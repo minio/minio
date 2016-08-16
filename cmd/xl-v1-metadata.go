@@ -137,11 +137,10 @@ func (m xlMetaV1) IsValid() bool {
 }
 
 // ObjectPartIndex - returns the index of matching object part number.
-func (m xlMetaV1) ObjectPartIndex(partNumber int) (index int) {
+func (m xlMetaV1) ObjectPartIndex(partNumber int) int {
 	for i, part := range m.Parts {
 		if partNumber == part.Number {
-			index = i
-			return index
+			return i
 		}
 	}
 	return -1

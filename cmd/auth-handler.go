@@ -165,22 +165,18 @@ func setAuthHandler(h http.Handler) http.Handler {
 }
 
 // List of all support S3 auth types.
-var supportedS3AuthTypes = []authType{
-	authTypeAnonymous,
-	authTypePresigned,
-	authTypeSigned,
-	authTypePostPolicy,
-	authTypeStreamingSigned,
+var supportedS3AuthTypes = map[authType]struct{}{
+	authTypeAnonymous:       {},
+	authTypePresigned:       {},
+	authTypeSigned:          {},
+	authTypePostPolicy:      {},
+	authTypeStreamingSigned: {},
 }
 
 // Validate if the authType is valid and supported.
 func isSupportedS3AuthType(aType authType) bool {
-	for _, a := range supportedS3AuthTypes {
-		if a == aType {
-			return true
-		}
-	}
-	return false
+	_, ok := supportedS3AuthTypes[aType]
+	return ok
 }
 
 // handler for validating incoming authorization headers.
