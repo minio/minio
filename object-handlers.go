@@ -268,9 +268,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	// Skip the first element if it is '/', split the rest.
-	if strings.HasPrefix(objectSource, "/") {
-		objectSource = objectSource[1:]
-	}
+	objectSource = strings.TrimPrefix(objectSource, "/")
 	splits := strings.SplitN(objectSource, "/", 2)
 
 	// Save sourceBucket and sourceObject extracted from url Path.

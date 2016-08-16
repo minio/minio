@@ -175,12 +175,7 @@ var supportedS3AuthTypes = []authType{
 
 // Validate if the authType is valid and supported.
 func isSupportedS3AuthType(aType authType) bool {
-	for _, a := range supportedS3AuthTypes {
-		if a == aType {
-			return true
-		}
-	}
-	return false
+	return contains(supportedS3AuthTypes, aType)
 }
 
 // handler for validating incoming authorization headers.

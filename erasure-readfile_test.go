@@ -112,7 +112,7 @@ func testGetReadDisks(t *testing.T, xl xlObjects) {
 			t.Errorf("test-case %d - expected nextIndex: %d, got : %d", i+1, test.nextIndex, nextIndex)
 			continue
 		}
-		if reflect.DeepEqual(test.retDisks, disks) == false {
+		if !reflect.DeepEqual(test.retDisks, disks) {
 			t.Errorf("test-case %d : incorrect disks returned. expected %+v, got %+v", i+1, test.retDisks, disks)
 			continue
 		}

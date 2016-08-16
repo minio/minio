@@ -17,10 +17,7 @@ type storageServer struct {
 // MakeVolHandler - make vol handler is rpc wrapper for MakeVol operation.
 func (s *storageServer) MakeVolHandler(arg *string, reply *GenericReply) error {
 	err := s.storage.MakeVol(*arg)
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
 // ListVolsHandler - list vols handler is rpc wrapper for ListVols operation.
@@ -47,10 +44,7 @@ func (s *storageServer) StatVolHandler(arg *string, reply *VolInfo) error {
 // DeleteVol operation.
 func (s *storageServer) DeleteVolHandler(arg *string, reply *GenericReply) error {
 	err := s.storage.DeleteVol(*arg)
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
 /// File operations
