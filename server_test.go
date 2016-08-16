@@ -79,7 +79,7 @@ func (s *TestSuiteCommon) TestAuth(c *C) {
 // verifies it by fetching the notification back.
 func (s *TestSuiteCommon) TestBucketNotification(c *C) {
 	// Sample bucket notification
-	bucketNotificationBuf := `<NotificationConfiguration><CloudFunctionConfiguration><Event>s3:ObjectCreated:Put</Event><Filter><S3Key><FilterRule><Name>prefix</Name><Value>images/</Value></FilterRule></S3Key></Filter><Id>1</Id><CloudFunction>arn:minio:lambda:us-east-1:444455556666:lambda</CloudFunction></CloudFunctionConfiguration></NotificationConfiguration>`
+	bucketNotificationBuf := `<NotificationConfiguration><TopicConfiguration><Event>s3:ObjectCreated:Put</Event><Filter><S3Key><FilterRule><Name>prefix</Name><Value>images/</Value></FilterRule></S3Key></Filter><Id>1</Id><Topic>arn:minio:sns:us-east-1:444455556666:listen</Topic></TopicConfiguration></NotificationConfiguration>`
 
 	// generate a random bucket Name.
 	bucketName := getRandomBucketName()
@@ -121,7 +121,7 @@ func (s *TestSuiteCommon) TestBucketNotification(c *C) {
 	// Verify if downloaded policy matches with previousy uploaded.
 	c.Assert(bytes.Equal([]byte(bucketNotificationBuf), bucketNotificationReadBuf), Equals, true)
 
-	invalidBucketNotificationBuf := `<NotificationConfiguration><CloudFunctionConfiguration><Event>s3:ObjectCreated:Put</Event><Filter><S3Key><FilterRule><Name>prefix</Name><Value>images/</Value></FilterRule></S3Key></Filter><Id>1</Id><CloudFunction>arn:minio:lambda:us-east-1:444455556666:minio</CloudFunction></CloudFunctionConfiguration></NotificationConfiguration>`
+	invalidBucketNotificationBuf := `<NotificationConfiguration><TopicConfiguration><Event>s3:ObjectCreated:Put</Event><Filter><S3Key><FilterRule><Name>prefix</Name><Value>images/</Value></FilterRule></S3Key></Filter><Id>1</Id><Topic>arn:minio:sns:us-east-1:444455556666:minio</Topic></TopicConfiguration></NotificationConfiguration>`
 
 	request, err = newTestSignedRequest("PUT", getPutNotificationURL(s.endPoint, bucketName),
 		int64(len(invalidBucketNotificationBuf)), bytes.NewReader([]byte(invalidBucketNotificationBuf)), s.accessKey, s.secretKey)
@@ -134,7 +134,7 @@ func (s *TestSuiteCommon) TestBucketNotification(c *C) {
 
 	verifyError(c, response, "InvalidArgument", "A specified destination ARN does not exist or is not well-formed. Verify the destination ARN.", http.StatusBadRequest)
 
-	invalidBucketNotificationBuf = `<NotificationConfiguration><CloudFunctionConfiguration><Event>s3:ObjectCreated:Put</Event><Filter><S3Key><FilterRule><Name>prefix</Name><Value>images/</Value></FilterRule></S3Key></Filter><Id>1</Id><CloudFunction>arn:minio:lambda:us-west-1:444455556666:lambda</CloudFunction></CloudFunctionConfiguration></NotificationConfiguration>`
+	invalidBucketNotificationBuf = `<NotificationConfiguration><TopicConfiguration><Event>s3:ObjectCreated:Put</Event><Filter><S3Key><FilterRule><Name>prefix</Name><Value>images/</Value></FilterRule></S3Key></Filter><Id>1</Id><Topic>arn:minio:sns:us-west-1:444455556666:listen</Topic></TopicConfiguration></NotificationConfiguration>`
 	request, err = newTestSignedRequest("PUT", getPutNotificationURL(s.endPoint, bucketName),
 		int64(len(invalidBucketNotificationBuf)), bytes.NewReader([]byte(invalidBucketNotificationBuf)), s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
@@ -146,7 +146,7 @@ func (s *TestSuiteCommon) TestBucketNotification(c *C) {
 
 	verifyError(c, response, "InvalidArgument", "A specified destination is in a different region than the bucket. You must use a destination that resides in the same region as the bucket.", http.StatusBadRequest)
 
-	invalidBucketNotificationBuf = `<NotificationConfiguration><CloudFunctionConfiguration><Event>s3:ObjectCreated:Invalid</Event><Filter><S3Key><FilterRule><Name>prefix</Name><Value>images/</Value></FilterRule></S3Key></Filter><Id>1</Id><CloudFunction>arn:minio:lambda:us-east-1:444455556666:lambda</CloudFunction></CloudFunctionConfiguration></NotificationConfiguration>`
+	invalidBucketNotificationBuf = `<NotificationConfiguration><TopicConfiguration><Event>s3:ObjectCreated:Invalid</Event><Filter><S3Key><FilterRule><Name>prefix</Name><Value>images/</Value></FilterRule></S3Key></Filter><Id>1</Id><Topic>arn:minio:sns:us-east-1:444455556666:listen</Topic></TopicConfiguration></NotificationConfiguration>`
 	request, err = newTestSignedRequest("PUT", getPutNotificationURL(s.endPoint, bucketName),
 		int64(len(invalidBucketNotificationBuf)), bytes.NewReader([]byte(invalidBucketNotificationBuf)), s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)

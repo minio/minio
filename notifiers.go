@@ -36,13 +36,13 @@ const (
 	queueTypeRedis = "redis"
 )
 
-// Lambda type.
+// Topic type.
 const (
-	// Minio lambda ARN prefix.
-	minioLambda = "arn:minio:lambda:"
+	// Minio topic ARN prefix.
+	minioTopic = "arn:minio:sns:"
 
-	// Static string indicating lambda type 'lambda'.
-	lambdaTypeMinio = "lambda"
+	// Static string indicating sns type 'listen'.
+	snsTypeMinio = "listen"
 )
 
 var errNotifyNotEnabled = errors.New("requested notifier not enabled")

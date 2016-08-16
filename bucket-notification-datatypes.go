@@ -155,15 +155,15 @@ type NotificationEvent struct {
 	S3                eventMeta         `json:"s3"`
 }
 
-// Represents the minio lambda type and account id's.
-type arnLambda struct {
+// Represents the minio topic type and account id's.
+type arnTopic struct {
 	Type      string
 	AccountID string
 }
 
 // Stringer for constructing AWS ARN compatible string.
-func (m arnLambda) String() string {
-	return minioLambda + serverConfig.GetRegion() + ":" + m.AccountID + ":" + m.Type
+func (m arnTopic) String() string {
+	return minioTopic + serverConfig.GetRegion() + ":" + m.AccountID + ":" + m.Type
 }
 
 // Represents the minio sqs type and account id's.

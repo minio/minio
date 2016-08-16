@@ -23,7 +23,6 @@ import (
 	"io"
 	"net/http"
 	"path"
-	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -203,22 +202,6 @@ func sendBucketNotification(w http.ResponseWriter, arnListenerCh <-chan []Notifi
 	}
 }
 
-// Returns true if the queueARN is for an Minio queue.
-func isMinL(lambdaARN arnLambda) bool {
-	return strings.HasSuffix(lambdaARN.Type, lambdaTypeMinio)
-}
-
-// isMinioARNConfigured - verifies if one lambda ARN is valid and is enabled.
-func isMinioARNConfigured(lambdaARN string, lambdaConfigs []lambdaConfig) bool {
-	for _, lambdaConfig := range lambdaConfigs {
-		// Validate if lambda ARN is already enabled.
-		if lambdaARN == lambdaConfig.LambdaARN {
-			return true
-		}
-	}
-	return false
-}
-
 // ListenBucketNotificationHandler - list bucket notifications.
 func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWriter, r *http.Request) {
 	// Validate request authorization.
@@ -230,8 +213,8 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 	bucket := vars["bucket"]
 
 	// Get notification ARN.
-	lambdaARN := r.URL.Query().Get("notificationARN")
-	if lambdaARN == "" {
+	topicARN := r.URL.Query().Get("notificationARN")
+	if topicARN == "" {
 		writeErrorResponse(w, r, ErrARNNotification, r.URL.Path)
 		return
 	}
@@ -250,8 +233,9 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 		return
 	}
 
-	// Notifications set, but do not have MINIO queue enabled, return.
-	if !isMinioARNConfigured(lambdaARN, notificationCfg.LambdaConfigs) {
+	// Set SNS notifications only if special "listen" sns is set in bucket
+	// notification configs.
+	if !isMinioSNSConfigured(topicARN, notificationCfg.TopicConfigs) {
 		writeErrorResponse(w, r, ErrARNNotification, r.URL.Path)
 		return
 	}
@@ -264,10 +248,10 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 	// Close the listener channel.
 	defer close(nEventCh)
 
-	// Set lambda target.
-	eventN.SetLambdaTarget(lambdaARN, nEventCh)
-	// Remove lambda listener after the writer has closed or the client disconnected.
-	defer eventN.RemoveLambdaTarget(lambdaARN, nEventCh)
+	// Set sns target.
+	eventN.SetSNSTarget(topicARN, nEventCh)
+	// Remove sns listener after the writer has closed or the client disconnected.
+	defer eventN.RemoveSNSTarget(topicARN, nEventCh)
 
 	// Start sending bucket notifications.
 	sendBucketNotification(w, nEventCh)

@@ -35,7 +35,7 @@ type eventNotifier struct {
 
 	// Collection of 'bucket' and notification config.
 	notificationConfigs map[string]*notificationConfig
-	lambdaTargets       map[string][]chan []NotificationEvent
+	snsTargets          map[string][]chan []NotificationEvent
 	queueTargets        map[string]*logrus.Logger
 }
 
@@ -101,37 +101,37 @@ func (en eventNotifier) GetQueueTarget(queueARN string) *logrus.Logger {
 	return en.queueTargets[queueARN]
 }
 
-func (en eventNotifier) GetLambdaTarget(lambdaARN string) []chan []NotificationEvent {
+func (en eventNotifier) GetSNSTarget(snsARN string) []chan []NotificationEvent {
 	en.rwMutex.RLock()
 	defer en.rwMutex.RUnlock()
-	return en.lambdaTargets[lambdaARN]
+	return en.snsTargets[snsARN]
 }
 
-// Set a new lambda target for an input lambda ARN.
-func (en *eventNotifier) SetLambdaTarget(lambdaARN string, listenerCh chan []NotificationEvent) error {
+// Set a new sns target for an input sns ARN.
+func (en *eventNotifier) SetSNSTarget(snsARN string, listenerCh chan []NotificationEvent) error {
 	en.rwMutex.Lock()
 	defer en.rwMutex.Unlock()
 	if listenerCh == nil {
 		return errors.New("invalid argument")
 	}
-	en.lambdaTargets[lambdaARN] = append(en.lambdaTargets[lambdaARN], listenerCh)
+	en.snsTargets[snsARN] = append(en.snsTargets[snsARN], listenerCh)
 	return nil
 }
 
-// Remove lambda target for an input lambda ARN.
-func (en *eventNotifier) RemoveLambdaTarget(lambdaARN string, listenerCh chan []NotificationEvent) {
+// Remove sns target for an input sns ARN.
+func (en *eventNotifier) RemoveSNSTarget(snsARN string, listenerCh chan []NotificationEvent) {
 	en.rwMutex.Lock()
 	defer en.rwMutex.Unlock()
-	lambdaTarget, ok := en.lambdaTargets[lambdaARN]
+	snsTarget, ok := en.snsTargets[snsARN]
 	if ok {
-		for i, savedListenerCh := range lambdaTarget {
+		for i, savedListenerCh := range snsTarget {
 			if listenerCh == savedListenerCh {
-				lambdaTarget = append(lambdaTarget[:i], lambdaTarget[i+1:]...)
-				if len(lambdaTarget) == 0 {
-					delete(en.lambdaTargets, lambdaARN)
+				snsTarget = append(snsTarget[:i], snsTarget[i+1:]...)
+				if len(snsTarget) == 0 {
+					delete(en.snsTargets, snsARN)
 					break
 				}
-				en.lambdaTargets[lambdaARN] = lambdaTarget
+				en.snsTargets[snsARN] = snsTarget
 			}
 		}
 	}
@@ -180,7 +180,7 @@ func eventNotify(event eventData) {
 
 	nConfig := eventN.GetBucketNotificationConfig(event.Bucket)
 	// No bucket notifications enabled, drop the event notification.
-	if len(nConfig.QueueConfigs) == 0 && len(nConfig.LambdaConfigs) == 0 {
+	if len(nConfig.QueueConfigs) == 0 && len(nConfig.TopicConfigs) == 0 && len(nConfig.LambdaConfigs) == 0 {
 		return
 	}
 
@@ -206,12 +206,12 @@ func eventNotify(event eventData) {
 			}
 		}
 	}
-	// Validate if the event and object match the lambda configs.
-	for _, lambdaConfig := range nConfig.LambdaConfigs {
-		ruleMatch := filterRuleMatch(objectName, lambdaConfig.Filter.Key.FilterRules)
-		eventMatch := eventMatch(eventType, lambdaConfig.Events)
+	// Validate if the event and object match the sns configs.
+	for _, topicConfig := range nConfig.TopicConfigs {
+		ruleMatch := filterRuleMatch(objectName, topicConfig.Filter.Key.FilterRules)
+		eventMatch := eventMatch(eventType, topicConfig.Events)
 		if eventMatch && ruleMatch {
-			targetListeners := eventN.GetLambdaTarget(lambdaConfig.LambdaARN)
+			targetListeners := eventN.GetSNSTarget(topicConfig.TopicARN)
 			for _, listener := range targetListeners {
 				listener <- notificationEvent
 			}
@@ -377,7 +377,7 @@ func initEventNotifier(objAPI ObjectLayer) error {
 		rwMutex:             &sync.RWMutex{},
 		notificationConfigs: configs,
 		queueTargets:        queueTargets,
-		lambdaTargets:       make(map[string][]chan []NotificationEvent),
+		snsTargets:          make(map[string][]chan []NotificationEvent),
 	}
 
 	return nil
