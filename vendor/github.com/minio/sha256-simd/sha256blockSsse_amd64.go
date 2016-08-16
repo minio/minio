@@ -20,12 +20,3 @@ package sha256
 
 //go:noescape
 func blockSsse(h []uint32, message []uint8, reserved0, reserved1, reserved2, reserved3 uint64)
-
-func blockSsseGo(dig *digest, p []byte) {
-
-	h := []uint32{dig.h[0], dig.h[1], dig.h[2], dig.h[3], dig.h[4], dig.h[5], dig.h[6], dig.h[7]}
-
-	blockSsse(h[:], p[:], 0, 0, 0, 0)
-
-	dig.h[0], dig.h[1], dig.h[2], dig.h[3], dig.h[4], dig.h[5], dig.h[6], dig.h[7] = h[0], h[1], h[2], h[3], h[4], h[5], h[6], h[7]
-}

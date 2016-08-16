@@ -101,7 +101,7 @@ deadcode:
 	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/deadcode
 
 spelling:
-	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/misspell -error *
+	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/misspell -error *.go
 	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/misspell -error pkg/**/*
 
 test: build
