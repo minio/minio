@@ -19,6 +19,7 @@ package sha256
 import (
 	"crypto/sha256"
 	"hash"
+	"runtime"
 )
 
 // Size - The size of a SHA256 checksum in bytes.
@@ -62,7 +63,12 @@ func (d *digest) Reset() {
 }
 
 func block(dig *digest, p []byte) {
-	switch true {
+	is386bit := runtime.GOARCH == "386"
+	isARM := runtime.GOARCH == "arm"
+	if is386bit || isARM {
+		blockGeneric(dig, p)
+	}
+	switch !is386bit && !isARM {
 	case avx2:
 		blockAvx2Go(dig, p)
 	case avx:
@@ -82,10 +88,9 @@ func New() hash.Hash {
 		d := new(digest)
 		d.Reset()
 		return d
-	} else {
-		// default back to the standard golang implementation
-		return sha256.New()
 	}
+	// default back to the standard golang implementation
+	return sha256.New()
 }
 
 // Sum256 - single caller sha256 helper

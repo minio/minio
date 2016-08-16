@@ -119,10 +119,10 @@
 			"revisionTime": "2016-07-24T00:05:56Z"
 		},
 		{
-			"checksumSHA1": "pGgL9xre+/LmNfZV7rNE8uyAovQ=",
+			"checksumSHA1": "i8Hl0yGP1jqorMgfFMoJCItnI38=",
 			"path": "github.com/minio/sha256-simd",
-			"revision": "8058cafa697e657caa0beb136bd3cbda50fc4496",
-			"revisionTime": "2016-07-28T21:10:57Z"
+			"revision": "6f50cd1d784b2bea46167b6929f16c0d12eefbfb",
+			"revisionTime": "2016-08-16T22:25:11Z"
 		},
 		{
 			"path": "github.com/pkg/profile",
