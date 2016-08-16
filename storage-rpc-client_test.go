@@ -31,7 +31,7 @@ func TestSplitNetPath(t *testing.T) {
 	}{
 		{"10.1.10.1:C:\\path\\test", "10.1.10.1", "C:\\path\\test", nil},
 		{"10.1.10.1:", "", "", &net.AddrError{Err: "missing path in network path", Addr: "10.1.10.1:"}},
-		{"10.1.10.1", "", "", &net.AddrError{Err: "missing path in network path", Addr: "10.1.10.1"}},
+		{"10.1.10.1", "", "10.1.10.1", nil},
 		{"10.1.10.1://", "10.1.10.1", "//", nil},
 		{"10.1.10.1:C:", "10.1.10.1", "C:", nil},
 		{":C:", "", "", &net.AddrError{Err: "missing address in network path", Addr: ":C:"}},

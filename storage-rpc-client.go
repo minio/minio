@@ -48,8 +48,8 @@ func splitNetPath(networkPath string) (netAddr, netPath string, err error) {
 	}
 	networkParts := strings.SplitN(networkPath, ":", 2)
 	switch len(networkParts) {
-	case 0, 1:
-		return "", "", &net.AddrError{Err: "missing path in network path", Addr: networkPath}
+	case 1:
+		return "", networkPath, nil
 	case 2:
 		if networkParts[1] == "" {
 			return "", "", &net.AddrError{Err: "missing path in network path", Addr: networkPath}

@@ -62,6 +62,10 @@ func isLocalStorage(networkPath string) bool {
 			errorIf(err, "Splitting into ip and path failed")
 			return false
 		}
+		// netAddr will only be set if this is not a local path.
+		if netAddr == "" {
+			return true
+		}
 		// Resolve host to address to check if the IP is loopback.
 		// If address resolution fails, assume it's a non-local host.
 		addrs, err := net.LookupHost(netAddr)
