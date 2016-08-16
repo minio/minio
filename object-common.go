@@ -57,17 +57,16 @@ func fsHouseKeeping(storageDisk StorageAPI) error {
 func isLocalStorage(networkPath string) bool {
 	if idx := strings.LastIndex(networkPath, ":"); idx != -1 {
 		// e.g 10.0.0.1:/mnt/networkPath
-		netAddr, _, _ := splitNetPath(networkPath)
-		var netHost string
-		var err error
-		netHost, _, err = net.SplitHostPort(netAddr)
+		netAddr, _, err := splitNetPath(networkPath)
 		if err != nil {
-			netHost = netAddr
+			errorIf(err, "Splitting into ip and path failed")
+			return false
 		}
 		// Resolve host to address to check if the IP is loopback.
 		// If address resolution fails, assume it's a non-local host.
-		addrs, err := net.LookupHost(netHost)
+		addrs, err := net.LookupHost(netAddr)
 		if err != nil {
+			errorIf(err, "Failed to lookup host")
 			return false
 		}
 		for _, addr := range addrs {
@@ -77,12 +76,14 @@ func isLocalStorage(networkPath string) bool {
 		}
 		iaddrs, err := net.InterfaceAddrs()
 		if err != nil {
+			errorIf(err, "Unable to list interface addresses")
 			return false
 		}
 		for _, addr := range addrs {
 			for _, iaddr := range iaddrs {
 				ip, _, err := net.ParseCIDR(iaddr.String())
 				if err != nil {
+					errorIf(err, "Unable to parse CIDR")
 					return false
 				}
 				if ip.String() == addr {
