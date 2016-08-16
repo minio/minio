@@ -481,7 +481,7 @@ func (fs fsObjects) DeleteObject(bucket, object string) error {
 	if !IsValidObjectName(object) {
 		return ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
-	err := fs.storage.DeleteFile(minioMetaBucket, path.Join(bucketMetaPrefix, bucket, object))
+	err := fs.storage.DeleteFile(minioMetaBucket, path.Join(bucketMetaPrefix, bucket, object, fsMetaJSONFile))
 	if err != nil && err != errFileNotFound {
 		return toObjectErr(err, bucket, object)
 	}
