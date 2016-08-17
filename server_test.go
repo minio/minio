@@ -536,24 +536,35 @@ func (s *TestSuiteCommon) TestObjectGet(c *C) {
 	c.Assert(err, IsNil)
 	// assert the HTTP response status code.
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
+	// concurrently reading the object, safety check for races.
+	var wg sync.WaitGroup
+	for i := 0; i < ConcurrencyLevel; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			// HTTP request to create the bucket.
+			// create HTTP request to fetch the object.
+			getRequest, err := newTestSignedRequest("GET", getGetObjectURL(s.endPoint, bucketName, objectName),
+				0, nil, s.accessKey, s.secretKey)
+			c.Assert(err, IsNil)
 
-	// create HTTP request to fetch the object.
-	request, err = newTestSignedRequest("GET", getGetObjectURL(s.endPoint, bucketName, objectName),
-		0, nil, s.accessKey, s.secretKey)
-	c.Assert(err, IsNil)
+			reqClient := http.Client{}
+			// execute the http request to fetch the object.
+			getResponse, err := reqClient.Do(getRequest)
+			c.Assert(err, IsNil)
+			defer getResponse.Body.Close()
+			// assert the http response status code.
+			c.Assert(getResponse.StatusCode, Equals, http.StatusOK)
 
-	client = http.Client{}
-	// execute the http request to fetch the object.
-	response, err = client.Do(request)
-	c.Assert(err, IsNil)
-	// assert the http response status code.
-	c.Assert(response.StatusCode, Equals, http.StatusOK)
+			// extract response body content.
+			responseBody, err := ioutil.ReadAll(getResponse.Body)
+			c.Assert(err, IsNil)
+			// assert the HTTP response body content with the expected content.
+			c.Assert(responseBody, DeepEquals, []byte("hello world"))
+		}()
 
-	// extract response body content.
-	responseBody, err := ioutil.ReadAll(response.Body)
-	c.Assert(err, IsNil)
-	// assert the HTTP response body content with the expected content.
-	c.Assert(responseBody, DeepEquals, []byte("hello world"))
+	}
+	wg.Wait()
 }
 
 // TestMultipleObjects - Validates upload and fetching of multiple object into the bucket.
@@ -783,7 +794,8 @@ func (s *TestSuiteCommon) TestCopyObject(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	objectName2 := "testObject2"
-	// creating HTTP request for uploading the object.
+	// Unlike the actual PUT object request, the request to Copy Object doesn't contain request body,
+	// empty body with the "X-Amz-Copy-Source" header pointing to the object to copies it in the backend.
 	request, err = newTestRequest("PUT", getPutObjectURL(s.endPoint, bucketName, objectName2), 0, nil)
 	c.Assert(err, IsNil)
 	// setting the "X-Amz-Copy-Source" to allow copying the content of previously uploaded object.
