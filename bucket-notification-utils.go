@@ -100,26 +100,36 @@ func checkFilterRules(filterRules []filterRule) APIErrorCode {
 	return ErrNone
 }
 
-// checkQueueARN - check if the queue arn is valid.
-func checkQueueARN(queueARN string) APIErrorCode {
-	if !strings.HasPrefix(queueARN, minioSqs) {
+// Checks validity of input ARN for a given arnType.
+func checkARN(arn, arnType string) APIErrorCode {
+	if !strings.HasPrefix(arn, arnType) {
 		return ErrARNNotification
 	}
-	if !strings.HasPrefix(queueARN, minioSqs+serverConfig.GetRegion()+":") {
+	if !strings.HasPrefix(arn, arnType+serverConfig.GetRegion()+":") {
 		return ErrRegionNotification
+	}
+	account := strings.SplitN(strings.TrimPrefix(arn, arnType+serverConfig.GetRegion()+":"), ":", 2)
+	switch len(account) {
+	case 1:
+		// This means ARN is malformed, account should have min of 2elements.
+		return ErrARNNotification
+	case 2:
+		// Account topic id or topic name cannot be empty.
+		if account[0] == "" || account[1] == "" {
+			return ErrARNNotification
+		}
 	}
 	return ErrNone
 }
 
+// checkQueueARN - check if the queue arn is valid.
+func checkQueueARN(queueARN string) APIErrorCode {
+	return checkARN(queueARN, minioSqs)
+}
+
 // checkTopicARN - check if the topic arn is valid.
 func checkTopicARN(topicARN string) APIErrorCode {
-	if !strings.HasPrefix(topicARN, minioTopic) {
-		return ErrARNNotification
-	}
-	if !strings.HasPrefix(topicARN, minioTopic+serverConfig.GetRegion()+":") {
-		return ErrRegionNotification
-	}
-	return ErrNone
+	return checkARN(topicARN, minioTopic)
 }
 
 // Returns true if the topicARN is for an Minio sns listen type.

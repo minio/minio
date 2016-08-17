@@ -119,18 +119,49 @@ func TestTopicARN(t *testing.T) {
 			topicARN: "arn:minio:sns:us-east-1:10:minio",
 			errCode:  ErrNone,
 		},
-		// Invalid empty queue arn.
+		// Invalid empty topic  arn.
 		{
 			topicARN: "",
 			errCode:  ErrARNNotification,
 		},
+		// Invalid notification service type.
+		{
+			topicARN: "arn:minio:sqs:us-east-1:1:listen",
+			errCode:  ErrARNNotification,
+		},
 		// Invalid region 'us-west-1' in queue arn.
 		{
-			topicARN: "arn:minio:sns:us-west-1:1:redis",
+			topicARN: "arn:minio:sns:us-west-1:1:listen",
 			errCode:  ErrRegionNotification,
+		},
+		// Empty topic account id is invalid.
+		{
+			topicARN: "arn:minio:sns:us-east-1::listen",
+			errCode:  ErrARNNotification,
+		},
+		// Empty topic account name is invalid.
+		{
+			topicARN: "arn:minio:sns:us-east-1:10:",
+			errCode:  ErrARNNotification,
+		},
+		// Empty topic account id and account name is invalid.
+		{
+			topicARN: "arn:minio:sns:us-east-1::",
+			errCode:  ErrARNNotification,
+		},
+		// Missing topic id and separator missing at the end in topic arn.
+		{
+			topicARN: "arn:minio:sns:us-east-1:listen",
+			errCode:  ErrARNNotification,
+		},
+		// Missing topic id and empty string at the end in topic arn.
+		{
+			topicARN: "arn:minio:sns:us-east-1:",
+			errCode:  ErrARNNotification,
 		},
 	}
 
+	// Validate all topics.
 	for i, testCase := range testCases {
 		errCode := checkTopicARN(testCase.topicARN)
 		if testCase.errCode != errCode {
@@ -171,13 +202,44 @@ func TestQueueARN(t *testing.T) {
 			queueARN: "",
 			errCode:  ErrARNNotification,
 		},
+		// Invalid notification service type.
+		{
+			queueARN: "arn:minio:sns:us-east-1:1:listen",
+			errCode:  ErrARNNotification,
+		},
 		// Invalid region 'us-west-1' in queue arn.
 		{
 			queueARN: "arn:minio:sqs:us-west-1:1:redis",
 			errCode:  ErrRegionNotification,
 		},
+		// Invalid queue name empty in queue arn.
+		{
+			queueARN: "arn:minio:sqs:us-east-1:1:",
+			errCode:  ErrARNNotification,
+		},
+		// Invalid queue id empty in queue arn.
+		{
+			queueARN: "arn:minio:sqs:us-east-1::redis",
+			errCode:  ErrARNNotification,
+		},
+		// Invalid queue id and queue name empty in queue arn.
+		{
+			queueARN: "arn:minio:sqs:us-east-1::",
+			errCode:  ErrARNNotification,
+		},
+		// Missing queue id and separator missing at the end in queue arn.
+		{
+			queueARN: "arn:minio:sqs:us-east-1:amqp",
+			errCode:  ErrARNNotification,
+		},
+		// Missing queue id and empty string at the end in queue arn.
+		{
+			queueARN: "arn:minio:sqs:us-east-1:",
+			errCode:  ErrARNNotification,
+		},
 	}
 
+	// Validate all tests for queue arn.
 	for i, testCase := range testCases {
 		errCode := checkQueueARN(testCase.queueARN)
 		if testCase.errCode != errCode {
