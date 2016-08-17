@@ -45,20 +45,20 @@ var healCmd = cli.Command{
 	Usage:  "To heal objects.",
 	Action: healControl,
 	CustomHelpTemplate: `NAME:
-  minio {{.Name}} - {{.Usage}}
+  minio control {{.Name}} - {{.Usage}}
 
 USAGE:
-  minio {{.Name}} heal
+  minio control {{.Name}}
 
 EAMPLES:
   1. Heal an object.
-     $ minio control heal http://localhost:9000/songs/classical/western/piano.mp3
+     $ minio control {{.Name}} http://localhost:9000/songs/classical/western/piano.mp3
 
   2. Heal all objects in a bucket recursively.
-     $ minio control heal http://localhost:9000/songs
+     $ minio control {{.Name}}  http://localhost:9000/songs
 
   3. Heall all objects with a given prefix recursively.
-     $ minio control heal http://localhost:9000/songs/classical/
+     $ minio control {{.Name}} http://localhost:9000/songs/classical/
 `,
 }
 
