@@ -65,10 +65,6 @@ func newObjectLayerFactory(disks, ignoredDisks []string) func() ObjectLayer {
 		err = cleanupOldBucketPolicyConfigs()
 		fatalIf(err, "Unable to clean up bucket policy from config directory.")
 
-		// Initialize and monitor shutdown signals.
-		err = initGracefulShutdown(os.Exit)
-		fatalIf(err, "Unable to initialize graceful shutdown operation")
-
 		// Register the callback that should be called when the process shuts down.
 		globalShutdownCBs.AddObjectLayerCB(func() errCode {
 			if sErr := objAPI.Shutdown(); sErr != nil {
@@ -94,6 +90,10 @@ func configureServerHandler(srvCmdConfig serverCmdConfig) http.Handler {
 	// Initialize storage rpc servers for every disk that is hosted on this node.
 	storageRPCs, err := newRPCServer(srvCmdConfig)
 	fatalIf(err, "Unable to initialize storage RPC server.")
+
+	// Initialize and monitor shutdown signals.
+	err = initGracefulShutdown(os.Exit)
+	fatalIf(err, "Unable to initialize graceful shutdown operation")
 
 	newObjectLayerFn := newObjectLayerFactory(srvCmdConfig.disks, srvCmdConfig.ignoredDisks)
 	// Initialize API.
