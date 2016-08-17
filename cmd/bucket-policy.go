@@ -116,9 +116,9 @@ func getOldBucketsConfigPath() (string, error) {
 	return path.Join(configPath, "buckets"), nil
 }
 
-// readBucketPolicy - reads bucket policy for an input bucket, returns BucketPolicyNotFound
-// if bucket policy is not found. This function also parses the bucket policy into an object.
-func readBucketPolicy(bucket string, objAPI ObjectLayer) (*bucketPolicy, error) {
+// readBucketPolicyJSON - reads bucket policy for an input bucket, returns BucketPolicyNotFound
+// if bucket policy is not found.
+func readBucketPolicyJSON(bucket string, objAPI ObjectLayer) (bucketPolicyReader io.Reader, err error) {
 	// Verify bucket is valid.
 	if !IsValidBucketName(bucket) {
 		return nil, BucketNameInvalid{Bucket: bucket}
@@ -139,9 +139,22 @@ func readBucketPolicy(bucket string, objAPI ObjectLayer) (*bucketPolicy, error) 
 		}
 		return nil, err
 	}
+
+	return &buffer, nil
+}
+
+// readBucketPolicy - reads bucket policy for an input bucket, returns BucketPolicyNotFound
+// if bucket policy is not found. This function also parses the bucket policy into an object.
+func readBucketPolicy(bucket string, objAPI ObjectLayer) (*bucketPolicy, error) {
+	// Read bucket policy JSON.
+	bucketPolicyReader, err := readBucketPolicyJSON(bucket, objAPI)
+	if err != nil {
+		return nil, err
+	}
+
 	// Parse the saved policy.
 	var policy = &bucketPolicy{}
-	err = parseBucketPolicy(&buffer, policy)
+	err = parseBucketPolicy(bucketPolicyReader, policy)
 	if err != nil {
 		return nil, err
 

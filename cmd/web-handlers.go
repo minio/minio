@@ -17,7 +17,10 @@
 package cmd
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"path"
@@ -30,6 +33,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/rpc/v2/json2"
+	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/miniobrowser"
 )
 
@@ -481,4 +485,99 @@ func writeWebErrorResponse(w http.ResponseWriter, err error) {
 	apiErr := getAPIError(apiErrCode)
 	w.WriteHeader(apiErr.HTTPStatusCode)
 	w.Write([]byte(apiErr.Description))
+}
+
+// GetBucketPolicyArgs - get bucket policy args.
+type GetBucketPolicyArgs struct {
+	BucketName string `json:"bucketName"`
+	Prefix     string `json:"prefix"`
+}
+
+// GetBucketPolicyRep - get bucket policy reply.
+type GetBucketPolicyRep struct {
+	UIVersion string              `json:"uiVersion"`
+	Policy    policy.BucketPolicy `json:"policy"`
+}
+
+func readBucketAccessPolicy(objAPI ObjectLayer, bucketName string) (policy.BucketAccessPolicy, error) {
+	bucketPolicyReader, err := readBucketPolicyJSON(bucketName, objAPI)
+	if err != nil {
+		if _, ok := err.(BucketPolicyNotFound); ok {
+			return policy.BucketAccessPolicy{}, nil
+		}
+		return policy.BucketAccessPolicy{}, err
+	}
+
+	bucketPolicyBuf, err := ioutil.ReadAll(bucketPolicyReader)
+	if err != nil {
+		return policy.BucketAccessPolicy{}, err
+	}
+
+	policyInfo := policy.BucketAccessPolicy{}
+	err = json.Unmarshal(bucketPolicyBuf, &policyInfo)
+	if err != nil {
+		return policy.BucketAccessPolicy{}, err
+	}
+
+	return policyInfo, nil
+
+}
+
+// GetBucketPolicy - get bucket policy.
+func (web *webAPIHandlers) GetBucketPolicy(r *http.Request, args *GetBucketPolicyArgs, reply *GetBucketPolicyRep) error {
+	if !isJWTReqAuthenticated(r) {
+		return &json2.Error{Message: "Unauthorized request"}
+	}
+
+	policyInfo, err := readBucketAccessPolicy(web.ObjectAPI, args.BucketName)
+	if err != nil {
+		return &json2.Error{Message: err.Error()}
+	}
+
+	bucketPolicy := policy.GetPolicy(policyInfo.Statements, args.BucketName, args.Prefix)
+
+	reply.UIVersion = miniobrowser.UIVersion
+	reply.Policy = bucketPolicy
+
+	return nil
+}
+
+// SetBucketPolicyArgs - set bucket policy args.
+type SetBucketPolicyArgs struct {
+	BucketName string `json:"bucketName"`
+	Prefix     string `json:"prefix"`
+	Policy     string `json:"policy"`
+}
+
+// SetBucketPolicy - set bucket policy.
+func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolicyArgs, reply *WebGenericRep) error {
+	if !isJWTReqAuthenticated(r) {
+		return &json2.Error{Message: "Unauthorized request"}
+	}
+
+	bucketPolicy := policy.BucketPolicy(args.Policy)
+	if !bucketPolicy.IsValidBucketPolicy() {
+		return &json2.Error{Message: "Invalid policy " + args.Policy}
+	}
+
+	policyInfo, err := readBucketAccessPolicy(web.ObjectAPI, args.BucketName)
+	if err != nil {
+		return &json2.Error{Message: err.Error()}
+	}
+
+	policyInfo.Statements = policy.SetPolicy(policyInfo.Statements, bucketPolicy, args.BucketName, args.Prefix)
+
+	data, err := json.Marshal(policyInfo)
+	if err != nil {
+		return &json2.Error{Message: err.Error()}
+	}
+
+	// TODO: update policy statements according to bucket name, prefix and policy arguments.
+	if err := writeBucketPolicy(args.BucketName, web.ObjectAPI, bytes.NewReader(data), int64(len(data))); err != nil {
+		return &json2.Error{Message: err.Error()}
+	}
+
+	reply.UIVersion = miniobrowser.UIVersion
+
+	return nil
 }
