@@ -21,7 +21,6 @@ import (
 	"encoding/hex"
 	"io"
 	"path"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -498,6 +497,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	if metadata == nil {
 		metadata = make(map[string]string)
 	}
+
 	uniqueID := getUUID()
 	tempErasureObj := path.Join(tmpMetaPrefix, uniqueID, "part.1")
 	minioMetaTmpBucket := path.Join(minioMetaBucket, tmpMetaPrefix)
@@ -581,7 +581,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 
 	// Guess content-type from the extension if possible.
 	if metadata["content-type"] == "" {
-		if objectExt := filepath.Ext(object); objectExt != "" {
+		if objectExt := path.Ext(object); objectExt != "" {
 			if content, ok := mimedb.DB[strings.ToLower(strings.TrimPrefix(objectExt, "."))]; ok {
 				metadata["content-type"] = content.ContentType
 			}
