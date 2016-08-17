@@ -77,7 +77,7 @@ func setBrowserRedirectHandler(h http.Handler) http.Handler {
 
 func (h redirectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Re-direction handled specifically for browsers.
-	if strings.Contains(r.Header.Get("User-Agent"), "Mozilla") {
+	if strings.Contains(r.Header.Get("User-Agent"), "Mozilla") && !isRequestSignatureV4(r) {
 		// '/' is redirected to 'locationPrefix/'
 		// '/webrpc' is redirected to 'locationPrefix/webrpc'
 		// '/login' is redirected to 'locationPrefix/login'
