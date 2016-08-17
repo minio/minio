@@ -77,25 +77,6 @@ func listObjectModtimes(partsMetadata []xlMetaV1, errs []error) (modTimes []time
 	return modTimes
 }
 
-func (xl xlObjects) shouldHeal(onlineDisks []StorageAPI) (heal bool) {
-	onlineDiskCount := diskCount(onlineDisks)
-	// If online disks count is lesser than configured disks, most
-	// probably we need to heal the file, additionally verify if the
-	// count is lesser than readQuorum, if not we throw an error.
-	if onlineDiskCount < len(xl.storageDisks) {
-		// Online disks lesser than total storage disks, needs to be
-		// healed. unless we do not have readQuorum.
-		heal = true
-		// Verify if online disks count are lesser than readQuorum
-		// threshold, return an error.
-		if onlineDiskCount < xl.readQuorum {
-			errorIf(errXLReadQuorum, "Unable to establish read quorum, disks are offline.")
-			return false
-		}
-	}
-	return heal
-}
-
 // Returns slice of online disks needed.
 // - slice returing readable disks.
 // - modTime of the Object
@@ -117,4 +98,51 @@ func listOnlineDisks(disks []StorageAPI, partsMetadata []xlMetaV1, errs []error)
 		}
 	}
 	return onlineDisks, modTime
+}
+
+// Return disks with the outdated or missing object.
+func outDatedDisks(disks []StorageAPI, partsMetadata []xlMetaV1, errs []error) (outDatedDisks []StorageAPI) {
+	outDatedDisks = make([]StorageAPI, len(disks))
+	latestDisks, _ := listOnlineDisks(disks, partsMetadata, errs)
+	for index, disk := range latestDisks {
+		if errs[index] == errFileNotFound {
+			outDatedDisks[index] = disks[index]
+			continue
+		}
+		if errs[index] != nil {
+			continue
+		}
+		if disk == nil {
+			outDatedDisks[index] = disks[index]
+		}
+	}
+	return outDatedDisks
+}
+
+// Return xlMetaV1 of the latest version of the object.
+func xlLatestMetadata(partsMetadata []xlMetaV1, errs []error) (latestMeta xlMetaV1) {
+	// List all the file commit ids from parts metadata.
+	modTimes := listObjectModtimes(partsMetadata, errs)
+
+	// Reduce list of UUIDs to a single common value.
+	modTime := commonTime(modTimes)
+
+	return pickValidXLMeta(partsMetadata, modTime)
+}
+
+// Returns if the object should be healed.
+func xlShouldHeal(partsMetadata []xlMetaV1, errs []error) bool {
+	modTime := commonTime(listObjectModtimes(partsMetadata, errs))
+	for index := range partsMetadata {
+		if errs[index] == errFileNotFound {
+			return true
+		}
+		if errs[index] != nil {
+			continue
+		}
+		if modTime != partsMetadata[index].Stat.ModTime {
+			return true
+		}
+	}
+	return false
 }

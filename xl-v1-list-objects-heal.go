@@ -16,23 +16,75 @@
 
 package main
 
-import "strings"
+import (
+	"path"
+	"sort"
+	"strings"
+)
 
-// listObjects - wrapper function implemented over file tree walk.
-func (xl xlObjects) listObjects(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
+func listDirHealFactory(disks ...StorageAPI) listDirFunc {
+	// Returns sorted merged entries from all the disks.
+	listDir := func(bucket, prefixDir, prefixEntry string) (mergedentries []string, delayIsLeaf bool, err error) {
+		for _, disk := range disks {
+			var entries []string
+			var newEntries []string
+			entries, err = disk.ListDir(bucket, prefixDir)
+			if err != nil {
+				// Skip the disk of listDir returns error.
+				continue
+			}
+
+			for i, entry := range entries {
+				if strings.HasSuffix(entry, slashSeparator) {
+					if _, err = disk.StatFile(bucket, path.Join(prefixDir, entry, xlMetaJSONFile)); err == nil {
+						// If it is an object trim the trailing "/"
+						entries[i] = strings.TrimSuffix(entry, slashSeparator)
+					}
+				}
+			}
+
+			if len(mergedentries) == 0 {
+				// For the first successful disk.ListDir()
+				mergedentries = entries
+				sort.Strings(mergedentries)
+				continue
+			}
+
+			// find elements in entries which are not in mergedentries
+			for _, entry := range entries {
+				idx := sort.SearchStrings(mergedentries, entry)
+				if mergedentries[idx] == entry {
+					continue
+				}
+				newEntries = append(newEntries, entry)
+			}
+
+			if len(newEntries) > 0 {
+				// Merge the entries and sort it.
+				mergedentries = append(mergedentries, newEntries...)
+				sort.Strings(mergedentries)
+			}
+		}
+		return mergedentries, false, nil
+	}
+	return listDir
+}
+
+// listObjectsHeal - wrapper function implemented over file tree walk.
+func (xl xlObjects) listObjectsHeal(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
 	// Default is recursive, if delimiter is set then list non recursive.
 	recursive := true
 	if delimiter == slashSeparator {
 		recursive = false
 	}
 
-	heal := false // true only for xl.ListObjectsHeal
+	// "heal" true for listObjectsHeal() and false for listObjects()
+	heal := true
 	walkResultCh, endWalkCh := xl.listPool.Release(listParams{bucket, recursive, marker, prefix, heal})
 	if walkResultCh == nil {
 		endWalkCh = make(chan struct{})
-		isLeaf := xl.isObject
-		listDir := listDirFactory(isLeaf, xl.getLoadBalancedDisks()...)
-		walkResultCh = startTreeWalk(bucket, prefix, marker, recursive, listDir, isLeaf, endWalkCh)
+		listDir := listDirHealFactory(xl.storageDisks...)
+		walkResultCh = startTreeWalk(bucket, prefix, marker, recursive, listDir, nil, endWalkCh)
 	}
 
 	var objInfos []ObjectInfo
@@ -61,17 +113,8 @@ func (xl xlObjects) listObjects(bucket, prefix, marker, delimiter string, maxKey
 			objInfo.Name = entry
 			objInfo.IsDir = true
 		} else {
-			// Set the Mode to a "regular" file.
-			var err error
-			objInfo, err = xl.getObjectInfo(bucket, entry)
-			if err != nil {
-				// Ignore errFileNotFound
-				if err == errFileNotFound {
-					errorIf(err, "Unable to get object info", bucket, entry)
-					continue
-				}
-				return ListObjectsInfo{}, toObjectErr(err, bucket, prefix)
-			}
+			objInfo.Bucket = bucket
+			objInfo.Name = entry
 		}
 		nextMarker = objInfo.Name
 		objInfos = append(objInfos, objInfo)
@@ -98,7 +141,6 @@ func (xl xlObjects) listObjects(bucket, prefix, marker, delimiter string, maxKey
 			Name:    objInfo.Name,
 			ModTime: objInfo.ModTime,
 			Size:    objInfo.Size,
-			MD5Sum:  objInfo.MD5Sum,
 			IsDir:   false,
 		})
 	}
@@ -106,7 +148,7 @@ func (xl xlObjects) listObjects(bucket, prefix, marker, delimiter string, maxKey
 }
 
 // ListObjects - list all objects at prefix, delimited by '/'.
-func (xl xlObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
+func (xl xlObjects) ListObjectsHeal(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
 		return ListObjectsInfo{}, BucketNameInvalid{Bucket: bucket}
@@ -153,7 +195,7 @@ func (xl xlObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 	}
 
 	// Initiate a list operation, if successful filter and return quickly.
-	listObjInfo, err := xl.listObjects(bucket, prefix, marker, delimiter, maxKeys)
+	listObjInfo, err := xl.listObjectsHeal(bucket, prefix, marker, delimiter, maxKeys)
 	if err == nil {
 		// We got the entries successfully return.
 		return listObjInfo, nil

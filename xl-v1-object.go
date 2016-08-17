@@ -213,6 +213,134 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 	return nil
 }
 
+// HealObject - heal the object.
+// FIXME: If an object object was deleted and one disk was down, and later the disk comes back
+// up again, heal on the object should delete it.
+func (xl xlObjects) HealObject(bucket, object string) error {
+	// Verify if bucket is valid.
+	if !IsValidBucketName(bucket) {
+		return BucketNameInvalid{Bucket: bucket}
+	}
+	// Verify if object is valid.
+	if !IsValidObjectName(object) {
+		// FIXME: return Invalid prefix.
+		return ObjectNameInvalid{Bucket: bucket, Object: object}
+	}
+
+	// Lock the object before healing.
+	nsMutex.RLock(bucket, object)
+	defer nsMutex.RUnlock(bucket, object)
+
+	partsMetadata, errs := readAllXLMetadata(xl.storageDisks, bucket, object)
+	if err := reduceErrs(errs, nil); err != nil {
+		return toObjectErr(err, bucket, object)
+	}
+
+	if !xlShouldHeal(partsMetadata, errs) {
+		// There is nothing to heal.
+		return nil
+	}
+
+	// List of disks having latest version of the object.
+	latestDisks, modTime := listOnlineDisks(xl.storageDisks, partsMetadata, errs)
+	// List of disks having outdated version of the object or missing object.
+	outDatedDisks := outDatedDisks(xl.storageDisks, partsMetadata, errs)
+	// Latest xlMetaV1 for reference.
+	latestMeta := pickValidXLMeta(partsMetadata, modTime)
+
+	for index, disk := range outDatedDisks {
+		// Before healing outdated disks, we need to remove xl.json
+		// and part files from "bucket/object/" so that
+		// rename(".minio.sys", "tmp/tmpuuid/", "bucket", "object/") succeeds.
+		if disk == nil {
+			// Not an outdated disk.
+			continue
+		}
+		if errs[index] != nil {
+			// If there was an error (most likely errFileNotFound)
+			continue
+		}
+		// Outdated object with the same name exists that needs to be deleted.
+		outDatedMeta := partsMetadata[index]
+		// Delete all the parts.
+		for partIndex := 0; partIndex < len(outDatedMeta.Parts); partIndex++ {
+			err := disk.DeleteFile(bucket,
+				pathJoin(object, outDatedMeta.Parts[partIndex].Name))
+			if err != nil {
+				return err
+			}
+		}
+		// Delete xl.json file.
+		err := disk.DeleteFile(bucket, pathJoin(object, xlMetaJSONFile))
+		if err != nil {
+			return err
+		}
+	}
+
+	// Reorder so that we have data disks first and parity disks next.
+	latestDisks = getOrderedDisks(latestMeta.Erasure.Distribution, latestDisks)
+	outDatedDisks = getOrderedDisks(latestMeta.Erasure.Distribution, outDatedDisks)
+	partsMetadata = getOrderedPartsMetadata(latestMeta.Erasure.Distribution, partsMetadata)
+
+	// We write at temporary location and then rename to fianal location.
+	tmpID := getUUID()
+
+	// Checksum of the part files. checkSumInfos[index] will contain checksums of all the part files
+	// in the outDatedDisks[index]
+	checkSumInfos := make([][]checkSumInfo, len(outDatedDisks))
+
+	// Heal each part. erasureHealFile() will write the healed part to
+	// .minio/tmp/uuid/ which needs to be renamed later to the final location.
+	for partIndex := 0; partIndex < len(latestMeta.Parts); partIndex++ {
+		partName := latestMeta.Parts[partIndex].Name
+		partSize := latestMeta.Parts[partIndex].Size
+		erasure := latestMeta.Erasure
+		sumInfo, err := latestMeta.Erasure.GetCheckSumInfo(partName)
+		if err != nil {
+			return err
+		}
+		// Heal the part file.
+		checkSums, err := erasureHealFile(latestDisks, outDatedDisks,
+			bucket, pathJoin(object, partName),
+			minioMetaBucket, pathJoin(tmpMetaPrefix, tmpID, partName),
+			partSize, erasure.BlockSize, erasure.DataBlocks, erasure.ParityBlocks, sumInfo.Algorithm)
+		if err != nil {
+			return err
+		}
+		for index, sum := range checkSums {
+			if outDatedDisks[index] == nil {
+				continue
+			}
+			checkSumInfos[index] = append(checkSumInfos[index], checkSumInfo{partName, sumInfo.Algorithm, sum})
+		}
+	}
+
+	// xl.json should be written to all the healed disks.
+	for index, disk := range outDatedDisks {
+		if disk == nil {
+			continue
+		}
+		partsMetadata[index] = latestMeta
+		partsMetadata[index].Erasure.Checksum = checkSumInfos[index]
+	}
+	err := writeUniqueXLMetadata(outDatedDisks, minioMetaBucket, pathJoin(tmpMetaPrefix, tmpID), partsMetadata, diskCount(outDatedDisks))
+	if err != nil {
+		return toObjectErr(err, bucket, object)
+	}
+
+	// Rename from tmp location to the actual location.
+	for _, disk := range outDatedDisks {
+		if disk == nil {
+			continue
+		}
+		err := disk.RenameFile(minioMetaBucket, retainSlash(pathJoin(tmpMetaPrefix, tmpID)), bucket, retainSlash(object))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // GetObjectInfo - reads object metadata and replies back ObjectInfo.
 func (xl xlObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 	// Verify if bucket is valid.

@@ -257,3 +257,10 @@ type PartTooSmall struct {
 func (e PartTooSmall) Error() string {
 	return fmt.Sprintf("Part size for %d should be atleast 5MB", e.PartNumber)
 }
+
+// NotImplemented If a feature is not implemented
+type NotImplemented struct{}
+
+func (e NotImplemented) Error() string {
+	return "Not Implemented"
+}
