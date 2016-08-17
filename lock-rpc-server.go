@@ -43,11 +43,13 @@ func (l *lockServer) Lock(name *string, reply *bool) error {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 	_, ok := l.lockMap[*name]
+	// No locks held on the given name.
 	if !ok {
 		*reply = true
 		l.lockMap[*name] = []bool{true}
 		return nil
 	}
+	// Either a read or write lock is held on the given name.
 	*reply = false
 	return nil
 }
@@ -57,6 +59,7 @@ func (l *lockServer) Unlock(name *string, reply *bool) error {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 	_, ok := l.lockMap[*name]
+	// No lock is held on the given name, there must be some issue at the lock client side.
 	if !ok {
 		return fmt.Errorf("Unlock attempted on an un-locked entity: %s", *name)
 	}
@@ -69,12 +72,18 @@ func (l *lockServer) RLock(name *string, reply *bool) error {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 	locksHeld, ok := l.lockMap[*name]
+	// No locks held on the given name.
 	if !ok {
 		// First read-lock to be held on *name.
 		l.lockMap[*name] = []bool{false}
+		*reply = true
+	} else if len(locksHeld) == 1 && locksHeld[0] == true {
+		// A write-lock is held, read lock can't be granted.
+		*reply = false
 	} else {
 		// Add an entry for this read lock.
 		l.lockMap[*name] = append(locksHeld, false)
+		*reply = true
 	}
 
 	return nil
@@ -91,10 +100,12 @@ func (l *lockServer) RUnlock(name *string, reply *bool) error {
 		// Remove one of the read locks held.
 		locksHeld = locksHeld[1:]
 		l.lockMap[*name] = locksHeld
+		*reply = true
 	} else {
 		// Delete the map entry since this is the last read lock held
 		// on *name.
 		delete(l.lockMap, *name)
+		*reply = true
 	}
 	return nil
 }
