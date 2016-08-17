@@ -17,8 +17,10 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -82,9 +84,79 @@ func TestMuxServer(t *testing.T) {
 
 	// Make sure there are zero connections
 	m.mu.Lock()
-	if len(m.conns) < 0 {
+	if len(m.conns) > 0 {
 		t.Fatal("Should have 0 connections")
 	}
 	m.mu.Unlock()
+}
 
+func TestServerCloseBlocking(t *testing.T) {
+	ts := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintln(w, "Hello, client")
+	}))
+	defer ts.Close()
+
+	// Create ServerMux
+	m := NewMuxServer("", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, "hello")
+	}))
+
+	// Set the test server config to the mux
+	ts.Config = &m.Server
+	ts.Start()
+
+	// Create a MuxListener
+	// var err error
+	ml, err := NewMuxListener(ts.Listener, m.WaitGroup, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.listener = ml
+
+	dial := func() net.Conn {
+		c, cerr := net.Dial("tcp", ts.Listener.Addr().String())
+		if cerr != nil {
+			t.Fatal(err)
+		}
+		return c
+	}
+
+	// Dial to open a StateNew but don't send anything
+	cnew := dial()
+	defer cnew.Close()
+
+	// Dial another connection but idle after a request to have StateIdle
+	cidle := dial()
+	defer cidle.Close()
+	cidle.Write([]byte("HEAD / HTTP/1.1\r\nHost: foo\r\n\r\n"))
+	_, err = http.ReadResponse(bufio.NewReader(cidle), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Make sure we don't block forever.
+	m.Close()
+
+	// Make sure there are zero connections
+	m.mu.Lock()
+	if len(m.conns) > 0 {
+		t.Fatal("Should have 0 connections")
+	}
+	m.mu.Unlock()
+}
+
+func TestListenAndServe(t *testing.T) {
+	m := NewMuxServer("", nil)
+	stopc := make(chan struct{})
+	errc := make(chan error)
+	go func() { errc <- m.ListenAndServe() }()
+	go func() { errc <- m.Close(); close(stopc) }()
+	select {
+	case err := <-errc:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-stopc:
+		return
+	}
 }

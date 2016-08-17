@@ -181,7 +181,7 @@ type MuxServer struct {
 	listener        *MuxListener
 	WaitGroup       *sync.WaitGroup
 	GracefulTimeout time.Duration
-	mu              sync.Mutex // guards closed and conns
+	mu              sync.Mutex // guards closed, conns, and listener
 	closed          bool
 	conns           map[net.Conn]http.ConnState // except terminal states
 }
@@ -221,7 +221,9 @@ func (m *MuxServer) ListenAndServeTLS(certFile, keyFile string) error {
 		return err
 	}
 
+	m.mu.Lock()
 	m.listener = mux
+	m.mu.Unlock()
 
 	err = http.Serve(mux,
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -257,7 +259,9 @@ func (m *MuxServer) ListenAndServe() error {
 		return err
 	}
 
+	m.mu.Lock()
 	m.listener = mux
+	m.mu.Unlock()
 
 	return m.Server.Serve(mux)
 }
@@ -280,42 +284,39 @@ func longestWord(strings []string) int {
 
 // Close initiates the graceful shutdown
 func (m *MuxServer) Close() error {
+	m.mu.Lock()
 	if m.closed {
 		return errors.New("Server has been closed")
 	}
-
-	m.mu.Lock()
-	m.Server.SetKeepAlivesEnabled(false)
 	m.closed = true
-	m.mu.Unlock()
+
+	// Make sure a listener was set
 	if err := m.listener.Close(); err != nil {
 		return err
 	}
 
-	// force connections to close after timeout
-	wait := make(chan struct{})
-	go func() {
-		defer close(wait)
-		m.mu.Lock()
-		for c, st := range m.conns {
-			// Force close any idle and new connections.
-			if st == http.StateIdle || st == http.StateNew {
-				c.Close()
-			}
+	m.SetKeepAlivesEnabled(false)
+	for c, st := range m.conns {
+		// Force close any idle and new connections. Waiting for other connections
+		// to close on their own (within the timeout period)
+		if st == http.StateIdle || st == http.StateNew {
+			c.Close()
 		}
-		m.mu.Unlock()
-
-		// Wait for all connections to be gracefully closed
-		m.WaitGroup.Wait()
-	}()
-
-	// We block until all active connections are closed or the GracefulTimeout happens
-	select {
-	case <-time.After(m.GracefulTimeout):
-		return nil
-	case <-wait:
-		return nil
 	}
+
+	// If the GracefulTimeout happens then forcefully close all connections
+	t := time.AfterFunc(m.GracefulTimeout, func() {
+		for c := range m.conns {
+			c.Close()
+		}
+	})
+	defer t.Stop()
+
+	m.mu.Unlock()
+
+	// Block until all connections are closed
+	m.WaitGroup.Wait()
+	return nil
 }
 
 // connState setups the ConnState tracking hook to know which connections are idle
