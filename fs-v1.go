@@ -23,7 +23,6 @@ import (
 	"io"
 	"os"
 	"path"
-	"path/filepath"
 	"sort"
 	"strings"
 
@@ -336,7 +335,7 @@ func (fs fsObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 
 	// Guess content-type from the extension if possible.
 	if fsMeta.Meta["content-type"] == "" {
-		if objectExt := filepath.Ext(object); objectExt != "" {
+		if objectExt := path.Ext(object); objectExt != "" {
 			if content, ok := mimedb.DB[strings.ToLower(strings.TrimPrefix(objectExt, "."))]; ok {
 				fsMeta.Meta["content-type"] = content.ContentType
 			}
@@ -368,6 +367,10 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 			Bucket: bucket,
 			Object: object,
 		}
+	}
+	// No metadata is set, allocate a new one.
+	if metadata == nil {
+		metadata = make(map[string]string)
 	}
 
 	uniqueID := getUUID()
@@ -419,10 +422,9 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 	}
 
 	newMD5Hex := hex.EncodeToString(md5Writer.Sum(nil))
-	// md5Hex representation.
-	var md5Hex string
-	if len(metadata) != 0 {
-		md5Hex = metadata["md5Sum"]
+	// Update the md5sum if not set with the newly calculated one.
+	if len(metadata["md5Sum"]) == 0 {
+		metadata["md5Sum"] = newMD5Hex
 	}
 
 	// Validate if payload is valid.
@@ -435,6 +437,8 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 		}
 	}
 
+	// md5Hex representation.
+	md5Hex := metadata["md5Sum"]
 	if md5Hex != "" {
 		if newMD5Hex != md5Hex {
 			// MD5 mismatch, delete the temporary object.
@@ -505,7 +509,9 @@ func isBucketExist(storage StorageAPI, bucketName string) bool {
 	return true
 }
 
-func (fs fsObjects) listObjects(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
+// ListObjects - list all objects at prefix upto maxKeys., optionally delimited by '/'. Maintains the list pool
+// state for future re-entrant list requests.
+func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
 	// Convert entry to FileInfo
 	entryToFileInfo := func(entry string) (fileInfo FileInfo, err error) {
 		if strings.HasSuffix(entry, slashSeparator) {
@@ -517,8 +523,16 @@ func (fs fsObjects) listObjects(bucket, prefix, marker, delimiter string, maxKey
 		if fileInfo, err = fs.storage.StatFile(bucket, entry); err != nil {
 			return
 		}
+		fsMeta, mErr := readFSMetadata(fs.storage, minioMetaBucket, path.Join(bucketMetaPrefix, bucket, entry))
+		if mErr != nil && mErr != errFileNotFound {
+			return FileInfo{}, mErr
+		}
+		if len(fsMeta.Meta) == 0 {
+			fsMeta.Meta = make(map[string]string)
+		}
 		// Object name needs to be full path.
 		fileInfo.Name = entry
+		fileInfo.MD5Sum = fsMeta.Meta["md5Sum"]
 		return
 	}
 
@@ -638,11 +652,6 @@ func (fs fsObjects) listObjects(bucket, prefix, marker, delimiter string, maxKey
 		})
 	}
 	return result, nil
-}
-
-// ListObjects - list all objects.
-func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
-	return fs.listObjects(bucket, prefix, marker, delimiter, maxKeys)
 }
 
 // HealObject - no-op for fs. Valid only for XL.

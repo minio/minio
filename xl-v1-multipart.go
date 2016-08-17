@@ -23,7 +23,6 @@ import (
 	"io"
 	"io/ioutil"
 	"path"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -259,7 +258,7 @@ func (xl xlObjects) newMultipartUpload(bucket string, object string, meta map[st
 	// If not set default to "application/octet-stream"
 	if meta["content-type"] == "" {
 		contentType := "application/octet-stream"
-		if objectExt := filepath.Ext(object); objectExt != "" {
+		if objectExt := path.Ext(object); objectExt != "" {
 			content, ok := mimedb.DB[strings.ToLower(strings.TrimPrefix(objectExt, "."))]
 			if ok {
 				contentType = content.ContentType

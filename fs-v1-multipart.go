@@ -219,6 +219,7 @@ func (fs fsObjects) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 func (fs fsObjects) newMultipartUpload(bucket string, object string, meta map[string]string) (uploadID string, err error) {
 	// Initialize `fs.json` values.
 	fsMeta := newFSMetaV1()
+
 	// Save additional metadata only if extended headers such as "X-Amz-Meta-" are set.
 	if hasExtendedHeader(meta) {
 		fsMeta.Meta = meta
