@@ -23,16 +23,20 @@ const DebugPath = "/debug"
 
 const DefaultPath = "/rpc/dsync"
 
-var n int
+// Number of nodes participating in the distributed locking.
+var dnodeCount int
+
+// List of nodes participating.
 var nodes []string
+
+// List of rpc paths, one per lock server.
 var rpcPaths []string
+
+// List of rpc client objects, one per lock server.
 var clnts []*RPCClient
 
-func closeClients(clients []*RPCClient) {
-	for _, clnt := range clients {
-		clnt.Close()
-	}
-}
+// Simple majority based quorum, set to dNodeCount/2+1
+var dquorum int
 
 // SetNodesWithPath - initializes package-level global state variables such as
 // nodes, rpcPaths, clnts.
@@ -41,7 +45,7 @@ func closeClients(clients []*RPCClient) {
 func SetNodesWithPath(nodeList []string, paths []string) (err error) {
 
 	// Validate if number of nodes is within allowable range.
-	if n != 0 {
+	if dnodeCount != 0 {
 		return errors.New("Cannot reinitialize dsync package")
 	} else if len(nodeList) < 4 {
 		return errors.New("Dsync not designed for less than 4 nodes")
@@ -53,8 +57,9 @@ func SetNodesWithPath(nodeList []string, paths []string) (err error) {
 	copy(nodes, nodeList[:])
 	rpcPaths = make([]string, len(paths))
 	copy(rpcPaths, paths[:])
-	n = len(nodes)
-	clnts = make([]*RPCClient, n)
+	dnodeCount = len(nodes)
+	dquorum = dnodeCount/2 + 1
+	clnts = make([]*RPCClient, dnodeCount)
 	// Initialize node name and rpc path for each RPCClient object.
 	for i := range clnts {
 		clnts[i] = newClient(nodes[i], rpcPaths[i])
