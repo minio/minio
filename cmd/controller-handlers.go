@@ -34,7 +34,7 @@ type HealListReply struct {
 
 // ListObjects - list all objects that needs healing.
 func (c *controllerAPIHandlers) ListObjectsHeal(arg *HealListArgs, reply *HealListReply) error {
-	objAPI := c.ObjectAPI
+	objAPI := c.ObjectAPI()
 	if objAPI == nil {
 		return errInvalidArgument
 	}
@@ -61,7 +61,7 @@ type HealObjectReply struct{}
 
 // HealObject - heal the object.
 func (c *controllerAPIHandlers) HealObject(arg *HealObjectArgs, reply *HealObjectReply) error {
-	objAPI := c.ObjectAPI
+	objAPI := c.ObjectAPI()
 	if objAPI == nil {
 		return errInvalidArgument
 	}

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package main
+package cmd
 
 import (
 	"bytes"
@@ -73,7 +73,7 @@ func (s *storageServer) LoginHandler(args *RPCLoginArgs, reply *RPCLoginReply) e
 		return err
 	}
 	reply.Token = token
-	reply.ServerVersion = minioVersion
+	reply.ServerVersion = Version
 	return nil
 }
 
