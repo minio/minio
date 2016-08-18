@@ -69,6 +69,11 @@ func configureServerHandler(srvCmdConfig serverCmdConfig) http.Handler {
 		ObjectAPI: objAPI,
 	}
 
+	// Initialize Controller.
+	ctrlHandlers := &controllerAPIHandlers{
+		ObjectAPI: objAPI,
+	}
+
 	// Initialize and monitor shutdown signals.
 	err = initGracefulShutdown(os.Exit)
 	fatalIf(err, "Unable to initialize graceful shutdown operation")
@@ -98,7 +103,7 @@ func configureServerHandler(srvCmdConfig serverCmdConfig) http.Handler {
 	// FIXME: till net/rpc auth is brought in "minio control" can be enabled only though
 	// this env variable.
 	if os.Getenv("MINIO_CONTROL") != "" {
-		registerControlRPCRouter(mux, objAPI)
+		registerControlRPCRouter(mux, ctrlHandlers)
 	}
 
 	// set environmental variable MINIO_BROWSER=off to disable minio web browser.

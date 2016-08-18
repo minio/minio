@@ -19,8 +19,10 @@ package cmd
 import (
 	"encoding/base64"
 	"encoding/xml"
+	"errors"
 	"io"
 	"os"
+	"os/exec"
 	"strings"
 	"sync"
 	"syscall"
@@ -145,8 +147,15 @@ func initGracefulShutdown(onExitFn onExitFunc) error {
 	return startMonitorShutdownSignal(onExitFn)
 }
 
+type shutdownSignal int
+
+const (
+	shutdownHalt = iota
+	shutdownRestart
+)
+
 // Global shutdown signal channel.
-var globalShutdownSignalCh = make(chan struct{}, 1)
+var globalShutdownSignalCh = make(chan shutdownSignal, 1)
 
 // Start to monitor shutdownSignal to execute shutdown callbacks
 func startMonitorShutdownSignal(onExitFn onExitFunc) error {
@@ -162,8 +171,8 @@ func startMonitorShutdownSignal(onExitFn onExitFunc) error {
 			select {
 			case <-trapCh:
 				// Initiate graceful shutdown.
-				globalShutdownSignalCh <- struct{}{}
-			case <-globalShutdownSignalCh:
+				globalShutdownSignalCh <- shutdownHalt
+			case signal := <-globalShutdownSignalCh:
 				// Call all object storage shutdown callbacks and exit for emergency
 				for _, callback := range globalShutdownCBs.GetObjectLayerCBs() {
 					exitCode := callback()
@@ -178,6 +187,21 @@ func startMonitorShutdownSignal(onExitFn onExitFunc) error {
 					if exitCode != exitSuccess {
 						onExitFn(int(exitCode))
 					}
+				}
+				// All shutdown callbacks ensure that the server is safely terminated
+				// and any concurrent process could be started again
+				if signal == shutdownRestart {
+					path := os.Args[0]
+					cmdArgs := os.Args[1:]
+					cmd := exec.Command(path, cmdArgs...)
+					cmd.Stdout = os.Stdout
+					cmd.Stderr = os.Stderr
+
+					err := cmd.Start()
+					if err != nil {
+						errorIf(errors.New("Unable to reboot."), err.Error())
+					}
+					onExitFn(int(exitSuccess))
 				}
 				onExitFn(int(exitSuccess))
 			}
