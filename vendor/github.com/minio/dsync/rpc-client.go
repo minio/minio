@@ -43,11 +43,6 @@ func (rpcClient *RPCClient) SetRPC(rpc *rpc.Client) {
 	defer rpcClient.Unlock()
 	rpcClient.rpc = rpc
 }
-func (rpcClient *RPCClient) Close() error {
-	rpcClient.Lock()
-	defer rpcClient.Unlock()
-	return rpcClient.rpc.Close()
-}
 
 func (rpcClient *RPCClient) Call(serviceMethod string, args interface{}, reply interface{}) error {
 	rpcClient.Lock()

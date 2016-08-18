@@ -17,127 +17,360 @@
 package dsync
 
 import (
-	"fmt"
+	"math"
+	"math/rand"
+	"net/rpc"
 	"sync"
+	"time"
 )
 
-const maxReaders = 8
+const DRWMutexAcquireTimeout = 25 * time.Millisecond
 
+// A DRWMutex is a distributed mutual exclusion lock.
 type DRWMutex struct {
-	rArray       []*DMutex
-	rLockedArray []bool
-	w            DMutex     // held if there are pending writers
-	m            sync.Mutex // Mutex to prevent multiple simultaneous locks from this node
-	m2           sync.Mutex // Mutex to prevent multiple simultaneous locks from this node
+	Name  string
+	locks []bool     // Array of nodes that granted a lock
+	uids  []string   // Array of uids for verification of sending correct release messages
+	m     sync.Mutex // Mutex to prevent multiple simultaneous locks from this node
 }
 
-func NewDRWMutex(name string) (drw *DRWMutex) {
+type Granted struct {
+	index  int
+	locked bool
+	uid    string
+}
 
-	rArray := make([]*DMutex, maxReaders)
-	rLockedArray := make([]bool, maxReaders)
-
-	for r := 0; r < maxReaders; r++ {
-		rArray[r] = &DMutex{Name: fmt.Sprintf("%s-r%d", name, r)}
-	}
-
+func NewDRWMutex(name string) *DRWMutex {
 	return &DRWMutex{
-		rArray:       rArray,
-		rLockedArray: rLockedArray,
-		w:            DMutex{Name: name + "-w"}}
+		Name:  name,
+		locks: make([]bool, dnodeCount),
+		uids:  make([]string, dnodeCount),
+	}
 }
 
-// RLock locks drw for reading.
-func (drw *DRWMutex) RLock() {
+// Connect to respective lock server nodes on the first Lock() call.
+func connectLazy() {
+	if clnts == nil {
+		panic("rpc client connections weren't initialized.")
+	}
+	for i := range clnts {
+		if clnts[i].rpc != nil {
+			continue
+		}
 
-	drw.m.Lock()
-	defer drw.m.Unlock()
+		// Pass in unique path (as required by server.HandleHTTP().
+		// Ignore failure to connect, the lock server node may join the
+		// cluster later.
+		clnt, err := rpc.DialHTTPPath("tcp", nodes[i], rpcPaths[i])
+		if err != nil {
+			clnts[i].SetRPC(nil)
+			continue
+		}
+		clnts[i].SetRPC(clnt)
+	}
+}
 
-	// Check if no write is active, block otherwise
-	// Can skip this?
-	drw.w.Lock()
-	drw.w.Unlock()
+// RLock holds a read lock on dm.
+//
+// If the lock is already in use, the calling goroutine
+// blocks until the mutex is available.
+func (dm *DRWMutex) RLock() {
+	// Shield RLock() with local mutex in order to prevent more than
+	// one broadcast going out at the same time from this node
+	dm.m.Lock()
+	defer dm.m.Unlock()
 
-	// Lock either one of the reader locks
-	for i := 0; ; i++ {
-		drw.rLockedArray[i%maxReaders] = drw.rArray[i%maxReaders].tryLockTimeout()
-		if drw.rLockedArray[i%maxReaders] {
+	runs, backOff := 1, 1
+
+	for {
+		connectLazy()
+
+		// create temp arrays on stack
+		locks := make([]bool, dnodeCount)
+		ids := make([]string, dnodeCount)
+
+		// try to acquire the lock
+		isReadLock := true
+		success := lock(clnts, &locks, &ids, dm.Name, isReadLock)
+		if success {
+			// if success, copy array to object
+			copy(dm.locks, locks[:])
+			copy(dm.uids, ids[:])
 			return
 		}
-	}
-}
 
-// RUnlock undoes a single RLock call;
-// it does not affect other simultaneous readers.
-// It is a run-time error if rw is not locked for reading
-// on entry to RUnlock.
-func (drw *DRWMutex) RUnlock() {
+		// We timed out on the previous lock, incrementally wait for a longer back-off time,
+		// and try again afterwards
+		time.Sleep(time.Duration(backOff) * time.Millisecond)
 
-	drw.m.Lock()
-	defer drw.m.Unlock()
+		backOff += int(rand.Float64() * math.Pow(2, float64(runs)))
+		if backOff > 1024 {
+			backOff = backOff % 64
 
-	// Unlock whichever readlock that was acquired)
-	for r := 0; r < maxReaders; r++ {
-		if drw.rLockedArray[r] {
-			drw.rArray[r].Unlock()
-			drw.rLockedArray[r] = false
-			// we only want to release a single read lock at a time
-			break
+			runs = 1 // reset runs
+		} else if runs < 10 {
+			runs++
 		}
 	}
 }
 
-// Lock locks rw for writing.
-// If the lock is already locked for reading or writing,
-// Lock blocks until the lock is available.
-// To ensure that the lock eventually becomes available,
-// a blocked Lock call excludes new readers from acquiring
-// the lock.
-func (drw *DRWMutex) Lock() {
+// Lock locks dm.
+//
+// If the lock is already in use, the calling goroutine
+// blocks until the mutex is available.
+func (dm *DRWMutex) Lock() {
 
-	drw.m.Lock()
-	defer drw.m.Unlock()
+	// Shield Lock() with local mutex in order to prevent more than
+	// one broadcast going out at the same time from this node
+	dm.m.Lock()
+	defer dm.m.Unlock()
 
-	// First, resolve competition with other writers.
-	drw.w.Lock()
+	runs, backOff := 1, 1
 
-	// Acquire all read locks.
-	var wg sync.WaitGroup
-	wg.Add(maxReaders)
+	for {
+		connectLazy()
 
-	for r := 0; r < maxReaders; r++ {
-		go func(r int) {
-			defer wg.Done()
-			drw.rArray[r].Lock()
-			drw.rLockedArray[r] = true
-		}(r)
+		// create temp arrays on stack
+		locks := make([]bool, dnodeCount)
+		ids := make([]string, dnodeCount)
+
+		// try to acquire the lock
+		isReadLock := false
+		success := lock(clnts, &locks, &ids, dm.Name, isReadLock)
+		if success {
+			// if success, copy array to object
+			copy(dm.locks, locks[:])
+			copy(dm.uids, ids[:])
+			return
+		}
+
+		// We timed out on the previous lock, incrementally wait for a longer back-off time,
+		// and try again afterwards
+		time.Sleep(time.Duration(backOff) * time.Millisecond)
+
+		backOff += int(rand.Float64() * math.Pow(2, float64(runs)))
+		if backOff > 1024 {
+			backOff = backOff % 64
+
+			runs = 1 // reset runs
+		} else if runs < 10 {
+			runs++
+		}
 	}
+}
+
+// lock tries to acquire the distributed lock, returning true or false
+//
+func lock(clnts []*RPCClient, locks *[]bool, uids *[]string, lockName string, isReadLock bool) bool {
+
+	// Create buffered channel of quorum size
+	ch := make(chan Granted, dquorum)
+
+	for index, c := range clnts {
+
+		// broadcast lock request to all nodes
+		go func(index int, isReadLock bool, c *RPCClient) {
+			// All client methods issuing RPCs are thread-safe and goroutine-safe,
+			// i.e. it is safe to call them from multiple concurrently running go routines.
+			var status bool
+			var err error
+			if isReadLock {
+				err = c.Call("Dsync.RLock", lockName, &status)
+			} else {
+				err = c.Call("Dsync.Lock", lockName, &status)
+			}
+
+			locked, uid := false, ""
+			if err == nil {
+				locked = status
+				// TODO: Get UIOD again
+				uid = ""
+			} else {
+				// If rpc call failed due to connection related errors, reset rpc.Client object
+				// to trigger reconnect on subsequent Lock()/Unlock() requests to the same node.
+				if IsRPCError(err) {
+					clnts[index].SetRPC(nil)
+				}
+				// silently ignore error, retry later
+			}
+
+			ch <- Granted{index: index, locked: locked, uid: uid}
+
+		}(index, isReadLock, c)
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	quorum := false
+
+	go func(isReadLock bool) {
+
+		// Wait until we have received (minimally) quorum number of responses or timeout
+		i := 0
+		done := false
+		timeout := time.After(DRWMutexAcquireTimeout)
+
+		for ; i < dnodeCount; i++ {
+
+			select {
+			case grant := <-ch:
+				if grant.locked {
+					// Mark that this node has acquired the lock
+					(*locks)[grant.index] = true
+					(*uids)[grant.index] = grant.uid
+				} else {
+					done = true
+					//fmt.Println("one lock failed before quorum -- release locks acquired")
+					releaseAll(clnts, locks, uids, lockName, isReadLock)
+				}
+
+			case <-timeout:
+				done = true
+				// timeout happened, maybe one of the nodes is slow, count
+				// number of locks to check whether we have quorum or not
+				if !quorumMet(locks) {
+					//fmt.Println("timed out -- release locks acquired")
+					releaseAll(clnts, locks, uids, lockName, isReadLock)
+				}
+			}
+
+			if done {
+				break
+			}
+		}
+
+		// Count locks in order to determine whterh we have quorum or not
+		quorum = quorumMet(locks)
+
+		// Signal that we have the quorum
+		wg.Done()
+
+		// Wait for the other responses and immediately release the locks
+		// (do not add them to the locks array because the DRWMutex could
+		//  already has been unlocked again by the original calling thread)
+		for ; i < dnodeCount; i++ {
+			grantToBeReleased := <-ch
+			if grantToBeReleased.locked {
+				// release lock
+				sendRelease(clnts[grantToBeReleased.index], lockName, grantToBeReleased.uid, isReadLock)
+			}
+		}
+	}(isReadLock)
 
 	wg.Wait()
+
+	return quorum
 }
 
-// Unlock unlocks rw for writing.  It is a run-time error if rw is
-// not locked for writing on entry to Unlock.
-//
-// As with Mutexes, a locked RWMutex is not associated with a particular
-// goroutine.  One goroutine may RLock (Lock) an RWMutex and then
-// arrange for another goroutine to RUnlock (Unlock) it.
-func (drw *DRWMutex) Unlock() {
+// quorumMet determines whether we have acquired n/2+1 underlying locks or not
+func quorumMet(locks *[]bool) bool {
 
-	drw.m.Lock()
-	defer drw.m.Unlock()
-
-	for r := 0; r < maxReaders; r++ {
-		if !drw.rLockedArray[r] {
-			panic("dsync: unlock of unlocked distributed rwmutex")
+	count := 0
+	for _, locked := range *locks {
+		if locked {
+			count++
 		}
 	}
 
-	// Unlock all read locks
-	for r := 0; r < maxReaders; r++ {
-		drw.rArray[r].Unlock()
-		drw.rLockedArray[r] = false
+	return count >= dquorum
+}
+
+// releaseAll releases all locks that are marked as locked
+func releaseAll(clnts []*RPCClient, locks *[]bool, ids *[]string, lockName string, isReadLock bool) {
+
+	for lock := 0; lock < dnodeCount; lock++ {
+		if (*locks)[lock] {
+			sendRelease(clnts[lock], lockName, (*ids)[lock], isReadLock)
+			(*locks)[lock] = false
+			(*ids)[lock] = ""
+		}
 	}
 
-	// Allow other writers to proceed.
-	drw.w.Unlock()
+}
+
+// RUnlock releases a read lock held on dm.
+//
+// It is a run-time error if dm is not locked on entry to RUnlock.
+func (dm *DRWMutex) RUnlock() {
+	// We don't panic like sync.Mutex, when an unlock is issued on an
+	// un-locked lock, since the lock rpc server may have restarted and
+	// "forgotten" about the lock.
+
+	// We don't need to wait until we have released all the locks (or the quorum)
+	// (a subsequent lock will retry automatically in case it would fail to get
+	//  quorum)
+	for index, c := range clnts {
+
+		if dm.locks[index] {
+			// broadcast lock release to all nodes the granted the lock
+			isReadLock := true
+			sendRelease(c, dm.Name, dm.uids[index], isReadLock)
+
+			dm.locks[index] = false
+		}
+	}
+}
+
+// Unlock unlocks dm.
+//
+// It is a run-time error if dm is not locked on entry to Unlock.
+func (dm *DRWMutex) Unlock() {
+
+	// We don't panic like sync.Mutex, when an unlock is issued on an
+	// un-locked lock, since the lock rpc server may have restarted and
+	// "forgotten" about the lock.
+
+	// We don't need to wait until we have released all the locks (or the quorum)
+	// (a subsequent lock will retry automatically in case it would fail to get
+	//  quorum)
+	for index, c := range clnts {
+
+		if dm.locks[index] {
+			// broadcast lock release to all nodes the granted the lock
+			isReadLock := false
+			sendRelease(c, dm.Name, dm.uids[index], isReadLock)
+
+			dm.locks[index] = false
+		}
+	}
+}
+
+// sendRelease sends a release message to a node that previously granted a lock
+func sendRelease(c *RPCClient, name, uid string, isReadLock bool) {
+
+	backOffArray := []time.Duration{30 * time.Second, 1 * time.Minute, 3 * time.Minute, 10 * time.Minute, 30 * time.Minute, 1 * time.Hour}
+
+	go func(c *RPCClient, name, uid string) {
+
+		for _, backOff := range backOffArray {
+
+			// Make sure we are connected
+			connectLazy()
+
+			// All client methods issuing RPCs are thread-safe and goroutine-safe,
+			// i.e. it is safe to call them from multiple concurrently running goroutines.
+			var status bool
+			var err error
+			// TODO: Send UID to server
+			if isReadLock {
+				if err = c.Call("Dsync.RUnlock", name, &status); err == nil {
+					// RUnlock delivered, exit out
+					return
+				}
+			} else {
+				if err = c.Call("Dsync.Unlock", name, &status); err == nil {
+					// Unlock delivered, exit out
+					return
+				}
+			}
+
+			// If rpc call failed due to connection related errors, reset rpc.Client object
+			// to trigger reconnect on subsequent Lock()/Unlock() requests to the same node.
+			c.SetRPC(nil)
+
+			// wait
+			time.Sleep(backOff)
+		}
+	}(c, name, uid)
 }
