@@ -22,7 +22,7 @@ install:
 
 # to run your custom scripts instead of automatic MSBuild
 build_script:
-  - go test -race .
+  - go test -race github.com/minio/minio/cmd...
   - go test -race github.com/minio/minio/pkg...
   - go test -coverprofile=coverage.txt -covermode=atomic
   - go run buildscripts/gen-ldflags.go > temp.txt
