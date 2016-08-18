@@ -106,16 +106,23 @@ func configureServerHandler(srvCmdConfig serverCmdConfig) http.Handler {
 		ObjectAPI: newObjectLayerFn,
 	}
 
+	// Initialize Controller.
+	ctrlHandlers := &controllerAPIHandlers{
+		ObjectAPI: newObjectLayerFn,
+	}
+
 	// Initialize router.
 	mux := router.NewRouter()
 
 	// Register all routers.
 	registerStorageRPCRouters(mux, storageRPCs)
+
+	// Initialize distributed NS lock.
 	initDistributedNSLock(mux, srvCmdConfig)
 
 	// FIXME: till net/rpc auth is brought in "minio control" can be enabled only though
 	// this env variable.
-	if os.Getenv("MINIO_CONTROL") != "" {
+	if !strings.EqualFold(os.Getenv("MINIO_CONTROL"), "off") {
 		registerControlRPCRouter(mux, ctrlHandlers)
 	}
 

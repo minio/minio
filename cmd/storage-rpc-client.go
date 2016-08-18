@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package main
+package cmd
 
 import (
 	"errors"
@@ -88,7 +88,7 @@ func loginRPCClient(rpcClient *RPCClient) (tokenStr string, err error) {
 	}, &reply); err != nil {
 		return "", err
 	}
-	if reply.ServerVersion != minioVersion {
+	if reply.ServerVersion != Version {
 		return "", errors.New("Server version mismatch")
 	}
 	// Reply back server provided token.
