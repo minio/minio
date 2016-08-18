@@ -38,5 +38,5 @@ func registerControlRPCRouter(mux *router.Router, ctrlHandlers *controllerAPIHan
 
 // Handler for object healing.
 type controllerAPIHandlers struct {
-	ObjectAPI ObjectLayer
+	ObjectAPI func() ObjectLayer
 }
