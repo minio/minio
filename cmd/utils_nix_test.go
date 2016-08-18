@@ -1,7 +1,7 @@
-// +build windows
+// +build !windows
 
 /*
- * Minio Cloud Storage, (C) 2015 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package main
+package cmd
 
 import (
 	"net"
@@ -31,11 +31,11 @@ func TestSplitNetPath(t *testing.T) {
 		netPath     string
 		err         error
 	}{
-		{"10.1.10.1:C:\\path\\test", "10.1.10.1", "C:\\path\\test", nil},
-		{"10.1.10.1:C:", "10.1.10.1", "C:", nil},
-		{":C:", "", "", &net.AddrError{Err: "missing address in network path", Addr: ":C:"}},
-		{"C:\\path\\test", "", "C:\\path\\test", nil},
-		{"10.1.10.1::C:\\path\\test", "10.1.10.1", ":C:\\path\\test", nil},
+		{"10.1.10.1:", "", "", &net.AddrError{Err: "missing path in network path", Addr: "10.1.10.1:"}},
+		{"10.1.10.1", "", "10.1.10.1", nil},
+		{"10.1.10.1://", "10.1.10.1", "//", nil},
+		{"10.1.10.1:/disk/1", "10.1.10.1", "/disk/1", nil},
+		{"10.1.10.1:\\path\\test", "10.1.10.1", "\\path\\test", nil},
 	}
 
 	for i, test := range testCases {
