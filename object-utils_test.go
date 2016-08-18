@@ -88,6 +88,7 @@ func TestIsValidObjectName(t *testing.T) {
 		{"Cost Benefit Analysis (2009-2010).pptx", true},
 		{"117Gn8rfHL2ACARPAhaFd0AGzic9pUbIA/5OCn5A", true},
 		{"SHØRT", true},
+		{"f*le", true},
 		{"There are far too many object names, and far too few bucket names!", true},
 		// cases for which test should fail.
 		// passing invalid object names.

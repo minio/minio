@@ -118,7 +118,7 @@ const (
 	ErrFilterNameInvalid
 	ErrFilterNamePrefix
 	ErrFilterNameSuffix
-	ErrFilterPrefixValueInvalid
+	ErrFilterValueInvalid
 
 	// S3 extended errors.
 	ErrContentSHA256Mismatch
@@ -500,9 +500,9 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "Cannot specify more than one suffix rule in a filter.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
-	ErrFilterPrefixValueInvalid: {
+	ErrFilterValueInvalid: {
 		Code:           "InvalidArgument",
-		Description:    "prefix rule value cannot exceed 1024 characters",
+		Description:    "Size of filter rule value cannot exceed 1024 bytes in UTF-8 representation",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 

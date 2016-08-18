@@ -88,9 +88,8 @@ func checkFilterRules(filterRules []filterRule) APIErrorCode {
 			}
 		}
 
-		// Maximum prefix length can be up to 1,024 characters, validate.
 		if !IsValidObjectPrefix(filterRule.Value) {
-			return ErrFilterPrefixValueInvalid
+			return ErrFilterValueInvalid
 		}
 
 		// Set the new rule name to keep track of duplicates.

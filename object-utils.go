@@ -103,7 +103,7 @@ func IsValidObjectPrefix(object string) bool {
 		return false
 	}
 	// Reject unsupported characters in object name.
-	if strings.ContainsAny(object, "`^*|\\\"") {
+	if strings.ContainsAny(object, "`^|\\\"") {
 		return false
 	}
 	return true
