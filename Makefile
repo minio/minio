@@ -71,19 +71,19 @@ verifiers: vet fmt lint cyclo spelling
 
 vet:
 	@echo "Running $@:"
-	@GO15VENDOREXPERIMENT=1 go tool vet -all *.go
+	@GO15VENDOREXPERIMENT=1 go tool vet -all ./cmd
 	@GO15VENDOREXPERIMENT=1 go tool vet -all ./pkg
-	@GO15VENDOREXPERIMENT=1 go tool vet -shadow=true *.go
+	@GO15VENDOREXPERIMENT=1 go tool vet -shadow=true ./cmd
 	@GO15VENDOREXPERIMENT=1 go tool vet -shadow=true ./pkg
 
 fmt:
 	@echo "Running $@:"
-	@GO15VENDOREXPERIMENT=1 gofmt -s -l *.go
+	@GO15VENDOREXPERIMENT=1 gofmt -s -l cmd
 	@GO15VENDOREXPERIMENT=1 gofmt -s -l pkg
 
 lint:
 	@echo "Running $@:"
-	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/golint *.go
+	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/golint github.com/minio/minio/cmd...
 	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/golint github.com/minio/minio/pkg...
 
 ineffassign:
@@ -92,7 +92,7 @@ ineffassign:
 
 cyclo:
 	@echo "Running $@:"
-	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/gocyclo -over 65 *.go
+	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/gocyclo -over 65 cmd
 	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/gocyclo -over 65 pkg
 
 build: getdeps verifiers $(UI_ASSETS)
@@ -101,12 +101,12 @@ deadcode:
 	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/deadcode
 
 spelling:
-	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/misspell -error *.go
+	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/misspell -error cmd/**/*
 	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/misspell -error pkg/**/*
 
 test: build
 	@echo "Running all minio testing:"
-	@GO15VENDOREXPERIMENT=1 go test $(GOFLAGS) .
+	@GO15VENDOREXPERIMENT=1 go test $(GOFLAGS) github.com/minio/minio/cmd...
 	@GO15VENDOREXPERIMENT=1 go test $(GOFLAGS) github.com/minio/minio/pkg...
 
 coverage: build
@@ -139,8 +139,6 @@ experimental: verifiers
 
 clean:
 	@echo "Cleaning up all the generated files:"
-	@rm -fv minio minio.test cover.out
 	@find . -name '*.test' | xargs rm -fv
-	@rm -rf isa-l
 	@rm -rf build
 	@rm -rf release
