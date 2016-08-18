@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package main
+package cmd
 
 // RPCLoginArgs - login username and password for RPC.
 type RPCLoginArgs struct {
