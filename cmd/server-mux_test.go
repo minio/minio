@@ -23,7 +23,10 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestClose(t *testing.T) {
@@ -145,15 +148,43 @@ func TestServerCloseBlocking(t *testing.T) {
 	m.mu.Unlock()
 }
 
+// Test creating new mux server and closing it
 func TestListenAndServe(t *testing.T) {
-	m := NewMuxServer("", nil)
+	// Choose a port and start a mux server
+	port := strconv.Itoa(getFreePort())
+	m := NewMuxServer(":"+port, nil)
+
 	stopc := make(chan struct{})
 	errc := make(chan error)
-	go func() { errc <- m.ListenAndServe() }()
-	go func() { errc <- m.Close(); close(stopc) }()
+
+	go func() {
+		errc <- m.ListenAndServe()
+	}()
+
+	go func() {
+		connected := false
+		// ListenAndServe() is called in a parallel go routine, be sure that the opened
+		// port is ready by calling it and retrying in case of failure until 10 times
+		for i := 1; i <= 10; i++ {
+			_, err := net.Dial("tcp", ":"+port)
+			if err == nil {
+				connected = true
+				break
+			}
+			time.Sleep(time.Millisecond * 500)
+		}
+		if !connected {
+			t.Fatal("Cannot connect to the created mux server")
+		}
+		errc <- m.Close()
+		close(stopc)
+	}()
+
 	select {
 	case err := <-errc:
-		if err != nil {
+		// use of closed network connection error is returned by ListenAndServe
+		// and triggered when we close the listener. This is a normal error
+		if err != nil && !strings.Contains(err.Error(), "use of closed network connection") {
 			t.Fatal(err)
 		}
 	case <-stopc:
