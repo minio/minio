@@ -23,7 +23,9 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
+	"time"
 )
 
 func TestClose(t *testing.T) {
@@ -36,9 +38,7 @@ func TestClose(t *testing.T) {
 }
 
 func TestMuxServer(t *testing.T) {
-	ts := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintln(w, "Hello, client")
-	}))
+	ts := httptest.NewUnstartedServer(nil)
 	defer ts.Close()
 
 	// Create ServerMux
@@ -91,9 +91,7 @@ func TestMuxServer(t *testing.T) {
 }
 
 func TestServerCloseBlocking(t *testing.T) {
-	ts := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintln(w, "Hello, client")
-	}))
+	ts := httptest.NewUnstartedServer(nil)
 	defer ts.Close()
 
 	// Create ServerMux
@@ -146,17 +144,42 @@ func TestServerCloseBlocking(t *testing.T) {
 }
 
 func TestListenAndServe(t *testing.T) {
-	m := NewMuxServer("", nil)
-	stopc := make(chan struct{})
+	wait := make(chan struct{})
+	addr := "127.0.0.1:" + strconv.Itoa(getFreePort())
 	errc := make(chan error)
+
+	// Create ServerMux and when we receive a request we stop waiting
+	m := NewMuxServer(addr, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, "hello")
+		close(wait)
+	}))
+
+	// ListenAndServe in a goroutine, but we don't know when it's ready
 	go func() { errc <- m.ListenAndServe() }()
-	go func() { errc <- m.Close(); close(stopc) }()
+
+	// Make sure we don't block by closing wait after a timeout
+	tf := time.AfterFunc(time.Millisecond*100, func() { close(wait) })
+
+	// Keep trying the server until it's accepting connections
+	client := http.Client{Timeout: time.Millisecond * 10}
+	ok := false
+	for !ok {
+		res, _ := client.Get("http://" + addr)
+		if res != nil && res.StatusCode == http.StatusOK {
+			ok = true
+		}
+	}
+
+	tf.Stop() // Cancel the timeout since we made a successful request
+
+	// Block until we get an error or wait closed
 	select {
 	case err := <-errc:
 		if err != nil {
 			t.Fatal(err)
 		}
-	case <-stopc:
+	case <-wait:
+		m.Close() // Shutdown the ServerMux
 		return
 	}
 }
