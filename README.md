@@ -122,6 +122,7 @@ $ docker pull minio/minio
 $ docker run -p 9000:9000 minio/minio
 
 ```
+Please visit Minio Docker quickstart guide for more [here](https://docs.minio.io/docs/minio-docker-quickstart-guide)
 
 ### FreeBSD
 
@@ -150,6 +151,7 @@ Object API (Amazon S3 compatible):
 
 
 ```
+Please visit official zfs FreeBSD guide for more details [here](https://www.freebsd.org/doc/handbook/zfs-quickstart.html)
 
 ## 3. Test Minio Server using Minio Browser
 
