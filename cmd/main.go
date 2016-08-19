@@ -180,12 +180,17 @@ func Main() {
 
 		// Do not print update messages, if quiet flag is set.
 		if !globalQuiet {
-			// Do not print any errors in release update function.
-			noError := true
-			updateMsg := getReleaseUpdate(minioUpdateStableURL, noError)
-			if updateMsg.Update {
-				console.Println(updateMsg)
+			if Version == "DEVELOPMENT.GOGET" {
+				// Update not allowed for source compiled builds.
+				return nil
 			}
+			updateMsg, _, err := getReleaseUpdate(minioUpdateStableURL)
+			if err != nil {
+				// Ignore any errors during getReleaseUpdate() because
+				// the internet might not be available.
+				return nil
+			}
+			console.Println(updateMsg)
 		}
 
 		return nil
