@@ -18,12 +18,22 @@ package cmd
 
 import (
 	"bufio"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
+	"errors"
 	"fmt"
 	"io/ioutil"
+	"math/big"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 )
@@ -147,30 +157,33 @@ func TestListenAndServe(t *testing.T) {
 	wait := make(chan struct{})
 	addr := "127.0.0.1:" + strconv.Itoa(getFreePort())
 	errc := make(chan error)
+	once := &sync.Once{}
 
 	// Create ServerMux and when we receive a request we stop waiting
 	m := NewMuxServer(addr, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, "hello")
-		close(wait)
+		once.Do(func() { close(wait) })
 	}))
 
 	// ListenAndServe in a goroutine, but we don't know when it's ready
 	go func() { errc <- m.ListenAndServe() }()
 
 	// Make sure we don't block by closing wait after a timeout
-	tf := time.AfterFunc(time.Millisecond*100, func() { close(wait) })
+	tf := time.AfterFunc(time.Millisecond*500, func() { errc <- errors.New("Unable to connect to server") })
 
 	// Keep trying the server until it's accepting connections
-	client := http.Client{Timeout: time.Millisecond * 10}
-	ok := false
-	for !ok {
-		res, _ := client.Get("http://" + addr)
-		if res != nil && res.StatusCode == http.StatusOK {
-			ok = true
+	go func() {
+		client := http.Client{Timeout: time.Millisecond * 10}
+		ok := false
+		for !ok {
+			res, _ := client.Get("http://" + addr)
+			if res != nil && res.StatusCode == http.StatusOK {
+				ok = true
+			}
 		}
-	}
 
-	tf.Stop() // Cancel the timeout since we made a successful request
+		tf.Stop() // Cancel the timeout since we made a successful request
+	}()
 
 	// Block until we get an error or wait closed
 	select {
@@ -182,4 +195,127 @@ func TestListenAndServe(t *testing.T) {
 		m.Close() // Shutdown the ServerMux
 		return
 	}
+}
+
+func TestListenAndServeTLS(t *testing.T) {
+	wait := make(chan struct{})
+	addr := "127.0.0.1:" + strconv.Itoa(getFreePort())
+	errc := make(chan error)
+	once := &sync.Once{}
+
+	// Create ServerMux and when we receive a request we stop waiting
+	m := NewMuxServer(addr, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, "hello")
+		once.Do(func() { close(wait) })
+	}))
+
+	// Create a cert
+	err := createCertsPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	certFile := mustGetCertFile()
+	keyFile := mustGetKeyFile()
+	defer os.RemoveAll(certFile)
+	defer os.RemoveAll(keyFile)
+
+	err = generateTestCert(addr)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	// ListenAndServe in a goroutine, but we don't know when it's ready
+	go func() { errc <- m.ListenAndServeTLS(certFile, keyFile) }()
+
+	// Make sure we don't block by closing wait after a timeout
+	tf := time.AfterFunc(time.Millisecond*500, func() { errc <- errors.New("Unable to connect to server") })
+
+	// Keep trying the server until it's accepting connections
+	go func() {
+		tr := &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+		client := http.Client{
+			Timeout:   time.Millisecond * 10,
+			Transport: tr,
+		}
+		ok := false
+		for !ok {
+			res, _ := client.Get("https://" + addr)
+			if res != nil && res.StatusCode == http.StatusOK {
+				ok = true
+			}
+		}
+
+		tf.Stop() // Cancel the timeout since we made a successful request
+	}()
+
+	// Block until we get an error or wait closed
+	select {
+	case err := <-errc:
+		if err != nil {
+			t.Error(err)
+			return
+		}
+	case <-wait:
+		m.Close() // Shutdown the ServerMux
+		return
+	}
+}
+
+// generateTestCert creates a cert and a key used for testing only
+func generateTestCert(host string) error {
+	certPath := mustGetCertFile()
+	keyPath := mustGetKeyFile()
+	priv, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return err
+	}
+
+	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
+	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
+	if err != nil {
+		return err
+	}
+
+	template := x509.Certificate{
+		SerialNumber: serialNumber,
+		Subject: pkix.Name{
+			Organization: []string{"Minio Test Cert"},
+		},
+		NotBefore: time.Now(),
+		NotAfter:  time.Now().Add(time.Minute * 1),
+
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+	}
+
+	if ip := net.ParseIP(host); ip != nil {
+		template.IPAddresses = append(template.IPAddresses, ip)
+	}
+
+	template.IsCA = true
+	template.KeyUsage |= x509.KeyUsageCertSign
+
+	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
+	if err != nil {
+		return err
+	}
+
+	certOut, err := os.Create(certPath)
+	if err != nil {
+		return err
+	}
+	pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
+	certOut.Close()
+
+	keyOut, err := os.OpenFile(keyPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	if err != nil {
+		return err
+	}
+	pem.Encode(keyOut, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(priv)})
+	keyOut.Close()
+	return nil
 }

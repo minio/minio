@@ -19,20 +19,27 @@ package cmd
 import (
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/minio/go-homedir"
 )
 
 // configPath for custom config path only for testing purposes
 var customConfigPath string
+var configMu sync.Mutex
 
 // Sets a new config path.
 func setGlobalConfigPath(configPath string) {
+	configMu.Lock()
+	defer configMu.Unlock()
 	customConfigPath = configPath
 }
 
 // getConfigPath get server config path
 func getConfigPath() (string, error) {
+	configMu.Lock()
+	defer configMu.Unlock()
+
 	if customConfigPath != "" {
 		return customConfigPath, nil
 	}
