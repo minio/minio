@@ -18,7 +18,7 @@ Minio server is running on port 9002, 9003, 9004 with associated data directory 
 **Minio server on port ``9002``**
 
 ```sh
-$ ./minio -C /home/minio/minio1/.minio server --address 192.168.1.11:9002 minio1/data1/
+$ ./minio -C ~/minio1/.m1config server --address 192.168.1.11:9002 ~/minio1/data1/
 
 Endpoint:  http://192.168.1.11:9002
 AccessKey: XTW9SWKRWYKWE9M9K9RG 
@@ -29,7 +29,7 @@ Region:    us-east-1
 **Minio server on port ``9003``**
 
 ```sh
-$ ./minio -C /home/minio/minio2/.minio server --address 192.168.1.11:9003 minio1/data2/                                                 
+$ ./minio -C ~/minio2/.m2config server --address 192.168.1.11:9003 ~/minio2/data2/                                                 
 
 Endpoint:  http://192.168.1.11:9003
 AccessKey: UTD2WWPJOK754KMZKHWF 
@@ -40,7 +40,7 @@ Region:    us-east-1
 **Minio server on port ``9004``**
 
 ```sh
-$ ./minio -C /home/minio/minio3/.minio server --address 192.168.1.11:9004 minio1/data3/                                                 
+$ ./minio -C ~/minio3/.m3config server --address 192.168.1.11:9004 ~/minio3/data3/                                                 
 
 Endpoint:  http://192.168.1.11:9004
 AccessKey: KXLOJ908VEJ2K9RGUFHQ 
