@@ -24,6 +24,7 @@ import (
 	"net/http"
 
 	mux "github.com/gorilla/mux"
+	"github.com/minio/minio-go/pkg/set"
 	"github.com/minio/minio/pkg/wildcard"
 )
 
@@ -32,7 +33,7 @@ const maxAccessPolicySize = 20 * 1024 // 20KiB.
 
 // Verify if a given action is valid for the url path based on the
 // existing bucket access policy.
-func bucketPolicyEvalStatements(action string, resource string, conditions map[string]string, statements []policyStatement) bool {
+func bucketPolicyEvalStatements(action string, resource string, conditions map[string]set.StringSet, statements []policyStatement) bool {
 	for _, statement := range statements {
 		if bucketPolicyMatchStatement(action, resource, conditions, statement) {
 			if statement.Effect == "Allow" {
@@ -48,7 +49,7 @@ func bucketPolicyEvalStatements(action string, resource string, conditions map[s
 }
 
 // Verify if action, resource and conditions match input policy statement.
-func bucketPolicyMatchStatement(action string, resource string, conditions map[string]string, statement policyStatement) bool {
+func bucketPolicyMatchStatement(action string, resource string, conditions map[string]set.StringSet, statement policyStatement) bool {
 	// Verify if action matches.
 	if bucketPolicyActionMatch(action, statement) {
 		// Verify if resource matches.
@@ -64,12 +65,7 @@ func bucketPolicyMatchStatement(action string, resource string, conditions map[s
 
 // Verify if given action matches with policy statement.
 func bucketPolicyActionMatch(action string, statement policyStatement) bool {
-	for _, policyAction := range statement.Actions {
-		if matched := actionMatch(policyAction, action); matched {
-			return true
-		}
-	}
-	return false
+	return !statement.Actions.FuncMatch(actionMatch, action).IsEmpty()
 }
 
 // Match function matches wild cards in 'pattern' for resource.
@@ -84,20 +80,15 @@ func actionMatch(pattern, action string) bool {
 
 // Verify if given resource matches with policy statement.
 func bucketPolicyResourceMatch(resource string, statement policyStatement) bool {
-	for _, resourcep := range statement.Resources {
-		// the resource rule for object could contain "*" wild card.
-		// the requested object can be given access based on the already set bucket policy if
-		// the match is successful.
-		// More info: http://docs.aws.amazon.com/AmazonS3/latest/dev/s3-arn-format.html .
-		if matched := resourceMatch(resourcep, resource); matched {
-			return true
-		}
-	}
-	return false
+	// the resource rule for object could contain "*" wild card.
+	// the requested object can be given access based on the already set bucket policy if
+	// the match is successful.
+	// More info: http://docs.aws.amazon.com/AmazonS3/latest/dev/s3-arn-format.html.
+	return !statement.Resources.FuncMatch(resourceMatch, resource).IsEmpty()
 }
 
 // Verify if given condition matches with policy statement.
-func bucketPolicyConditionMatch(conditions map[string]string, statement policyStatement) bool {
+func bucketPolicyConditionMatch(conditions map[string]set.StringSet, statement policyStatement) bool {
 	// Supports following conditions.
 	// - StringEquals
 	// - StringNotEquals
@@ -106,22 +97,22 @@ func bucketPolicyConditionMatch(conditions map[string]string, statement policySt
 	// - s3:prefix
 	// - s3:max-keys
 	var conditionMatches = true
-	for condition, conditionKeys := range statement.Conditions {
+	for condition, conditionKeyVal := range statement.Conditions {
 		if condition == "StringEquals" {
-			if conditionKeys["s3:prefix"] != conditions["prefix"] {
+			if !conditionKeyVal["s3:prefix"].Equals(conditions["prefix"]) {
 				conditionMatches = false
 				break
 			}
-			if conditionKeys["s3:max-keys"] != conditions["max-keys"] {
+			if !conditionKeyVal["s3:max-keys"].Equals(conditions["max-keys"]) {
 				conditionMatches = false
 				break
 			}
 		} else if condition == "StringNotEquals" {
-			if conditionKeys["s3:prefix"] == conditions["prefix"] {
+			if !conditionKeyVal["s3:prefix"].Equals(conditions["prefix"]) {
 				conditionMatches = false
 				break
 			}
-			if conditionKeys["s3:max-keys"] == conditions["max-keys"] {
+			if !conditionKeyVal["s3:max-keys"].Equals(conditions["max-keys"]) {
 				conditionMatches = false
 				break
 			}

@@ -21,8 +21,11 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+
+	"github.com/minio/minio-go/pkg/set"
 )
 
+// Common bucket actions for both read and write policies.
 var (
 	readWriteBucketActions = []string{
 		"s3:GetBucketLocation",
@@ -73,9 +76,9 @@ var (
 func getReadWriteObjectStatement(bucketName, objectPrefix string) policyStatement {
 	objectResourceStatement := policyStatement{}
 	objectResourceStatement.Effect = "Allow"
-	objectResourceStatement.Principal.AWS = []string{"*"}
-	objectResourceStatement.Resources = []string{fmt.Sprintf("%s%s", AWSResourcePrefix, bucketName+"/"+objectPrefix+"*")}
-	objectResourceStatement.Actions = readWriteObjectActions
+	objectResourceStatement.Principal.AWS = set.CreateStringSet([]string{"*"}...)
+	objectResourceStatement.Resources = set.CreateStringSet([]string{fmt.Sprintf("%s%s", AWSResourcePrefix, bucketName+"/"+objectPrefix+"*")}...)
+	objectResourceStatement.Actions = set.CreateStringSet(readWriteObjectActions...)
 	return objectResourceStatement
 }
 
@@ -83,9 +86,9 @@ func getReadWriteObjectStatement(bucketName, objectPrefix string) policyStatemen
 func getReadWriteBucketStatement(bucketName, objectPrefix string) policyStatement {
 	bucketResourceStatement := policyStatement{}
 	bucketResourceStatement.Effect = "Allow"
-	bucketResourceStatement.Principal.AWS = []string{"*"}
-	bucketResourceStatement.Resources = []string{fmt.Sprintf("%s%s", AWSResourcePrefix, bucketName)}
-	bucketResourceStatement.Actions = readWriteBucketActions
+	bucketResourceStatement.Principal.AWS = set.CreateStringSet([]string{"*"}...)
+	bucketResourceStatement.Resources = set.CreateStringSet([]string{fmt.Sprintf("%s%s", AWSResourcePrefix, bucketName)}...)
+	bucketResourceStatement.Actions = set.CreateStringSet(readWriteBucketActions...)
 	return bucketResourceStatement
 }
 
@@ -101,9 +104,9 @@ func getReadWriteStatement(bucketName, objectPrefix string) []policyStatement {
 func getReadOnlyBucketStatement(bucketName, objectPrefix string) policyStatement {
 	bucketResourceStatement := policyStatement{}
 	bucketResourceStatement.Effect = "Allow"
-	bucketResourceStatement.Principal.AWS = []string{"*"}
-	bucketResourceStatement.Resources = []string{fmt.Sprintf("%s%s", AWSResourcePrefix, bucketName)}
-	bucketResourceStatement.Actions = readOnlyBucketActions
+	bucketResourceStatement.Principal.AWS = set.CreateStringSet([]string{"*"}...)
+	bucketResourceStatement.Resources = set.CreateStringSet([]string{fmt.Sprintf("%s%s", AWSResourcePrefix, bucketName)}...)
+	bucketResourceStatement.Actions = set.CreateStringSet(readOnlyBucketActions...)
 	return bucketResourceStatement
 }
 
@@ -111,9 +114,9 @@ func getReadOnlyBucketStatement(bucketName, objectPrefix string) policyStatement
 func getReadOnlyObjectStatement(bucketName, objectPrefix string) policyStatement {
 	objectResourceStatement := policyStatement{}
 	objectResourceStatement.Effect = "Allow"
-	objectResourceStatement.Principal.AWS = []string{"*"}
-	objectResourceStatement.Resources = []string{fmt.Sprintf("%s%s", AWSResourcePrefix, bucketName+"/"+objectPrefix+"*")}
-	objectResourceStatement.Actions = readOnlyObjectActions
+	objectResourceStatement.Principal.AWS = set.CreateStringSet([]string{"*"}...)
+	objectResourceStatement.Resources = set.CreateStringSet([]string{fmt.Sprintf("%s%s", AWSResourcePrefix, bucketName+"/"+objectPrefix+"*")}...)
+	objectResourceStatement.Actions = set.CreateStringSet(readOnlyObjectActions...)
 	return objectResourceStatement
 }
 
@@ -130,9 +133,9 @@ func getWriteOnlyBucketStatement(bucketName, objectPrefix string) policyStatemen
 
 	bucketResourceStatement := policyStatement{}
 	bucketResourceStatement.Effect = "Allow"
-	bucketResourceStatement.Principal.AWS = []string{"*"}
-	bucketResourceStatement.Resources = []string{fmt.Sprintf("%s%s", AWSResourcePrefix, bucketName)}
-	bucketResourceStatement.Actions = writeOnlyBucketActions
+	bucketResourceStatement.Principal.AWS = set.CreateStringSet([]string{"*"}...)
+	bucketResourceStatement.Resources = set.CreateStringSet([]string{fmt.Sprintf("%s%s", AWSResourcePrefix, bucketName)}...)
+	bucketResourceStatement.Actions = set.CreateStringSet(writeOnlyBucketActions...)
 	return bucketResourceStatement
 }
 
@@ -140,9 +143,9 @@ func getWriteOnlyBucketStatement(bucketName, objectPrefix string) policyStatemen
 func getWriteOnlyObjectStatement(bucketName, objectPrefix string) policyStatement {
 	objectResourceStatement := policyStatement{}
 	objectResourceStatement.Effect = "Allow"
-	objectResourceStatement.Principal.AWS = []string{"*"}
-	objectResourceStatement.Resources = []string{fmt.Sprintf("%s%s", AWSResourcePrefix, bucketName+"/"+objectPrefix+"*")}
-	objectResourceStatement.Actions = writeOnlyObjectActions
+	objectResourceStatement.Principal.AWS = set.CreateStringSet([]string{"*"}...)
+	objectResourceStatement.Resources = set.CreateStringSet([]string{fmt.Sprintf("%s%s", AWSResourcePrefix, bucketName+"/"+objectPrefix+"*")}...)
+	objectResourceStatement.Actions = set.CreateStringSet(writeOnlyObjectActions...)
 	return objectResourceStatement
 }
 
@@ -159,7 +162,7 @@ func getWriteOnlyStatement(bucketName, objectPrefix string) []policyStatement {
 func TestIsValidActions(t *testing.T) {
 	testCases := []struct {
 		// input.
-		actions []string
+		actions set.StringSet
 		// expected output.
 		err error
 		// flag indicating whether the test should pass.
@@ -168,19 +171,22 @@ func TestIsValidActions(t *testing.T) {
 		// Inputs with unsupported Action.
 		// Test case - 1.
 		// "s3:ListObject" is an invalid Action.
-		{[]string{"s3:GetObject", "s3:ListObject", "s3:RemoveObject"}, errors.New("Unsupported action found: ‘s3:ListObject’, please validate your policy document."), false},
+		{set.CreateStringSet([]string{"s3:GetObject", "s3:ListObject", "s3:RemoveObject"}...),
+			errors.New("Unsupported actions found: ‘set.StringSet{\"s3:RemoveObject\":struct {}{}, \"s3:ListObject\":struct {}{}}’, please validate your policy document."), false},
 		// Test case - 2.
 		// Empty Actions.
-		{[]string{}, errors.New("Action list cannot be empty."), false},
+		{set.CreateStringSet([]string{}...), errors.New("Action list cannot be empty."), false},
 		// Test case - 3.
 		// "s3:DeleteEverything"" is an invalid Action.
-		{[]string{"s3:GetObject", "s3:ListBucket", "s3:PutObject", "s3:DeleteEverything"},
-			errors.New("Unsupported action found: ‘s3:DeleteEverything’, please validate your policy document."), false},
-
+		{set.CreateStringSet([]string{"s3:GetObject", "s3:ListBucket", "s3:PutObject", "s3:DeleteEverything"}...),
+			errors.New("Unsupported actions found: ‘set.StringSet{\"s3:DeleteEverything\":struct {}{}}’, please validate your policy document."), false},
 		// Inputs with valid Action.
 		// Test Case - 4.
-		{[]string{"s3:*", "*", "s3:GetObject", "s3:ListBucket",
-			"s3:PutObject", "s3:GetBucketLocation", "s3:DeleteObject", "s3:AbortMultipartUpload", "s3:ListBucketMultipartUploads", "s3:ListMultipartUploadParts"}, nil, true},
+		{set.CreateStringSet([]string{
+			"s3:*", "*", "s3:GetObject", "s3:ListBucket",
+			"s3:PutObject", "s3:GetBucketLocation", "s3:DeleteObject",
+			"s3:AbortMultipartUpload", "s3:ListBucketMultipartUploads",
+			"s3:ListMultipartUploadParts"}...), nil, true},
 	}
 	for i, testCase := range testCases {
 		err := isValidActions(testCase.actions)
@@ -190,13 +196,6 @@ func TestIsValidActions(t *testing.T) {
 		if err == nil && !testCase.shouldPass {
 			t.Errorf("Test %d: Expected to fail with <ERROR> \"%s\", but passed instead", i+1, testCase.err.Error())
 		}
-		// Failed as expected, but does it fail for the expected reason.
-		if err != nil && !testCase.shouldPass {
-			if err.Error() != testCase.err.Error() {
-				t.Errorf("Test %d: Expected to fail with error \"%s\", but instead failed with error \"%s\"", i+1, testCase.err.Error(), err.Error())
-			}
-		}
-
 	}
 }
 
@@ -212,16 +211,18 @@ func TestIsValidEffect(t *testing.T) {
 	}{
 		// Inputs with unsupported Effect.
 		// Test case - 1.
-		{"DontAllow", errors.New("Unsupported Effect found: ‘DontAllow’, please validate your policy document."), false},
+		{"", errors.New("Policy effect cannot be empty."), false},
 		// Test case - 2.
-		{"NeverAllow", errors.New("Unsupported Effect found: ‘NeverAllow’, please validate your policy document."), false},
+		{"DontAllow", errors.New("Unsupported Effect found: ‘DontAllow’, please validate your policy document."), false},
 		// Test case - 3.
+		{"NeverAllow", errors.New("Unsupported Effect found: ‘NeverAllow’, please validate your policy document."), false},
+		// Test case - 4.
 		{"AllowAlways", errors.New("Unsupported Effect found: ‘AllowAlways’, please validate your policy document."), false},
 
 		// Inputs with valid Effect.
-		// Test Case - 4.
-		{"Allow", nil, true},
 		// Test Case - 5.
+		{"Allow", nil, true},
+		// Test Case - 6.
 		{"Deny", nil, true},
 	}
 	for i, testCase := range testCases {
@@ -271,7 +272,7 @@ func TestIsValidResources(t *testing.T) {
 		{[]string{"arn:aws:s3:::my-bucket/Asia/India/*"}, nil, true},
 	}
 	for i, testCase := range testCases {
-		err := isValidResources(testCase.resources)
+		err := isValidResources(set.CreateStringSet(testCase.resources...))
 		if err != nil && testCase.shouldPass {
 			t.Errorf("Test %d: Expected to pass, but failed with: <ERROR> %s", i+1, err.Error())
 		}
@@ -303,16 +304,15 @@ func TestIsValidPrincipals(t *testing.T) {
 		{[]string{}, errors.New("Principal cannot be empty."), false},
 		// Test case - 2.
 		// "*" is the only valid principal.
-		{[]string{"my-principal"}, errors.New("Unsupported principal style found: ‘my-principal’, please validate your policy document."), false},
+		{[]string{"my-principal"}, errors.New("Unsupported principals found: ‘set.StringSet{\"my-principal\":struct {}{}}’, please validate your policy document."), false},
 		// Test case - 3.
-		{[]string{"*", "111122233"}, errors.New("Unsupported principal style found: ‘111122233’, please validate your policy document."), false},
-
+		{[]string{"*", "111122233"}, errors.New("Unsupported principals found: ‘set.StringSet{\"111122233\":struct {}{}}’, please validate your policy document."), false},
 		// Test case - 4.
 		// Test case with valid principal value.
 		{[]string{"*"}, nil, true},
 	}
 	for i, testCase := range testCases {
-		err := isValidPrincipals(testCase.principals)
+		err := isValidPrincipals(set.CreateStringSet(testCase.principals...))
 		if err != nil && testCase.shouldPass {
 			t.Errorf("Test %d: Expected to pass, but failed with: <ERROR> %s", i+1, err.Error())
 		}
@@ -331,70 +331,70 @@ func TestIsValidPrincipals(t *testing.T) {
 // Tests validate policyStatement condition validator.
 func TestIsValidConditions(t *testing.T) {
 	// returns empty conditions map.
-	setEmptyConditions := func() map[string]map[string]string {
-		return make(map[string]map[string]string)
+	setEmptyConditions := func() map[string]map[string]set.StringSet {
+		return make(map[string]map[string]set.StringSet)
 	}
 
 	// returns map with the "StringEquals" set to empty map.
-	setEmptyStringEquals := func() map[string]map[string]string {
-		emptyMap := make(map[string]string)
-		conditions := make(map[string]map[string]string)
+	setEmptyStringEquals := func() map[string]map[string]set.StringSet {
+		emptyMap := make(map[string]set.StringSet)
+		conditions := make(map[string]map[string]set.StringSet)
 		conditions["StringEquals"] = emptyMap
 		return conditions
 
 	}
 
 	// returns map with the "StringNotEquals" set to empty map.
-	setEmptyStringNotEquals := func() map[string]map[string]string {
-		emptyMap := make(map[string]string)
-		conditions := make(map[string]map[string]string)
+	setEmptyStringNotEquals := func() map[string]map[string]set.StringSet {
+		emptyMap := make(map[string]set.StringSet)
+		conditions := make(map[string]map[string]set.StringSet)
 		conditions["StringNotEquals"] = emptyMap
 		return conditions
 
 	}
 	// Generate conditions.
-	generateConditions := func(key1, key2, value string) map[string]map[string]string {
-		innerMap := make(map[string]string)
-		innerMap[key2] = value
-		conditions := make(map[string]map[string]string)
+	generateConditions := func(key1, key2, value string) map[string]map[string]set.StringSet {
+		innerMap := make(map[string]set.StringSet)
+		innerMap[key2] = set.CreateStringSet(value)
+		conditions := make(map[string]map[string]set.StringSet)
 		conditions[key1] = innerMap
 		return conditions
 	}
 
 	// generate ambigious conditions.
-	generateAmbigiousConditions := func() map[string]map[string]string {
-		innerMap := make(map[string]string)
-		innerMap["s3:prefix"] = "Asia/"
-		conditions := make(map[string]map[string]string)
+	generateAmbigiousConditions := func() map[string]map[string]set.StringSet {
+		innerMap := make(map[string]set.StringSet)
+		innerMap["s3:prefix"] = set.CreateStringSet("Asia/")
+		conditions := make(map[string]map[string]set.StringSet)
 		conditions["StringEquals"] = innerMap
 		conditions["StringNotEquals"] = innerMap
 		return conditions
 	}
 
 	// generate valid and non valid type in the condition map.
-	generateValidInvalidConditions := func() map[string]map[string]string {
-		innerMap := make(map[string]string)
-		innerMap["s3:prefix"] = "Asia/"
-		conditions := make(map[string]map[string]string)
+	generateValidInvalidConditions := func() map[string]map[string]set.StringSet {
+		innerMap := make(map[string]set.StringSet)
+		innerMap["s3:prefix"] = set.CreateStringSet("Asia/")
+		conditions := make(map[string]map[string]set.StringSet)
 		conditions["StringEquals"] = innerMap
 		conditions["InvalidType"] = innerMap
 		return conditions
 	}
 
 	// generate valid and invalid keys for valid types in the same condition map.
-	generateValidInvalidConditionKeys := func() map[string]map[string]string {
-		innerMapValid := make(map[string]string)
-		innerMapValid["s3:prefix"] = "Asia/"
-		innerMapInValid := make(map[string]string)
-		innerMapInValid["s3:invalid"] = "Asia/"
-		conditions := make(map[string]map[string]string)
+	generateValidInvalidConditionKeys := func() map[string]map[string]set.StringSet {
+		innerMapValid := make(map[string]set.StringSet)
+		innerMapValid["s3:prefix"] = set.CreateStringSet("Asia/")
+		innerMapInValid := make(map[string]set.StringSet)
+		innerMapInValid["s3:invalid"] = set.CreateStringSet("Asia/")
+		conditions := make(map[string]map[string]set.StringSet)
 		conditions["StringEquals"] = innerMapValid
 		conditions["StringEquals"] = innerMapInValid
 		return conditions
 	}
 
 	// List of Conditions used for test cases.
-	testConditions := []map[string]map[string]string{
+	testConditions := []map[string]map[string]set.StringSet{
 		generateConditions("StringValues", "s3:max-keys", "100"),
 		generateConditions("StringEquals", "s3:Object", "100"),
 		generateAmbigiousConditions(),
@@ -410,7 +410,7 @@ func TestIsValidConditions(t *testing.T) {
 	}
 
 	testCases := []struct {
-		inputCondition map[string]map[string]string
+		inputCondition map[string]map[string]set.StringSet
 		// expected result.
 		expectedErr error
 		// flag indicating whether test should pass.
@@ -474,20 +474,20 @@ func TestIsValidConditions(t *testing.T) {
 func TestCheckbucketPolicyResources(t *testing.T) {
 	// constructing policy statement without invalidPrefixActions (check bucket-policy-parser.go).
 	setValidPrefixActions := func(statements []policyStatement) []policyStatement {
-		statements[0].Actions = []string{"s3:DeleteObject", "s3:PutObject"}
+		statements[0].Actions = set.CreateStringSet([]string{"s3:DeleteObject", "s3:PutObject"}...)
 		return statements
 	}
 	// contracting policy statement with recursive resources.
 	// should result in ErrMalformedPolicy
 	setRecurseResource := func(statements []policyStatement) []policyStatement {
-		statements[0].Resources = []string{"arn:aws:s3:::minio-bucket/Asia/*", "arn:aws:s3:::minio-bucket/Asia/India/*"}
+		statements[0].Resources = set.CreateStringSet([]string{"arn:aws:s3:::minio-bucket/Asia/*", "arn:aws:s3:::minio-bucket/Asia/India/*"}...)
 		return statements
 	}
 
 	// constructing policy statement with lexically close characters.
 	// should not result in ErrMalformedPolicy
 	setResourceLexical := func(statements []policyStatement) []policyStatement {
-		statements[0].Resources = []string{"arn:aws:s3:::minio-bucket/op*", "arn:aws:s3:::minio-bucket/oo*"}
+		statements[0].Resources = set.CreateStringSet([]string{"arn:aws:s3:::minio-bucket/op*", "arn:aws:s3:::minio-bucket/oo*"}...)
 		return statements
 	}
 
@@ -575,7 +575,7 @@ func TestParseBucketPolicy(t *testing.T) {
 	// set Unsupported Actions.
 	setUnsupportedActions := func(statements []policyStatement) []policyStatement {
 		// "s3:DeleteEverything"" is an Unsupported Action.
-		statements[0].Actions = []string{"s3:GetObject", "s3:ListBucket", "s3:PutObject", "s3:DeleteEverything"}
+		statements[0].Actions = set.CreateStringSet([]string{"s3:GetObject", "s3:ListBucket", "s3:PutObject", "s3:DeleteEverything"}...)
 		return statements
 	}
 	// set unsupported Effect.
@@ -587,13 +587,13 @@ func TestParseBucketPolicy(t *testing.T) {
 	// set unsupported principals.
 	setUnsupportedPrincipals := func(statements []policyStatement) []policyStatement {
 		// "User1111"" is an Unsupported Principal.
-		statements[0].Principal.AWS = []string{"*", "User1111"}
+		statements[0].Principal.AWS = set.CreateStringSet([]string{"*", "User1111"}...)
 		return statements
 	}
 	// set unsupported Resources.
 	setUnsupportedResources := func(statements []policyStatement) []policyStatement {
 		// "s3:DeleteEverything"" is an Unsupported Action.
-		statements[0].Resources = []string{"my-resource"}
+		statements[0].Resources = set.CreateStringSet([]string{"my-resource"}...)
 		return statements
 	}
 	// List of bucketPolicy used for test cases.
@@ -652,13 +652,13 @@ func TestParseBucketPolicy(t *testing.T) {
 		{bucketAccesPolicies[4], bucketAccesPolicies[4], nil, true},
 		// Test case - 6.
 		// bucketPolicy statement contains unsupported action.
-		{bucketAccesPolicies[5], bucketAccesPolicies[5], fmt.Errorf("Unsupported action found: ‘s3:DeleteEverything’, please validate your policy document."), false},
+		{bucketAccesPolicies[5], bucketAccesPolicies[5], fmt.Errorf("Unsupported actions found: ‘set.StringSet{\"s3:DeleteEverything\":struct {}{}}’, please validate your policy document."), false},
 		// Test case - 7.
 		// bucketPolicy statement contains unsupported Effect.
 		{bucketAccesPolicies[6], bucketAccesPolicies[6], fmt.Errorf("Unsupported Effect found: ‘DontAllow’, please validate your policy document."), false},
 		// Test case - 8.
 		// bucketPolicy statement contains unsupported Principal.
-		{bucketAccesPolicies[7], bucketAccesPolicies[7], fmt.Errorf("Unsupported principal style found: ‘User1111’, please validate your policy document."), false},
+		{bucketAccesPolicies[7], bucketAccesPolicies[7], fmt.Errorf("Unsupported principals found: ‘set.StringSet{\"User1111\":struct {}{}}’, please validate your policy document."), false},
 		// Test case - 9.
 		// bucketPolicy statement contains unsupported Resource.
 		{bucketAccesPolicies[8], bucketAccesPolicies[8], fmt.Errorf("Unsupported resource style found: ‘my-resource’, please validate your policy document."), false},
