@@ -26,6 +26,8 @@ import (
 	"path"
 	"sort"
 	"strings"
+
+	"github.com/minio/minio-go/pkg/set"
 )
 
 const (
@@ -34,50 +36,39 @@ const (
 )
 
 // supportedActionMap - lists all the actions supported by minio.
-var supportedActionMap = map[string]struct{}{
-	"*":                             {},
-	"s3:*":                          {},
-	"s3:GetObject":                  {},
-	"s3:ListBucket":                 {},
-	"s3:PutObject":                  {},
-	"s3:GetBucketLocation":          {},
-	"s3:DeleteObject":               {},
-	"s3:AbortMultipartUpload":       {},
-	"s3:ListBucketMultipartUploads": {},
-	"s3:ListMultipartUploadParts":   {},
-}
+var supportedActionMap = set.CreateStringSet("*", "*", "s3:*", "s3:GetObject",
+	"s3:ListBucket", "s3:PutObject", "s3:GetBucketLocation", "s3:DeleteObject",
+	"s3:AbortMultipartUpload", "s3:ListBucketMultipartUploads", "s3:ListMultipartUploadParts")
 
 // supported Conditions type.
-var supportedConditionsType = map[string]struct{}{
-	"StringEquals":    {},
-	"StringNotEquals": {},
-}
+var supportedConditionsType = set.CreateStringSet("StringEquals", "StringNotEquals")
 
 // Validate s3:prefix, s3:max-keys are present if not
 // supported keys for the conditions.
-var supportedConditionsKey = map[string]struct{}{
-	"s3:prefix":   {},
-	"s3:max-keys": {},
-}
+var supportedConditionsKey = set.CreateStringSet("s3:prefix", "s3:max-keys")
 
-// User - canonical users list.
+// supportedEffectMap - supported effects.
+var supportedEffectMap = set.CreateStringSet("Allow", "Deny")
+
+// policyUser - canonical users list.
 type policyUser struct {
-	AWS []string
+	AWS           set.StringSet `json:"AWS,omitempty"`
+	CanonicalUser set.StringSet `json:"CanonicalUser,omitempty"`
 }
 
 // Statement - minio policy statement
 type policyStatement struct {
-	Sid        string
+	Actions    set.StringSet                       `json:"Action"`
+	Conditions map[string]map[string]set.StringSet `json:"Condition,omitempty"`
 	Effect     string
-	Principal  policyUser                   `json:"Principal"`
-	Actions    []string                     `json:"Action"`
-	Resources  []string                     `json:"Resource"`
-	Conditions map[string]map[string]string `json:"Condition,omitempty"`
+	Principal  policyUser    `json:"Principal"`
+	Resources  set.StringSet `json:"Resource"`
+	Sid        string
 }
 
 // bucketPolicy - collection of various bucket policy statements.
 type bucketPolicy struct {
-	Version    string            // date in 0000-00-00 format
+	Version    string            // date in YYYY-MM-DD format
 	Statements []policyStatement `json:"Statement"`
 }
 
@@ -91,51 +82,42 @@ func (b bucketPolicy) String() string {
 	return string(bbytes)
 }
 
-// supportedEffectMap - supported effects.
-var supportedEffectMap = map[string]struct{}{
-	"Allow": {},
-	"Deny":  {},
-}
-
 // isValidActions - are actions valid.
-func isValidActions(actions []string) (err error) {
+func isValidActions(actions set.StringSet) (err error) {
 	// Statement actions cannot be empty.
 	if len(actions) == 0 {
 		err = errors.New("Action list cannot be empty.")
 		return err
 	}
-	for _, action := range actions {
-		if _, ok := supportedActionMap[action]; !ok {
-			err = errors.New("Unsupported action found: ‘" + action + "’, please validate your policy document.")
-			return err
-		}
+	if unsupportedActions := actions.Difference(supportedActionMap); !unsupportedActions.IsEmpty() {
+		err = fmt.Errorf("Unsupported actions found: ‘%#v’, please validate your policy document.", unsupportedActions)
+		return err
 	}
 	return nil
 }
 
 // isValidEffect - is effect valid.
-func isValidEffect(effect string) error {
+func isValidEffect(effect string) (err error) {
 	// Statement effect cannot be empty.
-	if len(effect) == 0 {
-		err := errors.New("Policy effect cannot be empty.")
+	if effect == "" {
+		err = errors.New("Policy effect cannot be empty.")
 		return err
 	}
-	_, ok := supportedEffectMap[effect]
-	if !ok {
-		err := errors.New("Unsupported Effect found: ‘" + effect + "’, please validate your policy document.")
+	if !supportedEffectMap.Contains(effect) {
+		err = errors.New("Unsupported Effect found: ‘" + effect + "’, please validate your policy document.")
 		return err
 	}
 	return nil
 }
 
 // isValidResources - are valid resources.
-func isValidResources(resources []string) (err error) {
+func isValidResources(resources set.StringSet) (err error) {
 	// Statement resources cannot be empty.
 	if len(resources) == 0 {
 		err = errors.New("Resource list cannot be empty.")
 		return err
 	}
-	for _, resource := range resources {
+	for resource := range resources {
 		if !strings.HasPrefix(resource, AWSResourcePrefix) {
 			err = errors.New("Unsupported resource style found: ‘" + resource + "’, please validate your policy document.")
 			return err
@@ -150,63 +132,50 @@ func isValidResources(resources []string) (err error) {
 }
 
 // isValidPrincipals - are valid principals.
-func isValidPrincipals(principals []string) (err error) {
+func isValidPrincipals(principals set.StringSet) (err error) {
 	// Statement principal should have a value.
 	if len(principals) == 0 {
 		err = errors.New("Principal cannot be empty.")
 		return err
 	}
-	for _, principal := range principals {
+	if unsuppPrincipals := principals.Difference(set.CreateStringSet([]string{"*"}...)); !unsuppPrincipals.IsEmpty() {
 		// Minio does not support or implement IAM, "*" is the only valid value.
 		// Amazon s3 doc on principals: http://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements.html#Principal
-		if principal != "*" {
-			err = fmt.Errorf("Unsupported principal style found: ‘%s’, please validate your policy document.", principal)
-			return err
-		}
+		err = fmt.Errorf("Unsupported principals found: ‘%#v’, please validate your policy document.", unsuppPrincipals)
+		return err
 	}
 	return nil
 }
 
 // isValidConditions - are valid conditions.
-func isValidConditions(conditions map[string]map[string]string) (err error) {
-	// Returns true if string 'a' is found in the list.
-	findString := func(a string, list []string) bool {
-		for _, b := range list {
-			if b == a {
-				return true
-			}
-		}
-		return false
-	}
-	conditionKeyVal := make(map[string][]string)
+func isValidConditions(conditions map[string]map[string]set.StringSet) (err error) {
 	// Verify conditions should be valid.
 	// Validate if stringEquals, stringNotEquals are present
 	// if not throw an error.
+	conditionKeyVal := make(map[string]set.StringSet)
 	for conditionType := range conditions {
-		_, validType := supportedConditionsType[conditionType]
-		if !validType {
+		if !supportedConditionsType.Contains(conditionType) {
 			err = fmt.Errorf("Unsupported condition type '%s', please validate your policy document.", conditionType)
 			return err
 		}
-		for key := range conditions[conditionType] {
-			_, validKey := supportedConditionsKey[key]
-			if !validKey {
+		for key, value := range conditions[conditionType] {
+			if !supportedConditionsKey.Contains(key) {
 				err = fmt.Errorf("Unsupported condition key '%s', please validate your policy document.", conditionType)
 				return err
 			}
-			conditionArray, ok := conditionKeyVal[key]
-			if ok && findString(conditions[conditionType][key], conditionArray) {
+			conditionVal, ok := conditionKeyVal[key]
+			if ok && !value.Intersection(conditionVal).IsEmpty() {
 				err = fmt.Errorf("Ambigious condition values for key '%s', please validate your policy document.", key)
 				return err
 			}
-			conditionKeyVal[key] = append(conditionKeyVal[key], conditions[conditionType][key])
+			conditionKeyVal[key] = value
 		}
 	}
 	return nil
 }
 
 // List of actions for which prefixes are not allowed.
-var invalidPrefixActions = map[string]struct{}{
+var invalidPrefixActions = set.StringSet{
 	"s3:GetBucketLocation":          {},
 	"s3:ListBucket":                 {},
 	"s3:ListBucketMultipartUploads": {},
@@ -227,10 +196,10 @@ func resourcePrefix(resource string) string {
 func checkBucketPolicyResources(bucket string, bucketPolicy *bucketPolicy) APIErrorCode {
 	// Validate statements for special actions and collect resources
 	// for others to validate nesting.
-	var resourceMap = make(map[string]struct{})
+	var resourceMap = set.NewStringSet()
 	for _, statement := range bucketPolicy.Statements {
-		for _, action := range statement.Actions {
-			for _, resource := range statement.Resources {
+		for action := range statement.Actions {
+			for resource := range statement.Resources {
 				resourcePrefix := strings.SplitAfter(resource, AWSResourcePrefix)[1]
 				if _, ok := invalidPrefixActions[action]; ok {
 					// Resource prefix is not equal to bucket for
@@ -245,7 +214,7 @@ func checkBucketPolicyResources(bucket string, bucketPolicy *bucketPolicy) APIEr
 						return ErrMalformedPolicy
 					}
 					// All valid resources collect them separately to verify nesting.
-					resourceMap[resourcePrefix] = struct{}{}
+					resourceMap.Add(resourcePrefix)
 				}
 			}
 		}

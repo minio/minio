@@ -23,6 +23,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/minio/minio-go/pkg/set"
 )
 
 // Tests validate Bucket policy resource matcher.
@@ -31,7 +33,7 @@ func TestBucketPolicyResourceMatch(t *testing.T) {
 	// generates statement with given resource..
 	generateStatement := func(resource string) policyStatement {
 		statement := policyStatement{}
-		statement.Resources = []string{resource}
+		statement.Resources = set.CreateStringSet([]string{resource}...)
 		return statement
 	}
 
@@ -336,7 +338,7 @@ func testGetBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestErrH
 	credentials := serverConfig.GetCredential()
 
 	// template for constructing HTTP request body for PUT bucket policy.
-	bucketPolicyTemplate := `{"Version":"2012-10-17","Statement":[{"Sid":"","Effect":"Allow","Principal":{"AWS":["*"]},"Action":["s3:GetBucketLocation","s3:ListBucket"],"Resource":["arn:aws:s3:::%s"]},{"Sid":"","Effect":"Allow","Principal":{"AWS":["*"]},"Action":["s3:GetObject"],"Resource":["arn:aws:s3:::%s/this*"]}]}`
+	bucketPolicyTemplate := `{"Version":"2012-10-17","Statement":[{"Action":["s3:GetBucketLocation","s3:ListBucket"],"Effect":"Allow","Principal":{"AWS":["*"]},"Resource":["arn:aws:s3:::%s"],"Sid":""},{"Action":["s3:GetObject"],"Effect":"Allow","Principal":{"AWS":["*"]},"Resource":["arn:aws:s3:::%s/this*"],"Sid":""}]}`
 
 	// Writing bucket policy before running test on GetBucketPolicy.
 	putTestPolicies := []struct {

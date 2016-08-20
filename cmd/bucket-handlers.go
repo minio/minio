@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	mux "github.com/gorilla/mux"
+	"github.com/minio/minio-go/pkg/set"
 )
 
 // http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
@@ -43,13 +44,13 @@ func enforceBucketPolicy(bucket string, action string, reqURL *url.URL) (s3Error
 	resource := AWSResourcePrefix + strings.TrimPrefix(reqURL.Path, "/")
 
 	// Get conditions for policy verification.
-	conditions := make(map[string]string)
+	conditionKeyMap := make(map[string]set.StringSet)
 	for queryParam := range reqURL.Query() {
-		conditions[queryParam] = reqURL.Query().Get(queryParam)
+		conditionKeyMap[queryParam] = set.CreateStringSet(reqURL.Query().Get(queryParam))
 	}
 
 	// Validate action, resource and conditions with current policy statements.
-	if !bucketPolicyEvalStatements(action, resource, conditions, policy.Statements) {
+	if !bucketPolicyEvalStatements(action, resource, conditionKeyMap, policy.Statements) {
 		return ErrAccessDenied
 	}
 	return ErrNone

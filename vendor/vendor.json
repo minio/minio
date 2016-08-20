@@ -108,6 +108,12 @@
 			"revisionTime": "2016-02-29T08:42:30-08:00"
 		},
 		{
+			"checksumSHA1": "A8QOw1aWwc+RtjGozY0XeS5varo=",
+			"path": "github.com/minio/minio-go/pkg/set",
+			"revision": "9e734013294ab153b0bdbe182738bcddd46f1947",
+			"revisionTime": "2016-08-18T00:31:20Z"
+		},
+		{
 			"path": "github.com/minio/miniobrowser",
 			"revision": "2e74c097f04fd7927d46fee6482d41e7b5cbf830",
 			"revisionTime": "2016-07-02T02:15:29-07:00"

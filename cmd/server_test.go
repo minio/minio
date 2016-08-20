@@ -162,7 +162,7 @@ func (s *TestSuiteCommon) TestBucketNotification(c *C) {
 // Deletes the policy and verifies the deletion by fetching it back.
 func (s *TestSuiteCommon) TestBucketPolicy(c *C) {
 	// Sample bucket policy.
-	bucketPolicyBuf := `{"Version":"2012-10-17","Statement":[{"Sid":"","Effect":"Allow","Principal":{"AWS":["*"]},"Action":["s3:GetBucketLocation","s3:ListBucket"],"Resource":["arn:aws:s3:::%s"]},{"Sid":"","Effect":"Allow","Principal":{"AWS":["*"]},"Action":["s3:GetObject"],"Resource":["arn:aws:s3:::%s/this*"]}]}`
+	bucketPolicyBuf := `{"Version":"2012-10-17","Statement":[{"Action":["s3:GetBucketLocation","s3:ListBucket"],"Effect":"Allow","Principal":{"AWS":["*"]},"Resource":["arn:aws:s3:::%s"],"Sid":""},{"Action":["s3:GetObject"],"Effect":"Allow","Principal":{"AWS":["*"]},"Resource":["arn:aws:s3:::%s/this*"],"Sid":""}]}`
 
 	// generate a random bucket Name.
 	bucketName := getRandomBucketName()
