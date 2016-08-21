@@ -32,7 +32,6 @@ func newObjectLayer(disks, ignoredDisks []string) (ObjectLayer, error) {
 		// Initialize FS object layer.
 		return newFSObjects(exportPath)
 	}
-	// TODO: use dsync to block other concurrently booting up nodes.
 	// Initialize XL object layer.
 	objAPI, err := newXLObjects(disks, ignoredDisks)
 	if err == errXLWriteQuorum {
@@ -56,6 +55,8 @@ func newObjectLayerFactory(disks, ignoredDisks []string) func() ObjectLayer {
 		defer nsMutex.Unlock(minioMetaBucket, formatConfigFile)
 		objAPI, err = newObjectLayer(disks, ignoredDisks)
 		if err != nil {
+			errorIf(err, "Unable to initialize object layer.")
+			// Purposefully do not return error, just return nil.
 			return nil
 		}
 		// Migrate bucket policy from configDir to .minio.sys/buckets/
@@ -81,6 +82,7 @@ func newObjectLayerFactory(disks, ignoredDisks []string) func() ObjectLayer {
 		err = initBucketPolicies(objAPI)
 		fatalIf(err, "Unable to load all bucket policies")
 
+		// Success.
 		return objAPI
 	}
 }
