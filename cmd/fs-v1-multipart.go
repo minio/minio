@@ -557,6 +557,10 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 		return "", toObjectErr(errDiskFull, bucket, object)
 	}
 
+	if err := fs.storage.PrepareFile(bucket, object, totalSize); err != nil {
+		return "", toObjectErr(errUnexpected, bucket, object)
+	}
+
 	// Run commit parts in background
 	go fs.completeMultipartCommit(bucket, object, uploadID, s3MD5, fsMeta, parts)
 
@@ -566,6 +570,9 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 
 // Background commit
 func (fs fsObjects) completeMultipartCommit(bucket, object, uploadID, s3MD5 string, fsMeta fsMetaV1, parts []completePart) {
+	nsMutex.Lock(bucket, object+".background")
+	defer nsMutex.Unlock(bucket, object+".background")
+
 	var err, returnErr error
 	defer func() {
 		if returnErr != nil {
@@ -616,15 +623,24 @@ func (fs fsObjects) completeMultipartCommit(bucket, object, uploadID, s3MD5 stri
 		}
 	}
 
+	// Change the file time
+	fakeFileInfo, err := fs.storage.StatFile(bucket, object)
+	if err != nil {
+		returnErr = toObjectErr(err, bucket, object)
+		return
+	}
+
 	// Rename the file back to original location, if not delete the temporary object.
-	nsMutex.Lock(bucket, object)
 	err = fs.storage.RenameFile(minioMetaBucket, tempObj, bucket, object)
-	nsMutex.Unlock(bucket, object)
 	if err != nil {
 		if dErr := fs.storage.DeleteFile(minioMetaBucket, tempObj); dErr != nil {
 			returnErr = toObjectErr(dErr, minioMetaBucket, tempObj)
 			return
 		}
+		returnErr = toObjectErr(err, bucket, object)
+		return
+	}
+	if err = fs.storage.Chtimes(bucket, object, fakeFileInfo.ModTime, fakeFileInfo.ModTime); err != nil {
 		returnErr = toObjectErr(err, bucket, object)
 		return
 	}
