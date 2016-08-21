@@ -16,30 +16,6 @@
 
 package cmd
 
-import (
-	"net/rpc"
-
-	router "github.com/gorilla/mux"
-)
-
-// Routes paths for "minio control" commands.
-const (
-	controlRPCPath = reservedBucket + "/control"
-	healPath       = controlRPCPath + "/heal"
-)
-
-// Register control RPC handlers.
-func registerControlRPCRouter(mux *router.Router, objAPI ObjectLayer) {
-	healRPCServer := rpc.NewServer()
-	healRPCServer.RegisterName("Heal", &healHandler{objAPI})
-	mux.Path(healPath).Handler(healRPCServer)
-}
-
-// Handler for object healing.
-type healHandler struct {
-	ObjectAPI ObjectLayer
-}
-
 // HealListArgs - argument for ListObjects RPC.
 type HealListArgs struct {
 	Bucket    string
@@ -56,9 +32,13 @@ type HealListReply struct {
 	Objects     []string
 }
 
-// ListObjects - list objects.
-func (h healHandler) ListObjects(arg *HealListArgs, reply *HealListReply) error {
-	info, err := h.ObjectAPI.ListObjectsHeal(arg.Bucket, arg.Prefix, arg.Marker, arg.Delimiter, arg.MaxKeys)
+// ListObjects - list all objects that needs healing.
+func (c *controllerAPIHandlers) ListObjectsHeal(arg *HealListArgs, reply *HealListReply) error {
+	objAPI := c.ObjectAPI
+	if objAPI == nil {
+		return errInvalidArgument
+	}
+	info, err := objAPI.ListObjectsHeal(arg.Bucket, arg.Prefix, arg.Marker, arg.Delimiter, arg.MaxKeys)
 	if err != nil {
 		return err
 	}
@@ -80,6 +60,29 @@ type HealObjectArgs struct {
 type HealObjectReply struct{}
 
 // HealObject - heal the object.
-func (h healHandler) HealObject(arg *HealObjectArgs, reply *HealObjectReply) error {
-	return h.ObjectAPI.HealObject(arg.Bucket, arg.Object)
+func (c *controllerAPIHandlers) HealObject(arg *HealObjectArgs, reply *HealObjectReply) error {
+	objAPI := c.ObjectAPI
+	if objAPI == nil {
+		return errInvalidArgument
+	}
+	return objAPI.HealObject(arg.Bucket, arg.Object)
+}
+
+// ShutdownArgs - argument for Shutdown RPC.
+type ShutdownArgs struct {
+	Reboot bool
+}
+
+// ShutdownReply - reply by Shutdown RPC.
+type ShutdownReply struct{}
+
+// Shutdown - Shutdown the server.
+
+func (c *controllerAPIHandlers) Shutdown(arg *ShutdownArgs, reply *ShutdownReply) error {
+	if arg.Reboot {
+		globalShutdownSignalCh <- shutdownRestart
+	} else {
+		globalShutdownSignalCh <- shutdownHalt
+	}
+	return nil
 }

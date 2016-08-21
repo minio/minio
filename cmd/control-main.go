@@ -16,15 +16,7 @@
 
 package cmd
 
-import (
-	"fmt"
-	"strings"
-
-	"net/rpc"
-	"net/url"
-
-	"github.com/minio/cli"
-)
+import "github.com/minio/cli"
 
 // "minio control" command.
 var controlCmd = cli.Command{
@@ -33,102 +25,28 @@ var controlCmd = cli.Command{
 	Action: mainControl,
 	Subcommands: []cli.Command{
 		healCmd,
+		shutdownCmd,
 	},
-}
-
-func mainControl(c *cli.Context) {
-	cli.ShowCommandHelp(c, "")
-}
-
-var healCmd = cli.Command{
-	Name:   "heal",
-	Usage:  "To heal objects.",
-	Action: healControl,
 	CustomHelpTemplate: `NAME:
-  minio control {{.Name}} - {{.Usage}}
+   {{.Name}} - {{.Usage}}
 
 USAGE:
-  minio control {{.Name}}
+   {{.Name}} [FLAGS] COMMAND
 
-EAMPLES:
-  1. Heal an object.
-     $ minio control {{.Name}} http://localhost:9000/songs/classical/western/piano.mp3
-
-  2. Heal all objects in a bucket recursively.
-     $ minio control {{.Name}}  http://localhost:9000/songs
-
-  3. Heall all objects with a given prefix recursively.
-     $ minio control {{.Name}} http://localhost:9000/songs/classical/
+FLAGS:
+  {{range .Flags}}{{.}}
+  {{end}}
+COMMANDS:
+   {{range .Commands}}{{join .Names ", "}}{{ "\t" }}{{.Usage}}
+   {{end}}
 `,
 }
 
-// "minio control heal" entry point.
-func healControl(c *cli.Context) {
-	// Parse bucket and object from url.URL.Path
-	parseBucketObject := func(path string) (bucketName string, objectName string) {
-		splits := strings.SplitN(path, string(slashSeparator), 3)
-		switch len(splits) {
-		case 0, 1:
-			bucketName = ""
-			objectName = ""
-		case 2:
-			bucketName = splits[1]
-			objectName = ""
-		case 3:
-			bucketName = splits[1]
-			objectName = splits[2]
-
-		}
-		return bucketName, objectName
-	}
-
-	if len(c.Args()) != 1 {
-		cli.ShowCommandHelpAndExit(c, "heal", 1)
-	}
-
-	parsedURL, err := url.ParseRequestURI(c.Args()[0])
-	fatalIf(err, "Unable to parse URL")
-
-	bucketName, objectName := parseBucketObject(parsedURL.Path)
-	if bucketName == "" {
-		cli.ShowCommandHelpAndExit(c, "heal", 1)
-	}
-
-	client, err := rpc.DialHTTPPath("tcp", parsedURL.Host, healPath)
-	fatalIf(err, "Unable to connect to %s", parsedURL.Host)
-
-	// If object does not have trailing "/" then it's an object, hence heal it.
-	if objectName != "" && !strings.HasSuffix(objectName, slashSeparator) {
-		fmt.Printf("Healing : /%s/%s", bucketName, objectName)
-		args := &HealObjectArgs{bucketName, objectName}
-		reply := &HealObjectReply{}
-		err = client.Call("Heal.HealObject", args, reply)
-		fatalIf(err, "RPC Heal.HealObject call failed")
-		fmt.Println()
-		return
-	}
-
-	// Recursively list and heal the objects.
-	prefix := objectName
-	marker := ""
-	for {
-		args := HealListArgs{bucketName, prefix, marker, "", 1000}
-		reply := &HealListReply{}
-		err = client.Call("Heal.ListObjects", args, reply)
-		fatalIf(err, "RPC Heal.ListObjects call failed")
-
-		// Heal the objects returned in the ListObjects reply.
-		for _, obj := range reply.Objects {
-			fmt.Printf("Healing : /%s/%s", bucketName, obj)
-			reply := &HealObjectReply{}
-			err = client.Call("Heal.HealObject", HealObjectArgs{bucketName, obj}, reply)
-			fatalIf(err, "RPC Heal.HealObject call failed")
-			fmt.Println()
-		}
-		if !reply.IsTruncated {
-			// End of listing.
-			break
-		}
-		marker = reply.NextMarker
+func mainControl(ctx *cli.Context) {
+	if ctx.Args().First() != "" { // command help.
+		cli.ShowCommandHelp(ctx, ctx.Args().First())
+	} else {
+		// command with Subcommands is an App.
+		cli.ShowAppHelp(ctx)
 	}
 }

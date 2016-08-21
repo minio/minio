@@ -88,7 +88,7 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 
 	_, err := api.ObjectAPI.GetBucketInfo(bucket)
 	if err != nil {
-		errorIf(err, "Unable to bucket info.")
+		errorIf(err, "Unable to find bucket info.")
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
 	}
