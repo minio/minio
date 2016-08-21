@@ -324,7 +324,7 @@ func (fs fsObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 	if err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
-	fsMeta, err := readFSMetadata(fs.storage, minioMetaBucket, path.Join(bucketMetaPrefix, bucket, object))
+	fsMeta, err := readFSMetadata(fs.storage, minioMetaBucket, path.Join(bucketMetaPrefix, bucket, object, fsMetaJSONFile))
 	if err != nil && err != errFileNotFound {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
@@ -460,13 +460,8 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 		fsMeta := newFSMetaV1()
 		fsMeta.Meta = metadata
 
-		// Write the metadata to a temp file and rename it to the actual location.
-		tmpMetaPath := path.Join(tmpMetaPrefix, getUUID())
 		fsMetaPath := path.Join(bucketMetaPrefix, bucket, object, fsMetaJSONFile)
-		if err = writeFSMetadata(fs.storage, minioMetaBucket, tmpMetaPath, fsMeta); err != nil {
-			return "", toObjectErr(err, bucket, object)
-		}
-		if err = fs.storage.RenameFile(minioMetaBucket, tmpMetaPath, minioMetaBucket, fsMetaPath); err != nil {
+		if err = writeFSMetadata(fs.storage, minioMetaBucket, fsMetaPath, fsMeta); err != nil {
 			return "", toObjectErr(err, bucket, object)
 		}
 	}
@@ -523,7 +518,7 @@ func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 		if fileInfo, err = fs.storage.StatFile(bucket, entry); err != nil {
 			return
 		}
-		fsMeta, mErr := readFSMetadata(fs.storage, minioMetaBucket, path.Join(bucketMetaPrefix, bucket, entry))
+		fsMeta, mErr := readFSMetadata(fs.storage, minioMetaBucket, path.Join(bucketMetaPrefix, bucket, entry, fsMetaJSONFile))
 		if mErr != nil && mErr != errFileNotFound {
 			return FileInfo{}, mErr
 		}
