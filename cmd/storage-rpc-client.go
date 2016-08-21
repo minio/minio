@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"errors"
 	"io"
 	"path"
 	"strconv"
@@ -88,9 +87,6 @@ func loginRPCClient(rpcClient *RPCClient) (tokenStr string, err error) {
 	}, &reply); err != nil {
 		return "", err
 	}
-	if reply.ServerVersion != Version {
-		return "", errors.New("Server version mismatch")
-	}
 	// Reply back server provided token.
 	return reply.Token, nil
 }
@@ -102,7 +98,7 @@ func newRPCClient(networkPath string) (StorageAPI, error) {
 		return nil, errInvalidArgument
 	}
 
-	// TODO validate netAddr and netPath.
+	// Split network path into its components.
 	netAddr, netPath, err := splitNetPath(networkPath)
 	if err != nil {
 		return nil, err
@@ -125,7 +121,12 @@ func newRPCClient(networkPath string) (StorageAPI, error) {
 
 	// Initialize network storage.
 	ndisk := &networkStorage{
-		netScheme: "http", // TODO: fix for ssl rpc support.
+		netScheme: func() string {
+			if !isSSL() {
+				return "http"
+			}
+			return "https"
+		}(),
 		netAddr:   netAddr,
 		netPath:   netPath,
 		rpcClient: rpcClient,
