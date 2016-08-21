@@ -449,7 +449,7 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "Request has expired",
 		HTTPStatusCode: http.StatusForbidden,
 	},
-	// FIXME: Actual XML error response also contains the header which missed in lsit of signed header parameters.
+	// FIXME: Actual XML error response also contains the header which missed in list of signed header parameters.
 	ErrUnsignedHeaders: {
 		Code:           "AccessDenied",
 		Description:    "There were headers present in the request which were not signed",
