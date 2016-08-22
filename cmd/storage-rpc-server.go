@@ -88,8 +88,8 @@ func (s *storageServer) MakeVolHandler(args *GenericVolArgs, reply *GenericReply
 }
 
 // ListVolsHandler - list vols handler is rpc wrapper for ListVols operation.
-func (s *storageServer) ListVolsHandler(token *string, reply *ListVolsReply) error {
-	if !isRPCTokenValid(*token) {
+func (s *storageServer) ListVolsHandler(args *GenericArgs, reply *ListVolsReply) error {
+	if !isRPCTokenValid(args.Token) {
 		return errors.New("Invalid token")
 	}
 	vols, err := s.storage.ListVols()
