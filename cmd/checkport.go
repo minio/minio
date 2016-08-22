@@ -19,6 +19,8 @@ package cmd
 import (
 	"fmt"
 	"net"
+	"os"
+	"syscall"
 )
 
 // Make sure that none of the other processes are listening on the
@@ -35,7 +37,13 @@ func checkPortAvailability(port int) error {
 	for _, n := range network {
 		l, err := net.Listen(n, fmt.Sprintf(":%d", port))
 		if err != nil {
-			return err
+			if isAddrInUse(err) {
+				// Return error if another process is listening on the
+				// same port.
+				return err
+			}
+			// Ignore any other error (ex. EAFNOSUPPORT)
+			continue
 		}
 
 		// look for error so we don't have dangling connection
@@ -45,4 +53,19 @@ func checkPortAvailability(port int) error {
 	}
 
 	return nil
+}
+
+// Return true if err is "address already in use" error.
+// syscall.EADDRINUSE is available on all OSes.
+func isAddrInUse(err error) bool {
+	if opErr, ok := err.(*net.OpError); ok {
+		if sysErr, ok := opErr.Err.(*os.SyscallError); ok {
+			if errno, ok := sysErr.Err.(syscall.Errno); ok {
+				if errno == syscall.EADDRINUSE {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
