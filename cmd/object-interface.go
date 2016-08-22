@@ -22,6 +22,8 @@ import "io"
 type ObjectLayer interface {
 	// Storage operations.
 	Shutdown() error
+	HealDiskMetadata() error
+
 	StorageInfo() StorageInfo
 
 	// Bucket operations.
