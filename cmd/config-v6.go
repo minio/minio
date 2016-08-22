@@ -55,6 +55,14 @@ func initConfig() error {
 			Enable: true,
 			Level:  "fatal",
 		}
+
+		// Make sure to initialize notification configs.
+		srvCfg.Notify.AMQP = make(map[string]amqpNotify)
+		srvCfg.Notify.AMQP["1"] = amqpNotify{}
+		srvCfg.Notify.ElasticSearch = make(map[string]elasticSearchNotify)
+		srvCfg.Notify.ElasticSearch["1"] = elasticSearchNotify{}
+		srvCfg.Notify.Redis = make(map[string]redisNotify)
+		srvCfg.Notify.Redis["1"] = redisNotify{}
 		srvCfg.rwMutex = &sync.RWMutex{}
 
 		// Create config path.
