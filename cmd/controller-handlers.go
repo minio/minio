@@ -86,3 +86,13 @@ func (c *controllerAPIHandlers) Shutdown(arg *ShutdownArgs, reply *ShutdownReply
 	}
 	return nil
 }
+
+//
+func (c *controllerAPIHandlers) LockInfo(arg *struct{}, reply *SystemLockState) error {
+	lockInfo, err := generateSystemLockResponse()
+	if err != nil {
+		return err
+	}
+	reply = &lockInfo
+	return nil
+}

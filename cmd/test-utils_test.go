@@ -111,6 +111,50 @@ type TestServer struct {
 	Server    *httptest.Server
 }
 
+// Initializes control RPC end points.
+// The object Layer will be a temp back used for testing purpose.
+func initTestControlRPCEndPoint(objectLayer ObjectLayer) http.Handler {
+	// Initialize Web.
+	ctrlHandlers := &controllerAPIHandlers{
+		ObjectAPI: objectLayer,
+	}
+
+	// Initialize router.
+	muxRouter := router.NewRouter()
+	registerControlRPCRouter(muxRouter, ctrlHandlers)
+	return muxRouter
+}
+
+// StartTestRPCServer - Creates a temp XL/FS backend and initializes control RPC end points,
+// then starts a test server with those control RPC end points registered.
+func StartTestRPCServer(t TestErrHandler, instanceType string) TestServer {
+	// create an instance of TestServer.
+	testRPCServer := TestServer{}
+	// create temporary backend for the test server.
+	obj, erasureDisks, err := makeTestBackend(instanceType)
+
+	if err != nil {
+		t.Fatalf("Failed obtaining Temp Backend: <ERROR> %s", err)
+	}
+
+	root, err := newTestConfig("us-east-1")
+	if err != nil {
+		t.Fatalf("%s", err)
+	}
+
+	// Get credential.
+	credentials := serverConfig.GetCredential()
+
+	testRPCServer.Root = root
+	testRPCServer.Disks = erasureDisks
+	testRPCServer.AccessKey = credentials.AccessKeyID
+	testRPCServer.SecretKey = credentials.SecretAccessKey
+	// Run TestServer.
+	testRPCServer.Server = httptest.NewServer(initTestControlRPCEndPoint(obj))
+
+	return testRPCServer
+}
+
 // Starts the test server and returns the TestServer instance.
 func StartTestServer(t TestErrHandler, instanceType string) TestServer {
 	// create an instance of TestServer.
