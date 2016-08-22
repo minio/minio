@@ -17,36 +17,82 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"net/rpc"
 	"path"
 	"strings"
 	"sync"
+	"time"
 
 	router "github.com/gorilla/mux"
 )
 
 const lockRPCPath = "/minio/lock"
 
+// LockArgs besides lock name, holds Token and Timestamp for session
+// authentication and validation server restart.
+type LockArgs struct {
+	Name      string
+	Token     string
+	Timestamp time.Time
+}
+
+// SetToken - sets the token to the supplied value.
+func (l *LockArgs) SetToken(token string) {
+	l.Token = token
+}
+
+// SetTimestamp - sets the timestamp to the supplied value.
+func (l *LockArgs) SetTimestamp(tstamp time.Time) {
+	l.Timestamp = tstamp
+}
+
 type lockServer struct {
 	rpcPath string
 	mutex   sync.Mutex
 	// e.g, when a Lock(name) is held, map[string][]bool{"name" : []bool{true}}
 	// when one or more RLock() is held, map[string][]bool{"name" : []bool{false, false}}
-	lockMap map[string][]bool
+	lockMap   map[string][]bool
+	timestamp time.Time // Timestamp set at the time of initialization. Resets naturally on minio server restart.
+}
+
+func (l *lockServer) verifyTimestamp(tstamp time.Time) bool {
+	return l.timestamp.Equal(tstamp)
 }
 
 ///  Distributed lock handlers
 
+// LoginHandler - handles LoginHandler RPC call.
+func (l *lockServer) LoginHandler(args *RPCLoginArgs, reply *RPCLoginReply) error {
+	jwt, err := newJWT(defaultTokenExpiry)
+	if err != nil {
+		return err
+	}
+	if err = jwt.Authenticate(args.Username, args.Password); err != nil {
+		return err
+	}
+	token, err := jwt.GenerateToken(args.Username)
+	if err != nil {
+		return err
+	}
+	reply.Token = token
+	reply.Timestamp = l.timestamp
+	return nil
+}
+
 // LockHandler - rpc handler for lock operation.
-func (l *lockServer) Lock(name *string, reply *bool) error {
+func (l *lockServer) Lock(args *LockArgs, reply *bool) error {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
-	_, ok := l.lockMap[*name]
+	if l.verifyTimestamp(args.Timestamp) {
+		return errors.New("Timestamps don't match, server may have restarted.")
+	}
+	_, ok := l.lockMap[args.Name]
 	// No locks held on the given name.
 	if !ok {
 		*reply = true
-		l.lockMap[*name] = []bool{true}
+		l.lockMap[args.Name] = []bool{true}
 		return nil
 	}
 	// Either a read or write lock is held on the given name.
@@ -55,56 +101,65 @@ func (l *lockServer) Lock(name *string, reply *bool) error {
 }
 
 // UnlockHandler - rpc handler for unlock operation.
-func (l *lockServer) Unlock(name *string, reply *bool) error {
+func (l *lockServer) Unlock(args *LockArgs, reply *bool) error {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
-	_, ok := l.lockMap[*name]
+	if l.verifyTimestamp(args.Timestamp) {
+		return errors.New("Timestamps don't match, server may have restarted.")
+	}
+	_, ok := l.lockMap[args.Name]
 	// No lock is held on the given name, there must be some issue at the lock client side.
 	if !ok {
-		return fmt.Errorf("Unlock attempted on an un-locked entity: %s", *name)
+		return fmt.Errorf("Unlock attempted on an un-locked entity: %s", args.Name)
 	}
 	*reply = true
-	delete(l.lockMap, *name)
+	delete(l.lockMap, args.Name)
 	return nil
 }
 
-func (l *lockServer) RLock(name *string, reply *bool) error {
+func (l *lockServer) RLock(args *LockArgs, reply *bool) error {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
-	locksHeld, ok := l.lockMap[*name]
+	if l.verifyTimestamp(args.Timestamp) {
+		return errors.New("Timestamps don't match, server may have restarted.")
+	}
+	locksHeld, ok := l.lockMap[args.Name]
 	// No locks held on the given name.
 	if !ok {
 		// First read-lock to be held on *name.
-		l.lockMap[*name] = []bool{false}
+		l.lockMap[args.Name] = []bool{false}
 		*reply = true
 	} else if len(locksHeld) == 1 && locksHeld[0] == true {
 		// A write-lock is held, read lock can't be granted.
 		*reply = false
 	} else {
 		// Add an entry for this read lock.
-		l.lockMap[*name] = append(locksHeld, false)
+		l.lockMap[args.Name] = append(locksHeld, false)
 		*reply = true
 	}
 
 	return nil
 }
 
-func (l *lockServer) RUnlock(name *string, reply *bool) error {
+func (l *lockServer) RUnlock(args *LockArgs, reply *bool) error {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
-	locksHeld, ok := l.lockMap[*name]
+	if l.verifyTimestamp(args.Timestamp) {
+		return errors.New("Timestamps don't match, server may have restarted.")
+	}
+	locksHeld, ok := l.lockMap[args.Name]
 	if !ok {
-		return fmt.Errorf("RUnlock attempted on an un-locked entity: %s", *name)
+		return fmt.Errorf("RUnlock attempted on an un-locked entity: %s", args.Name)
 	}
 	if len(locksHeld) > 1 {
 		// Remove one of the read locks held.
 		locksHeld = locksHeld[1:]
-		l.lockMap[*name] = locksHeld
+		l.lockMap[args.Name] = locksHeld
 		*reply = true
 	} else {
 		// Delete the map entry since this is the last read lock held
 		// on *name.
-		delete(l.lockMap, *name)
+		delete(l.lockMap, args.Name)
 		*reply = true
 	}
 	return nil
@@ -136,9 +191,10 @@ func newLockServers(serverConfig serverCmdConfig) (lockServers []*lockServer) {
 				export = export[idx+1:]
 			}
 			lockServers = append(lockServers, &lockServer{
-				rpcPath: export,
-				mutex:   sync.Mutex{},
-				lockMap: make(map[string][]bool),
+				rpcPath:   export,
+				mutex:     sync.Mutex{},
+				lockMap:   make(map[string][]bool),
+				timestamp: time.Now().UTC(),
 			})
 		}
 	}
