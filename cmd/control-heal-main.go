@@ -74,9 +74,25 @@ func healControl(ctx *cli.Context) {
 	parsedURL, err := url.Parse(ctx.Args()[0])
 	fatalIf(err, "Unable to parse URL")
 
+	client, err := rpc.DialHTTPPath("tcp", parsedURL.Host, path.Join(reservedBucket, controlPath))
+	fatalIf(err, "Unable to connect to %s", parsedURL.Host)
+
+	// Always try to fix disk metadata
+	fmt.Print("Checking and healing disk metadata..")
+	args := &HealDiskMetadataArgs{}
+	reply := &HealDiskMetadataReply{}
+	err = client.Call("Control.HealDiskMetadata", args, reply)
+	fatalIf(err, "RPC Control.HealDiskMetadata call failed")
+	if reply.Success {
+		fmt.Println(" ok.")
+	} else {
+		fmt.Println(" failed!")
+	}
+
 	bucketName, objectName := parseBucketObject(parsedURL.Path)
 	if bucketName == "" {
-		cli.ShowCommandHelpAndExit(ctx, "heal", 1)
+		// cli.ShowCommandHelpAndExit(ctx, "heal", 1)
+		return
 	}
 
 	authCfg := &authConfig{
