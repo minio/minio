@@ -190,6 +190,15 @@ func initServerConfig(c *cli.Context) {
 		err = serverConfig.Save()
 		fatalIf(err, "Unable to save config.")
 	}
+	if len(c.Args()) > 1 {
+		// For XL setup, MINIO_ACCESS_KEY and MINIO_SECRET_KEY are mandatory. (for healing and storage RPC calls)
+		if accessKey == "" {
+			fatalIf(errInvalidArgument, "MINIO_ACCESS_KEY environmental variable should have valid access key for XL setup.")
+		}
+		if secretKey == "" {
+			fatalIf(errInvalidArgument, "MINIO_SECRET_KEY environmental variable should have valid secret key for XL setup.")
+		}
+	}
 
 	// Set maxOpenFiles, This is necessary since default operating
 	// system limits of 1024, 2048 are not enough for Minio server.
