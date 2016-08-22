@@ -56,8 +56,12 @@ func initDsyncNodes(disks []string, port int) (bool, error) {
 	}
 	// Initialize rpc lock client information only if this instance is a
 	// distributed setup.
+	clnts := make([]dsync.RPC, len(disks))
+	for i := 0; i < len(disks); i++ {
+		clnts[i] = newAuthClient(dsyncNodes[i], rpcPaths[i], serverConfig.GetCredential(), "Dsync.LoginHandler")
+	}
 	if isDist {
-		return isDist, dsync.SetNodesWithPath(dsyncNodes, rpcPaths)
+		return isDist, dsync.SetNodesWithClients(clnts)
 	}
 	return isDist, nil
 }
