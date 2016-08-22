@@ -16,10 +16,13 @@
 
 package cmd
 
+import "time"
+
 // TokenSetter is to be implemented by types that need a way to update member that represents a token.
 // e.g, See GenericArgs.
 type TokenSetter interface {
 	SetToken(token string)
+	SetTimestamp(tstamp time.Time)
 }
 
 // GenericReply represents any generic RPC reply.
@@ -28,12 +31,18 @@ type GenericReply struct {
 
 // GenericArgs represents any generic RPC arguments.
 type GenericArgs struct {
-	Token string // Used to authenticate every RPC call.
+	Token     string    // Used to authenticate every RPC call.
+	Timestamp time.Time // Used to verify if the RPC call was issued between the same Login() and disconnect event pair.
 }
 
 // SetToken - sets the token to the supplied value.
 func (ga *GenericArgs) SetToken(token string) {
 	ga.Token = token
+}
+
+// SetTimestamp - sets the timestamp to the supplied value.
+func (ga *GenericArgs) SetTimestamp(tstamp time.Time) {
+	ga.Timestamp = tstamp
 }
 
 // RPCLoginArgs - login username and password for RPC.
@@ -47,6 +56,7 @@ type RPCLoginArgs struct {
 type RPCLoginReply struct {
 	Token         string
 	ServerVersion string
+	Timestamp     time.Time
 }
 
 // GenericVolArgs - generic volume args.
