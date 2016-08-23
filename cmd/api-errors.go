@@ -119,6 +119,7 @@ const (
 	ErrFilterNamePrefix
 	ErrFilterNameSuffix
 	ErrFilterValueInvalid
+	ErrOverlappingConfigs
 
 	// S3 extended errors.
 	ErrContentSHA256Mismatch
@@ -503,6 +504,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	ErrFilterValueInvalid: {
 		Code:           "InvalidArgument",
 		Description:    "Size of filter rule value cannot exceed 1024 bytes in UTF-8 representation",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrOverlappingConfigs: {
+		Code:           "InvalidArgument",
+		Description:    "Configurations overlap. Configurations on the same bucket cannot share a common event type.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 

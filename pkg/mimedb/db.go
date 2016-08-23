@@ -1840,10 +1840,6 @@ var DB = map[string]struct {
 		ContentType:  "image/vnd.ms-modi",
 		Compressible: false,
 	},
-	"mdp": {
-		ContentType:  "application/dash+xml",
-		Compressible: false,
-	},
 	"me": {
 		ContentType:  "text/troff",
 		Compressible: false,
@@ -2006,6 +2002,10 @@ var DB = map[string]struct {
 	},
 	"mpc": {
 		ContentType:  "application/vnd.mophun.certificate",
+		Compressible: false,
+	},
+	"mpd": {
+		ContentType:  "application/dash+xml",
 		Compressible: false,
 	},
 	"mpe": {
@@ -2824,6 +2824,10 @@ var DB = map[string]struct {
 		ContentType:  "application/relax-ng-compact-syntax",
 		Compressible: false,
 	},
+	"rng": {
+		ContentType:  "application/xml",
+		Compressible: false,
+	},
 	"roa": {
 		ContentType:  "application/rpki-roa",
 		Compressible: false,
@@ -3086,6 +3090,14 @@ var DB = map[string]struct {
 	},
 	"sldx": {
 		ContentType:  "application/vnd.openxmlformats-officedocument.presentationml.slide",
+		Compressible: false,
+	},
+	"slim": {
+		ContentType:  "text/slim",
+		Compressible: false,
+	},
+	"slm": {
+		ContentType:  "text/slim",
 		Compressible: false,
 	},
 	"slt": {

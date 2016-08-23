@@ -32,33 +32,30 @@ type keyFilter struct {
 	FilterRules []filterRule `xml:"FilterRule,omitempty"`
 }
 
-// Queue SQS configuration.
-type queueConfig struct {
+// Common elements of service notification.
+type serviceConfig struct {
 	Events []string `xml:"Event"`
 	Filter struct {
 		Key keyFilter `xml:"S3Key,omitempty"`
 	}
-	ID       string `xml:"Id"`
+	ID string `xml:"Id"`
+}
+
+// Queue SQS configuration.
+type queueConfig struct {
+	serviceConfig
 	QueueARN string `xml:"Queue"`
 }
 
 // Topic SNS configuration, this is a compliance field not used by minio yet.
 type topicConfig struct {
-	Events []string `xml:"Event"`
-	Filter struct {
-		Key keyFilter `xml:"S3Key"`
-	}
-	ID       string `xml:"Id"`
+	serviceConfig
 	TopicARN string `xml:"Topic"`
 }
 
 // Lambda function configuration, this is a compliance field not used by minio yet.
 type lambdaConfig struct {
-	Events []string `xml:"Event"`
-	Filter struct {
-		Key keyFilter `xml:"S3Key,omitempty"`
-	}
-	ID        string `xml:"Id"`
+	serviceConfig
 	LambdaARN string `xml:"CloudFunction"`
 }
 

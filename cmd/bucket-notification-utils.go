@@ -266,14 +266,65 @@ func validateTopicConfigs(topicConfigs []topicConfig) APIErrorCode {
 	return ErrNone
 }
 
+// Check all the queue configs for any duplicates.
+func checkDuplicateQueueConfigs(configs []queueConfig) APIErrorCode {
+	configMaps := make(map[string]int)
+
+	// Navigate through each configs and count the entries.
+	for _, config := range configs {
+		configMaps[config.QueueARN]++
+	}
+
+	// Validate if there are any duplicate counts.
+	for _, count := range configMaps {
+		if count != 1 {
+			return ErrOverlappingConfigs
+		}
+	}
+
+	// Success.
+	return ErrNone
+}
+
+// Check all the topic configs for any duplicates.
+func checkDuplicateTopicConfigs(configs []topicConfig) APIErrorCode {
+	configMaps := make(map[string]int)
+
+	// Navigate through each configs and count the entries.
+	for _, config := range configs {
+		configMaps[config.TopicARN]++
+	}
+
+	// Validate if there are any duplicate counts.
+	for _, count := range configMaps {
+		if count != 1 {
+			return ErrOverlappingConfigs
+		}
+	}
+
+	// Success.
+	return ErrNone
+}
+
 // Validates all the bucket notification configuration for their validity,
 // if one of the config is malformed or has invalid data it is rejected.
 // Configuration is never applied partially.
 func validateNotificationConfig(nConfig notificationConfig) APIErrorCode {
+	// Validate all queue configs.
 	if s3Error := validateQueueConfigs(nConfig.QueueConfigs); s3Error != ErrNone {
 		return s3Error
 	}
+	// Validate all topic configs.
 	if s3Error := validateTopicConfigs(nConfig.TopicConfigs); s3Error != ErrNone {
+		return s3Error
+	}
+
+	// Check for duplicate queue configs.
+	if s3Error := checkDuplicateQueueConfigs(nConfig.QueueConfigs); s3Error != ErrNone {
+		return s3Error
+	}
+	// Check for duplicate topic configs.
+	if s3Error := checkDuplicateTopicConfigs(nConfig.TopicConfigs); s3Error != ErrNone {
 		return s3Error
 	}
 
