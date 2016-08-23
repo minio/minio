@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"net/rpc"
 	"time"
 
 	"github.com/minio/dsync"
@@ -62,7 +63,7 @@ func (authClient *AuthRPCClient) Login() (string, time.Time, error) {
 // Call - If rpc connection isn't established yet since previous disconnect,
 // connection is established, a jwt authenticated login is performed and then
 // the call is performed.
-func (authClient *AuthRPCClient) Call(serviceMethod string, args dsync.TokenSetter, reply interface{}) (err error) {
+func (authClient *AuthRPCClient) Call(serviceMethod string, args dsync.TokenSetter, reply interface{}) error {
 	if authClient.token == "" {
 		token, tstamp, err := authClient.Login()
 		if err != nil {
@@ -75,5 +76,10 @@ func (authClient *AuthRPCClient) Call(serviceMethod string, args dsync.TokenSett
 		args.SetToken(token)
 		args.SetTimestamp(tstamp)
 	}
-	return authClient.rpc.Call(serviceMethod, args, reply)
+	err := authClient.rpc.Call(serviceMethod, args, reply)
+	// Reset token on disconnect to mark for re-login on subsequent reconnect.
+	if err != nil && err == rpc.ErrShutdown {
+		authClient.token = ""
+	}
+	return err
 }
