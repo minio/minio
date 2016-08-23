@@ -361,9 +361,8 @@ func doesSignatureMatch(hashedPayload string, r *http.Request, validateRegion bo
 		if !isValidRegion(sRegion, region) {
 			return ErrInvalidRegion
 		}
-	} else {
-		region = sRegion
 	}
+	region = sRegion
 
 	// Extract date, if not present throw error.
 	var date string
