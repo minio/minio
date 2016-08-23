@@ -130,11 +130,8 @@ type MuxListener struct {
 // or invalid
 func NewMuxListener(listener net.Listener, wg *sync.WaitGroup, certPath, keyPath string) (*MuxListener, error) {
 	var err error
-	var config *tls.Config
-	config = nil
-
-	if certPath != "" {
-		config = &tls.Config{}
+	config := &tls.Config{} // Always instantiate.
+	if certPath != "" && keyPath != "" {
 		if config.NextProtos == nil {
 			config.NextProtos = []string{"http/1.1", "h2"}
 		}
