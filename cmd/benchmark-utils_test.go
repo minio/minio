@@ -28,6 +28,20 @@ import (
 	"time"
 )
 
+// Prepare benchmark backend
+func prepareBenchmarkBackend(instanceType string) (ObjectLayer, []string, error) {
+	nDisks := 16
+	disks, err := getRandomDisks(nDisks)
+	if err != nil {
+		return nil, nil, err
+	}
+	obj, err := makeTestBackend(disks, instanceType)
+	if err != nil {
+		return nil, nil, err
+	}
+	return obj, disks, nil
+}
+
 // Benchmark utility functions for ObjectLayer.PutObject().
 // Creates Object layer setup ( MakeBucket ) and then runs the PutObject benchmark.
 func runPutObjectBenchmark(b *testing.B, obj ObjectLayer, objSize int) {
@@ -135,7 +149,7 @@ func runPutObjectPartBenchmark(b *testing.B, obj ObjectLayer, partSize int) {
 // creates XL/FS backend setup, obtains the object layer and calls the runPutObjectPartBenchmark function.
 func benchmarkPutObjectPart(b *testing.B, instanceType string, objSize int) {
 	// create a temp XL/FS backend.
-	objLayer, disks, err := makeTestBackend(instanceType)
+	objLayer, disks, err := prepareBenchmarkBackend(instanceType)
 	if err != nil {
 		b.Fatalf("Failed obtaining Temp Backend: <ERROR> %s", err)
 	}
@@ -148,7 +162,7 @@ func benchmarkPutObjectPart(b *testing.B, instanceType string, objSize int) {
 // creates XL/FS backend setup, obtains the object layer and calls the runPutObjectBenchmark function.
 func benchmarkPutObject(b *testing.B, instanceType string, objSize int) {
 	// create a temp XL/FS backend.
-	objLayer, disks, err := makeTestBackend(instanceType)
+	objLayer, disks, err := prepareBenchmarkBackend(instanceType)
 	if err != nil {
 		b.Fatalf("Failed obtaining Temp Backend: <ERROR> %s", err)
 	}
@@ -161,7 +175,7 @@ func benchmarkPutObject(b *testing.B, instanceType string, objSize int) {
 // creates XL/FS backend setup, obtains the object layer and runs parallel benchmark for put object.
 func benchmarkPutObjectParallel(b *testing.B, instanceType string, objSize int) {
 	// create a temp XL/FS backend.
-	objLayer, disks, err := makeTestBackend(instanceType)
+	objLayer, disks, err := prepareBenchmarkBackend(instanceType)
 	if err != nil {
 		b.Fatalf("Failed obtaining Temp Backend: <ERROR> %s", err)
 	}
@@ -242,7 +256,7 @@ func generateBytesData(size int) []byte {
 // creates XL/FS backend setup, obtains the object layer and calls the runGetObjectBenchmark function.
 func benchmarkGetObject(b *testing.B, instanceType string, objSize int) {
 	// create a temp XL/FS backend.
-	objLayer, disks, err := makeTestBackend(instanceType)
+	objLayer, disks, err := prepareBenchmarkBackend(instanceType)
 	if err != nil {
 		b.Fatalf("Failed obtaining Temp Backend: <ERROR> %s", err)
 	}
@@ -255,7 +269,7 @@ func benchmarkGetObject(b *testing.B, instanceType string, objSize int) {
 // creates XL/FS backend setup, obtains the object layer and runs parallel benchmark for ObjectLayer.GetObject() .
 func benchmarkGetObjectParallel(b *testing.B, instanceType string, objSize int) {
 	// create a temp XL/FS backend.
-	objLayer, disks, err := makeTestBackend(instanceType)
+	objLayer, disks, err := prepareBenchmarkBackend(instanceType)
 	if err != nil {
 		b.Fatalf("Failed obtaining Temp Backend: <ERROR> %s", err)
 	}

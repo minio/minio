@@ -565,7 +565,11 @@ func (web *webAPIHandlers) GetBucketPolicy(r *http.Request, args *GetBucketPolic
 		return &json2.Error{Message: "Unauthorized request"}
 	}
 
-	policyInfo, err := readBucketAccessPolicy(web.ObjectAPI, args.BucketName)
+	objectAPI := web.ObjectAPI()
+	if objectAPI == nil {
+		return &json2.Error{Message: "Server not initialized"}
+	}
+	policyInfo, err := readBucketAccessPolicy(objectAPI, args.BucketName)
 	if err != nil {
 		return &json2.Error{Message: err.Error()}
 	}
@@ -596,7 +600,11 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 		return &json2.Error{Message: "Invalid policy " + args.Policy}
 	}
 
-	policyInfo, err := readBucketAccessPolicy(web.ObjectAPI, args.BucketName)
+	objectAPI := web.ObjectAPI()
+	if objectAPI == nil {
+		return &json2.Error{Message: "Server not initialized"}
+	}
+	policyInfo, err := readBucketAccessPolicy(objectAPI, args.BucketName)
 	if err != nil {
 		return &json2.Error{Message: err.Error()}
 	}
@@ -609,7 +617,7 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 	}
 
 	// TODO: update policy statements according to bucket name, prefix and policy arguments.
-	if err := writeBucketPolicy(args.BucketName, web.ObjectAPI, bytes.NewReader(data), int64(len(data))); err != nil {
+	if err := writeBucketPolicy(args.BucketName, objectAPI, bytes.NewReader(data), int64(len(data))); err != nil {
 		return &json2.Error{Message: err.Error()}
 	}
 

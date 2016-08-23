@@ -294,6 +294,35 @@ func isDistributedSetup(disks []string) (isDist bool) {
 	return isDist
 }
 
+// Format disks before initialization object layer.
+func formatDisks(disks, ignoredDisks []string) error {
+	storageDisks, err := waitForFormattingDisks(disks, ignoredDisks)
+	for i := range storageDisks {
+		switch storage := storageDisks[i].(type) {
+		// Closing associated TCP connections since
+		// []StorageAPI is garbage collected eventually.
+		case networkStorage:
+			storage.rpcClient.Close()
+		}
+	}
+	if err != nil {
+		return err
+	}
+	if isLocalStorage(disks[0]) {
+		// notify every one else that they can try init again.
+		for i := range storageDisks {
+			switch storage := storageDisks[i].(type) {
+			// Closing associated TCP connections since
+			// []StorageAPI is garage collected eventually.
+			case networkStorage:
+				var reply GenericReply
+				_ = storage.rpcClient.Call("Storage.TryInitHandler", &GenericArgs{}, &reply)
+			}
+		}
+	}
+	return nil
+}
+
 // serverMain handler called for 'minio server' command.
 func serverMain(c *cli.Context) {
 	// Check 'server' cli arguments.
@@ -335,6 +364,11 @@ func serverMain(c *cli.Context) {
 		disks:        disks,
 		ignoredDisks: ignoredDisks,
 	}
+
+	// Initialize and monitor shutdown signals.
+	err = initGracefulShutdown(os.Exit)
+	fatalIf(err, "Unable to initialize graceful shutdown operation")
+
 	// Configure server.
 	handler := configureServerHandler(srvConfig)
 
@@ -354,12 +388,33 @@ func serverMain(c *cli.Context) {
 
 	// Start server.
 	// Configure TLS if certs are available.
-	if tls {
-		err = apiServer.ListenAndServeTLS(mustGetCertFile(), mustGetKeyFile())
-	} else {
-		// Fallback to http.
-		err = apiServer.ListenAndServe()
+	wait := make(chan struct{}, 1)
+	go func(tls bool, wait chan<- struct{}) {
+		if tls {
+			err = apiServer.ListenAndServeTLS(mustGetCertFile(), mustGetKeyFile())
+		} else {
+			// Fallback to http.
+			err = apiServer.ListenAndServe()
+		}
+		wait <- struct{}{}
+
+	}(tls, wait)
+	err = formatDisks(disks, ignoredDisks)
+	if err != nil {
+		// FIXME: call graceful exit
+		errorIf(err, "formatting storage disks failed")
+		return
 	}
+	newObject, err := newObjectLayer(disks, ignoredDisks)
+	if err != nil {
+		// FIXME: call graceful exit
+		errorIf(err, "intializing object layer failed")
+		return
+	}
+	objLayerMutex.Lock()
+	globalObjectAPI = newObject
+	objLayerMutex.Unlock()
+	<-wait
 
 	fatalIf(err, "Failed to start minio server.")
 }
