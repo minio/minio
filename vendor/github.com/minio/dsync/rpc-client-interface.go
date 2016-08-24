@@ -18,12 +18,11 @@ package dsync
 
 import "time"
 
-type TokenSetter interface {
-	SetToken(token string)
-	SetTimestamp(tstamp time.Time)
-}
-
+// RPC - is dsync compatible client interface.
 type RPC interface {
-	Call(serviceMethod string, args TokenSetter, reply interface{}) error
+	Call(serviceMethod string, args interface {
+		SetToken(token string)
+		SetTimestamp(tstamp time.Time)
+	}, reply interface{}) error
 	Close() error
 }
