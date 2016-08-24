@@ -137,12 +137,18 @@ func (xl xlObjects) listObjectsHeal(bucket, prefix, marker, delimiter string, ma
 			result.Prefixes = append(result.Prefixes, objInfo.Name)
 			continue
 		}
-		result.Objects = append(result.Objects, ObjectInfo{
-			Name:    objInfo.Name,
-			ModTime: objInfo.ModTime,
-			Size:    objInfo.Size,
-			IsDir:   false,
-		})
+		// Check if the current object needs healing
+		nsMutex.RLock(bucket, objInfo.Name)
+		partsMetadata, errs := readAllXLMetadata(xl.storageDisks, bucket, objInfo.Name)
+		if xlShouldHeal(partsMetadata, errs) {
+			result.Objects = append(result.Objects, ObjectInfo{
+				Name:    objInfo.Name,
+				ModTime: objInfo.ModTime,
+				Size:    objInfo.Size,
+				IsDir:   false,
+			})
+		}
+		nsMutex.RUnlock(bucket, objInfo.Name)
 	}
 	return result, nil
 }
