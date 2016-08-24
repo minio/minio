@@ -47,16 +47,13 @@ func testHealDiskMetadataControllerHandler(obj ObjectLayer, instanceType string,
 		t.Fatal("dialing:", err)
 	}
 
-	args := &HealDiskMetadataArgs{}
-	reply := &HealDiskMetadataReply{}
-	err = client.Call("Control.HealDiskMetadata", args, reply)
-	if err != nil {
-		t.Fatal("RPC Control.HealDiskMetadata call failed ", err)
-	}
-	if instanceType == "FS" && reply.Success {
+	args := &GenericArgs{}
+	reply := &GenericReply{}
+	err = client.Call("Controller.HealDiskMetadata", args, reply)
+	if instanceType == "FS" && err == nil {
 		t.Errorf("Test should fail with FS")
 	}
-	if instanceType == "XL" && !reply.Success {
+	if instanceType == "XL" && err != nil {
 		t.Errorf("Test should succeed with XL")
 	}
 }

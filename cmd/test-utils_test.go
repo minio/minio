@@ -939,11 +939,11 @@ func initTestWebRPCEndPoint(objLayer ObjectLayer) http.Handler {
 // Initialize Controller RPC Handlers for testing
 func initTestControllerRPCEndPoint(objLayer ObjectLayer) (string, string, error) {
 	controllerHandlers := &controllerAPIHandlers{
-		ObjectAPI: objLayer,
+		ObjectAPI: func() ObjectLayer { return objLayer },
 	}
 	// Start configuring net/rpc server
 	server := rpc.NewServer()
-	server.RegisterName("Control", controllerHandlers)
+	server.RegisterName("Controller", controllerHandlers)
 
 	listenTCP := func() (net.Listener, string, error) {
 		l, e := net.Listen("tcp", ":0") // any available address

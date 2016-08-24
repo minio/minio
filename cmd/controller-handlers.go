@@ -103,25 +103,14 @@ func (c *controllerAPIHandlers) HealObjectHandler(args *HealObjectArgs, reply *G
 	return objAPI.HealObject(args.Bucket, args.Object)
 }
 
-// HealDiskMetadataArgs - argument for HealDiskMetadata RPC.
-type HealDiskMetadataArgs struct {
-}
-
-// HealDiskMetadataReply - reply by HealDiskMetadata RPC.
-type HealDiskMetadataReply struct {
-	Success bool `json:"success"`
-}
-
 // HealDiskMetadata - heal the disk format.
-func (c *controllerAPIHandlers) HealDiskMetadata(arg *HealDiskMetadataArgs, reply *HealDiskMetadataReply) error {
-	objAPI := c.ObjectAPI
+func (c *controllerAPIHandlers) HealDiskMetadata(args *GenericArgs, reply *GenericReply) error {
+	objAPI := c.ObjectAPI()
 	if objAPI == nil {
 		return errInvalidArgument
 	}
-	if objAPI.HealDiskMetadata() == nil {
-		reply.Success = true
-	} else {
-		reply.Success = false
+	if err := objAPI.HealDiskMetadata(); err != nil {
+		return err
 	}
 	return nil
 }

@@ -19,7 +19,6 @@ package cmd
 import (
 	"fmt"
 	"sort"
-	"sync"
 
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/objcache"
@@ -66,9 +65,6 @@ type xlObjects struct {
 
 	// Object cache enabled.
 	objCacheEnabled bool
-
-	// Protection for generic metadata
-	diskMetadataLock *sync.Mutex
 }
 
 // Validate if input disks are sufficient for initializing XL.
@@ -202,14 +198,13 @@ func newXLObjects(disks, ignoredDisks []string) (ObjectLayer, error) {
 
 	// Initialize xl objects.
 	xl := xlObjects{
-		physicalDisks:    disks,
-		storageDisks:     newPosixDisks,
-		dataBlocks:       dataBlocks,
-		parityBlocks:     parityBlocks,
-		listPool:         listPool,
-		objCache:         objCache,
-		objCacheEnabled:  globalMaxCacheSize > 0,
-		diskMetadataLock: &sync.Mutex{},
+		physicalDisks:   disks,
+		storageDisks:    newPosixDisks,
+		dataBlocks:      dataBlocks,
+		parityBlocks:    parityBlocks,
+		listPool:        listPool,
+		objCache:        objCache,
+		objCacheEnabled: globalMaxCacheSize > 0,
 	}
 
 	// Figure out read and write quorum based on number of storage disks.
@@ -229,8 +224,8 @@ func (xl xlObjects) Shutdown() error {
 
 // HealDiskMetadata function for object storage interface.
 func (xl xlObjects) HealDiskMetadata() error {
-	xl.diskMetadataLock.Lock()
-	defer xl.diskMetadataLock.Unlock()
+	nsMutex.Lock(minioMetaBucket, formatConfigFile)
+	defer nsMutex.Unlock(minioMetaBucket, formatConfigFile)
 	return repairDiskMetadata(xl.storageDisks)
 }
 
