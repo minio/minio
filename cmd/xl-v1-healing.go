@@ -134,7 +134,7 @@ func xlLatestMetadata(partsMetadata []xlMetaV1, errs []error) (latestMeta xlMeta
 func xlShouldHeal(partsMetadata []xlMetaV1, errs []error) bool {
 	modTime := commonTime(listObjectModtimes(partsMetadata, errs))
 	for index := range partsMetadata {
-		if errs[index] == errFileNotFound {
+		if errs[index] == errDiskNotFound {
 			return true
 		}
 		if errs[index] != nil {
