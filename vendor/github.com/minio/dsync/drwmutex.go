@@ -19,6 +19,7 @@ package dsync
 import (
 	"math"
 	"math/rand"
+	"net"
 	"sync"
 	"time"
 )
@@ -336,11 +337,21 @@ func sendRelease(c RPC, name, uid string, isReadLock bool) {
 				if err = c.Call("Dsync.RUnlock", &LockArgs{Name: name}, &status); err == nil {
 					// RUnlock delivered, exit out
 					return
+				} else if err != nil {
+					if nErr, ok := err.(net.Error); ok && nErr.Timeout() {
+						// RUnlock possibly failed with server timestamp mismatch, server may have restarted.
+						return
+					}
 				}
 			} else {
 				if err = c.Call("Dsync.Unlock", &LockArgs{Name: name}, &status); err == nil {
 					// Unlock delivered, exit out
 					return
+				} else if err != nil {
+					if nErr, ok := err.(net.Error); ok && nErr.Timeout() {
+						// Unlock possibly failed with server timestamp mismatch, server may have restarted.
+						return
+					}
 				}
 			}
 

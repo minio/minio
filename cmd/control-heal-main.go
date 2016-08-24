@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"fmt"
-	"net/rpc"
 	"net/url"
 	"path"
 	"strings"
@@ -80,17 +79,22 @@ func healControl(ctx *cli.Context) {
 		cli.ShowCommandHelpAndExit(ctx, "heal", 1)
 	}
 
-	client, err := rpc.DialHTTPPath("tcp", parsedURL.Host, path.Join(reservedBucket, controlPath))
-	fatalIf(err, "Unable to connect to %s", parsedURL.Host)
+	authCfg := &authConfig{
+		accessKey:   serverConfig.GetCredential().AccessKeyID,
+		secretKey:   serverConfig.GetCredential().SecretAccessKey,
+		address:     parsedURL.Host,
+		path:        path.Join(reservedBucket, controlPath),
+		loginMethod: "Controller.LoginHandler",
+	}
+	client := newAuthClient(authCfg)
 
 	// If object does not have trailing "/" then it's an object, hence heal it.
 	if objectName != "" && !strings.HasSuffix(objectName, slashSeparator) {
-		fmt.Printf("Healing : /%s/%s", bucketName, objectName)
-		args := &HealObjectArgs{bucketName, objectName}
+		fmt.Printf("Healing : /%s/%s\n", bucketName, objectName)
+		args := &HealObjectArgs{Bucket: bucketName, Object: objectName}
 		reply := &HealObjectReply{}
-		err = client.Call("Control.HealObject", args, reply)
-		fatalIf(err, "RPC Control.HealObject call failed")
-		fmt.Println()
+		err = client.Call("Controller.HealObjectHandler", args, reply)
+		errorIf(err, "Healing object %s failed.", objectName)
 		return
 	}
 
@@ -98,23 +102,32 @@ func healControl(ctx *cli.Context) {
 	prefix := objectName
 	marker := ""
 	for {
-		args := HealListArgs{bucketName, prefix, marker, "", 1000}
+		args := &HealListArgs{
+			Bucket:    bucketName,
+			Prefix:    prefix,
+			Marker:    marker,
+			Delimiter: "",
+			MaxKeys:   1000,
+		}
 		reply := &HealListReply{}
-		err = client.Call("Control.ListObjectsHeal", args, reply)
-		fatalIf(err, "RPC Heal.ListObjects call failed")
+		err = client.Call("Controller.ListObjectsHealHandler", args, reply)
+		fatalIf(err, "Unable to list objects for healing.")
 
 		// Heal the objects returned in the ListObjects reply.
 		for _, obj := range reply.Objects {
-			fmt.Printf("Healing : /%s/%s", bucketName, obj)
-			reply := &HealObjectReply{}
-			err = client.Call("Control.HealObject", HealObjectArgs{bucketName, obj}, reply)
-			fatalIf(err, "RPC Heal.HealObject call failed")
-			fmt.Println()
+			fmt.Printf("Healing : /%s/%s\n", bucketName, obj)
+			reply := &GenericReply{}
+			healArgs := &HealObjectArgs{Bucket: bucketName, Object: obj}
+			err = client.Call("Controller.HealObjectHandler", healArgs, reply)
+			errorIf(err, "Healing object %s failed.", obj)
 		}
+
 		if !reply.IsTruncated {
 			// End of listing.
 			break
 		}
+
+		// Set the marker to list the next set of keys.
 		marker = reply.NextMarker
 	}
 }

@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"errors"
 	"fmt"
 	"net/rpc"
 	"path"
@@ -59,10 +58,10 @@ type lockServer struct {
 
 func (l *lockServer) verifyArgs(args *LockArgs) error {
 	if !l.timestamp.Equal(args.Timestamp) {
-		return errors.New("Timestamps don't match, server may have restarted.")
+		return errInvalidTimestamp
 	}
 	if !isRPCTokenValid(args.Token) {
-		return errors.New("Invalid token")
+		return errInvalidToken
 	}
 	return nil
 }

@@ -34,14 +34,19 @@ var nsMutex *nsLockMap
 func initDsyncNodes(disks []string, port int) error {
 	serverPort := strconv.Itoa(port)
 	cred := serverConfig.GetCredential()
-	loginMethod := "Dsync.LoginHandler"
 	// Initialize rpc lock client information only if this instance is a distributed setup.
 	var clnts []dsync.RPC
 	for _, disk := range disks {
 		if idx := strings.LastIndex(disk, ":"); idx != -1 {
-			dsyncAddr := disk[:idx] + ":" + serverPort          // Construct a new dsync server addr.
-			rpcPath := pathutil.Join(lockRPCPath, disk[idx+1:]) // Construct a new rpc path for the disk.
-			clnts = append(clnts, newAuthClient(dsyncAddr, rpcPath, cred, loginMethod))
+			clnts = append(clnts, newAuthClient(&authConfig{
+				accessKey: cred.AccessKeyID,
+				secretKey: cred.SecretAccessKey,
+				// Construct a new dsync server addr.
+				address: disk[:idx] + ":" + serverPort,
+				// Construct a new rpc path for the disk.
+				path:        pathutil.Join(lockRPCPath, disk[idx+1:]),
+				loginMethod: "Dsync.LoginHandler",
+			}))
 		}
 	}
 	return dsync.SetNodesWithClients(clnts)
