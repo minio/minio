@@ -227,6 +227,19 @@ func getPort(address string) int {
 	return portInt
 }
 
+// Returns if slice of disks is a distributed setup.
+func isDistributedSetup(disks []string) (isDist bool) {
+	// Port to connect to for the lock servers in a distributed setup.
+	for _, disk := range disks {
+		if !isLocalStorage(disk) {
+			// One or more disks supplied as arguments are not
+			// attached to the local node.
+			isDist = true
+		}
+	}
+	return isDist
+}
+
 // serverMain handler called for 'minio server' command.
 func serverMain(c *cli.Context) {
 	// Check 'server' cli arguments.
@@ -252,10 +265,12 @@ func serverMain(c *cli.Context) {
 	// Disks to be used in server init.
 	disks := c.Args()
 
-	// Set nodes for dsync
-	var isDist bool
-	isDist, err = initDsyncNodes(disks, port)
-	fatalIf(err, "Unable to initialize distributed locking")
+	isDist := isDistributedSetup(disks)
+	// Set nodes for dsync for distributed setup.
+	if isDist {
+		err = initDsyncNodes(disks, port)
+		fatalIf(err, "Unable to initialize distributed locking")
+	}
 
 	// Initialize name space lock.
 	initNSLock(isDist)

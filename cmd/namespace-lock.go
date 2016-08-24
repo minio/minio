@@ -18,7 +18,7 @@ package cmd
 
 import (
 	"errors"
-	pathpkg "path"
+	pathutil "path"
 	"strconv"
 	"strings"
 	"sync"
@@ -31,39 +31,20 @@ var nsMutex *nsLockMap
 
 // Initialize distributed locking only in case of distributed setup.
 // Returns if the setup is distributed or not on success.
-func initDsyncNodes(disks []string, port int) (bool, error) {
-	// Holds a bool indicating whether this server instance is part of
-	// distributed setup or not.
-	var isDist = false
-	// List of lock servers that part in the co-operative namespace locking.
-	var dsyncNodes []string
-	// Corresponding rpc paths needed for communication over net/rpc
-	var rpcPaths []string
-
-	// Port to connect to for the lock servers in a distributed setup.
+func initDsyncNodes(disks []string, port int) error {
 	serverPort := strconv.Itoa(port)
-
+	cred := serverConfig.GetCredential()
+	loginMethod := "Dsync.LoginHandler"
+	// Initialize rpc lock client information only if this instance is a distributed setup.
+	var clnts []dsync.RPC
 	for _, disk := range disks {
 		if idx := strings.LastIndex(disk, ":"); idx != -1 {
-			dsyncNodes = append(dsyncNodes, disk[:idx]+":"+serverPort)
-			rpcPaths = append(rpcPaths, pathpkg.Join(lockRPCPath, disk[idx+1:]))
-		}
-		if !isLocalStorage(disk) {
-			// One or more disks supplied as arguments are not
-			// attached to the local node.
-			isDist = true
+			dsyncAddr := disk[:idx] + ":" + serverPort          // Construct a new dsync server addr.
+			rpcPath := pathutil.Join(lockRPCPath, disk[idx+1:]) // Construct a new rpc path for the disk.
+			clnts = append(clnts, newAuthClient(dsyncAddr, rpcPath, cred, loginMethod))
 		}
 	}
-	// Initialize rpc lock client information only if this instance is a
-	// distributed setup.
-	clnts := make([]dsync.RPC, len(disks))
-	for i := 0; i < len(disks); i++ {
-		clnts[i] = newAuthClient(dsyncNodes[i], rpcPaths[i], serverConfig.GetCredential(), "Dsync.LoginHandler")
-	}
-	if isDist {
-		return isDist, dsync.SetNodesWithClients(clnts)
-	}
-	return isDist, nil
+	return dsync.SetNodesWithClients(clnts)
 }
 
 // initNSLock - initialize name space lock map.
@@ -112,7 +93,7 @@ func (n *nsLockMap) lock(volume, path string, readLock bool) {
 		nsLk = &nsLock{
 			RWLocker: func() RWLocker {
 				if n.isDist {
-					return dsync.NewDRWMutex(pathpkg.Join(volume, path))
+					return dsync.NewDRWMutex(pathutil.Join(volume, path))
 				}
 				return &sync.RWMutex{}
 			}(),
