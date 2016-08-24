@@ -27,6 +27,7 @@ import (
 type AuthRPCClient struct {
 	rpc         *RPCClient // reconnect'able rpc client built on top of net/rpc Client
 	cred        credential // AccessKey and SecretKey
+	isLoggedIn  bool       // Indicates if the auth client has been logged in and token is valid.
 	token       string     // JWT based token
 	tstamp      time.Time  // Timestamp as received on Login RPC.
 	loginMethod string     // RPC service name for authenticating using JWT
@@ -37,6 +38,7 @@ func newAuthClient(node, rpcPath string, cred credential, loginMethod string) *A
 	return &AuthRPCClient{
 		rpc:         newClient(node, rpcPath),
 		cred:        cred,
+		isLoggedIn:  false, // Not logged in yet.
 		loginMethod: loginMethod,
 	}
 }
@@ -44,42 +46,46 @@ func newAuthClient(node, rpcPath string, cred credential, loginMethod string) *A
 // Close - closes underlying rpc connection.
 func (authClient *AuthRPCClient) Close() error {
 	// reset token on closing a connection
-	authClient.token = ""
+	authClient.isLoggedIn = false
 	return authClient.rpc.Close()
 }
 
 // Login - a jwt based authentication is performed with rpc server.
-func (authClient *AuthRPCClient) Login() (string, time.Time, error) {
+func (authClient *AuthRPCClient) Login() error {
+	// Return if already logged in.
+	if authClient.isLoggedIn {
+		return nil
+	}
 	reply := RPCLoginReply{}
 	if err := authClient.rpc.Call(authClient.loginMethod, RPCLoginArgs{
 		Username: authClient.cred.AccessKeyID,
 		Password: authClient.cred.SecretAccessKey,
 	}, &reply); err != nil {
-		return "", time.Time{}, err
+		return err
 	}
-	return reply.Token, reply.Timestamp, nil
+	// Set token, time stamp as received from a successful login call.
+	authClient.token = reply.Token
+	authClient.tstamp = reply.Timestamp
+	authClient.isLoggedIn = true
+	return nil
 }
 
 // Call - If rpc connection isn't established yet since previous disconnect,
 // connection is established, a jwt authenticated login is performed and then
 // the call is performed.
-func (authClient *AuthRPCClient) Call(serviceMethod string, args dsync.TokenSetter, reply interface{}) error {
-	if authClient.token == "" {
-		token, tstamp, err := authClient.Login()
-		if err != nil {
-			return err
+func (authClient *AuthRPCClient) Call(serviceMethod string, args dsync.TokenSetter, reply interface{}) (err error) {
+	// On successful login, attempt the call.
+	if err = authClient.Login(); err == nil {
+		// Set token and timestamp before the rpc call.
+		args.SetToken(authClient.token)
+		args.SetTimestamp(authClient.tstamp)
+
+		// ..
+		err = authClient.rpc.Call(serviceMethod, args, reply)
+		// Invalidate token to mark for re-login on subsequent reconnect.
+		if err != nil && err == rpc.ErrShutdown {
+			authClient.isLoggedIn = false
 		}
-		// set token, time stamp as received from a successful login call.
-		authClient.token = token
-		authClient.tstamp = tstamp
-		// Update the RPC call's token with that received from the recent login call.
-		args.SetToken(token)
-		args.SetTimestamp(tstamp)
-	}
-	err := authClient.rpc.Call(serviceMethod, args, reply)
-	// Reset token on disconnect to mark for re-login on subsequent reconnect.
-	if err != nil && err == rpc.ErrShutdown {
-		authClient.token = ""
 	}
 	return err
 }
