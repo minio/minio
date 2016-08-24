@@ -18,14 +18,11 @@ package cmd
 
 import (
 	"bytes"
-	"errors"
-	"fmt"
 	"io"
 	"net/rpc"
 	"path"
 	"strings"
 
-	jwtgo "github.com/dgrijalva/jwt-go"
 	router "github.com/gorilla/mux"
 )
 
@@ -34,27 +31,6 @@ import (
 type storageServer struct {
 	storage StorageAPI
 	path    string
-}
-
-// Validates if incoming token is valid.
-func isRPCTokenValid(tokenStr string) bool {
-	jwt, err := newJWT(defaultWebTokenExpiry) // Expiry set to 24Hrs.
-	if err != nil {
-		errorIf(err, "Unable to initialize JWT")
-		return false
-	}
-	token, err := jwtgo.Parse(tokenStr, func(token *jwtgo.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwtgo.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
-		}
-		return []byte(jwt.SecretAccessKey), nil
-	})
-	if err != nil {
-		errorIf(err, "Unable to parse JWT token string")
-		return false
-	}
-	// Return if token is valid.
-	return token.Valid
 }
 
 /// Auth operations
@@ -82,7 +58,7 @@ func (s *storageServer) LoginHandler(args *RPCLoginArgs, reply *RPCLoginReply) e
 // MakeVolHandler - make vol handler is rpc wrapper for MakeVol operation.
 func (s *storageServer) MakeVolHandler(args *GenericVolArgs, reply *GenericReply) error {
 	if !isRPCTokenValid(args.Token) {
-		return errors.New("Invalid token")
+		return errInvalidToken
 	}
 	return s.storage.MakeVol(args.Vol)
 }
@@ -90,7 +66,7 @@ func (s *storageServer) MakeVolHandler(args *GenericVolArgs, reply *GenericReply
 // ListVolsHandler - list vols handler is rpc wrapper for ListVols operation.
 func (s *storageServer) ListVolsHandler(args *GenericArgs, reply *ListVolsReply) error {
 	if !isRPCTokenValid(args.Token) {
-		return errors.New("Invalid token")
+		return errInvalidToken
 	}
 	vols, err := s.storage.ListVols()
 	if err != nil {
@@ -103,7 +79,7 @@ func (s *storageServer) ListVolsHandler(args *GenericArgs, reply *ListVolsReply)
 // StatVolHandler - stat vol handler is a rpc wrapper for StatVol operation.
 func (s *storageServer) StatVolHandler(args *GenericVolArgs, reply *VolInfo) error {
 	if !isRPCTokenValid(args.Token) {
-		return errors.New("Invalid token")
+		return errInvalidToken
 	}
 	volInfo, err := s.storage.StatVol(args.Vol)
 	if err != nil {
@@ -117,7 +93,7 @@ func (s *storageServer) StatVolHandler(args *GenericVolArgs, reply *VolInfo) err
 // DeleteVol operation.
 func (s *storageServer) DeleteVolHandler(args *GenericVolArgs, reply *GenericReply) error {
 	if !isRPCTokenValid(args.Token) {
-		return errors.New("Invalid token")
+		return errInvalidToken
 	}
 	return s.storage.DeleteVol(args.Vol)
 }
@@ -127,7 +103,7 @@ func (s *storageServer) DeleteVolHandler(args *GenericVolArgs, reply *GenericRep
 // StatFileHandler - stat file handler is rpc wrapper to stat file.
 func (s *storageServer) StatFileHandler(args *StatFileArgs, reply *FileInfo) error {
 	if !isRPCTokenValid(args.Token) {
-		return errors.New("Invalid token")
+		return errInvalidToken
 	}
 	fileInfo, err := s.storage.StatFile(args.Vol, args.Path)
 	if err != nil {
@@ -140,7 +116,7 @@ func (s *storageServer) StatFileHandler(args *StatFileArgs, reply *FileInfo) err
 // ListDirHandler - list directory handler is rpc wrapper to list dir.
 func (s *storageServer) ListDirHandler(args *ListDirArgs, reply *[]string) error {
 	if !isRPCTokenValid(args.Token) {
-		return errors.New("Invalid token")
+		return errInvalidToken
 	}
 	entries, err := s.storage.ListDir(args.Vol, args.Path)
 	if err != nil {
@@ -153,7 +129,7 @@ func (s *storageServer) ListDirHandler(args *ListDirArgs, reply *[]string) error
 // ReadAllHandler - read all handler is rpc wrapper to read all storage API.
 func (s *storageServer) ReadAllHandler(args *ReadFileArgs, reply *[]byte) error {
 	if !isRPCTokenValid(args.Token) {
-		return errors.New("Invalid token")
+		return errInvalidToken
 	}
 	buf, err := s.storage.ReadAll(args.Vol, args.Path)
 	if err != nil {
@@ -172,7 +148,7 @@ func (s *storageServer) ReadFileHandler(args *ReadFileArgs, reply *[]byte) (err 
 		}
 	}() // Do not crash the server.
 	if !isRPCTokenValid(args.Token) {
-		return errors.New("Invalid token")
+		return errInvalidToken
 	}
 	// Allocate the requested buffer from the client.
 	*reply = make([]byte, args.Size)
@@ -192,7 +168,7 @@ func (s *storageServer) ReadFileHandler(args *ReadFileArgs, reply *[]byte) (err 
 // AppendFileHandler - append file handler is rpc wrapper to append file.
 func (s *storageServer) AppendFileHandler(args *AppendFileArgs, reply *GenericReply) error {
 	if !isRPCTokenValid(args.Token) {
-		return errors.New("Invalid token")
+		return errInvalidToken
 	}
 	return s.storage.AppendFile(args.Vol, args.Path, args.Buffer)
 }
@@ -200,7 +176,7 @@ func (s *storageServer) AppendFileHandler(args *AppendFileArgs, reply *GenericRe
 // DeleteFileHandler - delete file handler is rpc wrapper to delete file.
 func (s *storageServer) DeleteFileHandler(args *DeleteFileArgs, reply *GenericReply) error {
 	if !isRPCTokenValid(args.Token) {
-		return errors.New("Invalid token")
+		return errInvalidToken
 	}
 	return s.storage.DeleteFile(args.Vol, args.Path)
 }
@@ -208,7 +184,7 @@ func (s *storageServer) DeleteFileHandler(args *DeleteFileArgs, reply *GenericRe
 // RenameFileHandler - rename file handler is rpc wrapper to rename file.
 func (s *storageServer) RenameFileHandler(args *RenameFileArgs, reply *GenericReply) error {
 	if !isRPCTokenValid(args.Token) {
-		return errors.New("Invalid token")
+		return errInvalidToken
 	}
 	return s.storage.RenameFile(args.SrcVol, args.SrcPath, args.DstVol, args.DstPath)
 }
