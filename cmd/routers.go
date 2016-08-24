@@ -109,7 +109,7 @@ func configureServerHandler(srvCmdConfig serverCmdConfig) http.Handler {
 	}
 
 	// Initialize Controller.
-	ctrlHandlers := &controllerAPIHandlers{
+	controllerHandlers := &controllerAPIHandlers{
 		ObjectAPI: newObjectLayerFn,
 	}
 
@@ -122,11 +122,8 @@ func configureServerHandler(srvCmdConfig serverCmdConfig) http.Handler {
 	// Initialize distributed NS lock.
 	initDistributedNSLock(mux, srvCmdConfig)
 
-	// FIXME: till net/rpc auth is brought in "minio control" can be enabled only though
-	// this env variable.
-	if !strings.EqualFold(os.Getenv("MINIO_CONTROL"), "off") {
-		registerControlRPCRouter(mux, ctrlHandlers)
-	}
+	// Register controller rpc router.
+	registerControllerRPCRouter(mux, controllerHandlers)
 
 	// set environmental variable MINIO_BROWSER=off to disable minio web browser.
 	// By default minio web browser is enabled.
@@ -134,11 +131,10 @@ func configureServerHandler(srvCmdConfig serverCmdConfig) http.Handler {
 		registerWebRouter(mux, webHandlers)
 	}
 
-	registerAPIRouter(mux, apiHandlers)
 	// Add new routers here.
+	registerAPIRouter(mux, apiHandlers)
 
-	// List of some generic handlers which are applied for all
-	// incoming requests.
+	// List of some generic handlers which are applied for all incoming requests.
 	var handlerFns = []HandlerFunc{
 		// Limits the number of concurrent http requests.
 		setRateLimitHandler,
