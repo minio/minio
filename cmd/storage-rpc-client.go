@@ -24,7 +24,6 @@ import (
 )
 
 type networkStorage struct {
-	netScheme string
 	netAddr   string
 	netPath   string
 	rpcClient *AuthRPCClient
@@ -93,15 +92,15 @@ func newRPCClient(networkPath string) (StorageAPI, error) {
 	rpcAddr := netAddr + ":" + strconv.Itoa(port)
 	// Initialize rpc client with network address and rpc path.
 	cred := serverConfig.GetCredential()
-	rpcClient := newAuthClient(rpcAddr, rpcPath, cred, "Storage.LoginHandler")
+	rpcClient := newAuthClient(&authConfig{
+		accessKey:   cred.AccessKeyID,
+		secretKey:   cred.SecretAccessKey,
+		address:     rpcAddr,
+		path:        rpcPath,
+		loginMethod: "Storage.LoginHandler",
+	})
 	// Initialize network storage.
 	ndisk := &networkStorage{
-		netScheme: func() string {
-			if !isSSL() {
-				return "http"
-			}
-			return "https"
-		}(),
 		netAddr:   netAddr,
 		netPath:   netPath,
 		rpcClient: rpcClient,

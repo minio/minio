@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"net/rpc"
 	"net/url"
 	"path"
 
@@ -55,14 +54,19 @@ func shutdownControl(c *cli.Context) {
 		cli.ShowCommandHelpAndExit(c, "shutdown", 1)
 	}
 
-	parsedURL, err := url.ParseRequestURI(c.Args()[0])
-	fatalIf(err, "Unable to parse URL")
+	parsedURL, err := url.Parse(c.Args()[0])
+	fatalIf(err, "Unable to parse URL.")
 
-	client, err := rpc.DialHTTPPath("tcp", parsedURL.Host, path.Join(reservedBucket, controlPath))
-	fatalIf(err, "Unable to connect to %s", parsedURL.Host)
+	authCfg := &authConfig{
+		accessKey:   serverConfig.GetCredential().AccessKeyID,
+		secretKey:   serverConfig.GetCredential().SecretAccessKey,
+		address:     parsedURL.Host,
+		path:        path.Join(reservedBucket, controlPath),
+		loginMethod: "Controller.LoginHandler",
+	}
+	client := newAuthClient(authCfg)
 
-	args := &ShutdownArgs{Reboot: c.Bool("restart")}
-	reply := &ShutdownReply{}
-	err = client.Call("Control.Shutdown", args, reply)
-	fatalIf(err, "RPC Control.Shutdown call failed")
+	args := &ShutdownArgs{Restart: c.Bool("restart")}
+	err = client.Call("Controller.ShutdownHandler", args, &GenericReply{})
+	errorIf(err, "Shutting down Minio server at %s failed.", parsedURL.Host)
 }
