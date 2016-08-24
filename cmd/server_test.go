@@ -75,10 +75,9 @@ func (s *TestSuiteCommon) TestAuth(c *C) {
 	c.Assert(len(accessID), Equals, minioAccessID)
 }
 
-// TestBucketNotification - Inserts the bucket notification and
-// verifies it by fetching the notification back.
+// TestBucketNotification - Inserts the bucket notification and verifies it by fetching the notification back.
 func (s *TestSuiteCommon) TestBucketNotification(c *C) {
-	// Sample bucket notification
+	// Sample bucket notification.
 	bucketNotificationBuf := `<NotificationConfiguration><TopicConfiguration><Event>s3:ObjectCreated:Put</Event><Filter><S3Key><FilterRule><Name>prefix</Name><Value>images/</Value></FilterRule></S3Key></Filter><Id>1</Id><Topic>arn:minio:sns:us-east-1:444455556666:listen</Topic></TopicConfiguration></NotificationConfiguration>`
 
 	// generate a random bucket Name.
@@ -100,7 +99,7 @@ func (s *TestSuiteCommon) TestBucketNotification(c *C) {
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
-	// execute the HTTP request to create bucket.
+	// execute the HTTP request.
 	response, err = client.Do(request)
 
 	c.Assert(err, IsNil)
@@ -128,7 +127,7 @@ func (s *TestSuiteCommon) TestBucketNotification(c *C) {
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
-	// execute the HTTP request to create bucket.
+	// execute the HTTP request.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 
@@ -140,7 +139,7 @@ func (s *TestSuiteCommon) TestBucketNotification(c *C) {
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
-	// execute the HTTP request to create bucket.
+	// execute the HTTP request.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 
@@ -152,10 +151,21 @@ func (s *TestSuiteCommon) TestBucketNotification(c *C) {
 	c.Assert(err, IsNil)
 
 	client = http.Client{}
-	// execute the HTTP request to create bucket.
+	// execute the HTTP request.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	verifyError(c, response, "InvalidArgument", "A specified event is not supported for notifications.", http.StatusBadRequest)
+
+	bucketNotificationDuplicates := `<NotificationConfiguration><TopicConfiguration><Event>s3:ObjectCreated:Put</Event><Filter><S3Key><FilterRule><Name>prefix</Name><Value>images/</Value></FilterRule></S3Key></Filter><Id>1</Id><Topic>arn:minio:sns:us-east-1:444455556666:listen</Topic></TopicConfiguration><TopicConfiguration><Event>s3:ObjectCreated:Put</Event><Filter><S3Key><FilterRule><Name>prefix</Name><Value>images/</Value></FilterRule></S3Key></Filter><Id>1</Id><Topic>arn:minio:sns:us-east-1:444455556666:listen</Topic></TopicConfiguration></NotificationConfiguration>`
+	request, err = newTestSignedRequest("PUT", getPutNotificationURL(s.endPoint, bucketName),
+		int64(len(bucketNotificationDuplicates)), bytes.NewReader([]byte(bucketNotificationDuplicates)), s.accessKey, s.secretKey)
+	c.Assert(err, IsNil)
+
+	client = http.Client{}
+	// execute the HTTP request.
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	verifyError(c, response, "InvalidArgument", "Configurations overlap. Configurations on the same bucket cannot share a common event type.", http.StatusBadRequest)
 }
 
 // TestBucketPolicy - Inserts the bucket policy and verifies it by fetching the policy back.
