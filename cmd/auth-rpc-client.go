@@ -17,29 +17,95 @@
 package cmd
 
 import (
+	"fmt"
 	"net/rpc"
 	"time"
 
-	"github.com/minio/dsync"
+	jwtgo "github.com/dgrijalva/jwt-go"
 )
+
+// GenericReply represents any generic RPC reply.
+type GenericReply struct{}
+
+// GenericArgs represents any generic RPC arguments.
+type GenericArgs struct {
+	Token     string    // Used to authenticate every RPC call.
+	Timestamp time.Time // Used to verify if the RPC call was issued between the same Login() and disconnect event pair.
+}
+
+// SetToken - sets the token to the supplied value.
+func (ga *GenericArgs) SetToken(token string) {
+	ga.Token = token
+}
+
+// SetTimestamp - sets the timestamp to the supplied value.
+func (ga *GenericArgs) SetTimestamp(tstamp time.Time) {
+	ga.Timestamp = tstamp
+}
+
+// RPCLoginArgs - login username and password for RPC.
+type RPCLoginArgs struct {
+	Username string
+	Password string
+}
+
+// RPCLoginReply - login reply provides generated token to be used
+// with subsequent requests.
+type RPCLoginReply struct {
+	Token         string
+	ServerVersion string
+	Timestamp     time.Time
+}
+
+// Validates if incoming token is valid.
+func isRPCTokenValid(tokenStr string) bool {
+	jwt, err := newJWT(defaultTokenExpiry) // Expiry set to 100yrs.
+	if err != nil {
+		errorIf(err, "Unable to initialize JWT")
+		return false
+	}
+	token, err := jwtgo.Parse(tokenStr, func(token *jwtgo.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwtgo.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
+		}
+		return []byte(jwt.SecretAccessKey), nil
+	})
+	if err != nil {
+		errorIf(err, "Unable to parse JWT token string")
+		return false
+	}
+	// Return if token is valid.
+	return token.Valid
+}
+
+// Auth config represents authentication credentials and Login method name to be used
+// for fetching JWT tokens from the RPC server.
+type authConfig struct {
+	accessKey   string // Username for the server.
+	secretKey   string // Password for the server.
+	address     string // Network address path of RPC server.
+	path        string // Network path for HTTP dial.
+	loginMethod string // RPC service name for authenticating using JWT
+}
 
 // AuthRPCClient is a wrapper type for RPCClient which provides JWT based authentication across reconnects.
 type AuthRPCClient struct {
-	rpc         *RPCClient // reconnect'able rpc client built on top of net/rpc Client
-	cred        credential // AccessKey and SecretKey
-	isLoggedIn  bool       // Indicates if the auth client has been logged in and token is valid.
-	token       string     // JWT based token
-	tstamp      time.Time  // Timestamp as received on Login RPC.
-	loginMethod string     // RPC service name for authenticating using JWT
+	config     *authConfig
+	rpc        *RPCClient // reconnect'able rpc client built on top of net/rpc Client
+	isLoggedIn bool       // Indicates if the auth client has been logged in and token is valid.
+	token      string     // JWT based token
+	tstamp     time.Time  // Timestamp as received on Login RPC.
 }
 
 // newAuthClient - returns a jwt based authenticated (go) rpc client, which does automatic reconnect.
-func newAuthClient(node, rpcPath string, cred credential, loginMethod string) *AuthRPCClient {
+func newAuthClient(cfg *authConfig) *AuthRPCClient {
 	return &AuthRPCClient{
-		rpc:         newClient(node, rpcPath),
-		cred:        cred,
-		isLoggedIn:  false, // Not logged in yet.
-		loginMethod: loginMethod,
+		// Save the config.
+		config: cfg,
+		// Initialize a new reconnectable rpc client.
+		rpc: newClient(cfg.address, cfg.path),
+		// Allocated auth client not logged in yet.
+		isLoggedIn: false,
 	}
 }
 
@@ -57,9 +123,9 @@ func (authClient *AuthRPCClient) Login() error {
 		return nil
 	}
 	reply := RPCLoginReply{}
-	if err := authClient.rpc.Call(authClient.loginMethod, RPCLoginArgs{
-		Username: authClient.cred.AccessKeyID,
-		Password: authClient.cred.SecretAccessKey,
+	if err := authClient.rpc.Call(authClient.config.loginMethod, RPCLoginArgs{
+		Username: authClient.config.accessKey,
+		Password: authClient.config.secretKey,
 	}, &reply); err != nil {
 		return err
 	}
@@ -73,7 +139,10 @@ func (authClient *AuthRPCClient) Login() error {
 // Call - If rpc connection isn't established yet since previous disconnect,
 // connection is established, a jwt authenticated login is performed and then
 // the call is performed.
-func (authClient *AuthRPCClient) Call(serviceMethod string, args dsync.TokenSetter, reply interface{}) (err error) {
+func (authClient *AuthRPCClient) Call(serviceMethod string, args interface {
+	SetToken(token string)
+	SetTimestamp(tstamp time.Time)
+}, reply interface{}) (err error) {
 	// On successful login, attempt the call.
 	if err = authClient.Login(); err == nil {
 		// Set token and timestamp before the rpc call.
