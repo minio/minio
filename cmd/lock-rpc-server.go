@@ -57,8 +57,14 @@ type lockServer struct {
 	timestamp time.Time // Timestamp set at the time of initialization. Resets naturally on minio server restart.
 }
 
-func (l *lockServer) verifyTimestamp(tstamp time.Time) bool {
-	return l.timestamp.Equal(tstamp)
+func (l *lockServer) verifyArgs(args *LockArgs) error {
+	if !l.timestamp.Equal(args.Timestamp) {
+		return errors.New("Timestamps don't match, server may have restarted.")
+	}
+	if !isRPCTokenValid(args.Token) {
+		return errors.New("Invalid token")
+	}
+	return nil
 }
 
 ///  Distributed lock handlers
@@ -85,8 +91,8 @@ func (l *lockServer) LoginHandler(args *RPCLoginArgs, reply *RPCLoginReply) erro
 func (l *lockServer) Lock(args *LockArgs, reply *bool) error {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
-	if l.verifyTimestamp(args.Timestamp) {
-		return errors.New("Timestamps don't match, server may have restarted.")
+	if err := l.verifyArgs(args); err != nil {
+		return err
 	}
 	_, ok := l.lockMap[args.Name]
 	// No locks held on the given name.
@@ -104,8 +110,8 @@ func (l *lockServer) Lock(args *LockArgs, reply *bool) error {
 func (l *lockServer) Unlock(args *LockArgs, reply *bool) error {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
-	if l.verifyTimestamp(args.Timestamp) {
-		return errors.New("Timestamps don't match, server may have restarted.")
+	if err := l.verifyArgs(args); err != nil {
+		return err
 	}
 	_, ok := l.lockMap[args.Name]
 	// No lock is held on the given name, there must be some issue at the lock client side.
@@ -120,8 +126,8 @@ func (l *lockServer) Unlock(args *LockArgs, reply *bool) error {
 func (l *lockServer) RLock(args *LockArgs, reply *bool) error {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
-	if l.verifyTimestamp(args.Timestamp) {
-		return errors.New("Timestamps don't match, server may have restarted.")
+	if err := l.verifyArgs(args); err != nil {
+		return err
 	}
 	locksHeld, ok := l.lockMap[args.Name]
 	// No locks held on the given name.
@@ -144,8 +150,8 @@ func (l *lockServer) RLock(args *LockArgs, reply *bool) error {
 func (l *lockServer) RUnlock(args *LockArgs, reply *bool) error {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
-	if l.verifyTimestamp(args.Timestamp) {
-		return errors.New("Timestamps don't match, server may have restarted.")
+	if err := l.verifyArgs(args); err != nil {
+		return err
 	}
 	locksHeld, ok := l.lockMap[args.Name]
 	if !ok {
