@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/xml"
 	"fmt"
+	"net"
 	"net/url"
 	"path"
 	"sync"
@@ -308,6 +309,14 @@ func loadAllQueueTargets() (map[string]*logrus.Logger, error) {
 		// Using accountID we can now initialize a new AMQP logrus instance.
 		amqpLog, err := newAMQPNotify(accountID)
 		if err != nil {
+			// Encapsulate network error to be more informative.
+			if _, ok := err.(net.Error); ok {
+				return nil, &net.OpError{
+					Op:  "Connecting to " + queueARN,
+					Net: "tcp",
+					Err: err,
+				}
+			}
 			return nil, err
 		}
 		queueTargets[queueARN] = amqpLog
@@ -327,6 +336,14 @@ func loadAllQueueTargets() (map[string]*logrus.Logger, error) {
 		// Using accountID we can now initialize a new Redis logrus instance.
 		redisLog, err := newRedisNotify(accountID)
 		if err != nil {
+			// Encapsulate network error to be more informative.
+			if _, ok := err.(net.Error); ok {
+				return nil, &net.OpError{
+					Op:  "Connecting to " + queueARN,
+					Net: "tcp",
+					Err: err,
+				}
+			}
 			return nil, err
 		}
 		queueTargets[queueARN] = redisLog
@@ -345,6 +362,13 @@ func loadAllQueueTargets() (map[string]*logrus.Logger, error) {
 		// Using accountID we can now initialize a new ElasticSearch logrus instance.
 		elasticLog, err := newElasticNotify(accountID)
 		if err != nil {
+			// Encapsulate network error to be more informative.
+			if _, ok := err.(net.Error); ok {
+				return nil, &net.OpError{
+					Op: "Connecting to " + queueARN, Net: "tcp",
+					Err: err,
+				}
+			}
 			return nil, err
 		}
 		queueTargets[queueARN] = elasticLog
