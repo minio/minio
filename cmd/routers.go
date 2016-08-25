@@ -61,10 +61,10 @@ func newObjectLayerFactory(disks, ignoredDisks []string) func() ObjectLayer {
 		}
 		// Migrate bucket policy from configDir to .minio.sys/buckets/
 		err = migrateBucketPolicyConfig(objAPI)
-		fatalIf(err, "Unable to migrate bucket policy from config directory")
+		errorIf(err, "Unable to migrate bucket policy from config directory")
 
 		err = cleanupOldBucketPolicyConfigs()
-		fatalIf(err, "Unable to clean up bucket policy from config directory.")
+		errorIf(err, "Unable to clean up bucket policy from config directory.")
 
 		// Register the callback that should be called when the process shuts down.
 		globalShutdownCBs.AddObjectLayerCB(func() errCode {
@@ -76,11 +76,11 @@ func newObjectLayerFactory(disks, ignoredDisks []string) func() ObjectLayer {
 
 		// Initialize a new event notifier.
 		err = initEventNotifier(objAPI)
-		fatalIf(err, "Unable to initialize event notification queue")
+		errorIf(err, "Unable to initialize event notification.")
 
 		// Initialize and load bucket policies.
 		err = initBucketPolicies(objAPI)
-		fatalIf(err, "Unable to load all bucket policies")
+		errorIf(err, "Unable to load all bucket policies.")
 
 		// Success.
 		return objAPI

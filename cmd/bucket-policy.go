@@ -100,10 +100,13 @@ func initBucketPolicies(objAPI ObjectLayer) error {
 		return err
 	}
 
+	// Populate global bucket collection.
 	globalBucketPolicies = &bucketPolicies{
 		rwMutex:             &sync.RWMutex{},
 		bucketPolicyConfigs: policies,
 	}
+
+	// Success.
 	return nil
 }
 
