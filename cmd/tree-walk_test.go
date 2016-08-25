@@ -337,7 +337,7 @@ func TestListDir(t *testing.T) {
 	}
 	// None of the disks are available, should get errDiskNotFound.
 	_, _, err = listDir(volume, "", "")
-	if err != errDiskNotFound {
+	if errorCause(err) != errDiskNotFound {
 		t.Error("expected errDiskNotFound error.")
 	}
 }

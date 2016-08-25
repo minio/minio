@@ -88,7 +88,7 @@ func (e erasureInfo) GetCheckSumInfo(partName string) (ckSum checkSumInfo, err e
 			return sum, nil
 		}
 	}
-	return checkSumInfo{}, errUnexpected
+	return checkSumInfo{}, traceError(errUnexpected)
 }
 
 // statInfo - carries stat information of the object.
@@ -188,7 +188,7 @@ func (m xlMetaV1) ObjectToPartOffset(offset int64) (partIndex int, partOffset in
 		partOffset -= part.Size
 	}
 	// Offset beyond the size of the object return InvalidRange.
-	return 0, 0, InvalidRange{}
+	return 0, 0, traceError(InvalidRange{})
 }
 
 // pickValidXLMeta - picks one valid xlMeta content and returns from a
@@ -239,7 +239,7 @@ func (xl xlObjects) readXLMetadata(bucket, object string) (xlMeta xlMetaV1, err 
 // deleteXLMetadata - deletes `xl.json` on a single disk.
 func deleteXLMetdata(disk StorageAPI, bucket, prefix string) error {
 	jsonFile := path.Join(prefix, xlMetaJSONFile)
-	return disk.DeleteFile(bucket, jsonFile)
+	return traceError(disk.DeleteFile(bucket, jsonFile))
 }
 
 // writeXLMetadata - writes `xl.json` to a single disk.
@@ -249,10 +249,10 @@ func writeXLMetadata(disk StorageAPI, bucket, prefix string, xlMeta xlMetaV1) er
 	// Marshal json.
 	metadataBytes, err := json.Marshal(&xlMeta)
 	if err != nil {
-		return err
+		return traceError(err)
 	}
 	// Persist marshalled data.
-	return disk.AppendFile(bucket, jsonFile, metadataBytes)
+	return traceError(disk.AppendFile(bucket, jsonFile, metadataBytes))
 }
 
 // deleteAllXLMetadata - deletes all partially written `xl.json` depending on errs.
@@ -284,7 +284,7 @@ func writeUniqueXLMetadata(disks []StorageAPI, bucket, prefix string, xlMetas []
 	// Start writing `xl.json` to all disks in parallel.
 	for index, disk := range disks {
 		if disk == nil {
-			mErrs[index] = errDiskNotFound
+			mErrs[index] = traceError(errDiskNotFound)
 			continue
 		}
 		wg.Add(1)
@@ -310,7 +310,7 @@ func writeUniqueXLMetadata(disks []StorageAPI, bucket, prefix string, xlMetas []
 	if !isDiskQuorum(mErrs, quorum) {
 		// Delete all `xl.json` successfully renamed.
 		deleteAllXLMetadata(disks, bucket, prefix, mErrs)
-		return errXLWriteQuorum
+		return traceError(errXLWriteQuorum)
 	}
 
 	return reduceErrs(mErrs, []error{
@@ -328,7 +328,7 @@ func writeSameXLMetadata(disks []StorageAPI, bucket, prefix string, xlMeta xlMet
 	// Start writing `xl.json` to all disks in parallel.
 	for index, disk := range disks {
 		if disk == nil {
-			mErrs[index] = errDiskNotFound
+			mErrs[index] = traceError(errDiskNotFound)
 			continue
 		}
 		wg.Add(1)
@@ -354,7 +354,7 @@ func writeSameXLMetadata(disks []StorageAPI, bucket, prefix string, xlMeta xlMet
 	if !isDiskQuorum(mErrs, writeQuorum) {
 		// Delete all `xl.json` successfully renamed.
 		deleteAllXLMetadata(disks, bucket, prefix, mErrs)
-		return errXLWriteQuorum
+		return traceError(errXLWriteQuorum)
 	}
 
 	return reduceErrs(mErrs, []error{

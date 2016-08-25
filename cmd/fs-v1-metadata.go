@@ -81,12 +81,12 @@ func readFSMetadata(disk StorageAPI, bucket, filePath string) (fsMeta fsMetaV1, 
 	// Read all `fs.json`.
 	buf, err := disk.ReadAll(bucket, filePath)
 	if err != nil {
-		return fsMetaV1{}, err
+		return fsMetaV1{}, traceError(err)
 	}
 
 	// Decode `fs.json` into fsMeta structure.
 	if err = json.Unmarshal(buf, &fsMeta); err != nil {
-		return fsMetaV1{}, err
+		return fsMetaV1{}, traceError(err)
 	}
 
 	// Success.
@@ -94,16 +94,23 @@ func readFSMetadata(disk StorageAPI, bucket, filePath string) (fsMeta fsMetaV1, 
 }
 
 // Write fsMeta to fs.json or fs-append.json.
-func writeFSMetadata(disk StorageAPI, bucket, filePath string, fsMeta fsMetaV1) (err error) {
+func writeFSMetadata(disk StorageAPI, bucket, filePath string, fsMeta fsMetaV1) error {
 	tmpPath := path.Join(tmpMetaPrefix, getUUID())
 	metadataBytes, err := json.Marshal(fsMeta)
 	if err != nil {
-		return err
+		return traceError(err)
 	}
 	if err = disk.AppendFile(minioMetaBucket, tmpPath, metadataBytes); err != nil {
-		return err
+		return traceError(err)
 	}
-	return disk.RenameFile(minioMetaBucket, tmpPath, bucket, filePath)
+	err = disk.RenameFile(minioMetaBucket, tmpPath, bucket, filePath)
+	if err != nil {
+		err = disk.DeleteFile(minioMetaBucket, tmpPath)
+		if err != nil {
+			return traceError(err)
+		}
+	}
+	return nil
 }
 
 // newFSMetaV1 - initializes new fsMetaV1.
