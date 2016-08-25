@@ -64,7 +64,7 @@ func erasureHealFile(latestDisks []StorageAPI, outDatedDisks []StorageAPI, volum
 			}
 			err := disk.AppendFile(healBucket, healPath, enBlocks[index])
 			if err != nil {
-				return nil, err
+				return nil, traceError(err)
 			}
 			hashWriters[index].Write(enBlocks[index])
 		}

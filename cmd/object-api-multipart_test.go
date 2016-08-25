@@ -92,6 +92,7 @@ func testObjectAPIIsUploadIDExists(obj ObjectLayer, instanceType string, t TestE
 	}
 
 	err = obj.AbortMultipartUpload(bucket, object, "abc")
+	err = errorCause(err)
 	switch err.(type) {
 	case InvalidUploadID:
 	default:

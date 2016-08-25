@@ -136,6 +136,7 @@ func TestObjectToPartOffset(t *testing.T) {
 	// Test them.
 	for _, testCase := range testCases {
 		index, offset, err := xlMeta.ObjectToPartOffset(testCase.offset)
+		err = errorCause(err)
 		if err != testCase.expectedErr {
 			t.Fatalf("%+v: expected = %s, got: %s", testCase, testCase.expectedErr, err)
 		}

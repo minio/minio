@@ -42,19 +42,19 @@ import (
 func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) error {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return BucketNameInvalid{Bucket: bucket}
+		return traceError(BucketNameInvalid{Bucket: bucket})
 	}
 	// Verify if object is valid.
 	if !IsValidObjectName(object) {
-		return ObjectNameInvalid{Bucket: bucket, Object: object}
+		return traceError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
 	// Start offset and length cannot be negative.
 	if startOffset < 0 || length < 0 {
-		return toObjectErr(errUnexpected, bucket, object)
+		return traceError(errUnexpected)
 	}
 	// Writer cannot be nil.
 	if writer == nil {
-		return toObjectErr(errUnexpected, bucket, object)
+		return traceError(errUnexpected)
 	}
 
 	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
@@ -69,7 +69,7 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 	metaArr, errs := readAllXLMetadata(xl.storageDisks, bucket, object)
 	// Do we have read quorum?
 	if !isDiskQuorum(errs, xl.readQuorum) {
-		return toObjectErr(errXLReadQuorum, bucket, object)
+		return traceError(InsufficientReadQuorum{}, errs...)
 	}
 
 	if reducedErr := reduceErrs(errs, []error{
@@ -94,24 +94,24 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 
 	// Reply back invalid range if the input offset and length fall out of range.
 	if startOffset > xlMeta.Stat.Size || length > xlMeta.Stat.Size {
-		return InvalidRange{startOffset, length, xlMeta.Stat.Size}
+		return traceError(InvalidRange{startOffset, length, xlMeta.Stat.Size})
 	}
 
 	// Reply if we have inputs with offset and length.
 	if startOffset+length > xlMeta.Stat.Size {
-		return InvalidRange{startOffset, length, xlMeta.Stat.Size}
+		return traceError(InvalidRange{startOffset, length, xlMeta.Stat.Size})
 	}
 
 	// Get start part index and offset.
 	partIndex, partOffset, err := xlMeta.ObjectToPartOffset(startOffset)
 	if err != nil {
-		return toObjectErr(err, bucket, object)
+		return traceError(InvalidRange{startOffset, length, xlMeta.Stat.Size})
 	}
 
 	// Get last part index to read given length.
 	lastPartIndex, _, err := xlMeta.ObjectToPartOffset(startOffset + length - 1)
 	if err != nil {
-		return toObjectErr(err, bucket, object)
+		return traceError(InvalidRange{startOffset, length, xlMeta.Stat.Size})
 	}
 
 	// Save the writer.
@@ -125,17 +125,17 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 		if err == nil { // Cache hit.
 			// Advance the buffer to offset as if it was read.
 			if _, err = cachedBuffer.Seek(startOffset, 0); err != nil { // Seek to the offset.
-				return err
+				return traceError(err)
 			}
 			// Write the requested length.
 			if _, err = io.CopyN(writer, cachedBuffer, length); err != nil {
-				return err
+				return traceError(err)
 			}
 			return nil
 		} // Cache miss.
 		// For unknown error, return and error out.
 		if err != objcache.ErrKeyNotFoundInCache {
-			return err
+			return traceError(err)
 		} // Cache has not been found, fill the cache.
 
 		// Cache is only set if whole object is being read.
@@ -152,7 +152,7 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 			// Ignore error if cache is full, proceed to write the object.
 			if err != nil && err != objcache.ErrCacheFull {
 				// For any other error return here.
-				return toObjectErr(err, bucket, object)
+				return toObjectErr(traceError(err), bucket, object)
 			}
 		}
 	}
@@ -223,12 +223,12 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 func (xl xlObjects) HealObject(bucket, object string) error {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return BucketNameInvalid{Bucket: bucket}
+		return traceError(BucketNameInvalid{Bucket: bucket})
 	}
 	// Verify if object is valid.
 	if !IsValidObjectName(object) {
 		// FIXME: return Invalid prefix.
-		return ObjectNameInvalid{Bucket: bucket, Object: object}
+		return traceError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
 
 	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
@@ -275,13 +275,13 @@ func (xl xlObjects) HealObject(bucket, object string) error {
 			err := disk.DeleteFile(bucket,
 				pathJoin(object, outDatedMeta.Parts[partIndex].Name))
 			if err != nil {
-				return err
+				return traceError(err)
 			}
 		}
 		// Delete xl.json file.
 		err := disk.DeleteFile(bucket, pathJoin(object, xlMetaJSONFile))
 		if err != nil {
-			return err
+			return traceError(err)
 		}
 	}
 
@@ -343,7 +343,7 @@ func (xl xlObjects) HealObject(bucket, object string) error {
 		}
 		err := disk.RenameFile(minioMetaBucket, retainSlash(pathJoin(tmpMetaPrefix, tmpID)), bucket, retainSlash(object))
 		if err != nil {
-			return err
+			return traceError(err)
 		}
 	}
 	return nil
@@ -447,7 +447,7 @@ func rename(disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry string,
 			defer wg.Done()
 			err := disk.RenameFile(srcBucket, srcEntry, dstBucket, dstEntry)
 			if err != nil && err != errFileNotFound {
-				errs[index] = err
+				errs[index] = traceError(err)
 			}
 		}(index, disk)
 	}
@@ -460,7 +460,7 @@ func rename(disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry string,
 	if !isDiskQuorum(errs, quorum) {
 		// Undo all the partial rename operations.
 		undoRename(disks, srcBucket, srcEntry, dstBucket, dstEntry, isPart, errs)
-		return errXLWriteQuorum
+		return traceError(errXLWriteQuorum)
 	}
 	// Return on first error, also undo any partially successful rename operations.
 	return reduceErrs(errs, []error{
@@ -495,17 +495,17 @@ func renameObject(disks []StorageAPI, srcBucket, srcObject, dstBucket, dstObject
 func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string) (md5Sum string, err error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return "", BucketNameInvalid{Bucket: bucket}
+		return "", traceError(BucketNameInvalid{Bucket: bucket})
 	}
 	// Verify bucket exists.
 	if !xl.isBucketExist(bucket) {
-		return "", BucketNotFound{Bucket: bucket}
+		return "", traceError(BucketNotFound{Bucket: bucket})
 	}
 	if !IsValidObjectName(object) {
-		return "", ObjectNameInvalid{
+		return "", traceError(ObjectNameInvalid{
 			Bucket: bucket,
 			Object: object,
-		}
+		})
 	}
 	// No metadata is set, allocate a new one.
 	if metadata == nil {
@@ -538,7 +538,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 		// Ignore error if cache is full, proceed to write the object.
 		if err != nil && err != objcache.ErrCacheFull {
 			// For any other error return here.
-			return "", toObjectErr(err, bucket, object)
+			return "", toObjectErr(traceError(err), bucket, object)
 		}
 	} else {
 		mw = md5Writer
@@ -636,7 +636,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	if xl.parentDirIsObject(bucket, path.Dir(object)) {
 		// Parent (in the namespace) is an object, delete temporary object.
 		xl.deleteObject(minioMetaTmpBucket, tempObj)
-		return "", toObjectErr(errFileAccessDenied, bucket, object)
+		return "", toObjectErr(traceError(errFileAccessDenied), bucket, object)
 	}
 
 	// Rename if an object already exists to temporary location.
@@ -706,14 +706,14 @@ func (xl xlObjects) deleteObject(bucket, object string) error {
 
 	for index, disk := range xl.storageDisks {
 		if disk == nil {
-			dErrs[index] = errDiskNotFound
+			dErrs[index] = traceError(errDiskNotFound)
 			continue
 		}
 		wg.Add(1)
 		go func(index int, disk StorageAPI) {
 			defer wg.Done()
 			err := cleanupDir(disk, bucket, object)
-			if err != nil && err != errFileNotFound {
+			if err != nil && errorCause(err) != errVolumeNotFound {
 				dErrs[index] = err
 			}
 		}(index, disk)
@@ -725,7 +725,7 @@ func (xl xlObjects) deleteObject(bucket, object string) error {
 	// Do we have write quorum?
 	if !isDiskQuorum(dErrs, xl.writeQuorum) {
 		// Return errXLWriteQuorum if errors were more than allowed write quorum.
-		return errXLWriteQuorum
+		return traceError(errXLWriteQuorum)
 	}
 
 	return nil
@@ -737,10 +737,10 @@ func (xl xlObjects) deleteObject(bucket, object string) error {
 func (xl xlObjects) DeleteObject(bucket, object string) (err error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return BucketNameInvalid{Bucket: bucket}
+		return traceError(BucketNameInvalid{Bucket: bucket})
 	}
 	if !IsValidObjectName(object) {
-		return ObjectNameInvalid{Bucket: bucket, Object: object}
+		return traceError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
 
 	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
@@ -752,7 +752,7 @@ func (xl xlObjects) DeleteObject(bucket, object string) (err error) {
 
 	// Validate object exists.
 	if !xl.isObject(bucket, object) {
-		return ObjectNotFound{bucket, object}
+		return traceError(ObjectNotFound{bucket, object})
 	} // else proceed to delete the object.
 
 	// Delete the object on all disks.

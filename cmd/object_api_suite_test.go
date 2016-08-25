@@ -707,6 +707,7 @@ func testNonExistantObjectInBucket(obj ObjectLayer, instanceType string, c TestE
 	if err == nil {
 		c.Fatalf("%s: Expected error but found nil", instanceType)
 	}
+	err = errorCause(err)
 	switch err := err.(type) {
 	case ObjectNotFound:
 		if err.Error() != "Object not found: bucket#dir1" {
@@ -740,6 +741,7 @@ func testGetDirectoryReturnsObjectNotFound(obj ObjectLayer, instanceType string,
 	}
 
 	_, err = obj.GetObjectInfo("bucket", "dir1")
+	err = errorCause(err)
 	switch err := err.(type) {
 	case ObjectNotFound:
 		if err.Bucket != "bucket" {
@@ -755,6 +757,7 @@ func testGetDirectoryReturnsObjectNotFound(obj ObjectLayer, instanceType string,
 	}
 
 	_, err = obj.GetObjectInfo("bucket", "dir1/")
+	err = errorCause(err)
 	switch err := err.(type) {
 	case ObjectNameInvalid:
 		if err.Bucket != "bucket" {
