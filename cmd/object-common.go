@@ -35,6 +35,7 @@ const (
 
 // isErrIgnored should we ignore this error?, takes a list of errors which can be ignored.
 func isErrIgnored(err error, ignoredErrs []error) bool {
+	err = errorCause(err)
 	for _, ignoredErr := range ignoredErrs {
 		if ignoredErr == err {
 			return true
@@ -220,7 +221,7 @@ func cleanupDir(storage StorageAPI, volume, dirPath string) error {
 		if err == errFileNotFound {
 			return nil
 		} else if err != nil { // For any other errors fail.
-			return err
+			return traceError(err)
 		} // else on success..
 
 		// Recurse and delete all other entries.

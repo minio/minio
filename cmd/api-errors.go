@@ -566,6 +566,7 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 	if err == nil {
 		return ErrNone
 	}
+	err = errorCause(err)
 	// Verify if the underlying error is signature mismatch.
 	switch err {
 	case errSignatureMismatch:

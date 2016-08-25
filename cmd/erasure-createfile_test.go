@@ -93,8 +93,8 @@ func TestErasureCreateFile(t *testing.T) {
 	// 1 more disk down. 7 disk down in total. Should return quorum error.
 	disks[10] = AppendDiskDown{disks[10].(*posix)}
 	_, _, err = erasureCreateFile(disks, "testbucket", "testobject4", bytes.NewReader(data), blockSize, dataBlocks, parityBlocks, bitRotAlgo, dataBlocks+1)
-	if err != errXLWriteQuorum {
-		t.Errorf("erasureCreateFile returned expected errXLWriteQuorum error, got %s", err)
+	if errorCause(err) != errXLWriteQuorum {
+		t.Errorf("erasureCreateFile return value: expected errXLWriteQuorum, got %s", err)
 	}
 }
 
@@ -195,7 +195,7 @@ func TestErasureEncode(t *testing.T) {
 		}
 		// Failed as expected, but does it fail for the expected reason.
 		if actualErr != nil && !testCase.shouldPass {
-			if testCase.expectedErr != actualErr {
+			if errorCause(actualErr) != testCase.expectedErr {
 				t.Errorf("Test %d: Expected Error to be \"%v\", but instead found \"%v\" ", i+1, testCase.expectedErr, actualErr)
 			}
 		}

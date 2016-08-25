@@ -67,9 +67,10 @@ func errorIf(err error, msg string, data ...interface{}) {
 	fields := logrus.Fields{
 		"cause": err.Error(),
 	}
-	if globalTrace {
-		fields["stack"] = "\n" + stackInfo()
+	if e, ok := err.(*Error); ok {
+		fields["stack"] = strings.Join(e.Trace(), " ")
 	}
+
 	log.WithFields(fields).Errorf(msg, data...)
 }
 

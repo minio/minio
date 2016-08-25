@@ -72,12 +72,12 @@ func readUploadsJSON(bucket, object string, disk StorageAPI) (uploadIDs uploadsV
 	// Reads entire `uploads.json`.
 	buf, err := disk.ReadAll(minioMetaBucket, uploadJSONPath)
 	if err != nil {
-		return uploadsV1{}, err
+		return uploadsV1{}, traceError(err)
 	}
 
 	// Decode `uploads.json`.
 	if err = json.Unmarshal(buf, &uploadIDs); err != nil {
-		return uploadsV1{}, err
+		return uploadsV1{}, traceError(err)
 	}
 
 	// Success.
@@ -103,7 +103,7 @@ func cleanupUploadedParts(bucket, object, uploadID string, storageDisks ...Stora
 	// Cleanup uploadID for all disks.
 	for index, disk := range storageDisks {
 		if disk == nil {
-			errs[index] = errDiskNotFound
+			errs[index] = traceError(errDiskNotFound)
 			continue
 		}
 		wg.Add(1)

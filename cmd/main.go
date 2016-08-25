@@ -160,6 +160,9 @@ func Main() {
 		// Enable all loggers by now.
 		enableLoggers()
 
+		// Init the error tracing module.
+		initError()
+
 		// Set global quiet flag.
 		globalQuiet = c.Bool("quiet") || c.GlobalBool("quiet")
 

@@ -32,6 +32,7 @@ import (
 
 func reduceErrs(errs []error, ignoredErrs []error) error {
 	errorCounts := make(map[error]int)
+	errs = errorsCause(errs)
 	for _, err := range errs {
 		if isErrIgnored(err, ignoredErrs) {
 			continue
@@ -46,13 +47,14 @@ func reduceErrs(errs []error, ignoredErrs []error) error {
 			errMax = err
 		}
 	}
-	return errMax
+	return traceError(errMax, errs...)
 }
 
 // Validates if we have quorum based on the errors related to disk only.
 // Returns 'true' if we have quorum, 'false' if we don't.
 func isDiskQuorum(errs []error, minQuorumCount int) bool {
 	var count int
+	errs = errorsCause(errs)
 	for _, err := range errs {
 		switch err {
 		case errDiskNotFound, errFaultyDisk, errDiskAccessDenied:
@@ -60,6 +62,7 @@ func isDiskQuorum(errs []error, minQuorumCount int) bool {
 		}
 		count++
 	}
+
 	return count >= minQuorumCount
 }
 
@@ -101,12 +104,12 @@ func readXLMeta(disk StorageAPI, bucket string, object string) (xlMeta xlMetaV1,
 	// Reads entire `xl.json`.
 	buf, err := disk.ReadAll(bucket, path.Join(object, xlMetaJSONFile))
 	if err != nil {
-		return xlMetaV1{}, err
+		return xlMetaV1{}, traceError(err)
 	}
 
 	// Unmarshal xl metadata.
 	if err = json.Unmarshal(buf, &xlMeta); err != nil {
-		return xlMetaV1{}, err
+		return xlMetaV1{}, traceError(err)
 	}
 
 	// Return structured `xl.json`.
