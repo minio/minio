@@ -41,7 +41,7 @@ func erasureCreateFile(disks []StorageAPI, volume, path string, reader io.Reader
 		// FIXME: this is a bug in Golang, n == 0 and err ==
 		// io.ErrUnexpectedEOF for io.ReadFull function.
 		if n == 0 && rErr == io.ErrUnexpectedEOF {
-			return 0, nil, rErr
+			return 0, nil, traceError(rErr)
 		}
 		if rErr == io.EOF {
 			// We have reached EOF on the first byte read, io.Reader
@@ -58,7 +58,7 @@ func erasureCreateFile(disks []StorageAPI, volume, path string, reader io.Reader
 			break
 		}
 		if rErr != nil && rErr != io.ErrUnexpectedEOF {
-			return 0, nil, rErr
+			return 0, nil, traceError(rErr)
 		}
 		if n > 0 {
 			// Returns encoded blocks.
@@ -88,19 +88,19 @@ func erasureCreateFile(disks []StorageAPI, volume, path string, reader io.Reader
 func encodeData(dataBuffer []byte, dataBlocks, parityBlocks int) ([][]byte, error) {
 	rs, err := reedsolomon.New(dataBlocks, parityBlocks)
 	if err != nil {
-		return nil, err
+		return nil, traceError(err)
 	}
 	// Split the input buffer into data and parity blocks.
 	var blocks [][]byte
 	blocks, err = rs.Split(dataBuffer)
 	if err != nil {
-		return nil, err
+		return nil, traceError(err)
 	}
 
 	// Encode parity blocks using data blocks.
 	err = rs.Encode(blocks)
 	if err != nil {
-		return nil, err
+		return nil, traceError(err)
 	}
 
 	// Return encoded blocks.
@@ -122,7 +122,7 @@ func appendFile(disks []StorageAPI, volume, path string, enBlocks [][]byte, hash
 			defer wg.Done()
 			wErr := disk.AppendFile(volume, path, enBlocks[index])
 			if wErr != nil {
-				wErrs[index] = wErr
+				wErrs[index] = traceError(wErr)
 				return
 			}
 
@@ -139,7 +139,7 @@ func appendFile(disks []StorageAPI, volume, path string, enBlocks [][]byte, hash
 
 	// Do we have write quorum?.
 	if !isDiskQuorum(wErrs, writeQuorum) {
-		return errXLWriteQuorum
+		return traceError(errXLWriteQuorum)
 	}
 	return nil
 }
