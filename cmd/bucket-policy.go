@@ -66,6 +66,9 @@ func (bp *bucketPolicies) RemoveBucketPolicy(bucket string) {
 func loadAllBucketPolicies(objAPI ObjectLayer) (policies map[string]*bucketPolicy, err error) {
 	// List buckets to proceed loading all notification configuration.
 	buckets, err := objAPI.ListBuckets()
+	errorIf(err, "Unable to list buckets.")
+	err = errorCause(err)
+
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +89,6 @@ func loadAllBucketPolicies(objAPI ObjectLayer) (policies map[string]*bucketPolic
 
 	// Success.
 	return policies, nil
-
 }
 
 // Intialize all bucket policies.
@@ -128,6 +130,8 @@ func readBucketPolicyJSON(bucket string, objAPI ObjectLayer) (bucketPolicyReader
 	}
 	policyPath := pathJoin(bucketConfigPrefix, bucket, policyJSON)
 	objInfo, err := objAPI.GetObjectInfo(minioMetaBucket, policyPath)
+	errorIf(err, "Unable to get policy for the bucket %s.", bucket)
+	err = errorCause(err)
 	if err != nil {
 		if _, ok := err.(ObjectNotFound); ok {
 			return nil, BucketPolicyNotFound{Bucket: bucket}
@@ -136,6 +140,8 @@ func readBucketPolicyJSON(bucket string, objAPI ObjectLayer) (bucketPolicyReader
 	}
 	var buffer bytes.Buffer
 	err = objAPI.GetObject(minioMetaBucket, policyPath, 0, objInfo.Size, &buffer)
+	errorIf(err, "Unable to get policy for the bucket %s.", bucket)
+	err = errorCause(err)
 	if err != nil {
 		if _, ok := err.(ObjectNotFound); ok {
 			return nil, BucketPolicyNotFound{Bucket: bucket}
@@ -174,6 +180,8 @@ func removeBucketPolicy(bucket string, objAPI ObjectLayer) error {
 	}
 	policyPath := pathJoin(bucketConfigPrefix, bucket, policyJSON)
 	if err := objAPI.DeleteObject(minioMetaBucket, policyPath); err != nil {
+		errorIf(err, "Unable to remove bucket-policy on bucket %s.", bucket)
+		err = errorCause(err)
 		if _, ok := err.(ObjectNotFound); ok {
 			return BucketPolicyNotFound{Bucket: bucket}
 		}
@@ -190,6 +198,9 @@ func writeBucketPolicy(bucket string, objAPI ObjectLayer, reader io.Reader, size
 	}
 
 	policyPath := pathJoin(bucketConfigPrefix, bucket, policyJSON)
-	_, err := objAPI.PutObject(minioMetaBucket, policyPath, size, reader, nil)
-	return err
+	if _, err := objAPI.PutObject(minioMetaBucket, policyPath, size, reader, nil); err != nil {
+		errorIf(err, "Unable to set policy for the bucket %s", bucket)
+		return errorCause(err)
+	}
+	return nil
 }

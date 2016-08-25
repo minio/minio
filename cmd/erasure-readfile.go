@@ -84,10 +84,10 @@ func getReadDisks(orderedDisks []StorageAPI, index int, dataBlocks int) (readDis
 
 	// Sanity checks - we should never have this situation.
 	if dataDisks == dataBlocks {
-		return nil, 0, errUnexpected
+		return nil, 0, traceError(errUnexpected)
 	}
 	if dataDisks+parityDisks >= dataBlocks {
-		return nil, 0, errUnexpected
+		return nil, 0, traceError(errUnexpected)
 	}
 
 	// Find the disks from which next set of parallel reads should happen.
@@ -107,7 +107,7 @@ func getReadDisks(orderedDisks []StorageAPI, index int, dataBlocks int) (readDis
 			return readDisks, i + 1, nil
 		}
 	}
-	return nil, 0, errXLReadQuorum
+	return nil, 0, traceError(errXLReadQuorum)
 }
 
 // parallelRead - reads chunks in parallel from the disks specified in []readDisks.
@@ -161,12 +161,12 @@ func parallelRead(volume, path string, readDisks []StorageAPI, orderedDisks []St
 func erasureReadFile(writer io.Writer, disks []StorageAPI, volume string, path string, offset int64, length int64, totalLength int64, blockSize int64, dataBlocks int, parityBlocks int, checkSums []string, algo string, pool *bpool.BytePool) (int64, error) {
 	// Offset and length cannot be negative.
 	if offset < 0 || length < 0 {
-		return 0, errUnexpected
+		return 0, traceError(errUnexpected)
 	}
 
 	// Can't request more data than what is available.
 	if offset+length > totalLength {
-		return 0, errUnexpected
+		return 0, traceError(errUnexpected)
 	}
 
 	// chunkSize is the amount of data that needs to be read from each disk at a time.
@@ -248,7 +248,7 @@ func erasureReadFile(writer io.Writer, disks []StorageAPI, volume string, path s
 			}
 			if nextIndex == len(disks) {
 				// No more disks to read from.
-				return bytesWritten, errXLReadQuorum
+				return bytesWritten, traceError(errXLReadQuorum)
 			}
 			// We do not have enough enough data blocks to reconstruct the data
 			// hence continue the for-loop till we have enough data blocks.
@@ -325,24 +325,24 @@ func decodeData(enBlocks [][]byte, dataBlocks, parityBlocks int) error {
 	// Initialized reedsolomon.
 	rs, err := reedsolomon.New(dataBlocks, parityBlocks)
 	if err != nil {
-		return err
+		return traceError(err)
 	}
 
 	// Reconstruct encoded blocks.
 	err = rs.Reconstruct(enBlocks)
 	if err != nil {
-		return err
+		return traceError(err)
 	}
 
 	// Verify reconstructed blocks (parity).
 	ok, err := rs.Verify(enBlocks)
 	if err != nil {
-		return err
+		return traceError(err)
 	}
 	if !ok {
 		// Blocks cannot be reconstructed, corrupted data.
 		err = errors.New("Verification failed after reconstruction, data likely corrupted.")
-		return err
+		return traceError(err)
 	}
 
 	// Success.

@@ -43,15 +43,15 @@ func (xl xlObjects) updateUploadsJSON(bucket, object string, uploadsJSON uploads
 			defer wg.Done()
 			uploadsBytes, wErr := json.Marshal(uploadsJSON)
 			if wErr != nil {
-				errs[index] = wErr
+				errs[index] = traceError(wErr)
 				return
 			}
 			if wErr = disk.AppendFile(minioMetaBucket, tmpUploadsPath, uploadsBytes); wErr != nil {
-				errs[index] = wErr
+				errs[index] = traceError(wErr)
 				return
 			}
 			if wErr = disk.RenameFile(minioMetaBucket, tmpUploadsPath, minioMetaBucket, uploadsPath); wErr != nil {
-				errs[index] = wErr
+				errs[index] = traceError(wErr)
 				return
 			}
 		}(index, disk)
@@ -82,7 +82,7 @@ func (xl xlObjects) updateUploadsJSON(bucket, object string, uploadsJSON uploads
 			}(index, disk)
 		}
 		wg.Wait()
-		return errXLWriteQuorum
+		return traceError(errXLWriteQuorum)
 	}
 	return nil
 }
@@ -117,7 +117,7 @@ func (xl xlObjects) writeUploadJSON(bucket, object, uploadID string, initiated t
 	// Reads `uploads.json` and returns error.
 	uploadsJSON, err := xl.readUploadsJSON(bucket, object)
 	if err != nil {
-		if err != errFileNotFound {
+		if errorCause(err) != errFileNotFound {
 			return err
 		}
 		// Set uploads format to `xl` otherwise.
@@ -129,7 +129,7 @@ func (xl xlObjects) writeUploadJSON(bucket, object, uploadID string, initiated t
 	// Update `uploads.json` on all disks.
 	for index, disk := range xl.storageDisks {
 		if disk == nil {
-			errs[index] = errDiskNotFound
+			errs[index] = traceError(errDiskNotFound)
 			continue
 		}
 		wg.Add(1)
@@ -138,21 +138,21 @@ func (xl xlObjects) writeUploadJSON(bucket, object, uploadID string, initiated t
 			defer wg.Done()
 			uploadsJSONBytes, wErr := json.Marshal(&uploadsJSON)
 			if wErr != nil {
-				errs[index] = wErr
+				errs[index] = traceError(wErr)
 				return
 			}
 			// Write `uploads.json` to disk.
 			if wErr = disk.AppendFile(minioMetaBucket, tmpUploadsPath, uploadsJSONBytes); wErr != nil {
-				errs[index] = wErr
+				errs[index] = traceError(wErr)
 				return
 			}
 			wErr = disk.RenameFile(minioMetaBucket, tmpUploadsPath, minioMetaBucket, uploadsPath)
 			if wErr != nil {
 				if dErr := disk.DeleteFile(minioMetaBucket, tmpUploadsPath); dErr != nil {
-					errs[index] = dErr
+					errs[index] = traceError(dErr)
 					return
 				}
-				errs[index] = wErr
+				errs[index] = traceError(wErr)
 				return
 			}
 			errs[index] = nil
@@ -180,7 +180,7 @@ func (xl xlObjects) writeUploadJSON(bucket, object, uploadID string, initiated t
 			}(index, disk)
 		}
 		wg.Wait()
-		return errXLWriteQuorum
+		return traceError(errXLWriteQuorum)
 	}
 
 	// Ignored errors list.
@@ -248,7 +248,7 @@ func (xl xlObjects) statPart(bucket, object, uploadID, partName string) (fileInf
 		if err == nil {
 			return fileInfo, nil
 		}
-
+		err = traceError(err)
 		// For any reason disk was deleted or goes offline we continue to next disk.
 		if isErrIgnored(err, objMetadataOpIgnoredErrs) {
 			continue
@@ -271,7 +271,7 @@ func commitXLMetadata(disks []StorageAPI, srcPrefix, dstPrefix string, quorum in
 	// Rename `xl.json` to all disks in parallel.
 	for index, disk := range disks {
 		if disk == nil {
-			mErrs[index] = errDiskNotFound
+			mErrs[index] = traceError(errDiskNotFound)
 			continue
 		}
 		wg.Add(1)
@@ -284,7 +284,7 @@ func commitXLMetadata(disks []StorageAPI, srcPrefix, dstPrefix string, quorum in
 			// Renames `xl.json` from source prefix to destination prefix.
 			rErr := disk.RenameFile(minioMetaBucket, srcJSONFile, minioMetaBucket, dstJSONFile)
 			if rErr != nil {
-				mErrs[index] = rErr
+				mErrs[index] = traceError(rErr)
 				return
 			}
 			mErrs[index] = nil
@@ -297,7 +297,7 @@ func commitXLMetadata(disks []StorageAPI, srcPrefix, dstPrefix string, quorum in
 	if !isDiskQuorum(mErrs, quorum) {
 		// Delete all `xl.json` successfully renamed.
 		deleteAllXLMetadata(disks, minioMetaBucket, dstPrefix, mErrs)
-		return errXLWriteQuorum
+		return traceError(errXLWriteQuorum)
 	}
 
 	// List of ignored errors.

@@ -214,42 +214,42 @@ func (xl xlObjects) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return ListMultipartsInfo{}, BucketNameInvalid{Bucket: bucket}
+		return ListMultipartsInfo{}, traceError(BucketNameInvalid{Bucket: bucket})
 	}
 	if !xl.isBucketExist(bucket) {
-		return ListMultipartsInfo{}, BucketNotFound{Bucket: bucket}
+		return ListMultipartsInfo{}, traceError(BucketNotFound{Bucket: bucket})
 	}
 	if !IsValidObjectPrefix(prefix) {
-		return ListMultipartsInfo{}, ObjectNameInvalid{Bucket: bucket, Object: prefix}
+		return ListMultipartsInfo{}, traceError(ObjectNameInvalid{Bucket: bucket, Object: prefix})
 	}
 	// Verify if delimiter is anything other than '/', which we do not support.
 	if delimiter != "" && delimiter != slashSeparator {
-		return ListMultipartsInfo{}, UnsupportedDelimiter{
+		return ListMultipartsInfo{}, traceError(UnsupportedDelimiter{
 			Delimiter: delimiter,
-		}
+		})
 	}
 	// Verify if marker has prefix.
 	if keyMarker != "" && !strings.HasPrefix(keyMarker, prefix) {
-		return ListMultipartsInfo{}, InvalidMarkerPrefixCombination{
+		return ListMultipartsInfo{}, traceError(InvalidMarkerPrefixCombination{
 			Marker: keyMarker,
 			Prefix: prefix,
-		}
+		})
 	}
 	if uploadIDMarker != "" {
 		if strings.HasSuffix(keyMarker, slashSeparator) {
-			return result, InvalidUploadIDKeyCombination{
+			return result, traceError(InvalidUploadIDKeyCombination{
 				UploadIDMarker: uploadIDMarker,
 				KeyMarker:      keyMarker,
-			}
+			})
 		}
 		id, err := uuid.Parse(uploadIDMarker)
 		if err != nil {
-			return result, err
+			return result, traceError(err)
 		}
 		if id.IsZero() {
-			return result, MalformedUploadID{
+			return result, traceError(MalformedUploadID{
 				UploadID: uploadIDMarker,
-			}
+			})
 		}
 	}
 	return xl.listMultipartUploads(bucket, prefix, keyMarker, uploadIDMarker, delimiter, maxUploads)
@@ -314,15 +314,15 @@ func (xl xlObjects) newMultipartUpload(bucket string, object string, meta map[st
 func (xl xlObjects) NewMultipartUpload(bucket, object string, meta map[string]string) (string, error) {
 	// Verify if bucket name is valid.
 	if !IsValidBucketName(bucket) {
-		return "", BucketNameInvalid{Bucket: bucket}
+		return "", traceError(BucketNameInvalid{Bucket: bucket})
 	}
 	// Verify whether the bucket exists.
 	if !xl.isBucketExist(bucket) {
-		return "", BucketNotFound{Bucket: bucket}
+		return "", traceError(BucketNotFound{Bucket: bucket})
 	}
 	// Verify if object name is valid.
 	if !IsValidObjectName(object) {
-		return "", ObjectNameInvalid{Bucket: bucket, Object: object}
+		return "", traceError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
 	// No metadata is set, allocate a new one.
 	if meta == nil {
@@ -339,14 +339,14 @@ func (xl xlObjects) NewMultipartUpload(bucket, object string, meta map[string]st
 func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, size int64, data io.Reader, md5Hex string) (string, error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return "", BucketNameInvalid{Bucket: bucket}
+		return "", traceError(BucketNameInvalid{Bucket: bucket})
 	}
 	// Verify whether the bucket exists.
 	if !xl.isBucketExist(bucket) {
-		return "", BucketNotFound{Bucket: bucket}
+		return "", traceError(BucketNotFound{Bucket: bucket})
 	}
 	if !IsValidObjectName(object) {
-		return "", ObjectNameInvalid{Bucket: bucket, Object: object}
+		return "", traceError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
 
 	var partsMetadata []xlMetaV1
@@ -361,14 +361,14 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	// Validates if upload ID exists.
 	if !xl.isUploadIDExists(bucket, object, uploadID) {
 		nsMutex.RUnlock(minioMetaBucket, uploadIDPath, opsID)
-		return "", InvalidUploadID{UploadID: uploadID}
+		return "", traceError(InvalidUploadID{UploadID: uploadID})
 	}
 	// Read metadata associated with the object from all disks.
 	partsMetadata, errs = readAllXLMetadata(xl.storageDisks, minioMetaBucket,
 		uploadIDPath)
 	if !isDiskQuorum(errs, xl.writeQuorum) {
 		nsMutex.RUnlock(minioMetaBucket, uploadIDPath, opsID)
-		return "", toObjectErr(errXLWriteQuorum, bucket, object)
+		return "", toObjectErr(traceError(errXLWriteQuorum), bucket, object)
 	}
 	nsMutex.RUnlock(minioMetaBucket, uploadIDPath, opsID)
 
@@ -409,7 +409,7 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	// Should return IncompleteBody{} error when reader has fewer bytes
 	// than specified in request header.
 	if sizeWritten < size {
-		return "", IncompleteBody{}
+		return "", traceError(IncompleteBody{})
 	}
 
 	// For size == -1, perhaps client is sending in chunked encoding
@@ -435,7 +435,7 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 			// MD5 mismatch, delete the temporary object.
 			xl.deleteObject(minioMetaBucket, tmpPartPath)
 			// Returns md5 mismatch.
-			return "", BadDigest{md5Hex, newMD5Hex}
+			return "", traceError(BadDigest{md5Hex, newMD5Hex})
 		}
 	}
 
@@ -448,7 +448,7 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 
 	// Validate again if upload ID still exists.
 	if !xl.isUploadIDExists(bucket, object, uploadID) {
-		return "", InvalidUploadID{UploadID: uploadID}
+		return "", traceError(InvalidUploadID{UploadID: uploadID})
 	}
 
 	// Rename temporary part file to its final location.
@@ -461,7 +461,7 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	// Read metadata again because it might be updated with parallel upload of another part.
 	partsMetadata, errs = readAllXLMetadata(onlineDisks, minioMetaBucket, uploadIDPath)
 	if !isDiskQuorum(errs, xl.writeQuorum) {
-		return "", toObjectErr(errXLWriteQuorum, bucket, object)
+		return "", toObjectErr(traceError(errXLWriteQuorum), bucket, object)
 	}
 
 	// Get current highest version based on re-read partsMetadata.
@@ -578,14 +578,14 @@ func (xl xlObjects) listObjectParts(bucket, object, uploadID string, partNumberM
 func (xl xlObjects) ListObjectParts(bucket, object, uploadID string, partNumberMarker, maxParts int) (ListPartsInfo, error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return ListPartsInfo{}, BucketNameInvalid{Bucket: bucket}
+		return ListPartsInfo{}, traceError(BucketNameInvalid{Bucket: bucket})
 	}
 	// Verify whether the bucket exists.
 	if !xl.isBucketExist(bucket) {
-		return ListPartsInfo{}, BucketNotFound{Bucket: bucket}
+		return ListPartsInfo{}, traceError(BucketNotFound{Bucket: bucket})
 	}
 	if !IsValidObjectName(object) {
-		return ListPartsInfo{}, ObjectNameInvalid{Bucket: bucket, Object: object}
+		return ListPartsInfo{}, traceError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
 
 	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
@@ -597,7 +597,7 @@ func (xl xlObjects) ListObjectParts(bucket, object, uploadID string, partNumberM
 	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID), opsID)
 
 	if !xl.isUploadIDExists(bucket, object, uploadID) {
-		return ListPartsInfo{}, InvalidUploadID{UploadID: uploadID}
+		return ListPartsInfo{}, traceError(InvalidUploadID{UploadID: uploadID})
 	}
 	result, err := xl.listObjectParts(bucket, object, uploadID, partNumberMarker, maxParts)
 	return result, err
@@ -612,17 +612,17 @@ func (xl xlObjects) ListObjectParts(bucket, object, uploadID string, partNumberM
 func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, uploadID string, parts []completePart) (string, error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return "", BucketNameInvalid{Bucket: bucket}
+		return "", traceError(BucketNameInvalid{Bucket: bucket})
 	}
 	// Verify whether the bucket exists.
 	if !xl.isBucketExist(bucket) {
-		return "", BucketNotFound{Bucket: bucket}
+		return "", traceError(BucketNotFound{Bucket: bucket})
 	}
 	if !IsValidObjectName(object) {
-		return "", ObjectNameInvalid{
+		return "", traceError(ObjectNameInvalid{
 			Bucket: bucket,
 			Object: object,
-		}
+		})
 	}
 
 	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
@@ -636,7 +636,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID), opsID)
 
 	if !xl.isUploadIDExists(bucket, object, uploadID) {
-		return "", InvalidUploadID{UploadID: uploadID}
+		return "", traceError(InvalidUploadID{UploadID: uploadID})
 	}
 	// Calculate s3 compatible md5sum for complete multipart.
 	s3MD5, err := completeMultipartMD5(parts...)
@@ -650,7 +650,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	partsMetadata, errs := readAllXLMetadata(xl.storageDisks, minioMetaBucket, uploadIDPath)
 	// Do we have writeQuorum?.
 	if !isDiskQuorum(errs, xl.writeQuorum) {
-		return "", toObjectErr(errXLWriteQuorum, bucket, object)
+		return "", toObjectErr(traceError(errXLWriteQuorum), bucket, object)
 	}
 
 	onlineDisks, modTime := listOnlineDisks(xl.storageDisks, partsMetadata, errs)
@@ -678,21 +678,21 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 		partIdx := currentXLMeta.ObjectPartIndex(part.PartNumber)
 		// All parts should have same part number.
 		if partIdx == -1 {
-			return "", InvalidPart{}
+			return "", traceError(InvalidPart{})
 		}
 
 		// All parts should have same ETag as previously generated.
 		if currentXLMeta.Parts[partIdx].ETag != part.ETag {
-			return "", BadDigest{}
+			return "", traceError(BadDigest{})
 		}
 
 		// All parts except the last part has to be atleast 5MB.
 		if (i < len(parts)-1) && !isMinAllowedPartSize(currentXLMeta.Parts[partIdx].Size) {
-			return "", PartTooSmall{
+			return "", traceError(PartTooSmall{
 				PartNumber: part.PartNumber,
 				PartSize:   currentXLMeta.Parts[partIdx].Size,
 				PartETag:   part.ETag,
-			}
+			})
 		}
 
 		// Last part could have been uploaded as 0bytes, do not need
@@ -716,7 +716,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 
 	// Check if an object is present as one of the parent dir.
 	if xl.parentDirIsObject(bucket, path.Dir(object)) {
-		return "", toObjectErr(errFileAccessDenied, bucket, object)
+		return "", toObjectErr(traceError(errFileAccessDenied), bucket, object)
 	}
 
 	// Save the final object size and modtime.
@@ -893,13 +893,13 @@ func (xl xlObjects) abortMultipartUpload(bucket, object, uploadID string) (err e
 func (xl xlObjects) AbortMultipartUpload(bucket, object, uploadID string) error {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return BucketNameInvalid{Bucket: bucket}
+		return traceError(BucketNameInvalid{Bucket: bucket})
 	}
 	if !xl.isBucketExist(bucket) {
-		return BucketNotFound{Bucket: bucket}
+		return traceError(BucketNotFound{Bucket: bucket})
 	}
 	if !IsValidObjectName(object) {
-		return ObjectNameInvalid{Bucket: bucket, Object: object}
+		return traceError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
 
 	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
@@ -911,7 +911,7 @@ func (xl xlObjects) AbortMultipartUpload(bucket, object, uploadID string) error 
 	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID), opsID)
 
 	if !xl.isUploadIDExists(bucket, object, uploadID) {
-		return InvalidUploadID{UploadID: uploadID}
+		return traceError(InvalidUploadID{UploadID: uploadID})
 	}
 	err := xl.abortMultipartUpload(bucket, object, uploadID)
 	return err

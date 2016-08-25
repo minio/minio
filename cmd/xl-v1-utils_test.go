@@ -55,7 +55,7 @@ func TestReduceErrs(t *testing.T) {
 	// Validates list of all the testcases for returning valid errors.
 	for i, testCase := range testCases {
 		gotErr := reduceErrs(testCase.errs, testCase.ignoredErrs)
-		if testCase.err != gotErr {
+		if errorCause(gotErr) != testCase.err {
 			t.Errorf("Test %d : expected %s, got %s", i+1, testCase.err, gotErr)
 		}
 	}
