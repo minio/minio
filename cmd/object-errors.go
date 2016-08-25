@@ -26,48 +26,57 @@ import (
 // handle all cases where we have known types of errors returned by
 // underlying storage layer.
 func toObjectErr(err error, params ...string) error {
+	e, ok := err.(*Error)
+	if ok {
+		err = e.e
+	}
+
 	switch err {
 	case errVolumeNotFound:
 		if len(params) >= 1 {
-			return BucketNotFound{Bucket: params[0]}
+			err = BucketNotFound{Bucket: params[0]}
 		}
 	case errVolumeNotEmpty:
 		if len(params) >= 1 {
-			return BucketNotEmpty{Bucket: params[0]}
+			err = BucketNotEmpty{Bucket: params[0]}
 		}
 	case errVolumeExists:
 		if len(params) >= 1 {
-			return BucketExists{Bucket: params[0]}
+			err = BucketExists{Bucket: params[0]}
 		}
 	case errDiskFull:
-		return StorageFull{}
+		err = StorageFull{}
 	case errIsNotRegular, errFileAccessDenied:
 		if len(params) >= 2 {
-			return ObjectExistsAsDirectory{
+			err = ObjectExistsAsDirectory{
 				Bucket: params[0],
 				Object: params[1],
 			}
 		}
 	case errFileNotFound:
 		if len(params) >= 2 {
-			return ObjectNotFound{
+			err = ObjectNotFound{
 				Bucket: params[0],
 				Object: params[1],
 			}
 		}
 	case errFileNameTooLong:
 		if len(params) >= 2 {
-			return ObjectNameInvalid{
+			err = ObjectNameInvalid{
 				Bucket: params[0],
 				Object: params[1],
 			}
 		}
 	case errXLReadQuorum:
-		return InsufficientReadQuorum{}
+		err = InsufficientReadQuorum{}
 	case errXLWriteQuorum:
-		return InsufficientWriteQuorum{}
+		err = InsufficientWriteQuorum{}
 	case io.ErrUnexpectedEOF, io.ErrShortWrite:
-		return IncompleteBody{}
+		err = IncompleteBody{}
+	}
+	if ok {
+		e.e = err
+		return e
 	}
 	return err
 }

@@ -227,6 +227,8 @@ func loadNotificationConfig(bucket string, objAPI ObjectLayer) (*notificationCon
 	// Construct the notification config path.
 	notificationConfigPath := path.Join(bucketConfigPrefix, bucket, bucketNotificationConfig)
 	objInfo, err := objAPI.GetObjectInfo(minioMetaBucket, notificationConfigPath)
+	errorIf(err, "Unable to get bucket-notification for butkcet %s", bucket)
+	err = errorCause(err)
 	if err != nil {
 		// 'notification.xml' not found return 'errNoSuchNotifications'.
 		// This is default when no bucket notifications are found on the bucket.
@@ -239,6 +241,8 @@ func loadNotificationConfig(bucket string, objAPI ObjectLayer) (*notificationCon
 	}
 	var buffer bytes.Buffer
 	err = objAPI.GetObject(minioMetaBucket, notificationConfigPath, 0, objInfo.Size, &buffer)
+	errorIf(err, "Unable to get bucket-notification for butkcet %s", bucket)
+	err = errorCause(err)
 	if err != nil {
 		// 'notification.xml' not found return 'errNoSuchNotifications'.
 		// This is default when no bucket notifications are found on the bucket.
