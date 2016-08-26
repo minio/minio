@@ -20,6 +20,7 @@ import (
 	"encoding/base64"
 	"encoding/xml"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -46,6 +47,33 @@ func cloneHeader(h http.Header) http.Header {
 	return h2
 }
 
+// checkDuplicates - function to validate if there are duplicates in a slice of strings.
+func checkDuplicates(list []string) error {
+	// Empty lists are not allowed.
+	if len(list) == 0 {
+		return errInvalidArgument
+	}
+	// Empty keys are not allowed.
+	for _, key := range list {
+		if key == "" {
+			return errInvalidArgument
+		}
+	}
+	listMaps := make(map[string]int)
+	// Navigate through each configs and count the entries.
+	for _, key := range list {
+		listMaps[key]++
+	}
+	// Validate if there are any duplicate counts.
+	for key, count := range listMaps {
+		if count != 1 {
+			return fmt.Errorf("Duplicate key: \"%s\" found of count: \"%d\"", key, count)
+		}
+	}
+	// No duplicates.
+	return nil
+}
+
 // splits network path into its components Address and Path.
 func splitNetPath(networkPath string) (netAddr, netPath string, err error) {
 	if runtime.GOOS == "windows" {
@@ -54,16 +82,15 @@ func splitNetPath(networkPath string) (netAddr, netPath string, err error) {
 		}
 	}
 	networkParts := strings.SplitN(networkPath, ":", 2)
-	switch len(networkParts) {
-	case 1:
+	if len(networkParts) == 1 {
 		return "", networkPath, nil
-	case 2:
-		if networkParts[1] == "" {
-			return "", "", &net.AddrError{Err: "missing path in network path", Addr: networkPath}
-		} else if networkParts[0] == "" {
-			return "", "", &net.AddrError{Err: "missing address in network path", Addr: networkPath}
-		}
-		return networkParts[0], networkParts[1], nil
+	}
+	if networkParts[1] == "" {
+		return "", "", &net.AddrError{Err: "Missing path in network path", Addr: networkPath}
+	} else if networkParts[0] == "" {
+		return "", "", &net.AddrError{Err: "Missing address in network path", Addr: networkPath}
+	} else if !filepath.IsAbs(networkParts[1]) {
+		return "", "", &net.AddrError{Err: "Network path should be absolute", Addr: networkPath}
 	}
 	return networkParts[0], networkParts[1], nil
 }
