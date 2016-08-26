@@ -202,16 +202,70 @@ func initServerConfig(c *cli.Context) {
 	// Do not fail if this is not allowed, lower limits are fine as well.
 }
 
+// Validate if input disks are sufficient for initializing XL.
+func checkSufficientDisks(disks []string) error {
+	// Verify total number of disks.
+	totalDisks := len(disks)
+	if totalDisks > maxErasureBlocks {
+		return errXLMaxDisks
+	}
+	if totalDisks < minErasureBlocks {
+		return errXLMinDisks
+	}
+
+	// isEven function to verify if a given number if even.
+	isEven := func(number int) bool {
+		return number%2 == 0
+	}
+
+	// Verify if we have even number of disks.
+	// only combination of 4, 6, 8, 10, 12, 14, 16 are supported.
+	if !isEven(totalDisks) {
+		return errXLNumDisks
+	}
+
+	// Success.
+	return nil
+}
+
+// Validates if disks are of supported format, invalid arguments are rejected.
+func checkNamingDisks(disks []string) error {
+	for _, disk := range disks {
+		_, _, err := splitNetPath(disk)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Check server arguments.
 func checkServerSyntax(c *cli.Context) {
 	if !c.Args().Present() || c.Args().First() == "help" {
 		cli.ShowCommandHelpAndExit(c, "server", 1)
+	}
+	disks := c.Args()
+	if len(disks) > 1 {
+		// Validate if input disks have duplicates in them.
+		err := checkDuplicates(disks)
+		fatalIf(err, "Invalid disk arguments for server.")
+
+		// Validate if input disks are sufficient for erasure coded setup.
+		err = checkSufficientDisks(disks)
+		fatalIf(err, "Invalid disk arguments for server.")
+
+		// Validate if input disks are properly named in accordance with either
+		//  - /mnt/disk1
+		//  - ip:/mnt/disk1
+		err = checkNamingDisks(disks)
+		fatalIf(err, "Invalid disk arguments for server.")
 	}
 }
 
 // Extract port number from address address should be of the form host:port.
 func getPort(address string) int {
 	_, portStr, _ := net.SplitHostPort(address)
+
 	// If port empty, default to port '80'
 	if portStr == "" {
 		portStr = "80"
