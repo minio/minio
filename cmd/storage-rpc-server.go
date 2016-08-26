@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	router "github.com/gorilla/mux"
+	"github.com/minio/minio/pkg/disk"
 )
 
 // Storage server implements rpc primitives to facilitate exporting a
@@ -53,7 +54,19 @@ func (s *storageServer) LoginHandler(args *RPCLoginArgs, reply *RPCLoginReply) e
 	return nil
 }
 
-/// Volume operations handlers
+/// Storage operations handlers.
+
+// DiskInfoHandler - disk info handler is rpc wrapper for DiskInfo operation.
+func (s *storageServer) DiskInfoHandler(args *GenericArgs, reply *disk.Info) error {
+	if !isRPCTokenValid(args.Token) {
+		return errInvalidToken
+	}
+	info, err := s.storage.DiskInfo()
+	*reply = info
+	return err
+}
+
+/// Volume operations handlers.
 
 // MakeVolHandler - make vol handler is rpc wrapper for MakeVol operation.
 func (s *storageServer) MakeVolHandler(args *GenericVolArgs, reply *GenericReply) error {

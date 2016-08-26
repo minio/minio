@@ -16,8 +16,13 @@
 
 package cmd
 
+import "github.com/minio/minio/pkg/disk"
+
 // StorageAPI interface.
 type StorageAPI interface {
+	// Storage operations.
+	DiskInfo() (info disk.Info, err error)
+
 	// Volume operations.
 	MakeVol(volume string) (err error)
 	ListVols() (vols []VolInfo, err error)
