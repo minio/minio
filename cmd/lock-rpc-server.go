@@ -86,7 +86,7 @@ func (l *lockServer) LoginHandler(args *RPCLoginArgs, reply *RPCLoginReply) erro
 	return nil
 }
 
-// LockHandler - rpc handler for lock operation.
+// Lock - rpc handler for (single) write lock operation.
 func (l *lockServer) Lock(args *LockArgs, reply *bool) error {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
@@ -98,30 +98,36 @@ func (l *lockServer) Lock(args *LockArgs, reply *bool) error {
 	if !ok {
 		*reply = true
 		l.lockMap[args.Name] = []bool{true}
-		return nil
+	} else {
+		// Either a read or write lock is held on the given name.
+		*reply = false
 	}
-	// Either a read or write lock is held on the given name.
-	*reply = false
 	return nil
 }
 
-// UnlockHandler - rpc handler for unlock operation.
+// Unlock - rpc handler for (single) write unlock operation.
 func (l *lockServer) Unlock(args *LockArgs, reply *bool) error {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 	if err := l.verifyArgs(args); err != nil {
 		return err
 	}
-	_, ok := l.lockMap[args.Name]
+	locksHeld, ok := l.lockMap[args.Name]
 	// No lock is held on the given name, there must be some issue at the lock client side.
 	if !ok {
+		*reply = false
 		return fmt.Errorf("Unlock attempted on an un-locked entity: %s", args.Name)
+	} else if len(locksHeld) == 1 && locksHeld[0] == true {
+		*reply = true
+		delete(l.lockMap, args.Name)
+		return nil
+	} else {
+		*reply = false
+		return fmt.Errorf("Unlock attempted on a read locked entity: %s (%d read locks active)", args.Name, len(locksHeld))
 	}
-	*reply = true
-	delete(l.lockMap, args.Name)
-	return nil
 }
 
+// RLock - rpc handler for read lock operation.
 func (l *lockServer) RLock(args *LockArgs, reply *bool) error {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
@@ -142,10 +148,10 @@ func (l *lockServer) RLock(args *LockArgs, reply *bool) error {
 		l.lockMap[args.Name] = append(locksHeld, false)
 		*reply = true
 	}
-
 	return nil
 }
 
+// RUnlock - rpc handler for read unlock operation.
 func (l *lockServer) RUnlock(args *LockArgs, reply *bool) error {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
@@ -154,9 +160,13 @@ func (l *lockServer) RUnlock(args *LockArgs, reply *bool) error {
 	}
 	locksHeld, ok := l.lockMap[args.Name]
 	if !ok {
+		*reply = false
 		return fmt.Errorf("RUnlock attempted on an un-locked entity: %s", args.Name)
-	}
-	if len(locksHeld) > 1 {
+	} else if len(locksHeld) == 1 && locksHeld[0] == true {
+		// A write-lock is held, cannot release a read lock
+		*reply = false
+		return fmt.Errorf("RUnlock attempted on a write locked entity: %s", args.Name)
+	} else if len(locksHeld) > 1 {
 		// Remove one of the read locks held.
 		locksHeld = locksHeld[1:]
 		l.lockMap[args.Name] = locksHeld
