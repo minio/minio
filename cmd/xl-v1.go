@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/minio/minio-go/pkg/set"
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/objcache"
 )
@@ -66,49 +67,20 @@ type xlObjects struct {
 	objCacheEnabled bool
 }
 
-// Validate if input disks are sufficient for initializing XL.
-func checkSufficientDisks(disks []string) error {
-	// Verify total number of disks.
-	totalDisks := len(disks)
-	if totalDisks > maxErasureBlocks {
-		return errXLMaxDisks
-	}
-	if totalDisks < minErasureBlocks {
-		return errXLMinDisks
-	}
-
-	// isEven function to verify if a given number if even.
-	isEven := func(number int) bool {
-		return number%2 == 0
-	}
-
-	// Verify if we have even number of disks.
-	// only combination of 4, 6, 8, 10, 12, 14, 16 are supported.
-	if !isEven(totalDisks) {
-		return errXLNumDisks
-	}
-
-	// Success.
-	return nil
-}
-
-// isDiskFound - validates if the disk is found in a list of input disks.
-func isDiskFound(disk string, disks []string) bool {
-	return contains(disks, disk)
-}
-
 // newXLObjects - initialize new xl object layer.
 func newXLObjects(disks, ignoredDisks []string) (ObjectLayer, error) {
-	// Validate if input disks are sufficient.
-	if err := checkSufficientDisks(disks); err != nil {
-		return nil, err
+	if disks == nil {
+		return nil, errInvalidArgument
 	}
-
+	disksSet := set.NewStringSet()
+	if len(ignoredDisks) > 0 {
+		disksSet = set.CreateStringSet(ignoredDisks...)
+	}
 	// Bootstrap disks.
 	storageDisks := make([]StorageAPI, len(disks))
 	for index, disk := range disks {
 		// Check if disk is ignored.
-		if isDiskFound(disk, ignoredDisks) {
+		if disksSet.Contains(disk) {
 			storageDisks[index] = nil
 			continue
 		}
