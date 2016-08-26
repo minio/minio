@@ -16,6 +16,8 @@
 
 package cmd
 
+import "github.com/minio/minio/pkg/disk"
+
 // Simulates disk returning errFaultyDisk on all methods of StorageAPI
 // interface after successCount number of successes.
 type faultyDisk struct {
@@ -28,6 +30,14 @@ func newFaultyDisk(disk *posix, n int) *faultyDisk {
 	return &faultyDisk{disk: disk, successCount: n}
 }
 
+func (f *faultyDisk) DiskInfo() (info disk.Info, err error) {
+	if f.successCount > 0 {
+		f.successCount--
+		return f.disk.DiskInfo()
+	}
+	return disk.Info{}, errFaultyDisk
+}
+
 func (f *faultyDisk) MakeVol(volume string) (err error) {
 	if f.successCount > 0 {
 		f.successCount--
@@ -35,6 +45,7 @@ func (f *faultyDisk) MakeVol(volume string) (err error) {
 	}
 	return errFaultyDisk
 }
+
 func (f *faultyDisk) ListVols() (vols []VolInfo, err error) {
 	if f.successCount > 0 {
 		f.successCount--
@@ -50,6 +61,7 @@ func (f *faultyDisk) StatVol(volume string) (volInfo VolInfo, err error) {
 	}
 	return VolInfo{}, errFaultyDisk
 }
+
 func (f *faultyDisk) DeleteVol(volume string) (err error) {
 	if f.successCount > 0 {
 		f.successCount--
