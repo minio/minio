@@ -87,6 +87,14 @@ Object API (Amazon S3 compatible):
 
 ```
 
+``Minio`` can also be downloaded via ``brew`` package manager.
+
+```sh
+$ brew install minio
+```
+
+
+
 ### Microsoft Windows
 
 ```sh
