@@ -50,12 +50,11 @@ const (
 
 // xlObjects - Implements XL object layer.
 type xlObjects struct {
-	physicalDisks []string     // Collection of regular disks.
-	storageDisks  []StorageAPI // Collection of initialized backend disks.
-	dataBlocks    int          // dataBlocks count caculated for erasure.
-	parityBlocks  int          // parityBlocks count calculated for erasure.
-	readQuorum    int          // readQuorum minimum required disks to read data.
-	writeQuorum   int          // writeQuorum minimum required disks to write data.
+	storageDisks []StorageAPI // Collection of initialized backend disks.
+	dataBlocks   int          // dataBlocks count caculated for erasure.
+	parityBlocks int          // parityBlocks count calculated for erasure.
+	readQuorum   int          // readQuorum minimum required disks to read data.
+	writeQuorum  int          // writeQuorum minimum required disks to write data.
 
 	// ListObjects pool management.
 	listPool *treeWalkPool
@@ -186,7 +185,6 @@ func newXLObjects(disks, ignoredDisks []string) (ObjectLayer, error) {
 
 	// Initialize xl objects.
 	xl := xlObjects{
-		physicalDisks:   disks,
 		storageDisks:    newPosixDisks,
 		dataBlocks:      dataBlocks,
 		parityBlocks:    parityBlocks,
@@ -222,10 +220,10 @@ func (d byDiskTotal) Less(i, j int) bool {
 // StorageInfo - returns underlying storage statistics.
 func (xl xlObjects) StorageInfo() StorageInfo {
 	var disksInfo []disk.Info
-	for _, diskPath := range xl.physicalDisks {
-		info, err := disk.GetInfo(diskPath)
+	for _, storageDisk := range xl.storageDisks {
+		info, err := storageDisk.DiskInfo()
 		if err != nil {
-			errorIf(err, "Unable to fetch disk info for "+diskPath)
+			errorIf(err, "Unable to fetch disk info for %#v", storageDisk)
 			continue
 		}
 		disksInfo = append(disksInfo, info)
