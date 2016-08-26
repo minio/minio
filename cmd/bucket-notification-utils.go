@@ -268,18 +268,17 @@ func validateTopicConfigs(topicConfigs []topicConfig) APIErrorCode {
 
 // Check all the queue configs for any duplicates.
 func checkDuplicateQueueConfigs(configs []queueConfig) APIErrorCode {
-	configMaps := make(map[string]int)
+	var queueConfigARNS []string
 
 	// Navigate through each configs and count the entries.
 	for _, config := range configs {
-		configMaps[config.QueueARN]++
+		queueConfigARNS = append(queueConfigARNS, config.QueueARN)
 	}
 
-	// Validate if there are any duplicate counts.
-	for _, count := range configMaps {
-		if count != 1 {
-			return ErrOverlappingConfigs
-		}
+	// Check if there are any duplicate counts.
+	if err := checkDuplicates(queueConfigARNS); err != nil {
+		errorIf(err, "Invalid queue configs found.")
+		return ErrOverlappingConfigs
 	}
 
 	// Success.
@@ -288,18 +287,17 @@ func checkDuplicateQueueConfigs(configs []queueConfig) APIErrorCode {
 
 // Check all the topic configs for any duplicates.
 func checkDuplicateTopicConfigs(configs []topicConfig) APIErrorCode {
-	configMaps := make(map[string]int)
+	var topicConfigARNS []string
 
 	// Navigate through each configs and count the entries.
 	for _, config := range configs {
-		configMaps[config.TopicARN]++
+		topicConfigARNS = append(topicConfigARNS, config.TopicARN)
 	}
 
-	// Validate if there are any duplicate counts.
-	for _, count := range configMaps {
-		if count != 1 {
-			return ErrOverlappingConfigs
-		}
+	// Check if there are any duplicate counts.
+	if err := checkDuplicates(topicConfigARNS); err != nil {
+		errorIf(err, "Invalid topic configs found.")
+		return ErrOverlappingConfigs
 	}
 
 	// Success.
@@ -320,12 +318,17 @@ func validateNotificationConfig(nConfig notificationConfig) APIErrorCode {
 	}
 
 	// Check for duplicate queue configs.
-	if s3Error := checkDuplicateQueueConfigs(nConfig.QueueConfigs); s3Error != ErrNone {
-		return s3Error
+	if len(nConfig.QueueConfigs) > 1 {
+		if s3Error := checkDuplicateQueueConfigs(nConfig.QueueConfigs); s3Error != ErrNone {
+			return s3Error
+		}
 	}
+
 	// Check for duplicate topic configs.
-	if s3Error := checkDuplicateTopicConfigs(nConfig.TopicConfigs); s3Error != ErrNone {
-		return s3Error
+	if len(nConfig.TopicConfigs) > 1 {
+		if s3Error := checkDuplicateTopicConfigs(nConfig.TopicConfigs); s3Error != ErrNone {
+			return s3Error
+		}
 	}
 
 	// Add validation for other configurations.
