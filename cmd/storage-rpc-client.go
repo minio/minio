@@ -21,6 +21,8 @@ import (
 	"path"
 	"strconv"
 	"strings"
+
+	"github.com/minio/minio/pkg/disk"
 )
 
 type networkStorage struct {
@@ -110,7 +112,16 @@ func newRPCClient(networkPath string) (StorageAPI, error) {
 	return ndisk, nil
 }
 
-// MakeVol - make a volume.
+// DiskInfo - fetch disk information for a remote disk.
+func (n networkStorage) DiskInfo() (info disk.Info, err error) {
+	args := GenericArgs{}
+	if err = n.rpcClient.Call("Storage.DiskInfoHandler", &args, &info); err != nil {
+		return disk.Info{}, err
+	}
+	return info, nil
+}
+
+// MakeVol - create a volume on a remote disk.
 func (n networkStorage) MakeVol(volume string) error {
 	reply := GenericReply{}
 	args := GenericVolArgs{Vol: volume}
@@ -120,7 +131,7 @@ func (n networkStorage) MakeVol(volume string) error {
 	return nil
 }
 
-// ListVols - List all volumes.
+// ListVols - List all volumes on a remote disk.
 func (n networkStorage) ListVols() (vols []VolInfo, err error) {
 	ListVols := ListVolsReply{}
 	err = n.rpcClient.Call("Storage.ListVolsHandler", &GenericArgs{}, &ListVols)

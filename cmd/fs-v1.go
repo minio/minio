@@ -26,7 +26,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/mimedb"
 )
 
@@ -144,8 +143,8 @@ func (fs fsObjects) Shutdown() error {
 
 // StorageInfo - returns underlying storage statistics.
 func (fs fsObjects) StorageInfo() StorageInfo {
-	info, err := disk.GetInfo(fs.physicalDisk)
-	fatalIf(err, "Unable to get disk info "+fs.physicalDisk)
+	info, err := fs.storage.DiskInfo()
+	errorIf(err, "Unable to get disk info %#v", fs.storage)
 	return StorageInfo{
 		Total: info.Total,
 		Free:  info.Free,
