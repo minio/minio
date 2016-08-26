@@ -284,6 +284,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	// requests which do not follow valid region requirements.
 	if s3Error := isValidLocationConstraint(r); s3Error != ErrNone {
 		writeErrorResponse(w, r, s3Error, r.URL.Path)
+		return
 	}
 
 	// Proceed to creating a bucket.
