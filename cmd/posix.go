@@ -160,6 +160,12 @@ func checkDiskFree(diskPath string, minFreeDisk int64) (err error) {
 	return nil
 }
 
+// DiskInfo provides current information about disk space usage,
+// total free inodes and underlying filesystem.
+func (s *posix) DiskInfo() (info disk.Info, err error) {
+	return getDiskInfo(s.diskPath)
+}
+
 // getVolDir - will convert incoming volume names to
 // corresponding valid volume names on the backend in a platform
 // compatible way for all operating systems. If volume is not found
