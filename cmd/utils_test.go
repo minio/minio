@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"fmt"
 	"net/http"
 	"reflect"
 	"testing"
@@ -42,6 +43,57 @@ func TestCloneHeader(t *testing.T) {
 		clonedHeader := cloneHeader(header)
 		if !reflect.DeepEqual(header, clonedHeader) {
 			t.Errorf("Test %d failed", i+1)
+		}
+	}
+}
+
+// Tests check duplicates function.
+func TestCheckDuplicates(t *testing.T) {
+	tests := []struct {
+		list       []string
+		err        error
+		shouldPass bool
+	}{
+		// Test 1 - for '/tmp/1' repeated twice.
+		{
+			list:       []string{"/tmp/1", "/tmp/1", "/tmp/2", "/tmp/3"},
+			err:        fmt.Errorf("Duplicate key: \"/tmp/1\" found of count: \"2\""),
+			shouldPass: false,
+		},
+		// Test 2 - for '/tmp/1' repeated thrice.
+		{
+			list:       []string{"/tmp/1", "/tmp/1", "/tmp/1", "/tmp/3"},
+			err:        fmt.Errorf("Duplicate key: \"/tmp/1\" found of count: \"3\""),
+			shouldPass: false,
+		},
+		// Test 3 - empty string.
+		{
+			list:       []string{""},
+			err:        errInvalidArgument,
+			shouldPass: false,
+		},
+		// Test 4 - empty string.
+		{
+			list:       nil,
+			err:        errInvalidArgument,
+			shouldPass: false,
+		},
+		// Test 5 - non repeated strings.
+		{
+			list:       []string{"/tmp/1", "/tmp/2", "/tmp/3"},
+			err:        nil,
+			shouldPass: true,
+		},
+	}
+
+	// Validate if function runs as expected.
+	for i, test := range tests {
+		err := checkDuplicates(test.list)
+		if test.shouldPass && err != test.err {
+			t.Errorf("Test: %d, Expected %s got %s", i+1, test.err, err)
+		}
+		if !test.shouldPass && err.Error() != test.err.Error() {
+			t.Errorf("Test: %d, Expected %s got %s", i+1, test.err, err)
 		}
 	}
 }
