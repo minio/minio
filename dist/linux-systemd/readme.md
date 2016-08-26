@@ -26,7 +26,7 @@ EOT
 
 Put minio.service in /etc/systemd/system/
 ```
-curl https://raw.githubusercontent.com/minio/minio/master/dist/linux-systemd/minio.service > /etc/systemd/system/
+( cd /etc/systemd/system/; curl -O https://raw.githubusercontent.com/minio/minio/master/dist/linux-systemd/minio.service )
 ```
 
 Enable startup on boot

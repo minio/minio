@@ -76,7 +76,7 @@ func (xl xlObjects) listObjects(bucket, prefix, marker, delimiter string, maxKey
 		nextMarker = objInfo.Name
 		objInfos = append(objInfos, objInfo)
 		i++
-		if walkResult.end == true {
+		if walkResult.end {
 			eof = true
 			break
 		}

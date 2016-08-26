@@ -37,15 +37,7 @@ func setMaxOpenFiles() error {
 	// TO increase this limit further user has to manually edit
 	// `/etc/security/limits.conf`
 	rLimit.Cur = rLimit.Max
-	err = syscall.Setrlimit(syscall.RLIMIT_NOFILE, &rLimit)
-	if err != nil {
-		return err
-	}
-	err = syscall.Getrlimit(syscall.RLIMIT_NOFILE, &rLimit)
-	if err != nil {
-		return err
-	}
-	return nil
+	return syscall.Setrlimit(syscall.RLIMIT_NOFILE, &rLimit)
 }
 
 // Set max memory used by minio as a process, this value is usually

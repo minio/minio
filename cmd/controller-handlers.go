@@ -103,16 +103,16 @@ func (c *controllerAPIHandlers) HealObjectHandler(args *HealObjectArgs, reply *G
 	return objAPI.HealObject(args.Bucket, args.Object)
 }
 
-// HealDiskMetadata - heal the disk format.
-func (c *controllerAPIHandlers) HealDiskMetadata(args *GenericArgs, reply *GenericReply) error {
+// HealObject - heal the object.
+func (c *controllerAPIHandlers) HealDiskMetadataHandler(args *GenericArgs, reply *GenericReply) error {
 	objAPI := c.ObjectAPI()
 	if objAPI == nil {
-		return errInvalidArgument
+		return errVolumeBusy
 	}
-	if err := objAPI.HealDiskMetadata(); err != nil {
-		return err
+	if !isRPCTokenValid(args.Token) {
+		return errInvalidToken
 	}
-	return nil
+	return objAPI.HealDiskMetadata()
 }
 
 // ShutdownArgs - argument for Shutdown RPC.

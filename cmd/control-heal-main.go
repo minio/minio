@@ -92,7 +92,7 @@ func healControl(ctx *cli.Context) {
 	fmt.Print("Checking and healing disk metadata..")
 	args := &GenericArgs{}
 	reply := &GenericReply{}
-	err = client.Call("Controller.HealDiskMetadata", args, reply)
+	err = client.Call("Controller.HealDiskMetadataHandler", args, reply)
 	fatalIf(err, "Unable to heal disk metadata.")
 	fmt.Println(" ok")
 
