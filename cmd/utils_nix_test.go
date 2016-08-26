@@ -31,11 +31,17 @@ func TestSplitNetPath(t *testing.T) {
 		netPath     string
 		err         error
 	}{
-		{"10.1.10.1:", "", "", &net.AddrError{Err: "missing path in network path", Addr: "10.1.10.1:"}},
+		// Invalid cases 1-5.
+		{"10.1.10.1:", "", "", &net.AddrError{Err: "Missing path in network path", Addr: "10.1.10.1:"}},
+		{"10.1.10.1:../1", "", "", &net.AddrError{Err: "Network path should be absolute", Addr: "10.1.10.1:../1"}},
+		{":/tmp/1", "", "", &net.AddrError{Err: "Missing address in network path", Addr: ":/tmp/1"}},
+		{"10.1.10.1:disk/1", "", "", &net.AddrError{Err: "Network path should be absolute", Addr: "10.1.10.1:disk/1"}},
+		{"10.1.10.1:\\path\\test", "", "", &net.AddrError{Err: "Network path should be absolute", Addr: "10.1.10.1:\\path\\test"}},
+
+		// Valid cases 6-8
 		{"10.1.10.1", "", "10.1.10.1", nil},
 		{"10.1.10.1://", "10.1.10.1", "//", nil},
 		{"10.1.10.1:/disk/1", "10.1.10.1", "/disk/1", nil},
-		{"10.1.10.1:\\path\\test", "10.1.10.1", "\\path\\test", nil},
 	}
 
 	for i, test := range testCases {
