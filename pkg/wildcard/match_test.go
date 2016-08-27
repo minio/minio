@@ -14,16 +14,18 @@
  * limitations under the License.
  */
 
-package wildcard
+package wildcard_test
 
 import (
 	"testing"
+
+	"github.com/minio/minio/pkg/wildcard"
 )
 
-// TestMatchExtended - Tests validate the logic of wild card matching.
-// `MatchExtended` supports '*' and '?' wildcards.
+// TestMatch - Tests validate the logic of wild card matching.
+// `Match` supports '*' and '?' wildcards.
 // Sample usage: In resource matching for bucket policy validation.
-func TestMatchExtended(t *testing.T) {
+func TestMatch(t *testing.T) {
 	testCases := []struct {
 		pattern string
 		text    string
@@ -131,7 +133,8 @@ func TestMatchExtended(t *testing.T) {
 		},
 		// Test case - 15.
 		// Test case where the keyname part of the pattern is expanded in the text.
-		{pattern: "my-bucket/In*/Ka*/Ban",
+		{
+			pattern: "my-bucket/In*/Ka*/Ban",
 			text:    "my-bucket/India/Karnataka/Bangalore",
 			matched: false,
 		},
@@ -144,7 +147,8 @@ func TestMatchExtended(t *testing.T) {
 		},
 		// Test case - 17.
 		// Test case with keyname part being a wildcard in the pattern.
-		{pattern: "my-bucket/*",
+		{
+			pattern: "my-bucket/*",
 			text:    "my-bucket/India",
 			matched: true,
 		},
@@ -367,16 +371,16 @@ func TestMatchExtended(t *testing.T) {
 	}
 	// Iterating over the test cases, call the function under test and asert the output.
 	for i, testCase := range testCases {
-		actualResult := MatchExtended(testCase.pattern, testCase.text)
+		actualResult := wildcard.Match(testCase.pattern, testCase.text)
 		if testCase.matched != actualResult {
 			t.Errorf("Test %d: Expected the result to be `%v`, but instead found it to be `%v`", i+1, testCase.matched, actualResult)
 		}
 	}
 }
 
-// TestMatch - Tests validate the logic of wild card matching.
-// `Match` supports matching for only '*' in the pattern string.
-func TestMatch(t *testing.T) {
+// TestMatchSimple - Tests validate the logic of wild card matching.
+// `MatchSimple` supports matching for only '*' in the pattern string.
+func TestMatchSimple(t *testing.T) {
 	testCases := []struct {
 		pattern string
 		text    string
@@ -484,7 +488,8 @@ func TestMatch(t *testing.T) {
 		},
 		// Test case - 15.
 		// Test case where the keyname part of the pattern is expanded in the text.
-		{pattern: "my-bucket/In*/Ka*/Ban",
+		{
+			pattern: "my-bucket/In*/Ka*/Ban",
 			text:    "my-bucket/India/Karnataka/Bangalore",
 			matched: false,
 		},
@@ -497,7 +502,8 @@ func TestMatch(t *testing.T) {
 		},
 		// Test case - 17.
 		// Test case with keyname part being a wildcard in the pattern.
-		{pattern: "my-bucket/*",
+		{
+			pattern: "my-bucket/*",
 			text:    "my-bucket/India",
 			matched: true,
 		},
@@ -507,10 +513,28 @@ func TestMatch(t *testing.T) {
 			text:    "my-bucket/odo",
 			matched: false,
 		},
+		// Test case - 11.
+		{
+			pattern: "my-bucket/oo?*",
+			text:    "my-bucket/oo???",
+			matched: true,
+		},
+		// Test case - 12:
+		{
+			pattern: "my-bucket/oo??*",
+			text:    "my-bucket/odo",
+			matched: false,
+		},
+		// Test case - 13:
+		{
+			pattern: "?h?*",
+			text:    "?h?hello",
+			matched: true,
+		},
 	}
 	// Iterating over the test cases, call the function under test and asert the output.
 	for i, testCase := range testCases {
-		actualResult := Match(testCase.pattern, testCase.text)
+		actualResult := wildcard.MatchSimple(testCase.pattern, testCase.text)
 		if testCase.matched != actualResult {
 			t.Errorf("Test %d: Expected the result to be `%v`, but instead found it to be `%v`", i+1, testCase.matched, actualResult)
 		}

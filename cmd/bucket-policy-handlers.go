@@ -70,12 +70,12 @@ func bucketPolicyActionMatch(action string, statement policyStatement) bool {
 
 // Match function matches wild cards in 'pattern' for resource.
 func resourceMatch(pattern, resource string) bool {
-	return wildcard.MatchExtended(pattern, resource)
+	return wildcard.Match(pattern, resource)
 }
 
 // Match function matches wild cards in 'pattern' for action.
 func actionMatch(pattern, action string) bool {
-	return wildcard.Match(pattern, action)
+	return wildcard.MatchSimple(pattern, action)
 }
 
 // Verify if given resource matches with policy statement.

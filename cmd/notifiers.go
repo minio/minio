@@ -114,7 +114,7 @@ func isElasticQueue(sqsArn arnSQS) bool {
 // Match function matches wild cards in 'pattern' for events.
 func eventMatch(eventType string, events []string) (ok bool) {
 	for _, event := range events {
-		ok = wildcard.Match(event, eventType)
+		ok = wildcard.MatchSimple(event, eventType)
 		if ok {
 			break
 		}
