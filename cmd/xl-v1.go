@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/minio/minio-go/pkg/set"
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/objcache"
 )
@@ -50,12 +51,11 @@ const (
 
 // xlObjects - Implements XL object layer.
 type xlObjects struct {
-	physicalDisks []string     // Collection of regular disks.
-	storageDisks  []StorageAPI // Collection of initialized backend disks.
-	dataBlocks    int          // dataBlocks count caculated for erasure.
-	parityBlocks  int          // parityBlocks count calculated for erasure.
-	readQuorum    int          // readQuorum minimum required disks to read data.
-	writeQuorum   int          // writeQuorum minimum required disks to write data.
+	storageDisks []StorageAPI // Collection of initialized backend disks.
+	dataBlocks   int          // dataBlocks count caculated for erasure.
+	parityBlocks int          // parityBlocks count calculated for erasure.
+	readQuorum   int          // readQuorum minimum required disks to read data.
+	writeQuorum  int          // writeQuorum minimum required disks to write data.
 
 	// ListObjects pool management.
 	listPool *treeWalkPool
@@ -67,49 +67,20 @@ type xlObjects struct {
 	objCacheEnabled bool
 }
 
-// Validate if input disks are sufficient for initializing XL.
-func checkSufficientDisks(disks []string) error {
-	// Verify total number of disks.
-	totalDisks := len(disks)
-	if totalDisks > maxErasureBlocks {
-		return errXLMaxDisks
-	}
-	if totalDisks < minErasureBlocks {
-		return errXLMinDisks
-	}
-
-	// isEven function to verify if a given number if even.
-	isEven := func(number int) bool {
-		return number%2 == 0
-	}
-
-	// Verify if we have even number of disks.
-	// only combination of 4, 6, 8, 10, 12, 14, 16 are supported.
-	if !isEven(totalDisks) {
-		return errXLNumDisks
-	}
-
-	// Success.
-	return nil
-}
-
-// isDiskFound - validates if the disk is found in a list of input disks.
-func isDiskFound(disk string, disks []string) bool {
-	return contains(disks, disk)
-}
-
 // newXLObjects - initialize new xl object layer.
 func newXLObjects(disks, ignoredDisks []string) (ObjectLayer, error) {
-	// Validate if input disks are sufficient.
-	if err := checkSufficientDisks(disks); err != nil {
-		return nil, err
+	if disks == nil {
+		return nil, errInvalidArgument
 	}
-
+	disksSet := set.NewStringSet()
+	if len(ignoredDisks) > 0 {
+		disksSet = set.CreateStringSet(ignoredDisks...)
+	}
 	// Bootstrap disks.
 	storageDisks := make([]StorageAPI, len(disks))
 	for index, disk := range disks {
 		// Check if disk is ignored.
-		if isDiskFound(disk, ignoredDisks) {
+		if disksSet.Contains(disk) {
 			storageDisks[index] = nil
 			continue
 		}
@@ -186,7 +157,6 @@ func newXLObjects(disks, ignoredDisks []string) (ObjectLayer, error) {
 
 	// Initialize xl objects.
 	xl := xlObjects{
-		physicalDisks:   disks,
 		storageDisks:    newPosixDisks,
 		dataBlocks:      dataBlocks,
 		parityBlocks:    parityBlocks,
@@ -222,10 +192,10 @@ func (d byDiskTotal) Less(i, j int) bool {
 // StorageInfo - returns underlying storage statistics.
 func (xl xlObjects) StorageInfo() StorageInfo {
 	var disksInfo []disk.Info
-	for _, diskPath := range xl.physicalDisks {
-		info, err := disk.GetInfo(diskPath)
+	for _, storageDisk := range xl.storageDisks {
+		info, err := storageDisk.DiskInfo()
 		if err != nil {
-			errorIf(err, "Unable to fetch disk info for "+diskPath)
+			errorIf(err, "Unable to fetch disk info for %#v", storageDisk)
 			continue
 		}
 		disksInfo = append(disksInfo, info)
