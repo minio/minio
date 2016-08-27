@@ -59,7 +59,6 @@ func checkDuplicates(list []string) error {
 	return nil
 }
 
-
 // splits network path into its components Address and Path.
 func splitNetPath(networkPath string) (netAddr, netPath string, err error) {
 	if runtime.GOOS == "windows" {
