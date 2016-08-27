@@ -75,8 +75,9 @@ type nsParam struct {
 
 // nsLock - provides primitives for locking critical namespace regions.
 type nsLock struct {
-	RWLocker
-	ref uint
+	writer      RWLocker
+	readerArray []RWLocker
+	ref         uint
 }
 
 // nsLockMap - namespace lock map, provides primitives to Lock,
@@ -96,7 +97,7 @@ func (n *nsLockMap) lock(volume, path string, readLock bool) {
 	nsLk, found := n.lockMap[param]
 	if !found {
 		nsLk = &nsLock{
-			RWLocker: func() RWLocker {
+			writer: func() RWLocker {
 				if n.isDist {
 					return dsync.NewDRWMutex(pathutil.Join(volume, path))
 				}
@@ -107,14 +108,29 @@ func (n *nsLockMap) lock(volume, path string, readLock bool) {
 		n.lockMap[param] = nsLk
 	}
 	nsLk.ref++ // Update ref count here to avoid multiple races.
+	rwlock := nsLk.writer
+	if readLock {
+		rwlock = dsync.NewDRWMutex(pathutil.Join(volume, path))
+	}
 	// Unlock map before Locking NS which might block.
 	n.lockMapMutex.Unlock()
 
 	// Locking here can block.
 	if readLock {
-		nsLk.RLock()
+		rwlock.RLock()
+
+		// Only add (for reader case) to array after RLock() succeeds
+		// (so that we know for sure that element in [0] can be RUnlocked())
+		n.lockMapMutex.Lock()
+		if len(nsLk.readerArray) == 0 {
+			nsLk.readerArray = []RWLocker{rwlock}
+		} else {
+			nsLk.readerArray = append(nsLk.readerArray, rwlock)
+		}
+		n.lockMapMutex.Unlock()
+
 	} else {
-		nsLk.Lock()
+		rwlock.Lock()
 	}
 }
 
@@ -127,9 +143,15 @@ func (n *nsLockMap) unlock(volume, path string, readLock bool) {
 	param := nsParam{volume, path}
 	if nsLk, found := n.lockMap[param]; found {
 		if readLock {
-			nsLk.RUnlock()
+			if len(nsLk.readerArray) == 0 {
+				errorIf(errors.New("Length of reader lock array cannot be 0."), "Invalid reader lock array length detected.")
+			}
+			// Release first lock first (FIFO)
+			nsLk.readerArray[0].RUnlock()
+			// And discard first element
+			nsLk.readerArray = nsLk.readerArray[1:]
 		} else {
-			nsLk.Unlock()
+			nsLk.writer.Unlock()
 		}
 		if nsLk.ref == 0 {
 			errorIf(errors.New("Namespace reference count cannot be 0."), "Invalid reference count detected.")
@@ -138,6 +160,10 @@ func (n *nsLockMap) unlock(volume, path string, readLock bool) {
 			nsLk.ref--
 		}
 		if nsLk.ref == 0 {
+			if len(nsLk.readerArray) != 0 {
+				errorIf(errors.New("Length of reader lock array should be 0 upon deleting map entry."), "Invalid reader lock array length detected.")
+			}
+
 			// Remove from the map if there are no more references.
 			delete(n.lockMap, param)
 		}
