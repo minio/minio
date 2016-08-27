@@ -110,12 +110,7 @@ func (n *nsLockMap) lock(volume, path string, readLock bool) {
 	nsLk.ref++ // Update ref count here to avoid multiple races.
 	rwlock := nsLk.writer
 	if readLock {
-		if len(nsLk.readerArray) == 0 {
-			nsLk.readerArray = []RWLocker{dsync.NewDRWMutex(pathutil.Join(volume, path))}
-		} else {
-			nsLk.readerArray = append(nsLk.readerArray, dsync.NewDRWMutex(pathutil.Join(volume, path)))
-		}
-		rwlock = nsLk.readerArray[len(nsLk.readerArray)-1]
+		rwlock = dsync.NewDRWMutex(pathutil.Join(volume, path))
 	}
 	// Unlock map before Locking NS which might block.
 	n.lockMapMutex.Unlock()
@@ -123,6 +118,17 @@ func (n *nsLockMap) lock(volume, path string, readLock bool) {
 	// Locking here can block.
 	if readLock {
 		rwlock.RLock()
+
+		// Only add (for reader case) to array after RLock() succeeds
+		// (so that we know for sure that element in [0] can be RUnlocked())
+		n.lockMapMutex.Lock()
+		if len(nsLk.readerArray) == 0 {
+			nsLk.readerArray = []RWLocker{rwlock}
+		} else {
+			nsLk.readerArray = append(nsLk.readerArray, rwlock)
+		}
+		n.lockMapMutex.Unlock()
+
 	} else {
 		rwlock.Lock()
 	}
