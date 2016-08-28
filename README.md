@@ -16,6 +16,15 @@ Minio server is light enough to be bundled with the application stack, similar t
 ||32-bit|https://dl.minio.io/server/minio/release/windows-386/minio.exe|
 |FreeBSD|64-bit|https://dl.minio.io/server/minio/release/freebsd-amd64/minio|
 
+### Install from Homebrew
+
+Homebrew is package manager for OS X, please follow [Homebrew](http://brew.sh/) website for installation instructions.
+
+```sh
+$ brew install minio
+$ minio --help
+```
+
 ### Install from Source
 
 Source installation is only intended for developers and advanced users. If you do not have a working Golang environment, please follow [How to install Golang](https://docs.minio.io/docs/how-to-install-golang).
