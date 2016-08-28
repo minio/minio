@@ -18,7 +18,7 @@ Minio server is light enough to be bundled with the application stack, similar t
 
 ### Install from Homebrew
 
-Homebrew is package manager for OSX, please follow [Homebrew](http://brew.sh/) website for installation instructions.
+Homebrew is package manager for OS X, please follow [Homebrew](http://brew.sh/) website for installation instructions.
 
 ```sh
 $ brew install minio
