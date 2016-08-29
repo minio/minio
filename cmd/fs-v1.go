@@ -659,3 +659,8 @@ func (fs fsObjects) HealObject(bucket, object string) error {
 func (fs fsObjects) ListObjectsHeal(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
 	return ListObjectsInfo{}, NotImplemented{}
 }
+
+// HealDiskMetadata -- heal disk metadata, not supported in FS
+func (fs fsObjects) HealDiskMetadata() error {
+	return NotImplemented{}
+}

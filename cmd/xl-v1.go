@@ -67,6 +67,46 @@ type xlObjects struct {
 	objCacheEnabled bool
 }
 
+func repairDiskMetadata(storageDisks []StorageAPI) error {
+	// Attempt to load all `format.json`.
+	formatConfigs, sErrs := loadAllFormats(storageDisks)
+
+	// Generic format check validates
+	// if (no quorum) return error
+	// if (disks not recognized) // Always error.
+	if err := genericFormatCheck(formatConfigs, sErrs); err != nil {
+		return err
+	}
+
+	// Initialize meta volume, if volume already exists ignores it.
+	if err := initMetaVolume(storageDisks); err != nil {
+		return fmt.Errorf("Unable to initialize '.minio.sys' meta volume, %s", err)
+	}
+
+	// Handles different cases properly.
+	switch reduceFormatErrs(sErrs, len(storageDisks)) {
+	case errCorruptedFormat:
+		if err := healFormatXLCorruptedDisks(storageDisks); err != nil {
+			return fmt.Errorf("Unable to repair corrupted format, %s", err)
+		}
+	case errUnformattedDisk:
+		// All drives online but fresh, initialize format.
+		if err := initFormatXL(storageDisks); err != nil {
+			return fmt.Errorf("Unable to initialize format, %s", err)
+		}
+	case errSomeDiskUnformatted:
+		// All drives online but some report missing format.json.
+		if err := healFormatXLFreshDisks(storageDisks); err != nil {
+			// There was an unexpected unrecoverable error during healing.
+			return fmt.Errorf("Unable to heal backend %s", err)
+		}
+	case errSomeDiskOffline:
+		// FIXME: in future.
+		return fmt.Errorf("Unable to initialize format %s and %s", errSomeDiskOffline, errSomeDiskUnformatted)
+	}
+	return nil
+}
+
 // newXLObjects - initialize new xl object layer.
 func newXLObjects(disks, ignoredDisks []string) (ObjectLayer, error) {
 	if disks == nil {
@@ -97,42 +137,8 @@ func newXLObjects(disks, ignoredDisks []string) (ObjectLayer, error) {
 		}
 	}
 
-	// Attempt to load all `format.json`.
-	formatConfigs, sErrs := loadAllFormats(storageDisks)
-
-	// Generic format check validates
-	// if (no quorum) return error
-	// if (disks not recognized) // Always error.
-	if err := genericFormatCheck(formatConfigs, sErrs); err != nil {
-		return nil, err
-	}
-
-	// Initialize meta volume, if volume already exists ignores it.
-	if err := initMetaVolume(storageDisks); err != nil {
-		return nil, fmt.Errorf("Unable to initialize '.minio.sys' meta volume, %s", err)
-	}
-
-	// Handles different cases properly.
-	switch reduceFormatErrs(sErrs, len(storageDisks)) {
-	case errCorruptedFormat:
-		if err := healFormatXLCorruptedDisks(storageDisks); err != nil {
-			return nil, fmt.Errorf("Unable to repair corrupted format, %s", err)
-		}
-	case errUnformattedDisk:
-		// All drives online but fresh, initialize format.
-		if err := initFormatXL(storageDisks); err != nil {
-			return nil, fmt.Errorf("Unable to initialize format, %s", err)
-		}
-	case errSomeDiskUnformatted:
-		// All drives online but some report missing format.json.
-		if err := healFormatXLFreshDisks(storageDisks); err != nil {
-			// There was an unexpected unrecoverable error during healing.
-			return nil, fmt.Errorf("Unable to heal backend %s", err)
-		}
-	case errSomeDiskOffline:
-		// FIXME: in future.
-		return nil, fmt.Errorf("Unable to initialize format %s and %s", errSomeDiskOffline, errSomeDiskUnformatted)
-	}
+	// Fix format files in case of fresh or corrupted disks
+	repairDiskMetadata(storageDisks)
 
 	// Runs house keeping code, like t, cleaning up tmp files etc.
 	if err := xlHouseKeeping(storageDisks); err != nil {
@@ -178,6 +184,13 @@ func newXLObjects(disks, ignoredDisks []string) (ObjectLayer, error) {
 func (xl xlObjects) Shutdown() error {
 	// Add any object layer shutdown activities here.
 	return nil
+}
+
+// HealDiskMetadata function for object storage interface.
+func (xl xlObjects) HealDiskMetadata() error {
+	nsMutex.Lock(minioMetaBucket, formatConfigFile)
+	defer nsMutex.Unlock(minioMetaBucket, formatConfigFile)
+	return repairDiskMetadata(xl.storageDisks)
 }
 
 // byDiskTotal is a collection satisfying sort.Interface.
