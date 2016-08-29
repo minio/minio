@@ -196,7 +196,7 @@ func lock(clnts []RPC, locks *[]bool, lockName string, isReadLock bool) bool {
 		done := false
 		timeout := time.After(DRWMutexAcquireTimeout)
 
-		for ; i < dnodeCount; i++ {	// Loop until we acquired all locks
+		for ; i < dnodeCount; i++ { // Loop until we acquired all locks
 
 			select {
 			case grant := <-ch:
@@ -205,7 +205,7 @@ func lock(clnts []RPC, locks *[]bool, lockName string, isReadLock bool) bool {
 					(*locks)[grant.index] = true
 				} else {
 					locksFailed++
-					if locksFailed > dnodeCount - dquorum {
+					if locksFailed > dnodeCount-dquorum {
 						// We know that we are not going to get the lock anymore, so exit out
 						// and release any locks that did get acquired
 						done = true
