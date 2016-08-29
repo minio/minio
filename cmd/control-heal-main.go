@@ -47,8 +47,17 @@ EAMPLES:
 `,
 }
 
+func checkHealControlSyntax(ctx *cli.Context) {
+	if len(ctx.Args()) != 1 {
+		cli.ShowCommandHelpAndExit(ctx, "heal", 1)
+	}
+}
+
 // "minio control heal" entry point.
 func healControl(ctx *cli.Context) {
+
+	checkHealControlSyntax(ctx)
+
 	// Parse bucket and object from url.URL.Path
 	parseBucketObject := func(path string) (bucketName string, objectName string) {
 		splits := strings.SplitN(path, string(slashSeparator), 3)
@@ -67,17 +76,8 @@ func healControl(ctx *cli.Context) {
 		return bucketName, objectName
 	}
 
-	if len(ctx.Args()) != 1 {
-		cli.ShowCommandHelpAndExit(ctx, "heal", 1)
-	}
-
 	parsedURL, err := url.Parse(ctx.Args()[0])
 	fatalIf(err, "Unable to parse URL")
-
-	bucketName, objectName := parseBucketObject(parsedURL.Path)
-	if bucketName == "" {
-		cli.ShowCommandHelpAndExit(ctx, "heal", 1)
-	}
 
 	authCfg := &authConfig{
 		accessKey:   serverConfig.GetCredential().AccessKeyID,
@@ -87,6 +87,19 @@ func healControl(ctx *cli.Context) {
 		loginMethod: "Controller.LoginHandler",
 	}
 	client := newAuthClient(authCfg)
+
+	// Always try to fix disk metadata
+	fmt.Print("Checking and healing disk metadata..")
+	args := &GenericArgs{}
+	reply := &GenericReply{}
+	err = client.Call("Controller.HealDiskMetadataHandler", args, reply)
+	fatalIf(err, "Unable to heal disk metadata.")
+	fmt.Println(" ok")
+
+	bucketName, objectName := parseBucketObject(parsedURL.Path)
+	if bucketName == "" {
+		return
+	}
 
 	// If object does not have trailing "/" then it's an object, hence heal it.
 	if objectName != "" && !strings.HasSuffix(objectName, slashSeparator) {
