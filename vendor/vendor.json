@@ -98,10 +98,10 @@
 			"revisionTime": "2015-11-18T20:00:48-08:00"
 		},
 		{
-			"checksumSHA1": "OOADbvXPHaDRzp8WEvNw6esmfu0=",
+			"checksumSHA1": "0raNaLP/AhxXhEeB5CdSnbED3O4=",
 			"path": "github.com/minio/dsync",
-			"revision": "a2d8949cd8284e6cfa5b2ff9b617e4edb87f513f",
-			"revisionTime": "2016-08-24T09:12:34Z"
+			"revision": "1f615ccd013d35489becfe710e0ba7dce98b59e5",
+			"revisionTime": "2016-08-29T17:06:27Z"
 		},
 		{
 			"path": "github.com/minio/go-homedir",
