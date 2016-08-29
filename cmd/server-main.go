@@ -48,9 +48,9 @@ var serverCmd = cli.Command{
   minio {{.Name}} - {{.Usage}}
 
 USAGE:
-  minio {{.Name}} [OPTIONS] PATH [PATH...]
+  minio {{.Name}} [FLAGS] PATH [PATH...]
 
-OPTIONS:
+FLAGS:
   {{range .Flags}}{{.}}
   {{end}}
 ENVIRONMENT VARIABLES:
