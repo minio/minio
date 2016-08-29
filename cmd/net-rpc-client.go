@@ -75,7 +75,6 @@ func (rpcClient *RPCClient) dialRPCClient() (*rpc.Client, error) {
 
 // Call makes a RPC call to the remote endpoint using the default codec, namely encoding/gob.
 func (rpcClient *RPCClient) Call(serviceMethod string, args interface{}, reply interface{}) error {
-
 	// Make a copy below so that we can safely (continue to) work with the rpc.Client.
 	// Even in the case the two threads would simultaneously find that the connection is not initialised,
 	// they would both attempt to dial and only one of them would succeed in doing so.
@@ -93,15 +92,24 @@ func (rpcClient *RPCClient) Call(serviceMethod string, args interface{}, reply i
 	// If the RPC fails due to a network-related error, then we reset
 	// rpc.Client for a subsequent reconnect.
 	err := rpcLocalStack.Call(serviceMethod, args, reply)
-	if IsRPCError(err) {
-		rpcClient.clearRPCClient()
+	if err != nil {
+		if err.Error() == rpc.ErrShutdown.Error() {
+			// Reset rpcClient.rpc to nil to trigger a reconnect in future
+			// and close the underlying connection.
+			rpcClient.clearRPCClient()
+
+			// Close the underlying connection.
+			rpcLocalStack.Close()
+
+			// Set rpc error as rpc.ErrShutdown type.
+			err = rpc.ErrShutdown
+		}
 	}
 	return err
 }
 
 // Close closes the underlying socket file descriptor.
 func (rpcClient *RPCClient) Close() error {
-
 	// See comment above for making a copy on local stack
 	rpcLocalStack := rpcClient.getRPCClient()
 
@@ -114,19 +122,4 @@ func (rpcClient *RPCClient) Close() error {
 	// (socket) connection.
 	rpcClient.clearRPCClient()
 	return rpcLocalStack.Close()
-}
-
-// IsRPCError returns true if the error value is due to a network related
-// failure, false otherwise.
-func IsRPCError(err error) bool {
-	if err == nil {
-		return false
-	}
-	// The following are net/rpc specific errors that indicate that
-	// the connection may have been reset. Reset rpcClient.rpc to nil
-	// to trigger a reconnect in future.
-	if err == rpc.ErrShutdown {
-		return true
-	}
-	return false
 }
