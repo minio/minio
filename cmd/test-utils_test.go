@@ -26,8 +26,10 @@ import (
 	"io"
 	"io/ioutil"
 	"math/rand"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/rpc"
 	"net/url"
 	"os"
 	"regexp"
@@ -931,6 +933,7 @@ func initTestAPIEndPoints(objLayer ObjectLayer, apiFunctions []string) http.Hand
 	return muxRouter
 }
 
+// Initialize Web RPC Handlers for testing
 func initTestWebRPCEndPoint(objLayer ObjectLayer) http.Handler {
 	// Initialize Web.
 	webHandlers := &webAPIHandlers{
@@ -941,4 +944,38 @@ func initTestWebRPCEndPoint(objLayer ObjectLayer) http.Handler {
 	muxRouter := router.NewRouter()
 	registerWebRouter(muxRouter, webHandlers)
 	return muxRouter
+}
+
+// Initialize Controller RPC Handlers for testing
+func initTestControllerRPCEndPoint(objLayer ObjectLayer) (string, string, error) {
+	controllerHandlers := &controllerAPIHandlers{
+		ObjectAPI: func() ObjectLayer { return objLayer },
+	}
+	// Start configuring net/rpc server
+	server := rpc.NewServer()
+	server.RegisterName("Controller", controllerHandlers)
+
+	listenTCP := func() (net.Listener, string, error) {
+		l, e := net.Listen("tcp", ":0") // any available address
+		if e != nil {
+			return nil, "", errors.New("net.Listen tcp :0, " + e.Error())
+		}
+		return l, l.Addr().String(), nil
+	}
+
+	l, serverAddr, err := listenTCP()
+	if err != nil {
+		return "", "", nil
+	}
+	go server.Accept(l)
+
+	// net/rpc only accepts one registered path and doesn't help to unregister it,
+	// so we are registering a new rpc path each time this function is called
+	random := strconv.Itoa(rand.Int())
+	server.HandleHTTP("/controller"+random, "/controller-debug"+random)
+
+	testserver := httptest.NewServer(nil)
+	serverAddr = testserver.Listener.Addr().String()
+
+	return serverAddr, random, nil
 }
