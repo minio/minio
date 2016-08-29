@@ -149,11 +149,14 @@ func (authClient *AuthRPCClient) Call(serviceMethod string, args interface {
 		args.SetToken(authClient.token)
 		args.SetTimestamp(authClient.tstamp)
 
-		// ..
+		// Call the underlying rpc.
 		err = authClient.rpc.Call(serviceMethod, args, reply)
+
 		// Invalidate token to mark for re-login on subsequent reconnect.
-		if err != nil && err == rpc.ErrShutdown {
-			authClient.isLoggedIn = false
+		if err != nil {
+			if err.Error() == rpc.ErrShutdown.Error() {
+				authClient.isLoggedIn = false
+			}
 		}
 	}
 	return err
