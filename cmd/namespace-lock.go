@@ -109,7 +109,7 @@ func (n *nsLockMap) lock(volume, path string, readLock bool) {
 	}
 	nsLk.ref++ // Update ref count here to avoid multiple races.
 	rwlock := nsLk.writer
-	if readLock {
+	if readLock && n.isDist {
 		rwlock = dsync.NewDRWMutex(pathutil.Join(volume, path))
 	}
 	// Unlock map before Locking NS which might block.
@@ -119,16 +119,17 @@ func (n *nsLockMap) lock(volume, path string, readLock bool) {
 	if readLock {
 		rwlock.RLock()
 
-		// Only add (for reader case) to array after RLock() succeeds
-		// (so that we know for sure that element in [0] can be RUnlocked())
-		n.lockMapMutex.Lock()
-		if len(nsLk.readerArray) == 0 {
-			nsLk.readerArray = []RWLocker{rwlock}
-		} else {
-			nsLk.readerArray = append(nsLk.readerArray, rwlock)
+		if n.isDist {
+			// Only add (for reader case) to array after RLock() succeeds
+			// (so that we know for sure that element in [0] can be RUnlocked())
+			n.lockMapMutex.Lock()
+			if len(nsLk.readerArray) == 0 {
+				nsLk.readerArray = []RWLocker{rwlock}
+			} else {
+				nsLk.readerArray = append(nsLk.readerArray, rwlock)
+			}
+			n.lockMapMutex.Unlock()
 		}
-		n.lockMapMutex.Unlock()
-
 	} else {
 		rwlock.Lock()
 	}
@@ -143,13 +144,17 @@ func (n *nsLockMap) unlock(volume, path string, readLock bool) {
 	param := nsParam{volume, path}
 	if nsLk, found := n.lockMap[param]; found {
 		if readLock {
-			if len(nsLk.readerArray) == 0 {
-				errorIf(errors.New("Length of reader lock array cannot be 0."), "Invalid reader lock array length detected.")
+			if n.isDist {
+				if len(nsLk.readerArray) == 0 {
+					errorIf(errors.New("Length of reader lock array cannot be 0."), "Invalid reader lock array length detected.")
+				}
+				// Release first lock first (FIFO)
+				nsLk.readerArray[0].RUnlock()
+				// And discard first element
+				nsLk.readerArray = nsLk.readerArray[1:]
+			} else {
+				nsLk.writer.RUnlock()
 			}
-			// Release first lock first (FIFO)
-			nsLk.readerArray[0].RUnlock()
-			// And discard first element
-			nsLk.readerArray = nsLk.readerArray[1:]
 		} else {
 			nsLk.writer.Unlock()
 		}
@@ -160,7 +165,7 @@ func (n *nsLockMap) unlock(volume, path string, readLock bool) {
 			nsLk.ref--
 		}
 		if nsLk.ref == 0 {
-			if len(nsLk.readerArray) != 0 {
+			if len(nsLk.readerArray) != 0 && n.isDist {
 				errorIf(errors.New("Length of reader lock array should be 0 upon deleting map entry."), "Invalid reader lock array length detected.")
 			}
 
