@@ -76,17 +76,17 @@ func getDataBlockLen(enBlocks [][]byte, dataBlocks int) int {
 func writeDataBlocks(dst io.Writer, enBlocks [][]byte, dataBlocks int, offset int64, length int64) (int64, error) {
 	// Offset and out size cannot be negative.
 	if offset < 0 || length < 0 {
-		return 0, errUnexpected
+		return 0, traceError(errUnexpected)
 	}
 
 	// Do we have enough blocks?
 	if len(enBlocks) < dataBlocks {
-		return 0, reedsolomon.ErrTooFewShards
+		return 0, traceError(reedsolomon.ErrTooFewShards)
 	}
 
 	// Do we have enough data?
 	if int64(getDataBlockLen(enBlocks, dataBlocks)) < length {
-		return 0, reedsolomon.ErrShortData
+		return 0, traceError(reedsolomon.ErrShortData)
 	}
 
 	// Counter to decrement total left to write.
@@ -114,7 +114,7 @@ func writeDataBlocks(dst io.Writer, enBlocks [][]byte, dataBlocks int, offset in
 		if write < int64(len(block)) {
 			n, err := io.Copy(dst, bytes.NewReader(block[:write]))
 			if err != nil {
-				return 0, err
+				return 0, traceError(err)
 			}
 			totalWritten += n
 			break
@@ -122,7 +122,7 @@ func writeDataBlocks(dst io.Writer, enBlocks [][]byte, dataBlocks int, offset in
 		// Copy the block.
 		n, err := io.Copy(dst, bytes.NewReader(block))
 		if err != nil {
-			return 0, err
+			return 0, traceError(err)
 		}
 
 		// Decrement output size.

@@ -64,8 +64,8 @@ func (fs fsObjects) writeUploadJSON(bucket, object, uploadID string, initiated t
 	var uploadsJSON uploadsV1
 	uploadsJSON, err = readUploadsJSON(bucket, object, fs.storage)
 	if err != nil {
-		// For any other errors.
-		if err != errFileNotFound {
+		// uploads.json might not exist hence ignore errFileNotFound.
+		if errorCause(err) != errFileNotFound {
 			return err
 		}
 		// Set uploads format to `fs`.
@@ -77,18 +77,18 @@ func (fs fsObjects) writeUploadJSON(bucket, object, uploadID string, initiated t
 	// Update `uploads.json` on all disks.
 	uploadsJSONBytes, wErr := json.Marshal(&uploadsJSON)
 	if wErr != nil {
-		return wErr
+		return traceError(wErr)
 	}
 	// Write `uploads.json` to disk.
 	if wErr = fs.storage.AppendFile(minioMetaBucket, tmpUploadsPath, uploadsJSONBytes); wErr != nil {
-		return wErr
+		return traceError(wErr)
 	}
 	wErr = fs.storage.RenameFile(minioMetaBucket, tmpUploadsPath, minioMetaBucket, uploadsPath)
 	if wErr != nil {
 		if dErr := fs.storage.DeleteFile(minioMetaBucket, tmpUploadsPath); dErr != nil {
-			return dErr
+			return traceError(dErr)
 		}
-		return wErr
+		return traceError(wErr)
 	}
 	return nil
 }
@@ -100,13 +100,13 @@ func (fs fsObjects) updateUploadsJSON(bucket, object string, uploadsJSON uploads
 	tmpUploadsPath := path.Join(tmpMetaPrefix, uniqueID)
 	uploadsBytes, wErr := json.Marshal(uploadsJSON)
 	if wErr != nil {
-		return wErr
+		return traceError(wErr)
 	}
 	if wErr = fs.storage.AppendFile(minioMetaBucket, tmpUploadsPath, uploadsBytes); wErr != nil {
-		return wErr
+		return traceError(wErr)
 	}
 	if wErr = fs.storage.RenameFile(minioMetaBucket, tmpUploadsPath, minioMetaBucket, uploadsPath); wErr != nil {
-		return wErr
+		return traceError(wErr)
 	}
 	return nil
 }

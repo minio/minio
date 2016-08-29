@@ -91,7 +91,7 @@ func (fs fsObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 					eof = true
 					break
 				}
-				return ListMultipartsInfo{}, err
+				return ListMultipartsInfo{}, walkResult.err
 			}
 			entry := strings.TrimPrefix(walkResult.entry, retainSlash(pathJoin(mpartMetaPrefix, bucket)))
 			if strings.HasSuffix(walkResult.entry, slashSeparator) {
@@ -168,42 +168,42 @@ func (fs fsObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 func (fs fsObjects) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (ListMultipartsInfo, error) {
 	// Validate input arguments.
 	if !IsValidBucketName(bucket) {
-		return ListMultipartsInfo{}, BucketNameInvalid{Bucket: bucket}
+		return ListMultipartsInfo{}, traceError(BucketNameInvalid{Bucket: bucket})
 	}
 	if !fs.isBucketExist(bucket) {
-		return ListMultipartsInfo{}, BucketNotFound{Bucket: bucket}
+		return ListMultipartsInfo{}, traceError(BucketNotFound{Bucket: bucket})
 	}
 	if !IsValidObjectPrefix(prefix) {
-		return ListMultipartsInfo{}, ObjectNameInvalid{Bucket: bucket, Object: prefix}
+		return ListMultipartsInfo{}, traceError(ObjectNameInvalid{Bucket: bucket, Object: prefix})
 	}
 	// Verify if delimiter is anything other than '/', which we do not support.
 	if delimiter != "" && delimiter != slashSeparator {
-		return ListMultipartsInfo{}, UnsupportedDelimiter{
+		return ListMultipartsInfo{}, traceError(UnsupportedDelimiter{
 			Delimiter: delimiter,
-		}
+		})
 	}
 	// Verify if marker has prefix.
 	if keyMarker != "" && !strings.HasPrefix(keyMarker, prefix) {
-		return ListMultipartsInfo{}, InvalidMarkerPrefixCombination{
+		return ListMultipartsInfo{}, traceError(InvalidMarkerPrefixCombination{
 			Marker: keyMarker,
 			Prefix: prefix,
-		}
+		})
 	}
 	if uploadIDMarker != "" {
 		if strings.HasSuffix(keyMarker, slashSeparator) {
-			return ListMultipartsInfo{}, InvalidUploadIDKeyCombination{
+			return ListMultipartsInfo{}, traceError(InvalidUploadIDKeyCombination{
 				UploadIDMarker: uploadIDMarker,
 				KeyMarker:      keyMarker,
-			}
+			})
 		}
 		id, err := uuid.Parse(uploadIDMarker)
 		if err != nil {
-			return ListMultipartsInfo{}, err
+			return ListMultipartsInfo{}, traceError(err)
 		}
 		if id.IsZero() {
-			return ListMultipartsInfo{}, MalformedUploadID{
+			return ListMultipartsInfo{}, traceError(MalformedUploadID{
 				UploadID: uploadIDMarker,
-			}
+			})
 		}
 	}
 	return fs.listMultipartUploads(bucket, prefix, keyMarker, uploadIDMarker, delimiter, maxUploads)
@@ -243,9 +243,9 @@ func (fs fsObjects) newMultipartUpload(bucket string, object string, meta map[st
 	err = fs.storage.RenameFile(minioMetaBucket, tempFSMetadataPath, minioMetaBucket, path.Join(uploadIDPath, fsMetaJSONFile))
 	if err != nil {
 		if dErr := fs.storage.DeleteFile(minioMetaBucket, tempFSMetadataPath); dErr != nil {
-			return "", toObjectErr(dErr, minioMetaBucket, tempFSMetadataPath)
+			return "", toObjectErr(traceError(dErr), minioMetaBucket, tempFSMetadataPath)
 		}
-		return "", toObjectErr(err, minioMetaBucket, uploadIDPath)
+		return "", toObjectErr(traceError(err), minioMetaBucket, uploadIDPath)
 	}
 	// Return success.
 	return uploadID, nil
@@ -259,15 +259,15 @@ func (fs fsObjects) newMultipartUpload(bucket string, object string, meta map[st
 func (fs fsObjects) NewMultipartUpload(bucket, object string, meta map[string]string) (string, error) {
 	// Verify if bucket name is valid.
 	if !IsValidBucketName(bucket) {
-		return "", BucketNameInvalid{Bucket: bucket}
+		return "", traceError(BucketNameInvalid{Bucket: bucket})
 	}
 	// Verify whether the bucket exists.
 	if !fs.isBucketExist(bucket) {
-		return "", BucketNotFound{Bucket: bucket}
+		return "", traceError(BucketNotFound{Bucket: bucket})
 	}
 	// Verify if object name is valid.
 	if !IsValidObjectName(object) {
-		return "", ObjectNameInvalid{Bucket: bucket, Object: object}
+		return "", traceError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
 	return fs.newMultipartUpload(bucket, object, meta)
 }
@@ -279,14 +279,14 @@ func (fs fsObjects) NewMultipartUpload(bucket, object string, meta map[string]st
 func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, size int64, data io.Reader, md5Hex string) (string, error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return "", BucketNameInvalid{Bucket: bucket}
+		return "", traceError(BucketNameInvalid{Bucket: bucket})
 	}
 	// Verify whether the bucket exists.
 	if !fs.isBucketExist(bucket) {
-		return "", BucketNotFound{Bucket: bucket}
+		return "", traceError(BucketNotFound{Bucket: bucket})
 	}
 	if !IsValidObjectName(object) {
-		return "", ObjectNameInvalid{Bucket: bucket, Object: object}
+		return "", traceError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
 
 	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID)
@@ -296,7 +296,7 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	uploadIDExists := fs.isUploadIDExists(bucket, object, uploadID)
 	nsMutex.RUnlock(minioMetaBucket, uploadIDPath)
 	if !uploadIDExists {
-		return "", InvalidUploadID{UploadID: uploadID}
+		return "", traceError(InvalidUploadID{UploadID: uploadID})
 	}
 
 	// Hold write lock on the part so that there is no parallel upload on the part.
@@ -334,7 +334,7 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	// bytes than specified in request header.
 	if bytesWritten < size {
 		fs.storage.DeleteFile(minioMetaBucket, tmpPartPath)
-		return "", IncompleteBody{}
+		return "", traceError(IncompleteBody{})
 	}
 
 	// Validate if payload is valid.
@@ -343,7 +343,7 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 			// Incoming payload wrong, delete the temporary object.
 			fs.storage.DeleteFile(minioMetaBucket, tmpPartPath)
 			// Error return.
-			return "", toObjectErr(err, bucket, object)
+			return "", toObjectErr(traceError(err), bucket, object)
 		}
 	}
 
@@ -353,7 +353,7 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 			// MD5 mismatch, delete the temporary object.
 			fs.storage.DeleteFile(minioMetaBucket, tmpPartPath)
 			// Returns md5 mismatch.
-			return "", BadDigest{md5Hex, newMD5Hex}
+			return "", traceError(BadDigest{md5Hex, newMD5Hex})
 		}
 	}
 
@@ -363,7 +363,7 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 
 	// Just check if the uploadID exists to avoid copy if it doesn't.
 	if !fs.isUploadIDExists(bucket, object, uploadID) {
-		return "", InvalidUploadID{UploadID: uploadID}
+		return "", traceError(InvalidUploadID{UploadID: uploadID})
 	}
 
 	fsMeta, err := readFSMetadata(fs.storage, minioMetaBucket, uploadIDPath)
@@ -376,9 +376,9 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	err = fs.storage.RenameFile(minioMetaBucket, tmpPartPath, minioMetaBucket, partPath)
 	if err != nil {
 		if dErr := fs.storage.DeleteFile(minioMetaBucket, tmpPartPath); dErr != nil {
-			return "", toObjectErr(dErr, minioMetaBucket, tmpPartPath)
+			return "", toObjectErr(traceError(dErr), minioMetaBucket, tmpPartPath)
 		}
-		return "", toObjectErr(err, minioMetaBucket, partPath)
+		return "", toObjectErr(traceError(err), minioMetaBucket, partPath)
 	}
 	uploadIDPath = path.Join(mpartMetaPrefix, bucket, object, uploadID)
 	tempFSMetadataPath := path.Join(tmpMetaPrefix, getUUID()+"-"+fsMetaJSONFile)
@@ -388,9 +388,9 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	err = fs.storage.RenameFile(minioMetaBucket, tempFSMetadataPath, minioMetaBucket, path.Join(uploadIDPath, fsMetaJSONFile))
 	if err != nil {
 		if dErr := fs.storage.DeleteFile(minioMetaBucket, tempFSMetadataPath); dErr != nil {
-			return "", toObjectErr(dErr, minioMetaBucket, tempFSMetadataPath)
+			return "", toObjectErr(traceError(dErr), minioMetaBucket, tempFSMetadataPath)
 		}
-		return "", toObjectErr(err, minioMetaBucket, uploadIDPath)
+		return "", toObjectErr(traceError(err), minioMetaBucket, uploadIDPath)
 	}
 	return newMD5Hex, nil
 }
@@ -418,7 +418,7 @@ func (fs fsObjects) listObjectParts(bucket, object, uploadID string, partNumberM
 		partNamePath := path.Join(mpartMetaPrefix, bucket, object, uploadID, part.Name)
 		fi, err = fs.storage.StatFile(minioMetaBucket, partNamePath)
 		if err != nil {
-			return ListPartsInfo{}, toObjectErr(err, minioMetaBucket, partNamePath)
+			return ListPartsInfo{}, toObjectErr(traceError(err), minioMetaBucket, partNamePath)
 		}
 		result.Parts = append(result.Parts, partInfo{
 			PartNumber:   part.Number,
@@ -456,21 +456,21 @@ func (fs fsObjects) listObjectParts(bucket, object, uploadID string, partNumberM
 func (fs fsObjects) ListObjectParts(bucket, object, uploadID string, partNumberMarker, maxParts int) (ListPartsInfo, error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return ListPartsInfo{}, BucketNameInvalid{Bucket: bucket}
+		return ListPartsInfo{}, traceError(BucketNameInvalid{Bucket: bucket})
 	}
 	// Verify whether the bucket exists.
 	if !fs.isBucketExist(bucket) {
-		return ListPartsInfo{}, BucketNotFound{Bucket: bucket}
+		return ListPartsInfo{}, traceError(BucketNotFound{Bucket: bucket})
 	}
 	if !IsValidObjectName(object) {
-		return ListPartsInfo{}, ObjectNameInvalid{Bucket: bucket, Object: object}
+		return ListPartsInfo{}, traceError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
 	// Hold lock so that there is no competing abort-multipart-upload or complete-multipart-upload.
 	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID))
 	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID))
 
 	if !fs.isUploadIDExists(bucket, object, uploadID) {
-		return ListPartsInfo{}, InvalidUploadID{UploadID: uploadID}
+		return ListPartsInfo{}, traceError(InvalidUploadID{UploadID: uploadID})
 	}
 	return fs.listObjectParts(bucket, object, uploadID, partNumberMarker, maxParts)
 }
@@ -484,17 +484,17 @@ func (fs fsObjects) ListObjectParts(bucket, object, uploadID string, partNumberM
 func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, uploadID string, parts []completePart) (string, error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return "", BucketNameInvalid{Bucket: bucket}
+		return "", traceError(BucketNameInvalid{Bucket: bucket})
 	}
 	// Verify whether the bucket exists.
 	if !fs.isBucketExist(bucket) {
-		return "", BucketNotFound{Bucket: bucket}
+		return "", traceError(BucketNotFound{Bucket: bucket})
 	}
 	if !IsValidObjectName(object) {
-		return "", ObjectNameInvalid{
+		return "", traceError(ObjectNameInvalid{
 			Bucket: bucket,
 			Object: object,
-		}
+		})
 	}
 
 	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID)
@@ -506,7 +506,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID))
 
 	if !fs.isUploadIDExists(bucket, object, uploadID) {
-		return "", InvalidUploadID{UploadID: uploadID}
+		return "", traceError(InvalidUploadID{UploadID: uploadID})
 	}
 
 	// Read saved fs metadata for ongoing multipart.
@@ -530,18 +530,18 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	for i, part := range parts {
 		partIdx := fsMeta.ObjectPartIndex(part.PartNumber)
 		if partIdx == -1 {
-			return "", InvalidPart{}
+			return "", traceError(InvalidPart{})
 		}
 		if fsMeta.Parts[partIdx].ETag != part.ETag {
-			return "", BadDigest{}
+			return "", traceError(BadDigest{})
 		}
 		// All parts except the last part has to be atleast 5MB.
 		if (i < len(parts)-1) && !isMinAllowedPartSize(fsMeta.Parts[partIdx].Size) {
-			return "", PartTooSmall{
+			return "", traceError(PartTooSmall{
 				PartNumber: part.PartNumber,
 				PartSize:   fsMeta.Parts[partIdx].Size,
 				PartETag:   part.ETag,
-			}
+			})
 		}
 		// Construct part suffix.
 		partSuffix := fmt.Sprintf("object%d", part.PartNumber)
@@ -557,7 +557,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 			n, err = fs.storage.ReadFile(minioMetaBucket, multipartPartFile, offset, buf[:curLeft])
 			if n > 0 {
 				if err = fs.storage.AppendFile(minioMetaBucket, tempObj, buf[:n]); err != nil {
-					return "", toObjectErr(err, minioMetaBucket, tempObj)
+					return "", toObjectErr(traceError(err), minioMetaBucket, tempObj)
 				}
 			}
 			if err != nil {
@@ -565,9 +565,9 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 					break
 				}
 				if err == errFileNotFound {
-					return "", InvalidPart{}
+					return "", traceError(InvalidPart{})
 				}
-				return "", toObjectErr(err, minioMetaBucket, multipartPartFile)
+				return "", toObjectErr(traceError(err), minioMetaBucket, multipartPartFile)
 			}
 			offset += n
 			totalLeft -= n
@@ -578,9 +578,9 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	err = fs.storage.RenameFile(minioMetaBucket, tempObj, bucket, object)
 	if err != nil {
 		if dErr := fs.storage.DeleteFile(minioMetaBucket, tempObj); dErr != nil {
-			return "", toObjectErr(dErr, minioMetaBucket, tempObj)
+			return "", toObjectErr(traceError(dErr), minioMetaBucket, tempObj)
 		}
-		return "", toObjectErr(err, bucket, object)
+		return "", toObjectErr(traceError(err), bucket, object)
 	}
 
 	// No need to save part info, since we have concatenated all parts.
@@ -600,7 +600,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 		}
 		fsMetaPath := path.Join(bucketMetaPrefix, bucket, object, fsMetaJSONFile)
 		if err = fs.storage.RenameFile(minioMetaBucket, tmpMetaPath, minioMetaBucket, fsMetaPath); err != nil {
-			return "", toObjectErr(err, bucket, object)
+			return "", toObjectErr(traceError(err), bucket, object)
 		}
 	}
 
@@ -635,7 +635,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	}
 
 	if err = fs.storage.DeleteFile(minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object, uploadsJSONFile)); err != nil {
-		return "", toObjectErr(err, minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object))
+		return "", toObjectErr(traceError(err), minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object))
 	}
 
 	// Return md5sum.
@@ -672,7 +672,7 @@ func (fs fsObjects) abortMultipartUpload(bucket, object, uploadID string) error 
 	} // No more pending uploads for the object, we purge the entire
 	// entry at '.minio/multipart/bucket/object'.
 	if err = fs.storage.DeleteFile(minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object, uploadsJSONFile)); err != nil {
-		return toObjectErr(err, minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object))
+		return toObjectErr(traceError(err), minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object))
 	}
 	return nil
 }
@@ -692,13 +692,13 @@ func (fs fsObjects) abortMultipartUpload(bucket, object, uploadID string) error 
 func (fs fsObjects) AbortMultipartUpload(bucket, object, uploadID string) error {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return BucketNameInvalid{Bucket: bucket}
+		return traceError(BucketNameInvalid{Bucket: bucket})
 	}
 	if !fs.isBucketExist(bucket) {
-		return BucketNotFound{Bucket: bucket}
+		return traceError(BucketNotFound{Bucket: bucket})
 	}
 	if !IsValidObjectName(object) {
-		return ObjectNameInvalid{Bucket: bucket, Object: object}
+		return traceError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
 
 	// Hold lock so that there is no competing complete-multipart-upload or put-object-part.
@@ -706,7 +706,7 @@ func (fs fsObjects) AbortMultipartUpload(bucket, object, uploadID string) error 
 	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID))
 
 	if !fs.isUploadIDExists(bucket, object, uploadID) {
-		return InvalidUploadID{UploadID: uploadID}
+		return traceError(InvalidUploadID{UploadID: uploadID})
 	}
 
 	err := fs.abortMultipartUpload(bucket, object, uploadID)

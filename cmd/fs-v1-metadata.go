@@ -81,12 +81,12 @@ func readFSMetadata(disk StorageAPI, bucket, object string) (fsMeta fsMetaV1, er
 	// Read all `fs.json`.
 	buf, err := disk.ReadAll(bucket, path.Join(object, fsMetaJSONFile))
 	if err != nil {
-		return fsMetaV1{}, err
+		return fsMetaV1{}, traceError(err)
 	}
 
 	// Decode `fs.json` into fsMeta structure.
 	if err = json.Unmarshal(buf, &fsMeta); err != nil {
-		return fsMetaV1{}, err
+		return fsMetaV1{}, traceError(err)
 	}
 
 	// Success.
@@ -136,10 +136,10 @@ func writeFSFormatData(storage StorageAPI, fsFormat formatConfigV1) error {
 func writeFSMetadata(storage StorageAPI, bucket, path string, fsMeta fsMetaV1) error {
 	metadataBytes, err := json.Marshal(fsMeta)
 	if err != nil {
-		return err
+		return traceError(err)
 	}
 	if err = storage.AppendFile(bucket, path, metadataBytes); err != nil {
-		return err
+		return traceError(err)
 	}
 	return nil
 }
