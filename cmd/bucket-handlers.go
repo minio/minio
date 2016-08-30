@@ -360,18 +360,20 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		ETag:     md5Sum,
 	})
 
+	// Set common headers.
 	setCommonHeaders(w)
 
+	// Write successful response.
 	writeSuccessResponse(w, encodedSuccessResponse)
 
-	// Fetch object info for notifications.
-	objInfo, err := api.ObjectAPI.GetObjectInfo(bucket, object)
-	if err != nil {
-		errorIf(err, "Unable to fetch object info for \"%s\"", path.Join(bucket, object))
-		return
-	}
-
 	if eventN.IsBucketNotificationSet(bucket) {
+		// Fetch object info for notifications.
+		objInfo, err := api.ObjectAPI.GetObjectInfo(bucket, object)
+		if err != nil {
+			errorIf(err, "Unable to fetch object info for \"%s\"", path.Join(bucket, object))
+			return
+		}
+
 		// Notify object created event.
 		eventNotify(eventData{
 			Type:    ObjectCreatedPost,
