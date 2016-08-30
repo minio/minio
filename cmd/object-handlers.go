@@ -454,14 +454,14 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 	writeSuccessResponse(w, nil)
 
-	// Fetch object info for notifications.
-	objInfo, err := api.ObjectAPI.GetObjectInfo(bucket, object)
-	if err != nil {
-		errorIf(err, "Unable to fetch object info for \"%s\"", path.Join(bucket, object))
-		return
-	}
-
 	if eventN.IsBucketNotificationSet(bucket) {
+		// Fetch object info for notifications.
+		objInfo, err := api.ObjectAPI.GetObjectInfo(bucket, object)
+		if err != nil {
+			errorIf(err, "Unable to fetch object info for \"%s\"", path.Join(bucket, object))
+			return
+		}
+
 		// Notify object created event.
 		eventNotify(eventData{
 			Type:    ObjectCreatedPut,
@@ -795,14 +795,14 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	w.Write(encodedSuccessResponse)
 	w.(http.Flusher).Flush()
 
-	// Fetch object info for notifications.
-	objInfo, err := api.ObjectAPI.GetObjectInfo(bucket, object)
-	if err != nil {
-		errorIf(err, "Unable to fetch object info for \"%s\"", path.Join(bucket, object))
-		return
-	}
-
 	if eventN.IsBucketNotificationSet(bucket) {
+		// Fetch object info for notifications.
+		objInfo, err := api.ObjectAPI.GetObjectInfo(bucket, object)
+		if err != nil {
+			errorIf(err, "Unable to fetch object info for \"%s\"", path.Join(bucket, object))
+			return
+		}
+
 		// Notify object created event.
 		eventNotify(eventData{
 			Type:    ObjectCreatedCompleteMultipartUpload,
