@@ -28,6 +28,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"syscall"
+	"time"
 
 	"github.com/minio/minio/pkg/disk"
 )
@@ -524,6 +525,75 @@ func (s *posix) ReadFile(volume string, path string, offset int64, buf []byte) (
 	return int64(m), err
 }
 
+// PrepareFile - prepare a file with fixed size
+func (s *posix) PrepareFile(volume, path string, size int64) (err error) {
+	defer func() {
+		if err == syscall.EIO {
+			atomic.AddInt32(&s.ioErrCount, 1)
+		}
+	}()
+
+	if s.ioErrCount > maxAllowedIOError {
+		return errFaultyDisk
+	}
+
+	// Validate if disk is free.
+	if err = checkDiskFree(s.diskPath, s.minFreeDisk); err != nil {
+		return err
+	}
+
+	volumeDir, err := s.getVolDir(volume)
+	if err != nil {
+		return err
+	}
+	// Stat a volume entry.
+	_, err = os.Stat(preparePath(volumeDir))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return errVolumeNotFound
+		}
+		return err
+	}
+	filePath := pathJoin(volumeDir, path)
+	if err = checkPathLength(filePath); err != nil {
+		return err
+	}
+	// Verify if the file already exists and is not of regular type.
+	var st os.FileInfo
+	if st, err = os.Stat(preparePath(filePath)); err == nil {
+		if !st.Mode().IsRegular() {
+			return errIsNotRegular
+		}
+	}
+	// Create top level directories if they don't exist.
+	// with mode 0777 mkdir honors system umask.
+	if err = mkdirAll(filepath.Dir(filePath), 0777); err != nil {
+		// File path cannot be verified since one of the parents is a file.
+		if strings.Contains(err.Error(), "not a directory") {
+			return errFileAccessDenied
+		} else if runtime.GOOS == "windows" && strings.Contains(err.Error(), "system cannot find the path specified") {
+			// Add specific case for windows.
+			return errFileAccessDenied
+		}
+		return err
+	}
+
+	// Creates the named file with mode 0666 (before umask), or starts appending
+	// to an existig file.
+	w, err := os.OpenFile(preparePath(filePath), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0666)
+	if err != nil {
+		// File path cannot be verified since one of the parents is a file.
+		if strings.Contains(err.Error(), "not a directory") {
+			return errFileAccessDenied
+		}
+		return err
+	}
+	if err := w.Truncate(size); err != nil {
+		return err
+	}
+	return nil
+}
+
 // AppendFile - append a byte array at path, if file doesn't exist at
 // path this call explicitly creates it.
 func (s *posix) AppendFile(volume, path string, buf []byte) (err error) {
@@ -814,6 +884,54 @@ func (s *posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err e
 		if os.IsNotExist(err) {
 			return errFileNotFound
 		}
+		return err
+	}
+	return nil
+}
+
+func (s *posix) Chtimes(volume, path string, atime, mtime time.Time) (err error) {
+	defer func() {
+		if err == syscall.EIO {
+			atomic.AddInt32(&s.ioErrCount, 1)
+		}
+	}()
+
+	if s.ioErrCount > maxAllowedIOError {
+		return errFaultyDisk
+	}
+
+	// Check disk availability.
+	if _, err = getDiskInfo(s.diskPath); err != nil {
+		return err
+	}
+
+	volumeDir, err := s.getVolDir(volume)
+	if err != nil {
+		return err
+	}
+	// Stat a volume entry.
+	_, err = os.Stat(preparePath(volumeDir))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return errVolumeNotFound
+		}
+		return err
+	}
+
+	filePath := slashpath.Join(volumeDir, path)
+	if err = checkPathLength(filePath); err != nil {
+		return err
+	}
+	if _, err := os.Stat(preparePath(filePath)); err != nil {
+		// File is really not found.
+		if os.IsNotExist(err) {
+			return errFileNotFound
+		}
+		// Return all errors here.
+		return err
+	}
+
+	if err := os.Chtimes(preparePath(filePath), atime, mtime); err != nil {
 		return err
 	}
 	return nil

@@ -246,6 +246,9 @@ func (fs fsObjects) GetObject(bucket, object string, offset int64, length int64,
 		return toObjectErr(errUnexpected, bucket, object)
 	}
 
+	nsMutex.Lock(bucket, object+".background")
+	defer nsMutex.Unlock(bucket, object+".background")
+
 	// Stat the file to get file size.
 	fi, err := fs.storage.StatFile(bucket, object)
 	if err != nil {
@@ -320,6 +323,7 @@ func (fs fsObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 	if !IsValidObjectName(object) {
 		return ObjectInfo{}, (ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
+
 	fi, err := fs.storage.StatFile(bucket, object)
 	if err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)

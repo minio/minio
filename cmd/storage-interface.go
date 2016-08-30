@@ -16,6 +16,8 @@
 
 package cmd
 
+import "time"
+
 // StorageAPI interface.
 type StorageAPI interface {
 	// Volume operations.
@@ -26,6 +28,10 @@ type StorageAPI interface {
 
 	// File operations.
 	ListDir(volume, dirPath string) ([]string, error)
+
+	PrepareFile(volume string, path string, size int64) (err error)
+	Chtimes(volume string, path string, atime time.Time, mtime time.Time) error
+
 	ReadFile(volume string, path string, offset int64, buf []byte) (n int64, err error)
 	AppendFile(volume string, path string, buf []byte) (err error)
 	RenameFile(srcVolume, srcPath, dstVolume, dstPath string) error

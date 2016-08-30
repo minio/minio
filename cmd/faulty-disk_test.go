@@ -16,6 +16,8 @@
 
 package cmd
 
+import "time"
+
 // Simulates disk returning errFaultyDisk on all methods of StorageAPI
 // interface after successCount number of successes.
 type faultyDisk struct {
@@ -112,4 +114,12 @@ func (f *faultyDisk) ReadAll(volume string, path string) (buf []byte, err error)
 		return f.disk.ReadAll(volume, path)
 	}
 	return nil, errFaultyDisk
+}
+
+func (f *faultyDisk) Chtimes(volume, path string, ctime, atime time.Time) (err error) {
+	return nil
+}
+
+func (f *faultyDisk) PrepareFile(volume, path string, size int64) (err error) {
+	return nil
 }
