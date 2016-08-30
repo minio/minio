@@ -188,9 +188,9 @@ func NewMuxServer(addr string, handler http.Handler) *MuxServer {
 	m := &MuxServer{
 		Server: http.Server{
 			Addr: addr,
-			// Adding timeout of 10 minutes for unresponsive client connections.
-			ReadTimeout:    10 * time.Minute,
-			WriteTimeout:   10 * time.Minute,
+			// Do not add any timeouts Golang net.Conn
+			// closes connections right after 10mins even
+			// if they are not idle.
 			Handler:        handler,
 			MaxHeaderBytes: 1 << 20,
 		},
