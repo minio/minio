@@ -24,6 +24,8 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"testing"
+
+	"github.com/minio/minio-go/pkg/policy"
 )
 
 // Authenticate and get JWT token - will be called before every webrpc handler invocation
@@ -709,5 +711,62 @@ func testDownloadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandl
 
 	if bytes.Compare(rec.Body.Bytes(), content) != 0 {
 		t.Fatalf("The downloaded file is corrupted")
+	}
+}
+
+// Wrapper for calling GetBucketPolicy Handler
+func TestWebHandlerGetBucketPolicyHandler(t *testing.T) {
+	ExecObjectLayerTest(t, testWebGetBucketPolicyHandler)
+}
+
+// testWebGetBucketPolicyHandler - Test GetBucketPolicy web handler
+func testWebGetBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
+	// Register the API end points with XL/FS object layer.
+	apiRouter := initTestWebRPCEndPoint(obj)
+	// initialize the server and obtain the credentials and root.
+	// credentials are necessary to sign the HTTP request.
+	rootPath, err := newTestConfig("us-east-1")
+	if err != nil {
+		t.Fatalf("Init Test config failed")
+	}
+	// remove the root folder after the test ends.
+	defer removeAll(rootPath)
+
+	credentials := serverConfig.GetCredential()
+
+	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKeyID, credentials.SecretAccessKey)
+	if err != nil {
+		t.Fatal("Cannot authenticate")
+	}
+
+	rec := httptest.NewRecorder()
+
+	bucketName := getRandomBucketName()
+
+	testCases := []struct {
+		bucketName     string
+		prefix         string
+		expectedResult policy.BucketPolicy
+	}{
+		{bucketName, "", policy.BucketPolicyNone},
+	}
+
+	for i, testCase := range testCases {
+		args := &GetBucketPolicyArgs{BucketName: testCase.bucketName, Prefix: testCase.prefix}
+		reply := &GetBucketPolicyRep{}
+		req, err := newTestWebRPCRequest("Web.GetBucketPolicy", authorization, args)
+		if err != nil {
+			t.Fatalf("Test %d: Failed to create HTTP request: <ERROR> %v", i+1, err)
+		}
+		apiRouter.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("Test %d: Expected the response status to be 200, but instead found `%d`", i+1, rec.Code)
+		}
+		if err = getTestWebRPCResponse(rec, &reply); err != nil {
+			t.Fatalf("Test %d: Should succeed but it didn't, %v", i+1, err)
+		}
+		if testCase.expectedResult != reply.Policy {
+			t.Fatalf("Test %d: expected: %v, got: %v", i+1, testCase.expectedResult, reply.Policy)
+		}
 	}
 }
