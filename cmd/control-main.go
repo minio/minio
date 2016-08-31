@@ -24,6 +24,7 @@ var controlCmd = cli.Command{
 	Usage:  "Control and manage minio server.",
 	Action: mainControl,
 	Subcommands: []cli.Command{
+		lockCmd,
 		healCmd,
 		shutdownCmd,
 	},

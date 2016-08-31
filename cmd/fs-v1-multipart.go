@@ -58,9 +58,12 @@ func (fs fsObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 	var err error
 	var eof bool
 	if uploadIDMarker != "" {
-		nsMutex.RLock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, keyMarker))
+		// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
+		// used for instrumentation on locks.
+		opsID := getOpsID()
+		nsMutex.RLock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, keyMarker), opsID)
 		uploads, _, err = listMultipartUploadIDs(bucket, keyMarker, uploadIDMarker, maxUploads, fs.storage)
-		nsMutex.RUnlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, keyMarker))
+		nsMutex.RUnlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, keyMarker), opsID)
 		if err != nil {
 			return ListMultipartsInfo{}, err
 		}
@@ -110,9 +113,14 @@ func (fs fsObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 			var tmpUploads []uploadMetadata
 			var end bool
 			uploadIDMarker = ""
-			nsMutex.RLock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, entry))
+
+			// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
+			// used for instrumentation on locks.
+			opsID := getOpsID()
+
+			nsMutex.RLock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, entry), opsID)
 			tmpUploads, end, err = listMultipartUploadIDs(bucket, entry, uploadIDMarker, maxUploads, fs.storage)
-			nsMutex.RUnlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, entry))
+			nsMutex.RUnlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, entry), opsID)
 			if err != nil {
 				return ListMultipartsInfo{}, err
 			}
@@ -225,9 +233,13 @@ func (fs fsObjects) newMultipartUpload(bucket string, object string, meta map[st
 		fsMeta.Meta = meta
 	}
 
+	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
+	// used for instrumentation on locks.
+	opsID := getOpsID()
+
 	// This lock needs to be held for any changes to the directory contents of ".minio/multipart/object/"
-	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object))
-	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object))
+	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object), opsID)
+	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object), opsID)
 
 	uploadID = getUUID()
 	initiated := time.Now().UTC()
@@ -291,17 +303,25 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 
 	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID)
 
-	nsMutex.RLock(minioMetaBucket, uploadIDPath)
+	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
+	// used for instrumentation on locks.
+	opsID := getOpsID()
+
+	nsMutex.RLock(minioMetaBucket, uploadIDPath, opsID)
 	// Just check if the uploadID exists to avoid copy if it doesn't.
 	uploadIDExists := fs.isUploadIDExists(bucket, object, uploadID)
-	nsMutex.RUnlock(minioMetaBucket, uploadIDPath)
+	nsMutex.RUnlock(minioMetaBucket, uploadIDPath, opsID)
 	if !uploadIDExists {
 		return "", InvalidUploadID{UploadID: uploadID}
 	}
 
+	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
+	// used for instrumentation on locks.
+	opsID = getOpsID()
+
 	// Hold write lock on the part so that there is no parallel upload on the part.
-	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID, strconv.Itoa(partID)))
-	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID, strconv.Itoa(partID)))
+	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID, strconv.Itoa(partID)), opsID)
+	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID, strconv.Itoa(partID)), opsID)
 
 	partSuffix := fmt.Sprintf("object%d", partID)
 	tmpPartPath := path.Join(tmpMetaPrefix, uploadID+"-"+partSuffix)
@@ -357,9 +377,13 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 		}
 	}
 
+	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
+	// used for instrumentation on locks.
+	opsID = getOpsID()
+
 	// Hold write lock as we are updating fs.json
-	nsMutex.Lock(minioMetaBucket, uploadIDPath)
-	defer nsMutex.Unlock(minioMetaBucket, uploadIDPath)
+	nsMutex.Lock(minioMetaBucket, uploadIDPath, opsID)
+	defer nsMutex.Unlock(minioMetaBucket, uploadIDPath, opsID)
 
 	// Just check if the uploadID exists to avoid copy if it doesn't.
 	if !fs.isUploadIDExists(bucket, object, uploadID) {
@@ -465,9 +489,14 @@ func (fs fsObjects) ListObjectParts(bucket, object, uploadID string, partNumberM
 	if !IsValidObjectName(object) {
 		return ListPartsInfo{}, ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
+
+	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
+	// used for instrumentation on locks.
+	opsID := getOpsID()
+
 	// Hold lock so that there is no competing abort-multipart-upload or complete-multipart-upload.
-	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID))
-	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID))
+	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID), opsID)
+	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID), opsID)
 
 	if !fs.isUploadIDExists(bucket, object, uploadID) {
 		return ListPartsInfo{}, InvalidUploadID{UploadID: uploadID}
@@ -498,12 +527,16 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	}
 
 	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID)
+	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
+	// used for instrumentation on locks.
+	opsID := getOpsID()
+
 	// Hold lock so that
 	// 1) no one aborts this multipart upload
 	// 2) no one does a parallel complete-multipart-upload on this
 	// multipart upload
-	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID))
-	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID))
+	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID), opsID)
+	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID), opsID)
 
 	if !fs.isUploadIDExists(bucket, object, uploadID) {
 		return "", InvalidUploadID{UploadID: uploadID}
@@ -609,10 +642,14 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 		return "", toObjectErr(err, bucket, object)
 	}
 
+	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
+	// used for instrumentation on locks.
+	opsID = getOpsID()
+
 	// Hold the lock so that two parallel complete-multipart-uploads do not
 	// leave a stale uploads.json behind.
-	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object))
-	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object))
+	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object), opsID)
+	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object), opsID)
 
 	// Validate if there are other incomplete upload-id's present for
 	// the object, if yes do not attempt to delete 'uploads.json'.
@@ -701,9 +738,13 @@ func (fs fsObjects) AbortMultipartUpload(bucket, object, uploadID string) error 
 		return ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
 
+	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
+	// used for instrumentation on locks.
+	opsID := getOpsID()
+
 	// Hold lock so that there is no competing complete-multipart-upload or put-object-part.
-	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID))
-	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID))
+	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID), opsID)
+	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID), opsID)
 
 	if !fs.isUploadIDExists(bucket, object, uploadID) {
 		return InvalidUploadID{UploadID: uploadID}

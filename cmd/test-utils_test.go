@@ -26,10 +26,8 @@ import (
 	"io"
 	"io/ioutil"
 	"math/rand"
-	"net"
 	"net/http"
 	"net/http/httptest"
-	"net/rpc"
 	"net/url"
 	"os"
 	"regexp"
@@ -178,6 +176,58 @@ func StartTestServer(t TestErrHandler, instanceType string) TestServer {
 	globalObjectAPI = objLayer
 	objLayerMutex.Unlock()
 	return testServer
+}
+
+// Initializes control RPC end points.
+// The object Layer will be a temp back used for testing purpose.
+func initTestControlRPCEndPoint(objectLayer ObjectLayer) http.Handler {
+	// Initialize Web.
+
+	controllerHandlers := &controllerAPIHandlers{
+		ObjectAPI: func() ObjectLayer { return objectLayer },
+	}
+
+	// Initialize router.
+	muxRouter := router.NewRouter()
+	registerControllerRPCRouter(muxRouter, controllerHandlers)
+	return muxRouter
+}
+
+// StartTestRPCServer - Creates a temp XL/FS backend and initializes control RPC end points,
+// then starts a test server with those control RPC end points registered.
+func StartTestRPCServer(t TestErrHandler, instanceType string) TestServer {
+	// create temporary backend for the test server.
+	nDisks := 16
+	disks, err := getRandomDisks(nDisks)
+	if err != nil {
+		t.Fatal("Failed to create disks for the backend")
+	}
+	// create an instance of TestServer.
+	testRPCServer := TestServer{}
+	// create temporary backend for the test server.
+	objLayer, err := makeTestBackend(disks, instanceType)
+
+	if err != nil {
+		t.Fatalf("Failed obtaining Temp Backend: <ERROR> %s", err)
+	}
+
+	root, err := newTestConfig("us-east-1")
+	if err != nil {
+		t.Fatalf("%s", err)
+	}
+
+	// Get credential.
+	credentials := serverConfig.GetCredential()
+
+	testRPCServer.Root = root
+	testRPCServer.Disks = disks
+	testRPCServer.AccessKey = credentials.AccessKeyID
+	testRPCServer.SecretKey = credentials.SecretAccessKey
+	testRPCServer.Obj = objLayer
+	// Run TestServer.
+	testRPCServer.Server = httptest.NewServer(initTestControlRPCEndPoint(objLayer))
+
+	return testRPCServer
 }
 
 // Configure the server for the test run.
@@ -979,38 +1029,4 @@ func initTestWebRPCEndPoint(objLayer ObjectLayer) http.Handler {
 	muxRouter := router.NewRouter()
 	registerWebRouter(muxRouter, webHandlers)
 	return muxRouter
-}
-
-// Initialize Controller RPC Handlers for testing
-func initTestControllerRPCEndPoint(objLayer ObjectLayer) (string, string, error) {
-	controllerHandlers := &controllerAPIHandlers{
-		ObjectAPI: func() ObjectLayer { return objLayer },
-	}
-	// Start configuring net/rpc server
-	server := rpc.NewServer()
-	server.RegisterName("Controller", controllerHandlers)
-
-	listenTCP := func() (net.Listener, string, error) {
-		l, e := net.Listen("tcp", ":0") // any available address
-		if e != nil {
-			return nil, "", errors.New("net.Listen tcp :0, " + e.Error())
-		}
-		return l, l.Addr().String(), nil
-	}
-
-	l, serverAddr, err := listenTCP()
-	if err != nil {
-		return "", "", nil
-	}
-	go server.Accept(l)
-
-	// net/rpc only accepts one registered path and doesn't help to unregister it,
-	// so we are registering a new rpc path each time this function is called
-	random := strconv.Itoa(rand.Int())
-	server.HandleHTTP("/controller"+random, "/controller-debug"+random)
-
-	testserver := httptest.NewServer(nil)
-	serverAddr = testserver.Listener.Addr().String()
-
-	return serverAddr, random, nil
 }
