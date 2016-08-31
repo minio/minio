@@ -153,3 +153,17 @@ func (c *controllerAPIHandlers) TryInitHandler(args *GenericArgs, reply *Generic
 	return nil
 
 }
+
+// LockInfo - RPC control handler for `minio control lock`.
+// Returns the info of the locks held in the system.
+func (c *controllerAPIHandlers) LockInfo(arg *GenericArgs, reply *SystemLockState) error {
+	// obtain the lock state information.
+	lockInfo, err := generateSystemLockResponse()
+	// in case of error, return err to the RPC client.
+	if err != nil {
+		return err
+	}
+	// the response containing the lock info.
+	*reply = lockInfo
+	return nil
+}

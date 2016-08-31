@@ -39,7 +39,7 @@ var shutdownCmd = cli.Command{
 USAGE:
   minio control {{.Name}} http://localhost:9000/
 
-EAMPLES:
+EXAMPLES:
   1. Shutdown the server:
     $ minio control shutdown http://localhost:9000/
 
