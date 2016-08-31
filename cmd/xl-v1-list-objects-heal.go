@@ -137,8 +137,13 @@ func (xl xlObjects) listObjectsHeal(bucket, prefix, marker, delimiter string, ma
 			result.Prefixes = append(result.Prefixes, objInfo.Name)
 			continue
 		}
+
+		// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
+		// used for instrumentation on locks.
+		opsID := getOpsID()
+
 		// Check if the current object needs healing
-		nsMutex.RLock(bucket, objInfo.Name)
+		nsMutex.RLock(bucket, objInfo.Name, opsID)
 		partsMetadata, errs := readAllXLMetadata(xl.storageDisks, bucket, objInfo.Name)
 		if xlShouldHeal(partsMetadata, errs) {
 			result.Objects = append(result.Objects, ObjectInfo{
@@ -148,7 +153,7 @@ func (xl xlObjects) listObjectsHeal(bucket, prefix, marker, delimiter string, ma
 				IsDir:   false,
 			})
 		}
-		nsMutex.RUnlock(bucket, objInfo.Name)
+		nsMutex.RUnlock(bucket, objInfo.Name, opsID)
 	}
 	return result, nil
 }
