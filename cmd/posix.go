@@ -339,12 +339,7 @@ func (s *posix) DeleteVol(volume string) (err error) {
 	if err != nil {
 		if os.IsNotExist(err) {
 			return errVolumeNotFound
-		} else if strings.Contains(err.Error(), "directory is not empty") {
-			// On windows the string is slightly different, handle it here.
-			return errVolumeNotEmpty
-		} else if strings.Contains(err.Error(), "directory not empty") {
-			// Hopefully for all other operating systems, this is
-			// assumed to be consistent.
+		} else if isSysErrNotEmpty(err) {
 			return errVolumeNotEmpty
 		}
 		return err
@@ -439,7 +434,7 @@ func (s *posix) ReadAll(volume, path string) (buf []byte, err error) {
 			case syscall.ENOTDIR, syscall.EISDIR:
 				return nil, errFileNotFound
 			default:
-				if strings.Contains(pathErr.Err.Error(), "The handle is invalid") {
+				if isSysErrHandleInvalid(pathErr.Err) {
 					// This case is special and needs to be handled for windows.
 					return nil, errFileNotFound
 				}
@@ -498,7 +493,7 @@ func (s *posix) ReadFile(volume string, path string, offset int64, buf []byte) (
 			return 0, errFileNotFound
 		} else if os.IsPermission(err) {
 			return 0, errFileAccessDenied
-		} else if strings.Contains(err.Error(), "not a directory") {
+		} else if isSysErrNotDir(err) {
 			return 0, errFileAccessDenied
 		}
 		return 0, err
@@ -575,9 +570,9 @@ func (s *posix) AppendFile(volume, path string, buf []byte) (err error) {
 	// with mode 0777 mkdir honors system umask.
 	if err = mkdirAll(filepath.Dir(filePath), 0777); err != nil {
 		// File path cannot be verified since one of the parents is a file.
-		if strings.Contains(err.Error(), "not a directory") {
+		if isSysErrNotDir(err) {
 			return errFileAccessDenied
-		} else if runtime.GOOS == "windows" && strings.Contains(err.Error(), "system cannot find the path specified") {
+		} else if isSysErrPathNotFound(err) {
 			// Add specific case for windows.
 			return errFileAccessDenied
 		}
@@ -589,7 +584,7 @@ func (s *posix) AppendFile(volume, path string, buf []byte) (err error) {
 	w, err := os.OpenFile(preparePath(filePath), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0666)
 	if err != nil {
 		// File path cannot be verified since one of the parents is a file.
-		if strings.Contains(err.Error(), "not a directory") {
+		if isSysErrNotDir(err) {
 			return errFileAccessDenied
 		}
 		return err
@@ -645,7 +640,7 @@ func (s *posix) StatFile(volume, path string) (file FileInfo, err error) {
 		}
 
 		// File path cannot be verified since one of the parents is a file.
-		if strings.Contains(err.Error(), "not a directory") {
+		if isSysErrNotDir(err) {
 			return FileInfo{}, errFileNotFound
 		}
 
@@ -804,9 +799,9 @@ func (s *posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err e
 	// Creates all the parent directories, with mode 0777 mkdir honors system umask.
 	if err = mkdirAll(preparePath(slashpath.Dir(dstFilePath)), 0777); err != nil {
 		// File path cannot be verified since one of the parents is a file.
-		if strings.Contains(err.Error(), "not a directory") {
+		if isSysErrNotDir(err) {
 			return errFileAccessDenied
-		} else if strings.Contains(err.Error(), "The system cannot find the path specified.") && runtime.GOOS == "windows" {
+		} else if isSysErrPathNotFound(err) {
 			// This is a special case should be handled only for
 			// windows, because windows API does not return "not a
 			// directory" error message. Handle this specifically here.

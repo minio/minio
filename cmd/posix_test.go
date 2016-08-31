@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"bytes"
-	"errors"
 	"io"
 	"io/ioutil"
 	"os"
@@ -901,7 +900,7 @@ func TestReadFile(t *testing.T) {
 					return &os.PathError{
 						Op:   "seek",
 						Path: preparePath(slashpath.Join(path, "success-vol", "myobject")),
-						Err:  errors.New("An attempt was made to move the file pointer before the beginning of the file."),
+						Err:  syscall.Errno(0x83), // ERROR_NEGATIVE_SEEK
 					}
 				}
 				return &os.PathError{
@@ -953,7 +952,24 @@ func TestReadFile(t *testing.T) {
 		if err != nil && testCase.expectedErr != nil {
 			// Validate if the type string of the errors are an exact match.
 			if err.Error() != testCase.expectedErr.Error() {
-				t.Errorf("Case: %d %#v, expected: %s, got: %s", i+1, testCase, testCase.expectedErr, err)
+				if runtime.GOOS != "windows" {
+					t.Errorf("Case: %d %#v, expected: %s, got: %s", i+1, testCase, testCase.expectedErr, err)
+				} else {
+					var resultErrno, expectErrno uintptr
+					if pathErr, ok := err.(*os.PathError); ok {
+						if errno, pok := pathErr.Err.(syscall.Errno); pok {
+							resultErrno = uintptr(errno)
+						}
+					}
+					if pathErr, ok := testCase.expectedErr.(*os.PathError); ok {
+						if errno, pok := pathErr.Err.(syscall.Errno); pok {
+							expectErrno = uintptr(errno)
+						}
+					}
+					if !(expectErrno != 0 && resultErrno != 0 && expectErrno == resultErrno) {
+						t.Errorf("Case: %d %#v, expected: %s, got: %s", i+1, testCase, testCase.expectedErr, err)
+					}
+				}
 			}
 			// Err unexpected EOF special case, where we verify we have provided a larger
 			// buffer than the data itself, but the results are in-fact valid. So we validate
