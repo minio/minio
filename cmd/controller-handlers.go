@@ -112,7 +112,14 @@ func (c *controllerAPIHandlers) HealDiskMetadataHandler(args *GenericArgs, reply
 	if !isRPCTokenValid(args.Token) {
 		return errInvalidToken
 	}
-	return objAPI.HealDiskMetadata()
+	err := objAPI.HealDiskMetadata()
+	if err != nil {
+		return err
+	}
+	go func() {
+		globalWakeupCh <- struct{}{}
+	}()
+	return err
 }
 
 // ShutdownArgs - argument for Shutdown RPC.
@@ -136,4 +143,13 @@ func (c *controllerAPIHandlers) ShutdownHandler(args *ShutdownArgs, reply *Gener
 		globalShutdownSignalCh <- shutdownHalt
 	}
 	return nil
+}
+
+func (c *controllerAPIHandlers) TryInitHandler(args *GenericArgs, reply *GenericReply) error {
+	go func() {
+		globalWakeupCh <- struct{}{}
+	}()
+	*reply = GenericReply{}
+	return nil
+
 }

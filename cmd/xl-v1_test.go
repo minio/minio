@@ -92,7 +92,7 @@ func TestCheckSufficientDisks(t *testing.T) {
 
 // TestStorageInfo - tests storage info.
 func TestStorageInfo(t *testing.T) {
-	objLayer, fsDirs, err := getXLObjectLayer()
+	objLayer, fsDirs, err := prepareXL()
 	if err != nil {
 		t.Fatalf("Unable to initialize 'XL' object layer.")
 	}
@@ -138,6 +138,10 @@ func TestNewXL(t *testing.T) {
 	}
 
 	// Initializes all erasure disks
+	err = formatDisks(erasureDisks, nil)
+	if err != nil {
+		t.Fatalf("Unable to format disks for erasure, %s", err)
+	}
 	_, err = newXLObjects(erasureDisks, nil)
 	if err != nil {
 		t.Fatalf("Unable to initialize erasure, %s", err)

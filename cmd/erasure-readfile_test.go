@@ -217,11 +217,16 @@ func TestIsSuccessBlocks(t *testing.T) {
 
 // Wrapper function for testGetReadDisks, testGetOrderedDisks.
 func TestErasureReadUtils(t *testing.T) {
-	objLayer, dirs, err := getXLObjectLayer()
+	nDisks := 16
+	disks, err := getRandomDisks(nDisks)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer removeRoots(dirs)
+	objLayer, err := getXLObjectLayer(disks)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer removeRoots(disks)
 	xl := objLayer.(xlObjects)
 	testGetReadDisks(t, xl)
 	testGetOrderedDisks(t, xl)

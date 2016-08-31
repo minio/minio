@@ -27,9 +27,17 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	mux "github.com/gorilla/mux"
 )
+
+var objLayerMutex *sync.Mutex
+var globalObjectAPI ObjectLayer
+
+func init() {
+	objLayerMutex = &sync.Mutex{}
+}
 
 // supportedGetReqParams - supported request parameters for GET presigned request.
 var supportedGetReqParams = map[string]string{

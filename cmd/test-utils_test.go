@@ -51,6 +51,33 @@ func init() {
 	initNSLock(isDist)
 }
 
+func prepareFS() (ObjectLayer, string, error) {
+	fsDirs, err := getRandomDisks(1)
+	if err != nil {
+		return nil, "", err
+	}
+	obj, err := getSingleNodeObjectLayer(fsDirs[0])
+	if err != nil {
+		removeRoots(fsDirs)
+		return nil, "", err
+	}
+	return obj, fsDirs[0], nil
+}
+
+func prepareXL() (ObjectLayer, []string, error) {
+	nDisks := 16
+	fsDirs, err := getRandomDisks(nDisks)
+	if err != nil {
+		return nil, nil, err
+	}
+	obj, err := getXLObjectLayer(fsDirs)
+	if err != nil {
+		removeRoots(fsDirs)
+		return nil, nil, err
+	}
+	return obj, fsDirs, nil
+}
+
 // TestErrHandler - Golang Testing.T and Testing.B, and gocheck.C satisfy this interface.
 // This makes it easy to run the TestServer from any of the tests.
 // Using this interface, functionalities to be used in tests can be made generalized, and can be integrated in benchmarks/unit tests/go check suite tests.
@@ -112,6 +139,7 @@ type TestServer struct {
 	AccessKey string
 	SecretKey string
 	Server    *httptest.Server
+	Obj       ObjectLayer
 }
 
 // Starts the test server and returns the TestServer instance.
@@ -119,10 +147,10 @@ func StartTestServer(t TestErrHandler, instanceType string) TestServer {
 	// create an instance of TestServer.
 	testServer := TestServer{}
 	// create temporary backend for the test server.
-	_, erasureDisks, err := makeTestBackend(instanceType)
-
+	nDisks := 16
+	disks, err := getRandomDisks(nDisks)
 	if err != nil {
-		t.Fatalf("Failed obtaining Temp Backend: <ERROR> %s", err)
+		t.Fatal("Failed to create disks for the backend")
 	}
 
 	root, err := newTestConfig("us-east-1")
@@ -130,16 +158,25 @@ func StartTestServer(t TestErrHandler, instanceType string) TestServer {
 		t.Fatalf("%s", err)
 	}
 
+	// Test Server needs to start before formatting of disks.
 	// Get credential.
 	credentials := serverConfig.GetCredential()
 
 	testServer.Root = root
-	testServer.Disks = erasureDisks
+	testServer.Disks = disks
 	testServer.AccessKey = credentials.AccessKeyID
 	testServer.SecretKey = credentials.SecretAccessKey
 	// Run TestServer.
-	testServer.Server = httptest.NewServer(configureServerHandler(serverCmdConfig{disks: erasureDisks}))
+	testServer.Server = httptest.NewServer(configureServerHandler(serverCmdConfig{disks: disks}))
 
+	objLayer, err := makeTestBackend(disks, instanceType)
+	if err != nil {
+		t.Fatalf("Failed obtaining Temp Backend: <ERROR> %s", err)
+	}
+	testServer.Obj = objLayer
+	objLayerMutex.Lock()
+	globalObjectAPI = objLayer
+	objLayerMutex.Unlock()
 	return testServer
 }
 
@@ -419,24 +456,24 @@ func getTestWebRPCResponse(resp *httptest.ResponseRecorder, data interface{}) er
 // if the option is
 // FS: Returns a temp single disk setup initializes FS Backend.
 // XL: Returns a 16 temp single disk setup and initializse XL Backend.
-func makeTestBackend(instanceType string) (ObjectLayer, []string, error) {
+func makeTestBackend(disks []string, instanceType string) (ObjectLayer, error) {
 	switch instanceType {
 	case "FS":
-		objLayer, fsroot, err := getSingleNodeObjectLayer()
+		objLayer, err := getSingleNodeObjectLayer(disks[0])
 		if err != nil {
-			return nil, []string{}, err
+			return nil, err
 		}
-		return objLayer, []string{fsroot}, err
+		return objLayer, err
 
 	case "XL":
-		objectLayer, erasureDisks, err := getXLObjectLayer()
+		objectLayer, err := getXLObjectLayer(disks)
 		if err != nil {
-			return nil, []string{}, err
+			return nil, err
 		}
-		return objectLayer, erasureDisks, err
+		return objectLayer, err
 	default:
 		errMsg := "Invalid instance type, Only FS and XL are valid options"
-		return nil, []string{}, fmt.Errorf("Failed obtaining Temp XL layer: <ERROR> %s", errMsg)
+		return nil, fmt.Errorf("Failed obtaining Temp XL layer: <ERROR> %s", errMsg)
 	}
 }
 
@@ -771,21 +808,30 @@ func getTestRoot() (string, error) {
 	return ioutil.TempDir(os.TempDir(), "api-")
 }
 
-// getXLObjectLayer - Instantiates XL object layer and returns it.
-func getXLObjectLayer() (ObjectLayer, []string, error) {
-	var nDisks = 16 // Maximum disks.
+// getRandomDisks - Creates a slice of N random disks, each of the form - minio-XXX
+func getRandomDisks(N int) ([]string, error) {
 	var erasureDisks []string
-	for i := 0; i < nDisks; i++ {
+	for i := 0; i < N; i++ {
 		path, err := ioutil.TempDir(os.TempDir(), "minio-")
 		if err != nil {
-			return nil, nil, err
+			// Remove directories created so far.
+			removeRoots(erasureDisks)
+			return nil, err
 		}
 		erasureDisks = append(erasureDisks, path)
 	}
+	return erasureDisks, nil
+}
 
+// getXLObjectLayer - Instantiates XL object layer and returns it.
+func getXLObjectLayer(erasureDisks []string) (ObjectLayer, error) {
+	err := formatDisks(erasureDisks, nil)
+	if err != nil {
+		return nil, err
+	}
 	objLayer, err := newXLObjects(erasureDisks, nil)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	// Disabling the cache for integration tests.
 	// Should use the object layer tests for validating cache.
@@ -793,23 +839,17 @@ func getXLObjectLayer() (ObjectLayer, []string, error) {
 		xl.objCacheEnabled = false
 	}
 
-	return objLayer, erasureDisks, nil
+	return objLayer, nil
 }
 
 // getSingleNodeObjectLayer - Instantiates single node object layer and returns it.
-func getSingleNodeObjectLayer() (ObjectLayer, string, error) {
-	// Make a temporary directory to use as the obj.
-	fsDir, err := ioutil.TempDir("", "minio-")
+func getSingleNodeObjectLayer(disk string) (ObjectLayer, error) {
+	// Create the object layer.
+	objLayer, err := newFSObjects(disk)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
-
-	// Create the obj.
-	objLayer, err := newFSObjects(fsDir)
-	if err != nil {
-		return nil, "", err
-	}
-	return objLayer, fsDir, nil
+	return objLayer, nil
 }
 
 // removeRoots - Cleans up initialized directories during tests.
@@ -838,14 +878,14 @@ type objTestDiskNotFoundType func(obj ObjectLayer, instanceType string, dirs []s
 // ExecObjectLayerTest - executes object layer tests.
 // Creates single node and XL ObjectLayer instance and runs test for both the layers.
 func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
-	objLayer, fsDir, err := getSingleNodeObjectLayer()
+	objLayer, fsDir, err := prepareFS()
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for single node setup: %s", err)
 	}
 	// Executing the object layer tests for single node setup.
 	objTest(objLayer, singleNodeTestStr, t)
 
-	objLayer, fsDirs, err := getXLObjectLayer()
+	objLayer, fsDirs, err := prepareXL()
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for XL setup: %s", err)
 	}
@@ -857,7 +897,7 @@ func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 // ExecObjectLayerDiskNotFoundTest - executes object layer tests while deleting
 // disks in between tests. Creates XL ObjectLayer instance and runs test for XL layer.
 func ExecObjectLayerDiskNotFoundTest(t *testing.T, objTest objTestDiskNotFoundType) {
-	objLayer, fsDirs, err := getXLObjectLayer()
+	objLayer, fsDirs, err := prepareXL()
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for XL setup: %s", err)
 	}
@@ -872,13 +912,18 @@ type objTestStaleFilesType func(obj ObjectLayer, instanceType string, dirs []str
 // ExecObjectLayerStaleFilesTest - executes object layer tests those leaves stale
 // files/directories under .minio/tmp.  Creates XL ObjectLayer instance and runs test for XL layer.
 func ExecObjectLayerStaleFilesTest(t *testing.T, objTest objTestStaleFilesType) {
-	objLayer, fsDirs, err := getXLObjectLayer()
+	nDisks := 16
+	erasureDisks, err := getRandomDisks(nDisks)
+	if err != nil {
+		t.Fatalf("Initialization of disks for XL setup: %s", err)
+	}
+	objLayer, err := getXLObjectLayer(erasureDisks)
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for XL setup: %s", err)
 	}
 	// Executing the object layer tests for XL.
-	objTest(objLayer, xLTestStr, fsDirs, t)
-	defer removeRoots(fsDirs)
+	objTest(objLayer, xLTestStr, erasureDisks, t)
+	defer removeRoots(erasureDisks)
 }
 
 // Takes in XL/FS object layer, and the list of API end points to be tested/required, registers the API end points and returns the HTTP handler.
