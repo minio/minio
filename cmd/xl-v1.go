@@ -178,8 +178,12 @@ func (xl xlObjects) Shutdown() error {
 
 // HealDiskMetadata function for object storage interface.
 func (xl xlObjects) HealDiskMetadata() error {
-	nsMutex.Lock(minioMetaBucket, formatConfigFile)
-	defer nsMutex.Unlock(minioMetaBucket, formatConfigFile)
+	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
+	// used for instrumentation on locks.
+	opsID := getOpsID()
+
+	nsMutex.Lock(minioMetaBucket, formatConfigFile, opsID)
+	defer nsMutex.Unlock(minioMetaBucket, formatConfigFile, opsID)
 	return repairDiskMetadata(xl.storageDisks)
 }
 
