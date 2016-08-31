@@ -78,21 +78,11 @@ func repairDiskMetadata(storageDisks []StorageAPI) error {
 		return err
 	}
 
-	// Initialize meta volume, if volume already exists ignores it.
-	if err := initMetaVolume(storageDisks); err != nil {
-		return fmt.Errorf("Unable to initialize '.minio.sys' meta volume, %s", err)
-	}
-
 	// Handles different cases properly.
 	switch reduceFormatErrs(sErrs, len(storageDisks)) {
 	case errCorruptedFormat:
 		if err := healFormatXLCorruptedDisks(storageDisks); err != nil {
 			return fmt.Errorf("Unable to repair corrupted format, %s", err)
-		}
-	case errUnformattedDisk:
-		// All drives online but fresh, initialize format.
-		if err := initFormatXL(storageDisks); err != nil {
-			return fmt.Errorf("Unable to initialize format, %s", err)
 		}
 	case errSomeDiskUnformatted:
 		// All drives online but some report missing format.json.

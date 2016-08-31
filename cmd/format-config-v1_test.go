@@ -215,7 +215,6 @@ func genFormatXLInvalidDisksOrder() []*formatConfigV1 {
 }
 
 func prepareFormatXLHealFreshDisks(obj ObjectLayer) ([]StorageAPI, error) {
-
 	var err error
 	xl := obj.(xlObjects)
 
@@ -326,7 +325,7 @@ func TestFormatXLHealFreshDisksErrorExpected(t *testing.T) {
 // a given disk to test healing a corrupted disk
 func TestFormatXLHealCorruptedDisks(t *testing.T) {
 	// Create an instance of xl backend.
-	obj, fsDirs, err := getXLObjectLayer()
+	obj, fsDirs, err := prepareXL()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -398,7 +397,7 @@ func TestFormatXLHealCorruptedDisks(t *testing.T) {
 // some of format.json
 func TestFormatXLReorderByInspection(t *testing.T) {
 	// Create an instance of xl backend.
-	obj, fsDirs, err := getXLObjectLayer()
+	obj, fsDirs, err := prepareXL()
 	if err != nil {
 		t.Fatal(err)
 	}
