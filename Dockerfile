@@ -1,14 +1,17 @@
-FROM golang:1.6
+FROM golang:1.6-alpine
 
-RUN mkdir -p /go/src/app
 WORKDIR /go/src/app
+ENV ALLOW_CONTAINER_ROOT=1
 
 COPY . /go/src/app
-RUN go-wrapper download
-RUN go-wrapper install
-
-ENV ALLOW_CONTAINER_ROOT=1
-RUN mkdir -p /export/docker && cp /go/src/app/docs/Docker.md /export/docker/
+RUN \
+	apk add --no-cache git && \
+	go-wrapper download && \
+	go-wrapper install && \
+	mkdir -p /export/docker && \
+	cp /go/src/app/docs/Docker.md /export/docker/ && \
+	rm -rf /go/pkg /go/src && \
+	apk del git
 
 EXPOSE 9000
 ENTRYPOINT ["go-wrapper", "run", "server"]
