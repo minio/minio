@@ -412,12 +412,8 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 		return "", InvalidUploadID{UploadID: uploadID}
 	}
 
-	// Hold write lock on the part so that there is no parallel upload on the part.
-	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID, strconv.Itoa(partID)))
-	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID, strconv.Itoa(partID)))
-
 	partSuffix := fmt.Sprintf("object%d", partID)
-	tmpPartPath := path.Join(tmpMetaPrefix, uploadID+"-"+partSuffix)
+	tmpPartPath := path.Join(tmpMetaPrefix, uploadID+"."+getUUID()+"."+partSuffix)
 
 	// Initialize md5 writer.
 	md5Writer := md5.New()
