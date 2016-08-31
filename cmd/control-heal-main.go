@@ -35,7 +35,7 @@ var healCmd = cli.Command{
 USAGE:
   minio control {{.Name}}
 
-EAMPLES:
+EXAMPLES:
   1. Heal an object.
      $ minio control {{.Name}} http://localhost:9000/songs/classical/western/piano.mp3
 
