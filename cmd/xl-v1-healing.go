@@ -135,10 +135,10 @@ func xlShouldHeal(partsMetadata []xlMetaV1, errs []error) bool {
 	modTime := commonTime(listObjectModtimes(partsMetadata, errs))
 	for index := range partsMetadata {
 		if errs[index] == errDiskNotFound {
-			return true
+			continue
 		}
 		if errs[index] != nil {
-			continue
+			return true
 		}
 		if modTime != partsMetadata[index].Stat.ModTime {
 			return true
