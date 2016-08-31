@@ -25,6 +25,7 @@ var controlCmd = cli.Command{
 	Action: mainControl,
 	Subcommands: []cli.Command{
 		healCmd,
+		lockCmd,
 		shutdownCmd,
 	},
 	CustomHelpTemplate: `NAME:

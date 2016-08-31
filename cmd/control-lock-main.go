@@ -17,6 +17,8 @@
 package cmd
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/rpc"
 	"net/url"
 	"path"
@@ -24,35 +26,26 @@ import (
 	"github.com/minio/cli"
 )
 
-var shutdownCmd = cli.Command{
-	Name:   "shutdown",
-	Usage:  "Shutdown or restart the server.",
-	Action: shutdownControl,
-	Flags: []cli.Flag{
-		cli.BoolFlag{
-			Name:  "restart",
-			Usage: "Restart the server.",
-		},
-	},
+var lockCmd = cli.Command{
+	Name:   "lock",
+	Usage:  "info about the locks in the node.",
+	Action: lockControl,
 	CustomHelpTemplate: `NAME:
   minio control {{.Name}} - {{.Usage}}
 
 USAGE:
   minio control {{.Name}} http://localhost:9000/
 
-EXAMPLES:
-  1. Shutdown the server:
-    $ minio control shutdown http://localhost:9000/
-
-  2. Reboot the server:
-    $ minio control shutdown --restart http://localhost:9000/
+EAMPLES:
+  1. Get all the info about the blocked/held locks in the node:
+    $ minio control lock http://localhost:9000/
 `,
 }
 
-// "minio control shutdown" entry point.
-func shutdownControl(c *cli.Context) {
+// "minio control lock" entry point.
+func lockControl(c *cli.Context) {
 	if len(c.Args()) != 1 {
-		cli.ShowCommandHelpAndExit(c, "shutdown", 1)
+		cli.ShowCommandHelpAndExit(c, "lock", 1)
 	}
 
 	parsedURL, err := url.ParseRequestURI(c.Args()[0])
@@ -61,8 +54,13 @@ func shutdownControl(c *cli.Context) {
 	client, err := rpc.DialHTTPPath("tcp", parsedURL.Host, path.Join(reservedBucket, controlPath))
 	fatalIf(err, "Unable to connect to %s", parsedURL.Host)
 
-	args := &ShutdownArgs{Reboot: c.Bool("restart")}
-	reply := &ShutdownReply{}
-	err = client.Call("Control.Shutdown", args, reply)
-	fatalIf(err, "RPC Control.Shutdown call failed")
+	args := &struct{}{}
+	reply := &SystemLockState{}
+	err = client.Call("Control.LockInfo", args, reply)
+	fatalIf(err, "RPC Control.LockInfo call failed")
+	b, err := json.MarshalIndent(*reply, "", "  ")
+	if err != nil {
+		fmt.Println("error:", err)
+	}
+	fmt.Print(string(b))
 }

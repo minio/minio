@@ -19,6 +19,7 @@ package cmd
 import (
 	"bytes"
 	"crypto/rand"
+	"encoding/json"
 	"encoding/xml"
 	"net/http"
 	"runtime"
@@ -54,6 +55,17 @@ func encodeResponse(response interface{}) []byte {
 	bytesBuffer.WriteString(xml.Header)
 	e := xml.NewEncoder(&bytesBuffer)
 	e.Encode(response)
+	return bytesBuffer.Bytes()
+}
+
+// Encodes response into json format.
+func mustEncodeJSON(response interface{}) []byte {
+	var bytesBuffer bytes.Buffer
+	e := json.NewEncoder(&bytesBuffer)
+	err := e.Encode(response)
+	if err != nil {
+		panic(err)
+	}
 	return bytesBuffer.Bytes()
 }
 
