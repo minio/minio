@@ -153,7 +153,7 @@ func TestServerCloseBlocking(t *testing.T) {
 	m.mu.Unlock()
 }
 
-func TestListenAndServe(t *testing.T) {
+func TestListenAndServePlain(t *testing.T) {
 	wait := make(chan struct{})
 	addr := "127.0.0.1:" + strconv.Itoa(getFreePort())
 	errc := make(chan error)
@@ -171,6 +171,8 @@ func TestListenAndServe(t *testing.T) {
 	// Make sure we don't block by closing wait after a timeout
 	tf := time.AfterFunc(time.Millisecond*500, func() { errc <- errors.New("Unable to connect to server") })
 
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
 	// Keep trying the server until it's accepting connections
 	go func() {
 		client := http.Client{Timeout: time.Millisecond * 10}
@@ -182,8 +184,11 @@ func TestListenAndServe(t *testing.T) {
 			}
 		}
 
+		wg.Done()
 		tf.Stop() // Cancel the timeout since we made a successful request
 	}()
+
+	wg.Wait()
 
 	// Block until we get an error or wait closed
 	select {
@@ -230,6 +235,8 @@ func TestListenAndServeTLS(t *testing.T) {
 
 	// Make sure we don't block by closing wait after a timeout
 	tf := time.AfterFunc(time.Millisecond*500, func() { errc <- errors.New("Unable to connect to server") })
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
 
 	// Keep trying the server until it's accepting connections
 	go func() {
@@ -248,8 +255,11 @@ func TestListenAndServeTLS(t *testing.T) {
 			}
 		}
 
+		wg.Done()
 		tf.Stop() // Cancel the timeout since we made a successful request
 	}()
+
+	wg.Wait()
 
 	// Block until we get an error or wait closed
 	select {
