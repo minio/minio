@@ -35,8 +35,12 @@ func (xl xlObjects) MakeBucket(bucket string) error {
 		return toObjectErr(errVolumeExists, bucket)
 	}
 
-	nsMutex.Lock(bucket, "")
-	defer nsMutex.Unlock(bucket, "")
+	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
+	// used for instrumentation on locks.
+	opsID := getOpsID()
+
+	nsMutex.Lock(bucket, "", opsID)
+	defer nsMutex.Unlock(bucket, "", opsID)
 
 	// Initialize sync waitgroup.
 	var wg = &sync.WaitGroup{}
@@ -157,8 +161,12 @@ func (xl xlObjects) getBucketInfo(bucketName string) (bucketInfo BucketInfo, err
 
 // Checks whether bucket exists.
 func (xl xlObjects) isBucketExist(bucket string) bool {
-	nsMutex.RLock(bucket, "")
-	defer nsMutex.RUnlock(bucket, "")
+	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
+	// used for instrumentation on locks.
+	opsID := getOpsID()
+
+	nsMutex.RLock(bucket, "", opsID)
+	defer nsMutex.RUnlock(bucket, "", opsID)
 
 	// Check whether bucket exists.
 	_, err := xl.getBucketInfo(bucket)
@@ -178,8 +186,12 @@ func (xl xlObjects) GetBucketInfo(bucket string) (BucketInfo, error) {
 	if !IsValidBucketName(bucket) {
 		return BucketInfo{}, BucketNameInvalid{Bucket: bucket}
 	}
-	nsMutex.RLock(bucket, "")
-	defer nsMutex.RUnlock(bucket, "")
+	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
+	// used for instrumentation on locks.
+	opsID := getOpsID()
+
+	nsMutex.RLock(bucket, "", opsID)
+	defer nsMutex.RUnlock(bucket, "", opsID)
 	bucketInfo, err := xl.getBucketInfo(bucket)
 	if err != nil {
 		return BucketInfo{}, toObjectErr(err, bucket)
@@ -254,8 +266,12 @@ func (xl xlObjects) DeleteBucket(bucket string) error {
 		return BucketNotFound{Bucket: bucket}
 	}
 
-	nsMutex.Lock(bucket, "")
-	defer nsMutex.Unlock(bucket, "")
+	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
+	// used for instrumentation on locks.
+	opsID := getOpsID()
+
+	nsMutex.Lock(bucket, "", opsID)
+	defer nsMutex.Unlock(bucket, "", opsID)
 
 	// Collect if all disks report volume not found.
 	var wg = &sync.WaitGroup{}
