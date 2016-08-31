@@ -870,6 +870,11 @@ func initFormatXL(storageDisks []StorageAPI) (err error) {
 		formats[index].XL.JBOD = jbod
 	}
 
+	// Initialize meta volume, if volume already exists ignores it.
+	if err := initMetaVolume(storageDisks); err != nil {
+		return fmt.Errorf("Unable to initialize '.minio' meta volume, %s", err)
+	}
+
 	// Save formats `format.json` across all disks.
 	return saveFormatXL(storageDisks, formats)
 }
