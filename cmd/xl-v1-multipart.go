@@ -62,7 +62,11 @@ func (xl xlObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 	// List all upload ids for the keyMarker starting from
 	// uploadIDMarker first.
 	if uploadIDMarker != "" {
-		nsMutex.RLock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, keyMarker))
+		// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
+		// used for instrumentation on locks.
+		opsID := getOpsID()
+
+		nsMutex.RLock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, keyMarker), opsID)
 		for _, disk := range xl.getLoadBalancedDisks() {
 			if disk == nil {
 				continue
@@ -76,7 +80,7 @@ func (xl xlObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 			}
 			break
 		}
-		nsMutex.RUnlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, keyMarker))
+		nsMutex.RUnlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, keyMarker), opsID)
 		if err != nil {
 			return ListMultipartsInfo{}, err
 		}
@@ -127,8 +131,13 @@ func (xl xlObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 			var newUploads []uploadMetadata
 			var end bool
 			uploadIDMarker = ""
+
+			// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
+			// used for instrumentation on locks.
+			opsID := getOpsID()
+
 			// For the new object entry we get all its pending uploadIDs.
-			nsMutex.RLock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, entry))
+			nsMutex.RLock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, entry), opsID)
 			var disk StorageAPI
 			for _, disk = range xl.getLoadBalancedDisks() {
 				if disk == nil {
@@ -143,7 +152,7 @@ func (xl xlObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 				}
 				break
 			}
-			nsMutex.RUnlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, entry))
+			nsMutex.RUnlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, entry), opsID)
 			if err != nil {
 				if isErrIgnored(err, walkResultIgnoredErrs) {
 					continue
@@ -269,9 +278,13 @@ func (xl xlObjects) newMultipartUpload(bucket string, object string, meta map[st
 	xlMeta.Stat.ModTime = time.Now().UTC()
 	xlMeta.Meta = meta
 
+	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
+	// used for instrumentation on locks.
+	opsID := getOpsID()
+
 	// This lock needs to be held for any changes to the directory contents of ".minio/multipart/object/"
-	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object))
-	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object))
+	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object), opsID)
+	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object), opsID)
 
 	uploadID = getUUID()
 	initiated := time.Now().UTC()
@@ -339,20 +352,25 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	var partsMetadata []xlMetaV1
 	var errs []error
 	uploadIDPath := pathJoin(mpartMetaPrefix, bucket, object, uploadID)
-	nsMutex.RLock(minioMetaBucket, uploadIDPath)
+
+	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
+	// used for instrumentation on locks.
+	opsID := getOpsID()
+
+	nsMutex.RLock(minioMetaBucket, uploadIDPath, opsID)
 	// Validates if upload ID exists.
 	if !xl.isUploadIDExists(bucket, object, uploadID) {
-		nsMutex.RUnlock(minioMetaBucket, uploadIDPath)
+		nsMutex.RUnlock(minioMetaBucket, uploadIDPath, opsID)
 		return "", InvalidUploadID{UploadID: uploadID}
 	}
 	// Read metadata associated with the object from all disks.
 	partsMetadata, errs = readAllXLMetadata(xl.storageDisks, minioMetaBucket,
 		uploadIDPath)
 	if !isDiskQuorum(errs, xl.writeQuorum) {
-		nsMutex.RUnlock(minioMetaBucket, uploadIDPath)
+		nsMutex.RUnlock(minioMetaBucket, uploadIDPath, opsID)
 		return "", toObjectErr(errXLWriteQuorum, bucket, object)
 	}
-	nsMutex.RUnlock(minioMetaBucket, uploadIDPath)
+	nsMutex.RUnlock(minioMetaBucket, uploadIDPath, opsID)
 
 	// List all online disks.
 	onlineDisks, modTime := listOnlineDisks(xl.storageDisks, partsMetadata, errs)
@@ -421,8 +439,12 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 		}
 	}
 
-	nsMutex.Lock(minioMetaBucket, uploadIDPath)
-	defer nsMutex.Unlock(minioMetaBucket, uploadIDPath)
+	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
+	// used for instrumentation on locks.
+	opsID = getOpsID()
+
+	nsMutex.Lock(minioMetaBucket, uploadIDPath, opsID)
+	defer nsMutex.Unlock(minioMetaBucket, uploadIDPath, opsID)
 
 	// Validate again if upload ID still exists.
 	if !xl.isUploadIDExists(bucket, object, uploadID) {
@@ -565,9 +587,14 @@ func (xl xlObjects) ListObjectParts(bucket, object, uploadID string, partNumberM
 	if !IsValidObjectName(object) {
 		return ListPartsInfo{}, ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
+
+	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
+	// used for instrumentation on locks.
+	opsID := getOpsID()
+
 	// Hold lock so that there is no competing abort-multipart-upload or complete-multipart-upload.
-	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID))
-	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID))
+	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID), opsID)
+	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID), opsID)
 
 	if !xl.isUploadIDExists(bucket, object, uploadID) {
 		return ListPartsInfo{}, InvalidUploadID{UploadID: uploadID}
@@ -597,11 +624,16 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 			Object: object,
 		}
 	}
+
+	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
+	// used for instrumentation on locks.
+	opsID := getOpsID()
+
 	// Hold lock so that
 	// 1) no one aborts this multipart upload
 	// 2) no one does a parallel complete-multipart-upload on this multipart upload
-	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID))
-	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID))
+	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID), opsID)
+	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID), opsID)
 
 	if !xl.isUploadIDExists(bucket, object, uploadID) {
 		return "", InvalidUploadID{UploadID: uploadID}
@@ -712,15 +744,20 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	if rErr != nil {
 		return "", toObjectErr(rErr, minioMetaBucket, uploadIDPath)
 	}
+
+	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
+	// used for instrumentation on locks.
+	opsID = getOpsID()
+
 	// Hold write lock on the destination before rename.
-	nsMutex.Lock(bucket, object)
+	nsMutex.Lock(bucket, object, opsID)
 	defer func() {
 		// A new complete multipart upload invalidates any
 		// previously cached object in memory.
 		xl.objCache.Delete(path.Join(bucket, object))
 
 		// This lock also protects the cache namespace.
-		nsMutex.Unlock(bucket, object)
+		nsMutex.Unlock(bucket, object, opsID)
 
 		// Prefetch the object from disk by triggering a fake GetObject call
 		// Unlike a regular single PutObject,  multipart PutObject is comes in
@@ -761,10 +798,14 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	// Delete the previously successfully renamed object.
 	xl.deleteObject(minioMetaBucket, path.Join(tmpMetaPrefix, uniqueID))
 
+	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
+	// used for instrumentation on locks.
+	opsID = getOpsID()
+
 	// Hold the lock so that two parallel complete-multipart-uploads do not
 	// leave a stale uploads.json behind.
-	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object))
-	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object))
+	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object), opsID)
+	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object), opsID)
 
 	// Validate if there are other incomplete upload-id's present for
 	// the object, if yes do not attempt to delete 'uploads.json'.
@@ -804,8 +845,12 @@ func (xl xlObjects) abortMultipartUpload(bucket, object, uploadID string) (err e
 		return toObjectErr(err, bucket, object)
 	}
 
-	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object))
-	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object))
+	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
+	// used for instrumentation on locks.
+	opsID := getOpsID()
+
+	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object), opsID)
+	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object), opsID)
 	// Validate if there are other incomplete upload-id's present for
 	// the object, if yes do not attempt to delete 'uploads.json'.
 	uploadsJSON, err := xl.readUploadsJSON(bucket, object)
@@ -857,9 +902,13 @@ func (xl xlObjects) AbortMultipartUpload(bucket, object, uploadID string) error 
 		return ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
 
+	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
+	// used for instrumentation on locks.
+	opsID := getOpsID()
+
 	// Hold lock so that there is no competing complete-multipart-upload or put-object-part.
-	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID))
-	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID))
+	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID), opsID)
+	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID), opsID)
 
 	if !xl.isUploadIDExists(bucket, object, uploadID) {
 		return InvalidUploadID{UploadID: uploadID}
