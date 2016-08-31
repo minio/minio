@@ -29,7 +29,7 @@ func TestRepeatPutObjectPart(t *testing.T) {
 	var disks []string
 	var err error
 
-	objLayer, disks, err = getXLObjectLayer()
+	objLayer, disks, err = prepareXL()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +78,7 @@ func TestXLDeleteObjectBasic(t *testing.T) {
 	}
 
 	// Create an instance of xl backend
-	xl, fsDirs, err := getXLObjectLayer()
+	xl, fsDirs, err := prepareXL()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,7 +109,7 @@ func TestXLDeleteObjectBasic(t *testing.T) {
 
 func TestXLDeleteObjectDiskNotFound(t *testing.T) {
 	// Create an instance of xl backend.
-	obj, fsDirs, err := getXLObjectLayer()
+	obj, fsDirs, err := prepareXL()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,7 +156,7 @@ func TestXLDeleteObjectDiskNotFound(t *testing.T) {
 
 func TestGetObjectNoQuorum(t *testing.T) {
 	// Create an instance of xl backend.
-	obj, fsDirs, err := getXLObjectLayer()
+	obj, fsDirs, err := prepareXL()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,7 +203,7 @@ func TestGetObjectNoQuorum(t *testing.T) {
 
 func TestPutObjectNoQuorum(t *testing.T) {
 	// Create an instance of xl backend.
-	obj, fsDirs, err := getXLObjectLayer()
+	obj, fsDirs, err := prepareXL()
 	if err != nil {
 		t.Fatal(err)
 	}

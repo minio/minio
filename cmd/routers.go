@@ -25,6 +25,12 @@ import (
 	router "github.com/gorilla/mux"
 )
 
+func newObjectLayerFn() ObjectLayer {
+	objLayerMutex.Lock()
+	defer objLayerMutex.Unlock()
+	return globalObjectAPI
+}
+
 // newObjectLayer - initialize any object layer depending on the number of disks.
 func newObjectLayer(disks, ignoredDisks []string) (ObjectLayer, error) {
 	if len(disks) == 1 {
@@ -37,54 +43,43 @@ func newObjectLayer(disks, ignoredDisks []string) (ObjectLayer, error) {
 	if err == errXLWriteQuorum {
 		return objAPI, errors.New("Disks are different with last minio server run.")
 	}
-	return objAPI, err
-}
-
-func newObjectLayerFactory(disks, ignoredDisks []string) func() ObjectLayer {
-	var objAPI ObjectLayer
-	// FIXME: This needs to be go-routine safe.
-	return func() ObjectLayer {
-		var err error
-		if objAPI != nil {
-			return objAPI
-		}
-
-		// Acquire a distributed lock to ensure only one of the nodes
-		// initializes the format.json.
-		nsMutex.Lock(minioMetaBucket, formatConfigFile)
-		defer nsMutex.Unlock(minioMetaBucket, formatConfigFile)
-		objAPI, err = newObjectLayer(disks, ignoredDisks)
-		if err != nil {
-			errorIf(err, "Unable to initialize object layer.")
-			// Purposefully do not return error, just return nil.
-			return nil
-		}
-		// Migrate bucket policy from configDir to .minio.sys/buckets/
-		err = migrateBucketPolicyConfig(objAPI)
+	// Migrate bucket policy from configDir to .minio.sys/buckets/
+	err = migrateBucketPolicyConfig(objAPI)
+	if err != nil {
 		errorIf(err, "Unable to migrate bucket policy from config directory")
-
-		err = cleanupOldBucketPolicyConfigs()
-		errorIf(err, "Unable to clean up bucket policy from config directory.")
-
-		// Register the callback that should be called when the process shuts down.
-		globalShutdownCBs.AddObjectLayerCB(func() errCode {
-			if sErr := objAPI.Shutdown(); sErr != nil {
-				return exitFailure
-			}
-			return exitSuccess
-		})
-
-		// Initialize a new event notifier.
-		err = initEventNotifier(objAPI)
-		errorIf(err, "Unable to initialize event notification.")
-
-		// Initialize and load bucket policies.
-		err = initBucketPolicies(objAPI)
-		errorIf(err, "Unable to load all bucket policies.")
-
-		// Success.
-		return objAPI
+		return nil, err
 	}
+
+	err = cleanupOldBucketPolicyConfigs()
+	if err != nil {
+		errorIf(err, "Unable to clean up bucket policy from config directory.")
+		return nil, err
+	}
+
+	// Register the callback that should be called when the process shuts down.
+	globalShutdownCBs.AddObjectLayerCB(func() errCode {
+		if sErr := objAPI.Shutdown(); sErr != nil {
+			return exitFailure
+		}
+		return exitSuccess
+	})
+
+	// Initialize a new event notifier.
+	err = initEventNotifier(objAPI)
+	if err != nil {
+		errorIf(err, "Unable to initialize event notification.")
+		return nil, err
+	}
+
+	// Initialize and load bucket policies.
+	err = initBucketPolicies(objAPI)
+	if err != nil {
+		errorIf(err, "Unable to load all bucket policies.")
+		return nil, err
+	}
+
+	// Success.
+	return objAPI, nil
 }
 
 // configureServer handler returns final handler for the http server.
@@ -97,7 +92,6 @@ func configureServerHandler(srvCmdConfig serverCmdConfig) http.Handler {
 	err = initGracefulShutdown(os.Exit)
 	fatalIf(err, "Unable to initialize graceful shutdown operation")
 
-	newObjectLayerFn := newObjectLayerFactory(srvCmdConfig.disks, srvCmdConfig.ignoredDisks)
 	// Initialize API.
 	apiHandlers := objectAPIHandlers{
 		ObjectAPI: newObjectLayerFn,
