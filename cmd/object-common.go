@@ -183,7 +183,7 @@ func xlHouseKeeping(storageDisks []StorageAPI) error {
 
 			// Cleanup all temp entries upon start.
 			err := cleanupDir(disk, minioMetaBucket, tmpMetaPrefix)
-			if err != nil {
+			if err != nil && err != errDiskNotFound {
 				errs[index] = err
 			}
 		}(index, disk)
