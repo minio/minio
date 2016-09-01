@@ -23,21 +23,27 @@ import (
 	"github.com/minio/cli"
 )
 
+var shutdownFlags = []cli.Flag{
+	cli.BoolFlag{
+		Name:  "restart",
+		Usage: "Restart the server.",
+	},
+}
+
 var shutdownCmd = cli.Command{
 	Name:   "shutdown",
 	Usage:  "Shutdown or restart the server.",
 	Action: shutdownControl,
-	Flags: []cli.Flag{
-		cli.BoolFlag{
-			Name:  "restart",
-			Usage: "Restart the server.",
-		},
-	},
+	Flags:  append(shutdownFlags, globalFlags...),
 	CustomHelpTemplate: `NAME:
   minio control {{.Name}} - {{.Usage}}
 
 USAGE:
   minio control {{.Name}} http://localhost:9000/
+
+FLAGS:
+  {{range .Flags}}{{.}}
+  {{end}}
 
 EXAMPLES:
   1. Shutdown the server:
