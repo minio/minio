@@ -28,10 +28,19 @@ import (
 
 var (
 	// global flags for minio.
-	minioFlags = []cli.Flag{
+	globalFlags = []cli.Flag{
 		cli.BoolFlag{
 			Name:  "help, h",
 			Usage: "Show help.",
+		},
+		cli.StringFlag{
+			Name:  "config-dir, C",
+			Value: mustGetConfigPath(),
+			Usage: "Path to configuration folder.",
+		},
+		cli.BoolFlag{
+			Name:  "quiet",
+			Usage: "Suppress chatty output.",
 		},
 	}
 )
@@ -116,7 +125,7 @@ func registerApp() *cli.App {
 	app.Author = "Minio.io"
 	app.Usage = "Cloud Storage Server."
 	app.Description = `Minio is an Amazon S3 compatible object storage server. Use it to store photos, videos, VMs, containers, log files, or any blob of data as objects.`
-	app.Flags = append(minioFlags, globalFlags...)
+	app.Flags = globalFlags
 	app.Commands = commands
 	app.CustomAppHelpTemplate = minioHelpTemplate
 	app.CommandNotFound = func(ctx *cli.Context, command string) {

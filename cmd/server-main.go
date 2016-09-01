@@ -29,20 +29,23 @@ import (
 )
 
 var srvConfig serverCmdConfig
-var serverCmd = cli.Command{
-	Name:  "server",
-	Usage: "Start object storage server.",
-	Flags: []cli.Flag{
-		cli.StringFlag{
-			Name:  "address",
-			Value: ":9000",
-			Usage: "Specify custom server \"ADDRESS:PORT\", defaults to \":9000\".",
-		},
-		cli.StringFlag{
-			Name:  "ignore-disks",
-			Usage: "Specify comma separated list of disks that are offline.",
-		},
+
+var serverFlags = []cli.Flag{
+	cli.StringFlag{
+		Name:  "address",
+		Value: ":9000",
+		Usage: "Specify custom server \"ADDRESS:PORT\", defaults to \":9000\".",
 	},
+	cli.StringFlag{
+		Name:  "ignore-disks",
+		Usage: "Specify comma separated list of disks that are offline.",
+	},
+}
+
+var serverCmd = cli.Command{
+	Name:   "server",
+	Usage:  "Start object storage server.",
+	Flags:  append(serverFlags, globalFlags...),
 	Action: serverMain,
 	CustomHelpTemplate: `NAME:
   minio {{.Name}} - {{.Usage}}
