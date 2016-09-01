@@ -97,11 +97,16 @@ var lockCmd = cli.Command{
 	Name:   "lock",
 	Usage:  "info about the locks in the node.",
 	Action: lockControl,
+	Flags:  globalFlags,
 	CustomHelpTemplate: `NAME:
   minio control {{.Name}} - {{.Usage}}
 
 USAGE:
   minio control {{.Name}} http://localhost:9000/
+
+FLAGS:
+  {{range .Flags}}{{.}}
+  {{end}}
 
 EAMPLES:
   1. Get all the info about the blocked/held locks in the node:

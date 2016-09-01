@@ -25,15 +25,25 @@ var versionCmd = cli.Command{
 	Name:   "version",
 	Usage:  "Print version.",
 	Action: mainVersion,
+	Flags:  globalFlags,
 	CustomHelpTemplate: `NAME:
    minio {{.Name}} - {{.Usage}}
 
 USAGE:
-   minio {{.Name}} {{if .Description}}
+   minio {{.Name}}
+
+FLAGS:
+  {{range .Flags}}{{.}}
+  {{end}}
+
 `,
 }
 
 func mainVersion(ctx *cli.Context) {
+	if len(ctx.Args()) != 0 {
+		cli.ShowCommandHelpAndExit(ctx, "version", 1)
+	}
+
 	console.Println("Version: " + Version)
 	console.Println("Release-Tag: " + ReleaseTag)
 	console.Println("Commit-ID: " + CommitID)
