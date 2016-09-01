@@ -29,11 +29,16 @@ var healCmd = cli.Command{
 	Name:   "heal",
 	Usage:  "To heal objects.",
 	Action: healControl,
+	Flags:  globalFlags,
 	CustomHelpTemplate: `NAME:
   minio control {{.Name}} - {{.Usage}}
 
 USAGE:
   minio control {{.Name}}
+
+FLAGS:
+  {{range .Flags}}{{.}}
+  {{end}}
 
 EXAMPLES:
   1. Heal an object.
