@@ -26,6 +26,8 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+
+	"github.com/pkg/profile"
 )
 
 // xmlDecoder provide decoded value in xml.
@@ -154,8 +156,32 @@ const (
 	shutdownRestart
 )
 
+// Starts a profiler returns nil if profiler is not enabled, caller needs to handle this.
+func startProfiler(profiler string) interface {
+	Stop()
+} {
+	// Set ``MINIO_PROFILE_DIR`` to the directory where profiling information should be persisted
+	profileDir := os.Getenv("MINIO_PROFILE_DIR")
+	// Enable profiler if ``MINIO_PROFILER`` is set. Supported options are [cpu, mem, block].
+	switch profiler {
+	case "cpu":
+		return profile.Start(profile.CPUProfile, profile.NoShutdownHook, profile.ProfilePath(profileDir))
+	case "mem":
+		return profile.Start(profile.MemProfile, profile.NoShutdownHook, profile.ProfilePath(profileDir))
+	case "block":
+		return profile.Start(profile.BlockProfile, profile.NoShutdownHook, profile.ProfilePath(profileDir))
+	default:
+		return nil
+	}
+}
+
 // Global shutdown signal channel.
 var globalShutdownSignalCh = make(chan shutdownSignal, 1)
+
+// Global profiler to be used by shutdown go-routine.
+var globalProfiler interface {
+	Stop()
+}
 
 // Start to monitor shutdownSignal to execute shutdown callbacks
 func startMonitorShutdownSignal(onExitFn onExitFunc) error {
@@ -163,8 +189,11 @@ func startMonitorShutdownSignal(onExitFn onExitFunc) error {
 	if onExitFn == nil {
 		return errInvalidArgument
 	}
+
+	// Start listening on shutdown signal.
 	go func() {
 		defer close(globalShutdownSignalCh)
+
 		// Monitor signals.
 		trapCh := signalTrap(os.Interrupt, syscall.SIGTERM)
 		for {
@@ -177,6 +206,10 @@ func startMonitorShutdownSignal(onExitFn onExitFunc) error {
 				for _, callback := range globalShutdownCBs.GetObjectLayerCBs() {
 					exitCode := callback()
 					if exitCode != exitSuccess {
+						// If global profiler is set stop before we exit.
+						if globalProfiler != nil {
+							globalProfiler.Stop()
+						}
 						onExitFn(int(exitCode))
 					}
 
@@ -185,6 +218,10 @@ func startMonitorShutdownSignal(onExitFn onExitFunc) error {
 				for _, callback := range globalShutdownCBs.GetGenericCBs() {
 					exitCode := callback()
 					if exitCode != exitSuccess {
+						// If global profiler is set stop before we exit.
+						if globalProfiler != nil {
+							globalProfiler.Stop()
+						}
 						onExitFn(int(exitCode))
 					}
 				}
@@ -201,14 +238,18 @@ func startMonitorShutdownSignal(onExitFn onExitFunc) error {
 					if err != nil {
 						errorIf(errors.New("Unable to reboot."), err.Error())
 					}
+
+					// If global profiler is set stop before we exit.
+					if globalProfiler != nil {
+						globalProfiler.Stop()
+					}
+
 					// Successfully forked.
 					onExitFn(int(exitSuccess))
 				}
 
-				// Enable profiler if ``MINIO_PROFILER`` is set.
-				switch os.Getenv("MINIO_PROFILER") {
-				case "cpu", "mem", "block":
-					// Stop any running profiler.
+				// If global profiler is set stop before we exit.
+				if globalProfiler != nil {
 					globalProfiler.Stop()
 				}
 
