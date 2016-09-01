@@ -30,10 +30,6 @@ func (xl xlObjects) MakeBucket(bucket string) error {
 	if !IsValidBucketName(bucket) {
 		return BucketNameInvalid{Bucket: bucket}
 	}
-	// Verify if bucket is found.
-	if xl.isBucketExist(bucket) {
-		return toObjectErr(errVolumeExists, bucket)
-	}
 
 	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
 	// used for instrumentation on locks.
@@ -161,13 +157,6 @@ func (xl xlObjects) getBucketInfo(bucketName string) (bucketInfo BucketInfo, err
 
 // Checks whether bucket exists.
 func (xl xlObjects) isBucketExist(bucket string) bool {
-	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
-	// used for instrumentation on locks.
-	opsID := getOpsID()
-
-	nsMutex.RLock(bucket, "", opsID)
-	defer nsMutex.RUnlock(bucket, "", opsID)
-
 	// Check whether bucket exists.
 	_, err := xl.getBucketInfo(bucket)
 	if err != nil {
@@ -261,10 +250,6 @@ func (xl xlObjects) DeleteBucket(bucket string) error {
 	if !IsValidBucketName(bucket) {
 		return BucketNameInvalid{Bucket: bucket}
 	}
-	// Verify if bucket is found.
-	if !xl.isBucketExist(bucket) {
-		return BucketNotFound{Bucket: bucket}
-	}
 
 	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
 	// used for instrumentation on locks.
@@ -316,5 +301,7 @@ func (xl xlObjects) DeleteBucket(bucket string) error {
 	}); reducedErr != nil {
 		return toObjectErr(reducedErr, bucket)
 	}
+
+	// Success.
 	return nil
 }
