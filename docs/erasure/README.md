@@ -26,7 +26,7 @@ Minio's erasure coded backend uses high speed [BLAKE2](https://blog.minio.io/acc
 
 Minio server runs on a variety of hardware, operating systems and virtual/container environments. 
 
-Minio erasure code backend is limited by design to a minimum of 6 drives and a maximum of 16 drives. The hard limit of 16 drives comes from operational experience. Failure domain becomes too large beyond 16 drives. If you need to scale beyond 16 drives, you may run multiple instances of Minio server on different ports. 
+Minio erasure code backend is limited by design to a minimum of 4 drives and a maximum of 16 drives. The hard limit of 16 drives comes from operational experience. Failure domain becomes too large beyond 16 drives. If you need to scale beyond 16 drives, you may run multiple instances of Minio server on different ports. 
 
 #### Reference Physical Hardware: 
 
