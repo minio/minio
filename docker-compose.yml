@@ -1,0 +1,46 @@
+version: '2'
+
+# starts 4 docker containers running minio server instances. Each
+# minio server's web interface will be accessible on the host at port
+# 9001 through 9004.
+services:
+  minio1:
+    image: minio/minio
+    ports:
+      - "9001:9000"
+    volumes:
+      - /mnt/export/minio1:/export
+    environment:
+      MINIO_ACCESS_KEY: abcd1
+      MINIO_SECRET_KEY: abcd1234
+    command: minio1:/export minio2:/export minio3:/export minio4:/export
+  minio2:
+    image: minio/minio
+    ports:
+      - "9002:9000"
+    volumes:
+      - /mnt/export/minio2:/export
+    environment:
+      MINIO_ACCESS_KEY: abcd1
+      MINIO_SECRET_KEY: abcd1234
+    command: minio1:/export minio2:/export minio3:/export minio4:/export
+  minio3:
+    image: minio/minio
+    ports:
+      - "9003:9000"
+    volumes:
+      - /mnt/export/minio3:/export
+    environment:
+      MINIO_ACCESS_KEY: abcd1
+      MINIO_SECRET_KEY: abcd1234
+    command: minio1:/export minio2:/export minio3:/export minio4:/export
+  minio4:
+    image: minio/minio
+    ports:
+      - "9004:9000"
+    volumes:
+      - /mnt/export/minio4:/export
+    environment:
+      MINIO_ACCESS_KEY: abcd1
+      MINIO_SECRET_KEY: abcd1234
+    command: minio1:/export minio2:/export minio3:/export minio4:/export

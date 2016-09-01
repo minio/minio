@@ -12,7 +12,7 @@ docker run -p 9000:9000 minio/minio /export
 
 ## 2. Run One Minio Docker Container
 
-Minio container requires a persistent volume to store configuration and application data. Following command maps local persistent directories from the host OS to virtual config `~/.minio` and export `/export` directories. 
+Minio container requires a persistent volume to store configuration and application data. Following command maps local persistent directories from the host OS to virtual config `~/.minio` and export `/export` directories.
 
 ```sh
 
@@ -40,29 +40,14 @@ docker run -p 9000:9000 --name minio1 \
 
 ## 4. Run Minio in clustered mode
 
-Let's consider that we need to run 4 minio servers inside different docker instances.
+Let's consider that we need to run 4 minio servers inside different docker containers. The `docker-compose.yml` file in the root of the project sets this up using the [docker-compose](https://docs.docker.com/compose/) tool.
 
-### Prepare and start Minio docker instances
-```sh
-$ docker run -d --name=minio1 -e "MINIO_ACCESS_KEY=abcde" -e "MINIO_SECRET_KEY=secret00" -it -v/mnt/export/minio1:/export minio/minio
-$ docker run -d --name=minio2 -e "MINIO_ACCESS_KEY=abcde" -e "MINIO_SECRET_KEY=secret00" -it -v/mnt/export/minio2:/export minio/minio
-$ docker run -d --name=minio3 -e "MINIO_ACCESS_KEY=abcde" -e "MINIO_SECRET_KEY=secret00" -it -v/mnt/export/minio3:/export minio/minio
-$ docker run -d --name=minio4 -e "MINIO_ACCESS_KEY=abcde" -e "MINIO_SECRET_KEY=secret00" -it -v/mnt/export/minio4:/export minio/minio
+### Start Minio docker instances
+
+From the root directory of the project, run:
+
+``` shell
+$ docker-compose up
 ```
 
-### Get docker instances IP addresses:
-```sh
-$ docker ps -q | xargs -n 1 docker inspect  --format '{{ .NetworkSettings.IPAddress }}'
-172.17.0.2
-172.17.0.3
-172.17.0.4
-172.17.0.5
-```
-
-### Run all minio instances
-```sh
-$ docker exec -d minio1 minio server 172.17.0.2:/export 172.17.0.3:/export 172.17.0.4:/export 172.17.0.5:/export
-$ docker exec -d minio2 minio server 172.17.0.2:/export 172.17.0.3:/export 172.17.0.4:/export 172.17.0.5:/export
-$ docker exec -d minio3 minio server 172.17.0.2:/export 172.17.0.3:/export 172.17.0.4:/export 172.17.0.5:/export
-$ docker exec -d minio4 minio server 172.17.0.2:/export 172.17.0.3:/export 172.17.0.4:/export 172.17.0.5:/export
-```
+Each instance's minio web-server is accessible on the host at ports 9001 through 9004, so you may access the first one at http://localhost:9001/
