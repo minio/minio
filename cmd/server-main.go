@@ -73,22 +73,22 @@ EXAMPLES:
       $ minio {{.Name}} C:\MyShare
 
   4. Start minio server on 12 disks to enable erasure coded layer with 6 data and 6 parity.
-      $ minio {{.Name}} /mnt/export1/backend /mnt/export2/backend /mnt/export3/backend /mnt/export4/backend \
-          /mnt/export5/backend /mnt/export6/backend /mnt/export7/backend /mnt/export8/backend /mnt/export9/backend \
-          /mnt/export10/backend /mnt/export11/backend /mnt/export12/backend
+      $ minio {{.Name}} /mnt/export1/ /mnt/export2/ /mnt/export3/ /mnt/export4/ \
+          /mnt/export5/ /mnt/export6/ /mnt/export7/ /mnt/export8/ /mnt/export9/ \
+          /mnt/export10/ /mnt/export11/ /mnt/export12/
 
   5. Start minio server on 12 disks while ignoring two disks for initialization.
-      $ minio {{.Name}} --ignore-disks=/mnt/export1/backend,/mnt/export2/backend /mnt/export1/backend \
-          /mnt/export2/backend /mnt/export3/backend /mnt/export4/backend /mnt/export5/backend /mnt/export6/backend \
-          /mnt/export7/backend /mnt/export8/backend /mnt/export9/backend /mnt/export10/backend /mnt/export11/backend \
-          /mnt/export12/backend
+      $ minio {{.Name}} --ignore-disks=/mnt/export1/ /mnt/export1/ /mnt/export2/ \
+          /mnt/export3/ /mnt/export4/ /mnt/export5/ /mnt/export6/ /mnt/export7/ \ 
+	  /mnt/export8/ /mnt/export9/ /mnt/export10/ /mnt/export11/ /mnt/export12/
 
   6. Start minio server with 4 remote disks on all remote nodes. You need to execute the same command on all nodes
      192.168.1.11, 192.168.1.12, 192.168.1.13 and 192.168.1.14.
       $ export MINIO_ACCESS_KEY=minio
       $ export MINIO_SECRET_KEY=miniostorage
-      $ minio {{.Name}} 192.168.1.11:/mnt/export1/backend 192.168.1.12:/mnt/export1/backend \
-          192.168.1.13:/mnt/export1/backend 192.168.1.14:/mnt/export1/backend
+      $ minio {{.Name}} 192.168.1.11:/mnt/export/ 192.168.1.12:/mnt/export/ \
+          192.168.1.13:/mnt/export/ 192.168.1.14:/mnt/export/
+
 `,
 }
 
