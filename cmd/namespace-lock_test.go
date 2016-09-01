@@ -234,7 +234,7 @@ func TestLockStats(t *testing.T) {
 		},
 		// Test case - 6.
 		// Case where in the first 5 read locks are released, but 2 write locks are
-		// blocked waiting for the remaining 5 read locks locks to be released (10 read locks were held intially).
+		// blocked waiting for the remaining 5 read locks locks to be released (10 read locks were held initially).
 		// We check the entry for the first blocked write call here.
 		{
 

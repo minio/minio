@@ -88,7 +88,7 @@ func (s *TestRPCControllerSuite) TestRPCControlLock(c *C) {
 			expectedVolPathBlockCount:   0,
 		},
 		// Test case 2.
-		// Testing the existance of entry for the last read lock (read lock with opsID "9").
+		// Testing the existence of entry for the last read lock (read lock with opsID "9").
 		{
 
 			volume:     "my-bucket",
@@ -203,11 +203,11 @@ func (s *TestRPCControllerSuite) TestRPCControlLock(c *C) {
 	// expected lock info.
 	expectedLockStats := expectedResult[0]
 	// verify the actual lock info with the expected one.
-	// verify the existance entry for first read lock (read lock with opsID "0").
+	// verify the existence entry for first read lock (read lock with opsID "0").
 	verifyRPCLockInfoResponse(expectedLockStats, *reply, c, 1)
 	expectedLockStats = expectedResult[1]
 	// verify the actual lock info with the expected one.
-	// verify the existance entry for last read lock (read lock with opsID "9").
+	// verify the existence entry for last read lock (read lock with opsID "9").
 	verifyRPCLockInfoResponse(expectedLockStats, *reply, c, 2)
 
 	// now hold a write lock in a different go routine and it should block since 10 read locks are
@@ -256,7 +256,7 @@ func (s *TestRPCControllerSuite) TestRPCControlLock(c *C) {
 		nsMutex.RUnlock("my-bucket", "my-object", strconv.Itoa(i))
 	}
 	wg.Wait()
-	// Since all the locks are released. There shouldnt be any entry in the lock info.
+	// Since all the locks are released. There should not be any entry in the lock info.
 	// and all the counters should be set to 0.
 	reply = &SystemLockState{}
 	// Call the lock instrumentation RPC end point.
