@@ -32,9 +32,8 @@ Source installation is only intended for developers and advanced users. If you d
 
 ```sh
 
-$ go get -d github.com/minio/minio
-$ cd $GOPATH/src/github.com/minio/minio
-$ make
+$ go get -u github.com/minio/minio
+
 
 ```
 
