@@ -34,7 +34,7 @@ type lockStateCase struct {
 
 	expectedGlobalLockCount  int // Total number of locks held across the system, includes blocked + held locks.
 	expectedBlockedLockCount int // Total blocked lock across the system.
-	expectedRunningLockCount int // Total succesfully held locks (non-blocking).
+	expectedRunningLockCount int // Total successfully held locks (non-blocking).
 	// expected lock statu for given <volume, path> pair.
 	expectedVolPathLockCount    int // Total locks held for given <volume,path> pair, includes blocked locks.
 	expectedVolPathRunningCount int // Total succcesfully held locks for given <volume, path> pair.
@@ -601,7 +601,7 @@ func TestNsLockMapDeleteLockInfoEntryForOps(t *testing.T) {
 	}
 
 	// Case - 3.
-	// Lock state is set to Running and then an attempt to delete the info for non-existant opsID done.
+	// Lock state is set to Running and then an attempt to delete the info for non-existent opsID done.
 	nsMutex.lockMapMutex.Lock()
 	err := nsMutex.statusNoneToBlocked(param, testCases[0].lockOrigin, testCases[0].opsID, testCases[0].readLock)
 	if err != nil {
@@ -612,9 +612,9 @@ func TestNsLockMapDeleteLockInfoEntryForOps(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Setting lock status to Running failed: <ERROR> %s", err)
 	}
-	actualErr = nsMutex.deleteLockInfoEntryForOps(param, "non-existant-OpsID")
+	actualErr = nsMutex.deleteLockInfoEntryForOps(param, "non-existent-OpsID")
 
-	expectedOpsIDErr := LockInfoOpsIDNotFound{param.volume, param.path, "non-existant-OpsID"}
+	expectedOpsIDErr := LockInfoOpsIDNotFound{param.volume, param.path, "non-existent-OpsID"}
 	if actualErr != expectedOpsIDErr {
 		t.Fatalf("Errors mismatch: Expected \"%s\", got \"%s\"", expectedOpsIDErr, actualErr)
 	}
