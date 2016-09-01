@@ -22,6 +22,7 @@ import "github.com/minio/cli"
 var controlCmd = cli.Command{
 	Name:   "control",
 	Usage:  "Control and manage minio server.",
+	Flags:  globalFlags,
 	Action: mainControl,
 	Subcommands: []cli.Command{
 		lockCmd,
