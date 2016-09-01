@@ -133,9 +133,9 @@ func prepForInit(disks []string, sErrs []error, diskCount int) InitActions {
 	// Already formatted, proceed to initialization of object layer.
 	if disksFormatted == diskCount {
 		return InitObjectLayer
-	} else if disksFormatted > quorum && disksFormatted+disksOffline == diskCount {
+	} else if disksFormatted >= quorum && disksFormatted+disksOffline == diskCount {
 		return InitObjectLayer
-	} else if disksFormatted > quorum {
+	} else if disksFormatted >= quorum {
 		// TODO: Print minioctl heal command
 		return InitObjectLayer
 	}
@@ -163,7 +163,6 @@ func retryFormattingDisks(disks []string, storageDisks []StorageAPI) ([]StorageA
 		case <-time.After(nextBackoff * time.Second):
 			// Attempt to load all `format.json`.
 			_, sErrs := loadAllFormats(storageDisks)
-
 			switch prepForInit(disks, sErrs, len(storageDisks)) {
 			case Abort:
 				err = errCorruptedFormat
