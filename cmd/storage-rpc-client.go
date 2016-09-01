@@ -18,6 +18,8 @@ package cmd
 
 import (
 	"io"
+	"net"
+	"net/rpc"
 	"path"
 	"strconv"
 	"strings"
@@ -42,11 +44,19 @@ func toStorageErr(err error) error {
 	if err == nil {
 		return nil
 	}
+
+	switch err.(type) {
+	case *net.OpError:
+		return errDiskNotFound
+	}
+
 	switch err.Error() {
 	case io.EOF.Error():
 		return io.EOF
 	case io.ErrUnexpectedEOF.Error():
 		return io.ErrUnexpectedEOF
+	case rpc.ErrShutdown.Error():
+		return errDiskNotFound
 	case errUnexpected.Error():
 		return errUnexpected
 	case errDiskFull.Error():
