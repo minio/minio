@@ -255,7 +255,7 @@ func (n *nsLockMap) deleteLockInfoEntryForOps(param nsParam, operationID string)
 			// decrease the global running and lock reference counter.
 			n.runningLockCounter--
 			n.globalLockCounter--
-			// decrease the lock referene counter for the lock info for given <volume,path> pair.
+			// decrease the lock referee counter for the lock info for given <volume,path> pair.
 			// decrease the running operation number. Its assumed that the operation is over once an attempt to release the lock is made.
 			infoMap.running--
 			// decrease the total reference count of locks jeld on <volume,path> pair.
