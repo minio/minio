@@ -297,12 +297,15 @@ func isDistributedSetup(disks []string) (isDist bool) {
 // Format disks before initialization object layer.
 func formatDisks(disks, ignoredDisks []string) error {
 	storageDisks, err := waitForFormattingDisks(disks, ignoredDisks)
-	for i := range storageDisks {
-		switch storage := storageDisks[i].(type) {
+	for _, storage := range storageDisks {
+		if storage == nil {
+			continue
+		}
+		switch store := storage.(type) {
 		// Closing associated TCP connections since
 		// []StorageAPI is garbage collected eventually.
 		case networkStorage:
-			storage.rpcClient.Close()
+			store.rpcClient.Close()
 		}
 	}
 	if err != nil {
@@ -310,13 +313,13 @@ func formatDisks(disks, ignoredDisks []string) error {
 	}
 	if isLocalStorage(disks[0]) {
 		// notify every one else that they can try init again.
-		for i := range storageDisks {
-			switch storage := storageDisks[i].(type) {
+		for _, storage := range storageDisks {
+			switch store := storage.(type) {
 			// Closing associated TCP connections since
 			// []StorageAPI is garage collected eventually.
 			case networkStorage:
 				var reply GenericReply
-				_ = storage.rpcClient.Call("Storage.TryInitHandler", &GenericArgs{}, &reply)
+				_ = store.rpcClient.Call("Storage.TryInitHandler", &GenericArgs{}, &reply)
 			}
 		}
 	}
