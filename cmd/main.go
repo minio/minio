@@ -140,6 +140,11 @@ func checkMainSyntax(c *cli.Context) {
 	}
 }
 
+// Global profiler to be cleanly set and saved inside graceful shutdown.
+var globalProfiler interface {
+	Stop()
+}
+
 // Main - main for minio server.
 func Main() {
 	app := registerApp()
@@ -181,11 +186,11 @@ func Main() {
 	// Enable profiler if ``MINIO_PROFILER`` is set. Supported options are [cpu, mem, block].
 	switch os.Getenv("MINIO_PROFILER") {
 	case "cpu":
-		defer profile.Start(profile.CPUProfile, profile.ProfilePath(profileDir)).Stop()
+		globalProfiler = profile.Start(profile.CPUProfile, profile.ProfilePath(profileDir))
 	case "mem":
-		defer profile.Start(profile.MemProfile, profile.ProfilePath(profileDir)).Stop()
+		globalProfiler = profile.Start(profile.MemProfile, profile.ProfilePath(profileDir))
 	case "block":
-		defer profile.Start(profile.BlockProfile, profile.ProfilePath(profileDir)).Stop()
+		globalProfiler = profile.Start(profile.BlockProfile, profile.ProfilePath(profileDir))
 	}
 
 	// Run the app - exit on error.

@@ -201,8 +201,18 @@ func startMonitorShutdownSignal(onExitFn onExitFunc) error {
 					if err != nil {
 						errorIf(errors.New("Unable to reboot."), err.Error())
 					}
+					// Successfully forked.
 					onExitFn(int(exitSuccess))
 				}
+
+				// Enable profiler if ``MINIO_PROFILER`` is set.
+				switch os.Getenv("MINIO_PROFILER") {
+				case "cpu", "mem", "block":
+					// Stop any running profiler.
+					globalProfiler.Stop()
+				}
+
+				// Exit as success if no errors.
 				onExitFn(int(exitSuccess))
 			}
 		}
