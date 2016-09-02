@@ -625,6 +625,9 @@ func testListBuckets(obj ObjectLayer, instanceType string, c TestErrHandler) {
 
 	// add three and test exists + prefix.
 	err = obj.MakeBucket("bucket22")
+	if err != nil {
+		c.Fatalf("%s: <ERROR> %s", instanceType, err)
+	}
 
 	buckets, err = obj.ListBuckets()
 	if err != nil {

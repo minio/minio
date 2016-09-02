@@ -1364,6 +1364,7 @@ func (s *TestSuiteCommon) TestListObjectsHandler(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	getContent, err := ioutil.ReadAll(response.Body)
+	c.Assert(err, IsNil)
 	c.Assert(strings.Contains(string(getContent), "<Key>bar</Key>"), Equals, true)
 
 	// create listObjectsV2 request with valid parameters
@@ -1377,6 +1378,7 @@ func (s *TestSuiteCommon) TestListObjectsHandler(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	getContent, err = ioutil.ReadAll(response.Body)
+	c.Assert(err, IsNil)
 	c.Assert(strings.Contains(string(getContent), "<Key>bar</Key>"), Equals, true)
 }
 
@@ -1944,6 +1946,7 @@ func (s *TestSuiteCommon) TestObjectMultipartAbort(c *C) {
 
 	// execute the HTTP request initiating the new multipart upload.
 	response, err = client.Do(request)
+	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	// parse the response body and obtain the new upload ID.
@@ -1961,6 +1964,7 @@ func (s *TestSuiteCommon) TestObjectMultipartAbort(c *C) {
 
 	// execute the HTTP request initiating the new multipart upload.
 	response, err = client.Do(request)
+	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	// parse the response body and obtain the new upload ID.
@@ -2177,6 +2181,7 @@ func (s *TestSuiteCommon) TestObjectMultipartListError(c *C) {
 	c.Assert(err, IsNil)
 	// execute the HTTP request initiating the new multipart upload.
 	response, err = client.Do(request)
+	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 	// parse the response body and obtain the new upload ID.
 	decoder := xml.NewDecoder(response.Body)

@@ -126,7 +126,9 @@ func TestXLDeleteObjectDiskNotFound(t *testing.T) {
 	object := "object"
 	// Create object "obj" under bucket "bucket".
 	_, err = obj.PutObject(bucket, object, int64(len("abcd")), bytes.NewReader([]byte("abcd")), nil)
-
+	if err != nil {
+		t.Fatal(err)
+	}
 	// for a 16 disk setup, quorum is 9. To simulate disks not found yet
 	// quorum is available, we remove disks leaving quorum disks behind.
 	for i := range xl.storageDisks[:7] {
