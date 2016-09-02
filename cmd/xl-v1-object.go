@@ -492,17 +492,17 @@ func renameObject(disks []StorageAPI, srcBucket, srcObject, dstBucket, dstObject
 // until EOF, erasure codes the data across all disk and additionally
 // writes `xl.json` which carries the necessary metadata for future
 // object operations.
-func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string) (md5Sum string, err error) {
+func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string) (objInfo ObjectInfo, err error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return "", traceError(BucketNameInvalid{Bucket: bucket})
+		return ObjectInfo{}, traceError(BucketNameInvalid{Bucket: bucket})
 	}
 	// Verify bucket exists.
 	if !xl.isBucketExist(bucket) {
-		return "", traceError(BucketNotFound{Bucket: bucket})
+		return ObjectInfo{}, traceError(BucketNotFound{Bucket: bucket})
 	}
 	if !IsValidObjectName(object) {
-		return "", traceError(ObjectNameInvalid{
+		return ObjectInfo{}, traceError(ObjectNameInvalid{
 			Bucket: bucket,
 			Object: object,
 		})
@@ -538,7 +538,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 		// Ignore error if cache is full, proceed to write the object.
 		if err != nil && err != objcache.ErrCacheFull {
 			// For any other error return here.
-			return "", toObjectErr(traceError(err), bucket, object)
+			return ObjectInfo{}, toObjectErr(traceError(err), bucket, object)
 		}
 	} else {
 		mw = md5Writer
@@ -568,14 +568,14 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	if err != nil {
 		// Create file failed, delete temporary object.
 		xl.deleteObject(minioMetaTmpBucket, tempObj)
-		return "", toObjectErr(err, minioMetaBucket, tempErasureObj)
+		return ObjectInfo{}, toObjectErr(err, minioMetaBucket, tempErasureObj)
 	}
 	// Should return IncompleteBody{} error when reader has fewer bytes
 	// than specified in request header.
 	if sizeWritten < size {
 		// Short write, delete temporary object.
 		xl.deleteObject(minioMetaTmpBucket, tempObj)
-		return "", IncompleteBody{}
+		return ObjectInfo{}, traceError(IncompleteBody{})
 	}
 
 	// For size == -1, perhaps client is sending in chunked encoding
@@ -608,7 +608,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 			// Incoming payload wrong, delete the temporary object.
 			xl.deleteObject(minioMetaTmpBucket, tempObj)
 			// Error return.
-			return "", toObjectErr(vErr, bucket, object)
+			return ObjectInfo{}, toObjectErr(traceError(vErr), bucket, object)
 		}
 	}
 
@@ -619,7 +619,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 			// MD5 mismatch, delete the temporary object.
 			xl.deleteObject(minioMetaTmpBucket, tempObj)
 			// Returns md5 mismatch.
-			return "", BadDigest{md5Hex, newMD5Hex}
+			return ObjectInfo{}, traceError(BadDigest{md5Hex, newMD5Hex})
 		}
 	}
 
@@ -636,7 +636,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	if xl.parentDirIsObject(bucket, path.Dir(object)) {
 		// Parent (in the namespace) is an object, delete temporary object.
 		xl.deleteObject(minioMetaTmpBucket, tempObj)
-		return "", toObjectErr(traceError(errFileAccessDenied), bucket, object)
+		return ObjectInfo{}, toObjectErr(traceError(errFileAccessDenied), bucket, object)
 	}
 
 	// Rename if an object already exists to temporary location.
@@ -647,7 +647,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 		// regardless of `xl.json` status and rolled back in case of errors.
 		err = renameObject(xl.storageDisks, bucket, object, minioMetaTmpBucket, newUniqueID, xl.writeQuorum)
 		if err != nil {
-			return "", toObjectErr(err, bucket, object)
+			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
 	}
 
@@ -672,13 +672,13 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 
 	// Write unique `xl.json` for each disk.
 	if err = writeUniqueXLMetadata(onlineDisks, minioMetaTmpBucket, tempObj, partsMetadata, xl.writeQuorum); err != nil {
-		return "", toObjectErr(err, bucket, object)
+		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
 	// Rename the successfully written temporary object to final location.
 	err = renameObject(onlineDisks, minioMetaTmpBucket, tempObj, bucket, object, xl.writeQuorum)
 	if err != nil {
-		return "", toObjectErr(err, bucket, object)
+		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
 	// Delete the temporary object.
@@ -690,8 +690,18 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 		newBuffer.Close()
 	}
 
-	// Return md5sum, successfully wrote object.
-	return newMD5Hex, nil
+	objInfo = ObjectInfo{
+		IsDir:           false,
+		Bucket:          bucket,
+		Name:            object,
+		Size:            xlMeta.Stat.Size,
+		ModTime:         xlMeta.Stat.ModTime,
+		MD5Sum:          xlMeta.Meta["md5Sum"],
+		ContentType:     xlMeta.Meta["content-type"],
+		ContentEncoding: xlMeta.Meta["content-encoding"],
+		UserDefined:     xlMeta.Meta,
+	}
+	return objInfo, nil
 }
 
 // deleteObject - wrapper for delete object, deletes an object from
