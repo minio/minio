@@ -623,6 +623,13 @@ func getDeleteObjectURL(endPoint, bucketName, objectName string) string {
 	return makeTestTargetURL(endPoint, bucketName, objectName, url.Values{})
 }
 
+// return URL for deleting multiple objects from a bucket.
+func getMultiDeleteObjectURL(endPoint, bucketName string) string {
+	queryValue := url.Values{}
+	queryValue.Set("delete", "")
+	return makeTestTargetURL(endPoint, bucketName, "", queryValue)
+}
+
 // return URL for HEAD on the object.
 func getHeadObjectURL(endPoint, bucketName, objectName string) string {
 	return makeTestTargetURL(endPoint, bucketName, objectName, url.Values{})

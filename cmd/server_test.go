@@ -309,6 +309,70 @@ func (s *TestSuiteCommon) TestDeleteBucketNotEmpty(c *C) {
 
 }
 
+func (s *TestSuiteCommon) TestDeleteMultipleObjects(c *C) {
+	// generate a random bucket name.
+	bucketName := getRandomBucketName()
+	// HTTP request to create the bucket.
+	request, err := newTestSignedRequest("PUT", getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
+	c.Assert(err, IsNil)
+
+	client := http.Client{}
+	// execute the request.
+	response, err := client.Do(request)
+	c.Assert(err, IsNil)
+	// assert the http response status code.
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	objectName := "prefix/myobject"
+	delObjReq := DeleteObjectsRequest{
+		Quiet: false,
+	}
+	for i := 0; i < 10; i++ {
+		// Obtain http request to upload object.
+		// object Name contains a prefix.
+		objName := fmt.Sprintf("%d/%s", i, objectName)
+		request, err = newTestSignedRequest("PUT", getPutObjectURL(s.endPoint, bucketName, objName),
+			0, nil, s.accessKey, s.secretKey)
+		c.Assert(err, IsNil)
+
+		client = http.Client{}
+		// execute the http request.
+		response, err = client.Do(request)
+		c.Assert(err, IsNil)
+		// assert the status of http response.
+		c.Assert(response.StatusCode, Equals, http.StatusOK)
+		// Append all objects.
+		delObjReq.Objects = append(delObjReq.Objects, ObjectIdentifier{
+			ObjectName: objName,
+		})
+	}
+
+	// Marshal delete request.
+	deleteReqBytes, err := xml.Marshal(delObjReq)
+	c.Assert(err, IsNil)
+
+	// object name was "prefix/myobject", an attempt to delelte "prefix"
+	// Should not delete "prefix/myobject"
+	request, err = newTestSignedRequest("POST", getMultiDeleteObjectURL(s.endPoint, bucketName),
+		int64(len(deleteReqBytes)), bytes.NewReader(deleteReqBytes), s.accessKey, s.secretKey)
+	c.Assert(err, IsNil)
+	client = http.Client{}
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	var deleteResp = DeleteObjectsResponse{}
+	delRespBytes, err := ioutil.ReadAll(response.Body)
+	c.Assert(err, IsNil)
+	err = xml.Unmarshal(delRespBytes, &deleteResp)
+	c.Assert(err, IsNil)
+	for i := 0; i < 10; i++ {
+		c.Assert(deleteResp.DeletedObjects[i], DeepEquals, delObjReq.Objects[i])
+	}
+	c.Assert(len(deleteResp.Errors), Equals, 0)
+}
+
 // Tests delete object responses and success.
 func (s *TestSuiteCommon) TestDeleteObject(c *C) {
 	// generate a random bucket name.
