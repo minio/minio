@@ -200,12 +200,12 @@ func testMultipleObjectCreation(obj ObjectLayer, instanceType string, c TestErrH
 		objects[key] = []byte(randomString)
 		metadata := make(map[string]string)
 		metadata["md5Sum"] = expectedMD5Sumhex
-		var md5Sum string
-		md5Sum, err = obj.PutObject("bucket", key, int64(len(randomString)), bytes.NewBufferString(randomString), metadata)
+		var objInfo ObjectInfo
+		objInfo, err = obj.PutObject("bucket", key, int64(len(randomString)), bytes.NewBufferString(randomString), metadata)
 		if err != nil {
 			c.Fatalf("%s: <ERROR> %s", instanceType, err)
 		}
-		if md5Sum != expectedMD5Sumhex {
+		if objInfo.MD5Sum != expectedMD5Sumhex {
 			c.Errorf("Md5 Mismatch")
 		}
 	}
