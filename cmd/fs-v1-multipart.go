@@ -323,7 +323,7 @@ func appendParts(disk StorageAPI, bucket, object, uploadID, opsID string) {
 
 	fsAppendMeta, err := readFSMetadata(disk, minioMetaBucket, fsAppendMetaPath)
 	if err != nil {
-		if err != errFileNotFound {
+		if errorCause(err) != errFileNotFound {
 			return
 		}
 		fsAppendMeta = fsMeta
@@ -358,6 +358,7 @@ func appendParts(disk StorageAPI, bucket, object, uploadID, opsID string) {
 		}
 	}
 	// Path to the part that needs to be appended.
+	partPath = path.Join(mpartMetaPrefix, bucket, object, uploadID, part.Name)
 	offset := int64(0)
 	totalLeft := part.Size
 	buf := make([]byte, readSizeV1)
