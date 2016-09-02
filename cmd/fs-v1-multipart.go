@@ -303,6 +303,13 @@ func getFSAppendDataPath(uploadID string) string {
 
 // Append parts to fsAppendDataFile.
 func appendParts(disk StorageAPI, bucket, object, uploadID, opsID string) {
+	cleanupAppendPaths := func() {
+		// In case of any error, cleanup the append data and json files
+		// from the tmp so that we do not have any inconsistent append
+		// data/json files.
+		disk.DeleteFile(bucket, getFSAppendDataPath(uploadID))
+		disk.DeleteFile(bucket, getFSAppendMetaPath(uploadID))
+	}
 	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID)
 	// fs-append.json path
 	fsAppendMetaPath := getFSAppendMetaPath(uploadID)
@@ -324,6 +331,7 @@ func appendParts(disk StorageAPI, bucket, object, uploadID, opsID string) {
 	fsAppendMeta, err := readFSMetadata(disk, minioMetaBucket, fsAppendMetaPath)
 	if err != nil {
 		if errorCause(err) != errFileNotFound {
+			cleanupAppendPaths()
 			return
 		}
 		fsAppendMeta = fsMeta
@@ -342,21 +350,6 @@ func appendParts(disk StorageAPI, bucket, object, uploadID, opsID string) {
 
 	// Proceed to append "part"
 	fsAppendDataPath := getFSAppendDataPath(uploadID)
-	tmpDataPath := path.Join(tmpMetaPrefix, getUUID())
-	if part.Number != 1 {
-		// Move it to tmp location before appending so that we don't leave inconsitent data
-		// if server crashes during append operation.
-		err = disk.RenameFile(minioMetaBucket, fsAppendDataPath, minioMetaBucket, tmpDataPath)
-		if err != nil {
-			return
-		}
-		// Delete fs-append.json so that we don't leave a stale file if server crashes
-		// when the part is being appended to the tmp file.
-		err = disk.DeleteFile(minioMetaBucket, fsAppendMetaPath)
-		if err != nil {
-			return
-		}
-	}
 	// Path to the part that needs to be appended.
 	partPath = path.Join(mpartMetaPrefix, bucket, object, uploadID, part.Name)
 	offset := int64(0)
@@ -370,7 +363,8 @@ func appendParts(disk StorageAPI, bucket, object, uploadID, opsID string) {
 		var n int64
 		n, err = disk.ReadFile(minioMetaBucket, partPath, offset, buf[:curLeft])
 		if n > 0 {
-			if err = disk.AppendFile(minioMetaBucket, tmpDataPath, buf[:n]); err != nil {
+			if err = disk.AppendFile(minioMetaBucket, fsAppendDataPath, buf[:n]); err != nil {
+				cleanupAppendPaths()
 				return
 			}
 		}
@@ -378,17 +372,16 @@ func appendParts(disk StorageAPI, bucket, object, uploadID, opsID string) {
 			if err == io.EOF || err == io.ErrUnexpectedEOF {
 				break
 			}
+			cleanupAppendPaths()
 			return
 		}
 		offset += n
 		totalLeft -= n
 	}
-	// All good, the part has been appended to the tmp file, rename it back.
-	if err = disk.RenameFile(minioMetaBucket, tmpDataPath, minioMetaBucket, fsAppendDataPath); err != nil {
-		return
-	}
 	fsAppendMeta.AddObjectPart(part.Number, part.Name, part.ETag, part.Size)
+	// Overwrite previous fs-append.json
 	if err = writeFSMetadata(disk, minioMetaBucket, fsAppendMetaPath, fsAppendMeta); err != nil {
+		cleanupAppendPaths()
 		return
 	}
 	// If there are more parts that need to be appended to fsAppendDataFile
