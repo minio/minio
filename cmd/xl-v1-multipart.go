@@ -379,7 +379,7 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	xlMeta := pickValidXLMeta(partsMetadata, modTime)
 
 	onlineDisks = getOrderedDisks(xlMeta.Erasure.Distribution, onlineDisks)
-	partsMetadata = getOrderedPartsMetadata(xlMeta.Erasure.Distribution, partsMetadata)
+	_ = getOrderedPartsMetadata(xlMeta.Erasure.Distribution, partsMetadata)
 
 	// Need a unique name for the part being written in minioMetaBucket to
 	// accommodate concurrent PutObjectPart requests

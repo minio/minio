@@ -91,7 +91,7 @@ func TestByteErrors(t *testing.T) {
 		t.Errorf("Expected error, got %v", got)
 	}
 	// Empty string.
-	got, err = strconvBytes("")
+	_, err = strconvBytes("")
 	if err == nil {
 		t.Errorf("Expected error parsing nothing")
 	}
