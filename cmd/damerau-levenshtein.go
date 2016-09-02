@@ -44,9 +44,9 @@ func DamerauLevenshteinDistance(a string, b string) int {
 	for j := 0; j <= len(b); j++ {
 		d[0][j] = j
 	}
+	var cost int
 	for i := 1; i <= len(a); i++ {
 		for j := 1; j <= len(b); j++ {
-			cost := 0
 			if a[i-1] == b[j-1] {
 				cost = 0
 			} else {
