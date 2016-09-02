@@ -721,7 +721,7 @@ func TestNsLockMapDeleteLockInfoEntryForVolumePath(t *testing.T) {
 		t.Fatalf("Entry for <volume> %s, <path> %s should have existed.", param.volume, param.path)
 	}
 	// first delete the entry for the operation ID.
-	err = nsMutex.deleteLockInfoEntryForOps(param, testCases[0].opsID)
+	_ = nsMutex.deleteLockInfoEntryForOps(param, testCases[0].opsID)
 	actualErr = nsMutex.deleteLockInfoEntryForVolumePath(param)
 	if actualErr != nil {
 		t.Fatalf("Expected the error to be <nil>, but got <ERROR> %s", actualErr)

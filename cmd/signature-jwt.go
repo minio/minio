@@ -42,9 +42,6 @@ func newJWT(expiry time.Duration) (*JWT, error) {
 	if serverConfig == nil {
 		return nil, errors.New("Server not initialzed")
 	}
-	if expiry == 0 {
-		expiry = defaultTokenExpiry
-	}
 
 	// Save access, secret keys.
 	cred := serverConfig.GetCredential()

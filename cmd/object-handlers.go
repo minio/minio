@@ -349,10 +349,8 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	// Size of object.
 	size := objInfo.Size
 
-	// Save metadata.
-	metadata := make(map[string]string)
 	// Save other metadata if available.
-	metadata = objInfo.UserDefined
+	metadata := objInfo.UserDefined
 
 	// Do not set `md5sum` as CopyObject will not keep the
 	// same md5sum as the source.
