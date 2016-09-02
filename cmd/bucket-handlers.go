@@ -23,6 +23,7 @@ import (
 	"net/url"
 	"path"
 	"strings"
+	"sync"
 
 	mux "github.com/gorilla/mux"
 	"github.com/minio/minio-go/pkg/set"
@@ -240,24 +241,41 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		return
 	}
 
-	var deleteErrors []DeleteError
-	var deletedObjects []ObjectIdentifier
-	// Loop through all the objects and delete them sequentially.
-	for _, object := range deleteObjects.Objects {
-		err := api.ObjectAPI.DeleteObject(bucket, object.ObjectName)
-		if err == nil {
-			deletedObjects = append(deletedObjects, ObjectIdentifier{
-				ObjectName: object.ObjectName,
-			})
-		} else {
-			errorIf(err, "Unable to delete object.")
-			deleteErrors = append(deleteErrors, DeleteError{
-				Code:    errorCodeResponse[toAPIErrorCode(err)].Code,
-				Message: errorCodeResponse[toAPIErrorCode(err)].Description,
-				Key:     object.ObjectName,
-			})
-		}
+	var wg = &sync.WaitGroup{} // Allocate a new wait group.
+	var dErrs = make([]error, len(deleteObjects.Objects))
+
+	// Delete all requested objects in parallel.
+	for index, object := range deleteObjects.Objects {
+		wg.Add(1)
+		go func(i int, obj ObjectIdentifier) {
+			defer wg.Done()
+			dErr := api.ObjectAPI.DeleteObject(bucket, obj.ObjectName)
+			if dErr != nil {
+				dErrs[i] = dErr
+			}
+		}(index, object)
 	}
+	wg.Wait()
+
+	// Collect deleted objects and errors if any.
+	var deletedObjects []ObjectIdentifier
+	var deleteErrors []DeleteError
+	for index, err := range dErrs {
+		object := deleteObjects.Objects[index]
+		// Success deleted objects are collected separately.
+		if err == nil {
+			deletedObjects = append(deletedObjects, object)
+			continue
+		}
+		errorIf(err, "Unable to delete object. %s", object.ObjectName)
+		// Error during delete should be collected separately.
+		deleteErrors = append(deleteErrors, DeleteError{
+			Code:    errorCodeResponse[toAPIErrorCode(err)].Code,
+			Message: errorCodeResponse[toAPIErrorCode(err)].Description,
+			Key:     object.ObjectName,
+		})
+	}
+
 	// Generate response
 	response := generateMultiDeleteResponse(deleteObjects.Quiet, deletedObjects, deleteErrors)
 	encodedSuccessResponse := encodeResponse(response)
@@ -265,6 +283,22 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	setCommonHeaders(w)
 	// Write success response.
 	writeSuccessResponse(w, encodedSuccessResponse)
+
+	if eventN.IsBucketNotificationSet(bucket) {
+		// Notify deleted event for objects.
+		for _, dobj := range deletedObjects {
+			eventNotify(eventData{
+				Type:   ObjectRemovedDelete,
+				Bucket: bucket,
+				ObjInfo: ObjectInfo{
+					Name: dobj.ObjectName,
+				},
+				ReqParams: map[string]string{
+					"sourceIPAddress": r.RemoteAddr,
+				},
+			})
+		}
+	}
 }
 
 // PutBucketHandler - PUT Bucket
