@@ -66,7 +66,11 @@ func TestErasureHealFile(t *testing.T) {
 	copy(latest, disks)
 	latest[0] = nil
 	outDated[0] = disks[0]
+
 	healCheckSums, err := erasureHealFile(latest, outDated, "testbucket", "testobject1", "testbucket", "testobject1", 1*1024*1024, blockSize, dataBlocks, parityBlocks, bitRotAlgo)
+	if err != nil {
+		t.Fatal(err)
+	}
 	// Checksum of the healed file should match.
 	if checkSums[0] != healCheckSums[0] {
 		t.Error("Healing failed, data does not match.")
@@ -116,7 +120,7 @@ func TestErasureHealFile(t *testing.T) {
 		latest[index] = nil
 		outDated[index] = disks[index]
 	}
-	healCheckSums, err = erasureHealFile(latest, outDated, "testbucket", "testobject1", "testbucket", "testobject1", 1*1024*1024, blockSize, dataBlocks, parityBlocks, bitRotAlgo)
+	_, err = erasureHealFile(latest, outDated, "testbucket", "testobject1", "testbucket", "testobject1", 1*1024*1024, blockSize, dataBlocks, parityBlocks, bitRotAlgo)
 	if err == nil {
 		t.Error("Expected erasureHealFile() to fail when the number of available disks <= parityBlocks")
 	}
