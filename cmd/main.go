@@ -23,7 +23,6 @@ import (
 
 	"github.com/minio/cli"
 	"github.com/minio/mc/pkg/console"
-	"github.com/pkg/profile"
 )
 
 var (
@@ -130,6 +129,7 @@ func registerApp() *cli.App {
 	return app
 }
 
+// Verify main command syntax.
 func checkMainSyntax(c *cli.Context) {
 	configPath, err := getConfigPath()
 	if err != nil {
@@ -140,12 +140,7 @@ func checkMainSyntax(c *cli.Context) {
 	}
 }
 
-// Global profiler to be cleanly set and saved inside graceful shutdown.
-var globalProfiler interface {
-	Stop()
-}
-
-// Main - main for minio server.
+// Main main for minio server.
 func Main() {
 	app := registerApp()
 	app.Before = func(c *cli.Context) error {
@@ -181,16 +176,9 @@ func Main() {
 		return nil
 	}
 
-	// Set ``MINIO_PROFILE_DIR`` to the directory where profiling information should be persisted
-	profileDir := os.Getenv("MINIO_PROFILE_DIR")
-	// Enable profiler if ``MINIO_PROFILER`` is set. Supported options are [cpu, mem, block].
-	switch os.Getenv("MINIO_PROFILER") {
-	case "cpu":
-		globalProfiler = profile.Start(profile.CPUProfile, profile.ProfilePath(profileDir))
-	case "mem":
-		globalProfiler = profile.Start(profile.MemProfile, profile.ProfilePath(profileDir))
-	case "block":
-		globalProfiler = profile.Start(profile.BlockProfile, profile.ProfilePath(profileDir))
+	// Start profiler if env is set.
+	if profiler := os.Getenv("MINIO_PROFILER"); profiler != "" {
+		globalProfiler = startProfiler(profiler)
 	}
 
 	// Run the app - exit on error.
