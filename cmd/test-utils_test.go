@@ -468,6 +468,9 @@ func newTestWebRPCRequest(rpcMethod string, authorization string, data interface
 	}
 	encapsulatedData := genericJSON{JSONRPC: "2.0", ID: "1", Method: rpcMethod, Params: data}
 	jsonData, err := json.Marshal(encapsulatedData)
+	if err != nil {
+		return nil, err
+	}
 	req, err := newWebRPCRequest(rpcMethod, authorization, bytes.NewReader(jsonData))
 	if err != nil {
 		return nil, err
