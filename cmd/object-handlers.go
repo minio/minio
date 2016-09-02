@@ -333,11 +333,14 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// Size of object.
+	size := objInfo.Size
+
 	pipeReader, pipeWriter := io.Pipe()
 	go func() {
 		startOffset := int64(0) // Read the whole file.
 		// Get the object.
-		gErr := objectAPI.GetObject(sourceBucket, sourceObject, startOffset, objInfo.Size, pipeWriter)
+		gErr := objectAPI.GetObject(sourceBucket, sourceObject, startOffset, size, pipeWriter)
 		if gErr != nil {
 			errorIf(gErr, "Unable to read an object.")
 			pipeWriter.CloseWithError(gErr)
@@ -346,9 +349,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		pipeWriter.Close() // Close.
 	}()
 
-	// Size of object.
-	size := objInfo.Size
-
 	// Save other metadata if available.
 	metadata := objInfo.UserDefined
 
@@ -356,7 +356,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	// same md5sum as the source.
 
 	// Create the object.
-	md5Sum, err := objectAPI.PutObject(bucket, object, size, pipeReader, metadata)
+	objInfo, err = objectAPI.PutObject(bucket, object, size, pipeReader, metadata)
 	if err != nil {
 		// Close the this end of the pipe upon error in PutObject.
 		pipeReader.CloseWithError(err)
@@ -367,13 +367,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	// Explicitly close the reader, before fetching object info.
 	pipeReader.Close()
 
-	objInfo, err = objectAPI.GetObjectInfo(bucket, object)
-	if err != nil {
-		errorIf(err, "Unable to fetch object info.")
-		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
-		return
-	}
-
+	md5Sum := objInfo.MD5Sum
 	response := generateCopyObjectResponse(md5Sum, objInfo.ModTime)
 	encodedSuccessResponse := encodeResponse(response)
 	// write headers
@@ -448,7 +442,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	// Make sure we hex encode md5sum here.
 	metadata["md5Sum"] = hex.EncodeToString(md5Bytes)
 
-	var md5Sum string
+	var objInfo ObjectInfo
 	switch rAuthType {
 	default:
 		// For all unknown auth types return error.
@@ -461,7 +455,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			return
 		}
 		// Create anonymous object.
-		md5Sum, err = objectAPI.PutObject(bucket, object, size, r.Body, metadata)
+		objInfo, err = objectAPI.PutObject(bucket, object, size, r.Body, metadata)
 	case authTypeStreamingSigned:
 		// Initialize stream signature verifier.
 		reader, s3Error := newSignV4ChunkedReader(r)
@@ -469,31 +463,22 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
-		md5Sum, err = objectAPI.PutObject(bucket, object, size, reader, metadata)
+		objInfo, err = objectAPI.PutObject(bucket, object, size, reader, metadata)
 	case authTypePresigned, authTypeSigned:
 		// Initialize signature verifier.
 		reader := newSignVerify(r)
 		// Create object.
-		md5Sum, err = objectAPI.PutObject(bucket, object, size, reader, metadata)
+		objInfo, err = objectAPI.PutObject(bucket, object, size, reader, metadata)
 	}
 	if err != nil {
 		errorIf(err, "Unable to create an object.")
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
 	}
-	if md5Sum != "" {
-		w.Header().Set("ETag", "\""+md5Sum+"\"")
-	}
+	w.Header().Set("ETag", "\""+objInfo.MD5Sum+"\"")
 	writeSuccessResponse(w, nil)
 
 	if globalEventNotifier.IsBucketNotificationSet(bucket) {
-		// Fetch object info for notifications.
-		objInfo, err := objectAPI.GetObjectInfo(bucket, object)
-		if err != nil {
-			errorIf(err, "Unable to fetch object info for \"%s\"", path.Join(bucket, object))
-			return
-		}
-
 		// Notify object created event.
 		eventNotify(eventData{
 			Type:    ObjectCreatedPut,

@@ -21,7 +21,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"path"
 	"strings"
 	"sync"
 
@@ -427,17 +426,13 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	metadata := make(map[string]string)
 	// Nothing to store right now.
 
-	md5Sum, err := objectAPI.PutObject(bucket, object, -1, fileBody, metadata)
+	objInfo, err := objectAPI.PutObject(bucket, object, -1, fileBody, metadata)
 	if err != nil {
 		errorIf(err, "Unable to create object.")
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
 	}
-	if md5Sum != "" {
-		w.Header().Set("ETag", "\""+md5Sum+"\"")
-	}
-
-	// TODO full URL is preferred.
+	w.Header().Set("ETag", "\""+objInfo.MD5Sum+"\"")
 	w.Header().Set("Location", getObjectLocation(bucket, object))
 
 	// Set common headers.
@@ -447,13 +442,6 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	writeSuccessNoContent(w)
 
 	if globalEventNotifier.IsBucketNotificationSet(bucket) {
-		// Fetch object info for notifications.
-		objInfo, err := objectAPI.GetObjectInfo(bucket, object)
-		if err != nil {
-			errorIf(err, "Unable to fetch object info for \"%s\"", path.Join(bucket, object))
-			return
-		}
-
 		// Notify object created event.
 		eventNotify(eventData{
 			Type:    ObjectCreatedPost,

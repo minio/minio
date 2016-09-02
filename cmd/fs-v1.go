@@ -311,16 +311,8 @@ func (fs fsObjects) GetObject(bucket, object string, offset int64, length int64,
 	return toObjectErr(err, bucket, object)
 }
 
-// GetObjectInfo - get object info.
-func (fs fsObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
-	// Verify if bucket is valid.
-	if !IsValidBucketName(bucket) {
-		return ObjectInfo{}, traceError(BucketNameInvalid{Bucket: bucket})
-	}
-	// Verify if object is valid.
-	if !IsValidObjectName(object) {
-		return ObjectInfo{}, traceError(ObjectNameInvalid{Bucket: bucket, Object: object})
-	}
+// getObjectInfo - get object info.
+func (fs fsObjects) getObjectInfo(bucket, object string) (ObjectInfo, error) {
 	fi, err := fs.storage.StatFile(bucket, object)
 	if err != nil {
 		return ObjectInfo{}, toObjectErr(traceError(err), bucket, object)
@@ -358,14 +350,27 @@ func (fs fsObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 	}, nil
 }
 
-// PutObject - create an object.
-func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string) (string, error) {
+// GetObjectInfo - get object info.
+func (fs fsObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return "", traceError(BucketNameInvalid{Bucket: bucket})
+		return ObjectInfo{}, traceError(BucketNameInvalid{Bucket: bucket})
+	}
+	// Verify if object is valid.
+	if !IsValidObjectName(object) {
+		return ObjectInfo{}, traceError(ObjectNameInvalid{Bucket: bucket, Object: object})
+	}
+	return fs.getObjectInfo(bucket, object)
+}
+
+// PutObject - create an object.
+func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string) (objInfo ObjectInfo, err error) {
+	// Verify if bucket is valid.
+	if !IsValidBucketName(bucket) {
+		return ObjectInfo{}, traceError(BucketNameInvalid{Bucket: bucket})
 	}
 	if !IsValidObjectName(object) {
-		return "", traceError(ObjectNameInvalid{
+		return ObjectInfo{}, traceError(ObjectNameInvalid{
 			Bucket: bucket,
 			Object: object,
 		})
@@ -397,9 +402,9 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 
 	if size == 0 {
 		// For size 0 we write a 0byte file.
-		err := fs.storage.AppendFile(minioMetaBucket, tempObj, []byte(""))
+		err = fs.storage.AppendFile(minioMetaBucket, tempObj, []byte(""))
 		if err != nil {
-			return "", toObjectErr(traceError(err), bucket, object)
+			return ObjectInfo{}, toObjectErr(traceError(err), bucket, object)
 		}
 	} else {
 		// Allocate a buffer to Read() from request body
@@ -409,17 +414,18 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 		}
 		buf := make([]byte, int(bufSize))
 		teeReader := io.TeeReader(limitDataReader, md5Writer)
-		bytesWritten, err := fsCreateFile(fs.storage, teeReader, buf, minioMetaBucket, tempObj)
+		var bytesWritten int64
+		bytesWritten, err = fsCreateFile(fs.storage, teeReader, buf, minioMetaBucket, tempObj)
 		if err != nil {
 			fs.storage.DeleteFile(minioMetaBucket, tempObj)
-			return "", toObjectErr(err, bucket, object)
+			return ObjectInfo{}, toObjectErr(traceError(err), bucket, object)
 		}
 
 		// Should return IncompleteBody{} error when reader has fewer
 		// bytes than specified in request header.
 		if bytesWritten < size {
 			fs.storage.DeleteFile(minioMetaBucket, tempObj)
-			return "", traceError(IncompleteBody{})
+			return ObjectInfo{}, traceError(IncompleteBody{})
 		}
 	}
 
@@ -435,7 +441,7 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 			// Incoming payload wrong, delete the temporary object.
 			fs.storage.DeleteFile(minioMetaBucket, tempObj)
 			// Error return.
-			return "", toObjectErr(traceError(vErr), bucket, object)
+			return ObjectInfo{}, toObjectErr(traceError(vErr), bucket, object)
 		}
 	}
 
@@ -446,14 +452,14 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 			// MD5 mismatch, delete the temporary object.
 			fs.storage.DeleteFile(minioMetaBucket, tempObj)
 			// Returns md5 mismatch.
-			return "", traceError(BadDigest{md5Hex, newMD5Hex})
+			return ObjectInfo{}, traceError(BadDigest{md5Hex, newMD5Hex})
 		}
 	}
 
 	// Entire object was written to the temp location, now it's safe to rename it to the actual location.
-	err := fs.storage.RenameFile(minioMetaBucket, tempObj, bucket, object)
+	err = fs.storage.RenameFile(minioMetaBucket, tempObj, bucket, object)
 	if err != nil {
-		return "", toObjectErr(traceError(err), bucket, object)
+		return ObjectInfo{}, toObjectErr(traceError(err), bucket, object)
 	}
 
 	// Save additional metadata only if extended headers such as "X-Amz-Meta-" are set.
@@ -464,12 +470,15 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 
 		fsMetaPath := path.Join(bucketMetaPrefix, bucket, object, fsMetaJSONFile)
 		if err = writeFSMetadata(fs.storage, minioMetaBucket, fsMetaPath, fsMeta); err != nil {
-			return "", toObjectErr(err, bucket, object)
+			return ObjectInfo{}, toObjectErr(traceError(err), bucket, object)
 		}
 	}
-
-	// Return md5sum, successfully wrote object.
-	return newMD5Hex, nil
+	objInfo, err = fs.getObjectInfo(bucket, object)
+	if err == nil {
+		// If MINIO_ENABLE_FSMETA is not enabled objInfo.MD5Sum will be empty.
+		objInfo.MD5Sum = newMD5Hex
+	}
+	return objInfo, err
 }
 
 // DeleteObject - deletes an object from a bucket, this operation is destructive
