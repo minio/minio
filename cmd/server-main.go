@@ -251,7 +251,7 @@ func serverMain(c *cli.Context) {
 		ignoredDisks: ignoredDisks,
 	})
 
-	apiServer := NewMuxServer(serverAddress, handler)
+	apiServer := NewServerMux(serverAddress, handler)
 
 	// Fetch endpoints which we are going to serve from.
 	endPoints := finalizeEndpoints(tls, &apiServer.Server)

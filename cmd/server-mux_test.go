@@ -40,19 +40,19 @@ import (
 
 func TestClose(t *testing.T) {
 	// Create ServerMux
-	m := NewMuxServer("", nil)
+	m := NewServerMux("", nil)
 
 	if err := m.Close(); err != nil {
 		t.Error("Server errored while trying to Close", err)
 	}
 }
 
-func TestMuxServer(t *testing.T) {
+func TestServerMux(t *testing.T) {
 	ts := httptest.NewUnstartedServer(nil)
 	defer ts.Close()
 
 	// Create ServerMux
-	m := NewMuxServer("", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	m := NewServerMux("", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, "hello")
 	}))
 
@@ -60,12 +60,12 @@ func TestMuxServer(t *testing.T) {
 	ts.Config = &m.Server
 	ts.Start()
 
-	// Create a MuxListener
-	ml, err := NewMuxListener(ts.Listener, m.WaitGroup, "", "")
-	if err != nil {
-		t.Fatal(err)
+	// Create a ListenerMux
+	lm := &ListenerMux{
+		Listener: ts.Listener,
+		config:   &tls.Config{},
 	}
-	m.listener = ml
+	m.listener = lm
 
 	client := http.Client{}
 	res, err := client.Get(ts.URL)
@@ -105,7 +105,7 @@ func TestServerCloseBlocking(t *testing.T) {
 	defer ts.Close()
 
 	// Create ServerMux
-	m := NewMuxServer("", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	m := NewServerMux("", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, "hello")
 	}))
 
@@ -113,18 +113,17 @@ func TestServerCloseBlocking(t *testing.T) {
 	ts.Config = &m.Server
 	ts.Start()
 
-	// Create a MuxListener
-	// var err error
-	ml, err := NewMuxListener(ts.Listener, m.WaitGroup, "", "")
-	if err != nil {
-		t.Fatal(err)
+	// Create a ListenerMux.
+	lm := &ListenerMux{
+		Listener: ts.Listener,
+		config:   &tls.Config{},
 	}
-	m.listener = ml
+	m.listener = lm
 
 	dial := func() net.Conn {
 		c, cerr := net.Dial("tcp", ts.Listener.Addr().String())
 		if cerr != nil {
-			t.Fatal(err)
+			t.Fatal(cerr)
 		}
 		return c
 	}
@@ -137,7 +136,7 @@ func TestServerCloseBlocking(t *testing.T) {
 	cidle := dial()
 	defer cidle.Close()
 	cidle.Write([]byte("HEAD / HTTP/1.1\r\nHost: foo\r\n\r\n"))
-	_, err = http.ReadResponse(bufio.NewReader(cidle), nil)
+	_, err := http.ReadResponse(bufio.NewReader(cidle), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,7 +159,7 @@ func TestListenAndServePlain(t *testing.T) {
 	once := &sync.Once{}
 
 	// Create ServerMux and when we receive a request we stop waiting
-	m := NewMuxServer(addr, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	m := NewServerMux(addr, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, "hello")
 		once.Do(func() { close(wait) })
 	}))
@@ -209,7 +208,7 @@ func TestListenAndServeTLS(t *testing.T) {
 	once := &sync.Once{}
 
 	// Create ServerMux and when we receive a request we stop waiting
-	m := NewMuxServer(addr, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	m := NewServerMux(addr, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, "hello")
 		once.Do(func() { close(wait) })
 	}))
