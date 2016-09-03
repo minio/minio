@@ -392,6 +392,8 @@ func newTestRequest(method, urlStr string, contentLength int64, body io.ReadSeek
 	// Save for subsequent use
 	var hashedPayload string
 	switch {
+	case contentLength == -1:
+		hashedPayload = "STREAMING-AWS4-HMAC-SHA256-PAYLOAD"
 	case body == nil:
 		hashedPayload = hex.EncodeToString(sum256([]byte{}))
 	default:
