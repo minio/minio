@@ -268,6 +268,208 @@ func (testServer TestServer) Stop() {
 }
 
 // Sign given request using Signature V4.
+func signStreamingRequest(req *http.Request, accessKey, secretKey string) (string, error) {
+	// Get hashed payload.
+	hashedPayload := req.Header.Get("x-amz-content-sha256")
+	if hashedPayload == "" {
+		return "", fmt.Errorf("Invalid hashed payload.")
+	}
+
+	currTime := time.Now().UTC()
+	// Set x-amz-date.
+	req.Header.Set("x-amz-date", currTime.Format(iso8601Format))
+
+	// Get header map.
+	headerMap := make(map[string][]string)
+	for k, vv := range req.Header {
+		// If request header key is not in ignored headers, then add it.
+		if _, ok := ignoredStreamingHeaders[http.CanonicalHeaderKey(k)]; !ok {
+			headerMap[strings.ToLower(k)] = vv
+		}
+	}
+
+	// Get header keys.
+	headers := []string{"host"}
+	for k := range headerMap {
+		headers = append(headers, k)
+	}
+	sort.Strings(headers)
+
+	// Get canonical headers.
+	var buf bytes.Buffer
+	for _, k := range headers {
+		buf.WriteString(k)
+		buf.WriteByte(':')
+		switch {
+		case k == "host":
+			buf.WriteString(req.URL.Host)
+			fallthrough
+		default:
+			for idx, v := range headerMap[k] {
+				if idx > 0 {
+					buf.WriteByte(',')
+				}
+				buf.WriteString(v)
+			}
+			buf.WriteByte('\n')
+		}
+	}
+	canonicalHeaders := buf.String()
+
+	// Get signed headers.
+	signedHeaders := strings.Join(headers, ";")
+
+	// Get canonical query string.
+	req.URL.RawQuery = strings.Replace(req.URL.Query().Encode(), "+", "%20", -1)
+
+	// Get canonical URI.
+	canonicalURI := getURLEncodedName(req.URL.Path)
+
+	// Get canonical request.
+	// canonicalRequest =
+	//  <HTTPMethod>\n
+	//  <CanonicalURI>\n
+	//  <CanonicalQueryString>\n
+	//  <CanonicalHeaders>\n
+	//  <SignedHeaders>\n
+	//  <HashedPayload>
+	//
+	canonicalRequest := strings.Join([]string{
+		req.Method,
+		canonicalURI,
+		req.URL.RawQuery,
+		canonicalHeaders,
+		signedHeaders,
+		hashedPayload,
+	}, "\n")
+
+	// Get scope.
+	scope := strings.Join([]string{
+		currTime.Format(yyyymmdd),
+		"us-east-1",
+		"s3",
+		"aws4_request",
+	}, "/")
+
+	stringToSign := "AWS4-HMAC-SHA256" + "\n" + currTime.Format(iso8601Format) + "\n"
+	stringToSign = stringToSign + scope + "\n"
+	stringToSign = stringToSign + hex.EncodeToString(sum256([]byte(canonicalRequest)))
+
+	date := sumHMAC([]byte("AWS4"+secretKey), []byte(currTime.Format(yyyymmdd)))
+	region := sumHMAC(date, []byte("us-east-1"))
+	service := sumHMAC(region, []byte("s3"))
+	signingKey := sumHMAC(service, []byte("aws4_request"))
+
+	signature := hex.EncodeToString(sumHMAC(signingKey, []byte(stringToSign)))
+
+	// final Authorization header
+	parts := []string{
+		"AWS4-HMAC-SHA256" + " Credential=" + accessKey + "/" + scope,
+		"SignedHeaders=" + signedHeaders,
+		"Signature=" + signature,
+	}
+	auth := strings.Join(parts, ", ")
+	req.Header.Set("Authorization", auth)
+
+	return signature, nil
+}
+
+// Returns new HTTP request object.
+func newTestStreamingRequest(method, urlStr string, dataLength, chunkSize int64, body io.ReadSeeker) (*http.Request, error) {
+	if method == "" {
+		method = "POST"
+	}
+
+	req, err := http.NewRequest(method, urlStr, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if body == nil {
+		// this is added to avoid panic during ioutil.ReadAll(req.Body).
+		// th stack trace can be found here  https://github.com/minio/minio/pull/2074 .
+		// This is very similar to https://github.com/golang/go/issues/7527.
+		req.Body = ioutil.NopCloser(bytes.NewReader([]byte("")))
+	}
+
+	contentLength := calculateStreamContentLength(dataLength, chunkSize)
+
+	req.Header.Set("x-amz-content-sha256", "STREAMING-AWS4-HMAC-SHA256-PAYLOAD")
+	req.Header.Set("content-encoding", "aws-chunked")
+	req.Header.Set("x-amz-storage-class", "REDUCED_REDUNDANCY")
+
+	req.Header.Set("x-amz-decoded-content-length", strconv.FormatInt(dataLength, 10))
+	req.Header.Set("content-length", strconv.FormatInt(contentLength, 10))
+
+	// Seek back to beginning.
+	body.Seek(0, 0)
+	// Add body
+	req.Body = ioutil.NopCloser(body)
+	req.ContentLength = contentLength
+
+	return req, nil
+}
+
+// Returns new HTTP request object signed with streaming signature v4.
+func newTestStreamingSignedRequest(method, urlStr string, contentLength, chunkSize int64, body io.ReadSeeker, accessKey, secretKey string) (*http.Request, error) {
+	req, err := newTestStreamingRequest(method, urlStr, contentLength, chunkSize, body)
+	if err != nil {
+		return nil, err
+	}
+
+	signature, err := signStreamingRequest(req, accessKey, secretKey)
+	if err != nil {
+		return nil, err
+	}
+
+	var stream []byte
+	var buffer []byte
+	body.Seek(0, 0)
+	for {
+		buffer = make([]byte, chunkSize)
+		n, err := body.Read(buffer)
+		if err != nil && err != io.EOF {
+			return nil, err
+		}
+
+		currTime := time.Now().UTC()
+		// Get scope.
+		scope := strings.Join([]string{
+			currTime.Format(yyyymmdd),
+			"us-east-1",
+			"s3",
+			"aws4_request",
+		}, "/")
+
+		stringToSign := "AWS4-HMAC-SHA256-PAYLOAD" + "\n"
+		stringToSign = stringToSign + currTime.Format(iso8601Format) + "\n"
+		stringToSign = stringToSign + scope + "\n"
+		stringToSign = stringToSign + signature + "\n"
+		stringToSign = stringToSign + "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" + "\n" // hex(sum256(""))
+		stringToSign = stringToSign + hex.EncodeToString(sum256(buffer[:n]))
+
+		date := sumHMAC([]byte("AWS4"+secretKey), []byte(currTime.Format(yyyymmdd)))
+		region := sumHMAC(date, []byte("us-east-1"))
+		service := sumHMAC(region, []byte("s3"))
+		signingKey := sumHMAC(service, []byte("aws4_request"))
+
+		signature = hex.EncodeToString(sumHMAC(signingKey, []byte(stringToSign)))
+
+		stream = append(stream, []byte(fmt.Sprintf("%x", n)+";chunk-signature="+signature+"\r\n")...)
+		stream = append(stream, buffer[:n]...)
+		stream = append(stream, []byte("\r\n")...)
+
+		if n <= 0 {
+			break
+		}
+
+	}
+
+	req.Body = ioutil.NopCloser(bytes.NewReader(stream))
+	return req, nil
+}
+
+// Sign given request using Signature V4.
 func signRequest(req *http.Request, accessKey, secretKey string) error {
 	// Get hashed payload.
 	hashedPayload := req.Header.Get("x-amz-content-sha256")
