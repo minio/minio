@@ -104,13 +104,8 @@ const (
 func prepForInit(disks []string, sErrs []error, diskCount int) InitActions {
 	// Count errors by error value.
 	errMap := make(map[error]int)
-	// If loadAllFormats returned successfully
-	if sErrs == nil {
-		errMap[nil] = diskCount
-	} else {
-		for _, err := range sErrs {
-			errMap[err]++
-		}
+	for _, err := range sErrs {
+		errMap[err]++
 	}
 
 	quorum := diskCount/2 + 1

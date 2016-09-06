@@ -68,23 +68,32 @@ func loadAllBucketPolicies(objAPI ObjectLayer) (policies map[string]*bucketPolic
 	buckets, err := objAPI.ListBuckets()
 	errorIf(err, "Unable to list buckets.")
 	err = errorCause(err)
-
 	if err != nil {
 		return nil, err
 	}
+
 	policies = make(map[string]*bucketPolicy)
+	var pErrs []error
 	// Loads bucket policy.
 	for _, bucket := range buckets {
-		var policy *bucketPolicy
-		policy, err = readBucketPolicy(bucket.Name, objAPI)
-		if err != nil {
-			switch err.(type) {
+		policy, pErr := readBucketPolicy(bucket.Name, objAPI)
+		if pErr != nil {
+			switch pErr.(type) {
 			case BucketPolicyNotFound:
 				continue
 			}
-			return nil, err
+			pErrs = append(pErrs, pErr)
+			// Continue to load other bucket policies if possible.
+			continue
 		}
 		policies[bucket.Name] = policy
+	}
+
+	// Look for any errors occurred while reading bucket policies.
+	for _, pErr := range pErrs {
+		if pErr != nil {
+			return policies, pErr
+		}
 	}
 
 	// Success.
@@ -96,6 +105,7 @@ func initBucketPolicies(objAPI ObjectLayer) error {
 	if objAPI == nil {
 		return errInvalidArgument
 	}
+
 	// Read all bucket policies.
 	policies, err := loadAllBucketPolicies(objAPI)
 	if err != nil {
@@ -130,22 +140,22 @@ func readBucketPolicyJSON(bucket string, objAPI ObjectLayer) (bucketPolicyReader
 	}
 	policyPath := pathJoin(bucketConfigPrefix, bucket, policyJSON)
 	objInfo, err := objAPI.GetObjectInfo(minioMetaBucket, policyPath)
-	errorIf(err, "Unable to get policy for the bucket %s.", bucket)
 	err = errorCause(err)
 	if err != nil {
 		if _, ok := err.(ObjectNotFound); ok {
 			return nil, BucketPolicyNotFound{Bucket: bucket}
 		}
+		errorIf(err, "Unable to load policy for the bucket %s.", bucket)
 		return nil, err
 	}
 	var buffer bytes.Buffer
 	err = objAPI.GetObject(minioMetaBucket, policyPath, 0, objInfo.Size, &buffer)
-	errorIf(err, "Unable to get policy for the bucket %s.", bucket)
 	err = errorCause(err)
 	if err != nil {
 		if _, ok := err.(ObjectNotFound); ok {
 			return nil, BucketPolicyNotFound{Bucket: bucket}
 		}
+		errorIf(err, "Unable to load policy for the bucket %s.", bucket)
 		return nil, err
 	}
 

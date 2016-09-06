@@ -265,12 +265,6 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		return
 	}
 
-	objectAPI := api.ObjectAPI()
-	if objectAPI == nil {
-		writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
-		return
-	}
-
 	var wg = &sync.WaitGroup{} // Allocate a new wait group.
 	var dErrs = make([]error, len(deleteObjects.Objects))
 
@@ -279,7 +273,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		wg.Add(1)
 		go func(i int, obj ObjectIdentifier) {
 			defer wg.Done()
-			dErr := api.ObjectAPI.DeleteObject(bucket, obj.ObjectName)
+			dErr := objectAPI.DeleteObject(bucket, obj.ObjectName)
 			if dErr != nil {
 				dErrs[i] = dErr
 			}
