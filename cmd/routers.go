@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"errors"
 	"net/http"
 	"os"
 	"strings"
@@ -33,16 +32,19 @@ func newObjectLayerFn() ObjectLayer {
 
 // newObjectLayer - initialize any object layer depending on the number of disks.
 func newObjectLayer(disks, ignoredDisks []string) (ObjectLayer, error) {
+	var objAPI ObjectLayer
+	var err error
 	if len(disks) == 1 {
-		exportPath := disks[0]
 		// Initialize FS object layer.
-		return newFSObjects(exportPath)
+		objAPI, err = newFSObjects(disks[0])
+	} else {
+		// Initialize XL object layer.
+		objAPI, err = newXLObjects(disks, ignoredDisks)
 	}
-	// Initialize XL object layer.
-	objAPI, err := newXLObjects(disks, ignoredDisks)
-	if err == errXLWriteQuorum {
-		return objAPI, errors.New("Disks are different with last minio server run.")
+	if err != nil {
+		return nil, err
 	}
+
 	// Migrate bucket policy from configDir to .minio.sys/buckets/
 	err = migrateBucketPolicyConfig(objAPI)
 	if err != nil {
@@ -58,8 +60,10 @@ func newObjectLayer(disks, ignoredDisks []string) (ObjectLayer, error) {
 
 	// Register the callback that should be called when the process shuts down.
 	globalShutdownCBs.AddObjectLayerCB(func() errCode {
-		if sErr := objAPI.Shutdown(); sErr != nil {
-			return exitFailure
+		if objAPI != nil {
+			if sErr := objAPI.Shutdown(); sErr != nil {
+				return exitFailure
+			}
 		}
 		return exitSuccess
 	})
@@ -68,14 +72,12 @@ func newObjectLayer(disks, ignoredDisks []string) (ObjectLayer, error) {
 	err = initEventNotifier(objAPI)
 	if err != nil {
 		errorIf(err, "Unable to initialize event notification.")
-		return nil, err
 	}
 
 	// Initialize and load bucket policies.
 	err = initBucketPolicies(objAPI)
 	if err != nil {
 		errorIf(err, "Unable to load all bucket policies.")
-		return nil, err
 	}
 
 	// Success.
