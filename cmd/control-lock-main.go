@@ -134,9 +134,9 @@ func lockControl(c *cli.Context) {
 
 	args := &GenericArgs{}
 	reply := &SystemLockState{}
-	err = client.Call("Control.LockInfo", args, reply)
+	err = client.Call("Controller.LockInfo", args, reply)
 	// logs the error and returns if err != nil.
-	fatalIf(err, "RPC Control.LockInfo call failed")
+	fatalIf(err, "RPC Controller.LockInfo call failed")
 	// print the lock info on the console.
 	b, err := json.MarshalIndent(*reply, "", "  ")
 	fatalIf(err, "Failed to parse the RPC lock info response")
