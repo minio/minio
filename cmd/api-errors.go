@@ -263,7 +263,7 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	},
 	ErrNoSuchBucketPolicy: {
 		Code:           "NoSuchBucketPolicy",
-		Description:    "The specified bucket does not have a bucket policy.",
+		Description:    "The bucket policy does not exist",
 		HTTPStatusCode: http.StatusNotFound,
 	},
 	ErrNoSuchKey: {
@@ -328,7 +328,7 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	},
 	ErrBucketNotEmpty: {
 		Code:           "BucketNotEmpty",
-		Description:    "The bucket you tried to delete is not empty.",
+		Description:    "The bucket you tried to delete is not empty",
 		HTTPStatusCode: http.StatusConflict,
 	},
 	ErrAllAccessDisabled: {
@@ -446,7 +446,7 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	ErrExpiredPresignRequest: {
 		Code:           "AccessDenied",
 		Description:    "Request has expired",
-		HTTPStatusCode: http.StatusBadRequest,
+		HTTPStatusCode: http.StatusForbidden,
 	},
 	// FIXME: Actual XML error response also contains the header which missed in lsit of signed header parameters.
 	ErrUnsignedHeaders: {
