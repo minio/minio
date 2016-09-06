@@ -319,7 +319,7 @@ func (fs fsObjects) getObjectInfo(bucket, object string) (ObjectInfo, error) {
 	}
 	fsMeta, err := readFSMetadata(fs.storage, minioMetaBucket, path.Join(bucketMetaPrefix, bucket, object, fsMetaJSONFile))
 	// Ignore error if the metadata file is not found, other errors must be returned.
-	if errorCause(err) != errFileNotFound {
+	if err != nil && errorCause(err) != errFileNotFound {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
@@ -530,7 +530,7 @@ func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 			return FileInfo{}, traceError(err)
 		}
 		fsMeta, mErr := readFSMetadata(fs.storage, minioMetaBucket, path.Join(bucketMetaPrefix, bucket, entry, fsMetaJSONFile))
-		if errorCause(mErr) != errFileNotFound {
+		if mErr != nil && errorCause(mErr) != errFileNotFound {
 			return FileInfo{}, traceError(mErr)
 		}
 		if len(fsMeta.Meta) == 0 {

@@ -189,7 +189,7 @@ func loadAllFormats(bootstrapDisks []StorageAPI) ([]*formatConfigV1, []error) {
 		}
 	}
 	// Return all formats and nil
-	return formatConfigs, nil
+	return formatConfigs, sErrs
 }
 
 // genericFormatCheck - validates and returns error.
