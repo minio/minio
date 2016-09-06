@@ -334,10 +334,14 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	// Create the object.
 	md5Sum, err := api.ObjectAPI.PutObject(bucket, object, size, pipeReader, metadata)
 	if err != nil {
+		// Close the this end of the pipe upon error in PutObject.
+		pipeReader.CloseWithError(err)
 		errorIf(err, "Unable to create an object.")
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
 	}
+	// Explicitly close the reader, before fetching object info.
+	pipeReader.Close()
 
 	objInfo, err = api.ObjectAPI.GetObjectInfo(bucket, object)
 	if err != nil {
@@ -352,8 +356,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	setCommonHeaders(w)
 	// write success response.
 	writeSuccessResponse(w, encodedSuccessResponse)
-	// Explicitly close the reader, to avoid fd leaks.
-	pipeReader.Close()
 
 	if eventN.IsBucketNotificationSet(bucket) {
 		// Notify object created event.
