@@ -226,16 +226,6 @@ type CompleteMultipartUploadResponse struct {
 	ETag     string
 }
 
-// PostResponse container for completed post upload response
-type PostResponse struct {
-	XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ PostResponse" json:"-"`
-
-	Location string
-	Bucket   string
-	Key      string
-	ETag     string
-}
-
 // DeleteError structure.
 type DeleteError struct {
 	Code    string
