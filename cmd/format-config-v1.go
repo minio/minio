@@ -524,6 +524,11 @@ func healFormatXLFreshDisks(storageDisks []StorageAPI) error {
 		}
 	}
 
+	// Initialize meta volume, if volume already exists ignores it.
+	if err := initMetaVolume(orderedDisks); err != nil {
+		return fmt.Errorf("Unable to initialize '.minio.sys' meta volume, %s", err)
+	}
+
 	// Save new `format.json` across all disks, in JBOD order.
 	return saveFormatXL(orderedDisks, newFormatConfigs)
 }
@@ -872,7 +877,7 @@ func initFormatXL(storageDisks []StorageAPI) (err error) {
 
 	// Initialize meta volume, if volume already exists ignores it.
 	if err := initMetaVolume(storageDisks); err != nil {
-		return fmt.Errorf("Unable to initialize '.minio' meta volume, %s", err)
+		return fmt.Errorf("Unable to initialize '.minio.sys' meta volume, %s", err)
 	}
 
 	// Save formats `format.json` across all disks.

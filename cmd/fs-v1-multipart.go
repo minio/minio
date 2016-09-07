@@ -221,7 +221,7 @@ func (fs fsObjects) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 // request, returns back a unique upload id.
 //
 // Internally this function creates 'uploads.json' associated for the
-// incoming object at '.minio/multipart/bucket/object/uploads.json' on
+// incoming object at '.minio.sys/multipart/bucket/object/uploads.json' on
 // all the disks. `uploads.json` carries metadata regarding on going
 // multipart operation on the object.
 func (fs fsObjects) newMultipartUpload(bucket string, object string, meta map[string]string) (uploadID string, err error) {
@@ -237,7 +237,7 @@ func (fs fsObjects) newMultipartUpload(bucket string, object string, meta map[st
 	// used for instrumentation on locks.
 	opsID := getOpsID()
 
-	// This lock needs to be held for any changes to the directory contents of ".minio/multipart/object/"
+	// This lock needs to be held for any changes to the directory contents of ".minio.sys/multipart/object/"
 	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object), opsID)
 	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object), opsID)
 
@@ -393,8 +393,8 @@ func appendParts(disk StorageAPI, bucket, object, uploadID, opsID string) {
 
 // PutObjectPart - reads incoming data until EOF for the part file on
 // an ongoing multipart transaction. Internally incoming data is
-// written to '.minio/tmp' location and safely renamed to
-// '.minio/multipart' for reach parts.
+// written to '.minio.sys/tmp' location and safely renamed to
+// '.minio.sys/multipart' for reach parts.
 func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, size int64, data io.Reader, md5Hex string) (string, error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
@@ -513,8 +513,8 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 }
 
 // listObjectParts - wrapper scanning through
-// '.minio/multipart/bucket/object/UPLOADID'. Lists all the parts
-// saved inside '.minio/multipart/bucket/object/UPLOADID'.
+// '.minio.sys/multipart/bucket/object/UPLOADID'. Lists all the parts
+// saved inside '.minio.sys/multipart/bucket/object/UPLOADID'.
 func (fs fsObjects) listObjectParts(bucket, object, uploadID string, partNumberMarker, maxParts int) (ListPartsInfo, error) {
 	result := ListPartsInfo{}
 
@@ -787,7 +787,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 
 // abortMultipartUpload - wrapper for purging an ongoing multipart
 // transaction, deletes uploadID entry from `uploads.json` and purges
-// the directory at '.minio/multipart/bucket/object/uploadID' holding
+// the directory at '.minio.sys/multipart/bucket/object/uploadID' holding
 // all the upload parts.
 func (fs fsObjects) abortMultipartUpload(bucket, object, uploadID string) error {
 	// Cleanup all uploaded parts.
@@ -813,7 +813,7 @@ func (fs fsObjects) abortMultipartUpload(bucket, object, uploadID string) error 
 			return nil
 		}
 	} // No more pending uploads for the object, we purge the entire
-	// entry at '.minio/multipart/bucket/object'.
+	// entry at '.minio.sys/multipart/bucket/object'.
 	if err = fs.storage.DeleteFile(minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object, uploadsJSONFile)); err != nil {
 		return toObjectErr(traceError(err), minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object))
 	}
