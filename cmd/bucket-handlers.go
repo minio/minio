@@ -267,6 +267,12 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			deletedObjects = append(deletedObjects, object)
 			continue
 		}
+		if _, ok := err.(ObjectNotFound); ok {
+			// If the object is not found it should be
+			// accounted as deleted as per S3 spec.
+			deletedObjects = append(deletedObjects, object)
+			continue
+		}
 		errorIf(err, "Unable to delete object. %s", object.ObjectName)
 		// Error during delete should be collected separately.
 		deleteErrors = append(deleteErrors, DeleteError{

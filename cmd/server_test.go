@@ -347,6 +347,11 @@ func (s *TestSuiteCommon) TestDeleteMultipleObjects(c *C) {
 			ObjectName: objName,
 		})
 	}
+	// Append a non-existent object for which the response should be marked
+	// as deleted.
+	delObjReq.Objects = append(delObjReq.Objects, ObjectIdentifier{
+		ObjectName: fmt.Sprintf("%d/%s", 10, objectName),
+	})
 
 	// Marshal delete request.
 	deleteReqBytes, err := xml.Marshal(delObjReq)
@@ -367,7 +372,8 @@ func (s *TestSuiteCommon) TestDeleteMultipleObjects(c *C) {
 	c.Assert(err, IsNil)
 	err = xml.Unmarshal(delRespBytes, &deleteResp)
 	c.Assert(err, IsNil)
-	for i := 0; i < 10; i++ {
+	for i := 0; i <= 10; i++ {
+		// All the objects should be under deleted list (including non-existent object)
 		c.Assert(deleteResp.DeletedObjects[i], DeepEquals, delObjReq.Objects[i])
 	}
 	c.Assert(len(deleteResp.Errors), Equals, 0)
