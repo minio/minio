@@ -22,15 +22,10 @@ import (
 	"strings"
 
 	"github.com/cheggaaa/pb"
-	"github.com/fatih/color"
 )
 
 // colorizeUpdateMessage - inspired from Yeoman project npm package https://github.com/yeoman/update-notifier
 func colorizeUpdateMessage(updateString string) string {
-	// Initialize coloring.
-	cyan := color.New(color.FgCyan, color.Bold).SprintFunc()
-	yellow := color.New(color.FgYellow, color.Bold).SprintfFunc()
-
 	// Calculate length without color coding, due to ANSI color
 	// characters padded to actual string the final length is wrong
 	// than the original string length.
@@ -38,7 +33,7 @@ func colorizeUpdateMessage(updateString string) string {
 	line1Length := len(line1Str)
 
 	// Populate lines with color coding.
-	line1InColor := fmt.Sprintf("  New update: %s ", cyan(updateString))
+	line1InColor := fmt.Sprintf("  New update: %s ", colorCyan(updateString))
 
 	// Calculate the rectangular box size.
 	maxContentWidth := line1Length
@@ -60,14 +55,14 @@ func colorizeUpdateMessage(updateString string) string {
 		// On windows terminal turn off unicode characters.
 		var top, bottom, sideBar string
 		if runtime.GOOS == "windows" {
-			top = yellow("*" + strings.Repeat("*", maxContentWidth) + "*")
-			bottom = yellow("*" + strings.Repeat("*", maxContentWidth) + "*")
-			sideBar = yellow("|")
+			top = colorYellow("*" + strings.Repeat("*", maxContentWidth) + "*")
+			bottom = colorYellow("*" + strings.Repeat("*", maxContentWidth) + "*")
+			sideBar = colorYellow("|")
 		} else {
 			// Color the rectangular box, use unicode characters here.
-			top = yellow("┏" + strings.Repeat("━", maxContentWidth) + "┓")
-			bottom = yellow("┗" + strings.Repeat("━", maxContentWidth) + "┛")
-			sideBar = yellow("┃")
+			top = colorYellow("┏" + strings.Repeat("━", maxContentWidth) + "┓")
+			bottom = colorYellow("┗" + strings.Repeat("━", maxContentWidth) + "┛")
+			sideBar = colorYellow("┃")
 		}
 		// Fill spaces to the rest of the area.
 		spacePaddingLine1 := strings.Repeat(" ", line1Rest)

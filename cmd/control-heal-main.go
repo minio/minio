@@ -18,11 +18,14 @@ package cmd
 
 import (
 	"fmt"
+	"net"
 	"net/url"
 	"path"
 	"strings"
 
+	"github.com/fatih/color"
 	"github.com/minio/cli"
+	"github.com/minio/mc/pkg/console"
 )
 
 var healCmd = cli.Command{
@@ -60,7 +63,10 @@ func checkHealControlSyntax(ctx *cli.Context) {
 
 // "minio control heal" entry point.
 func healControl(ctx *cli.Context) {
+	// Set console color.
+	console.SetColor("Controller", color.New(color.FgGreen, color.Bold))
 
+	// Validate input argument syntax.
 	checkHealControlSyntax(ctx)
 
 	// Parse bucket and object from url.URL.Path
@@ -93,26 +99,45 @@ func healControl(ctx *cli.Context) {
 	}
 	client := newAuthClient(authCfg)
 
-	// Always try to fix disk metadata
-	fmt.Print("Checking and healing disk metadata..")
-	args := &GenericArgs{}
-	reply := &GenericReply{}
-	err = client.Call("Controller.HealDiskMetadataHandler", args, reply)
-	fatalIf(err, "Unable to heal disk metadata.")
-	fmt.Println(" ok")
-
 	bucketName, objectName := parseBucketObject(parsedURL.Path)
 	if bucketName == "" {
+		args := &GenericArgs{}
+		reply := &GenericReply{}
+		err = client.Call("Controller.HealDiskMetadataHandler", args, reply)
+		if _, ok := err.(*net.OpError); ok {
+			errorIf(err, "Unable to heal disk metadata.")
+			return
+		}
+		fmt.Print(console.Colorize("Controller", "Healing Disk "))
+		switch toObjectCtrlErr(err) {
+		case nil:
+			fmt.Println(console.Colorize("Controller", fmt.Sprintf("%6s ", "[OK]")))
+		default:
+			fmt.Println(console.Colorize("Controller", fmt.Sprintf("%6s ", "[FAILED]")))
+			errorIf(err, "Unable to heal disk metadata.")
+		}
 		return
 	}
 
 	// If object does not have trailing "/" then it's an object, hence heal it.
 	if objectName != "" && !strings.HasSuffix(objectName, slashSeparator) {
-		fmt.Printf("Healing : /%s/%s\n", bucketName, objectName)
 		args := &HealObjectArgs{Bucket: bucketName, Object: objectName}
-		reply := &HealObjectReply{}
+		reply := &GenericReply{}
 		err = client.Call("Controller.HealObjectHandler", args, reply)
-		errorIf(err, "Healing object %s failed.", objectName)
+		if _, ok := err.(*net.OpError); ok {
+			errorIf(err, "Unable to heal object /%s/%s.", bucketName, objectName)
+			return
+		}
+		fmt.Print(console.Colorize("Controller", fmt.Sprintf("Healing Object /%s/%s ", bucketName, objectName)))
+		switch toObjectCtrlErr(err, bucketName, objectName).(type) {
+		case nil:
+			fmt.Println(console.Colorize("Controller", fmt.Sprintf("%6s ", "[OK]")))
+		case ObjectNotFound:
+			fmt.Println(console.Colorize("Controller", fmt.Sprintf("%6s ", "[NOSUCHKEY]")))
+		default:
+			fmt.Println(console.Colorize("Controller", fmt.Sprintf("%6s ", "[FAILED]")))
+			errorIf(err, "Unable to heal object /%s/%s.", bucketName, objectName)
+		}
 		return
 	}
 
@@ -133,11 +158,23 @@ func healControl(ctx *cli.Context) {
 
 		// Heal the objects returned in the ListObjects reply.
 		for _, obj := range reply.Objects {
-			fmt.Printf("Healing : /%s/%s\n", bucketName, obj)
-			reply := &GenericReply{}
 			healArgs := &HealObjectArgs{Bucket: bucketName, Object: obj}
+			reply := &GenericReply{}
 			err = client.Call("Controller.HealObjectHandler", healArgs, reply)
-			errorIf(err, "Healing object %s failed.", obj)
+			if _, ok := err.(*net.OpError); ok {
+				errorIf(err, "Unable to heal object /%s/%s.", bucketName, obj)
+				return
+			}
+			fmt.Print(console.Colorize("Controller", fmt.Sprintf("Healing Object /%s/%s ", bucketName, obj)))
+			switch toObjectCtrlErr(err, bucketName, obj).(type) {
+			case nil:
+				fmt.Println(console.Colorize("Controller", fmt.Sprintf("%6s ", "[OK]")))
+			case ObjectNotFound:
+				fmt.Println(console.Colorize("Controller", fmt.Sprintf("%6s ", "[NOSUCHKEY]")))
+			default:
+				fmt.Println(console.Colorize("Controller", fmt.Sprintf("%6s ", "[FAILED]")))
+				errorIf(err, "Unable to heal object /%s/%s.", bucketName, obj)
+			}
 		}
 
 		if !reply.IsTruncated {

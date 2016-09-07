@@ -26,6 +26,9 @@ import (
 // handle all cases where we have known types of errors returned by
 // underlying storage layer.
 func toObjectErr(err error, params ...string) error {
+	if err == nil {
+		return nil
+	}
 	e, ok := err.(*Error)
 	if ok {
 		err = e.e
