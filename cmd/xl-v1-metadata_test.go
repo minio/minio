@@ -55,13 +55,14 @@ func TestAddObjectPart(t *testing.T) {
 			xlMeta.AddObjectPart(testCase.partNum, "part."+partNumString, "etag."+partNumString, int64(testCase.partNum+MiB))
 		}
 
-		if index := xlMeta.ObjectPartIndex(testCase.partNum); index != testCase.expectedIndex {
+		if index := objectPartIndex(xlMeta.Parts, testCase.partNum); index != testCase.expectedIndex {
 			t.Fatalf("%+v: expected = %d, got: %d", testCase, testCase.expectedIndex, index)
 		}
 	}
 }
 
-// Test xlMetaV1.ObjectPartIndex()
+// Test objectPartIndex().
+// generates a sample xlMeta data and asserts the output of objectPartIndex() with the expected value.
 func TestObjectPartIndex(t *testing.T) {
 	testCases := []struct {
 		partNum       int
@@ -94,7 +95,7 @@ func TestObjectPartIndex(t *testing.T) {
 
 	// Test them.
 	for _, testCase := range testCases {
-		if index := xlMeta.ObjectPartIndex(testCase.partNum); index != testCase.expectedIndex {
+		if index := objectPartIndex(xlMeta.Parts, testCase.partNum); index != testCase.expectedIndex {
 			t.Fatalf("%+v: expected = %d, got: %d", testCase, testCase.expectedIndex, index)
 		}
 	}
