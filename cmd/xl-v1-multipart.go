@@ -259,7 +259,7 @@ func (xl xlObjects) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 // request, returns back a unique upload id.
 //
 // Internally this function creates 'uploads.json' associated for the
-// incoming object at '.minio/multipart/bucket/object/uploads.json' on
+// incoming object at '.minio.sys/multipart/bucket/object/uploads.json' on
 // all the disks. `uploads.json` carries metadata regarding on going
 // multipart operation on the object.
 func (xl xlObjects) newMultipartUpload(bucket string, object string, meta map[string]string) (uploadID string, err error) {
@@ -282,7 +282,7 @@ func (xl xlObjects) newMultipartUpload(bucket string, object string, meta map[st
 	// used for instrumentation on locks.
 	opsID := getOpsID()
 
-	// This lock needs to be held for any changes to the directory contents of ".minio/multipart/object/"
+	// This lock needs to be held for any changes to the directory contents of ".minio.sys/multipart/object/"
 	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object), opsID)
 	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object), opsID)
 
@@ -826,7 +826,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 		// Return success.
 		return s3MD5, nil
 	} // No more pending uploads for the object, proceed to delete
-	// object completely from '.minio/multipart'.
+	// object completely from '.minio.sys/multipart'.
 	if err = xl.deleteObject(minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object)); err != nil {
 		return "", toObjectErr(err, minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object))
 	}
@@ -837,7 +837,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 
 // abortMultipartUpload - wrapper for purging an ongoing multipart
 // transaction, deletes uploadID entry from `uploads.json` and purges
-// the directory at '.minio/multipart/bucket/object/uploadID' holding
+// the directory at '.minio.sys/multipart/bucket/object/uploadID' holding
 // all the upload parts.
 func (xl xlObjects) abortMultipartUpload(bucket, object, uploadID string) (err error) {
 	// Cleanup all uploaded parts.
@@ -870,7 +870,7 @@ func (xl xlObjects) abortMultipartUpload(bucket, object, uploadID string) (err e
 		}
 		return nil
 	} // No more pending uploads for the object, we purge the entire
-	// entry at '.minio/multipart/bucket/object'.
+	// entry at '.minio.sys/multipart/bucket/object'.
 	if err = xl.deleteObject(minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object)); err != nil {
 		return toObjectErr(err, minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object))
 	}
