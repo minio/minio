@@ -67,7 +67,7 @@ func newFSObjects(disk string) (ObjectLayer, error) {
 		return nil, err
 	}
 
-	// Attempt to create `.minio`.
+	// Attempt to create `.minio.sys`.
 	err = storage.MakeVol(minioMetaBucket)
 	if err != nil {
 		switch err {

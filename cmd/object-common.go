@@ -134,7 +134,7 @@ func initMetaVolume(storageDisks []StorageAPI) error {
 			// Indicate this wait group is done.
 			defer wg.Done()
 
-			// Attempt to create `.minio`.
+			// Attempt to create `.minio.sys`.
 			err := disk.MakeVol(minioMetaBucket)
 			if err != nil {
 				switch err {
@@ -184,8 +184,12 @@ func xlHouseKeeping(storageDisks []StorageAPI) error {
 
 			// Cleanup all temp entries upon start.
 			err := cleanupDir(disk, minioMetaBucket, tmpMetaPrefix)
-			if err != nil && err != errDiskNotFound {
-				errs[index] = err
+			if err != nil {
+				switch errorCause(err) {
+				case errDiskNotFound, errVolumeNotFound:
+				default:
+					errs[index] = err
+				}
 			}
 		}(index, disk)
 	}
