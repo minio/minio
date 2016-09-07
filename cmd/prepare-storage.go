@@ -60,7 +60,7 @@ func init() {
   | Quorum   | 				|  "Heal via minioctl"  |
   |          | Quorum UnFormatted   	|                   	|
   +----------+--------------------------+-----------------------+
-  | No       |           		|  Wait till enough     |
+  | No       |          		|  Wait till enough     |
   | Quorum   |          _  		|  nodes are online and |
   |	     |                          |  one of the above     |
   |          |				|  sections apply       |
@@ -128,15 +128,19 @@ func prepForInit(disks []string, sErrs []error, diskCount int) InitActions {
 	// Already formatted, proceed to initialization of object layer.
 	if disksFormatted == diskCount {
 		return InitObjectLayer
-	} else if disksFormatted >= quorum && disksFormatted+disksOffline == diskCount {
-		return InitObjectLayer
 	} else if disksFormatted >= quorum {
-		// TODO: Print minioctl heal command
+		if (disksFormatted+disksOffline == diskCount) ||
+			(disksFormatted+disksUnformatted == diskCount) {
+			return InitObjectLayer
+		}
+		if (disksFormatted+disksCorrupted == diskCount) {
+			return WaitForHeal
+		}
 		return InitObjectLayer
 	}
 
 	// No Quorum.
-	if disksOffline > quorum {
+	if disksOffline >= quorum {
 		return WaitForQuorum
 	}
 
