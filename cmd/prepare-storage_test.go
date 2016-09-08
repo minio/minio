@@ -108,6 +108,10 @@ func TestPrepForInit(t *testing.T) {
 		errUnformattedDisk, errUnformattedDisk, errUnformattedDisk, errUnformattedDisk,
 		errUnformattedDisk, errDiskNotFound, errDiskNotFound, errDiskNotFound,
 	}
+	quorumUnformattedSomeCorrupted := []error {
+		errUnformattedDisk, errUnformattedDisk, errUnformattedDisk, errUnformattedDisk,
+		errUnformattedDisk, errCorruptedFormat, errCorruptedFormat, errDiskNotFound,
+	}
 	// Quorum number of disks not online yet.
 	noQuourm := []error {
 		errDiskNotFound, errDiskNotFound, errDiskNotFound, errDiskNotFound,
@@ -126,6 +130,7 @@ func TestPrepForInit(t *testing.T) {
 		{disksLocal, quorumFormatted, 8, InitObjectLayer},
 		{disksLocal, allUnformatted, 8, FormatDisks},
 		{disksLocal, quorumUnformatted, 8, WaitForAll},
+		{disksLocal, quorumUnformattedSomeCorrupted, 8, WaitForHeal},
 		{disksLocal, noQuourm, 8, WaitForQuorum},
 		{disksLocal, minorityCorrupted, 8, WaitForHeal},
 		{disksLocal, majorityCorrupted, 8, Abort},
@@ -134,6 +139,7 @@ func TestPrepForInit(t *testing.T) {
 		{disksRemote, quorumFormatted, 8, InitObjectLayer},
 		{disksRemote, allUnformatted, 8, WaitForFormatting},
 		{disksRemote, quorumUnformatted, 8, WaitForAll},
+		{disksRemote, quorumUnformattedSomeCorrupted, 8, WaitForHeal},
 		{disksRemote, noQuourm, 8, WaitForQuorum},
 		{disksRemote, minorityCorrupted, 8, WaitForHeal},
 		{disksRemote, majorityCorrupted, 8, Abort},

@@ -121,8 +121,13 @@ func prepForInit(disks []string, sErrs []error, diskCount int) InitActions {
 			return FormatDisks
 		}
 		return WaitForFormatting
-	} else if (disksUnformatted >= quorum) && (disksUnformatted+disksOffline == diskCount) {
-		return WaitForAll
+	} else if (disksUnformatted >= quorum) {
+		if (disksUnformatted+disksOffline == diskCount) {
+			return WaitForAll
+		} else {
+			// Some disks possibly corrupted.
+			return WaitForHeal
+		}
 	}
 
 	// Already formatted, proceed to initialization of object layer.
@@ -132,11 +137,10 @@ func prepForInit(disks []string, sErrs []error, diskCount int) InitActions {
 		if (disksFormatted+disksOffline == diskCount) ||
 			(disksFormatted+disksUnformatted == diskCount) {
 			return InitObjectLayer
-		}
-		if (disksFormatted+disksCorrupted == diskCount) {
+		} else {
+			// Some disks possibly corrupted.
 			return WaitForHeal
 		}
-		return InitObjectLayer
 	}
 
 	// No Quorum.
