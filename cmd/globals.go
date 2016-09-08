@@ -17,9 +17,10 @@
 package cmd
 
 import (
+	"os"
+
 	"github.com/fatih/color"
 	"github.com/minio/minio/pkg/objcache"
-	"os"
 )
 
 // Global constants for Minio.
@@ -63,10 +64,13 @@ var (
 	maxFormFieldSize = int64(1024 * 1024)
 )
 
-// global colors.
+// Global colors.
 var (
-	colorBlue = color.New(color.FgBlue).SprintfFunc()
-	colorBold = color.New(color.Bold).SprintFunc()
+	colorBold   = color.New(color.Bold).SprintFunc()
+	colorBlue   = color.New(color.FgBlue).SprintfFunc()
+	colorCyan   = color.New(color.FgCyan).SprintfFunc()
+	colorGreen  = color.New(color.FgGreen).SprintfFunc()
+	colorYellow = color.New(color.FgYellow).SprintfFunc()
 )
 
 // fetch from environment variables and set the global values related to locks.

@@ -16,6 +16,44 @@
 
 package cmd
 
+// Converts rpc.ServerError to underlying error. This function is
+// written so that the controller errors are consistent across network
+// as well.
+func toObjectCtrlErr(err error, params ...string) error {
+	if err == nil {
+		return nil
+	}
+
+	switch err.Error() {
+	case StorageFull{}.Error():
+		err = StorageFull{}
+	}
+	if len(params) == 1 {
+		switch err.Error() {
+		case BucketNotFound{Bucket: params[0]}.Error():
+			err = BucketNotFound{Bucket: params[0]}
+		}
+	} else if len(params) >= 2 {
+		switch err.Error() {
+		case ObjectNotFound{Bucket: params[0], Object: params[1]}.Error():
+			err = ObjectNotFound{
+				Bucket: params[0],
+				Object: params[1],
+			}
+		case ObjectNameInvalid{Bucket: params[0], Object: params[1]}.Error():
+			err = ObjectNameInvalid{
+				Bucket: params[0],
+				Object: params[1],
+			}
+		case InsufficientReadQuorum{}.Error():
+			err = InsufficientReadQuorum{}
+		case InsufficientWriteQuorum{}.Error():
+			err = InsufficientWriteQuorum{}
+		}
+	}
+	return err
+}
+
 /// Auth operations
 
 // Login - login handler.
@@ -87,9 +125,6 @@ type HealObjectArgs struct {
 	// Name of the object.
 	Object string
 }
-
-// HealObjectReply - reply by HealObject RPC.
-type HealObjectReply struct{}
 
 // HealObject - heal the object.
 func (c *controllerAPIHandlers) HealObjectHandler(args *HealObjectArgs, reply *GenericReply) error {
