@@ -17,8 +17,8 @@
 package cmd
 
 import (
-	"testing"
 	"runtime"
+	"testing"
 )
 
 func (action InitActions) String() string {
@@ -44,7 +44,7 @@ func (action InitActions) String() string {
 func TestPrepForInit(t *testing.T) {
 	var disks []string
 	if runtime.GOOS == "windows" {
-		disks = []string {
+		disks = []string{
 			`c:\mnt\disk1`,
 			`c:\mnt\disk2`,
 			`c:\mnt\disk3`,
@@ -55,7 +55,7 @@ func TestPrepForInit(t *testing.T) {
 			`c:\mnt\disk8`,
 		}
 	} else {
-		disks = []string {
+		disks = []string{
 			"/mnt/disk1",
 			"/mnt/disk2",
 			"/mnt/disk3",
@@ -68,62 +68,62 @@ func TestPrepForInit(t *testing.T) {
 	}
 	// Building up disks that resolve to localhost and remote w.r.t isLocalStorage().
 	var (
-		disksLocal []string
+		disksLocal  []string
 		disksRemote []string
 	)
 	for i := range disks {
-		disksLocal = append(disksLocal, "localhost:" + disks[i])
+		disksLocal = append(disksLocal, "localhost:"+disks[i])
 	}
 	// Using 4.4.4.4 as a known non-local address.
 	for i := range disks {
-		disksRemote = append(disksRemote, "4.4.4.4:" + disks[i])
+		disksRemote = append(disksRemote, "4.4.4.4:"+disks[i])
 	}
 	// All disks are unformatted, a fresh setup.
-	allUnformatted := []error {
+	allUnformatted := []error{
 		errUnformattedDisk, errUnformattedDisk, errUnformattedDisk, errUnformattedDisk,
 		errUnformattedDisk, errUnformattedDisk, errUnformattedDisk, errUnformattedDisk,
 	}
 	// All disks are formatted, possible restart of a node in a formatted setup.
-	allFormatted := []error {
+	allFormatted := []error{
 		nil, nil, nil, nil,
 		nil, nil, nil, nil,
 	}
 	// Quorum number of disks are formatted and rest are offline.
-	quorumFormatted := []error {
+	quorumFormatted := []error{
 		nil, nil, nil, nil,
 		nil, errDiskNotFound, errDiskNotFound, errDiskNotFound,
 	}
 	// Minority disks are corrupted, can be healed.
-	minorityCorrupted := []error {
+	minorityCorrupted := []error{
 		errCorruptedFormat, errCorruptedFormat, errCorruptedFormat, nil,
 		nil, nil, nil, nil,
 	}
 	// Majority disks are corrupted, pretty bad setup.
-	majorityCorrupted := []error {
+	majorityCorrupted := []error{
 		errCorruptedFormat, errCorruptedFormat, errCorruptedFormat, errCorruptedFormat,
 		errCorruptedFormat, nil, nil, nil,
 	}
 	// Quorum disks are unformatted, remaining yet to come online.
-	quorumUnformatted := []error {
+	quorumUnformatted := []error{
 		errUnformattedDisk, errUnformattedDisk, errUnformattedDisk, errUnformattedDisk,
 		errUnformattedDisk, errDiskNotFound, errDiskNotFound, errDiskNotFound,
 	}
-	quorumUnformattedSomeCorrupted := []error {
+	quorumUnformattedSomeCorrupted := []error{
 		errUnformattedDisk, errUnformattedDisk, errUnformattedDisk, errUnformattedDisk,
 		errUnformattedDisk, errCorruptedFormat, errCorruptedFormat, errDiskNotFound,
 	}
 	// Quorum number of disks not online yet.
-	noQuourm := []error {
+	noQuourm := []error{
 		errDiskNotFound, errDiskNotFound, errDiskNotFound, errDiskNotFound,
 		errDiskNotFound, nil, nil, nil,
 	}
 
 	testCases := []struct {
 		// Params for prepForInit().
-		disks []string
-		errs []error
+		disks     []string
+		errs      []error
 		diskCount int
-		action InitActions
+		action    InitActions
 	}{
 		// Local disks.
 		{disksLocal, allFormatted, 8, InitObjectLayer},
@@ -143,7 +143,6 @@ func TestPrepForInit(t *testing.T) {
 		{disksRemote, noQuourm, 8, WaitForQuorum},
 		{disksRemote, minorityCorrupted, 8, WaitForHeal},
 		{disksRemote, majorityCorrupted, 8, Abort},
-
 	}
 	for i, test := range testCases {
 		actual := prepForInit(test.disks, test.errs, test.diskCount)
