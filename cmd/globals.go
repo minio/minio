@@ -17,6 +17,8 @@
 package cmd
 
 import (
+	"time"
+
 	"github.com/fatih/color"
 	"github.com/minio/minio/pkg/objcache"
 )
@@ -56,6 +58,11 @@ var (
 	// Limit fields size (except file) to 1Mib since Policy document
 	// can reach that size according to https://aws.amazon.com/articles/1434
 	maxFormFieldSize = int64(1024 * 1024)
+)
+
+var (
+	// The maximum allowed difference between the request generation time and the server processing time
+	maxSkewTime = 15 * time.Minute
 )
 
 // global colors.
