@@ -21,6 +21,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"strings"
@@ -29,6 +30,18 @@ import (
 
 	"github.com/pkg/profile"
 )
+
+// make a copy of http.Header
+func cloneHeader(h http.Header) http.Header {
+	h2 := make(http.Header, len(h))
+	for k, vv := range h {
+		vv2 := make([]string, len(vv))
+		copy(vv2, vv)
+		h2[k] = vv2
+
+	}
+	return h2
+}
 
 // xmlDecoder provide decoded value in xml.
 func xmlDecoder(body io.Reader, v interface{}, size int64) error {
