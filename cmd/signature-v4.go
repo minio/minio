@@ -342,8 +342,21 @@ func doesSignatureMatch(hashedPayload string, r *http.Request, validateRegion bo
 		return ErrContentSHA256Mismatch
 	}
 
+	header := req.Header
+
+	// Signature-V4 spec excludes Content-Length from signed headers list for signature calculation.
+	// But some clients deviate from this rule. Hence we consider Content-Length for signature
+	// calculation to be compatible with such clients.
+	for _, h := range signV4Values.SignedHeaders {
+		if h == "content-length" {
+			header = cloneHeader(req.Header)
+			header.Add("content-length", strconv.FormatInt(r.ContentLength, 10))
+			break
+		}
+	}
+
 	// Extract all the signed headers along with its values.
-	extractedSignedHeaders, errCode := extractSignedHeaders(signV4Values.SignedHeaders, req.Header)
+	extractedSignedHeaders, errCode := extractSignedHeaders(signV4Values.SignedHeaders, header)
 	if errCode != ErrNone {
 		return errCode
 	}

@@ -16,7 +16,35 @@
 
 package cmd
 
-import "testing"
+import (
+	"net/http"
+	"reflect"
+	"testing"
+)
+
+// Tests http.Header clone.
+func TestCloneHeader(t *testing.T) {
+	headers := []http.Header{
+		http.Header{
+			"Content-Type":   {"text/html; charset=UTF-8"},
+			"Content-Length": {"0"},
+		},
+		http.Header{
+			"Content-Length": {"0", "1", "2"},
+		},
+		http.Header{
+			"Expires":          {"-1"},
+			"Content-Length":   {"0"},
+			"Content-Encoding": {"gzip"},
+		},
+	}
+	for i, header := range headers {
+		clonedHeader := cloneHeader(header)
+		if !reflect.DeepEqual(header, clonedHeader) {
+			t.Errorf("Test %d failed", i+1)
+		}
+	}
+}
 
 // Tests maximum object size.
 func TestMaxObjectSize(t *testing.T) {
