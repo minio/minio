@@ -613,18 +613,18 @@ func TestReduceFormatErrs(t *testing.T) {
 	}
 	// Expect corrupted format error
 	if err := reduceFormatErrs([]error{nil, nil, errCorruptedFormat, nil}, 4); err != errCorruptedFormat {
-		t.Fatalf("Got a differnt error: ", err)
+		t.Fatal("Got a differnt error: ", err)
 	}
 	// Expect unformatted disk
 	if err := reduceFormatErrs([]error{errUnformattedDisk, errUnformattedDisk, errUnformattedDisk, errUnformattedDisk}, 4); err != errUnformattedDisk {
-		t.Fatalf("Got a differnt error: ", err)
+		t.Fatal("Got a differnt error: ", err)
 	}
 	// Expect some disks unformatted
 	if err := reduceFormatErrs([]error{nil, nil, errUnformattedDisk, errUnformattedDisk}, 4); err != errSomeDiskUnformatted {
-		t.Fatalf("Got a differnt error: ", err)
+		t.Fatal("Got a differnt error: ", err)
 	}
 	// Expect some disks offline
 	if err := reduceFormatErrs([]error{nil, nil, errDiskNotFound, errUnformattedDisk}, 4); err != errSomeDiskOffline {
-		t.Fatalf("Got a differnt error: ", err)
+		t.Fatal("Got a differnt error: ", err)
 	}
 }

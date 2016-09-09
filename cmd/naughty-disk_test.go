@@ -31,6 +31,10 @@ type naughtyDisk struct {
 	callNR int
 }
 
+func newNaughtyDisk(d *posix, errs map[int]error, defaultErr error) *naughtyDisk {
+	return &naughtyDisk{disk: d, errors: errs, defaultErr: defaultErr}
+}
+
 func (d *naughtyDisk) calcError() (err error) {
 	d.callNR++
 	if err, ok := d.errors[d.callNR]; ok {
