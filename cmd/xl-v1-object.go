@@ -375,22 +375,23 @@ func (xl xlObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 
 // getObjectInfo - wrapper for reading object metadata and constructs ObjectInfo.
 func (xl xlObjects) getObjectInfo(bucket, object string) (objInfo ObjectInfo, err error) {
-	var xlMeta xlMetaV1
-	xlMeta, err = xl.readXLMetadata(bucket, object)
+	// returns xl meta map and stat info.
+	xlStat, xlMetaMap, err := xl.readXLMetaStat(bucket, object)
 	if err != nil {
 		// Return error.
 		return ObjectInfo{}, err
 	}
+
 	objInfo = ObjectInfo{
 		IsDir:           false,
 		Bucket:          bucket,
 		Name:            object,
-		Size:            xlMeta.Stat.Size,
-		ModTime:         xlMeta.Stat.ModTime,
-		MD5Sum:          xlMeta.Meta["md5Sum"],
-		ContentType:     xlMeta.Meta["content-type"],
-		ContentEncoding: xlMeta.Meta["content-encoding"],
-		UserDefined:     xlMeta.Meta,
+		Size:            xlStat.Size,
+		ModTime:         xlStat.ModTime,
+		MD5Sum:          xlMetaMap["md5Sum"],
+		ContentType:     xlMetaMap["content-type"],
+		ContentEncoding: xlMetaMap["content-encoding"],
+		UserDefined:     xlMetaMap,
 	}
 	return objInfo, nil
 }
