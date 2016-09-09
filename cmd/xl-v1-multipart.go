@@ -512,7 +512,7 @@ func (xl xlObjects) listObjectParts(bucket, object, uploadID string, partNumberM
 
 	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID)
 
-	xlMeta, err := xl.readXLMetadata(minioMetaBucket, uploadIDPath)
+	xlParts, err := xl.readXLMetaParts(minioMetaBucket, uploadIDPath)
 	if err != nil {
 		return ListPartsInfo{}, toObjectErr(err, minioMetaBucket, uploadIDPath)
 	}
@@ -524,7 +524,7 @@ func (xl xlObjects) listObjectParts(bucket, object, uploadID string, partNumberM
 	result.MaxParts = maxParts
 
 	// For empty number of parts or maxParts as zero, return right here.
-	if len(xlMeta.Parts) == 0 || maxParts == 0 {
+	if len(xlParts) == 0 || maxParts == 0 {
 		return result, nil
 	}
 
@@ -534,10 +534,10 @@ func (xl xlObjects) listObjectParts(bucket, object, uploadID string, partNumberM
 	}
 
 	// Only parts with higher part numbers will be listed.
-	partIdx := xlMeta.ObjectPartIndex(partNumberMarker)
-	parts := xlMeta.Parts
+	partIdx := objectPartIndex(xlParts, partNumberMarker)
+	parts := xlParts
 	if partIdx != -1 {
-		parts = xlMeta.Parts[partIdx+1:]
+		parts = xlParts[partIdx+1:]
 	}
 	count := maxParts
 	for _, part := range parts {
@@ -675,7 +675,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 
 	// Validate each part and then commit to disk.
 	for i, part := range parts {
-		partIdx := currentXLMeta.ObjectPartIndex(part.PartNumber)
+		partIdx := objectPartIndex(currentXLMeta.Parts, part.PartNumber)
 		// All parts should have same part number.
 		if partIdx == -1 {
 			return "", traceError(InvalidPart{})
@@ -779,7 +779,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 
 	// Remove parts that weren't present in CompleteMultipartUpload request.
 	for _, curpart := range currentXLMeta.Parts {
-		if xlMeta.ObjectPartIndex(curpart.Number) == -1 {
+		if objectPartIndex(xlMeta.Parts, curpart.Number) == -1 {
 			// Delete the missing part files. e.g,
 			// Request 1: NewMultipart
 			// Request 2: PutObjectPart 1
