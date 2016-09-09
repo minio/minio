@@ -170,6 +170,18 @@
 			"revisionTime": "2016-03-11T21:55:03Z"
 		},
 		{
+			"checksumSHA1": "+Pcohsuq0Mi/y8bgaDFjb/CGzkk=",
+			"path": "github.com/tidwall/gjson",
+			"revision": "7c631e98686a791e5fc60ff099512968122afb52",
+			"revisionTime": "2016-09-08T16:02:40Z"
+		},
+		{
+			"checksumSHA1": "qmePMXEDYGwkAfT9QvtMC58JN/E=",
+			"path": "github.com/tidwall/match",
+			"revision": "173748da739a410c5b0b813b956f89ff94730b4c",
+			"revisionTime": "2016-08-30T17:39:30Z"
+		},
+		{
 			"path": "golang.org/x/crypto/bcrypt",
 			"revision": "7b85b097bf7527677d54d3220065e966a0e3b613",
 			"revisionTime": "2015-11-30T17:07:01-05:00"
