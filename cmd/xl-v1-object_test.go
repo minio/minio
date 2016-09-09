@@ -59,7 +59,6 @@ func TestRepeatPutObjectPart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
 }
 
 func TestXLDeleteObjectBasic(t *testing.T) {
@@ -130,7 +129,7 @@ func TestXLDeleteObjectDiskNotFound(t *testing.T) {
 	// for a 16 disk setup, quorum is 9. To simulate disks not found yet
 	// quorum is available, we remove disks leaving quorum disks behind.
 	for i := range xl.storageDisks[:7] {
-		xl.storageDisks[i] = newFaultyDisk(xl.storageDisks[i].(*posix), 0)
+		xl.storageDisks[i] = newNaughtyDisk(xl.storageDisks[i].(*posix), nil, errFaultyDisk)
 	}
 	err = obj.DeleteObject(bucket, object)
 	if err != nil {
@@ -144,8 +143,8 @@ func TestXLDeleteObjectDiskNotFound(t *testing.T) {
 	}
 
 	// Remove one more disk to 'lose' quorum, by setting it to nil.
-	xl.storageDisks[7] = &faultyDisk{}
-	xl.storageDisks[8] = &faultyDisk{}
+	xl.storageDisks[7] = nil
+	xl.storageDisks[8] = nil
 	err = obj.DeleteObject(bucket, object)
 	if err != toObjectErr(errXLWriteQuorum, bucket, object) {
 		t.Errorf("Expected deleteObject to fail with %v, but failed with %v", toObjectErr(errXLWriteQuorum, bucket, object), err)
@@ -180,15 +179,19 @@ func TestGetObjectNoQuorum(t *testing.T) {
 	xl.objCacheEnabled = false
 	// Make 9 disks offline, which leaves less than quorum number of disks
 	// in a 16 disk XL setup. The original disks are 'replaced' with
-	// faultyDisks that fail after 'f' successful StorageAPI method
+	// naughtyDisks that fail after 'f' successful StorageAPI method
 	// invocations, where f - [0,2)
 	for f := 0; f < 2; f++ {
+		diskErrors := make(map[int]error)
+		for i := 0; i <= f; i++ {
+			diskErrors[i] = nil
+		}
 		for i := range xl.storageDisks[:9] {
 			switch diskType := xl.storageDisks[i].(type) {
 			case *posix:
-				xl.storageDisks[i] = newFaultyDisk(diskType, f)
-			case *faultyDisk:
-				xl.storageDisks[i] = newFaultyDisk(diskType.disk, f)
+				xl.storageDisks[i] = newNaughtyDisk(diskType, diskErrors, errFaultyDisk)
+			case *naughtyDisk:
+				xl.storageDisks[i] = newNaughtyDisk(diskType.disk, diskErrors, errFaultyDisk)
 			}
 		}
 		// Fetch object from store.
@@ -226,15 +229,19 @@ func TestPutObjectNoQuorum(t *testing.T) {
 
 	// Make 9 disks offline, which leaves less than quorum number of disks
 	// in a 16 disk XL setup. The original disks are 'replaced' with
-	// faultyDisks that fail after 'f' successful StorageAPI method
+	// naughtyDisks that fail after 'f' successful StorageAPI method
 	// invocations, where f - [0,3)
 	for f := 0; f < 3; f++ {
+		diskErrors := make(map[int]error)
+		for i := 0; i <= f; i++ {
+			diskErrors[i] = nil
+		}
 		for i := range xl.storageDisks[:9] {
 			switch diskType := xl.storageDisks[i].(type) {
 			case *posix:
-				xl.storageDisks[i] = newFaultyDisk(diskType, f)
-			case *faultyDisk:
-				xl.storageDisks[i] = newFaultyDisk(diskType.disk, f)
+				xl.storageDisks[i] = newNaughtyDisk(diskType, diskErrors, errFaultyDisk)
+			case *naughtyDisk:
+				xl.storageDisks[i] = newNaughtyDisk(diskType.disk, diskErrors, errFaultyDisk)
 			}
 		}
 		// Upload new content to same object "object"
