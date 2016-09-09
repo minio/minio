@@ -198,9 +198,10 @@ func (h timeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			writeErrorResponse(w, r, apiErr, r.URL.Path)
 			return
 		}
-		// Verify if the request date header is more than 5minutes
-		// late, reject such clients.
-		if time.Now().UTC().Sub(amzDate)/time.Minute > time.Duration(5)*time.Minute {
+		// Verify if the request date header is shifted by less than maxSkewTime parameter in the past
+		// or in the future, reject request otherwise.
+		curTime := time.Now().UTC()
+		if curTime.Sub(amzDate) > maxSkewTime || amzDate.Sub(curTime) > maxSkewTime {
 			writeErrorResponse(w, r, ErrRequestTimeTooSkewed, r.URL.Path)
 			return
 		}
