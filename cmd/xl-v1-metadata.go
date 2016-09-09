@@ -136,9 +136,9 @@ func (m xlMetaV1) IsValid() bool {
 	return m.Version == "1.0.0" && m.Format == "xl"
 }
 
-// ObjectPartIndex - returns the index of matching object part number.
-func (m xlMetaV1) ObjectPartIndex(partNumber int) int {
-	for i, part := range m.Parts {
+// objectPartIndex - returns the index of matching object part number.
+func objectPartIndex(parts []objectPartInfo, partNumber int) int {
+	for i, part := range parts {
 		if partNumber == part.Number {
 			return i
 		}
@@ -214,16 +214,15 @@ var objMetadataOpIgnoredErrs = []error{
 	errFileNotFound,
 }
 
-// readXLMetadata - returns the object metadata `xl.json` content from
-// one of the disks picked at random.
-func (xl xlObjects) readXLMetadata(bucket, object string) (xlMeta xlMetaV1, err error) {
+// readXLMetaParts - returns the XL Metadata Parts from xl.json of one of the disks picked at random.
+func (xl xlObjects) readXLMetaParts(bucket, object string) (xlMetaParts []objectPartInfo, err error) {
 	for _, disk := range xl.getLoadBalancedDisks() {
 		if disk == nil {
 			continue
 		}
-		xlMeta, err = readXLMeta(disk, bucket, object)
+		xlMetaParts, err = readXLMetaParts(disk, bucket, object)
 		if err == nil {
-			return xlMeta, nil
+			return xlMetaParts, nil
 		}
 		// For any reason disk or bucket is not available continue
 		// and read from other disks.
@@ -233,7 +232,29 @@ func (xl xlObjects) readXLMetadata(bucket, object string) (xlMeta xlMetaV1, err 
 		break
 	}
 	// Return error here.
-	return xlMetaV1{}, err
+	return nil, err
+}
+
+// readXLMetaStat - return xlMetaV1.Stat and xlMetaV1.Meta from  one of the disks picked at random.
+func (xl xlObjects) readXLMetaStat(bucket, object string) (xlStat statInfo, xlMeta map[string]string, err error) {
+	for _, disk := range xl.getLoadBalancedDisks() {
+		if disk == nil {
+			continue
+		}
+		// parses only xlMetaV1.Meta and xlMeta.Stat
+		xlStat, xlMeta, err = readXLMetaStat(disk, bucket, object)
+		if err == nil {
+			return xlStat, xlMeta, nil
+		}
+		// For any reason disk or bucket is not available continue
+		// and read from other disks.
+		if isErrIgnored(err, objMetadataOpIgnoredErrs) {
+			continue
+		}
+		break
+	}
+	// Return error here.
+	return statInfo{}, nil, err
 }
 
 // deleteXLMetadata - deletes `xl.json` on a single disk.
