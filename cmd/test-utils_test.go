@@ -628,6 +628,11 @@ func newTestSignedRequest(method, urlStr string, contentLength int64, body io.Re
 		return nil, err
 	}
 
+	// Anonymous request return quickly.
+	if accessKey == "" || secretKey == "" {
+		return req, nil
+	}
+
 	err = signRequest(req, accessKey, secretKey)
 	if err != nil {
 		return nil, err
@@ -988,7 +993,13 @@ func getHEADBucketURL(endPoint, bucketName string) string {
 // return URL for deleting the bucket.
 func getDeleteBucketURL(endPoint, bucketName string) string {
 	return makeTestTargetURL(endPoint, bucketName, "", url.Values{})
+}
 
+// return URL For fetching location of the bucket.
+func getBucketLocationURL(endPoint, bucketName string) string {
+	queryValue := url.Values{}
+	queryValue.Set("location", "")
+	return makeTestTargetURL(endPoint, bucketName, "", queryValue)
 }
 
 // return URL for listing objects in the bucket with V1 legacy API.
@@ -1206,24 +1217,21 @@ func initTestAPIEndPoints(objLayer ObjectLayer, apiFunctions []string) http.Hand
 		// Register GetObject handler.
 		case "CopyObject`":
 			bucket.Methods("PUT").Path("/{object:.+}").HeadersRegexp("X-Amz-Copy-Source", ".*?(\\/|%2F).*?").HandlerFunc(api.CopyObjectHandler)
-
 		// Register PutBucket Policy handler.
 		case "PutBucketPolicy":
 			bucket.Methods("PUT").HandlerFunc(api.PutBucketPolicyHandler).Queries("policy", "")
-
 		// Register Delete bucket HTTP policy handler.
 		case "DeleteBucketPolicy":
 			bucket.Methods("DELETE").HandlerFunc(api.DeleteBucketPolicyHandler).Queries("policy", "")
-
-			// Register Get Bucket policy HTTP Handler.
+		// Register Get Bucket policy HTTP Handler.
 		case "GetBucketPolicy":
 			bucket.Methods("GET").HandlerFunc(api.GetBucketPolicyHandler).Queries("policy", "")
-
-			// Register Post Bucket policy function.
-		case "PostBucketPolicy":
-			bucket.Methods("POST").HeadersRegexp("Content-Type", "multipart/form-data*").HandlerFunc(api.PostPolicyBucketHandler)
-
-			// Register all api endpoints by default.
+		// Register GetBucketLocation handler.
+		case "GetBucketLocation":
+			bucket.Methods("GET").HandlerFunc(api.GetBucketLocationHandler).Queries("location", "")
+		case "HeadBucket":
+			bucket.Methods("HEAD").HandlerFunc(api.HeadBucketHandler)
+		// Register all api endpoints by default.
 		default:
 			registerAPIRouter(muxRouter, api)
 			// No need to register any more end points, all the end points are registered.
