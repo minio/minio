@@ -85,8 +85,7 @@ EXAMPLES:
           /mnt/export3/ /mnt/export4/ /mnt/export5/ /mnt/export6/ /mnt/export7/ \ 
 	  /mnt/export8/ /mnt/export9/ /mnt/export10/ /mnt/export11/ /mnt/export12/
 
-  6. Start minio server with 4 remote disks on all remote nodes. You need to execute the same command on all nodes
-     192.168.1.11, 192.168.1.12, 192.168.1.13 and 192.168.1.14.
+  6. Start minio server on a 4 node distributed setup. Type the following command on all the 4 nodes.
       $ export MINIO_ACCESS_KEY=minio
       $ export MINIO_SECRET_KEY=miniostorage
       $ minio {{.Name}} 192.168.1.11:/mnt/export/ 192.168.1.12:/mnt/export/ \

@@ -16,6 +16,8 @@
 
 package cmd
 
+import "github.com/minio/minio/pkg/disk"
+
 // naughtyDisk wraps a POSIX disk and returns programmed errors
 // specified by the developer. The purpose is to simulate errors
 // that are hard to simulate in practise like DiskNotFound.
@@ -44,6 +46,13 @@ func (d *naughtyDisk) calcError() (err error) {
 		return d.defaultErr
 	}
 	return nil
+}
+
+func (d *naughtyDisk) DiskInfo() (info disk.Info, err error) {
+	if err := d.calcError(); err != nil {
+		return info, err
+	}
+	return d.disk.DiskInfo()
 }
 
 func (d *naughtyDisk) MakeVol(volume string) (err error) {
