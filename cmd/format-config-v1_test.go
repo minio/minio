@@ -66,6 +66,75 @@ func genFormatXLInvalidVersion() []*formatConfigV1 {
 	return formatConfigs
 }
 
+// generates a invalid format.json version for XL backend.
+func genFormatXLInvalidFormat() []*formatConfigV1 {
+	jbod := make([]string, 8)
+	formatConfigs := make([]*formatConfigV1, 8)
+	for index := range jbod {
+		jbod[index] = getUUID()
+	}
+	for index := range jbod {
+		formatConfigs[index] = &formatConfigV1{
+			Version: "1",
+			Format:  "xl",
+			XL: &xlFormat{
+				Version: "1",
+				Disk:    jbod[index],
+				JBOD:    jbod,
+			},
+		}
+	}
+	// Corrupt version numbers.
+	formatConfigs[0].Format = "lx"
+	formatConfigs[3].Format = "lx"
+	return formatConfigs
+}
+
+// generates a invalid format.json version for XL backend.
+func genFormatXLInvalidXLVersion() []*formatConfigV1 {
+	jbod := make([]string, 8)
+	formatConfigs := make([]*formatConfigV1, 8)
+	for index := range jbod {
+		jbod[index] = getUUID()
+	}
+	for index := range jbod {
+		formatConfigs[index] = &formatConfigV1{
+			Version: "1",
+			Format:  "xl",
+			XL: &xlFormat{
+				Version: "1",
+				Disk:    jbod[index],
+				JBOD:    jbod,
+			},
+		}
+	}
+	// Corrupt version numbers.
+	formatConfigs[0].XL.Version = "10"
+	formatConfigs[3].XL.Version = "-1"
+	return formatConfigs
+}
+
+// generates a invalid format.json version for XL backend.
+func genFormatXLInvalidJBODCount() []*formatConfigV1 {
+	jbod := make([]string, 7)
+	formatConfigs := make([]*formatConfigV1, 8)
+	for index := range jbod {
+		jbod[index] = getUUID()
+	}
+	for index := range jbod {
+		formatConfigs[index] = &formatConfigV1{
+			Version: "1",
+			Format:  "xl",
+			XL: &xlFormat{
+				Version: "1",
+				Disk:    jbod[index],
+				JBOD:    jbod,
+			},
+		}
+	}
+	return formatConfigs
+}
+
 // generates a invalid format.json JBOD for XL backend.
 func genFormatXLInvalidJBOD() []*formatConfigV1 {
 	jbod := make([]string, 8)
@@ -391,12 +460,18 @@ func TestFormatXLReorderByInspection(t *testing.T) {
 // Wrapper for calling FormatXL tests - currently validates
 //  - valid format
 //  - unrecognized version number
+//  - unrecognized format tag
+//  - unrecognized xl version
+//  - wrong number of JBOD entries
 //  - invalid JBOD
 //  - invalid Disk uuid
 func TestFormatXL(t *testing.T) {
 	formatInputCases := [][]*formatConfigV1{
 		genFormatXLValid(),
 		genFormatXLInvalidVersion(),
+		genFormatXLInvalidFormat(),
+		genFormatXLInvalidXLVersion(),
+		genFormatXLInvalidJBODCount(),
 		genFormatXLInvalidJBOD(),
 		genFormatXLInvalidDisks(),
 		genFormatXLInvalidDisksOrder(),
@@ -423,6 +498,18 @@ func TestFormatXL(t *testing.T) {
 		},
 		{
 			formatConfigs: formatInputCases[4],
+			shouldPass:    false,
+		},
+		{
+			formatConfigs: formatInputCases[5],
+			shouldPass:    false,
+		},
+		{
+			formatConfigs: formatInputCases[6],
+			shouldPass:    false,
+		},
+		{
+			formatConfigs: formatInputCases[7],
 			shouldPass:    false,
 		},
 	}
@@ -477,5 +564,67 @@ func TestSavedUUIDOrder(t *testing.T) {
 		if testCase.shouldPass != isSavedUUIDInOrder(testCase.uuid, formatConfigs) {
 			t.Errorf("Test %d: Expected to pass but failed", i+1)
 		}
+	}
+}
+
+func TestInitFormatXLErrors(t *testing.T) {
+	// Create an instance of xl backend.
+	obj, fsDirs, err := getXLObjectLayer()
+	if err != nil {
+		t.Fatal(err)
+	}
+	xl := obj.(xlObjects)
+
+	testStorageDisks := make([]StorageAPI, 16)
+
+	for i := 0; i < 16; i++ {
+		d := xl.storageDisks[i].(*posix)
+		testStorageDisks[i] = &naughtyDisk{disk: d, defaultErr: errDiskNotFound}
+	}
+
+	if err := initFormatXL(testStorageDisks); err != errDiskNotFound {
+		t.Fatal("Got a different error: ", err)
+	}
+
+	for i := 0; i < 15; i++ {
+		d := xl.storageDisks[i].(*posix)
+		testStorageDisks[i] = &naughtyDisk{disk: d, defaultErr: errDiskNotFound, errors: map[int]error{0: nil, 1: nil, 2: nil}}
+	}
+
+	if err := initFormatXL(testStorageDisks); err != errDiskNotFound {
+		t.Fatal("Got a different error: ", err)
+	}
+
+	for i := 0; i < 15; i++ {
+		testStorageDisks[i] = nil
+	}
+
+	if err := initFormatXL(testStorageDisks); err != errDiskNotFound {
+		t.Fatal("Got a different error: ", err)
+	}
+
+	removeRoots(fsDirs)
+}
+
+func TestReduceFormatErrs(t *testing.T) {
+	// No error founds
+	if err := reduceFormatErrs([]error{nil, nil, nil, nil}, 4); err != nil {
+		t.Fatal("Err should be nil, found: ", err)
+	}
+	// Expect corrupted format error
+	if err := reduceFormatErrs([]error{nil, nil, errCorruptedFormat, nil}, 4); err != errCorruptedFormat {
+		t.Fatalf("Got a differnt error: ", err)
+	}
+	// Expect unformatted disk
+	if err := reduceFormatErrs([]error{errUnformattedDisk, errUnformattedDisk, errUnformattedDisk, errUnformattedDisk}, 4); err != errUnformattedDisk {
+		t.Fatalf("Got a differnt error: ", err)
+	}
+	// Expect some disks unformatted
+	if err := reduceFormatErrs([]error{nil, nil, errUnformattedDisk, errUnformattedDisk}, 4); err != errSomeDiskUnformatted {
+		t.Fatalf("Got a differnt error: ", err)
+	}
+	// Expect some disks offline
+	if err := reduceFormatErrs([]error{nil, nil, errDiskNotFound, errUnformattedDisk}, 4); err != errSomeDiskOffline {
+		t.Fatalf("Got a differnt error: ", err)
 	}
 }
