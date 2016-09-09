@@ -262,8 +262,13 @@ func prepareFormatXLHealFreshDisks(obj ObjectLayer) ([]StorageAPI, error) {
 }
 
 func TestFormatXLHealFreshDisks(t *testing.T) {
+	nDisks := 16
+	fsDirs, err := getRandomDisks(nDisks)
+	if err != nil {
+		t.Fatal(err)
+	}
 	// Create an instance of xl backend.
-	obj, fsDirs, err := getXLObjectLayer()
+	obj, err := getXLObjectLayer(fsDirs)
 	if err != nil {
 		t.Error(err)
 	}
@@ -289,8 +294,13 @@ func TestFormatXLHealFreshDisks(t *testing.T) {
 }
 
 func TestFormatXLHealFreshDisksErrorExpected(t *testing.T) {
+	nDisks := 16
+	fsDirs, err := getRandomDisks(nDisks)
+	if err != nil {
+		t.Fatal(err)
+	}
 	// Create an instance of xl backend.
-	obj, fsDirs, err := getXLObjectLayer()
+	obj, err := getXLObjectLayer(fsDirs)
 	if err != nil {
 		t.Error(err)
 	}
@@ -568,8 +578,13 @@ func TestSavedUUIDOrder(t *testing.T) {
 
 // Test initFormatXL() when disks are expected to return errors
 func TestInitFormatXLErrors(t *testing.T) {
+	nDisks := 16
+	fsDirs, err := getRandomDisks(nDisks)
+	if err != nil {
+		t.Fatal(err)
+	}
 	// Create an instance of xl backend.
-	obj, fsDirs, err := getXLObjectLayer()
+	obj, err := getXLObjectLayer(fsDirs)
 	if err != nil {
 		t.Fatal(err)
 	}
