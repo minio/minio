@@ -145,18 +145,14 @@ func genFormatXLInvalidDisksOrder() []*formatConfigV1 {
 	return formatConfigs
 }
 
-func TestFormatXLHealFreshDisks(t *testing.T) {
-	// Create an instance of xl backend.
-	obj, fsDirs, err := getXLObjectLayer()
-	if err != nil {
-		t.Fatal(err)
-	}
+func prepareFormatXLHealFreshDisks(obj ObjectLayer) ([]StorageAPI, error) {
 
+	var err error
 	xl := obj.(xlObjects)
 
 	err = obj.MakeBucket("bucket")
 	if err != nil {
-		t.Fatal(err)
+		return []StorageAPI{}, err
 	}
 
 	bucket := "bucket"
@@ -164,34 +160,26 @@ func TestFormatXLHealFreshDisks(t *testing.T) {
 
 	_, err = obj.PutObject(bucket, object, int64(len("abcd")), bytes.NewReader([]byte("abcd")), nil)
 	if err != nil {
-		t.Fatal(err)
+		return []StorageAPI{}, err
 	}
-
-	/* // Now, remove two format files.. Load them and reorder
-	if err = xl.storageDisks[3].DeleteFile(".minio.sys", "format.json"); err != nil {
-		t.Fatal(err)
-	}
-	if err = xl.storageDisks[11].DeleteFile(".minio.sys", "format.json"); err != nil {
-		t.Fatal(err)
-	} */
 
 	// Remove the content of export dir 10 but preserve .minio.sys because it is automatically
 	// created when minio starts
 	for i := 3; i <= 5; i++ {
 		if err = xl.storageDisks[i].DeleteFile(".minio.sys", "format.json"); err != nil {
-			t.Fatal(err)
+			return []StorageAPI{}, err
 		}
 		if err = xl.storageDisks[i].DeleteFile(".minio.sys", "tmp"); err != nil {
-			t.Fatal(err)
+			return []StorageAPI{}, err
 		}
 		if err = xl.storageDisks[i].DeleteFile(bucket, object+"/xl.json"); err != nil {
-			t.Fatal(err)
+			return []StorageAPI{}, err
 		}
 		if err = xl.storageDisks[i].DeleteFile(bucket, object+"/part.1"); err != nil {
-			t.Fatal(err)
+			return []StorageAPI{}, err
 		}
 		if err = xl.storageDisks[i].DeleteVol(bucket); err != nil {
-			t.Fatal(err)
+			return []StorageAPI{}, err
 		}
 	}
 
@@ -201,16 +189,64 @@ func TestFormatXLHealFreshDisks(t *testing.T) {
 		xl.storageDisks[3], xl.storageDisks[10], xl.storageDisks[12], xl.storageDisks[9],
 		xl.storageDisks[5], xl.storageDisks[11]}
 
+	return permutedStorageDisks, nil
+
+}
+
+func TestFormatXLHealFreshDisks(t *testing.T) {
+	// Create an instance of xl backend.
+	obj, fsDirs, err := getXLObjectLayer()
+	if err != nil {
+		t.Error(err)
+	}
+
+	storageDisks, err := prepareFormatXLHealFreshDisks(obj)
+	if err != nil {
+		t.Fatal(err)
+	}
 	// Start healing disks
-	err = healFormatXLFreshDisks(permutedStorageDisks)
+	err = healFormatXLFreshDisks(storageDisks)
 	if err != nil {
 		t.Fatal("healing corrupted disk failed: ", err)
 	}
 
 	// Load again XL format.json to validate it
-	_, err = loadFormatXL(permutedStorageDisks)
+	_, err = loadFormatXL(storageDisks)
 	if err != nil {
 		t.Fatal("loading healed disk failed: ", err)
+	}
+
+	// Clean all
+	removeRoots(fsDirs)
+}
+
+func TestFormatXLHealFreshDisksErrorExpected(t *testing.T) {
+	// Create an instance of xl backend.
+	obj, fsDirs, err := getXLObjectLayer()
+	if err != nil {
+		t.Error(err)
+	}
+
+	storageDisks, err := prepareFormatXLHealFreshDisks(obj)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for i := 0; i < 16; i++ {
+		d := storageDisks[i].(*posix)
+		storageDisks[i] = &naughtyDisk{disk: d, defaultErr: errDiskNotFound}
+	}
+
+	// Load again XL format.json to validate it
+	_, err = loadFormatXL(storageDisks)
+	if err == nil {
+		t.Fatal("loading format disk error")
+	}
+
+	storageDisks[3] = nil
+	err = healFormatXLFreshDisks(storageDisks)
+	if err != nil {
+		t.Fatal("didn't get nil when one disk is offline")
 	}
 
 	// Clean all
