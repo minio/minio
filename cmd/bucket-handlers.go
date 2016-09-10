@@ -290,7 +290,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	// Write success response.
 	writeSuccessResponse(w, encodedSuccessResponse)
 
-	if eventN.IsBucketNotificationSet(bucket) {
+	if globalEventNotifier.IsBucketNotificationSet(bucket) {
 		// Notify deleted event for objects.
 		for _, dobj := range deletedObjects {
 			eventNotify(eventData{
@@ -403,7 +403,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	// Write successful response.
 	writeSuccessNoContent(w)
 
-	if eventN.IsBucketNotificationSet(bucket) {
+	if globalEventNotifier.IsBucketNotificationSet(bucket) {
 		// Fetch object info for notifications.
 		objInfo, err := api.ObjectAPI.GetObjectInfo(bucket, object)
 		if err != nil {

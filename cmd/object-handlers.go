@@ -357,7 +357,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	// write success response.
 	writeSuccessResponse(w, encodedSuccessResponse)
 
-	if eventN.IsBucketNotificationSet(bucket) {
+	if globalEventNotifier.IsBucketNotificationSet(bucket) {
 		// Notify object created event.
 		eventNotify(eventData{
 			Type:    ObjectCreatedCopy,
@@ -456,7 +456,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 	writeSuccessResponse(w, nil)
 
-	if eventN.IsBucketNotificationSet(bucket) {
+	if globalEventNotifier.IsBucketNotificationSet(bucket) {
 		// Fetch object info for notifications.
 		objInfo, err := api.ObjectAPI.GetObjectInfo(bucket, object)
 		if err != nil {
@@ -797,7 +797,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	w.Write(encodedSuccessResponse)
 	w.(http.Flusher).Flush()
 
-	if eventN.IsBucketNotificationSet(bucket) {
+	if globalEventNotifier.IsBucketNotificationSet(bucket) {
 		// Fetch object info for notifications.
 		objInfo, err := api.ObjectAPI.GetObjectInfo(bucket, object)
 		if err != nil {
@@ -851,7 +851,7 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 	}
 	writeSuccessNoContent(w)
 
-	if eventN.IsBucketNotificationSet(bucket) {
+	if globalEventNotifier.IsBucketNotificationSet(bucket) {
 		// Notify object deleted event.
 		eventNotify(eventData{
 			Type:   ObjectRemovedDelete,

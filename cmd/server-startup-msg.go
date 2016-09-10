@@ -60,6 +60,11 @@ func printServerCommonMsg(endPoints []string) {
 	console.Println(colorBlue("AccessKey: ") + colorBold(fmt.Sprintf("%s ", cred.AccessKeyID)))
 	console.Println(colorBlue("SecretKey: ") + colorBold(fmt.Sprintf("%s ", cred.SecretAccessKey)))
 	console.Println(colorBlue("Region: ") + colorBold(fmt.Sprintf(getFormatStr(len(region), 3), region)))
+	arnMsg := colorBlue("SqsARNs: ")
+	for queueArn := range globalEventNotifier.queueTargets {
+		arnMsg += colorBold(fmt.Sprintf(getFormatStr(len(queueArn), 2), queueArn))
+	}
+	console.Println(arnMsg)
 
 	console.Println(colorBlue("\nBrowser Access:"))
 	console.Println(fmt.Sprintf(getFormatStr(len(endPointStr), 3), endPointStr))

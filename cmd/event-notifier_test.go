@@ -16,7 +16,73 @@
 
 package cmd
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
+
+// Tests event notify.
+func TestEventNotify(t *testing.T) {
+	ExecObjectLayerTest(t, testEventNotify)
+}
+
+func testEventNotify(obj ObjectLayer, instanceType string, t TestErrHandler) {
+	bucketName := getRandomBucketName()
+
+	// initialize the server and obtain the credentials and root.
+	// credentials are necessary to sign the HTTP request.
+	rootPath, err := newTestConfig("us-east-1")
+	if err != nil {
+		t.Fatalf("Init Test config failed")
+	}
+	// remove the root folder after the test ends.
+	defer removeAll(rootPath)
+
+	initEventNotifier(obj)
+
+	// Notify object created event.
+	eventNotify(eventData{
+		Type:   ObjectCreatedPost,
+		Bucket: bucketName,
+		ObjInfo: ObjectInfo{
+			Bucket: bucketName,
+			Name:   "object1",
+		},
+		ReqParams: map[string]string{
+			"sourceIPAddress": "localhost:1337",
+		},
+	})
+
+	if err := globalEventNotifier.SetBucketNotificationConfig(bucketName, nil); err != errInvalidArgument {
+		t.Errorf("Expected error %s, got %s", errInvalidArgument, err)
+	}
+
+	if err := globalEventNotifier.SetBucketNotificationConfig(bucketName, &notificationConfig{}); err != nil {
+		t.Errorf("Expected error to be nil, got %s", err)
+	}
+
+	if !globalEventNotifier.IsBucketNotificationSet(bucketName) {
+		t.Errorf("Notification expected to be set, but notification not set.")
+	}
+
+	nConfig := globalEventNotifier.GetBucketNotificationConfig(bucketName)
+	if !reflect.DeepEqual(nConfig, &notificationConfig{}) {
+		t.Errorf("Mismatching notification configs.")
+	}
+
+	// Notify object created event.
+	eventNotify(eventData{
+		Type:   ObjectCreatedPost,
+		Bucket: bucketName,
+		ObjInfo: ObjectInfo{
+			Bucket: bucketName,
+			Name:   "object1",
+		},
+		ReqParams: map[string]string{
+			"sourceIPAddress": "localhost:1337",
+		},
+	})
+}
 
 // Tests various forms of inititalization of event notifier.
 func TestInitEventNotifier(t *testing.T) {
