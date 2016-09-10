@@ -103,6 +103,7 @@ const (
 	ErrNegativeExpires
 	ErrAuthHeaderEmpty
 	ErrExpiredPresignRequest
+	ErrRequestNotReadyYet
 	ErrUnsignedHeaders
 	ErrMissingDateHeader
 	ErrInvalidQuerySignatureAlgo
@@ -446,6 +447,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	ErrExpiredPresignRequest: {
 		Code:           "AccessDenied",
 		Description:    "Request has expired",
+		HTTPStatusCode: http.StatusForbidden,
+	},
+	ErrRequestNotReadyYet: {
+		Code:           "AccessDenied",
+		Description:    "Request is not valid yet",
 		HTTPStatusCode: http.StatusForbidden,
 	},
 	// FIXME: Actual XML error response also contains the header which missed in lsit of signed header parameters.

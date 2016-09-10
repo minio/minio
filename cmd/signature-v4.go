@@ -246,6 +246,10 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, validate
 
 	query.Set("X-Amz-Algorithm", signV4Algorithm)
 
+	if pSignValues.Date.After(time.Now().UTC()) {
+		return ErrRequestNotReadyYet
+	}
+
 	if time.Now().UTC().Sub(pSignValues.Date) > time.Duration(pSignValues.Expires) {
 		return ErrExpiredPresignRequest
 	}
