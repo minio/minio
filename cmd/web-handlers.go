@@ -396,7 +396,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if eventN.IsBucketNotificationSet(bucket) {
+	if globalEventNotifier.IsBucketNotificationSet(bucket) {
 		// Notify object created event.
 		eventNotify(eventData{
 			Type:    ObjectCreatedPut,

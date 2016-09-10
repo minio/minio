@@ -141,7 +141,7 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 	}
 
 	// Set bucket notification config.
-	eventN.SetBucketNotificationConfig(bucket, &notificationCfg)
+	globalEventNotifier.SetBucketNotificationConfig(bucket, &notificationCfg)
 
 	// Success.
 	writeSuccessResponse(w, nil)
@@ -227,7 +227,7 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 		return
 	}
 
-	notificationCfg := eventN.GetBucketNotificationConfig(bucket)
+	notificationCfg := globalEventNotifier.GetBucketNotificationConfig(bucket)
 	if notificationCfg == nil {
 		writeErrorResponse(w, r, ErrARNNotification, r.URL.Path)
 		return
@@ -249,9 +249,9 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 	defer close(nEventCh)
 
 	// Set sns target.
-	eventN.SetSNSTarget(topicARN, nEventCh)
+	globalEventNotifier.SetSNSTarget(topicARN, nEventCh)
 	// Remove sns listener after the writer has closed or the client disconnected.
-	defer eventN.RemoveSNSTarget(topicARN, nEventCh)
+	defer globalEventNotifier.RemoveSNSTarget(topicARN, nEventCh)
 
 	// Start sending bucket notifications.
 	sendBucketNotification(w, nEventCh)

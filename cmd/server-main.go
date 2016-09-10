@@ -256,14 +256,14 @@ func serverMain(c *cli.Context) {
 	// Fetch endpoints which we are going to serve from.
 	endPoints := finalizeEndpoints(tls, &apiServer.Server)
 
-	// Prints the formatted startup message.
-	printStartupMessage(endPoints)
-
 	// Register generic callbacks.
 	globalShutdownCBs.AddGenericCB(func() errCode {
 		// apiServer.Stop()
 		return exitSuccess
 	})
+
+	// Prints the formatted startup message.
+	printStartupMessage(endPoints)
 
 	// Start server.
 	// Configure TLS if certs are available.
