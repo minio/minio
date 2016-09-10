@@ -274,3 +274,39 @@ func loadConfigV5() (*configV5, error) {
 	}
 	return c, nil
 }
+
+// configV6 server configuration version '6'.
+type configV6 struct {
+	Version string `json:"version"`
+
+	// S3 API configuration.
+	Credential credential `json:"credential"`
+	Region     string     `json:"region"`
+
+	// Additional error logging configuration.
+	Logger logger `json:"logger"`
+
+	// Notification queue configuration.
+	Notify notifier `json:"notify"`
+}
+
+// loadConfigV6 load config version '6'.
+func loadConfigV6() (*configV6, error) {
+	configFile, err := getConfigFile()
+	if err != nil {
+		return nil, err
+	}
+	if _, err = os.Stat(configFile); err != nil {
+		return nil, err
+	}
+	c := &configV6{}
+	c.Version = "6"
+	qc, err := quick.New(c)
+	if err != nil {
+		return nil, err
+	}
+	if err := qc.Load(configFile); err != nil {
+		return nil, err
+	}
+	return c, nil
+}
