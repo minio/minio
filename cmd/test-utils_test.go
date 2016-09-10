@@ -1135,6 +1135,66 @@ func removeDiskN(disks []string, n int) {
 	}
 }
 
+// creates a bucket for the tests and returns the bucket name.
+// initializes the specified API endpoints for the tests.
+// initialies the root and returns its path.
+// return credentials.
+func initAPIHandlerTest(obj ObjectLayer, endPoints []string) (bucketName, rootPath string, apiRouter http.Handler, err error) {
+	// get random bucket name.
+	bucketName = getRandomBucketName()
+
+	// Create bucket.
+	err = obj.MakeBucket(bucketName)
+	if err != nil {
+		// failed to create newbucket, return err.
+		return "", "", nil, err
+	}
+	// Register the API end points with XL/FS object layer.
+	// Registering only the GetObject handler.
+	apiRouter = initTestAPIEndPoints(obj, endPoints)
+	// initialize the server and obtain the credentials and root.
+	// credentials are necessary to sign the HTTP request.
+	rootPath, err = newTestConfig("us-east-1")
+	if err != nil {
+		return "", "", nil, err
+	}
+
+	return bucketName, rootPath, apiRouter, nil
+}
+
+// ExecObjectLayerAPITest - executes object layer API tests.
+// Creates single node and XL ObjectLayer instance, registers the specified API end points and runs test for both the layers.
+func ExecObjectLayerAPITest(t TestErrHandler, objAPITest objAPITestType, endPoints []string) {
+	objLayer, fsDir, err := prepareFS()
+	if err != nil {
+		t.Fatalf("Initialization of object layer failed for single node setup: %s", err)
+	}
+	bucketFS, fsRoot, fsAPIRouter, err := initAPIHandlerTest(objLayer, endPoints)
+	if err != nil {
+		t.Fatalf("Initialzation of API handler tests failed: <ERROR> %s", err)
+	}
+	credentials := serverConfig.GetCredential()
+	// Executing the object layer tests for single node setup.
+	objAPITest(objLayer, singleNodeTestStr, bucketFS, fsAPIRouter, credentials, t)
+
+	objLayer, xlDisks, err := prepareXL()
+	if err != nil {
+		t.Fatalf("Initialization of object layer failed for XL setup: %s", err)
+	}
+	bucketXL, xlRoot, xlAPIRouter, err := initAPIHandlerTest(objLayer, endPoints)
+	if err != nil {
+		t.Fatalf("Initialzation of API handler tests failed: <ERROR> %s", err)
+	}
+	credentials = serverConfig.GetCredential()
+	// Executing the object layer tests for XL.
+	objAPITest(objLayer, xLTestStr, bucketXL, xlAPIRouter, credentials, t)
+	defer removeRoots(append(xlDisks, fsDir, fsRoot, xlRoot))
+}
+
+// function to be passed to ExecObjectLayerAPITest, for executing object layr API handler tests.
+type objAPITestType func(obj ObjectLayer, instanceType string, bucketName string,
+	apiRouter http.Handler, credentials credential, t TestErrHandler)
+
 // Regular object test type.
 type objTestType func(obj ObjectLayer, instanceType string, t TestErrHandler)
 
