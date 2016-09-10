@@ -27,34 +27,12 @@ import (
 
 // Wrapper for calling GetObject API handler tests for both XL multiple disks and FS single drive setup.
 func TestAPIGetOjectHandler(t *testing.T) {
-	ExecObjectLayerTest(t, testAPIGetOjectHandler)
+	ExecObjectLayerAPITest(t, testAPIGetOjectHandler, []string{"GetObject"})
 }
 
-func testAPIGetOjectHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
-
-	// get random bucket name.
-	bucketName := getRandomBucketName()
+func testAPIGetOjectHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
+	credentials credential, t TestErrHandler) {
 	objectName := "test-object"
-	// Create bucket.
-	err := obj.MakeBucket(bucketName)
-	if err != nil {
-		// failed to create newbucket, abort.
-		t.Fatalf("%s : %s", instanceType, err)
-	}
-	// Register the API end points with XL/FS object layer.
-	// Registering only the GetObject handler.
-	apiRouter := initTestAPIEndPoints(obj, []string{"GetObject"})
-	// initialize the server and obtain the credentials and root.
-	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
-	if err != nil {
-		t.Fatalf("Init Test config failed")
-	}
-	// remove the root folder after the test ends.
-	defer removeAll(rootPath)
-
-	credentials := serverConfig.GetCredential()
-
 	// set of byte data for PutObject.
 	// object has to be inserted before running tests for GetObject.
 	// this is required even to assert the GetObject data,
@@ -78,7 +56,7 @@ func testAPIGetOjectHandler(obj ObjectLayer, instanceType string, t TestErrHandl
 	// iterate through the above set of inputs and upload the object.
 	for i, input := range putObjectInputs {
 		// uploading the object.
-		_, err = obj.PutObject(input.bucketName, input.objectName, input.contentLength, bytes.NewBuffer(input.textData), input.metaData)
+		_, err := obj.PutObject(input.bucketName, input.objectName, input.contentLength, bytes.NewBuffer(input.textData), input.metaData)
 		// if object upload fails stop the test.
 		if err != nil {
 			t.Fatalf("Put Object case %d:  Error uploading object: <ERROR> %v", i+1, err)
@@ -176,33 +154,13 @@ func testAPIGetOjectHandler(obj ObjectLayer, instanceType string, t TestErrHandl
 
 // Wrapper for calling PutObject API handler tests using streaming signature v4 for both XL multiple disks and FS single drive setup.
 func TestAPIPutObjectStreamSigV4Handler(t *testing.T) {
-	ExecObjectLayerTest(t, testAPIPutObjectStreamSigV4Handler)
+	ExecObjectLayerAPITest(t, testAPIPutObjectStreamSigV4Handler, []string{"PutObject"})
 }
 
-func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	// get random bucket name.
-	bucketName := getRandomBucketName()
+func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
+	credentials credential, t TestErrHandler) {
+
 	objectName := "test-object"
-	// Create bucket.
-	err := obj.MakeBucket(bucketName)
-	if err != nil {
-		// failed to create newbucket, abort.
-		t.Fatalf("%s : %s", instanceType, err)
-	}
-	// Register the API end points with XL/FS object layer.
-	// Registering only the GetObject handler.
-	apiRouter := initTestAPIEndPoints(obj, []string{"PutObject"})
-	// initialize the server and obtain the credentials and root.
-	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
-	if err != nil {
-		t.Fatalf("Init Test config failed")
-	}
-	// remove the root folder after the test ends.
-	defer removeAll(rootPath)
-
-	credentials := serverConfig.GetCredential()
-
 	bytesDataLen := 65 * 1024
 	bytesData := bytes.Repeat([]byte{'a'}, bytesDataLen)
 
@@ -271,33 +229,13 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType string, t 
 
 // Wrapper for calling PutObject API handler tests for both XL multiple disks and FS single drive setup.
 func TestAPIPutObjectHandler(t *testing.T) {
-	ExecObjectLayerTest(t, testAPIPutObjectHandler)
+	ExecObjectLayerAPITest(t, testAPIPutObjectHandler, []string{"PutObject"})
 }
 
-func testAPIPutObjectHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	// get random bucket name.
-	bucketName := getRandomBucketName()
+func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
+	credentials credential, t TestErrHandler) {
+
 	objectName := "test-object"
-	// Create bucket.
-	err := obj.MakeBucket(bucketName)
-	if err != nil {
-		// failed to create newbucket, abort.
-		t.Fatalf("%s : %s", instanceType, err)
-	}
-	// Register the API end points with XL/FS object layer.
-	// Registering only the GetObject handler.
-	apiRouter := initTestAPIEndPoints(obj, []string{"PutObject"})
-	// initialize the server and obtain the credentials and root.
-	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
-	if err != nil {
-		t.Fatalf("Init Test config failed")
-	}
-	// remove the root folder after the test ends.
-	defer removeAll(rootPath)
-
-	credentials := serverConfig.GetCredential()
-
 	// byte data for PutObject.
 	bytesData := generateBytesData(6 * 1024 * 1024)
 
@@ -363,37 +301,18 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType string, t TestErrHand
 
 // Wrapper for calling Copy Object API handler tests for both XL multiple disks and single node setup.
 func TestAPICopyObjectHandler(t *testing.T) {
-	ExecObjectLayerTest(t, testAPICopyObjectHandler)
+	ExecObjectLayerAPITest(t, testAPICopyObjectHandler, []string{"CopyObject"})
 }
 
-func testAPICopyObjectHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	// get random bucket name.
-	bucketName := getRandomBucketName()
-	objectName := "test-object"
-	// Create bucket.
-	err := obj.MakeBucket(bucketName)
-	if err != nil {
-		// failed to create newbucket, abort.
-		t.Fatalf("%s : %s", instanceType, err)
-	}
-	// Register the API end points with XL/FS object layer.
-	// Registering only the Copy Object handler.
-	apiRouter := initTestAPIEndPoints(obj, []string{"CopyObject"})
-	// initialize the server and obtain the credentials and root.
-	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
-	if err != nil {
-		t.Fatalf("Init Test config failed")
-	}
-	// remove the root folder after the test ends.
-	defer removeAll(rootPath)
+func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
+	credentials credential, t TestErrHandler) {
 
-	err = initEventNotifier(obj)
+	objectName := "test-object"
+	// register event notifier.
+	err := initEventNotifier(obj)
 	if err != nil {
 		t.Fatalf("Initializing event notifiers failed")
 	}
-
-	credentials := serverConfig.GetCredential()
 
 	// set of byte data for PutObject.
 	// object has to be inserted before running tests for Copy Object.
