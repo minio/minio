@@ -82,7 +82,7 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 		}
 	}
 	// Extract all the listObjectsV2 query params to their native values.
-	prefix, token, startAfter, delimiter, maxKeys, _ := getListObjectsV2Args(r.URL.Query())
+	prefix, token, startAfter, delimiter, fetchOwner, maxKeys, _ := getListObjectsV2Args(r.URL.Query())
 
 	// In ListObjectsV2 'continuation-token' is the marker.
 	marker := token
@@ -91,7 +91,8 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 		// Then we need to use 'start-after' as marker instead.
 		marker = startAfter
 	}
-	// Validate all the query params before beginning to serve the request.
+	// Validate the query params before beginning to serve the request.
+	// fetch-owner is not validated since it is a boolean
 	if s3Error := listObjectsValidateArgs(prefix, marker, delimiter, maxKeys); s3Error != ErrNone {
 		writeErrorResponse(w, r, s3Error, r.URL.Path)
 		return
@@ -106,7 +107,7 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 		return
 	}
 
-	response := generateListObjectsV2Response(bucket, prefix, token, startAfter, delimiter, maxKeys, listObjectsInfo)
+	response := generateListObjectsV2Response(bucket, prefix, token, startAfter, delimiter, fetchOwner, maxKeys, listObjectsInfo)
 	// Write headers
 	setCommonHeaders(w)
 	// Write success response.

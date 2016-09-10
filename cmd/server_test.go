@@ -1367,7 +1367,7 @@ func (s *TestSuiteCommon) TestListObjectsHandler(c *C) {
 	c.Assert(strings.Contains(string(getContent), "<Key>bar</Key>"), Equals, true)
 
 	// create listObjectsV2 request with valid parameters
-	request, err = newTestSignedRequest("GET", getListObjectsV2URL(s.endPoint, bucketName, "1000"),
+	request, err = newTestSignedRequest("GET", getListObjectsV2URL(s.endPoint, bucketName, "1000", ""),
 		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 	client = http.Client{}
@@ -1378,6 +1378,22 @@ func (s *TestSuiteCommon) TestListObjectsHandler(c *C) {
 
 	getContent, err = ioutil.ReadAll(response.Body)
 	c.Assert(strings.Contains(string(getContent), "<Key>bar</Key>"), Equals, true)
+	c.Assert(strings.Contains(string(getContent), "<Owner><ID></ID><DisplayName></DisplayName></Owner>"), Equals, true)
+
+	// create listObjectsV2 request with valid parameters and fetch-owner activated
+	request, err = newTestSignedRequest("GET", getListObjectsV2URL(s.endPoint, bucketName, "1000", "true"),
+		0, nil, s.accessKey, s.secretKey)
+	c.Assert(err, IsNil)
+	client = http.Client{}
+	// execute the HTTP request.
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	getContent, err = ioutil.ReadAll(response.Body)
+	c.Assert(strings.Contains(string(getContent), "<Key>bar</Key>"), Equals, true)
+	c.Assert(strings.Contains(string(getContent), "<Owner><ID>minio</ID><DisplayName>minio</DisplayName></Owner>"), Equals, true)
+
 }
 
 // TestListObjectsHandlerErrors - Setting invalid parameters to List Objects
@@ -1408,7 +1424,7 @@ func (s *TestSuiteCommon) TestListObjectsHandlerErrors(c *C) {
 	verifyError(c, response, "InvalidArgument", "Argument maxKeys must be an integer between 0 and 2147483647", http.StatusBadRequest)
 
 	// create listObjectsV2 request with invalid value of max-keys parameter. max-keys is set to -2.
-	request, err = newTestSignedRequest("GET", getListObjectsV2URL(s.endPoint, bucketName, "-2"),
+	request, err = newTestSignedRequest("GET", getListObjectsV2URL(s.endPoint, bucketName, "-2", ""),
 		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 	client = http.Client{}

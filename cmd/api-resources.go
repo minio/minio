@@ -36,7 +36,7 @@ func getListObjectsV1Args(values url.Values) (prefix, marker, delimiter string, 
 }
 
 // Parse bucket url queries for ListObjects V2.
-func getListObjectsV2Args(values url.Values) (prefix, token, startAfter, delimiter string, maxkeys int, encodingType string) {
+func getListObjectsV2Args(values url.Values) (prefix, token, startAfter, delimiter string, fetchOwner bool, maxkeys int, encodingType string) {
 	prefix = values.Get("prefix")
 	startAfter = values.Get("start-after")
 	delimiter = values.Get("delimiter")
@@ -47,6 +47,9 @@ func getListObjectsV2Args(values url.Values) (prefix, token, startAfter, delimit
 	}
 	encodingType = values.Get("encoding-type")
 	token = values.Get("continuation-token")
+	if values.Get("fetch-owner") == "true" {
+		fetchOwner = true
+	}
 	return
 }
 
