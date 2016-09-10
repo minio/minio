@@ -36,6 +36,8 @@ func migrateConfig() {
 	migrateV4ToV5()
 	// Migrate version '5' to '6.
 	migrateV5ToV6()
+	// Migrate version '6' to '7'.
+	migrateV6ToV7()
 }
 
 // Version '1' is not supported anymore and deprecated, safe to delete.
@@ -151,6 +153,46 @@ func migrateV3ToV4() {
 	console.Println("Migration from version ‘" + cv3.Version + "’ to ‘" + srvConfig.Version + "’ completed successfully.")
 }
 
+// Version '4' to '5' migrates config, removes previous fields related
+// to backend types and server address. This change further simplifies
+// the config for future additions.
+func migrateV4ToV5() {
+	cv4, err := loadConfigV4()
+	if err != nil && os.IsNotExist(err) {
+		return
+	}
+	fatalIf(err, "Unable to load config version ‘4’.")
+	if cv4.Version != "4" {
+		return
+	}
+
+	// Save only the new fields, ignore the rest.
+	srvConfig := &configV5{}
+	srvConfig.Version = "5"
+	srvConfig.Credential = cv4.Credential
+	srvConfig.Region = cv4.Region
+	if srvConfig.Region == "" {
+		// Region needs to be set for AWS Signature Version 4.
+		srvConfig.Region = "us-east-1"
+	}
+	srvConfig.Logger.Console = cv4.Logger.Console
+	srvConfig.Logger.File = cv4.Logger.File
+	srvConfig.Logger.Syslog = cv4.Logger.Syslog
+	srvConfig.Logger.AMQP.Enable = false
+	srvConfig.Logger.ElasticSearch.Enable = false
+	srvConfig.Logger.Redis.Enable = false
+
+	qc, err := quick.New(srvConfig)
+	fatalIf(err, "Unable to initialize the quick config.")
+	configFile, err := getConfigFile()
+	fatalIf(err, "Unable to get config file.")
+
+	err = qc.Save(configFile)
+	fatalIf(err, "Failed to migrate config from ‘"+cv4.Version+"’ to ‘"+srvConfig.Version+"’ failed.")
+
+	console.Println("Migration from version ‘" + cv4.Version + "’ to ‘" + srvConfig.Version + "’ completed successfully.")
+}
+
 // Version '5' to '6' migrates config, removes previous fields related
 // to backend types and server address. This change further simplifies
 // the config for future additions.
@@ -165,8 +207,8 @@ func migrateV5ToV6() {
 	}
 
 	// Save only the new fields, ignore the rest.
-	srvConfig := &serverConfigV6{}
-	srvConfig.Version = globalMinioConfigVersion
+	srvConfig := &configV6{}
+	srvConfig.Version = "6"
 	srvConfig.Credential = cv5.Credential
 	srvConfig.Region = cv5.Region
 	if srvConfig.Region == "" {
@@ -176,6 +218,7 @@ func migrateV5ToV6() {
 	srvConfig.Logger.Console = cv5.Logger.Console
 	srvConfig.Logger.File = cv5.Logger.File
 	srvConfig.Logger.Syslog = cv5.Logger.Syslog
+
 	srvConfig.Notify.AMQP = map[string]amqpNotify{
 		"1": {
 			Enable:      cv5.Logger.AMQP.Enable,
@@ -217,34 +260,49 @@ func migrateV5ToV6() {
 	console.Println("Migration from version ‘" + cv5.Version + "’ to ‘" + srvConfig.Version + "’ completed successfully.")
 }
 
-// Version '4' to '5' migrates config, removes previous fields related
+// Version '6' to '7' migrates config, removes previous fields related
 // to backend types and server address. This change further simplifies
 // the config for future additions.
-func migrateV4ToV5() {
-	cv4, err := loadConfigV4()
+func migrateV6ToV7() {
+	cv6, err := loadConfigV6()
 	if err != nil && os.IsNotExist(err) {
 		return
 	}
-	fatalIf(err, "Unable to load config version ‘4’.")
-	if cv4.Version != "4" {
+	fatalIf(err, "Unable to load config version ‘6’.")
+	if cv6.Version != "6" {
 		return
 	}
 
 	// Save only the new fields, ignore the rest.
-	srvConfig := &configV5{}
+	srvConfig := &serverConfigV7{}
 	srvConfig.Version = globalMinioConfigVersion
-	srvConfig.Credential = cv4.Credential
-	srvConfig.Region = cv4.Region
+	srvConfig.Credential = cv6.Credential
+	srvConfig.Region = cv6.Region
 	if srvConfig.Region == "" {
 		// Region needs to be set for AWS Signature Version 4.
 		srvConfig.Region = "us-east-1"
 	}
-	srvConfig.Logger.Console = cv4.Logger.Console
-	srvConfig.Logger.File = cv4.Logger.File
-	srvConfig.Logger.Syslog = cv4.Logger.Syslog
-	srvConfig.Logger.AMQP.Enable = false
-	srvConfig.Logger.ElasticSearch.Enable = false
-	srvConfig.Logger.Redis.Enable = false
+	srvConfig.Logger.Console = cv6.Logger.Console
+	srvConfig.Logger.File = cv6.Logger.File
+	srvConfig.Logger.Syslog = cv6.Logger.Syslog
+	srvConfig.Notify.AMQP = make(map[string]amqpNotify)
+	srvConfig.Notify.ElasticSearch = make(map[string]elasticSearchNotify)
+	srvConfig.Notify.Redis = make(map[string]redisNotify)
+	if len(cv6.Notify.AMQP) == 0 {
+		srvConfig.Notify.AMQP["1"] = amqpNotify{}
+	} else {
+		srvConfig.Notify.AMQP = cv6.Notify.AMQP
+	}
+	if len(cv6.Notify.ElasticSearch) == 0 {
+		srvConfig.Notify.ElasticSearch["1"] = elasticSearchNotify{}
+	} else {
+		srvConfig.Notify.ElasticSearch = cv6.Notify.ElasticSearch
+	}
+	if len(cv6.Notify.Redis) == 0 {
+		srvConfig.Notify.Redis["1"] = redisNotify{}
+	} else {
+		srvConfig.Notify.Redis = cv6.Notify.Redis
+	}
 
 	qc, err := quick.New(srvConfig)
 	fatalIf(err, "Unable to initialize the quick config.")
@@ -252,7 +310,7 @@ func migrateV4ToV5() {
 	fatalIf(err, "Unable to get config file.")
 
 	err = qc.Save(configFile)
-	fatalIf(err, "Failed to migrate config from ‘"+cv4.Version+"’ to ‘"+srvConfig.Version+"’ failed.")
+	fatalIf(err, "Failed to migrate config from ‘"+cv6.Version+"’ to ‘"+srvConfig.Version+"’ failed.")
 
-	console.Println("Migration from version ‘" + cv4.Version + "’ to ‘" + srvConfig.Version + "’ completed successfully.")
+	console.Println("Migration from version ‘" + cv6.Version + "’ to ‘" + srvConfig.Version + "’ completed successfully.")
 }
