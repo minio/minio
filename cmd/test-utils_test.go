@@ -706,11 +706,14 @@ func getListObjectsV1URL(endPoint, bucketName string, maxKeys string) string {
 }
 
 // return URL for listing objects in the bucket with V2 API.
-func getListObjectsV2URL(endPoint, bucketName string, maxKeys string) string {
+func getListObjectsV2URL(endPoint, bucketName string, maxKeys string, fetchOwner string) string {
 	queryValue := url.Values{}
 	queryValue.Set("list-type", "2") // Enables list objects V2 URL.
 	if maxKeys != "" {
 		queryValue.Set("max-keys", maxKeys)
+	}
+	if fetchOwner != "" {
+		queryValue.Set("fetch-owner", fetchOwner)
 	}
 	return makeTestTargetURL(endPoint, bucketName, "", queryValue)
 }

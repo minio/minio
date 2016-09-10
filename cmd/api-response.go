@@ -327,14 +327,16 @@ func generateListObjectsV1Response(bucket, prefix, marker, delimiter string, max
 }
 
 // generates an ListObjectsV2 response for the said bucket with other enumerated options.
-func generateListObjectsV2Response(bucket, prefix, token, startAfter, delimiter string, maxKeys int, resp ListObjectsInfo) ListObjectsV2Response {
+func generateListObjectsV2Response(bucket, prefix, token, startAfter, delimiter string, fetchOwner bool, maxKeys int, resp ListObjectsInfo) ListObjectsV2Response {
 	var contents []Object
 	var prefixes []CommonPrefix
 	var owner = Owner{}
 	var data = ListObjectsV2Response{}
 
-	owner.ID = "minio"
-	owner.DisplayName = "minio"
+	if fetchOwner {
+		owner.ID = "minio"
+		owner.DisplayName = "minio"
+	}
 
 	for _, object := range resp.Objects {
 		var content = Object{}
