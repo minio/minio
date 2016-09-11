@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
@@ -58,4 +59,40 @@ func TestNewFS(t *testing.T) {
 			t.Fatalf("expected: %s, got: %s", testCase.expectedErr, err)
 		}
 	}
+}
+
+// TestFSShutdown - initialize a new FS object layer then calls Shutdown
+// to check returned results
+func TestFSShutdown(t *testing.T) {
+	// Create an FS object and shutdown it. No errors expected
+	disk := filepath.Join(os.TempDir(), "minio-"+nextSuffix())
+	obj, err := newFSObjects(disk)
+	if err != nil {
+		t.Fatal("Cannot create a new FS object: ", err)
+	}
+
+	fs := obj.(fsObjects)
+	fsStorage := fs.storage.(*posix)
+
+	bucketName := "testbucket"
+	objectName := "object"
+	objectContent := "12345"
+
+	obj.MakeBucket(bucketName)
+	obj.PutObject(bucketName, objectName, int64(len(objectContent)), bytes.NewReader([]byte(objectContent)), nil)
+
+	if err := fs.Shutdown(); err != nil {
+		t.Fatal("Cannot shutdown the FS object: ", err)
+	}
+
+	// Create an FS and program errors with disks when shutdown is called
+	for i := 1; i <= 5; i++ {
+		naughty := newNaughtyDisk(fsStorage, map[int]error{i: errFaultyDisk}, nil)
+		fs.storage = naughty
+		if err := fs.Shutdown(); err != errFaultyDisk {
+			t.Fatal(i, ", Got unexpected fs shutdown error: ", err)
+		}
+	}
+
+	removeAll(disk)
 }

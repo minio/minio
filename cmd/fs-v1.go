@@ -117,14 +117,16 @@ func (fs fsObjects) Shutdown() error {
 	// List if there are any multipart entries.
 	_, err := fs.storage.ListDir(minioMetaBucket, mpartMetaPrefix)
 	if err != errFileNotFound {
-		// Multipart directory is not empty hence do not remove '.minio.sys' volume.
-		return nil
+		// A nil err means that multipart directory is not empty hence do not remove '.minio.sys' volume.
+		// A non nil err means that an unexpected error occured
+		return err
 	}
 	// List if there are any bucket configuration entries.
 	_, err = fs.storage.ListDir(minioMetaBucket, bucketConfigPrefix)
 	if err != errFileNotFound {
-		// Bucket config directory is not empty hence do not remove '.minio.sys' volume.
-		return nil
+		// A nil err means that bucket config directory is not empty hence do not remove '.minio.sys' volume.
+		// A non nil err means that an unexpected error occured
+		return err
 	}
 	// Cleanup everything else.
 	prefix := ""
