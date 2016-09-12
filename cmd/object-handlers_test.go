@@ -18,10 +18,12 @@ package cmd
 
 import (
 	"bytes"
+	"encoding/xml"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"sync"
 	"testing"
 )
 
@@ -437,4 +439,172 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 			buffers[0].Reset()
 		}
 	}
+}
+
+// Wrapper for calling NewMultipartUpload tests for both XL multiple disks and single node setup.
+// First register the HTTP handler for NewMutlipartUpload, then a HTTP request for NewMultipart upload is made.
+// The UploadID from the response body is parsed and compared with the uploadID present in the upload.json for the same object.
+func TestAPINewMultipartHandler(t *testing.T) {
+	ExecObjectLayerAPITest(t, testAPINewMultipartHandler, []string{"CopyObject"})
+}
+
+func testAPINewMultipartHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
+	credentials credential, t TestErrHandler) {
+
+	objectName := "test-object-new-multipart"
+	rec := httptest.NewRecorder()
+	// construct HTTP request for copy object.
+	req, err := newTestSignedRequest("POST", getNewMultipartURL("", bucketName, objectName), 0, nil, credentials.AccessKeyID, credentials.SecretAccessKey)
+
+	if err != nil {
+		t.Fatalf("Failed to create HTTP request for copy Object: <ERROR> %v", err)
+	}
+	// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
+	// Call the ServeHTTP to executes the registered handler.
+	apiRouter.ServeHTTP(rec, req)
+	// Assert the response code with the expected status.
+	if rec.Code != http.StatusOK {
+		t.Fatalf("%s:  Expected the response status to be `%d`, but instead found `%d`", instanceType, http.StatusOK, rec.Code)
+	}
+	// decode the response body.
+	decoder := xml.NewDecoder(rec.Body)
+	multipartResponse := &InitiateMultipartUploadResponse{}
+
+	err = decoder.Decode(multipartResponse)
+	if err != nil {
+		t.Fatalf("Error decoding the recorded response Body")
+	}
+	// verify the existance and correctness of upload.json.
+	var uploadsJSON uploadsV1
+	switch v := obj.(type) {
+	case xlObjects:
+		// read the upload.json for xl backend.
+		uploadsJSON, err = v.readUploadsJSON(bucketName, objectName)
+		if err != nil {
+			t.Fatalf("Reading uploads json from XL backend failed")
+		}
+		// compare the uploadID obtained from resposne with uploadID obtained from parsing upload.json .
+		if multipartResponse.UploadID != uploadsJSON.Uploads[0].UploadID {
+			t.Fatal("UploadID's obtained from multipart response and upload.json didn't match")
+		}
+	case fsObjects:
+		// read the upload.json for fs backend.
+		uploadsJSON, err = readUploadsJSON(bucketName, objectName, v.storage)
+		if err != nil {
+			t.Fatalf("Reading uploads json from FS backend failed")
+		}
+		// compare the uploadID obtained from resposne with uploadID obtained from parsing upload.json .
+		if multipartResponse.UploadID != uploadsJSON.Uploads[0].UploadID {
+			t.Fatal("UploadID's obtained from multipart response and upload.json didn't match")
+		}
+	}
+}
+
+// Wrapper for calling NewMultipartUploadParallel tests for both XL multiple disks and single node setup.
+// The objective of the test is to initialte multipart upload on the same object 10 times concurrently, and then validate the `upload.json` to assert for all the uploadID's present.
+func TestAPINewMultipartHandlerParallel(t *testing.T) {
+	ExecObjectLayerAPITest(t, testAPINewMultipartHandlerParallel, []string{"CopyObject"})
+}
+
+func testAPINewMultipartHandlerParallel(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
+	credentials credential, t TestErrHandler) {
+	// used for storing the uploadID's parsed on concurrent HTTP requests for NewMultipart upload on the same object.
+	testUploads := struct {
+		sync.Mutex
+		uploads []string
+	}{}
+
+	objectName := "test-object-new-multipart-parallel"
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		// Initiate NewMultipart upload on the same object 10 times concurrrently.
+		go func() {
+			defer wg.Done()
+			rec := httptest.NewRecorder()
+			// construct HTTP request for copy object.
+			req, err := newTestSignedRequest("POST", getNewMultipartURL("", bucketName, objectName), 0, nil, credentials.AccessKeyID, credentials.SecretAccessKey)
+
+			if err != nil {
+				t.Fatalf("Failed to create HTTP request for copy Object: <ERROR> %v", err)
+			}
+			// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
+			// Call the ServeHTTP to executes the registered handler.
+			apiRouter.ServeHTTP(rec, req)
+			// Assert the response code with the expected status.
+			if rec.Code != http.StatusOK {
+				t.Fatalf("Minio %s:  Expected the response status to be `%d`, but instead found `%d`", instanceType, http.StatusOK, rec.Code)
+			}
+			// decode the response body.
+			decoder := xml.NewDecoder(rec.Body)
+			multipartResponse := &InitiateMultipartUploadResponse{}
+
+			err = decoder.Decode(multipartResponse)
+			if err != nil {
+				t.Fatalf("Minio %s: Error decoding the recorded response Body", instanceType)
+			}
+			// push the obtained upload ID from the response into the array.
+			testUploads.Lock()
+			testUploads.uploads = append(testUploads.uploads, multipartResponse.UploadID)
+			testUploads.Unlock()
+		}()
+	}
+	// Wait till all go routines finishes execution.
+	wg.Wait()
+
+	// verify the existance and correctness of upload.json.
+	var uploadsJSON uploadsV1
+	var err error
+	switch v := obj.(type) {
+	case xlObjects:
+		// read the upload.json for xl backend.
+		uploadsJSON, err = v.readUploadsJSON(bucketName, objectName)
+		if err != nil {
+			t.Fatalf("Reading uploads json from XL backend failed: <ERROR> %s.", err)
+		}
+		// compare the uploadID obtained from response with uploadID obtained from parsing upload.json .
+		// Assert the number of uploadID entries for the object in upload.json .
+
+		if len(testUploads.uploads) != len(uploadsJSON.Uploads) {
+			t.Fatalf("Minio %s: Expected record of %d uploadID's in upload.json for given object, but got %d.", instanceType, len(testUploads.uploads), len(uploadsJSON.Uploads))
+		}
+		// Entry for the upload ID's generated from the response should be found in upload.json .
+
+	CheckXlUploadID:
+		for _, resUploadID := range testUploads.uploads {
+			for _, uploadIDJSON := range uploadsJSON.Uploads {
+				if resUploadID == uploadIDJSON.UploadID {
+					// entry found in upload.json, continue.
+					continue CheckXlUploadID
+				}
+				// Entry for uploadID obtained from the reponse is not found in upload.json, abort the test.
+			}
+			t.Fatalf("Minio %s: UploadID \"%s\", not found in upload.json.", instanceType, resUploadID)
+		}
+	case fsObjects:
+		// read the upload.json for fs backend.
+		uploadsJSON, err = readUploadsJSON(bucketName, objectName, v.storage)
+		if err != nil {
+			t.Fatalf("Reading uploads json from FS backend failed: <ERROR> %s.", err)
+		} // compare the uploadID obtained from response with uploadID obtained from parsing upload.json .
+		// Assert the number of uploadID entries for the object in upload.json .
+
+		if len(testUploads.uploads) != len(uploadsJSON.Uploads) {
+			t.Fatalf("Minio %s:Expected record of %d uploadID's in upload.json for given object, but got %d.", instanceType, len(testUploads.uploads), len(uploadsJSON.Uploads))
+		}
+		// Entry for the upload ID's generated from the response should be found in upload.json .
+	CheckFsUploadID:
+		for _, resUploadID := range testUploads.uploads {
+			for _, uploadIDJSON := range uploadsJSON.Uploads {
+				if resUploadID == uploadIDJSON.UploadID {
+					// entry found in upload.json, continue.
+					continue CheckFsUploadID
+				}
+			}
+			// Entry for uploadID obtained from the reponse is not found in upload.json, abort the test.
+			t.Fatalf("Minio %s: UploadID \"%s\", not found in upload.json.", instanceType, resUploadID)
+		}
+
+	}
+
 }
