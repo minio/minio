@@ -37,8 +37,11 @@ type rateLimit struct {
 // channel this is in-turn used to rate limit incoming connections in
 // ServeHTTP() http.Handler method.
 func (c *rateLimit) acquire() error {
+	//lock access to enter waitQueue
+	c.lock.Lock()
 	// Kick out clients when it is really crowded
 	if len(c.waitQueue) == cap(c.waitQueue) {
+		defer c.lock.Unlock() //unlock after return
 		return errTooManyRequests
 	}
 
@@ -46,11 +49,15 @@ func (c *rateLimit) acquire() error {
 	// wanting to process their requests
 	c.waitQueue <- struct{}{}
 
-	// Moving from wait to work queue is protected by a mutex
-	// to avoid draining waitQueue with multiple simultaneous clients.
-	c.lock.Lock()
-	c.workQueue <- <-c.waitQueue
+	// Unlock now. If we unlock before sending to the waitQueue
+	// channel, we can have multiple go-routines blocked on
+	// sending to the waitQueue (and exceeding the max. number of
+	// waiting connections.)
 	c.lock.Unlock()
+
+	// Block to put a waiting go-routine into processing mode.
+	c.workQueue <- <-c.waitQueue
+
 	return nil
 }
 
