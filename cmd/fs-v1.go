@@ -505,20 +505,6 @@ func (fs fsObjects) DeleteObject(bucket, object string) error {
 	return nil
 }
 
-// Checks whether bucket exists.
-func isBucketExist(storage StorageAPI, bucketName string) bool {
-	// Check whether bucket exists.
-	_, err := storage.StatVol(bucketName)
-	if err != nil {
-		if err == errVolumeNotFound {
-			return false
-		}
-		errorIf(err, "Stat failed on bucket "+bucketName+".")
-		return false
-	}
-	return true
-}
-
 // ListObjects - list all objects at prefix upto maxKeys., optionally delimited by '/'. Maintains the list pool
 // state for future re-entrant list requests.
 func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
@@ -551,7 +537,7 @@ func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 		return ListObjectsInfo{}, traceError(BucketNameInvalid{Bucket: bucket})
 	}
 	// Verify if bucket exists.
-	if !isBucketExist(fs.storage, bucket) {
+	if !fs.isBucketExist(bucket) {
 		return ListObjectsInfo{}, traceError(BucketNotFound{Bucket: bucket})
 	}
 	if !IsValidObjectPrefix(prefix) {
