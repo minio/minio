@@ -416,6 +416,9 @@ func serverMain(c *cli.Context) {
 		errorIf(err, "intializing object layer failed")
 		return
 	}
+
+	printEventNotifiers()
+
 	objLayerMutex.Lock()
 	globalObjectAPI = newObject
 	objLayerMutex.Unlock()

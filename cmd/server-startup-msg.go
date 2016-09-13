@@ -60,14 +60,25 @@ func printServerCommonMsg(endPoints []string) {
 	console.Println(colorBlue("AccessKey: ") + colorBold(fmt.Sprintf("%s ", cred.AccessKeyID)))
 	console.Println(colorBlue("SecretKey: ") + colorBold(fmt.Sprintf("%s ", cred.SecretAccessKey)))
 	console.Println(colorBlue("Region: ") + colorBold(fmt.Sprintf(getFormatStr(len(region), 3), region)))
-	arnMsg := colorBlue("SqsARNs: ")
+
+	console.Println(colorBlue("\nBrowser Access:"))
+	console.Println(fmt.Sprintf(getFormatStr(len(endPointStr), 3), endPointStr))
+}
+
+// Prints bucket notification configurations.
+func printEventNotifiers() {
+	if globalEventNotifier == nil {
+		// In case initEventNotifier() was not done or failed.
+		return
+	}
+	arnMsg := colorBlue("\nSQS ARNs: ")
+	if len(globalEventNotifier.queueTargets) == 0 {
+		arnMsg += colorBold(fmt.Sprintf(getFormatStr(len("<none>"), 2), "<none>"))
+	}
 	for queueArn := range globalEventNotifier.queueTargets {
 		arnMsg += colorBold(fmt.Sprintf(getFormatStr(len(queueArn), 2), queueArn))
 	}
 	console.Println(arnMsg)
-
-	console.Println(colorBlue("\nBrowser Access:"))
-	console.Println(fmt.Sprintf(getFormatStr(len(endPointStr), 3), endPointStr))
 }
 
 // Prints startup message for command line access. Prints link to our documentation
