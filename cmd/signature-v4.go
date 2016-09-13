@@ -354,7 +354,7 @@ func doesSignatureMatch(hashedPayload string, r *http.Request, validateRegion bo
 	for _, h := range signV4Values.SignedHeaders {
 		if h == "content-length" {
 			header = cloneHeader(req.Header)
-			header.Add("content-length", strconv.FormatInt(r.ContentLength, 10))
+			header.Set("content-length", strconv.FormatInt(r.ContentLength, 10))
 			break
 		}
 	}
