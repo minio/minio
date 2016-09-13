@@ -293,18 +293,22 @@ func startMonitorShutdownSignal(onExitFn onExitFunc) error {
 				// Initiate graceful shutdown.
 				globalShutdownSignalCh <- shutdownHalt
 			case signal := <-globalShutdownSignalCh:
-				// Call all object storage shutdown callbacks and exit for emergency
+				// Call all object storage shutdown
+				// callbacks and exit for emergency
 				exitCode := globalShutdownCBs.RunObjectLayerCBs()
 				if exitCode != exitSuccess {
 					runExitFn(exitCode)
-
 				}
+
 				exitCode = globalShutdownCBs.RunGenericCBs()
 				if exitCode != exitSuccess {
 					runExitFn(exitCode)
 				}
-				// All shutdown callbacks ensure that the server is safely terminated
-				// and any concurrent process could be started again
+
+				// All shutdown callbacks ensure that
+				// the server is safely terminated and
+				// any concurrent process could be
+				// started again
 				if signal == shutdownRestart {
 					path := os.Args[0]
 					cmdArgs := os.Args[1:]

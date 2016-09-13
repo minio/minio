@@ -82,7 +82,7 @@ EXAMPLES:
 
   5. Start minio server on 12 disks while ignoring two disks for initialization.
       $ minio {{.Name}} --ignore-disks=/mnt/export1/ /mnt/export1/ /mnt/export2/ \
-          /mnt/export3/ /mnt/export4/ /mnt/export5/ /mnt/export6/ /mnt/export7/ \ 
+          /mnt/export3/ /mnt/export4/ /mnt/export5/ /mnt/export6/ /mnt/export7/ \
 	  /mnt/export8/ /mnt/export9/ /mnt/export10/ /mnt/export11/ /mnt/export12/
 
   6. Start minio server on a 4 node distributed setup. Type the following command on all the 4 nodes.
@@ -318,7 +318,8 @@ func formatDisks(disks, ignoredDisks []string) error {
 		for _, storage := range storageDisks {
 			switch store := storage.(type) {
 			// Closing associated TCP connections since
-			// []StorageAPI is garage collected eventually.
+			// []StorageAPI is garbage collected
+			// eventually.
 			case networkStorage:
 				var reply GenericReply
 				_ = store.rpcClient.Call("Storage.TryInitHandler", &GenericArgs{}, &reply)

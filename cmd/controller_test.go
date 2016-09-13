@@ -19,45 +19,59 @@ package cmd
 import (
 	"path"
 	"strconv"
+	"strings"
 	"sync"
+	"testing"
 	"time"
-
-	. "gopkg.in/check.v1"
 )
 
 // API suite container common to both FS and XL.
 type TestRPCControllerSuite struct {
-	serverType string
-	testServer TestServer
-	endPoint   string
-	accessKey  string
-	secretKey  string
+	serverType   string
+	testServer   TestServer
+	testAuthConf *authConfig
 }
-
-// Init and run test on XL backend.
-var _ = Suite(&TestRPCControllerSuite{serverType: "XL"})
 
 // Setting up the test suite.
 // Starting the Test server with temporary FS backend.
-func (s *TestRPCControllerSuite) SetUpSuite(c *C) {
+func (s *TestRPCControllerSuite) SetUpSuite(c *testing.T) {
 	s.testServer = StartTestRPCServer(c, s.serverType)
-	s.endPoint = s.testServer.Server.Listener.Addr().String()
-	s.accessKey = s.testServer.AccessKey
-	s.secretKey = s.testServer.SecretKey
+	s.testAuthConf = &authConfig{
+		address:     s.testServer.Server.Listener.Addr().String(),
+		accessKey:   s.testServer.AccessKey,
+		secretKey:   s.testServer.SecretKey,
+		path:        path.Join(reservedBucket, controlPath),
+		loginMethod: "Controller.LoginHandler",
+	}
 }
 
-// Called implicitly by "gopkg.in/check.v1" after all tests are run.
-func (s *TestRPCControllerSuite) TearDownSuite(c *C) {
+// No longer used with gocheck, but used in explicit teardown code in
+// each test function. // Called implicitly by "gopkg.in/check.v1"
+// after all tests are run.
+func (s *TestRPCControllerSuite) TearDownSuite(c *testing.T) {
 	s.testServer.Stop()
 }
 
+func TestRPCControlLock(t *testing.T) {
+	//setup code
+	s := &TestRPCControllerSuite{serverType: "XL"}
+	s.SetUpSuite(t)
+
+	//run test
+	s.testRPCControlLock(t)
+
+	//teardown code
+	s.TearDownSuite(t)
+}
+
 // Tests to validate the correctness of lock instrumentation control RPC end point.
-func (s *TestRPCControllerSuite) TestRPCControlLock(c *C) {
+func (s *TestRPCControllerSuite) testRPCControlLock(c *testing.T) {
 	// enabling lock instrumentation.
 	globalDebugLock = true
 	// initializing the locks.
 	initNSLock(false)
-	// set debug lock info  to `nil` so that the next tests have to initialize them again.
+	// set debug lock info to `nil` so that the next tests have to
+	// initialize them again.
 	defer func() {
 		globalDebugLock = false
 		nsMutex.debugLockMap = nil
@@ -181,16 +195,7 @@ func (s *TestRPCControllerSuite) TestRPCControlLock(c *C) {
 		nsMutex.RLock("my-bucket", "my-object", strconv.Itoa(i))
 	}
 
-	authCfg := &authConfig{
-		accessKey:   s.accessKey,
-		secretKey:   s.secretKey,
-		address:     s.endPoint,
-		path:        path.Join(reservedBucket, controlPath),
-		loginMethod: "Controller.LoginHandler",
-	}
-
-	client := newAuthClient(authCfg)
-
+	client := newAuthClient(s.testAuthConf)
 	defer client.Close()
 
 	args := &GenericArgs{}
@@ -273,19 +278,23 @@ func (s *TestRPCControllerSuite) TestRPCControlLock(c *C) {
 	}
 }
 
+func TestControllerHealDiskMetadataH(t *testing.T) {
+	//setup code
+	s := &TestRPCControllerSuite{serverType: "XL"}
+	s.SetUpSuite(t)
+
+	//run test
+	s.testControllerHealDiskMetadataH(t)
+
+	//teardown code
+	s.TearDownSuite(t)
+}
+
 // TestControllerHandlerHealDiskMetadata - Registers and call the `HealDiskMetadataHandler`,
 // asserts to validate the success.
-func (s *TestRPCControllerSuite) TestControllerHandlerHealDiskMetadata(c *C) {
+func (s *TestRPCControllerSuite) testControllerHealDiskMetadataH(c *testing.T) {
 	// The suite has already started the test RPC server, just send RPC calls.
-	authCfg := &authConfig{
-		accessKey:   s.accessKey,
-		secretKey:   s.secretKey,
-		address:     s.endPoint,
-		path:        path.Join(reservedBucket, controlPath),
-		loginMethod: "Controller.LoginHandler",
-	}
-
-	client := newAuthClient(authCfg)
+	client := newAuthClient(s.testAuthConf)
 	defer client.Close()
 
 	args := &GenericArgs{}
@@ -293,6 +302,96 @@ func (s *TestRPCControllerSuite) TestControllerHandlerHealDiskMetadata(c *C) {
 	err := client.Call("Controller.HealDiskMetadataHandler", args, reply)
 
 	if err != nil {
-		c.Errorf("Heal Meta Disk Handler test failed with <ERROR> %s", err.Error())
+		c.Errorf("Control.HealDiskMetadataH - test failed with <ERROR> %s",
+			err.Error())
+	}
+}
+
+func TestControllerHealObjectH(t *testing.T) {
+	//setup code
+	s := &TestRPCControllerSuite{serverType: "XL"}
+	s.SetUpSuite(t)
+
+	//run test
+	s.testControllerHealObjectH(t)
+
+	//teardown code
+	s.TearDownSuite(t)
+}
+
+func (s *TestRPCControllerSuite) testControllerHealObjectH(t *testing.T) {
+	client := newAuthClient(s.testAuthConf)
+	defer client.Close()
+
+	err := s.testServer.Obj.MakeBucket("testbucket")
+	if err != nil {
+		t.Fatalf(
+			"Controller.HealObjectH - create bucket failed with <ERROR> %s",
+			err.Error(),
+		)
+	}
+
+	datum := strings.NewReader("a")
+	_, err = s.testServer.Obj.PutObject("testbucket", "testobject", 1,
+		datum, nil)
+	if err != nil {
+		t.Fatalf("Controller.HealObjectH - put object failed with <ERROR> %s",
+			err.Error())
+	}
+
+	args := &HealObjectArgs{GenericArgs{}, "testbucket", "testobject"}
+	reply := &GenericReply{}
+	err = client.Call("Controller.HealObjectHandler", args, reply)
+
+	if err != nil {
+		t.Errorf("Controller.HealObjectH - test failed with <ERROR> %s",
+			err.Error())
+	}
+}
+
+func TestControllerListObjectsHealH(t *testing.T) {
+	//setup code
+	s := &TestRPCControllerSuite{serverType: "XL"}
+	s.SetUpSuite(t)
+
+	//run test
+	s.testControllerListObjectsHealH(t)
+
+	//teardown code
+	s.TearDownSuite(t)
+}
+
+func (s *TestRPCControllerSuite) testControllerListObjectsHealH(t *testing.T) {
+	client := newAuthClient(s.testAuthConf)
+	defer client.Close()
+
+	// careate a bucket
+	err := s.testServer.Obj.MakeBucket("testbucket")
+	if err != nil {
+		t.Fatalf(
+			"Controller.ListObjectsHealH - create bucket failed - %s",
+			err.Error(),
+		)
+	}
+
+	r := strings.NewReader("0")
+	_, err = s.testServer.Obj.PutObject(
+		"testbucket", "testObj-0", 1, r, nil,
+	)
+	if err != nil {
+		t.Fatalf("Controller.ListObjectsHealH - object creation failed - %s",
+			err.Error())
+	}
+
+	args := &HealListArgs{
+		GenericArgs{}, "testbucket", "testObj-",
+		"", "", 100,
+	}
+	reply := &GenericReply{}
+	err = client.Call("Controller.ListObjectsHealHandler", args, reply)
+
+	if err != nil {
+		t.Errorf("Controller.ListObjectsHealHandler - test failed - %s",
+			err.Error())
 	}
 }
