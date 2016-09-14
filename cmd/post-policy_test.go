@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
+	"io/ioutil"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -80,6 +81,8 @@ func testPostPolicyHandler(obj ObjectLayer, instanceType string, t TestErrHandle
 	// remove the root folder after the test ends.
 	defer removeAll(rootPath)
 
+	credentials := serverConfig.GetCredential()
+
 	// bucketnames[0].
 	// objectNames[0].
 	// uploadIds [0].
@@ -96,30 +99,49 @@ func testPostPolicyHandler(obj ObjectLayer, instanceType string, t TestErrHandle
 		objectName         string
 		data               []byte
 		expectedRespStatus int
-		shouldPass         bool
+		accessKey          string
+		secretKey          string
+		malformedBody      bool
 	}{
 		// Success case.
 		{
 			objectName:         "test",
 			data:               []byte("Hello, World"),
 			expectedRespStatus: http.StatusNoContent,
-			shouldPass:         true,
+			accessKey:          credentials.AccessKeyID,
+			secretKey:          credentials.SecretAccessKey,
+			malformedBody:      false,
 		},
-		// Bad case.
+		// Bad case invalid request.
 		{
 			objectName:         "test",
 			data:               []byte("Hello, World"),
 			expectedRespStatus: http.StatusBadRequest,
-			shouldPass:         false,
+			accessKey:          "",
+			secretKey:          "",
+			malformedBody:      false,
+		},
+		// Bad case malformed input.
+		{
+			objectName:         "test",
+			data:               []byte("Hello, World"),
+			expectedRespStatus: http.StatusBadRequest,
+			accessKey:          credentials.AccessKeyID,
+			secretKey:          credentials.SecretAccessKey,
+			malformedBody:      true,
 		},
 	}
 
 	for i, testCase := range testCases {
 		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
 		rec := httptest.NewRecorder()
-		req, perr := newPostRequest("", bucketName, testCase.objectName, testCase.data, testCase.shouldPass)
+		req, perr := newPostRequest("", bucketName, testCase.objectName, testCase.data, testCase.accessKey, testCase.secretKey)
 		if perr != nil {
 			t.Fatalf("Test %d: %s: Failed to create HTTP request for PostPolicyHandler: <ERROR> %v", i+1, instanceType, perr)
+		}
+		if testCase.malformedBody {
+			// Change the request body.
+			req.Body = ioutil.NopCloser(bytes.NewReader([]byte("Hello,")))
 		}
 		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic ofthe handler.
 		// Call the ServeHTTP to execute the handler.
@@ -128,7 +150,6 @@ func testPostPolicyHandler(obj ObjectLayer, instanceType string, t TestErrHandle
 			t.Errorf("Test %d: %s: Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, rec.Code)
 		}
 	}
-
 }
 
 // postPresignSignatureV4 - presigned signature for PostPolicy requests.
@@ -140,33 +161,29 @@ func postPresignSignatureV4(policyBase64 string, t time.Time, secretAccessKey, l
 	return signature
 }
 
-func newPostRequest(endPoint, bucketName, objectName string, objData []byte, shouldPass bool) (*http.Request, error) {
+func newPostRequest(endPoint, bucketName, objectName string, objData []byte, accessKey, secretKey string) (*http.Request, error) {
 	// Keep time.
 	t := time.Now().UTC()
 	// Expire the request five minutes from now.
 	expirationTime := t.Add(time.Minute * 5)
 	// Get the user credential.
-	credentials := serverConfig.GetCredential()
-	credStr := getCredential(credentials.AccessKeyID, serverConfig.GetRegion(), t)
+	credStr := getCredential(accessKey, serverConfig.GetRegion(), t)
 	// Create a new post policy.
 	policy := newPostPolicyBytes(credStr, bucketName, objectName, expirationTime)
 	// Only need the encoding.
 	encodedPolicy := base64.StdEncoding.EncodeToString(policy)
 
-	formData := make(map[string]string)
-	if shouldPass {
-		// Presign with V4 signature based on the policy.
-		signature := postPresignSignatureV4(encodedPolicy, t, credentials.SecretAccessKey, serverConfig.GetRegion())
+	// Presign with V4 signature based on the policy.
+	signature := postPresignSignatureV4(encodedPolicy, t, secretKey, serverConfig.GetRegion())
 
-		formData = map[string]string{
-			"bucket":           bucketName,
-			"key":              objectName,
-			"x-amz-credential": credStr,
-			"policy":           encodedPolicy,
-			"x-amz-signature":  signature,
-			"x-amz-date":       t.Format(iso8601DateFormat),
-			"x-amz-algorithm":  "AWS4-HMAC-SHA256",
-		}
+	formData := map[string]string{
+		"bucket":           bucketName,
+		"key":              objectName,
+		"x-amz-credential": credStr,
+		"policy":           encodedPolicy,
+		"x-amz-signature":  signature,
+		"x-amz-date":       t.Format(iso8601DateFormat),
+		"x-amz-algorithm":  "AWS4-HMAC-SHA256",
 	}
 
 	// Create the multipart form.

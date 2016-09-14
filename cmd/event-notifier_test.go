@@ -99,7 +99,7 @@ func TestInitEventNotifier(t *testing.T) {
 	if err != nil {
 		t.Fatal("Unable to create directories for XL backend. ", err)
 	}
-	xl, err := getXLObjectLayer(disks)
+	xl, err := getXLObjectLayer(disks, nil)
 	if err != nil {
 		t.Fatal("Unable to initialize XL backend.", err)
 	}

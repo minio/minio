@@ -211,6 +211,7 @@ func waitForFormattingDisks(disks, ignoredDisks []string) ([]StorageAPI, error) 
 	for index, disk := range disks {
 		// Check if disk is ignored.
 		if disksSet.Contains(disk) {
+			// Set this situation as disk not found.
 			storageDisks[index] = nil
 			continue
 		}
@@ -222,6 +223,6 @@ func waitForFormattingDisks(disks, ignoredDisks []string) ([]StorageAPI, error) 
 		}
 		storageDisks[index] = storage
 	}
-
+	// Start wait loop retrying formatting disks.
 	return retryFormattingDisks(disks, storageDisks)
 }

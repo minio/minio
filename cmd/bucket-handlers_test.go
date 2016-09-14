@@ -300,3 +300,74 @@ func testListMultipartUploadsHandler(obj ObjectLayer, instanceType string, t Tes
 		t.Errorf("Test %s: Expected the response status to be `http.StatusForbidden`, but instead found `%d`", instanceType, rec.Code)
 	}
 }
+
+// Wrapper for calling TestListBucketsHandler tests for both XL multiple disks and single node setup.
+func TestListBucketsHandler(t *testing.T) {
+	ExecObjectLayerTest(t, testListBuckets)
+}
+
+// testListBucketsHandler - Tests validate listing of buckets.
+func testListBucketsHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
+	// get random bucket name.
+	bucketName := getRandomBucketName()
+
+	// Register the API end points with XL/FS object layer.
+	apiRouter := initTestAPIEndPoints(obj, []string{"ListBuckets"})
+	// initialize the server and obtain the credentials and root.
+	// credentials are necessary to sign the HTTP request.
+	rootPath, err := newTestConfig("us-east-1")
+	if err != nil {
+		t.Fatalf("Init Test config failed")
+	}
+	// remove the root folder after the test ends.
+	defer removeAll(rootPath)
+
+	credentials := serverConfig.GetCredential()
+
+	// bucketnames[0].
+	// objectNames[0].
+	// uploadIds [0].
+	// Create bucket before initiating NewMultipartUpload.
+	err = obj.MakeBucket(bucketName)
+	if err != nil {
+		// Failed to create newbucket, abort.
+		t.Fatalf("%s : %s", instanceType, err.Error())
+	}
+
+	testCases := []struct {
+		bucketName         string
+		accessKey          string
+		secretKey          string
+		expectedRespStatus int
+	}{
+		// Validate a good case request succeeds.
+		{
+			bucketName:         bucketName,
+			accessKey:          credentials.AccessKeyID,
+			secretKey:          credentials.SecretAccessKey,
+			expectedRespStatus: http.StatusOK,
+		},
+		// Validate a bad case request fails with http.StatusForbidden.
+		{
+			bucketName:         bucketName,
+			accessKey:          "",
+			secretKey:          "",
+			expectedRespStatus: http.StatusForbidden,
+		},
+	}
+
+	for i, testCase := range testCases {
+		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
+		rec := httptest.NewRecorder()
+		req, lerr := newTestSignedRequest("GET", getListBucketURL(""), 0, nil, testCase.accessKey, testCase.secretKey)
+		if lerr != nil {
+			t.Fatalf("Test %d: %s: Failed to create HTTP request for ListBucketsHandler: <ERROR> %v", i+1, instanceType, lerr)
+		}
+		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic ofthe handler.
+		// Call the ServeHTTP to execute the handler.
+		apiRouter.ServeHTTP(rec, req)
+		if rec.Code != testCase.expectedRespStatus {
+			t.Errorf("Test %d: %s: Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, rec.Code)
+		}
+	}
+}

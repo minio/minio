@@ -115,6 +115,25 @@ func TestStorageInfo(t *testing.T) {
 	if disks16Info.Total <= 0 {
 		t.Fatalf("Diskinfo total values should be greater 0")
 	}
+
+	objLayer, err = newXLObjects(fsDirs, fsDirs[:4])
+	if err != nil {
+		t.Fatalf("Unable to initialize 'XL' object layer with ignored disks %s.", fsDirs[:4])
+	}
+
+	// Get storage info first attempt.
+	disks16Info = objLayer.StorageInfo()
+
+	// This test assumes homogenity between all disks,
+	// i.e if we loose one disk the effective storage
+	// usage values is assumed to decrease. If we have
+	// heterogenous environment this is not true all the time.
+	if disks16Info.Free <= 0 {
+		t.Fatalf("Diskinfo total free values should be greater 0")
+	}
+	if disks16Info.Total <= 0 {
+		t.Fatalf("Diskinfo total values should be greater 0")
+	}
 }
 
 // TestNewXL - tests initialization of all input disks
