@@ -161,6 +161,8 @@ Object API (Amazon S3 compatible):
 ```
 Please visit official zfs FreeBSD guide for more details [here](https://www.freebsd.org/doc/handbook/zfs-quickstart.html)
 
+Note: `Photos` is data directory used in above Minio server example, replace it with your local setup.
+
 ## 3. Test Minio Server using Minio Browser
 
 Open a web browser and navigate to http://127.0.0.1:9000 to view your buckets on minio server.
