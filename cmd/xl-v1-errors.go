@@ -27,9 +27,6 @@ var errXLMinDisks = errors.New("Minimum '4' disks are required to enable erasure
 // errXLNumDisks - returned for odd number of disks.
 var errXLNumDisks = errors.New("Total number of disks should be multiples of '2'")
 
-// errXLDuplicateArguments - returned for duplicate disks.
-var errXLDuplicateArguments = errors.New("Duplicate disks found.")
-
 // errXLReadQuorum - did not meet read quorum.
 var errXLReadQuorum = errors.New("Read failed. Insufficient number of disks online")
 

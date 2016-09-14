@@ -629,19 +629,19 @@ func TestReduceFormatErrs(t *testing.T) {
 	}
 	// One corrupted format
 	if err := reduceFormatErrs([]error{nil, nil, errCorruptedFormat, nil}, 4); err != errCorruptedFormat {
-		t.Fatal("Got a differnt error: ", err)
+		t.Fatal("Got a different error: ", err)
 	}
 	// All disks unformatted
 	if err := reduceFormatErrs([]error{errUnformattedDisk, errUnformattedDisk, errUnformattedDisk, errUnformattedDisk}, 4); err != errUnformattedDisk {
-		t.Fatal("Got a differnt error: ", err)
+		t.Fatal("Got a different error: ", err)
 	}
 	// Some disks unformatted
 	if err := reduceFormatErrs([]error{nil, nil, errUnformattedDisk, errUnformattedDisk}, 4); err != errSomeDiskUnformatted {
-		t.Fatal("Got a differnt error: ", err)
+		t.Fatal("Got a different error: ", err)
 	}
 	// Some disks offline
 	if err := reduceFormatErrs([]error{nil, nil, errDiskNotFound, errUnformattedDisk}, 4); err != errSomeDiskOffline {
-		t.Fatal("Got a differnt error: ", err)
+		t.Fatal("Got a different error: ", err)
 	}
 }
 

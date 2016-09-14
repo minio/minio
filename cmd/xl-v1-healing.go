@@ -119,17 +119,6 @@ func outDatedDisks(disks []StorageAPI, partsMetadata []xlMetaV1, errs []error) (
 	return outDatedDisks
 }
 
-// Return xlMetaV1 of the latest version of the object.
-func xlLatestMetadata(partsMetadata []xlMetaV1, errs []error) (latestMeta xlMetaV1) {
-	// List all the file commit ids from parts metadata.
-	modTimes := listObjectModtimes(partsMetadata, errs)
-
-	// Reduce list of UUIDs to a single common value.
-	modTime := commonTime(modTimes)
-
-	return pickValidXLMeta(partsMetadata, modTime)
-}
-
 // Returns if the object should be healed.
 func xlShouldHeal(partsMetadata []xlMetaV1, errs []error) bool {
 	modTime := commonTime(listObjectModtimes(partsMetadata, errs))
