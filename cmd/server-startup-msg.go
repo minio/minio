@@ -60,6 +60,7 @@ func printServerCommonMsg(endPoints []string) {
 	console.Println(colorBlue("AccessKey: ") + colorBold(fmt.Sprintf("%s ", cred.AccessKeyID)))
 	console.Println(colorBlue("SecretKey: ") + colorBold(fmt.Sprintf("%s ", cred.SecretAccessKey)))
 	console.Println(colorBlue("Region: ") + colorBold(fmt.Sprintf(getFormatStr(len(region), 3), region)))
+	printEventNotifiers()
 
 	console.Println(colorBlue("\nBrowser Access:"))
 	console.Println(fmt.Sprintf(getFormatStr(len(endPointStr), 3), endPointStr))
@@ -71,12 +72,12 @@ func printEventNotifiers() {
 		// In case initEventNotifier() was not done or failed.
 		return
 	}
-	arnMsg := colorBlue("\nSQS ARNs: ")
+	arnMsg := colorBlue("SQS ARNs: ")
 	if len(globalEventNotifier.queueTargets) == 0 {
-		arnMsg += colorBold(fmt.Sprintf(getFormatStr(len("<none>"), 2), "<none>"))
+		arnMsg += colorBold(fmt.Sprintf(getFormatStr(len("<none>"), 1), "<none>"))
 	}
 	for queueArn := range globalEventNotifier.queueTargets {
-		arnMsg += colorBold(fmt.Sprintf(getFormatStr(len(queueArn), 2), queueArn))
+		arnMsg += colorBold(fmt.Sprintf(getFormatStr(len(queueArn), 1), queueArn))
 	}
 	console.Println(arnMsg)
 }
