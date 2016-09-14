@@ -93,7 +93,7 @@ func TestFSShutdown(t *testing.T) {
 	for i := 1; i <= 5; i++ {
 		naughty := newNaughtyDisk(fsStorage, map[int]error{i: errFaultyDisk}, nil)
 		fs.storage = naughty
-		if err := fs.Shutdown(); err != errFaultyDisk {
+		if err := fs.Shutdown(); errorCause(err) != errFaultyDisk {
 			t.Fatal(i, ", Got unexpected fs shutdown error: ", err)
 		}
 	}

@@ -93,10 +93,10 @@ func testGetBucketLocationHandler(obj ObjectLayer, instanceType string, t TestEr
 	for i, testCase := range testCases {
 		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
 		rec := httptest.NewRecorder()
-		// construct HTTP request for PUT bucket policy endpoint.
+		// construct HTTP request for Get bucket location.
 		req, err := newTestSignedRequest("GET", getBucketLocationURL("", testCase.bucketName), 0, nil, testCase.accessKey, testCase.secretKey)
 		if err != nil {
-			t.Fatalf("Test %d: %s: Failed to create HTTP request for PutBucketPolicyHandler: <ERROR> %v", i+1, instanceType, err)
+			t.Fatalf("Test %d: %s: Failed to create HTTP request for GetBucketLocationHandler: <ERROR> %v", i+1, instanceType, err)
 		}
 		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic ofthe handler.
 		// Call the ServeHTTP to execute the handler.
@@ -186,10 +186,10 @@ func testHeadBucketHandler(obj ObjectLayer, instanceType string, t TestErrHandle
 	for i, testCase := range testCases {
 		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
 		rec := httptest.NewRecorder()
-		// construct HTTP request for PUT bucket policy endpoint.
+		// construct HTTP request for HEAD bucket.
 		req, err := newTestSignedRequest("HEAD", getHEADBucketURL("", testCase.bucketName), 0, nil, testCase.accessKey, testCase.secretKey)
 		if err != nil {
-			t.Fatalf("Test %d: %s: Failed to create HTTP request for PutBucketPolicyHandler: <ERROR> %v", i+1, instanceType, err)
+			t.Fatalf("Test %d: %s: Failed to create HTTP request for HeadBucketHandler: <ERROR> %v", i+1, instanceType, err)
 		}
 		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic ofthe handler.
 		// Call the ServeHTTP to execute the handler.
@@ -197,5 +197,106 @@ func testHeadBucketHandler(obj ObjectLayer, instanceType string, t TestErrHandle
 		if rec.Code != testCase.expectedRespStatus {
 			t.Errorf("Test %d: %s: Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, rec.Code)
 		}
+	}
+}
+
+// Wrapper for calling TestListMultipartUploadsHandler tests for both XL multiple disks and single node setup.
+func TestListMultipartUploadsHandler(t *testing.T) {
+	ExecObjectLayerTest(t, testListMultipartUploads)
+}
+
+// testListMultipartUploadsHandler - Tests validate listing of multipart uploads.
+func testListMultipartUploadsHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
+	initBucketPolicies(obj)
+
+	// get random bucket name.
+	bucketName := getRandomBucketName()
+
+	// Register the API end points with XL/FS object layer.
+	apiRouter := initTestAPIEndPoints(obj, []string{"ListMultipartUploads"})
+	// initialize the server and obtain the credentials and root.
+	// credentials are necessary to sign the HTTP request.
+	rootPath, err := newTestConfig("us-east-1")
+	if err != nil {
+		t.Fatalf("Init Test config failed")
+	}
+	// remove the root folder after the test ends.
+	defer removeAll(rootPath)
+
+	credentials := serverConfig.GetCredential()
+
+	// bucketnames[0].
+	// objectNames[0].
+	// uploadIds [0].
+	// Create bucket before initiating NewMultipartUpload.
+	err = obj.MakeBucket(bucketName)
+	if err != nil {
+		// Failed to create newbucket, abort.
+		t.Fatalf("%s : %s", instanceType, err.Error())
+	}
+
+	// Collection of non-exhaustive ListMultipartUploads test cases, valid errors
+	// and success responses.
+	testCases := []struct {
+		// Inputs to ListMultipartUploads.
+		bucket             string
+		prefix             string
+		keyMarker          string
+		uploadIDMarker     string
+		delimiter          string
+		maxUploads         string
+		expectedRespStatus int
+		shouldPass         bool
+	}{
+		// 1 - invalid bucket name.
+		{".test", "", "", "", "", "0", http.StatusBadRequest, false},
+		// 2 - bucket not found.
+		{"volatile-bucket-1", "", "", "", "", "0", http.StatusNotFound, false},
+		// 3 - invalid delimiter.
+		{bucketName, "", "", "", "-", "0", http.StatusBadRequest, false},
+		// 4 - invalid prefix and marker combination.
+		{bucketName, "asia", "europe-object", "", "", "0", http.StatusNotImplemented, false},
+		// 5 - invalid upload id and marker combination.
+		{bucketName, "asia", "asia/europe/", "abc", "", "0", http.StatusBadRequest, false},
+		// 6 - invalid max upload id.
+		{bucketName, "", "", "", "", "-1", http.StatusBadRequest, false},
+		// 7 - good case delimiter.
+		{bucketName, "", "", "", "/", "100", http.StatusOK, true},
+		// 8 - good case without delimiter.
+		{bucketName, "", "", "", "", "100", http.StatusOK, true},
+	}
+
+	for i, testCase := range testCases {
+		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
+		rec := httptest.NewRecorder()
+
+		// construct HTTP request for List multipart uploads endpoint.
+		u := getListMultipartUploadsURLWithParams("", testCase.bucket, testCase.prefix, testCase.keyMarker, testCase.uploadIDMarker, testCase.delimiter, testCase.maxUploads)
+		req, gerr := newTestSignedRequest("GET", u, 0, nil, credentials.AccessKeyID, credentials.SecretAccessKey)
+		if gerr != nil {
+			t.Fatalf("Test %d: %s: Failed to create HTTP request for ListMultipartUploadsHandler: <ERROR> %v", i+1, instanceType, gerr)
+		}
+		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic ofthe handler.
+		// Call the ServeHTTP to execute the handler.
+		apiRouter.ServeHTTP(rec, req)
+		if rec.Code != testCase.expectedRespStatus {
+			t.Errorf("Test %d: %s: Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, rec.Code)
+		}
+	}
+
+	// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
+	rec := httptest.NewRecorder()
+
+	// construct HTTP request for List multipart uploads endpoint.
+	u := getListMultipartUploadsURLWithParams("", bucketName, "", "", "", "", "")
+	req, err := newTestSignedRequest("GET", u, 0, nil, "", "") // Generate an anonymous request.
+	if err != nil {
+		t.Fatalf("Test %s: Failed to create HTTP request for ListMultipartUploadsHandler: <ERROR> %v", instanceType, err)
+	}
+	// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic ofthe handler.
+	// Call the ServeHTTP to execute the handler.
+	apiRouter.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("Test %s: Expected the response status to be `http.StatusForbidden`, but instead found `%d`", instanceType, rec.Code)
 	}
 }

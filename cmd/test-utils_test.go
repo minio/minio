@@ -577,6 +577,11 @@ func signRequest(req *http.Request, accessKey, secretKey string) error {
 	return nil
 }
 
+// getCredential generate a credential string.
+func getCredential(accessKeyID, location string, t time.Time) string {
+	return accessKeyID + "/" + getScope(t, location)
+}
+
 // Returns new HTTP request object.
 func newTestRequest(method, urlStr string, contentLength int64, body io.ReadSeeker) (*http.Request, error) {
 	if method == "" {
@@ -1046,14 +1051,26 @@ func getAbortMultipartUploadURL(endPoint, bucketName, objectName, uploadID strin
 	return makeTestTargetURL(endPoint, bucketName, objectName, queryValue)
 }
 
-// return URL for a new multipart upload.
+// return URL for a listing pending multipart uploads.
 func getListMultipartURL(endPoint, bucketName string) string {
 	queryValue := url.Values{}
 	queryValue.Set("uploads", "")
 	return makeTestTargetURL(endPoint, bucketName, "", queryValue)
 }
 
-// return URL for a new multipart upload.
+// return URL for listing pending multipart uploads with parameters.
+func getListMultipartUploadsURLWithParams(endPoint, bucketName, prefix, keyMarker, uploadIDMarker, delimiter, maxUploads string) string {
+	queryValue := url.Values{}
+	queryValue.Set("uploads", "")
+	queryValue.Set("prefix", prefix)
+	queryValue.Set("delimiter", delimiter)
+	queryValue.Set("key-marker", keyMarker)
+	queryValue.Set("upload-id-marker", uploadIDMarker)
+	queryValue.Set("max-uploads", maxUploads)
+	return makeTestTargetURL(endPoint, bucketName, "", queryValue)
+}
+
+// return URL for a listing parts on a given upload id.
 func getListMultipartURLWithParams(endPoint, bucketName, objectName, uploadID, maxParts string) string {
 	queryValues := url.Values{}
 	queryValues.Set("uploadId", uploadID)
@@ -1289,8 +1306,12 @@ func initTestAPIEndPoints(objLayer ObjectLayer, apiFunctions []string) http.Hand
 		// Register GetBucketLocation handler.
 		case "GetBucketLocation":
 			bucket.Methods("GET").HandlerFunc(api.GetBucketLocationHandler).Queries("location", "")
+		// Register HeadBucket handler.
 		case "HeadBucket":
 			bucket.Methods("HEAD").HandlerFunc(api.HeadBucketHandler)
+		// Register ListMultipartUploads handler.
+		case "ListMultipartUploads":
+			bucket.Methods("GET").HandlerFunc(api.ListMultipartUploadsHandler).Queries("uploads", "")
 		// Register all api endpoints by default.
 		default:
 			registerAPIRouter(muxRouter, api)

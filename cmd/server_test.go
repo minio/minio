@@ -309,6 +309,7 @@ func (s *TestSuiteCommon) TestDeleteBucketNotEmpty(c *C) {
 
 }
 
+// Test deletes multple objects and verifies server resonse.
 func (s *TestSuiteCommon) TestDeleteMultipleObjects(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
@@ -347,18 +348,11 @@ func (s *TestSuiteCommon) TestDeleteMultipleObjects(c *C) {
 			ObjectName: objName,
 		})
 	}
-	// Append a non-existent object for which the response should be marked
-	// as deleted.
-	delObjReq.Objects = append(delObjReq.Objects, ObjectIdentifier{
-		ObjectName: fmt.Sprintf("%d/%s", 10, objectName),
-	})
-
 	// Marshal delete request.
 	deleteReqBytes, err := xml.Marshal(delObjReq)
 	c.Assert(err, IsNil)
 
-	// object name was "prefix/myobject", an attempt to delelte "prefix"
-	// Should not delete "prefix/myobject"
+	// Delete list of objects.
 	request, err = newTestSignedRequest("POST", getMultiDeleteObjectURL(s.endPoint, bucketName),
 		int64(len(deleteReqBytes)), bytes.NewReader(deleteReqBytes), s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
@@ -372,8 +366,28 @@ func (s *TestSuiteCommon) TestDeleteMultipleObjects(c *C) {
 	c.Assert(err, IsNil)
 	err = xml.Unmarshal(delRespBytes, &deleteResp)
 	c.Assert(err, IsNil)
-	for i := 0; i <= 10; i++ {
+	for i := 0; i < 10; i++ {
 		// All the objects should be under deleted list (including non-existent object)
+		c.Assert(deleteResp.DeletedObjects[i], DeepEquals, delObjReq.Objects[i])
+	}
+	c.Assert(len(deleteResp.Errors), Equals, 0)
+
+	// Attempt second time results should be same, NoSuchKey for objects not found
+	// shouldn't be set.
+	request, err = newTestSignedRequest("POST", getMultiDeleteObjectURL(s.endPoint, bucketName),
+		int64(len(deleteReqBytes)), bytes.NewReader(deleteReqBytes), s.accessKey, s.secretKey)
+	c.Assert(err, IsNil)
+	client = http.Client{}
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	deleteResp = DeleteObjectsResponse{}
+	delRespBytes, err = ioutil.ReadAll(response.Body)
+	c.Assert(err, IsNil)
+	err = xml.Unmarshal(delRespBytes, &deleteResp)
+	c.Assert(err, IsNil)
+	for i := 0; i < 10; i++ {
 		c.Assert(deleteResp.DeletedObjects[i], DeepEquals, delObjReq.Objects[i])
 	}
 	c.Assert(len(deleteResp.Errors), Equals, 0)
