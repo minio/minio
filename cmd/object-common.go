@@ -216,7 +216,8 @@ func cleanupDir(storage StorageAPI, volume, dirPath string) error {
 	delFunc = func(entryPath string) error {
 		if !strings.HasSuffix(entryPath, slashSeparator) {
 			// Delete the file entry.
-			return storage.DeleteFile(volume, entryPath)
+			err := storage.DeleteFile(volume, entryPath)
+			return traceError(err)
 		}
 
 		// If it's a directory, list and call delFunc() for each entry.
