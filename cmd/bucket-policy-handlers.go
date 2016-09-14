@@ -126,6 +126,12 @@ func bucketPolicyConditionMatch(conditions map[string]set.StringSet, statement p
 // This implementation of the PUT operation uses the policy
 // subresource to add to or replace a policy on a bucket
 func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
+	objAPI := api.ObjectAPI()
+	if objAPI == nil {
+		writeErrorResponse(w, r, ErrServerNotInitialized, r.URL.Path)
+		return
+	}
+
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	switch getRequestAuthType(r) {
@@ -180,8 +186,7 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 	}
 
 	// Save bucket policy.
-	if err = writeBucketPolicy(bucket, api.ObjectAPI, bytes.NewReader(policyBytes), int64(len(policyBytes))); err != nil {
-		errorIf(err, "Unable to write bucket policy.")
+	if err = writeBucketPolicy(bucket, objAPI, bytes.NewReader(policyBytes), int64(len(policyBytes))); err != nil {
 		switch err.(type) {
 		case BucketNameInvalid:
 			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
@@ -203,6 +208,12 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 // This implementation of the DELETE operation uses the policy
 // subresource to add to remove a policy on a bucket.
 func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
+	objAPI := api.ObjectAPI()
+	if objAPI == nil {
+		writeErrorResponse(w, r, ErrServerNotInitialized, r.URL.Path)
+		return
+	}
+
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
@@ -219,8 +230,7 @@ func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r 
 	}
 
 	// Delete bucket access policy.
-	if err := removeBucketPolicy(bucket, api.ObjectAPI); err != nil {
-		errorIf(err, "Unable to remove bucket policy.")
+	if err := removeBucketPolicy(bucket, objAPI); err != nil {
 		switch err.(type) {
 		case BucketNameInvalid:
 			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
@@ -244,6 +254,12 @@ func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r 
 // This operation uses the policy
 // subresource to return the policy of a specified bucket.
 func (api objectAPIHandlers) GetBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
+	objAPI := api.ObjectAPI()
+	if objAPI == nil {
+		writeErrorResponse(w, r, ErrServerNotInitialized, r.URL.Path)
+		return
+	}
+
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
@@ -260,7 +276,7 @@ func (api objectAPIHandlers) GetBucketPolicyHandler(w http.ResponseWriter, r *ht
 	}
 
 	// Read bucket access policy.
-	policy, err := readBucketPolicy(bucket, api.ObjectAPI)
+	policy, err := readBucketPolicy(bucket, objAPI)
 	if err != nil {
 		errorIf(err, "Unable to read bucket policy.")
 		switch err.(type) {

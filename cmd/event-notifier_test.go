@@ -86,16 +86,25 @@ func testEventNotify(obj ObjectLayer, instanceType string, t TestErrHandler) {
 
 // Tests various forms of inititalization of event notifier.
 func TestInitEventNotifier(t *testing.T) {
-	fs, disk, err := getSingleNodeObjectLayer()
+	disk, err := getRandomDisks(1)
+	if err != nil {
+		t.Fatal("Unable to create directories for FS backend. ", err)
+	}
+	fs, err := getSingleNodeObjectLayer(disk[0])
 	if err != nil {
 		t.Fatal("Unable to initialize FS backend.", err)
 	}
-	xl, disks, err := getXLObjectLayer()
+	nDisks := 16
+	disks, err := getRandomDisks(nDisks)
+	if err != nil {
+		t.Fatal("Unable to create directories for XL backend. ", err)
+	}
+	xl, err := getXLObjectLayer(disks)
 	if err != nil {
 		t.Fatal("Unable to initialize XL backend.", err)
 	}
 
-	disks = append(disks, disk)
+	disks = append(disks, disk...)
 	for _, d := range disks {
 		defer removeAll(d)
 	}

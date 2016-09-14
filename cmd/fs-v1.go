@@ -26,7 +26,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/mimedb"
 )
 
@@ -68,7 +67,7 @@ func newFSObjects(disk string) (ObjectLayer, error) {
 		return nil, err
 	}
 
-	// Attempt to create `.minio`.
+	// Attempt to create `.minio.sys`.
 	err = storage.MakeVol(minioMetaBucket)
 	if err != nil {
 		switch err {
@@ -146,8 +145,8 @@ func (fs fsObjects) Shutdown() error {
 
 // StorageInfo - returns underlying storage statistics.
 func (fs fsObjects) StorageInfo() StorageInfo {
-	info, err := disk.GetInfo(fs.physicalDisk)
-	fatalIf(err, "Unable to get disk info "+fs.physicalDisk)
+	info, err := fs.storage.DiskInfo()
+	errorIf(err, "Unable to get disk info %#v", fs.storage)
 	return StorageInfo{
 		Total: info.Total,
 		Free:  info.Free,
@@ -160,10 +159,10 @@ func (fs fsObjects) StorageInfo() StorageInfo {
 func (fs fsObjects) MakeBucket(bucket string) error {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return BucketNameInvalid{Bucket: bucket}
+		return traceError(BucketNameInvalid{Bucket: bucket})
 	}
 	if err := fs.storage.MakeVol(bucket); err != nil {
-		return toObjectErr(err, bucket)
+		return toObjectErr(traceError(err), bucket)
 	}
 	return nil
 }
@@ -172,11 +171,11 @@ func (fs fsObjects) MakeBucket(bucket string) error {
 func (fs fsObjects) GetBucketInfo(bucket string) (BucketInfo, error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return BucketInfo{}, BucketNameInvalid{Bucket: bucket}
+		return BucketInfo{}, traceError(BucketNameInvalid{Bucket: bucket})
 	}
 	vi, err := fs.storage.StatVol(bucket)
 	if err != nil {
-		return BucketInfo{}, toObjectErr(err, bucket)
+		return BucketInfo{}, toObjectErr(traceError(err), bucket)
 	}
 	return BucketInfo{
 		Name:    bucket,
@@ -189,7 +188,7 @@ func (fs fsObjects) ListBuckets() ([]BucketInfo, error) {
 	var bucketInfos []BucketInfo
 	vols, err := fs.storage.ListVols()
 	if err != nil {
-		return nil, toObjectErr(err)
+		return nil, toObjectErr(traceError(err))
 	}
 	for _, vol := range vols {
 		// StorageAPI can send volume names which are incompatible
@@ -214,11 +213,11 @@ func (fs fsObjects) ListBuckets() ([]BucketInfo, error) {
 func (fs fsObjects) DeleteBucket(bucket string) error {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return BucketNameInvalid{Bucket: bucket}
+		return traceError(BucketNameInvalid{Bucket: bucket})
 	}
 	// Attempt to delete regular bucket.
 	if err := fs.storage.DeleteVol(bucket); err != nil {
-		return toObjectErr(err, bucket)
+		return toObjectErr(traceError(err), bucket)
 	}
 	// Cleanup all the previously incomplete multiparts.
 	if err := cleanupDir(fs.storage, path.Join(minioMetaBucket, mpartMetaPrefix), bucket); err != nil && err != errVolumeNotFound {
@@ -233,34 +232,34 @@ func (fs fsObjects) DeleteBucket(bucket string) error {
 func (fs fsObjects) GetObject(bucket, object string, offset int64, length int64, writer io.Writer) (err error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return BucketNameInvalid{Bucket: bucket}
+		return traceError(BucketNameInvalid{Bucket: bucket})
 	}
 	// Verify if object is valid.
 	if !IsValidObjectName(object) {
-		return ObjectNameInvalid{Bucket: bucket, Object: object}
+		return traceError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
 	// Offset and length cannot be negative.
 	if offset < 0 || length < 0 {
-		return toObjectErr(errUnexpected, bucket, object)
+		return toObjectErr(traceError(errUnexpected), bucket, object)
 	}
 	// Writer cannot be nil.
 	if writer == nil {
-		return toObjectErr(errUnexpected, bucket, object)
+		return toObjectErr(traceError(errUnexpected), bucket, object)
 	}
 
 	// Stat the file to get file size.
 	fi, err := fs.storage.StatFile(bucket, object)
 	if err != nil {
-		return toObjectErr(err, bucket, object)
+		return toObjectErr(traceError(err), bucket, object)
 	}
 
 	// Reply back invalid range if the input offset and length fall out of range.
 	if offset > fi.Size || length > fi.Size {
-		return InvalidRange{offset, length, fi.Size}
+		return traceError(InvalidRange{offset, length, fi.Size})
 	}
 	// Reply if we have inputs with offset and length falling out of file size range.
 	if offset+length > fi.Size {
-		return InvalidRange{offset, length, fi.Size}
+		return traceError(InvalidRange{offset, length, fi.Size})
 	}
 
 	var totalLeft = length
@@ -289,11 +288,11 @@ func (fs fsObjects) GetObject(bucket, object string, offset int64, length int64,
 				offset += int64(nw)
 			}
 			if ew != nil {
-				err = ew
+				err = traceError(ew)
 				break
 			}
 			if nr != int64(nw) {
-				err = io.ErrShortWrite
+				err = traceError(io.ErrShortWrite)
 				break
 			}
 		}
@@ -301,7 +300,7 @@ func (fs fsObjects) GetObject(bucket, object string, offset int64, length int64,
 			break
 		}
 		if er != nil {
-			err = er
+			err = traceError(er)
 			break
 		}
 		if totalLeft == 0 {
@@ -312,22 +311,15 @@ func (fs fsObjects) GetObject(bucket, object string, offset int64, length int64,
 	return toObjectErr(err, bucket, object)
 }
 
-// GetObjectInfo - get object info.
-func (fs fsObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
-	// Verify if bucket is valid.
-	if !IsValidBucketName(bucket) {
-		return ObjectInfo{}, (BucketNameInvalid{Bucket: bucket})
-	}
-	// Verify if object is valid.
-	if !IsValidObjectName(object) {
-		return ObjectInfo{}, (ObjectNameInvalid{Bucket: bucket, Object: object})
-	}
+// getObjectInfo - get object info.
+func (fs fsObjects) getObjectInfo(bucket, object string) (ObjectInfo, error) {
 	fi, err := fs.storage.StatFile(bucket, object)
 	if err != nil {
-		return ObjectInfo{}, toObjectErr(err, bucket, object)
+		return ObjectInfo{}, toObjectErr(traceError(err), bucket, object)
 	}
 	fsMeta, err := readFSMetadata(fs.storage, minioMetaBucket, path.Join(bucketMetaPrefix, bucket, object, fsMetaJSONFile))
-	if err != nil && err != errFileNotFound {
+	// Ignore error if the metadata file is not found, other errors must be returned.
+	if err != nil && errorCause(err) != errFileNotFound {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
@@ -358,17 +350,30 @@ func (fs fsObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 	}, nil
 }
 
-// PutObject - create an object.
-func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string) (string, error) {
+// GetObjectInfo - get object info.
+func (fs fsObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return "", BucketNameInvalid{Bucket: bucket}
+		return ObjectInfo{}, traceError(BucketNameInvalid{Bucket: bucket})
+	}
+	// Verify if object is valid.
+	if !IsValidObjectName(object) {
+		return ObjectInfo{}, traceError(ObjectNameInvalid{Bucket: bucket, Object: object})
+	}
+	return fs.getObjectInfo(bucket, object)
+}
+
+// PutObject - create an object.
+func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string) (objInfo ObjectInfo, err error) {
+	// Verify if bucket is valid.
+	if !IsValidBucketName(bucket) {
+		return ObjectInfo{}, traceError(BucketNameInvalid{Bucket: bucket})
 	}
 	if !IsValidObjectName(object) {
-		return "", ObjectNameInvalid{
+		return ObjectInfo{}, traceError(ObjectNameInvalid{
 			Bucket: bucket,
 			Object: object,
-		}
+		})
 	}
 	// No metadata is set, allocate a new one.
 	if metadata == nil {
@@ -397,9 +402,9 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 
 	if size == 0 {
 		// For size 0 we write a 0byte file.
-		err := fs.storage.AppendFile(minioMetaBucket, tempObj, []byte(""))
+		err = fs.storage.AppendFile(minioMetaBucket, tempObj, []byte(""))
 		if err != nil {
-			return "", toObjectErr(err, bucket, object)
+			return ObjectInfo{}, toObjectErr(traceError(err), bucket, object)
 		}
 	} else {
 		// Allocate a buffer to Read() from request body
@@ -409,17 +414,18 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 		}
 		buf := make([]byte, int(bufSize))
 		teeReader := io.TeeReader(limitDataReader, md5Writer)
-		bytesWritten, err := fsCreateFile(fs.storage, teeReader, buf, minioMetaBucket, tempObj)
+		var bytesWritten int64
+		bytesWritten, err = fsCreateFile(fs.storage, teeReader, buf, minioMetaBucket, tempObj)
 		if err != nil {
 			fs.storage.DeleteFile(minioMetaBucket, tempObj)
-			return "", toObjectErr(err, bucket, object)
+			return ObjectInfo{}, toObjectErr(traceError(err), bucket, object)
 		}
 
 		// Should return IncompleteBody{} error when reader has fewer
 		// bytes than specified in request header.
 		if bytesWritten < size {
 			fs.storage.DeleteFile(minioMetaBucket, tempObj)
-			return "", IncompleteBody{}
+			return ObjectInfo{}, traceError(IncompleteBody{})
 		}
 	}
 
@@ -435,7 +441,7 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 			// Incoming payload wrong, delete the temporary object.
 			fs.storage.DeleteFile(minioMetaBucket, tempObj)
 			// Error return.
-			return "", toObjectErr(vErr, bucket, object)
+			return ObjectInfo{}, toObjectErr(traceError(vErr), bucket, object)
 		}
 	}
 
@@ -446,14 +452,14 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 			// MD5 mismatch, delete the temporary object.
 			fs.storage.DeleteFile(minioMetaBucket, tempObj)
 			// Returns md5 mismatch.
-			return "", BadDigest{md5Hex, newMD5Hex}
+			return ObjectInfo{}, traceError(BadDigest{md5Hex, newMD5Hex})
 		}
 	}
 
 	// Entire object was written to the temp location, now it's safe to rename it to the actual location.
-	err := fs.storage.RenameFile(minioMetaBucket, tempObj, bucket, object)
+	err = fs.storage.RenameFile(minioMetaBucket, tempObj, bucket, object)
 	if err != nil {
-		return "", toObjectErr(err, bucket, object)
+		return ObjectInfo{}, toObjectErr(traceError(err), bucket, object)
 	}
 
 	// Save additional metadata only if extended headers such as "X-Amz-Meta-" are set.
@@ -464,12 +470,15 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 
 		fsMetaPath := path.Join(bucketMetaPrefix, bucket, object, fsMetaJSONFile)
 		if err = writeFSMetadata(fs.storage, minioMetaBucket, fsMetaPath, fsMeta); err != nil {
-			return "", toObjectErr(err, bucket, object)
+			return ObjectInfo{}, toObjectErr(traceError(err), bucket, object)
 		}
 	}
-
-	// Return md5sum, successfully wrote object.
-	return newMD5Hex, nil
+	objInfo, err = fs.getObjectInfo(bucket, object)
+	if err == nil {
+		// If MINIO_ENABLE_FSMETA is not enabled objInfo.MD5Sum will be empty.
+		objInfo.MD5Sum = newMD5Hex
+	}
+	return objInfo, err
 }
 
 // DeleteObject - deletes an object from a bucket, this operation is destructive
@@ -477,17 +486,17 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 func (fs fsObjects) DeleteObject(bucket, object string) error {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return BucketNameInvalid{Bucket: bucket}
+		return traceError(BucketNameInvalid{Bucket: bucket})
 	}
 	if !IsValidObjectName(object) {
-		return ObjectNameInvalid{Bucket: bucket, Object: object}
+		return traceError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
 	err := fs.storage.DeleteFile(minioMetaBucket, path.Join(bucketMetaPrefix, bucket, object, fsMetaJSONFile))
 	if err != nil && err != errFileNotFound {
-		return toObjectErr(err, bucket, object)
+		return toObjectErr(traceError(err), bucket, object)
 	}
 	if err = fs.storage.DeleteFile(bucket, object); err != nil {
-		return toObjectErr(err, bucket, object)
+		return toObjectErr(traceError(err), bucket, object)
 	}
 	return nil
 }
@@ -518,11 +527,11 @@ func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 			return
 		}
 		if fileInfo, err = fs.storage.StatFile(bucket, entry); err != nil {
-			return
+			return FileInfo{}, traceError(err)
 		}
 		fsMeta, mErr := readFSMetadata(fs.storage, minioMetaBucket, path.Join(bucketMetaPrefix, bucket, entry, fsMetaJSONFile))
-		if mErr != nil && mErr != errFileNotFound {
-			return FileInfo{}, mErr
+		if mErr != nil && errorCause(mErr) != errFileNotFound {
+			return FileInfo{}, traceError(mErr)
 		}
 		if len(fsMeta.Meta) == 0 {
 			fsMeta.Meta = make(map[string]string)
@@ -535,28 +544,28 @@ func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return ListObjectsInfo{}, BucketNameInvalid{Bucket: bucket}
+		return ListObjectsInfo{}, traceError(BucketNameInvalid{Bucket: bucket})
 	}
 	// Verify if bucket exists.
 	if !isBucketExist(fs.storage, bucket) {
-		return ListObjectsInfo{}, BucketNotFound{Bucket: bucket}
+		return ListObjectsInfo{}, traceError(BucketNotFound{Bucket: bucket})
 	}
 	if !IsValidObjectPrefix(prefix) {
-		return ListObjectsInfo{}, ObjectNameInvalid{Bucket: bucket, Object: prefix}
+		return ListObjectsInfo{}, traceError(ObjectNameInvalid{Bucket: bucket, Object: prefix})
 	}
 	// Verify if delimiter is anything other than '/', which we do not support.
 	if delimiter != "" && delimiter != slashSeparator {
-		return ListObjectsInfo{}, UnsupportedDelimiter{
+		return ListObjectsInfo{}, traceError(UnsupportedDelimiter{
 			Delimiter: delimiter,
-		}
+		})
 	}
 	// Verify if marker has prefix.
 	if marker != "" {
 		if !strings.HasPrefix(marker, prefix) {
-			return ListObjectsInfo{}, InvalidMarkerPrefixCombination{
+			return ListObjectsInfo{}, traceError(InvalidMarkerPrefixCombination{
 				Marker: marker,
 				Prefix: prefix,
-			}
+			})
 		}
 	}
 
@@ -611,7 +620,7 @@ func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 		// For any walk error return right away.
 		if walkResult.err != nil {
 			// File not found is a valid case.
-			if walkResult.err == errFileNotFound {
+			if errorCause(walkResult.err) == errFileNotFound {
 				return ListObjectsInfo{}, nil
 			}
 			return ListObjectsInfo{}, toObjectErr(walkResult.err, bucket, prefix)
@@ -653,10 +662,15 @@ func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 
 // HealObject - no-op for fs. Valid only for XL.
 func (fs fsObjects) HealObject(bucket, object string) error {
-	return NotImplemented{}
+	return traceError(NotImplemented{})
 }
 
 // HealListObjects - list objects for healing. Valid only for XL
 func (fs fsObjects) ListObjectsHeal(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
-	return ListObjectsInfo{}, NotImplemented{}
+	return ListObjectsInfo{}, traceError(NotImplemented{})
+}
+
+// HealDiskMetadata -- heal disk metadata, not supported in FS
+func (fs fsObjects) HealDiskMetadata() error {
+	return NotImplemented{}
 }

@@ -148,7 +148,7 @@ func listDirFactory(isLeaf isLeafFunc, disks ...StorageAPI) listDirFunc {
 			break
 		}
 		// Return error at the end.
-		return nil, false, err
+		return nil, false, traceError(err)
 	}
 	return listDir
 }
@@ -173,7 +173,7 @@ func doTreeWalk(bucket, prefixDir, entryPrefixMatch, marker string, recursive bo
 	if err != nil {
 		select {
 		case <-endWalkCh:
-			return errWalkAbort
+			return traceError(errWalkAbort)
 		case resultCh <- treeWalkResult{err: err}:
 			return err
 		}
@@ -235,7 +235,7 @@ func doTreeWalk(bucket, prefixDir, entryPrefixMatch, marker string, recursive bo
 		isEOF := ((i == len(entries)-1) && isEnd)
 		select {
 		case <-endWalkCh:
-			return errWalkAbort
+			return traceError(errWalkAbort)
 		case resultCh <- treeWalkResult{entry: pathJoin(prefixDir, entry), end: isEOF}:
 		}
 	}

@@ -200,12 +200,12 @@ func testMultipleObjectCreation(obj ObjectLayer, instanceType string, c TestErrH
 		objects[key] = []byte(randomString)
 		metadata := make(map[string]string)
 		metadata["md5Sum"] = expectedMD5Sumhex
-		var md5Sum string
-		md5Sum, err = obj.PutObject("bucket", key, int64(len(randomString)), bytes.NewBufferString(randomString), metadata)
+		var objInfo ObjectInfo
+		objInfo, err = obj.PutObject("bucket", key, int64(len(randomString)), bytes.NewBufferString(randomString), metadata)
 		if err != nil {
 			c.Fatalf("%s: <ERROR> %s", instanceType, err)
 		}
-		if md5Sum != expectedMD5Sumhex {
+		if objInfo.MD5Sum != expectedMD5Sumhex {
 			c.Errorf("Md5 Mismatch")
 		}
 	}
@@ -625,6 +625,9 @@ func testListBuckets(obj ObjectLayer, instanceType string, c TestErrHandler) {
 
 	// add three and test exists + prefix.
 	err = obj.MakeBucket("bucket22")
+	if err != nil {
+		c.Fatalf("%s: <ERROR> %s", instanceType, err)
+	}
 
 	buckets, err = obj.ListBuckets()
 	if err != nil {
@@ -707,6 +710,7 @@ func testNonExistantObjectInBucket(obj ObjectLayer, instanceType string, c TestE
 	if err == nil {
 		c.Fatalf("%s: Expected error but found nil", instanceType)
 	}
+	err = errorCause(err)
 	switch err := err.(type) {
 	case ObjectNotFound:
 		if err.Error() != "Object not found: bucket#dir1" {
@@ -740,6 +744,7 @@ func testGetDirectoryReturnsObjectNotFound(obj ObjectLayer, instanceType string,
 	}
 
 	_, err = obj.GetObjectInfo("bucket", "dir1")
+	err = errorCause(err)
 	switch err := err.(type) {
 	case ObjectNotFound:
 		if err.Bucket != "bucket" {
@@ -755,6 +760,7 @@ func testGetDirectoryReturnsObjectNotFound(obj ObjectLayer, instanceType string,
 	}
 
 	_, err = obj.GetObjectInfo("bucket", "dir1/")
+	err = errorCause(err)
 	switch err := err.(type) {
 	case ObjectNameInvalid:
 		if err.Bucket != "bucket" {

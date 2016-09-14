@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/minio/minio-go/pkg/set"
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/objcache"
 )
@@ -50,12 +51,11 @@ const (
 
 // xlObjects - Implements XL object layer.
 type xlObjects struct {
-	physicalDisks []string     // Collection of regular disks.
-	storageDisks  []StorageAPI // Collection of initialized backend disks.
-	dataBlocks    int          // dataBlocks count caculated for erasure.
-	parityBlocks  int          // parityBlocks count calculated for erasure.
-	readQuorum    int          // readQuorum minimum required disks to read data.
-	writeQuorum   int          // writeQuorum minimum required disks to write data.
+	storageDisks []StorageAPI // Collection of initialized backend disks.
+	dataBlocks   int          // dataBlocks count caculated for erasure.
+	parityBlocks int          // parityBlocks count calculated for erasure.
+	readQuorum   int          // readQuorum minimum required disks to read data.
+	writeQuorum  int          // writeQuorum minimum required disks to write data.
 
 	// ListObjects pool management.
 	listPool *treeWalkPool
@@ -67,49 +67,50 @@ type xlObjects struct {
 	objCacheEnabled bool
 }
 
-// Validate if input disks are sufficient for initializing XL.
-func checkSufficientDisks(disks []string) error {
-	// Verify total number of disks.
-	totalDisks := len(disks)
-	if totalDisks > maxErasureBlocks {
-		return errXLMaxDisks
-	}
-	if totalDisks < minErasureBlocks {
-		return errXLMinDisks
+func repairDiskMetadata(storageDisks []StorageAPI) error {
+	// Attempt to load all `format.json`.
+	formatConfigs, sErrs := loadAllFormats(storageDisks)
+
+	// Generic format check validates
+	// if (no quorum) return error
+	// if (disks not recognized) // Always error.
+	if err := genericFormatCheck(formatConfigs, sErrs); err != nil {
+		return err
 	}
 
-	// isEven function to verify if a given number if even.
-	isEven := func(number int) bool {
-		return number%2 == 0
+	// Handles different cases properly.
+	switch reduceFormatErrs(sErrs, len(storageDisks)) {
+	case errCorruptedFormat:
+		if err := healFormatXLCorruptedDisks(storageDisks); err != nil {
+			return fmt.Errorf("Unable to repair corrupted format, %s", err)
+		}
+	case errSomeDiskUnformatted:
+		// All drives online but some report missing format.json.
+		if err := healFormatXLFreshDisks(storageDisks); err != nil {
+			// There was an unexpected unrecoverable error during healing.
+			return fmt.Errorf("Unable to heal backend %s", err)
+		}
+	case errSomeDiskOffline:
+		// FIXME: in future.
+		return fmt.Errorf("Unable to initialize format %s and %s", errSomeDiskOffline, errSomeDiskUnformatted)
 	}
-
-	// Verify if we have even number of disks.
-	// only combination of 4, 6, 8, 10, 12, 14, 16 are supported.
-	if !isEven(totalDisks) {
-		return errXLNumDisks
-	}
-
-	// Success.
 	return nil
-}
-
-// isDiskFound - validates if the disk is found in a list of input disks.
-func isDiskFound(disk string, disks []string) bool {
-	return contains(disks, disk)
 }
 
 // newXLObjects - initialize new xl object layer.
 func newXLObjects(disks, ignoredDisks []string) (ObjectLayer, error) {
-	// Validate if input disks are sufficient.
-	if err := checkSufficientDisks(disks); err != nil {
-		return nil, err
+	if disks == nil {
+		return nil, errInvalidArgument
 	}
-
+	disksSet := set.NewStringSet()
+	if len(ignoredDisks) > 0 {
+		disksSet = set.CreateStringSet(ignoredDisks...)
+	}
 	// Bootstrap disks.
 	storageDisks := make([]StorageAPI, len(disks))
 	for index, disk := range disks {
 		// Check if disk is ignored.
-		if isDiskFound(disk, ignoredDisks) {
+		if disksSet.Contains(disk) {
 			storageDisks[index] = nil
 			continue
 		}
@@ -118,46 +119,16 @@ func newXLObjects(disks, ignoredDisks []string) (ObjectLayer, error) {
 		// to handle these errors internally.
 		storageDisks[index], err = newStorageAPI(disk)
 		if err != nil && err != errDiskNotFound {
+			switch diskType := storageDisks[index].(type) {
+			case networkStorage:
+				diskType.rpcClient.Close()
+			}
 			return nil, err
 		}
 	}
 
-	// Attempt to load all `format.json`.
-	formatConfigs, sErrs := loadAllFormats(storageDisks)
-
-	// Generic format check validates
-	// if (no quorum) return error
-	// if (disks not recognized) // Always error.
-	if err := genericFormatCheck(formatConfigs, sErrs); err != nil {
-		return nil, err
-	}
-
-	// Initialize meta volume, if volume already exists ignores it.
-	if err := initMetaVolume(storageDisks); err != nil {
-		return nil, fmt.Errorf("Unable to initialize '.minio.sys' meta volume, %s", err)
-	}
-
-	// Handles different cases properly.
-	switch reduceFormatErrs(sErrs, len(storageDisks)) {
-	case errCorruptedFormat:
-		if err := healFormatXLCorruptedDisks(storageDisks); err != nil {
-			return nil, fmt.Errorf("Unable to repair corrupted format, %s", err)
-		}
-	case errUnformattedDisk:
-		// All drives online but fresh, initialize format.
-		if err := initFormatXL(storageDisks); err != nil {
-			return nil, fmt.Errorf("Unable to initialize format, %s", err)
-		}
-	case errSomeDiskUnformatted:
-		// All drives online but some report missing format.json.
-		if err := healFormatXLFreshDisks(storageDisks); err != nil {
-			// There was an unexpected unrecoverable error during healing.
-			return nil, fmt.Errorf("Unable to heal backend %s", err)
-		}
-	case errSomeDiskOffline:
-		// FIXME: in future.
-		return nil, fmt.Errorf("Unable to initialize format %s and %s", errSomeDiskOffline, errSomeDiskUnformatted)
-	}
+	// Fix format files in case of fresh or corrupted disks
+	repairDiskMetadata(storageDisks)
 
 	// Runs house keeping code, like t, cleaning up tmp files etc.
 	if err := xlHouseKeeping(storageDisks); err != nil {
@@ -182,7 +153,6 @@ func newXLObjects(disks, ignoredDisks []string) (ObjectLayer, error) {
 
 	// Initialize xl objects.
 	xl := xlObjects{
-		physicalDisks:   disks,
 		storageDisks:    newPosixDisks,
 		dataBlocks:      dataBlocks,
 		parityBlocks:    parityBlocks,
@@ -206,6 +176,17 @@ func (xl xlObjects) Shutdown() error {
 	return nil
 }
 
+// HealDiskMetadata function for object storage interface.
+func (xl xlObjects) HealDiskMetadata() error {
+	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
+	// used for instrumentation on locks.
+	opsID := getOpsID()
+
+	nsMutex.Lock(minioMetaBucket, formatConfigFile, opsID)
+	defer nsMutex.Unlock(minioMetaBucket, formatConfigFile, opsID)
+	return repairDiskMetadata(xl.storageDisks)
+}
+
 // byDiskTotal is a collection satisfying sort.Interface.
 type byDiskTotal []disk.Info
 
@@ -218,10 +199,10 @@ func (d byDiskTotal) Less(i, j int) bool {
 // StorageInfo - returns underlying storage statistics.
 func (xl xlObjects) StorageInfo() StorageInfo {
 	var disksInfo []disk.Info
-	for _, diskPath := range xl.physicalDisks {
-		info, err := disk.GetInfo(diskPath)
+	for _, storageDisk := range xl.storageDisks {
+		info, err := storageDisk.DiskInfo()
 		if err != nil {
-			errorIf(err, "Unable to fetch disk info for "+diskPath)
+			errorIf(err, "Unable to fetch disk info for %#v", storageDisk)
 			continue
 		}
 		disksInfo = append(disksInfo, info)

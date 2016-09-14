@@ -28,28 +28,32 @@ import (
 	"github.com/minio/cli"
 )
 
-var serverCmd = cli.Command{
-	Name:  "server",
-	Usage: "Start object storage server.",
-	Flags: []cli.Flag{
-		cli.StringFlag{
-			Name:  "address",
-			Value: ":9000",
-			Usage: "Specify custom server \"ADDRESS:PORT\", defaults to \":9000\".",
-		},
-		cli.StringFlag{
-			Name:  "ignore-disks",
-			Usage: "Specify comma separated list of disks that are offline.",
-		},
+var srvConfig serverCmdConfig
+
+var serverFlags = []cli.Flag{
+	cli.StringFlag{
+		Name:  "address",
+		Value: ":9000",
+		Usage: "Specify custom server \"ADDRESS:PORT\", defaults to \":9000\".",
 	},
+	cli.StringFlag{
+		Name:  "ignore-disks",
+		Usage: "Specify comma separated list of disks that are offline.",
+	},
+}
+
+var serverCmd = cli.Command{
+	Name:   "server",
+	Usage:  "Start object storage server.",
+	Flags:  append(serverFlags, globalFlags...),
 	Action: serverMain,
 	CustomHelpTemplate: `NAME:
   minio {{.Name}} - {{.Usage}}
 
 USAGE:
-  minio {{.Name}} [OPTIONS] PATH [PATH...]
+  minio {{.Name}} [FLAGS] PATH [PATH...]
 
-OPTIONS:
+FLAGS:
   {{range .Flags}}{{.}}
   {{end}}
 ENVIRONMENT VARIABLES:
@@ -72,15 +76,21 @@ EXAMPLES:
       $ minio {{.Name}} C:\MyShare
 
   4. Start minio server on 12 disks to enable erasure coded layer with 6 data and 6 parity.
-      $ minio {{.Name}} /mnt/export1/backend /mnt/export2/backend /mnt/export3/backend /mnt/export4/backend \
-          /mnt/export5/backend /mnt/export6/backend /mnt/export7/backend /mnt/export8/backend /mnt/export9/backend \
-          /mnt/export10/backend /mnt/export11/backend /mnt/export12/backend
+      $ minio {{.Name}} /mnt/export1/ /mnt/export2/ /mnt/export3/ /mnt/export4/ \
+          /mnt/export5/ /mnt/export6/ /mnt/export7/ /mnt/export8/ /mnt/export9/ \
+          /mnt/export10/ /mnt/export11/ /mnt/export12/
 
   5. Start minio server on 12 disks while ignoring two disks for initialization.
-      $ minio {{.Name}} --ignore-disks=/mnt/export1/backend,/mnt/export2/backend /mnt/export1/backend \
-          /mnt/export2/backend /mnt/export3/backend /mnt/export4/backend /mnt/export5/backend /mnt/export6/backend \
-          /mnt/export7/backend /mnt/export8/backend /mnt/export9/backend /mnt/export10/backend /mnt/export11/backend \
-          /mnt/export12/backend
+      $ minio {{.Name}} --ignore-disks=/mnt/export1/ /mnt/export1/ /mnt/export2/ \
+          /mnt/export3/ /mnt/export4/ /mnt/export5/ /mnt/export6/ /mnt/export7/ \ 
+	  /mnt/export8/ /mnt/export9/ /mnt/export10/ /mnt/export11/ /mnt/export12/
+
+  6. Start minio server on a 4 node distributed setup. Type the following command on all the 4 nodes.
+      $ export MINIO_ACCESS_KEY=minio
+      $ export MINIO_SECRET_KEY=miniostorage
+      $ minio {{.Name}} 192.168.1.11:/mnt/export/ 192.168.1.12:/mnt/export/ \
+          192.168.1.13:/mnt/export/ 192.168.1.14:/mnt/export/
+
 `,
 }
 
@@ -194,16 +204,70 @@ func initServerConfig(c *cli.Context) {
 	// Do not fail if this is not allowed, lower limits are fine as well.
 }
 
+// Validate if input disks are sufficient for initializing XL.
+func checkSufficientDisks(disks []string) error {
+	// Verify total number of disks.
+	totalDisks := len(disks)
+	if totalDisks > maxErasureBlocks {
+		return errXLMaxDisks
+	}
+	if totalDisks < minErasureBlocks {
+		return errXLMinDisks
+	}
+
+	// isEven function to verify if a given number if even.
+	isEven := func(number int) bool {
+		return number%2 == 0
+	}
+
+	// Verify if we have even number of disks.
+	// only combination of 4, 6, 8, 10, 12, 14, 16 are supported.
+	if !isEven(totalDisks) {
+		return errXLNumDisks
+	}
+
+	// Success.
+	return nil
+}
+
+// Validates if disks are of supported format, invalid arguments are rejected.
+func checkNamingDisks(disks []string) error {
+	for _, disk := range disks {
+		_, _, err := splitNetPath(disk)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Check server arguments.
 func checkServerSyntax(c *cli.Context) {
 	if !c.Args().Present() || c.Args().First() == "help" {
 		cli.ShowCommandHelpAndExit(c, "server", 1)
+	}
+	disks := c.Args()
+	if len(disks) > 1 {
+		// Validate if input disks have duplicates in them.
+		err := checkDuplicates(disks)
+		fatalIf(err, "Invalid disk arguments for server.")
+
+		// Validate if input disks are sufficient for erasure coded setup.
+		err = checkSufficientDisks(disks)
+		fatalIf(err, "Invalid disk arguments for server.")
+
+		// Validate if input disks are properly named in accordance with either
+		//  - /mnt/disk1
+		//  - ip:/mnt/disk1
+		err = checkNamingDisks(disks)
+		fatalIf(err, "Invalid disk arguments for server.")
 	}
 }
 
 // Extract port number from address address should be of the form host:port.
 func getPort(address string) int {
 	_, portStr, _ := net.SplitHostPort(address)
+
 	// If port empty, default to port '80'
 	if portStr == "" {
 		portStr = "80"
@@ -217,6 +281,51 @@ func getPort(address string) int {
 	portInt, err := strconv.Atoi(portStr)
 	fatalIf(err, "Invalid port number.")
 	return portInt
+}
+
+// Returns if slice of disks is a distributed setup.
+func isDistributedSetup(disks []string) (isDist bool) {
+	// Port to connect to for the lock servers in a distributed setup.
+	for _, disk := range disks {
+		if !isLocalStorage(disk) {
+			// One or more disks supplied as arguments are not
+			// attached to the local node.
+			isDist = true
+		}
+	}
+	return isDist
+}
+
+// Format disks before initialization object layer.
+func formatDisks(disks, ignoredDisks []string) error {
+	storageDisks, err := waitForFormattingDisks(disks, ignoredDisks)
+	for _, storage := range storageDisks {
+		if storage == nil {
+			continue
+		}
+		switch store := storage.(type) {
+		// Closing associated TCP connections since
+		// []StorageAPI is garbage collected eventually.
+		case networkStorage:
+			store.rpcClient.Close()
+		}
+	}
+	if err != nil {
+		return err
+	}
+	if isLocalStorage(disks[0]) {
+		// notify every one else that they can try init again.
+		for _, storage := range storageDisks {
+			switch store := storage.(type) {
+			// Closing associated TCP connections since
+			// []StorageAPI is garage collected eventually.
+			case networkStorage:
+				var reply GenericReply
+				_ = store.rpcClient.Call("Storage.TryInitHandler", &GenericArgs{}, &reply)
+			}
+		}
+	}
+	return nil
 }
 
 // serverMain handler called for 'minio server' command.
@@ -244,12 +353,29 @@ func serverMain(c *cli.Context) {
 	// Disks to be used in server init.
 	disks := c.Args()
 
+	isDist := isDistributedSetup(disks)
+	// Set nodes for dsync for distributed setup.
+	if isDist {
+		err = initDsyncNodes(disks, port)
+		fatalIf(err, "Unable to initialize distributed locking")
+	}
+
+	// Initialize name space lock.
+	initNSLock(isDist)
+
 	// Configure server.
-	handler := configureServerHandler(serverCmdConfig{
+	srvConfig = serverCmdConfig{
 		serverAddr:   serverAddress,
 		disks:        disks,
 		ignoredDisks: ignoredDisks,
-	})
+	}
+
+	// Initialize and monitor shutdown signals.
+	err = initGracefulShutdown(os.Exit)
+	fatalIf(err, "Unable to initialize graceful shutdown operation")
+
+	// Configure server.
+	handler := configureServerHandler(srvConfig)
 
 	apiServer := NewServerMux(serverAddress, handler)
 
@@ -267,12 +393,36 @@ func serverMain(c *cli.Context) {
 
 	// Start server.
 	// Configure TLS if certs are available.
-	if tls {
-		err = apiServer.ListenAndServeTLS(mustGetCertFile(), mustGetKeyFile())
-	} else {
-		// Fallback to http.
-		err = apiServer.ListenAndServe()
+	wait := make(chan struct{}, 1)
+	go func(tls bool, wait chan<- struct{}) {
+		if tls {
+			err = apiServer.ListenAndServeTLS(mustGetCertFile(), mustGetKeyFile())
+		} else {
+			// Fallback to http.
+			err = apiServer.ListenAndServe()
+		}
+		wait <- struct{}{}
+
+	}(tls, wait)
+	err = formatDisks(disks, ignoredDisks)
+	if err != nil {
+		// FIXME: call graceful exit
+		errorIf(err, "formatting storage disks failed")
+		return
 	}
+	newObject, err := newObjectLayer(disks, ignoredDisks)
+	if err != nil {
+		// FIXME: call graceful exit
+		errorIf(err, "intializing object layer failed")
+		return
+	}
+
+	printEventNotifiers()
+
+	objLayerMutex.Lock()
+	globalObjectAPI = newObject
+	objLayerMutex.Unlock()
+	<-wait
 
 	fatalIf(err, "Failed to start minio server.")
 }

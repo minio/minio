@@ -189,7 +189,7 @@ func loadAllFormats(bootstrapDisks []StorageAPI) ([]*formatConfigV1, []error) {
 		}
 	}
 	// Return all formats and nil
-	return formatConfigs, nil
+	return formatConfigs, sErrs
 }
 
 // genericFormatCheck - validates and returns error.
@@ -522,6 +522,11 @@ func healFormatXLFreshDisks(storageDisks []StorageAPI) error {
 				}
 			}
 		}
+	}
+
+	// Initialize meta volume, if volume already exists ignores it.
+	if err := initMetaVolume(orderedDisks); err != nil {
+		return fmt.Errorf("Unable to initialize '.minio.sys' meta volume, %s", err)
 	}
 
 	// Save new `format.json` across all disks, in JBOD order.
@@ -868,6 +873,11 @@ func initFormatXL(storageDisks []StorageAPI) (err error) {
 		}
 		// Save jbod.
 		formats[index].XL.JBOD = jbod
+	}
+
+	// Initialize meta volume, if volume already exists ignores it.
+	if err := initMetaVolume(storageDisks); err != nil {
+		return fmt.Errorf("Unable to initialize '.minio.sys' meta volume, %s", err)
 	}
 
 	// Save formats `format.json` across all disks.

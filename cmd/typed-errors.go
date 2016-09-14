@@ -38,6 +38,9 @@ var errSignatureMismatch = errors.New("Signature does not match")
 // used when token used for authentication by the MinioBrowser has expired
 var errInvalidToken = errors.New("Invalid token")
 
+// used when cached timestamp do not match with what client remembers.
+var errInvalidTimestamp = errors.New("Timestamps don't match, server may have restarted.")
+
 // If x-amz-content-sha256 header value mismatches with what we calculate.
 var errContentSHA256Mismatch = errors.New("sha256 mismatch")
 

@@ -19,6 +19,7 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -40,7 +41,7 @@ import (
 // isJWTReqAuthenticated validates if any incoming request to be a
 // valid JWT authenticated request.
 func isJWTReqAuthenticated(req *http.Request) bool {
-	jwt, err := newJWT()
+	jwt, err := newJWT(defaultWebTokenExpiry)
 	if err != nil {
 		errorIf(err, "unable to initialize a new JWT")
 		return false
@@ -124,7 +125,11 @@ func (web *webAPIHandlers) StorageInfo(r *http.Request, args *GenericArgs, reply
 		return &json2.Error{Message: "Unauthorized request"}
 	}
 	reply.UIVersion = miniobrowser.UIVersion
-	reply.StorageInfo = web.ObjectAPI.StorageInfo()
+	objectAPI := web.ObjectAPI()
+	if objectAPI == nil {
+		return &json2.Error{Message: "Volume not found"}
+	}
+	reply.StorageInfo = objectAPI.StorageInfo()
 	return nil
 }
 
@@ -139,7 +144,11 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 		return &json2.Error{Message: "Unauthorized request"}
 	}
 	reply.UIVersion = miniobrowser.UIVersion
-	if err := web.ObjectAPI.MakeBucket(args.BucketName); err != nil {
+	objectAPI := web.ObjectAPI()
+	if objectAPI == nil {
+		return &json2.Error{Message: "Volume not found"}
+	}
+	if err := objectAPI.MakeBucket(args.BucketName); err != nil {
 		return &json2.Error{Message: err.Error()}
 	}
 	return nil
@@ -164,7 +173,11 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 	if !isJWTReqAuthenticated(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
-	buckets, err := web.ObjectAPI.ListBuckets()
+	objectAPI := web.ObjectAPI()
+	if objectAPI == nil {
+		return &json2.Error{Message: "Volume not found"}
+	}
+	buckets, err := objectAPI.ListBuckets()
 	if err != nil {
 		return &json2.Error{Message: err.Error()}
 	}
@@ -212,7 +225,11 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 		return &json2.Error{Message: "Unauthorized request"}
 	}
 	for {
-		lo, err := web.ObjectAPI.ListObjects(args.BucketName, args.Prefix, marker, "/", 1000)
+		objectAPI := web.ObjectAPI()
+		if objectAPI == nil {
+			return &json2.Error{Message: "Volume not found"}
+		}
+		lo, err := objectAPI.ListObjects(args.BucketName, args.Prefix, marker, "/", 1000)
 		if err != nil {
 			return &json2.Error{Message: err.Error()}
 		}
@@ -250,7 +267,11 @@ func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs,
 		return &json2.Error{Message: "Unauthorized request"}
 	}
 	reply.UIVersion = miniobrowser.UIVersion
-	if err := web.ObjectAPI.DeleteObject(args.BucketName, args.ObjectName); err != nil {
+	objectAPI := web.ObjectAPI()
+	if objectAPI == nil {
+		return &json2.Error{Message: "Volume not found"}
+	}
+	if err := objectAPI.DeleteObject(args.BucketName, args.ObjectName); err != nil {
 		return &json2.Error{Message: err.Error()}
 	}
 	return nil
@@ -268,9 +289,14 @@ type LoginRep struct {
 	UIVersion string `json:"uiVersion"`
 }
 
+// Default JWT for minio browser expires in 24hrs.
+const (
+	defaultWebTokenExpiry time.Duration = time.Hour * 24 // 24Hrs.
+)
+
 // Login - user login handler.
 func (web *webAPIHandlers) Login(r *http.Request, args *LoginArgs, reply *LoginRep) error {
-	jwt, err := newJWT()
+	jwt, err := newJWT(defaultWebTokenExpiry)
 	if err != nil {
 		return &json2.Error{Message: err.Error()}
 	}
@@ -335,7 +361,7 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 		return &json2.Error{Message: err.Error()}
 	}
 
-	jwt, err := newJWT()
+	jwt, err := newJWT(defaultWebTokenExpiry) // JWT Expiry set to 24Hrs.
 	if err != nil {
 		return &json2.Error{Message: err.Error()}
 	}
@@ -384,13 +410,18 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	// Extract incoming metadata if any.
 	metadata := extractMetadataFromHeader(r.Header)
 
-	if _, err := web.ObjectAPI.PutObject(bucket, object, -1, r.Body, metadata); err != nil {
+	objectAPI := web.ObjectAPI()
+	if objectAPI == nil {
+		writeWebErrorResponse(w, errors.New("Volume not found"))
+		return
+	}
+	if _, err := objectAPI.PutObject(bucket, object, -1, r.Body, metadata); err != nil {
 		writeWebErrorResponse(w, err)
 		return
 	}
 
 	// Fetch object info for notifications.
-	objInfo, err := web.ObjectAPI.GetObjectInfo(bucket, object)
+	objInfo, err := objectAPI.GetObjectInfo(bucket, object)
 	if err != nil {
 		errorIf(err, "Unable to fetch object info for \"%s\"", path.Join(bucket, object))
 		return
@@ -416,7 +447,7 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	object := vars["object"]
 	tokenStr := r.URL.Query().Get("token")
 
-	jwt, err := newJWT()
+	jwt, err := newJWT(defaultWebTokenExpiry) // Expiry set to 24Hrs.
 	if err != nil {
 		errorIf(err, "error in getting new JWT")
 		return
@@ -435,13 +466,18 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	// Add content disposition.
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", path.Base(object)))
 
-	objInfo, err := web.ObjectAPI.GetObjectInfo(bucket, object)
+	objectAPI := web.ObjectAPI()
+	if objectAPI == nil {
+		writeWebErrorResponse(w, errors.New("Volume not found"))
+		return
+	}
+	objInfo, err := objectAPI.GetObjectInfo(bucket, object)
 	if err != nil {
 		writeWebErrorResponse(w, err)
 		return
 	}
 	offset := int64(0)
-	err = web.ObjectAPI.GetObject(bucket, object, offset, objInfo.Size, w)
+	err = objectAPI.GetObject(bucket, object, offset, objInfo.Size, w)
 	if err != nil {
 		/// No need to print error, response writer already written to.
 		return
@@ -529,7 +565,11 @@ func (web *webAPIHandlers) GetBucketPolicy(r *http.Request, args *GetBucketPolic
 		return &json2.Error{Message: "Unauthorized request"}
 	}
 
-	policyInfo, err := readBucketAccessPolicy(web.ObjectAPI, args.BucketName)
+	objectAPI := web.ObjectAPI()
+	if objectAPI == nil {
+		return &json2.Error{Message: "Server not initialized"}
+	}
+	policyInfo, err := readBucketAccessPolicy(objectAPI, args.BucketName)
 	if err != nil {
 		return &json2.Error{Message: err.Error()}
 	}
@@ -560,7 +600,11 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 		return &json2.Error{Message: "Invalid policy " + args.Policy}
 	}
 
-	policyInfo, err := readBucketAccessPolicy(web.ObjectAPI, args.BucketName)
+	objectAPI := web.ObjectAPI()
+	if objectAPI == nil {
+		return &json2.Error{Message: "Server not initialized"}
+	}
+	policyInfo, err := readBucketAccessPolicy(objectAPI, args.BucketName)
 	if err != nil {
 		return &json2.Error{Message: err.Error()}
 	}
@@ -573,7 +617,7 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 	}
 
 	// TODO: update policy statements according to bucket name, prefix and policy arguments.
-	if err := writeBucketPolicy(args.BucketName, web.ObjectAPI, bytes.NewReader(data), int64(len(data))); err != nil {
+	if err := writeBucketPolicy(args.BucketName, objectAPI, bytes.NewReader(data), int64(len(data))); err != nil {
 		return &json2.Error{Message: err.Error()}
 	}
 
