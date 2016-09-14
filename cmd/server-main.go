@@ -388,28 +388,30 @@ func serverMain(c *cli.Context) {
 		return exitSuccess
 	})
 
-	// Prints the formatted startup message.
-	printStartupMessage(endPoints)
-
 	// Start server.
 	// Configure TLS if certs are available.
 	wait := make(chan struct{}, 1)
 	go func(tls bool, wait chan<- struct{}) {
-		if tls {
-			err = apiServer.ListenAndServeTLS(mustGetCertFile(), mustGetKeyFile())
-		} else {
-			// Fallback to http.
-			err = apiServer.ListenAndServe()
-		}
-		wait <- struct{}{}
-
+		fatalIf(func() error {
+			defer func() {
+				wait <- struct{}{}
+			}()
+			if tls {
+				return apiServer.ListenAndServeTLS(mustGetCertFile(), mustGetKeyFile())
+			} // Fallback to http.
+			return apiServer.ListenAndServe()
+		}(), "Failed to start minio server.")
 	}(tls, wait)
+
+	// Wait for formatting of disks.
 	err = formatDisks(disks, ignoredDisks)
 	if err != nil {
 		// FIXME: call graceful exit
 		errorIf(err, "formatting storage disks failed")
 		return
 	}
+
+	// Once formatted, initialize object layer.
 	newObject, err := newObjectLayer(disks, ignoredDisks)
 	if err != nil {
 		// FIXME: call graceful exit
@@ -417,12 +419,13 @@ func serverMain(c *cli.Context) {
 		return
 	}
 
-	printEventNotifiers()
+	// Prints the formatted startup message.
+	printStartupMessage(endPoints)
 
 	objLayerMutex.Lock()
 	globalObjectAPI = newObject
 	objLayerMutex.Unlock()
-	<-wait
 
-	fatalIf(err, "Failed to start minio server.")
+	// Waits on the server.
+	<-wait
 }
