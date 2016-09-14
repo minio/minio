@@ -117,16 +117,30 @@ type shutdownCallbacks struct {
 // globalShutdownCBs stores regular and object storages callbacks
 var globalShutdownCBs *shutdownCallbacks
 
-func (s shutdownCallbacks) GetObjectLayerCBs() []cleanupOnExitFunc {
+func (s *shutdownCallbacks) RunObjectLayerCBs() errCode {
 	s.RLock()
 	defer s.RUnlock()
-	return s.objectLayerCallbacks
+	exitCode := exitSuccess
+	for _, callback := range s.objectLayerCallbacks {
+		exitCode = callback()
+		if exitCode != exitSuccess {
+			break
+		}
+	}
+	return exitCode
 }
 
-func (s shutdownCallbacks) GetGenericCBs() []cleanupOnExitFunc {
+func (s *shutdownCallbacks) RunGenericCBs() errCode {
 	s.RLock()
 	defer s.RUnlock()
-	return s.genericCallbacks
+	exitCode := exitSuccess
+	for _, callback := range s.genericCallbacks {
+		exitCode = callback()
+		if exitCode != exitSuccess {
+			break
+		}
+	}
+	return exitCode
 }
 
 func (s *shutdownCallbacks) AddObjectLayerCB(callback cleanupOnExitFunc) error {
@@ -203,6 +217,16 @@ func startMonitorShutdownSignal(onExitFn onExitFunc) error {
 		return errInvalidArgument
 	}
 
+	// Custom exit function
+	runExitFn := func(exitCode errCode) {
+		// If global profiler is set stop before we exit.
+		if globalProfiler != nil {
+			globalProfiler.Stop()
+		}
+		// Call user supplied user exit function
+		onExitFn(int(exitCode))
+	}
+
 	// Start listening on shutdown signal.
 	go func() {
 		defer close(globalShutdownSignalCh)
@@ -216,27 +240,14 @@ func startMonitorShutdownSignal(onExitFn onExitFunc) error {
 				globalShutdownSignalCh <- shutdownHalt
 			case signal := <-globalShutdownSignalCh:
 				// Call all object storage shutdown callbacks and exit for emergency
-				for _, callback := range globalShutdownCBs.GetObjectLayerCBs() {
-					exitCode := callback()
-					if exitCode != exitSuccess {
-						// If global profiler is set stop before we exit.
-						if globalProfiler != nil {
-							globalProfiler.Stop()
-						}
-						onExitFn(int(exitCode))
-					}
+				exitCode := globalShutdownCBs.RunObjectLayerCBs()
+				if exitCode != exitSuccess {
+					runExitFn(exitCode)
 
 				}
-				// Call all callbacks and exit for emergency
-				for _, callback := range globalShutdownCBs.GetGenericCBs() {
-					exitCode := callback()
-					if exitCode != exitSuccess {
-						// If global profiler is set stop before we exit.
-						if globalProfiler != nil {
-							globalProfiler.Stop()
-						}
-						onExitFn(int(exitCode))
-					}
+				exitCode = globalShutdownCBs.RunGenericCBs()
+				if exitCode != exitSuccess {
+					runExitFn(exitCode)
 				}
 				// All shutdown callbacks ensure that the server is safely terminated
 				// and any concurrent process could be started again
@@ -252,22 +263,12 @@ func startMonitorShutdownSignal(onExitFn onExitFunc) error {
 						errorIf(errors.New("Unable to reboot."), err.Error())
 					}
 
-					// If global profiler is set stop before we exit.
-					if globalProfiler != nil {
-						globalProfiler.Stop()
-					}
-
 					// Successfully forked.
-					onExitFn(int(exitSuccess))
-				}
-
-				// If global profiler is set stop before we exit.
-				if globalProfiler != nil {
-					globalProfiler.Stop()
+					runExitFn(exitSuccess)
 				}
 
 				// Exit as success if no errors.
-				onExitFn(int(exitSuccess))
+				runExitFn(exitSuccess)
 			}
 		}
 	}()
