@@ -104,7 +104,7 @@ func testGetReadDisks(t *testing.T, xl xlObjects) {
 
 	for i, test := range testCases {
 		disks, nextIndex, err := getReadDisks(test.argDisks, test.index, xl.dataBlocks)
-		if err != test.err {
+		if errorCause(err) != test.err {
 			t.Errorf("test-case %d - expected error : %s, got : %s", i+1, test.err, err)
 			continue
 		}
@@ -217,11 +217,16 @@ func TestIsSuccessBlocks(t *testing.T) {
 
 // Wrapper function for testGetReadDisks, testGetOrderedDisks.
 func TestErasureReadUtils(t *testing.T) {
-	objLayer, dirs, err := getXLObjectLayer()
+	nDisks := 16
+	disks, err := getRandomDisks(nDisks)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer removeRoots(dirs)
+	objLayer, err := getXLObjectLayer(disks)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer removeRoots(disks)
 	xl := objLayer.(xlObjects)
 	testGetReadDisks(t, xl)
 	testGetOrderedDisks(t, xl)
@@ -314,7 +319,7 @@ func TestErasureReadFileDiskFail(t *testing.T) {
 	disks[13] = ReadDiskDown{disks[13].(*posix)}
 	buf.Reset()
 	_, err = erasureReadFile(buf, disks, "testbucket", "testobject", 0, length, length, blockSize, dataBlocks, parityBlocks, checkSums, bitRotAlgo, pool)
-	if err != errXLReadQuorum {
+	if errorCause(err) != errXLReadQuorum {
 		t.Fatal("expected errXLReadQuorum error")
 	}
 }

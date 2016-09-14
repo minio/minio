@@ -20,10 +20,14 @@ import (
 	"encoding/base64"
 	"encoding/xml"
 	"errors"
+	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -41,6 +45,54 @@ func cloneHeader(h http.Header) http.Header {
 
 	}
 	return h2
+}
+
+// checkDuplicates - function to validate if there are duplicates in a slice of strings.
+func checkDuplicates(list []string) error {
+	// Empty lists are not allowed.
+	if len(list) == 0 {
+		return errInvalidArgument
+	}
+	// Empty keys are not allowed.
+	for _, key := range list {
+		if key == "" {
+			return errInvalidArgument
+		}
+	}
+	listMaps := make(map[string]int)
+	// Navigate through each configs and count the entries.
+	for _, key := range list {
+		listMaps[key]++
+	}
+	// Validate if there are any duplicate counts.
+	for key, count := range listMaps {
+		if count != 1 {
+			return fmt.Errorf("Duplicate key: \"%s\" found of count: \"%d\"", key, count)
+		}
+	}
+	// No duplicates.
+	return nil
+}
+
+// splits network path into its components Address and Path.
+func splitNetPath(networkPath string) (netAddr, netPath string, err error) {
+	if runtime.GOOS == "windows" {
+		if volumeName := filepath.VolumeName(networkPath); volumeName != "" {
+			return "", networkPath, nil
+		}
+	}
+	networkParts := strings.SplitN(networkPath, ":", 2)
+	if len(networkParts) == 1 {
+		return "", networkPath, nil
+	}
+	if networkParts[1] == "" {
+		return "", "", &net.AddrError{Err: "Missing path in network path", Addr: networkPath}
+	} else if networkParts[0] == "" {
+		return "", "", &net.AddrError{Err: "Missing address in network path", Addr: networkPath}
+	} else if !filepath.IsAbs(networkParts[1]) {
+		return "", "", &net.AddrError{Err: "Network path should be absolute", Addr: networkPath}
+	}
+	return networkParts[0], networkParts[1], nil
 }
 
 // xmlDecoder provide decoded value in xml.

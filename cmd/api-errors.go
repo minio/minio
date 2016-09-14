@@ -134,6 +134,7 @@ const (
 	ErrObjectExistsAsDirectory
 	ErrPolicyNesting
 	ErrInvalidObjectName
+	ErrServerNotInitialized
 	// Add new extended error codes here.
 	// Please open a https://github.com/minio/minio/issues before adding
 	// new error codes here.
@@ -454,7 +455,7 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "Request is not valid yet",
 		HTTPStatusCode: http.StatusForbidden,
 	},
-	// FIXME: Actual XML error response also contains the header which missed in lsit of signed header parameters.
+	// FIXME: Actual XML error response also contains the header which missed in list of signed header parameters.
 	ErrUnsignedHeaders: {
 		Code:           "AccessDenied",
 		Description:    "There were headers present in the request which were not signed",
@@ -556,6 +557,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "Object name contains unsupported characters. Unsupported characters are `^*|\\\"",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrServerNotInitialized: {
+		Code:           "XMinioServerNotInitialized",
+		Description:    "Server not initialized, please try again.",
+		HTTPStatusCode: http.StatusServiceUnavailable,
+	},
 	// Add your error structure here.
 }
 
@@ -566,6 +572,7 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 	if err == nil {
 		return ErrNone
 	}
+	err = errorCause(err)
 	// Verify if the underlying error is signature mismatch.
 	switch err {
 	case errSignatureMismatch:

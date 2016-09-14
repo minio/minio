@@ -41,7 +41,11 @@ func TestNewFS(t *testing.T) {
 	}
 
 	// Initializes all disks with XL
-	_, err := newXLObjects(disks, nil)
+	err := formatDisks(disks, nil)
+	if err != nil {
+		t.Fatalf("Unable to format XL %s", err)
+	}
+	_, err = newXLObjects(disks, nil)
 	if err != nil {
 		t.Fatalf("Unable to initialize XL object, %s", err)
 	}

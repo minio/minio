@@ -148,7 +148,7 @@ func completeMultipartMD5(parts ...completePart) (string, error) {
 	for _, part := range parts {
 		md5Bytes, err := hex.DecodeString(part.ETag)
 		if err != nil {
-			return "", err
+			return "", traceError(err)
 		}
 		finalMD5Bytes = append(finalMD5Bytes, md5Bytes...)
 	}

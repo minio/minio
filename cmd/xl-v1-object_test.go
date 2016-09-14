@@ -29,7 +29,7 @@ func TestRepeatPutObjectPart(t *testing.T) {
 	var disks []string
 	var err error
 
-	objLayer, disks, err = getXLObjectLayer()
+	objLayer, disks, err = prepareXL()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +77,7 @@ func TestXLDeleteObjectBasic(t *testing.T) {
 	}
 
 	// Create an instance of xl backend
-	xl, fsDirs, err := getXLObjectLayer()
+	xl, fsDirs, err := prepareXL()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,6 +95,7 @@ func TestXLDeleteObjectBasic(t *testing.T) {
 	}
 	for i, test := range testCases {
 		actualErr := xl.DeleteObject(test.bucket, test.object)
+		actualErr = errorCause(actualErr)
 		if test.expectedErr != nil && actualErr != test.expectedErr {
 			t.Errorf("Test %d: Expected to fail with %s, but failed with %s", i+1, test.expectedErr, actualErr)
 		}
@@ -108,7 +109,7 @@ func TestXLDeleteObjectBasic(t *testing.T) {
 
 func TestXLDeleteObjectDiskNotFound(t *testing.T) {
 	// Create an instance of xl backend.
-	obj, fsDirs, err := getXLObjectLayer()
+	obj, fsDirs, err := prepareXL()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +126,9 @@ func TestXLDeleteObjectDiskNotFound(t *testing.T) {
 	object := "object"
 	// Create object "obj" under bucket "bucket".
 	_, err = obj.PutObject(bucket, object, int64(len("abcd")), bytes.NewReader([]byte("abcd")), nil)
-
+	if err != nil {
+		t.Fatal(err)
+	}
 	// for a 16 disk setup, quorum is 9. To simulate disks not found yet
 	// quorum is available, we remove disks leaving quorum disks behind.
 	for i := range xl.storageDisks[:7] {
@@ -146,6 +149,7 @@ func TestXLDeleteObjectDiskNotFound(t *testing.T) {
 	xl.storageDisks[7] = nil
 	xl.storageDisks[8] = nil
 	err = obj.DeleteObject(bucket, object)
+	err = errorCause(err)
 	if err != toObjectErr(errXLWriteQuorum, bucket, object) {
 		t.Errorf("Expected deleteObject to fail with %v, but failed with %v", toObjectErr(errXLWriteQuorum, bucket, object), err)
 	}
@@ -155,7 +159,7 @@ func TestXLDeleteObjectDiskNotFound(t *testing.T) {
 
 func TestGetObjectNoQuorum(t *testing.T) {
 	// Create an instance of xl backend.
-	obj, fsDirs, err := getXLObjectLayer()
+	obj, fsDirs, err := prepareXL()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -196,6 +200,7 @@ func TestGetObjectNoQuorum(t *testing.T) {
 		}
 		// Fetch object from store.
 		err = xl.GetObject(bucket, object, 0, int64(len("abcd")), ioutil.Discard)
+		err = errorCause(err)
 		if err != toObjectErr(errXLReadQuorum, bucket, object) {
 			t.Errorf("Expected putObject to fail with %v, but failed with %v", toObjectErr(errXLWriteQuorum, bucket, object), err)
 		}
@@ -206,7 +211,7 @@ func TestGetObjectNoQuorum(t *testing.T) {
 
 func TestPutObjectNoQuorum(t *testing.T) {
 	// Create an instance of xl backend.
-	obj, fsDirs, err := getXLObjectLayer()
+	obj, fsDirs, err := prepareXL()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -246,6 +251,7 @@ func TestPutObjectNoQuorum(t *testing.T) {
 		}
 		// Upload new content to same object "object"
 		_, err = obj.PutObject(bucket, object, int64(len("abcd")), bytes.NewReader([]byte("abcd")), nil)
+		err = errorCause(err)
 		if err != toObjectErr(errXLWriteQuorum, bucket, object) {
 			t.Errorf("Expected putObject to fail with %v, but failed with %v", toObjectErr(errXLWriteQuorum, bucket, object), err)
 		}

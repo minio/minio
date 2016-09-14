@@ -59,3 +59,6 @@ var errVolumeAccessDenied = errors.New("volume access denied")
 
 // errVolumeAccessDenied - cannot access file, insufficient permissions.
 var errFileAccessDenied = errors.New("file access denied")
+
+// errVolumeBusy - remote disk is not connected to yet.
+var errVolumeBusy = errors.New("volume is busy")

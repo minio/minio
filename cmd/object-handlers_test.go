@@ -27,34 +27,12 @@ import (
 
 // Wrapper for calling GetObject API handler tests for both XL multiple disks and FS single drive setup.
 func TestAPIGetOjectHandler(t *testing.T) {
-	ExecObjectLayerTest(t, testAPIGetOjectHandler)
+	ExecObjectLayerAPITest(t, testAPIGetOjectHandler, []string{"GetObject"})
 }
 
-func testAPIGetOjectHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
-
-	// get random bucket name.
-	bucketName := getRandomBucketName()
+func testAPIGetOjectHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
+	credentials credential, t TestErrHandler) {
 	objectName := "test-object"
-	// Create bucket.
-	err := obj.MakeBucket(bucketName)
-	if err != nil {
-		// failed to create newbucket, abort.
-		t.Fatalf("%s : %s", instanceType, err)
-	}
-	// Register the API end points with XL/FS object layer.
-	// Registering only the GetObject handler.
-	apiRouter := initTestAPIEndPoints(obj, []string{"GetObject"})
-	// initialize the server and obtain the credentials and root.
-	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
-	if err != nil {
-		t.Fatalf("Init Test config failed")
-	}
-	// remove the root folder after the test ends.
-	defer removeAll(rootPath)
-
-	credentials := serverConfig.GetCredential()
-
 	// set of byte data for PutObject.
 	// object has to be inserted before running tests for GetObject.
 	// this is required even to assert the GetObject data,
@@ -78,7 +56,7 @@ func testAPIGetOjectHandler(obj ObjectLayer, instanceType string, t TestErrHandl
 	// iterate through the above set of inputs and upload the object.
 	for i, input := range putObjectInputs {
 		// uploading the object.
-		_, err = obj.PutObject(input.bucketName, input.objectName, input.contentLength, bytes.NewBuffer(input.textData), input.metaData)
+		_, err := obj.PutObject(input.bucketName, input.objectName, input.contentLength, bytes.NewBuffer(input.textData), input.metaData)
 		// if object upload fails stop the test.
 		if err != nil {
 			t.Fatalf("Put Object case %d:  Error uploading object: <ERROR> %v", i+1, err)
@@ -174,39 +152,167 @@ func testAPIGetOjectHandler(obj ObjectLayer, instanceType string, t TestErrHandl
 	}
 }
 
-// Wrapper for calling Copy Object API handler tests for both XL multiple disks and single node setup.
-func TestAPICopyObjectHandler(t *testing.T) {
-	ExecObjectLayerTest(t, testAPICopyObjectHandler)
+// Wrapper for calling PutObject API handler tests using streaming signature v4 for both XL multiple disks and FS single drive setup.
+func TestAPIPutObjectStreamSigV4Handler(t *testing.T) {
+	ExecObjectLayerAPITest(t, testAPIPutObjectStreamSigV4Handler, []string{"PutObject"})
 }
 
-func testAPICopyObjectHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	// get random bucket name.
-	bucketName := getRandomBucketName()
-	objectName := "test-object"
-	// Create bucket.
-	err := obj.MakeBucket(bucketName)
-	if err != nil {
-		// failed to create newbucket, abort.
-		t.Fatalf("%s : %s", instanceType, err)
-	}
-	// Register the API end points with XL/FS object layer.
-	// Registering only the Copy Object handler.
-	apiRouter := initTestAPIEndPoints(obj, []string{"CopyObject"})
-	// initialize the server and obtain the credentials and root.
-	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
-	if err != nil {
-		t.Fatalf("Init Test config failed")
-	}
-	// remove the root folder after the test ends.
-	defer removeAll(rootPath)
+func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
+	credentials credential, t TestErrHandler) {
 
-	err = initEventNotifier(obj)
+	objectName := "test-object"
+	bytesDataLen := 65 * 1024
+	bytesData := bytes.Repeat([]byte{'a'}, bytesDataLen)
+
+	// byte data for PutObject.
+	// test cases with inputs and expected result for GetObject.
+	testCases := []struct {
+		bucketName string
+		objectName string
+		data       []byte
+		dataLen    int
+		// expected output.
+		expectedContent    []byte // expected response body.
+		expectedRespStatus int    // expected response status body.
+	}{
+		// Test case - 1.
+		// Fetching the entire object and validating its contents.
+		{
+			bucketName:         bucketName,
+			objectName:         objectName,
+			data:               bytesData,
+			dataLen:            len(bytesData),
+			expectedContent:    []byte{},
+			expectedRespStatus: http.StatusOK,
+		},
+	}
+	// Iterating over the cases, fetching the object validating the response.
+	for i, testCase := range testCases {
+		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
+		rec := httptest.NewRecorder()
+		// construct HTTP request for Put Object end point.
+		req, err := newTestStreamingSignedRequest("PUT",
+			getPutObjectURL("", testCase.bucketName, testCase.objectName),
+			int64(testCase.dataLen), 64*1024, bytes.NewReader(testCase.data),
+			credentials.AccessKeyID, credentials.SecretAccessKey)
+		if err != nil {
+			t.Fatalf("Test %d: Failed to create HTTP request for Put Object: <ERROR> %v", i+1, err)
+		}
+		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
+		// Call the ServeHTTP to execute the handler,`func (api objectAPIHandlers) GetObjectHandler`  handles the request.
+		apiRouter.ServeHTTP(rec, req)
+		// Assert the response code with the expected status.
+		if rec.Code != testCase.expectedRespStatus {
+			t.Fatalf("Case %d: Expected the response status to be `%d`, but instead found `%d`", i+1, testCase.expectedRespStatus, rec.Code)
+		}
+		// read the response body.
+		actualContent, err := ioutil.ReadAll(rec.Body)
+		if err != nil {
+			t.Fatalf("Test %d: %s: Failed parsing response body: <ERROR> %v", i+1, instanceType, err)
+		}
+		// Verify whether the bucket obtained object is same as the one inserted.
+		if !bytes.Equal(testCase.expectedContent, actualContent) {
+			t.Errorf("Test %d: %s: Object content differs from expected value.: %s", i+1, instanceType, string(actualContent))
+		}
+
+		buffer := new(bytes.Buffer)
+		err = obj.GetObject(testCase.bucketName, testCase.objectName, 0, int64(bytesDataLen), buffer)
+		if err != nil {
+			t.Fatalf("Test %d: %s: Failed to fetch the copied object: <ERROR> %s", i+1, instanceType, err)
+		}
+		if !bytes.Equal(bytesData, buffer.Bytes()) {
+			t.Errorf("Test %d: %s: Data Mismatch: Data fetched back from the uploaded object doesn't match the original one.", i+1, instanceType)
+		}
+		buffer.Reset()
+	}
+}
+
+// Wrapper for calling PutObject API handler tests for both XL multiple disks and FS single drive setup.
+func TestAPIPutObjectHandler(t *testing.T) {
+	ExecObjectLayerAPITest(t, testAPIPutObjectHandler, []string{"PutObject"})
+}
+
+func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
+	credentials credential, t TestErrHandler) {
+
+	objectName := "test-object"
+	// byte data for PutObject.
+	bytesData := generateBytesData(6 * 1024 * 1024)
+
+	// test cases with inputs and expected result for GetObject.
+	testCases := []struct {
+		bucketName string
+		objectName string
+		data       []byte
+		dataLen    int
+		// expected output.
+		expectedContent    []byte // expected response body.
+		expectedRespStatus int    // expected response status body.
+	}{
+		// Test case - 1.
+		// Fetching the entire object and validating its contents.
+		{
+			bucketName:         bucketName,
+			objectName:         objectName,
+			data:               bytesData,
+			dataLen:            len(bytesData),
+			expectedContent:    []byte{},
+			expectedRespStatus: http.StatusOK,
+		},
+	}
+	// Iterating over the cases, fetching the object validating the response.
+	for i, testCase := range testCases {
+		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
+		rec := httptest.NewRecorder()
+		// construct HTTP request for Get Object end point.
+		req, err := newTestSignedRequest("PUT", getPutObjectURL("", testCase.bucketName, testCase.objectName),
+			int64(testCase.dataLen), bytes.NewReader(testCase.data), credentials.AccessKeyID, credentials.SecretAccessKey)
+		if err != nil {
+			t.Fatalf("Test %d: Failed to create HTTP request for Put Object: <ERROR> %v", i+1, err)
+		}
+		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
+		// Call the ServeHTTP to execute the handler,`func (api objectAPIHandlers) GetObjectHandler`  handles the request.
+		apiRouter.ServeHTTP(rec, req)
+		// Assert the response code with the expected status.
+		if rec.Code != testCase.expectedRespStatus {
+			t.Fatalf("Case %d: Expected the response status to be `%d`, but instead found `%d`", i+1, testCase.expectedRespStatus, rec.Code)
+		}
+		// read the response body.
+		actualContent, err := ioutil.ReadAll(rec.Body)
+		if err != nil {
+			t.Fatalf("Test %d: %s: Failed parsing response body: <ERROR> %v", i+1, instanceType, err)
+		}
+		// Verify whether the bucket obtained object is same as the one inserted.
+		if !bytes.Equal(testCase.expectedContent, actualContent) {
+			t.Errorf("Test %d: %s: Object content differs from expected value.: %s", i+1, instanceType, string(actualContent))
+		}
+
+		buffer := new(bytes.Buffer)
+		err = obj.GetObject(testCase.bucketName, testCase.objectName, 0, int64(len(bytesData)), buffer)
+		if err != nil {
+			t.Fatalf("Test %d: %s: Failed to fetch the copied object: <ERROR> %s", i+1, instanceType, err)
+		}
+		if !bytes.Equal(bytesData, buffer.Bytes()) {
+			t.Errorf("Test %d: %s: Data Mismatch: Data fetched back from the uploaded object doesn't match the original one.", i+1, instanceType)
+		}
+		buffer.Reset()
+	}
+}
+
+// Wrapper for calling Copy Object API handler tests for both XL multiple disks and single node setup.
+func TestAPICopyObjectHandler(t *testing.T) {
+	ExecObjectLayerAPITest(t, testAPICopyObjectHandler, []string{"CopyObject"})
+}
+
+func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
+	credentials credential, t TestErrHandler) {
+
+	objectName := "test-object"
+	// register event notifier.
+	err := initEventNotifier(obj)
 	if err != nil {
 		t.Fatalf("Initializing event notifiers failed")
 	}
-
-	credentials := serverConfig.GetCredential()
 
 	// set of byte data for PutObject.
 	// object has to be inserted before running tests for Copy Object.

@@ -98,6 +98,12 @@
 			"revisionTime": "2015-11-18T20:00:48-08:00"
 		},
 		{
+			"checksumSHA1": "0raNaLP/AhxXhEeB5CdSnbED3O4=",
+			"path": "github.com/minio/dsync",
+			"revision": "1f615ccd013d35489becfe710e0ba7dce98b59e5",
+			"revisionTime": "2016-08-29T17:06:27Z"
+		},
+		{
 			"path": "github.com/minio/go-homedir",
 			"revision": "0b1069c753c94b3633cc06a1995252dbcc27c7a6",
 			"revisionTime": "2016-02-15T17:25:11+05:30"
@@ -162,6 +168,18 @@
 			"path": "github.com/streadway/amqp",
 			"revision": "2e25825abdbd7752ff08b270d313b93519a0a232",
 			"revisionTime": "2016-03-11T21:55:03Z"
+		},
+		{
+			"checksumSHA1": "+Pcohsuq0Mi/y8bgaDFjb/CGzkk=",
+			"path": "github.com/tidwall/gjson",
+			"revision": "7c631e98686a791e5fc60ff099512968122afb52",
+			"revisionTime": "2016-09-08T16:02:40Z"
+		},
+		{
+			"checksumSHA1": "qmePMXEDYGwkAfT9QvtMC58JN/E=",
+			"path": "github.com/tidwall/match",
+			"revision": "173748da739a410c5b0b813b956f89ff94730b4c",
+			"revisionTime": "2016-08-30T17:39:30Z"
 		},
 		{
 			"path": "golang.org/x/crypto/bcrypt",

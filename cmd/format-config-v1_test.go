@@ -215,7 +215,6 @@ func genFormatXLInvalidDisksOrder() []*formatConfigV1 {
 }
 
 func prepareFormatXLHealFreshDisks(obj ObjectLayer) ([]StorageAPI, error) {
-
 	var err error
 	xl := obj.(xlObjects)
 
@@ -263,8 +262,13 @@ func prepareFormatXLHealFreshDisks(obj ObjectLayer) ([]StorageAPI, error) {
 }
 
 func TestFormatXLHealFreshDisks(t *testing.T) {
+	nDisks := 16
+	fsDirs, err := getRandomDisks(nDisks)
+	if err != nil {
+		t.Fatal(err)
+	}
 	// Create an instance of xl backend.
-	obj, fsDirs, err := getXLObjectLayer()
+	obj, err := getXLObjectLayer(fsDirs)
 	if err != nil {
 		t.Error(err)
 	}
@@ -290,8 +294,13 @@ func TestFormatXLHealFreshDisks(t *testing.T) {
 }
 
 func TestFormatXLHealFreshDisksErrorExpected(t *testing.T) {
+	nDisks := 16
+	fsDirs, err := getRandomDisks(nDisks)
+	if err != nil {
+		t.Fatal(err)
+	}
 	// Create an instance of xl backend.
-	obj, fsDirs, err := getXLObjectLayer()
+	obj, err := getXLObjectLayer(fsDirs)
 	if err != nil {
 		t.Error(err)
 	}
@@ -326,7 +335,7 @@ func TestFormatXLHealFreshDisksErrorExpected(t *testing.T) {
 // a given disk to test healing a corrupted disk
 func TestFormatXLHealCorruptedDisks(t *testing.T) {
 	// Create an instance of xl backend.
-	obj, fsDirs, err := getXLObjectLayer()
+	obj, fsDirs, err := prepareXL()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -398,7 +407,7 @@ func TestFormatXLHealCorruptedDisks(t *testing.T) {
 // some of format.json
 func TestFormatXLReorderByInspection(t *testing.T) {
 	// Create an instance of xl backend.
-	obj, fsDirs, err := getXLObjectLayer()
+	obj, fsDirs, err := prepareXL()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -569,8 +578,13 @@ func TestSavedUUIDOrder(t *testing.T) {
 
 // Test initFormatXL() when disks are expected to return errors
 func TestInitFormatXLErrors(t *testing.T) {
+	nDisks := 16
+	fsDirs, err := getRandomDisks(nDisks)
+	if err != nil {
+		t.Fatal(err)
+	}
 	// Create an instance of xl backend.
-	obj, fsDirs, err := getXLObjectLayer()
+	obj, err := getXLObjectLayer(fsDirs)
 	if err != nil {
 		t.Fatal(err)
 	}

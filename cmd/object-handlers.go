@@ -27,9 +27,17 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	mux "github.com/gorilla/mux"
 )
+
+var objLayerMutex *sync.Mutex
+var globalObjectAPI ObjectLayer
+
+func init() {
+	objLayerMutex = &sync.Mutex{}
+}
 
 // supportedGetReqParams - supported request parameters for GET presigned request.
 var supportedGetReqParams = map[string]string{
@@ -84,6 +92,13 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	bucket = vars["bucket"]
 	object = vars["object"]
 
+	// Fetch object stat info.
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(w, r, ErrServerNotInitialized, r.URL.Path)
+		return
+	}
+
 	switch getRequestAuthType(r) {
 	default:
 		// For all unknown auth types return error.
@@ -101,8 +116,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 			return
 		}
 	}
-	// Fetch object stat info.
-	objInfo, err := api.ObjectAPI.GetObjectInfo(bucket, object)
+	objInfo, err := objectAPI.GetObjectInfo(bucket, object)
 	if err != nil {
 		errorIf(err, "Unable to fetch object info.")
 		apiErr := toAPIErrorCode(err)
@@ -161,7 +175,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	})
 
 	// Reads the object at startOffset and writes to mw.
-	if err := api.ObjectAPI.GetObject(bucket, object, startOffset, length, writer); err != nil {
+	if err := objectAPI.GetObject(bucket, object, startOffset, length, writer); err != nil {
 		errorIf(err, "Unable to write to client.")
 		if !dataWritten {
 			// Error response only if no data has been written to client yet. i.e if
@@ -190,6 +204,12 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 	bucket = vars["bucket"]
 	object = vars["object"]
 
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(w, r, ErrServerNotInitialized, r.URL.Path)
+		return
+	}
+
 	switch getRequestAuthType(r) {
 	default:
 		// For all unknown auth types return error.
@@ -208,7 +228,7 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	objInfo, err := api.ObjectAPI.GetObjectInfo(bucket, object)
+	objInfo, err := objectAPI.GetObjectInfo(bucket, object)
 	if err != nil {
 		errorIf(err, "Unable to fetch object info.")
 		apiErr := toAPIErrorCode(err)
@@ -239,6 +259,12 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
+
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(w, r, ErrServerNotInitialized, r.URL.Path)
+		return
+	}
 
 	switch getRequestAuthType(r) {
 	default:
@@ -289,7 +315,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	objInfo, err := api.ObjectAPI.GetObjectInfo(sourceBucket, sourceObject)
+	objInfo, err := objectAPI.GetObjectInfo(sourceBucket, sourceObject)
 	if err != nil {
 		errorIf(err, "Unable to fetch object info.")
 		writeErrorResponse(w, r, toAPIErrorCode(err), objectSource)
@@ -307,11 +333,14 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// Size of object.
+	size := objInfo.Size
+
 	pipeReader, pipeWriter := io.Pipe()
 	go func() {
 		startOffset := int64(0) // Read the whole file.
 		// Get the object.
-		gErr := api.ObjectAPI.GetObject(sourceBucket, sourceObject, startOffset, objInfo.Size, pipeWriter)
+		gErr := objectAPI.GetObject(sourceBucket, sourceObject, startOffset, size, pipeWriter)
 		if gErr != nil {
 			errorIf(gErr, "Unable to read an object.")
 			pipeWriter.CloseWithError(gErr)
@@ -320,19 +349,14 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		pipeWriter.Close() // Close.
 	}()
 
-	// Size of object.
-	size := objInfo.Size
-
-	// Save metadata.
-	metadata := make(map[string]string)
 	// Save other metadata if available.
-	metadata = objInfo.UserDefined
+	metadata := objInfo.UserDefined
 
 	// Do not set `md5sum` as CopyObject will not keep the
 	// same md5sum as the source.
 
 	// Create the object.
-	md5Sum, err := api.ObjectAPI.PutObject(bucket, object, size, pipeReader, metadata)
+	objInfo, err = objectAPI.PutObject(bucket, object, size, pipeReader, metadata)
 	if err != nil {
 		// Close the this end of the pipe upon error in PutObject.
 		pipeReader.CloseWithError(err)
@@ -343,13 +367,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	// Explicitly close the reader, before fetching object info.
 	pipeReader.Close()
 
-	objInfo, err = api.ObjectAPI.GetObjectInfo(bucket, object)
-	if err != nil {
-		errorIf(err, "Unable to fetch object info.")
-		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
-		return
-	}
-
+	md5Sum := objInfo.MD5Sum
 	response := generateCopyObjectResponse(md5Sum, objInfo.ModTime)
 	encodedSuccessResponse := encodeResponse(response)
 	// write headers
@@ -374,6 +392,12 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 // ----------
 // This implementation of the PUT operation adds an object to a bucket.
 func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Request) {
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(w, r, ErrServerNotInitialized, r.URL.Path)
+		return
+	}
+
 	// If the matching failed, it means that the X-Amz-Copy-Source was
 	// wrong, fail right here.
 	if _, ok := r.Header["X-Amz-Copy-Source"]; ok {
@@ -418,7 +442,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	// Make sure we hex encode md5sum here.
 	metadata["md5Sum"] = hex.EncodeToString(md5Bytes)
 
-	var md5Sum string
+	var objInfo ObjectInfo
 	switch rAuthType {
 	default:
 		// For all unknown auth types return error.
@@ -431,7 +455,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			return
 		}
 		// Create anonymous object.
-		md5Sum, err = api.ObjectAPI.PutObject(bucket, object, size, r.Body, metadata)
+		objInfo, err = objectAPI.PutObject(bucket, object, size, r.Body, metadata)
 	case authTypeStreamingSigned:
 		// Initialize stream signature verifier.
 		reader, s3Error := newSignV4ChunkedReader(r)
@@ -439,31 +463,22 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
-		md5Sum, err = api.ObjectAPI.PutObject(bucket, object, size, reader, metadata)
+		objInfo, err = objectAPI.PutObject(bucket, object, size, reader, metadata)
 	case authTypePresigned, authTypeSigned:
 		// Initialize signature verifier.
 		reader := newSignVerify(r)
 		// Create object.
-		md5Sum, err = api.ObjectAPI.PutObject(bucket, object, size, reader, metadata)
+		objInfo, err = objectAPI.PutObject(bucket, object, size, reader, metadata)
 	}
 	if err != nil {
 		errorIf(err, "Unable to create an object.")
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
 	}
-	if md5Sum != "" {
-		w.Header().Set("ETag", "\""+md5Sum+"\"")
-	}
+	w.Header().Set("ETag", "\""+objInfo.MD5Sum+"\"")
 	writeSuccessResponse(w, nil)
 
 	if globalEventNotifier.IsBucketNotificationSet(bucket) {
-		// Fetch object info for notifications.
-		objInfo, err := api.ObjectAPI.GetObjectInfo(bucket, object)
-		if err != nil {
-			errorIf(err, "Unable to fetch object info for \"%s\"", path.Join(bucket, object))
-			return
-		}
-
 		// Notify object created event.
 		eventNotify(eventData{
 			Type:    ObjectCreatedPut,
@@ -484,6 +499,12 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 	vars := mux.Vars(r)
 	bucket = vars["bucket"]
 	object = vars["object"]
+
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(w, r, ErrServerNotInitialized, r.URL.Path)
+		return
+	}
 
 	switch getRequestAuthType(r) {
 	default:
@@ -506,7 +527,7 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 	// Extract metadata that needs to be saved.
 	metadata := extractMetadataFromHeader(r.Header)
 
-	uploadID, err := api.ObjectAPI.NewMultipartUpload(bucket, object, metadata)
+	uploadID, err := objectAPI.NewMultipartUpload(bucket, object, metadata)
 	if err != nil {
 		errorIf(err, "Unable to initiate new multipart upload id.")
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
@@ -526,6 +547,12 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
+
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(w, r, ErrServerNotInitialized, r.URL.Path)
+		return
+	}
 
 	// get Content-Md5 sent by client and verify if valid
 	md5Bytes, err := checkValidMD5(r.Header.Get("Content-Md5"))
@@ -588,7 +615,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			return
 		}
 		// No need to verify signature, anonymous request access is already allowed.
-		partMD5, err = api.ObjectAPI.PutObjectPart(bucket, object, uploadID, partID, size, r.Body, incomingMD5)
+		partMD5, err = objectAPI.PutObjectPart(bucket, object, uploadID, partID, size, r.Body, incomingMD5)
 	case authTypeStreamingSigned:
 		// Initialize stream signature verifier.
 		reader, s3Error := newSignV4ChunkedReader(r)
@@ -596,11 +623,11 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
-		partMD5, err = api.ObjectAPI.PutObjectPart(bucket, object, uploadID, partID, size, reader, incomingMD5)
+		partMD5, err = objectAPI.PutObjectPart(bucket, object, uploadID, partID, size, reader, incomingMD5)
 	case authTypePresigned, authTypeSigned:
 		// Initialize signature verifier.
 		reader := newSignVerify(r)
-		partMD5, err = api.ObjectAPI.PutObjectPart(bucket, object, uploadID, partID, size, reader, incomingMD5)
+		partMD5, err = objectAPI.PutObjectPart(bucket, object, uploadID, partID, size, reader, incomingMD5)
 	}
 	if err != nil {
 		errorIf(err, "Unable to create object part.")
@@ -619,6 +646,12 @@ func (api objectAPIHandlers) AbortMultipartUploadHandler(w http.ResponseWriter, 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
+
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(w, r, ErrServerNotInitialized, r.URL.Path)
+		return
+	}
 
 	switch getRequestAuthType(r) {
 	default:
@@ -639,7 +672,7 @@ func (api objectAPIHandlers) AbortMultipartUploadHandler(w http.ResponseWriter, 
 	}
 
 	uploadID, _, _, _ := getObjectResources(r.URL.Query())
-	if err := api.ObjectAPI.AbortMultipartUpload(bucket, object, uploadID); err != nil {
+	if err := objectAPI.AbortMultipartUpload(bucket, object, uploadID); err != nil {
 		errorIf(err, "Unable to abort multipart upload.")
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
@@ -652,6 +685,12 @@ func (api objectAPIHandlers) ListObjectPartsHandler(w http.ResponseWriter, r *ht
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
+
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(w, r, ErrServerNotInitialized, r.URL.Path)
+		return
+	}
 
 	switch getRequestAuthType(r) {
 	default:
@@ -680,7 +719,7 @@ func (api objectAPIHandlers) ListObjectPartsHandler(w http.ResponseWriter, r *ht
 		writeErrorResponse(w, r, ErrInvalidMaxParts, r.URL.Path)
 		return
 	}
-	listPartsInfo, err := api.ObjectAPI.ListObjectParts(bucket, object, uploadID, partNumberMarker, maxParts)
+	listPartsInfo, err := objectAPI.ListObjectParts(bucket, object, uploadID, partNumberMarker, maxParts)
 	if err != nil {
 		errorIf(err, "Unable to list uploaded parts.")
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
@@ -699,6 +738,12 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
+
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(w, r, ErrServerNotInitialized, r.URL.Path)
+		return
+	}
 
 	// Get upload id.
 	uploadID, _, _, _ := getObjectResources(r.URL.Query())
@@ -762,9 +807,10 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	}
 
 	doneCh := make(chan struct{})
+
 	// Signal that completeMultipartUpload is over via doneCh
 	go func(doneCh chan<- struct{}) {
-		md5Sum, err = api.ObjectAPI.CompleteMultipartUpload(bucket, object, uploadID, completeParts)
+		md5Sum, err = objectAPI.CompleteMultipartUpload(bucket, object, uploadID, completeParts)
 		doneCh <- struct{}{}
 	}(doneCh)
 
@@ -799,7 +845,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 
 	if globalEventNotifier.IsBucketNotificationSet(bucket) {
 		// Fetch object info for notifications.
-		objInfo, err := api.ObjectAPI.GetObjectInfo(bucket, object)
+		objInfo, err := objectAPI.GetObjectInfo(bucket, object)
 		if err != nil {
 			errorIf(err, "Unable to fetch object info for \"%s\"", path.Join(bucket, object))
 			return
@@ -825,6 +871,12 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 	bucket := vars["bucket"]
 	object := vars["object"]
 
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(w, r, ErrServerNotInitialized, r.URL.Path)
+		return
+	}
+
 	switch getRequestAuthType(r) {
 	default:
 		// For all unknown auth types return error.
@@ -845,7 +897,7 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 	/// http://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectDELETE.html
 	/// Ignore delete object errors, since we are suppposed to reply
 	/// only 204.
-	if err := api.ObjectAPI.DeleteObject(bucket, object); err != nil {
+	if err := objectAPI.DeleteObject(bucket, object); err != nil {
 		writeSuccessNoContent(w)
 		return
 	}

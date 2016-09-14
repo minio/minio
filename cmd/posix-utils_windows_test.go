@@ -41,7 +41,9 @@ func TestUNCPaths(t *testing.T) {
 	// Instantiate posix object to manage a disk
 	var err error
 	err = os.Mkdir("c:\\testdisk", 0700)
-
+	if err != nil {
+		t.Fatal(err)
+	}
 	// Cleanup on exit of test
 	defer os.RemoveAll("c:\\testdisk")
 
@@ -74,7 +76,9 @@ func TestUNCPathENOTDIR(t *testing.T) {
 	var err error
 	// Instantiate posix object to manage a disk
 	err = os.Mkdir("c:\\testdisk", 0700)
-
+	if err != nil {
+		t.Fatal(err)
+	}
 	// Cleanup on exit of test
 	defer os.RemoveAll("c:\\testdisk")
 	var fs StorageAPI

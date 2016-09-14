@@ -22,6 +22,7 @@ import "io"
 type ObjectLayer interface {
 	// Storage operations.
 	Shutdown() error
+	HealDiskMetadata() error
 	StorageInfo() StorageInfo
 
 	// Bucket operations.
@@ -35,7 +36,7 @@ type ObjectLayer interface {
 	// Object operations.
 	GetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) (err error)
 	GetObjectInfo(bucket, object string) (objInfo ObjectInfo, err error)
-	PutObject(bucket, object string, size int64, data io.Reader, metadata map[string]string) (md5 string, err error)
+	PutObject(bucket, object string, size int64, data io.Reader, metadata map[string]string) (objInto ObjectInfo, err error)
 	DeleteObject(bucket, object string) error
 	HealObject(bucket, object string) error
 

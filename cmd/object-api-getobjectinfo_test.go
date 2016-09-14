@@ -57,19 +57,19 @@ func testGetObjectInfo(obj ObjectLayer, instanceType string, t TestErrHandler) {
 		{"Test", "", ObjectInfo{}, BucketNameInvalid{Bucket: "Test"}, false},
 		{"---", "", ObjectInfo{}, BucketNameInvalid{Bucket: "---"}, false},
 		{"ad", "", ObjectInfo{}, BucketNameInvalid{Bucket: "ad"}, false},
-		// Test cases with valid but non-existing bucket names (Test number 5-7).
+		// Test cases with valid but non-existing bucket names (Test number 5-6).
 		{"abcdefgh", "abc", ObjectInfo{}, BucketNotFound{Bucket: "abcdefgh"}, false},
 		{"ijklmnop", "efg", ObjectInfo{}, BucketNotFound{Bucket: "ijklmnop"}, false},
-		// Test cases with valid but non-existing bucket names and invalid object name (Test number 8-9).
+		// Test cases with valid but non-existing bucket names and invalid object name (Test number 7-8).
 		{"test-getobjectinfo", "", ObjectInfo{}, ObjectNameInvalid{Bucket: "test-getobjectinfo", Object: ""}, false},
 		{"test-getobjectinfo", "", ObjectInfo{}, ObjectNameInvalid{Bucket: "test-getobjectinfo", Object: ""}, false},
-		// Test cases with non-existing object name with existing bucket (Test number 10-12).
+		// Test cases with non-existing object name with existing bucket (Test number 9-11).
 		{"test-getobjectinfo", "Africa", ObjectInfo{}, ObjectNotFound{Bucket: "test-getobjectinfo", Object: "Africa"}, false},
 		{"test-getobjectinfo", "Antartica", ObjectInfo{}, ObjectNotFound{Bucket: "test-getobjectinfo", Object: "Antartica"}, false},
 		{"test-getobjectinfo", "Asia/myfile", ObjectInfo{}, ObjectNotFound{Bucket: "test-getobjectinfo", Object: "Asia/myfile"}, false},
-		// Test case with existing bucket but object name set to a directory (Test number 13).
+		// Test case with existing bucket but object name set to a directory (Test number 12).
 		{"test-getobjectinfo", "Asia", ObjectInfo{}, ObjectNotFound{Bucket: "test-getobjectinfo", Object: "Asia"}, false},
-		// Valid case with existing object (Test number 14).
+		// Valid case with existing object (Test number 13).
 		{"test-getobjectinfo", "Asia/asiapics.jpg", resultCases[0], nil, true},
 	}
 	for i, testCase := range testCases {

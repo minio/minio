@@ -17,7 +17,7 @@
 package cmd
 
 import (
-	"fmt"
+	"errors"
 	"strings"
 	"time"
 
@@ -32,24 +32,24 @@ type JWT struct {
 	credential
 }
 
-// Default - each token expires in 10hrs.
+// Default each token expires in 100yrs.
 const (
-	tokenExpires time.Duration = 10
+	defaultTokenExpiry time.Duration = time.Hour * 876000 // 100yrs.
 )
 
 // newJWT - returns new JWT object.
-func newJWT() (*JWT, error) {
+func newJWT(expiry time.Duration) (*JWT, error) {
 	if serverConfig == nil {
-		return nil, fmt.Errorf("server not initialzed")
+		return nil, errors.New("Server not initialzed")
 	}
 
 	// Save access, secret keys.
 	cred := serverConfig.GetCredential()
 	if !isValidAccessKey.MatchString(cred.AccessKeyID) {
-		return nil, fmt.Errorf("Invalid access key")
+		return nil, errors.New("Invalid access key")
 	}
 	if !isValidSecretKey.MatchString(cred.SecretAccessKey) {
-		return nil, fmt.Errorf("Invalid secret key")
+		return nil, errors.New("Invalid secret key")
 	}
 
 	return &JWT{cred}, nil
@@ -61,13 +61,13 @@ func (jwt *JWT) GenerateToken(accessKey string) (string, error) {
 	accessKey = strings.TrimSpace(accessKey)
 
 	if !isValidAccessKey.MatchString(accessKey) {
-		return "", fmt.Errorf("Invalid access key")
+		return "", errors.New("Invalid access key")
 	}
 
 	tUTCNow := time.Now().UTC()
 	token := jwtgo.NewWithClaims(jwtgo.SigningMethodHS512, jwtgo.MapClaims{
 		// Token expires in 10hrs.
-		"exp": tUTCNow.Add(time.Hour * tokenExpires).Unix(),
+		"exp": tUTCNow.Add(defaultTokenExpiry).Unix(),
 		"iat": tUTCNow.Unix(),
 		"sub": accessKey,
 	})
@@ -80,20 +80,20 @@ func (jwt *JWT) Authenticate(accessKey, secretKey string) error {
 	accessKey = strings.TrimSpace(accessKey)
 
 	if !isValidAccessKey.MatchString(accessKey) {
-		return fmt.Errorf("Invalid access key")
+		return errors.New("Invalid access key")
 	}
 	if !isValidSecretKey.MatchString(secretKey) {
-		return fmt.Errorf("Invalid secret key")
+		return errors.New("Invalid secret key")
 	}
 
 	if accessKey != jwt.AccessKeyID {
-		return fmt.Errorf("Access key does not match")
+		return errors.New("Access key does not match")
 	}
 
 	hashedSecretKey, _ := bcrypt.GenerateFromPassword([]byte(jwt.SecretAccessKey), bcrypt.DefaultCost)
 
 	if bcrypt.CompareHashAndPassword(hashedSecretKey, []byte(secretKey)) != nil {
-		return fmt.Errorf("Authentication failed")
+		return errors.New("Authentication failed")
 	}
 
 	// Success.

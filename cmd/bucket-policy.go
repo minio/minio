@@ -66,27 +66,38 @@ func (bp *bucketPolicies) RemoveBucketPolicy(bucket string) {
 func loadAllBucketPolicies(objAPI ObjectLayer) (policies map[string]*bucketPolicy, err error) {
 	// List buckets to proceed loading all notification configuration.
 	buckets, err := objAPI.ListBuckets()
+	errorIf(err, "Unable to list buckets.")
+	err = errorCause(err)
 	if err != nil {
 		return nil, err
 	}
+
 	policies = make(map[string]*bucketPolicy)
+	var pErrs []error
 	// Loads bucket policy.
 	for _, bucket := range buckets {
-		var policy *bucketPolicy
-		policy, err = readBucketPolicy(bucket.Name, objAPI)
-		if err != nil {
-			switch err.(type) {
+		policy, pErr := readBucketPolicy(bucket.Name, objAPI)
+		if pErr != nil {
+			switch pErr.(type) {
 			case BucketPolicyNotFound:
 				continue
 			}
-			return nil, err
+			pErrs = append(pErrs, pErr)
+			// Continue to load other bucket policies if possible.
+			continue
 		}
 		policies[bucket.Name] = policy
 	}
 
+	// Look for any errors occurred while reading bucket policies.
+	for _, pErr := range pErrs {
+		if pErr != nil {
+			return policies, pErr
+		}
+	}
+
 	// Success.
 	return policies, nil
-
 }
 
 // Intialize all bucket policies.
@@ -94,16 +105,20 @@ func initBucketPolicies(objAPI ObjectLayer) error {
 	if objAPI == nil {
 		return errInvalidArgument
 	}
+
 	// Read all bucket policies.
 	policies, err := loadAllBucketPolicies(objAPI)
 	if err != nil {
 		return err
 	}
 
+	// Populate global bucket collection.
 	globalBucketPolicies = &bucketPolicies{
 		rwMutex:             &sync.RWMutex{},
 		bucketPolicyConfigs: policies,
 	}
+
+	// Success.
 	return nil
 }
 
@@ -125,18 +140,22 @@ func readBucketPolicyJSON(bucket string, objAPI ObjectLayer) (bucketPolicyReader
 	}
 	policyPath := pathJoin(bucketConfigPrefix, bucket, policyJSON)
 	objInfo, err := objAPI.GetObjectInfo(minioMetaBucket, policyPath)
+	err = errorCause(err)
 	if err != nil {
 		if _, ok := err.(ObjectNotFound); ok {
 			return nil, BucketPolicyNotFound{Bucket: bucket}
 		}
+		errorIf(err, "Unable to load policy for the bucket %s.", bucket)
 		return nil, err
 	}
 	var buffer bytes.Buffer
 	err = objAPI.GetObject(minioMetaBucket, policyPath, 0, objInfo.Size, &buffer)
+	err = errorCause(err)
 	if err != nil {
 		if _, ok := err.(ObjectNotFound); ok {
 			return nil, BucketPolicyNotFound{Bucket: bucket}
 		}
+		errorIf(err, "Unable to load policy for the bucket %s.", bucket)
 		return nil, err
 	}
 
@@ -169,9 +188,10 @@ func removeBucketPolicy(bucket string, objAPI ObjectLayer) error {
 	if !IsValidBucketName(bucket) {
 		return BucketNameInvalid{Bucket: bucket}
 	}
-
 	policyPath := pathJoin(bucketConfigPrefix, bucket, policyJSON)
 	if err := objAPI.DeleteObject(minioMetaBucket, policyPath); err != nil {
+		errorIf(err, "Unable to remove bucket-policy on bucket %s.", bucket)
+		err = errorCause(err)
 		if _, ok := err.(ObjectNotFound); ok {
 			return BucketPolicyNotFound{Bucket: bucket}
 		}
@@ -188,6 +208,9 @@ func writeBucketPolicy(bucket string, objAPI ObjectLayer, reader io.Reader, size
 	}
 
 	policyPath := pathJoin(bucketConfigPrefix, bucket, policyJSON)
-	_, err := objAPI.PutObject(minioMetaBucket, policyPath, size, reader, nil)
-	return err
+	if _, err := objAPI.PutObject(minioMetaBucket, policyPath, size, reader, nil); err != nil {
+		errorIf(err, "Unable to set policy for the bucket %s", bucket)
+		return errorCause(err)
+	}
+	return nil
 }

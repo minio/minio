@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -294,13 +294,13 @@ func testPutBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestErrH
 		req, err := newTestSignedRequest("PUT", getPutPolicyURL("", testCase.bucketName),
 			int64(len(bucketPolicyStr)), bytes.NewReader([]byte(bucketPolicyStr)), testCase.accessKey, testCase.secretKey)
 		if err != nil {
-			t.Fatalf("Test %d: Failed to create HTTP request for PutBucketPolicyHandler: <ERROR> %v", i+1, err)
+			t.Fatalf("Test %d: %s: Failed to create HTTP request for PutBucketPolicyHandler: <ERROR> %v", i+1, instanceType, err)
 		}
 		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic ofthe handler.
 		// Call the ServeHTTP to execute the handler.
 		apiRouter.ServeHTTP(rec, req)
 		if rec.Code != testCase.expectedRespStatus {
-			t.Errorf("Test %d: Expected the response status to be `%d`, but instead found `%d`", i+1, testCase.expectedRespStatus, rec.Code)
+			t.Errorf("Test %d: %s: Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, rec.Code)
 		}
 	}
 }
