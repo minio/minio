@@ -62,6 +62,7 @@ func newObjectLayer(disks, ignoredDisks []string) (ObjectLayer, error) {
 	globalShutdownCBs.AddObjectLayerCB(func() errCode {
 		if objAPI != nil {
 			if sErr := objAPI.Shutdown(); sErr != nil {
+				errorIf(err, "Unable to shutdown object API.")
 				return exitFailure
 			}
 		}

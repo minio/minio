@@ -117,26 +117,24 @@ func (fs fsObjects) Shutdown() error {
 	_, err := fs.storage.ListDir(minioMetaBucket, mpartMetaPrefix)
 	if err != errFileNotFound {
 		// A nil err means that multipart directory is not empty hence do not remove '.minio.sys' volume.
-		// A non nil err means that an unexpected error occurred
-		return err
+		// A non nil err means that an unexpected error occured
+		return toObjectErr(traceError(err))
 	}
 	// List if there are any bucket configuration entries.
 	_, err = fs.storage.ListDir(minioMetaBucket, bucketConfigPrefix)
 	if err != errFileNotFound {
 		// A nil err means that bucket config directory is not empty hence do not remove '.minio.sys' volume.
-		// A non nil err means that an unexpected error occurred
-		return err
+		// A non nil err means that an unexpected error occured
+		return toObjectErr(traceError(err))
 	}
 	// Cleanup everything else.
 	prefix := ""
 	if err = cleanupDir(fs.storage, minioMetaBucket, prefix); err != nil {
-		errorIf(err, "Unable to cleanup minio meta bucket")
 		return err
 	}
 	if err = fs.storage.DeleteVol(minioMetaBucket); err != nil {
 		if err != errVolumeNotEmpty {
-			errorIf(err, "Unable to delete minio meta bucket %s", minioMetaBucket)
-			return err
+			return toObjectErr(traceError(err))
 		}
 	}
 	// Successful.
@@ -220,7 +218,7 @@ func (fs fsObjects) DeleteBucket(bucket string) error {
 		return toObjectErr(traceError(err), bucket)
 	}
 	// Cleanup all the previously incomplete multiparts.
-	if err := cleanupDir(fs.storage, path.Join(minioMetaBucket, mpartMetaPrefix), bucket); err != nil && err != errVolumeNotFound {
+	if err := cleanupDir(fs.storage, path.Join(minioMetaBucket, mpartMetaPrefix), bucket); err != nil && errorCause(err) != errVolumeNotFound {
 		return toObjectErr(err, bucket)
 	}
 	return nil
