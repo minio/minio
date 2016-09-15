@@ -65,8 +65,8 @@ type LockArgs struct {
 	Timestamp time.Time
 	Name      string
 	Node      string
-	RpcPath   string
-	Uid       string
+	RPCPath   string
+	UID       string
 }
 
 func (l *LockArgs) SetToken(token string) {
@@ -167,7 +167,7 @@ func lock(clnts []RPC, locks *[]string, lockName string, isReadLock bool) bool {
 			bytesUid := [16]byte{}
 			cryptorand.Read(bytesUid[:])
 			uid := fmt.Sprintf("%X", bytesUid[:])
-			args := LockArgs{Name: lockName, Node: clnts[ownNode].Node(), RpcPath: clnts[ownNode].RpcPath(), Uid: uid}
+			args := LockArgs{Name: lockName, Node: clnts[ownNode].Node(), RPCPath: clnts[ownNode].RPCPath(), UID: uid}
 			if isReadLock {
 				if err := c.Call("Dsync.RLock", &args, &locked); err != nil {
 					if dsyncLog {
@@ -184,7 +184,7 @@ func lock(clnts []RPC, locks *[]string, lockName string, isReadLock bool) bool {
 
 			g := Granted{index: index}
 			if locked {
-				g.lockUid = args.Uid
+				g.lockUid = args.UID
 			}
 			ch <- g
 
@@ -377,7 +377,7 @@ func sendRelease(c RPC, name, uid string, isReadLock bool) {
 			// All client methods issuing RPCs are thread-safe and goroutine-safe,
 			// i.e. it is safe to call them from multiple concurrently running goroutines.
 			var unlocked bool
-			args := LockArgs{Name: name, Uid: uid} // Just send name & uid (and leave out node and rpcPath; unimportant for unlocks)
+			args := LockArgs{Name: name, UID: uid} // Just send name & uid (and leave out node and rpcPath; unimportant for unlocks)
 			if isReadLock {
 				if err := c.Call("Dsync.RUnlock", &args, &unlocked); err == nil {
 					// RUnlock delivered, exit out

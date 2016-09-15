@@ -25,6 +25,6 @@ type RPC interface {
 		SetTimestamp(tstamp time.Time)
 	}, reply interface{}) error
 	Node() string
-	RpcPath() string
+	RPCPath() string
 	Close() error
 }
