@@ -38,6 +38,7 @@ func initDsyncNodes(disks []string, port int) error {
 	cred := serverConfig.GetCredential()
 	// Initialize rpc lock client information only if this instance is a distributed setup.
 	var clnts []dsync.RPC
+	myNode := -1
 	for _, disk := range disks {
 		if idx := strings.LastIndex(disk, ":"); idx != -1 {
 			clnts = append(clnts, newAuthClient(&authConfig{
@@ -49,9 +50,15 @@ func initDsyncNodes(disks []string, port int) error {
 				path:        pathutil.Join(lockRPCPath, disk[idx+1:]),
 				loginMethod: "Dsync.LoginHandler",
 			}))
+
+			if isLocalStorage(disk) && myNode == -1 {
+				myNode = len(clnts) - 1
+			}
 		}
 	}
-	return dsync.SetNodesWithClients(clnts)
+
+	fmt.Println("myNode", myNode)
+	return dsync.SetNodesWithClients(clnts, myNode)
 }
 
 // initNSLock - initialize name space lock map.
