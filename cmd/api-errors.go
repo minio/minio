@@ -48,7 +48,6 @@ const (
 	ErrNone APIErrorCode = iota
 	ErrAccessDenied
 	ErrBadDigest
-	ErrBucketAlreadyExists
 	ErrEntityTooSmall
 	ErrEntityTooLarge
 	ErrIncompleteBody
@@ -192,11 +191,6 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Code:           "BadDigest",
 		Description:    "The Content-Md5 you specified did not match what we received.",
 		HTTPStatusCode: http.StatusBadRequest,
-	},
-	ErrBucketAlreadyExists: {
-		Code:           "BucketAlreadyExists",
-		Description:    "The requested bucket name is not available.",
-		HTTPStatusCode: http.StatusConflict,
 	},
 	ErrEntityTooSmall: {
 		Code:           "EntityTooSmall",
@@ -613,6 +607,14 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrWriteQuorum
 	case InsufficientReadQuorum:
 		apiErr = ErrReadQuorum
+	case UnsupportedDelimiter:
+		apiErr = ErrNotImplemented
+	case InvalidMarkerPrefixCombination:
+		apiErr = ErrNotImplemented
+	case InvalidUploadIDKeyCombination:
+		apiErr = ErrNotImplemented
+	case MalformedUploadID:
+		apiErr = ErrNoSuchUpload
 	case PartTooSmall:
 		apiErr = ErrEntityTooSmall
 	default:
