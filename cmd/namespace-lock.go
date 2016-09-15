@@ -57,7 +57,6 @@ func initDsyncNodes(disks []string, port int) error {
 		}
 	}
 
-	fmt.Println("myNode", myNode)
 	return dsync.SetNodesWithClients(clnts, myNode)
 }
 
