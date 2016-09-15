@@ -268,7 +268,7 @@ func TestFormatXLHealFreshDisks(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Create an instance of xl backend.
-	obj, err := getXLObjectLayer(fsDirs)
+	obj, err := getXLObjectLayer(fsDirs, nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -300,7 +300,7 @@ func TestFormatXLHealFreshDisksErrorExpected(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Create an instance of xl backend.
-	obj, err := getXLObjectLayer(fsDirs)
+	obj, err := getXLObjectLayer(fsDirs, nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -584,7 +584,7 @@ func TestInitFormatXLErrors(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Create an instance of xl backend.
-	obj, err := getXLObjectLayer(fsDirs)
+	obj, err := getXLObjectLayer(fsDirs, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -680,7 +680,7 @@ func TestLoadFormatXLErrs(t *testing.T) {
 	}
 
 	// Create an instance of xl backend.
-	obj, err := getXLObjectLayer(fsDirs)
+	obj, err := getXLObjectLayer(fsDirs, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -705,7 +705,7 @@ func TestLoadFormatXLErrs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	obj, err = getXLObjectLayer(fsDirs)
+	obj, err = getXLObjectLayer(fsDirs, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -730,7 +730,7 @@ func TestLoadFormatXLErrs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	obj, err = getXLObjectLayer(fsDirs)
+	obj, err = getXLObjectLayer(fsDirs, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -753,7 +753,7 @@ func TestLoadFormatXLErrs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	obj, err = getXLObjectLayer(fsDirs)
+	obj, err = getXLObjectLayer(fsDirs, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -779,7 +779,7 @@ func TestHealFormatXLCorruptedDisksErrs(t *testing.T) {
 	}
 
 	// Everything is fine, should return nil
-	obj, err := getXLObjectLayer(fsDirs)
+	obj, err := getXLObjectLayer(fsDirs, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -796,7 +796,7 @@ func TestHealFormatXLCorruptedDisksErrs(t *testing.T) {
 	}
 
 	// Disks 0..15 are nil
-	obj, err = getXLObjectLayer(fsDirs)
+	obj, err = getXLObjectLayer(fsDirs, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -815,7 +815,7 @@ func TestHealFormatXLCorruptedDisksErrs(t *testing.T) {
 	}
 
 	// One disk returns Faulty Disk
-	obj, err = getXLObjectLayer(fsDirs)
+	obj, err = getXLObjectLayer(fsDirs, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -836,7 +836,7 @@ func TestHealFormatXLCorruptedDisksErrs(t *testing.T) {
 	}
 
 	// One disk is not found, heal corrupted disks should return nil
-	obj, err = getXLObjectLayer(fsDirs)
+	obj, err = getXLObjectLayer(fsDirs, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -853,7 +853,7 @@ func TestHealFormatXLCorruptedDisksErrs(t *testing.T) {
 	}
 
 	// Remove format.json of all disks
-	obj, err = getXLObjectLayer(fsDirs)
+	obj, err = getXLObjectLayer(fsDirs, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -874,7 +874,7 @@ func TestHealFormatXLCorruptedDisksErrs(t *testing.T) {
 	}
 
 	// Corrupted format json in one disk
-	obj, err = getXLObjectLayer(fsDirs)
+	obj, err = getXLObjectLayer(fsDirs, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -899,7 +899,7 @@ func TestHealFormatXLFreshDisksErrs(t *testing.T) {
 	}
 
 	// Everything is fine, should return nil
-	obj, err := getXLObjectLayer(fsDirs)
+	obj, err := getXLObjectLayer(fsDirs, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -915,7 +915,7 @@ func TestHealFormatXLFreshDisksErrs(t *testing.T) {
 	}
 
 	// Disks 0..15 are nil
-	obj, err = getXLObjectLayer(fsDirs)
+	obj, err = getXLObjectLayer(fsDirs, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -934,7 +934,7 @@ func TestHealFormatXLFreshDisksErrs(t *testing.T) {
 	}
 
 	// One disk returns Faulty Disk
-	obj, err = getXLObjectLayer(fsDirs)
+	obj, err = getXLObjectLayer(fsDirs, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -955,7 +955,7 @@ func TestHealFormatXLFreshDisksErrs(t *testing.T) {
 	}
 
 	// One disk is not found, heal corrupted disks should return nil
-	obj, err = getXLObjectLayer(fsDirs)
+	obj, err = getXLObjectLayer(fsDirs, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -972,7 +972,7 @@ func TestHealFormatXLFreshDisksErrs(t *testing.T) {
 	}
 
 	// Remove format.json of all disks
-	obj, err = getXLObjectLayer(fsDirs)
+	obj, err = getXLObjectLayer(fsDirs, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -993,7 +993,7 @@ func TestHealFormatXLFreshDisksErrs(t *testing.T) {
 	}
 
 	// Remove format.json of all disks
-	obj, err = getXLObjectLayer(fsDirs)
+	obj, err = getXLObjectLayer(fsDirs, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

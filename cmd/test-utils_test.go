@@ -68,7 +68,7 @@ func prepareXL() (ObjectLayer, []string, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	obj, err := getXLObjectLayer(fsDirs)
+	obj, err := getXLObjectLayer(fsDirs, nil)
 	if err != nil {
 		removeRoots(fsDirs)
 		return nil, nil, err
@@ -498,6 +498,8 @@ func signRequest(req *http.Request, accessKey, secretKey string) error {
 	}
 	sort.Strings(headers)
 
+	region := serverConfig.GetRegion()
+
 	// Get canonical headers.
 	var buf bytes.Buffer
 	for _, k := range headers {
@@ -549,7 +551,7 @@ func signRequest(req *http.Request, accessKey, secretKey string) error {
 	// Get scope.
 	scope := strings.Join([]string{
 		currTime.Format(yyyymmdd),
-		"us-east-1",
+		region,
 		"s3",
 		"aws4_request",
 	}, "/")
@@ -559,8 +561,8 @@ func signRequest(req *http.Request, accessKey, secretKey string) error {
 	stringToSign = stringToSign + hex.EncodeToString(sum256([]byte(canonicalRequest)))
 
 	date := sumHMAC([]byte("AWS4"+secretKey), []byte(currTime.Format(yyyymmdd)))
-	region := sumHMAC(date, []byte("us-east-1"))
-	service := sumHMAC(region, []byte("s3"))
+	regionHMAC := sumHMAC(date, []byte(region))
+	service := sumHMAC(regionHMAC, []byte("s3"))
 	signingKey := sumHMAC(service, []byte("aws4_request"))
 
 	signature := hex.EncodeToString(sumHMAC(signingKey, []byte(stringToSign)))
@@ -731,7 +733,7 @@ func makeTestBackend(disks []string, instanceType string) (ObjectLayer, error) {
 		return objLayer, err
 
 	case "XL":
-		objectLayer, err := getXLObjectLayer(disks)
+		objectLayer, err := getXLObjectLayer(disks, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -1107,12 +1109,12 @@ func getRandomDisks(N int) ([]string, error) {
 }
 
 // getXLObjectLayer - Instantiates XL object layer and returns it.
-func getXLObjectLayer(erasureDisks []string) (ObjectLayer, error) {
-	err := formatDisks(erasureDisks, nil)
+func getXLObjectLayer(erasureDisks []string, ignoredDisks []string) (ObjectLayer, error) {
+	err := formatDisks(erasureDisks, ignoredDisks)
 	if err != nil {
 		return nil, err
 	}
-	objLayer, err := newXLObjects(erasureDisks, nil)
+	objLayer, err := newXLObjects(erasureDisks, ignoredDisks)
 	if err != nil {
 		return nil, err
 	}
@@ -1260,7 +1262,7 @@ func ExecObjectLayerStaleFilesTest(t *testing.T, objTest objTestStaleFilesType) 
 	if err != nil {
 		t.Fatalf("Initialization of disks for XL setup: %s", err)
 	}
-	objLayer, err := getXLObjectLayer(erasureDisks)
+	objLayer, err := getXLObjectLayer(erasureDisks, nil)
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for XL setup: %s", err)
 	}
@@ -1288,6 +1290,9 @@ func initTestAPIEndPoints(objLayer ObjectLayer, apiFunctions []string) http.Hand
 	// Iterate the list of API functions requested for and register them in mux HTTP handler.
 	for _, apiFunction := range apiFunctions {
 		switch apiFunction {
+		// Register ListBuckets	handler.
+		case "ListBuckets":
+			apiRouter.Methods("GET").HandlerFunc(api.ListBucketsHandler)
 		// Register GetObject handler.
 		case "GetObject`":
 			bucket.Methods("GET").Path("/{object:.+}").HandlerFunc(api.GetObjectHandler)

@@ -200,6 +200,10 @@ func (d byDiskTotal) Less(i, j int) bool {
 func (xl xlObjects) StorageInfo() StorageInfo {
 	var disksInfo []disk.Info
 	for _, storageDisk := range xl.storageDisks {
+		if storageDisk == nil {
+			// Storage disk is empty, perhaps ignored disk or not available.
+			continue
+		}
 		info, err := storageDisk.DiskInfo()
 		if err != nil {
 			errorIf(err, "Unable to fetch disk info for %#v", storageDisk)
