@@ -123,3 +123,13 @@ func (rpcClient *RPCClient) Close() error {
 	rpcClient.clearRPCClient()
 	return rpcLocalStack.Close()
 }
+
+// Node returns the node (network address) of the connection
+func (rpcClient *RPCClient) Node() string {
+	return rpcClient.node
+}
+
+// RpcPath returns the RPC path of the connection
+func (rpcClient *RPCClient) RpcPath() string {
+	return rpcClient.rpcPath
+}
