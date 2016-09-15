@@ -269,11 +269,10 @@ func (l *lockServer) lockMaintenance(interval time.Duration) {
 			// - some network error (and server is up normally)
 			//
 			// We will ignore the error, and we will retry later to get resolve on this lock
-			log.Println("  Dsync.Active failed:", err)
+			log.Infoln("Dsync.Active failed:", err)
 			c.Close()
 		} else {
 			c.Close()
-			log.Println("  Dsync.Active result:", active)
 
 			if !active { // The lock is no longer active at server that originated the lock
 				// so remove the lock from the map
@@ -284,7 +283,7 @@ func (l *lockServer) lockMaintenance(interval time.Duration) {
 						// Remove failed, in case it is a:
 						if nlrip.lri.writer {
 							// Writer: this should never happen as the whole (mapped) entry should have been deleted
-							log.Println("Lock maintenance failed to remove entry for write lock (should never happen)", nlrip.name, nlrip.lri, lri)
+							log.Errorln("Lock maintenance failed to remove entry for write lock (should never happen)", nlrip.name, nlrip.lri, lri)
 						} else {
 							// Reader: this can happen if multiple read locks were active and the one we are looking for
 							// has been released concurrently (so it is fine)
