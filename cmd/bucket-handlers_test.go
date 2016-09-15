@@ -202,7 +202,7 @@ func testHeadBucketHandler(obj ObjectLayer, instanceType string, t TestErrHandle
 
 // Wrapper for calling TestListMultipartUploadsHandler tests for both XL multiple disks and single node setup.
 func TestListMultipartUploadsHandler(t *testing.T) {
-	ExecObjectLayerTest(t, testListMultipartUploads)
+	ExecObjectLayerTest(t, testListMultipartUploadsHandler)
 }
 
 // testListMultipartUploadsHandler - Tests validate listing of multipart uploads.
@@ -253,12 +253,12 @@ func testListMultipartUploadsHandler(obj ObjectLayer, instanceType string, t Tes
 		// 2 - bucket not found.
 		{"volatile-bucket-1", "", "", "", "", "0", http.StatusNotFound, false},
 		// 3 - invalid delimiter.
-		{bucketName, "", "", "", "-", "0", http.StatusBadRequest, false},
+		{bucketName, "", "", "", "-", "0", http.StatusNotImplemented, false},
 		// 4 - invalid prefix and marker combination.
 		{bucketName, "asia", "europe-object", "", "", "0", http.StatusNotImplemented, false},
 		// 5 - invalid upload id and marker combination.
-		{bucketName, "asia", "asia/europe/", "abc", "", "0", http.StatusBadRequest, false},
-		// 6 - invalid max upload id.
+		{bucketName, "asia", "asia/europe/", "abc", "", "0", http.StatusNotImplemented, false},
+		// 6 - invalid max uploads.
 		{bucketName, "", "", "", "", "-1", http.StatusBadRequest, false},
 		// 7 - good case delimiter.
 		{bucketName, "", "", "", "/", "100", http.StatusOK, true},
