@@ -644,14 +644,14 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	// Calculate s3 compatible md5sum for complete multipart.
 	s3MD5, err := completeMultipartMD5(parts...)
 	if err != nil {
-		return "", traceError(err)
+		return "", err
 	}
 
 	// Read saved fs metadata for ongoing multipart.
 	fsMetaPath := pathJoin(uploadIDPath, fsMetaJSONFile)
 	fsMeta, err := readFSMetadata(fs.storage, minioMetaBucket, fsMetaPath)
 	if err != nil {
-		return "", toObjectErr(traceError(err), minioMetaBucket, fsMetaPath)
+		return "", toObjectErr(err, minioMetaBucket, fsMetaPath)
 	}
 
 	fsAppendMeta, err := readFSMetadata(fs.storage, minioMetaBucket, fsAppendMetaPath)
@@ -745,7 +745,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 
 	// Cleanup all the parts if everything else has been safely committed.
 	if err = cleanupUploadedParts(bucket, object, uploadID, fs.storage); err != nil {
-		return "", toObjectErr(traceError(err), bucket, object)
+		return "", toObjectErr(err, bucket, object)
 	}
 
 	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
@@ -761,7 +761,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	// the object, if yes do not attempt to delete 'uploads.json'.
 	uploadsJSON, err := readUploadsJSON(bucket, object, fs.storage)
 	if err != nil {
-		return "", toObjectErr(traceError(err), minioMetaBucket, object)
+		return "", toObjectErr(err, minioMetaBucket, object)
 	}
 	// If we have successfully read `uploads.json`, then we proceed to
 	// purge or update `uploads.json`.
@@ -771,7 +771,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	}
 	if len(uploadsJSON.Uploads) > 0 {
 		if err = fs.updateUploadsJSON(bucket, object, uploadsJSON); err != nil {
-			return "", toObjectErr(traceError(err), minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object))
+			return "", toObjectErr(err, minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object))
 		}
 		// Return success.
 		return s3MD5, nil
