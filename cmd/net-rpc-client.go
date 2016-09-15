@@ -129,7 +129,7 @@ func (rpcClient *RPCClient) Node() string {
 	return rpcClient.node
 }
 
-// RpcPath returns the RPC path of the connection
-func (rpcClient *RPCClient) RpcPath() string {
+// RPCPath returns the RPC path of the connection
+func (rpcClient *RPCClient) RPCPath() string {
 	return rpcClient.rpcPath
 }

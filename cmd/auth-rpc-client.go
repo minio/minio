@@ -170,8 +170,8 @@ func (authClient *AuthRPCClient) Node() string {
 	return ""
 }
 
-// RpcPath returns the RPC path of the connection
-func (authClient *AuthRPCClient) RpcPath() string {
+// RPCPath returns the RPC path of the connection
+func (authClient *AuthRPCClient) RPCPath() string {
 	if authClient.rpc != nil {
 		return authClient.rpc.rpcPath
 	}

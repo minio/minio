@@ -39,8 +39,8 @@ type LockArgs struct {
 	Token     string
 	Timestamp time.Time
 	Node      string
-	RpcPath   string
-	Uid       string
+	RPCPath   string
+	UID       string
 }
 
 // SetToken - sets the token to the supplied value.
@@ -115,7 +115,7 @@ func (l *lockServer) Lock(args *LockArgs, reply *bool) error {
 	}
 	_, *reply = l.lockMap[args.Name]
 	if !*reply { // No locks held on the given name, so claim write lock
-		l.lockMap[args.Name] = []lockRequesterInfo{lockRequesterInfo{writer: true, node: args.Node, rpcPath: args.RpcPath, uid: args.Uid, timestamp: time.Now(), timeLastCheck: time.Now()}}
+		l.lockMap[args.Name] = []lockRequesterInfo{lockRequesterInfo{writer: true, node: args.Node, rpcPath: args.RPCPath, uid: args.UID, timestamp: time.Now(), timeLastCheck: time.Now()}}
 	}
 	*reply = !*reply // Negate *reply to return true when lock is granted or false otherwise
 	return nil
@@ -136,10 +136,10 @@ func (l *lockServer) Unlock(args *LockArgs, reply *bool) error {
 	if *reply = isWriteLock(lri); !*reply { // Unless it is a write lock
 		return fmt.Errorf("Unlock attempted on a read locked entity: %s (%d read locks active)", args.Name, len(lri))
 	}
-	if l.removeEntry(args.Name, args.Uid, &lri) {
+	if l.removeEntry(args.Name, args.UID, &lri) {
 		return nil
 	}
-	return fmt.Errorf("Unlock unable to find corresponding lock for uuid: %s", args.Uid)
+	return fmt.Errorf("Unlock unable to find corresponding lock for uid: %s", args.UID)
 }
 
 // RLock - rpc handler for read lock operation.
@@ -152,11 +152,11 @@ func (l *lockServer) RLock(args *LockArgs, reply *bool) error {
 	var lri []lockRequesterInfo
 	lri, *reply = l.lockMap[args.Name]
 	if !*reply { // No locks held on the given name, so claim (first) read lock
-		l.lockMap[args.Name] = []lockRequesterInfo{lockRequesterInfo{writer: false, node: args.Node, rpcPath: args.RpcPath, uid: args.Uid, timestamp: time.Now(), timeLastCheck: time.Now()}}
+		l.lockMap[args.Name] = []lockRequesterInfo{lockRequesterInfo{writer: false, node: args.Node, rpcPath: args.RPCPath, uid: args.UID, timestamp: time.Now(), timeLastCheck: time.Now()}}
 		*reply = true
 	} else {
 		if *reply = !isWriteLock(lri); *reply { // Unless there is a write lock
-			l.lockMap[args.Name] = append(l.lockMap[args.Name], lockRequesterInfo{writer: false, node: args.Node, rpcPath: args.RpcPath, uid: args.Uid, timestamp: time.Now(), timeLastCheck: time.Now()})
+			l.lockMap[args.Name] = append(l.lockMap[args.Name], lockRequesterInfo{writer: false, node: args.Node, rpcPath: args.RPCPath, uid: args.UID, timestamp: time.Now(), timeLastCheck: time.Now()})
 		}
 	}
 	return nil
@@ -176,10 +176,10 @@ func (l *lockServer) RUnlock(args *LockArgs, reply *bool) error {
 	if *reply = !isWriteLock(lri); !*reply { // A write-lock is held, cannot release a read lock
 		return fmt.Errorf("RUnlock attempted on a write locked entity: %s", args.Name)
 	}
-	if l.removeEntry(args.Name, args.Uid, &lri) {
+	if l.removeEntry(args.Name, args.UID, &lri) {
 		return nil
 	}
-	return fmt.Errorf("RUnlock unable to find corresponding read lock for uuid: %s", args.Uid)
+	return fmt.Errorf("RUnlock unable to find corresponding read lock for uid: %s", args.UID)
 }
 
 // Active - rpc handler for active lock status.
@@ -195,7 +195,7 @@ func (l *lockServer) Active(args *LockArgs, reply *bool) error {
 	}
 	// Check whether uid is still active
 	for _, entry := range lri {
-		if *reply = entry.uid == args.Uid; *reply {
+		if *reply = entry.uid == args.UID; *reply {
 			return nil // When uid found return true
 		}
 	}
@@ -263,7 +263,7 @@ func (l *lockServer) lockMaintenance(interval time.Duration) {
 		var active bool
 
 		// Call back to original server verify whether the lock is still active (based on name & uid)
-		if err := c.Call("Dsync.Active", &LockArgs{Name: nlrip.name, Uid: nlrip.lri.uid}, &active); err != nil {
+		if err := c.Call("Dsync.Active", &LockArgs{Name: nlrip.name, UID: nlrip.lri.uid}, &active); err != nil {
 			// We failed to connect back to the server that originated the lock, this can either be due to
 			// - server at client down
 			// - some network error (and server is up normally)
