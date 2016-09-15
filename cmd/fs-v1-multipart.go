@@ -77,7 +77,7 @@ func (fs fsObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 		if walkResultCh == nil {
 			endWalkCh = make(chan struct{})
 			isLeaf := fs.isMultipartUpload
-			listDir := listDirFactory(isLeaf, fs.storage)
+			listDir := listDirFactory(isLeaf, fsTreeWalkIgnoredErrs, fs.storage)
 			walkResultCh = startTreeWalk(minioMetaBucket, multipartPrefixPath, multipartMarkerPath, recursive, listDir, isLeaf, endWalkCh)
 		}
 		for maxUploads > 0 {
@@ -90,7 +90,7 @@ func (fs fsObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 			// For any walk error return right away.
 			if walkResult.err != nil {
 				// File not found or Disk not found is a valid case.
-				if isErrIgnored(walkResult.err, walkResultIgnoredErrs) {
+				if isErrIgnored(walkResult.err, fsTreeWalkIgnoredErrs) {
 					eof = true
 					break
 				}

@@ -67,6 +67,15 @@ type xlObjects struct {
 	objCacheEnabled bool
 }
 
+// list of all errors that can be ignored in tree walk operation in XL
+var xlTreeWalkIgnoredErrs = []error{
+	errFileNotFound,
+	errVolumeNotFound,
+	errDiskNotFound,
+	errDiskAccessDenied,
+	errFaultyDisk,
+}
+
 func repairDiskMetadata(storageDisks []StorageAPI) error {
 	// Attempt to load all `format.json`.
 	formatConfigs, sErrs := loadAllFormats(storageDisks)

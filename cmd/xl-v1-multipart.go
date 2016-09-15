@@ -95,7 +95,7 @@ func (xl xlObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 		if walkerCh == nil {
 			walkerDoneCh = make(chan struct{})
 			isLeaf := xl.isMultipartUpload
-			listDir := listDirFactory(isLeaf, xl.getLoadBalancedDisks()...)
+			listDir := listDirFactory(isLeaf, xlTreeWalkIgnoredErrs, xl.getLoadBalancedDisks()...)
 			walkerCh = startTreeWalk(minioMetaBucket, multipartPrefixPath, multipartMarkerPath, recursive, listDir, isLeaf, walkerDoneCh)
 		}
 		// Collect uploads until we have reached maxUploads count to 0.
@@ -109,7 +109,7 @@ func (xl xlObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 			// For any walk error return right away.
 			if walkResult.err != nil {
 				// File not found or Disk not found is a valid case.
-				if isErrIgnored(walkResult.err, walkResultIgnoredErrs) {
+				if isErrIgnored(walkResult.err, xlTreeWalkIgnoredErrs) {
 					continue
 				}
 				return ListMultipartsInfo{}, err
@@ -154,7 +154,7 @@ func (xl xlObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 			}
 			nsMutex.RUnlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, entry), opsID)
 			if err != nil {
-				if isErrIgnored(err, walkResultIgnoredErrs) {
+				if isErrIgnored(err, xlTreeWalkIgnoredErrs) {
 					continue
 				}
 				return ListMultipartsInfo{}, err
