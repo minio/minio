@@ -24,5 +24,7 @@ type RPC interface {
 		SetToken(token string)
 		SetTimestamp(tstamp time.Time)
 	}, reply interface{}) error
+	Node() string
+	RpcPath() string
 	Close() error
 }
