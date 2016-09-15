@@ -38,6 +38,12 @@ type fsObjects struct {
 	listPool *treeWalkPool
 }
 
+// list of all errors that can be ignored in tree walk operation in FS
+var fsTreeWalkIgnoredErrs = []error{
+	errFileNotFound,
+	errVolumeNotFound,
+}
+
 // creates format.json, the FS format info in minioMetaBucket.
 func initFormatFS(storageDisk StorageAPI) error {
 	return writeFSFormatData(storageDisk, newFSFormatV1())
@@ -602,7 +608,7 @@ func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 			// object string does not end with "/".
 			return !strings.HasSuffix(object, slashSeparator)
 		}
-		listDir := listDirFactory(isLeaf, fs.storage)
+		listDir := listDirFactory(isLeaf, fsTreeWalkIgnoredErrs, fs.storage)
 		walkResultCh = startTreeWalk(bucket, prefix, marker, recursive, listDir, isLeaf, endWalkCh)
 	}
 	var fileInfos []FileInfo
