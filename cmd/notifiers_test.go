@@ -18,6 +18,113 @@ package cmd
 
 import "testing"
 
+// Tests for event filter rules.
+func TestFilterMatch(t *testing.T) {
+	testCases := []struct {
+		objectName        string
+		rules             []filterRule
+		expectedRuleMatch bool
+	}{
+		// Prefix matches for a parent.
+		{
+			objectName: "test/test1/object.txt",
+			rules: []filterRule{
+				{
+					Name:  "prefix",
+					Value: "test",
+				},
+			},
+			expectedRuleMatch: true,
+		},
+		// Prefix matches for the object.
+		{
+			objectName: "test/test1/object.txt",
+			rules: []filterRule{
+				{
+					Name:  "prefix",
+					Value: "test/test1/object",
+				},
+			},
+			expectedRuleMatch: true,
+		},
+		// Prefix doesn't match.
+		{
+			objectName: "test/test1/object.txt",
+			rules: []filterRule{
+				{
+					Name:  "prefix",
+					Value: "test/test1/object/",
+				},
+			},
+			expectedRuleMatch: false,
+		},
+		// Suffix matches.
+		{
+			objectName: "test/test1/object.txt",
+			rules: []filterRule{
+				{
+					Name:  "suffix",
+					Value: ".txt",
+				},
+			},
+			expectedRuleMatch: true,
+		},
+		// Suffix doesn't match but prefix matches.
+		{
+			objectName: "test/test1/object.txt",
+			rules: []filterRule{
+				{
+					Name:  "suffix",
+					Value: ".jpg",
+				},
+				{
+					Name:  "prefix",
+					Value: "test/test1",
+				},
+			},
+			expectedRuleMatch: false,
+		},
+		// Prefix doesn't match but suffix matches.
+		{
+			objectName: "test/test2/object.jpg",
+			rules: []filterRule{
+				{
+					Name:  "suffix",
+					Value: ".jpg",
+				},
+				{
+					Name:  "prefix",
+					Value: "test/test1",
+				},
+			},
+			expectedRuleMatch: false,
+		},
+		// Suffix and prefix doesn't match.
+		{
+			objectName: "test/test2/object.jpg",
+			rules: []filterRule{
+				{
+					Name:  "suffix",
+					Value: ".txt",
+				},
+				{
+					Name:  "prefix",
+					Value: "test/test1",
+				},
+			},
+			expectedRuleMatch: false,
+		},
+	}
+
+	// .. Validate all cases.
+	for i, testCase := range testCases {
+		ruleMatch := filterRuleMatch(testCase.objectName, testCase.rules)
+		if ruleMatch != testCase.expectedRuleMatch {
+			t.Errorf("Test %d: Expected %t, got %t", i+1, testCase.expectedRuleMatch, ruleMatch)
+		}
+	}
+}
+
 // Tests all event match.
 func TestEventMatch(t *testing.T) {
 	testCases := []struct {
