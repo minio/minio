@@ -24,6 +24,31 @@ import (
 	"time"
 )
 
+// Tests caclculating disk count.
+func TestDiskCount(t *testing.T) {
+	testCases := []struct {
+		disks     []StorageAPI
+		diskCount int
+	}{
+		// Test case - 1
+		{
+			disks:     []StorageAPI{&posix{}, &posix{}, &posix{}, &posix{}},
+			diskCount: 4,
+		},
+		// Test case - 2
+		{
+			disks:     []StorageAPI{nil, &posix{}, &posix{}, &posix{}},
+			diskCount: 3,
+		},
+	}
+	for i, testCase := range testCases {
+		cdiskCount := diskCount(testCase.disks)
+		if cdiskCount != testCase.diskCount {
+			t.Errorf("Test %d: Expected %d, got %d", i+1, testCase.diskCount, cdiskCount)
+		}
+	}
+}
+
 // Test for reduceErrs, reduceErr reduces collection
 // of errors into a single maximal error with in the list.
 func TestReduceErrs(t *testing.T) {
