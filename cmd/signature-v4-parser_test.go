@@ -565,7 +565,7 @@ func TestParsePreSignV4(t *testing.T) {
 		return strconv.FormatInt(int64(expires), 10)
 	}
 	// used in expected preSignValues, preSignValues.Date is of type time.Time .
-	queryTime := time.Now()
+	queryTime := time.Now().UTC()
 
 	sampleTimeStr := time.Now().UTC().Format(yyyymmdd)
 

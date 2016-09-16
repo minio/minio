@@ -56,7 +56,6 @@ func initDsyncNodes(disks []string, port int) error {
 			}
 		}
 	}
-
 	return dsync.SetNodesWithClients(clnts, myNode)
 }
 
@@ -100,12 +99,14 @@ type nsLock struct {
 // Unlock, RLock and RUnlock.
 type nsLockMap struct {
 	// lock counter used for lock debugging.
-	globalLockCounter  int64                                   //total locks held.
-	blockedCounter     int64                                   // total operations blocked waiting for locks.
-	runningLockCounter int64                                   // total locks held but not released yet.
-	debugLockMap       map[nsParam]*debugLockInfoPerVolumePath // info for instrumentation on locks.
+	globalLockCounter  int64                                   // Total locks held.
+	blockedCounter     int64                                   // Total operations blocked waiting for locks.
+	runningLockCounter int64                                   // Total locks held but not released yet.
+	debugLockMap       map[nsParam]*debugLockInfoPerVolumePath // Info for instrumentation on locks.
 
-	isDist       bool // indicates whether the locking service is part of a distributed setup or not.
+	// Indicates whether the locking service is part
+	// of a distributed setup or not.
+	isDist       bool
 	lockMap      map[nsParam]*nsLock
 	lockMapMutex sync.Mutex
 }
@@ -132,13 +133,14 @@ func (n *nsLockMap) lock(volume, path string, lockOrigin, opsID string, readLock
 	nsLk.ref++ // Update ref count here to avoid multiple races.
 
 	if globalDebugLock {
-		// change the state of the lock to be  blocked for the given pair of <volume, path> and <OperationID> till the lock unblocks.
-		// The lock for accessing `nsMutex` is held inside the function itself.
-		err := n.statusNoneToBlocked(param, lockOrigin, opsID, readLock)
-		if err != nil {
+		// Change the state of the lock to be blocked for the given pair of <volume, path>
+		// and <OperationID> till the lock unblocks. The lock for accessing `nsMutex` is
+		// held inside the function itself.
+		if err := n.statusNoneToBlocked(param, lockOrigin, opsID, readLock); err != nil {
 			errorIf(err, "Failed to set lock state to blocked.")
 		}
 	}
+
 	// Unlock map before Locking NS which might block.
 	n.lockMapMutex.Unlock()
 
@@ -149,12 +151,12 @@ func (n *nsLockMap) lock(volume, path string, lockOrigin, opsID string, readLock
 		nsLk.Lock()
 	}
 
-	// check if lock debugging enabled.
+	// Check if lock debugging enabled.
 	if globalDebugLock {
 		// Changing the status of the operation from blocked to running.
-		// change the state of the lock to be  running (from blocked) for the given pair of <volume, path> and <OperationID>.
-		err := n.statusBlockedToRunning(param, lockOrigin, opsID, readLock)
-		if err != nil {
+		// change the state of the lock to be  running (from blocked) for
+		// the given pair of <volume, path> and <OperationID>.
+		if err := n.statusBlockedToRunning(param, lockOrigin, opsID, readLock); err != nil {
 			errorIf(err, "Failed to set the lock state to running.")
 		}
 	}
@@ -178,7 +180,7 @@ func (n *nsLockMap) unlock(volume, path, opsID string, readLock bool) {
 		}
 		if nsLk.ref != 0 {
 			nsLk.ref--
-			// locking debug enabled, delete the lock state entry for given operation ID.
+			// Locking debug enabled, delete the lock state entry for given operation ID.
 			if globalDebugLock {
 				err := n.deleteLockInfoEntryForOps(param, opsID)
 				if err != nil {
@@ -190,7 +192,7 @@ func (n *nsLockMap) unlock(volume, path, opsID string, readLock bool) {
 			// Remove from the map if there are no more references.
 			delete(n.lockMap, param)
 
-			// locking debug enabled, delete the lock state entry for given <volume, path> pair.
+			// Locking debug enabled, delete the lock state entry for given <volume, path> pair.
 			if globalDebugLock {
 				err := n.deleteLockInfoEntryForVolumePath(param)
 				if err != nil {
@@ -205,9 +207,10 @@ func (n *nsLockMap) unlock(volume, path, opsID string, readLock bool) {
 // allocated name space lock or initializing a new one.
 func (n *nsLockMap) Lock(volume, path, opsID string) {
 	var lockOrigin string
-	// lock debugging enabled. The caller information of the lock held has be obtained here before calling any other function.
+	// Lock debugging enabled. The caller information of the lock held has
+	// been obtained here before calling any other function.
 	if globalDebugLock {
-		// fetching the package, function name and the line number of the caller from the runtime.
+		// Fetching the package, function name and the line number of the caller from the runtime.
 		// here is an example https://play.golang.org/p/perrmNRI9_ .
 		pc, fn, line, success := runtime.Caller(1)
 		if !success {
@@ -229,10 +232,11 @@ func (n *nsLockMap) Unlock(volume, path, opsID string) {
 func (n *nsLockMap) RLock(volume, path, opsID string) {
 	var lockOrigin string
 	readLock := true
-	// lock debugging enabled. The caller information of the lock held has be obtained here before calling any other function.
+	// Lock debugging enabled. The caller information of the lock held has
+	// been obtained here before calling any other function.
 	if globalDebugLock {
-		// fetching the package, function name and the line number of the caller from the runtime.
-		// here is an example https://play.golang.org/p/perrmNRI9_ .
+		// Fetching the package, function name and the line number of the
+		// caller from the runtime. Here is an example https://play.golang.org/p/perrmNRI9_ .
 		pc, fn, line, success := runtime.Caller(1)
 		if !success {
 			errorIf(errors.New("Couldn't get caller info."), "Fetching caller info form runtime failed.")
