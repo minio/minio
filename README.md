@@ -39,7 +39,7 @@ $ go get -u github.com/minio/minio
 
 ## 2. Run Minio Server
 
-In the examples below, Minio serves the contents of the ‘’Photos” directory as an object store.
+In the examples below, Minio serves the contents of the ``Photos`` directory as an object store.
 
 ### GNU/Linux
 
