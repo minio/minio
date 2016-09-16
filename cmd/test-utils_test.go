@@ -396,13 +396,12 @@ func newTestStreamingRequest(method, urlStr string, dataLength, chunkSize int64,
 
 	req.Header.Set("x-amz-content-sha256", "STREAMING-AWS4-HMAC-SHA256-PAYLOAD")
 	req.Header.Set("content-encoding", "aws-chunked")
-	req.Header.Set("x-amz-storage-class", "REDUCED_REDUNDANCY")
-
 	req.Header.Set("x-amz-decoded-content-length", strconv.FormatInt(dataLength, 10))
 	req.Header.Set("content-length", strconv.FormatInt(contentLength, 10))
 
 	// Seek back to beginning.
 	body.Seek(0, 0)
+
 	// Add body
 	req.Body = ioutil.NopCloser(body)
 	req.ContentLength = contentLength
@@ -422,6 +421,8 @@ func newTestStreamingSignedRequest(method, urlStr string, contentLength, chunkSi
 		return nil, err
 	}
 
+	regionStr := serverConfig.GetRegion()
+
 	var stream []byte
 	var buffer []byte
 	body.Seek(0, 0)
@@ -436,7 +437,7 @@ func newTestStreamingSignedRequest(method, urlStr string, contentLength, chunkSi
 		// Get scope.
 		scope := strings.Join([]string{
 			currTime.Format(yyyymmdd),
-			"us-east-1",
+			regionStr,
 			"s3",
 			"aws4_request",
 		}, "/")
@@ -449,7 +450,7 @@ func newTestStreamingSignedRequest(method, urlStr string, contentLength, chunkSi
 		stringToSign = stringToSign + hex.EncodeToString(sum256(buffer[:n]))
 
 		date := sumHMAC([]byte("AWS4"+secretKey), []byte(currTime.Format(yyyymmdd)))
-		region := sumHMAC(date, []byte("us-east-1"))
+		region := sumHMAC(date, []byte(regionStr))
 		service := sumHMAC(region, []byte("s3"))
 		signingKey := sumHMAC(service, []byte("aws4_request"))
 
