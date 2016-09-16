@@ -269,7 +269,6 @@ func (l *lockServer) lockMaintenance(interval time.Duration) {
 			// - some network error (and server is up normally)
 			//
 			// We will ignore the error, and we will retry later to get resolve on this lock
-			log.Infoln("Dsync.Active failed:", err)
 			c.Close()
 		} else {
 			c.Close()
