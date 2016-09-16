@@ -38,6 +38,7 @@ func initDsyncNodes(disks []string, port int) error {
 	cred := serverConfig.GetCredential()
 	// Initialize rpc lock client information only if this instance is a distributed setup.
 	var clnts []dsync.RPC
+	myNode := -1
 	for _, disk := range disks {
 		if idx := strings.LastIndex(disk, ":"); idx != -1 {
 			clnts = append(clnts, newAuthClient(&authConfig{
@@ -49,9 +50,14 @@ func initDsyncNodes(disks []string, port int) error {
 				path:        pathutil.Join(lockRPCPath, disk[idx+1:]),
 				loginMethod: "Dsync.LoginHandler",
 			}))
+
+			if isLocalStorage(disk) && myNode == -1 {
+				myNode = len(clnts) - 1
+			}
 		}
 	}
-	return dsync.SetNodesWithClients(clnts)
+
+	return dsync.SetNodesWithClients(clnts, myNode)
 }
 
 // initNSLock - initialize name space lock map.
@@ -86,9 +92,8 @@ type nsParam struct {
 
 // nsLock - provides primitives for locking critical namespace regions.
 type nsLock struct {
-	writer      RWLocker
-	readerArray []RWLocker
-	ref         uint
+	RWLocker
+	ref uint
 }
 
 // nsLockMap - namespace lock map, provides primitives to Lock,
@@ -114,7 +119,7 @@ func (n *nsLockMap) lock(volume, path string, lockOrigin, opsID string, readLock
 	nsLk, found := n.lockMap[param]
 	if !found {
 		nsLk = &nsLock{
-			writer: func() RWLocker {
+			RWLocker: func() RWLocker {
 				if n.isDist {
 					return dsync.NewDRWMutex(pathutil.Join(volume, path))
 				}
@@ -125,10 +130,6 @@ func (n *nsLockMap) lock(volume, path string, lockOrigin, opsID string, readLock
 		n.lockMap[param] = nsLk
 	}
 	nsLk.ref++ // Update ref count here to avoid multiple races.
-	rwlock := nsLk.writer
-	if readLock && n.isDist {
-		rwlock = dsync.NewDRWMutex(pathutil.Join(volume, path))
-	}
 
 	if globalDebugLock {
 		// change the state of the lock to be  blocked for the given pair of <volume, path> and <OperationID> till the lock unblocks.
@@ -143,21 +144,9 @@ func (n *nsLockMap) lock(volume, path string, lockOrigin, opsID string, readLock
 
 	// Locking here can block.
 	if readLock {
-		rwlock.RLock()
-
-		if n.isDist {
-			// Only add (for reader case) to array after RLock() succeeds
-			// (so that we know for sure that element in [0] can be RUnlocked())
-			n.lockMapMutex.Lock()
-			if len(nsLk.readerArray) == 0 {
-				nsLk.readerArray = []RWLocker{rwlock}
-			} else {
-				nsLk.readerArray = append(nsLk.readerArray, rwlock)
-			}
-			n.lockMapMutex.Unlock()
-		}
+		nsLk.RLock()
 	} else {
-		rwlock.Lock()
+		nsLk.Lock()
 	}
 
 	// check if lock debugging enabled.
@@ -180,19 +169,9 @@ func (n *nsLockMap) unlock(volume, path, opsID string, readLock bool) {
 	param := nsParam{volume, path}
 	if nsLk, found := n.lockMap[param]; found {
 		if readLock {
-			if n.isDist {
-				if len(nsLk.readerArray) == 0 {
-					errorIf(errors.New("Length of reader lock array cannot be 0."), "Invalid reader lock array length detected.")
-				}
-				// Release first lock first (FIFO)
-				nsLk.readerArray[0].RUnlock()
-				// And discard first element
-				nsLk.readerArray = nsLk.readerArray[1:]
-			} else {
-				nsLk.writer.RUnlock()
-			}
+			nsLk.RUnlock()
 		} else {
-			nsLk.writer.Unlock()
+			nsLk.Unlock()
 		}
 		if nsLk.ref == 0 {
 			errorIf(errors.New("Namespace reference count cannot be 0."), "Invalid reference count detected.")
@@ -208,10 +187,6 @@ func (n *nsLockMap) unlock(volume, path, opsID string, readLock bool) {
 			}
 		}
 		if nsLk.ref == 0 {
-			if len(nsLk.readerArray) != 0 && n.isDist {
-				errorIf(errors.New("Length of reader lock array should be 0 upon deleting map entry."), "Invalid reader lock array length detected.")
-			}
-
 			// Remove from the map if there are no more references.
 			delete(n.lockMap, param)
 

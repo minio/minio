@@ -29,13 +29,16 @@ var dnodeCount int
 // List of rpc client objects, one per lock server.
 var clnts []RPC
 
+// Index into rpc client array for server running on localhost
+var ownNode int
+
 // Simple majority based quorum, set to dNodeCount/2+1
 var dquorum int
 
 // SetNodesWithPath - initializes package-level global state variables such as clnts.
 // N B - This function should be called only once inside any program that uses
 // dsync.
-func SetNodesWithClients(rpcClnts []RPC) (err error) {
+func SetNodesWithClients(rpcClnts []RPC, rpcOwnNode int) (err error) {
 
 	// Validate if number of nodes is within allowable range.
 	if dnodeCount != 0 {
@@ -46,10 +49,17 @@ func SetNodesWithClients(rpcClnts []RPC) (err error) {
 		return errors.New("Dsync not designed for more than 16 nodes")
 	}
 
+	if rpcOwnNode > len(rpcClnts) {
+		return errors.New("Index for own node is too large")
+	}
+
+
 	dnodeCount = len(rpcClnts)
 	dquorum = dnodeCount/2 + 1
 	// Initialize node name and rpc path for each RPCClient object.
 	clnts = make([]RPC, dnodeCount)
 	copy(clnts, rpcClnts)
+
+	ownNode = rpcOwnNode
 	return nil
 }

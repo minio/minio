@@ -161,3 +161,19 @@ func (authClient *AuthRPCClient) Call(serviceMethod string, args interface {
 	}
 	return err
 }
+
+// Node returns the node (network address) of the connection
+func (authClient *AuthRPCClient) Node() string {
+	if authClient.rpc != nil {
+		return authClient.rpc.node
+	}
+	return ""
+}
+
+// RPCPath returns the RPC path of the connection
+func (authClient *AuthRPCClient) RPCPath() string {
+	if authClient.rpc != nil {
+		return authClient.rpc.rpcPath
+	}
+	return ""
+}
