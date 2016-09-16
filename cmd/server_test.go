@@ -632,7 +632,7 @@ func (s *TestSuiteCommon) TestObjectGet(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 	// concurrently reading the object, safety check for races.
 	var wg sync.WaitGroup
-	for i := 0; i < ConcurrencyLevel; i++ {
+	for i := 0; i < testConcurrencyLevel; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -821,7 +821,7 @@ func (s *TestSuiteCommon) TestPutBucket(c *C) {
 	// The purpose this block is not to check for correctness of functionality
 	// Run the test with -race flag to utilize this
 	var wg sync.WaitGroup
-	for i := 0; i < ConcurrencyLevel; i++ {
+	for i := 0; i < testConcurrencyLevel; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

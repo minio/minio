@@ -26,9 +26,9 @@ import (
 	. "gopkg.in/check.v1"
 )
 
-// Concurreny level.
+// concurreny level for certain parallel tests.
 const (
-	ConcurrencyLevel = 10
+	testConcurrencyLevel = 10
 )
 
 ///

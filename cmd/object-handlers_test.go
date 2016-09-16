@@ -171,9 +171,15 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 		objectName string
 		data       []byte
 		dataLen    int
+		chunkSize  int64
 		// expected output.
 		expectedContent    []byte // expected response body.
 		expectedRespStatus int    // expected response status body.
+		// Access keys
+		accessKey        string
+		secretKey        string
+		shouldPass       bool
+		removeAuthHeader bool
 	}{
 		// Test case - 1.
 		// Fetching the entire object and validating its contents.
@@ -182,8 +188,69 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 			objectName:         objectName,
 			data:               bytesData,
 			dataLen:            len(bytesData),
+			chunkSize:          64 * 1024, // 64k
 			expectedContent:    []byte{},
 			expectedRespStatus: http.StatusOK,
+			accessKey:          credentials.AccessKeyID,
+			secretKey:          credentials.SecretAccessKey,
+			shouldPass:         true,
+		},
+		// Test case - 2
+		// Small chunk size.
+		{
+			bucketName:         bucketName,
+			objectName:         objectName,
+			data:               bytesData,
+			dataLen:            len(bytesData),
+			chunkSize:          1 * 1024, // 1k
+			expectedContent:    []byte{},
+			expectedRespStatus: http.StatusOK,
+			accessKey:          credentials.AccessKeyID,
+			secretKey:          credentials.SecretAccessKey,
+			shouldPass:         true,
+		},
+		// Test case - 3
+		// Invalid access key id.
+		{
+			bucketName:         bucketName,
+			objectName:         objectName,
+			data:               bytesData,
+			dataLen:            len(bytesData),
+			chunkSize:          64 * 1024, // 64k
+			expectedContent:    []byte{},
+			expectedRespStatus: http.StatusForbidden,
+			accessKey:          "",
+			secretKey:          "",
+			shouldPass:         false,
+		},
+		// Test case - 4
+		// Wrong auth header returns as bad request.
+		{
+			bucketName:         bucketName,
+			objectName:         objectName,
+			data:               bytesData,
+			dataLen:            len(bytesData),
+			chunkSize:          64 * 1024, // 64k
+			expectedContent:    []byte{},
+			expectedRespStatus: http.StatusBadRequest,
+			accessKey:          credentials.AccessKeyID,
+			secretKey:          credentials.SecretAccessKey,
+			shouldPass:         false,
+			removeAuthHeader:   true,
+		},
+		// Test case - 5
+		// Large chunk size.. also passes.
+		{
+			bucketName:         bucketName,
+			objectName:         objectName,
+			data:               bytesData,
+			dataLen:            len(bytesData),
+			chunkSize:          100 * 1024, // 100k
+			expectedContent:    []byte{},
+			expectedRespStatus: http.StatusOK,
+			accessKey:          credentials.AccessKeyID,
+			secretKey:          credentials.SecretAccessKey,
+			shouldPass:         false,
 		},
 	}
 	// Iterating over the cases, fetching the object validating the response.
@@ -193,37 +260,43 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 		// construct HTTP request for Put Object end point.
 		req, err := newTestStreamingSignedRequest("PUT",
 			getPutObjectURL("", testCase.bucketName, testCase.objectName),
-			int64(testCase.dataLen), 64*1024, bytes.NewReader(testCase.data),
-			credentials.AccessKeyID, credentials.SecretAccessKey)
+			int64(testCase.dataLen), testCase.chunkSize, bytes.NewReader(testCase.data),
+			testCase.accessKey, testCase.secretKey)
 		if err != nil {
 			t.Fatalf("Test %d: Failed to create HTTP request for Put Object: <ERROR> %v", i+1, err)
+		}
+		// Removes auth header if test case requires it.
+		if testCase.removeAuthHeader {
+			req.Header.Del("Authorization")
 		}
 		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
 		// Call the ServeHTTP to execute the handler,`func (api objectAPIHandlers) GetObjectHandler`  handles the request.
 		apiRouter.ServeHTTP(rec, req)
 		// Assert the response code with the expected status.
 		if rec.Code != testCase.expectedRespStatus {
-			t.Fatalf("Case %d: Expected the response status to be `%d`, but instead found `%d`", i+1, testCase.expectedRespStatus, rec.Code)
+			t.Errorf("Test %d: Expected the response status to be `%d`, but instead found `%d`", i+1, testCase.expectedRespStatus, rec.Code)
 		}
 		// read the response body.
 		actualContent, err := ioutil.ReadAll(rec.Body)
 		if err != nil {
 			t.Fatalf("Test %d: %s: Failed parsing response body: <ERROR> %v", i+1, instanceType, err)
 		}
-		// Verify whether the bucket obtained object is same as the one inserted.
-		if !bytes.Equal(testCase.expectedContent, actualContent) {
-			t.Errorf("Test %d: %s: Object content differs from expected value.: %s", i+1, instanceType, string(actualContent))
-		}
+		if testCase.shouldPass {
+			// Verify whether the bucket obtained object is same as the one inserted.
+			if !bytes.Equal(testCase.expectedContent, actualContent) {
+				t.Errorf("Test %d: %s: Object content differs from expected value.: %s", i+1, instanceType, string(actualContent))
+			}
 
-		buffer := new(bytes.Buffer)
-		err = obj.GetObject(testCase.bucketName, testCase.objectName, 0, int64(bytesDataLen), buffer)
-		if err != nil {
-			t.Fatalf("Test %d: %s: Failed to fetch the copied object: <ERROR> %s", i+1, instanceType, err)
+			buffer := new(bytes.Buffer)
+			err = obj.GetObject(testCase.bucketName, testCase.objectName, 0, int64(bytesDataLen), buffer)
+			if err != nil {
+				t.Fatalf("Test %d: %s: Failed to fetch the copied object: <ERROR> %s", i+1, instanceType, err)
+			}
+			if !bytes.Equal(bytesData, buffer.Bytes()) {
+				t.Errorf("Test %d: %s: Data Mismatch: Data fetched back from the uploaded object doesn't match the original one.", i+1, instanceType)
+			}
+			buffer.Reset()
 		}
-		if !bytes.Equal(bytesData, buffer.Bytes()) {
-			t.Errorf("Test %d: %s: Data Mismatch: Data fetched back from the uploaded object doesn't match the original one.", i+1, instanceType)
-		}
-		buffer.Reset()
 	}
 }
 
