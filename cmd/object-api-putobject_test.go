@@ -148,6 +148,10 @@ func testObjectAPIPutObject(obj ObjectLayer, instanceType string, t TestErrHandl
 		{bucket, object, data, nil, int64(len(data) - 1), md5Hex(data[:len(data)-1]), nil},
 		{bucket, object, nilBytes, nil, int64(len(nilBytes) + 1), md5Hex(nilBytes), IncompleteBody{}},
 		{bucket, object, fiveMBBytes, nil, int64(0), md5Hex(fiveMBBytes), nil},
+
+		// Test case 29
+		// valid data with X-Amz-Meta- meta
+		{bucket, object, data, map[string]string{"X-Amz-Meta-AppID": "a42"}, int64(len(data)), md5Hex(data), nil},
 	}
 
 	for i, testCase := range testCases {

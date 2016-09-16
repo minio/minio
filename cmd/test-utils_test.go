@@ -30,6 +30,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"reflect"
 	"regexp"
 	"sort"
 	"strconv"
@@ -125,6 +126,11 @@ func nextSuffix() string {
 	randN = r
 	randmu.Unlock()
 	return strconv.Itoa(int(1e9 + r%1e9))[1:]
+}
+
+// isSameType - compares two object types via reflect.TypeOf
+func isSameType(obj1, obj2 interface{}) bool {
+	return reflect.TypeOf(obj1) == reflect.TypeOf(obj2)
 }
 
 // TestServer encapsulates an instantiation of a Minio instance with a temporary backend.

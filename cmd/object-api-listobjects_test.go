@@ -437,7 +437,7 @@ func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
 		{"test-bucket-list-object", "asia", "europe-object", "", 0, ListObjectsInfo{}, fmt.Errorf("Invalid combination of marker '%s' and prefix '%s'", "europe-object", "asia"), false},
 		// Setting a non-existing directory to be prefix (12-13).
 		{"empty-bucket", "europe/france/", "", "", 1, ListObjectsInfo{}, nil, true},
-		{"empty-bucket", "europe/tunisia/", "", "", 1, ListObjectsInfo{}, nil, true},
+		{"empty-bucket", "africa/tunisia/", "", "", 1, ListObjectsInfo{}, nil, true},
 		// Testing on empty bucket, that is, bucket without any objects in it (14).
 		{"empty-bucket", "", "", "", 0, ListObjectsInfo{}, nil, true},
 		// Setting maxKeys to negative value (15-16).
@@ -512,6 +512,9 @@ func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
 		{"test-bucket-list-object", "", "Asia/India/Karnataka/Bangalore/Koramangala/pics", "/", 10, resultCases[29], nil, true},
 		// Test with prefix and delimiter set to '/'. (60)
 		{"test-bucket-list-object", "/", "", "/", 10, resultCases[30], nil, true},
+
+		// Test with invalid prefix (61)
+		{"test-bucket-list-object", "^", "", "/", 10, resultCases[30], ObjectNameInvalid{Bucket: "test-bucket-list-object", Object: "^"}, false},
 	}
 
 	for i, testCase := range testCases {
