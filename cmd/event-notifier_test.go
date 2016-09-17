@@ -324,6 +324,11 @@ func TestListenBucketNotification(t *testing.T) {
 		t.Fatal("Unexpected error:", err)
 	}
 
+	// Validate if minio SNS is configured for an empty topic configs.
+	if isMinioSNSConfigured(listenARN, nil) {
+		t.Fatal("SNS listen shouldn't be configured.")
+	}
+
 	// Check if the config is loaded
 	notificationCfg := globalEventNotifier.GetBucketNotificationConfig(bucketName)
 	if notificationCfg == nil {
