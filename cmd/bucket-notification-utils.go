@@ -164,14 +164,13 @@ func isValidTopic(topicARN arnTopic) bool {
 func isValidQueueID(queueARN string) bool {
 	// Unmarshals QueueARN into structured object.
 	sqsARN := unmarshalSqsARN(queueARN)
-	// AMQP queue.
-	if isAMQPQueue(sqsARN) {
+	// Is Queue identifier valid?.
+	if isAMQPQueue(sqsARN) { // AMQP eueue.
 		amqpN := serverConfig.GetAMQPNotifyByID(sqsARN.AccountID)
 		return amqpN.Enable && amqpN.URL != ""
 	} else if isElasticQueue(sqsARN) { // Elastic queue.
 		elasticN := serverConfig.GetElasticSearchNotifyByID(sqsARN.AccountID)
 		return elasticN.Enable && elasticN.URL != ""
-
 	} else if isRedisQueue(sqsARN) { // Redis queue.
 		redisN := serverConfig.GetRedisNotifyByID(sqsARN.AccountID)
 		return redisN.Enable && redisN.Addr != ""
@@ -184,13 +183,6 @@ func checkQueueConfig(qConfig queueConfig) APIErrorCode {
 	// Check queue arn is valid.
 	if s3Error := checkQueueARN(qConfig.QueueARN); s3Error != ErrNone {
 		return s3Error
-	}
-
-	// Unmarshals QueueARN into structured object.
-	sqsARN := unmarshalSqsARN(qConfig.QueueARN)
-	// Validate if sqsARN requested any of the known supported queues.
-	if !isValidQueue(sqsARN) {
-		return ErrARNNotification
 	}
 
 	// Validate if the account ID is correct.
