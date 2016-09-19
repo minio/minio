@@ -27,7 +27,6 @@ import (
 	"strings"
 	"testing"
 
-	router "github.com/gorilla/mux"
 	"github.com/minio/minio-go/pkg/policy"
 )
 
@@ -1016,9 +1015,9 @@ func testWebSetBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestE
 // TestWebCheckAuthorization - Test Authorization for all web handlers
 func TestWebCheckAuthorization(t *testing.T) {
 	// Prepare XL backend
-	obj, fsDirs, e := prepareXL()
-	if e != nil {
-		t.Fatalf("Initialization of object layer failed for XL setup: %s", e)
+	obj, fsDirs, err := prepareXL()
+	if err != nil {
+		t.Fatalf("Initialization of object layer failed for XL setup: %s", err)
 	}
 	// Executing the object layer tests for XL.
 	defer removeRoots(fsDirs)
@@ -1027,9 +1026,9 @@ func TestWebCheckAuthorization(t *testing.T) {
 	apiRouter := initTestWebRPCEndPoint(obj)
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, e := newTestConfig("us-east-1")
-	if e != nil {
-		t.Fatalf("Init Test config failed")
+	rootPath, err := newTestConfig("us-east-1")
+	if err != nil {
+		t.Fatal("Init Test config failed", err)
 	}
 	// remove the root folder after the test ends.
 	defer removeAll(rootPath)
@@ -1042,9 +1041,9 @@ func TestWebCheckAuthorization(t *testing.T) {
 	for _, rpcCall := range webRPCs {
 		args := &GenericArgs{}
 		reply := &WebGenericRep{}
-		req, err := newTestWebRPCRequest("Web."+rpcCall, "Bearer fooauthorization", args)
-		if err != nil {
-			t.Fatalf("Test %s: Failed to create HTTP request: <ERROR> %v", rpcCall, err)
+		req, nerr := newTestWebRPCRequest("Web."+rpcCall, "Bearer fooauthorization", args)
+		if nerr != nil {
+			t.Fatalf("Test %s: Failed to create HTTP request: <ERROR> %v", rpcCall, nerr)
 		}
 		apiRouter.ServeHTTP(rec, req)
 		if rec.Code != http.StatusOK {
@@ -1097,18 +1096,14 @@ func TestWebCheckAuthorization(t *testing.T) {
 
 // TestWebObjectLayerNotReady - Test RPCs responses when disks are not ready
 func TestWebObjectLayerNotReady(t *testing.T) {
-	webHandlers := &webAPIHandlers{
-		ObjectAPI: func() ObjectLayer { return nil },
-	}
-	// Initialize router.
-	apiRouter := router.NewRouter()
-	registerWebRouter(apiRouter, webHandlers)
+	// Initialize web rpc endpoint.
+	apiRouter := initTestWebRPCEndPoint(nil)
 
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, e := newTestConfig("us-east-1")
-	if e != nil {
-		t.Fatalf("Init Test config failed")
+	rootPath, err := newTestConfig("us-east-1")
+	if err != nil {
+		t.Fatal("Init Test config failed", err)
 	}
 	// remove the root folder after the test ends.
 	defer removeAll(rootPath)
@@ -1116,9 +1111,9 @@ func TestWebObjectLayerNotReady(t *testing.T) {
 	rec := httptest.NewRecorder()
 
 	credentials := serverConfig.GetCredential()
-	authorization, e := getWebRPCToken(apiRouter, credentials.AccessKeyID, credentials.SecretAccessKey)
-	if e != nil {
-		t.Fatal("Cannot authenticate")
+	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKeyID, credentials.SecretAccessKey)
+	if err != nil {
+		t.Fatal("Cannot authenticate", err)
 	}
 
 	// Check if web rpc calls return Server not initialized. ServerInfo, GenerateAuth,
@@ -1128,9 +1123,9 @@ func TestWebObjectLayerNotReady(t *testing.T) {
 	for _, rpcCall := range webRPCs {
 		args := &GenericArgs{}
 		reply := &WebGenericRep{}
-		req, err := newTestWebRPCRequest("Web."+rpcCall, authorization, args)
-		if err != nil {
-			t.Fatalf("Test %s: Failed to create HTTP request: <ERROR> %v", rpcCall, err)
+		req, nerr := newTestWebRPCRequest("Web."+rpcCall, authorization, args)
+		if nerr != nil {
+			t.Fatalf("Test %s: Failed to create HTTP request: <ERROR> %v", rpcCall, nerr)
 		}
 		apiRouter.ServeHTTP(rec, req)
 		if rec.Code != http.StatusOK {
@@ -1184,9 +1179,9 @@ func TestWebObjectLayerNotReady(t *testing.T) {
 // TestWebObjectLayerFaultyDisks - Test Web RPC responses with faulty disks
 func TestWebObjectLayerFaultyDisks(t *testing.T) {
 	// Prepare XL backend
-	obj, fsDirs, e := prepareXL()
-	if e != nil {
-		t.Fatalf("Initialization of object layer failed for XL setup: %s", e)
+	obj, fsDirs, err := prepareXL()
+	if err != nil {
+		t.Fatalf("Initialization of object layer failed for XL setup: %s", err)
 	}
 	// Executing the object layer tests for XL.
 	defer removeRoots(fsDirs)
@@ -1197,18 +1192,14 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 		xl.storageDisks[i] = newNaughtyDisk(d.(*posix), nil, errFaultyDisk)
 	}
 
-	webHandlers := &webAPIHandlers{
-		ObjectAPI: func() ObjectLayer { return obj },
-	}
-	// Initialize router.
-	apiRouter := router.NewRouter()
-	registerWebRouter(apiRouter, webHandlers)
+	// Initialize web rpc endpoint.
+	apiRouter := initTestWebRPCEndPoint(obj)
 
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, e := newTestConfig("us-east-1")
-	if e != nil {
-		t.Fatalf("Init Test config failed")
+	rootPath, err := newTestConfig("us-east-1")
+	if err != nil {
+		t.Fatal("Init Test config failed", err)
 	}
 	// remove the root folder after the test ends.
 	defer removeAll(rootPath)
@@ -1216,9 +1207,9 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 	rec := httptest.NewRecorder()
 
 	credentials := serverConfig.GetCredential()
-	authorization, e := getWebRPCToken(apiRouter, credentials.AccessKeyID, credentials.SecretAccessKey)
-	if e != nil {
-		t.Fatal("Cannot authenticate")
+	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKeyID, credentials.SecretAccessKey)
+	if err != nil {
+		t.Fatal("Cannot authenticate", err)
 	}
 
 	// Check if web rpc calls return errors with faulty disks.  ServerInfo, GenerateAuth, SetAuth, GetAuth are not concerned
@@ -1228,9 +1219,9 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 	for _, rpcCall := range webRPCs {
 		args := &GenericArgs{}
 		reply := &WebGenericRep{}
-		req, err := newTestWebRPCRequest("Web."+rpcCall, authorization, args)
-		if err != nil {
-			t.Fatalf("Test %s: Failed to create HTTP request: <ERROR> %v", rpcCall, err)
+		req, nerr := newTestWebRPCRequest("Web."+rpcCall, authorization, args)
+		if nerr != nil {
+			t.Fatalf("Test %s: Failed to create HTTP request: <ERROR> %v", rpcCall, nerr)
 		}
 		apiRouter.ServeHTTP(rec, req)
 		if rec.Code != http.StatusOK {

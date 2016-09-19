@@ -20,6 +20,9 @@ import "github.com/minio/minio/pkg/disk"
 
 // StorageAPI interface.
 type StorageAPI interface {
+	// Stringified version of disk.
+	String() string
+
 	// Storage operations.
 	DiskInfo() (info disk.Info, err error)
 

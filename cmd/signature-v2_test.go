@@ -22,59 +22,6 @@ func TestResourceListSorting(t *testing.T) {
 	}
 }
 
-// Tests validate the query encoding.
-func TestQueryEncode(t *testing.T) {
-	testCases := []struct {
-		// Input.
-		input url.Values
-		// Expected result.
-		result string
-	}{
-		// % should be encoded as %25
-		{url.Values{
-			"key": []string{"thisisthe%url"},
-		}, "key=thisisthe%25url"},
-		// UTF-8 encoding.
-		{url.Values{
-			"key": []string{"本語"},
-		}, "key=%E6%9C%AC%E8%AA%9E"},
-		// UTF-8 encoding with ASCII.
-		{url.Values{
-			"key": []string{"本語.1"},
-		}, "key=%E6%9C%AC%E8%AA%9E.1"},
-		// Unusual ASCII characters.
-		{url.Values{
-			"key": []string{">123"},
-		}, "key=%3E123"},
-		// Fragment path characters.
-		{url.Values{
-			"key": []string{"myurl#link"},
-		}, "key=myurl%23link"},
-		// Space should be set to %20 not '+'.
-		{url.Values{
-			"key": []string{"space in url"},
-		}, "key=space%20in%20url"},
-		// '+' shouldn't be treated as space.
-		{url.Values{
-			"key": []string{"url+path"},
-		}, "key=url%2Bpath"},
-		// '/' shouldn't be treated as '/' should be percent coded.
-		{url.Values{
-			"key": []string{"url/+path"},
-		}, "key=url%2F%2Bpath"},
-		// Values is empty and empty string.
-		{nil, ""},
-	}
-
-	// Tests generated values from url encoded name.
-	for i, testCase := range testCases {
-		result := queryEncode(testCase.input)
-		if testCase.result != result {
-			t.Errorf("Test %d: Expected queryEncoded result to be \"%s\", but found it to be \"%s\" instead", i+1, testCase.result, result)
-		}
-	}
-}
-
 func TestDoesPresignedV2SignatureMatch(t *testing.T) {
 	root, err := newTestConfig("us-east-1")
 	if err != nil {

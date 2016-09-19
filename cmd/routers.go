@@ -31,15 +31,15 @@ func newObjectLayerFn() ObjectLayer {
 }
 
 // newObjectLayer - initialize any object layer depending on the number of disks.
-func newObjectLayer(disks, ignoredDisks []string) (ObjectLayer, error) {
+func newObjectLayer(storageDisks []StorageAPI) (ObjectLayer, error) {
 	var objAPI ObjectLayer
 	var err error
-	if len(disks) == 1 {
+	if len(storageDisks) == 1 {
 		// Initialize FS object layer.
-		objAPI, err = newFSObjects(disks[0])
+		objAPI, err = newFSObjects(storageDisks[0])
 	} else {
 		// Initialize XL object layer.
-		objAPI, err = newXLObjects(disks, ignoredDisks)
+		objAPI, err = newXLObjects(storageDisks)
 	}
 	if err != nil {
 		return nil, err
@@ -58,20 +58,18 @@ func newObjectLayer(disks, ignoredDisks []string) (ObjectLayer, error) {
 		return nil, err
 	}
 
-	// Register the callback that should be called when the process shuts down.
-	globalShutdownCBs.AddObjectLayerCB(func() errCode {
-		if objAPI != nil {
-			if sErr := objAPI.Shutdown(); sErr != nil {
-				errorIf(err, "Unable to shutdown object API.")
-				return exitFailure
+	if globalShutdownCBs != nil {
+		// Register the callback that should be called when the process shuts down.
+		globalShutdownCBs.AddObjectLayerCB(func() errCode {
+			if objAPI != nil {
+				if sErr := objAPI.Shutdown(); sErr != nil {
+					errorIf(err, "Unable to shutdown object API.")
+					return exitFailure
+				}
 			}
-		}
-		return exitSuccess
-	})
-
-	// Initialize a new event notifier.
-	err = initEventNotifier(objAPI)
-	fatalIf(err, "Unable to initialize event notification.")
+			return exitSuccess
+		})
+	}
 
 	// Initialize and load bucket policies.
 	err = initBucketPolicies(objAPI)
@@ -83,45 +81,28 @@ func newObjectLayer(disks, ignoredDisks []string) (ObjectLayer, error) {
 
 // configureServer handler returns final handler for the http server.
 func configureServerHandler(srvCmdConfig serverCmdConfig) http.Handler {
-	// Initialize storage rpc servers for every disk that is hosted on this node.
-	storageRPCs, err := newRPCServer(srvCmdConfig)
-	fatalIf(err, "Unable to initialize storage RPC server.")
-
-	// Initialize API.
-	apiHandlers := objectAPIHandlers{
-		ObjectAPI: newObjectLayerFn,
-	}
-
-	// Initialize Web.
-	webHandlers := &webAPIHandlers{
-		ObjectAPI: newObjectLayerFn,
-	}
-
-	// Initialize Controller.
-	controllerHandlers := &controllerAPIHandlers{
-		ObjectAPI: newObjectLayerFn,
-	}
-
 	// Initialize router.
 	mux := router.NewRouter()
 
-	// Register all routers.
-	registerStorageRPCRouters(mux, storageRPCs)
+	// Register storage rpc router.
+	registerStorageRPCRouters(mux, srvCmdConfig)
 
 	// Initialize distributed NS lock.
-	initDistributedNSLock(mux, srvCmdConfig)
+	if isDistributedSetup(srvCmdConfig.disks) {
+		registerDistNSLockRouter(mux, srvCmdConfig)
+	}
 
 	// Register controller rpc router.
-	registerControllerRPCRouter(mux, controllerHandlers)
+	registerControllerRPCRouter(mux, srvCmdConfig)
 
 	// set environmental variable MINIO_BROWSER=off to disable minio web browser.
 	// By default minio web browser is enabled.
 	if !strings.EqualFold(os.Getenv("MINIO_BROWSER"), "off") {
-		registerWebRouter(mux, webHandlers)
+		registerWebRouter(mux)
 	}
 
-	// Add new routers here.
-	registerAPIRouter(mux, apiHandlers)
+	// Add API router.
+	registerAPIRouter(mux)
 
 	// List of some generic handlers which are applied for all incoming requests.
 	var handlerFns = []HandlerFunc{

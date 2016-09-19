@@ -428,16 +428,6 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 		size = sizeWritten
 	}
 
-	// Validate if payload is valid.
-	if isSignVerify(data) {
-		if err = data.(*signVerifyReader).Verify(); err != nil {
-			// Incoming payload wrong, delete the temporary object.
-			xl.deleteObject(minioMetaBucket, tmpPartPath)
-			// Returns md5 mismatch.
-			return "", toObjectErr(err, bucket, object)
-		}
-	}
-
 	// Calculate new md5sum.
 	newMD5Hex := hex.EncodeToString(md5Writer.Sum(nil))
 	if md5Hex != "" {

@@ -222,8 +222,9 @@ func TestErasureReadUtils(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	objLayer, err := getXLObjectLayer(disks, nil)
+	objLayer, _, err := initObjectLayer(disks, nil)
 	if err != nil {
+		removeRoots(disks)
 		t.Fatal(err)
 	}
 	defer removeRoots(disks)

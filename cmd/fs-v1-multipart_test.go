@@ -31,10 +31,7 @@ func TestNewMultipartUploadFaultyDisk(t *testing.T) {
 	// Prepare for tests
 	disk := filepath.Join(os.TempDir(), "minio-"+nextSuffix())
 	defer removeAll(disk)
-	obj, err := newFSObjects(disk)
-	if err != nil {
-		t.Fatal("Cannot create a new FS object: ", err)
-	}
+	obj := initFSObjects(disk, t)
 
 	fs := obj.(fsObjects)
 	bucketName := "bucket"
@@ -67,18 +64,14 @@ func TestPutObjectPartFaultyDisk(t *testing.T) {
 	// Prepare for tests
 	disk := filepath.Join(os.TempDir(), "minio-"+nextSuffix())
 	defer removeAll(disk)
-	obj, err := newFSObjects(disk)
-	if err != nil {
-		t.Fatal("Cannot create a new FS object: ", err)
-	}
-
+	obj := initFSObjects(disk, t)
 	fs := obj.(fsObjects)
 	bucketName := "bucket"
 	objectName := "object"
 	data := []byte("12345")
 	dataLen := int64(len(data))
 
-	if err = obj.MakeBucket(bucketName); err != nil {
+	if err := obj.MakeBucket(bucketName); err != nil {
 		t.Fatal("Cannot create bucket, err: ", err)
 	}
 
@@ -119,17 +112,14 @@ func TestCompleteMultipartUploadFaultyDisk(t *testing.T) {
 	// Prepare for tests
 	disk := filepath.Join(os.TempDir(), "minio-"+nextSuffix())
 	defer removeAll(disk)
-	obj, err := newFSObjects(disk)
-	if err != nil {
-		t.Fatal("Cannot create a new FS object: ", err)
-	}
+	obj := initFSObjects(disk, t)
 
 	fs := obj.(fsObjects)
 	bucketName := "bucket"
 	objectName := "object"
 	data := []byte("12345")
 
-	if err = obj.MakeBucket(bucketName); err != nil {
+	if err := obj.MakeBucket(bucketName); err != nil {
 		t.Fatal("Cannot create bucket, err: ", err)
 	}
 
@@ -175,17 +165,13 @@ func TestListMultipartUploadsFaultyDisk(t *testing.T) {
 	// Prepare for tests
 	disk := filepath.Join(os.TempDir(), "minio-"+nextSuffix())
 	defer removeAll(disk)
-	obj, err := newFSObjects(disk)
-	if err != nil {
-		t.Fatal("Cannot create a new FS object: ", err)
-	}
-
+	obj := initFSObjects(disk, t)
 	fs := obj.(fsObjects)
 	bucketName := "bucket"
 	objectName := "object"
 	data := []byte("12345")
 
-	if err = obj.MakeBucket(bucketName); err != nil {
+	if err := obj.MakeBucket(bucketName); err != nil {
 		t.Fatal("Cannot create bucket, err: ", err)
 	}
 

@@ -28,8 +28,6 @@ import (
 	"github.com/minio/cli"
 )
 
-var srvConfig serverCmdConfig
-
 var serverFlags = []cli.Flag{
 	cli.StringFlag{
 		Name:  "address",
@@ -65,6 +63,9 @@ ENVIRONMENT VARIABLES:
      MINIO_CACHE_SIZE: Set total cache size in NN[GB|MB|KB]. Defaults to 8GB.
      MINIO_CACHE_EXPIRY: Set cache expiration duration in NN[h|m|s]. Defaults to 72 hours.
 
+  SECURITY:
+     MINIO_SECURE_CONSOLE: Set secure console to '0' to disable printing secret key. Defaults to '1'.
+
 EXAMPLES:
   1. Start minio server.
       $ minio {{.Name}} /home/shared
@@ -98,6 +99,7 @@ type serverCmdConfig struct {
 	serverAddr   string
 	disks        []string
 	ignoredDisks []string
+	storageDisks []StorageAPI
 }
 
 // getListenIPs - gets all the ips to listen on.
@@ -241,13 +243,21 @@ func checkNamingDisks(disks []string) error {
 	return nil
 }
 
-// Check server arguments.
-func checkServerSyntax(c *cli.Context) {
-	if !c.Args().Present() || c.Args().First() == "help" {
-		cli.ShowCommandHelpAndExit(c, "server", 1)
+func validateRemoteDisks(disks []StorageAPI) error {
+	for _, disk := range disks {
+		_, err := disk.DiskInfo()
+		if _, ok := err.(*net.OpError); ok {
+			continue
+		}
+		return err
 	}
-	disks := c.Args()
-	if len(disks) > 1 {
+	return nil
+}
+
+// Validate input disks.
+func validateDisks(disks []string, ignoredDisks []string) []StorageAPI {
+	isXL := len(disks) > 1
+	if isXL {
 		// Validate if input disks have duplicates in them.
 		err := checkDuplicates(disks)
 		fatalIf(err, "Invalid disk arguments for server.")
@@ -262,6 +272,13 @@ func checkServerSyntax(c *cli.Context) {
 		err = checkNamingDisks(disks)
 		fatalIf(err, "Invalid disk arguments for server.")
 	}
+	storageDisks, err := initStorageDisks(disks, ignoredDisks)
+	fatalIf(err, "Unable to initialize storage disks.")
+	if isXL {
+		err = validateRemoteDisks(storageDisks)
+		fatalIf(err, "Unable to validate remote disks.")
+	}
+	return storageDisks
 }
 
 // Extract port number from address address should be of the form host:port.
@@ -296,57 +313,21 @@ func isDistributedSetup(disks []string) (isDist bool) {
 	return isDist
 }
 
-// Format disks before initialization object layer.
-func formatDisks(disks, ignoredDisks []string) error {
-	storageDisks, err := waitForFormattingDisks(disks, ignoredDisks)
-	for _, storage := range storageDisks {
-		if storage == nil {
-			continue
-		}
-		switch store := storage.(type) {
-		// Closing associated TCP connections since
-		// []StorageAPI is garbage collected eventually.
-		case networkStorage:
-			store.rpcClient.Close()
-		}
-	}
-	if err != nil {
-		return err
-	}
-	if isLocalStorage(disks[0]) {
-		// notify every one else that they can try init again.
-		for _, storage := range storageDisks {
-			switch store := storage.(type) {
-			// Closing associated TCP connections since
-			// []StorageAPI is garbage collected
-			// eventually.
-			case networkStorage:
-				var reply GenericReply
-				_ = store.rpcClient.Call("Storage.TryInitHandler", &GenericArgs{}, &reply)
-			}
-		}
-	}
-	return nil
-}
-
 // serverMain handler called for 'minio server' command.
 func serverMain(c *cli.Context) {
-	// Check 'server' cli arguments.
-	checkServerSyntax(c)
-
-	// Initialize server config.
-	initServerConfig(c)
-
-	// If https.
-	tls := isSSL()
+	if !c.Args().Present() || c.Args().First() == "help" {
+		cli.ShowCommandHelpAndExit(c, "server", 1)
+	}
 
 	// Server address.
 	serverAddress := c.String("address")
 
 	// Check if requested port is available.
 	port := getPort(serverAddress)
-	err := checkPortAvailability(port)
-	fatalIf(err, "Port unavailable %d", port)
+	fatalIf(checkPortAvailability(port), "Port unavailable %d", port)
+
+	// Saves port in a globally accessible value.
+	globalMinioPort = port
 
 	// Disks to be ignored in server init, to skip format healing.
 	ignoredDisks := strings.Split(c.String("ignore-disks"), ",")
@@ -354,8 +335,35 @@ func serverMain(c *cli.Context) {
 	// Disks to be used in server init.
 	disks := c.Args()
 
-	isDist := isDistributedSetup(disks)
+	// Check 'server' cli arguments.
+	storageDisks := validateDisks(disks, ignoredDisks)
+
+	// Initialize server config.
+	initServerConfig(c)
+
+	// If https.
+	tls := isSSL()
+
+	// First disk argument check if it is local.
+	firstDisk := isLocalStorage(disks[0])
+
+	// Initialize and monitor shutdown signals.
+	err := initGracefulShutdown(os.Exit)
+	fatalIf(err, "Unable to initialize graceful shutdown operation")
+
+	// Configure server.
+	srvConfig := serverCmdConfig{
+		serverAddr:   serverAddress,
+		disks:        disks,
+		ignoredDisks: ignoredDisks,
+		storageDisks: storageDisks,
+	}
+
+	// Configure server.
+	handler := configureServerHandler(srvConfig)
+
 	// Set nodes for dsync for distributed setup.
+	isDist := isDistributedSetup(disks)
 	if isDist {
 		err = initDsyncNodes(disks, port)
 		fatalIf(err, "Unable to initialize distributed locking")
@@ -364,20 +372,7 @@ func serverMain(c *cli.Context) {
 	// Initialize name space lock.
 	initNSLock(isDist)
 
-	// Configure server.
-	srvConfig = serverCmdConfig{
-		serverAddr:   serverAddress,
-		disks:        disks,
-		ignoredDisks: ignoredDisks,
-	}
-
-	// Initialize and monitor shutdown signals.
-	err = initGracefulShutdown(os.Exit)
-	fatalIf(err, "Unable to initialize graceful shutdown operation")
-
-	// Configure server.
-	handler := configureServerHandler(srvConfig)
-
+	// Initialize a new HTTP server.
 	apiServer := NewServerMux(serverAddress, handler)
 
 	// Fetch endpoints which we are going to serve from.
@@ -405,27 +400,23 @@ func serverMain(c *cli.Context) {
 	}(tls, wait)
 
 	// Wait for formatting of disks.
-	err = formatDisks(disks, ignoredDisks)
-	if err != nil {
-		// FIXME: call graceful exit
-		errorIf(err, "formatting storage disks failed")
-		return
-	}
+	err = waitForFormatDisks(firstDisk, endPoints[0], storageDisks)
+	fatalIf(err, "formatting storage disks failed")
 
 	// Once formatted, initialize object layer.
-	newObject, err := newObjectLayer(disks, ignoredDisks)
-	if err != nil {
-		// FIXME: call graceful exit
-		errorIf(err, "intializing object layer failed")
-		return
-	}
-
-	// Prints the formatted startup message.
-	printStartupMessage(endPoints)
+	newObject, err := newObjectLayer(storageDisks)
+	fatalIf(err, "intializing object layer failed")
 
 	objLayerMutex.Lock()
 	globalObjectAPI = newObject
 	objLayerMutex.Unlock()
+
+	// Initialize a new event notifier.
+	err = initEventNotifier(newObjectLayerFn())
+	fatalIf(err, "Unable to initialize event notification.")
+
+	// Prints the formatted startup message once object layer is initialized.
+	printStartupMessage(endPoints)
 
 	// Waits on the server.
 	<-wait

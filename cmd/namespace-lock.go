@@ -72,10 +72,6 @@ func initNSLock(isDist bool) {
 	nsMutex.debugLockMap = make(map[nsParam]*debugLockInfoPerVolumePath)
 }
 
-func (n *nsLockMap) initLockInfoForVolumePath(param nsParam) {
-	n.debugLockMap[param] = newDebugLockInfoPerVolumePath()
-}
-
 // RWLocker - interface that any read-write locking library should implement.
 type RWLocker interface {
 	sync.Locker

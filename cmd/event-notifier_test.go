@@ -90,27 +90,24 @@ func testEventNotify(obj ObjectLayer, instanceType string, t TestErrHandler) {
 
 // Tests various forms of inititalization of event notifier.
 func TestInitEventNotifier(t *testing.T) {
-	disk, err := getRandomDisks(1)
+	disks, err := getRandomDisks(1)
 	if err != nil {
 		t.Fatal("Unable to create directories for FS backend. ", err)
 	}
-	fs, err := getSingleNodeObjectLayer(disk[0])
+	defer removeRoots(disks)
+	fs, _, err := initObjectLayer(disks, nil)
 	if err != nil {
 		t.Fatal("Unable to initialize FS backend.", err)
 	}
 	nDisks := 16
-	disks, err := getRandomDisks(nDisks)
+	disks, err = getRandomDisks(nDisks)
 	if err != nil {
 		t.Fatal("Unable to create directories for XL backend. ", err)
 	}
-	xl, err := getXLObjectLayer(disks, nil)
+	defer removeRoots(disks)
+	xl, _, err := initObjectLayer(disks, nil)
 	if err != nil {
 		t.Fatal("Unable to initialize XL backend.", err)
-	}
-
-	disks = append(disks, disk...)
-	for _, d := range disks {
-		defer removeAll(d)
 	}
 
 	// Collection of test cases for inititalizing event notifier.
@@ -156,11 +153,11 @@ func TestInitEventNotifierFaultyDisks(t *testing.T) {
 	defer removeAll(rootPath)
 
 	disk, err := getRandomDisks(1)
-	defer removeAll(disk[0])
 	if err != nil {
 		t.Fatal("Unable to create directories for FS backend. ", err)
 	}
-	obj, err := getSingleNodeObjectLayer(disk[0])
+	defer removeAll(disk[0])
+	obj, _, err := initObjectLayer(disk, nil)
 	if err != nil {
 		t.Fatal("Unable to initialize FS backend.", err)
 	}
@@ -210,7 +207,7 @@ func TestInitEventNotifierWithAMQP(t *testing.T) {
 	if err != nil {
 		t.Fatal("Unable to create directories for FS backend. ", err)
 	}
-	fs, err := getSingleNodeObjectLayer(disk[0])
+	fs, _, err := initObjectLayer(disk, nil)
 	if err != nil {
 		t.Fatal("Unable to initialize FS backend.", err)
 	}
@@ -237,7 +234,7 @@ func TestInitEventNotifierWithElasticSearch(t *testing.T) {
 	if err != nil {
 		t.Fatal("Unable to create directories for FS backend. ", err)
 	}
-	fs, err := getSingleNodeObjectLayer(disk[0])
+	fs, _, err := initObjectLayer(disk, nil)
 	if err != nil {
 		t.Fatal("Unable to initialize FS backend.", err)
 	}
@@ -264,7 +261,7 @@ func TestInitEventNotifierWithRedis(t *testing.T) {
 	if err != nil {
 		t.Fatal("Unable to create directories for FS backend. ", err)
 	}
-	fs, err := getSingleNodeObjectLayer(disk[0])
+	fs, _, err := initObjectLayer(disk, nil)
 	if err != nil {
 		t.Fatal("Unable to initialize FS backend.", err)
 	}
@@ -295,7 +292,7 @@ func TestListenBucketNotification(t *testing.T) {
 	if err != nil {
 		t.Fatal("Unable to create directories for FS backend. ", err)
 	}
-	obj, err := getSingleNodeObjectLayer(disk[0])
+	obj, _, err := initObjectLayer(disk, nil)
 	if err != nil {
 		t.Fatal("Unable to initialize FS backend.", err)
 	}
@@ -325,11 +322,6 @@ func TestListenBucketNotification(t *testing.T) {
 		t.Fatal("Unexpected error:", err)
 	}
 
-	// Validate if minio SNS is configured for an empty topic configs.
-	if isMinioSNSConfigured(listenARN, nil) {
-		t.Fatal("SNS listen shouldn't be configured.")
-	}
-
 	// Check if the config is loaded
 	notificationCfg := globalEventNotifier.GetBucketNotificationConfig(bucketName)
 	if notificationCfg == nil {
@@ -339,8 +331,8 @@ func TestListenBucketNotification(t *testing.T) {
 		t.Fatal("Notification config is not correctly loaded. Exactly one topic and one queue config are expected")
 	}
 
-	// Check if listen notification config is enabled
-	if !isMinioSNSConfigured(listenARN, notificationCfg.TopicConfigs) {
+	// Check if topic ARN is enabled
+	if notificationCfg.TopicConfigs[0].TopicARN != listenARN {
 		t.Fatal("SNS listen is not configured.")
 	}
 

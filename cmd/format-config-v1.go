@@ -149,6 +149,20 @@ func reduceFormatErrs(errs []error, diskCount int) (err error) {
 	return nil
 }
 
+// creates format.json, the FS format info in minioMetaBucket.
+func initFormatFS(storageDisk StorageAPI) error {
+	// Initialize meta volume, if volume already exists ignores it.
+	if err := initMetaVolume([]StorageAPI{storageDisk}); err != nil {
+		return fmt.Errorf("Unable to initialize '.minio.sys' meta volume, %s", err)
+	}
+	return saveFSFormatData(storageDisk, newFSFormatV1())
+}
+
+// loads format.json from minioMetaBucket if it exists.
+func loadFormatFS(storageDisk StorageAPI) (format *formatConfigV1, err error) {
+	return loadFormat(storageDisk)
+}
+
 // loadAllFormats - load all format config from all input disks in parallel.
 func loadAllFormats(bootstrapDisks []StorageAPI) ([]*formatConfigV1, []error) {
 	// Initialize sync waitgroup.
@@ -198,6 +212,17 @@ func loadAllFormats(bootstrapDisks []StorageAPI) ([]*formatConfigV1, []error) {
 // if (jbod inconsistent) return error // phase2
 // if (disks not recognized) // Always error.
 func genericFormatCheck(formatConfigs []*formatConfigV1, sErrs []error) (err error) {
+	if len(formatConfigs) == 1 {
+		// Successfully read, validate further.
+		if sErrs[0] == nil {
+			if !isFSFormat(formatConfigs[0]) {
+				return errFSDiskFormat
+			}
+			return nil
+		} // Returns error here.
+		return sErrs[0]
+	}
+
 	// Calculate the errors.
 	var (
 		errCorruptFormatCount = 0
@@ -390,8 +415,7 @@ func loadFormat(disk StorageAPI) (format *formatConfigV1, err error) {
 	return format, nil
 }
 
-// isFormatNotFound - returns true if all `format.json` are not
-// found on all disks.
+// isFormatNotFound - returns true if all `format.json` are not found on all disks.
 func isFormatNotFound(formats []*formatConfigV1) bool {
 	for _, format := range formats {
 		// One of the `format.json` is found.
@@ -403,8 +427,7 @@ func isFormatNotFound(formats []*formatConfigV1) bool {
 	return true
 }
 
-// isFormatFound - returns true if all input formats are found on
-// all disks.
+// isFormatFound - returns true if all input formats are found on all disks.
 func isFormatFound(formats []*formatConfigV1) bool {
 	for _, format := range formats {
 		// One of `format.json` is not found.

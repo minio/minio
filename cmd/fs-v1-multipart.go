@@ -462,22 +462,11 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 		return "", traceError(IncompleteBody{})
 	}
 
-	// Validate if payload is valid.
-	if isSignVerify(data) {
-		if err := data.(*signVerifyReader).Verify(); err != nil {
-			// Incoming payload wrong, delete the temporary object.
-			fs.storage.DeleteFile(minioMetaBucket, tmpPartPath)
-			// Error return.
-			return "", toObjectErr(traceError(err), bucket, object)
-		}
-	}
-
 	newMD5Hex := hex.EncodeToString(md5Writer.Sum(nil))
 	if md5Hex != "" {
 		if newMD5Hex != md5Hex {
 			// MD5 mismatch, delete the temporary object.
 			fs.storage.DeleteFile(minioMetaBucket, tmpPartPath)
-
 			return "", traceError(BadDigest{md5Hex, newMD5Hex})
 		}
 	}

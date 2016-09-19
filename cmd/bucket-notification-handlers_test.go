@@ -9,7 +9,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
-	"sync"
 	"testing"
 )
 
@@ -157,19 +156,6 @@ func TestSendBucketNotification(t *testing.T) {
 	}
 }
 
-func initMockEventNotifier(objAPI ObjectLayer) error {
-	if objAPI == nil {
-		return errInvalidArgument
-	}
-	globalEventNotifier = &eventNotifier{
-		rwMutex:             &sync.RWMutex{},
-		queueTargets:        nil,
-		notificationConfigs: make(map[string]*notificationConfig),
-		snsTargets:          make(map[string][]chan []NotificationEvent),
-	}
-	return nil
-}
-
 func testGetBucketNotificationHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// get random bucket name.
 	randBucket := getRandomBucketName()
@@ -196,8 +182,8 @@ func testGetBucketNotificationHandler(obj ObjectLayer, instanceType string, t Te
 
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestAPIEndPoints(obj, []string{
-		"GetBucketNotificationHandler",
-		"PutBucketNotificationHandler",
+		"GetBucketNotification",
+		"PutBucketNotification",
 	})
 
 	// initialize the server and obtain the credentials and root.
@@ -212,7 +198,7 @@ func testGetBucketNotificationHandler(obj ObjectLayer, instanceType string, t Te
 	credentials := serverConfig.GetCredential()
 
 	//Initialize global event notifier with mock queue targets.
-	err = initMockEventNotifier(obj)
+	err = initEventNotifier(obj)
 	if err != nil {
 		t.Fatalf("Test %s: Failed to initialize mock event notifier %v",
 			instanceType, err)
@@ -304,8 +290,8 @@ func testGetBucketNotificationHandler(obj ObjectLayer, instanceType string, t Te
 
 	// Nil Object layer
 	nilAPIRouter := initTestAPIEndPoints(nil, []string{
-		"GetBucketNotificationHandler",
-		"PutBucketNotificationHandler",
+		"GetBucketNotification",
+		"PutBucketNotification",
 	})
 	testRec := httptest.NewRecorder()
 	testReq, tErr := newTestSignedRequestV4("GET", getGetBucketNotificationURL("", randBucket),
@@ -344,8 +330,8 @@ func testPutBucketNotificationHandler(obj ObjectLayer, instanceType string, t Te
 
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestAPIEndPoints(obj, []string{
-		"GetBucketNotificationHandler",
-		"PutBucketNotificationHandler",
+		"GetBucketNotification",
+		"PutBucketNotification",
 	})
 
 	// initialize the server and obtain the credentials and root.
@@ -360,7 +346,7 @@ func testPutBucketNotificationHandler(obj ObjectLayer, instanceType string, t Te
 	credentials := serverConfig.GetCredential()
 
 	//Initialize global event notifier with mock queue targets.
-	err = initMockEventNotifier(obj)
+	err = initEventNotifier(obj)
 	if err != nil {
 		t.Fatalf("Test %s: Failed to initialize mock event notifier %v",
 			instanceType, err)
@@ -460,8 +446,8 @@ func testPutBucketNotificationHandler(obj ObjectLayer, instanceType string, t Te
 
 	// Nil Object layer
 	nilAPIRouter := initTestAPIEndPoints(nil, []string{
-		"GetBucketNotificationHandler",
-		"PutBucketNotificationHandler",
+		"GetBucketNotification",
+		"PutBucketNotification",
 	})
 	testRec := httptest.NewRecorder()
 	testReq, tErr := newTestSignedRequestV4("PUT", getPutBucketNotificationURL("", randBucket),
@@ -503,8 +489,8 @@ func testListenBucketNotificationHandler(obj ObjectLayer, instanceType string, t
 
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestAPIEndPoints(obj, []string{
-		"PutBucketNotificationHandler",
-		"ListenBucketNotificationHandler",
+		"PutBucketNotification",
+		"ListenBucketNotification",
 		"PutObject",
 	})
 
@@ -519,8 +505,8 @@ func testListenBucketNotificationHandler(obj ObjectLayer, instanceType string, t
 
 	credentials := serverConfig.GetCredential()
 
-	//Initialize global event notifier with mock queue targets.
-	err = initMockEventNotifier(obj)
+	// Initialize global event notifier with mock queue targets.
+	err = initEventNotifier(obj)
 	if err != nil {
 		t.Fatalf("Test %s: Failed to initialize mock event notifier %v",
 			instanceType, err)
@@ -556,8 +542,8 @@ func testListenBucketNotificationHandler(obj ObjectLayer, instanceType string, t
 		// FIXME: Need to find a way to run valid listen bucket notification test case without blocking the unit test.
 		{randBucket, "", "", invalidEvents, CheckStatus, signatureMismatchError.HTTPStatusCode, ""},
 		{randBucket, tooBigPrefix, "", validEvents, CheckStatus, http.StatusBadRequest, ""},
-		{invalidBucket, "", "", nil, CheckStatus, http.StatusBadRequest, ""},
-		{randBucket, "", "", nil, InvalidAuth, signatureMismatchError.HTTPStatusCode, signatureMismatchError.Code},
+		{invalidBucket, "", "", validEvents, CheckStatus, http.StatusBadRequest, ""},
+		{randBucket, "", "", validEvents, InvalidAuth, signatureMismatchError.HTTPStatusCode, signatureMismatchError.Code},
 	}
 
 	for i, test := range testCases {
@@ -607,8 +593,8 @@ func testListenBucketNotificationHandler(obj ObjectLayer, instanceType string, t
 
 	// Nil Object layer
 	nilAPIRouter := initTestAPIEndPoints(nil, []string{
-		"PutBucketNotificationHandler",
-		"ListenBucketNotificationHandler",
+		"PutBucketNotification",
+		"ListenBucketNotification",
 	})
 	testRec = httptest.NewRecorder()
 	testReq, tErr = newTestSignedRequestV4("GET",
@@ -647,8 +633,8 @@ func testRemoveNotificationConfig(obj ObjectLayer, instanceType string, t TestEr
 
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestAPIEndPoints(obj, []string{
-		"PutBucketNotificationHandler",
-		"ListenBucketNotificationHandler",
+		"PutBucketNotification",
+		"ListenBucketNotification",
 	})
 
 	// initialize the server and obtain the credentials and root.
@@ -663,7 +649,7 @@ func testRemoveNotificationConfig(obj ObjectLayer, instanceType string, t TestEr
 	credentials := serverConfig.GetCredential()
 
 	//Initialize global event notifier with mock queue targets.
-	err = initMockEventNotifier(obj)
+	err = initEventNotifier(obj)
 	if err != nil {
 		t.Fatalf("Test %s: Failed to initialize mock event notifier %v",
 			instanceType, err)

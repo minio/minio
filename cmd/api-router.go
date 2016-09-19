@@ -24,7 +24,12 @@ type objectAPIHandlers struct {
 }
 
 // registerAPIRouter - registers S3 compatible APIs.
-func registerAPIRouter(mux *router.Router, api objectAPIHandlers) {
+func registerAPIRouter(mux *router.Router) {
+	// Initialize API.
+	api := objectAPIHandlers{
+		ObjectAPI: newObjectLayerFn,
+	}
+
 	// API Router
 	apiRouter := mux.NewRoute().PathPrefix("/").Subrouter()
 

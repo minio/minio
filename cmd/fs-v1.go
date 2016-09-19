@@ -20,7 +20,7 @@ import (
 	"crypto/md5"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
+	"fmt"
 	"hash"
 	"io"
 	"os"
@@ -33,8 +33,7 @@ import (
 
 // fsObjects - Implements fs object layer.
 type fsObjects struct {
-	storage      StorageAPI
-	physicalDisk string
+	storage StorageAPI
 
 	// List pool management.
 	listPool *treeWalkPool
@@ -46,73 +45,27 @@ var fsTreeWalkIgnoredErrs = []error{
 	errVolumeNotFound,
 }
 
-// creates format.json, the FS format info in minioMetaBucket.
-func initFormatFS(storageDisk StorageAPI) error {
-	return writeFSFormatData(storageDisk, newFSFormatV1())
-}
-
-// loads format.json from minioMetaBucket if it exists.
-func loadFormatFS(storageDisk StorageAPI) (format formatConfigV1, err error) {
-	// Reads entire `format.json`.
-	buf, err := storageDisk.ReadAll(minioMetaBucket, fsFormatJSONFile)
-	if err != nil {
-		return formatConfigV1{}, err
-	}
-
-	// Unmarshal format config.
-	if err = json.Unmarshal(buf, &format); err != nil {
-		return formatConfigV1{}, err
-	}
-
-	// Return structured `format.json`.
-	return format, nil
-}
-
 // newFSObjects - initialize new fs object layer.
-func newFSObjects(disk string) (ObjectLayer, error) {
-	storage, err := newStorageAPI(disk)
-	if err != nil && err != errDiskNotFound {
-		return nil, err
-	}
-
-	// Attempt to create `.minio.sys`.
-	err = storage.MakeVol(minioMetaBucket)
-	if err != nil {
-		switch err {
-		// Ignore the errors.
-		case errVolumeExists, errDiskNotFound, errFaultyDisk:
-		default:
-			return nil, toObjectErr(err, minioMetaBucket)
-		}
+func newFSObjects(storage StorageAPI) (ObjectLayer, error) {
+	if storage == nil {
+		return nil, errInvalidArgument
 	}
 
 	// Runs house keeping code, like creating minioMetaBucket, cleaning up tmp files etc.
-	if err = fsHouseKeeping(storage); err != nil {
+	if err := fsHouseKeeping(storage); err != nil {
 		return nil, err
 	}
 
-	// loading format.json from minioMetaBucket.
-	// Note: The format.json content is ignored, reserved for future use.
-	format, err := loadFormatFS(storage)
+	// Load format and validate.
+	_, err := loadFormatFS(storage)
 	if err != nil {
-		if err == errFileNotFound {
-			// format.json doesn't exist, create it inside minioMetaBucket.
-			err = initFormatFS(storage)
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			return nil, err
-		}
-	} else if !isFSFormat(format) {
-		return nil, errFSDiskFormat
+		return nil, fmt.Errorf("Unable to recognize backend format, %s", err)
 	}
 
 	// Initialize fs objects.
 	fs := fsObjects{
-		storage:      storage,
-		physicalDisk: disk,
-		listPool:     newTreeWalkPool(globalLookupTimeout),
+		storage:  storage,
+		listPool: newTreeWalkPool(globalLookupTimeout),
 	}
 
 	// Return successfully initialized object layer.
@@ -153,10 +106,12 @@ func (fs fsObjects) Shutdown() error {
 func (fs fsObjects) StorageInfo() StorageInfo {
 	info, err := fs.storage.DiskInfo()
 	errorIf(err, "Unable to get disk info %#v", fs.storage)
-	return StorageInfo{
+	storageInfo := StorageInfo{
 		Total: info.Total,
 		Free:  info.Free,
 	}
+	storageInfo.Backend.Type = FS
+	return storageInfo
 }
 
 /// Bucket operations
@@ -450,16 +405,6 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 		metadata["md5Sum"] = newMD5Hex
 	}
 
-	// Validate if payload is valid.
-	if isSignVerify(data) {
-		if vErr := data.(*signVerifyReader).Verify(); vErr != nil {
-			// Incoming payload wrong, delete the temporary object.
-			fs.storage.DeleteFile(minioMetaBucket, tempObj)
-			// Error return.
-			return ObjectInfo{}, toObjectErr(traceError(vErr), bucket, object)
-		}
-	}
-
 	// md5Hex representation.
 	md5Hex := metadata["md5Sum"]
 	if md5Hex != "" {
@@ -678,9 +623,4 @@ func (fs fsObjects) HealObject(bucket, object string) error {
 // HealListObjects - list objects for healing. Valid only for XL
 func (fs fsObjects) ListObjectsHeal(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
 	return ListObjectsInfo{}, traceError(NotImplemented{})
-}
-
-// HealDiskMetadata -- heal disk metadata, not supported in FS
-func (fs fsObjects) HealDiskMetadata() error {
-	return NotImplemented{}
 }

@@ -564,6 +564,18 @@ func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	}
 }
 
+func initFSObjectsB(disk string, t *testing.B) (obj ObjectLayer) {
+	storageDisks, err := initStorageDisks([]string{disk}, nil)
+	if err != nil {
+		t.Fatal("Unexpected err: ", err)
+	}
+	obj, err = newFSObjects(storageDisks[0])
+	if err != nil {
+		t.Fatal("Unexpected err: ", err)
+	}
+	return obj
+}
+
 func BenchmarkListObjects(b *testing.B) {
 	// Make a temporary directory to use as the obj.
 	directory, err := ioutil.TempDir("", "minio-list-benchmark")
@@ -573,10 +585,7 @@ func BenchmarkListObjects(b *testing.B) {
 	defer removeAll(directory)
 
 	// Create the obj.
-	obj, err := newFSObjects(directory)
-	if err != nil {
-		b.Fatal(err)
-	}
+	obj := initFSObjectsB(directory, b)
 
 	// Create a bucket.
 	err = obj.MakeBucket("ls-benchmark-bucket")

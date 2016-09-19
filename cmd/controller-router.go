@@ -28,7 +28,13 @@ const (
 )
 
 // Register controller RPC handlers.
-func registerControllerRPCRouter(mux *router.Router, ctrlHandlers *controllerAPIHandlers) {
+func registerControllerRPCRouter(mux *router.Router, srvCmdConfig serverCmdConfig) {
+	// Initialize Controller.
+	ctrlHandlers := &controllerAPIHandlers{
+		ObjectAPI:    newObjectLayerFn,
+		StorageDisks: srvCmdConfig.storageDisks,
+	}
+
 	ctrlRPCServer := rpc.NewServer()
 	ctrlRPCServer.RegisterName("Controller", ctrlHandlers)
 
@@ -38,5 +44,6 @@ func registerControllerRPCRouter(mux *router.Router, ctrlHandlers *controllerAPI
 
 // Handler for object healing.
 type controllerAPIHandlers struct {
-	ObjectAPI func() ObjectLayer
+	ObjectAPI    func() ObjectLayer
+	StorageDisks []StorageAPI
 }

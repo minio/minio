@@ -609,16 +609,6 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 		}
 	}
 
-	// Validate if payload is valid.
-	if isSignVerify(data) {
-		if vErr := data.(*signVerifyReader).Verify(); vErr != nil {
-			// Incoming payload wrong, delete the temporary object.
-			xl.deleteObject(minioMetaTmpBucket, tempObj)
-			// Error return.
-			return ObjectInfo{}, toObjectErr(traceError(vErr), bucket, object)
-		}
-	}
-
 	// md5Hex representation.
 	md5Hex := metadata["md5Sum"]
 	if md5Hex != "" {

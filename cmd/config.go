@@ -83,15 +83,6 @@ func isConfigFileExists() bool {
 	return false
 }
 
-// mustGetConfigFile must get server config file.
-func mustGetConfigFile() string {
-	configFile, err := getConfigFile()
-	if err != nil {
-		return ""
-	}
-	return configFile
-}
-
 // getConfigFile get server config file.
 func getConfigFile() (string, error) {
 	configPath, err := getConfigPath()

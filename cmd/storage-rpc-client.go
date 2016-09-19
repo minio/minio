@@ -100,8 +100,7 @@ func newRPCClient(networkPath string) (StorageAPI, error) {
 
 	// Dial minio rpc storage http path.
 	rpcPath := path.Join(storageRPCPath, netPath)
-	port := getPort(srvConfig.serverAddr)
-	rpcAddr := netAddr + ":" + strconv.Itoa(port)
+	rpcAddr := netAddr + ":" + strconv.Itoa(globalMinioPort)
 	// Initialize rpc client with network address and rpc path.
 	cred := serverConfig.GetCredential()
 	rpcClient := newAuthClient(&authConfig{
@@ -121,6 +120,11 @@ func newRPCClient(networkPath string) (StorageAPI, error) {
 
 	// Returns successfully here.
 	return ndisk, nil
+}
+
+// Stringer interface compatible representation of network device.
+func (n networkStorage) String() string {
+	return n.netAddr + ":" + n.netPath
 }
 
 // DiskInfo - fetch disk information for a remote disk.

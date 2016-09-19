@@ -23,7 +23,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"testing"
 
 	"github.com/minio/cli"
@@ -167,11 +166,11 @@ func TestCheckServerSyntax(t *testing.T) {
 	app := cli.NewApp()
 	app.Commands = []cli.Command{serverCmd}
 	serverFlagSet := flag.NewFlagSet("server", 0)
-	ctx := cli.NewContext(app, serverFlagSet, nil)
+	cli.NewContext(app, serverFlagSet, nil)
 	disksGen := func(n int) []string {
-		var disks []string
-		for i := 0; i < n; i++ {
-			disks = append(disks, "disk"+strconv.Itoa(i))
+		disks, err := getRandomDisks(n)
+		if err != nil {
+			t.Fatalf("Unable to initialie disks %s", err)
 		}
 		return disks
 	}
@@ -181,12 +180,13 @@ func TestCheckServerSyntax(t *testing.T) {
 		disksGen(8),
 		disksGen(16),
 	}
-	for i, test := range testCases {
-		err := serverFlagSet.Parse(test)
+	for i, disks := range testCases {
+		err := serverFlagSet.Parse(disks)
 		if err != nil {
-			t.Errorf("Test %d failed to parse arguments %s", i+1, test)
+			t.Errorf("Test %d failed to parse arguments %s", i+1, disks)
 		}
-		checkServerSyntax(ctx)
+		defer removeRoots(disks)
+		_ = validateDisks(disks, nil)
 	}
 }
 
