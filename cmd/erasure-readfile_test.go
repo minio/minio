@@ -435,7 +435,7 @@ func TestErasureReadFileRandomOffsetLength(t *testing.T) {
 	}
 
 	// To generate random offset/length.
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	r := rand.New(rand.NewSource(time.Now().UTC().UnixNano()))
 
 	// create pool buffer which will be used by erasureReadFile for
 	// reading from disks and erasure decoding.

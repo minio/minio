@@ -83,7 +83,7 @@ func generateSystemLockResponse() (SystemLockState, error) {
 			opsState.LockOrigin = nsMutex.debugLockMap[param].lockInfo[opsID].lockOrigin
 			opsState.LockType = nsMutex.debugLockMap[param].lockInfo[opsID].lockType
 			opsState.Status = nsMutex.debugLockMap[param].lockInfo[opsID].status
-			opsState.StatusSince = time.Now().Sub(nsMutex.debugLockMap[param].lockInfo[opsID].since).String()
+			opsState.StatusSince = time.Now().UTC().Sub(nsMutex.debugLockMap[param].lockInfo[opsID].since).String()
 
 			volLockInfo.LockDetailsOnObject = append(volLockInfo.LockDetailsOnObject, opsState)
 		}
