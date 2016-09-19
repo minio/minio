@@ -50,18 +50,12 @@ var supportedConditionsKey = set.CreateStringSet("s3:prefix", "s3:max-keys")
 // supportedEffectMap - supported effects.
 var supportedEffectMap = set.CreateStringSet("Allow", "Deny")
 
-// policyUser - canonical users list.
-type policyUser struct {
-	AWS           set.StringSet `json:"AWS,omitempty"`
-	CanonicalUser set.StringSet `json:"CanonicalUser,omitempty"`
-}
-
 // Statement - minio policy statement
 type policyStatement struct {
 	Actions    set.StringSet                       `json:"Action"`
 	Conditions map[string]map[string]set.StringSet `json:"Condition,omitempty"`
 	Effect     string
-	Principal  policyUser    `json:"Principal"`
+	Principal  interface{}   `json:"Principal"`
 	Resources  set.StringSet `json:"Resource"`
 	Sid        string
 }
@@ -131,8 +125,51 @@ func isValidResources(resources set.StringSet) (err error) {
 	return nil
 }
 
+// Parse principals parses a incoming json. Handles cases for
+// these three combinations.
+// - "Principal": "*",
+// - "Principal": { "AWS" : "*" }
+// - "Principal": { "AWS" : [ "*" ]}
+func parsePrincipals(principal interface{}) set.StringSet {
+	principals, ok := principal.(map[string]interface{})
+	if !ok {
+		var principalStr string
+		principalStr, ok = principal.(string)
+		if ok {
+			return set.CreateStringSet(principalStr)
+		}
+	} // else {
+	var principalStrs []string
+	for _, p := range principals {
+		principalStr, isStr := p.(string)
+		if !isStr {
+			principalsAdd, isInterface := p.([]interface{})
+			if !isInterface {
+				principalStrsAddr, isStrs := p.([]string)
+				if !isStrs {
+					continue
+				}
+				principalStrs = append(principalStrs, principalStrsAddr...)
+			} else {
+				for _, pa := range principalsAdd {
+					var pstr string
+					pstr, isStr = pa.(string)
+					if !isStr {
+						continue
+					}
+					principalStrs = append(principalStrs, pstr)
+				}
+			}
+			continue
+		} // else {
+		principalStrs = append(principalStrs, principalStr)
+	}
+	return set.CreateStringSet(principalStrs...)
+}
+
 // isValidPrincipals - are valid principals.
-func isValidPrincipals(principals set.StringSet) (err error) {
+func isValidPrincipals(principal interface{}) (err error) {
+	principals := parsePrincipals(principal)
 	// Statement principal should have a value.
 	if len(principals) == 0 {
 		err = errors.New("Principal cannot be empty.")
@@ -274,7 +311,7 @@ func parseBucketPolicy(bucketPolicyReader io.Reader, policy *bucketPolicy) (err 
 			return err
 		}
 		// Statement principal should be supported format.
-		if err := isValidPrincipals(statement.Principal.AWS); err != nil {
+		if err := isValidPrincipals(statement.Principal); err != nil {
 			return err
 		}
 		// Statement actions should be valid.
