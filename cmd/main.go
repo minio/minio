@@ -79,7 +79,8 @@ func init() {
 
 func migrate() {
 	// Migrate config file
-	migrateConfig()
+	err := migrateConfig()
+	fatalIf(err, "Config migration failed.")
 
 	// Migrate other configs here.
 }
