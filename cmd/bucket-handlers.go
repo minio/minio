@@ -82,6 +82,7 @@ func (api objectAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r *
 		}
 	case authTypeSigned, authTypePresigned:
 		if s3Error := isReqAuthenticated(r); s3Error != ErrNone {
+			errorIf(errSignatureMismatch, dumpRequest(r))
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
@@ -137,6 +138,7 @@ func (api objectAPIHandlers) ListMultipartUploadsHandler(w http.ResponseWriter, 
 		}
 	case authTypePresigned, authTypeSigned:
 		if s3Error := isReqAuthenticated(r); s3Error != ErrNone {
+			errorIf(errSignatureMismatch, dumpRequest(r))
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
@@ -183,6 +185,7 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 
 	// List buckets does not support bucket policies, no need to enforce it.
 	if s3Error := checkAuth(r); s3Error != ErrNone {
+		errorIf(errSignatureMismatch, dumpRequest(r))
 		writeErrorResponse(w, r, s3Error, r.URL.Path)
 		return
 	}
@@ -228,6 +231,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		}
 	case authTypePresigned, authTypeSigned:
 		if s3Error := isReqAuthenticated(r); s3Error != ErrNone {
+			errorIf(errSignatureMismatch, dumpRequest(r))
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
@@ -343,6 +347,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 
 	// PutBucket does not support policies, use checkAuth to validate signature.
 	if s3Error := checkAuth(r); s3Error != ErrNone {
+		errorIf(errSignatureMismatch, dumpRequest(r))
 		writeErrorResponse(w, r, s3Error, r.URL.Path)
 		return
 	}
@@ -477,6 +482,7 @@ func (api objectAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.Re
 		}
 	case authTypePresigned, authTypeSigned:
 		if s3Error := isReqAuthenticated(r); s3Error != ErrNone {
+			errorIf(errSignatureMismatch, dumpRequest(r))
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
@@ -500,6 +506,7 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 
 	// DeleteBucket does not support bucket policies, use checkAuth to validate signature.
 	if s3Error := checkAuth(r); s3Error != ErrNone {
+		errorIf(errSignatureMismatch, dumpRequest(r))
 		writeErrorResponse(w, r, s3Error, r.URL.Path)
 		return
 	}

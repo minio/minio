@@ -32,6 +32,8 @@ import (
 	"sync"
 	"syscall"
 
+	"encoding/json"
+
 	"github.com/pkg/profile"
 )
 
@@ -326,4 +328,21 @@ func startMonitorShutdownSignal(onExitFn onExitFunc) error {
 	}()
 	// Successfully started routine.
 	return nil
+}
+
+// dump the request into a string in JSON format.
+func dumpRequest(r *http.Request) string {
+	header := cloneHeader(r.Header)
+	header.Set("Host", r.Host)
+	req := struct {
+		Method string      `json:"method"`
+		Path   string      `json:"path"`
+		Query  string      `json:"query"`
+		Header http.Header `json:"header"`
+	}{r.Method, r.URL.Path, r.URL.RawQuery, header}
+	jsonBytes, err := json.Marshal(req)
+	if err != nil {
+		return "<error dumping request>"
+	}
+	return string(jsonBytes)
 }

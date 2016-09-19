@@ -19,11 +19,12 @@ package cmd
 import (
 	"crypto/hmac"
 	"encoding/hex"
-	"github.com/minio/sha256-simd"
 	"net/http"
 	"regexp"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/minio/sha256-simd"
 )
 
 // http Header "x-amz-content-sha256" == "UNSIGNED-PAYLOAD" indicates that the
