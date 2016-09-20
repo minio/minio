@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -158,8 +159,13 @@ func checkMainSyntax(c *cli.Context) {
 func Main() {
 	app := registerApp()
 	app.Before = func(c *cli.Context) error {
+
+		configDir := c.GlobalString("config-dir")
+		if configDir == "" {
+			fatalIf(errors.New("Config directory is empty"), "Unable to get config file.")
+		}
 		// Sets new config folder.
-		setGlobalConfigPath(c.GlobalString("config-dir"))
+		setGlobalConfigPath(configDir)
 
 		// Valid input arguments to main.
 		checkMainSyntax(c)

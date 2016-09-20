@@ -163,20 +163,12 @@ func TestServerConfigMigrateFaultyConfig(t *testing.T) {
 	setGlobalConfigPath(rootPath)
 	configPath := rootPath + "/" + globalMinioConfigFile
 
-	/* for i := 2; i <= lastConfigVersion; i++ {
-		// Create a corrupted config file
-		if err := ioutil.WriteFile(configPath, []byte("{ \"version\":\""+strconv.Itoa(i)+""), 0644); err != nil {
-			t.Fatal("Unexpected error: ", err)
-		}
-		if err := migrateConfig(); err == nil {
-			t.Fatal("migrateConfig() should fail with a corrupted json")
-		}
-	} */
-
+	// Create a corrupted config file
 	if err := ioutil.WriteFile(configPath, []byte("{ \"version\":\""), 0644); err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
 
+	// Test different migrate versions and be sure they are returning an error
 	if err := migrateV2ToV3(); err == nil {
 		t.Fatal("migrateConfigV2ToV3() should fail with a corrupted json")
 	}
