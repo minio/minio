@@ -240,3 +240,15 @@ func cleanupDir(storage StorageAPI, volume, dirPath string) error {
 	err := delFunc(retainSlash(pathJoin(dirPath)))
 	return err
 }
+
+// Checks whether bucket exists.
+func isBucketExist(bucket string, obj ObjectLayer) error {
+	if !IsValidBucketName(bucket) {
+		return BucketNameInvalid{Bucket: bucket}
+	}
+	_, err := obj.GetBucketInfo(bucket)
+	if err != nil {
+		return BucketNotFound{Bucket: bucket}
+	}
+	return nil
+}
