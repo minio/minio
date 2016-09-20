@@ -204,7 +204,7 @@ func eventNotify(event eventData) {
 			targetLog := globalEventNotifier.GetQueueTarget(qConfig.QueueARN)
 			if targetLog != nil {
 				targetLog.WithFields(logrus.Fields{
-					"Key":       objectName,
+					"Key":       path.Join(event.Bucket, objectName),
 					"EventType": eventType,
 					"Records":   notificationEvent,
 				}).Info()
