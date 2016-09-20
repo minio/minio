@@ -741,7 +741,7 @@ func (api objectAPIHandlers) ListObjectPartsHandler(w http.ResponseWriter, r *ht
 	writeSuccessResponse(w, encodedSuccessResponse)
 }
 
-// CompleteMultipartUploadHandler - Complete multipart upload
+// CompleteMultipartUploadHandler - Complete multipart upload.
 func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -802,29 +802,11 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		part.ETag = strings.TrimSuffix(part.ETag, "\"")
 		completeParts = append(completeParts, part)
 	}
-	// Complete multipart upload.
-	// Send 200 OK
-	setCommonHeaders(w)
-	w.WriteHeader(http.StatusOK)
-	// Xml headers need to be sent before we possibly send whitespace characters
-	// to the client.
-	_, err = w.Write([]byte(xml.Header))
+
+	md5Sum, err = objectAPI.CompleteMultipartUpload(bucket, object, uploadID, completeParts)
+
 	if err != nil {
-		errorIf(err, "Unable to write XML header for complete multipart upload")
-		writeErrorResponseNoHeader(w, r, ErrInternalError, r.URL.Path)
-		return
-	}
-
-	doneCh := make(chan struct{})
-
-	// Signal that completeMultipartUpload is over via doneCh
-	go func(doneCh chan<- struct{}) {
-		md5Sum, err = objectAPI.CompleteMultipartUpload(bucket, object, uploadID, completeParts)
-		doneCh <- struct{}{}
-	}(doneCh)
-
-	sendWhiteSpaceChars(w, doneCh)
-	if err != nil {
+		err = errorCause(err)
 		errorIf(err, "Unable to complete multipart upload.")
 		switch oErr := err.(type) {
 		case PartTooSmall:
@@ -832,7 +814,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 			writePartSmallErrorResponse(w, r, oErr)
 		default:
 			// Handle all other generic issues.
-			writeErrorResponseNoHeader(w, r, toAPIErrorCode(err), r.URL.Path)
+			writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		}
 		return
 	}
@@ -841,7 +823,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	location := getLocation(r)
 	// Generate complete multipart response.
 	response := generateCompleteMultpartUploadResponse(bucket, object, location, md5Sum)
-	encodedSuccessResponse, err := xml.Marshal(response)
+	encodedSuccessResponse := encodeResponse(response)
 	if err != nil {
 		errorIf(err, "Unable to parse CompleteMultipartUpload response")
 		writeErrorResponseNoHeader(w, r, ErrInternalError, r.URL.Path)

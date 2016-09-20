@@ -20,6 +20,21 @@ package cmd
 
 import "net/http"
 
+// Represents additional fields necessary for ErrPartTooSmall S3 error.
+type completeMultipartAPIError struct {
+	// Proposed size represents uploaded size of the part.
+	ProposedSize int64
+	// Minimum size allowed epresents the minimum size allowed per
+	// part. Defaults to 5MB.
+	MinSizeAllowed int64
+	// Part number of the part which is incorrect.
+	PartNumber int
+	// ETag of the part which is incorrect.
+	PartETag string
+	// Other default XML error responses.
+	APIErrorResponse
+}
+
 // writeErrorResponsePartTooSmall - function is used specifically to
 // construct a proper error response during CompleteMultipartUpload
 // when one of the parts is < 5MB.
@@ -28,25 +43,16 @@ import "net/http"
 // error. So we construct a new type which lies well within the scope
 // of this function.
 func writePartSmallErrorResponse(w http.ResponseWriter, r *http.Request, err PartTooSmall) {
-	// Represents additional fields necessary for ErrPartTooSmall S3 error.
-	type completeMultipartAPIError struct {
-		// Proposed size represents uploaded size of the part.
-		ProposedSize int64
-		// Minimum size allowed epresents the minimum size allowed per
-		// part. Defaults to 5MB.
-		MinSizeAllowed int64
-		// Part number of the part which is incorrect.
-		PartNumber int
-		// ETag of the part which is incorrect.
-		PartETag string
-		// Other default XML error responses.
-		APIErrorResponse
-	}
+
+	apiError := getAPIError(toAPIErrorCode(err))
 	// Generate complete multipart error response.
-	errorResponse := getAPIErrorResponse(getAPIError(toAPIErrorCode(err)), r.URL.Path)
+	errorResponse := getAPIErrorResponse(apiError, r.URL.Path)
 	cmpErrResp := completeMultipartAPIError{err.PartSize, int64(5242880), err.PartNumber, err.PartETag, errorResponse}
 	encodedErrorResponse := encodeResponse(cmpErrResp)
-	// Write error body
+
+	// respond with 400 bad request.
+	w.WriteHeader(apiError.HTTPStatusCode)
+	// Write error body.
 	w.Write(encodedErrorResponse)
 	w.(http.Flusher).Flush()
 }
