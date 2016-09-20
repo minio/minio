@@ -96,11 +96,29 @@ func newElasticNotify(accountID string) (*logrus.Logger, error) {
 
 // Fire is required to implement logrus hook
 func (q elasticClient) Fire(entry *logrus.Entry) error {
-	_, err := q.Client.Index().Index(q.params.Index).
-		Type("event").
-		BodyJson(entry.Data).
-		Do()
+	// Reflect on eventType and Key on their native type.
+	entryStr, ok := entry.Data["EventType"].(string)
+	if !ok {
+		return nil
+	}
+	keyStr, ok := entry.Data["Key"].(string)
+	if !ok {
+		return nil
+	}
 
+	// If event matches as delete, we purge the previous index.
+	if eventMatch(entryStr, []string{"s3:ObjectRemoved:*"}) {
+		_, err := q.Client.DeleteIndex(keyStr).Do()
+		if err != nil {
+			return err
+		}
+		return nil
+	} // else we update elastic index or create a new one.
+	_, err := q.Client.Index().Index(keyStr).
+		Type("event").
+		BodyJson(map[string]interface{}{
+			"Records": entry.Data["Records"],
+		}).Do()
 	return err
 }
 
