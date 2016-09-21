@@ -27,8 +27,10 @@ package cmd
 import (
 	"bytes"
 	"encoding/hex"
+	"fmt"
 	"net/http"
 	"net/url"
+	"path"
 	"sort"
 	"strconv"
 	"strings"
@@ -416,4 +418,37 @@ func doesSignatureMatch(hashedPayload string, r *http.Request, validateRegion bo
 
 	// Return error none.
 	return ErrNone
+}
+
+// Returns presignedGET url.
+// Called From MinioBrowser via json-RPC.
+func presignedGet(host, bucket, object string) string {
+	cred := serverConfig.GetCredential()
+	region := serverConfig.GetRegion()
+
+	accessKey := cred.AccessKeyID
+	secretKey := cred.SecretAccessKey
+
+	date := time.Now().UTC()
+	dateStr := date.Format("20060102T150405Z")
+	credential := fmt.Sprintf("%s/%s", accessKey, getScope(date, region))
+
+	query := strings.Join([]string{
+		"X-Amz-Algorithm=" + signV4Algorithm,
+		"X-Amz-Credential=" + strings.Replace(credential, "/", "%2F", -1),
+		"X-Amz-Date=" + dateStr,
+		"X-Amz-Expires=" + "604800",
+		"X-Amz-SignedHeaders=host",
+	}, "&")
+
+	path := "/" + path.Join(bucket, object)
+
+	var extractedSignedHeaders http.Header // will be nil as "host" is the only signed header.
+
+	canonicalRequest := getCanonicalRequest(extractedSignedHeaders, unsignedPayload, query, path, "GET", host)
+	stringToSign := getStringToSign(canonicalRequest, date, region)
+	signingKey := getSigningKey(secretKey, date, region)
+	signature := getSignature(signingKey, stringToSign)
+
+	return host + path + "?" + query + "&" + "X-Amz-Signature=" + signature
 }

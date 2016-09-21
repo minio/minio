@@ -625,3 +625,27 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 
 	return nil
 }
+
+// PresignedGETArgs - presigned-get args.
+type PresignedGETArgs struct {
+	Host   string `json:"host"`
+	Bucket string `json:"bucket"`
+	Object string `json:"object"`
+}
+
+// PresignedGETRep - presigned-get reply.
+type PresignedGETRep struct {
+	URL string `json:"url"`
+}
+
+// PresignedGET - returns presigned-GET url.
+func (web *webAPIHandlers) PresignedGET(r *http.Request, args *PresignedGETArgs, reply *PresignedGETRep) error {
+	if !isJWTReqAuthenticated(r) {
+		return &json2.Error{Message: "Unauthorized request"}
+	}
+	if args.Host == "" || args.Bucket == "" || args.Object == "" {
+		return &json2.Error{Message: "Required arguments: Host, Bucket, Object"}
+	}
+	reply.URL = presignedGet(args.Host, args.Bucket, args.Object)
+	return nil
+}
