@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"io"
@@ -102,11 +103,18 @@ func TestSendBucketNotification(t *testing.T) {
 
 	eventCh := make(chan []NotificationEvent)
 
-	var buffer bytes.Buffer
+	// Create a Pipe with FlushWriter on the write-side and bufio.Scanner
+	// on the reader-side to receive notification over the listen channel in a
+	// synchronized manner.
+	pr, pw := io.Pipe()
+	fw := newFlushWriter(pw)
+	scanner := bufio.NewScanner(pr)
+	// Start a go-routine to wait for notification events.
 	go func(listenerCh <-chan []NotificationEvent) {
-		sendBucketNotification(newFlushWriter(&buffer), listenerCh)
+		sendBucketNotification(fw, listenerCh)
 	}(eventCh)
 
+	// Construct notification events to be passed on the events channel.
 	var events []NotificationEvent
 	evTypes := []EventName{
 		ObjectCreatedPut,
@@ -119,10 +127,23 @@ func TestSendBucketNotification(t *testing.T) {
 			Type: evType,
 		}))
 	}
+	// Send notification events to the channel on which sendBucketNotification
+	// is waiting on.
 	eventCh <- events
+
+	// Read from the pipe connected to the ResponseWriter.
+	scanner.Scan()
+	notificationBytes := scanner.Bytes()
+
+	// Close the read-end and send an empty notification event on the channel
+	// to signal sendBucketNotification to terminate.
+	pr.Close()
+	eventCh <- []NotificationEvent{}
 	close(eventCh)
+
+	// Checking if the notification are the same as those sent over the channel.
 	var notifications map[string][]NotificationEvent
-	err = json.Unmarshal(buffer.Bytes(), &notifications)
+	err = json.Unmarshal(notificationBytes, &notifications)
 	if err != nil {
 		t.Fatal("Failed to Unmarshal notification")
 	}
