@@ -224,6 +224,12 @@ func (xl xlObjects) StorageInfo() StorageInfo {
 	// Sort so that the first element is the smallest.
 	sort.Sort(byDiskTotal(disksInfo))
 
+	if len(disksInfo) == 0 {
+		return StorageInfo{
+			Total: -1,
+			Free:  -1,
+		}
+	}
 	// Return calculated storage info, choose the lowest Total and
 	// Free as the total aggregated values. Total capacity is always
 	// the multiple of smallest disk among the disk list.
