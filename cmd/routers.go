@@ -87,10 +87,6 @@ func configureServerHandler(srvCmdConfig serverCmdConfig) http.Handler {
 	storageRPCs, err := newRPCServer(srvCmdConfig)
 	fatalIf(err, "Unable to initialize storage RPC server.")
 
-	// Initialize and monitor shutdown signals.
-	err = initGracefulShutdown(os.Exit)
-	fatalIf(err, "Unable to initialize graceful shutdown operation")
-
 	// Initialize API.
 	apiHandlers := objectAPIHandlers{
 		ObjectAPI: newObjectLayerFn,
