@@ -27,7 +27,7 @@ $ minio --help
 
 ### 源码安装
 
-源码安装只针对开发者和一些高级用户，如果你还没有golang的环境，请安装golang官网安装[How to install Golang](https://docs.minio.io/docs/how-to-install-golang).
+源码安装只针对开发者和一些高级用户，如果你还没有golang的环境，请安装golang官网安装[How to install Golang](https://docs.minio.io/docs/zh-CN/how-to-install-golang).
 
 ```sh
 
@@ -47,22 +47,22 @@ $ chmod +x minio
 $ ./minio --help
 $ ./minio server ~/Photos
 
-Endpoint:  http://10.0.0.10:9000  http://127.0.0.1:9000  http://172.17.0.1:9000
+端点:  http://10.0.0.10:9000  http://127.0.0.1:9000  http://172.17.0.1:9000
 AccessKey: USWUXHGYZQYFYFFIT3RE
 SecretKey: MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03
-Region:    us-east-1
+区域:    us-east-1
 
-Browser Access:
+浏览器访问入口:
    http://10.0.0.10:9000  http://127.0.0.1:9000  http://172.17.0.1:9000
 
-Command-line Access: https://docs.minio.io/docs/minio-client-quickstart-guide
+命令行访问: https://docs.minio.io/docs/zh-CN/minio-client-quickstart-guide
    $ mc config host add myminio http://10.0.0.10:9000 USWUXHGYZQYFYFFIT3RE MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03
 
-Object API (Amazon S3 compatible):
-   Go:         https://docs.minio.io/docs/golang-client-quickstart-guide
-   Java:       https://docs.minio.io/docs/java-client-quickstart-guide
-   Python:     https://docs.minio.io/docs/python-client-quickstart-guide
-   JavaScript: https://docs.minio.io/docs/javascript-client-quickstart-guide
+对象操作API (兼容Amazon S3):
+   Go:         https://docs.minio.io/docs/zh-CN/golang-client-quickstart-guide
+   Java:       https://docs.minio.io/docs/zh-CN/java-client-quickstart-guide
+   Python:     https://docs.minio.io/docs/zh-CN/python-client-quickstart-guide
+   JavaScript: https://docs.minio.io/docs/zh-CN/javascript-client-quickstart-guide
 
 ```
 
@@ -75,22 +75,22 @@ $ chmod 755 minio
 $ ./minio --help
 $ ./minio server ~/Photos
 
-Endpoint:  http://10.0.0.10:9000  http://127.0.0.1:9000  http://172.17.0.1:9000
+端点:  http://10.0.0.10:9000  http://127.0.0.1:9000  http://172.17.0.1:9000
 AccessKey: USWUXHGYZQYFYFFIT3RE
 SecretKey: MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03
-Region:    us-east-1
+区域:    us-east-1
 
-Browser Access:
+浏览器访问入口:
    http://10.0.0.10:9000  http://127.0.0.1:9000  http://172.17.0.1:9000
 
-Command-line Access: https://docs.minio.io/docs/minio-client-quickstart-guide
+命令行访问: https://docs.minio.io/docs/zh-CN/minio-client-quickstart-guide
    $ mc config host add myminio http://10.0.0.10:9000 USWUXHGYZQYFYFFIT3RE MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03
 
-Object API (Amazon S3 compatible):
-   Go:         https://docs.minio.io/docs/golang-client-quickstart-guide
-   Java:       https://docs.minio.io/docs/java-client-quickstart-guide
-   Python:     https://docs.minio.io/docs/python-client-quickstart-guide
-   JavaScript: https://docs.minio.io/docs/javascript-client-quickstart-guide
+对象操作API (兼容Amazon S3):
+   Go:         https://docs.minio.io/docs/zh-CN/golang-client-quickstart-guide
+   Java:       https://docs.minio.io/docs/zh-CN/java-client-quickstart-guide
+   Python:     https://docs.minio.io/docs/zh-CN/python-client-quickstart-guide
+   JavaScript: https://docs.minio.io/docs/zh-CN/javascript-client-quickstart-guide
 
 ```
 
@@ -101,27 +101,27 @@ Object API (Amazon S3 compatible):
 C:\Users\Username\Downloads> minio.exe --help
 C:\Users\Username\Downloads> minio.exe server D:\Photos
 
-Endpoint:  http://10.0.0.10:9000  http://127.0.0.1:9000  http://172.17.0.1:9000
+端点:  http://10.0.0.10:9000  http://127.0.0.1:9000  http://172.17.0.1:9000
 AccessKey: USWUXHGYZQYFYFFIT3RE
 SecretKey: MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03
-Region:    us-east-1
+区域:    us-east-1
 
-Browser Access:
+浏览器访问入口:
    http://10.0.0.10:9000  http://127.0.0.1:9000  http://172.17.0.1:9000
 
-Command-line Access: https://docs.minio.io/docs/minio-client-quickstart-guide
+命令行访问: https://docs.minio.io/docs/zh-CN/minio-client-quickstart-guide
    $ mc.exe config host add myminio http://10.0.0.10:9000 USWUXHGYZQYFYFFIT3RE MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03
 
-Object API (Amazon S3 compatible):
-   Go:         https://docs.minio.io/docs/golang-client-quickstart-guide
-   Java:       https://docs.minio.io/docs/java-client-quickstart-guide
-   Python:     https://docs.minio.io/docs/python-client-quickstart-guide
-   JavaScript: https://docs.minio.io/docs/javascript-client-quickstart-guide
+对象操作API (兼容Amazon S3):
+   Go:         https://docs.minio.io/docs/zh-CN/golang-client-quickstart-guide
+   Java:       https://docs.minio.io/docs/zh-CN/java-client-quickstart-guide
+   Python:     https://docs.minio.io/docs/zh-CN/python-client-quickstart-guide
+   JavaScript: https://docs.minio.io/docs/zh-CN/javascript-client-quickstart-guide
 
 
 ```
 
-### Docker Container
+### Docker
 
 ```sh
 
@@ -129,7 +129,7 @@ $ docker pull minio/minio
 $ docker run -p 9000:9000 minio/minio
 
 ```
-Please visit Minio Docker quickstart guide for more [here](https://docs.minio.io/docs/minio-docker-quickstart-guide)
+访问minio的docker入门指南获得更多内容 [here](https://docs.minio.io/docs/zh-CN/minio-docker-quickstart-guide)
 
 ### FreeBSD
 
@@ -139,26 +139,26 @@ $ chmod 755 minio
 $ ./minio --help
 $ ./minio server ~/Photos
 
-Endpoint:  http://10.0.0.10:9000  http://127.0.0.1:9000  http://172.17.0.1:9000
+端点:  http://10.0.0.10:9000  http://127.0.0.1:9000  http://172.17.0.1:9000
 AccessKey: USWUXHGYZQYFYFFIT3RE
 SecretKey: MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03
-Region:    us-east-1
+区域:    us-east-1
 
-Browser Access:
+浏览器访问入口:
    http://10.0.0.10:9000  http://127.0.0.1:9000  http://172.17.0.1:9000
 
-Command-line Access: https://docs.minio.io/docs/minio-client-quickstart-guide
+命令行访问: https://docs.minio.io/docs/zh-CN/minio-client-quickstart-guide
    $ mc config host add myminio http://10.0.0.10:9000 USWUXHGYZQYFYFFIT3RE MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03
 
-Object API (Amazon S3 compatible):
-   Go:         https://docs.minio.io/docs/golang-client-quickstart-guide
-   Java:       https://docs.minio.io/docs/java-client-quickstart-guide
-   Python:     https://docs.minio.io/docs/python-client-quickstart-guide
-   JavaScript: https://docs.minio.io/docs/javascript-client-quickstart-guide
+对象操作API (兼容Amazon S3):
+   Go:         https://docs.minio.io/docs/zh-CN/golang-client-quickstart-guide
+   Java:       https://docs.minio.io/docs/zh-CN/java-client-quickstart-guide
+   Python:     https://docs.minio.io/docs/zh-CN/python-client-quickstart-guide
+   JavaScript: https://docs.minio.io/docs/zh-CN/javascript-client-quickstart-guide
 
 
 ```
-Please visit official zfs FreeBSD guide for more details [here](https://www.freebsd.org/doc/handbook/zfs-quickstart.html)
+请访问FreeBSD的官网指南获取更多详细信息[here](https://www.freebsd.org/doc/handbook/zfs-quickstart.html)
 
 ## 3. 使用浏览器测试minio服务
 
@@ -183,18 +183,18 @@ $ mc ls myminio/
 
 ```
 
-查看更多的例子请访问 [Minio Client Complete Guide](https://docs.minio.io/docs/minio-client-complete-guide).
+查看更多的例子请访问 [Minio Client Complete Guide](https://docs.minio.io/docs/zh-CN/minio-client-complete-guide).
 
 
-## 5. Explore Further
+## 5. 更多内容
 
-- [Minio Erasure Code QuickStart Guide](https://docs.minio.io/docs/minio-erasure-code-quickstart-guide)
-- [Minio Docker Quickstart Guide](https://docs.minio.io/docs/minio-docker-quickstart-guide)
-- [Use `mc` with Minio Server](https://docs.minio.io/docs/minio-client-quickstart-guide)
-- [Use `aws-cli` with Minio Server](https://docs.minio.io/docs/aws-cli-with-minio)
-- [Use `s3cmd` with Minio Server](https://docs.minio.io/docs/s3cmd-with-minio)
-- [Use `minio-go` SDK with Minio Server](https://docs.minio.io/docs/golang-client-quickstart-guide)
+- [Minio Erasure Code 快速入门](https://docs.minio.io/docs/zh-CN/minio-erasure-code-quickstart-guide)
+- [Minio Docker 快速入门](https://docs.minio.io/docs/zh-CN/minio-docker-quickstart-guide)
+- [使用`mc`测试 Minio Server](https://docs.minio.io/docs/zh-CN/minio-client-quickstart-guide)
+- [使用 `aws-cli` 测试 Minio Server](https://docs.minio.io/docs/zh-CN/aws-cli-with-minio)
+- [使用 `s3cmd` 测试 Minio Server](https://docs.minio.io/docs/zh-CN/s3cmd-with-minio)
+- [使用 `minio-go` SDK ce's测试 Minio Server](https://docs.minio.io/docs/zh-CN/golang-client-quickstart-guide)
 
 
-## 6. Contribute to Minio Project
-Please follow Minio [Contributor's Guide](https://github.com/minio/minio/blob/master/CONTRIBUTING.md)
+## 6. 给Minio项目贡献
+请按照Minio [贡献者指导手册](https://github.com/minio/minio/blob/master/CONTRIBUTING.md)
