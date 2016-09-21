@@ -742,6 +742,9 @@ func testWebGetBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestE
 	rec := httptest.NewRecorder()
 
 	bucketName := getRandomBucketName()
+	if err = obj.MakeBucket(bucketName); err != nil {
+		t.Fatal("Unexpected error: ", err)
+	}
 
 	testCases := []struct {
 		bucketName     string
@@ -767,6 +770,79 @@ func testWebGetBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestE
 		}
 		if testCase.expectedResult != reply.Policy {
 			t.Fatalf("Test %d: expected: %v, got: %v", i+1, testCase.expectedResult, reply.Policy)
+		}
+	}
+}
+
+// Wrapper for calling SetBucketPolicy Handler
+func TestWebHandlerSetBucketPolicyHandler(t *testing.T) {
+	ExecObjectLayerTest(t, testWebSetBucketPolicyHandler)
+}
+
+// testWebSetBucketPolicyHandler - Test SetBucketPolicy web handler
+func testWebSetBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
+	// Register the API end points with XL/FS object layer.
+	apiRouter := initTestWebRPCEndPoint(obj)
+	// initialize the server and obtain the credentials and root.
+	// credentials are necessary to sign the HTTP request.
+	rootPath, err := newTestConfig("us-east-1")
+	if err != nil {
+		t.Fatalf("Init Test config failed")
+	}
+	// remove the root folder after the test ends.
+	defer removeAll(rootPath)
+
+	credentials := serverConfig.GetCredential()
+
+	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKeyID, credentials.SecretAccessKey)
+	if err != nil {
+		t.Fatal("Cannot authenticate")
+	}
+
+	rec := httptest.NewRecorder()
+
+	// Create a bucket
+	bucketName := getRandomBucketName()
+	if err = obj.MakeBucket(bucketName); err != nil {
+		t.Fatal("Unexpected error: ", err)
+	}
+
+	testCases := []struct {
+		bucketName string
+		prefix     string
+		policy     string
+		pass       bool
+	}{
+		// Inexistent bucket
+		{"fooo", "", "readonly", false},
+		// Invalid bucket name
+		{"", "", "readonly", false},
+		// Invalid policy
+		{bucketName, "", "foo", false},
+		// Valid parameters
+		{bucketName, "", "readwrite", true},
+	}
+
+	for i, testCase := range testCases {
+		args := &SetBucketPolicyArgs{BucketName: testCase.bucketName, Prefix: testCase.prefix, Policy: testCase.policy}
+		reply := &WebGenericRep{}
+		// Call SetBucketPolicy RPC
+		req, err := newTestWebRPCRequest("Web.SetBucketPolicy", authorization, args)
+		if err != nil {
+			t.Fatalf("Test %d: Failed to create HTTP request: <ERROR> %v", i+1, err)
+		}
+		apiRouter.ServeHTTP(rec, req)
+		// Check if we have 200 OK
+		if rec.Code != http.StatusOK {
+			t.Fatalf("Test %d: Expected the response status to be 200, but instead found `%d`", i+1, rec.Code)
+		}
+		// Parse RPC response
+		err = getTestWebRPCResponse(rec, &reply)
+		if testCase.pass && err != nil {
+			t.Fatalf("Test %d: Should succeed but it didn't, %v", i+1, err)
+		}
+		if !testCase.pass && err == nil {
+			t.Fatalf("Test %d: Should fail it didn't", i+1)
 		}
 	}
 }

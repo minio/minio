@@ -134,10 +134,11 @@ func getOldBucketsConfigPath() (string, error) {
 // readBucketPolicyJSON - reads bucket policy for an input bucket, returns BucketPolicyNotFound
 // if bucket policy is not found.
 func readBucketPolicyJSON(bucket string, objAPI ObjectLayer) (bucketPolicyReader io.Reader, err error) {
-	// Verify bucket is valid.
-	if !IsValidBucketName(bucket) {
-		return nil, BucketNameInvalid{Bucket: bucket}
+	// Verify if bucket actually exists
+	if e := isBucketExist(bucket, objAPI); e != nil {
+		return nil, e
 	}
+
 	policyPath := pathJoin(bucketConfigPrefix, bucket, policyJSON)
 	objInfo, err := objAPI.GetObjectInfo(minioMetaBucket, policyPath)
 	err = errorCause(err)
@@ -184,10 +185,11 @@ func readBucketPolicy(bucket string, objAPI ObjectLayer) (*bucketPolicy, error) 
 // removeBucketPolicy - removes any previously written bucket policy. Returns BucketPolicyNotFound
 // if no policies are found.
 func removeBucketPolicy(bucket string, objAPI ObjectLayer) error {
-	// Verify bucket is valid.
-	if !IsValidBucketName(bucket) {
-		return BucketNameInvalid{Bucket: bucket}
+	// Verify if bucket actually exists
+	if err := isBucketExist(bucket, objAPI); err != nil {
+		return err
 	}
+
 	policyPath := pathJoin(bucketConfigPrefix, bucket, policyJSON)
 	if err := objAPI.DeleteObject(minioMetaBucket, policyPath); err != nil {
 		errorIf(err, "Unable to remove bucket-policy on bucket %s.", bucket)
@@ -202,9 +204,9 @@ func removeBucketPolicy(bucket string, objAPI ObjectLayer) error {
 
 // writeBucketPolicy - save all bucket policies.
 func writeBucketPolicy(bucket string, objAPI ObjectLayer, reader io.Reader, size int64) error {
-	// Verify if bucket path legal
-	if !IsValidBucketName(bucket) {
-		return BucketNameInvalid{Bucket: bucket}
+	// Verify if bucket actually exists
+	if err := isBucketExist(bucket, objAPI); err != nil {
+		return err
 	}
 
 	policyPath := pathJoin(bucketConfigPrefix, bucket, policyJSON)
