@@ -1314,10 +1314,13 @@ func initTestAPIEndPoints(objLayer ObjectLayer, apiFunctions []string) http.Hand
 		case "ListBuckets":
 			apiRouter.Methods("GET").HandlerFunc(api.ListBucketsHandler)
 		// Register GetObject handler.
-		case "GetObject`":
+		case "GetObject":
 			bucket.Methods("GET").Path("/{object:.+}").HandlerFunc(api.GetObjectHandler)
-		// Register GetObject handler.
-		case "CopyObject`":
+			// Register Delete Object handler.
+		case "DeleteObject":
+			bucket.Methods("DELETE").Path("/{object:.+}").HandlerFunc(api.DeleteObjectHandler)
+		// Register Copy Object  handler.
+		case "CopyObject":
 			bucket.Methods("PUT").Path("/{object:.+}").HeadersRegexp("X-Amz-Copy-Source", ".*?(\\/|%2F).*?").HandlerFunc(api.CopyObjectHandler)
 		// Register PutBucket Policy handler.
 		case "PutBucketPolicy":
@@ -1334,12 +1337,20 @@ func initTestAPIEndPoints(objLayer ObjectLayer, apiFunctions []string) http.Hand
 		// Register HeadBucket handler.
 		case "HeadBucket":
 			bucket.Methods("HEAD").HandlerFunc(api.HeadBucketHandler)
+			// Register New Multipart upload handler.
+		case "NewMultipart":
+			bucket.Methods("POST").Path("/{object:.+}").HandlerFunc(api.NewMultipartUploadHandler).Queries("uploads", "")
+
 		// Register ListMultipartUploads handler.
 		case "ListMultipartUploads":
 			bucket.Methods("GET").HandlerFunc(api.ListMultipartUploadsHandler).Queries("uploads", "")
+			// Register Complete Multipart Upload handler.
+		case "CompleteMultipart":
+			bucket.Methods("POST").Path("/{object:.+}").HandlerFunc(api.CompleteMultipartUploadHandler).Queries("uploadId", "{uploadId:.*}")
 			// Register GetBucketNotification Handler.
 		case "GetBucketNotification":
 			bucket.Methods("GET").HandlerFunc(api.GetBucketNotificationHandler).Queries("notification", "")
+			// Register PutBucketNotification Handler.
 		case "PutBucketNotification":
 			bucket.Methods("PUT").HandlerFunc(api.PutBucketNotificationHandler).Queries("notification", "")
 		// Register all api endpoints by default.

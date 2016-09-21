@@ -520,7 +520,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 // First register the HTTP handler for NewMutlipartUpload, then a HTTP request for NewMultipart upload is made.
 // The UploadID from the response body is parsed and its existance is asserted with an attempt to ListParts using it.
 func TestAPINewMultipartHandler(t *testing.T) {
-	ExecObjectLayerAPITest(t, testAPINewMultipartHandler, []string{"CopyObject"})
+	ExecObjectLayerAPITest(t, testAPINewMultipartHandler, []string{"NewMultipart"})
 }
 
 func testAPINewMultipartHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
@@ -561,7 +561,7 @@ func testAPINewMultipartHandler(obj ObjectLayer, instanceType, bucketName string
 // The objective of the test is to initialte multipart upload on the same object 10 times concurrently,
 // The UploadID from the response body is parsed and its existance is asserted with an attempt to ListParts using it.
 func TestAPINewMultipartHandlerParallel(t *testing.T) {
-	ExecObjectLayerAPITest(t, testAPINewMultipartHandlerParallel, []string{"CopyObject"})
+	ExecObjectLayerAPITest(t, testAPINewMultipartHandlerParallel, []string{"NewMultipart"})
 }
 
 func testAPINewMultipartHandlerParallel(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
@@ -620,7 +620,7 @@ func testAPINewMultipartHandlerParallel(obj ObjectLayer, instanceType, bucketNam
 
 // The UploadID from the response body is parsed and its existance is asserted with an attempt to ListParts using it.
 func TestAPICompleteMultipartHandler(t *testing.T) {
-	ExecObjectLayerAPITest(t, testAPICompleteMultipartHandler, []string{"CopyObject"})
+	ExecObjectLayerAPITest(t, testAPICompleteMultipartHandler, []string{"CompleteMultipart"})
 }
 
 func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
@@ -632,6 +632,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 		hasher.Write(toBeHashed)
 		return hex.EncodeToString(hasher.Sum(nil))
 	}
+
 	objectName := "test-object-new-multipart"
 
 	uploadID, err := obj.NewMultipartUpload(bucketName, objectName, nil)
@@ -851,6 +852,96 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 		// Verify whether the bucket obtained object is same as the one inserted.
 		if !bytes.Equal(testCase.expectedContent, actualContent) {
 			t.Errorf("Test %d : Minio %s: Object content differs from expected value.", i+1, instanceType)
+		}
+	}
+}
+
+// Wrapper for calling Delete Object API handler tests for both XL multiple disks and FS single drive setup.
+func TestAPIDeleteOjectHandler(t *testing.T) {
+	ExecObjectLayerAPITest(t, testAPIDeleteOjectHandler, []string{"DeleteObject"})
+}
+
+func testAPIDeleteOjectHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
+	credentials credential, t TestErrHandler) {
+
+	switch obj.(type) {
+	case fsObjects:
+		return
+	}
+	objectName := "test-object"
+	// set of byte data for PutObject.
+	// object has to be inserted before running tests for Deleting the object.
+	bytesData := []struct {
+		byteData []byte
+	}{
+		{generateBytesData(6 * 1024 * 1024)},
+	}
+
+	// set of inputs for uploading the objects before tests for deleting them is done.
+	putObjectInputs := []struct {
+		bucketName    string
+		objectName    string
+		contentLength int64
+		textData      []byte
+		metaData      map[string]string
+	}{
+		// case - 1.
+		{bucketName, objectName, int64(len(bytesData[0].byteData)), bytesData[0].byteData, make(map[string]string)},
+	}
+	// iterate through the above set of inputs and upload the object.
+	for i, input := range putObjectInputs {
+		// uploading the object.
+		_, err := obj.PutObject(input.bucketName, input.objectName, input.contentLength, bytes.NewBuffer(input.textData), input.metaData)
+		// if object upload fails stop the test.
+		if err != nil {
+			t.Fatalf("Put Object case %d:  Error uploading object: <ERROR> %v", i+1, err)
+		}
+	}
+
+	// test cases with inputs and expected result for DeleteObject.
+	testCases := []struct {
+		bucketName string
+		objectName string
+
+		expectedRespStatus int // expected response status body.
+	}{
+		// Test case - 1.
+		// Deleting an existing object.
+		// Expected to return HTTP resposne status code 204.
+		{
+			bucketName: bucketName,
+			objectName: objectName,
+
+			expectedRespStatus: http.StatusNoContent,
+		},
+		// Test case - 2.
+		// Attempt to delete an object which is already deleted.
+		// Still should return http response status 204.
+		{
+			bucketName: bucketName,
+			objectName: objectName,
+
+			expectedRespStatus: http.StatusNoContent,
+		},
+	}
+
+	// Iterating over the cases, call DeleteObjectHandler and validate the HTTP response.
+	for i, testCase := range testCases {
+		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
+		rec := httptest.NewRecorder()
+		// construct HTTP request for Get Object end point.
+		req, err := newTestSignedRequest("DELETE", getDeleteObjectURL("", testCase.bucketName, testCase.objectName),
+			0, nil, credentials.AccessKeyID, credentials.SecretAccessKey)
+
+		if err != nil {
+			t.Fatalf("Test %d: Failed to create HTTP request for Get Object: <ERROR> %v", i+1, err)
+		}
+		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
+		// Call the ServeHTTP to execute the handler,`func (api objectAPIHandlers) DeleteObjectHandler`  handles the request.
+		apiRouter.ServeHTTP(rec, req)
+		// Assert the response code with the expected status.
+		if rec.Code != testCase.expectedRespStatus {
+			t.Fatalf("Minio %s: Case %d: Expected the response status to be `%d`, but instead found `%d`", instanceType, i+1, testCase.expectedRespStatus, rec.Code)
 		}
 	}
 }
