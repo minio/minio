@@ -127,7 +127,7 @@ func (web *webAPIHandlers) StorageInfo(r *http.Request, args *GenericArgs, reply
 	reply.UIVersion = miniobrowser.UIVersion
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
-		return &json2.Error{Message: "Volume not found"}
+		return &json2.Error{Message: "Server not initialized"}
 	}
 	reply.StorageInfo = objectAPI.StorageInfo()
 	return nil
@@ -146,7 +146,7 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 	reply.UIVersion = miniobrowser.UIVersion
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
-		return &json2.Error{Message: "Volume not found"}
+		return &json2.Error{Message: "Server not initialized"}
 	}
 	if err := objectAPI.MakeBucket(args.BucketName); err != nil {
 		return &json2.Error{Message: err.Error()}
@@ -175,7 +175,7 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 	}
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
-		return &json2.Error{Message: "Volume not found"}
+		return &json2.Error{Message: "Server not initialized"}
 	}
 	buckets, err := objectAPI.ListBuckets()
 	if err != nil {
@@ -227,7 +227,7 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 	for {
 		objectAPI := web.ObjectAPI()
 		if objectAPI == nil {
-			return &json2.Error{Message: "Volume not found"}
+			return &json2.Error{Message: "Server not initialized"}
 		}
 		lo, err := objectAPI.ListObjects(args.BucketName, args.Prefix, marker, "/", 1000)
 		if err != nil {
@@ -269,7 +269,7 @@ func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs,
 	reply.UIVersion = miniobrowser.UIVersion
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
-		return &json2.Error{Message: "Volume not found"}
+		return &json2.Error{Message: "Server not initialized"}
 	}
 	if err := objectAPI.DeleteObject(args.BucketName, args.ObjectName); err != nil {
 		return &json2.Error{Message: err.Error()}
@@ -412,7 +412,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
-		writeWebErrorResponse(w, errors.New("Volume not found"))
+		writeWebErrorResponse(w, errors.New("Server not initialized"))
 		return
 	}
 	if _, err := objectAPI.PutObject(bucket, object, -1, r.Body, metadata); err != nil {
@@ -468,7 +468,7 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
-		writeWebErrorResponse(w, errors.New("Volume not found"))
+		writeWebErrorResponse(w, errors.New("Server not initialized"))
 		return
 	}
 	objInfo, err := objectAPI.GetObjectInfo(bucket, object)
@@ -594,16 +594,16 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 	if !isJWTReqAuthenticated(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
+	objectAPI := web.ObjectAPI()
+	if objectAPI == nil {
+		return &json2.Error{Message: "Server not initialized"}
+	}
 
 	bucketPolicy := policy.BucketPolicy(args.Policy)
 	if !bucketPolicy.IsValidBucketPolicy() {
 		return &json2.Error{Message: "Invalid policy " + args.Policy}
 	}
 
-	objectAPI := web.ObjectAPI()
-	if objectAPI == nil {
-		return &json2.Error{Message: "Server not initialized"}
-	}
 	policyInfo, err := readBucketAccessPolicy(objectAPI, args.BucketName)
 	if err != nil {
 		return &json2.Error{Message: err.Error()}
