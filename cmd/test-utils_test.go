@@ -942,6 +942,7 @@ func getMultiDeleteObjectURL(endPoint, bucketName string) string {
 	queryValue := url.Values{}
 	queryValue.Set("delete", "")
 	return makeTestTargetURL(endPoint, bucketName, "", queryValue)
+
 }
 
 // return URL for HEAD on the object.
@@ -1093,6 +1094,18 @@ func getCompleteMultipartUploadURL(endPoint, bucketName, objectName, uploadID st
 	queryValue := url.Values{}
 	queryValue.Set("uploadId", uploadID)
 	return makeTestTargetURL(endPoint, bucketName, objectName, queryValue)
+}
+
+// return URL for put bucket notification.
+func getPutBucketNotificationURL(endPoint, bucketName string) string {
+	return getGetBucketNotificationURL(endPoint, bucketName)
+}
+
+// return URL for get bucket notification.
+func getGetBucketNotificationURL(endPoint, bucketName string) string {
+	queryValue := url.Values{}
+	queryValue.Set("notification", "")
+	return makeTestTargetURL(endPoint, bucketName, "", queryValue)
 }
 
 // returns temp root directory. `
@@ -1324,6 +1337,11 @@ func initTestAPIEndPoints(objLayer ObjectLayer, apiFunctions []string) http.Hand
 		// Register ListMultipartUploads handler.
 		case "ListMultipartUploads":
 			bucket.Methods("GET").HandlerFunc(api.ListMultipartUploadsHandler).Queries("uploads", "")
+			// Register GetBucketNotification Handler.
+		case "GetBucketNotification":
+			bucket.Methods("GET").HandlerFunc(api.GetBucketNotificationHandler).Queries("notification", "")
+		case "PutBucketNotification":
+			bucket.Methods("PUT").HandlerFunc(api.PutBucketNotificationHandler).Queries("notification", "")
 		// Register all api endpoints by default.
 		default:
 			registerAPIRouter(muxRouter, api)
