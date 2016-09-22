@@ -21,7 +21,7 @@ _init() {
 
     ## Minimum required versions for build dependencies
     GIT_VERSION="1.0"
-    GO_VERSION="1.6"
+    GO_VERSION="1.7.1"
     OSX_VERSION="10.8"
     UNAME=$(uname -sm)
 
