@@ -5,7 +5,7 @@ version: '2'
 # 9001 through 9004.
 services:
   minio1:
-    image: minio/minio
+    image: minio/minio:edge
     ports:
       - "9001:9000"
     volumes:
@@ -15,7 +15,7 @@ services:
       MINIO_SECRET_KEY: abcd1234
     command: minio1:/export minio2:/export minio3:/export minio4:/export
   minio2:
-    image: minio/minio
+    image: minio/minio:edge
     ports:
       - "9002:9000"
     volumes:
@@ -25,7 +25,7 @@ services:
       MINIO_SECRET_KEY: abcd1234
     command: minio1:/export minio2:/export minio3:/export minio4:/export
   minio3:
-    image: minio/minio
+    image: minio/minio:edge
     ports:
       - "9003:9000"
     volumes:
@@ -35,7 +35,7 @@ services:
       MINIO_SECRET_KEY: abcd1234
     command: minio1:/export minio2:/export minio3:/export minio4:/export
   minio4:
-    image: minio/minio
+    image: minio/minio:edge
     ports:
       - "9004:9000"
     volumes:
