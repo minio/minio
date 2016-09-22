@@ -539,7 +539,7 @@ func readBucketAccessPolicy(objAPI ObjectLayer, bucketName string) (policy.Bucke
 	bucketPolicyReader, err := readBucketPolicyJSON(bucketName, objAPI)
 	if err != nil {
 		if _, ok := err.(BucketPolicyNotFound); ok {
-			return policy.BucketAccessPolicy{}, nil
+			return policy.BucketAccessPolicy{Version: "2012-10-17"}, nil
 		}
 		return policy.BucketAccessPolicy{}, err
 	}
@@ -599,8 +599,8 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 		return &json2.Error{Message: "Server not initialized"}
 	}
 
-	bucketPolicy := policy.BucketPolicy(args.Policy)
-	if !bucketPolicy.IsValidBucketPolicy() {
+	bucketP := policy.BucketPolicy(args.Policy)
+	if !bucketP.IsValidBucketPolicy() {
 		return &json2.Error{Message: "Invalid policy " + args.Policy}
 	}
 
@@ -608,12 +608,23 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 	if err != nil {
 		return &json2.Error{Message: err.Error()}
 	}
-
-	policyInfo.Statements = policy.SetPolicy(policyInfo.Statements, bucketPolicy, args.BucketName, args.Prefix)
-
+	policyInfo.Statements = policy.SetPolicy(policyInfo.Statements, bucketP, args.BucketName, args.Prefix)
 	data, err := json.Marshal(policyInfo)
 	if err != nil {
 		return &json2.Error{Message: err.Error()}
+	}
+
+	// Parse bucket policy.
+	var policy = &bucketPolicy{}
+	err = parseBucketPolicy(bytes.NewReader(data), policy)
+	if err != nil {
+		errorIf(err, "Unable to parse bucket policy.")
+		return &json2.Error{Message: err.Error()}
+	}
+
+	// Parse check bucket policy.
+	if s3Error := checkBucketPolicyResources(args.BucketName, policy); s3Error != ErrNone {
+		return &json2.Error{Message: getAPIError(s3Error).Description}
 	}
 
 	// TODO: update policy statements according to bucket name, prefix and policy arguments.
@@ -622,6 +633,5 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 	}
 
 	reply.UIVersion = miniobrowser.UIVersion
-
 	return nil
 }
