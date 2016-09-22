@@ -18,10 +18,14 @@ package cmd
 
 import (
 	"bytes"
+	"crypto/md5"
+	"encoding/hex"
+	"encoding/xml"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"sync"
 	"testing"
 )
 
@@ -508,6 +512,436 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 				t.Errorf("Test %d: %s: Data Mismatch: Data fetched back from the copied object doesn't match the original one.", i+1, instanceType)
 			}
 			buffers[0].Reset()
+		}
+	}
+}
+
+// Wrapper for calling NewMultipartUpload tests for both XL multiple disks and single node setup.
+// First register the HTTP handler for NewMutlipartUpload, then a HTTP request for NewMultipart upload is made.
+// The UploadID from the response body is parsed and its existance is asserted with an attempt to ListParts using it.
+func TestAPINewMultipartHandler(t *testing.T) {
+	ExecObjectLayerAPITest(t, testAPINewMultipartHandler, []string{"NewMultipart"})
+}
+
+func testAPINewMultipartHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
+	credentials credential, t TestErrHandler) {
+
+	objectName := "test-object-new-multipart"
+	rec := httptest.NewRecorder()
+	// construct HTTP request for copy object.
+	req, err := newTestSignedRequest("POST", getNewMultipartURL("", bucketName, objectName), 0, nil, credentials.AccessKeyID, credentials.SecretAccessKey)
+
+	if err != nil {
+		t.Fatalf("Failed to create HTTP request for copy Object: <ERROR> %v", err)
+	}
+	// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
+	// Call the ServeHTTP to executes the registered handler.
+	apiRouter.ServeHTTP(rec, req)
+	// Assert the response code with the expected status.
+	if rec.Code != http.StatusOK {
+		t.Fatalf("%s:  Expected the response status to be `%d`, but instead found `%d`", instanceType, http.StatusOK, rec.Code)
+	}
+	// decode the response body.
+	decoder := xml.NewDecoder(rec.Body)
+	multipartResponse := &InitiateMultipartUploadResponse{}
+
+	err = decoder.Decode(multipartResponse)
+	if err != nil {
+		t.Fatalf("Error decoding the recorded response Body")
+	}
+	// verify the uploadID my making an attempt to list parts.
+	_, err = obj.ListObjectParts(bucketName, objectName, multipartResponse.UploadID, 0, 1)
+	if err != nil {
+		t.Fatalf("Invalid UploadID: <ERROR> %s", err)
+	}
+
+}
+
+// Wrapper for calling NewMultipartUploadParallel tests for both XL multiple disks and single node setup.
+// The objective of the test is to initialte multipart upload on the same object 10 times concurrently,
+// The UploadID from the response body is parsed and its existance is asserted with an attempt to ListParts using it.
+func TestAPINewMultipartHandlerParallel(t *testing.T) {
+	ExecObjectLayerAPITest(t, testAPINewMultipartHandlerParallel, []string{"NewMultipart"})
+}
+
+func testAPINewMultipartHandlerParallel(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
+	credentials credential, t TestErrHandler) {
+	// used for storing the uploadID's parsed on concurrent HTTP requests for NewMultipart upload on the same object.
+	testUploads := struct {
+		sync.Mutex
+		uploads []string
+	}{}
+
+	objectName := "test-object-new-multipart-parallel"
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		// Initiate NewMultipart upload on the same object 10 times concurrrently.
+		go func() {
+			defer wg.Done()
+			rec := httptest.NewRecorder()
+			// construct HTTP request for copy object.
+			req, err := newTestSignedRequest("POST", getNewMultipartURL("", bucketName, objectName), 0, nil, credentials.AccessKeyID, credentials.SecretAccessKey)
+
+			if err != nil {
+				t.Fatalf("Failed to create HTTP request for copy Object: <ERROR> %v", err)
+			}
+			// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
+			// Call the ServeHTTP to executes the registered handler.
+			apiRouter.ServeHTTP(rec, req)
+			// Assert the response code with the expected status.
+			if rec.Code != http.StatusOK {
+				t.Fatalf("Minio %s:  Expected the response status to be `%d`, but instead found `%d`", instanceType, http.StatusOK, rec.Code)
+			}
+			// decode the response body.
+			decoder := xml.NewDecoder(rec.Body)
+			multipartResponse := &InitiateMultipartUploadResponse{}
+
+			err = decoder.Decode(multipartResponse)
+			if err != nil {
+				t.Fatalf("Minio %s: Error decoding the recorded response Body", instanceType)
+			}
+			// push the obtained upload ID from the response into the array.
+			testUploads.Lock()
+			testUploads.uploads = append(testUploads.uploads, multipartResponse.UploadID)
+			testUploads.Unlock()
+		}()
+	}
+	// Wait till all go routines finishes execution.
+	wg.Wait()
+	// Validate the upload ID by an attempt to list parts using it.
+	for _, uploadID := range testUploads.uploads {
+		_, err := obj.ListObjectParts(bucketName, objectName, uploadID, 0, 1)
+		if err != nil {
+			t.Fatalf("Invalid UploadID: <ERROR> %s", err)
+		}
+	}
+}
+
+// The UploadID from the response body is parsed and its existance is asserted with an attempt to ListParts using it.
+func TestAPICompleteMultipartHandler(t *testing.T) {
+	ExecObjectLayerAPITest(t, testAPICompleteMultipartHandler, []string{"CompleteMultipart"})
+}
+
+func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
+	credentials credential, t TestErrHandler) {
+
+	// Calculates MD5 sum of the given byte array.
+	findMD5 := func(toBeHashed []byte) string {
+		hasher := md5.New()
+		hasher.Write(toBeHashed)
+		return hex.EncodeToString(hasher.Sum(nil))
+	}
+
+	objectName := "test-object-new-multipart"
+
+	uploadID, err := obj.NewMultipartUpload(bucketName, objectName, nil)
+	if err != nil {
+		// Failed to create NewMultipartUpload, abort.
+		t.Fatalf("Minio %s : <ERROR>  %s", instanceType, err)
+	}
+	var uploadIDs []string
+	uploadIDs = append(uploadIDs, uploadID)
+	// Parts with size greater than 5 MB.
+	// Generating a 6MB byte array.
+	validPart := bytes.Repeat([]byte("abcdef"), 1024*1024)
+	validPartMD5 := findMD5(validPart)
+	// Create multipart parts.
+	// Need parts to be uploaded before CompleteMultiPartUpload can be called tested.
+	parts := []struct {
+		bucketName      string
+		objName         string
+		uploadID        string
+		PartID          int
+		inputReaderData string
+		inputMd5        string
+		intputDataSize  int64
+	}{
+		// Case 1-4.
+		// Creating sequence of parts for same uploadID.
+		{bucketName, objectName, uploadIDs[0], 1, "abcd", "e2fc714c4727ee9395f324cd2e7f331f", int64(len("abcd"))},
+		{bucketName, objectName, uploadIDs[0], 2, "efgh", "1f7690ebdd9b4caf8fab49ca1757bf27", int64(len("efgh"))},
+		{bucketName, objectName, uploadIDs[0], 3, "ijkl", "09a0877d04abf8759f99adec02baf579", int64(len("abcd"))},
+		{bucketName, objectName, uploadIDs[0], 4, "mnop", "e132e96a5ddad6da8b07bba6f6131fef", int64(len("abcd"))},
+		// Part with size larger than 5Mb.
+		{bucketName, objectName, uploadIDs[0], 5, string(validPart), validPartMD5, int64(len(string(validPart)))},
+		{bucketName, objectName, uploadIDs[0], 6, string(validPart), validPartMD5, int64(len(string(validPart)))},
+	}
+	// Iterating over creatPartCases to generate multipart chunks.
+	for _, part := range parts {
+		_, err = obj.PutObjectPart(part.bucketName, part.objName, part.uploadID, part.PartID, part.intputDataSize, bytes.NewBufferString(part.inputReaderData), part.inputMd5)
+		if err != nil {
+			t.Fatalf("%s : %s", instanceType, err)
+		}
+	}
+	// Parts to be sent as input for CompleteMultipartUpload.
+	inputParts := []struct {
+		parts []completePart
+	}{
+		// inputParts - 0.
+		// Case for replicating ETag mismatch.
+		{
+			[]completePart{
+				{ETag: "abcd", PartNumber: 1},
+			},
+		},
+		// inputParts - 1.
+		// should error out with part too small.
+		{
+			[]completePart{
+				{ETag: "e2fc714c4727ee9395f324cd2e7f331f", PartNumber: 1},
+				{ETag: "1f7690ebdd9b4caf8fab49ca1757bf27", PartNumber: 2},
+			},
+		},
+		// inputParts - 2.
+		// Case with invalid Part number.
+		{
+			[]completePart{
+				{ETag: "e2fc714c4727ee9395f324cd2e7f331f", PartNumber: 10},
+			},
+		},
+		// inputParts - 3.
+		// Case with valid parts,but parts are unsorted.
+		// Part size greater than 5MB.
+		{
+			[]completePart{
+				{ETag: validPartMD5, PartNumber: 6},
+				{ETag: validPartMD5, PartNumber: 5},
+			},
+		},
+		// inputParts - 4.
+		// Case with valid part.
+		// Part size greater than 5MB.
+		{
+			[]completePart{
+				{ETag: validPartMD5, PartNumber: 5},
+				{ETag: validPartMD5, PartNumber: 6},
+			},
+		},
+	}
+	// on succesfull complete multipart operation the s3MD5 for the parts uploaded iwll be returned.
+	s3MD5, err := completeMultipartMD5(inputParts[3].parts...)
+	if err != nil {
+		t.Fatalf("Obtaining S3MD5 failed")
+	}
+	// generating the response body content for the success case.
+	successResponse := generateCompleteMultpartUploadResponse(bucketName, objectName, getGetObjectURL("", bucketName, objectName), s3MD5)
+	encodedSuccessResponse := encodeResponse(successResponse)
+
+	testCases := []struct {
+		bucket   string
+		object   string
+		uploadID string
+		parts    []completePart
+		// Expected output of CompleteMultipartUpload.
+		expectedContent []byte
+		// Expected HTTP Response status.
+		expectedRespStatus int
+	}{
+		// Test case - 1.
+		// Upload and PartNumber exists, But a deliberate ETag mismatch is introduced.
+		{
+			bucket:   bucketName,
+			object:   objectName,
+			uploadID: uploadIDs[0],
+			parts:    inputParts[0].parts,
+			expectedContent: encodeResponse(getAPIErrorResponse(getAPIError(toAPIErrorCode(BadDigest{})),
+				getGetObjectURL("", bucketName, objectName))),
+			expectedRespStatus: http.StatusBadRequest,
+		},
+		// Test case - 2.
+		// No parts specified in completePart{}.
+		// Should return ErrMalformedXML in the response body.
+		{
+			bucket:             bucketName,
+			object:             objectName,
+			uploadID:           uploadIDs[0],
+			parts:              []completePart{},
+			expectedContent:    encodeResponse(getAPIErrorResponse(getAPIError(ErrMalformedXML), getGetObjectURL("", bucketName, objectName))),
+			expectedRespStatus: http.StatusBadRequest,
+		},
+		// Test case - 3.
+		// Non-Existant uploadID.
+		// 404 Not Found response status expected.
+		{
+			bucket:             bucketName,
+			object:             objectName,
+			uploadID:           "abc",
+			parts:              inputParts[0].parts,
+			expectedContent:    encodeResponse(getAPIErrorResponse(getAPIError(toAPIErrorCode(InvalidUploadID{UploadID: "abc"})), getGetObjectURL("", bucketName, objectName))),
+			expectedRespStatus: http.StatusNotFound,
+		},
+		// Test case - 4.
+		// Case with part size being less than minimum allowed size.
+		{
+			bucket:   bucketName,
+			object:   objectName,
+			uploadID: uploadIDs[0],
+			parts:    inputParts[1].parts,
+			expectedContent: encodeResponse(completeMultipartAPIError{int64(4), int64(5242880), 1, "e2fc714c4727ee9395f324cd2e7f331f",
+				getAPIErrorResponse(getAPIError(toAPIErrorCode(PartTooSmall{PartNumber: 1})),
+					getGetObjectURL("", bucketName, objectName))}),
+			expectedRespStatus: http.StatusBadRequest,
+		},
+		// Test case - 5.
+		// TestCase with invalid Part Number.
+		{
+			bucket:             bucketName,
+			object:             objectName,
+			uploadID:           uploadIDs[0],
+			parts:              inputParts[2].parts,
+			expectedContent:    encodeResponse(getAPIErrorResponse(getAPIError(toAPIErrorCode(InvalidPart{})), getGetObjectURL("", bucketName, objectName))),
+			expectedRespStatus: http.StatusBadRequest,
+		},
+		// Test case - 6.
+		// Parts are not sorted according to the part number.
+		// This should return ErrInvalidPartOrder in the response body.
+		{
+			bucket:             bucketName,
+			object:             objectName,
+			uploadID:           uploadIDs[0],
+			parts:              inputParts[3].parts,
+			expectedContent:    encodeResponse(getAPIErrorResponse(getAPIError(ErrInvalidPartOrder), getGetObjectURL("", bucketName, objectName))),
+			expectedRespStatus: http.StatusBadRequest,
+		},
+		// Test case - 7.
+		// Test case with proper parts.
+		// Should successed and the content in the response body is asserted.
+		{
+			bucket:             bucketName,
+			object:             objectName,
+			uploadID:           uploadIDs[0],
+			parts:              inputParts[4].parts,
+			expectedContent:    encodedSuccessResponse,
+			expectedRespStatus: http.StatusOK,
+		},
+	}
+
+	for i, testCase := range testCases {
+		var req *http.Request
+		// Complete multipart upload parts.
+		completeUploads := &completeMultipartUpload{
+			Parts: testCase.parts,
+		}
+		completeBytes, err := xml.Marshal(completeUploads)
+		if err != nil {
+			t.Fatalf("Error XML encoding of parts: <ERROR> %s.", err)
+		}
+		// Indicating that all parts are uploaded and initiating completeMultipartUpload.
+		req, err = newTestSignedRequest("POST", getCompleteMultipartUploadURL("", bucketName, objectName, testCase.uploadID),
+			int64(len(completeBytes)), bytes.NewReader(completeBytes), credentials.AccessKeyID, credentials.SecretAccessKey)
+		if err != nil {
+			t.Fatalf("Failed to create HTTP request for copy Object: <ERROR> %v", err)
+		}
+		rec := httptest.NewRecorder()
+		// construct HTTP request for copy object.
+
+		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
+		// Call the ServeHTTP to executes the registered handler.
+		apiRouter.ServeHTTP(rec, req)
+		// Assert the response code with the expected status.
+		if rec.Code != testCase.expectedRespStatus {
+			t.Errorf("Case %d: Minio %s: Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, rec.Code)
+		}
+
+		// read the response body.
+		actualContent, err := ioutil.ReadAll(rec.Body)
+		if err != nil {
+			t.Fatalf("Test %d : Minio %s: Failed parsing response body: <ERROR> %v", i+1, instanceType, err)
+		}
+		// Verify whether the bucket obtained object is same as the one inserted.
+		if !bytes.Equal(testCase.expectedContent, actualContent) {
+			t.Errorf("Test %d : Minio %s: Object content differs from expected value.", i+1, instanceType)
+		}
+	}
+}
+
+// Wrapper for calling Delete Object API handler tests for both XL multiple disks and FS single drive setup.
+func TestAPIDeleteOjectHandler(t *testing.T) {
+	ExecObjectLayerAPITest(t, testAPIDeleteOjectHandler, []string{"DeleteObject"})
+}
+
+func testAPIDeleteOjectHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
+	credentials credential, t TestErrHandler) {
+
+	switch obj.(type) {
+	case fsObjects:
+		return
+	}
+	objectName := "test-object"
+	// set of byte data for PutObject.
+	// object has to be inserted before running tests for Deleting the object.
+	bytesData := []struct {
+		byteData []byte
+	}{
+		{generateBytesData(6 * 1024 * 1024)},
+	}
+
+	// set of inputs for uploading the objects before tests for deleting them is done.
+	putObjectInputs := []struct {
+		bucketName    string
+		objectName    string
+		contentLength int64
+		textData      []byte
+		metaData      map[string]string
+	}{
+		// case - 1.
+		{bucketName, objectName, int64(len(bytesData[0].byteData)), bytesData[0].byteData, make(map[string]string)},
+	}
+	// iterate through the above set of inputs and upload the object.
+	for i, input := range putObjectInputs {
+		// uploading the object.
+		_, err := obj.PutObject(input.bucketName, input.objectName, input.contentLength, bytes.NewBuffer(input.textData), input.metaData)
+		// if object upload fails stop the test.
+		if err != nil {
+			t.Fatalf("Put Object case %d:  Error uploading object: <ERROR> %v", i+1, err)
+		}
+	}
+
+	// test cases with inputs and expected result for DeleteObject.
+	testCases := []struct {
+		bucketName string
+		objectName string
+
+		expectedRespStatus int // expected response status body.
+	}{
+		// Test case - 1.
+		// Deleting an existing object.
+		// Expected to return HTTP resposne status code 204.
+		{
+			bucketName: bucketName,
+			objectName: objectName,
+
+			expectedRespStatus: http.StatusNoContent,
+		},
+		// Test case - 2.
+		// Attempt to delete an object which is already deleted.
+		// Still should return http response status 204.
+		{
+			bucketName: bucketName,
+			objectName: objectName,
+
+			expectedRespStatus: http.StatusNoContent,
+		},
+	}
+
+	// Iterating over the cases, call DeleteObjectHandler and validate the HTTP response.
+	for i, testCase := range testCases {
+		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
+		rec := httptest.NewRecorder()
+		// construct HTTP request for Get Object end point.
+		req, err := newTestSignedRequest("DELETE", getDeleteObjectURL("", testCase.bucketName, testCase.objectName),
+			0, nil, credentials.AccessKeyID, credentials.SecretAccessKey)
+
+		if err != nil {
+			t.Fatalf("Test %d: Failed to create HTTP request for Get Object: <ERROR> %v", i+1, err)
+		}
+		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
+		// Call the ServeHTTP to execute the handler,`func (api objectAPIHandlers) DeleteObjectHandler`  handles the request.
+		apiRouter.ServeHTTP(rec, req)
+		// Assert the response code with the expected status.
+		if rec.Code != testCase.expectedRespStatus {
+			t.Fatalf("Minio %s: Case %d: Expected the response status to be `%d`, but instead found `%d`", instanceType, i+1, testCase.expectedRespStatus, rec.Code)
 		}
 	}
 }
