@@ -22,6 +22,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -777,6 +778,72 @@ func testWebGetBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestE
 		}
 		if testCase.expectedResult != reply.Policy {
 			t.Fatalf("Test %d: expected: %v, got: %v", i+1, testCase.expectedResult, reply.Policy)
+		}
+	}
+}
+
+// Wrapper for calling GetAllBucketPolicy Handler
+func TestWebHandlerGetAllBucketPolicyHandler(t *testing.T) {
+	ExecObjectLayerTest(t, testWebGetAllBucketPolicyHandler)
+}
+
+// testWebGetAllBucketPolicyHandler - Test GetAllBucketPolicy web handler
+func testWebGetAllBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
+	// Register the API end points with XL/FS object layer.
+	apiRouter := initTestWebRPCEndPoint(obj)
+	// initialize the server and obtain the credentials and root.
+	// credentials are necessary to sign the HTTP request.
+	rootPath, err := newTestConfig("us-east-1")
+	if err != nil {
+		t.Fatalf("Init Test config failed")
+	}
+	// remove the root folder after the test ends.
+	defer removeAll(rootPath)
+
+	credentials := serverConfig.GetCredential()
+
+	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKeyID, credentials.SecretAccessKey)
+	if err != nil {
+		t.Fatal("Cannot authenticate")
+	}
+
+	rec := httptest.NewRecorder()
+
+	bucketName := getRandomBucketName()
+	if err := obj.MakeBucket(bucketName); err != nil {
+		t.Fatal("Unexpected error: ", err)
+	}
+
+	policyDoc := `{"Version":"2012-10-17","Statement":[{"Action":["s3:GetBucketLocation"],"Effect":"Allow","Principal":{"AWS":["*"]},"Resource":["arn:aws:s3:::` + bucketName + `"],"Sid":""},{"Action":["s3:ListBucket"],"Condition":{"StringEquals":{"s3:prefix":["hello"]}},"Effect":"Allow","Principal":{"AWS":["*"]},"Resource":["arn:aws:s3:::` + bucketName + `"],"Sid":""},{"Action":["s3:ListBucketMultipartUploads"],"Effect":"Allow","Principal":{"AWS":["*"]},"Resource":["arn:aws:s3:::` + bucketName + `"],"Sid":""},{"Action":["s3:AbortMultipartUpload","s3:DeleteObject","s3:GetObject","s3:ListMultipartUploadParts","s3:PutObject"],"Effect":"Allow","Principal":{"AWS":["*"]},"Resource":["arn:aws:s3:::` + bucketName + `/hello*"],"Sid":""}]}`
+	if err := writeBucketPolicy(bucketName, obj, bytes.NewReader([]byte(policyDoc)), int64(len(policyDoc))); err != nil {
+		t.Fatal("Unexpected error: ", err)
+	}
+
+	testCaseResult1 := make(map[string]policy.BucketPolicy)
+	testCaseResult1[bucketName+"/hello*"] = policy.BucketPolicyReadWrite
+	testCases := []struct {
+		bucketName     string
+		expectedResult map[string]policy.BucketPolicy
+	}{
+		{bucketName, testCaseResult1},
+	}
+
+	for i, testCase := range testCases {
+		args := &GetAllBucketPolicyArgs{BucketName: testCase.bucketName}
+		reply := &GetAllBucketPolicyRep{}
+		req, err := newTestWebRPCRequest("Web.GetAllBucketPolicy", authorization, args)
+		if err != nil {
+			t.Fatalf("Test %d: Failed to create HTTP request: <ERROR> %v", i+1, err)
+		}
+		apiRouter.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("Test %d: Expected the response status to be 200, but instead found `%d`", i+1, rec.Code)
+		}
+		if err = getTestWebRPCResponse(rec, &reply); err != nil {
+			t.Fatalf("Test %d: Should succeed but it didn't, %v", i+1, err)
+		}
+		if !reflect.DeepEqual(testCase.expectedResult, reply.Policies) {
+			t.Fatalf("Test %d: expected: %v, got: %v", i+1, testCase.expectedResult, reply.Policies)
 		}
 	}
 }

@@ -582,6 +582,40 @@ func (web *webAPIHandlers) GetBucketPolicy(r *http.Request, args *GetBucketPolic
 	return nil
 }
 
+// GetAllBucketPolicyArgs - get all bucket policy args.
+type GetAllBucketPolicyArgs struct {
+	BucketName string `json:"bucketName"`
+}
+
+// GetAllBucketPolicyRep - get all bucket policy reply.
+type GetAllBucketPolicyRep struct {
+	UIVersion string                         `json:"uiVersion"`
+	Policies  map[string]policy.BucketPolicy `json:"policies"`
+}
+
+// GetAllBucketPolicy - get all bucket policy.
+func (web *webAPIHandlers) GetAllBucketPolicy(r *http.Request, args *GetAllBucketPolicyArgs, reply *GetAllBucketPolicyRep) error {
+	if !isJWTReqAuthenticated(r) {
+		return &json2.Error{Message: "Unauthorized request"}
+	}
+
+	objectAPI := web.ObjectAPI()
+	if objectAPI == nil {
+		return &json2.Error{Message: "Server not initialized"}
+	}
+	policyInfo, err := readBucketAccessPolicy(objectAPI, args.BucketName)
+	if err != nil {
+		return &json2.Error{Message: err.Error()}
+	}
+
+	policies := policy.GetPolicies(policyInfo.Statements, args.BucketName)
+
+	reply.UIVersion = miniobrowser.UIVersion
+	reply.Policies = policies
+
+	return nil
+}
+
 // SetBucketPolicyArgs - set bucket policy args.
 type SetBucketPolicyArgs struct {
 	BucketName string `json:"bucketName"`
