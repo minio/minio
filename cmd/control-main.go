@@ -45,10 +45,5 @@ COMMANDS:
 }
 
 func mainControl(ctx *cli.Context) {
-	if ctx.Args().First() != "" { // command help.
-		cli.ShowCommandHelp(ctx, ctx.Args().First())
-	} else {
-		// command with Subcommands is an App.
-		cli.ShowAppHelp(ctx)
-	}
+	cli.ShowAppHelp(ctx)
 }
