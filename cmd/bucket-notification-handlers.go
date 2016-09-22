@@ -17,13 +17,17 @@
 package cmd
 
 import (
+	"bufio"
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"path"
+	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -145,10 +149,8 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 	}
 
 	// Proceed to save notification configuration.
-	notificationConfigPath := path.Join(bucketConfigPrefix, bucket, bucketNotificationConfig)
-	_, err = objectAPI.PutObject(minioMetaBucket, notificationConfigPath, bufferSize, bytes.NewReader(buffer.Bytes()), nil)
+	err = saveNotificationConfigFromBytes(bucket, objectAPI, bufferSize, bytes.NewReader(buffer.Bytes()))
 	if err != nil {
-		errorIf(err, "Unable to write bucket notification configuration.")
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
 	}
@@ -170,7 +172,7 @@ func writeNotification(w http.ResponseWriter, notification map[string][]Notifica
 	if notification == nil {
 		return errInvalidArgument
 	}
-	// Marshal notification data into XML and write to client.
+	// Marshal notification data into JSON and write to client.
 	notificationBytes, err := json.Marshal(&notification)
 	if err != nil {
 		return err
@@ -195,7 +197,7 @@ var crlf = []byte("\r\n")
 // character. Upon any error received on response writer the for loop exits.
 //
 // TODO - do not log for all errors.
-func sendBucketNotification(w http.ResponseWriter, arnListenerCh <-chan []NotificationEvent) {
+func sendBucketNotification(w http.ResponseWriter, arnListenerCh <-chan []NotificationEvent, peerListenerCh <-chan []byte) {
 	var dummyEvents = map[string][]NotificationEvent{"Records": nil}
 	// Continuously write to client either timely empty structures
 	// every 5 seconds, or return back the notifications.
@@ -204,6 +206,15 @@ func sendBucketNotification(w http.ResponseWriter, arnListenerCh <-chan []Notifi
 		case events := <-arnListenerCh:
 			if err := writeNotification(w, map[string][]NotificationEvent{"Records": events}); err != nil {
 				errorIf(err, "Unable to write notification to client.")
+				return
+			}
+		case peerEvent := <-peerListenerCh:
+			// write the event without any more processing
+			// to response writer.
+			_, err := w.Write(append(peerEvent, crlf...))
+			w.(http.Flusher).Flush()
+			if err != nil {
+				errorIf(err, "Unable to write Peer notification to client.")
 				return
 			}
 		case <-time.After(5 * time.Second):
@@ -249,7 +260,7 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 
 	_, err := objAPI.GetBucketInfo(bucket)
 	if err != nil {
-		errorIf(err, "Unable to bucket info.")
+		errorIf(err, "Unable to get bucket info.")
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
 	}
@@ -286,27 +297,178 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 		},
 	}
 
-	// Add topic config to bucket notification config.
-	if err = globalEventNotifier.AddTopicConfig(bucket, topicCfg); err != nil {
+	// Add topic config to bucket notification config and persists
+	// config to disk.
+	if err = globalEventNotifier.AddTopicConfig(bucket, topicCfg, objAPI); err != nil {
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
 	}
 
+	// Setup a listening channel that will receive notifications
+	// from the RPC handler.
+	nEventCh := make(chan []NotificationEvent)
+	defer close(nEventCh)
+
+	// Configuration is persisted to disk, we tell all
+	// servers to send notifications for this topic to us.
+
 	// Add all common headers.
 	setCommonHeaders(w)
-
-	// Create a new notification event channel.
-	nEventCh := make(chan []NotificationEvent)
-	// Close the listener channel.
-	defer close(nEventCh)
 
 	// Set sns target.
 	globalEventNotifier.SetSNSTarget(accountARN, nEventCh)
 	// Remove sns listener after the writer has closed or the client disconnected.
 	defer globalEventNotifier.RemoveSNSTarget(accountARN, nEventCh)
 
+	// connect to each minio peer server to receive their
+	// notifications.
+	peerCh := make(chan []byte)
+	// if r.Header.Get("X-Minio-Peer") == "" {
+	// 	// Current request was not from a peer as the header
+	// 	// is not set - so connect to all other peers to
+	// 	// receive their notifications.
+	// 	peers, err := getAllOtherPeers()
+	// 	errorIf(err, "Error getting peer addrs - this shouldn't happen! Ploughing ahead anyway...")
+	// 	for _, peer := range peers {
+	// 		go listenNotificationFromPeer(peer, bucket, topicARN,
+	// 			peerCh)
+	// 	}
+	// }
+
 	// Start sending bucket notifications.
-	sendBucketNotification(w, nEventCh)
+	sendBucketNotification(w, nEventCh, peerCh)
+}
+
+func listenNotificationFromPeer(peer, bucket, topicARN string, eventCh chan<- []byte) {
+	httpClient := &http.Client{
+		Transport: http.DefaultTransport,
+	}
+	for {
+		// make http request to peer
+		req, err := makeListenRequest(peer, bucket, topicARN)
+		if err != nil {
+			// TODO: handle this
+			errorIf(err, "Error making a listen request to a peer")
+			return
+		}
+
+		// execute request
+		resp, err := httpClient.Do(req)
+		if err != nil {
+			// TODO: maybe a
+			// failed server -
+			// handle this.
+			errorIf(err, "Error exec'ing a listen request to a peer")
+			return
+		}
+
+		// TODO: check response status code
+		if resp.StatusCode != http.StatusOK {
+			// TODO: Another failure to handle
+			errorIf(err, "Got non-StatusOK response in listen request to peer")
+			return
+		}
+
+		// Initialize a scanner to read line by line
+		bio := bufio.NewScanner(resp.Body)
+		defer resp.Body.Close()
+
+		for bio.Scan() {
+			b := bio.Bytes()
+			eventCh <- b
+		}
+		// Check for errors during scan
+		if err = bio.Err(); err != nil {
+			// For an unxpected connection drop from
+			// server, we re-connect
+			if err == io.ErrUnexpectedEOF {
+				resp.Body.Close()
+				continue
+			}
+			// otherwise log and exit
+			errorIf(err, "Error reading peer server response")
+			return
+		}
+	}
+}
+
+func makeListenRequest(host, bucket, topicARN string) (*http.Request, error) {
+	method := "GET"
+	payload := []byte{}
+	cred := serverConfig.GetCredential()
+	region := serverConfig.GetRegion()
+
+	// TODO: need to check if connections have to be secure, etc
+	url, err := url.Parse(fmt.Sprintf(
+		"http://%s/%s?notificationARN=%s", host, bucket, topicARN,
+	))
+	if err != nil {
+		return nil, err
+	}
+
+	// Initialize HTTP request
+	req, err := http.NewRequest(method, url.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// Add payload hash header (payload is empty)
+	hash := hex.EncodeToString(sum256(payload))
+	req.Header.Set("X-Amz-Content-Sha256", hash)
+
+	// Add date header
+	t := time.Now().UTC()
+	req.Header.Set("X-Amz-Date", t.Format(iso8601Format))
+
+	// Add X-Minio-Peer header
+	req.Header.Set("X-Minio-Peer", host)
+
+	// Compute signature V4
+	queryStr := req.URL.Query().Encode()
+	canonicalRequest := getCanonicalRequest(req.Header, hash, queryStr,
+		req.URL.Path, req.Method, req.Host)
+	stringToSign := getStringToSign(canonicalRequest, t, region)
+	signingKey := getSigningKey(cred.SecretAccessKey, t, region)
+	signature := getSignature(signingKey, stringToSign)
+
+	// Compute Auth Header
+	signedHeaders := []string{"host", "x-amz-content-sha256", "x-amz-date",
+		"x-minio-peer"} // sorted
+	credentialHeader := strings.Join([]string{cred.AccessKeyID,
+		t.Format(yyyymmdd), region, "s3", "aws4_request"}, "/")
+	authHeaderValue := fmt.Sprintf(
+		"%s Credential=%s/%s,SignedHeaders=%s,Signature=%s",
+		signV4Algorithm, cred.AccessKeyID, credentialHeader,
+		strings.Join(signedHeaders, ";"), signature,
+	)
+
+	// Set Auth Header
+	req.Header.Set("Authorization", authHeaderValue)
+
+	return req, nil
+}
+
+// returns the addresses of all servers in the cluster other than
+// itself. Returned addresses are like "10.0.0.1:9000" (i.e. with
+// port)
+func getAllOtherPeers() ([]string, error) {
+	res := []string{}
+	port := getPort(srvConfig.serverAddr)
+	diskPaths := srvConfig.disks
+	for _, diskPath := range diskPaths {
+		netAddr, _, err := splitNetPath(diskPath)
+		if err != nil {
+			return nil, err
+		}
+		// check if the host is the same as local
+		if isLocalStorage(netAddr) {
+			continue
+		}
+		// append port
+		addrWithPort := fmt.Sprintf("%s:%d", netAddr, port)
+		res = append(res, addrWithPort)
+	}
+	return res, nil
 }
 
 // Removes notification.xml for a given bucket, only used during DeleteBucket.
