@@ -71,12 +71,16 @@ func TestFSIsUploadExists(t *testing.T) {
 
 	fs := obj.(fsObjects)
 
+	var uploadID string
 	bucketName := "bucket"
 	objectName := "object"
 
 	obj.MakeBucket(bucketName)
-	uploadID, err := obj.NewMultipartUpload(bucketName, objectName, nil)
+	uploadID, err = obj.NewMultipartUpload(bucketName, objectName, nil)
 
+	if err != nil {
+		t.Fatal("Cannot create a new FS object: ", err)
+	}
 	// Test with valid upload id
 	if exists := fs.isUploadIDExists(bucketName, objectName, uploadID); !exists {
 		t.Fatal("Wrong result, expected: ", exists)
@@ -117,6 +121,10 @@ func TestFSWriteUploadJSON(t *testing.T) {
 
 	obj.MakeBucket(bucketName)
 	uploadID, err := obj.NewMultipartUpload(bucketName, objectName, nil)
+
+	if err != nil {
+		t.Fatal("Unexpected err: ", err)
+	}
 
 	if err := fs.writeUploadJSON(bucketName, objectName, uploadID, time.Now().UTC()); err != nil {
 		t.Fatal("Unexpected err: ", err)

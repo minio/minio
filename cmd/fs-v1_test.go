@@ -108,6 +108,10 @@ func TestFSLoadFormatFS(t *testing.T) {
 	defer removeAll(disk)
 
 	obj, err := newFSObjects(disk)
+	if err != nil {
+		t.Fatal("Should not fail here", err)
+	}
+
 	fs := obj.(fsObjects)
 
 	// Regular format loading
@@ -137,6 +141,10 @@ func TestFSGetBucketInfo(t *testing.T) {
 	defer removeAll(disk)
 
 	obj, err := newFSObjects(disk)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	fs := obj.(fsObjects)
 	bucketName := "bucket"
 
