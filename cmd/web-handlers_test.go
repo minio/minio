@@ -717,6 +717,92 @@ func testDownloadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandl
 	}
 }
 
+// Wrapper for calling PresignedGet handler
+func TestWebHandlerPresignedGetHandler(t *testing.T) {
+	ExecObjectLayerTest(t, testWebPresignedGetHandler)
+}
+
+func testWebPresignedGetHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
+	// Register the API end points with XL/FS object layer.
+	apiRouter := initTestWebRPCEndPoint(obj)
+	// initialize the server and obtain the credentials and root.
+	// credentials are necessary to sign the HTTP request.
+	rootPath, err := newTestConfig("us-east-1")
+	if err != nil {
+		t.Fatalf("Init Test config failed")
+	}
+	// remove the root folder after the test ends.
+	defer removeAll(rootPath)
+
+	credentials := serverConfig.GetCredential()
+
+	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKeyID, credentials.SecretAccessKey)
+	if err != nil {
+		t.Fatal("Cannot authenticate")
+	}
+
+	rec := httptest.NewRecorder()
+
+	bucketName := getRandomBucketName()
+	objectName := "object"
+	objectSize := 1024
+
+	// Create bucket.
+	err = obj.MakeBucket(bucketName)
+	if err != nil {
+		// failed to create newbucket, abort.
+		t.Fatalf("%s : %s", instanceType, err)
+	}
+
+	data := bytes.Repeat([]byte("a"), objectSize)
+	_, err = obj.PutObject(bucketName, objectName, int64(len(data)), bytes.NewReader(data), map[string]string{"md5Sum": "c9a34cfc85d982698c6ac89f76071abd"})
+	if err != nil {
+		t.Fatalf("Was not able to upload an object, %v", err)
+	}
+
+	presignGetReq := PresignedGetArgs{
+		HostName:   "",
+		BucketName: bucketName,
+		ObjectName: objectName,
+	}
+	presignGetRep := &PresignedGetRep{}
+	req, err := newTestWebRPCRequest("Web.PresignedGet", authorization, presignGetReq)
+	if err != nil {
+		t.Fatalf("Failed to create HTTP request: <ERROR> %v", err)
+	}
+	apiRouter.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Expected the response status to be 200, but instead found `%d`", rec.Code)
+	}
+	err = getTestWebRPCResponse(rec, &presignGetRep)
+	if err != nil {
+		t.Fatalf("Failed, %v", err)
+	}
+
+	// Register the API end points with XL/FS object layer.
+	apiRouter = initTestAPIEndPoints(obj, []string{"GetObject"})
+
+	// Initialize a new api recorder.
+	arec := httptest.NewRecorder()
+
+	req, err = newTestRequest("GET", presignGetRep.URL, 0, nil)
+	req.Header.Del("x-amz-content-sha256")
+	if err != nil {
+		t.Fatal("Failed to initialized a new request", err)
+	}
+	apiRouter.ServeHTTP(arec, req)
+	if arec.Code != http.StatusOK {
+		t.Fatalf("Expected the response status to be 200, but instead found `%d`", arec.Code)
+	}
+	savedData, err := ioutil.ReadAll(arec.Body)
+	if err != nil {
+		t.Fatal("Reading body failed", err)
+	}
+	if !bytes.Equal(data, savedData) {
+		t.Fatal("Read data is not equal was what was expected")
+	}
+}
+
 // Wrapper for calling GetBucketPolicy Handler
 func TestWebHandlerGetBucketPolicyHandler(t *testing.T) {
 	ExecObjectLayerTest(t, testWebGetBucketPolicyHandler)
