@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"encoding/xml"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -171,21 +172,27 @@ func initMockEventNotifier(objAPI ObjectLayer) error {
 
 func testGetBucketNotificationHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// get random bucket name.
-	bucketName := getRandomBucketName()
-
-	// Create bucket to add notification config for.
-	err := obj.MakeBucket(bucketName)
-	if err != nil {
-		// failed to create newbucket, abort.
-		t.Fatalf("%s : %s", instanceType, err)
-	}
-
+	randBucket := getRandomBucketName()
 	noNotificationBucket := "nonotification"
-	err = obj.MakeBucket(noNotificationBucket)
-	if err != nil {
-		// failed to create newbucket, abort.
-		t.Fatalf("%s : %s", instanceType, err)
+	invalidBucket := "Invalid^Bucket"
+
+	// Create buckets for the following test cases.
+	for _, bucket := range []string{randBucket, noNotificationBucket} {
+		err := obj.MakeBucket(bucket)
+		if err != nil {
+			// failed to create newbucket, abort.
+			t.Fatalf("Failed to create bucket %s %s : %s", bucket,
+				instanceType, err)
+		}
 	}
+
+	// Initialize sample bucket notification config.
+	sampleNotificationBytes := []byte("<NotificationConfiguration><TopicConfiguration>" +
+		"<Event>s3:ObjectCreated:*</Event><Event>s3:ObjectRemoved:*</Event><Filter>" +
+		"<S3Key></S3Key></Filter><Id></Id><Topic>arn:minio:sns:us-east-1:1474332374:listen</Topic>" +
+		"</TopicConfiguration></NotificationConfiguration>")
+
+	emptyNotificationBytes := []byte("<NotificationConfiguration></NotificationConfiguration>")
 
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestAPIEndPoints(obj, []string{
@@ -213,15 +220,9 @@ func testGetBucketNotificationHandler(obj ObjectLayer, instanceType string, t Te
 	// Initialize httptest recorder.
 	rec := httptest.NewRecorder()
 
-	// Initialize sample bucket notification config.
-	sampleNotificationConfig := []byte("<NotificationConfiguration><TopicConfiguration>" +
-		"<Event>s3:ObjectCreated:*</Event><Event>s3:ObjectRemoved:*</Event><Filter>" +
-		"<S3Key></S3Key></Filter><Id></Id><Topic>arn:minio:sns:us-east-1:1474332374:listen</Topic>" +
-		"</TopicConfiguration></NotificationConfiguration>")
-
 	// Prepare notification config for one of the test cases.
-	req, err := newTestSignedRequest("PUT", getPutBucketNotificationURL("", bucketName),
-		int64(len(sampleNotificationConfig)), bytes.NewReader(sampleNotificationConfig),
+	req, err := newTestSignedRequest("PUT", getPutBucketNotificationURL("", randBucket),
+		int64(len(sampleNotificationBytes)), bytes.NewReader(sampleNotificationBytes),
 		credentials.AccessKeyID, credentials.SecretAccessKey)
 	if err != nil {
 		t.Fatalf("Test %d %s: Failed to create HTTP request for PutBucketNotification: <ERROR> %v",
@@ -229,58 +230,94 @@ func testGetBucketNotificationHandler(obj ObjectLayer, instanceType string, t Te
 	}
 
 	apiRouter.ServeHTTP(rec, req)
-	// Test 1: Check if we get back sample notification.
-	req, err = newTestSignedRequest("GET", getGetBucketNotificationURL("", bucketName),
-		int64(0), nil, credentials.AccessKeyID, credentials.SecretAccessKey)
-	if err != nil {
-		t.Fatalf("Test %d: %s: Failed to create HTTP request for GetBucketNotification: <ERROR> %v",
-			1, instanceType, err)
+
+	type testKind int
+	const (
+		CompareBytes testKind = iota
+		CheckStatus
+		InvalidAuth
+	)
+	testCases := []struct {
+		bucketName                string
+		kind                      testKind
+		expectedNotificationBytes []byte
+		expectedHTTPCode          int
+	}{
+		{randBucket, CompareBytes, sampleNotificationBytes, http.StatusOK},
+		{randBucket, InvalidAuth, nil, http.StatusBadRequest},
+		{noNotificationBucket, CompareBytes, emptyNotificationBytes, http.StatusOK},
+		{invalidBucket, CheckStatus, nil, http.StatusBadRequest},
+	}
+	signatureMismatchCode := getAPIError(ErrContentSHA256Mismatch).Code
+	for i, test := range testCases {
+		testRec := httptest.NewRecorder()
+		testReq, tErr := newTestSignedRequest("GET", getGetBucketNotificationURL("", test.bucketName),
+			int64(0), nil, credentials.AccessKeyID, credentials.SecretAccessKey)
+		if tErr != nil {
+			t.Fatalf("Test %d: %s: Failed to create HTTP testRequest for GetBucketNotification: <ERROR> %v",
+				i+1, instanceType, tErr)
+		}
+
+		// Set X-Amz-Content-SHA256 in header different from what was used to calculate Signature.
+		if test.kind == InvalidAuth {
+			// Triggering a authentication type check failure.
+			testReq.Header.Set("x-amz-content-sha256", "somethingElse")
+		}
+
+		apiRouter.ServeHTTP(testRec, testReq)
+
+		switch test.kind {
+		case CompareBytes:
+			rspBytes, rErr := ioutil.ReadAll(testRec.Body)
+			if rErr != nil {
+				t.Errorf("Test %d: %s: Failed to read response body: <ERROR> %v", i+1, instanceType, rErr)
+			}
+			if !bytes.Equal(rspBytes, test.expectedNotificationBytes) {
+				t.Errorf("Test %d: %s: Notification config doesn't match expected value %s: <ERROR> %v",
+					i+1, instanceType, string(test.expectedNotificationBytes), err)
+			}
+		case InvalidAuth:
+			rspBytes, rErr := ioutil.ReadAll(testRec.Body)
+			if rErr != nil {
+				t.Errorf("Test %d: %s: Failed to read response body: <ERROR> %v", i+1, instanceType, rErr)
+			}
+			var errCode APIError
+			xErr := xml.Unmarshal(rspBytes, &errCode)
+			if xErr != nil {
+				t.Errorf("Test %d: %s: Failed to unmarshal error XML: <ERROR> %v", i+1, instanceType, xErr)
+
+			}
+
+			if errCode.Code != signatureMismatchCode {
+				t.Errorf("Test %d: %s: Expected error code %s but received %s: <ERROR> %v", i+1,
+					instanceType, signatureMismatchCode, errCode.Code, err)
+
+			}
+			fallthrough
+		case CheckStatus:
+			if testRec.Code != test.expectedHTTPCode {
+				t.Errorf("Test %d: %s: expected HTTP code %d, but received %d: <ERROR> %v",
+					i+1, instanceType, test.expectedHTTPCode, testRec.Code, err)
+			}
+		}
 	}
 
-	apiRouter.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Errorf("Test %d: %s: GetBucketNotification request failed with %d: <ERROR> %v",
-			2, instanceType, rec.Code, err)
-	}
-	rspBytes, err := ioutil.ReadAll(rec.Body)
-	if err != nil {
-		t.Errorf("Test %d: %s: Failed to read response body: <ERROR> %v", 1, instanceType, err)
-	}
-	if !bytes.Equal(rspBytes, sampleNotificationConfig) {
-		t.Errorf("Test %d: %s: Notification config doesn't match expected value: <ERROR> %v", 2, instanceType, err)
-	}
-
-	// Test 2: Try getting bucket notification on a non-existent bucket.
-	invalidBucketName := "Invalid_BucketName"
-	req, err = newTestSignedRequest("GET", getGetBucketNotificationURL("", invalidBucketName),
+	// Nil Object layer
+	nilAPIRouter := initTestAPIEndPoints(nil, []string{
+		"GetBucketNotificationHandler",
+		"PutBucketNotificationHandler",
+	})
+	testRec := httptest.NewRecorder()
+	testReq, tErr := newTestSignedRequest("GET", getGetBucketNotificationURL("", randBucket),
 		int64(0), nil, credentials.AccessKeyID, credentials.SecretAccessKey)
-	if err != nil {
-		t.Fatalf("Test %d: %s: Failed to create HTTP request for GetBucketNotification: <ERROR> %v",
-			2, instanceType, err)
+	if tErr != nil {
+		t.Fatalf("Test %d: %s: Failed to create HTTP testRequest for GetBucketNotification: <ERROR> %v",
+			len(testCases)+1, instanceType, tErr)
 	}
-	apiRouter.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Errorf("Test %d: %s: GetBucketNotification request failed with %d: <ERROR> %v",
-			2, instanceType, rec.Code, err)
-	}
-
-	// Test 3: Try getting bucket notification for a bucket with notification set.
-	emptyNotificationXML := []byte("<NotificationConfiguration></NotificationConfiguration>" +
-		"<NotificationConfiguration></NotificationConfiguration>")
-	req, err = newTestSignedRequest("GET", getGetBucketNotificationURL("", noNotificationBucket),
-		int64(0), nil, credentials.AccessKeyID, credentials.SecretAccessKey)
-	if err != nil {
-		t.Fatalf("Test %d: %s: Failed to create HTTP request for GetBucketNotification: <ERROR> %v",
-			3, instanceType, err)
-	}
-	apiRouter.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Errorf("Test %d: %s: GetBucketNotification request failed with %d: <ERROR> %v",
-			3, instanceType, rec.Code, err)
-	}
-	if !bytes.Equal(rec.Body.Bytes(), emptyNotificationXML) {
-		t.Errorf("Test %d: %s: GetBucketNotification request received notification "+
-			"config different from empty config: <ERROR> %v", 3, instanceType, err)
+	nilAPIRouter.ServeHTTP(testRec, testReq)
+	if testRec.Code != http.StatusServiceUnavailable {
+		t.Errorf("Test %d: %s: expected HTTP code %d, but received %d: <ERROR> %v",
+			len(testCases)+1, instanceType, http.StatusServiceUnavailable, testRec.Code, err)
 	}
 }
 
