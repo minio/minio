@@ -27,6 +27,7 @@ import (
 	"path"
 	"runtime"
 	"strconv"
+	"strings"
 	"time"
 
 	jwtgo "github.com/dgrijalva/jwt-go"
@@ -668,4 +669,68 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 
 	reply.UIVersion = miniobrowser.UIVersion
 	return nil
+}
+
+// PresignedGetArgs - presigned-get API args.
+type PresignedGetArgs struct {
+	// Host header required for signed headers.
+	HostName string `json:"host"`
+
+	// Bucket name of the object to be presigned.
+	BucketName string `json:"bucket"`
+
+	// Object name to be presigned.
+	ObjectName string `json:"object"`
+}
+
+// PresignedGetRep - presigned-get URL reply.
+type PresignedGetRep struct {
+	// Presigned URL of the object.
+	URL string `json:"url"`
+}
+
+// PresignedGET - returns presigned-Get url.
+func (web *webAPIHandlers) PresignedGet(r *http.Request, args *PresignedGetArgs, reply *PresignedGetRep) error {
+	if !isJWTReqAuthenticated(r) {
+		return &json2.Error{Message: "Unauthorized request"}
+	}
+	if args.BucketName == "" || args.ObjectName == "" {
+		return &json2.Error{Message: "Required arguments: Host, Bucket, Object"}
+	}
+	reply.URL = presignedGet(args.HostName, args.BucketName, args.ObjectName)
+	return nil
+}
+
+// Returns presigned url for GET method.
+func presignedGet(host, bucket, object string) string {
+	cred := serverConfig.GetCredential()
+	region := serverConfig.GetRegion()
+
+	accessKey := cred.AccessKeyID
+	secretKey := cred.SecretAccessKey
+
+	date := time.Now().UTC()
+	dateStr := date.Format("20060102T150405Z")
+	credential := fmt.Sprintf("%s/%s", accessKey, getScope(date, region))
+
+	query := strings.Join([]string{
+		"X-Amz-Algorithm=" + signV4Algorithm,
+		"X-Amz-Credential=" + strings.Replace(credential, "/", "%2F", -1),
+		"X-Amz-Date=" + dateStr,
+		"X-Amz-Expires=" + "604800", // Default set to be expire in 7days.
+		"X-Amz-SignedHeaders=host",
+	}, "&")
+
+	path := "/" + path.Join(bucket, object)
+
+	// Headers are empty, since "host" is the only header required to be signed for Presigned URLs.
+	var extractedSignedHeaders http.Header
+
+	canonicalRequest := getCanonicalRequest(extractedSignedHeaders, unsignedPayload, query, path, "GET", host)
+	stringToSign := getStringToSign(canonicalRequest, date, region)
+	signingKey := getSigningKey(secretKey, date, region)
+	signature := getSignature(signingKey, stringToSign)
+
+	// Construct the final presigned URL.
+	return host + path + "?" + query + "&" + "X-Amz-Signature=" + signature
 }
