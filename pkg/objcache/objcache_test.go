@@ -257,7 +257,7 @@ func TestStaleEntryPurge(t *testing.T) {
 		t.Errorf("Test case expected to pass, failed instead %s", err)
 	}
 
-	_, err = cache.Open("test", time.Now().UTC())
+	_, err = cache.Open("test", time.Now().AddDate(0, 0, 1).UTC())
 	if err != ErrKeyNotFoundInCache {
 		t.Errorf("Test case expected to return ErrKeyNotFoundInCache, instead returned %s", err)
 	}
