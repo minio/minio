@@ -20,13 +20,19 @@ import (
 	"encoding/base64"
 	"encoding/xml"
 	"errors"
+	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"syscall"
+
+	"encoding/json"
 
 	"github.com/pkg/profile"
 )
@@ -41,6 +47,54 @@ func cloneHeader(h http.Header) http.Header {
 
 	}
 	return h2
+}
+
+// checkDuplicates - function to validate if there are duplicates in a slice of strings.
+func checkDuplicates(list []string) error {
+	// Empty lists are not allowed.
+	if len(list) == 0 {
+		return errInvalidArgument
+	}
+	// Empty keys are not allowed.
+	for _, key := range list {
+		if key == "" {
+			return errInvalidArgument
+		}
+	}
+	listMaps := make(map[string]int)
+	// Navigate through each configs and count the entries.
+	for _, key := range list {
+		listMaps[key]++
+	}
+	// Validate if there are any duplicate counts.
+	for key, count := range listMaps {
+		if count != 1 {
+			return fmt.Errorf("Duplicate key: \"%s\" found of count: \"%d\"", key, count)
+		}
+	}
+	// No duplicates.
+	return nil
+}
+
+// splits network path into its components Address and Path.
+func splitNetPath(networkPath string) (netAddr, netPath string, err error) {
+	if runtime.GOOS == "windows" {
+		if volumeName := filepath.VolumeName(networkPath); volumeName != "" {
+			return "", networkPath, nil
+		}
+	}
+	networkParts := strings.SplitN(networkPath, ":", 2)
+	if len(networkParts) == 1 {
+		return "", networkPath, nil
+	}
+	if networkParts[1] == "" {
+		return "", "", &net.AddrError{Err: "Missing path in network path", Addr: networkPath}
+	} else if networkParts[0] == "" {
+		return "", "", &net.AddrError{Err: "Missing address in network path", Addr: networkPath}
+	} else if !filepath.IsAbs(networkParts[1]) {
+		return "", "", &net.AddrError{Err: "Network path should be absolute", Addr: networkPath}
+	}
+	return networkParts[0], networkParts[1], nil
 }
 
 // xmlDecoder provide decoded value in xml.
@@ -117,16 +171,30 @@ type shutdownCallbacks struct {
 // globalShutdownCBs stores regular and object storages callbacks
 var globalShutdownCBs *shutdownCallbacks
 
-func (s shutdownCallbacks) GetObjectLayerCBs() []cleanupOnExitFunc {
+func (s *shutdownCallbacks) RunObjectLayerCBs() errCode {
 	s.RLock()
 	defer s.RUnlock()
-	return s.objectLayerCallbacks
+	exitCode := exitSuccess
+	for _, callback := range s.objectLayerCallbacks {
+		exitCode = callback()
+		if exitCode != exitSuccess {
+			break
+		}
+	}
+	return exitCode
 }
 
-func (s shutdownCallbacks) GetGenericCBs() []cleanupOnExitFunc {
+func (s *shutdownCallbacks) RunGenericCBs() errCode {
 	s.RLock()
 	defer s.RUnlock()
-	return s.genericCallbacks
+	exitCode := exitSuccess
+	for _, callback := range s.genericCallbacks {
+		exitCode = callback()
+		if exitCode != exitSuccess {
+			break
+		}
+	}
+	return exitCode
 }
 
 func (s *shutdownCallbacks) AddObjectLayerCB(callback cleanupOnExitFunc) error {
@@ -203,6 +271,16 @@ func startMonitorShutdownSignal(onExitFn onExitFunc) error {
 		return errInvalidArgument
 	}
 
+	// Custom exit function
+	runExitFn := func(exitCode errCode) {
+		// If global profiler is set stop before we exit.
+		if globalProfiler != nil {
+			globalProfiler.Stop()
+		}
+		// Call user supplied user exit function
+		onExitFn(int(exitCode))
+	}
+
 	// Start listening on shutdown signal.
 	go func() {
 		defer close(globalShutdownSignalCh)
@@ -215,31 +293,22 @@ func startMonitorShutdownSignal(onExitFn onExitFunc) error {
 				// Initiate graceful shutdown.
 				globalShutdownSignalCh <- shutdownHalt
 			case signal := <-globalShutdownSignalCh:
-				// Call all object storage shutdown callbacks and exit for emergency
-				for _, callback := range globalShutdownCBs.GetObjectLayerCBs() {
-					exitCode := callback()
-					if exitCode != exitSuccess {
-						// If global profiler is set stop before we exit.
-						if globalProfiler != nil {
-							globalProfiler.Stop()
-						}
-						onExitFn(int(exitCode))
-					}
+				// Call all object storage shutdown
+				// callbacks and exit for emergency
+				exitCode := globalShutdownCBs.RunObjectLayerCBs()
+				if exitCode != exitSuccess {
+					runExitFn(exitCode)
+				}
 
+				exitCode = globalShutdownCBs.RunGenericCBs()
+				if exitCode != exitSuccess {
+					runExitFn(exitCode)
 				}
-				// Call all callbacks and exit for emergency
-				for _, callback := range globalShutdownCBs.GetGenericCBs() {
-					exitCode := callback()
-					if exitCode != exitSuccess {
-						// If global profiler is set stop before we exit.
-						if globalProfiler != nil {
-							globalProfiler.Stop()
-						}
-						onExitFn(int(exitCode))
-					}
-				}
-				// All shutdown callbacks ensure that the server is safely terminated
-				// and any concurrent process could be started again
+
+				// All shutdown callbacks ensure that
+				// the server is safely terminated and
+				// any concurrent process could be
+				// started again
 				if signal == shutdownRestart {
 					path := os.Args[0]
 					cmdArgs := os.Args[1:]
@@ -252,25 +321,32 @@ func startMonitorShutdownSignal(onExitFn onExitFunc) error {
 						errorIf(errors.New("Unable to reboot."), err.Error())
 					}
 
-					// If global profiler is set stop before we exit.
-					if globalProfiler != nil {
-						globalProfiler.Stop()
-					}
-
 					// Successfully forked.
-					onExitFn(int(exitSuccess))
-				}
-
-				// If global profiler is set stop before we exit.
-				if globalProfiler != nil {
-					globalProfiler.Stop()
+					runExitFn(exitSuccess)
 				}
 
 				// Exit as success if no errors.
-				onExitFn(int(exitSuccess))
+				runExitFn(exitSuccess)
 			}
 		}
 	}()
 	// Successfully started routine.
 	return nil
+}
+
+// dump the request into a string in JSON format.
+func dumpRequest(r *http.Request) string {
+	header := cloneHeader(r.Header)
+	header.Set("Host", r.Host)
+	req := struct {
+		Method string      `json:"method"`
+		Path   string      `json:"path"`
+		Query  string      `json:"query"`
+		Header http.Header `json:"header"`
+	}{r.Method, r.URL.Path, r.URL.RawQuery, header}
+	jsonBytes, err := json.Marshal(req)
+	if err != nil {
+		return "<error dumping request>"
+	}
+	return string(jsonBytes)
 }

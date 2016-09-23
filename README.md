@@ -39,6 +39,7 @@ $ go get -u github.com/minio/minio
 
 ## 2. Run Minio Server
 
+In the examples below, Minio serves the contents of the ``Photos`` directory as an object store.
 
 ### GNU/Linux
 
@@ -163,6 +164,7 @@ Please visit official zfs FreeBSD guide for more details [here](https://www.free
 
 ## 3. Test Minio Server using Minio Browser
 
+
 Open a web browser and navigate to http://127.0.0.1:9000 to view your buckets on minio server.
 
 ![Screenshot](https://github.com/minio/minio/blob/master/docs/screenshots/minio-browser.jpg?raw=true)
@@ -174,14 +176,10 @@ Open a web browser and navigate to http://127.0.0.1:9000 to view your buckets on
 Install mc from [here](https://docs.minio.io/docs/minio-client-quickstart-guide). Use `mc ls` command to list all the buckets on your minio server.
 
 ```sh
-
+$ mc config host add myminio http://10.0.0.10:9000 USWUXHGYZQYFYFFIT3RE MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03
+$ mc mb myminio/mybucket
 $ mc ls myminio/
-[2015-08-05 08:13:22 IST]     0B andoria/
-[2015-08-05 06:14:26 IST]     0B deflector/
-[2015-08-05 08:13:11 IST]     0B ferenginar/
-[2016-03-08 14:56:35 IST]     0B jarjarbing/
-[2016-01-20 16:07:41 IST]     0B my.minio.io/
-
+[2015-08-05 08:13:11 IST]     0B mybucket/
 ```
 
 For more examples please navigate to [Minio Client Complete Guide](https://docs.minio.io/docs/minio-client-complete-guide).

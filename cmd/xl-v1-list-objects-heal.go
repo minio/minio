@@ -137,12 +137,23 @@ func (xl xlObjects) listObjectsHeal(bucket, prefix, marker, delimiter string, ma
 			result.Prefixes = append(result.Prefixes, objInfo.Name)
 			continue
 		}
-		result.Objects = append(result.Objects, ObjectInfo{
-			Name:    objInfo.Name,
-			ModTime: objInfo.ModTime,
-			Size:    objInfo.Size,
-			IsDir:   false,
-		})
+
+		// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
+		// used for instrumentation on locks.
+		opsID := getOpsID()
+
+		// Check if the current object needs healing
+		nsMutex.RLock(bucket, objInfo.Name, opsID)
+		partsMetadata, errs := readAllXLMetadata(xl.storageDisks, bucket, objInfo.Name)
+		if xlShouldHeal(partsMetadata, errs) {
+			result.Objects = append(result.Objects, ObjectInfo{
+				Name:    objInfo.Name,
+				ModTime: objInfo.ModTime,
+				Size:    objInfo.Size,
+				IsDir:   false,
+			})
+		}
+		nsMutex.RUnlock(bucket, objInfo.Name, opsID)
 	}
 	return result, nil
 }
@@ -151,28 +162,28 @@ func (xl xlObjects) listObjectsHeal(bucket, prefix, marker, delimiter string, ma
 func (xl xlObjects) ListObjectsHeal(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return ListObjectsInfo{}, BucketNameInvalid{Bucket: bucket}
+		return ListObjectsInfo{}, traceError(BucketNameInvalid{Bucket: bucket})
 	}
 	// Verify if bucket exists.
 	if !xl.isBucketExist(bucket) {
-		return ListObjectsInfo{}, BucketNotFound{Bucket: bucket}
+		return ListObjectsInfo{}, traceError(BucketNotFound{Bucket: bucket})
 	}
 	if !IsValidObjectPrefix(prefix) {
-		return ListObjectsInfo{}, ObjectNameInvalid{Bucket: bucket, Object: prefix}
+		return ListObjectsInfo{}, traceError(ObjectNameInvalid{Bucket: bucket, Object: prefix})
 	}
 	// Verify if delimiter is anything other than '/', which we do not support.
 	if delimiter != "" && delimiter != slashSeparator {
-		return ListObjectsInfo{}, UnsupportedDelimiter{
+		return ListObjectsInfo{}, traceError(UnsupportedDelimiter{
 			Delimiter: delimiter,
-		}
+		})
 	}
 	// Verify if marker has prefix.
 	if marker != "" {
 		if !strings.HasPrefix(marker, prefix) {
-			return ListObjectsInfo{}, InvalidMarkerPrefixCombination{
+			return ListObjectsInfo{}, traceError(InvalidMarkerPrefixCombination{
 				Marker: marker,
 				Prefix: prefix,
-			}
+			})
 		}
 	}
 

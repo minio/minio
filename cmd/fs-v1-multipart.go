@@ -58,9 +58,12 @@ func (fs fsObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 	var err error
 	var eof bool
 	if uploadIDMarker != "" {
-		nsMutex.RLock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, keyMarker))
+		// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
+		// used for instrumentation on locks.
+		opsID := getOpsID()
+		nsMutex.RLock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, keyMarker), opsID)
 		uploads, _, err = listMultipartUploadIDs(bucket, keyMarker, uploadIDMarker, maxUploads, fs.storage)
-		nsMutex.RUnlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, keyMarker))
+		nsMutex.RUnlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, keyMarker), opsID)
 		if err != nil {
 			return ListMultipartsInfo{}, err
 		}
@@ -74,7 +77,7 @@ func (fs fsObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 		if walkResultCh == nil {
 			endWalkCh = make(chan struct{})
 			isLeaf := fs.isMultipartUpload
-			listDir := listDirFactory(isLeaf, fs.storage)
+			listDir := listDirFactory(isLeaf, fsTreeWalkIgnoredErrs, fs.storage)
 			walkResultCh = startTreeWalk(minioMetaBucket, multipartPrefixPath, multipartMarkerPath, recursive, listDir, isLeaf, endWalkCh)
 		}
 		for maxUploads > 0 {
@@ -87,11 +90,11 @@ func (fs fsObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 			// For any walk error return right away.
 			if walkResult.err != nil {
 				// File not found or Disk not found is a valid case.
-				if isErrIgnored(walkResult.err, walkResultIgnoredErrs) {
+				if isErrIgnored(walkResult.err, fsTreeWalkIgnoredErrs) {
 					eof = true
 					break
 				}
-				return ListMultipartsInfo{}, err
+				return ListMultipartsInfo{}, walkResult.err
 			}
 			entry := strings.TrimPrefix(walkResult.entry, retainSlash(pathJoin(mpartMetaPrefix, bucket)))
 			if strings.HasSuffix(walkResult.entry, slashSeparator) {
@@ -110,9 +113,14 @@ func (fs fsObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 			var tmpUploads []uploadMetadata
 			var end bool
 			uploadIDMarker = ""
-			nsMutex.RLock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, entry))
+
+			// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
+			// used for instrumentation on locks.
+			opsID := getOpsID()
+
+			nsMutex.RLock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, entry), opsID)
 			tmpUploads, end, err = listMultipartUploadIDs(bucket, entry, uploadIDMarker, maxUploads, fs.storage)
-			nsMutex.RUnlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, entry))
+			nsMutex.RUnlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, entry), opsID)
 			if err != nil {
 				return ListMultipartsInfo{}, err
 			}
@@ -168,42 +176,42 @@ func (fs fsObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 func (fs fsObjects) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (ListMultipartsInfo, error) {
 	// Validate input arguments.
 	if !IsValidBucketName(bucket) {
-		return ListMultipartsInfo{}, BucketNameInvalid{Bucket: bucket}
+		return ListMultipartsInfo{}, traceError(BucketNameInvalid{Bucket: bucket})
 	}
 	if !fs.isBucketExist(bucket) {
-		return ListMultipartsInfo{}, BucketNotFound{Bucket: bucket}
+		return ListMultipartsInfo{}, traceError(BucketNotFound{Bucket: bucket})
 	}
 	if !IsValidObjectPrefix(prefix) {
-		return ListMultipartsInfo{}, ObjectNameInvalid{Bucket: bucket, Object: prefix}
+		return ListMultipartsInfo{}, traceError(ObjectNameInvalid{Bucket: bucket, Object: prefix})
 	}
 	// Verify if delimiter is anything other than '/', which we do not support.
 	if delimiter != "" && delimiter != slashSeparator {
-		return ListMultipartsInfo{}, UnsupportedDelimiter{
+		return ListMultipartsInfo{}, traceError(UnsupportedDelimiter{
 			Delimiter: delimiter,
-		}
+		})
 	}
 	// Verify if marker has prefix.
 	if keyMarker != "" && !strings.HasPrefix(keyMarker, prefix) {
-		return ListMultipartsInfo{}, InvalidMarkerPrefixCombination{
+		return ListMultipartsInfo{}, traceError(InvalidMarkerPrefixCombination{
 			Marker: keyMarker,
 			Prefix: prefix,
-		}
+		})
 	}
 	if uploadIDMarker != "" {
 		if strings.HasSuffix(keyMarker, slashSeparator) {
-			return ListMultipartsInfo{}, InvalidUploadIDKeyCombination{
+			return ListMultipartsInfo{}, traceError(InvalidUploadIDKeyCombination{
 				UploadIDMarker: uploadIDMarker,
 				KeyMarker:      keyMarker,
-			}
+			})
 		}
 		id, err := uuid.Parse(uploadIDMarker)
 		if err != nil {
-			return ListMultipartsInfo{}, err
+			return ListMultipartsInfo{}, traceError(err)
 		}
 		if id.IsZero() {
-			return ListMultipartsInfo{}, MalformedUploadID{
+			return ListMultipartsInfo{}, traceError(MalformedUploadID{
 				UploadID: uploadIDMarker,
-			}
+			})
 		}
 	}
 	return fs.listMultipartUploads(bucket, prefix, keyMarker, uploadIDMarker, delimiter, maxUploads)
@@ -213,7 +221,7 @@ func (fs fsObjects) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 // request, returns back a unique upload id.
 //
 // Internally this function creates 'uploads.json' associated for the
-// incoming object at '.minio/multipart/bucket/object/uploads.json' on
+// incoming object at '.minio.sys/multipart/bucket/object/uploads.json' on
 // all the disks. `uploads.json` carries metadata regarding on going
 // multipart operation on the object.
 func (fs fsObjects) newMultipartUpload(bucket string, object string, meta map[string]string) (uploadID string, err error) {
@@ -225,9 +233,13 @@ func (fs fsObjects) newMultipartUpload(bucket string, object string, meta map[st
 		fsMeta.Meta = meta
 	}
 
-	// This lock needs to be held for any changes to the directory contents of ".minio/multipart/object/"
-	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object))
-	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object))
+	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
+	// used for instrumentation on locks.
+	opsID := getOpsID()
+
+	// This lock needs to be held for any changes to the directory contents of ".minio.sys/multipart/object/"
+	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object), opsID)
+	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object), opsID)
 
 	uploadID = getUUID()
 	initiated := time.Now().UTC()
@@ -235,9 +247,9 @@ func (fs fsObjects) newMultipartUpload(bucket string, object string, meta map[st
 	if err = fs.writeUploadJSON(bucket, object, uploadID, initiated); err != nil {
 		return "", err
 	}
-	fsMetaPath := path.Join(mpartMetaPrefix, bucket, object, uploadID, fsMetaJSONFile)
-	if err = writeFSMetadata(fs.storage, minioMetaBucket, fsMetaPath, fsMeta); err != nil {
-		return "", toObjectErr(err, minioMetaBucket, fsMetaPath)
+	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID)
+	if err = writeFSMetadata(fs.storage, minioMetaBucket, path.Join(uploadIDPath, fsMetaJSONFile), fsMeta); err != nil {
+		return "", toObjectErr(err, minioMetaBucket, uploadIDPath)
 	}
 	// Return success.
 	return uploadID, nil
@@ -251,15 +263,15 @@ func (fs fsObjects) newMultipartUpload(bucket string, object string, meta map[st
 func (fs fsObjects) NewMultipartUpload(bucket, object string, meta map[string]string) (string, error) {
 	// Verify if bucket name is valid.
 	if !IsValidBucketName(bucket) {
-		return "", BucketNameInvalid{Bucket: bucket}
+		return "", traceError(BucketNameInvalid{Bucket: bucket})
 	}
 	// Verify whether the bucket exists.
 	if !fs.isBucketExist(bucket) {
-		return "", BucketNotFound{Bucket: bucket}
+		return "", traceError(BucketNotFound{Bucket: bucket})
 	}
 	// Verify if object name is valid.
 	if !IsValidObjectName(object) {
-		return "", ObjectNameInvalid{Bucket: bucket, Object: object}
+		return "", traceError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
 	return fs.newMultipartUpload(bucket, object, meta)
 }
@@ -290,7 +302,14 @@ func getFSAppendDataPath(uploadID string) string {
 }
 
 // Append parts to fsAppendDataFile.
-func appendParts(disk StorageAPI, bucket, object, uploadID string) {
+func appendParts(disk StorageAPI, bucket, object, uploadID, opsID string) {
+	cleanupAppendPaths := func() {
+		// In case of any error, cleanup the append data and json files
+		// from the tmp so that we do not have any inconsistent append
+		// data/json files.
+		disk.DeleteFile(bucket, getFSAppendDataPath(uploadID))
+		disk.DeleteFile(bucket, getFSAppendMetaPath(uploadID))
+	}
 	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID)
 	// fs-append.json path
 	fsAppendMetaPath := getFSAppendMetaPath(uploadID)
@@ -298,20 +317,21 @@ func appendParts(disk StorageAPI, bucket, object, uploadID string) {
 	fsMetaPath := path.Join(mpartMetaPrefix, bucket, object, uploadID, fsMetaJSONFile)
 
 	// Lock the uploadID so that no one modifies fs.json
-	nsMutex.RLock(minioMetaBucket, uploadIDPath)
+	nsMutex.RLock(minioMetaBucket, uploadIDPath, opsID)
 	fsMeta, err := readFSMetadata(disk, minioMetaBucket, fsMetaPath)
-	nsMutex.RUnlock(minioMetaBucket, uploadIDPath)
+	nsMutex.RUnlock(minioMetaBucket, uploadIDPath, opsID)
 	if err != nil {
 		return
 	}
 
 	// Lock fs-append.json so that there is no parallel append to the file.
-	nsMutex.Lock(minioMetaBucket, fsAppendMetaPath)
-	defer nsMutex.Unlock(minioMetaBucket, fsAppendMetaPath)
+	nsMutex.Lock(minioMetaBucket, fsAppendMetaPath, opsID)
+	defer nsMutex.Unlock(minioMetaBucket, fsAppendMetaPath, opsID)
 
 	fsAppendMeta, err := readFSMetadata(disk, minioMetaBucket, fsAppendMetaPath)
 	if err != nil {
-		if err != errFileNotFound {
+		if errorCause(err) != errFileNotFound {
+			cleanupAppendPaths()
 			return
 		}
 		fsAppendMeta = fsMeta
@@ -324,28 +344,14 @@ func appendParts(disk StorageAPI, bucket, object, uploadID string) {
 		return
 	}
 	// Hold write lock on the part so that there is no parallel upload on the part.
-	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID, strconv.Itoa(part.Number)))
-	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID, strconv.Itoa(part.Number)))
+	partPath := pathJoin(mpartMetaPrefix, bucket, object, uploadID, strconv.Itoa(part.Number))
+	nsMutex.Lock(minioMetaBucket, partPath, opsID)
+	defer nsMutex.Unlock(minioMetaBucket, partPath, opsID)
 
 	// Proceed to append "part"
 	fsAppendDataPath := getFSAppendDataPath(uploadID)
-	tmpDataPath := path.Join(tmpMetaPrefix, getUUID())
-	if part.Number != 1 {
-		// Move it to tmp location before appending so that we don't leave inconsitent data
-		// if server crashes during append operation.
-		err = disk.RenameFile(minioMetaBucket, fsAppendDataPath, minioMetaBucket, tmpDataPath)
-		if err != nil {
-			return
-		}
-		// Delete fs-append.json so that we don't leave a stale file if server crashes
-		// when the part is being appended to the tmp file.
-		err = disk.DeleteFile(minioMetaBucket, fsAppendMetaPath)
-		if err != nil {
-			return
-		}
-	}
 	// Path to the part that needs to be appended.
-	partPath := path.Join(mpartMetaPrefix, bucket, object, uploadID, part.Name)
+	partPath = path.Join(mpartMetaPrefix, bucket, object, uploadID, part.Name)
 	offset := int64(0)
 	totalLeft := part.Size
 	buf := make([]byte, readSizeV1)
@@ -357,7 +363,8 @@ func appendParts(disk StorageAPI, bucket, object, uploadID string) {
 		var n int64
 		n, err = disk.ReadFile(minioMetaBucket, partPath, offset, buf[:curLeft])
 		if n > 0 {
-			if err = disk.AppendFile(minioMetaBucket, tmpDataPath, buf[:n]); err != nil {
+			if err = disk.AppendFile(minioMetaBucket, fsAppendDataPath, buf[:n]); err != nil {
+				cleanupAppendPaths()
 				return
 			}
 		}
@@ -365,51 +372,54 @@ func appendParts(disk StorageAPI, bucket, object, uploadID string) {
 			if err == io.EOF || err == io.ErrUnexpectedEOF {
 				break
 			}
+			cleanupAppendPaths()
 			return
 		}
 		offset += n
 		totalLeft -= n
 	}
-	// All good, the part has been appended to the tmp file, rename it back.
-	if err = disk.RenameFile(minioMetaBucket, tmpDataPath, minioMetaBucket, fsAppendDataPath); err != nil {
-		return
-	}
 	fsAppendMeta.AddObjectPart(part.Number, part.Name, part.ETag, part.Size)
+	// Overwrite previous fs-append.json
 	if err = writeFSMetadata(disk, minioMetaBucket, fsAppendMetaPath, fsAppendMeta); err != nil {
+		cleanupAppendPaths()
 		return
 	}
 	// If there are more parts that need to be appended to fsAppendDataFile
 	_, appendNeeded = partToAppend(fsMeta, fsAppendMeta)
 	if appendNeeded {
-		go appendParts(disk, bucket, object, uploadID)
+		go appendParts(disk, bucket, object, uploadID, opsID)
 	}
 }
 
 // PutObjectPart - reads incoming data until EOF for the part file on
 // an ongoing multipart transaction. Internally incoming data is
-// written to '.minio/tmp' location and safely renamed to
-// '.minio/multipart' for reach parts.
+// written to '.minio.sys/tmp' location and safely renamed to
+// '.minio.sys/multipart' for reach parts.
 func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, size int64, data io.Reader, md5Hex string) (string, error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return "", BucketNameInvalid{Bucket: bucket}
+		return "", traceError(BucketNameInvalid{Bucket: bucket})
 	}
 	// Verify whether the bucket exists.
 	if !fs.isBucketExist(bucket) {
-		return "", BucketNotFound{Bucket: bucket}
+		return "", traceError(BucketNotFound{Bucket: bucket})
 	}
 	if !IsValidObjectName(object) {
-		return "", ObjectNameInvalid{Bucket: bucket, Object: object}
+		return "", traceError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
 
 	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID)
 
-	nsMutex.RLock(minioMetaBucket, uploadIDPath)
+	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
+	// used for instrumentation on locks.
+	opsID := getOpsID()
+
+	nsMutex.RLock(minioMetaBucket, uploadIDPath, opsID)
 	// Just check if the uploadID exists to avoid copy if it doesn't.
 	uploadIDExists := fs.isUploadIDExists(bucket, object, uploadID)
-	nsMutex.RUnlock(minioMetaBucket, uploadIDPath)
+	nsMutex.RUnlock(minioMetaBucket, uploadIDPath, opsID)
 	if !uploadIDExists {
-		return "", InvalidUploadID{UploadID: uploadID}
+		return "", traceError(InvalidUploadID{UploadID: uploadID})
 	}
 
 	partSuffix := fmt.Sprintf("object%d", partID)
@@ -443,7 +453,7 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	// bytes than specified in request header.
 	if bytesWritten < size {
 		fs.storage.DeleteFile(minioMetaBucket, tmpPartPath)
-		return "", IncompleteBody{}
+		return "", traceError(IncompleteBody{})
 	}
 
 	// Validate if payload is valid.
@@ -452,7 +462,7 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 			// Incoming payload wrong, delete the temporary object.
 			fs.storage.DeleteFile(minioMetaBucket, tmpPartPath)
 			// Error return.
-			return "", toObjectErr(err, bucket, object)
+			return "", toObjectErr(traceError(err), bucket, object)
 		}
 	}
 
@@ -462,17 +472,21 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 			// MD5 mismatch, delete the temporary object.
 			fs.storage.DeleteFile(minioMetaBucket, tmpPartPath)
 			// Returns md5 mismatch.
-			return "", BadDigest{md5Hex, newMD5Hex}
+			return "", traceError(BadDigest{md5Hex, newMD5Hex})
 		}
 	}
 
+	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
+	// used for instrumentation on locks.
+	opsID = getOpsID()
+
 	// Hold write lock as we are updating fs.json
-	nsMutex.Lock(minioMetaBucket, uploadIDPath)
-	defer nsMutex.Unlock(minioMetaBucket, uploadIDPath)
+	nsMutex.Lock(minioMetaBucket, uploadIDPath, opsID)
+	defer nsMutex.Unlock(minioMetaBucket, uploadIDPath, opsID)
 
 	// Just check if the uploadID exists to avoid copy if it doesn't.
 	if !fs.isUploadIDExists(bucket, object, uploadID) {
-		return "", InvalidUploadID{UploadID: uploadID}
+		return "", traceError(InvalidUploadID{UploadID: uploadID})
 	}
 
 	fsMetaPath := pathJoin(uploadIDPath, fsMetaJSONFile)
@@ -486,21 +500,21 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	err = fs.storage.RenameFile(minioMetaBucket, tmpPartPath, minioMetaBucket, partPath)
 	if err != nil {
 		if dErr := fs.storage.DeleteFile(minioMetaBucket, tmpPartPath); dErr != nil {
-			return "", toObjectErr(dErr, minioMetaBucket, tmpPartPath)
+			return "", toObjectErr(traceError(dErr), minioMetaBucket, tmpPartPath)
 		}
-		return "", toObjectErr(err, minioMetaBucket, partPath)
+		return "", toObjectErr(traceError(err), minioMetaBucket, partPath)
 	}
-
-	if err = writeFSMetadata(fs.storage, minioMetaBucket, fsMetaPath, fsMeta); err != nil {
-		return "", toObjectErr(err, minioMetaBucket, fsMetaPath)
+	uploadIDPath = path.Join(mpartMetaPrefix, bucket, object, uploadID)
+	if err = writeFSMetadata(fs.storage, minioMetaBucket, path.Join(uploadIDPath, fsMetaJSONFile), fsMeta); err != nil {
+		return "", toObjectErr(err, minioMetaBucket, uploadIDPath)
 	}
-	go appendParts(fs.storage, bucket, object, uploadID)
+	go appendParts(fs.storage, bucket, object, uploadID, opsID)
 	return newMD5Hex, nil
 }
 
 // listObjectParts - wrapper scanning through
-// '.minio/multipart/bucket/object/UPLOADID'. Lists all the parts
-// saved inside '.minio/multipart/bucket/object/UPLOADID'.
+// '.minio.sys/multipart/bucket/object/UPLOADID'. Lists all the parts
+// saved inside '.minio.sys/multipart/bucket/object/UPLOADID'.
 func (fs fsObjects) listObjectParts(bucket, object, uploadID string, partNumberMarker, maxParts int) (ListPartsInfo, error) {
 	result := ListPartsInfo{}
 
@@ -521,7 +535,7 @@ func (fs fsObjects) listObjectParts(bucket, object, uploadID string, partNumberM
 		partNamePath := path.Join(mpartMetaPrefix, bucket, object, uploadID, part.Name)
 		fi, err = fs.storage.StatFile(minioMetaBucket, partNamePath)
 		if err != nil {
-			return ListPartsInfo{}, toObjectErr(err, minioMetaBucket, partNamePath)
+			return ListPartsInfo{}, toObjectErr(traceError(err), minioMetaBucket, partNamePath)
 		}
 		result.Parts = append(result.Parts, partInfo{
 			PartNumber:   part.Number,
@@ -559,21 +573,26 @@ func (fs fsObjects) listObjectParts(bucket, object, uploadID string, partNumberM
 func (fs fsObjects) ListObjectParts(bucket, object, uploadID string, partNumberMarker, maxParts int) (ListPartsInfo, error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return ListPartsInfo{}, BucketNameInvalid{Bucket: bucket}
+		return ListPartsInfo{}, traceError(BucketNameInvalid{Bucket: bucket})
 	}
 	// Verify whether the bucket exists.
 	if !fs.isBucketExist(bucket) {
-		return ListPartsInfo{}, BucketNotFound{Bucket: bucket}
+		return ListPartsInfo{}, traceError(BucketNotFound{Bucket: bucket})
 	}
 	if !IsValidObjectName(object) {
-		return ListPartsInfo{}, ObjectNameInvalid{Bucket: bucket, Object: object}
+		return ListPartsInfo{}, traceError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
+
+	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
+	// used for instrumentation on locks.
+	opsID := getOpsID()
+
 	// Hold lock so that there is no competing abort-multipart-upload or complete-multipart-upload.
-	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID))
-	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID))
+	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID), opsID)
+	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID), opsID)
 
 	if !fs.isUploadIDExists(bucket, object, uploadID) {
-		return ListPartsInfo{}, InvalidUploadID{UploadID: uploadID}
+		return ListPartsInfo{}, traceError(InvalidUploadID{UploadID: uploadID})
 	}
 	return fs.listObjectParts(bucket, object, uploadID, partNumberMarker, maxParts)
 }
@@ -587,36 +606,40 @@ func (fs fsObjects) ListObjectParts(bucket, object, uploadID string, partNumberM
 func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, uploadID string, parts []completePart) (string, error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return "", BucketNameInvalid{Bucket: bucket}
+		return "", traceError(BucketNameInvalid{Bucket: bucket})
 	}
 	// Verify whether the bucket exists.
 	if !fs.isBucketExist(bucket) {
-		return "", BucketNotFound{Bucket: bucket}
+		return "", traceError(BucketNotFound{Bucket: bucket})
 	}
 	if !IsValidObjectName(object) {
-		return "", ObjectNameInvalid{
+		return "", traceError(ObjectNameInvalid{
 			Bucket: bucket,
 			Object: object,
-		}
+		})
 	}
 
 	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID)
+	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
+	// used for instrumentation on locks.
+	opsID := getOpsID()
+
 	// Hold lock so that
 	// 1) no one aborts this multipart upload
 	// 2) no one does a parallel complete-multipart-upload on this
 	// multipart upload
-	nsMutex.Lock(minioMetaBucket, uploadIDPath)
-	defer nsMutex.Unlock(minioMetaBucket, uploadIDPath)
+	nsMutex.Lock(minioMetaBucket, uploadIDPath, opsID)
+	defer nsMutex.Unlock(minioMetaBucket, uploadIDPath, opsID)
 
 	if !fs.isUploadIDExists(bucket, object, uploadID) {
-		return "", InvalidUploadID{UploadID: uploadID}
+		return "", traceError(InvalidUploadID{UploadID: uploadID})
 	}
 
 	// fs-append.json path
 	fsAppendMetaPath := getFSAppendMetaPath(uploadID)
 	// Lock fs-append.json so that no parallel appendParts() is being done.
-	nsMutex.Lock(minioMetaBucket, fsAppendMetaPath)
-	defer nsMutex.Unlock(minioMetaBucket, fsAppendMetaPath)
+	nsMutex.Lock(minioMetaBucket, fsAppendMetaPath, opsID)
+	defer nsMutex.Unlock(minioMetaBucket, fsAppendMetaPath, opsID)
 
 	// Calculate s3 compatible md5sum for complete multipart.
 	s3MD5, err := completeMultipartMD5(parts...)
@@ -635,7 +658,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	if err == nil && isPartsSame(fsAppendMeta.Parts, parts) {
 		fsAppendDataPath := getFSAppendDataPath(uploadID)
 		if err = fs.storage.RenameFile(minioMetaBucket, fsAppendDataPath, bucket, object); err != nil {
-			return "", toObjectErr(err, minioMetaBucket, fsAppendDataPath)
+			return "", toObjectErr(traceError(err), minioMetaBucket, fsAppendDataPath)
 		}
 		// Remove the append-file metadata file in tmp location as we no longer need it.
 		fs.storage.DeleteFile(minioMetaBucket, fsAppendMetaPath)
@@ -649,18 +672,18 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 		for i, part := range parts {
 			partIdx := fsMeta.ObjectPartIndex(part.PartNumber)
 			if partIdx == -1 {
-				return "", InvalidPart{}
+				return "", traceError(InvalidPart{})
 			}
 			if fsMeta.Parts[partIdx].ETag != part.ETag {
-				return "", BadDigest{}
+				return "", traceError(BadDigest{})
 			}
 			// All parts except the last part has to be atleast 5MB.
 			if (i < len(parts)-1) && !isMinAllowedPartSize(fsMeta.Parts[partIdx].Size) {
-				return "", PartTooSmall{
+				return "", traceError(PartTooSmall{
 					PartNumber: part.PartNumber,
 					PartSize:   fsMeta.Parts[partIdx].Size,
 					PartETag:   part.ETag,
-				}
+				})
 			}
 			// Construct part suffix.
 			partSuffix := fmt.Sprintf("object%d", part.PartNumber)
@@ -676,7 +699,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 				n, err = fs.storage.ReadFile(minioMetaBucket, multipartPartFile, offset, buf[:curLeft])
 				if n > 0 {
 					if err = fs.storage.AppendFile(minioMetaBucket, tempObj, buf[:n]); err != nil {
-						return "", toObjectErr(err, minioMetaBucket, tempObj)
+						return "", toObjectErr(traceError(err), minioMetaBucket, tempObj)
 					}
 				}
 				if err != nil {
@@ -684,9 +707,9 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 						break
 					}
 					if err == errFileNotFound {
-						return "", InvalidPart{}
+						return "", traceError(InvalidPart{})
 					}
-					return "", toObjectErr(err, minioMetaBucket, multipartPartFile)
+					return "", toObjectErr(traceError(err), minioMetaBucket, multipartPartFile)
 				}
 				offset += n
 				totalLeft -= n
@@ -697,9 +720,9 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 		err = fs.storage.RenameFile(minioMetaBucket, tempObj, bucket, object)
 		if err != nil {
 			if dErr := fs.storage.DeleteFile(minioMetaBucket, tempObj); dErr != nil {
-				return "", toObjectErr(dErr, minioMetaBucket, tempObj)
+				return "", toObjectErr(traceError(dErr), minioMetaBucket, tempObj)
 			}
-			return "", toObjectErr(err, bucket, object)
+			return "", toObjectErr(traceError(err), bucket, object)
 		}
 	}
 
@@ -713,7 +736,8 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 		}
 		fsMeta.Meta["md5Sum"] = s3MD5
 
-		fsMetaPath = path.Join(bucketMetaPrefix, bucket, object, fsMetaJSONFile)
+		fsMetaPath := path.Join(bucketMetaPrefix, bucket, object, fsMetaJSONFile)
+		// Write the metadata to a temp file and rename it to the actual location.
 		if err = writeFSMetadata(fs.storage, minioMetaBucket, fsMetaPath, fsMeta); err != nil {
 			return "", toObjectErr(err, bucket, object)
 		}
@@ -724,10 +748,14 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 		return "", toObjectErr(err, bucket, object)
 	}
 
+	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
+	// used for instrumentation on locks.
+	opsID = getOpsID()
+
 	// Hold the lock so that two parallel complete-multipart-uploads do not
 	// leave a stale uploads.json behind.
-	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object))
-	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object))
+	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object), opsID)
+	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object), opsID)
 
 	// Validate if there are other incomplete upload-id's present for
 	// the object, if yes do not attempt to delete 'uploads.json'.
@@ -750,7 +778,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	}
 
 	if err = fs.storage.DeleteFile(minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object, uploadsJSONFile)); err != nil {
-		return "", toObjectErr(err, minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object))
+		return "", toObjectErr(traceError(err), minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object))
 	}
 
 	// Return md5sum.
@@ -759,7 +787,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 
 // abortMultipartUpload - wrapper for purging an ongoing multipart
 // transaction, deletes uploadID entry from `uploads.json` and purges
-// the directory at '.minio/multipart/bucket/object/uploadID' holding
+// the directory at '.minio.sys/multipart/bucket/object/uploadID' holding
 // all the upload parts.
 func (fs fsObjects) abortMultipartUpload(bucket, object, uploadID string) error {
 	// Cleanup all uploaded parts.
@@ -785,9 +813,9 @@ func (fs fsObjects) abortMultipartUpload(bucket, object, uploadID string) error 
 			return nil
 		}
 	} // No more pending uploads for the object, we purge the entire
-	// entry at '.minio/multipart/bucket/object'.
+	// entry at '.minio.sys/multipart/bucket/object'.
 	if err = fs.storage.DeleteFile(minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object, uploadsJSONFile)); err != nil {
-		return toObjectErr(err, minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object))
+		return toObjectErr(traceError(err), minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object))
 	}
 	return nil
 }
@@ -807,27 +835,31 @@ func (fs fsObjects) abortMultipartUpload(bucket, object, uploadID string) error 
 func (fs fsObjects) AbortMultipartUpload(bucket, object, uploadID string) error {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return BucketNameInvalid{Bucket: bucket}
+		return traceError(BucketNameInvalid{Bucket: bucket})
 	}
 	if !fs.isBucketExist(bucket) {
-		return BucketNotFound{Bucket: bucket}
+		return traceError(BucketNotFound{Bucket: bucket})
 	}
 	if !IsValidObjectName(object) {
-		return ObjectNameInvalid{Bucket: bucket, Object: object}
+		return traceError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
 
+	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
+	// used for instrumentation on locks.
+	opsID := getOpsID()
+
 	// Hold lock so that there is no competing complete-multipart-upload or put-object-part.
-	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID))
-	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID))
+	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID), opsID)
+	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID), opsID)
 
 	if !fs.isUploadIDExists(bucket, object, uploadID) {
-		return InvalidUploadID{UploadID: uploadID}
+		return traceError(InvalidUploadID{UploadID: uploadID})
 	}
 
 	fsAppendMetaPath := getFSAppendMetaPath(uploadID)
 	// Lock fs-append.json so that no parallel appendParts() is being done.
-	nsMutex.Lock(minioMetaBucket, fsAppendMetaPath)
-	defer nsMutex.Unlock(minioMetaBucket, fsAppendMetaPath)
+	nsMutex.Lock(minioMetaBucket, fsAppendMetaPath, opsID)
+	defer nsMutex.Unlock(minioMetaBucket, fsAppendMetaPath, opsID)
 
 	err := fs.abortMultipartUpload(bucket, object, uploadID)
 	return err

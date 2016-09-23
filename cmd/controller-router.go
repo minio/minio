@@ -27,10 +27,10 @@ const (
 	controlPath = "/controller"
 )
 
-// Register control RPC handlers.
-func registerControlRPCRouter(mux *router.Router, ctrlHandlers *controllerAPIHandlers) {
+// Register controller RPC handlers.
+func registerControllerRPCRouter(mux *router.Router, ctrlHandlers *controllerAPIHandlers) {
 	ctrlRPCServer := rpc.NewServer()
-	ctrlRPCServer.RegisterName("Control", ctrlHandlers)
+	ctrlRPCServer.RegisterName("Controller", ctrlHandlers)
 
 	ctrlRouter := mux.NewRoute().PathPrefix(reservedBucket).Subrouter()
 	ctrlRouter.Path(controlPath).Handler(ctrlRPCServer)
@@ -38,5 +38,5 @@ func registerControlRPCRouter(mux *router.Router, ctrlHandlers *controllerAPIHan
 
 // Handler for object healing.
 type controllerAPIHandlers struct {
-	ObjectAPI ObjectLayer
+	ObjectAPI func() ObjectLayer
 }

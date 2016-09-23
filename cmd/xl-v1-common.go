@@ -62,7 +62,7 @@ func (xl xlObjects) isObject(bucket, prefix string) (ok bool) {
 			return true
 		}
 		// Ignore for file not found,  disk not found or faulty disk.
-		if isErrIgnored(err, walkResultIgnoredErrs) {
+		if isErrIgnored(err, xlTreeWalkIgnoredErrs) {
 			continue
 		}
 		errorIf(err, "Unable to stat a file %s/%s/%s", bucket, prefix, xlMetaJSONFile)

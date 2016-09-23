@@ -33,6 +33,15 @@ func TestIsValidLocationContraint(t *testing.T) {
 	}
 	defer removeAll(path)
 
+	// Test with corrupted XML
+	malformedReq := &http.Request{
+		Body:          ioutil.NopCloser(bytes.NewBuffer([]byte("<>"))),
+		ContentLength: int64(len("<>")),
+	}
+	if err := isValidLocationConstraint(malformedReq); err != ErrMalformedXML {
+		t.Fatal("Unexpected error: ", err)
+	}
+
 	// generates the input request with XML bucket configuration set to the request body.
 	createExpectedRequest := func(req *http.Request, location string) (*http.Request, error) {
 		createBucketConfig := createBucketLocationConfiguration{}
@@ -95,6 +104,16 @@ func TestExtractMetadataHeaders(t *testing.T) {
 				"test-1": []string{"123"},
 			},
 			metadata: map[string]string{},
+		},
+		// Validate if there are no keys to extract.
+		{
+			header: http.Header{
+				"X-Amz-Meta-Appid":   []string{"amz-meta"},
+				"X-Minio-Meta-Appid": []string{"minio-meta"},
+			},
+			metadata: map[string]string{
+				"X-Amz-Meta-Appid":   "amz-meta",
+				"X-Minio-Meta-Appid": "minio-meta"},
 		},
 	}
 

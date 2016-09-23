@@ -17,10 +17,12 @@
 package cmd
 
 import (
-	"encoding/json"
 	"hash/crc32"
 	"path"
 	"sync"
+	"time"
+
+	"github.com/tidwall/gjson"
 )
 
 // Returns number of errors that occurred the most (incl. nil) and the
@@ -32,6 +34,7 @@ import (
 
 func reduceErrs(errs []error, ignoredErrs []error) error {
 	errorCounts := make(map[error]int)
+	errs = errorsCause(errs)
 	for _, err := range errs {
 		if isErrIgnored(err, ignoredErrs) {
 			continue
@@ -46,13 +49,14 @@ func reduceErrs(errs []error, ignoredErrs []error) error {
 			errMax = err
 		}
 	}
-	return errMax
+	return traceError(errMax, errs...)
 }
 
 // Validates if we have quorum based on the errors related to disk only.
 // Returns 'true' if we have quorum, 'false' if we don't.
 func isDiskQuorum(errs []error, minQuorumCount int) bool {
 	var count int
+	errs = errorsCause(errs)
 	for _, err := range errs {
 		switch err {
 		case errDiskNotFound, errFaultyDisk, errDiskAccessDenied:
@@ -60,6 +64,7 @@ func isDiskQuorum(errs []error, minQuorumCount int) bool {
 		}
 		count++
 	}
+
 	return count >= minQuorumCount
 }
 
@@ -96,19 +101,160 @@ func hashOrder(key string, cardinality int) []int {
 	return nums
 }
 
-// readXLMeta reads `xl.json` and returns back XL metadata structure.
-func readXLMeta(disk StorageAPI, bucket string, object string) (xlMeta xlMetaV1, err error) {
-	// Reads entire `xl.json`.
-	buf, err := disk.ReadAll(bucket, path.Join(object, xlMetaJSONFile))
+func parseXLStat(xlMetaBuf []byte) (statInfo, error) {
+	// obtain stat info.
+	stat := statInfo{}
+	// fetching modTime.
+	modTime, err := time.Parse(time.RFC3339, gjson.GetBytes(xlMetaBuf, "stat.modTime").String())
+	if err != nil {
+		return statInfo{}, err
+	}
+	stat.ModTime = modTime
+	// obtain Stat.Size .
+	stat.Size = gjson.GetBytes(xlMetaBuf, "stat.size").Int()
+	return stat, nil
+}
+
+func parseXLVersion(xlMetaBuf []byte) string {
+	return gjson.GetBytes(xlMetaBuf, "version").String()
+}
+
+func parseXLFormat(xlMetaBuf []byte) string {
+	return gjson.GetBytes(xlMetaBuf, "format").String()
+}
+
+func parseXLRelease(xlMetaBuf []byte) string {
+	return gjson.GetBytes(xlMetaBuf, "minio.release").String()
+}
+
+func parseXLErasureInfo(xlMetaBuf []byte) erasureInfo {
+	erasure := erasureInfo{}
+	erasureResult := gjson.GetBytes(xlMetaBuf, "erasure")
+	// parse the xlV1Meta.Erasure.Distribution.
+	disResult := erasureResult.Get("distribution").Array()
+
+	distribution := make([]int, len(disResult))
+	for i, dis := range disResult {
+		distribution[i] = int(dis.Int())
+	}
+	erasure.Distribution = distribution
+
+	erasure.Algorithm = erasureResult.Get("algorithm").String()
+	erasure.DataBlocks = int(erasureResult.Get("data").Int())
+	erasure.ParityBlocks = int(erasureResult.Get("parity").Int())
+	erasure.BlockSize = erasureResult.Get("blockSize").Int()
+	erasure.Index = int(erasureResult.Get("index").Int())
+	// Pare xlMetaV1.Erasure.Checksum array.
+	checkSumsResult := erasureResult.Get("checksum").Array()
+	checkSums := make([]checkSumInfo, len(checkSumsResult))
+	for i, checkSumResult := range checkSumsResult {
+		checkSum := checkSumInfo{}
+		checkSum.Name = checkSumResult.Get("name").String()
+		checkSum.Algorithm = checkSumResult.Get("algorithm").String()
+		checkSum.Hash = checkSumResult.Get("hash").String()
+		checkSums[i] = checkSum
+	}
+	erasure.Checksum = checkSums
+
+	return erasure
+}
+
+func parseXLParts(xlMetaBuf []byte) []objectPartInfo {
+	// Parse the XL Parts.
+	partsResult := gjson.GetBytes(xlMetaBuf, "parts").Array()
+	partInfo := make([]objectPartInfo, len(partsResult))
+	for i, p := range partsResult {
+		info := objectPartInfo{}
+		info.Number = int(p.Get("number").Int())
+		info.Name = p.Get("name").String()
+		info.ETag = p.Get("etag").String()
+		info.Size = p.Get("size").Int()
+		partInfo[i] = info
+	}
+	return partInfo
+}
+
+func parseXLMetaMap(xlMetaBuf []byte) map[string]string {
+	// Get xlMetaV1.Meta map.
+	metaMapResult := gjson.GetBytes(xlMetaBuf, "meta").Map()
+	metaMap := make(map[string]string)
+	for key, valResult := range metaMapResult {
+		metaMap[key] = valResult.String()
+	}
+	return metaMap
+}
+
+// Constructs XLMetaV1 using `gjson` lib to retrieve each field.
+func xlMetaV1UnmarshalJSON(xlMetaBuf []byte) (xlMetaV1, error) {
+	xlMeta := xlMetaV1{}
+	// obtain version.
+	xlMeta.Version = parseXLVersion(xlMetaBuf)
+	// obtain format.
+	xlMeta.Format = parseXLFormat(xlMetaBuf)
+	// Parse xlMetaV1.Stat .
+	stat, err := parseXLStat(xlMetaBuf)
 	if err != nil {
 		return xlMetaV1{}, err
 	}
 
-	// Unmarshal xl metadata.
-	if err = json.Unmarshal(buf, &xlMeta); err != nil {
-		return xlMetaV1{}, err
-	}
+	xlMeta.Stat = stat
+	// parse the xlV1Meta.Erasure fields.
+	xlMeta.Erasure = parseXLErasureInfo(xlMetaBuf)
 
+	// Parse the XL Parts.
+	xlMeta.Parts = parseXLParts(xlMetaBuf)
+	// Get the xlMetaV1.Realse field.
+	xlMeta.Minio.Release = parseXLRelease(xlMetaBuf)
+	// parse xlMetaV1.
+	xlMeta.Meta = parseXLMetaMap(xlMetaBuf)
+
+	return xlMeta, nil
+}
+
+// read xl.json from the given disk, parse and return xlV1MetaV1.Parts.
+func readXLMetaParts(disk StorageAPI, bucket string, object string) ([]objectPartInfo, error) {
+	// Reads entire `xl.json`.
+	xlMetaBuf, err := disk.ReadAll(bucket, path.Join(object, xlMetaJSONFile))
+	if err != nil {
+		return nil, traceError(err)
+	}
+	// obtain xlMetaV1{}.Partsusing `github.com/tidwall/gjson`.
+	xlMetaParts := parseXLParts(xlMetaBuf)
+
+	return xlMetaParts, nil
+}
+
+// read xl.json from the given disk and parse xlV1Meta.Stat and xlV1Meta.Meta using gjson.
+func readXLMetaStat(disk StorageAPI, bucket string, object string) (statInfo, map[string]string, error) {
+	// Reads entire `xl.json`.
+	xlMetaBuf, err := disk.ReadAll(bucket, path.Join(object, xlMetaJSONFile))
+	if err != nil {
+		return statInfo{}, nil, traceError(err)
+	}
+	// obtain xlMetaV1{}.Meta using `github.com/tidwall/gjson`.
+	xlMetaMap := parseXLMetaMap(xlMetaBuf)
+
+	// obtain xlMetaV1{}.Stat using `github.com/tidwall/gjson`.
+	xlStat, err := parseXLStat(xlMetaBuf)
+	if err != nil {
+		return statInfo{}, nil, traceError(err)
+	}
+	// Return structured `xl.json`.
+	return xlStat, xlMetaMap, nil
+}
+
+// readXLMeta reads `xl.json` and returns back XL metadata structure.
+func readXLMeta(disk StorageAPI, bucket string, object string) (xlMeta xlMetaV1, err error) {
+	// Reads entire `xl.json`.
+	xlMetaBuf, err := disk.ReadAll(bucket, path.Join(object, xlMetaJSONFile))
+	if err != nil {
+		return xlMetaV1{}, traceError(err)
+	}
+	// obtain xlMetaV1{} using `github.com/tidwall/gjson`.
+	xlMeta, err = xlMetaV1UnmarshalJSON(xlMetaBuf)
+	if err != nil {
+		return xlMetaV1{}, traceError(err)
+	}
 	// Return structured `xl.json`.
 	return xlMeta, nil
 }

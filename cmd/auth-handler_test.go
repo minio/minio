@@ -20,8 +20,103 @@ import (
 	"bytes"
 	"io"
 	"net/http"
+	"net/url"
 	"testing"
 )
+
+// Test get request auth type.
+func TestGetRequestAuthType(t *testing.T) {
+	type testCase struct {
+		req   *http.Request
+		authT authType
+	}
+	testCases := []testCase{
+		// Test case - 1
+		// Check for generic signature v4 header.
+		{
+			req: &http.Request{
+				URL: &url.URL{
+					Host:   "localhost:9000",
+					Scheme: "http",
+					Path:   "/",
+				},
+				Header: http.Header{
+					"Authorization":        []string{"AWS4-HMAC-SHA256 <cred_string>"},
+					"X-Amz-Content-Sha256": []string{streamingContentSHA256},
+				},
+				Method: "PUT",
+			},
+			authT: authTypeStreamingSigned,
+		},
+		// Test case - 2
+		// Check for JWT header.
+		{
+			req: &http.Request{
+				URL: &url.URL{
+					Host:   "localhost:9000",
+					Scheme: "http",
+					Path:   "/",
+				},
+				Header: http.Header{
+					"Authorization": []string{"Bearer 12313123"},
+				},
+			},
+			authT: authTypeJWT,
+		},
+		// Test case - 3
+		// Empty authorization header.
+		{
+			req: &http.Request{
+				URL: &url.URL{
+					Host:   "localhost:9000",
+					Scheme: "http",
+					Path:   "/",
+				},
+				Header: http.Header{
+					"Authorization": []string{""},
+				},
+			},
+			authT: authTypeUnknown,
+		},
+		// Test case - 4
+		// Check for presigned.
+		{
+			req: &http.Request{
+				URL: &url.URL{
+					Host:     "localhost:9000",
+					Scheme:   "http",
+					Path:     "/",
+					RawQuery: "X-Amz-Credential=EXAMPLEINVALIDEXAMPL%2Fs3%2F20160314%2Fus-east-1",
+				},
+			},
+			authT: authTypePresigned,
+		},
+		// Test case - 5
+		// Check for post policy.
+		{
+			req: &http.Request{
+				URL: &url.URL{
+					Host:   "localhost:9000",
+					Scheme: "http",
+					Path:   "/",
+				},
+				Header: http.Header{
+					"Content-Type": []string{"multipart/form-data"},
+				},
+				Method: "POST",
+			},
+			authT: authTypePostPolicy,
+		},
+	}
+
+	// .. Tests all request auth type.
+	for i, testc := range testCases {
+		authT := getRequestAuthType(testc.req)
+		if authT != testc.authT {
+			t.Errorf("Test %d: Expected %d, got %d", i+1, testc.authT, authT)
+		}
+	}
+}
 
 // Test all s3 supported auth types.
 func TestS3SupportedAuthType(t *testing.T) {

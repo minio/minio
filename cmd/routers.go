@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"errors"
 	"net/http"
 	"os"
 	"strings"
@@ -25,86 +24,91 @@ import (
 	router "github.com/gorilla/mux"
 )
 
-// newObjectLayer - initialize any object layer depending on the number of disks.
-func newObjectLayer(disks, ignoredDisks []string) (ObjectLayer, error) {
-	if len(disks) == 1 {
-		exportPath := disks[0]
-		// Initialize FS object layer.
-		return newFSObjects(exportPath)
-	}
-	// Initialize XL object layer.
-	objAPI, err := newXLObjects(disks, ignoredDisks)
-	if err == errXLWriteQuorum {
-		return objAPI, errors.New("Disks are different with last minio server run.")
-	}
-	return objAPI, err
+func newObjectLayerFn() ObjectLayer {
+	objLayerMutex.Lock()
+	defer objLayerMutex.Unlock()
+	return globalObjectAPI
 }
 
-// configureServer handler returns final handler for the http server.
-func configureServerHandler(srvCmdConfig serverCmdConfig) http.Handler {
-	// Initialize name space lock.
-	initNSLock()
-
-	objAPI, err := newObjectLayer(srvCmdConfig.disks, srvCmdConfig.ignoredDisks)
-	fatalIf(err, "Unable to intialize object layer.")
+// newObjectLayer - initialize any object layer depending on the number of disks.
+func newObjectLayer(disks, ignoredDisks []string) (ObjectLayer, error) {
+	var objAPI ObjectLayer
+	var err error
+	if len(disks) == 1 {
+		// Initialize FS object layer.
+		objAPI, err = newFSObjects(disks[0])
+	} else {
+		// Initialize XL object layer.
+		objAPI, err = newXLObjects(disks, ignoredDisks)
+	}
+	if err != nil {
+		return nil, err
+	}
 
 	// Migrate bucket policy from configDir to .minio.sys/buckets/
 	err = migrateBucketPolicyConfig(objAPI)
-	fatalIf(err, "Unable to migrate bucket policy from config directory")
+	if err != nil {
+		errorIf(err, "Unable to migrate bucket policy from config directory")
+		return nil, err
+	}
 
 	err = cleanupOldBucketPolicyConfigs()
-	fatalIf(err, "Unable to clean up bucket policy from config directory.")
-
-	// Initialize storage rpc server.
-	storageRPC, err := newRPCServer(srvCmdConfig.disks[0]) // FIXME: should only have one path.
-	fatalIf(err, "Unable to initialize storage RPC server.")
-
-	// Initialize API.
-	apiHandlers := objectAPIHandlers{
-		ObjectAPI: objAPI,
+	if err != nil {
+		errorIf(err, "Unable to clean up bucket policy from config directory.")
+		return nil, err
 	}
-
-	// Initialize Web.
-	webHandlers := &webAPIHandlers{
-		ObjectAPI: objAPI,
-	}
-
-	// Initialize Controller.
-	ctrlHandlers := &controllerAPIHandlers{
-		ObjectAPI: objAPI,
-	}
-
-	// Initialize and monitor shutdown signals.
-	err = initGracefulShutdown(os.Exit)
-	fatalIf(err, "Unable to initialize graceful shutdown operation")
 
 	// Register the callback that should be called when the process shuts down.
 	globalShutdownCBs.AddObjectLayerCB(func() errCode {
-		if sErr := objAPI.Shutdown(); sErr != nil {
-			return exitFailure
+		if objAPI != nil {
+			if sErr := objAPI.Shutdown(); sErr != nil {
+				errorIf(err, "Unable to shutdown object API.")
+				return exitFailure
+			}
 		}
 		return exitSuccess
 	})
 
 	// Initialize a new event notifier.
 	err = initEventNotifier(objAPI)
-	fatalIf(err, "Unable to initialize event notification queue")
+	fatalIf(err, "Unable to initialize event notification.")
 
-	// Initialize a new bucket policies.
-	err = initBucketPolicies(objAPI)
-	fatalIf(err, "Unable to load all bucket policies")
+	// Success.
+	return objAPI, nil
+}
+
+// configureServer handler returns final handler for the http server.
+func configureServerHandler(srvCmdConfig serverCmdConfig) http.Handler {
+	// Initialize storage rpc servers for every disk that is hosted on this node.
+	storageRPCs, err := newRPCServer(srvCmdConfig)
+	fatalIf(err, "Unable to initialize storage RPC server.")
+
+	// Initialize API.
+	apiHandlers := objectAPIHandlers{
+		ObjectAPI: newObjectLayerFn,
+	}
+
+	// Initialize Web.
+	webHandlers := &webAPIHandlers{
+		ObjectAPI: newObjectLayerFn,
+	}
+
+	// Initialize Controller.
+	controllerHandlers := &controllerAPIHandlers{
+		ObjectAPI: newObjectLayerFn,
+	}
 
 	// Initialize router.
 	mux := router.NewRouter()
 
 	// Register all routers.
-	registerStorageRPCRouter(mux, storageRPC)
+	registerStorageRPCRouters(mux, storageRPCs)
 
-	// FIXME: till net/rpc auth is brought in "minio control" can be enabled only though
-	// this env variable.
-	if os.Getenv("MINIO_CONTROL") != "" {
-		registerControlRPCRouter(mux, ctrlHandlers)
-	}
+	// Initialize distributed NS lock.
+	initDistributedNSLock(mux, srvCmdConfig)
+
+	// Register controller rpc router.
+	registerControllerRPCRouter(mux, controllerHandlers)
 
 	// set environmental variable MINIO_BROWSER=off to disable minio web browser.
 	// By default minio web browser is enabled.
@@ -112,11 +116,10 @@ func configureServerHandler(srvCmdConfig serverCmdConfig) http.Handler {
 		registerWebRouter(mux, webHandlers)
 	}
 
-	registerAPIRouter(mux, apiHandlers)
 	// Add new routers here.
+	registerAPIRouter(mux, apiHandlers)
 
-	// List of some generic handlers which are applied for all
-	// incoming requests.
+	// List of some generic handlers which are applied for all incoming requests.
 	var handlerFns = []HandlerFunc{
 		// Limits the number of concurrent http requests.
 		setRateLimitHandler,

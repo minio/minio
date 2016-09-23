@@ -47,7 +47,7 @@ func dialRedis(rNotify redisNotify) (*redis.Pool, error) {
 	password := rNotify.Password
 	rPool := &redis.Pool{
 		MaxIdle:     3,
-		IdleTimeout: 240 * time.Second,
+		IdleTimeout: 240 * time.Second, // Time 2minutes.
 		Dial: func() (redis.Conn, error) {
 			c, err := redis.Dial("tcp", addr)
 			if err != nil {
@@ -113,13 +113,22 @@ func (r redisConn) Fire(entry *logrus.Entry) error {
 	rConn := r.Pool.Get()
 	defer rConn.Close()
 
-	data, err := entry.String()
-	if err != nil {
-		return err
+	// Fetch event type upon reflecting on its original type.
+	entryStr, ok := entry.Data["EventType"].(string)
+	if !ok {
+		return nil
 	}
 
-	_, err = rConn.Do("RPUSH", r.params.Key, data)
-	if err != nil {
+	// Match the event if its a delete request, attempt to delete the key
+	if eventMatch(entryStr, []string{"s3:ObjectRemoved:*"}) {
+		if _, err := rConn.Do("DEL", entry.Data["Key"]); err != nil {
+			return err
+		}
+		return nil
+	} // else save this as new entry or update any existing ones.
+	if _, err := rConn.Do("SET", entry.Data["Key"], map[string]interface{}{
+		"Records": entry.Data["Records"],
+	}); err != nil {
 		return err
 	}
 	return nil

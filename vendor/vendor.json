@@ -98,6 +98,12 @@
 			"revisionTime": "2015-11-18T20:00:48-08:00"
 		},
 		{
+			"checksumSHA1": "0wc4gxRamjyjVSiZF73KIaCRC6k=",
+			"path": "github.com/minio/dsync",
+			"revision": "531818cd6458e24e30eec2c67136a8bcb24520af",
+			"revisionTime": "2016-09-15T18:37:01Z"
+		},
+		{
 			"path": "github.com/minio/go-homedir",
 			"revision": "0b1069c753c94b3633cc06a1995252dbcc27c7a6",
 			"revisionTime": "2016-02-15T17:25:11+05:30"
@@ -108,10 +114,10 @@
 			"revisionTime": "2016-02-29T08:42:30-08:00"
 		},
 		{
-			"checksumSHA1": "0OZaeJPgMlA2Txn+1yeAIwEpJvM=",
+			"checksumSHA1": "qTxOBp3GVxCC70ykb7Hxg6UgWwA=",
 			"path": "github.com/minio/minio-go/pkg/policy",
-			"revision": "a2e27c84cd20b86cd781b76639781d6366235d0c",
-			"revisionTime": "2016-08-23T00:31:21Z"
+			"revision": "40505f5d08c721dfe5a6450fbdef3bcd6567aa97",
+			"revisionTime": "2016-09-04T08:12:15Z"
 		},
 		{
 			"checksumSHA1": "A8QOw1aWwc+RtjGozY0XeS5varo=",
@@ -162,6 +168,18 @@
 			"path": "github.com/streadway/amqp",
 			"revision": "2e25825abdbd7752ff08b270d313b93519a0a232",
 			"revisionTime": "2016-03-11T21:55:03Z"
+		},
+		{
+			"checksumSHA1": "+Pcohsuq0Mi/y8bgaDFjb/CGzkk=",
+			"path": "github.com/tidwall/gjson",
+			"revision": "7c631e98686a791e5fc60ff099512968122afb52",
+			"revisionTime": "2016-09-08T16:02:40Z"
+		},
+		{
+			"checksumSHA1": "qmePMXEDYGwkAfT9QvtMC58JN/E=",
+			"path": "github.com/tidwall/match",
+			"revision": "173748da739a410c5b0b813b956f89ff94730b4c",
+			"revisionTime": "2016-08-30T17:39:30Z"
 		},
 		{
 			"path": "golang.org/x/crypto/bcrypt",

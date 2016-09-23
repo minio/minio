@@ -8,7 +8,7 @@
 package cmd
 
 import (
-	"runtime"
+	"runtime/debug"
 	"sort"
 	"strings"
 	"time"
@@ -57,7 +57,7 @@ func (initialSnapShot LeakDetect) DetectLeak(t TestErrHandler) {
 	}
 	// Loop, waiting for goroutines to shut down.
 	// Wait up to 5 seconds, but finish as quickly as possible.
-	deadline := time.Now().Add(leakDetectDeadline * time.Second)
+	deadline := time.Now().UTC().Add(leakDetectDeadline * time.Second)
 	for {
 		// get sack snapshot of relevant go routines.
 		leaked := initialSnapShot.CompareCurrentSnapshot()
@@ -66,7 +66,7 @@ func (initialSnapShot LeakDetect) DetectLeak(t TestErrHandler) {
 			return
 		}
 		// wait a test again will deadline.
-		if time.Now().Before(deadline) {
+		if time.Now().UTC().Before(deadline) {
 			time.Sleep(leakDetectPauseTimeMs * time.Millisecond)
 			continue
 		}
@@ -126,9 +126,8 @@ func isIgnoredStackFn(stack string) (ok bool) {
 // pickRelevantGoroutines returns all goroutines we care about for the purpose
 // of leak checking. It excludes testing or runtime ones.
 func pickRelevantGoroutines() (gs []string) {
-	// make a large buffer to hold the runtime stack info.
-	buf := make([]byte, 2<<20)
-	buf = buf[:runtime.Stack(buf, true)]
+	// get runtime stack buffer.
+	buf := debug.Stack()
 	// runtime stack of go routines will be listed with 2 blank spaces between each of them, so split on "\n\n" .
 	for _, g := range strings.Split(string(buf), "\n\n") {
 		// Again split on a new line, the first line of the second half contaisn the info about the go routine.

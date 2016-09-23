@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"encoding/xml"
+	"fmt"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -25,9 +26,9 @@ import (
 	. "gopkg.in/check.v1"
 )
 
-// Concurreny level.
+// concurreny level for certain parallel tests.
 const (
-	ConcurrencyLevel = 10
+	testConcurrencyLevel = 10
 )
 
 ///
@@ -63,6 +64,40 @@ var ignoredHeaders = map[string]bool{
 	"Content-Type":   true,
 	"Content-Length": true,
 	"User-Agent":     true,
+}
+
+// Headers to ignore in streaming v4
+var ignoredStreamingHeaders = map[string]bool{
+	"Authorization": true,
+	"Content-Type":  true,
+	"Content-Md5":   true,
+	"User-Agent":    true,
+}
+
+// calculateSignedChunkLength - calculates the length of chunk metadata
+func calculateSignedChunkLength(chunkDataSize int64) int64 {
+	return int64(len(fmt.Sprintf("%x", chunkDataSize))) +
+		17 + // ";chunk-signature="
+		64 + // e.g. "f2ca1bb6c7e907d06dafe4687e579fce76b37e4e93b7605022da52e6ccc26fd2"
+		2 + // CRLF
+		chunkDataSize +
+		2 // CRLF
+}
+
+// calculateSignedChunkLength - calculates the length of the overall stream (data + metadata)
+func calculateStreamContentLength(dataLen, chunkSize int64) int64 {
+	if dataLen <= 0 {
+		return 0
+	}
+	chunksCount := int64(dataLen / chunkSize)
+	remainingBytes := int64(dataLen % chunkSize)
+	streamLen := int64(0)
+	streamLen += chunksCount * calculateSignedChunkLength(chunkSize)
+	if remainingBytes > 0 {
+		streamLen += calculateSignedChunkLength(remainingBytes)
+	}
+	streamLen += calculateSignedChunkLength(0)
+	return streamLen
 }
 
 // Ask the kernel for a free open port.

@@ -19,6 +19,7 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -26,6 +27,7 @@ import (
 	"path"
 	"runtime"
 	"strconv"
+	"strings"
 	"time"
 
 	jwtgo "github.com/dgrijalva/jwt-go"
@@ -40,7 +42,7 @@ import (
 // isJWTReqAuthenticated validates if any incoming request to be a
 // valid JWT authenticated request.
 func isJWTReqAuthenticated(req *http.Request) bool {
-	jwt, err := newJWT()
+	jwt, err := newJWT(defaultWebTokenExpiry)
 	if err != nil {
 		errorIf(err, "unable to initialize a new JWT")
 		return false
@@ -124,7 +126,11 @@ func (web *webAPIHandlers) StorageInfo(r *http.Request, args *GenericArgs, reply
 		return &json2.Error{Message: "Unauthorized request"}
 	}
 	reply.UIVersion = miniobrowser.UIVersion
-	reply.StorageInfo = web.ObjectAPI.StorageInfo()
+	objectAPI := web.ObjectAPI()
+	if objectAPI == nil {
+		return &json2.Error{Message: "Server not initialized, please try again., please try again."}
+	}
+	reply.StorageInfo = objectAPI.StorageInfo()
 	return nil
 }
 
@@ -139,7 +145,11 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 		return &json2.Error{Message: "Unauthorized request"}
 	}
 	reply.UIVersion = miniobrowser.UIVersion
-	if err := web.ObjectAPI.MakeBucket(args.BucketName); err != nil {
+	objectAPI := web.ObjectAPI()
+	if objectAPI == nil {
+		return &json2.Error{Message: "Server not initialized, please try again."}
+	}
+	if err := objectAPI.MakeBucket(args.BucketName); err != nil {
 		return &json2.Error{Message: err.Error()}
 	}
 	return nil
@@ -164,7 +174,11 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 	if !isJWTReqAuthenticated(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
-	buckets, err := web.ObjectAPI.ListBuckets()
+	objectAPI := web.ObjectAPI()
+	if objectAPI == nil {
+		return &json2.Error{Message: "Server not initialized, please try again."}
+	}
+	buckets, err := objectAPI.ListBuckets()
 	if err != nil {
 		return &json2.Error{Message: err.Error()}
 	}
@@ -212,7 +226,11 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 		return &json2.Error{Message: "Unauthorized request"}
 	}
 	for {
-		lo, err := web.ObjectAPI.ListObjects(args.BucketName, args.Prefix, marker, "/", 1000)
+		objectAPI := web.ObjectAPI()
+		if objectAPI == nil {
+			return &json2.Error{Message: "Server not initialized, please try again."}
+		}
+		lo, err := objectAPI.ListObjects(args.BucketName, args.Prefix, marker, "/", 1000)
 		if err != nil {
 			return &json2.Error{Message: err.Error()}
 		}
@@ -250,7 +268,11 @@ func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs,
 		return &json2.Error{Message: "Unauthorized request"}
 	}
 	reply.UIVersion = miniobrowser.UIVersion
-	if err := web.ObjectAPI.DeleteObject(args.BucketName, args.ObjectName); err != nil {
+	objectAPI := web.ObjectAPI()
+	if objectAPI == nil {
+		return &json2.Error{Message: "Server not initialized, please try again."}
+	}
+	if err := objectAPI.DeleteObject(args.BucketName, args.ObjectName); err != nil {
 		return &json2.Error{Message: err.Error()}
 	}
 	return nil
@@ -268,9 +290,14 @@ type LoginRep struct {
 	UIVersion string `json:"uiVersion"`
 }
 
+// Default JWT for minio browser expires in 24hrs.
+const (
+	defaultWebTokenExpiry time.Duration = time.Hour * 24 // 24Hrs.
+)
+
 // Login - user login handler.
 func (web *webAPIHandlers) Login(r *http.Request, args *LoginArgs, reply *LoginRep) error {
-	jwt, err := newJWT()
+	jwt, err := newJWT(defaultWebTokenExpiry)
 	if err != nil {
 		return &json2.Error{Message: err.Error()}
 	}
@@ -335,7 +362,7 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 		return &json2.Error{Message: err.Error()}
 	}
 
-	jwt, err := newJWT()
+	jwt, err := newJWT(defaultWebTokenExpiry) // JWT Expiry set to 24Hrs.
 	if err != nil {
 		return &json2.Error{Message: err.Error()}
 	}
@@ -384,13 +411,18 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	// Extract incoming metadata if any.
 	metadata := extractMetadataFromHeader(r.Header)
 
-	if _, err := web.ObjectAPI.PutObject(bucket, object, -1, r.Body, metadata); err != nil {
+	objectAPI := web.ObjectAPI()
+	if objectAPI == nil {
+		writeWebErrorResponse(w, errors.New("Server not initialized, please try again."))
+		return
+	}
+	if _, err := objectAPI.PutObject(bucket, object, -1, r.Body, metadata); err != nil {
 		writeWebErrorResponse(w, err)
 		return
 	}
 
 	// Fetch object info for notifications.
-	objInfo, err := web.ObjectAPI.GetObjectInfo(bucket, object)
+	objInfo, err := objectAPI.GetObjectInfo(bucket, object)
 	if err != nil {
 		errorIf(err, "Unable to fetch object info for \"%s\"", path.Join(bucket, object))
 		return
@@ -416,7 +448,7 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	object := vars["object"]
 	tokenStr := r.URL.Query().Get("token")
 
-	jwt, err := newJWT()
+	jwt, err := newJWT(defaultWebTokenExpiry) // Expiry set to 24Hrs.
 	if err != nil {
 		errorIf(err, "error in getting new JWT")
 		return
@@ -435,13 +467,18 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	// Add content disposition.
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", path.Base(object)))
 
-	objInfo, err := web.ObjectAPI.GetObjectInfo(bucket, object)
+	objectAPI := web.ObjectAPI()
+	if objectAPI == nil {
+		writeWebErrorResponse(w, errors.New("Server not initialized, please try again."))
+		return
+	}
+	objInfo, err := objectAPI.GetObjectInfo(bucket, object)
 	if err != nil {
 		writeWebErrorResponse(w, err)
 		return
 	}
 	offset := int64(0)
-	err = web.ObjectAPI.GetObject(bucket, object, offset, objInfo.Size, w)
+	err = objectAPI.GetObject(bucket, object, offset, objInfo.Size, w)
 	if err != nil {
 		/// No need to print error, response writer already written to.
 		return
@@ -503,7 +540,7 @@ func readBucketAccessPolicy(objAPI ObjectLayer, bucketName string) (policy.Bucke
 	bucketPolicyReader, err := readBucketPolicyJSON(bucketName, objAPI)
 	if err != nil {
 		if _, ok := err.(BucketPolicyNotFound); ok {
-			return policy.BucketAccessPolicy{}, nil
+			return policy.BucketAccessPolicy{Version: "2012-10-17"}, nil
 		}
 		return policy.BucketAccessPolicy{}, err
 	}
@@ -529,7 +566,11 @@ func (web *webAPIHandlers) GetBucketPolicy(r *http.Request, args *GetBucketPolic
 		return &json2.Error{Message: "Unauthorized request"}
 	}
 
-	policyInfo, err := readBucketAccessPolicy(web.ObjectAPI, args.BucketName)
+	objectAPI := web.ObjectAPI()
+	if objectAPI == nil {
+		return &json2.Error{Message: "Server not initialized, please try again."}
+	}
+	policyInfo, err := readBucketAccessPolicy(objectAPI, args.BucketName)
 	if err != nil {
 		return &json2.Error{Message: err.Error()}
 	}
@@ -538,6 +579,40 @@ func (web *webAPIHandlers) GetBucketPolicy(r *http.Request, args *GetBucketPolic
 
 	reply.UIVersion = miniobrowser.UIVersion
 	reply.Policy = bucketPolicy
+
+	return nil
+}
+
+// GetAllBucketPolicyArgs - get all bucket policy args.
+type GetAllBucketPolicyArgs struct {
+	BucketName string `json:"bucketName"`
+}
+
+// GetAllBucketPolicyRep - get all bucket policy reply.
+type GetAllBucketPolicyRep struct {
+	UIVersion string                         `json:"uiVersion"`
+	Policies  map[string]policy.BucketPolicy `json:"policies"`
+}
+
+// GetAllBucketPolicy - get all bucket policy.
+func (web *webAPIHandlers) GetAllBucketPolicy(r *http.Request, args *GetAllBucketPolicyArgs, reply *GetAllBucketPolicyRep) error {
+	if !isJWTReqAuthenticated(r) {
+		return &json2.Error{Message: "Unauthorized request"}
+	}
+
+	objectAPI := web.ObjectAPI()
+	if objectAPI == nil {
+		return &json2.Error{Message: "Server not initialized"}
+	}
+	policyInfo, err := readBucketAccessPolicy(objectAPI, args.BucketName)
+	if err != nil {
+		return &json2.Error{Message: err.Error()}
+	}
+
+	policies := policy.GetPolicies(policyInfo.Statements, args.BucketName)
+
+	reply.UIVersion = miniobrowser.UIVersion
+	reply.Policies = policies
 
 	return nil
 }
@@ -554,30 +629,108 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 	if !isJWTReqAuthenticated(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
+	objectAPI := web.ObjectAPI()
+	if objectAPI == nil {
+		return &json2.Error{Message: "Server not initialized, please try again."}
+	}
 
-	bucketPolicy := policy.BucketPolicy(args.Policy)
-	if !bucketPolicy.IsValidBucketPolicy() {
+	bucketP := policy.BucketPolicy(args.Policy)
+	if !bucketP.IsValidBucketPolicy() {
 		return &json2.Error{Message: "Invalid policy " + args.Policy}
 	}
 
-	policyInfo, err := readBucketAccessPolicy(web.ObjectAPI, args.BucketName)
+	policyInfo, err := readBucketAccessPolicy(objectAPI, args.BucketName)
 	if err != nil {
 		return &json2.Error{Message: err.Error()}
 	}
-
-	policyInfo.Statements = policy.SetPolicy(policyInfo.Statements, bucketPolicy, args.BucketName, args.Prefix)
-
+	policyInfo.Statements = policy.SetPolicy(policyInfo.Statements, bucketP, args.BucketName, args.Prefix)
 	data, err := json.Marshal(policyInfo)
 	if err != nil {
 		return &json2.Error{Message: err.Error()}
 	}
 
+	// Parse bucket policy.
+	var policy = &bucketPolicy{}
+	err = parseBucketPolicy(bytes.NewReader(data), policy)
+	if err != nil {
+		errorIf(err, "Unable to parse bucket policy.")
+		return &json2.Error{Message: err.Error()}
+	}
+
+	// Parse check bucket policy.
+	if s3Error := checkBucketPolicyResources(args.BucketName, policy); s3Error != ErrNone {
+		return &json2.Error{Message: getAPIError(s3Error).Description}
+	}
+
 	// TODO: update policy statements according to bucket name, prefix and policy arguments.
-	if err := writeBucketPolicy(args.BucketName, web.ObjectAPI, bytes.NewReader(data), int64(len(data))); err != nil {
+	if err := writeBucketPolicy(args.BucketName, objectAPI, bytes.NewReader(data), int64(len(data))); err != nil {
 		return &json2.Error{Message: err.Error()}
 	}
 
 	reply.UIVersion = miniobrowser.UIVersion
-
 	return nil
+}
+
+// PresignedGetArgs - presigned-get API args.
+type PresignedGetArgs struct {
+	// Host header required for signed headers.
+	HostName string `json:"host"`
+
+	// Bucket name of the object to be presigned.
+	BucketName string `json:"bucket"`
+
+	// Object name to be presigned.
+	ObjectName string `json:"object"`
+}
+
+// PresignedGetRep - presigned-get URL reply.
+type PresignedGetRep struct {
+	// Presigned URL of the object.
+	URL string `json:"url"`
+}
+
+// PresignedGET - returns presigned-Get url.
+func (web *webAPIHandlers) PresignedGet(r *http.Request, args *PresignedGetArgs, reply *PresignedGetRep) error {
+	if !isJWTReqAuthenticated(r) {
+		return &json2.Error{Message: "Unauthorized request"}
+	}
+	if args.BucketName == "" || args.ObjectName == "" {
+		return &json2.Error{Message: "Required arguments: Host, Bucket, Object"}
+	}
+	reply.URL = presignedGet(args.HostName, args.BucketName, args.ObjectName)
+	return nil
+}
+
+// Returns presigned url for GET method.
+func presignedGet(host, bucket, object string) string {
+	cred := serverConfig.GetCredential()
+	region := serverConfig.GetRegion()
+
+	accessKey := cred.AccessKeyID
+	secretKey := cred.SecretAccessKey
+
+	date := time.Now().UTC()
+	dateStr := date.Format("20060102T150405Z")
+	credential := fmt.Sprintf("%s/%s", accessKey, getScope(date, region))
+
+	query := strings.Join([]string{
+		"X-Amz-Algorithm=" + signV4Algorithm,
+		"X-Amz-Credential=" + strings.Replace(credential, "/", "%2F", -1),
+		"X-Amz-Date=" + dateStr,
+		"X-Amz-Expires=" + "604800", // Default set to be expire in 7days.
+		"X-Amz-SignedHeaders=host",
+	}, "&")
+
+	path := "/" + path.Join(bucket, object)
+
+	// Headers are empty, since "host" is the only header required to be signed for Presigned URLs.
+	var extractedSignedHeaders http.Header
+
+	canonicalRequest := getCanonicalRequest(extractedSignedHeaders, unsignedPayload, query, path, "GET", host)
+	stringToSign := getStringToSign(canonicalRequest, date, region)
+	signingKey := getSigningKey(secretKey, date, region)
+	signature := getSignature(signingKey, stringToSign)
+
+	// Construct the final presigned URL.
+	return host + path + "?" + query + "&" + "X-Amz-Signature=" + signature
 }

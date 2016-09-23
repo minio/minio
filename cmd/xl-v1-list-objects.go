@@ -31,7 +31,7 @@ func (xl xlObjects) listObjects(bucket, prefix, marker, delimiter string, maxKey
 	if walkResultCh == nil {
 		endWalkCh = make(chan struct{})
 		isLeaf := xl.isObject
-		listDir := listDirFactory(isLeaf, xl.getLoadBalancedDisks()...)
+		listDir := listDirFactory(isLeaf, xlTreeWalkIgnoredErrs, xl.getLoadBalancedDisks()...)
 		walkResultCh = startTreeWalk(bucket, prefix, marker, recursive, listDir, isLeaf, endWalkCh)
 	}
 
@@ -48,7 +48,7 @@ func (xl xlObjects) listObjects(bucket, prefix, marker, delimiter string, maxKey
 		// For any walk error return right away.
 		if walkResult.err != nil {
 			// File not found is a valid case.
-			if walkResult.err == errFileNotFound {
+			if errorCause(walkResult.err) == errFileNotFound {
 				return ListObjectsInfo{}, nil
 			}
 			return ListObjectsInfo{}, toObjectErr(walkResult.err, bucket, prefix)
@@ -66,8 +66,7 @@ func (xl xlObjects) listObjects(bucket, prefix, marker, delimiter string, maxKey
 			objInfo, err = xl.getObjectInfo(bucket, entry)
 			if err != nil {
 				// Ignore errFileNotFound
-				if err == errFileNotFound {
-					errorIf(err, "Unable to get object info", bucket, entry)
+				if errorCause(err) == errFileNotFound {
 					continue
 				}
 				return ListObjectsInfo{}, toObjectErr(err, bucket, prefix)
@@ -109,28 +108,28 @@ func (xl xlObjects) listObjects(bucket, prefix, marker, delimiter string, maxKey
 func (xl xlObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return ListObjectsInfo{}, BucketNameInvalid{Bucket: bucket}
+		return ListObjectsInfo{}, traceError(BucketNameInvalid{Bucket: bucket})
 	}
 	// Verify if bucket exists.
 	if !xl.isBucketExist(bucket) {
-		return ListObjectsInfo{}, BucketNotFound{Bucket: bucket}
+		return ListObjectsInfo{}, traceError(BucketNotFound{Bucket: bucket})
 	}
 	if !IsValidObjectPrefix(prefix) {
-		return ListObjectsInfo{}, ObjectNameInvalid{Bucket: bucket, Object: prefix}
+		return ListObjectsInfo{}, traceError(ObjectNameInvalid{Bucket: bucket, Object: prefix})
 	}
 	// Verify if delimiter is anything other than '/', which we do not support.
 	if delimiter != "" && delimiter != slashSeparator {
-		return ListObjectsInfo{}, UnsupportedDelimiter{
+		return ListObjectsInfo{}, traceError(UnsupportedDelimiter{
 			Delimiter: delimiter,
-		}
+		})
 	}
 	// Verify if marker has prefix.
 	if marker != "" {
 		if !strings.HasPrefix(marker, prefix) {
-			return ListObjectsInfo{}, InvalidMarkerPrefixCombination{
+			return ListObjectsInfo{}, traceError(InvalidMarkerPrefixCombination{
 				Marker: marker,
 				Prefix: prefix,
-			}
+			})
 		}
 	}
 

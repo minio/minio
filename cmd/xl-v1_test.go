@@ -92,7 +92,7 @@ func TestCheckSufficientDisks(t *testing.T) {
 
 // TestStorageInfo - tests storage info.
 func TestStorageInfo(t *testing.T) {
-	objLayer, fsDirs, err := getXLObjectLayer()
+	objLayer, fsDirs, err := prepareXL()
 	if err != nil {
 		t.Fatalf("Unable to initialize 'XL' object layer.")
 	}
@@ -104,6 +104,25 @@ func TestStorageInfo(t *testing.T) {
 
 	// Get storage info first attempt.
 	disks16Info := objLayer.StorageInfo()
+
+	// This test assumes homogenity between all disks,
+	// i.e if we loose one disk the effective storage
+	// usage values is assumed to decrease. If we have
+	// heterogenous environment this is not true all the time.
+	if disks16Info.Free <= 0 {
+		t.Fatalf("Diskinfo total free values should be greater 0")
+	}
+	if disks16Info.Total <= 0 {
+		t.Fatalf("Diskinfo total values should be greater 0")
+	}
+
+	objLayer, err = newXLObjects(fsDirs, fsDirs[:4])
+	if err != nil {
+		t.Fatalf("Unable to initialize 'XL' object layer with ignored disks %s.", fsDirs[:4])
+	}
+
+	// Get storage info first attempt.
+	disks16Info = objLayer.StorageInfo()
 
 	// This test assumes homogenity between all disks,
 	// i.e if we loose one disk the effective storage
@@ -130,8 +149,25 @@ func TestNewXL(t *testing.T) {
 		erasureDisks = append(erasureDisks, disk)
 		defer removeAll(disk)
 	}
+
+	// No disks input.
+	_, err := newXLObjects(nil, nil)
+	if err != errInvalidArgument {
+		t.Fatalf("Unable to initialize erasure, %s", err)
+	}
+
 	// Initializes all erasure disks
-	_, err := newXLObjects(erasureDisks, nil)
+	err = formatDisks(erasureDisks, nil)
+	if err != nil {
+		t.Fatalf("Unable to format disks for erasure, %s", err)
+	}
+	_, err = newXLObjects(erasureDisks, nil)
+	if err != nil {
+		t.Fatalf("Unable to initialize erasure, %s", err)
+	}
+
+	// Initializes all erasure disks, ignoring first two.
+	_, err = newXLObjects(erasureDisks, erasureDisks[:2])
 	if err != nil {
 		t.Fatalf("Unable to initialize erasure, %s", err)
 	}

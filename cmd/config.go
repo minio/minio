@@ -54,7 +54,9 @@ func getConfigPath() (string, error) {
 // mustGetConfigPath must get server config path.
 func mustGetConfigPath() string {
 	configPath, err := getConfigPath()
-	fatalIf(err, "Unable to get config path.")
+	if err != nil {
+		return ""
+	}
 	return configPath
 }
 
@@ -69,7 +71,11 @@ func createConfigPath() error {
 
 // isConfigFileExists - returns true if config file exists.
 func isConfigFileExists() bool {
-	st, err := os.Stat(mustGetConfigFile())
+	path, err := getConfigFile()
+	if err != nil {
+		return false
+	}
+	st, err := os.Stat(path)
 	// If file exists and is regular return true.
 	if err == nil && st.Mode().IsRegular() {
 		return true
@@ -80,8 +86,9 @@ func isConfigFileExists() bool {
 // mustGetConfigFile must get server config file.
 func mustGetConfigFile() string {
 	configFile, err := getConfigFile()
-	fatalIf(err, "Unable to get config file.")
-
+	if err != nil {
+		return ""
+	}
 	return configFile
 }
 

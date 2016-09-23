@@ -36,9 +36,14 @@ func testObjectNewMultipartUpload(obj ObjectLayer, instanceType string, t TestEr
 	bucket := "minio-bucket"
 	object := "minio-object"
 
+	_, err := obj.NewMultipartUpload("--", object, nil)
+	if err == nil {
+		t.Fatalf("%s: Expected to fail since bucket name is invalid.", instanceType)
+	}
+
 	errMsg := "Bucket not found: minio-bucket"
 	// opearation expected to fail since the bucket on which NewMultipartUpload is being initiated doesn't exist.
-	uploadID, err := obj.NewMultipartUpload(bucket, object, nil)
+	_, err = obj.NewMultipartUpload(bucket, object, nil)
 	if err == nil {
 		t.Fatalf("%s: Expected to fail since the NewMultipartUpload is intialized on a non-existent bucket.", instanceType)
 	}
@@ -53,7 +58,12 @@ func testObjectNewMultipartUpload(obj ObjectLayer, instanceType string, t TestEr
 		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
 
-	uploadID, err = obj.NewMultipartUpload(bucket, object, nil)
+	_, err = obj.NewMultipartUpload(bucket, "^", nil)
+	if err == nil {
+		t.Fatalf("%s: Expected to fail since object name is invalid.", instanceType)
+	}
+
+	uploadID, err := obj.NewMultipartUpload(bucket, object, nil)
 	if err != nil {
 		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
@@ -65,6 +75,53 @@ func testObjectNewMultipartUpload(obj ObjectLayer, instanceType string, t TestEr
 			t.Fatalf("%s: New Multipart upload failed to create uuid file.", instanceType)
 		default:
 			t.Fatalf(err.Error())
+		}
+	}
+}
+
+// Wrapper for calling AbortMultipartUpload tests for both XL multiple disks and single node setup.
+func TestObjectAbortMultipartUpload(t *testing.T) {
+	ExecObjectLayerTest(t, testObjectAbortMultipartUpload)
+}
+
+// Tests validate creation of abort multipart upload instance.
+func testObjectAbortMultipartUpload(obj ObjectLayer, instanceType string, t TestErrHandler) {
+
+	bucket := "minio-bucket"
+	object := "minio-object"
+
+	// Create bucket before intiating NewMultipartUpload.
+	err := obj.MakeBucket(bucket)
+	if err != nil {
+		// failed to create newbucket, abort.
+		t.Fatalf("%s : %s", instanceType, err.Error())
+	}
+
+	uploadID, err := obj.NewMultipartUpload(bucket, object, nil)
+	if err != nil {
+		t.Fatalf("%s : %s", instanceType, err.Error())
+	}
+
+	abortTestCases := []struct {
+		bucketName      string
+		objName         string
+		uploadID        string
+		expectedErrType error
+	}{
+		{"--", object, uploadID, BucketNameInvalid{}},
+		{bucket, "^", uploadID, ObjectNameInvalid{}},
+		{"foo", object, uploadID, BucketNotFound{}},
+		{bucket, object, "foo-foo", InvalidUploadID{}},
+		{bucket, object, uploadID, nil},
+	}
+	// Iterating over creatPartCases to generate multipart chunks.
+	for i, testCase := range abortTestCases {
+		err = obj.AbortMultipartUpload(testCase.bucketName, testCase.objName, testCase.uploadID)
+		if testCase.expectedErrType == nil && err != nil {
+			t.Errorf("Test %d, unexpected err is received: %v, expected:%v\n", i+1, err, testCase.expectedErrType)
+		}
+		if testCase.expectedErrType != nil && !isSameType(errorCause(err), testCase.expectedErrType) {
+			t.Errorf("Test %d, unexpected err is received: %v, expected:%v\n", i+1, err, testCase.expectedErrType)
 		}
 	}
 }
@@ -92,6 +149,7 @@ func testObjectAPIIsUploadIDExists(obj ObjectLayer, instanceType string, t TestE
 	}
 
 	err = obj.AbortMultipartUpload(bucket, object, "abc")
+	err = errorCause(err)
 	switch err.(type) {
 	case InvalidUploadID:
 	default:
@@ -1715,7 +1773,7 @@ func testObjectCompleteMultipartUpload(obj ObjectLayer, instanceType string, t T
 		t.Fatalf("%s : %s", instanceType, err)
 	}
 	// Initiate Multipart Upload on the above created bucket.
-	uploadID, err = obj.NewMultipartUpload(bucketNames[0], objectNames[0], nil)
+	uploadID, err = obj.NewMultipartUpload(bucketNames[0], objectNames[0], map[string]string{"X-Amz-Meta-Id": "id"})
 	if err != nil {
 		// Failed to create NewMultipartUpload, abort.
 		t.Fatalf("%s : %s", instanceType, err)
@@ -1848,6 +1906,7 @@ func testObjectCompleteMultipartUpload(obj ObjectLayer, instanceType string, t T
 		// the case above successfully completes CompleteMultipartUpload, the remaining Parts will be flushed.
 		// Expecting to fail with Invalid UploadID.
 		{bucketNames[0], objectNames[0], uploadIDs[0], inputParts[4].parts, "", InvalidUploadID{UploadID: uploadIDs[0]}, false},
+		// Expecting to fail due to bad
 	}
 
 	for i, testCase := range testCases {

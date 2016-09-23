@@ -76,7 +76,9 @@ var (
 func getReadWriteObjectStatement(bucketName, objectPrefix string) policyStatement {
 	objectResourceStatement := policyStatement{}
 	objectResourceStatement.Effect = "Allow"
-	objectResourceStatement.Principal.AWS = set.CreateStringSet([]string{"*"}...)
+	objectResourceStatement.Principal = map[string]interface{}{
+		"AWS": "*",
+	}
 	objectResourceStatement.Resources = set.CreateStringSet([]string{fmt.Sprintf("%s%s", AWSResourcePrefix, bucketName+"/"+objectPrefix+"*")}...)
 	objectResourceStatement.Actions = set.CreateStringSet(readWriteObjectActions...)
 	return objectResourceStatement
@@ -86,7 +88,9 @@ func getReadWriteObjectStatement(bucketName, objectPrefix string) policyStatemen
 func getReadWriteBucketStatement(bucketName, objectPrefix string) policyStatement {
 	bucketResourceStatement := policyStatement{}
 	bucketResourceStatement.Effect = "Allow"
-	bucketResourceStatement.Principal.AWS = set.CreateStringSet([]string{"*"}...)
+	bucketResourceStatement.Principal = map[string]interface{}{
+		"AWS": "*",
+	}
 	bucketResourceStatement.Resources = set.CreateStringSet([]string{fmt.Sprintf("%s%s", AWSResourcePrefix, bucketName)}...)
 	bucketResourceStatement.Actions = set.CreateStringSet(readWriteBucketActions...)
 	return bucketResourceStatement
@@ -104,7 +108,9 @@ func getReadWriteStatement(bucketName, objectPrefix string) []policyStatement {
 func getReadOnlyBucketStatement(bucketName, objectPrefix string) policyStatement {
 	bucketResourceStatement := policyStatement{}
 	bucketResourceStatement.Effect = "Allow"
-	bucketResourceStatement.Principal.AWS = set.CreateStringSet([]string{"*"}...)
+	bucketResourceStatement.Principal = map[string]interface{}{
+		"AWS": "*",
+	}
 	bucketResourceStatement.Resources = set.CreateStringSet([]string{fmt.Sprintf("%s%s", AWSResourcePrefix, bucketName)}...)
 	bucketResourceStatement.Actions = set.CreateStringSet(readOnlyBucketActions...)
 	return bucketResourceStatement
@@ -114,7 +120,9 @@ func getReadOnlyBucketStatement(bucketName, objectPrefix string) policyStatement
 func getReadOnlyObjectStatement(bucketName, objectPrefix string) policyStatement {
 	objectResourceStatement := policyStatement{}
 	objectResourceStatement.Effect = "Allow"
-	objectResourceStatement.Principal.AWS = set.CreateStringSet([]string{"*"}...)
+	objectResourceStatement.Principal = map[string]interface{}{
+		"AWS": "*",
+	}
 	objectResourceStatement.Resources = set.CreateStringSet([]string{fmt.Sprintf("%s%s", AWSResourcePrefix, bucketName+"/"+objectPrefix+"*")}...)
 	objectResourceStatement.Actions = set.CreateStringSet(readOnlyObjectActions...)
 	return objectResourceStatement
@@ -133,7 +141,9 @@ func getWriteOnlyBucketStatement(bucketName, objectPrefix string) policyStatemen
 
 	bucketResourceStatement := policyStatement{}
 	bucketResourceStatement.Effect = "Allow"
-	bucketResourceStatement.Principal.AWS = set.CreateStringSet([]string{"*"}...)
+	bucketResourceStatement.Principal = map[string]interface{}{
+		"AWS": "*",
+	}
 	bucketResourceStatement.Resources = set.CreateStringSet([]string{fmt.Sprintf("%s%s", AWSResourcePrefix, bucketName)}...)
 	bucketResourceStatement.Actions = set.CreateStringSet(writeOnlyBucketActions...)
 	return bucketResourceStatement
@@ -143,7 +153,9 @@ func getWriteOnlyBucketStatement(bucketName, objectPrefix string) policyStatemen
 func getWriteOnlyObjectStatement(bucketName, objectPrefix string) policyStatement {
 	objectResourceStatement := policyStatement{}
 	objectResourceStatement.Effect = "Allow"
-	objectResourceStatement.Principal.AWS = set.CreateStringSet([]string{"*"}...)
+	objectResourceStatement.Principal = map[string]interface{}{
+		"AWS": "*",
+	}
 	objectResourceStatement.Resources = set.CreateStringSet([]string{fmt.Sprintf("%s%s", AWSResourcePrefix, bucketName+"/"+objectPrefix+"*")}...)
 	objectResourceStatement.Actions = set.CreateStringSet(writeOnlyObjectActions...)
 	return objectResourceStatement
@@ -312,7 +324,9 @@ func TestIsValidPrincipals(t *testing.T) {
 		{[]string{"*"}, nil, true},
 	}
 	for i, testCase := range testCases {
-		err := isValidPrincipals(set.CreateStringSet(testCase.principals...))
+		err := isValidPrincipals(map[string]interface{}{
+			"AWS": testCase.principals,
+		})
 		if err != nil && testCase.shouldPass {
 			t.Errorf("Test %d: Expected to pass, but failed with: <ERROR> %s", i+1, err.Error())
 		}
@@ -587,7 +601,9 @@ func TestParseBucketPolicy(t *testing.T) {
 	// set unsupported principals.
 	setUnsupportedPrincipals := func(statements []policyStatement) []policyStatement {
 		// "User1111"" is an Unsupported Principal.
-		statements[0].Principal.AWS = set.CreateStringSet([]string{"*", "User1111"}...)
+		statements[0].Principal = map[string]interface{}{
+			"AWS": []string{"*", "User1111"},
+		}
 		return statements
 	}
 	// set unsupported Resources.

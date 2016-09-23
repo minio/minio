@@ -17,7 +17,7 @@
 package cmd
 
 import (
-	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -25,51 +25,72 @@ import (
 	"github.com/minio/minio/pkg/quick"
 )
 
-func migrateConfig() {
+func migrateConfig() error {
 	// Purge all configs with version '1'.
-	purgeV1()
+	if err := purgeV1(); err != nil {
+		return err
+	}
 	// Migrate version '2' to '3'.
-	migrateV2ToV3()
+	if err := migrateV2ToV3(); err != nil {
+		return err
+	}
 	// Migrate version '3' to '4'.
-	migrateV3ToV4()
+	if err := migrateV3ToV4(); err != nil {
+		return err
+	}
 	// Migrate version '4' to '5'.
-	migrateV4ToV5()
+	if err := migrateV4ToV5(); err != nil {
+		return err
+	}
 	// Migrate version '5' to '6.
-	migrateV5ToV6()
+	if err := migrateV5ToV6(); err != nil {
+		return err
+	}
 	// Migrate version '6' to '7'.
-	migrateV6ToV7()
+	if err := migrateV6ToV7(); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Version '1' is not supported anymore and deprecated, safe to delete.
-func purgeV1() {
+func purgeV1() error {
 	cv1, err := loadConfigV1()
-	if err != nil && os.IsNotExist(err) {
-		return
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("Unable to load config version ‘1’. %v", err)
+
 	}
-	fatalIf(err, "Unable to load config version ‘1’.")
 
 	if cv1.Version == "1" {
 		console.Println("Removed unsupported config version ‘1’.")
 		/// Purge old fsUsers.json file
 		configPath, err := getConfigPath()
-		fatalIf(err, "Unable to retrieve config path.")
+		if err != nil {
+			return fmt.Errorf("Unable to retrieve config path. %v", err)
+		}
 
 		configFile := filepath.Join(configPath, "fsUsers.json")
 		removeAll(configFile)
+		return nil
 	}
-	fatalIf(errors.New(""), "Failed to migrate unrecognized config version ‘"+cv1.Version+"’.")
+	return fmt.Errorf("Failed to migrate unrecognized config version ‘" + cv1.Version + "’.")
 }
 
 // Version '2' to '3' config migration adds new fields and re-orders
 // previous fields. Simplifies config for future additions.
-func migrateV2ToV3() {
+func migrateV2ToV3() error {
 	cv2, err := loadConfigV2()
-	if err != nil && os.IsNotExist(err) {
-		return
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("Unable to load config version ‘2’. %v", err)
 	}
-	fatalIf(err, "Unable to load config version ‘2’.")
 	if cv2.Version != "2" {
-		return
+		return nil
 	}
 	srvConfig := &configV3{}
 	srvConfig.Version = "3"
@@ -104,29 +125,38 @@ func migrateV2ToV3() {
 	srvConfig.Logger.Syslog = slogger
 
 	qc, err := quick.New(srvConfig)
-	fatalIf(err, "Unable to initialize config.")
+	if err != nil {
+		return fmt.Errorf("Unable to initialize config. %v", err)
+	}
 
 	configFile, err := getConfigFile()
-	fatalIf(err, "Unable to get config file.")
+	if err != nil {
+		return fmt.Errorf("Unable to get config file. %v", err)
+	}
 
 	// Migrate the config.
 	err = qc.Save(configFile)
-	fatalIf(err, "Failed to migrate config from ‘"+cv2.Version+"’ to ‘"+srvConfig.Version+"’ failed.")
+	if err != nil {
+		return fmt.Errorf("Failed to migrate config from ‘"+cv2.Version+"’ to ‘"+srvConfig.Version+"’ failed. %v", err)
+	}
 
 	console.Println("Migration from version ‘" + cv2.Version + "’ to ‘" + srvConfig.Version + "’ completed successfully.")
+	return nil
 }
 
 // Version '3' to '4' migrates config, removes previous fields related
 // to backend types and server address. This change further simplifies
 // the config for future additions.
-func migrateV3ToV4() {
+func migrateV3ToV4() error {
 	cv3, err := loadConfigV3()
-	if err != nil && os.IsNotExist(err) {
-		return
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("Unable to load config version ‘3’. %v", err)
 	}
-	fatalIf(err, "Unable to load config version ‘3’.")
 	if cv3.Version != "3" {
-		return
+		return nil
 	}
 
 	// Save only the new fields, ignore the rest.
@@ -143,27 +173,36 @@ func migrateV3ToV4() {
 	srvConfig.Logger.Syslog = cv3.Logger.Syslog
 
 	qc, err := quick.New(srvConfig)
-	fatalIf(err, "Unable to initialize the quick config.")
+	if err != nil {
+		return fmt.Errorf("Unable to initialize the quick config. %v", err)
+	}
 	configFile, err := getConfigFile()
-	fatalIf(err, "Unable to get config file.")
+	if err != nil {
+		return fmt.Errorf("Unable to get config file. %v", err)
+	}
 
 	err = qc.Save(configFile)
-	fatalIf(err, "Failed to migrate config from ‘"+cv3.Version+"’ to ‘"+srvConfig.Version+"’ failed.")
+	if err != nil {
+		return fmt.Errorf("Failed to migrate config from ‘"+cv3.Version+"’ to ‘"+srvConfig.Version+"’ failed. %v", err)
+	}
 
 	console.Println("Migration from version ‘" + cv3.Version + "’ to ‘" + srvConfig.Version + "’ completed successfully.")
+	return nil
 }
 
 // Version '4' to '5' migrates config, removes previous fields related
 // to backend types and server address. This change further simplifies
 // the config for future additions.
-func migrateV4ToV5() {
+func migrateV4ToV5() error {
 	cv4, err := loadConfigV4()
-	if err != nil && os.IsNotExist(err) {
-		return
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("Unable to load config version ‘4’. %v", err)
 	}
-	fatalIf(err, "Unable to load config version ‘4’.")
 	if cv4.Version != "4" {
-		return
+		return nil
 	}
 
 	// Save only the new fields, ignore the rest.
@@ -183,27 +222,36 @@ func migrateV4ToV5() {
 	srvConfig.Logger.Redis.Enable = false
 
 	qc, err := quick.New(srvConfig)
-	fatalIf(err, "Unable to initialize the quick config.")
+	if err != nil {
+		return fmt.Errorf("Unable to initialize the quick config. %v", err)
+	}
 	configFile, err := getConfigFile()
-	fatalIf(err, "Unable to get config file.")
+	if err != nil {
+		return fmt.Errorf("Unable to get config file. %v", err)
+	}
 
 	err = qc.Save(configFile)
-	fatalIf(err, "Failed to migrate config from ‘"+cv4.Version+"’ to ‘"+srvConfig.Version+"’ failed.")
+	if err != nil {
+		return fmt.Errorf("Failed to migrate config from ‘"+cv4.Version+"’ to ‘"+srvConfig.Version+"’ failed. %v", err)
+	}
 
 	console.Println("Migration from version ‘" + cv4.Version + "’ to ‘" + srvConfig.Version + "’ completed successfully.")
+	return nil
 }
 
 // Version '5' to '6' migrates config, removes previous fields related
 // to backend types and server address. This change further simplifies
 // the config for future additions.
-func migrateV5ToV6() {
+func migrateV5ToV6() error {
 	cv5, err := loadConfigV5()
-	if err != nil && os.IsNotExist(err) {
-		return
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("Unable to load config version ‘5’. %v", err)
 	}
-	fatalIf(err, "Unable to load config version ‘5’.")
 	if cv5.Version != "5" {
-		return
+		return nil
 	}
 
 	// Save only the new fields, ignore the rest.
@@ -250,27 +298,36 @@ func migrateV5ToV6() {
 	}
 
 	qc, err := quick.New(srvConfig)
-	fatalIf(err, "Unable to initialize the quick config.")
+	if err != nil {
+		return fmt.Errorf("Unable to initialize the quick config. %v", err)
+	}
 	configFile, err := getConfigFile()
-	fatalIf(err, "Unable to get config file.")
+	if err != nil {
+		return fmt.Errorf("Unable to get config file. %v", err)
+	}
 
 	err = qc.Save(configFile)
-	fatalIf(err, "Failed to migrate config from ‘"+cv5.Version+"’ to ‘"+srvConfig.Version+"’ failed.")
+	if err != nil {
+		return fmt.Errorf("Failed to migrate config from ‘"+cv5.Version+"’ to ‘"+srvConfig.Version+"’ failed. %v", err)
+	}
 
 	console.Println("Migration from version ‘" + cv5.Version + "’ to ‘" + srvConfig.Version + "’ completed successfully.")
+	return nil
 }
 
 // Version '6' to '7' migrates config, removes previous fields related
 // to backend types and server address. This change further simplifies
 // the config for future additions.
-func migrateV6ToV7() {
+func migrateV6ToV7() error {
 	cv6, err := loadConfigV6()
-	if err != nil && os.IsNotExist(err) {
-		return
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("Unable to load config version ‘6’. %v", err)
 	}
-	fatalIf(err, "Unable to load config version ‘6’.")
 	if cv6.Version != "6" {
-		return
+		return nil
 	}
 
 	// Save only the new fields, ignore the rest.
@@ -305,12 +362,19 @@ func migrateV6ToV7() {
 	}
 
 	qc, err := quick.New(srvConfig)
-	fatalIf(err, "Unable to initialize the quick config.")
+	if err != nil {
+		return fmt.Errorf("Unable to initialize the quick config. %v", err)
+	}
 	configFile, err := getConfigFile()
-	fatalIf(err, "Unable to get config file.")
+	if err != nil {
+		return fmt.Errorf("Unable to get config file. %v", err)
+	}
 
 	err = qc.Save(configFile)
-	fatalIf(err, "Failed to migrate config from ‘"+cv6.Version+"’ to ‘"+srvConfig.Version+"’ failed.")
+	if err != nil {
+		return fmt.Errorf("Failed to migrate config from ‘"+cv6.Version+"’ to ‘"+srvConfig.Version+"’ failed. %v", err)
+	}
 
 	console.Println("Migration from version ‘" + cv6.Version + "’ to ‘" + srvConfig.Version + "’ completed successfully.")
+	return nil
 }

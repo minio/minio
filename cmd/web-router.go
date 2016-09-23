@@ -30,7 +30,7 @@ import (
 
 // webAPI container for Web API.
 type webAPIHandlers struct {
-	ObjectAPI ObjectLayer
+	ObjectAPI func() ObjectLayer
 }
 
 // indexHandler - Handler to serve index.html

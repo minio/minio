@@ -24,10 +24,10 @@ import (
 )
 
 const (
-	timeFormatAMZ  = "2006-01-02T15:04:05.000Z" // Reply date format
-	maxObjectList  = 1000                       // Limit number of objects in a listObjectsResponse.
-	maxUploadsList = 1000                       // Limit number of uploads in a listUploadsResponse.
-	maxPartsList   = 1000                       // Limit number of parts in a listPartsResponse.
+	timeFormatAMZ  = "2006-01-02T15:04:05Z" // Reply date format
+	maxObjectList  = 1000                   // Limit number of objects in a listObjectsResponse.
+	maxUploadsList = 1000                   // Limit number of uploads in a listUploadsResponse.
+	maxPartsList   = 1000                   // Limit number of parts in a listPartsResponse.
 )
 
 // LocationResponse - format for location response.
@@ -489,18 +489,18 @@ func writeSuccessNoContent(w http.ResponseWriter) {
 
 // writeErrorRespone write error headers
 func writeErrorResponse(w http.ResponseWriter, req *http.Request, errorCode APIErrorCode, resource string) {
-	error := getAPIError(errorCode)
+	apiError := getAPIError(errorCode)
 	// set common headers
 	setCommonHeaders(w)
 	// write Header
-	w.WriteHeader(error.HTTPStatusCode)
+	w.WriteHeader(apiError.HTTPStatusCode)
 	writeErrorResponseNoHeader(w, req, errorCode, resource)
 }
 
 func writeErrorResponseNoHeader(w http.ResponseWriter, req *http.Request, errorCode APIErrorCode, resource string) {
-	error := getAPIError(errorCode)
+	apiError := getAPIError(errorCode)
 	// Generate error response.
-	errorResponse := getAPIErrorResponse(error, resource)
+	errorResponse := getAPIErrorResponse(apiError, resource)
 	encodedErrorResponse := encodeResponse(errorResponse)
 	// HEAD should have no body, do not attempt to write to it
 	if req.Method != "HEAD" {

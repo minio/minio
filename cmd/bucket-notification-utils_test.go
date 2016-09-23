@@ -16,7 +16,162 @@
 
 package cmd
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
+
+// Test validates for duplicate configs.
+func TestCheckDuplicateConfigs(t *testing.T) {
+	testCases := []struct {
+		qConfigs        []queueConfig
+		expectedErrCode APIErrorCode
+	}{
+		// Error for duplicate queue configs.
+		{
+			qConfigs: []queueConfig{
+				{
+					QueueARN: "arn:minio:sqs:us-east-1:1:redis",
+				},
+				{
+					QueueARN: "arn:minio:sqs:us-east-1:1:redis",
+				},
+			},
+			expectedErrCode: ErrOverlappingConfigs,
+		},
+		// Valid queue configs.
+		{
+			qConfigs: []queueConfig{
+				{
+					QueueARN: "arn:minio:sqs:us-east-1:1:redis",
+				},
+			},
+			expectedErrCode: ErrNone,
+		},
+	}
+
+	// ... validate for duplicate queue configs.
+	for i, testCase := range testCases {
+		errCode := checkDuplicateQueueConfigs(testCase.qConfigs)
+		if errCode != testCase.expectedErrCode {
+			t.Errorf("Test %d: Expected %d, got %d", i+1, testCase.expectedErrCode, errCode)
+		}
+	}
+
+	// Test cases for SNS topic config.
+	topicTestCases := []struct {
+		tConfigs        []topicConfig
+		expectedErrCode APIErrorCode
+	}{
+		// Error out for duplicate configs.
+		{
+			tConfigs: []topicConfig{
+				{
+					TopicARN: "arn:minio:sns:us-east-1:1:listen",
+				},
+				{
+					TopicARN: "arn:minio:sns:us-east-1:1:listen",
+				},
+			},
+			expectedErrCode: ErrOverlappingConfigs,
+		},
+		// Valid config.
+		{
+			tConfigs: []topicConfig{
+				{
+					TopicARN: "arn:minio:sns:us-east-1:1:listen",
+				},
+			},
+			expectedErrCode: ErrNone,
+		},
+	}
+
+	// ... validate for duplicate topic configs.
+	for i, testCase := range topicTestCases {
+		errCode := checkDuplicateTopicConfigs(testCase.tConfigs)
+		if errCode != testCase.expectedErrCode {
+			t.Errorf("Test %d: Expected %d, got %d", i+1, testCase.expectedErrCode, errCode)
+		}
+	}
+}
+
+// Tests for validating filter rules.
+func TestCheckFilterRules(t *testing.T) {
+	testCases := []struct {
+		rules           []filterRule
+		expectedErrCode APIErrorCode
+	}{
+		// Valid prefix and suffix values.
+		{
+			rules: []filterRule{
+				{
+					Name:  "prefix",
+					Value: "test/test1",
+				},
+				{
+					Name:  "suffix",
+					Value: ".jpg",
+				},
+			},
+			expectedErrCode: ErrNone,
+		},
+		// Invalid filter name.
+		{
+			rules: []filterRule{
+				{
+					Name:  "unknown",
+					Value: "test/test1",
+				},
+			},
+			expectedErrCode: ErrFilterNameInvalid,
+		},
+		// Cannot have duplicate prefixes.
+		{
+			rules: []filterRule{
+				{
+					Name:  "prefix",
+					Value: "test/test1",
+				},
+				{
+					Name:  "prefix",
+					Value: "test/test1",
+				},
+			},
+			expectedErrCode: ErrFilterNamePrefix,
+		},
+		// Cannot have duplicate suffixes.
+		{
+			rules: []filterRule{
+				{
+					Name:  "suffix",
+					Value: ".jpg",
+				},
+				{
+					Name:  "suffix",
+					Value: ".txt",
+				},
+			},
+			expectedErrCode: ErrFilterNameSuffix,
+		},
+		// Filter value cannot be bigger than > 1024.
+		{
+			rules: []filterRule{
+				{
+					Name:  "prefix",
+					Value: strings.Repeat("a", 1025),
+				},
+			},
+			expectedErrCode: ErrFilterValueInvalid,
+		},
+	}
+
+	for i, testCase := range testCases {
+		errCode := checkFilterRules(testCase.rules)
+		if errCode != testCase.expectedErrCode {
+			t.Errorf("Test %d: Expected %d, got %d", i+1, testCase.expectedErrCode, errCode)
+		}
+	}
+}
 
 // Tests filter name validation.
 func TestIsValidFilterName(t *testing.T) {

@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/xml"
 	"fmt"
+	"net"
 	"net/url"
 	"path"
 	"sync"
@@ -203,7 +204,9 @@ func eventNotify(event eventData) {
 			targetLog := globalEventNotifier.GetQueueTarget(qConfig.QueueARN)
 			if targetLog != nil {
 				targetLog.WithFields(logrus.Fields{
-					"Records": notificationEvent,
+					"Key":       path.Join(event.Bucket, objectName),
+					"EventType": eventType,
+					"Records":   notificationEvent,
 				}).Info()
 			}
 		}
@@ -226,6 +229,7 @@ func loadNotificationConfig(bucket string, objAPI ObjectLayer) (*notificationCon
 	// Construct the notification config path.
 	notificationConfigPath := path.Join(bucketConfigPrefix, bucket, bucketNotificationConfig)
 	objInfo, err := objAPI.GetObjectInfo(minioMetaBucket, notificationConfigPath)
+	err = errorCause(err)
 	if err != nil {
 		// 'notification.xml' not found return 'errNoSuchNotifications'.
 		// This is default when no bucket notifications are found on the bucket.
@@ -233,11 +237,13 @@ func loadNotificationConfig(bucket string, objAPI ObjectLayer) (*notificationCon
 		case ObjectNotFound:
 			return nil, errNoSuchNotifications
 		}
+		errorIf(err, "Unable to load bucket-notification for bucket %s", bucket)
 		// Returns error for other errors.
 		return nil, err
 	}
 	var buffer bytes.Buffer
 	err = objAPI.GetObject(minioMetaBucket, notificationConfigPath, 0, objInfo.Size, &buffer)
+	err = errorCause(err)
 	if err != nil {
 		// 'notification.xml' not found return 'errNoSuchNotifications'.
 		// This is default when no bucket notifications are found on the bucket.
@@ -245,6 +251,7 @@ func loadNotificationConfig(bucket string, objAPI ObjectLayer) (*notificationCon
 		case ObjectNotFound:
 			return nil, errNoSuchNotifications
 		}
+		errorIf(err, "Unable to load bucket-notification for bucket %s", bucket)
 		// Returns error for other errors.
 		return nil, err
 	}
@@ -272,13 +279,12 @@ func loadAllBucketNotifications(objAPI ObjectLayer) (map[string]*notificationCon
 
 	// Loads all bucket notifications.
 	for _, bucket := range buckets {
-		var nCfg *notificationConfig
-		nCfg, err = loadNotificationConfig(bucket.Name, objAPI)
-		if err != nil {
-			if err == errNoSuchNotifications {
+		nCfg, nErr := loadNotificationConfig(bucket.Name, objAPI)
+		if nErr != nil {
+			if nErr == errNoSuchNotifications {
 				continue
 			}
-			return nil, err
+			return nil, nErr
 		}
 		configs[bucket.Name] = nCfg
 	}
@@ -308,6 +314,14 @@ func loadAllQueueTargets() (map[string]*logrus.Logger, error) {
 		// Using accountID we can now initialize a new AMQP logrus instance.
 		amqpLog, err := newAMQPNotify(accountID)
 		if err != nil {
+			// Encapsulate network error to be more informative.
+			if _, ok := err.(net.Error); ok {
+				return nil, &net.OpError{
+					Op:  "Connecting to " + queueARN,
+					Net: "tcp",
+					Err: err,
+				}
+			}
 			return nil, err
 		}
 		queueTargets[queueARN] = amqpLog
@@ -327,6 +341,14 @@ func loadAllQueueTargets() (map[string]*logrus.Logger, error) {
 		// Using accountID we can now initialize a new Redis logrus instance.
 		redisLog, err := newRedisNotify(accountID)
 		if err != nil {
+			// Encapsulate network error to be more informative.
+			if _, ok := err.(net.Error); ok {
+				return nil, &net.OpError{
+					Op:  "Connecting to " + queueARN,
+					Net: "tcp",
+					Err: err,
+				}
+			}
 			return nil, err
 		}
 		queueTargets[queueARN] = redisLog
@@ -345,6 +367,13 @@ func loadAllQueueTargets() (map[string]*logrus.Logger, error) {
 		// Using accountID we can now initialize a new ElasticSearch logrus instance.
 		elasticLog, err := newElasticNotify(accountID)
 		if err != nil {
+			// Encapsulate network error to be more informative.
+			if _, ok := err.(net.Error); ok {
+				return nil, &net.OpError{
+					Op: "Connecting to " + queueARN, Net: "tcp",
+					Err: err,
+				}
+			}
 			return nil, err
 		}
 		queueTargets[queueARN] = elasticLog

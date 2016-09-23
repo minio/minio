@@ -185,7 +185,7 @@ func TestTreeWalk(t *testing.T) {
 	isLeaf := func(volume, prefix string) bool {
 		return !strings.HasSuffix(prefix, slashSeparator)
 	}
-	listDir := listDirFactory(isLeaf, disk)
+	listDir := listDirFactory(isLeaf, xlTreeWalkIgnoredErrs, disk)
 	// Simple test for prefix based walk.
 	testTreeWalkPrefix(t, listDir, isLeaf)
 	// Simple test when marker is set.
@@ -219,7 +219,7 @@ func TestTreeWalkTimeout(t *testing.T) {
 	isLeaf := func(volume, prefix string) bool {
 		return !strings.HasSuffix(prefix, slashSeparator)
 	}
-	listDir := listDirFactory(isLeaf, disk)
+	listDir := listDirFactory(isLeaf, xlTreeWalkIgnoredErrs, disk)
 
 	// TreeWalk pool with 2 seconds timeout for tree-walk go routines.
 	pool := newTreeWalkPool(2 * time.Second)
@@ -291,7 +291,7 @@ func TestListDir(t *testing.T) {
 	// create listDir function.
 	listDir := listDirFactory(func(volume, prefix string) bool {
 		return !strings.HasSuffix(prefix, slashSeparator)
-	}, disk1, disk2)
+	}, xlTreeWalkIgnoredErrs, disk1, disk2)
 
 	// Create file1 in fsDir1 and file2 in fsDir2.
 	disks := []StorageAPI{disk1, disk2}
@@ -337,7 +337,7 @@ func TestListDir(t *testing.T) {
 	}
 	// None of the disks are available, should get errDiskNotFound.
 	_, _, err = listDir(volume, "", "")
-	if err != errDiskNotFound {
+	if errorCause(err) != errDiskNotFound {
 		t.Error("expected errDiskNotFound error.")
 	}
 }
@@ -363,7 +363,7 @@ func TestRecursiveTreeWalk(t *testing.T) {
 	}
 
 	// Create listDir function.
-	listDir := listDirFactory(isLeaf, disk1)
+	listDir := listDirFactory(isLeaf, xlTreeWalkIgnoredErrs, disk1)
 
 	// Create the namespace.
 	var files = []string{
@@ -469,7 +469,7 @@ func TestSortedness(t *testing.T) {
 		return !strings.HasSuffix(prefix, slashSeparator)
 	}
 	// Create listDir function.
-	listDir := listDirFactory(isLeaf, disk1)
+	listDir := listDirFactory(isLeaf, xlTreeWalkIgnoredErrs, disk1)
 
 	// Create the namespace.
 	var files = []string{
@@ -543,7 +543,7 @@ func TestTreeWalkIsEnd(t *testing.T) {
 		return !strings.HasSuffix(prefix, slashSeparator)
 	}
 	// Create listDir function.
-	listDir := listDirFactory(isLeaf, disk1)
+	listDir := listDirFactory(isLeaf, xlTreeWalkIgnoredErrs, disk1)
 
 	// Create the namespace.
 	var files = []string{

@@ -75,8 +75,38 @@ func (s *TestSuiteCommon) TestAuth(c *C) {
 	c.Assert(len(accessID), Equals, minioAccessID)
 }
 
+func (s *TestSuiteCommon) TestBucketSQSNotification(c *C) {
+	// Sample bucket notification.
+	bucketNotificationBuf := `<NotificationConfiguration><QueueConfiguration><Event>s3:ObjectCreated:Put</Event><Filter><S3Key><FilterRule><Name>prefix</Name><Value>images/</Value></FilterRule></S3Key></Filter><Id>1</Id><Queue>arn:minio:sqs:us-east-1:444455556666:amqp</Queue></QueueConfiguration></NotificationConfiguration>`
+	// generate a random bucket Name.
+	bucketName := getRandomBucketName()
+	// HTTP request to create the bucket.
+	request, err := newTestSignedRequest("PUT", getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
+	c.Assert(err, IsNil)
+
+	client := http.Client{}
+	// execute the request.
+	response, err := client.Do(request)
+	c.Assert(err, IsNil)
+
+	// assert the http response status code.
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	request, err = newTestSignedRequest("PUT", getPutNotificationURL(s.endPoint, bucketName),
+		int64(len(bucketNotificationBuf)), bytes.NewReader([]byte(bucketNotificationBuf)), s.accessKey, s.secretKey)
+	c.Assert(err, IsNil)
+
+	client = http.Client{}
+	// execute the HTTP request.
+	response, err = client.Do(request)
+
+	c.Assert(err, IsNil)
+	verifyError(c, response, "InvalidArgument", "A specified destination ARN does not exist or is not well-formed. Verify the destination ARN.", http.StatusBadRequest)
+}
+
 // TestBucketNotification - Inserts the bucket notification and verifies it by fetching the notification back.
-func (s *TestSuiteCommon) TestBucketNotification(c *C) {
+func (s *TestSuiteCommon) TestBucketSNSNotification(c *C) {
 	// Sample bucket notification.
 	bucketNotificationBuf := `<NotificationConfiguration><TopicConfiguration><Event>s3:ObjectCreated:Put</Event><Filter><S3Key><FilterRule><Name>prefix</Name><Value>images/</Value></FilterRule></S3Key></Filter><Id>1</Id><Topic>arn:minio:sns:us-east-1:444455556666:listen</Topic></TopicConfiguration></NotificationConfiguration>`
 
@@ -120,7 +150,7 @@ func (s *TestSuiteCommon) TestBucketNotification(c *C) {
 	// Verify if downloaded policy matches with previousy uploaded.
 	c.Assert(bytes.Equal([]byte(bucketNotificationBuf), bucketNotificationReadBuf), Equals, true)
 
-	invalidBucketNotificationBuf := `<NotificationConfiguration><TopicConfiguration><Event>s3:ObjectCreated:Put</Event><Filter><S3Key><FilterRule><Name>prefix</Name><Value>images/</Value></FilterRule></S3Key></Filter><Id>1</Id><Topic>arn:minio:sns:us-east-1:444455556666:minio</Topic></TopicConfiguration></NotificationConfiguration>`
+	invalidBucketNotificationBuf := `<NotificationConfiguration><TopicConfiguration><Event>s3:ObjectCreated:Put</Event><Filter><S3Key><FilterRule><Name>invalid</Name><Value>images/</Value></FilterRule></S3Key></Filter><Id>1</Id><Topic>arn:minio:sns:us-east-1:444455556666:minio</Topic></TopicConfiguration></NotificationConfiguration>`
 
 	request, err = newTestSignedRequest("PUT", getPutNotificationURL(s.endPoint, bucketName),
 		int64(len(invalidBucketNotificationBuf)), bytes.NewReader([]byte(invalidBucketNotificationBuf)), s.accessKey, s.secretKey)
@@ -132,6 +162,32 @@ func (s *TestSuiteCommon) TestBucketNotification(c *C) {
 	c.Assert(err, IsNil)
 
 	verifyError(c, response, "InvalidArgument", "A specified destination ARN does not exist or is not well-formed. Verify the destination ARN.", http.StatusBadRequest)
+
+	invalidBucketNotificationBuf = `<NotificationConfiguration><TopicConfiguration><Event>s3:ObjectCreated:Put</Event><Filter><S3Key><FilterRule><Name>invalid</Name><Value>images/</Value></FilterRule></S3Key></Filter><Id>1</Id><Topic>arn:minio:sns:us-east-1:1:listen</Topic></TopicConfiguration></NotificationConfiguration>`
+
+	request, err = newTestSignedRequest("PUT", getPutNotificationURL(s.endPoint, bucketName),
+		int64(len(invalidBucketNotificationBuf)), bytes.NewReader([]byte(invalidBucketNotificationBuf)), s.accessKey, s.secretKey)
+	c.Assert(err, IsNil)
+
+	client = http.Client{}
+	// execute the HTTP request.
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+
+	verifyError(c, response, "InvalidArgument", "filter rule name must be either prefix or suffix", http.StatusBadRequest)
+
+	invalidBucketNotificationBuf = `<NotificationConfiguration><TopicConfiguration><Event>s3:ObjectCreated:Put</Event><Filter><S3Key><FilterRule><Name>prefix</Name><Value>|||</Value></FilterRule></S3Key></Filter><Id>1</Id><Topic>arn:minio:sns:us-east-1:1:listen</Topic></TopicConfiguration></NotificationConfiguration>`
+
+	request, err = newTestSignedRequest("PUT", getPutNotificationURL(s.endPoint, bucketName),
+		int64(len(invalidBucketNotificationBuf)), bytes.NewReader([]byte(invalidBucketNotificationBuf)), s.accessKey, s.secretKey)
+	c.Assert(err, IsNil)
+
+	client = http.Client{}
+	// execute the HTTP request.
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+
+	verifyError(c, response, "InvalidArgument", "Size of filter rule value cannot exceed 1024 bytes in UTF-8 representation", http.StatusBadRequest)
 
 	invalidBucketNotificationBuf = `<NotificationConfiguration><TopicConfiguration><Event>s3:ObjectCreated:Put</Event><Filter><S3Key><FilterRule><Name>prefix</Name><Value>images/</Value></FilterRule></S3Key></Filter><Id>1</Id><Topic>arn:minio:sns:us-west-1:444455556666:listen</Topic></TopicConfiguration></NotificationConfiguration>`
 	request, err = newTestSignedRequest("PUT", getPutNotificationURL(s.endPoint, bucketName),
@@ -309,6 +365,7 @@ func (s *TestSuiteCommon) TestDeleteBucketNotEmpty(c *C) {
 
 }
 
+// Test deletes multple objects and verifies server resonse.
 func (s *TestSuiteCommon) TestDeleteMultipleObjects(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
@@ -347,18 +404,11 @@ func (s *TestSuiteCommon) TestDeleteMultipleObjects(c *C) {
 			ObjectName: objName,
 		})
 	}
-	// Append a non-existent object for which the response should be marked
-	// as deleted.
-	delObjReq.Objects = append(delObjReq.Objects, ObjectIdentifier{
-		ObjectName: fmt.Sprintf("%d/%s", 10, objectName),
-	})
-
 	// Marshal delete request.
 	deleteReqBytes, err := xml.Marshal(delObjReq)
 	c.Assert(err, IsNil)
 
-	// object name was "prefix/myobject", an attempt to delelte "prefix"
-	// Should not delete "prefix/myobject"
+	// Delete list of objects.
 	request, err = newTestSignedRequest("POST", getMultiDeleteObjectURL(s.endPoint, bucketName),
 		int64(len(deleteReqBytes)), bytes.NewReader(deleteReqBytes), s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
@@ -372,8 +422,28 @@ func (s *TestSuiteCommon) TestDeleteMultipleObjects(c *C) {
 	c.Assert(err, IsNil)
 	err = xml.Unmarshal(delRespBytes, &deleteResp)
 	c.Assert(err, IsNil)
-	for i := 0; i <= 10; i++ {
+	for i := 0; i < 10; i++ {
 		// All the objects should be under deleted list (including non-existent object)
+		c.Assert(deleteResp.DeletedObjects[i], DeepEquals, delObjReq.Objects[i])
+	}
+	c.Assert(len(deleteResp.Errors), Equals, 0)
+
+	// Attempt second time results should be same, NoSuchKey for objects not found
+	// shouldn't be set.
+	request, err = newTestSignedRequest("POST", getMultiDeleteObjectURL(s.endPoint, bucketName),
+		int64(len(deleteReqBytes)), bytes.NewReader(deleteReqBytes), s.accessKey, s.secretKey)
+	c.Assert(err, IsNil)
+	client = http.Client{}
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	deleteResp = DeleteObjectsResponse{}
+	delRespBytes, err = ioutil.ReadAll(response.Body)
+	c.Assert(err, IsNil)
+	err = xml.Unmarshal(delRespBytes, &deleteResp)
+	c.Assert(err, IsNil)
+	for i := 0; i < 10; i++ {
 		c.Assert(deleteResp.DeletedObjects[i], DeepEquals, delObjReq.Objects[i])
 	}
 	c.Assert(len(deleteResp.Errors), Equals, 0)
@@ -618,7 +688,7 @@ func (s *TestSuiteCommon) TestObjectGet(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 	// concurrently reading the object, safety check for races.
 	var wg sync.WaitGroup
-	for i := 0; i < ConcurrencyLevel; i++ {
+	for i := 0; i < testConcurrencyLevel; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -807,7 +877,7 @@ func (s *TestSuiteCommon) TestPutBucket(c *C) {
 	// The purpose this block is not to check for correctness of functionality
 	// Run the test with -race flag to utilize this
 	var wg sync.WaitGroup
-	for i := 0; i < ConcurrencyLevel; i++ {
+	for i := 0; i < testConcurrencyLevel; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -1364,6 +1434,7 @@ func (s *TestSuiteCommon) TestListObjectsHandler(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	getContent, err := ioutil.ReadAll(response.Body)
+	c.Assert(err, IsNil)
 	c.Assert(strings.Contains(string(getContent), "<Key>bar</Key>"), Equals, true)
 
 	// create listObjectsV2 request with valid parameters
@@ -1377,6 +1448,7 @@ func (s *TestSuiteCommon) TestListObjectsHandler(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	getContent, err = ioutil.ReadAll(response.Body)
+	c.Assert(err, IsNil)
 	c.Assert(strings.Contains(string(getContent), "<Key>bar</Key>"), Equals, true)
 	c.Assert(strings.Contains(string(getContent), "<Owner><ID></ID><DisplayName></DisplayName></Owner>"), Equals, true)
 
@@ -1391,6 +1463,8 @@ func (s *TestSuiteCommon) TestListObjectsHandler(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	getContent, err = ioutil.ReadAll(response.Body)
+	c.Assert(err, IsNil)
+
 	c.Assert(strings.Contains(string(getContent), "<Key>bar</Key>"), Equals, true)
 	c.Assert(strings.Contains(string(getContent), "<Owner><ID>minio</ID><DisplayName>minio</DisplayName></Owner>"), Equals, true)
 
@@ -1960,6 +2034,7 @@ func (s *TestSuiteCommon) TestObjectMultipartAbort(c *C) {
 
 	// execute the HTTP request initiating the new multipart upload.
 	response, err = client.Do(request)
+	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	// parse the response body and obtain the new upload ID.
@@ -1977,6 +2052,7 @@ func (s *TestSuiteCommon) TestObjectMultipartAbort(c *C) {
 
 	// execute the HTTP request initiating the new multipart upload.
 	response, err = client.Do(request)
+	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	// parse the response body and obtain the new upload ID.
@@ -2193,6 +2269,7 @@ func (s *TestSuiteCommon) TestObjectMultipartListError(c *C) {
 	c.Assert(err, IsNil)
 	// execute the HTTP request initiating the new multipart upload.
 	response, err = client.Do(request)
+	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 	// parse the response body and obtain the new upload ID.
 	decoder := xml.NewDecoder(response.Body)

@@ -19,7 +19,6 @@ package cmd
 import (
 	"errors"
 	"net/http"
-	"sync"
 )
 
 var errTooManyRequests = errors.New("Too many clients in the waiting list")
@@ -28,7 +27,6 @@ var errTooManyRequests = errors.New("Too many clients in the waiting list")
 // limit the number of concurrent http requests.
 type rateLimit struct {
 	handler   http.Handler
-	lock      sync.Mutex
 	workQueue chan struct{}
 	waitQueue chan struct{}
 }
@@ -37,20 +35,27 @@ type rateLimit struct {
 // channel this is in-turn used to rate limit incoming connections in
 // ServeHTTP() http.Handler method.
 func (c *rateLimit) acquire() error {
-	// Kick out clients when it is really crowded
-	if len(c.waitQueue) == cap(c.waitQueue) {
+	//attempt to enter the waitQueue. If no slot is immediately
+	//available return error.
+	select {
+	case c.waitQueue <- struct{}{}:
+		//entered wait queue
+		break
+	default:
+		//no slot available for waiting
 		return errTooManyRequests
 	}
 
-	// Add new element in waitQueue to keep track of clients
-	// wanting to process their requests
-	c.waitQueue <- struct{}{}
+	//block attempting to enter the workQueue. If the workQueue is
+	//full, there can be at most cap(waitQueue) == 4*globalMaxConn
+	//goroutines waiting here because of the select above.
+	select {
+	case c.workQueue <- struct{}{}:
+		//entered workQueue - so remove one waiter. This step
+		//does not block as the waitQueue cannot be empty.
+		<-c.waitQueue
+	}
 
-	// Moving from wait to work queue is protected by a mutex
-	// to avoid draining waitQueue with multiple simultaneous clients.
-	c.lock.Lock()
-	c.workQueue <- <-c.waitQueue
-	c.lock.Unlock()
 	return nil
 }
 

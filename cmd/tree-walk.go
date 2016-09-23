@@ -21,15 +21,6 @@ import (
 	"strings"
 )
 
-// list of all errors that can be ignored in tree walk operation.
-var walkResultIgnoredErrs = []error{
-	errFileNotFound,
-	errVolumeNotFound,
-	errDiskNotFound,
-	errDiskAccessDenied,
-	errFaultyDisk,
-}
-
 // Tree walk result carries results of tree walking.
 type treeWalkResult struct {
 	entry string
@@ -107,7 +98,7 @@ type isLeafFunc func(string, string) bool
 // Returns function "listDir" of the type listDirFunc.
 // isLeaf - is used by listDir function to check if an entry is a leaf or non-leaf entry.
 // disks - used for doing disk.ListDir(). FS passes single disk argument, XL passes a list of disks.
-func listDirFactory(isLeaf isLeafFunc, disks ...StorageAPI) listDirFunc {
+func listDirFactory(isLeaf isLeafFunc, treeWalkIgnoredErrs []error, disks ...StorageAPI) listDirFunc {
 	// listDir - lists all the entries at a given prefix and given entry in the prefix.
 	listDir := func(bucket, prefixDir, prefixEntry string) (entries []string, delayIsLeaf bool, err error) {
 		for _, disk := range disks {
@@ -142,13 +133,13 @@ func listDirFactory(isLeaf isLeafFunc, disks ...StorageAPI) listDirFunc {
 			}
 			// For any reason disk was deleted or goes offline, continue
 			// and list from other disks if possible.
-			if isErrIgnored(err, walkResultIgnoredErrs) {
+			if isErrIgnored(err, treeWalkIgnoredErrs) {
 				continue
 			}
 			break
 		}
 		// Return error at the end.
-		return nil, false, err
+		return nil, false, traceError(err)
 	}
 	return listDir
 }
@@ -173,7 +164,7 @@ func doTreeWalk(bucket, prefixDir, entryPrefixMatch, marker string, recursive bo
 	if err != nil {
 		select {
 		case <-endWalkCh:
-			return errWalkAbort
+			return traceError(errWalkAbort)
 		case resultCh <- treeWalkResult{err: err}:
 			return err
 		}
@@ -235,7 +226,7 @@ func doTreeWalk(bucket, prefixDir, entryPrefixMatch, marker string, recursive bo
 		isEOF := ((i == len(entries)-1) && isEnd)
 		select {
 		case <-endWalkCh:
-			return errWalkAbort
+			return traceError(errWalkAbort)
 		case resultCh <- treeWalkResult{entry: pathJoin(prefixDir, entry), end: isEOF}:
 		}
 	}

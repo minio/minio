@@ -28,6 +28,20 @@ import (
 	"time"
 )
 
+// Prepare benchmark backend
+func prepareBenchmarkBackend(instanceType string) (ObjectLayer, []string, error) {
+	nDisks := 16
+	disks, err := getRandomDisks(nDisks)
+	if err != nil {
+		return nil, nil, err
+	}
+	obj, err := makeTestBackend(disks, instanceType)
+	if err != nil {
+		return nil, nil, err
+	}
+	return obj, disks, nil
+}
+
 // Benchmark utility functions for ObjectLayer.PutObject().
 // Creates Object layer setup ( MakeBucket ) and then runs the PutObject benchmark.
 func runPutObjectBenchmark(b *testing.B, obj ObjectLayer, objSize int) {
@@ -40,9 +54,6 @@ func runPutObjectBenchmark(b *testing.B, obj ObjectLayer, objSize int) {
 		b.Fatal(err)
 	}
 
-	// PutObject returns md5Sum of the object inserted.
-	// md5Sum variable is assigned with that value.
-	var md5Sum string
 	// get text data generated for number of bytes equal to object size.
 	textData := generateBytesData(objSize)
 	// generate md5sum for the generated data.
@@ -57,12 +68,12 @@ func runPutObjectBenchmark(b *testing.B, obj ObjectLayer, objSize int) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		// insert the object.
-		md5Sum, err = obj.PutObject(bucket, "object"+strconv.Itoa(i), int64(len(textData)), bytes.NewBuffer(textData), metadata)
+		objInfo, err := obj.PutObject(bucket, "object"+strconv.Itoa(i), int64(len(textData)), bytes.NewBuffer(textData), metadata)
 		if err != nil {
 			b.Fatal(err)
 		}
-		if md5Sum != metadata["md5Sum"] {
-			b.Fatalf("Write no: %d: Md5Sum mismatch during object write into the bucket: Expected %s, got %s", i+1, md5Sum, metadata["md5Sum"])
+		if objInfo.MD5Sum != metadata["md5Sum"] {
+			b.Fatalf("Write no: %d: Md5Sum mismatch during object write into the bucket: Expected %s, got %s", i+1, objInfo.MD5Sum, metadata["md5Sum"])
 		}
 	}
 	// Benchmark ends here. Stop timer.
@@ -135,7 +146,7 @@ func runPutObjectPartBenchmark(b *testing.B, obj ObjectLayer, partSize int) {
 // creates XL/FS backend setup, obtains the object layer and calls the runPutObjectPartBenchmark function.
 func benchmarkPutObjectPart(b *testing.B, instanceType string, objSize int) {
 	// create a temp XL/FS backend.
-	objLayer, disks, err := makeTestBackend(instanceType)
+	objLayer, disks, err := prepareBenchmarkBackend(instanceType)
 	if err != nil {
 		b.Fatalf("Failed obtaining Temp Backend: <ERROR> %s", err)
 	}
@@ -148,7 +159,7 @@ func benchmarkPutObjectPart(b *testing.B, instanceType string, objSize int) {
 // creates XL/FS backend setup, obtains the object layer and calls the runPutObjectBenchmark function.
 func benchmarkPutObject(b *testing.B, instanceType string, objSize int) {
 	// create a temp XL/FS backend.
-	objLayer, disks, err := makeTestBackend(instanceType)
+	objLayer, disks, err := prepareBenchmarkBackend(instanceType)
 	if err != nil {
 		b.Fatalf("Failed obtaining Temp Backend: <ERROR> %s", err)
 	}
@@ -161,7 +172,7 @@ func benchmarkPutObject(b *testing.B, instanceType string, objSize int) {
 // creates XL/FS backend setup, obtains the object layer and runs parallel benchmark for put object.
 func benchmarkPutObjectParallel(b *testing.B, instanceType string, objSize int) {
 	// create a temp XL/FS backend.
-	objLayer, disks, err := makeTestBackend(instanceType)
+	objLayer, disks, err := prepareBenchmarkBackend(instanceType)
 	if err != nil {
 		b.Fatalf("Failed obtaining Temp Backend: <ERROR> %s", err)
 	}
@@ -183,9 +194,6 @@ func runGetObjectBenchmark(b *testing.B, obj ObjectLayer, objSize int) {
 		b.Fatal(err)
 	}
 
-	// PutObject returns md5Sum of the object inserted.
-	// md5Sum variable is assigned with that value.
-	var md5Sum string
 	for i := 0; i < 10; i++ {
 		// get text data generated for number of bytes equal to object size.
 		textData := generateBytesData(objSize)
@@ -197,12 +205,13 @@ func runGetObjectBenchmark(b *testing.B, obj ObjectLayer, objSize int) {
 		metadata := make(map[string]string)
 		metadata["md5Sum"] = hex.EncodeToString(hasher.Sum(nil))
 		// insert the object.
-		md5Sum, err = obj.PutObject(bucket, "object"+strconv.Itoa(i), int64(len(textData)), bytes.NewBuffer(textData), metadata)
+		var objInfo ObjectInfo
+		objInfo, err = obj.PutObject(bucket, "object"+strconv.Itoa(i), int64(len(textData)), bytes.NewBuffer(textData), metadata)
 		if err != nil {
 			b.Fatal(err)
 		}
-		if md5Sum != metadata["md5Sum"] {
-			b.Fatalf("Write no: %d: Md5Sum mismatch during object write into the bucket: Expected %s, got %s", i+1, md5Sum, metadata["md5Sum"])
+		if objInfo.MD5Sum != metadata["md5Sum"] {
+			b.Fatalf("Write no: %d: Md5Sum mismatch during object write into the bucket: Expected %s, got %s", i+1, objInfo.MD5Sum, metadata["md5Sum"])
 		}
 	}
 
@@ -226,7 +235,7 @@ func runGetObjectBenchmark(b *testing.B, obj ObjectLayer, objSize int) {
 func getRandomByte() []byte {
 	const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 	// seeding the random number generator.
-	rand.Seed(time.Now().UnixNano())
+	rand.Seed(time.Now().UTC().UnixNano())
 	var b byte
 	// pick a character randomly.
 	b = letterBytes[rand.Intn(len(letterBytes))]
@@ -242,7 +251,7 @@ func generateBytesData(size int) []byte {
 // creates XL/FS backend setup, obtains the object layer and calls the runGetObjectBenchmark function.
 func benchmarkGetObject(b *testing.B, instanceType string, objSize int) {
 	// create a temp XL/FS backend.
-	objLayer, disks, err := makeTestBackend(instanceType)
+	objLayer, disks, err := prepareBenchmarkBackend(instanceType)
 	if err != nil {
 		b.Fatalf("Failed obtaining Temp Backend: <ERROR> %s", err)
 	}
@@ -255,7 +264,7 @@ func benchmarkGetObject(b *testing.B, instanceType string, objSize int) {
 // creates XL/FS backend setup, obtains the object layer and runs parallel benchmark for ObjectLayer.GetObject() .
 func benchmarkGetObjectParallel(b *testing.B, instanceType string, objSize int) {
 	// create a temp XL/FS backend.
-	objLayer, disks, err := makeTestBackend(instanceType)
+	objLayer, disks, err := prepareBenchmarkBackend(instanceType)
 	if err != nil {
 		b.Fatalf("Failed obtaining Temp Backend: <ERROR> %s", err)
 	}
@@ -277,9 +286,6 @@ func runPutObjectBenchmarkParallel(b *testing.B, obj ObjectLayer, objSize int) {
 		b.Fatal(err)
 	}
 
-	// PutObject returns md5Sum of the object inserted.
-	// md5Sum variable is assigned with that value.
-	var md5Sum string
 	// get text data generated for number of bytes equal to object size.
 	textData := generateBytesData(objSize)
 	// generate md5sum for the generated data.
@@ -297,12 +303,12 @@ func runPutObjectBenchmarkParallel(b *testing.B, obj ObjectLayer, objSize int) {
 		i := 0
 		for pb.Next() {
 			// insert the object.
-			md5Sum, err = obj.PutObject(bucket, "object"+strconv.Itoa(i), int64(len(textData)), bytes.NewBuffer(textData), metadata)
+			objInfo, err := obj.PutObject(bucket, "object"+strconv.Itoa(i), int64(len(textData)), bytes.NewBuffer(textData), metadata)
 			if err != nil {
 				b.Fatal(err)
 			}
-			if md5Sum != metadata["md5Sum"] {
-				b.Fatalf("Write no: Md5Sum mismatch during object write into the bucket: Expected %s, got %s", md5Sum, metadata["md5Sum"])
+			if objInfo.MD5Sum != metadata["md5Sum"] {
+				b.Fatalf("Write no: Md5Sum mismatch during object write into the bucket: Expected %s, got %s", objInfo.MD5Sum, metadata["md5Sum"])
 			}
 			i++
 		}
@@ -324,9 +330,6 @@ func runGetObjectBenchmarkParallel(b *testing.B, obj ObjectLayer, objSize int) {
 		b.Fatal(err)
 	}
 
-	// PutObject returns md5Sum of the object inserted.
-	// md5Sum variable is assigned with that value.
-	var md5Sum string
 	for i := 0; i < 10; i++ {
 		// get text data generated for number of bytes equal to object size.
 		textData := generateBytesData(objSize)
@@ -338,12 +341,13 @@ func runGetObjectBenchmarkParallel(b *testing.B, obj ObjectLayer, objSize int) {
 		metadata := make(map[string]string)
 		metadata["md5Sum"] = hex.EncodeToString(hasher.Sum(nil))
 		// insert the object.
-		md5Sum, err = obj.PutObject(bucket, "object"+strconv.Itoa(i), int64(len(textData)), bytes.NewBuffer(textData), metadata)
+		var objInfo ObjectInfo
+		objInfo, err = obj.PutObject(bucket, "object"+strconv.Itoa(i), int64(len(textData)), bytes.NewBuffer(textData), metadata)
 		if err != nil {
 			b.Fatal(err)
 		}
-		if md5Sum != metadata["md5Sum"] {
-			b.Fatalf("Write no: %d: Md5Sum mismatch during object write into the bucket: Expected %s, got %s", i+1, md5Sum, metadata["md5Sum"])
+		if objInfo.MD5Sum != metadata["md5Sum"] {
+			b.Fatalf("Write no: %d: Md5Sum mismatch during object write into the bucket: Expected %s, got %s", i+1, objInfo.MD5Sum, metadata["md5Sum"])
 		}
 	}
 

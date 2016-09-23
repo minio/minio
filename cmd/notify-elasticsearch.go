@@ -17,10 +17,12 @@
 package cmd
 
 import (
+	"encoding/hex"
 	"errors"
 	"io/ioutil"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/minio/sha256-simd"
 	"gopkg.in/olivere/elastic.v3"
 )
 
@@ -41,7 +43,11 @@ func dialElastic(esNotify elasticSearchNotify) (*elastic.Client, error) {
 	if !esNotify.Enable {
 		return nil, errNotifyNotEnabled
 	}
-	client, err := elastic.NewClient(elastic.SetURL(esNotify.URL), elastic.SetSniff(false))
+	client, err := elastic.NewClient(
+		elastic.SetURL(esNotify.URL),
+		elastic.SetSniff(false),
+		elastic.SetMaxRetries(10),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +76,7 @@ func newElasticNotify(accountID string) (*logrus.Logger, error) {
 			return nil, err
 		}
 		if !createIndex.Acknowledged {
-			return nil, errors.New("index not created")
+			return nil, errors.New("Index not created.")
 		}
 	}
 
@@ -96,11 +102,34 @@ func newElasticNotify(accountID string) (*logrus.Logger, error) {
 
 // Fire is required to implement logrus hook
 func (q elasticClient) Fire(entry *logrus.Entry) error {
+	// Reflect on eventType and Key on their native type.
+	entryStr, ok := entry.Data["EventType"].(string)
+	if !ok {
+		return nil
+	}
+	keyStr, ok := entry.Data["Key"].(string)
+	if !ok {
+		return nil
+	}
+
+	// Calculate a unique key id. Choosing sha256 here.
+	shaKey := sha256.Sum256([]byte(keyStr))
+	keyStr = hex.EncodeToString(shaKey[:])
+
+	// If event matches as delete, we purge the previous index.
+	if eventMatch(entryStr, []string{"s3:ObjectRemoved:*"}) {
+		_, err := q.Client.Delete().Index(q.params.Index).
+			Type("event").Id(keyStr).Do()
+		if err != nil {
+			return err
+		}
+		return nil
+	} // else we update elastic index or create a new one.
 	_, err := q.Client.Index().Index(q.params.Index).
 		Type("event").
-		BodyJson(entry.Data).
-		Do()
-
+		BodyJson(map[string]interface{}{
+			"Records": entry.Data["Records"],
+		}).Id(keyStr).Do()
 	return err
 }
 

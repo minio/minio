@@ -17,9 +17,11 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"sort"
+	"strings"
 
 	"github.com/minio/cli"
 	"github.com/minio/mc/pkg/console"
@@ -27,10 +29,19 @@ import (
 
 var (
 	// global flags for minio.
-	minioFlags = []cli.Flag{
+	globalFlags = []cli.Flag{
 		cli.BoolFlag{
 			Name:  "help, h",
 			Usage: "Show help.",
+		},
+		cli.StringFlag{
+			Name:  "config-dir, C",
+			Value: mustGetConfigPath(),
+			Usage: "Path to configuration folder.",
+		},
+		cli.BoolFlag{
+			Name:  "quiet",
+			Usage: "Suppress chatty output.",
 		},
 	}
 )
@@ -62,11 +73,15 @@ func init() {
 
 	// Set global trace flag.
 	globalTrace = os.Getenv("MINIO_TRACE") == "1"
+
+	// Set all the debug flags from ENV if any.
+	setGlobalsDebugFromEnv()
 }
 
 func migrate() {
 	// Migrate config file
-	migrateConfig()
+	err := migrateConfig()
+	fatalIf(err, "Config migration failed.")
 
 	// Migrate other configs here.
 }
@@ -112,7 +127,7 @@ func registerApp() *cli.App {
 	app.Author = "Minio.io"
 	app.Usage = "Cloud Storage Server."
 	app.Description = `Minio is an Amazon S3 compatible object storage server. Use it to store photos, videos, VMs, containers, log files, or any blob of data as objects.`
-	app.Flags = append(minioFlags, globalFlags...)
+	app.Flags = globalFlags
 	app.Commands = commands
 	app.CustomAppHelpTemplate = minioHelpTemplate
 	app.CommandNotFound = func(ctx *cli.Context, command string) {
@@ -144,8 +159,13 @@ func checkMainSyntax(c *cli.Context) {
 func Main() {
 	app := registerApp()
 	app.Before = func(c *cli.Context) error {
+
+		configDir := c.GlobalString("config-dir")
+		if configDir == "" {
+			fatalIf(errors.New("Config directory is empty"), "Unable to get config file.")
+		}
 		// Sets new config folder.
-		setGlobalConfigPath(c.GlobalString("config-dir"))
+		setGlobalConfigPath(configDir)
 
 		// Valid input arguments to main.
 		checkMainSyntax(c)
@@ -160,19 +180,24 @@ func Main() {
 		// Enable all loggers by now.
 		enableLoggers()
 
+		// Init the error tracing module.
+		initError()
+
 		// Set global quiet flag.
 		globalQuiet = c.Bool("quiet") || c.GlobalBool("quiet")
 
 		// Do not print update messages, if quiet flag is set.
 		if !globalQuiet {
-			// Do not print any errors in release update function.
-			noError := true
-			updateMsg := getReleaseUpdate(minioUpdateStableURL, noError)
-			if updateMsg.Update {
+			if strings.HasPrefix(Version, "RELEASE.") {
+				updateMsg, _, err := getReleaseUpdate(minioUpdateStableURL)
+				if err != nil {
+					// Ignore any errors during getReleaseUpdate() because
+					// the internet might not be available.
+					return nil
+				}
 				console.Println(updateMsg)
 			}
 		}
-
 		return nil
 	}
 

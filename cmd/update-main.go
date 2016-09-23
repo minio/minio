@@ -34,10 +34,6 @@ import (
 var (
 	updateFlags = []cli.Flag{
 		cli.BoolFlag{
-			Name:  "help, h",
-			Usage: "Help for update.",
-		},
-		cli.BoolFlag{
 			Name:  "experimental, E",
 			Usage: "Check experimental update.",
 		},
@@ -49,7 +45,7 @@ var updateCmd = cli.Command{
 	Name:   "update",
 	Usage:  "Check for a new software update.",
 	Action: mainUpdate,
-	Flags:  updateFlags,
+	Flags:  append(updateFlags, globalFlags...),
 	CustomHelpTemplate: `Name:
    minio {{.Name}} - {{.Usage}}
 
@@ -133,7 +129,7 @@ func parseReleaseData(data string) (time.Time, error) {
 }
 
 // verify updates for releases.
-func getReleaseUpdate(updateURL string, noError bool) updateMessage {
+func getReleaseUpdate(updateURL string) (updateMsg updateMessage, errMsg string, err error) {
 	// Construct a new update url.
 	newUpdateURLPrefix := updateURL + "/" + runtime.GOOS + "-" + runtime.GOARCH
 	newUpdateURL := newUpdateURLPrefix + "/minio.shasum"
@@ -150,7 +146,7 @@ func getReleaseUpdate(updateURL string, noError bool) updateMessage {
 	}
 
 	// Initialize update message.
-	updateMsg := updateMessage{
+	updateMsg = updateMessage{
 		Download: downloadURL,
 		Version:  Version,
 	}
@@ -160,61 +156,54 @@ func getReleaseUpdate(updateURL string, noError bool) updateMessage {
 		Timeout: 3 * time.Second,
 	}
 
-	// Fetch new update.
-	data, err := client.Get(newUpdateURL)
-	if err != nil && noError {
-		return updateMsg
-	}
-	fatalIf((err), "Unable to read from update URL ‘"+newUpdateURL+"’.")
-
-	// Error out if 'update' command is issued for development based builds.
-	if Version == "DEVELOPMENT.GOGET" && !noError {
-		fatalIf((errors.New("")),
-			"Update mechanism is not supported for ‘go get’ based binary builds. Please download official releases from https://minio.io/#minio")
-	}
-
 	// Parse current minio version into RFC3339.
 	current, err := time.Parse(time.RFC3339, Version)
-	if err != nil && noError {
-		return updateMsg
+	if err != nil {
+		errMsg = "Unable to parse version string as time."
+		return
 	}
-	fatalIf((err), "Unable to parse version string as time.")
 
 	// Verify if current minio version is zero.
-	if current.IsZero() && !noError {
-		fatalIf((errors.New("")),
-			"Updates mechanism is not supported for custom builds. Please download official releases from https://minio.io/#minio")
+	if current.IsZero() {
+		err = errors.New("date should not be zero")
+		errMsg = "Updates mechanism is not supported for custom builds. Please download official releases from https://minio.io/#minio"
+		return
+	}
+
+	// Fetch new update.
+	data, err := client.Get(newUpdateURL)
+	if err != nil {
+		return
 	}
 
 	// Verify if we have a valid http response i.e http.StatusOK.
 	if data != nil {
 		if data.StatusCode != http.StatusOK {
-			// Return quickly if noError is set.
-			if noError {
-				return updateMsg
-			}
-			fatalIf((errors.New("")), "Failed to retrieve update notice. "+data.Status)
+			errMsg = "Failed to retrieve update notice."
+			err = errors.New("http status : " + data.Status)
+			return
 		}
 	}
 
 	// Read the response body.
 	updateBody, err := ioutil.ReadAll(data.Body)
-	if err != nil && noError {
-		return updateMsg
+	if err != nil {
+		errMsg = "Failed to retrieve update notice. Please try again later."
+		return
 	}
-	fatalIf((err), "Failed to retrieve update notice. Please try again later.")
+
+	errMsg = "Failed to retrieve update notice. Please try again later. Please report this issue at https://github.com/minio/minio/issues"
 
 	// Parse the date if its valid.
 	latest, err := parseReleaseData(string(updateBody))
-	if err != nil && noError {
-		return updateMsg
+	if err != nil {
+		return
 	}
-	errMsg := "Failed to retrieve update notice. Please try again later. Please report this issue at https://github.com/minio/minio/issues"
-	fatalIf(err, errMsg)
 
 	// Verify if the date is not zero.
-	if latest.IsZero() && !noError {
-		fatalIf((errors.New("")), errMsg)
+	if latest.IsZero() {
+		err = errors.New("date should not be zero")
+		return
 	}
 
 	// Is the update latest?.
@@ -223,18 +212,25 @@ func getReleaseUpdate(updateURL string, noError bool) updateMessage {
 	}
 
 	// Return update message.
-	return updateMsg
+	return updateMsg, "", nil
 }
 
 // main entry point for update command.
 func mainUpdate(ctx *cli.Context) {
-	// Print all errors as they occur.
-	noError := false
+	// Error out if 'update' command is issued for development based builds.
+	if Version == "DEVELOPMENT.GOGET" {
+		fatalIf(errors.New(""), "Update mechanism is not supported for ‘go get’ based binary builds. Please download official releases from https://minio.io/#minio")
+	}
 
 	// Check for update.
+	var updateMsg updateMessage
+	var errMsg string
+	var err error
 	if ctx.Bool("experimental") {
-		console.Println(getReleaseUpdate(minioUpdateExperimentalURL, noError))
+		updateMsg, errMsg, err = getReleaseUpdate(minioUpdateExperimentalURL)
 	} else {
-		console.Println(getReleaseUpdate(minioUpdateStableURL, noError))
+		updateMsg, errMsg, err = getReleaseUpdate(minioUpdateStableURL)
 	}
+	fatalIf(err, errMsg)
+	console.Println(updateMsg)
 }

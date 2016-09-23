@@ -10,9 +10,9 @@ docker run -p 9000:9000 minio/minio /export
 
 ```
 
-## 2. Run Minio Docker Container
+## 2. Run One Minio Docker Container
 
-Minio container requires a persistent volume to store configuration and application data. Following command maps local persistent directories from the host OS to virtual config `~/.minio` and export `/export` directories. 
+Minio container requires a persistent volume to store configuration and application data. Following command maps local persistent directories from the host OS to virtual config `~/.minio` and export `/export` directories.
 
 ```sh
 
@@ -37,3 +37,17 @@ docker run -p 9000:9000 --name minio1 \
   minio/minio /export
 
 ```
+
+## 4. Run Minio in clustered mode
+
+Let's consider that we need to run 4 minio servers inside different docker containers. The `docker-compose.yml` file in the root of the project sets this up using the [docker-compose](https://docs.docker.com/compose/) tool.
+
+### Start Minio docker instances
+
+From the root directory of the project, run:
+
+``` shell
+$ docker-compose up
+```
+
+Each instance's minio web-server is accessible on the host at ports 9001 through 9004, so you may access the first one at http://localhost:9001/

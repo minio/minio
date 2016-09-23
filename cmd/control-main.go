@@ -22,8 +22,10 @@ import "github.com/minio/cli"
 var controlCmd = cli.Command{
 	Name:   "control",
 	Usage:  "Control and manage minio server.",
+	Flags:  globalFlags,
 	Action: mainControl,
 	Subcommands: []cli.Command{
+		lockCmd,
 		healCmd,
 		shutdownCmd,
 	},
@@ -43,10 +45,5 @@ COMMANDS:
 }
 
 func mainControl(ctx *cli.Context) {
-	if ctx.Args().First() != "" { // command help.
-		cli.ShowCommandHelp(ctx, ctx.Args().First())
-	} else {
-		// command with Subcommands is an App.
-		cli.ShowAppHelp(ctx)
-	}
+	cli.ShowAppHelp(ctx)
 }

@@ -563,6 +563,33 @@ func GetPolicy(statements []Statement, bucketName string, prefix string) BucketP
 	return policy
 }
 
+// GetPolicies returns a map of policies rules of given bucket name, prefix in given statements.
+func GetPolicies(statements []Statement, bucketName string) map[string]BucketPolicy {
+	policyRules := map[string]BucketPolicy{}
+	objResources := set.NewStringSet()
+	// Search all resources related to objects policy
+	for _, s := range statements {
+		for r := range s.Resources {
+			if strings.HasPrefix(r, awsResourcePrefix+bucketName+"/") {
+				objResources.Add(r)
+			}
+		}
+	}
+	// Pretend that policy resource as an actual object and fetch its policy
+	for r := range objResources {
+		// Put trailing * if exists in asterisk
+		asterisk := ""
+		if strings.HasSuffix(r, "*") {
+			r = r[:len(r)-1]
+			asterisk = "*"
+		}
+		objectPath := r[len(awsResourcePrefix+bucketName)+1 : len(r)]
+		p := GetPolicy(statements, bucketName, objectPath)
+		policyRules[bucketName+"/"+objectPath+asterisk] = p
+	}
+	return policyRules
+}
+
 // Returns new statements containing policy of given bucket name and
 // prefix are appended.
 func SetPolicy(statements []Statement, policy BucketPolicy, bucketName string, prefix string) []Statement {

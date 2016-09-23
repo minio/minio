@@ -148,10 +148,15 @@ func testObjectAPIPutObject(obj ObjectLayer, instanceType string, t TestErrHandl
 		{bucket, object, data, nil, int64(len(data) - 1), md5Hex(data[:len(data)-1]), nil},
 		{bucket, object, nilBytes, nil, int64(len(nilBytes) + 1), md5Hex(nilBytes), IncompleteBody{}},
 		{bucket, object, fiveMBBytes, nil, int64(0), md5Hex(fiveMBBytes), nil},
+
+		// Test case 29
+		// valid data with X-Amz-Meta- meta
+		{bucket, object, data, map[string]string{"X-Amz-Meta-AppID": "a42"}, int64(len(data)), md5Hex(data), nil},
 	}
 
 	for i, testCase := range testCases {
-		actualMd5Hex, actualErr := obj.PutObject(testCase.bucketName, testCase.objName, testCase.intputDataSize, bytes.NewReader(testCase.inputData), testCase.inputMeta)
+		objInfo, actualErr := obj.PutObject(testCase.bucketName, testCase.objName, testCase.intputDataSize, bytes.NewReader(testCase.inputData), testCase.inputMeta)
+		actualErr = errorCause(actualErr)
 		if actualErr != nil && testCase.expectedError == nil {
 			t.Errorf("Test %d: %s: Expected to pass, but failed with: error %s.", i+1, instanceType, actualErr.Error())
 		}
@@ -159,14 +164,14 @@ func testObjectAPIPutObject(obj ObjectLayer, instanceType string, t TestErrHandl
 			t.Errorf("Test %d: %s: Expected to fail with error \"%s\", but passed instead.", i+1, instanceType, testCase.expectedError.Error())
 		}
 		// Failed as expected, but does it fail for the expected reason.
-		if actualErr != nil && testCase.expectedError != actualErr {
+		if actualErr != nil && actualErr != testCase.expectedError {
 			t.Errorf("Test %d: %s: Expected to fail with error \"%s\", but instead failed with error \"%s\" instead.", i+1, instanceType, testCase.expectedError.Error(), actualErr.Error())
 		}
 		// Test passes as expected, but the output values are verified for correctness here.
 		if actualErr == nil {
 			// Asserting whether the md5 output is correct.
-			if expectedMD5, ok := testCase.inputMeta["md5Sum"]; ok && expectedMD5 != actualMd5Hex {
-				t.Errorf("Test %d: %s: Calculated Md5 different from the actual one %s.", i+1, instanceType, actualMd5Hex)
+			if expectedMD5, ok := testCase.inputMeta["md5Sum"]; ok && expectedMD5 != objInfo.MD5Sum {
+				t.Errorf("Test %d: %s: Calculated Md5 different from the actual one %s.", i+1, instanceType, objInfo.MD5Sum)
 			}
 		}
 	}
@@ -223,7 +228,8 @@ func testObjectAPIPutObjectDiskNotFOund(obj ObjectLayer, instanceType string, di
 	}
 
 	for i, testCase := range testCases {
-		actualMd5Hex, actualErr := obj.PutObject(testCase.bucketName, testCase.objName, testCase.intputDataSize, bytes.NewReader(testCase.inputData), testCase.inputMeta)
+		objInfo, actualErr := obj.PutObject(testCase.bucketName, testCase.objName, testCase.intputDataSize, bytes.NewReader(testCase.inputData), testCase.inputMeta)
+		actualErr = errorCause(err)
 		if actualErr != nil && testCase.shouldPass {
 			t.Errorf("Test %d: %s: Expected to pass, but failed with: <ERROR> %s.", i+1, instanceType, actualErr.Error())
 		}
@@ -240,8 +246,8 @@ func testObjectAPIPutObjectDiskNotFOund(obj ObjectLayer, instanceType string, di
 		// Test passes as expected, but the output values are verified for correctness here.
 		if actualErr == nil && testCase.shouldPass {
 			// Asserting whether the md5 output is correct.
-			if testCase.inputMeta["md5Sum"] != actualMd5Hex {
-				t.Errorf("Test %d: %s: Calculated Md5 different from the actual one %s.", i+1, instanceType, actualMd5Hex)
+			if testCase.inputMeta["md5Sum"] != objInfo.MD5Sum {
+				t.Errorf("Test %d: %s: Calculated Md5 different from the actual one %s.", i+1, instanceType, objInfo.MD5Sum)
 			}
 		}
 	}
@@ -272,6 +278,7 @@ func testObjectAPIPutObjectDiskNotFOund(obj ObjectLayer, instanceType string, di
 		InsufficientWriteQuorum{},
 	}
 	_, actualErr := obj.PutObject(testCase.bucketName, testCase.objName, testCase.intputDataSize, bytes.NewReader(testCase.inputData), testCase.inputMeta)
+	actualErr = errorCause(actualErr)
 	if actualErr != nil && testCase.shouldPass {
 		t.Errorf("Test %d: %s: Expected to pass, but failed with: <ERROR> %s.", len(testCases)+1, instanceType, actualErr.Error())
 	}
