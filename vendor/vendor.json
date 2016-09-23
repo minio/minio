@@ -114,10 +114,10 @@
 			"revisionTime": "2016-02-29T08:42:30-08:00"
 		},
 		{
-			"checksumSHA1": "0OZaeJPgMlA2Txn+1yeAIwEpJvM=",
+			"checksumSHA1": "qTxOBp3GVxCC70ykb7Hxg6UgWwA=",
 			"path": "github.com/minio/minio-go/pkg/policy",
-			"revision": "a2e27c84cd20b86cd781b76639781d6366235d0c",
-			"revisionTime": "2016-08-23T00:31:21Z"
+			"revision": "40505f5d08c721dfe5a6450fbdef3bcd6567aa97",
+			"revisionTime": "2016-09-04T08:12:15Z"
 		},
 		{
 			"checksumSHA1": "A8QOw1aWwc+RtjGozY0XeS5varo=",
