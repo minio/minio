@@ -247,8 +247,6 @@ func TestPutBucketPolicyHandler(t *testing.T) {
 // testPutBucketPolicyHandler - Test for Bucket policy end point.
 // TODO: Add exhaustive cases with various combination of statement fields.
 func testPutBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	initBucketPolicies(obj)
-
 	// get random bucket name.
 	bucketName := getRandomBucketName()
 	// Create bucket.
@@ -313,8 +311,6 @@ func TestGetBucketPolicyHandler(t *testing.T) {
 // testGetBucketPolicyHandler - Test for end point which fetches the access policy json of the given bucket.
 // TODO: Add exhaustive cases with various combination of statement fields.
 func testGetBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	initBucketPolicies(obj)
-
 	// get random bucket name.
 	bucketName := getRandomBucketName()
 	// Create bucket.
@@ -423,8 +419,6 @@ func TestDeleteBucketPolicyHandler(t *testing.T) {
 // testDeleteBucketPolicyHandler - Test for Delete bucket policy end point.
 // TODO: Add exhaustive cases with various combination of statement fields.
 func testDeleteBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	initBucketPolicies(obj)
-
 	// get random bucket name.
 	bucketName := getRandomBucketName()
 	// Create bucket.

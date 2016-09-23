@@ -1298,11 +1298,17 @@ func initTestAPIEndPoints(objLayer ObjectLayer, apiFunctions []string) http.Hand
 	// initialize a new mux router.
 	// goriilla/mux is the library used to register all the routes and handle them.
 	muxRouter := router.NewRouter()
+
 	// All object storage operations are registered as HTTP handlers on `objectAPIHandlers`.
 	// When the handlers get a HTTP request they use the underlyting ObjectLayer to perform operations.
+	objLayerMutex.Lock()
+	globalObjectAPI = objLayer
+	objLayerMutex.Unlock()
+
 	api := objectAPIHandlers{
-		ObjectAPI: func() ObjectLayer { return objLayer },
+		ObjectAPI: newObjectLayerFn,
 	}
+
 	// API Router.
 	apiRouter := muxRouter.NewRoute().PathPrefix("/").Subrouter()
 	// Bucket router.

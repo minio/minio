@@ -16,6 +16,11 @@
 
 package cmd
 
+import "errors"
+
+// errServerNotInitialized - server not initialized.
+var errServerNotInitialized = errors.New("Server not initialized, please try again.")
+
 /// Auth operations
 
 // Login - login handler.
@@ -59,7 +64,7 @@ type HealListReply struct {
 func (c *controllerAPIHandlers) ListObjectsHealHandler(args *HealListArgs, reply *HealListReply) error {
 	objAPI := c.ObjectAPI()
 	if objAPI == nil {
-		return errVolumeBusy
+		return errServerNotInitialized
 	}
 	if !isRPCTokenValid(args.Token) {
 		return errInvalidToken
@@ -91,11 +96,11 @@ type HealObjectArgs struct {
 // HealObjectReply - reply by HealObject RPC.
 type HealObjectReply struct{}
 
-// HealObject - heal the object.
+// HealObject - heals an object, returns nil error upon success.
 func (c *controllerAPIHandlers) HealObjectHandler(args *HealObjectArgs, reply *GenericReply) error {
 	objAPI := c.ObjectAPI()
 	if objAPI == nil {
-		return errVolumeBusy
+		return errServerNotInitialized
 	}
 	if !isRPCTokenValid(args.Token) {
 		return errInvalidToken
@@ -103,11 +108,11 @@ func (c *controllerAPIHandlers) HealObjectHandler(args *HealObjectArgs, reply *G
 	return objAPI.HealObject(args.Bucket, args.Object)
 }
 
-// HealObject - heal the object.
+// HealDiskMetadataHandler - heals disks metadata, returns nil error upon success.
 func (c *controllerAPIHandlers) HealDiskMetadataHandler(args *GenericArgs, reply *GenericReply) error {
 	objAPI := c.ObjectAPI()
 	if objAPI == nil {
-		return errVolumeBusy
+		return errServerNotInitialized
 	}
 	if !isRPCTokenValid(args.Token) {
 		return errInvalidToken

@@ -30,8 +30,6 @@ func TestGetBucketLocationHandler(t *testing.T) {
 }
 
 func testGetBucketLocationHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	initBucketPolicies(obj)
-
 	// get random bucket name.
 	bucketName := getRandomBucketName()
 	// Create bucket.
@@ -130,8 +128,6 @@ func TestHeadBucketHandler(t *testing.T) {
 }
 
 func testHeadBucketHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	initBucketPolicies(obj)
-
 	// get random bucket name.
 	bucketName := getRandomBucketName()
 	// Create bucket.
@@ -207,8 +203,6 @@ func TestListMultipartUploadsHandler(t *testing.T) {
 
 // testListMultipartUploadsHandler - Tests validate listing of multipart uploads.
 func testListMultipartUploadsHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	initBucketPolicies(obj)
-
 	// get random bucket name.
 	bucketName := getRandomBucketName()
 
