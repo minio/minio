@@ -21,6 +21,9 @@ import "errors"
 // errServerNotInitialized - server not initialized.
 var errServerNotInitialized = errors.New("Server not initialized, please try again.")
 
+// errServerVersionMismatch - server versions do not match.
+var errServerVersionMismatch = errors.New("Server versions do not match.")
+
 /// Auth operations
 
 // Login - login handler.

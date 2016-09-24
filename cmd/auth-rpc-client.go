@@ -53,8 +53,8 @@ type RPCLoginArgs struct {
 // with subsequent requests.
 type RPCLoginReply struct {
 	Token         string
-	ServerVersion string
 	Timestamp     time.Time
+	ServerVersion string
 }
 
 // Validates if incoming token is valid.
@@ -90,11 +90,12 @@ type authConfig struct {
 
 // AuthRPCClient is a wrapper type for RPCClient which provides JWT based authentication across reconnects.
 type AuthRPCClient struct {
-	config     *authConfig
-	rpc        *RPCClient // reconnect'able rpc client built on top of net/rpc Client
-	isLoggedIn bool       // Indicates if the auth client has been logged in and token is valid.
-	token      string     // JWT based token
-	tstamp     time.Time  // Timestamp as received on Login RPC.
+	config        *authConfig
+	rpc           *RPCClient // reconnect'able rpc client built on top of net/rpc Client
+	isLoggedIn    bool       // Indicates if the auth client has been logged in and token is valid.
+	token         string     // JWT based token
+	tstamp        time.Time  // Timestamp as received on Login RPC.
+	serverVerison string     // Server version exchanged by the RPC.
 }
 
 // newAuthClient - returns a jwt based authenticated (go) rpc client, which does automatic reconnect.
@@ -129,9 +130,14 @@ func (authClient *AuthRPCClient) Login() error {
 	}, &reply); err != nil {
 		return err
 	}
+	// Validate if version do indeed match.
+	if reply.ServerVersion != Version {
+		return errServerVersionMismatch
+	}
 	// Set token, time stamp as received from a successful login call.
 	authClient.token = reply.Token
 	authClient.tstamp = reply.Timestamp
+	authClient.serverVerison = reply.ServerVersion
 	authClient.isLoggedIn = true
 	return nil
 }

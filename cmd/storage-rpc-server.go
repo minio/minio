@@ -22,6 +22,7 @@ import (
 	"net/rpc"
 	"path"
 	"strings"
+	"time"
 
 	router "github.com/gorilla/mux"
 	"github.com/minio/minio/pkg/disk"
@@ -30,8 +31,9 @@ import (
 // Storage server implements rpc primitives to facilitate exporting a
 // disk over a network.
 type storageServer struct {
-	storage StorageAPI
-	path    string
+	storage   StorageAPI
+	path      string
+	timestamp time.Time
 }
 
 /// Auth operations
@@ -50,6 +52,7 @@ func (s *storageServer) LoginHandler(args *RPCLoginArgs, reply *RPCLoginReply) e
 		return err
 	}
 	reply.Token = token
+	reply.Timestamp = s.timestamp
 	reply.ServerVersion = Version
 	return nil
 }
@@ -213,6 +216,7 @@ func newRPCServer(serverConfig serverCmdConfig) (servers []*storageServer, err e
 	for _, ignoredExport := range ignoredExports {
 		skipDisks[ignoredExport] = true
 	}
+	t := time.Now().UTC()
 	for _, export := range exports {
 		if skipDisks[export] {
 			continue
@@ -231,8 +235,9 @@ func newRPCServer(serverConfig serverCmdConfig) (servers []*storageServer, err e
 				export = export[idx+1:]
 			}
 			servers = append(servers, &storageServer{
-				storage: storage,
-				path:    export,
+				storage:   storage,
+				path:      export,
+				timestamp: t,
 			})
 		}
 	}
