@@ -728,6 +728,10 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 	successResponse := generateCompleteMultpartUploadResponse(bucketName, objectName, getGetObjectURL("", bucketName, objectName), s3MD5)
 	encodedSuccessResponse := encodeResponse(successResponse)
 
+	if err = initEventNotifier(obj); err != nil {
+		t.Fatal("Initializing event notifier failed.", err)
+	}
+
 	testCases := []struct {
 		bucket   string
 		object   string

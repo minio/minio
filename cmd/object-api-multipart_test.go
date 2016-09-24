@@ -1925,9 +1925,8 @@ func testObjectCompleteMultipartUpload(obj ObjectLayer, instanceType string, t T
 		}
 		// Passes as expected, but asserting the results.
 		if actualErr == nil && testCase.shouldPass {
-
-			// Asserting IsTruncated.
-			if actualResult != testCase.expectedS3MD5 {
+			// Asserting md5sum.
+			if actualResult.MD5Sum != testCase.expectedS3MD5 {
 				t.Errorf("Test %d: %s: Expected the result to be \"%v\", but found it to \"%v\"", i+1, instanceType, testCase.expectedS3MD5, actualResult)
 			}
 		}
