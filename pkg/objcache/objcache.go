@@ -163,12 +163,19 @@ func (c *Cache) Create(key string, size int64) (w io.WriteCloser, err error) {
 
 // Open - open the in-memory file, returns an in memory read seeker.
 // returns an error ErrNotFoundInCache, if the key does not exist.
-func (c *Cache) Open(key string) (io.ReadSeeker, error) {
+// Returns ErrKeyNotFoundInCache if entry's lastAccessedTime is older
+// than objModTime.
+func (c *Cache) Open(key string, objModTime time.Time) (io.ReadSeeker, error) {
 	// Entry exists, return the readable buffer.
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	buf, ok := c.entries[key]
 	if !ok {
+		return nil, ErrKeyNotFoundInCache
+	}
+	// Check if buf is recent copy of the object on disk.
+	if buf.lastAccessed.Before(objModTime) {
+		c.delete(key)
 		return nil, ErrKeyNotFoundInCache
 	}
 	buf.lastAccessed = time.Now().UTC()

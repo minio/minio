@@ -57,7 +57,9 @@ func TestObjExpiry(t *testing.T) {
 	}
 	// Wait for 500 millisecond.
 	time.Sleep(500 * time.Millisecond)
-	_, err = cache.Open("test")
+	// Setting objModTime to the beginning of golang's time.Time to avoid deletion of stale entry.
+	fakeObjModTime := time.Time{}
+	_, err = cache.Open("test", fakeObjModTime)
 	if err != testCase.err {
 		t.Errorf("Test case 1 expected %s, got instead %s", testCase.err, err)
 	}
@@ -65,6 +67,9 @@ func TestObjExpiry(t *testing.T) {
 
 // TestObjCache - tests various cases for object cache behavior.
 func TestObjCache(t *testing.T) {
+	// Setting objModTime to the beginning of golang's time.Time to avoid deletion of stale entry.
+	fakeObjModTime := time.Time{}
+
 	// Non exhaustive list of all object cache behavior cases.
 	testCases := []struct {
 		expiry    time.Duration
@@ -117,7 +122,7 @@ func TestObjCache(t *testing.T) {
 	// Test 1 validating Open failure.
 	testCase := testCases[0]
 	cache := New(testCase.cacheSize, testCase.expiry)
-	_, err := cache.Open("test")
+	_, err := cache.Open("test", fakeObjModTime)
 	if testCase.err != err {
 		t.Errorf("Test case 2 expected to pass, failed instead %s", err)
 	}
@@ -157,7 +162,7 @@ func TestObjCache(t *testing.T) {
 	if err = w.Close(); err != nil {
 		t.Errorf("Test case 4 expected to pass, failed instead %s", err)
 	}
-	r, err := cache.Open("test")
+	r, err := cache.Open("test", fakeObjModTime)
 	if err != nil {
 		t.Errorf("Test case 4 expected to pass, failed instead %s", err)
 	}
@@ -186,7 +191,7 @@ func TestObjCache(t *testing.T) {
 	}
 	// Delete the cache entry.
 	cache.Delete("test")
-	_, err = cache.Open("test")
+	_, err = cache.Open("test", fakeObjModTime)
 	if testCase.err != err {
 		t.Errorf("Test case 5 expected to pass, failed instead %s", err)
 	}
@@ -235,5 +240,25 @@ func TestObjCache(t *testing.T) {
 	w.Write([]byte("H"))
 	if err = w.Close(); err != testCase.closeErr {
 		t.Errorf("Test case 7 expected to fail, passed instead")
+	}
+}
+
+// TestStateEntryPurge - tests if objCache purges stale entry and returns ErrKeyNotFoundInCache.
+func TestStaleEntryPurge(t *testing.T) {
+	cache := New(1024, NoExpiry)
+	w, err := cache.Create("test", 5)
+	if err != nil {
+		t.Errorf("Test case expected to pass, failed instead %s", err)
+	}
+	// Write '5' bytes.
+	w.Write([]byte("Hello"))
+	// Close to successfully save into cache.
+	if err = w.Close(); err != nil {
+		t.Errorf("Test case expected to pass, failed instead %s", err)
+	}
+
+	_, err = cache.Open("test", time.Now().AddDate(0, 0, 1).UTC())
+	if err != ErrKeyNotFoundInCache {
+		t.Errorf("Test case expected to return ErrKeyNotFoundInCache, instead returned %s", err)
 	}
 }
