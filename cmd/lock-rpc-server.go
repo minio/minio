@@ -154,6 +154,7 @@ func (l *lockServer) LoginHandler(args *RPCLoginArgs, reply *RPCLoginReply) erro
 	}
 	reply.Token = token
 	reply.Timestamp = l.timestamp
+	reply.ServerVersion = Version
 	return nil
 }
 
