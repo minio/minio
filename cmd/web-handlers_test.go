@@ -983,6 +983,10 @@ func testWebSetBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestE
 		{bucketName, "", "foo", false},
 		// Valid parameters
 		{bucketName, "", "readwrite", true},
+		// None is valid and policy should be removed.
+		{bucketName, "", "none", true},
+		// Setting none again meants should return an error.
+		{bucketName, "", "none", false},
 	}
 
 	for i, testCase := range testCases {
@@ -995,7 +999,7 @@ func testWebSetBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestE
 		}
 		apiRouter.ServeHTTP(rec, req)
 		// Check if we have 200 OK
-		if rec.Code != http.StatusOK {
+		if testCase.pass && rec.Code != http.StatusOK {
 			t.Fatalf("Test %d: Expected the response status to be 200, but instead found `%d`", i+1, rec.Code)
 		}
 		// Parse RPC response
