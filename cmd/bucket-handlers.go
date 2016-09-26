@@ -31,9 +31,8 @@ import (
 // http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
 // Enforces bucket policies for a bucket for a given tatusaction.
 func enforceBucketPolicy(bucket string, action string, reqURL *url.URL) (s3Error APIErrorCode) {
-	// Fetch bucket policy, if policy is not set return access denied.
-	policy, err := readBucketPolicy(bucket, newObjectLayerFn())
-	if err != nil {
+	// Verify if bucket actually exists
+	if err := isBucketExist(bucket, newObjectLayerFn()); err != nil {
 		err = errorCause(err)
 		switch err.(type) {
 		case BucketNameInvalid:
@@ -42,14 +41,16 @@ func enforceBucketPolicy(bucket string, action string, reqURL *url.URL) (s3Error
 		case BucketNotFound:
 			// For no bucket found we return NoSuchBucket instead.
 			return ErrNoSuchBucket
-		case BucketPolicyNotFound:
-			// For no bucket policy found, return AccessDenied, since
-			// anonymous requests are not allowed without bucket policies.
-			return ErrAccessDenied
 		}
 		errorIf(err, "Unable to read bucket policy.")
 		// Return internal error for any other errors so that we can investigate.
 		return ErrInternalError
+	}
+
+	// Fetch bucket policy, if policy is not set return access denied.
+	policy := globalBucketPolicies.GetBucketPolicy(bucket)
+	if policy == nil {
+		return ErrAccessDenied
 	}
 
 	// Construct resource in 'arn:aws:s3:::examplebucket/object' format.

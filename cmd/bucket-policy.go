@@ -18,9 +18,109 @@ package cmd
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"path"
+	"sync"
 )
+
+// Variable represents bucket policies in memory.
+var globalBucketPolicies *bucketPolicies
+
+// Global bucket policies list, policies are enforced on each bucket looking
+// through the policies here.
+type bucketPolicies struct {
+	rwMutex *sync.RWMutex
+
+	// Collection of 'bucket' policies.
+	bucketPolicyConfigs map[string]*bucketPolicy
+}
+
+// Fetch bucket policy for a given bucket.
+func (bp bucketPolicies) GetBucketPolicy(bucket string) *bucketPolicy {
+	bp.rwMutex.RLock()
+	defer bp.rwMutex.RUnlock()
+	return bp.bucketPolicyConfigs[bucket]
+}
+
+// Set a new bucket policy for a bucket, this operation will overwrite
+// any previous bucketpolicies for the bucket.
+func (bp *bucketPolicies) SetBucketPolicy(bucket string, policy *bucketPolicy) error {
+	bp.rwMutex.Lock()
+	defer bp.rwMutex.Unlock()
+	if policy == nil {
+		return errors.New("invalid argument")
+	}
+	bp.bucketPolicyConfigs[bucket] = policy
+	return nil
+}
+
+// Remove bucket policy for a bucket, from in-memory map.
+func (bp *bucketPolicies) RemoveBucketPolicy(bucket string) {
+	bp.rwMutex.Lock()
+	defer bp.rwMutex.Unlock()
+	delete(bp.bucketPolicyConfigs, bucket)
+}
+
+// Loads all bucket policies from persistent layer.
+func loadAllBucketPolicies(objAPI ObjectLayer) (policies map[string]*bucketPolicy, err error) {
+	// List buckets to proceed loading all notification configuration.
+	buckets, err := objAPI.ListBuckets()
+	errorIf(err, "Unable to list buckets.")
+	err = errorCause(err)
+	if err != nil {
+		return nil, err
+	}
+
+	policies = make(map[string]*bucketPolicy)
+	var pErrs []error
+	// Loads bucket policy.
+	for _, bucket := range buckets {
+		policy, pErr := readBucketPolicy(bucket.Name, objAPI)
+		if pErr != nil {
+			switch pErr.(type) {
+			case BucketPolicyNotFound:
+				continue
+			}
+			pErrs = append(pErrs, pErr)
+			// Continue to load other bucket policies if possible.
+			continue
+		}
+		policies[bucket.Name] = policy
+	}
+
+	// Look for any errors occurred while reading bucket policies.
+	for _, pErr := range pErrs {
+		if pErr != nil {
+			return policies, pErr
+		}
+	}
+
+	// Success.
+	return policies, nil
+}
+
+// Intialize all bucket policies.
+func initBucketPolicies(objAPI ObjectLayer) error {
+	if objAPI == nil {
+		return errInvalidArgument
+	}
+
+	// Read all bucket policies.
+	policies, err := loadAllBucketPolicies(objAPI)
+	if err != nil {
+		return err
+	}
+
+	// Populate global bucket collection.
+	globalBucketPolicies = &bucketPolicies{
+		rwMutex:             &sync.RWMutex{},
+		bucketPolicyConfigs: policies,
+	}
+
+	// Success.
+	return nil
+}
 
 // getOldBucketsConfigPath - get old buckets config path. (Only used for migrating old bucket policies)
 func getOldBucketsConfigPath() (string, error) {

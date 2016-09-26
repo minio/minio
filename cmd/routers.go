@@ -73,6 +73,10 @@ func newObjectLayer(disks, ignoredDisks []string) (ObjectLayer, error) {
 	err = initEventNotifier(objAPI)
 	fatalIf(err, "Unable to initialize event notification.")
 
+	// Initialize and load bucket policies.
+	err = initBucketPolicies(objAPI)
+	fatalIf(err, "Unable to load all bucket policies.")
+
 	// Success.
 	return objAPI, nil
 }

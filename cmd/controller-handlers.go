@@ -99,7 +99,7 @@ type HealObjectArgs struct {
 // HealObjectReply - reply by HealObject RPC.
 type HealObjectReply struct{}
 
-// HealObject - heals an object, returns nil error upon success.
+// HealObject - heal the object.
 func (c *controllerAPIHandlers) HealObjectHandler(args *HealObjectArgs, reply *GenericReply) error {
 	objAPI := c.ObjectAPI()
 	if objAPI == nil {
@@ -111,7 +111,7 @@ func (c *controllerAPIHandlers) HealObjectHandler(args *HealObjectArgs, reply *G
 	return objAPI.HealObject(args.Bucket, args.Object)
 }
 
-// HealDiskMetadataHandler - heals disks metadata, returns nil error upon success.
+// HealObject - heal the object.
 func (c *controllerAPIHandlers) HealDiskMetadataHandler(args *GenericArgs, reply *GenericReply) error {
 	objAPI := c.ObjectAPI()
 	if objAPI == nil {

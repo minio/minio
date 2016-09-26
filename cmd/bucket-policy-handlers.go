@@ -196,6 +196,9 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 		return
 	}
 
+	// Set the bucket policy in memory.
+	globalBucketPolicies.SetBucketPolicy(bucket, policy)
+
 	// Success.
 	writeSuccessNoContent(w)
 }
@@ -238,6 +241,9 @@ func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r 
 		}
 		return
 	}
+
+	// Remove bucket policy.
+	globalBucketPolicies.RemoveBucketPolicy(bucket)
 
 	// Success.
 	writeSuccessNoContent(w)
