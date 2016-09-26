@@ -614,6 +614,7 @@ func (web *webAPIHandlers) ListAllBucketPolicies(r *http.Request, args *ListAllB
 	}
 
 	reply.UIVersion = miniobrowser.UIVersion
+	reply.Policies = []bucketAccessPolicy{}
 	for prefix, policy := range policy.GetPolicies(policyInfo.Statements, args.BucketName) {
 		reply.Policies = append(reply.Policies, bucketAccessPolicy{
 			Prefix: prefix,
@@ -650,6 +651,12 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 		return &json2.Error{Message: err.Error()}
 	}
 	policyInfo.Statements = policy.SetPolicy(policyInfo.Statements, bucketP, args.BucketName, args.Prefix)
+	if len(policyInfo.Statements) == 0 {
+		if err = removeBucketPolicy(args.BucketName, objectAPI); err != nil {
+			return &json2.Error{Message: err.Error()}
+		}
+		return nil
+	}
 	data, err := json.Marshal(policyInfo)
 	if err != nil {
 		return &json2.Error{Message: err.Error()}
