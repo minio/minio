@@ -575,27 +575,31 @@ func (web *webAPIHandlers) GetBucketPolicy(r *http.Request, args *GetBucketPolic
 		return &json2.Error{Message: err.Error()}
 	}
 
-	bucketPolicy := policy.GetPolicy(policyInfo.Statements, args.BucketName, args.Prefix)
-
 	reply.UIVersion = miniobrowser.UIVersion
-	reply.Policy = bucketPolicy
+	reply.Policy = policy.GetPolicy(policyInfo.Statements, args.BucketName, args.Prefix)
 
 	return nil
 }
 
-// GetAllBucketPolicyArgs - get all bucket policy args.
-type GetAllBucketPolicyArgs struct {
+// ListAllBucketPoliciesArgs - get all bucket policies.
+type ListAllBucketPoliciesArgs struct {
 	BucketName string `json:"bucketName"`
 }
 
-// GetAllBucketPolicyRep - get all bucket policy reply.
-type GetAllBucketPolicyRep struct {
-	UIVersion string                         `json:"uiVersion"`
-	Policies  map[string]policy.BucketPolicy `json:"policies"`
+// Collection of canned bucket policy at a given prefix.
+type bucketAccessPolicy struct {
+	Prefix string              `json:"prefix"`
+	Policy policy.BucketPolicy `json:"policy"`
 }
 
-// GetAllBucketPolicy - get all bucket policy.
-func (web *webAPIHandlers) GetAllBucketPolicy(r *http.Request, args *GetAllBucketPolicyArgs, reply *GetAllBucketPolicyRep) error {
+// ListAllBucketPoliciesRep - get all bucket policy reply.
+type ListAllBucketPoliciesRep struct {
+	UIVersion string               `json:"uiVersion"`
+	Policies  []bucketAccessPolicy `json:"policies"`
+}
+
+// GetllBucketPolicy - get all bucket policy.
+func (web *webAPIHandlers) ListAllBucketPolicies(r *http.Request, args *ListAllBucketPoliciesArgs, reply *ListAllBucketPoliciesRep) error {
 	if !isJWTReqAuthenticated(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
@@ -609,11 +613,13 @@ func (web *webAPIHandlers) GetAllBucketPolicy(r *http.Request, args *GetAllBucke
 		return &json2.Error{Message: err.Error()}
 	}
 
-	policies := policy.GetPolicies(policyInfo.Statements, args.BucketName)
-
 	reply.UIVersion = miniobrowser.UIVersion
-	reply.Policies = policies
-
+	for prefix, policy := range policy.GetPolicies(policyInfo.Statements, args.BucketName) {
+		reply.Policies = append(reply.Policies, bucketAccessPolicy{
+			Prefix: prefix,
+			Policy: policy,
+		})
+	}
 	return nil
 }
 

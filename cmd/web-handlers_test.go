@@ -868,13 +868,13 @@ func testWebGetBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestE
 	}
 }
 
-// Wrapper for calling GetAllBucketPolicy Handler
-func TestWebHandlerGetAllBucketPolicyHandler(t *testing.T) {
-	ExecObjectLayerTest(t, testWebGetAllBucketPolicyHandler)
+// Wrapper for calling ListAllBucketPolicies Handler
+func TestWebHandlerListAllBucketPoliciesHandler(t *testing.T) {
+	ExecObjectLayerTest(t, testWebListAllBucketPoliciesHandler)
 }
 
-// testWebGetAllBucketPolicyHandler - Test GetAllBucketPolicy web handler
-func testWebGetAllBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
+// testWebListAllBucketPoliciesHandler - Test ListAllBucketPolicies web handler
+func testWebListAllBucketPoliciesHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
 	// initialize the server and obtain the credentials and root.
@@ -905,19 +905,21 @@ func testWebGetAllBucketPolicyHandler(obj ObjectLayer, instanceType string, t Te
 		t.Fatal("Unexpected error: ", err)
 	}
 
-	testCaseResult1 := make(map[string]policy.BucketPolicy)
-	testCaseResult1[bucketName+"/hello*"] = policy.BucketPolicyReadWrite
+	testCaseResult1 := []bucketAccessPolicy{{
+		Prefix: bucketName + "/hello*",
+		Policy: policy.BucketPolicyReadWrite,
+	}}
 	testCases := []struct {
 		bucketName     string
-		expectedResult map[string]policy.BucketPolicy
+		expectedResult []bucketAccessPolicy
 	}{
 		{bucketName, testCaseResult1},
 	}
 
 	for i, testCase := range testCases {
-		args := &GetAllBucketPolicyArgs{BucketName: testCase.bucketName}
-		reply := &GetAllBucketPolicyRep{}
-		req, err := newTestWebRPCRequest("Web.GetAllBucketPolicy", authorization, args)
+		args := &ListAllBucketPoliciesArgs{BucketName: testCase.bucketName}
+		reply := &ListAllBucketPoliciesRep{}
+		req, err := newTestWebRPCRequest("Web.ListAllBucketPolicies", authorization, args)
 		if err != nil {
 			t.Fatalf("Test %d: Failed to create HTTP request: <ERROR> %v", i+1, err)
 		}
