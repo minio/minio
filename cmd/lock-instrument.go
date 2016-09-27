@@ -271,13 +271,7 @@ func (n *nsLockMap) deleteLockInfoEntryForOps(param nsParam, operationID string)
 	return nil
 }
 
-// return randomly generated string ID if lock debug is enabled,
-// else returns empty string
-func getOpsID() (opsID string) {
-	// check if lock debug is enabled.
-	if globalDebugLock {
-		// generated random ID.
-		opsID = string(generateRequestID())
-	}
-	return opsID
+// return randomly generated string ID
+func getOpsID() string {
+	return string(generateRequestID())
 }
