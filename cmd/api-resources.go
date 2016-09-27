@@ -38,6 +38,7 @@ func getListObjectsV1Args(values url.Values) (prefix, marker, delimiter string, 
 // Parse bucket url queries for ListObjects V2.
 func getListObjectsV2Args(values url.Values) (prefix, token, startAfter, delimiter string, fetchOwner bool, maxkeys int, encodingType string) {
 	prefix = values.Get("prefix")
+	token = values.Get("continuation-token")
 	startAfter = values.Get("start-after")
 	delimiter = values.Get("delimiter")
 	if values.Get("max-keys") != "" {
@@ -45,11 +46,8 @@ func getListObjectsV2Args(values url.Values) (prefix, token, startAfter, delimit
 	} else {
 		maxkeys = maxObjectList
 	}
+	fetchOwner = values.Get("fetch-owner") == "true"
 	encodingType = values.Get("encoding-type")
-	token = values.Get("continuation-token")
-	if values.Get("fetch-owner") == "true" {
-		fetchOwner = true
-	}
 	return
 }
 
@@ -79,4 +77,12 @@ func getObjectResources(values url.Values) (uploadID string, partNumberMarker, m
 	}
 	encodingType = values.Get("encoding-type")
 	return
+}
+
+// Parse listen bucket notification resources.
+func getListenBucketNotificationResources(values url.Values) (prefix string, suffix string, events []string) {
+	prefix = values.Get("prefix")
+	suffix = values.Get("suffix")
+	events = values["events"]
+	return prefix, suffix, events
 }

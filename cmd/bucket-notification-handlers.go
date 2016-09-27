@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"encoding/xml"
+	"fmt"
 	"io"
 	"net/http"
 	"path"
@@ -231,11 +232,19 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
-	// Get notification ARN.
-	topicARN := r.URL.Query().Get("notificationARN")
-	if topicARN == "" {
-		writeErrorResponse(w, r, ErrARNNotification, r.URL.Path)
+	// Parse listen bucket notification resources.
+	prefix, suffix, events := getListenBucketNotificationResources(r.URL.Query())
+	if !IsValidObjectPrefix(prefix) || !IsValidObjectPrefix(suffix) {
+		writeErrorResponse(w, r, ErrFilterValueInvalid, r.URL.Path)
 		return
+	}
+
+	// Validate all the resource events.
+	for _, event := range events {
+		if errCode := checkEvent(event); errCode != ErrNone {
+			writeErrorResponse(w, r, errCode, r.URL.Path)
+			return
+		}
 	}
 
 	_, err := objAPI.GetBucketInfo(bucket)
@@ -245,16 +254,64 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 		return
 	}
 
-	notificationCfg := globalEventNotifier.GetBucketNotificationConfig(bucket)
-	if notificationCfg == nil {
-		writeErrorResponse(w, r, ErrARNNotification, r.URL.Path)
-		return
+	accountID := fmt.Sprintf("%d", time.Now().UTC().UnixNano())
+	accountARN := "arn:minio:sns:" + serverConfig.GetRegion() + accountID + ":listen"
+	var filterRules []filterRule
+	if prefix != "" {
+		filterRules = append(filterRules, filterRule{
+			Name:  "prefix",
+			Value: prefix,
+		})
+	}
+	if suffix != "" {
+		filterRules = append(filterRules, filterRule{
+			Name:  "suffix",
+			Value: suffix,
+		})
 	}
 
-	// Set SNS notifications only if special "listen" sns is set in bucket
-	// notification configs.
-	if !isMinioSNSConfigured(topicARN, notificationCfg.TopicConfigs) {
-		writeErrorResponse(w, r, ErrARNNotification, r.URL.Path)
+	// Fetch for existing notification configs and update topic configs.
+	nConfig := globalEventNotifier.GetBucketNotificationConfig(bucket)
+	if nConfig == nil {
+		// No notification configs found, initialize.
+		nConfig = &notificationConfig{
+			TopicConfigs: []topicConfig{{
+				TopicARN: accountARN,
+				serviceConfig: serviceConfig{
+					Events: events,
+					Filter: struct {
+						Key keyFilter `xml:"S3Key,omitempty"`
+					}{
+						Key: keyFilter{
+							FilterRules: filterRules,
+						},
+					},
+					ID: "sns-" + accountID,
+				},
+			}},
+		}
+	} else {
+		// Previously set notification configs found append to
+		// existing topic configs.
+		nConfig.TopicConfigs = append(nConfig.TopicConfigs, topicConfig{
+			TopicARN: accountARN,
+			serviceConfig: serviceConfig{
+				Events: events,
+				Filter: struct {
+					Key keyFilter `xml:"S3Key,omitempty"`
+				}{
+					Key: keyFilter{
+						FilterRules: filterRules,
+					},
+				},
+				ID: "sns-" + accountID,
+			},
+		})
+	}
+
+	// Save bucket notification config.
+	if err = globalEventNotifier.SetBucketNotificationConfig(bucket, nConfig); err != nil {
+		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
 	}
 
@@ -267,9 +324,9 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 	defer close(nEventCh)
 
 	// Set sns target.
-	globalEventNotifier.SetSNSTarget(topicARN, nEventCh)
+	globalEventNotifier.SetSNSTarget(accountARN, nEventCh)
 	// Remove sns listener after the writer has closed or the client disconnected.
-	defer globalEventNotifier.RemoveSNSTarget(topicARN, nEventCh)
+	defer globalEventNotifier.RemoveSNSTarget(accountARN, nEventCh)
 
 	// Start sending bucket notifications.
 	sendBucketNotification(w, nEventCh)
