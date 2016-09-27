@@ -331,20 +331,18 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	// Write success response.
 	writeSuccessResponse(w, encodedSuccessResponse)
 
-	if globalEventNotifier.IsBucketNotificationSet(bucket) {
-		// Notify deleted event for objects.
-		for _, dobj := range deletedObjects {
-			eventNotify(eventData{
-				Type:   ObjectRemovedDelete,
-				Bucket: bucket,
-				ObjInfo: ObjectInfo{
-					Name: dobj.ObjectName,
-				},
-				ReqParams: map[string]string{
-					"sourceIPAddress": r.RemoteAddr,
-				},
-			})
-		}
+	// Notify deleted event for objects.
+	for _, dobj := range deletedObjects {
+		eventNotify(eventData{
+			Type:   ObjectRemovedDelete,
+			Bucket: bucket,
+			ObjInfo: ObjectInfo{
+				Name: dobj.ObjectName,
+			},
+			ReqParams: map[string]string{
+				"sourceIPAddress": r.RemoteAddr,
+			},
+		})
 	}
 }
 
@@ -453,17 +451,15 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	// Write successful response.
 	writeSuccessNoContent(w)
 
-	if globalEventNotifier.IsBucketNotificationSet(bucket) {
-		// Notify object created event.
-		eventNotify(eventData{
-			Type:    ObjectCreatedPost,
-			Bucket:  bucket,
-			ObjInfo: objInfo,
-			ReqParams: map[string]string{
-				"sourceIPAddress": r.RemoteAddr,
-			},
-		})
-	}
+	// Notify object created event.
+	eventNotify(eventData{
+		Type:    ObjectCreatedPost,
+		Bucket:  bucket,
+		ObjInfo: objInfo,
+		ReqParams: map[string]string{
+			"sourceIPAddress": r.RemoteAddr,
+		},
+	})
 }
 
 // HeadBucketHandler - HEAD Bucket

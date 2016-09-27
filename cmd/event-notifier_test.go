@@ -39,6 +39,10 @@ func testEventNotify(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// remove the root folder after the test ends.
 	defer removeAll(rootPath)
 
+	objLayerMutex.Lock()
+	globalObjectAPI = obj
+	objLayerMutex.Unlock()
+
 	if err := initEventNotifier(obj); err != nil {
 		t.Fatal("Unexpected error:", err)
 	}
@@ -55,18 +59,6 @@ func testEventNotify(obj ObjectLayer, instanceType string, t TestErrHandler) {
 			"sourceIPAddress": "localhost:1337",
 		},
 	})
-
-	if err := globalEventNotifier.SetBucketNotificationConfig(bucketName, nil); err != errInvalidArgument {
-		t.Errorf("Expected error %s, got %s", errInvalidArgument, err)
-	}
-
-	if err := globalEventNotifier.SetBucketNotificationConfig(bucketName, &notificationConfig{}); err != nil {
-		t.Errorf("Expected error to be nil, got %s", err)
-	}
-
-	if !globalEventNotifier.IsBucketNotificationSet(bucketName) {
-		t.Errorf("Notification expected to be set, but notification not set.")
-	}
 
 	nConfig := globalEventNotifier.GetBucketNotificationConfig(bucketName)
 	if !reflect.DeepEqual(nConfig, &notificationConfig{}) {
@@ -165,7 +157,7 @@ func TestInitEventNotifierFaultyDisks(t *testing.T) {
 	}
 
 	bucketName := "bucket"
-	if err := obj.MakeBucket(bucketName); err != nil {
+	if err = obj.MakeBucket(bucketName); err != nil {
 		t.Fatal("Unexpected error:", err)
 	}
 
@@ -180,15 +172,16 @@ func TestInitEventNotifierFaultyDisks(t *testing.T) {
 	notificationXML += "<TopicConfiguration><Event>s3:ObjectRemoved:*</Event><Event>s3:ObjectRemoved:*</Event><Topic>" + listenARN + "</Topic></TopicConfiguration>"
 	notificationXML += "<QueueConfiguration><Event>s3:ObjectRemoved:*</Event><Event>s3:ObjectRemoved:*</Event><Queue>" + queueARN + "</Queue></QueueConfiguration>"
 	notificationXML += "</NotificationConfiguration>"
-	if err := fsstorage.AppendFile(minioMetaBucket, bucketConfigPrefix+"/"+bucketName+"/"+bucketNotificationConfig, []byte(notificationXML)); err != nil {
+	err = fsstorage.AppendFile(minioMetaBucket, bucketConfigPrefix+"/"+bucketName+"/"+bucketNotificationConfig, []byte(notificationXML))
+	if err != nil {
 		t.Fatal("Unexpected error:", err)
 	}
 
 	// Test initEventNotifier() with faulty disks
-	for i := 1; i <= 5; i++ {
+	for i := 1; i <= 4; i++ {
 		fs.storage = newNaughtyDisk(fsstorage, map[int]error{i: errFaultyDisk}, nil)
-		if err := initEventNotifier(fs); errorCause(err) != errFaultyDisk {
-			t.Fatal("Unexpected error:", err)
+		if _, err := loadNotificationConfig(bucketName, fs); errorCause(err) != errFaultyDisk {
+			t.Errorf("Test %d: Unexpected error: %s", i, err)
 		}
 	}
 }
@@ -300,9 +293,13 @@ func TestListenBucketNotification(t *testing.T) {
 	}
 
 	// Create the bucket to listen on
-	if err := obj.MakeBucket(bucketName); err != nil {
+	if err = obj.MakeBucket(bucketName); err != nil {
 		t.Fatal("Unexpected error:", err)
 	}
+
+	objLayerMutex.Lock()
+	globalObjectAPI = obj
+	objLayerMutex.Unlock()
 
 	listenARN := "arn:minio:sns:us-east-1:1:listen"
 	queueARN := "arn:minio:sqs:us-east-1:1:redis"
@@ -315,12 +312,13 @@ func TestListenBucketNotification(t *testing.T) {
 	notificationXML += "<TopicConfiguration><Event>s3:ObjectRemoved:*</Event><Event>s3:ObjectRemoved:*</Event><Topic>" + listenARN + "</Topic></TopicConfiguration>"
 	notificationXML += "<QueueConfiguration><Event>s3:ObjectRemoved:*</Event><Event>s3:ObjectRemoved:*</Event><Queue>" + queueARN + "</Queue></QueueConfiguration>"
 	notificationXML += "</NotificationConfiguration>"
-	if err := storage.AppendFile(minioMetaBucket, bucketConfigPrefix+"/"+bucketName+"/"+bucketNotificationConfig, []byte(notificationXML)); err != nil {
+	err = storage.AppendFile(minioMetaBucket, bucketConfigPrefix+"/"+bucketName+"/"+bucketNotificationConfig, []byte(notificationXML))
+	if err != nil {
 		t.Fatal("Unexpected error:", err)
 	}
 
 	// Init event notifier
-	if err := initEventNotifier(fs); err != nil {
+	if err = initEventNotifier(fs); err != nil {
 		t.Fatal("Unexpected error:", err)
 	}
 

@@ -17,8 +17,9 @@
 package cmd
 
 import (
-	"github.com/minio/minio/pkg/disk"
 	"sync"
+
+	"github.com/minio/minio/pkg/disk"
 )
 
 // naughtyDisk wraps a POSIX disk and returns programmed errors
@@ -56,48 +57,48 @@ func (d *naughtyDisk) calcError() (err error) {
 }
 
 func (d *naughtyDisk) DiskInfo() (info disk.Info, err error) {
-	if err := d.calcError(); err != nil {
+	if err = d.calcError(); err != nil {
 		return info, err
 	}
 	return d.disk.DiskInfo()
 }
 
 func (d *naughtyDisk) MakeVol(volume string) (err error) {
-	if err := d.calcError(); err != nil {
+	if err = d.calcError(); err != nil {
 		return err
 	}
 	return d.disk.MakeVol(volume)
 }
 
 func (d *naughtyDisk) ListVols() (vols []VolInfo, err error) {
-	if err := d.calcError(); err != nil {
+	if err = d.calcError(); err != nil {
 		return nil, err
 	}
 	return d.disk.ListVols()
 }
 
 func (d *naughtyDisk) StatVol(volume string) (volInfo VolInfo, err error) {
-	if err := d.calcError(); err != nil {
+	if err = d.calcError(); err != nil {
 		return VolInfo{}, err
 	}
 	return d.disk.StatVol(volume)
 }
 func (d *naughtyDisk) DeleteVol(volume string) (err error) {
-	if err := d.calcError(); err != nil {
+	if err = d.calcError(); err != nil {
 		return err
 	}
 	return d.disk.DeleteVol(volume)
 }
 
 func (d *naughtyDisk) ListDir(volume, path string) (entries []string, err error) {
-	if err := d.calcError(); err != nil {
+	if err = d.calcError(); err != nil {
 		return []string{}, err
 	}
 	return d.disk.ListDir(volume, path)
 }
 
 func (d *naughtyDisk) ReadFile(volume string, path string, offset int64, buf []byte) (n int64, err error) {
-	if err := d.calcError(); err != nil {
+	if err = d.calcError(); err != nil {
 		return 0, err
 	}
 	return d.disk.ReadFile(volume, path, offset, buf)
@@ -118,21 +119,21 @@ func (d *naughtyDisk) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) 
 }
 
 func (d *naughtyDisk) StatFile(volume string, path string) (file FileInfo, err error) {
-	if err := d.calcError(); err != nil {
+	if err = d.calcError(); err != nil {
 		return FileInfo{}, err
 	}
 	return d.disk.StatFile(volume, path)
 }
 
 func (d *naughtyDisk) DeleteFile(volume string, path string) (err error) {
-	if err := d.calcError(); err != nil {
+	if err = d.calcError(); err != nil {
 		return err
 	}
 	return d.disk.DeleteFile(volume, path)
 }
 
 func (d *naughtyDisk) ReadAll(volume string, path string) (buf []byte, err error) {
-	if err := d.calcError(); err != nil {
+	if err = d.calcError(); err != nil {
 		return nil, err
 	}
 	return d.disk.ReadAll(volume, path)

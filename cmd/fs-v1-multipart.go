@@ -603,17 +603,17 @@ func (fs fsObjects) ListObjectParts(bucket, object, uploadID string, partNumberM
 // md5sums of all the parts.
 //
 // Implements S3 compatible Complete multipart API.
-func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, uploadID string, parts []completePart) (string, error) {
+func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, uploadID string, parts []completePart) (ObjectInfo, error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return "", traceError(BucketNameInvalid{Bucket: bucket})
+		return ObjectInfo{}, traceError(BucketNameInvalid{Bucket: bucket})
 	}
 	// Verify whether the bucket exists.
 	if !fs.isBucketExist(bucket) {
-		return "", traceError(BucketNotFound{Bucket: bucket})
+		return ObjectInfo{}, traceError(BucketNotFound{Bucket: bucket})
 	}
 	if !IsValidObjectName(object) {
-		return "", traceError(ObjectNameInvalid{
+		return ObjectInfo{}, traceError(ObjectNameInvalid{
 			Bucket: bucket,
 			Object: object,
 		})
@@ -632,7 +632,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	defer nsMutex.Unlock(minioMetaBucket, uploadIDPath, opsID)
 
 	if !fs.isUploadIDExists(bucket, object, uploadID) {
-		return "", traceError(InvalidUploadID{UploadID: uploadID})
+		return ObjectInfo{}, traceError(InvalidUploadID{UploadID: uploadID})
 	}
 
 	// fs-append.json path
@@ -644,21 +644,21 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	// Calculate s3 compatible md5sum for complete multipart.
 	s3MD5, err := completeMultipartMD5(parts...)
 	if err != nil {
-		return "", err
+		return ObjectInfo{}, err
 	}
 
 	// Read saved fs metadata for ongoing multipart.
 	fsMetaPath := pathJoin(uploadIDPath, fsMetaJSONFile)
 	fsMeta, err := readFSMetadata(fs.storage, minioMetaBucket, fsMetaPath)
 	if err != nil {
-		return "", toObjectErr(err, minioMetaBucket, fsMetaPath)
+		return ObjectInfo{}, toObjectErr(err, minioMetaBucket, fsMetaPath)
 	}
 
 	fsAppendMeta, err := readFSMetadata(fs.storage, minioMetaBucket, fsAppendMetaPath)
 	if err == nil && isPartsSame(fsAppendMeta.Parts, parts) {
 		fsAppendDataPath := getFSAppendDataPath(uploadID)
 		if err = fs.storage.RenameFile(minioMetaBucket, fsAppendDataPath, bucket, object); err != nil {
-			return "", toObjectErr(traceError(err), minioMetaBucket, fsAppendDataPath)
+			return ObjectInfo{}, toObjectErr(traceError(err), minioMetaBucket, fsAppendDataPath)
 		}
 		// Remove the append-file metadata file in tmp location as we no longer need it.
 		fs.storage.DeleteFile(minioMetaBucket, fsAppendMetaPath)
@@ -672,14 +672,14 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 		for i, part := range parts {
 			partIdx := fsMeta.ObjectPartIndex(part.PartNumber)
 			if partIdx == -1 {
-				return "", traceError(InvalidPart{})
+				return ObjectInfo{}, traceError(InvalidPart{})
 			}
 			if fsMeta.Parts[partIdx].ETag != part.ETag {
-				return "", traceError(BadDigest{})
+				return ObjectInfo{}, traceError(BadDigest{})
 			}
 			// All parts except the last part has to be atleast 5MB.
 			if (i < len(parts)-1) && !isMinAllowedPartSize(fsMeta.Parts[partIdx].Size) {
-				return "", traceError(PartTooSmall{
+				return ObjectInfo{}, traceError(PartTooSmall{
 					PartNumber: part.PartNumber,
 					PartSize:   fsMeta.Parts[partIdx].Size,
 					PartETag:   part.ETag,
@@ -699,7 +699,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 				n, err = fs.storage.ReadFile(minioMetaBucket, multipartPartFile, offset, buf[:curLeft])
 				if n > 0 {
 					if err = fs.storage.AppendFile(minioMetaBucket, tempObj, buf[:n]); err != nil {
-						return "", toObjectErr(traceError(err), minioMetaBucket, tempObj)
+						return ObjectInfo{}, toObjectErr(traceError(err), minioMetaBucket, tempObj)
 					}
 				}
 				if err != nil {
@@ -707,9 +707,9 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 						break
 					}
 					if err == errFileNotFound {
-						return "", traceError(InvalidPart{})
+						return ObjectInfo{}, traceError(InvalidPart{})
 					}
-					return "", toObjectErr(traceError(err), minioMetaBucket, multipartPartFile)
+					return ObjectInfo{}, toObjectErr(traceError(err), minioMetaBucket, multipartPartFile)
 				}
 				offset += n
 				totalLeft -= n
@@ -720,9 +720,9 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 		err = fs.storage.RenameFile(minioMetaBucket, tempObj, bucket, object)
 		if err != nil {
 			if dErr := fs.storage.DeleteFile(minioMetaBucket, tempObj); dErr != nil {
-				return "", toObjectErr(traceError(dErr), minioMetaBucket, tempObj)
+				return ObjectInfo{}, toObjectErr(traceError(dErr), minioMetaBucket, tempObj)
 			}
-			return "", toObjectErr(traceError(err), bucket, object)
+			return ObjectInfo{}, toObjectErr(traceError(err), bucket, object)
 		}
 	}
 
@@ -739,13 +739,13 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 		fsMetaPath := path.Join(bucketMetaPrefix, bucket, object, fsMetaJSONFile)
 		// Write the metadata to a temp file and rename it to the actual location.
 		if err = writeFSMetadata(fs.storage, minioMetaBucket, fsMetaPath, fsMeta); err != nil {
-			return "", toObjectErr(err, bucket, object)
+			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
 	}
 
 	// Cleanup all the parts if everything else has been safely committed.
 	if err = cleanupUploadedParts(bucket, object, uploadID, fs.storage); err != nil {
-		return "", toObjectErr(err, bucket, object)
+		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
 	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
@@ -761,7 +761,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	// the object, if yes do not attempt to delete 'uploads.json'.
 	uploadsJSON, err := readUploadsJSON(bucket, object, fs.storage)
 	if err != nil {
-		return "", toObjectErr(err, minioMetaBucket, object)
+		return ObjectInfo{}, toObjectErr(err, minioMetaBucket, object)
 	}
 	// If we have successfully read `uploads.json`, then we proceed to
 	// purge or update `uploads.json`.
@@ -769,20 +769,27 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	if uploadIDIdx != -1 {
 		uploadsJSON.Uploads = append(uploadsJSON.Uploads[:uploadIDIdx], uploadsJSON.Uploads[uploadIDIdx+1:]...)
 	}
+
+	objInfo, err := fs.getObjectInfo(bucket, object)
+	if err != nil {
+		return ObjectInfo{}, toObjectErr(err, bucket, object)
+	}
+	objInfo.MD5Sum = s3MD5
+
 	if len(uploadsJSON.Uploads) > 0 {
 		if err = fs.updateUploadsJSON(bucket, object, uploadsJSON); err != nil {
-			return "", toObjectErr(err, minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object))
+			return ObjectInfo{}, toObjectErr(err, minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object))
 		}
-		// Return success.
-		return s3MD5, nil
+		// Return object info.
+		return objInfo, nil
 	}
 
 	if err = fs.storage.DeleteFile(minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object, uploadsJSONFile)); err != nil {
-		return "", toObjectErr(traceError(err), minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object))
+		return ObjectInfo{}, toObjectErr(traceError(err), minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object))
 	}
 
-	// Return md5sum.
-	return s3MD5, nil
+	// Return object info.
+	return objInfo, nil
 }
 
 // abortMultipartUpload - wrapper for purging an ongoing multipart

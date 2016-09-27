@@ -416,29 +416,21 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		writeWebErrorResponse(w, errors.New("Server not initialized"))
 		return
 	}
-	if _, err := objectAPI.PutObject(bucket, object, -1, r.Body, metadata); err != nil {
+	objInfo, err := objectAPI.PutObject(bucket, object, -1, r.Body, metadata)
+	if err != nil {
 		writeWebErrorResponse(w, err)
 		return
 	}
 
-	// Fetch object info for notifications.
-	objInfo, err := objectAPI.GetObjectInfo(bucket, object)
-	if err != nil {
-		errorIf(err, "Unable to fetch object info for \"%s\"", path.Join(bucket, object))
-		return
-	}
-
-	if globalEventNotifier.IsBucketNotificationSet(bucket) {
-		// Notify object created event.
-		eventNotify(eventData{
-			Type:    ObjectCreatedPut,
-			Bucket:  bucket,
-			ObjInfo: objInfo,
-			ReqParams: map[string]string{
-				"sourceIPAddress": r.RemoteAddr,
-			},
-		})
-	}
+	// Notify object created event.
+	eventNotify(eventData{
+		Type:    ObjectCreatedPut,
+		Bucket:  bucket,
+		ObjInfo: objInfo,
+		ReqParams: map[string]string{
+			"sourceIPAddress": r.RemoteAddr,
+		},
+	})
 }
 
 // Download - file download handler.

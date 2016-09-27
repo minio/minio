@@ -152,9 +152,6 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 		return
 	}
 
-	// Set bucket notification config.
-	globalEventNotifier.SetBucketNotificationConfig(bucket, &notificationCfg)
-
 	// Success.
 	writeSuccessResponse(w, nil)
 }
@@ -245,6 +242,7 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 		return
 	}
 
+	// Fetch bucket notification config.
 	notificationCfg := globalEventNotifier.GetBucketNotificationConfig(bucket)
 	if notificationCfg == nil {
 		writeErrorResponse(w, r, ErrARNNotification, r.URL.Path)

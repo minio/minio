@@ -137,34 +137,19 @@ func (en *eventNotifier) RemoveSNSTarget(snsARN string, listenerCh chan []Notifi
 	}
 }
 
-// Returns true if bucket notification is set for the bucket, false otherwise.
-func (en *eventNotifier) IsBucketNotificationSet(bucket string) bool {
-	if en == nil {
-		return false
-	}
-	en.rwMutex.RLock()
-	defer en.rwMutex.RUnlock()
-	_, ok := en.notificationConfigs[bucket]
-	return ok
-}
-
-// Fetch bucket notification config for an input bucket.
+// Fetch bucket notification config for a given bucket.
 func (en eventNotifier) GetBucketNotificationConfig(bucket string) *notificationConfig {
 	en.rwMutex.RLock()
 	defer en.rwMutex.RUnlock()
-	return en.notificationConfigs[bucket]
-}
-
-// Set a new notification config for a bucket, this operation will overwrite any previous
-// notification configs for the bucket.
-func (en *eventNotifier) SetBucketNotificationConfig(bucket string, notificationCfg *notificationConfig) error {
-	en.rwMutex.Lock()
-	defer en.rwMutex.Unlock()
-	if notificationCfg == nil {
-		return errInvalidArgument
+	nConfig, err := loadNotificationConfig(bucket, newObjectLayerFn())
+	if err != nil {
+		if err != errNoSuchNotifications {
+			errorIf(err, "Unable to load notification config.")
+			return nil
+		}
+		return &notificationConfig{}
 	}
-	en.notificationConfigs[bucket] = notificationCfg
-	return nil
+	return nConfig
 }
 
 // eventNotify notifies an event to relevant targets based on their
@@ -229,8 +214,8 @@ func loadNotificationConfig(bucket string, objAPI ObjectLayer) (*notificationCon
 	// Construct the notification config path.
 	notificationConfigPath := path.Join(bucketConfigPrefix, bucket, bucketNotificationConfig)
 	objInfo, err := objAPI.GetObjectInfo(minioMetaBucket, notificationConfigPath)
-	err = errorCause(err)
 	if err != nil {
+		err = errorCause(err)
 		// 'notification.xml' not found return 'errNoSuchNotifications'.
 		// This is default when no bucket notifications are found on the bucket.
 		switch err.(type) {
@@ -243,8 +228,8 @@ func loadNotificationConfig(bucket string, objAPI ObjectLayer) (*notificationCon
 	}
 	var buffer bytes.Buffer
 	err = objAPI.GetObject(minioMetaBucket, notificationConfigPath, 0, objInfo.Size, &buffer)
-	err = errorCause(err)
 	if err != nil {
+		err = errorCause(err)
 		// 'notification.xml' not found return 'errNoSuchNotifications'.
 		// This is default when no bucket notifications are found on the bucket.
 		switch err.(type) {
@@ -391,12 +376,6 @@ func initEventNotifier(objAPI ObjectLayer) error {
 		return errInvalidArgument
 	}
 
-	// Read all saved bucket notifications.
-	configs, err := loadAllBucketNotifications(objAPI)
-	if err != nil {
-		return err
-	}
-
 	// Initializes all queue targets.
 	queueTargets, err := loadAllQueueTargets()
 	if err != nil {
@@ -405,10 +384,9 @@ func initEventNotifier(objAPI ObjectLayer) error {
 
 	// Inititalize event notifier queue.
 	globalEventNotifier = &eventNotifier{
-		rwMutex:             &sync.RWMutex{},
-		notificationConfigs: configs,
-		queueTargets:        queueTargets,
-		snsTargets:          make(map[string][]chan []NotificationEvent),
+		rwMutex:      &sync.RWMutex{},
+		queueTargets: queueTargets,
+		snsTargets:   make(map[string][]chan []NotificationEvent),
 	}
 
 	return nil
