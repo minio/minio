@@ -294,7 +294,7 @@ func (l *lockServer) lockMaintenance(interval time.Duration) {
 	// Validate if long lived locks are indeed clean.
 	for _, nlrip := range nlripLongLived {
 		// Initialize client based on the long live locks.
-		c := newClient(nlrip.lri.node, nlrip.lri.rpcPath)
+		c := newClient(nlrip.lri.node, nlrip.lri.rpcPath, isSSL())
 
 		var expired bool
 

@@ -17,7 +17,12 @@
 package cmd
 
 import (
+	"bufio"
+	"crypto/tls"
 	"errors"
+	"io"
+	"net"
+	"net/http"
 	"net/rpc"
 	"sync"
 )
@@ -28,15 +33,17 @@ type RPCClient struct {
 	rpcPrivate *rpc.Client
 	node       string
 	rpcPath    string
+	secureConn bool
 }
 
 // newClient constructs a RPCClient object with node and rpcPath initialized.
 // It _doesn't_ connect to the remote endpoint. See Call method to see when the
 // connect happens.
-func newClient(node, rpcPath string) *RPCClient {
+func newClient(node, rpcPath string, secureConn bool) *RPCClient {
 	return &RPCClient{
-		node:    node,
-		rpcPath: rpcPath,
+		node:       node,
+		rpcPath:    rpcPath,
+		secureConn: secureConn,
 	}
 }
 
@@ -63,14 +70,41 @@ func (rpcClient *RPCClient) dialRPCClient() (*rpc.Client, error) {
 	if rpcClient.rpcPrivate != nil {
 		return rpcClient.rpcPrivate, nil
 	}
-	rpc, err := rpc.DialHTTPPath("tcp", rpcClient.node, rpcClient.rpcPath)
+
+	var err error
+	var conn net.Conn
+
+	if rpcClient.secureConn {
+		conn, err = tls.Dial("tcp", rpcClient.node, &tls.Config{})
+	} else {
+		conn, err = net.Dial("tcp", rpcClient.node)
+	}
 	if err != nil {
 		return nil, err
-	} else if rpc == nil {
-		return nil, errors.New("No valid RPC Client created after dial")
 	}
-	rpcClient.rpcPrivate = rpc
-	return rpcClient.rpcPrivate, nil
+	io.WriteString(conn, "CONNECT "+rpcClient.rpcPath+" HTTP/1.0\n\n")
+
+	// Require successful HTTP response
+	// before switching to RPC protocol.
+	resp, err := http.ReadResponse(bufio.NewReader(conn), &http.Request{Method: "CONNECT"})
+	if err == nil && resp.Status == "200 Connected to Go RPC" {
+		rpc := rpc.NewClient(conn)
+		if rpc == nil {
+			return nil, errors.New("No valid RPC Client created after dial")
+		}
+		rpcClient.rpcPrivate = rpc
+		return rpc, nil
+	}
+	if err == nil {
+		err = errors.New("unexpected HTTP response: " + resp.Status)
+	}
+	conn.Close()
+	return nil, &net.OpError{
+		Op:   "dial-http",
+		Net:  rpcClient.node + " " + rpcClient.rpcPath,
+		Addr: nil,
+		Err:  err,
+	}
 }
 
 // Call makes a RPC call to the remote endpoint using the default codec, namely encoding/gob.

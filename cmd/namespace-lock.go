@@ -45,7 +45,8 @@ func initDsyncNodes(disks []string, port int) error {
 				accessKey: cred.AccessKeyID,
 				secretKey: cred.SecretAccessKey,
 				// Construct a new dsync server addr.
-				address: disk[:idx] + ":" + serverPort,
+				secureConn: isSSL(),
+				address:    disk[:idx] + ":" + serverPort,
 				// Construct a new rpc path for the disk.
 				path:        pathutil.Join(lockRPCPath, disk[idx+1:]),
 				loginMethod: "Dsync.LoginHandler",

@@ -107,6 +107,7 @@ func newRPCClient(networkPath string) (StorageAPI, error) {
 	rpcClient := newAuthClient(&authConfig{
 		accessKey:   cred.AccessKeyID,
 		secretKey:   cred.SecretAccessKey,
+		secureConn:  isSSL(),
 		address:     rpcAddr,
 		path:        rpcPath,
 		loginMethod: "Storage.LoginHandler",
