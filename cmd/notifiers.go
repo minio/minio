@@ -30,6 +30,8 @@ const (
 
 	// Static string indicating queue type 'amqp'.
 	queueTypeAMQP = "amqp"
+	// Static string indicating queue type 'nats'.
+	queueTypeNATS = "nats"
 	// Static string indicating queue type 'elasticsearch'.
 	queueTypeElastic = "elasticsearch"
 	// Static string indicating queue type 'redis'.
@@ -50,6 +52,7 @@ var errNotifyNotEnabled = errors.New("requested notifier not enabled")
 // Notifier represents collection of supported notification queues.
 type notifier struct {
 	AMQP          map[string]amqpNotify          `json:"amqp"`
+	NATS          map[string]natsNotify          `json:"nats"`
 	ElasticSearch map[string]elasticSearchNotify `json:"elasticsearch"`
 	Redis         map[string]redisNotify         `json:"redis"`
 	// Add new notification queues.
@@ -71,6 +74,25 @@ func isAMQPQueue(sqsArn arnSQS) bool {
 		return false
 	}
 	defer amqpC.Close()
+	return true
+}
+
+// Returns true if natsArn is for an NATS queue.
+func isNATSQueue(sqsArn arnSQS) bool {
+	if sqsArn.Type != queueTypeNATS {
+		return false
+	}
+	natsL := serverConfig.GetNATSNotifyByID(sqsArn.AccountID)
+	if !natsL.Enable {
+		return false
+	}
+	// Connect to nats server to validate.
+	natsC, err := dialNATS(natsL)
+	if err != nil {
+		errorIf(err, "Unable to connect to nats service. %#v", natsL)
+		return false
+	}
+	defer natsC.Close()
 	return true
 }
 

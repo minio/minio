@@ -150,9 +150,10 @@ func isMinioSNSConfigured(topicARN string, topicConfigs []topicConfig) bool {
 // Validate if we recognize the queue type.
 func isValidQueue(sqsARN arnSQS) bool {
 	amqpQ := isAMQPQueue(sqsARN)       // Is amqp queue?.
+	natsQ := isNATSQueue(sqsARN)       // Is nats queue?.
 	elasticQ := isElasticQueue(sqsARN) // Is elastic queue?.
 	redisQ := isRedisQueue(sqsARN)     // Is redis queue?.
-	return amqpQ || elasticQ || redisQ
+	return amqpQ || natsQ || elasticQ || redisQ
 }
 
 // Validate if we recognize the topic type.
@@ -168,6 +169,9 @@ func isValidQueueID(queueARN string) bool {
 	if isAMQPQueue(sqsARN) { // AMQP eueue.
 		amqpN := serverConfig.GetAMQPNotifyByID(sqsARN.AccountID)
 		return amqpN.Enable && amqpN.URL != ""
+	} else if isNATSQueue(sqsARN) {
+		natsN := serverConfig.GetNATSNotifyByID(sqsARN.AccountID)
+		return natsN.Enable && natsN.Address != ""
 	} else if isElasticQueue(sqsARN) { // Elastic queue.
 		elasticN := serverConfig.GetElasticSearchNotifyByID(sqsARN.AccountID)
 		return elasticN.Enable && elasticN.URL != ""
@@ -347,6 +351,7 @@ func unmarshalTopicARN(topicARN string) arnTopic {
 // Unmarshals input value of AWS ARN format into minioSqs object.
 // Returned value represents minio sqs types, currently supported are
 // - amqp
+// - nats
 // - elasticsearch
 // - redis
 func unmarshalSqsARN(queueARN string) (mSqs arnSQS) {
@@ -358,6 +363,8 @@ func unmarshalSqsARN(queueARN string) (mSqs arnSQS) {
 	switch {
 	case strings.HasSuffix(sqsType, queueTypeAMQP):
 		mSqs.Type = queueTypeAMQP
+	case strings.HasSuffix(sqsType, queueTypeNATS):
+		mSqs.Type = queueTypeNATS
 	case strings.HasSuffix(sqsType, queueTypeElastic):
 		mSqs.Type = queueTypeElastic
 	case strings.HasSuffix(sqsType, queueTypeRedis):
