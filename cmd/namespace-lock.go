@@ -64,11 +64,11 @@ func initNSLock(isDist bool) {
 		isDist:  isDist,
 		lockMap: make(map[nsParam]*nsLock),
 	}
-	if globalDebugLock {
-		// lock Debugging enabed, initialize nsLockMap with entry for debugging information.
-		// entries of <volume,path> -> stateInfo of locks, for instrumentation purpose.
-		nsMutex.debugLockMap = make(map[nsParam]*debugLockInfoPerVolumePath)
-	}
+
+	// Initialize nsLockMap with entry for instrumentation
+	// information.
+	// Entries of <volume,path> -> stateInfo of locks
+	nsMutex.debugLockMap = make(map[nsParam]*debugLockInfoPerVolumePath)
 }
 
 func (n *nsLockMap) initLockInfoForVolumePath(param nsParam) {
@@ -131,13 +131,12 @@ func (n *nsLockMap) lock(volume, path string, lockOrigin, opsID string, readLock
 	}
 	nsLk.ref++ // Update ref count here to avoid multiple races.
 
-	if globalDebugLock {
-		// Change the state of the lock to be blocked for the given pair of <volume, path>
-		// and <OperationID> till the lock unblocks. The lock for accessing `nsMutex` is
-		// held inside the function itself.
-		if err := n.statusNoneToBlocked(param, lockOrigin, opsID, readLock); err != nil {
-			errorIf(err, "Failed to set lock state to blocked.")
-		}
+	// Change the state of the lock to be blocked for the given
+	// pair of <volume, path> and <OperationID> till the lock
+	// unblocks. The lock for accessing `nsMutex` is held inside
+	// the function itself.
+	if err := n.statusNoneToBlocked(param, lockOrigin, opsID, readLock); err != nil {
+		errorIf(err, "Failed to set lock state to blocked.")
 	}
 
 	// Unlock map before Locking NS which might block.
@@ -150,20 +149,19 @@ func (n *nsLockMap) lock(volume, path string, lockOrigin, opsID string, readLock
 		nsLk.Lock()
 	}
 
-	// Check if lock debugging enabled.
-	if globalDebugLock {
-		// Changing the status of the operation from blocked to running.
-		// change the state of the lock to be  running (from blocked) for
-		// the given pair of <volume, path> and <OperationID>.
-		if err := n.statusBlockedToRunning(param, lockOrigin, opsID, readLock); err != nil {
-			errorIf(err, "Failed to set the lock state to running.")
-		}
+	// Changing the status of the operation from blocked to
+	// running.  change the state of the lock to be running (from
+	// blocked) for the given pair of <volume, path> and
+	// <OperationID>.
+	if err := n.statusBlockedToRunning(param, lockOrigin, opsID, readLock); err != nil {
+		errorIf(err, "Failed to set the lock state to running.")
 	}
 }
 
 // Unlock the namespace resource.
 func (n *nsLockMap) unlock(volume, path, opsID string, readLock bool) {
-	// nsLk.Unlock() will not block, hence locking the map for the entire function is fine.
+	// nsLk.Unlock() will not block, hence locking the map for the
+	// entire function is fine.
 	n.lockMapMutex.Lock()
 	defer n.lockMapMutex.Unlock()
 
@@ -175,28 +173,27 @@ func (n *nsLockMap) unlock(volume, path, opsID string, readLock bool) {
 			nsLk.Unlock()
 		}
 		if nsLk.ref == 0 {
-			errorIf(errors.New("Namespace reference count cannot be 0."), "Invalid reference count detected.")
+			errorIf(errors.New("Namespace reference count cannot be 0."),
+				"Invalid reference count detected.")
 		}
 		if nsLk.ref != 0 {
 			nsLk.ref--
-			// Locking debug enabled, delete the lock state entry for given operation ID.
-			if globalDebugLock {
-				err := n.deleteLockInfoEntryForOps(param, opsID)
-				if err != nil {
-					errorIf(err, "Failed to delete lock info entry.")
-				}
+
+			// delete the lock state entry for given operation ID.
+			err := n.deleteLockInfoEntryForOps(param, opsID)
+			if err != nil {
+				errorIf(err, "Failed to delete lock info entry.")
 			}
 		}
 		if nsLk.ref == 0 {
 			// Remove from the map if there are no more references.
 			delete(n.lockMap, param)
 
-			// Locking debug enabled, delete the lock state entry for given <volume, path> pair.
-			if globalDebugLock {
-				err := n.deleteLockInfoEntryForVolumePath(param)
-				if err != nil {
-					errorIf(err, "Failed to delete lock info entry.")
-				}
+			// delete the lock state entry for given
+			// <volume, path> pair.
+			err := n.deleteLockInfoEntryForVolumePath(param)
+			if err != nil {
+				errorIf(err, "Failed to delete lock info entry.")
 			}
 		}
 	}
@@ -206,17 +203,21 @@ func (n *nsLockMap) unlock(volume, path, opsID string, readLock bool) {
 // allocated name space lock or initializing a new one.
 func (n *nsLockMap) Lock(volume, path, opsID string) {
 	var lockOrigin string
-	// Lock debugging enabled. The caller information of the lock held has
-	// been obtained here before calling any other function.
-	if globalDebugLock {
-		// Fetching the package, function name and the line number of the caller from the runtime.
-		// here is an example https://play.golang.org/p/perrmNRI9_ .
-		pc, fn, line, success := runtime.Caller(1)
-		if !success {
-			errorIf(errors.New("Couldn't get caller info."), "Fetching caller info form runtime failed.")
-		}
-		lockOrigin = fmt.Sprintf("[lock held] in %s[%s:%d]", runtime.FuncForPC(pc).Name(), fn, line)
+
+	// The caller information of the lock held has been obtained
+	// here before calling any other function.
+
+	// Fetching the package, function name and the line number of
+	// the caller from the runtime.  here is an example
+	// https://play.golang.org/p/perrmNRI9_ .
+	pc, fn, line, success := runtime.Caller(1)
+	if !success {
+		errorIf(errors.New("Couldn't get caller info."),
+			"Fetching caller info form runtime failed.")
 	}
+	lockOrigin = fmt.Sprintf("[lock held] in %s[%s:%d]",
+		runtime.FuncForPC(pc).Name(), fn, line)
+
 	readLock := false
 	n.lock(volume, path, lockOrigin, opsID, readLock)
 }
@@ -231,17 +232,21 @@ func (n *nsLockMap) Unlock(volume, path, opsID string) {
 func (n *nsLockMap) RLock(volume, path, opsID string) {
 	var lockOrigin string
 	readLock := true
-	// Lock debugging enabled. The caller information of the lock held has
-	// been obtained here before calling any other function.
-	if globalDebugLock {
-		// Fetching the package, function name and the line number of the
-		// caller from the runtime. Here is an example https://play.golang.org/p/perrmNRI9_ .
-		pc, fn, line, success := runtime.Caller(1)
-		if !success {
-			errorIf(errors.New("Couldn't get caller info."), "Fetching caller info form runtime failed.")
-		}
-		lockOrigin = fmt.Sprintf("[lock held] in %s[%s:%d]", runtime.FuncForPC(pc).Name(), fn, line)
+
+	// The caller information of the lock held has been obtained
+	// here before calling any other function.
+
+	// Fetching the package, function name and the line number of
+	// the caller from the runtime. Here is an example
+	// https://play.golang.org/p/perrmNRI9_ .
+	pc, fn, line, success := runtime.Caller(1)
+	if !success {
+		errorIf(errors.New("Couldn't get caller info."),
+			"Fetching caller info form runtime failed.")
 	}
+	lockOrigin = fmt.Sprintf("[lock held] in %s[%s:%d]",
+		runtime.FuncForPC(pc).Name(), fn, line)
+
 	n.lock(volume, path, lockOrigin, opsID, readLock)
 }
 

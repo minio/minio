@@ -73,9 +73,6 @@ func init() {
 
 	// Set global trace flag.
 	globalTrace = os.Getenv("MINIO_TRACE") == "1"
-
-	// Set all the debug flags from ENV if any.
-	setGlobalsDebugFromEnv()
 }
 
 func migrate() {

@@ -59,14 +59,11 @@ func TestControlLockMain(t *testing.T) {
 	// schedule cleanup at the end
 	defer testServer.Stop()
 
-	// enabling lock instrumentation.
-	globalDebugLock = true
 	// initializing the locks.
 	initNSLock(false)
 	// set debug lock info to `nil` so that other tests do not see
 	// such modified env settings.
 	defer func() {
-		globalDebugLock = false
 		nsMutex.debugLockMap = nil
 	}()
 

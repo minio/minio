@@ -66,14 +66,11 @@ func TestRPCControlLock(t *testing.T) {
 
 // Tests to validate the correctness of lock instrumentation control RPC end point.
 func (s *TestRPCControllerSuite) testRPCControlLock(c *testing.T) {
-	// enabling lock instrumentation.
-	globalDebugLock = true
 	// initializing the locks.
 	initNSLock(false)
 	// set debug lock info to `nil` so that the next tests have to
 	// initialize them again.
 	defer func() {
-		globalDebugLock = false
 		nsMutex.debugLockMap = nil
 	}()
 

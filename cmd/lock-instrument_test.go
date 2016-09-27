@@ -389,13 +389,10 @@ func TestNsLockMapStatusBlockedToRunning(t *testing.T) {
 		t.Fatalf("Errors mismatch: Expected: \"%s\", got: \"%s\"", expectedBlockErr, actualErr)
 	}
 
-	// enabling lock instrumentation.
-	globalDebugLock = true
 	// initializing the locks.
 	initNSLock(false)
 	// set debug lock info  to `nil` so that the next tests have to initialize them again.
 	defer func() {
-		globalDebugLock = false
 		nsMutex.debugLockMap = nil
 	}()
 	// Iterate over the cases and assert the result.
@@ -531,13 +528,10 @@ func TestNsLockMapStatusNoneToBlocked(t *testing.T) {
 	if actualErr != expectedNilErr {
 		t.Fatalf("Errors mismatch: Expected \"%s\", got \"%s\"", expectedNilErr, actualErr)
 	}
-	// enabling lock instrumentation.
-	globalDebugLock = true
 	// initializing the locks.
 	initNSLock(false)
 	// set debug lock info  to `nil` so that the next tests have to initialize them again.
 	defer func() {
-		globalDebugLock = false
 		nsMutex.debugLockMap = nil
 	}()
 	// Iterate over the cases and assert the result.
@@ -580,13 +574,10 @@ func TestNsLockMapDeleteLockInfoEntryForOps(t *testing.T) {
 		t.Fatalf("Errors mismatch: Expected \"%s\", got \"%s\"", expectedNilErr, actualErr)
 	}
 
-	// enabling lock instrumentation.
-	globalDebugLock = true
 	// initializing the locks.
 	initNSLock(false)
 	// set debug lock info  to `nil` so that the next tests have to initialize them again.
 	defer func() {
-		globalDebugLock = false
 		nsMutex.debugLockMap = nil
 	}()
 	// case - 2.
@@ -681,13 +672,10 @@ func TestNsLockMapDeleteLockInfoEntryForVolumePath(t *testing.T) {
 		t.Fatalf("Errors mismatch: Expected \"%s\", got \"%s\"", expectedNilErr, actualErr)
 	}
 
-	// enabling lock instrumentation.
-	globalDebugLock = true
 	// initializing the locks.
 	initNSLock(false)
 	// set debug lock info  to `nil` so that the next tests have to initialize them again.
 	defer func() {
-		globalDebugLock = false
 		nsMutex.debugLockMap = nil
 	}()
 	// case - 2.
