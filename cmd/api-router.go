@@ -63,7 +63,7 @@ func registerAPIRouter(mux *router.Router, api objectAPIHandlers) {
 	// GetBucketNotification
 	bucket.Methods("GET").HandlerFunc(api.GetBucketNotificationHandler).Queries("notification", "")
 	// ListenBucketNotification
-	bucket.Methods("GET").HandlerFunc(api.ListenBucketNotificationHandler).Queries("notificationARN", "{notificationARN:.*}")
+	bucket.Methods("GET").HandlerFunc(api.ListenBucketNotificationHandler).Queries("events", "{events:.*}")
 	// ListMultipartUploads
 	bucket.Methods("GET").HandlerFunc(api.ListMultipartUploadsHandler).Queries("uploads", "")
 	// ListObjectsV2
