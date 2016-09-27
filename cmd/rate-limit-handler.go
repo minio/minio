@@ -35,32 +35,33 @@ type rateLimit struct {
 // channel this is in-turn used to rate limit incoming connections in
 // ServeHTTP() http.Handler method.
 func (c *rateLimit) acquire() error {
-	//attempt to enter the waitQueue. If no slot is immediately
-	//available return error.
+	// attempt to enter the waitQueue. If no slot is immediately
+	// available return error.
 	select {
 	case c.waitQueue <- struct{}{}:
-		//entered wait queue
+		// entered wait queue
 		break
 	default:
-		//no slot available for waiting
+		// no slot available for waiting
 		return errTooManyRequests
 	}
 
-	//block attempting to enter the workQueue. If the workQueue is
-	//full, there can be at most cap(waitQueue) == 4*globalMaxConn
-	//goroutines waiting here because of the select above.
+	// block attempting to enter the workQueue. If the workQueue
+	// is full, there can be at most cap(waitQueue) ==
+	// 4*globalMaxConn goroutines waiting here because of the
+	// select above.
 	select {
 	case c.workQueue <- struct{}{}:
-		//entered workQueue - so remove one waiter. This step
-		//does not block as the waitQueue cannot be empty.
+		// entered workQueue - so remove one waiter. This step
+		// does not block as the waitQueue cannot be empty.
 		<-c.waitQueue
 	}
 
 	return nil
 }
 
-// Release one element from workQueue to serve a new client
-// in the waiting list
+// Release one element from workQueue to serve a new client in the
+// waiting list
 func (c *rateLimit) release() {
 	<-c.workQueue
 }
@@ -82,13 +83,15 @@ func (c *rateLimit) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	c.release()
 }
 
-// setRateLimitHandler limits the number of concurrent http requests based on MINIO_MAXCONN.
+// setRateLimitHandler limits the number of concurrent http requests
+// based on MINIO_MAXCONN.
 func setRateLimitHandler(handler http.Handler) http.Handler {
 	if globalMaxConn == 0 {
 		return handler
 	} // else proceed to rate limiting.
 
-	// For max connection limit of > '0' we initialize rate limit handler.
+	// For max connection limit of > '0' we initialize rate limit
+	// handler.
 	return &rateLimit{
 		handler:   handler,
 		workQueue: make(chan struct{}, globalMaxConn),
