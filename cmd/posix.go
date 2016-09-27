@@ -33,15 +33,17 @@ import (
 )
 
 const (
-	fsMinSpacePercent = 5
-	maxAllowedIOError = 5
+	fsMinFreeSpace         = 1024 * 1024 * 1024
+	fsMinFreeInodesPercent = 5
+	maxAllowedIOError      = 5
 )
 
 // posix - implements StorageAPI interface.
 type posix struct {
-	ioErrCount  int32 // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
-	diskPath    string
-	minFreeDisk int64
+	ioErrCount    int32 // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
+	diskPath      string
+	minFreeSpace  int64
+	minFreeInodes int64
 }
 
 var errFaultyDisk = errors.New("Faulty disk")
@@ -100,8 +102,9 @@ func newPosix(diskPath string) (StorageAPI, error) {
 		return nil, err
 	}
 	fs := &posix{
-		diskPath:    diskPath,
-		minFreeDisk: fsMinSpacePercent, // Minimum 5% disk should be free.
+		diskPath:      diskPath,
+		minFreeSpace:  fsMinFreeSpace,
+		minFreeInodes: fsMinFreeInodesPercent,
 	}
 	st, err := os.Stat(preparePath(diskPath))
 	if err != nil {
@@ -132,16 +135,15 @@ func getDiskInfo(diskPath string) (di disk.Info, err error) {
 }
 
 // checkDiskFree verifies if disk path has sufficient minimum free disk space and files.
-func checkDiskFree(diskPath string, minFreeDisk int64) (err error) {
-	di, err := getDiskInfo(diskPath)
+func (s posix) checkDiskFree() (err error) {
+	di, err := getDiskInfo(s.diskPath)
 	if err != nil {
 		return err
 	}
 
-	// Remove 5% from total space for cumulative disk
-	// space used for journalling, inodes etc.
-	availableDiskSpace := (float64(di.Free) / (float64(di.Total) - (0.05 * float64(di.Total)))) * 100
-	if int64(availableDiskSpace) <= minFreeDisk {
+	// Remove 5% from free space for cumulative disk space used for journalling, inodes etc.
+	availableDiskSpace := float64(di.Free) * 0.95
+	if int64(availableDiskSpace) <= s.minFreeSpace {
 		return errDiskFull
 	}
 
@@ -150,8 +152,8 @@ func checkDiskFree(diskPath string, minFreeDisk int64) (err error) {
 	// Allow for the available disk to be separately validate and we will validate inodes only if
 	// total inodes are provided by the underlying filesystem.
 	if di.Files != 0 {
-		availableFiles := (float64(di.Ffree) / (float64(di.Files) - (0.05 * float64(di.Files)))) * 100
-		if int64(availableFiles) <= minFreeDisk {
+		availableFiles := 100 * float64(di.Ffree) / float64(di.Files)
+		if int64(availableFiles) <= s.minFreeInodes {
 			return errDiskFull
 		}
 	}
@@ -191,7 +193,7 @@ func (s *posix) MakeVol(volume string) (err error) {
 	}
 
 	// Validate if disk is free.
-	if err = checkDiskFree(s.diskPath, s.minFreeDisk); err != nil {
+	if err = s.checkDiskFree(); err != nil {
 		return err
 	}
 
@@ -539,7 +541,7 @@ func (s *posix) AppendFile(volume, path string, buf []byte) (err error) {
 	}
 
 	// Validate if disk is free.
-	if err = checkDiskFree(s.diskPath, s.minFreeDisk); err != nil {
+	if err = s.checkDiskFree(); err != nil {
 		return err
 	}
 
@@ -744,7 +746,7 @@ func (s *posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err e
 	}
 
 	// Validate if disk is free.
-	if err = checkDiskFree(s.diskPath, s.minFreeDisk); err != nil {
+	if err = s.checkDiskFree(); err != nil {
 		return err
 	}
 
