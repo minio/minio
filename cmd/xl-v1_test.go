@@ -22,26 +22,6 @@ import (
 	"testing"
 )
 
-// Collection of disks verbatim used for tests.
-var disks = []string{
-	"/mnt/backend1",
-	"/mnt/backend2",
-	"/mnt/backend3",
-	"/mnt/backend4",
-	"/mnt/backend5",
-	"/mnt/backend6",
-	"/mnt/backend7",
-	"/mnt/backend8",
-	"/mnt/backend9",
-	"/mnt/backend10",
-	"/mnt/backend11",
-	"/mnt/backend12",
-	"/mnt/backend13",
-	"/mnt/backend14",
-	"/mnt/backend15",
-	"/mnt/backend16",
-}
-
 // TestStorageInfo - tests storage info.
 func TestStorageInfo(t *testing.T) {
 	objLayer, fsDirs, err := prepareXL()

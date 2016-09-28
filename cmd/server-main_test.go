@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"testing"
 
@@ -64,6 +65,24 @@ func TestFinalizeEndpoints(t *testing.T) {
 
 // Tests all the expected input disks for function checkSufficientDisks.
 func TestCheckSufficientDisks(t *testing.T) {
+	xlDisks := []string{
+		"/mnt/backend1",
+		"/mnt/backend2",
+		"/mnt/backend3",
+		"/mnt/backend4",
+		"/mnt/backend5",
+		"/mnt/backend6",
+		"/mnt/backend7",
+		"/mnt/backend8",
+		"/mnt/backend9",
+		"/mnt/backend10",
+		"/mnt/backend11",
+		"/mnt/backend12",
+		"/mnt/backend13",
+		"/mnt/backend14",
+		"/mnt/backend15",
+		"/mnt/backend16",
+	}
 	// List of test cases fo sufficient disk verification.
 	testCases := []struct {
 		disks       []string
@@ -71,33 +90,32 @@ func TestCheckSufficientDisks(t *testing.T) {
 	}{
 		// Even number of disks '6'.
 		{
-			disks[0:6],
+			xlDisks[0:6],
 			nil,
 		},
 		// Even number of disks '12'.
 		{
-			disks[0:12],
+			xlDisks[0:12],
 			nil,
 		},
 		// Even number of disks '16'.
 		{
-
-			disks[0:16],
+			xlDisks[0:16],
 			nil,
 		},
 		// Larger than maximum number of disks > 16.
 		{
-			append(disks[0:16], "/mnt/unsupported"),
+			append(xlDisks[0:16], "/mnt/unsupported"),
 			errXLMaxDisks,
 		},
 		// Lesser than minimum number of disks < 6.
 		{
-			disks[0:3],
+			xlDisks[0:3],
 			errXLMinDisks,
 		},
 		// Odd number of disks, not divisible by '2'.
 		{
-			append(disks[0:10], disks[11]),
+			append(xlDisks[0:10], xlDisks[11]),
 			errXLNumDisks,
 		},
 	}
@@ -188,8 +206,8 @@ func TestGetPort(t *testing.T) {
 			if cErr != nil {
 				t.Fatalf("Failed to create cert file %s", certFile)
 			}
-			_, kErr := os.Create(keyFile)
-			if kErr != nil {
+			_, tErr := os.Create(keyFile)
+			if tErr != nil {
 				t.Fatalf("Failed to create key file %s", keyFile)
 			}
 		}
@@ -205,19 +223,37 @@ func TestGetPort(t *testing.T) {
 }
 
 func TestIsDistributedSetup(t *testing.T) {
-	testCases := []struct {
+	var testCases []struct {
 		disks  []string
 		result bool
-	}{
-		{[]string{"4.4.4.4:/mnt/disk1", "4.4.4.4:/mnt/disk2"}, true},
-		{[]string{"4.4.4.4:/mnt/disk1", "localhost:/mnt/disk2"}, true},
-		{[]string{"localhost:/mnt/disk1", "localhost:/mnt/disk2"}, false},
-		{[]string{"/mnt/disk1", "/mnt/disk2"}, false},
+	}
+	if runtime.GOOS == "windows" {
+		testCases = []struct {
+			disks  []string
+			result bool
+		}{
+			{[]string{`4.4.4.4:c:\mnt\disk1`, `4.4.4.4:c:\mnt\disk2`}, true},
+			{[]string{`4.4.4.4:c:\mnt\disk1`, `localhost:c:\mnt\disk2`}, true},
+			{[]string{`localhost:c:\mnt\disk1`, `localhost:c:\mnt\disk2`}, false},
+			{[]string{`c:\mnt\disk1`, `c:\mnt\disk2`}, false},
+		}
+
+	} else {
+		testCases = []struct {
+			disks  []string
+			result bool
+		}{
+			{[]string{"4.4.4.4:/mnt/disk1", "4.4.4.4:/mnt/disk2"}, true},
+			{[]string{"4.4.4.4:/mnt/disk1", "localhost:/mnt/disk2"}, true},
+			{[]string{"localhost:/mnt/disk1", "localhost:/mnt/disk2"}, false},
+			{[]string{"/mnt/disk1", "/mnt/disk2"}, false},
+		}
+
 	}
 	for i, test := range testCases {
 		res := isDistributedSetup(test.disks)
 		if res != test.result {
-			t.Errorf("Test %d: expected result %s but received %s", i+1, test.result, res)
+			t.Errorf("Test %d: expected result %t but received %t", i+1, test.result, res)
 		}
 	}
 }
