@@ -138,8 +138,7 @@ func (xl xlObjects) listObjectsHeal(bucket, prefix, marker, delimiter string, ma
 			continue
 		}
 
-		// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
-		// used for instrumentation on locks.
+		// get a random ID for lock instrumentation.
 		opsID := getOpsID()
 
 		// Check if the current object needs healing

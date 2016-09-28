@@ -58,8 +58,7 @@ func (fs fsObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 	var err error
 	var eof bool
 	if uploadIDMarker != "" {
-		// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
-		// used for instrumentation on locks.
+		// get a random ID for lock instrumentation.
 		opsID := getOpsID()
 		nsMutex.RLock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, keyMarker), opsID)
 		uploads, _, err = listMultipartUploadIDs(bucket, keyMarker, uploadIDMarker, maxUploads, fs.storage)
@@ -114,8 +113,7 @@ func (fs fsObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 			var end bool
 			uploadIDMarker = ""
 
-			// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
-			// used for instrumentation on locks.
+			// get a random ID for lock instrumentation.
 			opsID := getOpsID()
 
 			nsMutex.RLock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, entry), opsID)
@@ -233,8 +231,7 @@ func (fs fsObjects) newMultipartUpload(bucket string, object string, meta map[st
 		fsMeta.Meta = meta
 	}
 
-	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
-	// used for instrumentation on locks.
+	// get a random ID for lock instrumentation.
 	opsID := getOpsID()
 
 	// This lock needs to be held for any changes to the directory contents of ".minio.sys/multipart/object/"
@@ -410,8 +407,7 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 
 	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID)
 
-	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
-	// used for instrumentation on locks.
+	// get a random ID for lock instrumentation.
 	opsID := getOpsID()
 
 	nsMutex.RLock(minioMetaBucket, uploadIDPath, opsID)
@@ -476,8 +472,7 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 		}
 	}
 
-	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
-	// used for instrumentation on locks.
+	// get a random ID for lock instrumentation.
 	opsID = getOpsID()
 
 	// Hold write lock as we are updating fs.json
@@ -583,8 +578,7 @@ func (fs fsObjects) ListObjectParts(bucket, object, uploadID string, partNumberM
 		return ListPartsInfo{}, traceError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
 
-	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
-	// used for instrumentation on locks.
+	// get a random ID for lock instrumentation.
 	opsID := getOpsID()
 
 	// Hold lock so that there is no competing abort-multipart-upload or complete-multipart-upload.
@@ -620,8 +614,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	}
 
 	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID)
-	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
-	// used for instrumentation on locks.
+	// get a random ID for lock instrumentation.
 	opsID := getOpsID()
 
 	// Hold lock so that
@@ -748,8 +741,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 		return "", toObjectErr(err, bucket, object)
 	}
 
-	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
-	// used for instrumentation on locks.
+	// get a random ID for lock instrumentation.
 	opsID = getOpsID()
 
 	// Hold the lock so that two parallel complete-multipart-uploads do not
@@ -844,8 +836,7 @@ func (fs fsObjects) AbortMultipartUpload(bucket, object, uploadID string) error 
 		return traceError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
 
-	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
-	// used for instrumentation on locks.
+	// get a random ID for lock instrumentation.
 	opsID := getOpsID()
 
 	// Hold lock so that there is no competing complete-multipart-upload or put-object-part.
