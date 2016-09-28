@@ -1,5 +1,7 @@
 sudo: required
+
 dist: trusty
+
 language: go
 
 os:
