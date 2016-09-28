@@ -1109,9 +1109,11 @@ func getGetBucketNotificationURL(endPoint, bucketName string) string {
 }
 
 // return URL for listen bucket notification.
-func getListenBucketNotificationURL(endPoint, bucketName, arn string) string {
+func getListenBucketNotificationURL(endPoint, bucketName, prefix, suffix string, events []string) string {
 	queryValue := url.Values{}
-	queryValue.Set("notificationARN", arn)
+	queryValue.Set("prefix", prefix)
+	queryValue.Set("suffix", suffix)
+	queryValue["events"] = events
 	return makeTestTargetURL(endPoint, bucketName, "", queryValue)
 }
 
@@ -1370,7 +1372,7 @@ func initTestAPIEndPoints(objLayer ObjectLayer, apiFunctions []string) http.Hand
 			bucket.Methods("PUT").HandlerFunc(api.PutBucketNotificationHandler).Queries("notification", "")
 			// Register ListenBucketNotification Handler.
 		case "ListenBucketNotification":
-			bucket.Methods("GET").HandlerFunc(api.ListenBucketNotificationHandler).Queries("notificationARN", "{notificationARN:.*}")
+			bucket.Methods("GET").HandlerFunc(api.ListenBucketNotificationHandler).Queries("events", "{events:.*}")
 		// Register all api endpoints by default.
 		default:
 			registerAPIRouter(muxRouter, api)
