@@ -42,54 +42,6 @@ var disks = []string{
 	"/mnt/backend16",
 }
 
-// Tests all the expected input disks for function checkSufficientDisks.
-func TestCheckSufficientDisks(t *testing.T) {
-	// List of test cases fo sufficient disk verification.
-	testCases := []struct {
-		disks       []string
-		expectedErr error
-	}{
-		// Even number of disks '6'.
-		{
-			disks[0:6],
-			nil,
-		},
-		// Even number of disks '12'.
-		{
-			disks[0:12],
-			nil,
-		},
-		// Even number of disks '16'.
-		{
-
-			disks[0:16],
-			nil,
-		},
-		// Larger than maximum number of disks > 16.
-		{
-			append(disks[0:16], "/mnt/unsupported"),
-			errXLMaxDisks,
-		},
-		// Lesser than minimum number of disks < 6.
-		{
-			disks[0:3],
-			errXLMinDisks,
-		},
-		// Odd number of disks, not divisible by '2'.
-		{
-			append(disks[0:10], disks[11]),
-			errXLNumDisks,
-		},
-	}
-
-	// Validates different variations of input disks.
-	for i, testCase := range testCases {
-		if checkSufficientDisks(testCase.disks) != testCase.expectedErr {
-			t.Errorf("Test %d expected to pass for disks %s", i+1, testCase.disks)
-		}
-	}
-}
-
 // TestStorageInfo - tests storage info.
 func TestStorageInfo(t *testing.T) {
 	objLayer, fsDirs, err := prepareXL()
