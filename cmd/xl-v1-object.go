@@ -57,8 +57,7 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 		return traceError(errUnexpected)
 	}
 
-	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
-	// used for instrumentation on locks.
+	// get a random ID for lock instrumentation.
 	opsID := getOpsID()
 
 	// Lock the object before reading.
@@ -231,8 +230,7 @@ func (xl xlObjects) HealObject(bucket, object string) error {
 		return traceError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
 
-	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
-	// used for instrumentation on locks.
+	// get a random ID for lock instrumentation.
 	opsID := getOpsID()
 
 	// Lock the object before healing.
@@ -360,8 +358,7 @@ func (xl xlObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 		return ObjectInfo{}, ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
 
-	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
-	// used for instrumentation on locks.
+	// get a random ID for lock instrumentation.
 	opsID := getOpsID()
 
 	nsMutex.RLock(bucket, object, opsID)
@@ -624,8 +621,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 		}
 	}
 
-	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
-	// used for instrumentation on locks.
+	// get a random ID for lock instrumentation.
 	opsID := getOpsID()
 
 	// Lock the object.
@@ -754,8 +750,7 @@ func (xl xlObjects) DeleteObject(bucket, object string) (err error) {
 		return traceError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
 
-	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
-	// used for instrumentation on locks.
+	// get a random ID for lock instrumentation.
 	opsID := getOpsID()
 
 	nsMutex.Lock(bucket, object, opsID)

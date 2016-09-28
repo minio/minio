@@ -31,8 +31,7 @@ func (xl xlObjects) MakeBucket(bucket string) error {
 		return traceError(BucketNameInvalid{Bucket: bucket})
 	}
 
-	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
-	// used for instrumentation on locks.
+	// get a random ID for lock instrumentation.
 	opsID := getOpsID()
 
 	nsMutex.Lock(bucket, "", opsID)
@@ -175,8 +174,7 @@ func (xl xlObjects) GetBucketInfo(bucket string) (BucketInfo, error) {
 	if !IsValidBucketName(bucket) {
 		return BucketInfo{}, BucketNameInvalid{Bucket: bucket}
 	}
-	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
-	// used for instrumentation on locks.
+	// get a random ID for lock instrumentation.
 	opsID := getOpsID()
 
 	nsMutex.RLock(bucket, "", opsID)
@@ -251,8 +249,7 @@ func (xl xlObjects) DeleteBucket(bucket string) error {
 		return BucketNameInvalid{Bucket: bucket}
 	}
 
-	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
-	// used for instrumentation on locks.
+	// get a random ID for lock instrumentation.
 	opsID := getOpsID()
 
 	nsMutex.Lock(bucket, "", opsID)
