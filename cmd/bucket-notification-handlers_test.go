@@ -560,23 +560,23 @@ func testListenBucketNotificationHandler(obj ObjectLayer, instanceType string, t
 	}
 	arn := "arn:minio:sns:us-east-1:1474332374:listen"
 	for i, test := range testCases {
-		testRec := httptest.NewRecorder()
-		testReq, tErr := newTestSignedRequest("GET", getListenBucketNotificationURL("", test.bucketName, arn),
+		tRec := httptest.NewRecorder()
+		tReq, testErr := newTestSignedRequest("GET", getListenBucketNotificationURL("", test.bucketName, arn),
 			0, nil, credentials.AccessKeyID, credentials.SecretAccessKey)
-		if tErr != nil {
-			t.Fatalf("%s: Failed to create HTTP testRequest for ListenBucketNotification: <ERROR> %v", instanceType, tErr)
+		if testErr != nil {
+			t.Fatalf("%s: Failed to create HTTP tRequest for ListenBucketNotification: <ERROR> %v", instanceType, testErr)
 		}
 
 		switch test.kind {
 		case InvalidAuth:
 			// Triggering a authentication type check failure.
-			testReq.Header.Set("x-amz-content-sha256", "somethingElse")
+			tReq.Header.Set("x-amz-content-sha256", "somethingElse")
 		case BadARN:
 			// Set empty arn
-			testReq, tErr = newTestSignedRequest("GET", getListenBucketNotificationURL("", test.bucketName, ""),
+			tReq, testErr = newTestSignedRequest("GET", getListenBucketNotificationURL("", test.bucketName, ""),
 				0, nil, credentials.AccessKeyID, credentials.SecretAccessKey)
-			if tErr != nil {
-				t.Fatalf("%s: Failed to create HTTP testRequest for ListenBucketNotification: <ERROR> %v", instanceType, tErr)
+			if testErr != nil {
+				t.Fatalf("%s: Failed to create HTTP tRequest for ListenBucketNotification: <ERROR> %v", instanceType, testErr)
 			}
 		}
 
@@ -584,7 +584,7 @@ func testListenBucketNotificationHandler(obj ObjectLayer, instanceType string, t
 		case Norm:
 			go func(apiRouter http.Handler, rec *httptest.ResponseRecorder, req *http.Request) {
 				apiRouter.ServeHTTP(rec, req)
-			}(apiRouter, testRec, testReq)
+			}(apiRouter, tRec, tReq)
 
 			// Trigger a listen event notification by putting an object in the bucket.
 			putObjRec := httptest.NewRecorder()
@@ -598,7 +598,7 @@ func testListenBucketNotificationHandler(obj ObjectLayer, instanceType string, t
 			// closes. httptest doesn't provide Result() until the
 			// handler completes.
 		default:
-			apiRouter.ServeHTTP(testRec, testReq)
+			apiRouter.ServeHTTP(tRec, tReq)
 		}
 		switch test.kind {
 		case Norm:
@@ -606,12 +606,12 @@ func testListenBucketNotificationHandler(obj ObjectLayer, instanceType string, t
 			for len(globalEventNotifier.GetSNSTarget(arn)) == 0 {
 
 			}
-			if test.expectedHTTPCode != testRec.Code {
+			if test.expectedHTTPCode != tRec.Code {
 				t.Errorf("Test %d: %s: expected HTTP code %d, but received %d: <ERROR> %v",
-					i+1, instanceType, test.expectedHTTPCode, testRec.Code, err)
+					i+1, instanceType, test.expectedHTTPCode, tRec.Code, err)
 			}
 		case InvalidAuth, NoNotification, BadARN:
-			rspBytes, rErr := ioutil.ReadAll(testRec.Body)
+			rspBytes, rErr := ioutil.ReadAll(tRec.Body)
 			if rErr != nil {
 				t.Errorf("Test %d: %s: Failed to read response body: <ERROR> %v", i+1, instanceType, rErr)
 			}
@@ -627,14 +627,14 @@ func testListenBucketNotificationHandler(obj ObjectLayer, instanceType string, t
 					instanceType, test.expectedAPIError, errCode.Code, err)
 
 			}
-			if testRec.Code != test.expectedHTTPCode {
+			if tRec.Code != test.expectedHTTPCode {
 				t.Errorf("Test %d: %s: expected HTTP code %d, but received %d: <ERROR> %v",
-					i+1, instanceType, test.expectedHTTPCode, testRec.Code, err)
+					i+1, instanceType, test.expectedHTTPCode, tRec.Code, err)
 			}
 		case CheckStatus:
-			if testRec.Code != test.expectedHTTPCode {
+			if tRec.Code != test.expectedHTTPCode {
 				t.Errorf("Test %d: %s: expected HTTP code %d, but received %d: <ERROR> %v",
-					i+1, instanceType, test.expectedHTTPCode, testRec.Code, err)
+					i+1, instanceType, test.expectedHTTPCode, tRec.Code, err)
 			}
 		}
 	}
