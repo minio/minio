@@ -1108,6 +1108,15 @@ func getGetBucketNotificationURL(endPoint, bucketName string) string {
 	return makeTestTargetURL(endPoint, bucketName, "", queryValue)
 }
 
+// return URL for listen bucket notification.
+func getListenBucketNotificationURL(endPoint, bucketName, prefix, suffix string, events []string) string {
+	queryValue := url.Values{}
+	queryValue.Set("prefix", prefix)
+	queryValue.Set("suffix", suffix)
+	queryValue["events"] = events
+	return makeTestTargetURL(endPoint, bucketName, "", queryValue)
+}
+
 // returns temp root directory. `
 func getTestRoot() (string, error) {
 	return ioutil.TempDir(os.TempDir(), "api-")
@@ -1321,7 +1330,10 @@ func initTestAPIEndPoints(objLayer ObjectLayer, apiFunctions []string) http.Hand
 		// Register GetObject handler.
 		case "GetObject":
 			bucket.Methods("GET").Path("/{object:.+}").HandlerFunc(api.GetObjectHandler)
-			// Register Delete Object handler.
+		// Register PutObject handler.
+		case "PutObject":
+			bucket.Methods("PUT").Path("/{object:.+}").HandlerFunc(api.PutObjectHandler)
+		// Register Delete Object handler.
 		case "DeleteObject":
 			bucket.Methods("DELETE").Path("/{object:.+}").HandlerFunc(api.DeleteObjectHandler)
 		// Register Copy Object  handler.
@@ -1358,6 +1370,9 @@ func initTestAPIEndPoints(objLayer ObjectLayer, apiFunctions []string) http.Hand
 			// Register PutBucketNotification Handler.
 		case "PutBucketNotification":
 			bucket.Methods("PUT").HandlerFunc(api.PutBucketNotificationHandler).Queries("notification", "")
+			// Register ListenBucketNotification Handler.
+		case "ListenBucketNotification":
+			bucket.Methods("GET").HandlerFunc(api.ListenBucketNotificationHandler).Queries("events", "{events:.*}")
 		// Register all api endpoints by default.
 		default:
 			registerAPIRouter(muxRouter, api)
