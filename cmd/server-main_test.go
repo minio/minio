@@ -129,12 +129,26 @@ func TestCheckSufficientDisks(t *testing.T) {
 }
 
 func TestCheckNamingDisks(t *testing.T) {
-	testCases := []struct {
+	var testCases []struct {
 		disks []string
 		err   error
-	}{
-		{[]string{"localhost:/mnt/disk1", ":/a/b/c"}, &net.AddrError{Err: "Missing address in network path", Addr: ":/a/b/c"}},
-		{[]string{"localhost:/mnt/disk1", "localhost:/mnt/disk2"}, nil},
+	}
+	if runtime.GOOS == "windows" {
+		testCases = []struct {
+			disks []string
+			err   error
+		}{
+			{[]string{`:C:\\a\\b\\c`}, &net.AddrError{Err: "Missing address in network path", Addr: `:C:\\a\\b\\c`}},
+			{[]string{`localhost:C:\\mnt\\disk1`, `localhost:C:\\mnt\\disk2`}, nil},
+		}
+	} else {
+		testCases = []struct {
+			disks []string
+			err   error
+		}{
+			{[]string{"localhost:/mnt/disk1", ":/a/b/c"}, &net.AddrError{Err: "Missing address in network path", Addr: ":/a/b/c"}},
+			{[]string{"localhost:/mnt/disk1", "localhost:/mnt/disk2"}, nil},
+		}
 	}
 
 	for i, test := range testCases {
@@ -202,14 +216,17 @@ func TestGetPort(t *testing.T) {
 	}
 	for i, test := range testCases {
 		if test.ssl {
-			_, cErr := os.Create(certFile)
+			cFile, cErr := os.Create(certFile)
 			if cErr != nil {
 				t.Fatalf("Failed to create cert file %s", certFile)
 			}
-			_, tErr := os.Create(keyFile)
+			cFile.Close()
+
+			tFile, tErr := os.Create(keyFile)
 			if tErr != nil {
 				t.Fatalf("Failed to create key file %s", keyFile)
 			}
+			tFile.Close()
 		}
 		port := getPort(test.addr)
 		if port != test.expectedPort {
