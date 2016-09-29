@@ -19,10 +19,11 @@ package cmd
 import (
 	"encoding/hex"
 	"fmt"
-	"github.com/minio/sha256-simd"
 	"hash"
 	"io"
 	"net/http"
+
+	"github.com/minio/sha256-simd"
 )
 
 // signVerifyReader represents an io.Reader compatible interface which
@@ -49,7 +50,7 @@ func isSignVerify(reader io.Reader) bool {
 
 // Verify - verifies signature and returns error upon signature mismatch.
 func (v *signVerifyReader) Verify() error {
-	validateRegion := true // Defaults to validating region.
+	region := serverConfig.GetRegion()
 	shaPayloadHex := hex.EncodeToString(v.HashWriter.Sum(nil))
 	if skipContentSha256Cksum(v.Request) {
 		// Sets 'UNSIGNED-PAYLOAD' if client requested to not calculated sha256.
@@ -58,9 +59,9 @@ func (v *signVerifyReader) Verify() error {
 	// Signature verification block.
 	var s3Error APIErrorCode
 	if isRequestSignatureV4(v.Request) {
-		s3Error = doesSignatureMatch(shaPayloadHex, v.Request, validateRegion)
+		s3Error = doesSignatureMatch(shaPayloadHex, v.Request, region)
 	} else if isRequestPresignedSignatureV4(v.Request) {
-		s3Error = doesPresignedSignatureMatch(shaPayloadHex, v.Request, validateRegion)
+		s3Error = doesPresignedSignatureMatch(shaPayloadHex, v.Request, region)
 	} else {
 		// Couldn't figure out the request type, set the error as AccessDenied.
 		s3Error = ErrAccessDenied
