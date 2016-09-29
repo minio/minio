@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Minio Cloud Storage, (C) 2015 Minio, Inc.
+# Minio Cloud Storage, (C) 2014-2016 Minio, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -98,14 +98,6 @@ check_version() {
 }
 
 check_golang_env() {
-    echo ${GOROOT:?} 2>&1 >/dev/null
-    if [ $? -eq 1 ]; then
-        echo "ERROR"
-        echo "GOROOT environment variable missing, please refer to Go installation document"
-        echo "https://github.com/minio/minio/blob/master/INSTALLGO.md#install-go-13"
-        exit 1
-    fi
-
     echo ${GOPATH:?} 2>&1 >/dev/null
     if [ $? -eq 1 ]; then
         echo "ERROR"
@@ -115,21 +107,8 @@ check_golang_env() {
     fi
 
     local go_binary_path=$(which go)
-
     if [ -z "${go_binary_path}" ] ; then
         echo "Cannot find go binary in your PATH configuration, please refer to Go installation document"
-        echo "https://github.com/minio/minio/blob/master/INSTALLGO.md#install-go-13"
-        exit -1
-    fi
-
-    local new_go_binary_path=${go_binary_path}
-    if [ -h "${go_binary_path}" ]; then
-        new_go_binary_path=$(readlink ${go_binary_path})
-    fi
-
-    if [[ !"$(dirname ${new_go_binary_path})" =~ *"${GOROOT%%*(/)}"* ]] ; then
-        echo "The go binary found in your PATH configuration does not belong to the Go installation pointed by your GOROOT environment," \
-            "please refer to Go installation document"
         echo "https://github.com/minio/minio/blob/master/INSTALLGO.md#install-go-13"
         exit -1
     fi
@@ -174,7 +153,8 @@ is_supported_arch() {
 }
 
 check_deps() {
-    check_version "$(env go version 2>/dev/null | sed 's/^.* go\([0-9.]*\).*$/\1/')" "${GO_VERSION}"
+    go_version=$(env go version 2>/dev/null)
+    check_version "$(echo ${go_version} | sed 's/^.* go\([0-9.]*\).*$/\1/')" "${GO_VERSION}"
     if [ $? -ge 2 ]; then
         MISSING="${MISSING} golang(${GO_VERSION})"
     fi
@@ -196,7 +176,7 @@ main() {
     check_golang_env
 
     echo "Done"
-    echo "Using GOPATH=${GOPATH} and GOROOT=${GOROOT}"
+    echo "Using GOPATH=${GOPATH}"
 
     echo -n "Checking dependencies for Minio.. "
     check_deps
