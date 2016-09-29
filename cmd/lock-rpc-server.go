@@ -26,6 +26,7 @@ import (
 	"time"
 
 	router "github.com/gorilla/mux"
+	"github.com/minio/minio-go/pkg/set"
 )
 
 const lockRPCPath = "/minio/lock"
@@ -73,8 +74,6 @@ type lockServer struct {
 	rpcPath string
 	mutex   sync.Mutex
 	lockMap map[string][]lockRequesterInfo
-	// Timestamp set at the time of initialization. Resets naturally on minio server restart.
-	timestamp time.Time
 }
 
 // Register distributed NS lock handlers.
@@ -90,12 +89,14 @@ func newLockServers(serverConfig serverCmdConfig) (lockServers []*lockServer) {
 	ignoredExports := serverConfig.ignoredDisks
 
 	// Save ignored disks in a map
-	skipDisks := make(map[string]bool)
-	for _, ignoredExport := range ignoredExports {
-		skipDisks[ignoredExport] = true
+	// Initialize ignored disks in a new set.
+	ignoredSet := set.NewStringSet()
+	if len(ignoredExports) > 0 {
+		ignoredSet = set.CreateStringSet(ignoredExports...)
 	}
 	for _, export := range exports {
-		if skipDisks[export] {
+		if ignoredSet.Contains(export) {
+			// Ignore initializing ignored export.
 			continue
 		}
 		// Not local storage move to the next node.
@@ -107,10 +108,9 @@ func newLockServers(serverConfig serverCmdConfig) (lockServers []*lockServer) {
 		}
 		// Create handler for lock RPCs
 		locker := &lockServer{
-			rpcPath:   export,
-			mutex:     sync.Mutex{},
-			lockMap:   make(map[string][]lockRequesterInfo),
-			timestamp: time.Now().UTC(),
+			rpcPath: export,
+			mutex:   sync.Mutex{},
+			lockMap: make(map[string][]lockRequesterInfo),
 		}
 
 		// Start loop for stale lock maintenance
@@ -153,7 +153,7 @@ func (l *lockServer) LoginHandler(args *RPCLoginArgs, reply *RPCLoginReply) erro
 		return err
 	}
 	reply.Token = token
-	reply.Timestamp = l.timestamp
+	reply.Timestamp = time.Now().UTC()
 	reply.ServerVersion = Version
 	return nil
 }

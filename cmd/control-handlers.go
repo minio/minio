@@ -34,7 +34,7 @@ var errServerTimeMismatch = errors.New("Server times are too far apart.")
 /// Auth operations
 
 // Login - login handler.
-func (c *controllerAPIHandlers) LoginHandler(args *RPCLoginArgs, reply *RPCLoginReply) error {
+func (c *controlAPIHandlers) LoginHandler(args *RPCLoginArgs, reply *RPCLoginReply) error {
 	jwt, err := newJWT(defaultInterNodeJWTExpiry)
 	if err != nil {
 		return err
@@ -47,7 +47,7 @@ func (c *controllerAPIHandlers) LoginHandler(args *RPCLoginArgs, reply *RPCLogin
 		return err
 	}
 	reply.Token = token
-	reply.Timestamp = c.timestamp
+	reply.Timestamp = time.Now().UTC()
 	reply.ServerVersion = Version
 	return nil
 }
@@ -72,7 +72,7 @@ type HealListReply struct {
 }
 
 // ListObjects - list all objects that needs healing.
-func (c *controllerAPIHandlers) ListObjectsHealHandler(args *HealListArgs, reply *HealListReply) error {
+func (c *controlAPIHandlers) ListObjectsHealHandler(args *HealListArgs, reply *HealListReply) error {
 	objAPI := c.ObjectAPI()
 	if objAPI == nil {
 		return errServerNotInitialized
@@ -108,7 +108,7 @@ type HealObjectArgs struct {
 type HealObjectReply struct{}
 
 // HealObject - heal the object.
-func (c *controllerAPIHandlers) HealObjectHandler(args *HealObjectArgs, reply *GenericReply) error {
+func (c *controlAPIHandlers) HealObjectHandler(args *HealObjectArgs, reply *GenericReply) error {
 	objAPI := c.ObjectAPI()
 	if objAPI == nil {
 		return errServerNotInitialized
@@ -120,7 +120,7 @@ func (c *controllerAPIHandlers) HealObjectHandler(args *HealObjectArgs, reply *G
 }
 
 // HealObject - heal the object.
-func (c *controllerAPIHandlers) HealDiskMetadataHandler(args *GenericArgs, reply *GenericReply) error {
+func (c *controlAPIHandlers) HealDiskMetadataHandler(args *GenericArgs, reply *GenericReply) error {
 	if !isRPCTokenValid(args.Token) {
 		return errInvalidToken
 	}
@@ -143,9 +143,6 @@ type ServiceArgs struct {
 	// to perform. Currently supported signals are
 	// stop, restart and status.
 	Signal serviceSignal
-
-	// Make remote calls.
-	Remote bool
 }
 
 // ServiceReply - represents service operation success info.
@@ -153,24 +150,30 @@ type ServiceReply struct {
 	StorageInfo StorageInfo
 }
 
-func (c *controllerAPIHandlers) remoteCall(serviceMethod string, args interface {
-	SetToken(token string)
-	SetTimestamp(tstamp time.Time)
-}, reply interface{}) {
+// Remote procedure call, calls serviceMethod with given input args.
+func (c *controlAPIHandlers) remoteServiceCall(args *ServiceArgs, replies []*ServiceReply) error {
 	var wg sync.WaitGroup
-	for index, clnt := range c.RemoteControllers {
+	var errs = make([]error, len(c.RemoteControls))
+	// Send remote call to all neighboring peers to restart minio servers.
+	for index, clnt := range c.RemoteControls {
 		wg.Add(1)
 		go func(index int, client *AuthRPCClient) {
 			defer wg.Done()
-			err := client.Call(serviceMethod, args, reply)
-			errorIf(err, "Unable to initiate %s", serviceMethod)
+			errs[index] = client.Call("Control.ServiceHandler", args, replies[index])
+			errorIf(errs[index], "Unable to initiate control service request to remote node %s", client.Node())
 		}(index, clnt)
 	}
 	wg.Wait()
+	for _, err := range errs {
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Service - handler for sending service signals across many servers.
-func (c *controllerAPIHandlers) ServiceHandler(args *ServiceArgs, reply *ServiceReply) error {
+func (c *controlAPIHandlers) ServiceHandler(args *ServiceArgs, reply *ServiceReply) error {
 	if !isRPCTokenValid(args.Token) {
 		return errInvalidToken
 	}
@@ -182,21 +185,24 @@ func (c *controllerAPIHandlers) ServiceHandler(args *ServiceArgs, reply *Service
 		reply.StorageInfo = objAPI.StorageInfo()
 		return nil
 	}
+	var replies = make([]*ServiceReply, len(c.RemoteControls))
 	switch args.Signal {
 	case serviceRestart:
 		if args.Remote {
 			// Set remote as false for remote calls.
 			args.Remote = false
-			// Send remote call to all neighboring peers to restart minio servers.
-			c.remoteCall("Controller.ServiceHandler", args, reply)
+			if err := c.remoteServiceCall(args, replies); err != nil {
+				return err
+			}
 		}
 		globalServiceSignalCh <- serviceRestart
 	case serviceStop:
 		if args.Remote {
 			// Set remote as false for remote calls.
 			args.Remote = false
-			// Send remote call to all neighboring peers to stop minio servers.
-			c.remoteCall("Controller.ServiceHandler", args, reply)
+			if err := c.remoteServiceCall(args, replies); err != nil {
+				return err
+			}
 		}
 		globalServiceSignalCh <- serviceStop
 	}
@@ -204,14 +210,13 @@ func (c *controllerAPIHandlers) ServiceHandler(args *ServiceArgs, reply *Service
 }
 
 // LockInfo - RPC control handler for `minio control lock`. Returns the info of the locks held in the system.
-func (c *controllerAPIHandlers) LockInfo(arg *GenericArgs, reply *SystemLockState) error {
-	// obtain the lock state information.
-	lockInfo, err := generateSystemLockResponse()
-	// in case of error, return err to the RPC client.
-	if err != nil {
-		return err
+func (c *controlAPIHandlers) TryInitHandler(args *GenericArgs, reply *GenericReply) error {
+	if !isRPCTokenValid(args.Token) {
+		return errInvalidToken
 	}
-	// The response containing the lock info.
-	*reply = lockInfo
+	go func() {
+		globalWakeupCh <- struct{}{}
+	}()
+	*reply = GenericReply{}
 	return nil
 }
