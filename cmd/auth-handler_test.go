@@ -151,19 +151,29 @@ func TestS3SupportedAuthType(t *testing.T) {
 			authT: authTypeStreamingSigned,
 			pass:  true,
 		},
-		// Test 6 - JWT is not supported s3 type.
+		// Test 6 - supported s3 type with signature v2.
+		{
+			authT: authTypeSignedV2,
+			pass:  true,
+		},
+		// Test 7 - supported s3 type with presign v2.
+		{
+			authT: authTypePresignedV2,
+			pass:  true,
+		},
+		// Test 8 - JWT is not supported s3 type.
 		{
 			authT: authTypeJWT,
 			pass:  false,
 		},
-		// Test 7 - unknown auth header is not supported s3 type.
+		// Test 9 - unknown auth header is not supported s3 type.
 		{
 			authT: authTypeUnknown,
 			pass:  false,
 		},
-		// Test 8 - some new auth type is not supported s3 type.
+		// Test 10 - some new auth type is not supported s3 type.
 		{
-			authT: authType(7),
+			authT: authType(9),
 			pass:  false,
 		},
 	}
@@ -204,6 +214,39 @@ func TestIsRequestUnsignedPayload(t *testing.T) {
 	for i, testCase := range testCases {
 		inputReq.Header.Set("X-Amz-Content-Sha256", testCase.inputAmzContentHeader)
 		actualResult := isRequestUnsignedPayload(inputReq)
+		if testCase.expectedResult != actualResult {
+			t.Errorf("Test %d: Expected the result to `%v`, but instead got `%v`", i+1, testCase.expectedResult, actualResult)
+		}
+	}
+}
+
+func TestIsRequestPresignedSignatureV2(t *testing.T) {
+	testCases := []struct {
+		inputQueryKey   string
+		inputQueryValue string
+		expectedResult  bool
+	}{
+		// Test case - 1.
+		// Test case with query key "AWSAccessKeyId" set.
+		{"", "", false},
+		// Test case - 2.
+		{"AWSAccessKeyId", "", true},
+		// Test case - 3.
+		{"X-Amz-Content-Sha256", "", false},
+	}
+
+	for i, testCase := range testCases {
+		// creating an input HTTP request.
+		// Only the query parameters are relevant for this particular test.
+		inputReq, err := http.NewRequest("GET", "http://example.com", nil)
+		if err != nil {
+			t.Fatalf("Error initializing input HTTP request: %v", err)
+		}
+		q := inputReq.URL.Query()
+		q.Add(testCase.inputQueryKey, testCase.inputQueryValue)
+		inputReq.URL.RawQuery = q.Encode()
+
+		actualResult := isRequestPresignedSignatureV2(inputReq)
 		if testCase.expectedResult != actualResult {
 			t.Errorf("Test %d: Expected the result to `%v`, but instead got `%v`", i+1, testCase.expectedResult, actualResult)
 		}
@@ -258,7 +301,7 @@ func mustNewRequest(method string, urlStr string, contentLength int64, body io.R
 func mustNewSignedRequest(method string, urlStr string, contentLength int64, body io.ReadSeeker, t *testing.T) *http.Request {
 	req := mustNewRequest(method, urlStr, contentLength, body, t)
 	cred := serverConfig.GetCredential()
-	if err := signRequest(req, cred.AccessKeyID, cred.SecretAccessKey); err != nil {
+	if err := signRequestV4(req, cred.AccessKeyID, cred.SecretAccessKey); err != nil {
 		t.Fatalf("Unable to inititalized new signed http request %s", err)
 	}
 	return req

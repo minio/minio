@@ -18,6 +18,8 @@ package cmd
 
 import (
 	"bytes"
+	"crypto/hmac"
+	"crypto/sha1"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -31,14 +33,12 @@ import (
 	"net/url"
 	"os"
 	"reflect"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
-	"unicode/utf8"
 
 	router "github.com/gorilla/mux"
 )
@@ -476,8 +476,76 @@ func newTestStreamingSignedRequest(method, urlStr string, contentLength, chunkSi
 	return req, nil
 }
 
+// preSignV2 - presign the request in following style.
+// https://${S3_BUCKET}.s3.amazonaws.com/${S3_OBJECT}?AWSAccessKeyId=${S3_ACCESS_KEY}&Expires=${TIMESTAMP}&Signature=${SIGNATURE}.
+func preSignV2(req *http.Request, accessKeyID, secretAccessKey string, expires int64) error {
+	// Presign is not needed for anonymous credentials.
+	if accessKeyID == "" || secretAccessKey == "" {
+		return errors.New("Presign cannot be generated without access and secret keys")
+	}
+
+	d := time.Now().UTC()
+	// Find epoch expires when the request will expire.
+	epochExpires := d.Unix() + expires
+
+	// Add expires header if not present.
+	if expiresStr := req.Header.Get("Expires"); expiresStr == "" {
+		req.Header.Set("Expires", strconv.FormatInt(epochExpires, 10))
+	}
+
+	// Get presigned string to sign.
+	stringToSign := preStringifyHTTPReq(*req)
+	hm := hmac.New(sha1.New, []byte(secretAccessKey))
+	hm.Write([]byte(stringToSign))
+
+	// Calculate signature.
+	signature := base64.StdEncoding.EncodeToString(hm.Sum(nil))
+
+	query := req.URL.Query()
+	// Handle specially for Google Cloud Storage.
+	query.Set("AWSAccessKeyId", accessKeyID)
+	// Fill in Expires for presigned query.
+	query.Set("Expires", strconv.FormatInt(epochExpires, 10))
+
+	// Encode query and save.
+	req.URL.RawQuery = queryEncode(query)
+
+	// Save signature finally.
+	req.URL.RawQuery += "&Signature=" + getURLEncodedName(signature)
+
+	// Success.
+	return nil
+}
+
+// Sign given request using Signature V2.
+func signRequestV2(req *http.Request, accessKey, secretKey string) error {
+	// Initial time.
+	d := time.Now().UTC()
+
+	// Add date if not present.
+	if date := req.Header.Get("Date"); date == "" {
+		req.Header.Set("Date", d.Format(http.TimeFormat))
+	}
+
+	// Calculate HMAC for secretAccessKey.
+	stringToSign := stringifyHTTPReq(*req)
+	hm := hmac.New(sha1.New, []byte(secretKey))
+	hm.Write([]byte(stringToSign))
+
+	// Prepare auth header.
+	authHeader := new(bytes.Buffer)
+	authHeader.WriteString(fmt.Sprintf("%s %s:", signV2Algorithm, accessKey))
+	encoder := base64.NewEncoder(base64.StdEncoding, authHeader)
+	encoder.Write(hm.Sum(nil))
+	encoder.Close()
+
+	// Set Authorization header.
+	req.Header.Set("Authorization", authHeader.String())
+	return nil
+}
+
 // Sign given request using Signature V4.
-func signRequest(req *http.Request, accessKey, secretKey string) error {
+func signRequestV4(req *http.Request, accessKey, secretKey string) error {
 	// Get hashed payload.
 	hashedPayload := req.Header.Get("x-amz-content-sha256")
 	if hashedPayload == "" {
@@ -611,9 +679,9 @@ func newTestRequest(method, urlStr string, contentLength int64, body io.ReadSeek
 	case body == nil:
 		hashedPayload = hex.EncodeToString(sum256([]byte{}))
 	default:
-		payloadBytes, e := ioutil.ReadAll(body)
-		if e != nil {
-			return nil, e
+		payloadBytes, err := ioutil.ReadAll(body)
+		if err != nil {
+			return nil, err
 		}
 		hashedPayload = hex.EncodeToString(sum256(payloadBytes))
 		md5Base64 := base64.StdEncoding.EncodeToString(sumMD5(payloadBytes))
@@ -635,8 +703,50 @@ func newTestRequest(method, urlStr string, contentLength int64, body io.ReadSeek
 	return req, nil
 }
 
+func newTestSignedRequestV2ContentType(method, urlStr string, contentLength int64, body io.ReadSeeker, accessKey, secretKey, contentType string) (*http.Request, error) {
+	req, err := newTestRequest(method, urlStr, contentLength, body)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Del("x-amz-content-sha256")
+	req.Header.Set("Content-Type", contentType)
+
+	// Anonymous request return quickly.
+	if accessKey == "" || secretKey == "" {
+		return req, nil
+	}
+
+	err = signRequestV2(req, accessKey, secretKey)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// Returns new HTTP request object signed with signature v2.
+func newTestSignedRequestV2(method, urlStr string, contentLength int64, body io.ReadSeeker, accessKey, secretKey string) (*http.Request, error) {
+	req, err := newTestRequest(method, urlStr, contentLength, body)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Del("x-amz-content-sha256")
+
+	// Anonymous request return quickly.
+	if accessKey == "" || secretKey == "" {
+		return req, nil
+	}
+
+	err = signRequestV2(req, accessKey, secretKey)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // Returns new HTTP request object signed with signature v4.
-func newTestSignedRequest(method, urlStr string, contentLength int64, body io.ReadSeeker, accessKey, secretKey string) (*http.Request, error) {
+func newTestSignedRequestV4(method, urlStr string, contentLength int64, body io.ReadSeeker, accessKey, secretKey string) (*http.Request, error) {
 	req, err := newTestRequest(method, urlStr, contentLength, body)
 	if err != nil {
 		return nil, err
@@ -647,7 +757,7 @@ func newTestSignedRequest(method, urlStr string, contentLength int64, body io.Re
 		return req, nil
 	}
 
-	err = signRequest(req, accessKey, secretKey)
+	err = signRequestV4(req, accessKey, secretKey)
 	if err != nil {
 		return nil, err
 	}
@@ -842,71 +952,6 @@ func (t *EOFWriter) Write(p []byte) (n int, err error) {
 	return
 }
 
-// queryEncode - encodes query values in their URL encoded form.
-func queryEncode(v url.Values) string {
-	if v == nil {
-		return ""
-	}
-	var buf bytes.Buffer
-	keys := make([]string, 0, len(v))
-	for k := range v {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	for _, k := range keys {
-		vs := v[k]
-		prefix := urlEncodePath(k) + "="
-		for _, v := range vs {
-			if buf.Len() > 0 {
-				buf.WriteByte('&')
-			}
-			buf.WriteString(prefix)
-			buf.WriteString(urlEncodePath(v))
-		}
-	}
-	return buf.String()
-}
-
-// urlEncodePath encode the strings from UTF-8 byte representations to HTML hex escape sequences
-//
-// This is necessary since regular url.Parse() and url.Encode() functions do not support UTF-8
-// non english characters cannot be parsed due to the nature in which url.Encode() is written
-//
-// This function on the other hand is a direct replacement for url.Encode() technique to support
-// pretty much every UTF-8 character.
-func urlEncodePath(pathName string) string {
-	// if object matches reserved string, no need to encode them
-	reservedNames := regexp.MustCompile("^[a-zA-Z0-9-_.~/]+$")
-	if reservedNames.MatchString(pathName) {
-		return pathName
-	}
-	var encodedPathname string
-	for _, s := range pathName {
-		if 'A' <= s && s <= 'Z' || 'a' <= s && s <= 'z' || '0' <= s && s <= '9' { // §2.3 Unreserved characters (mark)
-			encodedPathname = encodedPathname + string(s)
-			continue
-		}
-		switch s {
-		case '-', '_', '.', '~', '/': // §2.3 Unreserved characters (mark)
-			encodedPathname = encodedPathname + string(s)
-			continue
-		default:
-			len := utf8.RuneLen(s)
-			if len < 0 {
-				// if utf8 cannot convert return the same string as is
-				return pathName
-			}
-			u := make([]byte, len)
-			utf8.EncodeRune(u, s)
-			for _, r := range u {
-				hex := hex.EncodeToString([]byte{r})
-				encodedPathname = encodedPathname + "%" + strings.ToUpper(hex)
-			}
-		}
-	}
-	return encodedPathname
-}
-
 // construct URL for http requests for bucket operations.
 func makeTestTargetURL(endPoint, bucketName, objectName string, queryValues url.Values) string {
 	urlStr := endPoint + "/"
@@ -914,7 +959,7 @@ func makeTestTargetURL(endPoint, bucketName, objectName string, queryValues url.
 		urlStr = urlStr + bucketName + "/"
 	}
 	if objectName != "" {
-		urlStr = urlStr + urlEncodePath(objectName)
+		urlStr = urlStr + getURLEncodedName(objectName)
 	}
 	if len(queryValues) > 0 {
 		urlStr = urlStr + "?" + queryEncode(queryValues)

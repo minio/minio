@@ -61,7 +61,7 @@ func generateSystemLockResponse() (SystemLockState, error) {
 	defer nsMutex.lockMapMutex.Unlock()
 
 	if nsMutex.debugLockMap == nil {
-		return SystemLockState{}, LockInfoNil{}
+		return SystemLockState{}, errLockNotInitialized
 	}
 
 	lockState := SystemLockState{}

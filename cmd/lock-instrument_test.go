@@ -327,7 +327,7 @@ func TestNsLockMapStatusBlockedToRunning(t *testing.T) {
 	actualErr := nsMutex.statusBlockedToRunning(param, testCases[0].lockOrigin,
 		testCases[0].opsID, testCases[0].readLock)
 
-	expectedNilErr := LockInfoNil{}
+	expectedNilErr := errLockNotInitialized
 	if actualErr != expectedNilErr {
 		t.Fatalf("Errors mismatch: Expected \"%s\", got \"%s\"", expectedNilErr, actualErr)
 	}
@@ -338,12 +338,12 @@ func TestNsLockMapStatusBlockedToRunning(t *testing.T) {
 		lockMap:      make(map[nsParam]*nsLock),
 	}
 	// Entry for <volume, path> pair is set to nil.
-	// Should fail with `LockInfoNil{}`.
+	// Should fail with `errLockNotInitialized`.
 	nsMutex.debugLockMap[param] = nil
 	actualErr = nsMutex.statusBlockedToRunning(param, testCases[0].lockOrigin,
 		testCases[0].opsID, testCases[0].readLock)
 
-	expectedNilErr = LockInfoNil{}
+	expectedNilErr = errLockNotInitialized
 	if actualErr != expectedNilErr {
 		t.Fatalf("Errors mismatch: Expected \"%s\", got \"%s\"", expectedNilErr, actualErr)
 	}
@@ -524,7 +524,7 @@ func TestNsLockMapStatusNoneToBlocked(t *testing.T) {
 	actualErr := nsMutex.statusBlockedToRunning(param, testCases[0].lockOrigin,
 		testCases[0].opsID, testCases[0].readLock)
 
-	expectedNilErr := LockInfoNil{}
+	expectedNilErr := errLockNotInitialized
 	if actualErr != expectedNilErr {
 		t.Fatalf("Errors mismatch: Expected \"%s\", got \"%s\"", expectedNilErr, actualErr)
 	}
@@ -569,7 +569,7 @@ func TestNsLockMapDeleteLockInfoEntryForOps(t *testing.T) {
 
 	actualErr := nsMutex.deleteLockInfoEntryForOps(param, testCases[0].opsID)
 
-	expectedNilErr := LockInfoNil{}
+	expectedNilErr := errLockNotInitialized
 	if actualErr != expectedNilErr {
 		t.Fatalf("Errors mismatch: Expected \"%s\", got \"%s\"", expectedNilErr, actualErr)
 	}
@@ -667,7 +667,7 @@ func TestNsLockMapDeleteLockInfoEntryForVolumePath(t *testing.T) {
 
 	actualErr := nsMutex.deleteLockInfoEntryForVolumePath(param)
 
-	expectedNilErr := LockInfoNil{}
+	expectedNilErr := errLockNotInitialized
 	if actualErr != expectedNilErr {
 		t.Fatalf("Errors mismatch: Expected \"%s\", got \"%s\"", expectedNilErr, actualErr)
 	}

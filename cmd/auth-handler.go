@@ -42,9 +42,21 @@ func isRequestSignatureV4(r *http.Request) bool {
 	return strings.HasPrefix(r.Header.Get("Authorization"), signV4Algorithm)
 }
 
+// Verify if request has AWS Signature Version '2'.
+func isRequestSignatureV2(r *http.Request) bool {
+	return (!strings.HasPrefix(r.Header.Get("Authorization"), signV4Algorithm) &&
+		strings.HasPrefix(r.Header.Get("Authorization"), signV2Algorithm))
+}
+
 // Verify if request has AWS PreSign Version '4'.
 func isRequestPresignedSignatureV4(r *http.Request) bool {
 	_, ok := r.URL.Query()["X-Amz-Credential"]
+	return ok
+}
+
+// Verify request has AWS PreSign Version '2'.
+func isRequestPresignedSignatureV2(r *http.Request) bool {
+	_, ok := r.URL.Query()["AWSAccessKeyId"]
 	return ok
 }
 
@@ -66,15 +78,21 @@ const (
 	authTypeUnknown authType = iota
 	authTypeAnonymous
 	authTypePresigned
+	authTypePresignedV2
 	authTypePostPolicy
 	authTypeStreamingSigned
 	authTypeSigned
+	authTypeSignedV2
 	authTypeJWT
 )
 
 // Get request authentication type.
 func getRequestAuthType(r *http.Request) authType {
-	if isRequestSignStreamingV4(r) {
+	if isRequestSignatureV2(r) {
+		return authTypeSignedV2
+	} else if isRequestPresignedSignatureV2(r) {
+		return authTypePresignedV2
+	} else if isRequestSignStreamingV4(r) {
 		return authTypeStreamingSigned
 	} else if isRequestSignatureV4(r) {
 		return authTypeSigned
@@ -104,6 +122,14 @@ func sumMD5(data []byte) []byte {
 	return hash.Sum(nil)
 }
 
+// Verify if request has valid AWS Signature Version '2'.
+func isReqAuthenticatedV2(r *http.Request) (s3Error APIErrorCode) {
+	if isRequestSignatureV2(r) {
+		return doesSignV2Match(r)
+	}
+	return doesPresignV2SignatureMatch(r)
+}
+
 // Verify if request has valid AWS Signature Version '4'.
 func isReqAuthenticated(r *http.Request, region string) (s3Error APIErrorCode) {
 	if r == nil {
@@ -111,6 +137,7 @@ func isReqAuthenticated(r *http.Request, region string) (s3Error APIErrorCode) {
 	}
 	payload, err := ioutil.ReadAll(r.Body)
 	if err != nil {
+		errorIf(err, "Unable to read request body for signature verification")
 		return ErrInternalError
 	}
 	// Verify Content-Md5, if payload is set.
@@ -144,7 +171,6 @@ func isReqAuthenticated(r *http.Request, region string) (s3Error APIErrorCode) {
 // request headers and body are used to calculate the signature validating
 // the client signature present in request.
 func checkAuth(r *http.Request) APIErrorCode {
-	// Validates the request for both Presigned and Signed
 	return checkAuthWithRegion(r, serverConfig.GetRegion())
 }
 
@@ -152,11 +178,14 @@ func checkAuth(r *http.Request) APIErrorCode {
 func checkAuthWithRegion(r *http.Request, region string) APIErrorCode {
 	// Validates the request for both Presigned and Signed.
 	aType := getRequestAuthType(r)
-	if aType != authTypePresigned && aType != authTypeSigned {
-		// For all unhandled auth types return error AccessDenied.
-		return ErrAccessDenied
+	switch aType {
+	case authTypeSignedV2, authTypePresignedV2: // Signature V2.
+		return isReqAuthenticatedV2(r)
+	case authTypeSigned, authTypePresigned: // Signature V4.
+		return isReqAuthenticated(r, region)
 	}
-	return isReqAuthenticated(r, region)
+	// For all unhandled auth types return error AccessDenied.
+	return ErrAccessDenied
 }
 
 // authHandler - handles all the incoming authorization headers and validates them if possible.
@@ -173,7 +202,9 @@ func setAuthHandler(h http.Handler) http.Handler {
 var supportedS3AuthTypes = map[authType]struct{}{
 	authTypeAnonymous:       {},
 	authTypePresigned:       {},
+	authTypePresignedV2:     {},
 	authTypeSigned:          {},
+	authTypeSignedV2:        {},
 	authTypePostPolicy:      {},
 	authTypeStreamingSigned: {},
 }

@@ -93,6 +93,13 @@ func (api objectAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r *
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
+	case authTypePresignedV2, authTypeSignedV2:
+		// Signature V2 validation.
+		if s3Error := isReqAuthenticatedV2(r); s3Error != ErrNone {
+			errorIf(errSignatureMismatch, dumpRequest(r))
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
+			return
+		}
 	case authTypeSigned, authTypePresigned:
 		if s3Error := isReqAuthenticated(r, "us-east-1"); s3Error != ErrNone {
 			errorIf(errSignatureMismatch, dumpRequest(r))
@@ -149,6 +156,13 @@ func (api objectAPIHandlers) ListMultipartUploadsHandler(w http.ResponseWriter, 
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
+	case authTypePresignedV2, authTypeSignedV2:
+		// Signature V2 validation.
+		if s3Error := isReqAuthenticatedV2(r); s3Error != ErrNone {
+			errorIf(errSignatureMismatch, dumpRequest(r))
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
+			return
+		}
 	case authTypePresigned, authTypeSigned:
 		if s3Error := isReqAuthenticated(r, serverConfig.GetRegion()); s3Error != ErrNone {
 			errorIf(errSignatureMismatch, dumpRequest(r))
@@ -198,6 +212,7 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 
 	// List buckets does not support bucket policies, no need to enforce it.
 	// Proceed to validate signature.
+	// Validates the request for both Presigned and Signed.
 	if s3Error := checkAuthWithRegion(r, ""); s3Error != ErrNone {
 		errorIf(errSignatureMismatch, dumpRequest(r))
 		writeErrorResponse(w, r, s3Error, r.URL.Path)
@@ -240,6 +255,13 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	case authTypeAnonymous:
 		// http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
 		if s3Error := enforceBucketPolicy(bucket, "s3:DeleteObject", r.URL); s3Error != ErrNone {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
+			return
+		}
+	case authTypePresignedV2, authTypeSignedV2:
+		// Signature V2 validation.
+		if s3Error := isReqAuthenticatedV2(r); s3Error != ErrNone {
+			errorIf(errSignatureMismatch, dumpRequest(r))
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
@@ -487,6 +509,13 @@ func (api objectAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.Re
 	case authTypeAnonymous:
 		// http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
 		if s3Error := enforceBucketPolicy(bucket, "s3:ListBucket", r.URL); s3Error != ErrNone {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
+			return
+		}
+	case authTypePresignedV2, authTypeSignedV2:
+		// Signature V2 validation.
+		if s3Error := isReqAuthenticatedV2(r); s3Error != ErrNone {
+			errorIf(errSignatureMismatch, dumpRequest(r))
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
