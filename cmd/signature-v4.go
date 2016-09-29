@@ -194,12 +194,9 @@ func doesPolicySignatureMatch(formValues map[string]string) APIErrorCode {
 // doesPresignedSignatureMatch - Verify query headers with presigned signature
 //     - http://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html
 // returns true if matches, false otherwise. if error is not nil then it is always false
-func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, validateRegion bool) APIErrorCode {
+func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region string) APIErrorCode {
 	// Access credentials.
 	cred := serverConfig.GetCredential()
-
-	// Server region.
-	region := serverConfig.GetRegion()
 
 	// Copy request
 	req := *r
@@ -223,14 +220,12 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, validate
 
 	// Verify if region is valid.
 	sRegion := pSignValues.Credential.scope.region
-	// Should validate region, only if region is set. Some operations
-	// do not need region validated for example GetBucketLocation.
-	if validateRegion {
-		if !isValidRegion(sRegion, region) {
-			return ErrInvalidRegion
-		}
-	} else {
+	// Should validate region, only if region is set.
+	if region == "" {
 		region = sRegion
+	}
+	if !isValidRegion(sRegion, region) {
+		return ErrInvalidRegion
 	}
 
 	// Extract all the signed headers along with its values.
@@ -322,12 +317,9 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, validate
 // doesSignatureMatch - Verify authorization header with calculated header in accordance with
 //     - http://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-authenticating-requests.html
 // returns true if matches, false otherwise. if error is not nil then it is always false
-func doesSignatureMatch(hashedPayload string, r *http.Request, validateRegion bool) APIErrorCode {
+func doesSignatureMatch(hashedPayload string, r *http.Request, region string) APIErrorCode {
 	// Access credentials.
 	cred := serverConfig.GetCredential()
-
-	// Server region.
-	region := serverConfig.GetRegion()
 
 	// Copy request.
 	req := *r
@@ -372,14 +364,17 @@ func doesSignatureMatch(hashedPayload string, r *http.Request, validateRegion bo
 
 	// Verify if region is valid.
 	sRegion := signV4Values.Credential.scope.region
-	// Should validate region, only if region is set. Some operations
-	// do not need region validated for example GetBucketLocation.
-	if validateRegion {
-		if !isValidRegion(sRegion, region) {
-			return ErrInvalidRegion
-		}
+	// Region is set to be empty, we use whatever was sent by the
+	// request and proceed further. This is a work-around to address
+	// an important problem for ListBuckets() getting signed with
+	// different regions.
+	if region == "" {
+		region = sRegion
 	}
-	region = sRegion
+	// Should validate region, only if region is set.
+	if !isValidRegion(sRegion, region) {
+		return ErrInvalidRegion
+	}
 
 	// Extract date, if not present throw error.
 	var date string

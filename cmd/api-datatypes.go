@@ -28,7 +28,7 @@ type ObjectIdentifier struct {
 // createBucketConfiguration container for bucket configuration request from client.
 // Used for parsing the location from the request body for MakeBucketbucket.
 type createBucketLocationConfiguration struct {
-	XMLName  xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ CreateBucketConfiguration" json:"-"`
+	XMLName  xml.Name `xml:"CreateBucketConfiguration" json:"-"`
 	Location string   `xml:"LocationConstraint"`
 }
 

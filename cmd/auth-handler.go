@@ -105,7 +105,7 @@ func sumMD5(data []byte) []byte {
 }
 
 // Verify if request has valid AWS Signature Version '4'.
-func isReqAuthenticated(r *http.Request) (s3Error APIErrorCode) {
+func isReqAuthenticated(r *http.Request, region string) (s3Error APIErrorCode) {
 	if r == nil {
 		return ErrInternalError
 	}
@@ -121,7 +121,6 @@ func isReqAuthenticated(r *http.Request) (s3Error APIErrorCode) {
 	}
 	// Populate back the payload.
 	r.Body = ioutil.NopCloser(bytes.NewReader(payload))
-	validateRegion := true // Validate region.
 	var sha256sum string
 	// Skips calculating sha256 on the payload on server,
 	// if client requested for it.
@@ -131,9 +130,9 @@ func isReqAuthenticated(r *http.Request) (s3Error APIErrorCode) {
 		sha256sum = hex.EncodeToString(sum256(payload))
 	}
 	if isRequestSignatureV4(r) {
-		return doesSignatureMatch(sha256sum, r, validateRegion)
+		return doesSignatureMatch(sha256sum, r, region)
 	} else if isRequestPresignedSignatureV4(r) {
-		return doesPresignedSignatureMatch(sha256sum, r, validateRegion)
+		return doesPresignedSignatureMatch(sha256sum, r, region)
 	}
 	return ErrAccessDenied
 }
@@ -145,13 +144,19 @@ func isReqAuthenticated(r *http.Request) (s3Error APIErrorCode) {
 // request headers and body are used to calculate the signature validating
 // the client signature present in request.
 func checkAuth(r *http.Request) APIErrorCode {
+	// Validates the request for both Presigned and Signed
+	return checkAuthWithRegion(r, serverConfig.GetRegion())
+}
+
+// checkAuthWithRegion - similar to checkAuth but takes a custom region.
+func checkAuthWithRegion(r *http.Request, region string) APIErrorCode {
+	// Validates the request for both Presigned and Signed.
 	aType := getRequestAuthType(r)
 	if aType != authTypePresigned && aType != authTypeSigned {
 		// For all unhandled auth types return error AccessDenied.
 		return ErrAccessDenied
 	}
-	// Validates the request for both Presigned and Signed.
-	return isReqAuthenticated(r)
+	return isReqAuthenticated(r, region)
 }
 
 // authHandler - handles all the incoming authorization headers and validates them if possible.

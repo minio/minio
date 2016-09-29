@@ -294,7 +294,7 @@ func TestIsReqAuthenticated(t *testing.T) {
 		if testCase.s3Error == ErrBadDigest {
 			testCase.req.Header.Set("Content-Md5", "garbage")
 		}
-		if s3Error := isReqAuthenticated(testCase.req); s3Error != testCase.s3Error {
+		if s3Error := isReqAuthenticated(testCase.req, serverConfig.GetRegion()); s3Error != testCase.s3Error {
 			t.Fatalf("Unexpected s3error returned wanted %d, got %d", testCase.s3Error, s3Error)
 		}
 	}
