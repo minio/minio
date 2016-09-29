@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/xml"
 	"fmt"
+	"io"
 	"net"
 	"net/url"
 	"path"
@@ -54,7 +55,8 @@ func newNotificationEvent(event eventData) NotificationEvent {
 	region := serverConfig.GetRegion()
 	tnow := time.Now().UTC()
 	sequencer := fmt.Sprintf("%X", tnow.UnixNano())
-	// Following blocks fills in all the necessary details of s3 event message structure.
+	// Following blocks fills in all the necessary details of s3
+	// event message structure.
 	// http://docs.aws.amazon.com/AmazonS3/latest/dev/notification-content-structure.html
 	nEvent := NotificationEvent{
 		EventVersion:      "2.0",
@@ -144,8 +146,8 @@ func (en eventNotifier) GetBucketNotificationConfig(bucket string) *notification
 	return en.notificationConfigs[bucket]
 }
 
-// Set a new notification config for a bucket, this operation will overwrite any previous
-// notification configs for the bucket.
+// Set a new notification config for a bucket, this operation will
+// overwrite any previous notification configs for the bucket.
 func (en *eventNotifier) SetBucketNotificationConfig(bucket string, notificationCfg *notificationConfig) error {
 	en.rwMutex.Lock()
 	defer en.rwMutex.Unlock()
@@ -156,7 +158,9 @@ func (en *eventNotifier) SetBucketNotificationConfig(bucket string, notification
 	return nil
 }
 
-func (en *eventNotifier) AddTopicConfig(bucket string, topicCfg *topicConfig) error {
+// Adds topic configuration eventNotifier and saves the updated
+// notification configuration to disk
+func (en *eventNotifier) AddTopicConfig(bucket string, topicCfg *topicConfig, objAPI ObjectLayer) error {
 	en.rwMutex.Lock()
 	defer en.rwMutex.Unlock()
 	if topicCfg == nil {
@@ -170,7 +174,19 @@ func (en *eventNotifier) AddTopicConfig(bucket string, topicCfg *topicConfig) er
 		return nil
 	}
 	notificationCfg.TopicConfigs = append(notificationCfg.TopicConfigs, *topicCfg)
+
+	// persist the updated config
+	if err := saveNotificationConfig(bucket, objAPI, notificationCfg); err != nil {
+		errorIf(err, "Unable to persist updated notification config.")
+		return err
+	}
 	return nil
+}
+
+func (en *eventNotifier) UpdateNotificationConfig(bucket string, ncfg *notificationConfig) {
+	en.rwMutex.Lock()
+	defer en.rwMutex.Unlock()
+	en.notificationConfigs[bucket] = ncfg
 }
 
 // eventNotify notifies an event to relevant targets based on their
@@ -228,6 +244,25 @@ func eventNotify(event eventData) {
 			}
 		}
 	}
+}
+
+func saveNotificationConfig(bucket string, objAPI ObjectLayer, notificationCfg *notificationConfig) error {
+	buf, err := xml.Marshal(notificationCfg)
+	if err != nil {
+		errorIf(err, "Unable to marshal notification configuration into XML.", err)
+		return err
+	}
+	return saveNotificationConfigFromBytes(bucket, objAPI, int64(len(buf)),
+		bytes.NewReader(buf))
+}
+
+func saveNotificationConfigFromBytes(bucket string, objAPI ObjectLayer, bufSize int64, r io.Reader) error {
+	ncPath := path.Join(bucketConfigPrefix, bucket, bucketNotificationConfig)
+	_, err := objAPI.PutObject(minioMetaBucket, ncPath, bufSize, r, nil)
+	if err != nil {
+		errorIf(err, "Unable to write bucket notification configuration.")
+	}
+	return err
 }
 
 // loads notifcation config if any for a given bucket, returns back structured notification config.
