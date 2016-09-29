@@ -945,3 +945,26 @@ func testAPIDeleteOjectHandler(obj ObjectLayer, instanceType, bucketName string,
 		}
 	}
 }
+
+func TestPutObjectPartNilObjAPI(t *testing.T) {
+	configDir, err := newTestConfig("us-east-1")
+	if err != nil {
+		t.Fatalf("Failed to create a test config: %v", err)
+	}
+	defer removeAll(configDir)
+
+	rec := httptest.NewRecorder()
+	req, err := newTestSignedRequest("PUT",
+		getPutObjectPartURL("", "testbucket", "testobject", "uploadId1", "1"),
+		-1, bytes.NewReader([]byte("hello")), "abcd1", "abcd123")
+	if err != nil {
+		t.Fatal("Failed to create a signed UploadPart request.")
+	}
+	// Setup the 'nil' objectAPI router.
+	nilAPIRouter := initTestNilObjAPIEndPoints([]string{"PutObjectPart"})
+	nilAPIRouter.ServeHTTP(rec, req)
+	serverNotInitializedErr := getAPIError(ErrServerNotInitialized).HTTPStatusCode
+	if rec.Code != serverNotInitializedErr {
+		t.Errorf("Test expected to fail with %d, but failed with %d", serverNotInitializedErr, rec.Code)
+	}
+}
