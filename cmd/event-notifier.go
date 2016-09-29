@@ -156,6 +156,23 @@ func (en *eventNotifier) SetBucketNotificationConfig(bucket string, notification
 	return nil
 }
 
+func (en *eventNotifier) AddTopicConfig(bucket string, topicCfg *topicConfig) error {
+	en.rwMutex.Lock()
+	defer en.rwMutex.Unlock()
+	if topicCfg == nil {
+		return errInvalidArgument
+	}
+	notificationCfg := en.notificationConfigs[bucket]
+	if notificationCfg == nil {
+		en.notificationConfigs[bucket] = &notificationConfig{
+			TopicConfigs: []topicConfig{*topicCfg},
+		}
+		return nil
+	}
+	notificationCfg.TopicConfigs = append(notificationCfg.TopicConfigs, *topicCfg)
+	return nil
+}
+
 // eventNotify notifies an event to relevant targets based on their
 // bucket notification configs.
 func eventNotify(event eventData) {
