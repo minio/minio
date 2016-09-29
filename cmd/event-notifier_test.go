@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -64,11 +65,11 @@ func testEventNotify(obj ObjectLayer, instanceType string, t TestErrHandler) {
 		t.Errorf("Expected error to be nil, got %s", err)
 	}
 
-	if !globalEventNotifier.IsBucketNotificationSet(bucketName) {
+	nConfig := globalEventNotifier.GetBucketNotificationConfig(bucketName)
+	if nConfig == nil {
 		t.Errorf("Notification expected to be set, but notification not set.")
 	}
 
-	nConfig := globalEventNotifier.GetBucketNotificationConfig(bucketName)
 	if !reflect.DeepEqual(nConfig, &notificationConfig{}) {
 		t.Errorf("Mismatching notification configs.")
 	}
@@ -380,4 +381,70 @@ func TestListenBucketNotification(t *testing.T) {
 	case <-time.After(30 * time.Second):
 		break
 	}
+}
+
+func testAddTopicConfig(obj ObjectLayer, instanceType string, t TestErrHandler) {
+	root, cErr := newTestConfig("us-east-1")
+	if cErr != nil {
+		t.Fatalf("[%s] Failed to initialize test config: %v", instanceType, cErr)
+	}
+	defer removeAll(root)
+
+	if err := initEventNotifier(obj); err != nil {
+		t.Fatalf("[%s] : Failed to initialize event notifier: %v", instanceType, err)
+	}
+
+	// Make a bucket to store topicConfigs.
+	randBucket := getRandomBucketName()
+	if err := obj.MakeBucket(randBucket); err != nil {
+		t.Fatalf("[%s] : Failed to make bucket %s", instanceType, randBucket)
+	}
+
+	// Add a topicConfig to an empty notificationConfig.
+	accountID := fmt.Sprintf("%d", time.Now().UTC().UnixNano())
+	accountARN := "arn:minio:sns:" + serverConfig.GetRegion() + accountID + ":listen"
+	var filterRules []filterRule
+	filterRules = append(filterRules, filterRule{
+		Name:  "prefix",
+		Value: "minio",
+	})
+	filterRules = append(filterRules, filterRule{
+		Name:  "suffix",
+		Value: "*.jpg",
+	})
+
+	// Make topic configuration corresponding to this ListenBucketNotification request.
+	sampleTopicCfg := &topicConfig{
+		TopicARN: accountARN,
+		serviceConfig: serviceConfig{
+			Filter: struct {
+				Key keyFilter `xml:"S3Key,omitempty"`
+			}{
+				Key: keyFilter{
+					FilterRules: filterRules,
+				},
+			},
+			ID: "sns-" + accountID,
+		},
+	}
+	testCases := []struct {
+		topicCfg    *topicConfig
+		expectedErr error
+	}{
+		{sampleTopicCfg, nil},
+		{nil, errInvalidArgument},
+		{sampleTopicCfg, nil},
+	}
+
+	for i, test := range testCases {
+		err := globalEventNotifier.AddTopicConfig(randBucket, test.topicCfg)
+		if err != test.expectedErr {
+			t.Errorf("Test %d: %s failed with error %v, expected to fail with %v",
+				i+1, instanceType, err, test.expectedErr)
+		}
+	}
+}
+
+func TestAddTopicConfig(t *testing.T) {
+	ExecObjectLayerTest(t, testAddTopicConfig)
 }

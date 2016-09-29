@@ -270,47 +270,24 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 		})
 	}
 
-	// Fetch for existing notification configs and update topic configs.
-	nConfig := globalEventNotifier.GetBucketNotificationConfig(bucket)
-	if nConfig == nil {
-		// No notification configs found, initialize.
-		nConfig = &notificationConfig{
-			TopicConfigs: []topicConfig{{
-				TopicARN: accountARN,
-				serviceConfig: serviceConfig{
-					Events: events,
-					Filter: struct {
-						Key keyFilter `xml:"S3Key,omitempty"`
-					}{
-						Key: keyFilter{
-							FilterRules: filterRules,
-						},
-					},
-					ID: "sns-" + accountID,
+	// Make topic configuration corresponding to this ListenBucketNotification request.
+	topicCfg := &topicConfig{
+		TopicARN: accountARN,
+		serviceConfig: serviceConfig{
+			Events: events,
+			Filter: struct {
+				Key keyFilter `xml:"S3Key,omitempty"`
+			}{
+				Key: keyFilter{
+					FilterRules: filterRules,
 				},
-			}},
-		}
-	} else {
-		// Previously set notification configs found append to
-		// existing topic configs.
-		nConfig.TopicConfigs = append(nConfig.TopicConfigs, topicConfig{
-			TopicARN: accountARN,
-			serviceConfig: serviceConfig{
-				Events: events,
-				Filter: struct {
-					Key keyFilter `xml:"S3Key,omitempty"`
-				}{
-					Key: keyFilter{
-						FilterRules: filterRules,
-					},
-				},
-				ID: "sns-" + accountID,
 			},
-		})
+			ID: "sns-" + accountID,
+		},
 	}
 
-	// Save bucket notification config.
-	if err = globalEventNotifier.SetBucketNotificationConfig(bucket, nConfig); err != nil {
+	// Add topic config to bucket notification config.
+	if err = globalEventNotifier.AddTopicConfig(bucket, topicCfg); err != nil {
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
 	}

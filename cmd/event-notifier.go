@@ -137,17 +137,6 @@ func (en *eventNotifier) RemoveSNSTarget(snsARN string, listenerCh chan []Notifi
 	}
 }
 
-// Returns true if bucket notification is set for the bucket, false otherwise.
-func (en *eventNotifier) IsBucketNotificationSet(bucket string) bool {
-	if en == nil {
-		return false
-	}
-	en.rwMutex.RLock()
-	defer en.rwMutex.RUnlock()
-	_, ok := en.notificationConfigs[bucket]
-	return ok
-}
-
 // Fetch bucket notification config for an input bucket.
 func (en eventNotifier) GetBucketNotificationConfig(bucket string) *notificationConfig {
 	en.rwMutex.RLock()
@@ -164,6 +153,23 @@ func (en *eventNotifier) SetBucketNotificationConfig(bucket string, notification
 		return errInvalidArgument
 	}
 	en.notificationConfigs[bucket] = notificationCfg
+	return nil
+}
+
+func (en *eventNotifier) AddTopicConfig(bucket string, topicCfg *topicConfig) error {
+	en.rwMutex.Lock()
+	defer en.rwMutex.Unlock()
+	if topicCfg == nil {
+		return errInvalidArgument
+	}
+	notificationCfg := en.notificationConfigs[bucket]
+	if notificationCfg == nil {
+		en.notificationConfigs[bucket] = &notificationConfig{
+			TopicConfigs: []topicConfig{*topicCfg},
+		}
+		return nil
+	}
+	notificationCfg.TopicConfigs = append(notificationCfg.TopicConfigs, *topicCfg)
 	return nil
 }
 
