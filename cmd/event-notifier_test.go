@@ -64,11 +64,11 @@ func testEventNotify(obj ObjectLayer, instanceType string, t TestErrHandler) {
 		t.Errorf("Expected error to be nil, got %s", err)
 	}
 
-	if !globalEventNotifier.IsBucketNotificationSet(bucketName) {
+	nConfig := globalEventNotifier.GetBucketNotificationConfig(bucketName)
+	if nConfig == nil {
 		t.Errorf("Notification expected to be set, but notification not set.")
 	}
 
-	nConfig := globalEventNotifier.GetBucketNotificationConfig(bucketName)
 	if !reflect.DeepEqual(nConfig, &notificationConfig{}) {
 		t.Errorf("Mismatching notification configs.")
 	}

@@ -378,17 +378,15 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	// write success response.
 	writeSuccessResponse(w, encodedSuccessResponse)
 
-	if globalEventNotifier.IsBucketNotificationSet(bucket) {
-		// Notify object created event.
-		eventNotify(eventData{
-			Type:    ObjectCreatedCopy,
-			Bucket:  bucket,
-			ObjInfo: objInfo,
-			ReqParams: map[string]string{
-				"sourceIPAddress": r.RemoteAddr,
-			},
-		})
-	}
+	// Notify object created event.
+	eventNotify(eventData{
+		Type:    ObjectCreatedCopy,
+		Bucket:  bucket,
+		ObjInfo: objInfo,
+		ReqParams: map[string]string{
+			"sourceIPAddress": r.RemoteAddr,
+		},
+	})
 }
 
 // PutObjectHandler - PUT Object
@@ -482,17 +480,15 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	w.Header().Set("ETag", "\""+objInfo.MD5Sum+"\"")
 	writeSuccessResponse(w, nil)
 
-	if globalEventNotifier.IsBucketNotificationSet(bucket) {
-		// Notify object created event.
-		eventNotify(eventData{
-			Type:    ObjectCreatedPut,
-			Bucket:  bucket,
-			ObjInfo: objInfo,
-			ReqParams: map[string]string{
-				"sourceIPAddress": r.RemoteAddr,
-			},
-		})
-	}
+	// Notify object created event.
+	eventNotify(eventData{
+		Type:    ObjectCreatedPut,
+		Bucket:  bucket,
+		ObjInfo: objInfo,
+		ReqParams: map[string]string{
+			"sourceIPAddress": r.RemoteAddr,
+		},
+	})
 }
 
 /// Multipart objectAPIHandlers
@@ -834,24 +830,22 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	w.Write(encodedSuccessResponse)
 	w.(http.Flusher).Flush()
 
-	if globalEventNotifier.IsBucketNotificationSet(bucket) {
-		// Fetch object info for notifications.
-		objInfo, err := objectAPI.GetObjectInfo(bucket, object)
-		if err != nil {
-			errorIf(err, "Unable to fetch object info for \"%s\"", path.Join(bucket, object))
-			return
-		}
-
-		// Notify object created event.
-		eventNotify(eventData{
-			Type:    ObjectCreatedCompleteMultipartUpload,
-			Bucket:  bucket,
-			ObjInfo: objInfo,
-			ReqParams: map[string]string{
-				"sourceIPAddress": r.RemoteAddr,
-			},
-		})
+	// Fetch object info for notifications.
+	objInfo, err := objectAPI.GetObjectInfo(bucket, object)
+	if err != nil {
+		errorIf(err, "Unable to fetch object info for \"%s\"", path.Join(bucket, object))
+		return
 	}
+
+	// Notify object created event.
+	eventNotify(eventData{
+		Type:    ObjectCreatedCompleteMultipartUpload,
+		Bucket:  bucket,
+		ObjInfo: objInfo,
+		ReqParams: map[string]string{
+			"sourceIPAddress": r.RemoteAddr,
+		},
+	})
 }
 
 /// Delete objectAPIHandlers
@@ -895,17 +889,15 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 	}
 	writeSuccessNoContent(w)
 
-	if globalEventNotifier.IsBucketNotificationSet(bucket) {
-		// Notify object deleted event.
-		eventNotify(eventData{
-			Type:   ObjectRemovedDelete,
-			Bucket: bucket,
-			ObjInfo: ObjectInfo{
-				Name: object,
-			},
-			ReqParams: map[string]string{
-				"sourceIPAddress": r.RemoteAddr,
-			},
-		})
-	}
+	// Notify object deleted event.
+	eventNotify(eventData{
+		Type:   ObjectRemovedDelete,
+		Bucket: bucket,
+		ObjInfo: ObjectInfo{
+			Name: object,
+		},
+		ReqParams: map[string]string{
+			"sourceIPAddress": r.RemoteAddr,
+		},
+	})
 }

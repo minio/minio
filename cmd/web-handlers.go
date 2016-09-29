@@ -428,17 +428,15 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if globalEventNotifier.IsBucketNotificationSet(bucket) {
-		// Notify object created event.
-		eventNotify(eventData{
-			Type:    ObjectCreatedPut,
-			Bucket:  bucket,
-			ObjInfo: objInfo,
-			ReqParams: map[string]string{
-				"sourceIPAddress": r.RemoteAddr,
-			},
-		})
-	}
+	// Notify object created event.
+	eventNotify(eventData{
+		Type:    ObjectCreatedPut,
+		Bucket:  bucket,
+		ObjInfo: objInfo,
+		ReqParams: map[string]string{
+			"sourceIPAddress": r.RemoteAddr,
+		},
+	})
 }
 
 // Download - file download handler.
