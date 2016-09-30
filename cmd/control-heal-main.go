@@ -87,6 +87,7 @@ func healControl(ctx *cli.Context) {
 	authCfg := &authConfig{
 		accessKey:   serverConfig.GetCredential().AccessKeyID,
 		secretKey:   serverConfig.GetCredential().SecretAccessKey,
+		secureConn:  parsedURL.Scheme == "https",
 		address:     parsedURL.Host,
 		path:        path.Join(reservedBucket, controlPath),
 		loginMethod: "Controller.LoginHandler",

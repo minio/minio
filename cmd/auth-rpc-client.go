@@ -83,6 +83,7 @@ func isRPCTokenValid(tokenStr string) bool {
 type authConfig struct {
 	accessKey   string // Username for the server.
 	secretKey   string // Password for the server.
+	secureConn  bool   // Ask for a secured connection
 	address     string // Network address path of RPC server.
 	path        string // Network path for HTTP dial.
 	loginMethod string // RPC service name for authenticating using JWT
@@ -104,7 +105,7 @@ func newAuthClient(cfg *authConfig) *AuthRPCClient {
 		// Save the config.
 		config: cfg,
 		// Initialize a new reconnectable rpc client.
-		rpc: newClient(cfg.address, cfg.path),
+		rpc: newClient(cfg.address, cfg.path, cfg.secureConn),
 		// Allocated auth client not logged in yet.
 		isLoggedIn: false,
 	}
