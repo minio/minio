@@ -514,7 +514,7 @@ func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
 		{"test-bucket-list-object", "/", "", "/", 10, resultCases[30], nil, true},
 
 		// Test with invalid prefix (61)
-		{"test-bucket-list-object", "^", "", "/", 10, resultCases[30], ObjectNameInvalid{Bucket: "test-bucket-list-object", Object: "^"}, false},
+		{"test-bucket-list-object", "\\", "", "/", 10, resultCases[30], ObjectNameInvalid{Bucket: "test-bucket-list-object", Object: "\\"}, false},
 	}
 
 	for i, testCase := range testCases {

@@ -58,7 +58,7 @@ func testObjectNewMultipartUpload(obj ObjectLayer, instanceType string, t TestEr
 		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
 
-	_, err = obj.NewMultipartUpload(bucket, "^", nil)
+	_, err = obj.NewMultipartUpload(bucket, "\\", nil)
 	if err == nil {
 		t.Fatalf("%s: Expected to fail since object name is invalid.", instanceType)
 	}
@@ -109,7 +109,7 @@ func testObjectAbortMultipartUpload(obj ObjectLayer, instanceType string, t Test
 		expectedErrType error
 	}{
 		{"--", object, uploadID, BucketNameInvalid{}},
-		{bucket, "^", uploadID, ObjectNameInvalid{}},
+		{bucket, "\\", uploadID, ObjectNameInvalid{}},
 		{"foo", object, uploadID, BucketNotFound{}},
 		{bucket, object, "foo-foo", InvalidUploadID{}},
 		{bucket, object, uploadID, nil},

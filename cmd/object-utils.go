@@ -75,11 +75,8 @@ func IsValidBucketName(bucket string) bool {
 // Rejects strings with following characters.
 //
 // - Backslash ("\")
-// - Caret ("^")
-// - Grave accent / back tick ("`")
-// - Vertical bar / pipe ("|")
 //
-// Minio does not support object names with trailing "/".
+// additionally minio does not support object names with trailing "/".
 func IsValidObjectName(object string) bool {
 	if len(object) == 0 {
 		return false
@@ -103,7 +100,7 @@ func IsValidObjectPrefix(object string) bool {
 		return false
 	}
 	// Reject unsupported characters in object name.
-	if strings.ContainsAny(object, "`^|\\\"") {
+	if strings.ContainsAny(object, "\\") {
 		return false
 	}
 	return true
