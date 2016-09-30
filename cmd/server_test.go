@@ -176,7 +176,7 @@ func (s *TestSuiteCommon) TestBucketSNSNotification(c *C) {
 
 	verifyError(c, response, "InvalidArgument", "filter rule name must be either prefix or suffix", http.StatusBadRequest)
 
-	invalidBucketNotificationBuf = `<NotificationConfiguration><TopicConfiguration><Event>s3:ObjectCreated:Put</Event><Filter><S3Key><FilterRule><Name>prefix</Name><Value>|||</Value></FilterRule></S3Key></Filter><Id>1</Id><Topic>arn:minio:sns:us-east-1:1:listen</Topic></TopicConfiguration></NotificationConfiguration>`
+	invalidBucketNotificationBuf = `<NotificationConfiguration><TopicConfiguration><Event>s3:ObjectCreated:Put</Event><Filter><S3Key><FilterRule><Name>prefix</Name><Value>hello\</Value></FilterRule></S3Key></Filter><Id>1</Id><Topic>arn:minio:sns:us-east-1:1:listen</Topic></TopicConfiguration></NotificationConfiguration>`
 
 	request, err = newTestSignedRequestV4("PUT", getPutNotificationURL(s.endPoint, bucketName),
 		int64(len(invalidBucketNotificationBuf)), bytes.NewReader([]byte(invalidBucketNotificationBuf)), s.accessKey, s.secretKey)

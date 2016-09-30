@@ -194,7 +194,7 @@ func TestFSDeleteObject(t *testing.T) {
 		t.Fatal("Unexpected error: ", err)
 	}
 	// Test with invalid object name
-	if err := fs.DeleteObject(bucketName, "^"); !isSameType(errorCause(err), ObjectNameInvalid{}) {
+	if err := fs.DeleteObject(bucketName, "\\"); !isSameType(errorCause(err), ObjectNameInvalid{}) {
 		t.Fatal("Unexpected error: ", err)
 	}
 	// Test with inexist bucket/object

@@ -174,7 +174,7 @@ func testGetBucketNotificationHandler(obj ObjectLayer, instanceType string, t Te
 	// get random bucket name.
 	randBucket := getRandomBucketName()
 	noNotificationBucket := "nonotification"
-	invalidBucket := "Invalid^Bucket"
+	invalidBucket := "Invalid\\Bucket"
 
 	// Create buckets for the following test cases.
 	for _, bucket := range []string{randBucket, noNotificationBucket} {
@@ -326,7 +326,7 @@ func TestGetBucketNotificationHandler(t *testing.T) {
 }
 
 func testPutBucketNotificationHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	invalidBucket := "Invalid^Bucket"
+	invalidBucket := "Invalid\\Bucket"
 	// get random bucket name.
 	randBucket := getRandomBucketName()
 
@@ -483,7 +483,7 @@ func TestPutBucketNotificationHandler(t *testing.T) {
 }
 
 func testListenBucketNotificationHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	invalidBucket := "Invalid^Bucket"
+	invalidBucket := "Invalid\\Bucket"
 	noNotificationBucket := "nonotificationbucket"
 	// get random bucket name.
 	randBucket := getRandomBucketName()
@@ -629,7 +629,7 @@ func TestListenBucketNotificationHandler(t *testing.T) {
 }
 
 func testRemoveNotificationConfig(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	invalidBucket := "Invalid^Bucket"
+	invalidBucket := "Invalid\\Bucket"
 	// get random bucket name.
 	randBucket := getRandomBucketName()
 
