@@ -23,7 +23,7 @@ import (
 	"testing"
 )
 
-const lastConfigVersion = 7
+const lastConfigVersion = 8
 
 // TestServerConfigMigrateV1 - tests if a config v1 is purged
 func TestServerConfigMigrateV1(t *testing.T) {
@@ -90,10 +90,14 @@ func TestServerConfigMigrateInexistentConfig(t *testing.T) {
 	if err := migrateV6ToV7(); err != nil {
 		t.Fatal("migrate v6 to v7 should succeed when no config file is found")
 	}
+	if err := migrateV7ToV8(); err != nil {
+		t.Fatal("migrate v7 to v8 should succeed when no config file is found")
+	}
+
 }
 
-// TestServerConfigMigrateV2toV7 - tests if a config from v2 to v7 is successfully done
-func TestServerConfigMigrateV2toV7(t *testing.T) {
+// TestServerConfigMigrateV2toV8 - tests if a config from v2 to v8 is successfully done
+func TestServerConfigMigrateV2toV8(t *testing.T) {
 	rootPath, err := newTestConfig("us-east-1")
 	if err != nil {
 		t.Fatalf("Init Test config failed")
@@ -184,5 +188,7 @@ func TestServerConfigMigrateFaultyConfig(t *testing.T) {
 	if err := migrateV6ToV7(); err == nil {
 		t.Fatal("migrateConfigV6ToV7() should fail with a corrupted json")
 	}
-
+	if err := migrateV7ToV8(); err == nil {
+		t.Fatal("migrateConfigV7ToV8() should fail with a corrupted json")
+	}
 }

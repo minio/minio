@@ -3,6 +3,7 @@ package cmd
 import (
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/minio/minio/pkg/quick"
 )
@@ -301,6 +302,45 @@ func loadConfigV6() (*configV6, error) {
 	}
 	c := &configV6{}
 	c.Version = "6"
+	qc, err := quick.New(c)
+	if err != nil {
+		return nil, err
+	}
+	if err := qc.Load(configFile); err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
+// configV7 server configuration version '7'.
+type serverConfigV7 struct {
+	Version string `json:"version"`
+
+	// S3 API configuration.
+	Credential credential `json:"credential"`
+	Region     string     `json:"region"`
+
+	// Additional error logging configuration.
+	Logger logger `json:"logger"`
+
+	// Notification queue configuration.
+	Notify notifier `json:"notify"`
+
+	// Read Write mutex.
+	rwMutex *sync.RWMutex
+}
+
+// loadConfigV7 load config version '7'.
+func loadConfigV7() (*serverConfigV7, error) {
+	configFile, err := getConfigFile()
+	if err != nil {
+		return nil, err
+	}
+	if _, err = os.Stat(configFile); err != nil {
+		return nil, err
+	}
+	c := &serverConfigV7{}
+	c.Version = "7"
 	qc, err := quick.New(c)
 	if err != nil {
 		return nil, err

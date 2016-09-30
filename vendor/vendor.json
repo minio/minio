@@ -143,6 +143,24 @@
 			"revisionTime": "2016-08-16T22:25:11Z"
 		},
 		{
+			"checksumSHA1": "Nj7vQ2GlvJiPP7sqJX5AurrDSD4=",
+			"path": "github.com/nats-io/nats",
+			"revision": "70b70be17b77e8da86b6a3bcfe94fb22718a8dd0",
+			"revisionTime": "2016-09-16T18:17:35Z"
+		},
+		{
+			"checksumSHA1": "qAIuHdtQrDi2fFmpaP1dZLbgpGc=",
+			"path": "github.com/nats-io/nats/encoders/builtin",
+			"revision": "70b70be17b77e8da86b6a3bcfe94fb22718a8dd0",
+			"revisionTime": "2016-09-16T18:17:35Z"
+		},
+		{
+			"checksumSHA1": "i8Yom1KrpDKwjlGH/gpJGAQmo68=",
+			"path": "github.com/nats-io/nuid",
+			"revision": "289cccf02c178dc782430d534e3c1f5b72af807f",
+			"revisionTime": "2016-09-27T04:49:45Z"
+		},
+		{
 			"path": "github.com/pkg/profile",
 			"revision": "c78aac22bd43883fd2817833b982153dcac17b3b",
 			"revisionTime": "2016-05-18T16:56:57+10:00"
