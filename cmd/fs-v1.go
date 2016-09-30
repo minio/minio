@@ -18,8 +18,10 @@ package cmd
 
 import (
 	"crypto/md5"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"hash"
 	"io"
 	"os"
 	"path"
@@ -368,7 +370,7 @@ func (fs fsObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 }
 
 // PutObject - create an object.
-func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string) (objInfo ObjectInfo, err error) {
+func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (objInfo ObjectInfo, err error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
 		return ObjectInfo{}, traceError(BucketNameInvalid{Bucket: bucket})
@@ -394,6 +396,15 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 	// Initialize md5 writer.
 	md5Writer := md5.New()
 
+	hashWriters := []io.Writer{md5Writer}
+
+	var sha256Writer hash.Hash
+	if sha256sum != "" {
+		sha256Writer = sha256.New()
+		hashWriters = append(hashWriters, sha256Writer)
+	}
+	multiWriter := io.MultiWriter(hashWriters...)
+
 	// Limit the reader to its provided size if specified.
 	var limitDataReader io.Reader
 	if size > 0 {
@@ -417,7 +428,7 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 			bufSize = size
 		}
 		buf := make([]byte, int(bufSize))
-		teeReader := io.TeeReader(limitDataReader, md5Writer)
+		teeReader := io.TeeReader(limitDataReader, multiWriter)
 		var bytesWritten int64
 		bytesWritten, err = fsCreateFile(fs.storage, teeReader, buf, minioMetaBucket, tempObj)
 		if err != nil {
@@ -457,6 +468,15 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 			fs.storage.DeleteFile(minioMetaBucket, tempObj)
 			// Returns md5 mismatch.
 			return ObjectInfo{}, traceError(BadDigest{md5Hex, newMD5Hex})
+		}
+	}
+
+	if sha256sum != "" {
+		newSHA256sum := hex.EncodeToString(sha256Writer.Sum(nil))
+		if newSHA256sum != sha256sum {
+			// SHA256 mismatch, delete the temporary object.
+			fs.storage.DeleteFile(minioMetaBucket, tempObj)
+			return ObjectInfo{}, traceError(SHA256Mismatch{})
 		}
 	}
 

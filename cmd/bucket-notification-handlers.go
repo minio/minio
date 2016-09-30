@@ -146,7 +146,9 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 
 	// Proceed to save notification configuration.
 	notificationConfigPath := path.Join(bucketConfigPrefix, bucket, bucketNotificationConfig)
-	_, err = objectAPI.PutObject(minioMetaBucket, notificationConfigPath, bufferSize, bytes.NewReader(buffer.Bytes()), nil)
+	sha256sum := ""
+	var metadata map[string]string
+	_, err = objectAPI.PutObject(minioMetaBucket, notificationConfigPath, bufferSize, bytes.NewReader(buffer.Bytes()), metadata, sha256sum)
 	if err != nil {
 		errorIf(err, "Unable to write bucket notification configuration.")
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)

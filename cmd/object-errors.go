@@ -73,12 +73,21 @@ func toObjectErr(err error, params ...string) error {
 		err = InsufficientWriteQuorum{}
 	case io.ErrUnexpectedEOF, io.ErrShortWrite:
 		err = IncompleteBody{}
+	case errContentSHA256Mismatch:
+		err = SHA256Mismatch{}
 	}
 	if ok {
 		e.e = err
 		return e
 	}
 	return err
+}
+
+// SHA256Mismatch - when content sha256 does not match with what was sent from client.
+type SHA256Mismatch struct{}
+
+func (e SHA256Mismatch) Error() string {
+	return "sha256 computed does not match with what is expected"
 }
 
 // StorageFull storage ran out of space.

@@ -62,13 +62,14 @@ func runPutObjectBenchmark(b *testing.B, obj ObjectLayer, objSize int) {
 	hasher.Write([]byte(textData))
 	metadata := make(map[string]string)
 	metadata["md5Sum"] = hex.EncodeToString(hasher.Sum(nil))
+	sha256sum := ""
 	// benchmark utility which helps obtain number of allocations and bytes allocated per ops.
 	b.ReportAllocs()
 	// the actual benchmark for PutObject starts here. Reset the benchmark timer.
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		// insert the object.
-		objInfo, err := obj.PutObject(bucket, "object"+strconv.Itoa(i), int64(len(textData)), bytes.NewBuffer(textData), metadata)
+		objInfo, err := obj.PutObject(bucket, "object"+strconv.Itoa(i), int64(len(textData)), bytes.NewBuffer(textData), metadata, sha256sum)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -107,6 +108,7 @@ func runPutObjectPartBenchmark(b *testing.B, obj ObjectLayer, partSize int) {
 	hasher.Write([]byte(textData))
 	metadata := make(map[string]string)
 	metadata["md5Sum"] = hex.EncodeToString(hasher.Sum(nil))
+	sha256sum := ""
 	uploadID, err = obj.NewMultipartUpload(bucket, object, metadata)
 	if err != nil {
 		b.Fatal(err)
@@ -130,7 +132,7 @@ func runPutObjectPartBenchmark(b *testing.B, obj ObjectLayer, partSize int) {
 			hasher.Write([]byte(textPartData))
 			metadata := make(map[string]string)
 			metadata["md5Sum"] = hex.EncodeToString(hasher.Sum(nil))
-			md5Sum, err = obj.PutObjectPart(bucket, object, uploadID, j, int64(len(textPartData)), bytes.NewBuffer(textPartData), metadata["md5Sum"])
+			md5Sum, err = obj.PutObjectPart(bucket, object, uploadID, j, int64(len(textPartData)), bytes.NewBuffer(textPartData), metadata["md5Sum"], sha256sum)
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -194,6 +196,7 @@ func runGetObjectBenchmark(b *testing.B, obj ObjectLayer, objSize int) {
 		b.Fatal(err)
 	}
 
+	sha256sum := ""
 	for i := 0; i < 10; i++ {
 		// get text data generated for number of bytes equal to object size.
 		textData := generateBytesData(objSize)
@@ -206,7 +209,7 @@ func runGetObjectBenchmark(b *testing.B, obj ObjectLayer, objSize int) {
 		metadata["md5Sum"] = hex.EncodeToString(hasher.Sum(nil))
 		// insert the object.
 		var objInfo ObjectInfo
-		objInfo, err = obj.PutObject(bucket, "object"+strconv.Itoa(i), int64(len(textData)), bytes.NewBuffer(textData), metadata)
+		objInfo, err = obj.PutObject(bucket, "object"+strconv.Itoa(i), int64(len(textData)), bytes.NewBuffer(textData), metadata, sha256sum)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -294,6 +297,7 @@ func runPutObjectBenchmarkParallel(b *testing.B, obj ObjectLayer, objSize int) {
 	hasher.Write([]byte(textData))
 	metadata := make(map[string]string)
 	metadata["md5Sum"] = hex.EncodeToString(hasher.Sum(nil))
+	sha256sum := ""
 	// benchmark utility which helps obtain number of allocations and bytes allocated per ops.
 	b.ReportAllocs()
 	// the actual benchmark for PutObject starts here. Reset the benchmark timer.
@@ -303,7 +307,7 @@ func runPutObjectBenchmarkParallel(b *testing.B, obj ObjectLayer, objSize int) {
 		i := 0
 		for pb.Next() {
 			// insert the object.
-			objInfo, err := obj.PutObject(bucket, "object"+strconv.Itoa(i), int64(len(textData)), bytes.NewBuffer(textData), metadata)
+			objInfo, err := obj.PutObject(bucket, "object"+strconv.Itoa(i), int64(len(textData)), bytes.NewBuffer(textData), metadata, sha256sum)
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -340,9 +344,10 @@ func runGetObjectBenchmarkParallel(b *testing.B, obj ObjectLayer, objSize int) {
 		hasher.Write([]byte(textData))
 		metadata := make(map[string]string)
 		metadata["md5Sum"] = hex.EncodeToString(hasher.Sum(nil))
+		sha256sum := ""
 		// insert the object.
 		var objInfo ObjectInfo
-		objInfo, err = obj.PutObject(bucket, "object"+strconv.Itoa(i), int64(len(textData)), bytes.NewBuffer(textData), metadata)
+		objInfo, err = obj.PutObject(bucket, "object"+strconv.Itoa(i), int64(len(textData)), bytes.NewBuffer(textData), metadata, sha256sum)
 		if err != nil {
 			b.Fatal(err)
 		}

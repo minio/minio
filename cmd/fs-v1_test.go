@@ -84,7 +84,8 @@ func TestFSShutdown(t *testing.T) {
 	objectContent := "12345"
 
 	obj.MakeBucket(bucketName)
-	obj.PutObject(bucketName, objectName, int64(len(objectContent)), bytes.NewReader([]byte(objectContent)), nil)
+	sha256sum := ""
+	obj.PutObject(bucketName, objectName, int64(len(objectContent)), bytes.NewReader([]byte(objectContent)), nil, sha256sum)
 
 	// Test Shutdown with regular conditions
 	if err := fs.Shutdown(); err != nil {
@@ -187,7 +188,8 @@ func TestFSDeleteObject(t *testing.T) {
 	objectName := "object"
 
 	obj.MakeBucket(bucketName)
-	obj.PutObject(bucketName, objectName, int64(len("abcd")), bytes.NewReader([]byte("abcd")), nil)
+	sha256sum := ""
+	obj.PutObject(bucketName, objectName, int64(len("abcd")), bytes.NewReader([]byte("abcd")), nil, sha256sum)
 
 	// Test with invalid bucket name
 	if err := fs.DeleteObject("fo", objectName); !isSameType(errorCause(err), BucketNameInvalid{}) {

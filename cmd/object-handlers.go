@@ -379,8 +379,9 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	// Do not set `md5sum` as CopyObject will not keep the
 	// same md5sum as the source.
 
+	sha256sum := ""
 	// Create the object.
-	objInfo, err = objectAPI.PutObject(bucket, object, size, pipeReader, metadata)
+	objInfo, err = objectAPI.PutObject(bucket, object, size, pipeReader, metadata, sha256sum)
 	if err != nil {
 		// Close the this end of the pipe upon error in PutObject.
 		pipeReader.CloseWithError(err)
@@ -466,6 +467,8 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	// Make sure we hex encode md5sum here.
 	metadata["md5Sum"] = hex.EncodeToString(md5Bytes)
 
+	sha256sum := ""
+
 	var objInfo ObjectInfo
 	switch rAuthType {
 	default:
@@ -479,7 +482,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			return
 		}
 		// Create anonymous object.
-		objInfo, err = objectAPI.PutObject(bucket, object, size, r.Body, metadata)
+		objInfo, err = objectAPI.PutObject(bucket, object, size, r.Body, metadata, sha256sum)
 	case authTypeStreamingSigned:
 		// Initialize stream signature verifier.
 		reader, s3Error := newSignV4ChunkedReader(r)
@@ -488,7 +491,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
-		objInfo, err = objectAPI.PutObject(bucket, object, size, reader, metadata)
+		objInfo, err = objectAPI.PutObject(bucket, object, size, reader, metadata, sha256sum)
 	case authTypeSignedV2, authTypePresignedV2:
 		s3Error := isReqAuthenticatedV2(r)
 		if s3Error != ErrNone {
@@ -496,12 +499,18 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
-		objInfo, err = objectAPI.PutObject(bucket, object, size, r.Body, metadata)
+		objInfo, err = objectAPI.PutObject(bucket, object, size, r.Body, metadata, sha256sum)
 	case authTypePresigned, authTypeSigned:
-		// Initialize signature verifier.
-		reader := newSignVerify(r)
+		if s3Error := reqSignatureV4Verify(r); s3Error != ErrNone {
+			errorIf(errSignatureMismatch, dumpRequest(r))
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
+			return
+		}
+		if !skipContentSha256Cksum(r) {
+			sha256sum = r.Header.Get("X-Amz-Content-Sha256")
+		}
 		// Create object.
-		objInfo, err = objectAPI.PutObject(bucket, object, size, reader, metadata)
+		objInfo, err = objectAPI.PutObject(bucket, object, size, r.Body, metadata, sha256sum)
 	}
 	if err != nil {
 		errorIf(err, "Unable to create an object.")
@@ -642,6 +651,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 
 	var partMD5 string
 	incomingMD5 := hex.EncodeToString(md5Bytes)
+	sha256sum := ""
 	switch rAuthType {
 	default:
 		// For all unknown auth types return error.
@@ -654,7 +664,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			return
 		}
 		// No need to verify signature, anonymous request access is already allowed.
-		partMD5, err = objectAPI.PutObjectPart(bucket, object, uploadID, partID, size, r.Body, incomingMD5)
+		partMD5, err = objectAPI.PutObjectPart(bucket, object, uploadID, partID, size, r.Body, incomingMD5, sha256sum)
 	case authTypeStreamingSigned:
 		// Initialize stream signature verifier.
 		reader, s3Error := newSignV4ChunkedReader(r)
@@ -663,7 +673,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
-		partMD5, err = objectAPI.PutObjectPart(bucket, object, uploadID, partID, size, reader, incomingMD5)
+		partMD5, err = objectAPI.PutObjectPart(bucket, object, uploadID, partID, size, reader, incomingMD5, sha256sum)
 	case authTypeSignedV2, authTypePresignedV2:
 		s3Error := isReqAuthenticatedV2(r)
 		if s3Error != ErrNone {
@@ -671,11 +681,18 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
-		partMD5, err = objectAPI.PutObjectPart(bucket, object, uploadID, partID, size, r.Body, incomingMD5)
+		partMD5, err = objectAPI.PutObjectPart(bucket, object, uploadID, partID, size, r.Body, incomingMD5, sha256sum)
 	case authTypePresigned, authTypeSigned:
-		// Initialize signature verifier.
-		reader := newSignVerify(r)
-		partMD5, err = objectAPI.PutObjectPart(bucket, object, uploadID, partID, size, reader, incomingMD5)
+		if s3Error := reqSignatureV4Verify(r); s3Error != ErrNone {
+			errorIf(errSignatureMismatch, dumpRequest(r))
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
+			return
+		}
+
+		if !skipContentSha256Cksum(r) {
+			sha256sum = r.Header.Get("X-Amz-Content-Sha256")
+		}
+		partMD5, err = objectAPI.PutObjectPart(bucket, object, uploadID, partID, size, r.Body, incomingMD5, sha256sum)
 	}
 	if err != nil {
 		errorIf(err, "Unable to create object part.")

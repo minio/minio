@@ -210,7 +210,8 @@ func writeBucketPolicy(bucket string, objAPI ObjectLayer, reader io.Reader, size
 	}
 
 	policyPath := pathJoin(bucketConfigPrefix, bucket, policyJSON)
-	if _, err := objAPI.PutObject(minioMetaBucket, policyPath, size, reader, nil); err != nil {
+	sha256sum := ""
+	if _, err := objAPI.PutObject(minioMetaBucket, policyPath, size, reader, nil, sha256sum); err != nil {
 		errorIf(err, "Unable to set policy for the bucket %s", bucket)
 		return errorCause(err)
 	}

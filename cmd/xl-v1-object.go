@@ -18,7 +18,9 @@ package cmd
 
 import (
 	"crypto/md5"
+	"crypto/sha256"
 	"encoding/hex"
+	"hash"
 	"io"
 	"path"
 	"strings"
@@ -490,7 +492,7 @@ func renameObject(disks []StorageAPI, srcBucket, srcObject, dstBucket, dstObject
 // until EOF, erasure codes the data across all disk and additionally
 // writes `xl.json` which carries the necessary metadata for future
 // object operations.
-func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string) (objInfo ObjectInfo, err error) {
+func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (objInfo ObjectInfo, err error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
 		return ObjectInfo{}, traceError(BucketNameInvalid{Bucket: bucket})
@@ -515,9 +517,16 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	minioMetaTmpBucket := path.Join(minioMetaBucket, tmpMetaPrefix)
 	tempObj := uniqueID
 
-	var mw io.Writer
 	// Initialize md5 writer.
 	md5Writer := md5.New()
+
+	writers := []io.Writer{md5Writer}
+
+	var sha256Writer hash.Hash
+	if sha256sum != "" {
+		sha256Writer = sha256.New()
+		writers = append(writers, sha256Writer)
+	}
 
 	// Proceed to set the cache.
 	var newBuffer io.WriteCloser
@@ -531,16 +540,16 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 		newBuffer, err = xl.objCache.Create(path.Join(bucket, object), size)
 		if err == nil {
 			// Create a multi writer to write to both memory and client response.
-			mw = io.MultiWriter(newBuffer, md5Writer)
+			writers = append(writers, newBuffer)
 		}
 		// Ignore error if cache is full, proceed to write the object.
 		if err != nil && err != objcache.ErrCacheFull {
 			// For any other error return here.
 			return ObjectInfo{}, toObjectErr(traceError(err), bucket, object)
 		}
-	} else {
-		mw = md5Writer
 	}
+
+	mw := io.MultiWriter(writers...)
 
 	// Limit the reader to its provided size if specified.
 	var limitDataReader io.Reader
@@ -621,7 +630,18 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 		}
 	}
 
+	if sha256sum != "" {
+		newSHA256sum := hex.EncodeToString(sha256Writer.Sum(nil))
+		if newSHA256sum != sha256sum {
+			// SHA256 mismatch, delete the temporary object.
+			xl.deleteObject(minioMetaBucket, tempObj)
+			return ObjectInfo{}, traceError(SHA256Mismatch{})
+		}
+	}
+
 	// get a random ID for lock instrumentation.
+	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
+	// used for instrumentation on locks.
 	opsID := getOpsID()
 
 	// Lock the object.

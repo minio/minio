@@ -130,6 +130,21 @@ func isReqAuthenticatedV2(r *http.Request) (s3Error APIErrorCode) {
 	return doesPresignV2SignatureMatch(r)
 }
 
+func reqSignatureV4Verify(r *http.Request) (s3Error APIErrorCode) {
+	sha256sum := r.Header.Get("X-Amz-Content-Sha256")
+	// Skips calculating sha256 on the payload on server,
+	// if client requested for it.
+	if skipContentSha256Cksum(r) {
+		sha256sum = unsignedPayload
+	}
+	if isRequestSignatureV4(r) {
+		return doesSignatureMatch(sha256sum, r, serverConfig.GetRegion())
+	} else if isRequestPresignedSignatureV4(r) {
+		return doesPresignedSignatureMatch(sha256sum, r, serverConfig.GetRegion())
+	}
+	return ErrAccessDenied
+}
+
 // Verify if request has valid AWS Signature Version '4'.
 func isReqAuthenticated(r *http.Request, region string) (s3Error APIErrorCode) {
 	if r == nil {

@@ -1091,8 +1091,7 @@ func (s *TestSuiteCommon) TestSHA256Mismatch(c *C) {
 	// Body is on purpose set to nil so that we get payload generated for empty bytes.
 
 	// Create new HTTP request with incorrect secretKey to generate an incorrect signature.
-	secretKey := s.secretKey + "a"
-	request, err = newTestSignedRequestV4("PUT", getPutObjectURL(s.endPoint, bucketName, objName), 0, nil, s.accessKey, secretKey)
+	request, err = newTestSignedRequestV4("PUT", getPutObjectURL(s.endPoint, bucketName, objName), 0, nil, s.accessKey, s.secretKey)
 	c.Assert(request.Header.Get("x-amz-content-sha256"), Equals, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
 	// Set the body to generate signature mismatch.
 	request.Body = ioutil.NopCloser(bytes.NewReader([]byte("Hello, World")))

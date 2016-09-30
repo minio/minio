@@ -71,10 +71,11 @@ func testAPIGetOjectHandler(obj ObjectLayer, instanceType, bucketName string, ap
 		// case - 1.
 		{bucketName, objectName, int64(len(bytesData[0].byteData)), bytesData[0].byteData, make(map[string]string)},
 	}
+	sha256sum := ""
 	// iterate through the above set of inputs and upload the object.
 	for i, input := range putObjectInputs {
 		// uploading the object.
-		_, err := obj.PutObject(input.bucketName, input.objectName, input.contentLength, bytes.NewBuffer(input.textData), input.metaData)
+		_, err := obj.PutObject(input.bucketName, input.objectName, input.contentLength, bytes.NewBuffer(input.textData), input.metaData, sha256sum)
 		// if object upload fails stop the test.
 		if err != nil {
 			t.Fatalf("Put Object case %d:  Error uploading object: <ERROR> %v", i+1, err)
@@ -430,10 +431,11 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		// case - 1.
 		{bucketName, objectName, int64(len(bytesData[0].byteData)), bytesData[0].byteData, make(map[string]string)},
 	}
+	sha256sum := ""
 	// iterate through the above set of inputs and upload the object.
 	for i, input := range putObjectInputs {
 		// uploading the object.
-		_, err = obj.PutObject(input.bucketName, input.objectName, input.contentLength, bytes.NewBuffer(input.textData), input.metaData)
+		_, err = obj.PutObject(input.bucketName, input.objectName, input.contentLength, bytes.NewBuffer(input.textData), input.metaData, sha256sum)
 		// if object upload fails stop the test.
 		if err != nil {
 			t.Fatalf("Put Object case %d:  Error uploading object: <ERROR> %v", i+1, err)
@@ -683,7 +685,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 	}
 	// Iterating over creatPartCases to generate multipart chunks.
 	for _, part := range parts {
-		_, err = obj.PutObjectPart(part.bucketName, part.objName, part.uploadID, part.PartID, part.intputDataSize, bytes.NewBufferString(part.inputReaderData), part.inputMd5)
+		_, err = obj.PutObjectPart(part.bucketName, part.objName, part.uploadID, part.PartID, part.intputDataSize, bytes.NewBufferString(part.inputReaderData), part.inputMd5, "")
 		if err != nil {
 			t.Fatalf("%s : %s", instanceType, err)
 		}
@@ -905,7 +907,7 @@ func testAPIDeleteOjectHandler(obj ObjectLayer, instanceType, bucketName string,
 	// iterate through the above set of inputs and upload the object.
 	for i, input := range putObjectInputs {
 		// uploading the object.
-		_, err := obj.PutObject(input.bucketName, input.objectName, input.contentLength, bytes.NewBuffer(input.textData), input.metaData)
+		_, err := obj.PutObject(input.bucketName, input.objectName, input.contentLength, bytes.NewBuffer(input.textData), input.metaData, "")
 		// if object upload fails stop the test.
 		if err != nil {
 			t.Fatalf("Put Object case %d:  Error uploading object: <ERROR> %v", i+1, err)
@@ -1211,7 +1213,7 @@ func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName strin
 	NoAPIErr := APIError{}
 	MissingContent := getAPIError(ErrMissingContentLength)
 	EntityTooLarge := getAPIError(ErrEntityTooLarge)
-	BadSigning := getAPIError(ErrContentSHA256Mismatch)
+	BadSigning := getAPIError(ErrSignatureDoesNotMatch)
 	BadChecksum := getAPIError(ErrInvalidDigest)
 	InvalidPart := getAPIError(ErrInvalidPart)
 	InvalidMaxParts := getAPIError(ErrInvalidMaxParts)
@@ -1248,7 +1250,8 @@ func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName strin
 		case TooBigObject:
 			tReq.ContentLength = maxObjectSize + 1
 		case BadSignature:
-			tReq.Header.Set("x-amz-content-sha256", "somethingElse")
+			// Mangle signature
+			tReq.Header.Set("authorization", tReq.Header.Get("authorization")+"a")
 		case BadMD5:
 			tReq.Header.Set("Content-MD5", "badmd5")
 		}

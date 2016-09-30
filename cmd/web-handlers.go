@@ -416,7 +416,8 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		writeWebErrorResponse(w, errors.New("Server not initialized"))
 		return
 	}
-	if _, err := objectAPI.PutObject(bucket, object, -1, r.Body, metadata); err != nil {
+	sha256sum := ""
+	if _, err := objectAPI.PutObject(bucket, object, -1, r.Body, metadata, sha256sum); err != nil {
 		writeWebErrorResponse(w, err)
 		return
 	}
