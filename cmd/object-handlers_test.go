@@ -21,10 +21,12 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/xml"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"sync"
 	"testing"
 )
@@ -944,6 +946,109 @@ func testAPIDeleteOjectHandler(obj ObjectLayer, instanceType, bucketName string,
 			t.Fatalf("Minio %s: Case %d: Expected the response status to be `%d`, but instead found `%d`", instanceType, i+1, testCase.expectedRespStatus, rec.Code)
 		}
 	}
+}
+
+func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
+	credentials credential, t TestErrHandler) {
+	// Initiate Multipart upload for testing PutObjectPartHandler.
+	testObject := "testobject"
+	rec := httptest.NewRecorder()
+	req, err := newTestSignedRequest("POST", getNewMultipartURL("", bucketName, "testobject"),
+		0, nil, credentials.AccessKeyID, credentials.SecretAccessKey)
+	if err != nil {
+		t.Fatalf("[%s] - Failed to create a signed request to initiate multipart upload for %s/%s: <ERROR> %v",
+			instanceType, bucketName, testObject, err)
+	}
+	apiRouter.ServeHTTP(rec, req)
+
+	// Get uploadID of the mulitpart upload initiated.
+	var mpartResp InitiateMultipartUploadResponse
+	mpartRespBytes, err := ioutil.ReadAll(rec.Result().Body)
+	if err != nil {
+		t.Fatalf("[%s] Failed to read NewMultipartUpload response <ERROR> %v", instanceType, err)
+
+	}
+	err = xml.Unmarshal(mpartRespBytes, &mpartResp)
+	if err != nil {
+		t.Fatalf("[%s] Failed to unmarshal NewMultipartUpload response <ERROR> %v", instanceType, err)
+
+	}
+
+	type Fault int
+	const (
+		None Fault = iota
+		MissingContentLength
+		TooBigObject
+		BadSignature
+		BadMD5
+	)
+	NoAPIErr := APIError{}
+	MissingContent := getAPIError(ErrMissingContentLength)
+	EntityTooLarge := getAPIError(ErrEntityTooLarge)
+	BadSigning := getAPIError(ErrContentSHA256Mismatch)
+	BadChecksum := getAPIError(ErrInvalidDigest)
+	InvalidPart := getAPIError(ErrInvalidPart)
+	InvalidMaxParts := getAPIError(ErrInvalidMaxParts)
+	// SignatureMismatch for various signing types
+	testCases := []struct {
+		objectName       string
+		reader           io.ReadSeeker
+		partNumber       string
+		fault            Fault
+		expectedAPIError APIError
+	}{
+		// Success case
+		{testObject, bytes.NewReader([]byte("hello")), "1", None, NoAPIErr},
+		{testObject, bytes.NewReader([]byte("hello")), "9999999999999999999", None, InvalidPart},
+		{testObject, bytes.NewReader([]byte("hello")), strconv.Itoa(maxPartID + 1), None, InvalidMaxParts},
+		{testObject, bytes.NewReader([]byte("hello")), "1", MissingContentLength, MissingContent},
+		{testObject, bytes.NewReader([]byte("hello")), "1", TooBigObject, EntityTooLarge},
+		{testObject, bytes.NewReader([]byte("hello")), "1", BadSignature, BadSigning},
+		{testObject, bytes.NewReader([]byte("hello")), "1", BadMD5, BadChecksum},
+	}
+
+	for i, test := range testCases {
+		tRec := httptest.NewRecorder()
+		tReq, tErr := newTestSignedRequest("PUT",
+			getPutObjectPartURL("", bucketName, test.objectName, mpartResp.UploadID, test.partNumber),
+			0, test.reader, credentials.AccessKeyID, credentials.SecretAccessKey)
+		if tErr != nil {
+			t.Fatalf("Test %d %s Failed to create a signed request to upload part for %s/%s: <ERROR> %v", i+1, instanceType,
+				bucketName, test.objectName, tErr)
+		}
+		switch test.fault {
+		case MissingContentLength:
+			tReq.ContentLength = -1
+		case TooBigObject:
+			tReq.ContentLength = maxObjectSize + 1
+		case BadSignature:
+			tReq.Header.Set("x-amz-content-sha256", "somethingElse")
+		case BadMD5:
+			tReq.Header.Set("Content-MD5", "badmd5")
+		}
+		apiRouter.ServeHTTP(tRec, tReq)
+		if test.expectedAPIError != NoAPIErr {
+			errBytes, err := ioutil.ReadAll(tRec.Result().Body)
+			if err != nil {
+				t.Fatalf("Test %d %s Failed to read error response from upload part request %s/%s: <ERROR> %v",
+					i+1, instanceType, bucketName, test.objectName, err)
+			}
+			var errXML APIErrorResponse
+			err = xml.Unmarshal(errBytes, &errXML)
+			if err != nil {
+				t.Fatalf("Test %d %s Failed to unmarshal error response from upload part request %s/%s: <ERROR> %v",
+					i+1, instanceType, bucketName, test.objectName, err)
+			}
+			if test.expectedAPIError.Code != errXML.Code {
+				t.Errorf("Test %d %s expected to fail with error %s, but received %s", i+1, instanceType,
+					test.expectedAPIError.Code, errXML.Code)
+			}
+		}
+	}
+}
+
+func TestAPIPutObjectPartHandler(t *testing.T) {
+	ExecObjectLayerAPITest(t, testAPIPutObjectPartHandler, []string{"PutObjectPart", "NewMultipart"})
 }
 
 func TestPutObjectPartNilObjAPI(t *testing.T) {
