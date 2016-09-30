@@ -69,6 +69,22 @@ func doesPresignV2SignatureMatch(r *http.Request) APIErrorCode {
 		return ErrExpiredPresignRequest
 	}
 
+	// Save incoming siganture to be validated later.
+	incomingSignature := req.URL.Query().Get("Signature")
+
+	// Set the expires header for string to sign.
+	req.Header.Set("Expires", strconv.FormatInt(expired, 10))
+
+	/// Empty out the query params, we only need to validate signature.
+	query := req.URL.Query()
+	// Remove all the query params added for signature alone, we need
+	// a proper URL for string to sign.
+	query.Del("Expires")
+	query.Del("AWSAccessKeyId")
+	query.Del("Signature")
+	// Query encode whatever is left back to RawQuery.
+	req.URL.RawQuery = queryEncode(query)
+
 	// Get presigned string to sign.
 	stringToSign := preStringifyHTTPReq(req)
 	hm := hmac.New(sha1.New, []byte(cred.SecretAccessKey))
@@ -76,7 +92,7 @@ func doesPresignV2SignatureMatch(r *http.Request) APIErrorCode {
 
 	// Calculate signature and validate.
 	signature := base64.StdEncoding.EncodeToString(hm.Sum(nil))
-	if req.URL.Query().Get("Signature") != signature {
+	if incomingSignature != signature {
 		return ErrSignatureDoesNotMatch
 	}
 
