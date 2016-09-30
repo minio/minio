@@ -289,18 +289,32 @@ func testPutBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestErrH
 		// obtain the put bucket policy request body.
 		bucketPolicyStr := fmt.Sprintf(bucketPolicyTemplate, testCase.bucketName, testCase.bucketName)
 		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
-		rec := httptest.NewRecorder()
+		recV4 := httptest.NewRecorder()
 		// construct HTTP request for PUT bucket policy endpoint.
-		req, err := newTestSignedRequest("PUT", getPutPolicyURL("", testCase.bucketName),
+		reqV4, err := newTestSignedRequestV4("PUT", getPutPolicyURL("", testCase.bucketName),
 			int64(len(bucketPolicyStr)), bytes.NewReader([]byte(bucketPolicyStr)), testCase.accessKey, testCase.secretKey)
 		if err != nil {
 			t.Fatalf("Test %d: %s: Failed to create HTTP request for PutBucketPolicyHandler: <ERROR> %v", i+1, instanceType, err)
 		}
 		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic ofthe handler.
 		// Call the ServeHTTP to execute the handler.
-		apiRouter.ServeHTTP(rec, req)
-		if rec.Code != testCase.expectedRespStatus {
-			t.Errorf("Test %d: %s: Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, rec.Code)
+		apiRouter.ServeHTTP(recV4, reqV4)
+		if recV4.Code != testCase.expectedRespStatus {
+			t.Errorf("Test %d: %s: Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, recV4.Code)
+		}
+		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
+		recV2 := httptest.NewRecorder()
+		// construct HTTP request for PUT bucket policy endpoint.
+		reqV2, err := newTestSignedRequestV2("PUT", getPutPolicyURL("", testCase.bucketName),
+			int64(len(bucketPolicyStr)), bytes.NewReader([]byte(bucketPolicyStr)), testCase.accessKey, testCase.secretKey)
+		if err != nil {
+			t.Fatalf("Test %d: %s: Failed to create HTTP request for PutBucketPolicyHandler: <ERROR> %v", i+1, instanceType, err)
+		}
+		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic ofthe handler.
+		// Call the ServeHTTP to execute the handler.
+		apiRouter.ServeHTTP(recV2, reqV2)
+		if recV2.Code != testCase.expectedRespStatus {
+			t.Errorf("Test %d: %s: Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, recV2.Code)
 		}
 	}
 }
@@ -357,18 +371,32 @@ func testGetBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestErrH
 		// obtain the put bucket policy request body.
 		bucketPolicyStr := fmt.Sprintf(bucketPolicyTemplate, testPolicy.bucketName, testPolicy.bucketName)
 		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
-		rec := httptest.NewRecorder()
+		recV4 := httptest.NewRecorder()
 		// construct HTTP request for PUT bucket policy endpoint.
-		req, err := newTestSignedRequest("PUT", getPutPolicyURL("", testPolicy.bucketName),
+		reqV4, err := newTestSignedRequestV4("PUT", getPutPolicyURL("", testPolicy.bucketName),
 			int64(len(bucketPolicyStr)), bytes.NewReader([]byte(bucketPolicyStr)), testPolicy.accessKey, testPolicy.secretKey)
 		if err != nil {
 			t.Fatalf("Test %d: Failed to create HTTP request for PutBucketPolicyHandler: <ERROR> %v", i+1, err)
 		}
 		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic ofthe handler.
 		// Call the ServeHTTP to execute the handler.
-		apiRouter.ServeHTTP(rec, req)
-		if rec.Code != testPolicy.expectedRespStatus {
-			t.Fatalf("Case %d: Expected the response status to be `%d`, but instead found `%d`", i+1, testPolicy.expectedRespStatus, rec.Code)
+		apiRouter.ServeHTTP(recV4, reqV4)
+		if recV4.Code != testPolicy.expectedRespStatus {
+			t.Fatalf("Case %d: Expected the response status to be `%d`, but instead found `%d`", i+1, testPolicy.expectedRespStatus, recV4.Code)
+		}
+		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
+		recV2 := httptest.NewRecorder()
+		// construct HTTP request for PUT bucket policy endpoint.
+		reqV2, err := newTestSignedRequestV2("PUT", getPutPolicyURL("", testPolicy.bucketName),
+			int64(len(bucketPolicyStr)), bytes.NewReader([]byte(bucketPolicyStr)), testPolicy.accessKey, testPolicy.secretKey)
+		if err != nil {
+			t.Fatalf("Test %d: Failed to create HTTP request for PutBucketPolicyHandler: <ERROR> %v", i+1, err)
+		}
+		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic ofthe handler.
+		// Call the ServeHTTP to execute the handler.
+		apiRouter.ServeHTTP(recV2, reqV2)
+		if recV2.Code != testPolicy.expectedRespStatus {
+			t.Fatalf("Case %d: Expected the response status to be `%d`, but instead found `%d`", i+1, testPolicy.expectedRespStatus, recV2.Code)
 		}
 	}
 
@@ -388,9 +416,9 @@ func testGetBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestErrH
 		// expected bucket policy json string.
 		expectedBucketPolicyStr := fmt.Sprintf(testCase.expectedBucketPolicy, testCase.bucketName, testCase.bucketName)
 		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
-		rec := httptest.NewRecorder()
+		recV4 := httptest.NewRecorder()
 		// construct HTTP request for PUT bucket policy endpoint.
-		req, err := newTestSignedRequest("GET", getGetPolicyURL("", testCase.bucketName),
+		reqV4, err := newTestSignedRequestV4("GET", getGetPolicyURL("", testCase.bucketName),
 			0, nil, testCase.accessKey, testCase.secretKey)
 
 		if err != nil {
@@ -398,13 +426,37 @@ func testGetBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestErrH
 		}
 		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
 		// Call the ServeHTTP to execute the handler, GetBucketPolicyHandler handles the request.
-		apiRouter.ServeHTTP(rec, req)
+		apiRouter.ServeHTTP(recV4, reqV4)
 		// Assert the response code with the expected status.
-		if rec.Code != testCase.expectedRespStatus {
-			t.Fatalf("Case %d: Expected the response status to be `%d`, but instead found `%d`", i+1, testCase.expectedRespStatus, rec.Code)
+		if recV4.Code != testCase.expectedRespStatus {
+			t.Fatalf("Case %d: Expected the response status to be `%d`, but instead found `%d`", i+1, testCase.expectedRespStatus, recV4.Code)
 		}
 		// read the response body.
-		bucketPolicyReadBuf, err := ioutil.ReadAll(rec.Body)
+		bucketPolicyReadBuf, err := ioutil.ReadAll(recV4.Body)
+		if err != nil {
+			t.Fatalf("Test %d: %s: Failed parsing response body: <ERROR> %v", i+1, instanceType, err)
+		}
+		// Verify whether the bucket policy fetched is same as the one inserted.
+		if expectedBucketPolicyStr != string(bucketPolicyReadBuf) {
+			t.Errorf("Test %d: %s: Bucket policy differs from expected value.", i+1, instanceType)
+		}
+		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
+		recV2 := httptest.NewRecorder()
+		// construct HTTP request for PUT bucket policy endpoint.
+		reqV2, err := newTestSignedRequestV2("GET", getGetPolicyURL("", testCase.bucketName),
+			0, nil, testCase.accessKey, testCase.secretKey)
+		if err != nil {
+			t.Fatalf("Test %d: Failed to create HTTP request for GetBucketPolicyHandler: <ERROR> %v", i+1, err)
+		}
+		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
+		// Call the ServeHTTP to execute the handler, GetBucketPolicyHandler handles the request.
+		apiRouter.ServeHTTP(recV2, reqV2)
+		// Assert the response code with the expected status.
+		if recV2.Code != testCase.expectedRespStatus {
+			t.Fatalf("Case %d: Expected the response status to be `%d`, but instead found `%d`", i+1, testCase.expectedRespStatus, recV2.Code)
+		}
+		// read the response body.
+		bucketPolicyReadBuf, err = ioutil.ReadAll(recV2.Body)
 		if err != nil {
 			t.Fatalf("Test %d: %s: Failed parsing response body: <ERROR> %v", i+1, instanceType, err)
 		}
@@ -502,20 +554,21 @@ func testDeleteBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestE
 		// obtain the put bucket policy request body.
 		bucketPolicyStr := fmt.Sprintf(bucketPolicyTemplate, testPolicy.bucketName, testPolicy.bucketName)
 		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
-		rec := httptest.NewRecorder()
+		recV4 := httptest.NewRecorder()
 		// construct HTTP request for PUT bucket policy endpoint.
-		req, err := newTestSignedRequest("PUT", getPutPolicyURL("", testPolicy.bucketName),
+		reqV4, err := newTestSignedRequestV4("PUT", getPutPolicyURL("", testPolicy.bucketName),
 			int64(len(bucketPolicyStr)), bytes.NewReader([]byte(bucketPolicyStr)), testPolicy.accessKey, testPolicy.secretKey)
 		if err != nil {
 			t.Fatalf("Test %d: Failed to create HTTP request for PutBucketPolicyHandler: <ERROR> %v", i+1, err)
 		}
 		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
 		// Call the ServeHTTP to execute the handler.
-		apiRouter.ServeHTTP(rec, req)
-		if rec.Code != testPolicy.expectedRespStatus {
-			t.Fatalf("Case %d: Expected the response status to be `%d`, but instead found `%d`", i+1, testPolicy.expectedRespStatus, rec.Code)
+		apiRouter.ServeHTTP(recV4, reqV4)
+		if recV4.Code != testPolicy.expectedRespStatus {
+			t.Fatalf("Case %d: Expected the response status to be `%d`, but instead found `%d`", i+1, testPolicy.expectedRespStatus, recV4.Code)
 		}
 	}
+
 	// testcases with input and expected output for DeleteBucketPolicyHandler.
 	testCases := []struct {
 		bucketName string
@@ -529,21 +582,58 @@ func testDeleteBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestE
 	// Iterating over the cases and deleting the bucket policy and then asserting response.
 	for i, testCase := range testCases {
 		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
-		rec := httptest.NewRecorder()
+		recV4 := httptest.NewRecorder()
 		// construct HTTP request for Delete bucket policy endpoint.
-		req, err := newTestSignedRequest("DELETE", getDeletePolicyURL("", testCase.bucketName),
+		reqV4, err := newTestSignedRequestV4("DELETE", getDeletePolicyURL("", testCase.bucketName),
 			0, nil, testCase.accessKey, testCase.secretKey)
-
 		if err != nil {
 			t.Fatalf("Test %d: Failed to create HTTP request for GetBucketPolicyHandler: <ERROR> %v", i+1, err)
 		}
 		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
 		// Call the ServeHTTP to execute the handler, DeleteBucketPolicyHandler  handles the request.
-		apiRouter.ServeHTTP(rec, req)
+		apiRouter.ServeHTTP(recV4, reqV4)
 		// Assert the response code with the expected status.
-		if rec.Code != testCase.expectedRespStatus {
-			t.Fatalf("Case %d: Expected the response status to be `%d`, but instead found `%d`", i+1, testCase.expectedRespStatus, rec.Code)
+		if recV4.Code != testCase.expectedRespStatus {
+			t.Fatalf("Case %d: Expected the response status to be `%d`, but instead found `%d`", i+1, testCase.expectedRespStatus, recV4.Code)
 		}
+	}
 
+	// Iterating over the cases and writing the bucket policy.
+	// its required to write the policies first before running tests on GetBucketPolicy.
+	for i, testPolicy := range putTestPolicies {
+		// obtain the put bucket policy request body.
+		bucketPolicyStr := fmt.Sprintf(bucketPolicyTemplate, testPolicy.bucketName, testPolicy.bucketName)
+		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
+		recV2 := httptest.NewRecorder()
+		// construct HTTP request for PUT bucket policy endpoint.
+		reqV2, err := newTestSignedRequestV2("PUT", getPutPolicyURL("", testPolicy.bucketName),
+			int64(len(bucketPolicyStr)), bytes.NewReader([]byte(bucketPolicyStr)), testPolicy.accessKey, testPolicy.secretKey)
+		if err != nil {
+			t.Fatalf("Test %d: Failed to create HTTP request for PutBucketPolicyHandler: <ERROR> %v", i+1, err)
+		}
+		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
+		// Call the ServeHTTP to execute the handler.
+		apiRouter.ServeHTTP(recV2, reqV2)
+		if recV2.Code != testPolicy.expectedRespStatus {
+			t.Fatalf("Case %d: Expected the response status to be `%d`, but instead found `%d`", i+1, testPolicy.expectedRespStatus, recV2.Code)
+		}
+	}
+
+	for i, testCase := range testCases {
+		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
+		recV2 := httptest.NewRecorder()
+		// construct HTTP request for Delete bucket policy endpoint.
+		reqV2, err := newTestSignedRequestV2("DELETE", getDeletePolicyURL("", testCase.bucketName),
+			0, nil, testCase.accessKey, testCase.secretKey)
+		if err != nil {
+			t.Fatalf("Test %d: Failed to create HTTP request for GetBucketPolicyHandler: <ERROR> %v", i+1, err)
+		}
+		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
+		// Call the ServeHTTP to execute the handler, DeleteBucketPolicyHandler  handles the request.
+		apiRouter.ServeHTTP(recV2, reqV2)
+		// Assert the response code with the expected status.
+		if recV2.Code != testCase.expectedRespStatus {
+			t.Fatalf("Case %d: Expected the response status to be `%d`, but instead found `%d`", i+1, testCase.expectedRespStatus, recV2.Code)
+		}
 	}
 }

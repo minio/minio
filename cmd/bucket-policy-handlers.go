@@ -132,19 +132,15 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 		return
 	}
 
+	// PutBucketPolicy does not support bucket policies, use checkAuth to validate signature.
+	if s3Error := checkAuth(r); s3Error != ErrNone {
+		errorIf(errSignatureMismatch, dumpRequest(r))
+		writeErrorResponse(w, r, s3Error, r.URL.Path)
+		return
+	}
+
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
-	switch getRequestAuthType(r) {
-	default:
-		// For all unknown auth types return error.
-		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
-		return
-	case authTypePresigned, authTypeSigned:
-		if s3Error := isReqAuthenticated(r, serverConfig.GetRegion()); s3Error != ErrNone {
-			writeErrorResponse(w, r, s3Error, r.URL.Path)
-			return
-		}
-	}
 
 	// If Content-Length is unknown or zero, deny the
 	// request. PutBucketPolicy always needs a Content-Length if
@@ -214,20 +210,15 @@ func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r 
 		return
 	}
 
+	// DeleteBucketPolicy does not support bucket policies, use checkAuth to validate signature.
+	if s3Error := checkAuth(r); s3Error != ErrNone {
+		errorIf(errSignatureMismatch, dumpRequest(r))
+		writeErrorResponse(w, r, s3Error, r.URL.Path)
+		return
+	}
+
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
-
-	switch getRequestAuthType(r) {
-	default:
-		// For all unknown auth types return error.
-		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
-		return
-	case authTypePresigned, authTypeSigned:
-		if s3Error := isReqAuthenticated(r, serverConfig.GetRegion()); s3Error != ErrNone {
-			writeErrorResponse(w, r, s3Error, r.URL.Path)
-			return
-		}
-	}
 
 	// Delete bucket access policy.
 	if err := removeBucketPolicy(bucket, objAPI); err != nil {
@@ -260,20 +251,15 @@ func (api objectAPIHandlers) GetBucketPolicyHandler(w http.ResponseWriter, r *ht
 		return
 	}
 
+	// GetBucketPolicy does not support bucket policies, use checkAuth to validate signature.
+	if s3Error := checkAuth(r); s3Error != ErrNone {
+		errorIf(errSignatureMismatch, dumpRequest(r))
+		writeErrorResponse(w, r, s3Error, r.URL.Path)
+		return
+	}
+
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
-
-	switch getRequestAuthType(r) {
-	default:
-		// For all unknown auth types return error.
-		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
-		return
-	case authTypePresigned, authTypeSigned:
-		if s3Error := isReqAuthenticated(r, serverConfig.GetRegion()); s3Error != ErrNone {
-			writeErrorResponse(w, r, s3Error, r.URL.Path)
-			return
-		}
-	}
 
 	// Read bucket access policy.
 	policy, err := readBucketPolicy(bucket, objAPI)

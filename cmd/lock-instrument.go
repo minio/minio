@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"time"
 )
@@ -56,14 +57,6 @@ func newDebugLockInfoPerVolumePath() *debugLockInfoPerVolumePath {
 		blocked:  0,
 		running:  0,
 	}
-}
-
-// LockInfoNil - Returned if the lock info map is not initialized.
-type LockInfoNil struct {
-}
-
-func (l LockInfoNil) Error() string {
-	return fmt.Sprintf("Debug Lock Map not initialized:\n1. Enable Lock Debugging using right ENV settings \n2. Make sure initNSLock() is called.")
 }
 
 // LockInfoOriginNotFound - While changing the state of the lock info its important that the entry for
@@ -114,13 +107,15 @@ func (l LockInfoStateNotBlocked) Error() string {
 	return fmt.Sprintf("Lock state should be \"Blocked\" for <volume> %s, <path> %s, <operationID> %s.", l.volume, l.path, l.operationID)
 }
 
+var errLockNotInitialized = errors.New("Debug Lock Map not initialized:\n1. Enable Lock Debugging using right ENV settings \n2. Make sure initNSLock() is called.")
+
 // change the state of the lock from Blocked to Running.
 func (n *nsLockMap) statusBlockedToRunning(param nsParam, lockOrigin, operationID string, readLock bool) error {
 	// This operation is not executed under the scope nsLockMap.mutex.Lock(), lock has to be explicitly held here.
 	n.lockMapMutex.Lock()
 	defer n.lockMapMutex.Unlock()
 	if n.debugLockMap == nil {
-		return LockInfoNil{}
+		return errLockNotInitialized
 	}
 	// new state info to be set for the lock.
 	newLockInfo := debugLockInfo{
@@ -140,7 +135,7 @@ func (n *nsLockMap) statusBlockedToRunning(param nsParam, lockOrigin, operationI
 	if debugLockMap, ok := n.debugLockMap[param]; ok {
 		//  ``*debugLockInfoPerVolumePath` entry containing lock info for `param <volume, path>` is `nil`.
 		if debugLockMap == nil {
-			return LockInfoNil{}
+			return errLockNotInitialized
 		}
 	} else {
 		// The lock state info foe given <volume, path> pair should already exist.
@@ -186,7 +181,7 @@ func (n *nsLockMap) statusBlockedToRunning(param nsParam, lockOrigin, operationI
 // change the state of the lock from Ready to Blocked.
 func (n *nsLockMap) statusNoneToBlocked(param nsParam, lockOrigin, operationID string, readLock bool) error {
 	if n.debugLockMap == nil {
-		return LockInfoNil{}
+		return errLockNotInitialized
 	}
 
 	newLockInfo := debugLockInfo{
@@ -230,7 +225,7 @@ func (n *nsLockMap) statusNoneToBlocked(param nsParam, lockOrigin, operationID s
 // deleteLockInfoEntry - Deletes the lock state information for given <volume, path> pair. Called when nsLk.ref count is 0.
 func (n *nsLockMap) deleteLockInfoEntryForVolumePath(param nsParam) error {
 	if n.debugLockMap == nil {
-		return LockInfoNil{}
+		return errLockNotInitialized
 	}
 	// delete the lock info for the given operation.
 	if _, found := n.debugLockMap[param]; found {
@@ -246,7 +241,7 @@ func (n *nsLockMap) deleteLockInfoEntryForVolumePath(param nsParam) error {
 // called when the nsLk ref count for the given <volume, path> pair is not 0.
 func (n *nsLockMap) deleteLockInfoEntryForOps(param nsParam, operationID string) error {
 	if n.debugLockMap == nil {
-		return LockInfoNil{}
+		return errLockNotInitialized
 	}
 	// delete the lock info for the given operation.
 	if infoMap, found := n.debugLockMap[param]; found {

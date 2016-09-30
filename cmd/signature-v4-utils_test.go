@@ -22,7 +22,8 @@ import (
 	"time"
 )
 
-// TestSkipContentSha256Cksum - Test validate the logic which decides whether to skip checksum validation based on the request header.
+// TestSkipContentSha256Cksum - Test validate the logic which decides whether
+// to skip checksum validation based on the request header.
 func TestSkipContentSha256Cksum(t *testing.T) {
 	testCases := []struct {
 		inputHeaderKey   string
@@ -124,7 +125,7 @@ func TestGetURLEncodedName(t *testing.T) {
 	for i, testCase := range testCases {
 		result := getURLEncodedName(testCase.inputStr)
 		if testCase.result != result {
-			t.Errorf("Test %d: Expected queryEncode result to be \"%s\", but found it to be \"%s\" instead", i+1, testCase.result, result)
+			t.Errorf("Test %d: Expected URLEncoded result to be \"%s\", but found it to be \"%s\" instead", i+1, testCase.result, result)
 		}
 	}
 }

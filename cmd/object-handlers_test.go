@@ -128,7 +128,7 @@ func testAPIGetOjectHandler(obj ObjectLayer, instanceType, bucketName string, ap
 		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
 		rec := httptest.NewRecorder()
 		// construct HTTP request for Get Object end point.
-		req, err := newTestSignedRequest("GET", getGetObjectURL("", testCase.bucketName, testCase.objectName),
+		req, err := newTestSignedRequestV4("GET", getGetObjectURL("", testCase.bucketName, testCase.objectName),
 			0, nil, credentials.AccessKeyID, credentials.SecretAccessKey)
 
 		if err != nil {
@@ -342,7 +342,7 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
 		rec := httptest.NewRecorder()
 		// construct HTTP request for Get Object end point.
-		req, err := newTestSignedRequest("PUT", getPutObjectURL("", testCase.bucketName, testCase.objectName),
+		req, err := newTestSignedRequestV4("PUT", getPutObjectURL("", testCase.bucketName, testCase.objectName),
 			int64(testCase.dataLen), bytes.NewReader(testCase.data), credentials.AccessKeyID, credentials.SecretAccessKey)
 		if err != nil {
 			t.Fatalf("Test %d: Failed to create HTTP request for Put Object: <ERROR> %v", i+1, err)
@@ -484,7 +484,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
 		rec := httptest.NewRecorder()
 		// construct HTTP request for copy object.
-		req, err := newTestSignedRequest("PUT", getCopyObjectURL("", testCase.bucketName, testCase.newObjectName),
+		req, err := newTestSignedRequestV4("PUT", getCopyObjectURL("", testCase.bucketName, testCase.newObjectName),
 			0, nil, credentials.AccessKeyID, credentials.SecretAccessKey)
 
 		if err != nil {
@@ -529,7 +529,7 @@ func testAPINewMultipartHandler(obj ObjectLayer, instanceType, bucketName string
 	objectName := "test-object-new-multipart"
 	rec := httptest.NewRecorder()
 	// construct HTTP request for copy object.
-	req, err := newTestSignedRequest("POST", getNewMultipartURL("", bucketName, objectName), 0, nil, credentials.AccessKeyID, credentials.SecretAccessKey)
+	req, err := newTestSignedRequestV4("POST", getNewMultipartURL("", bucketName, objectName), 0, nil, credentials.AccessKeyID, credentials.SecretAccessKey)
 
 	if err != nil {
 		t.Fatalf("Failed to create HTTP request for copy Object: <ERROR> %v", err)
@@ -581,7 +581,7 @@ func testAPINewMultipartHandlerParallel(obj ObjectLayer, instanceType, bucketNam
 			defer wg.Done()
 			rec := httptest.NewRecorder()
 			// construct HTTP request for copy object.
-			req, err := newTestSignedRequest("POST", getNewMultipartURL("", bucketName, objectName), 0, nil, credentials.AccessKeyID, credentials.SecretAccessKey)
+			req, err := newTestSignedRequestV4("POST", getNewMultipartURL("", bucketName, objectName), 0, nil, credentials.AccessKeyID, credentials.SecretAccessKey)
 
 			if err != nil {
 				t.Fatalf("Failed to create HTTP request for copy Object: <ERROR> %v", err)
@@ -828,7 +828,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 			t.Fatalf("Error XML encoding of parts: <ERROR> %s.", err)
 		}
 		// Indicating that all parts are uploaded and initiating completeMultipartUpload.
-		req, err = newTestSignedRequest("POST", getCompleteMultipartUploadURL("", bucketName, objectName, testCase.uploadID),
+		req, err = newTestSignedRequestV4("POST", getCompleteMultipartUploadURL("", bucketName, objectName, testCase.uploadID),
 			int64(len(completeBytes)), bytes.NewReader(completeBytes), credentials.AccessKeyID, credentials.SecretAccessKey)
 		if err != nil {
 			t.Fatalf("Failed to create HTTP request for copy Object: <ERROR> %v", err)
@@ -930,7 +930,7 @@ func testAPIDeleteOjectHandler(obj ObjectLayer, instanceType, bucketName string,
 		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
 		rec := httptest.NewRecorder()
 		// construct HTTP request for Get Object end point.
-		req, err := newTestSignedRequest("DELETE", getDeleteObjectURL("", testCase.bucketName, testCase.objectName),
+		req, err := newTestSignedRequestV4("DELETE", getDeleteObjectURL("", testCase.bucketName, testCase.objectName),
 			0, nil, credentials.AccessKeyID, credentials.SecretAccessKey)
 
 		if err != nil {
