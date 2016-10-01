@@ -31,6 +31,17 @@ import (
 	"testing"
 )
 
+// Type to capture different modifications to API request to simulate failure cases.
+type Fault int
+
+const (
+	None Fault = iota
+	MissingContentLength
+	TooBigObject
+	BadSignature
+	BadMD5
+)
+
 // Wrapper for calling GetObject API handler tests for both XL multiple disks and FS single drive setup.
 func TestAPIGetOjectHandler(t *testing.T) {
 	ExecObjectLayerAPITest(t, testAPIGetOjectHandler, []string{"GetObject"})
@@ -948,6 +959,76 @@ func testAPIDeleteOjectHandler(obj ObjectLayer, instanceType, bucketName string,
 	}
 }
 
+func testAPIPutObjectPartHandlerStreaming(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
+	credentials credential, t TestErrHandler) {
+	testObject := "testobject"
+	rec := httptest.NewRecorder()
+	req, err := newTestSignedRequest("POST", getNewMultipartURL("", bucketName, "testobject"),
+		0, nil, credentials.AccessKeyID, credentials.SecretAccessKey)
+	if err != nil {
+		t.Fatalf("[%s] - Failed to create a signed request to initiate multipart upload for %s/%s: <ERROR> %v",
+			instanceType, bucketName, testObject, err)
+	}
+	apiRouter.ServeHTTP(rec, req)
+
+	// Get uploadID of the mulitpart upload initiated.
+	var mpartResp InitiateMultipartUploadResponse
+	mpartRespBytes, err := ioutil.ReadAll(rec.Result().Body)
+	if err != nil {
+		t.Fatalf("[%s] Failed to read NewMultipartUpload response <ERROR> %v", instanceType, err)
+
+	}
+	err = xml.Unmarshal(mpartRespBytes, &mpartResp)
+	if err != nil {
+		t.Fatalf("[%s] Failed to unmarshal NewMultipartUpload response <ERROR> %v", instanceType, err)
+	}
+
+	noAPIErr := APIError{}
+	missingDateHeaderErr := getAPIError(ErrMissingDateHeader)
+	testCases := []struct {
+		fault       Fault
+		expectedErr APIError
+	}{
+		{BadSignature, missingDateHeaderErr},
+		{None, noAPIErr},
+	}
+
+	for i, test := range testCases {
+		rec = httptest.NewRecorder()
+		req, err = newTestStreamingSignedRequest("PUT",
+			getPutObjectPartURL("", bucketName, testObject, mpartResp.UploadID, "1"),
+			5, 1, bytes.NewReader([]byte("hello")), credentials.AccessKeyID, credentials.SecretAccessKey)
+
+		if test.fault == BadSignature {
+			// Reset date field in header to make streaming signature fail.
+			req.Header.Set("x-amz-date", "")
+		}
+		apiRouter.ServeHTTP(rec, req)
+
+		if test.fault != None {
+			errBytes, err := ioutil.ReadAll(rec.Result().Body)
+			if err != nil {
+				t.Fatalf("Test %d %s Failed to read error response from upload part request %s/%s: <ERROR> %v",
+					i+1, instanceType, bucketName, testObject, err)
+			}
+			var errXML APIErrorResponse
+			err = xml.Unmarshal(errBytes, &errXML)
+			if err != nil {
+				t.Fatalf("Test %d %s Failed to unmarshal error response from upload part request %s/%s: <ERROR> %v",
+					i+1, instanceType, bucketName, testObject, err)
+			}
+			if missingDateHeaderErr.Code != errXML.Code {
+				t.Errorf("Test %d %s expected to fail with error %s, but received %s", i+1, instanceType,
+					missingDateHeaderErr.Code, errXML.Code)
+			}
+		}
+	}
+}
+
+func TestAPIPutObjectPartHandlerStreaming(t *testing.T) {
+	ExecObjectLayerAPITest(t, testAPIPutObjectPartHandlerStreaming, []string{"NewMultipart", "PutObjectPart"})
+}
+
 func testAPIPutObjectPartHandlerAnon(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
 	credentials credential, t TestErrHandler) {
 	// Initialize bucket policies for anonymous request test
@@ -971,7 +1052,6 @@ func testAPIPutObjectPartHandlerAnon(obj ObjectLayer, instanceType, bucketName s
 	mpartRespBytes, err := ioutil.ReadAll(rec.Result().Body)
 	if err != nil {
 		t.Fatalf("[%s] Failed to read NewMultipartUpload response <ERROR> %v", instanceType, err)
-
 	}
 	err = xml.Unmarshal(mpartRespBytes, &mpartResp)
 	if err != nil {
@@ -979,7 +1059,6 @@ func testAPIPutObjectPartHandlerAnon(obj ObjectLayer, instanceType, bucketName s
 
 	}
 
-	// authTypeAnonymous Request
 	accessDeniedErr := getAPIError(ErrAccessDenied)
 	anonRec := httptest.NewRecorder()
 	anonReq, aErr := newTestRequest("PUT",
@@ -1035,17 +1114,8 @@ func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName strin
 	err = xml.Unmarshal(mpartRespBytes, &mpartResp)
 	if err != nil {
 		t.Fatalf("[%s] Failed to unmarshal NewMultipartUpload response <ERROR> %v", instanceType, err)
-
 	}
 
-	type Fault int
-	const (
-		None Fault = iota
-		MissingContentLength
-		TooBigObject
-		BadSignature
-		BadMD5
-	)
 	NoAPIErr := APIError{}
 	MissingContent := getAPIError(ErrMissingContentLength)
 	EntityTooLarge := getAPIError(ErrEntityTooLarge)
@@ -1109,7 +1179,6 @@ func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName strin
 			}
 		}
 	}
-
 }
 
 func TestAPIPutObjectPartHandler(t *testing.T) {
