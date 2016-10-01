@@ -59,7 +59,7 @@ type RPCLoginReply struct {
 
 // Validates if incoming token is valid.
 func isRPCTokenValid(tokenStr string) bool {
-	jwt, err := newJWT(defaultTokenExpiry) // Expiry set to 100yrs.
+	jwt, err := newJWT(defaultInterNodeJWTExpiry)
 	if err != nil {
 		errorIf(err, "Unable to initialize JWT")
 		return false
