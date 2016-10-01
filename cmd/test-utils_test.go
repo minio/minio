@@ -972,6 +972,13 @@ func getPutObjectURL(endPoint, bucketName, objectName string) string {
 	return makeTestTargetURL(endPoint, bucketName, objectName, url.Values{})
 }
 
+func getPutObjectPartURL(endPoint, bucketName, objectName, uploadID, partNumber string) string {
+	queryValues := url.Values{}
+	queryValues.Set("uploadId", uploadID)
+	queryValues.Set("partNumber", partNumber)
+	return makeTestTargetURL(endPoint, bucketName, objectName, queryValues)
+}
+
 // return URL for fetching object from the bucket.
 func getGetObjectURL(endPoint, bucketName, objectName string) string {
 	return makeTestTargetURL(endPoint, bucketName, objectName, url.Values{})
@@ -1345,6 +1352,96 @@ func ExecObjectLayerStaleFilesTest(t *testing.T, objTest objTestStaleFilesType) 
 	defer removeRoots(erasureDisks)
 }
 
+// addAPIFunc helper function to add API functions identified by name to the routers.
+func addAPIFunc(muxRouter *router.Router, apiRouter *router.Router, bucket *router.Router,
+	api objectAPIHandlers, apiFunction string) {
+	switch apiFunction {
+	// Register ListBuckets	handler.
+	case "ListBuckets":
+		apiRouter.Methods("GET").HandlerFunc(api.ListBucketsHandler)
+	// Register GetObject handler.
+	case "GetObject":
+		bucket.Methods("GET").Path("/{object:.+}").HandlerFunc(api.GetObjectHandler)
+	// Register PutObject handler.
+	case "PutObject":
+		bucket.Methods("PUT").Path("/{object:.+}").HandlerFunc(api.PutObjectHandler)
+	// Register Delete Object handler.
+	case "DeleteObject":
+		bucket.Methods("DELETE").Path("/{object:.+}").HandlerFunc(api.DeleteObjectHandler)
+	// Register Copy Object  handler.
+	case "CopyObject":
+		bucket.Methods("PUT").Path("/{object:.+}").HeadersRegexp("X-Amz-Copy-Source", ".*?(\\/|%2F).*?").HandlerFunc(api.CopyObjectHandler)
+	// Register PutBucket Policy handler.
+	case "PutBucketPolicy":
+		bucket.Methods("PUT").HandlerFunc(api.PutBucketPolicyHandler).Queries("policy", "")
+	// Register Delete bucket HTTP policy handler.
+	case "DeleteBucketPolicy":
+		bucket.Methods("DELETE").HandlerFunc(api.DeleteBucketPolicyHandler).Queries("policy", "")
+	// Register Get Bucket policy HTTP Handler.
+	case "GetBucketPolicy":
+		bucket.Methods("GET").HandlerFunc(api.GetBucketPolicyHandler).Queries("policy", "")
+	// Register GetBucketLocation handler.
+	case "GetBucketLocation":
+		bucket.Methods("GET").HandlerFunc(api.GetBucketLocationHandler).Queries("location", "")
+	// Register HeadBucket handler.
+	case "HeadBucket":
+		bucket.Methods("HEAD").HandlerFunc(api.HeadBucketHandler)
+		// Register New Multipart upload handler.
+	case "NewMultipart":
+		bucket.Methods("POST").Path("/{object:.+}").HandlerFunc(api.NewMultipartUploadHandler).Queries("uploads", "")
+
+	// Register PutObjectPart handler.
+	case "PutObjectPart":
+		bucket.Methods("PUT").Path("/{object:.+}").HandlerFunc(api.PutObjectPartHandler).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}")
+	// Register ListMultipartUploads handler.
+	case "ListMultipartUploads":
+		bucket.Methods("GET").HandlerFunc(api.ListMultipartUploadsHandler).Queries("uploads", "")
+		// Register Complete Multipart Upload handler.
+	case "CompleteMultipart":
+		bucket.Methods("POST").Path("/{object:.+}").HandlerFunc(api.CompleteMultipartUploadHandler).Queries("uploadId", "{uploadId:.*}")
+		// Register GetBucketNotification Handler.
+	case "GetBucketNotification":
+		bucket.Methods("GET").HandlerFunc(api.GetBucketNotificationHandler).Queries("notification", "")
+		// Register PutBucketNotification Handler.
+	case "PutBucketNotification":
+		bucket.Methods("PUT").HandlerFunc(api.PutBucketNotificationHandler).Queries("notification", "")
+		// Register ListenBucketNotification Handler.
+	case "ListenBucketNotification":
+		bucket.Methods("GET").HandlerFunc(api.ListenBucketNotificationHandler).Queries("events", "{events:.*}")
+	// Register all api endpoints by default.
+	default:
+		registerAPIRouter(muxRouter, api)
+		// No need to register any more end points, all the end points are registered.
+		break
+	}
+}
+
+// Returns a http.Handler capable of routing API requests to handlers corresponding to apiFunctions,
+// with ObjectAPI set to nil.
+func initTestNilObjAPIEndPoints(apiFunctions []string) http.Handler {
+	muxRouter := router.NewRouter()
+	// All object storage operations are registered as HTTP handlers on `objectAPIHandlers`.
+	// When the handlers get a HTTP request they use the underlyting ObjectLayer to perform operations.
+	nilAPI := objectAPIHandlers{
+		ObjectAPI: func() ObjectLayer {
+			objLayerMutex.Lock()
+			defer objLayerMutex.Unlock()
+			globalObjectAPI = nil
+			return globalObjectAPI
+		},
+	}
+
+	// API Router.
+	apiRouter := muxRouter.NewRoute().PathPrefix("/").Subrouter()
+	// Bucket router.
+	bucket := apiRouter.PathPrefix("/{bucket}").Subrouter()
+	// Iterate the list of API functions requested for and register them in mux HTTP handler.
+	for _, apiFunction := range apiFunctions {
+		addAPIFunc(muxRouter, apiRouter, bucket, nilAPI, apiFunction)
+	}
+	return muxRouter
+}
+
 // Takes in XL/FS object layer, and the list of API end points to be tested/required, registers the API end points and returns the HTTP handler.
 // Need isolated registration of API end points while writing unit tests for end points.
 // All the API end points are registered only for the default case.
@@ -1368,62 +1465,7 @@ func initTestAPIEndPoints(objLayer ObjectLayer, apiFunctions []string) http.Hand
 	bucket := apiRouter.PathPrefix("/{bucket}").Subrouter()
 	// Iterate the list of API functions requested for and register them in mux HTTP handler.
 	for _, apiFunction := range apiFunctions {
-		switch apiFunction {
-		// Register ListBuckets	handler.
-		case "ListBuckets":
-			apiRouter.Methods("GET").HandlerFunc(api.ListBucketsHandler)
-		// Register GetObject handler.
-		case "GetObject":
-			bucket.Methods("GET").Path("/{object:.+}").HandlerFunc(api.GetObjectHandler)
-		// Register PutObject handler.
-		case "PutObject":
-			bucket.Methods("PUT").Path("/{object:.+}").HandlerFunc(api.PutObjectHandler)
-		// Register Delete Object handler.
-		case "DeleteObject":
-			bucket.Methods("DELETE").Path("/{object:.+}").HandlerFunc(api.DeleteObjectHandler)
-		// Register Copy Object  handler.
-		case "CopyObject":
-			bucket.Methods("PUT").Path("/{object:.+}").HeadersRegexp("X-Amz-Copy-Source", ".*?(\\/|%2F).*?").HandlerFunc(api.CopyObjectHandler)
-		// Register PutBucket Policy handler.
-		case "PutBucketPolicy":
-			bucket.Methods("PUT").HandlerFunc(api.PutBucketPolicyHandler).Queries("policy", "")
-		// Register Delete bucket HTTP policy handler.
-		case "DeleteBucketPolicy":
-			bucket.Methods("DELETE").HandlerFunc(api.DeleteBucketPolicyHandler).Queries("policy", "")
-		// Register Get Bucket policy HTTP Handler.
-		case "GetBucketPolicy":
-			bucket.Methods("GET").HandlerFunc(api.GetBucketPolicyHandler).Queries("policy", "")
-		// Register GetBucketLocation handler.
-		case "GetBucketLocation":
-			bucket.Methods("GET").HandlerFunc(api.GetBucketLocationHandler).Queries("location", "")
-		// Register HeadBucket handler.
-		case "HeadBucket":
-			bucket.Methods("HEAD").HandlerFunc(api.HeadBucketHandler)
-			// Register New Multipart upload handler.
-		case "NewMultipart":
-			bucket.Methods("POST").Path("/{object:.+}").HandlerFunc(api.NewMultipartUploadHandler).Queries("uploads", "")
-
-		// Register ListMultipartUploads handler.
-		case "ListMultipartUploads":
-			bucket.Methods("GET").HandlerFunc(api.ListMultipartUploadsHandler).Queries("uploads", "")
-			// Register Complete Multipart Upload handler.
-		case "CompleteMultipart":
-			bucket.Methods("POST").Path("/{object:.+}").HandlerFunc(api.CompleteMultipartUploadHandler).Queries("uploadId", "{uploadId:.*}")
-			// Register GetBucketNotification Handler.
-		case "GetBucketNotification":
-			bucket.Methods("GET").HandlerFunc(api.GetBucketNotificationHandler).Queries("notification", "")
-			// Register PutBucketNotification Handler.
-		case "PutBucketNotification":
-			bucket.Methods("PUT").HandlerFunc(api.PutBucketNotificationHandler).Queries("notification", "")
-			// Register ListenBucketNotification Handler.
-		case "ListenBucketNotification":
-			bucket.Methods("GET").HandlerFunc(api.ListenBucketNotificationHandler).Queries("events", "{events:.*}")
-		// Register all api endpoints by default.
-		default:
-			registerAPIRouter(muxRouter, api)
-			// No need to register any more end points, all the end points are registered.
-			break
-		}
+		addAPIFunc(muxRouter, apiRouter, bucket, api, apiFunction)
 	}
 	return muxRouter
 }
