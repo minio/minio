@@ -37,7 +37,8 @@ type redisConn struct {
 	params redisNotify
 }
 
-// Dial a new connection to redis instance at addr, optionally with a password if any.
+// Dial a new connection to redis instance at addr, optionally with a
+// password if any.
 func dialRedis(rNotify redisNotify) (*redis.Pool, error) {
 	// Return error if redis not enabled.
 	if !rNotify.Enable {

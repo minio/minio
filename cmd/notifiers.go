@@ -36,6 +36,8 @@ const (
 	queueTypeElastic = "elasticsearch"
 	// Static string indicating queue type 'redis'.
 	queueTypeRedis = "redis"
+	// Static string indicating queue type 'postgresql'.
+	queueTypePostgreSQL = "postgresql"
 )
 
 // Topic type.
@@ -55,6 +57,7 @@ type notifier struct {
 	NATS          map[string]natsNotify          `json:"nats"`
 	ElasticSearch map[string]elasticSearchNotify `json:"elasticsearch"`
 	Redis         map[string]redisNotify         `json:"redis"`
+	PostgreSQL    map[string]postgreSQLNotify    `json:"postgresql"`
 	// Add new notification queues.
 }
 
@@ -130,6 +133,24 @@ func isElasticQueue(sqsArn arnSQS) bool {
 		return false
 	}
 	defer elasticC.Stop()
+	return true
+}
+
+// Returns true if queueArn is for PostgreSQL.
+func isPostgreSQLQueue(sqsArn arnSQS) bool {
+	if sqsArn.Type != queueTypePostgreSQL {
+		return false
+	}
+	pgNotify := serverConfig.GetPostgreSQLNotifyByID(sqsArn.AccountID)
+	if !pgNotify.Enable {
+		return false
+	}
+	pgC, err := dialPostgreSQL(pgNotify)
+	if err != nil {
+		errorIf(err, "Unable to connect to PostgreSQL server %#v", pgNotify)
+		return false
+	}
+	defer pgC.Close()
 	return true
 }
 
