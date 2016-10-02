@@ -214,9 +214,10 @@ func testPutObjectPartDiskNotFound(obj ObjectLayer, instanceType string, disks [
 		{bucketNames[0], objectNames[0], uploadIDs[0], 4, "mnop", "e132e96a5ddad6da8b07bba6f6131fef", int64(len("mnop")), "e132e96a5ddad6da8b07bba6f6131fef"},
 		{bucketNames[0], objectNames[0], uploadIDs[0], 5, "mnop", "e132e96a5ddad6da8b07bba6f6131fef", int64(len("mnop")), "e132e96a5ddad6da8b07bba6f6131fef"},
 	}
+	sha256sum := ""
 	// Iterating over creatPartCases to generate multipart chunks.
 	for _, testCase := range createPartCases {
-		_, err = obj.PutObjectPart(testCase.bucketName, testCase.objName, testCase.uploadID, testCase.PartID, testCase.intputDataSize, bytes.NewBufferString(testCase.inputReaderData), testCase.inputMd5)
+		_, err = obj.PutObjectPart(testCase.bucketName, testCase.objName, testCase.uploadID, testCase.PartID, testCase.intputDataSize, bytes.NewBufferString(testCase.inputReaderData), testCase.inputMd5, sha256sum)
 		if err != nil {
 			t.Fatalf("%s : %s", instanceType, err.Error())
 		}
@@ -230,7 +231,7 @@ func testPutObjectPartDiskNotFound(obj ObjectLayer, instanceType string, disks [
 
 	// Object part upload should fail with quorum not available.
 	testCase := createPartCases[len(createPartCases)-1]
-	_, err = obj.PutObjectPart(testCase.bucketName, testCase.objName, testCase.uploadID, testCase.PartID, testCase.intputDataSize, bytes.NewBufferString(testCase.inputReaderData), testCase.inputMd5)
+	_, err = obj.PutObjectPart(testCase.bucketName, testCase.objName, testCase.uploadID, testCase.PartID, testCase.intputDataSize, bytes.NewBufferString(testCase.inputReaderData), testCase.inputMd5, sha256sum)
 	if err == nil {
 		t.Fatalf("Test %s: expected to fail but passed instead", instanceType)
 	}
@@ -279,6 +280,7 @@ func testObjectAPIPutObjectPart(obj ObjectLayer, instanceType string, t TestErrH
 		PartID          int
 		inputReaderData string
 		inputMd5        string
+		inputSHA256     string
 		intputDataSize  int64
 		// flag indicating whether the test should pass.
 		shouldPass bool
@@ -288,60 +290,63 @@ func testObjectAPIPutObjectPart(obj ObjectLayer, instanceType string, t TestErrH
 	}{
 		// Test case  1-4.
 		// Cases with invalid bucket name.
-		{".test", "obj", "", 1, "", "", 0, false, "", fmt.Errorf("%s", "Bucket name invalid: .test")},
-		{"------", "obj", "", 1, "", "", 0, false, "", fmt.Errorf("%s", "Bucket name invalid: ------")},
-		{"$this-is-not-valid-too", "obj", "", 1, "", "", 0, false, "",
+		{".test", "obj", "", 1, "", "", "", 0, false, "", fmt.Errorf("%s", "Bucket name invalid: .test")},
+		{"------", "obj", "", 1, "", "", "", 0, false, "", fmt.Errorf("%s", "Bucket name invalid: ------")},
+		{"$this-is-not-valid-too", "obj", "", 1, "", "", "", 0, false, "",
 			fmt.Errorf("%s", "Bucket name invalid: $this-is-not-valid-too")},
-		{"a", "obj", "", 1, "", "", 0, false, "", fmt.Errorf("%s", "Bucket name invalid: a")},
+		{"a", "obj", "", 1, "", "", "", 0, false, "", fmt.Errorf("%s", "Bucket name invalid: a")},
 		// Test case - 5.
 		// Case with invalid object names.
-		{bucket, "", "", 1, "", "", 0, false, "", fmt.Errorf("%s", "Object name invalid: minio-bucket#")},
+		{bucket, "", "", 1, "", "", "", 0, false, "", fmt.Errorf("%s", "Object name invalid: minio-bucket#")},
 		// Test case - 6.
 		// Valid object and bucket names but non-existent bucket.
-		{"abc", "def", "", 1, "", "", 0, false, "", fmt.Errorf("%s", "Bucket not found: abc")},
+		{"abc", "def", "", 1, "", "", "", 0, false, "", fmt.Errorf("%s", "Bucket not found: abc")},
 		// Test Case - 7.
 		// Existing bucket, but using a bucket on which NewMultipartUpload is not Initiated.
-		{"unused-bucket", "def", "xyz", 1, "", "", 0, false, "", fmt.Errorf("%s", "Invalid upload id xyz")},
+		{"unused-bucket", "def", "xyz", 1, "", "", "", 0, false, "", fmt.Errorf("%s", "Invalid upload id xyz")},
 		// Test Case - 8.
 		// Existing bucket, object name different from which NewMultipartUpload is constructed from.
 		// Expecting "Invalid upload id".
-		{bucket, "def", "xyz", 1, "", "", 0, false, "", fmt.Errorf("%s", "Invalid upload id xyz")},
+		{bucket, "def", "xyz", 1, "", "", "", 0, false, "", fmt.Errorf("%s", "Invalid upload id xyz")},
 		// Test Case - 9.
 		// Existing bucket, bucket and object name are the ones from which NewMultipartUpload is constructed from.
 		// But the uploadID is invalid.
 		// Expecting "Invalid upload id".
-		{bucket, object, "xyz", 1, "", "", 0, false, "", fmt.Errorf("%s", "Invalid upload id xyz")},
+		{bucket, object, "xyz", 1, "", "", "", 0, false, "", fmt.Errorf("%s", "Invalid upload id xyz")},
 		// Test Case - 10.
 		// Case with valid UploadID, existing bucket name.
 		// But using the bucket name from which NewMultipartUpload is not constructed from.
-		{"unused-bucket", object, uploadID, 1, "", "", 0, false, "", fmt.Errorf("%s", "Invalid upload id "+uploadID)},
+		{"unused-bucket", object, uploadID, 1, "", "", "", 0, false, "", fmt.Errorf("%s", "Invalid upload id "+uploadID)},
 		// Test Case - 11.
 		// Case with valid UploadID, existing bucket name.
 		// But using the object name from which NewMultipartUpload is not constructed from.
-		{bucket, "none-object", uploadID, 1, "", "", 0, false, "", fmt.Errorf("%s", "Invalid upload id "+uploadID)},
+		{bucket, "none-object", uploadID, 1, "", "", "", 0, false, "", fmt.Errorf("%s", "Invalid upload id "+uploadID)},
 		// Test case - 12.
 		// Input to replicate Md5 mismatch.
-		{bucket, object, uploadID, 1, "", "a35", 0, false, "",
+		{bucket, object, uploadID, 1, "", "a35", "", 0, false, "",
 			fmt.Errorf("%s", "Bad digest: Expected a35 is not valid with what we calculated "+"d41d8cd98f00b204e9800998ecf8427e")},
 		// Test case - 13.
-		// Input with size more than the size of actual data inside the reader.
-		{bucket, object, uploadID, 1, "abcd", "a35", int64(len("abcd") + 1), false, "",
-			IncompleteBody{}},
+		// When incorrect sha256 is provided.
+		{bucket, object, uploadID, 1, "", "", "incorrect-sha256", 0, false, "", SHA256Mismatch{}},
 		// Test case - 14.
+		// Input with size more than the size of actual data inside the reader.
+		{bucket, object, uploadID, 1, "abcd", "a35", "", int64(len("abcd") + 1), false, "", IncompleteBody{}},
+		// Test case - 15.
 		// Input with size less than the size of actual data inside the reader.
-		{bucket, object, uploadID, 1, "abcd", "a35", int64(len("abcd") - 1), false, "",
+		{bucket, object, uploadID, 1, "abcd", "a35", "", int64(len("abcd") - 1), false, "",
 			fmt.Errorf("%s", "Bad digest: Expected a35 is not valid with what we calculated 900150983cd24fb0d6963f7d28e17f72")},
-		// Test case - 15-18.
+
+		// Test case - 16-19.
 		// Validating for success cases.
-		{bucket, object, uploadID, 1, "abcd", "e2fc714c4727ee9395f324cd2e7f331f", int64(len("abcd")), true, "", nil},
-		{bucket, object, uploadID, 2, "efgh", "1f7690ebdd9b4caf8fab49ca1757bf27", int64(len("efgh")), true, "", nil},
-		{bucket, object, uploadID, 3, "ijkl", "09a0877d04abf8759f99adec02baf579", int64(len("abcd")), true, "", nil},
-		{bucket, object, uploadID, 4, "mnop", "e132e96a5ddad6da8b07bba6f6131fef", int64(len("abcd")), true, "", nil},
+		{bucket, object, uploadID, 1, "abcd", "e2fc714c4727ee9395f324cd2e7f331f", "88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589", int64(len("abcd")), true, "", nil},
+		{bucket, object, uploadID, 2, "efgh", "1f7690ebdd9b4caf8fab49ca1757bf27", "e5e088a0b66163a0a26a5e053d2a4496dc16ab6e0e3dd1adf2d16aa84a078c9d", int64(len("efgh")), true, "", nil},
+		{bucket, object, uploadID, 3, "ijkl", "09a0877d04abf8759f99adec02baf579", "005c19658919186b85618c5870463eec8d9b8c1a9d00208a5352891ba5bbe086", int64(len("abcd")), true, "", nil},
+		{bucket, object, uploadID, 4, "mnop", "e132e96a5ddad6da8b07bba6f6131fef", "f1afc31479522d6cff1ed068f93998f05a8cd3b22f5c37d7f307084f62d1d270", int64(len("abcd")), true, "", nil},
 	}
 
 	// Validate all the test cases.
 	for i, testCase := range testCases {
-		actualMd5Hex, actualErr := obj.PutObjectPart(testCase.bucketName, testCase.objName, testCase.uploadID, testCase.PartID, testCase.intputDataSize, bytes.NewBufferString(testCase.inputReaderData), testCase.inputMd5)
+		actualMd5Hex, actualErr := obj.PutObjectPart(testCase.bucketName, testCase.objName, testCase.uploadID, testCase.PartID, testCase.intputDataSize, bytes.NewBufferString(testCase.inputReaderData), testCase.inputMd5, testCase.inputSHA256)
 		// All are test cases above are expected to fail.
 		if actualErr != nil && testCase.shouldPass {
 			t.Errorf("Test %d: %s: Expected to pass, but failed with: <ERROR> %s.", i+1, instanceType, actualErr.Error())
@@ -472,9 +477,10 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 		{bucketNames[2], objectNames[4], uploadIDs[8], 1, "abcd", "e2fc714c4727ee9395f324cd2e7f331f", int64(len("abcd")), "e2fc714c4727ee9395f324cd2e7f331f"},
 		{bucketNames[2], objectNames[5], uploadIDs[9], 1, "abcd", "e2fc714c4727ee9395f324cd2e7f331f", int64(len("abcd")), "e2fc714c4727ee9395f324cd2e7f331f"},
 	}
+	sha256sum := ""
 	// Iterating over creatPartCases to generate multipart chunks.
 	for _, testCase := range createPartCases {
-		_, err := obj.PutObjectPart(testCase.bucketName, testCase.objName, testCase.uploadID, testCase.PartID, testCase.intputDataSize, bytes.NewBufferString(testCase.inputReaderData), testCase.inputMd5)
+		_, err := obj.PutObjectPart(testCase.bucketName, testCase.objName, testCase.uploadID, testCase.PartID, testCase.intputDataSize, bytes.NewBufferString(testCase.inputReaderData), testCase.inputMd5, sha256sum)
 		if err != nil {
 			t.Fatalf("%s : %s", instanceType, err.Error())
 		}
@@ -1319,9 +1325,10 @@ func testListObjectPartsDiskNotFound(obj ObjectLayer, instanceType string, disks
 		{bucketNames[0], objectNames[0], uploadIDs[0], 3, "ijkl", "09a0877d04abf8759f99adec02baf579", int64(len("abcd")), "09a0877d04abf8759f99adec02baf579"},
 		{bucketNames[0], objectNames[0], uploadIDs[0], 4, "mnop", "e132e96a5ddad6da8b07bba6f6131fef", int64(len("abcd")), "e132e96a5ddad6da8b07bba6f6131fef"},
 	}
+	sha256sum := ""
 	// Iterating over creatPartCases to generate multipart chunks.
 	for _, testCase := range createPartCases {
-		_, err := obj.PutObjectPart(testCase.bucketName, testCase.objName, testCase.uploadID, testCase.PartID, testCase.intputDataSize, bytes.NewBufferString(testCase.inputReaderData), testCase.inputMd5)
+		_, err := obj.PutObjectPart(testCase.bucketName, testCase.objName, testCase.uploadID, testCase.PartID, testCase.intputDataSize, bytes.NewBufferString(testCase.inputReaderData), testCase.inputMd5, sha256sum)
 		if err != nil {
 			t.Fatalf("%s : %s", instanceType, err.Error())
 		}
@@ -1558,9 +1565,10 @@ func testListObjectParts(obj ObjectLayer, instanceType string, t TestErrHandler)
 		{bucketNames[0], objectNames[0], uploadIDs[0], 3, "ijkl", "09a0877d04abf8759f99adec02baf579", int64(len("abcd")), "09a0877d04abf8759f99adec02baf579"},
 		{bucketNames[0], objectNames[0], uploadIDs[0], 4, "mnop", "e132e96a5ddad6da8b07bba6f6131fef", int64(len("abcd")), "e132e96a5ddad6da8b07bba6f6131fef"},
 	}
+	sha256sum := ""
 	// Iterating over creatPartCases to generate multipart chunks.
 	for _, testCase := range createPartCases {
-		_, err := obj.PutObjectPart(testCase.bucketName, testCase.objName, testCase.uploadID, testCase.PartID, testCase.intputDataSize, bytes.NewBufferString(testCase.inputReaderData), testCase.inputMd5)
+		_, err := obj.PutObjectPart(testCase.bucketName, testCase.objName, testCase.uploadID, testCase.PartID, testCase.intputDataSize, bytes.NewBufferString(testCase.inputReaderData), testCase.inputMd5, sha256sum)
 		if err != nil {
 			t.Fatalf("%s : %s", instanceType, err.Error())
 		}
@@ -1805,9 +1813,10 @@ func testObjectCompleteMultipartUpload(obj ObjectLayer, instanceType string, t T
 		{bucketNames[0], objectNames[0], uploadIDs[0], 5, string(validPart), validPartMD5, int64(len(string(validPart)))},
 		{bucketNames[0], objectNames[0], uploadIDs[0], 6, string(validPart), validPartMD5, int64(len(string(validPart)))},
 	}
+	sha256sum := ""
 	// Iterating over creatPartCases to generate multipart chunks.
 	for _, part := range parts {
-		_, err = obj.PutObjectPart(part.bucketName, part.objName, part.uploadID, part.PartID, part.intputDataSize, bytes.NewBufferString(part.inputReaderData), part.inputMd5)
+		_, err = obj.PutObjectPart(part.bucketName, part.objName, part.uploadID, part.PartID, part.intputDataSize, bytes.NewBufferString(part.inputReaderData), part.inputMd5, sha256sum)
 		if err != nil {
 			t.Fatalf("%s : %s", instanceType, err)
 		}

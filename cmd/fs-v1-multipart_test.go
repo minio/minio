@@ -90,13 +90,14 @@ func TestPutObjectPartFaultyDisk(t *testing.T) {
 	md5Writer := md5.New()
 	md5Writer.Write(data)
 	md5Hex := hex.EncodeToString(md5Writer.Sum(nil))
+	sha256sum := ""
 
 	// Test with faulty disk
 	fsStorage := fs.storage.(*posix)
 	for i := 1; i <= 7; i++ {
 		// Faulty disk generates errFaultyDisk at 'i' storage api call number
 		fs.storage = newNaughtyDisk(fsStorage, map[int]error{i: errFaultyDisk}, nil)
-		if _, err := fs.PutObjectPart(bucketName, objectName, uploadID, 1, dataLen, bytes.NewReader(data), md5Hex); errorCause(err) != errFaultyDisk {
+		if _, err := fs.PutObjectPart(bucketName, objectName, uploadID, 1, dataLen, bytes.NewReader(data), md5Hex, sha256sum); errorCause(err) != errFaultyDisk {
 			switch i {
 			case 1:
 				if !isSameType(errorCause(err), BucketNotFound{}) {
@@ -140,8 +141,9 @@ func TestCompleteMultipartUploadFaultyDisk(t *testing.T) {
 	md5Writer := md5.New()
 	md5Writer.Write(data)
 	md5Hex := hex.EncodeToString(md5Writer.Sum(nil))
+	sha256sum := ""
 
-	if _, err := fs.PutObjectPart(bucketName, objectName, uploadID, 1, 5, bytes.NewReader(data), md5Hex); err != nil {
+	if _, err := fs.PutObjectPart(bucketName, objectName, uploadID, 1, 5, bytes.NewReader(data), md5Hex, sha256sum); err != nil {
 		t.Fatal("Unexpected error ", err)
 	}
 
@@ -195,8 +197,9 @@ func TestListMultipartUploadsFaultyDisk(t *testing.T) {
 	md5Writer := md5.New()
 	md5Writer.Write(data)
 	md5Hex := hex.EncodeToString(md5Writer.Sum(nil))
+	sha256sum := ""
 
-	if _, err := fs.PutObjectPart(bucketName, objectName, uploadID, 1, 5, bytes.NewReader(data), md5Hex); err != nil {
+	if _, err := fs.PutObjectPart(bucketName, objectName, uploadID, 1, 5, bytes.NewReader(data), md5Hex, sha256sum); err != nil {
 		t.Fatal("Unexpected error ", err)
 	}
 

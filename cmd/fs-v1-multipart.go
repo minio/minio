@@ -18,8 +18,10 @@ package cmd
 
 import (
 	"crypto/md5"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"hash"
 	"io"
 	"path"
 	"strconv"
@@ -392,7 +394,7 @@ func appendParts(disk StorageAPI, bucket, object, uploadID, opsID string) {
 // an ongoing multipart transaction. Internally incoming data is
 // written to '.minio.sys/tmp' location and safely renamed to
 // '.minio.sys/multipart' for reach parts.
-func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, size int64, data io.Reader, md5Hex string) (string, error) {
+func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, size int64, data io.Reader, md5Hex string, sha256sum string) (string, error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
 		return "", traceError(BucketNameInvalid{Bucket: bucket})
@@ -424,6 +426,14 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	// Initialize md5 writer.
 	md5Writer := md5.New()
 
+	hashWriters := []io.Writer{md5Writer}
+
+	var sha256Writer hash.Hash
+	if sha256sum != "" {
+		sha256Writer = sha256.New()
+		hashWriters = append(hashWriters, sha256Writer)
+	}
+	multiWriter := io.MultiWriter(hashWriters...)
 	// Limit the reader to its provided size if specified.
 	var limitDataReader io.Reader
 	if size > 0 {
@@ -434,7 +444,7 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 		limitDataReader = data
 	}
 
-	teeReader := io.TeeReader(limitDataReader, md5Writer)
+	teeReader := io.TeeReader(limitDataReader, multiWriter)
 	bufSize := int64(readSizeV1)
 	if size > 0 && bufSize > size {
 		bufSize = size
@@ -467,12 +477,23 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 		if newMD5Hex != md5Hex {
 			// MD5 mismatch, delete the temporary object.
 			fs.storage.DeleteFile(minioMetaBucket, tmpPartPath)
-			// Returns md5 mismatch.
+
 			return "", traceError(BadDigest{md5Hex, newMD5Hex})
 		}
 	}
 
+	if sha256sum != "" {
+		newSHA256sum := hex.EncodeToString(sha256Writer.Sum(nil))
+		if newSHA256sum != sha256sum {
+			// SHA256 mismatch, delete the temporary object.
+			fs.storage.DeleteFile(minioMetaBucket, tmpPartPath)
+			return "", traceError(SHA256Mismatch{})
+		}
+	}
+
 	// get a random ID for lock instrumentation.
+	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
+	// used for instrumentation on locks.
 	opsID = getOpsID()
 
 	// Hold write lock as we are updating fs.json

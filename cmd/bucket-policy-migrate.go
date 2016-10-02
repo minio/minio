@@ -74,8 +74,10 @@ func migrateBucketPolicyConfig(objAPI ObjectLayer) error {
 		policyBytes, err := ioutil.ReadFile(policyPath)
 		fatalIf(err, "Unable to read bucket policy to migrate bucket policy", policyPath)
 		newPolicyPath := retainSlash(bucketConfigPrefix) + retainSlash(bucketName) + policyJSON
+		var metadata map[string]string
+		sha256sum := ""
 		// Erasure code the policy config to all the disks.
-		_, err = objAPI.PutObject(minioMetaBucket, newPolicyPath, int64(len(policyBytes)), bytes.NewReader(policyBytes), nil)
+		_, err = objAPI.PutObject(minioMetaBucket, newPolicyPath, int64(len(policyBytes)), bytes.NewReader(policyBytes), metadata, sha256sum)
 		fatalIf(err, "Unable to write bucket policy during migration.", newPolicyPath)
 		return nil
 	}

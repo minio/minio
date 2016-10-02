@@ -225,8 +225,9 @@ func prepareFormatXLHealFreshDisks(obj ObjectLayer) ([]StorageAPI, error) {
 
 	bucket := "bucket"
 	object := "object"
+	sha256sum := ""
 
-	_, err = obj.PutObject(bucket, object, int64(len("abcd")), bytes.NewReader([]byte("abcd")), nil)
+	_, err = obj.PutObject(bucket, object, int64(len("abcd")), bytes.NewReader([]byte("abcd")), nil, sha256sum)
 	if err != nil {
 		return []StorageAPI{}, err
 	}
@@ -349,8 +350,9 @@ func TestFormatXLHealCorruptedDisks(t *testing.T) {
 
 	bucket := "bucket"
 	object := "object"
+	sha256sum := ""
 
-	_, err = obj.PutObject(bucket, object, int64(len("abcd")), bytes.NewReader([]byte("abcd")), nil)
+	_, err = obj.PutObject(bucket, object, int64(len("abcd")), bytes.NewReader([]byte("abcd")), nil, sha256sum)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -421,8 +423,9 @@ func TestFormatXLReorderByInspection(t *testing.T) {
 
 	bucket := "bucket"
 	object := "object"
+	sha256sum := ""
 
-	_, err = obj.PutObject(bucket, object, int64(len("abcd")), bytes.NewReader([]byte("abcd")), nil)
+	_, err = obj.PutObject(bucket, object, int64(len("abcd")), bytes.NewReader([]byte("abcd")), nil, sha256sum)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -330,7 +330,7 @@ func (s *TestRPCControllerSuite) testControllerHealObjectH(t *testing.T) {
 
 	datum := strings.NewReader("a")
 	_, err = s.testServer.Obj.PutObject("testbucket", "testobject", 1,
-		datum, nil)
+		datum, nil, "")
 	if err != nil {
 		t.Fatalf("Controller.HealObjectH - put object failed with <ERROR> %s",
 			err.Error())
@@ -373,8 +373,7 @@ func (s *TestRPCControllerSuite) testControllerListObjectsHealH(t *testing.T) {
 
 	r := strings.NewReader("0")
 	_, err = s.testServer.Obj.PutObject(
-		"testbucket", "testObj-0", 1, r, nil,
-	)
+		"testbucket", "testObj-0", 1, r, nil, "")
 	if err != nil {
 		t.Fatalf("Controller.ListObjectsHealH - object creation failed - %s",
 			err.Error())

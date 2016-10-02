@@ -351,7 +351,7 @@ func testListObjectsWebHandler(obj ObjectLayer, instanceType string, t TestErrHa
 
 	data := bytes.Repeat([]byte("a"), objectSize)
 
-	_, err = obj.PutObject(bucketName, objectName, int64(len(data)), bytes.NewReader(data), map[string]string{"md5Sum": "c9a34cfc85d982698c6ac89f76071abd"})
+	_, err = obj.PutObject(bucketName, objectName, int64(len(data)), bytes.NewReader(data), map[string]string{"md5Sum": "c9a34cfc85d982698c6ac89f76071abd"}, "")
 
 	if err != nil {
 		t.Fatalf("Was not able to upload an object, %v", err)
@@ -422,7 +422,7 @@ func testRemoveObjectWebHandler(obj ObjectLayer, instanceType string, t TestErrH
 
 	data := bytes.Repeat([]byte("a"), objectSize)
 
-	_, err = obj.PutObject(bucketName, objectName, int64(len(data)), bytes.NewReader(data), map[string]string{"md5Sum": "c9a34cfc85d982698c6ac89f76071abd"})
+	_, err = obj.PutObject(bucketName, objectName, int64(len(data)), bytes.NewReader(data), map[string]string{"md5Sum": "c9a34cfc85d982698c6ac89f76071abd"}, "")
 
 	if err != nil {
 		t.Fatalf("Was not able to upload an object, %v", err)
@@ -696,7 +696,7 @@ func testDownloadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandl
 	}
 
 	content := []byte("temporary file's content")
-	_, err = obj.PutObject(bucketName, objectName, int64(len(content)), bytes.NewReader(content), map[string]string{"md5Sum": "01ce59706106fe5e02e7f55fffda7f34"})
+	_, err = obj.PutObject(bucketName, objectName, int64(len(content)), bytes.NewReader(content), map[string]string{"md5Sum": "01ce59706106fe5e02e7f55fffda7f34"}, "")
 	if err != nil {
 		t.Fatalf("Was not able to upload an object, %v", err)
 	}
@@ -755,7 +755,7 @@ func testWebPresignedGetHandler(obj ObjectLayer, instanceType string, t TestErrH
 	}
 
 	data := bytes.Repeat([]byte("a"), objectSize)
-	_, err = obj.PutObject(bucketName, objectName, int64(len(data)), bytes.NewReader(data), map[string]string{"md5Sum": "c9a34cfc85d982698c6ac89f76071abd"})
+	_, err = obj.PutObject(bucketName, objectName, int64(len(data)), bytes.NewReader(data), map[string]string{"md5Sum": "c9a34cfc85d982698c6ac89f76071abd"}, "")
 	if err != nil {
 		t.Fatalf("Was not able to upload an object, %v", err)
 	}
