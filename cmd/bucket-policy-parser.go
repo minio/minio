@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"path"
 	"sort"
 	"strings"
 
@@ -224,7 +223,7 @@ func resourcePrefix(resource string) string {
 	if strings.HasSuffix(resource, "*") {
 		resource = strings.TrimSuffix(resource, "*")
 	}
-	return path.Clean(resource)
+	return resource
 }
 
 // checkBucketPolicyResources validates Resources in unmarshalled bucket policy structure.
