@@ -489,12 +489,25 @@ func preSignV2(req *http.Request, accessKeyID, secretAccessKey string, expires i
 	epochExpires := d.Unix() + expires
 
 	// Add expires header if not present.
-	if expiresStr := req.Header.Get("Expires"); expiresStr == "" {
-		req.Header.Set("Expires", strconv.FormatInt(epochExpires, 10))
+	expiresStr := req.Header.Get("Expires")
+	if expiresStr == "" {
+		expiresStr = strconv.FormatInt(epochExpires, 10)
+		req.Header.Set("Expires", expiresStr)
+	}
+
+	// url.RawPath will be valid if path has any encoded characters, if not it will
+	// be empty - in which case we need to consider url.Path (bug in net/http?)
+	encodedResource := req.URL.RawPath
+	encodedQuery := req.URL.RawQuery
+	if encodedResource == "" {
+		splits := strings.Split(req.URL.Path, "?")
+		if len(splits) > 0 {
+			encodedResource = splits[0]
+		}
 	}
 
 	// Get presigned string to sign.
-	stringToSign := preStringifyHTTPReq(*req)
+	stringToSign := presignV2STS(req.Method, encodedResource, encodedQuery, req.Header, expiresStr)
 	hm := hmac.New(sha1.New, []byte(secretAccessKey))
 	hm.Write([]byte(stringToSign))
 
@@ -527,8 +540,19 @@ func signRequestV2(req *http.Request, accessKey, secretKey string) error {
 		req.Header.Set("Date", d.Format(http.TimeFormat))
 	}
 
+	// url.RawPath will be valid if path has any encoded characters, if not it will
+	// be empty - in which case we need to consider url.Path (bug in net/http?)
+	encodedResource := req.URL.RawPath
+	encodedQuery := req.URL.RawQuery
+	if encodedResource == "" {
+		splits := strings.Split(req.URL.Path, "?")
+		if len(splits) > 0 {
+			encodedResource = splits[0]
+		}
+	}
+
 	// Calculate HMAC for secretAccessKey.
-	stringToSign := stringifyHTTPReq(*req)
+	stringToSign := signV2STS(req.Method, encodedResource, encodedQuery, req.Header)
 	hm := hmac.New(sha1.New, []byte(secretKey))
 	hm.Write([]byte(stringToSign))
 

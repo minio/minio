@@ -17,13 +17,11 @@
 package cmd
 
 import (
-	"bytes"
 	"crypto/hmac"
 	"crypto/sha1"
 	"encoding/base64"
 	"fmt"
 	"net/http"
-	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -35,6 +33,29 @@ const (
 	signV2Algorithm = "AWS"
 )
 
+// AWS S3 Signature V2 calculation rule is give here:
+// http://docs.aws.amazon.com/AmazonS3/latest/dev/RESTAuthentication.html#RESTAuthenticationStringToSign
+
+// Whitelist resource list that will be used in query string for signature-V2 calculation.
+var resourceList = []string{
+	"acl",
+	"delete",
+	"lifecycle",
+	"location",
+	"logging",
+	"notification",
+	"partNumber",
+	"policy",
+	"requestPayment",
+	"torrent",
+	"uploadId",
+	"uploads",
+	"versionId",
+	"versioning",
+	"versions",
+	"website",
+}
+
 // TODO add post policy signature.
 
 // doesPresignV2SignatureMatch - Verify query headers with presigned signature
@@ -44,59 +65,59 @@ func doesPresignV2SignatureMatch(r *http.Request) APIErrorCode {
 	// Access credentials.
 	cred := serverConfig.GetCredential()
 
-	// Copy request
-	req := *r
+	// url.RawPath will be valid if path has any encoded characters, if not it will
+	// be empty - in which case we need to consider url.Path (bug in net/http?)
+	encodedResource := r.URL.RawPath
+	encodedQuery := r.URL.RawQuery
+	if encodedResource == "" {
+		splits := strings.Split(r.URL.Path, "?")
+		if len(splits) > 0 {
+			encodedResource = splits[0]
+		}
+	}
+	queries := strings.Split(encodedQuery, "&")
+	var filteredQueries []string
+	var gotSignature string
+	var expires string
+	var accessKey string
+	for _, query := range queries {
+		keyval := strings.Split(query, "=")
+		switch keyval[0] {
+		case "AWSAccessKeyId":
+			accessKey = keyval[1]
+		case "Signature":
+			gotSignature = keyval[1]
+		case "Expires":
+			expires = keyval[1]
+		default:
+			filteredQueries = append(filteredQueries, query)
+		}
+	}
 
-	// Validate if we do have query params.
-	if req.URL.Query().Encode() == "" {
+	if accessKey == "" {
 		return ErrInvalidQueryParams
 	}
 
 	// Validate if access key id same.
-	if req.URL.Query().Get("AWSAccessKeyId") != cred.AccessKeyID {
+	if accessKey != cred.AccessKeyID {
 		return ErrInvalidAccessKeyID
 	}
 
-	// Parse expires param into its native form.
-	expired, err := strconv.ParseInt(req.URL.Query().Get("Expires"), 10, 64)
+	// Make sure the request has not expired.
+	expiresInt, err := strconv.ParseInt(expires, 10, 64)
 	if err != nil {
-		errorIf(err, "Unable to parse expires query param")
 		return ErrMalformedExpires
 	}
 
-	// Validate if the request has already expired.
-	if expired < time.Now().UTC().Unix() {
+	if expiresInt < time.Now().UTC().Unix() {
 		return ErrExpiredPresignRequest
 	}
 
-	// Save incoming signature to be validated later.
-	incomingSignature := req.URL.Query().Get("Signature")
-
-	// Set the expires header for string to sign.
-	req.Header.Set("Expires", strconv.FormatInt(expired, 10))
-
-	/// Empty out the query params, we only need to validate signature.
-	query := req.URL.Query()
-	// Remove all the query params added for signature alone, we need
-	// a proper URL for string to sign.
-	query.Del("Expires")
-	query.Del("AWSAccessKeyId")
-	query.Del("Signature")
-	// Query encode whatever is left back to RawQuery.
-	req.URL.RawQuery = queryEncode(query)
-
-	// Get presigned string to sign.
-	stringToSign := preStringifyHTTPReq(req)
-	hm := hmac.New(sha1.New, []byte(cred.SecretAccessKey))
-	hm.Write([]byte(stringToSign))
-
-	// Calculate signature and validate.
-	signature := base64.StdEncoding.EncodeToString(hm.Sum(nil))
-	if incomingSignature != signature {
+	expectedSignature := preSignatureV2(r.Method, encodedResource, strings.Join(filteredQueries, "&"), r.Header, expires)
+	if gotSignature != getURLEncodedName(expectedSignature) {
 		return ErrSignatureDoesNotMatch
 	}
 
-	// Success.
 	return ErrNone
 }
 
@@ -120,200 +141,153 @@ func doesPresignV2SignatureMatch(r *http.Request) APIErrorCode {
 //     - http://docs.aws.amazon.com/AmazonS3/latest/dev/auth-request-sig-v2.html
 // returns true if matches, false otherwise. if error is not nil then it is always false
 func doesSignV2Match(r *http.Request) APIErrorCode {
-	// Access credentials.
-	cred := serverConfig.GetCredential()
-
-	// Copy request.
-	req := *r
-
-	// Save authorization header.
-	v2Auth := req.Header.Get("Authorization")
-	if v2Auth == "" {
+	gotAuth := r.Header.Get("Authorization")
+	if gotAuth == "" {
 		return ErrAuthHeaderEmpty
 	}
 
-	// Add date if not present.
-	if date := req.Header.Get("Date"); date == "" {
-		if date = req.Header.Get("X-Amz-Date"); date == "" {
-			return ErrMissingDateHeader
+	// url.RawPath will be valid if path has any encoded characters, if not it will
+	// be empty - in which case we need to consider url.Path (bug in net/http?)
+	encodedResource := r.URL.RawPath
+	encodedQuery := r.URL.RawQuery
+	if encodedResource == "" {
+		splits := strings.Split(r.URL.Path, "?")
+		if len(splits) > 0 {
+			encodedResource = splits[0]
 		}
 	}
 
-	// Calculate HMAC for secretAccessKey.
-	stringToSign := stringifyHTTPReq(req)
-	hm := hmac.New(sha1.New, []byte(cred.SecretAccessKey))
-	hm.Write([]byte(stringToSign))
-
-	// Prepare auth header.
-	authHeader := new(bytes.Buffer)
-	authHeader.WriteString(fmt.Sprintf("%s %s:", signV2Algorithm, cred.AccessKeyID))
-	encoder := base64.NewEncoder(base64.StdEncoding, authHeader)
-	encoder.Write(hm.Sum(nil))
-	encoder.Close()
-
-	// Verify if signature match.
-	if authHeader.String() != v2Auth {
+	expectedAuth := signatureV2(r.Method, encodedResource, encodedQuery, r.Header)
+	if gotAuth != expectedAuth {
 		return ErrSignatureDoesNotMatch
 	}
 
 	return ErrNone
 }
 
-// From the Amazon docs:
-//
-// StringToSign = HTTP-Verb + "\n" +
-// 	 Content-Md5 + "\n" +
-//	 Content-Type + "\n" +
-//	 Expires + "\n" +
-//	 CanonicalizedProtocolHeaders +
-//	 CanonicalizedResource;
-func preStringifyHTTPReq(req http.Request) string {
-	buf := new(bytes.Buffer)
-	// Write standard headers.
-	writePreSignV2Headers(buf, req)
-	// Write canonicalized protocol headers if any.
-	writeCanonicalizedHeaders(buf, req)
-	// Write canonicalized Query resources if any.
-	isPreSign := true
-	writeCanonicalizedResource(buf, req, isPreSign)
-	return buf.String()
+// Return signature-v2 for the presigned request.
+func preSignatureV2(method string, encodedResource string, encodedQuery string, headers http.Header, expires string) string {
+	cred := serverConfig.GetCredential()
+
+	stringToSign := presignV2STS(method, encodedResource, encodedQuery, headers, expires)
+	hm := hmac.New(sha1.New, []byte(cred.SecretAccessKey))
+	hm.Write([]byte(stringToSign))
+	signature := base64.StdEncoding.EncodeToString(hm.Sum(nil))
+	return signature
 }
 
-// writePreSignV2Headers - write preSign v2 required headers.
-func writePreSignV2Headers(buf *bytes.Buffer, req http.Request) {
-	buf.WriteString(req.Method + "\n")
-	buf.WriteString(req.Header.Get("Content-Md5") + "\n")
-	buf.WriteString(req.Header.Get("Content-Type") + "\n")
-	buf.WriteString(req.Header.Get("Expires") + "\n")
+// Return signature-v2 authrization header.
+func signatureV2(method string, encodedResource string, encodedQuery string, headers http.Header) string {
+	cred := serverConfig.GetCredential()
+
+	stringToSign := signV2STS(method, encodedResource, encodedQuery, headers)
+
+	hm := hmac.New(sha1.New, []byte(cred.SecretAccessKey))
+	hm.Write([]byte(stringToSign))
+	signature := base64.StdEncoding.EncodeToString(hm.Sum(nil))
+	return fmt.Sprintf("%s %s:%s", signV2Algorithm, cred.AccessKeyID, signature)
 }
 
-// From the Amazon docs:
-//
-// StringToSign = HTTP-Verb + "\n" +
-// 	 Content-Md5 + "\n" +
-//	 Content-Type + "\n" +
-//	 Date + "\n" +
-//	 CanonicalizedProtocolHeaders +
-//	 CanonicalizedResource;
-func stringifyHTTPReq(req http.Request) string {
-	buf := new(bytes.Buffer)
-	// Write standard headers.
-	writeSignV2Headers(buf, req)
-	// Write canonicalized protocol headers if any.
-	writeCanonicalizedHeaders(buf, req)
-	// Write canonicalized Query resources if any.
-	isPreSign := false
-	writeCanonicalizedResource(buf, req, isPreSign)
-	return buf.String()
-}
-
-// writeSignV2Headers - write signV2 required headers.
-func writeSignV2Headers(buf *bytes.Buffer, req http.Request) {
-	buf.WriteString(req.Method + "\n")
-	buf.WriteString(req.Header.Get("Content-Md5") + "\n")
-	buf.WriteString(req.Header.Get("Content-Type") + "\n")
-	buf.WriteString(req.Header.Get("Date") + "\n")
-}
-
-// writeCanonicalizedHeaders - write canonicalized headers.
-func writeCanonicalizedHeaders(buf *bytes.Buffer, req http.Request) {
-	var protoHeaders []string
-	vals := make(map[string][]string)
-	for k, vv := range req.Header {
-		// All the AMZ headers should be lowercase
-		lk := strings.ToLower(k)
-		if strings.HasPrefix(lk, "x-amz") {
-			protoHeaders = append(protoHeaders, lk)
-			vals[lk] = vv
+// Return canonical headers.
+func canonicalizedAmzHeadersV2(headers http.Header) string {
+	var keys []string
+	keyval := make(map[string]string)
+	for key := range headers {
+		lkey := strings.ToLower(key)
+		if !strings.HasPrefix(lkey, "x-amz-") {
+			continue
 		}
+		keys = append(keys, lkey)
+		keyval[lkey] = strings.Join(headers[key], ",")
 	}
-	sort.Strings(protoHeaders)
-	for _, k := range protoHeaders {
-		buf.WriteString(k)
-		buf.WriteByte(':')
-		for idx, v := range vals[k] {
-			if idx > 0 {
-				buf.WriteByte(',')
-			}
-			if strings.Contains(v, "\n") {
-				// TODO: "Unfold" long headers that
-				// span multiple lines (as allowed by
-				// RFC 2616, section 4.2) by replacing
-				// the folding white-space (including
-				// new-line) by a single space.
-				buf.WriteString(v)
-			} else {
-				buf.WriteString(v)
-			}
-		}
-		buf.WriteByte('\n')
+	sort.Strings(keys)
+	var canonicalHeaders []string
+	for _, key := range keys {
+		canonicalHeaders = append(canonicalHeaders, key+":"+keyval[key])
 	}
+	return strings.Join(canonicalHeaders, "\n")
 }
 
-// The following list is already sorted and should always be, otherwise we could
-// have signature-related issues
-var resourceList = []string{
-	"acl",
-	"delete",
-	"location",
-	"logging",
-	"notification",
-	"partNumber",
-	"policy",
-	"requestPayment",
-	"torrent",
-	"uploadId",
-	"uploads",
-	"versionId",
-	"versioning",
-	"versions",
-	"website",
+// Return canonical resource string.
+func canonicalizedResourceV2(encodedPath string, encodedQuery string) string {
+	queries := strings.Split(encodedQuery, "&")
+	keyval := make(map[string]string)
+	for _, query := range queries {
+		key := query
+		val := ""
+		index := strings.Index(query, "=")
+		if index != -1 {
+			key = query[:index]
+			val = query[index+1:]
+		}
+		keyval[key] = val
+	}
+	var canonicalQueries []string
+	for _, key := range resourceList {
+		val, ok := keyval[key]
+		if !ok {
+			continue
+		}
+		if val == "" {
+			canonicalQueries = append(canonicalQueries, key)
+			continue
+		}
+		canonicalQueries = append(canonicalQueries, key+"="+val)
+	}
+	if len(canonicalQueries) == 0 {
+		return encodedPath
+	}
+	// the queries will be already sorted as resourceList is sorted.
+	return encodedPath + "?" + strings.Join(canonicalQueries, "&")
 }
 
-// From the Amazon docs:
-//
-// CanonicalizedResource = [ "/" + Bucket ] +
-// 	  <HTTP-Request-URI, from the protocol name up to the query string> +
-// 	  [ sub-resource, if present. For example "?acl", "?location", "?logging", or "?torrent"];
-func writeCanonicalizedResource(buf *bytes.Buffer, req http.Request, isPreSign bool) {
-	// Save request URL.
-	requestURL := req.URL
-	// Get encoded URL path.
-	path := getURLEncodedName(requestURL.Path)
-	if isPreSign {
-		// Get encoded URL path.
-		if len(requestURL.Query()) > 0 {
-			// Keep the usual queries unescaped for string to sign.
-			query, _ := url.QueryUnescape(queryEncode(requestURL.Query()))
-			path = path + "?" + query
-		}
-		buf.WriteString(path)
-		return
+// Return string to sign for authz header calculation.
+func signV2STS(method string, encodedResource string, encodedQuery string, headers http.Header) string {
+	canonicalHeaders := canonicalizedAmzHeadersV2(headers)
+	if len(canonicalHeaders) > 0 {
+		canonicalHeaders += "\n"
 	}
-	buf.WriteString(path)
-	if requestURL.RawQuery != "" {
-		var n int
-		vals, _ := url.ParseQuery(requestURL.RawQuery)
-		// Verify if any sub resource queries are present, if yes
-		// canonicallize them.
-		for _, resource := range resourceList {
-			if vv, ok := vals[resource]; ok && len(vv) > 0 {
-				n++
-				// First element
-				switch n {
-				case 1:
-					buf.WriteByte('?')
-				// The rest
-				default:
-					buf.WriteByte('&')
-				}
-				buf.WriteString(resource)
-				// Request parameters
-				if len(vv[0]) > 0 {
-					buf.WriteByte('=')
-					buf.WriteString(strings.Replace(url.QueryEscape(vv[0]), "+", "%20", -1))
-				}
-			}
-		}
+
+	// From the Amazon docs:
+	//
+	// StringToSign = HTTP-Verb + "\n" +
+	// 	 Content-Md5 + "\n" +
+	//	 Content-Type + "\n" +
+	//	 Date + "\n" +
+	//	 CanonicalizedProtocolHeaders +
+	//	 CanonicalizedResource;
+	stringToSign := strings.Join([]string{
+		method,
+		headers.Get("Content-MD5"),
+		headers.Get("Content-Type"),
+		headers.Get("Date"),
+		canonicalHeaders,
+	}, "\n") + canonicalizedResourceV2(encodedResource, encodedQuery)
+
+	return stringToSign
+}
+
+// Return string to sign for pre-sign signature calculation.
+func presignV2STS(method string, encodedResource string, encodedQuery string, headers http.Header, expires string) string {
+	canonicalHeaders := canonicalizedAmzHeadersV2(headers)
+	if len(canonicalHeaders) > 0 {
+		canonicalHeaders += "\n"
 	}
+
+	// From the Amazon docs:
+	//
+	// StringToSign = HTTP-Verb + "\n" +
+	// 	 Content-Md5 + "\n" +
+	//	 Content-Type + "\n" +
+	//	 Expires + "\n" +
+	//	 CanonicalizedProtocolHeaders +
+	//	 CanonicalizedResource;
+	stringToSign := strings.Join([]string{
+		method,
+		headers.Get("Content-MD5"),
+		headers.Get("Content-Type"),
+		expires,
+		canonicalHeaders,
+	}, "\n") + canonicalizedResourceV2(encodedResource, encodedQuery)
+	return stringToSign
 }
