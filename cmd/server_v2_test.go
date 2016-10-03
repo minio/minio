@@ -2267,7 +2267,7 @@ func (s *TestSuiteCommonV2) TestObjectMultipartListError(c *C) {
 
 	// HTTP request to ListMultipart Uploads.
 	// max-keys is set to valid value of 1
-	request, err = newTestSignedRequestV2("GET", getListMultipartURLWithParams(s.endPoint, bucketName, objectName, uploadID, "1"),
+	request, err = newTestSignedRequestV2("GET", getListMultipartURLWithParams(s.endPoint, bucketName, objectName, uploadID, "1", "", ""),
 		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 	// execute the HTTP request.
@@ -2277,7 +2277,7 @@ func (s *TestSuiteCommonV2) TestObjectMultipartListError(c *C) {
 
 	// HTTP request to ListMultipart Uploads.
 	// max-keys is set to invalid value of -2.
-	request, err = newTestSignedRequestV2("GET", getListMultipartURLWithParams(s.endPoint, bucketName, objectName, uploadID, "-2"),
+	request, err = newTestSignedRequestV2("GET", getListMultipartURLWithParams(s.endPoint, bucketName, objectName, uploadID, "-2", "", ""),
 		0, nil, s.accessKey, s.secretKey)
 	c.Assert(err, IsNil)
 	// execute the HTTP request.
