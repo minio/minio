@@ -41,6 +41,7 @@ const (
 	TooBigDecodedLength
 	BadSignature
 	BadMD5
+	MissingUploadID
 )
 
 // Wrapper for calling GetObject API handler tests for both XL multiple disks and FS single drive setup.
@@ -1210,13 +1211,14 @@ func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName strin
 		t.Fatalf("[%s] Failed to unmarshal NewMultipartUpload response <ERROR> %v", instanceType, err)
 	}
 
-	NoAPIErr := APIError{}
-	MissingContent := getAPIError(ErrMissingContentLength)
-	EntityTooLarge := getAPIError(ErrEntityTooLarge)
-	BadSigning := getAPIError(ErrSignatureDoesNotMatch)
-	BadChecksum := getAPIError(ErrInvalidDigest)
-	InvalidPart := getAPIError(ErrInvalidPart)
-	InvalidMaxParts := getAPIError(ErrInvalidMaxParts)
+	noAPIErr := APIError{}
+	missingContent := getAPIError(ErrMissingContentLength)
+	entityTooLarge := getAPIError(ErrEntityTooLarge)
+	badSigning := getAPIError(ErrSignatureDoesNotMatch)
+	badChecksum := getAPIError(ErrInvalidDigest)
+	invalidPart := getAPIError(ErrInvalidPart)
+	invalidMaxParts := getAPIError(ErrInvalidMaxParts)
+	noSuchUploadID := getAPIError(ErrNoSuchUpload)
 	// SignatureMismatch for various signing types
 	testCases := []struct {
 		objectName       string
@@ -1226,19 +1228,25 @@ func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName strin
 		expectedAPIError APIError
 	}{
 		// Success case
-		{testObject, bytes.NewReader([]byte("hello")), "1", None, NoAPIErr},
-		{testObject, bytes.NewReader([]byte("hello")), "9999999999999999999", None, InvalidPart},
-		{testObject, bytes.NewReader([]byte("hello")), strconv.Itoa(maxPartID + 1), None, InvalidMaxParts},
-		{testObject, bytes.NewReader([]byte("hello")), "1", MissingContentLength, MissingContent},
-		{testObject, bytes.NewReader([]byte("hello")), "1", TooBigObject, EntityTooLarge},
-		{testObject, bytes.NewReader([]byte("hello")), "1", BadSignature, BadSigning},
-		{testObject, bytes.NewReader([]byte("hello")), "1", BadMD5, BadChecksum},
+		{testObject, bytes.NewReader([]byte("hello")), "1", None, noAPIErr},
+		{testObject, bytes.NewReader([]byte("hello")), "9999999999999999999", None, invalidPart},
+		{testObject, bytes.NewReader([]byte("hello")), strconv.Itoa(maxPartID + 1), None, invalidMaxParts},
+		{testObject, bytes.NewReader([]byte("hello")), "1", MissingContentLength, missingContent},
+		{testObject, bytes.NewReader([]byte("hello")), "1", TooBigObject, entityTooLarge},
+		{testObject, bytes.NewReader([]byte("hello")), "1", BadSignature, badSigning},
+		{testObject, bytes.NewReader([]byte("hello")), "1", BadMD5, badChecksum},
+		{testObject, bytes.NewReader([]byte("hello")), "1", MissingUploadID, noSuchUploadID},
 	}
 
 	for i, test := range testCases {
 		tRec := httptest.NewRecorder()
+		uploadID := mpartResp.UploadID
+		// To simulate PutObjectPart failure at object layer.
+		if test.fault == MissingUploadID {
+			uploadID = "upload1"
+		}
 		tReq, tErr := newTestSignedRequestV4("PUT",
-			getPutObjectPartURL("", bucketName, test.objectName, mpartResp.UploadID, test.partNumber),
+			getPutObjectPartURL("", bucketName, test.objectName, uploadID, test.partNumber),
 			0, test.reader, credentials.AccessKeyID, credentials.SecretAccessKey)
 		if tErr != nil {
 			t.Fatalf("Test %d %s Failed to create a signed request to upload part for %s/%s: <ERROR> %v", i+1, instanceType,
@@ -1256,7 +1264,7 @@ func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName strin
 			tReq.Header.Set("Content-MD5", "badmd5")
 		}
 		apiRouter.ServeHTTP(tRec, tReq)
-		if test.expectedAPIError != NoAPIErr {
+		if test.expectedAPIError != noAPIErr {
 			errBytes, err := ioutil.ReadAll(tRec.Result().Body)
 			if err != nil {
 				t.Fatalf("Test %d %s Failed to read error response from upload part request %s/%s: <ERROR> %v",
