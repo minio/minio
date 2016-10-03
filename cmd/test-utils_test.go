@@ -1133,10 +1133,13 @@ func getListMultipartUploadsURLWithParams(endPoint, bucketName, prefix, keyMarke
 }
 
 // return URL for a listing parts on a given upload id.
-func getListMultipartURLWithParams(endPoint, bucketName, objectName, uploadID, maxParts string) string {
+func getListMultipartURLWithParams(endPoint, bucketName, objectName, uploadID, maxParts, partNumberMarker, encoding string) string {
 	queryValues := url.Values{}
 	queryValues.Set("uploadId", uploadID)
 	queryValues.Set("max-parts", maxParts)
+	if partNumberMarker != "" {
+		queryValues.Set("part-number-marker", partNumberMarker)
+	}
 	return makeTestTargetURL(endPoint, bucketName, objectName, queryValues)
 }
 
@@ -1389,10 +1392,12 @@ func addAPIFunc(muxRouter *router.Router, apiRouter *router.Router, bucket *rout
 		// Register New Multipart upload handler.
 	case "NewMultipart":
 		bucket.Methods("POST").Path("/{object:.+}").HandlerFunc(api.NewMultipartUploadHandler).Queries("uploads", "")
-
 	// Register PutObjectPart handler.
 	case "PutObjectPart":
 		bucket.Methods("PUT").Path("/{object:.+}").HandlerFunc(api.PutObjectPartHandler).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}")
+	// Register ListObjectParts handler.
+	case "ListObjectParts":
+		bucket.Methods("GET").Path("/{object:.+}").HandlerFunc(api.ListObjectPartsHandler).Queries("uploadId", "{uploadId:.*}")
 	// Register ListMultipartUploads handler.
 	case "ListMultipartUploads":
 		bucket.Methods("GET").HandlerFunc(api.ListMultipartUploadsHandler).Queries("uploads", "")
