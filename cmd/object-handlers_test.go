@@ -29,6 +29,7 @@ import (
 	"strconv"
 	"sync"
 	"testing"
+	"time"
 )
 
 // Type to capture different modifications to API request to simulate failure cases.
@@ -963,7 +964,53 @@ func testAPIDeleteOjectHandler(obj ObjectLayer, instanceType, bucketName string,
 	}
 }
 
-func testAPIPutObjectHandlerV2(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
+func testAPIPutObjectPartHandlerPreSign(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
+	credentials credential, t TestErrHandler) {
+	testObject := "testobject"
+	rec := httptest.NewRecorder()
+	req, err := newTestSignedRequestV4("POST", getNewMultipartURL("", bucketName, "testobject"),
+		0, nil, credentials.AccessKeyID, credentials.SecretAccessKey)
+	if err != nil {
+		t.Fatalf("[%s] - Failed to create a signed request to initiate multipart upload for %s/%s: <ERROR> %v",
+			instanceType, bucketName, testObject, err)
+	}
+	apiRouter.ServeHTTP(rec, req)
+
+	// Get uploadID of the mulitpart upload initiated.
+	var mpartResp InitiateMultipartUploadResponse
+	mpartRespBytes, err := ioutil.ReadAll(rec.Result().Body)
+	if err != nil {
+		t.Fatalf("[%s] Failed to read NewMultipartUpload response <ERROR> %v", instanceType, err)
+
+	}
+	err = xml.Unmarshal(mpartRespBytes, &mpartResp)
+	if err != nil {
+		t.Fatalf("[%s] Failed to unmarshal NewMultipartUpload response <ERROR> %v", instanceType, err)
+	}
+
+	rec = httptest.NewRecorder()
+	req, err = newTestRequest("PUT", getPutObjectPartURL("", bucketName, testObject, mpartResp.UploadID, "1"),
+		int64(len("hello")), bytes.NewReader([]byte("hello")))
+	if err != nil {
+		t.Fatalf("[%s] - Failed to create an unsigned request to put object part for %s/%s <ERROR> %v",
+			instanceType, bucketName, testObject, err)
+	}
+	err = preSignV2(req, credentials.AccessKeyID, credentials.SecretAccessKey, int64(10*time.Minute))
+	if err != nil {
+		t.Fatalf("[%s] - Failed to presign an unsigned request to put object part for %s/%s <ERROR> %v",
+			instanceType, bucketName, testObject, err)
+	}
+	apiRouter.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("Test %d %s expected to succeed but failed with HTTP status code %d", 1, instanceType, rec.Code)
+	}
+}
+
+func TestAPIPutObjectPartHandlerPreSign(t *testing.T) {
+	ExecObjectLayerAPITest(t, testAPIPutObjectPartHandlerPreSign, []string{"NewMultipart", "PutObjectPart"})
+}
+
+func testAPIPutObjectPartHandlerV2(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
 	credentials credential, t TestErrHandler) {
 	testObject := "testobject"
 	rec := httptest.NewRecorder()
@@ -1016,8 +1063,8 @@ func testAPIPutObjectHandlerV2(obj ObjectLayer, instanceType, bucketName string,
 	}
 }
 
-func TestAPIPutObjectHandlerV2(t *testing.T) {
-	ExecObjectLayerAPITest(t, testAPIPutObjectHandlerV2, []string{"NewMultipart", "PutObjectPart"})
+func TestAPIPutObjectPartHandlerV2(t *testing.T) {
+	ExecObjectLayerAPITest(t, testAPIPutObjectPartHandlerV2, []string{"NewMultipart", "PutObjectPart"})
 }
 
 func testAPIPutObjectPartHandlerStreaming(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
@@ -1309,6 +1356,71 @@ func TestPutObjectPartNilObjAPI(t *testing.T) {
 	if rec.Code != serverNotInitializedErr {
 		t.Errorf("Test expected to fail with %d, but failed with %d", serverNotInitializedErr, rec.Code)
 	}
+}
+
+func testAPIListObjectPartsHandlerPreSign(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
+	credentials credential, t TestErrHandler) {
+	testObject := "testobject"
+	rec := httptest.NewRecorder()
+	req, err := newTestSignedRequestV4("POST", getNewMultipartURL("", bucketName, testObject),
+		0, nil, credentials.AccessKeyID, credentials.SecretAccessKey)
+	if err != nil {
+		t.Fatalf("[%s] - Failed to create a signed request to initiate multipart upload for %s/%s: <ERROR> %v",
+			instanceType, bucketName, testObject, err)
+	}
+	apiRouter.ServeHTTP(rec, req)
+
+	// Get uploadID of the mulitpart upload initiated.
+	var mpartResp InitiateMultipartUploadResponse
+	mpartRespBytes, err := ioutil.ReadAll(rec.Result().Body)
+	if err != nil {
+		t.Fatalf("[%s] Failed to read NewMultipartUpload response <ERROR> %v", instanceType, err)
+
+	}
+	err = xml.Unmarshal(mpartRespBytes, &mpartResp)
+	if err != nil {
+		t.Fatalf("[%s] Failed to unmarshal NewMultipartUpload response <ERROR> %v", instanceType, err)
+	}
+
+	// Upload a part for listing purposes.
+	rec = httptest.NewRecorder()
+	req, err = newTestSignedRequestV4("PUT",
+		getPutObjectPartURL("", bucketName, testObject, mpartResp.UploadID, "1"),
+		int64(len("hello")), bytes.NewReader([]byte("hello")), credentials.AccessKeyID, credentials.SecretAccessKey)
+	if err != nil {
+		t.Fatalf("[%s] - Failed to create a signed request to initiate multipart upload for %s/%s: <ERROR> %v",
+			instanceType, bucketName, testObject, err)
+	}
+	apiRouter.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("[%s] - Failed to PutObjectPart bucket: %s object: %s HTTP status code: %d",
+			instanceType, bucketName, testObject, rec.Code)
+	}
+	rec = httptest.NewRecorder()
+	req, err = newTestRequest("GET",
+		getListMultipartURLWithParams("", bucketName, testObject, mpartResp.UploadID, "", "", ""),
+		0, nil)
+	if err != nil {
+		t.Fatalf("[%s] - Failed to create an unsigned request to list object parts for bucket %s, uploadId %s",
+			instanceType, bucketName, mpartResp.UploadID)
+	}
+
+	err = preSignV2(req, credentials.AccessKeyID, credentials.SecretAccessKey, int64(10*time.Minute))
+	if err != nil {
+		t.Fatalf("[%s] - Failed to presignV2 an unsigned request to list object parts for bucket %s, uploadId %s",
+			instanceType, bucketName, mpartResp.UploadID)
+	}
+	apiRouter.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("Test %d %s expected to succeed but failed with HTTP status code %d",
+			1, instanceType, rec.Code)
+	}
+}
+
+func TestAPIListObjectPartsHandlerPreSign(t *testing.T) {
+	ExecObjectLayerAPITest(t, testAPIListObjectPartsHandlerPreSign,
+		[]string{"PutObjectPart", "NewMultipart", "ListObjectParts"})
 }
 
 func testAPIListObjectPartsHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
