@@ -69,7 +69,7 @@ func doesPresignV2SignatureMatch(r *http.Request) APIErrorCode {
 		return ErrExpiredPresignRequest
 	}
 
-	// Save incoming siganture to be validated later.
+	// Save incoming signature to be validated later.
 	incomingSignature := req.URL.Query().Get("Signature")
 
 	// Set the expires header for string to sign.

@@ -42,7 +42,7 @@ func testGetObject(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	}
 
 	// set of byte data for PutObject.
-	// object has to be inserted before running tests for GetObject.
+	// object has to be created before running tests for GetObject.
 	// this is required even to assert the GetObject data,
 	// since dataInserted === dataFetched back is a primary criteria for any object storage this assertion is critical.
 	bytesData := []struct {
@@ -194,7 +194,7 @@ func testGetObjectDiskNotFound(obj ObjectLayer, instanceType string, disks []str
 	}
 
 	// set of byte data for PutObject.
-	// object has to be inserted before running tests for GetObject.
+	// object has to be created before running tests for GetObject.
 	// this is required even to assert the GetObject data,
 	// since dataInserted === dataFetched back is a primary criteria for any object storage this assertion is critical.
 	bytesData := []struct {

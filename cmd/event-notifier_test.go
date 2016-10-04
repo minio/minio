@@ -372,7 +372,7 @@ func TestListenBucketNotification(t *testing.T) {
 	case n := <-nEventCh:
 		// Check that received event
 		if len(n) == 0 {
-			t.Fatal("Unexpected error occured")
+			t.Fatal("Unexpected error occurred")
 		}
 		if n[0].S3.Object.Key != objectName {
 			t.Fatalf("Received wrong object name in notification, expected %s, received %s", n[0].S3.Object.Key, objectName)
