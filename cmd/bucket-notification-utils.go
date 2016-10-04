@@ -149,11 +149,12 @@ func isMinioSNSConfigured(topicARN string, topicConfigs []topicConfig) bool {
 
 // Validate if we recognize the queue type.
 func isValidQueue(sqsARN arnSQS) bool {
-	amqpQ := isAMQPQueue(sqsARN)       // Is amqp queue?.
-	natsQ := isNATSQueue(sqsARN)       // Is nats queue?.
-	elasticQ := isElasticQueue(sqsARN) // Is elastic queue?.
-	redisQ := isRedisQueue(sqsARN)     // Is redis queue?.
-	return amqpQ || natsQ || elasticQ || redisQ
+	amqpQ := isAMQPQueue(sqsARN)           // Is amqp queue?
+	natsQ := isNATSQueue(sqsARN)           // Is nats queue?
+	elasticQ := isElasticQueue(sqsARN)     // Is elastic queue?
+	redisQ := isRedisQueue(sqsARN)         // Is redis queue?
+	postgresQ := isPostgreSQLQueue(sqsARN) // Is postgres queue?
+	return amqpQ || natsQ || elasticQ || redisQ || postgresQ
 }
 
 // Validate if we recognize the topic type.
@@ -178,6 +179,10 @@ func isValidQueueID(queueARN string) bool {
 	} else if isRedisQueue(sqsARN) { // Redis queue.
 		redisN := serverConfig.GetRedisNotifyByID(sqsARN.AccountID)
 		return redisN.Enable && redisN.Addr != ""
+	} else if isPostgreSQLQueue(sqsARN) {
+		pgN := serverConfig.GetPostgreSQLNotifyByID(sqsARN.AccountID)
+		// Postgres can work with only default conn. info.
+		return pgN.Enable
 	}
 	return false
 }
@@ -354,6 +359,7 @@ func unmarshalTopicARN(topicARN string) arnTopic {
 // - nats
 // - elasticsearch
 // - redis
+// - postgresql
 func unmarshalSqsARN(queueARN string) (mSqs arnSQS) {
 	mSqs = arnSQS{}
 	if !strings.HasPrefix(queueARN, minioSqs+serverConfig.GetRegion()+":") {
@@ -369,6 +375,8 @@ func unmarshalSqsARN(queueARN string) (mSqs arnSQS) {
 		mSqs.Type = queueTypeElastic
 	case strings.HasSuffix(sqsType, queueTypeRedis):
 		mSqs.Type = queueTypeRedis
+	case strings.HasSuffix(sqsType, queueTypePostgreSQL):
+		mSqs.Type = queueTypePostgreSQL
 	} // Add more queues here.
 	mSqs.AccountID = strings.TrimSuffix(sqsType, ":"+mSqs.Type)
 	return mSqs

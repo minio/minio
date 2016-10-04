@@ -23,9 +23,9 @@ import (
 	"testing"
 )
 
-const lastConfigVersion = 8
+const lastConfigVersion = 9
 
-// TestServerConfigMigrateV1 - tests if a config v1 is purged
+// Test if config v1 is purged
 func TestServerConfigMigrateV1(t *testing.T) {
 	rootPath, err := newTestConfig("us-east-1")
 	if err != nil {
@@ -58,7 +58,8 @@ func TestServerConfigMigrateV1(t *testing.T) {
 	}
 }
 
-// TestServerConfigMigrateV1 - tests if all migrate code return nil when config file is not existent
+// Test if all migrate code returns nil when config file does not
+// exist
 func TestServerConfigMigrateInexistentConfig(t *testing.T) {
 	rootPath, err := newTestConfig("us-east-1")
 	if err != nil {
@@ -93,11 +94,13 @@ func TestServerConfigMigrateInexistentConfig(t *testing.T) {
 	if err := migrateV7ToV8(); err != nil {
 		t.Fatal("migrate v7 to v8 should succeed when no config file is found")
 	}
-
+	if err := migrateV8ToV9(); err != nil {
+		t.Fatal("migrate v8 to v9 should succeed when no config file is found")
+	}
 }
 
-// TestServerConfigMigrateV2toV8 - tests if a config from v2 to v8 is successfully done
-func TestServerConfigMigrateV2toV8(t *testing.T) {
+// Test if a config migration from v2 to v9 is successfully done
+func TestServerConfigMigrateV2toV9(t *testing.T) {
 	rootPath, err := newTestConfig("us-east-1")
 	if err != nil {
 		t.Fatalf("Init Test config failed")
@@ -155,7 +158,7 @@ func TestServerConfigMigrateV2toV8(t *testing.T) {
 	}
 }
 
-// TestServerConfigMigrateFaultyConfig - checks if all migrate code return errors with corrupted config files
+// Test if all migrate code returns error with corrupted config files
 func TestServerConfigMigrateFaultyConfig(t *testing.T) {
 	rootPath, err := newTestConfig("us-east-1")
 	if err != nil {
@@ -190,5 +193,8 @@ func TestServerConfigMigrateFaultyConfig(t *testing.T) {
 	}
 	if err := migrateV7ToV8(); err == nil {
 		t.Fatal("migrateConfigV7ToV8() should fail with a corrupted json")
+	}
+	if err := migrateV8ToV9(); err == nil {
+		t.Fatal("migrateConfigV8ToV9() should fail with a corrupted json")
 	}
 }

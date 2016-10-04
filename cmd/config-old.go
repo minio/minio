@@ -350,3 +350,43 @@ func loadConfigV7() (*serverConfigV7, error) {
 	}
 	return c, nil
 }
+
+// serverConfigV8 server configuration version '8'. Adds NATS notifier
+// configuration.
+type serverConfigV8 struct {
+	Version string `json:"version"`
+
+	// S3 API configuration.
+	Credential credential `json:"credential"`
+	Region     string     `json:"region"`
+
+	// Additional error logging configuration.
+	Logger logger `json:"logger"`
+
+	// Notification queue configuration.
+	Notify notifier `json:"notify"`
+
+	// Read Write mutex.
+	rwMutex *sync.RWMutex
+}
+
+// loadConfigV8 load config version '8'.
+func loadConfigV8() (*serverConfigV8, error) {
+	configFile, err := getConfigFile()
+	if err != nil {
+		return nil, err
+	}
+	if _, err = os.Stat(configFile); err != nil {
+		return nil, err
+	}
+	c := &serverConfigV8{}
+	c.Version = "8"
+	qc, err := quick.New(c)
+	if err != nil {
+		return nil, err
+	}
+	if err := qc.Load(configFile); err != nil {
+		return nil, err
+	}
+	return c, nil
+}

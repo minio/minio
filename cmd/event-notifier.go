@@ -412,6 +412,32 @@ func loadAllQueueTargets() (map[string]*logrus.Logger, error) {
 		}
 		queueTargets[queueARN] = elasticLog
 	}
+	// Load PostgreSQL targets, initialize their respective loggers.
+	for accountID, pgN := range serverConfig.GetPostgreSQL() {
+		if !pgN.Enable {
+			continue
+		}
+		// Construct the queue ARN for Postgres.
+		queueARN := minioSqs + serverConfig.GetRegion() + ":" + accountID + ":" + queueTypePostgreSQL
+		_, ok := queueTargets[queueARN]
+		if ok {
+			continue
+		}
+		// Using accountID initialize a new Postgresql logrus instance.
+		pgLog, err := newPostgreSQLNotify(accountID)
+		if err != nil {
+			// Encapsulate network error to be more informative.
+			if _, ok := err.(net.Error); ok {
+				return nil, &net.OpError{
+					Op: "Connecting to " + queueARN, Net: "tcp",
+					Err: err,
+				}
+			}
+			return nil, err
+		}
+		queueTargets[queueARN] = pgLog
+	}
+
 	// Successfully initialized queue targets.
 	return queueTargets, nil
 }
