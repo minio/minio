@@ -46,15 +46,15 @@ const (
 )
 
 // Wrapper for calling GetObject API handler tests for both XL multiple disks and FS single drive setup.
-func TestAPIGetOjectHandler(t *testing.T) {
-	ExecObjectLayerAPITest(t, testAPIGetOjectHandler, []string{"GetObject"})
+func TestAPIGetObjectHandler(t *testing.T) {
+	ExecObjectLayerAPITest(t, testAPIGetObjectHandler, []string{"GetObject"})
 }
 
-func testAPIGetOjectHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
+func testAPIGetObjectHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
 	credentials credential, t TestErrHandler) {
 	objectName := "test-object"
 	// set of byte data for PutObject.
-	// object has to be inserted before running tests for GetObject.
+	// object has to be created before running tests for GetObject.
 	// this is required even to assert the GetObject data,
 	// since dataInserted === dataFetched back is a primary criteria for any object storage this assertion is critical.
 	bytesData := []struct {
@@ -166,7 +166,7 @@ func testAPIGetOjectHandler(obj ObjectLayer, instanceType, bucketName string, ap
 		if err != nil {
 			t.Fatalf("Test %d: %s: Failed parsing response body: <ERROR> %v", i+1, instanceType, err)
 		}
-		// Verify whether the bucket obtained object is same as the one inserted.
+		// Verify whether the bucket obtained object is same as the one created.
 		if !bytes.Equal(testCase.expectedContent, actualContent) {
 			t.Errorf("Test %d: %s: Object content differs from expected value.: %s", i+1, instanceType, string(actualContent))
 		}
@@ -303,7 +303,7 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 			t.Fatalf("Test %d: %s: Failed parsing response body: <ERROR> %v", i+1, instanceType, err)
 		}
 		if testCase.shouldPass {
-			// Verify whether the bucket obtained object is same as the one inserted.
+			// Verify whether the bucket obtained object is same as the one created.
 			if !bytes.Equal(testCase.expectedContent, actualContent) {
 				t.Errorf("Test %d: %s: Object content differs from expected value.: %s", i+1, instanceType, string(actualContent))
 			}
@@ -376,7 +376,7 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 		if err != nil {
 			t.Fatalf("Test %d: %s: Failed parsing response body: <ERROR> %v", i+1, instanceType, err)
 		}
-		// Verify whether the bucket obtained object is same as the one inserted.
+		// Verify whether the bucket obtained object is same as the one created.
 		if !bytes.Equal(testCase.expectedContent, actualContent) {
 			t.Errorf("Test %d: %s: Object content differs from expected value.: %s", i+1, instanceType, string(actualContent))
 		}
@@ -409,7 +409,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 	}
 
 	// set of byte data for PutObject.
-	// object has to be inserted before running tests for Copy Object.
+	// object has to be created before running tests for Copy Object.
 	// this is required even to assert the copied object,
 	bytesData := []struct {
 		byteData []byte
@@ -536,7 +536,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 
 // Wrapper for calling NewMultipartUpload tests for both XL multiple disks and single node setup.
 // First register the HTTP handler for NewMutlipartUpload, then a HTTP request for NewMultipart upload is made.
-// The UploadID from the response body is parsed and its existance is asserted with an attempt to ListParts using it.
+// The UploadID from the response body is parsed and its existence is asserted with an attempt to ListParts using it.
 func TestAPINewMultipartHandler(t *testing.T) {
 	ExecObjectLayerAPITest(t, testAPINewMultipartHandler, []string{"NewMultipart"})
 }
@@ -577,7 +577,7 @@ func testAPINewMultipartHandler(obj ObjectLayer, instanceType, bucketName string
 
 // Wrapper for calling NewMultipartUploadParallel tests for both XL multiple disks and single node setup.
 // The objective of the test is to initialte multipart upload on the same object 10 times concurrently,
-// The UploadID from the response body is parsed and its existance is asserted with an attempt to ListParts using it.
+// The UploadID from the response body is parsed and its existence is asserted with an attempt to ListParts using it.
 func TestAPINewMultipartHandlerParallel(t *testing.T) {
 	ExecObjectLayerAPITest(t, testAPINewMultipartHandlerParallel, []string{"NewMultipart"})
 }
@@ -636,7 +636,7 @@ func testAPINewMultipartHandlerParallel(obj ObjectLayer, instanceType, bucketNam
 	}
 }
 
-// The UploadID from the response body is parsed and its existance is asserted with an attempt to ListParts using it.
+// The UploadID from the response body is parsed and its existence is asserted with an attempt to ListParts using it.
 func TestAPICompleteMultipartHandler(t *testing.T) {
 	ExecObjectLayerAPITest(t, testAPICompleteMultipartHandler, []string{"CompleteMultipart"})
 }
@@ -737,7 +737,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 			},
 		},
 	}
-	// on succesfull complete multipart operation the s3MD5 for the parts uploaded iwll be returned.
+	// on succesfull complete multipart operation the s3MD5 for the parts uploaded will be returned.
 	s3MD5, err := completeMultipartMD5(inputParts[3].parts...)
 	if err != nil {
 		t.Fatalf("Obtaining S3MD5 failed")
@@ -779,7 +779,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 			expectedRespStatus: http.StatusBadRequest,
 		},
 		// Test case - 3.
-		// Non-Existant uploadID.
+		// Non-Existent uploadID.
 		// 404 Not Found response status expected.
 		{
 			bucket:             bucketName,
@@ -867,7 +867,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 		if err != nil {
 			t.Fatalf("Test %d : Minio %s: Failed parsing response body: <ERROR> %v", i+1, instanceType, err)
 		}
-		// Verify whether the bucket obtained object is same as the one inserted.
+		// Verify whether the bucket obtained object is same as the one created.
 		if !bytes.Equal(testCase.expectedContent, actualContent) {
 			t.Errorf("Test %d : Minio %s: Object content differs from expected value.", i+1, instanceType)
 		}
@@ -888,7 +888,7 @@ func testAPIDeleteOjectHandler(obj ObjectLayer, instanceType, bucketName string,
 	}
 	objectName := "test-object"
 	// set of byte data for PutObject.
-	// object has to be inserted before running tests for Deleting the object.
+	// object has to be created before running tests for Deleting the object.
 	bytesData := []struct {
 		byteData []byte
 	}{

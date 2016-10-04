@@ -914,7 +914,7 @@ func (s *TestSuiteCommon) TestPutBucket(c *C) {
 // The following is the test flow.
 // 1. Create bucket.
 // 2. Insert Object.
-// 3. Use "X-Amz-Copy-Source" header to copy the previously inserted object.
+// 3. Use "X-Amz-Copy-Source" header to copy the previously created object.
 // 4. Validate the content of copied object.
 func (s *TestSuiteCommon) TestCopyObject(c *C) {
 	// generate a random bucket name.
@@ -930,7 +930,7 @@ func (s *TestSuiteCommon) TestCopyObject(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
-	// content for the object to be inserted.
+	// content for the object to be created.
 	buffer1 := bytes.NewReader([]byte("hello world"))
 	objectName := "testObject"
 	// create HTTP request for object upload.
