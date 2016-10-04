@@ -1610,6 +1610,62 @@ func TestListObjectPartsHandlerV2(t *testing.T) {
 	ExecObjectLayerAPITest(t, testAPIListObjectPartsHandlerV2, []string{"PutObjectPart", "NewMultipart", "ListObjectParts"})
 }
 
+func testAPIListObjectPartsHandlerUnknown(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
+	credentials credential, t TestErrHandler) {
+	testObject := "testobject"
+	rec := httptest.NewRecorder()
+	req, err := newTestSignedRequestV4("POST", getNewMultipartURL("", bucketName, testObject),
+		0, nil, credentials.AccessKeyID, credentials.SecretAccessKey)
+	if err != nil {
+		t.Fatalf("[%s] - Failed to create a signed request to initiate multipart upload for %s/%s: <ERROR> %v",
+			instanceType, bucketName, testObject, err)
+	}
+	apiRouter.ServeHTTP(rec, req)
+
+	// Get uploadID of the mulitpart upload initiated.
+	var mpartResp InitiateMultipartUploadResponse
+	mpartRespBytes, err := ioutil.ReadAll(rec.Result().Body)
+	if err != nil {
+		t.Fatalf("[%s] Failed to read NewMultipartUpload response <ERROR> %v", instanceType, err)
+
+	}
+	err = xml.Unmarshal(mpartRespBytes, &mpartResp)
+	if err != nil {
+		t.Fatalf("[%s] Failed to unmarshal NewMultipartUpload response <ERROR> %v", instanceType, err)
+	}
+	accessDeniedErr := getAPIError(ErrAccessDenied)
+	unKnownRec := httptest.NewRecorder()
+	unKnownReq, aErr := newTestRequest("GET",
+		getListMultipartURLWithParams("", bucketName, testObject, mpartResp.UploadID, "", "", ""),
+		0, nil)
+	if aErr != nil {
+		t.Fatalf("Test %d %s Failed to create an unKnownymous request to list multipart of an upload for %s/%s: <ERROR> %v",
+			1, instanceType, bucketName, testObject, aErr)
+	}
+	unKnownReq.Header.Set("Authorization", "nothingElse")
+	apiRouter.ServeHTTP(unKnownRec, unKnownReq)
+	unKnownErrBytes, err := ioutil.ReadAll(unKnownRec.Result().Body)
+	if err != nil {
+		t.Fatalf("Test %d %s Failed to read error response from list object parts request %s/%s: <ERROR> %v",
+			1, instanceType, bucketName, testObject, err)
+	}
+	var unKnownErrXML APIErrorResponse
+	err = xml.Unmarshal(unKnownErrBytes, &unKnownErrXML)
+	if err != nil {
+		t.Fatalf("Test %d %s Failed to unmarshal error response from list object parts request %s/%s: <ERROR> %v",
+			1, instanceType, bucketName, testObject, err)
+	}
+	if accessDeniedErr.Code != unKnownErrXML.Code {
+		t.Errorf("Test %d %s expected to fail with error %s, but received %s", 1, instanceType,
+			accessDeniedErr.Code, unKnownErrXML.Code)
+	}
+}
+
+func TestAPIListObjectPartsHandlerUnknown(t *testing.T) {
+	ExecObjectLayerAPITest(t, testAPIListObjectPartsHandlerUnknown,
+		[]string{"PutObjectPart", "NewMultipart", "ListObjectParts"})
+}
+
 func testAPIListObjectPartsHandlerAnon(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
 	credentials credential, t TestErrHandler) {
 	// Initialize bucket policies for anonymous request test
