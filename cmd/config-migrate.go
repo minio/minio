@@ -54,6 +54,10 @@ func migrateConfig() error {
 	if err := migrateV7ToV8(); err != nil {
 		return err
 	}
+	// Migrate version '8' to '9'.
+	if err := migrateV8ToV9(); err != nil {
+		return err
+	}
 	return nil
 }
 
