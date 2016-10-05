@@ -113,14 +113,10 @@ func (c *controllerAPIHandlers) HealObjectHandler(args *HealObjectArgs, reply *G
 
 // HealObject - heal the object.
 func (c *controllerAPIHandlers) HealDiskMetadataHandler(args *GenericArgs, reply *GenericReply) error {
-	objAPI := c.ObjectAPI()
-	if objAPI == nil {
-		return errServerNotInitialized
-	}
 	if !isRPCTokenValid(args.Token) {
 		return errInvalidToken
 	}
-	err := objAPI.HealDiskMetadata()
+	err := repairDiskMetadata(c.StorageDisks)
 	if err != nil {
 		return err
 	}
@@ -151,15 +147,6 @@ func (c *controllerAPIHandlers) ShutdownHandler(args *ShutdownArgs, reply *Gener
 		globalShutdownSignalCh <- shutdownHalt
 	}
 	return nil
-}
-
-func (c *controllerAPIHandlers) TryInitHandler(args *GenericArgs, reply *GenericReply) error {
-	go func() {
-		globalWakeupCh <- struct{}{}
-	}()
-	*reply = GenericReply{}
-	return nil
-
 }
 
 // LockInfo - RPC control handler for `minio control lock`.

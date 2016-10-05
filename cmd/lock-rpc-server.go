@@ -77,8 +77,8 @@ type lockServer struct {
 	timestamp time.Time
 }
 
-// Initialize distributed name space lock.
-func initDistributedNSLock(mux *router.Router, serverConfig serverCmdConfig) {
+// Register distributed NS lock handlers.
+func registerDistNSLockRouter(mux *router.Router, serverConfig serverCmdConfig) {
 	lockServers := newLockServers(serverConfig)
 	registerStorageLockers(mux, lockServers)
 }

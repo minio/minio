@@ -65,11 +65,12 @@ func (rpcClient *RPCClient) getRPCClient() *rpc.Client {
 // dialRPCClient tries to establish a connection to the server in a safe manner
 func (rpcClient *RPCClient) dialRPCClient() (*rpc.Client, error) {
 	rpcClient.mu.Lock()
-	defer rpcClient.mu.Unlock()
 	// After acquiring lock, check whether another thread may not have already dialed and established connection
 	if rpcClient.rpcPrivate != nil {
+		rpcClient.mu.Unlock()
 		return rpcClient.rpcPrivate, nil
 	}
+	rpcClient.mu.Unlock()
 
 	var err error
 	var conn net.Conn
@@ -92,7 +93,9 @@ func (rpcClient *RPCClient) dialRPCClient() (*rpc.Client, error) {
 		if rpc == nil {
 			return nil, errors.New("No valid RPC Client created after dial")
 		}
+		rpcClient.mu.Lock()
 		rpcClient.rpcPrivate = rpc
+		rpcClient.mu.Unlock()
 		return rpc, nil
 	}
 	if err == nil {

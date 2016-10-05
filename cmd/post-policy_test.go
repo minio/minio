@@ -66,6 +66,18 @@ func TestPostPolicyHandler(t *testing.T) {
 
 // testPostPolicyHandler - Tests validate post policy handler uploading objects.
 func testPostPolicyHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
+	root, err := newTestConfig("us-east-1")
+	if err != nil {
+		t.Fatalf("Initializing config.json failed")
+	}
+	defer removeAll(root)
+
+	// Register event notifier.
+	err = initEventNotifier(obj)
+	if err != nil {
+		t.Fatalf("Initializing event notifiers failed")
+	}
+
 	// get random bucket name.
 	bucketName := getRandomBucketName()
 

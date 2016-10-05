@@ -35,7 +35,7 @@ func prepareBenchmarkBackend(instanceType string) (ObjectLayer, []string, error)
 	if err != nil {
 		return nil, nil, err
 	}
-	obj, err := makeTestBackend(disks, instanceType)
+	obj, _, err := initObjectLayer(disks, nil)
 	if err != nil {
 		return nil, nil, err
 	}

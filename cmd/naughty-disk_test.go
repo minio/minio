@@ -17,13 +17,14 @@
 package cmd
 
 import (
-	"github.com/minio/minio/pkg/disk"
 	"sync"
+
+	"github.com/minio/minio/pkg/disk"
 )
 
 // naughtyDisk wraps a POSIX disk and returns programmed errors
 // specified by the developer. The purpose is to simulate errors
-// that are hard to simulate in practise like DiskNotFound.
+// that are hard to simulate in practice like DiskNotFound.
 // Programmed errors are stored in errors field.
 type naughtyDisk struct {
 	// The real disk
@@ -40,6 +41,10 @@ type naughtyDisk struct {
 
 func newNaughtyDisk(d *posix, errs map[int]error, defaultErr error) *naughtyDisk {
 	return &naughtyDisk{disk: d, errors: errs, defaultErr: defaultErr}
+}
+
+func (d *naughtyDisk) String() string {
+	return d.String()
 }
 
 func (d *naughtyDisk) calcError() (err error) {

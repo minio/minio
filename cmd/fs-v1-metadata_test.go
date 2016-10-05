@@ -67,24 +67,31 @@ func TestHasExtendedHeader(t *testing.T) {
 	}
 }
 
+func initFSObjects(disk string, t *testing.T) (obj ObjectLayer) {
+	obj, _, err := initObjectLayer([]string{disk}, nil)
+	if err != nil {
+		t.Fatal("Unexpected err: ", err)
+	}
+	return obj
+}
+
 // TestReadFsMetadata - readFSMetadata testing with a healthy and faulty disk
 func TestReadFSMetadata(t *testing.T) {
 	disk := filepath.Join(os.TempDir(), "minio-"+nextSuffix())
 	defer removeAll(disk)
-	obj, err := newFSObjects(disk)
-	if err != nil {
-		t.Fatal("Unexpected err: ", err)
-	}
+
+	obj := initFSObjects(disk, t)
+
 	fs := obj.(fsObjects)
 
 	bucketName := "bucket"
 	objectName := "object"
 
-	if err = obj.MakeBucket(bucketName); err != nil {
+	if err := obj.MakeBucket(bucketName); err != nil {
 		t.Fatal("Unexpected err: ", err)
 	}
 	sha256sum := ""
-	if _, err = obj.PutObject(bucketName, objectName, int64(len("abcd")), bytes.NewReader([]byte("abcd")),
+	if _, err := obj.PutObject(bucketName, objectName, int64(len("abcd")), bytes.NewReader([]byte("abcd")),
 		map[string]string{"X-Amz-Meta-AppId": "a"}, sha256sum); err != nil {
 		t.Fatal("Unexpected err: ", err)
 	}
@@ -93,15 +100,15 @@ func TestReadFSMetadata(t *testing.T) {
 	fsPath := "buckets/" + bucketName + "/" + objectName + "/fs.json"
 
 	// Regular fs metadata reading, no errors expected
-	if _, err = readFSMetadata(fs.storage, ".minio.sys", fsPath); err != nil {
+	if _, err := readFSMetadata(fs.storage, ".minio.sys", fsPath); err != nil {
 		t.Fatal("Unexpected error ", err)
 	}
 
 	// Corrupted fs.json
-	if err = fs.storage.AppendFile(".minio.sys", fsPath, []byte{'a'}); err != nil {
+	if err := fs.storage.AppendFile(".minio.sys", fsPath, []byte{'a'}); err != nil {
 		t.Fatal("Unexpected error ", err)
 	}
-	if _, err = readFSMetadata(fs.storage, ".minio.sys", fsPath); err == nil {
+	if _, err := readFSMetadata(fs.storage, ".minio.sys", fsPath); err == nil {
 		t.Fatal("Should fail", err)
 	}
 
@@ -109,7 +116,7 @@ func TestReadFSMetadata(t *testing.T) {
 	fsStorage := fs.storage.(*posix)
 	naughty := newNaughtyDisk(fsStorage, nil, errFaultyDisk)
 	fs.storage = naughty
-	if _, err = readFSMetadata(fs.storage, ".minio.sys", fsPath); errorCause(err) != errFaultyDisk {
+	if _, err := readFSMetadata(fs.storage, ".minio.sys", fsPath); errorCause(err) != errFaultyDisk {
 		t.Fatal("Should fail", err)
 	}
 
@@ -119,20 +126,17 @@ func TestReadFSMetadata(t *testing.T) {
 func TestWriteFSMetadata(t *testing.T) {
 	disk := filepath.Join(os.TempDir(), "minio-"+nextSuffix())
 	defer removeAll(disk)
-	obj, err := newFSObjects(disk)
-	if err != nil {
-		t.Fatal("Unexpected err: ", err)
-	}
+	obj := initFSObjects(disk, t)
 	fs := obj.(fsObjects)
 
 	bucketName := "bucket"
 	objectName := "object"
 
-	if err = obj.MakeBucket(bucketName); err != nil {
+	if err := obj.MakeBucket(bucketName); err != nil {
 		t.Fatal("Unexpected err: ", err)
 	}
 	sha256sum := ""
-	if _, err = obj.PutObject(bucketName, objectName, int64(len("abcd")), bytes.NewReader([]byte("abcd")),
+	if _, err := obj.PutObject(bucketName, objectName, int64(len("abcd")), bytes.NewReader([]byte("abcd")),
 		map[string]string{"X-Amz-Meta-AppId": "a"}, sha256sum); err != nil {
 		t.Fatal("Unexpected err: ", err)
 	}

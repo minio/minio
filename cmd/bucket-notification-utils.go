@@ -136,27 +136,6 @@ func isMinioSNS(topicARN arnTopic) bool {
 	return strings.HasSuffix(topicARN.Type, snsTypeMinio)
 }
 
-// isMinioSNSConfigured - verifies if one topic ARN is valid and is enabled.
-func isMinioSNSConfigured(topicARN string, topicConfigs []topicConfig) bool {
-	for _, topicConfig := range topicConfigs {
-		// Validate if topic ARN is already enabled.
-		if topicARN == topicConfig.TopicARN {
-			return true
-		}
-	}
-	return false
-}
-
-// Validate if we recognize the queue type.
-func isValidQueue(sqsARN arnSQS) bool {
-	amqpQ := isAMQPQueue(sqsARN)           // Is amqp queue?
-	natsQ := isNATSQueue(sqsARN)           // Is nats queue?
-	elasticQ := isElasticQueue(sqsARN)     // Is elastic queue?
-	redisQ := isRedisQueue(sqsARN)         // Is redis queue?
-	postgresQ := isPostgreSQLQueue(sqsARN) // Is postgres queue?
-	return amqpQ || natsQ || elasticQ || redisQ || postgresQ
-}
-
 // Validate if we recognize the topic type.
 func isValidTopic(topicARN arnTopic) bool {
 	return isMinioSNS(topicARN) // Is minio topic?.

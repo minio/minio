@@ -52,6 +52,8 @@ var (
 	globalMaxCacheSize = uint64(maxCacheSize)
 	// Cache expiry.
 	globalCacheExpiry = objcache.DefaultExpiry
+	// Minio default port, can be changed through command line.
+	globalMinioPort = 9000
 	// Add new variable global values here.
 )
 

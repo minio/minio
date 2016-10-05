@@ -66,14 +66,6 @@ func TestRPCControlLock(t *testing.T) {
 
 // Tests to validate the correctness of lock instrumentation control RPC end point.
 func (s *TestRPCControllerSuite) testRPCControlLock(c *testing.T) {
-	// initializing the locks.
-	initNSLock(false)
-	// set debug lock info to `nil` so that the next tests have to
-	// initialize them again.
-	defer func() {
-		nsMutex.debugLockMap = nil
-	}()
-
 	expectedResult := []lockStateCase{
 		// Test case - 1.
 		// Case where 10 read locks are held.
@@ -297,10 +289,8 @@ func (s *TestRPCControllerSuite) testControllerHealDiskMetadataH(c *testing.T) {
 	args := &GenericArgs{}
 	reply := &GenericReply{}
 	err := client.Call("Controller.HealDiskMetadataHandler", args, reply)
-
 	if err != nil {
-		c.Errorf("Control.HealDiskMetadataH - test failed with <ERROR> %s",
-			err.Error())
+		c.Errorf("Control.HealDiskMetadataH - test failed with <ERROR> %s", err)
 	}
 }
 
@@ -320,20 +310,16 @@ func (s *TestRPCControllerSuite) testControllerHealObjectH(t *testing.T) {
 	client := newAuthClient(s.testAuthConf)
 	defer client.Close()
 
-	err := s.testServer.Obj.MakeBucket("testbucket")
+	err := newObjectLayerFn().MakeBucket("testbucket")
 	if err != nil {
 		t.Fatalf(
-			"Controller.HealObjectH - create bucket failed with <ERROR> %s",
-			err.Error(),
-		)
+			"Controller.HealObjectH - create bucket failed with <ERROR> %s", err)
 	}
 
 	datum := strings.NewReader("a")
-	_, err = s.testServer.Obj.PutObject("testbucket", "testobject", 1,
-		datum, nil, "")
+	_, err = newObjectLayerFn().PutObject("testbucket", "testobject", 1, datum, nil, "")
 	if err != nil {
-		t.Fatalf("Controller.HealObjectH - put object failed with <ERROR> %s",
-			err.Error())
+		t.Fatalf("Controller.HealObjectH - put object failed with <ERROR> %s", err)
 	}
 
 	args := &HealObjectArgs{GenericArgs{}, "testbucket", "testobject"}
@@ -341,8 +327,7 @@ func (s *TestRPCControllerSuite) testControllerHealObjectH(t *testing.T) {
 	err = client.Call("Controller.HealObjectHandler", args, reply)
 
 	if err != nil {
-		t.Errorf("Controller.HealObjectH - test failed with <ERROR> %s",
-			err.Error())
+		t.Errorf("Controller.HealObjectH - test failed with <ERROR> %s", err)
 	}
 }
 
@@ -363,20 +348,16 @@ func (s *TestRPCControllerSuite) testControllerListObjectsHealH(t *testing.T) {
 	defer client.Close()
 
 	// careate a bucket
-	err := s.testServer.Obj.MakeBucket("testbucket")
+	err := newObjectLayerFn().MakeBucket("testbucket")
 	if err != nil {
 		t.Fatalf(
-			"Controller.ListObjectsHealH - create bucket failed - %s",
-			err.Error(),
-		)
+			"Controller.ListObjectsHealH - create bucket failed - %s", err)
 	}
 
 	r := strings.NewReader("0")
-	_, err = s.testServer.Obj.PutObject(
-		"testbucket", "testObj-0", 1, r, nil, "")
+	_, err = newObjectLayerFn().PutObject("testbucket", "testObj-0", 1, r, nil, "")
 	if err != nil {
-		t.Fatalf("Controller.ListObjectsHealH - object creation failed - %s",
-			err.Error())
+		t.Fatalf("Controller.ListObjectsHealH - object creation failed - %s", err)
 	}
 
 	args := &HealListArgs{
@@ -387,7 +368,6 @@ func (s *TestRPCControllerSuite) testControllerListObjectsHealH(t *testing.T) {
 	err = client.Call("Controller.ListObjectsHealHandler", args, reply)
 
 	if err != nil {
-		t.Errorf("Controller.ListObjectsHealHandler - test failed - %s",
-			err.Error())
+		t.Errorf("Controller.ListObjectsHealHandler - test failed - %s", err)
 	}
 }

@@ -246,7 +246,6 @@ func TestNewDebugLockInfoPerVolumePath(t *testing.T) {
 
 // TestNsLockMapStatusBlockedToRunning - Validates the function for changing the lock state from blocked to running.
 func TestNsLockMapStatusBlockedToRunning(t *testing.T) {
-
 	testCases := []struct {
 		volume      string
 		path        string
@@ -327,9 +326,9 @@ func TestNsLockMapStatusBlockedToRunning(t *testing.T) {
 	actualErr := nsMutex.statusBlockedToRunning(param, testCases[0].lockOrigin,
 		testCases[0].opsID, testCases[0].readLock)
 
-	expectedNilErr := errLockNotInitialized
-	if actualErr != expectedNilErr {
-		t.Fatalf("Errors mismatch: Expected \"%s\", got \"%s\"", expectedNilErr, actualErr)
+	expectedErr := LockInfoVolPathMssing{testCases[0].volume, testCases[0].path}
+	if actualErr != expectedErr {
+		t.Fatalf("Errors mismatch: Expected \"%s\", got \"%s\"", expectedErr, actualErr)
 	}
 
 	nsMutex = &nsLockMap{
@@ -337,15 +336,13 @@ func TestNsLockMapStatusBlockedToRunning(t *testing.T) {
 		debugLockMap: make(map[nsParam]*debugLockInfoPerVolumePath),
 		lockMap:      make(map[nsParam]*nsLock),
 	}
-	// Entry for <volume, path> pair is set to nil.
-	// Should fail with `errLockNotInitialized`.
+	// Entry for <volume, path> pair is set to nil. Should fail with `errLockNotInitialized`.
 	nsMutex.debugLockMap[param] = nil
 	actualErr = nsMutex.statusBlockedToRunning(param, testCases[0].lockOrigin,
 		testCases[0].opsID, testCases[0].readLock)
 
-	expectedNilErr = errLockNotInitialized
-	if actualErr != expectedNilErr {
-		t.Fatalf("Errors mismatch: Expected \"%s\", got \"%s\"", expectedNilErr, actualErr)
+	if actualErr != errLockNotInitialized {
+		t.Fatalf("Errors mismatch: Expected \"%s\", got \"%s\"", errLockNotInitialized, actualErr)
 	}
 
 	// Setting the lock info the be `nil`.
@@ -391,10 +388,7 @@ func TestNsLockMapStatusBlockedToRunning(t *testing.T) {
 
 	// initializing the locks.
 	initNSLock(false)
-	// set debug lock info  to `nil` so that the next tests have to initialize them again.
-	defer func() {
-		nsMutex.debugLockMap = nil
-	}()
+
 	// Iterate over the cases and assert the result.
 	for i, testCase := range testCases {
 		param := nsParam{testCase.volume, testCase.path}
@@ -518,22 +512,20 @@ func TestNsLockMapStatusNoneToBlocked(t *testing.T) {
 		},
 	}
 
+	// initializing the locks.
+	initNSLock(false)
+
 	param := nsParam{testCases[0].volume, testCases[0].path}
 	// Testing before the initialization done.
 	// Since the data structures for
 	actualErr := nsMutex.statusBlockedToRunning(param, testCases[0].lockOrigin,
 		testCases[0].opsID, testCases[0].readLock)
 
-	expectedNilErr := errLockNotInitialized
-	if actualErr != expectedNilErr {
-		t.Fatalf("Errors mismatch: Expected \"%s\", got \"%s\"", expectedNilErr, actualErr)
+	expectedErr := LockInfoVolPathMssing{testCases[0].volume, testCases[0].path}
+	if actualErr != expectedErr {
+		t.Fatalf("Errors mismatch: Expected \"%s\", got \"%s\"", expectedErr, actualErr)
 	}
-	// initializing the locks.
-	initNSLock(false)
-	// set debug lock info  to `nil` so that the next tests have to initialize them again.
-	defer func() {
-		nsMutex.debugLockMap = nil
-	}()
+
 	// Iterate over the cases and assert the result.
 	for i, testCase := range testCases {
 		nsMutex.lockMapMutex.Lock()
@@ -562,6 +554,10 @@ func TestNsLockMapDeleteLockInfoEntryForOps(t *testing.T) {
 			// expected metrics.
 		},
 	}
+
+	// initializing the locks.
+	initNSLock(false)
+
 	// case  - 1.
 	// Testing the case where delete lock info is attempted even before the lock is initialized.
 	param := nsParam{testCases[0].volume, testCases[0].path}
@@ -569,29 +565,12 @@ func TestNsLockMapDeleteLockInfoEntryForOps(t *testing.T) {
 
 	actualErr := nsMutex.deleteLockInfoEntryForOps(param, testCases[0].opsID)
 
-	expectedNilErr := errLockNotInitialized
-	if actualErr != expectedNilErr {
-		t.Fatalf("Errors mismatch: Expected \"%s\", got \"%s\"", expectedNilErr, actualErr)
+	expectedErr := LockInfoVolPathMssing{testCases[0].volume, testCases[0].path}
+	if actualErr != expectedErr {
+		t.Fatalf("Errors mismatch: Expected \"%s\", got \"%s\"", expectedErr, actualErr)
 	}
 
-	// initializing the locks.
-	initNSLock(false)
-	// set debug lock info  to `nil` so that the next tests have to initialize them again.
-	defer func() {
-		nsMutex.debugLockMap = nil
-	}()
-	// case - 2.
-	// Case where an attempt to delete the entry for non-existent <volume, path> pair is done.
-	// Set the status of the lock to blocked and then to running.
-	nonExistParam := nsParam{volume: "non-exist-volume", path: "non-exist-path"}
-	actualErr = nsMutex.deleteLockInfoEntryForOps(nonExistParam, testCases[0].opsID)
-
-	expectedVolPathErr := LockInfoVolPathMssing{nonExistParam.volume, nonExistParam.path}
-	if actualErr != expectedVolPathErr {
-		t.Fatalf("Errors mismatch: Expected \"%s\", got \"%s\"", expectedVolPathErr, actualErr)
-	}
-
-	// Case - 3.
+	// Case - 2.
 	// Lock state is set to Running and then an attempt to delete the info for non-existent opsID done.
 	nsMutex.lockMapMutex.Lock()
 	err := nsMutex.statusNoneToBlocked(param, testCases[0].lockOrigin, testCases[0].opsID, testCases[0].readLock)
@@ -660,36 +639,21 @@ func TestNsLockMapDeleteLockInfoEntryForVolumePath(t *testing.T) {
 			// expected metrics.
 		},
 	}
+
+	// initializing the locks.
+	initNSLock(false)
+
 	// case  - 1.
-	// Testing the case where delete lock info is attempted even before the lock is initialized.
+	// Case where an attempt to delete the entry for non-existent <volume, path> pair is done.
+	// Set the status of the lock to blocked and then to running.
 	param := nsParam{testCases[0].volume, testCases[0].path}
-	// Testing before the initialization done.
-
 	actualErr := nsMutex.deleteLockInfoEntryForVolumePath(param)
-
-	expectedNilErr := errLockNotInitialized
+	expectedNilErr := LockInfoVolPathMssing{param.volume, param.path}
 	if actualErr != expectedNilErr {
 		t.Fatalf("Errors mismatch: Expected \"%s\", got \"%s\"", expectedNilErr, actualErr)
 	}
 
-	// initializing the locks.
-	initNSLock(false)
-	// set debug lock info  to `nil` so that the next tests have to initialize them again.
-	defer func() {
-		nsMutex.debugLockMap = nil
-	}()
 	// case - 2.
-	// Case where an attempt to delete the entry for non-existent <volume, path> pair is done.
-	// Set the status of the lock to blocked and then to running.
-	nonExistParam := nsParam{volume: "non-exist-volume", path: "non-exist-path"}
-	actualErr = nsMutex.deleteLockInfoEntryForVolumePath(nonExistParam)
-
-	expectedVolPathErr := LockInfoVolPathMssing{nonExistParam.volume, nonExistParam.path}
-	if actualErr != expectedVolPathErr {
-		t.Fatalf("Errors mismatch: Expected \"%s\", got \"%s\"", expectedVolPathErr, actualErr)
-	}
-
-	// case - 3.
 	// Attempt to delete an registered entry is done.
 	// All metrics should be 0 after deleting the entry.
 

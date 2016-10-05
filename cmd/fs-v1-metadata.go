@@ -123,8 +123,8 @@ func newFSMetaV1() (fsMeta fsMetaV1) {
 }
 
 // newFSFormatV1 - initializes new formatConfigV1 with FS format info.
-func newFSFormatV1() (format formatConfigV1) {
-	return formatConfigV1{
+func newFSFormatV1() (format *formatConfigV1) {
+	return &formatConfigV1{
 		Version: "1",
 		Format:  "fs",
 		FS: &fsFormat{
@@ -134,12 +134,12 @@ func newFSFormatV1() (format formatConfigV1) {
 }
 
 // isFSFormat - returns whether given formatConfigV1 is FS type or not.
-func isFSFormat(format formatConfigV1) bool {
+func isFSFormat(format *formatConfigV1) bool {
 	return format.Format == "fs"
 }
 
 // writes FS format (format.json) into minioMetaBucket.
-func writeFSFormatData(storage StorageAPI, fsFormat formatConfigV1) error {
+func saveFSFormatData(storage StorageAPI, fsFormat *formatConfigV1) error {
 	metadataBytes, err := json.Marshal(fsFormat)
 	if err != nil {
 		return err

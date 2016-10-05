@@ -40,10 +40,11 @@ const (
 
 // posix - implements StorageAPI interface.
 type posix struct {
-	ioErrCount    int32 // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
-	diskPath      string
-	minFreeSpace  int64
-	minFreeInodes int64
+	ioErrCount       int32 // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
+	diskPath         string
+	suppliedDiskPath string
+	minFreeSpace     int64
+	minFreeInodes    int64
 }
 
 var errFaultyDisk = errors.New("Faulty disk")
@@ -95,6 +96,10 @@ func newPosix(diskPath string) (StorageAPI, error) {
 	if diskPath == "" {
 		return nil, errInvalidArgument
 	}
+	suppliedDiskPath := diskPath
+	if idx := strings.LastIndex(diskPath, ":"); idx != -1 {
+		diskPath = diskPath[idx+1:]
+	}
 	var err error
 	// Disallow relative paths, figure out absolute paths.
 	diskPath, err = filepath.Abs(diskPath)
@@ -102,9 +107,10 @@ func newPosix(diskPath string) (StorageAPI, error) {
 		return nil, err
 	}
 	fs := &posix{
-		diskPath:      diskPath,
-		minFreeSpace:  fsMinFreeSpace,
-		minFreeInodes: fsMinFreeInodesPercent,
+		suppliedDiskPath: suppliedDiskPath,
+		diskPath:         diskPath,
+		minFreeSpace:     fsMinFreeSpace,
+		minFreeInodes:    fsMinFreeInodesPercent,
 	}
 	st, err := os.Stat(preparePath(diskPath))
 	if err != nil {
@@ -160,6 +166,11 @@ func (s posix) checkDiskFree() (err error) {
 
 	// Success.
 	return nil
+}
+
+// Implements stringer compatible interface.
+func (s *posix) String() string {
+	return s.suppliedDiskPath
 }
 
 // DiskInfo provides current information about disk space usage,

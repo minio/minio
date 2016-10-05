@@ -645,7 +645,3 @@ func getAPIErrorResponse(err APIError, resource string) APIErrorResponse {
 
 	return data
 }
-
-func getErrMalformedCredentialDate(malformedDateStr string) {
-
-}

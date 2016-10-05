@@ -59,14 +59,6 @@ func TestControlLockMain(t *testing.T) {
 	// schedule cleanup at the end
 	defer testServer.Stop()
 
-	// initializing the locks.
-	initNSLock(false)
-	// set debug lock info to `nil` so that other tests do not see
-	// such modified env settings.
-	defer func() {
-		nsMutex.debugLockMap = nil
-	}()
-
 	// fetch http server endpoint
 	url := testServer.Server.URL
 
@@ -95,29 +87,13 @@ func TestControlShutdownMain(t *testing.T) {
 	// fetch http server endpoint
 	url := testServer.Server.URL
 
-	// create a dummy exit function
-	testExitFn := func(exitCode int) {
-		if exitCode != int(exitSuccess) {
-			t.Errorf("Control-Shutdown-Main test failed - server exited with non-success error code - %d",
-				exitCode)
-		}
-	}
-
-	// initialize the shutdown signal listener
-	err := initGracefulShutdown(testExitFn)
-	if err != nil {
-		t.Fatalf("Control-Shutdown-Main test failed in initGracefulShutdown() - %s",
-			err.Error())
-	}
-
 	// create args to call
 	args := []string{"./minio", "control", "shutdown", url}
 
 	// run app
-	err = app.Run(args)
+	err := app.Run(args)
 	if err != nil {
-		t.Errorf("Control-Shutdown-Main test failed with - %s",
-			err.Error())
+		t.Errorf("Control-Shutdown-Main test failed with - %s", err)
 	}
 }
 
@@ -134,7 +110,6 @@ func TestControlMain(t *testing.T) {
 	// run app
 	err := app.Run(args)
 	if err != nil {
-		t.Errorf("Control-Main test failed with - %s",
-			err.Error())
+		t.Errorf("Control-Main test failed with - %s", err)
 	}
 }

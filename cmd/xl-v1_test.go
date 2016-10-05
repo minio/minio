@@ -48,7 +48,12 @@ func TestStorageInfo(t *testing.T) {
 		t.Fatalf("Diskinfo total values should be greater 0")
 	}
 
-	objLayer, err = newXLObjects(fsDirs, fsDirs[:4])
+	storageDisks, err := initStorageDisks(fsDirs, fsDirs[:4])
+	if err != nil {
+		t.Fatal("Unexpected error: ", err)
+	}
+
+	objLayer, err = newXLObjects(storageDisks)
 	if err != nil {
 		t.Fatalf("Unable to initialize 'XL' object layer with ignored disks %s.", fsDirs[:4])
 	}
@@ -83,23 +88,38 @@ func TestNewXL(t *testing.T) {
 	}
 
 	// No disks input.
-	_, err := newXLObjects(nil, nil)
+	_, err := newXLObjects(nil)
 	if err != errInvalidArgument {
 		t.Fatalf("Unable to initialize erasure, %s", err)
 	}
 
+	storageDisks, err := initStorageDisks(erasureDisks, nil)
+	if err != nil {
+		t.Fatal("Unexpected error: ", err)
+	}
+
+	err = waitForFormatDisks(true, "", nil)
+	if err != errInvalidArgument {
+		t.Fatalf("Expecting error, got %s", err)
+	}
+
 	// Initializes all erasure disks
-	err = formatDisks(erasureDisks, nil)
+	err = waitForFormatDisks(true, "", storageDisks)
 	if err != nil {
 		t.Fatalf("Unable to format disks for erasure, %s", err)
 	}
-	_, err = newXLObjects(erasureDisks, nil)
+	_, err = newXLObjects(storageDisks)
 	if err != nil {
 		t.Fatalf("Unable to initialize erasure, %s", err)
 	}
 
+	storageDisks, err = initStorageDisks(erasureDisks, erasureDisks[:2])
+	if err != nil {
+		t.Fatal("Unexpected error: ", err)
+	}
+
 	// Initializes all erasure disks, ignoring first two.
-	_, err = newXLObjects(erasureDisks, erasureDisks[:2])
+	_, err = newXLObjects(storageDisks)
 	if err != nil {
 		t.Fatalf("Unable to initialize erasure, %s", err)
 	}

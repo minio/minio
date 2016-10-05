@@ -58,7 +58,12 @@ func assetFS() *assetfs.AssetFS {
 const specialAssets = "loader.css|logo.svg|firefox.png|safari.png|chrome.png|favicon.ico"
 
 // registerWebRouter - registers web router for serving minio browser.
-func registerWebRouter(mux *router.Router, web *webAPIHandlers) {
+func registerWebRouter(mux *router.Router) {
+	// Initialize Web.
+	web := &webAPIHandlers{
+		ObjectAPI: newObjectLayerFn,
+	}
+
 	// Initialize a new json2 codec.
 	codec := json2.NewCodec()
 

@@ -28,11 +28,8 @@ func TestFSIsBucketExist(t *testing.T) {
 	// Prepare for testing
 	disk := filepath.Join(os.TempDir(), "minio-"+nextSuffix())
 	defer removeAll(disk)
-	obj, err := newFSObjects(disk)
-	if err != nil {
-		t.Fatal("Cannot create a new FS object: ", err)
-	}
 
+	obj := initFSObjects(disk, t)
 	fs := obj.(fsObjects)
 	bucketName := "bucket"
 
@@ -64,22 +61,20 @@ func TestFSIsUploadExists(t *testing.T) {
 	// Prepare for testing
 	disk := filepath.Join(os.TempDir(), "minio-"+nextSuffix())
 	defer removeAll(disk)
-	obj, err := newFSObjects(disk)
-	if err != nil {
-		t.Fatal("Cannot create a new FS object: ", err)
-	}
 
+	obj := initFSObjects(disk, t)
 	fs := obj.(fsObjects)
 
-	var uploadID string
 	bucketName := "bucket"
 	objectName := "object"
 
-	obj.MakeBucket(bucketName)
-	uploadID, err = obj.NewMultipartUpload(bucketName, objectName, nil)
+	if err := obj.MakeBucket(bucketName); err != nil {
+		t.Fatal("Unexpected err: ", err)
+	}
 
+	uploadID, err := obj.NewMultipartUpload(bucketName, objectName, nil)
 	if err != nil {
-		t.Fatal("Cannot create a new FS object: ", err)
+		t.Fatal("Unexpected err: ", err)
 	}
 	// Test with valid upload id
 	if exists := fs.isUploadIDExists(bucketName, objectName, uploadID); !exists {
@@ -110,10 +105,8 @@ func TestFSWriteUploadJSON(t *testing.T) {
 	// Prepare for tests
 	disk := filepath.Join(os.TempDir(), "minio-"+nextSuffix())
 	defer removeAll(disk)
-	obj, err := newFSObjects(disk)
-	if err != nil {
-		t.Fatal("Unexpected err: ", err)
-	}
+
+	obj := initFSObjects(disk, t)
 	fs := obj.(fsObjects)
 
 	bucketName := "bucket"
@@ -121,6 +114,9 @@ func TestFSWriteUploadJSON(t *testing.T) {
 
 	obj.MakeBucket(bucketName)
 	uploadID, err := obj.NewMultipartUpload(bucketName, objectName, nil)
+	if err != nil {
+		t.Fatal("Unexpected err: ", err)
+	}
 
 	if err != nil {
 		t.Fatal("Unexpected err: ", err)
@@ -146,10 +142,8 @@ func TestFSUpdateUploadsJSON(t *testing.T) {
 	// Prepare for tests
 	disk := filepath.Join(os.TempDir(), "minio-"+nextSuffix())
 	defer removeAll(disk)
-	obj, err := newFSObjects(disk)
-	if err != nil {
-		t.Fatal("Unexpected err: ", err)
-	}
+
+	obj := initFSObjects(disk, t)
 	fs := obj.(fsObjects)
 
 	bucketName := "bucket"

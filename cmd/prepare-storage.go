@@ -19,6 +19,7 @@ package cmd
 import (
 	"time"
 
+	"github.com/minio/mc/pkg/console"
 	"github.com/minio/minio-go/pkg/set"
 )
 
@@ -49,24 +50,23 @@ func init() {
   | Quorum   | Quorum Formatted    	|                   	|
   +----------+--------------------------+-----------------------+
   | All      | Quorum     		|  Print message saying |
-  |	     | Formatted,   		|  "Heal via minioctl"  |
+  |	     | Formatted,   		|   "Heal via control"  |
   |	     | some unformatted		|  and initObjectLayer  |
   +----------+--------------------------+-----------------------+
   | All      | None Formatted           |  FormatDisks          |
   |	     |				|  and initObjectLayer  |
   |          | 		             	|                   	|
   +----------+--------------------------+-----------------------+
-  |	     |      			|  Wait for notify from |
-  | Quorum   | 				|  "Heal via minioctl"  |
-  |          | Quorum UnFormatted   	|                   	|
-  +----------+--------------------------+-----------------------+
   | No       |          		|  Wait till enough     |
   | Quorum   |          _  		|  nodes are online and |
   |	     |                          |  one of the above     |
   |          |				|  sections apply       |
   +----------+--------------------------+-----------------------+
+  |	     |      			|                       |
+  | Quorum   | Quorum UnFormatted   	|        Abort        	|
+  +----------+--------------------------+-----------------------+
 
-  N B A disk can be in one of the following states.
+  A disk can be in one of the following states.
    - Unformatted
    - Formatted
    - Corrupted
@@ -101,7 +101,7 @@ const (
 	Abort
 )
 
-func prepForInit(disks []string, sErrs []error, diskCount int) InitActions {
+func prepForInitXL(firstDisk bool, sErrs []error, diskCount int) InitActions {
 	// Count errors by error value.
 	errMap := make(map[error]int)
 	for _, err := range sErrs {
@@ -114,34 +114,7 @@ func prepForInit(disks []string, sErrs []error, diskCount int) InitActions {
 	disksUnformatted := errMap[errUnformattedDisk]
 	disksCorrupted := errMap[errCorruptedFormat]
 
-	// All disks are unformatted, proceed to formatting disks.
-	if disksUnformatted == diskCount {
-		// Only the first server formats an uninitialized setup, others wait for notification.
-		if isLocalStorage(disks[0]) {
-			return FormatDisks
-		}
-		return WaitForFormatting
-	} else if disksUnformatted >= quorum {
-		if disksUnformatted+disksOffline == diskCount {
-			return WaitForAll
-		}
-		// Some disks possibly corrupted.
-		return WaitForHeal
-	}
-
-	// Already formatted, proceed to initialization of object layer.
-	if disksFormatted == diskCount {
-		return InitObjectLayer
-	} else if disksFormatted >= quorum {
-		if (disksFormatted+disksOffline == diskCount) ||
-			(disksFormatted+disksUnformatted == diskCount) {
-			return InitObjectLayer
-		}
-		// Some disks possibly corrupted.
-		return WaitForHeal
-	}
-
-	// No Quorum.
+	// No Quorum lots of offline disks, wait for quorum.
 	if disksOffline >= quorum {
 		return WaitForQuorum
 	}
@@ -151,57 +124,113 @@ func prepForInit(disks []string, sErrs []error, diskCount int) InitActions {
 	if disksCorrupted >= quorum {
 		return Abort
 	}
-	// Some of the formatted disks are possibly offline.
-	return WaitForHeal
-}
 
-func retryFormattingDisks(disks []string, storageDisks []StorageAPI) ([]StorageAPI, error) {
-	nextBackoff := time.Duration(0)
-	var err error
-	done := false
-	for !done {
-		select {
-		case <-time.After(nextBackoff * time.Second):
-			// Attempt to load all `format.json`.
-			_, sErrs := loadAllFormats(storageDisks)
-			switch prepForInit(disks, sErrs, len(storageDisks)) {
-			case Abort:
-				err = errCorruptedFormat
-				done = true
-			case FormatDisks:
-				err = initFormatXL(storageDisks)
-				done = true
-			case InitObjectLayer:
-				err = nil
-				done = true
-			}
-		case <-globalWakeupCh:
-			// Reset nextBackoff to reduce the subsequent wait and re-read
-			// format.json from all disks again.
-			nextBackoff = 0
+	// All disks are unformatted, proceed to formatting disks.
+	if disksUnformatted == diskCount {
+		// Only the first server formats an uninitialized setup, others wait for notification.
+		if firstDisk { // First node always initializes.
+			return FormatDisks
 		}
+		return WaitForFormatting
 	}
-	if err != nil {
-		return nil, err
+
+	// Total disks unformatted are in quorum verify if we have some offline disks.
+	if disksUnformatted >= quorum {
+		// Some disks offline and some disks unformatted, wait for all of them to come online.
+		if disksUnformatted+disksOffline == diskCount {
+			return WaitForAll
+		}
+		// Some disks possibly corrupted and too many unformatted disks.
+		return Abort
 	}
-	return storageDisks, nil
+
+	// Already formatted and in quorum, proceed to initialization of object layer.
+	if disksFormatted >= quorum {
+		if disksFormatted+disksOffline == diskCount {
+			return InitObjectLayer
+		}
+		// Some of the formatted disks are possibly corrupted or unformatted, heal them.
+		return WaitForHeal
+	} // No quorum wait for quorum number of disks.
+	return WaitForQuorum
 }
 
-func waitForFormattingDisks(disks, ignoredDisks []string) ([]StorageAPI, error) {
-	// FS Setup
+// Implements a jitter backoff loop for formatting all disks during
+// initialization of the server.
+func retryFormattingDisks(firstDisk bool, firstEndpoint string, storageDisks []StorageAPI) error {
+	if storageDisks == nil {
+		return errInvalidArgument
+	}
+
+	// Create a done channel to control 'ListObjects' go routine.
+	doneCh := make(chan struct{}, 1)
+
+	// Indicate to our routine to exit cleanly upon return.
+	defer close(doneCh)
+
+	// Wait on the jitter retry loop.
+	for range newRetryTimer(time.Second, time.Second*30, MaxJitter, doneCh) {
+		// Attempt to load all `format.json`.
+		formatConfigs, sErrs := loadAllFormats(storageDisks)
+		// Check if this is a XL or distributed XL, anything > 1 is considered XL backend.
+		if len(formatConfigs) > 1 {
+			switch prepForInitXL(firstDisk, sErrs, len(storageDisks)) {
+			case Abort:
+				return errCorruptedFormat
+			case FormatDisks:
+				console.Eraseline()
+				printFormatMsg(storageDisks, printOnceFn())
+				return initFormatXL(storageDisks)
+			case InitObjectLayer:
+				console.Eraseline()
+				// Validate formats load before proceeding forward.
+				err := genericFormatCheck(formatConfigs, sErrs)
+				if err == nil {
+					printRegularMsg(storageDisks, printOnceFn())
+				}
+				return err
+			case WaitForHeal:
+				// Validate formats load before proceeding forward.
+				err := genericFormatCheck(formatConfigs, sErrs)
+				if err == nil {
+					printHealMsg(firstEndpoint, storageDisks, printOnceFn())
+				}
+				return err
+			case WaitForQuorum:
+				console.Printf(
+					"Initializing data volume. Waiting for minimum %d servers to come online.\n",
+					len(storageDisks)/2+1,
+				)
+			case WaitForAll:
+				console.Println("Initializing data volume for first time. Waiting for other servers to come online.")
+			case WaitForFormatting:
+				console.Println("Initializing data volume for first time. Waiting for first server to come online.")
+			}
+			continue
+		} // else We have FS backend now. Check fs format as well now.
+		if isFormatFound(formatConfigs) {
+			console.Eraseline()
+			// Validate formats load before proceeding forward.
+			return genericFormatCheck(formatConfigs, sErrs)
+		} // else initialize the format for FS.
+		return initFormatFS(storageDisks[0])
+	} // Return here.
+	return nil
+}
+
+// Initialize storage disks based on input arguments.
+func initStorageDisks(disks, ignoredDisks []string) ([]StorageAPI, error) {
+	// Single disk means we will use FS backend.
 	if len(disks) == 1 {
 		storage, err := newStorageAPI(disks[0])
 		if err != nil && err != errDiskNotFound {
 			return nil, err
 		}
 		return []StorageAPI{storage}, nil
-	}
-
-	// XL Setup
+	} // Otherwise proceed with XL setup.
 	if err := checkSufficientDisks(disks); err != nil {
 		return nil, err
 	}
-
 	disksSet := set.NewStringSet()
 	if len(ignoredDisks) > 0 {
 		disksSet = set.CreateStringSet(ignoredDisks...)
@@ -223,6 +252,30 @@ func waitForFormattingDisks(disks, ignoredDisks []string) ([]StorageAPI, error) 
 		}
 		storageDisks[index] = storage
 	}
-	// Start wait loop retrying formatting disks.
-	return retryFormattingDisks(disks, storageDisks)
+	return storageDisks, nil
+}
+
+// Format disks before initialization object layer.
+func waitForFormatDisks(firstDisk bool, firstEndpoint string, storageDisks []StorageAPI) (err error) {
+	if storageDisks == nil {
+		return errInvalidArgument
+	}
+	// Start retry loop retrying until disks are formatted properly, until we have reached
+	// a conditional quorum of formatted disks.
+	err = retryFormattingDisks(firstDisk, firstEndpoint, storageDisks)
+	if err != nil {
+		return err
+	}
+	if firstDisk {
+		// Notify every one else that they can try init again.
+		for _, storage := range storageDisks {
+			switch store := storage.(type) {
+			// Wake up remote storage servers to initiate init again.
+			case networkStorage:
+				var reply GenericReply
+				_ = store.rpcClient.Call("Storage.TryInitHandler", &GenericArgs{}, &reply)
+			}
+		}
+	}
+	return nil
 }

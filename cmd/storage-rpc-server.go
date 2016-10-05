@@ -205,6 +205,18 @@ func (s *storageServer) RenameFileHandler(args *RenameFileArgs, reply *GenericRe
 	return s.storage.RenameFile(args.SrcVol, args.SrcPath, args.DstVol, args.DstPath)
 }
 
+// TryInitHandler - wake up storage server.
+func (s *storageServer) TryInitHandler(args *GenericArgs, reply *GenericReply) error {
+	if !isRPCTokenValid(args.Token) {
+		return errInvalidToken
+	}
+	go func() {
+		globalWakeupCh <- struct{}{}
+	}()
+	*reply = GenericReply{}
+	return nil
+}
+
 // Initialize new storage rpc.
 func newRPCServer(serverConfig serverCmdConfig) (servers []*storageServer, err error) {
 	// Initialize posix storage API.
@@ -245,9 +257,13 @@ func newRPCServer(serverConfig serverCmdConfig) (servers []*storageServer, err e
 }
 
 // registerStorageRPCRouter - register storage rpc router.
-func registerStorageRPCRouters(mux *router.Router, stServers []*storageServer) {
+func registerStorageRPCRouters(mux *router.Router, srvCmdConfig serverCmdConfig) {
+	// Initialize storage rpc servers for every disk that is hosted on this node.
+	storageRPCs, err := newRPCServer(srvCmdConfig)
+	fatalIf(err, "Unable to initialize storage RPC server.")
+
 	// Create a unique route for each disk exported from this node.
-	for _, stServer := range stServers {
+	for _, stServer := range storageRPCs {
 		storageRPCServer := rpc.NewServer()
 		storageRPCServer.RegisterName("Storage", stServer)
 		// Add minio storage routes.

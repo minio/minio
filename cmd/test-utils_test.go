@@ -40,6 +40,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fatih/color"
 	router "github.com/gorilla/mux"
 )
 
@@ -48,6 +49,9 @@ func init() {
 	// Initialize name space lock.
 	isDist := false
 	initNSLock(isDist)
+
+	// Disable printing console messages during tests.
+	color.Output = ioutil.Discard
 }
 
 func prepareFS() (ObjectLayer, string, error) {
@@ -55,7 +59,7 @@ func prepareFS() (ObjectLayer, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	obj, err := getSingleNodeObjectLayer(fsDirs[0])
+	obj, _, err := initObjectLayer(fsDirs, nil)
 	if err != nil {
 		removeRoots(fsDirs)
 		return nil, "", err
@@ -69,7 +73,7 @@ func prepareXL() (ObjectLayer, []string, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	obj, err := getXLObjectLayer(fsDirs, nil)
+	obj, _, err := initObjectLayer(fsDirs, nil)
 	if err != nil {
 		removeRoots(fsDirs)
 		return nil, nil, err
@@ -170,13 +174,20 @@ func StartTestServer(t TestErrHandler, instanceType string) TestServer {
 	testServer.Disks = disks
 	testServer.AccessKey = credentials.AccessKeyID
 	testServer.SecretKey = credentials.SecretAccessKey
-	// Run TestServer.
-	testServer.Server = httptest.NewServer(configureServerHandler(serverCmdConfig{disks: disks}))
 
-	objLayer, err := makeTestBackend(disks, instanceType)
+	objLayer, storageDisks, err := initObjectLayer(disks, nil)
 	if err != nil {
 		t.Fatalf("Failed obtaining Temp Backend: <ERROR> %s", err)
 	}
+
+	// Run TestServer.
+	testServer.Server = httptest.NewServer(configureServerHandler(
+		serverCmdConfig{
+			disks:        disks,
+			storageDisks: storageDisks,
+		},
+	))
+
 	testServer.Obj = objLayer
 	objLayerMutex.Lock()
 	globalObjectAPI = objLayer
@@ -186,16 +197,10 @@ func StartTestServer(t TestErrHandler, instanceType string) TestServer {
 
 // Initializes control RPC end points.
 // The object Layer will be a temp back used for testing purpose.
-func initTestControlRPCEndPoint(objectLayer ObjectLayer) http.Handler {
-	// Initialize Web.
-
-	controllerHandlers := &controllerAPIHandlers{
-		ObjectAPI: func() ObjectLayer { return objectLayer },
-	}
-
+func initTestControlRPCEndPoint(srvCmdConfig serverCmdConfig) http.Handler {
 	// Initialize router.
 	muxRouter := router.NewRouter()
-	registerControllerRPCRouter(muxRouter, controllerHandlers)
+	registerControllerRPCRouter(muxRouter, srvCmdConfig)
 	return muxRouter
 }
 
@@ -208,20 +213,14 @@ func StartTestRPCServer(t TestErrHandler, instanceType string) TestServer {
 	if err != nil {
 		t.Fatal("Failed to create disks for the backend")
 	}
-	// create an instance of TestServer.
-	testRPCServer := TestServer{}
-	// create temporary backend for the test server.
-	objLayer, err := makeTestBackend(disks, instanceType)
-
-	if err != nil {
-		t.Fatalf("Failed obtaining Temp Backend: <ERROR> %s", err)
-	}
 
 	root, err := newTestConfig("us-east-1")
 	if err != nil {
 		t.Fatalf("%s", err)
 	}
 
+	// create an instance of TestServer.
+	testRPCServer := TestServer{}
 	// Get credential.
 	credentials := serverConfig.GetCredential()
 
@@ -229,9 +228,21 @@ func StartTestRPCServer(t TestErrHandler, instanceType string) TestServer {
 	testRPCServer.Disks = disks
 	testRPCServer.AccessKey = credentials.AccessKeyID
 	testRPCServer.SecretKey = credentials.SecretAccessKey
-	testRPCServer.Obj = objLayer
+
+	// create temporary backend for the test server.
+	objLayer, storageDisks, err := initObjectLayer(disks, nil)
+	if err != nil {
+		t.Fatalf("Failed obtaining Temp Backend: <ERROR> %s", err)
+	}
+
+	objLayerMutex.Lock()
+	globalObjectAPI = objLayer
+	objLayerMutex.Unlock()
+
 	// Run TestServer.
-	testRPCServer.Server = httptest.NewServer(initTestControlRPCEndPoint(objLayer))
+	testRPCServer.Server = httptest.NewServer(initTestControlRPCEndPoint(serverCmdConfig{
+		storageDisks: storageDisks,
+	}))
 
 	return testRPCServer
 }
@@ -474,6 +485,38 @@ func newTestStreamingSignedRequest(method, urlStr string, contentLength, chunkSi
 
 	req.Body = ioutil.NopCloser(bytes.NewReader(stream))
 	return req, nil
+}
+
+// Replaces any occurring '/' in string, into its encoded representation.
+func percentEncodeSlash(s string) string {
+	return strings.Replace(s, "/", "%2F", -1)
+}
+
+// queryEncode - encodes query values in their URL encoded form. In
+// addition to the percent encoding performed by getURLEncodedName() used
+// here, it also percent encodes '/' (forward slash)
+func queryEncode(v url.Values) string {
+	if v == nil {
+		return ""
+	}
+	var buf bytes.Buffer
+	keys := make([]string, 0, len(v))
+	for k := range v {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		vs := v[k]
+		prefix := percentEncodeSlash(getURLEncodedName(k)) + "="
+		for _, v := range vs {
+			if buf.Len() > 0 {
+				buf.WriteByte('&')
+			}
+			buf.WriteString(prefix)
+			buf.WriteString(percentEncodeSlash(getURLEncodedName(v)))
+		}
+	}
+	return buf.String()
 }
 
 // preSignV2 - presign the request in following style.
@@ -860,31 +903,6 @@ func getTestWebRPCResponse(resp *httptest.ResponseRecorder, data interface{}) er
 	return nil
 }
 
-// creates the temp backend setup.
-// if the option is
-// FS: Returns a temp single disk setup initializes FS Backend.
-// XL: Returns a 16 temp single disk setup and initializse XL Backend.
-func makeTestBackend(disks []string, instanceType string) (ObjectLayer, error) {
-	switch instanceType {
-	case "FS":
-		objLayer, err := getSingleNodeObjectLayer(disks[0])
-		if err != nil {
-			return nil, err
-		}
-		return objLayer, err
-
-	case "XL":
-		objectLayer, err := getXLObjectLayer(disks, nil)
-		if err != nil {
-			return nil, err
-		}
-		return objectLayer, err
-	default:
-		errMsg := "Invalid instance type, Only FS and XL are valid options"
-		return nil, fmt.Errorf("Failed obtaining Temp XL layer: <ERROR> %s", errMsg)
-	}
-}
-
 var src = rand.NewSource(time.Now().UTC().UnixNano())
 
 // Function to generate random string for bucket/object names.
@@ -1216,33 +1234,31 @@ func getRandomDisks(N int) ([]string, error) {
 	return erasureDisks, nil
 }
 
-// getXLObjectLayer - Instantiates XL object layer and returns it.
-func getXLObjectLayer(erasureDisks []string, ignoredDisks []string) (ObjectLayer, error) {
-	err := formatDisks(erasureDisks, ignoredDisks)
+// initObjectLayer - Instantiates object layer and returns it.
+func initObjectLayer(disks []string, ignoredDisks []string) (ObjectLayer, []StorageAPI, error) {
+	storageDisks, err := initStorageDisks(disks, ignoredDisks)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	objLayer, err := newXLObjects(erasureDisks, ignoredDisks)
+
+	err = waitForFormatDisks(true, "", storageDisks)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
+
+	objLayer, err := newObjectLayer(storageDisks)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	// Disabling the cache for integration tests.
 	// Should use the object layer tests for validating cache.
 	if xl, ok := objLayer.(xlObjects); ok {
 		xl.objCacheEnabled = false
 	}
 
-	return objLayer, nil
-}
-
-// getSingleNodeObjectLayer - Instantiates single node object layer and returns it.
-func getSingleNodeObjectLayer(disk string) (ObjectLayer, error) {
-	// Create the object layer.
-	objLayer, err := newFSObjects(disk)
-	if err != nil {
-		return nil, err
-	}
-	return objLayer, nil
+	// Success.
+	return objLayer, storageDisks, nil
 }
 
 // removeRoots - Cleans up initialized directories during tests.
@@ -1260,6 +1276,48 @@ func removeDiskN(disks []string, n int) {
 	for _, disk := range disks[:n] {
 		removeAll(disk)
 	}
+}
+
+// Makes a entire new copy of a StorageAPI slice.
+func deepCopyStorageDisks(storageDisks []StorageAPI) []StorageAPI {
+	newStorageDisks := make([]StorageAPI, len(storageDisks))
+	for i, disk := range storageDisks {
+		newStorageDisks[i] = disk
+	}
+	return newStorageDisks
+}
+
+// Initializes storage disks with 'N' errored disks, N disks return 'err' for each disk access.
+func prepareNErroredDisks(storageDisks []StorageAPI, offline int, err error, t *testing.T) []StorageAPI {
+	if offline > len(storageDisks) {
+		t.Fatal("Requested more offline disks than supplied storageDisks slice", offline, len(storageDisks))
+	}
+
+	for i := 0; i < offline; i++ {
+		d := storageDisks[i].(*posix)
+		storageDisks[i] = &naughtyDisk{disk: d, defaultErr: err}
+	}
+	return storageDisks
+}
+
+// Initializes storage disks with 'N' offline disks, N disks returns 'errDiskNotFound' for each disk access.
+func prepareNOfflineDisks(storageDisks []StorageAPI, offline int, t *testing.T) []StorageAPI {
+	return prepareNErroredDisks(storageDisks, offline, errDiskNotFound, t)
+}
+
+// Initializes backend storage disks.
+func prepareXLStorageDisks(t *testing.T) ([]StorageAPI, []string) {
+	nDisks := 16
+	fsDirs, err := getRandomDisks(nDisks)
+	if err != nil {
+		t.Fatal("Unexpected error: ", err)
+	}
+	_, storageDisks, err := initObjectLayer(fsDirs, nil)
+	if err != nil {
+		removeRoots(fsDirs)
+		t.Fatal("Unable to initialize storage disks", err)
+	}
+	return storageDisks, fsDirs
 }
 
 // creates a bucket for the tests and returns the bucket name.
@@ -1370,7 +1428,7 @@ func ExecObjectLayerStaleFilesTest(t *testing.T, objTest objTestStaleFilesType) 
 	if err != nil {
 		t.Fatalf("Initialization of disks for XL setup: %s", err)
 	}
-	objLayer, err := getXLObjectLayer(erasureDisks, nil)
+	objLayer, _, err := initObjectLayer(erasureDisks, nil)
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for XL setup: %s", err)
 	}
@@ -1379,105 +1437,79 @@ func ExecObjectLayerStaleFilesTest(t *testing.T, objTest objTestStaleFilesType) 
 	defer removeRoots(erasureDisks)
 }
 
-// addAPIFunc helper function to add API functions identified by name to the routers.
-func addAPIFunc(muxRouter *router.Router, apiRouter *router.Router, bucket *router.Router,
-	api objectAPIHandlers, apiFunction string) {
-	switch apiFunction {
-	// Register ListBuckets	handler.
-	case "ListBuckets":
-		apiRouter.Methods("GET").HandlerFunc(api.ListBucketsHandler)
-	// Register GetObject handler.
-	case "GetObject":
-		bucket.Methods("GET").Path("/{object:.+}").HandlerFunc(api.GetObjectHandler)
-	// Register PutObject handler.
-	case "PutObject":
-		bucket.Methods("PUT").Path("/{object:.+}").HandlerFunc(api.PutObjectHandler)
-	// Register Delete Object handler.
-	case "DeleteObject":
-		bucket.Methods("DELETE").Path("/{object:.+}").HandlerFunc(api.DeleteObjectHandler)
-	// Register Copy Object  handler.
-	case "CopyObject":
-		bucket.Methods("PUT").Path("/{object:.+}").HeadersRegexp("X-Amz-Copy-Source", ".*?(\\/|%2F).*?").HandlerFunc(api.CopyObjectHandler)
-	// Register PutBucket Policy handler.
-	case "PutBucketPolicy":
-		bucket.Methods("PUT").HandlerFunc(api.PutBucketPolicyHandler).Queries("policy", "")
-	// Register Delete bucket HTTP policy handler.
-	case "DeleteBucketPolicy":
-		bucket.Methods("DELETE").HandlerFunc(api.DeleteBucketPolicyHandler).Queries("policy", "")
-	// Register Get Bucket policy HTTP Handler.
-	case "GetBucketPolicy":
-		bucket.Methods("GET").HandlerFunc(api.GetBucketPolicyHandler).Queries("policy", "")
-	// Register GetBucketLocation handler.
-	case "GetBucketLocation":
-		bucket.Methods("GET").HandlerFunc(api.GetBucketLocationHandler).Queries("location", "")
-	// Register HeadBucket handler.
-	case "HeadBucket":
-		bucket.Methods("HEAD").HandlerFunc(api.HeadBucketHandler)
-		// Register New Multipart upload handler.
-	case "NewMultipart":
-		bucket.Methods("POST").Path("/{object:.+}").HandlerFunc(api.NewMultipartUploadHandler).Queries("uploads", "")
-	// Register PutObjectPart handler.
-	case "PutObjectPart":
-		bucket.Methods("PUT").Path("/{object:.+}").HandlerFunc(api.PutObjectPartHandler).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}")
-	// Register ListObjectParts handler.
-	case "ListObjectParts":
-		bucket.Methods("GET").Path("/{object:.+}").HandlerFunc(api.ListObjectPartsHandler).Queries("uploadId", "{uploadId:.*}")
-	// Register ListMultipartUploads handler.
-	case "ListMultipartUploads":
-		bucket.Methods("GET").HandlerFunc(api.ListMultipartUploadsHandler).Queries("uploads", "")
-		// Register Complete Multipart Upload handler.
-	case "CompleteMultipart":
-		bucket.Methods("POST").Path("/{object:.+}").HandlerFunc(api.CompleteMultipartUploadHandler).Queries("uploadId", "{uploadId:.*}")
-		// Register GetBucketNotification Handler.
-	case "GetBucketNotification":
-		bucket.Methods("GET").HandlerFunc(api.GetBucketNotificationHandler).Queries("notification", "")
-		// Register PutBucketNotification Handler.
-	case "PutBucketNotification":
-		bucket.Methods("PUT").HandlerFunc(api.PutBucketNotificationHandler).Queries("notification", "")
-		// Register ListenBucketNotification Handler.
-	case "ListenBucketNotification":
-		bucket.Methods("GET").HandlerFunc(api.ListenBucketNotificationHandler).Queries("events", "{events:.*}")
-	// Register all api endpoints by default.
-	default:
-		registerAPIRouter(muxRouter, api)
-		// No need to register any more end points, all the end points are registered.
-		break
+func registerBucketLevelFunc(bucket *router.Router, api objectAPIHandlers, apiFunctions ...string) {
+	for _, apiFunction := range apiFunctions {
+		switch apiFunction {
+		case "PostPolicy":
+			// Register PostPolicy handler.
+			bucket.Methods("POST").HeadersRegexp("Content-Type", "multipart/form-data*").HandlerFunc(api.PostPolicyBucketHandler)
+			// Register GetObject handler.
+		case "GetObject":
+			bucket.Methods("GET").Path("/{object:.+}").HandlerFunc(api.GetObjectHandler)
+			// Register PutObject handler.
+		case "PutObject":
+			bucket.Methods("PUT").Path("/{object:.+}").HandlerFunc(api.PutObjectHandler)
+			// Register Delete Object handler.
+		case "DeleteObject":
+			bucket.Methods("DELETE").Path("/{object:.+}").HandlerFunc(api.DeleteObjectHandler)
+			// Register Copy Object  handler.
+		case "CopyObject":
+			bucket.Methods("PUT").Path("/{object:.+}").HeadersRegexp("X-Amz-Copy-Source", ".*?(\\/|%2F).*?").HandlerFunc(api.CopyObjectHandler)
+			// Register PutBucket Policy handler.
+		case "PutBucketPolicy":
+			bucket.Methods("PUT").HandlerFunc(api.PutBucketPolicyHandler).Queries("policy", "")
+			// Register Delete bucket HTTP policy handler.
+		case "DeleteBucketPolicy":
+			bucket.Methods("DELETE").HandlerFunc(api.DeleteBucketPolicyHandler).Queries("policy", "")
+			// Register Get Bucket policy HTTP Handler.
+		case "GetBucketPolicy":
+			bucket.Methods("GET").HandlerFunc(api.GetBucketPolicyHandler).Queries("policy", "")
+			// Register GetBucketLocation handler.
+		case "GetBucketLocation":
+			bucket.Methods("GET").HandlerFunc(api.GetBucketLocationHandler).Queries("location", "")
+			// Register HeadBucket handler.
+		case "HeadBucket":
+			bucket.Methods("HEAD").HandlerFunc(api.HeadBucketHandler)
+			// Register New Multipart upload handler.
+		case "NewMultipart":
+			bucket.Methods("POST").Path("/{object:.+}").HandlerFunc(api.NewMultipartUploadHandler).Queries("uploads", "")
+			// Register PutObjectPart handler.
+		case "PutObjectPart":
+			bucket.Methods("PUT").Path("/{object:.+}").HandlerFunc(api.PutObjectPartHandler).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}")
+			// Register ListObjectParts handler.
+		case "ListObjectParts":
+			bucket.Methods("GET").Path("/{object:.+}").HandlerFunc(api.ListObjectPartsHandler).Queries("uploadId", "{uploadId:.*}")
+			// Register ListMultipartUploads handler.
+		case "ListMultipartUploads":
+			bucket.Methods("GET").HandlerFunc(api.ListMultipartUploadsHandler).Queries("uploads", "")
+			// Register Complete Multipart Upload handler.
+		case "CompleteMultipart":
+			bucket.Methods("POST").Path("/{object:.+}").HandlerFunc(api.CompleteMultipartUploadHandler).Queries("uploadId", "{uploadId:.*}")
+			// Register GetBucketNotification Handler.
+		case "GetBucketNotification":
+			bucket.Methods("GET").HandlerFunc(api.GetBucketNotificationHandler).Queries("notification", "")
+			// Register PutBucketNotification Handler.
+		case "PutBucketNotification":
+			bucket.Methods("PUT").HandlerFunc(api.PutBucketNotificationHandler).Queries("notification", "")
+			// Register ListenBucketNotification Handler.
+		case "ListenBucketNotification":
+			bucket.Methods("GET").HandlerFunc(api.ListenBucketNotificationHandler).Queries("events", "{events:.*}")
+		}
 	}
 }
 
-// Returns a http.Handler capable of routing API requests to handlers corresponding to apiFunctions,
-// with ObjectAPI set to nil.
-func initTestNilObjAPIEndPoints(apiFunctions []string) http.Handler {
-	muxRouter := router.NewRouter()
-	// All object storage operations are registered as HTTP handlers on `objectAPIHandlers`.
-	// When the handlers get a HTTP request they use the underlyting ObjectLayer to perform operations.
-	nilAPI := objectAPIHandlers{
-		ObjectAPI: func() ObjectLayer {
-			objLayerMutex.Lock()
-			defer objLayerMutex.Unlock()
-			globalObjectAPI = nil
-			return globalObjectAPI
-		},
+// registerAPIFunctions helper function to add API functions identified by name to the routers.
+func registerAPIFunctions(muxRouter *router.Router, objLayer ObjectLayer, apiFunctions ...string) {
+	if len(apiFunctions) == 0 {
+		// Register all api endpoints by default.
+		registerAPIRouter(muxRouter)
+		return
 	}
-
 	// API Router.
 	apiRouter := muxRouter.NewRoute().PathPrefix("/").Subrouter()
 	// Bucket router.
-	bucket := apiRouter.PathPrefix("/{bucket}").Subrouter()
-	// Iterate the list of API functions requested for and register them in mux HTTP handler.
-	for _, apiFunction := range apiFunctions {
-		addAPIFunc(muxRouter, apiRouter, bucket, nilAPI, apiFunction)
-	}
-	return muxRouter
-}
+	bucketRouter := apiRouter.PathPrefix("/{bucket}").Subrouter()
 
-// Takes in XL/FS object layer, and the list of API end points to be tested/required, registers the API end points and returns the HTTP handler.
-// Need isolated registration of API end points while writing unit tests for end points.
-// All the API end points are registered only for the default case.
-func initTestAPIEndPoints(objLayer ObjectLayer, apiFunctions []string) http.Handler {
-	// initialize a new mux router.
-	// goriilla/mux is the library used to register all the routes and handle them.
-	muxRouter := router.NewRouter()
 	// All object storage operations are registered as HTTP handlers on `objectAPIHandlers`.
 	// When the handlers get a HTTP request they use the underlyting ObjectLayer to perform operations.
 	objLayerMutex.Lock()
@@ -1488,26 +1520,49 @@ func initTestAPIEndPoints(objLayer ObjectLayer, apiFunctions []string) http.Hand
 		ObjectAPI: newObjectLayerFn,
 	}
 
-	// API Router.
-	apiRouter := muxRouter.NewRoute().PathPrefix("/").Subrouter()
-	// Bucket router.
-	bucket := apiRouter.PathPrefix("/{bucket}").Subrouter()
-	// Iterate the list of API functions requested for and register them in mux HTTP handler.
-	for _, apiFunction := range apiFunctions {
-		addAPIFunc(muxRouter, apiRouter, bucket, api, apiFunction)
+	// Register ListBuckets	handler.
+	apiRouter.Methods("GET").HandlerFunc(api.ListBucketsHandler)
+	// Register all bucket level handlers.
+	registerBucketLevelFunc(bucketRouter, api, apiFunctions...)
+}
+
+// Returns a http.Handler capable of routing API requests to handlers corresponding to apiFunctions,
+// with ObjectAPI set to nil.
+func initTestNilObjAPIEndPoints(apiFunctions []string) http.Handler {
+	muxRouter := router.NewRouter()
+	if len(apiFunctions) > 0 {
+		// Iterate the list of API functions requested for and register them in mux HTTP handler.
+		registerAPIFunctions(muxRouter, nil, apiFunctions...)
+		return muxRouter
 	}
+	registerAPIRouter(muxRouter)
+	return muxRouter
+}
+
+// Takes in XL/FS object layer, and the list of API end points to be tested/required, registers the API end points and returns the HTTP handler.
+// Need isolated registration of API end points while writing unit tests for end points.
+// All the API end points are registered only for the default case.
+func initTestAPIEndPoints(objLayer ObjectLayer, apiFunctions []string) http.Handler {
+	// initialize a new mux router.
+	// goriilla/mux is the library used to register all the routes and handle them.
+	muxRouter := router.NewRouter()
+	if len(apiFunctions) > 0 {
+		// Iterate the list of API functions requested for and register them in mux HTTP handler.
+		registerAPIFunctions(muxRouter, objLayer, apiFunctions...)
+		return muxRouter
+	}
+	registerAPIRouter(muxRouter)
 	return muxRouter
 }
 
 // Initialize Web RPC Handlers for testing
 func initTestWebRPCEndPoint(objLayer ObjectLayer) http.Handler {
-	// Initialize Web.
-	webHandlers := &webAPIHandlers{
-		ObjectAPI: func() ObjectLayer { return objLayer },
-	}
+	objLayerMutex.Lock()
+	globalObjectAPI = objLayer
+	objLayerMutex.Unlock()
 
 	// Initialize router.
 	muxRouter := router.NewRouter()
-	registerWebRouter(muxRouter, webHandlers)
+	registerWebRouter(muxRouter)
 	return muxRouter
 }

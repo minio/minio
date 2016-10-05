@@ -105,9 +105,6 @@ func isLocalStorage(networkPath string) bool {
 // Depending on the disk type network or local, initialize storage API.
 func newStorageAPI(disk string) (storage StorageAPI, err error) {
 	if isLocalStorage(disk) {
-		if idx := strings.LastIndex(disk, ":"); idx != -1 {
-			return newPosix(disk[idx+1:])
-		}
 		return newPosix(disk)
 	}
 	return newRPCClient(disk)
