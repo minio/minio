@@ -28,7 +28,7 @@ var errServerVersionMismatch = errors.New("Server versions do not match.")
 
 // Login - login handler.
 func (c *controllerAPIHandlers) LoginHandler(args *RPCLoginArgs, reply *RPCLoginReply) error {
-	jwt, err := newJWT(defaultTokenExpiry)
+	jwt, err := newJWT(defaultInterNodeJWTExpiry)
 	if err != nil {
 		return err
 	}

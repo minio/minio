@@ -30,11 +30,15 @@ const jwtAlgorithm = "Bearer"
 // JWT - jwt auth backend
 type JWT struct {
 	credential
+	expiry time.Duration
 }
 
-// Default each token expires in 100yrs.
 const (
-	defaultTokenExpiry time.Duration = time.Hour * 876000 // 100yrs.
+	// Default JWT token for web handlers is one day.
+	defaultJWTExpiry time.Duration = time.Hour * 24
+
+	// Inter-node JWT token expiry is 100 years.
+	defaultInterNodeJWTExpiry time.Duration = time.Hour * 24 * 365 * 100
 )
 
 // newJWT - returns new JWT object.
@@ -52,7 +56,7 @@ func newJWT(expiry time.Duration) (*JWT, error) {
 		return nil, errors.New("Invalid secret key")
 	}
 
-	return &JWT{cred}, nil
+	return &JWT{cred, expiry}, nil
 }
 
 // GenerateToken - generates a new Json Web Token based on the incoming access key.
@@ -67,7 +71,7 @@ func (jwt *JWT) GenerateToken(accessKey string) (string, error) {
 	tUTCNow := time.Now().UTC()
 	token := jwtgo.NewWithClaims(jwtgo.SigningMethodHS512, jwtgo.MapClaims{
 		// Token expires in 10hrs.
-		"exp": tUTCNow.Add(defaultTokenExpiry).Unix(),
+		"exp": tUTCNow.Add(jwt.expiry).Unix(),
 		"iat": tUTCNow.Unix(),
 		"sub": accessKey,
 	})

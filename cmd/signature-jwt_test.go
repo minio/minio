@@ -108,7 +108,7 @@ func TestNewJWT(t *testing.T) {
 			serverConfig.SetCredential(*testCase.cred)
 		}
 
-		_, err := newJWT(defaultWebTokenExpiry)
+		_, err := newJWT(defaultJWTExpiry)
 
 		if testCase.expectedErr != nil {
 			if err == nil {
@@ -132,7 +132,7 @@ func TestGenerateToken(t *testing.T) {
 	}
 	defer removeAll(testPath)
 
-	jwt, err := newJWT(defaultWebTokenExpiry)
+	jwt, err := newJWT(defaultJWTExpiry)
 	if err != nil {
 		t.Fatalf("unable get new JWT, %s", err)
 	}
@@ -179,7 +179,7 @@ func TestAuthenticate(t *testing.T) {
 	}
 	defer removeAll(testPath)
 
-	jwt, err := newJWT(defaultWebTokenExpiry)
+	jwt, err := newJWT(defaultJWTExpiry)
 	if err != nil {
 		t.Fatalf("unable get new JWT, %s", err)
 	}
