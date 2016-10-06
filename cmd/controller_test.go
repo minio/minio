@@ -35,7 +35,7 @@ type TestRPCControllerSuite struct {
 // Setting up the test suite.
 // Starting the Test server with temporary FS backend.
 func (s *TestRPCControllerSuite) SetUpSuite(c *testing.T) {
-	s.testServer = StartTestRPCServer(c, s.serverType)
+	s.testServer = StartTestControlRPCServer(c, s.serverType)
 	s.testAuthConf = &authConfig{
 		address:     s.testServer.Server.Listener.Addr().String(),
 		accessKey:   s.testServer.AccessKey,

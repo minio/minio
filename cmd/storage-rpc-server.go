@@ -25,6 +25,7 @@ import (
 	"time"
 
 	router "github.com/gorilla/mux"
+	"github.com/minio/minio-go/pkg/set"
 	"github.com/minio/minio/pkg/disk"
 )
 
@@ -223,14 +224,15 @@ func newRPCServer(serverConfig serverCmdConfig) (servers []*storageServer, err e
 	exports := serverConfig.disks
 	ignoredExports := serverConfig.ignoredDisks
 
-	// Save ignored disks in a map
-	skipDisks := make(map[string]bool)
-	for _, ignoredExport := range ignoredExports {
-		skipDisks[ignoredExport] = true
+	// Initialize ignored disks in a new set.
+	ignoredSet := set.NewStringSet()
+	if len(ignoredExports) > 0 {
+		ignoredSet = set.CreateStringSet(ignoredExports...)
 	}
 	t := time.Now().UTC()
 	for _, export := range exports {
-		if skipDisks[export] {
+		if ignoredSet.Contains(export) {
+			// Ignore initializing ignored export.
 			continue
 		}
 		// e.g server:/mnt/disk1
@@ -253,7 +255,7 @@ func newRPCServer(serverConfig serverCmdConfig) (servers []*storageServer, err e
 			})
 		}
 	}
-	return servers, err
+	return servers, nil
 }
 
 // registerStorageRPCRouter - register storage rpc router.

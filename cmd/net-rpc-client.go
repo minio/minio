@@ -85,8 +85,7 @@ func (rpcClient *RPCClient) dialRPCClient() (*rpc.Client, error) {
 	}
 	io.WriteString(conn, "CONNECT "+rpcClient.rpcPath+" HTTP/1.0\n\n")
 
-	// Require successful HTTP response
-	// before switching to RPC protocol.
+	// Require successful HTTP response before switching to RPC protocol.
 	resp, err := http.ReadResponse(bufio.NewReader(conn), &http.Request{Method: "CONNECT"})
 	if err == nil && resp.Status == "200 Connected to Go RPC" {
 		rpc := rpc.NewClient(conn)
