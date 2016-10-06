@@ -1387,6 +1387,45 @@ func initAPIHandlerTest(obj ObjectLayer, endPoints []string) (bucketName, rootPa
 	return bucketName, rootPath, apiRouter, nil
 }
 
+// ExecObjectLayerAPINilTest - Sets the object layer to `nil`, and calls rhe registered object layer API endpoint, and assert the error response.
+// The purpose is to validate the API handlers response when the object layer is uninitialized.
+// Usage hint: Should be used at the end of the API end points tests (ex: check the last few lines of `testAPIListObjectPartsHandler`), need a sample HTTP request
+// to be sent as argument so that the relevant handler is called,
+// the handler registration is expected to be done since its called from within the API handler tests,
+// the reference to the registered HTTP handler has to be sent as an argument.
+func ExecObjectLayerAPINilTest(t TestErrHandler, bucketName, objectName, instanceType string, apiRouter http.Handler, req *http.Request) {
+	// httptest Recorder to capture all the response by the http handler.
+	rec := httptest.NewRecorder()
+
+	// The  API handler gets the referece to the object layer via the global object Layer,
+	// setting it to `nil` in order test for handlers response for uninitialized object layer.
+
+	objLayerMutex.Lock()
+	globalObjectAPI = nil
+	objLayerMutex.Unlock()
+	// call the HTTP handler.
+	apiRouter.ServeHTTP(rec, req)
+
+	// expected error response when the API handler is called before the object layer is initialized,
+	// or when objectLayer is `nil`.
+	serverNotInitializedErr := getAPIError(ErrServerNotInitialized).HTTPStatusCode
+	if rec.Code != serverNotInitializedErr {
+		t.Errorf("Object API Nil Test expected to fail with %d, but failed with %d.", serverNotInitializedErr, rec.Code)
+	}
+	// expected error response in bytes when objectLayer is not initialized, or set to `nil`.
+	expectedErrResponse := encodeResponse(getAPIErrorResponse(getAPIError(ErrServerNotInitialized), getGetObjectURL("", bucketName, objectName)))
+
+	// read the response body.
+	actualContent, err := ioutil.ReadAll(rec.Body)
+	if err != nil {
+		t.Fatalf("Minio %s: Failed parsing response body: <ERROR> %v.", instanceType, err)
+	}
+	// verify whether actual error response (from the response body), matches the expected error response.
+	if !bytes.Equal(expectedErrResponse, actualContent) {
+		t.Errorf("Minio %s: Object content differs from expected value.", instanceType)
+	}
+}
+
 // ExecObjectLayerAPITest - executes object layer API tests.
 // Creates single node and XL ObjectLayer instance, registers the specified API end points and runs test for both the layers.
 func ExecObjectLayerAPITest(t TestErrHandler, objAPITest objAPITestType, endPoints []string) {
@@ -1413,7 +1452,8 @@ func ExecObjectLayerAPITest(t TestErrHandler, objAPITest objAPITestType, endPoin
 	credentials = serverConfig.GetCredential()
 	// Executing the object layer tests for XL.
 	objAPITest(objLayer, xLTestStr, bucketXL, xlAPIRouter, credentials, t)
-	defer removeRoots(append(xlDisks, fsDir, fsRoot, xlRoot))
+	// clean up the temporary test backend.
+	removeRoots(append(xlDisks, fsDir, fsRoot, xlRoot))
 }
 
 // function to be passed to ExecObjectLayerAPITest, for executing object layr API handler tests.

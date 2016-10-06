@@ -171,6 +171,23 @@ func testAPIGetObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			t.Errorf("Test %d: %s: Object content differs from expected value.: %s", i+1, instanceType, string(actualContent))
 		}
 	}
+
+	// HTTP request for testing when `objectLayer` is set to `nil`.
+	// There is no need to use an existing bucket and valid input for creating the request
+	// since the `objectLayer==nil`  check is performed before any other checks inside the handlers.
+	// The only aim is to generate an HTTP request in a way that the relevant/registered end point is evoked/called.
+
+	nilBucket := "dummy-bucket"
+	nilObject := "dummy-object"
+	nilReq, err := newTestSignedRequestV4("GET", getGetObjectURL("", nilBucket, nilObject),
+		0, nil, "", "")
+
+	if err != nil {
+		t.Errorf("Minio %s: Failed to create HTTP request for testing the reponse when object Layer is set to `nil`.", instanceType)
+	}
+	// execute the object layer set to `nil` test.
+	// `ExecObjectLayerAPINilTest` manages the operation.
+	ExecObjectLayerAPINilTest(t, nilBucket, nilObject, instanceType, apiRouter, nilReq)
 }
 
 // Wrapper for calling PutObject API handler tests using streaming signature v4 for both XL multiple disks and FS single drive setup.
@@ -391,6 +408,24 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 		}
 		buffer.Reset()
 	}
+
+	// HTTP request to test the case of `objectLayer` being set to `nil`.
+	// There is no need to use an existing bucket or valid input for creating the request,
+	// since the `objectLayer==nil`  check is performed before any other checks inside the handlers.
+	// The only aim is to generate an HTTP request in a way that the relevant/registered end point is evoked/called.
+	nilBucket := "dummy-bucket"
+	nilObject := "dummy-object"
+
+	nilReq, err := newTestSignedRequestV4("PUT", getPutObjectURL("", nilBucket, nilObject),
+		0, nil, "", "")
+
+	if err != nil {
+		t.Errorf("Minio %s: Failed to create HTTP request for testing the reponse when object Layer is set to `nil`.", instanceType)
+	}
+	// execute the object layer set to `nil` test.
+	// `ExecObjectLayerAPINilTest` manages the operation.
+	ExecObjectLayerAPINilTest(t, nilBucket, nilObject, instanceType, apiRouter, nilReq)
+
 }
 
 // Wrapper for calling Copy Object API handler tests for both XL multiple disks and single node setup.
@@ -499,10 +534,11 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 	}
 
 	for i, testCase := range testCases {
+		var req *http.Request
 		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
 		rec := httptest.NewRecorder()
 		// construct HTTP request for copy object.
-		req, err := newTestSignedRequestV4("PUT", getCopyObjectURL("", testCase.bucketName, testCase.newObjectName),
+		req, err = newTestSignedRequestV4("PUT", getCopyObjectURL("", testCase.bucketName, testCase.newObjectName),
 			0, nil, credentials.AccessKeyID, credentials.SecretAccessKey)
 
 		if err != nil {
@@ -532,6 +568,28 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 			buffers[0].Reset()
 		}
 	}
+
+	// HTTP request to test the case of `objectLayer` being set to `nil`.
+	// There is no need to use an existing bucket or valid input for creating the request,
+	// since the `objectLayer==nil`  check is performed before any other checks inside the handlers.
+	// The only aim is to generate an HTTP request in a way that the relevant/registered end point is evoked/called.
+	nilBucket := "dummy-bucket"
+	nilObject := "dummy-object"
+
+	nilReq, err := newTestSignedRequestV4("PUT", getCopyObjectURL("", nilBucket, nilObject),
+		0, nil, "", "")
+
+	// Below is how CopyObjectHandler is registered.
+	// bucket.Methods("PUT").Path("/{object:.+}").HeadersRegexp("X-Amz-Copy-Source", ".*?(\\/|%2F).*?")
+	// Its necessary to set the "X-Amz-Copy-Source" header for the request to be accepted by the handler.
+	nilReq.Header.Set("X-Amz-Copy-Source", url.QueryEscape("/"+nilBucket+"/"+nilObject))
+	if err != nil {
+		t.Errorf("Minio %s: Failed to create HTTP request for testing the reponse when object Layer is set to `nil`.", instanceType)
+	}
+	// execute the object layer set to `nil` test.
+	// `ExecObjectLayerAPINilTest` manages the operation.
+	ExecObjectLayerAPINilTest(t, nilBucket, nilObject, instanceType, apiRouter, nilReq)
+
 }
 
 // Wrapper for calling NewMultipartUpload tests for both XL multiple disks and single node setup.
@@ -547,7 +605,8 @@ func testAPINewMultipartHandler(obj ObjectLayer, instanceType, bucketName string
 	objectName := "test-object-new-multipart"
 	rec := httptest.NewRecorder()
 	// construct HTTP request for copy object.
-	req, err := newTestSignedRequestV4("POST", getNewMultipartURL("", bucketName, objectName), 0, nil, credentials.AccessKeyID, credentials.SecretAccessKey)
+	req, err := newTestSignedRequestV4("POST", getNewMultipartURL("", bucketName, objectName),
+		0, nil, credentials.AccessKeyID, credentials.SecretAccessKey)
 
 	if err != nil {
 		t.Fatalf("Failed to create HTTP request for copy Object: <ERROR> %v", err)
@@ -572,6 +631,23 @@ func testAPINewMultipartHandler(obj ObjectLayer, instanceType, bucketName string
 	if err != nil {
 		t.Fatalf("Invalid UploadID: <ERROR> %s", err)
 	}
+
+	// HTTP request to test the case of `objectLayer` being set to `nil`.
+	// There is no need to use an existing bucket or valid input for creating the request,
+	// since the `objectLayer==nil`  check is performed before any other checks inside the handlers.
+	// The only aim is to generate an HTTP request in a way that the relevant/registered end point is evoked/called.
+	nilBucket := "dummy-bucket"
+	nilObject := "dummy-object"
+
+	nilReq, err := newTestSignedRequestV4("POST", getNewMultipartURL("", nilBucket, nilObject),
+		0, nil, "", "")
+
+	if err != nil {
+		t.Errorf("Minio %s: Failed to create HTTP request for testing the reponse when object Layer is set to `nil`.", instanceType)
+	}
+	// execute the object layer set to `nil` test.
+	// `ExecObjectLayerAPINilTest` manages the operation.
+	ExecObjectLayerAPINilTest(t, nilBucket, nilObject, instanceType, apiRouter, nilReq)
 
 }
 
@@ -687,7 +763,8 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 	}
 	// Iterating over creatPartCases to generate multipart chunks.
 	for _, part := range parts {
-		_, err = obj.PutObjectPart(part.bucketName, part.objName, part.uploadID, part.PartID, part.intputDataSize, bytes.NewBufferString(part.inputReaderData), part.inputMd5, "")
+		_, err = obj.PutObjectPart(part.bucketName, part.objName, part.uploadID, part.PartID, part.intputDataSize,
+			bytes.NewBufferString(part.inputReaderData), part.inputMd5, "")
 		if err != nil {
 			t.Fatalf("%s : %s", instanceType, err)
 		}
@@ -737,11 +814,13 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 			},
 		},
 	}
+
 	// on succesfull complete multipart operation the s3MD5 for the parts uploaded will be returned.
 	s3MD5, err := completeMultipartMD5(inputParts[3].parts...)
 	if err != nil {
 		t.Fatalf("Obtaining S3MD5 failed")
 	}
+
 	// generating the response body content for the success case.
 	successResponse := generateCompleteMultpartUploadResponse(bucketName, objectName, getGetObjectURL("", bucketName, objectName), s3MD5)
 	encodedSuccessResponse := encodeResponse(successResponse)
@@ -771,22 +850,24 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 		// No parts specified in completePart{}.
 		// Should return ErrMalformedXML in the response body.
 		{
-			bucket:             bucketName,
-			object:             objectName,
-			uploadID:           uploadIDs[0],
-			parts:              []completePart{},
-			expectedContent:    encodeResponse(getAPIErrorResponse(getAPIError(ErrMalformedXML), getGetObjectURL("", bucketName, objectName))),
+			bucket:   bucketName,
+			object:   objectName,
+			uploadID: uploadIDs[0],
+			parts:    []completePart{},
+			expectedContent: encodeResponse(getAPIErrorResponse(getAPIError(ErrMalformedXML),
+				getGetObjectURL("", bucketName, objectName))),
 			expectedRespStatus: http.StatusBadRequest,
 		},
 		// Test case - 3.
 		// Non-Existent uploadID.
 		// 404 Not Found response status expected.
 		{
-			bucket:             bucketName,
-			object:             objectName,
-			uploadID:           "abc",
-			parts:              inputParts[0].parts,
-			expectedContent:    encodeResponse(getAPIErrorResponse(getAPIError(toAPIErrorCode(InvalidUploadID{UploadID: "abc"})), getGetObjectURL("", bucketName, objectName))),
+			bucket:   bucketName,
+			object:   objectName,
+			uploadID: "abc",
+			parts:    inputParts[0].parts,
+			expectedContent: encodeResponse(getAPIErrorResponse(getAPIError(toAPIErrorCode(InvalidUploadID{UploadID: "abc"})),
+				getGetObjectURL("", bucketName, objectName))),
 			expectedRespStatus: http.StatusNotFound,
 		},
 		// Test case - 4.
@@ -804,22 +885,24 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 		// Test case - 5.
 		// TestCase with invalid Part Number.
 		{
-			bucket:             bucketName,
-			object:             objectName,
-			uploadID:           uploadIDs[0],
-			parts:              inputParts[2].parts,
-			expectedContent:    encodeResponse(getAPIErrorResponse(getAPIError(toAPIErrorCode(InvalidPart{})), getGetObjectURL("", bucketName, objectName))),
+			bucket:   bucketName,
+			object:   objectName,
+			uploadID: uploadIDs[0],
+			parts:    inputParts[2].parts,
+			expectedContent: encodeResponse(getAPIErrorResponse(getAPIError(toAPIErrorCode(InvalidPart{})),
+				getGetObjectURL("", bucketName, objectName))),
 			expectedRespStatus: http.StatusBadRequest,
 		},
 		// Test case - 6.
 		// Parts are not sorted according to the part number.
 		// This should return ErrInvalidPartOrder in the response body.
 		{
-			bucket:             bucketName,
-			object:             objectName,
-			uploadID:           uploadIDs[0],
-			parts:              inputParts[3].parts,
-			expectedContent:    encodeResponse(getAPIErrorResponse(getAPIError(ErrInvalidPartOrder), getGetObjectURL("", bucketName, objectName))),
+			bucket:   bucketName,
+			object:   objectName,
+			uploadID: uploadIDs[0],
+			parts:    inputParts[3].parts,
+			expectedContent: encodeResponse(getAPIErrorResponse(getAPIError(ErrInvalidPartOrder),
+				getGetObjectURL("", bucketName, objectName))),
 			expectedRespStatus: http.StatusBadRequest,
 		},
 		// Test case - 7.
@@ -837,11 +920,12 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 
 	for i, testCase := range testCases {
 		var req *http.Request
+		var completeBytes, actualContent []byte
 		// Complete multipart upload parts.
 		completeUploads := &completeMultipartUpload{
 			Parts: testCase.parts,
 		}
-		completeBytes, err := xml.Marshal(completeUploads)
+		completeBytes, err = xml.Marshal(completeUploads)
 		if err != nil {
 			t.Fatalf("Error XML encoding of parts: <ERROR> %s.", err)
 		}
@@ -863,7 +947,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 		}
 
 		// read the response body.
-		actualContent, err := ioutil.ReadAll(rec.Body)
+		actualContent, err = ioutil.ReadAll(rec.Body)
 		if err != nil {
 			t.Fatalf("Test %d : Minio %s: Failed parsing response body: <ERROR> %v", i+1, instanceType, err)
 		}
@@ -872,6 +956,24 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 			t.Errorf("Test %d : Minio %s: Object content differs from expected value.", i+1, instanceType)
 		}
 	}
+
+	// HTTP request to test the case of `objectLayer` being set to `nil`.
+	// There is no need to use an existing bucket or valid input for creating the request,
+	// since the `objectLayer==nil`  check is performed before any other checks inside the handlers.
+	// The only aim is to generate an HTTP request in a way that the relevant/registered end point is evoked/called.
+	// Indicating that all parts are uploaded and initiating completeMultipartUpload.
+	nilBucket := "dummy-bucket"
+	nilObject := "dummy-object"
+
+	nilReq, err := newTestSignedRequestV4("POST", getCompleteMultipartUploadURL("", nilBucket, nilObject, "dummy-uploadID"),
+		0, nil, "", "")
+
+	if err != nil {
+		t.Errorf("Minio %s: Failed to create HTTP request for testing the reponse when object Layer is set to `nil`.", instanceType)
+	}
+	// execute the object layer set to `nil` test.
+	// `ExecObjectLayerAPINilTest` manages the operation.
+	ExecObjectLayerAPINilTest(t, nilBucket, nilObject, instanceType, apiRouter, nilReq)
 }
 
 // Wrapper for calling Delete Object API handler tests for both XL multiple disks and FS single drive setup.
@@ -962,6 +1064,24 @@ func testAPIDeleteOjectHandler(obj ObjectLayer, instanceType, bucketName string,
 			t.Fatalf("Minio %s: Case %d: Expected the response status to be `%d`, but instead found `%d`", instanceType, i+1, testCase.expectedRespStatus, rec.Code)
 		}
 	}
+
+	// HTTP request to test the case of `objectLayer` being set to `nil`.
+	// There is no need to use an existing bucket or valid input for creating the request,
+	// since the `objectLayer==nil`  check is performed before any other checks inside the handlers.
+	// The only aim is to generate an HTTP request in a way that the relevant/registered end point is evoked/called.
+	// Indicating that all parts are uploaded and initiating completeMultipartUpload.
+	nilBucket := "dummy-bucket"
+	nilObject := "dummy-object"
+
+	nilReq, err := newTestSignedRequestV4("DELETE", getDeleteObjectURL("", nilBucket, nilObject),
+		0, nil, "", "")
+
+	if err != nil {
+		t.Errorf("Minio %s: Failed to create HTTP request for testing the reponse when object Layer is set to `nil`.", instanceType)
+	}
+	// execute the object layer set to `nil` test.
+	// `ExecObjectLayerAPINilTest` manages the operation.
+	ExecObjectLayerAPINilTest(t, nilBucket, nilObject, instanceType, apiRouter, nilReq)
 }
 
 func testAPIPutObjectPartHandlerPreSign(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
@@ -1312,7 +1432,8 @@ func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName strin
 		}
 		apiRouter.ServeHTTP(tRec, tReq)
 		if test.expectedAPIError != noAPIErr {
-			errBytes, err := ioutil.ReadAll(tRec.Result().Body)
+			var errBytes []byte
+			errBytes, err = ioutil.ReadAll(tRec.Result().Body)
 			if err != nil {
 				t.Fatalf("Test %d %s Failed to read error response from upload part request %s/%s: <ERROR> %v",
 					i+1, instanceType, bucketName, test.objectName, err)
@@ -1329,33 +1450,28 @@ func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName strin
 			}
 		}
 	}
+
+	// HTTP request for testing when `objectLayer` is set to `nil`.
+	// There is no need to use an existing bucket and valid input for creating the request
+	// since the `objectLayer==nil`  check is performed before any other checks inside the handlers.
+	// The only aim is to generate an HTTP request in a way that the relevant/registered end point is evoked/called.
+	nilBucket := "dummy-bucket"
+	nilObject := "dummy-object"
+
+	nilReq, err := newTestSignedRequestV4("PUT",
+		getPutObjectPartURL("", nilBucket, nilObject, "0", "0"),
+		0, bytes.NewReader([]byte("testNilObjLayer")), "", "")
+
+	if err != nil {
+		t.Errorf("Minio %s: Failed to create http request for testing the reponse when object Layer is set to `nil`.", instanceType)
+	}
+	// execute the object layer set to `nil` test.
+	// `ExecObjectLayerAPINilTest` manages the operation.
+	ExecObjectLayerAPINilTest(t, nilBucket, nilObject, instanceType, apiRouter, nilReq)
 }
 
 func TestAPIPutObjectPartHandler(t *testing.T) {
 	ExecObjectLayerAPITest(t, testAPIPutObjectPartHandler, []string{"PutObjectPart", "NewMultipart"})
-}
-
-func TestPutObjectPartNilObjAPI(t *testing.T) {
-	configDir, err := newTestConfig("us-east-1")
-	if err != nil {
-		t.Fatalf("Failed to create a test config: %v", err)
-	}
-	defer removeAll(configDir)
-
-	rec := httptest.NewRecorder()
-	req, err := newTestSignedRequestV4("PUT",
-		getPutObjectPartURL("", "testbucket", "testobject", "uploadId1", "1"),
-		-1, bytes.NewReader([]byte("hello")), "abcd1", "abcd123")
-	if err != nil {
-		t.Fatal("Failed to create a signed UploadPart request.")
-	}
-	// Setup the 'nil' objectAPI router.
-	nilAPIRouter := initTestNilObjAPIEndPoints([]string{"PutObjectPart"})
-	nilAPIRouter.ServeHTTP(rec, req)
-	serverNotInitializedErr := getAPIError(ErrServerNotInitialized).HTTPStatusCode
-	if rec.Code != serverNotInitializedErr {
-		t.Errorf("Test expected to fail with %d, but failed with %d", serverNotInitializedErr, rec.Code)
-	}
 }
 
 func testAPIListObjectPartsHandlerPreSign(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
@@ -1499,7 +1615,8 @@ func testAPIListObjectPartsHandler(obj ObjectLayer, instanceType, bucketName str
 		}
 		apiRouter.ServeHTTP(tRec, tReq)
 		if test.expectedErr != noAPIErr {
-			errBytes, err := ioutil.ReadAll(tRec.Result().Body)
+			var errBytes []byte
+			errBytes, err = ioutil.ReadAll(tRec.Result().Body)
 			if err != nil {
 				t.Fatalf("Test %d %s Failed to read error response list object parts request %s/%s: <ERROR> %v",
 					i+1, instanceType, bucketName, testObject, err)
@@ -1522,6 +1639,23 @@ func testAPIListObjectPartsHandler(obj ObjectLayer, instanceType, bucketName str
 			}
 		}
 	}
+
+	// HTTP request for testing when `objectLayer` is set to `nil`.
+	// There is no need to use an existing bucket and valid input for creating the request
+	// since the `objectLayer==nil`  check is performed before any other checks inside the handlers.
+	// The only aim is to generate an HTTP request in a way that the relevant/registered end point is evoked/called.
+	nilBucket := "dummy-bucket"
+	nilObject := "dummy-object"
+
+	nilReq, err := newTestSignedRequestV4("GET",
+		getListMultipartURLWithParams("", nilBucket, nilObject, "dummy-uploadID", "0", "0", ""),
+		0, nil, "", "")
+	if err != nil {
+		t.Errorf("Minio %s: Failed to create http request for testing the reponse when object Layer is set to `nil`.", instanceType)
+	}
+	// execute the object layer set to `nil` test.
+	// `ExecObjectLayerAPINilTest` sets the Object Layer to `nil` and calls the handler.
+	ExecObjectLayerAPINilTest(t, nilBucket, nilObject, instanceType, apiRouter, nilReq)
 }
 
 func TestAPIListObjectPartsHandler(t *testing.T) {
@@ -1756,27 +1890,4 @@ func testAPIListObjectPartsHandlerAnon(obj ObjectLayer, instanceType, bucketName
 
 func TestListObjectPartsHandlerAnon(t *testing.T) {
 	ExecObjectLayerAPITest(t, testAPIListObjectPartsHandlerAnon, []string{"PutObjectPart", "NewMultipart", "ListObjectParts"})
-}
-
-func TestListObjectPartsHandlerNilObjAPI(t *testing.T) {
-	configDir, err := newTestConfig("us-east-1")
-	if err != nil {
-		t.Fatalf("Failed to create a test config: %v", err)
-	}
-	defer removeAll(configDir)
-
-	rec := httptest.NewRecorder()
-	req, err := newTestSignedRequestV4("GET",
-		getListMultipartURLWithParams("", "testbucket", "testobject", "fakeuploadId", "", "", ""),
-		0, bytes.NewReader([]byte("")), "abcd1", "abcd123")
-	if err != nil {
-		t.Fatal("Failed to create a signed UploadPart request.")
-	}
-	// Setup the 'nil' objectAPI router.
-	nilAPIRouter := initTestNilObjAPIEndPoints([]string{"ListObjectParts"})
-	nilAPIRouter.ServeHTTP(rec, req)
-	serverNotInitializedErr := getAPIError(ErrServerNotInitialized).HTTPStatusCode
-	if rec.Code != serverNotInitializedErr {
-		t.Errorf("Test expected to fail with %d, but failed with %d", serverNotInitializedErr, rec.Code)
-	}
 }
