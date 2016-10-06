@@ -185,11 +185,13 @@ func initServerConfig(c *cli.Context) {
 		if !isValidSecretKey.MatchString(secretKey) {
 			fatalIf(errInvalidArgument, "Invalid secret key.")
 		}
+
 		// Set new credentials.
 		serverConfig.SetCredential(credential{
 			AccessKeyID:     accessKey,
 			SecretAccessKey: secretKey,
 		})
+
 		// Save new config.
 		err = serverConfig.Save()
 		fatalIf(err, "Unable to save config.")
@@ -198,6 +200,7 @@ func initServerConfig(c *cli.Context) {
 	// Set maxOpenFiles, This is necessary since default operating
 	// system limits of 1024, 2048 are not enough for Minio server.
 	setMaxOpenFiles()
+
 	// Set maxMemory, This is necessary since default operating
 	// system limits might be changed and we need to make sure we
 	// do not crash the server so the set the maxCacheSize appropriately.
@@ -336,11 +339,11 @@ func serverMain(c *cli.Context) {
 	// Disks to be used in server init.
 	disks := c.Args()
 
-	// Check 'server' cli arguments.
-	storageDisks := validateDisks(disks, ignoredDisks)
-
 	// Initialize server config.
 	initServerConfig(c)
+
+	// Check 'server' cli arguments.
+	storageDisks := validateDisks(disks, ignoredDisks)
 
 	// If https.
 	tls := isSSL()

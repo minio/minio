@@ -11,8 +11,8 @@ services:
     volumes:
       - /mnt/export/minio1:/export
     environment:
-      MINIO_ACCESS_KEY: abcd1
-      MINIO_SECRET_KEY: abcd1234
+      MINIO_ACCESS_KEY: minio
+      MINIO_SECRET_KEY: minio123
     command: minio1:/export minio2:/export minio3:/export minio4:/export
   minio2:
     image: minio/minio:edge
@@ -21,8 +21,8 @@ services:
     volumes:
       - /mnt/export/minio2:/export
     environment:
-      MINIO_ACCESS_KEY: abcd1
-      MINIO_SECRET_KEY: abcd1234
+      MINIO_ACCESS_KEY: minio
+      MINIO_SECRET_KEY: minio123
     command: minio1:/export minio2:/export minio3:/export minio4:/export
   minio3:
     image: minio/minio:edge
@@ -31,8 +31,8 @@ services:
     volumes:
       - /mnt/export/minio3:/export
     environment:
-      MINIO_ACCESS_KEY: abcd1
-      MINIO_SECRET_KEY: abcd1234
+      MINIO_ACCESS_KEY: minio
+      MINIO_SECRET_KEY: minio123
     command: minio1:/export minio2:/export minio3:/export minio4:/export
   minio4:
     image: minio/minio:edge
@@ -41,6 +41,6 @@ services:
     volumes:
       - /mnt/export/minio4:/export
     environment:
-      MINIO_ACCESS_KEY: abcd1
-      MINIO_SECRET_KEY: abcd1234
+      MINIO_ACCESS_KEY: minio
+      MINIO_SECRET_KEY: minio123
     command: minio1:/export minio2:/export minio3:/export minio4:/export
