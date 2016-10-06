@@ -216,6 +216,12 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 	bytesDataLen := 65 * 1024
 	bytesData := bytes.Repeat([]byte{'a'}, bytesDataLen)
 
+	err := initEventNotifier(obj)
+	if err != nil {
+		t.Fatalf("[%s] - Failed to initialize event notifiers <ERROR> %v", instanceType, err)
+
+	}
+
 	// byte data for PutObject.
 	// test cases with inputs and expected result for GetObject.
 	testCases := []struct {

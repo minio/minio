@@ -136,8 +136,8 @@ func TestParseS3ChunkExtension(t *testing.T) {
 	}
 }
 
-// Test check CRLF characters on input reader.
-func TestCheckCRLF(t *testing.T) {
+// Test read CRLF characters on input reader.
+func TestReadCRLF(t *testing.T) {
 	type testCase struct {
 		reader      io.Reader
 		expectedErr error
@@ -153,7 +153,7 @@ func TestCheckCRLF(t *testing.T) {
 		{bytes.NewReader([]byte("h")), io.ErrUnexpectedEOF},
 	}
 	for i, tt := range tests {
-		err := checkCRLF(tt.reader)
+		err := readCRLF(tt.reader)
 		if err != tt.expectedErr {
 			t.Errorf("Test %d: Expected %s, got %s this", i+1, tt.expectedErr, err)
 		}
