@@ -241,34 +241,14 @@ func TestBucketPolicyActionMatch(t *testing.T) {
 
 // Wrapper for calling Put Bucket Policy HTTP handler tests for both XL multiple disks and single node setup.
 func TestPutBucketPolicyHandler(t *testing.T) {
-	ExecObjectLayerTest(t, testPutBucketPolicyHandler)
+	ExecObjectLayerAPITest(t, testPutBucketPolicyHandler, []string{"PutBucketPolicy"})
 }
 
 // testPutBucketPolicyHandler - Test for Bucket policy end point.
 // TODO: Add exhaustive cases with various combination of statement fields.
-func testPutBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
+func testPutBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
+	credentials credential, t TestErrHandler) {
 	initBucketPolicies(obj)
-
-	// get random bucket name.
-	bucketName := getRandomBucketName()
-	// Create bucket.
-	err := obj.MakeBucket(bucketName)
-	if err != nil {
-		// failed to create newbucket, abort.
-		t.Fatalf("%s : %s", instanceType, err)
-	}
-	// Register the API end points with XL/FS object layer.
-	apiRouter := initTestAPIEndPoints(obj, []string{"PutBucketPolicy"})
-	// initialize the server and obtain the credentials and root.
-	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
-	if err != nil {
-		t.Fatalf("Init Test config failed")
-	}
-	// remove the root folder after the test ends.
-	defer removeAll(rootPath)
-
-	credentials := serverConfig.GetCredential()
 
 	// template for constructing HTTP request body for PUT bucket policy.
 	bucketPolicyTemplate := `{"Version":"2012-10-17","Statement":[{"Sid":"","Effect":"Allow","Principal":{"AWS":["*"]},"Action":["s3:GetBucketLocation","s3:ListBucket"],"Resource":["arn:aws:s3:::%s"]},{"Sid":"","Effect":"Allow","Principal":{"AWS":["*"]},"Action":["s3:GetObject"],"Resource":["arn:aws:s3:::%s/this*"]}]}`
@@ -321,35 +301,15 @@ func testPutBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestErrH
 
 // Wrapper for calling Get Bucket Policy HTTP handler tests for both XL multiple disks and single node setup.
 func TestGetBucketPolicyHandler(t *testing.T) {
-	ExecObjectLayerTest(t, testGetBucketPolicyHandler)
+	ExecObjectLayerAPITest(t, testGetBucketPolicyHandler, []string{"PutBucketPolicy", "GetBucketPolicy"})
 }
 
 // testGetBucketPolicyHandler - Test for end point which fetches the access policy json of the given bucket.
 // TODO: Add exhaustive cases with various combination of statement fields.
-func testGetBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
+func testGetBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
+	credentials credential, t TestErrHandler) {
+	// initialize bucket policy.
 	initBucketPolicies(obj)
-
-	// get random bucket name.
-	bucketName := getRandomBucketName()
-	// Create bucket.
-	err := obj.MakeBucket(bucketName)
-	if err != nil {
-		// failed to create newbucket, abort.
-		t.Fatalf("%s : %s", instanceType, err)
-	}
-	// Register the API end points with XL/FS object layer.
-	// Registering only the PutBucketPolicy and GetBucketPolicy handlers.
-	apiRouter := initTestAPIEndPoints(obj, []string{"PutBucketPolicy", "GetBucketPolicy"})
-	// initialize the server and obtain the credentials and root.
-	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
-	if err != nil {
-		t.Fatalf("Init Test config failed")
-	}
-	// remove the root folder after the test ends.
-	defer removeAll(rootPath)
-
-	credentials := serverConfig.GetCredential()
 
 	// template for constructing HTTP request body for PUT bucket policy.
 	bucketPolicyTemplate := `{"Version":"2012-10-17","Statement":[{"Action":["s3:GetBucketLocation","s3:ListBucket"],"Effect":"Allow","Principal":{"AWS":["*"]},"Resource":["arn:aws:s3:::%s"],"Sid":""},{"Action":["s3:GetObject"],"Effect":"Allow","Principal":{"AWS":["*"]},"Resource":["arn:aws:s3:::%s/this*"],"Sid":""}]}`
@@ -469,37 +429,15 @@ func testGetBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestErrH
 
 // Wrapper for calling Delete Bucket Policy HTTP handler tests for both XL multiple disks and single node setup.
 func TestDeleteBucketPolicyHandler(t *testing.T) {
-	ExecObjectLayerTest(t, testDeleteBucketPolicyHandler)
+	ExecObjectLayerAPITest(t, testDeleteBucketPolicyHandler, []string{"PutBucketPolicy", "DeleteBucketPolicy"})
 }
 
 // testDeleteBucketPolicyHandler - Test for Delete bucket policy end point.
 // TODO: Add exhaustive cases with various combination of statement fields.
-func testDeleteBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
+func testDeleteBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
+	credentials credential, t TestErrHandler) {
+	// initialize bucket policy.
 	initBucketPolicies(obj)
-
-	// get random bucket name.
-	bucketName := getRandomBucketName()
-	// Create bucket.
-	err := obj.MakeBucket(bucketName)
-	if err != nil {
-		// failed to create newbucket, abort.
-		t.Fatalf("%s : %s", instanceType, err)
-	}
-
-	// Register the API end points with XL/FS object layer.
-	// Registering PutBucketPolicy and DeleteBucketPolicy handlers.
-	apiRouter := initTestAPIEndPoints(obj, []string{"PutBucketPolicy", "DeleteBucketPolicy"})
-
-	// initialize the server and obtain the credentials and root.
-	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
-	if err != nil {
-		t.Fatalf("Init Test config failed")
-	}
-	// remove the root folder after the test ends.
-	defer removeAll(rootPath)
-
-	credentials := serverConfig.GetCredential()
 
 	// template for constructing HTTP request body for PUT bucket policy.
 	bucketPolicyTemplate := `{
