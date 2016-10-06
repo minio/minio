@@ -297,6 +297,22 @@ func testPutBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 			t.Errorf("Test %d: %s: Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, recV2.Code)
 		}
 	}
+
+	// HTTP request for testing when `objectLayer` is set to `nil`.
+	// There is no need to use an existing bucket and valid input for creating the request
+	// since the `objectLayer==nil`  check is performed before any other checks inside the handlers.
+	// The only aim is to generate an HTTP request in a way that the relevant/registered end point is evoked/called.
+	nilBucket := "dummy-bucket"
+
+	nilReq, err := newTestSignedRequestV4("PUT", getPutPolicyURL("", nilBucket),
+		0, nil, "", "")
+
+	if err != nil {
+		t.Errorf("Minio %s: Failed to create HTTP request for testing the reponse when object Layer is set to `nil`.", instanceType)
+	}
+	// execute the object layer set to `nil` test.
+	// `ExecObjectLayerAPINilTest` manages the operation.
+	ExecObjectLayerAPINilTest(t, nilBucket, "", instanceType, apiRouter, nilReq)
 }
 
 // Wrapper for calling Get Bucket Policy HTTP handler tests for both XL multiple disks and single node setup.
@@ -425,6 +441,23 @@ func testGetBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 			t.Errorf("Test %d: %s: Bucket policy differs from expected value.", i+1, instanceType)
 		}
 	}
+
+	// HTTP request for testing when `objectLayer` is set to `nil`.
+	// There is no need to use an existing bucket and valid input for creating the request
+	// since the `objectLayer==nil`  check is performed before any other checks inside the handlers.
+	// The only aim is to generate an HTTP request in a way that the relevant/registered end point is evoked/called.
+	nilBucket := "dummy-bucket"
+
+	nilReq, err := newTestSignedRequestV4("GET", getGetPolicyURL("", nilBucket),
+		0, nil, "", "")
+
+	if err != nil {
+		t.Errorf("Minio %s: Failed to create HTTP request for testing the reponse when object Layer is set to `nil`.", instanceType)
+	}
+	// execute the object layer set to `nil` test.
+	// `ExecObjectLayerAPINilTest` manages the operation.
+	ExecObjectLayerAPINilTest(t, nilBucket, "", instanceType, apiRouter, nilReq)
+
 }
 
 // Wrapper for calling Delete Bucket Policy HTTP handler tests for both XL multiple disks and single node setup.
@@ -574,6 +607,22 @@ func testDeleteBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName str
 			t.Fatalf("Case %d: Expected the response status to be `%d`, but instead found `%d`", i+1, testCase.expectedRespStatus, recV2.Code)
 		}
 	}
+
+	// HTTP request for testing when `objectLayer` is set to `nil`.
+	// There is no need to use an existing bucket and valid input for creating the request
+	// since the `objectLayer==nil`  check is performed before any other checks inside the handlers.
+	// The only aim is to generate an HTTP request in a way that the relevant/registered end point is evoked/called.
+	nilBucket := "dummy-bucket"
+
+	nilReq, err := newTestSignedRequestV4("DELETE", getDeletePolicyURL("", nilBucket),
+		0, nil, "", "")
+
+	if err != nil {
+		t.Errorf("Minio %s: Failed to create HTTP request for testing the reponse when object Layer is set to `nil`.", instanceType)
+	}
+	// execute the object layer set to `nil` test.
+	// `ExecObjectLayerAPINilTest` manages the operation.
+	ExecObjectLayerAPINilTest(t, nilBucket, "", instanceType, apiRouter, nilReq)
 }
 
 // TestBucketPolicyConditionMatch - Tests to validate whether bucket policy conditions match.

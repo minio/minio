@@ -533,7 +533,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 
 /// Multipart objectAPIHandlers
 
-// NewMultipartUploadHandler - New multipart upload
+// NewMultipartUploadHandler - New multipart upload.
 func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r *http.Request) {
 	var object, bucket string
 	vars := mux.Vars(r)
