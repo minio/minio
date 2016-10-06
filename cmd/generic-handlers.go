@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"net/http"
+	"os"
 	"path"
 	"regexp"
 	"strings"
@@ -76,19 +77,22 @@ func setBrowserRedirectHandler(h http.Handler) http.Handler {
 }
 
 func (h redirectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Re-direction handled specifically for browsers.
-	if strings.Contains(r.Header.Get("User-Agent"), "Mozilla") && !isRequestSignatureV4(r) {
-		// '/' is redirected to 'locationPrefix/'
-		// '/webrpc' is redirected to 'locationPrefix/webrpc'
-		// '/login' is redirected to 'locationPrefix/login'
-		switch r.URL.Path {
-		case "/", "/webrpc", "/login", "/favicon.ico":
-			location := h.locationPrefix + r.URL.Path
-			// Redirect to new location.
-			http.Redirect(w, r, location, http.StatusTemporaryRedirect)
-			return
+	if !strings.EqualFold(os.Getenv("MINIO_BROWSER"), "off") {
+		// Re-direction handled specifically for browsers.
+		if strings.Contains(r.Header.Get("User-Agent"), "Mozilla") && !isRequestSignatureV4(r) {
+			// '/' is redirected to 'locationPrefix/'
+			// '/webrpc' is redirected to 'locationPrefix/webrpc'
+			// '/login' is redirected to 'locationPrefix/login'
+			switch r.URL.Path {
+			case "/", "/webrpc", "/login", "/favicon.ico":
+				location := h.locationPrefix + r.URL.Path
+				// Redirect to new location.
+				http.Redirect(w, r, location, http.StatusTemporaryRedirect)
+				return
+			}
 		}
 	}
+
 	h.handler.ServeHTTP(w, r)
 }
 
