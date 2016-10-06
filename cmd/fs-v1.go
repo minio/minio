@@ -387,6 +387,7 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 		var bytesWritten int64
 		bytesWritten, err = fsCreateFile(fs.storage, teeReader, buf, minioMetaBucket, tempObj)
 		if err != nil {
+			errorIf(err, "Failed to create object %s/%s", bucket, object)
 			fs.storage.DeleteFile(minioMetaBucket, tempObj)
 			return ObjectInfo{}, toObjectErr(traceError(err), bucket, object)
 		}

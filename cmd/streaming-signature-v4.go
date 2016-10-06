@@ -250,6 +250,7 @@ func (cs chunkState) String() string {
 // Read - implements `io.Reader`, which transparently decodes
 // the incoming AWS Signature V4 streaming signature.
 func (cr *s3ChunkedReader) Read(buf []byte) (n int, err error) {
+	lastChunk := false
 	for {
 		switch cr.state {
 		case readChunkHeader:
@@ -260,6 +261,7 @@ func (cr *s3ChunkedReader) Read(buf []byte) (n int, err error) {
 			// If we're at the end of a chunk.
 			if cr.n == 0 && cr.err == io.EOF {
 				cr.state = readChunkTrailer
+				lastChunk = true
 				continue
 			}
 			if cr.err != nil {
@@ -270,6 +272,9 @@ func (cr *s3ChunkedReader) Read(buf []byte) (n int, err error) {
 			cr.err = readCRLF(cr.reader)
 			if cr.err != nil {
 				return 0, errMalformedEncoding
+			}
+			if lastChunk && cr.reader.Buffered() > 0 {
+				panic("there can't be any more bytes")
 			}
 			cr.state = verifyChunk
 		case readChunk:
