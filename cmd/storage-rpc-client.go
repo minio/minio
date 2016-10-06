@@ -111,6 +111,7 @@ func newRPCClient(networkPath string) (StorageAPI, error) {
 		path:        rpcPath,
 		loginMethod: "Storage.LoginHandler",
 	})
+
 	// Initialize network storage.
 	ndisk := &networkStorage{
 		netAddr:   netAddr,

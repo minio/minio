@@ -243,6 +243,7 @@ func checkNamingDisks(disks []string) error {
 	return nil
 }
 
+// Validates remote disks are successfully accessible, ignores networks errors.
 func validateRemoteDisks(disks []StorageAPI) error {
 	for _, disk := range disks {
 		_, err := disk.DiskInfo()

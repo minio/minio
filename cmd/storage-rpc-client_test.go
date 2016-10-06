@@ -17,11 +17,15 @@
 package cmd
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/rpc"
+	"runtime"
+	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -109,6 +113,164 @@ func TestStorageErr(t *testing.T) {
 		resultErr := toStorageErr(testCase.err)
 		if testCase.expectedErr != resultErr {
 			t.Errorf("Test %d: Expected %s, got %s", i+1, testCase.expectedErr, resultErr)
+		}
+	}
+}
+
+// API suite container common to both FS and XL.
+type TestRPCStorageSuite struct {
+	serverType  string
+	testServer  TestServer
+	remoteDisks []StorageAPI
+}
+
+// Setting up the test suite.
+// Starting the Test server with temporary FS backend.
+func (s *TestRPCStorageSuite) SetUpSuite(c *testing.T) {
+	s.testServer = StartTestStorageRPCServer(c, s.serverType, 1)
+	splitAddrs := strings.Split(s.testServer.Server.Listener.Addr().String(), ":")
+	var err error
+	globalMinioPort, err = strconv.Atoi(splitAddrs[1])
+	if err != nil {
+		c.Fatalf("Unable to convert %s to its integer representation, %s", splitAddrs[1], err)
+	}
+	for _, disk := range s.testServer.Disks {
+		storageDisk, err := newRPCClient(splitAddrs[0] + ":" + disk)
+		if err != nil {
+			c.Fatal("Unable to initialize RPC client", err)
+		}
+		s.remoteDisks = append(s.remoteDisks, storageDisk)
+	}
+}
+
+// No longer used with gocheck, but used in explicit teardown code in
+// each test function. // Called implicitly by "gopkg.in/check.v1"
+// after all tests are run.
+func (s *TestRPCStorageSuite) TearDownSuite(c *testing.T) {
+	s.testServer.Stop()
+}
+
+func TestRPCStorageClient(t *testing.T) {
+	// Setup code
+	s := &TestRPCStorageSuite{serverType: "XL"}
+	s.SetUpSuite(t)
+
+	// Run the test.
+	s.testRPCStorageClient(t)
+
+	// Teardown code
+	s.TearDownSuite(t)
+}
+
+func (s *TestRPCStorageSuite) testRPCStorageClient(t *testing.T) {
+	// TODO - Fix below tests to run on windows.
+	if runtime.GOOS == "windows" {
+		return
+	}
+	s.testRPCStorageDisksInfo(t)
+	s.testRPCStorageVolOps(t)
+	s.testRPCStorageFileOps(t)
+}
+
+// Test storage disks info.
+func (s *TestRPCStorageSuite) testRPCStorageDisksInfo(t *testing.T) {
+	for _, storageDisk := range s.remoteDisks {
+		diskInfo, err := storageDisk.DiskInfo()
+		if err != nil {
+			t.Error("Unable to initiate DiskInfo", err)
+		}
+		if diskInfo.Total == 0 {
+			t.Error("Invalid diskInfo total")
+		}
+		if storageDisk.String() == "" {
+			t.Error("Stinger storageAPI should be non empty")
+		}
+	}
+}
+
+// Test storage vol operations.
+func (s *TestRPCStorageSuite) testRPCStorageVolOps(t *testing.T) {
+	for _, storageDisk := range s.remoteDisks {
+		err := storageDisk.MakeVol("myvol")
+		if err != nil {
+			t.Error("Unable to initiate MakeVol", err)
+		}
+		volInfo, err := storageDisk.StatVol("myvol")
+		if err != nil {
+			t.Error("Unable to initiate StatVol", err)
+		}
+		if volInfo.Name != "myvol" {
+			t.Errorf("Expected `myvol` found %s instead", volInfo.Name)
+		}
+		if volInfo.Created.IsZero() {
+			t.Error("Expected created time to be non zero")
+		}
+		err = storageDisk.DeleteVol("myvol")
+		if err != nil {
+			t.Error("Unable to initiate DeleteVol", err)
+		}
+	}
+}
+
+// Tests all file operations.
+func (s *TestRPCStorageSuite) testRPCStorageFileOps(t *testing.T) {
+	for _, storageDisk := range s.remoteDisks {
+		err := storageDisk.MakeVol("myvol")
+		if err != nil {
+			t.Error("Unable to initiate MakeVol", err)
+		}
+		err = storageDisk.AppendFile("myvol", "file1", []byte("Hello, world"))
+		if err != nil {
+			t.Error("Unable to initiate AppendFile", err)
+		}
+		fi, err := storageDisk.StatFile("myvol", "file1")
+		if err != nil {
+			t.Error("Unable to initiate StatFile", err)
+		}
+		if fi.Name != "file1" {
+			t.Errorf("Expected `file1` but got %s", fi.Name)
+		}
+		if fi.Volume != "myvol" {
+			t.Errorf("Expected `myvol` but got %s", fi.Volume)
+		}
+		if fi.Size != 12 {
+			t.Errorf("Expected 12 but got %d", fi.Size)
+		}
+		if !fi.Mode.IsRegular() {
+			t.Error("Expected file to be regular found", fi.Mode)
+		}
+		if fi.ModTime.IsZero() {
+			t.Error("Expected created time to be non zero")
+		}
+		buf, err := storageDisk.ReadAll("myvol", "file1")
+		if err != nil {
+			t.Error("Unable to initiate ReadAll", err)
+		}
+		if !bytes.Equal(buf, []byte("Hello, world")) {
+			t.Errorf("Expected `Hello, world`, got %s", string(buf))
+		}
+		buf1 := make([]byte, 5)
+		n, err := storageDisk.ReadFile("myvol", "file1", 4, buf1)
+		if err != nil {
+			t.Error("Unable to initiate ReadFile", err)
+		}
+		if n != 5 {
+			t.Errorf("Expected `5`, got %d", n)
+		}
+		if !bytes.Equal(buf[4:9], buf1) {
+			t.Errorf("Expected %s, got %s", string(buf[4:9]), string(buf1))
+		}
+		err = storageDisk.RenameFile("myvol", "file1", "myvol", "file2")
+		if err != nil {
+			t.Error("Unable to initiate RenameFile", err)
+		}
+		err = storageDisk.DeleteFile("myvol", "file2")
+		if err != nil {
+			t.Error("Unable to initiate DeleteFile", err)
+		}
+		err = storageDisk.DeleteVol("myvol")
+		if err != nil {
+			t.Error("Unable to initiate DeleteVol", err)
 		}
 	}
 }

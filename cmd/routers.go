@@ -84,11 +84,12 @@ func configureServerHandler(srvCmdConfig serverCmdConfig) http.Handler {
 	// Initialize router.
 	mux := router.NewRouter()
 
-	// Register storage rpc router.
-	registerStorageRPCRouters(mux, srvCmdConfig)
-
 	// Initialize distributed NS lock.
 	if isDistributedSetup(srvCmdConfig.disks) {
+		// Register storage rpc router only if its a distributed setup.
+		registerStorageRPCRouters(mux, srvCmdConfig)
+
+		// Register distributed namespace lock.
 		registerDistNSLockRouter(mux, srvCmdConfig)
 	}
 

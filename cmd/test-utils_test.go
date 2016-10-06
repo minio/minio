@@ -195,7 +195,47 @@ func StartTestServer(t TestErrHandler, instanceType string) TestServer {
 	return testServer
 }
 
-// Initializes control RPC end points.
+// Initializes storage RPC endpoints.
+// The object Layer will be a temp back used for testing purpose.
+func initTestStorageRPCEndPoint(srvCmdConfig serverCmdConfig) http.Handler {
+	// Initialize router.
+	muxRouter := router.NewRouter()
+	registerStorageRPCRouters(muxRouter, srvCmdConfig)
+	return muxRouter
+}
+
+// StartTestStorageRPCServer - Creates a temp XL/FS backend and initializes storage RPC end points,
+// then starts a test server with those storage RPC end points registered.
+func StartTestStorageRPCServer(t TestErrHandler, instanceType string, diskN int) TestServer {
+	// create temporary backend for the test server.
+	disks, err := getRandomDisks(diskN)
+	if err != nil {
+		t.Fatal("Failed to create disks for the backend")
+	}
+
+	root, err := newTestConfig("us-east-1")
+	if err != nil {
+		t.Fatalf("%s", err)
+	}
+
+	// Create an instance of TestServer.
+	testRPCServer := TestServer{}
+	// Get credential.
+	credentials := serverConfig.GetCredential()
+
+	testRPCServer.Root = root
+	testRPCServer.Disks = disks
+	testRPCServer.AccessKey = credentials.AccessKeyID
+	testRPCServer.SecretKey = credentials.SecretAccessKey
+
+	// Run TestServer.
+	testRPCServer.Server = httptest.NewServer(initTestStorageRPCEndPoint(serverCmdConfig{
+		disks: disks,
+	}))
+	return testRPCServer
+}
+
+// Initializes control RPC endpoints.
 // The object Layer will be a temp back used for testing purpose.
 func initTestControlRPCEndPoint(srvCmdConfig serverCmdConfig) http.Handler {
 	// Initialize router.
@@ -204,9 +244,9 @@ func initTestControlRPCEndPoint(srvCmdConfig serverCmdConfig) http.Handler {
 	return muxRouter
 }
 
-// StartTestRPCServer - Creates a temp XL/FS backend and initializes control RPC end points,
+// StartTestControlRPCServer - Creates a temp XL/FS backend and initializes control RPC end points,
 // then starts a test server with those control RPC end points registered.
-func StartTestRPCServer(t TestErrHandler, instanceType string) TestServer {
+func StartTestControlRPCServer(t TestErrHandler, instanceType string) TestServer {
 	// create temporary backend for the test server.
 	nDisks := 16
 	disks, err := getRandomDisks(nDisks)
