@@ -637,3 +637,117 @@ func testDeleteBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestE
 		}
 	}
 }
+
+// TestBucketPolicyConditionMatch - Tests to validate whether bucket policy conditions match.
+func TestBucketPolicyConditionMatch(t *testing.T) {
+	// obtain the inner map[string]set.StringSet for policyStatement.Conditions .
+	getInnerMap := func(key2, value string) map[string]set.StringSet {
+		innerMap := make(map[string]set.StringSet)
+		innerMap[key2] = set.CreateStringSet(value)
+		return innerMap
+	}
+
+	// obtain policyStatement with Conditions set.
+	getStatementWithCondition := func(key1, key2, value string) policyStatement {
+		innerMap := getInnerMap(key2, value)
+		// to set policyStatment.Conditions .
+		conditions := make(map[string]map[string]set.StringSet)
+		conditions[key1] = innerMap
+		// new policy statement.
+		statement := policyStatement{}
+		// set the condition.
+		statement.Conditions = conditions
+		return statement
+	}
+
+	testCases := []struct {
+		statementCondition policyStatement
+		condition          map[string]set.StringSet
+
+		expectedMatch bool
+	}{
+
+		// Test case - 1.
+		// StringEquals condition matches.
+		{
+
+			statementCondition: getStatementWithCondition("StringEquals", "s3:prefix", "Asia/"),
+			condition:          getInnerMap("prefix", "Asia/"),
+
+			expectedMatch: true,
+		},
+		// Test case - 2.
+		// StringEquals condition doesn't match.
+		{
+
+			statementCondition: getStatementWithCondition("StringEquals", "s3:prefix", "Asia/"),
+			condition:          getInnerMap("prefix", "Africa/"),
+
+			expectedMatch: false,
+		},
+		// Test case - 3.
+		// StringEquals condition matches.
+		{
+
+			statementCondition: getStatementWithCondition("StringEquals", "s3:max-keys", "Asia/"),
+			condition:          getInnerMap("max-keys", "Asia/"),
+
+			expectedMatch: true,
+		},
+		// Test case - 4.
+		// StringEquals condition doesn't match.
+		{
+
+			statementCondition: getStatementWithCondition("StringEquals", "s3:max-keys", "Asia/"),
+			condition:          getInnerMap("max-keys", "Africa/"),
+
+			expectedMatch: false,
+		},
+		// Test case - 5.
+		// StringNotEquals condition matches.
+		{
+
+			statementCondition: getStatementWithCondition("StringNotEquals", "s3:prefix", "Asia/"),
+			condition:          getInnerMap("prefix", "Asia/"),
+
+			expectedMatch: true,
+		},
+		// Test case - 6.
+		// StringNotEquals condition doesn't match.
+		{
+
+			statementCondition: getStatementWithCondition("StringNotEquals", "s3:prefix", "Asia/"),
+			condition:          getInnerMap("prefix", "Africa/"),
+
+			expectedMatch: false,
+		},
+		// Test case - 7.
+		// StringNotEquals condition matches.
+		{
+
+			statementCondition: getStatementWithCondition("StringNotEquals", "s3:max-keys", "Asia/"),
+			condition:          getInnerMap("max-keys", "Asia/"),
+
+			expectedMatch: true,
+		},
+		// Test case - 8.
+		// StringNotEquals condition doesn't match.
+		{
+
+			statementCondition: getStatementWithCondition("StringNotEquals", "s3:max-keys", "Asia/"),
+			condition:          getInnerMap("max-keys", "Africa/"),
+
+			expectedMatch: false,
+		},
+	}
+
+	for i, tc := range testCases {
+		t.Run(fmt.Sprintf("Test case %d: Failed.", i+1), func(t *testing.T) {
+			// call the function under test and assert the result with the expected result.
+			doesMatch := bucketPolicyConditionMatch(tc.condition, tc.statementCondition)
+			if tc.expectedMatch != doesMatch {
+				t.Errorf("Expected the match to be `%v`; got `%v`.", tc.expectedMatch, doesMatch)
+			}
+		})
+	}
+}
