@@ -211,7 +211,8 @@ func lock(clnts []RPC, locks *[]string, lockName string, isReadLock bool) bool {
 					(*locks)[grant.index] = grant.lockUid
 				} else {
 					locksFailed++
-					if locksFailed > dnodeCount-dquorum {
+					if !isReadLock && locksFailed > dnodeCount-dquorum ||
+						isReadLock && locksFailed > dnodeCount-dquorumReads {
 						// We know that we are not going to get the lock anymore, so exit out
 						// and release any locks that did get acquired
 						done = true
@@ -223,7 +224,7 @@ func lock(clnts []RPC, locks *[]string, lockName string, isReadLock bool) bool {
 				done = true
 				// timeout happened, maybe one of the nodes is slow, count
 				// number of locks to check whether we have quorum or not
-				if !quorumMet(locks) {
+				if !quorumMet(locks, isReadLock) {
 					releaseAll(clnts, locks, lockName, isReadLock)
 				}
 			}
@@ -234,7 +235,7 @@ func lock(clnts []RPC, locks *[]string, lockName string, isReadLock bool) bool {
 		}
 
 		// Count locks in order to determine whterh we have quorum or not
-		quorum = quorumMet(locks)
+		quorum = quorumMet(locks, isReadLock)
 
 		// Signal that we have the quorum
 		wg.Done()
@@ -263,8 +264,8 @@ func lock(clnts []RPC, locks *[]string, lockName string, isReadLock bool) bool {
 	return quorum
 }
 
-// quorumMet determines whether we have acquired n/2+1 underlying locks or not
-func quorumMet(locks *[]string) bool {
+// quorumMet determines whether we have acquired the required quorum of underlying locks or not
+func quorumMet(locks *[]string, isReadLock bool) bool {
 
 	count := 0
 	for _, uid := range *locks {
@@ -273,7 +274,11 @@ func quorumMet(locks *[]string) bool {
 		}
 	}
 
-	return count >= dquorum
+	if isReadLock {
+		return count >= dquorumReads
+	} else {
+		return count >= dquorum
+	}
 }
 
 // releaseAll releases all locks that are marked as locked
