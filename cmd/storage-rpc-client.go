@@ -81,6 +81,14 @@ func toStorageErr(err error) error {
 		return errCorruptedFormat
 	case errUnformattedDisk.Error():
 		return errUnformattedDisk
+	case errInvalidAccessKeyID.Error():
+		return errInvalidAccessKeyID
+	case errAuthentication.Error():
+		return errAuthentication
+	case errServerVersionMismatch.Error():
+		return errServerVersionMismatch
+	case errServerTimeMismatch.Error():
+		return errServerTimeMismatch
 	}
 	return err
 }

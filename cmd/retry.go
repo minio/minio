@@ -45,9 +45,6 @@ func (r *lockedRandSource) Seed(seed int64) {
 	r.lk.Unlock()
 }
 
-// MaxRetry is the maximum number of retries before stopping.
-var MaxRetry = 5
-
 // MaxJitter will randomize over the full exponential backoff time
 const MaxJitter = 1.0
 

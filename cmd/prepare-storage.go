@@ -93,6 +93,9 @@ const (
 	// WaitForFormatting - Wait for formatting to be triggered from the '1st' server in the cluster.
 	WaitForFormatting
 
+	// WaitForConfig - Wait for all servers to have the same config including (credentials, version and time).
+	WaitForConfig
+
 	// InitObjectLayer - Initialize object layer.
 	InitObjectLayer
 
@@ -101,11 +104,36 @@ const (
 	Abort
 )
 
+// Quick error to actions converts looking for specific errors which need to
+// be returned quickly and server should wait instead.
+func quickErrToActions(errMap map[error]int) InitActions {
+	var action InitActions
+	switch {
+	case errMap[errInvalidAccessKeyID] > 0:
+		fallthrough
+	case errMap[errAuthentication] > 0:
+		fallthrough
+	case errMap[errServerVersionMismatch] > 0:
+		fallthrough
+	case errMap[errServerTimeMismatch] > 0:
+		action = WaitForConfig
+	}
+	return action
+}
+
+// Preparatory initialization stage for XL validates known errors.
+// Converts them into specific actions. These actions have special purpose
+// which caller decides on what needs to be done.
 func prepForInitXL(firstDisk bool, sErrs []error, diskCount int) InitActions {
 	// Count errors by error value.
 	errMap := make(map[error]int)
 	for _, err := range sErrs {
 		errMap[err]++
+	}
+
+	// Validates and converts specific config errors into WaitForConfig.
+	if quickErrToActions(errMap) == WaitForConfig {
+		return WaitForConfig
 	}
 
 	quorum := diskCount/2 + 1
@@ -151,7 +179,7 @@ func prepForInitXL(firstDisk bool, sErrs []error, diskCount int) InitActions {
 		}
 		// Some of the formatted disks are possibly corrupted or unformatted, heal them.
 		return WaitForHeal
-	} // No quorum wait for quorum number of disks.
+	} // Exhausted all our checks, un-handled errors perhaps we Abort.
 	return WaitForQuorum
 }
 
@@ -201,6 +229,9 @@ func retryFormattingDisks(firstDisk bool, firstEndpoint string, storageDisks []S
 					"Initializing data volume. Waiting for minimum %d servers to come online.\n",
 					len(storageDisks)/2+1,
 				)
+			case WaitForConfig:
+				// Print configuration errors.
+				printConfigErrMsg(storageDisks, sErrs, printOnceFn())
 			case WaitForAll:
 				console.Println("Initializing data volume for first time. Waiting for other servers to come online.")
 			case WaitForFormatting:

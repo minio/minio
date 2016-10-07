@@ -24,6 +24,9 @@ var errServerNotInitialized = errors.New("Server not initialized, please try aga
 // errServerVersionMismatch - server versions do not match.
 var errServerVersionMismatch = errors.New("Server versions do not match.")
 
+// errServerTimeMismatch - server times are too far apart.
+var errServerTimeMismatch = errors.New("Server times are too far apart.")
+
 /// Auth operations
 
 // Login - login handler.
@@ -40,6 +43,7 @@ func (c *controllerAPIHandlers) LoginHandler(args *RPCLoginArgs, reply *RPCLogin
 		return err
 	}
 	reply.Token = token
+	reply.Timestamp = c.timestamp
 	reply.ServerVersion = Version
 	return nil
 }

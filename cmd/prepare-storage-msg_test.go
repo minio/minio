@@ -20,15 +20,40 @@ import "testing"
 
 // Tests heal message to be correct and properly formatted.
 func TestHealMsg(t *testing.T) {
+	rootPath, err := newTestConfig("us-east-1")
+	if err != nil {
+		t.Fatal("Unable to initialize test config", err)
+	}
+	defer removeAll(rootPath)
 	storageDisks, fsDirs := prepareXLStorageDisks(t)
+	errs := make([]error, len(storageDisks))
 	defer removeRoots(fsDirs)
+	nilDisks := deepCopyStorageDisks(storageDisks)
+	nilDisks[5] = nil
+	authErrs := make([]error, len(storageDisks))
+	authErrs[5] = errAuthentication
 	testCases := []struct {
 		endPoint     string
 		storageDisks []StorageAPI
+		serrs        []error
 	}{
+		// Test - 1 for valid disks and errors.
 		{
 			endPoint:     "http://10.1.10.1:9000",
 			storageDisks: storageDisks,
+			serrs:        errs,
+		},
+		// Test - 2 for one of the disks is nil.
+		{
+			endPoint:     "http://10.1.10.1:9000",
+			storageDisks: nilDisks,
+			serrs:        errs,
+		},
+		// Test - 3 for one of the errs is authentication.
+		{
+			endPoint:     "http://10.1.10.1:9000",
+			storageDisks: nilDisks,
+			serrs:        authErrs,
 		},
 	}
 	for i, testCase := range testCases {
@@ -43,6 +68,10 @@ func TestHealMsg(t *testing.T) {
 		msg = getFormatMsg(testCase.storageDisks)
 		if msg == "" {
 			t.Fatalf("Test: %d Unable to get format message.", i+1)
+		}
+		msg = getConfigErrMsg(testCase.storageDisks, testCase.serrs)
+		if msg == "" {
+			t.Fatalf("Test: %d Unable to get config error message.", i+1)
 		}
 	}
 }

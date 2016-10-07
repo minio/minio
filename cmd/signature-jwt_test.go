@@ -201,9 +201,9 @@ func TestAuthenticate(t *testing.T) {
 		// Secret key too long.
 		{"myuser", "pass1234567890123456789012345678901234567", fmt.Errorf("Invalid secret key")},
 		// Authentication error.
-		{"myuser", "mypassword", fmt.Errorf("Access key does not match")},
+		{"myuser", "mypassword", errInvalidAccessKeyID},
 		// Authentication error.
-		{serverConfig.GetCredential().AccessKeyID, "mypassword", fmt.Errorf("Authentication failed")},
+		{serverConfig.GetCredential().AccessKeyID, "mypassword", errAuthentication},
 		// Success.
 		{serverConfig.GetCredential().AccessKeyID, serverConfig.GetCredential().SecretAccessKey, nil},
 		// Success when access key contains leading/trailing spaces.
@@ -213,12 +213,10 @@ func TestAuthenticate(t *testing.T) {
 	// Run tests.
 	for _, testCase := range testCases {
 		err := jwt.Authenticate(testCase.accessKey, testCase.secretKey)
-
 		if testCase.expectedErr != nil {
 			if err == nil {
 				t.Fatalf("%+v: expected: %s, got: <nil>", testCase, testCase.expectedErr)
 			}
-
 			if testCase.expectedErr.Error() != err.Error() {
 				t.Fatalf("%+v: expected: %s, got: %s", testCase, testCase.expectedErr, err)
 			}

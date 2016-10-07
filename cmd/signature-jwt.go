@@ -78,6 +78,10 @@ func (jwt *JWT) GenerateToken(accessKey string) (string, error) {
 	return token.SignedString([]byte(jwt.SecretAccessKey))
 }
 
+var errInvalidAccessKeyID = errors.New("The access key ID you provided does not exist in our records.")
+
+var errAuthentication = errors.New("Authentication failed, check your access credentials.")
+
 // Authenticate - authenticates incoming access key and secret key.
 func (jwt *JWT) Authenticate(accessKey, secretKey string) error {
 	// Trim spaces.
@@ -91,13 +95,12 @@ func (jwt *JWT) Authenticate(accessKey, secretKey string) error {
 	}
 
 	if accessKey != jwt.AccessKeyID {
-		return errors.New("Access key does not match")
+		return errInvalidAccessKeyID
 	}
 
 	hashedSecretKey, _ := bcrypt.GenerateFromPassword([]byte(jwt.SecretAccessKey), bcrypt.DefaultCost)
-
 	if bcrypt.CompareHashAndPassword(hashedSecretKey, []byte(secretKey)) != nil {
-		return errors.New("Authentication failed")
+		return errAuthentication
 	}
 
 	// Success.

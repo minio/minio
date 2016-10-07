@@ -105,6 +105,22 @@ func TestStorageErr(t *testing.T) {
 			err:         fmt.Errorf("%s", errFileNameTooLong.Error()),
 		},
 		{
+			expectedErr: errInvalidAccessKeyID,
+			err:         fmt.Errorf("%s", errInvalidAccessKeyID.Error()),
+		},
+		{
+			expectedErr: errAuthentication,
+			err:         fmt.Errorf("%s", errAuthentication.Error()),
+		},
+		{
+			expectedErr: errServerVersionMismatch,
+			err:         fmt.Errorf("%s", errServerVersionMismatch.Error()),
+		},
+		{
+			expectedErr: errServerTimeMismatch,
+			err:         fmt.Errorf("%s", errServerTimeMismatch.Error()),
+		},
+		{
 			expectedErr: unknownErr,
 			err:         unknownErr,
 		},

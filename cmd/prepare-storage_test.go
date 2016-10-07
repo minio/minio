@@ -32,6 +32,8 @@ func (action InitActions) String() string {
 		return "WaitForAll"
 	case WaitForQuorum:
 		return "WaitForQuorum"
+	case WaitForConfig:
+		return "WaitForConfig"
 	case Abort:
 		return "Abort"
 	default:
@@ -79,6 +81,26 @@ func TestPrepForInitXL(t *testing.T) {
 		errDiskNotFound, errDiskNotFound, errDiskNotFound, errDiskNotFound,
 		errDiskNotFound, nil, nil, nil,
 	}
+	// Invalid access key id.
+	accessKeyIDErr := []error{
+		errInvalidAccessKeyID, nil, nil, nil,
+		nil, nil, nil, nil,
+	}
+	// Authentication error.
+	authenticationErr := []error{
+		nil, nil, nil, nil,
+		errAuthentication, nil, nil, nil,
+	}
+	// Server version mismatch.
+	serverVersionMismatch := []error{
+		errServerVersionMismatch, nil, nil, nil,
+		errServerVersionMismatch, nil, nil, nil,
+	}
+	// Server time mismatch.
+	serverTimeMismatch := []error{
+		nil, nil, nil, nil,
+		errServerTimeMismatch, nil, nil, nil,
+	}
 
 	testCases := []struct {
 		// Params for prepForInit().
@@ -105,6 +127,11 @@ func TestPrepForInitXL(t *testing.T) {
 		{false, noQuourm, 8, WaitForQuorum},
 		{false, minorityCorrupted, 8, WaitForHeal},
 		{false, majorityCorrupted, 8, Abort},
+		// Config mistakes.
+		{true, accessKeyIDErr, 8, WaitForConfig},
+		{true, authenticationErr, 8, WaitForConfig},
+		{true, serverVersionMismatch, 8, WaitForConfig},
+		{true, serverTimeMismatch, 8, WaitForConfig},
 	}
 	for i, test := range testCases {
 		actual := prepForInitXL(test.firstDisk, test.errs, test.diskCount)
