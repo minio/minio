@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"net/rpc"
+	"time"
 
 	router "github.com/gorilla/mux"
 )
@@ -33,6 +34,7 @@ func registerControllerRPCRouter(mux *router.Router, srvCmdConfig serverCmdConfi
 	ctrlHandlers := &controllerAPIHandlers{
 		ObjectAPI:    newObjectLayerFn,
 		StorageDisks: srvCmdConfig.storageDisks,
+		timestamp:    time.Now().UTC(),
 	}
 
 	ctrlRPCServer := rpc.NewServer()
@@ -46,4 +48,5 @@ func registerControllerRPCRouter(mux *router.Router, srvCmdConfig serverCmdConfi
 type controllerAPIHandlers struct {
 	ObjectAPI    func() ObjectLayer
 	StorageDisks []StorageAPI
+	timestamp    time.Time
 }

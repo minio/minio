@@ -134,3 +134,28 @@ func getFormatMsg(storageDisks []StorageAPI) string {
 	}
 	return msg
 }
+
+func printConfigErrMsg(storageDisks []StorageAPI, sErrs []error, fn printOnceFunc) {
+	msg := getConfigErrMsg(storageDisks, sErrs)
+	fn(msg)
+}
+
+// Generate a formatted message when cluster is misconfigured.
+func getConfigErrMsg(storageDisks []StorageAPI, sErrs []error) string {
+	msg := colorBlue("\nDetected configuration inconsistencies in the cluster. Please fix following servers.")
+	for i, disk := range storageDisks {
+		if disk == nil {
+			continue
+		}
+		if sErrs[i] == nil {
+			continue
+		}
+		msg += fmt.Sprintf(
+			"\n[%s] %s : %s",
+			int2Str(i+1, len(storageDisks)),
+			storageDisks[i],
+			sErrs[i],
+		)
+	}
+	return msg
+}

@@ -229,7 +229,7 @@ func newRPCServer(serverConfig serverCmdConfig) (servers []*storageServer, err e
 	if len(ignoredExports) > 0 {
 		ignoredSet = set.CreateStringSet(ignoredExports...)
 	}
-	t := time.Now().UTC()
+	tstamp := time.Now().UTC()
 	for _, export := range exports {
 		if ignoredSet.Contains(export) {
 			// Ignore initializing ignored export.
@@ -251,7 +251,7 @@ func newRPCServer(serverConfig serverCmdConfig) (servers []*storageServer, err e
 			servers = append(servers, &storageServer{
 				storage:   storage,
 				path:      export,
-				timestamp: t,
+				timestamp: tstamp,
 			})
 		}
 	}

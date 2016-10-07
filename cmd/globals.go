@@ -65,7 +65,7 @@ var (
 
 var (
 	// The maximum allowed difference between the request generation time and the server processing time
-	maxSkewTime = 15 * time.Minute
+	globalMaxSkewTime = 15 * time.Minute
 )
 
 // global colors.

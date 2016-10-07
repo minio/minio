@@ -135,6 +135,10 @@ func (authClient *AuthRPCClient) Login() error {
 	if reply.ServerVersion != Version {
 		return errServerVersionMismatch
 	}
+	curTime := time.Now().UTC()
+	if curTime.Sub(reply.Timestamp) > globalMaxSkewTime {
+		return errServerTimeMismatch
+	}
 	// Set token, time stamp as received from a successful login call.
 	authClient.token = reply.Token
 	authClient.tstamp = reply.Timestamp

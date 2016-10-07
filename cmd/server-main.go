@@ -246,18 +246,6 @@ func checkNamingDisks(disks []string) error {
 	return nil
 }
 
-// Validates remote disks are successfully accessible, ignores networks errors.
-func validateRemoteDisks(disks []StorageAPI) error {
-	for _, disk := range disks {
-		_, err := disk.DiskInfo()
-		if _, ok := err.(*net.OpError); ok {
-			continue
-		}
-		return err
-	}
-	return nil
-}
-
 // Validate input disks.
 func validateDisks(disks []string, ignoredDisks []string) []StorageAPI {
 	isXL := len(disks) > 1
@@ -278,10 +266,6 @@ func validateDisks(disks []string, ignoredDisks []string) []StorageAPI {
 	}
 	storageDisks, err := initStorageDisks(disks, ignoredDisks)
 	fatalIf(err, "Unable to initialize storage disks.")
-	if isXL {
-		err = validateRemoteDisks(storageDisks)
-		fatalIf(err, "Unable to validate remote disks.")
-	}
 	return storageDisks
 }
 

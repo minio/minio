@@ -202,10 +202,10 @@ func (h timeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			writeErrorResponse(w, r, apiErr, r.URL.Path)
 			return
 		}
-		// Verify if the request date header is shifted by less than maxSkewTime parameter in the past
+		// Verify if the request date header is shifted by less than globalMaxSkewTime parameter in the past
 		// or in the future, reject request otherwise.
 		curTime := time.Now().UTC()
-		if curTime.Sub(amzDate) > maxSkewTime || amzDate.Sub(curTime) > maxSkewTime {
+		if curTime.Sub(amzDate) > globalMaxSkewTime || amzDate.Sub(curTime) > globalMaxSkewTime {
 			writeErrorResponse(w, r, ErrRequestTimeTooSkewed, r.URL.Path)
 			return
 		}
