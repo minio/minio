@@ -1428,7 +1428,7 @@ func ExecObjectLayerAPINilTest(t TestErrHandler, bucketName, objectName, instanc
 
 // ExecObjectLayerAPITest - executes object layer API tests.
 // Creates single node and XL ObjectLayer instance, registers the specified API end points and runs test for both the layers.
-func ExecObjectLayerAPITest(t TestErrHandler, objAPITest objAPITestType, endPoints []string) {
+func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endPoints []string) {
 	objLayer, fsDir, err := prepareFS()
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for single node setup: %s", err)
@@ -1458,7 +1458,7 @@ func ExecObjectLayerAPITest(t TestErrHandler, objAPITest objAPITestType, endPoin
 
 // function to be passed to ExecObjectLayerAPITest, for executing object layr API handler tests.
 type objAPITestType func(obj ObjectLayer, instanceType string, bucketName string,
-	apiRouter http.Handler, credentials credential, t TestErrHandler)
+	apiRouter http.Handler, credentials credential, t *testing.T)
 
 // Regular object test type.
 type objTestType func(obj ObjectLayer, instanceType string, t TestErrHandler)
