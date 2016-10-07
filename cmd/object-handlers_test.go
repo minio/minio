@@ -1276,92 +1276,6 @@ func testAPIPutObjectPartHandlerStreaming(obj ObjectLayer, instanceType, bucketN
 	}
 }
 
-// TestAPIPutObjectPartHandlerAnon - Tests validate the response of PutObjectPart HTTP handler
-// when the request type is anonymous/unsigned.
-func TestAPIPutObjectPartHandlerAnon(t *testing.T) {
-	ExecObjectLayerAPITest(t, testAPIPutObjectPartHandlerAnon, []string{"PutObjectPart", "NewMultipart"})
-}
-
-func testAPIPutObjectPartHandlerAnon(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t *testing.T) {
-	// Initialize bucket policies for anonymous request test
-	err := initBucketPolicies(obj)
-	if err != nil {
-		t.Fatalf("Failed to initialize bucket policies: <ERROR> %v", err)
-	}
-
-	testObject := "testobject"
-	rec := httptest.NewRecorder()
-	req, err := newTestSignedRequestV4("POST", getNewMultipartURL("", bucketName, "testobject"),
-		0, nil, credentials.AccessKeyID, credentials.SecretAccessKey)
-	if err != nil {
-		t.Fatalf("[%s] - Failed to create a signed request to initiate multipart upload for %s/%s: <ERROR> %v",
-			instanceType, bucketName, testObject, err)
-	}
-	apiRouter.ServeHTTP(rec, req)
-
-	// Get uploadID of the mulitpart upload initiated.
-	var mpartResp InitiateMultipartUploadResponse
-	mpartRespBytes, err := ioutil.ReadAll(rec.Result().Body)
-	if err != nil {
-		t.Fatalf("[%s] Failed to read NewMultipartUpload response <ERROR> %v", instanceType, err)
-	}
-	err = xml.Unmarshal(mpartRespBytes, &mpartResp)
-	if err != nil {
-		t.Fatalf("[%s] Failed to unmarshal NewMultipartUpload response <ERROR> %v", instanceType, err)
-
-	}
-
-	accessDeniedErr := getAPIError(ErrAccessDenied)
-	anonRec := httptest.NewRecorder()
-	anonReq, aErr := newTestRequest("PUT",
-		getPutObjectPartURL("", bucketName, testObject, mpartResp.UploadID, "1"),
-		int64(len("hello")), bytes.NewReader([]byte("hello")))
-	if aErr != nil {
-		t.Fatalf("Test %d %s Failed to create an anonymous request to upload part for %s/%s: <ERROR> %v",
-			1, instanceType, bucketName, testObject, aErr)
-	}
-	apiRouter.ServeHTTP(anonRec, anonReq)
-
-	anonErrBytes, err := ioutil.ReadAll(anonRec.Result().Body)
-	if err != nil {
-		t.Fatalf("Test %d %s Failed to read error response from upload part request %s/%s: <ERROR> %v",
-			1, instanceType, bucketName, testObject, err)
-	}
-	var anonErrXML APIErrorResponse
-	err = xml.Unmarshal(anonErrBytes, &anonErrXML)
-	if err != nil {
-		t.Fatalf("Test %d %s Failed to unmarshal error response from upload part request %s/%s: <ERROR> %v",
-			1, instanceType, bucketName, testObject, err)
-	}
-	if accessDeniedErr.Code != anonErrXML.Code {
-		t.Errorf("Test %d %s expected to fail with error %s, but received %s", 1, instanceType,
-			accessDeniedErr.Code, anonErrXML.Code)
-	}
-
-	// Set write only policy on bucket to allow anonymous PutObjectPart API
-	// request to go through.
-	writeOnlyPolicy := bucketPolicy{
-		Version:    "1.0",
-		Statements: []policyStatement{getWriteOnlyObjectStatement(bucketName, "")},
-	}
-	globalBucketPolicies.SetBucketPolicy(bucketName, &writeOnlyPolicy)
-
-	anonRec = httptest.NewRecorder()
-	anonReq, aErr = newTestRequest("PUT",
-		getPutObjectPartURL("", bucketName, testObject, mpartResp.UploadID, "1"),
-		int64(len("hello")), bytes.NewReader([]byte("hello")))
-	if aErr != nil {
-		t.Fatalf("Test %d %s Failed to create an anonymous request to upload part for %s/%s: <ERROR> %v",
-			1, instanceType, bucketName, testObject, aErr)
-	}
-	apiRouter.ServeHTTP(anonRec, anonReq)
-	if anonRec.Code != http.StatusOK {
-		t.Errorf("Test %d %s expected PutObject Part with authAnonymous type to succeed but failed with "+
-			"HTTP status code %d", 1, instanceType, anonRec.Code)
-	}
-}
-
 // TestAPIPutObjectPartHandler - Tests validate the response of PutObjectPart HTTP handler
 //  for variety of inputs.
 func TestAPIPutObjectPartHandler(t *testing.T) {
@@ -1382,6 +1296,8 @@ func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName strin
 		// Failed to create NewMultipartUpload, abort.
 		t.Fatalf("Minio %s : <ERROR>  %s", instanceType, err)
 	}
+
+	uploadIDCopy := uploadID
 
 	// expected error types for invalid inputs to PutObjectPartHandler.
 	noAPIErr := APIError{}
@@ -1554,6 +1470,19 @@ func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName strin
 		})
 	}
 
+	// Test for Anonymous/unsigned http request.
+	anonReq, err := newTestRequest("PUT", getPutObjectPartURL("", bucketName, testObject, uploadIDCopy, "1"),
+		int64(len("hello")), bytes.NewReader([]byte("hello")))
+	if err != nil {
+		t.Fatalf("Minio %s: Failed to create an anonymous request to upload part for %s/%s: <ERROR> %v",
+			instanceType, bucketName, testObject, err)
+	}
+
+	// ExecObjectLayerAPIAnonTest - Calls the HTTP API handler using the anonymous request, validates the ErrAccessDeniedResponse,
+	// sets the bucket policy using the policy statement generated from `getWriteOnlyObjectStatement` so that the
+	// unsigned request goes through and its validated again.
+	ExecObjectLayerAPIAnonTest(t, "TestAPIPutObjectPartHandler", bucketName, testObject, instanceType, apiRouter, anonReq, getWriteOnlyObjectStatement)
+
 	// HTTP request for testing when `ObjectLayer` is set to `nil`.
 	// There is no need to use an existing bucket and valid input for creating the request
 	// since the `objectLayer==nil`  check is performed before any other checks inside the handlers.
@@ -1561,8 +1490,7 @@ func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName strin
 	nilBucket := "dummy-bucket"
 	nilObject := "dummy-object"
 
-	nilReq, err := newTestSignedRequestV4("PUT",
-		getPutObjectPartURL("", nilBucket, nilObject, "0", "0"),
+	nilReq, err := newTestSignedRequestV4("PUT", getPutObjectPartURL("", nilBucket, nilObject, "0", "0"),
 		0, bytes.NewReader([]byte("testNilObjLayer")), "", "")
 
 	if err != nil {
@@ -1571,6 +1499,7 @@ func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName strin
 	// execute the object layer set to `nil` test.
 	// `ExecObjectLayerAPINilTest` manages the operation.
 	ExecObjectLayerAPINilTest(t, nilBucket, nilObject, instanceType, apiRouter, nilReq)
+
 }
 
 // TestAPIListObjectPartsHandlerPreSign - Tests validate the response of ListObjectParts HTTP handler
@@ -1949,6 +1878,7 @@ func testAPIListObjectPartsHandlerAnon(obj ObjectLayer, instanceType, bucketName
 		t.Fatalf("Test %d %s Failed to create a signed request to upload part for %s/%s: <ERROR> %v", 1, instanceType,
 			bucketName, testObject, err)
 	}
+
 	// Attempt an anonymous ListObjectParts API request to trigger AccessDenied error.
 	accessDeniedErr := getAPIError(ErrAccessDenied)
 	anonRec := httptest.NewRecorder()
@@ -1959,6 +1889,7 @@ func testAPIListObjectPartsHandlerAnon(obj ObjectLayer, instanceType, bucketName
 		t.Fatalf("Test %d %s Failed to create an anonymous request to list multipart of an upload for %s/%s: <ERROR> %v",
 			1, instanceType, bucketName, testObject, aErr)
 	}
+
 	apiRouter.ServeHTTP(anonRec, anonReq)
 	anonErrBytes, err := ioutil.ReadAll(anonRec.Result().Body)
 	if err != nil {
