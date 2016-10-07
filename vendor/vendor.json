@@ -73,9 +73,10 @@
 			"revisionTime": "2016-01-06T11:44:51+01:00"
 		},
 		{
+			"checksumSHA1": "XRii0aDqXZvztXflEB2EE9TRoks=",
 			"path": "github.com/klauspost/reedsolomon",
-			"revision": "467733eb9c209042fb37d2074a5b6be33a529be0",
-			"revisionTime": "2016-07-06T21:06:00+02:00"
+			"revision": "c54154da9e35cab25232314cf69ab9d78447f9a5",
+			"revisionTime": "2016-09-12T19:31:07Z"
 		},
 		{
 			"checksumSHA1": "dNYxHiBLalTqluak2/Z8c3RsSEM=",
