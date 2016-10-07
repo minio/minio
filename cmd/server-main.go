@@ -99,6 +99,7 @@ type serverCmdConfig struct {
 	serverAddr   string
 	disks        []string
 	ignoredDisks []string
+	isDistXL     bool // True only if its distributed XL.
 	storageDisks []StorageAPI
 }
 
@@ -308,10 +309,10 @@ func serverMain(c *cli.Context) {
 	}
 
 	// Server address.
-	serverAddress := c.String("address")
+	serverAddr := c.String("address")
 
 	// Check if requested port is available.
-	port := getPort(serverAddress)
+	port := getPort(serverAddr)
 	fatalIf(checkPortAvailability(port), "Port unavailable %d", port)
 
 	// Saves port in a globally accessible value.
@@ -335,69 +336,55 @@ func serverMain(c *cli.Context) {
 	// First disk argument check if it is local.
 	firstDisk := isLocalStorage(disks[0])
 
-	// Initialize and monitor shutdown signals.
-	err := initGracefulShutdown(os.Exit)
-	fatalIf(err, "Unable to initialize graceful shutdown operation")
-
 	// Configure server.
 	srvConfig := serverCmdConfig{
-		serverAddr:   serverAddress,
+		serverAddr:   serverAddr,
 		disks:        disks,
 		ignoredDisks: ignoredDisks,
 		storageDisks: storageDisks,
+		isDistXL:     isDistributedSetup(disks),
 	}
 
 	// Configure server.
 	handler := configureServerHandler(srvConfig)
 
 	// Set nodes for dsync for distributed setup.
-	isDist := isDistributedSetup(disks)
-	if isDist {
-		err = initDsyncNodes(disks, port)
-		fatalIf(err, "Unable to initialize distributed locking")
+	if srvConfig.isDistXL {
+		fatalIf(initDsyncNodes(disks, port), "Unable to initialize distributed locking")
 	}
 
 	// Initialize name space lock.
-	initNSLock(isDist)
+	initNSLock(srvConfig.isDistXL)
 
 	// Initialize a new HTTP server.
-	apiServer := NewServerMux(serverAddress, handler)
+	apiServer := NewServerMux(serverAddr, handler)
 
 	// Fetch endpoints which we are going to serve from.
 	endPoints := finalizeEndpoints(tls, &apiServer.Server)
 
-	// Register generic callbacks.
-	globalShutdownCBs.AddGenericCB(func() errCode {
-		// apiServer.Stop()
-		return exitSuccess
-	})
-
-	// Start server.
-	// Configure TLS if certs are available.
-	wait := make(chan struct{}, 1)
-	go func(tls bool, wait chan<- struct{}) {
-		fatalIf(func() error {
-			defer func() {
-				wait <- struct{}{}
-			}()
-			if tls {
-				return apiServer.ListenAndServeTLS(mustGetCertFile(), mustGetKeyFile())
-			} // Fallback to http.
-			return apiServer.ListenAndServe()
-		}(), "Failed to start minio server.")
-	}(tls, wait)
+	// Start server, automatically configures TLS if certs are available.
+	go func(tls bool) {
+		var lerr error
+		if tls {
+			lerr = apiServer.ListenAndServeTLS(mustGetCertFile(), mustGetKeyFile())
+		} else {
+			// Fallback to http.
+			lerr = apiServer.ListenAndServe()
+		}
+		fatalIf(lerr, "Failed to start minio server.")
+	}(tls)
 
 	// Wait for formatting of disks.
-	err = waitForFormatDisks(firstDisk, endPoints[0], storageDisks)
+	err := waitForFormatDisks(firstDisk, endPoints[0], storageDisks)
 	fatalIf(err, "formatting storage disks failed")
 
 	// Once formatted, initialize object layer.
 	newObject, err := newObjectLayer(storageDisks)
 	fatalIf(err, "intializing object layer failed")
 
-	objLayerMutex.Lock()
+	globalObjLayerMutex.Lock()
 	globalObjectAPI = newObject
-	objLayerMutex.Unlock()
+	globalObjLayerMutex.Unlock()
 
 	// Initialize a new event notifier.
 	err = initEventNotifier(newObjectLayerFn())
@@ -407,5 +394,5 @@ func serverMain(c *cli.Context) {
 	printStartupMessage(endPoints)
 
 	// Waits on the server.
-	<-wait
+	<-globalServiceDoneCh
 }

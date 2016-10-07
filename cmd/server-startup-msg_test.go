@@ -24,11 +24,11 @@ func TestStorageInfoMsg(t *testing.T) {
 	if err != nil {
 		t.Fatal("Unable to initialize XL backend", err)
 	}
-	objLayerMutex.Lock()
+	globalObjLayerMutex.Lock()
 	globalObjectAPI = obj
-	objLayerMutex.Unlock()
+	globalObjLayerMutex.Unlock()
 
-	if msg := getStorageInfoMsg(); msg == "" {
+	if msg := getStorageInfoMsg(obj.StorageInfo()); msg == "" {
 		t.Fatal("Empty message string is not implemented")
 	}
 }

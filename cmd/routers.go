@@ -25,8 +25,8 @@ import (
 )
 
 func newObjectLayerFn() ObjectLayer {
-	objLayerMutex.Lock()
-	defer objLayerMutex.Unlock()
+	globalObjLayerMutex.Lock()
+	defer globalObjLayerMutex.Unlock()
 	return globalObjectAPI
 }
 
@@ -58,19 +58,6 @@ func newObjectLayer(storageDisks []StorageAPI) (ObjectLayer, error) {
 		return nil, err
 	}
 
-	if globalShutdownCBs != nil {
-		// Register the callback that should be called when the process shuts down.
-		globalShutdownCBs.AddObjectLayerCB(func() errCode {
-			if objAPI != nil {
-				if sErr := objAPI.Shutdown(); sErr != nil {
-					errorIf(err, "Unable to shutdown object API.")
-					return exitFailure
-				}
-			}
-			return exitSuccess
-		})
-	}
-
 	// Initialize and load bucket policies.
 	err = initBucketPolicies(objAPI)
 	fatalIf(err, "Unable to load all bucket policies.")
@@ -85,7 +72,7 @@ func configureServerHandler(srvCmdConfig serverCmdConfig) http.Handler {
 	mux := router.NewRouter()
 
 	// Initialize distributed NS lock.
-	if isDistributedSetup(srvCmdConfig.disks) {
+	if srvCmdConfig.isDistXL {
 		// Register storage rpc router only if its a distributed setup.
 		registerStorageRPCRouters(mux, srvCmdConfig)
 

@@ -189,9 +189,9 @@ func StartTestServer(t TestErrHandler, instanceType string) TestServer {
 	))
 
 	testServer.Obj = objLayer
-	objLayerMutex.Lock()
+	globalObjLayerMutex.Lock()
 	globalObjectAPI = objLayer
-	objLayerMutex.Unlock()
+	globalObjLayerMutex.Unlock()
 	return testServer
 }
 
@@ -275,9 +275,9 @@ func StartTestControlRPCServer(t TestErrHandler, instanceType string) TestServer
 		t.Fatalf("Failed obtaining Temp Backend: <ERROR> %s", err)
 	}
 
-	objLayerMutex.Lock()
+	globalObjLayerMutex.Lock()
 	globalObjectAPI = objLayer
-	objLayerMutex.Unlock()
+	globalObjLayerMutex.Unlock()
 
 	// Run TestServer.
 	testRPCServer.Server = httptest.NewServer(initTestControlRPCEndPoint(serverCmdConfig{
@@ -1488,9 +1488,9 @@ func ExecObjectLayerAPINilTest(t TestErrHandler, bucketName, objectName, instanc
 	// The  API handler gets the referece to the object layer via the global object Layer,
 	// setting it to `nil` in order test for handlers response for uninitialized object layer.
 
-	objLayerMutex.Lock()
+	globalObjLayerMutex.Lock()
 	globalObjectAPI = nil
-	objLayerMutex.Unlock()
+	globalObjLayerMutex.Unlock()
 	// call the HTTP handler.
 	apiRouter.ServeHTTP(rec, req)
 
@@ -1680,9 +1680,9 @@ func registerAPIFunctions(muxRouter *router.Router, objLayer ObjectLayer, apiFun
 
 	// All object storage operations are registered as HTTP handlers on `objectAPIHandlers`.
 	// When the handlers get a HTTP request they use the underlyting ObjectLayer to perform operations.
-	objLayerMutex.Lock()
+	globalObjLayerMutex.Lock()
 	globalObjectAPI = objLayer
-	objLayerMutex.Unlock()
+	globalObjLayerMutex.Unlock()
 
 	api := objectAPIHandlers{
 		ObjectAPI: newObjectLayerFn,
@@ -1712,9 +1712,9 @@ func initTestAPIEndPoints(objLayer ObjectLayer, apiFunctions []string) http.Hand
 
 // Initialize Web RPC Handlers for testing
 func initTestWebRPCEndPoint(objLayer ObjectLayer) http.Handler {
-	objLayerMutex.Lock()
+	globalObjLayerMutex.Lock()
 	globalObjectAPI = objLayer
-	objLayerMutex.Unlock()
+	globalObjLayerMutex.Unlock()
 
 	// Initialize router.
 	muxRouter := router.NewRouter()
