@@ -21,6 +21,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/xml"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -51,7 +52,7 @@ func TestAPIGetObjectHandler(t *testing.T) {
 }
 
 func testAPIGetObjectHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t TestErrHandler) {
+	credentials credential, t *testing.T) {
 	objectName := "test-object"
 	// set of byte data for PutObject.
 	// object has to be created before running tests for GetObject.
@@ -196,7 +197,7 @@ func TestAPIPutObjectStreamSigV4Handler(t *testing.T) {
 }
 
 func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t TestErrHandler) {
+	credentials credential, t *testing.T) {
 
 	objectName := "test-object"
 	bytesDataLen := 65 * 1024
@@ -344,7 +345,7 @@ func TestAPIPutObjectHandler(t *testing.T) {
 }
 
 func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t TestErrHandler) {
+	credentials credential, t *testing.T) {
 
 	objectName := "test-object"
 	// byte data for PutObject.
@@ -434,7 +435,7 @@ func TestAPICopyObjectHandler(t *testing.T) {
 }
 
 func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t TestErrHandler) {
+	credentials credential, t *testing.T) {
 
 	objectName := "test-object"
 	// register event notifier.
@@ -600,7 +601,7 @@ func TestAPINewMultipartHandler(t *testing.T) {
 }
 
 func testAPINewMultipartHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t TestErrHandler) {
+	credentials credential, t *testing.T) {
 
 	objectName := "test-object-new-multipart"
 	rec := httptest.NewRecorder()
@@ -659,7 +660,7 @@ func TestAPINewMultipartHandlerParallel(t *testing.T) {
 }
 
 func testAPINewMultipartHandlerParallel(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t TestErrHandler) {
+	credentials credential, t *testing.T) {
 	// used for storing the uploadID's parsed on concurrent HTTP requests for NewMultipart upload on the same object.
 	testUploads := struct {
 		sync.Mutex
@@ -718,7 +719,7 @@ func TestAPICompleteMultipartHandler(t *testing.T) {
 }
 
 func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t TestErrHandler) {
+	credentials credential, t *testing.T) {
 
 	// Calculates MD5 sum of the given byte array.
 	findMD5 := func(toBeHashed []byte) string {
@@ -982,7 +983,7 @@ func TestAPIDeleteOjectHandler(t *testing.T) {
 }
 
 func testAPIDeleteOjectHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t TestErrHandler) {
+	credentials credential, t *testing.T) {
 
 	switch obj.(type) {
 	case fsObjects:
@@ -1084,8 +1085,14 @@ func testAPIDeleteOjectHandler(obj ObjectLayer, instanceType, bucketName string,
 	ExecObjectLayerAPINilTest(t, nilBucket, nilObject, instanceType, apiRouter, nilReq)
 }
 
+// TestAPIPutObjectPartHandlerPreSign - Tests validate the response of PutObjectPart HTTP handler
+// when the request signature type is PreSign.
+func TestAPIPutObjectPartHandlerPreSign(t *testing.T) {
+	ExecObjectLayerAPITest(t, testAPIPutObjectPartHandlerPreSign, []string{"NewMultipart", "PutObjectPart"})
+}
+
 func testAPIPutObjectPartHandlerPreSign(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t TestErrHandler) {
+	credentials credential, t *testing.T) {
 	testObject := "testobject"
 	rec := httptest.NewRecorder()
 	req, err := newTestSignedRequestV4("POST", getNewMultipartURL("", bucketName, "testobject"),
@@ -1126,12 +1133,14 @@ func testAPIPutObjectPartHandlerPreSign(obj ObjectLayer, instanceType, bucketNam
 	}
 }
 
-func TestAPIPutObjectPartHandlerPreSign(t *testing.T) {
-	ExecObjectLayerAPITest(t, testAPIPutObjectPartHandlerPreSign, []string{"NewMultipart", "PutObjectPart"})
+// TestAPIPutObjectPartHandlerV2 - Tests validate the response of PutObjectPart HTTP handler
+// when the request signature type is V2.
+func TestAPIPutObjectPartHandlerV2(t *testing.T) {
+	ExecObjectLayerAPITest(t, testAPIPutObjectPartHandlerV2, []string{"NewMultipart", "PutObjectPart"})
 }
 
 func testAPIPutObjectPartHandlerV2(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t TestErrHandler) {
+	credentials credential, t *testing.T) {
 	testObject := "testobject"
 	rec := httptest.NewRecorder()
 	req, err := newTestSignedRequestV4("POST", getNewMultipartURL("", bucketName, "testobject"),
@@ -1183,12 +1192,14 @@ func testAPIPutObjectPartHandlerV2(obj ObjectLayer, instanceType, bucketName str
 	}
 }
 
-func TestAPIPutObjectPartHandlerV2(t *testing.T) {
-	ExecObjectLayerAPITest(t, testAPIPutObjectPartHandlerV2, []string{"NewMultipart", "PutObjectPart"})
+// TestAPIPutObjectPartHandlerStreaming - Tests validate the response of PutObjectPart HTTP handler
+// when the request signature type is `streaming signature`.
+func TestAPIPutObjectPartHandlerStreaming(t *testing.T) {
+	ExecObjectLayerAPITest(t, testAPIPutObjectPartHandlerStreaming, []string{"NewMultipart", "PutObjectPart"})
 }
 
 func testAPIPutObjectPartHandlerStreaming(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t TestErrHandler) {
+	credentials credential, t *testing.T) {
 	testObject := "testobject"
 	rec := httptest.NewRecorder()
 	req, err := newTestSignedRequestV4("POST", getNewMultipartURL("", bucketName, "testobject"),
@@ -1265,12 +1276,14 @@ func testAPIPutObjectPartHandlerStreaming(obj ObjectLayer, instanceType, bucketN
 	}
 }
 
-func TestAPIPutObjectPartHandlerStreaming(t *testing.T) {
-	ExecObjectLayerAPITest(t, testAPIPutObjectPartHandlerStreaming, []string{"NewMultipart", "PutObjectPart"})
+// TestAPIPutObjectPartHandlerAnon - Tests validate the response of PutObjectPart HTTP handler
+// when the request type is anonymous/unsigned.
+func TestAPIPutObjectPartHandlerAnon(t *testing.T) {
+	ExecObjectLayerAPITest(t, testAPIPutObjectPartHandlerAnon, []string{"PutObjectPart", "NewMultipart"})
 }
 
 func testAPIPutObjectPartHandlerAnon(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t TestErrHandler) {
+	credentials credential, t *testing.T) {
 	// Initialize bucket policies for anonymous request test
 	err := initBucketPolicies(obj)
 	if err != nil {
@@ -1349,43 +1362,44 @@ func testAPIPutObjectPartHandlerAnon(obj ObjectLayer, instanceType, bucketName s
 	}
 }
 
-func TestAPIPutObjectPartHandlerAnon(t *testing.T) {
-	ExecObjectLayerAPITest(t, testAPIPutObjectPartHandlerAnon, []string{"PutObjectPart", "NewMultipart"})
+// TestAPIPutObjectPartHandler - Tests validate the response of PutObjectPart HTTP handler
+//  for variety of inputs.
+func TestAPIPutObjectPartHandler(t *testing.T) {
+	ExecObjectLayerAPITest(t, testAPIPutObjectPartHandler, []string{"PutObjectPart"})
 }
 
 func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t TestErrHandler) {
+	credentials credential, t *testing.T) {
+
 	// Initiate Multipart upload for testing PutObjectPartHandler.
 	testObject := "testobject"
-	rec := httptest.NewRecorder()
-	req, err := newTestSignedRequestV4("POST", getNewMultipartURL("", bucketName, "testobject"),
-		0, nil, credentials.AccessKeyID, credentials.SecretAccessKey)
-	if err != nil {
-		t.Fatalf("[%s] - Failed to create a signed request to initiate multipart upload for %s/%s: <ERROR> %v",
-			instanceType, bucketName, testObject, err)
-	}
-	apiRouter.ServeHTTP(rec, req)
 
-	// Get uploadID of the mulitpart upload initiated.
-	var mpartResp InitiateMultipartUploadResponse
-	mpartRespBytes, err := ioutil.ReadAll(rec.Result().Body)
+	// PutObjectPart API HTTP Handler has to be tested in isolation,
+	// that is without any other handler being registered,
+	// That's why NewMultipartUpload is initiated using ObjectLayer.
+	uploadID, err := obj.NewMultipartUpload(bucketName, testObject, nil)
 	if err != nil {
-		t.Fatalf("[%s] Failed to read NewMultipartUpload response <ERROR> %v", instanceType, err)
-
-	}
-	err = xml.Unmarshal(mpartRespBytes, &mpartResp)
-	if err != nil {
-		t.Fatalf("[%s] Failed to unmarshal NewMultipartUpload response <ERROR> %v", instanceType, err)
+		// Failed to create NewMultipartUpload, abort.
+		t.Fatalf("Minio %s : <ERROR>  %s", instanceType, err)
 	}
 
+	// expected error types for invalid inputs to PutObjectPartHandler.
 	noAPIErr := APIError{}
+	// expected error when content length is missing in the HTTP request.
 	missingContent := getAPIError(ErrMissingContentLength)
+	// expected error when content length is too large.
 	entityTooLarge := getAPIError(ErrEntityTooLarge)
+	// expected error when the signature check fails.
 	badSigning := getAPIError(ErrSignatureDoesNotMatch)
+	// expected error MD5 sum mismatch occurs.
 	badChecksum := getAPIError(ErrInvalidDigest)
+	// expected error when the part number in the request is invalid.
 	invalidPart := getAPIError(ErrInvalidPart)
+	// expected error when maxPart is beyond the limit.
 	invalidMaxParts := getAPIError(ErrInvalidMaxParts)
+	// expected error the when the uploadID is invalid.
 	noSuchUploadID := getAPIError(ErrNoSuchUpload)
+
 	// SignatureMismatch for various signing types
 	testCases := []struct {
 		objectName       string
@@ -1394,64 +1408,153 @@ func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName strin
 		fault            Fault
 		expectedAPIError APIError
 	}{
-		// Success case
-		{testObject, bytes.NewReader([]byte("hello")), "1", None, noAPIErr},
-		{testObject, bytes.NewReader([]byte("hello")), "9999999999999999999", None, invalidPart},
-		{testObject, bytes.NewReader([]byte("hello")), strconv.Itoa(maxPartID + 1), None, invalidMaxParts},
-		{testObject, bytes.NewReader([]byte("hello")), "1", MissingContentLength, missingContent},
-		{testObject, bytes.NewReader([]byte("hello")), "1", TooBigObject, entityTooLarge},
-		{testObject, bytes.NewReader([]byte("hello")), "1", BadSignature, badSigning},
-		{testObject, bytes.NewReader([]byte("hello")), "1", BadMD5, badChecksum},
-		{testObject, bytes.NewReader([]byte("hello")), "1", MissingUploadID, noSuchUploadID},
+		// Test case - 1.
+		// Success case.
+		{
+			objectName:       testObject,
+			reader:           bytes.NewReader([]byte("hello")),
+			partNumber:       "1",
+			fault:            None,
+			expectedAPIError: noAPIErr,
+		},
+		// Test case - 2.
+		// Case where part number is invalid.
+		{
+			objectName:       testObject,
+			reader:           bytes.NewReader([]byte("hello")),
+			partNumber:       "9999999999999999999",
+			fault:            None,
+			expectedAPIError: invalidPart,
+		},
+		// Test case - 3.
+		// Case where the part number has exceeded the max allowed parts in an upload.
+		{
+			objectName:       testObject,
+			reader:           bytes.NewReader([]byte("hello")),
+			partNumber:       strconv.Itoa(maxPartID + 1),
+			fault:            None,
+			expectedAPIError: invalidMaxParts,
+		},
+		// Test case - 4.
+		// Case where the content length is not set in the HTTP request.
+		{
+			objectName:       testObject,
+			reader:           bytes.NewReader([]byte("hello")),
+			partNumber:       "1",
+			fault:            MissingContentLength,
+			expectedAPIError: missingContent,
+		},
+		// Test case - 5.
+		// case where the object size is set to a value greater than the max allowed size.
+		{
+			objectName:       testObject,
+			reader:           bytes.NewReader([]byte("hello")),
+			partNumber:       "1",
+			fault:            TooBigObject,
+			expectedAPIError: entityTooLarge,
+		},
+		// Test case - 6.
+		// case where a signature mismatch is introduced and the response is validated.
+		{
+			objectName:       testObject,
+			reader:           bytes.NewReader([]byte("hello")),
+			partNumber:       "1",
+			fault:            BadSignature,
+			expectedAPIError: badSigning,
+		},
+		// Test case - 7.
+		// Case where incorrect checksum is set and the error response
+		// is asserted with the expected error response.
+		{
+			objectName:       testObject,
+			reader:           bytes.NewReader([]byte("hello")),
+			partNumber:       "1",
+			fault:            BadMD5,
+			expectedAPIError: badChecksum,
+		},
+		// Test case - 8.
+		// case where the a non-existent uploadID is set.
+		{
+			objectName:       testObject,
+			reader:           bytes.NewReader([]byte("hello")),
+			partNumber:       "1",
+			fault:            MissingUploadID,
+			expectedAPIError: noSuchUploadID,
+		},
 	}
 
 	for i, test := range testCases {
-		tRec := httptest.NewRecorder()
-		uploadID := mpartResp.UploadID
-		// To simulate PutObjectPart failure at object layer.
-		if test.fault == MissingUploadID {
-			uploadID = "upload1"
-		}
-		tReq, tErr := newTestSignedRequestV4("PUT",
-			getPutObjectPartURL("", bucketName, test.objectName, uploadID, test.partNumber),
-			0, test.reader, credentials.AccessKeyID, credentials.SecretAccessKey)
-		if tErr != nil {
-			t.Fatalf("Test %d %s Failed to create a signed request to upload part for %s/%s: <ERROR> %v", i+1, instanceType,
-				bucketName, test.objectName, tErr)
-		}
-		switch test.fault {
-		case MissingContentLength:
-			tReq.ContentLength = -1
-		case TooBigObject:
-			tReq.ContentLength = maxObjectSize + 1
-		case BadSignature:
-			// Mangle signature
-			tReq.Header.Set("authorization", tReq.Header.Get("authorization")+"a")
-		case BadMD5:
-			tReq.Header.Set("Content-MD5", "badmd5")
-		}
-		apiRouter.ServeHTTP(tRec, tReq)
-		if test.expectedAPIError != noAPIErr {
-			var errBytes []byte
-			errBytes, err = ioutil.ReadAll(tRec.Result().Body)
+		// Using sub-tests introduced in Go 1.7.
+		t.Run(fmt.Sprintf("Minio %s : Test case %d failed.", instanceType, i+1), func(t *testing.T) {
+
+			var req *http.Request
+			rec := httptest.NewRecorder()
+			// setting a non-existent uploadID.
+			// deliberately introducing the invalid value to be able to assert the response with the expected error response.
+			if test.fault == MissingUploadID {
+				uploadID = "upload1"
+			}
+			// constructing a v4 signed HTTP request.
+			req, err = newTestSignedRequestV4("PUT",
+				getPutObjectPartURL("", bucketName, test.objectName, uploadID, test.partNumber),
+				0, test.reader, credentials.AccessKeyID, credentials.SecretAccessKey)
 			if err != nil {
-				t.Fatalf("Test %d %s Failed to read error response from upload part request %s/%s: <ERROR> %v",
-					i+1, instanceType, bucketName, test.objectName, err)
+				t.Fatalf("Test %d %s Failed to create a signed request to upload part for %s/%s: <ERROR> %v", i+1, instanceType,
+					bucketName, test.objectName, err)
 			}
-			var errXML APIErrorResponse
-			err = xml.Unmarshal(errBytes, &errXML)
-			if err != nil {
-				t.Fatalf("Test %d %s Failed to unmarshal error response from upload part request %s/%s: <ERROR> %v",
-					i+1, instanceType, bucketName, test.objectName, err)
+
+			// introduce faults in the request.
+			// deliberately introducing the invalid value to be able to assert the response with the expected error response.
+			switch test.fault {
+			case MissingContentLength:
+				req.ContentLength = -1
+				// Setting the content length to a value greater than the max allowed size of a part.
+				// Used in test case  4.
+			case TooBigObject:
+				req.ContentLength = maxObjectSize + 1
+				// Malformed signature.
+				// Used in test case  6.
+			case BadSignature:
+				req.Header.Set("authorization", req.Header.Get("authorization")+"a")
+				// Setting an invalid Content-MD5 to force a Md5 Mismatch error.
+				// Used in tesr case 7.
+			case BadMD5:
+				req.Header.Set("Content-MD5", "badmd5")
 			}
-			if test.expectedAPIError.Code != errXML.Code {
-				t.Errorf("Test %d %s expected to fail with error %s, but received %s", i+1, instanceType,
-					test.expectedAPIError.Code, errXML.Code)
+
+			// invoke the PutObjectPart HTTP handler.
+			apiRouter.ServeHTTP(rec, req)
+
+			// validate the error response.
+			if test.expectedAPIError != noAPIErr {
+				var errBytes []byte
+				// read the response body.
+				errBytes, err = ioutil.ReadAll(rec.Result().Body)
+				if err != nil {
+					t.Fatalf("Failed to read error response from upload part request \"%s\"/\"%s\": <ERROR> %v.",
+						bucketName, test.objectName, err)
+				}
+				// parse the XML error response.
+				var errXML APIErrorResponse
+				err = xml.Unmarshal(errBytes, &errXML)
+				if err != nil {
+					t.Fatalf("Failed to unmarshal error response from upload part request \"%s\"/\"%s\": <ERROR> %v.",
+						bucketName, test.objectName, err)
+				}
+				// Validate whether the error has occured for the expected reason.
+				if test.expectedAPIError.Code != errXML.Code {
+					t.Errorf("Expected to fail with error \"%s\", but received \"%s\".",
+						test.expectedAPIError.Code, errXML.Code)
+				}
+				// Validate the HTTP response status code  with the expected one.
+				if test.expectedAPIError.HTTPStatusCode != rec.Code {
+					t.Errorf("Expected the HTTP response status code to be %d, got %d.", test.expectedAPIError.HTTPStatusCode, rec.Code)
+				}
 			}
-		}
+		})
 	}
 
-	// HTTP request for testing when `objectLayer` is set to `nil`.
+	// HTTP request for testing when `ObjectLayer` is set to `nil`.
 	// There is no need to use an existing bucket and valid input for creating the request
 	// since the `objectLayer==nil`  check is performed before any other checks inside the handlers.
 	// The only aim is to generate an HTTP request in a way that the relevant/registered end point is evoked/called.
@@ -1470,12 +1573,15 @@ func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName strin
 	ExecObjectLayerAPINilTest(t, nilBucket, nilObject, instanceType, apiRouter, nilReq)
 }
 
-func TestAPIPutObjectPartHandler(t *testing.T) {
-	ExecObjectLayerAPITest(t, testAPIPutObjectPartHandler, []string{"PutObjectPart", "NewMultipart"})
+// TestAPIListObjectPartsHandlerPreSign - Tests validate the response of ListObjectParts HTTP handler
+//  when signature type of the HTTP request is `Presigned`.
+func TestAPIListObjectPartsHandlerPreSign(t *testing.T) {
+	ExecObjectLayerAPITest(t, testAPIListObjectPartsHandlerPreSign,
+		[]string{"PutObjectPart", "NewMultipart", "ListObjectParts"})
 }
 
 func testAPIListObjectPartsHandlerPreSign(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t TestErrHandler) {
+	credentials credential, t *testing.T) {
 	testObject := "testobject"
 	rec := httptest.NewRecorder()
 	req, err := newTestSignedRequestV4("POST", getNewMultipartURL("", bucketName, testObject),
@@ -1534,13 +1640,15 @@ func testAPIListObjectPartsHandlerPreSign(obj ObjectLayer, instanceType, bucketN
 	}
 }
 
-func TestAPIListObjectPartsHandlerPreSign(t *testing.T) {
-	ExecObjectLayerAPITest(t, testAPIListObjectPartsHandlerPreSign,
+// TestAPIListObjectPartsHandler - Tests validate the response of ListObjectParts HTTP handler
+//  for variety of success/failure cases.
+func TestAPIListObjectPartsHandler(t *testing.T) {
+	ExecObjectLayerAPITest(t, testAPIListObjectPartsHandler,
 		[]string{"PutObjectPart", "NewMultipart", "ListObjectParts"})
 }
 
 func testAPIListObjectPartsHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t TestErrHandler) {
+	credentials credential, t *testing.T) {
 	testObject := "testobject"
 	rec := httptest.NewRecorder()
 	req, err := newTestSignedRequestV4("POST", getNewMultipartURL("", bucketName, testObject),
@@ -1658,13 +1766,14 @@ func testAPIListObjectPartsHandler(obj ObjectLayer, instanceType, bucketName str
 	ExecObjectLayerAPINilTest(t, nilBucket, nilObject, instanceType, apiRouter, nilReq)
 }
 
-func TestAPIListObjectPartsHandler(t *testing.T) {
-	ExecObjectLayerAPITest(t, testAPIListObjectPartsHandler,
-		[]string{"PutObjectPart", "NewMultipart", "ListObjectParts"})
+// TestAPIListObjectPartsHandler - Tests validate the response of ListObjectParts HTTP handler
+//  when signature type of the HTTP request is `V2`.
+func TestListObjectPartsHandlerV2(t *testing.T) {
+	ExecObjectLayerAPITest(t, testAPIListObjectPartsHandlerV2, []string{"PutObjectPart", "NewMultipart", "ListObjectParts"})
 }
 
 func testAPIListObjectPartsHandlerV2(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t TestErrHandler) {
+	credentials credential, t *testing.T) {
 	testObject := "testobject"
 	rec := httptest.NewRecorder()
 	req, err := newTestSignedRequestV4("POST", getNewMultipartURL("", bucketName, testObject),
@@ -1740,12 +1849,15 @@ func testAPIListObjectPartsHandlerV2(obj ObjectLayer, instanceType, bucketName s
 	}
 }
 
-func TestListObjectPartsHandlerV2(t *testing.T) {
-	ExecObjectLayerAPITest(t, testAPIListObjectPartsHandlerV2, []string{"PutObjectPart", "NewMultipart", "ListObjectParts"})
+// TestAPIListObjectPartsHandler - Tests validate the response of ListObjectParts HTTP handler
+//  when signature type of the HTTP request is `anonynous/unsigned`.
+func TestAPIListObjectPartsHandlerUnknown(t *testing.T) {
+	ExecObjectLayerAPITest(t, testAPIListObjectPartsHandlerUnknown,
+		[]string{"PutObjectPart", "NewMultipart", "ListObjectParts"})
 }
 
 func testAPIListObjectPartsHandlerUnknown(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t TestErrHandler) {
+	credentials credential, t *testing.T) {
 	testObject := "testobject"
 	rec := httptest.NewRecorder()
 	req, err := newTestSignedRequestV4("POST", getNewMultipartURL("", bucketName, testObject),
@@ -1795,13 +1907,12 @@ func testAPIListObjectPartsHandlerUnknown(obj ObjectLayer, instanceType, bucketN
 	}
 }
 
-func TestAPIListObjectPartsHandlerUnknown(t *testing.T) {
-	ExecObjectLayerAPITest(t, testAPIListObjectPartsHandlerUnknown,
-		[]string{"PutObjectPart", "NewMultipart", "ListObjectParts"})
+func TestListObjectPartsHandlerAnon(t *testing.T) {
+	ExecObjectLayerAPITest(t, testAPIListObjectPartsHandlerAnon, []string{"PutObjectPart", "NewMultipart", "ListObjectParts"})
 }
 
 func testAPIListObjectPartsHandlerAnon(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t TestErrHandler) {
+	credentials credential, t *testing.T) {
 	// Initialize bucket policies for anonymous request test
 	err := initBucketPolicies(obj)
 	if err != nil {
@@ -1886,8 +1997,4 @@ func testAPIListObjectPartsHandlerAnon(obj ObjectLayer, instanceType, bucketName
 		t.Errorf("Test %d %s expected ListObjectParts with authAnonymous type to succeed but failed with "+
 			"HTTP status code %d", 1, instanceType, anonRec.Code)
 	}
-}
-
-func TestListObjectPartsHandlerAnon(t *testing.T) {
-	ExecObjectLayerAPITest(t, testAPIListObjectPartsHandlerAnon, []string{"PutObjectPart", "NewMultipart", "ListObjectParts"})
 }

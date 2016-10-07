@@ -247,7 +247,7 @@ func TestPutBucketPolicyHandler(t *testing.T) {
 // testPutBucketPolicyHandler - Test for Bucket policy end point.
 // TODO: Add exhaustive cases with various combination of statement fields.
 func testPutBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t TestErrHandler) {
+	credentials credential, t *testing.T) {
 	initBucketPolicies(obj)
 
 	// template for constructing HTTP request body for PUT bucket policy.
@@ -323,7 +323,7 @@ func TestGetBucketPolicyHandler(t *testing.T) {
 // testGetBucketPolicyHandler - Test for end point which fetches the access policy json of the given bucket.
 // TODO: Add exhaustive cases with various combination of statement fields.
 func testGetBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t TestErrHandler) {
+	credentials credential, t *testing.T) {
 	// initialize bucket policy.
 	initBucketPolicies(obj)
 
@@ -468,7 +468,7 @@ func TestDeleteBucketPolicyHandler(t *testing.T) {
 // testDeleteBucketPolicyHandler - Test for Delete bucket policy end point.
 // TODO: Add exhaustive cases with various combination of statement fields.
 func testDeleteBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t TestErrHandler) {
+	credentials credential, t *testing.T) {
 	// initialize bucket policy.
 	initBucketPolicies(obj)
 
