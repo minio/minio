@@ -34,6 +34,8 @@ var ownNode int
 
 // Simple majority based quorum, set to dNodeCount/2+1
 var dquorum int
+// Simple quorum for read operations, set to dNodeCount/2
+var dquorumReads int
 
 // SetNodesWithPath - initializes package-level global state variables such as clnts.
 // N B - This function should be called only once inside any program that uses
@@ -47,15 +49,17 @@ func SetNodesWithClients(rpcClnts []RPC, rpcOwnNode int) (err error) {
 		return errors.New("Dsync not designed for less than 4 nodes")
 	} else if len(rpcClnts) > 16 {
 		return errors.New("Dsync not designed for more than 16 nodes")
+	} else if len(rpcClnts)&1 == 1 {
+		return errors.New("Dsync not designed for an uneven number of nodes")
 	}
 
 	if rpcOwnNode > len(rpcClnts) {
 		return errors.New("Index for own node is too large")
 	}
 
-
 	dnodeCount = len(rpcClnts)
 	dquorum = dnodeCount/2 + 1
+	dquorumReads = dnodeCount/2
 	// Initialize node name and rpc path for each RPCClient object.
 	clnts = make([]RPC, dnodeCount)
 	copy(clnts, rpcClnts)
