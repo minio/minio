@@ -298,6 +298,23 @@ func testPutBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 		}
 	}
 
+	// Test for Anonymous/unsigned http request.
+	// Bucket policy related functions doesn't support anonymous requests, setting policies shouldn't make a difference.
+	bucketPolicyStr := fmt.Sprintf(bucketPolicyTemplate, bucketName, bucketName)
+	// create unsigned HTTP request for PutBucketPolicyHandler.
+	anonReq, err := newTestRequest("PUT", getPutPolicyURL("", bucketName),
+		int64(len(bucketPolicyStr)), bytes.NewReader([]byte(bucketPolicyStr)))
+
+	if err != nil {
+		t.Fatalf("Minio %s: Failed to create an anonymous request for bucket \"%s\": <ERROR> %v",
+			instanceType, bucketName, err)
+	}
+
+	// ExecObjectLayerAPIAnonTest - Calls the HTTP API handler using the anonymous request, validates the ErrAccessDeniedResponse,
+	// sets the bucket policy using the policy statement generated from `getWriteOnlyObjectStatement` so that the
+	// unsigned request goes through and its validated again.
+	ExecObjectLayerAPIAnonTest(t, "PutBucketPolicyHandler", bucketName, "", instanceType, apiRouter, anonReq, getWriteOnlyObjectStatement)
+
 	// HTTP request for testing when `objectLayer` is set to `nil`.
 	// There is no need to use an existing bucket and valid input for creating the request
 	// since the `objectLayer==nil`  check is performed before any other checks inside the handlers.
@@ -308,7 +325,7 @@ func testPutBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 		0, nil, "", "")
 
 	if err != nil {
-		t.Errorf("Minio %s: Failed to create HTTP request for testing the reponse when object Layer is set to `nil`.", instanceType)
+		t.Errorf("Minio %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
 	}
 	// execute the object layer set to `nil` test.
 	// `ExecObjectLayerAPINilTest` manages the operation.
@@ -442,6 +459,21 @@ func testGetBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 		}
 	}
 
+	// Test for Anonymous/unsigned http request.
+	// Bucket policy related functions doesn't support anonymous requests, setting policies shouldn't make a difference.
+	// create unsigned HTTP request for PutBucketPolicyHandler.
+	anonReq, err := newTestRequest("GET", getPutPolicyURL("", bucketName), 0, nil)
+
+	if err != nil {
+		t.Fatalf("Minio %s: Failed to create an anonymous request for bucket \"%s\": <ERROR> %v",
+			instanceType, bucketName, err)
+	}
+
+	// ExecObjectLayerAPIAnonTest - Calls the HTTP API handler using the anonymous request, validates the ErrAccessDeniedResponse,
+	// sets the bucket policy using the policy statement generated from `getWriteOnlyObjectStatement` so that the
+	// unsigned request goes through and its validated again.
+	ExecObjectLayerAPIAnonTest(t, "GetBucketPolicyHandler", bucketName, "", instanceType, apiRouter, anonReq, getReadOnlyObjectStatement)
+
 	// HTTP request for testing when `objectLayer` is set to `nil`.
 	// There is no need to use an existing bucket and valid input for creating the request
 	// since the `objectLayer==nil`  check is performed before any other checks inside the handlers.
@@ -452,7 +484,7 @@ func testGetBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 		0, nil, "", "")
 
 	if err != nil {
-		t.Errorf("Minio %s: Failed to create HTTP request for testing the reponse when object Layer is set to `nil`.", instanceType)
+		t.Errorf("Minio %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
 	}
 	// execute the object layer set to `nil` test.
 	// `ExecObjectLayerAPINilTest` manages the operation.
@@ -607,6 +639,20 @@ func testDeleteBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName str
 			t.Fatalf("Case %d: Expected the response status to be `%d`, but instead found `%d`", i+1, testCase.expectedRespStatus, recV2.Code)
 		}
 	}
+	// Test for Anonymous/unsigned http request.
+	// Bucket policy related functions doesn't support anonymous requests, setting policies shouldn't make a difference.
+	// create unsigned HTTP request for PutBucketPolicyHandler.
+	anonReq, err := newTestRequest("DELETE", getPutPolicyURL("", bucketName), 0, nil)
+
+	if err != nil {
+		t.Fatalf("Minio %s: Failed to create an anonymous request for bucket \"%s\": <ERROR> %v",
+			instanceType, bucketName, err)
+	}
+
+	// ExecObjectLayerAPIAnonTest - Calls the HTTP API handler using the anonymous request, validates the ErrAccessDeniedResponse,
+	// sets the bucket policy using the policy statement generated from `getWriteOnlyObjectStatement` so that the
+	// unsigned request goes through and its validated again.
+	ExecObjectLayerAPIAnonTest(t, "DeleteBucketPolicyHandler", bucketName, "", instanceType, apiRouter, anonReq, getReadOnlyObjectStatement)
 
 	// HTTP request for testing when `objectLayer` is set to `nil`.
 	// There is no need to use an existing bucket and valid input for creating the request
@@ -618,7 +664,7 @@ func testDeleteBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName str
 		0, nil, "", "")
 
 	if err != nil {
-		t.Errorf("Minio %s: Failed to create HTTP request for testing the reponse when object Layer is set to `nil`.", instanceType)
+		t.Errorf("Minio %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
 	}
 	// execute the object layer set to `nil` test.
 	// `ExecObjectLayerAPINilTest` manages the operation.

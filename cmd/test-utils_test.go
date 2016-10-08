@@ -1444,6 +1444,7 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, testName, bucketName, objectName, 
 		Version:    "1.0",
 		Statements: []policyStatement{policyFunc(bucketName, "")},
 	}
+
 	globalBucketPolicies.SetBucketPolicy(bucketName, &policy)
 	// now call the handler again with the unsigned/anonymous request, it should be accepted.
 	rec = httptest.NewRecorder()
@@ -1456,10 +1457,14 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, testName, bucketName, objectName, 
 	// expectedHTTPStatus returns 204 (http.StatusNoContent) on success.
 	if testName == "TestAPIDeleteObjectHandler" {
 		expectedHTTPStatus = http.StatusNoContent
+	} else if strings.Contains(testName, "BucketPolicyHandler") {
+		// BucketPolicyHandler's doesn't support anonymous request, policy changes should allow unsigned requests.
+		expectedHTTPStatus = http.StatusForbidden
 	} else {
 		// other API handlers return 200OK on success.
 		expectedHTTPStatus = http.StatusOK
 	}
+
 	// compare the HTTP response status code with the expected one.
 	if rec.Code != expectedHTTPStatus {
 		failTest(fmt.Sprintf("Expected the anonymous HTTP request to be served after the policy changes\n,Expected response HTTP status code to be %d, got %d.",
