@@ -186,6 +186,7 @@ type s3ChunkedReader struct {
 	seedSignature     string
 	seedDate          time.Time
 	state             chunkState
+	lastChunk         bool
 	chunkSignature    string
 	chunkSHA256Writer hash.Hash // Calculates sha256 of chunk data.
 	n                 uint64    // Unread bytes in chunk
@@ -210,17 +211,6 @@ func (cr *s3ChunkedReader) readS3ChunkHeader() {
 	}
 	// Save the incoming chunk signature.
 	cr.chunkSignature = string(hexChunkSignature)
-}
-
-// Validate if the underlying buffer has chunk header.
-func (cr *s3ChunkedReader) s3ChunkHeaderAvailable() bool {
-	n := cr.reader.Buffered()
-	if n > 0 {
-		// Peek without seeking to look for trailing '\n'.
-		peek, _ := cr.reader.Peek(n)
-		return bytes.IndexByte(peek, '\n') >= 0
-	}
-	return false
 }
 
 type chunkState int
@@ -250,18 +240,14 @@ func (cs chunkState) String() string {
 // Read - implements `io.Reader`, which transparently decodes
 // the incoming AWS Signature V4 streaming signature.
 func (cr *s3ChunkedReader) Read(buf []byte) (n int, err error) {
-	lastChunk := false
 	for {
 		switch cr.state {
 		case readChunkHeader:
-			if n > 0 && !cr.s3ChunkHeaderAvailable() {
-				return n, nil
-			}
 			cr.readS3ChunkHeader()
 			// If we're at the end of a chunk.
 			if cr.n == 0 && cr.err == io.EOF {
 				cr.state = readChunkTrailer
-				lastChunk = true
+				cr.lastChunk = true
 				continue
 			}
 			if cr.err != nil {
@@ -272,9 +258,6 @@ func (cr *s3ChunkedReader) Read(buf []byte) (n int, err error) {
 			cr.err = readCRLF(cr.reader)
 			if cr.err != nil {
 				return 0, errMalformedEncoding
-			}
-			if lastChunk && cr.reader.Buffered() > 0 {
-				panic("there can't be any more bytes")
 			}
 			cr.state = verifyChunk
 		case readChunk:
@@ -326,6 +309,9 @@ func (cr *s3ChunkedReader) Read(buf []byte) (n int, err error) {
 			cr.seedSignature = newSignature
 			cr.chunkSHA256Writer.Reset()
 			cr.state = readChunkHeader
+			if cr.lastChunk {
+				return n, nil
+			}
 		}
 	}
 }
