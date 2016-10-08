@@ -21,7 +21,12 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"io/ioutil"
+	"math/rand"
+	"os"
+	"path"
+	"reflect"
 	"testing"
+	"time"
 )
 
 func TestRepeatPutObjectPart(t *testing.T) {
@@ -258,4 +263,86 @@ func TestPutObjectNoQuorum(t *testing.T) {
 	}
 	// Cleanup backend directories.
 	removeRoots(fsDirs)
+}
+
+func TestHealObject(t *testing.T) {
+	obj, fsDirs, err := prepareXL()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer removeRoots(fsDirs)
+	xl := obj.(xlObjects)
+
+	// Create "bucket"
+	err = obj.MakeBucket("bucket")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bucket := "bucket"
+	object := "object"
+
+	data := make([]byte, 1*1024*1024)
+	length := int64(len(data))
+	_, err = rand.Read(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = obj.PutObject(bucket, object, length, bytes.NewReader(data), nil, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	disk := xl.storageDisks[0]
+	xlMetaPreHeal, err := readXLMeta(disk, bucket, object)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Remove the object - to simulate the case where the disk was down when the object
+	// was created.
+	err = os.RemoveAll(path.Join(fsDirs[0], bucket, object))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = xl.HealObject(bucket, object)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	xlMetaPostHeal, err := readXLMeta(disk, bucket, object)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// After heal the meta file should be as expected.
+	if !reflect.DeepEqual(xlMetaPreHeal, xlMetaPostHeal) {
+		t.Fatal("HealObject failed")
+	}
+
+	// Write xl.json with different modtime to simulate the case where a disk had
+	// gone down when an object was replaced by a new object.
+	xlMetaOutDated := xlMetaPreHeal
+	xlMetaOutDated.Stat.ModTime = time.Now()
+	err = writeXLMetadata(disk, bucket, object, xlMetaOutDated)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = xl.HealObject(bucket, object)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	xlMetaPostHeal, err = readXLMeta(disk, bucket, object)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// After heal the meta file should be as expected.
+	if !reflect.DeepEqual(xlMetaPreHeal, xlMetaPostHeal) {
+		t.Fatal("HealObject failed")
+	}
 }
