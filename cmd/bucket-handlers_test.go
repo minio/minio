@@ -26,32 +26,13 @@ import (
 
 // Wrapper for calling GetBucketPolicy HTTP handler tests for both XL multiple disks and single node setup.
 func TestGetBucketLocationHandler(t *testing.T) {
-	ExecObjectLayerTest(t, testGetBucketLocationHandler)
+	ExecObjectLayerAPITest(t, testGetBucketLocationHandler, []string{"GetBucketLocation"})
 }
 
-func testGetBucketLocationHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
+func testGetBucketLocationHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
+	credentials credential, t *testing.T) {
 	initBucketPolicies(obj)
 
-	// get random bucket name.
-	bucketName := getRandomBucketName()
-	// Create bucket.
-	err := obj.MakeBucket(bucketName)
-	if err != nil {
-		// failed to create newbucket, abort.
-		t.Fatalf("%s : %s", instanceType, err)
-	}
-	// Register the API end points with XL/FS object layer.
-	apiRouter := initTestAPIEndPoints(obj, []string{"GetBucketLocation"})
-	// initialize the server and obtain the credentials and root.
-	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
-	if err != nil {
-		t.Fatalf("Init Test config failed")
-	}
-	// remove the root folder after the test ends.
-	defer removeAll(rootPath)
-
-	credentials := serverConfig.GetCredential()
 	// test cases with sample input and expected output.
 	testCases := []struct {
 		bucketName string
@@ -126,32 +107,13 @@ func testGetBucketLocationHandler(obj ObjectLayer, instanceType string, t TestEr
 
 // Wrapper for calling HeadBucket HTTP handler tests for both XL multiple disks and single node setup.
 func TestHeadBucketHandler(t *testing.T) {
-	ExecObjectLayerTest(t, testHeadBucketHandler)
+	ExecObjectLayerAPITest(t, testHeadBucketHandler, []string{"HeadBucket"})
 }
 
-func testHeadBucketHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
+func testHeadBucketHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
+	credentials credential, t *testing.T) {
 	initBucketPolicies(obj)
 
-	// get random bucket name.
-	bucketName := getRandomBucketName()
-	// Create bucket.
-	err := obj.MakeBucket(bucketName)
-	if err != nil {
-		// failed to create newbucket, abort.
-		t.Fatalf("%s : %s", instanceType, err)
-	}
-	// Register the API end points with XL/FS object layer.
-	apiRouter := initTestAPIEndPoints(obj, []string{"HeadBucket"})
-	// initialize the server and obtain the credentials and root.
-	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
-	if err != nil {
-		t.Fatalf("Init Test config failed")
-	}
-	// remove the root folder after the test ends.
-	defer removeAll(rootPath)
-
-	credentials := serverConfig.GetCredential()
 	// test cases with sample input and expected output.
 	testCases := []struct {
 		bucketName string
@@ -202,38 +164,13 @@ func testHeadBucketHandler(obj ObjectLayer, instanceType string, t TestErrHandle
 
 // Wrapper for calling TestListMultipartUploadsHandler tests for both XL multiple disks and single node setup.
 func TestListMultipartUploadsHandler(t *testing.T) {
-	ExecObjectLayerTest(t, testListMultipartUploadsHandler)
+	ExecObjectLayerAPITest(t, testListMultipartUploadsHandler, []string{"ListMultipartUploads"})
 }
 
 // testListMultipartUploadsHandler - Tests validate listing of multipart uploads.
-func testListMultipartUploadsHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
+func testListMultipartUploadsHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
+	credentials credential, t *testing.T) {
 	initBucketPolicies(obj)
-
-	// get random bucket name.
-	bucketName := getRandomBucketName()
-
-	// Register the API end points with XL/FS object layer.
-	apiRouter := initTestAPIEndPoints(obj, []string{"ListMultipartUploads"})
-	// initialize the server and obtain the credentials and root.
-	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
-	if err != nil {
-		t.Fatalf("Init Test config failed")
-	}
-	// remove the root folder after the test ends.
-	defer removeAll(rootPath)
-
-	credentials := serverConfig.GetCredential()
-
-	// bucketnames[0].
-	// objectNames[0].
-	// uploadIds [0].
-	// Create bucket before initiating NewMultipartUpload.
-	err = obj.MakeBucket(bucketName)
-	if err != nil {
-		// Failed to create newbucket, abort.
-		t.Fatalf("%s : %s", instanceType, err.Error())
-	}
 
 	// Collection of non-exhaustive ListMultipartUploads test cases, valid errors
 	// and success responses.
@@ -303,36 +240,12 @@ func testListMultipartUploadsHandler(obj ObjectLayer, instanceType string, t Tes
 
 // Wrapper for calling TestListBucketsHandler tests for both XL multiple disks and single node setup.
 func TestListBucketsHandler(t *testing.T) {
-	ExecObjectLayerTest(t, testListBuckets)
+	ExecObjectLayerAPITest(t, testListBucketsHandler, []string{"ListBuckets"})
 }
 
 // testListBucketsHandler - Tests validate listing of buckets.
-func testListBucketsHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	// get random bucket name.
-	bucketName := getRandomBucketName()
-
-	// Register the API end points with XL/FS object layer.
-	apiRouter := initTestAPIEndPoints(obj, []string{"ListBuckets"})
-	// initialize the server and obtain the credentials and root.
-	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
-	if err != nil {
-		t.Fatalf("Init Test config failed")
-	}
-	// remove the root folder after the test ends.
-	defer removeAll(rootPath)
-
-	credentials := serverConfig.GetCredential()
-
-	// bucketnames[0].
-	// objectNames[0].
-	// uploadIds [0].
-	// Create bucket before initiating NewMultipartUpload.
-	err = obj.MakeBucket(bucketName)
-	if err != nil {
-		// Failed to create newbucket, abort.
-		t.Fatalf("%s : %s", instanceType, err.Error())
-	}
+func testListBucketsHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
+	credentials credential, t *testing.T) {
 
 	testCases := []struct {
 		bucketName         string
