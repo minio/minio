@@ -1499,7 +1499,6 @@ func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName strin
 	// execute the object layer set to `nil` test.
 	// `ExecObjectLayerAPINilTest` manages the operation.
 	ExecObjectLayerAPINilTest(t, nilBucket, nilObject, instanceType, apiRouter, nilReq)
-
 }
 
 // TestAPIListObjectPartsHandlerPreSign - Tests validate the response of ListObjectParts HTTP handler
@@ -1572,110 +1571,155 @@ func testAPIListObjectPartsHandlerPreSign(obj ObjectLayer, instanceType, bucketN
 // TestAPIListObjectPartsHandler - Tests validate the response of ListObjectParts HTTP handler
 //  for variety of success/failure cases.
 func TestAPIListObjectPartsHandler(t *testing.T) {
-	ExecObjectLayerAPITest(t, testAPIListObjectPartsHandler,
-		[]string{"PutObjectPart", "NewMultipart", "ListObjectParts"})
+	ExecObjectLayerAPITest(t, testAPIListObjectPartsHandler, []string{"ListObjectParts"})
 }
 
 func testAPIListObjectPartsHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
 	credentials credential, t *testing.T) {
 	testObject := "testobject"
-	rec := httptest.NewRecorder()
-	req, err := newTestSignedRequestV4("POST", getNewMultipartURL("", bucketName, testObject),
-		0, nil, credentials.AccessKeyID, credentials.SecretAccessKey)
+
+	// PutObjectPart API HTTP Handler has to be tested in isolation,
+	// that is without any other handler being registered,
+	// That's why NewMultipartUpload is initiated using ObjectLayer.
+	uploadID, err := obj.NewMultipartUpload(bucketName, testObject, nil)
 	if err != nil {
-		t.Fatalf("[%s] - Failed to create a signed request to initiate multipart upload for %s/%s: <ERROR> %v",
-			instanceType, bucketName, testObject, err)
+		// Failed to create NewMultipartUpload, abort.
+		t.Fatalf("Minio %s : <ERROR>  %s", instanceType, err)
 	}
-	apiRouter.ServeHTTP(rec, req)
 
-	// Get uploadID of the mulitpart upload initiated.
-	var mpartResp InitiateMultipartUploadResponse
-	mpartRespBytes, err := ioutil.ReadAll(rec.Result().Body)
+	uploadIDCopy := uploadID
+
+	// create an object Part, will be used to test list object parts.
+	_, err = obj.PutObjectPart(bucketName, testObject, uploadID, 1, int64(len("hello")), bytes.NewReader([]byte("hello")),
+		"5d41402abc4b2a76b9719d911017c592", "")
 	if err != nil {
-		t.Fatalf("[%s] Failed to read NewMultipartUpload response <ERROR> %v", instanceType, err)
-
-	}
-	err = xml.Unmarshal(mpartRespBytes, &mpartResp)
-	if err != nil {
-		t.Fatalf("[%s] Failed to unmarshal NewMultipartUpload response <ERROR> %v", instanceType, err)
+		t.Fatalf("Minio %s : %s.", instanceType, err)
 	}
 
-	// Upload a part for listing purposes.
-	rec = httptest.NewRecorder()
-	req, err = newTestSignedRequestV4("PUT",
-		getPutObjectPartURL("", bucketName, testObject, mpartResp.UploadID, "1"),
-		int64(len("hello")), bytes.NewReader([]byte("hello")), credentials.AccessKeyID, credentials.SecretAccessKey)
-	if err != nil {
-		t.Fatalf("[%s] - Failed to create a signed request to initiate multipart upload for %s/%s: <ERROR> %v",
-			instanceType, bucketName, testObject, err)
-	}
-	apiRouter.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("[%s] - Failed to PutObjectPart bucket: %s object: %s HTTP status code: %d",
-			instanceType, bucketName, testObject, rec.Code)
-	}
-
+	// expected error types for invalid inputs to ListObjectParts handler.
 	noAPIErr := APIError{}
+	// expected error when the signature check fails.
 	signatureMismatchErr := getAPIError(ErrSignatureDoesNotMatch)
+	// expected error the when the uploadID is invalid.
 	noSuchUploadErr := getAPIError(ErrNoSuchUpload)
+	// expected error the part number marker use in the ListObjectParts request is invalid.
 	invalidPartMarkerErr := getAPIError(ErrInvalidPartNumberMarker)
+	// expected error when the maximum number of parts requested to listed in invalid.
 	invalidMaxPartsErr := getAPIError(ErrInvalidMaxParts)
+
 	testCases := []struct {
 		fault            Fault
 		partNumberMarker string
 		maxParts         string
 		expectedErr      APIError
 	}{
-		{BadSignature, "", "", signatureMismatchErr},
-		{MissingUploadID, "", "", noSuchUploadErr},
-		{None, "-1", "", invalidPartMarkerErr},
-		{None, "", "-1", invalidMaxPartsErr},
+		// Test case - 1.
+		// case where a signature mismatch is introduced and the response is validated.
+		{
+			fault:            BadSignature,
+			partNumberMarker: "",
+			maxParts:         "",
+			expectedErr:      signatureMismatchErr,
+		},
+
+		// Test case - 2.
+		// Marker is set to invalid value of -1, error response is asserted.
+		{
+			fault:            None,
+			partNumberMarker: "-1",
+			maxParts:         "",
+			expectedErr:      invalidPartMarkerErr,
+		},
+		// Test case - 3.
+		// Max Parts is set a negative value, error response is validated.
+		{
+			fault:            None,
+			partNumberMarker: "",
+			maxParts:         "-1",
+			expectedErr:      invalidMaxPartsErr,
+		},
+		// Test case - 4.
+		// Invalid UploadID is set and the error response is validated.
+		{
+			fault:            MissingUploadID,
+			partNumberMarker: "",
+			maxParts:         "",
+			expectedErr:      noSuchUploadErr,
+		},
 	}
 
 	for i, test := range testCases {
-		uploadID := mpartResp.UploadID
-		tRec := httptest.NewRecorder()
-		if test.fault == MissingUploadID {
-			uploadID = "upload1"
-		}
-		tReq, tErr := newTestSignedRequestV4("GET",
-			getListMultipartURLWithParams("", bucketName, testObject, uploadID, test.maxParts, test.partNumberMarker, ""),
-			0, nil, credentials.AccessKeyID, credentials.SecretAccessKey)
-		if tErr != nil {
-			t.Fatalf("Test %d %s - Failed to create a signed request to list object parts for %s/%s: <ERROR> %v",
-				i+1, instanceType, bucketName, testObject, tErr)
-		}
-		if test.fault == BadSignature {
-			// Mangle signature
-			tReq.Header.Set("authorization", tReq.Header.Get("authorization")+"a")
-		}
-		apiRouter.ServeHTTP(tRec, tReq)
-		if test.expectedErr != noAPIErr {
-			var errBytes []byte
-			errBytes, err = ioutil.ReadAll(tRec.Result().Body)
-			if err != nil {
-				t.Fatalf("Test %d %s Failed to read error response list object parts request %s/%s: <ERROR> %v",
-					i+1, instanceType, bucketName, testObject, err)
-			}
-			var errXML APIErrorResponse
-			err = xml.Unmarshal(errBytes, &errXML)
-			if err != nil {
-				t.Fatalf("Test %d %s Failed to unmarshal error response from list object partsest %s/%s: <ERROR> %v",
-					i+1, instanceType, bucketName, testObject, err)
-			}
-			if test.expectedErr.Code != errXML.Code {
-				t.Errorf("Test %d %s expected to fail with %s but received %s",
-					i+1, instanceType, test.expectedErr.Code, errXML.Code)
+		var req *http.Request
+		// Using sub-tests introduced in Go 1.7.
+		t.Run(fmt.Sprintf("Minio %s: Test case %d failed.", instanceType, i+1), func(t *testing.T) {
+			rec := httptest.NewRecorder()
+
+			// setting a non-existent uploadID.
+			// deliberately introducing the invalid value to be able to assert the response with the expected error response.
+			if test.fault == MissingUploadID {
+				uploadID = "upload1"
 			}
 
-		} else {
-			if tRec.Code != http.StatusOK {
-				t.Errorf("Test %d %s expected to succeed but failed with HTTP status code %d",
-					i+1, instanceType, tRec.Code)
+			// constructing a v4 signed HTTP request for ListMultipartUploads.
+			req, err = newTestSignedRequestV4("GET",
+				getListMultipartURLWithParams("", bucketName, testObject, uploadID, test.maxParts, test.partNumberMarker, ""),
+				0, nil, credentials.AccessKeyID, credentials.SecretAccessKey)
+
+			if err != nil {
+				t.Fatalf("Failed to create a signed request to list object parts for %s/%s: <ERROR> %v.",
+					bucketName, testObject, err)
 			}
-		}
+
+			// Malformed signature.
+			if test.fault == BadSignature {
+				req.Header.Set("authorization", req.Header.Get("authorization")+"a")
+			}
+
+			// invoke the PutObjectPart HTTP handler with the given HTTP request.
+			apiRouter.ServeHTTP(rec, req)
+
+			// validate the error response.
+			if test.expectedErr != noAPIErr {
+
+				var errBytes []byte
+				// read the response body.
+				errBytes, err = ioutil.ReadAll(rec.Result().Body)
+				if err != nil {
+					t.Fatalf("Failed to read error response list object parts request %s/%s: <ERROR> %v", bucketName, testObject, err)
+				}
+				// parse the error response.
+				var errXML APIErrorResponse
+				err = xml.Unmarshal(errBytes, &errXML)
+				if err != nil {
+					t.Fatalf("Failed to unmarshal error response from list object partsest %s/%s: <ERROR> %v",
+						bucketName, testObject, err)
+				}
+				// Validate whether the error has occured for the expected reason.
+				if test.expectedErr.Code != errXML.Code {
+					t.Errorf("Expected to fail with %s but received %s",
+						test.expectedErr.Code, errXML.Code)
+				}
+				// in case error is not expected response status should be 200OK.
+			} else {
+				if rec.Code != http.StatusOK {
+					t.Errorf("Expected to succeed with response HTTP status 200OK, but failed with HTTP status code %d.", rec.Code)
+				}
+			}
+		})
 	}
+
+	// Test for Anonymous/unsigned http request.
+	anonReq, err := newTestRequest("GET",
+		getListMultipartURLWithParams("", bucketName, testObject, uploadIDCopy, "", "", ""), 0, nil)
+	if err != nil {
+		t.Fatalf("Minio %s: Failed to create an anonymous request to upload part for %s/%s: <ERROR> %v",
+			instanceType, bucketName, testObject, err)
+	}
+
+	// ExecObjectLayerAPIAnonTest - Calls the HTTP API handler using the anonymous request, validates the ErrAccessDeniedResponse,
+	// sets the bucket policy using the policy statement generated from `getWriteOnlyObjectStatement` so that the
+	// unsigned request goes through and its validated again.
+	ExecObjectLayerAPIAnonTest(t, "TestAPIListObjectPartsHandler", bucketName, testObject, instanceType, apiRouter, anonReq, getWriteOnlyObjectStatement)
 
 	// HTTP request for testing when `objectLayer` is set to `nil`.
 	// There is no need to use an existing bucket and valid input for creating the request
@@ -1688,7 +1732,7 @@ func testAPIListObjectPartsHandler(obj ObjectLayer, instanceType, bucketName str
 		getListMultipartURLWithParams("", nilBucket, nilObject, "dummy-uploadID", "0", "0", ""),
 		0, nil, "", "")
 	if err != nil {
-		t.Errorf("Minio %s: Failed to create http request for testing the reponse when object Layer is set to `nil`.", instanceType)
+		t.Errorf("Minio %s:Failed to create http request for testing the reponse when object Layer is set to `nil`.", instanceType)
 	}
 	// execute the object layer set to `nil` test.
 	// `ExecObjectLayerAPINilTest` sets the Object Layer to `nil` and calls the handler.
@@ -1833,99 +1877,5 @@ func testAPIListObjectPartsHandlerUnknown(obj ObjectLayer, instanceType, bucketN
 	if accessDeniedErr.Code != unKnownErrXML.Code {
 		t.Errorf("Test %d %s expected to fail with error %s, but received %s", 1, instanceType,
 			accessDeniedErr.Code, unKnownErrXML.Code)
-	}
-}
-
-func TestListObjectPartsHandlerAnon(t *testing.T) {
-	ExecObjectLayerAPITest(t, testAPIListObjectPartsHandlerAnon, []string{"PutObjectPart", "NewMultipart", "ListObjectParts"})
-}
-
-func testAPIListObjectPartsHandlerAnon(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t *testing.T) {
-	// Initialize bucket policies for anonymous request test
-	err := initBucketPolicies(obj)
-	if err != nil {
-		t.Fatalf("Failed to initialize bucket policies: <ERROR> %v", err)
-	}
-
-	testObject := "testobject"
-	rec := httptest.NewRecorder()
-	req, err := newTestSignedRequestV4("POST", getNewMultipartURL("", bucketName, testObject),
-		0, nil, credentials.AccessKeyID, credentials.SecretAccessKey)
-	if err != nil {
-		t.Fatalf("[%s] - Failed to create a signed request to initiate multipart upload for %s/%s: <ERROR> %v",
-			instanceType, bucketName, testObject, err)
-	}
-	apiRouter.ServeHTTP(rec, req)
-
-	// Get uploadID of the mulitpart upload initiated.
-	var mpartResp InitiateMultipartUploadResponse
-	mpartRespBytes, err := ioutil.ReadAll(rec.Result().Body)
-	if err != nil {
-		t.Fatalf("[%s] Failed to read NewMultipartUpload response <ERROR> %v", instanceType, err)
-	}
-	err = xml.Unmarshal(mpartRespBytes, &mpartResp)
-	if err != nil {
-		t.Fatalf("[%s] Failed to unmarshal NewMultipartUpload response <ERROR> %v", instanceType, err)
-
-	}
-	// Add a part to the new multipart upload created.
-	uploadID := mpartResp.UploadID
-	req, err = newTestSignedRequestV4("PUT",
-		getPutObjectPartURL("", bucketName, testObject, uploadID, "1"),
-		0, bytes.NewReader([]byte("hello")), credentials.AccessKeyID, credentials.SecretAccessKey)
-	if err != nil {
-		t.Fatalf("Test %d %s Failed to create a signed request to upload part for %s/%s: <ERROR> %v", 1, instanceType,
-			bucketName, testObject, err)
-	}
-
-	// Attempt an anonymous ListObjectParts API request to trigger AccessDenied error.
-	accessDeniedErr := getAPIError(ErrAccessDenied)
-	anonRec := httptest.NewRecorder()
-	anonReq, aErr := newTestRequest("GET",
-		getListMultipartURLWithParams("", bucketName, testObject, mpartResp.UploadID, "", "", ""),
-		0, nil)
-	if aErr != nil {
-		t.Fatalf("Test %d %s Failed to create an anonymous request to list multipart of an upload for %s/%s: <ERROR> %v",
-			1, instanceType, bucketName, testObject, aErr)
-	}
-
-	apiRouter.ServeHTTP(anonRec, anonReq)
-	anonErrBytes, err := ioutil.ReadAll(anonRec.Result().Body)
-	if err != nil {
-		t.Fatalf("Test %d %s Failed to read error response from list object parts request %s/%s: <ERROR> %v",
-			1, instanceType, bucketName, testObject, err)
-	}
-	var anonErrXML APIErrorResponse
-	err = xml.Unmarshal(anonErrBytes, &anonErrXML)
-	if err != nil {
-		t.Fatalf("Test %d %s Failed to unmarshal error response from list object parts request %s/%s: <ERROR> %v",
-			1, instanceType, bucketName, testObject, err)
-	}
-	if accessDeniedErr.Code != anonErrXML.Code {
-		t.Errorf("Test %d %s expected to fail with error %s, but received %s", 1, instanceType,
-			accessDeniedErr.Code, anonErrXML.Code)
-	}
-
-	// Set write only policy on bucket to allow anonymous ListObjectParts API
-	// request to go through.
-	writeOnlyPolicy := bucketPolicy{
-		Version:    "1.0",
-		Statements: []policyStatement{getWriteOnlyObjectStatement(bucketName, "")},
-	}
-	globalBucketPolicies.SetBucketPolicy(bucketName, &writeOnlyPolicy)
-
-	anonRec = httptest.NewRecorder()
-	anonReq, aErr = newTestRequest("GET",
-		getListMultipartURLWithParams("", bucketName, testObject, mpartResp.UploadID, "", "", ""),
-		0, nil)
-	if aErr != nil {
-		t.Fatalf("Test %d %s Failed to create an anonymous request to list multipart of an upload for %s/%s: <ERROR> %v",
-			1, instanceType, bucketName, testObject, aErr)
-	}
-	apiRouter.ServeHTTP(anonRec, anonReq)
-	if anonRec.Code != http.StatusOK {
-		t.Errorf("Test %d %s expected ListObjectParts with authAnonymous type to succeed but failed with "+
-			"HTTP status code %d", 1, instanceType, anonRec.Code)
 	}
 }
