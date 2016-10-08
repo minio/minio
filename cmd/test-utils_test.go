@@ -1431,7 +1431,7 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, testName, bucketName, objectName, 
 	// read the response body.
 	actualContent, err := ioutil.ReadAll(rec.Body)
 	if err != nil {
-		failTest(fmt.Sprintf("Failed parsing response body: <ERROR> %v.", err))
+		failTest(fmt.Sprintf("Failed parsing response body: <ERROR> %v", err))
 	}
 	// verify whether actual error response (from the response body), matches the expected error response.
 	if !bytes.Equal(expectedErrResponse, actualContent) {
@@ -1451,9 +1451,19 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, testName, bucketName, objectName, 
 	anonReq.Body = readerTwo
 
 	apiRouter.ServeHTTP(rec, anonReq)
-	if rec.Code != http.StatusOK {
+
+	var expectedHTTPStatus int
+	// expectedHTTPStatus returns 204 (http.StatusNoContent) on success.
+	if testName == "TestAPIDeleteObjectHandler" {
+		expectedHTTPStatus = http.StatusNoContent
+	} else {
+		// other API handlers return 200OK on success.
+		expectedHTTPStatus = http.StatusOK
+	}
+	// compare the HTTP response status code with the expected one.
+	if rec.Code != expectedHTTPStatus {
 		failTest(fmt.Sprintf("Expected the anonymous HTTP request to be served after the policy changes\n,Expected response HTTP status code to be %d, got %d.",
-			http.StatusOK, rec.Code))
+			expectedHTTPStatus, rec.Code))
 	}
 }
 
