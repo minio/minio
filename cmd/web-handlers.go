@@ -669,8 +669,9 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 		return &json2.Error{Message: getAPIError(s3Error).Description}
 	}
 
-	// TODO: update policy statements according to bucket name, prefix and policy arguments.
-	if err := writeBucketPolicy(args.BucketName, objectAPI, bytes.NewReader(data), int64(len(data))); err != nil {
+	// TODO: update policy statements according to bucket name,
+	// prefix and policy arguments.
+	if err := writeBucketPolicy(args.BucketName, objectAPI, policy); err != nil {
 		return &json2.Error{Message: err.Error()}
 	}
 

@@ -182,7 +182,7 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 	}
 
 	// Save bucket policy.
-	if err = writeBucketPolicy(bucket, objAPI, bytes.NewReader(policyBytes), int64(len(policyBytes))); err != nil {
+	if err = PutBucketPolicy(bucket, policy, objAPI); err != nil {
 		switch err.(type) {
 		case BucketNameInvalid:
 			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
@@ -192,11 +192,36 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 		return
 	}
 
-	// Set the bucket policy in memory.
-	globalBucketPolicies.SetBucketPolicy(bucket, policy)
-
 	// Success.
 	writeSuccessNoContent(w)
+}
+
+// PutBucketPolicy - Persist the given policy to object layer, and
+// notify nodes in the cluster about the change. In-memory state is
+// updated in response to the notification. Assumes that the given
+// bucketPolicy is validated or is nil. If it is nil, bucket policy is
+// removed.
+func PutBucketPolicy(bucket string, bktpolicy *bucketPolicy, objAPI ObjectLayer) error {
+	// FIXME: Race exists between the bucket existence check and
+	// then updating the bucket policy.
+	if err := isBucketExist(bucket, objAPI); err != nil {
+		return err
+	}
+
+	// persist to object layer
+	if bktpolicy == nil {
+		if err := removeBucketPolicy(bucket, objAPI); err != nil {
+			return err
+		}
+	} else {
+		if err := writeBucketPolicy(bucket, objAPI, bktpolicy); err != nil {
+			return err
+		}
+	}
+
+	// Notify all peers (including self) to update in-memory state
+	S3PeersUpdateBucketPolicy(bucket, bktpolicy)
+	return nil
 }
 
 // DeleteBucketPolicyHandler - DELETE Bucket policy
@@ -221,7 +246,7 @@ func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r 
 	bucket := vars["bucket"]
 
 	// Delete bucket access policy.
-	if err := removeBucketPolicy(bucket, objAPI); err != nil {
+	if err := PutBucketPolicy(bucket, nil, objAPI); err != nil {
 		switch err.(type) {
 		case BucketNameInvalid:
 			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
@@ -232,9 +257,6 @@ func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r 
 		}
 		return
 	}
-
-	// Remove bucket policy.
-	globalBucketPolicies.RemoveBucketPolicy(bucket)
 
 	// Success.
 	writeSuccessNoContent(w)

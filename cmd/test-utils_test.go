@@ -29,6 +29,7 @@ import (
 	"io"
 	"io/ioutil"
 	"math/rand"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -182,22 +183,39 @@ func StartTestServer(t TestErrHandler, instanceType string) TestServer {
 		t.Fatalf("Failed obtaining Temp Backend: <ERROR> %s", err)
 	}
 
-	// Run TestServer.
+	srvCmdCfg := serverCmdConfig{
+		disks:        disks,
+		storageDisks: storageDisks,
+	}
 	httpHandler, err := configureServerHandler(
-		serverCmdConfig{
-			disks:        disks,
-			storageDisks: storageDisks,
-		},
+		srvCmdCfg,
 	)
 	if err != nil {
 		t.Fatalf("Failed to configure one of the RPC services <ERROR> %s", err)
 	}
+
+	// Run TestServer.
 	testServer.Server = httptest.NewServer(httpHandler)
+
+	srvCmdCfg.serverAddr = testServer.Server.Listener.Addr().String()
 
 	testServer.Obj = objLayer
 	globalObjLayerMutex.Lock()
 	globalObjectAPI = objLayer
 	globalObjLayerMutex.Unlock()
+
+	// initialize peer rpc
+	_, portStr, err := net.SplitHostPort(srvCmdCfg.serverAddr)
+	if err != nil {
+		t.Fatal("Early setup error:", err)
+	}
+	globalMinioPort, err = strconv.Atoi(portStr)
+	if err != nil {
+		t.Fatal("Early setup error:", err)
+	}
+	globalMinioAddr = getLocalAddress(srvCmdCfg)
+	initGlobalS3Peers(disks)
+
 	return testServer
 }
 

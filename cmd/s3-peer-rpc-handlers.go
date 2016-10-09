@@ -118,6 +118,33 @@ func (s3 *s3PeerAPIHandlers) Event(args *EventArgs, reply *GenericReply) error {
 		return errServerNotInitialized
 	}
 
-	err := globalEventNotifier.SendListenerEvent(args.Arn, args.Event)
-	return err
+	return globalEventNotifier.SendListenerEvent(args.Arn, args.Event)
+}
+
+// SetBPPArgs - Arguments collection for SetBucketPolicyPeer RPC call
+type SetBPPArgs struct {
+	// For Auth
+	GenericArgs
+
+	Bucket string
+
+	// policy config
+	PCfg *bucketPolicy
+}
+
+// tell receiving server to update a bucket policy
+func (s3 *s3PeerAPIHandlers) SetBucketPolicyPeer(args SetBPPArgs, reply *GenericReply) error {
+	// check auth
+	if !isRPCTokenValid(args.Token) {
+		return errInvalidToken
+	}
+
+	// check if object layer is available.
+	objAPI := s3.ObjectAPI()
+	if objAPI == nil {
+		return errServerNotInitialized
+	}
+
+	globalBucketPolicies.SetBucketPolicy(args.Bucket, args.PCfg)
+	return nil
 }

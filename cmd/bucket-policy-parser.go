@@ -69,7 +69,7 @@ type bucketPolicy struct {
 func (b bucketPolicy) String() string {
 	bbytes, err := json.Marshal(&b)
 	if err != nil {
-		errorIf(err, "Unable to unmarshal bucket policy into JSON %#v", b)
+		errorIf(err, "Unable to marshal bucket policy into JSON %#v", b)
 		return ""
 	}
 	return string(bbytes)

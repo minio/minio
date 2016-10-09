@@ -18,7 +18,7 @@ package cmd
 
 import (
 	"bytes"
-	"errors"
+	"encoding/json"
 	"io"
 	"path"
 	"sync"
@@ -44,22 +44,16 @@ func (bp bucketPolicies) GetBucketPolicy(bucket string) *bucketPolicy {
 }
 
 // Set a new bucket policy for a bucket, this operation will overwrite
-// any previous bucketpolicies for the bucket.
-func (bp *bucketPolicies) SetBucketPolicy(bucket string, policy *bucketPolicy) error {
+// any previous bucketpolicies for the bucket. If sent a nil policy,
+// deletes the policy for the bucket.
+func (bp *bucketPolicies) SetBucketPolicy(bucket string, policy *bucketPolicy) {
 	bp.rwMutex.Lock()
-	defer bp.rwMutex.Unlock()
 	if policy == nil {
-		return errors.New("invalid argument")
+		delete(bp.bucketPolicyConfigs, bucket)
+	} else {
+		bp.bucketPolicyConfigs[bucket] = policy
 	}
-	bp.bucketPolicyConfigs[bucket] = policy
-	return nil
-}
-
-// Remove bucket policy for a bucket, from in-memory map.
-func (bp *bucketPolicies) RemoveBucketPolicy(bucket string) {
-	bp.rwMutex.Lock()
-	defer bp.rwMutex.Unlock()
-	delete(bp.bucketPolicyConfigs, bucket)
+	bp.rwMutex.Unlock()
 }
 
 // Loads all bucket policies from persistent layer.
@@ -202,16 +196,23 @@ func removeBucketPolicy(bucket string, objAPI ObjectLayer) error {
 	return nil
 }
 
-// writeBucketPolicy - save all bucket policies.
-func writeBucketPolicy(bucket string, objAPI ObjectLayer, reader io.Reader, size int64) error {
+// writeBucketPolicy - save a bucket policy that is assumed to be
+// validated.
+func writeBucketPolicy(bucket string, objAPI ObjectLayer, bpy *bucketPolicy) error {
 	// Verify if bucket actually exists
 	if err := isBucketExist(bucket, objAPI); err != nil {
 		return err
 	}
 
+	buf, err := json.Marshal(bpy)
+	if err != nil {
+		errorIf(err, "Unable to marshal bucket policy '%v' to JSON", *bpy)
+		return err
+	}
 	policyPath := pathJoin(bucketConfigPrefix, bucket, policyJSON)
-	sha256sum := ""
-	if _, err := objAPI.PutObject(minioMetaBucket, policyPath, size, reader, nil, sha256sum); err != nil {
+	if _, err := objAPI.PutObject(minioMetaBucket, policyPath,
+		int64(len(buf)), bytes.NewReader(buf), nil, ""); err != nil {
+
 		errorIf(err, "Unable to set policy for the bucket %s", bucket)
 		return errorCause(err)
 	}
