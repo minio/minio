@@ -103,6 +103,18 @@ func testGetBucketLocationHandler(obj ObjectLayer, instanceType, bucketName stri
 			t.Errorf("Test %d: %s: Expected the error code to be `%s`, but instead found `%s`", i+1, instanceType, testCase.errorResponse.Code, errorResponse.Code)
 		}
 	}
+
+	// Test for Anonymous/unsigned http request.
+	// ListBucketsHandler doesn't support bucket policies, setting the policies shouldn't make any difference.
+	anonReq, err := newTestRequest("GET", getBucketLocationURL("", bucketName), 0, nil)
+	if err != nil {
+		t.Fatalf("Minio %s: Failed to create an anonymous request.", instanceType)
+	}
+
+	// ExecObjectLayerAPIAnonTest - Calls the HTTP API handler using the anonymous request, validates the ErrAccessDeniedResponse,
+	// sets the bucket policy using the policy statement generated from `getReadOnlyBucketStatement` so that the
+	// unsigned request goes through and its validated again.
+	ExecObjectLayerAPIAnonTest(t, "TestGetBucketLocationHandler", bucketName, "", instanceType, apiRouter, anonReq, getReadOnlyBucketStatement)
 }
 
 // Wrapper for calling HeadBucket HTTP handler tests for both XL multiple disks and single node setup.
@@ -160,6 +172,19 @@ func testHeadBucketHandler(obj ObjectLayer, instanceType, bucketName string, api
 			t.Errorf("Test %d: %s: Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, rec.Code)
 		}
 	}
+
+	// Test for Anonymous/unsigned http request.
+	anonReq, err := newTestRequest("HEAD", getHEADBucketURL("", bucketName), 0, nil)
+
+	if err != nil {
+		t.Fatalf("Minio %s: Failed to create an anonymous request for bucket \"%s\": <ERROR> %v",
+			instanceType, bucketName, err)
+	}
+
+	// ExecObjectLayerAPIAnonTest - Calls the HTTP API handler using the anonymous request, validates the ErrAccessDeniedResponse,
+	// sets the bucket policy using the policy statement generated from `getReadOnlyBucketStatement` so that the
+	// unsigned request goes through and its validated again.
+	ExecObjectLayerAPIAnonTest(t, "TestHeadBucketHandler", bucketName, "", instanceType, apiRouter, anonReq, getReadOnlyBucketStatement)
 }
 
 // Wrapper for calling TestListMultipartUploadsHandler tests for both XL multiple disks and single node setup.
@@ -236,6 +261,21 @@ func testListMultipartUploadsHandler(obj ObjectLayer, instanceType, bucketName s
 	if rec.Code != http.StatusForbidden {
 		t.Errorf("Test %s: Expected the response status to be `http.StatusForbidden`, but instead found `%d`", instanceType, rec.Code)
 	}
+
+	url := getListMultipartUploadsURLWithParams("", testCases[6].bucket, testCases[6].prefix, testCases[6].keyMarker,
+		testCases[6].uploadIDMarker, testCases[6].delimiter, testCases[6].maxUploads)
+	// Test for Anonymous/unsigned http request.
+	anonReq, err := newTestRequest("GET", url, 0, nil)
+	if err != nil {
+		t.Fatalf("Minio %s: Failed to create an anonymous request for bucket \"%s\": <ERROR> %v",
+			instanceType, bucketName, err)
+	}
+
+	// ExecObjectLayerAPIAnonTest - Calls the HTTP API handler using the anonymous request, validates the ErrAccessDeniedResponse,
+	// sets the bucket policy using the policy statement generated from `getWriteOnlyBucketStatement` so that the
+	// unsigned request goes through and its validated again.
+	ExecObjectLayerAPIAnonTest(t, "TestListMultipartUploadsHandler", bucketName, "", instanceType, apiRouter, anonReq, getWriteOnlyBucketStatement)
+
 }
 
 // Wrapper for calling TestListBucketsHandler tests for both XL multiple disks and single node setup.
@@ -283,4 +323,17 @@ func testListBucketsHandler(obj ObjectLayer, instanceType, bucketName string, ap
 			t.Errorf("Test %d: %s: Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, rec.Code)
 		}
 	}
+
+	// Test for Anonymous/unsigned http request.
+	// ListBucketsHandler doesn't support bucket policies, setting the policies shouldn't make a difference.
+	anonReq, err := newTestRequest("GET", getListBucketURL(""), 0, nil)
+
+	if err != nil {
+		t.Fatalf("Minio %s: Failed to create an anonymous request.", instanceType)
+	}
+
+	// ExecObjectLayerAPIAnonTest - Calls the HTTP API handler using the anonymous request, validates the ErrAccessDeniedResponse,
+	// sets the bucket policy using the policy statement generated from `getWriteOnlyObjectStatement` so that the
+	// unsigned request goes through and its validated again.
+	ExecObjectLayerAPIAnonTest(t, "ListBucketsHandler", "", "", instanceType, apiRouter, anonReq, getWriteOnlyObjectStatement)
 }
