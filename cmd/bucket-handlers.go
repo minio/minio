@@ -199,7 +199,7 @@ func (api objectAPIHandlers) ListMultipartUploadsHandler(w http.ResponseWriter, 
 	writeSuccessResponse(w, encodedSuccessResponse)
 }
 
-// ListBucketsHandler - GET Service
+// ListBucketsHandler - GET Service.
 // -----------
 // This implementation of the GET operation returns a list of all buckets
 // owned by the authenticated sender of the request.
@@ -502,7 +502,6 @@ func (api objectAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.Re
 		writeErrorResponse(w, r, ErrServerNotInitialized, r.URL.Path)
 		return
 	}
-
 	switch getRequestAuthType(r) {
 	default:
 		// For all unknown auth types return error.

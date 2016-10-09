@@ -26,32 +26,13 @@ import (
 
 // Wrapper for calling GetBucketPolicy HTTP handler tests for both XL multiple disks and single node setup.
 func TestGetBucketLocationHandler(t *testing.T) {
-	ExecObjectLayerTest(t, testGetBucketLocationHandler)
+	ExecObjectLayerAPITest(t, testGetBucketLocationHandler, []string{"GetBucketLocation"})
 }
 
-func testGetBucketLocationHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
+func testGetBucketLocationHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
+	credentials credential, t *testing.T) {
 	initBucketPolicies(obj)
 
-	// get random bucket name.
-	bucketName := getRandomBucketName()
-	// Create bucket.
-	err := obj.MakeBucket(bucketName)
-	if err != nil {
-		// failed to create newbucket, abort.
-		t.Fatalf("%s : %s", instanceType, err)
-	}
-	// Register the API end points with XL/FS object layer.
-	apiRouter := initTestAPIEndPoints(obj, []string{"GetBucketLocation"})
-	// initialize the server and obtain the credentials and root.
-	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
-	if err != nil {
-		t.Fatalf("Init Test config failed")
-	}
-	// remove the root folder after the test ends.
-	defer removeAll(rootPath)
-
-	credentials := serverConfig.GetCredential()
 	// test cases with sample input and expected output.
 	testCases := []struct {
 		bucketName string
@@ -122,36 +103,29 @@ func testGetBucketLocationHandler(obj ObjectLayer, instanceType string, t TestEr
 			t.Errorf("Test %d: %s: Expected the error code to be `%s`, but instead found `%s`", i+1, instanceType, testCase.errorResponse.Code, errorResponse.Code)
 		}
 	}
+
+	// Test for Anonymous/unsigned http request.
+	// ListBucketsHandler doesn't support bucket policies, setting the policies shouldn't make any difference.
+	anonReq, err := newTestRequest("GET", getBucketLocationURL("", bucketName), 0, nil)
+	if err != nil {
+		t.Fatalf("Minio %s: Failed to create an anonymous request.", instanceType)
+	}
+
+	// ExecObjectLayerAPIAnonTest - Calls the HTTP API handler using the anonymous request, validates the ErrAccessDeniedResponse,
+	// sets the bucket policy using the policy statement generated from `getReadOnlyBucketStatement` so that the
+	// unsigned request goes through and its validated again.
+	ExecObjectLayerAPIAnonTest(t, "TestGetBucketLocationHandler", bucketName, "", instanceType, apiRouter, anonReq, getReadOnlyBucketStatement)
 }
 
 // Wrapper for calling HeadBucket HTTP handler tests for both XL multiple disks and single node setup.
 func TestHeadBucketHandler(t *testing.T) {
-	ExecObjectLayerTest(t, testHeadBucketHandler)
+	ExecObjectLayerAPITest(t, testHeadBucketHandler, []string{"HeadBucket"})
 }
 
-func testHeadBucketHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
+func testHeadBucketHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
+	credentials credential, t *testing.T) {
 	initBucketPolicies(obj)
 
-	// get random bucket name.
-	bucketName := getRandomBucketName()
-	// Create bucket.
-	err := obj.MakeBucket(bucketName)
-	if err != nil {
-		// failed to create newbucket, abort.
-		t.Fatalf("%s : %s", instanceType, err)
-	}
-	// Register the API end points with XL/FS object layer.
-	apiRouter := initTestAPIEndPoints(obj, []string{"HeadBucket"})
-	// initialize the server and obtain the credentials and root.
-	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
-	if err != nil {
-		t.Fatalf("Init Test config failed")
-	}
-	// remove the root folder after the test ends.
-	defer removeAll(rootPath)
-
-	credentials := serverConfig.GetCredential()
 	// test cases with sample input and expected output.
 	testCases := []struct {
 		bucketName string
@@ -198,42 +172,30 @@ func testHeadBucketHandler(obj ObjectLayer, instanceType string, t TestErrHandle
 			t.Errorf("Test %d: %s: Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, rec.Code)
 		}
 	}
+
+	// Test for Anonymous/unsigned http request.
+	anonReq, err := newTestRequest("HEAD", getHEADBucketURL("", bucketName), 0, nil)
+
+	if err != nil {
+		t.Fatalf("Minio %s: Failed to create an anonymous request for bucket \"%s\": <ERROR> %v",
+			instanceType, bucketName, err)
+	}
+
+	// ExecObjectLayerAPIAnonTest - Calls the HTTP API handler using the anonymous request, validates the ErrAccessDeniedResponse,
+	// sets the bucket policy using the policy statement generated from `getReadOnlyBucketStatement` so that the
+	// unsigned request goes through and its validated again.
+	ExecObjectLayerAPIAnonTest(t, "TestHeadBucketHandler", bucketName, "", instanceType, apiRouter, anonReq, getReadOnlyBucketStatement)
 }
 
 // Wrapper for calling TestListMultipartUploadsHandler tests for both XL multiple disks and single node setup.
 func TestListMultipartUploadsHandler(t *testing.T) {
-	ExecObjectLayerTest(t, testListMultipartUploadsHandler)
+	ExecObjectLayerAPITest(t, testListMultipartUploadsHandler, []string{"ListMultipartUploads"})
 }
 
 // testListMultipartUploadsHandler - Tests validate listing of multipart uploads.
-func testListMultipartUploadsHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
+func testListMultipartUploadsHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
+	credentials credential, t *testing.T) {
 	initBucketPolicies(obj)
-
-	// get random bucket name.
-	bucketName := getRandomBucketName()
-
-	// Register the API end points with XL/FS object layer.
-	apiRouter := initTestAPIEndPoints(obj, []string{"ListMultipartUploads"})
-	// initialize the server and obtain the credentials and root.
-	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
-	if err != nil {
-		t.Fatalf("Init Test config failed")
-	}
-	// remove the root folder after the test ends.
-	defer removeAll(rootPath)
-
-	credentials := serverConfig.GetCredential()
-
-	// bucketnames[0].
-	// objectNames[0].
-	// uploadIds [0].
-	// Create bucket before initiating NewMultipartUpload.
-	err = obj.MakeBucket(bucketName)
-	if err != nil {
-		// Failed to create newbucket, abort.
-		t.Fatalf("%s : %s", instanceType, err.Error())
-	}
 
 	// Collection of non-exhaustive ListMultipartUploads test cases, valid errors
 	// and success responses.
@@ -299,40 +261,31 @@ func testListMultipartUploadsHandler(obj ObjectLayer, instanceType string, t Tes
 	if rec.Code != http.StatusForbidden {
 		t.Errorf("Test %s: Expected the response status to be `http.StatusForbidden`, but instead found `%d`", instanceType, rec.Code)
 	}
+
+	url := getListMultipartUploadsURLWithParams("", testCases[6].bucket, testCases[6].prefix, testCases[6].keyMarker,
+		testCases[6].uploadIDMarker, testCases[6].delimiter, testCases[6].maxUploads)
+	// Test for Anonymous/unsigned http request.
+	anonReq, err := newTestRequest("GET", url, 0, nil)
+	if err != nil {
+		t.Fatalf("Minio %s: Failed to create an anonymous request for bucket \"%s\": <ERROR> %v",
+			instanceType, bucketName, err)
+	}
+
+	// ExecObjectLayerAPIAnonTest - Calls the HTTP API handler using the anonymous request, validates the ErrAccessDeniedResponse,
+	// sets the bucket policy using the policy statement generated from `getWriteOnlyBucketStatement` so that the
+	// unsigned request goes through and its validated again.
+	ExecObjectLayerAPIAnonTest(t, "TestListMultipartUploadsHandler", bucketName, "", instanceType, apiRouter, anonReq, getWriteOnlyBucketStatement)
+
 }
 
 // Wrapper for calling TestListBucketsHandler tests for both XL multiple disks and single node setup.
 func TestListBucketsHandler(t *testing.T) {
-	ExecObjectLayerTest(t, testListBuckets)
+	ExecObjectLayerAPITest(t, testListBucketsHandler, []string{"ListBuckets"})
 }
 
 // testListBucketsHandler - Tests validate listing of buckets.
-func testListBucketsHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	// get random bucket name.
-	bucketName := getRandomBucketName()
-
-	// Register the API end points with XL/FS object layer.
-	apiRouter := initTestAPIEndPoints(obj, []string{"ListBuckets"})
-	// initialize the server and obtain the credentials and root.
-	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
-	if err != nil {
-		t.Fatalf("Init Test config failed")
-	}
-	// remove the root folder after the test ends.
-	defer removeAll(rootPath)
-
-	credentials := serverConfig.GetCredential()
-
-	// bucketnames[0].
-	// objectNames[0].
-	// uploadIds [0].
-	// Create bucket before initiating NewMultipartUpload.
-	err = obj.MakeBucket(bucketName)
-	if err != nil {
-		// Failed to create newbucket, abort.
-		t.Fatalf("%s : %s", instanceType, err.Error())
-	}
+func testListBucketsHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
+	credentials credential, t *testing.T) {
 
 	testCases := []struct {
 		bucketName         string
@@ -370,4 +323,17 @@ func testListBucketsHandler(obj ObjectLayer, instanceType string, t TestErrHandl
 			t.Errorf("Test %d: %s: Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, rec.Code)
 		}
 	}
+
+	// Test for Anonymous/unsigned http request.
+	// ListBucketsHandler doesn't support bucket policies, setting the policies shouldn't make a difference.
+	anonReq, err := newTestRequest("GET", getListBucketURL(""), 0, nil)
+
+	if err != nil {
+		t.Fatalf("Minio %s: Failed to create an anonymous request.", instanceType)
+	}
+
+	// ExecObjectLayerAPIAnonTest - Calls the HTTP API handler using the anonymous request, validates the ErrAccessDeniedResponse,
+	// sets the bucket policy using the policy statement generated from `getWriteOnlyObjectStatement` so that the
+	// unsigned request goes through and its validated again.
+	ExecObjectLayerAPIAnonTest(t, "ListBucketsHandler", "", "", instanceType, apiRouter, anonReq, getWriteOnlyObjectStatement)
 }

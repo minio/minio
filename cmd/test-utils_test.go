@@ -1410,6 +1410,7 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, testName, bucketName, objectName, 
 	if err != nil {
 		failTest(err.Error())
 	}
+
 	// creating 2 read closer (to set as request body) from the body content.
 	readerOne := ioutil.NopCloser(bytes.NewBuffer(buf))
 	readerTwo := ioutil.NopCloser(bytes.NewBuffer(buf))
@@ -1428,16 +1429,18 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, testName, bucketName, objectName, 
 	// expected error response in bytes when objectLayer is not initialized, or set to `nil`.
 	expectedErrResponse := encodeResponse(getAPIErrorResponse(getAPIError(ErrAccessDenied), getGetObjectURL("", bucketName, objectName)))
 
-	// read the response body.
-	actualContent, err := ioutil.ReadAll(rec.Body)
-	if err != nil {
-		failTest(fmt.Sprintf("Failed parsing response body: <ERROR> %v", err))
+	// HEAD HTTTP request doesn't contain response body.
+	if anonReq.Method != "HEAD" {
+		// read the response body.
+		actualContent, err := ioutil.ReadAll(rec.Body)
+		if err != nil {
+			failTest(fmt.Sprintf("Failed parsing response body: <ERROR> %v", err))
+		}
+		// verify whether actual error response (from the response body), matches the expected error response.
+		if !bytes.Equal(expectedErrResponse, actualContent) {
+			failTest("error response content differs from expected value")
+		}
 	}
-	// verify whether actual error response (from the response body), matches the expected error response.
-	if !bytes.Equal(expectedErrResponse, actualContent) {
-		failTest("Object content differs from expected value.")
-	}
-
 	// Set write only policy on bucket to allow anonymous HTTP request for the operation under test.
 	// request to go through.
 	policy := bucketPolicy{
@@ -1457,8 +1460,8 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, testName, bucketName, objectName, 
 	// expectedHTTPStatus returns 204 (http.StatusNoContent) on success.
 	if testName == "TestAPIDeleteObjectHandler" {
 		expectedHTTPStatus = http.StatusNoContent
-	} else if strings.Contains(testName, "BucketPolicyHandler") {
-		// BucketPolicyHandler's doesn't support anonymous request, policy changes should allow unsigned requests.
+	} else if strings.Contains(testName, "BucketPolicyHandler") || testName == "ListBucketsHandler" {
+		// BucketPolicyHandlers and `ListBucketsHandler` doesn't support anonymous request, policy changes should allow unsigned requests.
 		expectedHTTPStatus = http.StatusForbidden
 	} else {
 		// other API handlers return 200OK on success.
