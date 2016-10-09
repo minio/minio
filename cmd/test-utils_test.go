@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/hmac"
 	"crypto/sha1"
@@ -322,6 +323,79 @@ func (testServer TestServer) Stop() {
 		removeAll(disk)
 	}
 	testServer.Server.Close()
+}
+
+// Truncate request to simulate unexpected EOF for a request signed using streaming signature v4.
+func truncateChunkByHalfSigv4(req *http.Request) (*http.Request, error) {
+	bufReader := bufio.NewReader(req.Body)
+	hexChunkSize, chunkSignature, err := readChunkLine(bufReader)
+	if err != nil {
+		return nil, err
+	}
+
+	newChunkHdr := []byte(fmt.Sprintf("%s"+s3ChunkSignatureStr+"%s\r\n",
+		hexChunkSize, chunkSignature))
+	newChunk, err := ioutil.ReadAll(bufReader)
+	if err != nil {
+		return nil, err
+	}
+	newReq := req
+	newReq.Body = ioutil.NopCloser(
+		bytes.NewReader(bytes.Join([][]byte{newChunkHdr, newChunk[:len(newChunk)/2]},
+			[]byte(""))),
+	)
+	return newReq, nil
+}
+
+// Malform data given a request signed using streaming signature V4.
+func malformDataSigV4(req *http.Request, newByte byte) (*http.Request, error) {
+	bufReader := bufio.NewReader(req.Body)
+	hexChunkSize, chunkSignature, err := readChunkLine(bufReader)
+	if err != nil {
+		return nil, err
+	}
+
+	newChunkHdr := []byte(fmt.Sprintf("%s"+s3ChunkSignatureStr+"%s\r\n",
+		hexChunkSize, chunkSignature))
+	newChunk, err := ioutil.ReadAll(bufReader)
+	if err != nil {
+		return nil, err
+	}
+
+	newChunk[0] = newByte
+	newReq := req
+	newReq.Body = ioutil.NopCloser(
+		bytes.NewReader(bytes.Join([][]byte{newChunkHdr, newChunk},
+			[]byte(""))),
+	)
+
+	return newReq, nil
+}
+
+// Malform chunk size given a request signed using streaming signatureV4.
+func malformChunkSizeSigV4(req *http.Request, badSize int64) (*http.Request, error) {
+	bufReader := bufio.NewReader(req.Body)
+	_, chunkSignature, err := readChunkLine(bufReader)
+	if err != nil {
+		return nil, err
+	}
+
+	n := badSize
+	newHexChunkSize := []byte(fmt.Sprintf("%x", n))
+	newChunkHdr := []byte(fmt.Sprintf("%s"+s3ChunkSignatureStr+"%s\r\n",
+		newHexChunkSize, chunkSignature))
+	newChunk, err := ioutil.ReadAll(bufReader)
+	if err != nil {
+		return nil, err
+	}
+
+	newReq := req
+	newReq.Body = ioutil.NopCloser(
+		bytes.NewReader(bytes.Join([][]byte{newChunkHdr, newChunk},
+			[]byte(""))),
+	)
+
+	return newReq, nil
 }
 
 // Sign given request using Signature V4.
