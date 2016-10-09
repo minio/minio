@@ -18,9 +18,9 @@ package cmd
 
 import (
 	"reflect"
+	"sync"
 	"testing"
 	"time"
-	"sync"
 )
 
 // Test function to remove lock entries from map only in case they still exist based on name & uid combination
@@ -54,7 +54,7 @@ func TestLockRemoveEntryIfExists(t *testing.T) {
 	}
 
 	// then test normal deletion
-	locker.lockMap["name"] = []lockRequesterInfo{lri}  // add item
+	locker.lockMap["name"] = []lockRequesterInfo{lri} // add item
 	locker.removeEntryIfExists(nlrip)
 	{
 		gotLri, _ := locker.lockMap["name"]
