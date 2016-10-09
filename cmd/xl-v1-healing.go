@@ -16,9 +16,7 @@
 
 package cmd
 
-import (
-	"time"
-)
+import "time"
 
 // commonTime returns a maximally occurring time from a list of time.
 func commonTime(modTimes []time.Time) (modTime time.Time) {
@@ -105,7 +103,7 @@ func outDatedDisks(disks []StorageAPI, partsMetadata []xlMetaV1, errs []error) (
 	outDatedDisks = make([]StorageAPI, len(disks))
 	latestDisks, _ := listOnlineDisks(disks, partsMetadata, errs)
 	for index, disk := range latestDisks {
-		if errs[index] == errFileNotFound {
+		if errorCause(errs[index]) == errFileNotFound {
 			outDatedDisks[index] = disks[index]
 			continue
 		}
