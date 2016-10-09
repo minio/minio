@@ -80,7 +80,7 @@ func checkCopyObjectPreconditions(w http.ResponseWriter, r *http.Request, objInf
 	// same as the one specified; otherwise return a 412 (precondition failed).
 	ifMatchETagHeader := r.Header.Get("x-amz-copy-source-if-match")
 	if ifMatchETagHeader != "" {
-		if !isETagEqual(objInfo.MD5Sum, ifMatchETagHeader) {
+		if objInfo.MD5Sum != "" && !isETagEqual(objInfo.MD5Sum, ifMatchETagHeader) {
 			// If the object ETag does not match with the specified ETag.
 			writeHeaders()
 			writeErrorResponse(w, r, ErrPreconditionFailed, r.URL.Path)
@@ -92,7 +92,7 @@ func checkCopyObjectPreconditions(w http.ResponseWriter, r *http.Request, objInf
 	// one specified otherwise, return a 304 (not modified).
 	ifNoneMatchETagHeader := r.Header.Get("x-amz-copy-source-if-none-match")
 	if ifNoneMatchETagHeader != "" {
-		if isETagEqual(objInfo.MD5Sum, ifNoneMatchETagHeader) {
+		if objInfo.MD5Sum != "" && isETagEqual(objInfo.MD5Sum, ifNoneMatchETagHeader) {
 			// If the object ETag matches with the specified ETag.
 			writeHeaders()
 			writeErrorResponse(w, r, ErrPreconditionFailed, r.URL.Path)
