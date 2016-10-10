@@ -60,6 +60,7 @@ func TestLockRpcServerLock(t *testing.T) {
 		UID:       "0123-4567",
 	}
 
+	// Claim a lock
 	var result bool
 	err := locker.Lock(&la, &result)
 	if err != nil {
@@ -85,6 +86,7 @@ func TestLockRpcServerLock(t *testing.T) {
 		}
 	}
 
+	// Try to claim same lock again (will fail)
 	la2 := LockArgs{
 		Name:      "name",
 		Token:     "token",
@@ -138,6 +140,7 @@ func TestLockRpcServerUnlock(t *testing.T) {
 		t.Errorf("Expected %#v, got %#v", true, result)
 	}
 
+	// Finally test successful release of lock
 	err = locker.Unlock(&la, &result)
 	if err != nil {
 		t.Errorf("Expected %#v, got %#v", nil, err)
