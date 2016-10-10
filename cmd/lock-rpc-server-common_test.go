@@ -24,7 +24,7 @@ import (
 )
 
 // Test function to remove lock entries from map only in case they still exist based on name & uid combination
-func TestLockRemoveEntryIfExists(t *testing.T) {
+func TestLockRpcServerRemoveEntryIfExists(t *testing.T) {
 
 	locker := &lockServer{
 		rpcPath:   "rpc-path",
@@ -66,7 +66,7 @@ func TestLockRemoveEntryIfExists(t *testing.T) {
 }
 
 // Test function to remove lock entries from map based on name & uid combination
-func TestLockRemoveEntry(t *testing.T) {
+func TestLockRpcServerRemoveEntry(t *testing.T) {
 
 	locker := &lockServer{
 		rpcPath:   "rpc-path",
@@ -126,7 +126,7 @@ func TestLockRemoveEntry(t *testing.T) {
 }
 
 // Tests function returning long lived locks.
-func TestGetLongLivedLocks(t *testing.T) {
+func TestLockRpcServerGetLongLivedLocks(t *testing.T) {
 	ut := time.Now().UTC()
 	// Collection of test cases for verifying returning valid long lived locks.
 	testCases := []struct {
