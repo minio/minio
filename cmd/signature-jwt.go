@@ -44,7 +44,7 @@ const (
 // newJWT - returns new JWT object.
 func newJWT(expiry time.Duration) (*JWT, error) {
 	if serverConfig == nil {
-		return nil, errors.New("Server not initialzed")
+		return nil, errors.New("Server not initialized")
 	}
 
 	// Save access, secret keys.

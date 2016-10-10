@@ -72,11 +72,11 @@ func TestNewJWT(t *testing.T) {
 		expectedErr error
 	}{
 		// Test non-existent config directory.
-		{path.Join(path1, "non-existent-dir"), false, nil, fmt.Errorf("Server not initialzed")},
+		{path.Join(path1, "non-existent-dir"), false, nil, fmt.Errorf("Server not initialized")},
 		// Test empty config directory.
-		{path2, false, nil, fmt.Errorf("Server not initialzed")},
+		{path2, false, nil, fmt.Errorf("Server not initialized")},
 		// Test empty config file.
-		{path3, false, nil, fmt.Errorf("Server not initialzed")},
+		{path3, false, nil, fmt.Errorf("Server not initialized")},
 		// Test initialized config file.
 		{path4, true, nil, nil},
 		// Test to read already created config file.
