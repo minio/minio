@@ -25,7 +25,8 @@ import (
 // Test function to remove lock entries from map only in case they still exist based on name & uid combination
 func TestLockRpcServerRemoveEntryIfExists(t *testing.T) {
 
-	locker, _, _ := createLockTestServer(t)
+	testPath, locker, _, _ := createLockTestServer(t)
+	defer removeAll(testPath)
 
 	lri := lockRequesterInfo{
 		writer:        false,
@@ -62,7 +63,8 @@ func TestLockRpcServerRemoveEntryIfExists(t *testing.T) {
 // Test function to remove lock entries from map based on name & uid combination
 func TestLockRpcServerRemoveEntry(t *testing.T) {
 
-	locker, _, _ := createLockTestServer(t)
+	testPath, locker, _, _ := createLockTestServer(t)
+	defer removeAll(testPath)
 
 	lockRequesterInfo1 := lockRequesterInfo{
 		writer:        true,

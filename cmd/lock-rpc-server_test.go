@@ -41,13 +41,12 @@ func testLockEquality(lriLeft, lriRight []lockRequesterInfo) bool {
 }
 
 // Helper function to create a lock server for testing
-func createLockTestServer(t *testing.T) (*lockServer, string, time.Time) {
+func createLockTestServer(t *testing.T) (string, *lockServer, string, time.Time) {
 
 	testPath, err := newTestConfig("us-east-1")
 	if err != nil {
 		t.Fatalf("unable initialize config file, %s", err)
 	}
-	defer removeAll(testPath)
 
 	jwt, err := newJWT(defaultJWTExpiry)
 	if err != nil {
@@ -72,13 +71,14 @@ func createLockTestServer(t *testing.T) (*lockServer, string, time.Time) {
 		timestamp: timestamp,
 	}
 
-	return locker, token, timestamp
+	return testPath, locker, token, timestamp
 }
 
 // Test Lock functionality
 func TestLockRpcServerLock(t *testing.T) {
 
-	locker, token, timestamp := createLockTestServer(t)
+	testPath, locker, token, timestamp := createLockTestServer(t)
+	defer removeAll(testPath)
 
 	la := LockArgs{
 		Name:      "name",
@@ -135,7 +135,8 @@ func TestLockRpcServerLock(t *testing.T) {
 // Test Unlock functionality
 func TestLockRpcServerUnlock(t *testing.T) {
 
-	locker, token, timestamp := createLockTestServer(t)
+	testPath, locker, token, timestamp := createLockTestServer(t)
+	defer removeAll(testPath)
 
 	la := LockArgs{
 		Name:      "name",
@@ -181,7 +182,8 @@ func TestLockRpcServerUnlock(t *testing.T) {
 // Test RLock functionality
 func TestLockRpcServerRLock(t *testing.T) {
 
-	locker, token, timestamp := createLockTestServer(t)
+	testPath, locker, token, timestamp := createLockTestServer(t)
+	defer removeAll(testPath)
 
 	la := LockArgs{
 		Name:      "name",
@@ -238,7 +240,8 @@ func TestLockRpcServerRLock(t *testing.T) {
 // Test RUnlock functionality
 func TestLockRpcServerRUnlock(t *testing.T) {
 
-	locker, token, timestamp := createLockTestServer(t)
+	testPath, locker, token, timestamp := createLockTestServer(t)
+	defer removeAll(testPath)
 
 	la := LockArgs{
 		Name:      "name",
@@ -325,7 +328,8 @@ func TestLockRpcServerRUnlock(t *testing.T) {
 // Test Expired functionality
 func TestLockRpcServerExpired(t *testing.T) {
 
-	locker, token, timestamp := createLockTestServer(t)
+	testPath, locker, token, timestamp := createLockTestServer(t)
+	defer removeAll(testPath)
 
 	la := LockArgs{
 		Name:      "name",
