@@ -22,8 +22,102 @@ import (
 	"time"
 )
 
+// Test function to remove lock entries from map only in case they still exist based on name & uid combination
+func TestLockRpcServerRemoveEntryIfExists(t *testing.T) {
+
+	testPath, locker, _, _ := createLockTestServer(t)
+	defer removeAll(testPath)
+
+	lri := lockRequesterInfo{
+		writer:        false,
+		node:          "host",
+		rpcPath:       "rpc-path",
+		uid:           "0123-4567",
+		timestamp:     time.Now().UTC(),
+		timeLastCheck: time.Now().UTC(),
+	}
+	nlrip := nameLockRequesterInfoPair{name: "name", lri: lri}
+
+	// first test by simulating item has already been deleted
+	locker.removeEntryIfExists(nlrip)
+	{
+		gotLri, _ := locker.lockMap["name"]
+		expectedLri := []lockRequesterInfo(nil)
+		if !reflect.DeepEqual(expectedLri, gotLri) {
+			t.Errorf("Expected %#v, got %#v", expectedLri, gotLri)
+		}
+	}
+
+	// then test normal deletion
+	locker.lockMap["name"] = []lockRequesterInfo{lri} // add item
+	locker.removeEntryIfExists(nlrip)
+	{
+		gotLri, _ := locker.lockMap["name"]
+		expectedLri := []lockRequesterInfo(nil)
+		if !reflect.DeepEqual(expectedLri, gotLri) {
+			t.Errorf("Expected %#v, got %#v", expectedLri, gotLri)
+		}
+	}
+}
+
+// Test function to remove lock entries from map based on name & uid combination
+func TestLockRpcServerRemoveEntry(t *testing.T) {
+
+	testPath, locker, _, _ := createLockTestServer(t)
+	defer removeAll(testPath)
+
+	lockRequesterInfo1 := lockRequesterInfo{
+		writer:        true,
+		node:          "host",
+		rpcPath:       "rpc-path",
+		uid:           "0123-4567",
+		timestamp:     time.Now().UTC(),
+		timeLastCheck: time.Now().UTC(),
+	}
+	lockRequesterInfo2 := lockRequesterInfo{
+		writer:        true,
+		node:          "host",
+		rpcPath:       "rpc-path",
+		uid:           "89ab-cdef",
+		timestamp:     time.Now().UTC(),
+		timeLastCheck: time.Now().UTC(),
+	}
+
+	locker.lockMap["name"] = []lockRequesterInfo{
+		lockRequesterInfo1,
+		lockRequesterInfo2,
+	}
+
+	lri, _ := locker.lockMap["name"]
+
+	// test unknown uid
+	if locker.removeEntry("name", "unknown-uid", &lri) {
+		t.Errorf("Expected %#v, got %#v", false, true)
+	}
+
+	if !locker.removeEntry("name", "0123-4567", &lri) {
+		t.Errorf("Expected %#v, got %#v", true, false)
+	} else {
+		gotLri, _ := locker.lockMap["name"]
+		expectedLri := []lockRequesterInfo{lockRequesterInfo2}
+		if !reflect.DeepEqual(expectedLri, gotLri) {
+			t.Errorf("Expected %#v, got %#v", expectedLri, gotLri)
+		}
+	}
+
+	if !locker.removeEntry("name", "89ab-cdef", &lri) {
+		t.Errorf("Expected %#v, got %#v", true, false)
+	} else {
+		gotLri, _ := locker.lockMap["name"]
+		expectedLri := []lockRequesterInfo(nil)
+		if !reflect.DeepEqual(expectedLri, gotLri) {
+			t.Errorf("Expected %#v, got %#v", expectedLri, gotLri)
+		}
+	}
+}
+
 // Tests function returning long lived locks.
-func TestGetLongLivedLocks(t *testing.T) {
+func TestLockRpcServerGetLongLivedLocks(t *testing.T) {
 	ut := time.Now().UTC()
 	// Collection of test cases for verifying returning valid long lived locks.
 	testCases := []struct {
