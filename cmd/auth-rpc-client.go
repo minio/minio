@@ -96,7 +96,7 @@ type AuthRPCClient struct {
 	isLoggedIn    bool       // Indicates if the auth client has been logged in and token is valid.
 	token         string     // JWT based token
 	tstamp        time.Time  // Timestamp as received on Login RPC.
-	serverVerison string     // Server version exchanged by the RPC.
+	serverVersion string     // Server version exchanged by the RPC.
 }
 
 // newAuthClient - returns a jwt based authenticated (go) rpc client, which does automatic reconnect.
@@ -142,7 +142,7 @@ func (authClient *AuthRPCClient) Login() error {
 	// Set token, time stamp as received from a successful login call.
 	authClient.token = reply.Token
 	authClient.tstamp = reply.Timestamp
-	authClient.serverVerison = reply.ServerVersion
+	authClient.serverVersion = reply.ServerVersion
 	authClient.isLoggedIn = true
 	return nil
 }
