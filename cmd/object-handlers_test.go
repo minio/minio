@@ -215,6 +215,20 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 	objectName := "test-object"
 	bytesDataLen := 65 * 1024
 	bytesData := bytes.Repeat([]byte{'a'}, bytesDataLen)
+	oneKData := bytes.Repeat([]byte("a"), 1024)
+
+	err := initEventNotifier(obj)
+	if err != nil {
+		t.Fatalf("[%s] - Failed to initialize event notifiers <ERROR> %v", instanceType, err)
+
+	}
+	type streamFault int
+	const (
+		None streamFault = iota
+		malformedEncoding
+		unexpectedEOF
+		signatureMismatch
+	)
 
 	// byte data for PutObject.
 	// test cases with inputs and expected result for GetObject.
@@ -232,6 +246,7 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 		secretKey        string
 		shouldPass       bool
 		removeAuthHeader bool
+		fault            streamFault
 	}{
 		// Test case - 1.
 		// Fetching the entire object and validating its contents.
@@ -304,6 +319,51 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 			secretKey:          credentials.SecretAccessKey,
 			shouldPass:         false,
 		},
+		// Test case - 6
+		// Chunk with malformed encoding.
+		{
+			bucketName:         bucketName,
+			objectName:         objectName,
+			data:               oneKData,
+			dataLen:            1024,
+			chunkSize:          1024,
+			expectedContent:    []byte{},
+			expectedRespStatus: http.StatusInternalServerError,
+			accessKey:          credentials.AccessKeyID,
+			secretKey:          credentials.SecretAccessKey,
+			shouldPass:         false,
+			fault:              malformedEncoding,
+		},
+		// Test case - 7
+		// Chunk with shorter than advertised chunk data.
+		{
+			bucketName:         bucketName,
+			objectName:         objectName,
+			data:               oneKData,
+			dataLen:            1024,
+			chunkSize:          1024,
+			expectedContent:    []byte{},
+			expectedRespStatus: http.StatusBadRequest,
+			accessKey:          credentials.AccessKeyID,
+			secretKey:          credentials.SecretAccessKey,
+			shouldPass:         false,
+			fault:              unexpectedEOF,
+		},
+		// Test case - 8
+		// Chunk with first chunk data byte tampered.
+		{
+			bucketName:         bucketName,
+			objectName:         objectName,
+			data:               oneKData,
+			dataLen:            1024,
+			chunkSize:          1024,
+			expectedContent:    []byte{},
+			expectedRespStatus: http.StatusForbidden,
+			accessKey:          credentials.AccessKeyID,
+			secretKey:          credentials.SecretAccessKey,
+			shouldPass:         false,
+			fault:              signatureMismatch,
+		},
 	}
 	// Iterating over the cases, fetching the object validating the response.
 	for i, testCase := range testCases {
@@ -321,12 +381,21 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 		if testCase.removeAuthHeader {
 			req.Header.Del("Authorization")
 		}
+		switch testCase.fault {
+		case malformedEncoding:
+			req, err = malformChunkSizeSigV4(req, testCase.chunkSize-1)
+		case signatureMismatch:
+			req, err = malformDataSigV4(req, 'z')
+		case unexpectedEOF:
+			req, err = truncateChunkByHalfSigv4(req)
+		}
 		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
 		// Call the ServeHTTP to execute the handler,`func (api objectAPIHandlers) GetObjectHandler`  handles the request.
 		apiRouter.ServeHTTP(rec, req)
 		// Assert the response code with the expected status.
 		if rec.Code != testCase.expectedRespStatus {
-			t.Errorf("Test %d: Expected the response status to be `%d`, but instead found `%d`", i+1, testCase.expectedRespStatus, rec.Code)
+			t.Errorf("Test %d %s: Expected the response status to be `%d`, but instead found `%d`",
+				i+1, instanceType, testCase.expectedRespStatus, rec.Code)
 		}
 		// read the response body.
 		actualContent, err := ioutil.ReadAll(rec.Body)
@@ -337,6 +406,7 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 			// Verify whether the bucket obtained object is same as the one created.
 			if !bytes.Equal(testCase.expectedContent, actualContent) {
 				t.Errorf("Test %d: %s: Object content differs from expected value.: %s", i+1, instanceType, string(actualContent))
+				continue
 			}
 
 			buffer := new(bytes.Buffer)
