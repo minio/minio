@@ -149,6 +149,7 @@ type TestServer struct {
 	SecretKey string
 	Server    *httptest.Server
 	Obj       ObjectLayer
+	SrvCmdCfg serverCmdConfig
 }
 
 // Starts the test server and returns the TestServer instance.
@@ -233,6 +234,64 @@ func StartTestStorageRPCServer(t TestErrHandler, instanceType string, diskN int)
 	testRPCServer.Server = httptest.NewServer(initTestStorageRPCEndPoint(serverCmdConfig{
 		disks: disks,
 	}))
+	return testRPCServer
+}
+
+// Sets up a Peers RPC test server.
+func StartTestPeersRPCServer(t TestErrHandler, instanceType string) TestServer {
+	// create temporary backend for the test server.
+	nDisks := 16
+	disks, err := getRandomDisks(nDisks)
+	if err != nil {
+		t.Fatal("Failed to create disks for the backend")
+	}
+
+	root, err := newTestConfig("us-east-1")
+	if err != nil {
+		t.Fatalf("%s", err)
+	}
+
+	// create an instance of TestServer.
+	testRPCServer := TestServer{}
+	// Get credential.
+	credentials := serverConfig.GetCredential()
+
+	testRPCServer.Root = root
+	testRPCServer.Disks = disks
+	testRPCServer.AccessKey = credentials.AccessKeyID
+	testRPCServer.SecretKey = credentials.SecretAccessKey
+
+	// create temporary backend for the test server.
+	objLayer, storageDisks, err := initObjectLayer(disks, nil)
+	if err != nil {
+		t.Fatalf("Failed obtaining Temp Backend: <ERROR> %s", err)
+	}
+
+	globalObjLayerMutex.Lock()
+	globalObjectAPI = objLayer
+	testRPCServer.Obj = objLayer
+	globalObjLayerMutex.Unlock()
+
+	srvCfg := serverCmdConfig{
+		disks:        disks,
+		storageDisks: storageDisks,
+	}
+
+	mux := router.NewRouter()
+	// need storage layer for bucket config storage.
+	registerStorageRPCRouters(mux, srvCfg)
+	// need API layer to send requests, etc.
+	registerAPIRouter(mux)
+	// module being tested is Peer RPCs router.
+	registerS3PeerRPCRouter(mux)
+
+	// Run TestServer.
+	testRPCServer.Server = httptest.NewServer(mux)
+
+	// initialize remainder of serverCmdConfig
+	srvCfg.isDistXL = false
+	testRPCServer.SrvCmdCfg = srvCfg
+
 	return testRPCServer
 }
 
@@ -595,7 +654,6 @@ func newTestStreamingSignedBadChunkDateRequest(method, urlStr string, contentLen
 	}
 
 	currTime := time.Now().UTC()
-	fmt.Println("now: ", currTime)
 	signature, err := signStreamingRequest(req, accessKey, secretKey, currTime)
 	if err != nil {
 		return nil, err
@@ -603,7 +661,6 @@ func newTestStreamingSignedBadChunkDateRequest(method, urlStr string, contentLen
 
 	// skew the time between the chunk signature calculation and seed signature.
 	currTime = currTime.Add(1 * time.Second)
-	fmt.Println("later: ", currTime)
 	req, err = assembleStreamingChunks(req, body, chunkSize, secretKey, signature, currTime)
 	return req, nil
 }
@@ -625,14 +682,15 @@ func newTestStreamingSignedRequest(method, urlStr string, contentLength, chunkSi
 	return req, nil
 }
 
-// Replaces any occurring '/' in string, into its encoded representation.
+// Replaces any occurring '/' in string, into its encoded
+// representation.
 func percentEncodeSlash(s string) string {
 	return strings.Replace(s, "/", "%2F", -1)
 }
 
 // queryEncode - encodes query values in their URL encoded form. In
-// addition to the percent encoding performed by getURLEncodedName() used
-// here, it also percent encodes '/' (forward slash)
+// addition to the percent encoding performed by getURLEncodedName()
+// used here, it also percent encodes '/' (forward slash)
 func queryEncode(v url.Values) string {
 	if v == nil {
 		return ""

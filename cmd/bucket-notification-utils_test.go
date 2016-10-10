@@ -57,42 +57,6 @@ func TestCheckDuplicateConfigs(t *testing.T) {
 			t.Errorf("Test %d: Expected %d, got %d", i+1, testCase.expectedErrCode, errCode)
 		}
 	}
-
-	// Test cases for SNS topic config.
-	topicTestCases := []struct {
-		tConfigs        []topicConfig
-		expectedErrCode APIErrorCode
-	}{
-		// Error out for duplicate configs.
-		{
-			tConfigs: []topicConfig{
-				{
-					TopicARN: "arn:minio:sns:us-east-1:1:listen",
-				},
-				{
-					TopicARN: "arn:minio:sns:us-east-1:1:listen",
-				},
-			},
-			expectedErrCode: ErrOverlappingConfigs,
-		},
-		// Valid config.
-		{
-			tConfigs: []topicConfig{
-				{
-					TopicARN: "arn:minio:sns:us-east-1:1:listen",
-				},
-			},
-			expectedErrCode: ErrNone,
-		},
-	}
-
-	// ... validate for duplicate topic configs.
-	for i, testCase := range topicTestCases {
-		errCode := checkDuplicateTopicConfigs(testCase.tConfigs)
-		if errCode != testCase.expectedErrCode {
-			t.Errorf("Test %d: Expected %d, got %d", i+1, testCase.expectedErrCode, errCode)
-		}
-	}
 }
 
 // Tests for validating filter rules.

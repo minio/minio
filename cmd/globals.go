@@ -52,8 +52,13 @@ var (
 	globalMaxCacheSize = uint64(maxCacheSize)
 	// Cache expiry.
 	globalCacheExpiry = objcache.DefaultExpiry
+	// Minio local server address (in `host:port` format)
+	globalMinioAddr = ""
 	// Minio default port, can be changed through command line.
 	globalMinioPort = 9000
+	// Peer communication struct
+	globalS3Peers = s3Peers{}
+
 	// Add new variable global values here.
 )
 

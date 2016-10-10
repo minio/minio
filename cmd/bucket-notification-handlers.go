@@ -32,6 +32,7 @@ import (
 const (
 	bucketConfigPrefix       = "buckets"
 	bucketNotificationConfig = "notification.xml"
+	bucketListenerConfig     = "listener.json"
 )
 
 // GetBucketNotificationHandler - This implementation of the GET
@@ -117,11 +118,10 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 
 	// Reads the incoming notification configuration.
 	var buffer bytes.Buffer
-	var bufferSize int64
 	if r.ContentLength >= 0 {
-		bufferSize, err = io.CopyN(&buffer, r.Body, r.ContentLength)
+		_, err = io.CopyN(&buffer, r.Body, r.ContentLength)
 	} else {
-		bufferSize, err = io.Copy(&buffer, r.Body)
+		_, err = io.Copy(&buffer, r.Body)
 	}
 	if err != nil {
 		errorIf(err, "Unable to read incoming body.")
@@ -144,22 +144,37 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 		return
 	}
 
-	// Proceed to save notification configuration.
-	notificationConfigPath := path.Join(bucketConfigPrefix, bucket, bucketNotificationConfig)
-	sha256sum := ""
-	var metadata map[string]string
-	_, err = objectAPI.PutObject(minioMetaBucket, notificationConfigPath, bufferSize, bytes.NewReader(buffer.Bytes()), metadata, sha256sum)
+	// Put bucket notification config.
+	err = PutBucketNotificationConfig(bucket, &notificationCfg, objectAPI)
 	if err != nil {
-		errorIf(err, "Unable to write bucket notification configuration.")
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
 	}
 
-	// Set bucket notification config.
-	globalEventNotifier.SetBucketNotificationConfig(bucket, &notificationCfg)
-
 	// Success.
 	writeSuccessResponse(w, nil)
+}
+
+// PutBucketNotificationConfig - Put a new notification config for a
+// bucket (overwrites any previous config) persistently, updates
+// global in-memory state, and notify other nodes in the cluster (if
+// any)
+func PutBucketNotificationConfig(bucket string, ncfg *notificationConfig, objAPI ObjectLayer) error {
+	if ncfg == nil {
+		return errInvalidArgument
+	}
+
+	// persist config to disk
+	err := persistNotificationConfig(bucket, ncfg, objAPI)
+	if err != nil {
+		return fmt.Errorf("Unable to persist Bucket notification config to object layer - config=%v errMsg=%v", *ncfg, err)
+	}
+
+	// All servers (including local) are told to update in-memory
+	// config
+	S3PeersUpdateBucketNotification(bucket, ncfg)
+
+	return nil
 }
 
 // writeNotification marshals notification message before writing to client.
@@ -172,7 +187,7 @@ func writeNotification(w http.ResponseWriter, notification map[string][]Notifica
 	if notification == nil {
 		return errInvalidArgument
 	}
-	// Marshal notification data into XML and write to client.
+	// Marshal notification data into JSON and write to client.
 	notificationBytes, err := json.Marshal(&notification)
 	if err != nil {
 		return err
@@ -251,13 +266,18 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 
 	_, err := objAPI.GetBucketInfo(bucket)
 	if err != nil {
-		errorIf(err, "Unable to bucket info.")
+		errorIf(err, "Unable to get bucket info.")
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
 	}
 
 	accountID := fmt.Sprintf("%d", time.Now().UTC().UnixNano())
-	accountARN := "arn:minio:sns:" + serverConfig.GetRegion() + accountID + ":listen"
+	accountARN := fmt.Sprintf(
+		"arn:minio:sqs:%s:%s:listen-%s",
+		serverConfig.GetRegion(),
+		accountID,
+		globalMinioAddr,
+	)
 	var filterRules []filterRule
 	if prefix != "" {
 		filterRules = append(filterRules, filterRule{
@@ -272,13 +292,14 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 		})
 	}
 
-	// Make topic configuration corresponding to this ListenBucketNotification request.
+	// Make topic configuration corresponding to this
+	// ListenBucketNotification request.
 	topicCfg := &topicConfig{
 		TopicARN: accountARN,
-		serviceConfig: serviceConfig{
+		ServiceConfig: ServiceConfig{
 			Events: events,
 			Filter: struct {
-				Key keyFilter `xml:"S3Key,omitempty"`
+				Key keyFilter `xml:"S3Key,omitempty" json:"S3Key,omitempty"`
 			}{
 				Key: keyFilter{
 					FilterRules: filterRules,
@@ -288,27 +309,91 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 		},
 	}
 
-	// Add topic config to bucket notification config.
-	if err = globalEventNotifier.AddTopicConfig(bucket, topicCfg); err != nil {
+	// Setup a listening channel that will receive notifications
+	// from the RPC handler.
+	nEventCh := make(chan []NotificationEvent)
+	defer close(nEventCh)
+	// Add channel for listener events
+	globalEventNotifier.AddListenerChan(accountARN, nEventCh)
+	// Remove listener channel after the writer has closed or the
+	// client disconnected.
+	defer globalEventNotifier.RemoveListenerChan(accountARN)
+
+	// Update topic config to bucket config and persist - as soon
+	// as this call compelets, events may start appearing in
+	// nEventCh
+	lc := listenerConfig{
+		TopicConfig:  *topicCfg,
+		TargetServer: globalMinioAddr,
+	}
+	err = AddBucketListenerConfig(bucket, &lc, objAPI)
+	if err != nil {
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
 	}
+	defer RemoveBucketListenerConfig(bucket, &lc, objAPI)
 
 	// Add all common headers.
 	setCommonHeaders(w)
 
-	// Create a new notification event channel.
-	nEventCh := make(chan []NotificationEvent)
-	// Close the listener channel.
-	defer close(nEventCh)
-
-	// Set sns target.
-	globalEventNotifier.SetSNSTarget(accountARN, nEventCh)
-	// Remove sns listener after the writer has closed or the client disconnected.
-	defer globalEventNotifier.RemoveSNSTarget(accountARN, nEventCh)
-
 	// Start sending bucket notifications.
 	sendBucketNotification(w, nEventCh)
+}
+
+// AddBucketListenerConfig - Updates on disk state of listeners, and
+// updates all peers with the change in listener config.
+func AddBucketListenerConfig(bucket string, lcfg *listenerConfig, objAPI ObjectLayer) error {
+	if lcfg == nil {
+		return errInvalidArgument
+	}
+	listenerCfgs := globalEventNotifier.GetBucketListenerConfig(bucket)
+
+	// add new lid to listeners and persist to object layer.
+	listenerCfgs = append(listenerCfgs, *lcfg)
+
+	// update persistent config
+	err := persistListenerConfig(bucket, listenerCfgs, objAPI)
+	if err != nil {
+		errorIf(err, "Error persisting listener config when adding a listener.")
+		return err
+	}
+
+	// persistence success - now update in-memory globals on all
+	// peers (including local)
+	S3PeersUpdateBucketListener(bucket, listenerCfgs)
+	return nil
+}
+
+// RemoveBucketListenerConfig - removes a given bucket notification config
+func RemoveBucketListenerConfig(bucket string, lcfg *listenerConfig, objAPI ObjectLayer) {
+	listenerCfgs := globalEventNotifier.GetBucketListenerConfig(bucket)
+
+	// remove listener with matching ARN - if not found ignore and
+	// exit.
+	var updatedLcfgs []listenerConfig
+	found := false
+	for k, configuredLcfg := range listenerCfgs {
+		if configuredLcfg.TopicConfig.TopicARN == lcfg.TopicConfig.TopicARN {
+			updatedLcfgs = append(listenerCfgs[:k],
+				listenerCfgs[k+1:]...)
+			found = true
+			break
+		}
+	}
+	if !found {
+		return
+	}
+
+	// update persistent config
+	err := persistListenerConfig(bucket, updatedLcfgs, objAPI)
+	if err != nil {
+		errorIf(err, "Error persisting listener config when removing a listener.")
+		return
+	}
+
+	// persistence success - now update in-memory globals on all
+	// peers (including local)
+	S3PeersUpdateBucketListener(bucket, updatedLcfgs)
 }
 
 // Removes notification.xml for a given bucket, only used during DeleteBucket.

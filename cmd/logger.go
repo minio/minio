@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"path"
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
@@ -50,10 +51,10 @@ type logger struct {
 func funcFromPC(pc uintptr, file string, line int, shortFile bool) string {
 	var fn, name string
 	if shortFile {
-		fn = strings.Replace(file, filepath.ToSlash(GOPATH)+"/src/github.com/minio/minio/cmd/", "", -1)
+		fn = strings.Replace(file, path.Join(filepath.ToSlash(GOPATH)+"/src/github.com/minio/minio/cmd/")+"/", "", -1)
 		name = strings.Replace(runtime.FuncForPC(pc).Name(), "github.com/minio/minio/cmd.", "", -1)
 	} else {
-		fn = strings.Replace(file, filepath.ToSlash(GOPATH)+"/src/", "", -1)
+		fn = strings.Replace(file, path.Join(filepath.ToSlash(GOPATH)+"/src/")+"/", "", -1)
 		name = strings.Replace(runtime.FuncForPC(pc).Name(), "github.com/minio/minio/cmd.", "", -1)
 	}
 	return fmt.Sprintf("%s [%s:%d]", name, fn, line)

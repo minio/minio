@@ -265,25 +265,6 @@ func checkDuplicateQueueConfigs(configs []queueConfig) APIErrorCode {
 	return ErrNone
 }
 
-// Check all the topic configs for any duplicates.
-func checkDuplicateTopicConfigs(configs []topicConfig) APIErrorCode {
-	var topicConfigARNS []string
-
-	// Navigate through each configs and count the entries.
-	for _, config := range configs {
-		topicConfigARNS = append(topicConfigARNS, config.TopicARN)
-	}
-
-	// Check if there are any duplicate counts.
-	if err := checkDuplicates(topicConfigARNS); err != nil {
-		errorIf(err, "Invalid topic configs found.")
-		return ErrOverlappingConfigs
-	}
-
-	// Success.
-	return ErrNone
-}
-
 // Validates all the bucket notification configuration for their validity,
 // if one of the config is malformed or has invalid data it is rejected.
 // Configuration is never applied partially.
@@ -292,21 +273,10 @@ func validateNotificationConfig(nConfig notificationConfig) APIErrorCode {
 	if s3Error := validateQueueConfigs(nConfig.QueueConfigs); s3Error != ErrNone {
 		return s3Error
 	}
-	// Validate all topic configs.
-	if s3Error := validateTopicConfigs(nConfig.TopicConfigs); s3Error != ErrNone {
-		return s3Error
-	}
 
 	// Check for duplicate queue configs.
 	if len(nConfig.QueueConfigs) > 1 {
 		if s3Error := checkDuplicateQueueConfigs(nConfig.QueueConfigs); s3Error != ErrNone {
-			return s3Error
-		}
-	}
-
-	// Check for duplicate topic configs.
-	if len(nConfig.TopicConfigs) > 1 {
-		if s3Error := checkDuplicateTopicConfigs(nConfig.TopicConfigs); s3Error != ErrNone {
 			return s3Error
 		}
 	}

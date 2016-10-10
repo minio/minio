@@ -18,129 +18,12 @@ package cmd
 
 import (
 	"fmt"
+	"net"
 	"reflect"
+	"strconv"
 	"testing"
 	"time"
 )
-
-// Tests event notify.
-func TestEventNotify(t *testing.T) {
-	ExecObjectLayerTest(t, testEventNotify)
-}
-
-func testEventNotify(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	bucketName := getRandomBucketName()
-
-	// initialize the server and obtain the credentials and root.
-	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
-	if err != nil {
-		t.Fatalf("Init Test config failed")
-	}
-	// remove the root folder after the test ends.
-	defer removeAll(rootPath)
-
-	if err := initEventNotifier(obj); err != nil {
-		t.Fatal("Unexpected error:", err)
-	}
-
-	// Notify object created event.
-	eventNotify(eventData{
-		Type:   ObjectCreatedPost,
-		Bucket: bucketName,
-		ObjInfo: ObjectInfo{
-			Bucket: bucketName,
-			Name:   "object1",
-		},
-		ReqParams: map[string]string{
-			"sourceIPAddress": "localhost:1337",
-		},
-	})
-
-	if err := globalEventNotifier.SetBucketNotificationConfig(bucketName, nil); err != errInvalidArgument {
-		t.Errorf("Expected error %s, got %s", errInvalidArgument, err)
-	}
-
-	if err := globalEventNotifier.SetBucketNotificationConfig(bucketName, &notificationConfig{}); err != nil {
-		t.Errorf("Expected error to be nil, got %s", err)
-	}
-
-	nConfig := globalEventNotifier.GetBucketNotificationConfig(bucketName)
-	if nConfig == nil {
-		t.Errorf("Notification expected to be set, but notification not set.")
-	}
-
-	if !reflect.DeepEqual(nConfig, &notificationConfig{}) {
-		t.Errorf("Mismatching notification configs.")
-	}
-
-	// Notify object created event.
-	eventNotify(eventData{
-		Type:   ObjectRemovedDelete,
-		Bucket: bucketName,
-		ObjInfo: ObjectInfo{
-			Bucket: bucketName,
-			Name:   "object1",
-		},
-		ReqParams: map[string]string{
-			"sourceIPAddress": "localhost:1337",
-		},
-	})
-}
-
-// Tests various forms of inititalization of event notifier.
-func TestInitEventNotifier(t *testing.T) {
-	disks, err := getRandomDisks(1)
-	if err != nil {
-		t.Fatal("Unable to create directories for FS backend. ", err)
-	}
-	defer removeRoots(disks)
-	fs, _, err := initObjectLayer(disks, nil)
-	if err != nil {
-		t.Fatal("Unable to initialize FS backend.", err)
-	}
-	nDisks := 16
-	disks, err = getRandomDisks(nDisks)
-	if err != nil {
-		t.Fatal("Unable to create directories for XL backend. ", err)
-	}
-	defer removeRoots(disks)
-	xl, _, err := initObjectLayer(disks, nil)
-	if err != nil {
-		t.Fatal("Unable to initialize XL backend.", err)
-	}
-
-	// Collection of test cases for inititalizing event notifier.
-	testCases := []struct {
-		objAPI  ObjectLayer
-		configs map[string]*notificationConfig
-		err     error
-	}{
-		// Test 1 - invalid arguments.
-		{
-			objAPI: nil,
-			err:    errInvalidArgument,
-		},
-		// Test 2 - valid FS object layer but no bucket notifications.
-		{
-			objAPI: fs,
-			err:    nil,
-		},
-		// Test 3 - valid XL object layer but no bucket notifications.
-		{
-			objAPI: xl,
-			err:    nil,
-		},
-	}
-
-	// Validate if event notifier is properly initialized.
-	for i, testCase := range testCases {
-		err = initEventNotifier(testCase.objAPI)
-		if err != testCase.err {
-			t.Errorf("Test %d: Expected %s, but got: %s", i+1, testCase.err, err)
-		}
-	}
-}
 
 // Test InitEventNotifier with faulty disks
 func TestInitEventNotifierFaultyDisks(t *testing.T) {
@@ -272,78 +155,231 @@ func TestInitEventNotifierWithRedis(t *testing.T) {
 	}
 }
 
-// TestListenBucketNotification - test Listen Bucket Notification process
+type TestPeerRPCServerData struct {
+	serverType string
+	testServer TestServer
+}
+
+func (s *TestPeerRPCServerData) Setup(t *testing.T) {
+	s.testServer = StartTestPeersRPCServer(t, s.serverType)
+
+	// setup port and minio addr
+	_, portStr, err := net.SplitHostPort(s.testServer.Server.Listener.Addr().String())
+	if err != nil {
+		t.Fatalf("Initialisation error: %v", err)
+	}
+	globalMinioPort, err = strconv.Atoi(portStr)
+	if err != nil {
+		t.Fatalf("Initialisation error: %v", err)
+	}
+	globalMinioAddr = getLocalAddress(
+		s.testServer.SrvCmdCfg,
+	)
+
+	// initialize the peer client(s)
+	initGlobalS3Peers(s.testServer.Disks)
+}
+
+func (s *TestPeerRPCServerData) TearDown() {
+	s.testServer.Stop()
+	_ = removeAll(s.testServer.Root)
+	for _, d := range s.testServer.Disks {
+		_ = removeAll(d)
+	}
+}
+
+func TestSetNGetBucketNotification(t *testing.T) {
+	s := TestPeerRPCServerData{serverType: "XL"}
+
+	// setup and teardown
+	s.Setup(t)
+	defer s.TearDown()
+
+	bucketName := getRandomBucketName()
+
+	obj := s.testServer.Obj
+	if err := initEventNotifier(obj); err != nil {
+		t.Fatal("Unexpected error:", err)
+	}
+
+	globalEventNotifier.SetBucketNotificationConfig(bucketName, &notificationConfig{})
+	nConfig := globalEventNotifier.GetBucketNotificationConfig(bucketName)
+	if nConfig == nil {
+		t.Errorf("Notification expected to be set, but notification not set.")
+	}
+
+	if !reflect.DeepEqual(nConfig, &notificationConfig{}) {
+		t.Errorf("Mismatching notification configs.")
+	}
+}
+
+func TestInitEventNotifier(t *testing.T) {
+	s := TestPeerRPCServerData{serverType: "XL"}
+
+	// setup and teardown
+	s.Setup(t)
+	defer s.TearDown()
+
+	// test if empty object layer arg. returns expected error.
+	if err := initEventNotifier(nil); err == nil || err != errInvalidArgument {
+		t.Fatalf("initEventNotifier returned unexpected error value - %v", err)
+	}
+
+	obj := s.testServer.Obj
+	bucketName := getRandomBucketName()
+	// declare sample configs
+	filterRules := []filterRule{
+		{
+			Name:  "prefix",
+			Value: "minio",
+		},
+		{
+			Name:  "suffix",
+			Value: "*.jpg",
+		},
+	}
+	sampleSvcCfg := ServiceConfig{
+		[]string{"s3:ObjectRemoved:*", "s3:ObjectCreated:*"},
+		filterStruct{
+			keyFilter{filterRules},
+		},
+		"1",
+	}
+	sampleNotifCfg := notificationConfig{
+		QueueConfigs: []queueConfig{
+			{
+				ServiceConfig: sampleSvcCfg,
+				QueueARN:      "testqARN",
+			},
+		},
+	}
+	sampleListenCfg := []listenerConfig{
+		{
+			TopicConfig: topicConfig{ServiceConfig: sampleSvcCfg,
+				TopicARN: "testlARN"},
+			TargetServer: globalMinioAddr,
+		},
+	}
+
+	// write without an existing bucket and check
+	if err := persistNotificationConfig(bucketName, &notificationConfig{}, obj); err == nil {
+		t.Fatalf("Did not get an error though bucket does not exist!")
+	}
+	// no bucket write check for listener
+	if err := persistListenerConfig(bucketName, []listenerConfig{}, obj); err == nil {
+		t.Fatalf("Did not get an error though bucket does not exist!")
+	}
+
+	// create bucket
+	if err := obj.MakeBucket(bucketName); err != nil {
+		t.Fatal("Unexpected error:", err)
+	}
+
+	// bucket is created, now writing should not give errors.
+	if err := persistNotificationConfig(bucketName, &sampleNotifCfg, obj); err != nil {
+		t.Fatal("Unexpected error:", err)
+	}
+
+	if err := persistListenerConfig(bucketName, sampleListenCfg, obj); err != nil {
+		t.Fatal("Unexpected error:", err)
+	}
+
+	// test event notifier init
+	if err := initEventNotifier(obj); err != nil {
+		t.Fatal("Unexpected error:", err)
+	}
+
+	// fetch bucket configs and verify
+	ncfg := globalEventNotifier.GetBucketNotificationConfig(bucketName)
+	if ncfg == nil {
+		t.Error("Bucket notification was not present for ", bucketName)
+	}
+	if len(ncfg.QueueConfigs) != 1 || ncfg.QueueConfigs[0].QueueARN != "testqARN" {
+		t.Error("Unexpected bucket notification found - ", *ncfg)
+	}
+	if globalEventNotifier.GetExternalTarget("testqARN") != nil {
+		t.Error("A logger was not expected to be found as it was not enabled in the config.")
+	}
+
+	lcfg := globalEventNotifier.GetBucketListenerConfig(bucketName)
+	if lcfg == nil {
+		t.Error("Bucket listener was not present for ", bucketName)
+	}
+	if len(lcfg) != 1 || lcfg[0].TargetServer != globalMinioAddr || lcfg[0].TopicConfig.TopicARN != "testlARN" {
+		t.Error("Unexpected listener config found - ", lcfg[0])
+	}
+	if globalEventNotifier.GetInternalTarget("testlARN") == nil {
+		t.Error("A listen logger was not found.")
+	}
+}
+
 func TestListenBucketNotification(t *testing.T) {
+	s := TestPeerRPCServerData{serverType: "XL"}
+
+	// setup and teardown
+	s.Setup(t)
+	defer s.TearDown()
+
+	// test initialisation
+	obj := s.testServer.Obj
 
 	bucketName := "bucket"
 	objectName := "object"
-
-	// Prepare for tests
-	// Create fs backend
-	rootPath, err := newTestConfig("us-east-1")
-	if err != nil {
-		t.Fatalf("Init Test config failed")
-	}
-	// remove the root folder after the test ends.
-	defer removeAll(rootPath)
-
-	disk, err := getRandomDisks(1)
-	defer removeAll(disk[0])
-	if err != nil {
-		t.Fatal("Unable to create directories for FS backend. ", err)
-	}
-	obj, _, err := initObjectLayer(disk, nil)
-	if err != nil {
-		t.Fatal("Unable to initialize FS backend.", err)
-	}
 
 	// Create the bucket to listen on
 	if err := obj.MakeBucket(bucketName); err != nil {
 		t.Fatal("Unexpected error:", err)
 	}
 
-	listenARN := "arn:minio:sns:us-east-1:1:listen"
-	queueARN := "arn:minio:sqs:us-east-1:1:redis"
+	listenARN := "arn:minio:sns:us-east-1:1:listen-" + globalMinioAddr
+	lcfg := listenerConfig{
+		topicConfig{
+			ServiceConfig{
+				[]string{"s3:ObjectRemoved:*", "s3:ObjectCreated:*"},
+				filterStruct{},
+				"0",
+			},
+			listenARN,
+		},
+		globalMinioAddr,
+	}
 
-	fs := obj.(fsObjects)
-	storage := fs.storage.(*posix)
-
-	// Create and store notification.xml with listen and queue notification configured
-	notificationXML := "<NotificationConfiguration>"
-	notificationXML += "<TopicConfiguration><Event>s3:ObjectRemoved:*</Event><Event>s3:ObjectRemoved:*</Event><Topic>" + listenARN + "</Topic></TopicConfiguration>"
-	notificationXML += "<QueueConfiguration><Event>s3:ObjectRemoved:*</Event><Event>s3:ObjectRemoved:*</Event><Queue>" + queueARN + "</Queue></QueueConfiguration>"
-	notificationXML += "</NotificationConfiguration>"
-	if err := storage.AppendFile(minioMetaBucket, bucketConfigPrefix+"/"+bucketName+"/"+bucketNotificationConfig, []byte(notificationXML)); err != nil {
-		t.Fatal("Unexpected error:", err)
+	// write listener config to storage layer
+	lcfgs := []listenerConfig{lcfg}
+	if err := persistListenerConfig(bucketName, lcfgs, obj); err != nil {
+		t.Fatalf("Test Setup error: %v", err)
 	}
 
 	// Init event notifier
-	if err := initEventNotifier(fs); err != nil {
+	if err := initEventNotifier(obj); err != nil {
 		t.Fatal("Unexpected error:", err)
 	}
 
 	// Check if the config is loaded
-	notificationCfg := globalEventNotifier.GetBucketNotificationConfig(bucketName)
-	if notificationCfg == nil {
-		t.Fatal("Cannot load bucket notification config")
+	listenerCfg := globalEventNotifier.GetBucketListenerConfig(bucketName)
+	if listenerCfg == nil {
+		t.Fatal("Cannot load bucket listener config")
 	}
-	if len(notificationCfg.TopicConfigs) != 1 || len(notificationCfg.QueueConfigs) != 1 {
-		t.Fatal("Notification config is not correctly loaded. Exactly one topic and one queue config are expected")
+	if len(listenerCfg) != 1 {
+		t.Fatal("Listener config is not correctly loaded. Exactly one listener config is expected")
 	}
 
-	// Check if topic ARN is enabled
-	if notificationCfg.TopicConfigs[0].TopicARN != listenARN {
-		t.Fatal("SNS listen is not configured.")
+	// Check if topic ARN is correct
+	if listenerCfg[0].TopicConfig.TopicARN != listenARN {
+		t.Fatal("Configured topic ARN is incorrect.")
 	}
 
 	// Create a new notification event channel.
 	nEventCh := make(chan []NotificationEvent)
 	// Close the listener channel.
 	defer close(nEventCh)
-	// Set sns target.
-	globalEventNotifier.SetSNSTarget(listenARN, nEventCh)
-	// Remove sns listener after the writer has closed or the client disconnected.
-	defer globalEventNotifier.RemoveSNSTarget(listenARN, nEventCh)
+	// Add events channel for listener.
+	if err := globalEventNotifier.AddListenerChan(listenARN, nEventCh); err != nil {
+		t.Fatalf("Test Setup error: %v", err)
+	}
+	// Remove listen channel after the writer has closed or the
+	// client disconnected.
+	defer globalEventNotifier.RemoveListenerChan(listenARN)
 
 	// Fire an event notification
 	go eventNotify(eventData{
@@ -370,73 +406,90 @@ func TestListenBucketNotification(t *testing.T) {
 			t.Fatalf("Received wrong object name in notification, expected %s, received %s", n[0].S3.Object.Key, objectName)
 		}
 		break
-	case <-time.After(30 * time.Second):
+	case <-time.After(3 * time.Second):
 		break
 	}
+
 }
 
-func testAddTopicConfig(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	root, cErr := newTestConfig("us-east-1")
-	if cErr != nil {
-		t.Fatalf("[%s] Failed to initialize test config: %v", instanceType, cErr)
-	}
-	defer removeAll(root)
+func TestAddRemoveBucketListenerConfig(t *testing.T) {
+	s := TestPeerRPCServerData{serverType: "XL"}
 
+	// setup and teardown
+	s.Setup(t)
+	defer s.TearDown()
+
+	// test code
+	obj := s.testServer.Obj
 	if err := initEventNotifier(obj); err != nil {
-		t.Fatalf("[%s] : Failed to initialize event notifier: %v", instanceType, err)
+		t.Fatalf("Failed to initialize event notifier: %v", err)
 	}
 
 	// Make a bucket to store topicConfigs.
 	randBucket := getRandomBucketName()
 	if err := obj.MakeBucket(randBucket); err != nil {
-		t.Fatalf("[%s] : Failed to make bucket %s", instanceType, randBucket)
+		t.Fatalf("Failed to make bucket %s", randBucket)
 	}
 
 	// Add a topicConfig to an empty notificationConfig.
 	accountID := fmt.Sprintf("%d", time.Now().UTC().UnixNano())
-	accountARN := "arn:minio:sns:" + serverConfig.GetRegion() + accountID + ":listen"
-	var filterRules []filterRule
-	filterRules = append(filterRules, filterRule{
-		Name:  "prefix",
-		Value: "minio",
-	})
-	filterRules = append(filterRules, filterRule{
-		Name:  "suffix",
-		Value: "*.jpg",
-	})
+	accountARN := fmt.Sprintf(
+		"arn:minio:sqs:%s:%s:listen-%s",
+		serverConfig.GetRegion(),
+		accountID,
+		globalMinioAddr,
+	)
 
-	// Make topic configuration corresponding to this ListenBucketNotification request.
-	sampleTopicCfg := &topicConfig{
-		TopicARN: accountARN,
-		serviceConfig: serviceConfig{
-			Filter: struct {
-				Key keyFilter `xml:"S3Key,omitempty"`
-			}{
-				Key: keyFilter{
-					FilterRules: filterRules,
-				},
-			},
-			ID: "sns-" + accountID,
+	// Make topic configuration
+	filterRules := []filterRule{
+		{
+			Name:  "prefix",
+			Value: "minio",
+		},
+		{
+			Name:  "suffix",
+			Value: "*.jpg",
 		},
 	}
+	sampleTopicCfg := topicConfig{
+		TopicARN: accountARN,
+		ServiceConfig: ServiceConfig{
+			[]string{"s3:ObjectRemoved:*", "s3:ObjectCreated:*"},
+			filterStruct{
+				keyFilter{filterRules},
+			},
+			"sns-" + accountID,
+		},
+	}
+	sampleListenerCfg := &listenerConfig{
+		TopicConfig:  sampleTopicCfg,
+		TargetServer: globalMinioAddr,
+	}
 	testCases := []struct {
-		topicCfg    *topicConfig
+		lCfg        *listenerConfig
 		expectedErr error
 	}{
-		{sampleTopicCfg, nil},
+		{sampleListenerCfg, nil},
 		{nil, errInvalidArgument},
-		{sampleTopicCfg, nil},
 	}
 
 	for i, test := range testCases {
-		err := globalEventNotifier.AddTopicConfig(randBucket, test.topicCfg)
+		err := AddBucketListenerConfig(randBucket, test.lCfg, obj)
 		if err != test.expectedErr {
-			t.Errorf("Test %d: %s failed with error %v, expected to fail with %v",
-				i+1, instanceType, err, test.expectedErr)
+			t.Errorf(
+				"Test %d: Failed with error %v, expected to fail with %v",
+				i+1, err, test.expectedErr,
+			)
 		}
 	}
-}
 
-func TestAddTopicConfig(t *testing.T) {
-	ExecObjectLayerTest(t, testAddTopicConfig)
+	// test remove listener actually removes a listener
+	RemoveBucketListenerConfig(randBucket, sampleListenerCfg, obj)
+	// since it does not return errors we fetch the config and
+	// check
+	lcSlice := globalEventNotifier.GetBucketListenerConfig(randBucket)
+	if len(lcSlice) != 0 {
+		t.Errorf("Remove Listener Config Test: did not remove listener config - %v",
+			lcSlice)
+	}
 }

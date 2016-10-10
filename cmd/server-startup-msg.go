@@ -83,10 +83,10 @@ func printEventNotifiers() {
 		return
 	}
 	arnMsg := colorBlue("SQS ARNs: ")
-	if len(globalEventNotifier.queueTargets) == 0 {
+	if len(globalEventNotifier.external.targets) == 0 {
 		arnMsg += colorBold(fmt.Sprintf(getFormatStr(len("<none>"), 1), "<none>"))
 	}
-	for queueArn := range globalEventNotifier.queueTargets {
+	for queueArn := range globalEventNotifier.external.targets {
 		arnMsg += colorBold(fmt.Sprintf(getFormatStr(len(queueArn), 1), queueArn))
 	}
 	console.Println(arnMsg)

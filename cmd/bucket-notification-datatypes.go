@@ -32,30 +32,32 @@ type keyFilter struct {
 	FilterRules []filterRule `xml:"FilterRule,omitempty"`
 }
 
-// Common elements of service notification.
-type serviceConfig struct {
-	Events []string `xml:"Event"`
-	Filter struct {
-		Key keyFilter `xml:"S3Key,omitempty"`
-	}
-	ID string `xml:"Id"`
+type filterStruct struct {
+	Key keyFilter `xml:"S3Key,omitempty" json:"S3Key,omitempty"`
+}
+
+// ServiceConfig - Common elements of service notification.
+type ServiceConfig struct {
+	Events []string     `xml:"Event" json:"Event"`
+	Filter filterStruct `xml:"Filter" json:"Filter"`
+	ID     string       `xml:"Id" json:"Id"`
 }
 
 // Queue SQS configuration.
 type queueConfig struct {
-	serviceConfig
+	ServiceConfig
 	QueueARN string `xml:"Queue"`
 }
 
 // Topic SNS configuration, this is a compliance field not used by minio yet.
 type topicConfig struct {
-	serviceConfig
-	TopicARN string `xml:"Topic"`
+	ServiceConfig
+	TopicARN string `xml:"Topic" json:"Topic"`
 }
 
 // Lambda function configuration, this is a compliance field not used by minio yet.
 type lambdaConfig struct {
-	serviceConfig
+	ServiceConfig
 	LambdaARN string `xml:"CloudFunction"`
 }
 
@@ -64,8 +66,14 @@ type lambdaConfig struct {
 type notificationConfig struct {
 	XMLName       xml.Name       `xml:"NotificationConfiguration"`
 	QueueConfigs  []queueConfig  `xml:"QueueConfiguration"`
-	TopicConfigs  []topicConfig  `xml:"TopicConfiguration"`
 	LambdaConfigs []lambdaConfig `xml:"CloudFunctionConfiguration"`
+}
+
+// listenerConfig structure represents run-time notification
+// configuration for live listeners
+type listenerConfig struct {
+	TopicConfig  topicConfig `json:"TopicConfiguration"`
+	TargetServer string      `json:"TargetServer"`
 }
 
 // Internal error used to signal notifications not set.
