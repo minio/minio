@@ -19,6 +19,7 @@ package cmd
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -245,7 +246,6 @@ func TestPutBucketPolicyHandler(t *testing.T) {
 }
 
 // testPutBucketPolicyHandler - Test for Bucket policy end point.
-// TODO: Add exhaustive cases with various combination of statement fields.
 func testPutBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
 	credentials credential, t *testing.T) {
 	initBucketPolicies(obj)
@@ -256,23 +256,133 @@ func testPutBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 	// test cases with sample input and expected output.
 	testCases := []struct {
 		bucketName string
-		accessKey  string
-		secretKey  string
+		// bucket policy to be set,
+		// set as request body.
+		bucketPolicyReader io.ReadSeeker
+		// length in bytes of the bucket policy being set.
+		policyLen int
+		accessKey string
+		secretKey string
 		// expected Response.
 		expectedRespStatus int
 	}{
-		{bucketName, credentials.AccessKeyID, credentials.SecretAccessKey, http.StatusNoContent},
+		// Test case - 1.
+		{
+			bucketName:         bucketName,
+			bucketPolicyReader: bytes.NewReader([]byte(fmt.Sprintf(bucketPolicyTemplate, bucketName, bucketName))),
+
+			policyLen:          len(fmt.Sprintf(bucketPolicyTemplate, bucketName, bucketName)),
+			accessKey:          credentials.AccessKeyID,
+			secretKey:          credentials.SecretAccessKey,
+			expectedRespStatus: http.StatusNoContent,
+		},
+		// Test case - 2.
+		// Setting the content length to be more than max allowed size.
+		// Expecting StatusBadRequest (400).
+		{
+			bucketName:         bucketName,
+			bucketPolicyReader: bytes.NewReader([]byte(fmt.Sprintf(bucketPolicyTemplate, bucketName, bucketName))),
+
+			policyLen:          maxAccessPolicySize + 1,
+			accessKey:          credentials.AccessKeyID,
+			secretKey:          credentials.SecretAccessKey,
+			expectedRespStatus: http.StatusBadRequest,
+		},
+		// Test case - 3.
+		// Case with content-length of the HTTP request set to 0.
+		// Expecting the HTTP response status to be StatusLengthRequired (411).
+		{
+			bucketName:         bucketName,
+			bucketPolicyReader: bytes.NewReader([]byte(fmt.Sprintf(bucketPolicyTemplate, bucketName, bucketName))),
+
+			policyLen:          0,
+			accessKey:          credentials.AccessKeyID,
+			secretKey:          credentials.SecretAccessKey,
+			expectedRespStatus: http.StatusLengthRequired,
+		},
+		// Test case - 4.
+		// setting the readSeeker to `nil`, bucket policy parser will fail.
+		{
+			bucketName:         bucketName,
+			bucketPolicyReader: nil,
+
+			policyLen:          10,
+			accessKey:          credentials.AccessKeyID,
+			secretKey:          credentials.SecretAccessKey,
+			expectedRespStatus: http.StatusBadRequest,
+		},
+		// Test case - 5.
+		// setting the keys to be empty.
+		// Expecting statusForbidden.
+		{
+			bucketName:         bucketName,
+			bucketPolicyReader: nil,
+
+			policyLen:          10,
+			accessKey:          "",
+			secretKey:          "",
+			expectedRespStatus: http.StatusForbidden,
+		},
+		// Test case - 6.
+		// setting an invalid bucket policy.
+		// the bucket policy parser will fail.
+		{
+			bucketName:         "non-existent-bucket",
+			bucketPolicyReader: bytes.NewReader([]byte("dummy-policy")),
+
+			policyLen:          len([]byte("dummy-policy")),
+			accessKey:          credentials.AccessKeyID,
+			secretKey:          credentials.SecretAccessKey,
+			expectedRespStatus: http.StatusBadRequest,
+		},
+		// Test case - 7.
+		// Different bucket name used in the HTTP request and the policy string.
+		// checkBucketPolicyResources should fail.
+		{
+			bucketName:         "different-bucket",
+			bucketPolicyReader: bytes.NewReader([]byte(fmt.Sprintf(bucketPolicyTemplate, bucketName, bucketName))),
+
+			policyLen:          len(fmt.Sprintf(bucketPolicyTemplate, bucketName, bucketName)),
+			accessKey:          credentials.AccessKeyID,
+			secretKey:          credentials.SecretAccessKey,
+			expectedRespStatus: http.StatusBadRequest,
+		},
+		// Test case - 8.
+		// non-existent bucket is used.
+		// writing BucketPolicy should fail.
+		// should result is 500 InternalServerError.
+		{
+			bucketName:         "non-existent-bucket",
+			bucketPolicyReader: bytes.NewReader([]byte(fmt.Sprintf(bucketPolicyTemplate, "non-existent-bucket", "non-existent-bucket"))),
+
+			policyLen:          len(fmt.Sprintf(bucketPolicyTemplate, bucketName, bucketName)),
+			accessKey:          credentials.AccessKeyID,
+			secretKey:          credentials.SecretAccessKey,
+			expectedRespStatus: http.StatusInternalServerError,
+		},
+		// Test case - 9.
+		// invalid bucket name is used.
+		// writing BucketPolicy should fail.
+		// should result is 400 StatusBadRequest.
+		{
+			bucketName:         ".invalid-bucket",
+			bucketPolicyReader: bytes.NewReader([]byte(fmt.Sprintf(bucketPolicyTemplate, ".invalid-bucket", ".invalid-bucket"))),
+
+			policyLen:          len(fmt.Sprintf(bucketPolicyTemplate, bucketName, bucketName)),
+			accessKey:          credentials.AccessKeyID,
+			secretKey:          credentials.SecretAccessKey,
+			expectedRespStatus: http.StatusBadRequest,
+		},
 	}
 
 	// Iterating over the test cases, calling the function under test and asserting the response.
 	for i, testCase := range testCases {
 		// obtain the put bucket policy request body.
-		bucketPolicyStr := fmt.Sprintf(bucketPolicyTemplate, testCase.bucketName, testCase.bucketName)
 		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
 		recV4 := httptest.NewRecorder()
 		// construct HTTP request for PUT bucket policy endpoint.
 		reqV4, err := newTestSignedRequestV4("PUT", getPutPolicyURL("", testCase.bucketName),
-			int64(len(bucketPolicyStr)), bytes.NewReader([]byte(bucketPolicyStr)), testCase.accessKey, testCase.secretKey)
+			int64(testCase.policyLen), testCase.bucketPolicyReader, testCase.accessKey, testCase.secretKey)
 		if err != nil {
 			t.Fatalf("Test %d: %s: Failed to create HTTP request for PutBucketPolicyHandler: <ERROR> %v", i+1, instanceType, err)
 		}
@@ -286,7 +396,7 @@ func testPutBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 		recV2 := httptest.NewRecorder()
 		// construct HTTP request for PUT bucket policy endpoint.
 		reqV2, err := newTestSignedRequestV2("PUT", getPutPolicyURL("", testCase.bucketName),
-			int64(len(bucketPolicyStr)), bytes.NewReader([]byte(bucketPolicyStr)), testCase.accessKey, testCase.secretKey)
+			int64(testCase.policyLen), testCase.bucketPolicyReader, testCase.accessKey, testCase.secretKey)
 		if err != nil {
 			t.Fatalf("Test %d: %s: Failed to create HTTP request for PutBucketPolicyHandler: <ERROR> %v", i+1, instanceType, err)
 		}
@@ -338,7 +448,6 @@ func TestGetBucketPolicyHandler(t *testing.T) {
 }
 
 // testGetBucketPolicyHandler - Test for end point which fetches the access policy json of the given bucket.
-// TODO: Add exhaustive cases with various combination of statement fields.
 func testGetBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
 	credentials credential, t *testing.T) {
 	// initialize bucket policy.
@@ -402,7 +511,33 @@ func testGetBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 		expectedBucketPolicy string
 		expectedRespStatus   int
 	}{
-		{bucketName, credentials.AccessKeyID, credentials.SecretAccessKey, bucketPolicyTemplate, http.StatusOK},
+		// Test case - 1.
+		// Case which valid inputs, expected to return success status of 200OK.
+		{
+			bucketName:           bucketName,
+			accessKey:            credentials.AccessKeyID,
+			secretKey:            credentials.SecretAccessKey,
+			expectedBucketPolicy: bucketPolicyTemplate,
+			expectedRespStatus:   http.StatusOK,
+		},
+		// Test case - 2.
+		// Case with non-existent bucket name.
+		{
+			bucketName:           "non-existent-bucket",
+			accessKey:            credentials.AccessKeyID,
+			secretKey:            credentials.SecretAccessKey,
+			expectedBucketPolicy: bucketPolicyTemplate,
+			expectedRespStatus:   http.StatusInternalServerError,
+		},
+		// Test case - 3.
+		// Case with invalid bucket name.
+		{
+			bucketName:           ".invalid-bucket-name",
+			accessKey:            credentials.AccessKeyID,
+			secretKey:            credentials.SecretAccessKey,
+			expectedBucketPolicy: "",
+			expectedRespStatus:   http.StatusBadRequest,
+		},
 	}
 	// Iterating over the cases, fetching the policy and validating the response.
 	for i, testCase := range testCases {
@@ -429,9 +564,12 @@ func testGetBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 		if err != nil {
 			t.Fatalf("Test %d: %s: Failed parsing response body: <ERROR> %v", i+1, instanceType, err)
 		}
-		// Verify whether the bucket policy fetched is same as the one inserted.
-		if expectedBucketPolicyStr != string(bucketPolicyReadBuf) {
-			t.Errorf("Test %d: %s: Bucket policy differs from expected value.", i+1, instanceType)
+
+		if recV4.Code != testCase.expectedRespStatus {
+			// Verify whether the bucket policy fetched is same as the one inserted.
+			if expectedBucketPolicyStr != string(bucketPolicyReadBuf) {
+				t.Errorf("Test %d: %s: Bucket policy differs from expected value.", i+1, instanceType)
+			}
 		}
 		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
 		recV2 := httptest.NewRecorder()
@@ -453,9 +591,11 @@ func testGetBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 		if err != nil {
 			t.Fatalf("Test %d: %s: Failed parsing response body: <ERROR> %v", i+1, instanceType, err)
 		}
-		// Verify whether the bucket policy fetched is same as the one inserted.
-		if expectedBucketPolicyStr != string(bucketPolicyReadBuf) {
-			t.Errorf("Test %d: %s: Bucket policy differs from expected value.", i+1, instanceType)
+		if recV2.Code == http.StatusOK {
+			// Verify whether the bucket policy fetched is same as the one inserted.
+			if expectedBucketPolicyStr != string(bucketPolicyReadBuf) {
+				t.Errorf("Test %d: %s: Bucket policy differs from expected value.", i+1, instanceType)
+			}
 		}
 	}
 
@@ -489,7 +629,6 @@ func testGetBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 	// execute the object layer set to `nil` test.
 	// `ExecObjectLayerAPINilTest` manages the operation.
 	ExecObjectLayerAPINilTest(t, nilBucket, "", instanceType, apiRouter, nilReq)
-
 }
 
 // Wrapper for calling Delete Bucket Policy HTTP handler tests for both XL multiple disks and single node setup.
@@ -498,7 +637,6 @@ func TestDeleteBucketPolicyHandler(t *testing.T) {
 }
 
 // testDeleteBucketPolicyHandler - Test for Delete bucket policy end point.
-// TODO: Add exhaustive cases with various combination of statement fields.
 func testDeleteBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
 	credentials credential, t *testing.T) {
 	// initialize bucket policy.
@@ -548,7 +686,12 @@ func testDeleteBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName str
 		// expected Response.
 		expectedRespStatus int
 	}{
-		{bucketName, credentials.AccessKeyID, credentials.SecretAccessKey, http.StatusNoContent},
+		{
+			bucketName:         bucketName,
+			accessKey:          credentials.AccessKeyID,
+			secretKey:          credentials.SecretAccessKey,
+			expectedRespStatus: http.StatusNoContent,
+		},
 	}
 
 	// Iterating over the cases and writing the bucket policy.
@@ -577,10 +720,32 @@ func testDeleteBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName str
 		bucketName string
 		accessKey  string
 		secretKey  string
-		// expected Response.
+		// expected response.
 		expectedRespStatus int
 	}{
-		{bucketName, credentials.AccessKeyID, credentials.SecretAccessKey, http.StatusNoContent},
+		// Test case - 1.
+		{
+			bucketName:         bucketName,
+			accessKey:          credentials.AccessKeyID,
+			secretKey:          credentials.SecretAccessKey,
+			expectedRespStatus: http.StatusNoContent,
+		},
+		// Test case - 2.
+		// Case with non-existent-bucket.
+		{
+			bucketName:         "non-existent-bucket",
+			accessKey:          credentials.AccessKeyID,
+			secretKey:          credentials.SecretAccessKey,
+			expectedRespStatus: http.StatusInternalServerError,
+		},
+		// Test case - 3.
+		// Case with invalid bucket name.
+		{
+			bucketName:         ".invalid-bucket-name",
+			accessKey:          credentials.AccessKeyID,
+			secretKey:          credentials.SecretAccessKey,
+			expectedRespStatus: http.StatusBadRequest,
+		},
 	}
 	// Iterating over the cases and deleting the bucket policy and then asserting response.
 	for i, testCase := range testCases {
