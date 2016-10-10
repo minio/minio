@@ -40,21 +40,50 @@ func testLockEquality(lriLeft, lriRight []lockRequesterInfo) bool {
 	return true
 }
 
-// Test Lock functionality
-func TestLockRpcServerLock(t *testing.T) {
+// Helper function to create a lock server for testing
+func createLockTestServer(t *testing.T) (*lockServer, string, time.Time) {
 
-	tsValidateArgs := time.Now().UTC()
+	testPath, err := newTestConfig("us-east-1")
+	if err != nil {
+		t.Fatalf("unable initialize config file, %s", err)
+	}
+	defer removeAll(testPath)
+
+	jwt, err := newJWT(defaultJWTExpiry)
+	if err != nil {
+		t.Fatalf("unable to get new JWT, %s", err)
+	}
+
+	err = jwt.Authenticate(serverConfig.GetCredential().AccessKeyID, serverConfig.GetCredential().SecretAccessKey)
+	if err != nil {
+		t.Fatalf("unable for JWT to authenticate, %s", err)
+	}
+
+	token, err := jwt.GenerateToken(serverConfig.GetCredential().AccessKeyID)
+	if err != nil {
+		t.Fatalf("unable for JWT to generate token, %s", err)
+	}
+
+	timestamp := time.Now().UTC()
 	locker := &lockServer{
 		rpcPath:   "rpc-path",
 		mutex:     sync.Mutex{},
 		lockMap:   make(map[string][]lockRequesterInfo),
-		timestamp: tsValidateArgs,
+		timestamp: timestamp,
 	}
+
+	return locker, token, timestamp
+}
+
+// Test Lock functionality
+func TestLockRpcServerLock(t *testing.T) {
+
+	locker, token, timestamp := createLockTestServer(t)
 
 	la := LockArgs{
 		Name:      "name",
-		Token:     "token",
-		Timestamp: tsValidateArgs,
+		Token:     token,
+		Timestamp: timestamp,
 		Node:      "node",
 		RPCPath:   "rpc-path",
 		UID:       "0123-4567",
@@ -72,10 +101,10 @@ func TestLockRpcServerLock(t *testing.T) {
 			gotLri, _ := locker.lockMap["name"]
 			expectedLri := []lockRequesterInfo{
 				lockRequesterInfo{
-					writer:        true,
-					node:          "node",
-					rpcPath:       "rpc-path",
-					uid:           "0123-4567",
+					writer:  true,
+					node:    "node",
+					rpcPath: "rpc-path",
+					uid:     "0123-4567",
 				},
 			}
 			if !testLockEquality(expectedLri, gotLri) {
@@ -87,8 +116,8 @@ func TestLockRpcServerLock(t *testing.T) {
 	// Try to claim same lock again (will fail)
 	la2 := LockArgs{
 		Name:      "name",
-		Token:     "token",
-		Timestamp: tsValidateArgs,
+		Token:     token,
+		Timestamp: timestamp,
 		Node:      "node",
 		RPCPath:   "rpc-path",
 		UID:       "89ab-cdef",
@@ -106,18 +135,12 @@ func TestLockRpcServerLock(t *testing.T) {
 // Test Unlock functionality
 func TestLockRpcServerUnlock(t *testing.T) {
 
-	tsValidateArgs := time.Now().UTC()
-	locker := &lockServer{
-		rpcPath:   "rpc-path",
-		mutex:     sync.Mutex{},
-		lockMap:   make(map[string][]lockRequesterInfo),
-		timestamp: tsValidateArgs,
-	}
+	locker, token, timestamp := createLockTestServer(t)
 
 	la := LockArgs{
 		Name:      "name",
-		Token:     "token",
-		Timestamp: tsValidateArgs,
+		Token:     token,
+		Timestamp: timestamp,
 		Node:      "node",
 		RPCPath:   "rpc-path",
 		UID:       "0123-4567",
@@ -158,18 +181,12 @@ func TestLockRpcServerUnlock(t *testing.T) {
 // Test RLock functionality
 func TestLockRpcServerRLock(t *testing.T) {
 
-	tsValidateArgs := time.Now().UTC()
-	locker := &lockServer{
-		rpcPath:   "rpc-path",
-		mutex:     sync.Mutex{},
-		lockMap:   make(map[string][]lockRequesterInfo),
-		timestamp: tsValidateArgs,
-	}
+	locker, token, timestamp := createLockTestServer(t)
 
 	la := LockArgs{
 		Name:      "name",
-		Token:     "token",
-		Timestamp: tsValidateArgs,
+		Token:     token,
+		Timestamp: timestamp,
 		Node:      "node",
 		RPCPath:   "rpc-path",
 		UID:       "0123-4567",
@@ -187,10 +204,10 @@ func TestLockRpcServerRLock(t *testing.T) {
 			gotLri, _ := locker.lockMap["name"]
 			expectedLri := []lockRequesterInfo{
 				lockRequesterInfo{
-					writer:        false,
-					node:          "node",
-					rpcPath:       "rpc-path",
-					uid:           "0123-4567",
+					writer:  false,
+					node:    "node",
+					rpcPath: "rpc-path",
+					uid:     "0123-4567",
 				},
 			}
 			if !testLockEquality(expectedLri, gotLri) {
@@ -202,8 +219,8 @@ func TestLockRpcServerRLock(t *testing.T) {
 	// Try to claim same again (will succeed)
 	la2 := LockArgs{
 		Name:      "name",
-		Token:     "token",
-		Timestamp: tsValidateArgs,
+		Token:     token,
+		Timestamp: timestamp,
 		Node:      "node",
 		RPCPath:   "rpc-path",
 		UID:       "89ab-cdef",
@@ -221,18 +238,12 @@ func TestLockRpcServerRLock(t *testing.T) {
 // Test RUnlock functionality
 func TestLockRpcServerRUnlock(t *testing.T) {
 
-	tsValidateArgs := time.Now().UTC()
-	locker := &lockServer{
-		rpcPath:   "rpc-path",
-		mutex:     sync.Mutex{},
-		lockMap:   make(map[string][]lockRequesterInfo),
-		timestamp: tsValidateArgs,
-	}
+	locker, token, timestamp := createLockTestServer(t)
 
 	la := LockArgs{
 		Name:      "name",
-		Token:     "token",
-		Timestamp: tsValidateArgs,
+		Token:     token,
+		Timestamp: timestamp,
 		Node:      "node",
 		RPCPath:   "rpc-path",
 		UID:       "0123-4567",
@@ -255,8 +266,8 @@ func TestLockRpcServerRUnlock(t *testing.T) {
 
 	la2 := LockArgs{
 		Name:      "name",
-		Token:     "token",
-		Timestamp: tsValidateArgs,
+		Token:     token,
+		Timestamp: timestamp,
 		Node:      "node",
 		RPCPath:   "rpc-path",
 		UID:       "89ab-cdef",
@@ -281,10 +292,10 @@ func TestLockRpcServerRUnlock(t *testing.T) {
 			gotLri, _ := locker.lockMap["name"]
 			expectedLri := []lockRequesterInfo{
 				lockRequesterInfo{
-					writer:        false,
-					node:          "node",
-					rpcPath:       "rpc-path",
-					uid:           "89ab-cdef",
+					writer:  false,
+					node:    "node",
+					rpcPath: "rpc-path",
+					uid:     "89ab-cdef",
 				},
 			}
 			if !testLockEquality(expectedLri, gotLri) {
@@ -314,18 +325,12 @@ func TestLockRpcServerRUnlock(t *testing.T) {
 // Test Expired functionality
 func TestLockRpcServerExpired(t *testing.T) {
 
-	tsValidateArgs := time.Now().UTC()
-	locker := &lockServer{
-		rpcPath:   "rpc-path",
-		mutex:     sync.Mutex{},
-		lockMap:   make(map[string][]lockRequesterInfo),
-		timestamp: tsValidateArgs,
-	}
+	locker, token, timestamp := createLockTestServer(t)
 
 	la := LockArgs{
 		Name:      "name",
-		Token:     "token",
-		Timestamp: tsValidateArgs,
+		Token:     token,
+		Timestamp: timestamp,
 		Node:      "node",
 		RPCPath:   "rpc-path",
 		UID:       "0123-4567",
@@ -360,4 +365,3 @@ func TestLockRpcServerExpired(t *testing.T) {
 		}
 	}
 }
-

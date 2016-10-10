@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"reflect"
-	"sync"
 	"testing"
 	"time"
 )
@@ -26,12 +25,7 @@ import (
 // Test function to remove lock entries from map only in case they still exist based on name & uid combination
 func TestLockRpcServerRemoveEntryIfExists(t *testing.T) {
 
-	locker := &lockServer{
-		rpcPath:   "rpc-path",
-		mutex:     sync.Mutex{},
-		lockMap:   make(map[string][]lockRequesterInfo),
-		timestamp: time.Now().UTC(),
-	}
+	locker, _, _ := createLockTestServer(t)
 
 	lri := lockRequesterInfo{
 		writer:        false,
@@ -68,12 +62,7 @@ func TestLockRpcServerRemoveEntryIfExists(t *testing.T) {
 // Test function to remove lock entries from map based on name & uid combination
 func TestLockRpcServerRemoveEntry(t *testing.T) {
 
-	locker := &lockServer{
-		rpcPath:   "rpc-path",
-		mutex:     sync.Mutex{},
-		lockMap:   make(map[string][]lockRequesterInfo),
-		timestamp: time.Now().UTC(),
-	}
+	locker, _, _ := createLockTestServer(t)
 
 	lockRequesterInfo1 := lockRequesterInfo{
 		writer:        true,
