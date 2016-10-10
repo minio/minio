@@ -19,18 +19,14 @@ package cmd
 import (
 	"encoding/base64"
 	"encoding/xml"
-	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync"
-	"syscall"
 
 	"encoding/json"
 
@@ -148,95 +144,6 @@ func contains(stringList []string, element string) bool {
 	return false
 }
 
-// Represents a type of an exit func which will be invoked upon shutdown signal.
-type onExitFunc func(code int)
-
-// Represents a type for all the the callback functions invoked upon shutdown signal.
-type cleanupOnExitFunc func() errCode
-
-// Represents a collection of various callbacks executed upon exit signals.
-type shutdownCallbacks struct {
-	// Protect callbacks list from a concurrent access
-	*sync.RWMutex
-	// genericCallbacks - is the list of function callbacks executed one by one
-	// when a shutdown starts. A callback returns 0 for success and 1 for failure.
-	// Failure is considered an emergency error that needs an immediate exit
-	genericCallbacks []cleanupOnExitFunc
-	// objectLayerCallbacks - contains the list of function callbacks that
-	// need to be invoked when a shutdown starts. These callbacks will be called before
-	// the general callback shutdowns
-	objectLayerCallbacks []cleanupOnExitFunc
-}
-
-// globalShutdownCBs stores regular and object storages callbacks
-var globalShutdownCBs *shutdownCallbacks
-
-func (s *shutdownCallbacks) RunObjectLayerCBs() errCode {
-	s.RLock()
-	defer s.RUnlock()
-	exitCode := exitSuccess
-	for _, callback := range s.objectLayerCallbacks {
-		exitCode = callback()
-		if exitCode != exitSuccess {
-			break
-		}
-	}
-	return exitCode
-}
-
-func (s *shutdownCallbacks) RunGenericCBs() errCode {
-	s.RLock()
-	defer s.RUnlock()
-	exitCode := exitSuccess
-	for _, callback := range s.genericCallbacks {
-		exitCode = callback()
-		if exitCode != exitSuccess {
-			break
-		}
-	}
-	return exitCode
-}
-
-func (s *shutdownCallbacks) AddObjectLayerCB(callback cleanupOnExitFunc) error {
-	s.Lock()
-	defer s.Unlock()
-	if callback == nil {
-		return errInvalidArgument
-	}
-	s.objectLayerCallbacks = append(s.objectLayerCallbacks, callback)
-	return nil
-}
-
-func (s *shutdownCallbacks) AddGenericCB(callback cleanupOnExitFunc) error {
-	s.Lock()
-	defer s.Unlock()
-	if callback == nil {
-		return errInvalidArgument
-	}
-	s.genericCallbacks = append(s.genericCallbacks, callback)
-	return nil
-}
-
-// Initialize graceful shutdown mechanism.
-func initGracefulShutdown(onExitFn onExitFunc) error {
-	// Validate exit func.
-	if onExitFn == nil {
-		return errInvalidArgument
-	}
-	globalShutdownCBs = &shutdownCallbacks{
-		RWMutex: &sync.RWMutex{},
-	}
-	// Return start monitor shutdown signal.
-	return startMonitorShutdownSignal(onExitFn)
-}
-
-type shutdownSignal int
-
-const (
-	shutdownHalt = iota
-	shutdownRestart
-)
-
 // Starts a profiler returns nil if profiler is not enabled, caller needs to handle this.
 func startProfiler(profiler string) interface {
 	Stop()
@@ -256,82 +163,9 @@ func startProfiler(profiler string) interface {
 	}
 }
 
-// Global shutdown signal channel.
-var globalShutdownSignalCh = make(chan shutdownSignal, 1)
-
-// Global profiler to be used by shutdown go-routine.
+// Global profiler to be used by service go-routine.
 var globalProfiler interface {
 	Stop()
-}
-
-// Start to monitor shutdownSignal to execute shutdown callbacks
-func startMonitorShutdownSignal(onExitFn onExitFunc) error {
-	// Validate exit func.
-	if onExitFn == nil {
-		return errInvalidArgument
-	}
-
-	// Custom exit function
-	runExitFn := func(exitCode errCode) {
-		// If global profiler is set stop before we exit.
-		if globalProfiler != nil {
-			globalProfiler.Stop()
-		}
-		// Call user supplied user exit function
-		onExitFn(int(exitCode))
-	}
-
-	// Start listening on shutdown signal.
-	go func() {
-		defer close(globalShutdownSignalCh)
-
-		// Monitor signals.
-		trapCh := signalTrap(os.Interrupt, syscall.SIGTERM)
-		for {
-			select {
-			case <-trapCh:
-				// Initiate graceful shutdown.
-				globalShutdownSignalCh <- shutdownHalt
-			case signal := <-globalShutdownSignalCh:
-				// Call all object storage shutdown
-				// callbacks and exit for emergency
-				exitCode := globalShutdownCBs.RunObjectLayerCBs()
-				if exitCode != exitSuccess {
-					runExitFn(exitCode)
-				}
-
-				exitCode = globalShutdownCBs.RunGenericCBs()
-				if exitCode != exitSuccess {
-					runExitFn(exitCode)
-				}
-
-				// All shutdown callbacks ensure that
-				// the server is safely terminated and
-				// any concurrent process could be
-				// started again
-				if signal == shutdownRestart {
-					path := os.Args[0]
-					cmdArgs := os.Args[1:]
-					cmd := exec.Command(path, cmdArgs...)
-					cmd.Stdout = os.Stdout
-					cmd.Stderr = os.Stderr
-
-					err := cmd.Start()
-					if err != nil {
-						errorIf(errors.New("Unable to reboot."), err.Error())
-					}
-
-					// Successfully forked.
-					runExitFn(exitSuccess)
-				}
-
-				// Exit as success if no errors.
-				runExitFn(exitSuccess)
-			}
-		}
-	}()
-	// Successfully started routine.
-	return nil
 }
 
 // dump the request into a string in JSON format.

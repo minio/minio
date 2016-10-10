@@ -17,10 +17,14 @@
 package cmd
 
 import (
+	"fmt"
 	"net/rpc"
+	"path"
+	"strings"
 	"time"
 
 	router "github.com/gorilla/mux"
+	"github.com/minio/minio-go/pkg/set"
 )
 
 // Routes paths for "minio control" commands.
@@ -28,14 +32,65 @@ const (
 	controlPath = "/controller"
 )
 
+// Initializes remote controller clients for making remote requests.
+func initRemoteControllerClients(srvCmdConfig serverCmdConfig) []*AuthRPCClient {
+	if !srvCmdConfig.isDistXL {
+		return nil
+	}
+	var newExports []string
+	// Initialize auth rpc clients.
+	exports := srvCmdConfig.disks
+	ignoredExports := srvCmdConfig.ignoredDisks
+	remoteHosts := set.NewStringSet()
+
+	// Initialize ignored disks in a new set.
+	ignoredSet := set.NewStringSet()
+	if len(ignoredExports) > 0 {
+		ignoredSet = set.CreateStringSet(ignoredExports...)
+	}
+	var authRPCClients []*AuthRPCClient
+	for _, export := range exports {
+		if ignoredSet.Contains(export) {
+			// Ignore initializing ignored export.
+			continue
+		}
+		// Validates if remote disk is local.
+		if isLocalStorage(export) {
+			continue
+		}
+		newExports = append(newExports, export)
+	}
+	for _, export := range newExports {
+		var host string
+		if idx := strings.LastIndex(export, ":"); idx != -1 {
+			host = export[:idx]
+		}
+		remoteHosts.Add(fmt.Sprintf("%s:%d", host, globalMinioPort))
+	}
+	for host := range remoteHosts {
+		authRPCClients = append(authRPCClients, newAuthClient(&authConfig{
+			accessKey:   serverConfig.GetCredential().AccessKeyID,
+			secretKey:   serverConfig.GetCredential().SecretAccessKey,
+			secureConn:  isSSL(),
+			address:     host,
+			path:        path.Join(reservedBucket, controlPath),
+			loginMethod: "Controller.LoginHandler",
+		}))
+	}
+	return authRPCClients
+}
+
 // Register controller RPC handlers.
 func registerControllerRPCRouter(mux *router.Router, srvCmdConfig serverCmdConfig) {
-	// Initialize Controller.
+	// Initialize controller.
 	ctrlHandlers := &controllerAPIHandlers{
 		ObjectAPI:    newObjectLayerFn,
 		StorageDisks: srvCmdConfig.storageDisks,
 		timestamp:    time.Now().UTC(),
 	}
+
+	// Initializes remote controller clients.
+	ctrlHandlers.RemoteControllers = initRemoteControllerClients(srvCmdConfig)
 
 	ctrlRPCServer := rpc.NewServer()
 	ctrlRPCServer.RegisterName("Controller", ctrlHandlers)
@@ -46,7 +101,8 @@ func registerControllerRPCRouter(mux *router.Router, srvCmdConfig serverCmdConfi
 
 // Handler for object healing.
 type controllerAPIHandlers struct {
-	ObjectAPI    func() ObjectLayer
-	StorageDisks []StorageAPI
-	timestamp    time.Time
+	ObjectAPI         func() ObjectLayer
+	StorageDisks      []StorageAPI
+	RemoteControllers []*AuthRPCClient
+	timestamp         time.Time
 }

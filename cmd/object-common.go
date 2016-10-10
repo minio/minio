@@ -33,6 +33,17 @@ const (
 	bucketMetaPrefix = "buckets"
 )
 
+// Global object layer mutex, used for safely updating object layer.
+var globalObjLayerMutex *sync.Mutex
+
+// Global object layer, only accessed by newObjectLayerFn().
+var globalObjectAPI ObjectLayer
+
+func init() {
+	// Initialize this once per server initialization.
+	globalObjLayerMutex = &sync.Mutex{}
+}
+
 // isErrIgnored should we ignore this error?, takes a list of errors which can be ignored.
 func isErrIgnored(err error, ignoredErrs []error) bool {
 	err = errorCause(err)

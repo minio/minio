@@ -221,11 +221,13 @@ func getStorageInfo(disks []StorageAPI) StorageInfo {
 	storageInfo.Backend.Type = XL
 	storageInfo.Backend.OnlineDisks = onlineDisks
 	storageInfo.Backend.OfflineDisks = offlineDisks
-	storageInfo.Backend.Quorum = len(disks) / 2
 	return storageInfo
 }
 
 // StorageInfo - returns underlying storage statistics.
 func (xl xlObjects) StorageInfo() StorageInfo {
-	return getStorageInfo(xl.storageDisks)
+	storageInfo := getStorageInfo(xl.storageDisks)
+	storageInfo.Backend.ReadQuorum = xl.readQuorum
+	storageInfo.Backend.WriteQuorum = xl.writeQuorum
+	return storageInfo
 }

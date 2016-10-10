@@ -45,7 +45,8 @@ type StorageInfo struct {
 		// Following fields are only meaningful if BackendType is XL.
 		OnlineDisks  int // Online disks during server startup.
 		OfflineDisks int // Offline disks during server startup.
-		Quorum       int // Minimum disks required for successful operations.
+		ReadQuorum   int // Minimum disks required for successful read operations.
+		WriteQuorum  int // Minimum disks required for successful write operations.
 	}
 }
 

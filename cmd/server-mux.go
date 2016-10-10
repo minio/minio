@@ -186,7 +186,9 @@ func NewServerMux(addr string, handler http.Handler) *ServerMux {
 			Handler:        handler,
 			MaxHeaderBytes: 1 << 20,
 		},
-		WaitGroup:       &sync.WaitGroup{},
+		WaitGroup: &sync.WaitGroup{},
+		// Wait for 5 seconds for new incoming connnections, otherwise
+		// forcibly close them during graceful stop or restart.
 		GracefulTimeout: 5 * time.Second,
 	}
 
@@ -200,18 +202,20 @@ func NewServerMux(addr string, handler http.Handler) *ServerMux {
 // ListenAndServeTLS - similar to the http.Server version. However, it has the
 // ability to redirect http requests to the correct HTTPS url if the client
 // mistakenly initiates a http connection over the https port
-func (m *ServerMux) ListenAndServeTLS(certFile, keyFile string) error {
-	listener, err := net.Listen("tcp", m.Server.Addr)
-	if err != nil {
-		return err
-	}
-
+func (m *ServerMux) ListenAndServeTLS(certFile, keyFile string) (err error) {
 	config := &tls.Config{} // Always instantiate.
 	if config.NextProtos == nil {
 		config.NextProtos = []string{"http/1.1", "h2"}
 	}
 	config.Certificates = make([]tls.Certificate, 1)
 	config.Certificates[0], err = tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return err
+	}
+
+	go m.handleServiceSignals()
+
+	listener, err := net.Listen("tcp", m.Server.Addr)
 	if err != nil {
 		return err
 	}
@@ -240,12 +244,20 @@ func (m *ServerMux) ListenAndServeTLS(certFile, keyFile string) error {
 				// Execute registered handlers
 				m.Server.Handler.ServeHTTP(w, r)
 			}
-		}))
+		}),
+	)
+	if nerr, ok := err.(*net.OpError); ok {
+		if nerr.Op == "accept" && nerr.Net == "tcp" {
+			return nil
+		}
+	}
 	return err
 }
 
 // ListenAndServe - Same as the http.Server version
 func (m *ServerMux) ListenAndServe() error {
+	go m.handleServiceSignals()
+
 	listener, err := net.Listen("tcp", m.Server.Addr)
 	if err != nil {
 		return err
@@ -257,7 +269,13 @@ func (m *ServerMux) ListenAndServe() error {
 	m.listener = listenerMux
 	m.mu.Unlock()
 
-	return m.Server.Serve(listenerMux)
+	err = m.Server.Serve(listenerMux)
+	if nerr, ok := err.(*net.OpError); ok {
+		if nerr.Op == "accept" && nerr.Net == "tcp" {
+			return nil
+		}
+	}
+	return err
 }
 
 // Close initiates the graceful shutdown
@@ -266,17 +284,18 @@ func (m *ServerMux) Close() error {
 	if m.closed {
 		return errors.New("Server has been closed")
 	}
+	// Closed completely.
 	m.closed = true
 
-	// Make sure a listener was set
+	// Close the listener.
 	if err := m.listener.Close(); err != nil {
 		return err
 	}
 
 	m.SetKeepAlivesEnabled(false)
+	// Force close any idle and new connections. Waiting for other connections
+	// to close on their own (within the timeout period)
 	for c, st := range m.conns {
-		// Force close any idle and new connections. Waiting for other connections
-		// to close on their own (within the timeout period)
 		if st == http.StateIdle || st == http.StateNew {
 			c.Close()
 		}
@@ -288,12 +307,15 @@ func (m *ServerMux) Close() error {
 			c.Close()
 		}
 	})
+
+	// Wait for graceful timeout of connections.
 	defer t.Stop()
 
 	m.mu.Unlock()
 
 	// Block until all connections are closed
 	m.WaitGroup.Wait()
+
 	return nil
 }
 

@@ -27,7 +27,7 @@ var controlCmd = cli.Command{
 	Subcommands: []cli.Command{
 		lockCmd,
 		healCmd,
-		shutdownCmd,
+		serviceCmd,
 	},
 	CustomHelpTemplate: `NAME:
    {{.Name}} - {{.Usage}}

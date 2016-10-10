@@ -18,14 +18,6 @@ package cmd
 
 import "errors"
 
-// errCode represents the return status of shutdown functions
-type errCode int
-
-const (
-	exitFailure errCode = -1
-	exitSuccess errCode = 0
-)
-
 // errSyslogNotSupported - this message is only meaningful on windows
 var errSyslogNotSupported = errors.New("Syslog logger not supported on windows")
 
@@ -42,7 +34,7 @@ var errInvalidToken = errors.New("Invalid token")
 var errInvalidTimestamp = errors.New("Timestamps don't match, server may have restarted.")
 
 // If x-amz-content-sha256 header value mismatches with what we calculate.
-var errContentSHA256Mismatch = errors.New("sha256 mismatch")
+var errContentSHA256Mismatch = errors.New("Content checksum SHA256 mismatch")
 
 // used when we deal with data larger than expected
-var errSizeUnexpected = errors.New("data size larger than expected")
+var errSizeUnexpected = errors.New("Data size larger than expected")

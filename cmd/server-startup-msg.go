@@ -46,7 +46,10 @@ func printStartupMessage(endPoints []string) {
 	printServerCommonMsg(endPoints)
 	printCLIAccessMsg(endPoints[0])
 	printObjectAPIMsg()
-	printStorageInfo()
+	objAPI := newObjectLayerFn()
+	if objAPI != nil {
+		printStorageInfo(objAPI.StorageInfo())
+	}
 }
 
 // Prints common server startup message. Prints credential, region and browser access.
@@ -120,13 +123,12 @@ func printObjectAPIMsg() {
 }
 
 // Get formatted disk/storage info message.
-func getStorageInfoMsg() string {
-	storageInfo := newObjectLayerFn().StorageInfo()
+func getStorageInfoMsg(storageInfo StorageInfo) string {
 	msg := fmt.Sprintf("%s %s Free", colorBlue("Drive Capacity:"), humanize.IBytes(uint64(storageInfo.Free)))
 	diskInfo := fmt.Sprintf(" %d Online, %d Offline. We can withstand [%d] more drive failure(s).",
 		storageInfo.Backend.OnlineDisks,
 		storageInfo.Backend.OfflineDisks,
-		storageInfo.Backend.Quorum,
+		storageInfo.Backend.ReadQuorum,
 	)
 	if storageInfo.Backend.Type == XL {
 		msg += colorBlue("\nStatus:") + fmt.Sprintf(getFormatStr(len(diskInfo), 8), diskInfo)
@@ -135,7 +137,7 @@ func getStorageInfoMsg() string {
 }
 
 // Prints startup message of storage capacity and erasure information.
-func printStorageInfo() {
+func printStorageInfo(storageInfo StorageInfo) {
 	console.Println()
-	console.Println(getStorageInfoMsg())
+	console.Println(getStorageInfoMsg(storageInfo))
 }

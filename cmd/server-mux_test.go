@@ -24,7 +24,6 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"math/big"
@@ -158,6 +157,11 @@ func TestListenAndServePlain(t *testing.T) {
 	errc := make(chan error)
 	once := &sync.Once{}
 
+	// Initialize done channel specifically for each tests.
+	globalServiceDoneCh = make(chan struct{}, 1)
+	// Initialize signal channel specifically for each tests.
+	globalServiceSignalCh = make(chan serviceSignal, 1)
+
 	// Create ServerMux and when we receive a request we stop waiting
 	m := NewServerMux(addr, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, "hello")
@@ -166,9 +170,6 @@ func TestListenAndServePlain(t *testing.T) {
 
 	// ListenAndServe in a goroutine, but we don't know when it's ready
 	go func() { errc <- m.ListenAndServe() }()
-
-	// Make sure we don't block by closing wait after a timeout
-	tf := time.AfterFunc(time.Millisecond*500, func() { errc <- errors.New("Unable to connect to server") })
 
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
@@ -184,7 +185,6 @@ func TestListenAndServePlain(t *testing.T) {
 		}
 
 		wg.Done()
-		tf.Stop() // Cancel the timeout since we made a successful request
 	}()
 
 	wg.Wait()
@@ -206,6 +206,9 @@ func TestListenAndServeTLS(t *testing.T) {
 	addr := "127.0.0.1:" + strconv.Itoa(getFreePort())
 	errc := make(chan error)
 	once := &sync.Once{}
+
+	// Initialize done channel specifically for each tests.
+	globalServiceDoneCh = make(chan struct{}, 1)
 
 	// Create ServerMux and when we receive a request we stop waiting
 	m := NewServerMux(addr, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -232,11 +235,8 @@ func TestListenAndServeTLS(t *testing.T) {
 	// ListenAndServe in a goroutine, but we don't know when it's ready
 	go func() { errc <- m.ListenAndServeTLS(certFile, keyFile) }()
 
-	// Make sure we don't block by closing wait after a timeout
-	tf := time.AfterFunc(time.Millisecond*500, func() { errc <- errors.New("Unable to connect to server") })
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
-
 	// Keep trying the server until it's accepting connections
 	go func() {
 		tr := &http.Transport{
@@ -255,7 +255,6 @@ func TestListenAndServeTLS(t *testing.T) {
 		}
 
 		wg.Done()
-		tf.Stop() // Cancel the timeout since we made a successful request
 	}()
 
 	wg.Wait()
