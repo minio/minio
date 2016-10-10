@@ -310,3 +310,54 @@ func TestLockRpcServerRUnlock(t *testing.T) {
 		}
 	}
 }
+
+// Test Expired functionality
+func TestLockRpcServerExpired(t *testing.T) {
+
+	tsValidateArgs := time.Now().UTC()
+	locker := &lockServer{
+		rpcPath:   "rpc-path",
+		mutex:     sync.Mutex{},
+		lockMap:   make(map[string][]lockRequesterInfo),
+		timestamp: tsValidateArgs,
+	}
+
+	la := LockArgs{
+		Name:      "name",
+		Token:     "token",
+		Timestamp: tsValidateArgs,
+		Node:      "node",
+		RPCPath:   "rpc-path",
+		UID:       "0123-4567",
+	}
+
+	// Unknown lock at server will return expired = true
+	var expired bool
+	err := locker.Expired(&la, &expired)
+	if err != nil {
+		t.Errorf("Expected no error, got %#v", err)
+	} else {
+		if !expired {
+			t.Errorf("Expected %#v, got %#v", true, expired)
+		}
+	}
+
+	// Create lock (so that we can test that it is not expired)
+	var result bool
+	err = locker.Lock(&la, &result)
+	if err != nil {
+		t.Errorf("Expected %#v, got %#v", nil, err)
+	} else if !result {
+		t.Errorf("Expected %#v, got %#v", true, result)
+	}
+
+	err = locker.Expired(&la, &expired)
+	if err != nil {
+		t.Errorf("Expected no error, got %#v", err)
+	} else {
+		if expired {
+			t.Errorf("Expected %#v, got %#v", false, expired)
+		}
+	}
+}
+
