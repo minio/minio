@@ -76,8 +76,6 @@ func TestLockRpcServerLock(t *testing.T) {
 					node:          "node",
 					rpcPath:       "rpc-path",
 					uid:           "0123-4567",
-					timestamp:     tsValidateArgs,
-					timeLastCheck: tsValidateArgs,
 				},
 			}
 			if !testLockEquality(expectedLri, gotLri) {
@@ -142,6 +140,162 @@ func TestLockRpcServerUnlock(t *testing.T) {
 
 	// Finally test successful release of lock
 	err = locker.Unlock(&la, &result)
+	if err != nil {
+		t.Errorf("Expected %#v, got %#v", nil, err)
+	} else {
+		if !result {
+			t.Errorf("Expected %#v, got %#v", true, result)
+		} else {
+			gotLri, _ := locker.lockMap["name"]
+			expectedLri := []lockRequesterInfo(nil)
+			if !testLockEquality(expectedLri, gotLri) {
+				t.Errorf("Expected %#v, got %#v", expectedLri, gotLri)
+			}
+		}
+	}
+}
+
+// Test RLock functionality
+func TestLockRpcServerRLock(t *testing.T) {
+
+	tsValidateArgs := time.Now().UTC()
+	locker := &lockServer{
+		rpcPath:   "rpc-path",
+		mutex:     sync.Mutex{},
+		lockMap:   make(map[string][]lockRequesterInfo),
+		timestamp: tsValidateArgs,
+	}
+
+	la := LockArgs{
+		Name:      "name",
+		Token:     "token",
+		Timestamp: tsValidateArgs,
+		Node:      "node",
+		RPCPath:   "rpc-path",
+		UID:       "0123-4567",
+	}
+
+	// Claim a lock
+	var result bool
+	err := locker.RLock(&la, &result)
+	if err != nil {
+		t.Errorf("Expected %#v, got %#v", nil, err)
+	} else {
+		if !result {
+			t.Errorf("Expected %#v, got %#v", true, result)
+		} else {
+			gotLri, _ := locker.lockMap["name"]
+			expectedLri := []lockRequesterInfo{
+				lockRequesterInfo{
+					writer:        false,
+					node:          "node",
+					rpcPath:       "rpc-path",
+					uid:           "0123-4567",
+				},
+			}
+			if !testLockEquality(expectedLri, gotLri) {
+				t.Errorf("Expected %#v, got %#v", expectedLri, gotLri)
+			}
+		}
+	}
+
+	// Try to claim same again (will succeed)
+	la2 := LockArgs{
+		Name:      "name",
+		Token:     "token",
+		Timestamp: tsValidateArgs,
+		Node:      "node",
+		RPCPath:   "rpc-path",
+		UID:       "89ab-cdef",
+	}
+	err = locker.RLock(&la2, &result)
+	if err != nil {
+		t.Errorf("Expected %#v, got %#v", nil, err)
+	} else {
+		if !result {
+			t.Errorf("Expected %#v, got %#v", true, result)
+		}
+	}
+}
+
+// Test RUnlock functionality
+func TestLockRpcServerRUnlock(t *testing.T) {
+
+	tsValidateArgs := time.Now().UTC()
+	locker := &lockServer{
+		rpcPath:   "rpc-path",
+		mutex:     sync.Mutex{},
+		lockMap:   make(map[string][]lockRequesterInfo),
+		timestamp: tsValidateArgs,
+	}
+
+	la := LockArgs{
+		Name:      "name",
+		Token:     "token",
+		Timestamp: tsValidateArgs,
+		Node:      "node",
+		RPCPath:   "rpc-path",
+		UID:       "0123-4567",
+	}
+
+	// First test return of error when attempting to unlock a read-lock that does not exist
+	var result bool
+	err := locker.Unlock(&la, &result)
+	if err == nil {
+		t.Errorf("Expected error, got %#v", nil)
+	}
+
+	// Create first lock ... (so that we can release)
+	err = locker.RLock(&la, &result)
+	if err != nil {
+		t.Errorf("Expected %#v, got %#v", nil, err)
+	} else if !result {
+		t.Errorf("Expected %#v, got %#v", true, result)
+	}
+
+	la2 := LockArgs{
+		Name:      "name",
+		Token:     "token",
+		Timestamp: tsValidateArgs,
+		Node:      "node",
+		RPCPath:   "rpc-path",
+		UID:       "89ab-cdef",
+	}
+
+	// ... and create a second lock on same resource
+	err = locker.RLock(&la2, &result)
+	if err != nil {
+		t.Errorf("Expected %#v, got %#v", nil, err)
+	} else if !result {
+		t.Errorf("Expected %#v, got %#v", true, result)
+	}
+
+	// Test successful release of first read lock
+	err = locker.RUnlock(&la, &result)
+	if err != nil {
+		t.Errorf("Expected %#v, got %#v", nil, err)
+	} else {
+		if !result {
+			t.Errorf("Expected %#v, got %#v", true, result)
+		} else {
+			gotLri, _ := locker.lockMap["name"]
+			expectedLri := []lockRequesterInfo{
+				lockRequesterInfo{
+					writer:        false,
+					node:          "node",
+					rpcPath:       "rpc-path",
+					uid:           "89ab-cdef",
+				},
+			}
+			if !testLockEquality(expectedLri, gotLri) {
+				t.Errorf("Expected %#v, got %#v", expectedLri, gotLri)
+			}
+
+		}
+	}
+
+	// Finally test successful release of second (and last) read lock
+	err = locker.RUnlock(&la2, &result)
 	if err != nil {
 		t.Errorf("Expected %#v, got %#v", nil, err)
 	} else {
