@@ -35,107 +35,47 @@ $ go get -u github.com/minio/minio
 In the examples below, Minio serves the contents of the ``Photos`` directory as an object store.
 
 ### Docker Container
+
 ```sh
 $ docker pull minio/minio
-$ docker run -p 9000:9000 minio/minio ~/Photos
-
+$ docker run -p 9000:9000 minio/minio server /export
 ```
+
 Please visit Minio Docker quickstart guide for more [here](https://docs.minio.io/docs/minio-docker-quickstart-guide)
 
 ### GNU/Linux
- ```sh
+
+```sh
 $ chmod +x minio
 $ ./minio --help
 $ ./minio server ~/Photos
-
-Endpoint:  http://10.0.0.10:9000  http://127.0.0.1:9000  http://172.17.0.1:9000
-AccessKey: USWUXHGYZQYFYFFIT3RE
-SecretKey: MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03
-Region:    us-east-1
-
-Browser Access:
-   http://10.0.0.10:9000  http://127.0.0.1:9000  http://172.17.0.1:9000
-
-Command-line Access: https://docs.minio.io/docs/minio-client-quickstart-guide
-   $ mc config host add myminio http://10.0.0.10:9000 USWUXHGYZQYFYFFIT3RE MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03
-
-Object API (Amazon S3 compatible):
-   Go:         https://docs.minio.io/docs/golang-client-quickstart-guide
-   Java:       https://docs.minio.io/docs/java-client-quickstart-guide
-   Python:     https://docs.minio.io/docs/python-client-quickstart-guide
-   JavaScript: https://docs.minio.io/docs/javascript-client-quickstart-guide
-
+...
 ```
 
 ### OS X
- ```sh
+
+```sh
 $ chmod 755 minio
 $ ./minio --help
 $ ./minio server ~/Photos
-
-Endpoint:  http://10.0.0.10:9000  http://127.0.0.1:9000  http://172.17.0.1:9000
-AccessKey: USWUXHGYZQYFYFFIT3RE
-SecretKey: MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03
-Region:    us-east-1
-
-Browser Access:
-   http://10.0.0.10:9000  http://127.0.0.1:9000  http://172.17.0.1:9000
-
-Command-line Access: https://docs.minio.io/docs/minio-client-quickstart-guide
-   $ mc config host add myminio http://10.0.0.10:9000 USWUXHGYZQYFYFFIT3RE MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03
-
-Object API (Amazon S3 compatible):
-   Go:         https://docs.minio.io/docs/golang-client-quickstart-guide
-   Java:       https://docs.minio.io/docs/java-client-quickstart-guide
-   Python:     https://docs.minio.io/docs/python-client-quickstart-guide
-   JavaScript: https://docs.minio.io/docs/javascript-client-quickstart-guide
+...
 ```
 
 ### Microsoft Windows
+
 ```sh
 C:\Users\Username\Downloads> minio.exe --help
 C:\Users\Username\Downloads> minio.exe server D:\Photos
-
-Endpoint:  http://10.0.0.10:9000  http://127.0.0.1:9000  http://172.17.0.1:9000
-AccessKey: USWUXHGYZQYFYFFIT3RE
-SecretKey: MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03
-Region:    us-east-1
-
-Browser Access:
-   http://10.0.0.10:9000  http://127.0.0.1:9000  http://172.17.0.1:9000
-
-Command-line Access: https://docs.minio.io/docs/minio-client-quickstart-guide
-   $ mc.exe config host add myminio http://10.0.0.10:9000 USWUXHGYZQYFYFFIT3RE MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03
-
-Object API (Amazon S3 compatible):
-   Go:         https://docs.minio.io/docs/golang-client-quickstart-guide
-   Java:       https://docs.minio.io/docs/java-client-quickstart-guide
-   Python:     https://docs.minio.io/docs/python-client-quickstart-guide
-   JavaScript: https://docs.minio.io/docs/javascript-client-quickstart-guide
+...
 ```
 
 ### FreeBSD
+
 ```sh
 $ chmod 755 minio
 $ ./minio --help
 $ ./minio server ~/Photos
-
-Endpoint:  http://10.0.0.10:9000  http://127.0.0.1:9000  http://172.17.0.1:9000
-AccessKey: USWUXHGYZQYFYFFIT3RE
-SecretKey: MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03
-Region:    us-east-1
-
-Browser Access:
-   http://10.0.0.10:9000  http://127.0.0.1:9000  http://172.17.0.1:9000
-
-Command-line Access: https://docs.minio.io/docs/minio-client-quickstart-guide
-   $ mc config host add myminio http://10.0.0.10:9000 USWUXHGYZQYFYFFIT3RE MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03
-
-Object API (Amazon S3 compatible):
-   Go:         https://docs.minio.io/docs/golang-client-quickstart-guide
-   Java:       https://docs.minio.io/docs/java-client-quickstart-guide
-   Python:     https://docs.minio.io/docs/python-client-quickstart-guide
-   JavaScript: https://docs.minio.io/docs/javascript-client-quickstart-guide
+...
 ```
 Please visit official zfs FreeBSD guide for more details [here](https://www.freebsd.org/doc/handbook/zfs-quickstart.html)
 
@@ -163,7 +103,6 @@ For more examples please navigate to [Minio Client Complete Guide](https://docs.
 - [Use `aws-cli` with Minio Server](https://docs.minio.io/docs/aws-cli-with-minio)
 - [Use `s3cmd` with Minio Server](https://docs.minio.io/docs/s3cmd-with-minio)
 - [Use `minio-go` SDK with Minio Server](https://docs.minio.io/docs/golang-client-quickstart-guide)
-
 
 ## 6. Contribute to Minio Project
 Please follow Minio [Contributor's Guide](https://github.com/minio/minio/blob/master/CONTRIBUTING.md)
