@@ -59,8 +59,9 @@ func (l *lockServer) removeEntry(name, uid string, lri *[]lockRequesterInfo) boo
 
 // Validate lock args.
 func (l *lockServer) validateLockArgs(args *LockArgs) error {
-	if !l.timestamp.Equal(args.Timestamp) {
-		return errInvalidTimestamp
+	curTime := time.Now().UTC()
+	if curTime.Sub(args.Timestamp) > globalMaxSkewTime {
+		return errServerTimeMismatch
 	}
 	if !isRPCTokenValid(args.Token) {
 		return errInvalidToken

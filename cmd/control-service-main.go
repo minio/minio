@@ -65,7 +65,7 @@ func serviceControl(c *cli.Context) {
 	case "stop":
 		signal = serviceStop
 	default:
-		fatalIf(errInvalidArgument, "Unsupported signalling requested %s", c.Args().Get(0))
+		fatalIf(errInvalidArgument, "Unrecognized service %s", c.Args().Get(0))
 	}
 
 	parsedURL, err := url.Parse(c.Args().Get(1))
@@ -77,18 +77,18 @@ func serviceControl(c *cli.Context) {
 		secureConn:  parsedURL.Scheme == "https",
 		address:     parsedURL.Host,
 		path:        path.Join(reservedBucket, controlPath),
-		loginMethod: "Controller.LoginHandler",
+		loginMethod: "Control.LoginHandler",
 	}
 	client := newAuthClient(authCfg)
 
 	args := &ServiceArgs{
 		Signal: signal,
-		// This is necessary so that the remotes,
-		// don't end up sending requests back and forth.
-		Remote: true,
 	}
+	// This is necessary so that the remotes,
+	// don't end up sending requests back and forth.
+	args.Remote = true
 	reply := &ServiceReply{}
-	err = client.Call("Controller.ServiceHandler", args, reply)
+	err = client.Call("Control.ServiceHandler", args, reply)
 	fatalIf(err, "Service command %s failed for %s", c.Args().Get(0), parsedURL.Host)
 	if signal == serviceStatus {
 		console.Println(getStorageInfoMsg(reply.StorageInfo))

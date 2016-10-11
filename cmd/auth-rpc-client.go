@@ -29,8 +29,13 @@ type GenericReply struct{}
 
 // GenericArgs represents any generic RPC arguments.
 type GenericArgs struct {
-	Token     string    // Used to authenticate every RPC call.
-	Timestamp time.Time // Used to verify if the RPC call was issued between the same Login() and disconnect event pair.
+	Token string // Used to authenticate every RPC call.
+	// Used to verify if the RPC call was issued between
+	// the same Login() and disconnect event pair.
+	Timestamp time.Time
+
+	// Indicates if args should be sent to remote peers as well.
+	Remote bool
 }
 
 // SetToken - sets the token to the supplied value.
@@ -95,7 +100,6 @@ type AuthRPCClient struct {
 	rpc           *RPCClient // reconnect'able rpc client built on top of net/rpc Client
 	isLoggedIn    bool       // Indicates if the auth client has been logged in and token is valid.
 	token         string     // JWT based token
-	tstamp        time.Time  // Timestamp as received on Login RPC.
 	serverVersion string     // Server version exchanged by the RPC.
 }
 
@@ -141,7 +145,6 @@ func (authClient *AuthRPCClient) Login() error {
 	}
 	// Set token, time stamp as received from a successful login call.
 	authClient.token = reply.Token
-	authClient.tstamp = reply.Timestamp
 	authClient.serverVersion = reply.ServerVersion
 	authClient.isLoggedIn = true
 	return nil
@@ -158,7 +161,7 @@ func (authClient *AuthRPCClient) Call(serviceMethod string, args interface {
 	if err = authClient.Login(); err == nil {
 		// Set token and timestamp before the rpc call.
 		args.SetToken(authClient.token)
-		args.SetTimestamp(authClient.tstamp)
+		args.SetTimestamp(time.Now().UTC())
 
 		// Call the underlying rpc.
 		err = authClient.rpc.Call(serviceMethod, args, reply)

@@ -20,17 +20,36 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
+	"runtime"
+	"testing"
 
 	"github.com/Sirupsen/logrus"
-
-	. "gopkg.in/check.v1"
 )
 
-type LoggerSuite struct{}
+// Tests func obtained from process stack counter.
+func TestFuncToPC(t *testing.T) {
+	GOPATH = filepath.ToSlash(os.Getenv("GOPATH"))
+	pc, file, line, success := runtime.Caller(0)
+	if !success {
+		file = "???"
+		line = 0
+	}
+	shortFile := true // We are only interested in short file form.
+	cLocation := funcFromPC(pc, file, line, shortFile)
+	if cLocation != "TestFuncToPC [logger_test.go:34]" {
+		t.Fatal("Unexpected caller location found", cLocation)
+	}
+	shortFile = false // We are not interested in short file form.
+	cLocation = funcFromPC(pc, file, line, shortFile)
+	if cLocation != "TestFuncToPC [github.com/minio/minio/cmd/logger_test.go:34]" {
+		t.Fatal("Unexpected caller location found", cLocation)
+	}
+}
 
-var _ = Suite(&LoggerSuite{})
-
-func (s *LoggerSuite) TestLogger(c *C) {
+// Tests error logger.
+func TestLogger(t *testing.T) {
 	var buffer bytes.Buffer
 	var fields logrus.Fields
 	log.Out = &buffer
@@ -38,10 +57,17 @@ func (s *LoggerSuite) TestLogger(c *C) {
 
 	errorIf(errors.New("Fake error"), "Failed with error.")
 	err := json.Unmarshal(buffer.Bytes(), &fields)
-	c.Assert(err, IsNil)
-	c.Assert(fields["level"], Equals, "error")
-
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fields["level"] != "error" {
+		t.Fatalf("Expected error, got %s", fields["level"])
+	}
 	msg, ok := fields["cause"]
-	c.Assert(ok, Equals, true)
-	c.Assert(msg, Equals, "Fake error")
+	if !ok {
+		t.Fatal("Cause field missing")
+	}
+	if msg != "Fake error" {
+		t.Fatal("Cause field has unexpected message", msg)
+	}
 }

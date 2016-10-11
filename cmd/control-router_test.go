@@ -16,10 +16,73 @@
 
 package cmd
 
-import "testing"
+import (
+	"runtime"
+	"testing"
+)
+
+// Tests fetch local address.
+func TestLocalAddress(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		return
+	}
+	testCases := []struct {
+		srvCmdConfig serverCmdConfig
+		localAddr    string
+	}{
+		// Test 1 - local address is found.
+		{
+			srvCmdConfig: serverCmdConfig{
+				isDistXL: true,
+				disks: []string{
+					"localhost:/mnt/disk1",
+					"1.1.1.2:/mnt/disk2",
+					"1.1.2.1:/mnt/disk3",
+					"1.1.2.2:/mnt/disk4",
+				},
+			},
+			localAddr: "localhost:9000",
+		},
+		// Test 2 - local address is everything.
+		{
+			srvCmdConfig: serverCmdConfig{
+				isDistXL: false,
+				disks: []string{
+					"/mnt/disk1",
+					"/mnt/disk2",
+					"/mnt/disk3",
+					"/mnt/disk4",
+				},
+			},
+			localAddr: ":9000",
+		},
+		// Test 3 - local address is not found.
+		{
+			srvCmdConfig: serverCmdConfig{
+				isDistXL: true,
+				disks: []string{
+					"1.1.1.1:/mnt/disk1",
+					"1.1.1.2:/mnt/disk2",
+					"1.1.2.1:/mnt/disk3",
+					"1.1.2.2:/mnt/disk4",
+				},
+			},
+			localAddr: "",
+		},
+	}
+
+	// Validates fetching local address.
+	for i, testCase := range testCases {
+		localAddr := getLocalAddress(testCase.srvCmdConfig)
+		if localAddr != testCase.localAddr {
+			t.Fatalf("Test %d: Expected %s, got %s", i+1, testCase.localAddr, localAddr)
+		}
+	}
+
+}
 
 // Tests initialization of remote controller clients.
-func TestInitRemoteControllerClients(t *testing.T) {
+func TestInitRemoteControlClients(t *testing.T) {
 	rootPath, err := newTestConfig("us-east-1")
 	if err != nil {
 		t.Fatal("Unable to initialize config", err)
@@ -63,27 +126,11 @@ func TestInitRemoteControllerClients(t *testing.T) {
 			},
 			totalClients: 4,
 		},
-		// Test - 4 2 clients allocated with 4 disks with 1 disk ignored.
-		{
-			srvCmdConfig: serverCmdConfig{
-				isDistXL: true,
-				disks: []string{
-					"10.1.10.1:/mnt/disk1",
-					"10.1.10.2:/mnt/disk2",
-					"10.1.10.3:/mnt/disk3",
-					"10.1.10.4:/mnt/disk4",
-				},
-				ignoredDisks: []string{
-					"10.1.10.1:/mnt/disk1",
-				},
-			},
-			totalClients: 3,
-		},
 	}
 
 	// Evaluate and validate all test cases.
 	for i, testCase := range testCases {
-		rclients := initRemoteControllerClients(testCase.srvCmdConfig)
+		rclients := initRemoteControlClients(testCase.srvCmdConfig)
 		if len(rclients) != testCase.totalClients {
 			t.Errorf("Test %d, Expected %d, got %d RPC clients.", i+1, testCase.totalClients, len(rclients))
 		}

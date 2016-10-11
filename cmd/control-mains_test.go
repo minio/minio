@@ -49,23 +49,23 @@ func TestControlHealMain(t *testing.T) {
 
 // Test to call lockControl() in control-lock-main.go
 func TestControlLockMain(t *testing.T) {
-	// create cli app for testing
+	// Create cli app for testing
 	app := cli.NewApp()
 	app.Commands = []cli.Command{controlCmd}
 
-	// start test server
+	// Start test server
 	testServer := StartTestServer(t, "XL")
 
-	// schedule cleanup at the end
+	// Schedule cleanup at the end
 	defer testServer.Stop()
 
-	// fetch http server endpoint
+	// Fetch http server endpoint
 	url := testServer.Server.URL
 
-	// create args to call
-	args := []string{"./minio", "control", "lock", url}
+	// Create args to call
+	args := []string{"./minio", "control", "lock", "list", url}
 
-	// run app
+	// Run app
 	err := app.Run(args)
 	if err != nil {
 		t.Errorf("Control-Lock-Main test failed with - %s", err.Error())

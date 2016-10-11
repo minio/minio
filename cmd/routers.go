@@ -81,7 +81,7 @@ func configureServerHandler(srvCmdConfig serverCmdConfig) http.Handler {
 	}
 
 	// Register controller rpc router.
-	registerControllerRPCRouter(mux, srvCmdConfig)
+	registerControlRPCRouter(mux, srvCmdConfig)
 
 	// set environmental variable MINIO_BROWSER=off to disable minio web browser.
 	// By default minio web browser is enabled.

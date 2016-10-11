@@ -241,7 +241,7 @@ func StartTestStorageRPCServer(t TestErrHandler, instanceType string, diskN int)
 func initTestControlRPCEndPoint(srvCmdConfig serverCmdConfig) http.Handler {
 	// Initialize router.
 	muxRouter := router.NewRouter()
-	registerControllerRPCRouter(muxRouter, srvCmdConfig)
+	registerControlRPCRouter(muxRouter, srvCmdConfig)
 	return muxRouter
 }
 

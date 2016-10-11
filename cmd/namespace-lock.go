@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"errors"
-	"fmt"
 	pathutil "path"
 	"runtime"
 	"strconv"
@@ -66,8 +65,7 @@ func initNSLock(isDist bool) {
 		lockMap: make(map[nsParam]*nsLock),
 	}
 
-	// Initialize nsLockMap with entry for instrumentation
-	// information.
+	// Initialize nsLockMap with entry for instrumentation information.
 	// Entries of <volume,path> -> stateInfo of locks
 	nsMutex.debugLockMap = make(map[nsParam]*debugLockInfoPerVolumePath)
 }
@@ -94,7 +92,7 @@ type nsLock struct {
 // nsLockMap - namespace lock map, provides primitives to Lock,
 // Unlock, RLock and RUnlock.
 type nsLockMap struct {
-	// lock counter used for lock debugging.
+	// Lock counter used for lock debugging.
 	globalLockCounter  int64                                   // Total locks held.
 	blockedCounter     int64                                   // Total operations blocked waiting for locks.
 	runningLockCounter int64                                   // Total locks held but not released yet.
@@ -148,8 +146,7 @@ func (n *nsLockMap) lock(volume, path string, lockOrigin, opsID string, readLock
 
 	// Changing the status of the operation from blocked to
 	// running.  change the state of the lock to be running (from
-	// blocked) for the given pair of <volume, path> and
-	// <OperationID>.
+	// blocked) for the given pair of <volume, path> and <OperationID>.
 	if err := n.statusBlockedToRunning(param, lockOrigin, opsID, readLock); err != nil {
 		errorIf(err, "Failed to set the lock state to running.")
 	}
@@ -199,24 +196,22 @@ func (n *nsLockMap) unlock(volume, path, opsID string, readLock bool) {
 // Lock - locks the given resource for writes, using a previously
 // allocated name space lock or initializing a new one.
 func (n *nsLockMap) Lock(volume, path, opsID string) {
-	var lockOrigin string
+	readLock := false // This is a write lock.
 
 	// The caller information of the lock held has been obtained
 	// here before calling any other function.
 
 	// Fetching the package, function name and the line number of
-	// the caller from the runtime.  here is an example
-	// https://play.golang.org/p/perrmNRI9_ .
-	pc, fn, line, success := runtime.Caller(1)
+	// the caller from the runtime.
+	pc, file, line, success := runtime.Caller(1)
 	if !success {
-		errorIf(errors.New("Couldn't get caller info."),
-			"Fetching caller info form runtime failed.")
+		file = "???"
+		line = 0
 	}
-	lockOrigin = fmt.Sprintf("[lock held] in %s[%s:%d]",
-		runtime.FuncForPC(pc).Name(), fn, line)
+	shortFile := true // We are only interested in short file form.
+	lockLocation := funcFromPC(pc, file, line, shortFile)
 
-	readLock := false
-	n.lock(volume, path, lockOrigin, opsID, readLock)
+	n.lock(volume, path, lockLocation, opsID, readLock)
 }
 
 // Unlock - unlocks any previously acquired write locks.
@@ -227,24 +222,22 @@ func (n *nsLockMap) Unlock(volume, path, opsID string) {
 
 // RLock - locks any previously acquired read locks.
 func (n *nsLockMap) RLock(volume, path, opsID string) {
-	var lockOrigin string
 	readLock := true
 
 	// The caller information of the lock held has been obtained
 	// here before calling any other function.
 
 	// Fetching the package, function name and the line number of
-	// the caller from the runtime. Here is an example
-	// https://play.golang.org/p/perrmNRI9_ .
-	pc, fn, line, success := runtime.Caller(1)
+	// the caller from the runtime.
+	pc, file, line, success := runtime.Caller(1)
 	if !success {
-		errorIf(errors.New("Couldn't get caller info."),
-			"Fetching caller info form runtime failed.")
+		file = "???"
+		line = 0
 	}
-	lockOrigin = fmt.Sprintf("[lock held] in %s[%s:%d]",
-		runtime.FuncForPC(pc).Name(), fn, line)
+	shortFile := true // We are only interested in short file form.
+	lockLocation := funcFromPC(pc, file, line, shortFile)
 
-	n.lock(volume, path, lockOrigin, opsID, readLock)
+	n.lock(volume, path, lockLocation, opsID, readLock)
 }
 
 // RUnlock - unlocks any previously acquired read locks.

@@ -90,7 +90,7 @@ func healControl(ctx *cli.Context) {
 		secureConn:  parsedURL.Scheme == "https",
 		address:     parsedURL.Host,
 		path:        path.Join(reservedBucket, controlPath),
-		loginMethod: "Controller.LoginHandler",
+		loginMethod: "Control.LoginHandler",
 	}
 	client := newAuthClient(authCfg)
 
@@ -98,7 +98,7 @@ func healControl(ctx *cli.Context) {
 	fmt.Print("Checking and healing disk metadata..")
 	args := &GenericArgs{}
 	reply := &GenericReply{}
-	err = client.Call("Controller.HealDiskMetadataHandler", args, reply)
+	err = client.Call("Control.HealDiskMetadataHandler", args, reply)
 	fatalIf(err, "Unable to heal disk metadata.")
 	fmt.Println(" ok")
 
@@ -112,7 +112,7 @@ func healControl(ctx *cli.Context) {
 		fmt.Printf("Healing : /%s/%s\n", bucketName, objectName)
 		args := &HealObjectArgs{Bucket: bucketName, Object: objectName}
 		reply := &HealObjectReply{}
-		err = client.Call("Controller.HealObjectHandler", args, reply)
+		err = client.Call("Control.HealObjectHandler", args, reply)
 		errorIf(err, "Healing object %s failed.", objectName)
 		return
 	}
@@ -129,7 +129,7 @@ func healControl(ctx *cli.Context) {
 			MaxKeys:   1000,
 		}
 		reply := &HealListReply{}
-		err = client.Call("Controller.ListObjectsHealHandler", args, reply)
+		err = client.Call("Control.ListObjectsHealHandler", args, reply)
 		fatalIf(err, "Unable to list objects for healing.")
 
 		// Heal the objects returned in the ListObjects reply.
@@ -137,7 +137,7 @@ func healControl(ctx *cli.Context) {
 			fmt.Printf("Healing : /%s/%s\n", bucketName, obj)
 			reply := &GenericReply{}
 			healArgs := &HealObjectArgs{Bucket: bucketName, Object: obj}
-			err = client.Call("Controller.HealObjectHandler", healArgs, reply)
+			err = client.Call("Control.HealObjectHandler", healArgs, reply)
 			errorIf(err, "Healing object %s failed.", obj)
 		}
 

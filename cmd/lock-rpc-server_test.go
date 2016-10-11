@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -24,7 +25,6 @@ import (
 
 // Helper function to test equality of locks (without taking timing info into account)
 func testLockEquality(lriLeft, lriRight []lockRequesterInfo) bool {
-
 	if len(lriLeft) != len(lriRight) {
 		return false
 	}
@@ -41,8 +41,7 @@ func testLockEquality(lriLeft, lriRight []lockRequesterInfo) bool {
 }
 
 // Helper function to create a lock server for testing
-func createLockTestServer(t *testing.T) (string, *lockServer, string, time.Time) {
-
+func createLockTestServer(t *testing.T) (string, *lockServer, string) {
 	testPath, err := newTestConfig("us-east-1")
 	if err != nil {
 		t.Fatalf("unable initialize config file, %s", err)
@@ -63,21 +62,20 @@ func createLockTestServer(t *testing.T) (string, *lockServer, string, time.Time)
 		t.Fatalf("unable for JWT to generate token, %s", err)
 	}
 
-	timestamp := time.Now().UTC()
 	locker := &lockServer{
-		rpcPath:   "rpc-path",
-		mutex:     sync.Mutex{},
-		lockMap:   make(map[string][]lockRequesterInfo),
-		timestamp: timestamp,
+		rpcPath: "rpc-path",
+		mutex:   sync.Mutex{},
+		lockMap: make(map[string][]lockRequesterInfo),
 	}
 
-	return testPath, locker, token, timestamp
+	return testPath, locker, token
 }
 
 // Test Lock functionality
 func TestLockRpcServerLock(t *testing.T) {
 
-	testPath, locker, token, timestamp := createLockTestServer(t)
+	timestamp := time.Now().UTC()
+	testPath, locker, token := createLockTestServer(t)
 	defer removeAll(testPath)
 
 	la := LockArgs{
@@ -100,7 +98,7 @@ func TestLockRpcServerLock(t *testing.T) {
 		} else {
 			gotLri, _ := locker.lockMap["name"]
 			expectedLri := []lockRequesterInfo{
-				lockRequesterInfo{
+				{
 					writer:  true,
 					node:    "node",
 					rpcPath: "rpc-path",
@@ -135,7 +133,8 @@ func TestLockRpcServerLock(t *testing.T) {
 // Test Unlock functionality
 func TestLockRpcServerUnlock(t *testing.T) {
 
-	testPath, locker, token, timestamp := createLockTestServer(t)
+	timestamp := time.Now().UTC()
+	testPath, locker, token := createLockTestServer(t)
 	defer removeAll(testPath)
 
 	la := LockArgs{
@@ -182,7 +181,8 @@ func TestLockRpcServerUnlock(t *testing.T) {
 // Test RLock functionality
 func TestLockRpcServerRLock(t *testing.T) {
 
-	testPath, locker, token, timestamp := createLockTestServer(t)
+	timestamp := time.Now().UTC()
+	testPath, locker, token := createLockTestServer(t)
 	defer removeAll(testPath)
 
 	la := LockArgs{
@@ -205,7 +205,7 @@ func TestLockRpcServerRLock(t *testing.T) {
 		} else {
 			gotLri, _ := locker.lockMap["name"]
 			expectedLri := []lockRequesterInfo{
-				lockRequesterInfo{
+				{
 					writer:  false,
 					node:    "node",
 					rpcPath: "rpc-path",
@@ -240,7 +240,8 @@ func TestLockRpcServerRLock(t *testing.T) {
 // Test RUnlock functionality
 func TestLockRpcServerRUnlock(t *testing.T) {
 
-	testPath, locker, token, timestamp := createLockTestServer(t)
+	timestamp := time.Now().UTC()
+	testPath, locker, token := createLockTestServer(t)
 	defer removeAll(testPath)
 
 	la := LockArgs{
@@ -294,7 +295,7 @@ func TestLockRpcServerRUnlock(t *testing.T) {
 		} else {
 			gotLri, _ := locker.lockMap["name"]
 			expectedLri := []lockRequesterInfo{
-				lockRequesterInfo{
+				{
 					writer:  false,
 					node:    "node",
 					rpcPath: "rpc-path",
@@ -327,8 +328,8 @@ func TestLockRpcServerRUnlock(t *testing.T) {
 
 // Test Expired functionality
 func TestLockRpcServerExpired(t *testing.T) {
-
-	testPath, locker, token, timestamp := createLockTestServer(t)
+	timestamp := time.Now().UTC()
+	testPath, locker, token := createLockTestServer(t)
 	defer removeAll(testPath)
 
 	la := LockArgs{
@@ -366,6 +367,55 @@ func TestLockRpcServerExpired(t *testing.T) {
 	} else {
 		if expired {
 			t.Errorf("Expected %#v, got %#v", false, expired)
+		}
+	}
+}
+
+// Test initialization of lock servers.
+func TestLockServers(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		return
+	}
+	testCases := []struct {
+		srvCmdConfig     serverCmdConfig
+		totalLockServers int
+	}{
+		// Test - 1 one lock server initialized.
+		{
+			srvCmdConfig: serverCmdConfig{
+				isDistXL: true,
+				disks: []string{
+					"localhost:/mnt/disk1",
+					"1.1.1.2:/mnt/disk2",
+					"1.1.2.1:/mnt/disk3",
+					"1.1.2.2:/mnt/disk4",
+				},
+			},
+			totalLockServers: 1,
+		},
+		// Test - 2 two servers possible, 1 ignored.
+		{
+			srvCmdConfig: serverCmdConfig{
+				isDistXL: true,
+				disks: []string{
+					"localhost:/mnt/disk1",
+					"localhost:/mnt/disk2",
+					"1.1.2.1:/mnt/disk3",
+					"1.1.2.2:/mnt/disk4",
+				},
+				ignoredDisks: []string{
+					"localhost:/mnt/disk2",
+				},
+			},
+			totalLockServers: 1,
+		},
+	}
+
+	// Validates lock server initialization.
+	for i, testCase := range testCases {
+		lockServers := newLockServers(testCase.srvCmdConfig)
+		if len(lockServers) != testCase.totalLockServers {
+			t.Fatalf("Test %d: Expected total %d, got %d", i+1, testCase.totalLockServers, len(lockServers))
 		}
 	}
 }

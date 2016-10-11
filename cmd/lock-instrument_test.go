@@ -29,95 +29,94 @@ type lockStateCase struct {
 	readLock    bool // lock type.
 	setBlocked  bool // initialize the initial state to blocked.
 	expectedErr error
-	// expected global lock stats.
-	expectedLockStatus string // Status of the lock Blocked/Running.
+	// Expected global lock stats.
+	expectedLockStatus statusType // Status of the lock Blocked/Running.
 
 	expectedGlobalLockCount  int // Total number of locks held across the system, includes blocked + held locks.
 	expectedBlockedLockCount int // Total blocked lock across the system.
 	expectedRunningLockCount int // Total successfully held locks (non-blocking).
-	// expected lock statu for given <volume, path> pair.
+	// Expected lock status for given <volume, path> pair.
 	expectedVolPathLockCount    int // Total locks held for given <volume,path> pair, includes blocked locks.
 	expectedVolPathRunningCount int // Total succcesfully held locks for given <volume, path> pair.
 	expectedVolPathBlockCount   int // Total locks blocked on the given <volume, path> pair.
 }
 
 // Used for validating the Lock info obtaining from contol RPC end point for obtaining lock related info.
-func verifyRPCLockInfoResponse(l lockStateCase, rpcLockInfoResponse SystemLockState, t TestErrHandler, testNum int) {
-	// Assert the total number of locks (locked + acquired) in the system.
-	if rpcLockInfoResponse.TotalLocks != int64(l.expectedGlobalLockCount) {
-		t.Fatalf("Test %d: Expected the global lock counter to be %v, but got %v", testNum, int64(l.expectedGlobalLockCount),
-			rpcLockInfoResponse.TotalLocks)
-	}
+func verifyRPCLockInfoResponse(l lockStateCase, rpcLockInfoMap map[string]*SystemLockState, t TestErrHandler, testNum int) {
+	for _, rpcLockInfoResponse := range rpcLockInfoMap {
+		// Assert the total number of locks (locked + acquired) in the system.
+		if rpcLockInfoResponse.TotalLocks != int64(l.expectedGlobalLockCount) {
+			t.Fatalf("Test %d: Expected the global lock counter to be %v, but got %v", testNum, int64(l.expectedGlobalLockCount),
+				rpcLockInfoResponse.TotalLocks)
+		}
 
-	// verify the count for total blocked locks.
-	if rpcLockInfoResponse.TotalBlockedLocks != int64(l.expectedBlockedLockCount) {
-		t.Fatalf("Test %d: Expected the total blocked lock counter to be %v, but got %v", testNum, int64(l.expectedBlockedLockCount),
-			rpcLockInfoResponse.TotalBlockedLocks)
-	}
+		// verify the count for total blocked locks.
+		if rpcLockInfoResponse.TotalBlockedLocks != int64(l.expectedBlockedLockCount) {
+			t.Fatalf("Test %d: Expected the total blocked lock counter to be %v, but got %v", testNum, int64(l.expectedBlockedLockCount),
+				rpcLockInfoResponse.TotalBlockedLocks)
+		}
 
-	// verify the count for total running locks.
-	if rpcLockInfoResponse.TotalAcquiredLocks != int64(l.expectedRunningLockCount) {
-		t.Fatalf("Test %d: Expected the total running lock counter to be %v, but got %v", testNum, int64(l.expectedRunningLockCount),
-			rpcLockInfoResponse.TotalAcquiredLocks)
-	}
+		// verify the count for total running locks.
+		if rpcLockInfoResponse.TotalAcquiredLocks != int64(l.expectedRunningLockCount) {
+			t.Fatalf("Test %d: Expected the total running lock counter to be %v, but got %v", testNum, int64(l.expectedRunningLockCount),
+				rpcLockInfoResponse.TotalAcquiredLocks)
+		}
 
-	for _, locksInfoPerObject := range rpcLockInfoResponse.LocksInfoPerObject {
-		// See whether the entry for the <bucket, object> exists in the RPC response.
-		if locksInfoPerObject.Bucket == l.volume && locksInfoPerObject.Object == l.path {
-			// Assert the total number of locks (blocked + acquired) for the given <buckt, object> pair.
-			if locksInfoPerObject.LocksOnObject != int64(l.expectedVolPathLockCount) {
-				t.Errorf("Test %d: Expected the total lock count for bucket: \"%s\", object: \"%s\" to be %v, but got %v", testNum,
-					l.volume, l.path, int64(l.expectedVolPathLockCount), locksInfoPerObject.LocksOnObject)
-			}
-			// Assert the total number of acquired locks for the given <buckt, object> pair.
-			if locksInfoPerObject.LocksAcquiredOnObject != int64(l.expectedVolPathRunningCount) {
-				t.Errorf("Test %d: Expected the acquired lock count for bucket: \"%s\", object: \"%s\" to be %v, but got %v", testNum,
-					l.volume, l.path, int64(l.expectedVolPathRunningCount), locksInfoPerObject.LocksAcquiredOnObject)
-			}
-			// Assert the total number of blocked locks for the given <buckt, object> pair.
-			if locksInfoPerObject.TotalBlockedLocks != int64(l.expectedVolPathBlockCount) {
-				t.Errorf("Test %d: Expected the blocked lock count for bucket: \"%s\", object: \"%s\" to be %v, but got %v", testNum,
-					l.volume, l.path, int64(l.expectedVolPathBlockCount), locksInfoPerObject.TotalBlockedLocks)
-			}
-			// Flag to mark whether there's an entry in the RPC lock info response for given opsID.
-			var opsIDfound bool
-			for _, opsLockState := range locksInfoPerObject.LockDetailsOnObject {
-				// first check whether the entry for the given operation ID exists.
-				if opsLockState.OperationID == l.opsID {
-					opsIDfound = true
-					// asserting the type  of lock (RLock/WLock) from the RPC lock info response.
-					if l.readLock {
-						if opsLockState.LockType != debugRLockStr {
-							t.Errorf("Test case %d: Expected the lock type to be \"%s\"", testNum, debugRLockStr)
+		for _, locksInfoPerObject := range rpcLockInfoResponse.LocksInfoPerObject {
+			// See whether the entry for the <bucket, object> exists in the RPC response.
+			if locksInfoPerObject.Bucket == l.volume && locksInfoPerObject.Object == l.path {
+				// Assert the total number of locks (blocked + acquired) for the given <buckt, object> pair.
+				if locksInfoPerObject.LocksOnObject != int64(l.expectedVolPathLockCount) {
+					t.Errorf("Test %d: Expected the total lock count for bucket: \"%s\", object: \"%s\" to be %v, but got %v", testNum,
+						l.volume, l.path, int64(l.expectedVolPathLockCount), locksInfoPerObject.LocksOnObject)
+				}
+				// Assert the total number of acquired locks for the given <buckt, object> pair.
+				if locksInfoPerObject.LocksAcquiredOnObject != int64(l.expectedVolPathRunningCount) {
+					t.Errorf("Test %d: Expected the acquired lock count for bucket: \"%s\", object: \"%s\" to be %v, but got %v", testNum,
+						l.volume, l.path, int64(l.expectedVolPathRunningCount), locksInfoPerObject.LocksAcquiredOnObject)
+				}
+				// Assert the total number of blocked locks for the given <buckt, object> pair.
+				if locksInfoPerObject.TotalBlockedLocks != int64(l.expectedVolPathBlockCount) {
+					t.Errorf("Test %d: Expected the blocked lock count for bucket: \"%s\", object: \"%s\" to be %v, but got %v", testNum,
+						l.volume, l.path, int64(l.expectedVolPathBlockCount), locksInfoPerObject.TotalBlockedLocks)
+				}
+				// Flag to mark whether there's an entry in the RPC lock info response for given opsID.
+				var opsIDfound bool
+				for _, opsLockState := range locksInfoPerObject.LockDetailsOnObject {
+					// first check whether the entry for the given operation ID exists.
+					if opsLockState.OperationID == l.opsID {
+						opsIDfound = true
+						// asserting the type  of lock (RLock/WLock) from the RPC lock info response.
+						if l.readLock {
+							if opsLockState.LockType != debugRLockStr {
+								t.Errorf("Test case %d: Expected the lock type to be \"%s\"", testNum, debugRLockStr)
+							}
+						} else {
+							if opsLockState.LockType != debugWLockStr {
+								t.Errorf("Test case %d: Expected the lock type to be \"%s\"", testNum, debugWLockStr)
+							}
 						}
-					} else {
-						if opsLockState.LockType != debugWLockStr {
-							t.Errorf("Test case %d: Expected the lock type to be \"%s\"", testNum, debugWLockStr)
+
+						if opsLockState.Status != l.expectedLockStatus {
+							t.Errorf("Test case %d: Expected the  status of the operation to be \"%s\", got \"%s\"", testNum, l.expectedLockStatus, opsLockState.Status)
 						}
-					}
 
-					if opsLockState.Status != l.expectedLockStatus {
-						t.Errorf("Test case %d: Expected the  status of the operation to be \"%s\", got \"%s\"", testNum, l.expectedLockStatus, opsLockState.Status)
+						// all check satisfied, return here.
+						// Any mismatch in the earlier checks would have ended the tests due to `Fatalf`,
+						// control reaching here implies that all checks are satisfied.
+						return
 					}
-
-					// if opsLockState.LockOrigin != l.lockOrigin {
-					// 	t.Fatalf("Test case %d: Expected the origin of the lock to be \"%s\", got \"%s\"", testNum, opsLockState.LockOrigin, l.lockOrigin)
-					// }
-					// all check satisfied, return here.
-					// Any mismatch in the earlier checks would have ended the tests due to `Fatalf`,
-					// control reaching here implies that all checks are satisfied.
-					return
+				}
+				// opsID not found.
+				// No entry for an operation with given operation ID exists.
+				if !opsIDfound {
+					t.Fatalf("Test case %d: Entry for OpsId: \"%s\" not found in <bucket>: \"%s\", <path>: \"%s\" doesn't exist in the RPC response", testNum, l.opsID, l.volume, l.path)
 				}
 			}
-			// opsID not found.
-			// No entry for an operation with given operation ID exists.
-			if !opsIDfound {
-				t.Fatalf("Test case %d: Entry for OpsId: \"%s\" not found in <bucket>: \"%s\", <path>: \"%s\" doesn't exist in the RPC response", testNum, l.opsID, l.volume, l.path)
-			}
 		}
+		// No entry exists for given <bucket, object> pair in the RPC response.
+		t.Errorf("Test case %d: Entry for <bucket>: \"%s\", <object>: \"%s\" doesn't exist in the RPC response", testNum, l.volume, l.path)
 	}
-	// No entry exists for given <bucket, object> pair in the RPC response.
-	t.Errorf("Test case %d: Entry for <bucket>: \"%s\", <object>: \"%s\" doesn't exist in the RPC response", testNum, l.volume, l.path)
 }
 
 // Asserts the lock counter from the global nsMutex inmemory lock with the expected one.
@@ -142,7 +141,7 @@ func verifyGlobalLockStats(l lockStateCase, t *testing.T, testNum int) {
 	nsMutex.lockMapMutex.Unlock()
 	// Verifying again with the JSON response of the lock info.
 	// Verifying the lock stats.
-	sysLockState, err := generateSystemLockResponse()
+	sysLockState, err := getSystemLockState()
 	if err != nil {
 		t.Fatalf("Obtaining lock info failed with <ERROR> %s", err)
 
@@ -197,11 +196,11 @@ func verifyLockState(l lockStateCase, t *testing.T, testNum int) {
 		if lockInfo, ok := debugLockMap.lockInfo[l.opsID]; ok {
 			// Validating the lock type filed in the debug lock information.
 			if l.readLock {
-				if lockInfo.lockType != debugRLockStr {
+				if lockInfo.lType != debugRLockStr {
 					t.Errorf("Test case %d: Expected the lock type in the lock debug info to be \"%s\"", testNum, debugRLockStr)
 				}
 			} else {
-				if lockInfo.lockType != debugWLockStr {
+				if lockInfo.lType != debugWLockStr {
 					t.Errorf("Test case %d: Expected the lock type in the lock debug info to be \"%s\"", testNum, debugWLockStr)
 				}
 			}
@@ -251,8 +250,8 @@ func TestNsLockMapStatusBlockedToRunning(t *testing.T) {
 		path        string
 		lockOrigin  string
 		opsID       string
-		readLock    bool // lock type.
-		setBlocked  bool // initialize the initial state to blocked.
+		readLock    bool // Read lock type.
+		setBlocked  bool // Initialize the initial state to blocked.
 		expectedErr error
 	}{
 		// Test case - 1.
@@ -413,11 +412,11 @@ func TestNsLockMapStatusBlockedToRunning(t *testing.T) {
 				if lockInfo, ok := debugLockMap.lockInfo[testCase.opsID]; ok {
 					// Validating the lock type filed in the debug lock information.
 					if testCase.readLock {
-						if lockInfo.lockType != debugRLockStr {
+						if lockInfo.lType != debugRLockStr {
 							t.Errorf("Test case %d: Expected the lock type in the lock debug info to be \"%s\"", i+1, debugRLockStr)
 						}
 					} else {
-						if lockInfo.lockType != debugWLockStr {
+						if lockInfo.lType != debugWLockStr {
 							t.Errorf("Test case %d: Expected the lock type in the lock debug info to be \"%s\"", i+1, debugWLockStr)
 						}
 					}
@@ -427,7 +426,7 @@ func TestNsLockMapStatusBlockedToRunning(t *testing.T) {
 						t.Errorf("Test %d: Expected the lock origin info to be \"%s\", but got \"%s\"", i+1, testCase.lockOrigin, lockInfo.lockOrigin)
 					}
 					// validating the status of the lock.
-					if lockInfo.status != "Running" {
+					if lockInfo.status != runningStatus {
 						t.Errorf("Test %d: Expected the status of the lock to be \"%s\", but got \"%s\"", i+1, "Running", lockInfo.status)
 					}
 				} else {
@@ -457,7 +456,7 @@ func TestNsLockMapStatusNoneToBlocked(t *testing.T) {
 			readLock:   true,
 			// expected metrics.
 			expectedErr:        nil,
-			expectedLockStatus: "Blocked",
+			expectedLockStatus: blockedStatus,
 
 			expectedGlobalLockCount:  1,
 			expectedRunningLockCount: 0,
@@ -479,7 +478,7 @@ func TestNsLockMapStatusNoneToBlocked(t *testing.T) {
 			readLock:   false,
 			// expected metrics.
 			expectedErr:        nil,
-			expectedLockStatus: "Blocked",
+			expectedLockStatus: blockedStatus,
 
 			expectedGlobalLockCount:  2,
 			expectedRunningLockCount: 0,

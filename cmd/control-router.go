@@ -21,7 +21,6 @@ import (
 	"net/rpc"
 	"path"
 	"strings"
-	"time"
 
 	router "github.com/gorilla/mux"
 	"github.com/minio/minio-go/pkg/set"
@@ -29,31 +28,39 @@ import (
 
 // Routes paths for "minio control" commands.
 const (
-	controlPath = "/controller"
+	controlPath = "/control"
 )
 
-// Initializes remote controller clients for making remote requests.
-func initRemoteControllerClients(srvCmdConfig serverCmdConfig) []*AuthRPCClient {
+// Find local node through the command line arguments.
+func getLocalAddress(srvCmdConfig serverCmdConfig) string {
+	if !srvCmdConfig.isDistXL {
+		return fmt.Sprintf(":%d", globalMinioPort)
+	}
+	for _, export := range srvCmdConfig.disks {
+		// Validates if remote disk is local.
+		if isLocalStorage(export) {
+			var host string
+			if idx := strings.LastIndex(export, ":"); idx != -1 {
+				host = export[:idx]
+			}
+			return fmt.Sprintf("%s:%d", host, globalMinioPort)
+		}
+	}
+	return ""
+}
+
+// Initializes remote control clients for making remote requests.
+func initRemoteControlClients(srvCmdConfig serverCmdConfig) []*AuthRPCClient {
 	if !srvCmdConfig.isDistXL {
 		return nil
 	}
 	var newExports []string
 	// Initialize auth rpc clients.
 	exports := srvCmdConfig.disks
-	ignoredExports := srvCmdConfig.ignoredDisks
 	remoteHosts := set.NewStringSet()
 
-	// Initialize ignored disks in a new set.
-	ignoredSet := set.NewStringSet()
-	if len(ignoredExports) > 0 {
-		ignoredSet = set.CreateStringSet(ignoredExports...)
-	}
-	var authRPCClients []*AuthRPCClient
+	var remoteControlClnts []*AuthRPCClient
 	for _, export := range exports {
-		if ignoredSet.Contains(export) {
-			// Ignore initializing ignored export.
-			continue
-		}
 		// Validates if remote disk is local.
 		if isLocalStorage(export) {
 			continue
@@ -68,41 +75,40 @@ func initRemoteControllerClients(srvCmdConfig serverCmdConfig) []*AuthRPCClient 
 		remoteHosts.Add(fmt.Sprintf("%s:%d", host, globalMinioPort))
 	}
 	for host := range remoteHosts {
-		authRPCClients = append(authRPCClients, newAuthClient(&authConfig{
+		remoteControlClnts = append(remoteControlClnts, newAuthClient(&authConfig{
 			accessKey:   serverConfig.GetCredential().AccessKeyID,
 			secretKey:   serverConfig.GetCredential().SecretAccessKey,
 			secureConn:  isSSL(),
 			address:     host,
 			path:        path.Join(reservedBucket, controlPath),
-			loginMethod: "Controller.LoginHandler",
+			loginMethod: "Control.LoginHandler",
 		}))
 	}
-	return authRPCClients
+	return remoteControlClnts
 }
 
-// Register controller RPC handlers.
-func registerControllerRPCRouter(mux *router.Router, srvCmdConfig serverCmdConfig) {
-	// Initialize controller.
-	ctrlHandlers := &controllerAPIHandlers{
-		ObjectAPI:    newObjectLayerFn,
-		StorageDisks: srvCmdConfig.storageDisks,
-		timestamp:    time.Now().UTC(),
+// Represents control object which provides handlers for control
+// operations on server.
+type controlAPIHandlers struct {
+	ObjectAPI      func() ObjectLayer
+	StorageDisks   []StorageAPI
+	RemoteControls []*AuthRPCClient
+	LocalNode      string
+}
+
+// Register control RPC handlers.
+func registerControlRPCRouter(mux *router.Router, srvCmdConfig serverCmdConfig) {
+	// Initialize Control.
+	ctrlHandlers := &controlAPIHandlers{
+		ObjectAPI:      newObjectLayerFn,
+		RemoteControls: initRemoteControlClients(srvCmdConfig),
+		LocalNode:      getLocalAddress(srvCmdConfig),
+		StorageDisks:   srvCmdConfig.storageDisks,
 	}
 
-	// Initializes remote controller clients.
-	ctrlHandlers.RemoteControllers = initRemoteControllerClients(srvCmdConfig)
-
 	ctrlRPCServer := rpc.NewServer()
-	ctrlRPCServer.RegisterName("Controller", ctrlHandlers)
+	ctrlRPCServer.RegisterName("Control", ctrlHandlers)
 
 	ctrlRouter := mux.NewRoute().PathPrefix(reservedBucket).Subrouter()
 	ctrlRouter.Path(controlPath).Handler(ctrlRPCServer)
-}
-
-// Handler for object healing.
-type controllerAPIHandlers struct {
-	ObjectAPI         func() ObjectLayer
-	StorageDisks      []StorageAPI
-	RemoteControllers []*AuthRPCClient
-	timestamp         time.Time
 }

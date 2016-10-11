@@ -53,7 +53,7 @@ func (s *storageServer) LoginHandler(args *RPCLoginArgs, reply *RPCLoginReply) e
 		return err
 	}
 	reply.Token = token
-	reply.Timestamp = s.timestamp
+	reply.Timestamp = time.Now().UTC()
 	reply.ServerVersion = Version
 	return nil
 }
@@ -229,7 +229,6 @@ func newRPCServer(serverConfig serverCmdConfig) (servers []*storageServer, err e
 	if len(ignoredExports) > 0 {
 		ignoredSet = set.CreateStringSet(ignoredExports...)
 	}
-	tstamp := time.Now().UTC()
 	for _, export := range exports {
 		if ignoredSet.Contains(export) {
 			// Ignore initializing ignored export.
@@ -249,9 +248,8 @@ func newRPCServer(serverConfig serverCmdConfig) (servers []*storageServer, err e
 				export = export[idx+1:]
 			}
 			servers = append(servers, &storageServer{
-				storage:   storage,
-				path:      export,
-				timestamp: tstamp,
+				storage: storage,
+				path:    export,
 			})
 		}
 	}
