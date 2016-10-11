@@ -72,7 +72,7 @@ func testGetBucketLocationHandler(obj ObjectLayer, instanceType, bucketName stri
 	}
 
 	for i, testCase := range testCases {
-		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
+		// initialize httptest Recorder, this records any mutations to response writer inside the handler.
 		rec := httptest.NewRecorder()
 		// construct HTTP request for Get bucket location.
 		req, err := newTestSignedRequestV4("GET", getBucketLocationURL("", testCase.bucketName), 0, nil, testCase.accessKey, testCase.secretKey)
@@ -115,6 +115,21 @@ func testGetBucketLocationHandler(obj ObjectLayer, instanceType, bucketName stri
 	// sets the bucket policy using the policy statement generated from `getReadOnlyBucketStatement` so that the
 	// unsigned request goes through and its validated again.
 	ExecObjectLayerAPIAnonTest(t, "TestGetBucketLocationHandler", bucketName, "", instanceType, apiRouter, anonReq, getReadOnlyBucketStatement)
+
+	// HTTP request for testing when `objectLayer` is set to `nil`.
+	// There is no need to use an existing bucket and valid input for creating the request
+	// since the `objectLayer==nil`  check is performed before any other checks inside the handlers.
+	// The only aim is to generate an HTTP request in a way that the relevant/registered end point is evoked/called.
+
+	nilBucket := "dummy-bucket"
+	nilReq, err := newTestRequest("GET", getBucketLocationURL("", nilBucket), 0, nil)
+
+	if err != nil {
+		t.Errorf("Minio %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
+	}
+	// Executes the object layer set to `nil` test.
+	// `ExecObjectLayerAPINilTest` manages the operation.
+	ExecObjectLayerAPINilTest(t, nilBucket, "", instanceType, apiRouter, nilReq)
 }
 
 // Wrapper for calling HeadBucket HTTP handler tests for both XL multiple disks and single node setup.
@@ -185,6 +200,21 @@ func testHeadBucketHandler(obj ObjectLayer, instanceType, bucketName string, api
 	// sets the bucket policy using the policy statement generated from `getReadOnlyBucketStatement` so that the
 	// unsigned request goes through and its validated again.
 	ExecObjectLayerAPIAnonTest(t, "TestHeadBucketHandler", bucketName, "", instanceType, apiRouter, anonReq, getReadOnlyBucketStatement)
+
+	// HTTP request for testing when `objectLayer` is set to `nil`.
+	// There is no need to use an existing bucket and valid input for creating the request
+	// since the `objectLayer==nil`  check is performed before any other checks inside the handlers.
+	// The only aim is to generate an HTTP request in a way that the relevant/registered end point is evoked/called.
+
+	nilBucket := "dummy-bucket"
+	nilReq, err := newTestRequest("HEAD", getHEADBucketURL("", nilBucket), 0, nil)
+
+	if err != nil {
+		t.Errorf("Minio %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
+	}
+	// execute the object layer set to `nil` test.
+	// `ExecObjectLayerAPINilTest` manages the operation.
+	ExecObjectLayerAPINilTest(t, nilBucket, "", instanceType, apiRouter, nilReq)
 }
 
 // Wrapper for calling TestListMultipartUploadsHandler tests for both XL multiple disks and single node setup.
@@ -276,6 +306,23 @@ func testListMultipartUploadsHandler(obj ObjectLayer, instanceType, bucketName s
 	// unsigned request goes through and its validated again.
 	ExecObjectLayerAPIAnonTest(t, "TestListMultipartUploadsHandler", bucketName, "", instanceType, apiRouter, anonReq, getWriteOnlyBucketStatement)
 
+	// HTTP request for testing when `objectLayer` is set to `nil`.
+	// There is no need to use an existing bucket and valid input for creating the request
+	// since the `objectLayer==nil`  check is performed before any other checks inside the handlers.
+	// The only aim is to generate an HTTP request in a way that the relevant/registered end point is evoked/called.
+
+	nilBucket := "dummy-bucket"
+	url = getListMultipartUploadsURLWithParams("", nilBucket, "dummy-prefix", testCases[6].keyMarker,
+		testCases[6].uploadIDMarker, testCases[6].delimiter, testCases[6].maxUploads)
+
+	nilReq, err := newTestRequest("GET", url, 0, nil)
+
+	if err != nil {
+		t.Errorf("Minio %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
+	}
+	// execute the object layer set to `nil` test.
+	// `ExecObjectLayerAPINilTest` manages the operation.
+	ExecObjectLayerAPINilTest(t, nilBucket, "", instanceType, apiRouter, nilReq)
 }
 
 // Wrapper for calling TestListBucketsHandler tests for both XL multiple disks and single node setup.
@@ -336,4 +383,18 @@ func testListBucketsHandler(obj ObjectLayer, instanceType, bucketName string, ap
 	// sets the bucket policy using the policy statement generated from `getWriteOnlyObjectStatement` so that the
 	// unsigned request goes through and its validated again.
 	ExecObjectLayerAPIAnonTest(t, "ListBucketsHandler", "", "", instanceType, apiRouter, anonReq, getWriteOnlyObjectStatement)
+
+	// HTTP request for testing when `objectLayer` is set to `nil`.
+	// There is no need to use an existing bucket and valid input for creating the request
+	// since the `objectLayer==nil`  check is performed before any other checks inside the handlers.
+	// The only aim is to generate an HTTP request in a way that the relevant/registered end point is evoked/called.
+
+	nilReq, err := newTestRequest("GET", getListBucketURL(""), 0, nil)
+
+	if err != nil {
+		t.Errorf("Minio %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
+	}
+	// execute the object layer set to `nil` test.
+	// `ExecObjectLayerAPINilTest` manages the operation.
+	ExecObjectLayerAPINilTest(t, "", "", instanceType, apiRouter, nilReq)
 }

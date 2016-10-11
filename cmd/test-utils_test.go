@@ -1577,14 +1577,18 @@ func ExecObjectLayerAPINilTest(t TestErrHandler, bucketName, objectName, instanc
 	// expected error response in bytes when objectLayer is not initialized, or set to `nil`.
 	expectedErrResponse := encodeResponse(getAPIErrorResponse(getAPIError(ErrServerNotInitialized), getGetObjectURL("", bucketName, objectName)))
 
-	// read the response body.
-	actualContent, err := ioutil.ReadAll(rec.Body)
-	if err != nil {
-		t.Fatalf("Minio %s: Failed parsing response body: <ERROR> %v.", instanceType, err)
-	}
-	// verify whether actual error response (from the response body), matches the expected error response.
-	if !bytes.Equal(expectedErrResponse, actualContent) {
-		t.Errorf("Minio %s: Object content differs from expected value.", instanceType)
+	// HEAD HTTP Request doesn't contain body in its response,
+	// for other type of HTTP requests compare the response body content with the expected one.
+	if req.Method != "HEAD" {
+		// read the response body.
+		actualContent, err := ioutil.ReadAll(rec.Body)
+		if err != nil {
+			t.Fatalf("Minio %s: Failed parsing response body: <ERROR> %v.", instanceType, err)
+		}
+		// verify whether actual error response (from the response body), matches the expected error response.
+		if !bytes.Equal(expectedErrResponse, actualContent) {
+			t.Errorf("Minio %s: Object content differs from expected value.", instanceType)
+		}
 	}
 }
 
