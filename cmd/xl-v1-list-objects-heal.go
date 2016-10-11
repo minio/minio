@@ -17,55 +17,59 @@
 package cmd
 
 import (
-	"path"
 	"sort"
 	"strings"
 )
 
-func listDirHealFactory(disks ...StorageAPI) listDirFunc {
+func listDirHealFactory(isLeaf isLeafFunc, disks ...StorageAPI) listDirFunc {
 	// Returns sorted merged entries from all the disks.
-	listDir := func(bucket, prefixDir, prefixEntry string) (mergedentries []string, delayIsLeaf bool, err error) {
+	listDir := func(bucket, prefixDir, prefixEntry string) (mergedEntries []string, delayIsLeaf bool, err error) {
 		for _, disk := range disks {
+			if disk == nil {
+				continue
+			}
 			var entries []string
 			var newEntries []string
 			entries, err = disk.ListDir(bucket, prefixDir)
 			if err != nil {
-				// Skip the disk of listDir returns error.
 				continue
 			}
+			// Listing needs to be sorted.
+			sort.Strings(entries)
 
+			// Filter entries that have the prefix prefixEntry.
+			entries = filterMatchingPrefix(entries, prefixEntry)
+
+			// isLeaf() check has to happen here so that trailing "/" for objects can be removed.
 			for i, entry := range entries {
-				if strings.HasSuffix(entry, slashSeparator) {
-					if _, err = disk.StatFile(bucket, path.Join(prefixDir, entry, xlMetaJSONFile)); err == nil {
-						// If it is an object trim the trailing "/"
-						entries[i] = strings.TrimSuffix(entry, slashSeparator)
-					}
+				if isLeaf(bucket, pathJoin(prefixDir, entry)) {
+					entries[i] = strings.TrimSuffix(entry, slashSeparator)
 				}
 			}
-
-			if len(mergedentries) == 0 {
+			// Sort again after removing trailing "/" for objects as the previous sort
+			// does not hold good anymore.
+			sort.Strings(entries)
+			if len(mergedEntries) == 0 {
 				// For the first successful disk.ListDir()
-				mergedentries = entries
-				sort.Strings(mergedentries)
+				mergedEntries = entries
+				sort.Strings(mergedEntries)
 				continue
 			}
-
 			// find elements in entries which are not in mergedentries
 			for _, entry := range entries {
-				idx := sort.SearchStrings(mergedentries, entry)
-				if mergedentries[idx] == entry {
+				idx := sort.SearchStrings(mergedEntries, entry)
+				if mergedEntries[idx] == entry {
 					continue
 				}
 				newEntries = append(newEntries, entry)
 			}
-
 			if len(newEntries) > 0 {
 				// Merge the entries and sort it.
-				mergedentries = append(mergedentries, newEntries...)
-				sort.Strings(mergedentries)
+				mergedEntries = append(mergedEntries, newEntries...)
+				sort.Strings(mergedEntries)
 			}
 		}
-		return mergedentries, false, nil
+		return mergedEntries, false, nil
 	}
 	return listDir
 }
@@ -83,7 +87,8 @@ func (xl xlObjects) listObjectsHeal(bucket, prefix, marker, delimiter string, ma
 	walkResultCh, endWalkCh := xl.listPool.Release(listParams{bucket, recursive, marker, prefix, heal})
 	if walkResultCh == nil {
 		endWalkCh = make(chan struct{})
-		listDir := listDirHealFactory(xl.storageDisks...)
+		isLeaf := xl.isObject
+		listDir := listDirHealFactory(isLeaf, xl.storageDisks...)
 		walkResultCh = startTreeWalk(bucket, prefix, marker, recursive, listDir, nil, endWalkCh)
 	}
 

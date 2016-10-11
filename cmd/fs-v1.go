@@ -643,7 +643,12 @@ func (fs fsObjects) HealObject(bucket, object string) error {
 	return traceError(NotImplemented{})
 }
 
-// HealListObjects - list objects for healing. Valid only for XL
+// HealBucket - no-op for fs, Valid only for XL.
+func (fs fsObjects) HealBucket(bucket string) error {
+	return traceError(NotImplemented{})
+}
+
+// ListObjectsHeal - list all objects to be healed. Valid only for XL
 func (fs fsObjects) ListObjectsHeal(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
 	return ListObjectsInfo{}, traceError(NotImplemented{})
 }

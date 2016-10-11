@@ -111,12 +111,12 @@ func errorCause(err error) error {
 
 // Returns slice of underlying cause error.
 func errorsCause(errs []error) []error {
-	Errs := make([]error, len(errs))
+	cerrs := make([]error, len(errs))
 	for i, err := range errs {
 		if err == nil {
 			continue
 		}
-		Errs[i] = errorCause(err)
+		cerrs[i] = errorCause(err)
 	}
-	return Errs
+	return cerrs
 }

@@ -17,6 +17,10 @@
 package cmd
 
 import (
+	"bytes"
+	"crypto/rand"
+	"os"
+	"path"
 	"testing"
 
 	"github.com/minio/cli"
@@ -43,7 +47,49 @@ func TestControlHealMain(t *testing.T) {
 	// run app
 	err := app.Run(args)
 	if err != nil {
-		t.Errorf("Control-Heal-Main test failed with - %s", err.Error())
+		t.Errorf("Control-Heal-Format-Main test failed with - %s", err.Error())
+	}
+
+	obj := newObjectLayerFn()
+	// Create "bucket"
+	err = obj.MakeBucket("bucket")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bucket := "bucket"
+	object := "object"
+
+	data := make([]byte, 1*1024*1024)
+	length := int64(len(data))
+	_, err = rand.Read(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = obj.PutObject(bucket, object, length, bytes.NewReader(data), nil, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Remove the object - to simulate the case where the disk was down when the object was created.
+	err = os.RemoveAll(path.Join(testServer.Disks[0], bucket, object))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	args = []string{"./minio", "control", "heal", url + "/bucket"}
+	// run app
+	err = app.Run(args)
+	if err != nil {
+		t.Errorf("Control-Heal-Bucket-Main test failed with - %s", err.Error())
+	}
+
+	args = []string{"./minio", "control", "heal", url + "/bucket/object"}
+	// run app
+	err = app.Run(args)
+	if err != nil {
+		t.Errorf("Control-Heal-Bucket-With-Prefix-Main test failed with - %s", err.Error())
 	}
 }
 

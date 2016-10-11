@@ -73,9 +73,10 @@ func initRemoteControlClients(srvCmdConfig serverCmdConfig) []*AuthRPCClient {
 // operations on server.
 type controlAPIHandlers struct {
 	ObjectAPI      func() ObjectLayer
-	StorageDisks   []StorageAPI
+	IsXL           bool
 	RemoteControls []*AuthRPCClient
 	LocalNode      string
+	StorageDisks   []StorageAPI
 }
 
 // Register control RPC handlers.
@@ -83,6 +84,7 @@ func registerControlRPCRouter(mux *router.Router, srvCmdConfig serverCmdConfig) 
 	// Initialize Control.
 	ctrlHandlers := &controlAPIHandlers{
 		ObjectAPI:      newObjectLayerFn,
+		IsXL:           srvCmdConfig.isDistXL || len(srvCmdConfig.storageDisks) > 1,
 		RemoteControls: initRemoteControlClients(srvCmdConfig),
 		LocalNode:      getLocalAddress(srvCmdConfig),
 		StorageDisks:   srvCmdConfig.storageDisks,

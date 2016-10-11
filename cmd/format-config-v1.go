@@ -743,9 +743,10 @@ func healFormatXLCorruptedDisks(storageDisks []StorageAPI) error {
 
 // loadFormatXL - loads XL `format.json` and returns back properly
 // ordered storage slice based on `format.json`.
-func loadFormatXL(bootstrapDisks []StorageAPI) (disks []StorageAPI, err error) {
+func loadFormatXL(bootstrapDisks []StorageAPI, readQuorum int) (disks []StorageAPI, err error) {
 	var unformattedDisksFoundCnt = 0
 	var diskNotFoundCount = 0
+	var corruptedDisksFoundCnt = 0
 	formatConfigs := make([]*formatConfigV1, len(bootstrapDisks))
 
 	// Try to load `format.json` bootstrap disks.
@@ -763,6 +764,9 @@ func loadFormatXL(bootstrapDisks []StorageAPI) (disks []StorageAPI, err error) {
 			} else if err == errDiskNotFound {
 				diskNotFoundCount++
 				continue
+			} else if err == errCorruptedFormat {
+				corruptedDisksFoundCnt++
+				continue
 			}
 			return nil, err
 		}
@@ -771,11 +775,13 @@ func loadFormatXL(bootstrapDisks []StorageAPI) (disks []StorageAPI, err error) {
 	}
 
 	// If all disks indicate that 'format.json' is not available return 'errUnformattedDisk'.
-	if unformattedDisksFoundCnt > len(bootstrapDisks)-(len(bootstrapDisks)/2+1) {
+	if unformattedDisksFoundCnt > len(bootstrapDisks)-readQuorum {
 		return nil, errUnformattedDisk
+	} else if corruptedDisksFoundCnt > len(bootstrapDisks)-readQuorum {
+		return nil, errCorruptedFormat
 	} else if diskNotFoundCount == len(bootstrapDisks) {
 		return nil, errDiskNotFound
-	} else if diskNotFoundCount > len(bootstrapDisks)-(len(bootstrapDisks)/2+1) {
+	} else if diskNotFoundCount > len(bootstrapDisks)-readQuorum {
 		return nil, errXLReadQuorum
 	}
 
