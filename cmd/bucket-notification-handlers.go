@@ -252,18 +252,14 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 	// Parse listen bucket notification resources.
 	prefixes, suffixes, events := getListenBucketNotificationResources(r.URL.Query())
 
-	for _, prefix := range prefixes {
-		if !IsValidObjectPrefix(prefix) {
-			writeErrorResponse(w, r, ErrFilterValueInvalid, r.URL.Path)
-			return
-		}
+	if err := validateFilterValues(prefixes); err != ErrNone {
+		writeErrorResponse(w, r, err, r.URL.Path)
+		return
 	}
 
-	for _, suffix := range suffixes {
-		if !IsValidObjectPrefix(suffix) {
-			writeErrorResponse(w, r, ErrFilterValueInvalid, r.URL.Path)
-			return
-		}
+	if err := validateFilterValues(suffixes); err != ErrNone {
+		writeErrorResponse(w, r, err, r.URL.Path)
+		return
 	}
 
 	// Validate all the resource events.
