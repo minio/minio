@@ -80,9 +80,19 @@ func getObjectResources(values url.Values) (uploadID string, partNumberMarker, m
 }
 
 // Parse listen bucket notification resources.
-func getListenBucketNotificationResources(values url.Values) (prefix string, suffix string, events []string) {
-	prefix = values.Get("prefix")
-	suffix = values.Get("suffix")
+func getListenBucketNotificationResources(values url.Values) (prefix []string, suffix []string, events []string) {
+	prefix = values["prefix"]
+	suffix = values["suffix"]
 	events = values["events"]
 	return prefix, suffix, events
+}
+
+// Validates filter values
+func validateFilterValues(values []string) (err APIErrorCode) {
+	for _, value := range values {
+		if !IsValidObjectPrefix(value) {
+			return ErrFilterValueInvalid
+		}
+	}
+	return ErrNone
 }

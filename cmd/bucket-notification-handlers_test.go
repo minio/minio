@@ -235,24 +235,24 @@ func testListenBucketNotificationHandler(obj ObjectLayer, instanceType string, t
 	invalidEvents := []string{"invalidEvent"}
 	testCases := []struct {
 		bucketName       string
-		prefix           string
-		suffix           string
+		prefixes         []string
+		suffixes         []string
 		events           []string
 		kind             testKind
 		expectedHTTPCode int
 		expectedAPIError string
 	}{
 		// FIXME: Need to find a way to run valid listen bucket notification test case without blocking the unit test.
-		{randBucket, "", "", invalidEvents, CheckStatus, signatureMismatchError.HTTPStatusCode, ""},
-		{randBucket, tooBigPrefix, "", validEvents, CheckStatus, http.StatusBadRequest, ""},
-		{invalidBucket, "", "", validEvents, CheckStatus, http.StatusBadRequest, ""},
-		{randBucket, "", "", validEvents, InvalidAuth, signatureMismatchError.HTTPStatusCode, signatureMismatchError.Code},
+		{randBucket, []string{}, []string{}, invalidEvents, CheckStatus, signatureMismatchError.HTTPStatusCode, ""},
+		{randBucket, []string{tooBigPrefix}, []string{}, validEvents, CheckStatus, http.StatusBadRequest, ""},
+		{invalidBucket, []string{}, []string{}, validEvents, CheckStatus, http.StatusBadRequest, ""},
+		{randBucket, []string{}, []string{}, validEvents, InvalidAuth, signatureMismatchError.HTTPStatusCode, signatureMismatchError.Code},
 	}
 
 	for i, test := range testCases {
 		testRec = httptest.NewRecorder()
 		testReq, tErr = newTestSignedRequestV4("GET",
-			getListenBucketNotificationURL("", test.bucketName, test.prefix, test.suffix, test.events),
+			getListenBucketNotificationURL("", test.bucketName, test.prefixes, test.suffixes, test.events),
 			0, nil, credentials.AccessKeyID, credentials.SecretAccessKey)
 		if tErr != nil {
 			t.Fatalf("%s: Failed to create HTTP testRequest for ListenBucketNotification: <ERROR> %v", instanceType, tErr)
@@ -301,7 +301,7 @@ func testListenBucketNotificationHandler(obj ObjectLayer, instanceType string, t
 	})
 	testRec = httptest.NewRecorder()
 	testReq, tErr = newTestSignedRequestV4("GET",
-		getListenBucketNotificationURL("", randBucket, "", "*.jpg", []string{"s3:ObjectCreated:*", "s3:ObjectRemoved:*"}),
+		getListenBucketNotificationURL("", randBucket, []string{}, []string{"*.jpg"}, []string{"s3:ObjectCreated:*", "s3:ObjectRemoved:*"}),
 		0, nil, credentials.AccessKeyID, credentials.SecretAccessKey)
 	if tErr != nil {
 		t.Fatalf("%s: Failed to create HTTP testRequest for ListenBucketNotification: <ERROR> %v", instanceType, tErr)
