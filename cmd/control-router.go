@@ -79,7 +79,7 @@ type controlAPIHandlers struct {
 }
 
 // Register control RPC handlers.
-func registerControlRPCRouter(mux *router.Router, srvCmdConfig serverCmdConfig) {
+func registerControlRPCRouter(mux *router.Router, srvCmdConfig serverCmdConfig) (err error) {
 	// Initialize Control.
 	ctrlHandlers := &controlAPIHandlers{
 		ObjectAPI:      newObjectLayerFn,
@@ -89,8 +89,12 @@ func registerControlRPCRouter(mux *router.Router, srvCmdConfig serverCmdConfig) 
 	}
 
 	ctrlRPCServer := rpc.NewServer()
-	ctrlRPCServer.RegisterName("Control", ctrlHandlers)
+	err = ctrlRPCServer.RegisterName("Control", ctrlHandlers)
+	if err != nil {
+		return traceError(err)
+	}
 
 	ctrlRouter := mux.NewRoute().PathPrefix(reservedBucket).Subrouter()
 	ctrlRouter.Path(controlPath).Handler(ctrlRPCServer)
+	return nil
 }

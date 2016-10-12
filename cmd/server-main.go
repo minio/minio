@@ -346,7 +346,8 @@ func serverMain(c *cli.Context) {
 	}
 
 	// Configure server.
-	handler := configureServerHandler(srvConfig)
+	handler, err := configureServerHandler(srvConfig)
+	fatalIf(err, "Unable to configure one of server's RPC services.")
 
 	// Set nodes for dsync for distributed setup.
 	if srvConfig.isDistXL {
@@ -375,7 +376,7 @@ func serverMain(c *cli.Context) {
 	}(tls)
 
 	// Wait for formatting of disks.
-	err := waitForFormatDisks(firstDisk, endPoints[0], storageDisks)
+	err = waitForFormatDisks(firstDisk, endPoints[0], storageDisks)
 	fatalIf(err, "formatting storage disks failed")
 
 	// Once formatted, initialize object layer.
