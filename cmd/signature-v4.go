@@ -147,7 +147,7 @@ func getSignature(signingKey []byte, stringToSign string) string {
 
 // doesPolicySignatureMatch - Verify query headers with post policy
 //     - http://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-HTTPPOSTConstructPolicy.html
-// returns true if matches, false otherwise. if error is not nil then it is always false
+// returns ErrNone if the signature matches.
 func doesPolicySignatureMatch(formValues map[string]string) APIErrorCode {
 	// Access credentials.
 	cred := serverConfig.GetCredential()
@@ -193,7 +193,7 @@ func doesPolicySignatureMatch(formValues map[string]string) APIErrorCode {
 
 // doesPresignedSignatureMatch - Verify query headers with presigned signature
 //     - http://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html
-// returns true if matches, false otherwise. if error is not nil then it is always false
+// returns ErrNone if the signature matches.
 func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region string) APIErrorCode {
 	// Access credentials.
 	cred := serverConfig.GetCredential()
@@ -316,7 +316,7 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 
 // doesSignatureMatch - Verify authorization header with calculated header in accordance with
 //     - http://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-authenticating-requests.html
-// returns true if matches, false otherwise. if error is not nil then it is always false
+// returns ErrNone if signature matches.
 func doesSignatureMatch(hashedPayload string, r *http.Request, region string) APIErrorCode {
 	// Access credentials.
 	cred := serverConfig.GetCredential()

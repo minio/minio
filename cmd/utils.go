@@ -80,17 +80,36 @@ func splitNetPath(networkPath string) (netAddr, netPath string, err error) {
 		}
 	}
 	networkParts := strings.SplitN(networkPath, ":", 2)
-	if len(networkParts) == 1 {
+	switch {
+	case len(networkParts) == 1:
 		return "", networkPath, nil
-	}
-	if networkParts[1] == "" {
+	case networkParts[1] == "":
 		return "", "", &net.AddrError{Err: "Missing path in network path", Addr: networkPath}
-	} else if networkParts[0] == "" {
+	case networkParts[0] == "":
 		return "", "", &net.AddrError{Err: "Missing address in network path", Addr: networkPath}
-	} else if !filepath.IsAbs(networkParts[1]) {
+	case !filepath.IsAbs(networkParts[1]):
 		return "", "", &net.AddrError{Err: "Network path should be absolute", Addr: networkPath}
 	}
 	return networkParts[0], networkParts[1], nil
+}
+
+// Find local node through the command line arguments. Returns in
+// `host:port` format.
+func getLocalAddress(srvCmdConfig serverCmdConfig) string {
+	if !srvCmdConfig.isDistXL {
+		return fmt.Sprintf(":%d", globalMinioPort)
+	}
+	for _, export := range srvCmdConfig.disks {
+		// Validates if remote disk is local.
+		if isLocalStorage(export) {
+			var host string
+			if idx := strings.LastIndex(export, ":"); idx != -1 {
+				host = export[:idx]
+			}
+			return fmt.Sprintf("%s:%d", host, globalMinioPort)
+		}
+	}
+	return ""
 }
 
 // xmlDecoder provide decoded value in xml.

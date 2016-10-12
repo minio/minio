@@ -80,6 +80,9 @@ func configureServerHandler(srvCmdConfig serverCmdConfig) http.Handler {
 		registerDistNSLockRouter(mux, srvCmdConfig)
 	}
 
+	// Register S3 peer communication router.
+	registerS3PeerRPCRouter(mux)
+
 	// Register controller rpc router.
 	registerControlRPCRouter(mux, srvCmdConfig)
 

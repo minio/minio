@@ -16,70 +16,7 @@
 
 package cmd
 
-import (
-	"runtime"
-	"testing"
-)
-
-// Tests fetch local address.
-func TestLocalAddress(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		return
-	}
-	testCases := []struct {
-		srvCmdConfig serverCmdConfig
-		localAddr    string
-	}{
-		// Test 1 - local address is found.
-		{
-			srvCmdConfig: serverCmdConfig{
-				isDistXL: true,
-				disks: []string{
-					"localhost:/mnt/disk1",
-					"1.1.1.2:/mnt/disk2",
-					"1.1.2.1:/mnt/disk3",
-					"1.1.2.2:/mnt/disk4",
-				},
-			},
-			localAddr: "localhost:9000",
-		},
-		// Test 2 - local address is everything.
-		{
-			srvCmdConfig: serverCmdConfig{
-				isDistXL: false,
-				disks: []string{
-					"/mnt/disk1",
-					"/mnt/disk2",
-					"/mnt/disk3",
-					"/mnt/disk4",
-				},
-			},
-			localAddr: ":9000",
-		},
-		// Test 3 - local address is not found.
-		{
-			srvCmdConfig: serverCmdConfig{
-				isDistXL: true,
-				disks: []string{
-					"1.1.1.1:/mnt/disk1",
-					"1.1.1.2:/mnt/disk2",
-					"1.1.2.1:/mnt/disk3",
-					"1.1.2.2:/mnt/disk4",
-				},
-			},
-			localAddr: "",
-		},
-	}
-
-	// Validates fetching local address.
-	for i, testCase := range testCases {
-		localAddr := getLocalAddress(testCase.srvCmdConfig)
-		if localAddr != testCase.localAddr {
-			t.Fatalf("Test %d: Expected %s, got %s", i+1, testCase.localAddr, localAddr)
-		}
-	}
-
-}
+import "testing"
 
 // Tests initialization of remote controller clients.
 func TestInitRemoteControlClients(t *testing.T) {

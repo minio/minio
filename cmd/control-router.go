@@ -31,24 +31,6 @@ const (
 	controlPath = "/control"
 )
 
-// Find local node through the command line arguments.
-func getLocalAddress(srvCmdConfig serverCmdConfig) string {
-	if !srvCmdConfig.isDistXL {
-		return fmt.Sprintf(":%d", globalMinioPort)
-	}
-	for _, export := range srvCmdConfig.disks {
-		// Validates if remote disk is local.
-		if isLocalStorage(export) {
-			var host string
-			if idx := strings.LastIndex(export, ":"); idx != -1 {
-				host = export[:idx]
-			}
-			return fmt.Sprintf("%s:%d", host, globalMinioPort)
-		}
-	}
-	return ""
-}
-
 // Initializes remote control clients for making remote requests.
 func initRemoteControlClients(srvCmdConfig serverCmdConfig) []*AuthRPCClient {
 	if !srvCmdConfig.isDistXL {
