@@ -539,21 +539,10 @@ func newTestStreamingRequest(method, urlStr string, dataLength, chunkSize int64,
 	return req, nil
 }
 
-// Returns new HTTP request object signed with streaming signature v4.
-func newTestStreamingSignedRequest(method, urlStr string, contentLength, chunkSize int64, body io.ReadSeeker, accessKey, secretKey string) (*http.Request, error) {
-	req, err := newTestStreamingRequest(method, urlStr, contentLength, chunkSize, body)
-	if err != nil {
-		return nil, err
-	}
-
-	currTime := time.Now().UTC()
-	signature, err := signStreamingRequest(req, accessKey, secretKey, currTime)
-	if err != nil {
-		return nil, err
-	}
+func assembleStreamingChunks(req *http.Request, body io.ReadSeeker, chunkSize int64,
+	secretKey, signature string, currTime time.Time) (*http.Request, error) {
 
 	regionStr := serverConfig.GetRegion()
-
 	var stream []byte
 	var buffer []byte
 	body.Seek(0, 0)
@@ -595,8 +584,44 @@ func newTestStreamingSignedRequest(method, urlStr string, contentLength, chunkSi
 		}
 
 	}
-
 	req.Body = ioutil.NopCloser(bytes.NewReader(stream))
+	return req, nil
+}
+
+func newTestStreamingSignedBadChunkDateRequest(method, urlStr string, contentLength, chunkSize int64, body io.ReadSeeker, accessKey, secretKey string) (*http.Request, error) {
+	req, err := newTestStreamingRequest(method, urlStr, contentLength, chunkSize, body)
+	if err != nil {
+		return nil, err
+	}
+
+	currTime := time.Now().UTC()
+	fmt.Println("now: ", currTime)
+	signature, err := signStreamingRequest(req, accessKey, secretKey, currTime)
+	if err != nil {
+		return nil, err
+	}
+
+	// skew the time between the chunk signature calculation and seed signature.
+	currTime = currTime.Add(1 * time.Second)
+	fmt.Println("later: ", currTime)
+	req, err = assembleStreamingChunks(req, body, chunkSize, secretKey, signature, currTime)
+	return req, nil
+}
+
+// Returns new HTTP request object signed with streaming signature v4.
+func newTestStreamingSignedRequest(method, urlStr string, contentLength, chunkSize int64, body io.ReadSeeker, accessKey, secretKey string) (*http.Request, error) {
+	req, err := newTestStreamingRequest(method, urlStr, contentLength, chunkSize, body)
+	if err != nil {
+		return nil, err
+	}
+
+	currTime := time.Now().UTC()
+	signature, err := signStreamingRequest(req, accessKey, secretKey, currTime)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err = assembleStreamingChunks(req, body, chunkSize, secretKey, signature, currTime)
 	return req, nil
 }
 
