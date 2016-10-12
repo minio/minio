@@ -109,8 +109,6 @@ func configureServerHandler(srvCmdConfig serverCmdConfig) http.Handler {
 		setPrivateBucketHandler,
 		// Adds cache control for all browser requests.
 		setBrowserCacheControlHandler,
-		// Validates all incoming requests to have a valid date header.
-		setTimeValidityHandler,
 		// CORS setting for all browser API requests.
 		setCorsHandler,
 		// Validates all incoming URL resources, for invalid/unsupported
