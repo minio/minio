@@ -182,16 +182,10 @@ func parseAmzDateHeader(req *http.Request) (time.Time, APIErrorCode) {
 	return time.Time{}, ErrMissingDateHeader
 }
 
-type timeHandler struct {
-	handler http.Handler
+type timeValidityHandler struct {
 }
 
-// setTimeValidityHandler to validate parsable time over http header
-func setTimeValidityHandler(h http.Handler) http.Handler {
-	return timeHandler{h}
-}
-
-func (h timeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (h timeValidityHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Verify if date headers are set, if not reject the request
 	if _, ok := r.Header["Authorization"]; ok {
 		amzDate, apiErr := parseAmzDateHeader(r)
@@ -210,7 +204,6 @@ func (h timeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	h.handler.ServeHTTP(w, r)
 }
 
 type resourceHandler struct {
