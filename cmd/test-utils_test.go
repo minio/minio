@@ -399,14 +399,13 @@ func malformChunkSizeSigV4(req *http.Request, badSize int64) (*http.Request, err
 }
 
 // Sign given request using Signature V4.
-func signStreamingRequest(req *http.Request, accessKey, secretKey string) (string, error) {
+func signStreamingRequest(req *http.Request, accessKey, secretKey string, currTime time.Time) (string, error) {
 	// Get hashed payload.
 	hashedPayload := req.Header.Get("x-amz-content-sha256")
 	if hashedPayload == "" {
 		return "", fmt.Errorf("Invalid hashed payload.")
 	}
 
-	currTime := time.Now().UTC()
 	// Set x-amz-date.
 	req.Header.Set("x-amz-date", currTime.Format(iso8601Format))
 
@@ -547,7 +546,8 @@ func newTestStreamingSignedRequest(method, urlStr string, contentLength, chunkSi
 		return nil, err
 	}
 
-	signature, err := signStreamingRequest(req, accessKey, secretKey)
+	currTime := time.Now().UTC()
+	signature, err := signStreamingRequest(req, accessKey, secretKey, currTime)
 	if err != nil {
 		return nil, err
 	}
@@ -564,7 +564,6 @@ func newTestStreamingSignedRequest(method, urlStr string, contentLength, chunkSi
 			return nil, err
 		}
 
-		currTime := time.Now().UTC()
 		// Get scope.
 		scope := strings.Join([]string{
 			currTime.Format(yyyymmdd),
