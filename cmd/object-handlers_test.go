@@ -228,6 +228,7 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 		malformedEncoding
 		unexpectedEOF
 		signatureMismatch
+		chunkDateMismatch
 	)
 
 	// byte data for PutObject.
@@ -364,16 +365,41 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 			shouldPass:         false,
 			fault:              signatureMismatch,
 		},
+		// Test case - 9
+		// Different date (timestamps) used in seed signature calculation
+		// and chunks signature calculation.
+		{
+			bucketName:         bucketName,
+			objectName:         objectName,
+			data:               oneKData,
+			dataLen:            1024,
+			chunkSize:          1024,
+			expectedContent:    []byte{},
+			expectedRespStatus: http.StatusForbidden,
+			accessKey:          credentials.AccessKeyID,
+			secretKey:          credentials.SecretAccessKey,
+			shouldPass:         false,
+			fault:              chunkDateMismatch,
+		},
 	}
 	// Iterating over the cases, fetching the object validating the response.
 	for i, testCase := range testCases {
 		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
 		rec := httptest.NewRecorder()
 		// construct HTTP request for Put Object end point.
-		req, err := newTestStreamingSignedRequest("PUT",
-			getPutObjectURL("", testCase.bucketName, testCase.objectName),
-			int64(testCase.dataLen), testCase.chunkSize, bytes.NewReader(testCase.data),
-			testCase.accessKey, testCase.secretKey)
+		var req *http.Request
+		if testCase.fault == chunkDateMismatch {
+			req, err = newTestStreamingSignedBadChunkDateRequest("PUT",
+				getPutObjectURL("", testCase.bucketName, testCase.objectName),
+				int64(testCase.dataLen), testCase.chunkSize, bytes.NewReader(testCase.data),
+				testCase.accessKey, testCase.secretKey)
+
+		} else {
+			req, err = newTestStreamingSignedRequest("PUT",
+				getPutObjectURL("", testCase.bucketName, testCase.objectName),
+				int64(testCase.dataLen), testCase.chunkSize, bytes.NewReader(testCase.data),
+				testCase.accessKey, testCase.secretKey)
+		}
 		if err != nil {
 			t.Fatalf("Test %d: Failed to create HTTP request for Put Object: <ERROR> %v", i+1, err)
 		}
