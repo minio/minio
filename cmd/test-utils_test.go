@@ -1402,10 +1402,11 @@ func getGetBucketNotificationURL(endPoint, bucketName string) string {
 }
 
 // return URL for listen bucket notification.
-func getListenBucketNotificationURL(endPoint, bucketName, prefix, suffix string, events []string) string {
+func getListenBucketNotificationURL(endPoint, bucketName string, prefixes, suffixes, events []string) string {
 	queryValue := url.Values{}
-	queryValue.Set("prefix", prefix)
-	queryValue.Set("suffix", suffix)
+
+	queryValue["prefix"] = prefixes
+	queryValue["suffix"] = suffixes
 	queryValue["events"] = events
 	return makeTestTargetURL(endPoint, bucketName, "", queryValue)
 }

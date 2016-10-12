@@ -250,10 +250,20 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 	bucket := vars["bucket"]
 
 	// Parse listen bucket notification resources.
-	prefix, suffix, events := getListenBucketNotificationResources(r.URL.Query())
-	if !IsValidObjectPrefix(prefix) || !IsValidObjectPrefix(suffix) {
-		writeErrorResponse(w, r, ErrFilterValueInvalid, r.URL.Path)
-		return
+	prefixes, suffixes, events := getListenBucketNotificationResources(r.URL.Query())
+
+	for _, prefix := range prefixes {
+		if !IsValidObjectPrefix(prefix) {
+			writeErrorResponse(w, r, ErrFilterValueInvalid, r.URL.Path)
+			return
+		}
+	}
+
+	for _, suffix := range suffixes {
+		if !IsValidObjectPrefix(suffix) {
+			writeErrorResponse(w, r, ErrFilterValueInvalid, r.URL.Path)
+			return
+		}
 	}
 
 	// Validate all the resource events.
@@ -279,13 +289,15 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 		globalMinioAddr,
 	)
 	var filterRules []filterRule
-	if prefix != "" {
+
+	for _, prefix := range prefixes {
 		filterRules = append(filterRules, filterRule{
 			Name:  "prefix",
 			Value: prefix,
 		})
 	}
-	if suffix != "" {
+
+	for _, suffix := range suffixes {
 		filterRules = append(filterRules, filterRule{
 			Name:  "suffix",
 			Value: suffix,
