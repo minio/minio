@@ -16,19 +16,26 @@
 
 package cmd
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // Tests if we generate storage info.
 func TestStorageInfoMsg(t *testing.T) {
-	obj, _, err := prepareXL()
-	if err != nil {
-		t.Fatal("Unable to initialize XL backend", err)
+	infoStorage := StorageInfo{
+		Total: 1024 * 1024 * 1024 * 10,
+		Free:  1024 * 1024 * 1024 * 2,
+		Backend: struct {
+			Type         BackendType
+			OnlineDisks  int
+			OfflineDisks int
+			ReadQuorum   int
+			WriteQuorum  int
+		}{XL, 7, 1, 4, 5},
 	}
-	globalObjLayerMutex.Lock()
-	globalObjectAPI = obj
-	globalObjLayerMutex.Unlock()
 
-	if msg := getStorageInfoMsg(obj.StorageInfo()); msg == "" {
-		t.Fatal("Empty message string is not implemented")
+	if msg := getStorageInfoMsg(infoStorage); !strings.Contains(msg, "1.0 GiB Free, 5.0 GiB Total") || !strings.Contains(msg, "7 Online, 1 Offline") {
+		t.Fatal("Empty message string is not implemented", msg)
 	}
 }
