@@ -128,10 +128,10 @@ func newLockServers(serverConfig serverCmdConfig) (lockServers []*lockServer) {
 }
 
 // registerStorageLockers - register locker rpc handlers for net/rpc library clients
-func registerStorageLockers(mux *router.Router, lockServers []*lockServer) (err error) {
+func registerStorageLockers(mux *router.Router, lockServers []*lockServer) error {
 	for _, lockServer := range lockServers {
 		lockRPCServer := rpc.NewServer()
-		err = lockRPCServer.RegisterName("Dsync", lockServer)
+		err := lockRPCServer.RegisterName("Dsync", lockServer)
 		if err != nil {
 			return traceError(err)
 		}

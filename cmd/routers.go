@@ -71,11 +71,10 @@ func configureServerHandler(srvCmdConfig serverCmdConfig) (http.Handler, error) 
 	// Initialize router.
 	mux := router.NewRouter()
 
-	var err error
 	// Initialize distributed NS lock.
 	if srvCmdConfig.isDistXL {
 		// Register storage rpc router only if its a distributed setup.
-		err = registerStorageRPCRouters(mux, srvCmdConfig)
+		err := registerStorageRPCRouters(mux, srvCmdConfig)
 		if err != nil {
 			return nil, err
 		}
@@ -88,7 +87,7 @@ func configureServerHandler(srvCmdConfig serverCmdConfig) (http.Handler, error) 
 	}
 
 	// Register S3 peer communication router.
-	err = registerS3PeerRPCRouter(mux)
+	err := registerS3PeerRPCRouter(mux)
 	if err != nil {
 		return nil, err
 	}
