@@ -1461,20 +1461,27 @@ func initAPIHandlerTest(obj ObjectLayer, endPoints []string) (bucketName, rootPa
 	return bucketName, rootPath, apiRouter, nil
 }
 
-// ExecObjectLayerAPIAnonTest - Helper function to validate object Layer API handler response for anonymous/unsigned HTTP request.
+// ExecObjectLayerAPIAnonTest - Helper function to validate object Layer API handler
+// response for anonymous/unsigned and unknown signature type HTTP request.
+
 // Here is the brief description of some of the arguments to the function below.
 //   apiRouter - http.Handler with the relevant API endPoint (API endPoint under test) registered.
 //   anonReq   - unsigned *http.Request to invoke the handler's response for anonymous requests.
 //   policyFunc    - function to return bucketPolicy statement which would permit the anonymous request to be served.
 // The test works in 2 steps, here is the description of the steps.
 //   STEP 1: Call the handler with the unsigned HTTP request (anonReq), assert for the `ErrAccessDenied` error response.
-//   STEP 2: Set the policy to allow the unsigned request, use the policyFunc to obtain the relevant statement and call the handler again to verify its success.
+//   STEP 2: Set the policy to allow the unsigned request, use the policyFunc to obtain the relevant statement and call
+//           the handler again to verify its success.
 func ExecObjectLayerAPIAnonTest(t *testing.T, testName, bucketName, objectName, instanceType string, apiRouter http.Handler,
 	anonReq *http.Request, policyFunc func(string, string) policyStatement) {
+
+	anonTestStr := "Anonymous HTTP request test"
+	unknownSignTestStr := "Unknown HTTP signature test"
+
 	// simple function which ends the test by printing the common message which gives the context of the test
 	// and then followed by the the actual error message.
-	failTest := func(failMsg string) {
-		t.Fatalf("Minio %s: Anonymous HTTP request test Fail for \"%s\": \n<Error> %s.", instanceType, testName, failMsg)
+	failTest := func(testType, failMsg string) {
+		t.Fatalf("Minio %s: %s fail for \"%s\": \n<Error> %s.", instanceType, testType, testName, failMsg)
 	}
 	// httptest Recorder to capture all the response by the http handler.
 	rec := httptest.NewRecorder()
@@ -1482,12 +1489,13 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, testName, bucketName, objectName, 
 	// If the body is read in the handler the same request cannot be made use of.
 	buf, err := ioutil.ReadAll(anonReq.Body)
 	if err != nil {
-		failTest(err.Error())
+		failTest(anonTestStr, err.Error())
 	}
 
 	// creating 2 read closer (to set as request body) from the body content.
 	readerOne := ioutil.NopCloser(bytes.NewBuffer(buf))
 	readerTwo := ioutil.NopCloser(bytes.NewBuffer(buf))
+	readerThree := ioutil.NopCloser(bytes.NewBuffer(buf))
 
 	anonReq.Body = readerOne
 
@@ -1497,7 +1505,7 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, testName, bucketName, objectName, 
 	// expected error response when the unsigned HTTP request is not permitted.
 	accesDeniedHTTPStatus := getAPIError(ErrAccessDenied).HTTPStatusCode
 	if rec.Code != accesDeniedHTTPStatus {
-		failTest(fmt.Sprintf("Object API Nil Test expected to fail with %d, but failed with %d.", accesDeniedHTTPStatus, rec.Code))
+		failTest(anonTestStr, fmt.Sprintf("Object API Nil Test expected to fail with %d, but failed with %d.", accesDeniedHTTPStatus, rec.Code))
 	}
 
 	// expected error response in bytes when objectLayer is not initialized, or set to `nil`.
@@ -1508,11 +1516,11 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, testName, bucketName, objectName, 
 		// read the response body.
 		actualContent, err := ioutil.ReadAll(rec.Body)
 		if err != nil {
-			failTest(fmt.Sprintf("Failed parsing response body: <ERROR> %v", err))
+			failTest(anonTestStr, fmt.Sprintf("Failed parsing response body: <ERROR> %v", err))
 		}
 		// verify whether actual error response (from the response body), matches the expected error response.
 		if !bytes.Equal(expectedErrResponse, actualContent) {
-			failTest("error response content differs from expected value")
+			failTest(anonTestStr, "error response content differs from expected value")
 		}
 	}
 	// Set write only policy on bucket to allow anonymous HTTP request for the operation under test.
@@ -1544,9 +1552,37 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, testName, bucketName, objectName, 
 
 	// compare the HTTP response status code with the expected one.
 	if rec.Code != expectedHTTPStatus {
-		failTest(fmt.Sprintf("Expected the anonymous HTTP request to be served after the policy changes\n,Expected response HTTP status code to be %d, got %d.",
+		failTest(anonTestStr, fmt.Sprintf("Expected the anonymous HTTP request to be served after the policy changes\n,Expected response HTTP status code to be %d, got %d.",
 			expectedHTTPStatus, rec.Code))
 	}
+
+	// test for unknown auth case.
+	anonReq.Body = readerThree
+	// Setting the `Authorization` header to a random value so that the signature falls into unknown auth case.
+	anonReq.Header.Set("Authorization", "nothingElse")
+	// initialize new response recorder.
+	rec = httptest.NewRecorder()
+	// call the handler using the HTTP Request.
+	apiRouter.ServeHTTP(rec, anonReq)
+	// verify the response body for `ErrAccessDenied` message =.
+	if anonReq.Method != "HEAD" {
+		// read the response body.
+		actualContent, err := ioutil.ReadAll(rec.Body)
+		if err != nil {
+			failTest(unknownSignTestStr, fmt.Sprintf("Failed parsing response body: <ERROR> %v", err))
+		}
+		// verify whether actual error response (from the response body), matches the expected error response.
+		if !bytes.Equal(expectedErrResponse, actualContent) {
+			fmt.Println(string(expectedErrResponse))
+			fmt.Println(string(actualContent))
+			failTest(unknownSignTestStr, "error response content differs from expected value")
+		}
+	}
+
+	if rec.Code != accesDeniedHTTPStatus {
+		failTest(unknownSignTestStr, fmt.Sprintf("Object API Unknow auth test for \"%s\", expected to fail with %d, but failed with %d.", testName, accesDeniedHTTPStatus, rec.Code))
+	}
+
 }
 
 // ExecObjectLayerAPINilTest - Sets the object layer to `nil`, and calls rhe registered object layer API endpoint, and assert the error response.
