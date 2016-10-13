@@ -32,13 +32,13 @@ $ go get -u github.com/minio/minio
 In the examples below, Minio serves the contents of the ``Photos`` directory as an object store.
 
 ### Docker Container
-#### Latest Stable
+#### Stable
 ```sh
 $ docker pull minio/minio
 $ docker run -p 9000:9000 minio/minio server /export
 ```
 
-#### Latest Edge (Testing Only)
+#### Edge
 ```sh
 $ docker pull minio/minio:edge
 $ docker run -p 9000:9000 minio/minio:edge server /export
