@@ -257,17 +257,23 @@ func newRPCServer(serverConfig serverCmdConfig) (servers []*storageServer, err e
 }
 
 // registerStorageRPCRouter - register storage rpc router.
-func registerStorageRPCRouters(mux *router.Router, srvCmdConfig serverCmdConfig) {
+func registerStorageRPCRouters(mux *router.Router, srvCmdConfig serverCmdConfig) error {
 	// Initialize storage rpc servers for every disk that is hosted on this node.
 	storageRPCs, err := newRPCServer(srvCmdConfig)
-	fatalIf(err, "Unable to initialize storage RPC server.")
+	if err != nil {
+		return traceError(err)
+	}
 
 	// Create a unique route for each disk exported from this node.
 	for _, stServer := range storageRPCs {
 		storageRPCServer := rpc.NewServer()
-		storageRPCServer.RegisterName("Storage", stServer)
+		err = storageRPCServer.RegisterName("Storage", stServer)
+		if err != nil {
+			return traceError(err)
+		}
 		// Add minio storage routes.
 		storageRouter := mux.PathPrefix(reservedBucket).Subrouter()
 		storageRouter.Path(path.Join("/storage", stServer.path)).Handler(storageRPCServer)
 	}
+	return nil
 }

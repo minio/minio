@@ -67,24 +67,36 @@ func newObjectLayer(storageDisks []StorageAPI) (ObjectLayer, error) {
 }
 
 // configureServer handler returns final handler for the http server.
-func configureServerHandler(srvCmdConfig serverCmdConfig) http.Handler {
+func configureServerHandler(srvCmdConfig serverCmdConfig) (http.Handler, error) {
 	// Initialize router.
 	mux := router.NewRouter()
 
 	// Initialize distributed NS lock.
 	if srvCmdConfig.isDistXL {
 		// Register storage rpc router only if its a distributed setup.
-		registerStorageRPCRouters(mux, srvCmdConfig)
+		err := registerStorageRPCRouters(mux, srvCmdConfig)
+		if err != nil {
+			return nil, err
+		}
 
 		// Register distributed namespace lock.
-		registerDistNSLockRouter(mux, srvCmdConfig)
+		err = registerDistNSLockRouter(mux, srvCmdConfig)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Register S3 peer communication router.
-	registerS3PeerRPCRouter(mux)
+	err := registerS3PeerRPCRouter(mux)
+	if err != nil {
+		return nil, err
+	}
 
 	// Register controller rpc router.
-	registerControlRPCRouter(mux, srvCmdConfig)
+	err = registerControlRPCRouter(mux, srvCmdConfig)
+	if err != nil {
+		return nil, err
+	}
 
 	// set environmental variable MINIO_BROWSER=off to disable minio web browser.
 	// By default minio web browser is enabled.
@@ -122,5 +134,5 @@ func configureServerHandler(srvCmdConfig serverCmdConfig) http.Handler {
 	}
 
 	// Register rest of the handlers.
-	return registerHandlers(mux, handlerFns...)
+	return registerHandlers(mux, handlerFns...), nil
 }

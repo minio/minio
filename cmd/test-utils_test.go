@@ -183,12 +183,16 @@ func StartTestServer(t TestErrHandler, instanceType string) TestServer {
 	}
 
 	// Run TestServer.
-	testServer.Server = httptest.NewServer(configureServerHandler(
+	httpHandler, err := configureServerHandler(
 		serverCmdConfig{
 			disks:        disks,
 			storageDisks: storageDisks,
 		},
-	))
+	)
+	if err != nil {
+		t.Fatalf("Failed to configure one of the RPC services <ERROR> %s", err)
+	}
+	testServer.Server = httptest.NewServer(httpHandler)
 
 	testServer.Obj = objLayer
 	globalObjLayerMutex.Lock()

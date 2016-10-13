@@ -30,14 +30,18 @@ type s3PeerAPIHandlers struct {
 	ObjectAPI func() ObjectLayer
 }
 
-func registerS3PeerRPCRouter(mux *router.Router) {
+func registerS3PeerRPCRouter(mux *router.Router) error {
 	s3PeerHandlers := &s3PeerAPIHandlers{
 		ObjectAPI: newObjectLayerFn,
 	}
 
 	s3PeerRPCServer := rpc.NewServer()
-	s3PeerRPCServer.RegisterName("S3", s3PeerHandlers)
+	err := s3PeerRPCServer.RegisterName("S3", s3PeerHandlers)
+	if err != nil {
+		return traceError(err)
+	}
 
 	s3PeerRouter := mux.NewRoute().PathPrefix(reservedBucket).Subrouter()
 	s3PeerRouter.Path(s3Path).Handler(s3PeerRPCServer)
+	return nil
 }

@@ -77,9 +77,9 @@ type lockServer struct {
 }
 
 // Register distributed NS lock handlers.
-func registerDistNSLockRouter(mux *router.Router, serverConfig serverCmdConfig) {
+func registerDistNSLockRouter(mux *router.Router, serverConfig serverCmdConfig) error {
 	lockServers := newLockServers(serverConfig)
-	registerStorageLockers(mux, lockServers)
+	return registerStorageLockers(mux, lockServers)
 }
 
 // Create one lock server for every local storage rpc server.
@@ -128,13 +128,17 @@ func newLockServers(serverConfig serverCmdConfig) (lockServers []*lockServer) {
 }
 
 // registerStorageLockers - register locker rpc handlers for net/rpc library clients
-func registerStorageLockers(mux *router.Router, lockServers []*lockServer) {
+func registerStorageLockers(mux *router.Router, lockServers []*lockServer) error {
 	for _, lockServer := range lockServers {
 		lockRPCServer := rpc.NewServer()
-		lockRPCServer.RegisterName("Dsync", lockServer)
+		err := lockRPCServer.RegisterName("Dsync", lockServer)
+		if err != nil {
+			return traceError(err)
+		}
 		lockRouter := mux.PathPrefix(reservedBucket).Subrouter()
 		lockRouter.Path(path.Join("/lock", lockServer.rpcPath)).Handler(lockRPCServer)
 	}
+	return nil
 }
 
 ///  Distributed lock handlers
