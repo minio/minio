@@ -646,7 +646,7 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 	}
 	policyInfo.Statements = policy.SetPolicy(policyInfo.Statements, bucketP, args.BucketName, args.Prefix)
 	if len(policyInfo.Statements) == 0 {
-		if err = removeBucketPolicy(args.BucketName, objectAPI); err != nil {
+		if err = persistAndNotifyBucketPolicyChange(args.BucketName, policyChange{true, nil}, objectAPI); err != nil {
 			return &json2.Error{Message: err.Error()}
 		}
 		return nil
@@ -671,7 +671,7 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 
 	// TODO: update policy statements according to bucket name,
 	// prefix and policy arguments.
-	if err := writeBucketPolicy(args.BucketName, objectAPI, policy); err != nil {
+	if err := persistAndNotifyBucketPolicyChange(args.BucketName, policyChange{false, policy}, objectAPI); err != nil {
 		return &json2.Error{Message: err.Error()}
 	}
 

@@ -129,7 +129,7 @@ type SetBPPArgs struct {
 	Bucket string
 
 	// policy config
-	PCfg *bucketPolicy
+	PCh policyChange
 }
 
 // tell receiving server to update a bucket policy
@@ -145,6 +145,5 @@ func (s3 *s3PeerAPIHandlers) SetBucketPolicyPeer(args SetBPPArgs, reply *Generic
 		return errServerNotInitialized
 	}
 
-	globalBucketPolicies.SetBucketPolicy(args.Bucket, args.PCfg)
-	return nil
+	return globalBucketPolicies.SetBucketPolicy(args.Bucket, args.PCh)
 }

@@ -841,14 +841,14 @@ func testWebGetBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestE
 			{
 				Actions:   set.CreateStringSet("s3:GetBucketLocation", "s3:ListBucket"),
 				Effect:    "Allow",
-				Principal: map[string][]string{"AWS": []string{"*"}},
+				Principal: map[string][]string{"AWS": {"*"}},
 				Resources: set.CreateStringSet("arn:aws:s3:::" + bucketName),
 				Sid:       "",
 			},
 			{
 				Actions:   set.CreateStringSet("s3:GetObject"),
 				Effect:    "Allow",
-				Principal: map[string][]string{"AWS": []string{"*"}},
+				Principal: map[string][]string{"AWS": {"*"}},
 				Resources: set.CreateStringSet("arn:aws:s3:::" + bucketName + "/*"),
 				Sid:       "",
 			},
@@ -924,26 +924,26 @@ func testWebListAllBucketPoliciesHandler(obj ObjectLayer, instanceType string, t
 			{
 				Actions:   set.CreateStringSet("s3:GetBucketLocation"),
 				Effect:    "Allow",
-				Principal: map[string][]string{"AWS": []string{"*"}},
+				Principal: map[string][]string{"AWS": {"*"}},
 				Resources: set.CreateStringSet("arn:aws:s3:::" + bucketName),
 				Sid:       "",
 			},
 			{
 				Actions: set.CreateStringSet("s3:ListBucket"),
 				Conditions: map[string]map[string]set.StringSet{
-					"StringEquals": map[string]set.StringSet{
+					"StringEquals": {
 						"s3:prefix": set.CreateStringSet("hello"),
 					},
 				},
 				Effect:    "Allow",
-				Principal: map[string][]string{"AWS": []string{"*"}},
+				Principal: map[string][]string{"AWS": {"*"}},
 				Resources: set.CreateStringSet("arn:aws:s3:::" + bucketName),
 				Sid:       "",
 			},
 			{
 				Actions:   set.CreateStringSet("s3:ListBucketMultipartUploads"),
 				Effect:    "Allow",
-				Principal: map[string][]string{"AWS": []string{"*"}},
+				Principal: map[string][]string{"AWS": {"*"}},
 				Resources: set.CreateStringSet("arn:aws:s3:::" + bucketName),
 				Sid:       "",
 			},
@@ -951,7 +951,7 @@ func testWebListAllBucketPoliciesHandler(obj ObjectLayer, instanceType string, t
 				Actions: set.CreateStringSet("s3:AbortMultipartUpload", "s3:DeleteObject",
 					"s3:GetObject", "s3:ListMultipartUploadParts", "s3:PutObject"),
 				Effect:    "Allow",
-				Principal: map[string][]string{"AWS": []string{"*"}},
+				Principal: map[string][]string{"AWS": {"*"}},
 				Resources: set.CreateStringSet("arn:aws:s3:::" + bucketName + "/hello*"),
 				Sid:       "",
 			},

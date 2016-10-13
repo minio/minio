@@ -177,11 +177,10 @@ func S3PeersUpdateBucketListener(bucket string, lcfg []listenerConfig) {
 
 // S3PeersUpdateBucketPolicy - Sends update bucket policy request to
 // all peers. Currently we log an error and continue.
-func S3PeersUpdateBucketPolicy(bucket string, bply *bucketPolicy) {
-	setBPPArgs := &SetBPPArgs{Bucket: bucket, PCfg: bply}
+func S3PeersUpdateBucketPolicy(bucket string, pCh policyChange) {
+	setBPPArgs := &SetBPPArgs{Bucket: bucket, PCh: pCh}
 	peers := globalS3Peers.GetPeers()
-	errsMap := globalS3Peers.SendRPC(peers, "S3.SetBucketPolicyPeer",
-		setBPPArgs)
+	errsMap := globalS3Peers.SendRPC(peers, "S3.SetBucketPolicyPeer", setBPPArgs)
 	for peer, err := range errsMap {
 		errorIf(err, "Error sending peer update bucket policy to %s - %v", peer, err)
 	}

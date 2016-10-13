@@ -1635,7 +1635,7 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, testName, bucketName, objectName, 
 		Statements: []policyStatement{policyFunc(bucketName, "")},
 	}
 
-	globalBucketPolicies.SetBucketPolicy(bucketName, &policy)
+	globalBucketPolicies.SetBucketPolicy(bucketName, policyChange{false, &policy})
 	// now call the handler again with the unsigned/anonymous request, it should be accepted.
 	rec = httptest.NewRecorder()
 

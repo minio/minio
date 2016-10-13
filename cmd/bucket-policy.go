@@ -36,6 +36,16 @@ type bucketPolicies struct {
 	bucketPolicyConfigs map[string]*bucketPolicy
 }
 
+// Represent a policy change
+type policyChange struct {
+	// isRemove is true if the policy change is to delete the
+	// policy on a bucket.
+	IsRemove bool
+
+	// represents the new policy for the bucket
+	BktPolicy *bucketPolicy
+}
+
 // Fetch bucket policy for a given bucket.
 func (bp bucketPolicies) GetBucketPolicy(bucket string) *bucketPolicy {
 	bp.rwMutex.RLock()
@@ -44,16 +54,20 @@ func (bp bucketPolicies) GetBucketPolicy(bucket string) *bucketPolicy {
 }
 
 // Set a new bucket policy for a bucket, this operation will overwrite
-// any previous bucketpolicies for the bucket. If sent a nil policy,
-// deletes the policy for the bucket.
-func (bp *bucketPolicies) SetBucketPolicy(bucket string, policy *bucketPolicy) {
+// any previous bucket policies for the bucket.
+func (bp *bucketPolicies) SetBucketPolicy(bucket string, pCh policyChange) error {
 	bp.rwMutex.Lock()
-	if policy == nil {
+	defer bp.rwMutex.Unlock()
+
+	if pCh.IsRemove {
 		delete(bp.bucketPolicyConfigs, bucket)
 	} else {
-		bp.bucketPolicyConfigs[bucket] = policy
+		if pCh.BktPolicy == nil {
+			return errInvalidArgument
+		}
+		bp.bucketPolicyConfigs[bucket] = pCh.BktPolicy
 	}
-	bp.rwMutex.Unlock()
+	return nil
 }
 
 // Loads all bucket policies from persistent layer.
@@ -210,9 +224,7 @@ func writeBucketPolicy(bucket string, objAPI ObjectLayer, bpy *bucketPolicy) err
 		return err
 	}
 	policyPath := pathJoin(bucketConfigPrefix, bucket, policyJSON)
-	if _, err := objAPI.PutObject(minioMetaBucket, policyPath,
-		int64(len(buf)), bytes.NewReader(buf), nil, ""); err != nil {
-
+	if _, err := objAPI.PutObject(minioMetaBucket, policyPath, int64(len(buf)), bytes.NewReader(buf), nil, ""); err != nil {
 		errorIf(err, "Unable to set policy for the bucket %s", bucket)
 		return errorCause(err)
 	}

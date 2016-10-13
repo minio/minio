@@ -182,7 +182,7 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 	}
 
 	// Save bucket policy.
-	if err = PutBucketPolicy(bucket, policy, objAPI); err != nil {
+	if err = persistAndNotifyBucketPolicyChange(bucket, policyChange{false, policy}, objAPI); err != nil {
 		switch err.(type) {
 		case BucketNameInvalid:
 			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
@@ -196,31 +196,31 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 	writeSuccessNoContent(w)
 }
 
-// PutBucketPolicy - Persist the given policy to object layer, and
-// notify nodes in the cluster about the change. In-memory state is
-// updated in response to the notification. Assumes that the given
-// bucketPolicy is validated or is nil. If it is nil, bucket policy is
-// removed.
-func PutBucketPolicy(bucket string, bktpolicy *bucketPolicy, objAPI ObjectLayer) error {
+// persistAndNotifyBucketPolicyChange - takes a policyChange argument,
+// persists it to storage, and notify nodes in the cluster about the
+// change. In-memory state is updated in response to the notification.
+func persistAndNotifyBucketPolicyChange(bucket string, pCh policyChange, objAPI ObjectLayer) error {
 	// FIXME: Race exists between the bucket existence check and
 	// then updating the bucket policy.
 	if err := isBucketExist(bucket, objAPI); err != nil {
 		return err
 	}
 
-	// persist to object layer
-	if bktpolicy == nil {
+	if pCh.IsRemove {
 		if err := removeBucketPolicy(bucket, objAPI); err != nil {
 			return err
 		}
 	} else {
-		if err := writeBucketPolicy(bucket, objAPI, bktpolicy); err != nil {
+		if pCh.BktPolicy == nil {
+			return errInvalidArgument
+		}
+		if err := writeBucketPolicy(bucket, objAPI, pCh.BktPolicy); err != nil {
 			return err
 		}
 	}
 
 	// Notify all peers (including self) to update in-memory state
-	S3PeersUpdateBucketPolicy(bucket, bktpolicy)
+	S3PeersUpdateBucketPolicy(bucket, pCh)
 	return nil
 }
 
@@ -245,8 +245,9 @@ func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
-	// Delete bucket access policy.
-	if err := PutBucketPolicy(bucket, nil, objAPI); err != nil {
+	// Delete bucket access policy, by passing an empty policy
+	// struct.
+	if err := persistAndNotifyBucketPolicyChange(bucket, policyChange{true, nil}, objAPI); err != nil {
 		switch err.(type) {
 		case BucketNameInvalid:
 			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
