@@ -5,7 +5,7 @@ Minio generates new access and secret keys each time you run this command. Conta
 
 ```sh
 
-docker run -p 9000:9000 minio/minio /export
+docker run -p 9000:9000 minio/minio server /export
 
 ```
 
@@ -18,7 +18,7 @@ Minio container requires a persistent volume to store configuration and applicat
 docker run -p 9000:9000 --name minio1 \
   -v /mnt/export/minio1:/export \
   -v /mnt/config/minio1:/root/.minio \
-  minio/minio /export
+  minio/minio server /export
 
 ```
 
@@ -33,7 +33,7 @@ docker run -p 9000:9000 --name minio1 \
   -e "MINIO_SECRET_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" \
   -v /mnt/export/minio1:/export \
   -v /mnt/config/minio1:/root/.minio \
-  minio/minio /export
+  minio/minio server /export
 
 ```
 
