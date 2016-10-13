@@ -22,6 +22,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/minio/cli"
 	"github.com/minio/mc/pkg/console"
@@ -156,7 +157,6 @@ func checkMainSyntax(c *cli.Context) {
 func Main() {
 	app := registerApp()
 	app.Before = func(c *cli.Context) error {
-
 		configDir := c.GlobalString("config-dir")
 		if configDir == "" {
 			fatalIf(errors.New("Config directory is empty"), "Unable to get config file.")
@@ -185,11 +185,11 @@ func Main() {
 
 		// Do not print update messages, if quiet flag is set.
 		if !globalQuiet {
-			if strings.HasPrefix(Version, "RELEASE.") {
-				updateMsg, _, err := getReleaseUpdate(minioUpdateStableURL)
+			if strings.HasPrefix(ReleaseTag, "RELEASE.") && c.Args().Get(0) != "update" {
+				updateMsg, _, err := getReleaseUpdate(minioUpdateStableURL, 1*time.Second)
 				if err != nil {
-					// Ignore any errors during getReleaseUpdate() because
-					// the internet might not be available.
+					// Ignore any errors during getReleaseUpdate(), possibly
+					// because of network errors.
 					return nil
 				}
 				console.Println(updateMsg)

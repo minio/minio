@@ -17,10 +17,13 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"runtime"
 	"strings"
 	"time"
@@ -110,7 +113,8 @@ func parseReleaseData(data string) (time.Time, error) {
 	if releaseDateSplits[0] != "minio" {
 		return time.Time{}, (errors.New("Update data malformed, missing minio tag"))
 	}
-	// "OFFICIAL" tag is still kept for backward compatibility, we should remove this for the next release.
+	// "OFFICIAL" tag is still kept for backward compatibility.
+	// We should remove this for the next release.
 	if releaseDateSplits[1] != "RELEASE" && releaseDateSplits[1] != "OFFICIAL" {
 		return time.Time{}, (errors.New("Update data malformed, missing RELEASE tag"))
 	}
@@ -128,8 +132,28 @@ func parseReleaseData(data string) (time.Time, error) {
 	return parsedDate, nil
 }
 
+// User Agent should always following the below style.
+// Please open an issue to discuss any new changes here.
+//
+//       Minio (OS; ARCH) APP/VER APP/VER
+var (
+	userAgentSuffix = "Minio/" + Version + " " + "Minio/" + ReleaseTag + " " + "Minio/" + CommitID
+	userAgentPrefix = "Minio (" + runtime.GOOS + "; " + runtime.GOARCH + ") "
+	userAgent       = userAgentPrefix + userAgentSuffix
+)
+
+// Check if the operating system is a docker container.
+func isDocker() bool {
+	cgroup, err := ioutil.ReadFile("/proc/self/cgroup")
+	if err != nil && os.IsNotExist(err) {
+		return false
+	}
+	fatalIf(err, "Unable to read `cgroup` file.")
+	return bytes.Contains(cgroup, []byte("docker"))
+}
+
 // verify updates for releases.
-func getReleaseUpdate(updateURL string) (updateMsg updateMessage, errMsg string, err error) {
+func getReleaseUpdate(updateURL string, duration time.Duration) (updateMsg updateMessage, errMsg string, err error) {
 	// Construct a new update url.
 	newUpdateURLPrefix := updateURL + "/" + runtime.GOOS + "-" + runtime.GOARCH
 	newUpdateURL := newUpdateURLPrefix + "/minio.shasum"
@@ -153,7 +177,7 @@ func getReleaseUpdate(updateURL string) (updateMsg updateMessage, errMsg string,
 
 	// Instantiate a new client with 3 sec timeout.
 	client := &http.Client{
-		Timeout: 3 * time.Second,
+		Timeout: duration,
 	}
 
 	// Parse current minio version into RFC3339.
@@ -170,23 +194,32 @@ func getReleaseUpdate(updateURL string) (updateMsg updateMessage, errMsg string,
 		return
 	}
 
+	// Initialize new request.
+	req, err := http.NewRequest("GET", newUpdateURL, nil)
+	if err != nil {
+		return
+	}
+
+	// Set user agent.
+	req.Header.Set("User-Agent", userAgent+" "+fmt.Sprintf("Docker/%t", isDocker()))
+
 	// Fetch new update.
-	data, err := client.Get(newUpdateURL)
+	resp, err := client.Do(req)
 	if err != nil {
 		return
 	}
 
 	// Verify if we have a valid http response i.e http.StatusOK.
-	if data != nil {
-		if data.StatusCode != http.StatusOK {
+	if resp != nil {
+		if resp.StatusCode != http.StatusOK {
 			errMsg = "Failed to retrieve update notice."
-			err = errors.New("http status : " + data.Status)
+			err = errors.New("http status : " + resp.Status)
 			return
 		}
 	}
 
 	// Read the response body.
-	updateBody, err := ioutil.ReadAll(data.Body)
+	updateBody, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		errMsg = "Failed to retrieve update notice. Please try again later."
 		return
@@ -226,10 +259,11 @@ func mainUpdate(ctx *cli.Context) {
 	var updateMsg updateMessage
 	var errMsg string
 	var err error
+	var secs = time.Second * 3
 	if ctx.Bool("experimental") {
-		updateMsg, errMsg, err = getReleaseUpdate(minioUpdateExperimentalURL)
+		updateMsg, errMsg, err = getReleaseUpdate(minioUpdateExperimentalURL, secs)
 	} else {
-		updateMsg, errMsg, err = getReleaseUpdate(minioUpdateStableURL)
+		updateMsg, errMsg, err = getReleaseUpdate(minioUpdateStableURL, secs)
 	}
 	fatalIf(err, errMsg)
 	console.Println(updateMsg)
