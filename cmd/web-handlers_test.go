@@ -28,6 +28,7 @@ import (
 	"testing"
 
 	"github.com/minio/minio-go/pkg/policy"
+	"github.com/minio/minio-go/pkg/set"
 )
 
 // Authenticate and get JWT token - will be called before every webrpc handler invocation
@@ -834,8 +835,26 @@ func testWebGetBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestE
 		t.Fatal("Unexpected error: ", err)
 	}
 
-	policyDoc := "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Action\":[\"s3:GetBucketLocation\",\"s3:ListBucket\"],\"Effect\":\"Allow\",\"Principal\":{\"AWS\":[\"*\"]},\"Resource\":[\"arn:aws:s3:::" + bucketName + "\"],\"Sid\":\"\"},{\"Action\":[\"s3:GetObject\"],\"Effect\":\"Allow\",\"Principal\":{\"AWS\":[\"*\"]},\"Resource\":[\"arn:aws:s3:::" + bucketName + "/*\"],\"Sid\":\"\"}]}"
-	if err := writeBucketPolicy(bucketName, obj, bytes.NewReader([]byte(policyDoc)), int64(len(policyDoc))); err != nil {
+	policyVal := bucketPolicy{
+		Version: "2012-10-17",
+		Statements: []policyStatement{
+			{
+				Actions:   set.CreateStringSet("s3:GetBucketLocation", "s3:ListBucket"),
+				Effect:    "Allow",
+				Principal: map[string][]string{"AWS": {"*"}},
+				Resources: set.CreateStringSet("arn:aws:s3:::" + bucketName),
+				Sid:       "",
+			},
+			{
+				Actions:   set.CreateStringSet("s3:GetObject"),
+				Effect:    "Allow",
+				Principal: map[string][]string{"AWS": {"*"}},
+				Resources: set.CreateStringSet("arn:aws:s3:::" + bucketName + "/*"),
+				Sid:       "",
+			},
+		},
+	}
+	if err := writeBucketPolicy(bucketName, obj, &policyVal); err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
 
@@ -899,8 +918,46 @@ func testWebListAllBucketPoliciesHandler(obj ObjectLayer, instanceType string, t
 		t.Fatal("Unexpected error: ", err)
 	}
 
-	policyDoc := `{"Version":"2012-10-17","Statement":[{"Action":["s3:GetBucketLocation"],"Effect":"Allow","Principal":{"AWS":["*"]},"Resource":["arn:aws:s3:::` + bucketName + `"],"Sid":""},{"Action":["s3:ListBucket"],"Condition":{"StringEquals":{"s3:prefix":["hello"]}},"Effect":"Allow","Principal":{"AWS":["*"]},"Resource":["arn:aws:s3:::` + bucketName + `"],"Sid":""},{"Action":["s3:ListBucketMultipartUploads"],"Effect":"Allow","Principal":{"AWS":["*"]},"Resource":["arn:aws:s3:::` + bucketName + `"],"Sid":""},{"Action":["s3:AbortMultipartUpload","s3:DeleteObject","s3:GetObject","s3:ListMultipartUploadParts","s3:PutObject"],"Effect":"Allow","Principal":{"AWS":["*"]},"Resource":["arn:aws:s3:::` + bucketName + `/hello*"],"Sid":""}]}`
-	if err := writeBucketPolicy(bucketName, obj, bytes.NewReader([]byte(policyDoc)), int64(len(policyDoc))); err != nil {
+	policyVal := bucketPolicy{
+		Version: "2012-10-17",
+		Statements: []policyStatement{
+			{
+				Actions:   set.CreateStringSet("s3:GetBucketLocation"),
+				Effect:    "Allow",
+				Principal: map[string][]string{"AWS": {"*"}},
+				Resources: set.CreateStringSet("arn:aws:s3:::" + bucketName),
+				Sid:       "",
+			},
+			{
+				Actions: set.CreateStringSet("s3:ListBucket"),
+				Conditions: map[string]map[string]set.StringSet{
+					"StringEquals": {
+						"s3:prefix": set.CreateStringSet("hello"),
+					},
+				},
+				Effect:    "Allow",
+				Principal: map[string][]string{"AWS": {"*"}},
+				Resources: set.CreateStringSet("arn:aws:s3:::" + bucketName),
+				Sid:       "",
+			},
+			{
+				Actions:   set.CreateStringSet("s3:ListBucketMultipartUploads"),
+				Effect:    "Allow",
+				Principal: map[string][]string{"AWS": {"*"}},
+				Resources: set.CreateStringSet("arn:aws:s3:::" + bucketName),
+				Sid:       "",
+			},
+			{
+				Actions: set.CreateStringSet("s3:AbortMultipartUpload", "s3:DeleteObject",
+					"s3:GetObject", "s3:ListMultipartUploadParts", "s3:PutObject"),
+				Effect:    "Allow",
+				Principal: map[string][]string{"AWS": {"*"}},
+				Resources: set.CreateStringSet("arn:aws:s3:::" + bucketName + "/hello*"),
+				Sid:       "",
+			},
+		},
+	}
+	if err := writeBucketPolicy(bucketName, obj, &policyVal); err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
 

@@ -182,7 +182,7 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 	}
 
 	// Save bucket policy.
-	if err = writeBucketPolicy(bucket, objAPI, bytes.NewReader(policyBytes), int64(len(policyBytes))); err != nil {
+	if err = persistAndNotifyBucketPolicyChange(bucket, policyChange{false, policy}, objAPI); err != nil {
 		switch err.(type) {
 		case BucketNameInvalid:
 			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
@@ -192,11 +192,36 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 		return
 	}
 
-	// Set the bucket policy in memory.
-	globalBucketPolicies.SetBucketPolicy(bucket, policy)
-
 	// Success.
 	writeSuccessNoContent(w)
+}
+
+// persistAndNotifyBucketPolicyChange - takes a policyChange argument,
+// persists it to storage, and notify nodes in the cluster about the
+// change. In-memory state is updated in response to the notification.
+func persistAndNotifyBucketPolicyChange(bucket string, pCh policyChange, objAPI ObjectLayer) error {
+	// FIXME: Race exists between the bucket existence check and
+	// then updating the bucket policy.
+	if err := isBucketExist(bucket, objAPI); err != nil {
+		return err
+	}
+
+	if pCh.IsRemove {
+		if err := removeBucketPolicy(bucket, objAPI); err != nil {
+			return err
+		}
+	} else {
+		if pCh.BktPolicy == nil {
+			return errInvalidArgument
+		}
+		if err := writeBucketPolicy(bucket, objAPI, pCh.BktPolicy); err != nil {
+			return err
+		}
+	}
+
+	// Notify all peers (including self) to update in-memory state
+	S3PeersUpdateBucketPolicy(bucket, pCh)
+	return nil
 }
 
 // DeleteBucketPolicyHandler - DELETE Bucket policy
@@ -220,8 +245,9 @@ func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
-	// Delete bucket access policy.
-	if err := removeBucketPolicy(bucket, objAPI); err != nil {
+	// Delete bucket access policy, by passing an empty policy
+	// struct.
+	if err := persistAndNotifyBucketPolicyChange(bucket, policyChange{true, nil}, objAPI); err != nil {
 		switch err.(type) {
 		case BucketNameInvalid:
 			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
@@ -232,9 +258,6 @@ func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r 
 		}
 		return
 	}
-
-	// Remove bucket policy.
-	globalBucketPolicies.RemoveBucketPolicy(bucket)
 
 	// Success.
 	writeSuccessNoContent(w)
