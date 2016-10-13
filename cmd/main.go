@@ -192,7 +192,9 @@ func Main() {
 					// because of network errors.
 					return nil
 				}
-				console.Println(updateMsg)
+				if updateMsg.Update {
+					console.Println(updateMsg)
+				}
 			}
 		}
 		return nil
