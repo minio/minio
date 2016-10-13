@@ -167,13 +167,10 @@ func Main() {
 		// Do not print update messages, if quiet flag is set.
 		if !globalQuiet {
 			if strings.HasPrefix(ReleaseTag, "RELEASE.") && c.Args().Get(0) != "update" {
-				updateMsg, _, err := getReleaseUpdate(minioUpdateStableURL)
-				if err != nil {
-					// Ignore any errors during getReleaseUpdate(), possibly
-					// because of network errors.
-					return nil
+				updateMsg := getReleaseUpdate(minioUpdateStableURL, true)
+				if updateMsg.Update {
+					console.Println(updateMsg)
 				}
-				console.Println(updateMsg)
 			}
 		}
 
