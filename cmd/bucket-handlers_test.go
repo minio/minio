@@ -44,34 +44,39 @@ func testGetBucketLocationHandler(obj ObjectLayer, instanceType, bucketName stri
 		errorResponse      APIErrorResponse
 		shouldPass         bool
 	}{
+		// Test case - 1.
 		// Tests for authenticated request and proper response.
 		{
-			bucketName,
-			credentials.AccessKeyID,
-			credentials.SecretAccessKey,
-			http.StatusOK,
-			[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+			bucketName:         bucketName,
+			accessKey:          credentials.AccessKeyID,
+			secretKey:          credentials.SecretAccessKey,
+			expectedRespStatus: http.StatusOK,
+			locationResponse: []byte(`<?xml version="1.0" encoding="UTF-8"?>
 <LocationConstraint xmlns="http://s3.amazonaws.com/doc/2006-03-01/"></LocationConstraint>`),
-			APIErrorResponse{},
-			true,
+			errorResponse: APIErrorResponse{},
+			shouldPass:    true,
 		},
-		// Tests for anonymous requests.
+		// Test case - 2.
+		// Tests for signature mismatch error.
 		{
-			bucketName,
-			"",
-			"",
-			http.StatusForbidden,
-			[]byte(""),
-			APIErrorResponse{
+			bucketName:         bucketName,
+			accessKey:          "abcd",
+			secretKey:          "abcd",
+			expectedRespStatus: http.StatusForbidden,
+			locationResponse:   []byte(""),
+			errorResponse: APIErrorResponse{
 				Resource: "/" + bucketName + "/",
-				Code:     "AccessDenied",
-				Message:  "Access Denied.",
+				Code:     "InvalidAccessKeyID",
+				Message:  "The access key ID you provided does not exist in our records.",
 			},
-			false,
+			shouldPass: false,
 		},
 	}
 
 	for i, testCase := range testCases {
+		if i != 1 {
+			continue
+		}
 		// initialize httptest Recorder, this records any mutations to response writer inside the handler.
 		rec := httptest.NewRecorder()
 		// construct HTTP request for Get bucket location.
@@ -79,7 +84,7 @@ func testGetBucketLocationHandler(obj ObjectLayer, instanceType, bucketName stri
 		if err != nil {
 			t.Fatalf("Test %d: %s: Failed to create HTTP request for GetBucketLocationHandler: <ERROR> %v", i+1, instanceType, err)
 		}
-		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic ofthe handler.
+		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
 		// Call the ServeHTTP to execute the handler.
 		apiRouter.ServeHTTP(rec, req)
 		if rec.Code != testCase.expectedRespStatus {
@@ -102,6 +107,38 @@ func testGetBucketLocationHandler(obj ObjectLayer, instanceType, bucketName stri
 		if errorResponse.Code != testCase.errorResponse.Code {
 			t.Errorf("Test %d: %s: Expected the error code to be `%s`, but instead found `%s`", i+1, instanceType, testCase.errorResponse.Code, errorResponse.Code)
 		}
+
+		// Verify response of the V2 signed HTTP request.
+		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
+		recV2 := httptest.NewRecorder()
+		// construct HTTP request for PUT bucket policy endpoint.
+		reqV2, err := newTestSignedRequestV2("GET", getBucketLocationURL("", testCase.bucketName), 0, nil, testCase.accessKey, testCase.secretKey)
+
+		if err != nil {
+			t.Fatalf("Test %d: %s: Failed to create HTTP request for PutBucketPolicyHandler: <ERROR> %v", i+1, instanceType, err)
+		}
+		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
+		// Call the ServeHTTP to execute the handler.
+		apiRouter.ServeHTTP(recV2, reqV2)
+		if recV2.Code != testCase.expectedRespStatus {
+			t.Errorf("Test %d: %s: Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, recV2.Code)
+		}
+
+		errorResponse = APIErrorResponse{}
+		err = xml.Unmarshal(recV2.Body.Bytes(), &errorResponse)
+		if err != nil && !testCase.shouldPass {
+			t.Fatalf("Test %d: %s: Unable to marshal response body %s", i+1, instanceType, string(recV2.Body.Bytes()))
+		}
+		if errorResponse.Resource != testCase.errorResponse.Resource {
+			t.Errorf("Test %d: %s: Expected the error resource to be `%s`, but instead found `%s`", i+1, instanceType, testCase.errorResponse.Resource, errorResponse.Resource)
+		}
+		if errorResponse.Message != testCase.errorResponse.Message {
+			t.Errorf("Test %d: %s: Expected the error message to be `%s`, but instead found `%s`", i+1, instanceType, testCase.errorResponse.Message, errorResponse.Message)
+		}
+		if errorResponse.Code != testCase.errorResponse.Code {
+			t.Errorf("Test %d: %s: Expected the error code to be `%s`, but instead found `%s`", i+1, instanceType, testCase.errorResponse.Code, errorResponse.Code)
+		}
+
 	}
 
 	// Test for Anonymous/unsigned http request.
@@ -149,6 +186,7 @@ func testHeadBucketHandler(obj ObjectLayer, instanceType, bucketName string, api
 		// expected Response.
 		expectedRespStatus int
 	}{
+		// Test case - 1.
 		// Bucket exists.
 		{
 			bucketName:         bucketName,
@@ -156,6 +194,7 @@ func testHeadBucketHandler(obj ObjectLayer, instanceType, bucketName string, api
 			secretKey:          credentials.SecretAccessKey,
 			expectedRespStatus: http.StatusOK,
 		},
+		// Test case - 2.
 		// Non-existent bucket name.
 		{
 			bucketName:         "2333",
@@ -163,11 +202,13 @@ func testHeadBucketHandler(obj ObjectLayer, instanceType, bucketName string, api
 			secretKey:          credentials.SecretAccessKey,
 			expectedRespStatus: http.StatusNotFound,
 		},
-		// Un-authenticated request.
+		// Test case - 3.
+		// Testing for signature mismatch error.
+		// setting invalid acess and secret key.
 		{
 			bucketName:         bucketName,
-			accessKey:          "",
-			secretKey:          "",
+			accessKey:          "abcd",
+			secretKey:          "abcd",
 			expectedRespStatus: http.StatusForbidden,
 		},
 	}
@@ -180,12 +221,29 @@ func testHeadBucketHandler(obj ObjectLayer, instanceType, bucketName string, api
 		if err != nil {
 			t.Fatalf("Test %d: %s: Failed to create HTTP request for HeadBucketHandler: <ERROR> %v", i+1, instanceType, err)
 		}
-		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic ofthe handler.
+		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
 		// Call the ServeHTTP to execute the handler.
 		apiRouter.ServeHTTP(rec, req)
 		if rec.Code != testCase.expectedRespStatus {
 			t.Errorf("Test %d: %s: Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, rec.Code)
 		}
+
+		// Verify response the V2 signed HTTP request.
+		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
+		recV2 := httptest.NewRecorder()
+		// construct HTTP request for PUT bucket policy endpoint.
+		reqV2, err := newTestSignedRequestV2("HEAD", getHEADBucketURL("", testCase.bucketName), 0, nil, testCase.accessKey, testCase.secretKey)
+
+		if err != nil {
+			t.Fatalf("Test %d: %s: Failed to create HTTP request for PutBucketPolicyHandler: <ERROR> %v", i+1, instanceType, err)
+		}
+		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
+		// Call the ServeHTTP to execute the handler.
+		apiRouter.ServeHTTP(recV2, reqV2)
+		if recV2.Code != testCase.expectedRespStatus {
+			t.Errorf("Test %d: %s: Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, recV2.Code)
+		}
+
 	}
 
 	// Test for Anonymous/unsigned http request.
@@ -237,25 +295,138 @@ func testListMultipartUploadsHandler(obj ObjectLayer, instanceType, bucketName s
 		uploadIDMarker     string
 		delimiter          string
 		maxUploads         string
+		accessKey          string
+		secretKey          string
 		expectedRespStatus int
 		shouldPass         bool
 	}{
-		// 1 - invalid bucket name.
-		{".test", "", "", "", "", "0", http.StatusBadRequest, false},
-		// 2 - bucket not found.
-		{"volatile-bucket-1", "", "", "", "", "0", http.StatusNotFound, false},
-		// 3 - invalid delimiter.
-		{bucketName, "", "", "", "-", "0", http.StatusNotImplemented, false},
-		// 4 - invalid prefix and marker combination.
-		{bucketName, "asia", "europe-object", "", "", "0", http.StatusNotImplemented, false},
-		// 5 - invalid upload id and marker combination.
-		{bucketName, "asia", "asia/europe/", "abc", "", "0", http.StatusNotImplemented, false},
-		// 6 - invalid max uploads.
-		{bucketName, "", "", "", "", "-1", http.StatusBadRequest, false},
-		// 7 - good case delimiter.
-		{bucketName, "", "", "", "/", "100", http.StatusOK, true},
-		// 8 - good case without delimiter.
-		{bucketName, "", "", "", "", "100", http.StatusOK, true},
+		// Test case - 1.
+		// Setting invalid bucket name.
+		{
+			bucket:             ".test",
+			prefix:             "",
+			keyMarker:          "",
+			uploadIDMarker:     "",
+			delimiter:          "",
+			maxUploads:         "0",
+			accessKey:          credentials.AccessKeyID,
+			secretKey:          credentials.SecretAccessKey,
+			expectedRespStatus: http.StatusBadRequest,
+			shouldPass:         false,
+		},
+		// Test case - 2.
+		// Setting a non-existent bucket.
+		{
+			bucket:             "volatile-bucket-1",
+			prefix:             "",
+			keyMarker:          "",
+			uploadIDMarker:     "",
+			delimiter:          "",
+			maxUploads:         "0",
+			accessKey:          credentials.AccessKeyID,
+			secretKey:          credentials.SecretAccessKey,
+			expectedRespStatus: http.StatusNotFound,
+			shouldPass:         false,
+		},
+		// Test case -3.
+		// Setting invalid delimiter, expecting the HTTP response status to be http.StatusNotImplemented.
+		{
+			bucket:             bucketName,
+			prefix:             "",
+			keyMarker:          "",
+			uploadIDMarker:     "",
+			delimiter:          "-",
+			maxUploads:         "0",
+			accessKey:          credentials.AccessKeyID,
+			secretKey:          credentials.SecretAccessKey,
+			expectedRespStatus: http.StatusNotImplemented,
+			shouldPass:         false,
+		},
+		// Test case - 4.
+		// Setting Invalid prefix and marker combination.
+		{
+			bucket:             bucketName,
+			prefix:             "asia",
+			keyMarker:          "europe-object",
+			uploadIDMarker:     "",
+			delimiter:          "",
+			maxUploads:         "0",
+			accessKey:          credentials.AccessKeyID,
+			secretKey:          credentials.SecretAccessKey,
+			expectedRespStatus: http.StatusNotImplemented,
+			shouldPass:         false,
+		},
+		// Test case - 5.
+		// Invalid upload id and marker combination.
+		{
+			bucket:             bucketName,
+			prefix:             "asia",
+			keyMarker:          "asia/europe/",
+			uploadIDMarker:     "abc",
+			delimiter:          "",
+			maxUploads:         "0",
+			accessKey:          credentials.AccessKeyID,
+			secretKey:          credentials.SecretAccessKey,
+			expectedRespStatus: http.StatusNotImplemented,
+			shouldPass:         false,
+		},
+		// Test case - 6.
+		// Setting a negative value to max-uploads paramater, should result in http.StatusBadRequest.
+		{
+			bucket:             bucketName,
+			prefix:             "",
+			keyMarker:          "",
+			uploadIDMarker:     "",
+			delimiter:          "",
+			maxUploads:         "-1",
+			accessKey:          credentials.AccessKeyID,
+			secretKey:          credentials.SecretAccessKey,
+			expectedRespStatus: http.StatusBadRequest,
+			shouldPass:         false,
+		},
+		// Test case - 7.
+		// Case with right set of parameters,
+		// should result in success 200OK.
+		{
+			bucket:             bucketName,
+			prefix:             "",
+			keyMarker:          "",
+			uploadIDMarker:     "",
+			delimiter:          "/",
+			maxUploads:         "100",
+			accessKey:          credentials.AccessKeyID,
+			secretKey:          credentials.SecretAccessKey,
+			expectedRespStatus: http.StatusOK,
+			shouldPass:         true,
+		},
+		// Test case - 8.
+		// Good case without delimiter.
+		{
+			bucket:             bucketName,
+			prefix:             "",
+			keyMarker:          "",
+			uploadIDMarker:     "",
+			delimiter:          "",
+			maxUploads:         "100",
+			accessKey:          credentials.AccessKeyID,
+			secretKey:          credentials.SecretAccessKey,
+			expectedRespStatus: http.StatusOK,
+			shouldPass:         true,
+		},
+		// Test case - 9.
+		// Setting Invalid AccessKey and SecretKey to induce and verify Signature Mismatch error.
+		{
+			bucket:             bucketName,
+			prefix:             "",
+			keyMarker:          "",
+			uploadIDMarker:     "",
+			delimiter:          "",
+			maxUploads:         "100",
+			accessKey:          "abcd",
+			secretKey:          "abcd",
+			expectedRespStatus: http.StatusForbidden,
+			shouldPass:         true,
+		},
 	}
 
 	for i, testCase := range testCases {
@@ -264,15 +435,33 @@ func testListMultipartUploadsHandler(obj ObjectLayer, instanceType, bucketName s
 
 		// construct HTTP request for List multipart uploads endpoint.
 		u := getListMultipartUploadsURLWithParams("", testCase.bucket, testCase.prefix, testCase.keyMarker, testCase.uploadIDMarker, testCase.delimiter, testCase.maxUploads)
-		req, gerr := newTestSignedRequestV4("GET", u, 0, nil, credentials.AccessKeyID, credentials.SecretAccessKey)
+		req, gerr := newTestSignedRequestV4("GET", u, 0, nil, testCase.accessKey, testCase.secretKey)
 		if gerr != nil {
 			t.Fatalf("Test %d: %s: Failed to create HTTP request for ListMultipartUploadsHandler: <ERROR> %v", i+1, instanceType, gerr)
 		}
-		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic ofthe handler.
+		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
 		// Call the ServeHTTP to execute the handler.
 		apiRouter.ServeHTTP(rec, req)
 		if rec.Code != testCase.expectedRespStatus {
 			t.Errorf("Test %d: %s: Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, rec.Code)
+		}
+
+		// Verify response the V2 signed HTTP request.
+		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
+		recV2 := httptest.NewRecorder()
+		// construct HTTP request for PUT bucket policy endpoint.
+
+		// verify response for V2 signed HTTP request.
+		reqV2, err := newTestSignedRequestV2("GET", u, 0, nil, testCase.accessKey, testCase.secretKey)
+
+		if err != nil {
+			t.Fatalf("Test %d: %s: Failed to create HTTP request for PutBucketPolicyHandler: <ERROR> %v", i+1, instanceType, err)
+		}
+		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
+		// Call the ServeHTTP to execute the handler.
+		apiRouter.ServeHTTP(recV2, reqV2)
+		if recV2.Code != testCase.expectedRespStatus {
+			t.Errorf("Test %d: %s: Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, recV2.Code)
 		}
 	}
 
@@ -285,7 +474,7 @@ func testListMultipartUploadsHandler(obj ObjectLayer, instanceType, bucketName s
 	if err != nil {
 		t.Fatalf("Test %s: Failed to create HTTP request for ListMultipartUploadsHandler: <ERROR> %v", instanceType, err)
 	}
-	// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic ofthe handler.
+	// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
 	// Call the ServeHTTP to execute the handler.
 	apiRouter.ServeHTTP(rec, req)
 	if rec.Code != http.StatusForbidden {
@@ -340,6 +529,7 @@ func testListBucketsHandler(obj ObjectLayer, instanceType, bucketName string, ap
 		secretKey          string
 		expectedRespStatus int
 	}{
+		// Test case - 1.
 		// Validate a good case request succeeds.
 		{
 			bucketName:         bucketName,
@@ -347,11 +537,12 @@ func testListBucketsHandler(obj ObjectLayer, instanceType, bucketName string, ap
 			secretKey:          credentials.SecretAccessKey,
 			expectedRespStatus: http.StatusOK,
 		},
-		// Validate a bad case request fails with http.StatusForbidden.
+		// Test case - 2.
+		// Test case with invalid accessKey to produce and validate Signature MisMatch error.
 		{
 			bucketName:         bucketName,
-			accessKey:          "",
-			secretKey:          "",
+			accessKey:          "abcd",
+			secretKey:          "abcd",
 			expectedRespStatus: http.StatusForbidden,
 		},
 	}
@@ -363,11 +554,29 @@ func testListBucketsHandler(obj ObjectLayer, instanceType, bucketName string, ap
 		if lerr != nil {
 			t.Fatalf("Test %d: %s: Failed to create HTTP request for ListBucketsHandler: <ERROR> %v", i+1, instanceType, lerr)
 		}
-		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic ofthe handler.
+		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
 		// Call the ServeHTTP to execute the handler.
 		apiRouter.ServeHTTP(rec, req)
 		if rec.Code != testCase.expectedRespStatus {
 			t.Errorf("Test %d: %s: Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, rec.Code)
+		}
+
+		// Verify response of the V2 signed HTTP request.
+		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
+		recV2 := httptest.NewRecorder()
+		// construct HTTP request for PUT bucket policy endpoint.
+
+		// verify response for V2 signed HTTP request.
+		reqV2, err := newTestSignedRequestV2("GET", getListBucketURL(""), 0, nil, testCase.accessKey, testCase.secretKey)
+
+		if err != nil {
+			t.Fatalf("Test %d: %s: Failed to create HTTP request for PutBucketPolicyHandler: <ERROR> %v", i+1, instanceType, err)
+		}
+		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
+		// Call the ServeHTTP to execute the handler.
+		apiRouter.ServeHTTP(recV2, reqV2)
+		if recV2.Code != testCase.expectedRespStatus {
+			t.Errorf("Test %d: %s: Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, recV2.Code)
 		}
 	}
 
