@@ -140,10 +140,43 @@ func doesPresignV2SignatureMatch(r *http.Request) APIErrorCode {
 // doesSignV2Match - Verify authorization header with calculated header in accordance with
 //     - http://docs.aws.amazon.com/AmazonS3/latest/dev/auth-request-sig-v2.html
 // returns true if matches, false otherwise. if error is not nil then it is always false
-func doesSignV2Match(r *http.Request) APIErrorCode {
-	gotAuth := r.Header.Get("Authorization")
-	if gotAuth == "" {
+
+func validateV2AuthHeader(v2Auth string) APIErrorCode {
+	if v2Auth == "" {
 		return ErrAuthHeaderEmpty
+	}
+	// Verify if the header algorithm is supported or not.
+	if !strings.HasPrefix(v2Auth, signV2Algorithm) {
+		return ErrSignatureVersionNotSupported
+	}
+
+	// below is V2 Signed Auth header format, splitting on `space` (after the `AWS` string).
+	// Authorization = "AWS" + " " + AWSAccessKeyId + ":" + Signature
+	authFields := strings.Split(v2Auth, " ")
+	if len(authFields) != 2 {
+		return ErrMissingFields
+	}
+
+	// Then will be splitting on ":", this will seprate `AWSAccessKeyId` and `Signature` string.
+	keySignFields := strings.Split(strings.TrimSpace(authFields[1]), ":")
+	if len(keySignFields) != 2 {
+		return ErrMissingFields
+	}
+
+	// Access credentials.
+	cred := serverConfig.GetCredential()
+	if keySignFields[0] != cred.AccessKeyID {
+		return ErrInvalidAccessKeyID
+	}
+
+	return ErrNone
+}
+
+func doesSignV2Match(r *http.Request) APIErrorCode {
+	v2Auth := r.Header.Get("Authorization")
+
+	if apiError := validateV2AuthHeader(v2Auth); apiError != ErrNone {
+		return apiError
 	}
 
 	// url.RawPath will be valid if path has any encoded characters, if not it will
@@ -158,7 +191,7 @@ func doesSignV2Match(r *http.Request) APIErrorCode {
 	}
 
 	expectedAuth := signatureV2(r.Method, encodedResource, encodedQuery, r.Header)
-	if gotAuth != expectedAuth {
+	if v2Auth != expectedAuth {
 		return ErrSignatureDoesNotMatch
 	}
 
