@@ -17,7 +17,6 @@ Minio server is light enough to be bundled with the application stack, similar t
 
 ### Install from Homebrew
 Install minio packages using [Homebrew](http://brew.sh/)
- 
 ```sh
 $ brew install minio
 $ minio --help
@@ -25,8 +24,6 @@ $ minio --help
 
 ### Install from Source
 Source installation is only intended for developers and advanced users. If you do not have a working Golang environment, please follow [How to install Golang](https://docs.minio.io/docs/how-to-install-golang).
-
-
 ```sh
 $ go get -u github.com/minio/minio
 ```
@@ -35,16 +32,20 @@ $ go get -u github.com/minio/minio
 In the examples below, Minio serves the contents of the ``Photos`` directory as an object store.
 
 ### Docker Container
-
+#### Latest Stable
 ```sh
 $ docker pull minio/minio
 $ docker run -p 9000:9000 minio/minio server /export
 ```
 
+#### Latest Edge (Testing Only)
+```sh
+$ docker pull minio/minio:edge
+$ docker run -p 9000:9000 minio/minio:edge server /export
+```
 Please visit Minio Docker quickstart guide for more [here](https://docs.minio.io/docs/minio-docker-quickstart-guide)
 
 ### GNU/Linux
-
 ```sh
 $ chmod +x minio
 $ ./minio --help
@@ -53,7 +54,6 @@ $ ./minio server ~/Photos
 ```
 
 ### OS X
-
 ```sh
 $ chmod 755 minio
 $ ./minio --help
@@ -62,7 +62,6 @@ $ ./minio server ~/Photos
 ```
 
 ### Microsoft Windows
-
 ```sh
 C:\Users\Username\Downloads> minio.exe --help
 C:\Users\Username\Downloads> minio.exe server D:\Photos
@@ -70,7 +69,6 @@ C:\Users\Username\Downloads> minio.exe server D:\Photos
 ```
 
 ### FreeBSD
-
 ```sh
 $ chmod 755 minio
 $ ./minio --help
@@ -86,7 +84,6 @@ Open a web browser and navigate to http://127.0.0.1:9000 to view your buckets on
 
 ## 4. Test Minio Server using `mc`
 Install mc from [here](https://docs.minio.io/docs/minio-client-quickstart-guide). Use `mc ls` command to list all the buckets on your minio server.
-
 ```sh
 $ mc config host add myminio http://10.0.0.10:9000 USWUXHGYZQYFYFFIT3RE MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03
 $ mc mb myminio/mybucket
