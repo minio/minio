@@ -24,6 +24,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/skyrings/skyring-common/tools/uuid"
@@ -289,6 +290,14 @@ func getFSAppendDataPath(uploadID string) string {
 	return path.Join(tmpMetaPrefix, uploadID+".data")
 }
 
+// Parts pool shared buffer.
+var appendPartsBufPool = sync.Pool{
+	New: func() interface{} {
+		b := make([]byte, readSizeV1)
+		return &b
+	},
+}
+
 // Append parts to fsAppendDataFile.
 func appendParts(disk StorageAPI, bucket, object, uploadID string) {
 	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID)
@@ -348,7 +357,10 @@ func appendParts(disk StorageAPI, bucket, object, uploadID string) {
 	partPath := path.Join(mpartMetaPrefix, bucket, object, uploadID, part.Name)
 	offset := int64(0)
 	totalLeft := part.Size
-	buf := make([]byte, readSizeV1)
+
+	// Get buffer from parts pool.
+	bufp := appendPartsBufPool.Get().(*[]byte)
+	buf := *bufp
 	for totalLeft > 0 {
 		curLeft := int64(readSizeV1)
 		if totalLeft < readSizeV1 {
@@ -370,12 +382,16 @@ func appendParts(disk StorageAPI, bucket, object, uploadID string) {
 		offset += n
 		totalLeft -= n
 	}
+	appendPartsBufPool.Put(bufp)
+
 	// All good, the part has been appended to the tmp file, rename it back.
 	if err = disk.RenameFile(minioMetaBucket, tmpDataPath, minioMetaBucket, fsAppendDataPath); err != nil {
+		errorIf(err, "Unable to rename %s to %s", tmpDataPath, fsAppendDataPath)
 		return
 	}
 	fsAppendMeta.AddObjectPart(part.Number, part.Name, part.ETag, part.Size)
 	if err = writeFSMetadata(disk, minioMetaBucket, fsAppendMetaPath, fsAppendMeta); err != nil {
+		errorIf(err, "Unable to write FS metadata %s", fsAppendMetaPath)
 		return
 	}
 	// If there are more parts that need to be appended to fsAppendDataFile
@@ -383,6 +399,14 @@ func appendParts(disk StorageAPI, bucket, object, uploadID string) {
 	if appendNeeded {
 		go appendParts(disk, bucket, object, uploadID)
 	}
+}
+
+// Parts pool shared buffer.
+var partsBufPool = sync.Pool{
+	New: func() interface{} {
+		b := make([]byte, readSizeV1)
+		return &b
+	},
 }
 
 // PutObjectPart - reads incoming data until EOF for the part file on
@@ -433,8 +457,11 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	if size > 0 && bufSize > size {
 		bufSize = size
 	}
-	buf := make([]byte, int(bufSize))
-	bytesWritten, cErr := fsCreateFile(fs.storage, teeReader, buf, minioMetaBucket, tmpPartPath)
+	bufp := partsBufPool.Get().(*[]byte)
+	buf := *bufp
+	defer partsBufPool.Put(bufp)
+
+	bytesWritten, cErr := fsCreateFile(fs.storage, teeReader, buf[:bufSize], minioMetaBucket, tmpPartPath)
 	if cErr != nil {
 		fs.storage.DeleteFile(minioMetaBucket, tmpPartPath)
 		return "", toObjectErr(cErr, minioMetaBucket, tmpPartPath)
@@ -578,6 +605,14 @@ func (fs fsObjects) ListObjectParts(bucket, object, uploadID string, partNumberM
 	return fs.listObjectParts(bucket, object, uploadID, partNumberMarker, maxParts)
 }
 
+// Complete multipart pool shared buffer.
+var completeBufPool = sync.Pool{
+	New: func() interface{} {
+		b := make([]byte, readSizeV1)
+		return &b
+	},
+}
+
 // CompleteMultipartUpload - completes an ongoing multipart
 // transaction after receiving all the parts indicated by the client.
 // Returns an md5sum calculated by concatenating all the individual
@@ -642,8 +677,9 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	} else {
 		tempObj := path.Join(tmpMetaPrefix, uploadID+"-"+"part.1")
 
-		// Allocate staging buffer.
-		var buf = make([]byte, readSizeV1)
+		bufp := completeBufPool.Get().(*[]byte)
+		buf := *bufp
+		defer completeBufPool.Put(bufp)
 
 		// Loop through all parts, validate them and then commit to disk.
 		for i, part := range parts {

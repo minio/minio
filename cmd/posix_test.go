@@ -679,8 +679,8 @@ func TestPosixListDir(t *testing.T) {
 			t.Errorf("Unable to initialize posix, %s", err)
 		}
 
-		if err = posixStorage.DeleteFile("bin", "yes"); !os.IsPermission(err) {
-			t.Errorf("expected: Permission error, got: %s", err)
+		if err = posixStorage.DeleteFile("bin", "yes"); err != errFileAccessDenied {
+			t.Errorf("expected: %s error, got: %s", errFileAccessDenied, err)
 		}
 	}
 
@@ -793,8 +793,8 @@ func TestDeleteFile(t *testing.T) {
 			t.Errorf("Unable to initialize posix, %s", err)
 		}
 
-		if err = posixStorage.DeleteFile("bin", "yes"); !os.IsPermission(err) {
-			t.Errorf("expected: Permission error, got: %s", err)
+		if err = posixStorage.DeleteFile("bin", "yes"); err != errFileAccessDenied {
+			t.Errorf("expected: %s error, got: %s", errFileAccessDenied, err)
 		}
 	}
 

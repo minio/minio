@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 
@@ -42,6 +43,7 @@ type posix struct {
 	ioErrCount  int32 // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
 	diskPath    string
 	minFreeDisk int64
+	pool        sync.Pool
 }
 
 var errFaultyDisk = errors.New("Faulty disk")
@@ -70,16 +72,22 @@ func checkPathLength(pathName string) error {
 func isDirEmpty(dirname string) bool {
 	f, err := os.Open(dirname)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return false
+		}
 		errorIf(err, "Unable to access directory.")
 		return false
 	}
 	defer f.Close()
 	// List one entry.
 	_, err = f.Readdirnames(1)
+	if err == io.EOF {
+		// Returns true if we have reached EOF, directory is indeed empty.
+		return true
+	}
 	if err != nil {
-		if err == io.EOF {
-			// Returns true if we have reached EOF, directory is indeed empty.
-			return true
+		if os.IsNotExist(err) {
+			return false
 		}
 		errorIf(err, "Unable to list directory.")
 		return false
@@ -102,6 +110,13 @@ func newPosix(diskPath string) (StorageAPI, error) {
 	fs := &posix{
 		diskPath:    diskPath,
 		minFreeDisk: fsMinSpacePercent, // Minimum 5% disk should be free.
+		// 1MiB buffer pool for posix internal operations.
+		pool: sync.Pool{
+			New: func() interface{} {
+				b := make([]byte, 1*1024*1024)
+				return &b
+			},
+		},
 	}
 	st, err := os.Stat(preparePath(diskPath))
 	if err != nil {
@@ -592,8 +607,13 @@ func (s *posix) AppendFile(volume, path string, buf []byte) (err error) {
 	// Close upon return.
 	defer w.Close()
 
-	// Return io.Copy
-	_, err = io.Copy(w, bytes.NewReader(buf))
+	bufp := s.pool.Get().(*[]byte)
+
+	// Reuse buffer.
+	defer s.pool.Put(bufp)
+
+	// Return io.CopyBuffer
+	_, err = io.CopyBuffer(w, bytes.NewReader(buf), *bufp)
 	return err
 }
 
@@ -680,6 +700,11 @@ func deleteFile(basePath, deletePath string) error {
 	}
 	// Attempt to remove path.
 	if err := os.Remove(preparePath(deletePath)); err != nil {
+		if os.IsNotExist(err) {
+			return errFileNotFound
+		} else if os.IsPermission(err) {
+			return errFileAccessDenied
+		}
 		return err
 	}
 	// Recursively go down the next path and delete again.

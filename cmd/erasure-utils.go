@@ -21,6 +21,7 @@ import (
 	"errors"
 	"hash"
 	"io"
+	"sync"
 
 	"github.com/klauspost/reedsolomon"
 	"github.com/minio/blake2b-simd"
@@ -47,13 +48,23 @@ func newHash(algo string) hash.Hash {
 	}
 }
 
+var hashBufPool = sync.Pool{
+	New: func() interface{} {
+		b := make([]byte, readSizeV1)
+		return &b
+	},
+}
+
 // hashSum calculates the hash of the entire path and returns.
 func hashSum(disk StorageAPI, volume, path string, writer hash.Hash) ([]byte, error) {
-	// Allocate staging buffer of 128KiB for copyBuffer.
-	buf := make([]byte, readSizeV1)
+	// Allocate staging buffer of 2MiB for copyBuffer.
+	bufp := hashBufPool.Get().(*[]byte)
+
+	// Reuse buffer.
+	defer hashBufPool.Put(bufp)
 
 	// Copy entire buffer to writer.
-	if err := copyBuffer(writer, disk, volume, path, buf); err != nil {
+	if err := copyBuffer(writer, disk, volume, path, *bufp); err != nil {
 		return nil, err
 	}
 
