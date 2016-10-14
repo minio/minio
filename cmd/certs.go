@@ -17,8 +17,13 @@
 package cmd
 
 import (
+	"crypto/x509"
+	"encoding/pem"
+	"io/ioutil"
 	"os"
 	"path/filepath"
+
+	"github.com/pkg/errors"
 )
 
 // createCertsPath create certs path.
@@ -86,4 +91,48 @@ func isSSL() bool {
 		return true
 	}
 	return false
+}
+
+func readCertificateChain() ([]*x509.Certificate, error) {
+	certPath := filepath.Join(mustGetCertsPath(), globalMinioCertFile)
+	file, err := os.Open(certPath)
+
+	if err != nil {
+		return nil, errors.Wrapf(err, "Could not open certificate for reading")
+	}
+	defer file.Close()
+
+	bytes, err2 := ioutil.ReadAll(file)
+
+	if err2 != nil {
+		return nil, errors.Wrapf(err2, "Could not read certificate contents")
+	}
+
+	return parseCertificateChain(bytes)
+}
+
+// Parses certificate chain
+func parseCertificateChain(bytes []byte) ([]*x509.Certificate, error) {
+	var certs []*x509.Certificate
+	var block *pem.Block
+	current := bytes
+
+	for len(current) > 0 {
+		block, current = pem.Decode(current)
+
+		if block == nil {
+			return nil, errors.New("Could not PEM block")
+		}
+
+		cert, err := x509.ParseCertificate(block.Bytes)
+
+		if err != nil {
+			return nil, errors.Wrapf(err, "Could not parse certficiate")
+		}
+
+		certs = append(certs, cert)
+
+	}
+
+	return certs, nil
 }

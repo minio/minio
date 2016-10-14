@@ -58,3 +58,54 @@ func TestGetFiles(t *testing.T) {
 		t.Errorf("KeyFile does not contain %s", globalMinioKeyFile)
 	}
 }
+
+// Parses .crt file contents
+func TestParseCertificateChain(t *testing.T) {
+	// given
+	cert := `-----BEGIN CERTIFICATE-----
+MIICdTCCAd4CCQCO5G/W1xcE9TANBgkqhkiG9w0BAQUFADB/MQswCQYDVQQGEwJa
+WTEOMAwGA1UECBMFTWluaW8xETAPBgNVBAcTCEludGVybmV0MQ4wDAYDVQQKEwVN
+aW5pbzEOMAwGA1UECxMFTWluaW8xDjAMBgNVBAMTBU1pbmlvMR0wGwYJKoZIhvcN
+AQkBFg50ZXN0c0BtaW5pby5pbzAeFw0xNjEwMTQxMTM0MjJaFw0xNzEwMTQxMTM0
+MjJaMH8xCzAJBgNVBAYTAlpZMQ4wDAYDVQQIEwVNaW5pbzERMA8GA1UEBxMISW50
+ZXJuZXQxDjAMBgNVBAoTBU1pbmlvMQ4wDAYDVQQLEwVNaW5pbzEOMAwGA1UEAxMF
+TWluaW8xHTAbBgkqhkiG9w0BCQEWDnRlc3RzQG1pbmlvLmlvMIGfMA0GCSqGSIb3
+DQEBAQUAA4GNADCBiQKBgQDwNUYB/Sj79WsUE8qnXzzh2glSzWxUE79sCOpQYK83
+HWkrl5WxlG8ZxDR1IQV9Ex/lzigJu8G+KXahon6a+3n5GhNrYRe5kIXHQHz0qvv4
+aMulqlnYpvSfC83aaO9GVBtwXS/O4Nykd7QBg4nZlazVmsGk7POOjhpjGShRsqpU
+JwIDAQABMA0GCSqGSIb3DQEBBQUAA4GBALqjOA6bD8BEl7hkQ8XwX/owSAL0URDe
+nUfCOsXgIIAqgw4uTCLOfCJVZNKmRT+KguvPAQ6Z80vau2UxPX5Q2Q+OHXDRrEnK
+FjqSBgLP06Qw7a++bshlWGTt5bHWOneW3EQikedckVuIKPkOCib9yGi4VmBBjdFE
+M9ofSEt/bdRD
+-----END CERTIFICATE-----`
+
+	// when
+	certs, err := parseCertificateChain([]byte(cert))
+
+	// then
+	if err != nil {
+		t.Fatalf("Could not parse certificate: %s", err)
+	}
+
+	if len(certs) != 1 {
+		t.Fatalf("Expected number of certificates in chain was 1, actual: %d", len(certs))
+	}
+
+	if certs[0].Subject.CommonName != "Minio" {
+		t.Fatalf("Expected Subject.CommonName was Minio, actual: %s", certs[0].Subject.CommonName)
+	}
+}
+
+// Parses invalid .crt file contents and returns error
+func TestParseInvalidCertificateChain(t *testing.T) {
+	// given
+	cert := `This is now valid certificate`
+
+	// when
+	_, err := parseCertificateChain([]byte(cert))
+
+	// then
+	if err == nil {
+		t.Fatalf("Expected error but none occured")
+	}
+}
