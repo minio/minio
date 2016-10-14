@@ -69,3 +69,26 @@ func TestCertificateExpiryInfo(t *testing.T) {
 		t.Fatalf("Expected message was: %s, got: %s", expectedMsg, msg)
 	}
 }
+
+// Tests if certificate expiry warning will not be printed if certificate not expired
+func TestCertificateNotExpired(t *testing.T) {
+	// given
+	var expiredDate = time.Now().Add(time.Hour * 24 * (globalMinioCertExpireWarnDays + 1))
+
+	var fakeCerts = []*x509.Certificate{
+		&x509.Certificate{
+			NotAfter: expiredDate,
+			Subject: pkix.Name{
+				CommonName: "Test cert",
+			},
+		},
+	}
+
+	// when
+	msg := getCertificateChainMsg(fakeCerts)
+
+	// then
+	if msg != "" {
+		t.Fatalf("Expected empty message was: %s", msg)
+	}
+}
