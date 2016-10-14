@@ -305,3 +305,27 @@ func (xl xlObjects) DeleteBucket(bucket string) error {
 	// Success.
 	return nil
 }
+
+// Heal bucket - create buckets on disks where it does not exist.
+func healBucket(disks []StorageAPI, bucket string) error {
+	bucketFound := false
+	for _, disk := range disks {
+		_, err := disk.StatVol(bucket)
+		if err == nil {
+			bucketFound = true
+		}
+	}
+	if !bucketFound {
+		return traceError(errVolumeNotFound)
+	}
+	for _, disk := range disks {
+		err := disk.MakeVol(bucket)
+		if err == nil {
+			continue
+		}
+		if err != errVolumeExists {
+			return traceError(err)
+		}
+	}
+	return nil
+}

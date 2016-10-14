@@ -117,6 +117,16 @@ func healControl(ctx *cli.Context) {
 		return
 	}
 
+	// If object is "" then heal the bucket first.
+	if objectName == "" {
+		fmt.Printf("Healing : /%s\n", bucketName)
+		args := &HealObjectArgs{Bucket: bucketName, Object: ""}
+		reply := &HealObjectReply{}
+		err = client.Call("Control.HealObjectHandler", args, reply)
+		fatalIf(err, "Healing bucket %s failed.", bucketName)
+		// Continue to heal the objects in the bucket.
+	}
+
 	// Recursively list and heal the objects.
 	prefix := objectName
 	marker := ""
