@@ -71,6 +71,7 @@ Please visit official zfs FreeBSD guide for more details [here](https://www.free
 
 ## Install from Source
 Source installation is only intended for developers and advanced users. If you do not have a working Golang environment, please follow [How to install Golang](https://docs.minio.io/docs/how-to-install-golang).
+
 ```sh
 $ go get -u github.com/minio/minio
 ```
