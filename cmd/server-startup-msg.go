@@ -54,7 +54,9 @@ func printStartupMessage(endPoints []string) {
 		printStorageInfo(objAPI.StorageInfo())
 	}
 
-	if certs, err := readCertificateChain(); err == nil {
+	if isSSL() {
+		certs, err := readCertificateChain()
+		fatalIf(err, "Unable to read certificate chain.")
 		printCertificateMsg(certs)
 	}
 }
@@ -160,22 +162,20 @@ func getCertificateChainMsg(certs []*x509.Certificate) string {
 	msg := colorBlue("\nCertificate expiry info:\n")
 	totalCerts := len(certs)
 	var expiringCerts int
-
 	for i := totalCerts - 1; i >= 0; i-- {
 		cert := certs[i]
-
-		if cert.NotAfter.Before(time.Now().Add(time.Hour * 24 * globalMinioCertExpireWarnDays)) {
+		if cert.NotAfter.Before(time.Now().UTC().Add(globalMinioCertExpireWarnDays)) {
 			expiringCerts++
 			msg += fmt.Sprintf(colorBold("#%d %s will expire on %s\n"), expiringCerts, cert.Subject.CommonName, cert.NotAfter)
 		}
 	}
-
 	if expiringCerts > 0 {
 		return msg
 	}
 	return ""
 }
 
+// Prints the certificate expiry message.
 func printCertificateMsg(certs []*x509.Certificate) {
 	console.Println(getCertificateChainMsg(certs))
 }

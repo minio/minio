@@ -19,11 +19,10 @@ package cmd
 import (
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"io/ioutil"
 	"os"
 	"path/filepath"
-
-	"github.com/pkg/errors"
 )
 
 // createCertsPath create certs path.
@@ -93,46 +92,43 @@ func isSSL() bool {
 	return false
 }
 
+// Reads certificated file and returns a list of parsed certificates.
 func readCertificateChain() ([]*x509.Certificate, error) {
-	certPath := filepath.Join(mustGetCertsPath(), globalMinioCertFile)
-	file, err := os.Open(certPath)
-
+	file, err := os.Open(mustGetCertFile())
 	if err != nil {
-		return nil, errors.Wrapf(err, "Could not open certificate for reading")
+		return nil, err
 	}
 	defer file.Close()
 
-	bytes, err2 := ioutil.ReadAll(file)
-
-	if err2 != nil {
-		return nil, errors.Wrapf(err2, "Could not read certificate contents")
+	// Read the cert successfully.
+	bytes, err := ioutil.ReadAll(file)
+	if err != nil {
+		return nil, err
 	}
 
+	// Proceed to parse the certificates.
 	return parseCertificateChain(bytes)
 }
 
-// Parses certificate chain
+// Parses certificate chain, returns a list of parsed certificates.
 func parseCertificateChain(bytes []byte) ([]*x509.Certificate, error) {
 	var certs []*x509.Certificate
 	var block *pem.Block
 	current := bytes
 
+	// Parse all certs in the chain.
 	for len(current) > 0 {
 		block, current = pem.Decode(current)
-
 		if block == nil {
 			return nil, errors.New("Could not PEM block")
 		}
-
+		// Parse the decoded certificate.
 		cert, err := x509.ParseCertificate(block.Bytes)
-
 		if err != nil {
-			return nil, errors.Wrapf(err, "Could not parse certficiate")
+			return nil, err
 		}
-
 		certs = append(certs, cert)
 
 	}
-
 	return certs, nil
 }

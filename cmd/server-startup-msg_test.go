@@ -47,10 +47,10 @@ func TestStorageInfoMsg(t *testing.T) {
 // Tests if certificate expiry warning will be printed
 func TestCertificateExpiryInfo(t *testing.T) {
 	// given
-	var expiredDate = time.Now().Add(time.Hour * 24 * (globalMinioCertExpireWarnDays - 1))
+	var expiredDate = time.Now().Add(time.Hour * 24 * (30 - 1)) // 29 days.
 
 	var fakeCerts = []*x509.Certificate{
-		&x509.Certificate{
+		{
 			NotAfter: expiredDate,
 			Subject: pkix.Name{
 				CommonName: "Test cert",
@@ -61,10 +61,10 @@ func TestCertificateExpiryInfo(t *testing.T) {
 	expectedMsg := colorBlue("\nCertificate expiry info:\n") +
 		colorBold(fmt.Sprintf("#1 Test cert will expire on %s\n", expiredDate))
 
-	// when
+	// When
 	msg := getCertificateChainMsg(fakeCerts)
 
-	// then
+	// Then
 	if msg != expectedMsg {
 		t.Fatalf("Expected message was: %s, got: %s", expectedMsg, msg)
 	}
@@ -73,10 +73,10 @@ func TestCertificateExpiryInfo(t *testing.T) {
 // Tests if certificate expiry warning will not be printed if certificate not expired
 func TestCertificateNotExpired(t *testing.T) {
 	// given
-	var expiredDate = time.Now().Add(time.Hour * 24 * (globalMinioCertExpireWarnDays + 1))
+	var expiredDate = time.Now().Add(time.Hour * 24 * (30 + 1)) // 31 days.
 
 	var fakeCerts = []*x509.Certificate{
-		&x509.Certificate{
+		{
 			NotAfter: expiredDate,
 			Subject: pkix.Name{
 				CommonName: "Test cert",

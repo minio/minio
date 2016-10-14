@@ -36,7 +36,7 @@ const (
 	globalMinioCertFile           = "public.crt"
 	globalMinioKeyFile            = "private.key"
 	globalMinioConfigFile         = "config.json"
-	globalMinioCertExpireWarnDays = 30
+	globalMinioCertExpireWarnDays = time.Hour * 24 * 30 // 30 days.
 	// Add new global values here.
 )
 
