@@ -30,12 +30,13 @@ const (
 
 // minio configuration related constants.
 const (
-	globalMinioConfigVersion = "9"
-	globalMinioConfigDir     = ".minio"
-	globalMinioCertsDir      = "certs"
-	globalMinioCertFile      = "public.crt"
-	globalMinioKeyFile       = "private.key"
-	globalMinioConfigFile    = "config.json"
+	globalMinioConfigVersion      = "9"
+	globalMinioConfigDir          = ".minio"
+	globalMinioCertsDir           = "certs"
+	globalMinioCertFile           = "public.crt"
+	globalMinioKeyFile            = "private.key"
+	globalMinioConfigFile         = "config.json"
+	globalMinioCertExpireWarnDays = 30
 	// Add new global values here.
 )
 
