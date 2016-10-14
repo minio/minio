@@ -21,6 +21,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/minio/cli"
 	"github.com/minio/mc/pkg/console"
@@ -167,13 +168,16 @@ func Main() {
 		// Do not print update messages, if quiet flag is set.
 		if !globalQuiet {
 			if strings.HasPrefix(ReleaseTag, "RELEASE.") && c.Args().Get(0) != "update" {
-				updateMsg := getReleaseUpdate(minioUpdateStableURL, true)
+				updateMsg, _, err := getReleaseUpdate(minioUpdateStableURL, time.Second*1)
+				if err != nil {
+					// Ignore all network related errors.
+					return nil
+				}
 				if updateMsg.Update {
 					console.Println(updateMsg)
 				}
 			}
 		}
-
 		return nil
 	}
 
