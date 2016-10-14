@@ -226,6 +226,11 @@ func (xl xlObjects) HealObject(bucket, object string) error {
 	if !IsValidBucketName(bucket) {
 		return traceError(BucketNameInvalid{Bucket: bucket})
 	}
+	if object == "" {
+		// Empty object name indicates that bucket should be healed.
+		return healBucket(xl.storageDisks, bucket)
+	}
+
 	// Verify if object is valid.
 	if !IsValidObjectName(object) {
 		// FIXME: return Invalid prefix.

@@ -345,4 +345,21 @@ func TestHealObject(t *testing.T) {
 	if !reflect.DeepEqual(xlMetaPreHeal, xlMetaPostHeal) {
 		t.Fatal("HealObject failed")
 	}
+
+	// Remove the bucket - to simulate the case where bucket was created when the
+	// disk was down.
+	err = os.RemoveAll(path.Join(fsDirs[0], bucket))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// This would create the bucket.
+	err = xl.HealObject(bucket, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Stat the bucket to make sure that it was created.
+	_, err = xl.storageDisks[0].StatVol(bucket)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
