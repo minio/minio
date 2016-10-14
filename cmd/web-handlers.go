@@ -336,8 +336,9 @@ type SetAuthArgs struct {
 
 // SetAuthReply - reply for SetAuth
 type SetAuthReply struct {
-	Token     string `json:"token"`
-	UIVersion string `json:"uiVersion"`
+	Token       string   `json:"token"`
+	UIVersion   string   `json:"uiVersion"`
+	PeerErrMsgs []string `json:"peerErrMsgs"`
 }
 
 // SetAuth - Set accessKey and secretKey credentials.
@@ -351,26 +352,60 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 	if !isValidSecretKey.MatchString(args.SecretKey) {
 		return &json2.Error{Message: "Invalid Secret Key"}
 	}
+
 	cred := credential{args.AccessKey, args.SecretKey}
+
+	// Notify all other Minio peers to update credentials
+	errsMap := updateCredsOnPeers(cred)
+	// Collect errors from peers
+	peerErrMsgs := []string{}
+	for peer, errVal := range errsMap {
+		peerErrMsgs = append(
+			peerErrMsgs,
+			fmt.Sprintf("Password change error on %s - got: %v", peer, errVal),
+		)
+	}
+	combineErr := func(newErr *json2.Error) *json2.Error {
+		if len(peerErrMsgs) == 0 {
+			return newErr
+		}
+		combinedMsg := fmt.Sprintf(
+			"Aborting error was: %s. Earlier peer errors were: %s",
+			newErr.Message, strings.Join(peerErrMsgs, "||"),
+		)
+		return &json2.Error{Message: combinedMsg}
+	}
+
+	// Even if we fail to update some clients, update locally and
+	// let the user know
 	serverConfig.SetCredential(cred)
 	if err := serverConfig.Save(); err != nil {
-		return &json2.Error{Message: err.Error()}
+		return combineErr(
+			&json2.Error{Message: err.Error()},
+		)
 	}
 
 	jwt, err := newJWT(defaultJWTExpiry) // JWT Expiry set to 24Hrs.
 	if err != nil {
-		return &json2.Error{Message: err.Error()}
+		return combineErr(
+			&json2.Error{Message: err.Error()},
+		)
 	}
 
 	if err = jwt.Authenticate(args.AccessKey, args.SecretKey); err != nil {
-		return &json2.Error{Message: err.Error()}
+		return combineErr(
+			&json2.Error{Message: err.Error()},
+		)
 	}
 	token, err := jwt.GenerateToken(args.AccessKey)
 	if err != nil {
-		return &json2.Error{Message: err.Error()}
+		return combineErr(
+			&json2.Error{Message: err.Error()},
+		)
 	}
 	reply.Token = token
 	reply.UIVersion = miniobrowser.UIVersion
+	reply.PeerErrMsgs = peerErrMsgs
 	return nil
 }
 
