@@ -58,7 +58,7 @@ func assetFS() *assetfs.AssetFS {
 const specialAssets = "loader.css|logo.svg|firefox.png|safari.png|chrome.png|favicon.ico"
 
 // registerWebRouter - registers web router for serving minio browser.
-func registerWebRouter(mux *router.Router) {
+func registerWebRouter(mux *router.Router) error {
 	// Initialize Web.
 	web := &webAPIHandlers{
 		ObjectAPI: newObjectLayerFn,
@@ -74,7 +74,11 @@ func registerWebRouter(mux *router.Router) {
 	webRPC := jsonrpc.NewServer()
 	webRPC.RegisterCodec(codec, "application/json")
 	webRPC.RegisterCodec(codec, "application/json; charset=UTF-8")
-	webRPC.RegisterService(web, "Web")
+
+	// Register RPC handlers with server
+	if err := webRPC.RegisterService(web, "Web"); err != nil {
+		return err
+	}
 
 	// RPC handler at URI - /minio/webrpc
 	webBrowserRouter.Methods("POST").Path("/webrpc").Handler(webRPC)
@@ -89,4 +93,6 @@ func registerWebRouter(mux *router.Router) {
 
 	// Serve index.html for rest of the requests.
 	webBrowserRouter.Path("/{index:.*}").Handler(indexHandler{http.StripPrefix(reservedBucket, http.FileServer(assetFS()))})
+
+	return nil
 }

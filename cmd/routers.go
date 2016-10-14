@@ -101,7 +101,9 @@ func configureServerHandler(srvCmdConfig serverCmdConfig) (http.Handler, error) 
 	// set environmental variable MINIO_BROWSER=off to disable minio web browser.
 	// By default minio web browser is enabled.
 	if !strings.EqualFold(os.Getenv("MINIO_BROWSER"), "off") {
-		registerWebRouter(mux)
+		if err = registerWebRouter(mux); err != nil {
+			return nil, err
+		}
 	}
 
 	// Add API router.
