@@ -113,8 +113,9 @@ func (m *ServerMux) handleServiceSignals() error {
 				if objAPI == nil {
 					// Server not initialized yet, exit happily.
 					runExitFn(nil)
+				} else {
+					runExitFn(objAPI.Shutdown())
 				}
-				runExitFn(objAPI.Shutdown())
 			}
 		}
 	}
