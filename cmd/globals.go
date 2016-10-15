@@ -76,6 +76,8 @@ var (
 
 // global colors.
 var (
-	colorBlue = color.New(color.FgBlue).SprintfFunc()
-	colorBold = color.New(color.Bold).SprintFunc()
+	colorRed   = color.New(color.FgRed).SprintFunc()
+	colorBold  = color.New(color.Bold).SprintFunc()
+	colorBlue  = color.New(color.FgBlue).SprintfFunc()
+	colorGreen = color.New(color.FgGreen).SprintfFunc()
 )

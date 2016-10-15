@@ -218,7 +218,70 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 	return nil
 }
 
-// HealObject - heal the object.
+func (xl xlObjects) HealBucket(bucket string) error {
+	// Verify if bucket is valid.
+	if !IsValidBucketName(bucket) {
+		return traceError(BucketNameInvalid{Bucket: bucket})
+	}
+
+	// Heal bucket - create buckets on disks where it does not exist.
+
+	// get a random ID for lock instrumentation.
+	opsID := getOpsID()
+
+	nsMutex.Lock(bucket, "", opsID)
+	defer nsMutex.Unlock(bucket, "", opsID)
+
+	// Initialize sync waitgroup.
+	var wg = &sync.WaitGroup{}
+
+	// Initialize list of errors.
+	var dErrs = make([]error, len(xl.storageDisks))
+
+	// Make a volume entry on all underlying storage disks.
+	for index, disk := range xl.storageDisks {
+		if disk == nil {
+			dErrs[index] = traceError(errDiskNotFound)
+			continue
+		}
+		wg.Add(1)
+		// Make a volume inside a go-routine.
+		go func(index int, disk StorageAPI) {
+			defer wg.Done()
+			if _, err := disk.StatVol(bucket); err != nil {
+				if err != errVolumeNotFound {
+					dErrs[index] = traceError(err)
+					return
+				}
+				if err = disk.MakeVol(bucket); err != nil {
+					dErrs[index] = traceError(err)
+				}
+			}
+		}(index, disk)
+	}
+
+	// Wait for all make vol to finish.
+	wg.Wait()
+
+	// Do we have write quorum?.
+	if !isDiskQuorum(dErrs, xl.writeQuorum) {
+		// Purge successfully created buckets if we don't have writeQuorum.
+		xl.undoMakeBucket(bucket)
+		return toObjectErr(traceError(errXLWriteQuorum), bucket)
+	}
+
+	// Verify we have any other errors which should be returned as failure.
+	if reducedErr := reduceErrs(dErrs, []error{
+		errDiskNotFound,
+		errFaultyDisk,
+		errDiskAccessDenied,
+	}); reducedErr != nil {
+		return toObjectErr(reducedErr, bucket)
+	}
+	return nil
+}
+
+// HealObject heals a given object for all its missing entries.
 // FIXME: If an object object was deleted and one disk was down, and later the disk comes back
 // up again, heal on the object should delete it.
 func (xl xlObjects) HealObject(bucket, object string) error {
@@ -226,14 +289,9 @@ func (xl xlObjects) HealObject(bucket, object string) error {
 	if !IsValidBucketName(bucket) {
 		return traceError(BucketNameInvalid{Bucket: bucket})
 	}
-	if object == "" {
-		// Empty object name indicates that bucket should be healed.
-		return healBucket(xl.storageDisks, bucket)
-	}
 
 	// Verify if object is valid.
 	if !IsValidObjectName(object) {
-		// FIXME: return Invalid prefix.
 		return traceError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
 
@@ -277,8 +335,7 @@ func (xl xlObjects) HealObject(bucket, object string) error {
 		outDatedMeta := partsMetadata[index]
 		// Delete all the parts.
 		for partIndex := 0; partIndex < len(outDatedMeta.Parts); partIndex++ {
-			err := disk.DeleteFile(bucket,
-				pathJoin(object, outDatedMeta.Parts[partIndex].Name))
+			err := disk.DeleteFile(bucket, pathJoin(object, outDatedMeta.Parts[partIndex].Name))
 			if err != nil {
 				return traceError(err)
 			}
@@ -298,8 +355,8 @@ func (xl xlObjects) HealObject(bucket, object string) error {
 	// We write at temporary location and then rename to fianal location.
 	tmpID := getUUID()
 
-	// Checksum of the part files. checkSumInfos[index] will contain checksums of all the part files
-	// in the outDatedDisks[index]
+	// Checksum of the part files. checkSumInfos[index] will contain checksums
+	// of all the part files in the outDatedDisks[index]
 	checkSumInfos := make([][]checkSumInfo, len(outDatedDisks))
 
 	// Heal each part. erasureHealFile() will write the healed part to
@@ -336,6 +393,8 @@ func (xl xlObjects) HealObject(bucket, object string) error {
 		partsMetadata[index] = latestMeta
 		partsMetadata[index].Erasure.Checksum = checkSumInfos[index]
 	}
+
+	// Generate and write `xl.json` generated from other disks.
 	err := writeUniqueXLMetadata(outDatedDisks, minioMetaBucket, pathJoin(tmpMetaPrefix, tmpID), partsMetadata, diskCount(outDatedDisks))
 	if err != nil {
 		return toObjectErr(err, bucket, object)
@@ -346,7 +405,13 @@ func (xl xlObjects) HealObject(bucket, object string) error {
 		if disk == nil {
 			continue
 		}
-		err := disk.RenameFile(minioMetaBucket, retainSlash(pathJoin(tmpMetaPrefix, tmpID)), bucket, retainSlash(object))
+		// Remove any lingering partial data from current namespace.
+		err = disk.DeleteFile(bucket, retainSlash(object))
+		if err != nil && err != errFileNotFound {
+			return traceError(err)
+		}
+		// Attempt a rename now from healed data to final location.
+		err = disk.RenameFile(minioMetaBucket, retainSlash(pathJoin(tmpMetaPrefix, tmpID)), bucket, retainSlash(object))
 		if err != nil {
 			return traceError(err)
 		}

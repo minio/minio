@@ -17,12 +17,13 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"path"
-	"strings"
 
 	"github.com/minio/cli"
+	"github.com/minio/mc/pkg/console"
 )
 
 var healCmd = cli.Command{
@@ -41,48 +42,154 @@ FLAGS:
   {{end}}
 
 EXAMPLES:
-  1. Heal an object.
+  1. Heal missing on-disk format across all inconsistent nodes.
+     $ minio control {{.Name}} http://localhost:9000
+
+  2. Heals a specific object.
      $ minio control {{.Name}} http://localhost:9000/songs/classical/western/piano.mp3
 
-  2. Heal all objects in a bucket recursively.
-     $ minio control {{.Name}}  http://localhost:9000/songs
+  3. Heal bucket and all objects in a bucket recursively.
+     $ minio control {{.Name}} http://localhost:9000/songs
 
-  3. Heall all objects with a given prefix recursively.
-     $ minio control {{.Name}} http://localhost:9000/songs/classical/
+  4. Heal all objects with a given prefix recursively.
+     $ minio control {{.Name}} http://localhost:9000/songs/classical/  
 `,
 }
 
-func checkHealControlSyntax(ctx *cli.Context) {
-	if len(ctx.Args()) != 1 {
-		cli.ShowCommandHelpAndExit(ctx, "heal", 1)
-	}
+// heals backend storage format, useful in restoring `format.json` missing on a
+// fresh or corrupted disks.  This call does deep inspection of backend layout
+// and applies appropriate `format.json` to the disk.
+func healStorageFormat(authClnt *AuthRPCClient) error {
+	args := &GenericArgs{}
+	reply := &GenericReply{}
+	return authClnt.Call("Control.HealFormatHandler", args, reply)
 }
 
-// "minio control heal" entry point.
-func healControl(ctx *cli.Context) {
+// lists all objects which needs to be healed, this is a precursor helper function called before
+// calling actual healing operation. Returns a maximum of 1000 objects that needs healing at a time.
+// Marker indicates the next entry point where the listing will start.
+func listObjectsHeal(authClnt *AuthRPCClient, bucketName, prefixName, markerName string) (*HealListReply, error) {
+	args := &HealListArgs{
+		Bucket:    bucketName,
+		Prefix:    prefixName,
+		Marker:    markerName,
+		Delimiter: "",
+		MaxKeys:   1000,
+	}
+	reply := &HealListReply{}
+	err := authClnt.Call("Control.ListObjectsHealHandler", args, reply)
+	if err != nil {
+		return nil, err
+	}
+	return reply, nil
+}
 
-	checkHealControlSyntax(ctx)
+// Internal custom struct encapsulates pretty msg to be printed by the caller.
+type healMsg struct {
+	Msg string
+	Err error
+}
 
-	// Parse bucket and object from url.URL.Path
-	parseBucketObject := func(path string) (bucketName string, objectName string) {
-		splits := strings.SplitN(path, string(slashSeparator), 3)
-		switch len(splits) {
-		case 0, 1:
-			bucketName = ""
-			objectName = ""
-		case 2:
-			bucketName = splits[1]
-			objectName = ""
-		case 3:
-			bucketName = splits[1]
-			objectName = splits[2]
+// Prettifies heal results and returns them over a channel, caller reads from this channel and prints.
+func prettyHealResults(healedObjects []ObjectInfo, healReply *HealObjectReply) <-chan healMsg {
+	var msgCh = make(chan healMsg)
 
+	// Starts writing to message channel for the list of results sent back
+	// by a previous healing operation.
+	go func(msgCh chan<- healMsg) {
+		defer close(msgCh)
+		// Go through all the results and validate if we have success or failure.
+		for i, healStr := range healReply.Results {
+			objPath := path.Join(healedObjects[i].Bucket, healedObjects[i].Name)
+			// TODO: We need to still print heal error cause.
+			if healStr != "" {
+				msgCh <- healMsg{
+					Msg: fmt.Sprintf("%s  %s", colorRed("FAILED"), objPath),
+					Err: errors.New(healStr),
+				}
+				continue
+			}
+			msgCh <- healMsg{
+				Msg: fmt.Sprintf("%s  %s", colorGreen("SUCCESS"), objPath),
+			}
 		}
-		return bucketName, objectName
+	}(msgCh)
+
+	// Return ..
+	return msgCh
+}
+
+var scanBar = scanBarFactory()
+
+// Heals all the objects under a given bucket, optionally you can specify an
+// object prefix to heal objects under this prefix.
+func healObjects(authClnt *AuthRPCClient, bucketName, prefixName string) error {
+	if authClnt == nil || bucketName == "" {
+		return errInvalidArgument
+	}
+	// Save marker for the next request.
+	var markerName string
+	for {
+		healListReply, err := listObjectsHeal(authClnt, bucketName, prefixName, markerName)
+		if err != nil {
+			return err
+		}
+
+		// Attempt to heal only if there are any objects to heal.
+		if len(healListReply.Objects) > 0 {
+			healArgs := &HealObjectArgs{
+				Bucket:  bucketName,
+				Objects: healListReply.Objects,
+			}
+
+			healReply := &HealObjectReply{}
+			err = authClnt.Call("Control.HealObjectsHandler", healArgs, healReply)
+			if err != nil {
+				return err
+			}
+
+			// Pretty print all the heal results.
+			for msg := range prettyHealResults(healArgs.Objects, healReply) {
+				if msg.Err != nil {
+					// TODO we need to print the error cause as well.
+					scanBar(msg.Msg)
+					continue
+				}
+				// Success.
+				scanBar(msg.Msg)
+			}
+		}
+
+		// End of listing objects for healing.
+		if !healListReply.IsTruncated {
+			break
+		}
+
+		// Set the marker to list the next set of keys.
+		markerName = healListReply.NextMarker
+
+	}
+	return nil
+}
+
+// Heals your bucket for any missing entries.
+func healBucket(authClnt *AuthRPCClient, bucketName string) error {
+	if authClnt == nil || bucketName == "" {
+		return errInvalidArgument
+	}
+	return authClnt.Call("Control.HealBucketHandler", &HealBucketArgs{
+		Bucket: bucketName,
+	}, &GenericReply{})
+}
+
+// Entry point for minio control heal command.
+func healControl(ctx *cli.Context) {
+	if ctx.Args().Present() && len(ctx.Args()) != 1 {
+		cli.ShowCommandHelpAndExit(ctx, "heal", 1)
 	}
 
-	parsedURL, err := url.Parse(ctx.Args()[0])
-	fatalIf(err, "Unable to parse URL")
+	parsedURL, err := url.Parse(ctx.Args().Get(0))
+	fatalIf(err, "Unable to parse URL %s", ctx.Args().Get(0))
 
 	authCfg := &authConfig{
 		accessKey:   serverConfig.GetCredential().AccessKeyID,
@@ -92,71 +199,19 @@ func healControl(ctx *cli.Context) {
 		path:        path.Join(reservedBucket, controlPath),
 		loginMethod: "Control.LoginHandler",
 	}
+
 	client := newAuthClient(authCfg)
-
-	// Always try to fix disk metadata
-	fmt.Print("Checking and healing disk metadata..")
-	args := &GenericArgs{}
-	reply := &GenericReply{}
-	err = client.Call("Control.HealDiskMetadataHandler", args, reply)
-	fatalIf(err, "Unable to heal disk metadata.")
-	fmt.Println(" ok")
-
-	bucketName, objectName := parseBucketObject(parsedURL.Path)
-	if bucketName == "" {
+	if parsedURL.Path == "/" || parsedURL.Path == "" {
+		err = healStorageFormat(client)
+		fatalIf(err, "Unable to heal disk metadata.")
 		return
 	}
-
-	// If object does not have trailing "/" then it's an object, hence heal it.
-	if objectName != "" && !strings.HasSuffix(objectName, slashSeparator) {
-		fmt.Printf("Healing : /%s/%s\n", bucketName, objectName)
-		args := &HealObjectArgs{Bucket: bucketName, Object: objectName}
-		reply := &HealObjectReply{}
-		err = client.Call("Control.HealObjectHandler", args, reply)
-		errorIf(err, "Healing object %s failed.", objectName)
-		return
-	}
-
-	// If object is "" then heal the bucket first.
-	if objectName == "" {
-		fmt.Printf("Healing : /%s\n", bucketName)
-		args := &HealObjectArgs{Bucket: bucketName, Object: ""}
-		reply := &HealObjectReply{}
-		err = client.Call("Control.HealObjectHandler", args, reply)
-		fatalIf(err, "Healing bucket %s failed.", bucketName)
-		// Continue to heal the objects in the bucket.
-	}
-
-	// Recursively list and heal the objects.
-	prefix := objectName
-	marker := ""
-	for {
-		args := &HealListArgs{
-			Bucket:    bucketName,
-			Prefix:    prefix,
-			Marker:    marker,
-			Delimiter: "",
-			MaxKeys:   1000,
-		}
-		reply := &HealListReply{}
-		err = client.Call("Control.ListObjectsHealHandler", args, reply)
-		fatalIf(err, "Unable to list objects for healing.")
-
-		// Heal the objects returned in the ListObjects reply.
-		for _, obj := range reply.Objects {
-			fmt.Printf("Healing : /%s/%s\n", bucketName, obj)
-			reply := &GenericReply{}
-			healArgs := &HealObjectArgs{Bucket: bucketName, Object: obj}
-			err = client.Call("Control.HealObjectHandler", healArgs, reply)
-			errorIf(err, "Healing object %s failed.", obj)
-		}
-
-		if !reply.IsTruncated {
-			// End of listing.
-			break
-		}
-
-		// Set the marker to list the next set of keys.
-		marker = reply.NextMarker
-	}
+	bucketName, prefixName := urlPathSplit(parsedURL.Path)
+	// Heal the bucket.
+	err = healBucket(client, bucketName)
+	fatalIf(err, "Unable to heal bucket %s", bucketName)
+	// Heal all the objects.
+	err = healObjects(client, bucketName, prefixName)
+	fatalIf(err, "Unable to heal objects on bucket %s at prefix %s", bucketName, prefixName)
+	console.Println()
 }

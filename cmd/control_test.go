@@ -270,77 +270,91 @@ func (s *TestRPCControlSuite) testRPCControlLock(c *testing.T) {
 }
 
 func TestControlHealDiskMetadataH(t *testing.T) {
-	//setup code
+	// Setup code
 	s := &TestRPCControlSuite{serverType: "XL"}
 	s.SetUpSuite(t)
 
-	//run test
-	s.testControlHealDiskMetadataH(t)
+	// Run test
+	s.testControlHealFormatH(t)
 
-	//teardown code
+	// Teardown code
 	s.TearDownSuite(t)
 }
 
-// TestControlHandlerHealDiskMetadata - Registers and call the `HealDiskMetadataHandler`, asserts to validate the success.
-func (s *TestRPCControlSuite) testControlHealDiskMetadataH(c *testing.T) {
+// TestControlHandlerHealFormat - Registers and call the `HealFormatHandler`, asserts to validate the success.
+func (s *TestRPCControlSuite) testControlHealFormatH(c *testing.T) {
 	// The suite has already started the test RPC server, just send RPC calls.
 	client := newAuthClient(s.testAuthConf)
 	defer client.Close()
 
 	args := &GenericArgs{}
 	reply := &GenericReply{}
-	err := client.Call("Control.HealDiskMetadataHandler", args, reply)
+	err := client.Call("Control.HealFormatHandler", args, reply)
 	if err != nil {
-		c.Errorf("Control.HealDiskMetadataH - test failed with <ERROR> %s", err)
+		c.Errorf("Test failed with <ERROR> %s", err)
 	}
 }
 
 func TestControlHealObjectH(t *testing.T) {
-	//setup code
+	// Setup code
 	s := &TestRPCControlSuite{serverType: "XL"}
 	s.SetUpSuite(t)
 
-	//run test
-	s.testControlHealObjectH(t)
+	// Run test
+	s.testControlHealObjectsH(t)
 
-	//teardown code
+	// Teardown code
 	s.TearDownSuite(t)
 }
 
-func (s *TestRPCControlSuite) testControlHealObjectH(t *testing.T) {
+func (s *TestRPCControlSuite) testControlHealObjectsH(t *testing.T) {
 	client := newAuthClient(s.testAuthConf)
 	defer client.Close()
 
-	err := newObjectLayerFn().MakeBucket("testbucket")
+	objAPI := newObjectLayerFn()
+
+	err := objAPI.MakeBucket("testbucket")
 	if err != nil {
-		t.Fatalf(
-			"Control.HealObjectH - create bucket failed with <ERROR> %s", err)
+		t.Fatalf("Create bucket failed with <ERROR> %s", err)
 	}
 
 	datum := strings.NewReader("a")
-	_, err = newObjectLayerFn().PutObject("testbucket", "testobject", 1, datum, nil, "")
+	_, err = objAPI.PutObject("testbucket", "testobject1", 1, datum, nil, "")
 	if err != nil {
-		t.Fatalf("Control.HealObjectH - put object failed with <ERROR> %s", err)
+		t.Fatalf("Put object failed with <ERROR> %s", err)
+	}
+	datum = strings.NewReader("a")
+	_, err = objAPI.PutObject("testbucket", "testobject2", 1, datum, nil, "")
+	if err != nil {
+		t.Fatalf("Put object failed with <ERROR> %s", err)
 	}
 
-	args := &HealObjectArgs{GenericArgs{}, "testbucket", "testobject"}
-	reply := &GenericReply{}
-	err = client.Call("Control.HealObjectHandler", args, reply)
-
+	args := &HealObjectArgs{
+		Bucket: "testbucket",
+		Objects: []ObjectInfo{
+			{
+				Name: "testobject1",
+			}, {
+				Name: "testobject2",
+			},
+		},
+	}
+	reply := &HealObjectReply{}
+	err = client.Call("Control.HealObjectsHandler", args, reply)
 	if err != nil {
-		t.Errorf("Control.HealObjectH - test failed with <ERROR> %s", err)
+		t.Errorf("Test failed with <ERROR> %s", err)
 	}
 }
 
 func TestControlListObjectsHealH(t *testing.T) {
-	//setup code
+	// Setup code
 	s := &TestRPCControlSuite{serverType: "XL"}
 	s.SetUpSuite(t)
 
-	//run test
+	// Run test
 	s.testControlListObjectsHealH(t)
 
-	//teardown code
+	// Teardown code
 	s.TearDownSuite(t)
 }
 
@@ -348,17 +362,18 @@ func (s *TestRPCControlSuite) testControlListObjectsHealH(t *testing.T) {
 	client := newAuthClient(s.testAuthConf)
 	defer client.Close()
 
-	// careate a bucket
-	err := newObjectLayerFn().MakeBucket("testbucket")
+	objAPI := newObjectLayerFn()
+
+	// Create a bucket
+	err := objAPI.MakeBucket("testbucket")
 	if err != nil {
-		t.Fatalf(
-			"Control.ListObjectsHealH - create bucket failed - %s", err)
+		t.Fatalf("Create bucket failed - %s", err)
 	}
 
 	r := strings.NewReader("0")
-	_, err = newObjectLayerFn().PutObject("testbucket", "testObj-0", 1, r, nil, "")
+	_, err = objAPI.PutObject("testbucket", "testObj-0", 1, r, nil, "")
 	if err != nil {
-		t.Fatalf("Control.ListObjectsHealH - object creation failed - %s", err)
+		t.Fatalf("Object creation failed - %s", err)
 	}
 
 	args := &HealListArgs{
@@ -367,8 +382,7 @@ func (s *TestRPCControlSuite) testControlListObjectsHealH(t *testing.T) {
 	}
 	reply := &GenericReply{}
 	err = client.Call("Control.ListObjectsHealHandler", args, reply)
-
 	if err != nil {
-		t.Errorf("Control.ListObjectsHealHandler - test failed - %s", err)
+		t.Errorf("Test failed - %s", err)
 	}
 }

@@ -292,7 +292,7 @@ func TestFormatXLHealFreshDisks(t *testing.T) {
 	}
 
 	// Load again XL format.json to validate it
-	_, err = loadFormatXL(storageDisks)
+	_, err = loadFormatXL(storageDisks, 8)
 	if err != nil {
 		t.Fatal("loading healed disk failed: ", err)
 	}
@@ -322,7 +322,7 @@ func TestFormatXLHealFreshDisksErrorExpected(t *testing.T) {
 	prepareNOfflineDisks(storageDisks, 16, t)
 
 	// Load again XL format.json to validate it
-	_, err = loadFormatXL(storageDisks)
+	_, err = loadFormatXL(storageDisks, 8)
 	if err == nil {
 		t.Fatal("loading format disk error")
 	}
@@ -401,7 +401,7 @@ func TestFormatXLHealCorruptedDisks(t *testing.T) {
 	}
 
 	// Load again XL format.json to validate it
-	_, err = loadFormatXL(permutedStorageDisks)
+	_, err = loadFormatXL(permutedStorageDisks, 8)
 	if err != nil {
 		t.Fatal("loading healed disk failed: ", err)
 	}
@@ -709,7 +709,7 @@ func TestLoadFormatXLErrs(t *testing.T) {
 		t.Fatal("storage disk is not *posix type")
 	}
 	xl.storageDisks[10] = newNaughtyDisk(posixDisk, nil, errFaultyDisk)
-	if _, err = loadFormatXL(xl.storageDisks); err != errFaultyDisk {
+	if _, err = loadFormatXL(xl.storageDisks, 8); err != errFaultyDisk {
 		t.Fatal("Got an unexpected error: ", err)
 	}
 
@@ -735,7 +735,7 @@ func TestLoadFormatXLErrs(t *testing.T) {
 		}
 		xl.storageDisks[i] = newNaughtyDisk(posixDisk, nil, errDiskNotFound)
 	}
-	if _, err = loadFormatXL(xl.storageDisks); err != errXLReadQuorum {
+	if _, err = loadFormatXL(xl.storageDisks, 8); err != errXLReadQuorum {
 		t.Fatal("Got an unexpected error: ", err)
 	}
 
@@ -757,7 +757,7 @@ func TestLoadFormatXLErrs(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if _, err = loadFormatXL(xl.storageDisks); err != errUnformattedDisk {
+	if _, err = loadFormatXL(xl.storageDisks, 8); err != errUnformattedDisk {
 		t.Fatal("Got an unexpected error: ", err)
 	}
 
@@ -777,7 +777,7 @@ func TestLoadFormatXLErrs(t *testing.T) {
 	for i := 0; i < 16; i++ {
 		xl.storageDisks[i] = nil
 	}
-	if _, err := loadFormatXL(xl.storageDisks); err != errDiskNotFound {
+	if _, err := loadFormatXL(xl.storageDisks, 8); err != errDiskNotFound {
 		t.Fatal("Got an unexpected error: ", err)
 	}
 }

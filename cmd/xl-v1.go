@@ -75,7 +75,7 @@ var xlTreeWalkIgnoredErrs = []error{
 	errFaultyDisk,
 }
 
-func repairDiskMetadata(storageDisks []StorageAPI) error {
+func healFormatXL(storageDisks []StorageAPI) error {
 	// Attempt to load all `format.json`.
 	formatConfigs, sErrs := loadAllFormats(storageDisks)
 
@@ -116,14 +116,17 @@ func newXLObjects(storageDisks []StorageAPI) (ObjectLayer, error) {
 		return nil, err
 	}
 
+	readQuorum := len(storageDisks) / 2
+	writeQuorum := len(storageDisks)/2 + 1
+
 	// Load saved XL format.json and validate.
-	newPosixDisks, err := loadFormatXL(storageDisks)
+	newStorageDisks, err := loadFormatXL(storageDisks, readQuorum)
 	if err != nil {
 		return nil, fmt.Errorf("Unable to recognize backend format, %s", err)
 	}
 
 	// Calculate data and parity blocks.
-	dataBlocks, parityBlocks := len(newPosixDisks)/2, len(newPosixDisks)/2
+	dataBlocks, parityBlocks := len(newStorageDisks)/2, len(newStorageDisks)/2
 
 	// Initialize object cache.
 	objCache := objcache.New(globalMaxCacheSize, globalCacheExpiry)
@@ -133,7 +136,7 @@ func newXLObjects(storageDisks []StorageAPI) (ObjectLayer, error) {
 
 	// Initialize xl objects.
 	xl := xlObjects{
-		storageDisks:    newPosixDisks,
+		storageDisks:    newStorageDisks,
 		dataBlocks:      dataBlocks,
 		parityBlocks:    parityBlocks,
 		listPool:        listPool,
@@ -143,8 +146,8 @@ func newXLObjects(storageDisks []StorageAPI) (ObjectLayer, error) {
 
 	// Figure out read and write quorum based on number of storage disks.
 	// READ and WRITE quorum is always set to (N/2) number of disks.
-	xl.readQuorum = len(xl.storageDisks) / 2
-	xl.writeQuorum = len(xl.storageDisks)/2 + 1
+	xl.readQuorum = readQuorum
+	xl.writeQuorum = writeQuorum
 
 	// Return successfully initialized object layer.
 	return xl, nil
@@ -154,16 +157,6 @@ func newXLObjects(storageDisks []StorageAPI) (ObjectLayer, error) {
 func (xl xlObjects) Shutdown() error {
 	// Add any object layer shutdown activities here.
 	return nil
-}
-
-// HealDiskMetadata function for object storage interface.
-func (xl xlObjects) HealDiskMetadata() error {
-	// get a random ID for lock instrumentation.
-	opsID := getOpsID()
-
-	nsMutex.Lock(minioMetaBucket, formatConfigFile, opsID)
-	defer nsMutex.Unlock(minioMetaBucket, formatConfigFile, opsID)
-	return repairDiskMetadata(xl.storageDisks)
 }
 
 // byDiskTotal is a collection satisfying sort.Interface.

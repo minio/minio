@@ -265,7 +265,8 @@ func TestPutObjectNoQuorum(t *testing.T) {
 	removeRoots(fsDirs)
 }
 
-func TestHealObject(t *testing.T) {
+// Tests both object and bucket healing.
+func TestHealing(t *testing.T) {
 	obj, fsDirs, err := prepareXL()
 	if err != nil {
 		t.Fatal(err)
@@ -346,14 +347,14 @@ func TestHealObject(t *testing.T) {
 		t.Fatal("HealObject failed")
 	}
 
-	// Remove the bucket - to simulate the case where bucket was created when the
-	// disk was down.
+	// Remove the bucket - to simulate the case where bucket was
+	// created when the disk was down.
 	err = os.RemoveAll(path.Join(fsDirs[0], bucket))
 	if err != nil {
 		t.Fatal(err)
 	}
 	// This would create the bucket.
-	err = xl.HealObject(bucket, "")
+	err = xl.HealBucket(bucket)
 	if err != nil {
 		t.Fatal(err)
 	}
