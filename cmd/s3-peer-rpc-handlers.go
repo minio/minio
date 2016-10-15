@@ -16,7 +16,10 @@
 
 package cmd
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 func (s3 *s3PeerAPIHandlers) LoginHandler(args *RPCLoginArgs, reply *RPCLoginReply) error {
 	jwt, err := newJWT(defaultInterNodeJWTExpiry)
@@ -128,8 +131,8 @@ type SetBPPArgs struct {
 
 	Bucket string
 
-	// policy config
-	PCh policyChange
+	// Policy change (serialized to JSON)
+	PChBytes []byte
 }
 
 // tell receiving server to update a bucket policy
@@ -145,5 +148,10 @@ func (s3 *s3PeerAPIHandlers) SetBucketPolicyPeer(args SetBPPArgs, reply *Generic
 		return errServerNotInitialized
 	}
 
-	return globalBucketPolicies.SetBucketPolicy(args.Bucket, args.PCh)
+	var pCh policyChange
+	if err := json.Unmarshal(args.PChBytes, &pCh); err != nil {
+		return err
+	}
+
+	return globalBucketPolicies.SetBucketPolicy(args.Bucket, pCh)
 }
