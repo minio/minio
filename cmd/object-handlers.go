@@ -368,8 +368,9 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	// Save other metadata if available.
 	metadata := objInfo.UserDefined
 
-	// Do not set `md5sum` as CopyObject will not keep the
-	// same md5sum as the source.
+	// Remove the etag from source metadata because if it was uploaded as a multipart object
+	// then its ETag will not be MD5sum of the object.
+	delete(metadata, "md5Sum")
 
 	sha256sum := ""
 	// Create the object.
