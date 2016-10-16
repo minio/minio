@@ -208,8 +208,8 @@ func getStorageInfo(disks []StorageAPI) StorageInfo {
 	// Free as the total aggregated values. Total capacity is always
 	// the multiple of smallest disk among the disk list.
 	storageInfo := StorageInfo{
-		Total: disksInfo[0].Total * int64(onlineDisks),
-		Free:  disksInfo[0].Free * int64(onlineDisks),
+		Total: disksInfo[0].Total * int64(onlineDisks) / 2,
+		Free:  disksInfo[0].Free * int64(onlineDisks) / 2,
 	}
 	storageInfo.Backend.Type = XL
 	storageInfo.Backend.OnlineDisks = onlineDisks
