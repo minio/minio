@@ -39,8 +39,8 @@ func TestStorageInfoMsg(t *testing.T) {
 		}{XL, 7, 1, 4, 5},
 	}
 
-	if msg := getStorageInfoMsg(infoStorage); !strings.Contains(msg, "1.0 GiB Free, 5.0 GiB Total") || !strings.Contains(msg, "7 Online, 1 Offline") {
-		t.Fatal("Empty message string is not implemented", msg)
+	if msg := getStorageInfoMsg(infoStorage); !strings.Contains(msg, "2.0 GiB Free, 10 GiB Total") || !strings.Contains(msg, "7 Online, 1 Offline") {
+		t.Fatal("Unexpected storage info message, found:", msg)
 	}
 }
 

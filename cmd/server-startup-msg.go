@@ -133,13 +133,9 @@ func printObjectAPIMsg() {
 
 // Get formatted disk/storage info message.
 func getStorageInfoMsg(storageInfo StorageInfo) string {
-	freeSpace := uint64(storageInfo.Free)
-	totalSpace := uint64(storageInfo.Total)
-	if storageInfo.Backend.Type == XL {
-		freeSpace /= 2
-		totalSpace /= 2
-	}
-	msg := fmt.Sprintf("%s %s Free, %s Total", colorBlue("Drive Capacity:"), humanize.IBytes(freeSpace), humanize.IBytes(totalSpace))
+	msg := fmt.Sprintf("%s %s Free, %s Total", colorBlue("Drive Capacity:"),
+		humanize.IBytes(uint64(storageInfo.Free)),
+		humanize.IBytes(uint64(storageInfo.Total)))
 	diskInfo := fmt.Sprintf(" %d Online, %d Offline. We can withstand [%d] more drive failure(s).",
 		storageInfo.Backend.OnlineDisks,
 		storageInfo.Backend.OfflineDisks,
