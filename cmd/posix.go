@@ -694,6 +694,11 @@ func deleteFile(basePath, deletePath string) error {
 	}
 	// Attempt to remove path.
 	if err := os.Remove(preparePath(deletePath)); err != nil {
+		if os.IsNotExist(err) {
+			return errFileNotFound
+		} else if os.IsPermission(err) {
+			return errFileAccessDenied
+		}
 		return err
 	}
 	// Recursively go down the next path and delete again.
