@@ -142,10 +142,6 @@ func (s3p *s3Peers) SendRPC(peers []string, method string, args interface {
 	SetToken(token string)
 	SetTimestamp(tstamp time.Time)
 }) map[string]error {
-	// Take read lock for rpcClient map
-	s3p.mutex.RLock()
-	defer s3p.mutex.RUnlock()
-
 	// Result type
 	type callResult struct {
 		target string
@@ -158,9 +154,9 @@ func (s3p *s3Peers) SendRPC(peers []string, method string, args interface {
 	// Closure to make a single request.
 	callTarget := func(target string) {
 		reply := &GenericReply{}
-		client, ok := s3p.rpcClients[target]
+		client := s3p.GetPeerClient(target)
 		var err error
-		if !ok {
+		if client == nil {
 			err = fmt.Errorf("Requested client was not initialized - %v",
 				target)
 		} else {

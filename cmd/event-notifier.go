@@ -210,10 +210,6 @@ func (en *eventNotifier) SetBucketListenerConfig(bucket string, lcfg []listenerC
 	} else {
 		en.internal.listenerConfigs[bucket] = lcfg
 	}
-	// close all existing loggers and initialize again.
-	for _, v := range en.internal.targets {
-		v.lconn.Close()
-	}
 	en.internal.targets = make(map[string]*listenerLogger)
 	for _, lc := range lcfg {
 		logger, err := newListenerLogger(lc.TopicConfig.TopicARN,
