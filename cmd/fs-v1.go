@@ -20,6 +20,7 @@ import (
 	"crypto/md5"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"hash"
 	"io"
@@ -151,10 +152,12 @@ func (fs fsObjects) ListBuckets() ([]BucketInfo, error) {
 	if err != nil {
 		return nil, toObjectErr(traceError(err))
 	}
+	var invalidBucketNames []string
 	for _, vol := range vols {
 		// StorageAPI can send volume names which are incompatible
 		// with buckets, handle it and skip them.
 		if !IsValidBucketName(vol.Name) {
+			invalidBucketNames = append(invalidBucketNames, vol.Name)
 			continue
 		}
 		// Ignore the volume special bucket.
@@ -165,6 +168,11 @@ func (fs fsObjects) ListBuckets() ([]BucketInfo, error) {
 			Name:    vol.Name,
 			Created: vol.Created,
 		})
+	}
+	// Print a user friendly message if we indeed skipped certain folders which are
+	// incompatible with S3's bucket name restrictions.
+	if len(invalidBucketNames) > 0 {
+		errorIf(errors.New("One or more invalid bucket names found"), "Skipping %s", invalidBucketNames)
 	}
 	sort.Sort(byBucketName(bucketInfos))
 	return bucketInfos, nil
