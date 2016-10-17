@@ -19,7 +19,10 @@ package cmd
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
+
+	"github.com/minio/minio/pkg/disk"
 )
 
 // TestStorageInfo - tests storage info.
@@ -70,6 +73,51 @@ func TestStorageInfo(t *testing.T) {
 	}
 	if disks16Info.Total <= 0 {
 		t.Fatalf("Diskinfo total values should be greater 0")
+	}
+}
+
+// Sort valid disks info.
+func TestSortingValidDisks(t *testing.T) {
+	testCases := []struct {
+		disksInfo      []disk.Info
+		validDisksInfo []disk.Info
+	}{
+		// One of the disks is offline.
+		{
+			disksInfo: []disk.Info{
+				{Total: 150, Free: 10},
+				{Total: 0, Free: 0},
+				{Total: 200, Free: 10},
+				{Total: 100, Free: 10},
+			},
+			validDisksInfo: []disk.Info{
+				{Total: 100, Free: 10},
+				{Total: 150, Free: 10},
+				{Total: 200, Free: 10},
+			},
+		},
+		// All disks are online.
+		{
+			disksInfo: []disk.Info{
+				{Total: 150, Free: 10},
+				{Total: 200, Free: 10},
+				{Total: 100, Free: 10},
+				{Total: 115, Free: 10},
+			},
+			validDisksInfo: []disk.Info{
+				{Total: 100, Free: 10},
+				{Total: 115, Free: 10},
+				{Total: 150, Free: 10},
+				{Total: 200, Free: 10},
+			},
+		},
+	}
+
+	for i, testCase := range testCases {
+		validDisksInfo := sortValidDisksInfo(testCase.disksInfo)
+		if !reflect.DeepEqual(validDisksInfo, testCase.validDisksInfo) {
+			t.Errorf("Test %d: Expected %#v, Got %#v", i+1, testCase.validDisksInfo, validDisksInfo)
+		}
 	}
 }
 

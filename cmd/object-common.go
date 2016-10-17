@@ -194,7 +194,7 @@ func xlHouseKeeping(storageDisks []StorageAPI) error {
 			err := cleanupDir(disk, minioMetaBucket, tmpMetaPrefix)
 			if err != nil {
 				switch errorCause(err) {
-				case errDiskNotFound, errVolumeNotFound:
+				case errDiskNotFound, errVolumeNotFound, errFileNotFound:
 				default:
 					errs[index] = err
 				}

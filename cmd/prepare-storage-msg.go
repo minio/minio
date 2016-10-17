@@ -65,6 +65,9 @@ func getHealMsg(firstEndpoint string, storageDisks []StorageAPI) string {
 	msg = fmt.Sprintf(msg, creds.AccessKeyID, creds.SecretAccessKey, firstEndpoint)
 	disksInfo, _, _ := getDisksInfo(storageDisks)
 	for i, info := range disksInfo {
+		if storageDisks[i] == nil {
+			continue
+		}
 		msg += fmt.Sprintf(
 			"\n[%s] %s - %s %s",
 			int2Str(i+1, len(storageDisks)),
@@ -92,6 +95,9 @@ func getRegularMsg(storageDisks []StorageAPI) string {
 	msg := colorBlue("\nInitializing data volume.")
 	disksInfo, _, _ := getDisksInfo(storageDisks)
 	for i, info := range disksInfo {
+		if storageDisks[i] == nil {
+			continue
+		}
 		msg += fmt.Sprintf(
 			"\n[%s] %s - %s %s",
 			int2Str(i+1, len(storageDisks)),
@@ -119,6 +125,9 @@ func getFormatMsg(storageDisks []StorageAPI) string {
 	msg := colorBlue("\nInitializing data volume for the first time.")
 	disksInfo, _, _ := getDisksInfo(storageDisks)
 	for i, info := range disksInfo {
+		if storageDisks[i] == nil {
+			continue
+		}
 		msg += fmt.Sprintf(
 			"\n[%s] %s - %s %s",
 			int2Str(i+1, len(storageDisks)),
