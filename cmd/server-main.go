@@ -363,6 +363,12 @@ func serverMain(c *cli.Context) {
 	// Fetch endpoints which we are going to serve from.
 	endPoints := finalizeEndpoints(tls, &apiServer.Server)
 
+	// Initialize local server address
+	globalMinioAddr = getLocalAddress(srvConfig)
+
+	// Initialize S3 Peers inter-node communication
+	initGlobalS3Peers(disks)
+
 	// Start server, automatically configures TLS if certs are available.
 	go func(tls bool) {
 		var lerr error
@@ -386,16 +392,6 @@ func serverMain(c *cli.Context) {
 	globalObjLayerMutex.Lock()
 	globalObjectAPI = newObject
 	globalObjLayerMutex.Unlock()
-
-	// Initialize local server address
-	globalMinioAddr = getLocalAddress(srvConfig)
-
-	// Initialize S3 Peers inter-node communication
-	initGlobalS3Peers(disks)
-
-	// Initialize a new event notifier.
-	err = initEventNotifier(newObjectLayerFn())
-	fatalIf(err, "Unable to initialize event notification.")
 
 	// Prints the formatted startup message once object layer is initialized.
 	printStartupMessage(endPoints)
