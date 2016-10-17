@@ -24,10 +24,11 @@ import (
 )
 
 const (
-	timeFormatAMZ  = "2006-01-02T15:04:05Z" // Reply date format
-	maxObjectList  = 1000                   // Limit number of objects in a listObjectsResponse.
-	maxUploadsList = 1000                   // Limit number of uploads in a listUploadsResponse.
-	maxPartsList   = 1000                   // Limit number of parts in a listPartsResponse.
+	timeFormatAMZ     = "2006-01-02T15:04:05Z"     // Reply date format
+	timeFormatAMZLong = "2006-01-02T15:04:05.000Z" // Reply date format with nanosecond precision.
+	maxObjectList     = 1000                       // Limit number of objects in a listObjectsResponse.
+	maxUploadsList    = 1000                       // Limit number of uploads in a listUploadsResponse.
+	maxPartsList      = 1000                       // Limit number of parts in a listPartsResponse.
 )
 
 // LocationResponse - format for location response.
@@ -277,7 +278,7 @@ func generateListBucketsResponse(buckets []BucketInfo) ListBucketsResponse {
 	for _, bucket := range buckets {
 		var listbucket = Bucket{}
 		listbucket.Name = bucket.Name
-		listbucket.CreationDate = bucket.Created.Format(timeFormatAMZ)
+		listbucket.CreationDate = bucket.Created.Format(timeFormatAMZLong)
 		listbuckets = append(listbuckets, listbucket)
 	}
 
@@ -303,7 +304,7 @@ func generateListObjectsV1Response(bucket, prefix, marker, delimiter string, max
 			continue
 		}
 		content.Key = object.Name
-		content.LastModified = object.ModTime.UTC().Format(timeFormatAMZ)
+		content.LastModified = object.ModTime.UTC().Format(timeFormatAMZLong)
 		if object.MD5Sum != "" {
 			content.ETag = "\"" + object.MD5Sum + "\""
 		}
@@ -350,7 +351,7 @@ func generateListObjectsV2Response(bucket, prefix, token, startAfter, delimiter 
 			continue
 		}
 		content.Key = object.Name
-		content.LastModified = object.ModTime.UTC().Format(timeFormatAMZ)
+		content.LastModified = object.ModTime.UTC().Format(timeFormatAMZLong)
 		if object.MD5Sum != "" {
 			content.ETag = "\"" + object.MD5Sum + "\""
 		}
@@ -384,7 +385,7 @@ func generateListObjectsV2Response(bucket, prefix, token, startAfter, delimiter 
 func generateCopyObjectResponse(etag string, lastModified time.Time) CopyObjectResponse {
 	return CopyObjectResponse{
 		ETag:         "\"" + etag + "\"",
-		LastModified: lastModified.UTC().Format(timeFormatAMZ),
+		LastModified: lastModified.UTC().Format(timeFormatAMZLong),
 	}
 }
 
@@ -431,7 +432,7 @@ func generateListPartsResponse(partsInfo ListPartsInfo) ListPartsResponse {
 		newPart.PartNumber = part.PartNumber
 		newPart.ETag = "\"" + part.ETag + "\""
 		newPart.Size = part.Size
-		newPart.LastModified = part.LastModified.UTC().Format(timeFormatAMZ)
+		newPart.LastModified = part.LastModified.UTC().Format(timeFormatAMZLong)
 		listPartsResponse.Parts[index] = newPart
 	}
 	return listPartsResponse
@@ -461,7 +462,7 @@ func generateListMultipartUploadsResponse(bucket string, multipartsInfo ListMult
 		newUpload := Upload{}
 		newUpload.UploadID = upload.UploadID
 		newUpload.Key = upload.Object
-		newUpload.Initiated = upload.Initiated.UTC().Format(timeFormatAMZ)
+		newUpload.Initiated = upload.Initiated.UTC().Format(timeFormatAMZLong)
 		listMultipartUploadsResponse.Uploads[index] = newUpload
 	}
 	return listMultipartUploadsResponse
