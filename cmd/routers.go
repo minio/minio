@@ -45,6 +45,13 @@ func newObjectLayer(storageDisks []StorageAPI) (ObjectLayer, error) {
 		return nil, err
 	}
 
+	// The following actions are performed here, so that any
+	// requests coming in early in the bootup sequence don't fail
+	// unexpectedly - e.g. if initEventNotifier was initialized
+	// after this function completes, an event could be generated
+	// before the notification system is ready, causing event
+	// drops or crashes.
+
 	// Migrate bucket policy from configDir to .minio.sys/buckets/
 	err = migrateBucketPolicyConfig(objAPI)
 	if err != nil {
@@ -61,6 +68,10 @@ func newObjectLayer(storageDisks []StorageAPI) (ObjectLayer, error) {
 	// Initialize and load bucket policies.
 	err = initBucketPolicies(objAPI)
 	fatalIf(err, "Unable to load all bucket policies.")
+
+	// Initialize a new event notifier.
+	err = initEventNotifier(objAPI)
+	fatalIf(err, "Unable to initialize event notification.")
 
 	// Success.
 	return objAPI, nil
