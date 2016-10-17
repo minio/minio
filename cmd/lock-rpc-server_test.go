@@ -339,7 +339,7 @@ func TestLockRpcServerForceUnlock(t *testing.T) {
 		Timestamp: timestamp,
 		Node:      "node",
 		RPCPath:   "rpc-path",
-		UID:	   "1234-5678",
+		UID:       "1234-5678",
 	}
 
 	// First test that UID should be empty

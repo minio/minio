@@ -170,7 +170,8 @@ func (d byDiskTotal) Less(i, j int) bool {
 
 // getDisksInfo - fetch disks info across all other storage API.
 func getDisksInfo(disks []StorageAPI) (disksInfo []disk.Info, onlineDisks int, offlineDisks int) {
-	for _, storageDisk := range disks {
+	disksInfo = make([]disk.Info, len(disks))
+	for i, storageDisk := range disks {
 		if storageDisk == nil {
 			// Storage disk is empty, perhaps ignored disk or not available.
 			offlineDisks++
@@ -185,32 +186,49 @@ func getDisksInfo(disks []StorageAPI) (disksInfo []disk.Info, onlineDisks int, o
 			continue
 		}
 		onlineDisks++
-		disksInfo = append(disksInfo, info)
+		disksInfo[i] = info
 	}
-
-	// Sort so that the first element is the smallest.
-	sort.Sort(byDiskTotal(disksInfo))
 
 	// Success.
 	return disksInfo, onlineDisks, offlineDisks
 }
 
+// returns sorted disksInfo slice which has only valid entries.
+// i.e the entries where the total size of the disk is not stated
+// as 0Bytes, this means that the disk is not online or ignored.
+func sortValidDisksInfo(disksInfo []disk.Info) []disk.Info {
+	var validDisksInfo []disk.Info
+	for _, diskInfo := range disksInfo {
+		if diskInfo.Total == 0 {
+			continue
+		}
+		validDisksInfo = append(validDisksInfo, diskInfo)
+	}
+	sort.Sort(byDiskTotal(validDisksInfo))
+	return validDisksInfo
+}
+
 // Get an aggregated storage info across all disks.
 func getStorageInfo(disks []StorageAPI) StorageInfo {
 	disksInfo, onlineDisks, offlineDisks := getDisksInfo(disks)
-	if len(disksInfo) == 0 {
+
+	// Sort so that the first element is the smallest.
+	validDisksInfo := sortValidDisksInfo(disksInfo)
+	if len(validDisksInfo) == 0 {
 		return StorageInfo{
 			Total: -1,
 			Free:  -1,
 		}
 	}
+
 	// Return calculated storage info, choose the lowest Total and
 	// Free as the total aggregated values. Total capacity is always
 	// the multiple of smallest disk among the disk list.
 	storageInfo := StorageInfo{
-		Total: disksInfo[0].Total * int64(onlineDisks) / 2,
-		Free:  disksInfo[0].Free * int64(onlineDisks) / 2,
+		Total: validDisksInfo[0].Total * int64(onlineDisks) / 2,
+		Free:  validDisksInfo[0].Free * int64(onlineDisks) / 2,
 	}
+
 	storageInfo.Backend.Type = XL
 	storageInfo.Backend.OnlineDisks = onlineDisks
 	storageInfo.Backend.OfflineDisks = offlineDisks

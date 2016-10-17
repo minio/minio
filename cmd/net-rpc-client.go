@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"net/rpc"
 	"sync"
+	"time"
 )
 
 // RPCClient is a wrapper type for rpc.Client which provides reconnect on first failure.
@@ -78,7 +79,8 @@ func (rpcClient *RPCClient) dialRPCClient() (*rpc.Client, error) {
 	if rpcClient.secureConn {
 		conn, err = tls.Dial("tcp", rpcClient.node, &tls.Config{})
 	} else {
-		conn, err = net.Dial("tcp", rpcClient.node)
+		// Have a dial timeout with 3 secs.
+		conn, err = net.DialTimeout("tcp", rpcClient.node, 3*time.Second)
 	}
 	if err != nil {
 		return nil, err
