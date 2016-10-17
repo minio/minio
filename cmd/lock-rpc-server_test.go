@@ -326,6 +326,74 @@ func TestLockRpcServerRUnlock(t *testing.T) {
 	}
 }
 
+// Test ForceUnlock functionality
+func TestLockRpcServerForceUnlock(t *testing.T) {
+
+	timestamp := time.Now().UTC()
+	testPath, locker, token := createLockTestServer(t)
+	defer removeAll(testPath)
+
+	laForce := LockArgs{
+		Name:      "name",
+		Token:     token,
+		Timestamp: timestamp,
+		Node:      "node",
+		RPCPath:   "rpc-path",
+		UID:	   "1234-5678",
+	}
+
+	// First test that UID should be empty
+	var result bool
+	err := locker.ForceUnlock(&laForce, &result)
+	if err == nil {
+		t.Errorf("Expected error, got %#v", nil)
+	}
+
+	// Then test force unlock of a lock that does not exist (not returning an error)
+	laForce.UID = ""
+	err = locker.ForceUnlock(&laForce, &result)
+	if err != nil {
+		t.Errorf("Expected no error, got %#v", err)
+	}
+
+	la := LockArgs{
+		Name:      "name",
+		Token:     token,
+		Timestamp: timestamp,
+		Node:      "node",
+		RPCPath:   "rpc-path",
+		UID:       "0123-4567",
+	}
+
+	// Create lock ... (so that we can force unlock)
+	err = locker.Lock(&la, &result)
+	if err != nil {
+		t.Errorf("Expected %#v, got %#v", nil, err)
+	} else if !result {
+		t.Errorf("Expected %#v, got %#v", true, result)
+	}
+
+	// Forcefully unlock the lock (not returning an error)
+	err = locker.ForceUnlock(&laForce, &result)
+	if err != nil {
+		t.Errorf("Expected no error, got %#v", err)
+	}
+
+	// Try to get lock again (should be granted)
+	err = locker.Lock(&la, &result)
+	if err != nil {
+		t.Errorf("Expected %#v, got %#v", nil, err)
+	} else if !result {
+		t.Errorf("Expected %#v, got %#v", true, result)
+	}
+
+	// Finally forcefully unlock the lock once again
+	err = locker.ForceUnlock(&laForce, &result)
+	if err != nil {
+		t.Errorf("Expected no error, got %#v", err)
+	}
+}
+
 // Test Expired functionality
 func TestLockRpcServerExpired(t *testing.T) {
 	timestamp := time.Now().UTC()

@@ -252,6 +252,23 @@ func (l *lockServer) RUnlock(args *LockArgs, reply *bool) error {
 	return nil
 }
 
+// ForceUnlock - rpc handler for force unlock operation.
+func (l *lockServer) ForceUnlock(args *LockArgs, reply *bool) error {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+	if err := l.validateLockArgs(args); err != nil {
+		return err
+	}
+	if len(args.UID) != 0 {
+		return fmt.Errorf("ForceUnlock called with non-empty UID: %s", args.UID)
+	}
+	if _, ok := l.lockMap[args.Name]; ok { // Only clear lock when set
+		delete(l.lockMap, args.Name) // Remove the lock (irrespective of write or read lock)
+	}
+	*reply = true
+	return nil
+}
+
 // Expired - rpc handler for expired lock status.
 func (l *lockServer) Expired(args *LockArgs, reply *bool) error {
 	l.mutex.Lock()
