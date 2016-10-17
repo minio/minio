@@ -322,7 +322,11 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 	nEventCh := make(chan []NotificationEvent)
 	defer close(nEventCh)
 	// Add channel for listener events
-	globalEventNotifier.AddListenerChan(accountARN, nEventCh)
+	if err = globalEventNotifier.AddListenerChan(accountARN, nEventCh); err != nil {
+		errorIf(err, "Error adding a listener!")
+		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
+		return
+	}
 	// Remove listener channel after the writer has closed or the
 	// client disconnected.
 	defer globalEventNotifier.RemoveListenerChan(accountARN)

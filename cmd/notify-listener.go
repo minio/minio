@@ -55,11 +55,6 @@ func newListenerLogger(listenerArn, targetAddr string) (*listenerLogger, error) 
 	return &listenerLogger{lcLog, lc}, nil
 }
 
-func (lc listenerConn) Close() {
-	// ignore closing errors
-	_ = lc.Client.Close()
-}
-
 // send event to target server via rpc client calls.
 func (lc listenerConn) Fire(entry *logrus.Entry) error {
 	notificationEvent, ok := entry.Data["Records"].([]NotificationEvent)
