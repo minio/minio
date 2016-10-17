@@ -20,6 +20,7 @@ import (
 	"crypto/md5"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"hash"
 	"io"
@@ -155,6 +156,7 @@ func (fs fsObjects) ListBuckets() ([]BucketInfo, error) {
 		// StorageAPI can send volume names which are incompatible
 		// with buckets, handle it and skip them.
 		if !IsValidBucketName(vol.Name) {
+			err = errors.New("One or more invalid bucket names found, skipping them")
 			continue
 		}
 		// Ignore the volume special bucket.
@@ -167,7 +169,7 @@ func (fs fsObjects) ListBuckets() ([]BucketInfo, error) {
 		})
 	}
 	sort.Sort(byBucketName(bucketInfos))
-	return bucketInfos, nil
+	return bucketInfos, err
 }
 
 // DeleteBucket - delete a bucket.
