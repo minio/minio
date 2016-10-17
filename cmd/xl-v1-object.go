@@ -259,8 +259,14 @@ func (xl xlObjects) getObjectInfo(bucket, object string) (objInfo ObjectInfo, er
 		MD5Sum:          xlMetaMap["md5Sum"],
 		ContentType:     xlMetaMap["content-type"],
 		ContentEncoding: xlMetaMap["content-encoding"],
-		UserDefined:     xlMetaMap,
 	}
+
+	// md5Sum has already been extracted into objInfo.MD5Sum.  We
+	// need to remove it from xlMetaMap to avoid it from appearing as
+	// part of response headers. e.g, X-Minio-* or X-Amz-*.
+
+	delete(xlMetaMap, "md5Sum")
+	objInfo.UserDefined = xlMetaMap
 	return objInfo, nil
 }
 
