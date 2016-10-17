@@ -174,6 +174,23 @@ func Main() {
 		err := initConfig()
 		fatalIf(err, "Unable to initialize minio config.")
 
+		// Fetch access keys from environment variables and update the config.
+		accessKey := os.Getenv("MINIO_ACCESS_KEY")
+		secretKey := os.Getenv("MINIO_SECRET_KEY")
+		if accessKey != "" && secretKey != "" {
+			if !isValidAccessKey.MatchString(accessKey) {
+				fatalIf(errInvalidArgument, "Invalid access key.")
+			}
+			if !isValidSecretKey.MatchString(secretKey) {
+				fatalIf(errInvalidArgument, "Invalid secret key.")
+			}
+			// Set new credentials.
+			serverConfig.SetCredential(credential{
+				AccessKeyID:     accessKey,
+				SecretAccessKey: secretKey,
+			})
+		}
+
 		// Enable all loggers by now.
 		enableLoggers()
 
