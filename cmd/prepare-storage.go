@@ -165,7 +165,7 @@ func prepForInitXL(firstDisk bool, sErrs []error, diskCount int) InitActions {
 	// Total disks unformatted are in quorum verify if we have some offline disks.
 	if disksUnformatted >= quorum {
 		// Some disks offline and some disks unformatted, wait for all of them to come online.
-		if disksUnformatted+disksOffline == diskCount {
+		if disksUnformatted+disksFormatted+disksOffline == diskCount {
 			return WaitForAll
 		}
 		// Some disks possibly corrupted and too many unformatted disks.
