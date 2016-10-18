@@ -68,7 +68,7 @@ func TestNamespaceLockTest(t *testing.T) {
 	if !ok && testCase.shouldPass {
 		t.Errorf("Lock in map missing.")
 	}
-	// Validate loced ref count.
+	// Validate locked ref count.
 	if testCase.lockedRefCount != nsLk.ref && testCase.shouldPass {
 		t.Errorf("Test %d fails, expected to pass. Wanted ref count is %d, got %d", 1, testCase.lockedRefCount, nsLk.ref)
 	}
@@ -91,7 +91,7 @@ func TestNamespaceLockTest(t *testing.T) {
 	if !ok && testCase.shouldPass {
 		t.Errorf("Lock in map missing.")
 	}
-	// Validate loced ref count.
+	// Validate locked ref count.
 	if testCase.lockedRefCount != nsLk.ref && testCase.shouldPass {
 		t.Errorf("Test %d fails, expected to pass. Wanted ref count is %d, got %d", 1, testCase.lockedRefCount, nsLk.ref)
 	}
@@ -114,7 +114,7 @@ func TestNamespaceLockTest(t *testing.T) {
 	if !ok && testCase.shouldPass {
 		t.Errorf("Lock in map missing.")
 	}
-	// Validate loced ref count.
+	// Validate locked ref count.
 	if testCase.lockedRefCount != nsLk.ref && testCase.shouldPass {
 		t.Errorf("Test %d fails, expected to pass. Wanted ref count is %d, got %d", 3, testCase.lockedRefCount, nsLk.ref)
 	}
