@@ -174,28 +174,11 @@ func initServerConfig(c *cli.Context) {
 		fatalIf(err, "Unable to convert MINIO_CACHE_EXPIRY=%s environment variable into its time.Duration value.", cacheExpiryStr)
 	}
 
-	// Fetch access keys from environment variables if any and update the config.
-	accessKey := os.Getenv("MINIO_ACCESS_KEY")
-	secretKey := os.Getenv("MINIO_SECRET_KEY")
-
-	// Validate if both keys are specified and they are valid save them.
-	if accessKey != "" && secretKey != "" {
-		if !isValidAccessKey.MatchString(accessKey) {
-			fatalIf(errInvalidArgument, "Invalid access key.")
-		}
-		if !isValidSecretKey.MatchString(secretKey) {
-			fatalIf(errInvalidArgument, "Invalid secret key.")
-		}
-
-		// Set new credentials.
-		serverConfig.SetCredential(credential{
-			AccessKeyID:     accessKey,
-			SecretAccessKey: secretKey,
-		})
-
-		// Save new config.
+	// When credentials inherited from the env, server cmd has to save them in the disk
+	if os.Getenv("MINIO_ACCESS_KEY") != "" && os.Getenv("MINIO_SECRET_KEY") != "" {
+		// Env credentials are already loaded in serverConfig, just save in the disk
 		err = serverConfig.Save()
-		fatalIf(err, "Unable to save config.")
+		fatalIf(err, "Unable to save credentials in the disk.")
 	}
 
 	// Set maxOpenFiles, This is necessary since default operating
