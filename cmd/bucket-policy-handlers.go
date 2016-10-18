@@ -134,7 +134,7 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
 		return
 	case authTypePresigned, authTypeSigned:
-		if s3Error := isReqAuthenticated(r); s3Error != ErrNone {
+		if s3Error := isReqAuthenticated(r, serverConfig.GetRegion()); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
@@ -203,20 +203,14 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 // This implementation of the DELETE operation uses the policy
 // subresource to add to remove a policy on a bucket.
 func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
+	// DeleteBucketPolicy does not support bucket policies, use checkAuth to validate signature.
+	if s3Error := checkAuth(r); s3Error != ErrNone {
+		writeErrorResponse(w, r, s3Error, r.URL.Path)
+		return
+	}
+
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
-
-	switch getRequestAuthType(r) {
-	default:
-		// For all unknown auth types return error.
-		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
-		return
-	case authTypePresigned, authTypeSigned:
-		if s3Error := isReqAuthenticated(r); s3Error != ErrNone {
-			writeErrorResponse(w, r, s3Error, r.URL.Path)
-			return
-		}
-	}
 
 	// Delete bucket access policy.
 	if err := removeBucketPolicy(bucket, api.ObjectAPI); err != nil {
@@ -244,20 +238,14 @@ func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r 
 // This operation uses the policy
 // subresource to return the policy of a specified bucket.
 func (api objectAPIHandlers) GetBucketPolicyHandler(w http.ResponseWriter, r *http.Request) {
+	// GetBucketPolicy does not support bucket policies, use checkAuth to validate signature.
+	if s3Error := checkAuth(r); s3Error != ErrNone {
+		writeErrorResponse(w, r, s3Error, r.URL.Path)
+		return
+	}
+
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
-
-	switch getRequestAuthType(r) {
-	default:
-		// For all unknown auth types return error.
-		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
-		return
-	case authTypePresigned, authTypeSigned:
-		if s3Error := isReqAuthenticated(r); s3Error != ErrNone {
-			writeErrorResponse(w, r, s3Error, r.URL.Path)
-			return
-		}
-	}
 
 	// Read bucket access policy.
 	policy, err := readBucketPolicy(bucket, api.ObjectAPI)

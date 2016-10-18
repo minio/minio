@@ -206,6 +206,8 @@ func signRequest(req *http.Request, accessKey, secretKey string) error {
 	}
 	sort.Strings(headers)
 
+	region := serverConfig.GetRegion()
+
 	// Get canonical headers.
 	var buf bytes.Buffer
 	for _, k := range headers {
@@ -257,7 +259,7 @@ func signRequest(req *http.Request, accessKey, secretKey string) error {
 	// Get scope.
 	scope := strings.Join([]string{
 		currTime.Format(yyyymmdd),
-		"us-east-1",
+		region,
 		"s3",
 		"aws4_request",
 	}, "/")
@@ -267,8 +269,8 @@ func signRequest(req *http.Request, accessKey, secretKey string) error {
 	stringToSign = stringToSign + hex.EncodeToString(sum256([]byte(canonicalRequest)))
 
 	date := sumHMAC([]byte("AWS4"+secretKey), []byte(currTime.Format(yyyymmdd)))
-	region := sumHMAC(date, []byte("us-east-1"))
-	service := sumHMAC(region, []byte("s3"))
+	regionHMAC := sumHMAC(date, []byte(region))
+	service := sumHMAC(regionHMAC, []byte("s3"))
 	signingKey := sumHMAC(service, []byte("aws4_request"))
 
 	signature := hex.EncodeToString(sumHMAC(signingKey, []byte(stringToSign)))
@@ -305,9 +307,9 @@ func newTestRequest(method, urlStr string, contentLength int64, body io.ReadSeek
 	case body == nil:
 		hashedPayload = hex.EncodeToString(sum256([]byte{}))
 	default:
-		payloadBytes, e := ioutil.ReadAll(body)
-		if e != nil {
-			return nil, e
+		payloadBytes, err := ioutil.ReadAll(body)
+		if err != nil {
+			return nil, err
 		}
 		hashedPayload = hex.EncodeToString(sum256(payloadBytes))
 		md5Base64 := base64.StdEncoding.EncodeToString(sumMD5(payloadBytes))

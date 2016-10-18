@@ -95,8 +95,14 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
+	case authTypePresignedV2, authTypeSignedV2:
+		// Signature V2 validation.
+		if s3Error := isReqAuthenticatedV2(r); s3Error != ErrNone {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
+			return
+		}
 	case authTypePresigned, authTypeSigned:
-		if s3Error := isReqAuthenticated(r); s3Error != ErrNone {
+		if s3Error := isReqAuthenticated(r, serverConfig.GetRegion()); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
@@ -201,8 +207,14 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
+	case authTypePresignedV2, authTypeSignedV2:
+		// Signature V2 validation.
+		if s3Error := isReqAuthenticatedV2(r); s3Error != ErrNone {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
+			return
+		}
 	case authTypePresigned, authTypeSigned:
-		if s3Error := isReqAuthenticated(r); s3Error != ErrNone {
+		if s3Error := isReqAuthenticated(r, serverConfig.GetRegion()); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
@@ -251,8 +263,14 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
+	case authTypePresignedV2, authTypeSignedV2:
+		// Signature V2 validation.
+		if s3Error := isReqAuthenticatedV2(r); s3Error != ErrNone {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
+			return
+		}
 	case authTypePresigned, authTypeSigned:
-		if s3Error := isReqAuthenticated(r); s3Error != ErrNone {
+		if s3Error := isReqAuthenticated(r, serverConfig.GetRegion()); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
@@ -440,9 +458,16 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			return
 		}
 		md5Sum, err = api.ObjectAPI.PutObject(bucket, object, size, reader, metadata)
+	case authTypeSignedV2, authTypePresignedV2:
+		s3Error := isReqAuthenticatedV2(r)
+		if s3Error != ErrNone {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
+			return
+		}
+		md5Sum, err = api.ObjectAPI.PutObject(bucket, object, size, r.Body, metadata)
 	case authTypePresigned, authTypeSigned:
 		// Initialize signature verifier.
-		reader := newSignVerify(r)
+		reader := newSignVerify(r, serverConfig.GetRegion())
 		// Create object.
 		md5Sum, err = api.ObjectAPI.PutObject(bucket, object, size, reader, metadata)
 	}
@@ -496,8 +521,14 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
+	case authTypePresignedV2, authTypeSignedV2:
+		// Signature V2 validation.
+		if s3Error := isReqAuthenticatedV2(r); s3Error != ErrNone {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
+			return
+		}
 	case authTypePresigned, authTypeSigned:
-		if s3Error := isReqAuthenticated(r); s3Error != ErrNone {
+		if s3Error := isReqAuthenticated(r, serverConfig.GetRegion()); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
@@ -597,9 +628,16 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			return
 		}
 		partMD5, err = api.ObjectAPI.PutObjectPart(bucket, object, uploadID, partID, size, reader, incomingMD5)
+	case authTypeSignedV2, authTypePresignedV2:
+		s3Error := isReqAuthenticatedV2(r)
+		if s3Error != ErrNone {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
+			return
+		}
+		partMD5, err = api.ObjectAPI.PutObjectPart(bucket, object, uploadID, partID, size, r.Body, incomingMD5)
 	case authTypePresigned, authTypeSigned:
 		// Initialize signature verifier.
-		reader := newSignVerify(r)
+		reader := newSignVerify(r, serverConfig.GetRegion())
 		partMD5, err = api.ObjectAPI.PutObjectPart(bucket, object, uploadID, partID, size, reader, incomingMD5)
 	}
 	if err != nil {
@@ -631,8 +669,14 @@ func (api objectAPIHandlers) AbortMultipartUploadHandler(w http.ResponseWriter, 
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
+	case authTypePresignedV2, authTypeSignedV2:
+		// Signature V2 validation.
+		if s3Error := isReqAuthenticatedV2(r); s3Error != ErrNone {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
+			return
+		}
 	case authTypePresigned, authTypeSigned:
-		if s3Error := isReqAuthenticated(r); s3Error != ErrNone {
+		if s3Error := isReqAuthenticated(r, serverConfig.GetRegion()); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
@@ -664,8 +708,14 @@ func (api objectAPIHandlers) ListObjectPartsHandler(w http.ResponseWriter, r *ht
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
+	case authTypePresignedV2, authTypeSignedV2:
+		// Signature V2 validation.
+		if s3Error := isReqAuthenticatedV2(r); s3Error != ErrNone {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
+			return
+		}
 	case authTypePresigned, authTypeSigned:
-		if s3Error := isReqAuthenticated(r); s3Error != ErrNone {
+		if s3Error := isReqAuthenticated(r, serverConfig.GetRegion()); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
@@ -715,8 +765,14 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
+	case authTypePresignedV2, authTypeSignedV2:
+		// Signature V2 validation.
+		if s3Error := isReqAuthenticatedV2(r); s3Error != ErrNone {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
+			return
+		}
 	case authTypePresigned, authTypeSigned:
-		if s3Error := isReqAuthenticated(r); s3Error != ErrNone {
+		if s3Error := isReqAuthenticated(r, serverConfig.GetRegion()); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
@@ -836,8 +892,14 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}
+	case authTypePresignedV2, authTypeSignedV2:
+		// Signature V2 validation.
+		if s3Error := isReqAuthenticatedV2(r); s3Error != ErrNone {
+			writeErrorResponse(w, r, s3Error, r.URL.Path)
+			return
+		}
 	case authTypeSigned, authTypePresigned:
-		if s3Error := isReqAuthenticated(r); s3Error != ErrNone {
+		if s3Error := isReqAuthenticated(r, serverConfig.GetRegion()); s3Error != ErrNone {
 			writeErrorResponse(w, r, s3Error, r.URL.Path)
 			return
 		}

@@ -19,10 +19,11 @@ package cmd
 import (
 	"encoding/hex"
 	"fmt"
-	"github.com/minio/sha256-simd"
 	"hash"
 	"io"
 	"net/http"
+
+	"github.com/minio/sha256-simd"
 )
 
 // signVerifyReader represents an io.Reader compatible interface which
@@ -31,13 +32,15 @@ import (
 type signVerifyReader struct {
 	Request    *http.Request // HTTP request to be validated and read.
 	HashWriter hash.Hash     // sha256 hash writer.
+	Region     string
 }
 
 // Initializes a new signature verify reader.
-func newSignVerify(req *http.Request) *signVerifyReader {
+func newSignVerify(req *http.Request, region string) *signVerifyReader {
 	return &signVerifyReader{
 		Request:    req,          // Save the request.
 		HashWriter: sha256.New(), // Inititalize sha256.
+		Region:     region,
 	}
 }
 
@@ -49,7 +52,6 @@ func isSignVerify(reader io.Reader) bool {
 
 // Verify - verifies signature and returns error upon signature mismatch.
 func (v *signVerifyReader) Verify() error {
-	validateRegion := true // Defaults to validating region.
 	shaPayloadHex := hex.EncodeToString(v.HashWriter.Sum(nil))
 	if skipContentSha256Cksum(v.Request) {
 		// Sets 'UNSIGNED-PAYLOAD' if client requested to not calculated sha256.
@@ -58,9 +60,9 @@ func (v *signVerifyReader) Verify() error {
 	// Signature verification block.
 	var s3Error APIErrorCode
 	if isRequestSignatureV4(v.Request) {
-		s3Error = doesSignatureMatch(shaPayloadHex, v.Request, validateRegion)
+		s3Error = doesSignatureMatch(shaPayloadHex, v.Request, v.Region)
 	} else if isRequestPresignedSignatureV4(v.Request) {
-		s3Error = doesPresignedSignatureMatch(shaPayloadHex, v.Request, validateRegion)
+		s3Error = doesPresignedSignatureMatch(shaPayloadHex, v.Request, v.Region)
 	} else {
 		// Couldn't figure out the request type, set the error as AccessDenied.
 		s3Error = ErrAccessDenied

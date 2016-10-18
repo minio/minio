@@ -58,6 +58,18 @@ func isRequestSignStreamingV4(r *http.Request) bool {
 	return r.Header.Get("x-amz-content-sha256") == streamingContentSHA256 && r.Method == "PUT"
 }
 
+// Verify if request has AWS Signature Version '2'.
+func isRequestSignatureV2(r *http.Request) bool {
+	return (!strings.HasPrefix(r.Header.Get("Authorization"), signV4Algorithm) &&
+		strings.HasPrefix(r.Header.Get("Authorization"), signV2Algorithm))
+}
+
+// Verify request has AWS PreSign Version '2'.
+func isRequestPresignedSignatureV2(r *http.Request) bool {
+	_, ok := r.URL.Query()["AWSAccessKeyId"]
+	return ok
+}
+
 // Authorization type.
 type authType int
 
@@ -66,15 +78,21 @@ const (
 	authTypeUnknown authType = iota
 	authTypeAnonymous
 	authTypePresigned
+	authTypePresignedV2
 	authTypePostPolicy
 	authTypeStreamingSigned
 	authTypeSigned
+	authTypeSignedV2
 	authTypeJWT
 )
 
 // Get request authentication type.
 func getRequestAuthType(r *http.Request) authType {
-	if isRequestSignStreamingV4(r) {
+	if isRequestSignatureV2(r) {
+		return authTypeSignedV2
+	} else if isRequestPresignedSignatureV2(r) {
+		return authTypePresignedV2
+	} else if isRequestSignStreamingV4(r) {
 		return authTypeStreamingSigned
 	} else if isRequestSignatureV4(r) {
 		return authTypeSigned
@@ -104,8 +122,16 @@ func sumMD5(data []byte) []byte {
 	return hash.Sum(nil)
 }
 
+// Verify if request has valid AWS Signature Version '2'.
+func isReqAuthenticatedV2(r *http.Request) (s3Error APIErrorCode) {
+	if isRequestSignatureV2(r) {
+		return doesSignV2Match(r)
+	}
+	return doesPresignV2SignatureMatch(r)
+}
+
 // Verify if request has valid AWS Signature Version '4'.
-func isReqAuthenticated(r *http.Request) (s3Error APIErrorCode) {
+func isReqAuthenticated(r *http.Request, region string) (s3Error APIErrorCode) {
 	if r == nil {
 		return ErrInternalError
 	}
@@ -121,7 +147,6 @@ func isReqAuthenticated(r *http.Request) (s3Error APIErrorCode) {
 	}
 	// Populate back the payload.
 	r.Body = ioutil.NopCloser(bytes.NewReader(payload))
-	validateRegion := true // Validate region.
 	var sha256sum string
 	// Skips calculating sha256 on the payload on server,
 	// if client requested for it.
@@ -131,9 +156,9 @@ func isReqAuthenticated(r *http.Request) (s3Error APIErrorCode) {
 		sha256sum = hex.EncodeToString(sum256(payload))
 	}
 	if isRequestSignatureV4(r) {
-		return doesSignatureMatch(sha256sum, r, validateRegion)
+		return doesSignatureMatch(sha256sum, r, region)
 	} else if isRequestPresignedSignatureV4(r) {
-		return doesPresignedSignatureMatch(sha256sum, r, validateRegion)
+		return doesPresignedSignatureMatch(sha256sum, r, region)
 	}
 	return ErrAccessDenied
 }
@@ -145,13 +170,21 @@ func isReqAuthenticated(r *http.Request) (s3Error APIErrorCode) {
 // request headers and body are used to calculate the signature validating
 // the client signature present in request.
 func checkAuth(r *http.Request) APIErrorCode {
-	aType := getRequestAuthType(r)
-	if aType != authTypePresigned && aType != authTypeSigned {
-		// For all unhandled auth types return error AccessDenied.
-		return ErrAccessDenied
-	}
+	return checkAuthWithRegion(r, serverConfig.GetRegion())
+}
+
+// checkAuthWithRegion - similar to checkAuth but takes a custom region.
+func checkAuthWithRegion(r *http.Request, region string) APIErrorCode {
 	// Validates the request for both Presigned and Signed.
-	return isReqAuthenticated(r)
+	aType := getRequestAuthType(r)
+	switch aType {
+	case authTypeSignedV2, authTypePresignedV2: // Signature V2.
+		return isReqAuthenticatedV2(r)
+	case authTypeSigned, authTypePresigned: // Signature V4.
+		return isReqAuthenticated(r, region)
+	}
+	// For all unhandled auth types return error AccessDenied.
+	return ErrAccessDenied
 }
 
 // authHandler - handles all the incoming authorization headers and validates them if possible.
@@ -168,7 +201,9 @@ func setAuthHandler(h http.Handler) http.Handler {
 var supportedS3AuthTypes = map[authType]struct{}{
 	authTypeAnonymous:       {},
 	authTypePresigned:       {},
+	authTypePresignedV2:     {},
 	authTypeSigned:          {},
+	authTypeSignedV2:        {},
 	authTypePostPolicy:      {},
 	authTypeStreamingSigned: {},
 }

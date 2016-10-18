@@ -106,15 +106,15 @@ func TestDoesPresignedSignatureMatch(t *testing.T) {
 	credentialTemplate := "%s/%s/%s/s3/aws4_request"
 
 	testCases := []struct {
-		queryParams  map[string]string
-		headers      map[string]string
-		verifyRegion bool
-		expected     APIErrorCode
+		queryParams map[string]string
+		headers     map[string]string
+		region      string
+		expected    APIErrorCode
 	}{
 		// (0) Should error without a set URL query.
 		{
-			verifyRegion: false,
-			expected:     ErrInvalidQueryParams,
+			region:   "us-east-1",
+			expected: ErrInvalidQueryParams,
 		},
 		// (1) Should error on an invalid access key.
 		{
@@ -126,8 +126,8 @@ func TestDoesPresignedSignatureMatch(t *testing.T) {
 				"X-Amz-SignedHeaders": "host;x-amz-content-sha256;x-amz-date",
 				"X-Amz-Credential":    fmt.Sprintf(credentialTemplate, "Z7IXGOO6BZ0REAN1Q26I", now.Format(yyyymmdd), "us-west-1"),
 			},
-			verifyRegion: false,
-			expected:     ErrInvalidAccessKeyID,
+			region:   "us-west-1",
+			expected: ErrInvalidAccessKeyID,
 		},
 		// (2) Should error when the payload sha256 doesn't match.
 		{
@@ -140,8 +140,8 @@ func TestDoesPresignedSignatureMatch(t *testing.T) {
 				"X-Amz-Credential":     fmt.Sprintf(credentialTemplate, serverConfig.GetCredential().AccessKeyID, now.Format(yyyymmdd), "us-west-1"),
 				"X-Amz-Content-Sha256": "ThisIsNotThePayloadHash",
 			},
-			verifyRegion: false,
-			expected:     ErrContentSHA256Mismatch,
+			region:   "us-west-1",
+			expected: ErrContentSHA256Mismatch,
 		},
 		// (3) Should fail with an invalid region.
 		{
@@ -154,8 +154,8 @@ func TestDoesPresignedSignatureMatch(t *testing.T) {
 				"X-Amz-Credential":     fmt.Sprintf(credentialTemplate, serverConfig.GetCredential().AccessKeyID, now.Format(yyyymmdd), "us-west-1"),
 				"X-Amz-Content-Sha256": payload,
 			},
-			verifyRegion: true,
-			expected:     ErrInvalidRegion,
+			region:   "us-east-1",
+			expected: ErrInvalidRegion,
 		},
 		// (4) Should NOT fail with an invalid region if it doesn't verify it.
 		{
@@ -168,8 +168,8 @@ func TestDoesPresignedSignatureMatch(t *testing.T) {
 				"X-Amz-Credential":     fmt.Sprintf(credentialTemplate, serverConfig.GetCredential().AccessKeyID, now.Format(yyyymmdd), "us-west-1"),
 				"X-Amz-Content-Sha256": payload,
 			},
-			verifyRegion: false,
-			expected:     ErrUnsignedHeaders,
+			region:   "us-west-1",
+			expected: ErrUnsignedHeaders,
 		},
 		// (5) Should fail to extract headers if the host header is not signed.
 		{
@@ -182,8 +182,8 @@ func TestDoesPresignedSignatureMatch(t *testing.T) {
 				"X-Amz-Credential":     fmt.Sprintf(credentialTemplate, serverConfig.GetCredential().AccessKeyID, now.Format(yyyymmdd), serverConfig.GetRegion()),
 				"X-Amz-Content-Sha256": payload,
 			},
-			verifyRegion: true,
-			expected:     ErrUnsignedHeaders,
+			region:   serverConfig.GetRegion(),
+			expected: ErrUnsignedHeaders,
 		},
 		// (6) Should give an expired request if it has expired.
 		{
@@ -200,8 +200,8 @@ func TestDoesPresignedSignatureMatch(t *testing.T) {
 				"X-Amz-Date":           now.AddDate(0, 0, -2).Format(iso8601Format),
 				"X-Amz-Content-Sha256": payload,
 			},
-			verifyRegion: false,
-			expected:     ErrExpiredPresignRequest,
+			region:   serverConfig.GetRegion(),
+			expected: ErrExpiredPresignRequest,
 		},
 		// (7) Should error if the signature is incorrect.
 		{
@@ -218,8 +218,8 @@ func TestDoesPresignedSignatureMatch(t *testing.T) {
 				"X-Amz-Date":           now.Format(iso8601Format),
 				"X-Amz-Content-Sha256": payload,
 			},
-			verifyRegion: false,
-			expected:     ErrSignatureDoesNotMatch,
+			region:   serverConfig.GetRegion(),
+			expected: ErrSignatureDoesNotMatch,
 		},
 	}
 
@@ -243,7 +243,7 @@ func TestDoesPresignedSignatureMatch(t *testing.T) {
 		}
 
 		// Check if it matches!
-		err := doesPresignedSignatureMatch(payload, req, testCase.verifyRegion)
+		err := doesPresignedSignatureMatch(payload, req, testCase.region)
 		if err != testCase.expected {
 			t.Errorf("(%d) expected to get %s, instead got %s", i, niceError(testCase.expected), niceError(err))
 		}
