@@ -163,11 +163,15 @@ func testTreeWalkMarker(t *testing.T, listDir listDirFunc, isLeaf isLeafFunc) {
 func TestTreeWalk(t *testing.T) {
 	fsDir, err := ioutil.TempDir("", "minio-")
 	if err != nil {
-		t.Errorf("Unable to create tmp directory: %s", err)
+		t.Fatalf("Unable to create tmp directory: %s", err)
 	}
-	disk, err := newStorageAPI(fsDir)
+	endpoint, err := parseStorageEndPoint(fsDir, 0)
 	if err != nil {
-		t.Errorf("Unable to create StorageAPI: %s", err)
+		t.Fatalf("Unexpected error %s", err)
+	}
+	disk, err := newStorageAPI(endpoint)
+	if err != nil {
+		t.Fatalf("Unable to create StorageAPI: %s", err)
 	}
 
 	var files = []string{
@@ -200,11 +204,15 @@ func TestTreeWalk(t *testing.T) {
 func TestTreeWalkTimeout(t *testing.T) {
 	fsDir, err := ioutil.TempDir("", "minio-")
 	if err != nil {
-		t.Errorf("Unable to create tmp directory: %s", err)
+		t.Fatalf("Unable to create tmp directory: %s", err)
 	}
-	disk, err := newStorageAPI(fsDir)
+	endpoint, err := parseStorageEndPoint(fsDir, 0)
 	if err != nil {
-		t.Errorf("Unable to create StorageAPI: %s", err)
+		t.Fatalf("Unexpected error %s", err)
+	}
+	disk, err := newStorageAPI(endpoint)
+	if err != nil {
+		t.Fatalf("Unable to create StorageAPI: %s", err)
 	}
 	var myfiles []string
 	// Create maxObjectsList+1 number of entries.
@@ -278,12 +286,23 @@ func TestListDir(t *testing.T) {
 		t.Errorf("Unable to create tmp directory: %s", err)
 	}
 
+	endpoint1, err := parseStorageEndPoint(fsDir1, 0)
+	if err != nil {
+		t.Fatalf("Unexpected error %s", err)
+	}
+
 	// Create two StorageAPIs disk1 and disk2.
-	disk1, err := newStorageAPI(fsDir1)
+	disk1, err := newStorageAPI(endpoint1)
 	if err != nil {
 		t.Errorf("Unable to create StorageAPI: %s", err)
 	}
-	disk2, err := newStorageAPI(fsDir2)
+
+	endpoint2, err := parseStorageEndPoint(fsDir2, 0)
+	if err != nil {
+		t.Fatalf("Unexpected error %s", err)
+	}
+
+	disk2, err := newStorageAPI(endpoint2)
 	if err != nil {
 		t.Errorf("Unable to create StorageAPI: %s", err)
 	}
@@ -348,13 +367,18 @@ func TestRecursiveTreeWalk(t *testing.T) {
 	// Create a backend directories fsDir1.
 	fsDir1, err := ioutil.TempDir("", "minio-")
 	if err != nil {
-		t.Errorf("Unable to create tmp directory: %s", err)
+		t.Fatalf("Unable to create tmp directory: %s", err)
+	}
+
+	endpoint1, err := parseStorageEndPoint(fsDir1, 0)
+	if err != nil {
+		t.Fatalf("Unexpected error %s", err)
 	}
 
 	// Create two StorageAPIs disk1.
-	disk1, err := newStorageAPI(fsDir1)
+	disk1, err := newStorageAPI(endpoint1)
 	if err != nil {
-		t.Errorf("Unable to create StorageAPI: %s", err)
+		t.Fatalf("Unable to create StorageAPI: %s", err)
 	}
 
 	// Simple isLeaf check, returns true if there is no trailing "/"
@@ -458,8 +482,13 @@ func TestSortedness(t *testing.T) {
 		t.Errorf("Unable to create tmp directory: %s", err)
 	}
 
+	endpoint1, err := parseStorageEndPoint(fsDir1, 0)
+	if err != nil {
+		t.Fatalf("Unexpected error %s", err)
+	}
+
 	// Create two StorageAPIs disk1.
-	disk1, err := newStorageAPI(fsDir1)
+	disk1, err := newStorageAPI(endpoint1)
 	if err != nil {
 		t.Errorf("Unable to create StorageAPI: %s", err)
 	}
@@ -533,8 +562,13 @@ func TestTreeWalkIsEnd(t *testing.T) {
 		t.Errorf("Unable to create tmp directory: %s", err)
 	}
 
+	endpoint1, err := parseStorageEndPoint(fsDir1, 0)
+	if err != nil {
+		t.Fatalf("Unexpected error %s", err)
+	}
+
 	// Create two StorageAPIs disk1.
-	disk1, err := newStorageAPI(fsDir1)
+	disk1, err := newStorageAPI(endpoint1)
 	if err != nil {
 		t.Errorf("Unable to create StorageAPI: %s", err)
 	}

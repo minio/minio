@@ -256,7 +256,7 @@ func checkDuplicateQueueConfigs(configs []queueConfig) APIErrorCode {
 	}
 
 	// Check if there are any duplicate counts.
-	if err := checkDuplicates(queueConfigARNS); err != nil {
+	if err := checkDuplicateStrings(queueConfigARNS); err != nil {
 		errorIf(err, "Invalid queue configs found.")
 		return ErrOverlappingConfigs
 	}

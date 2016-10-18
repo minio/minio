@@ -89,7 +89,7 @@ func TestCheckDuplicates(t *testing.T) {
 
 	// Validate if function runs as expected.
 	for i, test := range tests {
-		err := checkDuplicates(test.list)
+		err := checkDuplicateStrings(test.list)
 		if test.shouldPass && err != test.err {
 			t.Errorf("Test: %d, Expected %s got %s", i+1, test.err, err)
 		}
@@ -233,11 +233,11 @@ func TestLocalAddress(t *testing.T) {
 		{
 			srvCmdConfig: serverCmdConfig{
 				isDistXL: true,
-				disks: []string{
-					"localhost:/mnt/disk1",
-					"1.1.1.2:/mnt/disk2",
-					"1.1.2.1:/mnt/disk3",
-					"1.1.2.2:/mnt/disk4",
+				endPoints: []storageEndPoint{
+					{"localhost", 9000, "/mnt/disk1"},
+					{"1.1.1.2", 9000, "/mnt/disk2"},
+					{"1.1.2.1", 9000, "/mnt/disk3"},
+					{"1.1.2.2", 9000, "/mnt/disk4"},
 				},
 			},
 			localAddr: fmt.Sprintf("localhost:%d", globalMinioPort),
@@ -247,11 +247,11 @@ func TestLocalAddress(t *testing.T) {
 			srvCmdConfig: serverCmdConfig{
 				serverAddr: fmt.Sprintf(":%d", globalMinioPort),
 				isDistXL:   false,
-				disks: []string{
-					"/mnt/disk1",
-					"/mnt/disk2",
-					"/mnt/disk3",
-					"/mnt/disk4",
+				endPoints: []storageEndPoint{
+					{path: "/mnt/disk1"},
+					{path: "/mnt/disk2"},
+					{path: "/mnt/disk3"},
+					{path: "/mnt/disk4"},
 				},
 			},
 			localAddr: fmt.Sprintf(":%d", globalMinioPort),
@@ -260,11 +260,11 @@ func TestLocalAddress(t *testing.T) {
 		{
 			srvCmdConfig: serverCmdConfig{
 				isDistXL: true,
-				disks: []string{
-					"1.1.1.1:/mnt/disk1",
-					"1.1.1.2:/mnt/disk2",
-					"1.1.2.1:/mnt/disk3",
-					"1.1.2.2:/mnt/disk4",
+				endPoints: []storageEndPoint{
+					{"1.1.1.1", 9000, "/mnt/disk1"},
+					{"1.1.1.2", 9000, "/mnt/disk2"},
+					{"1.1.2.1", 9000, "/mnt/disk3"},
+					{"1.1.2.2", 9000, "/mnt/disk4"},
 				},
 			},
 			localAddr: "",
@@ -276,11 +276,11 @@ func TestLocalAddress(t *testing.T) {
 			srvCmdConfig: serverCmdConfig{
 				serverAddr: "play.minio.io:9000",
 				isDistXL:   false,
-				disks: []string{
-					"/mnt/disk1",
-					"/mnt/disk2",
-					"/mnt/disk3",
-					"/mnt/disk4",
+				endPoints: []storageEndPoint{
+					{path: "/mnt/disk1"},
+					{path: "/mnt/disk2"},
+					{path: "/mnt/disk3"},
+					{path: "/mnt/disk4"},
 				},
 			},
 			localAddr: "play.minio.io:9000",

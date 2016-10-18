@@ -61,7 +61,11 @@ func prepareFS() (ObjectLayer, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	obj, _, err := initObjectLayer(fsDirs, nil)
+	endpoints, err := parseStorageEndPoints(fsDirs, 0)
+	if err != nil {
+		return nil, "", err
+	}
+	obj, _, err := initObjectLayer(endpoints, nil)
 	if err != nil {
 		removeRoots(fsDirs)
 		return nil, "", err
@@ -75,7 +79,11 @@ func prepareXL() (ObjectLayer, []string, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	obj, _, err := initObjectLayer(fsDirs, nil)
+	endpoints, err := parseStorageEndPoints(fsDirs, 0)
+	if err != nil {
+		return nil, nil, err
+	}
+	obj, _, err := initObjectLayer(endpoints, nil)
 	if err != nil {
 		removeRoots(fsDirs)
 		return nil, nil, err
@@ -145,7 +153,7 @@ func isSameType(obj1, obj2 interface{}) bool {
 //   defer s.Stop()
 type TestServer struct {
 	Root      string
-	Disks     []string
+	Disks     []storageEndPoint
 	AccessKey string
 	SecretKey string
 	Server    *httptest.Server
@@ -174,17 +182,20 @@ func StartTestServer(t TestErrHandler, instanceType string) TestServer {
 	credentials := serverConfig.GetCredential()
 
 	testServer.Root = root
-	testServer.Disks = disks
+	testServer.Disks, err = parseStorageEndPoints(disks, 0)
+	if err != nil {
+		t.Fatalf("Unexpected error %s", err)
+	}
 	testServer.AccessKey = credentials.AccessKeyID
 	testServer.SecretKey = credentials.SecretAccessKey
 
-	objLayer, storageDisks, err := initObjectLayer(disks, nil)
+	objLayer, storageDisks, err := initObjectLayer(testServer.Disks, nil)
 	if err != nil {
 		t.Fatalf("Failed obtaining Temp Backend: <ERROR> %s", err)
 	}
 
 	srvCmdCfg := serverCmdConfig{
-		disks:        disks,
+		endPoints:    testServer.Disks,
 		storageDisks: storageDisks,
 	}
 	httpHandler, err := configureServerHandler(
@@ -214,7 +225,11 @@ func StartTestServer(t TestErrHandler, instanceType string) TestServer {
 		t.Fatal("Early setup error:", err)
 	}
 	globalMinioAddr = getLocalAddress(srvCmdCfg)
-	initGlobalS3Peers(disks)
+	endpoints, err := parseStorageEndPoints(disks, 0)
+	if err != nil {
+		t.Fatal("Early setup error:", err)
+	}
+	initGlobalS3Peers(endpoints)
 
 	return testServer
 }
@@ -236,6 +251,10 @@ func StartTestStorageRPCServer(t TestErrHandler, instanceType string, diskN int)
 	if err != nil {
 		t.Fatal("Failed to create disks for the backend")
 	}
+	endPoints, err := parseStorageEndPoints(disks, 0)
+	if err != nil {
+		t.Fatalf("%s", err)
+	}
 
 	root, err := newTestConfig("us-east-1")
 	if err != nil {
@@ -248,13 +267,13 @@ func StartTestStorageRPCServer(t TestErrHandler, instanceType string, diskN int)
 	credentials := serverConfig.GetCredential()
 
 	testRPCServer.Root = root
-	testRPCServer.Disks = disks
+	testRPCServer.Disks = endPoints
 	testRPCServer.AccessKey = credentials.AccessKeyID
 	testRPCServer.SecretKey = credentials.SecretAccessKey
 
 	// Run TestServer.
 	testRPCServer.Server = httptest.NewServer(initTestStorageRPCEndPoint(serverCmdConfig{
-		disks: disks,
+		endPoints: endPoints,
 	}))
 	return testRPCServer
 }
@@ -266,6 +285,10 @@ func StartTestPeersRPCServer(t TestErrHandler, instanceType string) TestServer {
 	disks, err := getRandomDisks(nDisks)
 	if err != nil {
 		t.Fatal("Failed to create disks for the backend")
+	}
+	endPoints, err := parseStorageEndPoints(disks, 0)
+	if err != nil {
+		t.Fatalf("%s", err)
 	}
 
 	root, err := newTestConfig("us-east-1")
@@ -279,12 +302,12 @@ func StartTestPeersRPCServer(t TestErrHandler, instanceType string) TestServer {
 	credentials := serverConfig.GetCredential()
 
 	testRPCServer.Root = root
-	testRPCServer.Disks = disks
+	testRPCServer.Disks = endPoints
 	testRPCServer.AccessKey = credentials.AccessKeyID
 	testRPCServer.SecretKey = credentials.SecretAccessKey
 
 	// create temporary backend for the test server.
-	objLayer, storageDisks, err := initObjectLayer(disks, nil)
+	objLayer, storageDisks, err := initObjectLayer(endPoints, nil)
 	if err != nil {
 		t.Fatalf("Failed obtaining Temp Backend: <ERROR> %s", err)
 	}
@@ -295,7 +318,7 @@ func StartTestPeersRPCServer(t TestErrHandler, instanceType string) TestServer {
 	globalObjLayerMutex.Unlock()
 
 	srvCfg := serverCmdConfig{
-		disks:        disks,
+		endPoints:    endPoints,
 		storageDisks: storageDisks,
 	}
 
@@ -335,6 +358,10 @@ func StartTestControlRPCServer(t TestErrHandler, instanceType string) TestServer
 	if err != nil {
 		t.Fatal("Failed to create disks for the backend")
 	}
+	endPoints, err := parseStorageEndPoints(disks, 0)
+	if err != nil {
+		t.Fatalf("%s", err)
+	}
 
 	root, err := newTestConfig("us-east-1")
 	if err != nil {
@@ -347,12 +374,12 @@ func StartTestControlRPCServer(t TestErrHandler, instanceType string) TestServer
 	credentials := serverConfig.GetCredential()
 
 	testRPCServer.Root = root
-	testRPCServer.Disks = disks
+	testRPCServer.Disks = endPoints
 	testRPCServer.AccessKey = credentials.AccessKeyID
 	testRPCServer.SecretKey = credentials.SecretAccessKey
 
 	// create temporary backend for the test server.
-	objLayer, storageDisks, err := initObjectLayer(disks, nil)
+	objLayer, storageDisks, err := initObjectLayer(endPoints, nil)
 	if err != nil {
 		t.Fatalf("Failed obtaining Temp Backend: <ERROR> %s", err)
 	}
@@ -401,7 +428,7 @@ func newTestConfig(bucketLocation string) (rootPath string, err error) {
 func (testServer TestServer) Stop() {
 	removeAll(testServer.Root)
 	for _, disk := range testServer.Disks {
-		removeAll(disk)
+		removeAll(disk.path)
 	}
 	testServer.Server.Close()
 }
@@ -1454,8 +1481,8 @@ func getRandomDisks(N int) ([]string, error) {
 }
 
 // initObjectLayer - Instantiates object layer and returns it.
-func initObjectLayer(disks []string, ignoredDisks []string) (ObjectLayer, []StorageAPI, error) {
-	storageDisks, err := initStorageDisks(disks, ignoredDisks)
+func initObjectLayer(endPoints []storageEndPoint, ignoredEndPoints []storageEndPoint) (ObjectLayer, []StorageAPI, error) {
+	storageDisks, err := initStorageDisks(endPoints, ignoredEndPoints)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1531,7 +1558,12 @@ func prepareXLStorageDisks(t *testing.T) ([]StorageAPI, []string) {
 	if err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
-	_, storageDisks, err := initObjectLayer(fsDirs, nil)
+	endpoints, err := parseStorageEndPoints(fsDirs, 0)
+	if err != nil {
+		t.Fatal("Unexpected error: ", err)
+	}
+
+	_, storageDisks, err := initObjectLayer(endpoints, nil)
 	if err != nil {
 		removeRoots(fsDirs)
 		t.Fatal("Unable to initialize storage disks", err)
@@ -1815,7 +1847,11 @@ func ExecObjectLayerStaleFilesTest(t *testing.T, objTest objTestStaleFilesType) 
 	if err != nil {
 		t.Fatalf("Initialization of disks for XL setup: %s", err)
 	}
-	objLayer, _, err := initObjectLayer(erasureDisks, nil)
+	endpoints, err := parseStorageEndPoints(erasureDisks, 0)
+	if err != nil {
+		t.Fatalf("Initialization of disks for XL setup: %s", err)
+	}
+	objLayer, _, err := initObjectLayer(endpoints, nil)
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for XL setup: %s", err)
 	}

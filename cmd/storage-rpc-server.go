@@ -21,11 +21,9 @@ import (
 	"io"
 	"net/rpc"
 	"path"
-	"strings"
 	"time"
 
 	router "github.com/gorilla/mux"
-	"github.com/minio/minio-go/pkg/set"
 	"github.com/minio/minio/pkg/disk"
 )
 
@@ -220,36 +218,20 @@ func (s *storageServer) TryInitHandler(args *GenericArgs, reply *GenericReply) e
 
 // Initialize new storage rpc.
 func newRPCServer(serverConfig serverCmdConfig) (servers []*storageServer, err error) {
-	// Initialize posix storage API.
-	exports := serverConfig.disks
-	ignoredExports := serverConfig.ignoredDisks
-
-	// Initialize ignored disks in a new set.
-	ignoredSet := set.NewStringSet()
-	if len(ignoredExports) > 0 {
-		ignoredSet = set.CreateStringSet(ignoredExports...)
-	}
-	for _, export := range exports {
-		if ignoredSet.Contains(export) {
-			// Ignore initializing ignored export.
+	for _, ep := range serverConfig.endPoints {
+		if ep.presentIn(serverConfig.ignoredEndPoints) {
+			// Do not init ignored end point.
 			continue
 		}
 		// e.g server:/mnt/disk1
-		if isLocalStorage(export) {
-			if idx := strings.LastIndex(export, ":"); idx != -1 {
-				export = export[idx+1:]
-			}
-			var storage StorageAPI
-			storage, err = newPosix(export)
+		if isLocalStorage(ep) {
+			storage, err := newPosix(ep.path)
 			if err != nil && err != errDiskNotFound {
 				return nil, err
 			}
-			if idx := strings.LastIndex(export, ":"); idx != -1 {
-				export = export[idx+1:]
-			}
 			servers = append(servers, &storageServer{
 				storage: storage,
-				path:    export,
+				path:    ep.path,
 			})
 		}
 	}

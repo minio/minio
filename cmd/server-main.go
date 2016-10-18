@@ -17,13 +17,17 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
+
+	"regexp"
 
 	"github.com/minio/cli"
 )
@@ -96,11 +100,118 @@ EXAMPLES:
 }
 
 type serverCmdConfig struct {
-	serverAddr   string
-	disks        []string
-	ignoredDisks []string
-	isDistXL     bool // True only if its distributed XL.
-	storageDisks []StorageAPI
+	serverAddr       string
+	endPoints        []storageEndPoint
+	ignoredEndPoints []storageEndPoint
+	isDistXL         bool // True only if its distributed XL.
+	storageDisks     []StorageAPI
+}
+
+// End point is specified in the command line as host:port:path or host:path or path
+// host:port:path or host:path - for distributed XL. Default port is 9000.
+// just path - for single node XL or FS.
+type storageEndPoint struct {
+	host string // Will be empty for single node XL and FS
+	port int    // Will be valid for distributed XL
+	path string // Will be valid for all configs
+}
+
+// Returns string form.
+func (ep storageEndPoint) String() string {
+	var str []string
+	if ep.host != "" {
+		str = append(str, ep.host)
+	}
+	if ep.port != 0 {
+		str = append(str, strconv.Itoa(ep.port))
+	}
+	if ep.path != "" {
+		str = append(str, ep.path)
+	}
+	return strings.Join(str, ":")
+}
+
+// Returns if ep is present in the eps list.
+func (ep storageEndPoint) presentIn(eps []storageEndPoint) bool {
+	for _, entry := range eps {
+		if entry == ep {
+			return true
+		}
+	}
+	return false
+}
+
+// Parse end-point (of the form host:port:path or host:path or path)
+func parseStorageEndPoint(ep string, defaultPort int) (storageEndPoint, error) {
+	if runtime.GOOS == "windows" {
+		// Try to match path, ex. C:\export
+		matched, err := regexp.MatchString(`^[a-zA-Z]:\\[^:]+$`, ep)
+		if err != nil {
+			return storageEndPoint{}, err
+		}
+		if matched {
+			return storageEndPoint{path: ep}, nil
+		}
+
+		// Try to match host:path ex. 127.0.0.1:C:\export
+		re, err := regexp.Compile(`^([^:]+):([a-zA-Z]:\\[^:]+)$`)
+		if err != nil {
+			return storageEndPoint{}, err
+		}
+		result := re.FindStringSubmatch(ep)
+		if len(result) != 0 {
+			return storageEndPoint{host: result[1], port: defaultPort, path: result[2]}, nil
+		}
+
+		// Try to match host:port:path ex. 127.0.0.1:443:C:\export
+		re, err = regexp.Compile(`^([^:]+):([0-9]+):([a-zA-Z]:\\[^:]+)$`)
+		if err != nil {
+			return storageEndPoint{}, err
+		}
+		result = re.FindStringSubmatch(ep)
+		if len(result) != 0 {
+			portInt, err := strconv.Atoi(result[2])
+			if err != nil {
+				return storageEndPoint{}, err
+			}
+			return storageEndPoint{host: result[1], port: portInt, path: result[3]}, nil
+		}
+		return storageEndPoint{}, errors.New("Unable to parse endpoint " + ep)
+	}
+	// For *nix OSes
+	parts := strings.Split(ep, ":")
+	var parsedep storageEndPoint
+	switch len(parts) {
+	case 1:
+		parsedep = storageEndPoint{path: parts[0]}
+	case 2:
+		parsedep = storageEndPoint{host: parts[0], port: defaultPort, path: parts[1]}
+	case 3:
+		port, err := strconv.Atoi(parts[1])
+		if err != nil {
+			return storageEndPoint{}, err
+		}
+		parsedep = storageEndPoint{host: parts[0], port: port, path: parts[2]}
+	default:
+		return storageEndPoint{}, errors.New("Unable to parse " + ep)
+	}
+	return parsedep, nil
+}
+
+// Parse an array of end-points (passed on the command line)
+func parseStorageEndPoints(eps []string, defaultPort int) (endpoints []storageEndPoint, err error) {
+	for _, ep := range eps {
+		if ep == "" {
+			continue
+		}
+		var endpoint storageEndPoint
+		endpoint, err = parseStorageEndPoint(ep, defaultPort)
+		if err != nil {
+			return nil, err
+		}
+		endpoints = append(endpoints, endpoint)
+	}
+	return endpoints, nil
 }
 
 // getListenIPs - gets all the ips to listen on.
@@ -194,13 +305,13 @@ func initServerConfig(c *cli.Context) {
 }
 
 // Validate if input disks are sufficient for initializing XL.
-func checkSufficientDisks(disks []string) error {
+func checkSufficientDisks(eps []storageEndPoint) error {
 	// Verify total number of disks.
-	totalDisks := len(disks)
-	if totalDisks > maxErasureBlocks {
+	total := len(eps)
+	if total > maxErasureBlocks {
 		return errXLMaxDisks
 	}
-	if totalDisks < minErasureBlocks {
+	if total < minErasureBlocks {
 		return errXLMinDisks
 	}
 
@@ -211,7 +322,7 @@ func checkSufficientDisks(disks []string) error {
 
 	// Verify if we have even number of disks.
 	// only combination of 4, 6, 8, 10, 12, 14, 16 are supported.
-	if !isEven(totalDisks) {
+	if !isEven(total) {
 		return errXLNumDisks
 	}
 
@@ -219,36 +330,19 @@ func checkSufficientDisks(disks []string) error {
 	return nil
 }
 
-// Validates if disks are of supported format, invalid arguments are rejected.
-func checkNamingDisks(disks []string) error {
-	for _, disk := range disks {
-		_, _, err := splitNetPath(disk)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // Validate input disks.
-func validateDisks(disks []string, ignoredDisks []string) []StorageAPI {
-	isXL := len(disks) > 1
+func validateDisks(endPoints []storageEndPoint, ignoredEndPoints []storageEndPoint) []StorageAPI {
+	isXL := len(endPoints) > 1
 	if isXL {
 		// Validate if input disks have duplicates in them.
-		err := checkDuplicates(disks)
+		err := checkDuplicateEndPoints(endPoints)
 		fatalIf(err, "Invalid disk arguments for server.")
 
 		// Validate if input disks are sufficient for erasure coded setup.
-		err = checkSufficientDisks(disks)
-		fatalIf(err, "Invalid disk arguments for server.")
-
-		// Validate if input disks are properly named in accordance with either
-		//  - /mnt/disk1
-		//  - ip:/mnt/disk1
-		err = checkNamingDisks(disks)
+		err = checkSufficientDisks(endPoints)
 		fatalIf(err, "Invalid disk arguments for server.")
 	}
-	storageDisks, err := initStorageDisks(disks, ignoredDisks)
+	storageDisks, err := initStorageDisks(endPoints, ignoredEndPoints)
 	fatalIf(err, "Unable to initialize storage disks.")
 	return storageDisks
 }
@@ -273,10 +367,10 @@ func getPort(address string) int {
 }
 
 // Returns if slice of disks is a distributed setup.
-func isDistributedSetup(disks []string) (isDist bool) {
+func isDistributedSetup(eps []storageEndPoint) (isDist bool) {
 	// Port to connect to for the lock servers in a distributed setup.
-	for _, disk := range disks {
-		if !isLocalStorage(disk) {
+	for _, ep := range eps {
+		if !isLocalStorage(ep) {
 			// One or more disks supplied as arguments are not
 			// attached to the local node.
 			isDist = true
@@ -295,17 +389,25 @@ func serverMain(c *cli.Context) {
 	serverAddr := c.String("address")
 
 	// Check if requested port is available.
-	port := getPort(serverAddr)
-	fatalIf(checkPortAvailability(port), "Port unavailable %d", port)
+	host, portStr, err := net.SplitHostPort(serverAddr)
+	fatalIf(err, "Unable to parse %s.", serverAddr)
 
-	// Saves port in a globally accessible value.
-	globalMinioPort = port
+	portInt, err := strconv.Atoi(portStr)
+	fatalIf(err, "Invalid port number.")
+
+	fatalIf(checkPortAvailability(portInt), "Port unavailable %d", portInt)
+
+	// Saves host and port in a globally accessible value.
+	globalMinioPort = portInt
+	globalMinioHost = host
 
 	// Disks to be ignored in server init, to skip format healing.
-	ignoredDisks := strings.Split(c.String("ignore-disks"), ",")
+	ignoredDisks, err := parseStorageEndPoints(strings.Split(c.String("ignore-disks"), ","), portInt)
+	fatalIf(err, "Unable to parse storage endpoints %s", strings.Split(c.String("ignore-disks"), ","))
 
 	// Disks to be used in server init.
-	disks := c.Args()
+	disks, err := parseStorageEndPoints(c.Args(), portInt)
+	fatalIf(err, "Unable to parse storage endpoints %s", c.Args())
 
 	// Initialize server config.
 	initServerConfig(c)
@@ -324,11 +426,11 @@ func serverMain(c *cli.Context) {
 
 	// Configure server.
 	srvConfig := serverCmdConfig{
-		serverAddr:   serverAddr,
-		disks:        disks,
-		ignoredDisks: ignoredDisks,
-		storageDisks: storageDisks,
-		isDistXL:     isDistributedSetup(disks),
+		serverAddr:       serverAddr,
+		endPoints:        disks,
+		ignoredEndPoints: ignoredDisks,
+		storageDisks:     storageDisks,
+		isDistXL:         isDistributedSetup(disks),
 	}
 
 	// Configure server.
@@ -337,7 +439,7 @@ func serverMain(c *cli.Context) {
 
 	// Set nodes for dsync for distributed setup.
 	if srvConfig.isDistXL {
-		fatalIf(initDsyncNodes(disks, port), "Unable to initialize distributed locking")
+		fatalIf(initDsyncNodes(disks), "Unable to initialize distributed locking")
 	}
 
 	// Initialize name space lock.

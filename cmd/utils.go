@@ -46,7 +46,7 @@ func cloneHeader(h http.Header) http.Header {
 }
 
 // checkDuplicates - function to validate if there are duplicates in a slice of strings.
-func checkDuplicates(list []string) error {
+func checkDuplicateStrings(list []string) error {
 	// Empty lists are not allowed.
 	if len(list) == 0 {
 		return errInvalidArgument
@@ -70,6 +70,15 @@ func checkDuplicates(list []string) error {
 	}
 	// No duplicates.
 	return nil
+}
+
+// checkDuplicates - function to validate if there are duplicates in a slice of endPoints.
+func checkDuplicateEndPoints(list []storageEndPoint) error {
+	var strs []string
+	for _, ep := range list {
+		strs = append(strs, ep.String())
+	}
+	return checkDuplicateStrings(strs)
 }
 
 // splits network path into its components Address and Path.
@@ -99,14 +108,10 @@ func getLocalAddress(srvCmdConfig serverCmdConfig) string {
 	if !srvCmdConfig.isDistXL {
 		return srvCmdConfig.serverAddr
 	}
-	for _, export := range srvCmdConfig.disks {
+	for _, ep := range srvCmdConfig.endPoints {
 		// Validates if remote disk is local.
-		if isLocalStorage(export) {
-			var host string
-			if idx := strings.LastIndex(export, ":"); idx != -1 {
-				host = export[:idx]
-			}
-			return fmt.Sprintf("%s:%d", host, globalMinioPort)
+		if isLocalStorage(ep) {
+			return fmt.Sprintf("%s:%d", ep.host, ep.port)
 		}
 	}
 	return ""

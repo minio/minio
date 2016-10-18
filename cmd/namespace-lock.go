@@ -21,7 +21,6 @@ import (
 	pathutil "path"
 	"runtime"
 	"strconv"
-	"strings"
 	"sync"
 
 	"github.com/minio/dsync"
@@ -32,27 +31,27 @@ var nsMutex *nsLockMap
 
 // Initialize distributed locking only in case of distributed setup.
 // Returns if the setup is distributed or not on success.
-func initDsyncNodes(disks []string, port int) error {
-	serverPort := strconv.Itoa(port)
+func initDsyncNodes(eps []storageEndPoint) error {
 	cred := serverConfig.GetCredential()
 	// Initialize rpc lock client information only if this instance is a distributed setup.
 	var clnts []dsync.RPC
 	myNode := -1
-	for _, disk := range disks {
-		if idx := strings.LastIndex(disk, ":"); idx != -1 {
-			clnts = append(clnts, newAuthClient(&authConfig{
-				accessKey: cred.AccessKeyID,
-				secretKey: cred.SecretAccessKey,
-				// Construct a new dsync server addr.
-				secureConn: isSSL(),
-				address:    disk[:idx] + ":" + serverPort,
-				// Construct a new rpc path for the disk.
-				path:        pathutil.Join(lockRPCPath, disk[idx+1:]),
-				loginMethod: "Dsync.LoginHandler",
-			}))
-			if isLocalStorage(disk) && myNode == -1 {
-				myNode = len(clnts) - 1
-			}
+	for _, ep := range eps {
+		if ep.host == "" || ep.port == 0 || ep.path == "" {
+			return errInvalidArgument
+		}
+		clnts = append(clnts, newAuthClient(&authConfig{
+			accessKey: cred.AccessKeyID,
+			secretKey: cred.SecretAccessKey,
+			// Construct a new dsync server addr.
+			secureConn: isSSL(),
+			address:    ep.host + ":" + strconv.Itoa(ep.port),
+			// Construct a new rpc path for the endpoint.
+			path:        pathutil.Join(lockRPCPath, ep.path),
+			loginMethod: "Dsync.LoginHandler",
+		}))
+		if isLocalStorage(ep) && myNode == -1 {
+			myNode = len(clnts) - 1
 		}
 	}
 	return dsync.SetNodesWithClients(clnts, myNode)

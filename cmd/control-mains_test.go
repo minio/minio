@@ -73,7 +73,7 @@ func TestControlHealMain(t *testing.T) {
 	}
 
 	// Remove the object - to simulate the case where the disk was down when the object was created.
-	err = os.RemoveAll(path.Join(testServer.Disks[0], bucket, object))
+	err = os.RemoveAll(path.Join(testServer.Disks[0].path, bucket, object))
 	if err != nil {
 		t.Fatal(err)
 	}

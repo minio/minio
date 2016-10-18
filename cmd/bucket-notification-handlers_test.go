@@ -197,7 +197,7 @@ func testListenBucketNotificationHandler(obj ObjectLayer, instanceType string, t
 	}
 	globalMinioAddr = fmt.Sprintf(":%d", globalMinioPort)
 	// initialize the peer client(s)
-	initGlobalS3Peers([]string{})
+	initGlobalS3Peers([]storageEndPoint{})
 
 	invalidBucket := "Invalid\\Bucket"
 	noNotificationBucket := "nonotificationbucket"
