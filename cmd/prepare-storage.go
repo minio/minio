@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"github.com/minio/mc/pkg/console"
-	"github.com/minio/minio-go/pkg/set"
 )
 
 // Channel where minioctl heal handler would notify if it were successful. This
@@ -250,7 +249,7 @@ func retryFormattingDisks(firstDisk bool, firstEndpoint string, storageDisks []S
 }
 
 // Initialize storage disks based on input arguments.
-func initStorageDisks(disks, ignoredDisks []string) ([]StorageAPI, error) {
+func initStorageDisks(disks, ignoredDisks []storageEndPoint) ([]StorageAPI, error) {
 	// Single disk means we will use FS backend.
 	if len(disks) == 1 {
 		storage, err := newStorageAPI(disks[0])
@@ -258,19 +257,24 @@ func initStorageDisks(disks, ignoredDisks []string) ([]StorageAPI, error) {
 			return nil, err
 		}
 		return []StorageAPI{storage}, nil
-	} // Otherwise proceed with XL setup.
+	}
+	// Otherwise proceed with XL setup.
+	// FIXME: this check is already done by validateDisks() hence redundant.
 	if err := checkSufficientDisks(disks); err != nil {
 		return nil, err
-	}
-	disksSet := set.NewStringSet()
-	if len(ignoredDisks) > 0 {
-		disksSet = set.CreateStringSet(ignoredDisks...)
 	}
 	// Bootstrap disks.
 	storageDisks := make([]StorageAPI, len(disks))
 	for index, disk := range disks {
 		// Check if disk is ignored.
-		if disksSet.Contains(disk) {
+		ignored := false
+		for _, ignoredDisk := range ignoredDisks {
+			if disk == ignoredDisk {
+				ignored = true
+				break
+			}
+		}
+		if ignored {
 			// Set this situation as disk not found.
 			storageDisks[index] = nil
 			continue

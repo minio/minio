@@ -24,8 +24,6 @@ import (
 	"net"
 	"net/rpc"
 	"runtime"
-	"strconv"
-	"strings"
 	"testing"
 )
 
@@ -144,14 +142,11 @@ type TestRPCStorageSuite struct {
 // Starting the Test server with temporary FS backend.
 func (s *TestRPCStorageSuite) SetUpSuite(c *testing.T) {
 	s.testServer = StartTestStorageRPCServer(c, s.serverType, 1)
-	splitAddrs := strings.Split(s.testServer.Server.Listener.Addr().String(), ":")
-	var err error
-	globalMinioPort, err = strconv.Atoi(splitAddrs[1])
-	if err != nil {
-		c.Fatalf("Unable to convert %s to its integer representation, %s", splitAddrs[1], err)
-	}
+	listenAddress := s.testServer.Server.Listener.Addr().String()
+
 	for _, disk := range s.testServer.Disks {
-		storageDisk, err := newRPCClient(splitAddrs[0] + ":" + disk)
+		remoteEndPoint := parseStorageEndPoint(listenAddress+":"+disk.path, 0)
+		storageDisk, err := newRPCClient(remoteEndPoint)
 		if err != nil {
 			c.Fatal("Unable to initialize RPC client", err)
 		}

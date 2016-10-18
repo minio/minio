@@ -21,12 +21,10 @@ import (
 	"math/rand"
 	"net/rpc"
 	"path"
-	"strings"
 	"sync"
 	"time"
 
 	router "github.com/gorilla/mux"
-	"github.com/minio/minio-go/pkg/set"
 )
 
 const lockRPCPath = "/minio/lock"
@@ -88,14 +86,15 @@ func newLockServers(serverConfig serverCmdConfig) (lockServers []*lockServer) {
 	exports := serverConfig.disks
 	ignoredExports := serverConfig.ignoredDisks
 
-	// Save ignored disks in a map
-	// Initialize ignored disks in a new set.
-	ignoredSet := set.NewStringSet()
-	if len(ignoredExports) > 0 {
-		ignoredSet = set.CreateStringSet(ignoredExports...)
-	}
 	for _, export := range exports {
-		if ignoredSet.Contains(export) {
+		ignored := false
+		for _, ignoredDisk := range ignoredExports {
+			if ignoredDisk == export {
+				ignored = true
+				break
+			}
+		}
+		if ignored {
 			// Ignore initializing ignored export.
 			continue
 		}
@@ -103,12 +102,9 @@ func newLockServers(serverConfig serverCmdConfig) (lockServers []*lockServer) {
 		if !isLocalStorage(export) {
 			continue
 		}
-		if idx := strings.LastIndex(export, ":"); idx != -1 {
-			export = export[idx+1:]
-		}
 		// Create handler for lock RPCs
 		locker := &lockServer{
-			rpcPath: export,
+			rpcPath: export.path,
 			mutex:   sync.Mutex{},
 			lockMap: make(map[string][]lockRequesterInfo),
 		}

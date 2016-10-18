@@ -20,10 +20,8 @@ import (
 	"fmt"
 	"net/rpc"
 	"path"
-	"strings"
 
 	router "github.com/gorilla/mux"
-	"github.com/minio/minio-go/pkg/set"
 )
 
 // Routes paths for "minio control" commands.
@@ -36,32 +34,26 @@ func initRemoteControlClients(srvCmdConfig serverCmdConfig) []*AuthRPCClient {
 	if !srvCmdConfig.isDistXL {
 		return nil
 	}
-	var newExports []string
 	// Initialize auth rpc clients.
-	exports := srvCmdConfig.disks
-	remoteHosts := set.NewStringSet()
-
 	var remoteControlClnts []*AuthRPCClient
-	for _, export := range exports {
+	localMap := make(map[storageEndPoint]int)
+	for _, disk := range srvCmdConfig.disks {
+		// Set path to "" so that it is not used for filtering the
+		// unique entries.
+		disk.path = ""
 		// Validates if remote disk is local.
-		if isLocalStorage(export) {
+		if isLocalStorage(disk) {
 			continue
 		}
-		newExports = append(newExports, export)
-	}
-	for _, export := range newExports {
-		var host string
-		if idx := strings.LastIndex(export, ":"); idx != -1 {
-			host = export[:idx]
+		if localMap[disk] == 1 {
+			continue
 		}
-		remoteHosts.Add(fmt.Sprintf("%s:%d", host, globalMinioPort))
-	}
-	for host := range remoteHosts {
+		localMap[disk]++
 		remoteControlClnts = append(remoteControlClnts, newAuthClient(&authConfig{
 			accessKey:   serverConfig.GetCredential().AccessKeyID,
 			secretKey:   serverConfig.GetCredential().SecretAccessKey,
 			secureConn:  isSSL(),
-			address:     host,
+			address:     fmt.Sprintf("%s:%d", disk.host, disk.port),
 			path:        path.Join(reservedBucket, controlPath),
 			loginMethod: "Control.LoginHandler",
 		}))

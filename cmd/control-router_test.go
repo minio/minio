@@ -41,11 +41,11 @@ func TestInitRemoteControlClients(t *testing.T) {
 		{
 			srvCmdConfig: serverCmdConfig{
 				isDistXL: true,
-				disks: []string{
-					"10.1.10.1:/mnt/disk1",
-					"10.1.10.1:/mnt/disk2",
-					"10.1.10.2:/mnt/disk3",
-					"10.1.10.2:/mnt/disk4",
+				disks: []storageEndPoint{
+					{"10.1.10.1", 9000, "/mnt/disk1"},
+					{"10.1.10.1", 9000, "/mnt/disk2"},
+					{"10.1.10.2", 9000, "/mnt/disk1"},
+					{"10.1.10.2", 9000, "/mnt/disk2"},
 				},
 			},
 			totalClients: 2,
@@ -54,11 +54,11 @@ func TestInitRemoteControlClients(t *testing.T) {
 		{
 			srvCmdConfig: serverCmdConfig{
 				isDistXL: true,
-				disks: []string{
-					"10.1.10.1:/mnt/disk1",
-					"10.1.10.2:/mnt/disk2",
-					"10.1.10.3:/mnt/disk3",
-					"10.1.10.4:/mnt/disk4",
+				disks: []storageEndPoint{
+					{"10.1.10.1", 9000, "/mnt/disk1"},
+					{"10.1.10.2", 9000, "/mnt/disk2"},
+					{"10.1.10.3", 9000, "/mnt/disk3"},
+					{"10.1.10.4", 9000, "/mnt/disk4"},
 				},
 			},
 			totalClients: 4,
