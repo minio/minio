@@ -19,6 +19,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"net/rpc"
 	"path"
 	"sync"
 	"time"
@@ -143,44 +144,48 @@ func (s3p *s3Peers) SendRPC(peers []string, method string, args interface {
 	SetToken(token string)
 	SetTimestamp(tstamp time.Time)
 }) map[string]error {
-	// Result type
-	type callResult struct {
-		target string
-		err    error
+
+	// peer error responses array
+	errArr := make([]error, len(peers))
+
+	// Start a wait group and make RPC requests to peers.
+	var wg sync.WaitGroup
+	for i, target := range peers {
+		wg.Add(1)
+		go func(ix int, target string) {
+			defer wg.Done()
+			reply := &GenericReply{}
+			// Get RPC client object safely.
+			client := s3p.GetPeerClient(target)
+			var err error
+			if client == nil {
+				err = fmt.Errorf("Requested client was not initialized - %v",
+					target)
+			} else {
+				err = client.Call(method, args, reply)
+				// Check for network errors and try
+				// again just once.
+				if err != nil {
+					if err.Error() == rpc.ErrShutdown.Error() {
+						err = client.Call(method, args, reply)
+					}
+				}
+			}
+			errArr[ix] = err
+		}(i, target)
 	}
 
-	// Channel to collect results from goroutines
-	resChan := make(chan callResult)
-
-	// Closure to make a single request.
-	callTarget := func(target string) {
-		reply := &GenericReply{}
-		client := s3p.GetPeerClient(target)
-		var err error
-		if client == nil {
-			err = fmt.Errorf("Requested client was not initialized - %v",
-				target)
-		} else {
-			err = client.Call(method, args, reply)
-		}
-		resChan <- callResult{target, err}
-	}
+	// Wait for requests to complete.
+	wg.Wait()
 
 	// Map of errors
 	errsMap := make(map[string]error)
-	// make network calls in parallel
-	for _, target := range peers {
-		go callTarget(target)
-	}
-	// Wait on channel and collect all results
-	for range peers {
-		res := <-resChan
-		if res.err != nil {
-			errsMap[res.target] = res.err
+	for i, errVal := range errArr {
+		if errVal != nil {
+			errsMap[peers[i]] = errVal
 		}
 	}
 
-	// Return errors map
 	return errsMap
 }
 

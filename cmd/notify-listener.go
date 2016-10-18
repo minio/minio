@@ -19,12 +19,13 @@ package cmd
 import (
 	"fmt"
 	"io/ioutil"
+	"net/rpc"
 
 	"github.com/Sirupsen/logrus"
 )
 
 type listenerConn struct {
-	Client      *AuthRPCClient
+	TargetAddr  string
 	ListenerARN string
 }
 
@@ -34,13 +35,14 @@ type listenerLogger struct {
 }
 
 func newListenerLogger(listenerArn, targetAddr string) (*listenerLogger, error) {
-	client := globalS3Peers.GetPeerClient(targetAddr)
-	if client == nil {
-		return nil, fmt.Errorf("Peer %s was not initialized - bug!",
-			targetAddr)
+	if globalS3Peers.GetPeerClient(targetAddr) == nil {
+		return nil, fmt.Errorf(
+			"Peer %s was not initialized - bug!",
+			targetAddr,
+		)
 	}
 	lc := listenerConn{
-		Client:      client,
+		TargetAddr:  targetAddr,
 		ListenerARN: listenerArn,
 	}
 
@@ -64,9 +66,23 @@ func (lc listenerConn) Fire(entry *logrus.Entry) error {
 		return nil
 	}
 
-	evArgs := EventArgs{Event: notificationEvent, Arn: lc.ListenerARN}
+	// Fetch peer client object
+	client := globalS3Peers.GetPeerClient(lc.TargetAddr)
+	if client == nil {
+		return fmt.Errorf("Target %s client RPC object not available!", lc.TargetAddr)
+	}
+
+	// Send Event RPC call and return error
+	arg := EventArgs{Event: notificationEvent, Arn: lc.ListenerARN}
 	reply := GenericReply{}
-	err := lc.Client.Call("S3.Event", &evArgs, &reply)
+	err := client.Call("S3.Event", &arg, &reply)
+
+	// In case connection is shutdown, retry once.
+	if err != nil {
+		if err.Error() == rpc.ErrShutdown.Error() {
+			err = client.Call("S3.Event", &arg, &reply)
+		}
+	}
 	return err
 }
 
