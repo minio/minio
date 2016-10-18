@@ -87,6 +87,7 @@ func (s3p *s3Peers) InitS3PeerClient(peer string) {
 		accessKey:   serverConfig.GetCredential().AccessKeyID,
 		secretKey:   serverConfig.GetCredential().SecretAccessKey,
 		address:     peer,
+		secureConn:  isSSL(),
 		path:        path.Join(reservedBucket, s3Path),
 		loginMethod: "S3.LoginHandler",
 	}
