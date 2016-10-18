@@ -19,6 +19,7 @@ package cmd
 import (
 	"bufio"
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"io"
 	"net"
@@ -83,6 +84,11 @@ func (rpcClient *RPCClient) dialRPCClient() (*rpc.Client, error) {
 		conn, err = net.DialTimeout("tcp", rpcClient.node, 3*time.Second)
 	}
 	if err != nil {
+		// Print RPC connection errors that are worthy to display in log
+		switch err.(type) {
+		case x509.HostnameError:
+			errorIf(err, "Unable to establish RPC to %s", rpcClient.node)
+		}
 		return nil, err
 	}
 	io.WriteString(conn, "CONNECT "+rpcClient.rpcPath+" HTTP/1.0\n\n")
