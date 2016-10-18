@@ -245,3 +245,26 @@ func (n *nsLockMap) RUnlock(volume, path, opsID string) {
 	readLock := true
 	n.unlock(volume, path, opsID, readLock)
 }
+
+// ForceUnlock - forcefully unlock a lock based on name.
+func (n *nsLockMap) ForceUnlock(volume, path string) {
+	n.lockMapMutex.Lock()
+	defer n.lockMapMutex.Unlock()
+
+	if n.isDist { // For distributed mode, broadcast ForceUnlock message.
+		dsync.NewDRWMutex(pathutil.Join(volume, path)).ForceUnlock()
+	}
+
+	param := nsParam{volume, path}
+	if _, found := n.lockMap[param]; found {
+		// Remove lock from the map.
+		delete(n.lockMap, param)
+
+		// delete the lock state entry for given
+		// <volume, path> pair.
+		err := n.deleteLockInfoEntryForVolumePath(param)
+		if err != nil {
+			errorIf(err, "Failed to delete lock info entry.")
+		}
+	}
+}
