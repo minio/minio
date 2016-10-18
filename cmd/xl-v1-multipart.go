@@ -386,8 +386,6 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	tmpSuffix := getUUID()
 	tmpPartPath := path.Join(tmpMetaPrefix, tmpSuffix)
 
-	lreader := data
-
 	// Initialize md5 writer.
 	md5Writer := md5.New()
 
@@ -401,12 +399,16 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 
 	mw := io.MultiWriter(writers...)
 
+	var lreader io.Reader
 	// Limit the reader to its provided size > 0.
 	if size > 0 {
 		// This is done so that we can avoid erroneous clients sending
 		// more data than the set content size.
 		lreader = io.LimitReader(data, size)
-	} // else we read till EOF.
+	} else {
+		// else we read till EOF.
+		lreader = data
+	}
 
 	// Construct a tee reader for md5sum.
 	teeReader := io.TeeReader(lreader, mw)

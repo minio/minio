@@ -187,10 +187,7 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 				checkSums[index] = ""
 				continue
 			}
-			ckSumInfo, err := metaArr[index].Erasure.GetCheckSumInfo(partName)
-			if err != nil { // FIXME - relook at returning error here.
-				return toObjectErr(err, bucket, object)
-			}
+			ckSumInfo := metaArr[index].Erasure.GetCheckSumInfo(partName)
 			checkSums[index] = ckSumInfo.Hash
 			// Set checksum algo only once, while it is possible to have
 			// different algos per block because of our `xl.json`.

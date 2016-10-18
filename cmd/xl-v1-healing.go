@@ -171,10 +171,7 @@ func (xl xlObjects) HealObject(bucket, object string) error {
 		partName := latestMeta.Parts[partIndex].Name
 		partSize := latestMeta.Parts[partIndex].Size
 		erasure := latestMeta.Erasure
-		sumInfo, err := latestMeta.Erasure.GetCheckSumInfo(partName)
-		if err != nil {
-			return err
-		}
+		sumInfo := latestMeta.Erasure.GetCheckSumInfo(partName)
 		// Heal the part file.
 		checkSums, err := erasureHealFile(latestDisks, outDatedDisks,
 			bucket, pathJoin(object, partName),
