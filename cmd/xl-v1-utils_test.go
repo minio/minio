@@ -209,7 +209,7 @@ func compareXLMetaV1(t *testing.T, unMarshalXLMeta, gjsonXLMeta xlMetaV1) {
 	if unMarshalXLMeta.Stat.Size != gjsonXLMeta.Stat.Size {
 		t.Errorf("Expected the stat size to be %v, but got %v.", unMarshalXLMeta.Stat.Size, gjsonXLMeta.Stat.Size)
 	}
-	if unMarshalXLMeta.Stat.ModTime != gjsonXLMeta.Stat.ModTime {
+	if !unMarshalXLMeta.Stat.ModTime.Equal(gjsonXLMeta.Stat.ModTime) {
 		t.Errorf("Expected the modTime to be \"%v\", but got \"%v\".", unMarshalXLMeta.Stat.ModTime, gjsonXLMeta.Stat.ModTime)
 	}
 	if unMarshalXLMeta.Erasure.Algorithm != gjsonXLMeta.Erasure.Algorithm {

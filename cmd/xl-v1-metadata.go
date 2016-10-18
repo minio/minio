@@ -81,14 +81,14 @@ func (e *erasureInfo) AddCheckSumInfo(ckSumInfo checkSumInfo) {
 }
 
 // GetCheckSumInfo - get checksum of a part.
-func (e erasureInfo) GetCheckSumInfo(partName string) (ckSum checkSumInfo, err error) {
+func (e erasureInfo) GetCheckSumInfo(partName string) (ckSum checkSumInfo) {
 	// Return the checksum.
 	for _, sum := range e.Checksum {
 		if sum.Name == partName {
-			return sum, nil
+			return sum
 		}
 	}
-	return checkSumInfo{}, traceError(errUnexpected)
+	return checkSumInfo{Algorithm: bitRotAlgo}
 }
 
 // statInfo - carries stat information of the object.
@@ -197,7 +197,7 @@ func (m xlMetaV1) ObjectToPartOffset(offset int64) (partIndex int, partOffset in
 func pickValidXLMeta(metaArr []xlMetaV1, modTime time.Time) xlMetaV1 {
 	// Pick latest valid metadata.
 	for _, meta := range metaArr {
-		if meta.IsValid() && meta.Stat.ModTime == modTime {
+		if meta.IsValid() && meta.Stat.ModTime.Equal(modTime) {
 			return meta
 		}
 	}
