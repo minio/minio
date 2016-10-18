@@ -200,6 +200,7 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 		// Start erasure decoding and writing to the client.
 		n, err := erasureReadFile(mw, onlineDisks, bucket, pathJoin(object, partName), partOffset, readSize, partSize, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks, xlMeta.Erasure.ParityBlocks, checkSums, ckSumAlgo, pool)
 		if err != nil {
+			errorIf(err, "Unable to read %s of the object `%s/%s`.", partName, bucket, object)
 			return toObjectErr(err, bucket, object)
 		}
 
