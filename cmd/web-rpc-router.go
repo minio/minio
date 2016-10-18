@@ -22,13 +22,19 @@ import (
 	router "github.com/gorilla/mux"
 )
 
+// Set up an RPC endpoint that receives browser related calls. The
+// original motivation is for propagating credentials change
+// throughout Minio cluster, initiated from a Minio browser session.
+
 const (
 	browserPath = "/browser/setauth"
 )
 
+// The Type exporting methods exposed for RPC calls.
 type browserAPIHandlers struct {
 }
 
+// Register RPC router
 func registerBrowserRPCRouter(mux *router.Router) error {
 	browserHandlers := &browserAPIHandlers{}
 

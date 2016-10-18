@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"path"
+	"sync"
 	"time"
 )
 
@@ -78,23 +79,21 @@ func updateCredsOnPeers(creds credential) map[string]error {
 	// Get list of peers (from globalS3Peers)
 	peers := globalS3Peers.GetPeers()
 
-	// A result type for responses from peers
-	type callResult struct {
-		ix  int
-		err error
-	}
-
-	// Channel to collect results from goroutines
-	resChan := make(chan callResult)
+	// Array of errors for each peer
+	errs := make([]error, len(peers))
+	var wg sync.WaitGroup
 
 	// Launch go routines to send request to each peer in
 	// parallel.
 	for ix := range peers {
+		wg.Add(1)
 		go func(ix int) {
+			defer wg.Done()
+
 			// Exclude self to avoid race with
 			// invalidating the RPC token.
 			if peers[ix] == globalMinioAddr {
-				resChan <- callResult{ix, nil}
+				errs[ix] = nil
 				return
 			}
 
@@ -128,16 +127,18 @@ func updateCredsOnPeers(creds credential) map[string]error {
 			}
 
 			// Send result down the channel
-			resChan <- callResult{ix, err}
+			errs[ix] = err
 		}(ix)
 	}
 
-	// Retrieve peer responses and put into errors map.
+	// Wait for requests to complete.
+	wg.Wait()
+
+	// Put errors into map.
 	errsMap := make(map[string]error)
-	for range peers {
-		res := <-resChan
-		if res.err != nil {
-			errsMap[peers[res.ix]] = res.err
+	for i, err := range errs {
+		if err != nil {
+			errsMap[peers[i]] = err
 		}
 	}
 

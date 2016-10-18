@@ -336,9 +336,9 @@ type SetAuthArgs struct {
 
 // SetAuthReply - reply for SetAuth
 type SetAuthReply struct {
-	Token       string   `json:"token"`
-	UIVersion   string   `json:"uiVersion"`
-	PeerErrMsgs []string `json:"peerErrMsgs"`
+	Token       string            `json:"token"`
+	UIVersion   string            `json:"uiVersion"`
+	PeerErrMsgs map[string]string `json:"peerErrMsgs"`
 }
 
 // SetAuth - Set accessKey and secretKey credentials.
@@ -354,58 +354,68 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 	}
 
 	cred := credential{args.AccessKey, args.SecretKey}
+	unexpErrsMsg := "ALERT: Unexpected error(s) happened - please check the server logs."
+	gaveUpMsg := func(errMsg error, moreErrors bool) *json2.Error {
+		msg := fmt.Sprintf(
+			"ALERT: We gave up due to: '%s', but there were more errors. Please check the server logs.",
+			errMsg.Error(),
+		)
+		if moreErrors {
+			return &json2.Error{Message: msg}
+		}
+		return &json2.Error{Message: errMsg.Error()}
+	}
 
 	// Notify all other Minio peers to update credentials
 	errsMap := updateCredsOnPeers(cred)
-	// Collect errors from peers
-	peerErrMsgs := []string{}
-	for peer, errVal := range errsMap {
-		peerErrMsgs = append(
-			peerErrMsgs,
-			fmt.Sprintf("Password change error on %s - got: %v", peer, errVal),
-		)
-	}
-	combineErr := func(newErr *json2.Error) *json2.Error {
-		if len(peerErrMsgs) == 0 {
-			return newErr
-		}
-		combinedMsg := fmt.Sprintf(
-			"Aborting error was: %s. Earlier peer errors were: %s",
-			newErr.Message, strings.Join(peerErrMsgs, "||"),
-		)
-		return &json2.Error{Message: combinedMsg}
-	}
 
-	// Even if we fail to update some clients, update locally and
-	// let the user know
+	// Update local credentials
 	serverConfig.SetCredential(cred)
 	if err := serverConfig.Save(); err != nil {
-		return combineErr(
-			&json2.Error{Message: err.Error()},
-		)
+		errsMap[globalMinioAddr] = err
 	}
 
+	// Log all the peer related error messages, and populate the
+	// PeerErrMsgs map.
+	reply.PeerErrMsgs = make(map[string]string)
+	for svr, errVal := range errsMap {
+		tErr := fmt.Errorf("Unable to change credentials on %s: %v", svr, errVal)
+		errorIf(tErr, "Credentials change could not be propagated successfully!")
+		reply.PeerErrMsgs[svr] = errVal.Error()
+	}
+
+	// If we were unable to update locally, we return an error to
+	// the user/browser.
+	if errsMap[globalMinioAddr] != nil {
+		// Since the error message may be very long to display
+		// on the browser, we tell the user to check the
+		// server logs.
+		return &json2.Error{Message: unexpErrsMsg}
+	}
+
+	// Did we have peer errors?
+	var moreErrors bool
+	if len(errsMap) > 0 {
+		moreErrors = true
+	}
+
+	// If we were able to update locally, we try to generate a new
+	// token and complete the request.
 	jwt, err := newJWT(defaultJWTExpiry) // JWT Expiry set to 24Hrs.
 	if err != nil {
-		return combineErr(
-			&json2.Error{Message: err.Error()},
-		)
+		return gaveUpMsg(err, moreErrors)
 	}
 
 	if err = jwt.Authenticate(args.AccessKey, args.SecretKey); err != nil {
-		return combineErr(
-			&json2.Error{Message: err.Error()},
-		)
+		return gaveUpMsg(err, moreErrors)
 	}
 	token, err := jwt.GenerateToken(args.AccessKey)
 	if err != nil {
-		return combineErr(
-			&json2.Error{Message: err.Error()},
-		)
+		return gaveUpMsg(err, moreErrors)
 	}
+
 	reply.Token = token
 	reply.UIVersion = miniobrowser.UIVersion
-	reply.PeerErrMsgs = peerErrMsgs
 	return nil
 }
 
