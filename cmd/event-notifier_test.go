@@ -40,7 +40,7 @@ func TestInitEventNotifierFaultyDisks(t *testing.T) {
 		t.Fatal("Unable to create directories for FS backend. ", err)
 	}
 	defer removeAll(disk[0])
-	obj, _, err := initObjectLayer(disk, nil)
+	obj, _, err := initObjectLayer(parseStorageEndPoints(disk, 0), nil)
 	if err != nil {
 		t.Fatal("Unable to initialize FS backend.", err)
 	}
@@ -90,7 +90,7 @@ func TestInitEventNotifierWithAMQP(t *testing.T) {
 	if err != nil {
 		t.Fatal("Unable to create directories for FS backend. ", err)
 	}
-	fs, _, err := initObjectLayer(disk, nil)
+	fs, _, err := initObjectLayer(parseStorageEndPoints(disk, 0), nil)
 	if err != nil {
 		t.Fatal("Unable to initialize FS backend.", err)
 	}
@@ -117,7 +117,7 @@ func TestInitEventNotifierWithElasticSearch(t *testing.T) {
 	if err != nil {
 		t.Fatal("Unable to create directories for FS backend. ", err)
 	}
-	fs, _, err := initObjectLayer(disk, nil)
+	fs, _, err := initObjectLayer(parseStorageEndPoints(disk, 0), nil)
 	if err != nil {
 		t.Fatal("Unable to initialize FS backend.", err)
 	}
@@ -144,7 +144,7 @@ func TestInitEventNotifierWithRedis(t *testing.T) {
 	if err != nil {
 		t.Fatal("Unable to create directories for FS backend. ", err)
 	}
-	fs, _, err := initObjectLayer(disk, nil)
+	fs, _, err := initObjectLayer(parseStorageEndPoints(disk, 0), nil)
 	if err != nil {
 		t.Fatal("Unable to initialize FS backend.", err)
 	}
@@ -184,7 +184,7 @@ func (s *TestPeerRPCServerData) TearDown() {
 	s.testServer.Stop()
 	_ = removeAll(s.testServer.Root)
 	for _, d := range s.testServer.Disks {
-		_ = removeAll(d)
+		_ = removeAll(d.path)
 	}
 }
 

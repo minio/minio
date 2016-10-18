@@ -452,11 +452,11 @@ func TestLockServers(t *testing.T) {
 		{
 			srvCmdConfig: serverCmdConfig{
 				isDistXL: true,
-				disks: []string{
-					"localhost:/mnt/disk1",
-					"1.1.1.2:/mnt/disk2",
-					"1.1.2.1:/mnt/disk3",
-					"1.1.2.2:/mnt/disk4",
+				disks: []storageEndPoint{
+					{"localhost", 9000, "/mnt/disk1"},
+					{"1.1.1.2", 9000, "/mnt/disk2"},
+					{"1.1.2.1", 9000, "/mnt/disk3"},
+					{"1.1.2.2", 9000, "/mnt/disk4"},
 				},
 			},
 			totalLockServers: 1,
@@ -465,14 +465,14 @@ func TestLockServers(t *testing.T) {
 		{
 			srvCmdConfig: serverCmdConfig{
 				isDistXL: true,
-				disks: []string{
-					"localhost:/mnt/disk1",
-					"localhost:/mnt/disk2",
-					"1.1.2.1:/mnt/disk3",
-					"1.1.2.2:/mnt/disk4",
+				disks: []storageEndPoint{
+					{"localhost", 9000, "/mnt/disk1"},
+					{"localhost", 9000, "/mnt/disk2"},
+					{"1.1.2.1", 9000, "/mnt/disk3"},
+					{"1.1.2.2", 9000, "/mnt/disk4"},
 				},
-				ignoredDisks: []string{
-					"localhost:/mnt/disk2",
+				ignoredDisks: []storageEndPoint{
+					{"localhost", 9000, "/mnt/disk2"},
 				},
 			},
 			totalLockServers: 1,

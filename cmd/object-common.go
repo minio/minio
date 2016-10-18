@@ -100,57 +100,53 @@ func houseKeeping(storageDisks []StorageAPI) error {
 }
 
 // Check if a network path is local to this node.
-func isLocalStorage(networkPath string) bool {
-	if idx := strings.LastIndex(networkPath, ":"); idx != -1 {
-		// e.g 10.0.0.1:/mnt/networkPath
-		netAddr, _, err := splitNetPath(networkPath)
-		if err != nil {
-			errorIf(err, "Splitting into ip and path failed")
-			return false
-		}
-		// netAddr will only be set if this is not a local path.
-		if netAddr == "" {
+func isLocalStorage(disk storageEndPoint) bool {
+	if disk.host == "" {
+		return true
+	}
+	if globalServer != "" {
+		if globalServer == disk.host && globalMinioPort == disk.port {
 			return true
-		}
-		// Resolve host to address to check if the IP is loopback.
-		// If address resolution fails, assume it's a non-local host.
-		addrs, err := net.LookupHost(netAddr)
-		if err != nil {
-			errorIf(err, "Failed to lookup host")
-			return false
-		}
-		for _, addr := range addrs {
-			if ip := net.ParseIP(addr); ip.IsLoopback() {
-				return true
-			}
-		}
-		iaddrs, err := net.InterfaceAddrs()
-		if err != nil {
-			errorIf(err, "Unable to list interface addresses")
-			return false
-		}
-		for _, addr := range addrs {
-			for _, iaddr := range iaddrs {
-				ip, _, err := net.ParseCIDR(iaddr.String())
-				if err != nil {
-					errorIf(err, "Unable to parse CIDR")
-					return false
-				}
-				if ip.String() == addr {
-					return true
-				}
-
-			}
 		}
 		return false
 	}
-	return true
+	// Resolve host to address to check if the IP is loopback.
+	// If address resolution fails, assume it's a non-local host.
+	addrs, err := net.LookupHost(disk.host)
+	if err != nil {
+		errorIf(err, "Failed to lookup host")
+		return false
+	}
+	for _, addr := range addrs {
+		if ip := net.ParseIP(addr); ip.IsLoopback() {
+			return true
+		}
+	}
+	iaddrs, err := net.InterfaceAddrs()
+	if err != nil {
+		errorIf(err, "Unable to list interface addresses")
+		return false
+	}
+	for _, addr := range addrs {
+		for _, iaddr := range iaddrs {
+			ip, _, err := net.ParseCIDR(iaddr.String())
+			if err != nil {
+				errorIf(err, "Unable to parse CIDR")
+				return false
+			}
+			if ip.String() == addr {
+				return true
+			}
+
+		}
+	}
+	return false
 }
 
 // Depending on the disk type network or local, initialize storage API.
-func newStorageAPI(disk string) (storage StorageAPI, err error) {
+func newStorageAPI(disk storageEndPoint) (storage StorageAPI, err error) {
 	if isLocalStorage(disk) {
-		return newPosix(disk)
+		return newPosix(disk.path)
 	}
 	return newRPCClient(disk)
 }

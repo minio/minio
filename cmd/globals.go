@@ -57,6 +57,7 @@ var (
 	globalMinioAddr = ""
 	// Minio default port, can be changed through command line.
 	globalMinioPort = 9000
+	globalServer    = ""
 	// Peer communication struct
 	globalS3Peers = s3Peers{}
 

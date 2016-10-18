@@ -23,8 +23,6 @@ import (
 	"path"
 	"sync"
 	"time"
-
-	"github.com/minio/minio-go/pkg/set"
 )
 
 type s3Peers struct {
@@ -38,7 +36,7 @@ type s3Peers struct {
 	peers []string
 }
 
-func initGlobalS3Peers(disks []string) {
+func initGlobalS3Peers(disks []storageEndPoint) {
 	// Get list of de-duplicated peers.
 	peers := getAllPeers(disks)
 
@@ -112,23 +110,10 @@ func (s3p *s3Peers) Close() error {
 
 // returns the network addresses of all Minio servers in the cluster
 // in `host:port` format.
-func getAllPeers(disks []string) []string {
+func getAllPeers(disks []storageEndPoint) []string {
 	res := []string{}
-	// use set to de-duplicate
-	sset := set.NewStringSet()
 	for _, disk := range disks {
-		netAddr, _, err := splitNetPath(disk)
-		if err != nil || netAddr == "" {
-			errorIf(err, "Unexpected error - most likely a bug.")
-			continue
-		}
-		if !sset.Contains(netAddr) {
-			res = append(
-				res,
-				fmt.Sprintf("%s:%d", netAddr, globalMinioPort),
-			)
-			sset.Add(netAddr)
-		}
+		res = append(res, fmt.Sprintf("%s:%d", disk.host, disk.port))
 	}
 	return res
 }
