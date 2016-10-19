@@ -184,7 +184,7 @@ func StartTestServer(t TestErrHandler, instanceType string) TestServer {
 	}
 
 	srvCmdCfg := serverCmdConfig{
-		disks:        testServer.Disks,
+		endPoints:    testServer.Disks,
 		storageDisks: storageDisks,
 	}
 	httpHandler, err := configureServerHandler(
@@ -254,7 +254,7 @@ func StartTestStorageRPCServer(t TestErrHandler, instanceType string, diskN int)
 
 	// Run TestServer.
 	testRPCServer.Server = httptest.NewServer(initTestStorageRPCEndPoint(serverCmdConfig{
-		disks: endPoints,
+		endPoints: endPoints,
 	}))
 	return testRPCServer
 }
@@ -295,7 +295,7 @@ func StartTestPeersRPCServer(t TestErrHandler, instanceType string) TestServer {
 	globalObjLayerMutex.Unlock()
 
 	srvCfg := serverCmdConfig{
-		disks:        endPoints,
+		endPoints:    endPoints,
 		storageDisks: storageDisks,
 	}
 
@@ -1454,8 +1454,8 @@ func getRandomDisks(N int) ([]string, error) {
 }
 
 // initObjectLayer - Instantiates object layer and returns it.
-func initObjectLayer(disks []storageEndPoint, ignoredDisks []storageEndPoint) (ObjectLayer, []StorageAPI, error) {
-	storageDisks, err := initStorageDisks(disks, ignoredDisks)
+func initObjectLayer(endPoints []storageEndPoint, ignoredEndPoints []storageEndPoint) (ObjectLayer, []StorageAPI, error) {
+	storageDisks, err := initStorageDisks(endPoints, ignoredEndPoints)
 	if err != nil {
 		return nil, nil, err
 	}

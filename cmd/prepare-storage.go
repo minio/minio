@@ -249,10 +249,10 @@ func retryFormattingDisks(firstDisk bool, firstEndpoint string, storageDisks []S
 }
 
 // Initialize storage disks based on input arguments.
-func initStorageDisks(disks, ignoredDisks []storageEndPoint) ([]StorageAPI, error) {
+func initStorageDisks(endPoints, ignoredEndPoints []storageEndPoint) ([]StorageAPI, error) {
 	// Single disk means we will use FS backend.
-	if len(disks) == 1 {
-		storage, err := newStorageAPI(disks[0])
+	if len(endPoints) == 1 {
+		storage, err := newStorageAPI(endPoints[0])
 		if err != nil && err != errDiskNotFound {
 			return nil, err
 		}
@@ -260,16 +260,16 @@ func initStorageDisks(disks, ignoredDisks []storageEndPoint) ([]StorageAPI, erro
 	}
 	// Otherwise proceed with XL setup.
 	// FIXME: this check is already done by validateDisks() hence redundant.
-	if err := checkSufficientDisks(disks); err != nil {
+	if err := checkSufficientDisks(endPoints); err != nil {
 		return nil, err
 	}
 	// Bootstrap disks.
-	storageDisks := make([]StorageAPI, len(disks))
-	for index, disk := range disks {
+	storageDisks := make([]StorageAPI, len(endPoints))
+	for index, ep := range endPoints {
 		// Check if disk is ignored.
 		ignored := false
-		for _, ignoredDisk := range ignoredDisks {
-			if disk == ignoredDisk {
+		for _, iep := range ignoredEndPoints {
+			if ep == iep {
 				ignored = true
 				break
 			}
@@ -281,7 +281,7 @@ func initStorageDisks(disks, ignoredDisks []storageEndPoint) ([]StorageAPI, erro
 		}
 		// Intentionally ignore disk not found errors. XL is designed
 		// to handle these errors internally.
-		storage, err := newStorageAPI(disk)
+		storage, err := newStorageAPI(ep)
 		if err != nil && err != errDiskNotFound {
 			return nil, err
 		}

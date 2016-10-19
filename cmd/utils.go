@@ -126,10 +126,10 @@ func getLocalAddress(srvCmdConfig serverCmdConfig) string {
 	if !srvCmdConfig.isDistXL {
 		return srvCmdConfig.serverAddr
 	}
-	for _, export := range srvCmdConfig.disks {
+	for _, ep := range srvCmdConfig.endPoints {
 		// Validates if remote disk is local.
-		if isLocalStorage(export) {
-			return fmt.Sprintf("%s:%d", export.host, export.port)
+		if isLocalStorage(ep) {
+			return fmt.Sprintf("%s:%d", ep.host, ep.port)
 		}
 	}
 	return ""

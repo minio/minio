@@ -93,15 +93,15 @@ func toStorageErr(err error) error {
 }
 
 // Initialize new rpc client.
-func newRPCClient(disk storageEndPoint) (StorageAPI, error) {
+func newRPCClient(ep storageEndPoint) (StorageAPI, error) {
 	// Input validation.
-	if disk.host == "" || disk.port == 0 || disk.path == "" {
+	if ep.host == "" || ep.port == 0 || ep.path == "" {
 		return nil, errInvalidArgument
 	}
 
 	// Dial minio rpc storage http path.
-	rpcPath := path.Join(storageRPCPath, disk.path)
-	rpcAddr := fmt.Sprintf("%s:%d", disk.host, disk.port)
+	rpcPath := path.Join(storageRPCPath, ep.path)
+	rpcAddr := fmt.Sprintf("%s:%d", ep.host, ep.port)
 
 	// Initialize rpc client with network address and rpc path.
 	cred := serverConfig.GetCredential()
@@ -116,8 +116,8 @@ func newRPCClient(disk storageEndPoint) (StorageAPI, error) {
 
 	// Initialize network storage.
 	ndisk := &networkStorage{
-		netAddr:   disk.host,
-		netPath:   disk.path,
+		netAddr:   ep.host,
+		netPath:   ep.path,
 		rpcClient: rpcClient,
 	}
 

@@ -452,7 +452,7 @@ func TestLockServers(t *testing.T) {
 		{
 			srvCmdConfig: serverCmdConfig{
 				isDistXL: true,
-				disks: []storageEndPoint{
+				endPoints: []storageEndPoint{
 					{"localhost", 9000, "/mnt/disk1"},
 					{"1.1.1.2", 9000, "/mnt/disk2"},
 					{"1.1.2.1", 9000, "/mnt/disk3"},
@@ -465,13 +465,13 @@ func TestLockServers(t *testing.T) {
 		{
 			srvCmdConfig: serverCmdConfig{
 				isDistXL: true,
-				disks: []storageEndPoint{
+				endPoints: []storageEndPoint{
 					{"localhost", 9000, "/mnt/disk1"},
 					{"localhost", 9000, "/mnt/disk2"},
 					{"1.1.2.1", 9000, "/mnt/disk3"},
 					{"1.1.2.2", 9000, "/mnt/disk4"},
 				},
-				ignoredDisks: []storageEndPoint{
+				ignoredEndPoints: []storageEndPoint{
 					{"localhost", 9000, "/mnt/disk2"},
 				},
 			},

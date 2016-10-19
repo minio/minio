@@ -37,23 +37,23 @@ func initRemoteControlClients(srvCmdConfig serverCmdConfig) []*AuthRPCClient {
 	// Initialize auth rpc clients.
 	var remoteControlClnts []*AuthRPCClient
 	localMap := make(map[storageEndPoint]int)
-	for _, disk := range srvCmdConfig.disks {
+	for _, ep := range srvCmdConfig.endPoints {
 		// Set path to "" so that it is not used for filtering the
 		// unique entries.
-		disk.path = ""
+		ep.path = ""
 		// Validates if remote disk is local.
-		if isLocalStorage(disk) {
+		if isLocalStorage(ep) {
 			continue
 		}
-		if localMap[disk] == 1 {
+		if localMap[ep] == 1 {
 			continue
 		}
-		localMap[disk]++
+		localMap[ep]++
 		remoteControlClnts = append(remoteControlClnts, newAuthClient(&authConfig{
 			accessKey:   serverConfig.GetCredential().AccessKeyID,
 			secretKey:   serverConfig.GetCredential().SecretAccessKey,
 			secureConn:  isSSL(),
-			address:     fmt.Sprintf("%s:%d", disk.host, disk.port),
+			address:     fmt.Sprintf("%s:%d", ep.host, ep.port),
 			path:        path.Join(reservedBucket, controlPath),
 			loginMethod: "Control.LoginHandler",
 		}))

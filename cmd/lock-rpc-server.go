@@ -82,14 +82,10 @@ func registerDistNSLockRouter(mux *router.Router, serverConfig serverCmdConfig) 
 
 // Create one lock server for every local storage rpc server.
 func newLockServers(serverConfig serverCmdConfig) (lockServers []*lockServer) {
-	// Initialize posix storage API.
-	exports := serverConfig.disks
-	ignoredExports := serverConfig.ignoredDisks
-
-	for _, export := range exports {
+	for _, ep := range serverConfig.endPoints {
 		ignored := false
-		for _, ignoredDisk := range ignoredExports {
-			if ignoredDisk == export {
+		for _, iep := range serverConfig.ignoredEndPoints {
+			if iep == ep {
 				ignored = true
 				break
 			}
@@ -99,12 +95,12 @@ func newLockServers(serverConfig serverCmdConfig) (lockServers []*lockServer) {
 			continue
 		}
 		// Not local storage move to the next node.
-		if !isLocalStorage(export) {
+		if !isLocalStorage(ep) {
 			continue
 		}
 		// Create handler for lock RPCs
 		locker := &lockServer{
-			rpcPath: export.path,
+			rpcPath: ep.path,
 			mutex:   sync.Mutex{},
 			lockMap: make(map[string][]lockRequesterInfo),
 		}

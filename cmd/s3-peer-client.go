@@ -36,9 +36,9 @@ type s3Peers struct {
 	peers []string
 }
 
-func initGlobalS3Peers(disks []storageEndPoint) {
+func initGlobalS3Peers(eps []storageEndPoint) {
 	// Get list of de-duplicated peers.
-	peers := getAllPeers(disks)
+	peers := getAllPeers(eps)
 
 	// Initialize global state.
 	globalS3Peers = s3Peers{
@@ -110,10 +110,10 @@ func (s3p *s3Peers) Close() error {
 
 // returns the network addresses of all Minio servers in the cluster
 // in `host:port` format.
-func getAllPeers(disks []storageEndPoint) []string {
+func getAllPeers(eps []storageEndPoint) []string {
 	res := []string{}
-	for _, disk := range disks {
-		res = append(res, fmt.Sprintf("%s:%d", disk.host, disk.port))
+	for _, ep := range eps {
+		res = append(res, fmt.Sprintf("%s:%d", ep.host, ep.port))
 	}
 	return res
 }

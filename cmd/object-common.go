@@ -100,19 +100,21 @@ func houseKeeping(storageDisks []StorageAPI) error {
 }
 
 // Check if a network path is local to this node.
-func isLocalStorage(disk storageEndPoint) bool {
-	if disk.host == "" {
+func isLocalStorage(ep storageEndPoint) bool {
+	if ep.host == "" {
 		return true
 	}
-	if globalServer != "" {
-		if globalServer == disk.host && globalMinioPort == disk.port {
+	if globalMinioHost != "" {
+		// if --address host:port was specified for distXL we short circuit only the endPoint
+		// that matches host:port
+		if globalMinioHost == ep.host && globalMinioPort == ep.port {
 			return true
 		}
 		return false
 	}
 	// Resolve host to address to check if the IP is loopback.
 	// If address resolution fails, assume it's a non-local host.
-	addrs, err := net.LookupHost(disk.host)
+	addrs, err := net.LookupHost(ep.host)
 	if err != nil {
 		errorIf(err, "Failed to lookup host")
 		return false
@@ -144,11 +146,11 @@ func isLocalStorage(disk storageEndPoint) bool {
 }
 
 // Depending on the disk type network or local, initialize storage API.
-func newStorageAPI(disk storageEndPoint) (storage StorageAPI, err error) {
-	if isLocalStorage(disk) {
-		return newPosix(disk.path)
+func newStorageAPI(ep storageEndPoint) (storage StorageAPI, err error) {
+	if isLocalStorage(ep) {
+		return newPosix(ep.path)
 	}
-	return newRPCClient(disk)
+	return newRPCClient(ep)
 }
 
 // Initializes meta volume on all input storage disks.
