@@ -128,6 +128,16 @@ func (ep storageEndPoint) String() string {
 	return strings.Join(str, ":")
 }
 
+// Returns if ep is present in the eps list.
+func (ep storageEndPoint) presentIn(eps []storageEndPoint) bool {
+	for _, entry := range eps {
+		if entry == ep {
+			return true
+		}
+	}
+	return false
+}
+
 // Parse end-point (of the form host:port:path or host:path or path)
 func parseStorageEndPoint(ep string, defaultPort int) storageEndPoint {
 	parts := strings.Split(ep, ":")

@@ -74,29 +74,11 @@ func checkDuplicateStrings(list []string) error {
 
 // checkDuplicates - function to validate if there are duplicates in a slice of endPoints.
 func checkDuplicateEndPoints(list []storageEndPoint) error {
-	// Empty lists are not allowed.
-	if len(list) == 0 {
-		return errInvalidArgument
-	}
-	// Empty end points are not allowed.
+	var strs []string
 	for _, ep := range list {
-		if (ep == storageEndPoint{}) {
-			return errInvalidArgument
-		}
+		strs = append(strs, ep.String())
 	}
-	listMaps := make(map[storageEndPoint]int)
-	// Navigate through each configs and count the entries.
-	for _, ep := range list {
-		listMaps[ep]++
-	}
-	// Validate if there are any duplicate counts.
-	for ep, count := range listMaps {
-		if count != 1 {
-			return fmt.Errorf("Duplicate entry: \"%s\" found of count: \"%d\"", ep, count)
-		}
-	}
-	// No duplicates.
-	return nil
+	return checkDuplicateStrings(strs)
 }
 
 // splits network path into its components Address and Path.
