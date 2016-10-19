@@ -282,25 +282,6 @@ func validateDisks(endPoints []storageEndPoint, ignoredEndPoints []storageEndPoi
 	return storageDisks
 }
 
-func splitHostPort(address string) (string, int) {
-	host, portStr, err := net.SplitHostPort(address)
-	fatalIf(err, "Unable to parse "+address)
-
-	// If port empty, default to port '80'
-	if portStr == "" {
-		portStr = "80"
-		// if SSL is enabled, choose port as "443" instead.
-		if isSSL() {
-			portStr = "443"
-		}
-	}
-
-	// Return converted port number.
-	portInt, err := strconv.Atoi(portStr)
-	fatalIf(err, "Invalid port number.")
-	return host, portInt
-}
-
 // Extract port number from address address should be of the form host:port.
 func getPort(address string) int {
 	_, portStr, _ := net.SplitHostPort(address)
@@ -343,18 +324,23 @@ func serverMain(c *cli.Context) {
 	serverAddr := c.String("address")
 
 	// Check if requested port is available.
-	host, port := splitHostPort(serverAddr)
-	fatalIf(checkPortAvailability(port), "Port unavailable %d", port)
+	host, portStr, err := net.SplitHostPort(serverAddr)
+	fatalIf(err, "Unable to parse %s.", serverAddr)
+
+	portInt, err := strconv.Atoi(portStr)
+	fatalIf(err, "Invalid port number.")
+
+	fatalIf(checkPortAvailability(portInt), "Port unavailable %d", portInt)
 
 	// Saves host and port in a globally accessible value.
-	globalMinioPort = port
+	globalMinioPort = portInt
 	globalMinioHost = host
 
 	// Disks to be ignored in server init, to skip format healing.
-	ignoredDisks := parseStorageEndPoints(strings.Split(c.String("ignore-disks"), ","), port)
+	ignoredDisks := parseStorageEndPoints(strings.Split(c.String("ignore-disks"), ","), portInt)
 
 	// Disks to be used in server init.
-	disks := parseStorageEndPoints(c.Args(), port)
+	disks := parseStorageEndPoints(c.Args(), portInt)
 
 	// Initialize server config.
 	initServerConfig(c)
