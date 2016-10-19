@@ -52,11 +52,6 @@ func newFSObjects(storage StorageAPI) (ObjectLayer, error) {
 		return nil, errInvalidArgument
 	}
 
-	// Runs house keeping code, like creating minioMetaBucket, cleaning up tmp files etc.
-	if err := fsHouseKeeping(storage); err != nil {
-		return nil, err
-	}
-
 	// Load format and validate.
 	_, err := loadFormatFS(storage)
 	if err != nil {

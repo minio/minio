@@ -44,7 +44,7 @@ func newNaughtyDisk(d *posix, errs map[int]error, defaultErr error) *naughtyDisk
 }
 
 func (d *naughtyDisk) String() string {
-	return d.String()
+	return d.disk.String()
 }
 
 func (d *naughtyDisk) calcError() (err error) {

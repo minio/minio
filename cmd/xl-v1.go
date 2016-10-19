@@ -111,11 +111,6 @@ func newXLObjects(storageDisks []StorageAPI) (ObjectLayer, error) {
 		return nil, errInvalidArgument
 	}
 
-	// Runs house keeping code, like t, cleaning up tmp files etc.
-	if err := xlHouseKeeping(storageDisks); err != nil {
-		return nil, err
-	}
-
 	readQuorum := len(storageDisks) / 2
 	writeQuorum := len(storageDisks)/2 + 1
 
