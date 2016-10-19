@@ -104,12 +104,16 @@ type serverCmdConfig struct {
 	storageDisks     []StorageAPI
 }
 
+// End point is specified in the command line as host:port:path or host:path or path
+// host:port:path or host:path - for distributed XL. Default port is 9000.
+// just path - for single node XL or FS.
 type storageEndPoint struct {
-	host string
-	port int
-	path string
+	host string // Will be empty for single node XL and FS
+	port int    // Will be valid for distributed XL
+	path string // Will be valid for all configs
 }
 
+// Returns string form.
 func (ep storageEndPoint) String() string {
 	var str []string
 	if ep.host != "" {
@@ -124,6 +128,7 @@ func (ep storageEndPoint) String() string {
 	return strings.Join(str, ":")
 }
 
+// Parse end-point (of the form host:port:path or host:path or path)
 func parseStorageEndPoint(ep string, defaultPort int) storageEndPoint {
 	parts := strings.Split(ep, ":")
 	var parsedep storageEndPoint
@@ -142,6 +147,7 @@ func parseStorageEndPoint(ep string, defaultPort int) storageEndPoint {
 	return parsedep
 }
 
+// Parse an array of end-points (passed on the command line)
 func parseStorageEndPoints(eps []string, defaultPort int) (endpoints []storageEndPoint) {
 	for _, ep := range eps {
 		endpoints = append(endpoints, parseStorageEndPoint(ep, defaultPort))
