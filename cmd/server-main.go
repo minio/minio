@@ -97,11 +97,11 @@ EXAMPLES:
 }
 
 type serverCmdConfig struct {
-	serverAddr   string
-	disks        []storageEndPoint
-	ignoredDisks []storageEndPoint
-	isDistXL     bool // True only if its distributed XL.
-	storageDisks []StorageAPI
+	serverAddr       string
+	endPoints        []storageEndPoint
+	ignoredEndPoints []storageEndPoint
+	isDistXL         bool // True only if its distributed XL.
+	storageDisks     []StorageAPI
 }
 
 type storageEndPoint struct {
@@ -240,13 +240,13 @@ func initServerConfig(c *cli.Context) {
 }
 
 // Validate if input disks are sufficient for initializing XL.
-func checkSufficientDisks(disks []storageEndPoint) error {
+func checkSufficientDisks(eps []storageEndPoint) error {
 	// Verify total number of disks.
-	totalDisks := len(disks)
-	if totalDisks > maxErasureBlocks {
+	total := len(eps)
+	if total > maxErasureBlocks {
 		return errXLMaxDisks
 	}
-	if totalDisks < minErasureBlocks {
+	if total < minErasureBlocks {
 		return errXLMinDisks
 	}
 
@@ -257,7 +257,7 @@ func checkSufficientDisks(disks []storageEndPoint) error {
 
 	// Verify if we have even number of disks.
 	// only combination of 4, 6, 8, 10, 12, 14, 16 are supported.
-	if !isEven(totalDisks) {
+	if !isEven(total) {
 		return errXLNumDisks
 	}
 
@@ -266,18 +266,18 @@ func checkSufficientDisks(disks []storageEndPoint) error {
 }
 
 // Validate input disks.
-func validateDisks(disks []storageEndPoint, ignoredDisks []storageEndPoint) []StorageAPI {
-	isXL := len(disks) > 1
+func validateDisks(endPoints []storageEndPoint, ignoredEndPoints []storageEndPoint) []StorageAPI {
+	isXL := len(endPoints) > 1
 	if isXL {
 		// Validate if input disks have duplicates in them.
-		err := checkDuplicateEndPoints(disks)
+		err := checkDuplicateEndPoints(endPoints)
 		fatalIf(err, "Invalid disk arguments for server.")
 
 		// Validate if input disks are sufficient for erasure coded setup.
-		err = checkSufficientDisks(disks)
+		err = checkSufficientDisks(endPoints)
 		fatalIf(err, "Invalid disk arguments for server.")
 	}
-	storageDisks, err := initStorageDisks(disks, ignoredDisks)
+	storageDisks, err := initStorageDisks(endPoints, ignoredEndPoints)
 	fatalIf(err, "Unable to initialize storage disks.")
 	return storageDisks
 }
@@ -321,10 +321,10 @@ func getPort(address string) int {
 }
 
 // Returns if slice of disks is a distributed setup.
-func isDistributedSetup(disks []storageEndPoint) (isDist bool) {
+func isDistributedSetup(eps []storageEndPoint) (isDist bool) {
 	// Port to connect to for the lock servers in a distributed setup.
-	for _, disk := range disks {
-		if !isLocalStorage(disk) {
+	for _, ep := range eps {
+		if !isLocalStorage(ep) {
 			// One or more disks supplied as arguments are not
 			// attached to the local node.
 			isDist = true
@@ -343,12 +343,12 @@ func serverMain(c *cli.Context) {
 	serverAddr := c.String("address")
 
 	// Check if requested port is available.
-	serverName, port := splitHostPort(serverAddr)
+	host, port := splitHostPort(serverAddr)
 	fatalIf(checkPortAvailability(port), "Port unavailable %d", port)
 
-	// Saves port in a globally accessible value.
+	// Saves host and port in a globally accessible value.
 	globalMinioPort = port
-	globalServer = serverName
+	globalMinioHost = host
 
 	// Disks to be ignored in server init, to skip format healing.
 	ignoredDisks := parseStorageEndPoints(strings.Split(c.String("ignore-disks"), ","), port)
@@ -373,11 +373,11 @@ func serverMain(c *cli.Context) {
 
 	// Configure server.
 	srvConfig := serverCmdConfig{
-		serverAddr:   serverAddr,
-		disks:        disks,
-		ignoredDisks: ignoredDisks,
-		storageDisks: storageDisks,
-		isDistXL:     isDistributedSetup(disks),
+		serverAddr:       serverAddr,
+		endPoints:        disks,
+		ignoredEndPoints: ignoredDisks,
+		storageDisks:     storageDisks,
+		isDistXL:         isDistributedSetup(disks),
 	}
 
 	// Configure server.

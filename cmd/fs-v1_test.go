@@ -40,8 +40,7 @@ func TestNewFS(t *testing.T) {
 		disks = append(disks, xlDisk)
 	}
 
-	fsStorageDisks, err := initStorageDisks(
-		parseStorageEndPoints([]string{disk}, 0), nil)
+	fsStorageDisks, err := initStorageDisks(parseStorageEndPoints([]string{disk}, 0), nil)
 	if err != nil {
 		t.Fatal("Uexpected error: ", err)
 	}

@@ -218,14 +218,10 @@ func (s *storageServer) TryInitHandler(args *GenericArgs, reply *GenericReply) e
 
 // Initialize new storage rpc.
 func newRPCServer(serverConfig serverCmdConfig) (servers []*storageServer, err error) {
-	// Initialize posix storage API.
-	exports := serverConfig.disks
-	ignoredExports := serverConfig.ignoredDisks
-
-	for _, export := range exports {
+	for _, ep := range serverConfig.endPoints {
 		ignored := false
-		for _, ignoredDisk := range ignoredExports {
-			if ignoredDisk == export {
+		for _, iep := range serverConfig.ignoredEndPoints {
+			if iep == ep {
 				ignored = true
 				break
 			}
@@ -235,14 +231,14 @@ func newRPCServer(serverConfig serverCmdConfig) (servers []*storageServer, err e
 			continue
 		}
 		// e.g server:/mnt/disk1
-		if isLocalStorage(export) {
-			storage, err := newPosix(export.path)
+		if isLocalStorage(ep) {
+			storage, err := newPosix(ep.path)
 			if err != nil && err != errDiskNotFound {
 				return nil, err
 			}
 			servers = append(servers, &storageServer{
 				storage: storage,
-				path:    export.path,
+				path:    ep.path,
 			})
 		}
 	}

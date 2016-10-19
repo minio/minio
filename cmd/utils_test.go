@@ -233,7 +233,7 @@ func TestLocalAddress(t *testing.T) {
 		{
 			srvCmdConfig: serverCmdConfig{
 				isDistXL: true,
-				disks: []storageEndPoint{
+				endPoints: []storageEndPoint{
 					{"localhost", 9000, "/mnt/disk1"},
 					{"1.1.1.2", 9000, "/mnt/disk2"},
 					{"1.1.2.1", 9000, "/mnt/disk3"},
@@ -247,7 +247,7 @@ func TestLocalAddress(t *testing.T) {
 			srvCmdConfig: serverCmdConfig{
 				serverAddr: fmt.Sprintf(":%d", globalMinioPort),
 				isDistXL:   false,
-				disks: []storageEndPoint{
+				endPoints: []storageEndPoint{
 					{path: "/mnt/disk1"},
 					{path: "/mnt/disk2"},
 					{path: "/mnt/disk3"},
@@ -260,7 +260,7 @@ func TestLocalAddress(t *testing.T) {
 		{
 			srvCmdConfig: serverCmdConfig{
 				isDistXL: true,
-				disks: []storageEndPoint{
+				endPoints: []storageEndPoint{
 					{"1.1.1.1", 9000, "/mnt/disk1"},
 					{"1.1.1.2", 9000, "/mnt/disk2"},
 					{"1.1.2.1", 9000, "/mnt/disk3"},
