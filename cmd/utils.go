@@ -72,7 +72,7 @@ func checkDuplicateStrings(list []string) error {
 	return nil
 }
 
-// checkDuplicates - function to validate if there are duplicates in a slice of strings.
+// checkDuplicates - function to validate if there are duplicates in a slice of endPoints.
 func checkDuplicateEndPoints(list []storageEndPoint) error {
 	// Empty lists are not allowed.
 	if len(list) == 0 {
