@@ -259,10 +259,6 @@ func initStorageDisks(endPoints, ignoredEndPoints []storageEndPoint) ([]StorageA
 		return []StorageAPI{storage}, nil
 	}
 	// Otherwise proceed with XL setup.
-	// FIXME: this check is already done by validateDisks() hence redundant.
-	if err := checkSufficientDisks(endPoints); err != nil {
-		return nil, err
-	}
 	// Bootstrap disks.
 	storageDisks := make([]StorageAPI, len(endPoints))
 	for index, ep := range endPoints {

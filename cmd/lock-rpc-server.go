@@ -83,17 +83,11 @@ func registerDistNSLockRouter(mux *router.Router, serverConfig serverCmdConfig) 
 // Create one lock server for every local storage rpc server.
 func newLockServers(serverConfig serverCmdConfig) (lockServers []*lockServer) {
 	for _, ep := range serverConfig.endPoints {
-		ignored := false
-		for _, iep := range serverConfig.ignoredEndPoints {
-			if iep == ep {
-				ignored = true
-				break
-			}
-		}
-		if ignored {
-			// Ignore initializing ignored export.
+		if ep.presentIn(serverConfig.ignoredEndPoints) {
+			// Skip initializing ignored end point.
 			continue
 		}
+
 		// Not local storage move to the next node.
 		if !isLocalStorage(ep) {
 			continue

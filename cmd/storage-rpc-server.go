@@ -219,15 +219,8 @@ func (s *storageServer) TryInitHandler(args *GenericArgs, reply *GenericReply) e
 // Initialize new storage rpc.
 func newRPCServer(serverConfig serverCmdConfig) (servers []*storageServer, err error) {
 	for _, ep := range serverConfig.endPoints {
-		ignored := false
-		for _, iep := range serverConfig.ignoredEndPoints {
-			if iep == ep {
-				ignored = true
-				break
-			}
-		}
-		if ignored {
-			// Ignore initializing ignored export.
+		if ep.presentIn(serverConfig.ignoredEndPoints) {
+			// Do not init ignored end point.
 			continue
 		}
 		// e.g server:/mnt/disk1
