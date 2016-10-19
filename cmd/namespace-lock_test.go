@@ -68,7 +68,7 @@ func TestNamespaceLockTest(t *testing.T) {
 	if !ok && testCase.shouldPass {
 		t.Errorf("Lock in map missing.")
 	}
-	// Validate loced ref count.
+	// Validate locked ref count.
 	if testCase.lockedRefCount != nsLk.ref && testCase.shouldPass {
 		t.Errorf("Test %d fails, expected to pass. Wanted ref count is %d, got %d", 1, testCase.lockedRefCount, nsLk.ref)
 	}
@@ -91,7 +91,7 @@ func TestNamespaceLockTest(t *testing.T) {
 	if !ok && testCase.shouldPass {
 		t.Errorf("Lock in map missing.")
 	}
-	// Validate loced ref count.
+	// Validate locked ref count.
 	if testCase.lockedRefCount != nsLk.ref && testCase.shouldPass {
 		t.Errorf("Test %d fails, expected to pass. Wanted ref count is %d, got %d", 1, testCase.lockedRefCount, nsLk.ref)
 	}
@@ -114,7 +114,7 @@ func TestNamespaceLockTest(t *testing.T) {
 	if !ok && testCase.shouldPass {
 		t.Errorf("Lock in map missing.")
 	}
-	// Validate loced ref count.
+	// Validate locked ref count.
 	if testCase.lockedRefCount != nsLk.ref && testCase.shouldPass {
 		t.Errorf("Test %d fails, expected to pass. Wanted ref count is %d, got %d", 3, testCase.lockedRefCount, nsLk.ref)
 	}
@@ -380,5 +380,35 @@ func TestLockStats(t *testing.T) {
 	expectedLockStats = expectedResult[7]
 	// verify the actual lock info with the expected one.
 	verifyGlobalLockStats(expectedLockStats, t, 8)
+}
 
+// Tests functionality to forcefully unlock locks.
+func TestNamespaceForceUnlockTest(t *testing.T) {
+
+	// Create lock.
+	nsMutex.Lock("bucket", "object", "11-11")
+	// Forcefully unlock lock.
+	nsMutex.ForceUnlock("bucket", "object")
+
+	ch := make(chan struct{}, 1)
+
+	go func() {
+		// Try to claim lock again.
+		nsMutex.Lock("bucket", "object", "22-22")
+		// And signal succes.
+		ch <- struct{}{}
+	}()
+
+	select {
+		case <-ch:
+			// Signalled so all is fine.
+			break
+
+		case <-time.After(100*time.Millisecond):
+			// In case we hit the time out, the lock has not been cleared.
+			t.Errorf("Lock not cleared.")
+	}
+
+	// Clean up lock.
+	nsMutex.ForceUnlock("bucket", "object")
 }
