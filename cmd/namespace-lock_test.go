@@ -408,4 +408,7 @@ func TestNamespaceForceUnlockTest(t *testing.T) {
 			// In case we hit the time out, the lock has not been cleared.
 			t.Errorf("Lock not cleared.")
 	}
+
+	// Clean up lock.
+	nsMutex.ForceUnlock("bucket", "object")
 }
