@@ -78,7 +78,12 @@ func (rpcClient *RPCClient) dialRPCClient() (*rpc.Client, error) {
 	var conn net.Conn
 
 	if rpcClient.secureConn {
-		conn, err = tls.Dial("tcp", rpcClient.node, &tls.Config{})
+		hostname, _, splitErr := net.SplitHostPort(rpcClient.node)
+		if splitErr != nil {
+			return nil, errors.New("Unable to parse RPC address <" + rpcClient.node + "> : " + splitErr.Error())
+		}
+		// ServerName in tls.Config needs to be specified to support SNI certificates
+		conn, err = tls.Dial("tcp", rpcClient.node, &tls.Config{ServerName: hostname})
 	} else {
 		// Have a dial timeout with 3 secs.
 		conn, err = net.DialTimeout("tcp", rpcClient.node, 3*time.Second)
