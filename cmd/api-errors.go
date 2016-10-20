@@ -64,6 +64,7 @@ const (
 	ErrInvalidCopySource
 	ErrInvalidCopyDest
 	ErrInvalidPolicyDocument
+	ErrInvalidObjectState
 	ErrMalformedXML
 	ErrMissingContentLength
 	ErrMissingContentMD5
@@ -306,6 +307,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Code:           "InvalidPartOrder",
 		Description:    "The list of parts was not in ascending order. The parts list must be specified in order by part number.",
 		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidObjectState: {
+		Code:           "InvalidObjectState",
+		Description:    "The operation is not valid for the current state of the object.",
+		HTTPStatusCode: http.StatusForbidden,
 	},
 	ErrAuthorizationHeaderMalformed: {
 		Code:           "AuthorizationHeaderMalformed",
@@ -587,6 +593,8 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrIncompleteBody
 	case ObjectExistsAsDirectory:
 		apiErr = ErrObjectExistsAsDirectory
+	case PrefixAccessDenied:
+		apiErr = ErrAccessDenied
 	case BucketNameInvalid:
 		apiErr = ErrInvalidBucketName
 	case BucketNotFound:

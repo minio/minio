@@ -46,6 +46,13 @@ func toObjectErr(err error, params ...string) error {
 		}
 	case errDiskFull:
 		err = StorageFull{}
+	case errFileAccessDenied:
+		if len(params) >= 2 {
+			err = PrefixAccessDenied{
+				Bucket: params[0],
+				Object: params[1],
+			}
+		}
 	case errIsNotRegular, errFileAccessDenied:
 		if len(params) >= 2 {
 			err = ObjectExistsAsDirectory{
@@ -143,6 +150,13 @@ type ObjectExistsAsDirectory GenericError
 
 func (e ObjectExistsAsDirectory) Error() string {
 	return "Object exists on : " + e.Bucket + " as directory " + e.Object
+}
+
+//PrefixAccessDenied object access is denied.
+type PrefixAccessDenied GenericError
+
+func (e PrefixAccessDenied) Error() string {
+	return "Prefix access is denied: " + e.Bucket + "/" + e.Object
 }
 
 // BucketExists bucket exists.

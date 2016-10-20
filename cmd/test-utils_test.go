@@ -1792,9 +1792,9 @@ func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 	defer removeRoots(append(fsDirs, fsDir))
 }
 
-// ExecObjectLayerDiskNotFoundTest - executes object layer tests while deleting
+// ExecObjectLayerDiskAlteredTest - executes object layer tests while altering
 // disks in between tests. Creates XL ObjectLayer instance and runs test for XL layer.
-func ExecObjectLayerDiskNotFoundTest(t *testing.T, objTest objTestDiskNotFoundType) {
+func ExecObjectLayerDiskAlteredTest(t *testing.T, objTest objTestDiskNotFoundType) {
 	objLayer, fsDirs, err := prepareXL()
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for XL setup: %s", err)

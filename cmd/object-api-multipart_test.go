@@ -160,7 +160,7 @@ func testObjectAPIIsUploadIDExists(obj ObjectLayer, instanceType string, t TestE
 // Wrapper for calling TestPutObjectPartDiskNotFound tests for both XL
 // write quorum.
 func TestPutObjectPartDiskNotFound(t *testing.T) {
-	ExecObjectLayerDiskNotFoundTest(t, testPutObjectPartDiskNotFound)
+	ExecObjectLayerDiskAlteredTest(t, testPutObjectPartDiskNotFound)
 }
 
 // testPutObjectPartDiskNotFound - Tests validate PutObjectPart behavior when disks go offline.
@@ -1274,7 +1274,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 
 // Wrapper for calling TestListObjectPartsDiskNotFound tests for both XL multiple disks and single node setup.
 func TestListObjectPartsDiskNotFound(t *testing.T) {
-	ExecObjectLayerDiskNotFoundTest(t, testListObjectPartsDiskNotFound)
+	ExecObjectLayerDiskAlteredTest(t, testListObjectPartsDiskNotFound)
 }
 
 // testListObjectParts - Tests validate listing of object parts when disks go offline.

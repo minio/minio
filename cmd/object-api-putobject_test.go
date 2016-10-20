@@ -185,7 +185,7 @@ func testObjectAPIPutObject(obj ObjectLayer, instanceType string, t TestErrHandl
 // Wrapper for calling PutObject tests for both XL multiple disks case
 // when quorum is not available.
 func TestObjectAPIPutObjectDiskNotFound(t *testing.T) {
-	ExecObjectLayerDiskNotFoundTest(t, testObjectAPIPutObjectDiskNotFOund)
+	ExecObjectLayerDiskAlteredTest(t, testObjectAPIPutObjectDiskNotFOund)
 }
 
 // Tests validate correctness of PutObject.

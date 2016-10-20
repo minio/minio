@@ -115,6 +115,9 @@ func readDir(dirPath string) (entries []string, err error) {
 		if os.IsNotExist(err) {
 			return nil, errFileNotFound
 		}
+		if os.IsPermission(err) {
+			return nil, errFileAccessDenied
+		}
 
 		// File path cannot be verified since one of the parents is a file.
 		if strings.Contains(err.Error(), "not a directory") {
