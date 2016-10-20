@@ -562,10 +562,13 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 	}
 
 	// Delete bucket access policy, if present - ignore any errors.
-	removeBucketPolicy(bucket, objectAPI)
+	_ = removeBucketPolicy(bucket, objectAPI)
 
 	// Delete notification config, if present - ignore any errors.
-	removeNotificationConfig(bucket, objectAPI)
+	_ = removeNotificationConfig(bucket, objectAPI)
+
+	// Delete listener config, if present - ignore any errors.
+	_ = removeListenerConfig(bucket, objectAPI)
 
 	// Write success response.
 	writeSuccessNoContent(w)

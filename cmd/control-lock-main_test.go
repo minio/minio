@@ -49,10 +49,10 @@ func TestPrintLockState(t *testing.T) {
 func testLockStateEquality(vliLeft, vliRight VolumeLockInfo) bool {
 
 	if vliLeft.Bucket != vliRight.Bucket ||
-	vliLeft.Object != vliRight.Object ||
-	vliLeft.LocksOnObject != vliRight.LocksOnObject ||
-	vliLeft.LocksAcquiredOnObject != vliRight.LocksAcquiredOnObject ||
-	vliLeft.TotalBlockedLocks != vliRight.TotalBlockedLocks {
+		vliLeft.Object != vliRight.Object ||
+		vliLeft.LocksOnObject != vliRight.LocksOnObject ||
+		vliLeft.LocksAcquiredOnObject != vliRight.LocksAcquiredOnObject ||
+		vliLeft.TotalBlockedLocks != vliRight.TotalBlockedLocks {
 		return false
 	}
 	return true
