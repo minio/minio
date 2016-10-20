@@ -140,7 +140,7 @@ func (ep storageEndPoint) presentIn(eps []storageEndPoint) bool {
 
 // Parse end-point (of the form host:port:path or host:path or path)
 func parseStorageEndPoint(ep string, defaultPort int) storageEndPoint {
-	parts := strings.Split(ep, ":")
+	parts := strings.SplitN(ep, ":", 3)
 	var parsedep storageEndPoint
 	switch len(parts) {
 	case 1:
