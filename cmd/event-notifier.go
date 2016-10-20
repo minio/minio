@@ -443,6 +443,15 @@ func persistListenerConfig(bucket string, lcfg []listenerConfig, obj ObjectLayer
 	return err
 }
 
+// Remove listener configuration from storage layer. Used when a
+// bucket is deleted.
+func removeListenerConfig(bucket string, obj ObjectLayer) error {
+	// make the path
+	lcPath := path.Join(bucketConfigPrefix, bucket, bucketListenerConfig)
+	// remove it
+	return obj.DeleteObject(minioMetaBucket, lcPath)
+}
+
 // loads all bucket notifications if present.
 func loadAllBucketNotifications(objAPI ObjectLayer) (map[string]*notificationConfig, map[string][]listenerConfig, error) {
 	// List buckets to proceed loading all notification configuration.
