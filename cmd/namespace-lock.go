@@ -251,6 +251,20 @@ func (n *nsLockMap) ForceUnlock(volume, path string) {
 	n.lockMapMutex.Lock()
 	defer n.lockMapMutex.Unlock()
 
+	// Clarification on operation:
+	// - In case of FS or XL we call ForceUnlock on the local nsMutex
+	//   (since there is only a single server) which will cause the 'stuck'
+	//   mutex to be removed from the map. Existing operations for this
+	//   will continue to be blocked (and timeout). New operations on this
+	//   resource will use a new mutex and proceed normally.
+	//
+	// - In case of Distributed setup (using dsync), there is no need to call
+	//   ForceUnlock on the server where the lock was acquired and is presumably
+	//   'stuck'. Instead dsync.ForceUnlock() will release the underlying locks
+	//   that participated in granting the lock. Any pending dsync locks that
+	//   are blocking can now proceed as normal and any new locks will also
+	//   participate normally.
+
 	if n.isDist { // For distributed mode, broadcast ForceUnlock message.
 		dsync.NewDRWMutex(pathutil.Join(volume, path)).ForceUnlock()
 	}
