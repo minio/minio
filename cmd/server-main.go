@@ -313,6 +313,9 @@ func serverMain(c *cli.Context) {
 	// Check 'server' cli arguments.
 	storageDisks := validateDisks(disks, ignoredDisks)
 
+	// Cleanup objects that weren't successfully written into the namespace.
+	fatalIf(houseKeeping(storageDisks), "Unable to purge temporary files.")
+
 	// If https.
 	tls := isSSL()
 
