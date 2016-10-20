@@ -20,6 +20,8 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"os"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -175,9 +177,121 @@ func testGetObject(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	}
 }
 
+// Wrapper for calling GetObject with permission denied expected
+func TestGetObjectPermissionDenied(t *testing.T) {
+	// Windows doesn't support Chmod under golang
+	if runtime.GOOS != "windows" {
+		ExecObjectLayerDiskAlteredTest(t, testGetObjectPermissionDenied)
+	}
+}
+
+// Test GetObject when we are allowed to access some dirs and objects
+func testGetObjectPermissionDenied(obj ObjectLayer, instanceType string, disks []string, t *testing.T) {
+	// Setup for the tests.
+	bucketName := getRandomBucketName()
+	// create bucket.
+	err := obj.MakeBucket(bucketName)
+	// Stop the test if creation of the bucket fails.
+	if err != nil {
+		t.Fatalf("%s : %s", instanceType, err.Error())
+	}
+
+	bytesData := []struct {
+		byteData []byte
+	}{
+		{generateBytesData(6 * 1024 * 1024)},
+	}
+	// set of inputs for uploading the objects before tests for downloading is done.
+	putObjectInputs := []struct {
+		bucketName    string
+		objectName    string
+		contentLength int64
+		textData      []byte
+		metaData      map[string]string
+	}{
+		{bucketName, "test-object1", int64(len(bytesData[0].byteData)), bytesData[0].byteData, make(map[string]string)},
+		{bucketName, "test-object2", int64(len(bytesData[0].byteData)), bytesData[0].byteData, make(map[string]string)},
+		{bucketName, "dir/test-object3", int64(len(bytesData[0].byteData)), bytesData[0].byteData, make(map[string]string)},
+	}
+	sha256sum := ""
+	// iterate through the above set of inputs and upkoad the object.
+	for i, input := range putObjectInputs {
+		// uploading the object.
+		_, err = obj.PutObject(input.bucketName, input.objectName, input.contentLength, bytes.NewBuffer(input.textData), input.metaData, sha256sum)
+		// if object upload fails stop the test.
+		if err != nil {
+			t.Fatalf("Put Object case %d:  Error uploading object: <ERROR> %v", i+1, err)
+		}
+	}
+
+	// set of empty buffers used to fill GetObject data.
+	buffers := []*bytes.Buffer{
+		new(bytes.Buffer),
+	}
+
+	// test cases with set of inputs
+	testCases := []struct {
+		bucketName  string
+		objectName  string
+		chmodPath   string
+		startOffset int64
+		length      int64
+		// data obtained/fetched from GetObject.
+		getObjectData *bytes.Buffer
+		// writer which governs the write into the `getObjectData`.
+		writer io.Writer
+		// flag indicating whether the test for given ase should pass.
+		shouldPass bool
+		// expected Result.
+		expectedData []byte
+		err          error
+	}{
+		// Test 1 - chmod 000 bucket/test-object1
+		{bucketName, "test-object1", "test-object1", 0, int64(len(bytesData[0].byteData)), buffers[0], buffers[0], false, bytesData[0].byteData, PrefixAccessDenied{Bucket: bucketName, Object: "test-object1"}},
+		// Test 2 - chmod 000 bucket/dir/
+		{bucketName, "dir/test-object2", "dir", 0, int64(len(bytesData[0].byteData)), buffers[0], buffers[0], false, bytesData[0].byteData, PrefixAccessDenied{Bucket: bucketName, Object: "dir/test-object2"}},
+		// Test 3 - chmod 000 bucket/
+		{bucketName, "test-object3", "", 0, int64(len(bytesData[0].byteData)), buffers[0], buffers[0], false, bytesData[0].byteData, PrefixAccessDenied{Bucket: bucketName, Object: "test-object3"}},
+	}
+
+	for i, testCase := range testCases {
+		for _, d := range disks {
+			err = os.Chmod(d+"/"+testCase.bucketName+"/"+testCase.chmodPath, 0)
+			if err != nil {
+				t.Fatalf("Test %d, Unable to chmod: %v", i+1, err)
+			}
+		}
+
+		err = obj.GetObject(testCase.bucketName, testCase.objectName, testCase.startOffset, testCase.length, testCase.writer)
+		if err != nil && testCase.shouldPass {
+			t.Errorf("Test %d: %s:  Expected to pass, but failed with: <ERROR> %s", i+1, instanceType, err.Error())
+		}
+		if err == nil && !testCase.shouldPass {
+			t.Errorf("Test %d: %s: Expected to fail with <ERROR> \"%s\", but passed instead.", i+1, instanceType, testCase.err.Error())
+		}
+		// Failed as expected, but does it fail for the expected reason.
+		if err != nil && !testCase.shouldPass {
+			if !strings.Contains(err.Error(), testCase.err.Error()) {
+				t.Errorf("Test %d: %s: Expected to fail with error \"%s\", but instead failed with error \"%s\" instead.", i+1, instanceType, testCase.err.Error(), err.Error())
+			}
+		}
+		// Since there are cases for which GetObject fails, this is
+		// necessary. Test passes as expected, but the output values
+		// are verified for correctness here.
+		if err == nil && testCase.shouldPass {
+			if !bytes.Equal(testCase.expectedData, testCase.getObjectData.Bytes()) {
+				t.Errorf("Test %d: %s: Data Mismatch: Expected data and the fetched data from GetObject doesn't match.", i+1, instanceType)
+			}
+			// empty the buffer so that it can be used to further cases.
+			testCase.getObjectData.Reset()
+		}
+	}
+
+}
+
 // Wrapper for calling GetObject tests for both XL multiple disks and single node setup.
 func TestGetObjectDiskNotFound(t *testing.T) {
-	ExecObjectLayerDiskNotFoundTest(t, testGetObjectDiskNotFound)
+	ExecObjectLayerDiskAlteredTest(t, testGetObjectDiskNotFound)
 }
 
 // ObjectLayer.GetObject is called with series of cases for valid and erroneous inputs and the result is validated.
