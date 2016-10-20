@@ -245,7 +245,8 @@ func TestLocalAddress(t *testing.T) {
 		// Test 2 - local address is everything.
 		{
 			srvCmdConfig: serverCmdConfig{
-				isDistXL: false,
+				serverAddr: fmt.Sprintf(":%d", globalMinioPort),
+				isDistXL:   false,
 				disks: []string{
 					"/mnt/disk1",
 					"/mnt/disk2",
@@ -267,6 +268,22 @@ func TestLocalAddress(t *testing.T) {
 				},
 			},
 			localAddr: "",
+		},
+		// Test 4 - in case of FS mode, with SSL, the host
+		// name is specified in the --address option on the
+		// server command line.
+		{
+			srvCmdConfig: serverCmdConfig{
+				serverAddr: "play.minio.io:9000",
+				isDistXL:   false,
+				disks: []string{
+					"/mnt/disk1",
+					"/mnt/disk2",
+					"/mnt/disk3",
+					"/mnt/disk4",
+				},
+			},
+			localAddr: "play.minio.io:9000",
 		},
 	}
 

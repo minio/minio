@@ -97,7 +97,7 @@ func splitNetPath(networkPath string) (netAddr, netPath string, err error) {
 // `host:port` format.
 func getLocalAddress(srvCmdConfig serverCmdConfig) string {
 	if !srvCmdConfig.isDistXL {
-		return fmt.Sprintf(":%d", globalMinioPort)
+		return srvCmdConfig.serverAddr
 	}
 	for _, export := range srvCmdConfig.disks {
 		// Validates if remote disk is local.
