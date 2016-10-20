@@ -276,11 +276,11 @@ func TestLocalAddress(t *testing.T) {
 			srvCmdConfig: serverCmdConfig{
 				serverAddr: "play.minio.io:9000",
 				isDistXL:   false,
-				disks: []string{
-					"/mnt/disk1",
-					"/mnt/disk2",
-					"/mnt/disk3",
-					"/mnt/disk4",
+				endPoints: []storageEndPoint{
+					{path: "/mnt/disk1"},
+					{path: "/mnt/disk2"},
+					{path: "/mnt/disk3"},
+					{path: "/mnt/disk4"},
 				},
 			},
 			localAddr: "play.minio.io:9000",
