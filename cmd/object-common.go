@@ -64,7 +64,11 @@ func houseKeeping(storageDisks []StorageAPI) error {
 
 	// Initialize all disks in parallel.
 	for index, disk := range storageDisks {
-		if disk == nil || !isLocalStorage(disk.String()) {
+		if disk == nil {
+			continue
+		}
+		if _, ok := disk.(*networkStorage); ok {
+			// Skip remote disks.
 			continue
 		}
 		wg.Add(1)
