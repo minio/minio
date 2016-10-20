@@ -17,12 +17,11 @@
 package cmd
 
 import (
+	"fmt"
 	"io"
 	"net"
 	"net/rpc"
 	"path"
-	"strconv"
-	"strings"
 
 	"github.com/minio/minio/pkg/disk"
 )
@@ -94,21 +93,16 @@ func toStorageErr(err error) error {
 }
 
 // Initialize new rpc client.
-func newRPCClient(networkPath string) (StorageAPI, error) {
+func newRPCClient(ep storageEndPoint) (StorageAPI, error) {
 	// Input validation.
-	if networkPath == "" || strings.LastIndex(networkPath, ":") == -1 {
+	if ep.host == "" || ep.port == 0 || ep.path == "" {
 		return nil, errInvalidArgument
 	}
 
-	// Split network path into its components.
-	netAddr, netPath, err := splitNetPath(networkPath)
-	if err != nil {
-		return nil, err
-	}
-
 	// Dial minio rpc storage http path.
-	rpcPath := path.Join(storageRPCPath, netPath)
-	rpcAddr := netAddr + ":" + strconv.Itoa(globalMinioPort)
+	rpcPath := path.Join(storageRPCPath, ep.path)
+	rpcAddr := fmt.Sprintf("%s:%d", ep.host, ep.port)
+
 	// Initialize rpc client with network address and rpc path.
 	cred := serverConfig.GetCredential()
 	rpcClient := newAuthClient(&authConfig{
@@ -122,8 +116,8 @@ func newRPCClient(networkPath string) (StorageAPI, error) {
 
 	// Initialize network storage.
 	ndisk := &networkStorage{
-		netAddr:   netAddr,
-		netPath:   netPath,
+		netAddr:   ep.host,
+		netPath:   ep.path,
 		rpcClient: rpcClient,
 	}
 

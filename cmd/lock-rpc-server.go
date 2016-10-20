@@ -21,12 +21,10 @@ import (
 	"math/rand"
 	"net/rpc"
 	"path"
-	"strings"
 	"sync"
 	"time"
 
 	router "github.com/gorilla/mux"
-	"github.com/minio/minio-go/pkg/set"
 )
 
 const lockRPCPath = "/minio/lock"
@@ -84,31 +82,19 @@ func registerDistNSLockRouter(mux *router.Router, serverConfig serverCmdConfig) 
 
 // Create one lock server for every local storage rpc server.
 func newLockServers(serverConfig serverCmdConfig) (lockServers []*lockServer) {
-	// Initialize posix storage API.
-	exports := serverConfig.disks
-	ignoredExports := serverConfig.ignoredDisks
+	for _, ep := range serverConfig.endPoints {
+		if ep.presentIn(serverConfig.ignoredEndPoints) {
+			// Skip initializing ignored end point.
+			continue
+		}
 
-	// Save ignored disks in a map
-	// Initialize ignored disks in a new set.
-	ignoredSet := set.NewStringSet()
-	if len(ignoredExports) > 0 {
-		ignoredSet = set.CreateStringSet(ignoredExports...)
-	}
-	for _, export := range exports {
-		if ignoredSet.Contains(export) {
-			// Ignore initializing ignored export.
-			continue
-		}
 		// Not local storage move to the next node.
-		if !isLocalStorage(export) {
+		if !isLocalStorage(ep) {
 			continue
-		}
-		if idx := strings.LastIndex(export, ":"); idx != -1 {
-			export = export[idx+1:]
 		}
 		// Create handler for lock RPCs
 		locker := &lockServer{
-			rpcPath: export,
+			rpcPath: ep.path,
 			mutex:   sync.Mutex{},
 			lockMap: make(map[string][]lockRequesterInfo),
 		}

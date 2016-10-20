@@ -68,7 +68,7 @@ func TestHasExtendedHeader(t *testing.T) {
 }
 
 func initFSObjects(disk string, t *testing.T) (obj ObjectLayer) {
-	obj, _, err := initObjectLayer([]string{disk}, nil)
+	obj, _, err := initObjectLayer(parseStorageEndPoints([]string{disk}, 0), nil)
 	if err != nil {
 		t.Fatal("Unexpected err: ", err)
 	}

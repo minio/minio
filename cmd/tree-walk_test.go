@@ -165,7 +165,7 @@ func TestTreeWalk(t *testing.T) {
 	if err != nil {
 		t.Errorf("Unable to create tmp directory: %s", err)
 	}
-	disk, err := newStorageAPI(fsDir)
+	disk, err := newStorageAPI(parseStorageEndPoint(fsDir, 0))
 	if err != nil {
 		t.Errorf("Unable to create StorageAPI: %s", err)
 	}
@@ -202,7 +202,7 @@ func TestTreeWalkTimeout(t *testing.T) {
 	if err != nil {
 		t.Errorf("Unable to create tmp directory: %s", err)
 	}
-	disk, err := newStorageAPI(fsDir)
+	disk, err := newStorageAPI(parseStorageEndPoint(fsDir, 0))
 	if err != nil {
 		t.Errorf("Unable to create StorageAPI: %s", err)
 	}
@@ -279,11 +279,11 @@ func TestListDir(t *testing.T) {
 	}
 
 	// Create two StorageAPIs disk1 and disk2.
-	disk1, err := newStorageAPI(fsDir1)
+	disk1, err := newStorageAPI(parseStorageEndPoint(fsDir1, 0))
 	if err != nil {
 		t.Errorf("Unable to create StorageAPI: %s", err)
 	}
-	disk2, err := newStorageAPI(fsDir2)
+	disk2, err := newStorageAPI(parseStorageEndPoint(fsDir2, 0))
 	if err != nil {
 		t.Errorf("Unable to create StorageAPI: %s", err)
 	}
@@ -352,7 +352,7 @@ func TestRecursiveTreeWalk(t *testing.T) {
 	}
 
 	// Create two StorageAPIs disk1.
-	disk1, err := newStorageAPI(fsDir1)
+	disk1, err := newStorageAPI(parseStorageEndPoint(fsDir1, 0))
 	if err != nil {
 		t.Errorf("Unable to create StorageAPI: %s", err)
 	}
@@ -459,7 +459,7 @@ func TestSortedness(t *testing.T) {
 	}
 
 	// Create two StorageAPIs disk1.
-	disk1, err := newStorageAPI(fsDir1)
+	disk1, err := newStorageAPI(parseStorageEndPoint(fsDir1, 0))
 	if err != nil {
 		t.Errorf("Unable to create StorageAPI: %s", err)
 	}
@@ -534,7 +534,7 @@ func TestTreeWalkIsEnd(t *testing.T) {
 	}
 
 	// Create two StorageAPIs disk1.
-	disk1, err := newStorageAPI(fsDir1)
+	disk1, err := newStorageAPI(parseStorageEndPoint(fsDir1, 0))
 	if err != nil {
 		t.Errorf("Unable to create StorageAPI: %s", err)
 	}

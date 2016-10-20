@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"flag"
-	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -121,43 +120,8 @@ func TestCheckSufficientDisks(t *testing.T) {
 
 	// Validates different variations of input disks.
 	for i, testCase := range testCases {
-		if checkSufficientDisks(testCase.disks) != testCase.expectedErr {
+		if checkSufficientDisks(parseStorageEndPoints(testCase.disks, 0)) != testCase.expectedErr {
 			t.Errorf("Test %d expected to pass for disks %s", i+1, testCase.disks)
-		}
-	}
-}
-
-func TestCheckNamingDisks(t *testing.T) {
-	var testCases []struct {
-		disks []string
-		err   error
-	}
-	if runtime.GOOS == "windows" {
-		testCases = []struct {
-			disks []string
-			err   error
-		}{
-			{[]string{`:C:\\a\\b\\c`}, &net.AddrError{Err: "Missing address in network path", Addr: `:C:\\a\\b\\c`}},
-			{[]string{`localhost:C:\\mnt\\disk1`, `localhost:C:\\mnt\\disk2`}, nil},
-		}
-	} else {
-		testCases = []struct {
-			disks []string
-			err   error
-		}{
-			{[]string{"localhost:/mnt/disk1", ":/a/b/c"}, &net.AddrError{Err: "Missing address in network path", Addr: ":/a/b/c"}},
-			{[]string{"localhost:/mnt/disk1", "localhost:/mnt/disk2"}, nil},
-		}
-	}
-
-	for i, test := range testCases {
-		err := checkNamingDisks(test.disks)
-		if test.err != nil {
-			if err == nil || err.Error() != test.err.Error() {
-				t.Errorf("Test %d failed with %v but expected error %v", i+1, err, test.err)
-			}
-		} else if err != test.err {
-			t.Errorf("Test %d failed with %v but expected error %v", i+1, err, test.err)
 		}
 	}
 }
@@ -186,7 +150,7 @@ func TestCheckServerSyntax(t *testing.T) {
 			t.Errorf("Test %d failed to parse arguments %s", i+1, disks)
 		}
 		defer removeRoots(disks)
-		_ = validateDisks(disks, nil)
+		_ = validateDisks(parseStorageEndPoints(disks, 0), nil)
 	}
 }
 
@@ -268,7 +232,7 @@ func TestIsDistributedSetup(t *testing.T) {
 
 	}
 	for i, test := range testCases {
-		res := isDistributedSetup(test.disks)
+		res := isDistributedSetup(parseStorageEndPoints(test.disks, 0))
 		if res != test.result {
 			t.Errorf("Test %d: expected result %t but received %t", i+1, test.result, res)
 		}
