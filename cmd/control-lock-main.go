@@ -17,8 +17,10 @@
 package cmd
 
 import (
+	"errors"
 	"net/url"
 	"path"
+	"strings"
 	"time"
 
 	"github.com/minio/cli"
@@ -28,12 +30,16 @@ import (
 var lockFlags = []cli.Flag{
 	cli.StringFlag{
 		Name:  "older-than",
-		Usage: "List locks older than given time.",
+		Usage: "Include locks older than given time.",
 		Value: "24h",
 	},
 	cli.BoolFlag{
 		Name:  "verbose",
 		Usage: "Lists more information about locks.",
+	},
+	cli.BoolFlag{
+		Name:  "recursive",
+		Usage: "Recursively clear locks.",
 	},
 }
 
@@ -55,8 +61,20 @@ EAMPLES:
   1. List all currently active locks from all nodes. Defaults to list locks held longer than 24hrs.
     $ minio control {{.Name}} list http://localhost:9000/
 
-  2. List all currently active locks from all nodes. Request locks from older than 1minute.
+  2. List all currently active locks from all nodes. Request locks older than 1minute.
     $ minio control {{.Name}} --older-than=1m list http://localhost:9000/
+
+  3. Clear lock named 'bucket/object' (exact match).
+    $ minio control {{.Name}} clear http://localhost:9000/bucket/object
+
+  4. Clear all locks with names that start with 'bucket/prefix' (wildcard match).
+    $ minio control {{.Name}} --recursive clear http://localhost:9000/bucket/prefix
+
+  5. Clear all locks older than 10minutes.
+    $ minio control {{.Name}} --older-than=10m clear http://localhost:9000/
+
+  6. Clear all locks with names that start with 'bucket/a' and that are older than 1hour.
+    $ minio control {{.Name}} --recursive --older-than=1h clear http://localhost:9000/bucket/a
 `,
 }
 
@@ -96,6 +114,33 @@ func printLockState(lkStateRep map[string]SystemLockState, olderThan time.Durati
 	}
 }
 
+// clearLockState - clear locks based on a filter for a given duration and a name or prefix to match
+func clearLockState(f func(bucket, object string), lkStateRep map[string]SystemLockState, olderThan time.Duration, match string, recursive bool) {
+	console.Println("Status      Duration     Server     LockType     Resource")
+	for server, lockState := range lkStateRep {
+		for _, lockInfo := range lockState.LocksInfoPerObject {
+			lockedResource := path.Join(lockInfo.Bucket, lockInfo.Object)
+			for _, lockDetails := range lockInfo.LockDetailsOnObject {
+				if lockDetails.Duration < olderThan {
+					continue
+				}
+				if match != "" {
+					if recursive {
+						if !strings.HasPrefix(lockedResource, match) {
+							continue
+						}
+					} else if lockedResource != match {
+						continue
+					}
+				}
+				f(lockInfo.Bucket, lockInfo.Object)
+				console.Println("CLEARED", lockDetails.Duration, server,
+					lockDetails.LockType, lockedResource)
+			}
+		}
+	}
+}
+
 // "minio control lock" entry point.
 func lockControl(c *cli.Context) {
 	if !c.Args().Present() && len(c.Args()) != 2 {
@@ -112,6 +157,9 @@ func lockControl(c *cli.Context) {
 
 	// Verbose flag.
 	verbose := c.Bool("verbose")
+
+	// Recursive flag.
+	recursive := c.Bool("recursive")
 
 	authCfg := &authConfig{
 		accessKey:   serverConfig.GetCredential().AccessKeyID,
@@ -142,9 +190,36 @@ func lockControl(c *cli.Context) {
 			printLockStateVerbose(lkStateRep, olderThan)
 		}
 	case "clear":
-		// TODO. Defaults to clearing all locks.
+		path := parsedURL.Path
+		if strings.HasPrefix(path, "/") {
+			path = path[1:] // Strip leading slash
+		}
+		if path == "" && c.NumFlags() == 0 {
+			fatalIf(errors.New("Bad arguments"), "Need to either pass a path or older-than argument")
+		}
+		if !c.IsSet("older-than") { // If not set explicitly, change default to 0 instead of 24h
+			olderThan = 0
+		}
+		lkStateRep := make(map[string]SystemLockState)
+		// Request lock info, fetches from all the nodes in the cluster.
+		err = client.Call("Control.LockInfo", args, &lkStateRep)
+		fatalIf(err, "Unable to fetch system lockInfo.")
+
+		// Helper function to call server for actual removal of lock
+		f := func(bucket, object string) {
+			args := LockClearArgs{
+				Bucket: bucket,
+				Object: object,
+			}
+			reply := GenericReply{}
+			// Call server to clear the lock based on the name of the object.
+			err := client.Call("Control.LockClear", &args, &reply)
+			fatalIf(err, "Unable to clear lock.")
+		}
+
+		// Loop over all locks and determine whether to clear or not.
+		clearLockState(f, lkStateRep, olderThan, path, recursive)
 	default:
 		fatalIf(errInvalidArgument, "Unsupported lock control operation %s", c.Args().Get(0))
 	}
-
 }

@@ -167,3 +167,20 @@ func (c *controlAPIHandlers) LockInfo(args *GenericArgs, reply *map[string]Syste
 	// Success.
 	return nil
 }
+
+// LockClearArgs - arguments for LockClear handler
+type LockClearArgs struct {
+	GenericArgs
+	Bucket string
+	Object string
+}
+
+// LockClear - RPC control handler for `minio control lock clear`.
+func (c *controlAPIHandlers) LockClear(args *LockClearArgs, reply *GenericReply) error {
+	if !isRPCTokenValid(args.Token) {
+		return errInvalidToken
+	}
+	nsMutex.ForceUnlock(args.Bucket, args.Object)
+	*reply = GenericReply{}
+	return nil
+}
