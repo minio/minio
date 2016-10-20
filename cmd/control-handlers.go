@@ -261,7 +261,7 @@ func (c *controlAPIHandlers) ServiceHandler(args *ServiceArgs, reply *ServiceRep
 	return nil
 }
 
-// LockInfo - RPC control handler for `minio control lock`. Returns the info of the locks held in the system.
+// TryInitHandler - generic RPC control handler
 func (c *controlAPIHandlers) TryInitHandler(args *GenericArgs, reply *GenericReply) error {
 	if !isRPCTokenValid(args.Token) {
 		return errInvalidToken

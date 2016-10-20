@@ -99,7 +99,7 @@ func getSystemLockState() (SystemLockState, error) {
 func (c *controlAPIHandlers) remoteLockInfoCall(args *GenericArgs, replies []SystemLockState) error {
 	var wg sync.WaitGroup
 	var errs = make([]error, len(c.RemoteControls))
-	// Send remote call to all neighboring peers to restart minio servers.
+	// Send remote call to all neighboring peers fetch control lock info.
 	for index, clnt := range c.RemoteControls {
 		wg.Add(1)
 		go func(index int, client *AuthRPCClient) {
@@ -133,7 +133,7 @@ func (c *controlAPIHandlers) RemoteLockInfo(args *GenericArgs, reply *SystemLock
 	return nil
 }
 
-// LockInfo - RPC control handler for `minio control lock`. Returns the info of the locks held in the cluster.
+// LockInfo - RPC control handler for `minio control lock list`. Returns the info of the locks held in the cluster.
 func (c *controlAPIHandlers) LockInfo(args *GenericArgs, reply *map[string]SystemLockState) error {
 	if !isRPCTokenValid(args.Token) {
 		return errInvalidToken
