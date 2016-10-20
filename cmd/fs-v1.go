@@ -384,6 +384,7 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 		// For size 0 we write a 0byte file.
 		err = fs.storage.AppendFile(minioMetaBucket, tempObj, []byte(""))
 		if err != nil {
+			fs.storage.DeleteFile(minioMetaBucket, tempObj)
 			return ObjectInfo{}, toObjectErr(traceError(err), bucket, object)
 		}
 	} else {
@@ -397,8 +398,8 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 		var bytesWritten int64
 		bytesWritten, err = fsCreateFile(fs.storage, teeReader, buf, minioMetaBucket, tempObj)
 		if err != nil {
-			errorIf(err, "Failed to create object %s/%s", bucket, object)
 			fs.storage.DeleteFile(minioMetaBucket, tempObj)
+			errorIf(err, "Failed to create object %s/%s", bucket, object)
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
 
@@ -409,6 +410,10 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 			return ObjectInfo{}, traceError(IncompleteBody{})
 		}
 	}
+	// Delete the temporary object in the case of a
+	// failure. If PutObject succeeds, then there would be
+	// nothing to delete.
+	defer fs.storage.DeleteFile(minioMetaBucket, tempObj)
 
 	newMD5Hex := hex.EncodeToString(md5Writer.Sum(nil))
 	// Update the md5sum if not set with the newly calculated one.
@@ -420,8 +425,6 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 	md5Hex := metadata["md5Sum"]
 	if md5Hex != "" {
 		if newMD5Hex != md5Hex {
-			// MD5 mismatch, delete the temporary object.
-			fs.storage.DeleteFile(minioMetaBucket, tempObj)
 			// Returns md5 mismatch.
 			return ObjectInfo{}, traceError(BadDigest{md5Hex, newMD5Hex})
 		}
@@ -430,8 +433,6 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 	if sha256sum != "" {
 		newSHA256sum := hex.EncodeToString(sha256Writer.Sum(nil))
 		if newSHA256sum != sha256sum {
-			// SHA256 mismatch, delete the temporary object.
-			fs.storage.DeleteFile(minioMetaBucket, tempObj)
 			return ObjectInfo{}, traceError(SHA256Mismatch{})
 		}
 	}

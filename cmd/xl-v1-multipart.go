@@ -413,11 +413,15 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	// Construct a tee reader for md5sum.
 	teeReader := io.TeeReader(lreader, mw)
 
+	// Delete the temporary object part. If PutObjectPart succeeds there would be nothing to delete.
+	defer xl.deleteObject(minioMetaBucket, tmpPartPath)
+
 	// Erasure code data and write across all disks.
 	sizeWritten, checkSums, err := erasureCreateFile(onlineDisks, minioMetaBucket, tmpPartPath, teeReader, xlMeta.Erasure.BlockSize, xl.dataBlocks, xl.parityBlocks, bitRotAlgo, xl.writeQuorum)
 	if err != nil {
 		return "", toObjectErr(err, bucket, object)
 	}
+
 	// Should return IncompleteBody{} error when reader has fewer bytes
 	// than specified in request header.
 	if sizeWritten < size {
@@ -434,8 +438,6 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	newMD5Hex := hex.EncodeToString(md5Writer.Sum(nil))
 	if md5Hex != "" {
 		if newMD5Hex != md5Hex {
-			// MD5 mismatch, delete the temporary object.
-			xl.deleteObject(minioMetaBucket, tmpPartPath)
 			// Returns md5 mismatch.
 			return "", traceError(BadDigest{md5Hex, newMD5Hex})
 		}
@@ -444,8 +446,6 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	if sha256sum != "" {
 		newSHA256sum := hex.EncodeToString(sha256Writer.Sum(nil))
 		if newSHA256sum != sha256sum {
-			// SHA256 mismatch, delete the temporary object.
-			xl.deleteObject(minioMetaBucket, tmpPartPath)
 			return "", traceError(SHA256Mismatch{})
 		}
 	}
