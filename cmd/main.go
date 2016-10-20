@@ -178,17 +178,17 @@ func Main() {
 		accessKey := os.Getenv("MINIO_ACCESS_KEY")
 		secretKey := os.Getenv("MINIO_SECRET_KEY")
 		if accessKey != "" && secretKey != "" {
-			if !isValidAccessKey.MatchString(accessKey) {
-				fatalIf(errInvalidArgument, "Invalid access key.")
-			}
-			if !isValidSecretKey.MatchString(secretKey) {
-				fatalIf(errInvalidArgument, "Invalid secret key.")
-			}
 			// Set new credentials.
 			serverConfig.SetCredential(credential{
 				AccessKeyID:     accessKey,
 				SecretAccessKey: secretKey,
 			})
+		}
+		if !isValidAccessKey.MatchString(serverConfig.GetCredential().AccessKeyID) {
+			fatalIf(errInvalidArgument, "Invalid access key. Accept only a string starting with a alphabetic and containing from 5 to 20 characters.")
+		}
+		if !isValidSecretKey.MatchString(serverConfig.GetCredential().SecretAccessKey) {
+			fatalIf(errInvalidArgument, "Invalid secret key. Accept only a string containing from 8 to 40 characters.")
 		}
 
 		// Enable all loggers by now.
