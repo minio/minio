@@ -462,11 +462,14 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 		return "", traceError(IncompleteBody{})
 	}
 
+	// Delete temporary part in case of failure. If
+	// PutObjectPart succeeds then there would be nothing to
+	// delete.
+	defer fs.storage.DeleteFile(minioMetaBucket, tmpPartPath)
+
 	newMD5Hex := hex.EncodeToString(md5Writer.Sum(nil))
 	if md5Hex != "" {
 		if newMD5Hex != md5Hex {
-			// MD5 mismatch, delete the temporary object.
-			fs.storage.DeleteFile(minioMetaBucket, tmpPartPath)
 			return "", traceError(BadDigest{md5Hex, newMD5Hex})
 		}
 	}
@@ -474,8 +477,6 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	if sha256sum != "" {
 		newSHA256sum := hex.EncodeToString(sha256Writer.Sum(nil))
 		if newSHA256sum != sha256sum {
-			// SHA256 mismatch, delete the temporary object.
-			fs.storage.DeleteFile(minioMetaBucket, tmpPartPath)
 			return "", traceError(SHA256Mismatch{})
 		}
 	}
@@ -504,9 +505,6 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	partPath := path.Join(mpartMetaPrefix, bucket, object, uploadID, partSuffix)
 	err = fs.storage.RenameFile(minioMetaBucket, tmpPartPath, minioMetaBucket, partPath)
 	if err != nil {
-		if dErr := fs.storage.DeleteFile(minioMetaBucket, tmpPartPath); dErr != nil {
-			return "", toObjectErr(traceError(dErr), minioMetaBucket, tmpPartPath)
-		}
 		return "", toObjectErr(traceError(err), minioMetaBucket, partPath)
 	}
 	uploadIDPath = path.Join(mpartMetaPrefix, bucket, object, uploadID)

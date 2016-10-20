@@ -443,18 +443,19 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 
 	onlineDisks := getOrderedDisks(xlMeta.Erasure.Distribution, xl.storageDisks)
 
+	// Delete temporary object in the event of failure. If
+	// PutObject succeeded there would be no temporary object to
+	// delete.
+	defer xl.deleteObject(minioMetaTmpBucket, tempObj)
+
 	// Erasure code data and write across all disks.
 	sizeWritten, checkSums, err := erasureCreateFile(onlineDisks, minioMetaBucket, tempErasureObj, teeReader, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks, xlMeta.Erasure.ParityBlocks, bitRotAlgo, xl.writeQuorum)
 	if err != nil {
-		// Create file failed, delete temporary object.
-		xl.deleteObject(minioMetaTmpBucket, tempObj)
 		return ObjectInfo{}, toObjectErr(err, minioMetaBucket, tempErasureObj)
 	}
 	// Should return IncompleteBody{} error when reader has fewer bytes
 	// than specified in request header.
 	if sizeWritten < size {
-		// Short write, delete temporary object.
-		xl.deleteObject(minioMetaTmpBucket, tempObj)
 		return ObjectInfo{}, traceError(IncompleteBody{})
 	}
 
@@ -486,8 +487,6 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	md5Hex := metadata["md5Sum"]
 	if md5Hex != "" {
 		if newMD5Hex != md5Hex {
-			// MD5 mismatch, delete the temporary object.
-			xl.deleteObject(minioMetaTmpBucket, tempObj)
 			// Returns md5 mismatch.
 			return ObjectInfo{}, traceError(BadDigest{md5Hex, newMD5Hex})
 		}
@@ -496,8 +495,6 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	if sha256sum != "" {
 		newSHA256sum := hex.EncodeToString(sha256Writer.Sum(nil))
 		if newSHA256sum != sha256sum {
-			// SHA256 mismatch, delete the temporary object.
-			xl.deleteObject(minioMetaBucket, tempObj)
 			return ObjectInfo{}, traceError(SHA256Mismatch{})
 		}
 	}
@@ -514,14 +511,15 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	// Check if an object is present as one of the parent dir.
 	// -- FIXME. (needs a new kind of lock).
 	if xl.parentDirIsObject(bucket, path.Dir(object)) {
-		// Parent (in the namespace) is an object, delete temporary object.
-		xl.deleteObject(minioMetaTmpBucket, tempObj)
 		return ObjectInfo{}, toObjectErr(traceError(errFileAccessDenied), bucket, object)
 	}
 
 	// Rename if an object already exists to temporary location.
 	newUniqueID := getUUID()
 	if xl.isObject(bucket, object) {
+		// Delete the temporary copy of the object that existed before this PutObject request.
+		defer xl.deleteObject(minioMetaTmpBucket, newUniqueID)
+
 		// NOTE: Do not use online disks slice here.
 		// The reason is that existing object should be purged
 		// regardless of `xl.json` status and rolled back in case of errors.
@@ -560,9 +558,6 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	if err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
-
-	// Delete the temporary object.
-	xl.deleteObject(minioMetaTmpBucket, newUniqueID)
 
 	// Once we have successfully renamed the object, Close the buffer which would
 	// save the object on cache.
