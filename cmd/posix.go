@@ -73,22 +73,28 @@ func checkPathLength(pathName string) error {
 func isDirEmpty(dirname string) bool {
 	f, err := os.Open(dirname)
 	if err != nil {
-		errorIf(err, "Unable to access directory.")
+		errorIf(func() error {
+			if !os.IsNotExist(err) {
+				return err
+			}
+			return nil
+		}(), "Unable to access directory.")
 		return false
 	}
 	defer f.Close()
 	// List one entry.
 	_, err = f.Readdirnames(1)
-	if err != nil {
-		if err == io.EOF {
-			// Returns true if we have reached EOF, directory is indeed empty.
-			return true
-		}
-		errorIf(err, "Unable to list directory.")
+	if err != io.EOF {
+		errorIf(func() error {
+			if !os.IsNotExist(err) {
+				return err
+			}
+			return nil
+		}(), "Unable to list directory.")
 		return false
 	}
-	// Directory is not empty.
-	return false
+	// Returns true if we have reached EOF, directory is indeed empty.
+	return true
 }
 
 // Initialize a new storage disk.
