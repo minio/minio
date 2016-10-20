@@ -22,9 +22,12 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
+
+	"regexp"
 
 	"github.com/minio/cli"
 )
@@ -140,7 +143,35 @@ func (ep storageEndPoint) presentIn(eps []storageEndPoint) bool {
 
 // Parse end-point (of the form host:port:path or host:path or path)
 func parseStorageEndPoint(ep string, defaultPort int) storageEndPoint {
-	parts := strings.SplitN(ep, ":", 3)
+	if runtime.GOOS == "windows" {
+		// Try to match path, ex. C:\export
+		matched, err := regexp.MatchString(`^[a-zA-Z]:\\[^:]+$`, ep)
+		fatalIf(err, "Unable to match %s", ep)
+		if matched {
+			return storageEndPoint{path: ep}
+		}
+
+		// Try to match host:path ex. 127.0.0.1:C:\export
+		re, err := regexp.Compile(`^([^:]+):([a-zA-Z]:\\[^:]+)$`)
+		fatalIf(err, "Failed to compile regex")
+		result := re.FindStringSubmatch(ep)
+		if len(result) != 0 {
+			return storageEndPoint{host: result[1], port: defaultPort, path: result[2]}
+		}
+
+		// Try to match host:port:path ex. 127.0.0.1:443:C:\export
+		re, err = regexp.Compile(`^([^:]+):([0-9]+):([a-zA-Z]:\\[^:]+)$`)
+		fatalIf(err, "Failed to compile regex")
+		result = re.FindStringSubmatch(ep)
+		if len(result) != 0 {
+			portInt, err := strconv.Atoi(result[2])
+			fatalIf(err, "Unable to parse port %s", result[2])
+			return storageEndPoint{host: result[1], port: portInt, path: result[3]}
+		}
+		fatalIf(errors.New(""), "Unable to parse endpoint %s", ep)
+	}
+	// For *nix OSes
+	parts := strings.Split(ep, ":")
 	var parsedep storageEndPoint
 	switch len(parts) {
 	case 1:
@@ -160,6 +191,9 @@ func parseStorageEndPoint(ep string, defaultPort int) storageEndPoint {
 // Parse an array of end-points (passed on the command line)
 func parseStorageEndPoints(eps []string, defaultPort int) (endpoints []storageEndPoint) {
 	for _, ep := range eps {
+		if ep == "" {
+			continue
+		}
 		endpoints = append(endpoints, parseStorageEndPoint(ep, defaultPort))
 	}
 	return
