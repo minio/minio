@@ -400,13 +400,13 @@ func TestNamespaceForceUnlockTest(t *testing.T) {
 	}()
 
 	select {
-		case <-ch:
-			// Signalled so all is fine.
-			break
+	case <-ch:
+		// Signalled so all is fine.
+		break
 
-		case <-time.After(100*time.Millisecond):
-			// In case we hit the time out, the lock has not been cleared.
-			t.Errorf("Lock not cleared.")
+	case <-time.After(100 * time.Millisecond):
+		// In case we hit the time out, the lock has not been cleared.
+		t.Errorf("Lock not cleared.")
 	}
 
 	// Clean up lock.
