@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strconv"
 	"sync"
 	"testing"
@@ -161,6 +162,79 @@ func TestSendBucketNotification(t *testing.T) {
 	}
 }
 
+func TestGetBucketNotificationHandler(t *testing.T) {
+	ExecObjectLayerAPITest(t, testGetBucketNotificationHandler, []string{
+		"GetBucketNotification",
+	})
+}
+
+func testGetBucketNotificationHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
+	credentials credential, t *testing.T) {
+	// declare sample configs
+	filterRules := []filterRule{
+		{
+			Name:  "prefix",
+			Value: "minio",
+		},
+		{
+			Name:  "suffix",
+			Value: "*.jpg",
+		},
+	}
+	sampleSvcCfg := ServiceConfig{
+		[]string{"s3:ObjectRemoved:*", "s3:ObjectCreated:*"},
+		filterStruct{
+			keyFilter{filterRules},
+		},
+		"1",
+	}
+	sampleNotifCfg := notificationConfig{
+		QueueConfigs: []queueConfig{
+			{
+				ServiceConfig: sampleSvcCfg,
+				QueueARN:      "testqARN",
+			},
+		},
+	}
+	rec := httptest.NewRecorder()
+	req, err := newTestSignedRequestV4("GET", getGetBucketNotificationURL("", bucketName),
+		0, nil, credentials.AccessKeyID, credentials.SecretAccessKey)
+	if err != nil {
+		t.Fatalf("%s: Failed to create HTTP testRequest for ListenBucketNotification: <ERROR> %v", instanceType, err)
+	}
+	apiRouter.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Unexpected http response %d", rec.Code)
+	}
+	if err = persistNotificationConfig(bucketName, &sampleNotifCfg, obj); err != nil {
+		t.Fatalf("Unable to save notification config %s", err)
+	}
+	rec = httptest.NewRecorder()
+	req, err = newTestSignedRequestV4("GET", getGetBucketNotificationURL("", bucketName),
+		0, nil, credentials.AccessKeyID, credentials.SecretAccessKey)
+	if err != nil {
+		t.Fatalf("%s: Failed to create HTTP testRequest for ListenBucketNotification: <ERROR> %v", instanceType, err)
+	}
+	apiRouter.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Unexpected http response %d", rec.Code)
+	}
+	notificationBytes, err := ioutil.ReadAll(rec.Body)
+	if err != nil {
+		t.Fatalf("Unexpected error %s", err)
+	}
+	nConfig := notificationConfig{}
+	if err = xml.Unmarshal(notificationBytes, &nConfig); err != nil {
+		t.Fatalf("Unexpected XML received %s", err)
+	}
+	if sampleNotifCfg.QueueConfigs[0].QueueARN != nConfig.QueueConfigs[0].QueueARN {
+		t.Fatalf("Uexpected notification configs expected %#v, got %#v", sampleNotifCfg, nConfig)
+	}
+	if !reflect.DeepEqual(sampleNotifCfg.QueueConfigs[0].Events, nConfig.QueueConfigs[0].Events) {
+		t.Fatalf("Uexpected notification configs expected %#v, got %#v", sampleNotifCfg, nConfig)
+	}
+}
+
 func TestListenBucketNotificationHandler(t *testing.T) {
 	ExecObjectLayerAPITest(t, testListenBucketNotificationHandler, []string{
 		"ListenBucketNotification",
@@ -168,7 +242,8 @@ func TestListenBucketNotificationHandler(t *testing.T) {
 	})
 }
 
-func testListenBucketNotificationHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler, credentials credential, t *testing.T) {
+func testListenBucketNotificationHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
+	credentials credential, t *testing.T) {
 	mux, ok := apiRouter.(*mux.Router)
 	if !ok {
 		t.Fatal("Invalid mux router found")
