@@ -347,25 +347,6 @@ func validateDisks(endPoints []storageEndPoint, ignoredEndPoints []storageEndPoi
 	return storageDisks
 }
 
-// Extract port number from address address should be of the form host:port.
-func getPort(address string) int {
-	_, portStr, _ := net.SplitHostPort(address)
-
-	// If port empty, default to port '80'
-	if portStr == "" {
-		portStr = "80"
-		// if SSL is enabled, choose port as "443" instead.
-		if isSSL() {
-			portStr = "443"
-		}
-	}
-
-	// Return converted port number.
-	portInt, err := strconv.Atoi(portStr)
-	fatalIf(err, "Invalid port number.")
-	return portInt
-}
-
 // Returns if slice of disks is a distributed setup.
 func isDistributedSetup(eps []storageEndPoint) (isDist bool) {
 	// Port to connect to for the lock servers in a distributed setup.

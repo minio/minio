@@ -22,12 +22,6 @@ import (
 	"syscall"
 )
 
-// Represents a type of an exit func which will be invoked upon service signal.
-type onExitFunc func(err error)
-
-// Represents a type for all the the callback functions invoked upon service signal.
-type cleanupOnExitFunc func() error
-
 // Type of service signals currently supported.
 type serviceSignal int
 

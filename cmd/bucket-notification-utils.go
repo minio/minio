@@ -126,21 +126,6 @@ func checkQueueARN(queueARN string) APIErrorCode {
 	return checkARN(queueARN, minioSqs)
 }
 
-// checkTopicARN - check if the topic arn is valid.
-func checkTopicARN(topicARN string) APIErrorCode {
-	return checkARN(topicARN, minioTopic)
-}
-
-// Returns true if the topicARN is for an Minio sns listen type.
-func isMinioSNS(topicARN arnTopic) bool {
-	return strings.HasSuffix(topicARN.Type, snsTypeMinio)
-}
-
-// Validate if we recognize the topic type.
-func isValidTopic(topicARN arnTopic) bool {
-	return isMinioSNS(topicARN) // Is minio topic?.
-}
-
 // Validates account id for input queue ARN.
 func isValidQueueID(queueARN string) bool {
 	// Unmarshals QueueARN into structured object.
@@ -192,53 +177,12 @@ func checkQueueConfig(qConfig queueConfig) APIErrorCode {
 	return ErrNone
 }
 
-// Check - validates queue configuration and returns error if any.
-func checkTopicConfig(tConfig topicConfig) APIErrorCode {
-	// Check queue arn is valid.
-	if s3Error := checkTopicARN(tConfig.TopicARN); s3Error != ErrNone {
-		return s3Error
-	}
-
-	// Unmarshals QueueARN into structured object.
-	topicARN := unmarshalTopicARN(tConfig.TopicARN)
-	// Validate if topicARN requested any of the known supported queues.
-	if !isValidTopic(topicARN) {
-		return ErrARNNotification
-	}
-
-	// Check if valid events are set in queue config.
-	if s3Error := checkEvents(tConfig.Events); s3Error != ErrNone {
-		return s3Error
-	}
-
-	// Check if valid filters are set in queue config.
-	if s3Error := checkFilterRules(tConfig.Filter.Key.FilterRules); s3Error != ErrNone {
-		return s3Error
-	}
-
-	// Success.
-	return ErrNone
-}
-
 // Validates all incoming queue configs, checkQueueConfig validates if the
 // input fields for each queues is not malformed and has valid configuration
 // information.  If validation fails bucket notifications are not enabled.
 func validateQueueConfigs(queueConfigs []queueConfig) APIErrorCode {
 	for _, qConfig := range queueConfigs {
 		if s3Error := checkQueueConfig(qConfig); s3Error != ErrNone {
-			return s3Error
-		}
-	}
-	// Success.
-	return ErrNone
-}
-
-// Validates all incoming topic configs, checkTopicConfig validates if the
-// input fields for each queues is not malformed and has valid configuration
-// information.  If validation fails bucket notifications are not enabled.
-func validateTopicConfigs(topicConfigs []topicConfig) APIErrorCode {
-	for _, tConfig := range topicConfigs {
-		if s3Error := checkTopicConfig(tConfig); s3Error != ErrNone {
 			return s3Error
 		}
 	}
@@ -283,23 +227,6 @@ func validateNotificationConfig(nConfig notificationConfig) APIErrorCode {
 
 	// Add validation for other configurations.
 	return ErrNone
-}
-
-// Unmarshals input value of AWS ARN format into minioTopic object.
-// Returned value represents minio topic type, currently supported are
-// - listen
-func unmarshalTopicARN(topicARN string) arnTopic {
-	topic := arnTopic{}
-	if !strings.HasPrefix(topicARN, minioTopic+serverConfig.GetRegion()+":") {
-		return topic
-	}
-	topicType := strings.TrimPrefix(topicARN, minioTopic+serverConfig.GetRegion()+":")
-	switch {
-	case strings.HasSuffix(topicType, snsTypeMinio):
-		topic.Type = snsTypeMinio
-	} // Add more topic here.
-	topic.AccountID = strings.TrimSuffix(topicType, ":"+topic.Type)
-	return topic
 }
 
 // Unmarshals input value of AWS ARN format into minioSqs object.

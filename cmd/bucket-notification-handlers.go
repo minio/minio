@@ -279,9 +279,11 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 
 	accountID := fmt.Sprintf("%d", time.Now().UTC().UnixNano())
 	accountARN := fmt.Sprintf(
-		"arn:minio:sqs:%s:%s:listen-%s",
+		"%s:%s:%s:%s-%s",
+		minioTopic,
 		serverConfig.GetRegion(),
 		accountID,
+		snsTypeMinio,
 		globalMinioAddr,
 	)
 	var filterRules []filterRule
@@ -338,6 +340,7 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 		TopicConfig:  *topicCfg,
 		TargetServer: globalMinioAddr,
 	}
+
 	err = AddBucketListenerConfig(bucket, &lc, objAPI)
 	if err != nil {
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)

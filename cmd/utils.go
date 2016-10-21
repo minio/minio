@@ -21,11 +21,8 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"os"
-	"path/filepath"
-	"runtime"
 	"strings"
 
 	"encoding/json"
@@ -79,27 +76,6 @@ func checkDuplicateEndPoints(list []storageEndPoint) error {
 		strs = append(strs, ep.String())
 	}
 	return checkDuplicateStrings(strs)
-}
-
-// splits network path into its components Address and Path.
-func splitNetPath(networkPath string) (netAddr, netPath string, err error) {
-	if runtime.GOOS == "windows" {
-		if volumeName := filepath.VolumeName(networkPath); volumeName != "" {
-			return "", networkPath, nil
-		}
-	}
-	networkParts := strings.SplitN(networkPath, ":", 2)
-	switch {
-	case len(networkParts) == 1:
-		return "", networkPath, nil
-	case networkParts[1] == "":
-		return "", "", &net.AddrError{Err: "Missing path in network path", Addr: networkPath}
-	case networkParts[0] == "":
-		return "", "", &net.AddrError{Err: "Missing address in network path", Addr: networkPath}
-	case !filepath.IsAbs(networkParts[1]):
-		return "", "", &net.AddrError{Err: "Network path should be absolute", Addr: networkPath}
-	}
-	return networkParts[0], networkParts[1], nil
 }
 
 // Find local node through the command line arguments. Returns in
