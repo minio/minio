@@ -103,9 +103,6 @@ func newPosix(diskPath string) (StorageAPI, error) {
 		return nil, errInvalidArgument
 	}
 	suppliedDiskPath := diskPath
-	if idx := strings.LastIndex(diskPath, ":"); idx != -1 {
-		diskPath = diskPath[idx+1:]
-	}
 	var err error
 	// Disallow relative paths, figure out absolute paths.
 	diskPath, err = filepath.Abs(diskPath)
