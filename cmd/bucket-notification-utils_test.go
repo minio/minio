@@ -216,79 +216,6 @@ func TestValidEvents(t *testing.T) {
 	}
 }
 
-// Tests topic arn validation.
-func TestTopicARN(t *testing.T) {
-	rootPath, err := newTestConfig("us-east-1")
-	if err != nil {
-		t.Fatalf("unable initialize config file, %s", err)
-	}
-	defer removeAll(rootPath)
-
-	testCases := []struct {
-		topicARN string
-		errCode  APIErrorCode
-	}{
-		// Valid minio topic with '1' account id.
-		{
-			topicARN: "arn:minio:sns:us-east-1:1:minio",
-			errCode:  ErrNone,
-		},
-		// Valid minio topic with '10' account id.
-		{
-			topicARN: "arn:minio:sns:us-east-1:10:minio",
-			errCode:  ErrNone,
-		},
-		// Invalid empty topic  arn.
-		{
-			topicARN: "",
-			errCode:  ErrARNNotification,
-		},
-		// Invalid notification service type.
-		{
-			topicARN: "arn:minio:sqs:us-east-1:1:listen",
-			errCode:  ErrARNNotification,
-		},
-		// Invalid region 'us-west-1' in queue arn.
-		{
-			topicARN: "arn:minio:sns:us-west-1:1:listen",
-			errCode:  ErrRegionNotification,
-		},
-		// Empty topic account id is invalid.
-		{
-			topicARN: "arn:minio:sns:us-east-1::listen",
-			errCode:  ErrARNNotification,
-		},
-		// Empty topic account name is invalid.
-		{
-			topicARN: "arn:minio:sns:us-east-1:10:",
-			errCode:  ErrARNNotification,
-		},
-		// Empty topic account id and account name is invalid.
-		{
-			topicARN: "arn:minio:sns:us-east-1::",
-			errCode:  ErrARNNotification,
-		},
-		// Missing topic id and separator missing at the end in topic arn.
-		{
-			topicARN: "arn:minio:sns:us-east-1:listen",
-			errCode:  ErrARNNotification,
-		},
-		// Missing topic id and empty string at the end in topic arn.
-		{
-			topicARN: "arn:minio:sns:us-east-1:",
-			errCode:  ErrARNNotification,
-		},
-	}
-
-	// Validate all topics.
-	for i, testCase := range testCases {
-		errCode := checkTopicARN(testCase.topicARN)
-		if testCase.errCode != errCode {
-			t.Errorf("Test %d: Expected \"%d\", got \"%d\"", i+1, testCase.errCode, errCode)
-		}
-	}
-}
-
 // Tests queue arn validation.
 func TestQueueARN(t *testing.T) {
 	rootPath, err := newTestConfig("us-east-1")
@@ -367,55 +294,8 @@ func TestQueueARN(t *testing.T) {
 	}
 }
 
-// Test unmarshal topic arn.
-func TestUnmarshalTopicARN(t *testing.T) {
-	rootPath, err := newTestConfig("us-east-1")
-	if err != nil {
-		t.Fatalf("unable initialize config file, %s", err)
-	}
-	defer removeAll(rootPath)
-
-	testCases := []struct {
-		topicARN string
-		Type     string
-	}{
-		// Valid minio topic arn.
-		{
-			topicARN: "arn:minio:sns:us-east-1:1:listen",
-			Type:     "listen",
-		},
-		// Invalid empty topic arn.
-		{
-			topicARN: "",
-			Type:     "",
-		},
-		// Invalid region 'us-west-1' in topic arn.
-		{
-			topicARN: "arn:minio:sns:us-west-1:1:listen",
-			Type:     "",
-		},
-		// Partial topic arn.
-		{
-			topicARN: "arn:minio:sns:",
-			Type:     "",
-		},
-		// Invalid topic service value.
-		{
-			topicARN: "arn:minio:sns:us-east-1:1:*",
-			Type:     "",
-		},
-	}
-
-	for i, testCase := range testCases {
-		topic := unmarshalTopicARN(testCase.topicARN)
-		if testCase.Type != topic.Type {
-			t.Errorf("Test %d: Expected \"%s\", got \"%s\"", i+1, testCase.Type, topic.Type)
-		}
-	}
-}
-
 // Test unmarshal queue arn.
-func TestUnmarshalSqsARN(t *testing.T) {
+func TestUnmarshalSQSARN(t *testing.T) {
 	rootPath, err := newTestConfig("us-east-1")
 	if err != nil {
 		t.Fatalf("unable initialize config file, %s", err)

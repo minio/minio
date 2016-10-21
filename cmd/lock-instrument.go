@@ -26,7 +26,6 @@ type statusType string
 
 const (
 	runningStatus statusType = "Running"
-	readyStatus   statusType = "Ready"
 	blockedStatus statusType = "Blocked"
 )
 

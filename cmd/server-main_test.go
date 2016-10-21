@@ -20,7 +20,6 @@ import (
 	"flag"
 	"net/http"
 	"os"
-	"path/filepath"
 	"runtime"
 	"testing"
 
@@ -183,55 +182,6 @@ func TestCheckServerSyntax(t *testing.T) {
 			t.Fatalf("Unexpected error %s", err)
 		}
 		_ = validateDisks(endpoints, nil)
-	}
-}
-
-func TestGetPort(t *testing.T) {
-	root, err := newTestConfig("us-east-1")
-	if err != nil {
-		t.Fatal("failed to create test config")
-	}
-	defer removeAll(root)
-
-	testCases := []struct {
-		addr         string
-		ssl          bool
-		expectedPort int
-	}{
-		{"localhost:1234", true, 1234},
-		{"localhost:1234", false, 1234},
-		{"localhost", true, 443},
-		{"localhost", false, 80},
-	}
-
-	certFile := filepath.Join(mustGetCertsPath(), globalMinioCertFile)
-	keyFile := filepath.Join(mustGetCertsPath(), globalMinioKeyFile)
-	err = os.MkdirAll(filepath.Dir(certFile), 0755)
-	if err != nil {
-		t.Fatalf("Couldn't create certs directory.")
-	}
-	for i, test := range testCases {
-		if test.ssl {
-			cFile, cErr := os.Create(certFile)
-			if cErr != nil {
-				t.Fatalf("Failed to create cert file %s", certFile)
-			}
-			cFile.Close()
-
-			tFile, tErr := os.Create(keyFile)
-			if tErr != nil {
-				t.Fatalf("Failed to create key file %s", keyFile)
-			}
-			tFile.Close()
-		}
-		port := getPort(test.addr)
-		if port != test.expectedPort {
-			t.Errorf("Test %d expected port %d but received %d", i+1, test.expectedPort, port)
-		}
-		if test.ssl {
-			os.Remove(certFile)
-			os.Remove(keyFile)
-		}
 	}
 }
 

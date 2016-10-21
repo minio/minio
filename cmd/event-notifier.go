@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
@@ -411,8 +412,8 @@ func persistNotificationConfig(bucket string, ncfg *notificationConfig, obj Obje
 	// build path
 	ncPath := path.Join(bucketConfigPrefix, bucket, bucketNotificationConfig)
 	// write object to path
-	_, err = obj.PutObject(minioMetaBucket, ncPath, int64(len(buf)),
-		bytes.NewReader(buf), nil, "")
+	sha256Sum := hex.EncodeToString(sum256(buf))
+	_, err = obj.PutObject(minioMetaBucket, ncPath, int64(len(buf)), bytes.NewReader(buf), nil, sha256Sum)
 	if err != nil {
 		errorIf(err, "Unable to write bucket notification configuration.")
 		return err
@@ -437,16 +438,15 @@ func persistListenerConfig(bucket string, lcfg []listenerConfig, obj ObjectLayer
 	// build path
 	lcPath := path.Join(bucketConfigPrefix, bucket, bucketListenerConfig)
 	// write object to path
-	_, err = obj.PutObject(minioMetaBucket, lcPath, int64(len(buf)),
-		bytes.NewReader(buf), nil, "")
+	sha256Sum := hex.EncodeToString(sum256(buf))
+	_, err = obj.PutObject(minioMetaBucket, lcPath, int64(len(buf)), bytes.NewReader(buf), nil, sha256Sum)
 	if err != nil {
 		errorIf(err, "Unable to write bucket listener configuration to object layer.")
 	}
 	return err
 }
 
-// Remove listener configuration from storage layer. Used when a
-// bucket is deleted.
+// Remove listener configuration from storage layer. Used when a bucket is deleted.
 func removeListenerConfig(bucket string, obj ObjectLayer) error {
 	// make the path
 	lcPath := path.Join(bucketConfigPrefix, bucket, bucketListenerConfig)
