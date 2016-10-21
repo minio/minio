@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"os"
 	"path"
 	"path/filepath"
 	"runtime"
@@ -77,13 +78,31 @@ func stackInfo() string {
 	return strings.Replace(stackBuf.String(), filepath.ToSlash(GOPATH)+"/src/", "", -1)
 }
 
+// Get file:line:funcName of the caller.
+func callerLocation() string {
+	pc, file, line, ok := runtime.Caller(2)
+	var name string
+	var location string
+	if ok {
+		pc = pc - 1
+		fn := runtime.FuncForPC(pc)
+		name = fn.Name()
+		file = strings.TrimPrefix(file, rootPath+string(os.PathSeparator))
+		name = strings.TrimPrefix(name, "github.com/minio/minio/cmd.")
+		location = fmt.Sprintf("%s:%d:%s ", file, line, name)
+	}
+	return location
+}
+
 // errorIf synonymous with fatalIf but doesn't exit on error != nil
 func errorIf(err error, msg string, data ...interface{}) {
 	if err == nil {
 		return
 	}
+	location := callerLocation()
 	fields := logrus.Fields{
-		"cause": err.Error(),
+		"location": location,
+		"cause":    err.Error(),
 	}
 	if e, ok := err.(*Error); ok {
 		fields["stack"] = strings.Join(e.Trace(), " ")
@@ -97,8 +116,10 @@ func fatalIf(err error, msg string, data ...interface{}) {
 	if err == nil {
 		return
 	}
+	location := callerLocation()
 	fields := logrus.Fields{
-		"cause": err.Error(),
+		"location": location,
+		"cause":    err.Error(),
 	}
 	if globalTrace {
 		fields["stack"] = "\n" + stackInfo()
