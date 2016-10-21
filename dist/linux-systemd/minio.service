@@ -1,6 +1,6 @@
 [Unit]
 Description=Minio
-Documentation=http://minio.io
+Documentation=https://docs.minio.io
 Wants=network-online.target
 After=network-online.target
 AssertPathExists=/etc/minio/
