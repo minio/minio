@@ -63,23 +63,47 @@ func TestFinalizeEndpoints(t *testing.T) {
 
 // Tests all the expected input disks for function checkSufficientDisks.
 func TestCheckSufficientDisks(t *testing.T) {
-	xlDisks := []string{
-		"/mnt/backend1",
-		"/mnt/backend2",
-		"/mnt/backend3",
-		"/mnt/backend4",
-		"/mnt/backend5",
-		"/mnt/backend6",
-		"/mnt/backend7",
-		"/mnt/backend8",
-		"/mnt/backend9",
-		"/mnt/backend10",
-		"/mnt/backend11",
-		"/mnt/backend12",
-		"/mnt/backend13",
-		"/mnt/backend14",
-		"/mnt/backend15",
-		"/mnt/backend16",
+	var xlDisks []string
+	if runtime.GOOS == "windows" {
+		xlDisks = []string{
+			"C:\\mnt\\backend1",
+			"C:\\mnt\\backend2",
+			"C:\\mnt\\backend3",
+			"C:\\mnt\\backend4",
+			"C:\\mnt\\backend5",
+			"C:\\mnt\\backend6",
+			"C:\\mnt\\backend7",
+			"C:\\mnt\\backend8",
+			"C:\\mnt\\backend9",
+			"C:\\mnt\\backend10",
+			"C:\\mnt\\backend11",
+			"C:\\mnt\\backend12",
+			"C:\\mnt\\backend13",
+			"C:\\mnt\\backend14",
+			"C:\\mnt\\backend15",
+			"C:\\mnt\\backend16",
+			"C:\\mnt\\backend17",
+		}
+	} else {
+		xlDisks = []string{
+			"/mnt/backend1",
+			"/mnt/backend2",
+			"/mnt/backend3",
+			"/mnt/backend4",
+			"/mnt/backend5",
+			"/mnt/backend6",
+			"/mnt/backend7",
+			"/mnt/backend8",
+			"/mnt/backend9",
+			"/mnt/backend10",
+			"/mnt/backend11",
+			"/mnt/backend12",
+			"/mnt/backend13",
+			"/mnt/backend14",
+			"/mnt/backend15",
+			"/mnt/backend16",
+			"/mnt/backend17",
+		}
 	}
 	// List of test cases fo sufficient disk verification.
 	testCases := []struct {
@@ -103,7 +127,7 @@ func TestCheckSufficientDisks(t *testing.T) {
 		},
 		// Larger than maximum number of disks > 16.
 		{
-			append(xlDisks[0:16], "/mnt/unsupported"),
+			xlDisks,
 			errXLMaxDisks,
 		},
 		// Lesser than minimum number of disks < 6.
@@ -120,7 +144,11 @@ func TestCheckSufficientDisks(t *testing.T) {
 
 	// Validates different variations of input disks.
 	for i, testCase := range testCases {
-		if checkSufficientDisks(parseStorageEndPoints(testCase.disks, 0)) != testCase.expectedErr {
+		endpoints, err := parseStorageEndPoints(testCase.disks, 0)
+		if err != nil {
+			t.Fatalf("Unexpected error %s", err)
+		}
+		if checkSufficientDisks(endpoints) != testCase.expectedErr {
 			t.Errorf("Test %d expected to pass for disks %s", i+1, testCase.disks)
 		}
 	}
@@ -150,7 +178,11 @@ func TestCheckServerSyntax(t *testing.T) {
 			t.Errorf("Test %d failed to parse arguments %s", i+1, disks)
 		}
 		defer removeRoots(disks)
-		_ = validateDisks(parseStorageEndPoints(disks, 0), nil)
+		endpoints, err := parseStorageEndPoints(disks, 0)
+		if err != nil {
+			t.Fatalf("Unexpected error %s", err)
+		}
+		_ = validateDisks(endpoints, nil)
 	}
 }
 
@@ -232,7 +264,11 @@ func TestIsDistributedSetup(t *testing.T) {
 
 	}
 	for i, test := range testCases {
-		res := isDistributedSetup(parseStorageEndPoints(test.disks, 0))
+		endpoints, err := parseStorageEndPoints(test.disks, 0)
+		if err != nil {
+			t.Fatalf("Unexpected error %s", err)
+		}
+		res := isDistributedSetup(endpoints)
 		if res != test.result {
 			t.Errorf("Test %d: expected result %t but received %t", i+1, test.result, res)
 		}

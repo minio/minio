@@ -35,12 +35,16 @@ func TestInitEventNotifierFaultyDisks(t *testing.T) {
 	// remove the root folder after the test ends.
 	defer removeAll(rootPath)
 
-	disk, err := getRandomDisks(1)
+	disks, err := getRandomDisks(1)
 	if err != nil {
 		t.Fatal("Unable to create directories for FS backend. ", err)
 	}
-	defer removeAll(disk[0])
-	obj, _, err := initObjectLayer(parseStorageEndPoints(disk, 0), nil)
+	defer removeAll(disks[0])
+	endpoints, err := parseStorageEndPoints(disks, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	obj, _, err := initObjectLayer(endpoints, nil)
 	if err != nil {
 		t.Fatal("Unable to initialize FS backend.", err)
 	}
@@ -85,12 +89,16 @@ func TestInitEventNotifierWithAMQP(t *testing.T) {
 	// remove the root folder after the test ends.
 	defer removeAll(rootPath)
 
-	disk, err := getRandomDisks(1)
-	defer removeAll(disk[0])
+	disks, err := getRandomDisks(1)
+	defer removeAll(disks[0])
 	if err != nil {
 		t.Fatal("Unable to create directories for FS backend. ", err)
 	}
-	fs, _, err := initObjectLayer(parseStorageEndPoints(disk, 0), nil)
+	endpoints, err := parseStorageEndPoints(disks, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fs, _, err := initObjectLayer(endpoints, nil)
 	if err != nil {
 		t.Fatal("Unable to initialize FS backend.", err)
 	}
@@ -112,12 +120,16 @@ func TestInitEventNotifierWithElasticSearch(t *testing.T) {
 	// remove the root folder after the test ends.
 	defer removeAll(rootPath)
 
-	disk, err := getRandomDisks(1)
-	defer removeAll(disk[0])
+	disks, err := getRandomDisks(1)
+	defer removeAll(disks[0])
 	if err != nil {
 		t.Fatal("Unable to create directories for FS backend. ", err)
 	}
-	fs, _, err := initObjectLayer(parseStorageEndPoints(disk, 0), nil)
+	endpoints, err := parseStorageEndPoints(disks, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fs, _, err := initObjectLayer(endpoints, nil)
 	if err != nil {
 		t.Fatal("Unable to initialize FS backend.", err)
 	}
@@ -139,12 +151,16 @@ func TestInitEventNotifierWithRedis(t *testing.T) {
 	// remove the root folder after the test ends.
 	defer removeAll(rootPath)
 
-	disk, err := getRandomDisks(1)
-	defer removeAll(disk[0])
+	disks, err := getRandomDisks(1)
+	defer removeAll(disks[0])
 	if err != nil {
 		t.Fatal("Unable to create directories for FS backend. ", err)
 	}
-	fs, _, err := initObjectLayer(parseStorageEndPoints(disk, 0), nil)
+	endpoints, err := parseStorageEndPoints(disks, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fs, _, err := initObjectLayer(endpoints, nil)
 	if err != nil {
 		t.Fatal("Unable to initialize FS backend.", err)
 	}

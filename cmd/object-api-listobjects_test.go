@@ -565,7 +565,11 @@ func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
 }
 
 func initFSObjectsB(disk string, t *testing.B) (obj ObjectLayer) {
-	endPoints := parseStorageEndPoints([]string{disk}, 0)
+	endPoints, err := parseStorageEndPoints([]string{disk}, 0)
+	if err != nil {
+		t.Fatal("Unexpected err: ", err)
+	}
+
 	storageDisks, err := initStorageDisks(endPoints, nil)
 	if err != nil {
 		t.Fatal("Unexpected err: ", err)

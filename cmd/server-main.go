@@ -142,33 +142,41 @@ func (ep storageEndPoint) presentIn(eps []storageEndPoint) bool {
 }
 
 // Parse end-point (of the form host:port:path or host:path or path)
-func parseStorageEndPoint(ep string, defaultPort int) storageEndPoint {
+func parseStorageEndPoint(ep string, defaultPort int) (storageEndPoint, error) {
 	if runtime.GOOS == "windows" {
 		// Try to match path, ex. C:\export
 		matched, err := regexp.MatchString(`^[a-zA-Z]:\\[^:]+$`, ep)
-		fatalIf(err, "Unable to match %s", ep)
+		if err != nil {
+			return storageEndPoint{}, err
+		}
 		if matched {
-			return storageEndPoint{path: ep}
+			return storageEndPoint{path: ep}, nil
 		}
 
 		// Try to match host:path ex. 127.0.0.1:C:\export
 		re, err := regexp.Compile(`^([^:]+):([a-zA-Z]:\\[^:]+)$`)
-		fatalIf(err, "Failed to compile regex")
+		if err != nil {
+			return storageEndPoint{}, err
+		}
 		result := re.FindStringSubmatch(ep)
 		if len(result) != 0 {
-			return storageEndPoint{host: result[1], port: defaultPort, path: result[2]}
+			return storageEndPoint{host: result[1], port: defaultPort, path: result[2]}, nil
 		}
 
 		// Try to match host:port:path ex. 127.0.0.1:443:C:\export
 		re, err = regexp.Compile(`^([^:]+):([0-9]+):([a-zA-Z]:\\[^:]+)$`)
-		fatalIf(err, "Failed to compile regex")
+		if err != nil {
+			return storageEndPoint{}, err
+		}
 		result = re.FindStringSubmatch(ep)
 		if len(result) != 0 {
 			portInt, err := strconv.Atoi(result[2])
-			fatalIf(err, "Unable to parse port %s", result[2])
-			return storageEndPoint{host: result[1], port: portInt, path: result[3]}
+			if err != nil {
+				return storageEndPoint{}, err
+			}
+			return storageEndPoint{host: result[1], port: portInt, path: result[3]}, nil
 		}
-		fatalIf(errors.New(""), "Unable to parse endpoint %s", ep)
+		return storageEndPoint{}, errors.New("Unable to parse endpoint " + ep)
 	}
 	// For *nix OSes
 	parts := strings.Split(ep, ":")
@@ -180,23 +188,30 @@ func parseStorageEndPoint(ep string, defaultPort int) storageEndPoint {
 		parsedep = storageEndPoint{host: parts[0], port: defaultPort, path: parts[1]}
 	case 3:
 		port, err := strconv.Atoi(parts[1])
-		fatalIf(err, "Unable to parse "+ep)
+		if err != nil {
+			return storageEndPoint{}, err
+		}
 		parsedep = storageEndPoint{host: parts[0], port: port, path: parts[2]}
 	default:
-		fatalIf(errors.New(""), "Unable to parse"+ep)
+		return storageEndPoint{}, errors.New("Unable to parse " + ep)
 	}
-	return parsedep
+	return parsedep, nil
 }
 
 // Parse an array of end-points (passed on the command line)
-func parseStorageEndPoints(eps []string, defaultPort int) (endpoints []storageEndPoint) {
+func parseStorageEndPoints(eps []string, defaultPort int) (endpoints []storageEndPoint, err error) {
 	for _, ep := range eps {
 		if ep == "" {
 			continue
 		}
-		endpoints = append(endpoints, parseStorageEndPoint(ep, defaultPort))
+		var endpoint storageEndPoint
+		endpoint, err = parseStorageEndPoint(ep, defaultPort)
+		if err != nil {
+			return nil, err
+		}
+		endpoints = append(endpoints, endpoint)
 	}
-	return
+	return endpoints, nil
 }
 
 // getListenIPs - gets all the ips to listen on.
@@ -387,10 +402,12 @@ func serverMain(c *cli.Context) {
 	globalMinioHost = host
 
 	// Disks to be ignored in server init, to skip format healing.
-	ignoredDisks := parseStorageEndPoints(strings.Split(c.String("ignore-disks"), ","), portInt)
+	ignoredDisks, err := parseStorageEndPoints(strings.Split(c.String("ignore-disks"), ","), portInt)
+	fatalIf(err, "Unable to parse storage endpoints %s", strings.Split(c.String("ignore-disks"), ","))
 
 	// Disks to be used in server init.
-	disks := parseStorageEndPoints(c.Args(), portInt)
+	disks, err := parseStorageEndPoints(c.Args(), portInt)
+	fatalIf(err, "Unable to parse storage endpoints %s", c.Args())
 
 	// Initialize server config.
 	initServerConfig(c)

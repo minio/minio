@@ -145,7 +145,10 @@ func (s *TestRPCStorageSuite) SetUpSuite(c *testing.T) {
 	listenAddress := s.testServer.Server.Listener.Addr().String()
 
 	for _, disk := range s.testServer.Disks {
-		remoteEndPoint := parseStorageEndPoint(listenAddress+":"+disk.path, 0)
+		remoteEndPoint, err := parseStorageEndPoint(listenAddress+":"+disk.path, 0)
+		if err != nil {
+			c.Fatalf("Unexpected error %s", err)
+		}
 		storageDisk, err := newRPCClient(remoteEndPoint)
 		if err != nil {
 			c.Fatal("Unable to initialize RPC client", err)
