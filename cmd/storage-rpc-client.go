@@ -186,6 +186,18 @@ func (n networkStorage) DeleteVol(volume string) error {
 
 // File operations.
 
+func (n networkStorage) PrepareFile(volume, path string, length int64) (err error) {
+	reply := GenericReply{}
+	if err = n.rpcClient.Call("Storage.PrepareFileHandler", &PrepareFileArgs{
+		Vol:  volume,
+		Path: path,
+		Size: length,
+	}, &reply); err != nil {
+		return toStorageErr(err)
+	}
+	return nil
+}
+
 // CreateFile - create file.
 func (n networkStorage) AppendFile(volume, path string, buffer []byte) (err error) {
 	reply := GenericReply{}

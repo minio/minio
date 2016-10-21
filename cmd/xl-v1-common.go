@@ -69,3 +69,16 @@ func (xl xlObjects) isObject(bucket, prefix string) (ok bool) {
 	} // Exhausted all disks - return false.
 	return false
 }
+
+// Calculate the space occupied by an object in a single disk
+func (xl xlObjects) sizeOnDisk(fileSize int64, blockSize int64, dataBlocks int) int64 {
+	numBlocks := fileSize / blockSize
+	chunkSize := getChunkSize(blockSize, dataBlocks)
+	sizeInDisk := numBlocks * chunkSize
+	remaining := fileSize % blockSize
+	if remaining > 0 {
+		sizeInDisk += getChunkSize(remaining, dataBlocks)
+	}
+
+	return sizeInDisk
+}

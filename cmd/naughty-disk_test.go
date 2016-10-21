@@ -108,6 +108,13 @@ func (d *naughtyDisk) ReadFile(volume string, path string, offset int64, buf []b
 	return d.disk.ReadFile(volume, path, offset, buf)
 }
 
+func (d *naughtyDisk) PrepareFile(volume, path string, length int64) error {
+	if err := d.calcError(); err != nil {
+		return err
+	}
+	return d.disk.PrepareFile(volume, path, length)
+}
+
 func (d *naughtyDisk) AppendFile(volume, path string, buf []byte) error {
 	if err := d.calcError(); err != nil {
 		return err

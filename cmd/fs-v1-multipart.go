@@ -450,6 +450,15 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 		bufSize = size
 	}
 	buf := make([]byte, int(bufSize))
+
+	if size > 0 {
+		// Prepare file to avoid disk fragmentation
+		err := fs.storage.PrepareFile(minioMetaBucket, tmpPartPath, size)
+		if err != nil {
+			return "", toObjectErr(err, minioMetaBucket, tmpPartPath)
+		}
+	}
+
 	bytesWritten, cErr := fsCreateFile(fs.storage, teeReader, buf, minioMetaBucket, tmpPartPath)
 	if cErr != nil {
 		fs.storage.DeleteFile(minioMetaBucket, tmpPartPath)
@@ -599,6 +608,18 @@ func (fs fsObjects) ListObjectParts(bucket, object, uploadID string, partNumberM
 	return fs.listObjectParts(bucket, object, uploadID, partNumberMarker, maxParts)
 }
 
+func (fs fsObjects) totalObjectSize(fsMeta fsMetaV1, parts []completePart) (int64, error) {
+	objSize := int64(0)
+	for _, part := range parts {
+		partIdx := fsMeta.ObjectPartIndex(part.PartNumber)
+		if partIdx == -1 {
+			return 0, InvalidPart{}
+		}
+		objSize += fsMeta.Parts[partIdx].Size
+	}
+	return objSize, nil
+}
+
 // CompleteMultipartUpload - completes an ongoing multipart
 // transaction after receiving all the parts indicated by the client.
 // Returns an md5sum calculated by concatenating all the individual
@@ -668,6 +689,19 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 
 		// Allocate staging buffer.
 		var buf = make([]byte, readSizeV1)
+		var objSize int64
+
+		objSize, err = fs.totalObjectSize(fsMeta, parts)
+		if err != nil {
+			return "", traceError(err)
+		}
+		if objSize > 0 {
+			// Prepare file to avoid disk fragmentation
+			err = fs.storage.PrepareFile(minioMetaBucket, tempObj, objSize)
+			if err != nil {
+				return "", traceError(err)
+			}
+		}
 
 		// Loop through all parts, validate them and then commit to disk.
 		for i, part := range parts {

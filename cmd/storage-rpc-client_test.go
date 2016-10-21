@@ -243,6 +243,10 @@ func (s *TestRPCStorageSuite) testRPCStorageFileOps(t *testing.T) {
 		if err != nil {
 			t.Error("Unable to initiate MakeVol", err)
 		}
+		err = storageDisk.PrepareFile("myvol", "file1", int64(len([]byte("Hello, world"))))
+		if err != nil {
+			t.Error("Unable to initiate AppendFile", err)
+		}
 		err = storageDisk.AppendFile("myvol", "file1", []byte("Hello, world"))
 		if err != nil {
 			t.Error("Unable to initiate AppendFile", err)
