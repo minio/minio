@@ -331,7 +331,6 @@ func TestInitEventNotifier(t *testing.T) {
 
 func TestListenBucketNotification(t *testing.T) {
 	s := TestPeerRPCServerData{serverType: "XL"}
-
 	// setup and teardown
 	s.Setup(t)
 	defer s.TearDown()
@@ -347,9 +346,14 @@ func TestListenBucketNotification(t *testing.T) {
 		t.Fatal("Unexpected error:", err)
 	}
 
-	listenARN := "arn:minio:sns:us-east-1:1:listen-" + globalMinioAddr
+	listenARN := fmt.Sprintf("%s:%s:1:%s-%s",
+		minioTopic,
+		serverConfig.GetRegion(),
+		snsTypeMinio,
+		s.testServer.Server.Listener.Addr(),
+	)
 	lcfg := listenerConfig{
-		topicConfig{
+		TopicConfig: topicConfig{
 			ServiceConfig{
 				[]string{"s3:ObjectRemoved:*", "s3:ObjectCreated:*"},
 				filterStruct{},
@@ -357,7 +361,7 @@ func TestListenBucketNotification(t *testing.T) {
 			},
 			listenARN,
 		},
-		globalMinioAddr,
+		TargetServer: globalMinioAddr,
 	}
 
 	// write listener config to storage layer

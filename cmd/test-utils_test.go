@@ -1575,7 +1575,7 @@ func prepareXLStorageDisks(t *testing.T) ([]StorageAPI, []string) {
 // initializes the specified API endpoints for the tests.
 // initialies the root and returns its path.
 // return credentials.
-func initAPIHandlerTest(obj ObjectLayer, endPoints []string) (bucketName, rootPath string, apiRouter http.Handler, err error) {
+func initAPIHandlerTest(obj ObjectLayer, endPoints []string) (bucketName string, apiRouter http.Handler, err error) {
 	// get random bucket name.
 	bucketName = getRandomBucketName()
 
@@ -1583,19 +1583,12 @@ func initAPIHandlerTest(obj ObjectLayer, endPoints []string) (bucketName, rootPa
 	err = obj.MakeBucket(bucketName)
 	if err != nil {
 		// failed to create newbucket, return err.
-		return "", "", nil, err
+		return "", nil, err
 	}
 	// Register the API end points with XL/FS object layer.
 	// Registering only the GetObject handler.
 	apiRouter = initTestAPIEndPoints(obj, endPoints)
-	// initialize the server and obtain the credentials and root.
-	// credentials are necessary to sign the HTTP request.
-	rootPath, err = newTestConfig("us-east-1")
-	if err != nil {
-		return "", "", nil, err
-	}
-
-	return bucketName, rootPath, apiRouter, nil
+	return bucketName, apiRouter, nil
 }
 
 // ExecObjectLayerAPIAnonTest - Helper function to validate object Layer API handler
@@ -1768,11 +1761,17 @@ func ExecObjectLayerAPINilTest(t TestErrHandler, bucketName, objectName, instanc
 // ExecObjectLayerAPITest - executes object layer API tests.
 // Creates single node and XL ObjectLayer instance, registers the specified API end points and runs test for both the layers.
 func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endPoints []string) {
+	// initialize the server and obtain the credentials and root.
+	// credentials are necessary to sign the HTTP request.
+	rootPath, err := newTestConfig("us-east-1")
+	if err != nil {
+		t.Fatalf("Unable to initialize server config. %s", err)
+	}
 	objLayer, fsDir, err := prepareFS()
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for single node setup: %s", err)
 	}
-	bucketFS, fsRoot, fsAPIRouter, err := initAPIHandlerTest(objLayer, endPoints)
+	bucketFS, fsAPIRouter, err := initAPIHandlerTest(objLayer, endPoints)
 	if err != nil {
 		t.Fatalf("Initialzation of API handler tests failed: <ERROR> %s", err)
 	}
@@ -1784,7 +1783,7 @@ func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endPoints [
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for XL setup: %s", err)
 	}
-	bucketXL, xlRoot, xlAPIRouter, err := initAPIHandlerTest(objLayer, endPoints)
+	bucketXL, xlAPIRouter, err := initAPIHandlerTest(objLayer, endPoints)
 	if err != nil {
 		t.Fatalf("Initialzation of API handler tests failed: <ERROR> %s", err)
 	}
@@ -1792,7 +1791,7 @@ func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endPoints [
 	// Executing the object layer tests for XL.
 	objAPITest(objLayer, xLTestStr, bucketXL, xlAPIRouter, credentials, t)
 	// clean up the temporary test backend.
-	removeRoots(append(xlDisks, fsDir, fsRoot, xlRoot))
+	removeRoots(append(xlDisks, fsDir, rootPath))
 }
 
 // function to be passed to ExecObjectLayerAPITest, for executing object layr API handler tests.
@@ -1808,6 +1807,14 @@ type objTestDiskNotFoundType func(obj ObjectLayer, instanceType string, dirs []s
 // ExecObjectLayerTest - executes object layer tests.
 // Creates single node and XL ObjectLayer instance and runs test for both the layers.
 func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
+	// initialize the server and obtain the credentials and root.
+	// credentials are necessary to sign the HTTP request.
+	rootPath, err := newTestConfig("us-east-1")
+	if err != nil {
+		t.Fatal("Unexpected error", err)
+	}
+	defer removeAll(rootPath)
+
 	objLayer, fsDir, err := prepareFS()
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for single node setup: %s", err)
