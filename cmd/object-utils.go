@@ -20,6 +20,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"path"
 	"regexp"
 	"strings"
@@ -161,3 +162,24 @@ type byBucketName []BucketInfo
 func (d byBucketName) Len() int           { return len(d) }
 func (d byBucketName) Swap(i, j int)      { d[i], d[j] = d[j], d[i] }
 func (d byBucketName) Less(i, j int) bool { return d[i].Name < d[j].Name }
+
+// Copied from io.LimitReader()
+// limitReader returns a Reader that reads from r
+// but returns error after n bytes.
+// The underlying implementation is a *LimitedReader.
+type limitedReader struct {
+	R io.Reader // underlying reader
+	N int64     // max bytes remaining
+}
+
+func limitReader(r io.Reader, n int64) io.Reader { return &limitedReader{r, n} }
+
+func (l *limitedReader) Read(p []byte) (n int, err error) {
+	n, err = l.R.Read(p)
+	l.N -= int64(n)
+	if l.N < 0 {
+		// If more data is available than what is expected we return error.
+		return 0, errDataTooLarge
+	}
+	return
+}
