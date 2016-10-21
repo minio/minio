@@ -14,4 +14,5 @@ RUN \
 
 EXPOSE 9000
 ENTRYPOINT ["go-wrapper", "run"]
+CMD ["server"]
 VOLUME ["/export"]
