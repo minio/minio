@@ -200,11 +200,19 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 // persists it to storage, and notify nodes in the cluster about the
 // change. In-memory state is updated in response to the notification.
 func persistAndNotifyBucketPolicyChange(bucket string, pCh policyChange, objAPI ObjectLayer) error {
-	// FIXME: Race exists between the bucket existence check and
-	// then updating the bucket policy.
+	// Verify if bucket actually exists. FIXME: Ideally this check
+	// should not be used but is kept here to error out for
+	// invalid and non-existent buckets.
 	if err := isBucketExist(bucket, objAPI); err != nil {
 		return err
 	}
+
+	// Acquire a write lock on bucket before modifying its
+	// configuration.
+	opsID := getOpsID()
+	nsMutex.Lock(bucket, "", opsID)
+	// Release lock after notifying peers
+	defer nsMutex.Unlock(bucket, "", opsID)
 
 	if pCh.IsRemove {
 		if err := removeBucketPolicy(bucket, objAPI); err != nil {

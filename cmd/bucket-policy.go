@@ -193,11 +193,6 @@ func readBucketPolicy(bucket string, objAPI ObjectLayer) (*bucketPolicy, error) 
 // removeBucketPolicy - removes any previously written bucket policy. Returns BucketPolicyNotFound
 // if no policies are found.
 func removeBucketPolicy(bucket string, objAPI ObjectLayer) error {
-	// Verify if bucket actually exists
-	if err := isBucketExist(bucket, objAPI); err != nil {
-		return err
-	}
-
 	policyPath := pathJoin(bucketConfigPrefix, bucket, policyJSON)
 	if err := objAPI.DeleteObject(minioMetaBucket, policyPath); err != nil {
 		errorIf(err, "Unable to remove bucket-policy on bucket %s.", bucket)
@@ -213,11 +208,6 @@ func removeBucketPolicy(bucket string, objAPI ObjectLayer) error {
 // writeBucketPolicy - save a bucket policy that is assumed to be
 // validated.
 func writeBucketPolicy(bucket string, objAPI ObjectLayer, bpy *bucketPolicy) error {
-	// Verify if bucket actually exists
-	if err := isBucketExist(bucket, objAPI); err != nil {
-		return err
-	}
-
 	buf, err := json.Marshal(bpy)
 	if err != nil {
 		errorIf(err, "Unable to marshal bucket policy '%v' to JSON", *bpy)

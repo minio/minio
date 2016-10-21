@@ -164,6 +164,13 @@ func PutBucketNotificationConfig(bucket string, ncfg *notificationConfig, objAPI
 		return errInvalidArgument
 	}
 
+	// Acquire a write lock on bucket before modifying its
+	// configuration.
+	opsID := getOpsID()
+	nsMutex.Lock(bucket, "", opsID)
+	// Release lock after notifying peers
+	defer nsMutex.Unlock(bucket, "", opsID)
+
 	// persist config to disk
 	err := persistNotificationConfig(bucket, ncfg, objAPI)
 	if err != nil {
@@ -365,6 +372,13 @@ func AddBucketListenerConfig(bucket string, lcfg *listenerConfig, objAPI ObjectL
 	// add new lid to listeners and persist to object layer.
 	listenerCfgs = append(listenerCfgs, *lcfg)
 
+	// Acquire a write lock on bucket before modifying its
+	// configuration.
+	opsID := getOpsID()
+	nsMutex.Lock(bucket, "", opsID)
+	// Release lock after notifying peers
+	defer nsMutex.Unlock(bucket, "", opsID)
+
 	// update persistent config
 	err := persistListenerConfig(bucket, listenerCfgs, objAPI)
 	if err != nil {
@@ -397,6 +411,13 @@ func RemoveBucketListenerConfig(bucket string, lcfg *listenerConfig, objAPI Obje
 	if !found {
 		return
 	}
+
+	// Acquire a write lock on bucket before modifying its
+	// configuration.
+	opsID := getOpsID()
+	nsMutex.Lock(bucket, "", opsID)
+	// Release lock after notifying peers
+	defer nsMutex.Unlock(bucket, "", opsID)
 
 	// update persistent config
 	err := persistListenerConfig(bucket, updatedLcfgs, objAPI)
