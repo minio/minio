@@ -20,7 +20,6 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"os"
 	"path"
 	"path/filepath"
 	"runtime"
@@ -78,20 +77,16 @@ func stackInfo() string {
 	return strings.Replace(stackBuf.String(), filepath.ToSlash(GOPATH)+"/src/", "", -1)
 }
 
-// Get file:line:funcName of the caller.
+// Get file, line, function name of the caller.
 func callerLocation() string {
-	pc, file, line, ok := runtime.Caller(2)
-	var name string
-	var location string
-	if ok {
-		pc = pc - 1
-		fn := runtime.FuncForPC(pc)
-		name = fn.Name()
-		file = strings.TrimPrefix(file, rootPath+string(os.PathSeparator))
-		name = strings.TrimPrefix(name, "github.com/minio/minio/cmd.")
-		location = fmt.Sprintf("%s:%d:%s ", file, line, name)
+	pc, file, line, success := runtime.Caller(2)
+	if !success {
+		file = "<unknown>"
+		line = 0
 	}
-	return location
+	shortFile := true // We are only interested in short file form.
+	callerLoc := funcFromPC(pc, file, line, shortFile)
+	return callerLoc
 }
 
 // errorIf synonymous with fatalIf but doesn't exit on error != nil
