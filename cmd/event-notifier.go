@@ -225,8 +225,7 @@ func (en *eventNotifier) SetBucketListenerConfig(bucket string, lcfg []listenerC
 	return nil
 }
 
-func eventNotifyForBucketNotifications(eventType, objectName, bucketName string,
-	nEvent []NotificationEvent) {
+func eventNotifyForBucketNotifications(eventType, objectName, bucketName string, nEvent []NotificationEvent) {
 	nConfig := globalEventNotifier.GetBucketNotificationConfig(bucketName)
 	if nConfig == nil {
 		return
@@ -294,12 +293,10 @@ func eventNotify(event eventData) {
 	notificationEvent := []NotificationEvent{newNotificationEvent(event)}
 
 	// Notify external targets.
-	eventNotifyForBucketNotifications(eventType, objectName, event.Bucket,
-		notificationEvent)
+	eventNotifyForBucketNotifications(eventType, objectName, event.Bucket, notificationEvent)
 
 	// Notify internal targets.
-	eventNotifyForBucketListeners(eventType, objectName, event.Bucket,
-		notificationEvent)
+	eventNotifyForBucketListeners(eventType, objectName, event.Bucket, notificationEvent)
 }
 
 // loads notification config if any for a given bucket, returns

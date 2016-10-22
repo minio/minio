@@ -246,6 +246,99 @@ func (s *TestSuiteCommon) TestDeleteBucketNotEmpty(c *C) {
 
 }
 
+func (s *TestSuiteCommon) TestListenBucketNotificationHandler(c *C) {
+	// generate a random bucket name.
+	bucketName := getRandomBucketName()
+	// HTTP request to create the bucket.
+	req, err := newTestSignedRequestV4("PUT", getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey)
+	c.Assert(err, IsNil)
+
+	client := http.Client{}
+	// execute the request.
+	response, err := client.Do(req)
+	c.Assert(err, IsNil)
+	// assert the http response status code.
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	invalidBucket := "Invalid\\Bucket"
+	tooByte := bytes.Repeat([]byte("a"), 1025)
+	tooBigPrefix := string(tooByte)
+	validEvents := []string{"s3:ObjectCreated:*", "s3:ObjectRemoved:*"}
+	invalidEvents := []string{"invalidEvent"}
+
+	req, err = newTestSignedRequestV4("GET",
+		getListenBucketNotificationURL(s.endPoint, invalidBucket, []string{}, []string{}, []string{}),
+		0, nil, s.accessKey, s.secretKey)
+	c.Assert(err, IsNil)
+
+	client = http.Client{}
+	// execute the request.
+	response, err = client.Do(req)
+	c.Assert(err, IsNil)
+	verifyError(c, response, "InvalidBucketName", "The specified bucket is not valid.", http.StatusBadRequest)
+
+	req, err = newTestSignedRequestV4("GET",
+		getListenBucketNotificationURL(s.endPoint, bucketName, []string{}, []string{}, invalidEvents),
+		0, nil, s.accessKey, s.secretKey)
+	c.Assert(err, IsNil)
+
+	client = http.Client{}
+	// execute the request.
+	response, err = client.Do(req)
+	c.Assert(err, IsNil)
+	verifyError(c, response, "InvalidArgument", "A specified event is not supported for notifications.", http.StatusBadRequest)
+
+	req, err = newTestSignedRequestV4("GET",
+		getListenBucketNotificationURL(s.endPoint, bucketName, []string{tooBigPrefix}, []string{}, validEvents),
+		0, nil, s.accessKey, s.secretKey)
+	c.Assert(err, IsNil)
+
+	client = http.Client{}
+	// execute the request.
+	response, err = client.Do(req)
+	c.Assert(err, IsNil)
+	verifyError(c, response, "InvalidArgument", "Size of filter rule value cannot exceed 1024 bytes in UTF-8 representation", http.StatusBadRequest)
+
+	req, err = newTestSignedRequestV4("GET",
+		getListenBucketNotificationURL(s.endPoint, bucketName, []string{}, []string{}, validEvents),
+		0, nil, s.accessKey, s.secretKey)
+	c.Assert(err, IsNil)
+
+	req.Header.Set("x-amz-content-sha256", "somethingElse")
+	client = http.Client{}
+	// execute the request.
+	response, err = client.Do(req)
+	c.Assert(err, IsNil)
+	verifyError(c, response, "XAmzContentSHA256Mismatch", "The provided 'x-amz-content-sha256' header does not match what was computed.", http.StatusBadRequest)
+
+	// Change global value from 5 second to 100millisecond.
+	globalSNSConnAlive = 100 * time.Millisecond
+	req, err = newTestSignedRequestV4("GET",
+		getListenBucketNotificationURL(s.endPoint, bucketName,
+			[]string{}, []string{}, validEvents), 0, nil, s.accessKey, s.secretKey)
+	c.Assert(err, IsNil)
+	client = http.Client{}
+	// execute the request.
+	response, err = client.Do(req)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+	// FIXME: uncomment this in future when we have a code to read notifications from.
+	// go func() {
+	// 	buf := bytes.NewReader(tooByte)
+	// 	rreq, rerr := newTestSignedRequestV4("GET",
+	// 		getPutObjectURL(s.endPoint, bucketName, "myobject/1"),
+	// 		int64(buf.Len()), buf, s.accessKey, s.secretKey)
+	// 	c.Assert(rerr, IsNil)
+	// 	client = http.Client{}
+	// 	// execute the request.
+	// 	resp, rerr := client.Do(rreq)
+	// 	c.Assert(rerr, IsNil)
+	// 	c.Assert(resp.StatusCode, Equals, http.StatusOK)
+	// }()
+	response.Body.Close() // FIXME. Find a way to read from the returned body.
+}
+
 // Test deletes multple objects and verifies server resonse.
 func (s *TestSuiteCommon) TestDeleteMultipleObjects(c *C) {
 	// generate a random bucket name.
