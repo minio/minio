@@ -180,3 +180,35 @@ func TestValidateV2AuthHeader(t *testing.T) {
 	}
 
 }
+
+func TestDoesPolicySignatureV2Match(t *testing.T) {
+	if err := initConfig(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := serverConfig.Save(); err != nil {
+		t.Fatal(err)
+	}
+	creds := serverConfig.GetCredential()
+	policy := "policy"
+	testCases := []struct {
+		accessKey string
+		policy    string
+		signature string
+		errCode   APIErrorCode
+	}{
+		{"invalidAccessKey", policy, calculateSignatureV2(policy, creds.SecretAccessKey), ErrInvalidAccessKeyID},
+		{creds.AccessKeyID, policy, calculateSignatureV2("random", creds.SecretAccessKey), ErrSignatureDoesNotMatch},
+		{creds.AccessKeyID, policy, calculateSignatureV2(policy, creds.SecretAccessKey), ErrNone},
+	}
+	for i, test := range testCases {
+		formValues := make(map[string]string)
+		formValues["Awsaccesskeyid"] = test.accessKey
+		formValues["Signature"] = test.signature
+		formValues["Policy"] = test.policy
+		errCode := doesPolicySignatureV2Match(formValues)
+		if errCode != test.errCode {
+			t.Fatalf("(%d) expected to get %s, instead got %s", i+1, niceError(test.errCode), niceError(errCode))
+		}
+	}
+}

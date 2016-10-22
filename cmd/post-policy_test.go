@@ -33,8 +33,8 @@ const (
 	iso8601DateFormat    = "20060102T150405Z"
 )
 
-// newPostPolicyBytes - creates a bare bones postpolicy string with key and bucket matches.
-func newPostPolicyBytes(credential, bucketName, objectKey string, expiration time.Time) []byte {
+// newPostPolicyBytesV4 - creates a bare bones postpolicy string with key and bucket matches.
+func newPostPolicyBytesV4(credential, bucketName, objectKey string, expiration time.Time) []byte {
 	t := time.Now().UTC()
 	// Add the expiration date.
 	expirationStr := fmt.Sprintf(`"expiration": "%s"`, expiration.Format(expirationDateFormat))
@@ -51,6 +51,25 @@ func newPostPolicyBytes(credential, bucketName, objectKey string, expiration tim
 
 	// Combine all conditions into one string.
 	conditionStr := fmt.Sprintf(`"conditions":[%s, %s, %s, %s, %s]`, bucketConditionStr, keyConditionStr, algorithmConditionStr, dateConditionStr, credentialConditionStr)
+	retStr := "{"
+	retStr = retStr + expirationStr + ","
+	retStr = retStr + conditionStr
+	retStr = retStr + "}"
+
+	return []byte(retStr)
+}
+
+// newPostPolicyBytesV2 - creates a bare bones postpolicy string with key and bucket matches.
+func newPostPolicyBytesV2(bucketName, objectKey string, expiration time.Time) []byte {
+	// Add the expiration date.
+	expirationStr := fmt.Sprintf(`"expiration": "%s"`, expiration.Format(expirationDateFormat))
+	// Add the bucket condition, only accept buckets equal to the one passed.
+	bucketConditionStr := fmt.Sprintf(`["eq", "$bucket", "%s"]`, bucketName)
+	// Add the key condition, only accept keys equal to the one passed.
+	keyConditionStr := fmt.Sprintf(`["eq", "$key", "%s"]`, objectKey)
+
+	// Combine all conditions into one string.
+	conditionStr := fmt.Sprintf(`"conditions":[%s, %s]`, bucketConditionStr, keyConditionStr)
 	retStr := "{"
 	retStr = retStr + expirationStr + ","
 	retStr = retStr + conditionStr
@@ -105,9 +124,34 @@ func testPostPolicyHandler(obj ObjectLayer, instanceType string, t TestErrHandle
 		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
 
-	// Collection of non-exhaustive ListMultipartUploads test cases, valid errors
-	// and success responses.
-	testCases := []struct {
+	// Test cases for signature-V2.
+	testCasesV2 := []struct {
+		expectedStatus int
+		accessKey      string
+		secretKey      string
+	}{
+		{http.StatusForbidden, "invalidaccesskey", credentials.SecretAccessKey},
+		{http.StatusForbidden, credentials.AccessKeyID, "invalidsecretkey"},
+		{http.StatusNoContent, credentials.AccessKeyID, credentials.SecretAccessKey},
+	}
+
+	for i, test := range testCasesV2 {
+		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
+		rec := httptest.NewRecorder()
+		req, perr := newPostRequestV2("", bucketName, "testobject", test.accessKey, test.secretKey)
+		if perr != nil {
+			t.Fatalf("Test %d: %s: Failed to create HTTP request for PostPolicyHandler: <ERROR> %v", i+1, instanceType, perr)
+		}
+		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic ofthe handler.
+		// Call the ServeHTTP to execute the handler.
+		apiRouter.ServeHTTP(rec, req)
+		if rec.Code != test.expectedStatus {
+			t.Fatalf("Test %d: %s: Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, test.expectedStatus, rec.Code)
+		}
+	}
+
+	// Test cases for signature-V4.
+	testCasesV4 := []struct {
 		objectName         string
 		data               []byte
 		expectedRespStatus int
@@ -144,10 +188,10 @@ func testPostPolicyHandler(obj ObjectLayer, instanceType string, t TestErrHandle
 		},
 	}
 
-	for i, testCase := range testCases {
+	for i, testCase := range testCasesV4 {
 		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
 		rec := httptest.NewRecorder()
-		req, perr := newPostRequest("", bucketName, testCase.objectName, testCase.data, testCase.accessKey, testCase.secretKey)
+		req, perr := newPostRequestV4("", bucketName, testCase.objectName, testCase.data, testCase.accessKey, testCase.secretKey)
 		if perr != nil {
 			t.Fatalf("Test %d: %s: Failed to create HTTP request for PostPolicyHandler: <ERROR> %v", i+1, instanceType, perr)
 		}
@@ -173,7 +217,57 @@ func postPresignSignatureV4(policyBase64 string, t time.Time, secretAccessKey, l
 	return signature
 }
 
-func newPostRequest(endPoint, bucketName, objectName string, objData []byte, accessKey, secretKey string) (*http.Request, error) {
+func newPostRequestV2(endPoint, bucketName, objectName string, accessKey, secretKey string) (*http.Request, error) {
+	// Expire the request five minutes from now.
+	expirationTime := time.Now().UTC().Add(time.Minute * 5)
+	// Create a new post policy.
+	policy := newPostPolicyBytesV2(bucketName, objectName, expirationTime)
+	// Only need the encoding.
+	encodedPolicy := base64.StdEncoding.EncodeToString(policy)
+
+	// Presign with V4 signature based on the policy.
+	signature := calculateSignatureV2(encodedPolicy, secretKey)
+
+	formData := map[string]string{
+		"AWSAccessKeyId": accessKey,
+		"bucket":         bucketName,
+		"key":            objectName,
+		"policy":         encodedPolicy,
+		"signature":      signature,
+	}
+
+	// Create the multipart form.
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+
+	// Set the normal formData
+	for k, v := range formData {
+		w.WriteField(k, v)
+	}
+	// Set the File formData
+	writer, err := w.CreateFormFile("file", "s3verify/post/object")
+	if err != nil {
+		// return nil, err
+		return nil, err
+	}
+	writer.Write([]byte("hello world"))
+	// Close before creating the new request.
+	w.Close()
+
+	// Set the body equal to the created policy.
+	reader := bytes.NewReader(buf.Bytes())
+
+	req, err := http.NewRequest("POST", makeTestTargetURL(endPoint, bucketName, objectName, nil), reader)
+	if err != nil {
+		return nil, err
+	}
+
+	// Set form content-type.
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	return req, nil
+}
+
+func newPostRequestV4(endPoint, bucketName, objectName string, objData []byte, accessKey, secretKey string) (*http.Request, error) {
 	// Keep time.
 	t := time.Now().UTC()
 	// Expire the request five minutes from now.
@@ -181,7 +275,7 @@ func newPostRequest(endPoint, bucketName, objectName string, objData []byte, acc
 	// Get the user credential.
 	credStr := getCredential(accessKey, serverConfig.GetRegion(), t)
 	// Create a new post policy.
-	policy := newPostPolicyBytes(credStr, bucketName, objectName, expirationTime)
+	policy := newPostPolicyBytesV4(credStr, bucketName, objectName, expirationTime)
 	// Only need the encoding.
 	encodedPolicy := base64.StdEncoding.EncodeToString(policy)
 
