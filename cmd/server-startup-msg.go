@@ -136,12 +136,11 @@ func getStorageInfoMsg(storageInfo StorageInfo) string {
 	msg := fmt.Sprintf("%s %s Free, %s Total", colorBlue("Drive Capacity:"),
 		humanize.IBytes(uint64(storageInfo.Free)),
 		humanize.IBytes(uint64(storageInfo.Total)))
-	diskInfo := fmt.Sprintf(" %d Online, %d Offline. We can withstand [%d] more drive failure(s).",
-		storageInfo.Backend.OnlineDisks,
-		storageInfo.Backend.OfflineDisks,
-		storageInfo.Backend.ReadQuorum,
-	)
 	if storageInfo.Backend.Type == XL {
+		diskInfo := fmt.Sprintf(" %d Online, %d Offline. ", storageInfo.Backend.OnlineDisks, storageInfo.Backend.OfflineDisks)
+		if maxDiskFailures := storageInfo.Backend.ReadQuorum - storageInfo.Backend.OfflineDisks; maxDiskFailures >= 0 {
+			diskInfo += fmt.Sprintf("We can withstand [%d] more drive failure(s).", maxDiskFailures)
+		}
 		msg += colorBlue("\nStatus:") + fmt.Sprintf(getFormatStr(len(diskInfo), 8), diskInfo)
 	}
 	return msg
