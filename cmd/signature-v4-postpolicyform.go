@@ -153,9 +153,6 @@ func parsePostPolicyFormV4(policy string) (PostPolicyForm, error) {
 
 // checkPostPolicy - apply policy conditions and validate input values.
 func checkPostPolicy(formValues map[string]string) APIErrorCode {
-	if formValues["X-Amz-Algorithm"] != signV4Algorithm {
-		return ErrSignatureVersionNotSupported
-	}
 	/// Decoding policy
 	policyBytes, err := base64.StdEncoding.DecodeString(formValues["Policy"])
 	if err != nil {

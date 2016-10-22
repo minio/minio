@@ -145,10 +145,19 @@ func getSignature(signingKey []byte, stringToSign string) string {
 	return hex.EncodeToString(sumHMAC(signingKey, []byte(stringToSign)))
 }
 
+// Check to see if Policy is signed correctly.
+func doesPolicySignatureMatch(formValues map[string]string) APIErrorCode {
+	// For SignV2 - Signature field will be valid
+	if formValues["Signature"] != "" {
+		return doesPolicySignatureV2Match(formValues)
+	}
+	return doesPolicySignatureV4Match(formValues)
+}
+
 // doesPolicySignatureMatch - Verify query headers with post policy
 //     - http://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-HTTPPOSTConstructPolicy.html
 // returns ErrNone if the signature matches.
-func doesPolicySignatureMatch(formValues map[string]string) APIErrorCode {
+func doesPolicySignatureV4Match(formValues map[string]string) APIErrorCode {
 	// Access credentials.
 	cred := serverConfig.GetCredential()
 

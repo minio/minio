@@ -56,7 +56,19 @@ var resourceList = []string{
 	"website",
 }
 
-// TODO add post policy signature.
+func doesPolicySignatureV2Match(formValues map[string]string) APIErrorCode {
+	cred := serverConfig.GetCredential()
+	accessKey := formValues["Awsaccesskeyid"]
+	if accessKey != cred.AccessKeyID {
+		return ErrInvalidAccessKeyID
+	}
+	signature := formValues["Signature"]
+	policy := formValues["Policy"]
+	if signature != calculateSignatureV2(policy, cred.SecretAccessKey) {
+		return ErrSignatureDoesNotMatch
+	}
+	return ErrNone
+}
 
 // doesPresignV2SignatureMatch - Verify query headers with presigned signature
 //     - http://docs.aws.amazon.com/AmazonS3/latest/dev/RESTAuthentication.html#RESTAuthenticationQueryStringAuth
@@ -198,26 +210,24 @@ func doesSignV2Match(r *http.Request) APIErrorCode {
 	return ErrNone
 }
 
+func calculateSignatureV2(stringToSign string, secret string) string {
+	hm := hmac.New(sha1.New, []byte(secret))
+	hm.Write([]byte(stringToSign))
+	return base64.StdEncoding.EncodeToString(hm.Sum(nil))
+}
+
 // Return signature-v2 for the presigned request.
 func preSignatureV2(method string, encodedResource string, encodedQuery string, headers http.Header, expires string) string {
 	cred := serverConfig.GetCredential()
-
 	stringToSign := presignV2STS(method, encodedResource, encodedQuery, headers, expires)
-	hm := hmac.New(sha1.New, []byte(cred.SecretAccessKey))
-	hm.Write([]byte(stringToSign))
-	signature := base64.StdEncoding.EncodeToString(hm.Sum(nil))
-	return signature
+	return calculateSignatureV2(stringToSign, cred.SecretAccessKey)
 }
 
 // Return signature-v2 authrization header.
 func signatureV2(method string, encodedResource string, encodedQuery string, headers http.Header) string {
 	cred := serverConfig.GetCredential()
-
 	stringToSign := signV2STS(method, encodedResource, encodedQuery, headers)
-
-	hm := hmac.New(sha1.New, []byte(cred.SecretAccessKey))
-	hm.Write([]byte(stringToSign))
-	signature := base64.StdEncoding.EncodeToString(hm.Sum(nil))
+	signature := calculateSignatureV2(stringToSign, cred.SecretAccessKey)
 	return fmt.Sprintf("%s %s:%s", signV2Algorithm, cred.AccessKeyID, signature)
 }
 
