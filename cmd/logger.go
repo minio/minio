@@ -77,13 +77,27 @@ func stackInfo() string {
 	return strings.Replace(stackBuf.String(), filepath.ToSlash(GOPATH)+"/src/", "", -1)
 }
 
+// Get file, line, function name of the caller.
+func callerLocation() string {
+	pc, file, line, success := runtime.Caller(2)
+	if !success {
+		file = "<unknown>"
+		line = 0
+	}
+	shortFile := true // We are only interested in short file form.
+	callerLoc := funcFromPC(pc, file, line, shortFile)
+	return callerLoc
+}
+
 // errorIf synonymous with fatalIf but doesn't exit on error != nil
 func errorIf(err error, msg string, data ...interface{}) {
 	if err == nil {
 		return
 	}
+	location := callerLocation()
 	fields := logrus.Fields{
-		"cause": err.Error(),
+		"location": location,
+		"cause":    err.Error(),
 	}
 	if e, ok := err.(*Error); ok {
 		fields["stack"] = strings.Join(e.Trace(), " ")
@@ -97,8 +111,10 @@ func fatalIf(err error, msg string, data ...interface{}) {
 	if err == nil {
 		return
 	}
+	location := callerLocation()
 	fields := logrus.Fields{
-		"cause": err.Error(),
+		"location": location,
+		"cause":    err.Error(),
 	}
 	if globalTrace {
 		fields["stack"] = "\n" + stackInfo()
