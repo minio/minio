@@ -406,46 +406,17 @@ func testListenBucketNotificationHandler(obj ObjectLayer, instanceType, bucketNa
 	}
 }
 
-func testRemoveNotificationConfig(obj ObjectLayer, instanceType string, t TestErrHandler) {
+func testRemoveNotificationConfig(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
+	credentials credential, t *testing.T) {
 	invalidBucket := "Invalid\\Bucket"
 	// get random bucket name.
-	randBucket := getRandomBucketName()
-
-	err := obj.MakeBucket(randBucket)
-	if err != nil {
-		// failed to create bucket, abort.
-		t.Fatalf("Failed to create bucket %s %s : %s", randBucket,
-			instanceType, err)
-	}
+	randBucket := bucketName
 
 	sampleNotificationBytes := []byte("<NotificationConfiguration><TopicConfiguration>" +
 		"<Event>s3:ObjectCreated:*</Event><Event>s3:ObjectRemoved:*</Event><Filter>" +
 		"<S3Key></S3Key></Filter><Id></Id><Topic>arn:minio:sns:us-east-1:1474332374:listen</Topic>" +
 		"</TopicConfiguration></NotificationConfiguration>")
 
-	// Register the API end points with XL/FS object layer.
-	apiRouter := initTestAPIEndPoints(obj, []string{
-		"PutBucketNotification",
-		"ListenBucketNotification",
-	})
-
-	// initialize the server and obtain the credentials and root.
-	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
-	if err != nil {
-		t.Fatalf("Init Test config failed")
-	}
-	// remove the root folder after the test ends.
-	defer removeAll(rootPath)
-
-	credentials := serverConfig.GetCredential()
-
-	//Initialize global event notifier with mock queue targets.
-	err = initEventNotifier(obj)
-	if err != nil {
-		t.Fatalf("Test %s: Failed to initialize mock event notifier %v",
-			instanceType, err)
-	}
 	// Set sample bucket notification on randBucket.
 	testRec := httptest.NewRecorder()
 	testReq, tErr := newTestSignedRequestV4("PUT", getPutBucketNotificationURL("", randBucket),
@@ -472,5 +443,8 @@ func testRemoveNotificationConfig(obj ObjectLayer, instanceType string, t TestEr
 }
 
 func TestRemoveNotificationConfig(t *testing.T) {
-	ExecObjectLayerTest(t, testRemoveNotificationConfig)
+	ExecObjectLayerAPITest(t, testRemoveNotificationConfig, []string{
+		"PutBucketNotification",
+		"ListenBucketNotification",
+	})
 }
