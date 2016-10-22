@@ -25,7 +25,7 @@ import (
 
 // Global constants for Minio.
 const (
-	minGoVersion = ">= 1.7.1" // minimum Go runtime version
+	minGoVersion = ">= 1.7" // Minio requires at least Go v1.7
 )
 
 // minio configuration related constants.
