@@ -210,8 +210,6 @@ var crlf = []byte("\r\n")
 // for each notification input, otherwise writes whitespace characters periodically
 // to keep the connection active. Each notification messages are terminated by CRLF
 // character. Upon any error received on response writer the for loop exits.
-//
-// TODO - do not log for all errors.
 func sendBucketNotification(w http.ResponseWriter, arnListenerCh <-chan []NotificationEvent) {
 	var dummyEvents = map[string][]NotificationEvent{"Records": nil}
 	// Continuously write to client either timely empty structures
@@ -223,8 +221,9 @@ func sendBucketNotification(w http.ResponseWriter, arnListenerCh <-chan []Notifi
 				errorIf(err, "Unable to write notification to client.")
 				return
 			}
-		case <-time.After(5 * time.Second):
+		case <-time.After(globalSNSConnAlive): // Wait for global conn active seconds.
 			if err := writeNotification(w, dummyEvents); err != nil {
+				// FIXME - do not log for all errors.
 				errorIf(err, "Unable to write notification to client.")
 				return
 			}

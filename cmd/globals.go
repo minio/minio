@@ -74,6 +74,10 @@ var (
 var (
 	// The maximum allowed difference between the request generation time and the server processing time
 	globalMaxSkewTime = 15 * time.Minute
+
+	// Keeps the connection active by waiting for following amount of time.
+	// Primarily used in ListenBucketNotification.
+	globalSNSConnAlive = 5 * time.Second
 )
 
 // global colors.
