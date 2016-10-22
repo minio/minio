@@ -17,6 +17,8 @@
 package cmd
 
 import (
+	"io/ioutil"
+	"strings"
 	"testing"
 )
 
@@ -110,6 +112,27 @@ func TestIsValidObjectName(t *testing.T) {
 		}
 		if !testCase.shouldPass && isValidObjectName {
 			t.Errorf("Test case %d: Expected object name \"%s\" to be invalid", i+1, testCase.objectName)
+		}
+	}
+}
+
+// Tests limitReader
+func TestLimitReader(t *testing.T) {
+	testCases := []struct {
+		data   string
+		maxLen int64
+		err    error
+	}{
+		{"1234567890", 15, nil},
+		{"1234567890", 10, nil},
+		{"1234567890", 5, errDataTooLarge},
+	}
+
+	for i, test := range testCases {
+		r := strings.NewReader(test.data)
+		_, err := ioutil.ReadAll(limitReader(r, test.maxLen))
+		if err != test.err {
+			t.Fatalf("test %d failed: expected %v, got %v", i+1, test.err, err)
 		}
 	}
 }

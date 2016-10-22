@@ -114,7 +114,7 @@ func extractPostPolicyFormValues(reader *multipart.Reader) (filePart io.Reader, 
 				}
 				formValues[canonicalFormName] = string(buffer)
 			} else {
-				filePart = io.LimitReader(part, maxObjectSize)
+				filePart = limitReader(part, maxObjectSize)
 				fileName = part.FileName()
 				// As described in S3 spec, we expect file to be the last form field
 				break

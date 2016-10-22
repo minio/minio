@@ -74,6 +74,13 @@ func toObjectErr(err error, params ...string) error {
 				Object: params[1],
 			}
 		}
+	case errDataTooLarge:
+		if len(params) >= 2 {
+			err = ObjectTooLarge{
+				Bucket: params[0],
+				Object: params[1],
+			}
+		}
 	case errXLReadQuorum:
 		err = InsufficientReadQuorum{}
 	case errXLWriteQuorum:
@@ -250,6 +257,13 @@ type InvalidRange struct {
 
 func (e InvalidRange) Error() string {
 	return fmt.Sprintf("The requested range \"bytes %d-%d/%d\" is not satisfiable.", e.offsetBegin, e.offsetEnd, e.resourceSize)
+}
+
+// ObjectTooLarge error returned when the size of the object > max object size allowed (5G) per request.
+type ObjectTooLarge GenericError
+
+func (e ObjectTooLarge) Error() string {
+	return "size of the object greater than what is allowed(5G)"
 }
 
 /// Multipart related errors.
