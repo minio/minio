@@ -211,7 +211,6 @@ func (en *eventNotifier) SetBucketListenerConfig(bucket string, lcfg []listenerC
 	} else {
 		en.internal.listenerConfigs[bucket] = lcfg
 	}
-	en.internal.targets = make(map[string]*listenerLogger)
 	for _, elcArr := range en.internal.listenerConfigs {
 		for _, elcElem := range elcArr {
 			currArn := elcElem.TopicConfig.TopicARN
