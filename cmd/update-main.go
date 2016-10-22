@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -138,8 +137,6 @@ func parseReleaseData(data string) (time.Time, error) {
 //       Minio (OS; ARCH) APP/VER APP/VER
 var (
 	userAgentSuffix = "Minio/" + Version + " " + "Minio/" + ReleaseTag + " " + "Minio/" + CommitID
-	userAgentPrefix = "Minio (" + runtime.GOOS + "; " + runtime.GOARCH + ") "
-	userAgent       = userAgentPrefix + userAgentSuffix
 )
 
 // Check if the operating system is a docker container.
@@ -200,8 +197,15 @@ func getReleaseUpdate(updateURL string, duration time.Duration) (updateMsg updat
 		return
 	}
 
+	userAgentPrefix := func() string {
+		if isDocker() {
+			return "Minio (" + runtime.GOOS + "; " + runtime.GOARCH + "; " + "docker) "
+		}
+		return "Minio (" + runtime.GOOS + "; " + runtime.GOARCH + ") "
+	}()
+
 	// Set user agent.
-	req.Header.Set("User-Agent", userAgent+" "+fmt.Sprintf("Docker/%t", isDocker()))
+	req.Header.Set("User-Agent", userAgentPrefix+" "+userAgentSuffix)
 
 	// Fetch new update.
 	resp, err := client.Do(req)
