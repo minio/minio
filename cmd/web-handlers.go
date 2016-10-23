@@ -125,12 +125,12 @@ func (web *webAPIHandlers) StorageInfo(r *http.Request, args *GenericArgs, reply
 	if !isJWTReqAuthenticated(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
-	reply.UIVersion = miniobrowser.UIVersion
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
 		return &json2.Error{Message: "Server not initialized"}
 	}
 	reply.StorageInfo = objectAPI.StorageInfo()
+	reply.UIVersion = miniobrowser.UIVersion
 	return nil
 }
 
@@ -144,7 +144,6 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 	if !isJWTReqAuthenticated(r) {
 		return &json2.Error{Message: "Unauthorized request"}
 	}
-	reply.UIVersion = miniobrowser.UIVersion
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
 		return &json2.Error{Message: "Server not initialized"}
@@ -152,6 +151,7 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 	if err := objectAPI.MakeBucket(args.BucketName); err != nil {
 		return &json2.Error{Message: err.Error()}
 	}
+	reply.UIVersion = miniobrowser.UIVersion
 	return nil
 }
 
@@ -275,6 +275,7 @@ func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs,
 	if err := objectAPI.DeleteObject(args.BucketName, args.ObjectName); err != nil {
 		return &json2.Error{Message: err.Error()}
 	}
+	reply.UIVersion = miniobrowser.UIVersion
 	return nil
 }
 
@@ -653,7 +654,6 @@ func (web *webAPIHandlers) ListAllBucketPolicies(r *http.Request, args *ListAllB
 	}
 
 	reply.UIVersion = miniobrowser.UIVersion
-	reply.Policies = []bucketAccessPolicy{}
 	for prefix, policy := range policy.GetPolicies(policyInfo.Statements, args.BucketName) {
 		reply.Policies = append(reply.Policies, bucketAccessPolicy{
 			Prefix: prefix,
@@ -694,6 +694,7 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 		if err = persistAndNotifyBucketPolicyChange(args.BucketName, policyChange{true, nil}, objectAPI); err != nil {
 			return &json2.Error{Message: err.Error()}
 		}
+		reply.UIVersion = miniobrowser.UIVersion
 		return nil
 	}
 	data, err := json.Marshal(policyInfo)
@@ -719,7 +720,6 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 	if err := persistAndNotifyBucketPolicyChange(args.BucketName, policyChange{false, policy}, objectAPI); err != nil {
 		return &json2.Error{Message: err.Error()}
 	}
-
 	reply.UIVersion = miniobrowser.UIVersion
 	return nil
 }
@@ -738,6 +738,7 @@ type PresignedGetArgs struct {
 
 // PresignedGetRep - presigned-get URL reply.
 type PresignedGetRep struct {
+	UIVersion string `json:"uiVersion"`
 	// Presigned URL of the object.
 	URL string `json:"url"`
 }
@@ -750,6 +751,7 @@ func (web *webAPIHandlers) PresignedGet(r *http.Request, args *PresignedGetArgs,
 	if args.BucketName == "" || args.ObjectName == "" {
 		return &json2.Error{Message: "Required arguments: Host, Bucket, Object"}
 	}
+	reply.UIVersion = miniobrowser.UIVersion
 	reply.URL = presignedGet(args.HostName, args.BucketName, args.ObjectName)
 	return nil
 }

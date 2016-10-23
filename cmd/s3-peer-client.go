@@ -45,17 +45,13 @@ func initGlobalS3Peers(eps []storageEndPoint) {
 		rpcClients: make(map[string]*AuthRPCClient),
 		mutex:      &sync.RWMutex{},
 	}
+
 	// Initialize each peer connection.
 	for _, peer := range peers {
 		globalS3Peers.InitS3PeerClient(peer)
 	}
 
-	// Additionally setup a local peer if one does not exist.
-	if globalS3Peers.GetPeerClient(globalMinioAddr) == nil {
-		globalS3Peers.InitS3PeerClient(globalMinioAddr)
-		peers = append(peers, globalMinioAddr)
-	}
-
+	// Save new peers
 	globalS3Peers.peers = peers
 }
 
@@ -108,14 +104,19 @@ func (s3p *s3Peers) Close() error {
 	return nil
 }
 
-// returns the network addresses of all Minio servers in the cluster
-// in `host:port` format.
-func getAllPeers(eps []storageEndPoint) []string {
-	res := []string{}
-	for _, ep := range eps {
-		res = append(res, fmt.Sprintf("%s:%d", ep.host, ep.port))
+// Returns the network addresses of all Minio servers in the cluster in `host:port` format.
+func getAllPeers(eps []storageEndPoint) (peers []string) {
+	if eps == nil {
+		return nil
 	}
-	return res
+	peers = []string{globalMinioAddr} // Starts with a default peer.
+	for _, ep := range eps {
+		// Rest of the peers configured.
+		if ep.host != "" {
+			peers = append(peers, fmt.Sprintf("%s:%d", ep.host, ep.port))
+		}
+	}
+	return peers
 }
 
 // Make RPC calls with the given method and arguments to all the given
