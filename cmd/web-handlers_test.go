@@ -801,6 +801,31 @@ func testWebPresignedGetHandler(obj ObjectLayer, instanceType string, t TestErrH
 	if !bytes.Equal(data, savedData) {
 		t.Fatal("Read data is not equal was what was expected")
 	}
+
+	// Register the API end points with XL/FS object layer.
+	apiRouter = initTestWebRPCEndPoint(obj)
+
+	presignGetReq = PresignedGetArgs{
+		HostName:   "",
+		BucketName: "",
+		ObjectName: "",
+	}
+	presignGetRep = &PresignedGetRep{}
+	req, err = newTestWebRPCRequest("Web.PresignedGet", authorization, presignGetReq)
+	if err != nil {
+		t.Fatalf("Failed to create HTTP request: <ERROR> %v", err)
+	}
+	apiRouter.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Expected the response status to be 200, but instead found `%d`", rec.Code)
+	}
+	err = getTestWebRPCResponse(rec, &presignGetRep)
+	if err == nil {
+		t.Fatalf("Failed, %v", err)
+	}
+	if err.Error() != "Required arguments: Host, Bucket, Object" {
+		t.Fatalf("Unexpected, expected `Required arguments: Host, Bucket, Object`, got %s", err)
+	}
 }
 
 // Wrapper for calling GetBucketPolicy Handler
