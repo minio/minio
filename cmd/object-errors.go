@@ -81,6 +81,13 @@ func toObjectErr(err error, params ...string) error {
 				Object: params[1],
 			}
 		}
+	case errDataTooSmall:
+		if len(params) >= 2 {
+			err = ObjectTooSmall{
+				Bucket: params[0],
+				Object: params[1],
+			}
+		}
 	case errXLReadQuorum:
 		err = InsufficientReadQuorum{}
 	case errXLWriteQuorum:
@@ -264,6 +271,13 @@ type ObjectTooLarge GenericError
 
 func (e ObjectTooLarge) Error() string {
 	return "size of the object greater than what is allowed(5G)"
+}
+
+// ObjectTooSmall error returned when the size of the object < what is expected.
+type ObjectTooSmall GenericError
+
+func (e ObjectTooSmall) Error() string {
+	return "size of the object less than what is expected"
 }
 
 /// Multipart related errors.

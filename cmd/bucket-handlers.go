@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"encoding/base64"
 	"encoding/xml"
 	"io"
 	"net/http"
@@ -450,9 +451,33 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		writeErrorResponse(w, r, apiErr, r.URL.Path)
 		return
 	}
-	if apiErr = checkPostPolicy(formValues); apiErr != ErrNone {
+
+	policyBytes, err := base64.StdEncoding.DecodeString(formValues["Policy"])
+	if err != nil {
+		writeErrorResponse(w, r, ErrMalformedPOSTRequest, r.URL.Path)
+		return
+	}
+
+	postPolicyForm, err := parsePostPolicyFormV4(string(policyBytes))
+	if err != nil {
+		writeErrorResponse(w, r, ErrMalformedPOSTRequest, r.URL.Path)
+		return
+	}
+
+	// Make sure formValues adhere to policy restrictions.
+	if apiErr = checkPostPolicy(formValues, postPolicyForm); apiErr != ErrNone {
 		writeErrorResponse(w, r, apiErr, r.URL.Path)
 		return
+	}
+
+	// Use limitReader to ensure that object size is within expected range.
+	lengthRange := postPolicyForm.Conditions.ContentLengthRange
+	if lengthRange.Valid {
+		// If policy restricted the size of the object.
+		fileBody = limitReader(fileBody, int64(lengthRange.Min), int64(lengthRange.Max))
+	} else {
+		// Default values of min/max size of the object.
+		fileBody = limitReader(fileBody, 0, maxObjectSize)
 	}
 
 	// Save metadata.
