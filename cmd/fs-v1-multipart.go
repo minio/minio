@@ -643,7 +643,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	defer nsMutex.Unlock(minioMetaBucket, fsAppendMetaPath, opsID)
 
 	// Calculate s3 compatible md5sum for complete multipart.
-	s3MD5, err := completeMultipartMD5(parts...)
+	s3MD5, err := getCompleteMultipartMD5(parts...)
 	if err != nil {
 		return "", err
 	}

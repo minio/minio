@@ -136,3 +136,35 @@ func TestLimitReader(t *testing.T) {
 		}
 	}
 }
+
+// Tests getCompleteMultipartMD5
+func TestGetCompleteMultipartMD5(t *testing.T) {
+	testCases := []struct {
+		parts          []completePart
+		expectedResult string
+		expectedErr    string
+	}{
+		// Wrong MD5 hash string
+		{[]completePart{{ETag: "wrong-md5-hash-string"}}, "", "encoding/hex: odd length hex string"},
+
+		// Single completePart with valid MD5 hash string.
+		{[]completePart{{ETag: "cf1f738a5924e645913c984e0fe3d708"}}, "10dc1617fbcf0bd0858048cb96e6bd77-1", ""},
+
+		// Multiple completePart with valid MD5 hash string.
+		{[]completePart{{ETag: "cf1f738a5924e645913c984e0fe3d708"}, {ETag: "9ccbc9a80eee7fb6fdd22441db2aedbd"}}, "0239a86b5266bb624f0ac60ba2aed6c8-2", ""},
+	}
+
+	for i, test := range testCases {
+		result, err := getCompleteMultipartMD5(test.parts...)
+		if result != test.expectedResult {
+			t.Fatalf("test %d failed: expected: result=%v, got=%v", i+1, test.expectedResult, result)
+		}
+		errString := ""
+		if err != nil {
+			errString = err.Error()
+		}
+		if errString != test.expectedErr {
+			t.Fatalf("test %d failed: expected: err=%v, got=%v", i+1, test.expectedErr, err)
+		}
+	}
+}
