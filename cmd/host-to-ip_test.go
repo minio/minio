@@ -16,18 +16,23 @@
 
 package cmd
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
 
 // Tests sorted list generated from hosts to ip.
 func TestHostToIP(t *testing.T) {
 	// Collection of test cases to validate last octet sorting.
 	testCases := []struct {
-		hosts       []string
-		sortedHosts []string
+		ips        []string
+		sortedIPs  []string
+		err        error
+		shouldPass bool
 	}{
 		{
 			// List of ip addresses that need to be sorted.
-			[]string{
+			ips: []string{
 				"129.95.30.40",
 				"5.24.69.2",
 				"19.20.203.5",
@@ -37,7 +42,7 @@ func TestHostToIP(t *testing.T) {
 				"5.220.100.50",
 			},
 			// Numerical sorting result based on the last octet.
-			[]string{
+			sortedIPs: []string{
 				"5.220.100.50",
 				"129.95.30.40",
 				"19.20.21.22",
@@ -46,15 +51,34 @@ func TestHostToIP(t *testing.T) {
 				"5.24.69.2",
 				"127.0.0.1",
 			},
+			err:        nil,
+			shouldPass: true,
+		},
+		{
+			ips: []string{
+				"localhost",
+			},
+			sortedIPs:  []string{},
+			err:        fmt.Errorf("Unable to parse invalid ip localhost"),
+			shouldPass: false,
 		},
 	}
 
 	// Tests the correct sorting behavior of getIPsFromHosts.
 	for j, testCase := range testCases {
-		ips := getIPsFromHosts(testCase.hosts)
-		for i, ip := range ips {
-			if ip.String() != testCase.sortedHosts[i] {
-				t.Fatalf("Test %d expected to pass but failed. Wanted ip %s, but got %s", j+1, testCase.sortedHosts[i], ip.String())
+		err := sortIPsByOctet(testCase.ips)
+		if !testCase.shouldPass && testCase.err.Error() != err.Error() {
+			t.Fatalf("Test %d: Expected error %s, got %s", j+1, testCase.err, err)
+		}
+		if testCase.shouldPass && err != nil {
+			t.Fatalf("Test %d: Expected error %s", j+1, err)
+		}
+		if testCase.shouldPass {
+			for i, ip := range testCase.ips {
+				if ip == testCase.sortedIPs[i] {
+					continue
+				}
+				t.Errorf("Test %d expected to pass but failed. Wanted ip %s, but got %s", j+1, testCase.sortedIPs[i], ip)
 			}
 		}
 	}

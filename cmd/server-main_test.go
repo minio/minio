@@ -28,15 +28,39 @@ import (
 
 func TestGetListenIPs(t *testing.T) {
 	testCases := []struct {
-		addr string
-		port string
+		addr       string
+		port       string
+		shouldPass bool
 	}{
-		{"localhost", ":80"},
-		{"", ":80"},
+		{"localhost", "9000", true},
+		{"", "9000", true},
+		{"", "", false},
 	}
 	for _, test := range testCases {
-		ts := &http.Server{Addr: test.addr + test.port}
-		getListenIPs(ts)
+		var addr string
+		// Please keep this we need to do this because
+		// of odd https://play.golang.org/p/4dMPtM6Wdd
+		// implementation issue.
+		if test.port != "" {
+			addr = test.addr + ":" + test.port
+		}
+		hosts, port, err := getListenIPs(&http.Server{
+			Addr: addr,
+		})
+		if !test.shouldPass && err == nil {
+			t.Fatalf("Test should fail but succeeded %s", err)
+		}
+		if test.shouldPass && err != nil {
+			t.Fatalf("Test should succeed but failed %s", err)
+		}
+		if test.shouldPass {
+			if port != test.port {
+				t.Errorf("Test expected %s, got %s", test.port, port)
+			}
+			if len(hosts) == 0 {
+				t.Errorf("Test unexpected value hosts cannot be empty %#v", test)
+			}
+		}
 	}
 }
 
