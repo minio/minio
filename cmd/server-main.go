@@ -144,8 +144,8 @@ func (ep storageEndPoint) presentIn(eps []storageEndPoint) bool {
 // Parse end-point (of the form host:port:path or host:path or path)
 func parseStorageEndPoint(ep string, defaultPort int) (storageEndPoint, error) {
 	if runtime.GOOS == "windows" {
-		// Try to match path, ex. C:\export
-		matched, err := regexp.MatchString(`^[a-zA-Z]:\\[^:]+$`, ep)
+		// Try to match path, ex. C:\export or export
+		matched, err := regexp.MatchString(`^([a-zA-Z]:\\[^:]+|[^:]+)$`, ep)
 		if err != nil {
 			return storageEndPoint{}, err
 		}
