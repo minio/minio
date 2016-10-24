@@ -37,8 +37,6 @@ func TestReleaseUpdateVersion(t *testing.T) {
 		fmt.Fprintln(w, "fbe246edbd382902db9a4035df7dce8cb441357d minio.RELEASE.2016-10-07T01-16-39Z")
 	}))
 	userAgentSuffix = "Minio/" + Version + " " + "Minio/" + ReleaseTag + " " + "Minio/" + CommitID
-	userAgentPrefix = "Minio (" + runtime.GOOS + "; " + runtime.GOARCH + ") "
-	userAgent = userAgentPrefix + userAgentSuffix
 	defer ts.Close()
 	testCases := []struct {
 		updateURL  string
