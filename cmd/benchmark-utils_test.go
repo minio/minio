@@ -43,6 +43,7 @@ func prepareBenchmarkBackend(instanceType string) (ObjectLayer, []string, error)
 	if err != nil {
 		return nil, nil, err
 	}
+
 	return obj, disks, nil
 }
 
@@ -151,6 +152,12 @@ func runPutObjectPartBenchmark(b *testing.B, obj ObjectLayer, partSize int) {
 
 // creates XL/FS backend setup, obtains the object layer and calls the runPutObjectPartBenchmark function.
 func benchmarkPutObjectPart(b *testing.B, instanceType string, objSize int) {
+	rootPath, err := newTestConfig("us-east-1")
+	if err != nil {
+		b.Fatalf("Unable to initialize config. %s", err)
+	}
+	defer removeAll(rootPath)
+
 	// create a temp XL/FS backend.
 	objLayer, disks, err := prepareBenchmarkBackend(instanceType)
 	if err != nil {
@@ -164,6 +171,12 @@ func benchmarkPutObjectPart(b *testing.B, instanceType string, objSize int) {
 
 // creates XL/FS backend setup, obtains the object layer and calls the runPutObjectBenchmark function.
 func benchmarkPutObject(b *testing.B, instanceType string, objSize int) {
+	rootPath, err := newTestConfig("us-east-1")
+	if err != nil {
+		b.Fatalf("Unable to initialize config. %s", err)
+	}
+	defer removeAll(rootPath)
+
 	// create a temp XL/FS backend.
 	objLayer, disks, err := prepareBenchmarkBackend(instanceType)
 	if err != nil {
@@ -177,6 +190,12 @@ func benchmarkPutObject(b *testing.B, instanceType string, objSize int) {
 
 // creates XL/FS backend setup, obtains the object layer and runs parallel benchmark for put object.
 func benchmarkPutObjectParallel(b *testing.B, instanceType string, objSize int) {
+	rootPath, err := newTestConfig("us-east-1")
+	if err != nil {
+		b.Fatalf("Unable to initialize config. %s", err)
+	}
+	defer removeAll(rootPath)
+
 	// create a temp XL/FS backend.
 	objLayer, disks, err := prepareBenchmarkBackend(instanceType)
 	if err != nil {
@@ -191,7 +210,12 @@ func benchmarkPutObjectParallel(b *testing.B, instanceType string, objSize int) 
 // Benchmark utility functions for ObjectLayer.GetObject().
 // Creates Object layer setup ( MakeBucket, PutObject) and then runs the benchmark.
 func runGetObjectBenchmark(b *testing.B, obj ObjectLayer, objSize int) {
-	var err error
+	rootPath, err := newTestConfig("us-east-1")
+	if err != nil {
+		b.Fatalf("Unable to initialize config. %s", err)
+	}
+	defer removeAll(rootPath)
+
 	// obtains random bucket name.
 	bucket := getRandomBucketName()
 	// create bucket.
@@ -257,6 +281,12 @@ func generateBytesData(size int) []byte {
 
 // creates XL/FS backend setup, obtains the object layer and calls the runGetObjectBenchmark function.
 func benchmarkGetObject(b *testing.B, instanceType string, objSize int) {
+	rootPath, err := newTestConfig("us-east-1")
+	if err != nil {
+		b.Fatalf("Unable to initialize config. %s", err)
+	}
+	defer removeAll(rootPath)
+
 	// create a temp XL/FS backend.
 	objLayer, disks, err := prepareBenchmarkBackend(instanceType)
 	if err != nil {
@@ -270,6 +300,12 @@ func benchmarkGetObject(b *testing.B, instanceType string, objSize int) {
 
 // creates XL/FS backend setup, obtains the object layer and runs parallel benchmark for ObjectLayer.GetObject() .
 func benchmarkGetObjectParallel(b *testing.B, instanceType string, objSize int) {
+	rootPath, err := newTestConfig("us-east-1")
+	if err != nil {
+		b.Fatalf("Unable to initialize config. %s", err)
+	}
+	defer removeAll(rootPath)
+
 	// create a temp XL/FS backend.
 	objLayer, disks, err := prepareBenchmarkBackend(instanceType)
 	if err != nil {
@@ -284,7 +320,12 @@ func benchmarkGetObjectParallel(b *testing.B, instanceType string, objSize int) 
 // Parallel benchmark utility functions for ObjectLayer.PutObject().
 // Creates Object layer setup ( MakeBucket ) and then runs the PutObject benchmark.
 func runPutObjectBenchmarkParallel(b *testing.B, obj ObjectLayer, objSize int) {
-	var err error
+	rootPath, err := newTestConfig("us-east-1")
+	if err != nil {
+		b.Fatalf("Unable to initialize config. %s", err)
+	}
+	defer removeAll(rootPath)
+
 	// obtains random bucket name.
 	bucket := getRandomBucketName()
 	// create bucket.
@@ -329,7 +370,12 @@ func runPutObjectBenchmarkParallel(b *testing.B, obj ObjectLayer, objSize int) {
 // Parallel benchmark utility functions for ObjectLayer.GetObject().
 // Creates Object layer setup ( MakeBucket, PutObject) and then runs the benchmark.
 func runGetObjectBenchmarkParallel(b *testing.B, obj ObjectLayer, objSize int) {
-	var err error
+	rootPath, err := newTestConfig("us-east-1")
+	if err != nil {
+		b.Fatalf("Unable to initialize config. %s", err)
+	}
+	defer removeAll(rootPath)
+
 	// obtains random bucket name.
 	bucket := getRandomBucketName()
 	// create bucket.

@@ -27,7 +27,7 @@ const (
 	blockSizeV1 = 10 * 1024 * 1024 // 10MiB.
 
 	// Staging buffer read size for all internal operations version 1.
-	readSizeV1 = 128 * 1024 // 128KiB.
+	readSizeV1 = 2 * 1024 * 1024 // 2MiB.
 
 	// Buckets meta prefix.
 	bucketMetaPrefix = "buckets"

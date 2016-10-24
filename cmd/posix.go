@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 
@@ -45,6 +46,7 @@ type posix struct {
 	suppliedDiskPath string
 	minFreeSpace     int64
 	minFreeInodes    int64
+	pool             sync.Pool
 }
 
 var errFaultyDisk = errors.New("Faulty disk")
@@ -114,6 +116,13 @@ func newPosix(diskPath string) (StorageAPI, error) {
 		diskPath:         diskPath,
 		minFreeSpace:     fsMinFreeSpace,
 		minFreeInodes:    fsMinFreeInodesPercent,
+		// 1MiB buffer pool for posix internal operations.
+		pool: sync.Pool{
+			New: func() interface{} {
+				b := make([]byte, 1*1024*1024) // 1MiB.
+				return &b
+			},
+		},
 	}
 	st, err := os.Stat(preparePath(diskPath))
 	if err != nil {
@@ -609,8 +618,13 @@ func (s *posix) AppendFile(volume, path string, buf []byte) (err error) {
 	// Close upon return.
 	defer w.Close()
 
-	// Return io.Copy
-	_, err = io.Copy(w, bytes.NewReader(buf))
+	bufp := s.pool.Get().(*[]byte)
+
+	// Reuse buffer.
+	defer s.pool.Put(bufp)
+
+	// Return io.CopyBuffer
+	_, err = io.CopyBuffer(w, bytes.NewReader(buf), *bufp)
 	return err
 }
 
