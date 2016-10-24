@@ -31,9 +31,14 @@ import (
 const (
 	// readDirentBufSize for syscall.ReadDirent() to hold multiple
 	// directory entries in one buffer. golang source uses 4096 as
-	// buffer size whereas we use 1MiB for large entries in single
+	// buffer size whereas we use 256KiB for large entries in single
 	// operation to avoid multiple syscall.ReadDirent() call.
-	readDirentBufSize = 1 * 1024 * 1024 // 1MiB.
+	//
+	// We would ideally want 1MiB. but now sticking to 256KiB due to
+	// a bug in OS X 10.12 where large buffers results in
+	// syscall.Readdirent() returning garbage values.
+	// - https://github.com/minio/minio/issues/3075
+	readDirentBufSize = 4096 * 64 // 256KiB.
 )
 
 // actual length of the byte array from the c - world.
