@@ -215,43 +215,52 @@ func parseStorageEndPoints(eps []string, defaultPort int) (endpoints []storageEn
 }
 
 // getListenIPs - gets all the ips to listen on.
-func getListenIPs(httpServerConf *http.Server) (hosts []string, port string) {
-	host, port, err := net.SplitHostPort(httpServerConf.Addr)
-	fatalIf(err, "Unable to parse host address.", httpServerConf.Addr)
-
-	if host != "" {
-		hosts = append(hosts, host)
-		return hosts, port
+func getListenIPs(httpServerConf *http.Server) (hosts []string, port string, err error) {
+	var host string
+	host, port, err = net.SplitHostPort(httpServerConf.Addr)
+	if err != nil {
+		return nil, port, fmt.Errorf("Unable to parse host address %s", err)
 	}
-	addrs, err := net.InterfaceAddrs()
-	fatalIf(err, "Unable to determine network interface address.")
-	for _, addr := range addrs {
-		if addr.Network() == "ip+net" {
-			host := strings.Split(addr.String(), "/")[0]
-			if ip := net.ParseIP(host); ip.To4() != nil {
-				hosts = append(hosts, host)
+	if host == "" {
+		var addrs []net.Addr
+		addrs, err = net.InterfaceAddrs()
+		if err != nil {
+			return nil, port, fmt.Errorf("Unable to determine network interface address. %s", err)
+		}
+		for _, addr := range addrs {
+			if addr.Network() == "ip+net" {
+				hostname := strings.Split(addr.String(), "/")[0]
+				if ip := net.ParseIP(hostname); ip.To4() != nil {
+					hosts = append(hosts, hostname)
+				}
 			}
 		}
-	}
-	return hosts, port
+		err = sortIPsByOctet(hosts)
+		if err != nil {
+			return nil, port, fmt.Errorf("Unable reverse sorted ips from hosts %s", err)
+		}
+		return hosts, port, nil
+	} // if host != "" {
+	// Proceed to append itself, since user requested a specific endpoint.
+	hosts = append(hosts, host)
+	return hosts, port, nil
 }
 
 // Finalizes the endpoints based on the host list and port.
 func finalizeEndpoints(tls bool, apiServer *http.Server) (endPoints []string) {
-	// Get list of listen ips and port.
-	hosts, port := getListenIPs(apiServer)
-
 	// Verify current scheme.
 	scheme := "http"
 	if tls {
 		scheme = "https"
 	}
 
-	ips := getIPsFromHosts(hosts)
+	// Get list of listen ips and port.
+	hosts, port, err := getListenIPs(apiServer)
+	fatalIf(err, "Unable to get list of ips to listen on")
 
 	// Construct proper endpoints.
-	for _, ip := range ips {
-		endPoints = append(endPoints, fmt.Sprintf("%s://%s:%s", scheme, ip.String(), port))
+	for _, host := range hosts {
+		endPoints = append(endPoints, fmt.Sprintf("%s://%s:%s", scheme, host, port))
 	}
 
 	// Success.
