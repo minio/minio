@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"fmt"
 	"net"
 	"sort"
 )
@@ -33,19 +32,7 @@ func (n byLastOctet) Less(i, j int) bool {
 }
 
 // sortIPsByOctet - returns a reverse sorted list of hosts based on the last octet value.
-func sortIPsByOctet(ips []string) error {
-	var nips []net.IP
-	for _, ip := range ips {
-		nip := net.ParseIP(ip)
-		if nip == nil {
-			return fmt.Errorf("Unable to parse invalid ip %s", ip)
-		}
-		nips = append(nips, nip)
-	}
+func sortIPsByOctet(ips []net.IP) {
 	// Reverse sort ips by their last octet.
-	sort.Sort(sort.Reverse(byLastOctet(nips)))
-	for i, nip := range nips {
-		ips[i] = nip.String()
-	}
-	return nil
+	sort.Sort(sort.Reverse(byLastOctet(ips)))
 }

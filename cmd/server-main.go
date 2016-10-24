@@ -32,6 +32,7 @@ import (
 	"github.com/minio/cli"
 )
 
+var errNoAddr = errors.New("Unable to find any valid network address.")
 var serverFlags = []cli.Flag{
 	cli.StringFlag{
 		Name:  "address",
@@ -223,21 +224,29 @@ func getListenIPs(httpServerConf *http.Server) (hosts []string, port string, err
 	}
 	if host == "" {
 		var addrs []net.Addr
+		var ips []net.IP
 		addrs, err = net.InterfaceAddrs()
 		if err != nil {
 			return nil, port, fmt.Errorf("Unable to determine network interface address. %s", err)
 		}
 		for _, addr := range addrs {
 			if addr.Network() == "ip+net" {
-				hostname := strings.Split(addr.String(), "/")[0]
-				if ip := net.ParseIP(hostname); ip.To4() != nil {
-					hosts = append(hosts, hostname)
+				ip, _, err := net.ParseCIDR(addr.String())
+				if err != nil {
+					return nil, port, fmt.Errorf("Unable to parse IP from network interface address. %s", err)
+				}
+				// FIXME: For now, we support only IPv4 addresses. This is mainly due to our sortIPsByOctet.
+				if ip.To4() != nil {
+					ips = append(ips, ip)
 				}
 			}
 		}
-		err = sortIPsByOctet(hosts)
-		if err != nil {
-			return nil, port, fmt.Errorf("Unable reverse sorted ips from hosts %s", err)
+		if len(ips) == 0 {
+			return nil, port, errNoAddr
+		}
+		sortIPsByOctet(ips)
+		for _, ip := range ips {
+			hosts = append(hosts, ip.String())
 		}
 		return hosts, port, nil
 	} // if host != "" {
