@@ -222,22 +222,13 @@ func getListenIPs(httpServerConf *http.Server) (hosts []string, port string, err
 		return nil, port, fmt.Errorf("Unable to parse host address %s", err)
 	}
 	if host == "" {
-		var addrs []net.Addr
-		addrs, err = net.InterfaceAddrs()
-		if err != nil {
-			return nil, port, fmt.Errorf("Unable to determine network interface address. %s", err)
-		}
-		for _, addr := range addrs {
-			if addr.Network() == "ip+net" {
-				hostname := strings.Split(addr.String(), "/")[0]
-				if ip := net.ParseIP(hostname); ip.To4() != nil {
-					hosts = append(hosts, hostname)
-				}
-			}
-		}
-		err = sortIPsByOctet(hosts)
+		var ipv4s []net.IP
+		ipv4s, err = getInterfaceIPv4s()
 		if err != nil {
 			return nil, port, fmt.Errorf("Unable reverse sorted ips from hosts %s", err)
+		}
+		for _, ip := range ipv4s {
+			hosts = append(hosts, ip.String())
 		}
 		return hosts, port, nil
 	} // if host != "" {
