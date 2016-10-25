@@ -153,13 +153,6 @@ func checkPostPolicy(formValues map[string]string, postPolicyForm PostPolicyForm
 	if !postPolicyForm.Expiration.After(time.Now().UTC()) {
 		return ErrPolicyAlreadyExpired
 	}
-	if postPolicyForm.Conditions.ContentLengthRange.Max > maxObjectSize {
-		// Upload object size can not be more than what is allowed.
-		return ErrNotImplemented
-	}
-	if postPolicyForm.Conditions.ContentLengthRange.Min > postPolicyForm.Conditions.ContentLengthRange.Max {
-		return ErrAccessDenied
-	}
 	if postPolicyForm.Conditions.Policies["$bucket"].Operator == "eq" {
 		if formValues["Bucket"] != postPolicyForm.Conditions.Policies["$bucket"].Value {
 			return ErrAccessDenied
