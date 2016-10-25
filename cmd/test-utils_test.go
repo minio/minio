@@ -161,8 +161,7 @@ type TestServer struct {
 	SrvCmdCfg serverCmdConfig
 }
 
-// Starts the test server and returns the TestServer instance.
-func StartTestServer(t TestErrHandler, instanceType string) TestServer {
+func UnStartedTestServer(t TestErrHandler, instanceType string) TestServer {
 	// create an instance of TestServer.
 	testServer := TestServer{}
 	// create temporary backend for the test server.
@@ -206,7 +205,7 @@ func StartTestServer(t TestErrHandler, instanceType string) TestServer {
 	}
 
 	// Run TestServer.
-	testServer.Server = httptest.NewServer(httpHandler)
+	testServer.Server = httptest.NewUnstartedServer(httpHandler)
 
 	srvCmdCfg.serverAddr = testServer.Server.Listener.Addr().String()
 
@@ -231,6 +230,15 @@ func StartTestServer(t TestErrHandler, instanceType string) TestServer {
 	}
 	initGlobalS3Peers(endpoints)
 
+	return testServer
+
+}
+
+// Starts the test server and returns the TestServer instance.
+func StartTestServer(t TestErrHandler, instanceType string) TestServer {
+	// create an instance of TestServer.
+	testServer := UnStartedTestServer(t, instanceType)
+	testServer.Server.Start()
 	return testServer
 }
 
