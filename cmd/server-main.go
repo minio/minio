@@ -228,12 +228,7 @@ func getListenIPs(httpServerConf *http.Server) (hosts []string, port string, err
 			return nil, port, fmt.Errorf("Unable to determine network interface address. %s", err)
 		}
 		for _, addr := range addrs {
-			if addr.Network() == "ip+net" {
-				hostname := strings.Split(addr.String(), "/")[0]
-				if ip := net.ParseIP(hostname); ip.To4() != nil {
-					hosts = append(hosts, hostname)
-				}
-			}
+			hosts = append(hosts, addr.String())
 		}
 		err = sortIPsByOctet(hosts)
 		if err != nil {

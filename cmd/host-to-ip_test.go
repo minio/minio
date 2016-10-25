@@ -33,13 +33,13 @@ func TestHostToIP(t *testing.T) {
 		{
 			// List of ip addresses that need to be sorted.
 			ips: []string{
-				"129.95.30.40",
-				"5.24.69.2",
-				"19.20.203.5",
-				"1.2.3.4",
-				"127.0.0.1",
-				"19.20.21.22",
-				"5.220.100.50",
+				"129.95.30.40/24",
+				"5.24.69.2/24",
+				"19.20.203.5/24",
+				"1.2.3.4/24",
+				"127.0.0.1/24",
+				"19.20.21.22/24",
+				"5.220.100.50/24",
 			},
 			// Numerical sorting result based on the last octet.
 			sortedIPs: []string{

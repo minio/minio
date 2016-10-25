@@ -36,14 +36,18 @@ func (n byLastOctet) Less(i, j int) bool {
 func sortIPsByOctet(ips []string) error {
 	var nips []net.IP
 	for _, ip := range ips {
-		nip := net.ParseIP(ip)
-		if nip == nil {
+		nip, _, err := net.ParseCIDR(ip)
+		if err != nil {
 			return fmt.Errorf("Unable to parse invalid ip %s", ip)
+		}
+		if nip.To4() == nil {
+			continue
 		}
 		nips = append(nips, nip)
 	}
 	// Reverse sort ips by their last octet.
 	sort.Sort(sort.Reverse(byLastOctet(nips)))
+	ips = ips[:len(nips)]
 	for i, nip := range nips {
 		ips[i] = nip.String()
 	}
