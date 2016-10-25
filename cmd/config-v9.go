@@ -42,8 +42,8 @@ type serverConfigV9 struct {
 	rwMutex *sync.RWMutex
 }
 
-// initConfig - initialize server config. config version (called only once).
-func initConfig() error {
+// initConfig - initialize server config and indicate if we are creating a new file or we are just loading
+func initConfig() (bool, error) {
 	if !isConfigFileExists() {
 		// Initialize server config.
 		srvCfg := &serverConfigV9{}
@@ -73,38 +73,38 @@ func initConfig() error {
 		// Create config path.
 		err := createConfigPath()
 		if err != nil {
-			return err
+			return false, err
 		}
 
 		// Save the new config globally.
 		serverConfig = srvCfg
 
 		// Save config into file.
-		return serverConfig.Save()
+		return true, serverConfig.Save()
 	}
 	configFile, err := getConfigFile()
 	if err != nil {
-		return err
+		return false, err
 	}
 	if _, err = os.Stat(configFile); err != nil {
-		return err
+		return false, err
 	}
 	srvCfg := &serverConfigV9{}
 	srvCfg.Version = globalMinioConfigVersion
 	srvCfg.rwMutex = &sync.RWMutex{}
 	qc, err := quick.New(srvCfg)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if err := qc.Load(configFile); err != nil {
-		return err
+		return false, err
 	}
 	// Save the loaded config globally.
 	serverConfig = srvCfg
 	// Set the version properly after the unmarshalled json is loaded.
 	serverConfig.Version = globalMinioConfigVersion
 
-	return nil
+	return false, nil
 }
 
 // serverConfig server config.
