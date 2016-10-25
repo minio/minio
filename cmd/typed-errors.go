@@ -38,3 +38,6 @@ var errSizeUnexpected = errors.New("Data size larger than expected")
 
 // When upload object size is greater than 5G in a single PUT/POST operation.
 var errDataTooLarge = errors.New("Object size larger than allowed limit")
+
+// When upload object size is less than what was expected.
+var errDataTooSmall = errors.New("Object size smaller than expected")

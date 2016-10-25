@@ -120,17 +120,20 @@ func TestIsValidObjectName(t *testing.T) {
 func TestLimitReader(t *testing.T) {
 	testCases := []struct {
 		data   string
+		minLen int64
 		maxLen int64
 		err    error
 	}{
-		{"1234567890", 15, nil},
-		{"1234567890", 10, nil},
-		{"1234567890", 5, errDataTooLarge},
+		{"1234567890", 0, 15, nil},
+		{"1234567890", 0, 10, nil},
+		{"1234567890", 0, 5, errDataTooLarge},
+		{"123", 5, 10, errDataTooSmall},
+		{"123", 2, 10, nil},
 	}
 
 	for i, test := range testCases {
 		r := strings.NewReader(test.data)
-		_, err := ioutil.ReadAll(limitReader(r, test.maxLen))
+		_, err := ioutil.ReadAll(limitReader(r, test.minLen, test.maxLen))
 		if err != test.err {
 			t.Fatalf("test %d failed: expected %v, got %v", i+1, test.err, err)
 		}

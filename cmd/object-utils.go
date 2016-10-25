@@ -169,17 +169,22 @@ func (d byBucketName) Less(i, j int) bool { return d[i].Name < d[j].Name }
 // The underlying implementation is a *LimitedReader.
 type limitedReader struct {
 	R io.Reader // underlying reader
+	M int64     // min bytes remaining
 	N int64     // max bytes remaining
 }
 
-func limitReader(r io.Reader, n int64) io.Reader { return &limitedReader{r, n} }
+func limitReader(r io.Reader, m, n int64) io.Reader { return &limitedReader{r, m, n} }
 
 func (l *limitedReader) Read(p []byte) (n int, err error) {
 	n, err = l.R.Read(p)
 	l.N -= int64(n)
+	l.M -= int64(n)
 	if l.N < 0 {
 		// If more data is available than what is expected we return error.
 		return 0, errDataTooLarge
+	}
+	if err == io.EOF && l.M > 0 {
+		return 0, errDataTooSmall
 	}
 	return
 }

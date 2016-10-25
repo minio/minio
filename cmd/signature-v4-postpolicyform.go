@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -52,6 +51,13 @@ func isString(val interface{}) bool {
 	return false
 }
 
+// ContentLengthRange - policy content-length-range field.
+type contentLengthRange struct {
+	Min   int
+	Max   int
+	Valid bool // If content-length-range was part of policy
+}
+
 // PostPolicyForm provides strict static type conversion and validation for Amazon S3's POST policy JSON string.
 type PostPolicyForm struct {
 	Expiration time.Time // Expiration date and time of the POST policy.
@@ -60,10 +66,7 @@ type PostPolicyForm struct {
 			Operator string
 			Value    string
 		}
-		ContentLengthRange struct {
-			Min int
-			Max int
-		}
+		ContentLengthRange contentLengthRange
 	}
 }
 
@@ -133,13 +136,7 @@ func parsePostPolicyFormV4(policy string) (PostPolicyForm, error) {
 					Value:    value,
 				}
 			case "content-length-range":
-				parsedPolicy.Conditions.ContentLengthRange = struct {
-					Min int
-					Max int
-				}{
-					Min: toInteger(condt[1]),
-					Max: toInteger(condt[2]),
-				}
+				parsedPolicy.Conditions.ContentLengthRange = contentLengthRange{toInteger(condt[1]), toInteger(condt[2]), true}
 			default:
 				// Condition should be valid.
 				return parsedPolicy, fmt.Errorf("Unknown type %s of conditional field value %s found in POST policy form.", reflect.TypeOf(condt).String(), condt)
@@ -152,16 +149,7 @@ func parsePostPolicyFormV4(policy string) (PostPolicyForm, error) {
 }
 
 // checkPostPolicy - apply policy conditions and validate input values.
-func checkPostPolicy(formValues map[string]string) APIErrorCode {
-	/// Decoding policy
-	policyBytes, err := base64.StdEncoding.DecodeString(formValues["Policy"])
-	if err != nil {
-		return ErrMalformedPOSTRequest
-	}
-	postPolicyForm, err := parsePostPolicyFormV4(string(policyBytes))
-	if err != nil {
-		return ErrMalformedPOSTRequest
-	}
+func checkPostPolicy(formValues map[string]string, postPolicyForm PostPolicyForm) APIErrorCode {
 	if !postPolicyForm.Expiration.After(time.Now().UTC()) {
 		return ErrPolicyAlreadyExpired
 	}
