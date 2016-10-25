@@ -1015,25 +1015,20 @@ func newTestRequest(method, urlStr string, contentLength int64, body io.ReadSeek
 	return req, nil
 }
 
-func newTestSignedRequestV2ContentType(method, urlStr string, contentLength int64, body io.ReadSeeker, accessKey, secretKey, contentType string) (*http.Request, error) {
-	req, err := newTestRequest(method, urlStr, contentLength, body)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Del("x-amz-content-sha256")
-	req.Header.Set("Content-Type", contentType)
+// Various signature types we are supporting, currently
+// two main signature types.
+type signerType int
 
-	// Anonymous request return quickly.
-	if accessKey == "" || secretKey == "" {
-		return req, nil
-	}
+const (
+	signerV2 signerType = iota
+	signerV4
+)
 
-	err = signRequestV2(req, accessKey, secretKey)
-	if err != nil {
-		return nil, err
+func newTestSignedRequest(method, urlStr string, contentLength int64, body io.ReadSeeker, accessKey, secretKey string, signer signerType) (*http.Request, error) {
+	if signer == signerV2 {
+		return newTestSignedRequestV2(method, urlStr, contentLength, body, accessKey, secretKey)
 	}
-
-	return req, nil
+	return newTestSignedRequestV4(method, urlStr, contentLength, body, accessKey, secretKey)
 }
 
 // Returns new HTTP request object signed with signature v2.
