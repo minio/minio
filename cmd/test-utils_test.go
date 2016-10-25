@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"crypto/hmac"
 	"crypto/sha1"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -34,6 +35,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"path/filepath"
 	"reflect"
 	"sort"
 	"strconv"
@@ -161,7 +163,7 @@ type TestServer struct {
 	SrvCmdCfg serverCmdConfig
 }
 
-func UnStartedTestServer(t TestErrHandler, instanceType string) TestServer {
+func UnstartedTestServer(t TestErrHandler, instanceType string) TestServer {
 	// create an instance of TestServer.
 	testServer := TestServer{}
 	// create temporary backend for the test server.
@@ -234,10 +236,30 @@ func UnStartedTestServer(t TestErrHandler, instanceType string) TestServer {
 
 }
 
+// Starts the test server and returns the TestServer with TLS configured instance.
+func StartTestTLSServer(t TestErrHandler, instanceType string) TestServer {
+	// Fetch TLS key and pem files from test-data/ directory.
+	dir, _ := os.Getwd()
+	testDataDir := filepath.Join(filepath.Dir(dir), "test-data")
+
+	pemFile := filepath.Join(testDataDir, "server.pem")
+	keyFile := filepath.Join(testDataDir, "server.key")
+	cer, err := tls.LoadX509KeyPair(pemFile, keyFile)
+	if err != nil {
+		t.Fatalf("Failed to load certificate: %v", err)
+	}
+	config := &tls.Config{Certificates: []tls.Certificate{cer}}
+
+	testServer := UnstartedTestServer(t, instanceType)
+	testServer.Server.TLS = config
+	testServer.Server.StartTLS()
+	return testServer
+}
+
 // Starts the test server and returns the TestServer instance.
 func StartTestServer(t TestErrHandler, instanceType string) TestServer {
 	// create an instance of TestServer.
-	testServer := UnStartedTestServer(t, instanceType)
+	testServer := UnstartedTestServer(t, instanceType)
 	testServer.Server.Start()
 	return testServer
 }
