@@ -256,13 +256,14 @@ func (xl xlObjects) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 }
 
 // newMultipartUpload - wrapper for initializing a new multipart
-// request, returns back a unique upload id.
+// request; returns a unique upload id.
 //
 // Internally this function creates 'uploads.json' associated for the
-// incoming object at '.minio.sys/multipart/bucket/object/uploads.json' on
-// all the disks. `uploads.json` carries metadata regarding on going
-// multipart operation on the object.
-func (xl xlObjects) newMultipartUpload(bucket string, object string, meta map[string]string) (uploadID string, err error) {
+// incoming object at
+// '.minio.sys/multipart/bucket/object/uploads.json' on all the
+// disks. `uploads.json` carries metadata regarding on-going multipart
+// operation(s) on the object.
+func (xl xlObjects) newMultipartUpload(bucket string, object string, meta map[string]string) (string, error) {
 	xlMeta := newXLMetaV1(object, xl.dataBlocks, xl.parityBlocks)
 	// If not set default to "application/octet-stream"
 	if meta["content-type"] == "" {
@@ -285,24 +286,31 @@ func (xl xlObjects) newMultipartUpload(bucket string, object string, meta map[st
 	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object), opsID)
 	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object), opsID)
 
-	uploadID = getUUID()
-	initiated := time.Now().UTC()
-	// Create 'uploads.json'
-	if err = xl.writeUploadJSON(bucket, object, uploadID, initiated); err != nil {
-		return "", err
-	}
+	uploadID := getUUID()
 	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID)
 	tempUploadIDPath := path.Join(tmpMetaPrefix, uploadID)
 	// Write updated `xl.json` to all disks.
-	if err = writeSameXLMetadata(xl.storageDisks, minioMetaBucket, tempUploadIDPath, xlMeta, xl.writeQuorum, xl.readQuorum); err != nil {
+	if err := writeSameXLMetadata(xl.storageDisks, minioMetaBucket, tempUploadIDPath, xlMeta, xl.writeQuorum, xl.readQuorum); err != nil {
 		return "", toObjectErr(err, minioMetaBucket, tempUploadIDPath)
 	}
-	rErr := renameObject(xl.storageDisks, minioMetaBucket, tempUploadIDPath, minioMetaBucket, uploadIDPath, xl.writeQuorum)
-	if rErr == nil {
-		// Return success.
-		return uploadID, nil
+	// delete the tmp path later in case we fail to rename (ignore
+	// returned errors) - this will be a no-op in case of a rename
+	// success.
+	defer xl.deleteObject(minioMetaBucket, tempUploadIDPath)
+
+	// Attempt to rename temp upload object to actual upload path
+	// object
+	if rErr := renameObject(xl.storageDisks, minioMetaBucket, tempUploadIDPath, minioMetaBucket, uploadIDPath, xl.writeQuorum); rErr != nil {
+		return "", toObjectErr(rErr, minioMetaBucket, uploadIDPath)
 	}
-	return "", toObjectErr(rErr, minioMetaBucket, uploadIDPath)
+
+	initiated := time.Now().UTC()
+	// Create or update 'uploads.json'
+	if err := xl.writeUploadJSON(bucket, object, uploadID, initiated); err != nil {
+		return "", err
+	}
+	// Return success.
+	return uploadID, nil
 }
 
 // NewMultipartUpload - initialize a new multipart upload, returns a
