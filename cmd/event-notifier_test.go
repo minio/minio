@@ -277,15 +277,6 @@ func TestInitEventNotifier(t *testing.T) {
 		},
 	}
 
-	// write without an existing bucket and check
-	if err := persistNotificationConfig(bucketName, &notificationConfig{}, obj); err == nil {
-		t.Fatalf("Did not get an error though bucket does not exist!")
-	}
-	// no bucket write check for listener
-	if err := persistListenerConfig(bucketName, []listenerConfig{}, obj); err == nil {
-		t.Fatalf("Did not get an error though bucket does not exist!")
-	}
-
 	// create bucket
 	if err := obj.MakeBucket(bucketName); err != nil {
 		t.Fatal("Unexpected error:", err)

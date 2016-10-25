@@ -399,12 +399,6 @@ func persistNotificationConfig(bucket string, ncfg *notificationConfig, obj Obje
 		return err
 	}
 
-	// verify bucket exists
-	// FIXME: There is a race between this check and PutObject
-	if err = isBucketExist(bucket, obj); err != nil {
-		return err
-	}
-
 	// build path
 	ncPath := path.Join(bucketConfigPrefix, bucket, bucketNotificationConfig)
 	// write object to path
@@ -422,12 +416,6 @@ func persistListenerConfig(bucket string, lcfg []listenerConfig, obj ObjectLayer
 	buf, err := json.Marshal(lcfg)
 	if err != nil {
 		errorIf(err, "Unable to marshal listener config to JSON.")
-		return err
-	}
-
-	// verify bucket exists
-	// FIXME: There is a race between this check and PutObject
-	if err = isBucketExist(bucket, obj); err != nil {
 		return err
 	}
 
