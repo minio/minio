@@ -679,7 +679,7 @@ func TestPosixListDir(t *testing.T) {
 		}
 
 		if err = posixStorage.DeleteFile("bin", "yes"); err != errFileAccessDenied {
-			t.Errorf("expected: %s, got: %s", errFileAccessDenied, err)
+			t.Errorf("expected: %s error, got: %s", errFileAccessDenied, err)
 		}
 	}
 
@@ -793,7 +793,7 @@ func TestDeleteFile(t *testing.T) {
 		}
 
 		if err = posixStorage.DeleteFile("bin", "yes"); err != errFileAccessDenied {
-			t.Errorf("expected: %s, got: %s", errFileAccessDenied, err)
+			t.Errorf("expected: %s error, got: %s", errFileAccessDenied, err)
 		}
 	}
 

@@ -23,6 +23,7 @@ import (
 	"path"
 	"runtime"
 	"strings"
+	"sync"
 	"syscall"
 	"unsafe"
 )
@@ -30,9 +31,14 @@ import (
 const (
 	// readDirentBufSize for syscall.ReadDirent() to hold multiple
 	// directory entries in one buffer. golang source uses 4096 as
-	// buffer size whereas we want 25 times larger to save lots of
-	// entries to avoid multiple syscall.ReadDirent() call.
-	readDirentBufSize = 4096 * 25
+	// buffer size whereas we use 256KiB for large entries in single
+	// operation to avoid multiple syscall.ReadDirent() call.
+	//
+	// We would ideally want 1MiB. but now sticking to 256KiB due to
+	// a bug in OS X 10.12 where large buffers results in
+	// syscall.Readdirent() returning garbage values.
+	// - https://github.com/minio/minio/issues/3075
+	readDirentBufSize = 4096 * 64 // 256KiB.
 )
 
 // actual length of the byte array from the c - world.
@@ -106,9 +112,19 @@ func parseDirents(dirPath string, buf []byte) (entries []string, err error) {
 	return entries, nil
 }
 
+var readDirBufPool = sync.Pool{
+	New: func() interface{} {
+		b := make([]byte, readDirentBufSize)
+		return &b
+	},
+}
+
 // Return all the entries at the directory dirPath.
 func readDir(dirPath string) (entries []string, err error) {
-	buf := make([]byte, readDirentBufSize)
+	bufp := readDirBufPool.Get().(*[]byte)
+	buf := *bufp
+	defer readDirBufPool.Put(bufp)
+
 	d, err := os.Open(dirPath)
 	if err != nil {
 		// File is really not found.

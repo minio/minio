@@ -28,6 +28,7 @@ import (
 	"path"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/minio/minio/pkg/mimedb"
 )
@@ -192,6 +193,13 @@ func (fs fsObjects) DeleteBucket(bucket string) error {
 
 /// Object Operations
 
+var getBufPool = sync.Pool{
+	New: func() interface{} {
+		b := make([]byte, readSizeV1)
+		return &b
+	},
+}
+
 // GetObject - get an object.
 func (fs fsObjects) GetObject(bucket, object string, offset int64, length int64, writer io.Writer) (err error) {
 	// Verify if bucket is valid.
@@ -238,8 +246,11 @@ func (fs fsObjects) GetObject(bucket, object string, offset int64, length int64,
 	if length > 0 && bufSize > length {
 		bufSize = length
 	}
+
 	// Allocate a staging buffer.
-	buf := make([]byte, int(bufSize))
+	bufp := getBufPool.Get().(*[]byte)
+	buf := *bufp
+	defer getBufPool.Put(bufp)
 	for {
 		// Figure out the right size for the buffer.
 		curLeft := bufSize
@@ -334,6 +345,14 @@ func (fs fsObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 	return fs.getObjectInfo(bucket, object)
 }
 
+// Put object buffer pool.
+var putBufPool = sync.Pool{
+	New: func() interface{} {
+		b := make([]byte, readSizeV1)
+		return &b
+	},
+}
+
 // PutObject - create an object.
 func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (objInfo ObjectInfo, err error) {
 	// Verify if bucket is valid.
@@ -393,10 +412,12 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 		if size > 0 && bufSize > size {
 			bufSize = size
 		}
-		buf := make([]byte, int(bufSize))
+		bufp := putBufPool.Get().(*[]byte)
+		buf := *bufp
+		defer putBufPool.Put(bufp)
 		teeReader := io.TeeReader(limitDataReader, multiWriter)
 		var bytesWritten int64
-		bytesWritten, err = fsCreateFile(fs.storage, teeReader, buf, minioMetaBucket, tempObj)
+		bytesWritten, err = fsCreateFile(fs.storage, teeReader, buf[:bufSize], minioMetaBucket, tempObj)
 		if err != nil {
 			fs.storage.DeleteFile(minioMetaBucket, tempObj)
 			errorIf(err, "Failed to create object %s/%s", bucket, object)
