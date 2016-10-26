@@ -35,6 +35,7 @@ func newPosixTestSetup() (StorageAPI, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
+	// Initialize a new posix layer.
 	posixStorage, err := newPosix(diskPath)
 	if err != nil {
 		return nil, "", err
@@ -179,8 +180,8 @@ func TestNewPosix(t *testing.T) {
 
 	// List of all tests for posix initialization.
 	testCases := []struct {
-		diskPath string
-		err      error
+		name string
+		err  error
 	}{
 		// Validates input argument cannot be empty.
 		{
@@ -203,7 +204,8 @@ func TestNewPosix(t *testing.T) {
 
 	// Validate all test cases.
 	for i, testCase := range testCases {
-		_, err := newPosix(testCase.diskPath)
+		// Initialize a new posix layer.
+		_, err := newPosix(testCase.name)
 		if err != testCase.err {
 			t.Fatalf("Test %d failed wanted: %s, got: %s", i+1, err, testCase.err)
 		}

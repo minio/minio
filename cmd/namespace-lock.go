@@ -18,9 +18,9 @@ package cmd
 
 import (
 	"errors"
+	"net/url"
 	pathutil "path"
 	"runtime"
-	"strconv"
 	"sync"
 
 	"github.com/minio/dsync"
@@ -31,13 +31,13 @@ var nsMutex *nsLockMap
 
 // Initialize distributed locking only in case of distributed setup.
 // Returns if the setup is distributed or not on success.
-func initDsyncNodes(eps []storageEndPoint) error {
+func initDsyncNodes(eps []*url.URL) error {
 	cred := serverConfig.GetCredential()
 	// Initialize rpc lock client information only if this instance is a distributed setup.
 	var clnts []dsync.RPC
 	myNode := -1
 	for _, ep := range eps {
-		if ep.host == "" || ep.port == 0 || ep.path == "" {
+		if ep == nil {
 			return errInvalidArgument
 		}
 		clnts = append(clnts, newAuthClient(&authConfig{
@@ -45,9 +45,9 @@ func initDsyncNodes(eps []storageEndPoint) error {
 			secretKey: cred.SecretAccessKey,
 			// Construct a new dsync server addr.
 			secureConn: isSSL(),
-			address:    ep.host + ":" + strconv.Itoa(ep.port),
+			address:    ep.Host,
 			// Construct a new rpc path for the endpoint.
-			path:        pathutil.Join(lockRPCPath, ep.path),
+			path:        pathutil.Join(lockRPCPath, getPath(ep)),
 			loginMethod: "Dsync.LoginHandler",
 		}))
 		if isLocalStorage(ep) && myNode == -1 {

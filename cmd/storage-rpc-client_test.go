@@ -23,6 +23,7 @@ import (
 	"io"
 	"net"
 	"net/rpc"
+	"net/url"
 	"runtime"
 	"testing"
 )
@@ -144,16 +145,25 @@ func (s *TestRPCStorageSuite) SetUpSuite(c *testing.T) {
 	s.testServer = StartTestStorageRPCServer(c, s.serverType, 1)
 	listenAddress := s.testServer.Server.Listener.Addr().String()
 
-	for _, disk := range s.testServer.Disks {
-		remoteEndPoint, err := parseStorageEndPoint(listenAddress+":"+disk.path, 0)
-		if err != nil {
-			c.Fatalf("Unexpected error %s", err)
-		}
-		storageDisk, err := newRPCClient(remoteEndPoint)
+	for _, ep := range s.testServer.Disks {
+		ep.Host = listenAddress
+		storageDisk, err := newStorageRPC(ep)
 		if err != nil {
 			c.Fatal("Unable to initialize RPC client", err)
 		}
 		s.remoteDisks = append(s.remoteDisks, storageDisk)
+	}
+	_, err := newStorageRPC(nil)
+	if err != errInvalidArgument {
+		c.Fatalf("Unexpected error %s, expecting %s", err, errInvalidArgument)
+	}
+	u, err := url.Parse("http://abcd:abcd123@localhost/mnt/disk")
+	if err != nil {
+		c.Fatal("Unexpected error", err)
+	}
+	_, err = newStorageRPC(u)
+	if err != nil {
+		c.Fatal("Unexpected error", err)
 	}
 }
 

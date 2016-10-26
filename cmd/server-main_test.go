@@ -167,7 +167,7 @@ func TestCheckSufficientDisks(t *testing.T) {
 
 	// Validates different variations of input disks.
 	for i, testCase := range testCases {
-		endpoints, err := parseStorageEndPoints(testCase.disks, 0)
+		endpoints, err := parseStorageEndpoints(testCase.disks)
 		if err != nil {
 			t.Fatalf("Unexpected error %s", err)
 		}
@@ -201,7 +201,7 @@ func TestCheckServerSyntax(t *testing.T) {
 			t.Errorf("Test %d failed to parse arguments %s", i+1, disks)
 		}
 		defer removeRoots(disks)
-		endpoints, err := parseStorageEndPoints(disks, 0)
+		endpoints, err := parseStorageEndpoints(disks)
 		if err != nil {
 			t.Fatalf("Unexpected error %s", err)
 		}
@@ -219,26 +219,25 @@ func TestIsDistributedSetup(t *testing.T) {
 			disks  []string
 			result bool
 		}{
-			{[]string{`4.4.4.4:c:\mnt\disk1`, `4.4.4.4:c:\mnt\disk2`}, true},
-			{[]string{`4.4.4.4:c:\mnt\disk1`, `localhost:c:\mnt\disk2`}, true},
-			{[]string{`localhost:c:\mnt\disk1`, `localhost:c:\mnt\disk2`}, false},
+			{[]string{`http://4.4.4.4:80/c:\mnt\disk1`, `http://4.4.4.4:80/c:\mnt\disk2`}, true},
+			{[]string{`http://4.4.4.4:9000/c:\mnt\disk1`, `http://127.0.0.1:9000/c:\mnt\disk2`}, true},
+			{[]string{`http://127.0.0.1:9000/c:\mnt\disk1`, `http://127.0.0.1:9001/c:\mnt\disk2`}, true},
 			{[]string{`c:\mnt\disk1`, `c:\mnt\disk2`}, false},
 		}
-
 	} else {
 		testCases = []struct {
 			disks  []string
 			result bool
 		}{
-			{[]string{"4.4.4.4:/mnt/disk1", "4.4.4.4:/mnt/disk2"}, true},
-			{[]string{"4.4.4.4:/mnt/disk1", "localhost:/mnt/disk2"}, true},
-			{[]string{"localhost:/mnt/disk1", "localhost:/mnt/disk2"}, false},
+			{[]string{"http://4.4.4.4:9000/mnt/disk1", "http://4.4.4.4:9000/mnt/disk2"}, true},
+			{[]string{"http://4.4.4.4:9000/mnt/disk1", "http://127.0.0.1:9000/mnt/disk2"}, true},
+			{[]string{"http://127.0.0.1:9000/mnt/disk1", "http://127.0.0.1:9000/mnt/disk2"}, true},
 			{[]string{"/mnt/disk1", "/mnt/disk2"}, false},
 		}
 
 	}
 	for i, test := range testCases {
-		endpoints, err := parseStorageEndPoints(test.disks, 0)
+		endpoints, err := parseStorageEndpoints(test.disks)
 		if err != nil {
 			t.Fatalf("Unexpected error %s", err)
 		}

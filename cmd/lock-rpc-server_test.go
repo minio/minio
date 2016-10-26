@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"net/url"
 	"runtime"
 	"sync"
 	"testing"
@@ -444,6 +445,7 @@ func TestLockServers(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		return
 	}
+	globalMinioHost = ""
 	testCases := []struct {
 		srvCmdConfig     serverCmdConfig
 		totalLockServers int
@@ -452,12 +454,23 @@ func TestLockServers(t *testing.T) {
 		{
 			srvCmdConfig: serverCmdConfig{
 				isDistXL: true,
-				endPoints: []storageEndPoint{
-					{"localhost", 9000, "/mnt/disk1"},
-					{"1.1.1.2", 9000, "/mnt/disk2"},
-					{"1.1.2.1", 9000, "/mnt/disk3"},
-					{"1.1.2.2", 9000, "/mnt/disk4"},
-				},
+				endpoints: []*url.URL{{
+					Scheme: "http",
+					Host:   "localhost:9000",
+					Path:   "/mnt/disk1",
+				}, {
+					Scheme: "http",
+					Host:   "1.1.1.2:9000",
+					Path:   "/mnt/disk2",
+				}, {
+					Scheme: "http",
+					Host:   "1.1.2.1:9000",
+					Path:   "/mnt/disk3",
+				}, {
+					Scheme: "http",
+					Host:   "1.1.2.2:9000",
+					Path:   "/mnt/disk4",
+				}},
 			},
 			totalLockServers: 1,
 		},
@@ -465,15 +478,28 @@ func TestLockServers(t *testing.T) {
 		{
 			srvCmdConfig: serverCmdConfig{
 				isDistXL: true,
-				endPoints: []storageEndPoint{
-					{"localhost", 9000, "/mnt/disk1"},
-					{"localhost", 9000, "/mnt/disk2"},
-					{"1.1.2.1", 9000, "/mnt/disk3"},
-					{"1.1.2.2", 9000, "/mnt/disk4"},
-				},
-				ignoredEndPoints: []storageEndPoint{
-					{"localhost", 9000, "/mnt/disk2"},
-				},
+				endpoints: []*url.URL{{
+					Scheme: "http",
+					Host:   "localhost:9000",
+					Path:   "/mnt/disk1",
+				}, {
+					Scheme: "http",
+					Host:   "localhost:9000",
+					Path:   "/mnt/disk2",
+				}, {
+					Scheme: "http",
+					Host:   "1.1.2.1:9000",
+					Path:   "/mnt/disk3",
+				}, {
+					Scheme: "http",
+					Host:   "1.1.2.2:9000",
+					Path:   "/mnt/disk4",
+				}},
+				ignoredEndpoints: []*url.URL{{
+					Scheme: "http",
+					Host:   "localhost:9000",
+					Path:   "/mnt/disk2",
+				}},
 			},
 			totalLockServers: 1,
 		},

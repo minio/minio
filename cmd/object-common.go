@@ -18,6 +18,8 @@ package cmd
 
 import (
 	"net"
+	"net/url"
+	"runtime"
 	"strings"
 	"sync"
 )
@@ -104,21 +106,27 @@ func houseKeeping(storageDisks []StorageAPI) error {
 }
 
 // Check if a network path is local to this node.
-func isLocalStorage(ep storageEndPoint) bool {
-	if ep.host == "" {
+func isLocalStorage(ep *url.URL) bool {
+	if ep.Host == "" {
 		return true
 	}
-	if globalMinioHost != "" {
-		// if --address host:port was specified for distXL we short circuit only the endPoint
-		// that matches host:port
-		if globalMinioHost == ep.host && globalMinioPort == ep.port {
+	if globalMinioHost != "" && globalMinioPort != "" {
+		// if --address host:port was specified for distXL we short
+		// circuit only the endPoint that matches host:port
+		if net.JoinHostPort(globalMinioHost, globalMinioPort) == ep.Host {
 			return true
 		}
 		return false
 	}
+	// Split host to extract host information.
+	host, _, err := net.SplitHostPort(ep.Host)
+	if err != nil {
+		errorIf(err, "Cannot split host port")
+		return false
+	}
 	// Resolve host to address to check if the IP is loopback.
 	// If address resolution fails, assume it's a non-local host.
-	addrs, err := net.LookupHost(ep.host)
+	addrs, err := net.LookupHost(host)
 	if err != nil {
 		errorIf(err, "Failed to lookup host")
 		return false
@@ -149,12 +157,37 @@ func isLocalStorage(ep storageEndPoint) bool {
 	return false
 }
 
-// Depending on the disk type network or local, initialize storage API.
-func newStorageAPI(ep storageEndPoint) (storage StorageAPI, err error) {
-	if isLocalStorage(ep) {
-		return newPosix(ep.path)
+// Fetch the path component from *url.URL*.
+func getPath(ep *url.URL) string {
+	if ep == nil {
+		return ""
 	}
-	return newRPCClient(ep)
+	var diskPath string
+	// For windows ep.Path is usually empty
+	if runtime.GOOS == "windows" {
+		// For full URLs windows drive is part of URL path.
+		// Eg: http://ip:port/C:\mydrive
+		if ep.Scheme == "http" || ep.Scheme == "https" {
+			// For windows trim off the preceding "/".
+			diskPath = ep.Path[1:]
+		} else {
+			// For the rest url splits drive letter into
+			// Scheme contruct the disk path back.
+			diskPath = ep.Scheme + ":" + ep.Opaque
+		}
+	} else {
+		// For other operating systems ep.Path is non empty.
+		diskPath = ep.Path
+	}
+	return diskPath
+}
+
+// Depending on the disk type network or local, initialize storage API.
+func newStorageAPI(ep *url.URL) (storage StorageAPI, err error) {
+	if isLocalStorage(ep) {
+		return newPosix(getPath(ep))
+	}
+	return newStorageRPC(ep)
 }
 
 // Initializes meta volume on all input storage disks.

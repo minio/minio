@@ -48,7 +48,7 @@ func TestUNCPaths(t *testing.T) {
 	defer os.RemoveAll("c:\\testdisk")
 
 	var fs StorageAPI
-	fs, err = newPosix("c:\\testdisk")
+	fs, err = newPosix(`c:\testdisk`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +66,6 @@ func TestUNCPaths(t *testing.T) {
 		} else if err == nil && !test.pass {
 			t.Error(err)
 		}
-
 		fs.DeleteFile("voldir", test.objName)
 	}
 }
@@ -81,8 +80,9 @@ func TestUNCPathENOTDIR(t *testing.T) {
 	}
 	// Cleanup on exit of test
 	defer os.RemoveAll("c:\\testdisk")
+
 	var fs StorageAPI
-	fs, err = newPosix("c:\\testdisk")
+	fs, err = newPosix(`c:\testdisk`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,58 +106,30 @@ func TestUNCPathENOTDIR(t *testing.T) {
 	}
 }
 
-// Test to validate that path name in UNC form works
-func TestUNCPathDiskName(t *testing.T) {
-	var err error
-	// Instantiate posix object to manage a disk
-	longPathDisk := `\\?\c:\testdisk`
-	err = mkdirAll(longPathDisk, 0777)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Cleanup on exit of test
-	defer removeAll(longPathDisk)
-	var fs StorageAPI
-	fs, err = newPosix(longPathDisk)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Create volume to use in conjunction with other StorageAPI's file API(s)
-	err = fs.MakeVol("voldir")
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
 // Test to validate 32k path works on windows platform
 func Test32kUNCPath(t *testing.T) {
 	var err error
-	// Instantiate posix object to manage a disk
-	longDiskName := `\\?\c:`
+	// The following calculation was derived empirically. It is not exactly MAX_PATH - len(longDiskName)
+	// possibly due to expansion rules as mentioned here -
+	// https://msdn.microsoft.com/en-us/library/windows/desktop/aa365247(v=vs.85).aspx#maxpath
+	var longPathName string
 	for {
 		compt := strings.Repeat("a", 255)
-		if len(compt)+len(longDiskName)+1 > 32767 {
+		if len(compt)+len(longPathName)+1 > 32767 {
 			break
 		}
-		longDiskName = longDiskName + `\` + compt
+		longPathName = longPathName + `\` + compt
 	}
-
-	if len(longDiskName) < 32767 {
-		// The following calculation was derived empirically. It is not exactly MAX_PATH - len(longDiskName)
-		// possibly due to expansion rules as mentioned here -
-		// https://msdn.microsoft.com/en-us/library/windows/desktop/aa365247(v=vs.85).aspx#maxpath
-		remaining := 32767 - 25 - len(longDiskName) - 10
-		longDiskName = longDiskName + `\` + strings.Repeat("a", remaining)
-	}
-	err = mkdirAll(longDiskName, 0777)
+	longPathName = "C:" + longPathName
+	err = mkdirAll(longPathName, 0777)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Cleanup on exit of test
-	defer removeAll(longDiskName)
-	_, err = newPosix(longDiskName)
+	defer removeAll(longPathName)
+
+	_, err = newPosix(longPathName)
 	if err != nil {
 		t.Fatal(err)
 	}

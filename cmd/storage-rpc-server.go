@@ -217,21 +217,24 @@ func (s *storageServer) TryInitHandler(args *GenericArgs, reply *GenericReply) e
 }
 
 // Initialize new storage rpc.
-func newRPCServer(serverConfig serverCmdConfig) (servers []*storageServer, err error) {
-	for _, ep := range serverConfig.endPoints {
-		if ep.presentIn(serverConfig.ignoredEndPoints) {
-			// Do not init ignored end point.
+func newRPCServer(srvConfig serverCmdConfig) (servers []*storageServer, err error) {
+	for _, ep := range srvConfig.endpoints {
+		if containsEndpoint(srvConfig.ignoredEndpoints, ep) {
+			// Do not init disk RPC for ignored end point.
 			continue
 		}
 		// e.g server:/mnt/disk1
 		if isLocalStorage(ep) {
-			storage, err := newPosix(ep.path)
+			// Get the posix path.
+			path := getPath(ep)
+			var storage StorageAPI
+			storage, err = newPosix(path)
 			if err != nil && err != errDiskNotFound {
 				return nil, err
 			}
 			servers = append(servers, &storageServer{
 				storage: storage,
-				path:    ep.path,
+				path:    path,
 			})
 		}
 	}

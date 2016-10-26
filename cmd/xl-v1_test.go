@@ -51,12 +51,12 @@ func TestStorageInfo(t *testing.T) {
 		t.Fatalf("Diskinfo total values should be greater 0")
 	}
 
-	endpoints, err := parseStorageEndPoints(fsDirs, 0)
+	endpoints, err := parseStorageEndpoints(fsDirs)
 	if err != nil {
 		t.Fatalf("Unexpected error %s", err)
 	}
 
-	ignoredEndpoints, err := parseStorageEndPoints(fsDirs[:4], 0)
+	ignoredEndpoints, err := parseStorageEndpoints(fsDirs[:4])
 	if err != nil {
 		t.Fatalf("Unexpected error %s", err)
 	}
@@ -68,7 +68,7 @@ func TestStorageInfo(t *testing.T) {
 
 	objLayer, err = newXLObjects(storageDisks)
 	if err != nil {
-		t.Fatalf("Unable to initialize 'XL' object layer with ignored disks %s.", fsDirs[:4])
+		t.Fatalf("Unable to initialize 'XL' object layer with ignored disks %s. error %s", fsDirs[:4], err)
 	}
 
 	// Get storage info first attempt.
@@ -151,7 +151,7 @@ func TestNewXL(t *testing.T) {
 		t.Fatalf("Unable to initialize erasure, %s", err)
 	}
 
-	endpoints, err := parseStorageEndPoints(erasureDisks, 0)
+	endpoints, err := parseStorageEndpoints(erasureDisks)
 	if err != nil {
 		t.Fatalf("Unable to initialize erasure, %s", err)
 	}
@@ -161,13 +161,18 @@ func TestNewXL(t *testing.T) {
 		t.Fatal("Unexpected error: ", err)
 	}
 
-	err = waitForFormatDisks(true, "", nil)
+	err = waitForFormatDisks(true, endpoints[0], nil)
+	if err != errInvalidArgument {
+		t.Fatalf("Expecting error, got %s", err)
+	}
+
+	err = waitForFormatDisks(true, nil, storageDisks)
 	if err != errInvalidArgument {
 		t.Fatalf("Expecting error, got %s", err)
 	}
 
 	// Initializes all erasure disks
-	err = waitForFormatDisks(true, "", storageDisks)
+	err = waitForFormatDisks(true, endpoints[0], storageDisks)
 	if err != nil {
 		t.Fatalf("Unable to format disks for erasure, %s", err)
 	}
@@ -176,12 +181,12 @@ func TestNewXL(t *testing.T) {
 		t.Fatalf("Unable to initialize erasure, %s", err)
 	}
 
-	endpoints, err = parseStorageEndPoints(erasureDisks, 0)
+	endpoints, err = parseStorageEndpoints(erasureDisks)
 	if err != nil {
 		t.Fatalf("Unable to initialize erasure, %s", err)
 	}
 
-	ignoredEndpoints, err := parseStorageEndPoints(erasureDisks[:2], 0)
+	ignoredEndpoints, err := parseStorageEndpoints(erasureDisks[:2])
 	if err != nil {
 		t.Fatalf("Unable to initialize erasure, %s", err)
 	}

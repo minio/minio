@@ -17,10 +17,10 @@
 package cmd
 
 import (
-	"fmt"
 	"io"
 	"net"
 	"net/rpc"
+	"net/url"
 	"path"
 
 	"github.com/minio/minio/pkg/disk"
@@ -92,22 +92,28 @@ func toStorageErr(err error) error {
 	return err
 }
 
-// Initialize new rpc client.
-func newRPCClient(ep storageEndPoint) (StorageAPI, error) {
-	// Input validation.
-	if ep.host == "" || ep.port == 0 || ep.path == "" {
+// Initialize new storage rpc client.
+func newStorageRPC(ep *url.URL) (StorageAPI, error) {
+	if ep == nil {
 		return nil, errInvalidArgument
 	}
 
 	// Dial minio rpc storage http path.
-	rpcPath := path.Join(storageRPCPath, ep.path)
-	rpcAddr := fmt.Sprintf("%s:%d", ep.host, ep.port)
+	rpcPath := path.Join(storageRPCPath, getPath(ep))
+	rpcAddr := ep.Host
 
 	// Initialize rpc client with network address and rpc path.
-	cred := serverConfig.GetCredential()
+	accessKeyID := serverConfig.GetCredential().AccessKeyID
+	secretAccessKey := serverConfig.GetCredential().SecretAccessKey
+	if ep.User != nil {
+		accessKeyID = ep.User.Username()
+		if key, set := ep.User.Password(); set {
+			secretAccessKey = key
+		}
+	}
 	rpcClient := newAuthClient(&authConfig{
-		accessKey:   cred.AccessKeyID,
-		secretKey:   cred.SecretAccessKey,
+		accessKey:   accessKeyID,
+		secretKey:   secretAccessKey,
 		secureConn:  isSSL(),
 		address:     rpcAddr,
 		path:        rpcPath,
@@ -116,8 +122,8 @@ func newRPCClient(ep storageEndPoint) (StorageAPI, error) {
 
 	// Initialize network storage.
 	ndisk := &networkStorage{
-		netAddr:   ep.host,
-		netPath:   ep.path,
+		netAddr:   ep.Host,
+		netPath:   getPath(ep),
 		rpcClient: rpcClient,
 	}
 

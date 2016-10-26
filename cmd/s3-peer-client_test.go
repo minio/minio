@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"net/url"
 	"reflect"
 	"testing"
 )
@@ -24,16 +25,14 @@ import (
 // Validates getAllPeers, fetches all peers based on list of storage endpoints.
 func TestGetAllPeers(t *testing.T) {
 	testCases := []struct {
-		eps   []storageEndPoint
+		eps   []*url.URL
 		peers []string
 	}{
 		{nil, nil},
-		{[]storageEndPoint{{path: "/mnt/disk1"}}, []string{globalMinioAddr}},
-		{[]storageEndPoint{{
-			host: "localhost",
-			port: 9001,
-		}}, []string{
-			globalMinioAddr, "localhost:9001",
+		{[]*url.URL{nil}, nil},
+		{[]*url.URL{{Path: "/mnt/disk1"}}, []string{globalMinioAddr, ""}},
+		{[]*url.URL{{Host: "localhost:9001"}}, []string{globalMinioAddr,
+			"localhost:9001",
 		}},
 	}
 

@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"net"
 	"reflect"
-	"strconv"
 	"testing"
 	"time"
 )
@@ -40,7 +39,7 @@ func TestInitEventNotifierFaultyDisks(t *testing.T) {
 		t.Fatal("Unable to create directories for FS backend. ", err)
 	}
 	defer removeAll(disks[0])
-	endpoints, err := parseStorageEndPoints(disks, 0)
+	endpoints, err := parseStorageEndpoints(disks)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +93,7 @@ func TestInitEventNotifierWithAMQP(t *testing.T) {
 	if err != nil {
 		t.Fatal("Unable to create directories for FS backend. ", err)
 	}
-	endpoints, err := parseStorageEndPoints(disks, 0)
+	endpoints, err := parseStorageEndpoints(disks)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +124,7 @@ func TestInitEventNotifierWithElasticSearch(t *testing.T) {
 	if err != nil {
 		t.Fatal("Unable to create directories for FS backend. ", err)
 	}
-	endpoints, err := parseStorageEndPoints(disks, 0)
+	endpoints, err := parseStorageEndpoints(disks)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,7 +155,7 @@ func TestInitEventNotifierWithRedis(t *testing.T) {
 	if err != nil {
 		t.Fatal("Unable to create directories for FS backend. ", err)
 	}
-	endpoints, err := parseStorageEndPoints(disks, 0)
+	endpoints, err := parseStorageEndpoints(disks)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,14 +179,12 @@ func (s *TestPeerRPCServerData) Setup(t *testing.T) {
 	s.testServer = StartTestPeersRPCServer(t, s.serverType)
 
 	// setup port and minio addr
-	_, portStr, err := net.SplitHostPort(s.testServer.Server.Listener.Addr().String())
+	host, port, err := net.SplitHostPort(s.testServer.Server.Listener.Addr().String())
 	if err != nil {
 		t.Fatalf("Initialisation error: %v", err)
 	}
-	globalMinioPort, err = strconv.Atoi(portStr)
-	if err != nil {
-		t.Fatalf("Initialisation error: %v", err)
-	}
+	globalMinioHost = host
+	globalMinioPort = port
 	globalMinioAddr = getLocalAddress(
 		s.testServer.SrvCmdCfg,
 	)
@@ -200,7 +197,7 @@ func (s *TestPeerRPCServerData) TearDown() {
 	s.testServer.Stop()
 	_ = removeAll(s.testServer.Root)
 	for _, d := range s.testServer.Disks {
-		_ = removeAll(d.path)
+		_ = removeAll(d.Path)
 	}
 }
 

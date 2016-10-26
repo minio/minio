@@ -275,7 +275,7 @@ func TestFormatXLHealFreshDisks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	endpoints, err := parseStorageEndPoints(fsDirs, 0)
+	endpoints, err := parseStorageEndpoints(fsDirs)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -311,7 +311,7 @@ func TestFormatXLHealFreshDisksErrorExpected(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	endpoints, err := parseStorageEndPoints(fsDirs, 0)
+	endpoints, err := parseStorageEndpoints(fsDirs)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -600,7 +600,7 @@ func TestInitFormatXLErrors(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer removeRoots(fsDirs)
-	endpoints, err := parseStorageEndPoints(fsDirs, 0)
+	endpoints, err := parseStorageEndpoints(fsDirs)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -706,7 +706,7 @@ func TestLoadFormatXLErrs(t *testing.T) {
 	}
 	defer removeRoots(fsDirs)
 
-	endpoints, err := parseStorageEndPoints(fsDirs, 0)
+	endpoints, err := parseStorageEndpoints(fsDirs)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -737,7 +737,7 @@ func TestLoadFormatXLErrs(t *testing.T) {
 	}
 	defer removeRoots(fsDirs)
 
-	endpoints, err = parseStorageEndPoints(fsDirs, 0)
+	endpoints, err = parseStorageEndpoints(fsDirs)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -765,7 +765,7 @@ func TestLoadFormatXLErrs(t *testing.T) {
 	}
 	defer removeRoots(fsDirs)
 
-	endpoints, err = parseStorageEndPoints(fsDirs, 0)
+	endpoints, err = parseStorageEndpoints(fsDirs)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -791,7 +791,7 @@ func TestLoadFormatXLErrs(t *testing.T) {
 	}
 	defer removeRoots(fsDirs)
 
-	endpoints, err = parseStorageEndPoints(fsDirs, 0)
+	endpoints, err = parseStorageEndpoints(fsDirs)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -818,7 +818,7 @@ func TestHealFormatXLCorruptedDisksErrs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	endpoints, err := parseStorageEndPoints(fsDirs, 0)
+	endpoints, err := parseStorageEndpoints(fsDirs)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -840,7 +840,7 @@ func TestHealFormatXLCorruptedDisksErrs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	endpoints, err = parseStorageEndPoints(fsDirs, 0)
+	endpoints, err = parseStorageEndpoints(fsDirs)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -864,7 +864,7 @@ func TestHealFormatXLCorruptedDisksErrs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	endpoints, err = parseStorageEndPoints(fsDirs, 0)
+	endpoints, err = parseStorageEndpoints(fsDirs)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -890,7 +890,7 @@ func TestHealFormatXLCorruptedDisksErrs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	endpoints, err = parseStorageEndPoints(fsDirs, 0)
+	endpoints, err = parseStorageEndpoints(fsDirs)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -912,7 +912,7 @@ func TestHealFormatXLCorruptedDisksErrs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	endpoints, err = parseStorageEndPoints(fsDirs, 0)
+	endpoints, err = parseStorageEndpoints(fsDirs)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -938,7 +938,7 @@ func TestHealFormatXLCorruptedDisksErrs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	endpoints, err = parseStorageEndPoints(fsDirs, 0)
+	endpoints, err = parseStorageEndpoints(fsDirs)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -968,7 +968,7 @@ func TestHealFormatXLFreshDisksErrs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	endpoints, err := parseStorageEndPoints(fsDirs, 0)
+	endpoints, err := parseStorageEndpoints(fsDirs)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -989,7 +989,7 @@ func TestHealFormatXLFreshDisksErrs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	endpoints, err = parseStorageEndPoints(fsDirs, 0)
+	endpoints, err = parseStorageEndpoints(fsDirs)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1013,7 +1013,7 @@ func TestHealFormatXLFreshDisksErrs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	endpoints, err = parseStorageEndPoints(fsDirs, 0)
+	endpoints, err = parseStorageEndpoints(fsDirs)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1039,7 +1039,7 @@ func TestHealFormatXLFreshDisksErrs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	endpoints, err = parseStorageEndPoints(fsDirs, 0)
+	endpoints, err = parseStorageEndpoints(fsDirs)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1061,7 +1061,7 @@ func TestHealFormatXLFreshDisksErrs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	endpoints, err = parseStorageEndPoints(fsDirs, 0)
+	endpoints, err = parseStorageEndpoints(fsDirs)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1087,7 +1087,7 @@ func TestHealFormatXLFreshDisksErrs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	endpoints, err = parseStorageEndPoints(fsDirs, 0)
+	endpoints, err = parseStorageEndpoints(fsDirs)
 	if err != nil {
 		t.Fatal(err)
 	}

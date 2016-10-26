@@ -17,6 +17,8 @@
 package cmd
 
 import (
+	"net/url"
+	"runtime"
 	"sync"
 	"testing"
 )
@@ -35,8 +37,9 @@ func TestHouseKeeping(t *testing.T) {
 	defer removeRoots(noSpaceDirs)
 
 	properStorage := []StorageAPI{}
-	for _, fs := range fsDirs {
-		sd, err := newPosix(fs)
+	for _, fsDir := range fsDirs {
+		var sd StorageAPI
+		sd, err = newPosix(fsDir)
 		if err != nil {
 			t.Fatalf("Failed to create a local disk-based storage layer <ERROR> %v", err)
 		}
@@ -44,8 +47,8 @@ func TestHouseKeeping(t *testing.T) {
 	}
 
 	noSpaceBackend := []StorageAPI{}
-	for _, noSpaceFS := range noSpaceDirs {
-		sd, err := newPosix(noSpaceFS)
+	for _, noSpaceDir := range noSpaceDirs {
+		sd, err := newPosix(noSpaceDir)
 		if err != nil {
 			t.Fatalf("Failed to create a local disk-based storage layer <ERROR> %v", err)
 		}
@@ -68,7 +71,6 @@ func TestHouseKeeping(t *testing.T) {
 			if errs[index] != nil {
 				return
 			}
-
 			errs[index] = store.AppendFile(pathJoin(minioMetaBucket, tmpMetaPrefix), "hello.txt", []byte("hello"))
 		}(i, store)
 	}
@@ -94,6 +96,55 @@ func TestHouseKeeping(t *testing.T) {
 		if actualErr != test.expectedErr {
 			t.Errorf("Test %d - actual error is %#v, expected error was %#v",
 				i+1, actualErr, test.expectedErr)
+		}
+	}
+}
+
+// Test constructing the final path.
+func TestGetPath(t *testing.T) {
+	var testCases []struct {
+		ep   *url.URL
+		path string
+	}
+	if runtime.GOOS != "windows" {
+		testCases = []struct {
+			ep   *url.URL
+			path string
+		}{
+			{
+				ep:   nil,
+				path: "",
+			},
+			{
+				ep:   &url.URL{Path: "/test1"},
+				path: "/test1",
+			},
+		}
+	} else {
+		testCases = []struct {
+			ep   *url.URL
+			path string
+		}{
+			{
+				ep:   nil,
+				path: "",
+			},
+			{
+				ep:   &url.URL{Opaque: "\\test1", Scheme: "C"},
+				path: "C:\\test1",
+			},
+			{
+				ep:   &url.URL{Scheme: "http", Path: "/C:\\test1"},
+				path: "C:\\test1",
+			},
+		}
+	}
+
+	// Validate all the test cases.
+	for i, testCase := range testCases {
+		path := getPath(testCase.ep)
+		if path != testCase.path {
+			t.Fatalf("Test: %d Expected path %s, got %s", i+1, testCase.path, path)
 		}
 	}
 }

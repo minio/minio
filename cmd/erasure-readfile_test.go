@@ -222,7 +222,7 @@ func TestErasureReadUtils(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	endpoints, err := parseStorageEndPoints(disks, 0)
+	endpoints, err := parseStorageEndpoints(disks)
 	if err != nil {
 		t.Fatal(err)
 	}
