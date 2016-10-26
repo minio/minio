@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"crypto/hmac"
 	"crypto/sha1"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -161,8 +162,7 @@ type TestServer struct {
 	SrvCmdCfg serverCmdConfig
 }
 
-// Starts the test server and returns the TestServer instance.
-func StartTestServer(t TestErrHandler, instanceType string) TestServer {
+func UnstartedTestServer(t TestErrHandler, instanceType string) TestServer {
 	// create an instance of TestServer.
 	testServer := TestServer{}
 	// create temporary backend for the test server.
@@ -206,7 +206,7 @@ func StartTestServer(t TestErrHandler, instanceType string) TestServer {
 	}
 
 	// Run TestServer.
-	testServer.Server = httptest.NewServer(httpHandler)
+	testServer.Server = httptest.NewUnstartedServer(httpHandler)
 
 	srvCmdCfg.serverAddr = testServer.Server.Listener.Addr().String()
 
@@ -231,6 +231,86 @@ func StartTestServer(t TestErrHandler, instanceType string) TestServer {
 	}
 	initGlobalS3Peers(endpoints)
 
+	return testServer
+
+}
+
+// Starts the test server and returns the TestServer with TLS configured instance.
+func StartTestTLSServer(t TestErrHandler, instanceType string) TestServer {
+	serverKey := []byte(`-----BEGIN RSA PRIVATE KEY-----
+MIIEpAIBAAKCAQEAwD0kEmvtaHx+M0qJAY8zFEn6UpCIbZshNIoXOOr2S3XBEar9
+gtvTGpL73rPJroVcaTJxavsQJx6iD8E38t85rTsrlxEomAk5eKVK3WyplcUuqBgm
++KMYyyWxMXgYA3+AumEHiDg1SMIgrWFka2x+dSsqRb64tzWtD3LLy/Amq4cdiO1v
+/v1rNEdqj+9G7G8leZSd8TNWZqebOwBPA4JiVtDDubemk4Qr4qYt3ChwNQiwq7Bt
+RFR7EokO2an9XfT1NS71evikmGduhBLz3T+3QinxZDwb6SmNouYJkdqy6oPcWt0z
+OXDgSPmY1NVlrujJ5JhtQTQxOs6mFVZ/82mn7wIDAQABAoIBAQCWiIoRntAGLM5J
+7cjBHthZv+Az/RfH9F0ZHjU3Dc6VonzwD9x6NxbkzUpLxq9caPPHMIfdxQGOEI/J
+FH1yQtiQTTBCGF6YR0jor06jey6EqCZz3I3Pzy9gDIDnguoS+ynbSJW0VodrFRCv
+k/8lm4yexZFRkhpk5LRCz5rEdKZjU4kBgTBzeD6P1JbYKfAs49A99x9L42hExwfv
+ppX/7ECbdMTQRVgDytOJpQR+mrrEHq30lxNZg0XngGm/4Rby8Ga6cfxmQbUrj5of
+uA9TsQ6CAmTy6OqagLK4Rr9tSd4cjbBm2MCs2bDMYhzkhsveoFidsF1A9S3zSo/z
+VJlqFtXpAoGBAP2ewImNRpaa0D1TWk/559XZJ64MMd4J0VK4cGzXPeBZ8WGVJxqF
+PLl74AXG7/Iu18EWMHqTuMxlrkTKpF6KF9G5RCmAFi+UzVVspj9uvAk8SrFUA5P7
+c7Ahnmz44isD7OJ6sHUOP1d88dehODQdRAp5hX0h+rsTH3L6g3QRnEEdAoGBAMIK
+8DJMsl2dmuuV4WPrgoqdnDnSmuC5YqxibJPJnZpgp19IxlIYRYtuUZjHIYx7OM/r
+1X/dIvNqpFbvTnT9XFHWSyYMqal1+OY1Sg9i9E6YKuPAW2wccf3svhzehc98vJ0j
+d7S81UpfKKWY+uD/wvOJdV1Pw7SoSvs5pmbFuKt7AoGAUY7ClblDsNy6CG6MhVl0
+7zT06KhtRNzdXn+HT8jr0gC6ecnwGDwuaetnABSYRsY/hY0wK8rjS3+LSf3sW6aG
+wF+Whs301HpCiaz1zUI737BuyJWezPC4pDQ7cQmcGX8apz4TDqF1Rxob316t5zxe
+DAxGHBZYPd6JZ30d1q5vFBUCgYEAvnaOHlE6Irm4ftW3TqS0lerulbMrYrmVKS/S
+851KnWWR4+1C/QHmAV5fqV6Mh5/LvAr4nXEqBVP/y3VJxXuLSqjVSpvTTQsHLK/R
+6hhvRVYHg1YkZpHlMiFW2m9xWKBPYs6ViUpw8XdGJoVqe7+QVAvwr47DwmgOcVm9
+A9O/2FECgYAgttnwo3gBxY0DJdfXBuqZCAa1MMErIxCaKw2Gm9JccnQW0fcuUcb3
+WSHJPyJ74ktk/QZGEmtKzAxVZ73t14dwHNNDid5CN2FyTIMCeWG5b2vM5NJe8KuQ
+6cJePZj7ZkSvm2tkREdR37Oh2eZqGtaIbj6VTplvKUByWa/TEozMpQ==
+-----END RSA PRIVATE KEY-----`)
+
+	serverPem := []byte(`-----BEGIN CERTIFICATE-----
+MIID2zCCAsOgAwIBAgIJALPniQGEq3KtMA0GCSqGSIb3DQEBCwUAMIGDMQswCQYD
+VQQGEwJJTjESMBAGA1UECAwJS2FybmF0YWthMRIwEAYDVQQHDAlCZW5nYWx1cnUx
+FzAVBgNVBAoMDk1pbmlvVW5pdFRlc3RzMREwDwYDVQQLDAhTU0xUZXN0czEgMB4G
+CSqGSIb3DQEJARYRc3NsdGVzdHNAbWluaW8uaW8wHhcNMTYxMDI0MDk1ODQzWhcN
+MjYxMDIyMDk1ODQzWjCBgzELMAkGA1UEBhMCSU4xEjAQBgNVBAgMCUthcm5hdGFr
+YTESMBAGA1UEBwwJQmVuZ2FsdXJ1MRcwFQYDVQQKDA5NaW5pb1VuaXRUZXN0czER
+MA8GA1UECwwIU1NMVGVzdHMxIDAeBgkqhkiG9w0BCQEWEXNzbHRlc3RzQG1pbmlv
+LmlvMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwD0kEmvtaHx+M0qJ
+AY8zFEn6UpCIbZshNIoXOOr2S3XBEar9gtvTGpL73rPJroVcaTJxavsQJx6iD8E3
+8t85rTsrlxEomAk5eKVK3WyplcUuqBgm+KMYyyWxMXgYA3+AumEHiDg1SMIgrWFk
+a2x+dSsqRb64tzWtD3LLy/Amq4cdiO1v/v1rNEdqj+9G7G8leZSd8TNWZqebOwBP
+A4JiVtDDubemk4Qr4qYt3ChwNQiwq7BtRFR7EokO2an9XfT1NS71evikmGduhBLz
+3T+3QinxZDwb6SmNouYJkdqy6oPcWt0zOXDgSPmY1NVlrujJ5JhtQTQxOs6mFVZ/
+82mn7wIDAQABo1AwTjAdBgNVHQ4EFgQUv++gaIEUL0sboDER+4KPpiU27FMwHwYD
+VR0jBBgwFoAUv++gaIEUL0sboDER+4KPpiU27FMwDAYDVR0TBAUwAwEB/zANBgkq
+hkiG9w0BAQsFAAOCAQEAHumbrFEBhN0EWsjZZB/VkArE/owBg7djvNetYE/rEWSV
+/dwysQgkTpGrCyfmzSwhsX++gr5a5qh+HAF0Ygufd5OIk/kn9X3pz66Kaq4TYdFO
+hc/DUD7wwY3/Mfi9lhT6lKSfMu69D3FuiI+xtUJ7CU8Fhr2ua6UB7e/2inYzsJDN
+WYMzrkLMasQNzNWiz3Tditxj1WuuRe9mgXbbBHT03udUyuLi+4ZiOuw6CiJL4Pfk
+PAKMo7QWaxAectHZsxvcfH9uYOIuv1AwDUQBA+jhADvLh55epFq0DdJ057+QKItL
+vtKIzIB9HcGDFfBvIq+WlxYlQPSIkeq2z1iZaTl11g==
+-----END CERTIFICATE-----`)
+	// Fetch TLS key and pem files from test-data/ directory.
+	//	dir, _ := os.Getwd()
+	//	testDataDir := filepath.Join(filepath.Dir(dir), "test-data")
+	//
+	//	pemFile := filepath.Join(testDataDir, "server.pem")
+	//	keyFile := filepath.Join(testDataDir, "server.key")
+	cer, err := tls.X509KeyPair(serverPem, serverKey)
+	if err != nil {
+		t.Fatalf("Failed to load certificate: %v", err)
+	}
+	config := &tls.Config{Certificates: []tls.Certificate{cer}}
+
+	testServer := UnstartedTestServer(t, instanceType)
+	testServer.Server.TLS = config
+	testServer.Server.StartTLS()
+	return testServer
+}
+
+// Starts the test server and returns the TestServer instance.
+func StartTestServer(t TestErrHandler, instanceType string) TestServer {
+	// create an instance of TestServer.
+	testServer := UnstartedTestServer(t, instanceType)
+	testServer.Server.Start()
 	return testServer
 }
 
