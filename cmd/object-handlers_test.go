@@ -1349,7 +1349,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 		},
 	}
 
-	// on successfull complete multipart operation the s3MD5 for the parts uploaded will be returned.
+	// on successful complete multipart operation the s3MD5 for the parts uploaded will be returned.
 	s3MD5, err := getCompleteMultipartMD5(inputParts[3].parts...)
 	if err != nil {
 		t.Fatalf("Obtaining S3MD5 failed")
@@ -2141,7 +2141,7 @@ func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName strin
 						t.Fatalf("%s, Failed to unmarshal error response from upload part request \"%s\"/\"%s\": <ERROR> %v.",
 							reqType, bucketName, test.objectName, err)
 					}
-					// Validate whether the error has occured for the expected reason.
+					// Validate whether the error has occurred for the expected reason.
 					if test.expectedAPIError.Code != errXML.Code {
 						t.Errorf("%s, Expected to fail with error \"%s\", but received \"%s\".",
 							reqType, test.expectedAPIError.Code, errXML.Code)
@@ -2421,7 +2421,7 @@ func testAPIListObjectPartsHandler(obj ObjectLayer, instanceType, bucketName str
 						t.Fatalf("%s, Failed to unmarshal error response from list object partsest %s/%s: <ERROR> %v",
 							reqType, bucketName, testObject, err)
 					}
-					// Validate whether the error has occured for the expected reason.
+					// Validate whether the error has occurred for the expected reason.
 					if test.expectedErr.Code != errXML.Code {
 						t.Errorf("%s, Expected to fail with %s but received %s",
 							reqType, test.expectedErr.Code, errXML.Code)
