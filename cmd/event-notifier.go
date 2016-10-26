@@ -347,6 +347,13 @@ func loadNotificationConfig(bucket string, objAPI ObjectLayer) (*notificationCon
 // loads notification config if any for a given bucket, returns
 // structured notification config.
 func loadListenerConfig(bucket string, objAPI ObjectLayer) ([]listenerConfig, error) {
+	// in single node mode, there are no peers, so in this case
+	// there is no configuration to load, as any previously
+	// connected listen clients have been disconnected
+	if !globalS3Peers.isDistXL {
+		return nil, nil
+	}
+
 	// Construct the notification config path.
 	listenerConfigPath := path.Join(bucketConfigPrefix, bucket, bucketListenerConfig)
 	objInfo, err := objAPI.GetObjectInfo(minioMetaBucket, listenerConfigPath)
