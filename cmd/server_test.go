@@ -19,6 +19,7 @@ package cmd
 import (
 	"bytes"
 	"crypto/md5"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/xml"
@@ -43,6 +44,8 @@ type TestSuiteCommon struct {
 	accessKey  string
 	secretKey  string
 	signer     signerType
+	secure     bool
+	transport  *http.Transport
 }
 
 // Init and run test on FS backend.
@@ -51,13 +54,26 @@ var _ = Suite(&TestSuiteCommon{serverType: "FS", signer: signerV4})
 // Init and run test on FS backend with AWS signature v2.
 var _ = Suite(&TestSuiteCommon{serverType: "FS", signer: signerV2})
 
+// Init and run test on FS backend, with tls enabled.
+var _ = Suite(&TestSuiteCommon{serverType: "FS", signer: signerV4, secure: true})
+
 // Init and run test on XL backend.
 var _ = Suite(&TestSuiteCommon{serverType: "XL", signer: signerV4})
 
 // Setting up the test suite.
 // Starting the Test server with temporary FS backend.
 func (s *TestSuiteCommon) SetUpSuite(c *C) {
-	s.testServer = StartTestServer(c, s.serverType)
+	if s.secure {
+		s.testServer = StartTestTLSServer(c, s.serverType)
+		s.transport = &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		}
+	} else {
+		s.testServer = StartTestServer(c, s.serverType)
+		s.transport = &http.Transport{}
+	}
 	s.endPoint = s.testServer.Server.URL
 	s.accessKey = s.testServer.AccessKey
 	s.secretKey = s.testServer.SecretKey
@@ -89,7 +105,7 @@ func (s *TestSuiteCommon) TestBucketSQSNotification(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client := http.Client{}
+	client := http.Client{Transport: s.transport}
 	// execute the request.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
@@ -101,7 +117,7 @@ func (s *TestSuiteCommon) TestBucketSQSNotification(c *C) {
 		int64(len(bucketNotificationBuf)), bytes.NewReader([]byte(bucketNotificationBuf)), s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	// execute the HTTP request.
 	response, err = client.Do(request)
 
@@ -124,7 +140,7 @@ func (s *TestSuiteCommon) TestBucketPolicy(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client := http.Client{}
+	client := http.Client{Transport: s.transport}
 	// execute the request.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
@@ -136,7 +152,7 @@ func (s *TestSuiteCommon) TestBucketPolicy(c *C) {
 		int64(len(bucketPolicyStr)), bytes.NewReader([]byte(bucketPolicyStr)), s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	// execute the HTTP request to create bucket.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -147,7 +163,7 @@ func (s *TestSuiteCommon) TestBucketPolicy(c *C) {
 		s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
@@ -162,7 +178,7 @@ func (s *TestSuiteCommon) TestBucketPolicy(c *C) {
 		s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusNoContent)
@@ -172,7 +188,7 @@ func (s *TestSuiteCommon) TestBucketPolicy(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusNotFound)
@@ -187,7 +203,7 @@ func (s *TestSuiteCommon) TestDeleteBucket(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client := http.Client{}
+	client := http.Client{Transport: s.transport}
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
 	// assert the response status code.
@@ -198,7 +214,7 @@ func (s *TestSuiteCommon) TestDeleteBucket(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	// Assert the response status code.
@@ -215,7 +231,7 @@ func (s *TestSuiteCommon) TestDeleteBucketNotEmpty(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client := http.Client{}
+	client := http.Client{Transport: s.transport}
 	// execute the request.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
@@ -229,7 +245,7 @@ func (s *TestSuiteCommon) TestDeleteBucketNotEmpty(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	// execute the request to complete object upload.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -243,7 +259,7 @@ func (s *TestSuiteCommon) TestDeleteBucketNotEmpty(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusConflict)
@@ -258,7 +274,7 @@ func (s *TestSuiteCommon) TestListenBucketNotificationHandler(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client := http.Client{}
+	client := http.Client{Transport: s.transport}
 	// execute the request.
 	response, err := client.Do(req)
 	c.Assert(err, IsNil)
@@ -276,7 +292,7 @@ func (s *TestSuiteCommon) TestListenBucketNotificationHandler(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	// execute the request.
 	response, err = client.Do(req)
 	c.Assert(err, IsNil)
@@ -287,7 +303,7 @@ func (s *TestSuiteCommon) TestListenBucketNotificationHandler(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	// execute the request.
 	response, err = client.Do(req)
 	c.Assert(err, IsNil)
@@ -298,7 +314,7 @@ func (s *TestSuiteCommon) TestListenBucketNotificationHandler(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	// execute the request.
 	response, err = client.Do(req)
 	c.Assert(err, IsNil)
@@ -310,7 +326,7 @@ func (s *TestSuiteCommon) TestListenBucketNotificationHandler(c *C) {
 	c.Assert(err, IsNil)
 
 	req.Header.Set("x-amz-content-sha256", "somethingElse")
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	// execute the request.
 	response, err = client.Do(req)
 	c.Assert(err, IsNil)
@@ -324,7 +340,7 @@ func (s *TestSuiteCommon) TestListenBucketNotificationHandler(c *C) {
 		getListenBucketNotificationURL(s.endPoint, bucketName,
 			[]string{}, []string{}, validEvents), 0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	// execute the request.
 	response, err = client.Do(req)
 	c.Assert(err, IsNil)
@@ -336,7 +352,7 @@ func (s *TestSuiteCommon) TestListenBucketNotificationHandler(c *C) {
 	// 		getPutObjectURL(s.endPoint, bucketName, "myobject/1"),
 	// 		int64(buf.Len()), buf, s.accessKey, s.secretKey, s.signer)
 	// 	c.Assert(rerr, IsNil)
-	// 	client = http.Client{}
+	// 	client = http.Client{Transport: s.transport}
 	// 	// execute the request.
 	// 	resp, rerr := client.Do(rreq)
 	// 	c.Assert(rerr, IsNil)
@@ -354,7 +370,7 @@ func (s *TestSuiteCommon) TestDeleteMultipleObjects(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client := http.Client{}
+	client := http.Client{Transport: s.transport}
 	// execute the request.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
@@ -373,7 +389,7 @@ func (s *TestSuiteCommon) TestDeleteMultipleObjects(c *C) {
 			0, nil, s.accessKey, s.secretKey, s.signer)
 		c.Assert(err, IsNil)
 
-		client = http.Client{}
+		client = http.Client{Transport: s.transport}
 		// execute the http request.
 		response, err = client.Do(request)
 		c.Assert(err, IsNil)
@@ -392,7 +408,7 @@ func (s *TestSuiteCommon) TestDeleteMultipleObjects(c *C) {
 	request, err = newTestSignedRequest("POST", getMultiDeleteObjectURL(s.endPoint, bucketName),
 		int64(len(deleteReqBytes)), bytes.NewReader(deleteReqBytes), s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
@@ -413,7 +429,7 @@ func (s *TestSuiteCommon) TestDeleteMultipleObjects(c *C) {
 	request, err = newTestSignedRequest("POST", getMultiDeleteObjectURL(s.endPoint, bucketName),
 		int64(len(deleteReqBytes)), bytes.NewReader(deleteReqBytes), s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
@@ -438,7 +454,7 @@ func (s *TestSuiteCommon) TestDeleteObject(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client := http.Client{}
+	client := http.Client{Transport: s.transport}
 	// execute the request.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
@@ -452,7 +468,7 @@ func (s *TestSuiteCommon) TestDeleteObject(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	// execute the http request.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -464,7 +480,7 @@ func (s *TestSuiteCommon) TestDeleteObject(c *C) {
 	request, err = newTestSignedRequest("DELETE", getDeleteObjectURL(s.endPoint, bucketName, "prefix"),
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusNoContent)
@@ -475,7 +491,7 @@ func (s *TestSuiteCommon) TestDeleteObject(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	// Assert the HTTP response status code.
@@ -485,7 +501,7 @@ func (s *TestSuiteCommon) TestDeleteObject(c *C) {
 	request, err = newTestSignedRequest("DELETE", getDeleteObjectURL(s.endPoint, bucketName, objectName),
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	// execute the http request.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -496,7 +512,7 @@ func (s *TestSuiteCommon) TestDeleteObject(c *C) {
 	request, err = newTestSignedRequest("DELETE", getDeleteObjectURL(s.endPoint, bucketName, "prefix/myobject1"),
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	// execute the http request.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -514,7 +530,7 @@ func (s *TestSuiteCommon) TestNonExistentBucket(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client := http.Client{}
+	client := http.Client{Transport: s.transport}
 	// execute the http request.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
@@ -531,7 +547,7 @@ func (s *TestSuiteCommon) TestEmptyObject(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client := http.Client{}
+	client := http.Client{Transport: s.transport}
 	// execute the http request.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
@@ -544,7 +560,7 @@ func (s *TestSuiteCommon) TestEmptyObject(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	// execute the upload request.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -556,7 +572,7 @@ func (s *TestSuiteCommon) TestEmptyObject(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	// execute the http request to fetch object.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -579,7 +595,7 @@ func (s *TestSuiteCommon) TestBucket(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client := http.Client{}
+	client := http.Client{Transport: s.transport}
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
@@ -588,7 +604,7 @@ func (s *TestSuiteCommon) TestBucket(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
@@ -604,7 +620,7 @@ func (s *TestSuiteCommon) TestObjectGetAnonymous(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client := http.Client{}
+	client := http.Client{Transport: s.transport}
 	// execute the make bucket http request.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
@@ -617,7 +633,7 @@ func (s *TestSuiteCommon) TestObjectGetAnonymous(c *C) {
 		int64(buffer.Len()), buffer, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	// execute the HTTP request to upload the object.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -625,13 +641,13 @@ func (s *TestSuiteCommon) TestObjectGetAnonymous(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 
 	// initiate anonymous HTTP request to fetch the object which does not exist. We need to return AccessDenied.
-	response, err = http.Get(getGetObjectURL(s.endPoint, bucketName, objectName+".1"))
+	response, err = client.Get(getGetObjectURL(s.endPoint, bucketName, objectName+".1"))
 	c.Assert(err, IsNil)
 	// assert the http response status code.
 	verifyError(c, response, "AccessDenied", "Access Denied.", http.StatusForbidden)
 
 	// initiate anonymous HTTP request to fetch the object which does exist. We need to return AccessDenied.
-	response, err = http.Get(getGetObjectURL(s.endPoint, bucketName, objectName))
+	response, err = client.Get(getGetObjectURL(s.endPoint, bucketName, objectName))
 	c.Assert(err, IsNil)
 	// assert the http response status code.
 	verifyError(c, response, "AccessDenied", "Access Denied.", http.StatusForbidden)
@@ -647,7 +663,7 @@ func (s *TestSuiteCommon) TestObjectGet(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client := http.Client{}
+	client := http.Client{Transport: s.transport}
 	// execute the make bucket http request.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
@@ -660,7 +676,7 @@ func (s *TestSuiteCommon) TestObjectGet(c *C) {
 		int64(buffer.Len()), buffer, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	// execute the HTTP request to upload the object.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -678,7 +694,7 @@ func (s *TestSuiteCommon) TestObjectGet(c *C) {
 				0, nil, s.accessKey, s.secretKey, s.signer)
 			c.Assert(err, IsNil)
 
-			reqClient := http.Client{}
+			reqClient := http.Client{Transport: s.transport}
 			// execute the http request to fetch the object.
 			getResponse, err := reqClient.Do(getRequest)
 			c.Assert(err, IsNil)
@@ -706,7 +722,7 @@ func (s *TestSuiteCommon) TestMultipleObjects(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client := http.Client{}
+	client := http.Client{Transport: s.transport}
 	// execute the HTTP request to create the bucket.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
@@ -719,7 +735,7 @@ func (s *TestSuiteCommon) TestMultipleObjects(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	// execute the HTTP request.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -734,7 +750,7 @@ func (s *TestSuiteCommon) TestMultipleObjects(c *C) {
 		int64(buffer1.Len()), buffer1, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	// execute the HTTP request for object upload.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -746,7 +762,7 @@ func (s *TestSuiteCommon) TestMultipleObjects(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	// execute the HTTP request.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -766,7 +782,7 @@ func (s *TestSuiteCommon) TestMultipleObjects(c *C) {
 		int64(buffer2.Len()), buffer2, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	// execute the HTTP request for object upload.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -777,7 +793,7 @@ func (s *TestSuiteCommon) TestMultipleObjects(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	// execute the HTTP request to fetch the object.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -796,7 +812,7 @@ func (s *TestSuiteCommon) TestMultipleObjects(c *C) {
 		int64(buffer3.Len()), buffer3, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	// execute HTTP request.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -808,7 +824,7 @@ func (s *TestSuiteCommon) TestMultipleObjects(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
@@ -827,7 +843,7 @@ func (s *TestSuiteCommon) TestNotImplemented(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client := http.Client{}
+	client := http.Client{Transport: s.transport}
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusNotImplemented)
@@ -842,7 +858,7 @@ func (s *TestSuiteCommon) TestHeader(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client := http.Client{}
+	client := http.Client{Transport: s.transport}
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
 	// asserting for the expected error response.
@@ -866,7 +882,7 @@ func (s *TestSuiteCommon) TestPutBucket(c *C) {
 				0, nil, s.accessKey, s.secretKey, s.signer)
 			c.Assert(err, IsNil)
 
-			client := http.Client{}
+			client := http.Client{Transport: s.transport}
 			response, err := client.Do(request)
 			if err != nil {
 				c.Fatalf("Put bucket Failed: <ERROR> %s", err)
@@ -883,7 +899,7 @@ func (s *TestSuiteCommon) TestPutBucket(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client := http.Client{}
+	client := http.Client{Transport: s.transport}
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
@@ -904,7 +920,7 @@ func (s *TestSuiteCommon) TestCopyObject(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client := http.Client{}
+	client := http.Client{Transport: s.transport}
 	// execute the HTTP request to create bucket.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
@@ -971,7 +987,7 @@ func (s *TestSuiteCommon) TestPutObject(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client := http.Client{}
+	client := http.Client{Transport: s.transport}
 	// execute the HTTP request to create bucket.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
@@ -1017,7 +1033,7 @@ func (s *TestSuiteCommon) TestListBuckets(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client := http.Client{}
+	client := http.Client{Transport: s.transport}
 	// execute the HTTP request to list buckets.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
@@ -1040,7 +1056,7 @@ func (s *TestSuiteCommon) TestValidateSignature(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client := http.Client{}
+	client := http.Client{Transport: s.transport}
 	// Execute the HTTP request to create bucket.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
@@ -1068,7 +1084,7 @@ func (s *TestSuiteCommon) TestSHA256Mismatch(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client := http.Client{}
+	client := http.Client{Transport: s.transport}
 	// Execute the HTTP request to create bucket.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
@@ -1104,7 +1120,7 @@ func (s *TestSuiteCommon) TestPutObjectLongName(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client := http.Client{}
+	client := http.Client{Transport: s.transport}
 	// Execute the HTTP request to create bucket.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
@@ -1147,7 +1163,7 @@ func (s *TestSuiteCommon) TestNotBeAbleToCreateObjectInNonexistentBucket(c *C) {
 		int64(buffer1.Len()), buffer1, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client := http.Client{}
+	client := http.Client{Transport: s.transport}
 	// Execute the HTTP request.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
@@ -1169,7 +1185,7 @@ func (s *TestSuiteCommon) TestHeadOnObjectLastModified(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client := http.Client{}
+	client := http.Client{Transport: s.transport}
 	// execute the HTTP request to create bucket.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
@@ -1239,7 +1255,7 @@ func (s *TestSuiteCommon) TestHeadOnBucket(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client := http.Client{}
+	client := http.Client{Transport: s.transport}
 	// execute the HTTP request to create bucket.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
@@ -1265,7 +1281,7 @@ func (s *TestSuiteCommon) TestContentTypePersists(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client := http.Client{}
+	client := http.Client{Transport: s.transport}
 	// execute the HTTP request to create bucket.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
@@ -1285,7 +1301,7 @@ func (s *TestSuiteCommon) TestContentTypePersists(c *C) {
 		c.Assert(err, IsNil)
 	}
 
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	// execute the HTTP request for object upload.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -1307,7 +1323,7 @@ func (s *TestSuiteCommon) TestContentTypePersists(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	// Execute the HTTP to fetch the object.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -1365,7 +1381,7 @@ func (s *TestSuiteCommon) TestPartialContent(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client := http.Client{}
+	client := http.Client{Transport: s.transport}
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
@@ -1375,7 +1391,7 @@ func (s *TestSuiteCommon) TestPartialContent(c *C) {
 		int64(buffer1.Len()), buffer1, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
@@ -1386,7 +1402,7 @@ func (s *TestSuiteCommon) TestPartialContent(c *C) {
 	c.Assert(err, IsNil)
 	request.Header.Add("Range", "bytes=6-7")
 
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusPartialContent)
@@ -1406,7 +1422,7 @@ func (s *TestSuiteCommon) TestListObjectsHandler(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client := http.Client{}
+	client := http.Client{Transport: s.transport}
 	// execute the HTTP request to create bucket.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
@@ -1417,7 +1433,7 @@ func (s *TestSuiteCommon) TestListObjectsHandler(c *C) {
 		int64(buffer1.Len()), buffer1, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
@@ -1426,7 +1442,7 @@ func (s *TestSuiteCommon) TestListObjectsHandler(c *C) {
 	request, err = newTestSignedRequest("GET", getListObjectsV1URL(s.endPoint, bucketName, "1000"),
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	// execute the HTTP request.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -1440,7 +1456,7 @@ func (s *TestSuiteCommon) TestListObjectsHandler(c *C) {
 	request, err = newTestSignedRequest("GET", getListObjectsV2URL(s.endPoint, bucketName, "1000", ""),
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	// execute the HTTP request.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -1455,7 +1471,7 @@ func (s *TestSuiteCommon) TestListObjectsHandler(c *C) {
 	request, err = newTestSignedRequest("GET", getListObjectsV2URL(s.endPoint, bucketName, "1000", "true"),
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	// execute the HTTP request.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -1479,7 +1495,7 @@ func (s *TestSuiteCommon) TestListObjectsHandlerErrors(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client := http.Client{}
+	client := http.Client{Transport: s.transport}
 	// execute the HTTP request to create bucket.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
@@ -1489,7 +1505,7 @@ func (s *TestSuiteCommon) TestListObjectsHandlerErrors(c *C) {
 	request, err = newTestSignedRequest("GET", getListObjectsV1URL(s.endPoint, bucketName, "-2"),
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	// execute the HTTP request.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -1500,7 +1516,7 @@ func (s *TestSuiteCommon) TestListObjectsHandlerErrors(c *C) {
 	request, err = newTestSignedRequest("GET", getListObjectsV2URL(s.endPoint, bucketName, "-2", ""),
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	// execute the HTTP request.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -1520,7 +1536,7 @@ func (s *TestSuiteCommon) TestPutBucketErrors(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client := http.Client{}
+	client := http.Client{Transport: s.transport}
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
 	// expected to fail with error message "InvalidBucketName".
@@ -1530,7 +1546,7 @@ func (s *TestSuiteCommon) TestPutBucketErrors(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	// execute the HTTP request to create bucket.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -1565,7 +1581,7 @@ func (s *TestSuiteCommon) TestGetObjectLarge10MiB(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client := http.Client{}
+	client := http.Client{Transport: s.transport}
 	// execute the HTTP request to create the bucket.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
@@ -1595,7 +1611,7 @@ func (s *TestSuiteCommon) TestGetObjectLarge10MiB(c *C) {
 		int64(buf.Len()), buf, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	// execute the HTTP request.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -1607,7 +1623,7 @@ func (s *TestSuiteCommon) TestGetObjectLarge10MiB(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	// execute the HTTP request to download the object.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -1629,7 +1645,7 @@ func (s *TestSuiteCommon) TestGetObjectLarge11MiB(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client := http.Client{}
+	client := http.Client{Transport: s.transport}
 	// execute the HTTP request.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
@@ -1660,7 +1676,7 @@ func (s *TestSuiteCommon) TestGetObjectLarge11MiB(c *C) {
 		int64(buf.Len()), buf, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	// execute the HTTP request for object upload.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -1671,7 +1687,7 @@ func (s *TestSuiteCommon) TestGetObjectLarge11MiB(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	// execute the HTTP request.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -1698,7 +1714,7 @@ func (s *TestSuiteCommon) TestGetPartialObjectMisAligned(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client := http.Client{}
+	client := http.Client{Transport: s.transport}
 	// execute the HTTP request to create the bucket.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
@@ -1730,7 +1746,7 @@ func (s *TestSuiteCommon) TestGetPartialObjectMisAligned(c *C) {
 		int64(buf.Len()), buf, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	// execute the HTTP request to upload the object.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -1762,7 +1778,7 @@ func (s *TestSuiteCommon) TestGetPartialObjectMisAligned(c *C) {
 		// Get partial content based on the byte range set.
 		request.Header.Add("Range", "bytes="+t.byteRange)
 
-		client = http.Client{}
+		client = http.Client{Transport: s.transport}
 		// execute the HTTP request.
 		response, err = client.Do(request)
 		c.Assert(err, IsNil)
@@ -1786,7 +1802,7 @@ func (s *TestSuiteCommon) TestGetPartialObjectLarge11MiB(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client := http.Client{}
+	client := http.Client{Transport: s.transport}
 	// execute the HTTP request to create the bucket.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
@@ -1818,7 +1834,7 @@ func (s *TestSuiteCommon) TestGetPartialObjectLarge11MiB(c *C) {
 		int64(buf.Len()), buf, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	// execute the HTTP request to upload the object.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -1831,7 +1847,7 @@ func (s *TestSuiteCommon) TestGetPartialObjectLarge11MiB(c *C) {
 	// This range spans into first two blocks.
 	request.Header.Add("Range", "bytes=10485750-10485769")
 
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	// execute the HTTP request.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -1854,7 +1870,7 @@ func (s *TestSuiteCommon) TestGetPartialObjectLarge10MiB(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client := http.Client{}
+	client := http.Client{Transport: s.transport}
 	// execute the HTTP request to create bucket.
 	response, err := client.Do(request)
 	// expecting the error to be nil.
@@ -1887,7 +1903,7 @@ func (s *TestSuiteCommon) TestGetPartialObjectLarge10MiB(c *C) {
 		int64(buf.Len()), buf, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	// execute the HTTP request to upload the object.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -1901,7 +1917,7 @@ func (s *TestSuiteCommon) TestGetPartialObjectLarge10MiB(c *C) {
 	// Get partial content based on the byte range set.
 	request.Header.Add("Range", "bytes=2048-2058")
 
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	// execute the HTTP request to download the partila content.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -1925,7 +1941,7 @@ func (s *TestSuiteCommon) TestGetObjectErrors(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client := http.Client{}
+	client := http.Client{Transport: s.transport}
 	// execute the HTTP request to create bucket.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
@@ -1939,7 +1955,7 @@ func (s *TestSuiteCommon) TestGetObjectErrors(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	verifyError(c, response, "NoSuchKey", "The specified key does not exist.", http.StatusNotFound)
@@ -1965,7 +1981,7 @@ func (s *TestSuiteCommon) TestGetObjectRangeErrors(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client := http.Client{}
+	client := http.Client{Transport: s.transport}
 	// execute the HTTP request to create bucket.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
@@ -1980,7 +1996,7 @@ func (s *TestSuiteCommon) TestGetObjectRangeErrors(c *C) {
 		int64(buffer1.Len()), buffer1, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	// execute the HTTP request to upload the object.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -1994,7 +2010,7 @@ func (s *TestSuiteCommon) TestGetObjectRangeErrors(c *C) {
 	request.Header.Add("Range", "bytes=-0")
 	c.Assert(err, IsNil)
 
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	// execute the HTTP request.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -2011,7 +2027,7 @@ func (s *TestSuiteCommon) TestObjectMultipartAbort(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client := http.Client{}
+	client := http.Client{Transport: s.transport}
 	// execute the HTTP request to create bucket.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
@@ -2106,7 +2122,7 @@ func (s *TestSuiteCommon) TestBucketMultipartList(c *C) {
 		nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client := http.Client{}
+	client := http.Client{Transport: s.transport}
 	// execute the HTTP request to create bucket.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
@@ -2219,7 +2235,7 @@ func (s *TestSuiteCommon) TestValidateObjectMultipartUploadID(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client := http.Client{}
+	client := http.Client{Transport: s.transport}
 	// execute the HTTP request to create bucket.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
@@ -2255,7 +2271,7 @@ func (s *TestSuiteCommon) TestObjectMultipartListError(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client := http.Client{}
+	client := http.Client{Transport: s.transport}
 	// execute the HTTP request to create bucket.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
@@ -2336,7 +2352,7 @@ func (s *TestSuiteCommon) TestObjectValidMD5(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client := http.Client{}
+	client := http.Client{Transport: s.transport}
 	// execute the HTTP request to create bucket.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
@@ -2358,7 +2374,7 @@ func (s *TestSuiteCommon) TestObjectValidMD5(c *C) {
 	c.Assert(err, IsNil)
 	// set the Content-Md5 to be the hash to content.
 	request.Header.Set("Content-Md5", base64.StdEncoding.EncodeToString(md5Sum))
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	// expecting a successful upload.
@@ -2372,7 +2388,7 @@ func (s *TestSuiteCommon) TestObjectValidMD5(c *C) {
 	// set Content-Md5 to invalid value.
 	request.Header.Set("Content-Md5", "kvLTlMrX9NpYDQlEIFlnDA==")
 	// expecting a failure during upload.
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	// Since Content-Md5 header was wrong, expecting to fail with "SignatureDoesNotMatch" error.
@@ -2389,7 +2405,7 @@ func (s *TestSuiteCommon) TestObjectMultipart(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client := http.Client{}
+	client := http.Client{Transport: s.transport}
 	// execute the HTTP request to create bucket.
 	response, err := client.Do(request)
 	c.Assert(err, IsNil)
@@ -2401,7 +2417,7 @@ func (s *TestSuiteCommon) TestObjectMultipart(c *C) {
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	// execute the HTTP request initiating the new multipart upload.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -2433,7 +2449,7 @@ func (s *TestSuiteCommon) TestObjectMultipart(c *C) {
 	request.Header.Set("Content-Md5", base64.StdEncoding.EncodeToString(md5Sum))
 	c.Assert(err, IsNil)
 
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	// execute the HTTP request to upload the first part.
 	response1, err := client.Do(request)
 	c.Assert(err, IsNil)
@@ -2456,7 +2472,7 @@ func (s *TestSuiteCommon) TestObjectMultipart(c *C) {
 	request.Header.Set("Content-Md5", base64.StdEncoding.EncodeToString(md5Sum))
 	c.Assert(err, IsNil)
 
-	client = http.Client{}
+	client = http.Client{Transport: s.transport}
 	// execute the HTTP request to upload the second part.
 	response2, err := client.Do(request)
 	c.Assert(err, IsNil)
