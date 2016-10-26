@@ -191,9 +191,19 @@ func healControl(ctx *cli.Context) {
 	parsedURL, err := url.Parse(ctx.Args().Get(0))
 	fatalIf(err, "Unable to parse URL %s", ctx.Args().Get(0))
 
+	accessKey := serverConfig.GetCredential().AccessKeyID
+	secretKey := serverConfig.GetCredential().SecretAccessKey
+	// Username and password specified in URL will override prior configuration
+	if parsedURL.User != nil {
+		accessKey = parsedURL.User.Username()
+		if key, set := parsedURL.User.Password(); set {
+			secretKey = key
+		}
+	}
+
 	authCfg := &authConfig{
-		accessKey:   serverConfig.GetCredential().AccessKeyID,
-		secretKey:   serverConfig.GetCredential().SecretAccessKey,
+		accessKey:   accessKey,
+		secretKey:   secretKey,
 		secureConn:  parsedURL.Scheme == "https",
 		address:     parsedURL.Host,
 		path:        path.Join(reservedBucket, controlPath),
