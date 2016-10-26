@@ -292,6 +292,7 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 		unexpectedEOF
 		signatureMismatch
 		chunkDateMismatch
+		tooBigDecodedLength
 	)
 
 	// byte data for PutObject.
@@ -444,9 +445,27 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 			shouldPass:         false,
 			fault:              chunkDateMismatch,
 		},
+		// Test case - 10
+		// Set x-amz-decoded-content-length to a value too big to hold in int64.
+		{
+			bucketName:         bucketName,
+			objectName:         objectName,
+			data:               oneKData,
+			dataLen:            1024,
+			chunkSize:          1024,
+			expectedContent:    []byte{},
+			expectedRespStatus: http.StatusInternalServerError,
+			accessKey:          credentials.AccessKeyID,
+			secretKey:          credentials.SecretAccessKey,
+			shouldPass:         false,
+			fault:              tooBigDecodedLength,
+		},
 	}
 	// Iterating over the cases, fetching the object validating the response.
 	for i, testCase := range testCases {
+		if i != 9 {
+			continue
+		}
 		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
 		rec := httptest.NewRecorder()
 		// construct HTTP request for Put Object end point.
@@ -477,6 +496,9 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 			req, err = malformDataSigV4(req, 'z')
 		case unexpectedEOF:
 			req, err = truncateChunkByHalfSigv4(req)
+		case tooBigDecodedLength:
+			// Set decoded length to a large value out of int64 range to simulate parse failure.
+			req.Header.Set("x-amz-decoded-content-length", "9999999999999999999999")
 		}
 		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
 		// Call the ServeHTTP to execute the handler,`func (api objectAPIHandlers) GetObjectHandler`  handles the request.
@@ -529,14 +551,29 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 	// byte data for PutObject.
 	bytesData := generateBytesData(6 * 1024 * 1024)
 
+	copySourceHeader := http.Header{}
+	copySourceHeader.Set("X-Amz-Copy-Source", "somewhere")
+	invalidMD5Header := http.Header{}
+	invalidMD5Header.Set("Content-Md5", "42")
+
+	addCustomHeaders := func(req *http.Request, customHeaders http.Header) {
+		for k, values := range customHeaders {
+			for _, value := range values {
+				req.Header.Set(k, value)
+			}
+		}
+	}
+
 	// test cases with inputs and expected result for GetObject.
 	testCases := []struct {
 		bucketName string
 		objectName string
+		headers    http.Header
 		data       []byte
 		dataLen    int
 		accessKey  string
 		secretKey  string
+		fault      Fault
 		// expected output.
 		expectedRespStatus int // expected response status body.
 	}{
@@ -564,6 +601,54 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 
 			expectedRespStatus: http.StatusForbidden,
 		},
+		// Test case - 3.
+		// Test Case with invalid header key X-Amz-Copy-Source.
+		{
+			bucketName:         bucketName,
+			objectName:         objectName,
+			headers:            copySourceHeader,
+			data:               bytesData,
+			dataLen:            len(bytesData),
+			accessKey:          credentials.AccessKeyID,
+			secretKey:          credentials.SecretAccessKey,
+			expectedRespStatus: http.StatusBadRequest,
+		},
+		// Test case - 4.
+		// Test Case with invalid Content-Md5 value
+		{
+			bucketName:         bucketName,
+			objectName:         objectName,
+			headers:            invalidMD5Header,
+			data:               bytesData,
+			dataLen:            len(bytesData),
+			accessKey:          credentials.AccessKeyID,
+			secretKey:          credentials.SecretAccessKey,
+			expectedRespStatus: http.StatusBadRequest,
+		},
+		// Test case - 5.
+		// Test Case with object greater than maximum allowed size.
+		{
+			bucketName:         bucketName,
+			objectName:         objectName,
+			data:               bytesData,
+			dataLen:            len(bytesData),
+			accessKey:          credentials.AccessKeyID,
+			secretKey:          credentials.SecretAccessKey,
+			fault:              TooBigObject,
+			expectedRespStatus: http.StatusBadRequest,
+		},
+		// Test case - 6.
+		// Test Case with missing content length
+		{
+			bucketName:         bucketName,
+			objectName:         objectName,
+			data:               bytesData,
+			dataLen:            len(bytesData),
+			accessKey:          credentials.AccessKeyID,
+			secretKey:          credentials.SecretAccessKey,
+			fault:              MissingContentLength,
+			expectedRespStatus: http.StatusLengthRequired,
+		},
 	}
 	// Iterating over the cases, fetching the object validating the response.
 	for i, testCase := range testCases {
@@ -575,6 +660,17 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			int64(testCase.dataLen), bytes.NewReader(testCase.data), testCase.accessKey, testCase.secretKey)
 		if err != nil {
 			t.Fatalf("Test %d: Failed to create HTTP request for Put Object: <ERROR> %v", i+1, err)
+		}
+		// Add test case specific headers to the request.
+		addCustomHeaders(req, testCase.headers)
+
+		// Inject faults if specified in testCase.fault
+		switch testCase.fault {
+		case MissingContentLength:
+			req.ContentLength = -1
+			req.TransferEncoding = []string{}
+		case TooBigObject:
+			req.ContentLength = maxObjectSize + 1
 		}
 		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
 		// Call the ServeHTTP to execute the handler,`func (api objectAPIHandlers) GetObjectHandler`  handles the request.
@@ -606,6 +702,18 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 
 		if err != nil {
 			t.Fatalf("Test %d: %s: Failed to create HTTP request for PutObject: <ERROR> %v", i+1, instanceType, err)
+		}
+
+		// Add test case specific headers to the request.
+		addCustomHeaders(reqV2, testCase.headers)
+
+		// Inject faults if specified in testCase.fault
+		switch testCase.fault {
+		case MissingContentLength:
+			reqV2.ContentLength = -1
+			reqV2.TransferEncoding = []string{}
+		case TooBigObject:
+			reqV2.ContentLength = maxObjectSize + 1
 		}
 
 		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
