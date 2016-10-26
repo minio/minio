@@ -440,7 +440,7 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 	// get a random ID for lock instrumentation.
 	opsID := getOpsID()
 
-	// Lock the object before comitting the object.
+	// Lock the object before committing the object.
 	nsMutex.RLock(bucket, object, opsID)
 	defer nsMutex.RUnlock(bucket, object, opsID)
 

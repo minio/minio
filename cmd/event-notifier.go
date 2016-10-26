@@ -369,7 +369,7 @@ func loadListenerConfig(bucket string, objAPI ObjectLayer) ([]listenerConfig, er
 	if err != nil {
 		// 'notification.xml' not found return
 		// 'errNoSuchNotifications'.  This is default when no
-		// bucket listners are found on the bucket.
+		// bucket listeners are found on the bucket.
 		switch err.(type) {
 		case ObjectNotFound:
 			return nil, errNoSuchNotifications

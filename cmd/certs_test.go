@@ -106,6 +106,6 @@ func TestParseInvalidCertificateChain(t *testing.T) {
 
 	// then
 	if err == nil {
-		t.Fatalf("Expected error but none occured")
+		t.Fatalf("Expected error but none occurred")
 	}
 }
