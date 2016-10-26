@@ -70,8 +70,8 @@ type PostPolicyForm struct {
 	}
 }
 
-// parsePostPolicyFormV4 - Parse JSON policy string into typed POostPolicyForm structure.
-func parsePostPolicyFormV4(policy string) (PostPolicyForm, error) {
+// parsePostPolicyForm - Parse JSON policy string into typed POostPolicyForm structure.
+func parsePostPolicyForm(policy string) (PostPolicyForm, error) {
 	// Convert po into interfaces and
 	// perform strict type conversion using reflection.
 	var rawPolicy struct {

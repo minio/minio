@@ -458,7 +458,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	postPolicyForm, err := parsePostPolicyFormV4(string(policyBytes))
+	postPolicyForm, err := parsePostPolicyForm(string(policyBytes))
 	if err != nil {
 		writeErrorResponse(w, r, ErrMalformedPOSTRequest, r.URL.Path)
 		return

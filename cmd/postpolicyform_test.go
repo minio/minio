@@ -55,7 +55,7 @@ func TestPostPolicyForm(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		postPolicyForm, err := parsePostPolicyFormV4(string(policyBytes))
+		postPolicyForm, err := parsePostPolicyForm(string(policyBytes))
 		if err != nil {
 			t.Fatal(err)
 		}
