@@ -463,9 +463,6 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 	}
 	// Iterating over the cases, fetching the object validating the response.
 	for i, testCase := range testCases {
-		if i != 9 {
-			continue
-		}
 		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
 		rec := httptest.NewRecorder()
 		// construct HTTP request for Put Object end point.
