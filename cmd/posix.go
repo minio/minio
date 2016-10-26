@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 
@@ -45,6 +46,7 @@ type posix struct {
 	suppliedDiskPath string
 	minFreeSpace     int64
 	minFreeInodes    int64
+	pool             sync.Pool
 }
 
 var errFaultyDisk = errors.New("Faulty disk")
@@ -114,6 +116,13 @@ func newPosix(diskPath string) (StorageAPI, error) {
 		diskPath:         diskPath,
 		minFreeSpace:     fsMinFreeSpace,
 		minFreeInodes:    fsMinFreeInodesPercent,
+		// 1MiB buffer pool for posix internal operations.
+		pool: sync.Pool{
+			New: func() interface{} {
+				b := make([]byte, readSizeV1)
+				return &b
+			},
+		},
 	}
 	st, err := os.Stat(preparePath(diskPath))
 	if err != nil {
@@ -144,7 +153,7 @@ func getDiskInfo(diskPath string) (di disk.Info, err error) {
 }
 
 // checkDiskFree verifies if disk path has sufficient minimum free disk space and files.
-func (s posix) checkDiskFree() (err error) {
+func (s *posix) checkDiskFree() (err error) {
 	di, err := getDiskInfo(s.diskPath)
 	if err != nil {
 		return err
@@ -584,7 +593,7 @@ func (s *posix) AppendFile(volume, path string, buf []byte) (err error) {
 	}
 	// Create top level directories if they don't exist.
 	// with mode 0777 mkdir honors system umask.
-	if err = mkdirAll(filepath.Dir(filePath), 0777); err != nil {
+	if err = mkdirAll(preparePath(slashpath.Dir(filePath)), 0777); err != nil {
 		// File path cannot be verified since one of the parents is a file.
 		if isSysErrNotDir(err) {
 			return errFileAccessDenied
@@ -609,8 +618,13 @@ func (s *posix) AppendFile(volume, path string, buf []byte) (err error) {
 	// Close upon return.
 	defer w.Close()
 
+	bufp := s.pool.Get().(*[]byte)
+
+	// Reuse buffer.
+	defer s.pool.Put(bufp)
+
 	// Return io.Copy
-	_, err = io.Copy(w, bytes.NewReader(buf))
+	_, err = io.CopyBuffer(w, bytes.NewReader(buf), *bufp)
 	return err
 }
 
