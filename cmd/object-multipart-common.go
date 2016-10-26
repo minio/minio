@@ -35,6 +35,7 @@ type uploadInfo struct {
 type uploadsV1 struct {
 	Version string       `json:"version"`   // Version of the current `uploads.json`
 	Format  string       `json:"format"`    // Format of the current `uploads.json`
+	GenID   int64        `json:"GenId"`     // A generation id to identify latest written file.
 	Uploads []uploadInfo `json:"uploadIds"` // Captures all the upload ids for a given object.
 }
 
@@ -47,13 +48,15 @@ func (t byInitiatedTime) Less(i, j int) bool {
 	return t[i].Initiated.Before(t[j].Initiated)
 }
 
-// AddUploadID - adds a new upload id in order of its initiated time.
+// AddUploadID - adds a new upload id in order of its initiated
+// time. Also increments the Generation ID.
 func (u *uploadsV1) AddUploadID(uploadID string, initiated time.Time) {
 	u.Uploads = append(u.Uploads, uploadInfo{
 		UploadID:  uploadID,
 		Initiated: initiated,
 	})
 	sort.Sort(byInitiatedTime(u.Uploads))
+	u.GenID++
 }
 
 // Index - returns the index of matching the upload id.
@@ -64,6 +67,16 @@ func (u uploadsV1) Index(uploadID string) int {
 		}
 	}
 	return -1
+}
+
+// RemoveUploadIDAtIndex - removes upload ID at given index. Also
+// increments Generation ID.
+func (u uploadsV1) RemoveUploadIDAtIndex(idx int) {
+	// we ignore invalid index
+	if len(u.Uploads) > idx {
+		u.Uploads = append(u.Uploads[:idx], u.Uploads[idx+1:]...)
+		u.GenID++
+	}
 }
 
 // readUploadsJSON - get all the saved uploads JSON.
@@ -89,6 +102,7 @@ func newUploadsV1(format string) uploadsV1 {
 	uploadIDs := uploadsV1{}
 	uploadIDs.Version = "1.0.0" // Should follow semantic versioning.
 	uploadIDs.Format = format
+	uploadIDs.GenID = 0
 	return uploadIDs
 }
 

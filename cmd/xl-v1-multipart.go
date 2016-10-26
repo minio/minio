@@ -282,7 +282,8 @@ func (xl xlObjects) newMultipartUpload(bucket string, object string, meta map[st
 	// get a random ID for lock instrumentation.
 	opsID := getOpsID()
 
-	// This lock needs to be held for any changes to the directory contents of ".minio.sys/multipart/object/"
+	// This lock needs to be held for any changes to the directory
+	// contents of ".minio.sys/multipart/bucket/object/"
 	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object), opsID)
 	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object), opsID)
 
@@ -305,7 +306,7 @@ func (xl xlObjects) newMultipartUpload(bucket string, object string, meta map[st
 	}
 
 	initiated := time.Now().UTC()
-	// Create or update 'uploads.json'
+	// Create or update 'uploads.json' with new uploadID
 	if err := xl.writeUploadJSON(bucket, object, uploadID, initiated); err != nil {
 		return "", err
 	}
@@ -832,19 +833,34 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	// If we have successfully read `uploads.json`, then we proceed to
 	// purge or update `uploads.json`.
 	uploadIDIdx := uploadsJSON.Index(uploadID)
-	if uploadIDIdx != -1 {
-		uploadsJSON.Uploads = append(uploadsJSON.Uploads[:uploadIDIdx], uploadsJSON.Uploads[uploadIDIdx+1:]...)
+	if uploadIDIdx == -1 {
+		// This should never actually happen. But we can
+		// return at this point - the upload Id we wanted to
+		// delete is not present, so we log and exit.
+		err = fmt.Errorf(
+			"Unable to delete uploadID %s from uploads.json for %s/%s",
+			uploadID, bucket, object,
+		)
+		errorIf(err, "WARNING: Possible bug or inconsistency found in CompleteMultipartUpload")
+		// Since we completed multipart operation we
+		// nevertheless return success to the client.
+		return s3MD5, nil
 	}
-	if len(uploadsJSON.Uploads) > 0 {
+
+	// delete the found entry
+	uploadsJSON.RemoveUploadIDAtIndex(uploadIDIdx)
+	// write updated uploads.json. delete if empty.
+	if len(uploadsJSON.Uploads) == 0 {
+		// No more pending uploads for the object, proceed to
+		// delete object completely from
+		// '.minio.sys/multipart'.
+		if err = xl.deleteObject(minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object)); err != nil {
+			return "", toObjectErr(err, minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object))
+		}
+	} else {
 		if err = xl.updateUploadsJSON(bucket, object, uploadsJSON); err != nil {
 			return "", toObjectErr(err, minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object))
 		}
-		// Return success.
-		return s3MD5, nil
-	} // No more pending uploads for the object, proceed to delete
-	// object completely from '.minio.sys/multipart'.
-	if err = xl.deleteObject(minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object)); err != nil {
-		return "", toObjectErr(err, minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object))
 	}
 
 	// Return md5sum.
@@ -855,9 +871,9 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 // transaction, deletes uploadID entry from `uploads.json` and purges
 // the directory at '.minio.sys/multipart/bucket/object/uploadID' holding
 // all the upload parts.
-func (xl xlObjects) abortMultipartUpload(bucket, object, uploadID string) (err error) {
+func (xl xlObjects) abortMultipartUpload(bucket, object, uploadID string) error {
 	// Cleanup all uploaded parts.
-	if err = cleanupUploadedParts(bucket, object, uploadID, xl.storageDisks...); err != nil {
+	if err := cleanupUploadedParts(bucket, object, uploadID, xl.storageDisks...); err != nil {
 		return toObjectErr(err, bucket, object)
 	}
 
@@ -873,24 +889,37 @@ func (xl xlObjects) abortMultipartUpload(bucket, object, uploadID string) (err e
 		return toObjectErr(err, bucket, object)
 	}
 	uploadIDIdx := uploadsJSON.Index(uploadID)
-	if uploadIDIdx != -1 {
-		uploadsJSON.Uploads = append(uploadsJSON.Uploads[:uploadIDIdx], uploadsJSON.Uploads[uploadIDIdx+1:]...)
-	}
-	if len(uploadsJSON.Uploads) > 0 {
-		// There are pending uploads for the same object, preserve
-		// them update 'uploads.json' in-place.
-		err = xl.updateUploadsJSON(bucket, object, uploadsJSON)
-		if err != nil {
-			return toObjectErr(err, bucket, object)
-		}
+	if uploadIDIdx == -1 {
+		// This should never actually happen. But we can
+		// return at this point - the upload Id we wanted to
+		// delete is not present, so we log and exit.
+		err = fmt.Errorf(
+			"Unable to delete uploadID %s from uploads.json for %s/%s",
+			uploadID, bucket, object,
+		)
+		errorIf(err, "WARNING: Possible bug or inconsistency found in abortMultipartUpload")
+		// Since we aborted multipart operation we
+		// nevertheless return success to the client.
 		return nil
-	} // No more pending uploads for the object, we purge the entire
-	// entry at '.minio.sys/multipart/bucket/object'.
-	if err = xl.deleteObject(minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object)); err != nil {
-		return toObjectErr(err, minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object))
 	}
 
-	// Successfully purged.
+	// delete the found entry
+	uploadsJSON.RemoveUploadIDAtIndex(uploadIDIdx)
+	// write updated uploads.json. delete if empty.
+	if len(uploadsJSON.Uploads) == 0 {
+		// No more pending uploads for the object, we purge the entire
+		// entry at '.minio.sys/multipart/bucket/object'.
+		if err = xl.deleteObject(minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object)); err != nil {
+			return toObjectErr(err, minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object))
+		}
+	} else {
+		// There are pending uploads for the same object, preserve
+		// them update 'uploads.json' in-place.
+		if err = xl.updateUploadsJSON(bucket, object, uploadsJSON); err != nil {
+			return toObjectErr(err, bucket, object)
+		}
+	}
+	// return success
 	return nil
 }
 

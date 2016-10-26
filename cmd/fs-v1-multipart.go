@@ -763,22 +763,34 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	if err != nil {
 		return "", toObjectErr(err, minioMetaBucket, object)
 	}
-	// If we have successfully read `uploads.json`, then we proceed to
-	// purge or update `uploads.json`.
+	// If we have successfully read `uploads.json`, then we
+	// proceed to purge or update `uploads.json`.
 	uploadIDIdx := uploadsJSON.Index(uploadID)
-	if uploadIDIdx != -1 {
-		uploadsJSON.Uploads = append(uploadsJSON.Uploads[:uploadIDIdx], uploadsJSON.Uploads[uploadIDIdx+1:]...)
-	}
-	if len(uploadsJSON.Uploads) > 0 {
-		if err = fs.updateUploadsJSON(bucket, object, uploadsJSON); err != nil {
-			return "", toObjectErr(err, minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object))
-		}
-		// Return success.
+	if uploadIDIdx == -1 {
+		// This should never actually happen. But we can
+		// return at this point - the upload Id we wanted to
+		// delete is not present, so we log and exit.
+		err = fmt.Errorf(
+			"Unable to delete uploadID %s from uploads.json for %s/%s",
+			uploadID, bucket, object,
+		)
+		errorIf(err, "WARNING: Possible bug or inconsistency found in CompleteMultipartUpload")
+		// Since we completed multipart operation we
+		// nevertheless return success to the client.
 		return s3MD5, nil
 	}
 
-	if err = fs.storage.DeleteFile(minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object, uploadsJSONFile)); err != nil {
-		return "", toObjectErr(traceError(err), minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object))
+	// delete the found entry
+	uploadsJSON.RemoveUploadIDAtIndex(uploadIDIdx)
+	// write updated uploads.json. delete if empty.
+	if len(uploadsJSON.Uploads) == 0 {
+		if err = fs.storage.DeleteFile(minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object, uploadsJSONFile)); err != nil {
+			return "", toObjectErr(traceError(err), minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object))
+		}
+	} else {
+		if err = fs.updateUploadsJSON(bucket, object, uploadsJSON); err != nil {
+			return "", toObjectErr(err, minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object))
+		}
 	}
 
 	// Return md5sum.
@@ -798,25 +810,41 @@ func (fs fsObjects) abortMultipartUpload(bucket, object, uploadID string) error 
 	// Validate if there are other incomplete upload-id's present for
 	// the object, if yes do not attempt to delete 'uploads.json'.
 	uploadsJSON, err := readUploadsJSON(bucket, object, fs.storage)
-	if err == nil {
-		uploadIDIdx := uploadsJSON.Index(uploadID)
-		if uploadIDIdx != -1 {
-			uploadsJSON.Uploads = append(uploadsJSON.Uploads[:uploadIDIdx], uploadsJSON.Uploads[uploadIDIdx+1:]...)
-		}
-		// There are pending uploads for the same object, preserve
-		// them update 'uploads.json' in-place.
-		if len(uploadsJSON.Uploads) > 0 {
-			err = fs.updateUploadsJSON(bucket, object, uploadsJSON)
-			if err != nil {
-				return toObjectErr(err, bucket, object)
-			}
-			return nil
-		}
-	} // No more pending uploads for the object, we purge the entire
-	// entry at '.minio.sys/multipart/bucket/object'.
-	if err = fs.storage.DeleteFile(minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object, uploadsJSONFile)); err != nil {
-		return toObjectErr(traceError(err), minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object))
+	if err != nil {
+		return toObjectErr(err, bucket, object)
 	}
+
+	// If we have successfully read `uploads.json`, then we
+	// proceed to purge or update `uploads.json`.
+	uploadIDIdx := uploadsJSON.Index(uploadID)
+	if uploadIDIdx == -1 {
+		// This should never actually happen. But we can
+		// return at this point - the upload Id we wanted to
+		// delete is not present, so we log and exit.
+		err = fmt.Errorf(
+			"Unable to delete uploadID %s from uploads.json for %s/%s",
+			uploadID, bucket, object,
+		)
+		errorIf(err, "WARNING: Possible bug or inconsistency found in CompleteMultipartUpload")
+		// Since we completed multipart operation we
+		// nevertheless return success to the client.
+		return nil
+	}
+
+	// delete the found entry
+	uploadsJSON.RemoveUploadIDAtIndex(uploadIDIdx)
+
+	// write updated uploads.json. delete if empty.
+	if len(uploadsJSON.Uploads) == 0 {
+		if err = fs.storage.DeleteFile(minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object, uploadsJSONFile)); err != nil {
+			return toObjectErr(traceError(err), bucket, object)
+		}
+	} else {
+		if err = fs.updateUploadsJSON(bucket, object, uploadsJSON); err != nil {
+			return toObjectErr(traceError(err), minioMetaBucket, object)
+		}
+	}
+	// Return success
 	return nil
 }
 
