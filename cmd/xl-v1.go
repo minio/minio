@@ -45,7 +45,7 @@ const (
 	maxErasureBlocks = 16
 
 	// Minimum erasure blocks.
-	minErasureBlocks = 4
+	minErasureBlocks = 2
 )
 
 // xlObjects - Implements XL object layer.
