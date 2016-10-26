@@ -58,8 +58,8 @@ var globalRandomSource = rand.New(&lockedRandSource{
 
 // newRetryTimer creates a timer with exponentially increasing delays
 // until the maximum retry attempts are reached.
-func newRetryTimer(unit time.Duration, cap time.Duration, jitter float64, doneCh chan struct{}) <-chan struct{} {
-	attemptCh := make(chan struct{})
+func newRetryTimer(unit time.Duration, cap time.Duration, jitter float64, doneCh chan struct{}) <-chan int {
+	attemptCh := make(chan int)
 
 	// computes the exponential backoff duration according to
 	// https://www.awsarchitectureblog.com/2015/03/backoff.html
@@ -89,7 +89,7 @@ func newRetryTimer(unit time.Duration, cap time.Duration, jitter float64, doneCh
 		for {
 			select {
 			// Attempts starts.
-			case attemptCh <- struct{}{}:
+			case attemptCh <- nextBackoff:
 				nextBackoff++
 			case <-globalWakeupCh:
 				// Reset nextBackoff to reduce the subsequent wait and re-read

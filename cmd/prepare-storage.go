@@ -196,9 +196,16 @@ func retryFormattingDisks(firstDisk bool, firstEndpoint string, storageDisks []S
 	defer close(doneCh)
 
 	// Wait on the jitter retry loop.
-	for range newRetryTimer(time.Second, time.Second*30, MaxJitter, doneCh) {
+	for retryCounter := range newRetryTimer(time.Second, time.Second*30, MaxJitter, doneCh) {
 		// Attempt to load all `format.json`.
 		formatConfigs, sErrs := loadAllFormats(storageDisks)
+		if retryCounter > 5 {
+			for i, e := range sErrs {
+				if e == errDiskNotFound {
+					console.Printf("%s still unreachable.\n", storageDisks[i])
+				}
+			}
+		}
 		// Check if this is a XL or distributed XL, anything > 1 is considered XL backend.
 		if len(formatConfigs) > 1 {
 			switch prepForInitXL(firstDisk, sErrs, len(storageDisks)) {
