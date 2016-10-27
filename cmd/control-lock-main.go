@@ -150,6 +150,16 @@ func lockControl(c *cli.Context) {
 	parsedURL, err := url.Parse(c.Args().Get(1))
 	fatalIf(err, "Unable to parse URL.")
 
+	accessKey := serverConfig.GetCredential().AccessKeyID
+	secretKey := serverConfig.GetCredential().SecretAccessKey
+	// Username and password specified in URL will override prior configuration
+	if parsedURL.User != nil {
+		accessKey = parsedURL.User.Username()
+		if key, set := parsedURL.User.Password(); set {
+			secretKey = key
+		}
+	}
+
 	// Parse older than string.
 	olderThanStr := c.String("older-than")
 	olderThan, err := time.ParseDuration(olderThanStr)
@@ -162,8 +172,8 @@ func lockControl(c *cli.Context) {
 	recursive := c.Bool("recursive")
 
 	authCfg := &authConfig{
-		accessKey:   serverConfig.GetCredential().AccessKeyID,
-		secretKey:   serverConfig.GetCredential().SecretAccessKey,
+		accessKey:   accessKey,
+		secretKey:   secretKey,
 		secureConn:  parsedURL.Scheme == "https",
 		address:     parsedURL.Host,
 		path:        path.Join(reservedBucket, controlPath),
