@@ -379,11 +379,13 @@ func AddBucketListenerConfig(bucket string, lcfg *listenerConfig, objAPI ObjectL
 	// Release lock after notifying peers
 	defer nsMutex.Unlock(bucket, "", opsID)
 
-	// update persistent config
-	err := persistListenerConfig(bucket, listenerCfgs, objAPI)
-	if err != nil {
-		errorIf(err, "Error persisting listener config when adding a listener.")
-		return err
+	// update persistent config if dist XL
+	if globalS3Peers.isDistXL {
+		err := persistListenerConfig(bucket, listenerCfgs, objAPI)
+		if err != nil {
+			errorIf(err, "Error persisting listener config when adding a listener.")
+			return err
+		}
 	}
 
 	// persistence success - now update in-memory globals on all
@@ -419,11 +421,13 @@ func RemoveBucketListenerConfig(bucket string, lcfg *listenerConfig, objAPI Obje
 	// Release lock after notifying peers
 	defer nsMutex.Unlock(bucket, "", opsID)
 
-	// update persistent config
-	err := persistListenerConfig(bucket, updatedLcfgs, objAPI)
-	if err != nil {
-		errorIf(err, "Error persisting listener config when removing a listener.")
-		return
+	// update persistent config if dist XL
+	if globalS3Peers.isDistXL {
+		err := persistListenerConfig(bucket, updatedLcfgs, objAPI)
+		if err != nil {
+			errorIf(err, "Error persisting listener config when removing a listener.")
+			return
+		}
 	}
 
 	// persistence success - now update in-memory globals on all

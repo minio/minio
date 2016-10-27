@@ -32,6 +32,9 @@ type s3Peers struct {
 
 	mutex *sync.RWMutex
 
+	// Is single-node?
+	isDistXL bool
+
 	// Slice of all peer addresses (in `host:port` format).
 	peers []string
 }
@@ -53,6 +56,9 @@ func initGlobalS3Peers(eps []storageEndPoint) {
 
 	// Save new peers
 	globalS3Peers.peers = peers
+
+	// store if this is a distributed setup or not.
+	globalS3Peers.isDistXL = len(globalS3Peers.peers) > 1
 }
 
 func (s3p *s3Peers) GetPeers() []string {

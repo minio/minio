@@ -291,6 +291,11 @@ func TestInitEventNotifier(t *testing.T) {
 		t.Fatal("Unexpected error:", err)
 	}
 
+	// needed to load listener config from disk for testing (in
+	// single peer mode, the listener config is ingored, but here
+	// we want to test the loading from disk too.)
+	globalS3Peers.isDistXL = true
+
 	// test event notifier init
 	if err := initEventNotifier(obj); err != nil {
 		t.Fatal("Unexpected error:", err)
@@ -360,6 +365,11 @@ func TestListenBucketNotification(t *testing.T) {
 	if err := persistListenerConfig(bucketName, lcfgs, obj); err != nil {
 		t.Fatalf("Test Setup error: %v", err)
 	}
+
+	// needed to load listener config from disk for testing (in
+	// single peer mode, the listener config is ingored, but here
+	// we want to test the loading from disk too.)
+	globalS3Peers.isDistXL = true
 
 	// Init event notifier
 	if err := initEventNotifier(obj); err != nil {
