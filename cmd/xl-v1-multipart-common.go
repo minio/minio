@@ -87,22 +87,55 @@ func (xl xlObjects) updateUploadsJSON(bucket, object string, uploadsJSON uploads
 	return nil
 }
 
+// TODO: This needs to read using quorum
 // Reads uploads.json from any of the load balanced disks.
+// Reads uploads.json with quorum
 func (xl xlObjects) readUploadsJSON(bucket, object string) (uploadsJSON uploadsV1, err error) {
-	for _, disk := range xl.getLoadBalancedDisks() {
+	// get disks
+	diskPermutation := xl.getLoadBalancedDisks()
+	// init arrays to store errors and responses
+	errs := make([]error, len(diskPermutation))
+	uploadResp := make([]uploadsV1, len(diskPermutation))
+
+	// read uploads.json on all disks in parallel
+	var wg sync.WaitGroup
+	for idx, disk := range diskPermutation {
 		if disk == nil {
+			errs[idx] = traceError(errDiskNotFound)
 			continue
 		}
-		uploadsJSON, err = readUploadsJSON(bucket, object, disk)
-		if err == nil {
-			return uploadsJSON, nil
-		}
-		if isErrIgnored(err, objMetadataOpIgnoredErrs) {
-			continue
-		}
-		break
+		wg.Add(1)
+		// read all disks in parallel
+		go func(index int, disk StorageAPI) {
+			defer wg.Done()
+			// read the disk
+			resp, err := readUploadsJSON(bucket, object, disk)
+			// assign into response and error arrays
+			uploadResp[index], errs[index] = resp, traceError(err)
+		}(idx, disk)
 	}
-	return uploadsV1{}, err
+
+	// Wait for reads to complete
+	wg.Wait()
+
+	// find the uploadsJSON with the "quorum" number of generation
+	// id occurrences
+	genIDCount := make(map[int64]int)
+	for i := 0; i < len(uploadResp); i++ {
+		if errs[i] != nil {
+			continue
+		}
+		// update the seen generation ID counter
+		gID := uploadResp[i].GenID
+		genIDCount[gID]++
+		// is the current gen-id "quorum" seen?
+		if genIDCount[gID] >= xl.readQuorum {
+			return uploadResp[i], nil
+		}
+	}
+
+	// Return no quorum error.
+	return uploadsV1{}, errXLReadQuorum
 }
 
 // writeUploadJSON - create `uploads.json` or update it with new uploadID.
