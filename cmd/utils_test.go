@@ -18,7 +18,9 @@ package cmd
 
 import (
 	"fmt"
+	"net"
 	"net/http"
+	"net/url"
 	"reflect"
 	"runtime"
 	"testing"
@@ -224,7 +226,8 @@ func TestLocalAddress(t *testing.T) {
 		return
 	}
 	// need to set this to avoid stale values from other tests.
-	globalMinioPort = 9000
+	globalMinioPort = "9000"
+	globalMinioHost = ""
 	testCases := []struct {
 		srvCmdConfig serverCmdConfig
 		localAddr    string
@@ -233,39 +236,64 @@ func TestLocalAddress(t *testing.T) {
 		{
 			srvCmdConfig: serverCmdConfig{
 				isDistXL: true,
-				endPoints: []storageEndPoint{
-					{"localhost", 9000, "/mnt/disk1"},
-					{"1.1.1.2", 9000, "/mnt/disk2"},
-					{"1.1.2.1", 9000, "/mnt/disk3"},
-					{"1.1.2.2", 9000, "/mnt/disk4"},
-				},
+				endpoints: []*url.URL{{
+					Scheme: "http",
+					Host:   "localhost:9000",
+					Path:   "/mnt/disk1",
+				}, {
+					Scheme: "http",
+					Host:   "1.1.1.2:9000",
+					Path:   "/mnt/disk2",
+				}, {
+					Scheme: "http",
+					Host:   "1.1.2.1:9000",
+					Path:   "/mnt/disk3",
+				}, {
+					Scheme: "http",
+					Host:   "1.1.2.2:9000",
+					Path:   "/mnt/disk4",
+				}},
 			},
-			localAddr: fmt.Sprintf("localhost:%d", globalMinioPort),
+			localAddr: net.JoinHostPort("localhost", globalMinioPort),
 		},
 		// Test 2 - local address is everything.
 		{
 			srvCmdConfig: serverCmdConfig{
-				serverAddr: fmt.Sprintf(":%d", globalMinioPort),
+				serverAddr: net.JoinHostPort("", globalMinioPort),
 				isDistXL:   false,
-				endPoints: []storageEndPoint{
-					{path: "/mnt/disk1"},
-					{path: "/mnt/disk2"},
-					{path: "/mnt/disk3"},
-					{path: "/mnt/disk4"},
-				},
+				endpoints: []*url.URL{{
+					Path: "/mnt/disk1",
+				}, {
+					Path: "/mnt/disk2",
+				}, {
+					Path: "/mnt/disk3",
+				}, {
+					Path: "/mnt/disk4",
+				}},
 			},
-			localAddr: fmt.Sprintf(":%d", globalMinioPort),
+			localAddr: net.JoinHostPort("", globalMinioPort),
 		},
 		// Test 3 - local address is not found.
 		{
 			srvCmdConfig: serverCmdConfig{
 				isDistXL: true,
-				endPoints: []storageEndPoint{
-					{"1.1.1.1", 9000, "/mnt/disk1"},
-					{"1.1.1.2", 9000, "/mnt/disk2"},
-					{"1.1.2.1", 9000, "/mnt/disk3"},
-					{"1.1.2.2", 9000, "/mnt/disk4"},
-				},
+				endpoints: []*url.URL{{
+					Scheme: "http",
+					Host:   "1.1.1.1:9000",
+					Path:   "/mnt/disk2",
+				}, {
+					Scheme: "http",
+					Host:   "1.1.1.2:9000",
+					Path:   "/mnt/disk2",
+				}, {
+					Scheme: "http",
+					Host:   "1.1.2.1:9000",
+					Path:   "/mnt/disk3",
+				}, {
+					Scheme: "http",
+					Host:   "1.1.2.2:9000",
+					Path:   "/mnt/disk4",
+				}},
 			},
 			localAddr: "",
 		},
@@ -276,12 +304,15 @@ func TestLocalAddress(t *testing.T) {
 			srvCmdConfig: serverCmdConfig{
 				serverAddr: "play.minio.io:9000",
 				isDistXL:   false,
-				endPoints: []storageEndPoint{
-					{path: "/mnt/disk1"},
-					{path: "/mnt/disk2"},
-					{path: "/mnt/disk3"},
-					{path: "/mnt/disk4"},
-				},
+				endpoints: []*url.URL{{
+					Path: "/mnt/disk1",
+				}, {
+					Path: "/mnt/disk2",
+				}, {
+					Path: "/mnt/disk3",
+				}, {
+					Path: "/mnt/disk4",
+				}},
 			},
 			localAddr: "play.minio.io:9000",
 		},

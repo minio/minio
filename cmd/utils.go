@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 
@@ -70,24 +71,23 @@ func checkDuplicateStrings(list []string) error {
 }
 
 // checkDuplicates - function to validate if there are duplicates in a slice of endPoints.
-func checkDuplicateEndPoints(list []storageEndPoint) error {
+func checkDuplicateEndpoints(endpoints []*url.URL) error {
 	var strs []string
-	for _, ep := range list {
+	for _, ep := range endpoints {
 		strs = append(strs, ep.String())
 	}
 	return checkDuplicateStrings(strs)
 }
 
-// Find local node through the command line arguments. Returns in
-// `host:port` format.
+// Find local node through the command line arguments. Returns in `host:port` format.
 func getLocalAddress(srvCmdConfig serverCmdConfig) string {
 	if !srvCmdConfig.isDistXL {
 		return srvCmdConfig.serverAddr
 	}
-	for _, ep := range srvCmdConfig.endPoints {
-		// Validates if remote disk is local.
+	for _, ep := range srvCmdConfig.endpoints {
+		// Validates if remote endpoint is local.
 		if isLocalStorage(ep) {
-			return fmt.Sprintf("%s:%d", ep.host, ep.port)
+			return ep.Host
 		}
 	}
 	return ""
@@ -138,6 +138,16 @@ func isMaxPartID(partID int) bool {
 func contains(stringList []string, element string) bool {
 	for _, e := range stringList {
 		if e == element {
+			return true
+		}
+	}
+	return false
+}
+
+// Contains endpoint returns true if endpoint found in the list of input endpoints.
+func containsEndpoint(endpoints []*url.URL, endpoint *url.URL) bool {
+	for _, ep := range endpoints {
+		if *ep == *endpoint {
 			return true
 		}
 	}

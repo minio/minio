@@ -31,7 +31,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -153,7 +152,7 @@ func TestServerCloseBlocking(t *testing.T) {
 
 func TestListenAndServePlain(t *testing.T) {
 	wait := make(chan struct{})
-	addr := "127.0.0.1:" + strconv.Itoa(getFreePort())
+	addr := net.JoinHostPort("127.0.0.1", getFreePort())
 	errc := make(chan error)
 	once := &sync.Once{}
 
@@ -203,7 +202,7 @@ func TestListenAndServePlain(t *testing.T) {
 
 func TestListenAndServeTLS(t *testing.T) {
 	wait := make(chan struct{})
-	addr := "127.0.0.1:" + strconv.Itoa(getFreePort())
+	addr := net.JoinHostPort("127.0.0.1", getFreePort())
 	errc := make(chan error)
 	once := &sync.Once{}
 

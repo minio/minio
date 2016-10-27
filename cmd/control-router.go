@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"fmt"
 	"net/rpc"
 	"path"
 
@@ -36,24 +35,21 @@ func initRemoteControlClients(srvCmdConfig serverCmdConfig) []*AuthRPCClient {
 	}
 	// Initialize auth rpc clients.
 	var remoteControlClnts []*AuthRPCClient
-	localMap := make(map[storageEndPoint]int)
-	for _, ep := range srvCmdConfig.endPoints {
-		// Set path to "" so that it is not used for filtering the
-		// unique entries.
-		ep.path = ""
+	localMap := make(map[string]int)
+	for _, ep := range srvCmdConfig.endpoints {
 		// Validates if remote disk is local.
 		if isLocalStorage(ep) {
 			continue
 		}
-		if localMap[ep] == 1 {
+		if localMap[ep.Host] == 1 {
 			continue
 		}
-		localMap[ep]++
+		localMap[ep.Host]++
 		remoteControlClnts = append(remoteControlClnts, newAuthClient(&authConfig{
 			accessKey:   serverConfig.GetCredential().AccessKeyID,
 			secretKey:   serverConfig.GetCredential().SecretAccessKey,
 			secureConn:  isSSL(),
-			address:     fmt.Sprintf("%s:%d", ep.host, ep.port),
+			address:     ep.Host,
 			path:        path.Join(reservedBucket, controlPath),
 			loginMethod: "Control.LoginHandler",
 		}))

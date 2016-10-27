@@ -16,7 +16,10 @@
 
 package cmd
 
-import "testing"
+import (
+	"net/url"
+	"testing"
+)
 
 // Tests initialization of remote controller clients.
 func TestInitRemoteControlClients(t *testing.T) {
@@ -41,11 +44,19 @@ func TestInitRemoteControlClients(t *testing.T) {
 		{
 			srvCmdConfig: serverCmdConfig{
 				isDistXL: true,
-				endPoints: []storageEndPoint{
-					{"10.1.10.1", 9000, "/mnt/disk1"},
-					{"10.1.10.1", 9000, "/mnt/disk2"},
-					{"10.1.10.2", 9000, "/mnt/disk1"},
-					{"10.1.10.2", 9000, "/mnt/disk2"},
+				endpoints: []*url.URL{{
+					Scheme: "http",
+					Host:   "10.1.10.1:9000",
+					Path:   "/mnt/disk1",
+				}, {
+					Scheme: "http",
+					Host:   "10.1.10.1:9000", Path: "/mnt/disk2",
+				}, {
+					Scheme: "http",
+					Host:   "10.1.10.2:9000", Path: "/mnt/disk1",
+				}, {
+					Scheme: "http",
+					Host:   "10.1.10.2:9000", Path: "/mnt/disk2"},
 				},
 			},
 			totalClients: 2,
@@ -54,11 +65,18 @@ func TestInitRemoteControlClients(t *testing.T) {
 		{
 			srvCmdConfig: serverCmdConfig{
 				isDistXL: true,
-				endPoints: []storageEndPoint{
-					{"10.1.10.1", 9000, "/mnt/disk1"},
-					{"10.1.10.2", 9000, "/mnt/disk2"},
-					{"10.1.10.3", 9000, "/mnt/disk3"},
-					{"10.1.10.4", 9000, "/mnt/disk4"},
+				endpoints: []*url.URL{{
+					Scheme: "http",
+					Host:   "10.1.10.1:9000", Path: "/mnt/disk1",
+				}, {
+					Scheme: "http",
+					Host:   "10.1.10.2:9000", Path: "/mnt/disk2",
+				}, {
+					Scheme: "http",
+					Host:   "10.1.10.3:9000", Path: "/mnt/disk1",
+				}, {
+					Scheme: "http",
+					Host:   "10.1.10.4:9000", Path: "/mnt/disk2"},
 				},
 			},
 			totalClients: 4,

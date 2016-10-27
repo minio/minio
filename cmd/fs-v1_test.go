@@ -40,7 +40,7 @@ func TestNewFS(t *testing.T) {
 		disks = append(disks, xlDisk)
 	}
 
-	endpoints, err := parseStorageEndPoints([]string{disk}, 0)
+	endpoints, err := parseStorageEndpoints([]string{disk})
 	if err != nil {
 		t.Fatal("Uexpected error: ", err)
 	}
@@ -50,7 +50,7 @@ func TestNewFS(t *testing.T) {
 		t.Fatal("Uexpected error: ", err)
 	}
 
-	endpoints, err = parseStorageEndPoints(disks, 0)
+	endpoints, err = parseStorageEndpoints(disks)
 	if err != nil {
 		t.Fatal("Uexpected error: ", err)
 	}
@@ -61,7 +61,7 @@ func TestNewFS(t *testing.T) {
 	}
 
 	// Initializes all disks with XL
-	err = waitForFormatDisks(true, "", xlStorageDisks)
+	err = waitForFormatDisks(true, endpoints[0], xlStorageDisks)
 	if err != nil {
 		t.Fatalf("Unable to format XL %s", err)
 	}
@@ -79,7 +79,7 @@ func TestNewFS(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		if err = waitForFormatDisks(true, "", []StorageAPI{testCase.disk}); err != testCase.expectedErr {
+		if err = waitForFormatDisks(true, endpoints[0], []StorageAPI{testCase.disk}); err != testCase.expectedErr {
 			t.Errorf("expected: %s, got :%s", testCase.expectedErr, err)
 		}
 	}

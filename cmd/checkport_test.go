@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"fmt"
 	"net"
 	"runtime"
 	"testing"
@@ -26,7 +25,7 @@ import (
 // Tests for port availability logic written for server startup sequence.
 func TestCheckPortAvailability(t *testing.T) {
 	tests := []struct {
-		port int
+		port string
 	}{
 		{getFreePort()},
 		{getFreePort()},
@@ -35,11 +34,11 @@ func TestCheckPortAvailability(t *testing.T) {
 		// This test should pass if the ports are available
 		err := checkPortAvailability(test.port)
 		if err != nil {
-			t.Fatalf("checkPortAvailability test failed for port: %d. Error: %v", test.port, err)
+			t.Fatalf("checkPortAvailability test failed for port: %s. Error: %v", test.port, err)
 		}
 
 		// Now use the ports and check again
-		ln, err := net.Listen("tcp", fmt.Sprintf(":%d", test.port))
+		ln, err := net.Listen("tcp", net.JoinHostPort("", test.port))
 		if err != nil {
 			t.Fail()
 		}
@@ -49,7 +48,7 @@ func TestCheckPortAvailability(t *testing.T) {
 
 		// Skip if the os is windows due to https://github.com/golang/go/issues/7598
 		if err == nil && runtime.GOOS != "windows" {
-			t.Fatalf("checkPortAvailability should fail for port: %d. Error: %v", test.port, err)
+			t.Fatalf("checkPortAvailability should fail for port: %s. Error: %v", test.port, err)
 		}
 	}
 }

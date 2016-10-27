@@ -41,12 +41,11 @@ const (
 
 // posix - implements StorageAPI interface.
 type posix struct {
-	ioErrCount       int32 // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
-	diskPath         string
-	suppliedDiskPath string
-	minFreeSpace     int64
-	minFreeInodes    int64
-	pool             sync.Pool
+	ioErrCount    int32 // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
+	diskPath      string
+	minFreeSpace  int64
+	minFreeInodes int64
+	pool          sync.Pool
 }
 
 var errFaultyDisk = errors.New("Faulty disk")
@@ -100,22 +99,19 @@ func isDirEmpty(dirname string) bool {
 }
 
 // Initialize a new storage disk.
-func newPosix(diskPath string) (StorageAPI, error) {
-	if diskPath == "" {
+func newPosix(path string) (StorageAPI, error) {
+	if path == "" {
 		return nil, errInvalidArgument
 	}
-	suppliedDiskPath := diskPath
-	var err error
 	// Disallow relative paths, figure out absolute paths.
-	diskPath, err = filepath.Abs(diskPath)
+	diskPath, err := filepath.Abs(path)
 	if err != nil {
 		return nil, err
 	}
 	fs := &posix{
-		suppliedDiskPath: suppliedDiskPath,
-		diskPath:         diskPath,
-		minFreeSpace:     fsMinFreeSpace,
-		minFreeInodes:    fsMinFreeInodesPercent,
+		diskPath:      diskPath,
+		minFreeSpace:  fsMinFreeSpace,
+		minFreeInodes: fsMinFreeInodesPercent,
 		// 1MiB buffer pool for posix internal operations.
 		pool: sync.Pool{
 			New: func() interface{} {
@@ -182,7 +178,7 @@ func (s *posix) checkDiskFree() (err error) {
 
 // Implements stringer compatible interface.
 func (s *posix) String() string {
-	return s.suppliedDiskPath
+	return s.diskPath
 }
 
 // DiskInfo provides current information about disk space usage,

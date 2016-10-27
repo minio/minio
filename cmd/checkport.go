@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"fmt"
 	"net"
 	"os"
 	"syscall"
@@ -32,10 +31,16 @@ import (
 // This causes confusion on Mac OSX that minio server is not reachable
 // on 127.0.0.1 even though minio server is running. So before we start
 // the minio server we make sure that the port is free on each tcp network.
-func checkPortAvailability(port int) error {
+//
+// Port is string on purpose here.
+// https://github.com/golang/go/issues/16142#issuecomment-245912773
+//
+// "Keep in mind that ports in Go are strings: https://play.golang.org/p/zk2WEri_E9"
+//                 - @bradfitz
+func checkPortAvailability(portStr string) error {
 	network := [3]string{"tcp", "tcp4", "tcp6"}
 	for _, n := range network {
-		l, err := net.Listen(n, fmt.Sprintf(":%d", port))
+		l, err := net.Listen(n, net.JoinHostPort("", portStr))
 		if err != nil {
 			if isAddrInUse(err) {
 				// Return error if another process is listening on the

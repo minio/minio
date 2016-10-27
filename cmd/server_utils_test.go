@@ -101,7 +101,7 @@ func calculateStreamContentLength(dataLen, chunkSize int64) int64 {
 }
 
 // Ask the kernel for a free open port.
-func getFreePort() int {
+func getFreePort() string {
 	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
 	if err != nil {
 		panic(err)
@@ -112,7 +112,7 @@ func getFreePort() int {
 		panic(err)
 	}
 	defer l.Close()
-	return l.Addr().(*net.TCPAddr).Port
+	return fmt.Sprintf("%d", l.Addr().(*net.TCPAddr).Port)
 }
 
 func verifyError(c *C, response *http.Response, code, description string, statusCode int) {

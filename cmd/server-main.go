@@ -17,17 +17,14 @@
 package cmd
 
 import (
-	"errors"
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
-
-	"regexp"
 
 	"github.com/minio/cli"
 )
@@ -90,126 +87,44 @@ EXAMPLES:
           /mnt/export3/ /mnt/export4/ /mnt/export5/ /mnt/export6/ /mnt/export7/ \
 	  /mnt/export8/ /mnt/export9/ /mnt/export10/ /mnt/export11/ /mnt/export12/
 
-  6. Start minio server on a 4 node distributed setup. Type the following command on all the 4 nodes.
+  6. Start minio server for a 4 node distributed setup. Type the following command on all the 4 nodes exactly.
       $ export MINIO_ACCESS_KEY=minio
       $ export MINIO_SECRET_KEY=miniostorage
-      $ minio {{.Name}} 192.168.1.11:/mnt/export/ 192.168.1.12:/mnt/export/ \
-          192.168.1.13:/mnt/export/ 192.168.1.14:/mnt/export/
+      $ minio {{.Name}} http://192.168.1.11/mnt/export/ http://192.168.1.12/mnt/export/ \
+          http://192.168.1.13/mnt/export/ http://192.168.1.14/mnt/export/
+
+  7. Start minio server on a 4 node distributed setup. Type the following command on all the 4 nodes exactly.
+      $ minio {{.Name}} http://minio:miniostorage@192.168.1.11/mnt/export/ \
+          http://minio:miniostorage@192.168.1.12/mnt/export/ \
+          http://minio:miniostorage@192.168.1.13/mnt/export/ \
+          http://minio:miniostorage@192.168.1.14/mnt/export/
 
 `,
 }
 
 type serverCmdConfig struct {
 	serverAddr       string
-	endPoints        []storageEndPoint
-	ignoredEndPoints []storageEndPoint
+	endpoints        []*url.URL
+	ignoredEndpoints []*url.URL
 	isDistXL         bool // True only if its distributed XL.
 	storageDisks     []StorageAPI
 }
 
-// End point is specified in the command line as host:port:path or host:path or path
-// host:port:path or host:path - for distributed XL. Default port is 9000.
-// just path - for single node XL or FS.
-type storageEndPoint struct {
-	host string // Will be empty for single node XL and FS
-	port int    // Will be valid for distributed XL
-	path string // Will be valid for all configs
-}
-
-// Returns string form.
-func (ep storageEndPoint) String() string {
-	var str []string
-	if ep.host != "" {
-		str = append(str, ep.host)
-	}
-	if ep.port != 0 {
-		str = append(str, strconv.Itoa(ep.port))
-	}
-	if ep.path != "" {
-		str = append(str, ep.path)
-	}
-	return strings.Join(str, ":")
-}
-
-// Returns if ep is present in the eps list.
-func (ep storageEndPoint) presentIn(eps []storageEndPoint) bool {
-	for _, entry := range eps {
-		if entry == ep {
-			return true
-		}
-	}
-	return false
-}
-
-// Parse end-point (of the form host:port:path or host:path or path)
-func parseStorageEndPoint(ep string, defaultPort int) (storageEndPoint, error) {
-	if runtime.GOOS == "windows" {
-		// Try to match path, ex. C:\export or export
-		matched, err := regexp.MatchString(`^([a-zA-Z]:\\[^:]+|[^:]+)$`, ep)
-		if err != nil {
-			return storageEndPoint{}, err
-		}
-		if matched {
-			return storageEndPoint{path: ep}, nil
-		}
-
-		// Try to match host:path ex. 127.0.0.1:C:\export
-		re, err := regexp.Compile(`^([^:]+):([a-zA-Z]:\\[^:]+)$`)
-		if err != nil {
-			return storageEndPoint{}, err
-		}
-		result := re.FindStringSubmatch(ep)
-		if len(result) != 0 {
-			return storageEndPoint{host: result[1], port: defaultPort, path: result[2]}, nil
-		}
-
-		// Try to match host:port:path ex. 127.0.0.1:443:C:\export
-		re, err = regexp.Compile(`^([^:]+):([0-9]+):([a-zA-Z]:\\[^:]+)$`)
-		if err != nil {
-			return storageEndPoint{}, err
-		}
-		result = re.FindStringSubmatch(ep)
-		if len(result) != 0 {
-			portInt, err := strconv.Atoi(result[2])
-			if err != nil {
-				return storageEndPoint{}, err
-			}
-			return storageEndPoint{host: result[1], port: portInt, path: result[3]}, nil
-		}
-		return storageEndPoint{}, errors.New("Unable to parse endpoint " + ep)
-	}
-	// For *nix OSes
-	parts := strings.Split(ep, ":")
-	var parsedep storageEndPoint
-	switch len(parts) {
-	case 1:
-		parsedep = storageEndPoint{path: parts[0]}
-	case 2:
-		parsedep = storageEndPoint{host: parts[0], port: defaultPort, path: parts[1]}
-	case 3:
-		port, err := strconv.Atoi(parts[1])
-		if err != nil {
-			return storageEndPoint{}, err
-		}
-		parsedep = storageEndPoint{host: parts[0], port: port, path: parts[2]}
-	default:
-		return storageEndPoint{}, errors.New("Unable to parse " + ep)
-	}
-	return parsedep, nil
-}
-
-// Parse an array of end-points (passed on the command line)
-func parseStorageEndPoints(eps []string, defaultPort int) (endpoints []storageEndPoint, err error) {
+// Parse an array of end-points (from the command line)
+func parseStorageEndpoints(eps []string) (endpoints []*url.URL, err error) {
 	for _, ep := range eps {
 		if ep == "" {
-			continue
+			return nil, errInvalidArgument
 		}
-		var endpoint storageEndPoint
-		endpoint, err = parseStorageEndPoint(ep, defaultPort)
+		var u *url.URL
+		u, err = url.Parse(ep)
 		if err != nil {
 			return nil, err
 		}
-		endpoints = append(endpoints, endpoint)
+		if u.Host != "" && globalMinioHost == "" {
+			u.Host = net.JoinHostPort(u.Host, globalMinioPort)
+		}
+		endpoints = append(endpoints, u)
 	}
 	return endpoints, nil
 }
@@ -305,7 +220,7 @@ func initServerConfig(c *cli.Context) {
 }
 
 // Validate if input disks are sufficient for initializing XL.
-func checkSufficientDisks(eps []storageEndPoint) error {
+func checkSufficientDisks(eps []*url.URL) error {
 	// Verify total number of disks.
 	total := len(eps)
 	if total > maxErasureBlocks {
@@ -331,30 +246,31 @@ func checkSufficientDisks(eps []storageEndPoint) error {
 }
 
 // Validate input disks.
-func validateDisks(endPoints []storageEndPoint, ignoredEndPoints []storageEndPoint) []StorageAPI {
-	isXL := len(endPoints) > 1
+func validateDisks(endpoints []*url.URL, ignoredEndpoints []*url.URL) []StorageAPI {
+	isXL := len(endpoints) > 1
 	if isXL {
 		// Validate if input disks have duplicates in them.
-		err := checkDuplicateEndPoints(endPoints)
+		err := checkDuplicateEndpoints(endpoints)
 		fatalIf(err, "Invalid disk arguments for server.")
 
 		// Validate if input disks are sufficient for erasure coded setup.
-		err = checkSufficientDisks(endPoints)
-		fatalIf(err, "Invalid disk arguments for server.")
+		err = checkSufficientDisks(endpoints)
+		fatalIf(err, "Invalid disk arguments for server. %#v", endpoints)
 	}
-	storageDisks, err := initStorageDisks(endPoints, ignoredEndPoints)
+	storageDisks, err := initStorageDisks(endpoints, ignoredEndpoints)
 	fatalIf(err, "Unable to initialize storage disks.")
 	return storageDisks
 }
 
 // Returns if slice of disks is a distributed setup.
-func isDistributedSetup(eps []storageEndPoint) (isDist bool) {
-	// Port to connect to for the lock servers in a distributed setup.
+func isDistributedSetup(eps []*url.URL) (isDist bool) {
+	// Validate if one the disks is not local.
 	for _, ep := range eps {
 		if !isLocalStorage(ep) {
 			// One or more disks supplied as arguments are not
 			// attached to the local node.
 			isDist = true
+			break
 		}
 	}
 	return isDist
@@ -372,29 +288,28 @@ func serverMain(c *cli.Context) {
 	// Check if requested port is available.
 	host, portStr, err := net.SplitHostPort(serverAddr)
 	fatalIf(err, "Unable to parse %s.", serverAddr)
-
-	portInt, err := strconv.Atoi(portStr)
-	fatalIf(err, "Invalid port number.")
-
-	fatalIf(checkPortAvailability(portInt), "Port unavailable %d", portInt)
-
-	// Saves host and port in a globally accessible value.
-	globalMinioPort = portInt
 	globalMinioHost = host
 
+	// Check if requested port is available.
+	fatalIf(checkPortAvailability(portStr), "Port unavailable %s", portStr)
+	globalMinioPort = portStr
+
 	// Disks to be ignored in server init, to skip format healing.
-	ignoredDisks, err := parseStorageEndPoints(strings.Split(c.String("ignore-disks"), ","), portInt)
-	fatalIf(err, "Unable to parse storage endpoints %s", strings.Split(c.String("ignore-disks"), ","))
+	var ignoredEndpoints []*url.URL
+	if len(c.String("ignore-disks")) > 0 {
+		ignoredEndpoints, err = parseStorageEndpoints(strings.Split(c.String("ignore-disks"), ","))
+		fatalIf(err, "Unable to parse storage endpoints %s", strings.Split(c.String("ignore-disks"), ","))
+	}
 
 	// Disks to be used in server init.
-	disks, err := parseStorageEndPoints(c.Args(), portInt)
+	endpoints, err := parseStorageEndpoints(c.Args())
 	fatalIf(err, "Unable to parse storage endpoints %s", c.Args())
 
-	// Initialize server config.
-	initServerConfig(c)
-
 	// Check 'server' cli arguments.
-	storageDisks := validateDisks(disks, ignoredDisks)
+	storageDisks := validateDisks(endpoints, ignoredEndpoints)
+
+	// Check if endpoints are part of distributed setup.
+	isDistXL := isDistributedSetup(endpoints)
 
 	// Cleanup objects that weren't successfully written into the namespace.
 	fatalIf(houseKeeping(storageDisks), "Unable to purge temporary files.")
@@ -402,16 +317,28 @@ func serverMain(c *cli.Context) {
 	// If https.
 	tls := isSSL()
 
+	// Fail if SSL is not configured and ssl endpoints are provided for distributed setup.
+	if !tls && isDistXL {
+		for _, ep := range endpoints {
+			if ep.Host != "" && ep.Scheme == "https" {
+				fatalIf(errInvalidArgument, "Cannot use secure endpoints when SSL is not configured %s", ep)
+			}
+		}
+	}
+
+	// Initialize server config.
+	initServerConfig(c)
+
 	// First disk argument check if it is local.
-	firstDisk := isLocalStorage(disks[0])
+	firstDisk := isLocalStorage(endpoints[0])
 
 	// Configure server.
 	srvConfig := serverCmdConfig{
 		serverAddr:       serverAddr,
-		endPoints:        disks,
-		ignoredEndPoints: ignoredDisks,
+		endpoints:        endpoints,
+		ignoredEndpoints: ignoredEndpoints,
 		storageDisks:     storageDisks,
-		isDistXL:         isDistributedSetup(disks),
+		isDistXL:         isDistXL,
 	}
 
 	// Configure server.
@@ -419,12 +346,12 @@ func serverMain(c *cli.Context) {
 	fatalIf(err, "Unable to configure one of server's RPC services.")
 
 	// Set nodes for dsync for distributed setup.
-	if srvConfig.isDistXL {
-		fatalIf(initDsyncNodes(disks), "Unable to initialize distributed locking")
+	if isDistXL {
+		fatalIf(initDsyncNodes(endpoints), "Unable to initialize distributed locking")
 	}
 
 	// Initialize name space lock.
-	initNSLock(srvConfig.isDistXL)
+	initNSLock(isDistXL)
 
 	// Initialize a new HTTP server.
 	apiServer := NewServerMux(serverAddr, handler)
@@ -436,7 +363,7 @@ func serverMain(c *cli.Context) {
 	globalMinioAddr = getLocalAddress(srvConfig)
 
 	// Initialize S3 Peers inter-node communication
-	initGlobalS3Peers(disks)
+	initGlobalS3Peers(endpoints)
 
 	// Start server, automatically configures TLS if certs are available.
 	go func(tls bool) {
@@ -451,7 +378,7 @@ func serverMain(c *cli.Context) {
 	}(tls)
 
 	// Wait for formatting of disks.
-	err = waitForFormatDisks(firstDisk, endPoints[0], storageDisks)
+	err = waitForFormatDisks(firstDisk, endpoints[0], storageDisks)
 	fatalIf(err, "formatting storage disks failed")
 
 	// Once formatted, initialize object layer.

@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/rpc"
+	"net/url"
 	"path"
 	"sync"
 	"time"
@@ -39,7 +40,7 @@ type s3Peers struct {
 	peers []string
 }
 
-func initGlobalS3Peers(eps []storageEndPoint) {
+func initGlobalS3Peers(eps []*url.URL) {
 	// Get list of de-duplicated peers.
 	peers := getAllPeers(eps)
 
@@ -111,16 +112,17 @@ func (s3p *s3Peers) Close() error {
 }
 
 // Returns the network addresses of all Minio servers in the cluster in `host:port` format.
-func getAllPeers(eps []storageEndPoint) (peers []string) {
+func getAllPeers(eps []*url.URL) (peers []string) {
 	if eps == nil {
 		return nil
 	}
 	peers = []string{globalMinioAddr} // Starts with a default peer.
 	for _, ep := range eps {
-		// Rest of the peers configured.
-		if ep.host != "" {
-			peers = append(peers, fmt.Sprintf("%s:%d", ep.host, ep.port))
+		if ep == nil {
+			return nil
 		}
+		// Rest of the peers configured.
+		peers = append(peers, ep.Host)
 	}
 	return peers
 }

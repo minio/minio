@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"net/url"
 	"time"
 
 	"github.com/minio/mc/pkg/console"
@@ -184,7 +185,10 @@ func prepForInitXL(firstDisk bool, sErrs []error, diskCount int) InitActions {
 
 // Implements a jitter backoff loop for formatting all disks during
 // initialization of the server.
-func retryFormattingDisks(firstDisk bool, firstEndpoint string, storageDisks []StorageAPI) error {
+func retryFormattingDisks(firstDisk bool, firstEndpoint *url.URL, storageDisks []StorageAPI) error {
+	if firstEndpoint == nil {
+		return errInvalidArgument
+	}
 	if storageDisks == nil {
 		return errInvalidArgument
 	}
@@ -227,7 +231,7 @@ func retryFormattingDisks(firstDisk bool, firstEndpoint string, storageDisks []S
 				// Validate formats load before proceeding forward.
 				err := genericFormatCheck(formatConfigs, sErrs)
 				if err == nil {
-					printHealMsg(firstEndpoint, storageDisks, printOnceFn())
+					printHealMsg(firstEndpoint.String(), storageDisks, printOnceFn())
 				}
 				return err
 			case WaitForQuorum:
@@ -256,23 +260,28 @@ func retryFormattingDisks(firstDisk bool, firstEndpoint string, storageDisks []S
 }
 
 // Initialize storage disks based on input arguments.
-func initStorageDisks(endPoints, ignoredEndPoints []storageEndPoint) ([]StorageAPI, error) {
+func initStorageDisks(endpoints, ignoredEndpoints []*url.URL) ([]StorageAPI, error) {
 	// Single disk means we will use FS backend.
-	if len(endPoints) == 1 {
-		storage, err := newStorageAPI(endPoints[0])
+	if len(endpoints) == 1 {
+		if endpoints[0] == nil {
+			return nil, errInvalidArgument
+		}
+		storage, err := newStorageAPI(endpoints[0])
 		if err != nil && err != errDiskNotFound {
 			return nil, err
 		}
 		return []StorageAPI{storage}, nil
 	}
-	// Otherwise proceed with XL setup.
-	// Bootstrap disks.
-	storageDisks := make([]StorageAPI, len(endPoints))
-	for index, ep := range endPoints {
+	// Otherwise proceed with XL setup. Bootstrap disks.
+	storageDisks := make([]StorageAPI, len(endpoints))
+	for index, ep := range endpoints {
+		if ep == nil {
+			return nil, errInvalidArgument
+		}
 		// Check if disk is ignored.
 		ignored := false
-		for _, iep := range ignoredEndPoints {
-			if ep == iep {
+		for _, iep := range ignoredEndpoints {
+			if *ep == *iep {
 				ignored = true
 				break
 			}
@@ -294,7 +303,10 @@ func initStorageDisks(endPoints, ignoredEndPoints []storageEndPoint) ([]StorageA
 }
 
 // Format disks before initialization object layer.
-func waitForFormatDisks(firstDisk bool, firstEndpoint string, storageDisks []StorageAPI) (err error) {
+func waitForFormatDisks(firstDisk bool, firstEndpoint *url.URL, storageDisks []StorageAPI) (err error) {
+	if firstEndpoint == nil {
+		return errInvalidArgument
+	}
 	if storageDisks == nil {
 		return errInvalidArgument
 	}

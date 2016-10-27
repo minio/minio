@@ -56,7 +56,7 @@ var (
 	// Minio local server address (in `host:port` format)
 	globalMinioAddr = ""
 	// Minio default port, can be changed through command line.
-	globalMinioPort = 9000
+	globalMinioPort = "9000"
 	// Holds the host that was passed using --address
 	globalMinioHost = ""
 	// Peer communication struct

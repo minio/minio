@@ -62,7 +62,7 @@ func prepareFS() (ObjectLayer, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	endpoints, err := parseStorageEndPoints(fsDirs, 0)
+	endpoints, err := parseStorageEndpoints(fsDirs)
 	if err != nil {
 		return nil, "", err
 	}
@@ -80,7 +80,7 @@ func prepareXL() (ObjectLayer, []string, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	endpoints, err := parseStorageEndPoints(fsDirs, 0)
+	endpoints, err := parseStorageEndpoints(fsDirs)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -154,7 +154,7 @@ func isSameType(obj1, obj2 interface{}) bool {
 //   defer s.Stop()
 type TestServer struct {
 	Root      string
-	Disks     []storageEndPoint
+	Disks     []*url.URL
 	AccessKey string
 	SecretKey string
 	Server    *httptest.Server
@@ -182,7 +182,7 @@ func UnstartedTestServer(t TestErrHandler, instanceType string) TestServer {
 	credentials := serverConfig.GetCredential()
 
 	testServer.Root = root
-	testServer.Disks, err = parseStorageEndPoints(disks, 0)
+	testServer.Disks, err = parseStorageEndpoints(disks)
 	if err != nil {
 		t.Fatalf("Unexpected error %s", err)
 	}
@@ -195,7 +195,7 @@ func UnstartedTestServer(t TestErrHandler, instanceType string) TestServer {
 	}
 
 	srvCmdCfg := serverCmdConfig{
-		endPoints:    testServer.Disks,
+		endpoints:    testServer.Disks,
 		storageDisks: storageDisks,
 	}
 	httpHandler, err := configureServerHandler(
@@ -216,16 +216,14 @@ func UnstartedTestServer(t TestErrHandler, instanceType string) TestServer {
 	globalObjLayerMutex.Unlock()
 
 	// initialize peer rpc
-	_, portStr, err := net.SplitHostPort(srvCmdCfg.serverAddr)
+	host, port, err := net.SplitHostPort(srvCmdCfg.serverAddr)
 	if err != nil {
 		t.Fatal("Early setup error:", err)
 	}
-	globalMinioPort, err = strconv.Atoi(portStr)
-	if err != nil {
-		t.Fatal("Early setup error:", err)
-	}
+	globalMinioHost = host
+	globalMinioPort = port
 	globalMinioAddr = getLocalAddress(srvCmdCfg)
-	endpoints, err := parseStorageEndPoints(disks, 0)
+	endpoints, err := parseStorageEndpoints(disks)
 	if err != nil {
 		t.Fatal("Early setup error:", err)
 	}
@@ -331,7 +329,7 @@ func StartTestStorageRPCServer(t TestErrHandler, instanceType string, diskN int)
 	if err != nil {
 		t.Fatal("Failed to create disks for the backend")
 	}
-	endPoints, err := parseStorageEndPoints(disks, 0)
+	endpoints, err := parseStorageEndpoints(disks)
 	if err != nil {
 		t.Fatalf("%s", err)
 	}
@@ -347,13 +345,13 @@ func StartTestStorageRPCServer(t TestErrHandler, instanceType string, diskN int)
 	credentials := serverConfig.GetCredential()
 
 	testRPCServer.Root = root
-	testRPCServer.Disks = endPoints
+	testRPCServer.Disks = endpoints
 	testRPCServer.AccessKey = credentials.AccessKeyID
 	testRPCServer.SecretKey = credentials.SecretAccessKey
 
 	// Run TestServer.
 	testRPCServer.Server = httptest.NewServer(initTestStorageRPCEndPoint(serverCmdConfig{
-		endPoints: endPoints,
+		endpoints: endpoints,
 	}))
 	return testRPCServer
 }
@@ -366,7 +364,7 @@ func StartTestPeersRPCServer(t TestErrHandler, instanceType string) TestServer {
 	if err != nil {
 		t.Fatal("Failed to create disks for the backend")
 	}
-	endPoints, err := parseStorageEndPoints(disks, 0)
+	endpoints, err := parseStorageEndpoints(disks)
 	if err != nil {
 		t.Fatalf("%s", err)
 	}
@@ -382,12 +380,12 @@ func StartTestPeersRPCServer(t TestErrHandler, instanceType string) TestServer {
 	credentials := serverConfig.GetCredential()
 
 	testRPCServer.Root = root
-	testRPCServer.Disks = endPoints
+	testRPCServer.Disks = endpoints
 	testRPCServer.AccessKey = credentials.AccessKeyID
 	testRPCServer.SecretKey = credentials.SecretAccessKey
 
 	// create temporary backend for the test server.
-	objLayer, storageDisks, err := initObjectLayer(endPoints, nil)
+	objLayer, storageDisks, err := initObjectLayer(endpoints, nil)
 	if err != nil {
 		t.Fatalf("Failed obtaining Temp Backend: <ERROR> %s", err)
 	}
@@ -398,7 +396,7 @@ func StartTestPeersRPCServer(t TestErrHandler, instanceType string) TestServer {
 	globalObjLayerMutex.Unlock()
 
 	srvCfg := serverCmdConfig{
-		endPoints:    endPoints,
+		endpoints:    endpoints,
 		storageDisks: storageDisks,
 	}
 
@@ -438,7 +436,7 @@ func StartTestControlRPCServer(t TestErrHandler, instanceType string) TestServer
 	if err != nil {
 		t.Fatal("Failed to create disks for the backend")
 	}
-	endPoints, err := parseStorageEndPoints(disks, 0)
+	endpoints, err := parseStorageEndpoints(disks)
 	if err != nil {
 		t.Fatalf("%s", err)
 	}
@@ -454,12 +452,12 @@ func StartTestControlRPCServer(t TestErrHandler, instanceType string) TestServer
 	credentials := serverConfig.GetCredential()
 
 	testRPCServer.Root = root
-	testRPCServer.Disks = endPoints
+	testRPCServer.Disks = endpoints
 	testRPCServer.AccessKey = credentials.AccessKeyID
 	testRPCServer.SecretKey = credentials.SecretAccessKey
 
 	// create temporary backend for the test server.
-	objLayer, storageDisks, err := initObjectLayer(endPoints, nil)
+	objLayer, storageDisks, err := initObjectLayer(endpoints, nil)
 	if err != nil {
 		t.Fatalf("Failed obtaining Temp Backend: <ERROR> %s", err)
 	}
@@ -508,7 +506,7 @@ func newTestConfig(bucketLocation string) (rootPath string, err error) {
 func (testServer TestServer) Stop() {
 	removeAll(testServer.Root)
 	for _, disk := range testServer.Disks {
-		removeAll(disk.path)
+		removeAll(disk.Path)
 	}
 	testServer.Server.Close()
 }
@@ -1556,13 +1554,13 @@ func getRandomDisks(N int) ([]string, error) {
 }
 
 // initObjectLayer - Instantiates object layer and returns it.
-func initObjectLayer(endPoints []storageEndPoint, ignoredEndPoints []storageEndPoint) (ObjectLayer, []StorageAPI, error) {
-	storageDisks, err := initStorageDisks(endPoints, ignoredEndPoints)
+func initObjectLayer(endpoints, ignoredEndpoints []*url.URL) (ObjectLayer, []StorageAPI, error) {
+	storageDisks, err := initStorageDisks(endpoints, ignoredEndpoints)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	err = waitForFormatDisks(true, "", storageDisks)
+	err = waitForFormatDisks(true, endpoints[0], storageDisks)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1633,7 +1631,7 @@ func prepareXLStorageDisks(t *testing.T) ([]StorageAPI, []string) {
 	if err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
-	endpoints, err := parseStorageEndPoints(fsDirs, 0)
+	endpoints, err := parseStorageEndpoints(fsDirs)
 	if err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
@@ -1650,7 +1648,7 @@ func prepareXLStorageDisks(t *testing.T) ([]StorageAPI, []string) {
 // initializes the specified API endpoints for the tests.
 // initialies the root and returns its path.
 // return credentials.
-func initAPIHandlerTest(obj ObjectLayer, endPoints []string) (bucketName string, apiRouter http.Handler, err error) {
+func initAPIHandlerTest(obj ObjectLayer, endpoints []string) (bucketName string, apiRouter http.Handler, err error) {
 	// get random bucket name.
 	bucketName = getRandomBucketName()
 
@@ -1662,7 +1660,7 @@ func initAPIHandlerTest(obj ObjectLayer, endPoints []string) (bucketName string,
 	}
 	// Register the API end points with XL/FS object layer.
 	// Registering only the GetObject handler.
-	apiRouter = initTestAPIEndPoints(obj, endPoints)
+	apiRouter = initTestAPIEndPoints(obj, endpoints)
 	return bucketName, apiRouter, nil
 }
 
@@ -1835,7 +1833,7 @@ func ExecObjectLayerAPINilTest(t TestErrHandler, bucketName, objectName, instanc
 
 // ExecObjectLayerAPITest - executes object layer API tests.
 // Creates single node and XL ObjectLayer instance, registers the specified API end points and runs test for both the layers.
-func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endPoints []string) {
+func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endpoints []string) {
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
 	rootPath, err := newTestConfig("us-east-1")
@@ -1846,7 +1844,7 @@ func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endPoints [
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for single node setup: %s", err)
 	}
-	bucketFS, fsAPIRouter, err := initAPIHandlerTest(objLayer, endPoints)
+	bucketFS, fsAPIRouter, err := initAPIHandlerTest(objLayer, endpoints)
 	if err != nil {
 		t.Fatalf("Initialzation of API handler tests failed: <ERROR> %s", err)
 	}
@@ -1858,7 +1856,7 @@ func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endPoints [
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for XL setup: %s", err)
 	}
-	bucketXL, xlAPIRouter, err := initAPIHandlerTest(objLayer, endPoints)
+	bucketXL, xlAPIRouter, err := initAPIHandlerTest(objLayer, endpoints)
 	if err != nil {
 		t.Fatalf("Initialzation of API handler tests failed: <ERROR> %s", err)
 	}
@@ -1929,7 +1927,7 @@ func ExecObjectLayerStaleFilesTest(t *testing.T, objTest objTestStaleFilesType) 
 	if err != nil {
 		t.Fatalf("Initialization of disks for XL setup: %s", err)
 	}
-	endpoints, err := parseStorageEndPoints(erasureDisks, 0)
+	endpoints, err := parseStorageEndpoints(erasureDisks)
 	if err != nil {
 		t.Fatalf("Initialization of disks for XL setup: %s", err)
 	}
