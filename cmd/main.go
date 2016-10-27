@@ -171,8 +171,11 @@ func Main() {
 		migrate()
 
 		// Initialize config.
-		err := initConfig()
+		configCreated, err := initConfig()
 		fatalIf(err, "Unable to initialize minio config.")
+		if configCreated {
+			console.Println("Created minio configuration file at " + mustGetConfigPath())
+		}
 
 		// Fetch access keys from environment variables and update the config.
 		accessKey := os.Getenv("MINIO_ACCESS_KEY")

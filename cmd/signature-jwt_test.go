@@ -99,7 +99,7 @@ func TestNewJWT(t *testing.T) {
 	for _, testCase := range testCases {
 		setGlobalConfigPath(testCase.dirPath)
 		if testCase.init {
-			if err := initConfig(); err != nil {
+			if _, err := initConfig(); err != nil {
 				t.Fatalf("unable initialize config file, %s", err)
 			}
 		}
