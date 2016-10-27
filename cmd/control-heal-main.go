@@ -35,7 +35,7 @@ var healCmd = cli.Command{
   minio control {{.Name}} - {{.Usage}}
 
 USAGE:
-  minio control {{.Name}}
+  minio control {{.Name}} http[s]://[access_key[:secret_key]@]server_ip:port/
 
 FLAGS:
   {{range .Flags}}{{.}}

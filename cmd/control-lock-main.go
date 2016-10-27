@@ -52,7 +52,7 @@ var lockCmd = cli.Command{
   minio control {{.Name}} - {{.Usage}}
 
 USAGE:
-  minio control {{.Name}} [list|clear] http://localhost:9000/
+  minio control {{.Name}} [list|clear] http[s]://[access_key[:secret_key]@]server_ip:port/
 
 FLAGS:
   {{range .Flags}}{{.}}

@@ -33,7 +33,7 @@ var serviceCmd = cli.Command{
   minio control {{.Name}} - {{.Usage}}
 
 USAGE:
-  minio control {{.Name}} [status|restart|stop] URL
+  minio control {{.Name}} [status|restart|stop] http[s]://[access_key[:secret_key]@]server_ip:port/
 
 FLAGS:
   {{range .Flags}}{{.}}
