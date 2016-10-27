@@ -36,7 +36,7 @@ func TestUNCPaths(t *testing.T) {
 		{string(bytes.Repeat([]byte("界"), 85)), true},
 		// Each path component must be <= 255 bytes long.
 		{string(bytes.Repeat([]byte("界"), 100)), false},
-		{`\\p\q\r\s\t`, true},
+		{`/p/q/r/s/t`, true},
 	}
 	// Instantiate posix object to manage a disk
 	var err error

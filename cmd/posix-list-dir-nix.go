@@ -23,6 +23,7 @@ import (
 	"path"
 	"runtime"
 	"strings"
+	"sync"
 	"syscall"
 	"unsafe"
 )
@@ -30,9 +31,9 @@ import (
 const (
 	// readDirentBufSize for syscall.ReadDirent() to hold multiple
 	// directory entries in one buffer. golang source uses 4096 as
-	// buffer size whereas we want 25 times larger to save lots of
+	// buffer size whereas we want 64 times larger to save lots of
 	// entries to avoid multiple syscall.ReadDirent() call.
-	readDirentBufSize = 4096 * 25
+	readDirentBufSize = 4096 * 64
 )
 
 // actual length of the byte array from the c - world.
@@ -106,9 +107,19 @@ func parseDirents(dirPath string, buf []byte) (entries []string, err error) {
 	return entries, nil
 }
 
+var readDirBufPool = sync.Pool{
+	New: func() interface{} {
+		b := make([]byte, readDirentBufSize)
+		return &b
+	},
+}
+
 // Return all the entries at the directory dirPath.
 func readDir(dirPath string) (entries []string, err error) {
-	buf := make([]byte, readDirentBufSize)
+	bufp := readDirBufPool.Get().(*[]byte)
+	buf := *bufp
+	defer readDirBufPool.Put(bufp)
+
 	d, err := os.Open(dirPath)
 	if err != nil {
 		// File is really not found.
