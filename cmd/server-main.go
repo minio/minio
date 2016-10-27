@@ -26,6 +26,9 @@ import (
 	"strings"
 	"time"
 
+	"regexp"
+	"runtime"
+
 	"github.com/minio/cli"
 )
 
@@ -245,23 +248,6 @@ func checkSufficientDisks(eps []*url.URL) error {
 	return nil
 }
 
-// Validate input disks.
-func validateDisks(endpoints []*url.URL, ignoredEndpoints []*url.URL) []StorageAPI {
-	isXL := len(endpoints) > 1
-	if isXL {
-		// Validate if input disks have duplicates in them.
-		err := checkDuplicateEndpoints(endpoints)
-		fatalIf(err, "Invalid disk arguments for server.")
-
-		// Validate if input disks are sufficient for erasure coded setup.
-		err = checkSufficientDisks(endpoints)
-		fatalIf(err, "Invalid disk arguments for server. %#v", endpoints)
-	}
-	storageDisks, err := initStorageDisks(endpoints, ignoredEndpoints)
-	fatalIf(err, "Unable to initialize storage disks.")
-	return storageDisks
-}
-
 // Returns if slice of disks is a distributed setup.
 func isDistributedSetup(eps []*url.URL) (isDist bool) {
 	// Validate if one the disks is not local.
@@ -274,6 +260,126 @@ func isDistributedSetup(eps []*url.URL) (isDist bool) {
 		}
 	}
 	return isDist
+}
+
+// We just exit for invalid endpoints.
+func checkEndpointsSyntax(eps []*url.URL, disks []string) {
+	for i, u := range eps {
+		switch u.Scheme {
+		case "", "http", "https":
+			// Scheme is "" for FS and singlenode-XL, hence pass.
+		default:
+			if runtime.GOOS == "windows" {
+				// On windows for "C:\export" scheme will be "C"
+				matched, err := regexp.MatchString("^[a-zA-Z]$", u.Scheme)
+				fatalIf(err, "Parsing scheme : %s (%s)", u.Scheme, disks[i])
+				if matched {
+					break
+				}
+			}
+			fatalIf(errInvalidArgument, "Invalid scheme : %s (%s)", u.Scheme, disks[i])
+		}
+		if runtime.GOOS == "windows" {
+			if u.Scheme == "http" || u.Scheme == "https" {
+				// "http://server1/" is not allowed
+				if u.Path == "" || u.Path == "/" || u.Path == "\\" {
+					fatalIf(errInvalidArgument, "Empty path for %s", disks[i])
+				}
+			}
+		} else {
+			if u.Scheme == "http" || u.Scheme == "https" {
+				// "http://server1/" is not allowed.
+				if u.Path == "" || u.Path == "/" {
+					fatalIf(errInvalidArgument, "Empty path for %s", disks[i])
+				}
+			} else {
+				// "/" is not allowed.
+				if u.Path == "" || u.Path == "/" {
+					fatalIf(errInvalidArgument, "Empty path for %s", disks[i])
+				}
+			}
+		}
+	}
+
+	if err := checkDuplicateEndpoints(eps); err != nil {
+		fatalIf(errInvalidArgument, "Duplicate entries in %s", strings.Join(disks, " "))
+	}
+}
+
+// Make sure all the command line parameters are OK and exit in case of invalid parameters.
+func checkServerSyntax(c *cli.Context) {
+	serverAddr := c.String("address")
+
+	host, portStr, err := net.SplitHostPort(serverAddr)
+	fatalIf(err, "Unable to parse %s.", serverAddr)
+
+	// Verify syntax for all the XL disks.
+	disks := c.Args()
+	endpoints, err := parseStorageEndpoints(disks)
+	fatalIf(err, "Unable to parse storage endpoints %s", disks)
+	checkEndpointsSyntax(endpoints, disks)
+
+	if len(endpoints) > 1 {
+		// For XL setup.
+		err = checkSufficientDisks(endpoints)
+		fatalIf(err, "Storage endpoint error.")
+	}
+
+	// Verify syntax for all the ignored disks.
+	var ignoredEndpoints []*url.URL
+	ignoredDisksStr := c.String("ignore-disks")
+	if ignoredDisksStr != "" {
+		ignoredDisks := strings.Split(ignoredDisksStr, ",")
+		if len(endpoints) == 1 {
+			fatalIf(errInvalidArgument, "--ignore-disks is valid only for XL setup.")
+		}
+		ignoredEndpoints, err = parseStorageEndpoints(ignoredDisks)
+		fatalIf(err, "Unable to parse ignored storage endpoints %s", ignoredDisks)
+		checkEndpointsSyntax(ignoredEndpoints, ignoredDisks)
+
+		for i, ep := range ignoredEndpoints {
+			// An ignored disk should be present in the XL disks list.
+			if !containsEndpoint(endpoints, ep) {
+				fatalIf(errInvalidArgument, "Ignored storage %s not available in the list of erasure storages list.", disks[i])
+			}
+		}
+	}
+
+	if !isDistributedSetup(endpoints) {
+		// for FS and singlenode-XL validation is done, return.
+		return
+	}
+
+	// Rest of the checks applies only to distributed XL setup.
+	if host != "" {
+		// We are here implies --address host:port is passed, hence the user is trying
+		// to run one minio process per export disk.
+		if portStr == "" {
+			fatalIf(errInvalidArgument, "Port missing, Host:Port should be specified for --address")
+		}
+		foundCnt := 0
+		for _, ep := range endpoints {
+			if ep.Host == serverAddr {
+				foundCnt++
+			}
+		}
+		if foundCnt == 0 {
+			// --address host:port should be available in the XL disk list.
+			fatalIf(errInvalidArgument, "%s is not available in %s", serverAddr, strings.Join(disks, " "))
+		}
+		if foundCnt > 1 {
+			// --address host:port should match exactly one entry in the XL disk list.
+			fatalIf(errInvalidArgument, "%s matches % entries in %s", serverAddr, foundCnt, strings.Join(disks, " "))
+		}
+	}
+
+	tls := isSSL()
+	for _, ep := range endpoints {
+		if ep.Scheme == "https" && !tls {
+			// Certificates should be provided for https configuration.
+			fatalIf(errInvalidArgument, "Certificates not provided for https")
+		}
+	}
 }
 
 // serverMain handler called for 'minio server' command.
@@ -294,6 +400,11 @@ func serverMain(c *cli.Context) {
 	fatalIf(checkPortAvailability(portStr), "Port unavailable %s", portStr)
 	globalMinioPort = portStr
 
+	// Check server syntax and exit in case of errors.
+	// Done after globalMinioHost and globalMinioPort is set as parseStorageEndpoints()
+	// depends on it.
+	checkServerSyntax(c)
+
 	// Disks to be ignored in server init, to skip format healing.
 	var ignoredEndpoints []*url.URL
 	if len(c.String("ignore-disks")) > 0 {
@@ -305,32 +416,20 @@ func serverMain(c *cli.Context) {
 	endpoints, err := parseStorageEndpoints(c.Args())
 	fatalIf(err, "Unable to parse storage endpoints %s", c.Args())
 
-	// Check 'server' cli arguments.
-	storageDisks := validateDisks(endpoints, ignoredEndpoints)
-
-	// Check if endpoints are part of distributed setup.
-	isDistXL := isDistributedSetup(endpoints)
+	storageDisks, err := initStorageDisks(endpoints, ignoredEndpoints)
+	fatalIf(err, "Unable to initialize storage disks.")
 
 	// Cleanup objects that weren't successfully written into the namespace.
 	fatalIf(houseKeeping(storageDisks), "Unable to purge temporary files.")
-
-	// If https.
-	tls := isSSL()
-
-	// Fail if SSL is not configured and ssl endpoints are provided for distributed setup.
-	if !tls && isDistXL {
-		for _, ep := range endpoints {
-			if ep.Host != "" && ep.Scheme == "https" {
-				fatalIf(errInvalidArgument, "Cannot use secure endpoints when SSL is not configured %s", ep)
-			}
-		}
-	}
 
 	// Initialize server config.
 	initServerConfig(c)
 
 	// First disk argument check if it is local.
 	firstDisk := isLocalStorage(endpoints[0])
+
+	// Check if endpoints are part of distributed setup.
+	isDistXL := isDistributedSetup(endpoints)
 
 	// Configure server.
 	srvConfig := serverCmdConfig{
@@ -355,6 +454,9 @@ func serverMain(c *cli.Context) {
 
 	// Initialize a new HTTP server.
 	apiServer := NewServerMux(serverAddr, handler)
+
+	// If https.
+	tls := isSSL()
 
 	// Fetch endpoints which we are going to serve from.
 	endPoints := finalizeEndpoints(tls, &apiServer.Server)
