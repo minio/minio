@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"fmt"
 	"path"
 	"sort"
 	"sync"
@@ -201,7 +202,8 @@ func pickValidXLMeta(metaArr []xlMetaV1, modTime time.Time) xlMetaV1 {
 			return meta
 		}
 	}
-	panic("Unable to look for valid XL metadata content")
+	pmsg := fmt.Sprintf("Unable to look for valid XL metadata content - %v %s", metaArr, modTime)
+	panic(pmsg)
 }
 
 // list of all errors that can be ignored in a metadata operation.
