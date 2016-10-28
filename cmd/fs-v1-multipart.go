@@ -243,7 +243,7 @@ func (fs fsObjects) newMultipartUpload(bucket string, object string, meta map[st
 	uploadID = getUUID()
 	initiated := time.Now().UTC()
 	// Create 'uploads.json'
-	if err = fs.writeUploadJSON(bucket, object, uploadID, initiated); err != nil {
+	if err = fs.updateUploadJSON(bucket, object, uploadIDChange{uploadID, initiated, false}); err != nil {
 		return "", err
 	}
 	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID)
@@ -791,28 +791,9 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object), opsID)
 	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object), opsID)
 
-	// Validate if there are other incomplete upload-id's present for
-	// the object, if yes do not attempt to delete 'uploads.json'.
-	uploadsJSON, err := readUploadsJSON(bucket, object, fs.storage)
-	if err != nil {
-		return "", toObjectErr(err, minioMetaBucket, object)
-	}
-	// If we have successfully read `uploads.json`, then we proceed to
-	// purge or update `uploads.json`.
-	uploadIDIdx := uploadsJSON.Index(uploadID)
-	if uploadIDIdx != -1 {
-		uploadsJSON.Uploads = append(uploadsJSON.Uploads[:uploadIDIdx], uploadsJSON.Uploads[uploadIDIdx+1:]...)
-	}
-	if len(uploadsJSON.Uploads) > 0 {
-		if err = fs.updateUploadsJSON(bucket, object, uploadsJSON); err != nil {
-			return "", toObjectErr(err, minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object))
-		}
-		// Return success.
-		return s3MD5, nil
-	}
-
-	if err = fs.storage.DeleteFile(minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object, uploadsJSONFile)); err != nil {
-		return "", toObjectErr(traceError(err), minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object))
+	// remove entry from uploads.json
+	if err = fs.updateUploadJSON(bucket, object, uploadIDChange{uploadID: uploadID, isRemove: true}); err != nil {
+		return "", toObjectErr(err, minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object))
 	}
 
 	// Return md5sum.
@@ -829,28 +810,12 @@ func (fs fsObjects) abortMultipartUpload(bucket, object, uploadID string) error 
 		return err
 	}
 
-	// Validate if there are other incomplete upload-id's present for
-	// the object, if yes do not attempt to delete 'uploads.json'.
-	uploadsJSON, err := readUploadsJSON(bucket, object, fs.storage)
-	if err == nil {
-		uploadIDIdx := uploadsJSON.Index(uploadID)
-		if uploadIDIdx != -1 {
-			uploadsJSON.Uploads = append(uploadsJSON.Uploads[:uploadIDIdx], uploadsJSON.Uploads[uploadIDIdx+1:]...)
-		}
-		// There are pending uploads for the same object, preserve
-		// them update 'uploads.json' in-place.
-		if len(uploadsJSON.Uploads) > 0 {
-			err = fs.updateUploadsJSON(bucket, object, uploadsJSON)
-			if err != nil {
-				return toObjectErr(err, bucket, object)
-			}
-			return nil
-		}
-	} // No more pending uploads for the object, we purge the entire
-	// entry at '.minio.sys/multipart/bucket/object'.
-	if err = fs.storage.DeleteFile(minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object, uploadsJSONFile)); err != nil {
-		return toObjectErr(traceError(err), minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object))
+	// remove entry from uploads.json with quorum
+	if err := fs.updateUploadJSON(bucket, object, uploadIDChange{uploadID: uploadID, isRemove: true}); err != nil {
+		return toObjectErr(err, bucket, object)
 	}
+
+	// success
 	return nil
 }
 

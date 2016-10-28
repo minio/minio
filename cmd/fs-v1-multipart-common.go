@@ -16,11 +16,7 @@
 
 package cmd
 
-import (
-	"encoding/json"
-	"path"
-	"time"
-)
+import "path"
 
 // Returns if the prefix is a multipart upload.
 func (fs fsObjects) isMultipartUpload(bucket, prefix string) bool {
@@ -57,56 +53,38 @@ func (fs fsObjects) isUploadIDExists(bucket, object, uploadID string) bool {
 }
 
 // writeUploadJSON - create `uploads.json` or update it with new uploadID.
-func (fs fsObjects) writeUploadJSON(bucket, object, uploadID string, initiated time.Time) (err error) {
+func (fs fsObjects) updateUploadJSON(bucket, object string, uCh uploadIDChange) error {
 	uploadsPath := path.Join(mpartMetaPrefix, bucket, object, uploadsJSONFile)
 	uniqueID := getUUID()
 	tmpUploadsPath := path.Join(tmpMetaPrefix, uniqueID)
-	var uploadsJSON uploadsV1
-	uploadsJSON, err = readUploadsJSON(bucket, object, fs.storage)
+
+	uploadsJSON, err := readUploadsJSON(bucket, object, fs.storage)
+	if errorCause(err) == errFileNotFound {
+		// If file is not found, we assume a default (empty)
+		// upload info.
+		uploadsJSON, err = newUploadsV1("fs"), nil
+	}
 	if err != nil {
-		// uploads.json might not exist hence ignore errFileNotFound.
-		if errorCause(err) != errFileNotFound {
-			return err
-		}
-		// Set uploads format to `fs`.
-		uploadsJSON = newUploadsV1("fs")
+		return err
 	}
-	// Add a new upload id.
-	uploadsJSON.AddUploadID(uploadID, initiated)
 
-	// Update `uploads.json` on all disks.
-	uploadsJSONBytes, wErr := json.Marshal(&uploadsJSON)
-	if wErr != nil {
-		return traceError(wErr)
+	// update the uploadsJSON struct
+	if !uCh.isRemove {
+		// Add the uploadID
+		uploadsJSON.AddUploadID(uCh.uploadID, uCh.initiated)
+	} else {
+		// Remove the upload ID
+		uploadsJSON.RemoveUploadID(uCh.uploadID)
 	}
-	// Write `uploads.json` to disk.
-	if wErr = fs.storage.AppendFile(minioMetaBucket, tmpUploadsPath, uploadsJSONBytes); wErr != nil {
-		return traceError(wErr)
-	}
-	wErr = fs.storage.RenameFile(minioMetaBucket, tmpUploadsPath, minioMetaBucket, uploadsPath)
-	if wErr != nil {
-		if dErr := fs.storage.DeleteFile(minioMetaBucket, tmpUploadsPath); dErr != nil {
-			return traceError(dErr)
-		}
-		return traceError(wErr)
-	}
-	return nil
-}
 
-// updateUploadsJSON - update `uploads.json` with new uploadsJSON for all disks.
-func (fs fsObjects) updateUploadsJSON(bucket, object string, uploadsJSON uploadsV1) (err error) {
-	uploadsPath := path.Join(mpartMetaPrefix, bucket, object, uploadsJSONFile)
-	uniqueID := getUUID()
-	tmpUploadsPath := path.Join(tmpMetaPrefix, uniqueID)
-	uploadsBytes, wErr := json.Marshal(uploadsJSON)
-	if wErr != nil {
-		return traceError(wErr)
+	// update the file or delete it?
+	if len(uploadsJSON.Uploads) > 0 {
+		err = writeUploadJSON(&uploadsJSON, uploadsPath, tmpUploadsPath, fs.storage)
+	} else {
+		// no uploads, so we delete the file.
+		if err = fs.storage.DeleteFile(minioMetaBucket, uploadsPath); err != nil {
+			return toObjectErr(traceError(err), minioMetaBucket, uploadsPath)
+		}
 	}
-	if wErr = fs.storage.AppendFile(minioMetaBucket, tmpUploadsPath, uploadsBytes); wErr != nil {
-		return traceError(wErr)
-	}
-	if wErr = fs.storage.RenameFile(minioMetaBucket, tmpUploadsPath, minioMetaBucket, uploadsPath); wErr != nil {
-		return traceError(wErr)
-	}
-	return nil
+	return err
 }
