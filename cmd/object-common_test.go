@@ -111,10 +111,12 @@ func TestGetPath(t *testing.T) {
 			path  string
 		}{
 			{"\\export", "\\export"},
-			{"D:\\export", "D:\\export"},
-			{"D:\\", "D:\\"},
-			{"D:", "D:"},
+			{"D:\\export", "d:\\export"},
+			{"D:\\", "d:\\"},
+			{"D:", "d:"},
 			{"\\", "\\"},
+			{"http://localhost/d:/export", "d:/export"},
+			{"https://localhost/d:/export", "d:/export"},
 		}
 	} else {
 		testCases = []struct {
@@ -122,6 +124,8 @@ func TestGetPath(t *testing.T) {
 			path  string
 		}{
 			{"/export", "/export"},
+			{"http://localhost/export", "/export"},
+			{"https://localhost/export", "/export"},
 		}
 	}
 	testCasesCommon := []struct {
@@ -129,19 +133,17 @@ func TestGetPath(t *testing.T) {
 		path  string
 	}{
 		{"export", "export"},
-		{"http://localhost/export", "/export"},
-		{"https://localhost/export", "/export"},
 	}
 	testCases = append(testCases, testCasesCommon...)
-	for _, test := range testCases {
+	for i, test := range testCases {
 		eps, err := parseStorageEndpoints([]string{test.epStr})
 		if err != nil {
-			t.Error(test.epStr, err)
+			t.Errorf("Test %d: %s - %s", i+1, test.epStr, err)
 			continue
 		}
 		path := getPath(eps[0])
 		if path != test.path {
-			t.Errorf("For endpoing %s, getPath() failed, got: %s, expected: %s,", test.epStr, path, test.path)
+			t.Errorf("Test %d: For endpoing %s, getPath() failed, got: %s, expected: %s,", i+1, test.epStr, path, test.path)
 		}
 	}
 }
