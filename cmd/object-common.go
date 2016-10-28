@@ -165,12 +165,16 @@ func getPath(ep *url.URL) string {
 	var diskPath string
 	// For windows ep.Path is usually empty
 	if runtime.GOOS == "windows" {
-		// For full URLs windows drive is part of URL path.
-		// Eg: http://ip:port/C:\mydrive
-		if ep.Scheme == "http" || ep.Scheme == "https" {
+		switch ep.Scheme {
+		case "":
+			// Eg. "minio server .\export"
+			diskPath = ep.Path
+		case "http", "https":
+			// For full URLs windows drive is part of URL path.
+			// Eg: http://ip:port/C:\mydrive
 			// For windows trim off the preceding "/".
 			diskPath = ep.Path[1:]
-		} else {
+		default:
 			// For the rest url splits drive letter into
 			// Scheme contruct the disk path back.
 			diskPath = ep.Scheme + ":" + ep.Opaque
