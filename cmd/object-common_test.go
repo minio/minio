@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"net/url"
 	"runtime"
 	"sync"
 	"testing"
@@ -100,51 +99,49 @@ func TestHouseKeeping(t *testing.T) {
 	}
 }
 
-// Test constructing the final path.
+// Test getPath() - the path that needs to be passed to newPosix()
 func TestGetPath(t *testing.T) {
 	var testCases []struct {
-		ep   *url.URL
-		path string
+		epStr string
+		path  string
 	}
-	if runtime.GOOS != "windows" {
+	if runtime.GOOS == "windows" {
 		testCases = []struct {
-			ep   *url.URL
-			path string
+			epStr string
+			path  string
 		}{
-			{
-				ep:   nil,
-				path: "",
-			},
-			{
-				ep:   &url.URL{Path: "/test1"},
-				path: "/test1",
-			},
+			{"\\export", "\\export"},
+			{"D:\\export", "D:\\export"},
+			{"D:\\", "D:\\"},
+			{"D:", "D:"},
+			{"\\", "\\"},
 		}
 	} else {
 		testCases = []struct {
-			ep   *url.URL
-			path string
+			epStr string
+			path  string
 		}{
-			{
-				ep:   nil,
-				path: "",
-			},
-			{
-				ep:   &url.URL{Opaque: "\\test1", Scheme: "C"},
-				path: "C:\\test1",
-			},
-			{
-				ep:   &url.URL{Scheme: "http", Path: "/C:\\test1"},
-				path: "C:\\test1",
-			},
+			{"/export", "/export"},
 		}
 	}
-
-	// Validate all the test cases.
-	for i, testCase := range testCases {
-		path := getPath(testCase.ep)
-		if path != testCase.path {
-			t.Fatalf("Test: %d Expected path %s, got %s", i+1, testCase.path, path)
+	testCasesCommon := []struct {
+		epStr string
+		path  string
+	}{
+		{"export", "export"},
+		{"http://localhost/export", "/export"},
+		{"https://localhost/export", "/export"},
+	}
+	testCases = append(testCases, testCasesCommon...)
+	for _, test := range testCases {
+		eps, err := parseStorageEndpoints([]string{test.epStr})
+		if err != nil {
+			t.Error(test.epStr, err)
+			continue
+		}
+		path := getPath(eps[0])
+		if path != test.path {
+			t.Errorf("For endpoing %s, getPath() failed, got: %s, expected: %s,", test.epStr, path, test.path)
 		}
 	}
 }
