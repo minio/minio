@@ -177,6 +177,38 @@ func TestCheckSufficientDisks(t *testing.T) {
 	}
 }
 
+func TestCheckEndpointsSyntax(t *testing.T) {
+	testCases := []string{}
+	if runtime.GOOS == "windows" {
+		testCases = []string{
+			"\\export",
+			"D:\\export",
+			"D:\\",
+			"D:",
+			"\\",
+		}
+	} else {
+		testCases = []string{
+			"/export",
+		}
+	}
+	testCasesCommon := []string{
+		"export",
+		"http://localhost/export",
+		"https://localhost/export",
+	}
+	testCases = append(testCases, testCasesCommon...)
+	for _, disk := range testCases {
+		eps, err := parseStorageEndpoints([]string{disk})
+		if err != nil {
+			t.Error(disk, err)
+			continue
+		}
+		// This will fatalIf() if endpoint is invalid.
+		checkEndpointsSyntax(eps, []string{disk})
+	}
+}
+
 func TestCheckServerSyntax(t *testing.T) {
 	app := cli.NewApp()
 	app.Commands = []cli.Command{serverCmd}
@@ -203,9 +235,13 @@ func TestCheckServerSyntax(t *testing.T) {
 		defer removeRoots(disks)
 		endpoints, err := parseStorageEndpoints(disks)
 		if err != nil {
-			t.Fatalf("Unexpected error %s", err)
+			t.Fatalf("Test %d : Unexpected error %s", i+1, err)
 		}
-		_ = validateDisks(endpoints, nil)
+		checkEndpointsSyntax(endpoints, disks)
+		_, err = initStorageDisks(endpoints, nil)
+		if err != nil {
+			t.Errorf("Test %d : disk init failed : %s", i+1, err)
+		}
 	}
 }
 
