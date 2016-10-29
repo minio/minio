@@ -90,13 +90,18 @@ func TestPutObjectPartFaultyDisk(t *testing.T) {
 	for i := 1; i <= 7; i++ {
 		// Faulty disk generates errFaultyDisk at 'i' storage api call number
 		fs.storage = newNaughtyDisk(fsStorage, map[int]error{i: errFaultyDisk}, nil)
-		if _, err := fs.PutObjectPart(bucketName, objectName, uploadID, 1, dataLen, bytes.NewReader(data), md5Hex, sha256sum); errorCause(err) != errFaultyDisk {
+		md5sum, err := fs.PutObjectPart(bucketName, objectName, uploadID, 1, dataLen, bytes.NewReader(data), md5Hex, sha256sum)
+		if errorCause(err) != errFaultyDisk {
+			if errorCause(err) == nil {
+				t.Fatalf("Test %d shouldn't succeed, md5sum = %s\n", i, md5sum)
+			}
 			switch i {
 			case 1:
 				if !isSameType(errorCause(err), BucketNotFound{}) {
 					t.Fatal("Unexpected error ", err)
 				}
-			case 2, 4:
+			case 3:
+			case 2, 4, 5:
 				if !isSameType(errorCause(err), InvalidUploadID{}) {
 					t.Fatal("Unexpected error ", err)
 				}

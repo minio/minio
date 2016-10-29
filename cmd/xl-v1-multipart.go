@@ -424,6 +424,15 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	// Delete the temporary object part. If PutObjectPart succeeds there would be nothing to delete.
 	defer xl.deleteObject(minioMetaBucket, tmpPartPath)
 
+	if size > 0 {
+		for _, disk := range onlineDisks {
+			if disk != nil {
+				actualSize := xl.sizeOnDisk(size, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks)
+				disk.PrepareFile(minioMetaBucket, tmpPartPath, actualSize)
+			}
+		}
+	}
+
 	// Erasure code data and write across all disks.
 	sizeWritten, checkSums, err := erasureCreateFile(onlineDisks, minioMetaBucket, tmpPartPath, teeReader, xlMeta.Erasure.BlockSize, xl.dataBlocks, xl.parityBlocks, bitRotAlgo, xl.writeQuorum)
 	if err != nil {

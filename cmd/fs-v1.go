@@ -388,6 +388,15 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 			return ObjectInfo{}, toObjectErr(traceError(err), bucket, object)
 		}
 	} else {
+
+		// Prepare file to avoid disk fragmentation
+		if size > 0 {
+			err = fs.storage.PrepareFile(minioMetaBucket, tempObj, size)
+			if err != nil {
+				return ObjectInfo{}, toObjectErr(err, bucket, object)
+			}
+		}
+
 		// Allocate a buffer to Read() from request body
 		bufSize := int64(readSizeV1)
 		if size > 0 && bufSize > size {

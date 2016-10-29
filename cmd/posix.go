@@ -546,6 +546,121 @@ func (s *posix) ReadFile(volume string, path string, offset int64, buf []byte) (
 	return int64(m), err
 }
 
+func (s *posix) createFile(volume, path string) (f *os.File, err error) {
+	defer func() {
+		if err == syscall.EIO {
+			atomic.AddInt32(&s.ioErrCount, 1)
+		}
+	}()
+
+	if s.ioErrCount > maxAllowedIOError {
+		return nil, errFaultyDisk
+	}
+
+	// Validate if disk is free.
+	if err = s.checkDiskFree(); err != nil {
+		return nil, err
+	}
+
+	volumeDir, err := s.getVolDir(volume)
+	if err != nil {
+		return nil, err
+	}
+	// Stat a volume entry.
+	_, err = os.Stat(preparePath(volumeDir))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, errVolumeNotFound
+		}
+		return nil, err
+	}
+
+	filePath := pathJoin(volumeDir, path)
+	if err = checkPathLength(filePath); err != nil {
+		return nil, err
+	}
+
+	// Verify if the file already exists and is not of regular type.
+	var st os.FileInfo
+	if st, err = os.Stat(preparePath(filePath)); err == nil {
+		if !st.Mode().IsRegular() {
+			return nil, errIsNotRegular
+		}
+	} else {
+		// Create top level directories if they don't exist.
+		// with mode 0777 mkdir honors system umask.
+		if err = mkdirAll(preparePath(slashpath.Dir(filePath)), 0777); err != nil {
+			// File path cannot be verified since one of the parents is a file.
+			if isSysErrNotDir(err) {
+				return nil, errFileAccessDenied
+			} else if isSysErrPathNotFound(err) {
+				// Add specific case for windows.
+				return nil, errFileAccessDenied
+			}
+			return nil, err
+		}
+	}
+
+	w, err := os.OpenFile(preparePath(filePath), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0666)
+	if err != nil {
+		// File path cannot be verified since one of the parents is a file.
+		if isSysErrNotDir(err) {
+			return nil, errFileAccessDenied
+		}
+		return nil, err
+	}
+
+	return w, nil
+}
+
+// PrepareFile - run prior actions before creating a new file for optimization purposes
+// Currenty we use fallocate when available to avoid disk fragmentation as much as possible
+func (s *posix) PrepareFile(volume, path string, fileSize int64) (err error) {
+
+	// It doesn't make sense to create a negative-sized file
+	if fileSize <= 0 {
+		return errInvalidArgument
+	}
+
+	defer func() {
+		if err == syscall.EIO {
+			atomic.AddInt32(&s.ioErrCount, 1)
+		}
+	}()
+
+	if s.ioErrCount > maxAllowedIOError {
+		return errFaultyDisk
+	}
+
+	// Create file if not found
+	w, err := s.createFile(volume, path)
+	if err != nil {
+		return err
+	}
+
+	// Close upon return.
+	defer w.Close()
+
+	// Allocate needed disk space to append data
+	e := Fallocate(int(w.Fd()), 0, fileSize)
+
+	// Ignore errors when Fallocate is not supported in the current system
+	if e != nil && !isSysErrNoSys(e) && !isSysErrOpNotSupported(e) {
+		switch {
+		case isSysErrNoSpace(e):
+			err = errDiskFull
+		case isSysErrIO(e):
+			err = e
+		default:
+			// For errors: EBADF, EINTR, EINVAL, ENODEV, EPERM, ESPIPE  and ETXTBSY
+			// Appending was failed anyway, returns unexpected error
+			err = errUnexpected
+		}
+		return err
+	}
+	return nil
+}
+
 // AppendFile - append a byte array at path, if file doesn't exist at
 // path this call explicitly creates it.
 func (s *posix) AppendFile(volume, path string, buf []byte) (err error) {
@@ -559,55 +674,9 @@ func (s *posix) AppendFile(volume, path string, buf []byte) (err error) {
 		return errFaultyDisk
 	}
 
-	// Validate if disk is free.
-	if err = s.checkDiskFree(); err != nil {
-		return err
-	}
-
-	volumeDir, err := s.getVolDir(volume)
+	// Create file if not found
+	w, err := s.createFile(volume, path)
 	if err != nil {
-		return err
-	}
-	// Stat a volume entry.
-	_, err = os.Stat(preparePath(volumeDir))
-	if err != nil {
-		if os.IsNotExist(err) {
-			return errVolumeNotFound
-		}
-		return err
-	}
-	filePath := pathJoin(volumeDir, path)
-	if err = checkPathLength(filePath); err != nil {
-		return err
-	}
-	// Verify if the file already exists and is not of regular type.
-	var st os.FileInfo
-	if st, err = os.Stat(preparePath(filePath)); err == nil {
-		if !st.Mode().IsRegular() {
-			return errIsNotRegular
-		}
-	}
-	// Create top level directories if they don't exist.
-	// with mode 0777 mkdir honors system umask.
-	if err = mkdirAll(preparePath(slashpath.Dir(filePath)), 0777); err != nil {
-		// File path cannot be verified since one of the parents is a file.
-		if isSysErrNotDir(err) {
-			return errFileAccessDenied
-		} else if isSysErrPathNotFound(err) {
-			// Add specific case for windows.
-			return errFileAccessDenied
-		}
-		return err
-	}
-
-	// Creates the named file with mode 0666 (before umask), or starts appending
-	// to an existig file.
-	w, err := os.OpenFile(preparePath(filePath), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0666)
-	if err != nil {
-		// File path cannot be verified since one of the parents is a file.
-		if isSysErrNotDir(err) {
-			return errFileAccessDenied
-		}
 		return err
 	}
 

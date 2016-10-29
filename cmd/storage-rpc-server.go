@@ -180,6 +180,14 @@ func (s *storageServer) ReadFileHandler(args *ReadFileArgs, reply *[]byte) (err 
 	return err
 }
 
+// PrepareFileHandler - prepare file handler is rpc wrapper to prepare file.
+func (s *storageServer) PrepareFileHandler(args *PrepareFileArgs, reply *GenericReply) error {
+	if !isRPCTokenValid(args.Token) {
+		return errInvalidToken
+	}
+	return s.storage.PrepareFile(args.Vol, args.Path, args.Size)
+}
+
 // AppendFileHandler - append file handler is rpc wrapper to append file.
 func (s *storageServer) AppendFileHandler(args *AppendFileArgs, reply *GenericReply) error {
 	if !isRPCTokenValid(args.Token) {

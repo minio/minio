@@ -448,6 +448,15 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	// delete.
 	defer xl.deleteObject(minioMetaTmpBucket, tempObj)
 
+	if size > 0 {
+		for _, disk := range onlineDisks {
+			if disk != nil {
+				actualSize := xl.sizeOnDisk(size, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks)
+				disk.PrepareFile(minioMetaBucket, tempErasureObj, actualSize)
+			}
+		}
+	}
+
 	// Erasure code data and write across all disks.
 	sizeWritten, checkSums, err := erasureCreateFile(onlineDisks, minioMetaBucket, tempErasureObj, teeReader, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks, xlMeta.Erasure.ParityBlocks, bitRotAlgo, xl.writeQuorum)
 	if err != nil {

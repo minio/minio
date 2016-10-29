@@ -1126,6 +1126,100 @@ func TestAppendFile(t *testing.T) {
 	}
 }
 
+// Test posix.PrepareFile()
+func TestPrepareFile(t *testing.T) {
+	// create posix test setup
+	posixStorage, path, err := newPosixTestSetup()
+	if err != nil {
+		t.Fatalf("Unable to create posix test setup, %s", err)
+	}
+	defer removeAll(path)
+
+	// Setup test environment.
+	if err = posixStorage.MakeVol("success-vol"); err != nil {
+		t.Fatalf("Unable to create volume, %s", err)
+	}
+
+	if err = os.Mkdir(slashpath.Join(path, "success-vol", "object-as-dir"), 0777); err != nil {
+		t.Fatalf("Unable to create directory, %s", err)
+	}
+
+	testCases := []struct {
+		fileName    string
+		expectedErr error
+	}{
+		{"myobject", nil},
+		{"path/to/my/object", nil},
+		// Test to append to previously created file.
+		{"myobject", nil},
+		// Test to use same path of previously created file.
+		{"path/to/my/testobject", nil},
+		{"object-as-dir", errIsNotRegular},
+		// path segment uses previously uploaded object.
+		{"myobject/testobject", errFileAccessDenied},
+		// One path segment length is > 255 chars long.
+		{"path/to/my/object0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001", errFileNameTooLong},
+	}
+
+	// Add path length > 1024 test specially as OS X system does not support 1024 long path.
+	err = errFileNameTooLong
+	if runtime.GOOS != "darwin" {
+		err = nil
+	}
+	// path length is 1024 chars long.
+	testCases = append(testCases, struct {
+		fileName    string
+		expectedErr error
+	}{"level0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001/level0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002/level0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003/object000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001", err})
+
+	for _, testCase := range testCases {
+		if err = posixStorage.PrepareFile("success-vol", testCase.fileName, 16); err != testCase.expectedErr {
+			t.Errorf("Case: %s, expected: %s, got: %s", testCase, testCase.expectedErr, err)
+		}
+	}
+
+	// Test for permission denied.
+	if runtime.GOOS != "windows" {
+		// Initialize posix storage layer for permission denied error.
+		posixStorage, err = newPosix("/usr")
+		if err != nil {
+			t.Fatalf("Unable to initialize posix, %s", err)
+		}
+
+		if err = posixStorage.PrepareFile("bin", "yes", 16); !os.IsPermission(err) {
+			t.Errorf("expected: Permission error, got: %s", err)
+		}
+	}
+
+	// Test case with invalid file size which should be strictly positive
+	err = posixStorage.PrepareFile("bn", "yes", -3)
+	if err != errInvalidArgument {
+		t.Fatalf("should fail: %v", err)
+	}
+
+	// Test case with invalid volume name.
+	// A valid volume name should be atleast of size 3.
+	err = posixStorage.PrepareFile("bn", "yes", 16)
+	if err != errInvalidArgument {
+		t.Fatalf("expected: \"Invalid argument error\", got: \"%s\"", err)
+	}
+
+	// Test case with IO error count > max limit.
+
+	// setting ioErrCnt to 6.
+	// should fail with errFaultyDisk.
+	if posixType, ok := posixStorage.(*posix); ok {
+		// setting the io error count from as specified in the test case.
+		posixType.ioErrCount = int32(6)
+		err = posixType.PrepareFile("abc", "yes", 16)
+		if err != errFaultyDisk {
+			t.Fatalf("Expected \"Faulty Disk\", got: \"%s\"", err)
+		}
+	} else {
+		t.Fatalf("Expected the StorageAPI to be of type *posix")
+	}
+}
+
 // Test posix.RenameFile()
 func TestRenameFile(t *testing.T) {
 	// create posix test setup
