@@ -42,7 +42,6 @@ const (
 
 var (
 	globalQuiet = false // Quiet flag set via command line
-	globalTrace = false // Trace flag set via environment setting.
 
 	// Add new global flags here.
 
