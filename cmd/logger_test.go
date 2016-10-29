@@ -20,31 +20,18 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"os"
-	"path/filepath"
-	"runtime"
 	"testing"
 
 	"github.com/Sirupsen/logrus"
 )
 
-// Tests func obtained from process stack counter.
-func TestFuncToPC(t *testing.T) {
-	GOPATH = filepath.ToSlash(os.Getenv("GOPATH"))
-	pc, file, line, success := runtime.Caller(0)
-	if !success {
-		file = "???"
-		line = 0
-	}
-	shortFile := true // We are only interested in short file form.
-	cLocation := funcFromPC(pc, file, line, shortFile)
-	if cLocation != "TestFuncToPC [logger_test.go:34]" {
-		t.Fatal("Unexpected caller location found", cLocation)
-	}
-	shortFile = false // We are not interested in short file form.
-	cLocation = funcFromPC(pc, file, line, shortFile)
-	if cLocation != "TestFuncToPC [github.com/minio/minio/cmd/logger_test.go:34]" {
-		t.Fatal("Unexpected caller location found", cLocation)
+// Tests callerLocation.
+func TestCallerLocation(t *testing.T) {
+	currentLocation := func() string { return callerLocation() }
+	gotLocation := currentLocation()
+	expectedLocation := "[logger_test.go:31:TestCallerLocation()]"
+	if gotLocation != expectedLocation {
+		t.Errorf("expected : %s, got : %s", expectedLocation, gotLocation)
 	}
 }
 

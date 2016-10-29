@@ -20,7 +20,6 @@ import (
 	"errors"
 	"net/url"
 	pathutil "path"
-	"runtime"
 	"sync"
 
 	"github.com/minio/dsync"
@@ -197,19 +196,7 @@ func (n *nsLockMap) unlock(volume, path, opsID string, readLock bool) {
 func (n *nsLockMap) Lock(volume, path, opsID string) {
 	readLock := false // This is a write lock.
 
-	// The caller information of the lock held has been obtained
-	// here before calling any other function.
-
-	// Fetching the package, function name and the line number of
-	// the caller from the runtime.
-	pc, file, line, success := runtime.Caller(1)
-	if !success {
-		file = "???"
-		line = 0
-	}
-	shortFile := true // We are only interested in short file form.
-	lockLocation := funcFromPC(pc, file, line, shortFile)
-
+	lockLocation := callerLocation() // Useful for debugging
 	n.lock(volume, path, lockLocation, opsID, readLock)
 }
 
@@ -223,19 +210,7 @@ func (n *nsLockMap) Unlock(volume, path, opsID string) {
 func (n *nsLockMap) RLock(volume, path, opsID string) {
 	readLock := true
 
-	// The caller information of the lock held has been obtained
-	// here before calling any other function.
-
-	// Fetching the package, function name and the line number of
-	// the caller from the runtime.
-	pc, file, line, success := runtime.Caller(1)
-	if !success {
-		file = "???"
-		line = 0
-	}
-	shortFile := true // We are only interested in short file form.
-	lockLocation := funcFromPC(pc, file, line, shortFile)
-
+	lockLocation := callerLocation() // Useful for debugging
 	n.lock(volume, path, lockLocation, opsID, readLock)
 }
 
