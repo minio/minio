@@ -84,9 +84,10 @@ func callerLocation() string {
 		file = "<unknown>"
 		line = 0
 	}
-	shortFile := true // We are only interested in short file form.
-	callerLoc := funcFromPC(pc, file, line, shortFile)
-	return callerLoc
+	file = path.Base(file)
+	name := runtime.FuncForPC(pc).Name()
+	name = strings.TrimPrefix(name, "github.com/minio/minio/cmd.")
+	return fmt.Sprintf("[%s:%d:%s()]", file, line, name)
 }
 
 // errorIf synonymous with fatalIf but doesn't exit on error != nil
@@ -116,8 +117,8 @@ func fatalIf(err error, msg string, data ...interface{}) {
 		"location": location,
 		"cause":    err.Error(),
 	}
-	if globalTrace {
-		fields["stack"] = "\n" + stackInfo()
+	if e, ok := err.(*Error); ok {
+		fields["stack"] = strings.Join(e.Trace(), " ")
 	}
 	log.WithFields(fields).Fatalf(msg, data...)
 }
