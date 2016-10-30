@@ -122,7 +122,7 @@ func TestFSWriteUploadJSON(t *testing.T) {
 		t.Fatal("Unexpected err: ", err)
 	}
 
-	if err := fs.writeUploadJSON(bucketName, objectName, uploadID, time.Now().UTC()); err != nil {
+	if err := fs.updateUploadJSON(bucketName, objectName, uploadIDChange{uploadID, time.Now().UTC(), false}); err != nil {
 		t.Fatal("Unexpected err: ", err)
 	}
 
@@ -131,36 +131,8 @@ func TestFSWriteUploadJSON(t *testing.T) {
 	for i := 1; i <= 3; i++ {
 		naughty := newNaughtyDisk(fsStorage, map[int]error{i: errFaultyDisk}, nil)
 		fs.storage = naughty
-		if err := fs.writeUploadJSON(bucketName, objectName, uploadID, time.Now().UTC()); errorCause(err) != errFaultyDisk {
-			t.Fatal("Unexpected err: ", err)
-		}
-	}
-}
-
-// TestFSUpdateUploadsJSON - tests for updateUploadsJSON for FS
-func TestFSUpdateUploadsJSON(t *testing.T) {
-	// Prepare for tests
-	disk := filepath.Join(os.TempDir(), "minio-"+nextSuffix())
-	defer removeAll(disk)
-
-	obj := initFSObjects(disk, t)
-	fs := obj.(fsObjects)
-
-	bucketName := "bucket"
-	objectName := "object"
-
-	obj.MakeBucket(bucketName)
-
-	if err := fs.updateUploadsJSON(bucketName, objectName, uploadsV1{}); err != nil {
-		t.Fatal("Unexpected err: ", err)
-	}
-
-	// isUploadIdExists with a faulty disk should return false
-	fsStorage := fs.storage.(*posix)
-	for i := 1; i <= 2; i++ {
-		naughty := newNaughtyDisk(fsStorage, map[int]error{i: errFaultyDisk}, nil)
-		fs.storage = naughty
-		if err := fs.updateUploadsJSON(bucketName, objectName, uploadsV1{}); errorCause(err) != errFaultyDisk {
+		if err := fs.updateUploadJSON(bucketName, objectName,
+			uploadIDChange{uploadID, time.Now().UTC(), false}); errorCause(err) != errFaultyDisk {
 			t.Fatal("Unexpected err: ", err)
 		}
 	}

@@ -306,7 +306,7 @@ func (xl xlObjects) newMultipartUpload(bucket string, object string, meta map[st
 
 	initiated := time.Now().UTC()
 	// Create or update 'uploads.json'
-	if err := xl.writeUploadJSON(bucket, object, uploadID, initiated); err != nil {
+	if err := xl.updateUploadJSON(bucket, object, uploadIDChange{uploadID, initiated, false}); err != nil {
 		return "", err
 	}
 	// Return success.
@@ -832,27 +832,8 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object), opsID)
 	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object), opsID)
 
-	// Validate if there are other incomplete upload-id's present for
-	// the object, if yes do not attempt to delete 'uploads.json'.
-	uploadsJSON, err := xl.readUploadsJSON(bucket, object)
-	if err != nil {
-		return "", toObjectErr(err, minioMetaBucket, object)
-	}
-	// If we have successfully read `uploads.json`, then we proceed to
-	// purge or update `uploads.json`.
-	uploadIDIdx := uploadsJSON.Index(uploadID)
-	if uploadIDIdx != -1 {
-		uploadsJSON.Uploads = append(uploadsJSON.Uploads[:uploadIDIdx], uploadsJSON.Uploads[uploadIDIdx+1:]...)
-	}
-	if len(uploadsJSON.Uploads) > 0 {
-		if err = xl.updateUploadsJSON(bucket, object, uploadsJSON); err != nil {
-			return "", toObjectErr(err, minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object))
-		}
-		// Return success.
-		return s3MD5, nil
-	} // No more pending uploads for the object, proceed to delete
-	// object completely from '.minio.sys/multipart'.
-	if err = xl.deleteObject(minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object)); err != nil {
+	// remove entry from uploads.json with quorum
+	if err = xl.updateUploadJSON(bucket, object, uploadIDChange{uploadID: uploadID, isRemove: true}); err != nil {
 		return "", toObjectErr(err, minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object))
 	}
 
@@ -875,28 +856,10 @@ func (xl xlObjects) abortMultipartUpload(bucket, object, uploadID string) (err e
 
 	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object), opsID)
 	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object), opsID)
-	// Validate if there are other incomplete upload-id's present for
-	// the object, if yes do not attempt to delete 'uploads.json'.
-	uploadsJSON, err := xl.readUploadsJSON(bucket, object)
-	if err != nil {
+
+	// remove entry from uploads.json with quorum
+	if err = xl.updateUploadJSON(bucket, object, uploadIDChange{uploadID: uploadID, isRemove: true}); err != nil {
 		return toObjectErr(err, bucket, object)
-	}
-	uploadIDIdx := uploadsJSON.Index(uploadID)
-	if uploadIDIdx != -1 {
-		uploadsJSON.Uploads = append(uploadsJSON.Uploads[:uploadIDIdx], uploadsJSON.Uploads[uploadIDIdx+1:]...)
-	}
-	if len(uploadsJSON.Uploads) > 0 {
-		// There are pending uploads for the same object, preserve
-		// them update 'uploads.json' in-place.
-		err = xl.updateUploadsJSON(bucket, object, uploadsJSON)
-		if err != nil {
-			return toObjectErr(err, bucket, object)
-		}
-		return nil
-	} // No more pending uploads for the object, we purge the entire
-	// entry at '.minio.sys/multipart/bucket/object'.
-	if err = xl.deleteObject(minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object)); err != nil {
-		return toObjectErr(err, minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object))
 	}
 
 	// Successfully purged.

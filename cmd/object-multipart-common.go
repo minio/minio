@@ -56,6 +56,17 @@ func (u *uploadsV1) AddUploadID(uploadID string, initiated time.Time) {
 	sort.Sort(byInitiatedTime(u.Uploads))
 }
 
+// RemoveUploadID - removes upload id from uploads metadata.
+func (u *uploadsV1) RemoveUploadID(uploadID string) {
+	// If the uploadID is absent, we do nothing.
+	for i, uInfo := range u.Uploads {
+		if uInfo.UploadID == uploadID {
+			u.Uploads = append(u.Uploads[:i], u.Uploads[i+1:]...)
+			break
+		}
+	}
+}
+
 // Index - returns the index of matching the upload id.
 func (u uploadsV1) Index(uploadID string) int {
 	for i, u := range u.Uploads {
@@ -90,6 +101,40 @@ func newUploadsV1(format string) uploadsV1 {
 	uploadIDs.Version = "1.0.0" // Should follow semantic versioning.
 	uploadIDs.Format = format
 	return uploadIDs
+}
+
+// uploadIDChange - represents a change to uploads.json - either add
+// or remove an upload id.
+type uploadIDChange struct {
+	// the id being added or removed.
+	uploadID string
+	// time of upload start. only used in uploadid add operations.
+	initiated time.Time
+	// if true, removes uploadID and ignores initiated time.
+	isRemove bool
+}
+
+func writeUploadJSON(u *uploadsV1, uploadsPath, tmpPath string, disk StorageAPI) error {
+	// Serialize to prepare to write to disk.
+	uplBytes, wErr := json.Marshal(&u)
+	if wErr != nil {
+		return traceError(wErr)
+	}
+
+	// Write `uploads.json` to disk. First to tmp location and
+	// then rename.
+	if wErr = disk.AppendFile(minioMetaBucket, tmpPath, uplBytes); wErr != nil {
+		return traceError(wErr)
+	}
+	wErr = disk.RenameFile(minioMetaBucket, tmpPath, minioMetaBucket, uploadsPath)
+	if wErr != nil {
+		if dErr := disk.DeleteFile(minioMetaBucket, tmpPath); dErr != nil {
+			// we return the most recent error.
+			return traceError(dErr)
+		}
+		return traceError(wErr)
+	}
+	return nil
 }
 
 // Wrapper which removes all the uploaded parts.

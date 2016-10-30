@@ -17,171 +17,128 @@
 package cmd
 
 import (
-	"encoding/json"
 	"path"
 	"sync"
-	"time"
 )
 
-// updateUploadsJSON - update `uploads.json` with new uploadsJSON for all disks.
-func (xl xlObjects) updateUploadsJSON(bucket, object string, uploadsJSON uploadsV1) (err error) {
-	uploadsPath := path.Join(mpartMetaPrefix, bucket, object, uploadsJSONFile)
-	uniqueID := getUUID()
-	tmpUploadsPath := path.Join(tmpMetaPrefix, uniqueID)
-	var errs = make([]error, len(xl.storageDisks))
-	var wg = &sync.WaitGroup{}
-
-	// Update `uploads.json` for all the disks.
-	for index, disk := range xl.storageDisks {
-		if disk == nil {
-			errs[index] = errDiskNotFound
-			continue
-		}
-		wg.Add(1)
-		// Update `uploads.json` in routine.
-		go func(index int, disk StorageAPI) {
-			defer wg.Done()
-			uploadsBytes, wErr := json.Marshal(uploadsJSON)
-			if wErr != nil {
-				errs[index] = traceError(wErr)
-				return
-			}
-			if wErr = disk.AppendFile(minioMetaBucket, tmpUploadsPath, uploadsBytes); wErr != nil {
-				errs[index] = traceError(wErr)
-				return
-			}
-			if wErr = disk.RenameFile(minioMetaBucket, tmpUploadsPath, minioMetaBucket, uploadsPath); wErr != nil {
-				errs[index] = traceError(wErr)
-				return
-			}
-		}(index, disk)
-	}
-
-	// Wait for all the routines to finish updating `uploads.json`
-	wg.Wait()
-
-	// Count all the errors and validate if we have write quorum.
-	if !isDiskQuorum(errs, xl.writeQuorum) {
-		// Do we have readQuorum?.
-		if isDiskQuorum(errs, xl.readQuorum) {
-			return nil
-		}
-		// Rename `uploads.json` left over back to tmp location.
-		for index, disk := range xl.storageDisks {
-			if disk == nil {
-				continue
-			}
-			// Undo rename `uploads.json` in parallel.
-			wg.Add(1)
-			go func(index int, disk StorageAPI) {
-				defer wg.Done()
-				if errs[index] != nil {
-					return
-				}
-				_ = disk.RenameFile(minioMetaBucket, uploadsPath, minioMetaBucket, tmpUploadsPath)
-			}(index, disk)
-		}
-		wg.Wait()
-		return traceError(errXLWriteQuorum)
-	}
-	return nil
-}
-
-// Reads uploads.json from any of the load balanced disks.
-func (xl xlObjects) readUploadsJSON(bucket, object string) (uploadsJSON uploadsV1, err error) {
-	for _, disk := range xl.getLoadBalancedDisks() {
-		if disk == nil {
-			continue
-		}
-		uploadsJSON, err = readUploadsJSON(bucket, object, disk)
-		if err == nil {
-			return uploadsJSON, nil
-		}
-		if isErrIgnored(err, objMetadataOpIgnoredErrs) {
-			continue
-		}
-		break
-	}
-	return uploadsV1{}, err
-}
-
-// writeUploadJSON - create `uploads.json` or update it with new uploadID.
-func (xl xlObjects) writeUploadJSON(bucket, object, uploadID string, initiated time.Time) (err error) {
+// writeUploadJSON - create `uploads.json` or update it with change
+// described in uCh.
+func (xl xlObjects) updateUploadJSON(bucket, object string, uCh uploadIDChange) error {
 	uploadsPath := path.Join(mpartMetaPrefix, bucket, object, uploadsJSONFile)
 	uniqueID := getUUID()
 	tmpUploadsPath := path.Join(tmpMetaPrefix, uniqueID)
 
-	var errs = make([]error, len(xl.storageDisks))
-	var wg = &sync.WaitGroup{}
+	// slice to store errors from disks
+	errs := make([]error, len(xl.storageDisks))
+	// slice to store if it is a delete operation on a disk
+	isDelete := make([]bool, len(xl.storageDisks))
 
-	// Reads `uploads.json` and returns error.
-	uploadsJSON, err := xl.readUploadsJSON(bucket, object)
-	if err != nil {
-		if errorCause(err) != errFileNotFound {
-			return err
-		}
-		// Set uploads format to `xl` otherwise.
-		uploadsJSON = newUploadsV1("xl")
-	}
-	// Add a new upload id.
-	uploadsJSON.AddUploadID(uploadID, initiated)
-
-	// Update `uploads.json` on all disks.
+	wg := sync.WaitGroup{}
 	for index, disk := range xl.storageDisks {
 		if disk == nil {
 			errs[index] = traceError(errDiskNotFound)
 			continue
 		}
+		// Update `uploads.json` in a go routine.
 		wg.Add(1)
-		// Update `uploads.json` in a routine.
 		go func(index int, disk StorageAPI) {
 			defer wg.Done()
-			uploadsJSONBytes, wErr := json.Marshal(&uploadsJSON)
-			if wErr != nil {
-				errs[index] = traceError(wErr)
+
+			// read and parse uploads.json on this disk
+			uploadsJSON, err := readUploadsJSON(bucket, object, disk)
+			if errorCause(err) == errFileNotFound {
+				// If file is not found, we assume an
+				// default (empty) upload info.
+				uploadsJSON, err = newUploadsV1("xl"), nil
+			}
+			// If we have a read error, we store error and
+			// exit.
+			if err != nil {
+				errs[index] = traceError(err)
 				return
 			}
-			// Write `uploads.json` to disk.
-			if wErr = disk.AppendFile(minioMetaBucket, tmpUploadsPath, uploadsJSONBytes); wErr != nil {
-				errs[index] = traceError(wErr)
-				return
-			}
-			wErr = disk.RenameFile(minioMetaBucket, tmpUploadsPath, minioMetaBucket, uploadsPath)
-			if wErr != nil {
-				if dErr := disk.DeleteFile(minioMetaBucket, tmpUploadsPath); dErr != nil {
-					errs[index] = traceError(dErr)
-					return
+
+			if !uCh.isRemove {
+				// Add the uploadID
+				uploadsJSON.AddUploadID(uCh.uploadID, uCh.initiated)
+			} else {
+				// Remove the upload ID
+				uploadsJSON.RemoveUploadID(uCh.uploadID)
+				if len(uploadsJSON.Uploads) == 0 {
+					isDelete[index] = true
 				}
-				errs[index] = traceError(wErr)
-				return
 			}
-			errs[index] = nil
+
+			// For delete, rename to tmp, for the
+			// possibility of recovery in case of quorum
+			// failure.
+			if !isDelete[index] {
+				errs[index] = writeUploadJSON(&uploadsJSON, uploadsPath, tmpUploadsPath, disk)
+			} else {
+				wErr := disk.RenameFile(minioMetaBucket, uploadsPath, minioMetaBucket, tmpUploadsPath)
+				if wErr != nil {
+					errs[index] = traceError(wErr)
+				}
+
+			}
 		}(index, disk)
 	}
 
-	// Wait here for all the writes to finish.
+	// Wait for all the writes to finish.
 	wg.Wait()
 
-	// Do we have write quorum?.
+	// Do we have write quorum?
 	if !isDiskQuorum(errs, xl.writeQuorum) {
-		// Rename `uploads.json` left over back to tmp location.
+		// No quorum. Perform cleanup on the minority of disks
+		// on which the operation succeeded.
+
+		// There are two cases:
+		//
+		// 1. uploads.json file was updated -> we delete the
+		//    file that we successfully overwrote on the
+		//    minority of disks, so that the failed quorum
+		//    operation is not partially visible.
+		//
+		// 2. uploads.json was deleted -> in this case since
+		//    the delete failed, we restore from tmp.
 		for index, disk := range xl.storageDisks {
-			if disk == nil {
+			if disk == nil || errs[index] != nil {
 				continue
 			}
-			// Undo rename `uploads.json` in parallel.
 			wg.Add(1)
 			go func(index int, disk StorageAPI) {
 				defer wg.Done()
-				if errs[index] != nil {
-					return
+				if !isDelete[index] {
+					_ = disk.DeleteFile(
+						minioMetaBucket,
+						uploadsPath,
+					)
+				} else {
+					_ = disk.RenameFile(
+						minioMetaBucket, tmpUploadsPath,
+						minioMetaBucket, uploadsPath,
+					)
 				}
-				_ = disk.RenameFile(minioMetaBucket, uploadsPath, minioMetaBucket, tmpUploadsPath)
 			}(index, disk)
 		}
 		wg.Wait()
 		return traceError(errXLWriteQuorum)
 	}
+
+	// we do have quorum, so in case of delete upload.json file
+	// operation, we purge from tmp.
+	for index, disk := range xl.storageDisks {
+		if disk == nil || !isDelete[index] {
+			continue
+		}
+		wg.Add(1)
+		go func(index int, disk StorageAPI) {
+			defer wg.Done()
+			// isDelete[index] = true at this point.
+			_ = disk.DeleteFile(minioMetaBucket, tmpUploadsPath)
+		}(index, disk)
+	}
+	wg.Wait()
 
 	// Ignored errors list.
 	ignoredErrs := []error{
