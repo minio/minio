@@ -34,9 +34,9 @@ import (
 )
 
 const (
-	fsMinFreeSpace         = 1024 * 1024 * 1024
-	fsMinFreeInodesPercent = 5
-	maxAllowedIOError      = 5
+	fsMinFreeSpace    = 1024 * 1024 * 1024 // Min 1GiB free space.
+	fsMinFreeInodes   = 10000              // Min 10000.
+	maxAllowedIOError = 5
 )
 
 // posix - implements StorageAPI interface.
@@ -56,6 +56,9 @@ func checkPathLength(pathName string) error {
 	if runtime.GOOS == "darwin" && len(pathName) > 1016 {
 		return errFileNameTooLong
 	}
+
+	// Convert any '\' to '/'.
+	pathName = filepath.ToSlash(pathName)
 
 	// Check each path segment length is > 255
 	for len(pathName) > 0 && pathName != "." && pathName != "/" {
@@ -111,7 +114,7 @@ func newPosix(path string) (StorageAPI, error) {
 	fs := &posix{
 		diskPath:      diskPath,
 		minFreeSpace:  fsMinFreeSpace,
-		minFreeInodes: fsMinFreeInodesPercent,
+		minFreeInodes: fsMinFreeInodes,
 		// 1MiB buffer pool for posix internal operations.
 		pool: sync.Pool{
 			New: func() interface{} {
@@ -120,17 +123,21 @@ func newPosix(path string) (StorageAPI, error) {
 			},
 		},
 	}
-	st, err := os.Stat(preparePath(diskPath))
-	if err != nil {
-		if os.IsNotExist(err) {
-			// Disk not found create it.
-			err = os.MkdirAll(diskPath, 0777)
-			return fs, err
+	fi, err := os.Stat(preparePath(diskPath))
+	if err == nil {
+		if !fi.IsDir() {
+			return nil, syscall.ENOTDIR
 		}
-		return fs, err
 	}
-	if !st.IsDir() {
-		return fs, syscall.ENOTDIR
+	if os.IsNotExist(err) {
+		// Disk not found create it.
+		err = os.MkdirAll(preparePath(diskPath), 0777)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if err = fs.checkDiskFree(); err != nil {
+		return nil, err
 	}
 	return fs, nil
 }
@@ -150,7 +157,14 @@ func getDiskInfo(diskPath string) (di disk.Info, err error) {
 
 // checkDiskFree verifies if disk path has sufficient minimum free disk space and files.
 func (s *posix) checkDiskFree() (err error) {
-	di, err := getDiskInfo(s.diskPath)
+	// We don't validate disk space or inode utilization on windows.
+	// Each windows calls to 'GetVolumeInformationW' takes around 3-5seconds.
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+
+	var di disk.Info
+	di, err = getDiskInfo(preparePath(s.diskPath))
 	if err != nil {
 		return err
 	}
@@ -166,8 +180,8 @@ func (s *posix) checkDiskFree() (err error) {
 	// Allow for the available disk to be separately validate and we will validate inodes only if
 	// total inodes are provided by the underlying filesystem.
 	if di.Files != 0 {
-		availableFiles := 100 * float64(di.Ffree) / float64(di.Files)
-		if int64(availableFiles) <= s.minFreeInodes {
+		availableFiles := int64(di.Ffree)
+		if availableFiles <= s.minFreeInodes {
 			return errDiskFull
 		}
 	}
@@ -184,7 +198,7 @@ func (s *posix) String() string {
 // DiskInfo provides current information about disk space usage,
 // total free inodes and underlying filesystem.
 func (s *posix) DiskInfo() (info disk.Info, err error) {
-	return getDiskInfo(s.diskPath)
+	return getDiskInfo(preparePath(s.diskPath))
 }
 
 // getVolDir - will convert incoming volume names to
@@ -199,6 +213,20 @@ func (s *posix) getVolDir(volume string) (string, error) {
 	return volumeDir, nil
 }
 
+// checkDiskFound - validates if disk is available,
+// returns errDiskNotFound if not found.
+func (s *posix) checkDiskFound() (err error) {
+	_, err = os.Stat(preparePath(s.diskPath))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return errDiskNotFound
+		} else if isSysErrTooLong(err) {
+			return errFileNameTooLong
+		}
+	}
+	return err
+}
+
 // Make a volume entry.
 func (s *posix) MakeVol(volume string) (err error) {
 	defer func() {
@@ -211,8 +239,7 @@ func (s *posix) MakeVol(volume string) (err error) {
 		return errFaultyDisk
 	}
 
-	// Validate if disk is free.
-	if err = s.checkDiskFree(); err != nil {
+	if err = s.checkDiskFound(); err != nil {
 		return err
 	}
 
@@ -246,7 +273,11 @@ func (s *posix) ListVols() (volsInfo []VolInfo, err error) {
 		return nil, errFaultyDisk
 	}
 
-	volsInfo, err = listVols(s.diskPath)
+	if err = s.checkDiskFound(); err != nil {
+		return nil, err
+	}
+
+	volsInfo, err = listVols(preparePath(s.diskPath))
 	if err != nil {
 		return nil, err
 	}
@@ -306,8 +337,7 @@ func (s *posix) StatVol(volume string) (volInfo VolInfo, err error) {
 		return VolInfo{}, errFaultyDisk
 	}
 
-	// Check disk availability.
-	if _, err = getDiskInfo(s.diskPath); err != nil {
+	if err = s.checkDiskFound(); err != nil {
 		return VolInfo{}, err
 	}
 
@@ -346,8 +376,7 @@ func (s *posix) DeleteVol(volume string) (err error) {
 		return errFaultyDisk
 	}
 
-	// Check disk availability.
-	if _, err = getDiskInfo(s.diskPath); err != nil {
+	if err = s.checkDiskFound(); err != nil {
 		return err
 	}
 
@@ -381,8 +410,7 @@ func (s *posix) ListDir(volume, dirPath string) (entries []string, err error) {
 		return nil, errFaultyDisk
 	}
 
-	// Check disk availability.
-	if _, err = getDiskInfo(s.diskPath); err != nil {
+	if err = s.checkDiskFound(); err != nil {
 		return nil, err
 	}
 
@@ -419,8 +447,7 @@ func (s *posix) ReadAll(volume, path string) (buf []byte, err error) {
 		return nil, errFaultyDisk
 	}
 
-	// Check disk availability.
-	if _, err = getDiskInfo(s.diskPath); err != nil {
+	if err = s.checkDiskFound(); err != nil {
 		return nil, err
 	}
 
@@ -439,7 +466,7 @@ func (s *posix) ReadAll(volume, path string) (buf []byte, err error) {
 
 	// Validate file path length, before reading.
 	filePath := pathJoin(volumeDir, path)
-	if err = checkPathLength(filePath); err != nil {
+	if err = checkPathLength(preparePath(filePath)); err != nil {
 		return nil, err
 	}
 
@@ -483,8 +510,7 @@ func (s *posix) ReadFile(volume string, path string, offset int64, buf []byte) (
 		return 0, errFaultyDisk
 	}
 
-	// Check disk availability.
-	if _, err = getDiskInfo(s.diskPath); err != nil {
+	if err = s.checkDiskFound(); err != nil {
 		return 0, err
 	}
 
@@ -503,7 +529,7 @@ func (s *posix) ReadFile(volume string, path string, offset int64, buf []byte) (
 
 	// Validate effective path length before reading.
 	filePath := pathJoin(volumeDir, path)
-	if err = checkPathLength(filePath); err != nil {
+	if err = checkPathLength(preparePath(filePath)); err != nil {
 		return 0, err
 	}
 
@@ -557,8 +583,7 @@ func (s *posix) createFile(volume, path string) (f *os.File, err error) {
 		return nil, errFaultyDisk
 	}
 
-	// Validate if disk is free.
-	if err = s.checkDiskFree(); err != nil {
+	if err = s.checkDiskFound(); err != nil {
 		return nil, err
 	}
 
@@ -576,7 +601,7 @@ func (s *posix) createFile(volume, path string) (f *os.File, err error) {
 	}
 
 	filePath := pathJoin(volumeDir, path)
-	if err = checkPathLength(filePath); err != nil {
+	if err = checkPathLength(preparePath(filePath)); err != nil {
 		return nil, err
 	}
 
@@ -630,6 +655,11 @@ func (s *posix) PrepareFile(volume, path string, fileSize int64) (err error) {
 
 	if s.ioErrCount > maxAllowedIOError {
 		return errFaultyDisk
+	}
+
+	// Validate if disk is indeed free.
+	if err = s.checkDiskFree(); err != nil {
+		return err
 	}
 
 	// Create file if not found
@@ -705,8 +735,7 @@ func (s *posix) StatFile(volume, path string) (file FileInfo, err error) {
 		return FileInfo{}, errFaultyDisk
 	}
 
-	// Check disk availability.
-	if _, err = getDiskInfo(s.diskPath); err != nil {
+	if err = s.checkDiskFound(); err != nil {
 		return FileInfo{}, err
 	}
 
@@ -724,7 +753,7 @@ func (s *posix) StatFile(volume, path string) (file FileInfo, err error) {
 	}
 
 	filePath := slashpath.Join(volumeDir, path)
-	if err = checkPathLength(filePath); err != nil {
+	if err = checkPathLength(preparePath(filePath)); err != nil {
 		return FileInfo{}, err
 	}
 	st, err := os.Stat(preparePath(filePath))
@@ -802,8 +831,7 @@ func (s *posix) DeleteFile(volume, path string) (err error) {
 		return errFaultyDisk
 	}
 
-	// Check disk availability.
-	if _, err = getDiskInfo(s.diskPath); err != nil {
+	if err = s.checkDiskFound(); err != nil {
 		return err
 	}
 
@@ -823,7 +851,7 @@ func (s *posix) DeleteFile(volume, path string) (err error) {
 	// Following code is needed so that we retain "/" suffix if any in
 	// path argument.
 	filePath := pathJoin(volumeDir, path)
-	if err = checkPathLength(filePath); err != nil {
+	if err = checkPathLength(preparePath(filePath)); err != nil {
 		return err
 	}
 
@@ -843,8 +871,7 @@ func (s *posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err e
 		return errFaultyDisk
 	}
 
-	// Validate if disk is free.
-	if err = s.checkDiskFree(); err != nil {
+	if err = s.checkDiskFound(); err != nil {
 		return err
 	}
 
@@ -878,11 +905,11 @@ func (s *posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err e
 		return errFileAccessDenied
 	}
 	srcFilePath := slashpath.Join(srcVolumeDir, srcPath)
-	if err = checkPathLength(srcFilePath); err != nil {
+	if err = checkPathLength(preparePath(srcFilePath)); err != nil {
 		return err
 	}
 	dstFilePath := slashpath.Join(dstVolumeDir, dstPath)
-	if err = checkPathLength(dstFilePath); err != nil {
+	if err = checkPathLength(preparePath(dstFilePath)); err != nil {
 		return err
 	}
 	if srcIsDir {
