@@ -8,8 +8,6 @@ services:
     image: minio/minio:edge
     ports:
       - "9001:9000"
-    volumes:
-      - /mnt/export/minio1:/export
     environment:
       MINIO_ACCESS_KEY: minio
       MINIO_SECRET_KEY: minio123
@@ -18,8 +16,6 @@ services:
     image: minio/minio:edge
     ports:
       - "9002:9000"
-    volumes:
-      - /mnt/export/minio2:/export
     environment:
       MINIO_ACCESS_KEY: minio
       MINIO_SECRET_KEY: minio123
@@ -28,8 +24,6 @@ services:
     image: minio/minio:edge
     ports:
       - "9003:9000"
-    volumes:
-      - /mnt/export/minio3:/export
     environment:
       MINIO_ACCESS_KEY: minio
       MINIO_SECRET_KEY: minio123
@@ -38,8 +32,6 @@ services:
     image: minio/minio:edge
     ports:
       - "9004:9000"
-    volumes:
-      - /mnt/export/minio4:/export
     environment:
       MINIO_ACCESS_KEY: minio
       MINIO_SECRET_KEY: minio123
