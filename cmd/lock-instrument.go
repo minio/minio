@@ -88,13 +88,13 @@ func (l LockInfoOriginNotFound) Error() string {
 		l.lockOrigin, l.volume, l.path, l.opsID)
 }
 
-// LockInfoVolPathMssing - Error interface. Returned when the info the
-type LockInfoVolPathMssing struct {
+// LockInfoVolPathMissing - Error interface. Returned when the info the
+type LockInfoVolPathMissing struct {
 	volume string
 	path   string
 }
 
-func (l LockInfoVolPathMssing) Error() string {
+func (l LockInfoVolPathMissing) Error() string {
 	return fmt.Sprintf("No entry in debug Lock Map for Volume: %s, path: %s.", l.volume, l.path)
 }
 
@@ -152,26 +152,26 @@ func (n *nsLockMap) statusBlockedToRunning(param nsParam, lockOrigin, opsID stri
 	debugLockMap, ok := n.debugLockMap[param]
 	if !ok {
 		// The lock state info foe given <volume, path> pair should already exist.
-		// If not return `LockInfoVolPathMssing`.
-		return LockInfoVolPathMssing{param.volume, param.path}
+		// If not return `LockInfoVolPathMissing`.
+		return traceError(LockInfoVolPathMissing{param.volume, param.path})
 	}
 	//  ``debugLockMap`` entry containing lock info for `param <volume, path>` is `nil`.
 	if debugLockMap == nil {
-		return errLockNotInitialized
+		return traceError(errLockNotInitialized)
 	}
 	lockInfo, ok := n.debugLockMap[param].lockInfo[opsID]
 	if !ok {
 		// The lock info entry for given `opsID` should already exist for given <volume, path> pair.
 		// If not return `LockInfoOpsIDNotFound`.
-		return LockInfoOpsIDNotFound{param.volume, param.path, opsID}
+		return traceError(LockInfoOpsIDNotFound{param.volume, param.path, opsID})
 	}
 	// The entry for the lock origined at `lockOrigin` should already exist. If not return `LockInfoOriginNotFound`.
 	if lockInfo.lockOrigin != lockOrigin {
-		return LockInfoOriginNotFound{param.volume, param.path, opsID, lockOrigin}
+		return traceError(LockInfoOriginNotFound{param.volume, param.path, opsID, lockOrigin})
 	}
 	// Status of the lock should already be set to "Blocked". If not return `LockInfoStateNotBlocked`.
 	if lockInfo.status != blockedStatus {
-		return LockInfoStateNotBlocked{param.volume, param.path, opsID}
+		return traceError(LockInfoStateNotBlocked{param.volume, param.path, opsID})
 	}
 	// All checks finished. Changing the status of the operation from blocked to running and updating the time.
 	n.debugLockMap[param].lockInfo[opsID] = newLockInfo
@@ -230,7 +230,7 @@ func (n *nsLockMap) statusNoneToBlocked(param nsParam, lockOrigin, opsID string,
 func (n *nsLockMap) deleteLockInfoEntryForVolumePath(param nsParam) error {
 	// delete the lock info for the given operation.
 	if _, found := n.debugLockMap[param]; !found {
-		return LockInfoVolPathMssing{param.volume, param.path}
+		return traceError(LockInfoVolPathMissing{param.volume, param.path})
 	}
 	// Remove from the map if there are no more references for the given (volume,path) pair.
 	delete(n.debugLockMap, param)
@@ -244,14 +244,14 @@ func (n *nsLockMap) deleteLockInfoEntryForOps(param nsParam, opsID string) error
 	// delete the lock info for the given operation.
 	infoMap, found := n.debugLockMap[param]
 	if !found {
-		return LockInfoVolPathMssing{param.volume, param.path}
+		return traceError(LockInfoVolPathMissing{param.volume, param.path})
 	}
 	// The opertion finished holding the lock on the resource, remove
 	// the entry for the given operation with the operation ID.
 	_, foundInfo := infoMap.lockInfo[opsID]
 	if !foundInfo {
 		// Unlock request with invalid opertion ID not accepted.
-		return LockInfoOpsIDNotFound{param.volume, param.path, opsID}
+		return traceError(LockInfoOpsIDNotFound{param.volume, param.path, opsID})
 	}
 	// Decrease the global running and lock reference counter.
 	n.runningLockCounter--

@@ -278,7 +278,7 @@ func TestNsLockMapStatusBlockedToRunning(t *testing.T) {
 			readLock:   false,
 			setBlocked: false,
 			// expected metrics.
-			expectedErr: LockInfoVolPathMssing{"my-bucket", "my-object-2"},
+			expectedErr: LockInfoVolPathMissing{"my-bucket", "my-object-2"},
 		},
 		// Test case - 3.
 		// Entry for the given operationID doesn't exist in the lock state info.
@@ -325,8 +325,8 @@ func TestNsLockMapStatusBlockedToRunning(t *testing.T) {
 	actualErr := nsMutex.statusBlockedToRunning(param, testCases[0].lockOrigin,
 		testCases[0].opsID, testCases[0].readLock)
 
-	expectedErr := LockInfoVolPathMssing{testCases[0].volume, testCases[0].path}
-	if actualErr != expectedErr {
+	expectedErr := LockInfoVolPathMissing{testCases[0].volume, testCases[0].path}
+	if errorCause(actualErr) != expectedErr {
 		t.Fatalf("Errors mismatch: Expected \"%s\", got \"%s\"", expectedErr, actualErr)
 	}
 
@@ -340,7 +340,7 @@ func TestNsLockMapStatusBlockedToRunning(t *testing.T) {
 	actualErr = nsMutex.statusBlockedToRunning(param, testCases[0].lockOrigin,
 		testCases[0].opsID, testCases[0].readLock)
 
-	if actualErr != errLockNotInitialized {
+	if errorCause(actualErr) != errLockNotInitialized {
 		t.Fatalf("Errors mismatch: Expected \"%s\", got \"%s\"", errLockNotInitialized, actualErr)
 	}
 
@@ -356,7 +356,7 @@ func TestNsLockMapStatusBlockedToRunning(t *testing.T) {
 		testCases[0].opsID, testCases[0].readLock)
 
 	expectedOpsErr := LockInfoOpsIDNotFound{testCases[0].volume, testCases[0].path, testCases[0].opsID}
-	if actualErr != expectedOpsErr {
+	if errorCause(actualErr) != expectedOpsErr {
 		t.Fatalf("Errors mismatch: Expected \"%s\", got \"%s\"", expectedOpsErr, actualErr)
 	}
 
@@ -381,7 +381,7 @@ func TestNsLockMapStatusBlockedToRunning(t *testing.T) {
 		testCases[0].opsID, testCases[0].readLock)
 
 	expectedBlockErr := LockInfoStateNotBlocked{testCases[0].volume, testCases[0].path, testCases[0].opsID}
-	if actualErr != expectedBlockErr {
+	if errorCause(actualErr) != expectedBlockErr {
 		t.Fatalf("Errors mismatch: Expected: \"%s\", got: \"%s\"", expectedBlockErr, actualErr)
 	}
 
@@ -402,7 +402,7 @@ func TestNsLockMapStatusBlockedToRunning(t *testing.T) {
 		}
 		// invoking the method under test.
 		actualErr = nsMutex.statusBlockedToRunning(param, testCase.lockOrigin, testCase.opsID, testCase.readLock)
-		if actualErr != testCase.expectedErr {
+		if errorCause(actualErr) != testCase.expectedErr {
 			t.Fatalf("Test %d: Errors mismatch: Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, actualErr)
 		}
 		// In case of no error proceed with validating the lock state information.
@@ -520,8 +520,8 @@ func TestNsLockMapStatusNoneToBlocked(t *testing.T) {
 	actualErr := nsMutex.statusBlockedToRunning(param, testCases[0].lockOrigin,
 		testCases[0].opsID, testCases[0].readLock)
 
-	expectedErr := LockInfoVolPathMssing{testCases[0].volume, testCases[0].path}
-	if actualErr != expectedErr {
+	expectedErr := LockInfoVolPathMissing{testCases[0].volume, testCases[0].path}
+	if errorCause(actualErr) != expectedErr {
 		t.Fatalf("Errors mismatch: Expected \"%s\", got \"%s\"", expectedErr, actualErr)
 	}
 
@@ -564,8 +564,8 @@ func TestNsLockMapDeleteLockInfoEntryForOps(t *testing.T) {
 
 	actualErr := nsMutex.deleteLockInfoEntryForOps(param, testCases[0].opsID)
 
-	expectedErr := LockInfoVolPathMssing{testCases[0].volume, testCases[0].path}
-	if actualErr != expectedErr {
+	expectedErr := LockInfoVolPathMissing{testCases[0].volume, testCases[0].path}
+	if errorCause(actualErr) != expectedErr {
 		t.Fatalf("Errors mismatch: Expected \"%s\", got \"%s\"", expectedErr, actualErr)
 	}
 
@@ -584,7 +584,7 @@ func TestNsLockMapDeleteLockInfoEntryForOps(t *testing.T) {
 	actualErr = nsMutex.deleteLockInfoEntryForOps(param, "non-existent-OpsID")
 
 	expectedOpsIDErr := LockInfoOpsIDNotFound{param.volume, param.path, "non-existent-OpsID"}
-	if actualErr != expectedOpsIDErr {
+	if errorCause(actualErr) != expectedOpsIDErr {
 		t.Fatalf("Errors mismatch: Expected \"%s\", got \"%s\"", expectedOpsIDErr, actualErr)
 	}
 	// case - 4.
@@ -647,8 +647,8 @@ func TestNsLockMapDeleteLockInfoEntryForVolumePath(t *testing.T) {
 	// Set the status of the lock to blocked and then to running.
 	param := nsParam{testCases[0].volume, testCases[0].path}
 	actualErr := nsMutex.deleteLockInfoEntryForVolumePath(param)
-	expectedNilErr := LockInfoVolPathMssing{param.volume, param.path}
-	if actualErr != expectedNilErr {
+	expectedNilErr := LockInfoVolPathMissing{param.volume, param.path}
+	if errorCause(actualErr) != expectedNilErr {
 		t.Fatalf("Errors mismatch: Expected \"%s\", got \"%s\"", expectedNilErr, actualErr)
 	}
 
