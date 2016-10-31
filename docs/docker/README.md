@@ -37,13 +37,14 @@ docker run -p 9000:9000 --name minio1 \
 
 ```
 
-## 4. Run Distributed Minio on Docker
+## 4. Test Distributed Minio on Docker
 
-To run 4 minio servers inside different docker containers using [docker-compose](https://docs.docker.com/compose/). Please download [docker-compose.yml](https://raw.githubusercontent.com/minio/minio/master/docker-compose.yml) to your project root directory.
+To run 4 minio servers inside different docker containers using [docker-compose](https://docs.docker.com/compose/). Please download [docker-compose.yml](./docker-compose.yml) to your current working directory.
 
 ### Run `docker-compose`
 
 ```sh
+docker-compose pull
 docker-compose up
 ```
 
