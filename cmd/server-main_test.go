@@ -178,7 +178,7 @@ func TestCheckSufficientDisks(t *testing.T) {
 }
 
 func TestCheckEndpointsSyntax(t *testing.T) {
-	testCases := []string{}
+	var testCases []string
 	if runtime.GOOS == "windows" {
 		testCases = []string{
 			"\\export",

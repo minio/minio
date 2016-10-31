@@ -29,7 +29,7 @@
    MINIO_VOLUMES=node1:/tmp/drive1 node2:/drive1 node3:/tmp/drive1 minio4:/tmp/drive1
    # Use if you want to run Minio on a custom port.
    MINIO_OPTS="--address :9199" 
-   # Acess Key of the server.
+   # Access Key of the server.
    MINIO_ACCESS_KEY=Server-Access-Key
    # Secret key of the server. 
    MINIO_SECRET_KEY=Server-Secret-Key

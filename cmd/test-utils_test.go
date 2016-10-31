@@ -789,7 +789,7 @@ func newTestStreamingSignedBadChunkDateRequest(method, urlStr string, contentLen
 	// skew the time between the chunk signature calculation and seed signature.
 	currTime = currTime.Add(1 * time.Second)
 	req, err = assembleStreamingChunks(req, body, chunkSize, secretKey, signature, currTime)
-	return req, nil
+	return req, err
 }
 
 // Returns new HTTP request object signed with streaming signature v4.
@@ -806,7 +806,7 @@ func newTestStreamingSignedRequest(method, urlStr string, contentLength, chunkSi
 	}
 
 	req, err = assembleStreamingChunks(req, body, chunkSize, secretKey, signature, currTime)
-	return req, nil
+	return req, err
 }
 
 // Replaces any occurring '/' in string, into its encoded
