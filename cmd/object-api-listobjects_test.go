@@ -564,23 +564,23 @@ func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	}
 }
 
+// Initialize FS backend for the benchmark.
 func initFSObjectsB(disk string, t *testing.B) (obj ObjectLayer) {
+
 	endPoints, err := parseStorageEndpoints([]string{disk})
 	if err != nil {
 		t.Fatal("Unexpected err: ", err)
 	}
 
-	storageDisks, err := initStorageDisks(endPoints, nil)
+	obj, _, err = initObjectLayer(endPoints, nil)
 	if err != nil {
 		t.Fatal("Unexpected err: ", err)
 	}
-	obj, err = newFSObjects(storageDisks[0])
-	if err != nil {
-		t.Fatal("Unexpected err: ", err)
-	}
+
 	return obj
 }
 
+// BenchmarkListObjects - Run ListObject Repeatedly and benchmark.
 func BenchmarkListObjects(b *testing.B) {
 	// Make a temporary directory to use as the obj.
 	directory, err := ioutil.TempDir("", "minio-list-benchmark")
@@ -588,20 +588,28 @@ func BenchmarkListObjects(b *testing.B) {
 		b.Fatal(err)
 	}
 	defer removeAll(directory)
+	// initialize the root directory.
+	rootPath, err := newTestConfig("us-east-1")
+	if err != nil {
+		b.Fatalf("Unable to initialize config. %s", err)
+	}
 
+	defer removeAll(rootPath)
 	// Create the obj.
 	obj := initFSObjectsB(directory, b)
 
+	bucket := "ls-benchmark-bucket"
 	// Create a bucket.
-	err = obj.MakeBucket("ls-benchmark-bucket")
+	err = obj.MakeBucket(bucket)
 	if err != nil {
 		b.Fatal(err)
 	}
 
 	sha256sum := ""
+	// Insert objects to be listed and benchmarked later.
 	for i := 0; i < 20000; i++ {
 		key := "obj" + strconv.Itoa(i)
-		_, err = obj.PutObject("ls-benchmark-bucket", key, int64(len(key)), bytes.NewBufferString(key), nil, sha256sum)
+		_, err = obj.PutObject(bucket, key, int64(len(key)), bytes.NewBufferString(key), nil, sha256sum)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -611,7 +619,7 @@ func BenchmarkListObjects(b *testing.B) {
 
 	// List the buckets over and over and over.
 	for i := 0; i < b.N; i++ {
-		_, err = obj.ListObjects("ls-benchmark-bucket", "", "obj9000", "", -1)
+		_, err = obj.ListObjects(bucket, "", "obj9000", "", -1)
 		if err != nil {
 			b.Fatal(err)
 		}
