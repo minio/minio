@@ -497,6 +497,10 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 			// Set decoded length to a large value out of int64 range to simulate parse failure.
 			req.Header.Set("x-amz-decoded-content-length", "9999999999999999999999")
 		}
+
+		if err != nil {
+			t.Fatalf("Error injecting faults into the request: <ERROR> %v.", err)
+		}
 		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
 		// Call the ServeHTTP to execute the handler,`func (api objectAPIHandlers) GetObjectHandler`  handles the request.
 		apiRouter.ServeHTTP(rec, req)
@@ -1835,6 +1839,9 @@ func testAPIPutObjectPartHandlerStreaming(obj ObjectLayer, instanceType, bucketN
 			getPutObjectPartURL("", bucketName, testObject, mpartResp.UploadID, "1"),
 			5, 1, bytes.NewReader([]byte("hello")), credentials.AccessKeyID, credentials.SecretAccessKey)
 
+		if err != nil {
+			t.Fatalf("Failed to create new streaming signed HTTP request: <ERROR> %v.", err)
+		}
 		switch test.fault {
 		case BadSignature:
 			// Reset date field in header to make streaming signature fail.
