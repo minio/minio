@@ -8,7 +8,7 @@ RUN \
 	go-wrapper download && \
 	go-wrapper install -ldflags "$(go run buildscripts/gen-ldflags.go)" && \
 	mkdir -p /export/docker && \
-	cp /go/src/app/docs/Docker.md /export/docker/ && \
+	cp /go/src/app/docs/docker/README.md /export/docker/ && \
 	rm -rf /go/pkg /go/src && \
 	apk del git
 
