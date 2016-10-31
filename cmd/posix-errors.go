@@ -42,7 +42,7 @@ func isSysErrIO(err error) bool {
 	return err != nil && err == syscall.EIO
 }
 
-// Check if the given error corresponds to ENOTDIR (is not a directory)
+// Check if the given error corresponds to ENOTDIR (is not a directory).
 func isSysErrNotDir(err error) bool {
 	if pathErr, ok := err.(*os.PathError); ok {
 		switch pathErr.Err {
@@ -53,8 +53,19 @@ func isSysErrNotDir(err error) bool {
 	return false
 }
 
+// Check if the given error corresponds to the ENAMETOOLONG (name too long).
+func isSysErrTooLong(err error) bool {
+	if pathErr, ok := err.(*os.PathError); ok {
+		switch pathErr.Err {
+		case syscall.ENAMETOOLONG:
+			return true
+		}
+	}
+	return false
+}
+
 // Check if the given error corresponds to ENOTEMPTY for unix
-// and ERROR_DIR_NOT_EMPTY for windows (directory not empty)
+// and ERROR_DIR_NOT_EMPTY for windows (directory not empty).
 func isSysErrNotEmpty(err error) bool {
 	if pathErr, ok := err.(*os.PathError); ok {
 		if runtime.GOOS == "windows" {

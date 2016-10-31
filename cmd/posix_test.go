@@ -536,23 +536,6 @@ func TestListVols(t *testing.T) {
 	if _, err = posixStorage.ListVols(); err != errDiskNotFound {
 		t.Errorf("Expected to fail with \"%s\", but instead failed with \"%s\"", errDiskNotFound, err)
 	}
-	// creating a new posix instance.
-	posixStorage, path, err = newPosixTestSetup()
-	if err != nil {
-		t.Fatalf("Unable to create posix test setup, %s", err)
-	}
-	defer removeAll(path)
-	// adding the segment of the path length of the volume to be > 255.
-	if posixType, ok := posixStorage.(*posix); ok {
-		// setting the disk Path with name whose segment length > 255.
-		posixType.diskPath = "my-vol-name-0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001"
-	} else {
-		t.Errorf("Expected the StorageAPI to be of type *posix")
-	}
-	if _, err = posixStorage.ListVols(); err != errFileNameTooLong {
-		t.Errorf("Expected to fail with \"%s\", but instead failed with \"%s\"", errFileNameTooLong, err)
-	}
-
 }
 
 // TestPosixListDir -  Tests validate the directory listing functionality provided by posix.ListDir .
