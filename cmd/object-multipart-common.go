@@ -67,16 +67,6 @@ func (u *uploadsV1) RemoveUploadID(uploadID string) {
 	}
 }
 
-// Index - returns the index of matching the upload id.
-func (u uploadsV1) Index(uploadID string) int {
-	for i, u := range u.Uploads {
-		if u.UploadID == uploadID {
-			return i
-		}
-	}
-	return -1
-}
-
 // readUploadsJSON - get all the saved uploads JSON.
 func readUploadsJSON(bucket, object string, disk StorageAPI) (uploadIDs uploadsV1, err error) {
 	uploadJSONPath := path.Join(mpartMetaPrefix, bucket, object, uploadsJSONFile)
