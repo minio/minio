@@ -31,10 +31,68 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
 )
+
+// Tests initalizing listeners.
+func TestInitListeners(t *testing.T) {
+	testCases := []struct {
+		serverAddr string
+		shouldPass bool
+	}{
+		// Test 1 with ip and port.
+		{
+			serverAddr: "127.0.0.1:" + getFreePort(),
+			shouldPass: true,
+		},
+		// Test 2 only port.
+		{
+			serverAddr: ":" + getFreePort(),
+			shouldPass: true,
+		},
+		// Test 3 with no port error.
+		{
+			serverAddr: "127.0.0.1",
+			shouldPass: false,
+		},
+		// Test 4 with 'foobar' host not resolvable.
+		{
+			serverAddr: "foobar:9000",
+			shouldPass: false,
+		},
+	}
+	for i, testCase := range testCases {
+		listeners, err := initListeners(testCase.serverAddr, &tls.Config{})
+		if testCase.shouldPass {
+			if err != nil {
+				t.Fatalf("Test %d: Unable to initialize listeners %s", i+1, err)
+			}
+			for _, listener := range listeners {
+				if err = listener.Close(); err != nil {
+					t.Fatalf("Test %d: Unable to close listeners %s", i+1, err)
+				}
+			}
+		}
+		if err == nil && !testCase.shouldPass {
+			t.Fatalf("Test %d: Should fail but is successful", i+1)
+		}
+	}
+	// Windows doesn't have 'localhost' hostname.
+	if runtime.GOOS != "windows" {
+		listeners, err := initListeners("localhost:"+getFreePort(), &tls.Config{})
+		if err != nil {
+			t.Fatalf("Test 3: Unable to initialize listeners %s", err)
+		}
+		for _, listener := range listeners {
+			if err = listener.Close(); err != nil {
+				t.Fatalf("Test 3: Unable to close listeners %s", err)
+			}
+		}
+	}
+}
 
 func TestClose(t *testing.T) {
 	// Create ServerMux
@@ -42,6 +100,11 @@ func TestClose(t *testing.T) {
 
 	if err := m.Close(); err != nil {
 		t.Error("Server errored while trying to Close", err)
+	}
+
+	// Closing again should return an error.
+	if err := m.Close(); err.Error() != "Server has been closed" {
+		t.Error("Unexepcted error expected \"Server has been closed\", got", err)
 	}
 }
 
@@ -63,7 +126,7 @@ func TestServerMux(t *testing.T) {
 		Listener: ts.Listener,
 		config:   &tls.Config{},
 	}
-	m.listener = lm
+	m.listeners = []*ListenerMux{lm}
 
 	client := http.Client{}
 	res, err := client.Get(ts.URL)
@@ -116,7 +179,7 @@ func TestServerCloseBlocking(t *testing.T) {
 		Listener: ts.Listener,
 		config:   &tls.Config{},
 	}
-	m.listener = lm
+	m.listeners = []*ListenerMux{lm}
 
 	dial := func() net.Conn {
 		c, cerr := net.Dial("tcp", ts.Listener.Addr().String())
@@ -245,14 +308,23 @@ func TestListenAndServeTLS(t *testing.T) {
 			Timeout:   time.Millisecond * 10,
 			Transport: tr,
 		}
-		ok := false
-		for !ok {
+		okTLS := false
+		for !okTLS {
 			res, _ := client.Get("https://" + addr)
 			if res != nil && res.StatusCode == http.StatusOK {
-				ok = true
+				okTLS = true
 			}
 		}
 
+		okNoTLS := false
+		for !okNoTLS {
+			res, _ := client.Get("http://" + addr)
+			// Without TLS we expect a re-direction from http to https
+			// And also the request is not rejected.
+			if res != nil && res.StatusCode == http.StatusOK && res.Request.URL.Scheme == "https" {
+				okNoTLS = true
+			}
+		}
 		wg.Done()
 	}()
 

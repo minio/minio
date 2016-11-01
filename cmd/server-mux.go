@@ -167,7 +167,7 @@ func (l *ListenerMux) Close() error {
 // ServerMux - the main mux server
 type ServerMux struct {
 	http.Server
-	listener        *ListenerMux
+	listeners       []*ListenerMux
 	WaitGroup       *sync.WaitGroup
 	GracefulTimeout time.Duration
 	mu              sync.Mutex // guards closed, conns, and listener
@@ -199,6 +199,51 @@ func NewServerMux(addr string, handler http.Handler) *ServerMux {
 	return m
 }
 
+// Initialize listeners on all ports.
+func initListeners(serverAddr string, tls *tls.Config) ([]*ListenerMux, error) {
+	host, port, err := net.SplitHostPort(serverAddr)
+	if err != nil {
+		return nil, err
+	}
+	var listeners []*ListenerMux
+	if host == "" {
+		var listener net.Listener
+		listener, err = net.Listen("tcp", serverAddr)
+		if err != nil {
+			return nil, err
+		}
+		listeners = append(listeners, &ListenerMux{
+			Listener: listener,
+			config:   tls,
+		})
+		return listeners, nil
+	}
+	var addrs []string
+	if net.ParseIP(host) != nil {
+		addrs = append(addrs, host)
+	} else {
+		addrs, err = net.LookupHost(host)
+		if err != nil {
+			return nil, err
+		}
+		if len(addrs) == 0 {
+			return nil, errUnexpected
+		}
+	}
+	for _, addr := range addrs {
+		var listener net.Listener
+		listener, err = net.Listen("tcp", net.JoinHostPort(addr, port))
+		if err != nil {
+			return nil, err
+		}
+		listeners = append(listeners, &ListenerMux{
+			Listener: listener,
+			config:   tls,
+		})
+	}
+	return listeners, nil
+}
+
 // ListenAndServeTLS - similar to the http.Server version. However, it has the
 // ability to redirect http requests to the correct HTTPS url if the client
 // mistakenly initiates a http connection over the https port
@@ -215,81 +260,91 @@ func (m *ServerMux) ListenAndServeTLS(certFile, keyFile string) (err error) {
 
 	go m.handleServiceSignals()
 
-	listener, err := net.Listen("tcp", m.Server.Addr)
+	listeners, err := initListeners(m.Server.Addr, config)
 	if err != nil {
 		return err
 	}
 
-	listenerMux := &ListenerMux{Listener: listener, config: config}
-
 	m.mu.Lock()
-	m.listener = listenerMux
+	m.listeners = listeners
 	m.mu.Unlock()
 
-	err = http.Serve(listenerMux,
-		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// We reach here when ListenerMux.ConnMux is not wrapped with tls.Server
-			if r.TLS == nil {
-				u := url.URL{
-					Scheme:   "https",
-					Opaque:   r.URL.Opaque,
-					User:     r.URL.User,
-					Host:     r.Host,
-					Path:     r.URL.Path,
-					RawQuery: r.URL.RawQuery,
-					Fragment: r.URL.Fragment,
-				}
-				http.Redirect(w, r, u.String(), http.StatusMovedPermanently)
-			} else {
-				// Execute registered handlers
-				m.Server.Handler.ServeHTTP(w, r)
-			}
-		}),
-	)
-	if nerr, ok := err.(*net.OpError); ok {
-		if nerr.Op == "accept" && nerr.Net == "tcp" {
-			return nil
-		}
+	var wg = &sync.WaitGroup{}
+	for _, listener := range listeners {
+		wg.Add(1)
+		go func(listener *ListenerMux) {
+			defer wg.Done()
+			serr := http.Serve(listener,
+				http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					// We reach here when ListenerMux.ConnMux is not wrapped with tls.Server
+					if r.TLS == nil {
+						u := url.URL{
+							Scheme:   "https",
+							Opaque:   r.URL.Opaque,
+							User:     r.URL.User,
+							Host:     r.Host,
+							Path:     r.URL.Path,
+							RawQuery: r.URL.RawQuery,
+							Fragment: r.URL.Fragment,
+						}
+						http.Redirect(w, r, u.String(), http.StatusMovedPermanently)
+					} else {
+						// Execute registered handlers
+						m.Server.Handler.ServeHTTP(w, r)
+					}
+				}),
+			)
+			errorIf(serr, "Unable to serve incoming requests.")
+		}(listener)
 	}
-	return err
+	// Waits for all http.Serve's to return.
+	wg.Wait()
+	return nil
 }
 
 // ListenAndServe - Same as the http.Server version
 func (m *ServerMux) ListenAndServe() error {
 	go m.handleServiceSignals()
 
-	listener, err := net.Listen("tcp", m.Server.Addr)
+	listeners, err := initListeners(m.Server.Addr, &tls.Config{})
 	if err != nil {
 		return err
 	}
 
-	listenerMux := &ListenerMux{Listener: listener, config: &tls.Config{}}
-
 	m.mu.Lock()
-	m.listener = listenerMux
+	m.listeners = listeners
 	m.mu.Unlock()
 
-	err = m.Server.Serve(listenerMux)
-	if nerr, ok := err.(*net.OpError); ok {
-		if nerr.Op == "accept" && nerr.Net == "tcp" {
-			return nil
-		}
+	var wg = &sync.WaitGroup{}
+	for _, listener := range listeners {
+		wg.Add(1)
+		go func(listener *ListenerMux) {
+			defer wg.Done()
+			serr := m.Server.Serve(listener)
+			errorIf(serr, "Unable to serve incoming requests.")
+		}(listener)
 	}
-	return err
+	// Wait for all the http.Serve to finish.
+	wg.Wait()
+	return nil
 }
 
 // Close initiates the graceful shutdown
 func (m *ServerMux) Close() error {
 	m.mu.Lock()
 	if m.closed {
+		m.mu.Unlock()
 		return errors.New("Server has been closed")
 	}
 	// Closed completely.
 	m.closed = true
 
-	// Close the listener.
-	if err := m.listener.Close(); err != nil {
-		return err
+	// Close the listeners.
+	for _, listener := range m.listeners {
+		if err := listener.Close(); err != nil {
+			m.mu.Unlock()
+			return err
+		}
 	}
 
 	m.SetKeepAlivesEnabled(false)
