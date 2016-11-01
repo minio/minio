@@ -411,8 +411,10 @@ func StartTestPeersRPCServer(t TestErrHandler, instanceType string) TestServer {
 	// Run TestServer.
 	testRPCServer.Server = httptest.NewServer(mux)
 
+	// Set as non-distributed.
+	globalIsDistXL = false
+
 	// initialize remainder of serverCmdConfig
-	srvCfg.isDistXL = false
 	testRPCServer.SrvCmdCfg = srvCfg
 
 	return testRPCServer

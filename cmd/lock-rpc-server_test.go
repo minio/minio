@@ -447,13 +447,14 @@ func TestLockServers(t *testing.T) {
 	}
 	globalMinioHost = ""
 	testCases := []struct {
+		isDistXL         bool
 		srvCmdConfig     serverCmdConfig
 		totalLockServers int
 	}{
 		// Test - 1 one lock server initialized.
 		{
+			isDistXL: true,
 			srvCmdConfig: serverCmdConfig{
-				isDistXL: true,
 				endpoints: []*url.URL{{
 					Scheme: "http",
 					Host:   "localhost:9000",
@@ -476,8 +477,8 @@ func TestLockServers(t *testing.T) {
 		},
 		// Test - 2 two servers possible, 1 ignored.
 		{
+			isDistXL: true,
 			srvCmdConfig: serverCmdConfig{
-				isDistXL: true,
 				endpoints: []*url.URL{{
 					Scheme: "http",
 					Host:   "localhost:9000",
@@ -507,6 +508,7 @@ func TestLockServers(t *testing.T) {
 
 	// Validates lock server initialization.
 	for i, testCase := range testCases {
+		globalIsDistXL = testCase.isDistXL
 		lockServers := newLockServers(testCase.srvCmdConfig)
 		if len(lockServers) != testCase.totalLockServers {
 			t.Fatalf("Test %d: Expected total %d, got %d", i+1, testCase.totalLockServers, len(lockServers))

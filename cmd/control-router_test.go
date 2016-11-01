@@ -30,20 +30,20 @@ func TestInitRemoteControlClients(t *testing.T) {
 	defer removeAll(rootPath)
 
 	testCases := []struct {
+		isDistXL     bool
 		srvCmdConfig serverCmdConfig
 		totalClients int
 	}{
 		// Test - 1 no allocation if server config is not distributed XL.
 		{
-			srvCmdConfig: serverCmdConfig{
-				isDistXL: false,
-			},
+			isDistXL:     false,
+			srvCmdConfig: serverCmdConfig{},
 			totalClients: 0,
 		},
 		// Test - 2 two clients allocated with 4 disks with 2 disks on same node each.
 		{
+			isDistXL: true,
 			srvCmdConfig: serverCmdConfig{
-				isDistXL: true,
 				endpoints: []*url.URL{{
 					Scheme: "http",
 					Host:   "10.1.10.1:9000",
@@ -63,8 +63,8 @@ func TestInitRemoteControlClients(t *testing.T) {
 		},
 		// Test - 3 4 clients allocated with 4 disks with 1 disk on each node.
 		{
+			isDistXL: true,
 			srvCmdConfig: serverCmdConfig{
-				isDistXL: true,
 				endpoints: []*url.URL{{
 					Scheme: "http",
 					Host:   "10.1.10.1:9000", Path: "/mnt/disk1",
@@ -85,6 +85,7 @@ func TestInitRemoteControlClients(t *testing.T) {
 
 	// Evaluate and validate all test cases.
 	for i, testCase := range testCases {
+		globalIsDistXL = testCase.isDistXL
 		rclients := initRemoteControlClients(testCase.srvCmdConfig)
 		if len(rclients) != testCase.totalClients {
 			t.Errorf("Test %d, Expected %d, got %d RPC clients.", i+1, testCase.totalClients, len(rclients))

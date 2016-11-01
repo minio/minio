@@ -27,12 +27,14 @@ const (
 )
 
 type s3PeerAPIHandlers struct {
-	ObjectAPI func() ObjectLayer
+	*localBMS
 }
 
 func registerS3PeerRPCRouter(mux *router.Router) error {
 	s3PeerHandlers := &s3PeerAPIHandlers{
-		ObjectAPI: newObjectLayerFn,
+		&localBMS{
+			ObjectAPI: newObjectLayerFn,
+		},
 	}
 
 	s3PeerRPCServer := rpc.NewServer()

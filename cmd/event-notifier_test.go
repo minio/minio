@@ -291,7 +291,7 @@ func TestInitEventNotifier(t *testing.T) {
 	// needed to load listener config from disk for testing (in
 	// single peer mode, the listener config is ingored, but here
 	// we want to test the loading from disk too.)
-	globalS3Peers.isDistXL = true
+	globalIsDistXL = true
 
 	// test event notifier init
 	if err := initEventNotifier(obj); err != nil {
@@ -366,7 +366,7 @@ func TestListenBucketNotification(t *testing.T) {
 	// needed to load listener config from disk for testing (in
 	// single peer mode, the listener config is ingored, but here
 	// we want to test the loading from disk too.)
-	globalS3Peers.isDistXL = true
+	globalIsDistXL = true
 
 	// Init event notifier
 	if err := initEventNotifier(obj); err != nil {

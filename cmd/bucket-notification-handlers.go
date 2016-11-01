@@ -380,7 +380,7 @@ func AddBucketListenerConfig(bucket string, lcfg *listenerConfig, objAPI ObjectL
 	defer nsMutex.Unlock(bucket, "", opsID)
 
 	// update persistent config if dist XL
-	if globalS3Peers.isDistXL {
+	if globalIsDistXL {
 		err := persistListenerConfig(bucket, listenerCfgs, objAPI)
 		if err != nil {
 			errorIf(err, "Error persisting listener config when adding a listener.")
@@ -422,7 +422,7 @@ func RemoveBucketListenerConfig(bucket string, lcfg *listenerConfig, objAPI Obje
 	defer nsMutex.Unlock(bucket, "", opsID)
 
 	// update persistent config if dist XL
-	if globalS3Peers.isDistXL {
+	if globalIsDistXL {
 		err := persistListenerConfig(bucket, updatedLcfgs, objAPI)
 		if err != nil {
 			errorIf(err, "Error persisting listener config when removing a listener.")
