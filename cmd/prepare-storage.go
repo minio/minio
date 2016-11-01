@@ -185,7 +185,11 @@ func prepForInitXL(firstDisk bool, sErrs []error, diskCount int) InitActions {
 
 // Implements a jitter backoff loop for formatting all disks during
 // initialization of the server.
-func retryFormattingDisks(firstDisk bool, firstEndpoint *url.URL, storageDisks []StorageAPI) error {
+func retryFormattingDisks(firstDisk bool, endpoints []*url.URL, storageDisks []StorageAPI) error {
+	if len(endpoints) == 0 {
+		return errInvalidArgument
+	}
+	firstEndpoint := endpoints[0]
 	if firstEndpoint == nil {
 		return errInvalidArgument
 	}
@@ -217,14 +221,14 @@ func retryFormattingDisks(firstDisk bool, firstEndpoint *url.URL, storageDisks [
 				return errCorruptedFormat
 			case FormatDisks:
 				console.Eraseline()
-				printFormatMsg(storageDisks, printOnceFn())
+				printFormatMsg(endpoints, storageDisks, printOnceFn())
 				return initFormatXL(storageDisks)
 			case InitObjectLayer:
 				console.Eraseline()
 				// Validate formats load before proceeding forward.
 				err := genericFormatCheck(formatConfigs, sErrs)
 				if err == nil {
-					printRegularMsg(storageDisks, printOnceFn())
+					printRegularMsg(endpoints, storageDisks, printOnceFn())
 				}
 				return err
 			case WaitForHeal:
@@ -303,7 +307,11 @@ func initStorageDisks(endpoints, ignoredEndpoints []*url.URL) ([]StorageAPI, err
 }
 
 // Format disks before initialization object layer.
-func waitForFormatDisks(firstDisk bool, firstEndpoint *url.URL, storageDisks []StorageAPI) (err error) {
+func waitForFormatDisks(firstDisk bool, endpoints []*url.URL, storageDisks []StorageAPI) (err error) {
+	if len(endpoints) == 0 {
+		return errInvalidArgument
+	}
+	firstEndpoint := endpoints[0]
 	if firstEndpoint == nil {
 		return errInvalidArgument
 	}
@@ -312,7 +320,7 @@ func waitForFormatDisks(firstDisk bool, firstEndpoint *url.URL, storageDisks []S
 	}
 	// Start retry loop retrying until disks are formatted properly, until we have reached
 	// a conditional quorum of formatted disks.
-	err = retryFormattingDisks(firstDisk, firstEndpoint, storageDisks)
+	err = retryFormattingDisks(firstDisk, endpoints, storageDisks)
 	if err != nil {
 		return err
 	}
