@@ -96,12 +96,6 @@ EXAMPLES:
       $ minio {{.Name}} http://192.168.1.11/mnt/export/ http://192.168.1.12/mnt/export/ \
           http://192.168.1.13/mnt/export/ http://192.168.1.14/mnt/export/
 
-  7. Start minio server on a 4 node distributed setup. Type the following command on all the 4 nodes exactly.
-      $ minio {{.Name}} http://minio:miniostorage@192.168.1.11/mnt/export/ \
-          http://minio:miniostorage@192.168.1.12/mnt/export/ \
-          http://minio:miniostorage@192.168.1.13/mnt/export/ \
-          http://minio:miniostorage@192.168.1.14/mnt/export/
-
 `,
 }
 
