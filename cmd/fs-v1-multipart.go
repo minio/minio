@@ -669,6 +669,8 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 		return "", err
 	}
 
+	fsAppendDataPath := getFSAppendDataPath(uploadID)
+
 	// Read saved fs metadata for ongoing multipart.
 	fsMetaPath := pathJoin(uploadIDPath, fsMetaJSONFile)
 	fsMeta, err := readFSMetadata(fs.storage, minioMetaBucket, fsMetaPath)
@@ -678,13 +680,13 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 
 	fsAppendMeta, err := readFSMetadata(fs.storage, minioMetaBucket, fsAppendMetaPath)
 	if err == nil && isPartsSame(fsAppendMeta.Parts, parts) {
-		fsAppendDataPath := getFSAppendDataPath(uploadID)
 		if err = fs.storage.RenameFile(minioMetaBucket, fsAppendDataPath, bucket, object); err != nil {
 			return "", toObjectErr(traceError(err), minioMetaBucket, fsAppendDataPath)
 		}
-		// Remove the append-file metadata file in tmp location as we no longer need it.
-		fs.storage.DeleteFile(minioMetaBucket, fsAppendMetaPath)
 	} else {
+		// Remove append data temporary file since it is no longer needed at this point
+		fs.storage.DeleteFile(minioMetaBucket, fsAppendDataPath)
+
 		tempObj := path.Join(tmpMetaPrefix, uploadID+"-"+"part.1")
 
 		// Allocate staging buffer.
@@ -760,6 +762,9 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 			return "", toObjectErr(traceError(err), bucket, object)
 		}
 	}
+
+	// Remove the append-file metadata file in tmp location as we no longer need it.
+	fs.storage.DeleteFile(minioMetaBucket, fsAppendMetaPath)
 
 	// No need to save part info, since we have concatenated all parts.
 	fsMeta.Parts = nil
