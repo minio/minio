@@ -23,6 +23,7 @@ JSON RPC namespace is `Web`.
 
 * ServerInfo - fetches current server information, includes memory statistics, minio binary
   version, golang runtime version and more.
+* StorageInfo - fetches disc space availability(Total/Free), Type, Online/Offline status of disc with counts along with ReadQuorum and WriteQuorum counts.   
 
 #### Auth operations
 
