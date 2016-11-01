@@ -104,10 +104,10 @@ type TestErrHandler interface {
 }
 
 const (
-	// singleNodeTestStr is the string which is used as notation for Single node ObjectLayer in the unit tests.
-	singleNodeTestStr string = "FS"
-	// xLTestStr is the string which is used as notation for XL ObjectLayer in the unit tests.
-	xLTestStr string = "XL"
+	// FSTestStr is the string which is used as notation for Single node ObjectLayer in the unit tests.
+	FSTestStr string = "FS"
+	// XLTestStr is the string which is used as notation for XL ObjectLayer in the unit tests.
+	XLTestStr string = "XL"
 )
 
 const letterBytes = "abcdefghijklmnopqrstuvwxyz01234569"
@@ -1850,7 +1850,7 @@ func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endpoints [
 	}
 	credentials := serverConfig.GetCredential()
 	// Executing the object layer tests for single node setup.
-	objAPITest(objLayer, singleNodeTestStr, bucketFS, fsAPIRouter, credentials, t)
+	objAPITest(objLayer, FSTestStr, bucketFS, fsAPIRouter, credentials, t)
 
 	objLayer, xlDisks, err := prepareXL()
 	if err != nil {
@@ -1862,7 +1862,7 @@ func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endpoints [
 	}
 	credentials = serverConfig.GetCredential()
 	// Executing the object layer tests for XL.
-	objAPITest(objLayer, xLTestStr, bucketXL, xlAPIRouter, credentials, t)
+	objAPITest(objLayer, XLTestStr, bucketXL, xlAPIRouter, credentials, t)
 	// clean up the temporary test backend.
 	removeRoots(append(xlDisks, fsDir, rootPath))
 }
@@ -1893,14 +1893,14 @@ func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 		t.Fatalf("Initialization of object layer failed for single node setup: %s", err)
 	}
 	// Executing the object layer tests for single node setup.
-	objTest(objLayer, singleNodeTestStr, t)
+	objTest(objLayer, FSTestStr, t)
 
 	objLayer, fsDirs, err := prepareXL()
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for XL setup: %s", err)
 	}
 	// Executing the object layer tests for XL.
-	objTest(objLayer, xLTestStr, t)
+	objTest(objLayer, XLTestStr, t)
 	defer removeRoots(append(fsDirs, fsDir))
 }
 
@@ -1912,7 +1912,7 @@ func ExecObjectLayerDiskAlteredTest(t *testing.T, objTest objTestDiskNotFoundTyp
 		t.Fatalf("Initialization of object layer failed for XL setup: %s", err)
 	}
 	// Executing the object layer tests for XL.
-	objTest(objLayer, xLTestStr, fsDirs, t)
+	objTest(objLayer, XLTestStr, fsDirs, t)
 	defer removeRoots(fsDirs)
 }
 
@@ -1936,7 +1936,7 @@ func ExecObjectLayerStaleFilesTest(t *testing.T, objTest objTestStaleFilesType) 
 		t.Fatalf("Initialization of object layer failed for XL setup: %s", err)
 	}
 	// Executing the object layer tests for XL.
-	objTest(objLayer, xLTestStr, erasureDisks, t)
+	objTest(objLayer, XLTestStr, erasureDisks, t)
 	defer removeRoots(erasureDisks)
 }
 

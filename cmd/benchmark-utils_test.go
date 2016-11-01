@@ -30,7 +30,18 @@ import (
 
 // Prepare benchmark backend
 func prepareBenchmarkBackend(instanceType string) (ObjectLayer, []string, error) {
-	nDisks := 16
+	var nDisks int
+	switch instanceType {
+	// Total number of disks for FS backend is set to 1.
+	case FSTestStr:
+		nDisks = 1
+		// Total number of disks for FS backend is set to 16.
+	case XLTestStr:
+		nDisks = 16
+	default:
+		nDisks = 1
+	}
+	// get `nDisks` random disks.
 	disks, err := getRandomDisks(nDisks)
 	if err != nil {
 		return nil, nil, err
@@ -39,11 +50,11 @@ func prepareBenchmarkBackend(instanceType string) (ObjectLayer, []string, error)
 	if err != nil {
 		return nil, nil, err
 	}
+	// initialize object layer.
 	obj, _, err := initObjectLayer(endpoints, nil)
 	if err != nil {
 		return nil, nil, err
 	}
-
 	return obj, disks, nil
 }
 
