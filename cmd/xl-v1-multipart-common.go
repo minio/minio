@@ -54,7 +54,7 @@ func (xl xlObjects) updateUploadJSON(bucket, object string, uCh uploadIDChange) 
 			// If we have a read error, we store error and
 			// exit.
 			if err != nil {
-				errs[index] = traceError(err)
+				errs[index] = err
 				return
 			}
 
