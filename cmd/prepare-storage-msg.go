@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"fmt"
+	"net/url"
 	"sync"
 
 	humanize "github.com/dustin/go-humanize"
@@ -85,14 +86,14 @@ func getHealMsg(firstEndpoint string, storageDisks []StorageAPI) string {
 }
 
 // Prints regular message when we have sufficient disks to start the cluster.
-func printRegularMsg(storageDisks []StorageAPI, fn printOnceFunc) {
-	msg := getRegularMsg(storageDisks)
+func printRegularMsg(endpoints []*url.URL, storageDisks []StorageAPI, fn printOnceFunc) {
+	msg := getStorageInitMsg("\nInitializing data volume.", endpoints, storageDisks)
 	fn(msg)
 }
 
 // Constructs a formatted regular message when we have sufficient disks to start the cluster.
-func getRegularMsg(storageDisks []StorageAPI) string {
-	msg := colorBlue("\nInitializing data volume.")
+func getStorageInitMsg(titleMsg string, endpoints []*url.URL, storageDisks []StorageAPI) string {
+	msg := colorBlue(titleMsg)
 	disksInfo, _, _ := getDisksInfo(storageDisks)
 	for i, info := range disksInfo {
 		if storageDisks[i] == nil {
@@ -101,7 +102,7 @@ func getRegularMsg(storageDisks []StorageAPI) string {
 		msg += fmt.Sprintf(
 			"\n[%s] %s - %s %s",
 			int2Str(i+1, len(storageDisks)),
-			storageDisks[i],
+			endpoints[i],
 			humanize.IBytes(uint64(info.Total)),
 			func() string {
 				if info.Total > 0 {
@@ -115,33 +116,9 @@ func getRegularMsg(storageDisks []StorageAPI) string {
 }
 
 // Prints initialization message when cluster is being initialized for the first time.
-func printFormatMsg(storageDisks []StorageAPI, fn printOnceFunc) {
-	msg := getFormatMsg(storageDisks)
+func printFormatMsg(endpoints []*url.URL, storageDisks []StorageAPI, fn printOnceFunc) {
+	msg := getStorageInitMsg("\nInitializing data volume for the first time.", endpoints, storageDisks)
 	fn(msg)
-}
-
-// Generate a formatted message when cluster is being initialized for the first time.
-func getFormatMsg(storageDisks []StorageAPI) string {
-	msg := colorBlue("\nInitializing data volume for the first time.")
-	disksInfo, _, _ := getDisksInfo(storageDisks)
-	for i, info := range disksInfo {
-		if storageDisks[i] == nil {
-			continue
-		}
-		msg += fmt.Sprintf(
-			"\n[%s] %s - %s %s",
-			int2Str(i+1, len(storageDisks)),
-			storageDisks[i],
-			humanize.IBytes(uint64(info.Total)),
-			func() string {
-				if info.Total > 0 {
-					return "online"
-				}
-				return "offline"
-			}(),
-		)
-	}
-	return msg
 }
 
 func printConfigErrMsg(storageDisks []StorageAPI, sErrs []error, fn printOnceFunc) {

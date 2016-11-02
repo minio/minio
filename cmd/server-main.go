@@ -474,7 +474,7 @@ func serverMain(c *cli.Context) {
 	}(tls)
 
 	// Wait for formatting of disks.
-	err = waitForFormatDisks(firstDisk, endpoints[0], storageDisks)
+	err = waitForFormatDisks(firstDisk, endpoints, storageDisks)
 	fatalIf(err, "formatting storage disks failed")
 
 	// Once formatted, initialize object layer.

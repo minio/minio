@@ -1560,7 +1560,7 @@ func initObjectLayer(endpoints, ignoredEndpoints []*url.URL) (ObjectLayer, []Sto
 		return nil, nil, err
 	}
 
-	err = waitForFormatDisks(true, endpoints[0], storageDisks)
+	err = waitForFormatDisks(true, endpoints, storageDisks)
 	if err != nil {
 		return nil, nil, err
 	}

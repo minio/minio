@@ -61,7 +61,7 @@ func TestNewFS(t *testing.T) {
 	}
 
 	// Initializes all disks with XL
-	err = waitForFormatDisks(true, endpoints[0], xlStorageDisks)
+	err = waitForFormatDisks(true, endpoints, xlStorageDisks)
 	if err != nil {
 		t.Fatalf("Unable to format XL %s", err)
 	}
@@ -79,7 +79,7 @@ func TestNewFS(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		if err = waitForFormatDisks(true, endpoints[0], []StorageAPI{testCase.disk}); err != testCase.expectedErr {
+		if err = waitForFormatDisks(true, endpoints, []StorageAPI{testCase.disk}); err != testCase.expectedErr {
 			t.Errorf("expected: %s, got :%s", testCase.expectedErr, err)
 		}
 	}

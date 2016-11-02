@@ -161,7 +161,7 @@ func TestNewXL(t *testing.T) {
 		t.Fatal("Unexpected error: ", err)
 	}
 
-	err = waitForFormatDisks(true, endpoints[0], nil)
+	err = waitForFormatDisks(true, endpoints, nil)
 	if err != errInvalidArgument {
 		t.Fatalf("Expecting error, got %s", err)
 	}
@@ -172,7 +172,7 @@ func TestNewXL(t *testing.T) {
 	}
 
 	// Initializes all erasure disks
-	err = waitForFormatDisks(true, endpoints[0], storageDisks)
+	err = waitForFormatDisks(true, endpoints, storageDisks)
 	if err != nil {
 		t.Fatalf("Unable to format disks for erasure, %s", err)
 	}
