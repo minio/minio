@@ -19,7 +19,6 @@ package cmd
 import (
 	"crypto/rand"
 	"encoding/base64"
-	"regexp"
 )
 
 // credential container for access and secret keys.
@@ -33,11 +32,15 @@ const (
 	minioSecretID = 40
 )
 
-// isValidSecretKey - validate secret key.
-var isValidSecretKey = regexp.MustCompile(`^.{8,40}$`)
+// isValidAccessKey - validate access key for right length.
+func isValidAccessKey(accessKey string) bool {
+	return len(accessKey) >= 5 && len(accessKey) <= 20
+}
 
-// isValidAccessKey - validate access key.
-var isValidAccessKey = regexp.MustCompile(`^[a-zA-Z0-9\\-\\.\\_\\~]{5,20}$`)
+// isValidSecretKey - validate secret key for right length.
+func isValidSecretKey(secretKey string) bool {
+	return len(secretKey) >= 8 && len(secretKey) <= 40
+}
 
 // mustGenAccessKeys - must generate access credentials.
 func mustGenAccessKeys() (creds credential) {
