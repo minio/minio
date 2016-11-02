@@ -19,7 +19,6 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -86,7 +85,7 @@ type ServerInfoRep struct {
 // ServerInfo - get server info.
 func (web *webAPIHandlers) ServerInfo(r *http.Request, args *WebGenericArgs, reply *ServerInfoRep) error {
 	if !isJWTReqAuthenticated(r) {
-		return &json2.Error{Message: "Unauthorized request"}
+		return &json2.Error{Message: errAuthentication.Error()}
 	}
 	host, err := os.Hostname()
 	if err != nil {
@@ -122,12 +121,12 @@ type StorageInfoRep struct {
 
 // StorageInfo - web call to gather storage usage statistics.
 func (web *webAPIHandlers) StorageInfo(r *http.Request, args *GenericArgs, reply *StorageInfoRep) error {
-	if !isJWTReqAuthenticated(r) {
-		return &json2.Error{Message: "Unauthorized request"}
-	}
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
-		return &json2.Error{Message: "Server not initialized"}
+		return &json2.Error{Message: errServerNotInitialized.Error()}
+	}
+	if !isJWTReqAuthenticated(r) {
+		return &json2.Error{Message: errAuthentication.Error()}
 	}
 	reply.StorageInfo = objectAPI.StorageInfo()
 	reply.UIVersion = miniobrowser.UIVersion
@@ -141,12 +140,12 @@ type MakeBucketArgs struct {
 
 // MakeBucket - make a bucket.
 func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, reply *WebGenericRep) error {
-	if !isJWTReqAuthenticated(r) {
-		return &json2.Error{Message: "Unauthorized request"}
-	}
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
-		return &json2.Error{Message: "Server not initialized"}
+		return &json2.Error{Message: errServerNotInitialized.Error()}
+	}
+	if !isJWTReqAuthenticated(r) {
+		return &json2.Error{Message: errAuthentication.Error()}
 	}
 	if err := objectAPI.MakeBucket(args.BucketName); err != nil {
 		return &json2.Error{Message: err.Error()}
@@ -171,12 +170,12 @@ type WebBucketInfo struct {
 
 // ListBuckets - list buckets api.
 func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, reply *ListBucketsRep) error {
-	if !isJWTReqAuthenticated(r) {
-		return &json2.Error{Message: "Unauthorized request"}
-	}
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
-		return &json2.Error{Message: "Server not initialized"}
+		return &json2.Error{Message: errServerNotInitialized.Error()}
+	}
+	if !isJWTReqAuthenticated(r) {
+		return &json2.Error{Message: errAuthentication.Error()}
 	}
 	buckets, err := objectAPI.ListBuckets()
 	if err != nil {
@@ -221,15 +220,15 @@ type WebObjectInfo struct {
 
 // ListObjects - list objects api.
 func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, reply *ListObjectsRep) error {
+	objectAPI := web.ObjectAPI()
+	if objectAPI == nil {
+		return &json2.Error{Message: errServerNotInitialized.Error()}
+	}
 	marker := ""
 	if !isJWTReqAuthenticated(r) {
-		return &json2.Error{Message: "Unauthorized request"}
+		return &json2.Error{Message: errAuthentication.Error()}
 	}
 	for {
-		objectAPI := web.ObjectAPI()
-		if objectAPI == nil {
-			return &json2.Error{Message: "Server not initialized"}
-		}
 		lo, err := objectAPI.ListObjects(args.BucketName, args.Prefix, marker, "/", 1000)
 		if err != nil {
 			return &json2.Error{Message: err.Error()}
@@ -264,13 +263,12 @@ type RemoveObjectArgs struct {
 
 // RemoveObject - removes an object.
 func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs, reply *WebGenericRep) error {
-	if !isJWTReqAuthenticated(r) {
-		return &json2.Error{Message: "Unauthorized request"}
-	}
-	reply.UIVersion = miniobrowser.UIVersion
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
-		return &json2.Error{Message: "Server not initialized"}
+		return &json2.Error{Message: errServerNotInitialized.Error()}
+	}
+	if !isJWTReqAuthenticated(r) {
+		return &json2.Error{Message: errAuthentication.Error()}
 	}
 	if err := objectAPI.DeleteObject(args.BucketName, args.ObjectName); err != nil {
 		return &json2.Error{Message: err.Error()}
@@ -320,7 +318,7 @@ type GenerateAuthReply struct {
 
 func (web webAPIHandlers) GenerateAuth(r *http.Request, args *WebGenericArgs, reply *GenerateAuthReply) error {
 	if !isJWTReqAuthenticated(r) {
-		return &json2.Error{Message: "Unauthorized request"}
+		return &json2.Error{Message: errAuthentication.Error()}
 	}
 	cred := mustGenAccessKeys()
 	reply.AccessKey = cred.AccessKeyID
@@ -345,13 +343,13 @@ type SetAuthReply struct {
 // SetAuth - Set accessKey and secretKey credentials.
 func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *SetAuthReply) error {
 	if !isJWTReqAuthenticated(r) {
-		return &json2.Error{Message: "Unauthorized request"}
+		return &json2.Error{Message: errAuthentication.Error()}
 	}
-	if !isValidAccessKey.MatchString(args.AccessKey) {
-		return &json2.Error{Message: "Invalid Access Key"}
+	if !isValidAccessKey(args.AccessKey) {
+		return &json2.Error{Message: errInvalidAccessKeyLength.Error()}
 	}
-	if !isValidSecretKey.MatchString(args.SecretKey) {
-		return &json2.Error{Message: "Invalid Secret Key"}
+	if !isValidSecretKey(args.SecretKey) {
+		return &json2.Error{Message: errInvalidSecretKeyLength.Error()}
 	}
 
 	cred := credential{args.AccessKey, args.SecretKey}
@@ -430,7 +428,7 @@ type GetAuthReply struct {
 // GetAuth - return accessKey and secretKey credentials.
 func (web *webAPIHandlers) GetAuth(r *http.Request, args *WebGenericArgs, reply *GetAuthReply) error {
 	if !isJWTReqAuthenticated(r) {
-		return &json2.Error{Message: "Unauthorized request"}
+		return &json2.Error{Message: errAuthentication.Error()}
 	}
 	creds := serverConfig.GetCredential()
 	reply.AccessKey = creds.AccessKeyID
@@ -441,8 +439,14 @@ func (web *webAPIHandlers) GetAuth(r *http.Request, args *WebGenericArgs, reply 
 
 // Upload - file upload handler.
 func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
+	objectAPI := web.ObjectAPI()
+	if objectAPI == nil {
+		writeWebErrorResponse(w, errServerNotInitialized)
+		return
+	}
+
 	if !isJWTReqAuthenticated(r) {
-		writeWebErrorResponse(w, errInvalidToken)
+		writeWebErrorResponse(w, errAuthentication)
 		return
 	}
 	vars := mux.Vars(r)
@@ -452,11 +456,6 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	// Extract incoming metadata if any.
 	metadata := extractMetadataFromHeader(r.Header)
 
-	objectAPI := web.ObjectAPI()
-	if objectAPI == nil {
-		writeWebErrorResponse(w, errors.New("Server not initialized"))
-		return
-	}
 	sha256sum := ""
 	if _, err := objectAPI.PutObject(bucket, object, -1, r.Body, metadata, sha256sum); err != nil {
 		writeWebErrorResponse(w, err)
@@ -483,6 +482,12 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 
 // Download - file download handler.
 func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
+	objectAPI := web.ObjectAPI()
+	if objectAPI == nil {
+		writeWebErrorResponse(w, errServerNotInitialized)
+		return
+	}
+
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
@@ -501,17 +506,12 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 		return []byte(jwt.SecretAccessKey), nil
 	})
 	if e != nil || !token.Valid {
-		writeWebErrorResponse(w, errInvalidToken)
+		writeWebErrorResponse(w, errAuthentication)
 		return
 	}
 	// Add content disposition.
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", path.Base(object)))
 
-	objectAPI := web.ObjectAPI()
-	if objectAPI == nil {
-		writeWebErrorResponse(w, errors.New("Server not initialized"))
-		return
-	}
 	objInfo, err := objectAPI.GetObjectInfo(bucket, object)
 	if err != nil {
 		writeWebErrorResponse(w, err)
@@ -527,12 +527,17 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 
 // writeWebErrorResponse - set HTTP status code and write error description to the body.
 func writeWebErrorResponse(w http.ResponseWriter, err error) {
-	// Handle invalid token as a special case.
-	if err == errInvalidToken {
+	if err == errAuthentication {
 		w.WriteHeader(http.StatusForbidden)
 		w.Write([]byte(err.Error()))
 		return
 	}
+	if err == errServerNotInitialized {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
 	// Convert error type to api error code.
 	var apiErrCode APIErrorCode
 	switch err.(type) {
@@ -602,14 +607,15 @@ func readBucketAccessPolicy(objAPI ObjectLayer, bucketName string) (policy.Bucke
 
 // GetBucketPolicy - get bucket policy.
 func (web *webAPIHandlers) GetBucketPolicy(r *http.Request, args *GetBucketPolicyArgs, reply *GetBucketPolicyRep) error {
-	if !isJWTReqAuthenticated(r) {
-		return &json2.Error{Message: "Unauthorized request"}
-	}
-
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
-		return &json2.Error{Message: "Server not initialized"}
+		return &json2.Error{Message: errServerNotInitialized.Error()}
 	}
+
+	if !isJWTReqAuthenticated(r) {
+		return &json2.Error{Message: errAuthentication.Error()}
+	}
+
 	policyInfo, err := readBucketAccessPolicy(objectAPI, args.BucketName)
 	if err != nil {
 		return &json2.Error{Message: err.Error()}
@@ -640,14 +646,15 @@ type ListAllBucketPoliciesRep struct {
 
 // GetllBucketPolicy - get all bucket policy.
 func (web *webAPIHandlers) ListAllBucketPolicies(r *http.Request, args *ListAllBucketPoliciesArgs, reply *ListAllBucketPoliciesRep) error {
-	if !isJWTReqAuthenticated(r) {
-		return &json2.Error{Message: "Unauthorized request"}
-	}
-
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
-		return &json2.Error{Message: "Server not initialized"}
+		return &json2.Error{Message: errServerNotInitialized.Error()}
 	}
+
+	if !isJWTReqAuthenticated(r) {
+		return &json2.Error{Message: errAuthentication.Error()}
+	}
+
 	policyInfo, err := readBucketAccessPolicy(objectAPI, args.BucketName)
 	if err != nil {
 		return &json2.Error{Message: err.Error()}
@@ -672,17 +679,18 @@ type SetBucketPolicyArgs struct {
 
 // SetBucketPolicy - set bucket policy.
 func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolicyArgs, reply *WebGenericRep) error {
-	if !isJWTReqAuthenticated(r) {
-		return &json2.Error{Message: "Unauthorized request"}
-	}
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
-		return &json2.Error{Message: "Server not initialized"}
+		return &json2.Error{Message: errServerNotInitialized.Error()}
+	}
+
+	if !isJWTReqAuthenticated(r) {
+		return &json2.Error{Message: errAuthentication.Error()}
 	}
 
 	bucketP := policy.BucketPolicy(args.Policy)
 	if !bucketP.IsValidBucketPolicy() {
-		return &json2.Error{Message: "Invalid policy " + args.Policy}
+		return &json2.Error{Message: "Invalid policy type " + args.Policy}
 	}
 
 	policyInfo, err := readBucketAccessPolicy(objectAPI, args.BucketName)
@@ -745,11 +753,14 @@ type PresignedGetRep struct {
 
 // PresignedGET - returns presigned-Get url.
 func (web *webAPIHandlers) PresignedGet(r *http.Request, args *PresignedGetArgs, reply *PresignedGetRep) error {
+	if web.ObjectAPI() == nil {
+		return &json2.Error{Message: errServerNotInitialized.Error()}
+	}
 	if !isJWTReqAuthenticated(r) {
-		return &json2.Error{Message: "Unauthorized request"}
+		return &json2.Error{Message: errAuthentication.Error()}
 	}
 	if args.BucketName == "" || args.ObjectName == "" {
-		return &json2.Error{Message: "Required arguments: Host, Bucket, Object"}
+		return &json2.Error{Message: "Bucket, Object are mandatory arguments."}
 	}
 	reply.UIVersion = miniobrowser.UIVersion
 	reply.URL = presignedGet(args.HostName, args.BucketName, args.ObjectName)

@@ -184,10 +184,10 @@ func Main() {
 				SecretAccessKey: secretKey,
 			})
 		}
-		if !isValidAccessKey.MatchString(serverConfig.GetCredential().AccessKeyID) {
+		if !isValidAccessKey(serverConfig.GetCredential().AccessKeyID) {
 			fatalIf(errInvalidArgument, "Invalid access key. Accept only a string starting with a alphabetic and containing from 5 to 20 characters.")
 		}
-		if !isValidSecretKey.MatchString(serverConfig.GetCredential().SecretAccessKey) {
+		if !isValidSecretKey(serverConfig.GetCredential().SecretAccessKey) {
 			fatalIf(errInvalidArgument, "Invalid secret key. Accept only a string containing from 8 to 40 characters.")
 		}
 

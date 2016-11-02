@@ -31,6 +31,69 @@ import (
 	"github.com/minio/minio-go/pkg/set"
 )
 
+// Tests private function writeWebErrorResponse.
+func TestWriteWebErrorResponse(t *testing.T) {
+	var buffer bytes.Buffer
+	testCases := []struct {
+		webErr     error
+		apiErrCode APIErrorCode
+	}{
+		// List of various errors and their corresponding API errors.
+		{
+			webErr:     StorageFull{},
+			apiErrCode: ErrStorageFull,
+		},
+		{
+			webErr:     BucketNotFound{},
+			apiErrCode: ErrNoSuchBucket,
+		},
+		{
+			webErr:     BucketNameInvalid{},
+			apiErrCode: ErrInvalidBucketName,
+		},
+		{
+			webErr:     BadDigest{},
+			apiErrCode: ErrBadDigest,
+		},
+		{
+			webErr:     IncompleteBody{},
+			apiErrCode: ErrIncompleteBody,
+		},
+		{
+			webErr:     ObjectExistsAsDirectory{},
+			apiErrCode: ErrObjectExistsAsDirectory,
+		},
+		{
+			webErr:     ObjectNotFound{},
+			apiErrCode: ErrNoSuchKey,
+		},
+		{
+			webErr:     ObjectNameInvalid{},
+			apiErrCode: ErrNoSuchKey,
+		},
+		{
+			webErr:     InsufficientWriteQuorum{},
+			apiErrCode: ErrWriteQuorum,
+		},
+		{
+			webErr:     InsufficientReadQuorum{},
+			apiErrCode: ErrReadQuorum,
+		},
+	}
+
+	// Validate all the test cases.
+	for i, testCase := range testCases {
+		writeWebErrorResponse(newFlushWriter(&buffer), testCase.webErr)
+		desc := getAPIError(testCase.apiErrCode).Description
+		recvDesc := buffer.Bytes()
+		// Check if the written desc is same as the one expected.
+		if !bytes.Equal(recvDesc, []byte(desc)) {
+			t.Errorf("Test %d: Unexpected response, expecting %s, got %s", i+1, desc, string(buffer.Bytes()))
+		}
+		buffer.Reset()
+	}
+}
+
 // Authenticate and get JWT token - will be called before every webrpc handler invocation
 func getWebRPCToken(apiRouter http.Handler, accessKey, secretKey string) (token string, err error) {
 	rec := httptest.NewRecorder()
@@ -823,8 +886,8 @@ func testWebPresignedGetHandler(obj ObjectLayer, instanceType string, t TestErrH
 	if err == nil {
 		t.Fatalf("Failed, %v", err)
 	}
-	if err.Error() != "Required arguments: Host, Bucket, Object" {
-		t.Fatalf("Unexpected, expected `Required arguments: Host, Bucket, Object`, got %s", err)
+	if err.Error() != "Bucket, Object are mandatory arguments." {
+		t.Fatalf("Unexpected, expected `Bucket, Object are mandatory arguments`, got %s", err)
 	}
 }
 
@@ -1118,8 +1181,13 @@ func TestWebCheckAuthorization(t *testing.T) {
 	rec := httptest.NewRecorder()
 
 	// Check if web rpc calls return unauthorized request with an incorrect token
-	webRPCs := []string{"ServerInfo", "StorageInfo", "MakeBucket", "ListBuckets", "ListObjects", "RemoveObject", "GenerateAuth",
-		"SetAuth", "GetAuth", "GetBucketPolicy", "SetBucketPolicy"}
+	webRPCs := []string{
+		"ServerInfo", "StorageInfo", "MakeBucket",
+		"ListBuckets", "ListObjects", "RemoveObject",
+		"GenerateAuth", "SetAuth", "GetAuth",
+		"GetBucketPolicy", "SetBucketPolicy", "ListAllBucketPolicies",
+		"PresignedGet",
+	}
 	for _, rpcCall := range webRPCs {
 		args := &GenericArgs{}
 		reply := &WebGenericRep{}
@@ -1135,26 +1203,28 @@ func TestWebCheckAuthorization(t *testing.T) {
 		if err == nil {
 			t.Fatalf("Test %s: Should fail", rpcCall)
 		} else {
-			if !strings.Contains(err.Error(), "Unauthorized request") {
+			if !strings.Contains(err.Error(), errAuthentication.Error()) {
 				t.Fatalf("Test %s: should fail with Unauthorized request. Found error: %v", rpcCall, err)
 			}
 		}
 	}
 
+	rec = httptest.NewRecorder()
 	// Test authorization of Web.Download
 	req, err := http.NewRequest("GET", "/minio/download/bucket/object?token=wrongauth", nil)
 	if err != nil {
 		t.Fatalf("Cannot create upload request, %v", err)
 	}
 	apiRouter.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("Expected the response status to be 200, but instead found `%d`", rec.Code)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("Expected the response status to be 403, but instead found `%d`", rec.Code)
 	}
 	resp := string(rec.Body.Bytes())
-	if !strings.Contains(resp, "Invalid token") {
-		t.Fatalf("Unexpected error message, expected: `Invalid token`, found: `%s`", resp)
+	if !strings.EqualFold(resp, errAuthentication.Error()) {
+		t.Fatalf("Unexpected error message, expected: %s, found: `%s`", errAuthentication, resp)
 	}
 
+	rec = httptest.NewRecorder()
 	// Test authorization of Web.Upload
 	content := []byte("temporary file's content")
 	req, err = http.NewRequest("PUT", "/minio/upload/bucket/object", nil)
@@ -1167,12 +1237,12 @@ func TestWebCheckAuthorization(t *testing.T) {
 		t.Fatalf("Cannot create upload request, %v", err)
 	}
 	apiRouter.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("Expected the response status to be 200, but instead found `%d`", rec.Code)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("Expected the response status to be 403, but instead found `%d`", rec.Code)
 	}
 	resp = string(rec.Body.Bytes())
-	if !strings.Contains(resp, "Invalid token") {
-		t.Fatalf("Unexpected error message, expected: `Invalid token`, found: `%s`", resp)
+	if !strings.EqualFold(resp, errAuthentication.Error()) {
+		t.Fatalf("Unexpected error message, expected: `%s`, found: `%s`", errAuthentication, resp)
 	}
 }
 
@@ -1201,7 +1271,7 @@ func TestWebObjectLayerNotReady(t *testing.T) {
 	// Check if web rpc calls return Server not initialized. ServerInfo, GenerateAuth,
 	// SetAuth and GetAuth are not concerned
 	webRPCs := []string{"StorageInfo", "MakeBucket", "ListBuckets", "ListObjects", "RemoveObject",
-		"GetBucketPolicy", "SetBucketPolicy"}
+		"GetBucketPolicy", "SetBucketPolicy", "ListAllBucketPolicies"}
 	for _, rpcCall := range webRPCs {
 		args := &GenericArgs{}
 		reply := &WebGenericRep{}
@@ -1217,26 +1287,28 @@ func TestWebObjectLayerNotReady(t *testing.T) {
 		if err == nil {
 			t.Fatalf("Test %s: Should fail", rpcCall)
 		} else {
-			if !strings.Contains(err.Error(), "Server not initialized") {
-				t.Fatalf("Test %s: should fail with Unauthorized request. Found error: %v", rpcCall, err)
+			if !strings.EqualFold(err.Error(), errServerNotInitialized.Error()) {
+				t.Fatalf("Test %s: should fail with %s Found error: %v", rpcCall, errServerNotInitialized, err)
 			}
 		}
 	}
 
+	rec = httptest.NewRecorder()
 	// Test authorization of Web.Download
 	req, err := http.NewRequest("GET", "/minio/download/bucket/object?token="+authorization, nil)
 	if err != nil {
 		t.Fatalf("Cannot create upload request, %v", err)
 	}
 	apiRouter.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("Expected the response status to be 200, but instead found `%d`", rec.Code)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("Expected the response status to be 503, but instead found `%d`", rec.Code)
 	}
 	resp := string(rec.Body.Bytes())
-	if !strings.Contains(resp, "We encountered an internal error, please try again.") {
-		t.Fatalf("Unexpected error message, expected: `Invalid token`, found: `%s`", resp)
+	if !strings.EqualFold(resp, errServerNotInitialized.Error()) {
+		t.Fatalf("Unexpected error message, expected: `%s`, found: `%s`", errServerNotInitialized, resp)
 	}
 
+	rec = httptest.NewRecorder()
 	// Test authorization of Web.Upload
 	content := []byte("temporary file's content")
 	req, err = http.NewRequest("PUT", "/minio/upload/bucket/object", nil)
@@ -1249,12 +1321,12 @@ func TestWebObjectLayerNotReady(t *testing.T) {
 		t.Fatalf("Cannot create upload request, %v", err)
 	}
 	apiRouter.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("Expected the response status to be 200, but instead found `%d`", rec.Code)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("Expected the response status to be 503, but instead found `%d`", rec.Code)
 	}
 	resp = string(rec.Body.Bytes())
-	if !strings.Contains(resp, "We encountered an internal error, please try again.") {
-		t.Fatalf("Unexpected error message, expected: `Invalid token`, found: `%s`", resp)
+	if !strings.EqualFold(resp, errServerNotInitialized.Error()) {
+		t.Fatalf("Unexpected error message, expected: `%s`, found: `%s`", errServerNotInitialized, resp)
 	}
 }
 

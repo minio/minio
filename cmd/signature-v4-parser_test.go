@@ -116,10 +116,10 @@ func TestParseCredentialHeader(t *testing.T) {
 			expectedErrCode:     ErrCredMalformed,
 		},
 		// Test Case - 4.
-		// Test case with malformed AccessKey.
+		// Test case with AccessKey of length 4.
 		{
 			inputCredentialStr: generateCredentialStr(
-				"^#@..!23",
+				"^#@.",
 				time.Now().UTC().Format(yyyymmdd),
 				"ABCD",
 				"ABCD",

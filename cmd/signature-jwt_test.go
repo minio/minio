@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
@@ -72,25 +71,23 @@ func TestNewJWT(t *testing.T) {
 		expectedErr error
 	}{
 		// Test non-existent config directory.
-		{path.Join(path1, "non-existent-dir"), false, nil, fmt.Errorf("Server not initialized")},
+		{path.Join(path1, "non-existent-dir"), false, nil, errServerNotInitialized},
 		// Test empty config directory.
-		{path2, false, nil, fmt.Errorf("Server not initialized")},
+		{path2, false, nil, errServerNotInitialized},
 		// Test empty config file.
-		{path3, false, nil, fmt.Errorf("Server not initialized")},
+		{path3, false, nil, errServerNotInitialized},
 		// Test initialized config file.
 		{path4, true, nil, nil},
 		// Test to read already created config file.
 		{path4, false, nil, nil},
 		// Access key is too small.
-		{path4, false, &credential{"user", "pass"}, fmt.Errorf("Invalid access key")},
+		{path4, false, &credential{"user", "pass"}, errInvalidAccessKeyLength},
 		// Access key is too long.
-		{path4, false, &credential{"user12345678901234567", "pass"}, fmt.Errorf("Invalid access key")},
-		// Access key contains unsupported characters.
-		{path4, false, &credential{"!@#$%^&*()", "pass"}, fmt.Errorf("Invalid access key")},
+		{path4, false, &credential{"user12345678901234567", "pass"}, errInvalidAccessKeyLength},
 		// Secret key is too small.
-		{path4, false, &credential{"myuser", "pass"}, fmt.Errorf("Invalid secret key")},
+		{path4, false, &credential{"myuser", "pass"}, errInvalidSecretKeyLength},
 		// Secret key is too long.
-		{path4, false, &credential{"myuser", "pass1234567890123456789012345678901234567"}, fmt.Errorf("Invalid secret key")},
+		{path4, false, &credential{"myuser", "pass1234567890123456789012345678901234567"}, errInvalidSecretKeyLength},
 		// Valid access/secret keys.
 		{path4, false, &credential{"myuser", "mypassword"}, nil},
 	}
@@ -114,7 +111,6 @@ func TestNewJWT(t *testing.T) {
 			if err == nil {
 				t.Fatalf("%+v: expected: %s, got: <nil>", testCase, testCase.expectedErr)
 			}
-
 			if testCase.expectedErr.Error() != err.Error() {
 				t.Fatalf("%+v: expected: %s, got: %s", testCase, testCase.expectedErr, err)
 			}
@@ -143,11 +139,11 @@ func TestGenerateToken(t *testing.T) {
 		expectedErr error
 	}{
 		// Access key is too small.
-		{"user", fmt.Errorf("Invalid access key")},
+		{"user", errInvalidAccessKeyLength},
 		// Access key is too long.
-		{"user12345678901234567", fmt.Errorf("Invalid access key")},
+		{"user12345678901234567", errInvalidAccessKeyLength},
 		// Access key contains unsupported characters.
-		{"!@#$%^&*()", fmt.Errorf("Invalid access key")},
+		{"!@#$", errInvalidAccessKeyLength},
 		// Valid access key.
 		{"myuser", nil},
 		// Valid access key with leading/trailing spaces.
@@ -191,15 +187,15 @@ func TestAuthenticate(t *testing.T) {
 		expectedErr error
 	}{
 		// Access key too small.
-		{"user", "pass", fmt.Errorf("Invalid access key")},
+		{"user", "pass", errInvalidAccessKeyLength},
 		// Access key too long.
-		{"user12345678901234567", "pass", fmt.Errorf("Invalid access key")},
+		{"user12345678901234567", "pass", errInvalidAccessKeyLength},
 		// Access key contains unsuppported characters.
-		{"!@#$%^&*()", "pass", fmt.Errorf("Invalid access key")},
+		{"!@#$", "pass", errInvalidAccessKeyLength},
 		// Secret key too small.
-		{"myuser", "pass", fmt.Errorf("Invalid secret key")},
+		{"myuser", "pass", errInvalidSecretKeyLength},
 		// Secret key too long.
-		{"myuser", "pass1234567890123456789012345678901234567", fmt.Errorf("Invalid secret key")},
+		{"myuser", "pass1234567890123456789012345678901234567", errInvalidSecretKeyLength},
 		// Authentication error.
 		{"myuser", "mypassword", errInvalidAccessKeyID},
 		// Authentication error.
