@@ -244,6 +244,17 @@ func initListeners(serverAddr string, tls *tls.Config) ([]*ListenerMux, error) {
 	return listeners, nil
 }
 
+// Is network connection really closed?.
+func isCloseConnectionErr(err error) bool {
+	if nerr, ok := err.(*net.OpError); ok {
+		nmsgMatch := strings.EqualFold(nerr.Err.Error(), "use of closed network connection")
+		if nerr.Op == "accept" && nerr.Net == "tcp" && nmsgMatch {
+			return true
+		}
+	}
+	return false
+}
+
 // ListenAndServeTLS - similar to the http.Server version. However, it has the
 // ability to redirect http requests to the correct HTTPS url if the client
 // mistakenly initiates a http connection over the https port
@@ -294,7 +305,12 @@ func (m *ServerMux) ListenAndServeTLS(certFile, keyFile string) (err error) {
 					}
 				}),
 			)
-			errorIf(serr, "Unable to serve incoming requests.")
+			// Do not print if the message is about underlying
+			// listener closing its connection, always happens when
+			// graceful shutdown is called.
+			if !isCloseConnectionErr(serr) {
+				errorIf(serr, "Unable to serve incoming requests.")
+			}
 		}(listener)
 	}
 	// Waits for all http.Serve's to return.
@@ -321,7 +337,12 @@ func (m *ServerMux) ListenAndServe() error {
 		go func(listener *ListenerMux) {
 			defer wg.Done()
 			serr := m.Server.Serve(listener)
-			errorIf(serr, "Unable to serve incoming requests.")
+			// Do not print if the message is about underlying
+			// listener closing its connection, always happens when
+			// graceful shutdown is called.
+			if !isCloseConnectionErr(serr) {
+				errorIf(serr, "Unable to serve incoming requests.")
+			}
 		}(listener)
 	}
 	// Wait for all the http.Serve to finish.
