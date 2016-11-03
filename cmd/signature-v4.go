@@ -68,7 +68,7 @@ func getCanonicalHeaders(signedHeaders http.Header, host string) string {
 				if idx > 0 {
 					buf.WriteByte(',')
 				}
-				buf.WriteString(v)
+				buf.WriteString(signV4TrimAll(v))
 			}
 			buf.WriteByte('\n')
 		}

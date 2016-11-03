@@ -211,3 +211,31 @@ func TestFindHost(t *testing.T) {
 		t.Fatalf("Expected the APIErrorCode to be %d, but got %d", ErrNone, errCode)
 	}
 }
+
+// TestSigV4TrimAll - tests the logic of TrimAll() function
+func TestSigV4TrimAll(t *testing.T) {
+	testCases := []struct {
+		// Input.
+		inputStr string
+		// Expected result.
+		result string
+	}{
+		{"本語", "本語"},
+		{" abc ", "abc"},
+		{" a b ", "a b"},
+		{"a b ", "a b"},
+		{"a  b", "a b"},
+		{"a   b", "a b"},
+		{"   a   b  c   ", "a b c"},
+		{"a \t b  c   ", "a b c"},
+		{"\"a \t b  c   ", "\"a b c"},
+	}
+
+	// Tests generated values from url encoded name.
+	for i, testCase := range testCases {
+		result := signV4TrimAll(testCase.inputStr)
+		if testCase.result != result {
+			t.Errorf("Test %d: Expected sigV4TrimAll result to be \"%s\", but found it to be \"%s\" instead", i+1, testCase.result, result)
+		}
+	}
+}
