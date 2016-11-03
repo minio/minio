@@ -119,6 +119,14 @@ func parseStorageEndpoints(eps []string) (endpoints []*url.URL, err error) {
 			return nil, err
 		}
 		if u.Host != "" && globalMinioHost == "" {
+			// For ex.: minio server host1:port1 host2:port2...
+			// we return error as port is configurable only
+			// using "--address :port"
+			_, _, err := net.SplitHostPort(u.Host)
+			if err == nil {
+				// u.Host has ":"
+				return nil, fmt.Errorf("Invalid argument %s, port configurable using --address", u.Host)
+			}
 			u.Host = net.JoinHostPort(u.Host, globalMinioPort)
 		}
 		endpoints = append(endpoints, u)
