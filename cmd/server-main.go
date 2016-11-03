@@ -453,7 +453,7 @@ func serverMain(c *cli.Context) {
 	tls := isSSL()
 
 	// Fetch endpoints which we are going to serve from.
-	endPoints := finalizeEndpoints(tls, &apiServer.Server)
+	endPoints := finalizeEndpoints(tls, apiServer.Server)
 
 	// Initialize local server address
 	globalMinioAddr = getLocalAddress(srvConfig)
