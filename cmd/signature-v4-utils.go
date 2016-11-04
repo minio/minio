@@ -161,15 +161,7 @@ func extractSignedHeaders(signedHeaders []string, reqHeaders http.Header) (http.
 // Trim leading and trailing spaces and replace sequential spaces with one space, following Trimall()
 // in http://docs.aws.amazon.com/general/latest/gr/sigv4-create-canonical-request.html
 func signV4TrimAll(input string) string {
-	// Remove all whitespaces first
-	cleanWhiteSpaces := func(r rune) rune {
-		switch r {
-		case '\t', '\n', '\u000b', '\r', '\f':
-			return ' '
-		}
-		return r
-	}
-	input = strings.Map(cleanWhiteSpaces, input)
-	// Compress adjacent spaces to one space and return
+	// Compress adjacent spaces (a space is determined by
+	// unicode.IsSpace() internally here) to one space and return
 	return strings.Join(strings.Fields(input), " ")
 }

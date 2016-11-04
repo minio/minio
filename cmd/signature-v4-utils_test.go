@@ -212,8 +212,8 @@ func TestFindHost(t *testing.T) {
 	}
 }
 
-// TestSigV4TrimAll - tests the logic of TrimAll() function
-func TestSigV4TrimAll(t *testing.T) {
+// TestSignV4TrimAll - tests the logic of TrimAll() function
+func TestSignV4TrimAll(t *testing.T) {
 	testCases := []struct {
 		// Input.
 		inputStr string
@@ -229,13 +229,14 @@ func TestSigV4TrimAll(t *testing.T) {
 		{"   a   b  c   ", "a b c"},
 		{"a \t b  c   ", "a b c"},
 		{"\"a \t b  c   ", "\"a b c"},
+		{" \t\n\u000b\r\fa \t\n\u000b\r\f b \t\n\u000b\r\f c \t\n\u000b\r\f", "a b c"},
 	}
 
 	// Tests generated values from url encoded name.
 	for i, testCase := range testCases {
 		result := signV4TrimAll(testCase.inputStr)
 		if testCase.result != result {
-			t.Errorf("Test %d: Expected sigV4TrimAll result to be \"%s\", but found it to be \"%s\" instead", i+1, testCase.result, result)
+			t.Errorf("Test %d: Expected signV4TrimAll result to be \"%s\", but found it to be \"%s\" instead", i+1, testCase.result, result)
 		}
 	}
 }
