@@ -118,16 +118,31 @@ func parseStorageEndpoints(eps []string) (endpoints []*url.URL, err error) {
 		if err != nil {
 			return nil, err
 		}
-		if u.Host != "" && globalMinioHost == "" {
-			// For ex.: minio server host1:port1 host2:port2...
-			// we return error as port is configurable only
-			// using "--address :port"
-			_, _, err := net.SplitHostPort(u.Host)
-			if err == nil {
-				// u.Host has ":"
-				return nil, fmt.Errorf("Invalid argument %s, port configurable using --address", u.Host)
+		if u.Host != "" {
+			_, port, err := net.SplitHostPort(u.Host)
+			// Ignore the missing port error as the default port can be globalMinioPort.
+			if err != nil && !strings.Contains(err.Error(), "missing port in address") {
+				return nil, err
 			}
-			u.Host = net.JoinHostPort(u.Host, globalMinioPort)
+
+			if globalMinioHost == "" {
+				// For ex.: minio server host1:port1 host2:port2...
+				// we return error as port is configurable only
+				// using "--address :port"
+				if port != "" {
+					errorIf(fmt.Errorf("Invalid argument %s, port configurable using --address :<port>", u.Host), "")
+					return nil, errInvalidArgument
+				}
+				u.Host = net.JoinHostPort(u.Host, globalMinioPort)
+			} else {
+				// For ex.: minio server --address host:port host1:port1 host2:port2...
+				// i.e if "--address host:port" is specified
+				// port info in u.Host is mandatory else return error.
+				if port == "" {
+					errorIf(fmt.Errorf("Invalid argument %s, port mandatory when --address <host>:<port> is used", u.Host), "")
+					return nil, errInvalidArgument
+				}
+			}
 		}
 		endpoints = append(endpoints, u)
 	}

@@ -177,6 +177,28 @@ func TestCheckSufficientDisks(t *testing.T) {
 	}
 }
 
+func TestParseStorageEndpoints(t *testing.T) {
+	testCases := []struct {
+		globalMinioHost string
+		host            string
+		expectedErr     error
+	}{
+		{"", "http://localhost/export", nil},
+		{"testhost", "http://localhost/export", errInvalidArgument},
+		{"", "http://localhost:9000/export", errInvalidArgument},
+		{"testhost", "http://localhost:9000/export", nil},
+	}
+	for i, test := range testCases {
+		globalMinioHost = test.globalMinioHost
+		_, err := parseStorageEndpoints([]string{test.host})
+		if err != test.expectedErr {
+			t.Errorf("Test %d : got %v, expected %v", i+1, err, test.expectedErr)
+		}
+	}
+	// Should be reset back to "" so that we don't affect other tests.
+	globalMinioHost = ""
+}
+
 func TestCheckEndpointsSyntax(t *testing.T) {
 	var testCases []string
 	if runtime.GOOS == "windows" {
