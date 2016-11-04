@@ -101,6 +101,7 @@ func TestHouseKeeping(t *testing.T) {
 
 // Test getPath() - the path that needs to be passed to newPosix()
 func TestGetPath(t *testing.T) {
+	globalMinioHost = ""
 	var testCases []struct {
 		epStr string
 		path  string
