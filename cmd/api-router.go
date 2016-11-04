@@ -34,7 +34,7 @@ func registerAPIRouter(mux *router.Router) {
 	}
 
 	// API Router
-	apiRouter := router.NewRouter().PathPrefix("/").Subrouter()
+	apiRouter := mux.NewRoute().PathPrefix("").Subrouter()
 
 	// Bucket router
 	bucket := apiRouter.PathPrefix("/{bucket}").Subrouter()

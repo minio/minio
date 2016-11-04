@@ -118,7 +118,7 @@ func TestServerMux(t *testing.T) {
 	}))
 
 	// Set the test server config to the mux
-	ts.Config = &m.Server
+	ts.Config = m.Server
 	ts.Start()
 
 	// Create a ListenerMux
@@ -171,7 +171,7 @@ func TestServerCloseBlocking(t *testing.T) {
 	}))
 
 	// Set the test server config to the mux
-	ts.Config = &m.Server
+	ts.Config = m.Server
 	ts.Start()
 
 	// Create a ListenerMux.

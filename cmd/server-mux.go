@@ -166,7 +166,7 @@ func (l *ListenerMux) Close() error {
 
 // ServerMux - the main mux server
 type ServerMux struct {
-	http.Server
+	*http.Server
 	listeners       []*ListenerMux
 	WaitGroup       *sync.WaitGroup
 	GracefulTimeout time.Duration
@@ -178,7 +178,7 @@ type ServerMux struct {
 // NewServerMux constructor to create a ServerMux
 func NewServerMux(addr string, handler http.Handler) *ServerMux {
 	m := &ServerMux{
-		Server: http.Server{
+		Server: &http.Server{
 			Addr: addr,
 			// Do not add any timeouts Golang net.Conn
 			// closes connections right after 10mins even
