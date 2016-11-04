@@ -86,10 +86,7 @@ func isKeyFileExists() bool {
 
 // isSSL - returns true with both cert and key exists.
 func isSSL() bool {
-	if isCertFileExists() && isKeyFileExists() {
-		return true
-	}
-	return false
+	return isCertFileExists() && isKeyFileExists()
 }
 
 // Reads certificated file and returns a list of parsed certificates.
