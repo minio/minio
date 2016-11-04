@@ -177,6 +177,28 @@ func TestCheckSufficientDisks(t *testing.T) {
 	}
 }
 
+func TestParseStorageEndpoints(t *testing.T) {
+	testCases := []struct {
+		globalMinioHost string
+		host            string
+		expectedErr     error
+	}{
+		{"", "http://localhost/export", nil},
+		{"testhost", "http://localhost/export", errInvalidArgument},
+		{"", "http://localhost:9000/export", errInvalidArgument},
+		{"testhost", "http://localhost:9000/export", nil},
+	}
+	for i, test := range testCases {
+		globalMinioHost = test.globalMinioHost
+		_, err := parseStorageEndpoints([]string{test.host})
+		if err != test.expectedErr {
+			t.Errorf("Test %d : got %v, expected %v", i+1, err, test.expectedErr)
+		}
+	}
+	// Should be reset back to "" so that we don't affect other tests.
+	globalMinioHost = ""
+}
+
 func TestCheckEndpointsSyntax(t *testing.T) {
 	var testCases []string
 	if runtime.GOOS == "windows" {
@@ -255,9 +277,8 @@ func TestIsDistributedSetup(t *testing.T) {
 			disks  []string
 			result bool
 		}{
-			{[]string{`http://4.4.4.4:80/c:\mnt\disk1`, `http://4.4.4.4:80/c:\mnt\disk2`}, true},
-			{[]string{`http://4.4.4.4:9000/c:\mnt\disk1`, `http://127.0.0.1:9000/c:\mnt\disk2`}, true},
-			{[]string{`http://127.0.0.1:9000/c:\mnt\disk1`, `http://127.0.0.1:9001/c:\mnt\disk2`}, true},
+			{[]string{`http://4.4.4.4/c:\mnt\disk1`, `http://4.4.4.4/c:\mnt\disk2`}, true},
+			{[]string{`http://4.4.4.4/c:\mnt\disk1`, `http://127.0.0.1/c:\mnt\disk2`}, true},
 			{[]string{`c:\mnt\disk1`, `c:\mnt\disk2`}, false},
 		}
 	} else {
@@ -265,23 +286,44 @@ func TestIsDistributedSetup(t *testing.T) {
 			disks  []string
 			result bool
 		}{
-			{[]string{"http://4.4.4.4:9000/mnt/disk1", "http://4.4.4.4:9000/mnt/disk2"}, true},
-			{[]string{"http://4.4.4.4:9000/mnt/disk1", "http://127.0.0.1:9000/mnt/disk2"}, true},
-			{[]string{"http://127.0.0.1:9000/mnt/disk1", "http://127.0.0.1:9000/mnt/disk2"}, true},
+			{[]string{"http://4.4.4.4/mnt/disk1", "http://4.4.4.4/mnt/disk2"}, true},
+			{[]string{"http://4.4.4.4/mnt/disk1", "http://127.0.0.1/mnt/disk2"}, true},
 			{[]string{"/mnt/disk1", "/mnt/disk2"}, false},
 		}
-
 	}
 	for i, test := range testCases {
 		endpoints, err := parseStorageEndpoints(test.disks)
 		if err != nil {
-			t.Fatalf("Unexpected error %s", err)
+			t.Fatalf("Test %d: Unexpected error: %s", i+1, err)
 		}
 		res := isDistributedSetup(endpoints)
 		if res != test.result {
 			t.Errorf("Test %d: expected result %t but received %t", i+1, test.result, res)
 		}
 	}
+
+	// Test cases when globalMinioHost is set
+	globalMinioHost = "testhost"
+	testCases = []struct {
+		disks  []string
+		result bool
+	}{
+		{[]string{"http://127.0.0.1:9001/mnt/disk1", "http://127.0.0.1:9002/mnt/disk2", "http://127.0.0.1:9003/mnt/disk3", "http://127.0.0.1:9004/mnt/disk4"}, true},
+		{[]string{"/mnt/disk1", "/mnt/disk2"}, false},
+	}
+
+	for i, test := range testCases {
+		endpoints, err := parseStorageEndpoints(test.disks)
+		if err != nil {
+			t.Fatalf("Test %d: Unexpected error: %s", i+1, err)
+		}
+		res := isDistributedSetup(endpoints)
+		if res != test.result {
+			t.Errorf("Test %d: expected result %t but received %t", i+1, test.result, res)
+		}
+	}
+	// Reset so that we don't affect other tests.
+	globalMinioHost = ""
 }
 
 func TestInitServerConfig(t *testing.T) {
