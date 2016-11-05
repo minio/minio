@@ -3,6 +3,7 @@ FROM golang:1.7-alpine
 WORKDIR /go/src/app
 
 COPY . /go/src/app
+
 RUN \
 	apk add --no-cache git && \
 	go-wrapper download && \
@@ -13,5 +14,5 @@ RUN \
 	apk del git
 
 EXPOSE 9000
-ENTRYPOINT ["go-wrapper", "run"]
+ENTRYPOINT ["minio"]
 VOLUME ["/export"]
