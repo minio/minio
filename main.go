@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package main
+package main // import "github.com/minio/minio"
 
 import minio "github.com/minio/minio/cmd"
 
