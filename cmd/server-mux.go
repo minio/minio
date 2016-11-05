@@ -281,18 +281,24 @@ func initListeners(serverAddr string, tls *tls.Config) ([]*ListenerMux, error) {
 	return listeners, nil
 }
 
-// ListenAndServeTLS - similar to the http.Server version. However, it has the
-// ability to redirect http requests to the correct HTTPS url if the client
-// mistakenly initiates a http connection over the https port
-func (m *ServerMux) ListenAndServeTLS(certFile, keyFile string) (err error) {
+// ListenAndServe - serve HTTP requests with protocol multiplexing support
+// TLS is actived when certFile and keyFile parameters are not empty.
+func (m *ServerMux) ListenAndServe(certFile, keyFile string) (err error) {
+
+	tlsEnabled := certFile != "" && keyFile != ""
+
 	config := &tls.Config{} // Always instantiate.
-	if config.NextProtos == nil {
-		config.NextProtos = []string{"http/1.1", "h2"}
-	}
-	config.Certificates = make([]tls.Certificate, 1)
-	config.Certificates[0], err = tls.LoadX509KeyPair(certFile, keyFile)
-	if err != nil {
-		return err
+
+	if tlsEnabled {
+		// Configure TLS in the server
+		if config.NextProtos == nil {
+			config.NextProtos = []string{"http/1.1", "h2"}
+		}
+		config.Certificates = make([]tls.Certificate, 1)
+		config.Certificates[0], err = tls.LoadX509KeyPair(certFile, keyFile)
+		if err != nil {
+			return err
+		}
 	}
 
 	go m.handleServiceSignals()
@@ -306,68 +312,39 @@ func (m *ServerMux) ListenAndServeTLS(certFile, keyFile string) (err error) {
 	m.listeners = listeners
 	m.mu.Unlock()
 
-	var wg = &sync.WaitGroup{}
-	for _, listener := range listeners {
-		wg.Add(1)
-		go func(listener *ListenerMux) {
-			defer wg.Done()
-			serr := http.Serve(listener,
-				http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					// We reach here when ListenerMux.ConnMux is not wrapped with tls.Server
-					if r.TLS == nil {
-						u := url.URL{
-							Scheme:   "https",
-							Opaque:   r.URL.Opaque,
-							User:     r.URL.User,
-							Host:     r.Host,
-							Path:     r.URL.Path,
-							RawQuery: r.URL.RawQuery,
-							Fragment: r.URL.Fragment,
-						}
-						http.Redirect(w, r, u.String(), http.StatusMovedPermanently)
-					} else {
-						// Execute registered handlers
-						m.Server.Handler.ServeHTTP(w, r)
-					}
-				}),
-			)
-			// Do not print the error if the listener is closed.
-			if !listener.IsClosed() {
-				errorIf(serr, "Unable to serve incoming requests.")
+	// All http requests start to be processed by httpHandler
+	httpHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if tlsEnabled && r.TLS == nil {
+			// TLS is enabled but Request is not TLS configured
+			u := url.URL{
+				Scheme:   "https",
+				Opaque:   r.URL.Opaque,
+				User:     r.URL.User,
+				Host:     r.Host,
+				Path:     r.URL.Path,
+				RawQuery: r.URL.RawQuery,
+				Fragment: r.URL.Fragment,
 			}
-		}(listener)
-	}
-	// Waits for all http.Serve's to return.
-	wg.Wait()
-	return nil
-}
-
-// ListenAndServe - Same as the http.Server version
-func (m *ServerMux) ListenAndServe() error {
-	go m.handleServiceSignals()
-
-	listeners, err := initListeners(m.Server.Addr, &tls.Config{})
-	if err != nil {
-		return err
-	}
-
-	m.mu.Lock()
-	m.listeners = listeners
-	m.mu.Unlock()
+			http.Redirect(w, r, u.String(), http.StatusMovedPermanently)
+		} else {
+			// Execute registered handlers
+			m.Server.Handler.ServeHTTP(w, r)
+		}
+	})
 
 	var wg = &sync.WaitGroup{}
 	for _, listener := range listeners {
 		wg.Add(1)
 		go func(listener *ListenerMux) {
 			defer wg.Done()
-			serr := m.Server.Serve(listener)
+			serr := http.Serve(listener, httpHandler)
 			// Do not print the error if the listener is closed.
 			if !listener.IsClosed() {
 				errorIf(serr, "Unable to serve incoming requests.")
 			}
 		}(listener)
 	}
-	// Wait for all the http.Serve to finish.
+	// Wait for all http.Serve's to return.
 	wg.Wait()
 	return nil
 }
