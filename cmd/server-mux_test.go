@@ -59,11 +59,8 @@ func runTest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ln = &ListenerMux{
-		Listener: ln,
-		config:   &tls.Config{},
-		cond:     sync.NewCond(&sync.Mutex{}),
-	}
+
+	ln = newListenerMux(ln, &tls.Config{})
 
 	addr := ln.Addr().String()
 	waitForListener := make(chan error)

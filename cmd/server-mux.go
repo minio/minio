@@ -134,9 +134,50 @@ func (c *ConnMux) Close() (err error) {
 type ListenerMux struct {
 	net.Listener
 	config *tls.Config
+	// acceptResCh is a channel for transporting wrapped net.Conn (regular or tls)
+	// after peeking the content of the latter
+	acceptResCh chan ListenerMuxAcceptRes
 	// Cond is used to signal Close when there are no references to the listener.
 	cond *sync.Cond
 	refs int
+}
+
+// ListenerMuxAcceptRes contains then final net.Conn data (wrapper by tls or not) to be sent to the http handler
+type ListenerMuxAcceptRes struct {
+	conn net.Conn
+	err  error
+}
+
+// newListenerMux listens and wraps accepted connections with tls after protocol peeking
+func newListenerMux(listener net.Listener, config *tls.Config) *ListenerMux {
+	l := ListenerMux{
+		Listener:    listener,
+		config:      config,
+		cond:        sync.NewCond(&sync.Mutex{}),
+		acceptResCh: make(chan ListenerMuxAcceptRes),
+	}
+	// Start listening, wrap connections with tls when needed
+	go func() {
+		// Loop for accepting new connections
+		for {
+			conn, err := l.Listener.Accept()
+			if err != nil {
+				l.acceptResCh <- ListenerMuxAcceptRes{err: err}
+				return
+			}
+			// Wrap the connection with ConnMux to be able to peek the data in the incoming connection
+			// and decide if we need to wrap the connection itself with a TLS or not
+			go func(conn net.Conn) {
+				connMux := NewConnMux(conn)
+				if connMux.PeekProtocol() == "tls" {
+					l.acceptResCh <- ListenerMuxAcceptRes{conn: tls.Server(connMux, l.config)}
+				} else {
+					l.acceptResCh <- ListenerMuxAcceptRes{conn: connMux}
+				}
+			}(conn)
+		}
+	}()
+	return &l
 }
 
 // IsClosed - Returns if the underlying listener is closed fully.
@@ -187,16 +228,8 @@ func (l *ListenerMux) Accept() (net.Conn, error) {
 	l.incRef()
 	defer l.decRef()
 
-	conn, err := l.Listener.Accept()
-	if err != nil {
-		return conn, err
-	}
-	connMux := NewConnMux(conn)
-	protocol := connMux.PeekProtocol()
-	if protocol == "tls" {
-		return tls.Server(connMux, l.config), nil
-	}
-	return connMux, nil
+	res := <-l.acceptResCh
+	return res.conn, res.err
 }
 
 // ServerMux - the main mux server
@@ -247,11 +280,7 @@ func initListeners(serverAddr string, tls *tls.Config) ([]*ListenerMux, error) {
 		if err != nil {
 			return nil, err
 		}
-		listeners = append(listeners, &ListenerMux{
-			Listener: listener,
-			config:   tls,
-			cond:     sync.NewCond(&sync.Mutex{}),
-		})
+		listeners = append(listeners, newListenerMux(listener, tls))
 		return listeners, nil
 	}
 	var addrs []string
@@ -272,11 +301,7 @@ func initListeners(serverAddr string, tls *tls.Config) ([]*ListenerMux, error) {
 		if err != nil {
 			return nil, err
 		}
-		listeners = append(listeners, &ListenerMux{
-			Listener: listener,
-			config:   tls,
-			cond:     sync.NewCond(&sync.Mutex{}),
-		})
+		listeners = append(listeners, newListenerMux(listener, tls))
 	}
 	return listeners, nil
 }
