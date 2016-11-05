@@ -37,6 +37,79 @@ import (
 	"time"
 )
 
+func TestListenerAcceptAfterClose(t *testing.T) {
+	var wg sync.WaitGroup
+	for i := 0; i < 16; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			for i := 0; i < 10; i++ {
+				runTest(t)
+			}
+		}()
+	}
+	wg.Wait()
+}
+
+func runTest(t *testing.T) {
+	const connectionsBeforeClose = 1
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ln = &ListenerMux{
+		Listener: ln,
+		config:   &tls.Config{},
+		cond:     sync.NewCond(&sync.Mutex{}),
+	}
+
+	addr := ln.Addr().String()
+	waitForListener := make(chan error)
+	go func() {
+		defer close(waitForListener)
+
+		var connCount int
+		for {
+			conn, aerr := ln.Accept()
+			if aerr != nil {
+				return
+			}
+
+			connCount++
+			if connCount > connectionsBeforeClose {
+				waitForListener <- errUnexpected
+				return
+			}
+			conn.Close()
+		}
+	}()
+
+	for i := 0; i < connectionsBeforeClose; i++ {
+		err = dial(addr)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	ln.Close()
+	dial(addr)
+
+	err = <-waitForListener
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func dial(addr string) error {
+	conn, err := net.Dial("tcp", addr)
+	if err == nil {
+		conn.Close()
+	}
+	return err
+}
+
 // Tests initalizing listeners.
 func TestInitListeners(t *testing.T) {
 	testCases := []struct {
@@ -125,6 +198,7 @@ func TestServerMux(t *testing.T) {
 	lm := &ListenerMux{
 		Listener: ts.Listener,
 		config:   &tls.Config{},
+		cond:     sync.NewCond(&sync.Mutex{}),
 	}
 	m.listeners = []*ListenerMux{lm}
 
@@ -178,6 +252,7 @@ func TestServerCloseBlocking(t *testing.T) {
 	lm := &ListenerMux{
 		Listener: ts.Listener,
 		config:   &tls.Config{},
+		cond:     sync.NewCond(&sync.Mutex{}),
 	}
 	m.listeners = []*ListenerMux{lm}
 
