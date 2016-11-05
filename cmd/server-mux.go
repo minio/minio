@@ -17,15 +17,23 @@
 package cmd
 
 import (
+	"bufio"
 	"crypto/tls"
 	"errors"
-	"io"
 	"net"
 	"net/http"
 	"net/url"
 	"strings"
 	"sync"
 	"time"
+)
+
+// The value choosen below is longest word choosen
+// from all the http verbs comprising of
+// "PRI", "OPTIONS", "GET", "HEAD", "POST",
+// "PUT", "DELETE", "TRACE", "CONNECT".
+const (
+	maxHTTPVerbLen = 7
 )
 
 var defaultHTTP2Methods = []string{
@@ -43,64 +51,40 @@ var defaultHTTP1Methods = []string{
 	"CONNECT",
 }
 
-// ConnBuf - contains network buffer to record data
-type ConnBuf struct {
-	buffer []byte
-	unRead bool
-	offset int
-}
-
-// ConnMux - implements a Read() which streams twice the firs bytes from
-// the incoming connection, to help peeking protocol
+// ConnMux - Peeks into the incoming connection for relevant
+// protocol without advancing the underlying net.Conn (io.Reader).
+// ConnMux - allows us to multiplex between TLS and Regular HTTP
+// connections on the same listeners.
 type ConnMux struct {
 	net.Conn
-	lastError error
-	dataBuf   ConnBuf
-}
-
-func longestWord(strings []string) int {
-	maxLen := 0
-	for _, m := range defaultHTTP1Methods {
-		if maxLen < len(m) {
-			maxLen = len(m)
-		}
-	}
-	for _, m := range defaultHTTP2Methods {
-		if maxLen < len(m) {
-			maxLen = len(m)
-		}
-	}
-
-	return maxLen
+	bufrw *bufio.ReadWriter
 }
 
 // NewConnMux - creates a new ConnMux instance
 func NewConnMux(c net.Conn) *ConnMux {
-	h1 := longestWord(defaultHTTP1Methods)
-	h2 := longestWord(defaultHTTP2Methods)
-	max := h1
-	if h2 > max {
-		max = h2
+	br := bufio.NewReader(c)
+	bw := bufio.NewWriter(c)
+	return &ConnMux{
+		Conn:  c,
+		bufrw: bufio.NewReadWriter(br, bw),
 	}
-	return &ConnMux{Conn: c, dataBuf: ConnBuf{buffer: make([]byte, max+1)}}
 }
 
 // PeekProtocol - reads the first bytes, then checks if it is similar
 // to one of the default http methods
 func (c *ConnMux) PeekProtocol() string {
-	var n int
-	n, c.lastError = c.Conn.Read(c.dataBuf.buffer)
-	if n == 0 || (c.lastError != nil && c.lastError != io.EOF) {
-		return ""
+	buf, err := c.bufrw.Peek(maxHTTPVerbLen)
+	if err != nil {
+		errorIf(err, "Unable to peek into the protocol")
+		return "http"
 	}
-	c.dataBuf.unRead = true
 	for _, m := range defaultHTTP1Methods {
-		if strings.HasPrefix(string(c.dataBuf.buffer), m) {
+		if strings.HasPrefix(string(buf), m) {
 			return "http"
 		}
 	}
 	for _, m := range defaultHTTP2Methods {
-		if strings.HasPrefix(string(c.dataBuf.buffer), m) {
+		if strings.HasPrefix(string(buf), m) {
 			return "http2"
 		}
 	}
@@ -110,28 +94,15 @@ func (c *ConnMux) PeekProtocol() string {
 // Read - streams the ConnMux buffer when reset flag is activated, otherwise
 // streams from the incoming network connection
 func (c *ConnMux) Read(b []byte) (int, error) {
-	if c.dataBuf.unRead {
-		n := copy(b, c.dataBuf.buffer[c.dataBuf.offset:])
-		c.dataBuf.offset += n
-		if c.dataBuf.offset == len(c.dataBuf.buffer) {
-			// We finished copying all c.buffer, reset all
-			c.dataBuf.unRead = false
-			c.dataBuf.offset = 0
-			c.dataBuf.buffer = c.dataBuf.buffer[:]
-			if n < len(b) {
-				// Continue copying from socket if b still has room for data
-				tmpBuffer := make([]byte, len(b)-n-1)
-				nr, err := c.Conn.Read(tmpBuffer)
-				for idx, val := range tmpBuffer {
-					b[n+idx] = val
-				}
-				return n + nr, err
-			}
-		}
-		// We here return the last error
-		return n, c.lastError
+	return c.bufrw.Read(b)
+}
+
+// Close the connection.
+func (c *ConnMux) Close() (err error) {
+	if err = c.bufrw.Flush(); err != nil {
+		return err
 	}
-	return c.Conn.Read(b)
+	return c.Conn.Close()
 }
 
 // ListenerMux wraps the standard net.Listener to inspect
