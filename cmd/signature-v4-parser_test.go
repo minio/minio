@@ -228,13 +228,21 @@ func TestParseSignature(t *testing.T) {
 			expectedErrCode:  ErrMissingFields,
 		},
 		// Test case - 2.
+		// SignElement does have 2 parts but doesn't have valid signature value.
+		// ErrMissingFields expected.
+		{
+			inputSignElement: "Signature=",
+			expectedSignStr:  "",
+			expectedErrCode:  ErrMissingFields,
+		},
+		// Test case - 3.
 		// SignElemenet with missing "SignatureTag",ErrMissingSignTag expected.
 		{
 			inputSignElement: "Sign=",
 			expectedSignStr:  "",
 			expectedErrCode:  ErrMissingSignTag,
 		},
-		// Test case - 3.
+		// Test case - 4.
 		// Test case with valid inputs.
 		{
 			inputSignElement: "Signature=abcd",
@@ -289,8 +297,7 @@ func TestParseSignedHeaders(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		actualSignedHeaders, actualErrCode := parseSignedHeaders(testCase.inputSignElement)
-
+		actualSignedHeaders, actualErrCode := parseSignedHeader(testCase.inputSignElement)
 		if testCase.expectedErrCode != actualErrCode {
 			t.Errorf("Test %d: Expected the APIErrCode to be %d, got %d", i+1, testCase.expectedErrCode, actualErrCode)
 		}
@@ -670,6 +677,50 @@ func TestParsePreSignV4(t *testing.T) {
 			expectedErrCode:       ErrMalformedExpires,
 		},
 		// Test case - 6.
+		// Test case with negative X-Amz-Expires header.
+		{
+			inputQueryKeyVals: []string{
+				// valid  "X-Amz-Algorithm" header.
+				"X-Amz-Algorithm", signV4Algorithm,
+				// valid  "X-Amz-Credential" header.
+				"X-Amz-Credential", joinWithSlash(
+					"Z7IXGOO6BZ0REAN1Q26I",
+					sampleTimeStr,
+					"us-west-1",
+					"s3",
+					"aws4_request"),
+				// valid "X-Amz-Date" query.
+				"X-Amz-Date", queryTime.UTC().Format(iso8601Format),
+				"X-Amz-Expires", getDurationStr(-1),
+				"X-Amz-Signature", "abcd",
+				"X-Amz-SignedHeaders", "host;x-amz-content-sha256;x-amz-date",
+			},
+			expectedPreSignValues: preSignValues{},
+			expectedErrCode:       ErrNegativeExpires,
+		},
+		// Test case - 7.
+		// Test case with empty X-Amz-SignedHeaders.
+		{
+			inputQueryKeyVals: []string{
+				// valid  "X-Amz-Algorithm" header.
+				"X-Amz-Algorithm", signV4Algorithm,
+				// valid  "X-Amz-Credential" header.
+				"X-Amz-Credential", joinWithSlash(
+					"Z7IXGOO6BZ0REAN1Q26I",
+					sampleTimeStr,
+					"us-west-1",
+					"s3",
+					"aws4_request"),
+				// valid "X-Amz-Date" query.
+				"X-Amz-Date", queryTime.UTC().Format(iso8601Format),
+				"X-Amz-Expires", getDurationStr(100),
+				"X-Amz-Signature", "abcd",
+				"X-Amz-SignedHeaders", "",
+			},
+			expectedPreSignValues: preSignValues{},
+			expectedErrCode:       ErrMissingFields,
+		},
+		// Test case - 8.
 		// Test case with valid "X-Amz-Algorithm", "X-Amz-Credential", "X-Amz-Date" query value.
 		// Malformed Expiry, a valid expiry should be of format "<int>s".
 		{
@@ -722,7 +773,6 @@ func TestParsePreSignV4(t *testing.T) {
 		}
 		// call the function under test.
 		parsedPreSign, actualErrCode := parsePreSignV4(inputQuery)
-
 		if testCase.expectedErrCode != actualErrCode {
 			t.Fatalf("Test %d: Expected the APIErrCode to be %d, got %d", i+1, testCase.expectedErrCode, actualErrCode)
 		}

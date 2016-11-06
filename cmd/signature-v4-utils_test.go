@@ -86,10 +86,11 @@ func TestIsValidRegion(t *testing.T) {
 		{"us-east-1", "US", true},
 		{"us-west-1", "US", false},
 		{"us-west-1", "us-west-1", true},
+		// "US" was old naming convention for 'us-east-1'.
+		{"US", "US", true},
 	}
 
 	for i, testCase := range testCases {
-
 		actualResult := isValidRegion(testCase.inputReqRegion, testCase.inputConfRegion)
 		if testCase.expectedResult != actualResult {
 			t.Errorf("Test %d: Expected the result to `%v`, but instead got `%v`", i+1, testCase.expectedResult, actualResult)

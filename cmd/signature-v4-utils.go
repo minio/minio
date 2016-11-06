@@ -86,14 +86,13 @@ func getURLEncodedName(name string) string {
 			continue
 		default:
 			len := utf8.RuneLen(s)
-			if len < 0 {
-				return name
-			}
-			u := make([]byte, len)
-			utf8.EncodeRune(u, s)
-			for _, r := range u {
-				hex := hex.EncodeToString([]byte{r})
-				encodedName = encodedName + "%" + strings.ToUpper(hex)
+			if len > 0 {
+				u := make([]byte, len)
+				utf8.EncodeRune(u, s)
+				for _, r := range u {
+					hex := hex.EncodeToString([]byte{r})
+					encodedName = encodedName + "%" + strings.ToUpper(hex)
+				}
 			}
 		}
 	}
