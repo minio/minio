@@ -74,7 +74,7 @@ func parseCredentialHeader(credElement string) (credentialHeader, APIErrorCode) 
 	return cred, ErrNone
 }
 
-// Parse signature string.
+// Parse signature from signature tag.
 func parseSignature(signElement string) (string, APIErrorCode) {
 	signFields := strings.Split(strings.TrimSpace(signElement), "=")
 	if len(signFields) != 2 {
@@ -83,18 +83,24 @@ func parseSignature(signElement string) (string, APIErrorCode) {
 	if signFields[0] != "Signature" {
 		return "", ErrMissingSignTag
 	}
+	if signFields[1] == "" {
+		return "", ErrMissingFields
+	}
 	signature := signFields[1]
 	return signature, ErrNone
 }
 
-// Parse signed headers string.
-func parseSignedHeaders(signedHdrElement string) ([]string, APIErrorCode) {
+// Parse slice of signed headers from signed headers tag.
+func parseSignedHeader(signedHdrElement string) ([]string, APIErrorCode) {
 	signedHdrFields := strings.Split(strings.TrimSpace(signedHdrElement), "=")
 	if len(signedHdrFields) != 2 {
 		return nil, ErrMissingFields
 	}
 	if signedHdrFields[0] != "SignedHeaders" {
 		return nil, ErrMissingSignHeadersTag
+	}
+	if signedHdrFields[1] == "" {
+		return nil, ErrMissingFields
 	}
 	signedHeaders := strings.Split(signedHdrFields[1], ";")
 	return signedHeaders, ErrNone
@@ -122,8 +128,7 @@ type preSignValues struct {
 //   querystring += &X-Amz-Expires=timeout interval
 //   querystring += &X-Amz-SignedHeaders=signed_headers
 //   querystring += &X-Amz-Signature=signature
-//{
-
+//
 // verifies if any of the necessary query params are missing in the presigned request.
 func doesV4PresignParamsExist(query url.Values) APIErrorCode {
 	v4PresignQueryParams := []string{"X-Amz-Algorithm", "X-Amz-Credential", "X-Amz-Signature", "X-Amz-Date", "X-Amz-SignedHeaders", "X-Amz-Expires"}
@@ -135,6 +140,7 @@ func doesV4PresignParamsExist(query url.Values) APIErrorCode {
 	return ErrNone
 }
 
+// Parses all the presigned signature values into separate elements.
 func parsePreSignV4(query url.Values) (preSignValues, APIErrorCode) {
 	var err APIErrorCode
 	// verify whether the required query params exist.
@@ -174,7 +180,7 @@ func parsePreSignV4(query url.Values) (preSignValues, APIErrorCode) {
 		return preSignValues{}, ErrNegativeExpires
 	}
 	// Save signed headers.
-	preSignV4Values.SignedHeaders, err = parseSignedHeaders("SignedHeaders=" + query.Get("X-Amz-SignedHeaders"))
+	preSignV4Values.SignedHeaders, err = parseSignedHeader("SignedHeaders=" + query.Get("X-Amz-SignedHeaders"))
 	if err != ErrNone {
 		return preSignValues{}, err
 	}
@@ -231,7 +237,7 @@ func parseSignV4(v4Auth string) (signValues, APIErrorCode) {
 	}
 
 	// Save signed headers.
-	signV4Values.SignedHeaders, err = parseSignedHeaders(authFields[1])
+	signV4Values.SignedHeaders, err = parseSignedHeader(authFields[1])
 	if err != ErrNone {
 		return signValues{}, err
 	}
