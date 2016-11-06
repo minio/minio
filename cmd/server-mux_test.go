@@ -306,7 +306,7 @@ func TestListenAndServePlain(t *testing.T) {
 	}))
 
 	// ListenAndServe in a goroutine, but we don't know when it's ready
-	go func() { errc <- m.ListenAndServe() }()
+	go func() { errc <- m.ListenAndServe("", "") }()
 
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
@@ -370,7 +370,7 @@ func TestListenAndServeTLS(t *testing.T) {
 	}
 
 	// ListenAndServe in a goroutine, but we don't know when it's ready
-	go func() { errc <- m.ListenAndServeTLS(certFile, keyFile) }()
+	go func() { errc <- m.ListenAndServe(certFile, keyFile) }()
 
 	wg := &sync.WaitGroup{}
 	wg.Add(1)

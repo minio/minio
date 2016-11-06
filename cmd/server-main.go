@@ -487,12 +487,11 @@ func serverMain(c *cli.Context) {
 	// Start server, automatically configures TLS if certs are available.
 	go func(tls bool) {
 		var lerr error
+		cert, key := "", ""
 		if tls {
-			lerr = apiServer.ListenAndServeTLS(mustGetCertFile(), mustGetKeyFile())
-		} else {
-			// Fallback to http.
-			lerr = apiServer.ListenAndServe()
+			cert, key = mustGetCertFile(), mustGetKeyFile()
 		}
+		lerr = apiServer.ListenAndServe(cert, key)
 		fatalIf(lerr, "Failed to start minio server.")
 	}(tls)
 
