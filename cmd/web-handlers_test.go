@@ -590,7 +590,6 @@ func testSetAuthWebHandler(obj ObjectLayer, instanceType string, t TestErrHandle
 
 	// Iterating over the test cases, calling the function under test and asserting the response.
 	for i, testCase := range testCases {
-
 		setAuthRequest := SetAuthArgs{AccessKey: testCase.username, SecretKey: testCase.password}
 		setAuthReply := &SetAuthReply{}
 		req, err := newTestWebRPCRequest("Web.SetAuth", authorization, setAuthRequest)

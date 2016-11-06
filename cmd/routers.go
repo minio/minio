@@ -113,7 +113,7 @@ func configureServerHandler(srvCmdConfig serverCmdConfig) (http.Handler, error) 
 	// By default minio web browser is enabled.
 	if !strings.EqualFold(os.Getenv("MINIO_BROWSER"), "off") {
 		// Register RPC router for web related calls.
-		if err = registerBrowserRPCRouter(mux); err != nil {
+		if err = registerBrowserPeerRPCRouter(mux); err != nil {
 			return nil, err
 		}
 

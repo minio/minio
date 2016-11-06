@@ -27,24 +27,23 @@ import (
 // throughout Minio cluster, initiated from a Minio browser session.
 
 const (
-	browserPath = "/browser/setauth"
+	browserPeerPath = "/browser/setauth"
 )
 
 // The Type exporting methods exposed for RPC calls.
-type browserAPIHandlers struct {
-}
+type browserPeerAPIHandlers struct{}
 
 // Register RPC router
-func registerBrowserRPCRouter(mux *router.Router) error {
-	browserHandlers := &browserAPIHandlers{}
+func registerBrowserPeerRPCRouter(mux *router.Router) error {
+	bpHandlers := &browserPeerAPIHandlers{}
 
-	browserRPCServer := rpc.NewServer()
-	err := browserRPCServer.RegisterName("Browser", browserHandlers)
+	bpRPCServer := rpc.NewServer()
+	err := bpRPCServer.RegisterName("BrowserPeer", bpHandlers)
 	if err != nil {
 		return traceError(err)
 	}
 
-	browserRouter := mux.NewRoute().PathPrefix(reservedBucket).Subrouter()
-	browserRouter.Path(browserPath).Handler(browserRPCServer)
+	bpRouter := mux.NewRoute().PathPrefix(reservedBucket).Subrouter()
+	bpRouter.Path(browserPeerPath).Handler(bpRPCServer)
 	return nil
 }
