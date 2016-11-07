@@ -383,8 +383,7 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 		reply.PeerErrMsgs[svr] = errVal.Error()
 	}
 
-	// If we were unable to update locally, we return an error to
-	// the user/browser.
+	// If we were unable to update locally, we return an error to the user/browser.
 	if errsMap[globalMinioAddr] != nil {
 		// Since the error message may be very long to display
 		// on the browser, we tell the user to check the

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2014-2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,9 @@ import (
 	"time"
 )
 
-func (br *browserAPIHandlers) LoginHandler(args *RPCLoginArgs, reply *RPCLoginReply) error {
+// Login handler implements JWT login token generator, which upon login request
+// along with username and password is generated.
+func (br *browserPeerAPIHandlers) LoginHandler(args *RPCLoginArgs, reply *RPCLoginReply) error {
 	jwt, err := newJWT(defaultInterNodeJWTExpiry)
 	if err != nil {
 		return err
@@ -56,7 +58,7 @@ type SetAuthPeerArgs struct {
 // will be forced to re-establish connections. Connections will be
 // re-established only when the sending client has also updated its
 // credentials.
-func (br *browserAPIHandlers) SetAuthPeer(args SetAuthPeerArgs, reply *GenericReply) error {
+func (br *browserPeerAPIHandlers) SetAuthPeer(args SetAuthPeerArgs, reply *GenericReply) error {
 	// Check auth
 	if !isRPCTokenValid(args.Token) {
 		return errInvalidToken
@@ -83,8 +85,7 @@ func updateCredsOnPeers(creds credential) map[string]error {
 	errs := make([]error, len(peers))
 	var wg sync.WaitGroup
 
-	// Launch go routines to send request to each peer in
-	// parallel.
+	// Launch go routines to send request to each peer in parallel.
 	for ix := range peers {
 		wg.Add(1)
 		go func(ix int) {
@@ -103,7 +104,7 @@ func updateCredsOnPeers(creds credential) map[string]error {
 				secretKey:   serverConfig.GetCredential().SecretAccessKey,
 				address:     peers[ix],
 				secureConn:  isSSL(),
-				path:        path.Join(reservedBucket, browserPath),
+				path:        path.Join(reservedBucket, browserPeerPath),
 				loginMethod: "Browser.LoginHandler",
 			})
 
@@ -114,12 +115,11 @@ func updateCredsOnPeers(creds credential) map[string]error {
 			// response and not the reply.
 			err := client.Call("Browser.SetAuthPeer", &args, &GenericReply{})
 
-			// we try a bit hard (3 attempts with 1 second
-			// delay) to set creds on peers in case of
-			// failure.
+			// We try a bit hard (3 attempts with 1 second delay)
+			// to set creds on peers in case of failure.
 			if err != nil {
 				for i := 0; i < 2; i++ {
-					time.Sleep(1 * time.Second)
+					time.Sleep(1 * time.Second) // 1 second delay.
 					err = client.Call("Browser.SetAuthPeer", &args, &GenericReply{})
 					if err == nil {
 						break

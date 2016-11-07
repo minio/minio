@@ -2056,3 +2056,33 @@ func initTestWebRPCEndPoint(objLayer ObjectLayer) http.Handler {
 	registerWebRouter(muxRouter)
 	return muxRouter
 }
+
+// Initialize browser RPC endpoint.
+func initTestBrowserPeerRPCEndPoint() http.Handler {
+	// Initialize router.
+	muxRouter := router.NewRouter()
+	registerBrowserPeerRPCRouter(muxRouter)
+	return muxRouter
+}
+
+func StartTestBrowserPeerRPCServer(t TestErrHandler, instanceType string) TestServer {
+	root, err := newTestConfig("us-east-1")
+	if err != nil {
+		t.Fatalf("%s", err)
+	}
+
+	// Create an instance of TestServer.
+	testRPCServer := TestServer{}
+
+	// Fetch credentials for the test server.
+	credentials := serverConfig.GetCredential()
+
+	testRPCServer.Root = root
+	testRPCServer.AccessKey = credentials.AccessKeyID
+	testRPCServer.SecretKey = credentials.SecretAccessKey
+
+	// Initialize and run the TestServer.
+	testRPCServer.Server = httptest.NewServer(initTestBrowserPeerRPCEndPoint())
+	return testRPCServer
+
+}
