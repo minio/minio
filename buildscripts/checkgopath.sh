@@ -15,26 +15,23 @@
 # limitations under the License.
 #
 
-_init() {
-
-    shopt -s extglob
-
-    PWD=$(pwd -P)
-    GOPATH=$(cd "$(go env GOPATH)" ; env pwd -P)
-}
-
 main() {
-    echo "Checking if project is at ${GOPATH}"
-    for minio in $(echo ${GOPATH} | tr ':' ' '); do
-        if [ ! -d ${minio}/src/github.com/minio/minio ]; then
-            echo "Project not found in ${minio}, please follow instructions provided at https://github.com/minio/minio/blob/master/CONTRIBUTING.md#setup-your-minio-github-repository" \
-                && exit 1
-        fi
-        if [ "x${minio}/src/github.com/minio/minio" != "x${PWD}" ]; then
-            echo "Build outside of ${minio}, two source checkouts found. Exiting." && exit 1
+    echo "Checking project is in GOPATH:"
+
+    IFS=':' read -r -a paths <<< "$GOPATH"
+    for path in "${paths[@]}"; do
+        minio_path="$path/src/github.com/minio/minio"
+        if [ -d "$minio_path" ]; then
+            if [ "$minio_path" == "$PWD" ]; then
+               exit 0
+            fi
         fi
     done
+
+    echo "ERROR"
+    echo "Project not found in ${GOPATH}."
+    echo "Follow instructions at https://github.com/minio/minio/blob/master/CONTRIBUTING.md#setup-your-minio-github-repository"
+    exit 1
 }
 
-_init && main
-
+main
