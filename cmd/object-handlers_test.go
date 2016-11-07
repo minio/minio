@@ -48,6 +48,7 @@ const (
 
 // Wrapper for calling GetObject API handler tests for both XL multiple disks and FS single drive setup.
 func TestAPIGetObjectHandler(t *testing.T) {
+	defer DetectTestLeak(t)()
 	ExecObjectLayerAPITest(t, testAPIGetObjectHandler, []string{"GetObject"})
 }
 
@@ -269,6 +270,7 @@ func testAPIGetObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 
 // Wrapper for calling PutObject API handler tests using streaming signature v4 for both XL multiple disks and FS single drive setup.
 func TestAPIPutObjectStreamSigV4Handler(t *testing.T) {
+	defer DetectTestLeak(t)()
 	ExecObjectLayerAPITest(t, testAPIPutObjectStreamSigV4Handler, []string{"PutObject"})
 }
 
@@ -536,6 +538,7 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 
 // Wrapper for calling PutObject API handler tests for both XL multiple disks and FS single drive setup.
 func TestAPIPutObjectHandler(t *testing.T) {
+	defer DetectTestLeak(t)()
 	ExecObjectLayerAPITest(t, testAPIPutObjectHandler, []string{"PutObject"})
 }
 
@@ -772,6 +775,7 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 
 // Wrapper for calling Copy Object API handler tests for both XL multiple disks and single node setup.
 func TestAPICopyObjectHandler(t *testing.T) {
+	defer DetectTestLeak(t)()
 	ExecObjectLayerAPITest(t, testAPICopyObjectHandler, []string{"CopyObject"})
 }
 
@@ -1015,6 +1019,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 // First register the HTTP handler for NewMutlipartUpload, then a HTTP request for NewMultipart upload is made.
 // The UploadID from the response body is parsed and its existence is asserted with an attempt to ListParts using it.
 func TestAPINewMultipartHandler(t *testing.T) {
+	defer DetectTestLeak(t)()
 	ExecObjectLayerAPITest(t, testAPINewMultipartHandler, []string{"NewMultipart"})
 }
 
@@ -1160,6 +1165,7 @@ func testAPINewMultipartHandler(obj ObjectLayer, instanceType, bucketName string
 // The objective of the test is to initialte multipart upload on the same object 10 times concurrently,
 // The UploadID from the response body is parsed and its existence is asserted with an attempt to ListParts using it.
 func TestAPINewMultipartHandlerParallel(t *testing.T) {
+	defer DetectTestLeak(t)()
 	ExecObjectLayerAPITest(t, testAPINewMultipartHandlerParallel, []string{"NewMultipart"})
 }
 
@@ -1219,6 +1225,7 @@ func testAPINewMultipartHandlerParallel(obj ObjectLayer, instanceType, bucketNam
 
 // The UploadID from the response body is parsed and its existence is asserted with an attempt to ListParts using it.
 func TestAPICompleteMultipartHandler(t *testing.T) {
+	defer DetectTestLeak(t)()
 	ExecObjectLayerAPITest(t, testAPICompleteMultipartHandler, []string{"CompleteMultipart"})
 }
 
@@ -1580,6 +1587,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 
 // Wrapper for calling Delete Object API handler tests for both XL multiple disks and FS single drive setup.
 func TestAPIDeleteObjectHandler(t *testing.T) {
+	defer DetectTestLeak(t)()
 	ExecObjectLayerAPITest(t, testAPIDeleteObjectHandler, []string{"DeleteObject"})
 }
 
@@ -1746,6 +1754,7 @@ func testAPIDeleteObjectHandler(obj ObjectLayer, instanceType, bucketName string
 // TestAPIPutObjectPartHandlerPreSign - Tests validate the response of PutObjectPart HTTP handler
 // when the request signature type is PreSign.
 func TestAPIPutObjectPartHandlerPreSign(t *testing.T) {
+	defer DetectTestLeak(t)()
 	ExecObjectLayerAPITest(t, testAPIPutObjectPartHandlerPreSign, []string{"NewMultipart", "PutObjectPart"})
 }
 
@@ -1794,6 +1803,7 @@ func testAPIPutObjectPartHandlerPreSign(obj ObjectLayer, instanceType, bucketNam
 // TestAPIPutObjectPartHandlerStreaming - Tests validate the response of PutObjectPart HTTP handler
 // when the request signature type is `streaming signature`.
 func TestAPIPutObjectPartHandlerStreaming(t *testing.T) {
+	defer DetectTestLeak(t)()
 	ExecObjectLayerAPITest(t, testAPIPutObjectPartHandlerStreaming, []string{"NewMultipart", "PutObjectPart"})
 }
 
@@ -1881,6 +1891,7 @@ func testAPIPutObjectPartHandlerStreaming(obj ObjectLayer, instanceType, bucketN
 // TestAPIPutObjectPartHandler - Tests validate the response of PutObjectPart HTTP handler
 //  for variety of inputs.
 func TestAPIPutObjectPartHandler(t *testing.T) {
+	defer DetectTestLeak(t)()
 	ExecObjectLayerAPITest(t, testAPIPutObjectPartHandler, []string{"PutObjectPart"})
 }
 
@@ -2196,6 +2207,7 @@ func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName strin
 // TestAPIListObjectPartsHandlerPreSign - Tests validate the response of ListObjectParts HTTP handler
 //  when signature type of the HTTP request is `Presigned`.
 func TestAPIListObjectPartsHandlerPreSign(t *testing.T) {
+	defer DetectTestLeak(t)()
 	ExecObjectLayerAPITest(t, testAPIListObjectPartsHandlerPreSign,
 		[]string{"PutObjectPart", "NewMultipart", "ListObjectParts"})
 }
@@ -2263,6 +2275,7 @@ func testAPIListObjectPartsHandlerPreSign(obj ObjectLayer, instanceType, bucketN
 // TestAPIListObjectPartsHandler - Tests validate the response of ListObjectParts HTTP handler
 //  for variety of success/failure cases.
 func TestAPIListObjectPartsHandler(t *testing.T) {
+	defer DetectTestLeak(t)()
 	ExecObjectLayerAPITest(t, testAPIListObjectPartsHandler, []string{"ListObjectParts"})
 }
 
