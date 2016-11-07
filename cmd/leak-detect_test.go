@@ -2,9 +2,6 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package leaktest provides tools to detect leaked goroutines in tests.
-// To use it, call "defer leaktest.AfterTest(t)()" at the beginning of each
-// test that may use goroutines.
 package cmd
 
 import (
@@ -50,7 +47,7 @@ func (initialSnapShot LeakDetect) CompareCurrentSnapshot() []string {
 	return stackDiff
 }
 
-// DetectLeak - Creates a snapshot of runtiem stack and compares it with  the initial stack snapshot.
+// DetectLeak - Creates a snapshot of runtime stack and compares it with the initial stack snapshot.
 func (initialSnapShot LeakDetect) DetectLeak(t TestErrHandler) {
 	if t.Failed() {
 		return
@@ -78,7 +75,7 @@ func (initialSnapShot LeakDetect) DetectLeak(t TestErrHandler) {
 	}
 }
 
-// DetectTestLeak -  snapshots the currently-running goroutines and returns a
+// DetectTestLeak -  snapshots the currently running goroutines and returns a
 // function to be run at the end of tests to see whether any
 // goroutines leaked.
 // Usage: `defer DetectTestLeak(t)()` in beginning line of benchmarks or unit tests.
