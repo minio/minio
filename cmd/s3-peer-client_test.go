@@ -22,24 +22,42 @@ import (
 	"testing"
 )
 
-// Validates getAllPeers, fetches all peers based on list of storage endpoints.
-func TestGetAllPeers(t *testing.T) {
+// Validates makeS3Peers, fetches all peers based on list of storage
+// endpoints.
+func TestMakeS3Peers(t *testing.T) {
+	// Initialize configuration
+	root, err := newTestConfig("us-east-1")
+	if err != nil {
+		t.Fatalf("%s", err)
+	}
+	defer removeAll(root)
+
+	// test cases
 	testCases := []struct {
-		eps   []*url.URL
-		peers []string
+		gMinioAddr string
+		eps        []*url.URL
+		peers      []string
 	}{
-		{nil, nil},
-		{[]*url.URL{nil}, nil},
-		{[]*url.URL{{Path: "/mnt/disk1"}}, []string{globalMinioAddr, ""}},
-		{[]*url.URL{{Host: "localhost:9001"}}, []string{globalMinioAddr,
-			"localhost:9001",
-		}},
+		{":9000", []*url.URL{{Path: "/mnt/disk1"}}, []string{":9000"}},
+		{":9000", []*url.URL{{Host: "localhost:9001"}}, []string{":9000", "localhost:9001"}},
+		{"m1:9000", []*url.URL{{Host: "m1:9000"}, {Host: "m2:9000"}, {Host: "m3:9000"}}, []string{"m1:9000", "m2:9000", "m3:9000"}},
 	}
 
+	getPeersHelper := func(s3p s3Peers) []string {
+		r := []string{}
+		for _, p := range s3p {
+			r = append(r, p.addr)
+		}
+		return r
+	}
+
+	// execute tests
 	for i, testCase := range testCases {
-		peers := getAllPeers(testCase.eps)
-		if !reflect.DeepEqual(testCase.peers, peers) {
-			t.Errorf("Test %d: Expected %s, got %s", i+1, testCase.peers, peers)
+		globalMinioAddr = testCase.gMinioAddr
+		s3peers := makeS3Peers(testCase.eps)
+		referencePeers := getPeersHelper(s3peers)
+		if !reflect.DeepEqual(testCase.peers, referencePeers) {
+			t.Errorf("Test %d: Expected %v, got %v", i+1, testCase.peers, referencePeers)
 		}
 	}
 }

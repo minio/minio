@@ -41,7 +41,8 @@ const (
 )
 
 var (
-	globalQuiet = false // Quiet flag set via command line
+	globalQuiet    = false // Quiet flag set via command line
+	globalIsDistXL = false // "Is Distributed?" flag.
 
 	// Add new global flags here.
 

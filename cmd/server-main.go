@@ -103,7 +103,6 @@ type serverCmdConfig struct {
 	serverAddr       string
 	endpoints        []*url.URL
 	ignoredEndpoints []*url.URL
-	isDistXL         bool // True only if its distributed XL.
 	storageDisks     []StorageAPI
 }
 
@@ -266,17 +265,16 @@ func checkSufficientDisks(eps []*url.URL) error {
 }
 
 // Returns if slice of disks is a distributed setup.
-func isDistributedSetup(eps []*url.URL) (isDist bool) {
+func isDistributedSetup(eps []*url.URL) bool {
 	// Validate if one the disks is not local.
 	for _, ep := range eps {
 		if !isLocalStorage(ep) {
-			// One or more disks supplied as arguments are not
-			// attached to the local node.
-			isDist = true
-			break
+			// One or more disks supplied as arguments are
+			// not attached to the local node.
+			return true
 		}
 	}
-	return isDist
+	return false
 }
 
 // We just exit for invalid endpoints.
@@ -446,7 +444,7 @@ func serverMain(c *cli.Context) {
 	firstDisk := isLocalStorage(endpoints[0])
 
 	// Check if endpoints are part of distributed setup.
-	isDistXL := isDistributedSetup(endpoints)
+	globalIsDistXL = isDistributedSetup(endpoints)
 
 	// Configure server.
 	srvConfig := serverCmdConfig{
@@ -454,7 +452,6 @@ func serverMain(c *cli.Context) {
 		endpoints:        endpoints,
 		ignoredEndpoints: ignoredEndpoints,
 		storageDisks:     storageDisks,
-		isDistXL:         isDistXL,
 	}
 
 	// Configure server.
@@ -462,12 +459,12 @@ func serverMain(c *cli.Context) {
 	fatalIf(err, "Unable to configure one of server's RPC services.")
 
 	// Set nodes for dsync for distributed setup.
-	if isDistXL {
+	if globalIsDistXL {
 		fatalIf(initDsyncNodes(endpoints), "Unable to initialize distributed locking")
 	}
 
 	// Initialize name space lock.
-	initNSLock(isDistXL)
+	initNSLock(globalIsDistXL)
 
 	// Initialize a new HTTP server.
 	apiServer := NewServerMux(serverAddr, handler)

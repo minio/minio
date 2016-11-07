@@ -81,7 +81,7 @@ func checkDuplicateEndpoints(endpoints []*url.URL) error {
 
 // Find local node through the command line arguments. Returns in `host:port` format.
 func getLocalAddress(srvCmdConfig serverCmdConfig) string {
-	if !srvCmdConfig.isDistXL {
+	if !globalIsDistXL {
 		return srvCmdConfig.serverAddr
 	}
 	for _, ep := range srvCmdConfig.endpoints {

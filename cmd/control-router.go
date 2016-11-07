@@ -30,7 +30,7 @@ const (
 
 // Initializes remote control clients for making remote requests.
 func initRemoteControlClients(srvCmdConfig serverCmdConfig) []*AuthRPCClient {
-	if !srvCmdConfig.isDistXL {
+	if !globalIsDistXL {
 		return nil
 	}
 	// Initialize auth rpc clients.
@@ -72,7 +72,7 @@ func registerControlRPCRouter(mux *router.Router, srvCmdConfig serverCmdConfig) 
 	// Initialize Control.
 	ctrlHandlers := &controlAPIHandlers{
 		ObjectAPI:      newObjectLayerFn,
-		IsXL:           srvCmdConfig.isDistXL || len(srvCmdConfig.storageDisks) > 1,
+		IsXL:           globalIsDistXL || len(srvCmdConfig.storageDisks) > 1,
 		RemoteControls: initRemoteControlClients(srvCmdConfig),
 		LocalNode:      getLocalAddress(srvCmdConfig),
 		StorageDisks:   srvCmdConfig.storageDisks,

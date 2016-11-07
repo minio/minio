@@ -350,7 +350,7 @@ func loadListenerConfig(bucket string, objAPI ObjectLayer) ([]listenerConfig, er
 	// in single node mode, there are no peers, so in this case
 	// there is no configuration to load, as any previously
 	// connected listen clients have been disconnected
-	if !globalS3Peers.isDistXL {
+	if !globalIsDistXL {
 		return nil, nil
 	}
 

@@ -27,6 +27,7 @@ import (
 type listenerConn struct {
 	TargetAddr  string
 	ListenerARN string
+	BMSClient   BucketMetaState
 }
 
 type listenerLogger struct {
@@ -35,7 +36,8 @@ type listenerLogger struct {
 }
 
 func newListenerLogger(listenerArn, targetAddr string) (*listenerLogger, error) {
-	if globalS3Peers.GetPeerClient(targetAddr) == nil {
+	bmsClient := globalS3Peers.GetPeerClient(targetAddr)
+	if bmsClient == nil {
 		return nil, fmt.Errorf(
 			"Peer %s was not initialized - bug!",
 			targetAddr,
@@ -44,6 +46,7 @@ func newListenerLogger(listenerArn, targetAddr string) (*listenerLogger, error) 
 	lc := listenerConn{
 		TargetAddr:  targetAddr,
 		ListenerARN: listenerArn,
+		BMSClient:   bmsClient,
 	}
 
 	lcLog := logrus.New()
@@ -66,21 +69,14 @@ func (lc listenerConn) Fire(entry *logrus.Entry) error {
 		return nil
 	}
 
-	// Fetch peer client object
-	client := globalS3Peers.GetPeerClient(lc.TargetAddr)
-	if client == nil {
-		return fmt.Errorf("Target %s client RPC object not available!", lc.TargetAddr)
-	}
-
 	// Send Event RPC call and return error
 	arg := EventArgs{Event: notificationEvent, Arn: lc.ListenerARN}
-	reply := GenericReply{}
-	err := client.Call("S3.Event", &arg, &reply)
+	err := lc.BMSClient.SendEvent(&arg)
 
 	// In case connection is shutdown, retry once.
 	if err != nil {
 		if err.Error() == rpc.ErrShutdown.Error() {
-			err = client.Call("S3.Event", &arg, &reply)
+			err = lc.BMSClient.SendEvent(&arg)
 		}
 	}
 	return err

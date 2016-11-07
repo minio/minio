@@ -83,7 +83,7 @@ func configureServerHandler(srvCmdConfig serverCmdConfig) (http.Handler, error) 
 	mux := router.NewRouter()
 
 	// Initialize distributed NS lock.
-	if srvCmdConfig.isDistXL {
+	if globalIsDistXL {
 		// Register storage rpc router only if its a distributed setup.
 		err := registerStorageRPCRouters(mux, srvCmdConfig)
 		if err != nil {
