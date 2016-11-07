@@ -46,6 +46,152 @@ const (
 	MissingUploadID
 )
 
+// Wrapper for calling HeadObject API handler tests for both XL multiple disks and FS single drive setup.
+func TestAPIHeadObjectHandler(t *testing.T) {
+	ExecObjectLayerAPITest(t, testAPIHeadObjectHandler, []string{"HeadObject"})
+}
+
+func testAPIHeadObjectHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
+	credentials credential, t *testing.T) {
+	objectName := "test-object"
+	// set of byte data for PutObject.
+	// object has to be created before running tests for HeadObject.
+	// this is required even to assert the HeadObject data,
+	// since dataInserted === dataFetched back is a primary criteria for any object storage this assertion is critical.
+	bytesData := []struct {
+		byteData []byte
+	}{
+		{generateBytesData(6 * 1024 * 1024)},
+	}
+	// set of inputs for uploading the objects before tests for downloading is done.
+	putObjectInputs := []struct {
+		bucketName    string
+		objectName    string
+		contentLength int64
+		textData      []byte
+		metaData      map[string]string
+	}{
+		{bucketName, objectName, int64(len(bytesData[0].byteData)), bytesData[0].byteData, make(map[string]string)},
+	}
+	sha256sum := ""
+	// iterate through the above set of inputs and upload the object.
+	for i, input := range putObjectInputs {
+		// uploading the object.
+		_, err := obj.PutObject(input.bucketName, input.objectName, input.contentLength, bytes.NewBuffer(input.textData), input.metaData, sha256sum)
+		// if object upload fails stop the test.
+		if err != nil {
+			t.Fatalf("Put Object case %d:  Error uploading object: <ERROR> %v", i+1, err)
+		}
+	}
+
+	// test cases with inputs and expected result for HeadObject.
+	testCases := []struct {
+		bucketName string
+		objectName string
+		accessKey  string
+		secretKey  string
+		// expected output.
+		expectedRespStatus int // expected response status body.
+	}{
+		// Test case - 1.
+		// Fetching stat info of object and validating it.
+		{
+			bucketName:         bucketName,
+			objectName:         objectName,
+			accessKey:          credentials.AccessKeyID,
+			secretKey:          credentials.SecretAccessKey,
+			expectedRespStatus: http.StatusOK,
+		},
+		// Test case - 2.
+		// Case with non-existent object name.
+		{
+			bucketName:         bucketName,
+			objectName:         "abcd",
+			accessKey:          credentials.AccessKeyID,
+			secretKey:          credentials.SecretAccessKey,
+			expectedRespStatus: http.StatusNotFound,
+		},
+		// Test case - 3.
+		// Test case to induce a signature mismatch.
+		// Using invalid accessID.
+		{
+			bucketName:         bucketName,
+			objectName:         objectName,
+			accessKey:          "Invalid-AccessID",
+			secretKey:          credentials.SecretAccessKey,
+			expectedRespStatus: http.StatusForbidden,
+		},
+	}
+
+	// Iterating over the cases, fetching the object validating the response.
+	for i, testCase := range testCases {
+		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
+		rec := httptest.NewRecorder()
+		// construct HTTP request for Get Object end point.
+		req, err := newTestSignedRequestV4("HEAD", getHeadObjectURL("", testCase.bucketName, testCase.objectName),
+			0, nil, testCase.accessKey, testCase.secretKey)
+		if err != nil {
+			t.Fatalf("Test %d: %s: Failed to create HTTP request for Head Object: <ERROR> %v", i+1, instanceType, err)
+		}
+		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
+		// Call the ServeHTTP to execute the handler,`func (api objectAPIHandlers) GetObjectHandler`  handles the request.
+		apiRouter.ServeHTTP(rec, req)
+
+		// Assert the response code with the expected status.
+		if rec.Code != testCase.expectedRespStatus {
+			t.Fatalf("Case %d: Expected the response status to be `%d`, but instead found `%d`", i+1, testCase.expectedRespStatus, rec.Code)
+		}
+
+		// Verify response of the V2 signed HTTP request.
+		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
+		recV2 := httptest.NewRecorder()
+		// construct HTTP request for Head Object endpoint.
+		reqV2, err := newTestSignedRequestV2("HEAD", getHeadObjectURL("", testCase.bucketName, testCase.objectName),
+			0, nil, testCase.accessKey, testCase.secretKey)
+
+		if err != nil {
+			t.Fatalf("Test %d: %s: Failed to create HTTP request for Head Object: <ERROR> %v", i+1, instanceType, err)
+		}
+
+		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
+		// Call the ServeHTTP to execute the handler.
+		apiRouter.ServeHTTP(recV2, reqV2)
+		if recV2.Code != testCase.expectedRespStatus {
+			t.Errorf("Test %d: %s: Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, recV2.Code)
+		}
+	}
+
+	// Test for Anonymous/unsigned http request.
+	anonReq, err := newTestRequest("HEAD", getHeadObjectURL("", bucketName, objectName), 0, nil)
+
+	if err != nil {
+		t.Fatalf("Minio %s: Failed to create an anonymous request for %s/%s: <ERROR> %v",
+			instanceType, bucketName, objectName, err)
+	}
+
+	// ExecObjectLayerAPIAnonTest - Calls the HTTP API handler using the anonymous request, validates the ErrAccessDeniedResponse,
+	// sets the bucket policy using the policy statement generated from `getWriteOnlyObjectStatement` so that the
+	// unsigned request goes through and its validated again.
+	ExecObjectLayerAPIAnonTest(t, "TestAPIHeadObjectHandler", bucketName, objectName, instanceType, apiRouter, anonReq, getReadOnlyObjectStatement)
+
+	// HTTP request for testing when `objectLayer` is set to `nil`.
+	// There is no need to use an existing bucket and valid input for creating the request
+	// since the `objectLayer==nil`  check is performed before any other checks inside the handlers.
+	// The only aim is to generate an HTTP request in a way that the relevant/registered end point is evoked/called.
+
+	nilBucket := "dummy-bucket"
+	nilObject := "dummy-object"
+	nilReq, err := newTestSignedRequestV4("HEAD", getGetObjectURL("", nilBucket, nilObject),
+		0, nil, "", "")
+
+	if err != nil {
+		t.Errorf("Minio %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
+	}
+	// execute the object layer set to `nil` test.
+	// `ExecObjectLayerAPINilTest` manages the operation.
+	ExecObjectLayerAPINilTest(t, nilBucket, nilObject, instanceType, apiRouter, nilReq)
+}
+
 // Wrapper for calling GetObject API handler tests for both XL multiple disks and FS single drive setup.
 func TestAPIGetObjectHandler(t *testing.T) {
 	defer DetectTestLeak(t)()
