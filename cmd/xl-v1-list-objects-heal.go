@@ -143,11 +143,9 @@ func (xl xlObjects) listObjectsHeal(bucket, prefix, marker, delimiter string, ma
 			continue
 		}
 
-		// get a random ID for lock instrumentation.
-		opsID := getOpsID()
-
 		// Check if the current object needs healing
-		nsMutex.RLock(bucket, objInfo.Name, opsID)
+		objectLock := nsMutex.NewNSLock(bucket, objInfo.Name)
+		objectLock.RLock()
 		partsMetadata, errs := readAllXLMetadata(xl.storageDisks, bucket, objInfo.Name)
 		if xlShouldHeal(partsMetadata, errs) {
 			result.Objects = append(result.Objects, ObjectInfo{
@@ -157,7 +155,7 @@ func (xl xlObjects) listObjectsHeal(bucket, prefix, marker, delimiter string, ma
 				IsDir:   false,
 			})
 		}
-		nsMutex.RUnlock(bucket, objInfo.Name, opsID)
+		objectLock.RUnlock()
 	}
 	return result, nil
 }

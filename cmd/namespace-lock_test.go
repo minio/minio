@@ -386,7 +386,8 @@ func TestLockStats(t *testing.T) {
 func TestNamespaceForceUnlockTest(t *testing.T) {
 
 	// Create lock.
-	nsMutex.Lock("bucket", "object", "11-11")
+	lock := nsMutex.NewNSLock("bucket", "object")
+	lock.Lock()
 	// Forcefully unlock lock.
 	nsMutex.ForceUnlock("bucket", "object")
 
@@ -394,7 +395,8 @@ func TestNamespaceForceUnlockTest(t *testing.T) {
 
 	go func() {
 		// Try to claim lock again.
-		nsMutex.Lock("bucket", "object", "22-22")
+		anotherLock := nsMutex.NewNSLock("bucket", "object")
+		anotherLock.Lock()
 		// And signal succes.
 		ch <- struct{}{}
 	}()

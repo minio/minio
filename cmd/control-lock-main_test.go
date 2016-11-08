@@ -23,12 +23,13 @@ import (
 
 // Test print systemState.
 func TestPrintLockState(t *testing.T) {
-	nsMutex.Lock("testbucket", "1.txt", "11-11")
+	testLock := nsMutex.NewNSLock("testbucket", "1.txt")
+	testLock.Lock()
 	sysLockState, err := getSystemLockState()
 	if err != nil {
 		t.Fatal(err)
 	}
-	nsMutex.Unlock("testbucket", "1.txt", "11-11")
+	testLock.Unlock()
 	sysLockStateMap := map[string]SystemLockState{}
 	sysLockStateMap["bucket"] = sysLockState
 
@@ -66,7 +67,8 @@ func TestLockStateClear(t *testing.T) {
 		nsMutex.ForceUnlock(bucket, object)
 	}
 
-	nsMutex.Lock("testbucket", "1.txt", "11-11")
+	testLock := nsMutex.NewNSLock("testbucket", "1.txt")
+	testLock.Lock()
 
 	sysLockState, err := getSystemLockState()
 	if err != nil {
@@ -111,7 +113,8 @@ func TestLockStateClear(t *testing.T) {
 	}
 
 	// Create another lock
-	nsMutex.RLock("testbucket", "blob.txt", "22-22")
+	blobLock := nsMutex.NewNSLock("testbucket", "blob.txt")
+	blobLock.RLock()
 
 	if sysLockState, err = getSystemLockState(); err != nil {
 		t.Fatal(err)
@@ -142,7 +145,8 @@ func TestLockStateClear(t *testing.T) {
 	}
 
 	// Create yet another lock
-	nsMutex.RLock("testbucket", "exact.txt", "33-33")
+	exactLock := nsMutex.NewNSLock("testbucket", "exact.txt")
+	exactLock.RLock()
 
 	if sysLockState, err = getSystemLockState(); err != nil {
 		t.Fatal(err)

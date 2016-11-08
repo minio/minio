@@ -166,10 +166,10 @@ func PutBucketNotificationConfig(bucket string, ncfg *notificationConfig, objAPI
 
 	// Acquire a write lock on bucket before modifying its
 	// configuration.
-	opsID := getOpsID()
-	nsMutex.Lock(bucket, "", opsID)
+	bucketLock := nsMutex.NewNSLock(bucket, "")
+	bucketLock.Lock()
 	// Release lock after notifying peers
-	defer nsMutex.Unlock(bucket, "", opsID)
+	defer bucketLock.Unlock()
 
 	// persist config to disk
 	err := persistNotificationConfig(bucket, ncfg, objAPI)
@@ -374,10 +374,10 @@ func AddBucketListenerConfig(bucket string, lcfg *listenerConfig, objAPI ObjectL
 
 	// Acquire a write lock on bucket before modifying its
 	// configuration.
-	opsID := getOpsID()
-	nsMutex.Lock(bucket, "", opsID)
+	bucketLock := nsMutex.NewNSLock(bucket, "")
+	bucketLock.Lock()
 	// Release lock after notifying peers
-	defer nsMutex.Unlock(bucket, "", opsID)
+	defer bucketLock.Unlock()
 
 	// update persistent config if dist XL
 	if globalIsDistXL {
@@ -416,10 +416,10 @@ func RemoveBucketListenerConfig(bucket string, lcfg *listenerConfig, objAPI Obje
 
 	// Acquire a write lock on bucket before modifying its
 	// configuration.
-	opsID := getOpsID()
-	nsMutex.Lock(bucket, "", opsID)
+	bucketLock := nsMutex.NewNSLock(bucket, "")
+	bucketLock.Lock()
 	// Release lock after notifying peers
-	defer nsMutex.Unlock(bucket, "", opsID)
+	defer bucketLock.Unlock()
 
 	// update persistent config if dist XL
 	if globalIsDistXL {
