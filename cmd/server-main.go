@@ -149,9 +149,9 @@ func parseStorageEndpoints(eps []string) (endpoints []*url.URL, err error) {
 }
 
 // getListenIPs - gets all the ips to listen on.
-func getListenIPs(httpServerConf *http.Server) (hosts []string, port string, err error) {
+func getListenIPs(serverAddr string) (hosts []string, port string, err error) {
 	var host string
-	host, port, err = net.SplitHostPort(httpServerConf.Addr)
+	host, port, err = net.SplitHostPort(serverAddr)
 	if err != nil {
 		return nil, port, fmt.Errorf("Unable to parse host address %s", err)
 	}
@@ -180,7 +180,7 @@ func finalizeEndpoints(tls bool, apiServer *http.Server) (endPoints []string) {
 	}
 
 	// Get list of listen ips and port.
-	hosts, port, err := getListenIPs(apiServer)
+	hosts, port, err := getListenIPs(apiServer.Addr)
 	fatalIf(err, "Unable to get list of ips to listen on")
 
 	// Construct proper endpoints.

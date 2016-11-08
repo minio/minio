@@ -44,9 +44,7 @@ func TestGetListenIPs(t *testing.T) {
 		if test.port != "" {
 			addr = test.addr + ":" + test.port
 		}
-		hosts, port, err := getListenIPs(&http.Server{
-			Addr: addr,
-		})
+		hosts, port, err := getListenIPs(addr)
 		if !test.shouldPass && err == nil {
 			t.Fatalf("Test should fail but succeeded %s", err)
 		}
