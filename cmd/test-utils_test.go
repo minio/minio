@@ -1948,56 +1948,59 @@ func registerBucketLevelFunc(bucket *router.Router, api objectAPIHandlers, apiFu
 		case "PostPolicy":
 			// Register PostPolicy handler.
 			bucket.Methods("POST").HeadersRegexp("Content-Type", "multipart/form-data*").HandlerFunc(api.PostPolicyBucketHandler)
-			// Register GetObject handler.
+		case "HeadObject":
+			// Register HeadObject handler.
+			bucket.Methods("Head").Path("/{object:.+}").HandlerFunc(api.HeadObjectHandler)
 		case "GetObject":
+			// Register GetObject handler.
 			bucket.Methods("GET").Path("/{object:.+}").HandlerFunc(api.GetObjectHandler)
-			// Register PutObject handler.
 		case "PutObject":
+			// Register PutObject handler.
 			bucket.Methods("PUT").Path("/{object:.+}").HandlerFunc(api.PutObjectHandler)
-			// Register Delete Object handler.
 		case "DeleteObject":
+			// Register Delete Object handler.
 			bucket.Methods("DELETE").Path("/{object:.+}").HandlerFunc(api.DeleteObjectHandler)
-			// Register Copy Object  handler.
 		case "CopyObject":
+			// Register Copy Object  handler.
 			bucket.Methods("PUT").Path("/{object:.+}").HeadersRegexp("X-Amz-Copy-Source", ".*?(\\/|%2F).*?").HandlerFunc(api.CopyObjectHandler)
-			// Register PutBucket Policy handler.
 		case "PutBucketPolicy":
+			// Register PutBucket Policy handler.
 			bucket.Methods("PUT").HandlerFunc(api.PutBucketPolicyHandler).Queries("policy", "")
-			// Register Delete bucket HTTP policy handler.
 		case "DeleteBucketPolicy":
+			// Register Delete bucket HTTP policy handler.
 			bucket.Methods("DELETE").HandlerFunc(api.DeleteBucketPolicyHandler).Queries("policy", "")
-			// Register Get Bucket policy HTTP Handler.
 		case "GetBucketPolicy":
+			// Register Get Bucket policy HTTP Handler.
 			bucket.Methods("GET").HandlerFunc(api.GetBucketPolicyHandler).Queries("policy", "")
-			// Register GetBucketLocation handler.
 		case "GetBucketLocation":
+			// Register GetBucketLocation handler.
 			bucket.Methods("GET").HandlerFunc(api.GetBucketLocationHandler).Queries("location", "")
-			// Register HeadBucket handler.
 		case "HeadBucket":
+			// Register HeadBucket handler.
 			bucket.Methods("HEAD").HandlerFunc(api.HeadBucketHandler)
-			// Register New Multipart upload handler.
 		case "NewMultipart":
+			// Register New Multipart upload handler.
 			bucket.Methods("POST").Path("/{object:.+}").HandlerFunc(api.NewMultipartUploadHandler).Queries("uploads", "")
-			// Register PutObjectPart handler.
 		case "PutObjectPart":
+			// Register PutObjectPart handler.
 			bucket.Methods("PUT").Path("/{object:.+}").HandlerFunc(api.PutObjectPartHandler).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}")
-			// Register ListObjectParts handler.
 		case "ListObjectParts":
+			// Register ListObjectParts handler.
 			bucket.Methods("GET").Path("/{object:.+}").HandlerFunc(api.ListObjectPartsHandler).Queries("uploadId", "{uploadId:.*}")
-			// Register ListMultipartUploads handler.
 		case "ListMultipartUploads":
+			// Register ListMultipartUploads handler.
 			bucket.Methods("GET").HandlerFunc(api.ListMultipartUploadsHandler).Queries("uploads", "")
-			// Register Complete Multipart Upload handler.
 		case "CompleteMultipart":
+			// Register Complete Multipart Upload handler.
 			bucket.Methods("POST").Path("/{object:.+}").HandlerFunc(api.CompleteMultipartUploadHandler).Queries("uploadId", "{uploadId:.*}")
-			// Register GetBucketNotification Handler.
 		case "GetBucketNotification":
+			// Register GetBucketNotification Handler.
 			bucket.Methods("GET").HandlerFunc(api.GetBucketNotificationHandler).Queries("notification", "")
-			// Register PutBucketNotification Handler.
 		case "PutBucketNotification":
+			// Register PutBucketNotification Handler.
 			bucket.Methods("PUT").HandlerFunc(api.PutBucketNotificationHandler).Queries("notification", "")
-			// Register ListenBucketNotification Handler.
 		case "ListenBucketNotification":
+			// Register ListenBucketNotification Handler.
 			bucket.Methods("GET").HandlerFunc(api.ListenBucketNotificationHandler).Queries("events", "{events:.*}")
 		}
 	}
