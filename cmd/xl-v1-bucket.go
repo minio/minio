@@ -36,7 +36,7 @@ func (xl xlObjects) MakeBucket(bucket string) error {
 		return traceError(BucketNameInvalid{Bucket: bucket})
 	}
 
-	bucketLock := nsMutex.NewNSLock(bucket, "")
+	bucketLock := globalNSMutex.NewNSLock(bucket, "")
 	bucketLock.Lock()
 	defer bucketLock.Unlock()
 
@@ -166,7 +166,7 @@ func (xl xlObjects) GetBucketInfo(bucket string) (BucketInfo, error) {
 		return BucketInfo{}, BucketNameInvalid{Bucket: bucket}
 	}
 
-	bucketLock := nsMutex.NewNSLock(bucket, "")
+	bucketLock := globalNSMutex.NewNSLock(bucket, "")
 	bucketLock.RLock()
 	defer bucketLock.RUnlock()
 
@@ -240,7 +240,7 @@ func (xl xlObjects) DeleteBucket(bucket string) error {
 		return BucketNameInvalid{Bucket: bucket}
 	}
 
-	bucketLock := nsMutex.NewNSLock(bucket, "")
+	bucketLock := globalNSMutex.NewNSLock(bucket, "")
 	bucketLock.Lock()
 	defer bucketLock.Unlock()
 

@@ -68,7 +68,7 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 	}
 
 	// Lock the object before reading.
-	objectLock := nsMutex.NewNSLock(bucket, object)
+	objectLock := globalNSMutex.NewNSLock(bucket, object)
 	objectLock.RLock()
 	defer objectLock.RUnlock()
 
@@ -232,7 +232,7 @@ func (xl xlObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 		return ObjectInfo{}, ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
 
-	objectLock := nsMutex.NewNSLock(bucket, object)
+	objectLock := globalNSMutex.NewNSLock(bucket, object)
 	objectLock.RLock()
 	defer objectLock.RUnlock()
 
@@ -507,7 +507,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	}
 
 	// Lock the object.
-	objectLock := nsMutex.NewNSLock(bucket, object)
+	objectLock := globalNSMutex.NewNSLock(bucket, object)
 	objectLock.Lock()
 	defer objectLock.Unlock()
 
@@ -631,7 +631,7 @@ func (xl xlObjects) DeleteObject(bucket, object string) (err error) {
 		return traceError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
 
-	objectLock := nsMutex.NewNSLock(bucket, object)
+	objectLock := globalNSMutex.NewNSLock(bucket, object)
 	objectLock.Lock()
 	defer objectLock.Unlock()
 

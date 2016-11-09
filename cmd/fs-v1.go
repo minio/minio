@@ -80,6 +80,11 @@ func newFSObjects(storage StorageAPI) (ObjectLayer, error) {
 
 // Should be called when process shuts down.
 func (fs fsObjects) Shutdown() error {
+	// Not attempting to cleanup on shared backend.
+	// FIXME: we need to see if we can detect and safely purge.
+	if globalIsSharedBackend {
+		return nil
+	}
 	// List if there are any multipart entries.
 	prefix := ""
 	entries, err := fs.storage.ListDir(minioMetaMultipartBucket, prefix)
@@ -119,6 +124,7 @@ func (fs fsObjects) Shutdown() error {
 			return toObjectErr(traceError(err))
 		}
 	}
+
 	// Successful.
 	return nil
 }
@@ -252,7 +258,7 @@ func (fs fsObjects) GetObject(bucket, object string, offset int64, length int64,
 	}
 
 	// Lock the object before reading.
-	objectLock := nsMutex.NewNSLock(bucket, object)
+	objectLock := globalNSMutex.NewNSLock(bucket, object)
 	objectLock.RLock()
 	defer objectLock.RUnlock()
 
@@ -476,7 +482,7 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 	}
 
 	// Lock the object before committing the object.
-	objectLock := nsMutex.NewNSLock(bucket, object)
+	objectLock := globalNSMutex.NewNSLock(bucket, object)
 	objectLock.RLock()
 	defer objectLock.RUnlock()
 
@@ -515,7 +521,7 @@ func (fs fsObjects) DeleteObject(bucket, object string) error {
 
 	// Lock the object before deleting so that an in progress GetObject does not return
 	// corrupt data or there is no race with a PutObject.
-	objectLock := nsMutex.NewNSLock(bucket, object)
+	objectLock := globalNSMutex.NewNSLock(bucket, object)
 	objectLock.RLock()
 	defer objectLock.RUnlock()
 

@@ -202,7 +202,7 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 func persistAndNotifyBucketPolicyChange(bucket string, pCh policyChange, objAPI ObjectLayer) error {
 	// Acquire a write lock on bucket before modifying its
 	// configuration.
-	bucketLock := nsMutex.NewNSLock(bucket, "")
+	bucketLock := globalNSMutex.NewNSLock(bucket, "")
 	bucketLock.Lock()
 	// Release lock after notifying peers
 	defer bucketLock.Unlock()

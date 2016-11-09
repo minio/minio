@@ -56,9 +56,9 @@ import (
 
 // Tests should initNSLock only once.
 func init() {
+	isDistXL := false
 	// Initialize name space lock.
-	isDist := false
-	initNSLock(isDist)
+	initNSLock(isDistXL)
 
 	// Disable printing console messages during tests.
 	color.Output = ioutil.Discard

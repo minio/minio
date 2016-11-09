@@ -23,12 +23,14 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	pathutil "path"
 	"strings"
 
 	"regexp"
 	"runtime"
 
 	"github.com/minio/cli"
+	"github.com/minio/minio/pkg/lock"
 )
 
 var serverFlags = []cli.Flag{
@@ -413,6 +415,10 @@ func serverMain(c *cli.Context) {
 	// Check if endpoints are part of distributed setup.
 	globalIsDistXL = isDistributedSetup(endpoints)
 
+	// Set only when shared backend ENV is set.
+	// FIXME: can we detect this automatically?
+	globalIsSharedBackend = strings.EqualFold(os.Getenv("MINIO_FS_SHARED_BACKEND"), "1")
+
 	// Configure server.
 	srvConfig := serverCmdConfig{
 		serverAddr:   serverAddr,
@@ -426,8 +432,17 @@ func serverMain(c *cli.Context) {
 
 	// Set nodes for dsync for distributed setup.
 	if globalIsDistXL {
-		fatalIf(initDsyncNodes(endpoints), "Unable to initialize distributed locking")
+		fatalIf(initDsyncNodes(endpoints), "Unable to initialize distributed locking clients")
 	}
+
+	// Lock is used only when shared backend is requested and FS is used.
+	globalFSMutex = func() lock.RWLocker {
+		if globalIsSharedBackend && len(storageDisks) == 1 {
+			sharedLockFile := pathutil.Join(preparePath(storageDisks[0].String()), minioMetaBucket, fsFormatJSONFile)
+			return lock.NewFlock(sharedLockFile)
+		}
+		return nil
+	}()
 
 	// Initialize name space lock.
 	initNSLock(globalIsDistXL)
