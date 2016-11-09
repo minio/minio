@@ -190,10 +190,6 @@ func retryFormattingDisks(firstDisk bool, endpoints []*url.URL, storageDisks []S
 	if len(endpoints) == 0 {
 		return errInvalidArgument
 	}
-	firstEndpoint := endpoints[0]
-	if firstEndpoint == nil {
-		return errInvalidArgument
-	}
 	if storageDisks == nil {
 		return errInvalidArgument
 	}
@@ -239,7 +235,7 @@ func retryFormattingDisks(firstDisk bool, endpoints []*url.URL, storageDisks []S
 					// Validate formats load before proceeding forward.
 					err := genericFormatCheck(formatConfigs, sErrs)
 					if err == nil {
-						printHealMsg(firstEndpoint.String(), storageDisks, printOnceFn())
+						printHealMsg(endpoints, storageDisks, printOnceFn())
 					}
 					return err
 				case WaitForQuorum:
