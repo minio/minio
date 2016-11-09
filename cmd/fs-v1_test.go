@@ -99,35 +99,38 @@ func TestNewFS(t *testing.T) {
 // TestFSShutdown - initialize a new FS object layer then calls Shutdown
 // to check returned results
 func TestFSShutdown(t *testing.T) {
-	// Prepare for tests
-	disk := filepath.Join(os.TempDir(), "minio-"+nextSuffix())
-	defer removeAll(disk)
-	obj := initFSObjects(disk, t)
 
-	fs := obj.(fsObjects)
-	fsStorage := fs.storage.(*posix)
-
-	bucketName := "testbucket"
-	objectName := "object"
-	objectContent := "12345"
-
-	obj.MakeBucket(bucketName)
-	sha256sum := ""
-	obj.PutObject(bucketName, objectName, int64(len(objectContent)), bytes.NewReader([]byte(objectContent)), nil, sha256sum)
+	// Create and return an fsObject with its path in the disk
+	prepareTest := func() (fsObjects, string) {
+		disk := filepath.Join(os.TempDir(), "minio-"+nextSuffix())
+		obj := initFSObjects(disk, t)
+		fs := obj.(fsObjects)
+		bucketName := "testbucket"
+		objectName := "object"
+		objectContent := "12345"
+		obj.MakeBucket(bucketName)
+		sha256sum := ""
+		obj.PutObject(bucketName, objectName, int64(len(objectContent)), bytes.NewReader([]byte(objectContent)), nil, sha256sum)
+		return fs, disk
+	}
 
 	// Test Shutdown with regular conditions
+	fs, disk := prepareTest()
 	if err := fs.Shutdown(); err != nil {
 		t.Fatal("Cannot shutdown the FS object: ", err)
 	}
+	removeAll(disk)
 
-	// Test Shutdown with faulty disks
+	// Test Shutdown with faulty disk
 	for i := 1; i <= 5; i++ {
+		fs, disk := prepareTest()
+		fsStorage := fs.storage.(*posix)
 		fs.storage = newNaughtyDisk(fsStorage, map[int]error{i: errFaultyDisk}, nil)
 		if err := fs.Shutdown(); errorCause(err) != errFaultyDisk {
 			t.Fatal(i, ", Got unexpected fs shutdown error: ", err)
 		}
+		removeAll(disk)
 	}
-
 }
 
 // TestFSLoadFormatFS - test loadFormatFS with healty and faulty disks
