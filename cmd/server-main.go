@@ -36,11 +36,11 @@ var serverFlags = []cli.Flag{
 	cli.StringFlag{
 		Name:  "address",
 		Value: ":9000",
-		Usage: "Specify custom server \"ADDRESS:PORT\", defaults to \":9000\".",
+		Usage: `Bind to a specific IP:PORT. Defaults to ":9000".`,
 	},
 	cli.StringFlag{
 		Name:  "ignore-disks",
-		Usage: "Specify comma separated list of disks that are offline.",
+		Usage: `Comma separated list of faulty drives to ignore at startup.`,
 	},
 }
 
@@ -60,37 +60,29 @@ FLAGS:
   {{end}}
 ENVIRONMENT VARIABLES:
   ACCESS:
-     MINIO_ACCESS_KEY: Access key string of 5 to 20 characters in length.
-     MINIO_SECRET_KEY: Secret key string of 8 to 40 characters in length.
+     MINIO_ACCESS_KEY: Username or access key of 5 to 20 characters in length.
+     MINIO_SECRET_KEY: Password or secret key of 8 to 40 characters in length.
 
   CACHING:
-     MINIO_CACHE_SIZE: Set total cache size in NN[GB|MB|KB]. Defaults to 8GB.
-     MINIO_CACHE_EXPIRY: Set cache expiration duration in NN[h|m|s]. Defaults to 72 hours.
+     MINIO_CACHE_SIZE:   Limit maximum cache size. Allowed units are [GB|MB|KB]. Defaults to 8GB.
+     MINIO_CACHE_EXPIRY: Automatically expire cached objects. Allowed units are [h|m|s]. Defaults to 72h.
 
   SECURITY:
-     MINIO_SECURE_CONSOLE: Set secure console to '0' to disable printing secret key. Defaults to '1'.
+     MINIO_SECURE_CONSOLE: Set secure console to 'no' to disable printing secret key. Defaults to 'yes'.
 
 EXAMPLES:
-  1. Start minio server.
+  1. Start minio server on "/home/shared" directory.
       $ minio {{.Name}} /home/shared
 
-  2. Start minio server bound to a specific IP:PORT, when you have multiple network interfaces.
+  2. Start minio server bound to a specific IP:PORT.
       $ minio {{.Name}} --address 192.168.1.101:9000 /home/shared
 
-  3. Start minio server on Windows.
-      $ minio {{.Name}} C:\MyShare
-
-  4. Start minio server on 12 disks to enable erasure coded layer with 6 data and 6 parity.
+  3. Start erasure coded minio server on a 12 disks server.
       $ minio {{.Name}} /mnt/export1/ /mnt/export2/ /mnt/export3/ /mnt/export4/ \
           /mnt/export5/ /mnt/export6/ /mnt/export7/ /mnt/export8/ /mnt/export9/ \
           /mnt/export10/ /mnt/export11/ /mnt/export12/
 
-  5. Start minio server on 12 disks while ignoring two disks for initialization.
-      $ minio {{.Name}} --ignore-disks=/mnt/export1/ /mnt/export1/ /mnt/export2/ \
-          /mnt/export3/ /mnt/export4/ /mnt/export5/ /mnt/export6/ /mnt/export7/ \
-	  /mnt/export8/ /mnt/export9/ /mnt/export10/ /mnt/export11/ /mnt/export12/
-
-  6. Start minio server for a 4 node distributed setup. Type the following command on all the 4 nodes exactly.
+  4. Start erasure coded distributed minio server on a 4 node setup with 1 drive each. Run following commands on all the 4 nodes.
       $ export MINIO_ACCESS_KEY=minio
       $ export MINIO_SECRET_KEY=miniostorage
       $ minio {{.Name}} http://192.168.1.11/mnt/export/ http://192.168.1.12/mnt/export/ \

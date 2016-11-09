@@ -31,7 +31,7 @@ func TestInitEventNotifierFaultyDisks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
-	// remove the root folder after the test ends.
+	// remove the root directory after the test ends.
 	defer removeAll(rootPath)
 
 	disks, err := getRandomDisks(1)
@@ -85,7 +85,7 @@ func TestInitEventNotifierWithAMQP(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
-	// remove the root folder after the test ends.
+	// remove the root directory after the test ends.
 	defer removeAll(rootPath)
 
 	disks, err := getRandomDisks(1)
@@ -116,7 +116,7 @@ func TestInitEventNotifierWithElasticSearch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
-	// remove the root folder after the test ends.
+	// remove the root directory after the test ends.
 	defer removeAll(rootPath)
 
 	disks, err := getRandomDisks(1)
@@ -147,7 +147,7 @@ func TestInitEventNotifierWithRedis(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
-	// remove the root folder after the test ends.
+	// remove the root directory after the test ends.
 	defer removeAll(rootPath)
 
 	disks, err := getRandomDisks(1)

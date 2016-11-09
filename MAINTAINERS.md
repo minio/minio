@@ -18,7 +18,7 @@ $
 
   - Run `go get foo/bar`
   - Edit your code to import foo/bar
-  - Run `govendor add foo/bar` from top-level folder
+  - Run `govendor add foo/bar` from top-level directory
 
 #### Remove dependencies 
 

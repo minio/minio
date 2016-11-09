@@ -132,7 +132,7 @@ func testLoginWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
-	// remove the root folder after the test ends.
+	// remove the root directory after the test ends.
 	defer removeAll(rootPath)
 
 	credentials := serverConfig.GetCredential()
@@ -180,7 +180,7 @@ func testStorageInfoWebHandler(obj ObjectLayer, instanceType string, t TestErrHa
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
-	// remove the root folder after the test ends.
+	// remove the root directory after the test ends.
 	defer removeAll(rootPath)
 
 	credentials := serverConfig.GetCredential()
@@ -226,7 +226,7 @@ func testServerInfoWebHandler(obj ObjectLayer, instanceType string, t TestErrHan
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
-	// remove the root folder after the test ends.
+	// remove the root directory after the test ends.
 	defer removeAll(rootPath)
 
 	credentials := serverConfig.GetCredential()
@@ -272,7 +272,7 @@ func testMakeBucketWebHandler(obj ObjectLayer, instanceType string, t TestErrHan
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
-	// remove the root folder after the test ends.
+	// remove the root directory after the test ends.
 	defer removeAll(rootPath)
 
 	credentials := serverConfig.GetCredential()
@@ -332,7 +332,7 @@ func testListBucketsWebHandler(obj ObjectLayer, instanceType string, t TestErrHa
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
-	// remove the root folder after the test ends.
+	// remove the root directory after the test ends.
 	defer removeAll(rootPath)
 
 	credentials := serverConfig.GetCredential()
@@ -389,7 +389,7 @@ func testListObjectsWebHandler(obj ObjectLayer, instanceType string, t TestErrHa
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
-	// remove the root folder after the test ends.
+	// remove the root directory after the test ends.
 	defer removeAll(rootPath)
 
 	credentials := serverConfig.GetCredential()
@@ -461,7 +461,7 @@ func testRemoveObjectWebHandler(obj ObjectLayer, instanceType string, t TestErrH
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
-	// remove the root folder after the test ends.
+	// remove the root directory after the test ends.
 	defer removeAll(rootPath)
 
 	credentials := serverConfig.GetCredential()
@@ -522,7 +522,7 @@ func testGenerateAuthWebHandler(obj ObjectLayer, instanceType string, t TestErrH
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
-	// remove the root folder after the test ends.
+	// remove the root directory after the test ends.
 	defer removeAll(rootPath)
 
 	credentials := serverConfig.GetCredential()
@@ -568,7 +568,7 @@ func testSetAuthWebHandler(obj ObjectLayer, instanceType string, t TestErrHandle
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
-	// remove the root folder after the test ends.
+	// remove the root directory after the test ends.
 	defer removeAll(rootPath)
 
 	credentials := serverConfig.GetCredential()
@@ -628,7 +628,7 @@ func testGetAuthWebHandler(obj ObjectLayer, instanceType string, t TestErrHandle
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
-	// remove the root folder after the test ends.
+	// remove the root directory after the test ends.
 	defer removeAll(rootPath)
 
 	credentials := serverConfig.GetCredential()
@@ -673,7 +673,7 @@ func testUploadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
-	// remove the root folder after the test ends.
+	// remove the root directory after the test ends.
 	defer removeAll(rootPath)
 
 	credentials := serverConfig.GetCredential()
@@ -737,7 +737,7 @@ func testDownloadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandl
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
-	// remove the root folder after the test ends.
+	// remove the root directory after the test ends.
 	defer removeAll(rootPath)
 
 	credentials := serverConfig.GetCredential()
@@ -793,7 +793,7 @@ func testWebPresignedGetHandler(obj ObjectLayer, instanceType string, t TestErrH
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
-	// remove the root folder after the test ends.
+	// remove the root directory after the test ends.
 	defer removeAll(rootPath)
 
 	credentials := serverConfig.GetCredential()
@@ -905,7 +905,7 @@ func testWebGetBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestE
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
-	// remove the root folder after the test ends.
+	// remove the root directory after the test ends.
 	defer removeAll(rootPath)
 
 	credentials := serverConfig.GetCredential()
@@ -988,7 +988,7 @@ func testWebListAllBucketPoliciesHandler(obj ObjectLayer, instanceType string, t
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
-	// remove the root folder after the test ends.
+	// remove the root directory after the test ends.
 	defer removeAll(rootPath)
 
 	credentials := serverConfig.GetCredential()
@@ -1094,7 +1094,7 @@ func testWebSetBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestE
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
-	// remove the root folder after the test ends.
+	// remove the root directory after the test ends.
 	defer removeAll(rootPath)
 
 	credentials := serverConfig.GetCredential()
@@ -1174,7 +1174,7 @@ func TestWebCheckAuthorization(t *testing.T) {
 	if err != nil {
 		t.Fatal("Init Test config failed", err)
 	}
-	// remove the root folder after the test ends.
+	// remove the root directory after the test ends.
 	defer removeAll(rootPath)
 
 	rec := httptest.NewRecorder()
@@ -1256,7 +1256,7 @@ func TestWebObjectLayerNotReady(t *testing.T) {
 	if err != nil {
 		t.Fatal("Init Test config failed", err)
 	}
-	// remove the root folder after the test ends.
+	// remove the root directory after the test ends.
 	defer removeAll(rootPath)
 
 	rec := httptest.NewRecorder()
@@ -1354,7 +1354,7 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 	if err != nil {
 		t.Fatal("Init Test config failed", err)
 	}
-	// remove the root folder after the test ends.
+	// remove the root directory after the test ends.
 	defer removeAll(rootPath)
 
 	rec := httptest.NewRecorder()

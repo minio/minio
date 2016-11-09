@@ -26,7 +26,7 @@ func TestServerConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
-	// remove the root folder after the test ends.
+	// remove the root directory after the test ends.
 	defer removeAll(rootPath)
 
 	if serverConfig.GetRegion() != "us-east-1" {
