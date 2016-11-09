@@ -76,6 +76,23 @@ type xlObjects struct {
 // list of all errors that can be ignored in tree walk operation in XL
 var xlTreeWalkIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied, errVolumeNotFound, errFileNotFound)
 
+// newXLObjectLayer - initialize any object layer depending on the number of disks.
+func newXLObjectLayer(storageDisks []StorageAPI) (ObjectLayer, error) {
+	// Initialize XL object layer.
+	objAPI, err := newXLObjects(storageDisks)
+
+	// Initialize and load bucket policies.
+	err = initBucketPolicies(objAPI)
+	fatalIf(err, "Unable to load all bucket policies.")
+
+	// Initialize a new event notifier.
+	err = initEventNotifier(objAPI)
+	fatalIf(err, "Unable to initialize event notification.")
+
+	// Success.
+	return objAPI, nil
+}
+
 // newXLObjects - initialize new xl object layer.
 func newXLObjects(storageDisks []StorageAPI) (ObjectLayer, error) {
 	if storageDisks == nil {

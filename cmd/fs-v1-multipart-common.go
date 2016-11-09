@@ -17,72 +17,74 @@
 package cmd
 
 import (
-	"path"
+	"io"
 	"time"
+
+	"github.com/minio/minio/pkg/lock"
 )
 
 // Returns if the prefix is a multipart upload.
 func (fs fsObjects) isMultipartUpload(bucket, prefix string) bool {
-	_, err := fs.storage.StatFile(bucket, pathJoin(prefix, uploadsJSONFile))
-	return err == nil
-}
-
-// isUploadIDExists - verify if a given uploadID exists and is valid.
-func (fs fsObjects) isUploadIDExists(bucket, object, uploadID string) bool {
-	uploadIDPath := path.Join(bucket, object, uploadID)
-	_, err := fs.storage.StatFile(minioMetaMultipartBucket, path.Join(uploadIDPath, fsMetaJSONFile))
+	uploadsIDPath := pathJoin(fs.fsPath, bucket, prefix, uploadsJSONFile)
+	_, err := fsStatFile(uploadsIDPath)
 	if err != nil {
 		if err == errFileNotFound {
 			return false
 		}
-		errorIf(err, "Unable to access upload id "+pathJoin(minioMetaMultipartBucket, uploadIDPath))
+		errorIf(err, "Unable to access uploads.json "+uploadsIDPath)
 		return false
 	}
 	return true
 }
 
-// updateUploadJSON - add or remove upload ID info in all `uploads.json`.
-func (fs fsObjects) updateUploadJSON(bucket, object, uploadID string, initiated time.Time, isRemove bool) error {
-	uploadsPath := path.Join(bucket, object, uploadsJSONFile)
-	tmpUploadsPath := mustGetUUID()
-
-	uploadsJSON, err := readUploadsJSON(bucket, object, fs.storage)
-	if errorCause(err) == errFileNotFound {
-		// If file is not found, we assume a default (empty)
-		// upload info.
-		uploadsJSON, err = newUploadsV1("fs"), nil
+// isUploadIDExists - verify if a given uploadID exists and is valid.
+func (fs fsObjects) isUploadIDExists(bucket, object, uploadID string) bool {
+	uploadIDPath := pathJoin(bucket, object, uploadID)
+	_, err := fsStatFile(pathJoin(fs.fsPath, minioMetaMultipartBucket, uploadIDPath, fsMetaJSONFile))
+	if err != nil {
+		if err == errFileNotFound {
+			return false
+		}
+		errorIf(err, "Unable to access upload id "+uploadIDPath)
+		return false
 	}
+	return true
+}
+
+// Removes the uploadID, called either by CompleteMultipart of AbortMultipart. If the resuling uploads
+// slice is empty then we remove/purge the file.
+func (fs fsObjects) removeUploadID(bucket, object, uploadID string, rwlk *lock.RWLockedFile) error {
+	uploadIDs := uploadsV1{}
+	_, err := uploadIDs.ReadFrom(io.NewSectionReader(rwlk, 0, rwlk.Size()))
 	if err != nil {
 		return err
 	}
-
-	// update the uploadsJSON struct
-	if !isRemove {
-		// Add the uploadID
-		uploadsJSON.AddUploadID(uploadID, initiated)
-	} else {
-		// Remove the upload ID
-		uploadsJSON.RemoveUploadID(uploadID)
-	}
-
-	// update the file or delete it?
-	if len(uploadsJSON.Uploads) > 0 {
-		err = writeUploadJSON(&uploadsJSON, uploadsPath, tmpUploadsPath, fs.storage)
-	} else {
-		// no uploads, so we delete the file.
-		if err = fs.storage.DeleteFile(minioMetaMultipartBucket, uploadsPath); err != nil {
-			return toObjectErr(traceError(err), minioMetaMultipartBucket, uploadsPath)
-		}
-	}
+	uploadIDs.RemoveUploadID(uploadID)
+	if uploadIDs.IsEmpty() {
+		// No more uploads left, so we delete `uploads.json` file.
+		uploadsPath := pathJoin(bucket, object, uploadsJSONFile)
+		multipartPathBucket := pathJoin(fs.fsPath, minioMetaMultipartBucket)
+		uploadPathBucket := pathJoin(multipartPathBucket, uploadsPath)
+		return fsDeleteFile(multipartPathBucket, uploadPathBucket)
+	} // else not empty
+	_, err = uploadIDs.WriteTo(rwlk)
 	return err
 }
 
-// addUploadID - add upload ID and its initiated time to 'uploads.json'.
-func (fs fsObjects) addUploadID(bucket, object string, uploadID string, initiated time.Time) error {
-	return fs.updateUploadJSON(bucket, object, uploadID, initiated, false)
-}
-
-// removeUploadID - remove upload ID in 'uploads.json'.
-func (fs fsObjects) removeUploadID(bucket, object string, uploadID string) error {
-	return fs.updateUploadJSON(bucket, object, uploadID, time.Time{}, true)
+// Adds a new uploadID if no previous `uploads.json` is found we
+// initialize a new one.
+func (fs fsObjects) addUploadID(bucket, object, uploadID string, initiated time.Time, rwlk *lock.RWLockedFile) error {
+	uploadIDs := uploadsV1{}
+	_, err := uploadIDs.ReadFrom(io.NewSectionReader(rwlk, 0, rwlk.Size()))
+	// For all unexpected errors, we return.
+	if err != nil && errorCause(err) != io.EOF {
+		return err
+	}
+	if errorCause(err) == io.EOF {
+		// If we couldn't read anything, we assume a default (empty) upload info.
+		uploadIDs = newUploadsV1("fs")
+	}
+	uploadIDs.AddUploadID(uploadID, initiated)
+	_, err = uploadIDs.WriteTo(rwlk)
+	return err
 }

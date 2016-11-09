@@ -61,7 +61,8 @@ var (
 	globalConfigDir = mustGetConfigPath() // config-dir flag set via command line
 	// Add new global flags here.
 
-	globalIsDistXL = false // "Is Distributed?" flag.
+	// Indicates if the running minio server is distributed setup.
+	globalIsDistXL = false
 
 	// This flag is set to 'true' by default, it is set to `false`
 	// when MINIO_BROWSER env is set to 'off'.

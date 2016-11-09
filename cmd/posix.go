@@ -652,7 +652,6 @@ func (s *posix) createFile(volume, path string) (f *os.File, err error) {
 // PrepareFile - run prior actions before creating a new file for optimization purposes
 // Currently we use fallocate when available to avoid disk fragmentation as much as possible
 func (s *posix) PrepareFile(volume, path string, fileSize int64) (err error) {
-
 	// It doesn't make sense to create a negative-sized file
 	if fileSize <= 0 {
 		return errInvalidArgument

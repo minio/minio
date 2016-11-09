@@ -24,6 +24,10 @@ import "syscall"
 // sure that subsequent writes on a file just created will not fail,
 // in addition, file allocation will be contigous on the disk
 func Fallocate(fd int, offset int64, len int64) error {
+	// No need to attempt fallocate for 0 length.
+	if len == 0 {
+		return nil
+	}
 	return syscall.Fallocate(fd,
 		1, // FALLOC_FL_KEEP_SIZE
 		offset,

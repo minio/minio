@@ -80,7 +80,7 @@ func TestDoesPresignedV2SignatureMatch(t *testing.T) {
 		// (5) Should error when the signature does not match.
 		{
 			queryParams: map[string]string{
-				"Expires":        fmt.Sprintf("%d", now.Unix()),
+				"Expires":        fmt.Sprintf("%d", now.Unix()+60),
 				"Signature":      "zOM2YrY/yAQe15VWmT78OlBrK6g=",
 				"AWSAccessKeyId": serverConfig.GetCredential().AccessKey,
 			},
