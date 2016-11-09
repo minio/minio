@@ -1745,7 +1745,7 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, testName, bucketName, objectName, 
 
 	var expectedHTTPStatus int
 	// expectedHTTPStatus returns 204 (http.StatusNoContent) on success.
-	if testName == "TestAPIDeleteObjectHandler" {
+	if testName == "TestAPIDeleteObjectHandler" || testName == "TestAPIAbortMultipartHandler" {
 		expectedHTTPStatus = http.StatusNoContent
 	} else if strings.Contains(testName, "BucketPolicyHandler") || testName == "ListBucketsHandler" {
 		// BucketPolicyHandlers and `ListBucketsHandler` doesn't support anonymous request, policy changes should allow unsigned requests.
@@ -1993,6 +1993,9 @@ func registerBucketLevelFunc(bucket *router.Router, api objectAPIHandlers, apiFu
 		case "CompleteMultipart":
 			// Register Complete Multipart Upload handler.
 			bucket.Methods("POST").Path("/{object:.+}").HandlerFunc(api.CompleteMultipartUploadHandler).Queries("uploadId", "{uploadId:.*}")
+		case "AbortMultipart":
+			// Register AbortMultipart Handler.
+			bucket.Methods("DELETE").Path("/{object:.+}").HandlerFunc(api.AbortMultipartUploadHandler).Queries("uploadId", "{uploadId:.*}")
 		case "GetBucketNotification":
 			// Register GetBucketNotification Handler.
 			bucket.Methods("GET").HandlerFunc(api.GetBucketNotificationHandler).Queries("notification", "")

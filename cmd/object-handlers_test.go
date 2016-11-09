@@ -1731,6 +1731,182 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 	ExecObjectLayerAPINilTest(t, nilBucket, nilObject, instanceType, apiRouter, nilReq)
 }
 
+// The UploadID from the response body is parsed and its existence is asserted with an attempt to ListParts using it.
+func TestAPIAbortMultipartHandler(t *testing.T) {
+	defer DetectTestLeak(t)()
+	ExecObjectLayerAPITest(t, testAPIAbortMultipartHandler, []string{"AbortMultipart"})
+}
+
+func testAPIAbortMultipartHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
+	credentials credential, t *testing.T) {
+
+	var err error
+	// register event notifier.
+	err = initEventNotifier(obj)
+
+	if err != nil {
+		t.Fatal("Notifier initialization failed.")
+	}
+
+	// Calculates MD5 sum of the given byte array.
+	findMD5 := func(toBeHashed []byte) string {
+		hasher := md5.New()
+		hasher.Write(toBeHashed)
+		return hex.EncodeToString(hasher.Sum(nil))
+	}
+
+	// object used for the test.
+	objectName := "test-object-new-multipart"
+
+	// uploadID obtained from NewMultipart upload.
+	var uploadID string
+	// upload IDs collected.
+	var uploadIDs []string
+
+	for i := 0; i < 2; i++ {
+		// initiate new multipart uploadID.
+		uploadID, err = obj.NewMultipartUpload(bucketName, objectName, nil)
+		if err != nil {
+			// Failed to create NewMultipartUpload, abort.
+			t.Fatalf("Minio %s : <ERROR>  %s", instanceType, err)
+		}
+
+		uploadIDs = append(uploadIDs, uploadID)
+	}
+
+	// Parts with size greater than 5 MB.
+	// Generating a 6MB byte array.
+	validPart := bytes.Repeat([]byte("abcdef"), 1024*1024)
+	validPartMD5 := findMD5(validPart)
+	// Create multipart parts.
+	// Need parts to be uploaded before AbortMultiPartUpload can be called tested.
+	parts := []struct {
+		bucketName      string
+		objName         string
+		uploadID        string
+		PartID          int
+		inputReaderData string
+		inputMd5        string
+		intputDataSize  int64
+	}{
+		// Case 1-4.
+		// Creating sequence of parts for same uploadID.
+		{bucketName, objectName, uploadIDs[0], 1, "abcd", "e2fc714c4727ee9395f324cd2e7f331f", int64(len("abcd"))},
+		{bucketName, objectName, uploadIDs[0], 2, "efgh", "1f7690ebdd9b4caf8fab49ca1757bf27", int64(len("efgh"))},
+		{bucketName, objectName, uploadIDs[0], 3, "ijkl", "09a0877d04abf8759f99adec02baf579", int64(len("abcd"))},
+		{bucketName, objectName, uploadIDs[0], 4, "mnop", "e132e96a5ddad6da8b07bba6f6131fef", int64(len("abcd"))},
+		// Part with size larger than 5Mb.
+		{bucketName, objectName, uploadIDs[0], 5, string(validPart), validPartMD5, int64(len(string(validPart)))},
+		{bucketName, objectName, uploadIDs[0], 6, string(validPart), validPartMD5, int64(len(string(validPart)))},
+
+		// Part with size larger than 5Mb.
+		// Parts uploaded for anonymous/unsigned API handler test.
+		{bucketName, objectName, uploadIDs[1], 1, string(validPart), validPartMD5, int64(len(string(validPart)))},
+		{bucketName, objectName, uploadIDs[1], 2, string(validPart), validPartMD5, int64(len(string(validPart)))},
+	}
+	// Iterating over createPartCases to generate multipart chunks.
+	for _, part := range parts {
+		_, err = obj.PutObjectPart(part.bucketName, part.objName, part.uploadID, part.PartID, part.intputDataSize,
+			bytes.NewBufferString(part.inputReaderData), part.inputMd5, "")
+		if err != nil {
+			t.Fatalf("%s : %s", instanceType, err)
+		}
+	}
+
+	testCases := []struct {
+		bucket    string
+		object    string
+		uploadID  string
+		accessKey string
+		secretKey string
+		// Expected HTTP Response status.
+		expectedRespStatus int
+	}{
+		// Test case - 1.
+		// Abort existing upload ID.
+		{
+			bucket:             bucketName,
+			object:             objectName,
+			uploadID:           uploadIDs[0],
+			accessKey:          credentials.AccessKeyID,
+			secretKey:          credentials.SecretAccessKey,
+			expectedRespStatus: http.StatusNoContent,
+		},
+		// Test case - 2.
+		// Abort non-existng upload ID.
+		{
+			bucket:             bucketName,
+			object:             objectName,
+			uploadID:           "nonexistent-upload-id",
+			accessKey:          credentials.AccessKeyID,
+			secretKey:          credentials.SecretAccessKey,
+			expectedRespStatus: http.StatusNotFound,
+		},
+		// Test case - 3.
+		// Abort with unknown Access key.
+		{
+			bucket:             bucketName,
+			object:             objectName,
+			uploadID:           uploadIDs[0],
+			accessKey:          "Invalid-AccessID",
+			secretKey:          credentials.SecretAccessKey,
+			expectedRespStatus: http.StatusForbidden,
+		},
+	}
+
+	for i, testCase := range testCases {
+		var req *http.Request
+		// Indicating that all parts are uploaded and initiating abortMultipartUpload.
+		req, err = newTestSignedRequestV4("DELETE", getAbortMultipartUploadURL("", testCase.bucket, testCase.object, testCase.uploadID),
+			0, nil, testCase.accessKey, testCase.secretKey)
+		if err != nil {
+			t.Fatalf("Failed to create HTTP request for AbortMultipartUpload: <ERROR> %v", err)
+		}
+
+		rec := httptest.NewRecorder()
+
+		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
+		// Call the ServeHTTP to executes the registered handler.
+		apiRouter.ServeHTTP(rec, req)
+		// Assert the response code with the expected status.
+		if rec.Code != testCase.expectedRespStatus {
+			t.Errorf("Case %d: Minio %s: Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, rec.Code)
+		}
+	}
+
+	// create unsigned HTTP request for Abort multipart upload.
+	anonReq, err := newTestRequest("DELETE", getAbortMultipartUploadURL("", bucketName, objectName, uploadIDs[1]),
+		0, nil)
+	if err != nil {
+		t.Fatalf("Minio %s: Failed to create an anonymous request for %s/%s: <ERROR> %v",
+			instanceType, bucketName, objectName, err)
+	}
+
+	// ExecObjectLayerAPIAnonTest - Calls the HTTP API handler using the anonymous request, validates the ErrAccessDeniedResponse,
+	// sets the bucket policy using the policy statement generated from `getWriteOnlyObjectStatement` so that the
+	// unsigned request goes through and its validated again.
+	ExecObjectLayerAPIAnonTest(t, "TestAPIAbortMultipartHandler", bucketName, objectName, instanceType,
+		apiRouter, anonReq, getWriteOnlyObjectStatement)
+
+	// HTTP request to test the case of `objectLayer` being set to `nil`.
+	// There is no need to use an existing bucket or valid input for creating the request,
+	// since the `objectLayer==nil`  check is performed before any other checks inside the handlers.
+	// The only aim is to generate an HTTP request in a way that the relevant/registered end point is evoked/called.
+	// Indicating that all parts are uploaded and initiating abortMultipartUpload.
+	nilBucket := "dummy-bucket"
+	nilObject := "dummy-object"
+
+	nilReq, err := newTestSignedRequestV4("DELETE", getAbortMultipartUploadURL("", nilBucket, nilObject, "dummy-uploadID"),
+		0, nil, "", "")
+
+	if err != nil {
+		t.Errorf("Minio %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
+	}
+	// execute the object layer set to `nil` test.
+	// `ExecObjectLayerAPINilTest` manages the operation.
+	ExecObjectLayerAPINilTest(t, nilBucket, nilObject, instanceType, apiRouter, nilReq)
+}
+
 // Wrapper for calling Delete Object API handler tests for both XL multiple disks and FS single drive setup.
 func TestAPIDeleteObjectHandler(t *testing.T) {
 	defer DetectTestLeak(t)()
