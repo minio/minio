@@ -21,7 +21,7 @@ import (
 	"sync"
 )
 
-// writeUploadJSON - create `uploads.json` or update it with change
+// updateUploadJSON - create `uploads.json` or update it with change
 // described in uCh.
 func (xl xlObjects) updateUploadJSON(bucket, object string, uCh uploadIDChange) error {
 	uploadsPath := path.Join(mpartMetaPrefix, bucket, object, uploadsJSONFile)
@@ -149,6 +149,51 @@ func (xl xlObjects) updateUploadJSON(bucket, object string, uCh uploadIDChange) 
 	return reduceErrs(errs, ignoredErrs)
 }
 
+// isUploadIDInUploadsJSON - check if given upload id is present in
+// quorum disks' uploads.json
+func (xl xlObjects) isUploadIDInUploadsJSON(bucket, object, uploadID string) bool {
+	isPresent := make([]bool, len(xl.storageDisks))
+
+	// check disks in parallel for the uploadID
+	wg := sync.WaitGroup{}
+	for index, disk := range xl.storageDisks {
+		if disk == nil {
+			continue
+		}
+
+		wg.Add(1)
+		go func(index int, disk StorageAPI) {
+			defer wg.Done()
+
+			// read and parse uploads.json on this disk
+			uploadsJSON, err := readUploadsJSON(bucket, object, disk)
+			if err != nil {
+				return
+			}
+
+			// look for uploadID in the uploadsJSON
+			for _, upInfo := range uploadsJSON.Uploads {
+				if upInfo.UploadID == uploadID {
+					isPresent[index] = true
+					break
+				}
+			}
+		}(index, disk)
+	}
+
+	// Wait for all the writes to finish.
+	wg.Wait()
+
+	// check if uploadID is present in quorum disks.
+	count := 0
+	for _, ok := range isPresent {
+		if ok {
+			count++
+		}
+	}
+	return count >= xl.writeQuorum
+}
+
 // Returns if the prefix is a multipart upload.
 func (xl xlObjects) isMultipartUpload(bucket, prefix string) bool {
 	for _, disk := range xl.getLoadBalancedDisks() {
@@ -169,7 +214,14 @@ func (xl xlObjects) isMultipartUpload(bucket, prefix string) bool {
 }
 
 // isUploadIDExists - verify if a given uploadID exists and is valid.
-func (xl xlObjects) isUploadIDExists(bucket, object, uploadID string) bool {
+func (xl xlObjects) isUploadIDExists(bucket, object, uploadID string, withQuorum bool) bool {
+	if withQuorum {
+		// if uploadID is not present in quorum uploads.json
+		// files, we return false.
+		if !xl.isUploadIDInUploadsJSON(bucket, object, uploadID) {
+			return false
+		}
+	}
 	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID)
 	return xl.isObject(minioMetaBucket, uploadIDPath)
 }

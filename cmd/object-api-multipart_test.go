@@ -229,15 +229,16 @@ func testPutObjectPartDiskNotFound(obj ObjectLayer, instanceType string, disks [
 		removeAll(disk)
 	}
 
-	// Object part upload should fail with quorum not available.
+	// Object part upload should fail with upload id invalid (as
+	// it is not present on quorum disks).
 	testCase := createPartCases[len(createPartCases)-1]
 	_, err = obj.PutObjectPart(testCase.bucketName, testCase.objName, testCase.uploadID, testCase.PartID, testCase.intputDataSize, bytes.NewBufferString(testCase.inputReaderData), testCase.inputMd5, sha256sum)
 	if err == nil {
 		t.Fatalf("Test %s: expected to fail but passed instead", instanceType)
 	}
-	expectedErr := InsufficientWriteQuorum{}
-	if err.Error() != expectedErr.Error() {
-		t.Fatalf("Test %s: expected error %s, got %s instead.", instanceType, expectedErr, err)
+	expectedErrPrefix := "Invalid upload id "
+	if !strings.HasPrefix(err.Error(), expectedErrPrefix) {
+		t.Fatalf("Test %s: expected error '%s<upload-id>', got '%s' instead.", instanceType, expectedErrPrefix, err)
 	}
 }
 

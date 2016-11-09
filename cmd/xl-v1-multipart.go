@@ -365,7 +365,7 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 
 	nsMutex.RLock(minioMetaBucket, uploadIDPath, opsID)
 	// Validates if upload ID exists.
-	if !xl.isUploadIDExists(bucket, object, uploadID) {
+	if !xl.isUploadIDExists(bucket, object, uploadID, true) {
 		nsMutex.RUnlock(minioMetaBucket, uploadIDPath, opsID)
 		return "", traceError(InvalidUploadID{UploadID: uploadID})
 	}
@@ -476,7 +476,7 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	defer nsMutex.Unlock(minioMetaBucket, uploadIDPath, opsID)
 
 	// Validate again if upload ID still exists.
-	if !xl.isUploadIDExists(bucket, object, uploadID) {
+	if !xl.isUploadIDExists(bucket, object, uploadID, true) {
 		return "", traceError(InvalidUploadID{UploadID: uploadID})
 	}
 
@@ -624,7 +624,7 @@ func (xl xlObjects) ListObjectParts(bucket, object, uploadID string, partNumberM
 	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID), opsID)
 	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID), opsID)
 
-	if !xl.isUploadIDExists(bucket, object, uploadID) {
+	if !xl.isUploadIDExists(bucket, object, uploadID, false) {
 		return ListPartsInfo{}, traceError(InvalidUploadID{UploadID: uploadID})
 	}
 	result, err := xl.listObjectParts(bucket, object, uploadID, partNumberMarker, maxParts)
@@ -662,7 +662,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID), opsID)
 	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID), opsID)
 
-	if !xl.isUploadIDExists(bucket, object, uploadID) {
+	if !xl.isUploadIDExists(bucket, object, uploadID, true) {
 		return "", traceError(InvalidUploadID{UploadID: uploadID})
 	}
 	// Calculate s3 compatible md5sum for complete multipart.
@@ -896,7 +896,7 @@ func (xl xlObjects) AbortMultipartUpload(bucket, object, uploadID string) error 
 	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID), opsID)
 	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID), opsID)
 
-	if !xl.isUploadIDExists(bucket, object, uploadID) {
+	if !xl.isUploadIDExists(bucket, object, uploadID, true) {
 		return traceError(InvalidUploadID{UploadID: uploadID})
 	}
 	err := xl.abortMultipartUpload(bucket, object, uploadID)
