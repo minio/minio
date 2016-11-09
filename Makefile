@@ -101,8 +101,9 @@ deadcode:
 	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/deadcode
 
 spelling:
-	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/misspell -error cmd/**/*
-	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/misspell -error pkg/**/*
+	@-GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/misspell -error `find cmd/`
+	@-GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/misspell -error `find pkg/`
+	@-GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/misspell -error `find docs/`
 
 test: build
 	@echo "Running all minio testing:"
