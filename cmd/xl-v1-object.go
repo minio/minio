@@ -59,12 +59,10 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 		return traceError(errUnexpected)
 	}
 
-	// get a random ID for lock instrumentation.
-	opsID := getOpsID()
-
 	// Lock the object before reading.
-	nsMutex.RLock(bucket, object, opsID)
-	defer nsMutex.RUnlock(bucket, object, opsID)
+	objectLock := nsMutex.NewNSLock(bucket, object)
+	objectLock.RLock()
+	defer objectLock.RUnlock()
 
 	// Read metadata associated with the object from all disks.
 	metaArr, errs := readAllXLMetadata(xl.storageDisks, bucket, object)
@@ -227,11 +225,10 @@ func (xl xlObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 		return ObjectInfo{}, ObjectNameInvalid{Bucket: bucket, Object: object}
 	}
 
-	// get a random ID for lock instrumentation.
-	opsID := getOpsID()
+	objectLock := nsMutex.NewNSLock(bucket, object)
+	objectLock.RLock()
+	defer objectLock.RUnlock()
 
-	nsMutex.RLock(bucket, object, opsID)
-	defer nsMutex.RUnlock(bucket, object, opsID)
 	info, err := xl.getObjectInfo(bucket, object)
 	if err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
@@ -508,14 +505,10 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 		}
 	}
 
-	// get a random ID for lock instrumentation.
-	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
-	// used for instrumentation on locks.
-	opsID := getOpsID()
-
 	// Lock the object.
-	nsMutex.Lock(bucket, object, opsID)
-	defer nsMutex.Unlock(bucket, object, opsID)
+	objectLock := nsMutex.NewNSLock(bucket, object)
+	objectLock.Lock()
+	defer objectLock.Unlock()
 
 	// Check if an object is present as one of the parent dir.
 	// -- FIXME. (needs a new kind of lock).
@@ -637,11 +630,9 @@ func (xl xlObjects) DeleteObject(bucket, object string) (err error) {
 		return traceError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
 
-	// get a random ID for lock instrumentation.
-	opsID := getOpsID()
-
-	nsMutex.Lock(bucket, object, opsID)
-	defer nsMutex.Unlock(bucket, object, opsID)
+	objectLock := nsMutex.NewNSLock(bucket, object)
+	objectLock.Lock()
+	defer objectLock.Unlock()
 
 	// Validate object exists.
 	if !xl.isObject(bucket, object) {

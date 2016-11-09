@@ -256,3 +256,42 @@ func (n *nsLockMap) ForceUnlock(volume, path string) {
 		}
 	}
 }
+
+// lockInstance - frontend/top-level interface for namespace locks.
+type lockInstance struct {
+	n                   *nsLockMap
+	volume, path, opsID string
+}
+
+// NewNSLock - returns a lock instance for a given volume and
+// path. The returned lockInstance object encapsulates the nsLockMap,
+// volume, path and operation ID.
+func (n *nsLockMap) NewNSLock(volume, path string) *lockInstance {
+	return &lockInstance{n, volume, path, getOpsID()}
+}
+
+// Lock - block until write lock is taken.
+func (li *lockInstance) Lock() {
+	lockLocation := callerLocation()
+	readLock := false
+	li.n.lock(li.volume, li.path, lockLocation, li.opsID, readLock)
+}
+
+// Unlock - block until write lock is released.
+func (li *lockInstance) Unlock() {
+	readLock := false
+	li.n.unlock(li.volume, li.path, li.opsID, readLock)
+}
+
+// RLock - block until read lock is taken.
+func (li *lockInstance) RLock() {
+	lockLocation := callerLocation()
+	readLock := true
+	li.n.lock(li.volume, li.path, lockLocation, li.opsID, readLock)
+}
+
+// RUnlock - block until read lock is released.
+func (li *lockInstance) RUnlock() {
+	readLock := true
+	li.n.unlock(li.volume, li.path, li.opsID, readLock)
+}

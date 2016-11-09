@@ -31,11 +31,9 @@ func (xl xlObjects) MakeBucket(bucket string) error {
 		return traceError(BucketNameInvalid{Bucket: bucket})
 	}
 
-	// get a random ID for lock instrumentation.
-	opsID := getOpsID()
-
-	nsMutex.Lock(bucket, "", opsID)
-	defer nsMutex.Unlock(bucket, "", opsID)
+	bucketLock := nsMutex.NewNSLock(bucket, "")
+	bucketLock.Lock()
+	defer bucketLock.Unlock()
 
 	// Initialize sync waitgroup.
 	var wg = &sync.WaitGroup{}
@@ -174,11 +172,11 @@ func (xl xlObjects) GetBucketInfo(bucket string) (BucketInfo, error) {
 	if !IsValidBucketName(bucket) {
 		return BucketInfo{}, BucketNameInvalid{Bucket: bucket}
 	}
-	// get a random ID for lock instrumentation.
-	opsID := getOpsID()
 
-	nsMutex.RLock(bucket, "", opsID)
-	defer nsMutex.RUnlock(bucket, "", opsID)
+	bucketLock := nsMutex.NewNSLock(bucket, "")
+	bucketLock.RLock()
+	defer bucketLock.RUnlock()
+
 	bucketInfo, err := xl.getBucketInfo(bucket)
 	if err != nil {
 		return BucketInfo{}, toObjectErr(err, bucket)
@@ -249,11 +247,9 @@ func (xl xlObjects) DeleteBucket(bucket string) error {
 		return BucketNameInvalid{Bucket: bucket}
 	}
 
-	// get a random ID for lock instrumentation.
-	opsID := getOpsID()
-
-	nsMutex.Lock(bucket, "", opsID)
-	defer nsMutex.Unlock(bucket, "", opsID)
+	bucketLock := nsMutex.NewNSLock(bucket, "")
+	bucketLock.Lock()
+	defer bucketLock.Unlock()
 
 	// Collect if all disks report volume not found.
 	var wg = &sync.WaitGroup{}

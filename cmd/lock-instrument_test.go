@@ -256,7 +256,6 @@ func TestNsLockMapStatusBlockedToRunning(t *testing.T) {
 	}{
 		// Test case - 1.
 		{
-
 			volume:     "my-bucket",
 			path:       "my-object",
 			lockOrigin: "/home/vadmeste/work/go/src/github.com/minio/minio/xl-v1-object.go:683 +0x2a",
@@ -270,7 +269,6 @@ func TestNsLockMapStatusBlockedToRunning(t *testing.T) {
 		// No entry for <volume, path> pair.
 		// So an attempt to change the state of the lock from `Blocked`->`Running` should fail.
 		{
-
 			volume:     "my-bucket",
 			path:       "my-object-2",
 			lockOrigin: "/home/vadmeste/work/go/src/github.com/minio/minio/xl-v1-object.go:683 +0x2a",
@@ -307,7 +305,6 @@ func TestNsLockMapStatusBlockedToRunning(t *testing.T) {
 		// Test case - 5.
 		// Test case with write lock.
 		{
-
 			volume:     "my-bucket",
 			path:       "my-object",
 			lockOrigin: "/home/vadmeste/work/go/src/github.com/minio/minio/xl-v1-object.go:683 +0x2a",

@@ -60,11 +60,11 @@ func (fs fsObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 	var err error
 	var eof bool
 	if uploadIDMarker != "" {
-		// get a random ID for lock instrumentation.
-		opsID := getOpsID()
-		nsMutex.RLock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, keyMarker), opsID)
+		keyMarkerLock := nsMutex.NewNSLock(minioMetaBucket,
+			pathJoin(mpartMetaPrefix, bucket, keyMarker))
+		keyMarkerLock.RLock()
 		uploads, _, err = listMultipartUploadIDs(bucket, keyMarker, uploadIDMarker, maxUploads, fs.storage)
-		nsMutex.RUnlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, keyMarker), opsID)
+		keyMarkerLock.RUnlock()
 		if err != nil {
 			return ListMultipartsInfo{}, err
 		}
@@ -115,12 +115,11 @@ func (fs fsObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 			var end bool
 			uploadIDMarker = ""
 
-			// get a random ID for lock instrumentation.
-			opsID := getOpsID()
-
-			nsMutex.RLock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, entry), opsID)
+			entryLock := nsMutex.NewNSLock(minioMetaBucket,
+				pathJoin(mpartMetaPrefix, bucket, entry))
+			entryLock.RLock()
 			tmpUploads, end, err = listMultipartUploadIDs(bucket, entry, uploadIDMarker, maxUploads, fs.storage)
-			nsMutex.RUnlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, entry), opsID)
+			entryLock.RUnlock()
 			if err != nil {
 				return ListMultipartsInfo{}, err
 			}
@@ -233,12 +232,12 @@ func (fs fsObjects) newMultipartUpload(bucket string, object string, meta map[st
 		fsMeta.Meta = meta
 	}
 
-	// get a random ID for lock instrumentation.
-	opsID := getOpsID()
-
-	// This lock needs to be held for any changes to the directory contents of ".minio.sys/multipart/object/"
-	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object), opsID)
-	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object), opsID)
+	// This lock needs to be held for any changes to the directory
+	// contents of ".minio.sys/multipart/object/"
+	objectMPartPathLock := nsMutex.NewNSLock(minioMetaBucket,
+		pathJoin(mpartMetaPrefix, bucket, object))
+	objectMPartPathLock.Lock()
+	defer objectMPartPathLock.Unlock()
 
 	uploadID = getUUID()
 	initiated := time.Now().UTC()
@@ -301,7 +300,7 @@ func getFSAppendDataPath(uploadID string) string {
 }
 
 // Append parts to fsAppendDataFile.
-func appendParts(disk StorageAPI, bucket, object, uploadID, opsID string) {
+func appendParts(disk StorageAPI, bucket, object, uploadID string) {
 	cleanupAppendPaths := func() {
 		// In case of any error, cleanup the append data and json files
 		// from the tmp so that we do not have any inconsistent append
@@ -316,16 +315,18 @@ func appendParts(disk StorageAPI, bucket, object, uploadID, opsID string) {
 	fsMetaPath := path.Join(mpartMetaPrefix, bucket, object, uploadID, fsMetaJSONFile)
 
 	// Lock the uploadID so that no one modifies fs.json
-	nsMutex.RLock(minioMetaBucket, uploadIDPath, opsID)
+	uploadIDLock := nsMutex.NewNSLock(minioMetaBucket, uploadIDPath)
+	uploadIDLock.RLock()
 	fsMeta, err := readFSMetadata(disk, minioMetaBucket, fsMetaPath)
-	nsMutex.RUnlock(minioMetaBucket, uploadIDPath, opsID)
+	uploadIDLock.RUnlock()
 	if err != nil {
 		return
 	}
 
 	// Lock fs-append.json so that there is no parallel append to the file.
-	nsMutex.Lock(minioMetaBucket, fsAppendMetaPath, opsID)
-	defer nsMutex.Unlock(minioMetaBucket, fsAppendMetaPath, opsID)
+	appendPathLock := nsMutex.NewNSLock(minioMetaBucket, fsAppendMetaPath)
+	appendPathLock.Lock()
+	defer appendPathLock.Unlock()
 
 	fsAppendMeta, err := readFSMetadata(disk, minioMetaBucket, fsAppendMetaPath)
 	if err != nil {
@@ -344,8 +345,9 @@ func appendParts(disk StorageAPI, bucket, object, uploadID, opsID string) {
 	}
 	// Hold write lock on the part so that there is no parallel upload on the part.
 	partPath := pathJoin(mpartMetaPrefix, bucket, object, uploadID, strconv.Itoa(part.Number))
-	nsMutex.Lock(minioMetaBucket, partPath, opsID)
-	defer nsMutex.Unlock(minioMetaBucket, partPath, opsID)
+	partPathLock := nsMutex.NewNSLock(minioMetaBucket, partPath)
+	partPathLock.Lock()
+	defer partPathLock.Unlock()
 
 	// Proceed to append "part"
 	fsAppendDataPath := getFSAppendDataPath(uploadID)
@@ -386,7 +388,7 @@ func appendParts(disk StorageAPI, bucket, object, uploadID, opsID string) {
 	// If there are more parts that need to be appended to fsAppendDataFile
 	_, appendNeeded = partToAppend(fsMeta, fsAppendMeta)
 	if appendNeeded {
-		go appendParts(disk, bucket, object, uploadID, opsID)
+		go appendParts(disk, bucket, object, uploadID)
 	}
 }
 
@@ -409,13 +411,11 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 
 	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID)
 
-	// get a random ID for lock instrumentation.
-	opsID := getOpsID()
-
-	nsMutex.RLock(minioMetaBucket, uploadIDPath, opsID)
+	preUploadIDLock := nsMutex.NewNSLock(minioMetaBucket, uploadIDPath)
+	preUploadIDLock.RLock()
 	// Just check if the uploadID exists to avoid copy if it doesn't.
 	uploadIDExists := fs.isUploadIDExists(bucket, object, uploadID)
-	nsMutex.RUnlock(minioMetaBucket, uploadIDPath, opsID)
+	preUploadIDLock.RUnlock()
 	if !uploadIDExists {
 		return "", traceError(InvalidUploadID{UploadID: uploadID})
 	}
@@ -490,14 +490,10 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 		}
 	}
 
-	// get a random ID for lock instrumentation.
-	// generates random string on setting MINIO_DEBUG=lock, else returns empty string.
-	// used for instrumentation on locks.
-	opsID = getOpsID()
-
 	// Hold write lock as we are updating fs.json
-	nsMutex.Lock(minioMetaBucket, uploadIDPath, opsID)
-	defer nsMutex.Unlock(minioMetaBucket, uploadIDPath, opsID)
+	postUploadIDLock := nsMutex.NewNSLock(minioMetaBucket, uploadIDPath)
+	postUploadIDLock.Lock()
+	defer postUploadIDLock.Unlock()
 
 	// Just check if the uploadID exists to avoid copy if it doesn't.
 	if !fs.isUploadIDExists(bucket, object, uploadID) {
@@ -520,7 +516,7 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	if err = writeFSMetadata(fs.storage, minioMetaBucket, path.Join(uploadIDPath, fsMetaJSONFile), fsMeta); err != nil {
 		return "", toObjectErr(err, minioMetaBucket, uploadIDPath)
 	}
-	go appendParts(fs.storage, bucket, object, uploadID, opsID)
+	go appendParts(fs.storage, bucket, object, uploadID)
 	return newMD5Hex, nil
 }
 
@@ -595,12 +591,12 @@ func (fs fsObjects) ListObjectParts(bucket, object, uploadID string, partNumberM
 		return ListPartsInfo{}, traceError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
 
-	// get a random ID for lock instrumentation.
-	opsID := getOpsID()
-
-	// Hold lock so that there is no competing abort-multipart-upload or complete-multipart-upload.
-	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID), opsID)
-	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID), opsID)
+	// Hold lock so that there is no competing
+	// abort-multipart-upload or complete-multipart-upload.
+	uploadIDLock := nsMutex.NewNSLock(minioMetaBucket,
+		pathJoin(mpartMetaPrefix, bucket, object, uploadID))
+	uploadIDLock.Lock()
+	defer uploadIDLock.Unlock()
 
 	if !fs.isUploadIDExists(bucket, object, uploadID) {
 		return ListPartsInfo{}, traceError(InvalidUploadID{UploadID: uploadID})
@@ -643,15 +639,14 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	}
 
 	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID)
-	// get a random ID for lock instrumentation.
-	opsID := getOpsID()
 
 	// Hold lock so that
 	// 1) no one aborts this multipart upload
 	// 2) no one does a parallel complete-multipart-upload on this
 	// multipart upload
-	nsMutex.Lock(minioMetaBucket, uploadIDPath, opsID)
-	defer nsMutex.Unlock(minioMetaBucket, uploadIDPath, opsID)
+	uploadIDLock := nsMutex.NewNSLock(minioMetaBucket, uploadIDPath)
+	uploadIDLock.Lock()
+	defer uploadIDLock.Unlock()
 
 	if !fs.isUploadIDExists(bucket, object, uploadID) {
 		return "", traceError(InvalidUploadID{UploadID: uploadID})
@@ -660,8 +655,9 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	// fs-append.json path
 	fsAppendMetaPath := getFSAppendMetaPath(uploadID)
 	// Lock fs-append.json so that no parallel appendParts() is being done.
-	nsMutex.Lock(minioMetaBucket, fsAppendMetaPath, opsID)
-	defer nsMutex.Unlock(minioMetaBucket, fsAppendMetaPath, opsID)
+	appendPathLock := nsMutex.NewNSLock(minioMetaBucket, fsAppendMetaPath)
+	appendPathLock.Lock()
+	defer appendPathLock.Unlock()
 
 	// Calculate s3 compatible md5sum for complete multipart.
 	s3MD5, err := getCompleteMultipartMD5(parts...)
@@ -788,13 +784,13 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 		return "", toObjectErr(err, bucket, object)
 	}
 
-	// get a random ID for lock instrumentation.
-	opsID = getOpsID()
-
-	// Hold the lock so that two parallel complete-multipart-uploads do not
-	// leave a stale uploads.json behind.
-	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object), opsID)
-	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object), opsID)
+	// Hold the lock so that two parallel
+	// complete-multipart-uploads do not leave a stale
+	// uploads.json behind.
+	objectMPartPathLock := nsMutex.NewNSLock(minioMetaBucket,
+		pathJoin(mpartMetaPrefix, bucket, object))
+	objectMPartPathLock.Lock()
+	defer objectMPartPathLock.Unlock()
 
 	// remove entry from uploads.json
 	if err = fs.updateUploadJSON(bucket, object, uploadIDChange{uploadID: uploadID, isRemove: true}); err != nil {
@@ -848,12 +844,12 @@ func (fs fsObjects) AbortMultipartUpload(bucket, object, uploadID string) error 
 		return traceError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
 
-	// get a random ID for lock instrumentation.
-	opsID := getOpsID()
-
-	// Hold lock so that there is no competing complete-multipart-upload or put-object-part.
-	nsMutex.Lock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID), opsID)
-	defer nsMutex.Unlock(minioMetaBucket, pathJoin(mpartMetaPrefix, bucket, object, uploadID), opsID)
+	// Hold lock so that there is no competing
+	// complete-multipart-upload or put-object-part.
+	uploadIDLock := nsMutex.NewNSLock(minioMetaBucket,
+		pathJoin(mpartMetaPrefix, bucket, object, uploadID))
+	uploadIDLock.Lock()
+	defer uploadIDLock.Unlock()
 
 	if !fs.isUploadIDExists(bucket, object, uploadID) {
 		return traceError(InvalidUploadID{UploadID: uploadID})
@@ -861,8 +857,9 @@ func (fs fsObjects) AbortMultipartUpload(bucket, object, uploadID string) error 
 
 	fsAppendMetaPath := getFSAppendMetaPath(uploadID)
 	// Lock fs-append.json so that no parallel appendParts() is being done.
-	nsMutex.Lock(minioMetaBucket, fsAppendMetaPath, opsID)
-	defer nsMutex.Unlock(minioMetaBucket, fsAppendMetaPath, opsID)
+	appendPathLock := nsMutex.NewNSLock(minioMetaBucket, fsAppendMetaPath)
+	appendPathLock.Lock()
+	defer appendPathLock.Unlock()
 
 	err := fs.abortMultipartUpload(bucket, object, uploadID)
 	return err

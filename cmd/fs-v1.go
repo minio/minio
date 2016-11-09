@@ -226,12 +226,10 @@ func (fs fsObjects) GetObject(bucket, object string, offset int64, length int64,
 		return traceError(InvalidRange{offset, length, fi.Size})
 	}
 
-	// get a random ID for lock instrumentation.
-	opsID := getOpsID()
-
 	// Lock the object before reading.
-	nsMutex.RLock(bucket, object, opsID)
-	defer nsMutex.RUnlock(bucket, object, opsID)
+	objectLock := nsMutex.NewNSLock(bucket, object)
+	objectLock.RLock()
+	defer objectLock.RUnlock()
 
 	var totalLeft = length
 	bufSize := int64(readSizeV1)
@@ -446,12 +444,10 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 		}
 	}
 
-	// get a random ID for lock instrumentation.
-	opsID := getOpsID()
-
 	// Lock the object before committing the object.
-	nsMutex.RLock(bucket, object, opsID)
-	defer nsMutex.RUnlock(bucket, object, opsID)
+	objectLock := nsMutex.NewNSLock(bucket, object)
+	objectLock.RLock()
+	defer objectLock.RUnlock()
 
 	// Entire object was written to the temp location, now it's safe to rename it to the actual location.
 	err = fs.storage.RenameFile(minioMetaBucket, tempObj, bucket, object)
@@ -488,13 +484,12 @@ func (fs fsObjects) DeleteObject(bucket, object string) error {
 	if !IsValidObjectName(object) {
 		return traceError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
-	// get a random ID for lock instrumentation.
-	opsID := getOpsID()
 
 	// Lock the object before deleting so that an in progress GetObject does not return
 	// corrupt data or there is no race with a PutObject.
-	nsMutex.RLock(bucket, object, opsID)
-	defer nsMutex.RUnlock(bucket, object, opsID)
+	objectLock := nsMutex.NewNSLock(bucket, object)
+	objectLock.RLock()
+	defer objectLock.RUnlock()
 
 	err := fs.storage.DeleteFile(minioMetaBucket, path.Join(bucketMetaPrefix, bucket, object, fsMetaJSONFile))
 	if err != nil && err != errFileNotFound {

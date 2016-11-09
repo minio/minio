@@ -209,10 +209,10 @@ func persistAndNotifyBucketPolicyChange(bucket string, pCh policyChange, objAPI 
 
 	// Acquire a write lock on bucket before modifying its
 	// configuration.
-	opsID := getOpsID()
-	nsMutex.Lock(bucket, "", opsID)
+	bucketLock := nsMutex.NewNSLock(bucket, "")
+	bucketLock.Lock()
 	// Release lock after notifying peers
-	defer nsMutex.Unlock(bucket, "", opsID)
+	defer bucketLock.Unlock()
 
 	if pCh.IsRemove {
 		if err := removeBucketPolicy(bucket, objAPI); err != nil {

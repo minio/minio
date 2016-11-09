@@ -32,11 +32,9 @@ func (xl xlObjects) HealBucket(bucket string) error {
 
 	// Heal bucket - create buckets on disks where it does not exist.
 
-	// get a random ID for lock instrumentation.
-	opsID := getOpsID()
-
-	nsMutex.Lock(bucket, "", opsID)
-	defer nsMutex.Unlock(bucket, "", opsID)
+	bucketLock := nsMutex.NewNSLock(bucket, "")
+	bucketLock.Lock()
+	defer bucketLock.Unlock()
 
 	// Initialize sync waitgroup.
 	var wg = &sync.WaitGroup{}
@@ -101,12 +99,10 @@ func (xl xlObjects) HealObject(bucket, object string) error {
 		return traceError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
 
-	// get a random ID for lock instrumentation.
-	opsID := getOpsID()
-
 	// Lock the object before healing.
-	nsMutex.RLock(bucket, object, opsID)
-	defer nsMutex.RUnlock(bucket, object, opsID)
+	objectLock := nsMutex.NewNSLock(bucket, object)
+	objectLock.RLock()
+	defer objectLock.RUnlock()
 
 	partsMetadata, errs := readAllXLMetadata(xl.storageDisks, bucket, object)
 	if err := reduceErrs(errs, nil); err != nil {
