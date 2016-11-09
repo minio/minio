@@ -22,7 +22,7 @@ main() {
     for path in "${paths[@]}"; do
         minio_path="$path/src/github.com/minio/minio"
         if [ -d "$minio_path" ]; then
-            if [ "$minio_path" == "$PWD" ]; then
+            if [ "$minio_path" -ef "$PWD" ]; then
                exit 0
             fi
         fi
