@@ -1,4 +1,4 @@
-# Minio Environmental varaibles
+# Minio Environmental variables
 
 #### MINIO_ENABLE_FSMETA
 When enabled, minio-FS saves the HTTP headers that start with `X-Amz-Meta-` and `X-Minio-Meta`. These header meta data can be retrieved on HEAD and GET requests on the object.
