@@ -54,7 +54,7 @@ func (s3 *s3PeerAPIHandlers) SetBucketNotificationPeer(args *SetBNPArgs, reply *
 		return errInvalidToken
 	}
 
-	return s3.UpdateBucketNotification(args)
+	return s3.bms.UpdateBucketNotification(args)
 }
 
 // SetBLPArgs - Arguments collection to SetBucketListenerPeer RPC call
@@ -74,7 +74,7 @@ func (s3 *s3PeerAPIHandlers) SetBucketListenerPeer(args *SetBLPArgs, reply *Gene
 		return errInvalidToken
 	}
 
-	return s3.UpdateBucketListener(args)
+	return s3.bms.UpdateBucketListener(args)
 }
 
 // EventArgs - Arguments collection for Event RPC call
@@ -96,7 +96,7 @@ func (s3 *s3PeerAPIHandlers) Event(args *EventArgs, reply *GenericReply) error {
 		return errInvalidToken
 	}
 
-	return s3.SendEvent(args)
+	return s3.bms.SendEvent(args)
 }
 
 // SetBPPArgs - Arguments collection for SetBucketPolicyPeer RPC call
@@ -117,5 +117,5 @@ func (s3 *s3PeerAPIHandlers) SetBucketPolicyPeer(args *SetBPPArgs, reply *Generi
 		return errInvalidToken
 	}
 
-	return s3.UpdateBucketPolicy(args)
+	return s3.bms.UpdateBucketPolicy(args)
 }
