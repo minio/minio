@@ -27,7 +27,7 @@ const (
 )
 
 type s3PeerAPIHandlers struct {
-	*localBMS
+	bms BucketMetaState
 }
 
 func registerS3PeerRPCRouter(mux *router.Router) error {
