@@ -137,7 +137,7 @@ func prepForInitXL(firstDisk bool, sErrs []error, diskCount int) InitActions {
 		return WaitForConfig
 	}
 
-	quorum := diskCount/2 + 1
+	quorum := diskCount / 2
 	disksOffline := errMap[errDiskNotFound]
 	disksFormatted := errMap[nil]
 	disksUnformatted := errMap[errUnformattedDisk]
@@ -178,8 +178,11 @@ func prepForInitXL(firstDisk bool, sErrs []error, diskCount int) InitActions {
 		if disksFormatted+disksOffline == diskCount {
 			return InitObjectLayer
 		}
-		// Some of the formatted disks are possibly corrupted or unformatted, heal them.
-		return WaitForHeal
+		// We need write quorum for heal.
+		if disksFormatted >= quorum+1 {
+			// Some of the formatted disks are possibly corrupted or unformatted, heal them.
+			return WaitForHeal
+		}
 	} // Exhausted all our checks, un-handled errors perhaps we Abort.
 	return WaitForQuorum
 }
@@ -241,7 +244,7 @@ func retryFormattingDisks(firstDisk bool, endpoints []*url.URL, storageDisks []S
 				case WaitForQuorum:
 					console.Printf(
 						"Initializing data volume. Waiting for minimum %d servers to come online.\n",
-						len(storageDisks)/2+1,
+						len(storageDisks)/2,
 					)
 				case WaitForConfig:
 					// Print configuration errors.
