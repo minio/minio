@@ -271,7 +271,15 @@ func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs,
 		return &json2.Error{Message: errAuthentication.Error()}
 	}
 	if err := objectAPI.DeleteObject(args.BucketName, args.ObjectName); err != nil {
-		return &json2.Error{Message: err.Error()}
+		objErr := errorCause(err)
+		switch objErr.(type) {
+		case ObjectNotFound:
+			// Ignore object not found error.
+			reply.UIVersion = miniobrowser.UIVersion
+			return nil
+		default:
+			return &json2.Error{Message: err.Error()}
+		}
 	}
 
 	// Notify object deleted event.
