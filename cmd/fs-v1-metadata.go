@@ -18,10 +18,8 @@ package cmd
 
 import (
 	"encoding/json"
-	"os"
 	"path"
 	"sort"
-	"strings"
 )
 
 const (
@@ -163,33 +161,4 @@ func isPartsSame(uploadedParts []objectPartInfo, completeParts []completePart) b
 		}
 	}
 	return true
-}
-
-var extendedHeaders = []string{
-	"X-Amz-Meta-",
-	"X-Minio-Meta-",
-	// Add new extended headers.
-}
-
-// isExtendedHeader validates if input string matches extended headers.
-func isExtendedHeader(header string) bool {
-	for _, extendedHeader := range extendedHeaders {
-		if strings.HasPrefix(header, extendedHeader) {
-			return true
-		}
-	}
-	return false
-}
-
-// Return true if extended HTTP headers are set, false otherwise.
-func hasExtendedHeader(metadata map[string]string) bool {
-	if os.Getenv("MINIO_ENABLE_FSMETA") == "1" {
-		return true
-	}
-	for k := range metadata {
-		if isExtendedHeader(k) {
-			return true
-		}
-	}
-	return false
 }

@@ -66,7 +66,7 @@ func prepareFS() (ObjectLayer, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	obj, _, err := initObjectLayer(endpoints, nil)
+	obj, _, err := initObjectLayer(endpoints)
 	if err != nil {
 		removeRoots(fsDirs)
 		return nil, "", err
@@ -84,7 +84,7 @@ func prepareXL() (ObjectLayer, []string, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	obj, _, err := initObjectLayer(endpoints, nil)
+	obj, _, err := initObjectLayer(endpoints)
 	if err != nil {
 		removeRoots(fsDirs)
 		return nil, nil, err
@@ -189,7 +189,7 @@ func UnstartedTestServer(t TestErrHandler, instanceType string) TestServer {
 	testServer.AccessKey = credentials.AccessKeyID
 	testServer.SecretKey = credentials.SecretAccessKey
 
-	objLayer, storageDisks, err := initObjectLayer(testServer.Disks, nil)
+	objLayer, storageDisks, err := initObjectLayer(testServer.Disks)
 	if err != nil {
 		t.Fatalf("Failed obtaining Temp Backend: <ERROR> %s", err)
 	}
@@ -385,7 +385,7 @@ func StartTestPeersRPCServer(t TestErrHandler, instanceType string) TestServer {
 	testRPCServer.SecretKey = credentials.SecretAccessKey
 
 	// create temporary backend for the test server.
-	objLayer, storageDisks, err := initObjectLayer(endpoints, nil)
+	objLayer, storageDisks, err := initObjectLayer(endpoints)
 	if err != nil {
 		t.Fatalf("Failed obtaining Temp Backend: <ERROR> %s", err)
 	}
@@ -459,7 +459,7 @@ func StartTestControlRPCServer(t TestErrHandler, instanceType string) TestServer
 	testRPCServer.SecretKey = credentials.SecretAccessKey
 
 	// create temporary backend for the test server.
-	objLayer, storageDisks, err := initObjectLayer(endpoints, nil)
+	objLayer, storageDisks, err := initObjectLayer(endpoints)
 	if err != nil {
 		t.Fatalf("Failed obtaining Temp Backend: <ERROR> %s", err)
 	}
@@ -1595,8 +1595,8 @@ func getRandomDisks(N int) ([]string, error) {
 }
 
 // initObjectLayer - Instantiates object layer and returns it.
-func initObjectLayer(endpoints, ignoredEndpoints []*url.URL) (ObjectLayer, []StorageAPI, error) {
-	storageDisks, err := initStorageDisks(endpoints, ignoredEndpoints)
+func initObjectLayer(endpoints []*url.URL) (ObjectLayer, []StorageAPI, error) {
+	storageDisks, err := initStorageDisks(endpoints)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1677,7 +1677,7 @@ func prepareXLStorageDisks(t *testing.T) ([]StorageAPI, []string) {
 		t.Fatal("Unexpected error: ", err)
 	}
 
-	_, storageDisks, err := initObjectLayer(endpoints, nil)
+	_, storageDisks, err := initObjectLayer(endpoints)
 	if err != nil {
 		removeRoots(fsDirs)
 		t.Fatal("Unable to initialize storage disks", err)
@@ -1972,7 +1972,7 @@ func ExecObjectLayerStaleFilesTest(t *testing.T, objTest objTestStaleFilesType) 
 	if err != nil {
 		t.Fatalf("Initialization of disks for XL setup: %s", err)
 	}
-	objLayer, _, err := initObjectLayer(endpoints, nil)
+	objLayer, _, err := initObjectLayer(endpoints)
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for XL setup: %s", err)
 	}

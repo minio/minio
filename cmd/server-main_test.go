@@ -258,7 +258,7 @@ func TestCheckServerSyntax(t *testing.T) {
 			t.Fatalf("Test %d : Unexpected error %s", i+1, err)
 		}
 		checkEndpointsSyntax(endpoints, disks)
-		_, err = initStorageDisks(endpoints, nil)
+		_, err = initStorageDisks(endpoints)
 		if err != nil {
 			t.Errorf("Test %d : disk init failed : %s", i+1, err)
 		}
@@ -336,9 +336,6 @@ func TestInitServerConfig(t *testing.T) {
 		envVar string
 		val    string
 	}{
-		{"MINIO_MAXCONN", "10"},
-		{"MINIO_CACHE_SIZE", "42MB"},
-		{"MINIO_CACHE_EXPIRY", "2h45m"},
 		{"MINIO_ACCESS_KEY", "abcd1"},
 		{"MINIO_SECRET_KEY", "abcd12345"},
 	}

@@ -45,7 +45,7 @@ func TestNewFS(t *testing.T) {
 		t.Fatal("Uexpected error: ", err)
 	}
 
-	fsStorageDisks, err := initStorageDisks(endpoints, nil)
+	fsStorageDisks, err := initStorageDisks(endpoints)
 	if err != nil {
 		t.Fatal("Uexpected error: ", err)
 	}
@@ -55,7 +55,7 @@ func TestNewFS(t *testing.T) {
 		t.Fatal("Uexpected error: ", err)
 	}
 
-	xlStorageDisks, err := initStorageDisks(endpoints, nil)
+	xlStorageDisks, err := initStorageDisks(endpoints)
 	if err != nil {
 		t.Fatal("Uexpected error: ", err)
 	}
@@ -96,17 +96,22 @@ func TestNewFS(t *testing.T) {
 	}
 }
 
-// TestFSShutdown - initialize a new FS object layer then calls Shutdown
-// to check returned results
+// TestFSShutdown - initialize a new FS object layer then calls
+// Shutdown to check returned results
 func TestFSShutdown(t *testing.T) {
+	rootPath, err := newTestConfig("us-east-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer removeAll(rootPath)
 
+	bucketName := "testbucket"
+	objectName := "object"
 	// Create and return an fsObject with its path in the disk
 	prepareTest := func() (fsObjects, string) {
 		disk := filepath.Join(os.TempDir(), "minio-"+nextSuffix())
 		obj := initFSObjects(disk, t)
 		fs := obj.(fsObjects)
-		bucketName := "testbucket"
-		objectName := "object"
 		objectContent := "12345"
 		obj.MakeBucket(bucketName)
 		sha256sum := ""
@@ -124,6 +129,7 @@ func TestFSShutdown(t *testing.T) {
 	// Test Shutdown with faulty disk
 	for i := 1; i <= 5; i++ {
 		fs, disk := prepareTest()
+		fs.DeleteObject(bucketName, objectName)
 		fsStorage := fs.storage.(*posix)
 		fs.storage = newNaughtyDisk(fsStorage, map[int]error{i: errFaultyDisk}, nil)
 		if err := fs.Shutdown(); errorCause(err) != errFaultyDisk {

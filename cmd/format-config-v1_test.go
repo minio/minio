@@ -280,7 +280,7 @@ func TestFormatXLHealFreshDisks(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Create an instance of xl backend.
-	obj, _, err := initObjectLayer(endpoints, nil)
+	obj, _, err := initObjectLayer(endpoints)
 	if err != nil {
 		t.Error(err)
 	}
@@ -316,7 +316,7 @@ func TestFormatXLHealFreshDisksErrorExpected(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Create an instance of xl backend.
-	obj, _, err := initObjectLayer(endpoints, nil)
+	obj, _, err := initObjectLayer(endpoints)
 	if err != nil {
 		t.Error(err)
 	}
@@ -605,7 +605,7 @@ func TestInitFormatXLErrors(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Create an instance of xl backend.
-	obj, _, err := initObjectLayer(endpoints, nil)
+	obj, _, err := initObjectLayer(endpoints)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -711,7 +711,7 @@ func TestLoadFormatXLErrs(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Create an instance of xl backend.
-	obj, _, err := initObjectLayer(endpoints, nil)
+	obj, _, err := initObjectLayer(endpoints)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -741,7 +741,7 @@ func TestLoadFormatXLErrs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	obj, _, err = initObjectLayer(endpoints, nil)
+	obj, _, err = initObjectLayer(endpoints)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -769,7 +769,7 @@ func TestLoadFormatXLErrs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	obj, _, err = initObjectLayer(endpoints, nil)
+	obj, _, err = initObjectLayer(endpoints)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -795,7 +795,7 @@ func TestLoadFormatXLErrs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	obj, _, err = initObjectLayer(endpoints, nil)
+	obj, _, err = initObjectLayer(endpoints)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -824,7 +824,7 @@ func TestHealFormatXLCorruptedDisksErrs(t *testing.T) {
 	}
 
 	// Everything is fine, should return nil
-	obj, _, err := initObjectLayer(endpoints, nil)
+	obj, _, err := initObjectLayer(endpoints)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -846,7 +846,7 @@ func TestHealFormatXLCorruptedDisksErrs(t *testing.T) {
 	}
 
 	// Disks 0..15 are nil
-	obj, _, err = initObjectLayer(endpoints, nil)
+	obj, _, err = initObjectLayer(endpoints)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -870,7 +870,7 @@ func TestHealFormatXLCorruptedDisksErrs(t *testing.T) {
 	}
 
 	// One disk returns Faulty Disk
-	obj, _, err = initObjectLayer(endpoints, nil)
+	obj, _, err = initObjectLayer(endpoints)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -896,7 +896,7 @@ func TestHealFormatXLCorruptedDisksErrs(t *testing.T) {
 	}
 
 	// One disk is not found, heal corrupted disks should return nil
-	obj, _, err = initObjectLayer(endpoints, nil)
+	obj, _, err = initObjectLayer(endpoints)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -918,7 +918,7 @@ func TestHealFormatXLCorruptedDisksErrs(t *testing.T) {
 	}
 
 	// Remove format.json of all disks
-	obj, _, err = initObjectLayer(endpoints, nil)
+	obj, _, err = initObjectLayer(endpoints)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -944,7 +944,7 @@ func TestHealFormatXLCorruptedDisksErrs(t *testing.T) {
 	}
 
 	// Corrupted format json in one disk
-	obj, _, err = initObjectLayer(endpoints, nil)
+	obj, _, err = initObjectLayer(endpoints)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -974,7 +974,7 @@ func TestHealFormatXLFreshDisksErrs(t *testing.T) {
 	}
 
 	// Everything is fine, should return nil
-	obj, _, err := initObjectLayer(endpoints, nil)
+	obj, _, err := initObjectLayer(endpoints)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -995,7 +995,7 @@ func TestHealFormatXLFreshDisksErrs(t *testing.T) {
 	}
 
 	// Disks 0..15 are nil
-	obj, _, err = initObjectLayer(endpoints, nil)
+	obj, _, err = initObjectLayer(endpoints)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1019,7 +1019,7 @@ func TestHealFormatXLFreshDisksErrs(t *testing.T) {
 	}
 
 	// One disk returns Faulty Disk
-	obj, _, err = initObjectLayer(endpoints, nil)
+	obj, _, err = initObjectLayer(endpoints)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1045,7 +1045,7 @@ func TestHealFormatXLFreshDisksErrs(t *testing.T) {
 	}
 
 	// One disk is not found, heal corrupted disks should return nil
-	obj, _, err = initObjectLayer(endpoints, nil)
+	obj, _, err = initObjectLayer(endpoints)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1067,7 +1067,7 @@ func TestHealFormatXLFreshDisksErrs(t *testing.T) {
 	}
 
 	// Remove format.json of all disks
-	obj, _, err = initObjectLayer(endpoints, nil)
+	obj, _, err = initObjectLayer(endpoints)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1093,7 +1093,7 @@ func TestHealFormatXLFreshDisksErrs(t *testing.T) {
 	}
 
 	// Remove format.json of all disks
-	obj, _, err = initObjectLayer(endpoints, nil)
+	obj, _, err = initObjectLayer(endpoints)
 	if err != nil {
 		t.Fatal(err)
 	}

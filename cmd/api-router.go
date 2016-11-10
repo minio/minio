@@ -16,10 +16,7 @@
 
 package cmd
 
-import (
-	router "github.com/gorilla/mux"
-	"github.com/urfave/negroni"
-)
+import router "github.com/gorilla/mux"
 
 // objectAPIHandler implements and provides http handlers for S3 API.
 type objectAPIHandlers struct {
@@ -34,7 +31,7 @@ func registerAPIRouter(mux *router.Router) {
 	}
 
 	// API Router
-	apiRouter := mux.NewRoute().PathPrefix("").Subrouter()
+	apiRouter := mux.NewRoute().PathPrefix("/").Subrouter()
 
 	// Bucket router
 	bucket := apiRouter.PathPrefix("/{bucket}").Subrouter()
@@ -99,12 +96,4 @@ func registerAPIRouter(mux *router.Router) {
 
 	// ListBuckets
 	apiRouter.Methods("GET").HandlerFunc(api.ListBucketsHandler)
-
-	mux.PathPrefix("/").Handler(negroni.New(
-		// Validates all incoming requests to have a valid date header.
-		negroni.Wrap(timeValidityHandler{}),
-		// Route requests
-		negroni.Wrap(apiRouter),
-	))
-
 }

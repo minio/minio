@@ -23,7 +23,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 
 	"encoding/json"
@@ -171,16 +170,14 @@ func urlPathSplit(urlPath string) (bucketName, prefixName string) {
 func startProfiler(profiler string) interface {
 	Stop()
 } {
-	// Set ``MINIO_PROFILE_DIR`` to the directory where profiling information should be persisted
-	profileDir := os.Getenv("MINIO_PROFILE_DIR")
-	// Enable profiler if ``MINIO_PROFILER`` is set. Supported options are [cpu, mem, block].
+	// Enable profiler if ``_MINIO_PROFILER`` is set. Supported options are [cpu, mem, block].
 	switch profiler {
 	case "cpu":
-		return profile.Start(profile.CPUProfile, profile.NoShutdownHook, profile.ProfilePath(profileDir))
+		return profile.Start(profile.CPUProfile, profile.NoShutdownHook)
 	case "mem":
-		return profile.Start(profile.MemProfile, profile.NoShutdownHook, profile.ProfilePath(profileDir))
+		return profile.Start(profile.MemProfile, profile.NoShutdownHook)
 	case "block":
-		return profile.Start(profile.BlockProfile, profile.NoShutdownHook, profile.ProfilePath(profileDir))
+		return profile.Start(profile.BlockProfile, profile.NoShutdownHook)
 	default:
 		return nil
 	}

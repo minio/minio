@@ -475,7 +475,7 @@ func TestLockServers(t *testing.T) {
 			},
 			totalLockServers: 1,
 		},
-		// Test - 2 two servers possible, 1 ignored.
+		// Test - 2 two servers possible.
 		{
 			isDistXL: true,
 			srvCmdConfig: serverCmdConfig{
@@ -496,13 +496,8 @@ func TestLockServers(t *testing.T) {
 					Host:   "1.1.2.2:9000",
 					Path:   "/mnt/disk4",
 				}},
-				ignoredEndpoints: []*url.URL{{
-					Scheme: "http",
-					Host:   "localhost:9000",
-					Path:   "/mnt/disk2",
-				}},
 			},
-			totalLockServers: 1,
+			totalLockServers: 2,
 		},
 	}
 

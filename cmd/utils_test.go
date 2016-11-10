@@ -220,6 +220,13 @@ func TestMaxPartID(t *testing.T) {
 	}
 }
 
+// Add tests for starting and stopping different profilers.
+func TestStartProfiler(t *testing.T) {
+	if startProfiler("") != nil {
+		t.Fatal("Expected nil, but non-nil value returned for invalid profiler.")
+	}
+}
+
 // Tests fetch local address.
 func TestLocalAddress(t *testing.T) {
 	if runtime.GOOS == "windows" {
