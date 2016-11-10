@@ -2503,5 +2503,12 @@ func (s *TestSuiteCommon) TestObjectMultipart(c *C) {
 	c.Assert(err, IsNil)
 	// verify whether complete multipart was successful.
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
-
+	var parts []completePart
+	for _, part := range completeUploads.Parts {
+		part.ETag = strings.Trim(part.ETag, "\"")
+		parts = append(parts, part)
+	}
+	etag, err := getCompleteMultipartMD5(parts)
+	c.Assert(err, IsNil)
+	c.Assert(strings.Trim(response.Header.Get("Etag"), "\""), Equals, etag)
 }
