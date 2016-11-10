@@ -16,10 +16,7 @@
 
 package cmd
 
-import (
-	"encoding/json"
-	"net/rpc"
-)
+import "encoding/json"
 
 // BucketMetaState - Interface to update bucket metadata in-memory
 // state.
@@ -107,46 +104,26 @@ type remoteBMS struct {
 // change to remote peer via RPC call.
 func (rc *remoteBMS) UpdateBucketNotification(args *SetBNPArgs) error {
 	reply := GenericReply{}
-	err := rc.Call("S3.SetBucketNotificationPeer", args, &reply)
-	// Check for network error and retry once.
-	if err != nil && err.Error() == rpc.ErrShutdown.Error() {
-		err = rc.Call("S3.SetBucketNotificationPeer", args, &reply)
-	}
-	return err
+	return rc.Call("S3.SetBucketNotificationPeer", args, &reply)
 }
 
 // remoteBMS.UpdateBucketListener - sends bucket listener change to
 // remote peer via RPC call.
 func (rc *remoteBMS) UpdateBucketListener(args *SetBLPArgs) error {
 	reply := GenericReply{}
-	err := rc.Call("S3.SetBucketListenerPeer", args, &reply)
-	// Check for network error and retry once.
-	if err != nil && err.Error() == rpc.ErrShutdown.Error() {
-		err = rc.Call("S3.SetBucketListenerPeer", args, &reply)
-	}
-	return err
+	return rc.Call("S3.SetBucketListenerPeer", args, &reply)
 }
 
 // remoteBMS.UpdateBucketPolicy - sends bucket policy change to remote
 // peer via RPC call.
 func (rc *remoteBMS) UpdateBucketPolicy(args *SetBPPArgs) error {
 	reply := GenericReply{}
-	err := rc.Call("S3.SetBucketPolicyPeer", args, &reply)
-	// Check for network error and retry once.
-	if err != nil && err.Error() == rpc.ErrShutdown.Error() {
-		err = rc.Call("S3.SetBucketPolicyPeer", args, &reply)
-	}
-	return err
+	return rc.Call("S3.SetBucketPolicyPeer", args, &reply)
 }
 
 // remoteBMS.SendEvent - sends event for bucket listener to remote
 // peer via RPC call.
 func (rc *remoteBMS) SendEvent(args *EventArgs) error {
 	reply := GenericReply{}
-	err := rc.Call("S3.Event", args, &reply)
-	// Check for network error and retry once.
-	if err != nil && err.Error() == rpc.ErrShutdown.Error() {
-		err = rc.Call("S3.Event", args, &reply)
-	}
-	return err
+	return rc.Call("S3.Event", args, &reply)
 }

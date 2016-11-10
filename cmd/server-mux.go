@@ -28,7 +28,7 @@ import (
 	"time"
 )
 
-// The value choosen below is longest word choosen
+// The value chosen below is longest word chosen
 // from all the http verbs comprising of
 // "PRI", "OPTIONS", "GET", "HEAD", "POST",
 // "PUT", "DELETE", "TRACE", "CONNECT".

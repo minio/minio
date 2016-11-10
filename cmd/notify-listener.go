@@ -19,7 +19,6 @@ package cmd
 import (
 	"fmt"
 	"io/ioutil"
-	"net/rpc"
 
 	"github.com/Sirupsen/logrus"
 )
@@ -71,15 +70,7 @@ func (lc listenerConn) Fire(entry *logrus.Entry) error {
 
 	// Send Event RPC call and return error
 	arg := EventArgs{Event: notificationEvent, Arn: lc.ListenerARN}
-	err := lc.BMSClient.SendEvent(&arg)
-
-	// In case connection is shutdown, retry once.
-	if err != nil {
-		if err.Error() == rpc.ErrShutdown.Error() {
-			err = lc.BMSClient.SendEvent(&arg)
-		}
-	}
-	return err
+	return lc.BMSClient.SendEvent(&arg)
 }
 
 func (lc listenerConn) Levels() []logrus.Level {

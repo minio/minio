@@ -246,7 +246,7 @@ func genericFormatCheck(formatConfigs []*formatConfigV1, sErrs []error) (err err
 	}
 
 	// Calculate read quorum.
-	readQuorum := len(formatConfigs)/2 + 1
+	readQuorum := len(formatConfigs) / 2
 
 	// Validate the err count under tolerant limit.
 	if errCount > len(formatConfigs)-readQuorum {

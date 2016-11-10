@@ -142,17 +142,26 @@ func (rpcClient *RPCClient) Call(serviceMethod string, args interface{}, reply i
 	// rpc.Client for a subsequent reconnect.
 	err := rpcLocalStack.Call(serviceMethod, args, reply)
 	if err != nil {
-		if err.Error() == rpc.ErrShutdown.Error() {
-			// Reset rpcClient.rpc to nil to trigger a reconnect in future
-			// and close the underlying connection.
-			rpcClient.clearRPCClient()
+		// Any errors other than rpc.ErrShutdown just return quickly.
+		if err != rpc.ErrShutdown {
+			return err
+		} // else rpc.ErrShutdown returned by rpc.Call
 
-			// Close the underlying connection.
-			rpcLocalStack.Close()
+		// Reset the underlying rpc connection before
+		// moving to reconnect.
+		rpcClient.clearRPCClient()
 
-			// Set rpc error as rpc.ErrShutdown type.
-			err = rpc.ErrShutdown
+		// Close the underlying connection before reconnect.
+		rpcLocalStack.Close()
+
+		// Try once more to re-connect.
+		rpcLocalStack, err = rpcClient.dialRPCClient()
+		if err != nil {
+			return err
 		}
+
+		// Attempt the rpc.Call once again, upon any error now just give up.
+		err = rpcLocalStack.Call(serviceMethod, args, reply)
 	}
 	return err
 }

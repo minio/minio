@@ -107,7 +107,7 @@ func dial(addr string) error {
 	return err
 }
 
-// Tests initalizing listeners.
+// Tests initializing listeners.
 func TestInitListeners(t *testing.T) {
 	testCases := []struct {
 		serverAddr string
