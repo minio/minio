@@ -877,7 +877,6 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	}
 
 	md5Sum, err = objectAPI.CompleteMultipartUpload(bucket, object, uploadID, completeParts)
-
 	if err != nil {
 		err = errorCause(err)
 		errorIf(err, "Unable to complete multipart upload.")
@@ -902,6 +901,9 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		writeErrorResponseNoHeader(w, r, ErrInternalError, r.URL.Path)
 		return
 	}
+
+	// Set etag.
+	w.Header().Set("ETag", "\""+md5Sum+"\"")
 
 	// Write success response.
 	w.Write(encodedSuccessResponse)
