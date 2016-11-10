@@ -19,6 +19,7 @@ package cmd
 import (
 	"fmt"
 	"net/rpc"
+	"sync"
 	"time"
 
 	jwtgo "github.com/dgrijalva/jwt-go"
@@ -96,6 +97,7 @@ type authConfig struct {
 
 // AuthRPCClient is a wrapper type for RPCClient which provides JWT based authentication across reconnects.
 type AuthRPCClient struct {
+	mu            sync.Mutex
 	config        *authConfig
 	rpc           *RPCClient // reconnect'able rpc client built on top of net/rpc Client
 	isLoggedIn    bool       // Indicates if the auth client has been logged in and token is valid.
@@ -117,13 +119,17 @@ func newAuthClient(cfg *authConfig) *AuthRPCClient {
 
 // Close - closes underlying rpc connection.
 func (authClient *AuthRPCClient) Close() error {
+	authClient.mu.Lock()
 	// reset token on closing a connection
 	authClient.isLoggedIn = false
+	authClient.mu.Unlock()
 	return authClient.rpc.Close()
 }
 
 // Login - a jwt based authentication is performed with rpc server.
 func (authClient *AuthRPCClient) Login() error {
+	authClient.mu.Lock()
+	defer authClient.mu.Unlock()
 	// Return if already logged in.
 	if authClient.isLoggedIn {
 		return nil
@@ -168,7 +174,9 @@ func (authClient *AuthRPCClient) Call(serviceMethod string, args interface {
 
 		// Invalidate token, and mark it for re-login on subsequent reconnect.
 		if err != nil && err == rpc.ErrShutdown {
+			authClient.mu.Lock()
 			authClient.isLoggedIn = false
+			authClient.mu.Unlock()
 		}
 	}
 	return err
