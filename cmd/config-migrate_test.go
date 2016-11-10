@@ -31,7 +31,7 @@ func TestServerConfigMigrateV1(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
-	// remove the root folder after the test ends.
+	// remove the root directory after the test ends.
 	defer removeAll(rootPath)
 
 	setGlobalConfigPath(rootPath)
@@ -65,7 +65,7 @@ func TestServerConfigMigrateInexistentConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
-	// remove the root folder after the test ends.
+	// remove the root directory after the test ends.
 	defer removeAll(rootPath)
 
 	setGlobalConfigPath(rootPath)
@@ -105,7 +105,7 @@ func TestServerConfigMigrateV2toV9(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
-	// remove the root folder after the test ends.
+	// remove the root directory after the test ends.
 	defer removeAll(rootPath)
 
 	setGlobalConfigPath(rootPath)
@@ -164,7 +164,7 @@ func TestServerConfigMigrateFaultyConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
-	// remove the root folder after the test ends.
+	// remove the root directory after the test ends.
 	defer removeAll(rootPath)
 
 	setGlobalConfigPath(rootPath)

@@ -3,7 +3,6 @@
 ![minio_MIRROR](https://github.com/minio/minio/blob/master/docs/screenshots/miniomirror.jpeg?raw=true)
 
 
-
 In this document we will illustrate how to set up replication between two Minio servers, `minio1` and `minio2` running on ``192.168.1.11`` and ``192.168.1.12`` respectively. We will mirror the data directory on `minio1` to the bucket on `minio2`.
 
 
@@ -24,6 +23,7 @@ Endpoint:  http://127.0.0.1:9000  http://192.168.1.11:9000
 AccessKey: MURIVYBYNPTYE7O8I779 
 SecretKey: lVbZmz4CvGkBl7JKw5icuL7RCcSvpBJTkAJTFQwz
 Region:    us-east-1
+...
 ```
 **mc alias**
 
@@ -55,6 +55,7 @@ Endpoint:  http://127.0.0.1:9000  http://192.168.1.12:9000
 AccessKey: YRDRWWQLEWS9OBJ31GZ2
 SecretKey: y2sSWzx5ytwvkELcxOuSaQ8n3doNqoIilRpb5Kjj
 Region:    us-east-1
+...
 ```
 
 ```sh

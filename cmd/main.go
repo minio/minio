@@ -38,7 +38,7 @@ var (
 		cli.StringFlag{
 			Name:  "config-dir, C",
 			Value: mustGetConfigPath(),
-			Usage: "Path to configuration folder.",
+			Usage: "Path to configuration directory.",
 		},
 		cli.BoolFlag{
 			Name:  "quiet",
@@ -146,7 +146,7 @@ func checkMainSyntax(c *cli.Context) {
 		console.Fatalf("Unable to obtain user's home directory. \nError: %s\n", err)
 	}
 	if configPath == "" {
-		console.Fatalln("Config folder cannot be empty, please specify --config-dir <foldername>.")
+		console.Fatalln("Config directory cannot be empty, please specify --config-dir <directoryname>.")
 	}
 }
 
@@ -158,7 +158,7 @@ func Main() {
 		if configDir == "" {
 			fatalIf(errors.New("Config directory is empty"), "Unable to get config file.")
 		}
-		// Sets new config folder.
+		// Sets new config directory.
 		setGlobalConfigPath(configDir)
 
 		// Valid input arguments to main.

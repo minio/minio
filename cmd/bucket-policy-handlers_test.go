@@ -61,7 +61,7 @@ func TestBucketPolicyResourceMatch(t *testing.T) {
 		// Policy with resource ending with bucket/oo* should allow access to bucket/ootput.txt.
 		{generateResource("minio-bucket", "ootput.txt"), generateStatement(fmt.Sprintf("%s%s", AWSResourcePrefix, "minio-bucket"+"/oo*")), true},
 		// Test case - 7.
-		// Policy with resource ending with bucket/oo* allows access to all subfolders starting with "oo" inside given bucket.
+		// Policy with resource ending with bucket/oo* allows access to all sub-dirs starting with "oo" inside given bucket.
 		{generateResource("minio-bucket", "oop-bucket/my-file"), generateStatement(fmt.Sprintf("%s%s", AWSResourcePrefix, "minio-bucket"+"/oo*")), true},
 		// Test case - 8.
 		{generateResource("minio-bucket", "Asia/India/1.pjg"), generateStatement(fmt.Sprintf("%s%s", AWSResourcePrefix, "minio-bucket"+"/Asia/Japan/*")), false},

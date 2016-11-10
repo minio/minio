@@ -164,7 +164,7 @@ func (fs fsObjects) ListBuckets() ([]BucketInfo, error) {
 			Created: vol.Created,
 		})
 	}
-	// Print a user friendly message if we indeed skipped certain folders which are
+	// Print a user friendly message if we indeed skipped certain directories which are
 	// incompatible with S3's bucket name restrictions.
 	if len(invalidBucketNames) > 0 {
 		errorIf(errors.New("One or more invalid bucket names found"), "Skipping %s", invalidBucketNames)

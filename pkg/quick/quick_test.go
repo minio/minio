@@ -53,9 +53,9 @@ func (s *MySuite) TestCheckData(c *C) {
 	c.Assert(err, Not(IsNil))
 
 	type myStructBadNoVersion struct {
-		User     string
-		Password string
-		Folders  []string
+		User        string
+		Password    string
+		Directories []string
 	}
 	saveMeBadNoVersion := myStructBadNoVersion{"guest", "nopassword", []string{"Work", "Documents", "Music"}}
 	err = quick.CheckData(&saveMeBadNoVersion)
@@ -71,10 +71,10 @@ func (s *MySuite) TestCheckData(c *C) {
 	c.Assert(err, Not(IsNil))
 
 	type myStructGood struct {
-		Version  string
-		User     string
-		Password string
-		Folders  []string
+		Version     string
+		User        string
+		Password    string
+		Directories []string
 	}
 
 	saveMeGood := myStructGood{"1", "guest", "nopassword", []string{"Work", "Documents", "Music"}}
@@ -84,10 +84,10 @@ func (s *MySuite) TestCheckData(c *C) {
 
 func (s *MySuite) TestLoadFile(c *C) {
 	type myStruct struct {
-		Version  string
-		User     string
-		Password string
-		Folders  []string
+		Version     string
+		User        string
+		Password    string
+		Directories []string
 	}
 	saveMe := myStruct{}
 	_, err := quick.Load("test.json", &saveMe)
@@ -125,10 +125,10 @@ func (s *MySuite) TestLoadFile(c *C) {
 func (s *MySuite) TestVersion(c *C) {
 	defer os.RemoveAll("test.json")
 	type myStruct struct {
-		Version  string
-		User     string
-		Password string
-		Folders  []string
+		Version     string
+		User        string
+		Password    string
+		Directories []string
 	}
 	saveMe := myStruct{"1", "guest", "nopassword", []string{"Work", "Documents", "Music"}}
 	config, err := quick.New(&saveMe)
@@ -158,10 +158,10 @@ func (s *MySuite) TestVersion(c *C) {
 func (s *MySuite) TestSaveLoad(c *C) {
 	defer os.RemoveAll("test.json")
 	type myStruct struct {
-		Version  string
-		User     string
-		Password string
-		Folders  []string
+		Version     string
+		User        string
+		Password    string
+		Directories []string
 	}
 	saveMe := myStruct{"1", "guest", "nopassword", []string{"Work", "Documents", "Music"}}
 	config, err := quick.New(&saveMe)
@@ -188,10 +188,10 @@ func (s *MySuite) TestSaveBackup(c *C) {
 	defer os.RemoveAll("test.json")
 	defer os.RemoveAll("test.json.old")
 	type myStruct struct {
-		Version  string
-		User     string
-		Password string
-		Folders  []string
+		Version     string
+		User        string
+		Password    string
+		Directories []string
 	}
 	saveMe := myStruct{"1", "guest", "nopassword", []string{"Work", "Documents", "Music"}}
 	config, err := quick.New(&saveMe)
@@ -221,10 +221,10 @@ func (s *MySuite) TestSaveBackup(c *C) {
 
 func (s *MySuite) TestDiff(c *C) {
 	type myStruct struct {
-		Version  string
-		User     string
-		Password string
-		Folders  []string
+		Version     string
+		User        string
+		Password    string
+		Directories []string
 	}
 	saveMe := myStruct{"1", "guest", "nopassword", []string{"Work", "Documents", "Music"}}
 	config, err := quick.New(&saveMe)
@@ -234,8 +234,8 @@ func (s *MySuite) TestDiff(c *C) {
 	type myNewStruct struct {
 		Version string
 		// User     string
-		Password string
-		Folders  []string
+		Password    string
+		Directories []string
 	}
 
 	mismatch := myNewStruct{"1", "nopassword", []string{"Work", "documents", "Music"}}
@@ -255,10 +255,10 @@ func (s *MySuite) TestDiff(c *C) {
 
 func (s *MySuite) TestDeepDiff(c *C) {
 	type myStruct struct {
-		Version  string
-		User     string
-		Password string
-		Folders  []string
+		Version     string
+		User        string
+		Password    string
+		Directories []string
 	}
 	saveMe := myStruct{"1", "guest", "nopassword", []string{"Work", "Documents", "Music"}}
 	config, err := quick.New(&saveMe)

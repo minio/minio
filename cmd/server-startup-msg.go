@@ -74,7 +74,7 @@ func printServerCommonMsg(endPoints []string) {
 	console.Println(colorBlue("\nEndpoint: ") + colorBold(fmt.Sprintf(getFormatStr(len(endPointStr), 1), endPointStr)))
 	console.Println(colorBlue("AccessKey: ") + colorBold(fmt.Sprintf("%s ", cred.AccessKeyID)))
 	secretKey := cred.SecretAccessKey
-	if os.Getenv("MINIO_SECURE_CONSOLE") == "0" {
+	if strings.EqualFold(os.Getenv("MINIO_SECURE_CONSOLE"), "no") {
 		secretKey = "*REDACTED*"
 	}
 	console.Println(colorBlue("SecretKey: ") + colorBold(fmt.Sprintf("%s ", secretKey)))

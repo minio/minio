@@ -1341,7 +1341,7 @@ func TestRenameFile(t *testing.T) {
 			expectedErr: errFaultyDisk,
 		},
 		// Test case - 10.
-		// Test case with source being a file and destination being a folder.
+		// Test case with source being a file and destination being a directory.
 		// Either both have to be files or directories.
 		// Expecting to fail with `errFileAccessDenied`.
 		{
