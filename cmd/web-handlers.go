@@ -273,6 +273,19 @@ func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs,
 	if err := objectAPI.DeleteObject(args.BucketName, args.ObjectName); err != nil {
 		return &json2.Error{Message: err.Error()}
 	}
+
+	// Notify object deleted event.
+	eventNotify(eventData{
+		Type:   ObjectRemovedDelete,
+		Bucket: args.BucketName,
+		ObjInfo: ObjectInfo{
+			Name: args.ObjectName,
+		},
+		ReqParams: map[string]string{
+			"sourceIPAddress": r.RemoteAddr,
+		},
+	})
+
 	reply.UIVersion = miniobrowser.UIVersion
 	return nil
 }
