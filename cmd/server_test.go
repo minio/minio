@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"crypto/md5"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/xml"
@@ -64,11 +65,20 @@ var _ = Suite(&TestSuiteCommon{serverType: "XL", signer: signerV4})
 // Starting the Test server with temporary FS backend.
 func (s *TestSuiteCommon) SetUpSuite(c *C) {
 	if s.secure {
-		s.testServer = StartTestTLSServer(c, s.serverType)
+		cert, key, err := generateTLSCertKey("127.0.0.1")
+		c.Assert(err, IsNil)
+
+		s.testServer = StartTestTLSServer(c, s.serverType, cert, key)
+
+		rootCAs := x509.NewCertPool()
+		rootCAs.AppendCertsFromPEM(cert)
+		tlsConfig := &tls.Config{
+			RootCAs: rootCAs,
+		}
+		tlsConfig.BuildNameToCertificate()
+
 		s.transport = &http.Transport{
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: true,
-			},
+			TLSClientConfig: tlsConfig,
 		}
 	} else {
 		s.testServer = StartTestServer(c, s.serverType)

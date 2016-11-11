@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"crypto/x509"
 	"time"
 
 	"github.com/fatih/color"
@@ -33,6 +34,7 @@ const (
 	globalMinioConfigVersion      = "9"
 	globalMinioConfigDir          = ".minio"
 	globalMinioCertsDir           = "certs"
+	globalMinioCertsCADir         = "CAs"
 	globalMinioCertFile           = "public.crt"
 	globalMinioKeyFile            = "private.key"
 	globalMinioConfigFile         = "config.json"
@@ -58,6 +60,9 @@ var (
 	globalMinioHost = ""
 	// Peer communication struct
 	globalS3Peers = s3Peers{}
+
+	// CA root certificates, a nil value means system certs pool will be used
+	globalRootCAs *x509.CertPool
 
 	// Add new variable global values here.
 )

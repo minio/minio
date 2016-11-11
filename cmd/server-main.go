@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"fmt"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
@@ -170,11 +171,33 @@ func finalizeEndpoints(tls bool, apiServer *http.Server) (endPoints []string) {
 	return endPoints
 }
 
+// loadRootCAs fetches CA files provided in minio config and adds them to globalRootCAs
+// Currently under Windows, there is no way to load system + user CAs at the same time
+func loadRootCAs() {
+	caFiles := mustGetCAFiles()
+	if len(caFiles) == 0 {
+		return
+	}
+	// Get system cert pool, and empty cert pool under Windows because it is not supported
+	globalRootCAs = mustGetSystemCertPool()
+	// Load custom root CAs for client requests
+	for _, caFile := range mustGetCAFiles() {
+		caCert, err := ioutil.ReadFile(caFile)
+		if err != nil {
+			fatalIf(err, "Unable to load a CA file")
+		}
+		globalRootCAs.AppendCertsFromPEM(caCert)
+	}
+}
+
 // initServerConfig initialize server config.
 func initServerConfig(c *cli.Context) {
 	// Create certs path.
 	err := createCertsPath()
 	fatalIf(err, "Unable to create \"certs\" directory.")
+
+	// Load user supplied root CAs
+	loadRootCAs()
 
 	// When credentials inherited from the env, server cmd has to save them in the disk
 	if os.Getenv("MINIO_ACCESS_KEY") != "" && os.Getenv("MINIO_SECRET_KEY") != "" {
