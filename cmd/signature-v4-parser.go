@@ -184,11 +184,6 @@ func parsePreSignV4(query url.Values) (preSignValues, APIErrorCode) {
 	if err != ErrNone {
 		return preSignValues{}, err
 	}
-	// `host` is the only header used during the presigned request.
-	// Malformed signed headers has be caught here, otherwise it'll lead to signature mismatch.
-	if preSignV4Values.SignedHeaders[0] != "host" {
-		return preSignValues{}, ErrUnsignedHeaders
-	}
 
 	// Save signature.
 	preSignV4Values.Signature, err = parseSignature("Signature=" + query.Get("X-Amz-Signature"))

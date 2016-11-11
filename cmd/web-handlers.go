@@ -796,7 +796,7 @@ func presignedGet(host, bucket, object string) string {
 	secretKey := cred.SecretAccessKey
 
 	date := time.Now().UTC()
-	dateStr := date.Format("20060102T150405Z")
+	dateStr := date.Format(iso8601Format)
 	credential := fmt.Sprintf("%s/%s", accessKey, getScope(date, region))
 
 	query := strings.Join([]string{

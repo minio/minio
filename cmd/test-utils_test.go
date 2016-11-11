@@ -844,6 +844,45 @@ func queryEncode(v url.Values) string {
 	return buf.String()
 }
 
+// preSignV4 presign the request, in accordance with
+// http://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html.
+func preSignV4(req *http.Request, accessKeyID, secretAccessKey string, expires int64) error {
+	// Presign is not needed for anonymous credentials.
+	if accessKeyID == "" || secretAccessKey == "" {
+		return errors.New("Presign cannot be generated without access and secret keys")
+	}
+
+	region := serverConfig.GetRegion()
+	date := time.Now().UTC()
+	credential := fmt.Sprintf("%s/%s", accessKeyID, getScope(date, region))
+
+	// Set URL query.
+	query := req.URL.Query()
+	query.Set("X-Amz-Algorithm", signV4Algorithm)
+	query.Set("X-Amz-Date", date.Format(iso8601Format))
+	query.Set("X-Amz-Expires", strconv.FormatInt(expires, 10))
+	query.Set("X-Amz-SignedHeaders", "host")
+	query.Set("X-Amz-Credential", credential)
+	query.Set("X-Amz-Content-Sha256", unsignedPayload)
+
+	// Headers are empty, since "host" is the only header required to be signed for Presigned URLs.
+	var extractedSignedHeaders http.Header
+
+	queryStr := strings.Replace(query.Encode(), "+", "%20", -1)
+	canonicalRequest := getCanonicalRequest(extractedSignedHeaders, unsignedPayload, queryStr, req.URL.Path, req.Method, req.Host)
+	stringToSign := getStringToSign(canonicalRequest, date, region)
+	signingKey := getSigningKey(secretAccessKey, date, region)
+	signature := getSignature(signingKey, stringToSign)
+
+	req.URL.RawQuery = query.Encode()
+
+	// Add signature header to RawQuery.
+	req.URL.RawQuery += "&X-Amz-Signature=" + signature
+
+	// Construct the final presigned URL.
+	return nil
+}
+
 // preSignV2 - presign the request in following style.
 // https://${S3_BUCKET}.s3.amazonaws.com/${S3_OBJECT}?AWSAccessKeyId=${S3_ACCESS_KEY}&Expires=${TIMESTAMP}&Signature=${SIGNATURE}.
 func preSignV2(req *http.Request, accessKeyID, secretAccessKey string, expires int64) error {

@@ -163,9 +163,8 @@ func isReqAuthenticated(r *http.Request, region string) (s3Error APIErrorCode) {
 	}
 	// Populate back the payload.
 	r.Body = ioutil.NopCloser(bytes.NewReader(payload))
+	// Skips calculating sha256 on the payload on server, if client requested for it.
 	var sha256sum string
-	// Skips calculating sha256 on the payload on server,
-	// if client requested for it.
 	if skipContentSha256Cksum(r) {
 		sha256sum = unsignedPayload
 	} else {

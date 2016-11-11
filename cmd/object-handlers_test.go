@@ -30,7 +30,6 @@ import (
 	"strconv"
 	"sync"
 	"testing"
-	"time"
 )
 
 // Type to capture different modifications to API request to simulate failure cases.
@@ -2111,7 +2110,24 @@ func testAPIPutObjectPartHandlerPreSign(obj ObjectLayer, instanceType, bucketNam
 		t.Fatalf("[%s] - Failed to create an unsigned request to put object part for %s/%s <ERROR> %v",
 			instanceType, bucketName, testObject, err)
 	}
-	err = preSignV2(req, credentials.AccessKeyID, credentials.SecretAccessKey, int64(10*time.Minute))
+	err = preSignV2(req, credentials.AccessKeyID, credentials.SecretAccessKey, int64(10*60*60))
+	if err != nil {
+		t.Fatalf("[%s] - Failed to presign an unsigned request to put object part for %s/%s <ERROR> %v",
+			instanceType, bucketName, testObject, err)
+	}
+	apiRouter.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("Test %d %s expected to succeed but failed with HTTP status code %d", 1, instanceType, rec.Code)
+	}
+
+	rec = httptest.NewRecorder()
+	req, err = newTestRequest("PUT", getPutObjectPartURL("", bucketName, testObject, mpartResp.UploadID, "1"),
+		int64(len("hello")), bytes.NewReader([]byte("hello")))
+	if err != nil {
+		t.Fatalf("[%s] - Failed to create an unsigned request to put object part for %s/%s <ERROR> %v",
+			instanceType, bucketName, testObject, err)
+	}
+	err = preSignV4(req, credentials.AccessKeyID, credentials.SecretAccessKey, int64(10*60*60))
 	if err != nil {
 		t.Fatalf("[%s] - Failed to presign an unsigned request to put object part for %s/%s <ERROR> %v",
 			instanceType, bucketName, testObject, err)
@@ -2582,7 +2598,27 @@ func testAPIListObjectPartsHandlerPreSign(obj ObjectLayer, instanceType, bucketN
 			instanceType, bucketName, mpartResp.UploadID)
 	}
 
-	err = preSignV2(req, credentials.AccessKeyID, credentials.SecretAccessKey, int64(10*time.Minute))
+	err = preSignV2(req, credentials.AccessKeyID, credentials.SecretAccessKey, int64(10*60*60))
+	if err != nil {
+		t.Fatalf("[%s] - Failed to presignV2 an unsigned request to list object parts for bucket %s, uploadId %s",
+			instanceType, bucketName, mpartResp.UploadID)
+	}
+	apiRouter.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("Test %d %s expected to succeed but failed with HTTP status code %d",
+			1, instanceType, rec.Code)
+	}
+
+	rec = httptest.NewRecorder()
+	req, err = newTestRequest("GET",
+		getListMultipartURLWithParams("", bucketName, testObject, mpartResp.UploadID, "", "", ""),
+		0, nil)
+	if err != nil {
+		t.Fatalf("[%s] - Failed to create an unsigned request to list object parts for bucket %s, uploadId %s",
+			instanceType, bucketName, mpartResp.UploadID)
+	}
+
+	err = preSignV4(req, credentials.AccessKeyID, credentials.SecretAccessKey, int64(10*60*60))
 	if err != nil {
 		t.Fatalf("[%s] - Failed to presignV2 an unsigned request to list object parts for bucket %s, uploadId %s",
 			instanceType, bucketName, mpartResp.UploadID)
