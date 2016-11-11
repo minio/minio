@@ -350,7 +350,7 @@ func (m *ServerMux) ListenAndServe(certFile, keyFile string) (err error) {
 				RawQuery: r.URL.RawQuery,
 				Fragment: r.URL.Fragment,
 			}
-			http.Redirect(w, r, u.String(), http.StatusMovedPermanently)
+			http.Redirect(w, r, u.String(), http.StatusTemporaryRedirect)
 		} else {
 			// Execute registered handlers
 			m.Server.Handler.ServeHTTP(w, r)
