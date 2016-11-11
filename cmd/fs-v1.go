@@ -27,6 +27,7 @@ import (
 	"path"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/minio/minio/pkg/mimedb"
 )
@@ -37,6 +38,9 @@ type fsObjects struct {
 
 	// List pool management.
 	listPool *treeWalkPool
+
+	// To manage the appendRoutine go0routines
+	appendPart *appendPartFS
 }
 
 // list of all errors that can be ignored in tree walk operation in FS
@@ -61,6 +65,10 @@ func newFSObjects(storage StorageAPI) (ObjectLayer, error) {
 	fs := fsObjects{
 		storage:  storage,
 		listPool: newTreeWalkPool(globalLookupTimeout),
+		appendPart: &appendPartFS{
+			appendRoutineMap: make(map[string]appendRoutineInfo),
+			mu:               sync.Mutex{},
+		},
 	}
 
 	// Return successfully initialized object layer.
