@@ -2092,5 +2092,43 @@ func StartTestBrowserPeerRPCServer(t TestErrHandler, instanceType string) TestSe
 	// Initialize and run the TestServer.
 	testRPCServer.Server = httptest.NewServer(initTestBrowserPeerRPCEndPoint())
 	return testRPCServer
+}
 
+func StartTestS3PeerRPCServer(t TestErrHandler) (TestServer, []string) {
+	root, err := newTestConfig("us-east-1")
+	if err != nil {
+		t.Fatalf("%s", err)
+	}
+
+	// Create an instance of TestServer.
+	testRPCServer := TestServer{}
+
+	// Fetch credentials for the test server.
+	credentials := serverConfig.GetCredential()
+
+	testRPCServer.Root = root
+	testRPCServer.AccessKey = credentials.AccessKeyID
+	testRPCServer.SecretKey = credentials.SecretAccessKey
+
+	// init disks
+	objLayer, fsDirs, err := prepareXL()
+	if err != nil {
+		t.Fatalf("%s", err)
+	}
+	// set object layer
+	testRPCServer.Obj = objLayer
+	globalObjLayerMutex.Lock()
+	globalObjectAPI = objLayer
+	globalObjLayerMutex.Unlock()
+
+	// Register router on a new mux
+	muxRouter := router.NewRouter()
+	err = registerS3PeerRPCRouter(muxRouter)
+	if err != nil {
+		t.Fatalf("%s", err)
+	}
+
+	// Initialize and run the TestServer.
+	testRPCServer.Server = httptest.NewServer(muxRouter)
+	return testRPCServer, fsDirs
 }
