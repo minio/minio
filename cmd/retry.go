@@ -61,17 +61,22 @@ var globalRandomSource = rand.New(&lockedRandSource{
 func newRetryTimer(unit time.Duration, cap time.Duration, jitter float64, doneCh chan struct{}) <-chan int {
 	attemptCh := make(chan int)
 
+	// normalize jitter to the range [0, 1.0]
+	if jitter < NoJitter {
+		jitter = NoJitter
+	}
+	if jitter > MaxJitter {
+		jitter = MaxJitter
+	}
+
 	// computes the exponential backoff duration according to
 	// https://www.awsarchitectureblog.com/2015/03/backoff.html
 	exponentialBackoffWait := func(attempt int) time.Duration {
-		// normalize jitter to the range [0, 1.0]
-		if jitter < NoJitter {
-			jitter = NoJitter
+		// 1<<uint(attempt) below could overflow, so limit the value of attempt
+		maxAttempt := 30
+		if attempt > maxAttempt {
+			attempt = maxAttempt
 		}
-		if jitter > MaxJitter {
-			jitter = MaxJitter
-		}
-
 		//sleep = random_between(0, min(cap, base * 2 ** attempt))
 		sleep := unit * time.Duration(1<<uint(attempt))
 		if sleep > cap {
