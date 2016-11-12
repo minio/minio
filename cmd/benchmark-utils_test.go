@@ -51,7 +51,7 @@ func prepareBenchmarkBackend(instanceType string) (ObjectLayer, []string, error)
 		return nil, nil, err
 	}
 	// initialize object layer.
-	obj, _, err := initObjectLayer(endpoints, nil)
+	obj, _, err := initObjectLayer(endpoints)
 	if err != nil {
 		return nil, nil, err
 	}

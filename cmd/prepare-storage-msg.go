@@ -45,7 +45,11 @@ type printOnceFunc func(msg string)
 func printOnceFn() printOnceFunc {
 	var once sync.Once
 	return func(msg string) {
-		once.Do(func() { console.Println(msg) })
+		once.Do(func() {
+			if !globalQuiet {
+				console.Println(msg)
+			}
+		})
 	}
 }
 

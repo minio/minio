@@ -42,7 +42,7 @@ var (
 		},
 		cli.BoolFlag{
 			Name:  "quiet",
-			Usage: "Suppress chatty output.",
+			Usage: "Disable startup information.",
 		},
 	}
 )
@@ -218,7 +218,7 @@ func Main() {
 	}
 
 	// Start profiler if env is set.
-	if profiler := os.Getenv("MINIO_PROFILER"); profiler != "" {
+	if profiler := os.Getenv("_MINIO_PROFILER"); profiler != "" {
 		globalProfiler = startProfiler(profiler)
 	}
 

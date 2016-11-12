@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"net/http"
-	"os"
 	"path"
 	"regexp"
 	"strings"
@@ -77,27 +76,24 @@ func setBrowserRedirectHandler(h http.Handler) http.Handler {
 }
 
 func (h redirectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if !strings.EqualFold(os.Getenv("MINIO_BROWSER"), "off") {
-		// Re-direction handled specifically for browsers.
-		if strings.Contains(r.Header.Get("User-Agent"), "Mozilla") && !isRequestSignatureV4(r) {
-			switch r.URL.Path {
-			case "/", "/webrpc", "/login", "/favicon.ico":
-				// '/' is redirected to 'locationPrefix/'
-				// '/webrpc' is redirected to 'locationPrefix/webrpc'
-				// '/login' is redirected to 'locationPrefix/login'
-				location := h.locationPrefix + r.URL.Path
-				// Redirect to new location.
-				http.Redirect(w, r, location, http.StatusTemporaryRedirect)
-				return
-			case h.locationPrefix:
-				// locationPrefix is redirected to 'locationPrefix/'
-				location := h.locationPrefix + "/"
-				http.Redirect(w, r, location, http.StatusTemporaryRedirect)
-				return
-			}
+	// Re-direction handled specifically for browsers.
+	if strings.Contains(r.Header.Get("User-Agent"), "Mozilla") && !isRequestSignatureV4(r) {
+		switch r.URL.Path {
+		case "/", "/webrpc", "/login", "/favicon.ico":
+			// '/' is redirected to 'locationPrefix/'
+			// '/webrpc' is redirected to 'locationPrefix/webrpc'
+			// '/login' is redirected to 'locationPrefix/login'
+			location := h.locationPrefix + r.URL.Path
+			// Redirect to new location.
+			http.Redirect(w, r, location, http.StatusTemporaryRedirect)
+			return
+		case h.locationPrefix:
+			// locationPrefix is redirected to 'locationPrefix/'
+			location := h.locationPrefix + "/"
+			http.Redirect(w, r, location, http.StatusTemporaryRedirect)
+			return
 		}
 	}
-
 	h.handler.ServeHTTP(w, r)
 }
 
@@ -187,11 +183,19 @@ func parseAmzDateHeader(req *http.Request) (time.Time, APIErrorCode) {
 	return time.Time{}, ErrMissingDateHeader
 }
 
-type timeValidityHandler struct{}
+type timeValidityHandler struct {
+	handler http.Handler
+}
+
+// setTimeValidityHandler to validate parsable time over http header
+func setTimeValidityHandler(h http.Handler) http.Handler {
+	return timeValidityHandler{h}
+}
 
 func (h timeValidityHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Verify if date headers are set, if not reject the request
-	if _, ok := r.Header["Authorization"]; ok {
+	aType := getRequestAuthType(r)
+	if aType != authTypeAnonymous && aType != authTypeJWT {
+		// Verify if date headers are set, if not reject the request
 		amzDate, apiErr := parseAmzDateHeader(r)
 		if apiErr != ErrNone {
 			// All our internal APIs are sensitive towards Date
@@ -208,6 +212,7 @@ func (h timeValidityHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	h.handler.ServeHTTP(w, r)
 }
 
 type resourceHandler struct {

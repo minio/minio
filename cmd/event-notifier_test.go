@@ -43,7 +43,7 @@ func TestInitEventNotifierFaultyDisks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	obj, _, err := initObjectLayer(endpoints, nil)
+	obj, _, err := initObjectLayer(endpoints)
 	if err != nil {
 		t.Fatal("Unable to initialize FS backend.", err)
 	}
@@ -97,7 +97,7 @@ func TestInitEventNotifierWithAMQP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fs, _, err := initObjectLayer(endpoints, nil)
+	fs, _, err := initObjectLayer(endpoints)
 	if err != nil {
 		t.Fatal("Unable to initialize FS backend.", err)
 	}
@@ -128,7 +128,7 @@ func TestInitEventNotifierWithElasticSearch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fs, _, err := initObjectLayer(endpoints, nil)
+	fs, _, err := initObjectLayer(endpoints)
 	if err != nil {
 		t.Fatal("Unable to initialize FS backend.", err)
 	}
@@ -159,7 +159,7 @@ func TestInitEventNotifierWithRedis(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fs, _, err := initObjectLayer(endpoints, nil)
+	fs, _, err := initObjectLayer(endpoints)
 	if err != nil {
 		t.Fatal("Unable to initialize FS backend.", err)
 	}

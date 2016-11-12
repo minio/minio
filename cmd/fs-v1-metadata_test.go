@@ -23,56 +23,12 @@ import (
 	"testing"
 )
 
-// Tests scenarios which can occur for hasExtendedHeader function.
-func TestHasExtendedHeader(t *testing.T) {
-	// All test cases concerning hasExtendedHeader function.
-	testCases := []struct {
-		metadata map[string]string
-		has      bool
-	}{
-		// Verifies if X-Amz-Meta is present.
-		{
-			metadata: map[string]string{
-				"X-Amz-Meta-1": "value",
-			},
-			has: true || os.Getenv("MINIO_ENABLE_FSMETA") == "1",
-		},
-		// Verifies if X-Minio-Meta is present.
-		{
-			metadata: map[string]string{
-				"X-Minio-Meta-1": "value",
-			},
-			has: true || os.Getenv("MINIO_ENABLE_FSMETA") == "1",
-		},
-		// Verifies if extended header is not present.
-		{
-			metadata: map[string]string{
-				"md5Sum": "value",
-			},
-			has: false || os.Getenv("MINIO_ENABLE_FSMETA") == "1",
-		},
-		// Verifies if extended header is not present, but with an empty input.
-		{
-			metadata: nil,
-			has:      false || os.Getenv("MINIO_ENABLE_FSMETA") == "1",
-		},
-	}
-
-	// Validate all test cases.
-	for i, testCase := range testCases {
-		has := hasExtendedHeader(testCase.metadata)
-		if has != testCase.has {
-			t.Fatalf("Test case %d: Expected \"%#v\", but got \"%#v\"", i+1, testCase.has, has)
-		}
-	}
-}
-
 func initFSObjects(disk string, t *testing.T) (obj ObjectLayer) {
 	endpoints, err := parseStorageEndpoints([]string{disk})
 	if err != nil {
 		t.Fatal(err)
 	}
-	obj, _, err = initObjectLayer(endpoints, nil)
+	obj, _, err = initObjectLayer(endpoints)
 	if err != nil {
 		t.Fatal("Unexpected err: ", err)
 	}

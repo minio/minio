@@ -227,10 +227,6 @@ func (s *storageServer) TryInitHandler(args *GenericArgs, reply *GenericReply) e
 // Initialize new storage rpc.
 func newRPCServer(srvConfig serverCmdConfig) (servers []*storageServer, err error) {
 	for _, ep := range srvConfig.endpoints {
-		if containsEndpoint(srvConfig.ignoredEndpoints, ep) {
-			// Do not init disk RPC for ignored end point.
-			continue
-		}
 		// e.g server:/mnt/disk1
 		if isLocalStorage(ep) {
 			// Get the posix path.

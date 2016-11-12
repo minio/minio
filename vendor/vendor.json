@@ -214,12 +214,6 @@
 			"revisionTime": "2016-08-30T17:39:30Z"
 		},
 		{
-			"checksumSHA1": "hMj8vjbjGCAE368E3xAjZGFON+E=",
-			"path": "github.com/urfave/negroni",
-			"revision": "3f7ce7b928e14ff890b067e5bbbc80af73690a9c",
-			"revisionTime": "2016-09-09T03:51:52Z"
-		},
-		{
 			"path": "golang.org/x/crypto/bcrypt",
 			"revision": "7b85b097bf7527677d54d3220065e966a0e3b613",
 			"revisionTime": "2015-11-30T17:07:01-05:00"

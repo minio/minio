@@ -455,17 +455,15 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 		return ObjectInfo{}, toObjectErr(traceError(err), bucket, object)
 	}
 
-	// Save additional metadata only if extended headers such as "X-Amz-Meta-" are set.
-	if hasExtendedHeader(metadata) {
-		// Initialize `fs.json` values.
-		fsMeta := newFSMetaV1()
-		fsMeta.Meta = metadata
+	// Save additional metadata. Initialize `fs.json` values.
+	fsMeta := newFSMetaV1()
+	fsMeta.Meta = metadata
 
-		fsMetaPath := path.Join(bucketMetaPrefix, bucket, object, fsMetaJSONFile)
-		if err = writeFSMetadata(fs.storage, minioMetaBucket, fsMetaPath, fsMeta); err != nil {
-			return ObjectInfo{}, toObjectErr(traceError(err), bucket, object)
-		}
+	fsMetaPath := path.Join(bucketMetaPrefix, bucket, object, fsMetaJSONFile)
+	if err = writeFSMetadata(fs.storage, minioMetaBucket, fsMetaPath, fsMeta); err != nil {
+		return ObjectInfo{}, toObjectErr(traceError(err), bucket, object)
 	}
+
 	objInfo, err = fs.getObjectInfo(bucket, object)
 	if err == nil {
 		// If MINIO_ENABLE_FSMETA is not enabled objInfo.MD5Sum will be empty.

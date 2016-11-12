@@ -227,10 +227,8 @@ func (fs fsObjects) newMultipartUpload(bucket string, object string, meta map[st
 	// Initialize `fs.json` values.
 	fsMeta := newFSMetaV1()
 
-	// Save additional metadata only if extended headers such as "X-Amz-Meta-" are set.
-	if hasExtendedHeader(meta) {
-		fsMeta.Meta = meta
-	}
+	// Save additional metadata.
+	fsMeta.Meta = meta
 
 	// This lock needs to be held for any changes to the directory
 	// contents of ".minio.sys/multipart/object/"
@@ -765,18 +763,16 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	// No need to save part info, since we have concatenated all parts.
 	fsMeta.Parts = nil
 
-	// Save additional metadata only if extended headers such as "X-Amz-Meta-" are set.
-	if hasExtendedHeader(fsMeta.Meta) {
-		if len(fsMeta.Meta) == 0 {
-			fsMeta.Meta = make(map[string]string)
-		}
-		fsMeta.Meta["md5Sum"] = s3MD5
+	// Save additional metadata.
+	if len(fsMeta.Meta) == 0 {
+		fsMeta.Meta = make(map[string]string)
+	}
+	fsMeta.Meta["md5Sum"] = s3MD5
 
-		fsMetaPath := path.Join(bucketMetaPrefix, bucket, object, fsMetaJSONFile)
-		// Write the metadata to a temp file and rename it to the actual location.
-		if err = writeFSMetadata(fs.storage, minioMetaBucket, fsMetaPath, fsMeta); err != nil {
-			return "", toObjectErr(err, bucket, object)
-		}
+	fsMetaPath = path.Join(bucketMetaPrefix, bucket, object, fsMetaJSONFile)
+	// Write the metadata to a temp file and rename it to the actual location.
+	if err = writeFSMetadata(fs.storage, minioMetaBucket, fsMetaPath, fsMeta); err != nil {
+		return "", toObjectErr(err, bucket, object)
 	}
 
 	// Cleanup all the parts if everything else has been safely committed.

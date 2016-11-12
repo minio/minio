@@ -41,14 +41,11 @@ const (
 )
 
 var (
-	globalQuiet    = false // Quiet flag set via command line
+	globalQuiet    = false // Quiet flag set via command line.
 	globalIsDistXL = false // "Is Distributed?" flag.
 
 	// Add new global flags here.
 
-	// Maximum connections handled per
-	// server, defaults to 0 (unlimited).
-	globalMaxConn = 0
 	// Maximum cache size.
 	globalMaxCacheSize = uint64(maxCacheSize)
 	// Cache expiry.

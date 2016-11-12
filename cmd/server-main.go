@@ -22,9 +22,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"strconv"
 	"strings"
-	"time"
 
 	"regexp"
 	"runtime"
@@ -37,10 +35,6 @@ var serverFlags = []cli.Flag{
 		Name:  "address",
 		Value: ":9000",
 		Usage: `Bind to a specific IP:PORT. Defaults to ":9000".`,
-	},
-	cli.StringFlag{
-		Name:  "ignore-disks",
-		Usage: `Comma separated list of faulty drives to ignore at startup.`,
 	},
 }
 
@@ -62,13 +56,6 @@ ENVIRONMENT VARIABLES:
   ACCESS:
      MINIO_ACCESS_KEY: Username or access key of 5 to 20 characters in length.
      MINIO_SECRET_KEY: Password or secret key of 8 to 40 characters in length.
-
-  CACHING:
-     MINIO_CACHE_SIZE:   Limit maximum cache size. Allowed units are [GB|MB|KB]. Defaults to 8GB.
-     MINIO_CACHE_EXPIRY: Automatically expire cached objects. Allowed units are [h|m|s]. Defaults to 72h.
-
-  SECURITY:
-     MINIO_SECURE_CONSOLE: Set secure console to 'no' to disable printing secret key. Defaults to 'yes'.
 
 EXAMPLES:
   1. Start minio server on "/home/shared" directory.
@@ -92,10 +79,9 @@ EXAMPLES:
 }
 
 type serverCmdConfig struct {
-	serverAddr       string
-	endpoints        []*url.URL
-	ignoredEndpoints []*url.URL
-	storageDisks     []StorageAPI
+	serverAddr   string
+	endpoints    []*url.URL
+	storageDisks []StorageAPI
 }
 
 // Parse an array of end-points (from the command line)
@@ -189,27 +175,6 @@ func initServerConfig(c *cli.Context) {
 	// Create certs path.
 	err := createCertsPath()
 	fatalIf(err, "Unable to create \"certs\" directory.")
-
-	// Fetch max conn limit from environment variable.
-	if maxConnStr := os.Getenv("MINIO_MAXCONN"); maxConnStr != "" {
-		// We need to parse to its integer value.
-		globalMaxConn, err = strconv.Atoi(maxConnStr)
-		fatalIf(err, "Unable to convert MINIO_MAXCONN=%s environment variable into its integer value.", maxConnStr)
-	}
-
-	// Fetch max cache size from environment variable.
-	if maxCacheSizeStr := os.Getenv("MINIO_CACHE_SIZE"); maxCacheSizeStr != "" {
-		// We need to parse cache size to its integer value.
-		globalMaxCacheSize, err = strconvBytes(maxCacheSizeStr)
-		fatalIf(err, "Unable to convert MINIO_CACHE_SIZE=%s environment variable into its integer value.", maxCacheSizeStr)
-	}
-
-	// Fetch cache expiry from environment variable.
-	if cacheExpiryStr := os.Getenv("MINIO_CACHE_EXPIRY"); cacheExpiryStr != "" {
-		// We need to parse cache expiry to its time.Duration value.
-		globalCacheExpiry, err = time.ParseDuration(cacheExpiryStr)
-		fatalIf(err, "Unable to convert MINIO_CACHE_EXPIRY=%s environment variable into its time.Duration value.", cacheExpiryStr)
-	}
 
 	// When credentials inherited from the env, server cmd has to save them in the disk
 	if os.Getenv("MINIO_ACCESS_KEY") != "" && os.Getenv("MINIO_SECRET_KEY") != "" {
@@ -332,26 +297,6 @@ func checkServerSyntax(c *cli.Context) {
 		fatalIf(err, "Storage endpoint error.")
 	}
 
-	// Verify syntax for all the ignored disks.
-	var ignoredEndpoints []*url.URL
-	ignoredDisksStr := c.String("ignore-disks")
-	if ignoredDisksStr != "" {
-		ignoredDisks := strings.Split(ignoredDisksStr, ",")
-		if len(endpoints) == 1 {
-			fatalIf(errInvalidArgument, "--ignore-disks is valid only for XL setup.")
-		}
-		ignoredEndpoints, err = parseStorageEndpoints(ignoredDisks)
-		fatalIf(err, "Unable to parse ignored storage endpoints %s", ignoredDisks)
-		checkEndpointsSyntax(ignoredEndpoints, ignoredDisks)
-
-		for i, ep := range ignoredEndpoints {
-			// An ignored disk should be present in the XL disks list.
-			if !containsEndpoint(endpoints, ep) {
-				fatalIf(errInvalidArgument, "Ignored storage %s not available in the list of erasure storages list.", disks[i])
-			}
-		}
-	}
-
 	if !isDistributedSetup(endpoints) {
 		// for FS and singlenode-XL validation is done, return.
 		return
@@ -412,18 +357,11 @@ func serverMain(c *cli.Context) {
 	// depends on it.
 	checkServerSyntax(c)
 
-	// Disks to be ignored in server init, to skip format healing.
-	var ignoredEndpoints []*url.URL
-	if len(c.String("ignore-disks")) > 0 {
-		ignoredEndpoints, err = parseStorageEndpoints(strings.Split(c.String("ignore-disks"), ","))
-		fatalIf(err, "Unable to parse storage endpoints %s", strings.Split(c.String("ignore-disks"), ","))
-	}
-
 	// Disks to be used in server init.
 	endpoints, err := parseStorageEndpoints(c.Args())
 	fatalIf(err, "Unable to parse storage endpoints %s", c.Args())
 
-	storageDisks, err := initStorageDisks(endpoints, ignoredEndpoints)
+	storageDisks, err := initStorageDisks(endpoints)
 	fatalIf(err, "Unable to initialize storage disks.")
 
 	// Cleanup objects that weren't successfully written into the namespace.
@@ -440,10 +378,9 @@ func serverMain(c *cli.Context) {
 
 	// Configure server.
 	srvConfig := serverCmdConfig{
-		serverAddr:       serverAddr,
-		endpoints:        endpoints,
-		ignoredEndpoints: ignoredEndpoints,
-		storageDisks:     storageDisks,
+		serverAddr:   serverAddr,
+		endpoints:    endpoints,
+		storageDisks: storageDisks,
 	}
 
 	// Configure server.

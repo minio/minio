@@ -19,7 +19,6 @@ package cmd
 import (
 	"crypto/x509"
 	"fmt"
-	"os"
 	"runtime"
 	"strings"
 	"time"
@@ -45,6 +44,10 @@ func getFormatStr(strLen int, padding int) string {
 
 // Prints the formatted startup message.
 func printStartupMessage(endPoints []string) {
+	// If quiet flag is set do not print startup message.
+	if globalQuiet {
+		return
+	}
 	printServerCommonMsg(endPoints)
 	printCLIAccessMsg(endPoints[0])
 	printObjectAPIMsg()
@@ -73,11 +76,7 @@ func printServerCommonMsg(endPoints []string) {
 	// Colorize the message and print.
 	console.Println(colorBlue("\nEndpoint: ") + colorBold(fmt.Sprintf(getFormatStr(len(endPointStr), 1), endPointStr)))
 	console.Println(colorBlue("AccessKey: ") + colorBold(fmt.Sprintf("%s ", cred.AccessKeyID)))
-	secretKey := cred.SecretAccessKey
-	if strings.EqualFold(os.Getenv("MINIO_SECURE_CONSOLE"), "no") {
-		secretKey = "*REDACTED*"
-	}
-	console.Println(colorBlue("SecretKey: ") + colorBold(fmt.Sprintf("%s ", secretKey)))
+	console.Println(colorBlue("SecretKey: ") + colorBold(fmt.Sprintf("%s ", cred.SecretAccessKey)))
 	console.Println(colorBlue("Region: ") + colorBold(fmt.Sprintf(getFormatStr(len(region), 3), region)))
 	printEventNotifiers()
 
@@ -109,15 +108,11 @@ func printCLIAccessMsg(endPoint string) {
 
 	// Configure 'mc', following block prints platform specific information for minio client.
 	console.Println(colorBlue("\nCommand-line Access: ") + mcQuickStartGuide)
-	secretKey := cred.SecretAccessKey
-	if os.Getenv("MINIO_SECURE_CONSOLE") == "0" {
-		secretKey = "*REDACTED*"
-	}
 	if runtime.GOOS == "windows" {
-		mcMessage := fmt.Sprintf("$ mc.exe config host add myminio %s %s %s", endPoint, cred.AccessKeyID, secretKey)
+		mcMessage := fmt.Sprintf("$ mc.exe config host add myminio %s %s %s", endPoint, cred.AccessKeyID, cred.SecretAccessKey)
 		console.Println(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
 	} else {
-		mcMessage := fmt.Sprintf("$ mc config host add myminio %s %s %s", endPoint, cred.AccessKeyID, secretKey)
+		mcMessage := fmt.Sprintf("$ mc config host add myminio %s %s %s", endPoint, cred.AccessKeyID, cred.SecretAccessKey)
 		console.Println(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
 	}
 }

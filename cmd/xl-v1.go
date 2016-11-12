@@ -18,7 +18,9 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"sort"
+	"strings"
 
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/objcache"
@@ -129,6 +131,9 @@ func newXLObjects(storageDisks []StorageAPI) (ObjectLayer, error) {
 	// Initialize list pool.
 	listPool := newTreeWalkPool(globalLookupTimeout)
 
+	// Check if object cache is disabled.
+	objCacheDisabled := strings.EqualFold(os.Getenv("_MINIO_CACHE"), "off")
+
 	// Initialize xl objects.
 	xl := xlObjects{
 		storageDisks:    newStorageDisks,
@@ -136,7 +141,7 @@ func newXLObjects(storageDisks []StorageAPI) (ObjectLayer, error) {
 		parityBlocks:    parityBlocks,
 		listPool:        listPool,
 		objCache:        objCache,
-		objCacheEnabled: globalMaxCacheSize > 0,
+		objCacheEnabled: !objCacheDisabled,
 	}
 
 	// Figure out read and write quorum based on number of storage disks.
