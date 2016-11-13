@@ -194,7 +194,7 @@ func setTimeValidityHandler(h http.Handler) http.Handler {
 
 func (h timeValidityHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	aType := getRequestAuthType(r)
-	if aType != authTypeAnonymous && aType != authTypeJWT {
+	if aType == authTypeSigned || aType == authTypeSignedV2 || aType == authTypeStreamingSigned {
 		// Verify if date headers are set, if not reject the request
 		amzDate, apiErr := parseAmzDateHeader(r)
 		if apiErr != ErrNone {
