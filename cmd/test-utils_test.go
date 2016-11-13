@@ -1573,7 +1573,7 @@ func initObjectLayer(endpoints []*url.URL) (ObjectLayer, []StorageAPI, error) {
 
 	// Disabling the cache for integration tests.
 	// Should use the object layer tests for validating cache.
-	if xl, ok := objLayer.(xlObjects); ok {
+	if xl, ok := objLayer.(*xlObjects); ok {
 		xl.objCacheEnabled = false
 	}
 

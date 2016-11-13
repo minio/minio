@@ -96,10 +96,6 @@ func newRetryTimer(unit time.Duration, cap time.Duration, jitter float64, doneCh
 			// Attempts starts.
 			case attemptCh <- nextBackoff:
 				nextBackoff++
-			case <-globalWakeupCh:
-				// Reset nextBackoff to reduce the subsequent wait and re-read
-				// format.json from all disks again.
-				nextBackoff = 0
 			case <-doneCh:
 				// Stop the routine.
 				return

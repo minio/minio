@@ -64,7 +64,7 @@ func (xl xlObjects) MakeBucket(bucket string) error {
 	// Do we have write quorum?.
 	if !isDiskQuorum(dErrs, xl.writeQuorum) {
 		// Purge successfully created buckets if we don't have writeQuorum.
-		xl.undoMakeBucket(bucket)
+		undoMakeBucket(xl.storageDisks, bucket)
 		return toObjectErr(traceError(errXLWriteQuorum), bucket)
 	}
 
@@ -100,11 +100,11 @@ func (xl xlObjects) undoDeleteBucket(bucket string) {
 }
 
 // undo make bucket operation upon quorum failure.
-func (xl xlObjects) undoMakeBucket(bucket string) {
+func undoMakeBucket(storageDisks []StorageAPI, bucket string) {
 	// Initialize sync waitgroup.
 	var wg = &sync.WaitGroup{}
 	// Undo previous make bucket entry on all underlying storage disks.
-	for index, disk := range xl.storageDisks {
+	for index, disk := range storageDisks {
 		if disk == nil {
 			continue
 		}
@@ -214,7 +214,7 @@ func (xl xlObjects) listBuckets() (bucketsInfo []BucketInfo, err error) {
 				})
 			}
 			// For buckets info empty, loop once again to check
-			// if we have, can happen if disks are down.
+			// if we have, can happen if disks were down.
 			if len(bucketsInfo) == 0 {
 				continue
 			}

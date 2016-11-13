@@ -304,13 +304,11 @@ func loadNotificationConfig(bucket string, objAPI ObjectLayer) (*notificationCon
 	// Construct the notification config path.
 	notificationConfigPath := path.Join(bucketConfigPrefix, bucket, bucketNotificationConfig)
 	objInfo, err := objAPI.GetObjectInfo(minioMetaBucket, notificationConfigPath)
-	err = errorCause(err)
 	if err != nil {
 		// 'notification.xml' not found return
 		// 'errNoSuchNotifications'.  This is default when no
 		// bucket notifications are found on the bucket.
-		switch err.(type) {
-		case ObjectNotFound:
+		if isErrObjectNotFound(err) {
 			return nil, errNoSuchNotifications
 		}
 		errorIf(err, "Unable to load bucket-notification for bucket %s", bucket)
@@ -319,13 +317,11 @@ func loadNotificationConfig(bucket string, objAPI ObjectLayer) (*notificationCon
 	}
 	var buffer bytes.Buffer
 	err = objAPI.GetObject(minioMetaBucket, notificationConfigPath, 0, objInfo.Size, &buffer)
-	err = errorCause(err)
 	if err != nil {
 		// 'notification.xml' not found return
 		// 'errNoSuchNotifications'.  This is default when no
 		// bucket notifications are found on the bucket.
-		switch err.(type) {
-		case ObjectNotFound:
+		if isErrObjectNotFound(err) {
 			return nil, errNoSuchNotifications
 		}
 		errorIf(err, "Unable to load bucket-notification for bucket %s", bucket)
@@ -357,13 +353,11 @@ func loadListenerConfig(bucket string, objAPI ObjectLayer) ([]listenerConfig, er
 	// Construct the notification config path.
 	listenerConfigPath := path.Join(bucketConfigPrefix, bucket, bucketListenerConfig)
 	objInfo, err := objAPI.GetObjectInfo(minioMetaBucket, listenerConfigPath)
-	err = errorCause(err)
 	if err != nil {
 		// 'listener.json' not found return
 		// 'errNoSuchNotifications'.  This is default when no
 		// bucket notifications are found on the bucket.
-		switch err.(type) {
-		case ObjectNotFound:
+		if isErrObjectNotFound(err) {
 			return nil, errNoSuchNotifications
 		}
 		errorIf(err, "Unable to load bucket-listeners for bucket %s", bucket)
@@ -372,13 +366,11 @@ func loadListenerConfig(bucket string, objAPI ObjectLayer) ([]listenerConfig, er
 	}
 	var buffer bytes.Buffer
 	err = objAPI.GetObject(minioMetaBucket, listenerConfigPath, 0, objInfo.Size, &buffer)
-	err = errorCause(err)
 	if err != nil {
 		// 'notification.xml' not found return
 		// 'errNoSuchNotifications'.  This is default when no
 		// bucket listeners are found on the bucket.
-		switch err.(type) {
-		case ObjectNotFound:
+		if isErrObjectNotFound(err) {
 			return nil, errNoSuchNotifications
 		}
 		errorIf(err, "Unable to load bucket-listeners for bucket %s", bucket)

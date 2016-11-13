@@ -119,7 +119,7 @@ func TestXLDeleteObjectDiskNotFound(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	xl := obj.(xlObjects)
+	xl := obj.(*xlObjects)
 
 	// Create "bucket"
 	err = obj.MakeBucket("bucket")
@@ -169,7 +169,7 @@ func TestGetObjectNoQuorum(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	xl := obj.(xlObjects)
+	xl := obj.(*xlObjects)
 
 	// Create "bucket"
 	err = obj.MakeBucket("bucket")
@@ -221,7 +221,7 @@ func TestPutObjectNoQuorum(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	xl := obj.(xlObjects)
+	xl := obj.(*xlObjects)
 
 	// Create "bucket"
 	err = obj.MakeBucket("bucket")
@@ -272,7 +272,7 @@ func TestHealing(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer removeRoots(fsDirs)
-	xl := obj.(xlObjects)
+	xl := obj.(*xlObjects)
 
 	// Create "bucket"
 	err = obj.MakeBucket("bucket")

@@ -1338,7 +1338,7 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 	defer removeRoots(fsDirs)
 
 	// Set faulty disks to XL backend
-	xl := obj.(xlObjects)
+	xl := obj.(*xlObjects)
 	for i, d := range xl.storageDisks {
 		xl.storageDisks[i] = newNaughtyDisk(d.(*posix), nil, errFaultyDisk)
 	}
