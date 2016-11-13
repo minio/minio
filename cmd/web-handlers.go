@@ -239,6 +239,7 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 				Key:          obj.Name,
 				LastModified: obj.ModTime,
 				Size:         obj.Size,
+				ContentType:  obj.ContentType,
 			})
 		}
 		for _, prefix := range lo.Prefixes {
