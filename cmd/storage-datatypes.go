@@ -46,7 +46,4 @@ type FileInfo struct {
 
 	// File mode bits.
 	Mode os.FileMode
-
-	// Hex encoded md5 checksum of the file.
-	MD5Sum string
 }

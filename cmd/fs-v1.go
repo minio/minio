@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"hash"
 	"io"
-	"os"
 	"path"
 	"sort"
 	"strings"
@@ -502,27 +501,17 @@ func (fs fsObjects) DeleteObject(bucket, object string) error {
 // ListObjects - list all objects at prefix upto maxKeys., optionally delimited by '/'. Maintains the list pool
 // state for future re-entrant list requests.
 func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
-	// Convert entry to FileInfo
-	entryToFileInfo := func(entry string) (fileInfo FileInfo, err error) {
+	// Convert entry to ObjectInfo
+	entryToObjectInfo := func(entry string) (objInfo ObjectInfo, err error) {
 		if strings.HasSuffix(entry, slashSeparator) {
 			// Object name needs to be full path.
-			fileInfo.Name = entry
-			fileInfo.Mode = os.ModeDir
+			objInfo.Name = entry
+			objInfo.IsDir = true
 			return
 		}
-		if fileInfo, err = fs.storage.StatFile(bucket, entry); err != nil {
-			return FileInfo{}, traceError(err)
+		if objInfo, err = fs.getObjectInfo(bucket, entry); err != nil {
+			return ObjectInfo{}, err
 		}
-		fsMeta, mErr := readFSMetadata(fs.storage, minioMetaBucket, path.Join(bucketMetaPrefix, bucket, entry, fsMetaJSONFile))
-		if mErr != nil && errorCause(mErr) != errFileNotFound {
-			return FileInfo{}, traceError(mErr)
-		}
-		if len(fsMeta.Meta) == 0 {
-			fsMeta.Meta = make(map[string]string)
-		}
-		// Object name needs to be full path.
-		fileInfo.Name = entry
-		fileInfo.MD5Sum = fsMeta.Meta["md5Sum"]
 		return
 	}
 
@@ -591,7 +580,7 @@ func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 		listDir := listDirFactory(isLeaf, fsTreeWalkIgnoredErrs, fs.storage)
 		walkResultCh = startTreeWalk(bucket, prefix, marker, recursive, listDir, isLeaf, endWalkCh)
 	}
-	var fileInfos []FileInfo
+	var objInfos []ObjectInfo
 	var eof bool
 	var nextMarker string
 	for i := 0; i < maxKeys; {
@@ -609,12 +598,12 @@ func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 			}
 			return ListObjectsInfo{}, toObjectErr(walkResult.err, bucket, prefix)
 		}
-		fileInfo, err := entryToFileInfo(walkResult.entry)
+		objInfo, err := entryToObjectInfo(walkResult.entry)
 		if err != nil {
 			return ListObjectsInfo{}, nil
 		}
-		nextMarker = fileInfo.Name
-		fileInfos = append(fileInfos, fileInfo)
+		nextMarker = objInfo.Name
+		objInfos = append(objInfos, objInfo)
 		if walkResult.end {
 			eof = true
 			break
@@ -627,19 +616,13 @@ func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 	}
 
 	result := ListObjectsInfo{IsTruncated: !eof}
-	for _, fileInfo := range fileInfos {
-		result.NextMarker = fileInfo.Name
-		if fileInfo.Mode.IsDir() {
-			result.Prefixes = append(result.Prefixes, fileInfo.Name)
+	for _, objInfo := range objInfos {
+		result.NextMarker = objInfo.Name
+		if objInfo.IsDir {
+			result.Prefixes = append(result.Prefixes, objInfo.Name)
 			continue
 		}
-		result.Objects = append(result.Objects, ObjectInfo{
-			Name:    fileInfo.Name,
-			ModTime: fileInfo.ModTime,
-			Size:    fileInfo.Size,
-			MD5Sum:  fileInfo.MD5Sum,
-			IsDir:   false,
-		})
+		result.Objects = append(result.Objects, objInfo)
 	}
 	return result, nil
 }

@@ -93,13 +93,7 @@ func (xl xlObjects) listObjects(bucket, prefix, marker, delimiter string, maxKey
 			result.Prefixes = append(result.Prefixes, objInfo.Name)
 			continue
 		}
-		result.Objects = append(result.Objects, ObjectInfo{
-			Name:    objInfo.Name,
-			ModTime: objInfo.ModTime,
-			Size:    objInfo.Size,
-			MD5Sum:  objInfo.MD5Sum,
-			IsDir:   false,
-		})
+		result.Objects = append(result.Objects, objInfo)
 	}
 	return result, nil
 }
