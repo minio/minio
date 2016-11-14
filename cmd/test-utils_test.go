@@ -950,13 +950,13 @@ func signRequestV2(req *http.Request, accessKey, secretKey string) error {
 	// url.RawPath will be valid if path has any encoded characters, if not it will
 	// be empty - in which case we need to consider url.Path (bug in net/http?)
 	encodedResource := req.URL.RawPath
-	encodedQuery := req.URL.RawQuery
 	if encodedResource == "" {
 		splits := strings.Split(req.URL.Path, "?")
 		if len(splits) > 0 {
-			encodedResource = splits[0]
+			encodedResource = getURLEncodedName(splits[0])
 		}
 	}
+	encodedQuery := req.URL.Query().Encode()
 
 	// Calculate HMAC for secretAccessKey.
 	stringToSign := signV2STS(req.Method, encodedResource, encodedQuery, req.Header)
