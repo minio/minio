@@ -1118,8 +1118,6 @@ func testWebSetBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestE
 		policy     string
 		pass       bool
 	}{
-		// Inexistent bucket
-		{"fooo", "", "readonly", false},
 		// Invalid bucket name
 		{"", "", "readonly", false},
 		// Invalid policy

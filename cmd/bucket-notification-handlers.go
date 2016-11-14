@@ -54,6 +54,14 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 	}
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
+
+	_, err := objAPI.GetBucketInfo(bucket)
+	if err != nil {
+		errorIf(err, "Unable to find bucket info.")
+		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
+		return
+	}
+
 	// Attempt to successfully load notification config.
 	nConfig, err := loadNotificationConfig(bucket, objAPI)
 	if err != nil && err != errNoSuchNotifications {
@@ -177,8 +185,7 @@ func PutBucketNotificationConfig(bucket string, ncfg *notificationConfig, objAPI
 		return fmt.Errorf("Unable to persist Bucket notification config to object layer - config=%v errMsg=%v", *ncfg, err)
 	}
 
-	// All servers (including local) are told to update in-memory
-	// config
+	// All servers (including local) are told to update in-memory config
 	S3PeersUpdateBucketNotification(bucket, ncfg)
 
 	return nil

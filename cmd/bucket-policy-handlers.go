@@ -142,6 +142,14 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
+	// Before proceeding validate if bucket exists.
+	_, err := objAPI.GetBucketInfo(bucket)
+	if err != nil {
+		errorIf(err, "Unable to find bucket info.")
+		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
+		return
+	}
+
 	// If Content-Length is unknown or zero, deny the
 	// request. PutBucketPolicy always needs a Content-Length if
 	// incoming request is not chunked.
@@ -200,13 +208,6 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 // persists it to storage, and notify nodes in the cluster about the
 // change. In-memory state is updated in response to the notification.
 func persistAndNotifyBucketPolicyChange(bucket string, pCh policyChange, objAPI ObjectLayer) error {
-	// Verify if bucket actually exists. FIXME: Ideally this check
-	// should not be used but is kept here to error out for
-	// invalid and non-existent buckets.
-	if err := isBucketExist(bucket, objAPI); err != nil {
-		return err
-	}
-
 	// Acquire a write lock on bucket before modifying its
 	// configuration.
 	bucketLock := nsMutex.NewNSLock(bucket, "")
@@ -253,12 +254,18 @@ func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
+	// Before proceeding validate if bucket exists.
+	_, err := objAPI.GetBucketInfo(bucket)
+	if err != nil {
+		errorIf(err, "Unable to find bucket info.")
+		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
+		return
+	}
+
 	// Delete bucket access policy, by passing an empty policy
 	// struct.
 	if err := persistAndNotifyBucketPolicyChange(bucket, policyChange{true, nil}, objAPI); err != nil {
 		switch err.(type) {
-		case BucketNameInvalid:
-			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
 		case BucketPolicyNotFound:
 			writeErrorResponse(w, r, ErrNoSuchBucketPolicy, r.URL.Path)
 		default:
@@ -292,13 +299,19 @@ func (api objectAPIHandlers) GetBucketPolicyHandler(w http.ResponseWriter, r *ht
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
+	// Before proceeding validate if bucket exists.
+	_, err := objAPI.GetBucketInfo(bucket)
+	if err != nil {
+		errorIf(err, "Unable to find bucket info.")
+		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
+		return
+	}
+
 	// Read bucket access policy.
 	policy, err := readBucketPolicy(bucket, objAPI)
 	if err != nil {
 		errorIf(err, "Unable to read bucket policy.")
 		switch err.(type) {
-		case BucketNameInvalid:
-			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
 		case BucketPolicyNotFound:
 			writeErrorResponse(w, r, ErrNoSuchBucketPolicy, r.URL.Path)
 		default:
