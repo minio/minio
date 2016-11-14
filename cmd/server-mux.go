@@ -138,22 +138,52 @@ func (c *ConnMux) Read(b []byte) (int, error) {
 // the communication protocol upon network connection
 type ListenerMux struct {
 	net.Listener
-	config *tls.Config
+	config      *tls.Config
+	acceptResCh chan ListenerMuxAcceptRes
+}
+
+// ListenerMuxAcceptRes contains then final net.Conn data (wrapper by tls or not) to be sent to the http handler
+type ListenerMuxAcceptRes struct {
+	conn net.Conn
+	err  error
+}
+
+// newListenerMux listens and wraps accepted connections with tls after protocol peeking
+func newListenerMux(listener net.Listener, config *tls.Config) *ListenerMux {
+	l := ListenerMux{
+		Listener:    listener,
+		config:      config,
+		acceptResCh: make(chan ListenerMuxAcceptRes),
+	}
+	// Start listening, wrap connections with tls when needed
+	go func() {
+		// Loop for accepting new connections
+		for {
+			conn, err := l.Listener.Accept()
+			if err != nil {
+				l.acceptResCh <- ListenerMuxAcceptRes{err: err}
+				return
+			}
+			// Wrap the connection with ConnMux to be able to peek the data in the incoming connection
+			// and decide if we need to wrap the connection itself with a TLS or not
+			go func(conn net.Conn) {
+				connMux := NewConnMux(conn)
+				if connMux.PeekProtocol() == "tls" {
+					l.acceptResCh <- ListenerMuxAcceptRes{conn: tls.Server(connMux, l.config)}
+				} else {
+					l.acceptResCh <- ListenerMuxAcceptRes{conn: connMux}
+				}
+			}(conn)
+		}
+	}()
+	return &l
 }
 
 // Accept - peek the protocol to decide if we should wrap the
 // network stream with the TLS server
 func (l *ListenerMux) Accept() (net.Conn, error) {
-	conn, err := l.Listener.Accept()
-	if err != nil {
-		return conn, err
-	}
-	connMux := NewConnMux(conn)
-	protocol := connMux.PeekProtocol()
-	if protocol == "tls" {
-		return tls.Server(connMux, l.config), nil
-	}
-	return connMux, nil
+	res := <-l.acceptResCh
+	return res.conn, res.err
 }
 
 // Close Listener
@@ -216,7 +246,7 @@ func (m *ServerMux) ListenAndServeTLS(certFile, keyFile string) error {
 		return err
 	}
 
-	listenerMux := &ListenerMux{Listener: listener, config: config}
+	listenerMux := newListenerMux(listener, config)
 
 	m.mu.Lock()
 	m.listener = listenerMux
@@ -251,7 +281,7 @@ func (m *ServerMux) ListenAndServe() error {
 		return err
 	}
 
-	listenerMux := &ListenerMux{Listener: listener, config: &tls.Config{}}
+	listenerMux := newListenerMux(listener, &tls.Config{})
 
 	m.mu.Lock()
 	m.listener = listenerMux
