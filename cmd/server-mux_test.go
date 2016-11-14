@@ -56,23 +56,19 @@ func TestServerMux(t *testing.T) {
 		fmt.Fprint(w, "hello")
 	}))
 
+	// Create a ListenerMux
+	ts.Listener = newListenerMux(ts.Listener, &tls.Config{})
+
 	// Set the test server config to the mux
 	ts.Config = &m.Server
-	ts.Start()
 
-	// Create a ListenerMux
-	lm := &ListenerMux{
-		Listener: ts.Listener,
-		config:   &tls.Config{},
-	}
-	m.listener = lm
+	ts.Start()
 
 	client := http.Client{}
 	res, err := client.Get(ts.URL)
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	got, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		t.Fatal(err)
@@ -111,14 +107,11 @@ func TestServerCloseBlocking(t *testing.T) {
 
 	// Set the test server config to the mux
 	ts.Config = &m.Server
-	ts.Start()
 
 	// Create a ListenerMux.
-	lm := &ListenerMux{
-		Listener: ts.Listener,
-		config:   &tls.Config{},
-	}
-	m.listener = lm
+	ts.Listener = newListenerMux(ts.Listener, &tls.Config{})
+
+	ts.Start()
 
 	dial := func() net.Conn {
 		c, cerr := net.Dial("tcp", ts.Listener.Addr().String())
