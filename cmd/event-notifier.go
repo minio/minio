@@ -466,7 +466,6 @@ func loadAllBucketNotifications(objAPI ObjectLayer) (map[string]*notificationCon
 		} else {
 			nConfigs[bucket.Name] = nCfg
 		}
-
 		lCfg, lErr := loadListenerConfig(bucket.Name, objAPI)
 		if lErr != nil {
 			if lErr != errNoSuchNotifications {

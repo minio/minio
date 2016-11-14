@@ -142,11 +142,6 @@ func getOldBucketsConfigPath() (string, error) {
 // readBucketPolicyJSON - reads bucket policy for an input bucket, returns BucketPolicyNotFound
 // if bucket policy is not found.
 func readBucketPolicyJSON(bucket string, objAPI ObjectLayer) (bucketPolicyReader io.Reader, err error) {
-	// Verify if bucket actually exists
-	if err = isBucketExist(bucket, objAPI); err != nil {
-		return nil, err
-	}
-
 	policyPath := pathJoin(bucketConfigPrefix, bucket, policyJSON)
 	objInfo, err := objAPI.GetObjectInfo(minioMetaBucket, policyPath)
 	err = errorCause(err)
