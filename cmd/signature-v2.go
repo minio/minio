@@ -191,16 +191,19 @@ func doesSignV2Match(r *http.Request) APIErrorCode {
 		return apiError
 	}
 
-	// url.RawPath will be valid if path has any encoded characters, if not it will
-	// be empty - in which case we need to consider url.Path (bug in net/http?)
+	// Encode path:
+	//   url.RawPath will be valid if path has any encoded characters, if not it will
+	//   be empty - in which case we need to consider url.Path (bug in net/http?)
 	encodedResource := r.URL.RawPath
-	encodedQuery := r.URL.RawQuery
 	if encodedResource == "" {
 		splits := strings.Split(r.URL.Path, "?")
 		if len(splits) > 0 {
-			encodedResource = splits[0]
+			encodedResource = getURLEncodedName(splits[0])
 		}
 	}
+
+	// Encode query strings
+	encodedQuery := r.URL.Query().Encode()
 
 	expectedAuth := signatureV2(r.Method, encodedResource, encodedQuery, r.Header)
 	if v2Auth != expectedAuth {
