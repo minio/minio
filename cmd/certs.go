@@ -31,7 +31,11 @@ func createCertsPath() error {
 	if err != nil {
 		return err
 	}
-	return os.MkdirAll(certsPath, 0700)
+	if err := os.MkdirAll(certsPath, 0700); err != nil {
+		return err
+	}
+	rootCAsPath := filepath.Join(certsPath, globalMinioCertsCADir)
+	return os.MkdirAll(rootCAsPath, 0700)
 }
 
 // getCertsPath get certs path.
@@ -60,6 +64,25 @@ func mustGetCertFile() string {
 // mustGetKeyFile must get key file.
 func mustGetKeyFile() string {
 	return filepath.Join(mustGetCertsPath(), globalMinioKeyFile)
+}
+
+// mustGetCAFiles must get the list of the CA certificates stored in minio config dir
+func mustGetCAFiles() (caCerts []string) {
+	CAsDir := filepath.Join(mustGetCertsPath(), globalMinioCertsCADir)
+	caFiles, _ := ioutil.ReadDir(CAsDir)
+	for _, cert := range caFiles {
+		caCerts = append(caCerts, filepath.Join(CAsDir, cert.Name()))
+	}
+	return
+}
+
+// mustGetSystemCertPool returns empty cert pool in case of error (windows)
+func mustGetSystemCertPool() *x509.CertPool {
+	pool, err := x509.SystemCertPool()
+	if err != nil {
+		return x509.NewCertPool()
+	}
+	return pool
 }
 
 // isCertFileExists verifies if cert file exists, returns true if
