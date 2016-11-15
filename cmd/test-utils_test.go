@@ -420,62 +420,6 @@ func StartTestPeersRPCServer(t TestErrHandler, instanceType string) TestServer {
 	return testRPCServer
 }
 
-// Initializes control RPC endpoints.
-// The object Layer will be a temp back used for testing purpose.
-func initTestControlRPCEndPoint(srvCmdConfig serverCmdConfig) http.Handler {
-	// Initialize router.
-	muxRouter := router.NewRouter()
-	registerControlRPCRouter(muxRouter, srvCmdConfig)
-	return muxRouter
-}
-
-// StartTestControlRPCServer - Creates a temp XL/FS backend and initializes control RPC end points,
-// then starts a test server with those control RPC end points registered.
-func StartTestControlRPCServer(t TestErrHandler, instanceType string) TestServer {
-	// create temporary backend for the test server.
-	nDisks := 16
-	disks, err := getRandomDisks(nDisks)
-	if err != nil {
-		t.Fatal("Failed to create disks for the backend")
-	}
-	endpoints, err := parseStorageEndpoints(disks)
-	if err != nil {
-		t.Fatalf("%s", err)
-	}
-
-	root, err := newTestConfig("us-east-1")
-	if err != nil {
-		t.Fatalf("%s", err)
-	}
-
-	// create an instance of TestServer.
-	testRPCServer := TestServer{}
-	// Get credential.
-	credentials := serverConfig.GetCredential()
-
-	testRPCServer.Root = root
-	testRPCServer.Disks = endpoints
-	testRPCServer.AccessKey = credentials.AccessKeyID
-	testRPCServer.SecretKey = credentials.SecretAccessKey
-
-	// create temporary backend for the test server.
-	objLayer, storageDisks, err := initObjectLayer(endpoints)
-	if err != nil {
-		t.Fatalf("Failed obtaining Temp Backend: <ERROR> %s", err)
-	}
-
-	globalObjLayerMutex.Lock()
-	globalObjectAPI = objLayer
-	globalObjLayerMutex.Unlock()
-
-	// Run TestServer.
-	testRPCServer.Server = httptest.NewServer(initTestControlRPCEndPoint(serverCmdConfig{
-		storageDisks: storageDisks,
-	}))
-
-	return testRPCServer
-}
-
 // Configure the server for the test run.
 func newTestConfig(bucketLocation string) (rootPath string, err error) {
 	// Get test root.

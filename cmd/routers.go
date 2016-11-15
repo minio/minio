@@ -101,12 +101,6 @@ func configureServerHandler(srvCmdConfig serverCmdConfig) (http.Handler, error) 
 		return nil, err
 	}
 
-	// Register controller rpc router.
-	err = registerControlRPCRouter(mux, srvCmdConfig)
-	if err != nil {
-		return nil, err
-	}
-
 	// Register RPC router for web related calls.
 	if err = registerBrowserPeerRPCRouter(mux); err != nil {
 		return nil, err

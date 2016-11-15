@@ -16,10 +16,7 @@
 
 package cmd
 
-import (
-	"sync"
-	"time"
-)
+import "time"
 
 // SystemLockState - Structure to fill the lock state of entire object storage.
 // That is the total locks held, total calls blocked on locks and state of all the locks for the entire system.
@@ -93,94 +90,4 @@ func getSystemLockState() (SystemLockState, error) {
 		lockState.LocksInfoPerObject = append(lockState.LocksInfoPerObject, volLockInfo)
 	}
 	return lockState, nil
-}
-
-// Remote procedure call, calls LockInfo handler with given input args.
-func (c *controlAPIHandlers) remoteLockInfoCall(args *GenericArgs, replies []SystemLockState) error {
-	var wg sync.WaitGroup
-	var errs = make([]error, len(c.RemoteControls))
-	// Send remote call to all neighboring peers fetch control lock info.
-	for index, clnt := range c.RemoteControls {
-		wg.Add(1)
-		go func(index int, client *AuthRPCClient) {
-			defer wg.Done()
-			errs[index] = client.Call("Control.RemoteLockInfo", args, &replies[index])
-			errorIf(errs[index], "Unable to initiate control lockInfo request to remote node %s", client.Node())
-		}(index, clnt)
-	}
-	wg.Wait()
-	for _, err := range errs {
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// RemoteLockInfo - RPC control handler for `minio control lock`, used internally by LockInfo to
-// make calls to neighboring peers.
-func (c *controlAPIHandlers) RemoteLockInfo(args *GenericArgs, reply *SystemLockState) error {
-	if !isRPCTokenValid(args.Token) {
-		return errInvalidToken
-	}
-	// Obtain the lock state information of the local system.
-	lockState, err := getSystemLockState()
-	// In case of error, return err to the RPC client.
-	if err != nil {
-		return err
-	}
-	*reply = lockState
-	return nil
-}
-
-// LockInfo - RPC control handler for `minio control lock list`. Returns the info of the locks held in the cluster.
-func (c *controlAPIHandlers) LockInfo(args *GenericArgs, reply *map[string]SystemLockState) error {
-	if !isRPCTokenValid(args.Token) {
-		return errInvalidToken
-	}
-	var replies = make([]SystemLockState, len(c.RemoteControls))
-	if args.Remote {
-		// Fetch lock states from all the remote peers.
-		args.Remote = false
-		if err := c.remoteLockInfoCall(args, replies); err != nil {
-			return err
-		}
-	}
-	rep := make(map[string]SystemLockState)
-	// The response containing the lock info.
-	for index, client := range c.RemoteControls {
-		rep[client.Node()] = replies[index]
-	}
-	// Obtain the lock state information of the local system.
-	lockState, err := getSystemLockState()
-	// In case of error, return err to the RPC client.
-	if err != nil {
-		return err
-	}
-
-	// Save the local node lock state.
-	rep[c.LocalNode] = lockState
-
-	// Set the reply.
-	*reply = rep
-
-	// Success.
-	return nil
-}
-
-// LockClearArgs - arguments for LockClear handler
-type LockClearArgs struct {
-	GenericArgs
-	Bucket string
-	Object string
-}
-
-// LockClear - RPC control handler for `minio control lock clear`.
-func (c *controlAPIHandlers) LockClear(args *LockClearArgs, reply *GenericReply) error {
-	if !isRPCTokenValid(args.Token) {
-		return errInvalidToken
-	}
-	nsMutex.ForceUnlock(args.Bucket, args.Object)
-	*reply = GenericReply{}
-	return nil
 }

@@ -41,3 +41,12 @@ var errDataTooLarge = errors.New("Object size larger than allowed limit")
 
 // When upload object size is less than what was expected.
 var errDataTooSmall = errors.New("Object size smaller than expected")
+
+// errServerNotInitialized - server not initialized.
+var errServerNotInitialized = errors.New("Server not initialized, please try again.")
+
+// errServerVersionMismatch - server versions do not match.
+var errServerVersionMismatch = errors.New("Server versions do not match.")
+
+// errServerTimeMismatch - server times are too far apart.
+var errServerTimeMismatch = errors.New("Server times are too far apart.")
