@@ -51,7 +51,17 @@ func (xl xlObjects) MakeBucket(bucket string) error {
 		// Make a volume inside a go-routine.
 		go func(index int, disk StorageAPI) {
 			defer wg.Done()
-			err := disk.MakeVol(bucket)
+			// Check if format.json exists on disk, to
+			// make sure this disk is formatted. Otherwise
+			// we do not create bucket.
+			_, err := disk.StatFile(minioMetaBucket, formatConfigFile)
+			if err != nil {
+				dErrs[index] = traceError(err)
+				return
+			}
+
+			// Create volume.
+			err = disk.MakeVol(bucket)
 			if err != nil {
 				dErrs[index] = traceError(err)
 			}
