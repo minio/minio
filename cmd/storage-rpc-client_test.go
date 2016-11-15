@@ -194,6 +194,7 @@ func (s *TestRPCStorageSuite) testRPCStorageClient(t *testing.T) {
 	s.testRPCStorageDisksInfo(t)
 	s.testRPCStorageVolOps(t)
 	s.testRPCStorageFileOps(t)
+	s.testRPCStorageListDir(t)
 }
 
 // Test storage disks info.
@@ -207,7 +208,7 @@ func (s *TestRPCStorageSuite) testRPCStorageDisksInfo(t *testing.T) {
 			t.Error("Invalid diskInfo total")
 		}
 		if storageDisk.String() == "" {
-			t.Error("Stinger storageAPI should be non empty")
+			t.Error("String representation of storageAPI should not be empty")
 		}
 	}
 }
@@ -215,10 +216,12 @@ func (s *TestRPCStorageSuite) testRPCStorageDisksInfo(t *testing.T) {
 // Test storage vol operations.
 func (s *TestRPCStorageSuite) testRPCStorageVolOps(t *testing.T) {
 	for _, storageDisk := range s.remoteDisks {
+		numVols := 0
 		err := storageDisk.MakeVol("myvol")
 		if err != nil {
 			t.Error("Unable to initiate MakeVol", err)
 		}
+		numVols++
 		volInfo, err := storageDisk.StatVol("myvol")
 		if err != nil {
 			t.Error("Unable to initiate StatVol", err)
@@ -229,9 +232,39 @@ func (s *TestRPCStorageSuite) testRPCStorageVolOps(t *testing.T) {
 		if volInfo.Created.IsZero() {
 			t.Error("Expected created time to be non zero")
 		}
+
+		for i := 0; i < 10; i++ {
+			err = storageDisk.MakeVol(fmt.Sprintf("myvol-%d", i))
+			if err != nil {
+				t.Error("Unable to initiate MakeVol", err)
+			}
+			numVols++
+		}
+		vols, err := storageDisk.ListVols()
+		if err != nil {
+			t.Error("Unable to initiate ListVol")
+		}
+		if len(vols) != numVols {
+			t.Errorf("Expected %d volumes but found only %d", numVols, len(vols))
+		}
+
+		for i := 0; i < 10; i++ {
+			err = storageDisk.DeleteVol(fmt.Sprintf("myvol-%d", i))
+			if err != nil {
+				t.Error("Unable to initiate DeleteVol", err)
+			}
+		}
+
 		err = storageDisk.DeleteVol("myvol")
 		if err != nil {
 			t.Error("Unable to initiate DeleteVol", err)
+		}
+		vols, err = storageDisk.ListVols()
+		if err != nil {
+			t.Error("Unable to initiate ListVol")
+		}
+		if len(vols) > 0 {
+			t.Errorf("Expected no volumes but found %d", len(vols))
 		}
 	}
 }
@@ -299,6 +332,46 @@ func (s *TestRPCStorageSuite) testRPCStorageFileOps(t *testing.T) {
 		err = storageDisk.DeleteVol("myvol")
 		if err != nil {
 			t.Error("Unable to initiate DeleteVol", err)
+		}
+	}
+}
+
+// Tests for ListDirHandler.
+func (s *TestRPCStorageSuite) testRPCStorageListDir(t *testing.T) {
+	for _, storageDisk := range s.remoteDisks {
+		err := storageDisk.MakeVol("myvol")
+		if err != nil {
+			t.Error("Unable to initiate MakeVol", err)
+		}
+		dirCount := 10
+		for i := 0; i < dirCount; i++ {
+			err = storageDisk.MakeVol(fmt.Sprintf("myvol/mydir-%d", i))
+			if err != nil {
+				t.Error("Unable to initiate MakeVol", err)
+			}
+		}
+		dirs, err := storageDisk.ListDir("myvol", "")
+		if len(dirs) != dirCount {
+			t.Errorf("Expected %d directories but found only %d", dirCount, len(dirs))
+		}
+		for i := 0; i < dirCount; i++ {
+			err = storageDisk.DeleteVol(fmt.Sprintf("myvol/mydir-%d", i))
+			if err != nil {
+				t.Error("Unable to initiate DeleteVol", err)
+			}
+		}
+		dirs, err = storageDisk.ListDir("myvol", "")
+		if len(dirs) != 0 {
+			t.Errorf("Expected no directories but found %d", dirCount)
+		}
+
+		err = storageDisk.DeleteVol("myvol")
+		if err != nil {
+			t.Error("Unable to initiate DeleteVol", err)
+		}
+		vols, err := storageDisk.ListVols()
+		if len(vols) != 0 {
+			t.Errorf("Expected no volumes but found %d", dirCount)
 		}
 	}
 }
