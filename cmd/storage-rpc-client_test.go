@@ -208,7 +208,7 @@ func (s *TestRPCStorageSuite) testRPCStorageDisksInfo(t *testing.T) {
 			t.Error("Invalid diskInfo total")
 		}
 		if storageDisk.String() == "" {
-			t.Error("String representation of storageAPI should be non-empty")
+			t.Error("String representation of storageAPI should not be empty")
 		}
 	}
 }
