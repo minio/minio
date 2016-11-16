@@ -77,8 +77,9 @@ func newObjectLayer(storageDisks []StorageAPI) (ObjectLayer, error) {
 
 // configureServer handler returns final handler for the http server.
 func configureServerHandler(srvCmdConfig serverCmdConfig) (http.Handler, error) {
-	// Initialize router.
-	mux := router.NewRouter()
+	// Initialize router. `SkipClean(true)` stops gorilla/mux from
+	// normalizing URL path minio/minio#3256
+	mux := router.NewRouter().SkipClean(true)
 
 	// Initialize distributed NS lock.
 	if globalIsDistXL {
