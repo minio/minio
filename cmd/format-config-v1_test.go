@@ -475,7 +475,7 @@ func TestFormatXLReorderByInspection(t *testing.T) {
 			t.Fatal("should not be nil")
 		}
 		if orderedDisks[i] != nil && orderedDisks[i] != xl.storageDisks[i] {
-			t.Fatal("Disks were not ordered correctly.")
+			t.Fatal("Disks were not ordered correctly")
 		}
 	}
 

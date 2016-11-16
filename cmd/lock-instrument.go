@@ -84,7 +84,7 @@ type LockInfoOriginNotFound struct {
 }
 
 func (l LockInfoOriginNotFound) Error() string {
-	return fmt.Sprintf("No lock state stored for the lock origined at \"%s\", for <volume> %s, <path> %s, <opsID> %s.",
+	return fmt.Sprintf("No lock state stored for the lock origined at \"%s\", for <volume> %s, <path> %s, <opsID> %s",
 		l.lockOrigin, l.volume, l.path, l.opsID)
 }
 
@@ -95,7 +95,7 @@ type LockInfoVolPathMissing struct {
 }
 
 func (l LockInfoVolPathMissing) Error() string {
-	return fmt.Sprintf("No entry in debug Lock Map for Volume: %s, path: %s.", l.volume, l.path)
+	return fmt.Sprintf("No entry in debug Lock Map for Volume: %s, path: %s", l.volume, l.path)
 }
 
 // LockInfoOpsIDNotFound - Returned when the lock state info exists, but the entry for
@@ -107,7 +107,7 @@ type LockInfoOpsIDNotFound struct {
 }
 
 func (l LockInfoOpsIDNotFound) Error() string {
-	return fmt.Sprintf("No entry in lock info for <Operation ID> %s, <volume> %s, <path> %s.", l.opsID, l.volume, l.path)
+	return fmt.Sprintf("No entry in lock info for <Operation ID> %s, <volume> %s, <path> %s", l.opsID, l.volume, l.path)
 }
 
 // LockInfoStateNotBlocked - When an attempt to change the state of the lock form `blocked` to `running` is done,
@@ -119,10 +119,10 @@ type LockInfoStateNotBlocked struct {
 }
 
 func (l LockInfoStateNotBlocked) Error() string {
-	return fmt.Sprintf("Lock state should be \"Blocked\" for <volume> %s, <path> %s, <opsID> %s.", l.volume, l.path, l.opsID)
+	return fmt.Sprintf("Lock state should be \"Blocked\" for <volume> %s, <path> %s, <opsID> %s", l.volume, l.path, l.opsID)
 }
 
-var errLockNotInitialized = errors.New("Debug lockMap not initialized.")
+var errLockNotInitialized = errors.New("Debug lockMap not initialized")
 
 // Initialize lock info volume path.
 func (n *nsLockMap) initLockInfoForVolumePath(param nsParam) {

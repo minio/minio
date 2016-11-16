@@ -42,8 +42,7 @@ To make Minio aware about your generated key and certificate, you will need to p
 
 ## 4. Install third parties CAs
 
-Minio can be configured to connect to other servers, whether Minio nodes or servers like NATs, Redis... If these servers use certificates that are not registerd in one of the known certificates authorities, you can make your Minio trusts them by putting these certificates under `certs/CAs/` in your Minio config path.
-
+Minio can be configured to connect to other servers, whether Minio nodes or servers like NATs, Redis. If these servers use certificates that are not registered in one of the known certificates authorities, you can make Minio server trust these CAs by dropping these certificates under `~/.minio/certs/CAs/` in your Minio config path.
 
 # Explore Further
 * [Minio Quickstart Guide](https://docs.minio.io/docs/minio-quickstart-guide)

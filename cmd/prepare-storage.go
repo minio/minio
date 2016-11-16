@@ -247,9 +247,9 @@ func retryFormattingDisks(firstDisk bool, endpoints []*url.URL, storageDisks []S
 					// Print configuration errors.
 					printConfigErrMsg(storageDisks, sErrs, printOnceFn())
 				case WaitForAll:
-					console.Println("Initializing data volume for first time. Waiting for other servers to come online.")
+					console.Println("Initializing data volume for first time. Waiting for other servers to come online")
 				case WaitForFormatting:
-					console.Println("Initializing data volume for first time. Waiting for first server to come online.")
+					console.Println("Initializing data volume for first time. Waiting for first server to come online")
 				}
 				continue
 			} // else We have FS backend now. Check fs format as well now.
@@ -260,7 +260,7 @@ func retryFormattingDisks(firstDisk bool, endpoints []*url.URL, storageDisks []S
 			} // else initialize the format for FS.
 			return initFormatFS(storageDisks[0])
 		case <-globalServiceDoneCh:
-			return errors.New("Initializing data volumes gracefully stopped.")
+			return errors.New("Initializing data volumes gracefully stopped")
 		}
 	}
 }

@@ -103,7 +103,7 @@ func parsePostPolicyForm(policy string) (PostPolicyForm, error) {
 			for k, v := range condt {
 				if !isString(v) { // Pre-check value type.
 					// All values must be of type string.
-					return parsedPolicy, fmt.Errorf("Unknown type %s of conditional field value %s found in POST policy form.", reflect.TypeOf(condt).String(), condt)
+					return parsedPolicy, fmt.Errorf("Unknown type %s of conditional field value %s found in POST policy form", reflect.TypeOf(condt).String(), condt)
 				}
 				// {"acl": "public-read" } is an alternate way to indicate - [ "eq", "$acl", "public-read" ]
 				// In this case we will just collapse this into "eq" for all use cases.
@@ -117,14 +117,14 @@ func parsePostPolicyForm(policy string) (PostPolicyForm, error) {
 			}
 		case []interface{}: // Handle array types.
 			if len(condt) != 3 { // Return error if we have insufficient elements.
-				return parsedPolicy, fmt.Errorf("Malformed conditional fields %s of type %s found in POST policy form.", condt, reflect.TypeOf(condt).String())
+				return parsedPolicy, fmt.Errorf("Malformed conditional fields %s of type %s found in POST policy form", condt, reflect.TypeOf(condt).String())
 			}
 			switch toString(condt[0]) {
 			case "eq", "starts-with":
 				for _, v := range condt { // Pre-check all values for type.
 					if !isString(v) {
 						// All values must be of type string.
-						return parsedPolicy, fmt.Errorf("Unknown type %s of conditional field value %s found in POST policy form.", reflect.TypeOf(condt).String(), condt)
+						return parsedPolicy, fmt.Errorf("Unknown type %s of conditional field value %s found in POST policy form", reflect.TypeOf(condt).String(), condt)
 					}
 				}
 				operator, matchType, value := toString(condt[0]), toString(condt[1]), toString(condt[2])
@@ -139,10 +139,12 @@ func parsePostPolicyForm(policy string) (PostPolicyForm, error) {
 				parsedPolicy.Conditions.ContentLengthRange = contentLengthRange{toInteger(condt[1]), toInteger(condt[2]), true}
 			default:
 				// Condition should be valid.
-				return parsedPolicy, fmt.Errorf("Unknown type %s of conditional field value %s found in POST policy form.", reflect.TypeOf(condt).String(), condt)
+				return parsedPolicy, fmt.Errorf("Unknown type %s of conditional field value %s found in POST policy form",
+					reflect.TypeOf(condt).String(), condt)
 			}
 		default:
-			return parsedPolicy, fmt.Errorf("Unknown field %s of type %s found in POST policy form.", condt, reflect.TypeOf(condt).String())
+			return parsedPolicy, fmt.Errorf("Unknown field %s of type %s found in POST policy form",
+				condt, reflect.TypeOf(condt).String())
 		}
 	}
 	return parsedPolicy, nil

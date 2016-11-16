@@ -54,17 +54,17 @@ type config struct {
 // type struct and contain a string type field called "Version".
 func CheckData(data interface{}) error {
 	if !structs.IsStruct(data) {
-		return fmt.Errorf("Invalid argument type. Expecing \"struct\" type.")
+		return fmt.Errorf("Invalid argument type. Expecing \"struct\" type")
 	}
 
 	st := structs.New(data)
 	f, ok := st.FieldOk("Version")
 	if !ok {
-		return fmt.Errorf("Invalid type of struct argument. No [%s.Version] field found.", st.Name())
+		return fmt.Errorf("Invalid type of struct argument. No [%s.Version] field found", st.Name())
 	}
 
 	if f.Kind() != reflect.String {
-		return fmt.Errorf("Invalid type of struct argument. Expecting \"string\" type [%s.Version] field.", st.Name())
+		return fmt.Errorf("Invalid type of struct argument. Expecting \"string\" type [%s.Version] field", st.Name())
 	}
 
 	return nil
@@ -258,7 +258,7 @@ func (d *config) Load(filename string) error {
 	st := structs.New(d.data)
 	f, ok := st.FieldOk("Version")
 	if !ok {
-		return fmt.Errorf("Argument struct [%s] does not contain field \"Version\".", st.Name())
+		return fmt.Errorf("Argument struct [%s] does not contain field \"Version\"", st.Name())
 	}
 
 	err = json.Unmarshal(fileData, d.data)

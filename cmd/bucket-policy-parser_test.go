@@ -184,14 +184,14 @@ func TestIsValidActions(t *testing.T) {
 		// Test case - 1.
 		// "s3:ListObject" is an invalid Action.
 		{set.CreateStringSet([]string{"s3:GetObject", "s3:ListObject", "s3:RemoveObject"}...),
-			errors.New("Unsupported actions found: ‘set.StringSet{\"s3:RemoveObject\":struct {}{}, \"s3:ListObject\":struct {}{}}’, please validate your policy document."), false},
+			errors.New("Unsupported actions found: ‘set.StringSet{\"s3:RemoveObject\":struct {}{}, \"s3:ListObject\":struct {}{}}’, please validate your policy document"), false},
 		// Test case - 2.
 		// Empty Actions.
-		{set.CreateStringSet([]string{}...), errors.New("Action list cannot be empty."), false},
+		{set.CreateStringSet([]string{}...), errors.New("Action list cannot be empty"), false},
 		// Test case - 3.
 		// "s3:DeleteEverything"" is an invalid Action.
 		{set.CreateStringSet([]string{"s3:GetObject", "s3:ListBucket", "s3:PutObject", "s3:DeleteEverything"}...),
-			errors.New("Unsupported actions found: ‘set.StringSet{\"s3:DeleteEverything\":struct {}{}}’, please validate your policy document."), false},
+			errors.New("Unsupported actions found: ‘set.StringSet{\"s3:DeleteEverything\":struct {}{}}’, please validate your policy document"), false},
 		// Inputs with valid Action.
 		// Test Case - 4.
 		{set.CreateStringSet([]string{
@@ -223,13 +223,13 @@ func TestIsValidEffect(t *testing.T) {
 	}{
 		// Inputs with unsupported Effect.
 		// Test case - 1.
-		{"", errors.New("Policy effect cannot be empty."), false},
+		{"", errors.New("Policy effect cannot be empty"), false},
 		// Test case - 2.
-		{"DontAllow", errors.New("Unsupported Effect found: ‘DontAllow’, please validate your policy document."), false},
+		{"DontAllow", errors.New("Unsupported Effect found: ‘DontAllow’, please validate your policy document"), false},
 		// Test case - 3.
-		{"NeverAllow", errors.New("Unsupported Effect found: ‘NeverAllow’, please validate your policy document."), false},
+		{"NeverAllow", errors.New("Unsupported Effect found: ‘NeverAllow’, please validate your policy document"), false},
 		// Test case - 4.
-		{"AllowAlways", errors.New("Unsupported Effect found: ‘AllowAlways’, please validate your policy document."), false},
+		{"AllowAlways", errors.New("Unsupported Effect found: ‘AllowAlways’, please validate your policy document"), false},
 
 		// Inputs with valid Effect.
 		// Test Case - 5.
@@ -267,16 +267,16 @@ func TestIsValidResources(t *testing.T) {
 		// Inputs with unsupported Action.
 		// Test case - 1.
 		// Empty Resources.
-		{[]string{}, errors.New("Resource list cannot be empty."), false},
+		{[]string{}, errors.New("Resource list cannot be empty"), false},
 		// Test case - 2.
 		// A valid resource should have prefix "arn:aws:s3:::".
-		{[]string{"my-resource"}, errors.New("Unsupported resource style found: ‘my-resource’, please validate your policy document."), false},
+		{[]string{"my-resource"}, errors.New("Unsupported resource style found: ‘my-resource’, please validate your policy document"), false},
 		// Test case - 3.
 		// A Valid resource should have bucket name followed by "arn:aws:s3:::".
-		{[]string{"arn:aws:s3:::"}, errors.New("Invalid resource style found: ‘arn:aws:s3:::’, please validate your policy document."), false},
+		{[]string{"arn:aws:s3:::"}, errors.New("Invalid resource style found: ‘arn:aws:s3:::’, please validate your policy document"), false},
 		// Test Case - 4.
 		// Valid resource shouldn't have slash('/') followed by "arn:aws:s3:::".
-		{[]string{"arn:aws:s3:::/"}, errors.New("Invalid resource style found: ‘arn:aws:s3:::/’, please validate your policy document."), false},
+		{[]string{"arn:aws:s3:::/"}, errors.New("Invalid resource style found: ‘arn:aws:s3:::/’, please validate your policy document"), false},
 
 		// Test cases with valid Resources.
 		{[]string{"arn:aws:s3:::my-bucket"}, nil, true},
@@ -313,12 +313,12 @@ func TestIsValidPrincipals(t *testing.T) {
 		// Inputs with unsupported Principals.
 		// Test case - 1.
 		// Empty Principals list.
-		{[]string{}, errors.New("Principal cannot be empty."), false},
+		{[]string{}, errors.New("Principal cannot be empty"), false},
 		// Test case - 2.
 		// "*" is the only valid principal.
-		{[]string{"my-principal"}, errors.New("Unsupported principals found: ‘set.StringSet{\"my-principal\":struct {}{}}’, please validate your policy document."), false},
+		{[]string{"my-principal"}, errors.New("Unsupported principals found: ‘set.StringSet{\"my-principal\":struct {}{}}’, please validate your policy document"), false},
 		// Test case - 3.
-		{[]string{"*", "111122233"}, errors.New("Unsupported principals found: ‘set.StringSet{\"111122233\":struct {}{}}’, please validate your policy document."), false},
+		{[]string{"*", "111122233"}, errors.New("Unsupported principals found: ‘set.StringSet{\"111122233\":struct {}{}}’, please validate your policy document"), false},
 		// Test case - 4.
 		// Test case with valid principal value.
 		{[]string{"*"}, nil, true},
@@ -434,23 +434,23 @@ func TestIsValidConditions(t *testing.T) {
 		// Test case - 1.
 		// "StringValues" is an invalid type.
 		{testConditions[0], fmt.Errorf("Unsupported condition type 'StringValues', " +
-			"please validate your policy document."), false},
+			"please validate your policy document"), false},
 		// Test case - 2.
 		// "s3:Object" is an invalid key.
 		{testConditions[1], fmt.Errorf("Unsupported condition key " +
-			"'StringEquals', please validate your policy document."), false},
+			"'StringEquals', please validate your policy document"), false},
 		// Test case - 3.
 		// Test case with Ambigious conditions set.
 		{testConditions[2], fmt.Errorf("Ambigious condition values for key 's3:prefix', " +
-			"please validate your policy document."), false},
+			"please validate your policy document"), false},
 		// Test case - 4.
 		// Test case with valid and invalid condition types.
 		{testConditions[3], fmt.Errorf("Unsupported condition type 'InvalidType', " +
-			"please validate your policy document."), false},
+			"please validate your policy document"), false},
 		// Test case - 5.
 		// Test case with valid and invalid condition keys.
 		{testConditions[4], fmt.Errorf("Unsupported condition key 'StringEquals', " +
-			"please validate your policy document."), false},
+			"please validate your policy document"), false},
 		// Test cases with valid conditions.
 		// Test case - 6.
 		{testConditions[5], nil, true},
@@ -653,10 +653,10 @@ func TestParseBucketPolicy(t *testing.T) {
 	}{
 		// Test case - 1.
 		// bucketPolicy statement empty.
-		{bucketAccesPolicies[0], bucketPolicy{}, errors.New("Policy statement cannot be empty."), false},
+		{bucketAccesPolicies[0], bucketPolicy{}, errors.New("Policy statement cannot be empty"), false},
 		// Test case - 2.
 		// bucketPolicy version empty.
-		{bucketAccesPolicies[1], bucketPolicy{}, errors.New("Policy version cannot be empty."), false},
+		{bucketAccesPolicies[1], bucketPolicy{}, errors.New("Policy version cannot be empty"), false},
 		// Test case - 3.
 		// Readonly bucketPolicy.
 		{bucketAccesPolicies[2], bucketAccesPolicies[2], nil, true},
@@ -668,16 +668,16 @@ func TestParseBucketPolicy(t *testing.T) {
 		{bucketAccesPolicies[4], bucketAccesPolicies[4], nil, true},
 		// Test case - 6.
 		// bucketPolicy statement contains unsupported action.
-		{bucketAccesPolicies[5], bucketAccesPolicies[5], fmt.Errorf("Unsupported actions found: ‘set.StringSet{\"s3:DeleteEverything\":struct {}{}}’, please validate your policy document."), false},
+		{bucketAccesPolicies[5], bucketAccesPolicies[5], fmt.Errorf("Unsupported actions found: ‘set.StringSet{\"s3:DeleteEverything\":struct {}{}}’, please validate your policy document"), false},
 		// Test case - 7.
 		// bucketPolicy statement contains unsupported Effect.
-		{bucketAccesPolicies[6], bucketAccesPolicies[6], fmt.Errorf("Unsupported Effect found: ‘DontAllow’, please validate your policy document."), false},
+		{bucketAccesPolicies[6], bucketAccesPolicies[6], fmt.Errorf("Unsupported Effect found: ‘DontAllow’, please validate your policy document"), false},
 		// Test case - 8.
 		// bucketPolicy statement contains unsupported Principal.
-		{bucketAccesPolicies[7], bucketAccesPolicies[7], fmt.Errorf("Unsupported principals found: ‘set.StringSet{\"User1111\":struct {}{}}’, please validate your policy document."), false},
+		{bucketAccesPolicies[7], bucketAccesPolicies[7], fmt.Errorf("Unsupported principals found: ‘set.StringSet{\"User1111\":struct {}{}}’, please validate your policy document"), false},
 		// Test case - 9.
 		// bucketPolicy statement contains unsupported Resource.
-		{bucketAccesPolicies[8], bucketAccesPolicies[8], fmt.Errorf("Unsupported resource style found: ‘my-resource’, please validate your policy document."), false},
+		{bucketAccesPolicies[8], bucketAccesPolicies[8], fmt.Errorf("Unsupported resource style found: ‘my-resource’, please validate your policy document"), false},
 	}
 	for i, testCase := range testCases {
 		var buffer bytes.Buffer

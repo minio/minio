@@ -58,8 +58,8 @@ func newJWT(expiry time.Duration) (*JWT, error) {
 	return &JWT{cred, expiry}, nil
 }
 
-var errInvalidAccessKeyLength = errors.New("Invalid access key, access key should be 5 to 20 characters in length.")
-var errInvalidSecretKeyLength = errors.New("Invalid secret key, secret key should be 8 to 40 characters in length.")
+var errInvalidAccessKeyLength = errors.New("Invalid access key, access key should be 5 to 20 characters in length")
+var errInvalidSecretKeyLength = errors.New("Invalid secret key, secret key should be 8 to 40 characters in length")
 
 // GenerateToken - generates a new Json Web Token based on the incoming access key.
 func (jwt *JWT) GenerateToken(accessKey string) (string, error) {
@@ -80,8 +80,8 @@ func (jwt *JWT) GenerateToken(accessKey string) (string, error) {
 	return token.SignedString([]byte(jwt.SecretAccessKey))
 }
 
-var errInvalidAccessKeyID = errors.New("The access key ID you provided does not exist in our records.")
-var errAuthentication = errors.New("Authentication failed, check your access credentials.")
+var errInvalidAccessKeyID = errors.New("The access key ID you provided does not exist in our records")
+var errAuthentication = errors.New("Authentication failed, check your access credentials")
 
 // Authenticate - authenticates incoming access key and secret key.
 func (jwt *JWT) Authenticate(accessKey, secretKey string) error {

@@ -79,11 +79,11 @@ func (b bucketPolicy) String() string {
 func isValidActions(actions set.StringSet) (err error) {
 	// Statement actions cannot be empty.
 	if len(actions) == 0 {
-		err = errors.New("Action list cannot be empty.")
+		err = errors.New("Action list cannot be empty")
 		return err
 	}
 	if unsupportedActions := actions.Difference(supportedActionMap); !unsupportedActions.IsEmpty() {
-		err = fmt.Errorf("Unsupported actions found: ‘%#v’, please validate your policy document.", unsupportedActions)
+		err = fmt.Errorf("Unsupported actions found: ‘%#v’, please validate your policy document", unsupportedActions)
 		return err
 	}
 	return nil
@@ -93,11 +93,11 @@ func isValidActions(actions set.StringSet) (err error) {
 func isValidEffect(effect string) (err error) {
 	// Statement effect cannot be empty.
 	if effect == "" {
-		err = errors.New("Policy effect cannot be empty.")
+		err = errors.New("Policy effect cannot be empty")
 		return err
 	}
 	if !supportedEffectMap.Contains(effect) {
-		err = errors.New("Unsupported Effect found: ‘" + effect + "’, please validate your policy document.")
+		err = errors.New("Unsupported Effect found: ‘" + effect + "’, please validate your policy document")
 		return err
 	}
 	return nil
@@ -107,17 +107,17 @@ func isValidEffect(effect string) (err error) {
 func isValidResources(resources set.StringSet) (err error) {
 	// Statement resources cannot be empty.
 	if len(resources) == 0 {
-		err = errors.New("Resource list cannot be empty.")
+		err = errors.New("Resource list cannot be empty")
 		return err
 	}
 	for resource := range resources {
 		if !strings.HasPrefix(resource, AWSResourcePrefix) {
-			err = errors.New("Unsupported resource style found: ‘" + resource + "’, please validate your policy document.")
+			err = errors.New("Unsupported resource style found: ‘" + resource + "’, please validate your policy document")
 			return err
 		}
 		resourceSuffix := strings.SplitAfter(resource, AWSResourcePrefix)[1]
 		if len(resourceSuffix) == 0 || strings.HasPrefix(resourceSuffix, "/") {
-			err = errors.New("Invalid resource style found: ‘" + resource + "’, please validate your policy document.")
+			err = errors.New("Invalid resource style found: ‘" + resource + "’, please validate your policy document")
 			return err
 		}
 	}
@@ -171,13 +171,13 @@ func isValidPrincipals(principal interface{}) (err error) {
 	principals := parsePrincipals(principal)
 	// Statement principal should have a value.
 	if len(principals) == 0 {
-		err = errors.New("Principal cannot be empty.")
+		err = errors.New("Principal cannot be empty")
 		return err
 	}
 	if unsuppPrincipals := principals.Difference(set.CreateStringSet([]string{"*"}...)); !unsuppPrincipals.IsEmpty() {
 		// Minio does not support or implement IAM, "*" is the only valid value.
 		// Amazon s3 doc on principals: http://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_elements.html#Principal
-		err = fmt.Errorf("Unsupported principals found: ‘%#v’, please validate your policy document.", unsuppPrincipals)
+		err = fmt.Errorf("Unsupported principals found: ‘%#v’, please validate your policy document", unsuppPrincipals)
 		return err
 	}
 	return nil
@@ -191,17 +191,17 @@ func isValidConditions(conditions map[string]map[string]set.StringSet) (err erro
 	conditionKeyVal := make(map[string]set.StringSet)
 	for conditionType := range conditions {
 		if !supportedConditionsType.Contains(conditionType) {
-			err = fmt.Errorf("Unsupported condition type '%s', please validate your policy document.", conditionType)
+			err = fmt.Errorf("Unsupported condition type '%s', please validate your policy document", conditionType)
 			return err
 		}
 		for key, value := range conditions[conditionType] {
 			if !supportedConditionsKey.Contains(key) {
-				err = fmt.Errorf("Unsupported condition key '%s', please validate your policy document.", conditionType)
+				err = fmt.Errorf("Unsupported condition key '%s', please validate your policy document", conditionType)
 				return err
 			}
 			conditionVal, ok := conditionKeyVal[key]
 			if ok && !value.Intersection(conditionVal).IsEmpty() {
-				err = fmt.Errorf("Ambigious condition values for key '%s', please validate your policy document.", key)
+				err = fmt.Errorf("Ambigious condition values for key '%s', please validate your policy document", key)
 				return err
 			}
 			conditionKeyVal[key] = value
@@ -293,13 +293,13 @@ func parseBucketPolicy(bucketPolicyReader io.Reader, policy *bucketPolicy) (err 
 
 	// Policy version cannot be empty.
 	if len(policy.Version) == 0 {
-		err = errors.New("Policy version cannot be empty.")
+		err = errors.New("Policy version cannot be empty")
 		return err
 	}
 
 	// Policy statements cannot be empty.
 	if len(policy.Statements) == 0 {
-		err = errors.New("Policy statement cannot be empty.")
+		err = errors.New("Policy statement cannot be empty")
 		return err
 	}
 

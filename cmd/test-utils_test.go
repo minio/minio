@@ -544,7 +544,7 @@ func signStreamingRequest(req *http.Request, accessKey, secretKey string, currTi
 	// Get hashed payload.
 	hashedPayload := req.Header.Get("x-amz-content-sha256")
 	if hashedPayload == "" {
-		return "", fmt.Errorf("Invalid hashed payload.")
+		return "", fmt.Errorf("Invalid hashed payload")
 	}
 
 	// Set x-amz-date.
@@ -933,7 +933,7 @@ func signRequestV4(req *http.Request, accessKey, secretKey string) error {
 	// Get hashed payload.
 	hashedPayload := req.Header.Get("x-amz-content-sha256")
 	if hashedPayload == "" {
-		return fmt.Errorf("Invalid hashed payload.")
+		return fmt.Errorf("Invalid hashed payload")
 	}
 
 	currTime := time.Now().UTC()
@@ -1678,7 +1678,7 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, testName, bucketName, objectName, 
 	// simple function which ends the test by printing the common message which gives the context of the test
 	// and then followed by the the actual error message.
 	failTest := func(testType, failMsg string) {
-		t.Fatalf("Minio %s: %s fail for \"%s\": \n<Error> %s.", instanceType, testType, testName, failMsg)
+		t.Fatalf("Minio %s: %s fail for \"%s\": \n<Error> %s", instanceType, testType, testName, failMsg)
 	}
 	// httptest Recorder to capture all the response by the http handler.
 	rec := httptest.NewRecorder()
@@ -1702,7 +1702,7 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, testName, bucketName, objectName, 
 	// expected error response when the unsigned HTTP request is not permitted.
 	accesDeniedHTTPStatus := getAPIError(ErrAccessDenied).HTTPStatusCode
 	if rec.Code != accesDeniedHTTPStatus {
-		failTest(anonTestStr, fmt.Sprintf("Object API Nil Test expected to fail with %d, but failed with %d.", accesDeniedHTTPStatus, rec.Code))
+		failTest(anonTestStr, fmt.Sprintf("Object API Nil Test expected to fail with %d, but failed with %d", accesDeniedHTTPStatus, rec.Code))
 	}
 
 	// expected error response in bytes when objectLayer is not initialized, or set to `nil`.
@@ -1749,7 +1749,7 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, testName, bucketName, objectName, 
 
 	// compare the HTTP response status code with the expected one.
 	if rec.Code != expectedHTTPStatus {
-		failTest(anonTestStr, fmt.Sprintf("Expected the anonymous HTTP request to be served after the policy changes\n,Expected response HTTP status code to be %d, got %d.",
+		failTest(anonTestStr, fmt.Sprintf("Expected the anonymous HTTP request to be served after the policy changes\n,Expected response HTTP status code to be %d, got %d",
 			expectedHTTPStatus, rec.Code))
 	}
 
@@ -1777,7 +1777,7 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, testName, bucketName, objectName, 
 	}
 
 	if rec.Code != accesDeniedHTTPStatus {
-		failTest(unknownSignTestStr, fmt.Sprintf("Object API Unknow auth test for \"%s\", expected to fail with %d, but failed with %d.", testName, accesDeniedHTTPStatus, rec.Code))
+		failTest(unknownSignTestStr, fmt.Sprintf("Object API Unknow auth test for \"%s\", expected to fail with %d, but failed with %d", testName, accesDeniedHTTPStatus, rec.Code))
 	}
 
 }
@@ -1805,7 +1805,7 @@ func ExecObjectLayerAPINilTest(t TestErrHandler, bucketName, objectName, instanc
 	// or when objectLayer is `nil`.
 	serverNotInitializedErr := getAPIError(ErrServerNotInitialized).HTTPStatusCode
 	if rec.Code != serverNotInitializedErr {
-		t.Errorf("Object API Nil Test expected to fail with %d, but failed with %d.", serverNotInitializedErr, rec.Code)
+		t.Errorf("Object API Nil Test expected to fail with %d, but failed with %d", serverNotInitializedErr, rec.Code)
 	}
 	// expected error response in bytes when objectLayer is not initialized, or set to `nil`.
 	expectedErrResponse := encodeResponse(getAPIErrorResponse(getAPIError(ErrServerNotInitialized), getGetObjectURL("", bucketName, objectName)))
@@ -1816,11 +1816,11 @@ func ExecObjectLayerAPINilTest(t TestErrHandler, bucketName, objectName, instanc
 		// read the response body.
 		actualContent, err := ioutil.ReadAll(rec.Body)
 		if err != nil {
-			t.Fatalf("Minio %s: Failed parsing response body: <ERROR> %v.", instanceType, err)
+			t.Fatalf("Minio %s: Failed parsing response body: <ERROR> %v", instanceType, err)
 		}
 		// verify whether actual error response (from the response body), matches the expected error response.
 		if !bytes.Equal(expectedErrResponse, actualContent) {
-			t.Errorf("Minio %s: Object content differs from expected value.", instanceType)
+			t.Errorf("Minio %s: Object content differs from expected value", instanceType)
 		}
 	}
 }
