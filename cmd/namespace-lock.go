@@ -129,7 +129,7 @@ func (n *nsLockMap) lock(volume, path string, lockOrigin, opsID string, readLock
 	// unblocks. The lock for accessing `nsMutex` is held inside
 	// the function itself.
 	if err := n.statusNoneToBlocked(param, lockOrigin, opsID, readLock); err != nil {
-		errorIf(err, "Failed to set lock state to blocked.")
+		errorIf(err, "Failed to set lock state to blocked")
 	}
 
 	// Unlock map before Locking NS which might block.
@@ -146,7 +146,7 @@ func (n *nsLockMap) lock(volume, path string, lockOrigin, opsID string, readLock
 	// running.  change the state of the lock to be running (from
 	// blocked) for the given pair of <volume, path> and <OperationID>.
 	if err := n.statusBlockedToRunning(param, lockOrigin, opsID, readLock); err != nil {
-		errorIf(err, "Failed to set the lock state to running.")
+		errorIf(err, "Failed to set the lock state to running")
 	}
 }
 
@@ -165,8 +165,8 @@ func (n *nsLockMap) unlock(volume, path, opsID string, readLock bool) {
 			nsLk.Unlock()
 		}
 		if nsLk.ref == 0 {
-			errorIf(errors.New("Namespace reference count cannot be 0."),
-				"Invalid reference count detected.")
+			errorIf(errors.New("Namespace reference count cannot be 0"),
+				"Invalid reference count detected")
 		}
 		if nsLk.ref != 0 {
 			nsLk.ref--
@@ -174,7 +174,7 @@ func (n *nsLockMap) unlock(volume, path, opsID string, readLock bool) {
 			// delete the lock state entry for given operation ID.
 			err := n.deleteLockInfoEntryForOps(param, opsID)
 			if err != nil {
-				errorIf(err, "Failed to delete lock info entry.")
+				errorIf(err, "Failed to delete lock info entry")
 			}
 		}
 		if nsLk.ref == 0 {
@@ -185,7 +185,7 @@ func (n *nsLockMap) unlock(volume, path, opsID string, readLock bool) {
 			// <volume, path> pair.
 			err := n.deleteLockInfoEntryForVolumePath(param)
 			if err != nil {
-				errorIf(err, "Failed to delete lock info entry.")
+				errorIf(err, "Failed to delete lock info entry")
 			}
 		}
 	}
@@ -252,7 +252,7 @@ func (n *nsLockMap) ForceUnlock(volume, path string) {
 		// <volume, path> pair.
 		err := n.deleteLockInfoEntryForVolumePath(param)
 		if err != nil {
-			errorIf(err, "Failed to delete lock info entry.")
+			errorIf(err, "Failed to delete lock info entry")
 		}
 	}
 }

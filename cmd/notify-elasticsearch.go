@@ -76,7 +76,7 @@ func newElasticNotify(accountID string) (*logrus.Logger, error) {
 			return nil, err
 		}
 		if !createIndex.Acknowledged {
-			return nil, errors.New("Index not created.")
+			return nil, errors.New("Index not created")
 		}
 	}
 

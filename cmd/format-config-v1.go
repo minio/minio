@@ -342,7 +342,7 @@ func checkJBODConsistency(formatConfigs []*formatConfigV1) error {
 		}
 		currentJBOD := format.XL.JBOD
 		if !reflect.DeepEqual(sentinelJBOD, currentJBOD) {
-			return errors.New("Inconsistent JBOD found.")
+			return errors.New("Inconsistent JBOD found")
 		}
 	}
 	return nil
@@ -801,10 +801,10 @@ func checkFormatXL(formatConfigs []*formatConfigV1) error {
 		}
 		// Validate format version and format type.
 		if formatXL.Version != "1" {
-			return fmt.Errorf("Unsupported version of backend format [%s] found.", formatXL.Version)
+			return fmt.Errorf("Unsupported version of backend format [%s] found", formatXL.Version)
 		}
 		if formatXL.Format != "xl" {
-			return fmt.Errorf("Unsupported backend format [%s] found.", formatXL.Format)
+			return fmt.Errorf("Unsupported backend format [%s] found", formatXL.Format)
 		}
 		if formatXL.XL.Version != "1" {
 			return fmt.Errorf("Unsupported XL backend format found [%s]", formatXL.XL.Version)

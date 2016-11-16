@@ -341,7 +341,7 @@ func decodeData(enBlocks [][]byte, dataBlocks, parityBlocks int) error {
 	}
 	if !ok {
 		// Blocks cannot be reconstructed, corrupted data.
-		err = errors.New("Verification failed after reconstruction, data likely corrupted.")
+		err = errors.New("Verification failed after reconstruction, data likely corrupted")
 		return traceError(err)
 	}
 

@@ -38,7 +38,7 @@ func newListenerLogger(listenerArn, targetAddr string) (*listenerLogger, error) 
 	bmsClient := globalS3Peers.GetPeerClient(targetAddr)
 	if bmsClient == nil {
 		return nil, fmt.Errorf(
-			"Peer %s was not initialized - bug!",
+			"Peer %s was not initialized, unexpected error",
 			targetAddr,
 		)
 	}

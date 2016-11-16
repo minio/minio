@@ -19,4 +19,4 @@ package cmd
 import "errors"
 
 // errFSDiskFormat - returned when given disk format is other than FS format.
-var errFSDiskFormat = errors.New("Disk is not in FS format.")
+var errFSDiskFormat = errors.New("Disk is not in FS format")
