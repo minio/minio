@@ -1416,6 +1416,13 @@ func getDeleteBucketURL(endPoint, bucketName string) string {
 	return makeTestTargetURL(endPoint, bucketName, "", url.Values{})
 }
 
+// return URL for deleting the bucket.
+func getDeleteMultipleObjectsURL(endPoint, bucketName string) string {
+	queryValue := url.Values{}
+	queryValue.Set("delete", "")
+	return makeTestTargetURL(endPoint, bucketName, "", queryValue)
+}
+
 // return URL For fetching location of the bucket.
 func getBucketLocationURL(endPoint, bucketName string) string {
 	queryValue := url.Values{}
@@ -1970,6 +1977,9 @@ func registerBucketLevelFunc(bucket *router.Router, api objectAPIHandlers, apiFu
 		case "HeadBucket":
 			// Register HeadBucket handler.
 			bucket.Methods("HEAD").HandlerFunc(api.HeadBucketHandler)
+		case "DeleteMultipleObjects":
+			// Register DeleteMultipleObjects handler.
+			bucket.Methods("POST").HandlerFunc(api.DeleteMultipleObjectsHandler).Queries("delete", "")
 		case "NewMultipart":
 			// Register New Multipart upload handler.
 			bucket.Methods("POST").Path("/{object:.+}").HandlerFunc(api.NewMultipartUploadHandler).Queries("uploads", "")

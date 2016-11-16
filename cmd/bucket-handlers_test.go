@@ -19,8 +19,10 @@ package cmd
 import (
 	"bytes"
 	"encoding/xml"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 )
 
@@ -606,4 +608,166 @@ func testListBucketsHandler(obj ObjectLayer, instanceType, bucketName string, ap
 	// execute the object layer set to `nil` test.
 	// `ExecObjectLayerAPINilTest` manages the operation.
 	ExecObjectLayerAPINilTest(t, "", "", instanceType, apiRouter, nilReq)
+}
+
+// Wrapper for calling DeleteMultipleObjects HTTP handler tests for both XL multiple disks and single node setup.
+func TestAPIDeleteMultipleObjectsHandler(t *testing.T) {
+	ExecObjectLayerAPITest(t, testAPIDeleteMultipleObjectsHandler, []string{"DeleteMultipleObjects"})
+}
+
+func testAPIDeleteMultipleObjectsHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
+	credentials credential, t *testing.T) {
+	initBucketPolicies(obj)
+
+	var err error
+	// register event notifier.
+	err = initEventNotifier(obj)
+	if err != nil {
+		t.Fatal("Notifier initialization failed.")
+	}
+
+	contentBytes := []byte("hello")
+	sha256sum := ""
+	var objectNames []string
+	for i := 0; i < 10; i++ {
+		objectName := "test-object-" + strconv.Itoa(i)
+		// uploading the object.
+		_, err = obj.PutObject(bucketName, objectName, int64(len(contentBytes)), bytes.NewBuffer(contentBytes),
+			make(map[string]string), sha256sum)
+		// if object upload fails stop the test.
+		if err != nil {
+			t.Fatalf("Put Object %d:  Error uploading object: <ERROR> %v", i, err)
+		}
+
+		// object used for the test.
+		objectNames = append(objectNames, objectName)
+	}
+
+	getObjectIdentifierList := func(objectNames []string) (objectIdentifierList []ObjectIdentifier) {
+		for _, objectName := range objectNames {
+			objectIdentifierList = append(objectIdentifierList, ObjectIdentifier{objectName})
+		}
+
+		return objectIdentifierList
+	}
+
+	requestList := []DeleteObjectsRequest{
+		{Quiet: false, Objects: getObjectIdentifierList(objectNames[:5])},
+		{Quiet: true, Objects: getObjectIdentifierList(objectNames[5:])},
+	}
+
+	// generate multi objects delete response.
+	successRequest0 := encodeResponse(requestList[0])
+	successResponse0 := generateMultiDeleteResponse(requestList[0].Quiet, requestList[0].Objects, nil)
+	encodedSuccessResponse0 := encodeResponse(successResponse0)
+
+	successRequest1 := encodeResponse(requestList[1])
+	successResponse1 := generateMultiDeleteResponse(requestList[1].Quiet, requestList[1].Objects, nil)
+	encodedSuccessResponse1 := encodeResponse(successResponse1)
+
+	// generate multi objects delete response for errors.
+	// errorRequest := encodeResponse(requestList[1])
+	errorResponse := generateMultiDeleteResponse(requestList[1].Quiet, requestList[1].Objects, nil)
+	encodedErrorResponse := encodeResponse(errorResponse)
+
+	testCases := []struct {
+		bucket             string
+		objects            []byte
+		accessKey          string
+		secretKey          string
+		expectedContent    []byte
+		expectedRespStatus int
+	}{
+		// Test case - 1.
+		// Delete objects with invalid access key.
+		{
+			bucket:             bucketName,
+			objects:            successRequest0,
+			accessKey:          "Invalid-AccessID",
+			secretKey:          credentials.SecretAccessKey,
+			expectedContent:    nil,
+			expectedRespStatus: http.StatusForbidden,
+		},
+		// Test case - 2.
+		// Delete valid objects with quiet flag off.
+		{
+			bucket:             bucketName,
+			objects:            successRequest0,
+			accessKey:          credentials.AccessKeyID,
+			secretKey:          credentials.SecretAccessKey,
+			expectedContent:    encodedSuccessResponse0,
+			expectedRespStatus: http.StatusOK,
+		},
+		// Test case - 3.
+		// Delete valid objects with quiet flag on.
+		{
+			bucket:             bucketName,
+			objects:            successRequest1,
+			accessKey:          credentials.AccessKeyID,
+			secretKey:          credentials.SecretAccessKey,
+			expectedContent:    encodedSuccessResponse1,
+			expectedRespStatus: http.StatusOK,
+		},
+		// Test case - 4.
+		// Delete previously deleted objects.
+		{
+			bucket:             bucketName,
+			objects:            successRequest1,
+			accessKey:          credentials.AccessKeyID,
+			secretKey:          credentials.SecretAccessKey,
+			expectedContent:    encodedErrorResponse,
+			expectedRespStatus: http.StatusOK,
+		},
+	}
+
+	for i, testCase := range testCases {
+		var req *http.Request
+		var actualContent []byte
+
+		// Indicating that all parts are uploaded and initiating completeMultipartUpload.
+		req, err = newTestSignedRequestV4("POST", getDeleteMultipleObjectsURL("", bucketName),
+			int64(len(testCase.objects)), bytes.NewReader(testCase.objects), testCase.accessKey, testCase.secretKey)
+		if err != nil {
+			t.Fatalf("Failed to create HTTP request for DeleteMultipleObjects: <ERROR> %v", err)
+		}
+
+		rec := httptest.NewRecorder()
+
+		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
+		// Call the ServeHTTP to executes the registered handler.
+		apiRouter.ServeHTTP(rec, req)
+		// Assert the response code with the expected status.
+		if rec.Code != testCase.expectedRespStatus {
+			t.Errorf("Case %d: Minio %s: Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, rec.Code)
+		}
+
+		// read the response body.
+		actualContent, err = ioutil.ReadAll(rec.Body)
+		if err != nil {
+			t.Fatalf("Test %d : Minio %s: Failed parsing response body: <ERROR> %v", i+1, instanceType, err)
+		}
+
+		// Verify whether the bucket obtained object is same as the one created.
+		if testCase.expectedContent != nil && !bytes.Equal(testCase.expectedContent, actualContent) {
+			t.Errorf("Test %d : Minio %s: Object content differs from expected value.", i+1, instanceType)
+		}
+	}
+
+	// Currently anonymous user cannot delete multiple objects in Minio server, hence no test case is required.
+
+	// HTTP request to test the case of `objectLayer` being set to `nil`.
+	// There is no need to use an existing bucket or valid input for creating the request,
+	// since the `objectLayer==nil`  check is performed before any other checks inside the handlers.
+	// The only aim is to generate an HTTP request in a way that the relevant/registered end point is evoked/called.
+	// Indicating that all parts are uploaded and initiating completeMultipartUpload.
+	nilBucket := "dummy-bucket"
+	nilObject := ""
+
+	nilReq, err := newTestSignedRequestV4("POST", getDeleteMultipleObjectsURL("", nilBucket), 0, nil, "", "")
+	if err != nil {
+		t.Errorf("Minio %s: Failed to create HTTP request for testing the response when object Layer is set to `nil`.", instanceType)
+	}
+	// execute the object layer set to `nil` test.
+	// `ExecObjectLayerAPINilTest` manages the operation.
+	ExecObjectLayerAPINilTest(t, nilBucket, nilObject, instanceType, apiRouter, nilReq)
 }
