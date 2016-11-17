@@ -1971,7 +1971,7 @@ func (s *TestSuiteCommon) TestGetObjectErrors(c *C) {
 	verifyError(c, response, "NoSuchKey", "The specified key does not exist.", http.StatusNotFound)
 
 	// request to download an object, but an invalid bucket name is set.
-	request, err = newTestSignedRequest("GET", getGetObjectURL(s.endPoint, "/getobjecterrors-.", objectName),
+	request, err = newTestSignedRequest("GET", getGetObjectURL(s.endPoint, "getobjecterrors-.", objectName),
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
