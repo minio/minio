@@ -28,18 +28,20 @@ type credential struct {
 }
 
 const (
-	minioAccessID = 20
-	minioSecretID = 40
+	accessKeyMinLen = 5
+	accessKeyMaxLen = 20
+	secretKeyMinLen = 8
+	secretKeyMaxLen = 40
 )
 
 // isValidAccessKey - validate access key for right length.
 func isValidAccessKey(accessKey string) bool {
-	return len(accessKey) >= 5 && len(accessKey) <= 20
+	return len(accessKey) >= accessKeyMinLen && len(accessKey) <= accessKeyMaxLen
 }
 
 // isValidSecretKey - validate secret key for right length.
 func isValidSecretKey(secretKey string) bool {
-	return len(secretKey) >= 8 && len(secretKey) <= 40
+	return len(secretKey) >= secretKeyMinLen && len(secretKey) <= secretKeyMaxLen
 }
 
 // mustGenAccessKeys - must generate access credentials.
@@ -69,11 +71,11 @@ func genAccessKeys() (credential, error) {
 // genAccessKeyID - generate random alpha numeric value using only uppercase characters
 // takes input as size in integer
 func genAccessKeyID() ([]byte, error) {
-	alpha := make([]byte, minioAccessID)
+	alpha := make([]byte, accessKeyMaxLen)
 	if _, err := rand.Read(alpha); err != nil {
 		return nil, err
 	}
-	for i := 0; i < minioAccessID; i++ {
+	for i := 0; i < accessKeyMaxLen; i++ {
 		alpha[i] = alphaNumericTable[alpha[i]%byte(len(alphaNumericTable))]
 	}
 	return alpha, nil
@@ -81,9 +83,9 @@ func genAccessKeyID() ([]byte, error) {
 
 // genSecretAccessKey - generate random base64 numeric value from a random seed.
 func genSecretAccessKey() ([]byte, error) {
-	rb := make([]byte, minioSecretID)
+	rb := make([]byte, secretKeyMaxLen)
 	if _, err := rand.Read(rb); err != nil {
 		return nil, err
 	}
-	return []byte(base64.StdEncoding.EncodeToString(rb))[:minioSecretID], nil
+	return []byte(base64.StdEncoding.EncodeToString(rb))[:secretKeyMaxLen], nil
 }

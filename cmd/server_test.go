@@ -101,8 +101,8 @@ func (s *TestSuiteCommon) TestAuth(c *C) {
 	accessID, err := genAccessKeyID()
 	c.Assert(err, IsNil)
 
-	c.Assert(len(secretID), Equals, minioSecretID)
-	c.Assert(len(accessID), Equals, minioAccessID)
+	c.Assert(len(secretID), Equals, secretKeyMaxLen)
+	c.Assert(len(accessID), Equals, accessKeyMaxLen)
 }
 
 func (s *TestSuiteCommon) TestBucketSQSNotification(c *C) {
