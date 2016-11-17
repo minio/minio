@@ -52,7 +52,7 @@ func TestUpdateUploadJSON(t *testing.T) {
 		{uploadIDChange{uploadID: "111abc", isRemove: true}, nil},
 	}
 
-	xl := obj.(xlObjects)
+	xl := obj.(*xlObjects)
 	for i, test := range testCases {
 		testErrVal := xl.updateUploadJSON(bucket, object, test.uCh)
 		if testErrVal != test.errVal {

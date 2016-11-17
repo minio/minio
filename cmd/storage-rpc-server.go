@@ -212,18 +212,6 @@ func (s *storageServer) RenameFileHandler(args *RenameFileArgs, reply *GenericRe
 	return s.storage.RenameFile(args.SrcVol, args.SrcPath, args.DstVol, args.DstPath)
 }
 
-// TryInitHandler - wake up storage server.
-func (s *storageServer) TryInitHandler(args *GenericArgs, reply *GenericReply) error {
-	if !isRPCTokenValid(args.Token) {
-		return errInvalidToken
-	}
-	go func() {
-		globalWakeupCh <- struct{}{}
-	}()
-	*reply = GenericReply{}
-	return nil
-}
-
 // Initialize new storage rpc.
 func newRPCServer(srvConfig serverCmdConfig) (servers []*storageServer, err error) {
 	for _, ep := range srvConfig.endpoints {

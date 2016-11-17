@@ -24,15 +24,6 @@ import (
 	"github.com/minio/mc/pkg/console"
 )
 
-// Channel where minioctl heal handler would notify if it were successful. This
-// would be used by waitForFormattingDisks routine to check if it's worth
-// retrying loadAllFormats.
-var globalWakeupCh chan struct{}
-
-func init() {
-	globalWakeupCh = make(chan struct{}, 1)
-}
-
 /*
 
   Following table lists different possible states the backend could be in.
@@ -309,20 +300,5 @@ func waitForFormatDisks(firstDisk bool, endpoints []*url.URL, storageDisks []Sto
 	}
 	// Start retry loop retrying until disks are formatted properly, until we have reached
 	// a conditional quorum of formatted disks.
-	err = retryFormattingDisks(firstDisk, endpoints, storageDisks)
-	if err != nil {
-		return err
-	}
-	if firstDisk {
-		// Notify every one else that they can try init again.
-		for _, storage := range storageDisks {
-			switch store := storage.(type) {
-			// Wake up remote storage servers to initiate init again.
-			case networkStorage:
-				var reply GenericReply
-				_ = store.rpcClient.Call("Storage.TryInitHandler", &GenericArgs{}, &reply)
-			}
-		}
-	}
-	return nil
+	return retryFormattingDisks(firstDisk, endpoints, storageDisks)
 }

@@ -21,6 +21,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/objcache"
@@ -52,6 +53,7 @@ const (
 
 // xlObjects - Implements XL object layer.
 type xlObjects struct {
+	mutex        *sync.Mutex
 	storageDisks []StorageAPI // Collection of initialized backend disks.
 	dataBlocks   int          // dataBlocks count caculated for erasure.
 	parityBlocks int          // parityBlocks count calculated for erasure.
@@ -75,36 +77,6 @@ var xlTreeWalkIgnoredErrs = []error{
 	errDiskNotFound,
 	errDiskAccessDenied,
 	errFaultyDisk,
-}
-
-func healFormatXL(storageDisks []StorageAPI) error {
-	// Attempt to load all `format.json`.
-	formatConfigs, sErrs := loadAllFormats(storageDisks)
-
-	// Generic format check validates
-	// if (no quorum) return error
-	// if (disks not recognized) // Always error.
-	if err := genericFormatCheck(formatConfigs, sErrs); err != nil {
-		return err
-	}
-
-	// Handles different cases properly.
-	switch reduceFormatErrs(sErrs, len(storageDisks)) {
-	case errCorruptedFormat:
-		if err := healFormatXLCorruptedDisks(storageDisks); err != nil {
-			return fmt.Errorf("Unable to repair corrupted format, %s", err)
-		}
-	case errSomeDiskUnformatted:
-		// All drives online but some report missing format.json.
-		if err := healFormatXLFreshDisks(storageDisks); err != nil {
-			// There was an unexpected unrecoverable error during healing.
-			return fmt.Errorf("Unable to heal backend %s", err)
-		}
-	case errSomeDiskOffline:
-		// FIXME: in future.
-		return fmt.Errorf("Unable to initialize format %s and %s", errSomeDiskOffline, errSomeDiskUnformatted)
-	}
-	return nil
 }
 
 // newXLObjects - initialize new xl object layer.
@@ -135,7 +107,8 @@ func newXLObjects(storageDisks []StorageAPI) (ObjectLayer, error) {
 	objCacheDisabled := strings.EqualFold(os.Getenv("_MINIO_CACHE"), "off")
 
 	// Initialize xl objects.
-	xl := xlObjects{
+	xl := &xlObjects{
+		mutex:           &sync.Mutex{},
 		storageDisks:    newStorageDisks,
 		dataBlocks:      dataBlocks,
 		parityBlocks:    parityBlocks,
@@ -148,6 +121,11 @@ func newXLObjects(storageDisks []StorageAPI) (ObjectLayer, error) {
 	// READ and WRITE quorum is always set to (N/2) number of disks.
 	xl.readQuorum = readQuorum
 	xl.writeQuorum = writeQuorum
+
+	// Do a quick heal on the buckets themselves for any discrepancies.
+	if err := quickHeal(xl.storageDisks, xl.writeQuorum); err != nil {
+		return xl, err
+	}
 
 	// Return successfully initialized object layer.
 	return xl, nil

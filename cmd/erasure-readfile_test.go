@@ -28,7 +28,7 @@ import "reflect"
 
 // Tests getReadDisks which returns readable disks slice from which we can
 // read parallelly.
-func testGetReadDisks(t *testing.T, xl xlObjects) {
+func testGetReadDisks(t *testing.T, xl *xlObjects) {
 	d := xl.storageDisks
 	testCases := []struct {
 		index     int          // index argument for getReadDisks
@@ -121,7 +121,7 @@ func testGetReadDisks(t *testing.T, xl xlObjects) {
 
 // Test getOrderedDisks which returns ordered slice of disks from their
 // actual distribution.
-func testGetOrderedDisks(t *testing.T, xl xlObjects) {
+func testGetOrderedDisks(t *testing.T, xl *xlObjects) {
 	disks := xl.storageDisks
 	distribution := []int{16, 14, 12, 10, 8, 6, 4, 2, 1, 3, 5, 7, 9, 11, 13, 15}
 	orderedDisks := getOrderedDisks(distribution, disks)
@@ -232,7 +232,7 @@ func TestErasureReadUtils(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer removeRoots(disks)
-	xl := objLayer.(xlObjects)
+	xl := objLayer.(*xlObjects)
 	testGetReadDisks(t, xl)
 	testGetOrderedDisks(t, xl)
 }

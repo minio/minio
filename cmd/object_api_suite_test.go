@@ -710,13 +710,11 @@ func testNonExistantObjectInBucket(obj ObjectLayer, instanceType string, c TestE
 	if err == nil {
 		c.Fatalf("%s: Expected error but found nil", instanceType)
 	}
-	err = errorCause(err)
-	switch err := err.(type) {
-	case ObjectNotFound:
+	if isErrObjectNotFound(err) {
 		if err.Error() != "Object not found: bucket#dir1" {
 			c.Errorf("%s: Expected the Error message to be `%s`, but instead found `%s`", instanceType, "Object not found: bucket#dir1", err.Error())
 		}
-	default:
+	} else {
 		if err.Error() != "fails" {
 			c.Errorf("%s: Expected the Error message to be `%s`, but instead found it to be `%s`", instanceType, "fails", err.Error())
 		}
@@ -744,32 +742,37 @@ func testGetDirectoryReturnsObjectNotFound(obj ObjectLayer, instanceType string,
 	}
 
 	_, err = obj.GetObjectInfo("bucket", "dir1")
-	err = errorCause(err)
-	switch err := err.(type) {
-	case ObjectNotFound:
-		if err.Bucket != "bucket" {
-			c.Errorf("%s: Expected the bucket name in the error message to be `%s`, but instead found `%s`", instanceType, "bucket", err.Bucket)
+	if isErrObjectNotFound(err) {
+		err = errorCause(err)
+		err1 := err.(ObjectNotFound)
+		if err1.Bucket != "bucket" {
+			c.Errorf("%s: Expected the bucket name in the error message to be `%s`, but instead found `%s`",
+				instanceType, "bucket", err1.Bucket)
 		}
-		if err.Object != "dir1" {
-			c.Errorf("%s: Expected the object name in the error message to be `%s`, but instead found `%s`", instanceType, "dir1", err.Object)
+		if err1.Object != "dir1" {
+			c.Errorf("%s: Expected the object name in the error message to be `%s`, but instead found `%s`",
+				instanceType, "dir1", err1.Object)
 		}
-	default:
+	} else {
 		if err.Error() != "ObjectNotFound" {
-			c.Errorf("%s: Expected the error message to be `%s`, but instead found `%s`", instanceType, "ObjectNotFound", err.Error())
+			c.Errorf("%s: Expected the error message to be `%s`, but instead found `%s`", instanceType,
+				"ObjectNotFound", err.Error())
 		}
 	}
 
 	_, err = obj.GetObjectInfo("bucket", "dir1/")
-	err = errorCause(err)
-	switch err := err.(type) {
-	case ObjectNameInvalid:
-		if err.Bucket != "bucket" {
-			c.Errorf("%s: Expected the bucket name in the error message to be `%s`, but instead found `%s`", instanceType, "bucket", err.Bucket)
+	if isErrObjectNameInvalid(err) {
+		err = errorCause(err)
+		err1 := err.(ObjectNameInvalid)
+		if err1.Bucket != "bucket" {
+			c.Errorf("%s: Expected the bucket name in the error message to be `%s`, but instead found `%s`",
+				instanceType, "bucket", err1.Bucket)
 		}
-		if err.Object != "dir1/" {
-			c.Errorf("%s: Expected the object name in the error message to be `%s`, but instead found `%s`", instanceType, "dir1/", err.Object)
+		if err1.Object != "dir1/" {
+			c.Errorf("%s: Expected the object name in the error message to be `%s`, but instead found `%s`",
+				instanceType, "dir1/", err1.Object)
 		}
-	default:
+	} else {
 		// force a failure with a line number.
 		if err.Error() != "ObjectNotFound" {
 			c.Errorf("%s: Expected the error message to be `%s`, but instead found `%s`", instanceType, "ObjectNotFound", err.Error())

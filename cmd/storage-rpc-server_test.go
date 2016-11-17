@@ -90,23 +90,6 @@ func errorIfInvalidToken(t *testing.T, err error) {
 	}
 }
 
-func TestStorageRPCTryInitHandler(t *testing.T) {
-	st := createTestStorageServer(t)
-	defer removeRoots(st.diskDirs)
-	defer removeAll(st.configDir)
-	storageRPC := st.stServer
-	timestamp := time.Now().UTC()
-	tryArgs := &GenericArgs{
-		Token:     st.token,
-		Timestamp: timestamp,
-	}
-	tryReply := &GenericReply{}
-	err := storageRPC.TryInitHandler(tryArgs, tryReply)
-	if err != nil {
-		t.Errorf("TryInitHandler failed with %s", err)
-	}
-}
-
 func TestStorageRPCInvalidToken(t *testing.T) {
 	st := createTestStorageServer(t)
 	defer removeRoots(st.diskDirs)
@@ -216,11 +199,5 @@ func TestStorageRPCInvalidToken(t *testing.T) {
 	}
 	renameReply := &GenericReply{}
 	err = storageRPC.RenameFileHandler(renameArgs, renameReply)
-	errorIfInvalidToken(t, err)
-
-	// 14. TryInitHandler
-	tryArgs := &badga
-	tryReply := &GenericReply{}
-	err = storageRPC.TryInitHandler(tryArgs, tryReply)
 	errorIfInvalidToken(t, err)
 }
