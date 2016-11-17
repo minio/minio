@@ -18,10 +18,6 @@ package cmd
 
 import (
 	"bytes"
-	"crypto/md5"
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/hex"
 	"io/ioutil"
 	"net/http"
 	"strings"
@@ -108,18 +104,32 @@ func getRequestAuthType(r *http.Request) authType {
 	return authTypeUnknown
 }
 
-// sum256 calculate sha256 sum for an input byte array
-func sum256(data []byte) []byte {
-	hash := sha256.New()
-	hash.Write(data)
-	return hash.Sum(nil)
-}
+func checkRequestAuthType(r *http.Request, bucket, policyAction, region string) APIErrorCode {
+	reqAuthType := getRequestAuthType(r)
 
-// sumMD5 calculate md5 sum for an input byte array
-func sumMD5(data []byte) []byte {
-	hash := md5.New()
-	hash.Write(data)
-	return hash.Sum(nil)
+	switch reqAuthType {
+	case authTypePresignedV2, authTypeSignedV2:
+		// Signature V2 validation.
+		s3Error := isReqAuthenticatedV2(r)
+		if s3Error != ErrNone {
+			errorIf(errSignatureMismatch, dumpRequest(r))
+		}
+		return s3Error
+	case authTypeSigned, authTypePresigned:
+		s3Error := isReqAuthenticated(r, region)
+		if s3Error != ErrNone {
+			errorIf(errSignatureMismatch, dumpRequest(r))
+		}
+		return s3Error
+	}
+
+	if reqAuthType == authTypeAnonymous && policyAction != "" {
+		// http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
+		return enforceBucketPolicy(bucket, policyAction, r.URL)
+	}
+
+	// By default return ErrAccessDenied
+	return ErrAccessDenied
 }
 
 // Verify if request has valid AWS Signature Version '2'.
@@ -157,7 +167,7 @@ func isReqAuthenticated(r *http.Request, region string) (s3Error APIErrorCode) {
 	}
 	// Verify Content-Md5, if payload is set.
 	if r.Header.Get("Content-Md5") != "" {
-		if r.Header.Get("Content-Md5") != base64.StdEncoding.EncodeToString(sumMD5(payload)) {
+		if r.Header.Get("Content-Md5") != getMD5HashBase64(payload) {
 			return ErrBadDigest
 		}
 	}
@@ -168,37 +178,13 @@ func isReqAuthenticated(r *http.Request, region string) (s3Error APIErrorCode) {
 	if skipContentSha256Cksum(r) {
 		sha256sum = unsignedPayload
 	} else {
-		sha256sum = hex.EncodeToString(sum256(payload))
+		sha256sum = getSHA256Hash(payload)
 	}
 	if isRequestSignatureV4(r) {
 		return doesSignatureMatch(sha256sum, r, region)
 	} else if isRequestPresignedSignatureV4(r) {
 		return doesPresignedSignatureMatch(sha256sum, r, region)
 	}
-	return ErrAccessDenied
-}
-
-// checkAuth - checks for conditions satisfying the authorization of
-// the incoming request. Request should be either Presigned or Signed
-// in accordance with AWS S3 Signature V4 requirements. ErrAccessDenied
-// is returned for unhandled auth type. Once the auth type is indentified
-// request headers and body are used to calculate the signature validating
-// the client signature present in request.
-func checkAuth(r *http.Request) APIErrorCode {
-	return checkAuthWithRegion(r, serverConfig.GetRegion())
-}
-
-// checkAuthWithRegion - similar to checkAuth but takes a custom region.
-func checkAuthWithRegion(r *http.Request, region string) APIErrorCode {
-	// Validates the request for both Presigned and Signed.
-	aType := getRequestAuthType(r)
-	switch aType {
-	case authTypeSignedV2, authTypePresignedV2: // Signature V2.
-		return isReqAuthenticatedV2(r)
-	case authTypeSigned, authTypePresigned: // Signature V4.
-		return isReqAuthenticated(r, region)
-	}
-	// For all unhandled auth types return error AccessDenied.
 	return ErrAccessDenied
 }
 

@@ -36,9 +36,9 @@ func (s3 *s3PeerAPIHandlers) LoginHandler(args *RPCLoginArgs, reply *RPCLoginRep
 	return nil
 }
 
-// SetBNPArgs - Arguments collection to SetBucketNotificationPeer RPC
+// SetBucketNotificationPeerArgs - Arguments collection to SetBucketNotificationPeer RPC
 // call
-type SetBNPArgs struct {
+type SetBucketNotificationPeerArgs struct {
 	// For Auth
 	GenericArgs
 
@@ -48,7 +48,7 @@ type SetBNPArgs struct {
 	NCfg *notificationConfig
 }
 
-func (s3 *s3PeerAPIHandlers) SetBucketNotificationPeer(args *SetBNPArgs, reply *GenericReply) error {
+func (s3 *s3PeerAPIHandlers) SetBucketNotificationPeer(args *SetBucketNotificationPeerArgs, reply *GenericReply) error {
 	// check auth
 	if !isRPCTokenValid(args.Token) {
 		return errInvalidToken
@@ -57,8 +57,8 @@ func (s3 *s3PeerAPIHandlers) SetBucketNotificationPeer(args *SetBNPArgs, reply *
 	return s3.bms.UpdateBucketNotification(args)
 }
 
-// SetBLPArgs - Arguments collection to SetBucketListenerPeer RPC call
-type SetBLPArgs struct {
+// SetBucketListenerPeerArgs - Arguments collection to SetBucketListenerPeer RPC call
+type SetBucketListenerPeerArgs struct {
 	// For Auth
 	GenericArgs
 
@@ -68,7 +68,7 @@ type SetBLPArgs struct {
 	LCfg []listenerConfig
 }
 
-func (s3 *s3PeerAPIHandlers) SetBucketListenerPeer(args *SetBLPArgs, reply *GenericReply) error {
+func (s3 *s3PeerAPIHandlers) SetBucketListenerPeer(args *SetBucketListenerPeerArgs, reply *GenericReply) error {
 	// check auth
 	if !isRPCTokenValid(args.Token) {
 		return errInvalidToken
@@ -99,8 +99,8 @@ func (s3 *s3PeerAPIHandlers) Event(args *EventArgs, reply *GenericReply) error {
 	return s3.bms.SendEvent(args)
 }
 
-// SetBPPArgs - Arguments collection for SetBucketPolicyPeer RPC call
-type SetBPPArgs struct {
+// SetBucketPolicyPeerArgs - Arguments collection for SetBucketPolicyPeer RPC call
+type SetBucketPolicyPeerArgs struct {
 	// For Auth
 	GenericArgs
 
@@ -111,7 +111,7 @@ type SetBPPArgs struct {
 }
 
 // tell receiving server to update a bucket policy
-func (s3 *s3PeerAPIHandlers) SetBucketPolicyPeer(args *SetBPPArgs, reply *GenericReply) error {
+func (s3 *s3PeerAPIHandlers) SetBucketPolicyPeer(args *SetBucketPolicyPeerArgs, reply *GenericReply) error {
 	// check auth
 	if !isRPCTokenValid(args.Token) {
 		return errInvalidToken

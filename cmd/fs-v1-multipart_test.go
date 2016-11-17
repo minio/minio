@@ -18,8 +18,6 @@ package cmd
 
 import (
 	"bytes"
-	"crypto/md5"
-	"encoding/hex"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -80,9 +78,7 @@ func TestPutObjectPartFaultyDisk(t *testing.T) {
 		t.Fatal("Unexpected error ", err)
 	}
 
-	md5Writer := md5.New()
-	md5Writer.Write(data)
-	md5Hex := hex.EncodeToString(md5Writer.Sum(nil))
+	md5Hex := getMD5Hash(data)
 	sha256sum := ""
 
 	// Test with faulty disk
@@ -133,9 +129,7 @@ func TestCompleteMultipartUploadFaultyDisk(t *testing.T) {
 		t.Fatal("Unexpected error ", err)
 	}
 
-	md5Writer := md5.New()
-	md5Writer.Write(data)
-	md5Hex := hex.EncodeToString(md5Writer.Sum(nil))
+	md5Hex := getMD5Hash(data)
 	sha256sum := ""
 
 	if _, err := fs.PutObjectPart(bucketName, objectName, uploadID, 1, 5, bytes.NewReader(data), md5Hex, sha256sum); err != nil {
@@ -185,9 +179,7 @@ func TestListMultipartUploadsFaultyDisk(t *testing.T) {
 		t.Fatal("Unexpected error ", err)
 	}
 
-	md5Writer := md5.New()
-	md5Writer.Write(data)
-	md5Hex := hex.EncodeToString(md5Writer.Sum(nil))
+	md5Hex := getMD5Hash(data)
 	sha256sum := ""
 
 	if _, err := fs.PutObjectPart(bucketName, objectName, uploadID, 1, 5, bytes.NewReader(data), md5Hex, sha256sum); err != nil {

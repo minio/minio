@@ -73,7 +73,7 @@ func (s *TestRPCS3PeerSuite) testS3PeerRPC(t *testing.T) {
 	}
 
 	// Check bucket notification call works.
-	BNPArgs := SetBNPArgs{Bucket: "bucket", NCfg: &notificationConfig{}}
+	BNPArgs := SetBucketNotificationPeerArgs{Bucket: "bucket", NCfg: &notificationConfig{}}
 	client := newAuthClient(s.testAuthConf)
 	defer client.Close()
 	err = client.Call("S3.SetBucketNotificationPeer", &BNPArgs, &GenericReply{})
@@ -82,7 +82,7 @@ func (s *TestRPCS3PeerSuite) testS3PeerRPC(t *testing.T) {
 	}
 
 	// Check bucket listener update call works.
-	BLPArgs := SetBLPArgs{Bucket: "bucket", LCfg: nil}
+	BLPArgs := SetBucketListenerPeerArgs{Bucket: "bucket", LCfg: nil}
 	err = client.Call("S3.SetBucketListenerPeer", &BLPArgs, &GenericReply{})
 	if err != nil {
 		t.Fatal(err)
@@ -94,7 +94,7 @@ func (s *TestRPCS3PeerSuite) testS3PeerRPC(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	BPPArgs := SetBPPArgs{Bucket: "bucket", PChBytes: pChBytes}
+	BPPArgs := SetBucketPolicyPeerArgs{Bucket: "bucket", PChBytes: pChBytes}
 	err = client.Call("S3.SetBucketPolicyPeer", &BPPArgs, &GenericReply{})
 	if err != nil {
 		t.Fatal(err)

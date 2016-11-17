@@ -18,8 +18,6 @@ package cmd
 
 import (
 	"bytes"
-	"crypto/md5"
-	"encoding/hex"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -52,9 +50,7 @@ func TestRepeatPutObjectPart(t *testing.T) {
 		t.Fatal(err)
 	}
 	fiveMBBytes := bytes.Repeat([]byte("a"), 5*1024*1024)
-	md5Writer := md5.New()
-	md5Writer.Write(fiveMBBytes)
-	md5Hex := hex.EncodeToString(md5Writer.Sum(nil))
+	md5Hex := getMD5Hash(fiveMBBytes)
 	_, err = objLayer.PutObjectPart("bucket1", "mpartObj1", uploadID, 1, 5*1024*1024, bytes.NewReader(fiveMBBytes), md5Hex, "")
 	if err != nil {
 		t.Fatal(err)

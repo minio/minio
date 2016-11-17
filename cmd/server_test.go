@@ -18,11 +18,8 @@ package cmd
 
 import (
 	"bytes"
-	"crypto/md5"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/base64"
-	"encoding/hex"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -1676,7 +1673,7 @@ func (s *TestSuiteCommon) TestGetObjectLarge11MiB(c *C) {
 	for i := 0; i < 11*1024; i++ {
 		buffer.WriteString(fmt.Sprintf("[%05d] %s\n", i, line))
 	}
-	putMD5 := sumMD5(buffer.Bytes())
+	putMD5 := getMD5Hash(buffer.Bytes())
 
 	objectName := "test-11Mb-object"
 	// Put object
@@ -1707,10 +1704,10 @@ func (s *TestSuiteCommon) TestGetObjectLarge11MiB(c *C) {
 	c.Assert(err, IsNil)
 
 	// Get md5Sum of the response content.
-	getMD5 := sumMD5(getContent)
+	getMD5 := getMD5Hash(getContent)
 
 	// Compare putContent and getContent.
-	c.Assert(hex.EncodeToString(putMD5), Equals, hex.EncodeToString(getMD5))
+	c.Assert(putMD5, Equals, getMD5)
 }
 
 // TestGetPartialObjectMisAligned - tests get object partially mis-aligned.
@@ -2372,9 +2369,7 @@ func (s *TestSuiteCommon) TestObjectValidMD5(c *C) {
 	// content for the object to be uploaded.
 	data := bytes.Repeat([]byte("0123456789abcdef"), 5*1024*1024/16)
 	// calculate md5Sum of the data.
-	hasher := md5.New()
-	hasher.Write(data)
-	md5Sum := hasher.Sum(nil)
+	md5SumBase64 := getMD5HashBase64(data)
 
 	buffer1 := bytes.NewReader(data)
 	objectName := "test-1-object"
@@ -2383,7 +2378,7 @@ func (s *TestSuiteCommon) TestObjectValidMD5(c *C) {
 		int64(buffer1.Len()), buffer1, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 	// set the Content-Md5 to be the hash to content.
-	request.Header.Set("Content-Md5", base64.StdEncoding.EncodeToString(md5Sum))
+	request.Header.Set("Content-Md5", md5SumBase64)
 	client = http.Client{Transport: s.transport}
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -2447,16 +2442,14 @@ func (s *TestSuiteCommon) TestObjectMultipart(c *C) {
 	// Create a byte array of 5MB.
 	data := bytes.Repeat([]byte("0123456789abcdef"), 5*1024*1024/16)
 	// calculate md5Sum of the data.
-	hasher := md5.New()
-	hasher.Write(data)
-	md5Sum := hasher.Sum(nil)
+	md5SumBase64 := getMD5HashBase64(data)
 
 	buffer1 := bytes.NewReader(data)
 	// HTTP request for the part to be uploaded.
 	request, err = newTestSignedRequest("PUT", getPartUploadURL(s.endPoint, bucketName, objectName, uploadID, "1"),
 		int64(buffer1.Len()), buffer1, s.accessKey, s.secretKey, s.signer)
 	// set the Content-Md5 header to the base64 encoding the md5Sum of the content.
-	request.Header.Set("Content-Md5", base64.StdEncoding.EncodeToString(md5Sum))
+	request.Header.Set("Content-Md5", md5SumBase64)
 	c.Assert(err, IsNil)
 
 	client = http.Client{Transport: s.transport}
@@ -2469,17 +2462,15 @@ func (s *TestSuiteCommon) TestObjectMultipart(c *C) {
 	// Create a byte array of 1 byte.
 	data = []byte("0")
 
-	hasher = md5.New()
-	hasher.Write(data)
 	// calculate md5Sum of the data.
-	md5Sum = hasher.Sum(nil)
+	md5SumBase64 = getMD5HashBase64(data)
 
 	buffer2 := bytes.NewReader(data)
 	// HTTP request for the second part to be uploaded.
 	request, err = newTestSignedRequest("PUT", getPartUploadURL(s.endPoint, bucketName, objectName, uploadID, "2"),
 		int64(buffer2.Len()), buffer2, s.accessKey, s.secretKey, s.signer)
 	// set the Content-Md5 header to the base64 encoding the md5Sum of the content.
-	request.Header.Set("Content-Md5", base64.StdEncoding.EncodeToString(md5Sum))
+	request.Header.Set("Content-Md5", md5SumBase64)
 	c.Assert(err, IsNil)
 
 	client = http.Client{Transport: s.transport}

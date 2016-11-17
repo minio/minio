@@ -268,5 +268,5 @@ func (n *nsLockMap) deleteLockInfoEntryForOps(param nsParam, opsID string) error
 
 // Return randomly generated string ID
 func getOpsID() string {
-	return string(generateRequestID())
+	return newRequestID()
 }

@@ -35,7 +35,7 @@ const (
 )
 
 // supportedActionMap - lists all the actions supported by minio.
-var supportedActionMap = set.CreateStringSet("*", "*", "s3:*", "s3:GetObject",
+var supportedActionMap = set.CreateStringSet("*", "s3:*", "s3:GetObject",
 	"s3:ListBucket", "s3:PutObject", "s3:GetBucketLocation", "s3:DeleteObject",
 	"s3:AbortMultipartUpload", "s3:ListBucketMultipartUploads", "s3:ListMultipartUploadParts")
 

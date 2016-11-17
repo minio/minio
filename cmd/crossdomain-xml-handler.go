@@ -19,7 +19,7 @@ package cmd
 import "net/http"
 
 // Standard cross domain policy information located at https://s3.amazonaws.com/crossdomain.xml
-var crossDomainXML = `<?xml version="1.0"?><!DOCTYPE cross-domain-policy SYSTEM "http://www.adobe.com/xml/dtds/cross-domain-policy.dtd"><cross-domain-policy><allow-access-from domain="*" secure="false" /></cross-domain-policy>`
+const crossDomainXML = `<?xml version="1.0"?><!DOCTYPE cross-domain-policy SYSTEM "http://www.adobe.com/xml/dtds/cross-domain-policy.dtd"><cross-domain-policy><allow-access-from domain="*" secure="false" /></cross-domain-policy>`
 
 // Cross domain policy implements http.Handler interface, implementing a custom ServerHTTP.
 type crossDomainPolicy struct {

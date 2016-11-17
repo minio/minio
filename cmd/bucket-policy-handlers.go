@@ -50,17 +50,10 @@ func bucketPolicyEvalStatements(action string, resource string, conditions map[s
 
 // Verify if action, resource and conditions match input policy statement.
 func bucketPolicyMatchStatement(action string, resource string, conditions map[string]set.StringSet, statement policyStatement) bool {
-	// Verify if action matches.
-	if bucketPolicyActionMatch(action, statement) {
-		// Verify if resource matches.
-		if bucketPolicyResourceMatch(resource, statement) {
-			// Verify if condition matches.
-			if bucketPolicyConditionMatch(conditions, statement) {
-				return true
-			}
-		}
-	}
-	return false
+	// Verify if action, resource and condition match in given statement.
+	return (bucketPolicyActionMatch(action, statement) &&
+		bucketPolicyResourceMatch(resource, statement) &&
+		bucketPolicyConditionMatch(conditions, statement))
 }
 
 // Verify if given action matches with policy statement.
@@ -132,9 +125,7 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 		return
 	}
 
-	// PutBucketPolicy does not support bucket policies, use checkAuth to validate signature.
-	if s3Error := checkAuth(r); s3Error != ErrNone {
-		errorIf(errSignatureMismatch, dumpRequest(r))
+	if s3Error := checkRequestAuthType(r, "", "", serverConfig.GetRegion()); s3Error != ErrNone {
 		writeErrorResponse(w, r, s3Error, r.URL.Path)
 		return
 	}
@@ -244,9 +235,7 @@ func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r 
 		return
 	}
 
-	// DeleteBucketPolicy does not support bucket policies, use checkAuth to validate signature.
-	if s3Error := checkAuth(r); s3Error != ErrNone {
-		errorIf(errSignatureMismatch, dumpRequest(r))
+	if s3Error := checkRequestAuthType(r, "", "", serverConfig.GetRegion()); s3Error != ErrNone {
 		writeErrorResponse(w, r, s3Error, r.URL.Path)
 		return
 	}
@@ -289,9 +278,7 @@ func (api objectAPIHandlers) GetBucketPolicyHandler(w http.ResponseWriter, r *ht
 		return
 	}
 
-	// GetBucketPolicy does not support bucket policies, use checkAuth to validate signature.
-	if s3Error := checkAuth(r); s3Error != ErrNone {
-		errorIf(errSignatureMismatch, dumpRequest(r))
+	if s3Error := checkRequestAuthType(r, "", "", serverConfig.GetRegion()); s3Error != ErrNone {
 		writeErrorResponse(w, r, s3Error, r.URL.Path)
 		return
 	}

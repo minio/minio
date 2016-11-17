@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-// Package cmd file carries any specific responses constructed/necessary in
-// multipart operations.
 package cmd
 
 import "net/http"
@@ -56,5 +54,3 @@ func writePartSmallErrorResponse(w http.ResponseWriter, r *http.Request, err Par
 	w.Write(encodedErrorResponse)
 	w.(http.Flusher).Flush()
 }
-
-// Add any other multipart specific responses here.

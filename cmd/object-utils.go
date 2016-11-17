@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"crypto/md5"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -150,9 +149,7 @@ func getCompleteMultipartMD5(parts []completePart) (string, error) {
 		}
 		finalMD5Bytes = append(finalMD5Bytes, md5Bytes...)
 	}
-	md5Hasher := md5.New()
-	md5Hasher.Write(finalMD5Bytes)
-	s3MD5 := fmt.Sprintf("%s-%d", hex.EncodeToString(md5Hasher.Sum(nil)), len(parts))
+	s3MD5 := fmt.Sprintf("%s-%d", getMD5Hash(finalMD5Bytes), len(parts))
 	return s3MD5, nil
 }
 

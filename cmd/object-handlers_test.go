@@ -18,8 +18,6 @@ package cmd
 
 import (
 	"bytes"
-	"crypto/md5"
-	"encoding/hex"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -1385,13 +1383,6 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 		t.Fatal("Notifier initialization failed.")
 	}
 
-	// Calculates MD5 sum of the given byte array.
-	findMD5 := func(toBeHashed []byte) string {
-		hasher := md5.New()
-		hasher.Write(toBeHashed)
-		return hex.EncodeToString(hasher.Sum(nil))
-	}
-
 	// object used for the test.
 	objectName := "test-object-new-multipart"
 
@@ -1414,7 +1405,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 	// Parts with size greater than 5 MB.
 	// Generating a 6MB byte array.
 	validPart := bytes.Repeat([]byte("abcdef"), 1024*1024)
-	validPartMD5 := findMD5(validPart)
+	validPartMD5 := getMD5Hash(validPart)
 	// Create multipart parts.
 	// Need parts to be uploaded before CompleteMultiPartUpload can be called tested.
 	parts := []struct {
@@ -1747,13 +1738,6 @@ func testAPIAbortMultipartHandler(obj ObjectLayer, instanceType, bucketName stri
 		t.Fatal("Notifier initialization failed.")
 	}
 
-	// Calculates MD5 sum of the given byte array.
-	findMD5 := func(toBeHashed []byte) string {
-		hasher := md5.New()
-		hasher.Write(toBeHashed)
-		return hex.EncodeToString(hasher.Sum(nil))
-	}
-
 	// object used for the test.
 	objectName := "test-object-new-multipart"
 
@@ -1776,7 +1760,7 @@ func testAPIAbortMultipartHandler(obj ObjectLayer, instanceType, bucketName stri
 	// Parts with size greater than 5 MB.
 	// Generating a 6MB byte array.
 	validPart := bytes.Repeat([]byte("abcdef"), 1024*1024)
-	validPartMD5 := findMD5(validPart)
+	validPartMD5 := getMD5Hash(validPart)
 	// Create multipart parts.
 	// Need parts to be uploaded before AbortMultiPartUpload can be called tested.
 	parts := []struct {

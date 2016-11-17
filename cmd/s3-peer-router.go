@@ -32,7 +32,7 @@ type s3PeerAPIHandlers struct {
 
 func registerS3PeerRPCRouter(mux *router.Router) error {
 	s3PeerHandlers := &s3PeerAPIHandlers{
-		&localBMS{
+		&localBucketMetaState{
 			ObjectAPI: newObjectLayerFn,
 		},
 	}

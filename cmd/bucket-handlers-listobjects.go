@@ -29,7 +29,7 @@ import (
 // - delimiter if set should be equal to '/', otherwise the request is rejected.
 // - marker if set should have a common prefix with 'prefix' param, otherwise
 //   the request is rejected.
-func listObjectsValidateArgs(prefix, marker, delimiter string, maxKeys int) APIErrorCode {
+func validateListObjectsArgs(prefix, marker, delimiter string, maxKeys int) APIErrorCode {
 	// Max keys cannot be negative.
 	if maxKeys < 0 {
 		return ErrInvalidMaxKeys
@@ -70,31 +70,11 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 		return
 	}
 
-	switch getRequestAuthType(r) {
-	default:
-		// For all unknown auth types return error.
-		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
+	if s3Error := checkRequestAuthType(r, bucket, "s3:ListBucket", serverConfig.GetRegion()); s3Error != ErrNone {
+		writeErrorResponse(w, r, s3Error, r.URL.Path)
 		return
-	case authTypeAnonymous:
-		// http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
-		if s3Error := enforceBucketPolicy(bucket, "s3:ListBucket", r.URL); s3Error != ErrNone {
-			writeErrorResponse(w, r, s3Error, r.URL.Path)
-			return
-		}
-	case authTypePresignedV2, authTypeSignedV2:
-		// Signature V2 validation.
-		if s3Error := isReqAuthenticatedV2(r); s3Error != ErrNone {
-			errorIf(errSignatureMismatch, dumpRequest(r))
-			writeErrorResponse(w, r, s3Error, r.URL.Path)
-			return
-		}
-	case authTypeSigned, authTypePresigned:
-		if s3Error := isReqAuthenticated(r, serverConfig.GetRegion()); s3Error != ErrNone {
-			errorIf(errSignatureMismatch, dumpRequest(r))
-			writeErrorResponse(w, r, s3Error, r.URL.Path)
-			return
-		}
 	}
+
 	// Extract all the listObjectsV2 query params to their native values.
 	prefix, token, startAfter, delimiter, fetchOwner, maxKeys, _ := getListObjectsV2Args(r.URL.Query())
 
@@ -107,7 +87,7 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 	}
 	// Validate the query params before beginning to serve the request.
 	// fetch-owner is not validated since it is a boolean
-	if s3Error := listObjectsValidateArgs(prefix, marker, delimiter, maxKeys); s3Error != ErrNone {
+	if s3Error := validateListObjectsArgs(prefix, marker, delimiter, maxKeys); s3Error != ErrNone {
 		writeErrorResponse(w, r, s3Error, r.URL.Path)
 		return
 	}
@@ -144,37 +124,16 @@ func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http
 		return
 	}
 
-	switch getRequestAuthType(r) {
-	default:
-		// For all unknown auth types return error.
-		writeErrorResponse(w, r, ErrAccessDenied, r.URL.Path)
+	if s3Error := checkRequestAuthType(r, bucket, "s3:ListBucket", serverConfig.GetRegion()); s3Error != ErrNone {
+		writeErrorResponse(w, r, s3Error, r.URL.Path)
 		return
-	case authTypeAnonymous:
-		// http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
-		if s3Error := enforceBucketPolicy(bucket, "s3:ListBucket", r.URL); s3Error != ErrNone {
-			writeErrorResponse(w, r, s3Error, r.URL.Path)
-			return
-		}
-	case authTypePresignedV2, authTypeSignedV2:
-		// Signature V2 validation.
-		if s3Error := isReqAuthenticatedV2(r); s3Error != ErrNone {
-			errorIf(errSignatureMismatch, dumpRequest(r))
-			writeErrorResponse(w, r, s3Error, r.URL.Path)
-			return
-		}
-	case authTypeSigned, authTypePresigned:
-		if s3Error := isReqAuthenticated(r, serverConfig.GetRegion()); s3Error != ErrNone {
-			errorIf(errSignatureMismatch, dumpRequest(r))
-			writeErrorResponse(w, r, s3Error, r.URL.Path)
-			return
-		}
 	}
 
 	// Extract all the litsObjectsV1 query params to their native values.
 	prefix, marker, delimiter, maxKeys, _ := getListObjectsV1Args(r.URL.Query())
 
 	// Validate all the query params before beginning to serve the request.
-	if s3Error := listObjectsValidateArgs(prefix, marker, delimiter, maxKeys); s3Error != ErrNone {
+	if s3Error := validateListObjectsArgs(prefix, marker, delimiter, maxKeys); s3Error != ErrNone {
 		writeErrorResponse(w, r, s3Error, r.URL.Path)
 		return
 	}

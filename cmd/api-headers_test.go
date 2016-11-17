@@ -20,9 +20,9 @@ import (
 	"testing"
 )
 
-func TestGenerateRequestID(t *testing.T) {
+func TestNewRequestID(t *testing.T) {
 	// Ensure that it returns an alphanumeric result of length 16.
-	var id = generateRequestID()
+	var id = newRequestID()
 
 	if len(id) != 16 {
 		t.Fail()
