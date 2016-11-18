@@ -1,6 +1,6 @@
 # How to secure access to your Minio server with TLS [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/minio/minio?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
-In this document, we will show how to configure your Minio servers with TLS certificates.
+In this document, we will show how to configure your Minio servers with TLS certificates. Steps for Windows could be found [here](https://github.com/minio/minio/blob/master/docs/configure-minio-with-gnutls-windows.md).
 
 ## 1. Prerequisites
 
