@@ -380,8 +380,12 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	// List all online disks.
 	onlineDisks, modTime := listOnlineDisks(xl.storageDisks, partsMetadata, errs)
 
-	// Pick one from the first valid metadata.
-	xlMeta := pickValidXLMeta(partsMetadata, modTime)
+	// Pick one from the first valid metadata. If no valid metadata exists, it as good
+	// as the corresponding upload not found.
+	xlMeta, err := pickValidXLMeta(partsMetadata, modTime)
+	if err != nil {
+		return "", toObjectErr(traceError(InvalidUploadID{UploadID: uploadID}), bucket, object)
+	}
 
 	onlineDisks = getOrderedDisks(xlMeta.Erasure.Distribution, onlineDisks)
 	_ = getOrderedPartsMetadata(xlMeta.Erasure.Distribution, partsMetadata)
@@ -492,8 +496,12 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	// Get current highest version based on re-read partsMetadata.
 	onlineDisks, modTime = listOnlineDisks(onlineDisks, partsMetadata, errs)
 
-	// Pick one from the first valid metadata.
-	xlMeta = pickValidXLMeta(partsMetadata, modTime)
+	// Pick one from the first valid metadata. If no valid metadata is present
+	// then the multipart upload is as good as not found.
+	xlMeta, err = pickValidXLMeta(partsMetadata, modTime)
+	if err != nil {
+		return "", toObjectErr(traceError(InvalidUploadID{UploadID: uploadID}), bucket, object)
+	}
 
 	// Once part is successfully committed, proceed with updating XL metadata.
 	xlMeta.Stat.ModTime = time.Now().UTC()
@@ -683,8 +691,12 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	// Calculate full object size.
 	var objectSize int64
 
-	// Pick one from the first valid metadata.
-	xlMeta := pickValidXLMeta(partsMetadata, modTime)
+	// Pick one from the first valid metadata. If no valid metadata is found,
+	// it is as good as the corresponding upload not found.
+	xlMeta, err := pickValidXLMeta(partsMetadata, modTime)
+	if err != nil {
+		return "", toObjectErr(traceError(InvalidUploadID{UploadID: uploadID}), bucket, object)
+	}
 
 	// Order online disks in accordance with distribution order.
 	onlineDisks = getOrderedDisks(xlMeta.Erasure.Distribution, onlineDisks)
