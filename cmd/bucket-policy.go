@@ -72,7 +72,7 @@ func (bp *bucketPolicies) SetBucketPolicy(bucket string, pCh policyChange) error
 
 // Loads all bucket policies from persistent layer.
 func loadAllBucketPolicies(objAPI ObjectLayer) (policies map[string]*bucketPolicy, err error) {
-	// List buckets to proceed loading all notification configuration.
+	// List buckets to proceed loading all bucket policies.
 	buckets, err := objAPI.ListBuckets()
 	errorIf(err, "Unable to list buckets.")
 	err = errorCause(err)

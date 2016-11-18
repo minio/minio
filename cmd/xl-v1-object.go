@@ -156,6 +156,19 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 		}
 	}
 
+	// Validate if all the parts exist before proceeding to read from the disk.
+	for _, part := range xlMeta.Parts {
+		// Pick the first disk from online disks and validate if we have all the parts.
+		_, err = onlineDisks[0].StatFile(bucket, path.Join(object, part.Name))
+		if err != nil {
+			errorIf(err, "Unable to stat the file %s/%s", object, part.Name)
+			return traceError(InvalidObjectState{
+				Bucket: bucket,
+				Object: object,
+			})
+		}
+	}
+
 	totalBytesRead := int64(0)
 
 	chunkSize := getChunkSize(xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks)
