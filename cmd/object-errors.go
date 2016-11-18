@@ -325,6 +325,17 @@ func (e NotImplemented) Error() string {
 	return "Not Implemented"
 }
 
+// InvalidObjectState represents a state of an object either is its corrupted
+// or unreadable.
+type InvalidObjectState struct {
+	Bucket string
+	Object string
+}
+
+func (e InvalidObjectState) Error() string {
+	return "Bucket: " + e.Bucket + " Object " + e.Object + " is in invalid state"
+}
+
 // Check if error type is ObjectNameInvalid.
 func isErrObjectNameInvalid(err error) bool {
 	err = errorCause(err)

@@ -163,6 +163,12 @@ func TestXLDeleteObjectDiskNotFound(t *testing.T) {
 }
 
 func TestGetObjectNoQuorum(t *testing.T) {
+	root, err := newTestConfig("us-east-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer removeAll(root)
+
 	// Create an instance of xl backend.
 	obj, fsDirs, err := prepareXL()
 	if err != nil {
@@ -189,7 +195,7 @@ func TestGetObjectNoQuorum(t *testing.T) {
 	// Make 9 disks offline, which leaves less than quorum number of disks
 	// in a 16 disk XL setup. The original disks are 'replaced' with
 	// naughtyDisks that fail after 'f' successful StorageAPI method
-	// invocations, where f - [0,2)
+	// invocations, where f - [0,2]
 	for f := 0; f < 2; f++ {
 		diskErrors := make(map[int]error)
 		for i := 0; i <= f; i++ {
@@ -206,9 +212,13 @@ func TestGetObjectNoQuorum(t *testing.T) {
 		// Fetch object from store.
 		err = xl.GetObject(bucket, object, 0, int64(len("abcd")), ioutil.Discard)
 		err = errorCause(err)
-		if err != toObjectErr(errXLReadQuorum, bucket, object) {
-			t.Errorf("Expected putObject to fail with %v, but failed with %v", toObjectErr(errXLWriteQuorum, bucket, object), err)
+		if _, ok := err.(InvalidObjectState); ok {
+			continue
 		}
+		if _, ok := err.(InsufficientReadQuorum); ok {
+			continue
+		}
+		t.Errorf("Unexpected failure of getObject  %v", err)
 	}
 	// Cleanup backend directories.
 	removeRoots(fsDirs)
