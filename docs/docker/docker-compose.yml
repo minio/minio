@@ -11,7 +11,7 @@ services:
     environment:
       MINIO_ACCESS_KEY: minio
       MINIO_SECRET_KEY: minio123
-    command: server http://minio1/export http://minio2/export http://minio3/export http://minio4/export
+    command: server http://minio1/myexport http://minio2/myexport http://minio3/myexport http://minio4/myexport
   minio2:
     image: minio/minio:edge
     ports:
@@ -19,7 +19,7 @@ services:
     environment:
       MINIO_ACCESS_KEY: minio
       MINIO_SECRET_KEY: minio123
-    command: server http://minio1/export http://minio2/export http://minio3/export http://minio4/export
+    command: server http://minio1/myexport http://minio2/myexport http://minio3/myexport http://minio4/myexport
   minio3:
     image: minio/minio:edge
     ports:
@@ -27,7 +27,7 @@ services:
     environment:
       MINIO_ACCESS_KEY: minio
       MINIO_SECRET_KEY: minio123
-    command: server http://minio1/export http://minio2/export http://minio3/export http://minio4/export
+    command: server http://minio1/myexport http://minio2/myexport http://minio3/myexport http://minio4/myexport
   minio4:
     image: minio/minio:edge
     ports:
@@ -35,4 +35,4 @@ services:
     environment:
       MINIO_ACCESS_KEY: minio
       MINIO_SECRET_KEY: minio123
-    command: server http://minio1/export http://minio2/export http://minio3/export http://minio4/export
+    command: server http://minio1/myexport http://minio2/myexport http://minio3/myexport http://minio4/myexport
