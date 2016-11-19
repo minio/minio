@@ -243,7 +243,7 @@ func healObject(storageDisks []StorageAPI, bucket string, object string) error {
 	// Latest xlMetaV1 for reference. If a valid metadata is not present, it is as good as object not found.
 	latestMeta, pErr := pickValidXLMeta(partsMetadata, modTime)
 	if pErr != nil {
-		return traceError(ObjectNotFound{Bucket: bucket, Object: object})
+		return pErr
 	}
 
 	for index, disk := range outDatedDisks {

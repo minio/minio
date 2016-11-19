@@ -202,7 +202,7 @@ func pickValidXLMeta(metaArr []xlMetaV1, modTime time.Time) (xlMetaV1, error) {
 			return meta, nil
 		}
 	}
-	return xlMetaV1{}, errors.New("No valid xl.json present")
+	return xlMetaV1{}, traceError(errors.New("No valid xl.json present"))
 }
 
 // list of all errors that can be ignored in a metadata operation.

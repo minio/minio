@@ -197,7 +197,7 @@ func TestPickValidXLMeta(t *testing.T) {
 	for i, test := range testCases {
 		xlMeta, err := pickValidXLMeta(test.metaArr, test.modTime)
 		if test.expectedErr != nil {
-			if err.Error() != test.expectedErr.Error() {
+			if errorCause(err).Error() != test.expectedErr.Error() {
 				t.Errorf("Test %d: Expected to fail with %v but received %v",
 					i+1, test.expectedErr, err)
 			}
