@@ -8,83 +8,108 @@ import (
 	"time"
 )
 
-// Error sent by appendRoutine when there are holes in parts.
+// Error sent by appendParts go-routine when there are holes in parts.
 // For ex. let's say client uploads part-2 before part-1 in which case we
 // can not append and have to wait till part-1 is uploaded. Hence we return
 // this error. Currently this error is not used in the caller.
 var errPartsMissing = errors.New("required parts missing")
 
-// Error sent when appendRoutine has waited long enough and timedout.
-var errAppendRoutineTimeout = errors.New("timeout")
+// Error sent when appendParts go-routine has waited long enough and timedout.
+var errAppendPartsTimeout = errors.New("appendParts goroutine timeout")
 
-// Timeout value for the appendRoutine go-routine.
-var appendRoutineTimeout = 24 * 60 * 60 * time.Second
+// Timeout value for the appendParts go-routine.
+var appendPartsTimeout = 24 * 60 * 60 * time.Second
 
-// Holds a map of uploadID->appendRoutine
-type appendPartFS struct {
-	appendRoutineMap map[string]appendRoutineInfo
-	mu               sync.Mutex
+// Holds a map of uploadID->appendParts go-routine
+type backgroundAppend struct {
+	infoMap map[string]bgAppendPartsInfo
+	sync.Mutex
 }
 
-// Input to the appendRoutine
-type appendRoutineInput struct {
+// Input to the appendParts go-routine
+type bgAppendPartsInput struct {
 	meta  fsMetaV1   // list of parts that need to be appended
-	errCh chan error // error sent by appendRoutine
+	errCh chan error // error sent by appendParts go-routine
 }
 
-// Identifies an appendRoutine.
-type appendRoutineInfo struct {
-	inputCh   chan appendRoutineInput
-	timeoutCh chan struct{} // closed by appendRoutine when it timesout
-	endCh     chan struct{} // closed after complete/abort of upload to end the appendRoutine
+// Identifies an appendParts go-routine.
+type bgAppendPartsInfo struct {
+	inputCh   chan bgAppendPartsInput
+	timeoutCh chan struct{} // closed by appendParts go-routine when it timesout
+	endCh     chan struct{} // closed after complete/abort of upload to end the appendParts go-routine
 }
 
 // Called after a part is uploaded so that it can be appended in the background.
-func (m *appendPartFS) processPart(disk StorageAPI, bucket, object, uploadID string, meta fsMetaV1) chan error {
-	m.mu.Lock()
-	info, ok := m.appendRoutineMap[uploadID]
+func (b *backgroundAppend) append(disk StorageAPI, bucket, object, uploadID string, meta fsMetaV1) {
+	b.Lock()
+	info, ok := b.infoMap[uploadID]
 	if !ok {
-		// Corresponding appendRoutine was not found, create a new one. Would happen when the first
+		// Corresponding appendParts go-routine was not found, create a new one. Would happen when the first
 		// part of a multipart upload is uploaded.
-		inputCh := make(chan appendRoutineInput)
+		inputCh := make(chan bgAppendPartsInput)
 		timeoutCh := make(chan struct{})
 		endCh := make(chan struct{})
 
-		info = appendRoutineInfo{inputCh, timeoutCh, endCh}
-		m.appendRoutineMap[uploadID] = info
+		info = bgAppendPartsInfo{inputCh, timeoutCh, endCh}
+		b.infoMap[uploadID] = info
 
-		go m.appendRoutine(disk, bucket, object, uploadID, info)
+		go b.appendParts(disk, bucket, object, uploadID, info)
 	}
-	m.mu.Unlock()
-	errCh := make(chan error)
+	b.Unlock()
 	go func() {
-		// send input in a goroutine as send on the inputCh can block if appendRoutine
+		errCh := make(chan error)
+		// send input in a goroutine as send on the inputCh can block if appendParts go-routine
 		// is busy appending a part.
 		select {
 		case <-info.timeoutCh:
-			// This is to handle a rare race condition where we found info in m.appendRoutineMap
-			// but soon after that appendRoutine timedouted out.
-			errCh <- errAppendRoutineTimeout
-		case info.inputCh <- appendRoutineInput{meta, errCh}:
+			// This is to handle a rare race condition where we found info in b.infoMap
+			// but soon after that appendParts go-routine timed out.
+		case info.inputCh <- bgAppendPartsInput{meta, errCh}:
+			// Receive the error so that the appendParts go-routine does not block on send.
+			// But the error received is ignored as fs.PutObjectPart() would have already
+			// returned success to the client.
+			<-errCh
 		}
 	}()
-	return errCh
 }
 
-// Called after complete-multipart-upload or abort-multipart-upload so that the appendRoutine is not left dangling.
-func (m *appendPartFS) endAppendRoutine(uploadID string) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	info, ok := m.appendRoutineMap[uploadID]
+// Called on complete-multipart-upload. Returns nil if app the required parts have been appended.
+func (b *backgroundAppend) complete(disk StorageAPI, bucket, object, uploadID string, meta fsMetaV1) error {
+	b.Lock()
+	info, ok := b.infoMap[uploadID]
+	b.Unlock()
+	if !ok {
+		return errPartsMissing
+	}
+	errCh := make(chan error)
+	select {
+	case <-info.timeoutCh:
+		// This is to handle a rare race condition where we found info in b.infoMap
+		// but soon after that appendParts go-routine timedouted out.
+		return errAppendPartsTimeout
+	case info.inputCh <- bgAppendPartsInput{meta, errCh}:
+	}
+	err := <-errCh
+
+	b.remove(uploadID)
+
+	return err
+}
+
+// Called after complete-multipart-upload or abort-multipart-upload so that the appendParts go-routine is not left dangling.
+func (b *backgroundAppend) remove(uploadID string) {
+	b.Lock()
+	defer b.Unlock()
+	info, ok := b.infoMap[uploadID]
 	if !ok {
 		return
 	}
-	delete(m.appendRoutineMap, uploadID)
+	delete(b.infoMap, uploadID)
 	close(info.endCh)
 }
 
-// The go-routine that appends the parts in the background.
-func (m *appendPartFS) appendRoutine(disk StorageAPI, bucket, object, uploadID string, info appendRoutineInfo) {
+// This is run as a go-routine that appends the parts in the background.
+func (b *backgroundAppend) appendParts(disk StorageAPI, bucket, object, uploadID string, info bgAppendPartsInfo) {
 	// Holds the list of parts that is already appended to the "append" file.
 	appendMeta := fsMetaV1{}
 	for {
@@ -116,20 +141,21 @@ func (m *appendPartFS) appendRoutine(disk StorageAPI, bucket, object, uploadID s
 				appendMeta.AddObjectPart(part.Number, part.Name, part.ETag, part.Size)
 			}
 		case <-info.endCh:
-			// Either complete-multipart-upload or abort-multipart-upload closed endCh to end the appendRoutine.
+			// Either complete-multipart-upload or abort-multipart-upload closed endCh to end the appendParts go-routine.
 			appendFilePath := getFSAppendDataPath(uploadID)
 			disk.DeleteFile(bucket, appendFilePath) // Delete the tmp append file in case abort-multipart was called.
 			return
-		case <-time.After(appendRoutineTimeout):
+		case <-time.After(appendPartsTimeout):
 			// Timeout the goroutine to garbage collect its resources. This would happen if the client initates
 			// a multipart upload and does not complete/abort it.
-			m.mu.Lock()
-			delete(m.appendRoutineMap, uploadID)
-			m.mu.Unlock()
-			close(info.timeoutCh)
+			b.Lock()
+			delete(b.infoMap, uploadID)
+			b.Unlock()
 			// Delete the temporary append file as well.
 			appendFilePath := getFSAppendDataPath(uploadID)
 			disk.DeleteFile(bucket, appendFilePath)
+
+			close(info.timeoutCh)
 		}
 	}
 }

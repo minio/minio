@@ -416,10 +416,7 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	}
 
 	// Append the part in background.
-	go func() {
-		// Result is ignored as we would have already replied to the client.
-		<-fs.appendPart.processPart(fs.storage, bucket, object, uploadID, fsMeta)
-	}()
+	fs.bgAppend.append(fs.storage, bucket, object, uploadID, fsMeta)
 
 	return newMD5Hex, nil
 }
@@ -571,7 +568,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 
 	appendFallback := true // In case background appendRoutine() did not append the required parts.
 	if isPartsSame(fsMeta.Parts, parts) {
-		err = <-fs.appendPart.processPart(fs.storage, bucket, object, uploadID, fsMeta)
+		err = fs.bgAppend.complete(fs.storage, bucket, object, uploadID, fsMeta)
 		if err == nil {
 			appendFallback = false
 			fsAppendDataPath := getFSAppendDataPath(uploadID)
@@ -580,9 +577,6 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 			}
 		}
 	}
-
-	// End the background go-routine.
-	fs.appendPart.endAppendRoutine(uploadID)
 
 	if appendFallback {
 		// appendRoutine could not do append all the required parts, hence we do it here.
@@ -708,7 +702,7 @@ func (fs fsObjects) abortMultipartUpload(bucket, object, uploadID string) error 
 	if err := cleanupUploadedParts(bucket, object, uploadID, fs.storage); err != nil {
 		return err
 	}
-	fs.appendPart.endAppendRoutine(uploadID)
+	fs.bgAppend.remove(uploadID)
 	// remove entry from uploads.json with quorum
 	if err := fs.updateUploadJSON(bucket, object, uploadIDChange{uploadID: uploadID, isRemove: true}); err != nil {
 		return toObjectErr(err, bucket, object)
