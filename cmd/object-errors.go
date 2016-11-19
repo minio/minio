@@ -325,6 +325,26 @@ func (e NotImplemented) Error() string {
 	return "Not Implemented"
 }
 
+// Check if error type is IncompleteBody.
+func isErrIncompleteBody(err error) bool {
+	err = errorCause(err)
+	switch err.(type) {
+	case IncompleteBody:
+		return true
+	}
+	return false
+}
+
+// Check if error type is BucketPolicyNotFound.
+func isErrBucketPolicyNotFound(err error) bool {
+	err = errorCause(err)
+	switch err.(type) {
+	case BucketPolicyNotFound:
+		return true
+	}
+	return false
+}
+
 // Check if error type is ObjectNameInvalid.
 func isErrObjectNameInvalid(err error) bool {
 	err = errorCause(err)

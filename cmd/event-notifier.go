@@ -308,7 +308,7 @@ func loadNotificationConfig(bucket string, objAPI ObjectLayer) (*notificationCon
 		// 'notification.xml' not found return
 		// 'errNoSuchNotifications'.  This is default when no
 		// bucket notifications are found on the bucket.
-		if isErrObjectNotFound(err) {
+		if isErrObjectNotFound(err) || isErrIncompleteBody(err) {
 			return nil, errNoSuchNotifications
 		}
 		errorIf(err, "Unable to load bucket-notification for bucket %s", bucket)
@@ -321,7 +321,7 @@ func loadNotificationConfig(bucket string, objAPI ObjectLayer) (*notificationCon
 		// 'notification.xml' not found return
 		// 'errNoSuchNotifications'.  This is default when no
 		// bucket notifications are found on the bucket.
-		if isErrObjectNotFound(err) {
+		if isErrObjectNotFound(err) || isErrIncompleteBody(err) {
 			return nil, errNoSuchNotifications
 		}
 		errorIf(err, "Unable to load bucket-notification for bucket %s", bucket)
@@ -430,11 +430,34 @@ func persistListenerConfig(bucket string, lcfg []listenerConfig, obj ObjectLayer
 }
 
 // Remove listener configuration from storage layer. Used when a bucket is deleted.
-func removeListenerConfig(bucket string, obj ObjectLayer) error {
+func removeListenerConfig(bucket string, objAPI ObjectLayer) error {
 	// make the path
 	lcPath := path.Join(bucketConfigPrefix, bucket, bucketListenerConfig)
 	// remove it
-	return obj.DeleteObject(minioMetaBucket, lcPath)
+	return objAPI.DeleteObject(minioMetaBucket, lcPath)
+}
+
+// Loads both notification and listener config.
+func loadNotificationAndListenerConfig(bucketName string, objAPI ObjectLayer) (nCfg *notificationConfig, lCfg []listenerConfig, err error) {
+	nConfigErrs := []error{
+		// When no previous notification configs were found.
+		errNoSuchNotifications,
+		// net.Dial fails for rpc client or any
+		// other unexpected errors during net.Dial.
+		errDiskNotFound,
+	}
+	// Loads notification config if any.
+	nCfg, err = loadNotificationConfig(bucketName, objAPI)
+	if err != nil && !isErrIgnored(err, nConfigErrs) {
+		return nil, nil, err
+	}
+
+	// Loads listener config if any.
+	lCfg, err = loadListenerConfig(bucketName, objAPI)
+	if err != nil && !isErrIgnored(err, nConfigErrs) {
+		return nil, nil, err
+	}
+	return nCfg, lCfg, nil
 }
 
 // loads all bucket notifications if present.
@@ -450,21 +473,11 @@ func loadAllBucketNotifications(objAPI ObjectLayer) (map[string]*notificationCon
 
 	// Loads all bucket notifications.
 	for _, bucket := range buckets {
-		nCfg, nErr := loadNotificationConfig(bucket.Name, objAPI)
-		if nErr != nil {
-			if nErr != errNoSuchNotifications {
-				return nil, nil, nErr
-			}
-		} else {
-			nConfigs[bucket.Name] = nCfg
-		}
-		lCfg, lErr := loadListenerConfig(bucket.Name, objAPI)
-		if lErr != nil {
-			if lErr != errNoSuchNotifications {
-				return nil, nil, lErr
-			}
-		} else {
-			lConfigs[bucket.Name] = lCfg
+		// Load persistent notification and listener configurations
+		// a given bucket name.
+		nConfigs[bucket.Name], lConfigs[bucket.Name], err = loadNotificationAndListenerConfig(bucket.Name, objAPI)
+		if err != nil {
+			return nil, nil, err
 		}
 	}
 

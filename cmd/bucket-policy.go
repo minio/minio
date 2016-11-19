@@ -75,9 +75,8 @@ func loadAllBucketPolicies(objAPI ObjectLayer) (policies map[string]*bucketPolic
 	// List buckets to proceed loading all notification configuration.
 	buckets, err := objAPI.ListBuckets()
 	errorIf(err, "Unable to list buckets.")
-	err = errorCause(err)
 	if err != nil {
-		return nil, err
+		return nil, errorCause(err)
 	}
 
 	policies = make(map[string]*bucketPolicy)
@@ -86,11 +85,15 @@ func loadAllBucketPolicies(objAPI ObjectLayer) (policies map[string]*bucketPolic
 	for _, bucket := range buckets {
 		policy, pErr := readBucketPolicy(bucket.Name, objAPI)
 		if pErr != nil {
-			switch pErr.(type) {
-			case BucketPolicyNotFound:
-				continue
+			if !isErrIgnored(pErr, []error{
+				// net.Dial fails for rpc client or any
+				// other unexpected errors during net.Dial.
+				errDiskNotFound,
+			}) {
+				if !isErrBucketPolicyNotFound(pErr) {
+					pErrs = append(pErrs, pErr)
+				}
 			}
-			pErrs = append(pErrs, pErr)
 			// Continue to load other bucket policies if possible.
 			continue
 		}
@@ -144,23 +147,21 @@ func getOldBucketsConfigPath() (string, error) {
 func readBucketPolicyJSON(bucket string, objAPI ObjectLayer) (bucketPolicyReader io.Reader, err error) {
 	policyPath := pathJoin(bucketConfigPrefix, bucket, policyJSON)
 	objInfo, err := objAPI.GetObjectInfo(minioMetaBucket, policyPath)
-	err = errorCause(err)
 	if err != nil {
-		if _, ok := err.(ObjectNotFound); ok {
+		if isErrObjectNotFound(err) || isErrIncompleteBody(err) {
 			return nil, BucketPolicyNotFound{Bucket: bucket}
 		}
 		errorIf(err, "Unable to load policy for the bucket %s.", bucket)
-		return nil, err
+		return nil, errorCause(err)
 	}
 	var buffer bytes.Buffer
 	err = objAPI.GetObject(minioMetaBucket, policyPath, 0, objInfo.Size, &buffer)
-	err = errorCause(err)
 	if err != nil {
-		if _, ok := err.(ObjectNotFound); ok {
+		if isErrObjectNotFound(err) || isErrIncompleteBody(err) {
 			return nil, BucketPolicyNotFound{Bucket: bucket}
 		}
 		errorIf(err, "Unable to load policy for the bucket %s.", bucket)
-		return nil, err
+		return nil, errorCause(err)
 	}
 
 	return &buffer, nil
@@ -200,8 +201,7 @@ func removeBucketPolicy(bucket string, objAPI ObjectLayer) error {
 	return nil
 }
 
-// writeBucketPolicy - save a bucket policy that is assumed to be
-// validated.
+// writeBucketPolicy - save a bucket policy that is assumed to be validated.
 func writeBucketPolicy(bucket string, objAPI ObjectLayer, bpy *bucketPolicy) error {
 	buf, err := json.Marshal(bpy)
 	if err != nil {
