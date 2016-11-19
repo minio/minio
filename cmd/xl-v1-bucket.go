@@ -22,6 +22,17 @@ import (
 	"sync"
 )
 
+// list all errors that can be ignored in a bucket metadata operation.
+var bucketMetadataOpIgnoredErrs = append(bucketOpIgnoredErrs, errVolumeNotFound)
+
+// list all errors that can be ignore in a bucket operation.
+var bucketOpIgnoredErrs = []error{
+	errFaultyDisk,
+	errFaultyRemoteDisk,
+	errDiskNotFound,
+	errDiskAccessDenied,
+}
+
 /// Bucket operations
 
 // MakeBucket - make a bucket.
@@ -69,11 +80,7 @@ func (xl xlObjects) MakeBucket(bucket string) error {
 	}
 
 	// Verify we have any other errors which should undo make bucket.
-	if reducedErr := reduceErrs(dErrs, []error{
-		errDiskNotFound,
-		errFaultyDisk,
-		errDiskAccessDenied,
-	}); reducedErr != nil {
+	if reducedErr := reduceErrs(dErrs, bucketOpIgnoredErrs); reducedErr != nil {
 		return toObjectErr(reducedErr, bucket)
 	}
 	return nil
@@ -118,14 +125,6 @@ func undoMakeBucket(storageDisks []StorageAPI, bucket string) {
 
 	// Wait for all make vol to finish.
 	wg.Wait()
-}
-
-// list all errors that can be ignored in a bucket metadata operation.
-var bucketMetadataOpIgnoredErrs = []error{
-	errDiskNotFound,
-	errDiskAccessDenied,
-	errFaultyDisk,
-	errVolumeNotFound,
 }
 
 // getBucketInfo - returns the BucketInfo from one of the load balanced disks.
@@ -290,11 +289,7 @@ func (xl xlObjects) DeleteBucket(bucket string) error {
 		return toObjectErr(traceError(errXLWriteQuorum), bucket)
 	}
 
-	if reducedErr := reduceErrs(dErrs, []error{
-		errFaultyDisk,
-		errDiskNotFound,
-		errDiskAccessDenied,
-	}); reducedErr != nil {
+	if reducedErr := reduceErrs(dErrs, bucketOpIgnoredErrs); reducedErr != nil {
 		return toObjectErr(reducedErr, bucket)
 	}
 

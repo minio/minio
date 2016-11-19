@@ -97,12 +97,13 @@ type authConfig struct {
 
 // AuthRPCClient is a wrapper type for RPCClient which provides JWT based authentication across reconnects.
 type AuthRPCClient struct {
-	mu            sync.Mutex
-	config        *authConfig
-	rpc           *RPCClient // reconnect'able rpc client built on top of net/rpc Client
-	isLoggedIn    bool       // Indicates if the auth client has been logged in and token is valid.
-	token         string     // JWT based token
-	serverVersion string     // Server version exchanged by the RPC.
+	mu             sync.Mutex
+	config         *authConfig
+	rpc            *RPCClient // reconnect'able rpc client built on top of net/rpc Client
+	isLoggedIn     bool       // Indicates if the auth client has been logged in and token is valid.
+	serverToken    string     // Disk rpc JWT based token.
+	serverVersion  string     // Server version exchanged by the RPC.
+	serverIOErrCnt int        // Keeps track of total errors occurred for each RPC call.
 }
 
 // newAuthClient - returns a jwt based authenticated (go) rpc client, which does automatic reconnect.
@@ -127,30 +128,51 @@ func (authClient *AuthRPCClient) Close() error {
 }
 
 // Login - a jwt based authentication is performed with rpc server.
-func (authClient *AuthRPCClient) Login() error {
+func (authClient *AuthRPCClient) Login() (err error) {
 	authClient.mu.Lock()
+	// As soon as the function returns unlock,
 	defer authClient.mu.Unlock()
+
+	// Take remote disk offline if the total server errors
+	// are more than maximum allowable IO error limit.
+	if authClient.serverIOErrCnt > maxAllowedIOError {
+		return errFaultyRemoteDisk
+	}
+
+	// In defer sequence this is called first, so error
+	// increment happens well with in the lock.
+	defer func() {
+		if err != nil {
+			authClient.serverIOErrCnt++
+		}
+	}()
+
 	// Return if already logged in.
 	if authClient.isLoggedIn {
 		return nil
 	}
+
 	reply := RPCLoginReply{}
-	if err := authClient.rpc.Call(authClient.config.loginMethod, RPCLoginArgs{
+	if err = authClient.rpc.Call(authClient.config.loginMethod, RPCLoginArgs{
 		Username: authClient.config.accessKey,
 		Password: authClient.config.secretKey,
 	}, &reply); err != nil {
 		return err
 	}
+
 	// Validate if version do indeed match.
 	if reply.ServerVersion != Version {
 		return errServerVersionMismatch
 	}
+
+	// Validate if server timestamp is skewed.
 	curTime := time.Now().UTC()
 	if curTime.Sub(reply.Timestamp) > globalMaxSkewTime {
 		return errServerTimeMismatch
 	}
+
 	// Set token, time stamp as received from a successful login call.
-	authClient.token = reply.Token
+	authClient.serverToken = reply.Token
 	authClient.serverVersion = reply.ServerVersion
 	authClient.isLoggedIn = true
 	return nil
@@ -166,7 +188,7 @@ func (authClient *AuthRPCClient) Call(serviceMethod string, args interface {
 	// On successful login, attempt the call.
 	if err = authClient.Login(); err == nil {
 		// Set token and timestamp before the rpc call.
-		args.SetToken(authClient.token)
+		args.SetToken(authClient.serverToken)
 		args.SetTimestamp(time.Now().UTC())
 
 		// Call the underlying rpc.
@@ -183,17 +205,17 @@ func (authClient *AuthRPCClient) Call(serviceMethod string, args interface {
 }
 
 // Node returns the node (network address) of the connection
-func (authClient *AuthRPCClient) Node() string {
+func (authClient *AuthRPCClient) Node() (node string) {
 	if authClient.rpc != nil {
-		return authClient.rpc.node
+		node = authClient.rpc.node
 	}
-	return ""
+	return node
 }
 
 // RPCPath returns the RPC path of the connection
-func (authClient *AuthRPCClient) RPCPath() string {
+func (authClient *AuthRPCClient) RPCPath() (rpcPath string) {
 	if authClient.rpc != nil {
-		return authClient.rpc.rpcPath
+		rpcPath = authClient.rpc.rpcPath
 	}
-	return ""
+	return rpcPath
 }

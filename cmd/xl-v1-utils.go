@@ -52,19 +52,25 @@ func reduceErrs(errs []error, ignoredErrs []error) error {
 	return traceError(errMax, errs...)
 }
 
+// List of all errors which are ignored while verifying quorum.
+var quorumIgnoredErrs = []error{
+	errFaultyDisk,
+	errFaultyRemoteDisk,
+	errDiskNotFound,
+	errDiskAccessDenied,
+}
+
 // Validates if we have quorum based on the errors related to disk only.
 // Returns 'true' if we have quorum, 'false' if we don't.
 func isDiskQuorum(errs []error, minQuorumCount int) bool {
 	var count int
 	errs = errorsCause(errs)
 	for _, err := range errs {
-		switch err {
-		case errDiskNotFound, errFaultyDisk, errDiskAccessDenied:
-			continue
+		// Check if the error can be ignored for quorum verification.
+		if !isErrIgnored(err, quorumIgnoredErrs) {
+			count++
 		}
-		count++
 	}
-
 	return count >= minQuorumCount
 }
 

@@ -77,6 +77,7 @@ var xlTreeWalkIgnoredErrs = []error{
 	errDiskNotFound,
 	errDiskAccessDenied,
 	errFaultyDisk,
+	errFaultyRemoteDisk,
 }
 
 // newXLObjects - initialize new xl object layer.
