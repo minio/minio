@@ -18,15 +18,17 @@ package cmd
 
 import (
 	"fmt"
+	"math"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/cheggaaa/pb"
 	"github.com/fatih/color"
 )
 
 // colorizeUpdateMessage - inspired from Yeoman project npm package https://github.com/yeoman/update-notifier
-func colorizeUpdateMessage(updateString string) string {
+func colorizeUpdateMessage(updateString string, newerThan time.Duration) string {
 	// Initialize coloring.
 	cyan := color.New(color.FgCyan, color.Bold).SprintFunc()
 	yellow := color.New(color.FgYellow, color.Bold).SprintfFunc()
@@ -34,15 +36,20 @@ func colorizeUpdateMessage(updateString string) string {
 	// Calculate length without color coding, due to ANSI color
 	// characters padded to actual string the final length is wrong
 	// than the original string length.
-	line1Str := fmt.Sprintf("  New update: %s ", updateString)
+	hTime := timeDurationToHumanizedDuration(newerThan)
+	line1Str := fmt.Sprintf(" Minio is %s old ", hTime.StringShort())
+	line2Str := fmt.Sprintf(" Update: %s ", updateString)
 	line1Length := len(line1Str)
+	line2Length := len(line2Str)
 
 	// Populate lines with color coding.
-	line1InColor := fmt.Sprintf("  New update: %s ", cyan(updateString))
+	line1InColor := fmt.Sprintf(" Minio is %s old ", yellow(hTime.StringShort()))
+	line2InColor := fmt.Sprintf(" Update: %s ", cyan(updateString))
 
-	// Calculate the rectangular box size.
-	maxContentWidth := line1Length
+	// calculate the rectangular box size.
+	maxContentWidth := int(math.Max(float64(line1Length), float64(line2Length)))
 	line1Rest := maxContentWidth - line1Length
+	line2Rest := maxContentWidth - line2Length
 
 	// termWidth is set to a default one to use when we are
 	// not able to calculate terminal width via OS syscalls
@@ -54,27 +61,29 @@ func colorizeUpdateMessage(updateString string) string {
 
 	var message string
 	switch {
-	case len(line1Str) > termWidth:
-		message = "\n" + line1InColor + "\n"
+	case len(line2Str) > termWidth:
+		message = "\n" + line1InColor + "\n" + line2InColor + "\n"
 	default:
-		// On windows terminal turn off unicode characters.
+		// on windows terminal turn off unicode characters.
 		var top, bottom, sideBar string
 		if runtime.GOOS == "windows" {
 			top = yellow("*" + strings.Repeat("*", maxContentWidth) + "*")
 			bottom = yellow("*" + strings.Repeat("*", maxContentWidth) + "*")
 			sideBar = yellow("|")
 		} else {
-			// Color the rectangular box, use unicode characters here.
+			// color the rectangular box, use unicode characters here.
 			top = yellow("┏" + strings.Repeat("━", maxContentWidth) + "┓")
 			bottom = yellow("┗" + strings.Repeat("━", maxContentWidth) + "┛")
 			sideBar = yellow("┃")
 		}
-		// Fill spaces to the rest of the area.
+		// fill spaces to the rest of the area.
 		spacePaddingLine1 := strings.Repeat(" ", line1Rest)
+		spacePaddingLine2 := strings.Repeat(" ", line2Rest)
 
-		// Construct the final message.
+		// construct the final message.
 		message = "\n" + top + "\n" +
 			sideBar + line1InColor + spacePaddingLine1 + sideBar + "\n" +
+			sideBar + line2InColor + spacePaddingLine2 + sideBar + "\n" +
 			bottom + "\n"
 	}
 	// Return the final message.
