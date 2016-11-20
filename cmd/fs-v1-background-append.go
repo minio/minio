@@ -89,7 +89,7 @@ func (b *backgroundAppend) append(disk StorageAPI, bucket, object, uploadID stri
 	}()
 }
 
-// Called on complete-multipart-upload. Returns nil if app the required parts have been appended.
+// Called on complete-multipart-upload. Returns nil if the required parts have been appended.
 func (b *backgroundAppend) complete(disk StorageAPI, bucket, object, uploadID string, meta fsMetaV1) error {
 	b.Lock()
 	info, ok := b.infoMap[uploadID]
@@ -159,10 +159,10 @@ func (b *backgroundAppend) appendParts(disk StorageAPI, bucket, object, uploadID
 		case <-info.endCh:
 			// Either complete-multipart-upload or abort-multipart-upload closed endCh to end the appendParts go-routine.
 			appendFilePath := getFSAppendDataPath(uploadID)
-			disk.DeleteFile(bucket, appendFilePath) // Delete the tmp append file in case abort-multipart was called.
+			disk.DeleteFile(bucket, appendFilePath)
 			return
 		case <-time.After(appendPartsTimeout):
-			// Timeout the goroutine to garbage collect its resources. This would happen if the client initates
+			// Timeout the goroutine to garbage collect its resources. This would happen if the client initiates
 			// a multipart upload and does not complete/abort it.
 			b.Lock()
 			delete(b.infoMap, uploadID)
@@ -192,16 +192,17 @@ func appendPart(disk StorageAPI, bucket, object, uploadID string, part objectPar
 		}
 		var n int64
 		n, err := disk.ReadFile(minioMetaBucket, partPath, offset, buf[:curLeft])
-		if n > 0 {
-			if err = disk.AppendFile(minioMetaBucket, appendFilePath, buf[:n]); err != nil {
-				disk.DeleteFile(bucket, appendFilePath)
-				return err
-			}
+		if err == io.EOF {
+			break
 		}
 		if err != nil {
-			if err == io.EOF || err == io.ErrUnexpectedEOF {
-				break
-			}
+			// Check for ErrUnexpectedEOF not needed as it should never happen as we know
+			// the size of the file and never read more than its size. Hence any non io.EOF
+			// error condition can be considered as an error.
+			disk.DeleteFile(bucket, appendFilePath)
+			return err
+		}
+		if err = disk.AppendFile(minioMetaBucket, appendFilePath, buf[:n]); err != nil {
 			disk.DeleteFile(bucket, appendFilePath)
 			return err
 		}

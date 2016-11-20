@@ -494,8 +494,11 @@ func (s *posix) ReadAll(volume, path string) (buf []byte, err error) {
 // ReadFile reads exactly len(buf) bytes into buf. It returns the
 // number of bytes copied. The error is EOF only if no bytes were
 // read. On return, n == len(buf) if and only if err == nil. n == 0
-// for io.EOF. Additionally ReadFile also starts reading from an
-// offset.
+// for io.EOF.
+// If an EOF happens after reading some but not all the bytes,
+// ReadFull returns ErrUnexpectedEOF.
+// Additionally ReadFile also starts reading from an offset.
+// ReadFile symantics are same as io.ReadFull
 func (s *posix) ReadFile(volume string, path string, offset int64, buf []byte) (n int64, err error) {
 	defer func() {
 		if err == syscall.EIO {
