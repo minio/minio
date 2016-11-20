@@ -26,7 +26,7 @@ import (
 func (xl xlObjects) updateUploadJSON(bucket, object string, uCh uploadIDChange) error {
 	uploadsPath := path.Join(mpartMetaPrefix, bucket, object, uploadsJSONFile)
 	uniqueID := getUUID()
-	tmpUploadsPath := path.Join(tmpMetaPrefix, uniqueID)
+	tmpUploadsPath := uniqueID
 
 	// slice to store errors from disks
 	errs := make([]error, len(xl.storageDisks))
@@ -75,7 +75,7 @@ func (xl xlObjects) updateUploadJSON(bucket, object string, uCh uploadIDChange) 
 			if !isDelete[index] {
 				errs[index] = writeUploadJSON(&uploadsJSON, uploadsPath, tmpUploadsPath, disk)
 			} else {
-				wErr := disk.RenameFile(minioMetaBucket, uploadsPath, minioMetaBucket, tmpUploadsPath)
+				wErr := disk.RenameFile(minioMetaBucket, uploadsPath, minioMetaTmpBucket, tmpUploadsPath)
 				if wErr != nil {
 					errs[index] = traceError(wErr)
 				}
@@ -115,7 +115,7 @@ func (xl xlObjects) updateUploadJSON(bucket, object string, uCh uploadIDChange) 
 					)
 				} else {
 					_ = disk.RenameFile(
-						minioMetaBucket, tmpUploadsPath,
+						minioMetaTmpBucket, tmpUploadsPath,
 						minioMetaBucket, uploadsPath,
 					)
 				}
@@ -135,7 +135,7 @@ func (xl xlObjects) updateUploadJSON(bucket, object string, uCh uploadIDChange) 
 		go func(index int, disk StorageAPI) {
 			defer wg.Done()
 			// isDelete[index] = true at this point.
-			_ = disk.DeleteFile(minioMetaBucket, tmpUploadsPath)
+			_ = disk.DeleteFile(minioMetaTmpBucket, tmpUploadsPath)
 		}(index, disk)
 	}
 	wg.Wait()
@@ -236,10 +236,10 @@ func commitXLMetadata(disks []StorageAPI, srcPrefix, dstPrefix string, quorum in
 		go func(index int, disk StorageAPI) {
 			defer wg.Done()
 			// Delete any dangling directories.
-			defer disk.DeleteFile(minioMetaBucket, srcPrefix)
+			defer disk.DeleteFile(minioMetaTmpBucket, srcPrefix)
 
 			// Renames `xl.json` from source prefix to destination prefix.
-			rErr := disk.RenameFile(minioMetaBucket, srcJSONFile, minioMetaBucket, dstJSONFile)
+			rErr := disk.RenameFile(minioMetaTmpBucket, srcJSONFile, minioMetaBucket, dstJSONFile)
 			if rErr != nil {
 				mErrs[index] = traceError(rErr)
 				return

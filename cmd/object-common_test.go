@@ -66,11 +66,11 @@ func TestHouseKeeping(t *testing.T) {
 			if errs[index] != nil {
 				return
 			}
-			errs[index] = store.MakeVol(pathJoin(minioMetaBucket, tmpMetaPrefix))
+			errs[index] = store.MakeVol(minioMetaTmpBucket)
 			if errs[index] != nil {
 				return
 			}
-			errs[index] = store.AppendFile(pathJoin(minioMetaBucket, tmpMetaPrefix), "hello.txt", []byte("hello"))
+			errs[index] = store.AppendFile(minioMetaTmpBucket, "hello.txt", []byte("hello"))
 		}(i, store)
 	}
 	wg.Wait()

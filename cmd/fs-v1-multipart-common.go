@@ -56,7 +56,7 @@ func (fs fsObjects) isUploadIDExists(bucket, object, uploadID string) bool {
 func (fs fsObjects) updateUploadJSON(bucket, object string, uCh uploadIDChange) error {
 	uploadsPath := path.Join(mpartMetaPrefix, bucket, object, uploadsJSONFile)
 	uniqueID := getUUID()
-	tmpUploadsPath := path.Join(tmpMetaPrefix, uniqueID)
+	tmpUploadsPath := uniqueID
 
 	uploadsJSON, err := readUploadsJSON(bucket, object, fs.storage)
 	if errorCause(err) == errFileNotFound {

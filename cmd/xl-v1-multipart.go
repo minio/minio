@@ -288,19 +288,19 @@ func (xl xlObjects) newMultipartUpload(bucket string, object string, meta map[st
 
 	uploadID := getUUID()
 	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID)
-	tempUploadIDPath := path.Join(tmpMetaPrefix, uploadID)
+	tempUploadIDPath := uploadID
 	// Write updated `xl.json` to all disks.
-	if err := writeSameXLMetadata(xl.storageDisks, minioMetaBucket, tempUploadIDPath, xlMeta, xl.writeQuorum, xl.readQuorum); err != nil {
-		return "", toObjectErr(err, minioMetaBucket, tempUploadIDPath)
+	if err := writeSameXLMetadata(xl.storageDisks, minioMetaTmpBucket, tempUploadIDPath, xlMeta, xl.writeQuorum, xl.readQuorum); err != nil {
+		return "", toObjectErr(err, minioMetaTmpBucket, tempUploadIDPath)
 	}
 	// delete the tmp path later in case we fail to rename (ignore
 	// returned errors) - this will be a no-op in case of a rename
 	// success.
-	defer xl.deleteObject(minioMetaBucket, tempUploadIDPath)
+	defer xl.deleteObject(minioMetaTmpBucket, tempUploadIDPath)
 
 	// Attempt to rename temp upload object to actual upload path
 	// object
-	if rErr := renameObject(xl.storageDisks, minioMetaBucket, tempUploadIDPath, minioMetaBucket, uploadIDPath, xl.writeQuorum); rErr != nil {
+	if rErr := renameObject(xl.storageDisks, minioMetaTmpBucket, tempUploadIDPath, minioMetaBucket, uploadIDPath, xl.writeQuorum); rErr != nil {
 		return "", toObjectErr(rErr, minioMetaBucket, uploadIDPath)
 	}
 
@@ -391,7 +391,7 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 
 	partSuffix := fmt.Sprintf("part.%d", partID)
 	tmpSuffix := getUUID()
-	tmpPartPath := path.Join(tmpMetaPrefix, tmpSuffix)
+	tmpPartPath := tmpSuffix
 
 	// Initialize md5 writer.
 	md5Writer := md5.New()
@@ -421,19 +421,19 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	teeReader := io.TeeReader(lreader, mw)
 
 	// Delete the temporary object part. If PutObjectPart succeeds there would be nothing to delete.
-	defer xl.deleteObject(minioMetaBucket, tmpPartPath)
+	defer xl.deleteObject(minioMetaTmpBucket, tmpPartPath)
 
 	if size > 0 {
 		for _, disk := range onlineDisks {
 			if disk != nil {
 				actualSize := xl.sizeOnDisk(size, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks)
-				disk.PrepareFile(minioMetaBucket, tmpPartPath, actualSize)
+				disk.PrepareFile(minioMetaTmpBucket, tmpPartPath, actualSize)
 			}
 		}
 	}
 
 	// Erasure code data and write across all disks.
-	sizeWritten, checkSums, err := erasureCreateFile(onlineDisks, minioMetaBucket, tmpPartPath, teeReader, xlMeta.Erasure.BlockSize, xl.dataBlocks, xl.parityBlocks, bitRotAlgo, xl.writeQuorum)
+	sizeWritten, checkSums, err := erasureCreateFile(onlineDisks, minioMetaTmpBucket, tmpPartPath, teeReader, xlMeta.Erasure.BlockSize, xl.dataBlocks, xl.parityBlocks, bitRotAlgo, xl.writeQuorum)
 	if err != nil {
 		return "", toObjectErr(err, bucket, object)
 	}
@@ -478,7 +478,7 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 
 	// Rename temporary part file to its final location.
 	partPath := path.Join(uploadIDPath, partSuffix)
-	err = renamePart(onlineDisks, minioMetaBucket, tmpPartPath, minioMetaBucket, partPath, xl.writeQuorum)
+	err = renamePart(onlineDisks, minioMetaTmpBucket, tmpPartPath, minioMetaBucket, partPath, xl.writeQuorum)
 	if err != nil {
 		return "", toObjectErr(err, minioMetaBucket, partPath)
 	}
@@ -515,11 +515,11 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 
 	// Write all the checksum metadata.
 	newUUID := getUUID()
-	tempXLMetaPath := path.Join(tmpMetaPrefix, newUUID)
+	tempXLMetaPath := newUUID
 
 	// Writes a unique `xl.json` each disk carrying new checksum related information.
-	if err = writeUniqueXLMetadata(onlineDisks, minioMetaBucket, tempXLMetaPath, partsMetadata, xl.writeQuorum); err != nil {
-		return "", toObjectErr(err, minioMetaBucket, tempXLMetaPath)
+	if err = writeUniqueXLMetadata(onlineDisks, minioMetaTmpBucket, tempXLMetaPath, partsMetadata, xl.writeQuorum); err != nil {
+		return "", toObjectErr(err, minioMetaTmpBucket, tempXLMetaPath)
 	}
 	rErr := commitXLMetadata(onlineDisks, tempXLMetaPath, uploadIDPath, xl.writeQuorum)
 	if rErr != nil {
@@ -751,7 +751,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	// Save successfully calculated md5sum.
 	xlMeta.Meta["md5Sum"] = s3MD5
 	uploadIDPath = path.Join(mpartMetaPrefix, bucket, object, uploadID)
-	tempUploadIDPath := path.Join(tmpMetaPrefix, uploadID)
+	tempUploadIDPath := uploadID
 
 	// Update all xl metadata, make sure to not modify fields like
 	// checksum which are different on each disks.
@@ -762,8 +762,8 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	}
 
 	// Write unique `xl.json` for each disk.
-	if err = writeUniqueXLMetadata(onlineDisks, minioMetaBucket, tempUploadIDPath, partsMetadata, xl.writeQuorum); err != nil {
-		return "", toObjectErr(err, minioMetaBucket, tempUploadIDPath)
+	if err = writeUniqueXLMetadata(onlineDisks, minioMetaTmpBucket, tempUploadIDPath, partsMetadata, xl.writeQuorum); err != nil {
+		return "", toObjectErr(err, minioMetaTmpBucket, tempUploadIDPath)
 	}
 	rErr := commitXLMetadata(onlineDisks, tempUploadIDPath, uploadIDPath, xl.writeQuorum)
 	if rErr != nil {
@@ -793,7 +793,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 		// NOTE: Do not use online disks slice here.
 		// The reason is that existing object should be purged
 		// regardless of `xl.json` status and rolled back in case of errors.
-		err = renameObject(xl.storageDisks, bucket, object, minioMetaBucket, path.Join(tmpMetaPrefix, uniqueID), xl.writeQuorum)
+		err = renameObject(xl.storageDisks, bucket, object, minioMetaTmpBucket, uniqueID, xl.writeQuorum)
 		if err != nil {
 			return "", toObjectErr(err, bucket, object)
 		}
@@ -818,7 +818,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	}
 
 	// Delete the previously successfully renamed object.
-	xl.deleteObject(minioMetaBucket, path.Join(tmpMetaPrefix, uniqueID))
+	xl.deleteObject(minioMetaTmpBucket, uniqueID)
 
 	// Hold the lock so that two parallel
 	// complete-multipart-uploads do not leave a stale
