@@ -47,9 +47,9 @@ func TestReleaseUpdateVersion(t *testing.T) {
 		{
 			updateURL: ts.URL,
 			updateMsg: updateMessage{
-				Download: ts.URL + "/" + runtime.GOOS + "-" + runtime.GOARCH + "/minio.exe",
-				Version:  "2016-10-06T00:08:32Z",
-				Update:   true,
+				Download:  ts.URL + "/" + runtime.GOOS + "-" + runtime.GOARCH + "/minio.exe",
+				Update:    true,
+				NewerThan: 90487000000000,
 			},
 			errMsg:     "",
 			shouldPass: true,
@@ -87,9 +87,8 @@ func TestReleaseUpdate(t *testing.T) {
 			updateURL: ts.URL,
 			updateMsg: updateMessage{
 				Download: ts.URL + "/" + runtime.GOOS + "-" + runtime.GOARCH + "/minio.exe",
-				Version:  "DEVELOPMENT.GOGET",
 			},
-			errMsg:     "Unable to parse version string as time.",
+			errMsg:     "Failed to retrieve update notice. Please try again later. Please report this issue at https://github.com/minio/minio/issues",
 			shouldPass: false,
 		},
 	}
