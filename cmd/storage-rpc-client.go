@@ -140,7 +140,7 @@ func (n networkStorage) String() string {
 func (n networkStorage) DiskInfo() (info disk.Info, err error) {
 	args := GenericArgs{}
 	if err = n.rpcClient.Call("Storage.DiskInfoHandler", &args, &info); err != nil {
-		return disk.Info{}, err
+		return disk.Info{}, toStorageErr(err)
 	}
 	return info, nil
 }
@@ -160,7 +160,7 @@ func (n networkStorage) ListVols() (vols []VolInfo, err error) {
 	ListVols := ListVolsReply{}
 	err = n.rpcClient.Call("Storage.ListVolsHandler", &GenericArgs{}, &ListVols)
 	if err != nil {
-		return nil, err
+		return nil, toStorageErr(err)
 	}
 	return ListVols.Vols, nil
 }

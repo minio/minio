@@ -77,8 +77,8 @@ func (xl xlObjects) HealBucket(bucket string) error {
 	return healBucketMetadata(xl.storageDisks, bucket)
 }
 
+// Heal bucket - create buckets on disks where it does not exist.
 func healBucket(storageDisks []StorageAPI, bucket string, writeQuorum int) error {
-	// Heal bucket - create buckets on disks where it does not exist.
 	bucketLock := nsMutex.NewNSLock(bucket, "")
 	bucketLock.Lock()
 	defer bucketLock.Unlock()
@@ -139,7 +139,7 @@ func healBucketMetadata(storageDisks []StorageAPI, bucket string) error {
 		metaLock := nsMutex.NewNSLock(minioMetaBucket, metaPath)
 		metaLock.RLock()
 		defer metaLock.RUnlock()
-		// Heals the metaPath.
+		// Heals the given file at metaPath.
 		if err := healObject(storageDisks, minioMetaBucket, metaPath); err != nil && !isErrObjectNotFound(err) {
 			return err
 		} // Success.
@@ -299,10 +299,13 @@ func healObject(storageDisks []StorageAPI, bucket string, object string) error {
 			return err
 		}
 		for index, sum := range checkSums {
-			if outDatedDisks[index] == nil {
-				continue
+			if outDatedDisks[index] != nil {
+				checkSumInfos[index] = append(checkSumInfos[index], checkSumInfo{
+					Name:      partName,
+					Algorithm: sumInfo.Algorithm,
+					Hash:      sum,
+				})
 			}
-			checkSumInfos[index] = append(checkSumInfos[index], checkSumInfo{partName, sumInfo.Algorithm, sum})
 		}
 	}
 
