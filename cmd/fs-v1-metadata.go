@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"encoding/json"
-	"path"
 	"sort"
 )
 
@@ -93,17 +92,17 @@ func readFSMetadata(disk StorageAPI, bucket, filePath string) (fsMeta fsMetaV1, 
 
 // Write fsMeta to fs.json or fs-append.json.
 func writeFSMetadata(disk StorageAPI, bucket, filePath string, fsMeta fsMetaV1) error {
-	tmpPath := path.Join(tmpMetaPrefix, getUUID())
+	tmpPath := getUUID()
 	metadataBytes, err := json.Marshal(fsMeta)
 	if err != nil {
 		return traceError(err)
 	}
-	if err = disk.AppendFile(minioMetaBucket, tmpPath, metadataBytes); err != nil {
+	if err = disk.AppendFile(minioMetaTmpBucket, tmpPath, metadataBytes); err != nil {
 		return traceError(err)
 	}
-	err = disk.RenameFile(minioMetaBucket, tmpPath, bucket, filePath)
+	err = disk.RenameFile(minioMetaTmpBucket, tmpPath, bucket, filePath)
 	if err != nil {
-		err = disk.DeleteFile(minioMetaBucket, tmpPath)
+		err = disk.DeleteFile(minioMetaTmpBucket, tmpPath)
 		if err != nil {
 			return traceError(err)
 		}

@@ -325,9 +325,9 @@ func testObjectAPIPutObjectStaleFiles(obj ObjectLayer, instanceType string, disk
 	}
 
 	for _, disk := range disks {
-		tmpMetaDir := path.Join(disk, minioMetaBucket, tmpMetaPrefix)
+		tmpMetaDir := path.Join(disk, minioMetaTmpBucket)
 		if !isDirEmpty(tmpMetaDir) {
-			t.Fatalf("%s: expected: empty, got: non-empty", tmpMetaDir)
+			t.Fatalf("%s: expected: empty, got: non-empty", minioMetaTmpBucket)
 		}
 	}
 }
@@ -392,7 +392,7 @@ func testObjectAPIMultipartPutObjectStaleFiles(obj ObjectLayer, instanceType str
 	}
 
 	for _, disk := range disks {
-		tmpMetaDir := path.Join(disk, minioMetaBucket, tmpMetaPrefix)
+		tmpMetaDir := path.Join(disk, minioMetaTmpBucket)
 		files, err := ioutil.ReadDir(tmpMetaDir)
 		if err != nil {
 			// Its OK to have non-existen tmpMetaDir.

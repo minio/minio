@@ -293,7 +293,7 @@ func healObject(storageDisks []StorageAPI, bucket string, object string) error {
 		// Heal the part file.
 		checkSums, err := erasureHealFile(latestDisks, outDatedDisks,
 			bucket, pathJoin(object, partName),
-			minioMetaBucket, pathJoin(tmpMetaPrefix, tmpID, partName),
+			minioMetaTmpBucket, pathJoin(tmpID, partName),
 			partSize, erasure.BlockSize, erasure.DataBlocks, erasure.ParityBlocks, sumInfo.Algorithm)
 		if err != nil {
 			return err
@@ -319,7 +319,7 @@ func healObject(storageDisks []StorageAPI, bucket string, object string) error {
 	}
 
 	// Generate and write `xl.json` generated from other disks.
-	err := writeUniqueXLMetadata(outDatedDisks, minioMetaBucket, pathJoin(tmpMetaPrefix, tmpID), partsMetadata, diskCount(outDatedDisks))
+	err := writeUniqueXLMetadata(outDatedDisks, minioMetaTmpBucket, tmpID, partsMetadata, diskCount(outDatedDisks))
 	if err != nil {
 		return toObjectErr(err, bucket, object)
 	}
@@ -335,7 +335,7 @@ func healObject(storageDisks []StorageAPI, bucket string, object string) error {
 			return traceError(err)
 		}
 		// Attempt a rename now from healed data to final location.
-		err = disk.RenameFile(minioMetaBucket, retainSlash(pathJoin(tmpMetaPrefix, tmpID)), bucket, retainSlash(object))
+		err = disk.RenameFile(minioMetaTmpBucket, retainSlash(tmpID), bucket, retainSlash(object))
 		if err != nil {
 			return traceError(err)
 		}

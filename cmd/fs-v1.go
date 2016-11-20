@@ -353,7 +353,7 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 	// Uploaded object will first be written to the temporary location which will eventually
 	// be renamed to the actual location. It is first written to the temporary location
 	// so that cleaning it up will be easy if the server goes down.
-	tempObj := path.Join(tmpMetaPrefix, uniqueID)
+	tempObj := uniqueID
 
 	// Initialize md5 writer.
 	md5Writer := md5.New()
@@ -379,16 +379,16 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 
 	if size == 0 {
 		// For size 0 we write a 0byte file.
-		err = fs.storage.AppendFile(minioMetaBucket, tempObj, []byte(""))
+		err = fs.storage.AppendFile(minioMetaTmpBucket, tempObj, []byte(""))
 		if err != nil {
-			fs.storage.DeleteFile(minioMetaBucket, tempObj)
+			fs.storage.DeleteFile(minioMetaTmpBucket, tempObj)
 			return ObjectInfo{}, toObjectErr(traceError(err), bucket, object)
 		}
 	} else {
 
 		// Prepare file to avoid disk fragmentation
 		if size > 0 {
-			err = fs.storage.PrepareFile(minioMetaBucket, tempObj, size)
+			err = fs.storage.PrepareFile(minioMetaTmpBucket, tempObj, size)
 			if err != nil {
 				return ObjectInfo{}, toObjectErr(err, bucket, object)
 			}
@@ -402,9 +402,9 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 		buf := make([]byte, int(bufSize))
 		teeReader := io.TeeReader(limitDataReader, multiWriter)
 		var bytesWritten int64
-		bytesWritten, err = fsCreateFile(fs.storage, teeReader, buf, minioMetaBucket, tempObj)
+		bytesWritten, err = fsCreateFile(fs.storage, teeReader, buf, minioMetaTmpBucket, tempObj)
 		if err != nil {
-			fs.storage.DeleteFile(minioMetaBucket, tempObj)
+			fs.storage.DeleteFile(minioMetaTmpBucket, tempObj)
 			errorIf(err, "Failed to create object %s/%s", bucket, object)
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
@@ -412,14 +412,14 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 		// Should return IncompleteBody{} error when reader has fewer
 		// bytes than specified in request header.
 		if bytesWritten < size {
-			fs.storage.DeleteFile(minioMetaBucket, tempObj)
+			fs.storage.DeleteFile(minioMetaTmpBucket, tempObj)
 			return ObjectInfo{}, traceError(IncompleteBody{})
 		}
 	}
 	// Delete the temporary object in the case of a
 	// failure. If PutObject succeeds, then there would be
 	// nothing to delete.
-	defer fs.storage.DeleteFile(minioMetaBucket, tempObj)
+	defer fs.storage.DeleteFile(minioMetaTmpBucket, tempObj)
 
 	newMD5Hex := hex.EncodeToString(md5Writer.Sum(nil))
 	// Update the md5sum if not set with the newly calculated one.
@@ -449,7 +449,7 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 	defer objectLock.RUnlock()
 
 	// Entire object was written to the temp location, now it's safe to rename it to the actual location.
-	err = fs.storage.RenameFile(minioMetaBucket, tempObj, bucket, object)
+	err = fs.storage.RenameFile(minioMetaTmpBucket, tempObj, bucket, object)
 	if err != nil {
 		return ObjectInfo{}, toObjectErr(traceError(err), bucket, object)
 	}

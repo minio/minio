@@ -289,12 +289,12 @@ func partToAppend(fsMeta fsMetaV1, fsAppendMeta fsMetaV1) (part objectPartInfo, 
 // Returns metadata path for the file holding info about the parts that
 // have been appended to the "append-file"
 func getFSAppendMetaPath(uploadID string) string {
-	return path.Join(tmpMetaPrefix, uploadID+".json")
+	return uploadID + ".json"
 }
 
 // Returns path for the append-file.
 func getFSAppendDataPath(uploadID string) string {
-	return path.Join(tmpMetaPrefix, uploadID+".data")
+	return uploadID + ".data"
 }
 
 // Append parts to fsAppendDataFile.
@@ -303,8 +303,8 @@ func appendParts(disk StorageAPI, bucket, object, uploadID string) {
 		// In case of any error, cleanup the append data and json files
 		// from the tmp so that we do not have any inconsistent append
 		// data/json files.
-		disk.DeleteFile(bucket, getFSAppendDataPath(uploadID))
-		disk.DeleteFile(bucket, getFSAppendMetaPath(uploadID))
+		disk.DeleteFile(minioMetaTmpBucket, getFSAppendDataPath(uploadID))
+		disk.DeleteFile(minioMetaTmpBucket, getFSAppendMetaPath(uploadID))
 	}
 	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID)
 	// fs-append.json path
@@ -322,11 +322,11 @@ func appendParts(disk StorageAPI, bucket, object, uploadID string) {
 	}
 
 	// Lock fs-append.json so that there is no parallel append to the file.
-	appendPathLock := nsMutex.NewNSLock(minioMetaBucket, fsAppendMetaPath)
+	appendPathLock := nsMutex.NewNSLock(minioMetaTmpBucket, fsAppendMetaPath)
 	appendPathLock.Lock()
 	defer appendPathLock.Unlock()
 
-	fsAppendMeta, err := readFSMetadata(disk, minioMetaBucket, fsAppendMetaPath)
+	fsAppendMeta, err := readFSMetadata(disk, minioMetaTmpBucket, fsAppendMetaPath)
 	if err != nil {
 		if errorCause(err) != errFileNotFound {
 			cleanupAppendPaths()
@@ -362,7 +362,7 @@ func appendParts(disk StorageAPI, bucket, object, uploadID string) {
 		var n int64
 		n, err = disk.ReadFile(minioMetaBucket, partPath, offset, buf[:curLeft])
 		if n > 0 {
-			if err = disk.AppendFile(minioMetaBucket, fsAppendDataPath, buf[:n]); err != nil {
+			if err = disk.AppendFile(minioMetaTmpBucket, fsAppendDataPath, buf[:n]); err != nil {
 				cleanupAppendPaths()
 				return
 			}
@@ -379,7 +379,7 @@ func appendParts(disk StorageAPI, bucket, object, uploadID string) {
 	}
 	fsAppendMeta.AddObjectPart(part.Number, part.Name, part.ETag, part.Size)
 	// Overwrite previous fs-append.json
-	if err = writeFSMetadata(disk, minioMetaBucket, fsAppendMetaPath, fsAppendMeta); err != nil {
+	if err = writeFSMetadata(disk, minioMetaTmpBucket, fsAppendMetaPath, fsAppendMeta); err != nil {
 		cleanupAppendPaths()
 		return
 	}
@@ -419,7 +419,7 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	}
 
 	partSuffix := fmt.Sprintf("object%d", partID)
-	tmpPartPath := path.Join(tmpMetaPrefix, uploadID+"."+getUUID()+"."+partSuffix)
+	tmpPartPath := uploadID + "." + getUUID() + "." + partSuffix
 
 	// Initialize md5 writer.
 	md5Writer := md5.New()
@@ -451,28 +451,28 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 
 	if size > 0 {
 		// Prepare file to avoid disk fragmentation
-		err := fs.storage.PrepareFile(minioMetaBucket, tmpPartPath, size)
+		err := fs.storage.PrepareFile(minioMetaTmpBucket, tmpPartPath, size)
 		if err != nil {
-			return "", toObjectErr(err, minioMetaBucket, tmpPartPath)
+			return "", toObjectErr(err, minioMetaTmpBucket, tmpPartPath)
 		}
 	}
 
-	bytesWritten, cErr := fsCreateFile(fs.storage, teeReader, buf, minioMetaBucket, tmpPartPath)
+	bytesWritten, cErr := fsCreateFile(fs.storage, teeReader, buf, minioMetaTmpBucket, tmpPartPath)
 	if cErr != nil {
-		fs.storage.DeleteFile(minioMetaBucket, tmpPartPath)
-		return "", toObjectErr(cErr, minioMetaBucket, tmpPartPath)
+		fs.storage.DeleteFile(minioMetaTmpBucket, tmpPartPath)
+		return "", toObjectErr(cErr, minioMetaTmpBucket, tmpPartPath)
 	}
 	// Should return IncompleteBody{} error when reader has fewer
 	// bytes than specified in request header.
 	if bytesWritten < size {
-		fs.storage.DeleteFile(minioMetaBucket, tmpPartPath)
+		fs.storage.DeleteFile(minioMetaTmpBucket, tmpPartPath)
 		return "", traceError(IncompleteBody{})
 	}
 
 	// Delete temporary part in case of failure. If
 	// PutObjectPart succeeds then there would be nothing to
 	// delete.
-	defer fs.storage.DeleteFile(minioMetaBucket, tmpPartPath)
+	defer fs.storage.DeleteFile(minioMetaTmpBucket, tmpPartPath)
 
 	newMD5Hex := hex.EncodeToString(md5Writer.Sum(nil))
 	if md5Hex != "" {
@@ -506,7 +506,7 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	fsMeta.AddObjectPart(partID, partSuffix, newMD5Hex, size)
 
 	partPath := path.Join(mpartMetaPrefix, bucket, object, uploadID, partSuffix)
-	err = fs.storage.RenameFile(minioMetaBucket, tmpPartPath, minioMetaBucket, partPath)
+	err = fs.storage.RenameFile(minioMetaTmpBucket, tmpPartPath, minioMetaBucket, partPath)
 	if err != nil {
 		return "", toObjectErr(traceError(err), minioMetaBucket, partPath)
 	}
@@ -653,7 +653,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	// fs-append.json path
 	fsAppendMetaPath := getFSAppendMetaPath(uploadID)
 	// Lock fs-append.json so that no parallel appendParts() is being done.
-	appendPathLock := nsMutex.NewNSLock(minioMetaBucket, fsAppendMetaPath)
+	appendPathLock := nsMutex.NewNSLock(minioMetaTmpBucket, fsAppendMetaPath)
 	appendPathLock.Lock()
 	defer appendPathLock.Unlock()
 
@@ -672,16 +672,16 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 		return "", toObjectErr(err, minioMetaBucket, fsMetaPath)
 	}
 
-	fsAppendMeta, err := readFSMetadata(fs.storage, minioMetaBucket, fsAppendMetaPath)
+	fsAppendMeta, err := readFSMetadata(fs.storage, minioMetaTmpBucket, fsAppendMetaPath)
 	if err == nil && isPartsSame(fsAppendMeta.Parts, parts) {
-		if err = fs.storage.RenameFile(minioMetaBucket, fsAppendDataPath, bucket, object); err != nil {
-			return "", toObjectErr(traceError(err), minioMetaBucket, fsAppendDataPath)
+		if err = fs.storage.RenameFile(minioMetaTmpBucket, fsAppendDataPath, bucket, object); err != nil {
+			return "", toObjectErr(traceError(err), minioMetaTmpBucket, fsAppendDataPath)
 		}
 	} else {
 		// Remove append data temporary file since it is no longer needed at this point
-		fs.storage.DeleteFile(minioMetaBucket, fsAppendDataPath)
+		fs.storage.DeleteFile(minioMetaTmpBucket, fsAppendDataPath)
 
-		tempObj := path.Join(tmpMetaPrefix, uploadID+"-"+"part.1")
+		tempObj := uploadID + "-" + "part.1"
 
 		// Allocate staging buffer.
 		var buf = make([]byte, readSizeV1)
@@ -693,7 +693,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 		}
 		if objSize > 0 {
 			// Prepare file to avoid disk fragmentation
-			err = fs.storage.PrepareFile(minioMetaBucket, tempObj, objSize)
+			err = fs.storage.PrepareFile(minioMetaTmpBucket, tempObj, objSize)
 			if err != nil {
 				return "", traceError(err)
 			}
@@ -729,8 +729,8 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 				var n int64
 				n, err = fs.storage.ReadFile(minioMetaBucket, multipartPartFile, offset, buf[:curLeft])
 				if n > 0 {
-					if err = fs.storage.AppendFile(minioMetaBucket, tempObj, buf[:n]); err != nil {
-						return "", toObjectErr(traceError(err), minioMetaBucket, tempObj)
+					if err = fs.storage.AppendFile(minioMetaTmpBucket, tempObj, buf[:n]); err != nil {
+						return "", toObjectErr(traceError(err), minioMetaTmpBucket, tempObj)
 					}
 				}
 				if err != nil {
@@ -748,17 +748,17 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 		}
 
 		// Rename the file back to original location, if not delete the temporary object.
-		err = fs.storage.RenameFile(minioMetaBucket, tempObj, bucket, object)
+		err = fs.storage.RenameFile(minioMetaTmpBucket, tempObj, bucket, object)
 		if err != nil {
-			if dErr := fs.storage.DeleteFile(minioMetaBucket, tempObj); dErr != nil {
-				return "", toObjectErr(traceError(dErr), minioMetaBucket, tempObj)
+			if dErr := fs.storage.DeleteFile(minioMetaTmpBucket, tempObj); dErr != nil {
+				return "", toObjectErr(traceError(dErr), minioMetaTmpBucket, tempObj)
 			}
 			return "", toObjectErr(traceError(err), bucket, object)
 		}
 	}
 
 	// Remove the append-file metadata file in tmp location as we no longer need it.
-	fs.storage.DeleteFile(minioMetaBucket, fsAppendMetaPath)
+	fs.storage.DeleteFile(minioMetaTmpBucket, fsAppendMetaPath)
 
 	// No need to save part info, since we have concatenated all parts.
 	fsMeta.Parts = nil
@@ -853,7 +853,7 @@ func (fs fsObjects) AbortMultipartUpload(bucket, object, uploadID string) error 
 
 	fsAppendMetaPath := getFSAppendMetaPath(uploadID)
 	// Lock fs-append.json so that no parallel appendParts() is being done.
-	appendPathLock := nsMutex.NewNSLock(minioMetaBucket, fsAppendMetaPath)
+	appendPathLock := nsMutex.NewNSLock(minioMetaTmpBucket, fsAppendMetaPath)
 	appendPathLock.Lock()
 	defer appendPathLock.Unlock()
 

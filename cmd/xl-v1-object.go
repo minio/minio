@@ -383,8 +383,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	}
 
 	uniqueID := getUUID()
-	tempErasureObj := path.Join(tmpMetaPrefix, uniqueID, "part.1")
-	minioMetaTmpBucket := path.Join(minioMetaBucket, tmpMetaPrefix)
+	tempErasureObj := path.Join(uniqueID, "part.1")
 	tempObj := uniqueID
 
 	// Initialize md5 writer.
@@ -449,15 +448,15 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 		for _, disk := range onlineDisks {
 			if disk != nil {
 				actualSize := xl.sizeOnDisk(size, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks)
-				disk.PrepareFile(minioMetaBucket, tempErasureObj, actualSize)
+				disk.PrepareFile(minioMetaTmpBucket, tempErasureObj, actualSize)
 			}
 		}
 	}
 
 	// Erasure code data and write across all disks.
-	sizeWritten, checkSums, err := erasureCreateFile(onlineDisks, minioMetaBucket, tempErasureObj, teeReader, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks, xlMeta.Erasure.ParityBlocks, bitRotAlgo, xl.writeQuorum)
+	sizeWritten, checkSums, err := erasureCreateFile(onlineDisks, minioMetaTmpBucket, tempErasureObj, teeReader, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks, xlMeta.Erasure.ParityBlocks, bitRotAlgo, xl.writeQuorum)
 	if err != nil {
-		return ObjectInfo{}, toObjectErr(err, minioMetaBucket, tempErasureObj)
+		return ObjectInfo{}, toObjectErr(err, minioMetaTmpBucket, tempErasureObj)
 	}
 	// Should return IncompleteBody{} error when reader has fewer bytes
 	// than specified in request header.

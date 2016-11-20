@@ -113,12 +113,12 @@ func writeUploadJSON(u *uploadsV1, uploadsPath, tmpPath string, disk StorageAPI)
 
 	// Write `uploads.json` to disk. First to tmp location and
 	// then rename.
-	if wErr = disk.AppendFile(minioMetaBucket, tmpPath, uplBytes); wErr != nil {
+	if wErr = disk.AppendFile(minioMetaTmpBucket, tmpPath, uplBytes); wErr != nil {
 		return traceError(wErr)
 	}
-	wErr = disk.RenameFile(minioMetaBucket, tmpPath, minioMetaBucket, uploadsPath)
+	wErr = disk.RenameFile(minioMetaTmpBucket, tmpPath, minioMetaBucket, uploadsPath)
 	if wErr != nil {
-		if dErr := disk.DeleteFile(minioMetaBucket, tmpPath); dErr != nil {
+		if dErr := disk.DeleteFile(minioMetaTmpBucket, tmpPath); dErr != nil {
 			// we return the most recent error.
 			return traceError(dErr)
 		}

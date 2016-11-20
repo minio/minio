@@ -79,7 +79,7 @@ func houseKeeping(storageDisks []StorageAPI) error {
 			defer wg.Done()
 
 			// Cleanup all temp entries upon start.
-			err := cleanupDir(disk, minioMetaBucket, tmpMetaPrefix)
+			err := cleanupDir(disk, minioMetaTmpBucket, "")
 			if err != nil {
 				switch errorCause(err) {
 				case errDiskNotFound, errVolumeNotFound, errFileNotFound:
@@ -98,7 +98,7 @@ func houseKeeping(storageDisks []StorageAPI) error {
 		if err == nil {
 			continue
 		}
-		return toObjectErr(err, minioMetaBucket, tmpMetaPrefix)
+		return toObjectErr(err, minioMetaTmpBucket, "*")
 	}
 
 	// Return success here.
@@ -224,6 +224,17 @@ func initMetaVolume(storageDisks []StorageAPI) error {
 				default:
 					errs[index] = err
 				}
+				return
+			}
+			err = disk.MakeVol(minioMetaTmpBucket)
+			if err != nil {
+				switch err {
+				// Ignored errors.
+				case errVolumeExists, errDiskNotFound, errFaultyDisk:
+				default:
+					errs[index] = err
+				}
+				return
 			}
 		}(index, disk)
 	}
