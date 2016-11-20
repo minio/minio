@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"errors"
-	"io"
 	"reflect"
 	"sync"
 	"time"
@@ -192,13 +191,11 @@ func appendPart(disk StorageAPI, bucket, object, uploadID string, part objectPar
 		}
 		var n int64
 		n, err := disk.ReadFile(minioMetaBucket, partPath, offset, buf[:curLeft])
-		if err == io.EOF {
-			break
-		}
 		if err != nil {
-			// Check for ErrUnexpectedEOF not needed as it should never happen as we know
-			// the size of the file and never read more than its size. Hence any non io.EOF
-			// error condition can be considered as an error.
+			// Check for EOF/ErrUnexpectedEOF not needed as it should never happen as we know
+			// the exact size of the file and hence know the size of buf[]
+			// EOF/ErrUnexpectedEOF indicates that the length of file was shorter than part.Size and
+			// hence considered as an error condition.
 			disk.DeleteFile(bucket, appendFilePath)
 			return err
 		}
