@@ -1682,10 +1682,10 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, testName, bucketName, objectName, 
 	anonTestStr := "Anonymous HTTP request test"
 	unknownSignTestStr := "Unknown HTTP signature test"
 
-	// simple function which ends the test by printing the common message which gives the context of the test
+	// simple function which returns a message which gives the context of the test
 	// and then followed by the the actual error message.
-	failTest := func(testType, failMsg string) {
-		t.Fatalf("Minio %s: %s fail for \"%s\": \n<Error> %s", instanceType, testType, testName, failMsg)
+	failTestStr := func(testType, failMsg string) string {
+		return fmt.Sprintf("Minio %s: %s fail for \"%s\": \n<Error> %s", instanceType, testType, testName, failMsg)
 	}
 	// httptest Recorder to capture all the response by the http handler.
 	rec := httptest.NewRecorder()
@@ -1693,7 +1693,7 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, testName, bucketName, objectName, 
 	// If the body is read in the handler the same request cannot be made use of.
 	buf, err := ioutil.ReadAll(anonReq.Body)
 	if err != nil {
-		failTest(anonTestStr, err.Error())
+		t.Fatal(failTestStr(anonTestStr, err.Error()))
 	}
 
 	// creating 2 read closer (to set as request body) from the body content.
@@ -1709,7 +1709,7 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, testName, bucketName, objectName, 
 	// expected error response when the unsigned HTTP request is not permitted.
 	accesDeniedHTTPStatus := getAPIError(ErrAccessDenied).HTTPStatusCode
 	if rec.Code != accesDeniedHTTPStatus {
-		failTest(anonTestStr, fmt.Sprintf("Object API Nil Test expected to fail with %d, but failed with %d", accesDeniedHTTPStatus, rec.Code))
+		t.Fatal(failTestStr(anonTestStr, fmt.Sprintf("Object API Nil Test expected to fail with %d, but failed with %d", accesDeniedHTTPStatus, rec.Code)))
 	}
 
 	// expected error response in bytes when objectLayer is not initialized, or set to `nil`.
@@ -1720,11 +1720,11 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, testName, bucketName, objectName, 
 		// read the response body.
 		actualContent, err := ioutil.ReadAll(rec.Body)
 		if err != nil {
-			failTest(anonTestStr, fmt.Sprintf("Failed parsing response body: <ERROR> %v", err))
+			t.Fatal(failTestStr(anonTestStr, fmt.Sprintf("Failed parsing response body: <ERROR> %v", err)))
 		}
 		// verify whether actual error response (from the response body), matches the expected error response.
 		if !bytes.Equal(expectedErrResponse, actualContent) {
-			failTest(anonTestStr, "error response content differs from expected value")
+			t.Fatal(failTestStr(anonTestStr, "error response content differs from expected value"))
 		}
 	}
 	// Set write only policy on bucket to allow anonymous HTTP request for the operation under test.
@@ -1756,8 +1756,8 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, testName, bucketName, objectName, 
 
 	// compare the HTTP response status code with the expected one.
 	if rec.Code != expectedHTTPStatus {
-		failTest(anonTestStr, fmt.Sprintf("Expected the anonymous HTTP request to be served after the policy changes\n,Expected response HTTP status code to be %d, got %d",
-			expectedHTTPStatus, rec.Code))
+		t.Fatal(failTestStr(anonTestStr, fmt.Sprintf("Expected the anonymous HTTP request to be served after the policy changes\n,Expected response HTTP status code to be %d, got %d",
+			expectedHTTPStatus, rec.Code)))
 	}
 
 	// test for unknown auth case.
@@ -1773,20 +1773,19 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, testName, bucketName, objectName, 
 		// read the response body.
 		actualContent, err := ioutil.ReadAll(rec.Body)
 		if err != nil {
-			failTest(unknownSignTestStr, fmt.Sprintf("Failed parsing response body: <ERROR> %v", err))
+			t.Fatal(failTestStr(unknownSignTestStr, fmt.Sprintf("Failed parsing response body: <ERROR> %v", err)))
 		}
 		// verify whether actual error response (from the response body), matches the expected error response.
 		if !bytes.Equal(expectedErrResponse, actualContent) {
 			fmt.Println(string(expectedErrResponse))
 			fmt.Println(string(actualContent))
-			failTest(unknownSignTestStr, "error response content differs from expected value")
+			t.Fatal(failTestStr(unknownSignTestStr, "error response content differs from expected value"))
 		}
 	}
 
 	if rec.Code != accesDeniedHTTPStatus {
-		failTest(unknownSignTestStr, fmt.Sprintf("Object API Unknow auth test for \"%s\", expected to fail with %d, but failed with %d", testName, accesDeniedHTTPStatus, rec.Code))
+		t.Fatal(failTestStr(unknownSignTestStr, fmt.Sprintf("Object API Unknow auth test for \"%s\", expected to fail with %d, but failed with %d", testName, accesDeniedHTTPStatus, rec.Code)))
 	}
-
 }
 
 // ExecObjectLayerAPINilTest - Sets the object layer to `nil`, and calls rhe registered object layer API endpoint, and assert the error response.
