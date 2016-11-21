@@ -18,7 +18,7 @@ package cmd
 
 import (
 	"encoding/json"
-	"fmt"
+	"errors"
 	"path"
 	"sort"
 	"sync"
@@ -195,15 +195,14 @@ func (m xlMetaV1) ObjectToPartOffset(offset int64) (partIndex int, partOffset in
 // pickValidXLMeta - picks one valid xlMeta content and returns from a
 // slice of xlmeta content. If no value is found this function panics
 // and dies.
-func pickValidXLMeta(metaArr []xlMetaV1, modTime time.Time) xlMetaV1 {
+func pickValidXLMeta(metaArr []xlMetaV1, modTime time.Time) (xlMetaV1, error) {
 	// Pick latest valid metadata.
 	for _, meta := range metaArr {
 		if meta.IsValid() && meta.Stat.ModTime.Equal(modTime) {
-			return meta
+			return meta, nil
 		}
 	}
-	pmsg := fmt.Sprintf("Unable to look for valid XL metadata content - %v %s", metaArr, modTime)
-	panic(pmsg)
+	return xlMetaV1{}, traceError(errors.New("No valid xl.json present"))
 }
 
 // list of all errors that can be ignored in a metadata operation.

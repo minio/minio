@@ -17,8 +17,10 @@
 package cmd
 
 import (
+	"errors"
 	"strconv"
 	"testing"
+	"time"
 )
 
 const MiB = 1024 * 1024
@@ -146,6 +148,64 @@ func TestObjectToPartOffset(t *testing.T) {
 		}
 		if offset != testCase.expectedOffset {
 			t.Fatalf("%+v: offset: expected = %d, got: %d", testCase, testCase.expectedOffset, offset)
+		}
+	}
+}
+
+// Helper function to check if two xlMetaV1 values are similar.
+func isXLMetaSimilar(m, n xlMetaV1) bool {
+	if m.Version != n.Version {
+		return false
+	}
+	if m.Format != n.Format {
+		return false
+	}
+	if len(m.Parts) != len(n.Parts) {
+		return false
+	}
+	return true
+}
+
+func TestPickValidXLMeta(t *testing.T) {
+	obj := "object"
+	x1 := newXLMetaV1(obj, 4, 4)
+	now := time.Now().UTC()
+	x1.Stat.ModTime = now
+	invalidX1 := x1
+	invalidX1.Version = "invalid-version"
+	xs := []xlMetaV1{x1, x1, x1, x1}
+	invalidXS := []xlMetaV1{invalidX1, invalidX1, invalidX1, invalidX1}
+	testCases := []struct {
+		metaArr     []xlMetaV1
+		modTime     time.Time
+		xlMeta      xlMetaV1
+		expectedErr error
+	}{
+		{
+			metaArr:     xs,
+			modTime:     now,
+			xlMeta:      x1,
+			expectedErr: nil,
+		},
+		{
+			metaArr:     invalidXS,
+			modTime:     now,
+			xlMeta:      invalidX1,
+			expectedErr: errors.New("No valid xl.json present"),
+		},
+	}
+	for i, test := range testCases {
+		xlMeta, err := pickValidXLMeta(test.metaArr, test.modTime)
+		if test.expectedErr != nil {
+			if errorCause(err).Error() != test.expectedErr.Error() {
+				t.Errorf("Test %d: Expected to fail with %v but received %v",
+					i+1, test.expectedErr, err)
+			}
+		} else {
+			if !isXLMetaSimilar(xlMeta, test.xlMeta) {
+				t.Errorf("Test %d: Expected %v but received %v",
+					i+1, test.xlMeta, xlMeta)
+			}
 		}
 	}
 }

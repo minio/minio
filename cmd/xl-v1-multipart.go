@@ -381,7 +381,10 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	onlineDisks, modTime := listOnlineDisks(xl.storageDisks, partsMetadata, errs)
 
 	// Pick one from the first valid metadata.
-	xlMeta := pickValidXLMeta(partsMetadata, modTime)
+	xlMeta, err := pickValidXLMeta(partsMetadata, modTime)
+	if err != nil {
+		return "", err
+	}
 
 	onlineDisks = getOrderedDisks(xlMeta.Erasure.Distribution, onlineDisks)
 	_ = getOrderedPartsMetadata(xlMeta.Erasure.Distribution, partsMetadata)
@@ -493,7 +496,10 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	onlineDisks, modTime = listOnlineDisks(onlineDisks, partsMetadata, errs)
 
 	// Pick one from the first valid metadata.
-	xlMeta = pickValidXLMeta(partsMetadata, modTime)
+	xlMeta, err = pickValidXLMeta(partsMetadata, modTime)
+	if err != nil {
+		return "", err
+	}
 
 	// Once part is successfully committed, proceed with updating XL metadata.
 	xlMeta.Stat.ModTime = time.Now().UTC()
@@ -684,7 +690,10 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	var objectSize int64
 
 	// Pick one from the first valid metadata.
-	xlMeta := pickValidXLMeta(partsMetadata, modTime)
+	xlMeta, err := pickValidXLMeta(partsMetadata, modTime)
+	if err != nil {
+		return "", err
+	}
 
 	// Order online disks in accordance with distribution order.
 	onlineDisks = getOrderedDisks(xlMeta.Erasure.Distribution, onlineDisks)

@@ -87,7 +87,10 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 	onlineDisks, modTime := listOnlineDisks(xl.storageDisks, metaArr, errs)
 
 	// Pick latest valid metadata.
-	xlMeta := pickValidXLMeta(metaArr, modTime)
+	xlMeta, err := pickValidXLMeta(metaArr, modTime)
+	if err != nil {
+		return err
+	}
 
 	// Reorder online disks based on erasure distribution order.
 	onlineDisks = getOrderedDisks(xlMeta.Erasure.Distribution, onlineDisks)

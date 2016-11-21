@@ -236,8 +236,11 @@ func healObject(storageDisks []StorageAPI, bucket string, object string) error {
 	latestDisks, modTime := listOnlineDisks(storageDisks, partsMetadata, errs)
 	// List of disks having outdated version of the object or missing object.
 	outDatedDisks := outDatedDisks(storageDisks, partsMetadata, errs)
-	// Latest xlMetaV1 for reference.
-	latestMeta := pickValidXLMeta(partsMetadata, modTime)
+	// Latest xlMetaV1 for reference. If a valid metadata is not present, it is as good as object not found.
+	latestMeta, pErr := pickValidXLMeta(partsMetadata, modTime)
+	if pErr != nil {
+		return pErr
+	}
 
 	for index, disk := range outDatedDisks {
 		// Before healing outdated disks, we need to remove xl.json
