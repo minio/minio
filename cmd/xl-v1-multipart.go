@@ -527,7 +527,7 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	if err = writeUniqueXLMetadata(onlineDisks, minioMetaTmpBucket, tempXLMetaPath, partsMetadata, xl.writeQuorum); err != nil {
 		return "", toObjectErr(err, minioMetaTmpBucket, tempXLMetaPath)
 	}
-	rErr := commitXLMetadata(onlineDisks, tempXLMetaPath, uploadIDPath, xl.writeQuorum)
+	rErr := commitXLMetadata(onlineDisks, minioMetaTmpBucket, tempXLMetaPath, minioMetaBucket, uploadIDPath, xl.writeQuorum)
 	if rErr != nil {
 		return "", toObjectErr(rErr, minioMetaBucket, uploadIDPath)
 	}
@@ -774,7 +774,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	if err = writeUniqueXLMetadata(onlineDisks, minioMetaTmpBucket, tempUploadIDPath, partsMetadata, xl.writeQuorum); err != nil {
 		return "", toObjectErr(err, minioMetaTmpBucket, tempUploadIDPath)
 	}
-	rErr := commitXLMetadata(onlineDisks, tempUploadIDPath, uploadIDPath, xl.writeQuorum)
+	rErr := commitXLMetadata(onlineDisks, minioMetaTmpBucket, tempUploadIDPath, minioMetaBucket, uploadIDPath, xl.writeQuorum)
 	if rErr != nil {
 		return "", toObjectErr(rErr, minioMetaBucket, uploadIDPath)
 	}
