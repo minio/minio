@@ -61,11 +61,11 @@ func TestNewFS(t *testing.T) {
 	}
 
 	// Initializes all disks with XL
-	err = waitForFormatDisks(true, endpoints, xlStorageDisks)
+	formattedDisks, err := waitForFormatDisks(true, endpoints, xlStorageDisks)
 	if err != nil {
 		t.Fatalf("Unable to format XL %s", err)
 	}
-	_, err = newXLObjects(xlStorageDisks)
+	_, err = newXLObjects(formattedDisks)
 	if err != nil {
 		t.Fatalf("Unable to initialize XL object, %s", err)
 	}
@@ -79,7 +79,7 @@ func TestNewFS(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		if err = waitForFormatDisks(true, endpoints, []StorageAPI{testCase.disk}); err != testCase.expectedErr {
+		if _, err = waitForFormatDisks(true, endpoints, []StorageAPI{testCase.disk}); err != testCase.expectedErr {
 			t.Errorf("expected: %s, got :%s", testCase.expectedErr, err)
 		}
 	}
@@ -87,7 +87,7 @@ func TestNewFS(t *testing.T) {
 	if err != errInvalidArgument {
 		t.Errorf("Expecting error invalid argument, got %s", err)
 	}
-	_, err = newFSObjects(xlStorageDisks[0])
+	_, err = newFSObjects(&retryStorage{xlStorageDisks[0]})
 	if err != nil {
 		errMsg := "Unable to recognize backend format, Disk is not in FS format."
 		if err.Error() == errMsg {
@@ -131,7 +131,7 @@ func TestFSShutdown(t *testing.T) {
 	/* for i := 1; i <= 5; i++ {
 		fs, disk := prepareTest()
 		fs.DeleteObject(bucketName, objectName)
-		fsStorage := fs.storage.(*posix)
+		fsStorage := fs.storage.(*retryStorage)
 		fs.storage = newNaughtyDisk(fsStorage, map[int]error{i: errFaultyDisk}, nil)
 		if err := fs.Shutdown(); errorCause(err) != errFaultyDisk {
 			t.Fatal(i, ", Got unexpected fs shutdown error: ", err)
@@ -161,7 +161,7 @@ func TestFSLoadFormatFS(t *testing.T) {
 		t.Fatal("Should return an error here")
 	}
 	// Loading format file from faulty disk
-	fsStorage := fs.storage.(*posix)
+	fsStorage := fs.storage.(*retryStorage)
 	fs.storage = newNaughtyDisk(fsStorage, nil, errFaultyDisk)
 	_, err = loadFormatFS(fs.storage)
 	if err != errFaultyDisk {
@@ -197,7 +197,7 @@ func TestFSGetBucketInfo(t *testing.T) {
 	}
 
 	// Loading format file from faulty disk
-	fsStorage := fs.storage.(*posix)
+	fsStorage := fs.storage.(*retryStorage)
 	fs.storage = newNaughtyDisk(fsStorage, nil, errFaultyDisk)
 	_, err = fs.GetBucketInfo(bucketName)
 	if errorCause(err) != errFaultyDisk {
@@ -239,7 +239,7 @@ func TestFSDeleteObject(t *testing.T) {
 	}
 
 	// Loading format file from faulty disk
-	fsStorage := fs.storage.(*posix)
+	fsStorage := fs.storage.(*retryStorage)
 	fs.storage = newNaughtyDisk(fsStorage, nil, errFaultyDisk)
 	if err := fs.DeleteObject(bucketName, objectName); errorCause(err) != errFaultyDisk {
 		t.Fatal("Unexpected error: ", err)
@@ -278,7 +278,7 @@ func TestFSDeleteBucket(t *testing.T) {
 	obj.MakeBucket(bucketName)
 
 	// Loading format file from faulty disk
-	fsStorage := fs.storage.(*posix)
+	fsStorage := fs.storage.(*retryStorage)
 	for i := 1; i <= 2; i++ {
 		fs.storage = newNaughtyDisk(fsStorage, map[int]error{i: errFaultyDisk}, nil)
 		if err := fs.DeleteBucket(bucketName); errorCause(err) != errFaultyDisk {
@@ -317,7 +317,7 @@ func TestFSListBuckets(t *testing.T) {
 	}
 
 	// Test ListBuckets with faulty disks
-	fsStorage := fs.storage.(*posix)
+	fsStorage := fs.storage.(*retryStorage)
 	for i := 1; i <= 2; i++ {
 		fs.storage = newNaughtyDisk(fsStorage, nil, errFaultyDisk)
 		if _, err := fs.ListBuckets(); errorCause(err) != errFaultyDisk {

@@ -1561,12 +1561,12 @@ func initObjectLayer(endpoints []*url.URL) (ObjectLayer, []StorageAPI, error) {
 		return nil, nil, err
 	}
 
-	err = waitForFormatDisks(true, endpoints, storageDisks)
+	formattedDisks, err := waitForFormatDisks(true, endpoints, storageDisks)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	objLayer, err := newObjectLayer(storageDisks)
+	objLayer, err := newObjectLayer(formattedDisks)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1578,7 +1578,7 @@ func initObjectLayer(endpoints []*url.URL) (ObjectLayer, []StorageAPI, error) {
 	}
 
 	// Success.
-	return objLayer, storageDisks, nil
+	return objLayer, formattedDisks, nil
 }
 
 // removeRoots - Cleans up initialized directories during tests.
@@ -1614,8 +1614,7 @@ func prepareNErroredDisks(storageDisks []StorageAPI, offline int, err error, t *
 	}
 
 	for i := 0; i < offline; i++ {
-		d := storageDisks[i].(*posix)
-		storageDisks[i] = &naughtyDisk{disk: d, defaultErr: err}
+		storageDisks[i] = &naughtyDisk{disk: &retryStorage{storageDisks[i]}, defaultErr: err}
 	}
 	return storageDisks
 }

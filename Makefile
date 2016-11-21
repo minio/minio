@@ -92,8 +92,8 @@ ineffassign:
 
 cyclo:
 	@echo "Running $@:"
-	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/gocyclo -over 65 cmd
-	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/gocyclo -over 65 pkg
+	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/gocyclo -over 100 cmd
+	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/gocyclo -over 100 pkg
 
 build: getdeps verifiers $(UI_ASSETS)
 

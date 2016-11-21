@@ -24,6 +24,8 @@ type StorageAPI interface {
 	String() string
 
 	// Storage operations.
+	Init() (err error)
+	Close() (err error)
 	DiskInfo() (info disk.Info, err error)
 
 	// Volume operations.

@@ -52,7 +52,7 @@ func TestStorageErr(t *testing.T) {
 			err:         &net.OpError{},
 		},
 		{
-			expectedErr: errDiskNotFound,
+			expectedErr: rpc.ErrShutdown,
 			err:         rpc.ErrShutdown,
 		},
 		{

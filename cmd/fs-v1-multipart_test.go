@@ -40,7 +40,7 @@ func TestNewMultipartUploadFaultyDisk(t *testing.T) {
 	}
 
 	// Test with faulty disk
-	fsStorage := fs.storage.(*posix)
+	fsStorage := fs.storage.(*retryStorage)
 	for i := 1; i <= 5; i++ {
 		// Faulty disk generates errFaultyDisk at 'i' storage api call number
 		fs.storage = newNaughtyDisk(fsStorage, map[int]error{i: errFaultyDisk}, nil)
@@ -82,7 +82,7 @@ func TestPutObjectPartFaultyDisk(t *testing.T) {
 	sha256sum := ""
 
 	// Test with faulty disk
-	fsStorage := fs.storage.(*posix)
+	fsStorage := fs.storage.(*retryStorage)
 	for i := 1; i <= 7; i++ {
 		// Faulty disk generates errFaultyDisk at 'i' storage api call number
 		fs.storage = newNaughtyDisk(fsStorage, map[int]error{i: errFaultyDisk}, nil)
@@ -138,7 +138,7 @@ func TestCompleteMultipartUploadFaultyDisk(t *testing.T) {
 
 	parts := []completePart{{PartNumber: 1, ETag: md5Hex}}
 
-	fsStorage := fs.storage.(*posix)
+	fsStorage := fs.storage.(*retryStorage)
 	for i := 1; i <= 3; i++ {
 		// Faulty disk generates errFaultyDisk at 'i' storage api call number
 		fs.storage = newNaughtyDisk(fsStorage, map[int]error{i: errFaultyDisk}, nil)
@@ -186,7 +186,7 @@ func TestListMultipartUploadsFaultyDisk(t *testing.T) {
 		t.Fatal("Unexpected error ", err)
 	}
 
-	fsStorage := fs.storage.(*posix)
+	fsStorage := fs.storage.(*retryStorage)
 	for i := 1; i <= 4; i++ {
 		// Faulty disk generates errFaultyDisk at 'i' storage api call number
 		fs.storage = newNaughtyDisk(fsStorage, map[int]error{i: errFaultyDisk}, nil)

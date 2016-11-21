@@ -615,7 +615,7 @@ func TestInitFormatXLErrors(t *testing.T) {
 
 	// All disks API return disk not found
 	for i := 0; i < 16; i++ {
-		d := xl.storageDisks[i].(*posix)
+		d := xl.storageDisks[i].(*retryStorage)
 		testStorageDisks[i] = &naughtyDisk{disk: d, defaultErr: errDiskNotFound}
 	}
 	if err := initFormatXL(testStorageDisks); err != errDiskNotFound {
@@ -624,7 +624,7 @@ func TestInitFormatXLErrors(t *testing.T) {
 
 	// All disks returns disk not found in the fourth call
 	for i := 0; i < 15; i++ {
-		d := xl.storageDisks[i].(*posix)
+		d := xl.storageDisks[i].(*retryStorage)
 		testStorageDisks[i] = &naughtyDisk{disk: d, defaultErr: errDiskNotFound, errors: map[int]error{0: nil, 1: nil, 2: nil}}
 	}
 	if err := initFormatXL(testStorageDisks); err != errDiskNotFound {
@@ -720,9 +720,9 @@ func TestLoadFormatXLErrs(t *testing.T) {
 	xl.storageDisks[11] = nil
 
 	// disk 12 returns faulty disk
-	posixDisk, ok := xl.storageDisks[12].(*posix)
+	posixDisk, ok := xl.storageDisks[12].(*retryStorage)
 	if !ok {
-		t.Fatal("storage disk is not *posix type")
+		t.Fatal("storage disk is not *retryStorage type")
 	}
 	xl.storageDisks[10] = newNaughtyDisk(posixDisk, nil, errFaultyDisk)
 	if _, err = loadFormatXL(xl.storageDisks, 8); err != errFaultyDisk {
@@ -749,9 +749,9 @@ func TestLoadFormatXLErrs(t *testing.T) {
 
 	// disks 0..10 returns disk not found
 	for i := 0; i <= 10; i++ {
-		posixDisk, ok := xl.storageDisks[i].(*posix)
+		posixDisk, ok := xl.storageDisks[i].(*retryStorage)
 		if !ok {
-			t.Fatal("storage disk is not *posix type")
+			t.Fatal("storage disk is not *retryStorage type")
 		}
 		xl.storageDisks[i] = newNaughtyDisk(posixDisk, nil, errDiskNotFound)
 	}
@@ -881,9 +881,9 @@ func TestHealFormatXLCorruptedDisksErrs(t *testing.T) {
 		t.Fatal(err)
 	}
 	xl = obj.(*xlObjects)
-	posixDisk, ok := xl.storageDisks[0].(*posix)
+	posixDisk, ok := xl.storageDisks[0].(*retryStorage)
 	if !ok {
-		t.Fatal("storage disk is not *posix type")
+		t.Fatal("storage disk is not *retryStorage type")
 	}
 	xl.storageDisks[0] = newNaughtyDisk(posixDisk, nil, errFaultyDisk)
 	if err = healFormatXLCorruptedDisks(xl.storageDisks); err != errFaultyDisk {
@@ -1036,9 +1036,9 @@ func TestHealFormatXLFreshDisksErrs(t *testing.T) {
 		t.Fatal(err)
 	}
 	xl = obj.(*xlObjects)
-	posixDisk, ok := xl.storageDisks[0].(*posix)
+	posixDisk, ok := xl.storageDisks[0].(*retryStorage)
 	if !ok {
-		t.Fatal("storage disk is not *posix type")
+		t.Fatal("storage disk is not *retryStorage type")
 	}
 	xl.storageDisks[0] = newNaughtyDisk(posixDisk, nil, errFaultyDisk)
 	if err = healFormatXLFreshDisks(xl.storageDisks); err != errFaultyDisk {
