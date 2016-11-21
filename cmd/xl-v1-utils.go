@@ -31,8 +31,7 @@ import (
 // golang's map orders keys. This doesn't affect correctness as long as quorum
 // value is greater than or equal to simple majority, since none of the equally
 // maximal values would occur quorum or more number of times.
-
-func reduceErrs(errs []error, ignoredErrs []error) error {
+func reduceErrs(errs []error, ignoredErrs []error) (maxCount int, maxErr error) {
 	errorCounts := make(map[error]int)
 	errs = errorsCause(errs)
 	for _, err := range errs {
@@ -42,14 +41,45 @@ func reduceErrs(errs []error, ignoredErrs []error) error {
 		errorCounts[err]++
 	}
 	max := 0
-	var errMax error
 	for err, count := range errorCounts {
 		if max < count {
 			max = count
-			errMax = err
+			maxErr = err
 		}
 	}
-	return traceError(errMax, errs...)
+	return max, maxErr
+}
+
+// reduceQuorumErrs behaves like reduceErrs by only for returning
+// values of maximally occurring errors validated against a generic
+// quorum number can be read or write quorum depending on usage.
+// additionally a special error is provided as well to be returned
+// in case quorum is not satisfied.
+func reduceQuorumErrs(errs []error, ignoredErrs []error, quorum int, quorumErr error) (maxErr error) {
+	maxCount, maxErr := reduceErrs(errs, ignoredErrs)
+	if maxErr == nil && maxCount >= quorum {
+		// Success in quorum.
+		return nil
+	}
+	if maxErr != nil && maxCount >= quorum {
+		// Errors in quorum.
+		return traceError(maxErr, errs...)
+	}
+	// No quorum satisfied.
+	maxErr = traceError(quorumErr, errs...)
+	return
+}
+
+// reduceReadQuorumErrs behaves like reduceErrs but only for returning
+// values of maximally occurring errors validated against readQuorum.
+func reduceReadQuorumErrs(errs []error, ignoredErrs []error, readQuorum int) (maxErr error) {
+	return reduceQuorumErrs(errs, ignoredErrs, readQuorum, errXLReadQuorum)
+}
+
+// reduceWriteQuorumErrs behaves like reduceErrs but only for returning
+// values of maximally occurring errors validated against writeQuorum.
+func reduceWriteQuorumErrs(errs []error, ignoredErrs []error, writeQuorum int) (maxErr error) {
+	return reduceQuorumErrs(errs, ignoredErrs, writeQuorum, errXLWriteQuorum)
 }
 
 // List of all errors which are ignored while verifying quorum.

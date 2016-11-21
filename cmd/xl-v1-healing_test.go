@@ -353,7 +353,7 @@ func TestQuickHeal(t *testing.T) {
 	}
 
 	// Heal the missing buckets.
-	if err = quickHeal(xl.storageDisks, xl.writeQuorum); err != nil {
+	if err = quickHeal(xl.storageDisks, xl.writeQuorum, xl.readQuorum); err != nil {
 		t.Fatal(err)
 	}
 
@@ -370,7 +370,7 @@ func TestQuickHeal(t *testing.T) {
 		t.Fatal("storage disk is not *posix type")
 	}
 	xl.storageDisks[0] = newNaughtyDisk(posixDisk, nil, errUnformattedDisk)
-	if err = quickHeal(xl.storageDisks, xl.writeQuorum); err != errUnformattedDisk {
+	if err = quickHeal(xl.storageDisks, xl.writeQuorum, xl.readQuorum); err != errUnformattedDisk {
 		t.Fatal(err)
 	}
 
@@ -392,7 +392,7 @@ func TestQuickHeal(t *testing.T) {
 	}
 	xl = obj.(*xlObjects)
 	xl.storageDisks[0] = nil
-	if err = quickHeal(xl.storageDisks, xl.writeQuorum); err != nil {
+	if err = quickHeal(xl.storageDisks, xl.writeQuorum, xl.readQuorum); err != nil {
 		t.Fatal("Got an unexpected error: ", err)
 	}
 
@@ -419,7 +419,7 @@ func TestQuickHeal(t *testing.T) {
 		t.Fatal("storage disk is not *posix type")
 	}
 	xl.storageDisks[0] = newNaughtyDisk(posixDisk, nil, errDiskNotFound)
-	if err = quickHeal(xl.storageDisks, xl.writeQuorum); err != nil {
+	if err = quickHeal(xl.storageDisks, xl.writeQuorum, xl.readQuorum); err != nil {
 		t.Fatal("Got an unexpected error: ", err)
 	}
 }

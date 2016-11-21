@@ -80,7 +80,7 @@ func (xl xlObjects) MakeBucket(bucket string) error {
 	}
 
 	// Verify we have any other errors which should undo make bucket.
-	if reducedErr := reduceErrs(dErrs, bucketOpIgnoredErrs); reducedErr != nil {
+	if reducedErr := reduceWriteQuorumErrs(dErrs, bucketOpIgnoredErrs, xl.writeQuorum); reducedErr != nil {
 		return toObjectErr(reducedErr, bucket)
 	}
 	return nil
@@ -289,7 +289,7 @@ func (xl xlObjects) DeleteBucket(bucket string) error {
 		return toObjectErr(traceError(errXLWriteQuorum), bucket)
 	}
 
-	if reducedErr := reduceErrs(dErrs, bucketOpIgnoredErrs); reducedErr != nil {
+	if reducedErr := reduceWriteQuorumErrs(dErrs, bucketOpIgnoredErrs, xl.writeQuorum); reducedErr != nil {
 		return toObjectErr(reducedErr, bucket)
 	}
 

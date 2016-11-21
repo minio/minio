@@ -140,7 +140,10 @@ func (xl xlObjects) updateUploadJSON(bucket, object string, uCh uploadIDChange) 
 	}
 	wg.Wait()
 
-	return reduceErrs(errs, objectOpIgnoredErrs)
+	if reducedErr := reduceWriteQuorumErrs(errs, objectOpIgnoredErrs, xl.writeQuorum); reducedErr != nil {
+		return reducedErr
+	}
+	return nil
 }
 
 // Returns if the prefix is a multipart upload.
@@ -251,5 +254,8 @@ func commitXLMetadata(disks []StorageAPI, srcPrefix, dstPrefix string, quorum in
 		return traceError(errXLWriteQuorum)
 	}
 
-	return reduceErrs(mErrs, objectOpIgnoredErrs)
+	if reducedErr := reduceWriteQuorumErrs(mErrs, objectOpIgnoredErrs, quorum); reducedErr != nil {
+		return reducedErr
+	}
+	return nil
 }

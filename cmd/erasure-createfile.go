@@ -141,5 +141,5 @@ func appendFile(disks []StorageAPI, volume, path string, enBlocks [][]byte, hash
 	if !isDiskQuorum(wErrs, writeQuorum) {
 		return traceError(errXLWriteQuorum)
 	}
-	return nil
+	return reduceWriteQuorumErrs(wErrs, objectOpIgnoredErrs, writeQuorum)
 }
