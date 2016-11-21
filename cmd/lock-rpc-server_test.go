@@ -48,7 +48,7 @@ func createLockTestServer(t *testing.T) (string, *lockServer, string) {
 		t.Fatalf("unable initialize config file, %s", err)
 	}
 
-	jwt, err := newJWT(defaultJWTExpiry)
+	jwt, err := newJWT(defaultJWTExpiry, serverConfig.GetCredential())
 	if err != nil {
 		t.Fatalf("unable to get new JWT, %s", err)
 	}

@@ -485,8 +485,8 @@ func testRemoveObjectWebHandler(obj ObjectLayer, instanceType string, t TestErrH
 
 	data := bytes.Repeat([]byte("a"), objectSize)
 
-	_, err = obj.PutObject(bucketName, objectName, int64(len(data)), bytes.NewReader(data), map[string]string{"md5Sum": "c9a34cfc85d982698c6ac89f76071abd"}, "")
-
+	_, err = obj.PutObject(bucketName, objectName, int64(len(data)), bytes.NewReader(data),
+		map[string]string{"md5Sum": "c9a34cfc85d982698c6ac89f76071abd"}, "")
 	if err != nil {
 		t.Fatalf("Was not able to upload an object, %v", err)
 	}
@@ -494,6 +494,21 @@ func testRemoveObjectWebHandler(obj ObjectLayer, instanceType string, t TestErrH
 	removeObjectRequest := RemoveObjectArgs{BucketName: bucketName, ObjectName: objectName}
 	removeObjectReply := &WebGenericRep{}
 	req, err := newTestWebRPCRequest("Web.RemoveObject", authorization, removeObjectRequest)
+	if err != nil {
+		t.Fatalf("Failed to create HTTP request: <ERROR> %v", err)
+	}
+	apiRouter.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Expected the response status to be 200, but instead found `%d`", rec.Code)
+	}
+	err = getTestWebRPCResponse(rec, &removeObjectReply)
+	if err != nil {
+		t.Fatalf("Failed, %v", err)
+	}
+
+	removeObjectRequest = RemoveObjectArgs{BucketName: bucketName, ObjectName: objectName}
+	removeObjectReply = &WebGenericRep{}
+	req, err = newTestWebRPCRequest("Web.RemoveObject", authorization, removeObjectRequest)
 	if err != nil {
 		t.Fatalf("Failed to create HTTP request: <ERROR> %v", err)
 	}
@@ -585,6 +600,7 @@ func testSetAuthWebHandler(obj ObjectLayer, instanceType string, t TestErrHandle
 		success  bool
 	}{
 		{"", "", false},
+		{"1", "1", false},
 		{"azerty", "foooooooooooooo", true},
 	}
 
@@ -826,6 +842,7 @@ func testWebPresignedGetHandler(obj ObjectLayer, instanceType string, t TestErrH
 		HostName:   "",
 		BucketName: bucketName,
 		ObjectName: objectName,
+		Expiry:     1000,
 	}
 	presignGetRep := &PresignedGetRep{}
 	req, err := newTestWebRPCRequest("Web.PresignedGet", authorization, presignGetReq)
@@ -885,8 +902,8 @@ func testWebPresignedGetHandler(obj ObjectLayer, instanceType string, t TestErrH
 	if err == nil {
 		t.Fatalf("Failed, %v", err)
 	}
-	if err.Error() != "Bucket, Object are mandatory arguments." {
-		t.Fatalf("Unexpected, expected `Bucket, Object are mandatory arguments`, got %s", err)
+	if err.Error() != "Bucket and Object are mandatory arguments." {
+		t.Fatalf("Unexpected, expected `Bucket and Object are mandatory arguments`, got %s", err)
 	}
 }
 
@@ -1329,6 +1346,12 @@ func TestWebObjectLayerNotReady(t *testing.T) {
 
 // TestWebObjectLayerFaultyDisks - Test Web RPC responses with faulty disks
 func TestWebObjectLayerFaultyDisks(t *testing.T) {
+	root, err := newTestConfig("us-east-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer removeAll(root)
+
 	// Prepare XL backend
 	obj, fsDirs, err := prepareXL()
 	if err != nil {

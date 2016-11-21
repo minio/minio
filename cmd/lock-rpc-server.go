@@ -127,7 +127,7 @@ func registerStorageLockers(mux *router.Router, lockServers []*lockServer) error
 
 // LoginHandler - handles LoginHandler RPC call.
 func (l *lockServer) LoginHandler(args *RPCLoginArgs, reply *RPCLoginReply) error {
-	jwt, err := newJWT(defaultInterNodeJWTExpiry)
+	jwt, err := newJWT(defaultInterNodeJWTExpiry, serverConfig.GetCredential())
 	if err != nil {
 		return err
 	}

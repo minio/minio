@@ -70,16 +70,10 @@ func TestNewJWT(t *testing.T) {
 		cred        *credential
 		expectedErr error
 	}{
-		// Test non-existent config directory.
-		{path.Join(path1, "non-existent-dir"), false, nil, errServerNotInitialized},
-		// Test empty config directory.
-		{path2, false, nil, errServerNotInitialized},
-		// Test empty config file.
-		{path3, false, nil, errServerNotInitialized},
 		// Test initialized config file.
 		{path4, true, nil, nil},
 		// Test to read already created config file.
-		{path4, false, nil, nil},
+		{path4, true, nil, nil},
 		// Access key is too small.
 		{path4, false, &credential{"user", "pass"}, errInvalidAccessKeyLength},
 		// Access key is too long.
@@ -100,13 +94,10 @@ func TestNewJWT(t *testing.T) {
 				t.Fatalf("unable initialize config file, %s", err)
 			}
 		}
-
 		if testCase.cred != nil {
 			serverConfig.SetCredential(*testCase.cred)
 		}
-
-		_, err := newJWT(defaultJWTExpiry)
-
+		_, err := newJWT(defaultJWTExpiry, serverConfig.GetCredential())
 		if testCase.expectedErr != nil {
 			if err == nil {
 				t.Fatalf("%+v: expected: %s, got: <nil>", testCase, testCase.expectedErr)
@@ -128,7 +119,7 @@ func TestGenerateToken(t *testing.T) {
 	}
 	defer removeAll(testPath)
 
-	jwt, err := newJWT(defaultJWTExpiry)
+	jwt, err := newJWT(defaultJWTExpiry, serverConfig.GetCredential())
 	if err != nil {
 		t.Fatalf("unable get new JWT, %s", err)
 	}
@@ -175,7 +166,7 @@ func TestAuthenticate(t *testing.T) {
 	}
 	defer removeAll(testPath)
 
-	jwt, err := newJWT(defaultJWTExpiry)
+	jwt, err := newJWT(defaultJWTExpiry, serverConfig.GetCredential())
 	if err != nil {
 		t.Fatalf("unable get new JWT, %s", err)
 	}

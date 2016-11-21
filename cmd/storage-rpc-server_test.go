@@ -40,7 +40,7 @@ func createTestStorageServer(t *testing.T) *testStorageRPCServer {
 		t.Fatalf("unable initialize config file, %s", err)
 	}
 
-	jwt, err := newJWT(defaultInterNodeJWTExpiry)
+	jwt, err := newJWT(defaultInterNodeJWTExpiry, serverConfig.GetCredential())
 	if err != nil {
 		t.Fatalf("unable to get new JWT, %s", err)
 	}

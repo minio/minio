@@ -42,13 +42,7 @@ const (
 )
 
 // newJWT - returns new JWT object.
-func newJWT(expiry time.Duration) (*JWT, error) {
-	if serverConfig == nil {
-		return nil, errServerNotInitialized
-	}
-
-	// Save access, secret keys.
-	cred := serverConfig.GetCredential()
+func newJWT(expiry time.Duration, cred credential) (*JWT, error) {
 	if !isValidAccessKey(cred.AccessKeyID) {
 		return nil, errInvalidAccessKeyLength
 	}

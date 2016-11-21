@@ -39,7 +39,7 @@ type storageServer struct {
 
 // Login - login handler.
 func (s *storageServer) LoginHandler(args *RPCLoginArgs, reply *RPCLoginReply) error {
-	jwt, err := newJWT(defaultInterNodeJWTExpiry)
+	jwt, err := newJWT(defaultInterNodeJWTExpiry, serverConfig.GetCredential())
 	if err != nil {
 		return err
 	}
