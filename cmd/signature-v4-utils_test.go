@@ -40,7 +40,7 @@ func TestSkipContentSha256Cksum(t *testing.T) {
 		// Test case - 2.
 		// Test case with "X-Amz-Content-Sha256" header set to  "UNSIGNED-PAYLOAD"
 		// When "X-Amz-Content-Sha256" header is set to  "UNSIGNED-PAYLOAD", validation of content sha256 has to be skipped.
-		{"X-Amz-Content-Sha256", "UNSIGNED-PAYLOAD", "", "", true},
+		{"X-Amz-Content-Sha256", unsignedPayload, "", "", true},
 		// Test case - 3.
 		// Enabling PreSigned Signature v4.
 		{"", "", "X-Amz-Credential", "", true},

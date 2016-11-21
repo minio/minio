@@ -47,11 +47,11 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 		return
 	}
 
-	// Validate request authorization.
-	if s3Error := checkAuth(r); s3Error != ErrNone {
+	if s3Error := checkRequestAuthType(r, "", "", serverConfig.GetRegion()); s3Error != ErrNone {
 		writeErrorResponse(w, r, s3Error, r.URL.Path)
 		return
 	}
+
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
@@ -100,11 +100,11 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 		return
 	}
 
-	// Validate request authorization.
-	if s3Error := checkAuth(r); s3Error != ErrNone {
+	if s3Error := checkRequestAuthType(r, "", "", serverConfig.GetRegion()); s3Error != ErrNone {
 		writeErrorResponse(w, r, s3Error, r.URL.Path)
 		return
 	}
+
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
@@ -254,11 +254,11 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 		return
 	}
 
-	// Validate request authorization.
-	if s3Error := checkAuth(r); s3Error != ErrNone {
+	if s3Error := checkRequestAuthType(r, "", "", serverConfig.GetRegion()); s3Error != ErrNone {
 		writeErrorResponse(w, r, s3Error, r.URL.Path)
 		return
 	}
+
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 

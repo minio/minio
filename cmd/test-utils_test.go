@@ -624,7 +624,7 @@ func signStreamingRequest(req *http.Request, accessKey, secretKey string, currTi
 
 	stringToSign := "AWS4-HMAC-SHA256" + "\n" + currTime.Format(iso8601Format) + "\n"
 	stringToSign = stringToSign + scope + "\n"
-	stringToSign = stringToSign + hex.EncodeToString(sum256([]byte(canonicalRequest)))
+	stringToSign = stringToSign + getSHA256Hash([]byte(canonicalRequest))
 
 	date := sumHMAC([]byte("AWS4"+secretKey), []byte(currTime.Format(yyyymmdd)))
 	region := sumHMAC(date, []byte("us-east-1"))
@@ -707,7 +707,7 @@ func assembleStreamingChunks(req *http.Request, body io.ReadSeeker, chunkSize in
 		stringToSign = stringToSign + scope + "\n"
 		stringToSign = stringToSign + signature + "\n"
 		stringToSign = stringToSign + "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" + "\n" // hex(sum256(""))
-		stringToSign = stringToSign + hex.EncodeToString(sum256(buffer[:n]))
+		stringToSign = stringToSign + getSHA256Hash(buffer[:n])
 
 		date := sumHMAC([]byte("AWS4"+secretKey), []byte(currTime.Format(yyyymmdd)))
 		region := sumHMAC(date, []byte(regionStr))
@@ -1017,7 +1017,7 @@ func signRequestV4(req *http.Request, accessKey, secretKey string) error {
 
 	stringToSign := "AWS4-HMAC-SHA256" + "\n" + currTime.Format(iso8601Format) + "\n"
 	stringToSign = stringToSign + scope + "\n"
-	stringToSign = stringToSign + hex.EncodeToString(sum256([]byte(canonicalRequest)))
+	stringToSign = stringToSign + getSHA256Hash([]byte(canonicalRequest))
 
 	date := sumHMAC([]byte("AWS4"+secretKey), []byte(currTime.Format(yyyymmdd)))
 	regionHMAC := sumHMAC(date, []byte(region))
@@ -1061,14 +1061,14 @@ func newTestRequest(method, urlStr string, contentLength int64, body io.ReadSeek
 	var hashedPayload string
 	switch {
 	case body == nil:
-		hashedPayload = hex.EncodeToString(sum256([]byte{}))
+		hashedPayload = getSHA256Hash([]byte{})
 	default:
 		payloadBytes, err := ioutil.ReadAll(body)
 		if err != nil {
 			return nil, err
 		}
-		hashedPayload = hex.EncodeToString(sum256(payloadBytes))
-		md5Base64 := base64.StdEncoding.EncodeToString(sumMD5(payloadBytes))
+		hashedPayload = getSHA256Hash(payloadBytes)
+		md5Base64 := getMD5HashBase64(payloadBytes)
 		req.Header.Set("Content-Md5", md5Base64)
 	}
 	req.Header.Set("x-amz-content-sha256", hashedPayload)

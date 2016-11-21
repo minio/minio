@@ -18,8 +18,6 @@ package cmd
 
 import (
 	"bytes"
-	"crypto/md5"
-	"encoding/hex"
 	"io"
 	"math/rand"
 	"strconv"
@@ -104,9 +102,7 @@ func testMultipartObjectCreation(obj ObjectLayer, instanceType string, c TestErr
 	data := bytes.Repeat([]byte("0123456789abcdef"), 5*1024*1024/16)
 	completedParts := completeMultipartUpload{}
 	for i := 1; i <= 10; i++ {
-		hasher := md5.New()
-		hasher.Write(data)
-		expectedMD5Sumhex := hex.EncodeToString(hasher.Sum(nil))
+		expectedMD5Sumhex := getMD5Hash(data)
 
 		var calculatedMD5sum string
 		calculatedMD5sum, err = obj.PutObjectPart("bucket", "key", uploadID, i, int64(len(data)), bytes.NewBuffer(data), expectedMD5Sumhex, "")
@@ -152,9 +148,7 @@ func testMultipartObjectAbort(obj ObjectLayer, instanceType string, c TestErrHan
 			randomString = randomString + strconv.Itoa(num)
 		}
 
-		hasher := md5.New()
-		hasher.Write([]byte(randomString))
-		expectedMD5Sumhex := hex.EncodeToString(hasher.Sum(nil))
+		expectedMD5Sumhex := getMD5Hash([]byte(randomString))
 
 		metadata["md5"] = expectedMD5Sumhex
 		var calculatedMD5sum string
@@ -192,9 +186,7 @@ func testMultipleObjectCreation(obj ObjectLayer, instanceType string, c TestErrH
 			randomString = randomString + strconv.Itoa(num)
 		}
 
-		hasher := md5.New()
-		hasher.Write([]byte(randomString))
-		expectedMD5Sumhex := hex.EncodeToString(hasher.Sum(nil))
+		expectedMD5Sumhex := getMD5Hash([]byte(randomString))
 
 		key := "obj" + strconv.Itoa(i)
 		objects[key] = []byte(randomString)

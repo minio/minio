@@ -198,7 +198,7 @@ func TestIsRequestUnsignedPayload(t *testing.T) {
 		// Test case - 2.
 		// Test case with "X-Amz-Content-Sha256" header set to  "UNSIGNED-PAYLOAD"
 		// The payload is flagged as unsigned When "X-Amz-Content-Sha256" header is set to  "UNSIGNED-PAYLOAD".
-		{"UNSIGNED-PAYLOAD", true},
+		{unsignedPayload, true},
 		// Test case - 3.
 		// set to a random value.
 		{"abcd", false},

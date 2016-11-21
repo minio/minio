@@ -18,8 +18,6 @@ package cmd
 
 import (
 	"bytes"
-	"crypto/md5"
-	"encoding/hex"
 	"fmt"
 	"strings"
 	"testing"
@@ -1759,12 +1757,6 @@ func TestObjectCompleteMultipartUpload(t *testing.T) {
 
 // Tests validate CompleteMultipart functionality.
 func testObjectCompleteMultipartUpload(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	// Calculates MD5 sum of the given byte array.
-	findMD5 := func(toBeHashed []byte) string {
-		hasher := md5.New()
-		hasher.Write(toBeHashed)
-		return hex.EncodeToString(hasher.Sum(nil))
-	}
 	var err error
 	var uploadID string
 	bucketNames := []string{"minio-bucket", "minio-2-bucket"}
@@ -1791,7 +1783,7 @@ func testObjectCompleteMultipartUpload(obj ObjectLayer, instanceType string, t T
 	// Parts with size greater than 5 MB.
 	// Generating a 6MB byte array.
 	validPart := bytes.Repeat([]byte("abcdef"), 1024*1024)
-	validPartMD5 := findMD5(validPart)
+	validPartMD5 := getMD5Hash(validPart)
 	// Create multipart parts.
 	// Need parts to be uploaded before CompleteMultiPartUpload can be called tested.
 	parts := []struct {

@@ -114,14 +114,7 @@ func isSSL() bool {
 
 // Reads certificated file and returns a list of parsed certificates.
 func readCertificateChain() ([]*x509.Certificate, error) {
-	file, err := os.Open(mustGetCertFile())
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	// Read the cert successfully.
-	bytes, err := ioutil.ReadAll(file)
+	bytes, err := ioutil.ReadFile(mustGetCertFile())
 	if err != nil {
 		return nil, err
 	}

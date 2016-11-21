@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015,2016 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,25 +25,23 @@ import (
 	"strconv"
 )
 
-//// helpers
-
-// Static alphaNumeric table used for generating unique request ids
+// Static alphanumeric table used for generating unique request ids
 var alphaNumericTable = []byte("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
-// generateRequestID - Generate request id
-func generateRequestID() []byte {
+// newRequestID generates and returns request ID string.
+func newRequestID() string {
 	alpha := make([]byte, 16)
 	rand.Read(alpha)
 	for i := 0; i < 16; i++ {
 		alpha[i] = alphaNumericTable[alpha[i]%byte(len(alphaNumericTable))]
 	}
-	return alpha
+	return string(alpha)
 }
 
 // Write http common headers
 func setCommonHeaders(w http.ResponseWriter) {
 	// Set unique request ID for each reply.
-	w.Header().Set("X-Amz-Request-Id", string(generateRequestID()))
+	w.Header().Set("X-Amz-Request-Id", newRequestID())
 	w.Header().Set("Server", ("Minio/" + ReleaseTag + " (" + runtime.GOOS + "; " + runtime.GOARCH + ")"))
 	w.Header().Set("Accept-Ranges", "bytes")
 }

@@ -261,12 +261,8 @@ func getObjectLocation(bucketName string, key string) string {
 	return "/" + bucketName + "/" + key
 }
 
-// takes an array of Bucketmetadata information for serialization
-// input:
-// array of bucket metadata
-//
-// output:
-// populated struct that can be serialized to match xml and json api spec output
+// generates ListBucketsResponse from array of BucketInfo which can be
+// serialized to match XML and JSON API spec output.
 func generateListBucketsResponse(buckets []BucketInfo) ListBucketsResponse {
 	var listbuckets []Bucket
 	var data = ListBucketsResponse{}
@@ -381,7 +377,7 @@ func generateListObjectsV2Response(bucket, prefix, token, startAfter, delimiter 
 	return data
 }
 
-// generateCopyObjectResponse
+// generates CopyObjectResponse from etag and lastModified time.
 func generateCopyObjectResponse(etag string, lastModified time.Time) CopyObjectResponse {
 	return CopyObjectResponse{
 		ETag:         "\"" + etag + "\"",
@@ -389,7 +385,7 @@ func generateCopyObjectResponse(etag string, lastModified time.Time) CopyObjectR
 	}
 }
 
-// generateInitiateMultipartUploadResponse
+// generates InitiateMultipartUploadResponse for given bucket, key and uploadID.
 func generateInitiateMultipartUploadResponse(bucket, key, uploadID string) InitiateMultipartUploadResponse {
 	return InitiateMultipartUploadResponse{
 		Bucket:   bucket,
@@ -398,7 +394,7 @@ func generateInitiateMultipartUploadResponse(bucket, key, uploadID string) Initi
 	}
 }
 
-// generateCompleteMultipartUploadResponse
+// generates CompleteMultipartUploadResponse for given bucket, key, location and ETag.
 func generateCompleteMultpartUploadResponse(bucket, key, location, etag string) CompleteMultipartUploadResponse {
 	return CompleteMultipartUploadResponse{
 		Location: location,
@@ -408,7 +404,7 @@ func generateCompleteMultpartUploadResponse(bucket, key, location, etag string) 
 	}
 }
 
-// generateListPartsResult
+// generates ListPartsResponse from ListPartsInfo.
 func generateListPartsResponse(partsInfo ListPartsInfo) ListPartsResponse {
 	// TODO - support EncodingType in xml decoding
 	listPartsResponse := ListPartsResponse{}
@@ -438,7 +434,7 @@ func generateListPartsResponse(partsInfo ListPartsInfo) ListPartsResponse {
 	return listPartsResponse
 }
 
-// generateListMultipartUploadsResponse
+// generates ListMultipartUploadsResponse for given bucket and ListMultipartsInfo.
 func generateListMultipartUploadsResponse(bucket string, multipartsInfo ListMultipartsInfo) ListMultipartUploadsResponse {
 	listMultipartUploadsResponse := ListMultipartUploadsResponse{}
 	listMultipartUploadsResponse.Bucket = bucket

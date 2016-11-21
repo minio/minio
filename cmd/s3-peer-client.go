@@ -48,7 +48,7 @@ func makeS3Peers(eps []*url.URL) s3Peers {
 	// add local (self) as peer in the array
 	ret = append(ret, s3Peer{
 		globalMinioAddr,
-		&localBMS{ObjectAPI: newObjectLayerFn},
+		&localBucketMetaState{ObjectAPI: newObjectLayerFn},
 	})
 	seenAddr[globalMinioAddr] = true
 
@@ -72,7 +72,7 @@ func makeS3Peers(eps []*url.URL) s3Peers {
 
 			ret = append(ret, s3Peer{
 				ep.Host,
-				&remoteBMS{newAuthClient(&cfg)},
+				&remoteBucketMetaState{newAuthClient(&cfg)},
 			})
 			seenAddr[ep.Host] = true
 		}
@@ -127,13 +127,13 @@ func (s3p s3Peers) SendUpdate(peerIndex []int, args interface{}) []error {
 		// Make the appropriate bucket metadata update
 		// according to the argument type
 		switch v := args.(type) {
-		case *SetBNPArgs:
+		case *SetBucketNotificationPeerArgs:
 			err = client.UpdateBucketNotification(v)
 
-		case *SetBLPArgs:
+		case *SetBucketListenerPeerArgs:
 			err = client.UpdateBucketListener(v)
 
-		case *SetBPPArgs:
+		case *SetBucketPolicyPeerArgs:
 			err = client.UpdateBucketPolicy(v)
 
 		default:
@@ -173,7 +173,7 @@ func (s3p s3Peers) SendUpdate(peerIndex []int, args interface{}) []error {
 // S3PeersUpdateBucketNotification - Sends Update Bucket notification
 // request to all peers. Currently we log an error and continue.
 func S3PeersUpdateBucketNotification(bucket string, ncfg *notificationConfig) {
-	setBNPArgs := &SetBNPArgs{Bucket: bucket, NCfg: ncfg}
+	setBNPArgs := &SetBucketNotificationPeerArgs{Bucket: bucket, NCfg: ncfg}
 	errs := globalS3Peers.SendUpdate(nil, setBNPArgs)
 	for idx, err := range errs {
 		errorIf(
@@ -187,7 +187,7 @@ func S3PeersUpdateBucketNotification(bucket string, ncfg *notificationConfig) {
 // S3PeersUpdateBucketListener - Sends Update Bucket listeners request
 // to all peers. Currently we log an error and continue.
 func S3PeersUpdateBucketListener(bucket string, lcfg []listenerConfig) {
-	setBLPArgs := &SetBLPArgs{Bucket: bucket, LCfg: lcfg}
+	setBLPArgs := &SetBucketListenerPeerArgs{Bucket: bucket, LCfg: lcfg}
 	errs := globalS3Peers.SendUpdate(nil, setBLPArgs)
 	for idx, err := range errs {
 		errorIf(
@@ -206,7 +206,7 @@ func S3PeersUpdateBucketPolicy(bucket string, pCh policyChange) {
 		errorIf(err, "Failed to marshal policyChange - this is a BUG!")
 		return
 	}
-	setBPPArgs := &SetBPPArgs{Bucket: bucket, PChBytes: byts}
+	setBPPArgs := &SetBucketPolicyPeerArgs{Bucket: bucket, PChBytes: byts}
 	errs := globalS3Peers.SendUpdate(nil, setBPPArgs)
 	for idx, err := range errs {
 		errorIf(
