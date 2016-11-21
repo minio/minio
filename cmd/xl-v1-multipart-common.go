@@ -215,7 +215,7 @@ func (xl xlObjects) statPart(bucket, object, uploadID, partName string) (fileInf
 }
 
 // commitXLMetadata - commit `xl.json` from source prefix to destination prefix in the given slice of disks.
-func commitXLMetadata(disks []StorageAPI, srcPrefix, dstPrefix string, quorum int) error {
+func commitXLMetadata(disks []StorageAPI, srcBucket, srcPrefix, dstBucket, dstPrefix string, quorum int) error {
 	var wg = &sync.WaitGroup{}
 	var mErrs = make([]error, len(disks))
 
@@ -233,10 +233,10 @@ func commitXLMetadata(disks []StorageAPI, srcPrefix, dstPrefix string, quorum in
 		go func(index int, disk StorageAPI) {
 			defer wg.Done()
 			// Delete any dangling directories.
-			defer disk.DeleteFile(minioMetaTmpBucket, srcPrefix)
+			defer disk.DeleteFile(srcBucket, srcPrefix)
 
 			// Renames `xl.json` from source prefix to destination prefix.
-			rErr := disk.RenameFile(minioMetaTmpBucket, srcJSONFile, minioMetaBucket, dstJSONFile)
+			rErr := disk.RenameFile(srcBucket, srcJSONFile, dstBucket, dstJSONFile)
 			if rErr != nil {
 				mErrs[index] = traceError(rErr)
 				return
@@ -250,7 +250,7 @@ func commitXLMetadata(disks []StorageAPI, srcPrefix, dstPrefix string, quorum in
 	// Do we have write Quorum?.
 	if !isDiskQuorum(mErrs, quorum) {
 		// Delete all `xl.json` successfully renamed.
-		deleteAllXLMetadata(disks, minioMetaBucket, dstPrefix, mErrs)
+		deleteAllXLMetadata(disks, dstBucket, dstPrefix, mErrs)
 		return traceError(errXLWriteQuorum)
 	}
 
