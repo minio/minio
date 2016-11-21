@@ -37,6 +37,9 @@ type fsObjects struct {
 
 	// List pool management.
 	listPool *treeWalkPool
+
+	// To manage the appendRoutine go0routines
+	bgAppend *backgroundAppend
 }
 
 // list of all errors that can be ignored in tree walk operation in FS
@@ -61,6 +64,9 @@ func newFSObjects(storage StorageAPI) (ObjectLayer, error) {
 	fs := fsObjects{
 		storage:  storage,
 		listPool: newTreeWalkPool(globalLookupTimeout),
+		bgAppend: &backgroundAppend{
+			infoMap: make(map[string]bgAppendPartsInfo),
+		},
 	}
 
 	// Return successfully initialized object layer.
