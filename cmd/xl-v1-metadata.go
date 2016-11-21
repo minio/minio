@@ -335,8 +335,7 @@ func writeUniqueXLMetadata(disks []StorageAPI, bucket, prefix string, xlMetas []
 		deleteAllXLMetadata(disks, bucket, prefix, mErrs)
 		return traceError(errXLWriteQuorum)
 	}
-
-	return reduceErrs(mErrs, objectOpIgnoredErrs)
+	return reduceWriteQuorumErrs(mErrs, objectOpIgnoredErrs, quorum)
 }
 
 // writeSameXLMetadata - write `xl.json` on all disks in order.
@@ -375,6 +374,5 @@ func writeSameXLMetadata(disks []StorageAPI, bucket, prefix string, xlMeta xlMet
 		deleteAllXLMetadata(disks, bucket, prefix, mErrs)
 		return traceError(errXLWriteQuorum)
 	}
-
-	return reduceErrs(mErrs, objectOpIgnoredErrs)
+	return reduceWriteQuorumErrs(mErrs, objectOpIgnoredErrs, writeQuorum)
 }

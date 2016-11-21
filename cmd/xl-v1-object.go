@@ -79,7 +79,7 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 		return traceError(InsufficientReadQuorum{}, errs...)
 	}
 
-	if reducedErr := reduceErrs(errs, objectOpIgnoredErrs); reducedErr != nil {
+	if reducedErr := reduceReadQuorumErrs(errs, objectOpIgnoredErrs, xl.readQuorum); reducedErr != nil {
 		return toObjectErr(reducedErr, bucket, object)
 	}
 
@@ -339,8 +339,7 @@ func rename(disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry string,
 		undoRename(disks, srcBucket, srcEntry, dstBucket, dstEntry, isPart, errs)
 		return traceError(errXLWriteQuorum)
 	}
-	// Return on first error, also undo any partially successful rename operations.
-	return reduceErrs(errs, objectOpIgnoredErrs)
+	return reduceWriteQuorumErrs(errs, objectOpIgnoredErrs, quorum)
 }
 
 // renamePart - renames a part of the source object to the destination

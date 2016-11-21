@@ -63,28 +63,34 @@ func TestReduceErrs(t *testing.T) {
 			errDiskNotFound,
 			errDiskNotFound,
 			errDiskFull,
-		}, []error{}, errDiskNotFound},
+		}, []error{}, errXLReadQuorum},
 		// Validate if have no consensus.
 		{[]error{
 			errDiskFull,
 			errDiskNotFound,
 			nil, nil,
-		}, []error{}, nil},
+		}, []error{}, errXLReadQuorum},
 		// Validate if have consensus and errors ignored.
 		{[]error{
+			errVolumeNotFound,
+			errVolumeNotFound,
 			errVolumeNotFound,
 			errVolumeNotFound,
 			errVolumeNotFound,
 			errDiskNotFound,
 			errDiskNotFound,
 		}, []error{errDiskNotFound}, errVolumeNotFound},
-		{[]error{}, []error{}, nil},
+		{[]error{}, []error{}, errXLReadQuorum},
 	}
 	// Validates list of all the testcases for returning valid errors.
 	for i, testCase := range testCases {
-		gotErr := reduceErrs(testCase.errs, testCase.ignoredErrs)
+		gotErr := reduceReadQuorumErrs(testCase.errs, testCase.ignoredErrs, 5)
 		if errorCause(gotErr) != testCase.err {
 			t.Errorf("Test %d : expected %s, got %s", i+1, testCase.err, gotErr)
+		}
+		gotNewErr := reduceWriteQuorumErrs(testCase.errs, testCase.ignoredErrs, 6)
+		if errorCause(gotNewErr) != errXLWriteQuorum {
+			t.Errorf("Test %d : expected %s, got %s", i+1, errXLWriteQuorum, gotErr)
 		}
 	}
 }
