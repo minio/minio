@@ -72,9 +72,9 @@ check_minimum_version() {
     IFS='.' read -r -a varray2 <<< "$2"
 
     for i in "${!varray1[@]}"; do
-        if [[ ${varray1[i]} < ${varray2[i]} ]]; then
+        if [[ ${varray1[i]} -lt ${varray2[i]} ]]; then
             return 0
-        elif [[ ${varray1[i]} > ${varray2[i]} ]]; then
+        elif [[ ${varray1[i]} -gt ${varray2[i]} ]]; then
             return 1
         fi
     done
