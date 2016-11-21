@@ -157,8 +157,7 @@ func (b *backgroundAppend) appendParts(disk StorageAPI, bucket, object, uploadID
 			}
 		case <-info.endCh:
 			// Either complete-multipart-upload or abort-multipart-upload closed endCh to end the appendParts go-routine.
-			appendFilePath := getFSAppendDataPath(uploadID)
-			disk.DeleteFile(bucket, appendFilePath)
+			disk.DeleteFile(minioMetaTmpBucket, uploadID)
 			return
 		case <-time.After(appendPartsTimeout):
 			// Timeout the goroutine to garbage collect its resources. This would happen if the client initiates
@@ -167,8 +166,7 @@ func (b *backgroundAppend) appendParts(disk StorageAPI, bucket, object, uploadID
 			delete(b.infoMap, uploadID)
 			b.Unlock()
 			// Delete the temporary append file as well.
-			appendFilePath := getFSAppendDataPath(uploadID)
-			disk.DeleteFile(bucket, appendFilePath)
+			disk.DeleteFile(minioMetaTmpBucket, uploadID)
 
 			close(info.timeoutCh)
 		}
@@ -178,8 +176,7 @@ func (b *backgroundAppend) appendParts(disk StorageAPI, bucket, object, uploadID
 // Appends the "part" to the append-file inside "tmp/" that finally gets moved to the actual location
 // upon complete-multipart-upload.
 func appendPart(disk StorageAPI, bucket, object, uploadID string, part objectPartInfo) error {
-	partPath := pathJoin(bucket, object, uploadID, part.Name)
-	appendFilePath := getFSAppendDataPath(uploadID)
+	partPath := pathJoin(mpartMetaPrefix, bucket, object, uploadID, part.Name)
 
 	offset := int64(0)
 	totalLeft := part.Size
@@ -196,11 +193,11 @@ func appendPart(disk StorageAPI, bucket, object, uploadID string, part objectPar
 			// the exact size of the file and hence know the size of buf[]
 			// EOF/ErrUnexpectedEOF indicates that the length of file was shorter than part.Size and
 			// hence considered as an error condition.
-			disk.DeleteFile(bucket, appendFilePath)
+			disk.DeleteFile(minioMetaTmpBucket, uploadID)
 			return err
 		}
-		if err = disk.AppendFile(minioMetaBucket, appendFilePath, buf[:n]); err != nil {
-			disk.DeleteFile(bucket, appendFilePath)
+		if err = disk.AppendFile(minioMetaTmpBucket, uploadID, buf[:n]); err != nil {
+			disk.DeleteFile(minioMetaTmpBucket, uploadID)
 			return err
 		}
 		offset += n
