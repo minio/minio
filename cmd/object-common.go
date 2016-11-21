@@ -194,6 +194,13 @@ func newStorageAPI(ep *url.URL) (storage StorageAPI, err error) {
 	return newStorageRPC(ep)
 }
 
+var initMetaVolIgnoredErrs = []error{
+	errVolumeExists,
+	errDiskNotFound,
+	errFaultyDisk,
+	errFaultyRemoteDisk,
+}
+
 // Initializes meta volume on all input storage disks.
 func initMetaVolume(storageDisks []StorageAPI) error {
 	// This happens for the first time, but keep this here since this
@@ -218,20 +225,14 @@ func initMetaVolume(storageDisks []StorageAPI) error {
 			// Attempt to create `.minio.sys`.
 			err := disk.MakeVol(minioMetaBucket)
 			if err != nil {
-				switch err {
-				// Ignored errors.
-				case errVolumeExists, errDiskNotFound, errFaultyDisk:
-				default:
+				if !isErrIgnored(err, initMetaVolIgnoredErrs) {
 					errs[index] = err
 				}
 				return
 			}
 			err = disk.MakeVol(minioMetaTmpBucket)
 			if err != nil {
-				switch err {
-				// Ignored errors.
-				case errVolumeExists, errDiskNotFound, errFaultyDisk:
-				default:
+				if !isErrIgnored(err, initMetaVolIgnoredErrs) {
 					errs[index] = err
 				}
 				return
