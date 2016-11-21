@@ -33,7 +33,7 @@ var errPartsMissing = errors.New("required parts missing")
 var errAppendPartsTimeout = errors.New("appendParts goroutine timeout")
 
 // Timeout value for the appendParts go-routine.
-var appendPartsTimeout = 24 * 60 * 60 * time.Second
+var appendPartsTimeout = 24 * 60 * 60 * time.Second // 24 hours.
 
 // Holds a map of uploadID->appendParts go-routine
 type backgroundAppend struct {
