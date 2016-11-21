@@ -33,6 +33,34 @@ const (
 	iso8601DateFormat    = "20060102T150405Z"
 )
 
+func newPostPolicyBytesV4WithContentRange(credential, bucketName, objectKey string, expiration time.Time) []byte {
+	t := time.Now().UTC()
+	// Add the expiration date.
+	expirationStr := fmt.Sprintf(`"expiration": "%s"`, expiration.Format(expirationDateFormat))
+	// Add the bucket condition, only accept buckets equal to the one passed.
+	bucketConditionStr := fmt.Sprintf(`["eq", "$bucket", "%s"]`, bucketName)
+	// Add the key condition, only accept keys equal to the one passed.
+	keyConditionStr := fmt.Sprintf(`["eq", "$key", "%s"]`, objectKey)
+	// Add content length condition, only accept content sizes of a given length.
+	contentLengthCondStr := `["content-length-range", 1024, 1048576]`
+	// Add the algorithm condition, only accept AWS SignV4 Sha256.
+	algorithmConditionStr := `["eq", "$x-amz-algorithm", "AWS4-HMAC-SHA256"]`
+	// Add the date condition, only accept the current date.
+	dateConditionStr := fmt.Sprintf(`["eq", "$x-amz-date", "%s"]`, t.Format(iso8601DateFormat))
+	// Add the credential string, only accept the credential passed.
+	credentialConditionStr := fmt.Sprintf(`["eq", "$x-amz-credential", "%s"]`, credential)
+
+	// Combine all conditions into one string.
+	conditionStr := fmt.Sprintf(`"conditions":[%s, %s, %s, %s, %s, %s]`, bucketConditionStr,
+		keyConditionStr, contentLengthCondStr, algorithmConditionStr, dateConditionStr, credentialConditionStr)
+	retStr := "{"
+	retStr = retStr + expirationStr + ","
+	retStr = retStr + conditionStr
+	retStr = retStr + "}"
+
+	return []byte(retStr)
+}
+
 // newPostPolicyBytesV4 - creates a bare bones postpolicy string with key and bucket matches.
 func newPostPolicyBytesV4(credential, bucketName, objectKey string, expiration time.Time) []byte {
 	t := time.Now().UTC()
@@ -206,6 +234,59 @@ func testPostPolicyHandler(obj ObjectLayer, instanceType string, t TestErrHandle
 			t.Errorf("Test %d: %s: Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, rec.Code)
 		}
 	}
+
+	testCases2 := []struct {
+		objectName         string
+		data               []byte
+		expectedRespStatus int
+		accessKey          string
+		secretKey          string
+		malformedBody      bool
+	}{
+		// Success case.
+		{
+			objectName:         "test",
+			data:               bytes.Repeat([]byte("a"), 1025),
+			expectedRespStatus: http.StatusNoContent,
+			accessKey:          credentials.AccessKeyID,
+			secretKey:          credentials.SecretAccessKey,
+			malformedBody:      false,
+		},
+		// Failed with entity too small.
+		{
+			objectName:         "test",
+			data:               bytes.Repeat([]byte("a"), 1023),
+			expectedRespStatus: http.StatusBadRequest,
+			accessKey:          credentials.AccessKeyID,
+			secretKey:          credentials.SecretAccessKey,
+			malformedBody:      false,
+		},
+		// Failed with entity too large.
+		{
+			objectName:         "test",
+			data:               bytes.Repeat([]byte("a"), 1024*1024+1),
+			expectedRespStatus: http.StatusBadRequest,
+			accessKey:          credentials.AccessKeyID,
+			secretKey:          credentials.SecretAccessKey,
+			malformedBody:      false,
+		},
+	}
+
+	for i, testCase := range testCases2 {
+		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
+		rec := httptest.NewRecorder()
+		req, perr := newPostRequestV4WithContentLength("", bucketName, testCase.objectName, testCase.data, testCase.accessKey, testCase.secretKey)
+		if perr != nil {
+			t.Fatalf("Test %d: %s: Failed to create HTTP request for PostPolicyHandler: <ERROR> %v", i+1, instanceType, perr)
+		}
+		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic ofthe handler.
+		// Call the ServeHTTP to execute the handler.
+		apiRouter.ServeHTTP(rec, req)
+		if rec.Code != testCase.expectedRespStatus {
+			t.Errorf("Test %d: %s: Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, rec.Code)
+		}
+	}
+
 }
 
 // postPresignSignatureV4 - presigned signature for PostPolicy requests.
@@ -267,7 +348,7 @@ func newPostRequestV2(endPoint, bucketName, objectName string, accessKey, secret
 	return req, nil
 }
 
-func newPostRequestV4(endPoint, bucketName, objectName string, objData []byte, accessKey, secretKey string) (*http.Request, error) {
+func newPostRequestV4Generic(endPoint, bucketName, objectName string, objData []byte, accessKey, secretKey string, contentLengthRange bool) (*http.Request, error) {
 	// Keep time.
 	t := time.Now().UTC()
 	// Expire the request five minutes from now.
@@ -276,6 +357,9 @@ func newPostRequestV4(endPoint, bucketName, objectName string, objData []byte, a
 	credStr := getCredential(accessKey, serverConfig.GetRegion(), t)
 	// Create a new post policy.
 	policy := newPostPolicyBytesV4(credStr, bucketName, objectName, expirationTime)
+	if contentLengthRange {
+		policy = newPostPolicyBytesV4WithContentRange(credStr, bucketName, objectName, expirationTime)
+	}
 	// Only need the encoding.
 	encodedPolicy := base64.StdEncoding.EncodeToString(policy)
 
@@ -321,4 +405,12 @@ func newPostRequestV4(endPoint, bucketName, objectName string, objData []byte, a
 	// Set form content-type.
 	req.Header.Set("Content-Type", w.FormDataContentType())
 	return req, nil
+}
+
+func newPostRequestV4WithContentLength(endPoint, bucketName, objectName string, objData []byte, accessKey, secretKey string) (*http.Request, error) {
+	return newPostRequestV4Generic(endPoint, bucketName, objectName, objData, accessKey, secretKey, true)
+}
+
+func newPostRequestV4(endPoint, bucketName, objectName string, objData []byte, accessKey, secretKey string) (*http.Request, error) {
+	return newPostRequestV4Generic(endPoint, bucketName, objectName, objData, accessKey, secretKey, false)
 }

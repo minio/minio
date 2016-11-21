@@ -629,6 +629,8 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrContentSHA256Mismatch
 	case ObjectTooLarge:
 		apiErr = ErrEntityTooLarge
+	case ObjectTooSmall:
+		apiErr = ErrEntityTooSmall
 	default:
 		apiErr = ErrInternalError
 	}
