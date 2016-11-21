@@ -33,6 +33,12 @@ var errDiskFull = errors.New("disk path full")
 // errDiskNotFount - cannot find the underlying configured disk anymore.
 var errDiskNotFound = errors.New("disk not found")
 
+// errFaultyRemoteDisk - remote disk is faulty.
+var errFaultyRemoteDisk = errors.New("remote disk is faulty")
+
+// errFaultyDisk - disk is faulty.
+var errFaultyDisk = errors.New("disk is faulty")
+
 // errDiskAccessDenied - we don't have write permissions on disk.
 var errDiskAccessDenied = errors.New("disk access denied")
 

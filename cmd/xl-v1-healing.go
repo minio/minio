@@ -122,11 +122,7 @@ func healBucket(storageDisks []StorageAPI, bucket string, writeQuorum int) error
 	}
 
 	// Verify we have any other errors which should be returned as failure.
-	if reducedErr := reduceErrs(dErrs, []error{
-		errDiskNotFound,
-		errFaultyDisk,
-		errDiskAccessDenied,
-	}); reducedErr != nil {
+	if reducedErr := reduceErrs(dErrs, bucketOpIgnoredErrs); reducedErr != nil {
 		return toObjectErr(reducedErr, bucket)
 	}
 	return nil

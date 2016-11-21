@@ -211,6 +211,7 @@ var objMetadataOpIgnoredErrs = []error{
 	errDiskNotFound,
 	errDiskAccessDenied,
 	errFaultyDisk,
+	errFaultyRemoteDisk,
 	errVolumeNotFound,
 	errFileAccessDenied,
 	errFileNotFound,
@@ -336,11 +337,7 @@ func writeUniqueXLMetadata(disks []StorageAPI, bucket, prefix string, xlMetas []
 		return traceError(errXLWriteQuorum)
 	}
 
-	return reduceErrs(mErrs, []error{
-		errDiskNotFound,
-		errFaultyDisk,
-		errDiskAccessDenied,
-	})
+	return reduceErrs(mErrs, objectOpIgnoredErrs)
 }
 
 // writeSameXLMetadata - write `xl.json` on all disks in order.
@@ -380,9 +377,5 @@ func writeSameXLMetadata(disks []StorageAPI, bucket, prefix string, xlMeta xlMet
 		return traceError(errXLWriteQuorum)
 	}
 
-	return reduceErrs(mErrs, []error{
-		errDiskNotFound,
-		errFaultyDisk,
-		errDiskAccessDenied,
-	})
+	return reduceErrs(mErrs, objectOpIgnoredErrs)
 }

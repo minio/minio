@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"bytes"
-	"errors"
 	"io"
 	"io/ioutil"
 	"os"
@@ -47,8 +46,6 @@ type posix struct {
 	minFreeInodes int64
 	pool          sync.Pool
 }
-
-var errFaultyDisk = errors.New("Faulty disk")
 
 // checkPathLength - returns error if given path name length more than 255
 func checkPathLength(pathName string) error {

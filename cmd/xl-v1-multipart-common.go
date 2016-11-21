@@ -140,13 +140,7 @@ func (xl xlObjects) updateUploadJSON(bucket, object string, uCh uploadIDChange) 
 	}
 	wg.Wait()
 
-	// Ignored errors list.
-	ignoredErrs := []error{
-		errDiskNotFound,
-		errFaultyDisk,
-		errDiskAccessDenied,
-	}
-	return reduceErrs(errs, ignoredErrs)
+	return reduceErrs(errs, objectOpIgnoredErrs)
 }
 
 // Returns if the prefix is a multipart upload.
@@ -257,11 +251,5 @@ func commitXLMetadata(disks []StorageAPI, srcPrefix, dstPrefix string, quorum in
 		return traceError(errXLWriteQuorum)
 	}
 
-	// List of ignored errors.
-	ignoredErrs := []error{
-		errDiskNotFound,
-		errDiskAccessDenied,
-		errFaultyDisk,
-	}
-	return reduceErrs(mErrs, ignoredErrs)
+	return reduceErrs(mErrs, objectOpIgnoredErrs)
 }

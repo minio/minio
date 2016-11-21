@@ -32,6 +32,14 @@ import (
 	"github.com/minio/minio/pkg/objcache"
 )
 
+// list all errors which can be ignored in object operations.
+var objectOpIgnoredErrs = []error{
+	errDiskNotFound,
+	errDiskAccessDenied,
+	errFaultyDisk,
+	errFaultyRemoteDisk,
+}
+
 /// Object Operations
 
 // GetObject - reads an object erasured coded across multiple
@@ -71,11 +79,7 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 		return traceError(InsufficientReadQuorum{}, errs...)
 	}
 
-	if reducedErr := reduceErrs(errs, []error{
-		errDiskNotFound,
-		errFaultyDisk,
-		errDiskAccessDenied,
-	}); reducedErr != nil {
+	if reducedErr := reduceErrs(errs, objectOpIgnoredErrs); reducedErr != nil {
 		return toObjectErr(reducedErr, bucket, object)
 	}
 
@@ -333,11 +337,7 @@ func rename(disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry string,
 		return traceError(errXLWriteQuorum)
 	}
 	// Return on first error, also undo any partially successful rename operations.
-	return reduceErrs(errs, []error{
-		errDiskNotFound,
-		errDiskAccessDenied,
-		errFaultyDisk,
-	})
+	return reduceErrs(errs, objectOpIgnoredErrs)
 }
 
 // renamePart - renames a part of the source object to the destination
