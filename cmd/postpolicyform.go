@@ -34,10 +34,14 @@ func toString(val interface{}) string {
 }
 
 // toInteger _ Safely convert interface to integer without causing panic.
-func toInteger(val interface{}) int {
+func toInteger(val interface{}) int64 {
 	switch v := val.(type) {
-	case int:
+	case float64:
+		return int64(v)
+	case int64:
 		return v
+	case int:
+		return int64(v)
 	}
 	return 0
 }
@@ -53,8 +57,8 @@ func isString(val interface{}) bool {
 
 // ContentLengthRange - policy content-length-range field.
 type contentLengthRange struct {
-	Min   int
-	Max   int
+	Min   int64
+	Max   int64
 	Valid bool // If content-length-range was part of policy
 }
 
@@ -136,7 +140,11 @@ func parsePostPolicyForm(policy string) (PostPolicyForm, error) {
 					Value:    value,
 				}
 			case "content-length-range":
-				parsedPolicy.Conditions.ContentLengthRange = contentLengthRange{toInteger(condt[1]), toInteger(condt[2]), true}
+				parsedPolicy.Conditions.ContentLengthRange = contentLengthRange{
+					Min:   toInteger(condt[1]),
+					Max:   toInteger(condt[2]),
+					Valid: true,
+				}
 			default:
 				// Condition should be valid.
 				return parsedPolicy, fmt.Errorf("Unknown type %s of conditional field value %s found in POST policy form",

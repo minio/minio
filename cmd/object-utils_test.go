@@ -116,8 +116,8 @@ func TestIsValidObjectName(t *testing.T) {
 	}
 }
 
-// Tests limitReader
-func TestLimitReader(t *testing.T) {
+// Tests rangeReader.
+func TestRangeReader(t *testing.T) {
 	testCases := []struct {
 		data   string
 		minLen int64
@@ -126,15 +126,19 @@ func TestLimitReader(t *testing.T) {
 	}{
 		{"1234567890", 0, 15, nil},
 		{"1234567890", 0, 10, nil},
-		{"1234567890", 0, 5, errDataTooLarge},
-		{"123", 5, 10, errDataTooSmall},
+		{"1234567890", 0, 5, toObjectErr(errDataTooLarge, "test", "test")},
+		{"123", 5, 10, toObjectErr(errDataTooSmall, "test", "test")},
 		{"123", 2, 10, nil},
 	}
 
 	for i, test := range testCases {
 		r := strings.NewReader(test.data)
-		_, err := ioutil.ReadAll(limitReader(r, test.minLen, test.maxLen))
-		if err != test.err {
+		_, err := ioutil.ReadAll(&rangeReader{
+			Reader: r,
+			Min:    test.minLen,
+			Max:    test.maxLen,
+		})
+		if toObjectErr(err, "test", "test") != test.err {
 			t.Fatalf("test %d failed: expected %v, got %v", i+1, test.err, err)
 		}
 	}

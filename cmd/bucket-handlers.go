@@ -470,14 +470,22 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	// Use limitReader to ensure that object size is within expected range.
+	// Use rangeReader to ensure that object size is within expected range.
 	lengthRange := postPolicyForm.Conditions.ContentLengthRange
 	if lengthRange.Valid {
 		// If policy restricted the size of the object.
-		fileBody = limitReader(fileBody, int64(lengthRange.Min), int64(lengthRange.Max))
+		fileBody = &rangeReader{
+			Reader: fileBody,
+			Min:    lengthRange.Min,
+			Max:    lengthRange.Max,
+		}
 	} else {
 		// Default values of min/max size of the object.
-		fileBody = limitReader(fileBody, 0, maxObjectSize)
+		fileBody = &rangeReader{
+			Reader: fileBody,
+			Min:    0,
+			Max:    maxObjectSize,
+		}
 	}
 
 	// Save metadata.
