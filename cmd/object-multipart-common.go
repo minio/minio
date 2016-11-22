@@ -93,17 +93,6 @@ func newUploadsV1(format string) uploadsV1 {
 	return uploadIDs
 }
 
-// uploadIDChange - represents a change to uploads.json - either add
-// or remove an upload id.
-type uploadIDChange struct {
-	// the id being added or removed.
-	uploadID string
-	// time of upload start. only used in uploadid add operations.
-	initiated time.Time
-	// if true, removes uploadID and ignores initiated time.
-	isRemove bool
-}
-
 func writeUploadJSON(u *uploadsV1, uploadsPath, tmpPath string, disk StorageAPI) error {
 	// Serialize to prepare to write to disk.
 	uplBytes, wErr := json.Marshal(&u)

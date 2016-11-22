@@ -122,7 +122,7 @@ func TestFSWriteUploadJSON(t *testing.T) {
 		t.Fatal("Unexpected err: ", err)
 	}
 
-	if err := fs.updateUploadJSON(bucketName, objectName, uploadIDChange{uploadID, time.Now().UTC(), false}); err != nil {
+	if err := fs.addUploadID(bucketName, objectName, uploadID, time.Now().UTC()); err != nil {
 		t.Fatal("Unexpected err: ", err)
 	}
 
@@ -131,8 +131,7 @@ func TestFSWriteUploadJSON(t *testing.T) {
 	for i := 1; i <= 3; i++ {
 		naughty := newNaughtyDisk(fsStorage, map[int]error{i: errFaultyDisk}, nil)
 		fs.storage = naughty
-		if err := fs.updateUploadJSON(bucketName, objectName,
-			uploadIDChange{uploadID, time.Now().UTC(), false}); errorCause(err) != errFaultyDisk {
+		if err := fs.addUploadID(bucketName, objectName, uploadID, time.Now().UTC()); errorCause(err) != errFaultyDisk {
 			t.Fatal("Unexpected err: ", err)
 		}
 	}

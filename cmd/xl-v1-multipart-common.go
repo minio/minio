@@ -19,14 +19,13 @@ package cmd
 import (
 	"path"
 	"sync"
+	"time"
 )
 
-// writeUploadJSON - create `uploads.json` or update it with change
-// described in uCh.
-func (xl xlObjects) updateUploadJSON(bucket, object string, uCh uploadIDChange) error {
+// updateUploadJSON - add or remove upload ID info in all `uploads.json`.
+func (xl xlObjects) updateUploadJSON(bucket, object, uploadID string, initiated time.Time, isRemove bool) error {
 	uploadsPath := path.Join(bucket, object, uploadsJSONFile)
-	uniqueID := getUUID()
-	tmpUploadsPath := uniqueID
+	tmpUploadsPath := getUUID()
 
 	// slice to store errors from disks
 	errs := make([]error, len(xl.storageDisks))
@@ -58,12 +57,12 @@ func (xl xlObjects) updateUploadJSON(bucket, object string, uCh uploadIDChange) 
 				return
 			}
 
-			if !uCh.isRemove {
+			if !isRemove {
 				// Add the uploadID
-				uploadsJSON.AddUploadID(uCh.uploadID, uCh.initiated)
+				uploadsJSON.AddUploadID(uploadID, initiated)
 			} else {
 				// Remove the upload ID
-				uploadsJSON.RemoveUploadID(uCh.uploadID)
+				uploadsJSON.RemoveUploadID(uploadID)
 				if len(uploadsJSON.Uploads) == 0 {
 					isDelete[index] = true
 				}
@@ -144,6 +143,16 @@ func (xl xlObjects) updateUploadJSON(bucket, object string, uCh uploadIDChange) 
 		return reducedErr
 	}
 	return nil
+}
+
+// addUploadID - add upload ID and its initiated time to 'uploads.json'.
+func (xl xlObjects) addUploadID(bucket, object string, uploadID string, initiated time.Time) error {
+	return xl.updateUploadJSON(bucket, object, uploadID, initiated, false)
+}
+
+// removeUploadID - remove upload ID in 'uploads.json'.
+func (xl xlObjects) removeUploadID(bucket, object string, uploadID string) error {
+	return xl.updateUploadJSON(bucket, object, uploadID, time.Time{}, true)
 }
 
 // Returns if the prefix is a multipart upload.

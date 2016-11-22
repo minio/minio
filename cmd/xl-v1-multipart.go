@@ -306,7 +306,7 @@ func (xl xlObjects) newMultipartUpload(bucket string, object string, meta map[st
 
 	initiated := time.Now().UTC()
 	// Create or update 'uploads.json'
-	if err := xl.updateUploadJSON(bucket, object, uploadIDChange{uploadID, initiated, false}); err != nil {
+	if err := xl.addUploadID(bucket, object, uploadID, initiated); err != nil {
 		return "", err
 	}
 	// Return success.
@@ -839,7 +839,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	defer objectMPartPathLock.Unlock()
 
 	// remove entry from uploads.json with quorum
-	if err = xl.updateUploadJSON(bucket, object, uploadIDChange{uploadID: uploadID, isRemove: true}); err != nil {
+	if err = xl.removeUploadID(bucket, object, uploadID); err != nil {
 		return "", toObjectErr(err, minioMetaMultipartBucket, path.Join(bucket, object))
 	}
 
@@ -865,7 +865,7 @@ func (xl xlObjects) abortMultipartUpload(bucket, object, uploadID string) (err e
 	defer objectMPartPathLock.Unlock()
 
 	// remove entry from uploads.json with quorum
-	if err = xl.updateUploadJSON(bucket, object, uploadIDChange{uploadID: uploadID, isRemove: true}); err != nil {
+	if err = xl.removeUploadID(bucket, object, uploadID); err != nil {
 		return toObjectErr(err, bucket, object)
 	}
 
