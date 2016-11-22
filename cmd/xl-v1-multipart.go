@@ -394,7 +394,8 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 
 	partSuffix := fmt.Sprintf("part.%d", partID)
 	tmpSuffix := getUUID()
-	tmpPartPath := tmpSuffix
+	tmpPart := tmpSuffix
+	tmpPartPath := path.Join(tmpSuffix, partSuffix)
 
 	// Initialize md5 writer.
 	md5Writer := md5.New()
@@ -424,7 +425,7 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	teeReader := io.TeeReader(lreader, mw)
 
 	// Delete the temporary object part. If PutObjectPart succeeds there would be nothing to delete.
-	defer xl.deleteObject(minioMetaTmpBucket, tmpPartPath)
+	defer xl.deleteObject(minioMetaTmpBucket, tmpPart)
 
 	if size > 0 {
 		for _, disk := range onlineDisks {
