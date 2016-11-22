@@ -369,6 +369,12 @@ func serverMain(c *cli.Context) {
 	// Check if requested port is available.
 	host, portStr, err := net.SplitHostPort(serverAddr)
 	fatalIf(err, "Unable to parse %s.", serverAddr)
+	if portStr == "0" || portStr == "" {
+		// Port zero or empty means use requested to choose any freely available
+		// port. Avoid this since it won't work with any configured clients,
+		// can lead to serious loss of availability.
+		fatalIf(errInvalidArgument, "Invalid port `%s`, please use `--address` to pick a specific port", portStr)
+	}
 	globalMinioHost = host
 
 	// Check if requested port is available.
