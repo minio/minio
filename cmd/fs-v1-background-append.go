@@ -178,7 +178,7 @@ func (b *backgroundAppend) appendParts(disk StorageAPI, bucket, object, uploadID
 // Appends the "part" to the append-file inside "tmp/" that finally gets moved to the actual location
 // upon complete-multipart-upload.
 func appendPart(disk StorageAPI, bucket, object, uploadID string, part objectPartInfo) error {
-	partPath := pathJoin(mpartMetaPrefix, bucket, object, uploadID, part.Name)
+	partPath := pathJoin(bucket, object, uploadID, part.Name)
 	appendFilePath := getFSAppendDataPath(uploadID)
 
 	offset := int64(0)
@@ -190,7 +190,7 @@ func appendPart(disk StorageAPI, bucket, object, uploadID string, part objectPar
 			curLeft = totalLeft
 		}
 		var n int64
-		n, err := disk.ReadFile(minioMetaBucket, partPath, offset, buf[:curLeft])
+		n, err := disk.ReadFile(minioMetaMultipartBucket, partPath, offset, buf[:curLeft])
 		if err != nil {
 			// Check for EOF/ErrUnexpectedEOF not needed as it should never happen as we know
 			// the exact size of the file and hence know the size of buf[]

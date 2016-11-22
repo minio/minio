@@ -69,9 +69,9 @@ func (u *uploadsV1) RemoveUploadID(uploadID string) {
 
 // readUploadsJSON - get all the saved uploads JSON.
 func readUploadsJSON(bucket, object string, disk StorageAPI) (uploadIDs uploadsV1, err error) {
-	uploadJSONPath := path.Join(mpartMetaPrefix, bucket, object, uploadsJSONFile)
+	uploadJSONPath := path.Join(bucket, object, uploadsJSONFile)
 	// Reads entire `uploads.json`.
-	buf, err := disk.ReadAll(minioMetaBucket, uploadJSONPath)
+	buf, err := disk.ReadAll(minioMetaMultipartBucket, uploadJSONPath)
 	if err != nil {
 		return uploadsV1{}, traceError(err)
 	}
@@ -116,7 +116,7 @@ func writeUploadJSON(u *uploadsV1, uploadsPath, tmpPath string, disk StorageAPI)
 	if wErr = disk.AppendFile(minioMetaTmpBucket, tmpPath, uplBytes); wErr != nil {
 		return traceError(wErr)
 	}
-	wErr = disk.RenameFile(minioMetaTmpBucket, tmpPath, minioMetaBucket, uploadsPath)
+	wErr = disk.RenameFile(minioMetaTmpBucket, tmpPath, minioMetaMultipartBucket, uploadsPath)
 	if wErr != nil {
 		if dErr := disk.DeleteFile(minioMetaTmpBucket, tmpPath); dErr != nil {
 			// we return the most recent error.
@@ -133,7 +133,7 @@ func cleanupUploadedParts(bucket, object, uploadID string, storageDisks ...Stora
 	var wg = &sync.WaitGroup{}
 
 	// Construct uploadIDPath.
-	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID)
+	uploadIDPath := path.Join(bucket, object, uploadID)
 
 	// Cleanup uploadID for all disks.
 	for index, disk := range storageDisks {
@@ -145,7 +145,7 @@ func cleanupUploadedParts(bucket, object, uploadID string, storageDisks ...Stora
 		// Cleanup each uploadID in a routine.
 		go func(index int, disk StorageAPI) {
 			defer wg.Done()
-			err := cleanupDir(disk, minioMetaBucket, uploadIDPath)
+			err := cleanupDir(disk, minioMetaMultipartBucket, uploadIDPath)
 			if err != nil {
 				errs[index] = err
 				return

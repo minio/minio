@@ -33,6 +33,8 @@ const (
 	minioMetaBucket = ".minio.sys"
 	// Multipart meta prefix.
 	mpartMetaPrefix = "multipart"
+	// Minio Multipart meta prefix.
+	minioMetaMultipartBucket = minioMetaBucket + "/" + mpartMetaPrefix
 	// Minio Tmp meta prefix.
 	minioMetaTmpBucket = minioMetaBucket + "/tmp"
 )

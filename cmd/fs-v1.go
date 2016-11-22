@@ -189,7 +189,7 @@ func (fs fsObjects) DeleteBucket(bucket string) error {
 		return toObjectErr(traceError(err), bucket)
 	}
 	// Cleanup all the previously incomplete multiparts.
-	if err := cleanupDir(fs.storage, path.Join(minioMetaBucket, mpartMetaPrefix), bucket); err != nil && errorCause(err) != errVolumeNotFound {
+	if err := cleanupDir(fs.storage, minioMetaMultipartBucket, bucket); err != nil && errorCause(err) != errVolumeNotFound {
 		return toObjectErr(err, bucket)
 	}
 	return nil

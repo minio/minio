@@ -45,7 +45,7 @@ func (fs fsObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 	result.Delimiter = delimiter
 
 	// Not using path.Join() as it strips off the trailing '/'.
-	multipartPrefixPath := pathJoin(mpartMetaPrefix, bucket, prefix)
+	multipartPrefixPath := pathJoin(bucket, prefix)
 	if prefix == "" {
 		// Should have a trailing "/" if prefix is ""
 		// For ex. multipartPrefixPath should be "multipart/bucket/" if prefix is ""
@@ -53,14 +53,14 @@ func (fs fsObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 	}
 	multipartMarkerPath := ""
 	if keyMarker != "" {
-		multipartMarkerPath = pathJoin(mpartMetaPrefix, bucket, keyMarker)
+		multipartMarkerPath = pathJoin(bucket, keyMarker)
 	}
 	var uploads []uploadMetadata
 	var err error
 	var eof bool
 	if uploadIDMarker != "" {
-		keyMarkerLock := nsMutex.NewNSLock(minioMetaBucket,
-			pathJoin(mpartMetaPrefix, bucket, keyMarker))
+		keyMarkerLock := nsMutex.NewNSLock(minioMetaMultipartBucket,
+			pathJoin(bucket, keyMarker))
 		keyMarkerLock.RLock()
 		uploads, _, err = listMultipartUploadIDs(bucket, keyMarker, uploadIDMarker, maxUploads, fs.storage)
 		keyMarkerLock.RUnlock()
@@ -73,12 +73,12 @@ func (fs fsObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 	var endWalkCh chan struct{}
 	heal := false // true only for xl.ListObjectsHeal()
 	if maxUploads > 0 {
-		walkResultCh, endWalkCh = fs.listPool.Release(listParams{minioMetaBucket, recursive, multipartMarkerPath, multipartPrefixPath, heal})
+		walkResultCh, endWalkCh = fs.listPool.Release(listParams{minioMetaMultipartBucket, recursive, multipartMarkerPath, multipartPrefixPath, heal})
 		if walkResultCh == nil {
 			endWalkCh = make(chan struct{})
 			isLeaf := fs.isMultipartUpload
 			listDir := listDirFactory(isLeaf, fsTreeWalkIgnoredErrs, fs.storage)
-			walkResultCh = startTreeWalk(minioMetaBucket, multipartPrefixPath, multipartMarkerPath, recursive, listDir, isLeaf, endWalkCh)
+			walkResultCh = startTreeWalk(minioMetaMultipartBucket, multipartPrefixPath, multipartMarkerPath, recursive, listDir, isLeaf, endWalkCh)
 		}
 		for maxUploads > 0 {
 			walkResult, ok := <-walkResultCh
@@ -96,7 +96,7 @@ func (fs fsObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 				}
 				return ListMultipartsInfo{}, walkResult.err
 			}
-			entry := strings.TrimPrefix(walkResult.entry, retainSlash(pathJoin(mpartMetaPrefix, bucket)))
+			entry := strings.TrimPrefix(walkResult.entry, retainSlash(bucket))
 			if strings.HasSuffix(walkResult.entry, slashSeparator) {
 				uploads = append(uploads, uploadMetadata{
 					Object: entry,
@@ -114,8 +114,8 @@ func (fs fsObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 			var end bool
 			uploadIDMarker = ""
 
-			entryLock := nsMutex.NewNSLock(minioMetaBucket,
-				pathJoin(mpartMetaPrefix, bucket, entry))
+			entryLock := nsMutex.NewNSLock(minioMetaMultipartBucket,
+				pathJoin(bucket, entry))
 			entryLock.RLock()
 			tmpUploads, end, err = listMultipartUploadIDs(bucket, entry, uploadIDMarker, maxUploads, fs.storage)
 			entryLock.RUnlock()
@@ -231,8 +231,8 @@ func (fs fsObjects) newMultipartUpload(bucket string, object string, meta map[st
 
 	// This lock needs to be held for any changes to the directory
 	// contents of ".minio.sys/multipart/object/"
-	objectMPartPathLock := nsMutex.NewNSLock(minioMetaBucket,
-		pathJoin(mpartMetaPrefix, bucket, object))
+	objectMPartPathLock := nsMutex.NewNSLock(minioMetaMultipartBucket,
+		pathJoin(bucket, object))
 	objectMPartPathLock.Lock()
 	defer objectMPartPathLock.Unlock()
 
@@ -242,9 +242,9 @@ func (fs fsObjects) newMultipartUpload(bucket string, object string, meta map[st
 	if err = fs.updateUploadJSON(bucket, object, uploadIDChange{uploadID, initiated, false}); err != nil {
 		return "", err
 	}
-	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID)
-	if err = writeFSMetadata(fs.storage, minioMetaBucket, path.Join(uploadIDPath, fsMetaJSONFile), fsMeta); err != nil {
-		return "", toObjectErr(err, minioMetaBucket, uploadIDPath)
+	uploadIDPath := path.Join(bucket, object, uploadID)
+	if err = writeFSMetadata(fs.storage, minioMetaMultipartBucket, path.Join(uploadIDPath, fsMetaJSONFile), fsMeta); err != nil {
+		return "", toObjectErr(err, minioMetaMultipartBucket, uploadIDPath)
 	}
 	// Return success.
 	return uploadID, nil
@@ -307,9 +307,9 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 		return "", traceError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
 
-	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID)
+	uploadIDPath := path.Join(bucket, object, uploadID)
 
-	preUploadIDLock := nsMutex.NewNSLock(minioMetaBucket, uploadIDPath)
+	preUploadIDLock := nsMutex.NewNSLock(minioMetaMultipartBucket, uploadIDPath)
 	preUploadIDLock.RLock()
 	// Just check if the uploadID exists to avoid copy if it doesn't.
 	uploadIDExists := fs.isUploadIDExists(bucket, object, uploadID)
@@ -389,7 +389,7 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	}
 
 	// Hold write lock as we are updating fs.json
-	postUploadIDLock := nsMutex.NewNSLock(minioMetaBucket, uploadIDPath)
+	postUploadIDLock := nsMutex.NewNSLock(minioMetaMultipartBucket, uploadIDPath)
 	postUploadIDLock.Lock()
 	defer postUploadIDLock.Unlock()
 
@@ -399,20 +399,20 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	}
 
 	fsMetaPath := pathJoin(uploadIDPath, fsMetaJSONFile)
-	fsMeta, err := readFSMetadata(fs.storage, minioMetaBucket, fsMetaPath)
+	fsMeta, err := readFSMetadata(fs.storage, minioMetaMultipartBucket, fsMetaPath)
 	if err != nil {
-		return "", toObjectErr(err, minioMetaBucket, fsMetaPath)
+		return "", toObjectErr(err, minioMetaMultipartBucket, fsMetaPath)
 	}
 	fsMeta.AddObjectPart(partID, partSuffix, newMD5Hex, size)
 
-	partPath := path.Join(mpartMetaPrefix, bucket, object, uploadID, partSuffix)
-	err = fs.storage.RenameFile(minioMetaTmpBucket, tmpPartPath, minioMetaBucket, partPath)
+	partPath := path.Join(bucket, object, uploadID, partSuffix)
+	err = fs.storage.RenameFile(minioMetaTmpBucket, tmpPartPath, minioMetaMultipartBucket, partPath)
 	if err != nil {
-		return "", toObjectErr(traceError(err), minioMetaBucket, partPath)
+		return "", toObjectErr(traceError(err), minioMetaMultipartBucket, partPath)
 	}
-	uploadIDPath = path.Join(mpartMetaPrefix, bucket, object, uploadID)
-	if err = writeFSMetadata(fs.storage, minioMetaBucket, path.Join(uploadIDPath, fsMetaJSONFile), fsMeta); err != nil {
-		return "", toObjectErr(err, minioMetaBucket, uploadIDPath)
+	uploadIDPath = path.Join(bucket, object, uploadID)
+	if err = writeFSMetadata(fs.storage, minioMetaMultipartBucket, path.Join(uploadIDPath, fsMetaJSONFile), fsMeta); err != nil {
+		return "", toObjectErr(err, minioMetaMultipartBucket, uploadIDPath)
 	}
 
 	// Append the part in background.
@@ -427,8 +427,8 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 func (fs fsObjects) listObjectParts(bucket, object, uploadID string, partNumberMarker, maxParts int) (ListPartsInfo, error) {
 	result := ListPartsInfo{}
 
-	fsMetaPath := path.Join(mpartMetaPrefix, bucket, object, uploadID, fsMetaJSONFile)
-	fsMeta, err := readFSMetadata(fs.storage, minioMetaBucket, fsMetaPath)
+	fsMetaPath := path.Join(bucket, object, uploadID, fsMetaJSONFile)
+	fsMeta, err := readFSMetadata(fs.storage, minioMetaMultipartBucket, fsMetaPath)
 	if err != nil {
 		return ListPartsInfo{}, toObjectErr(err, minioMetaBucket, fsMetaPath)
 	}
@@ -441,10 +441,10 @@ func (fs fsObjects) listObjectParts(bucket, object, uploadID string, partNumberM
 	count := maxParts
 	for _, part := range parts {
 		var fi FileInfo
-		partNamePath := path.Join(mpartMetaPrefix, bucket, object, uploadID, part.Name)
-		fi, err = fs.storage.StatFile(minioMetaBucket, partNamePath)
+		partNamePath := path.Join(bucket, object, uploadID, part.Name)
+		fi, err = fs.storage.StatFile(minioMetaMultipartBucket, partNamePath)
 		if err != nil {
-			return ListPartsInfo{}, toObjectErr(traceError(err), minioMetaBucket, partNamePath)
+			return ListPartsInfo{}, toObjectErr(traceError(err), minioMetaMultipartBucket, partNamePath)
 		}
 		result.Parts = append(result.Parts, partInfo{
 			PartNumber:   part.Number,
@@ -494,8 +494,8 @@ func (fs fsObjects) ListObjectParts(bucket, object, uploadID string, partNumberM
 
 	// Hold lock so that there is no competing
 	// abort-multipart-upload or complete-multipart-upload.
-	uploadIDLock := nsMutex.NewNSLock(minioMetaBucket,
-		pathJoin(mpartMetaPrefix, bucket, object, uploadID))
+	uploadIDLock := nsMutex.NewNSLock(minioMetaMultipartBucket,
+		pathJoin(bucket, object, uploadID))
 	uploadIDLock.Lock()
 	defer uploadIDLock.Unlock()
 
@@ -539,13 +539,13 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 		})
 	}
 
-	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID)
+	uploadIDPath := path.Join(bucket, object, uploadID)
 
 	// Hold lock so that
 	// 1) no one aborts this multipart upload
 	// 2) no one does a parallel complete-multipart-upload on this
 	// multipart upload
-	uploadIDLock := nsMutex.NewNSLock(minioMetaBucket, uploadIDPath)
+	uploadIDLock := nsMutex.NewNSLock(minioMetaMultipartBucket, uploadIDPath)
 	uploadIDLock.Lock()
 	defer uploadIDLock.Unlock()
 
@@ -561,9 +561,9 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 
 	// Read saved fs metadata for ongoing multipart.
 	fsMetaPath := pathJoin(uploadIDPath, fsMetaJSONFile)
-	fsMeta, err := readFSMetadata(fs.storage, minioMetaBucket, fsMetaPath)
+	fsMeta, err := readFSMetadata(fs.storage, minioMetaMultipartBucket, fsMetaPath)
 	if err != nil {
-		return "", toObjectErr(err, minioMetaBucket, fsMetaPath)
+		return "", toObjectErr(err, minioMetaMultipartBucket, fsMetaPath)
 	}
 
 	appendFallback := true // In case background appendRoutine() did not append the required parts.
@@ -617,7 +617,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 			}
 			// Construct part suffix.
 			partSuffix := fmt.Sprintf("object%d", part.PartNumber)
-			multipartPartFile := path.Join(mpartMetaPrefix, bucket, object, uploadID, partSuffix)
+			multipartPartFile := path.Join(bucket, object, uploadID, partSuffix)
 			offset := int64(0)
 			totalLeft := fsMeta.Parts[partIdx].Size
 			for totalLeft > 0 {
@@ -626,7 +626,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 					curLeft = totalLeft
 				}
 				var n int64
-				n, err = fs.storage.ReadFile(minioMetaBucket, multipartPartFile, offset, buf[:curLeft])
+				n, err = fs.storage.ReadFile(minioMetaMultipartBucket, multipartPartFile, offset, buf[:curLeft])
 				if n > 0 {
 					if err = fs.storage.AppendFile(minioMetaTmpBucket, tempObj, buf[:n]); err != nil {
 						return "", toObjectErr(traceError(err), minioMetaTmpBucket, tempObj)
@@ -639,7 +639,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 					if err == errFileNotFound {
 						return "", traceError(InvalidPart{})
 					}
-					return "", toObjectErr(traceError(err), minioMetaBucket, multipartPartFile)
+					return "", toObjectErr(traceError(err), minioMetaMultipartBucket, multipartPartFile)
 				}
 				offset += n
 				totalLeft -= n
@@ -679,14 +679,14 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	// Hold the lock so that two parallel
 	// complete-multipart-uploads do not leave a stale
 	// uploads.json behind.
-	objectMPartPathLock := nsMutex.NewNSLock(minioMetaBucket,
-		pathJoin(mpartMetaPrefix, bucket, object))
+	objectMPartPathLock := nsMutex.NewNSLock(minioMetaMultipartBucket,
+		pathJoin(bucket, object))
 	objectMPartPathLock.Lock()
 	defer objectMPartPathLock.Unlock()
 
 	// remove entry from uploads.json
 	if err = fs.updateUploadJSON(bucket, object, uploadIDChange{uploadID: uploadID, isRemove: true}); err != nil {
-		return "", toObjectErr(err, minioMetaBucket, path.Join(mpartMetaPrefix, bucket, object))
+		return "", toObjectErr(err, minioMetaMultipartBucket, path.Join(bucket, object))
 	}
 
 	// Return md5sum.
@@ -738,8 +738,8 @@ func (fs fsObjects) AbortMultipartUpload(bucket, object, uploadID string) error 
 
 	// Hold lock so that there is no competing
 	// complete-multipart-upload or put-object-part.
-	uploadIDLock := nsMutex.NewNSLock(minioMetaBucket,
-		pathJoin(mpartMetaPrefix, bucket, object, uploadID))
+	uploadIDLock := nsMutex.NewNSLock(minioMetaMultipartBucket,
+		pathJoin(bucket, object, uploadID))
 	uploadIDLock.Lock()
 	defer uploadIDLock.Unlock()
 

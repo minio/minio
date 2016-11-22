@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"path"
 	"sort"
 	"sync"
 )
@@ -271,7 +270,7 @@ func (xl xlObjects) DeleteBucket(bucket string) error {
 				return
 			}
 			// Cleanup all the previously incomplete multiparts.
-			err = cleanupDir(disk, path.Join(minioMetaBucket, mpartMetaPrefix), bucket)
+			err = cleanupDir(disk, minioMetaMultipartBucket, bucket)
 			if err != nil {
 				if errorCause(err) == errVolumeNotFound {
 					return
