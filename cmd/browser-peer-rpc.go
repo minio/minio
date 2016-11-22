@@ -25,7 +25,7 @@ import (
 // Login handler implements JWT login token generator, which upon login request
 // along with username and password is generated.
 func (br *browserPeerAPIHandlers) LoginHandler(args *RPCLoginArgs, reply *RPCLoginReply) error {
-	jwt, err := newJWT(defaultInterNodeJWTExpiry)
+	jwt, err := newJWT(defaultInterNodeJWTExpiry, serverConfig.GetCredential())
 	if err != nil {
 		return err
 	}

@@ -19,7 +19,7 @@ package cmd
 import "time"
 
 func (s3 *s3PeerAPIHandlers) LoginHandler(args *RPCLoginArgs, reply *RPCLoginReply) error {
-	jwt, err := newJWT(defaultInterNodeJWTExpiry)
+	jwt, err := newJWT(defaultInterNodeJWTExpiry, serverConfig.GetCredential())
 	if err != nil {
 		return err
 	}

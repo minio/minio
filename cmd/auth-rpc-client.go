@@ -65,7 +65,7 @@ type RPCLoginReply struct {
 
 // Validates if incoming token is valid.
 func isRPCTokenValid(tokenStr string) bool {
-	jwt, err := newJWT(defaultInterNodeJWTExpiry)
+	jwt, err := newJWT(defaultInterNodeJWTExpiry, serverConfig.GetCredential())
 	if err != nil {
 		errorIf(err, "Unable to initialize JWT")
 		return false

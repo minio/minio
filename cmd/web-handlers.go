@@ -19,6 +19,7 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -41,7 +42,7 @@ import (
 // isJWTReqAuthenticated validates if any incoming request to be a
 // valid JWT authenticated request.
 func isJWTReqAuthenticated(req *http.Request) bool {
-	jwt, err := newJWT(defaultJWTExpiry)
+	jwt, err := newJWT(defaultJWTExpiry, serverConfig.GetCredential())
 	if err != nil {
 		errorIf(err, "unable to initialize a new JWT")
 		return false
@@ -85,7 +86,7 @@ type ServerInfoRep struct {
 // ServerInfo - get server info.
 func (web *webAPIHandlers) ServerInfo(r *http.Request, args *WebGenericArgs, reply *ServerInfoRep) error {
 	if !isJWTReqAuthenticated(r) {
-		return &json2.Error{Message: errAuthentication.Error()}
+		return toJSONError(errAuthentication)
 	}
 	host, err := os.Hostname()
 	if err != nil {
@@ -123,10 +124,10 @@ type StorageInfoRep struct {
 func (web *webAPIHandlers) StorageInfo(r *http.Request, args *GenericArgs, reply *StorageInfoRep) error {
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
-		return &json2.Error{Message: errServerNotInitialized.Error()}
+		return toJSONError(errServerNotInitialized)
 	}
 	if !isJWTReqAuthenticated(r) {
-		return &json2.Error{Message: errAuthentication.Error()}
+		return toJSONError(errAuthentication)
 	}
 	reply.StorageInfo = objectAPI.StorageInfo()
 	reply.UIVersion = miniobrowser.UIVersion
@@ -142,13 +143,13 @@ type MakeBucketArgs struct {
 func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, reply *WebGenericRep) error {
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
-		return &json2.Error{Message: errServerNotInitialized.Error()}
+		return toJSONError(errServerNotInitialized)
 	}
 	if !isJWTReqAuthenticated(r) {
-		return &json2.Error{Message: errAuthentication.Error()}
+		return toJSONError(errAuthentication)
 	}
 	if err := objectAPI.MakeBucket(args.BucketName); err != nil {
-		return &json2.Error{Message: err.Error()}
+		return toJSONError(err, args.BucketName)
 	}
 	reply.UIVersion = miniobrowser.UIVersion
 	return nil
@@ -172,14 +173,14 @@ type WebBucketInfo struct {
 func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, reply *ListBucketsRep) error {
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
-		return &json2.Error{Message: errServerNotInitialized.Error()}
+		return toJSONError(errServerNotInitialized)
 	}
 	if !isJWTReqAuthenticated(r) {
-		return &json2.Error{Message: errAuthentication.Error()}
+		return toJSONError(errAuthentication)
 	}
 	buckets, err := objectAPI.ListBuckets()
 	if err != nil {
-		return &json2.Error{Message: err.Error()}
+		return toJSONError(err)
 	}
 	for _, bucket := range buckets {
 		// List all buckets which are not private.
@@ -222,12 +223,12 @@ type WebObjectInfo struct {
 func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, reply *ListObjectsRep) error {
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
-		return &json2.Error{Message: errServerNotInitialized.Error()}
+		return toJSONError(errServerNotInitialized)
+	}
+	if !isJWTReqAuthenticated(r) {
+		return toJSONError(errAuthentication)
 	}
 	marker := ""
-	if !isJWTReqAuthenticated(r) {
-		return &json2.Error{Message: errAuthentication.Error()}
-	}
 	for {
 		lo, err := objectAPI.ListObjects(args.BucketName, args.Prefix, marker, "/", 1000)
 		if err != nil {
@@ -266,10 +267,10 @@ type RemoveObjectArgs struct {
 func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs, reply *WebGenericRep) error {
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
-		return &json2.Error{Message: errServerNotInitialized.Error()}
+		return toJSONError(errServerNotInitialized)
 	}
 	if !isJWTReqAuthenticated(r) {
-		return &json2.Error{Message: errAuthentication.Error()}
+		return toJSONError(errAuthentication)
 	}
 	if err := objectAPI.DeleteObject(args.BucketName, args.ObjectName); err != nil {
 		if isErrObjectNotFound(err) {
@@ -277,7 +278,7 @@ func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs,
 			reply.UIVersion = miniobrowser.UIVersion
 			return nil
 		}
-		return &json2.Error{Message: err.Error()}
+		return toJSONError(err, args.BucketName, args.ObjectName)
 	}
 
 	// Notify object deleted event.
@@ -310,18 +311,18 @@ type LoginRep struct {
 
 // Login - user login handler.
 func (web *webAPIHandlers) Login(r *http.Request, args *LoginArgs, reply *LoginRep) error {
-	jwt, err := newJWT(defaultJWTExpiry)
+	jwt, err := newJWT(defaultJWTExpiry, serverConfig.GetCredential())
 	if err != nil {
-		return &json2.Error{Message: err.Error()}
+		return toJSONError(err)
 	}
 
 	if err = jwt.Authenticate(args.Username, args.Password); err != nil {
-		return &json2.Error{Message: err.Error()}
+		return toJSONError(err)
 	}
 
 	token, err := jwt.GenerateToken(args.Username)
 	if err != nil {
-		return &json2.Error{Message: err.Error()}
+		return toJSONError(err)
 	}
 	reply.Token = token
 	reply.UIVersion = miniobrowser.UIVersion
@@ -337,7 +338,7 @@ type GenerateAuthReply struct {
 
 func (web webAPIHandlers) GenerateAuth(r *http.Request, args *WebGenericArgs, reply *GenerateAuthReply) error {
 	if !isJWTReqAuthenticated(r) {
-		return &json2.Error{Message: errAuthentication.Error()}
+		return toJSONError(errAuthentication)
 	}
 	cred := mustGenAccessKeys()
 	reply.AccessKey = cred.AccessKeyID
@@ -362,34 +363,46 @@ type SetAuthReply struct {
 // SetAuth - Set accessKey and secretKey credentials.
 func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *SetAuthReply) error {
 	if !isJWTReqAuthenticated(r) {
-		return &json2.Error{Message: errAuthentication.Error()}
+		return toJSONError(errAuthentication)
 	}
-	if !isValidAccessKey(args.AccessKey) {
-		return &json2.Error{Message: errInvalidAccessKeyLength.Error()}
+
+	// Initialize jwt with the new access keys, fail if not possible.
+	jwt, err := newJWT(defaultJWTExpiry, credential{
+		AccessKeyID:     args.AccessKey,
+		SecretAccessKey: args.SecretKey,
+	}) // JWT Expiry set to 24Hrs.
+	if err != nil {
+		return toJSONError(err)
 	}
-	if !isValidSecretKey(args.SecretKey) {
-		return &json2.Error{Message: errInvalidSecretKeyLength.Error()}
+
+	// Authenticate the secret key properly.
+	if err = jwt.Authenticate(args.AccessKey, args.SecretKey); err != nil {
+		return toJSONError(err)
+
+	}
+
+	unexpErrsMsg := "Unexpected error(s) occurred - please check minio server logs."
+	gaveUpMsg := func(errMsg error, moreErrors bool) *json2.Error {
+		msg := fmt.Sprintf(
+			"We gave up due to: '%s', but there were more errors. Please check minio server logs.",
+			errMsg.Error(),
+		)
+		var err *json2.Error
+		if moreErrors {
+			err = toJSONError(errors.New(msg))
+		} else {
+			err = toJSONError(errMsg)
+		}
+		return err
 	}
 
 	cred := credential{args.AccessKey, args.SecretKey}
-	unexpErrsMsg := "ALERT: Unexpected error(s) happened - please check the server logs."
-	gaveUpMsg := func(errMsg error, moreErrors bool) *json2.Error {
-		msg := fmt.Sprintf(
-			"ALERT: We gave up due to: '%s', but there were more errors. Please check the server logs.",
-			errMsg.Error(),
-		)
-		if moreErrors {
-			return &json2.Error{Message: msg}
-		}
-		return &json2.Error{Message: errMsg.Error()}
-	}
-
 	// Notify all other Minio peers to update credentials
 	errsMap := updateCredsOnPeers(cred)
 
 	// Update local credentials
 	serverConfig.SetCredential(cred)
-	if err := serverConfig.Save(); err != nil {
+	if err = serverConfig.Save(); err != nil {
 		errsMap[globalMinioAddr] = err
 	}
 
@@ -407,7 +420,7 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 		// Since the error message may be very long to display
 		// on the browser, we tell the user to check the
 		// server logs.
-		return &json2.Error{Message: unexpErrsMsg}
+		return toJSONError(errors.New(unexpErrsMsg))
 	}
 
 	// Did we have peer errors?
@@ -416,16 +429,7 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 		moreErrors = true
 	}
 
-	// If we were able to update locally, we try to generate a new
-	// token and complete the request.
-	jwt, err := newJWT(defaultJWTExpiry) // JWT Expiry set to 24Hrs.
-	if err != nil {
-		return gaveUpMsg(err, moreErrors)
-	}
-
-	if err = jwt.Authenticate(args.AccessKey, args.SecretKey); err != nil {
-		return gaveUpMsg(err, moreErrors)
-	}
+	// Generate a JWT token.
 	token, err := jwt.GenerateToken(args.AccessKey)
 	if err != nil {
 		return gaveUpMsg(err, moreErrors)
@@ -446,7 +450,7 @@ type GetAuthReply struct {
 // GetAuth - return accessKey and secretKey credentials.
 func (web *webAPIHandlers) GetAuth(r *http.Request, args *WebGenericArgs, reply *GetAuthReply) error {
 	if !isJWTReqAuthenticated(r) {
-		return &json2.Error{Message: errAuthentication.Error()}
+		return toJSONError(errAuthentication)
 	}
 	creds := serverConfig.GetCredential()
 	reply.AccessKey = creds.AccessKeyID
@@ -511,7 +515,7 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	object := vars["object"]
 	tokenStr := r.URL.Query().Get("token")
 
-	jwt, err := newJWT(defaultJWTExpiry) // Expiry set to 24Hrs.
+	jwt, err := newJWT(defaultJWTExpiry, serverConfig.GetCredential()) // Expiry set to 24Hrs.
 	if err != nil {
 		errorIf(err, "error in getting new JWT")
 		return
@@ -541,50 +545,6 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 		/// No need to print error, response writer already written to.
 		return
 	}
-}
-
-// writeWebErrorResponse - set HTTP status code and write error description to the body.
-func writeWebErrorResponse(w http.ResponseWriter, err error) {
-	if err == errAuthentication {
-		w.WriteHeader(http.StatusForbidden)
-		w.Write([]byte(err.Error()))
-		return
-	}
-	if err == errServerNotInitialized {
-		w.WriteHeader(http.StatusServiceUnavailable)
-		w.Write([]byte(err.Error()))
-		return
-	}
-
-	// Convert error type to api error code.
-	var apiErrCode APIErrorCode
-	switch err.(type) {
-	case StorageFull:
-		apiErrCode = ErrStorageFull
-	case BucketNotFound:
-		apiErrCode = ErrNoSuchBucket
-	case BucketNameInvalid:
-		apiErrCode = ErrInvalidBucketName
-	case BadDigest:
-		apiErrCode = ErrBadDigest
-	case IncompleteBody:
-		apiErrCode = ErrIncompleteBody
-	case ObjectExistsAsDirectory:
-		apiErrCode = ErrObjectExistsAsDirectory
-	case ObjectNotFound:
-		apiErrCode = ErrNoSuchKey
-	case ObjectNameInvalid:
-		apiErrCode = ErrNoSuchKey
-	case InsufficientWriteQuorum:
-		apiErrCode = ErrWriteQuorum
-	case InsufficientReadQuorum:
-		apiErrCode = ErrReadQuorum
-	default:
-		apiErrCode = ErrInternalError
-	}
-	apiErr := getAPIError(apiErrCode)
-	w.WriteHeader(apiErr.HTTPStatusCode)
-	w.Write([]byte(apiErr.Description))
 }
 
 // GetBucketPolicyArgs - get bucket policy args.
@@ -627,16 +587,16 @@ func readBucketAccessPolicy(objAPI ObjectLayer, bucketName string) (policy.Bucke
 func (web *webAPIHandlers) GetBucketPolicy(r *http.Request, args *GetBucketPolicyArgs, reply *GetBucketPolicyRep) error {
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
-		return &json2.Error{Message: errServerNotInitialized.Error()}
+		return toJSONError(errServerNotInitialized)
 	}
 
 	if !isJWTReqAuthenticated(r) {
-		return &json2.Error{Message: errAuthentication.Error()}
+		return toJSONError(errAuthentication)
 	}
 
 	policyInfo, err := readBucketAccessPolicy(objectAPI, args.BucketName)
 	if err != nil {
-		return &json2.Error{Message: err.Error()}
+		return toJSONError(err, args.BucketName)
 	}
 
 	reply.UIVersion = miniobrowser.UIVersion
@@ -666,16 +626,16 @@ type ListAllBucketPoliciesRep struct {
 func (web *webAPIHandlers) ListAllBucketPolicies(r *http.Request, args *ListAllBucketPoliciesArgs, reply *ListAllBucketPoliciesRep) error {
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
-		return &json2.Error{Message: errServerNotInitialized.Error()}
+		return toJSONError(errServerNotInitialized)
 	}
 
 	if !isJWTReqAuthenticated(r) {
-		return &json2.Error{Message: errAuthentication.Error()}
+		return toJSONError(errAuthentication)
 	}
 
 	policyInfo, err := readBucketAccessPolicy(objectAPI, args.BucketName)
 	if err != nil {
-		return &json2.Error{Message: err.Error()}
+		return toJSONError(err, args.BucketName)
 	}
 
 	reply.UIVersion = miniobrowser.UIVersion
@@ -699,33 +659,36 @@ type SetBucketPolicyArgs struct {
 func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolicyArgs, reply *WebGenericRep) error {
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
-		return &json2.Error{Message: errServerNotInitialized.Error()}
+		return toJSONError(errServerNotInitialized)
 	}
 
 	if !isJWTReqAuthenticated(r) {
-		return &json2.Error{Message: errAuthentication.Error()}
+		return toJSONError(errAuthentication)
 	}
 
 	bucketP := policy.BucketPolicy(args.Policy)
 	if !bucketP.IsValidBucketPolicy() {
-		return &json2.Error{Message: "Invalid policy type " + args.Policy}
+		return &json2.Error{
+			Message: "Invalid policy type " + args.Policy,
+		}
 	}
 
 	policyInfo, err := readBucketAccessPolicy(objectAPI, args.BucketName)
 	if err != nil {
-		return &json2.Error{Message: err.Error()}
+		return toJSONError(err, args.BucketName)
 	}
 	policyInfo.Statements = policy.SetPolicy(policyInfo.Statements, bucketP, args.BucketName, args.Prefix)
 	if len(policyInfo.Statements) == 0 {
-		if err = persistAndNotifyBucketPolicyChange(args.BucketName, policyChange{true, nil}, objectAPI); err != nil {
-			return &json2.Error{Message: err.Error()}
+		err = persistAndNotifyBucketPolicyChange(args.BucketName, policyChange{true, nil}, objectAPI)
+		if err != nil {
+			return toJSONError(err, args.BucketName)
 		}
 		reply.UIVersion = miniobrowser.UIVersion
 		return nil
 	}
 	data, err := json.Marshal(policyInfo)
 	if err != nil {
-		return &json2.Error{Message: err.Error()}
+		return toJSONError(err)
 	}
 
 	// Parse bucket policy.
@@ -733,18 +696,19 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 	err = parseBucketPolicy(bytes.NewReader(data), policy)
 	if err != nil {
 		errorIf(err, "Unable to parse bucket policy.")
-		return &json2.Error{Message: err.Error()}
+		return toJSONError(err)
 	}
 
 	// Parse check bucket policy.
 	if s3Error := checkBucketPolicyResources(args.BucketName, policy); s3Error != ErrNone {
-		return &json2.Error{Message: getAPIError(s3Error).Description}
+		apiErr := getAPIError(s3Error)
+		return toJSONError(errors.New(apiErr.Description), args.BucketName)
 	}
 
 	// TODO: update policy statements according to bucket name,
 	// prefix and policy arguments.
 	if err := persistAndNotifyBucketPolicyChange(args.BucketName, policyChange{false, policy}, objectAPI); err != nil {
-		return &json2.Error{Message: err.Error()}
+		return toJSONError(err, args.BucketName)
 	}
 	reply.UIVersion = miniobrowser.UIVersion
 	return nil
@@ -760,6 +724,9 @@ type PresignedGetArgs struct {
 
 	// Object name to be presigned.
 	ObjectName string `json:"object"`
+
+	// Expiry in seconds.
+	Expiry int64 `json:"expiry"`
 }
 
 // PresignedGetRep - presigned-get URL reply.
@@ -771,22 +738,22 @@ type PresignedGetRep struct {
 
 // PresignedGET - returns presigned-Get url.
 func (web *webAPIHandlers) PresignedGet(r *http.Request, args *PresignedGetArgs, reply *PresignedGetRep) error {
-	if web.ObjectAPI() == nil {
-		return &json2.Error{Message: errServerNotInitialized.Error()}
-	}
 	if !isJWTReqAuthenticated(r) {
-		return &json2.Error{Message: errAuthentication.Error()}
+		return toJSONError(errAuthentication)
 	}
+
 	if args.BucketName == "" || args.ObjectName == "" {
-		return &json2.Error{Message: "Bucket, Object are mandatory arguments."}
+		return &json2.Error{
+			Message: "Bucket and Object are mandatory arguments.",
+		}
 	}
 	reply.UIVersion = miniobrowser.UIVersion
-	reply.URL = presignedGet(args.HostName, args.BucketName, args.ObjectName)
+	reply.URL = presignedGet(args.HostName, args.BucketName, args.ObjectName, args.Expiry)
 	return nil
 }
 
 // Returns presigned url for GET method.
-func presignedGet(host, bucket, object string) string {
+func presignedGet(host, bucket, object string, expiry int64) string {
 	cred := serverConfig.GetCredential()
 	region := serverConfig.GetRegion()
 
@@ -797,11 +764,15 @@ func presignedGet(host, bucket, object string) string {
 	dateStr := date.Format(iso8601Format)
 	credential := fmt.Sprintf("%s/%s", accessKey, getScope(date, region))
 
+	var expiryStr = "604800" // Default set to be expire in 7days.
+	if expiry < 604800 && expiry > 0 {
+		expiryStr = strconv.FormatInt(expiry, 10)
+	}
 	query := strings.Join([]string{
 		"X-Amz-Algorithm=" + signV4Algorithm,
 		"X-Amz-Credential=" + strings.Replace(credential, "/", "%2F", -1),
 		"X-Amz-Date=" + dateStr,
-		"X-Amz-Expires=" + "604800", // Default set to be expire in 7days.
+		"X-Amz-Expires=" + expiryStr,
 		"X-Amz-SignedHeaders=host",
 	}, "&")
 
@@ -817,4 +788,94 @@ func presignedGet(host, bucket, object string) string {
 
 	// Construct the final presigned URL.
 	return host + path + "?" + query + "&" + "X-Amz-Signature=" + signature
+}
+
+// toJSONError converts regular errors into more user friendly
+// and consumable error message for the browser UI.
+func toJSONError(err error, params ...string) (jerr *json2.Error) {
+	apiErr := toWebAPIError(err)
+	jerr = &json2.Error{
+		Message: apiErr.Description,
+	}
+	switch apiErr.Code {
+	// Bucket name invalid with custom error message.
+	case "InvalidBucketName":
+		if len(params) > 0 {
+			jerr = &json2.Error{
+				Message: fmt.Sprintf("Bucket Name %s is invalid. Lowercase letters, period and numerals are the only allowed characters.",
+					params[0]),
+			}
+		}
+	// Bucket not found custom error message.
+	case "NoSuchBucket":
+		if len(params) > 0 {
+			jerr = &json2.Error{
+				Message: fmt.Sprintf("The specified bucket %s does not exist.", params[0]),
+			}
+		}
+	// Object not found custom error message.
+	case "NoSuchKey":
+		if len(params) > 1 {
+			jerr = &json2.Error{
+				Message: fmt.Sprintf("The specified key %s does not exist", params[1]),
+			}
+		}
+		// Add more custom error messages here with more context.
+	}
+	return jerr
+}
+
+// toWebAPIError - convert into error into APIError.
+func toWebAPIError(err error) APIError {
+	err = errorCause(err)
+	if err == errAuthentication {
+		return APIError{
+			Code:           "AccessDenied",
+			HTTPStatusCode: http.StatusForbidden,
+			Description:    err.Error(),
+		}
+	}
+	if err == errServerNotInitialized {
+		return APIError{
+			Code:           "XMinioServerNotInitialized",
+			HTTPStatusCode: http.StatusServiceUnavailable,
+			Description:    err.Error(),
+		}
+	}
+
+	// Convert error type to api error code.
+	var apiErrCode APIErrorCode
+	switch err.(type) {
+	case StorageFull:
+		apiErrCode = ErrStorageFull
+	case BucketNotFound:
+		apiErrCode = ErrNoSuchBucket
+	case BucketNameInvalid:
+		apiErrCode = ErrInvalidBucketName
+	case BadDigest:
+		apiErrCode = ErrBadDigest
+	case IncompleteBody:
+		apiErrCode = ErrIncompleteBody
+	case ObjectExistsAsDirectory:
+		apiErrCode = ErrObjectExistsAsDirectory
+	case ObjectNotFound:
+		apiErrCode = ErrNoSuchKey
+	case ObjectNameInvalid:
+		apiErrCode = ErrNoSuchKey
+	case InsufficientWriteQuorum:
+		apiErrCode = ErrWriteQuorum
+	case InsufficientReadQuorum:
+		apiErrCode = ErrReadQuorum
+	default:
+		apiErrCode = ErrInternalError
+	}
+	apiErr := getAPIError(apiErrCode)
+	return apiErr
+}
+
+// writeWebErrorResponse - set HTTP status code and write error description to the body.
+func writeWebErrorResponse(w http.ResponseWriter, err error) {
+	apiErr := toWebAPIError(err)
+	w.WriteHeader(apiErr.HTTPStatusCode)
+	w.Write([]byte(apiErr.Description))
 }
