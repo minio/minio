@@ -26,7 +26,7 @@ func genFormatXLValid() []*formatConfigV1 {
 	jbod := make([]string, 8)
 	formatConfigs := make([]*formatConfigV1, 8)
 	for index := range jbod {
-		jbod[index] = getUUID()
+		jbod[index] = mustGetUUID()
 	}
 	for index := range jbod {
 		formatConfigs[index] = &formatConfigV1{
@@ -47,7 +47,7 @@ func genFormatXLInvalidVersion() []*formatConfigV1 {
 	jbod := make([]string, 8)
 	formatConfigs := make([]*formatConfigV1, 8)
 	for index := range jbod {
-		jbod[index] = getUUID()
+		jbod[index] = mustGetUUID()
 	}
 	for index := range jbod {
 		formatConfigs[index] = &formatConfigV1{
@@ -71,7 +71,7 @@ func genFormatXLInvalidFormat() []*formatConfigV1 {
 	jbod := make([]string, 8)
 	formatConfigs := make([]*formatConfigV1, 8)
 	for index := range jbod {
-		jbod[index] = getUUID()
+		jbod[index] = mustGetUUID()
 	}
 	for index := range jbod {
 		formatConfigs[index] = &formatConfigV1{
@@ -95,7 +95,7 @@ func genFormatXLInvalidXLVersion() []*formatConfigV1 {
 	jbod := make([]string, 8)
 	formatConfigs := make([]*formatConfigV1, 8)
 	for index := range jbod {
-		jbod[index] = getUUID()
+		jbod[index] = mustGetUUID()
 	}
 	for index := range jbod {
 		formatConfigs[index] = &formatConfigV1{
@@ -126,7 +126,7 @@ func genFormatXLInvalidJBODCount() []*formatConfigV1 {
 	jbod := make([]string, 7)
 	formatConfigs := make([]*formatConfigV1, 8)
 	for index := range jbod {
-		jbod[index] = getUUID()
+		jbod[index] = mustGetUUID()
 	}
 	for index := range jbod {
 		formatConfigs[index] = &formatConfigV1{
@@ -147,7 +147,7 @@ func genFormatXLInvalidJBOD() []*formatConfigV1 {
 	jbod := make([]string, 8)
 	formatConfigs := make([]*formatConfigV1, 8)
 	for index := range jbod {
-		jbod[index] = getUUID()
+		jbod[index] = mustGetUUID()
 	}
 	for index := range jbod {
 		formatConfigs[index] = &formatConfigV1{
@@ -161,7 +161,7 @@ func genFormatXLInvalidJBOD() []*formatConfigV1 {
 		}
 	}
 	for index := range jbod {
-		jbod[index] = getUUID()
+		jbod[index] = mustGetUUID()
 	}
 	// Corrupt JBOD entries on disk 6 and disk 8.
 	formatConfigs[5].XL.JBOD = jbod
@@ -174,7 +174,7 @@ func genFormatXLInvalidDisks() []*formatConfigV1 {
 	jbod := make([]string, 8)
 	formatConfigs := make([]*formatConfigV1, 8)
 	for index := range jbod {
-		jbod[index] = getUUID()
+		jbod[index] = mustGetUUID()
 	}
 	for index := range jbod {
 		formatConfigs[index] = &formatConfigV1{
@@ -188,8 +188,8 @@ func genFormatXLInvalidDisks() []*formatConfigV1 {
 		}
 	}
 	// Make disk 5 and disk 8 have inconsistent disk uuid's.
-	formatConfigs[4].XL.Disk = getUUID()
-	formatConfigs[7].XL.Disk = getUUID()
+	formatConfigs[4].XL.Disk = mustGetUUID()
+	formatConfigs[7].XL.Disk = mustGetUUID()
 	return formatConfigs
 }
 
@@ -198,7 +198,7 @@ func genFormatXLInvalidDisksOrder() []*formatConfigV1 {
 	jbod := make([]string, 8)
 	formatConfigs := make([]*formatConfigV1, 8)
 	for index := range jbod {
-		jbod[index] = getUUID()
+		jbod[index] = mustGetUUID()
 	}
 	for index := range jbod {
 		formatConfigs[index] = &formatConfigV1{
@@ -559,7 +559,7 @@ func TestSavedUUIDOrder(t *testing.T) {
 	jbod := make([]string, 8)
 	formatConfigs := make([]*formatConfigV1, 8)
 	for index := range jbod {
-		jbod[index] = getUUID()
+		jbod[index] = mustGetUUID()
 		uuidTestCases[index].uuid = jbod[index]
 		uuidTestCases[index].shouldPass = true
 	}

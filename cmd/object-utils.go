@@ -127,18 +127,14 @@ func pathJoin(elem ...string) string {
 	return path.Join(elem...) + trailingSlash
 }
 
-// getUUID() - get a unique uuid.
-func getUUID() (uuidStr string) {
-	for {
-		uuid, err := uuid.New()
-		if err != nil {
-			errorIf(err, "Unable to initialize uuid")
-			continue
-		}
-		uuidStr = uuid.String()
-		break
+// mustGetUUID - get a random UUID.
+func mustGetUUID() string {
+	uuid, err := uuid.New()
+	if err != nil {
+		panic(fmt.Sprintf("Random UUID generation failed. Error: %s", err))
 	}
-	return uuidStr
+
+	return uuid.String()
 }
 
 // Create an s3 compatible MD5sum for complete multipart transaction.

@@ -236,7 +236,7 @@ func (fs fsObjects) newMultipartUpload(bucket string, object string, meta map[st
 	objectMPartPathLock.Lock()
 	defer objectMPartPathLock.Unlock()
 
-	uploadID = getUUID()
+	uploadID = mustGetUUID()
 	initiated := time.Now().UTC()
 	// Add upload ID to uploads.json
 	if err = fs.addUploadID(bucket, object, uploadID, initiated); err != nil {
@@ -319,7 +319,7 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	}
 
 	partSuffix := fmt.Sprintf("object%d", partID)
-	tmpPartPath := uploadID + "." + getUUID() + "." + partSuffix
+	tmpPartPath := uploadID + "." + mustGetUUID() + "." + partSuffix
 
 	// Initialize md5 writer.
 	md5Writer := md5.New()

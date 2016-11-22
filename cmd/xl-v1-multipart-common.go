@@ -25,7 +25,7 @@ import (
 // updateUploadJSON - add or remove upload ID info in all `uploads.json`.
 func (xl xlObjects) updateUploadJSON(bucket, object, uploadID string, initiated time.Time, isRemove bool) error {
 	uploadsPath := path.Join(bucket, object, uploadsJSONFile)
-	tmpUploadsPath := getUUID()
+	tmpUploadsPath := mustGetUUID()
 
 	// slice to store errors from disks
 	errs := make([]error, len(xl.storageDisks))

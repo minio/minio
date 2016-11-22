@@ -286,7 +286,7 @@ func (xl xlObjects) newMultipartUpload(bucket string, object string, meta map[st
 	objectMPartPathLock.Lock()
 	defer objectMPartPathLock.Unlock()
 
-	uploadID := getUUID()
+	uploadID := mustGetUUID()
 	uploadIDPath := path.Join(bucket, object, uploadID)
 	tempUploadIDPath := uploadID
 	// Write updated `xl.json` to all disks.
@@ -393,9 +393,8 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	// accommodate concurrent PutObjectPart requests
 
 	partSuffix := fmt.Sprintf("part.%d", partID)
-	tmpSuffix := getUUID()
-	tmpPart := tmpSuffix
-	tmpPartPath := path.Join(tmpSuffix, partSuffix)
+	tmpPart := mustGetUUID()
+	tmpPartPath := path.Join(tmpPart, partSuffix)
 
 	// Initialize md5 writer.
 	md5Writer := md5.New()
@@ -521,7 +520,7 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	}
 
 	// Write all the checksum metadata.
-	newUUID := getUUID()
+	newUUID := mustGetUUID()
 	tempXLMetaPath := newUUID
 
 	// Writes a unique `xl.json` each disk carrying new checksum related information.
@@ -798,7 +797,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	}()
 
 	// Rename if an object already exists to temporary location.
-	uniqueID := getUUID()
+	uniqueID := mustGetUUID()
 	if xl.isObject(bucket, object) {
 		// NOTE: Do not use online disks slice here.
 		// The reason is that existing object should be purged
