@@ -16,7 +16,10 @@
 
 package cmd
 
-import "path"
+import (
+	"path"
+	"time"
+)
 
 // Returns if the prefix is a multipart upload.
 func (fs fsObjects) isMultipartUpload(bucket, prefix string) bool {
@@ -52,11 +55,10 @@ func (fs fsObjects) isUploadIDExists(bucket, object, uploadID string) bool {
 	return true
 }
 
-// writeUploadJSON - create `uploads.json` or update it with new uploadID.
-func (fs fsObjects) updateUploadJSON(bucket, object string, uCh uploadIDChange) error {
+// updateUploadJSON - add or remove upload ID info in all `uploads.json`.
+func (fs fsObjects) updateUploadJSON(bucket, object, uploadID string, initiated time.Time, isRemove bool) error {
 	uploadsPath := path.Join(bucket, object, uploadsJSONFile)
-	uniqueID := getUUID()
-	tmpUploadsPath := uniqueID
+	tmpUploadsPath := getUUID()
 
 	uploadsJSON, err := readUploadsJSON(bucket, object, fs.storage)
 	if errorCause(err) == errFileNotFound {
@@ -69,12 +71,12 @@ func (fs fsObjects) updateUploadJSON(bucket, object string, uCh uploadIDChange) 
 	}
 
 	// update the uploadsJSON struct
-	if !uCh.isRemove {
+	if !isRemove {
 		// Add the uploadID
-		uploadsJSON.AddUploadID(uCh.uploadID, uCh.initiated)
+		uploadsJSON.AddUploadID(uploadID, initiated)
 	} else {
 		// Remove the upload ID
-		uploadsJSON.RemoveUploadID(uCh.uploadID)
+		uploadsJSON.RemoveUploadID(uploadID)
 	}
 
 	// update the file or delete it?
@@ -87,4 +89,14 @@ func (fs fsObjects) updateUploadJSON(bucket, object string, uCh uploadIDChange) 
 		}
 	}
 	return err
+}
+
+// addUploadID - add upload ID and its initiated time to 'uploads.json'.
+func (fs fsObjects) addUploadID(bucket, object string, uploadID string, initiated time.Time) error {
+	return fs.updateUploadJSON(bucket, object, uploadID, initiated, false)
+}
+
+// removeUploadID - remove upload ID in 'uploads.json'.
+func (fs fsObjects) removeUploadID(bucket, object string, uploadID string) error {
+	return fs.updateUploadJSON(bucket, object, uploadID, time.Time{}, true)
 }

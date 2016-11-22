@@ -238,8 +238,8 @@ func (fs fsObjects) newMultipartUpload(bucket string, object string, meta map[st
 
 	uploadID = getUUID()
 	initiated := time.Now().UTC()
-	// Create 'uploads.json'
-	if err = fs.updateUploadJSON(bucket, object, uploadIDChange{uploadID, initiated, false}); err != nil {
+	// Add upload ID to uploads.json
+	if err = fs.addUploadID(bucket, object, uploadID, initiated); err != nil {
 		return "", err
 	}
 	uploadIDPath := path.Join(bucket, object, uploadID)
@@ -685,7 +685,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	defer objectMPartPathLock.Unlock()
 
 	// remove entry from uploads.json
-	if err = fs.updateUploadJSON(bucket, object, uploadIDChange{uploadID: uploadID, isRemove: true}); err != nil {
+	if err := fs.removeUploadID(bucket, object, uploadID); err != nil {
 		return "", toObjectErr(err, minioMetaMultipartBucket, path.Join(bucket, object))
 	}
 
@@ -703,8 +703,9 @@ func (fs fsObjects) abortMultipartUpload(bucket, object, uploadID string) error 
 		return err
 	}
 	fs.bgAppend.remove(uploadID)
-	// remove entry from uploads.json with quorum
-	if err := fs.updateUploadJSON(bucket, object, uploadIDChange{uploadID: uploadID, isRemove: true}); err != nil {
+
+	// remove upload ID in uploads.json
+	if err := fs.removeUploadID(bucket, object, uploadID); err != nil {
 		return toObjectErr(err, bucket, object)
 	}
 
