@@ -40,13 +40,13 @@ func (fs fsObjects) isBucketExist(bucket string) bool {
 
 // isUploadIDExists - verify if a given uploadID exists and is valid.
 func (fs fsObjects) isUploadIDExists(bucket, object, uploadID string) bool {
-	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID)
-	_, err := fs.storage.StatFile(minioMetaBucket, path.Join(uploadIDPath, fsMetaJSONFile))
+	uploadIDPath := path.Join(bucket, object, uploadID)
+	_, err := fs.storage.StatFile(minioMetaMultipartBucket, path.Join(uploadIDPath, fsMetaJSONFile))
 	if err != nil {
 		if err == errFileNotFound {
 			return false
 		}
-		errorIf(err, "Unable to access upload id"+uploadIDPath)
+		errorIf(err, "Unable to access upload id "+pathJoin(minioMetaMultipartBucket, uploadIDPath))
 		return false
 	}
 	return true
@@ -54,7 +54,7 @@ func (fs fsObjects) isUploadIDExists(bucket, object, uploadID string) bool {
 
 // writeUploadJSON - create `uploads.json` or update it with new uploadID.
 func (fs fsObjects) updateUploadJSON(bucket, object string, uCh uploadIDChange) error {
-	uploadsPath := path.Join(mpartMetaPrefix, bucket, object, uploadsJSONFile)
+	uploadsPath := path.Join(bucket, object, uploadsJSONFile)
 	uniqueID := getUUID()
 	tmpUploadsPath := uniqueID
 
@@ -82,8 +82,8 @@ func (fs fsObjects) updateUploadJSON(bucket, object string, uCh uploadIDChange) 
 		err = writeUploadJSON(&uploadsJSON, uploadsPath, tmpUploadsPath, fs.storage)
 	} else {
 		// no uploads, so we delete the file.
-		if err = fs.storage.DeleteFile(minioMetaBucket, uploadsPath); err != nil {
-			return toObjectErr(traceError(err), minioMetaBucket, uploadsPath)
+		if err = fs.storage.DeleteFile(minioMetaMultipartBucket, uploadsPath); err != nil {
+			return toObjectErr(traceError(err), minioMetaMultipartBucket, uploadsPath)
 		}
 	}
 	return err

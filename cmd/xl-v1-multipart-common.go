@@ -24,7 +24,7 @@ import (
 // writeUploadJSON - create `uploads.json` or update it with change
 // described in uCh.
 func (xl xlObjects) updateUploadJSON(bucket, object string, uCh uploadIDChange) error {
-	uploadsPath := path.Join(mpartMetaPrefix, bucket, object, uploadsJSONFile)
+	uploadsPath := path.Join(bucket, object, uploadsJSONFile)
 	uniqueID := getUUID()
 	tmpUploadsPath := uniqueID
 
@@ -75,7 +75,7 @@ func (xl xlObjects) updateUploadJSON(bucket, object string, uCh uploadIDChange) 
 			if !isDelete[index] {
 				errs[index] = writeUploadJSON(&uploadsJSON, uploadsPath, tmpUploadsPath, disk)
 			} else {
-				wErr := disk.RenameFile(minioMetaBucket, uploadsPath, minioMetaTmpBucket, tmpUploadsPath)
+				wErr := disk.RenameFile(minioMetaMultipartBucket, uploadsPath, minioMetaTmpBucket, tmpUploadsPath)
 				if wErr != nil {
 					errs[index] = traceError(wErr)
 				}
@@ -110,13 +110,13 @@ func (xl xlObjects) updateUploadJSON(bucket, object string, uCh uploadIDChange) 
 				defer wg.Done()
 				if !isDelete[index] {
 					_ = disk.DeleteFile(
-						minioMetaBucket,
+						minioMetaMultipartBucket,
 						uploadsPath,
 					)
 				} else {
 					_ = disk.RenameFile(
 						minioMetaTmpBucket, tmpUploadsPath,
-						minioMetaBucket, uploadsPath,
+						minioMetaMultipartBucket, uploadsPath,
 					)
 				}
 			}(index, disk)
@@ -167,13 +167,13 @@ func (xl xlObjects) isMultipartUpload(bucket, prefix string) bool {
 
 // isUploadIDExists - verify if a given uploadID exists and is valid.
 func (xl xlObjects) isUploadIDExists(bucket, object, uploadID string) bool {
-	uploadIDPath := path.Join(mpartMetaPrefix, bucket, object, uploadID)
-	return xl.isObject(minioMetaBucket, uploadIDPath)
+	uploadIDPath := path.Join(bucket, object, uploadID)
+	return xl.isObject(minioMetaMultipartBucket, uploadIDPath)
 }
 
 // Removes part given by partName belonging to a mulitpart upload from minioMetaBucket
 func (xl xlObjects) removeObjectPart(bucket, object, uploadID, partName string) {
-	curpartPath := path.Join(mpartMetaPrefix, bucket, object, uploadID, partName)
+	curpartPath := path.Join(bucket, object, uploadID, partName)
 	wg := sync.WaitGroup{}
 	for i, disk := range xl.storageDisks {
 		if disk == nil {
@@ -185,7 +185,7 @@ func (xl xlObjects) removeObjectPart(bucket, object, uploadID, partName string) 
 			// Ignoring failure to remove parts that weren't present in CompleteMultipartUpload
 			// requests. xl.json is the authoritative source of truth on which parts constitute
 			// the object. The presence of parts that don't belong in the object doesn't affect correctness.
-			_ = disk.DeleteFile(minioMetaBucket, curpartPath)
+			_ = disk.DeleteFile(minioMetaMultipartBucket, curpartPath)
 		}(i, disk)
 	}
 	wg.Wait()
@@ -193,12 +193,12 @@ func (xl xlObjects) removeObjectPart(bucket, object, uploadID, partName string) 
 
 // statPart - returns fileInfo structure for a successful stat on part file.
 func (xl xlObjects) statPart(bucket, object, uploadID, partName string) (fileInfo FileInfo, err error) {
-	partNamePath := path.Join(mpartMetaPrefix, bucket, object, uploadID, partName)
+	partNamePath := path.Join(bucket, object, uploadID, partName)
 	for _, disk := range xl.getLoadBalancedDisks() {
 		if disk == nil {
 			continue
 		}
-		fileInfo, err = disk.StatFile(minioMetaBucket, partNamePath)
+		fileInfo, err = disk.StatFile(minioMetaMultipartBucket, partNamePath)
 		if err == nil {
 			return fileInfo, nil
 		}
