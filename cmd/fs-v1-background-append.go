@@ -49,9 +49,10 @@ type bgAppendPartsInput struct {
 
 // Identifies an appendParts go-routine.
 type bgAppendPartsInfo struct {
-	inputCh   chan bgAppendPartsInput
-	timeoutCh chan struct{} // closed by appendParts go-routine when it timesout
-	endCh     chan struct{} // closed after complete/abort of upload to end the appendParts go-routine
+	inputCh    chan bgAppendPartsInput
+	timeoutCh  chan struct{} // closed by appendParts go-routine when it timesout
+	abortCh    chan struct{} // closed after abort of upload to end the appendParts go-routine
+	completeCh chan struct{} // closed after complete of upload to end the appendParts go-routine
 }
 
 // Called after a part is uploaded so that it can be appended in the background.
@@ -63,9 +64,10 @@ func (b *backgroundAppend) append(disk StorageAPI, bucket, object, uploadID stri
 		// part of a multipart upload is uploaded.
 		inputCh := make(chan bgAppendPartsInput)
 		timeoutCh := make(chan struct{})
-		endCh := make(chan struct{})
+		abortCh := make(chan struct{})
+		completeCh := make(chan struct{})
 
-		info = bgAppendPartsInfo{inputCh, timeoutCh, endCh}
+		info = bgAppendPartsInfo{inputCh, timeoutCh, abortCh, completeCh}
 		b.infoMap[uploadID] = info
 
 		go b.appendParts(disk, bucket, object, uploadID, info)
@@ -92,6 +94,7 @@ func (b *backgroundAppend) append(disk StorageAPI, bucket, object, uploadID stri
 func (b *backgroundAppend) complete(disk StorageAPI, bucket, object, uploadID string, meta fsMetaV1) error {
 	b.Lock()
 	info, ok := b.infoMap[uploadID]
+	delete(b.infoMap, uploadID)
 	b.Unlock()
 	if !ok {
 		return errPartsMissing
@@ -106,13 +109,13 @@ func (b *backgroundAppend) complete(disk StorageAPI, bucket, object, uploadID st
 	}
 	err := <-errCh
 
-	b.remove(uploadID)
+	close(info.completeCh)
 
 	return err
 }
 
 // Called after complete-multipart-upload or abort-multipart-upload so that the appendParts go-routine is not left dangling.
-func (b *backgroundAppend) remove(uploadID string) {
+func (b *backgroundAppend) abort(uploadID string) {
 	b.Lock()
 	defer b.Unlock()
 	info, ok := b.infoMap[uploadID]
@@ -120,7 +123,7 @@ func (b *backgroundAppend) remove(uploadID string) {
 		return
 	}
 	delete(b.infoMap, uploadID)
-	close(info.endCh)
+	close(info.abortCh)
 }
 
 // This is run as a go-routine that appends the parts in the background.
@@ -155,9 +158,12 @@ func (b *backgroundAppend) appendParts(disk StorageAPI, bucket, object, uploadID
 				}
 				appendMeta.AddObjectPart(part.Number, part.Name, part.ETag, part.Size)
 			}
-		case <-info.endCh:
-			// Either complete-multipart-upload or abort-multipart-upload closed endCh to end the appendParts go-routine.
+		case <-info.abortCh:
+			// abort-multipart-upload closed abortCh to end the appendParts go-routine.
 			disk.DeleteFile(minioMetaTmpBucket, uploadID)
+			return
+		case <-info.completeCh:
+			// complete-multipart-upload closed completeCh to end the appendParts go-routine.
 			return
 		case <-time.After(appendPartsTimeout):
 			// Timeout the goroutine to garbage collect its resources. This would happen if the client initiates

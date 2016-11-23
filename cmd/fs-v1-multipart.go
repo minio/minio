@@ -696,9 +696,8 @@ func (fs fsObjects) abortMultipartUpload(bucket, object, uploadID string) error 
 	if err := cleanupUploadedParts(bucket, object, uploadID, fs.storage); err != nil {
 		return err
 	}
-	fs.bgAppend.remove(uploadID)
-
-	// remove upload ID in uploads.json
+	fs.bgAppend.abort(uploadID)
+	// remove entry from uploads.json with quorum
 	if err := fs.removeUploadID(bucket, object, uploadID); err != nil {
 		return toObjectErr(err, bucket, object)
 	}
