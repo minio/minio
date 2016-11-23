@@ -38,11 +38,9 @@ var log = struct {
 //
 //   - console [default]
 //   - file
-//   - syslog
 type logger struct {
 	Console consoleLogger `json:"console"`
 	File    fileLogger    `json:"file"`
-	Syslog  syslogLogger  `json:"syslog"`
 	// Add new loggers here.
 }
 

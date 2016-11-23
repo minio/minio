@@ -78,15 +78,6 @@ func TestServerConfig(t *testing.T) {
 		t.Errorf("Expecting file logger config %#v found %#v", fileLogger{Enable: true}, consoleCfg)
 	}
 
-	// Set new syslog logger.
-	serverConfig.SetSyslogLogger(syslogLogger{
-		Enable: true,
-	})
-	sysLogCfg := serverConfig.GetSyslogLogger()
-	if !reflect.DeepEqual(sysLogCfg, syslogLogger{Enable: true}) {
-		t.Errorf("Expecting syslog logger config %#v found %#v", syslogLogger{Enable: true}, sysLogCfg)
-	}
-
 	// Match version.
 	if serverConfig.GetVersion() != globalMinioConfigVersion {
 		t.Errorf("Expecting version %s found %s", serverConfig.GetVersion(), globalMinioConfigVersion)
