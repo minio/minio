@@ -401,17 +401,30 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	fsMeta.AddObjectPart(partID, partSuffix, newMD5Hex, size)
 
 	partPath := path.Join(bucket, object, uploadID, partSuffix)
+	// Lock the part so that another part upload with same part-number gets blocked
+	// while the part is getting appended in the background.
+	partLock := nsMutex.NewNSLock(minioMetaMultipartBucket, partPath)
+	partLock.Lock()
 	err = fs.storage.RenameFile(minioMetaTmpBucket, tmpPartPath, minioMetaMultipartBucket, partPath)
 	if err != nil {
+		partLock.Unlock()
 		return "", toObjectErr(traceError(err), minioMetaMultipartBucket, partPath)
 	}
 	uploadIDPath = path.Join(bucket, object, uploadID)
 	if err = writeFSMetadata(fs.storage, minioMetaMultipartBucket, path.Join(uploadIDPath, fsMetaJSONFile), fsMeta); err != nil {
+		partLock.Unlock()
 		return "", toObjectErr(err, minioMetaMultipartBucket, uploadIDPath)
 	}
 
-	// Append the part in background.
-	fs.bgAppend.append(fs.storage, bucket, object, uploadID, fsMeta)
+	go func() {
+		// Append the part in background.
+		errCh := fs.bgAppend.append(fs.storage, bucket, object, uploadID, fsMeta)
+		// Also receive the error so that the appendParts go-routine does not block on send.
+		// But the error received is ignored as fs.PutObjectPart() would have already
+		// returned success to the client.
+		<-errCh
+		partLock.Unlock()
+	}()
 
 	return newMD5Hex, nil
 }
