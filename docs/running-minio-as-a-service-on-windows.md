@@ -1,7 +1,8 @@
 # Running Minio as a service on Windows
 
 ## Install Minio service
-Download and install the (Windows Server 2003 Resource Kit Tools)[https://www.microsoft.com/en-us/download/details.aspx?id=17657]. It 
+
+Download and install the [Windows Server 2003 Resource Kit Tools](https://www.microsoft.com/en-us/download/details.aspx?id=17657). It 
 is old, but still works on recent Windows versions. On the latest Windows versions you'll get a warning message, but you can run
 it anyhow by clicking on "Run the program without getting help".
 
