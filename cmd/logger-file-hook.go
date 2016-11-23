@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 
 	"github.com/Sirupsen/logrus"
@@ -43,15 +44,22 @@ func enableFileLogger() {
 	file, err := os.OpenFile(flogger.Filename, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0666)
 	fatalIf(err, "Unable to open log file.")
 
+	fileLogger := logrus.New()
+
 	// Add a local file hook.
-	log.Hooks.Add(&localFile{file})
+	fileLogger.Hooks.Add(&localFile{file})
 
 	lvl, err := logrus.ParseLevel(flogger.Level)
 	fatalIf(err, "Unknown log level found in the config file.")
 
 	// Set default JSON formatter.
-	log.Formatter = new(logrus.JSONFormatter)
-	log.Level = lvl // Minimum log level.
+	fileLogger.Out = ioutil.Discard
+	fileLogger.Formatter = new(logrus.JSONFormatter)
+	fileLogger.Level = lvl // Minimum log level.
+
+	log.mu.Lock()
+	log.loggers = append(log.loggers, fileLogger)
+	log.mu.Unlock()
 }
 
 // Fire fires the file logger hook and logs to the file.

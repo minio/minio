@@ -39,8 +39,12 @@ func TestCallerLocation(t *testing.T) {
 func TestLogger(t *testing.T) {
 	var buffer bytes.Buffer
 	var fields logrus.Fields
-	log.Out = &buffer
-	log.Formatter = new(logrus.JSONFormatter)
+	testLog := logrus.New()
+	testLog.Out = &buffer
+	testLog.Formatter = new(logrus.JSONFormatter)
+	log.mu.Lock()
+	log.loggers = append(log.loggers, testLog)
+	log.mu.Unlock()
 
 	errorIf(errors.New("Fake error"), "Failed with error.")
 	err := json.Unmarshal(buffer.Bytes(), &fields)

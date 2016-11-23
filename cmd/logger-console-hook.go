@@ -16,11 +16,7 @@
 
 package cmd
 
-import (
-	"io/ioutil"
-
-	"github.com/Sirupsen/logrus"
-)
+import "github.com/Sirupsen/logrus"
 
 // consoleLogger - default logger if not other logging is enabled.
 type consoleLogger struct {
@@ -32,15 +28,19 @@ type consoleLogger struct {
 func enableConsoleLogger() {
 	clogger := serverConfig.GetConsoleLogger()
 	if !clogger.Enable {
-		// Disable console logger if asked for.
-		log.Out = ioutil.Discard
 		return
 	}
+
+	consoleLogger := logrus.New()
 
 	// log.Out and log.Formatter use the default versions.
 	// Only set specific log level.
 	lvl, err := logrus.ParseLevel(clogger.Level)
 	fatalIf(err, "Unknown log level found in the config file.")
 
-	log.Level = lvl
+	consoleLogger.Level = lvl
+	consoleLogger.Formatter = new(logrus.TextFormatter)
+	log.mu.Lock()
+	log.loggers = append(log.loggers, consoleLogger)
+	log.mu.Unlock()
 }
