@@ -2,6 +2,7 @@
 
 ## Install Minio service
 
+### SRVANY
 Download and install the [Windows Server 2003 Resource Kit Tools](https://www.microsoft.com/en-us/download/details.aspx?id=17657). It 
 is old, but still works on recent Windows versions. On the latest Windows versions you'll get a warning message, but you can run
 it anyhow by clicking on "Run the program without getting help".
@@ -20,9 +21,22 @@ create a new key called Parameters.
 Within the new key create a new String value called Application and enter the path of your Minio binary. (eg. C:\Minio\bin\minio.exe) And create
 another String value called AppParameters with value `server c:\data` where c:\data will be the location of the data folder.
 
+### NSSM
+NSSM is an opensource alternative to srvany. NSSM is still being updated, and works on Windows 10 as well. 
+
+Download [NSSM](http://nssm.cc/download) and extract the 64 bit nssm.exe to a known path. 
+
+`
+c:\nssm.exe install Minio c:\minio\bin\minio.exe server c:\data\
+`
+
+### Configuring startup type
+
 When you start services, look for the Minio service and start and stop (or make it automatically start at reboots) the service. 
 
 ![](./screenshots/windows-configure-startup-type.png?raw=true)
+
+### Configuring user
 
 It is a good (and secure) practice to create a new user, assign rights to the data folder to this user and change the service Log On info to use the newly created user.
 
@@ -30,8 +44,15 @@ It is a good (and secure) practice to create a new user, assign rights to the da
 
 ## Delete Minio service
 
+### SRVANY
 If you want to remove the Minio service, just enter the following command from the command line.
 
 ```
 sc delete Minio
 ```
+
+### NSSM
+
+`
+c:\nssm.exe remove Minio c:\minio\bin\minio.exe server c:\data\
+`
