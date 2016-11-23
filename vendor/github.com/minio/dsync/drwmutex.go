@@ -230,7 +230,6 @@ func lock(clnts []RPC, locks *[]string, lockName string, isReadLock bool) bool {
 			}
 
 			if done {
-				i++
 				break
 			}
 		}
