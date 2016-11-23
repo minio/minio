@@ -43,6 +43,15 @@ const (
 	// Add new global values here.
 )
 
+const (
+	// Limit fields size (except file) to 1Mib since Policy document
+	// can reach that size according to https://aws.amazon.com/articles/1434
+	maxFormFieldSize = int64(1 * humanize.MiByte)
+
+	// The maximum allowed difference between the request generation time and the server processing time
+	globalMaxSkewTime = 15 * time.Minute
+)
+
 var (
 	globalQuiet    = false // Quiet flag set via command line.
 	globalIsDistXL = false // "Is Distributed?" flag.
@@ -69,15 +78,6 @@ var (
 )
 
 var (
-	// Limit fields size (except file) to 1Mib since Policy document
-	// can reach that size according to https://aws.amazon.com/articles/1434
-	maxFormFieldSize = int64(1 * humanize.MiByte)
-)
-
-var (
-	// The maximum allowed difference between the request generation time and the server processing time
-	globalMaxSkewTime = 15 * time.Minute
-
 	// Keeps the connection active by waiting for following amount of time.
 	// Primarily used in ListenBucketNotification.
 	globalSNSConnAlive = 5 * time.Second
