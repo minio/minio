@@ -44,6 +44,10 @@ func mainVersion(ctx *cli.Context) {
 		cli.ShowCommandHelpAndExit(ctx, "version", 1)
 	}
 
+	setGlobalsFromContext(ctx)
+
+	checkUpdate()
+
 	console.Println("Version: " + Version)
 	console.Println("Release-Tag: " + ReleaseTag)
 	console.Println("Commit-ID: " + CommitID)
