@@ -68,7 +68,7 @@ func (l *localFile) Fire(entry *logrus.Entry) error {
 	if err != nil {
 		return fmt.Errorf("Unable to read entry, %v", err)
 	}
-	l.File.Write([]byte(line + "\n"))
+	l.File.Write([]byte(line))
 	l.File.Sync()
 	return nil
 }

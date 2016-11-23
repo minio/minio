@@ -54,7 +54,7 @@ func TestInitEventNotifierFaultyDisks(t *testing.T) {
 	}
 
 	fs := obj.(fsObjects)
-	fsstorage := fs.storage.(*posix)
+	fsstorage := fs.storage.(*retryStorage)
 
 	listenARN := "arn:minio:sns:us-east-1:1:listen"
 	queueARN := "arn:minio:sqs:us-east-1:1:redis"

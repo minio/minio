@@ -48,7 +48,7 @@ func TestFSIsBucketExist(t *testing.T) {
 	}
 
 	// Using a faulty disk
-	fsStorage := fs.storage.(*posix)
+	fsStorage := fs.storage.(*retryStorage)
 	naughty := newNaughtyDisk(fsStorage, nil, errFaultyDisk)
 	fs.storage = naughty
 	if found := fs.isBucketExist(bucketName); found {
@@ -92,7 +92,7 @@ func TestFSIsUploadExists(t *testing.T) {
 	}
 
 	// isUploadIdExists with a faulty disk should return false
-	fsStorage := fs.storage.(*posix)
+	fsStorage := fs.storage.(*retryStorage)
 	naughty := newNaughtyDisk(fsStorage, nil, errFaultyDisk)
 	fs.storage = naughty
 	if exists := fs.isUploadIDExists(bucketName, objectName, uploadID); exists {
@@ -127,7 +127,7 @@ func TestFSWriteUploadJSON(t *testing.T) {
 	}
 
 	// isUploadIdExists with a faulty disk should return false
-	fsStorage := fs.storage.(*posix)
+	fsStorage := fs.storage.(*retryStorage)
 	for i := 1; i <= 3; i++ {
 		naughty := newNaughtyDisk(fsStorage, map[int]error{i: errFaultyDisk}, nil)
 		fs.storage = naughty

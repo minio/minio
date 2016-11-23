@@ -31,22 +31,12 @@ import (
 	"github.com/minio/mc/pkg/console"
 )
 
-// command specific flags.
-var (
-	updateFlags = []cli.Flag{
-		cli.BoolFlag{
-			Name:  "experimental, E",
-			Usage: "Check experimental update.",
-		},
-	}
-)
-
 // Check for new software updates.
 var updateCmd = cli.Command{
 	Name:   "update",
 	Usage:  "Check for a new software update.",
 	Action: mainUpdate,
-	Flags:  append(updateFlags, globalFlags...),
+	Flags:  globalFlags,
 	CustomHelpTemplate: `Name:
    minio {{.Name}} - {{.Usage}}
 
@@ -59,16 +49,12 @@ FLAGS:
 EXAMPLES:
    1. Check for any new official release.
       $ minio {{.Name}}
-
-   2. Check for any new experimental release.
-      $ minio {{.Name}} --experimental
 `,
 }
 
 // update URL endpoints.
 const (
-	minioUpdateStableURL       = "https://dl.minio.io/server/minio/release"
-	minioUpdateExperimentalURL = "https://dl.minio.io/server/minio/experimental"
+	minioUpdateStableURL = "https://dl.minio.io/server/minio/release"
 )
 
 // updateMessage container to hold update messages.
@@ -279,16 +265,17 @@ func getReleaseUpdate(updateURL string, duration time.Duration) (updateMsg updat
 
 // main entry point for update command.
 func mainUpdate(ctx *cli.Context) {
+	// Set global quiet flag.
+	if ctx.Bool("quiet") || ctx.GlobalBool("quiet") {
+		return
+	}
+
 	// Check for update.
 	var updateMsg updateMessage
 	var errMsg string
 	var err error
 	var secs = time.Second * 3
-	if ctx.Bool("experimental") {
-		updateMsg, errMsg, err = getReleaseUpdate(minioUpdateExperimentalURL, secs)
-	} else {
-		updateMsg, errMsg, err = getReleaseUpdate(minioUpdateStableURL, secs)
-	}
+	updateMsg, errMsg, err = getReleaseUpdate(minioUpdateStableURL, secs)
 	fatalIf(err, errMsg)
 	console.Println(updateMsg)
 }

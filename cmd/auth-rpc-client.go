@@ -97,13 +97,12 @@ type authConfig struct {
 
 // AuthRPCClient is a wrapper type for RPCClient which provides JWT based authentication across reconnects.
 type AuthRPCClient struct {
-	mu             sync.Mutex
-	config         *authConfig
-	rpc            *RPCClient // reconnect'able rpc client built on top of net/rpc Client
-	isLoggedIn     bool       // Indicates if the auth client has been logged in and token is valid.
-	serverToken    string     // Disk rpc JWT based token.
-	serverVersion  string     // Server version exchanged by the RPC.
-	serverIOErrCnt int        // Keeps track of total errors occurred for each RPC call.
+	mu            sync.Mutex
+	config        *authConfig
+	rpc           *RPCClient // reconnect'able rpc client built on top of net/rpc Client
+	isLoggedIn    bool       // Indicates if the auth client has been logged in and token is valid.
+	serverToken   string     // Disk rpc JWT based token.
+	serverVersion string     // Server version exchanged by the RPC.
 }
 
 // newAuthClient - returns a jwt based authenticated (go) rpc client, which does automatic reconnect.
@@ -132,20 +131,6 @@ func (authClient *AuthRPCClient) Login() (err error) {
 	authClient.mu.Lock()
 	// As soon as the function returns unlock,
 	defer authClient.mu.Unlock()
-
-	// Take remote disk offline if the total server errors
-	// are more than maximum allowable IO error limit.
-	if authClient.serverIOErrCnt > maxAllowedIOError {
-		return errFaultyRemoteDisk
-	}
-
-	// In defer sequence this is called first, so error
-	// increment happens well with in the lock.
-	defer func() {
-		if err != nil {
-			authClient.serverIOErrCnt++
-		}
-	}()
 
 	// Return if already logged in.
 	if authClient.isLoggedIn {
