@@ -28,6 +28,7 @@ import (
 	"net/http"
 	"time"
 
+	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/sha256-simd"
 )
 
@@ -151,7 +152,7 @@ func calculateSeedSignature(r *http.Request) (signature string, date time.Time, 
 	return newSignature, date, ErrNone
 }
 
-const maxLineLength = 4096 // assumed <= bufio.defaultBufSize 4KiB.
+const maxLineLength = 4 * humanize.KiByte // assumed <= bufio.defaultBufSize 4KiB
 
 // lineTooLong is generated as chunk header is bigger than 4KiB.
 var errLineTooLong = errors.New("header line too long")

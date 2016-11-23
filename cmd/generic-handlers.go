@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	humanize "github.com/dustin/go-humanize"
 	router "github.com/gorilla/mux"
 	"github.com/rs/cors"
 )
@@ -43,7 +44,7 @@ func registerHandlers(mux *router.Router, handlerFns ...HandlerFunc) http.Handle
 
 // Set the body size limit to 6 Gb = Maximum object size + other possible data
 // in the same request
-const requestMaxBodySize = 1024 * 1024 * 1024 * (5 + 1)
+const requestMaxBodySize = (5 + 1) * humanize.GiByte
 
 type requestSizeLimitHandler struct {
 	handler     http.Handler

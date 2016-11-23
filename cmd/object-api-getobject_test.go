@@ -24,6 +24,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	humanize "github.com/dustin/go-humanize"
 )
 
 // Wrapper for calling GetObject tests for both XL multiple disks and single node setup.
@@ -50,7 +52,7 @@ func testGetObject(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	bytesData := []struct {
 		byteData []byte
 	}{
-		{generateBytesData(6 * 1024 * 1024)},
+		{generateBytesData(6 * humanize.MiByte)},
 	}
 	// set of inputs for uploading the objects before tests for downloading is done.
 	putObjectInputs := []struct {
@@ -199,7 +201,7 @@ func testGetObjectPermissionDenied(obj ObjectLayer, instanceType string, disks [
 	bytesData := []struct {
 		byteData []byte
 	}{
-		{generateBytesData(6 * 1024 * 1024)},
+		{generateBytesData(6 * humanize.MiByte)},
 	}
 	// set of inputs for uploading the objects before tests for downloading is done.
 	putObjectInputs := []struct {
@@ -314,7 +316,7 @@ func testGetObjectDiskNotFound(obj ObjectLayer, instanceType string, disks []str
 	bytesData := []struct {
 		byteData []byte
 	}{
-		{generateBytesData(6 * 1024 * 1024)},
+		{generateBytesData(6 * humanize.MiByte)},
 	}
 	// set of inputs for uploading the objects before tests for downloading is done.
 	putObjectInputs := []struct {
@@ -463,73 +465,73 @@ func BenchmarkGetObjectVerySmallXL(b *testing.B) {
 
 // BenchmarkGetObject10KbFS - Benchmark FS.GetObject() for object size of 10KB.
 func BenchmarkGetObject10KbFS(b *testing.B) {
-	benchmarkGetObject(b, "FS", 10*1024)
+	benchmarkGetObject(b, "FS", 10*humanize.KiByte)
 }
 
 // BenchmarkGetObject10KbXL - Benchmark XL.GetObject() for object size of 10KB.
 func BenchmarkGetObject10KbXL(b *testing.B) {
-	benchmarkGetObject(b, "XL", 10*1024)
+	benchmarkGetObject(b, "XL", 10*humanize.KiByte)
 }
 
 // BenchmarkGetObject100KbFS - Benchmark FS.GetObject() for object size of 100KB.
 func BenchmarkGetObject100KbFS(b *testing.B) {
-	benchmarkGetObject(b, "FS", 100*1024)
+	benchmarkGetObject(b, "FS", 100*humanize.KiByte)
 }
 
 // BenchmarkGetObject100KbXL - Benchmark XL.GetObject() for object size of 100KB.
 func BenchmarkGetObject100KbXL(b *testing.B) {
-	benchmarkGetObject(b, "XL", 100*1024)
+	benchmarkGetObject(b, "XL", 100*humanize.KiByte)
 }
 
 // BenchmarkGetObject1MbFS - Benchmark FS.GetObject() for object size of 1MB.
 func BenchmarkGetObject1MbFS(b *testing.B) {
-	benchmarkGetObject(b, "FS", 1024*1024)
+	benchmarkGetObject(b, "FS", 1*humanize.MiByte)
 }
 
 // BenchmarkGetObject1MbXL - Benchmark XL.GetObject() for object size of 1MB.
 func BenchmarkGetObject1MbXL(b *testing.B) {
-	benchmarkGetObject(b, "XL", 1024*1024)
+	benchmarkGetObject(b, "XL", 1*humanize.MiByte)
 }
 
 // BenchmarkGetObject5MbFS - Benchmark FS.GetObject() for object size of 5MB.
 func BenchmarkGetObject5MbFS(b *testing.B) {
-	benchmarkGetObject(b, "FS", 5*1024*1024)
+	benchmarkGetObject(b, "FS", 5*humanize.MiByte)
 }
 
 // BenchmarkGetObject5MbXL - Benchmark XL.GetObject() for object size of 5MB.
 func BenchmarkGetObject5MbXL(b *testing.B) {
-	benchmarkGetObject(b, "XL", 5*1024*1024)
+	benchmarkGetObject(b, "XL", 5*humanize.MiByte)
 }
 
 // BenchmarkGetObject10MbFS - Benchmark FS.GetObject() for object size of 10MB.
 func BenchmarkGetObject10MbFS(b *testing.B) {
-	benchmarkGetObject(b, "FS", 10*1024*1024)
+	benchmarkGetObject(b, "FS", 10*humanize.MiByte)
 }
 
 // BenchmarkGetObject10MbXL - Benchmark XL.GetObject() for object size of 10MB.
 func BenchmarkGetObject10MbXL(b *testing.B) {
-	benchmarkGetObject(b, "XL", 10*1024*1024)
+	benchmarkGetObject(b, "XL", 10*humanize.MiByte)
 }
 
 // BenchmarkGetObject25MbFS - Benchmark FS.GetObject() for object size of 25MB.
 func BenchmarkGetObject25MbFS(b *testing.B) {
-	benchmarkGetObject(b, "FS", 25*1024*1024)
+	benchmarkGetObject(b, "FS", 25*humanize.MiByte)
 
 }
 
 // BenchmarkGetObject25MbXL - Benchmark XL.GetObject() for object size of 25MB.
 func BenchmarkGetObject25MbXL(b *testing.B) {
-	benchmarkGetObject(b, "XL", 25*1024*1024)
+	benchmarkGetObject(b, "XL", 25*humanize.MiByte)
 }
 
 // BenchmarkGetObject50MbFS - Benchmark FS.GetObject() for object size of 50MB.
 func BenchmarkGetObject50MbFS(b *testing.B) {
-	benchmarkGetObject(b, "FS", 50*1024*1024)
+	benchmarkGetObject(b, "FS", 50*humanize.MiByte)
 }
 
 // BenchmarkGetObject50MbXL - Benchmark XL.GetObject() for object size of 50MB.
 func BenchmarkGetObject50MbXL(b *testing.B) {
-	benchmarkGetObject(b, "XL", 50*1024*1024)
+	benchmarkGetObject(b, "XL", 50*humanize.MiByte)
 }
 
 // parallel benchmarks for ObjectLayer.GetObject() .
@@ -546,71 +548,71 @@ func BenchmarkGetObjectParallelVerySmallXL(b *testing.B) {
 
 // BenchmarkGetObjectParallel10KbFS - Benchmark FS.GetObject() for object size of 10KB.
 func BenchmarkGetObjectParallel10KbFS(b *testing.B) {
-	benchmarkGetObjectParallel(b, "FS", 10*1024)
+	benchmarkGetObjectParallel(b, "FS", 10*humanize.KiByte)
 }
 
 // BenchmarkGetObjectParallel10KbXL - Benchmark XL.GetObject() for object size of 10KB.
 func BenchmarkGetObjectParallel10KbXL(b *testing.B) {
-	benchmarkGetObjectParallel(b, "XL", 10*1024)
+	benchmarkGetObjectParallel(b, "XL", 10*humanize.KiByte)
 }
 
 // BenchmarkGetObjectParallel100KbFS - Benchmark FS.GetObject() for object size of 100KB.
 func BenchmarkGetObjectParallel100KbFS(b *testing.B) {
-	benchmarkGetObjectParallel(b, "FS", 100*1024)
+	benchmarkGetObjectParallel(b, "FS", 100*humanize.KiByte)
 }
 
 // BenchmarkGetObjectParallel100KbXL - Benchmark XL.GetObject() for object size of 100KB.
 func BenchmarkGetObjectParallel100KbXL(b *testing.B) {
-	benchmarkGetObjectParallel(b, "XL", 100*1024)
+	benchmarkGetObjectParallel(b, "XL", 100*humanize.KiByte)
 }
 
 // BenchmarkGetObjectParallel1MbFS - Benchmark FS.GetObject() for object size of 1MB.
 func BenchmarkGetObjectParallel1MbFS(b *testing.B) {
-	benchmarkGetObjectParallel(b, "FS", 1024*1024)
+	benchmarkGetObjectParallel(b, "FS", 1*humanize.MiByte)
 }
 
 // BenchmarkGetObjectParallel1MbXL - Benchmark XL.GetObject() for object size of 1MB.
 func BenchmarkGetObjectParallel1MbXL(b *testing.B) {
-	benchmarkGetObjectParallel(b, "XL", 1024*1024)
+	benchmarkGetObjectParallel(b, "XL", 1*humanize.MiByte)
 }
 
 // BenchmarkGetObjectParallel5MbFS - Benchmark FS.GetObject() for object size of 5MB.
 func BenchmarkGetObjectParallel5MbFS(b *testing.B) {
-	benchmarkGetObjectParallel(b, "FS", 5*1024*1024)
+	benchmarkGetObjectParallel(b, "FS", 5*humanize.MiByte)
 }
 
 // BenchmarkGetObjectParallel5MbXL - Benchmark XL.GetObject() for object size of 5MB.
 func BenchmarkGetObjectParallel5MbXL(b *testing.B) {
-	benchmarkGetObjectParallel(b, "XL", 5*1024*1024)
+	benchmarkGetObjectParallel(b, "XL", 5*humanize.MiByte)
 }
 
 // BenchmarkGetObjectParallel10MbFS - Benchmark FS.GetObject() for object size of 10MB.
 func BenchmarkGetObjectParallel10MbFS(b *testing.B) {
-	benchmarkGetObjectParallel(b, "FS", 10*1024*1024)
+	benchmarkGetObjectParallel(b, "FS", 10*humanize.MiByte)
 }
 
 // BenchmarkGetObjectParallel10MbXL - Benchmark XL.GetObject() for object size of 10MB.
 func BenchmarkGetObjectParallel10MbXL(b *testing.B) {
-	benchmarkGetObjectParallel(b, "XL", 10*1024*1024)
+	benchmarkGetObjectParallel(b, "XL", 10*humanize.MiByte)
 }
 
 // BenchmarkGetObjectParallel25MbFS - Benchmark FS.GetObject() for object size of 25MB.
 func BenchmarkGetObjectParallel25MbFS(b *testing.B) {
-	benchmarkGetObjectParallel(b, "FS", 25*1024*1024)
+	benchmarkGetObjectParallel(b, "FS", 25*humanize.MiByte)
 
 }
 
 // BenchmarkGetObjectParallel25MbXL - Benchmark XL.GetObject() for object size of 25MB.
 func BenchmarkGetObjectParallel25MbXL(b *testing.B) {
-	benchmarkGetObjectParallel(b, "XL", 25*1024*1024)
+	benchmarkGetObjectParallel(b, "XL", 25*humanize.MiByte)
 }
 
 // BenchmarkGetObjectParallel50MbFS - Benchmark FS.GetObject() for object size of 50MB.
 func BenchmarkGetObjectParallel50MbFS(b *testing.B) {
-	benchmarkGetObjectParallel(b, "FS", 50*1024*1024)
+	benchmarkGetObjectParallel(b, "FS", 50*humanize.MiByte)
 }
 
 // BenchmarkGetObjectParallel50MbXL - Benchmark XL.GetObject() for object size of 50MB.
 func BenchmarkGetObjectParallel50MbXL(b *testing.B) {
-	benchmarkGetObjectParallel(b, "XL", 50*1024*1024)
+	benchmarkGetObjectParallel(b, "XL", 50*humanize.MiByte)
 }

@@ -31,6 +31,8 @@ import (
 	"sync"
 	"time"
 
+	humanize "github.com/dustin/go-humanize"
+
 	. "gopkg.in/check.v1"
 )
 
@@ -2367,7 +2369,7 @@ func (s *TestSuiteCommon) TestObjectValidMD5(c *C) {
 
 	// Create a byte array of 5MB.
 	// content for the object to be uploaded.
-	data := bytes.Repeat([]byte("0123456789abcdef"), 5*1024*1024/16)
+	data := bytes.Repeat([]byte("0123456789abcdef"), 5*humanize.MiByte/16)
 	// calculate md5Sum of the data.
 	md5SumBase64 := getMD5HashBase64(data)
 
@@ -2440,7 +2442,7 @@ func (s *TestSuiteCommon) TestObjectMultipart(c *C) {
 
 	// content for the part to be uploaded.
 	// Create a byte array of 5MB.
-	data := bytes.Repeat([]byte("0123456789abcdef"), 5*1024*1024/16)
+	data := bytes.Repeat([]byte("0123456789abcdef"), 5*humanize.MiByte/16)
 	// calculate md5Sum of the data.
 	md5SumBase64 := getMD5HashBase64(data)
 

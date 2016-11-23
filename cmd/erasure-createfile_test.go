@@ -21,6 +21,7 @@ import (
 	"crypto/rand"
 	"testing"
 
+	humanize "github.com/dustin/go-humanize"
 	"github.com/klauspost/reedsolomon"
 )
 
@@ -48,8 +49,8 @@ func TestErasureCreateFile(t *testing.T) {
 
 	disks := setup.disks
 
-	// Prepare a slice of 1MB with random data.
-	data := make([]byte, 1*1024*1024)
+	// Prepare a slice of 1MiB with random data.
+	data := make([]byte, 1*humanize.MiByte)
 	_, err = rand.Read(data)
 	if err != nil {
 		t.Fatal(err)

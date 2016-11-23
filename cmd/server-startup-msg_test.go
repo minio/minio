@@ -23,13 +23,15 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	humanize "github.com/dustin/go-humanize"
 )
 
 // Tests if we generate storage info.
 func TestStorageInfoMsg(t *testing.T) {
 	infoStorage := StorageInfo{
-		Total: 1024 * 1024 * 1024 * 10,
-		Free:  1024 * 1024 * 1024 * 2,
+		Total: 10 * humanize.GiByte,
+		Free:  2 * humanize.GiByte,
 		Backend: struct {
 			Type         BackendType
 			OnlineDisks  int
