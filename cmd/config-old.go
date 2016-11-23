@@ -441,8 +441,5 @@ func loadConfigV9() (*serverConfigV9, error) {
 	if err := qc.Load(configFile); err != nil {
 		return nil, err
 	}
-	// Set the version properly after the unmarshalled json is loaded.
-	srvCfg.Version = "9"
-
 	return srvCfg, nil
 }
