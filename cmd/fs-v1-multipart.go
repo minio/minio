@@ -285,11 +285,6 @@ func partToAppend(fsMeta fsMetaV1, fsAppendMeta fsMetaV1) (part objectPartInfo, 
 	return fsMeta.Parts[nextPartIndex], true
 }
 
-// Returns path for the append-file.
-func getFSAppendDataPath(uploadID string) string {
-	return path.Join(minioMetaTmpBucket, uploadID)
-}
-
 // PutObjectPart - reads incoming data until EOF for the part file on
 // an ongoing multipart transaction. Internally incoming data is
 // written to '.minio.sys/tmp' location and safely renamed to
@@ -566,21 +561,20 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 		return "", toObjectErr(err, minioMetaMultipartBucket, fsMetaPath)
 	}
 
-	appendFallback := true // In case background appendRoutine() did not append the required parts.
+	appendFallback := true // In case background-append did not append the required parts.
 	if isPartsSame(fsMeta.Parts, parts) {
 		err = fs.bgAppend.complete(fs.storage, bucket, object, uploadID, fsMeta)
 		if err == nil {
 			appendFallback = false
-			fsAppendDataPath := getFSAppendDataPath(uploadID)
-			if err = fs.storage.RenameFile(minioMetaBucket, fsAppendDataPath, bucket, object); err != nil {
-				return "", toObjectErr(traceError(err), minioMetaBucket, fsAppendDataPath)
+			if err = fs.storage.RenameFile(minioMetaTmpBucket, uploadID, bucket, object); err != nil {
+				return "", toObjectErr(traceError(err), minioMetaTmpBucket, uploadID)
 			}
 		}
 	}
 
 	if appendFallback {
-		// appendRoutine could not do append all the required parts, hence we do it here.
-		tempObj := path.Join(minioMetaTmpBucket, uploadID+"-"+"part.1")
+		// background append could not do append all the required parts, hence we do it here.
+		tempObj := uploadID + "-" + "part.1"
 
 		// Allocate staging buffer.
 		var buf = make([]byte, readSizeV1)
@@ -702,9 +696,8 @@ func (fs fsObjects) abortMultipartUpload(bucket, object, uploadID string) error 
 	if err := cleanupUploadedParts(bucket, object, uploadID, fs.storage); err != nil {
 		return err
 	}
-	fs.bgAppend.remove(uploadID)
-
-	// remove upload ID in uploads.json
+	fs.bgAppend.abort(uploadID)
+	// remove entry from uploads.json with quorum
 	if err := fs.removeUploadID(bucket, object, uploadID); err != nil {
 		return toObjectErr(err, bucket, object)
 	}
