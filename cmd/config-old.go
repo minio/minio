@@ -89,6 +89,13 @@ type backendV3 struct {
 	Disks []string `json:"disks,omitempty"`
 }
 
+// syslogLogger v3
+type syslogLoggerV3 struct {
+	Enable bool   `json:"enable"`
+	Addr   string `json:"address"`
+	Level  string `json:"level"`
+}
+
 // loggerV3 type.
 type loggerV3 struct {
 	Console struct {
@@ -276,6 +283,12 @@ func loadConfigV5() (*configV5, error) {
 	return c, nil
 }
 
+type loggerV6 struct {
+	Console consoleLogger  `json:"console"`
+	File    fileLogger     `json:"file"`
+	Syslog  syslogLoggerV3 `json:"syslog"`
+}
+
 // configV6 server configuration version '6'.
 type configV6 struct {
 	Version string `json:"version"`
@@ -285,7 +298,7 @@ type configV6 struct {
 	Region     string     `json:"region"`
 
 	// Additional error logging configuration.
-	Logger logger `json:"logger"`
+	Logger loggerV6 `json:"logger"`
 
 	// Notification queue configuration.
 	Notify notifier `json:"notify"`
@@ -321,7 +334,7 @@ type serverConfigV7 struct {
 	Region     string     `json:"region"`
 
 	// Additional error logging configuration.
-	Logger logger `json:"logger"`
+	Logger loggerV6 `json:"logger"`
 
 	// Notification queue configuration.
 	Notify notifier `json:"notify"`
@@ -361,7 +374,7 @@ type serverConfigV8 struct {
 	Region     string     `json:"region"`
 
 	// Additional error logging configuration.
-	Logger logger `json:"logger"`
+	Logger loggerV6 `json:"logger"`
 
 	// Notification queue configuration.
 	Notify notifier `json:"notify"`
@@ -389,4 +402,47 @@ func loadConfigV8() (*serverConfigV8, error) {
 		return nil, err
 	}
 	return c, nil
+}
+
+// serverConfigV9 server configuration version '9'. Adds PostgreSQL
+// notifier configuration.
+type serverConfigV9 struct {
+	Version string `json:"version"`
+
+	// S3 API configuration.
+	Credential credential `json:"credential"`
+	Region     string     `json:"region"`
+
+	// Additional error logging configuration.
+	Logger loggerV6 `json:"logger"`
+
+	// Notification queue configuration.
+	Notify notifier `json:"notify"`
+
+	// Read Write mutex.
+	rwMutex *sync.RWMutex
+}
+
+func loadConfigV9() (*serverConfigV9, error) {
+	configFile, err := getConfigFile()
+	if err != nil {
+		return nil, err
+	}
+	if _, err = os.Stat(configFile); err != nil {
+		return nil, err
+	}
+	srvCfg := &serverConfigV9{}
+	srvCfg.Version = "9"
+	srvCfg.rwMutex = &sync.RWMutex{}
+	qc, err := quick.New(srvCfg)
+	if err != nil {
+		return nil, err
+	}
+	if err := qc.Load(configFile); err != nil {
+		return nil, err
+	}
+	// Set the version properly after the unmarshalled json is loaded.
+	srvCfg.Version = "9"
+
+	return srvCfg, nil
 }

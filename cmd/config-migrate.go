@@ -58,6 +58,10 @@ func migrateConfig() error {
 	if err := migrateV8ToV9(); err != nil {
 		return err
 	}
+	// Migrate version '9' to '10'.
+	if err := migrateV9ToV10(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -124,7 +128,7 @@ func migrateV2ToV3() error {
 	}
 	srvConfig.Logger.File = flogger
 
-	slogger := syslogLogger{}
+	slogger := syslogLoggerV3{}
 	slogger.Level = "debug"
 	if cv2.SyslogLogger.Addr != "" {
 		slogger.Enable = true
@@ -539,6 +543,91 @@ func migrateV8ToV9() error {
 	console.Println(
 		"Migration from version ‘" +
 			cv8.Version + "’ to ‘" + srvConfig.Version +
+			"’ completed successfully.",
+	)
+	return nil
+}
+
+// Version '9' to '10' migration. Remove syslog config
+// but it's otherwise the same as V9.
+func migrateV9ToV10() error {
+	cv9, err := loadConfigV9()
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("Unable to load config version ‘9’. %v", err)
+	}
+	if cv9.Version != "9" {
+		return nil
+	}
+
+	// Copy over fields from V9 into V10 config struct
+	srvConfig := &serverConfigV10{}
+	srvConfig.Version = "10"
+	srvConfig.Credential = cv9.Credential
+	srvConfig.Region = cv9.Region
+	if srvConfig.Region == "" {
+		// Region needs to be set for AWS Signature Version 4.
+		srvConfig.Region = "us-east-1"
+	}
+	srvConfig.Logger.Console = cv9.Logger.Console
+	srvConfig.Logger.File = cv9.Logger.File
+
+	// check and set notifiers config
+	if len(cv9.Notify.AMQP) == 0 {
+		srvConfig.Notify.AMQP = make(map[string]amqpNotify)
+		srvConfig.Notify.AMQP["1"] = amqpNotify{}
+	} else {
+		srvConfig.Notify.AMQP = cv9.Notify.AMQP
+	}
+	if len(cv9.Notify.NATS) == 0 {
+		srvConfig.Notify.NATS = make(map[string]natsNotify)
+		srvConfig.Notify.NATS["1"] = natsNotify{}
+	} else {
+		srvConfig.Notify.NATS = cv9.Notify.NATS
+	}
+	if len(cv9.Notify.ElasticSearch) == 0 {
+		srvConfig.Notify.ElasticSearch = make(map[string]elasticSearchNotify)
+		srvConfig.Notify.ElasticSearch["1"] = elasticSearchNotify{}
+	} else {
+		srvConfig.Notify.ElasticSearch = cv9.Notify.ElasticSearch
+	}
+	if len(cv9.Notify.Redis) == 0 {
+		srvConfig.Notify.Redis = make(map[string]redisNotify)
+		srvConfig.Notify.Redis["1"] = redisNotify{}
+	} else {
+		srvConfig.Notify.Redis = cv9.Notify.Redis
+	}
+	if len(cv9.Notify.PostgreSQL) == 0 {
+		srvConfig.Notify.PostgreSQL = make(map[string]postgreSQLNotify)
+		srvConfig.Notify.PostgreSQL["1"] = postgreSQLNotify{}
+	} else {
+		srvConfig.Notify.PostgreSQL = cv9.Notify.PostgreSQL
+	}
+
+	qc, err := quick.New(srvConfig)
+	if err != nil {
+		return fmt.Errorf("Unable to initialize the quick config. %v",
+			err)
+	}
+	configFile, err := getConfigFile()
+	if err != nil {
+		return fmt.Errorf("Unable to get config file. %v", err)
+	}
+
+	err = qc.Save(configFile)
+	if err != nil {
+		return fmt.Errorf(
+			"Failed to migrate config from ‘"+
+				cv9.Version+"’ to ‘"+srvConfig.Version+
+				"’ failed. %v", err,
+		)
+	}
+
+	console.Println(
+		"Migration from version ‘" +
+			cv9.Version + "’ to ‘" + srvConfig.Version +
 			"’ completed successfully.",
 	)
 	return nil

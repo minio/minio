@@ -18,9 +18,6 @@ package cmd
 
 import "errors"
 
-// errSyslogNotSupported - this message is only meaningful on windows
-var errSyslogNotSupported = errors.New("Syslog logger not supported on windows")
-
 // errInvalidArgument means that input argument is invalid.
 var errInvalidArgument = errors.New("Invalid arguments specified")
 

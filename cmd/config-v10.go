@@ -23,9 +23,9 @@ import (
 	"github.com/minio/minio/pkg/quick"
 )
 
-// serverConfigV9 server configuration version '9'. Adds PostgreSQL
-// notifier configuration.
-type serverConfigV9 struct {
+// serverConfigV10 server configuration version '10' which is like version '9'
+// except it drops support of syslog config
+type serverConfigV10 struct {
 	Version string `json:"version"`
 
 	// S3 API configuration.
@@ -46,7 +46,7 @@ type serverConfigV9 struct {
 func initConfig() (bool, error) {
 	if !isConfigFileExists() {
 		// Initialize server config.
-		srvCfg := &serverConfigV9{}
+		srvCfg := &serverConfigV10{}
 		srvCfg.Version = globalMinioConfigVersion
 		srvCfg.Region = "us-east-1"
 		srvCfg.Credential = mustGenAccessKeys()
@@ -89,7 +89,7 @@ func initConfig() (bool, error) {
 	if _, err = os.Stat(configFile); err != nil {
 		return false, err
 	}
-	srvCfg := &serverConfigV9{}
+	srvCfg := &serverConfigV10{}
 	srvCfg.Version = globalMinioConfigVersion
 	srvCfg.rwMutex = &sync.RWMutex{}
 	qc, err := quick.New(srvCfg)
@@ -108,10 +108,10 @@ func initConfig() (bool, error) {
 }
 
 // serverConfig server config.
-var serverConfig *serverConfigV9
+var serverConfig *serverConfigV10
 
 // GetVersion get current config version.
-func (s serverConfigV9) GetVersion() string {
+func (s serverConfigV10) GetVersion() string {
 	s.rwMutex.RLock()
 	defer s.rwMutex.RUnlock()
 	return s.Version
@@ -119,173 +119,159 @@ func (s serverConfigV9) GetVersion() string {
 
 /// Logger related.
 
-func (s *serverConfigV9) SetAMQPNotifyByID(accountID string, amqpn amqpNotify) {
+func (s *serverConfigV10) SetAMQPNotifyByID(accountID string, amqpn amqpNotify) {
 	s.rwMutex.Lock()
 	defer s.rwMutex.Unlock()
 	s.Notify.AMQP[accountID] = amqpn
 }
 
-func (s serverConfigV9) GetAMQP() map[string]amqpNotify {
+func (s serverConfigV10) GetAMQP() map[string]amqpNotify {
 	s.rwMutex.RLock()
 	defer s.rwMutex.RUnlock()
 	return s.Notify.AMQP
 }
 
 // GetAMQPNotify get current AMQP logger.
-func (s serverConfigV9) GetAMQPNotifyByID(accountID string) amqpNotify {
+func (s serverConfigV10) GetAMQPNotifyByID(accountID string) amqpNotify {
 	s.rwMutex.RLock()
 	defer s.rwMutex.RUnlock()
 	return s.Notify.AMQP[accountID]
 }
 
 //
-func (s *serverConfigV9) SetNATSNotifyByID(accountID string, natsn natsNotify) {
+func (s *serverConfigV10) SetNATSNotifyByID(accountID string, natsn natsNotify) {
 	s.rwMutex.Lock()
 	defer s.rwMutex.Unlock()
 	s.Notify.NATS[accountID] = natsn
 }
 
-func (s serverConfigV9) GetNATS() map[string]natsNotify {
+func (s serverConfigV10) GetNATS() map[string]natsNotify {
 	s.rwMutex.RLock()
 	defer s.rwMutex.RUnlock()
 	return s.Notify.NATS
 }
 
 // GetNATSNotify get current NATS logger.
-func (s serverConfigV9) GetNATSNotifyByID(accountID string) natsNotify {
+func (s serverConfigV10) GetNATSNotifyByID(accountID string) natsNotify {
 	s.rwMutex.RLock()
 	defer s.rwMutex.RUnlock()
 	return s.Notify.NATS[accountID]
 }
 
-func (s *serverConfigV9) SetElasticSearchNotifyByID(accountID string, esNotify elasticSearchNotify) {
+func (s *serverConfigV10) SetElasticSearchNotifyByID(accountID string, esNotify elasticSearchNotify) {
 	s.rwMutex.Lock()
 	defer s.rwMutex.Unlock()
 	s.Notify.ElasticSearch[accountID] = esNotify
 }
 
-func (s serverConfigV9) GetElasticSearch() map[string]elasticSearchNotify {
+func (s serverConfigV10) GetElasticSearch() map[string]elasticSearchNotify {
 	s.rwMutex.RLock()
 	defer s.rwMutex.RUnlock()
 	return s.Notify.ElasticSearch
 }
 
 // GetElasticSearchNotify get current ElasicSearch logger.
-func (s serverConfigV9) GetElasticSearchNotifyByID(accountID string) elasticSearchNotify {
+func (s serverConfigV10) GetElasticSearchNotifyByID(accountID string) elasticSearchNotify {
 	s.rwMutex.RLock()
 	defer s.rwMutex.RUnlock()
 	return s.Notify.ElasticSearch[accountID]
 }
 
-func (s *serverConfigV9) SetRedisNotifyByID(accountID string, rNotify redisNotify) {
+func (s *serverConfigV10) SetRedisNotifyByID(accountID string, rNotify redisNotify) {
 	s.rwMutex.Lock()
 	defer s.rwMutex.Unlock()
 	s.Notify.Redis[accountID] = rNotify
 }
 
-func (s serverConfigV9) GetRedis() map[string]redisNotify {
+func (s serverConfigV10) GetRedis() map[string]redisNotify {
 	s.rwMutex.RLock()
 	defer s.rwMutex.RUnlock()
 	return s.Notify.Redis
 }
 
 // GetRedisNotify get current Redis logger.
-func (s serverConfigV9) GetRedisNotifyByID(accountID string) redisNotify {
+func (s serverConfigV10) GetRedisNotifyByID(accountID string) redisNotify {
 	s.rwMutex.RLock()
 	defer s.rwMutex.RUnlock()
 	return s.Notify.Redis[accountID]
 }
 
-func (s *serverConfigV9) SetPostgreSQLNotifyByID(accountID string, pgn postgreSQLNotify) {
+func (s *serverConfigV10) SetPostgreSQLNotifyByID(accountID string, pgn postgreSQLNotify) {
 	s.rwMutex.Lock()
 	defer s.rwMutex.Unlock()
 	s.Notify.PostgreSQL[accountID] = pgn
 }
 
-func (s serverConfigV9) GetPostgreSQL() map[string]postgreSQLNotify {
+func (s serverConfigV10) GetPostgreSQL() map[string]postgreSQLNotify {
 	s.rwMutex.RLock()
 	defer s.rwMutex.RUnlock()
 	return s.Notify.PostgreSQL
 }
 
-func (s serverConfigV9) GetPostgreSQLNotifyByID(accountID string) postgreSQLNotify {
+func (s serverConfigV10) GetPostgreSQLNotifyByID(accountID string) postgreSQLNotify {
 	s.rwMutex.RLock()
 	defer s.rwMutex.RUnlock()
 	return s.Notify.PostgreSQL[accountID]
 }
 
 // SetFileLogger set new file logger.
-func (s *serverConfigV9) SetFileLogger(flogger fileLogger) {
+func (s *serverConfigV10) SetFileLogger(flogger fileLogger) {
 	s.rwMutex.Lock()
 	defer s.rwMutex.Unlock()
 	s.Logger.File = flogger
 }
 
 // GetFileLogger get current file logger.
-func (s serverConfigV9) GetFileLogger() fileLogger {
+func (s serverConfigV10) GetFileLogger() fileLogger {
 	s.rwMutex.RLock()
 	defer s.rwMutex.RUnlock()
 	return s.Logger.File
 }
 
 // SetConsoleLogger set new console logger.
-func (s *serverConfigV9) SetConsoleLogger(clogger consoleLogger) {
+func (s *serverConfigV10) SetConsoleLogger(clogger consoleLogger) {
 	s.rwMutex.Lock()
 	defer s.rwMutex.Unlock()
 	s.Logger.Console = clogger
 }
 
 // GetConsoleLogger get current console logger.
-func (s serverConfigV9) GetConsoleLogger() consoleLogger {
+func (s serverConfigV10) GetConsoleLogger() consoleLogger {
 	s.rwMutex.RLock()
 	defer s.rwMutex.RUnlock()
 	return s.Logger.Console
 }
 
-// SetSyslogLogger set new syslog logger.
-func (s *serverConfigV9) SetSyslogLogger(slogger syslogLogger) {
-	s.rwMutex.Lock()
-	defer s.rwMutex.Unlock()
-	s.Logger.Syslog = slogger
-}
-
-// GetSyslogLogger get current syslog logger.
-func (s *serverConfigV9) GetSyslogLogger() syslogLogger {
-	s.rwMutex.RLock()
-	defer s.rwMutex.RUnlock()
-	return s.Logger.Syslog
-}
-
 // SetRegion set new region.
-func (s *serverConfigV9) SetRegion(region string) {
+func (s *serverConfigV10) SetRegion(region string) {
 	s.rwMutex.Lock()
 	defer s.rwMutex.Unlock()
 	s.Region = region
 }
 
 // GetRegion get current region.
-func (s serverConfigV9) GetRegion() string {
+func (s serverConfigV10) GetRegion() string {
 	s.rwMutex.RLock()
 	defer s.rwMutex.RUnlock()
 	return s.Region
 }
 
 // SetCredentials set new credentials.
-func (s *serverConfigV9) SetCredential(creds credential) {
+func (s *serverConfigV10) SetCredential(creds credential) {
 	s.rwMutex.Lock()
 	defer s.rwMutex.Unlock()
 	s.Credential = creds
 }
 
 // GetCredentials get current credentials.
-func (s serverConfigV9) GetCredential() credential {
+func (s serverConfigV10) GetCredential() credential {
 	s.rwMutex.RLock()
 	defer s.rwMutex.RUnlock()
 	return s.Credential
 }
 
 // Save config.
-func (s serverConfigV9) Save() error {
+func (s serverConfigV10) Save() error {
 	s.rwMutex.RLock()
 	defer s.rwMutex.RUnlock()
 
