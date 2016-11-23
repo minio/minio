@@ -506,7 +506,7 @@ func healFormatXLFreshDisks(storageDisks []StorageAPI) error {
 	// From ordered disks fill the UUID position.
 	for index, disk := range orderedDisks {
 		if disk == nil {
-			newJBOD[index] = getUUID()
+			newJBOD[index] = mustGetUUID()
 		}
 	}
 
@@ -696,7 +696,7 @@ func healFormatXLCorruptedDisks(storageDisks []StorageAPI) error {
 	// From ordered disks fill the UUID position.
 	for index, disk := range orderedDisks {
 		if disk == nil {
-			newJBOD[index] = getUUID()
+			newJBOD[index] = mustGetUUID()
 		}
 	}
 
@@ -889,7 +889,7 @@ func initFormatXL(storageDisks []StorageAPI) (err error) {
 			Format:  "xl",
 			XL: &xlFormat{
 				Version: "1",
-				Disk:    getUUID(),
+				Disk:    mustGetUUID(),
 			},
 		}
 		jbod[index] = formats[index].XL.Disk

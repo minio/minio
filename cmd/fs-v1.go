@@ -354,7 +354,7 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 		metadata = make(map[string]string)
 	}
 
-	uniqueID := getUUID()
+	uniqueID := mustGetUUID()
 
 	// Uploaded object will first be written to the temporary location which will eventually
 	// be renamed to the actual location. It is first written to the temporary location

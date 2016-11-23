@@ -276,7 +276,7 @@ func healObject(storageDisks []StorageAPI, bucket string, object string, quorum 
 	partsMetadata = getOrderedPartsMetadata(latestMeta.Erasure.Distribution, partsMetadata)
 
 	// We write at temporary location and then rename to fianal location.
-	tmpID := getUUID()
+	tmpID := mustGetUUID()
 
 	// Checksum of the part files. checkSumInfos[index] will contain checksums
 	// of all the part files in the outDatedDisks[index]

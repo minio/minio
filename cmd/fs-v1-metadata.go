@@ -92,7 +92,7 @@ func readFSMetadata(disk StorageAPI, bucket, filePath string) (fsMeta fsMetaV1, 
 
 // Write fsMeta to fs.json or fs-append.json.
 func writeFSMetadata(disk StorageAPI, bucket, filePath string, fsMeta fsMetaV1) error {
-	tmpPath := getUUID()
+	tmpPath := mustGetUUID()
 	metadataBytes, err := json.Marshal(fsMeta)
 	if err != nil {
 		return traceError(err)

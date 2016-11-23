@@ -384,7 +384,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 		metadata = make(map[string]string)
 	}
 
-	uniqueID := getUUID()
+	uniqueID := mustGetUUID()
 	tempErasureObj := path.Join(uniqueID, "part.1")
 	tempObj := uniqueID
 
@@ -518,7 +518,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	}
 
 	// Rename if an object already exists to temporary location.
-	newUniqueID := getUUID()
+	newUniqueID := mustGetUUID()
 	if xl.isObject(bucket, object) {
 		// Delete the temporary copy of the object that existed before this PutObject request.
 		defer xl.deleteObject(minioMetaTmpBucket, newUniqueID)

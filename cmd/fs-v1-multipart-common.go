@@ -58,7 +58,7 @@ func (fs fsObjects) isUploadIDExists(bucket, object, uploadID string) bool {
 // updateUploadJSON - add or remove upload ID info in all `uploads.json`.
 func (fs fsObjects) updateUploadJSON(bucket, object, uploadID string, initiated time.Time, isRemove bool) error {
 	uploadsPath := path.Join(bucket, object, uploadsJSONFile)
-	tmpUploadsPath := getUUID()
+	tmpUploadsPath := mustGetUUID()
 
 	uploadsJSON, err := readUploadsJSON(bucket, object, fs.storage)
 	if errorCause(err) == errFileNotFound {
