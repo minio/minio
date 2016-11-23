@@ -21,13 +21,17 @@ import (
 	"path"
 	"runtime"
 	"strings"
+	"sync"
 
 	"github.com/Sirupsen/logrus"
 )
 
 type fields map[string]interface{}
 
-var log = logrus.New() // Default console logger.
+var log = struct {
+	loggers []*logrus.Logger // All registered loggers.
+	mu      sync.Mutex
+}{}
 
 // logger carries logging configuration for various supported loggers.
 // Currently supported loggers are
@@ -69,7 +73,9 @@ func errorIf(err error, msg string, data ...interface{}) {
 		fields["stack"] = strings.Join(e.Trace(), " ")
 	}
 
-	log.WithFields(fields).Errorf(msg, data...)
+	for _, log := range log.loggers {
+		log.WithFields(fields).Errorf(msg, data...)
+	}
 }
 
 // fatalIf wrapper function which takes error and prints jsonic error messages.
@@ -85,5 +91,7 @@ func fatalIf(err error, msg string, data ...interface{}) {
 	if e, ok := err.(*Error); ok {
 		fields["stack"] = strings.Join(e.Trace(), " ")
 	}
-	log.WithFields(fields).Fatalf(msg, data...)
+	for _, log := range log.loggers {
+		log.WithFields(fields).Fatalf(msg, data...)
+	}
 }

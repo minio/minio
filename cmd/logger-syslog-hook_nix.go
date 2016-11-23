@@ -20,6 +20,7 @@ package cmd
 
 import (
 	"fmt"
+	"io/ioutil"
 	"log/syslog"
 
 	"github.com/Sirupsen/logrus"
@@ -43,9 +44,16 @@ func enableSyslogLogger(raddr string) {
 	syslogHook, err := newSyslog("udp", raddr, syslog.LOG_ERR, "MINIO")
 	fatalIf(err, "Unable to initialize syslog logger.")
 
-	log.Hooks.Add(syslogHook)               // Add syslog hook.
-	log.Formatter = &logrus.JSONFormatter{} // JSON formatted log.
-	log.Level = logrus.ErrorLevel           // Minimum log level.
+	sysLogger := logrus.New()
+
+	sysLogger.Hooks.Add(syslogHook)               // Add syslog hook.
+	sysLogger.Formatter = &logrus.JSONFormatter{} // JSON formatted log.
+	sysLogger.Level = logrus.ErrorLevel           // Minimum log level.
+	sysLogger.Out = ioutil.Discard
+
+	log.mu.Lock()
+	log.loggers = append(log.loggers, sysLogger)
+	log.mu.Unlock()
 }
 
 // newSyslog - Creates a hook to be added to an instance of logger.
