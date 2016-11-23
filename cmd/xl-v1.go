@@ -23,6 +23,7 @@ import (
 	"strings"
 	"sync"
 
+	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/objcache"
 )
@@ -42,7 +43,7 @@ const (
 	uploadsJSONFile = "uploads.json"
 
 	// 8GiB cache by default.
-	maxCacheSize = 8 * 1024 * 1024 * 1024
+	maxCacheSize = 8 * humanize.GiByte
 
 	// Maximum erasure blocks.
 	maxErasureBlocks = 16

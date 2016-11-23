@@ -22,6 +22,8 @@ import (
 	"os"
 	"path"
 	"testing"
+
+	humanize "github.com/dustin/go-humanize"
 )
 
 // Test erasureHealFile()
@@ -39,8 +41,8 @@ func TestErasureHealFile(t *testing.T) {
 
 	disks := setup.disks
 
-	// Prepare a slice of 1MB with random data.
-	data := make([]byte, 1*1024*1024)
+	// Prepare a slice of 1MiB with random data.
+	data := make([]byte, 1*humanize.MiByte)
 	_, err = rand.Read(data)
 	if err != nil {
 		t.Fatal(err)
@@ -67,7 +69,7 @@ func TestErasureHealFile(t *testing.T) {
 	latest[0] = nil
 	outDated[0] = disks[0]
 
-	healCheckSums, err := erasureHealFile(latest, outDated, "testbucket", "testobject1", "testbucket", "testobject1", 1*1024*1024, blockSize, dataBlocks, parityBlocks, bitRotAlgo)
+	healCheckSums, err := erasureHealFile(latest, outDated, "testbucket", "testobject1", "testbucket", "testobject1", 1*humanize.MiByte, blockSize, dataBlocks, parityBlocks, bitRotAlgo)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +92,7 @@ func TestErasureHealFile(t *testing.T) {
 		outDated[index] = disks[index]
 	}
 
-	healCheckSums, err = erasureHealFile(latest, outDated, "testbucket", "testobject1", "testbucket", "testobject1", 1*1024*1024, blockSize, dataBlocks, parityBlocks, bitRotAlgo)
+	healCheckSums, err = erasureHealFile(latest, outDated, "testbucket", "testobject1", "testbucket", "testobject1", 1*humanize.MiByte, blockSize, dataBlocks, parityBlocks, bitRotAlgo)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,7 +122,7 @@ func TestErasureHealFile(t *testing.T) {
 		latest[index] = nil
 		outDated[index] = disks[index]
 	}
-	_, err = erasureHealFile(latest, outDated, "testbucket", "testobject1", "testbucket", "testobject1", 1*1024*1024, blockSize, dataBlocks, parityBlocks, bitRotAlgo)
+	_, err = erasureHealFile(latest, outDated, "testbucket", "testobject1", "testbucket", "testobject1", 1*humanize.MiByte, blockSize, dataBlocks, parityBlocks, bitRotAlgo)
 	if err == nil {
 		t.Error("Expected erasureHealFile() to fail when the number of available disks <= parityBlocks")
 	}

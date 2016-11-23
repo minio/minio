@@ -21,9 +21,9 @@ import (
 	"strconv"
 	"testing"
 	"time"
-)
 
-const MiB = 1024 * 1024
+	humanize "github.com/dustin/go-humanize"
+)
 
 // Test xlMetaV1.AddObjectPart()
 func TestAddObjectPart(t *testing.T) {
@@ -54,7 +54,7 @@ func TestAddObjectPart(t *testing.T) {
 	for _, testCase := range testCases {
 		if testCase.expectedIndex > -1 {
 			partNumString := strconv.Itoa(testCase.partNum)
-			xlMeta.AddObjectPart(testCase.partNum, "part."+partNumString, "etag."+partNumString, int64(testCase.partNum+MiB))
+			xlMeta.AddObjectPart(testCase.partNum, "part."+partNumString, "etag."+partNumString, int64(testCase.partNum+humanize.MiByte))
 		}
 
 		if index := objectPartIndex(xlMeta.Parts, testCase.partNum); index != testCase.expectedIndex {
@@ -86,7 +86,7 @@ func TestObjectPartIndex(t *testing.T) {
 	// Add some parts for testing.
 	for _, testCase := range testCases {
 		partNumString := strconv.Itoa(testCase.partNum)
-		xlMeta.AddObjectPart(testCase.partNum, "part."+partNumString, "etag."+partNumString, int64(testCase.partNum+MiB))
+		xlMeta.AddObjectPart(testCase.partNum, "part."+partNumString, "etag."+partNumString, int64(testCase.partNum+humanize.MiByte))
 	}
 
 	// Add failure test case.
@@ -115,7 +115,7 @@ func TestObjectToPartOffset(t *testing.T) {
 	// Total size of all parts is 5,242,899 bytes.
 	for _, partNum := range []int{1, 2, 4, 5, 7} {
 		partNumString := strconv.Itoa(partNum)
-		xlMeta.AddObjectPart(partNum, "part."+partNumString, "etag."+partNumString, int64(partNum+MiB))
+		xlMeta.AddObjectPart(partNum, "part."+partNumString, "etag."+partNumString, int64(partNum+humanize.MiByte))
 	}
 
 	testCases := []struct {
@@ -125,15 +125,15 @@ func TestObjectToPartOffset(t *testing.T) {
 		expectedErr    error
 	}{
 		{0, 0, 0, nil},
-		{MiB, 0, MiB, nil},
-		{1 + MiB, 1, 0, nil},
-		{2 + MiB, 1, 1, nil},
+		{1 * humanize.MiByte, 0, 1 * humanize.MiByte, nil},
+		{1 + humanize.MiByte, 1, 0, nil},
+		{2 + humanize.MiByte, 1, 1, nil},
 		// Its valid for zero sized object.
 		{-1, 0, -1, nil},
 		// Max fffset is always (size - 1).
-		{(1 + 2 + 4 + 5 + 7) + (5 * MiB) - 1, 4, 1048582, nil},
+		{(1 + 2 + 4 + 5 + 7) + (5 * humanize.MiByte) - 1, 4, 1048582, nil},
 		// Error if offset is size.
-		{(1 + 2 + 4 + 5 + 7) + (5 * MiB), 0, 0, InvalidRange{}},
+		{(1 + 2 + 4 + 5 + 7) + (5 * humanize.MiByte), 0, 0, InvalidRange{}},
 	}
 
 	// Test them.

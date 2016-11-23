@@ -22,6 +22,8 @@ import (
 	"math/rand"
 	"strconv"
 
+	humanize "github.com/dustin/go-humanize"
+
 	. "gopkg.in/check.v1"
 )
 
@@ -98,8 +100,8 @@ func testMultipartObjectCreation(obj ObjectLayer, instanceType string, c TestErr
 	if err != nil {
 		c.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
-	// Create a byte array of 5MB.
-	data := bytes.Repeat([]byte("0123456789abcdef"), 5*1024*1024/16)
+	// Create a byte array of 5MiB.
+	data := bytes.Repeat([]byte("0123456789abcdef"), 5*humanize.MiByte/16)
 	completedParts := completeMultipartUpload{}
 	for i := 1; i <= 10; i++ {
 		expectedMD5Sumhex := getMD5Hash(data)

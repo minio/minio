@@ -29,12 +29,13 @@ import (
 	"sync/atomic"
 	"syscall"
 
+	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio/pkg/disk"
 )
 
 const (
-	fsMinFreeSpace    = 1024 * 1024 * 1024 // Min 1GiB free space.
-	fsMinFreeInodes   = 10000              // Min 10000.
+	fsMinFreeSpace    = 1 * humanize.GiByte // Min 1GiB free space.
+	fsMinFreeInodes   = 10000               // Min 10000.
 	maxAllowedIOError = 5
 )
 

@@ -24,6 +24,8 @@ import (
 	"strconv"
 	"testing"
 	"time"
+
+	humanize "github.com/dustin/go-humanize"
 )
 
 // Prepare benchmark backend
@@ -107,7 +109,7 @@ func runPutObjectPartBenchmark(b *testing.B, obj ObjectLayer, partSize int) {
 		b.Fatal(err)
 	}
 
-	objSize := 128 * 1024 * 1024
+	objSize := 128 * humanize.MiByte
 
 	// PutObjectPart returns md5Sum of the object inserted.
 	// md5Sum variable is assigned with that value.

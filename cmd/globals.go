@@ -20,6 +20,7 @@ import (
 	"crypto/x509"
 	"time"
 
+	humanize "github.com/dustin/go-humanize"
 	"github.com/fatih/color"
 	"github.com/minio/minio/pkg/objcache"
 )
@@ -70,7 +71,7 @@ var (
 var (
 	// Limit fields size (except file) to 1Mib since Policy document
 	// can reach that size according to https://aws.amazon.com/articles/1434
-	maxFormFieldSize = int64(1024 * 1024)
+	maxFormFieldSize = int64(1 * humanize.MiByte)
 )
 
 var (

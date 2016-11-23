@@ -23,13 +23,14 @@ import (
 	"io/ioutil"
 	"net/http"
 
+	humanize "github.com/dustin/go-humanize"
 	mux "github.com/gorilla/mux"
 	"github.com/minio/minio-go/pkg/set"
 	"github.com/minio/minio/pkg/wildcard"
 )
 
 // maximum supported access policy size.
-const maxAccessPolicySize = 20 * 1024 // 20KiB.
+const maxAccessPolicySize = 20 * humanize.KiByte
 
 // Verify if a given action is valid for the url path based on the
 // existing bucket access policy.

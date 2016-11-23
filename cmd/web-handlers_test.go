@@ -27,6 +27,7 @@ import (
 	"strings"
 	"testing"
 
+	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio-go/pkg/set"
 )
@@ -403,7 +404,7 @@ func testListObjectsWebHandler(obj ObjectLayer, instanceType string, t TestErrHa
 
 	bucketName := getRandomBucketName()
 	objectName := "object"
-	objectSize := 1024
+	objectSize := 1 * humanize.KiByte
 
 	// Create bucket.
 	err = obj.MakeBucket(bucketName)
@@ -474,7 +475,7 @@ func testRemoveObjectWebHandler(obj ObjectLayer, instanceType string, t TestErrH
 
 	bucketName := getRandomBucketName()
 	objectName := "object"
-	objectSize := 1024
+	objectSize := 1 * humanize.KiByte
 
 	// Create bucket.
 	err = obj.MakeBucket(bucketName)
@@ -823,7 +824,7 @@ func testWebPresignedGetHandler(obj ObjectLayer, instanceType string, t TestErrH
 
 	bucketName := getRandomBucketName()
 	objectName := "object"
-	objectSize := 1024
+	objectSize := 1 * humanize.KiByte
 
 	// Create bucket.
 	err = obj.MakeBucket(bucketName)

@@ -22,9 +22,11 @@ import (
 	"testing"
 	"time"
 
+	"reflect"
+
+	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio/pkg/bpool"
 )
-import "reflect"
 
 // Tests getReadDisks which returns readable disks slice from which we can
 // read parallelly.
@@ -260,8 +262,8 @@ func TestErasureReadFileDiskFail(t *testing.T) {
 
 	disks := setup.disks
 
-	// Prepare a slice of 1MB with random data.
-	data := make([]byte, 1*1024*1024)
+	// Prepare a slice of 1humanize.MiByte with random data.
+	data := make([]byte, 1*humanize.MiByte)
 	length := int64(len(data))
 	_, err = rand.Read(data)
 	if err != nil {
@@ -333,7 +335,7 @@ func TestErasureReadFileOffsetLength(t *testing.T) {
 	// Initialize environment needed for the test.
 	dataBlocks := 7
 	parityBlocks := 7
-	blockSize := int64(1 * 1024 * 1024)
+	blockSize := int64(1 * humanize.MiByte)
 	setup, err := newErasureTestSetup(dataBlocks, parityBlocks, blockSize)
 	if err != nil {
 		t.Error(err)
@@ -343,8 +345,8 @@ func TestErasureReadFileOffsetLength(t *testing.T) {
 
 	disks := setup.disks
 
-	// Prepare a slice of 5MB with random data.
-	data := make([]byte, 5*1024*1024)
+	// Prepare a slice of 5humanize.MiByte with random data.
+	data := make([]byte, 5*humanize.MiByte)
 	length := int64(len(data))
 	_, err = rand.Read(data)
 	if err != nil {
@@ -409,7 +411,7 @@ func TestErasureReadFileRandomOffsetLength(t *testing.T) {
 	// Initialize environment needed for the test.
 	dataBlocks := 7
 	parityBlocks := 7
-	blockSize := int64(1 * 1024 * 1024)
+	blockSize := int64(1 * humanize.MiByte)
 	setup, err := newErasureTestSetup(dataBlocks, parityBlocks, blockSize)
 	if err != nil {
 		t.Error(err)
@@ -419,8 +421,8 @@ func TestErasureReadFileRandomOffsetLength(t *testing.T) {
 
 	disks := setup.disks
 
-	// Prepare a slice of 5MB with random data.
-	data := make([]byte, 5*1024*1024)
+	// Prepare a slice of 5MiB with random data.
+	data := make([]byte, 5*humanize.MiByte)
 	length := int64(len(data))
 	_, err = rand.Read(data)
 	if err != nil {

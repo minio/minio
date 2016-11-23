@@ -26,6 +26,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	humanize "github.com/dustin/go-humanize"
 )
 
 const (
@@ -264,7 +266,7 @@ func testPostPolicyHandler(obj ObjectLayer, instanceType string, t TestErrHandle
 		// Failed with entity too large.
 		{
 			objectName:         "test",
-			data:               bytes.Repeat([]byte("a"), 1024*1024+1),
+			data:               bytes.Repeat([]byte("a"), (1*humanize.MiByte)+1),
 			expectedRespStatus: http.StatusBadRequest,
 			accessKey:          credentials.AccessKeyID,
 			secretKey:          credentials.SecretAccessKey,
