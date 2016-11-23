@@ -123,53 +123,12 @@ Thanks for using Minio, awaiting feedback :-)
 
 It is possible to build the minio server from source on FreeBSD.  To do this we will used the golang distribution provided by the FreeBSD pkg infrastructure.
 
-First we will need to install golang as well as GNU make:
+We will need to install golang and GNU make:
 
 ```sh
-
 $ sudo pkg install go gmake
-Updating FreeBSD repository catalogue..
-FreeBSD repository is up-to-date.
-All repositories are up-to-date.
-The following 1 package(s) will be affected (of 0 checked):
-
-New packages to be INSTALLED:
-        go: 1.6.2,1
-        gmake: 4.1_2
-
-        The process will require 261 MiB more space.
-        40 MiB to be downloaded.
-
-        Proceed with this action? [y/N]: y
-        Fetching go-1.6.2,1.txz: 100%   40 MiB  10.4MB/s    00:04
-        Fetching gmake-4.1_2.txz: 100%  363 KiB 372.2kB/s    00:01
-        Checking integrity... done (0 conflicting)
-        [1/2] Installing go-1.6.2,1...
-        [1/2] Extracting go-1.6.2,1: 100%
-        [2/2] Installing gmake-4.1_2...
-        [2/2] Extracting gmake-4.1_2: 100%
 ```
+Now we can proceed with the normal build process of minio server as found [here](https://github.com/minio/minio/blob/master/CONTRIBUTING.md).  The only caveat is we need to specify gmake (GNU make) when building minio server as the current Makefile is not BSD make compatible:
 
-Next we need to configure our environment for golang.  Insert the following lines into your ~/.profile file, and be sure to source the file before proceeding to the next step:
-
-
-```sh
-
-GOPATH=$HOME/golang; export GOPATH
-GOROOT=/usr/local/go/; export GOROOT
-
-```
-
-Now we can proceed with the normal build process of minio server as found [here](https://github.com/nomadlogic/minio/blob/master/CONTRIBUTING.md).  The only caveat is we need to specify gmake (GNU make) when building minio server as the current Makefile is not BSD make compatible:
-
-```sh
-
-$ mkdir -p $GOPATH/src/github.com/minio
-$ cd $GOPATH/src/github.com/minio
-$ git clone <paste saved URL for personal forked minio repo>
-$ cd minio
-$ gmake
-
-```
 
 From here you can start the server as you would with a precompiled minio server build.
