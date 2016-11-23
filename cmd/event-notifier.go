@@ -484,6 +484,7 @@ func loadAllBucketNotifications(objAPI ObjectLayer) (map[string]*notificationCon
 	return nConfigs, lConfigs, nil
 }
 
+
 // Loads all queue targets, initializes each queueARNs depending on their config.
 // Each instance of queueARN registers its own logrus to communicate with the
 // queue service. QueueARN once initialized is not initialized again for the
