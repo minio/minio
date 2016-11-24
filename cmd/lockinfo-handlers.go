@@ -52,7 +52,7 @@ type VolumeLockInfo struct {
 // structure to fill in status information for each operation with given operation ID.
 type OpsLockState struct {
 	OperationID string        `json:"opsID"`          // String containing operation ID.
-	LockOrigin  string        `json:"lockOrigin"`     // Operation type (GetObject, PutObject...)
+	LockSource  string        `json:"lockSource"`     // Operation type (GetObject, PutObject...)
 	LockType    lockType      `json:"lockType"`       // Lock type (RLock, WLock)
 	Status      statusType    `json:"status"`         // Status can be Running/Ready/Blocked.
 	Since       time.Time     `json:"statusSince"`    // Time when the lock was initially held.
@@ -80,7 +80,7 @@ func getSystemLockState() (SystemLockState, error) {
 		for opsID, lockInfo := range debugLock.lockInfo {
 			volLockInfo.LockDetailsOnObject = append(volLockInfo.LockDetailsOnObject, OpsLockState{
 				OperationID: opsID,
-				LockOrigin:  lockInfo.lockOrigin,
+				LockSource:  lockInfo.lockSource,
 				LockType:    lockInfo.lType,
 				Status:      lockInfo.status,
 				Since:       lockInfo.since,

@@ -41,7 +41,7 @@ type debugLockInfo struct {
 	// "RLock" or "WLock".
 	lType lockType
 	// Contains the trace of the function which invoked the lock, obtained from runtime.
-	lockOrigin string
+	lockSource string
 	// Status can be running/ready/blocked.
 	status statusType
 	// Time info of the since how long the status holds true.
@@ -80,12 +80,12 @@ type LockInfoOriginNotFound struct {
 	volume     string
 	path       string
 	opsID      string
-	lockOrigin string
+	lockSource string
 }
 
 func (l LockInfoOriginNotFound) Error() string {
 	return fmt.Sprintf("No lock state stored for the lock origined at \"%s\", for <volume> %s, <path> %s, <opsID> %s",
-		l.lockOrigin, l.volume, l.path, l.opsID)
+		l.lockSource, l.volume, l.path, l.opsID)
 }
 
 // LockInfoVolPathMissing - Error interface. Returned when the info the
@@ -130,13 +130,13 @@ func (n *nsLockMap) initLockInfoForVolumePath(param nsParam) {
 }
 
 // Change the state of the lock from Blocked to Running.
-func (n *nsLockMap) statusBlockedToRunning(param nsParam, lockOrigin, opsID string, readLock bool) error {
+func (n *nsLockMap) statusBlockedToRunning(param nsParam, lockSource, opsID string, readLock bool) error {
 	// This operation is not executed under the scope nsLockMap.mutex.Lock(), lock has to be explicitly held here.
 	n.lockMapMutex.Lock()
 	defer n.lockMapMutex.Unlock()
 	// new state info to be set for the lock.
 	newLockInfo := debugLockInfo{
-		lockOrigin: lockOrigin,
+		lockSource: lockSource,
 		status:     runningStatus,
 		since:      time.Now().UTC(),
 	}
@@ -165,9 +165,9 @@ func (n *nsLockMap) statusBlockedToRunning(param nsParam, lockOrigin, opsID stri
 		// If not return `LockInfoOpsIDNotFound`.
 		return traceError(LockInfoOpsIDNotFound{param.volume, param.path, opsID})
 	}
-	// The entry for the lock origined at `lockOrigin` should already exist. If not return `LockInfoOriginNotFound`.
-	if lockInfo.lockOrigin != lockOrigin {
-		return traceError(LockInfoOriginNotFound{param.volume, param.path, opsID, lockOrigin})
+	// The entry for the lock origined at `lockSource` should already exist. If not return `LockInfoOriginNotFound`.
+	if lockInfo.lockSource != lockSource {
+		return traceError(LockInfoOriginNotFound{param.volume, param.path, opsID, lockSource})
 	}
 	// Status of the lock should already be set to "Blocked". If not return `LockInfoStateNotBlocked`.
 	if lockInfo.status != blockedStatus {
@@ -186,9 +186,9 @@ func (n *nsLockMap) statusBlockedToRunning(param nsParam, lockOrigin, opsID stri
 }
 
 // Change the state of the lock from Ready to Blocked.
-func (n *nsLockMap) statusNoneToBlocked(param nsParam, lockOrigin, opsID string, readLock bool) error {
+func (n *nsLockMap) statusNoneToBlocked(param nsParam, lockSource, opsID string, readLock bool) error {
 	newLockInfo := debugLockInfo{
-		lockOrigin: lockOrigin,
+		lockSource: lockSource,
 		status:     blockedStatus,
 		since:      time.Now().UTC(),
 	}

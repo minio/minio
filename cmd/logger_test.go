@@ -25,13 +25,13 @@ import (
 	"github.com/Sirupsen/logrus"
 )
 
-// Tests callerLocation.
-func TestCallerLocation(t *testing.T) {
-	currentLocation := func() string { return callerLocation() }
-	gotLocation := currentLocation()
-	expectedLocation := "[logger_test.go:31:TestCallerLocation()]"
-	if gotLocation != expectedLocation {
-		t.Errorf("expected : %s, got : %s", expectedLocation, gotLocation)
+// Tests callerSource.
+func TestCallerSource(t *testing.T) {
+	currentSource := func() string { return callerSource() }
+	gotSource := currentSource()
+	expectedSource := "[logger_test.go:31:TestCallerSource()]"
+	if gotSource != expectedSource {
+		t.Errorf("expected : %s, got : %s", expectedSource, gotSource)
 	}
 }
 

@@ -141,7 +141,7 @@ func TestLockStats(t *testing.T) {
 			path:       "my-object",
 			opsID:      "0",
 			readLock:   true,
-			lockOrigin: "[lock held] in github.com/minio/minio/cmd.TestLockStats[/Users/hackintoshrao/mycode/go/src/github.com/minio/minio/cmd/namespace-lock_test.go:298]",
+			lockSource: "[lock held] in github.com/minio/minio/cmd.TestLockStats[/Users/hackintoshrao/mycode/go/src/github.com/minio/minio/cmd/namespace-lock_test.go:298]",
 			// expected metrics.
 			expectedErr:        nil,
 			expectedLockStatus: "Running",
@@ -162,7 +162,7 @@ func TestLockStats(t *testing.T) {
 			path:       "my-object",
 			opsID:      "6",
 			readLock:   true,
-			lockOrigin: "[lock held] in github.com/minio/minio/cmd.TestLockStats[/Users/hackintoshrao/mycode/go/src/github.com/minio/minio/cmd/namespace-lock_test.go:298]",
+			lockSource: "[lock held] in github.com/minio/minio/cmd.TestLockStats[/Users/hackintoshrao/mycode/go/src/github.com/minio/minio/cmd/namespace-lock_test.go:298]",
 			// expected metrics.
 			expectedErr:        nil,
 			expectedLockStatus: "Running",
@@ -182,7 +182,7 @@ func TestLockStats(t *testing.T) {
 			path:       "my-object",
 			opsID:      "10",
 			readLock:   false,
-			lockOrigin: "[lock held] in github.com/minio/minio/cmd.TestLockStats[/Users/hackintoshrao/mycode/go/src/github.com/minio/minio/cmd/namespace-lock_test.go:298]",
+			lockSource: "[lock held] in github.com/minio/minio/cmd.TestLockStats[/Users/hackintoshrao/mycode/go/src/github.com/minio/minio/cmd/namespace-lock_test.go:298]",
 			// expected metrics.
 			expectedErr:        nil,
 			expectedLockStatus: "Running",
@@ -219,7 +219,7 @@ func TestLockStats(t *testing.T) {
 			path:       "my-object",
 			opsID:      "11",
 			readLock:   false,
-			lockOrigin: "[lock held] in github.com/minio/minio/cmd.TestLockStats[/Users/hackintoshrao/mycode/go/src/github.com/minio/minio/cmd/namespace-lock_test.go:298]",
+			lockSource: "[lock held] in github.com/minio/minio/cmd.TestLockStats[/Users/hackintoshrao/mycode/go/src/github.com/minio/minio/cmd/namespace-lock_test.go:298]",
 			// expected metrics.
 			expectedErr:        nil,
 			expectedLockStatus: "Running",
@@ -244,7 +244,7 @@ func TestLockStats(t *testing.T) {
 			readLock: false,
 			// write lock is held at line 318.
 			// this confirms that we are looking the right write lock.
-			lockOrigin: "[lock held] in github.com/minio/minio/cmd.TestLockStats.func2[/Users/hackintoshrao/mycode/go/src/github.com/minio/minio/cmd/namespace-lock_test.go:318]",
+			lockSource: "[lock held] in github.com/minio/minio/cmd.TestLockStats.func2[/Users/hackintoshrao/mycode/go/src/github.com/minio/minio/cmd/namespace-lock_test.go:318]",
 			// expected metrics.
 			expectedErr:        nil,
 			expectedLockStatus: "Blocked",
@@ -268,7 +268,7 @@ func TestLockStats(t *testing.T) {
 			path:       "my-object",
 			opsID:      "9",
 			readLock:   true,
-			lockOrigin: "[lock held] in github.com/minio/minio/cmd.TestLockStats.func2[/Users/hackintoshrao/mycode/go/src/github.com/minio/minio/cmd/namespace-lock_test.go:318]",
+			lockSource: "[lock held] in github.com/minio/minio/cmd.TestLockStats.func2[/Users/hackintoshrao/mycode/go/src/github.com/minio/minio/cmd/namespace-lock_test.go:318]",
 			// expected metrics.
 			expectedErr:        nil,
 			expectedLockStatus: "Running",

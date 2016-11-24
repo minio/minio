@@ -104,7 +104,7 @@ type nsLockMap struct {
 }
 
 // Lock the namespace resource.
-func (n *nsLockMap) lock(volume, path string, lockOrigin, opsID string, readLock bool) {
+func (n *nsLockMap) lock(volume, path string, lockSource, opsID string, readLock bool) {
 	var nsLk *nsLock
 	n.lockMapMutex.Lock()
 
@@ -128,7 +128,7 @@ func (n *nsLockMap) lock(volume, path string, lockOrigin, opsID string, readLock
 	// pair of <volume, path> and <OperationID> till the lock
 	// unblocks. The lock for accessing `nsMutex` is held inside
 	// the function itself.
-	if err := n.statusNoneToBlocked(param, lockOrigin, opsID, readLock); err != nil {
+	if err := n.statusNoneToBlocked(param, lockSource, opsID, readLock); err != nil {
 		errorIf(err, "Failed to set lock state to blocked")
 	}
 
@@ -145,7 +145,7 @@ func (n *nsLockMap) lock(volume, path string, lockOrigin, opsID string, readLock
 	// Changing the status of the operation from blocked to
 	// running.  change the state of the lock to be running (from
 	// blocked) for the given pair of <volume, path> and <OperationID>.
-	if err := n.statusBlockedToRunning(param, lockOrigin, opsID, readLock); err != nil {
+	if err := n.statusBlockedToRunning(param, lockSource, opsID, readLock); err != nil {
 		errorIf(err, "Failed to set the lock state to running")
 	}
 }
@@ -196,8 +196,8 @@ func (n *nsLockMap) unlock(volume, path, opsID string, readLock bool) {
 func (n *nsLockMap) Lock(volume, path, opsID string) {
 	readLock := false // This is a write lock.
 
-	lockLocation := callerLocation() // Useful for debugging
-	n.lock(volume, path, lockLocation, opsID, readLock)
+	lockSource := callerSource() // Useful for debugging
+	n.lock(volume, path, lockSource, opsID, readLock)
 }
 
 // Unlock - unlocks any previously acquired write locks.
@@ -210,8 +210,8 @@ func (n *nsLockMap) Unlock(volume, path, opsID string) {
 func (n *nsLockMap) RLock(volume, path, opsID string) {
 	readLock := true
 
-	lockLocation := callerLocation() // Useful for debugging
-	n.lock(volume, path, lockLocation, opsID, readLock)
+	lockSource := callerSource() // Useful for debugging
+	n.lock(volume, path, lockSource, opsID, readLock)
 }
 
 // RUnlock - unlocks any previously acquired read locks.
@@ -272,9 +272,9 @@ func (n *nsLockMap) NewNSLock(volume, path string) *lockInstance {
 
 // Lock - block until write lock is taken.
 func (li *lockInstance) Lock() {
-	lockLocation := callerLocation()
+	lockSource := callerSource()
 	readLock := false
-	li.n.lock(li.volume, li.path, lockLocation, li.opsID, readLock)
+	li.n.lock(li.volume, li.path, lockSource, li.opsID, readLock)
 }
 
 // Unlock - block until write lock is released.
@@ -285,9 +285,9 @@ func (li *lockInstance) Unlock() {
 
 // RLock - block until read lock is taken.
 func (li *lockInstance) RLock() {
-	lockLocation := callerLocation()
+	lockSource := callerSource()
 	readLock := true
-	li.n.lock(li.volume, li.path, lockLocation, li.opsID, readLock)
+	li.n.lock(li.volume, li.path, lockSource, li.opsID, readLock)
 }
 
 // RUnlock - block until read lock is released.
