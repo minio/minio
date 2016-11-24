@@ -117,10 +117,10 @@ var (
 // Check if the operating system is a docker container.
 func isDocker() bool {
 	cgroup, err := ioutil.ReadFile("/proc/self/cgroup")
-	if err != nil && os.IsNotExist(err) {
-		return false
+	if err != nil && !os.IsNotExist(err) {
+		errorIf(err, "Unable to read `cgroup` file.")
 	}
-	fatalIf(err, "Unable to read `cgroup` file.")
+
 	return bytes.Contains(cgroup, []byte("docker"))
 }
 
