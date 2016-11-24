@@ -54,7 +54,7 @@ func initConfig() (bool, error) {
 		// Enable console logger by default on a fresh run.
 		srvCfg.Logger.Console = consoleLogger{
 			Enable: true,
-			Level:  "fatal",
+			Level:  "error",
 		}
 
 		// Make sure to initialize notification configs.

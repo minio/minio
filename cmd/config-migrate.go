@@ -486,6 +486,7 @@ func migrateV8ToV9() error {
 		srvConfig.Region = "us-east-1"
 	}
 	srvConfig.Logger.Console = cv8.Logger.Console
+	srvConfig.Logger.Console.Level = "error"
 	srvConfig.Logger.File = cv8.Logger.File
 	srvConfig.Logger.Syslog = cv8.Logger.Syslog
 

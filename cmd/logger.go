@@ -45,7 +45,7 @@ type logger struct {
 }
 
 // Get file, line, function name of the caller.
-func callerLocation() string {
+func callerSource() string {
 	pc, file, line, success := runtime.Caller(2)
 	if !success {
 		file = "<unknown>"
@@ -59,13 +59,13 @@ func callerLocation() string {
 
 // errorIf synonymous with fatalIf but doesn't exit on error != nil
 func errorIf(err error, msg string, data ...interface{}) {
-	if err == nil {
+	if err == nil || !isErrLogged(err) {
 		return
 	}
-	location := callerLocation()
+	source := callerSource()
 	fields := logrus.Fields{
-		"location": location,
-		"cause":    err.Error(),
+		"source": source,
+		"cause":  err.Error(),
 	}
 	if e, ok := err.(*Error); ok {
 		fields["stack"] = strings.Join(e.Trace(), " ")
@@ -78,13 +78,13 @@ func errorIf(err error, msg string, data ...interface{}) {
 
 // fatalIf wrapper function which takes error and prints jsonic error messages.
 func fatalIf(err error, msg string, data ...interface{}) {
-	if err == nil {
+	if err == nil || !isErrLogged(err) {
 		return
 	}
-	location := callerLocation()
+	source := callerSource()
 	fields := logrus.Fields{
-		"location": location,
-		"cause":    err.Error(),
+		"source": source,
+		"cause":  err.Error(),
 	}
 	if e, ok := err.(*Error); ok {
 		fields["stack"] = strings.Join(e.Trace(), " ")
@@ -92,4 +92,21 @@ func fatalIf(err error, msg string, data ...interface{}) {
 	for _, log := range log.loggers {
 		log.WithFields(fields).Fatalf(msg, data...)
 	}
+}
+
+// returns false if error is not supposed to be logged.
+func isErrLogged(err error) (ok bool) {
+	ok = true
+	err = errorCause(err)
+	switch err.(type) {
+	case BucketNotFound, BucketNotEmpty, BucketExists:
+		ok = false
+	case ObjectNotFound, ObjectExistsAsDirectory:
+		ok = false
+	case BucketPolicyNotFound, InvalidUploadID:
+		ok = false
+	case BadDigest:
+		ok = false
+	}
+	return ok
 }

@@ -24,7 +24,7 @@ import (
 type lockStateCase struct {
 	volume      string
 	path        string
-	lockOrigin  string
+	lockSource  string
 	opsID       string
 	readLock    bool // lock type.
 	setBlocked  bool // initialize the initial state to blocked.
@@ -206,8 +206,8 @@ func verifyLockState(l lockStateCase, t *testing.T, testNum int) {
 			}
 
 			// // validating the lock origin.
-			// if l.lockOrigin != lockInfo.lockOrigin {
-			// 	t.Fatalf("Test %d: Expected the lock origin info to be \"%s\", but got \"%s\"", testNum, l.lockOrigin, lockInfo.lockOrigin)
+			// if l.lockSource != lockInfo.lockSource {
+			// 	t.Fatalf("Test %d: Expected the lock origin info to be \"%s\", but got \"%s\"", testNum, l.lockSource, lockInfo.lockSource)
 			// }
 			// validating the status of the lock.
 			if lockInfo.status != l.expectedLockStatus {
@@ -248,7 +248,7 @@ func TestNsLockMapStatusBlockedToRunning(t *testing.T) {
 	testCases := []struct {
 		volume      string
 		path        string
-		lockOrigin  string
+		lockSource  string
 		opsID       string
 		readLock    bool // Read lock type.
 		setBlocked  bool // Initialize the initial state to blocked.
@@ -258,7 +258,7 @@ func TestNsLockMapStatusBlockedToRunning(t *testing.T) {
 		{
 			volume:     "my-bucket",
 			path:       "my-object",
-			lockOrigin: "/home/vadmeste/work/go/src/github.com/minio/minio/xl-v1-object.go:683 +0x2a",
+			lockSource: "/home/vadmeste/work/go/src/github.com/minio/minio/xl-v1-object.go:683 +0x2a",
 			opsID:      "abcd1234",
 			readLock:   true,
 			setBlocked: true,
@@ -271,7 +271,7 @@ func TestNsLockMapStatusBlockedToRunning(t *testing.T) {
 		{
 			volume:     "my-bucket",
 			path:       "my-object-2",
-			lockOrigin: "/home/vadmeste/work/go/src/github.com/minio/minio/xl-v1-object.go:683 +0x2a",
+			lockSource: "/home/vadmeste/work/go/src/github.com/minio/minio/xl-v1-object.go:683 +0x2a",
 			opsID:      "abcd1234",
 			readLock:   false,
 			setBlocked: false,
@@ -283,7 +283,7 @@ func TestNsLockMapStatusBlockedToRunning(t *testing.T) {
 		{
 			volume:     "my-bucket",
 			path:       "my-object",
-			lockOrigin: "/home/vadmeste/work/go/src/github.com/minio/minio/xl-v1-object.go:683 +0x2a",
+			lockSource: "/home/vadmeste/work/go/src/github.com/minio/minio/xl-v1-object.go:683 +0x2a",
 			opsID:      "ops-Id-not-registered",
 			readLock:   true,
 			setBlocked: false,
@@ -295,7 +295,7 @@ func TestNsLockMapStatusBlockedToRunning(t *testing.T) {
 		{
 			volume:     "my-bucket",
 			path:       "my-object",
-			lockOrigin: "Bad Origin",
+			lockSource: "Bad Origin",
 			opsID:      "abcd1234",
 			readLock:   true,
 			setBlocked: false,
@@ -307,7 +307,7 @@ func TestNsLockMapStatusBlockedToRunning(t *testing.T) {
 		{
 			volume:     "my-bucket",
 			path:       "my-object",
-			lockOrigin: "/home/vadmeste/work/go/src/github.com/minio/minio/xl-v1-object.go:683 +0x2a",
+			lockSource: "/home/vadmeste/work/go/src/github.com/minio/minio/xl-v1-object.go:683 +0x2a",
 			opsID:      "abcd1234",
 			readLock:   false,
 			setBlocked: true,
@@ -319,7 +319,7 @@ func TestNsLockMapStatusBlockedToRunning(t *testing.T) {
 	param := nsParam{testCases[0].volume, testCases[0].path}
 	// Testing before the initialization done.
 	// Since the data structures for
-	actualErr := nsMutex.statusBlockedToRunning(param, testCases[0].lockOrigin,
+	actualErr := nsMutex.statusBlockedToRunning(param, testCases[0].lockSource,
 		testCases[0].opsID, testCases[0].readLock)
 
 	expectedErr := LockInfoVolPathMissing{testCases[0].volume, testCases[0].path}
@@ -334,7 +334,7 @@ func TestNsLockMapStatusBlockedToRunning(t *testing.T) {
 	}
 	// Entry for <volume, path> pair is set to nil. Should fail with `errLockNotInitialized`.
 	nsMutex.debugLockMap[param] = nil
-	actualErr = nsMutex.statusBlockedToRunning(param, testCases[0].lockOrigin,
+	actualErr = nsMutex.statusBlockedToRunning(param, testCases[0].lockSource,
 		testCases[0].opsID, testCases[0].readLock)
 
 	if errorCause(actualErr) != errLockNotInitialized {
@@ -349,7 +349,7 @@ func TestNsLockMapStatusBlockedToRunning(t *testing.T) {
 		running:  0,
 	}
 
-	actualErr = nsMutex.statusBlockedToRunning(param, testCases[0].lockOrigin,
+	actualErr = nsMutex.statusBlockedToRunning(param, testCases[0].lockSource,
 		testCases[0].opsID, testCases[0].readLock)
 
 	expectedOpsErr := LockInfoOpsIDNotFound{testCases[0].volume, testCases[0].path, testCases[0].opsID}
@@ -369,12 +369,12 @@ func TestNsLockMapStatusBlockedToRunning(t *testing.T) {
 	// Setting the status of the lock to be "Running".
 	// The initial state of the lock should set to "Blocked", otherwise its not possible to change the state from "Blocked" -> "Running".
 	nsMutex.debugLockMap[param].lockInfo[testCases[0].opsID] = debugLockInfo{
-		lockOrigin: "/home/vadmeste/work/go/src/github.com/minio/minio/xl-v1-object.go:683 +0x2a",
+		lockSource: "/home/vadmeste/work/go/src/github.com/minio/minio/xl-v1-object.go:683 +0x2a",
 		status:     "Running", // State set to "Running". Should fail with `LockInfoStateNotBlocked`.
 		since:      time.Now().UTC(),
 	}
 
-	actualErr = nsMutex.statusBlockedToRunning(param, testCases[0].lockOrigin,
+	actualErr = nsMutex.statusBlockedToRunning(param, testCases[0].lockSource,
 		testCases[0].opsID, testCases[0].readLock)
 
 	expectedBlockErr := LockInfoStateNotBlocked{testCases[0].volume, testCases[0].path, testCases[0].opsID}
@@ -391,14 +391,14 @@ func TestNsLockMapStatusBlockedToRunning(t *testing.T) {
 		// status of the lock to be set to "Blocked", before setting Blocked->Running.
 		if testCase.setBlocked {
 			nsMutex.lockMapMutex.Lock()
-			err := nsMutex.statusNoneToBlocked(param, testCase.lockOrigin, testCase.opsID, testCase.readLock)
+			err := nsMutex.statusNoneToBlocked(param, testCase.lockSource, testCase.opsID, testCase.readLock)
 			if err != nil {
 				t.Fatalf("Test %d: Initializing the initial state to Blocked failed <ERROR> %s", i+1, err)
 			}
 			nsMutex.lockMapMutex.Unlock()
 		}
 		// invoking the method under test.
-		actualErr = nsMutex.statusBlockedToRunning(param, testCase.lockOrigin, testCase.opsID, testCase.readLock)
+		actualErr = nsMutex.statusBlockedToRunning(param, testCase.lockSource, testCase.opsID, testCase.readLock)
 		if errorCause(actualErr) != testCase.expectedErr {
 			t.Fatalf("Test %d: Errors mismatch: Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, actualErr)
 		}
@@ -419,8 +419,8 @@ func TestNsLockMapStatusBlockedToRunning(t *testing.T) {
 					}
 
 					// validating the lock origin.
-					if testCase.lockOrigin != lockInfo.lockOrigin {
-						t.Errorf("Test %d: Expected the lock origin info to be \"%s\", but got \"%s\"", i+1, testCase.lockOrigin, lockInfo.lockOrigin)
+					if testCase.lockSource != lockInfo.lockSource {
+						t.Errorf("Test %d: Expected the lock origin info to be \"%s\", but got \"%s\"", i+1, testCase.lockSource, lockInfo.lockSource)
 					}
 					// validating the status of the lock.
 					if lockInfo.status != runningStatus {
@@ -448,7 +448,7 @@ func TestNsLockMapStatusNoneToBlocked(t *testing.T) {
 
 			volume:     "my-bucket",
 			path:       "my-object",
-			lockOrigin: "/home/vadmeste/work/go/src/github.com/minio/minio/xl-v1-object.go:683 +0x2a",
+			lockSource: "/home/vadmeste/work/go/src/github.com/minio/minio/xl-v1-object.go:683 +0x2a",
 			opsID:      "abcd1234",
 			readLock:   true,
 			// expected metrics.
@@ -470,7 +470,7 @@ func TestNsLockMapStatusNoneToBlocked(t *testing.T) {
 
 			volume:     "my-bucket",
 			path:       "my-object-2",
-			lockOrigin: "/home/vadmeste/work/go/src/github.com/minio/minio/xl-v1-object.go:683 +0x2a",
+			lockSource: "/home/vadmeste/work/go/src/github.com/minio/minio/xl-v1-object.go:683 +0x2a",
 			opsID:      "abcd1234",
 			readLock:   false,
 			// expected metrics.
@@ -491,7 +491,7 @@ func TestNsLockMapStatusNoneToBlocked(t *testing.T) {
 		{
 			volume:     "my-bucket",
 			path:       "my-object",
-			lockOrigin: "/home/vadmeste/work/go/src/github.com/minio/minio/xl-v1-object.go:683 +0x2a",
+			lockSource: "/home/vadmeste/work/go/src/github.com/minio/minio/xl-v1-object.go:683 +0x2a",
 			opsID:      "ops-Id-not-registered",
 			readLock:   true,
 			// expected metrics.
@@ -514,7 +514,7 @@ func TestNsLockMapStatusNoneToBlocked(t *testing.T) {
 	param := nsParam{testCases[0].volume, testCases[0].path}
 	// Testing before the initialization done.
 	// Since the data structures for
-	actualErr := nsMutex.statusBlockedToRunning(param, testCases[0].lockOrigin,
+	actualErr := nsMutex.statusBlockedToRunning(param, testCases[0].lockSource,
 		testCases[0].opsID, testCases[0].readLock)
 
 	expectedErr := LockInfoVolPathMissing{testCases[0].volume, testCases[0].path}
@@ -526,7 +526,7 @@ func TestNsLockMapStatusNoneToBlocked(t *testing.T) {
 	for i, testCase := range testCases {
 		nsMutex.lockMapMutex.Lock()
 		param := nsParam{testCase.volume, testCase.path}
-		actualErr := nsMutex.statusNoneToBlocked(param, testCase.lockOrigin, testCase.opsID, testCase.readLock)
+		actualErr := nsMutex.statusNoneToBlocked(param, testCase.lockSource, testCase.opsID, testCase.readLock)
 		if actualErr != testCase.expectedErr {
 			t.Fatalf("Test %d: Errors mismatch: Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, actualErr)
 		}
@@ -544,7 +544,7 @@ func TestNsLockMapDeleteLockInfoEntryForOps(t *testing.T) {
 		{
 			volume:     "my-bucket",
 			path:       "my-object",
-			lockOrigin: "/home/vadmeste/work/go/src/github.com/minio/minio/xl-v1-object.go:683 +0x2a",
+			lockSource: "/home/vadmeste/work/go/src/github.com/minio/minio/xl-v1-object.go:683 +0x2a",
 			opsID:      "abcd1234",
 			readLock:   true,
 			// expected metrics.
@@ -569,12 +569,12 @@ func TestNsLockMapDeleteLockInfoEntryForOps(t *testing.T) {
 	// Case - 2.
 	// Lock state is set to Running and then an attempt to delete the info for non-existent opsID done.
 	nsMutex.lockMapMutex.Lock()
-	err := nsMutex.statusNoneToBlocked(param, testCases[0].lockOrigin, testCases[0].opsID, testCases[0].readLock)
+	err := nsMutex.statusNoneToBlocked(param, testCases[0].lockSource, testCases[0].opsID, testCases[0].readLock)
 	if err != nil {
 		t.Fatalf("Setting lock status to Blocked failed: <ERROR> %s", err)
 	}
 	nsMutex.lockMapMutex.Unlock()
-	err = nsMutex.statusBlockedToRunning(param, testCases[0].lockOrigin, testCases[0].opsID, testCases[0].readLock)
+	err = nsMutex.statusBlockedToRunning(param, testCases[0].lockSource, testCases[0].opsID, testCases[0].readLock)
 	if err != nil {
 		t.Fatalf("Setting lock status to Running failed: <ERROR> %s", err)
 	}
@@ -629,7 +629,7 @@ func TestNsLockMapDeleteLockInfoEntryForVolumePath(t *testing.T) {
 		{
 			volume:     "my-bucket",
 			path:       "my-object",
-			lockOrigin: "/home/vadmeste/work/go/src/github.com/minio/minio/xl-v1-object.go:683 +0x2a",
+			lockSource: "/home/vadmeste/work/go/src/github.com/minio/minio/xl-v1-object.go:683 +0x2a",
 			opsID:      "abcd1234",
 			readLock:   true,
 			// expected metrics.
@@ -655,12 +655,12 @@ func TestNsLockMapDeleteLockInfoEntryForVolumePath(t *testing.T) {
 
 	// Registering the entry first.
 	nsMutex.lockMapMutex.Lock()
-	err := nsMutex.statusNoneToBlocked(param, testCases[0].lockOrigin, testCases[0].opsID, testCases[0].readLock)
+	err := nsMutex.statusNoneToBlocked(param, testCases[0].lockSource, testCases[0].opsID, testCases[0].readLock)
 	if err != nil {
 		t.Fatalf("Setting lock status to Blocked failed: <ERROR> %s", err)
 	}
 	nsMutex.lockMapMutex.Unlock()
-	err = nsMutex.statusBlockedToRunning(param, testCases[0].lockOrigin, testCases[0].opsID, testCases[0].readLock)
+	err = nsMutex.statusBlockedToRunning(param, testCases[0].lockSource, testCases[0].opsID, testCases[0].readLock)
 	if err != nil {
 		t.Fatalf("Setting lock status to Running failed: <ERROR> %s", err)
 	}
