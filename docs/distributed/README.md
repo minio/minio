@@ -14,17 +14,17 @@ Distributed Minio provides protection against multiple node/drive failures and [
 
 A stand-alone Minio server would go down if the server hosting the disks goes offline. In contrast, a distributed Minio setup with _n_ disks will have your data safe as long as _n/2_ or more disks are online. You'll need a minimum of _(n/2 + 1)_ [Quorum](https://github.com/minio/dsync#lock-process) disks to create new objects though.
 
-For example, a 8 nodes distributed Minio setup, with 1 disk per node would stay put, even if upto 4 nodes are offline. But, you'll need atleast 5 nodes online to create new objects.
+For example, an 8-node distributed Minio setup, with 1 disk per node would stay put, even if upto 4 nodes are offline. But, you'll need atleast 5 nodes online to create new objects.
 
 ## Limitations
 
-As with Minio in standalone mode, distributed Minio has the per tenant limit of minimum 4 and maximum 16 drives (imposed by erasure code). This helps maintain simplicity and yet remain scalable. If you need a multiple tenant setup, you can easily spin multiple Minio instances managed by orchestration tools like Kubernetes.
+As with Minio in stand-alone mode, distributed Minio has a per tenant limit of minimum 4 and maximum 16 drives (imposed by erasure code). This helps maintain simplicity and yet remain scalable. If you need a multiple tenant setup, you can easily spin multiple Minio instances managed by orchestration tools like Kubernetes.
 
-Note that with distributed Minio you can play around with the number of nodes and drives as long as the limits are adhered to. For example you can have 2 nodes with 4 drives each, 4 nodes with 4 drives each, 8 nodes with 2 drives each, and so on.
+Note that with distributed Minio you can play around with the number of nodes and drives as long as the limits are adhered to. For example, you can have 2 nodes with 4 drives each, 4 nodes with 4 drives each, 8 nodes with 2 drives each, and so on.
 
 # Get started
 
-If you're aware of stand-alone Minio set up, the process remains largely the same, as the Minio server automatically switches to standalone or distributed mode, depending on the command line parameters.
+If you're aware of stand-alone Minio set up, the process remains largely the same, as the Minio server automatically switches to stand-alone or distributed mode, depending on the command line parameters.
 
 ## 1. Prerequisites
 
