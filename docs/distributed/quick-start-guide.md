@@ -32,12 +32,16 @@ Install Minio - [Minio Quickstart Guide](https://docs.minio.io/docs/minio).
 
 ### 2. Run distributed Minio
 
-To start a distributed Minio instance, you just need to pass drive locations as parameters to the minio server command. Then, you’ll need to run the same command on all the participating nodes.
+To start a distributed Minio instance, you just need to pass drive locations as parameters to the minio server command. Then, you’ll need to run the same command on all the participating nodes. 
+
+It is important to note here that all the nodes running distributed Minio need to have same access key and secret key. Otherwise nodes won't connect. To achieve this, you need to export access key and secret key as environment variables on all the nodes before executing Minio server command.
 
 Below examples will clarify further:
 
 Example 1: Start distributed Minio instance with 1 drive each on 8 nodes, by running this command on all the 8 nodes.
 ```
+$ export MINIO_ACCESS_KEY=<ACCESS_KEY>
+$ export MINIO_SECRET_KEY=<SECRET_KEY>
 $ minio server http://192.168.1.11/export1 http://192.168.1.12/export2 
 http://192.168.1.13/export3 http://192.168.1.14/export4 http://192.168.1.15/export5 http://192.168.1.16/export6 
 http://192.168.1.17/export7 http://192.168.1.18/export8
@@ -46,6 +50,8 @@ http://192.168.1.17/export7 http://192.168.1.18/export8
 
 Example 2: Start distributed Minio instance with 4 drives each on 4 nodes, by running this command on all the 4 nodes. 
 ```
+$ export MINIO_ACCESS_KEY=<ACCESS_KEY>
+$ export MINIO_SECRET_KEY=<SECRET_KEY>
 $ minio server http://192.168.1.11/export1 http://192.168.1.11/export2
 http://192.168.1.11/export3 http://192.168.1.11/export4
 http://192.168.1.12/export1 http://192.168.1.12/export2
