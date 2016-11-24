@@ -22,15 +22,15 @@ As with Minio in standalone mode, distributed Minio has the per tenant limit of 
 
 Note that with distributed Minio you can play around with the number of nodes and drives as long as the limits are adhered to. For example you can have 2 nodes with 4 drives each, 4 nodes with 4 drives each, 8 nodes with 2 drives each, and so on. 
 
-## Get started
+# Get started
 
 If you're aware of stand-alone Minio set up, the process remains largely the same, as the Minio server automatically switches to standalone or distributed mode, depending on the command line parameters. 
 
-### 1. Prerequisites
+## 1. Prerequisites
 
 Install Minio - [Minio Quickstart Guide](https://docs.minio.io/docs/minio). 
 
-### 2. Run distributed Minio
+## 2. Run distributed Minio
 
 To start a distributed Minio instance, you just need to pass drive locations as parameters to the minio server command. Then, you’ll need to run the same command on all the participating nodes. 
 
@@ -39,6 +39,7 @@ It is important to note here that all the nodes running distributed Minio need t
 Below examples will clarify further:
 
 Example 1: Start distributed Minio instance with 1 drive each on 8 nodes, by running this command on all the 8 nodes.
+
 ```
 $ export MINIO_ACCESS_KEY=<ACCESS_KEY>
 $ export MINIO_SECRET_KEY=<SECRET_KEY>
@@ -46,9 +47,11 @@ $ minio server http://192.168.1.11/export1 http://192.168.1.12/export2
 http://192.168.1.13/export3 http://192.168.1.14/export4 http://192.168.1.15/export5 http://192.168.1.16/export6 
 http://192.168.1.17/export7 http://192.168.1.18/export8
 ```
+
 ![Distributed Minio, 8 nodes with 1 disk each](https://raw.githubusercontent.com/minio/minio/master/docs/screenshots/Architecture-diagram_distributed_8.png)
 
-Example 2: Start distributed Minio instance with 4 drives each on 4 nodes, by running this command on all the 4 nodes. 
+Example 2: Start distributed Minio instance with 4 drives each on 4 nodes, by running this command on all the 4 nodes.
+
 ```
 $ export MINIO_ACCESS_KEY=<ACCESS_KEY>
 $ export MINIO_SECRET_KEY=<SECRET_KEY>
@@ -61,11 +64,12 @@ http://192.168.1.13/export3 http://192.168.1.13/export4
 http://192.168.1.14/export1 http://192.168.1.14/export2
 http://192.168.1.14/export3 http://192.168.1.14/export4
 ```
+
 ![Distributed Minio, 4 nodes with 4 disks each](https://raw.githubusercontent.com/minio/minio/master/docs/screenshots/Architecture-diagram_distributed_16.png)
 
 Note that these IP addresses and drive paths are for demonstration purposes only, you need to replace these with the actual IP addresses and drive paths. 
 
-### 3. Test your setup
+## 3. Test your setup
 
 To test this setup, access the Minio server via browser or [`mc`](https://docs.minio.io/docs/minio-client-quickstart-guide). You’ll see the combined capacity of all the storage drives as the capacity of this drive. 
 
