@@ -48,17 +48,6 @@ func init() {
 	globalObjLayerMutex = &sync.Mutex{}
 }
 
-// isErrIgnored should we ignore this error?, takes a list of errors which can be ignored.
-func isErrIgnored(err error, ignoredErrs []error) bool {
-	err = errorCause(err)
-	for _, ignoredErr := range ignoredErrs {
-		if ignoredErr == err {
-			return true
-		}
-	}
-	return false
-}
-
 // House keeping code for FS/XL and distributed Minio setup.
 func houseKeeping(storageDisks []StorageAPI) error {
 	var wg = &sync.WaitGroup{}
@@ -83,9 +72,7 @@ func houseKeeping(storageDisks []StorageAPI) error {
 			// Cleanup all temp entries upon start.
 			err := cleanupDir(disk, minioMetaTmpBucket, "")
 			if err != nil {
-				switch errorCause(err) {
-				case errDiskNotFound, errVolumeNotFound, errFileNotFound:
-				default:
+				if !isErrIgnored(errorCause(err), errDiskNotFound, errVolumeNotFound, errFileNotFound) {
 					errs[index] = err
 				}
 			}
@@ -196,12 +183,7 @@ func newStorageAPI(ep *url.URL) (storage StorageAPI, err error) {
 	return newStorageRPC(ep)
 }
 
-var initMetaVolIgnoredErrs = []error{
-	errVolumeExists,
-	errDiskNotFound,
-	errFaultyDisk,
-	errFaultyRemoteDisk,
-}
+var initMetaVolIgnoredErrs = append(baseIgnoredErrs, errVolumeExists)
 
 // Initializes meta volume on all input storage disks.
 func initMetaVolume(storageDisks []StorageAPI) error {
@@ -227,21 +209,21 @@ func initMetaVolume(storageDisks []StorageAPI) error {
 			// Attempt to create `.minio.sys`.
 			err := disk.MakeVol(minioMetaBucket)
 			if err != nil {
-				if !isErrIgnored(err, initMetaVolIgnoredErrs) {
+				if !isErrIgnored(err, initMetaVolIgnoredErrs...) {
 					errs[index] = err
 				}
 				return
 			}
 			err = disk.MakeVol(minioMetaTmpBucket)
 			if err != nil {
-				if !isErrIgnored(err, initMetaVolIgnoredErrs) {
+				if !isErrIgnored(err, initMetaVolIgnoredErrs...) {
 					errs[index] = err
 				}
 				return
 			}
 			err = disk.MakeVol(minioMetaMultipartBucket)
 			if err != nil {
-				if !isErrIgnored(err, initMetaVolIgnoredErrs) {
+				if !isErrIgnored(err, initMetaVolIgnoredErrs...) {
 					errs[index] = err
 				}
 				return

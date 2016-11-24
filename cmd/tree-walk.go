@@ -133,7 +133,7 @@ func listDirFactory(isLeaf isLeafFunc, treeWalkIgnoredErrs []error, disks ...Sto
 			}
 			// For any reason disk was deleted or goes offline, continue
 			// and list from other disks if possible.
-			if isErrIgnored(err, treeWalkIgnoredErrs) {
+			if isErrIgnored(err, treeWalkIgnoredErrs...) {
 				continue
 			}
 			break

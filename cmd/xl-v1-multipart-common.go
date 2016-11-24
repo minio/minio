@@ -166,7 +166,7 @@ func (xl xlObjects) isMultipartUpload(bucket, prefix string) bool {
 			return true
 		}
 		// For any reason disk was deleted or goes offline, continue
-		if isErrIgnored(err, objMetadataOpIgnoredErrs) {
+		if isErrIgnored(err, objMetadataOpIgnoredErrs...) {
 			continue
 		}
 		break
@@ -213,7 +213,7 @@ func (xl xlObjects) statPart(bucket, object, uploadID, partName string) (fileInf
 		}
 		err = traceError(err)
 		// For any reason disk was deleted or goes offline we continue to next disk.
-		if isErrIgnored(err, objMetadataOpIgnoredErrs) {
+		if isErrIgnored(err, objMetadataOpIgnoredErrs...) {
 			continue
 		}
 

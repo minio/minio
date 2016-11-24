@@ -72,14 +72,7 @@ type xlObjects struct {
 }
 
 // list of all errors that can be ignored in tree walk operation in XL
-var xlTreeWalkIgnoredErrs = []error{
-	errFileNotFound,
-	errVolumeNotFound,
-	errDiskNotFound,
-	errDiskAccessDenied,
-	errFaultyDisk,
-	errFaultyRemoteDisk,
-}
+var xlTreeWalkIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied, errVolumeNotFound, errFileNotFound)
 
 // newXLObjects - initialize new xl object layer.
 func newXLObjects(storageDisks []StorageAPI) (ObjectLayer, error) {

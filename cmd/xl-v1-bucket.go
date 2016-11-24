@@ -21,16 +21,11 @@ import (
 	"sync"
 )
 
+// list all errors that can be ignore in a bucket operation.
+var bucketOpIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied)
+
 // list all errors that can be ignored in a bucket metadata operation.
 var bucketMetadataOpIgnoredErrs = append(bucketOpIgnoredErrs, errVolumeNotFound)
-
-// list all errors that can be ignore in a bucket operation.
-var bucketOpIgnoredErrs = []error{
-	errFaultyDisk,
-	errFaultyRemoteDisk,
-	errDiskNotFound,
-	errDiskAccessDenied,
-}
 
 /// Bucket operations
 
@@ -143,7 +138,7 @@ func (xl xlObjects) getBucketInfo(bucketName string) (bucketInfo BucketInfo, err
 		}
 		err = traceError(err)
 		// For any reason disk went offline continue and pick the next one.
-		if isErrIgnored(err, bucketMetadataOpIgnoredErrs) {
+		if isErrIgnored(err, bucketMetadataOpIgnoredErrs...) {
 			continue
 		}
 		break
@@ -219,7 +214,7 @@ func (xl xlObjects) listBuckets() (bucketsInfo []BucketInfo, err error) {
 			return bucketsInfo, nil
 		}
 		// Ignore any disks not found.
-		if isErrIgnored(err, bucketMetadataOpIgnoredErrs) {
+		if isErrIgnored(err, bucketMetadataOpIgnoredErrs...) {
 			continue
 		}
 		break
