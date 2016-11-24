@@ -549,7 +549,7 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	},
 	ErrPolicyNesting: {
 		Code:           "XMinioPolicyNesting",
-		Description:    "Policy nesting conflict has occurred.",
+		Description:    "New bucket policy conflicts with an existing policy. Please try again with new prefix.",
 		HTTPStatusCode: http.StatusConflict,
 	},
 	ErrInvalidObjectName: {

@@ -696,13 +696,19 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 	err = parseBucketPolicy(bytes.NewReader(data), policy)
 	if err != nil {
 		errorIf(err, "Unable to parse bucket policy.")
-		return toJSONError(err)
+		return toJSONError(err, args.BucketName)
 	}
 
 	// Parse check bucket policy.
 	if s3Error := checkBucketPolicyResources(args.BucketName, policy); s3Error != ErrNone {
 		apiErr := getAPIError(s3Error)
-		return toJSONError(errors.New(apiErr.Description), args.BucketName)
+		var err error
+		if apiErr.Code == "XMinioPolicyNesting" {
+			err = PolicyNesting{}
+		} else {
+			err = errors.New(apiErr.Description)
+		}
+		return toJSONError(err, args.BucketName)
 	}
 
 	// TODO: update policy statements according to bucket name,
@@ -850,6 +856,8 @@ func toWebAPIError(err error) APIError {
 		apiErrCode = ErrStorageFull
 	case BucketNotFound:
 		apiErrCode = ErrNoSuchBucket
+	case BucketExists:
+		apiErrCode = ErrBucketAlreadyOwnedByYou
 	case BucketNameInvalid:
 		apiErrCode = ErrInvalidBucketName
 	case BadDigest:
@@ -866,7 +874,11 @@ func toWebAPIError(err error) APIError {
 		apiErrCode = ErrWriteQuorum
 	case InsufficientReadQuorum:
 		apiErrCode = ErrReadQuorum
+	case PolicyNesting:
+		apiErrCode = ErrPolicyNesting
 	default:
+		// Log unexpected and unhandled errors.
+		errorIf(err, errUnexpected.Error())
 		apiErrCode = ErrInternalError
 	}
 	apiErr := getAPIError(apiErrCode)
