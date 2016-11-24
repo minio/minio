@@ -184,7 +184,7 @@ func listBucketNames(storageDisks []StorageAPI) (bucketNames map[string]struct{}
 			continue
 		}
 		// Ignore any disks not found.
-		if isErrIgnored(err, bucketMetadataOpIgnoredErrs) {
+		if isErrIgnored(err, bucketMetadataOpIgnoredErrs...) {
 			continue
 		}
 		break

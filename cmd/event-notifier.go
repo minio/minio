@@ -438,22 +438,15 @@ func removeListenerConfig(bucket string, objAPI ObjectLayer) error {
 
 // Loads both notification and listener config.
 func loadNotificationAndListenerConfig(bucketName string, objAPI ObjectLayer) (nCfg *notificationConfig, lCfg []listenerConfig, err error) {
-	nConfigErrs := []error{
-		// When no previous notification configs were found.
-		errNoSuchNotifications,
-		// net.Dial fails for rpc client or any
-		// other unexpected errors during net.Dial.
-		errDiskNotFound,
-	}
 	// Loads notification config if any.
 	nCfg, err = loadNotificationConfig(bucketName, objAPI)
-	if err != nil && !isErrIgnored(err, nConfigErrs) {
+	if err != nil && !isErrIgnored(err, errDiskNotFound, errNoSuchNotifications) {
 		return nil, nil, err
 	}
 
 	// Loads listener config if any.
 	lCfg, err = loadListenerConfig(bucketName, objAPI)
-	if err != nil && !isErrIgnored(err, nConfigErrs) {
+	if err != nil && !isErrIgnored(err, errDiskNotFound, errNoSuchNotifications) {
 		return nil, nil, err
 	}
 	return nCfg, lCfg, nil
