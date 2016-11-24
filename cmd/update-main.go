@@ -265,8 +265,9 @@ func getReleaseUpdate(updateURL string, duration time.Duration) (updateMsg updat
 
 // main entry point for update command.
 func mainUpdate(ctx *cli.Context) {
-	// Set global quiet flag.
-	if ctx.Bool("quiet") || ctx.GlobalBool("quiet") {
+
+	setGlobalsFromContext(ctx)
+	if globalQuiet {
 		return
 	}
 
