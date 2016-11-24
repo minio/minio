@@ -180,7 +180,7 @@ func (authClient *AuthRPCClient) Call(serviceMethod string, args interface {
 		err = authClient.rpc.Call(serviceMethod, args, reply)
 
 		// Invalidate token, and mark it for re-login on subsequent reconnect.
-		if err != nil && err == rpc.ErrShutdown {
+		if err == rpc.ErrShutdown {
 			authClient.mu.Lock()
 			authClient.isLoggedIn = false
 			authClient.mu.Unlock()
