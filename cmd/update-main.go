@@ -265,8 +265,14 @@ func getReleaseUpdate(updateURL string, duration time.Duration) (updateMsg updat
 
 // main entry point for update command.
 func mainUpdate(ctx *cli.Context) {
-	// Set global quiet flag.
-	if ctx.Bool("quiet") || ctx.GlobalBool("quiet") {
+
+	// Set global variables after parsing passed arguments
+	setGlobalsFromContext(ctx)
+
+	// Initialization routine, such as config loading, enable logging, ..
+	minioInit()
+
+	if globalQuiet {
 		return
 	}
 

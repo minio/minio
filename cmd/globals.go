@@ -22,6 +22,8 @@ import (
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/fatih/color"
+	"github.com/minio/cli"
+	"github.com/minio/mc/pkg/console"
 	"github.com/minio/minio/pkg/objcache"
 )
 
@@ -53,10 +55,11 @@ const (
 )
 
 var (
-	globalQuiet    = false // Quiet flag set via command line.
-	globalIsDistXL = false // "Is Distributed?" flag.
-
+	globalQuiet     = false               // quiet flag set via command line.
+	globalConfigDir = mustGetConfigPath() // config-dir flag set via command line
 	// Add new global flags here.
+
+	globalIsDistXL = false // "Is Distributed?" flag.
 
 	// Maximum cache size.
 	globalMaxCacheSize = uint64(maxCacheSize)
@@ -90,3 +93,19 @@ var (
 	colorBlue  = color.New(color.FgBlue).SprintfFunc()
 	colorGreen = color.New(color.FgGreen).SprintfFunc()
 )
+
+// Parse command arguments and set global variables accordingly
+func setGlobalsFromContext(c *cli.Context) {
+	// Set config dir
+	switch {
+	case c.IsSet("config-dir"):
+		globalConfigDir = c.String("config-dir")
+	case c.GlobalIsSet("config-dir"):
+		globalConfigDir = c.GlobalString("config-dir")
+	}
+	if globalConfigDir == "" {
+		console.Fatalf("Unable to get config file. Config directory is empty.")
+	}
+	// Set global quiet flag.
+	globalQuiet = c.Bool("quiet") || c.GlobalBool("quiet")
+}
