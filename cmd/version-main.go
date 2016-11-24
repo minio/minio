@@ -43,10 +43,10 @@ func mainVersion(ctx *cli.Context) {
 	if len(ctx.Args()) != 0 {
 		cli.ShowCommandHelpAndExit(ctx, "version", 1)
 	}
-
-	setGlobalsFromContext(ctx)
-
-	checkUpdate()
+	// Set global quiet flag.
+	if ctx.Bool("quiet") || ctx.GlobalBool("quiet") {
+		return
+	}
 
 	console.Println("Version: " + Version)
 	console.Println("Release-Tag: " + ReleaseTag)

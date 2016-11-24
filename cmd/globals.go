@@ -53,11 +53,10 @@ const (
 )
 
 var (
-	globalQuiet     = false               // quiet flag set via command line.
-	globalConfigDir = mustGetConfigPath() // config-dir flag set via command line
-	// Add new global flags here.
-
+	globalQuiet    = false // Quiet flag set via command line.
 	globalIsDistXL = false // "Is Distributed?" flag.
+
+	// Add new global flags here.
 
 	// Maximum cache size.
 	globalMaxCacheSize = uint64(maxCacheSize)
