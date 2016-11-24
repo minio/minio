@@ -40,33 +40,30 @@ Below examples will clarify further:
 
 Example 1: Start distributed Minio instance with 1 drive each on 8 nodes, by running this command on all the 8 nodes.
 
-```
-
+```shell
 $ export MINIO_ACCESS_KEY=<ACCESS_KEY>
 $ export MINIO_SECRET_KEY=<SECRET_KEY>
-$ minio server http://192.168.1.11/export1 http://192.168.1.12/export2
-http://192.168.1.13/export3 http://192.168.1.14/export4 http://192.168.1.15/export5 http://192.168.1.16/export6
-http://192.168.1.17/export7 http://192.168.1.18/export8
-
+$ minio server http://192.168.1.11/export1 http://192.168.1.12/export2 \
+               http://192.168.1.13/export3 http://192.168.1.14/export4 \
+               http://192.168.1.15/export5 http://192.168.1.16/export6 \
+               http://192.168.1.17/export7 http://192.168.1.18/export8
 ```
 
 ![Distributed Minio, 8 nodes with 1 disk each](https://raw.githubusercontent.com/minio/minio/master/docs/screenshots/Architecture-diagram_distributed_8.png)
 
 Example 2: Start distributed Minio instance with 4 drives each on 4 nodes, by running this command on all the 4 nodes.
 
-```
-
+```shell
 $ export MINIO_ACCESS_KEY=<ACCESS_KEY>
 $ export MINIO_SECRET_KEY=<SECRET_KEY>
-$ minio server http://192.168.1.11/export1 http://192.168.1.11/export2
-http://192.168.1.11/export3 http://192.168.1.11/export4
-http://192.168.1.12/export1 http://192.168.1.12/export2
-http://192.168.1.12/export3 http://192.168.1.12/export4
-http://192.168.1.13/export1 http://192.168.1.13/export2
-http://192.168.1.13/export3 http://192.168.1.13/export4
-http://192.168.1.14/export1 http://192.168.1.14/export2
-http://192.168.1.14/export3 http://192.168.1.14/export4
-
+$ minio server http://192.168.1.11/export1 http://192.168.1.11/export2 \
+               http://192.168.1.11/export3 http://192.168.1.11/export4 \
+               http://192.168.1.12/export1 http://192.168.1.12/export2 \
+               http://192.168.1.12/export3 http://192.168.1.12/export4 \
+               http://192.168.1.13/export1 http://192.168.1.13/export2 \
+               http://192.168.1.13/export3 http://192.168.1.13/export4 \
+               http://192.168.1.14/export1 http://192.168.1.14/export2 \
+               http://192.168.1.14/export3 http://192.168.1.14/export4
 ```
 
 ![Distributed Minio, 4 nodes with 4 disks each](https://raw.githubusercontent.com/minio/minio/master/docs/screenshots/Architecture-diagram_distributed_16.png)
