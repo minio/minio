@@ -325,6 +325,13 @@ func (e NotImplemented) Error() string {
 	return "Not Implemented"
 }
 
+// PolicyNesting - policy nesting conflict.
+type PolicyNesting struct{}
+
+func (e PolicyNesting) Error() string {
+	return "New bucket policy conflicts with an existing policy. Please try again with new prefix."
+}
+
 // Check if error type is IncompleteBody.
 func isErrIncompleteBody(err error) bool {
 	err = errorCause(err)
