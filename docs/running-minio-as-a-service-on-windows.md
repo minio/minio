@@ -25,5 +25,5 @@ It is a good (and secure) practice to create a new user, assign rights to the da
 ## Delete Minio service
 
 `
-c:\nssm.exe remove Minio c:\minio\bin\minio.exe server c:\data\
+c:\nssm.exe remove Minio
 `
