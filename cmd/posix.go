@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -797,6 +798,7 @@ func (s *posix) StatFile(volume, path string) (file FileInfo, err error) {
 
 // deleteFile - delete file path if its empty.
 func deleteFile(basePath, deletePath string) error {
+	fmt.Printf("delete %s\n", deletePath)
 	if basePath == deletePath {
 		return nil
 	}
