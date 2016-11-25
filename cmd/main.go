@@ -167,10 +167,15 @@ func Main() {
 
 		// Initialize config.
 		configCreated, err := initConfig()
-		fatalIf(err, "Unable to initialize minio config.")
+		if err != nil {
+			console.Fatalf("Unable to initialize minio config. Err: %s.\n", err)
+		}
 		if configCreated {
 			console.Println("Created minio configuration file at " + mustGetConfigPath())
 		}
+
+		// Enable all loggers by now so we can use errorIf() and fatalIf()
+		enableLoggers()
 
 		// Fetch access keys from environment variables and update the config.
 		accessKey := os.Getenv("MINIO_ACCESS_KEY")
@@ -188,9 +193,6 @@ func Main() {
 		if !isValidSecretKey(serverConfig.GetCredential().SecretAccessKey) {
 			fatalIf(errInvalidArgument, "Invalid secret key. Accept only a string containing from 8 to 40 characters.")
 		}
-
-		// Enable all loggers by now.
-		enableLoggers()
 
 		// Init the error tracing module.
 		initError()
