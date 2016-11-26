@@ -60,6 +60,11 @@ func newFSObjects(storage StorageAPI) (ObjectLayer, error) {
 		return nil, fmt.Errorf("Unable to recognize backend format, %s", err)
 	}
 
+	// Initialize meta volume, if volume already exists ignores it.
+	if err = initMetaVolume([]StorageAPI{storage}); err != nil {
+		return nil, fmt.Errorf("Unable to initialize '.minio.sys' meta volume, %s", err)
+	}
+
 	// Initialize fs objects.
 	fs := fsObjects{
 		storage:  storage,

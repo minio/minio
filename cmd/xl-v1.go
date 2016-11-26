@@ -112,6 +112,11 @@ func newXLObjects(storageDisks []StorageAPI) (ObjectLayer, error) {
 		objCacheEnabled: !objCacheDisabled,
 	}
 
+	// Initialize meta volume, if volume already exists ignores it.
+	if err = initMetaVolume(storageDisks); err != nil {
+		return nil, fmt.Errorf("Unable to initialize '.minio.sys' meta volume, %s", err)
+	}
+
 	// Figure out read and write quorum based on number of storage disks.
 	// READ and WRITE quorum is always set to (N/2) number of disks.
 	xl.readQuorum = readQuorum

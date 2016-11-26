@@ -211,22 +211,22 @@ func initMetaVolume(storageDisks []StorageAPI) error {
 			if err != nil {
 				if !isErrIgnored(err, initMetaVolIgnoredErrs...) {
 					errs[index] = err
+					return
 				}
-				return
 			}
 			err = disk.MakeVol(minioMetaTmpBucket)
 			if err != nil {
 				if !isErrIgnored(err, initMetaVolIgnoredErrs...) {
 					errs[index] = err
+					return
 				}
-				return
 			}
 			err = disk.MakeVol(minioMetaMultipartBucket)
 			if err != nil {
 				if !isErrIgnored(err, initMetaVolIgnoredErrs...) {
 					errs[index] = err
+					return
 				}
-				return
 			}
 		}(index, disk)
 	}
