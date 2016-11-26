@@ -120,3 +120,20 @@ func errorsCause(errs []error) []error {
 	}
 	return cerrs
 }
+
+var baseIgnoredErrs = []error{
+	errDiskNotFound,
+	errFaultyDisk,
+	errFaultyRemoteDisk,
+}
+
+// isErrIgnored returns whether given error is ignored or not.
+func isErrIgnored(err error, ignoredErrs ...error) bool {
+	err = errorCause(err)
+	for _, ignoredErr := range ignoredErrs {
+		if ignoredErr == err {
+			return true
+		}
+	}
+	return false
+}

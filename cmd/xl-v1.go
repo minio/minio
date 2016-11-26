@@ -72,14 +72,7 @@ type xlObjects struct {
 }
 
 // list of all errors that can be ignored in tree walk operation in XL
-var xlTreeWalkIgnoredErrs = []error{
-	errFileNotFound,
-	errVolumeNotFound,
-	errDiskNotFound,
-	errDiskAccessDenied,
-	errFaultyDisk,
-	errFaultyRemoteDisk,
-}
+var xlTreeWalkIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied, errVolumeNotFound, errFileNotFound)
 
 // newXLObjects - initialize new xl object layer.
 func newXLObjects(storageDisks []StorageAPI) (ObjectLayer, error) {
@@ -117,6 +110,11 @@ func newXLObjects(storageDisks []StorageAPI) (ObjectLayer, error) {
 		listPool:        listPool,
 		objCache:        objCache,
 		objCacheEnabled: !objCacheDisabled,
+	}
+
+	// Initialize meta volume, if volume already exists ignores it.
+	if err = initMetaVolume(storageDisks); err != nil {
+		return nil, fmt.Errorf("Unable to initialize '.minio.sys' meta volume, %s", err)
 	}
 
 	// Figure out read and write quorum based on number of storage disks.

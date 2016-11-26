@@ -24,22 +24,22 @@ import (
 
 // Function not implemented error
 func isSysErrNoSys(err error) bool {
-	return err != nil && err == syscall.ENOSYS
+	return err == syscall.ENOSYS
 }
 
 // Not supported error
 func isSysErrOpNotSupported(err error) bool {
-	return err != nil && err == syscall.EOPNOTSUPP
+	return err == syscall.EOPNOTSUPP
 }
 
 // No space left on device error
 func isSysErrNoSpace(err error) bool {
-	return err != nil && err == syscall.ENOSPC
+	return err == syscall.ENOSPC
 }
 
 // Input/output error
 func isSysErrIO(err error) bool {
-	return err != nil && err == syscall.EIO
+	return err == syscall.EIO
 }
 
 // Check if the given error corresponds to ENOTDIR (is not a directory).

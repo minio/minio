@@ -85,11 +85,9 @@ func loadAllBucketPolicies(objAPI ObjectLayer) (policies map[string]*bucketPolic
 	for _, bucket := range buckets {
 		policy, pErr := readBucketPolicy(bucket.Name, objAPI)
 		if pErr != nil {
-			if !isErrIgnored(pErr, []error{
-				// net.Dial fails for rpc client or any
-				// other unexpected errors during net.Dial.
-				errDiskNotFound,
-			}) {
+			// net.Dial fails for rpc client or any
+			// other unexpected errors during net.Dial.
+			if !isErrIgnored(pErr, errDiskNotFound) {
 				if !isErrBucketPolicyNotFound(pErr) {
 					pErrs = append(pErrs, pErr)
 				}

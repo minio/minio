@@ -76,7 +76,7 @@ func (xl xlObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 			if err == nil {
 				break
 			}
-			if isErrIgnored(err, objMetadataOpIgnoredErrs) {
+			if isErrIgnored(err, objMetadataOpIgnoredErrs...) {
 				continue
 			}
 			break
@@ -110,7 +110,7 @@ func (xl xlObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 			// For any walk error return right away.
 			if walkResult.err != nil {
 				// File not found or Disk not found is a valid case.
-				if isErrIgnored(walkResult.err, xlTreeWalkIgnoredErrs) {
+				if isErrIgnored(walkResult.err, xlTreeWalkIgnoredErrs...) {
 					continue
 				}
 				return ListMultipartsInfo{}, err
@@ -147,14 +147,14 @@ func (xl xlObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 				if err == nil {
 					break
 				}
-				if isErrIgnored(err, objMetadataOpIgnoredErrs) {
+				if isErrIgnored(err, objMetadataOpIgnoredErrs...) {
 					continue
 				}
 				break
 			}
 			entryLock.RUnlock()
 			if err != nil {
-				if isErrIgnored(err, xlTreeWalkIgnoredErrs) {
+				if isErrIgnored(err, xlTreeWalkIgnoredErrs...) {
 					continue
 				}
 				return ListMultipartsInfo{}, err
