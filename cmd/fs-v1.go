@@ -465,21 +465,20 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 		return ObjectInfo{}, toObjectErr(traceError(err), bucket, object)
 	}
 
-	// Save additional metadata. Initialize `fs.json` values.
-	fsMeta := newFSMetaV1()
-	fsMeta.Meta = metadata
+	if bucket != minioMetaBucket {
+		// Save objects' metadata in `fs.json`.
+		// Skip creating fs.json if bucket is .minio.sys as the object would have been created
+		// by minio's S3 layer (ex. policy.json)
+		fsMeta := newFSMetaV1()
+		fsMeta.Meta = metadata
 
-	fsMetaPath := path.Join(bucketMetaPrefix, bucket, object, fsMetaJSONFile)
-	if err = writeFSMetadata(fs.storage, minioMetaBucket, fsMetaPath, fsMeta); err != nil {
-		return ObjectInfo{}, toObjectErr(traceError(err), bucket, object)
+		fsMetaPath := path.Join(bucketMetaPrefix, bucket, object, fsMetaJSONFile)
+		if err = writeFSMetadata(fs.storage, minioMetaBucket, fsMetaPath, fsMeta); err != nil {
+			return ObjectInfo{}, toObjectErr(traceError(err), bucket, object)
+		}
 	}
 
-	objInfo, err = fs.getObjectInfo(bucket, object)
-	if err == nil {
-		// If MINIO_ENABLE_FSMETA is not enabled objInfo.MD5Sum will be empty.
-		objInfo.MD5Sum = newMD5Hex
-	}
-	return objInfo, err
+	return fs.getObjectInfo(bucket, object)
 }
 
 // DeleteObject - deletes an object from a bucket, this operation is destructive
@@ -499,11 +498,15 @@ func (fs fsObjects) DeleteObject(bucket, object string) error {
 	objectLock.RLock()
 	defer objectLock.RUnlock()
 
-	err := fs.storage.DeleteFile(minioMetaBucket, path.Join(bucketMetaPrefix, bucket, object, fsMetaJSONFile))
-	if err != nil && err != errFileNotFound {
-		return toObjectErr(traceError(err), bucket, object)
+	if bucket != minioMetaBucket {
+		// We don't store fs.json for minio-S3-layer created files like policy.json,
+		// hence we don't try to delete fs.json for such files.
+		err := fs.storage.DeleteFile(minioMetaBucket, path.Join(bucketMetaPrefix, bucket, object, fsMetaJSONFile))
+		if err != nil && err != errFileNotFound {
+			return toObjectErr(traceError(err), bucket, object)
+		}
 	}
-	if err = fs.storage.DeleteFile(bucket, object); err != nil {
+	if err := fs.storage.DeleteFile(bucket, object); err != nil {
 		return toObjectErr(traceError(err), bucket, object)
 	}
 	return nil
