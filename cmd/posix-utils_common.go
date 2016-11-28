@@ -31,7 +31,7 @@ func hasPosixReservedPrefix(name string) (isReserved bool) {
 			isReserved = true
 			break
 		}
-		isReserved = false
 	}
+
 	return isReserved
 }
