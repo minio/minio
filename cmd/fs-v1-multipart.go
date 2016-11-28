@@ -426,6 +426,10 @@ func (fs fsObjects) NewMultipartUpload(bucket, object string, meta map[string]st
 		return "", toObjectErr(err, bucket)
 	}
 
+	if !IsValidObjectNameFS(bucket, object) {
+		return "", traceError(ObjectNameInvalid{Bucket: bucket, Object: object})
+	}
+
 	// Hold the lock so that two parallel complete-multipart-uploads
 	// do not leave a stale uploads.json behind.
 	objectMPartPathLock := globalNSMutex.NewNSLock(minioMetaMultipartBucket, pathJoin(bucket, object))
