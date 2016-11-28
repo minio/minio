@@ -268,6 +268,9 @@ func (fs fsObjects) NewMultipartUpload(bucket, object string, meta map[string]st
 	if !IsValidObjectName(object) {
 		return "", traceError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
+	if !IsValidObjectNameFS(bucket, object) {
+		return "", traceError(ObjectNameInvalid{Bucket: bucket, Object: object})
+	}
 	return fs.newMultipartUpload(bucket, object, meta)
 }
 
