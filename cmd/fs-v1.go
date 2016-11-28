@@ -81,10 +81,18 @@ func newFSObjects(storage StorageAPI) (ObjectLayer, error) {
 // Should be called when process shuts down.
 func (fs fsObjects) Shutdown() error {
 	// List if there are any multipart entries.
-	_, err := fs.storage.ListDir(minioMetaBucket, mpartMetaPrefix)
-	if err != errFileNotFound {
-		// A nil err means that multipart directory is not empty hence do not remove '.minio.sys' volume.
+	prefix := ""
+	entries, err := fs.storage.ListDir(minioMetaMultipartBucket, prefix)
+	if err != nil {
 		// A non nil err means that an unexpected error occurred
+		return toObjectErr(traceError(err))
+	}
+	if len(entries) > 0 {
+		// Should not remove .minio.sys if there are any multipart
+		// uploads were found.
+		return nil
+	}
+	if err = fs.storage.DeleteVol(minioMetaMultipartBucket); err != nil {
 		return toObjectErr(traceError(err))
 	}
 	// List if there are any bucket configuration entries.
@@ -94,10 +102,17 @@ func (fs fsObjects) Shutdown() error {
 		// A non nil err means that an unexpected error occurred
 		return toObjectErr(traceError(err))
 	}
-	// Cleanup everything else.
-	prefix := ""
-	if err = cleanupDir(fs.storage, minioMetaBucket, prefix); err != nil {
+	// Cleanup and delete tmp bucket.
+	if err = cleanupDir(fs.storage, minioMetaTmpBucket, prefix); err != nil {
 		return err
+	}
+	if err = fs.storage.DeleteVol(minioMetaTmpBucket); err != nil {
+		return toObjectErr(traceError(err))
+	}
+
+	// Remove format.json and delete .minio.sys bucket
+	if err = fs.storage.DeleteFile(minioMetaBucket, fsFormatJSONFile); err != nil {
+		return toObjectErr(traceError(err))
 	}
 	if err = fs.storage.DeleteVol(minioMetaBucket); err != nil {
 		if err != errVolumeNotEmpty {
