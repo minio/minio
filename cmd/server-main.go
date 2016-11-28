@@ -363,8 +363,13 @@ func serverMain(c *cli.Context) {
 		cli.ShowCommandHelpAndExit(c, "server", 1)
 	}
 
-	// Set global quiet flag.
-	globalQuiet = c.Bool("quiet") || c.GlobalBool("quiet")
+	// Set global variables after parsing passed arguments
+	setGlobalsFromContext(c)
+
+	// Initialization routine, such as config loading, enable logging, ..
+	minioInit()
+
+	checkUpdate()
 
 	// Server address.
 	serverAddr := c.String("address")
