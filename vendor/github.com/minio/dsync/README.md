@@ -16,7 +16,7 @@ This package was developed for the distributed server version of [Minio Object S
 For [minio](https://minio.io/) the distributed version is started as follows (for a 6-server system):
 
 ```
-$ minio server server1/disk server2/disk server3/disk server4/disk server5/disk server6/disk 
+$ minio server server1:/disk server2:/disk server3:/disk server4:/disk server5:/disk server6:/disk 
 ```
  
 _(note that the same identical command should be run on servers `server1` through to `server6`)_

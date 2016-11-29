@@ -45,8 +45,8 @@ func SetNodesWithClients(rpcClnts []RPC, rpcOwnNode int) (err error) {
 	// Validate if number of nodes is within allowable range.
 	if dnodeCount != 0 {
 		return errors.New("Cannot reinitialize dsync package")
-	} else if len(rpcClnts) < 4 {
-		return errors.New("Dsync not designed for less than 4 nodes")
+	} else if len(rpcClnts) < 2 {
+		return errors.New("Dsync not designed for less than 2 nodes")
 	} else if len(rpcClnts) > 16 {
 		return errors.New("Dsync not designed for more than 16 nodes")
 	} else if len(rpcClnts)&1 == 1 {

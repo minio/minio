@@ -151,9 +151,9 @@ func TestCheckSufficientDisks(t *testing.T) {
 			xlDisks,
 			errXLMaxDisks,
 		},
-		// Lesser than minimum number of disks < 6.
+		// Lesser than minimum number of disks < 2.
 		{
-			xlDisks[0:3],
+			xlDisks[0:1],
 			errXLMinDisks,
 		},
 		// Odd number of disks, not divisible by '2'.
