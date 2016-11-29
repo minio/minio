@@ -16,7 +16,10 @@
 
 package cmd
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"net/rpc"
+)
 
 // BucketMetaState - Interface to update bucket metadata in-memory
 // state.
@@ -104,26 +107,62 @@ type remoteBucketMetaState struct {
 // change to remote peer via RPC call.
 func (rc *remoteBucketMetaState) UpdateBucketNotification(args *SetBucketNotificationPeerArgs) error {
 	reply := GenericReply{}
-	return rc.Call("S3.SetBucketNotificationPeer", args, &reply)
+	err := rc.Call("S3.SetBucketNotificationPeer", args, &reply)
+	// Check for network error and retry once.
+	if err != nil && err == rpc.ErrShutdown {
+		// Close the underlying connection to attempt once more.
+		rc.Close()
+
+		// Attempt again and proceed.
+		err = rc.Call("S3.SetBucketNotificationPeer", args, &reply)
+	}
+	return err
 }
 
 // remoteBucketMetaState.UpdateBucketListener - sends bucket listener change to
 // remote peer via RPC call.
 func (rc *remoteBucketMetaState) UpdateBucketListener(args *SetBucketListenerPeerArgs) error {
 	reply := GenericReply{}
-	return rc.Call("S3.SetBucketListenerPeer", args, &reply)
+	err := rc.Call("S3.SetBucketListenerPeer", args, &reply)
+	// Check for network error and retry once.
+	if err != nil && err == rpc.ErrShutdown {
+		// Close the underlying connection to attempt once more.
+		rc.Close()
+
+		// Attempt again and proceed.
+		err = rc.Call("S3.SetBucketListenerPeer", args, &reply)
+	}
+	return err
 }
 
 // remoteBucketMetaState.UpdateBucketPolicy - sends bucket policy change to remote
 // peer via RPC call.
 func (rc *remoteBucketMetaState) UpdateBucketPolicy(args *SetBucketPolicyPeerArgs) error {
 	reply := GenericReply{}
-	return rc.Call("S3.SetBucketPolicyPeer", args, &reply)
+	err := rc.Call("S3.SetBucketPolicyPeer", args, &reply)
+	// Check for network error and retry once.
+	if err != nil && err == rpc.ErrShutdown {
+		// Close the underlying connection to attempt once more.
+		rc.Close()
+
+		// Attempt again and proceed.
+		err = rc.Call("S3.SetBucketPolicyPeer", args, &reply)
+	}
+	return err
 }
 
 // remoteBucketMetaState.SendEvent - sends event for bucket listener to remote
 // peer via RPC call.
 func (rc *remoteBucketMetaState) SendEvent(args *EventArgs) error {
 	reply := GenericReply{}
-	return rc.Call("S3.Event", args, &reply)
+	err := rc.Call("S3.Event", args, &reply)
+	// Check for network error and retry once.
+	if err != nil && err == rpc.ErrShutdown {
+		// Close the underlying connection to attempt once more.
+		rc.Close()
+
+		// Attempt again and proceed.
+		err = rc.Call("S3.Event", args, &reply)
+	}
+	return err
 }
