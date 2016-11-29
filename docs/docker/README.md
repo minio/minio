@@ -39,7 +39,7 @@ docker run -p 9000:9000 --name minio1 \
 
 ## 4. Test Distributed Minio on Docker
 
-This example shows how to run 4 node Minio cluster inside different docker containers using [docker-compose](https://docs.docker.com/compose/). Please download [docker-compose.yml](https://raw.githubusercontent.com/minio/minio/master/docs/docker/docker-compose.yml) to your current working directory, docker-compose pulls the Minio Docker image with label ``edge``.
+This example shows how to run 4 node Minio cluster inside different docker containers using [docker-compose](https://docs.docker.com/compose/). Please download [docker-compose.yml](https://raw.githubusercontent.com/minio/minio/master/docs/docker/docker-compose.yml) to your current working directory, docker-compose pulls the Minio Docker image.
 
 ### Run `docker-compose`
 
