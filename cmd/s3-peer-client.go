@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/url"
 	"path"
 	"sync"
@@ -97,122 +96,115 @@ func (s3p s3Peers) GetPeerClient(peer string) BucketMetaState {
 	return nil
 }
 
-// SendUpdate sends bucket metadata updates to all given peer
-// indices. The update calls are sent in parallel, and errors are
-// returned per peer in an array. The returned error arrayslice is
-// always as long as s3p.peers.addr.
-//
-// The input peerIndex slice can be nil if the update is to be sent to
-// all peers. This is the common case.
-//
-// The updates are sent via a type implementing the BucketMetaState
-// interface. This makes sure that the local node is directly updated,
-// and remote nodes are updated via RPC calls.
-func (s3p s3Peers) SendUpdate(peerIndex []int, args interface{}) []error {
-
+// UpdateBucketNotification sends SetBucketNotificationPeerArgs to all S3 Peers.
+// The request is sent through BucketMetaState interface. This makes sure that
+// local node is directly updated, and remote nodes are updated via RPC calls.
+func (s3p s3Peers) UpdateBucketNotification(args SetBucketNotificationPeerArgs) []error {
 	// peer error array
 	errs := make([]error, len(s3p))
 
 	// Start a wait group and make RPC requests to peers.
 	var wg sync.WaitGroup
 
-	// Function that sends update to peer at `index`
-	sendUpdateToPeer := func(index int) {
-		defer wg.Done()
-		var err error
-		// Get BMS client for peer at `index`. The index is
-		// already checked for being within array bounds.
-		client := s3p[index].bmsClient
-
-		// Make the appropriate bucket metadata update
-		// according to the argument type
-		switch v := args.(type) {
-		case *SetBucketNotificationPeerArgs:
-			err = client.UpdateBucketNotification(v)
-
-		case *SetBucketListenerPeerArgs:
-			err = client.UpdateBucketListener(v)
-
-		case *SetBucketPolicyPeerArgs:
-			err = client.UpdateBucketPolicy(v)
-
-		default:
-			err = fmt.Errorf("Unknown arg in BucketMetaState updater - %v", args)
-		}
-		errs[index] = err
-	}
-
-	// Special (but common) case of peerIndex == nil, implies send
-	// update to all peers.
-	if peerIndex == nil {
-		for idx := 0; idx < len(s3p); idx++ {
-			wg.Add(1)
-			go sendUpdateToPeer(idx)
-		}
-	} else {
-		// Send update only to given peer indices.
-		for _, idx := range peerIndex {
-			// check idx is in array bounds.
-			if !(idx >= 0 && idx < len(s3p)) {
-				errorIf(
-					fmt.Errorf("Bad peer index %d input to SendUpdate()", idx),
-					"peerIndex out of bounds",
-				)
-				continue
-			}
-			wg.Add(1)
-			go sendUpdateToPeer(idx)
-		}
+	for i, s3peer := range s3p {
+		wg.Add(1)
+		go func(bms BucketMetaState, i int) {
+			defer wg.Done()
+			errs[i] = bms.UpdateBucketNotification(&args)
+		}(s3peer.bmsClient, i)
 	}
 
 	// Wait for requests to complete and return
 	wg.Wait()
+
+	return errs
+}
+
+// UpdateBucketListener sends SetBucketListenerPeerArgs to all S3 Peers.
+// The request is sent through BucketMetaState interface. This makes sure that
+// local node is directly updated, and remote nodes are updated via RPC calls.
+func (s3p s3Peers) UpdateBucketListener(args SetBucketListenerPeerArgs) []error {
+	// peer error array
+	errs := make([]error, len(s3p))
+
+	// Start a wait group and make RPC requests to peers.
+	var wg sync.WaitGroup
+
+	for i, s3peer := range s3p {
+		wg.Add(1)
+		go func(bms BucketMetaState, i int) {
+			defer wg.Done()
+			errs[i] = bms.UpdateBucketListener(&args)
+		}(s3peer.bmsClient, i)
+	}
+
+	// Wait for requests to complete and return
+	wg.Wait()
+
+	return errs
+}
+
+// UpdateBucketPolicy sends SetBucketPolicyPeerArgs to all S3 Peers.
+// The request is sent through BucketMetaState interface. This makes sure that
+// local node is directly updated, and remote nodes are updated via RPC calls.
+func (s3p s3Peers) UpdateBucketPolicy(args SetBucketPolicyPeerArgs) []error {
+	// peer error array
+	errs := make([]error, len(s3p))
+
+	// Start a wait group and make RPC requests to peers.
+	var wg sync.WaitGroup
+
+	for i, s3peer := range s3p {
+		wg.Add(1)
+		go func(bms BucketMetaState, i int) {
+			defer wg.Done()
+			errs[i] = bms.UpdateBucketPolicy(&args)
+		}(s3peer.bmsClient, i)
+	}
+
+	// Wait for requests to complete and return
+	wg.Wait()
+
 	return errs
 }
 
 // S3PeersUpdateBucketNotification - Sends Update Bucket notification
 // request to all peers. Currently we log an error and continue.
 func S3PeersUpdateBucketNotification(bucket string, ncfg *notificationConfig) {
-	setBNPArgs := &SetBucketNotificationPeerArgs{Bucket: bucket, NCfg: ncfg}
-	errs := globalS3Peers.SendUpdate(nil, setBNPArgs)
+	args := SetBucketNotificationPeerArgs{Bucket: bucket, NCfg: ncfg}
+	errs := globalS3Peers.UpdateBucketNotification(args)
 	for idx, err := range errs {
-		errorIf(
-			err,
+		errorIf(err,
 			"Error sending update bucket notification to %s - %v",
-			globalS3Peers[idx].addr, err,
-		)
+			globalS3Peers[idx].addr, err)
 	}
 }
 
 // S3PeersUpdateBucketListener - Sends Update Bucket listeners request
 // to all peers. Currently we log an error and continue.
 func S3PeersUpdateBucketListener(bucket string, lcfg []listenerConfig) {
-	setBLPArgs := &SetBucketListenerPeerArgs{Bucket: bucket, LCfg: lcfg}
-	errs := globalS3Peers.SendUpdate(nil, setBLPArgs)
+	args := SetBucketListenerPeerArgs{Bucket: bucket, LCfg: lcfg}
+	errs := globalS3Peers.UpdateBucketListener(args)
 	for idx, err := range errs {
-		errorIf(
-			err,
+		errorIf(err,
 			"Error sending update bucket listener to %s - %v",
-			globalS3Peers[idx].addr, err,
-		)
+			globalS3Peers[idx].addr, err)
 	}
 }
 
 // S3PeersUpdateBucketPolicy - Sends update bucket policy request to
 // all peers. Currently we log an error and continue.
-func S3PeersUpdateBucketPolicy(bucket string, pCh policyChange) {
-	byts, err := json.Marshal(pCh)
+func S3PeersUpdateBucketPolicy(bucket string, policy policyChange) {
+	byts, err := json.Marshal(policy)
 	if err != nil {
 		errorIf(err, "Failed to marshal policyChange - this is a BUG!")
 		return
 	}
-	setBPPArgs := &SetBucketPolicyPeerArgs{Bucket: bucket, PChBytes: byts}
-	errs := globalS3Peers.SendUpdate(nil, setBPPArgs)
+	args := SetBucketPolicyPeerArgs{Bucket: bucket, PChBytes: byts}
+	errs := globalS3Peers.UpdateBucketPolicy(args)
 	for idx, err := range errs {
-		errorIf(
-			err,
+		errorIf(err,
 			"Error sending update bucket policy to %s - %v",
-			globalS3Peers[idx].addr, err,
-		)
+			globalS3Peers[idx].addr, err)
 	}
 }
