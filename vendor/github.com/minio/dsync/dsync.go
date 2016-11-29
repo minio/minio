@@ -34,6 +34,7 @@ var ownNode int
 
 // Simple majority based quorum, set to dNodeCount/2+1
 var dquorum int
+
 // Simple quorum for read operations, set to dNodeCount/2
 var dquorumReads int
 
@@ -59,7 +60,7 @@ func SetNodesWithClients(rpcClnts []RPC, rpcOwnNode int) (err error) {
 
 	dnodeCount = len(rpcClnts)
 	dquorum = dnodeCount/2 + 1
-	dquorumReads = dnodeCount/2
+	dquorumReads = dnodeCount / 2
 	// Initialize node name and rpc path for each RPCClient object.
 	clnts = make([]RPC, dnodeCount)
 	copy(clnts, rpcClnts)
