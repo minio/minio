@@ -154,7 +154,7 @@ func (dm *DRWMutex) lockBlocking(isReadLock bool) {
 //
 func lock(clnts []RPC, locks *[]string, lockName string, isReadLock bool) bool {
 
-	// Create buffered channel of quorum size
+	// Create buffered channel of size equal to total number of nodes.
 	ch := make(chan Granted, dnodeCount)
 
 	for index, c := range clnts {
@@ -216,6 +216,8 @@ func lock(clnts []RPC, locks *[]string, lockName string, isReadLock bool) bool {
 						// We know that we are not going to get the lock anymore, so exit out
 						// and release any locks that did get acquired
 						done = true
+						// Increment the number of grants received from the buffered channel.
+						i++
 						releaseAll(clnts, locks, lockName, isReadLock)
 					}
 				}
