@@ -48,6 +48,10 @@ type SetBucketNotificationPeerArgs struct {
 	NCfg *notificationConfig
 }
 
+func (s *SetBucketNotificationPeerArgs) BucketUpdate(client BucketMetaState) error {
+	return client.UpdateBucketNotification(s)
+}
+
 func (s3 *s3PeerAPIHandlers) SetBucketNotificationPeer(args *SetBucketNotificationPeerArgs, reply *GenericReply) error {
 	// check auth
 	if !isRPCTokenValid(args.Token) {
@@ -66,6 +70,10 @@ type SetBucketListenerPeerArgs struct {
 
 	// Listener config for a given bucket.
 	LCfg []listenerConfig
+}
+
+func (s *SetBucketListenerPeerArgs) BucketUpdate(client BucketMetaState) error {
+	return client.UpdateBucketListener(s)
 }
 
 func (s3 *s3PeerAPIHandlers) SetBucketListenerPeer(args *SetBucketListenerPeerArgs, reply *GenericReply) error {
@@ -108,6 +116,10 @@ type SetBucketPolicyPeerArgs struct {
 
 	// Policy change (serialized to JSON)
 	PChBytes []byte
+}
+
+func (s *SetBucketPolicyPeerArgs) BucketUpdate(client BucketMetaState) error {
+	return client.UpdateBucketPolicy(s)
 }
 
 // tell receiving server to update a bucket policy

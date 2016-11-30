@@ -108,7 +108,7 @@ func (s3p s3Peers) GetPeerClient(peer string) BucketMetaState {
 // The updates are sent via a type implementing the BucketMetaState
 // interface. This makes sure that the local node is directly updated,
 // and remote nodes are updated via RPC calls.
-func (s3p s3Peers) SendUpdate(peerIndex []int, args interface{}) []error {
+func (s3p s3Peers) SendUpdate(peerIndex []int, args BucketUpdater) []error {
 
 	// peer error array
 	errs := make([]error, len(s3p))
@@ -119,27 +119,7 @@ func (s3p s3Peers) SendUpdate(peerIndex []int, args interface{}) []error {
 	// Function that sends update to peer at `index`
 	sendUpdateToPeer := func(index int) {
 		defer wg.Done()
-		var err error
-		// Get BMS client for peer at `index`. The index is
-		// already checked for being within array bounds.
-		client := s3p[index].bmsClient
-
-		// Make the appropriate bucket metadata update
-		// according to the argument type
-		switch v := args.(type) {
-		case *SetBucketNotificationPeerArgs:
-			err = client.UpdateBucketNotification(v)
-
-		case *SetBucketListenerPeerArgs:
-			err = client.UpdateBucketListener(v)
-
-		case *SetBucketPolicyPeerArgs:
-			err = client.UpdateBucketPolicy(v)
-
-		default:
-			err = fmt.Errorf("Unknown arg in BucketMetaState updater - %v", args)
-		}
-		errs[index] = err
+		errs[index] = args.BucketUpdate(s3p[index].bmsClient)
 	}
 
 	// Special (but common) case of peerIndex == nil, implies send
