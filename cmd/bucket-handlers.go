@@ -170,11 +170,15 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 	}
 
 	// ListBuckets does not have any bucket action.
-	if s3Error := checkRequestAuthType(r, "", "", "us-east-1"); s3Error != ErrNone {
+	s3Error := checkRequestAuthType(r, "", "", "us-east-1")
+	if s3Error == ErrInvalidRegion {
+		// Clients like boto3 send listBuckets() call signed with region that is configured.
+		s3Error = checkRequestAuthType(r, "", "", serverConfig.GetRegion())
+	}
+	if s3Error != ErrNone {
 		writeErrorResponse(w, r, s3Error, r.URL.Path)
 		return
 	}
-
 	// Invoke the list buckets.
 	bucketsInfo, err := objectAPI.ListBuckets()
 	if err != nil {
