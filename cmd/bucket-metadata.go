@@ -37,6 +37,11 @@ type BucketMetaState interface {
 	SendEvent(args *EventArgs) error
 }
 
+// BucketUpdater - Interface implementer calls one of BucketMetaState's methods.
+type BucketUpdater interface {
+	BucketUpdate(client BucketMetaState) error
+}
+
 // Type that implements BucketMetaState for local node.
 type localBucketMetaState struct {
 	ObjectAPI func() ObjectLayer
