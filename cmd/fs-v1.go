@@ -330,8 +330,7 @@ func (fs fsObjects) getObjectInfo(bucket, object string) (ObjectInfo, error) {
 		}
 	}
 
-	// Guess content-type from the extension if possible.
-	return ObjectInfo{
+	objInfo := ObjectInfo{
 		Bucket:          bucket,
 		Name:            object,
 		ModTime:         fi.ModTime,
@@ -340,8 +339,15 @@ func (fs fsObjects) getObjectInfo(bucket, object string) (ObjectInfo, error) {
 		MD5Sum:          fsMeta.Meta["md5Sum"],
 		ContentType:     fsMeta.Meta["content-type"],
 		ContentEncoding: fsMeta.Meta["content-encoding"],
-		UserDefined:     fsMeta.Meta,
-	}, nil
+	}
+
+	// md5Sum has already been extracted into objInfo.MD5Sum.  We
+	// need to remove it from fsMeta.Meta to avoid it from appearing as
+	// part of response headers. e.g, X-Minio-* or X-Amz-*.
+	delete(fsMeta.Meta, "md5Sum")
+	objInfo.UserDefined = fsMeta.Meta
+
+	return objInfo, nil
 }
 
 // GetObjectInfo - get object info.
