@@ -71,8 +71,8 @@ func makeS3Peers(eps []*url.URL) s3Peers {
 			}
 
 			ret = append(ret, s3Peer{
-				ep.Host,
-				&remoteBucketMetaState{newAuthClient(&cfg)},
+				addr:      ep.Host,
+				bmsClient: &remoteBucketMetaState{newAuthClient(&cfg)},
 			})
 			seenAddr[ep.Host] = true
 		}
