@@ -574,11 +574,16 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 		return "", toObjectErr(err, minioMetaMultipartBucket, fsMetaPath)
 	}
 
+	// This lock is held during rename of the appended tmp file to the actual
+	// location so that any competing GetObject/PutObject/DeleteObject do not race.
+	objectLock := nsMutex.NewNSLock(bucket, object)
 	appendFallback := true // In case background-append did not append the required parts.
 	if isPartsSame(fsMeta.Parts, parts) {
 		err = fs.bgAppend.complete(fs.storage, bucket, object, uploadID, fsMeta)
 		if err == nil {
 			appendFallback = false
+			objectLock.Lock()
+			defer objectLock.Unlock()
 			if err = fs.storage.RenameFile(minioMetaTmpBucket, uploadID, bucket, object); err != nil {
 				return "", toObjectErr(traceError(err), minioMetaTmpBucket, uploadID)
 			}
@@ -653,6 +658,8 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 			}
 		}
 
+		objectLock.Lock()
+		defer objectLock.Unlock()
 		// Rename the file back to original location, if not delete the temporary object.
 		err = fs.storage.RenameFile(minioMetaTmpBucket, tempObj, bucket, object)
 		if err != nil {
