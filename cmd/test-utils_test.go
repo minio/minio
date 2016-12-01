@@ -1921,6 +1921,12 @@ type objTestStaleFilesType func(obj ObjectLayer, instanceType string, dirs []str
 // ExecObjectLayerStaleFilesTest - executes object layer tests those leaves stale
 // files/directories under .minio/tmp.  Creates XL ObjectLayer instance and runs test for XL layer.
 func ExecObjectLayerStaleFilesTest(t *testing.T, objTest objTestStaleFilesType) {
+	configPath, err := newTestConfig("us-east-1")
+	if err != nil {
+		t.Fatal("Failed to create config directory", err)
+	}
+	defer removeAll(configPath)
+
 	nDisks := 16
 	erasureDisks, err := getRandomDisks(nDisks)
 	if err != nil {

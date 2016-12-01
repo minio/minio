@@ -957,7 +957,7 @@ func (s *posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err e
 	}
 
 	// Remove parent dir of the source file if empty
-	if parentDir := slashpath.Dir(preparePath(srcFilePath)); isDirEmpty(parentDir) {
+	if parentDir := slashpath.Dir(srcFilePath); isDirEmpty(parentDir) {
 		deleteFile(srcVolumeDir, parentDir)
 	}
 
