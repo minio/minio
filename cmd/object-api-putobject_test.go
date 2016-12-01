@@ -23,7 +23,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
-	"runtime"
 	"testing"
 
 	humanize "github.com/dustin/go-humanize"
@@ -329,9 +328,6 @@ func testObjectAPIPutObjectStaleFiles(obj ObjectLayer, instanceType string, disk
 
 // Wrapper for calling Multipart PutObject tests for both XL multiple disks and single node setup.
 func TestObjectAPIMultipartPutObjectStaleFiles(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		return
-	}
 	ExecObjectLayerStaleFilesTest(t, testObjectAPIMultipartPutObjectStaleFiles)
 }
 
