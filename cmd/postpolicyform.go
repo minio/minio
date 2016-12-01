@@ -18,8 +18,10 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -34,16 +36,20 @@ func toString(val interface{}) string {
 }
 
 // toInteger _ Safely convert interface to integer without causing panic.
-func toInteger(val interface{}) int64 {
+func toInteger(val interface{}) (int64, error) {
 	switch v := val.(type) {
 	case float64:
-		return int64(v)
+		return int64(v), nil
 	case int64:
-		return v
+		return v, nil
 	case int:
-		return int64(v)
+		return int64(v), nil
+	case string:
+		i, err := strconv.Atoi(v)
+		return int64(i), err
 	}
-	return 0
+
+	return 0, errors.New("Invalid number format")
 }
 
 // isString - Safely check if val is of type string without causing panic.
@@ -140,9 +146,19 @@ func parsePostPolicyForm(policy string) (PostPolicyForm, error) {
 					Value:    value,
 				}
 			case "content-length-range":
+				min, err := toInteger(condt[1])
+				if err != nil {
+					return parsedPolicy, err
+				}
+
+				max, err := toInteger(condt[2])
+				if err != nil {
+					return parsedPolicy, err
+				}
+
 				parsedPolicy.Conditions.ContentLengthRange = contentLengthRange{
-					Min:   toInteger(condt[1]),
-					Max:   toInteger(condt[2]),
+					Min:   min,
+					Max:   max,
 					Valid: true,
 				}
 			default:
