@@ -246,11 +246,6 @@ func (fs fsObjects) GetObject(bucket, object string, offset int64, length int64,
 		return traceError(InvalidRange{offset, length, fi.Size})
 	}
 
-	// Lock the object before reading.
-	objectLock := nsMutex.NewNSLock(bucket, object)
-	objectLock.RLock()
-	defer objectLock.RUnlock()
-
 	var totalLeft = length
 	bufSize := int64(readSizeV1)
 	if length > 0 && bufSize > length {
@@ -450,11 +445,6 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 		}
 	}
 
-	// Lock the object before committing the object.
-	objectLock := nsMutex.NewNSLock(bucket, object)
-	objectLock.RLock()
-	defer objectLock.RUnlock()
-
 	// Entire object was written to the temp location, now it's safe to rename it to the actual location.
 	err = fs.storage.RenameFile(minioMetaTmpBucket, tempObj, bucket, object)
 	if err != nil {
@@ -483,12 +473,6 @@ func (fs fsObjects) DeleteObject(bucket, object string) error {
 	if err := checkDelObjArgs(bucket, object); err != nil {
 		return err
 	}
-
-	// Lock the object before deleting so that an in progress GetObject does not return
-	// corrupt data or there is no race with a PutObject.
-	objectLock := nsMutex.NewNSLock(bucket, object)
-	objectLock.RLock()
-	defer objectLock.RUnlock()
 
 	if bucket != minioMetaBucket {
 		// We don't store fs.json for minio-S3-layer created files like policy.json,

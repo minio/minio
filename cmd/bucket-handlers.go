@@ -334,6 +334,10 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	bucketLock := globalNSMutex.NewNSLock(bucket, "")
+	bucketLock.Lock()
+	defer bucketLock.Unlock()
+
 	// Proceed to creating a bucket.
 	err := objectAPI.MakeBucket(bucket)
 	if err != nil {
@@ -431,6 +435,10 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 
 	sha256sum := ""
 
+	objectLock := globalNSMutex.NewNSLock(bucket, object)
+	objectLock.Lock()
+	defer objectLock.Unlock()
+
 	objInfo, err := objectAPI.PutObject(bucket, object, -1, fileBody, metadata, sha256sum)
 	if err != nil {
 		errorIf(err, "Unable to create object.")
@@ -478,6 +486,10 @@ func (api objectAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	bucketLock := globalNSMutex.NewNSLock(bucket, "")
+	bucketLock.RLock()
+	defer bucketLock.RUnlock()
+
 	if _, err := objectAPI.GetBucketInfo(bucket); err != nil {
 		errorIf(err, "Unable to fetch bucket info.")
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
@@ -502,6 +514,10 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
+
+	bucketLock := globalNSMutex.NewNSLock(bucket, "")
+	bucketLock.Lock()
+	defer bucketLock.Unlock()
 
 	// Attempt to delete bucket.
 	if err := objectAPI.DeleteBucket(bucket); err != nil {

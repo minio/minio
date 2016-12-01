@@ -37,22 +37,22 @@ func TestNamespaceLockTest(t *testing.T) {
 		shouldPass       bool
 	}{
 		{
-			lk:               nsMutex.Lock,
-			unlk:             nsMutex.Unlock,
+			lk:               globalNSMutex.Lock,
+			unlk:             globalNSMutex.Unlock,
 			lockedRefCount:   1,
 			unlockedRefCount: 0,
 			shouldPass:       true,
 		},
 		{
-			rlk:              nsMutex.RLock,
-			runlk:            nsMutex.RUnlock,
+			rlk:              globalNSMutex.RLock,
+			runlk:            globalNSMutex.RUnlock,
 			lockedRefCount:   4,
 			unlockedRefCount: 2,
 			shouldPass:       true,
 		},
 		{
-			rlk:              nsMutex.RLock,
-			runlk:            nsMutex.RUnlock,
+			rlk:              globalNSMutex.RLock,
+			runlk:            globalNSMutex.RUnlock,
 			lockedRefCount:   1,
 			unlockedRefCount: 0,
 			shouldPass:       true,
@@ -64,7 +64,7 @@ func TestNamespaceLockTest(t *testing.T) {
 	// Write lock tests.
 	testCase := testCases[0]
 	testCase.lk("a", "b", "c") // lock once.
-	nsLk, ok := nsMutex.lockMap[nsParam{"a", "b"}]
+	nsLk, ok := globalNSMutex.lockMap[nsParam{"a", "b"}]
 	if !ok && testCase.shouldPass {
 		t.Errorf("Lock in map missing.")
 	}
@@ -76,7 +76,7 @@ func TestNamespaceLockTest(t *testing.T) {
 	if testCase.unlockedRefCount != nsLk.ref && testCase.shouldPass {
 		t.Errorf("Test %d fails, expected to pass. Wanted ref count is %d, got %d", 1, testCase.unlockedRefCount, nsLk.ref)
 	}
-	_, ok = nsMutex.lockMap[nsParam{"a", "b"}]
+	_, ok = globalNSMutex.lockMap[nsParam{"a", "b"}]
 	if ok && !testCase.shouldPass {
 		t.Errorf("Lock map found after unlock.")
 	}
@@ -87,7 +87,7 @@ func TestNamespaceLockTest(t *testing.T) {
 	testCase.rlk("a", "b", "c") // lock second time.
 	testCase.rlk("a", "b", "c") // lock third time.
 	testCase.rlk("a", "b", "c") // lock fourth time.
-	nsLk, ok = nsMutex.lockMap[nsParam{"a", "b"}]
+	nsLk, ok = globalNSMutex.lockMap[nsParam{"a", "b"}]
 	if !ok && testCase.shouldPass {
 		t.Errorf("Lock in map missing.")
 	}
@@ -101,7 +101,7 @@ func TestNamespaceLockTest(t *testing.T) {
 	if testCase.unlockedRefCount != nsLk.ref && testCase.shouldPass {
 		t.Errorf("Test %d fails, expected to pass. Wanted ref count is %d, got %d", 2, testCase.unlockedRefCount, nsLk.ref)
 	}
-	_, ok = nsMutex.lockMap[nsParam{"a", "b"}]
+	_, ok = globalNSMutex.lockMap[nsParam{"a", "b"}]
 	if !ok && testCase.shouldPass {
 		t.Errorf("Lock map not found.")
 	}
@@ -110,7 +110,7 @@ func TestNamespaceLockTest(t *testing.T) {
 	testCase = testCases[2]
 	testCase.rlk("a", "c", "d") // lock once.
 
-	nsLk, ok = nsMutex.lockMap[nsParam{"a", "c"}]
+	nsLk, ok = globalNSMutex.lockMap[nsParam{"a", "c"}]
 	if !ok && testCase.shouldPass {
 		t.Errorf("Lock in map missing.")
 	}
@@ -122,7 +122,7 @@ func TestNamespaceLockTest(t *testing.T) {
 	if testCase.unlockedRefCount != nsLk.ref && testCase.shouldPass {
 		t.Errorf("Test %d fails, expected to pass. Wanted ref count is %d, got %d", 3, testCase.unlockedRefCount, nsLk.ref)
 	}
-	_, ok = nsMutex.lockMap[nsParam{"a", "c"}]
+	_, ok = globalNSMutex.lockMap[nsParam{"a", "c"}]
 	if ok && !testCase.shouldPass {
 		t.Errorf("Lock map not found.")
 	}
@@ -303,7 +303,7 @@ func TestLockStats(t *testing.T) {
 
 	// hold 10 read locks.
 	for i := 0; i < 10; i++ {
-		nsMutex.RLock("my-bucket", "my-object", strconv.Itoa(i))
+		globalNSMutex.RLock("my-bucket", "my-object", strconv.Itoa(i))
 	}
 	// expected lock info.
 	expectedLockStats := expectedResult[0]
@@ -311,7 +311,7 @@ func TestLockStats(t *testing.T) {
 	verifyLockState(expectedLockStats, t, 1)
 	// unlock 5 readlock.
 	for i := 0; i < 5; i++ {
-		nsMutex.RUnlock("my-bucket", "my-object", strconv.Itoa(i))
+		globalNSMutex.RUnlock("my-bucket", "my-object", strconv.Itoa(i))
 	}
 
 	expectedLockStats = expectedResult[1]
@@ -323,14 +323,14 @@ func TestLockStats(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		// blocks till all read locks are released.
-		nsMutex.Lock("my-bucket", "my-object", strconv.Itoa(10))
+		globalNSMutex.Lock("my-bucket", "my-object", strconv.Itoa(10))
 		// Once the above attempt to lock is unblocked/acquired, we verify the stats and release the lock.
 		expectedWLockStats := expectedResult[2]
 		// Since the write lock acquired here, the number of blocked locks should reduce by 1 and
 		// count of running locks should increase by 1.
 		verifyLockState(expectedWLockStats, t, 3)
 		// release the write lock.
-		nsMutex.Unlock("my-bucket", "my-object", strconv.Itoa(10))
+		globalNSMutex.Unlock("my-bucket", "my-object", strconv.Itoa(10))
 		// The number of running locks should decrease by 1.
 		// expectedWLockStats = expectedResult[3]
 		// verifyLockState(expectedWLockStats, t, 4)
@@ -348,14 +348,14 @@ func TestLockStats(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		// blocks till all read locks are released.
-		nsMutex.Lock("my-bucket", "my-object", strconv.Itoa(11))
+		globalNSMutex.Lock("my-bucket", "my-object", strconv.Itoa(11))
 		// Once the above attempt to lock is unblocked/acquired, we release the lock.
 		// Unlock the second write lock only after lock stats for first write lock release is taken.
 		<-syncChan
 		// The number of running locks should decrease by 1.
 		expectedWLockStats := expectedResult[4]
 		verifyLockState(expectedWLockStats, t, 5)
-		nsMutex.Unlock("my-bucket", "my-object", strconv.Itoa(11))
+		globalNSMutex.Unlock("my-bucket", "my-object", strconv.Itoa(11))
 	}()
 
 	expectedLockStats = expectedResult[5]
@@ -366,7 +366,7 @@ func TestLockStats(t *testing.T) {
 
 	// unlock 4 out of remaining 5 read locks.
 	for i := 0; i < 4; i++ {
-		nsMutex.RUnlock("my-bucket", "my-object", strconv.Itoa(i+5))
+		globalNSMutex.RUnlock("my-bucket", "my-object", strconv.Itoa(i+5))
 	}
 
 	// verify the entry for one remaining read lock and count of blocked write locks.
@@ -375,7 +375,7 @@ func TestLockStats(t *testing.T) {
 	verifyLockState(expectedLockStats, t, 7)
 
 	// Releasing the last read lock.
-	nsMutex.RUnlock("my-bucket", "my-object", strconv.Itoa(9))
+	globalNSMutex.RUnlock("my-bucket", "my-object", strconv.Itoa(9))
 	wg.Wait()
 	expectedLockStats = expectedResult[7]
 	// verify the actual lock info with the expected one.
@@ -386,16 +386,16 @@ func TestLockStats(t *testing.T) {
 func TestNamespaceForceUnlockTest(t *testing.T) {
 
 	// Create lock.
-	lock := nsMutex.NewNSLock("bucket", "object")
+	lock := globalNSMutex.NewNSLock("bucket", "object")
 	lock.Lock()
 	// Forcefully unlock lock.
-	nsMutex.ForceUnlock("bucket", "object")
+	globalNSMutex.ForceUnlock("bucket", "object")
 
 	ch := make(chan struct{}, 1)
 
 	go func() {
 		// Try to claim lock again.
-		anotherLock := nsMutex.NewNSLock("bucket", "object")
+		anotherLock := globalNSMutex.NewNSLock("bucket", "object")
 		anotherLock.Lock()
 		// And signal succes.
 		ch <- struct{}{}
@@ -412,5 +412,5 @@ func TestNamespaceForceUnlockTest(t *testing.T) {
 	}
 
 	// Clean up lock.
-	nsMutex.ForceUnlock("bucket", "object")
+	globalNSMutex.ForceUnlock("bucket", "object")
 }
