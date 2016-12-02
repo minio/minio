@@ -219,13 +219,8 @@ func (fs fsObjects) DeleteBucket(bucket string) error {
 
 // GetObject - get an object.
 func (fs fsObjects) GetObject(bucket, object string, offset int64, length int64, writer io.Writer) (err error) {
-	// Verify if bucket is valid.
-	if !IsValidBucketName(bucket) {
-		return traceError(BucketNameInvalid{Bucket: bucket})
-	}
-	// Verify if object is valid.
-	if !IsValidObjectName(object) {
-		return traceError(ObjectNameInvalid{Bucket: bucket, Object: object})
+	if err = checkGetObjArgs(bucket, object); err != nil {
+		return err
 	}
 	// Offset and length cannot be negative.
 	if offset < 0 || length < 0 {
@@ -352,28 +347,16 @@ func (fs fsObjects) getObjectInfo(bucket, object string) (ObjectInfo, error) {
 
 // GetObjectInfo - get object info.
 func (fs fsObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
-	// Verify if bucket is valid.
-	if !IsValidBucketName(bucket) {
-		return ObjectInfo{}, traceError(BucketNameInvalid{Bucket: bucket})
-	}
-	// Verify if object is valid.
-	if !IsValidObjectName(object) {
-		return ObjectInfo{}, traceError(ObjectNameInvalid{Bucket: bucket, Object: object})
+	if err := checkGetObjArgs(bucket, object); err != nil {
+		return ObjectInfo{}, err
 	}
 	return fs.getObjectInfo(bucket, object)
 }
 
 // PutObject - create an object.
 func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (objInfo ObjectInfo, err error) {
-	// Verify if bucket is valid.
-	if !IsValidBucketName(bucket) {
-		return ObjectInfo{}, traceError(BucketNameInvalid{Bucket: bucket})
-	}
-	if !IsValidObjectName(object) {
-		return ObjectInfo{}, traceError(ObjectNameInvalid{
-			Bucket: bucket,
-			Object: object,
-		})
+	if err = checkPutObjectArgs(bucket, object, fs); err != nil {
+		return ObjectInfo{}, err
 	}
 	// No metadata is set, allocate a new one.
 	if metadata == nil {
@@ -505,12 +488,8 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 // DeleteObject - deletes an object from a bucket, this operation is destructive
 // and there are no rollbacks supported.
 func (fs fsObjects) DeleteObject(bucket, object string) error {
-	// Verify if bucket is valid.
-	if !IsValidBucketName(bucket) {
-		return traceError(BucketNameInvalid{Bucket: bucket})
-	}
-	if !IsValidObjectName(object) {
-		return traceError(ObjectNameInvalid{Bucket: bucket, Object: object})
+	if err := checkDelObjArgs(bucket, object); err != nil {
+		return err
 	}
 
 	// Lock the object before deleting so that an in progress GetObject does not return
@@ -550,31 +529,8 @@ func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 		return
 	}
 
-	// Verify if bucket is valid.
-	if !IsValidBucketName(bucket) {
-		return ListObjectsInfo{}, traceError(BucketNameInvalid{Bucket: bucket})
-	}
-	// Verify if bucket exists.
-	if !fs.isBucketExist(bucket) {
-		return ListObjectsInfo{}, traceError(BucketNotFound{Bucket: bucket})
-	}
-	if !IsValidObjectPrefix(prefix) {
-		return ListObjectsInfo{}, traceError(ObjectNameInvalid{Bucket: bucket, Object: prefix})
-	}
-	// Verify if delimiter is anything other than '/', which we do not support.
-	if delimiter != "" && delimiter != slashSeparator {
-		return ListObjectsInfo{}, traceError(UnsupportedDelimiter{
-			Delimiter: delimiter,
-		})
-	}
-	// Verify if marker has prefix.
-	if marker != "" {
-		if !strings.HasPrefix(marker, prefix) {
-			return ListObjectsInfo{}, traceError(InvalidMarkerPrefixCombination{
-				Marker: marker,
-				Prefix: prefix,
-			})
-		}
+	if err := checkListObjsArgs(bucket, prefix, marker, delimiter, fs); err != nil {
+		return ListObjectsInfo{}, err
 	}
 
 	// With max keys of zero we have reached eof, return right here.

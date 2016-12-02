@@ -146,19 +146,6 @@ func (xl xlObjects) getBucketInfo(bucketName string) (bucketInfo BucketInfo, err
 	return BucketInfo{}, err
 }
 
-// Checks whether bucket exists.
-func (xl xlObjects) isBucketExist(bucket string) bool {
-	// Check whether bucket exists.
-	_, err := xl.getBucketInfo(bucket)
-	if err != nil {
-		if err == errVolumeNotFound {
-			return false
-		}
-		return false
-	}
-	return true
-}
-
 // GetBucketInfo - returns BucketInfo for a bucket.
 func (xl xlObjects) GetBucketInfo(bucket string) (BucketInfo, error) {
 	// Verify if bucket is valid.

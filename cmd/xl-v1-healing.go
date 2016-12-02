@@ -28,9 +28,9 @@ func healFormatXL(storageDisks []StorageAPI) (err error) {
 	// Attempt to load all `format.json`.
 	formatConfigs, sErrs := loadAllFormats(storageDisks)
 
-	// Generic format check validates
-	// if (no quorum) return error
-	// if (disks not recognized) // Always error.
+	// Generic format check.
+	// - if (no quorum) return error
+	// - if (disks not recognized) // Always error.
 	if err = genericFormatCheck(formatConfigs, sErrs); err != nil {
 		return err
 	}
@@ -58,14 +58,8 @@ func healFormatXL(storageDisks []StorageAPI) (err error) {
 // also heals the missing entries for bucket metadata files
 // `policy.json, notification.xml, listeners.json`.
 func (xl xlObjects) HealBucket(bucket string) error {
-	// Verify if bucket is valid.
-	if !IsValidBucketName(bucket) {
-		return traceError(BucketNameInvalid{Bucket: bucket})
-	}
-
-	// Verify if bucket exists.
-	if !xl.isBucketExist(bucket) {
-		return traceError(BucketNotFound{Bucket: bucket})
+	if err := checkBucketExist(bucket, xl); err != nil {
+		return err
 	}
 
 	// Heal bucket.
@@ -347,14 +341,8 @@ func healObject(storageDisks []StorageAPI, bucket string, object string, quorum 
 // and later the disk comes back up again, heal on the object
 // should delete it.
 func (xl xlObjects) HealObject(bucket, object string) error {
-	// Verify if bucket is valid.
-	if !IsValidBucketName(bucket) {
-		return traceError(BucketNameInvalid{Bucket: bucket})
-	}
-
-	// Verify if object is valid.
-	if !IsValidObjectName(object) {
-		return traceError(ObjectNameInvalid{Bucket: bucket, Object: object})
+	if err := checkGetObjArgs(bucket, object); err != nil {
+		return err
 	}
 
 	// Lock the object before healing.
