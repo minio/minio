@@ -48,6 +48,9 @@ type SetBucketNotificationPeerArgs struct {
 	NCfg *notificationConfig
 }
 
+// BucketUpdate - implements bucket notification updates,
+// the underlying operation is a network call updates all
+// the peers participating in bucket notification.
 func (s *SetBucketNotificationPeerArgs) BucketUpdate(client BucketMetaState) error {
 	return client.UpdateBucketNotification(s)
 }
@@ -72,6 +75,9 @@ type SetBucketListenerPeerArgs struct {
 	LCfg []listenerConfig
 }
 
+// BucketUpdate - implements bucket listener updates,
+// the underlying operation is a network call updates all
+// the peers participating in listen bucket notification.
 func (s *SetBucketListenerPeerArgs) BucketUpdate(client BucketMetaState) error {
 	return client.UpdateBucketListener(s)
 }
@@ -118,6 +124,9 @@ type SetBucketPolicyPeerArgs struct {
 	PChBytes []byte
 }
 
+// BucketUpdate - implements bucket policy updates,
+// the underlying operation is a network call updates all
+// the peers participating for new set/unset policies.
 func (s *SetBucketPolicyPeerArgs) BucketUpdate(client BucketMetaState) error {
 	return client.UpdateBucketPolicy(s)
 }
