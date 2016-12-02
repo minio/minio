@@ -27,20 +27,6 @@ func (fs fsObjects) isMultipartUpload(bucket, prefix string) bool {
 	return err == nil
 }
 
-// Checks whether bucket exists.
-func (fs fsObjects) isBucketExist(bucket string) bool {
-	// Check whether bucket exists.
-	_, err := fs.storage.StatVol(bucket)
-	if err != nil {
-		if err == errVolumeNotFound {
-			return false
-		}
-		errorIf(err, "Stat failed on bucket "+bucket+".")
-		return false
-	}
-	return true
-}
-
 // isUploadIDExists - verify if a given uploadID exists and is valid.
 func (fs fsObjects) isUploadIDExists(bucket, object, uploadID string) bool {
 	uploadIDPath := path.Join(bucket, object, uploadID)

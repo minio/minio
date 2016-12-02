@@ -33,7 +33,7 @@ import (
 // Enforces bucket policies for a bucket for a given tatusaction.
 func enforceBucketPolicy(bucket string, action string, reqURL *url.URL) (s3Error APIErrorCode) {
 	// Verify if bucket actually exists
-	if err := isBucketExist(bucket, newObjectLayerFn()); err != nil {
+	if err := checkBucketExist(bucket, newObjectLayerFn()); err != nil {
 		err = errorCause(err)
 		switch err.(type) {
 		case BucketNameInvalid:
