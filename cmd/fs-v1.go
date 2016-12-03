@@ -392,45 +392,37 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 		limitDataReader = data
 	}
 
-	if size == 0 {
-		// For size 0 we write a 0byte file.
-		err = fs.storage.AppendFile(minioMetaTmpBucket, tempObj, []byte(""))
+	// Prepare file to avoid disk fragmentation
+	if size > 0 {
+		err = fs.storage.PrepareFile(minioMetaTmpBucket, tempObj, size)
 		if err != nil {
-			fs.storage.DeleteFile(minioMetaTmpBucket, tempObj)
-			return ObjectInfo{}, toObjectErr(traceError(err), bucket, object)
-		}
-	} else {
-
-		// Prepare file to avoid disk fragmentation
-		if size > 0 {
-			err = fs.storage.PrepareFile(minioMetaTmpBucket, tempObj, size)
-			if err != nil {
-				return ObjectInfo{}, toObjectErr(err, bucket, object)
-			}
-		}
-
-		// Allocate a buffer to Read() from request body
-		bufSize := int64(readSizeV1)
-		if size > 0 && bufSize > size {
-			bufSize = size
-		}
-		buf := make([]byte, int(bufSize))
-		teeReader := io.TeeReader(limitDataReader, multiWriter)
-		var bytesWritten int64
-		bytesWritten, err = fsCreateFile(fs.storage, teeReader, buf, minioMetaTmpBucket, tempObj)
-		if err != nil {
-			fs.storage.DeleteFile(minioMetaTmpBucket, tempObj)
-			errorIf(err, "Failed to create object %s/%s", bucket, object)
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
-
-		// Should return IncompleteBody{} error when reader has fewer
-		// bytes than specified in request header.
-		if bytesWritten < size {
-			fs.storage.DeleteFile(minioMetaTmpBucket, tempObj)
-			return ObjectInfo{}, traceError(IncompleteBody{})
-		}
 	}
+
+	// Allocate a buffer to Read() from request body
+	bufSize := int64(readSizeV1)
+	if size > 0 && bufSize > size {
+		bufSize = size
+	}
+
+	buf := make([]byte, int(bufSize))
+	teeReader := io.TeeReader(limitDataReader, multiWriter)
+	var bytesWritten int64
+	bytesWritten, err = fsCreateFile(fs.storage, teeReader, buf, minioMetaTmpBucket, tempObj)
+	if err != nil {
+		fs.storage.DeleteFile(minioMetaTmpBucket, tempObj)
+		errorIf(err, "Failed to create object %s/%s", bucket, object)
+		return ObjectInfo{}, toObjectErr(err, bucket, object)
+	}
+
+	// Should return IncompleteBody{} error when reader has fewer
+	// bytes than specified in request header.
+	if bytesWritten < size {
+		fs.storage.DeleteFile(minioMetaTmpBucket, tempObj)
+		return ObjectInfo{}, traceError(IncompleteBody{})
+	}
+
 	// Delete the temporary object in the case of a
 	// failure. If PutObject succeeds, then there would be
 	// nothing to delete.

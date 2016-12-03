@@ -301,6 +301,7 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 		fs.storage.DeleteFile(minioMetaTmpBucket, tmpPartPath)
 		return "", toObjectErr(cErr, minioMetaTmpBucket, tmpPartPath)
 	}
+
 	// Should return IncompleteBody{} error when reader has fewer
 	// bytes than specified in request header.
 	if bytesWritten < size {

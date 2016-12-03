@@ -59,6 +59,12 @@ func TestNewMultipartUploadFaultyDisk(t *testing.T) {
 
 // TestPutObjectPartFaultyDisk - test PutObjectPart with faulty disks
 func TestPutObjectPartFaultyDisk(t *testing.T) {
+	root, err := newTestConfig("us-east-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer removeAll(root)
+
 	// Prepare for tests
 	disk := filepath.Join(os.TempDir(), "minio-"+nextSuffix())
 	defer removeAll(disk)
@@ -69,7 +75,7 @@ func TestPutObjectPartFaultyDisk(t *testing.T) {
 	data := []byte("12345")
 	dataLen := int64(len(data))
 
-	if err := obj.MakeBucket(bucketName); err != nil {
+	if err = obj.MakeBucket(bucketName); err != nil {
 		t.Fatal("Cannot create bucket, err: ", err)
 	}
 
@@ -97,7 +103,7 @@ func TestPutObjectPartFaultyDisk(t *testing.T) {
 					t.Fatal("Unexpected error ", err)
 				}
 			case 3:
-			case 2, 4, 5:
+			case 2, 4, 5, 6:
 				if !isSameType(errorCause(err), InvalidUploadID{}) {
 					t.Fatal("Unexpected error ", err)
 				}

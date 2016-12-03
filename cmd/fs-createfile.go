@@ -27,11 +27,9 @@ func fsCreateFile(disk StorageAPI, reader io.Reader, buf []byte, tmpBucket, temp
 			return 0, traceError(rErr)
 		}
 		bytesWritten += int64(n)
-		if n > 0 {
-			wErr := disk.AppendFile(tmpBucket, tempObj, buf[0:n])
-			if wErr != nil {
-				return 0, traceError(wErr)
-			}
+		wErr := disk.AppendFile(tmpBucket, tempObj, buf[0:n])
+		if wErr != nil {
+			return 0, traceError(wErr)
 		}
 		if rErr == io.EOF {
 			break
