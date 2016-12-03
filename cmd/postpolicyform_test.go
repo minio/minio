@@ -58,7 +58,7 @@ func TestPostPolicyForm(t *testing.T) {
 	for i, tt := range testCases {
 		formValues := make(map[string]string)
 		formValues["Bucket"] = tt.Bucket
-		formValues["Acl"] = tt.Acl
+		formValues["Acl"] = tt.ACL
 		formValues["Key"] = tt.Key
 		formValues["X-Amz-Date"] = tt.XAmzDate
 		formValues["X-Amz-Meta-Uuid"] = tt.XAmzMetaUUID
