@@ -43,7 +43,7 @@ func testGetBucketLocationHandler(obj ObjectLayer, instanceType, bucketName stri
 		// expected Response.
 		expectedRespStatus int
 		locationResponse   []byte
-		errorResponse      APIErrorResponse
+		errorResponse      error
 		shouldPass         bool
 	}{
 		// Test case - 1.
@@ -55,8 +55,7 @@ func testGetBucketLocationHandler(obj ObjectLayer, instanceType, bucketName stri
 			expectedRespStatus: http.StatusOK,
 			locationResponse: []byte(`<?xml version="1.0" encoding="UTF-8"?>
 <LocationConstraint xmlns="http://s3.amazonaws.com/doc/2006-03-01/"></LocationConstraint>`),
-			errorResponse: APIErrorResponse{},
-			shouldPass:    true,
+			shouldPass: true,
 		},
 		// Test case - 2.
 		// Tests for signature mismatch error.
@@ -66,12 +65,8 @@ func testGetBucketLocationHandler(obj ObjectLayer, instanceType, bucketName stri
 			secretKey:          "abcd",
 			expectedRespStatus: http.StatusForbidden,
 			locationResponse:   []byte(""),
-			errorResponse: APIErrorResponse{
-				Resource: "/" + bucketName + "/",
-				Code:     "InvalidAccessKeyID",
-				Message:  "The access key ID you provided does not exist in our records.",
-			},
-			shouldPass: false,
+			errorResponse:      eInvalidAccessKeyID(),
+			shouldPass:         false,
 		},
 	}
 
@@ -100,14 +95,17 @@ func testGetBucketLocationHandler(obj ObjectLayer, instanceType, bucketName stri
 		if err != nil && !testCase.shouldPass {
 			t.Fatalf("Test %d: %s: Unable to marshal response body %s", i+1, instanceType, string(rec.Body.Bytes()))
 		}
-		if errorResponse.Resource != testCase.errorResponse.Resource {
-			t.Errorf("Test %d: %s: Expected the error resource to be `%s`, but instead found `%s`", i+1, instanceType, testCase.errorResponse.Resource, errorResponse.Resource)
-		}
-		if errorResponse.Message != testCase.errorResponse.Message {
-			t.Errorf("Test %d: %s: Expected the error message to be `%s`, but instead found `%s`", i+1, instanceType, testCase.errorResponse.Message, errorResponse.Message)
-		}
-		if errorResponse.Code != testCase.errorResponse.Code {
-			t.Errorf("Test %d: %s: Expected the error code to be `%s`, but instead found `%s`", i+1, instanceType, testCase.errorResponse.Code, errorResponse.Code)
+		if testCase.errorResponse != nil {
+			aerr, ok := testCase.errorResponse.(APIError)
+			if !ok {
+				t.Fatal("Unable to validate APIError", testCase.errorResponse)
+			}
+			if errorResponse.Message != aerr.Error() {
+				t.Errorf("Test %d: %s: Expected the error message to be `%s`, but instead found `%s`", i+1, instanceType, aerr.Error(), errorResponse.Message)
+			}
+			if errorResponse.ErrCode != aerr.Code() {
+				t.Errorf("Test %d: %s: Expected the error code to be `%s`, but instead found `%s`", i+1, instanceType, aerr.Code(), errorResponse.Code)
+			}
 		}
 
 		// Verify response of the V2 signed HTTP request.
@@ -131,16 +129,18 @@ func testGetBucketLocationHandler(obj ObjectLayer, instanceType, bucketName stri
 		if err != nil && !testCase.shouldPass {
 			t.Fatalf("Test %d: %s: Unable to marshal response body %s", i+1, instanceType, string(recV2.Body.Bytes()))
 		}
-		if errorResponse.Resource != testCase.errorResponse.Resource {
-			t.Errorf("Test %d: %s: Expected the error resource to be `%s`, but instead found `%s`", i+1, instanceType, testCase.errorResponse.Resource, errorResponse.Resource)
+		if testCase.errorResponse != nil {
+			aerr, ok := testCase.errorResponse.(APIError)
+			if !ok {
+				t.Fatal("Unable to validate APIError", testCase.errorResponse)
+			}
+			if errorResponse.Message != aerr.Error() {
+				t.Errorf("Test %d: %s: Expected the error message to be `%s`, but instead found `%s`", i+1, instanceType, aerr.Error(), errorResponse.Message)
+			}
+			if errorResponse.ErrCode != aerr.Code() {
+				t.Errorf("Test %d: %s: Expected the error code to be `%s`, but instead found `%s`", i+1, instanceType, aerr.Code(), errorResponse.Code)
+			}
 		}
-		if errorResponse.Message != testCase.errorResponse.Message {
-			t.Errorf("Test %d: %s: Expected the error message to be `%s`, but instead found `%s`", i+1, instanceType, testCase.errorResponse.Message, errorResponse.Message)
-		}
-		if errorResponse.Code != testCase.errorResponse.Code {
-			t.Errorf("Test %d: %s: Expected the error code to be `%s`, but instead found `%s`", i+1, instanceType, testCase.errorResponse.Code, errorResponse.Code)
-		}
-
 	}
 
 	// Test for Anonymous/unsigned http request.

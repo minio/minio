@@ -32,23 +32,23 @@ var suppportedEventTypes = map[string]struct{}{
 }
 
 // checkEvent - checks if an event is supported.
-func checkEvent(event string) APIErrorCode {
+func checkEvent(event string) error {
 	_, ok := suppportedEventTypes[event]
 	if !ok {
-		return ErrEventNotification
+		return eEventNotification(event)
 	}
-	return ErrNone
+	return nil
 }
 
 // checkEvents - checks given list of events if all of them are valid.
 // given if one of them is invalid, this function returns an error.
-func checkEvents(events []string) APIErrorCode {
+func checkEvents(events []string) error {
 	for _, event := range events {
-		if s3Error := checkEvent(event); s3Error != ErrNone {
+		if s3Error := checkEvent(event); s3Error != nil {
 			return s3Error
 		}
 	}
-	return ErrNone
+	return nil
 }
 
 // Valid if filterName is 'prefix'.
@@ -67,62 +67,63 @@ func isValidFilterName(filterName string) bool {
 }
 
 // checkFilterRules - checks given list of filter rules if all of them are valid.
-func checkFilterRules(filterRules []filterRule) APIErrorCode {
+func checkFilterRules(filterRules []filterRule) error {
 	ruleSetMap := make(map[string]string)
 	// Validate all filter rules.
 	for _, filterRule := range filterRules {
 		// Unknown filter rule name found, returns an appropriate error.
 		if !isValidFilterName(filterRule.Name) {
-			return ErrFilterNameInvalid
+			return eFilterNameInvalid()
 		}
 
 		// Filter names should not be set twice per notification service
 		// configuration, if found return an appropriate error.
 		if _, ok := ruleSetMap[filterRule.Name]; ok {
 			if isValidFilterNamePrefix(filterRule.Name) {
-				return ErrFilterNamePrefix
+				return eFilterNamePrefix()
 			} else if isValidFilterNameSuffix(filterRule.Name) {
-				return ErrFilterNameSuffix
+				return eFilterNameSuffix()
 			} else {
-				return ErrFilterNameInvalid
+				return eFilterNameInvalid()
 			}
 		}
 
 		if !IsValidObjectPrefix(filterRule.Value) {
-			return ErrFilterValueInvalid
+			return eFilterValueInvalid(filterRule.Value)
 		}
 
 		// Set the new rule name to keep track of duplicates.
 		ruleSetMap[filterRule.Name] = filterRule.Value
 	}
 	// Success all prefixes validated.
-	return ErrNone
+	return nil
 }
 
 // Checks validity of input ARN for a given arnType.
-func checkARN(arn, arnType string) APIErrorCode {
+func checkARN(arn, arnType string) error {
 	if !strings.HasPrefix(arn, arnType) {
-		return ErrARNNotification
+		return eARNNotification(arn)
 	}
 	if !strings.HasPrefix(arn, arnType+serverConfig.GetRegion()+":") {
-		return ErrRegionNotification
+		region := strings.TrimSuffix(strings.Trim(arn, arnType), ":")
+		return eRegionNotification(region)
 	}
 	account := strings.SplitN(strings.TrimPrefix(arn, arnType+serverConfig.GetRegion()+":"), ":", 2)
 	switch len(account) {
 	case 1:
 		// This means ARN is malformed, account should have min of 2elements.
-		return ErrARNNotification
+		return eARNNotification(arn)
 	case 2:
 		// Account topic id or topic name cannot be empty.
 		if account[0] == "" || account[1] == "" {
-			return ErrARNNotification
+			return eARNNotification(arn)
 		}
 	}
-	return ErrNone
+	return nil
 }
 
 // checkQueueARN - check if the queue arn is valid.
-func checkQueueARN(queueARN string) APIErrorCode {
+func checkQueueARN(queueARN string) error {
 	return checkARN(queueARN, minioSqs)
 }
 
@@ -152,46 +153,46 @@ func isValidQueueID(queueARN string) bool {
 }
 
 // Check - validates queue configuration and returns error if any.
-func checkQueueConfig(qConfig queueConfig) APIErrorCode {
+func checkQueueConfig(qConfig queueConfig) error {
 	// Check queue arn is valid.
-	if s3Error := checkQueueARN(qConfig.QueueARN); s3Error != ErrNone {
+	if s3Error := checkQueueARN(qConfig.QueueARN); s3Error != nil {
 		return s3Error
 	}
 
 	// Validate if the account ID is correct.
 	if !isValidQueueID(qConfig.QueueARN) {
-		return ErrARNNotification
+		return eARNNotification(qConfig.QueueARN)
 	}
 
 	// Check if valid events are set in queue config.
-	if s3Error := checkEvents(qConfig.Events); s3Error != ErrNone {
+	if s3Error := checkEvents(qConfig.Events); s3Error != nil {
 		return s3Error
 	}
 
 	// Check if valid filters are set in queue config.
-	if s3Error := checkFilterRules(qConfig.Filter.Key.FilterRules); s3Error != ErrNone {
+	if s3Error := checkFilterRules(qConfig.Filter.Key.FilterRules); s3Error != nil {
 		return s3Error
 	}
 
 	// Success.
-	return ErrNone
+	return nil
 }
 
 // Validates all incoming queue configs, checkQueueConfig validates if the
 // input fields for each queues is not malformed and has valid configuration
 // information.  If validation fails bucket notifications are not enabled.
-func validateQueueConfigs(queueConfigs []queueConfig) APIErrorCode {
+func validateQueueConfigs(queueConfigs []queueConfig) error {
 	for _, qConfig := range queueConfigs {
-		if s3Error := checkQueueConfig(qConfig); s3Error != ErrNone {
+		if s3Error := checkQueueConfig(qConfig); s3Error != nil {
 			return s3Error
 		}
 	}
 	// Success.
-	return ErrNone
+	return nil
 }
 
 // Check all the queue configs for any duplicates.
-func checkDuplicateQueueConfigs(configs []queueConfig) APIErrorCode {
+func checkDuplicateQueueConfigs(configs []queueConfig) error {
 	var queueConfigARNS []string
 
 	// Navigate through each configs and count the entries.
@@ -202,31 +203,31 @@ func checkDuplicateQueueConfigs(configs []queueConfig) APIErrorCode {
 	// Check if there are any duplicate counts.
 	if err := checkDuplicateStrings(queueConfigARNS); err != nil {
 		errorIf(err, "Invalid queue configs found.")
-		return ErrOverlappingConfigs
+		return eOverlappingConfigs()
 	}
 
 	// Success.
-	return ErrNone
+	return nil
 }
 
 // Validates all the bucket notification configuration for their validity,
 // if one of the config is malformed or has invalid data it is rejected.
 // Configuration is never applied partially.
-func validateNotificationConfig(nConfig notificationConfig) APIErrorCode {
+func validateNotificationConfig(nConfig notificationConfig) error {
 	// Validate all queue configs.
-	if s3Error := validateQueueConfigs(nConfig.QueueConfigs); s3Error != ErrNone {
+	if s3Error := validateQueueConfigs(nConfig.QueueConfigs); s3Error != nil {
 		return s3Error
 	}
 
 	// Check for duplicate queue configs.
 	if len(nConfig.QueueConfigs) > 1 {
-		if s3Error := checkDuplicateQueueConfigs(nConfig.QueueConfigs); s3Error != ErrNone {
+		if s3Error := checkDuplicateQueueConfigs(nConfig.QueueConfigs); s3Error != nil {
 			return s3Error
 		}
 	}
 
 	// Add validation for other configurations.
-	return ErrNone
+	return nil
 }
 
 // Unmarshals input value of AWS ARN format into minioSqs object.

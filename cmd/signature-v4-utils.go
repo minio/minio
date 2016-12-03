@@ -106,19 +106,19 @@ func getURLEncodedName(name string) string {
 	return encodedName
 }
 
-func findHost(signedHeaders []string) APIErrorCode {
+func findHost(signedHeaders []string) error {
 	if contains(signedHeaders, "host") {
-		return ErrNone
+		return nil
 	}
-	return ErrUnsignedHeaders
+	return eUnsignedHeaders(strings.Join(signedHeaders, ","))
 }
 
 // extractSignedHeaders extract signed headers from Authorization header
-func extractSignedHeaders(signedHeaders []string, reqHeaders http.Header) (http.Header, APIErrorCode) {
+func extractSignedHeaders(signedHeaders []string, reqHeaders http.Header) (http.Header, error) {
 	// find whether "host" is part of list of signed headers.
 	// if not return ErrUnsignedHeaders. "host" is mandatory.
 	if !contains(signedHeaders, "host") {
-		return nil, ErrUnsignedHeaders
+		return nil, eUnsignedHeaders(strings.Join(signedHeaders, ","))
 	}
 	extractedSignedHeaders := make(http.Header)
 	for _, header := range signedHeaders {
@@ -153,11 +153,11 @@ func extractSignedHeaders(signedHeaders []string, reqHeaders http.Header) (http.
 				continue
 			}
 			// If not found continue, we will stop here.
-			return nil, ErrUnsignedHeaders
+			return nil, eUnsignedHeaders(strings.Join(signedHeaders, ","))
 		}
 		extractedSignedHeaders[header] = val
 	}
-	return extractedSignedHeaders, ErrNone
+	return extractedSignedHeaders, nil
 }
 
 // Trim leading and trailing spaces and replace sequential spaces with one space, following Trimall()

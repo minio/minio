@@ -55,7 +55,7 @@ func (bp bucketPolicies) GetBucketPolicy(bucket string) *bucketPolicy {
 
 // Set a new bucket policy for a bucket, this operation will overwrite
 // any previous bucket policies for the bucket.
-func (bp *bucketPolicies) SetBucketPolicy(bucket string, pCh policyChange) error {
+func (bp *bucketPolicies) SetBucketPolicy(bucket string, pCh policyChange) (err error) {
 	bp.rwMutex.Lock()
 	defer bp.rwMutex.Unlock()
 
@@ -63,7 +63,8 @@ func (bp *bucketPolicies) SetBucketPolicy(bucket string, pCh policyChange) error
 		delete(bp.bucketPolicyConfigs, bucket)
 	} else {
 		if pCh.BktPolicy == nil {
-			return errInvalidArgument
+			err = errInvalidArgument
+			return
 		}
 		bp.bucketPolicyConfigs[bucket] = pCh.BktPolicy
 	}
@@ -147,7 +148,7 @@ func readBucketPolicyJSON(bucket string, objAPI ObjectLayer) (bucketPolicyReader
 	objInfo, err := objAPI.GetObjectInfo(minioMetaBucket, policyPath)
 	if err != nil {
 		if isErrObjectNotFound(err) || isErrIncompleteBody(err) {
-			return nil, BucketPolicyNotFound{Bucket: bucket}
+			return nil, eBucketPolicyNotFound(bucket)
 		}
 		errorIf(err, "Unable to load policy for the bucket %s.", bucket)
 		return nil, errorCause(err)
@@ -156,7 +157,7 @@ func readBucketPolicyJSON(bucket string, objAPI ObjectLayer) (bucketPolicyReader
 	err = objAPI.GetObject(minioMetaBucket, policyPath, 0, objInfo.Size, &buffer)
 	if err != nil {
 		if isErrObjectNotFound(err) || isErrIncompleteBody(err) {
-			return nil, BucketPolicyNotFound{Bucket: bucket}
+			return nil, eBucketPolicyNotFound(bucket)
 		}
 		errorIf(err, "Unable to load policy for the bucket %s.", bucket)
 		return nil, errorCause(err)
@@ -192,7 +193,7 @@ func removeBucketPolicy(bucket string, objAPI ObjectLayer) error {
 		errorIf(err, "Unable to remove bucket-policy on bucket %s.", bucket)
 		err = errorCause(err)
 		if _, ok := err.(ObjectNotFound); ok {
-			return BucketPolicyNotFound{Bucket: bucket}
+			return eBucketPolicyNotFound(bucket)
 		}
 		return err
 	}
@@ -201,6 +202,9 @@ func removeBucketPolicy(bucket string, objAPI ObjectLayer) error {
 
 // writeBucketPolicy - save a bucket policy that is assumed to be validated.
 func writeBucketPolicy(bucket string, objAPI ObjectLayer, bpy *bucketPolicy) error {
+	if bpy == nil {
+		return errInvalidArgument
+	}
 	buf, err := json.Marshal(bpy)
 	if err != nil {
 		errorIf(err, "Unable to marshal bucket policy '%v' to JSON", *bpy)

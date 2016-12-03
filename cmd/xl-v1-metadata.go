@@ -189,7 +189,7 @@ func (m xlMetaV1) ObjectToPartOffset(offset int64) (partIndex int, partOffset in
 		partOffset -= part.Size
 	}
 	// Offset beyond the size of the object return InvalidRange.
-	return 0, 0, traceError(InvalidRange{})
+	return 0, 0, traceError(eInvalidRange(offset, 0, 0))
 }
 
 // pickValidXLMeta - picks one valid xlMeta content and returns from a

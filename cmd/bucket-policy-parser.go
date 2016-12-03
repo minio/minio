@@ -79,8 +79,7 @@ func (b bucketPolicy) String() string {
 func isValidActions(actions set.StringSet) (err error) {
 	// Statement actions cannot be empty.
 	if len(actions) == 0 {
-		err = errors.New("Action list cannot be empty")
-		return err
+		return eMalformedPolicy()
 	}
 	if unsupportedActions := actions.Difference(supportedActionMap); !unsupportedActions.IsEmpty() {
 		err = fmt.Errorf("Unsupported actions found: ‘%#v’, please validate your policy document", unsupportedActions)
@@ -93,8 +92,7 @@ func isValidActions(actions set.StringSet) (err error) {
 func isValidEffect(effect string) (err error) {
 	// Statement effect cannot be empty.
 	if effect == "" {
-		err = errors.New("Policy effect cannot be empty")
-		return err
+		return eMalformedPolicy()
 	}
 	if !supportedEffectMap.Contains(effect) {
 		err = errors.New("Unsupported Effect found: ‘" + effect + "’, please validate your policy document")
@@ -107,8 +105,7 @@ func isValidEffect(effect string) (err error) {
 func isValidResources(resources set.StringSet) (err error) {
 	// Statement resources cannot be empty.
 	if len(resources) == 0 {
-		err = errors.New("Resource list cannot be empty")
-		return err
+		return eMalformedPolicy()
 	}
 	for resource := range resources {
 		if !strings.HasPrefix(resource, AWSResourcePrefix) {
@@ -171,8 +168,7 @@ func isValidPrincipals(principal interface{}) (err error) {
 	principals := parsePrincipals(principal)
 	// Statement principal should have a value.
 	if len(principals) == 0 {
-		err = errors.New("Principal cannot be empty")
-		return err
+		return eMalformedPolicy()
 	}
 	if unsuppPrincipals := principals.Difference(set.CreateStringSet([]string{"*"}...)); !unsuppPrincipals.IsEmpty() {
 		// Minio does not support or implement IAM, "*" is the only valid value.
@@ -229,7 +225,7 @@ func resourcePrefix(resource string) string {
 // checkBucketPolicyResources validates Resources in unmarshalled bucket policy structure.
 // First valation of Resources done for given set of Actions.
 // Later its validated for recursive Resources.
-func checkBucketPolicyResources(bucket string, bucketPolicy *bucketPolicy) APIErrorCode {
+func checkBucketPolicyResources(bucket string, bucketPolicy *bucketPolicy) error {
 	// Validate statements for special actions and collect resources
 	// for others to validate nesting.
 	var resourceMap = set.NewStringSet()
@@ -241,13 +237,13 @@ func checkBucketPolicyResources(bucket string, bucketPolicy *bucketPolicy) APIEr
 					// Resource prefix is not equal to bucket for
 					// prefix invalid actions, reject them.
 					if resourcePrefix != bucket {
-						return ErrMalformedPolicy
+						return eMalformedPolicy()
 					}
 				} else {
 					// For all other actions validate if resourcePrefix begins
 					// with bucket name, if not reject them.
 					if strings.Split(resourcePrefix, "/")[0] != bucket {
-						return ErrMalformedPolicy
+						return eMalformedPolicy()
 					}
 					// All valid resources collect them separately to verify nesting.
 					resourceMap.Add(resourcePrefix)
@@ -273,13 +269,13 @@ func checkBucketPolicyResources(bucket string, bucketPolicy *bucketPolicy) APIEr
 		for _, otherResource := range resources {
 			// Common prefix reject such rules.
 			if strings.HasPrefix(otherResource, resource) {
-				return ErrPolicyNesting
+				return ePolicyNesting(otherResource, resource)
 			}
 		}
 	}
 
 	// No errors found.
-	return ErrNone
+	return nil
 }
 
 // parseBucketPolicy - parses and validates if bucket policy is of
@@ -292,15 +288,9 @@ func parseBucketPolicy(bucketPolicyReader io.Reader, policy *bucketPolicy) (err 
 	}
 
 	// Policy version cannot be empty.
-	if len(policy.Version) == 0 {
-		err = errors.New("Policy version cannot be empty")
-		return err
-	}
-
 	// Policy statements cannot be empty.
-	if len(policy.Statements) == 0 {
-		err = errors.New("Policy statement cannot be empty")
-		return err
+	if len(policy.Version) == 0 || len(policy.Statements) == 0 {
+		return eMalformedPolicy()
 	}
 
 	// Loop through all policy statements and validate entries.

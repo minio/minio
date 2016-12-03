@@ -104,7 +104,7 @@ func (fs fsObjects) Shutdown() error {
 	}
 	// Cleanup and delete tmp bucket.
 	if err = cleanupDir(fs.storage, minioMetaTmpBucket, prefix); err != nil {
-		return err
+		return toObjectErr(err)
 	}
 	if err = fs.storage.DeleteVol(minioMetaTmpBucket); err != nil {
 		return toObjectErr(traceError(err))
@@ -153,7 +153,7 @@ func (fs fsObjects) MakeBucket(bucket string) error {
 func (fs fsObjects) GetBucketInfo(bucket string) (BucketInfo, error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return BucketInfo{}, traceError(BucketNameInvalid{Bucket: bucket})
+		return BucketInfo{}, traceError(eBucketNameInvalid(bucket))
 	}
 	vi, err := fs.storage.StatVol(bucket)
 	if err != nil {
@@ -202,7 +202,7 @@ func (fs fsObjects) ListBuckets() ([]BucketInfo, error) {
 func (fs fsObjects) DeleteBucket(bucket string) error {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return traceError(BucketNameInvalid{Bucket: bucket})
+		return traceError(eBucketNameInvalid(bucket))
 	}
 	// Attempt to delete regular bucket.
 	if err := fs.storage.DeleteVol(bucket); err != nil {
@@ -239,11 +239,13 @@ func (fs fsObjects) GetObject(bucket, object string, offset int64, length int64,
 
 	// Reply back invalid range if the input offset and length fall out of range.
 	if offset > fi.Size || length > fi.Size {
-		return traceError(InvalidRange{offset, length, fi.Size})
+		return traceError(eInvalidRange(offset,
+			length, fi.Size))
 	}
 	// Reply if we have inputs with offset and length falling out of file size range.
 	if offset+length > fi.Size {
-		return traceError(InvalidRange{offset, length, fi.Size})
+		return traceError(eInvalidRange(offset,
+			length, fi.Size))
 	}
 
 	// Lock the object before reading.
@@ -447,14 +449,20 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 	if md5Hex != "" {
 		if newMD5Hex != md5Hex {
 			// Returns md5 mismatch.
-			return ObjectInfo{}, traceError(BadDigest{md5Hex, newMD5Hex})
+			return ObjectInfo{}, traceError(BadDigest{
+				ExpectedDigest:   md5Hex,
+				CalculatedDigest: newMD5Hex,
+			})
 		}
 	}
 
 	if sha256sum != "" {
 		newSHA256sum := hex.EncodeToString(sha256Writer.Sum(nil))
 		if newSHA256sum != sha256sum {
-			return ObjectInfo{}, traceError(SHA256Mismatch{})
+			return ObjectInfo{}, traceError(SHA256Mismatch{
+				ClientSHA256: sha256sum,
+				ServerSHA256: newSHA256sum,
+			})
 		}
 	}
 

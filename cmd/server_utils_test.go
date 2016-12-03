@@ -121,7 +121,7 @@ func verifyError(c *C, response *http.Response, code, description string, status
 	errorResponse := APIErrorResponse{}
 	err = xml.Unmarshal(data, &errorResponse)
 	c.Assert(err, IsNil)
-	c.Assert(errorResponse.Code, Equals, code)
+	c.Assert(errorResponse.ErrCode, Equals, code)
 	c.Assert(errorResponse.Message, Equals, description)
 	c.Assert(response.StatusCode, Equals, statusCode)
 }

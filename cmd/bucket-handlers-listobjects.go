@@ -23,33 +23,33 @@ import (
 	"github.com/gorilla/mux"
 )
 
-// Validate all the ListObjects query arguments, returns an APIErrorCode
+// Validate all the ListObjects query arguments, returns an error
 // if one of the args do not meet the required conditions.
 // Special conditions required by Minio server are as below
 // - delimiter if set should be equal to '/', otherwise the request is rejected.
 // - marker if set should have a common prefix with 'prefix' param, otherwise
 //   the request is rejected.
-func validateListObjectsArgs(prefix, marker, delimiter string, maxKeys int) APIErrorCode {
+func validateListObjectsArgs(prefix, marker, delimiter string, maxKeys int) error {
 	// Max keys cannot be negative.
 	if maxKeys < 0 {
-		return ErrInvalidMaxKeys
+		return eInvalidMaxKeys(maxKeys)
 	}
 
 	/// Minio special conditions for ListObjects.
 
 	// Verify if delimiter is anything other than '/', which we do not support.
 	if delimiter != "" && delimiter != "/" {
-		return ErrNotImplemented
+		return eUnsupportedDelimiter(delimiter)
 	}
 	// Marker is set validate pre-condition.
 	if marker != "" {
 		// Marker not common with prefix is not implemented.
 		if !strings.HasPrefix(marker, prefix) {
-			return ErrNotImplemented
+			return eInvalidMarkerPrefixCombination(marker, prefix)
 		}
 	}
 	// Success.
-	return ErrNone
+	return nil
 }
 
 // ListObjectsV2Handler - GET Bucket (List Objects) Version 2.
@@ -66,12 +66,12 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
-		writeErrorResponse(w, r, ErrServerNotInitialized, r.URL.Path)
+		writeErrorResponse(w, r, eServerNotInitialized())
 		return
 	}
 
-	if s3Error := checkRequestAuthType(r, bucket, "s3:ListBucket", serverConfig.GetRegion()); s3Error != ErrNone {
-		writeErrorResponse(w, r, s3Error, r.URL.Path)
+	if s3Error := checkRequestAuthType(r, bucket, "s3:ListBucket", serverConfig.GetRegion()); s3Error != nil {
+		writeErrorResponse(w, r, s3Error)
 		return
 	}
 
@@ -87,8 +87,8 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 	}
 	// Validate the query params before beginning to serve the request.
 	// fetch-owner is not validated since it is a boolean
-	if s3Error := validateListObjectsArgs(prefix, marker, delimiter, maxKeys); s3Error != ErrNone {
-		writeErrorResponse(w, r, s3Error, r.URL.Path)
+	if s3Error := validateListObjectsArgs(prefix, marker, delimiter, maxKeys); s3Error != nil {
+		writeErrorResponse(w, r, s3Error)
 		return
 	}
 	// Inititate a list objects operation based on the input params.
@@ -97,7 +97,7 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 	listObjectsInfo, err := objectAPI.ListObjects(bucket, prefix, marker, delimiter, maxKeys)
 	if err != nil {
 		errorIf(err, "Unable to list objects.")
-		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
+		writeErrorResponse(w, r, err)
 		return
 	}
 
@@ -120,12 +120,12 @@ func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
-		writeErrorResponse(w, r, ErrServerNotInitialized, r.URL.Path)
+		writeErrorResponse(w, r, eServerNotInitialized())
 		return
 	}
 
-	if s3Error := checkRequestAuthType(r, bucket, "s3:ListBucket", serverConfig.GetRegion()); s3Error != ErrNone {
-		writeErrorResponse(w, r, s3Error, r.URL.Path)
+	if s3Error := checkRequestAuthType(r, bucket, "s3:ListBucket", serverConfig.GetRegion()); s3Error != nil {
+		writeErrorResponse(w, r, s3Error)
 		return
 	}
 
@@ -133,8 +133,8 @@ func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http
 	prefix, marker, delimiter, maxKeys, _ := getListObjectsV1Args(r.URL.Query())
 
 	// Validate all the query params before beginning to serve the request.
-	if s3Error := validateListObjectsArgs(prefix, marker, delimiter, maxKeys); s3Error != ErrNone {
-		writeErrorResponse(w, r, s3Error, r.URL.Path)
+	if s3Error := validateListObjectsArgs(prefix, marker, delimiter, maxKeys); s3Error != nil {
+		writeErrorResponse(w, r, s3Error)
 		return
 	}
 
@@ -144,7 +144,7 @@ func (api objectAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http
 	listObjectsInfo, err := objectAPI.ListObjects(bucket, prefix, marker, delimiter, maxKeys)
 	if err != nil {
 		errorIf(err, "Unable to list objects.")
-		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
+		writeErrorResponse(w, r, err)
 		return
 	}
 	response := generateListObjectsV1Response(bucket, prefix, marker, delimiter, maxKeys, listObjectsInfo)

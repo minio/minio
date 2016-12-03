@@ -87,7 +87,7 @@ func TestHouseKeeping(t *testing.T) {
 		expectedErr error
 	}{
 		{properStorage, nil},
-		{noSpaceStorage, StorageFull{}},
+		{noSpaceStorage, eStorageFull()},
 		{nilDiskStorage, nil},
 	}
 	for i, test := range testCases {

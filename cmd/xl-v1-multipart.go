@@ -91,12 +91,17 @@ func (xl xlObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 	heal := false // true only for xl.ListObjectsHeal
 	// Validate if we need to list further depending on maxUploads.
 	if maxUploads > 0 {
-		walkerCh, walkerDoneCh = xl.listPool.Release(listParams{minioMetaMultipartBucket, recursive, multipartMarkerPath, multipartPrefixPath, heal})
+		walkerCh, walkerDoneCh = xl.listPool.Release(listParams{
+			minioMetaMultipartBucket, recursive,
+			multipartMarkerPath, multipartPrefixPath,
+			heal,
+		})
 		if walkerCh == nil {
 			walkerDoneCh = make(chan struct{})
 			isLeaf := xl.isMultipartUpload
 			listDir := listDirFactory(isLeaf, xlTreeWalkIgnoredErrs, xl.getLoadBalancedDisks()...)
-			walkerCh = startTreeWalk(minioMetaMultipartBucket, multipartPrefixPath, multipartMarkerPath, recursive, listDir, isLeaf, walkerDoneCh)
+			walkerCh = startTreeWalk(minioMetaMultipartBucket, multipartPrefixPath,
+				multipartMarkerPath, recursive, listDir, isLeaf, walkerDoneCh)
 		}
 		// Collect uploads until we have reached maxUploads count to 0.
 		for maxUploads > 0 {
@@ -187,7 +192,10 @@ func (xl xlObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 	if !eof {
 		// Save the go-routine state in the pool so that it can continue from where it left off on
 		// the next request.
-		xl.listPool.Set(listParams{bucket, recursive, result.NextKeyMarker, prefix, heal}, walkerCh, walkerDoneCh)
+		xl.listPool.Set(listParams{
+			bucket, recursive, result.NextKeyMarker,
+			prefix, heal,
+		}, walkerCh, walkerDoneCh)
 	}
 
 	result.IsTruncated = !eof
@@ -261,7 +269,8 @@ func (xl xlObjects) newMultipartUpload(bucket string, object string, meta map[st
 
 	// Attempt to rename temp upload object to actual upload path
 	// object
-	if rErr := renameObject(xl.storageDisks, minioMetaTmpBucket, tempUploadIDPath, minioMetaMultipartBucket, uploadIDPath, xl.writeQuorum); rErr != nil {
+	rErr := renameObject(xl.storageDisks, minioMetaTmpBucket, tempUploadIDPath, minioMetaMultipartBucket, uploadIDPath, xl.writeQuorum)
+	if rErr != nil {
 		return "", toObjectErr(rErr, minioMetaMultipartBucket, uploadIDPath)
 	}
 
@@ -310,7 +319,7 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	// Validates if upload ID exists.
 	if !xl.isUploadIDExists(bucket, object, uploadID) {
 		preUploadIDLock.RUnlock()
-		return "", traceError(InvalidUploadID{UploadID: uploadID})
+		return "", traceError(eInvalidUploadID(bucket, object, uploadID))
 	}
 	// Read metadata associated with the object from all disks.
 	partsMetadata, errs = readAllXLMetadata(xl.storageDisks, minioMetaMultipartBucket,
@@ -388,7 +397,7 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	// Should return IncompleteBody{} error when reader has fewer bytes
 	// than specified in request header.
 	if sizeWritten < size {
-		return "", traceError(IncompleteBody{})
+		return "", traceError(eIncompleteBody())
 	}
 
 	// For size == -1, perhaps client is sending in chunked encoding
@@ -402,14 +411,14 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	if md5Hex != "" {
 		if newMD5Hex != md5Hex {
 			// Returns md5 mismatch.
-			return "", traceError(BadDigest{md5Hex, newMD5Hex})
+			return "", traceError(eBadDigest(newMD5Hex, md5Hex))
 		}
 	}
 
 	if sha256sum != "" {
 		newSHA256sum := hex.EncodeToString(sha256Writer.Sum(nil))
 		if newSHA256sum != sha256sum {
-			return "", traceError(SHA256Mismatch{})
+			return "", traceError(eSHA256Mismatch(sha256sum, newSHA256sum))
 		}
 	}
 
@@ -420,7 +429,7 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 
 	// Validate again if upload ID still exists.
 	if !xl.isUploadIDExists(bucket, object, uploadID) {
-		return "", traceError(InvalidUploadID{UploadID: uploadID})
+		return "", traceError(eInvalidUploadID(bucket, object, uploadID))
 	}
 
 	// Rename temporary part file to its final location.
@@ -563,7 +572,7 @@ func (xl xlObjects) ListObjectParts(bucket, object, uploadID string, partNumberM
 	defer uploadIDLock.Unlock()
 
 	if !xl.isUploadIDExists(bucket, object, uploadID) {
-		return ListPartsInfo{}, traceError(InvalidUploadID{UploadID: uploadID})
+		return ListPartsInfo{}, traceError(eInvalidUploadID(bucket, object, uploadID))
 	}
 	result, err := xl.listObjectParts(bucket, object, uploadID, partNumberMarker, maxParts)
 	return result, err
@@ -592,12 +601,12 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	defer uploadIDLock.Unlock()
 
 	if !xl.isUploadIDExists(bucket, object, uploadID) {
-		return "", traceError(InvalidUploadID{UploadID: uploadID})
+		return "", traceError(eInvalidUploadID(bucket, object, uploadID))
 	}
 	// Calculate s3 compatible md5sum for complete multipart.
 	s3MD5, err := getCompleteMultipartMD5(parts)
 	if err != nil {
-		return "", err
+		return "", toObjectErr(err, bucket, object)
 	}
 
 	uploadIDPath := pathJoin(bucket, object, uploadID)
@@ -617,7 +626,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	// Pick one from the first valid metadata.
 	xlMeta, err := pickValidXLMeta(partsMetadata, modTime)
 	if err != nil {
-		return "", err
+		return "", toObjectErr(err, bucket, object)
 	}
 
 	// Order online disks in accordance with distribution order.
@@ -637,21 +646,21 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 		partIdx := objectPartIndex(currentXLMeta.Parts, part.PartNumber)
 		// All parts should have same part number.
 		if partIdx == -1 {
-			return "", traceError(InvalidPart{})
+			return "", traceError(eInvalidPart(bucket, object, uploadID, part.PartNumber))
 		}
 
 		// All parts should have same ETag as previously generated.
 		if currentXLMeta.Parts[partIdx].ETag != part.ETag {
-			return "", traceError(BadDigest{})
+			return "", traceError(eBadDigest(currentXLMeta.Parts[partIdx].ETag, part.ETag))
 		}
 
 		// All parts except the last part has to be atleast 5MB.
 		if (i < len(parts)-1) && !isMinAllowedPartSize(currentXLMeta.Parts[partIdx].Size) {
-			return "", traceError(PartTooSmall{
-				PartNumber: part.PartNumber,
-				PartSize:   currentXLMeta.Parts[partIdx].Size,
-				PartETag:   part.ETag,
-			})
+			return "", traceError(ePartTooSmall(currentXLMeta.Parts[partIdx].Size,
+				minPartSize,
+				part.PartNumber,
+				part.ETag,
+			))
 		}
 
 		// Last part could have been uploaded as 0bytes, do not need
@@ -821,7 +830,7 @@ func (xl xlObjects) AbortMultipartUpload(bucket, object, uploadID string) error 
 	defer uploadIDLock.Unlock()
 
 	if !xl.isUploadIDExists(bucket, object, uploadID) {
-		return traceError(InvalidUploadID{UploadID: uploadID})
+		return traceError(eInvalidUploadID(bucket, object, uploadID))
 	}
 	err := xl.abortMultipartUpload(bucket, object, uploadID)
 	return err

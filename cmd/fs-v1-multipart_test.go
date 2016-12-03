@@ -26,6 +26,12 @@ import (
 
 // TestNewMultipartUploadFaultyDisk - test NewMultipartUpload with faulty disks
 func TestNewMultipartUploadFaultyDisk(t *testing.T) {
+	root, err := newTestConfig("us-east-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer removeAll(root)
+
 	// Prepare for tests
 	disk := filepath.Join(os.TempDir(), "minio-"+nextSuffix())
 	defer removeAll(disk)
@@ -44,7 +50,8 @@ func TestNewMultipartUploadFaultyDisk(t *testing.T) {
 	for i := 1; i <= 5; i++ {
 		// Faulty disk generates errFaultyDisk at 'i' storage api call number
 		fs.storage = newNaughtyDisk(fsStorage, map[int]error{i: errFaultyDisk}, nil)
-		if _, err := fs.NewMultipartUpload(bucketName, objectName, map[string]string{"X-Amz-Meta-xid": "3f"}); errorCause(err) != errFaultyDisk {
+		_, err := fs.NewMultipartUpload(bucketName, objectName, map[string]string{"X-Amz-Meta-xid": "3f"})
+		if errorCause(err) != eFaultyDisk() {
 			switch i {
 			case 1:
 				if !isSameType(errorCause(err), BucketNotFound{}) {
@@ -87,7 +94,7 @@ func TestPutObjectPartFaultyDisk(t *testing.T) {
 		// Faulty disk generates errFaultyDisk at 'i' storage api call number
 		fs.storage = newNaughtyDisk(fsStorage, map[int]error{i: errFaultyDisk}, nil)
 		md5sum, err := fs.PutObjectPart(bucketName, objectName, uploadID, 1, dataLen, bytes.NewReader(data), md5Hex, sha256sum)
-		if errorCause(err) != errFaultyDisk {
+		if errorCause(err) != eFaultyDisk() {
 			if errorCause(err) == nil {
 				t.Fatalf("Test %d shouldn't succeed, md5sum = %s\n", i, md5sum)
 			}
@@ -142,7 +149,7 @@ func TestCompleteMultipartUploadFaultyDisk(t *testing.T) {
 	for i := 1; i <= 3; i++ {
 		// Faulty disk generates errFaultyDisk at 'i' storage api call number
 		fs.storage = newNaughtyDisk(fsStorage, map[int]error{i: errFaultyDisk}, nil)
-		if _, err := fs.CompleteMultipartUpload(bucketName, objectName, uploadID, parts); errorCause(err) != errFaultyDisk {
+		if _, err := fs.CompleteMultipartUpload(bucketName, objectName, uploadID, parts); errorCause(err) != eFaultyDisk() {
 			switch i {
 			case 1:
 				if !isSameType(errorCause(err), BucketNotFound{}) {
@@ -161,6 +168,12 @@ func TestCompleteMultipartUploadFaultyDisk(t *testing.T) {
 
 // TestListMultipartUploadsFaultyDisk - test ListMultipartUploads with faulty disks
 func TestListMultipartUploadsFaultyDisk(t *testing.T) {
+	root, err := newTestConfig("us-east-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer removeAll(root)
+
 	// Prepare for tests
 	disk := filepath.Join(os.TempDir(), "minio-"+nextSuffix())
 	defer removeAll(disk)
@@ -190,7 +203,7 @@ func TestListMultipartUploadsFaultyDisk(t *testing.T) {
 	for i := 1; i <= 4; i++ {
 		// Faulty disk generates errFaultyDisk at 'i' storage api call number
 		fs.storage = newNaughtyDisk(fsStorage, map[int]error{i: errFaultyDisk}, nil)
-		if _, err := fs.ListMultipartUploads(bucketName, objectName, "", "", "", 1000); errorCause(err) != errFaultyDisk {
+		if _, err := fs.ListMultipartUploads(bucketName, objectName, "", "", "", 1000); errorCause(err) != eFaultyDisk() {
 			switch i {
 			case 1:
 				if !isSameType(errorCause(err), BucketNotFound{}) {
@@ -201,7 +214,7 @@ func TestListMultipartUploadsFaultyDisk(t *testing.T) {
 					t.Fatal("Unexpected error ", err)
 				}
 			case 3:
-				if errorCause(err) != errFileNotFound {
+				if !isSameType(errorCause(err), ObjectNotFound{}) {
 					t.Fatal("Unexpected error ", err)
 				}
 			default:

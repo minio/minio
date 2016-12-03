@@ -65,17 +65,23 @@ func TestRepeatPutObjectPart(t *testing.T) {
 }
 
 func TestXLDeleteObjectBasic(t *testing.T) {
+	root, err := newTestConfig("us-east-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer removeAll(root)
+
 	testCases := []struct {
 		bucket      string
 		object      string
 		expectedErr error
 	}{
-		{".test", "obj", BucketNameInvalid{Bucket: ".test"}},
-		{"----", "obj", BucketNameInvalid{Bucket: "----"}},
-		{"bucket", "", ObjectNameInvalid{Bucket: "bucket", Object: ""}},
-		{"bucket", "obj/", ObjectNameInvalid{Bucket: "bucket", Object: "obj/"}},
-		{"bucket", "/obj", ObjectNameInvalid{Bucket: "bucket", Object: "/obj"}},
-		{"bucket", "doesnotexist", ObjectNotFound{Bucket: "bucket", Object: "doesnotexist"}},
+		{".test", "obj", eBucketNameInvalid(".test")},
+		{"----", "obj", eBucketNameInvalid("----")},
+		{"bucket", "", eObjectNameInvalid("bucket", "")},
+		{"bucket", "obj/", eObjectNameInvalid("bucket", "obj/")},
+		{"bucket", "/obj", eObjectNameInvalid("bucket", "/obj")},
+		{"bucket", "doesnotexist", eObjectNotFound("bucket", "doesnotexist")},
 		{"bucket", "obj", nil},
 	}
 
@@ -204,8 +210,9 @@ func TestGetObjectNoQuorum(t *testing.T) {
 		// Fetch object from store.
 		err = xl.GetObject(bucket, object, 0, int64(len("abcd")), ioutil.Discard)
 		err = errorCause(err)
-		if err != toObjectErr(errXLReadQuorum, bucket, object) {
-			t.Errorf("Expected putObject to fail with %v, but failed with %v", toObjectErr(errXLWriteQuorum, bucket, object), err)
+		expectedErr := toObjectErr(errXLReadQuorum, bucket, object)
+		if err != expectedErr {
+			t.Errorf("Expected putObject to fail with %v, but failed with %v", expectedErr, err)
 		}
 	}
 	// Cleanup backend directories.

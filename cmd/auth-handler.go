@@ -104,20 +104,20 @@ func getRequestAuthType(r *http.Request) authType {
 	return authTypeUnknown
 }
 
-func checkRequestAuthType(r *http.Request, bucket, policyAction, region string) APIErrorCode {
+func checkRequestAuthType(r *http.Request, bucket, policyAction, region string) error {
 	reqAuthType := getRequestAuthType(r)
 
 	switch reqAuthType {
 	case authTypePresignedV2, authTypeSignedV2:
 		// Signature V2 validation.
 		s3Error := isReqAuthenticatedV2(r)
-		if s3Error != ErrNone {
+		if s3Error != nil {
 			errorIf(errSignatureMismatch, dumpRequest(r))
 		}
 		return s3Error
 	case authTypeSigned, authTypePresigned:
 		s3Error := isReqAuthenticated(r, region)
-		if s3Error != ErrNone {
+		if s3Error != nil {
 			errorIf(errSignatureMismatch, dumpRequest(r))
 		}
 		return s3Error
@@ -128,19 +128,19 @@ func checkRequestAuthType(r *http.Request, bucket, policyAction, region string) 
 		return enforceBucketPolicy(bucket, policyAction, r.URL)
 	}
 
-	// By default return ErrAccessDenied
-	return ErrAccessDenied
+	// By default return AccessDenied
+	return eAccessDenied()
 }
 
 // Verify if request has valid AWS Signature Version '2'.
-func isReqAuthenticatedV2(r *http.Request) (s3Error APIErrorCode) {
+func isReqAuthenticatedV2(r *http.Request) (s3Error error) {
 	if isRequestSignatureV2(r) {
 		return doesSignV2Match(r)
 	}
 	return doesPresignV2SignatureMatch(r)
 }
 
-func reqSignatureV4Verify(r *http.Request) (s3Error APIErrorCode) {
+func reqSignatureV4Verify(r *http.Request) (s3Error error) {
 	sha256sum := r.Header.Get("X-Amz-Content-Sha256")
 	// Skips calculating sha256 on the payload on server,
 	// if client requested for it.
@@ -152,23 +152,24 @@ func reqSignatureV4Verify(r *http.Request) (s3Error APIErrorCode) {
 	} else if isRequestPresignedSignatureV4(r) {
 		return doesPresignedSignatureMatch(sha256sum, r, serverConfig.GetRegion())
 	}
-	return ErrAccessDenied
+	return eAccessDenied()
 }
 
 // Verify if request has valid AWS Signature Version '4'.
-func isReqAuthenticated(r *http.Request, region string) (s3Error APIErrorCode) {
+func isReqAuthenticated(r *http.Request, region string) (s3Error error) {
 	if r == nil {
-		return ErrInternalError
+		return eInternalError()
 	}
 	payload, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		errorIf(err, "Unable to read request body for signature verification")
-		return ErrInternalError
+		return eIncompleteBody()
 	}
 	// Verify Content-Md5, if payload is set.
 	if r.Header.Get("Content-Md5") != "" {
-		if r.Header.Get("Content-Md5") != getMD5HashBase64(payload) {
-			return ErrBadDigest
+		calcDigest := getMD5HashBase64(payload)
+		if r.Header.Get("Content-Md5") != calcDigest {
+			return eBadDigest(calcDigest, r.Header.Get("Content-Md5"))
 		}
 	}
 	// Populate back the payload.
@@ -185,7 +186,31 @@ func isReqAuthenticated(r *http.Request, region string) (s3Error APIErrorCode) {
 	} else if isRequestPresignedSignatureV4(r) {
 		return doesPresignedSignatureMatch(sha256sum, r, region)
 	}
-	return ErrAccessDenied
+	return eAccessDenied()
+}
+
+// checkAuth - checks for conditions satisfying the authorization of
+// the incoming request. Request should be either Presigned or Signed
+// in accordance with AWS S3 Signature V4 requirements. ErrAccessDenied
+// is returned for unhandled auth type. Once the auth type is indentified
+// request headers and body are used to calculate the signature validating
+// the client signature present in request.
+func checkAuth(r *http.Request) error {
+	return checkAuthWithRegion(r, serverConfig.GetRegion())
+}
+
+// checkAuthWithRegion - similar to checkAuth but takes a custom region.
+func checkAuthWithRegion(r *http.Request, region string) error {
+	// Validates the request for both Presigned and Signed.
+	aType := getRequestAuthType(r)
+	switch aType {
+	case authTypeSignedV2, authTypePresignedV2: // Signature V2.
+		return isReqAuthenticatedV2(r)
+	case authTypeSigned, authTypePresigned: // Signature V4.
+		return isReqAuthenticated(r, region)
+	}
+	// For all unhandled auth types return error AccessDenied.
+	return AccessDenied{}
 }
 
 // authHandler - handles all the incoming authorization headers and validates them if possible.
@@ -231,5 +256,5 @@ func (a authHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		a.handler.ServeHTTP(w, r)
 		return
 	}
-	writeErrorResponse(w, r, ErrSignatureVersionNotSupported, r.URL.Path)
+	writeErrorResponse(w, r, eSignatureNotSupported())
 }

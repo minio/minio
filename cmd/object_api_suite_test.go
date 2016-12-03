@@ -473,8 +473,8 @@ func testNonExistantBucketOperations(obj ObjectLayer, instanceType string, c Tes
 	if err == nil {
 		c.Fatal("Expected error but found nil")
 	}
-	if err.Error() != "Bucket not found: bucket1" {
-		c.Errorf("%s: Expected the error msg to be `%s`, but instead found `%s`", instanceType, "Bucket not found: bucket1", err.Error())
+	if err.Error() != "The specified bucket does not exist" {
+		c.Errorf("%s: Expected the error msg to be `%s`, but instead found `%s`", instanceType, "The specified bucket does not exist", err.Error())
 	}
 }
 
@@ -494,8 +494,8 @@ func testBucketRecreateFails(obj ObjectLayer, instanceType string, c TestErrHand
 		c.Fatalf("%s: Expected error but found nil.", instanceType)
 	}
 
-	if err.Error() != "Bucket exists: string" {
-		c.Errorf("%s: Expected the error message to be `%s`, but instead found `%s`", instanceType, "Bucket exists: string", err.Error())
+	if err.Error() != "Your previous request to create the named bucket succeeded and you already own it." {
+		c.Errorf("%s: Expected the error message to be `%s`, but instead found `%s`", instanceType, "Your previous request to create the named bucket succeeded and you already own it.", err.Error())
 	}
 }
 
@@ -683,8 +683,8 @@ func testListObjectsTestsForNonExistantBucket(obj ObjectLayer, instanceType stri
 	if result.IsTruncated != false {
 		c.Fatalf("%s: Expected IsTruncated to be `false`, but instead found it to be `%v`", instanceType, result.IsTruncated)
 	}
-	if err.Error() != "Bucket not found: bucket" {
-		c.Errorf("%s: Expected the error msg to be `%s`, but instead found `%s`", instanceType, "Bucket not found: bucket", err.Error())
+	if err.Error() != "The specified bucket does not exist" {
+		c.Errorf("%s: Expected the error msg to be `%s`, but instead found `%s`", instanceType, "The specified bucket does not exist", err.Error())
 	}
 }
 
@@ -705,8 +705,8 @@ func testNonExistantObjectInBucket(obj ObjectLayer, instanceType string, c TestE
 		c.Fatalf("%s: Expected error but found nil", instanceType)
 	}
 	if isErrObjectNotFound(err) {
-		if err.Error() != "Object not found: bucket#dir1" {
-			c.Errorf("%s: Expected the Error message to be `%s`, but instead found `%s`", instanceType, "Object not found: bucket#dir1", err.Error())
+		if err.Error() != "The specified key does not exist." {
+			c.Errorf("%s: Expected the Error message to be `%s`, but instead found `%s`", instanceType, "The specified key does not exist.", err.Error())
 		}
 	} else {
 		if err.Error() != "fails" {

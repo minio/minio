@@ -132,22 +132,22 @@ func testGetObject(obj ObjectLayer, instanceType string, t TestErrHandler) {
 		// Test case - 11.
 		{bucketName, objectName, int64(len(bytesData[0].byteData) + 1), int64(len(bytesData[0].byteData)), buffers[0],
 			NewEOFWriter(buffers[0], 100), false, []byte{},
-			InvalidRange{int64(len(bytesData[0].byteData) + 1), int64(len(bytesData[0].byteData)), int64(len(bytesData[0].byteData))}},
+			eInvalidRange(int64(len(bytesData[0].byteData)+1), int64(len(bytesData[0].byteData)), int64(len(bytesData[0].byteData)))},
 		// Test case with offset greater than the size of the object.
 		// Test case - 12.
 		{bucketName, objectName, -1, int64(len(bytesData[0].byteData)), buffers[0], new(bytes.Buffer), false, []byte{}, errUnexpected},
 		// Test case length parameter is more than the object size.
 		// Test case - 13.
 		{bucketName, objectName, 0, int64(len(bytesData[0].byteData) + 1), buffers[1], buffers[1], false, bytesData[0].byteData,
-			InvalidRange{0, int64(len(bytesData[0].byteData) + 1), int64(len(bytesData[0].byteData))}},
+			eInvalidRange(0, int64(len(bytesData[0].byteData)+1), int64(len(bytesData[0].byteData)))},
 		// Test case with `length` parameter set to a negative value.
 		// Test case - 14.
 		{bucketName, objectName, 0, int64(-1), buffers[1], buffers[1], false, bytesData[0].byteData, errUnexpected},
 		// Test case with offset + length > objectSize parameter set to a negative value.
 		// Test case - 15.
 		{bucketName, objectName, 2, int64(len(bytesData[0].byteData)), buffers[1], buffers[1], false, bytesData[0].byteData,
-			InvalidRange{2, int64(len(bytesData[0].byteData)), int64(len(bytesData[0].byteData))}},
-		// Test case with the writer set to nil.
+			eInvalidRange(2, int64(len(bytesData[0].byteData)), int64(len(bytesData[0].byteData)))},
+		// Test case with the writer set to nil.a
 		// Test case - 16.
 		{bucketName, objectName, 0, int64(len(bytesData[0].byteData)), buffers[1], nil, false, bytesData[0].byteData, errUnexpected},
 	}
@@ -402,21 +402,21 @@ func testGetObjectDiskNotFound(obj ObjectLayer, instanceType string, disks []str
 		// Test case - 11.
 		{bucketName, objectName, int64(len(bytesData[0].byteData) + 1), int64(len(bytesData[0].byteData)), buffers[0],
 			NewEOFWriter(buffers[0], 100), false, []byte{},
-			InvalidRange{int64(len(bytesData[0].byteData) + 1), int64(len(bytesData[0].byteData)), int64(len(bytesData[0].byteData))}},
+			eInvalidRange(int64(len(bytesData[0].byteData)+1), int64(len(bytesData[0].byteData)), int64(len(bytesData[0].byteData)))},
 		// Test case with offset greater than the size of the object.
 		// Test case - 12.
 		{bucketName, objectName, -1, int64(len(bytesData[0].byteData)), buffers[0], new(bytes.Buffer), false, []byte{}, errUnexpected},
 		// Test case length parameter is more than the object size.
 		// Test case - 13.
 		{bucketName, objectName, 0, int64(len(bytesData[0].byteData) + 1), buffers[1], buffers[1], false, bytesData[0].byteData,
-			InvalidRange{0, int64(len(bytesData[0].byteData) + 1), int64(len(bytesData[0].byteData))}},
+			eInvalidRange(0, int64(len(bytesData[0].byteData)+1), int64(len(bytesData[0].byteData)))},
 		// Test case with `length` parameter set to a negative value.
 		// Test case - 14.
 		{bucketName, objectName, 0, int64(-1), buffers[1], buffers[1], false, bytesData[0].byteData, errUnexpected},
 		// Test case with offset + length > objectSize parameter set to a negative value.
 		// Test case - 15.
 		{bucketName, objectName, 2, int64(len(bytesData[0].byteData)), buffers[1], buffers[1], false, bytesData[0].byteData,
-			InvalidRange{2, int64(len(bytesData[0].byteData)), int64(len(bytesData[0].byteData))}},
+			eInvalidRange(2, int64(len(bytesData[0].byteData)), int64(len(bytesData[0].byteData)))},
 		// Test case with the writer set to nil.
 		// Test case - 16.
 		{bucketName, objectName, 0, int64(len(bytesData[0].byteData)), buffers[1], nil, false, bytesData[0].byteData, errUnexpected},

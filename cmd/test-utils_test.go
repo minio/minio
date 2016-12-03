@@ -1706,14 +1706,13 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, testName, bucketName, objectName, 
 	apiRouter.ServeHTTP(rec, anonReq)
 
 	// expected error response when the unsigned HTTP request is not permitted.
-	accesDeniedHTTPStatus := getAPIError(ErrAccessDenied).HTTPStatusCode
+	accesDeniedHTTPStatus := errCodeResponse[ErrAccessDenied]
 	if rec.Code != accesDeniedHTTPStatus {
 		t.Fatal(failTestStr(anonTestStr, fmt.Sprintf("Object API Nil Test expected to fail with %d, but failed with %d", accesDeniedHTTPStatus, rec.Code)))
 	}
 
 	// expected error response in bytes when objectLayer is not initialized, or set to `nil`.
-	expectedErrResponse := encodeResponse(getAPIErrorResponse(getAPIError(ErrAccessDenied), getGetObjectURL("", bucketName, objectName)))
-
+	expectedErrResponse := encodeResponse(eAccessDenied())
 	// HEAD HTTTP request doesn't contain response body.
 	if anonReq.Method != "HEAD" {
 		// read the response body.
@@ -1808,13 +1807,12 @@ func ExecObjectLayerAPINilTest(t TestErrHandler, bucketName, objectName, instanc
 
 	// expected error response when the API handler is called before the object layer is initialized,
 	// or when objectLayer is `nil`.
-	serverNotInitializedErr := getAPIError(ErrServerNotInitialized).HTTPStatusCode
+	serverNotInitializedErr := errCodeResponse[ErrServerNotInitialized]
 	if rec.Code != serverNotInitializedErr {
 		t.Errorf("Object API Nil Test expected to fail with %d, but failed with %d", serverNotInitializedErr, rec.Code)
 	}
 	// expected error response in bytes when objectLayer is not initialized, or set to `nil`.
-	expectedErrResponse := encodeResponse(getAPIErrorResponse(getAPIError(ErrServerNotInitialized), getGetObjectURL("", bucketName, objectName)))
-
+	expectedErrResponse := encodeResponse(eServerNotInitialized())
 	// HEAD HTTP Request doesn't contain body in its response,
 	// for other type of HTTP requests compare the response body content with the expected one.
 	if req.Method != "HEAD" {

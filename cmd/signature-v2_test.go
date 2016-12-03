@@ -34,11 +34,11 @@ func TestDoesPresignedV2SignatureMatch(t *testing.T) {
 	testCases := []struct {
 		queryParams map[string]string
 		headers     map[string]string
-		expected    APIErrorCode
+		expectedErr string
 	}{
 		// (0) Should error without a set URL query.
 		{
-			expected: ErrInvalidQueryParams,
+			expectedErr: ErrInvalidQueryParams,
 		},
 		// (1) Should error on an invalid access key.
 		{
@@ -47,7 +47,7 @@ func TestDoesPresignedV2SignatureMatch(t *testing.T) {
 				"Signature":      "badsignature",
 				"AWSAccessKeyId": "Z7IXGOO6BZ0REAN1Q26I",
 			},
-			expected: ErrInvalidAccessKeyID,
+			expectedErr: ErrInvalidAccessKeyID,
 		},
 		// (2) Should error with malformed expires.
 		{
@@ -56,7 +56,7 @@ func TestDoesPresignedV2SignatureMatch(t *testing.T) {
 				"Signature":      "badsignature",
 				"AWSAccessKeyId": serverConfig.GetCredential().AccessKeyID,
 			},
-			expected: ErrMalformedExpires,
+			expectedErr: ErrMalformedExpires,
 		},
 		// (3) Should give an expired request if it has expired.
 		{
@@ -65,7 +65,7 @@ func TestDoesPresignedV2SignatureMatch(t *testing.T) {
 				"Signature":      "badsignature",
 				"AWSAccessKeyId": serverConfig.GetCredential().AccessKeyID,
 			},
-			expected: ErrExpiredPresignRequest,
+			expectedErr: ErrExpiredPresignRequest,
 		},
 		// (4) Should error when the signature does not match.
 		{
@@ -74,7 +74,7 @@ func TestDoesPresignedV2SignatureMatch(t *testing.T) {
 				"Signature":      "badsignature",
 				"AWSAccessKeyId": serverConfig.GetCredential().AccessKeyID,
 			},
-			expected: ErrSignatureDoesNotMatch,
+			expectedErr: ErrSignatureDoesNotMatch,
 		},
 	}
 
@@ -99,8 +99,14 @@ func TestDoesPresignedV2SignatureMatch(t *testing.T) {
 
 		// Check if it matches!
 		err := doesPresignV2SignatureMatch(req)
-		if err != testCase.expected {
-			t.Errorf("(%d) expected to get %s, instead got %s", i, niceError(testCase.expected), niceError(err))
+		if err != nil {
+			aerr, ok := err.(APIError)
+			if !ok {
+				t.Fatal("Unable to validate APIError", err)
+			}
+			if aerr.Code() != testCase.expectedErr {
+				t.Errorf("(%d) expected to get %s, instead got %s", i+1, testCase.expectedErr, aerr.Code())
+			}
 		}
 	}
 }
@@ -120,7 +126,7 @@ func TestValidateV2AuthHeader(t *testing.T) {
 
 	testCases := []struct {
 		authString    string
-		expectedError APIErrorCode
+		expectedError string
 	}{
 		// Test case - 1.
 		// Case with empty V2AuthString.
@@ -170,11 +176,16 @@ func TestValidateV2AuthHeader(t *testing.T) {
 
 	for i, testCase := range testCases {
 		t.Run(fmt.Sprintf("Case %d AuthStr \"%s\".", i+1, testCase.authString), func(t *testing.T) {
-
-			actualErrCode := validateV2AuthHeader(testCase.authString)
-
-			if testCase.expectedError != actualErrCode {
-				t.Errorf("Expected the error code to be %v, got %v.", testCase.expectedError, actualErrCode)
+			err := validateV2AuthHeader(testCase.authString, accessID)
+			if err != nil {
+				apiErr, ok := err.(APIError)
+				if !ok {
+					t.Fatal("Unable to validate error APIError.")
+				}
+				actualErrCode := apiErr.Code()
+				if testCase.expectedError != actualErrCode {
+					t.Errorf("Expected the error code to be %v, got %v.", testCase.expectedError, actualErrCode)
+				}
 			}
 		})
 	}
@@ -195,7 +206,7 @@ func TestDoesPolicySignatureV2Match(t *testing.T) {
 		accessKey string
 		policy    string
 		signature string
-		errCode   APIErrorCode
+		errCode   string
 	}{
 		{"invalidAccessKey", policy, calculateSignatureV2(policy, creds.SecretAccessKey), ErrInvalidAccessKeyID},
 		{creds.AccessKeyID, policy, calculateSignatureV2("random", creds.SecretAccessKey), ErrSignatureDoesNotMatch},
@@ -206,9 +217,16 @@ func TestDoesPolicySignatureV2Match(t *testing.T) {
 		formValues["Awsaccesskeyid"] = test.accessKey
 		formValues["Signature"] = test.signature
 		formValues["Policy"] = test.policy
-		errCode := doesPolicySignatureV2Match(formValues)
-		if errCode != test.errCode {
-			t.Fatalf("(%d) expected to get %s, instead got %s", i+1, niceError(test.errCode), niceError(errCode))
+		err := doesPolicySignatureV2Match(formValues)
+		if err != nil {
+			aerr, ok := err.(APIError)
+			if !ok {
+				t.Fatal("Unable to validate APIError", err)
+			}
+			errCode := aerr.Code()
+			if errCode != test.errCode {
+				t.Fatalf("(%d) expected to get %s, instead got %s", i+1, test.errCode, errCode)
+			}
 		}
 	}
 }

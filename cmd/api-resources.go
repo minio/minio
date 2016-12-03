@@ -88,11 +88,13 @@ func getListenBucketNotificationResources(values url.Values) (prefix []string, s
 }
 
 // Validates filter values
-func validateFilterValues(values []string) (err APIErrorCode) {
+func validateFilterValues(values []string) (err error) {
 	for _, value := range values {
-		if !IsValidObjectPrefix(value) {
-			return ErrFilterValueInvalid
+		if IsValidObjectPrefix(value) {
+			continue
 		}
+		err = eFilterValueInvalid(value)
+		break
 	}
-	return ErrNone
+	return err
 }

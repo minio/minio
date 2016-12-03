@@ -118,9 +118,10 @@ func setBrowserCacheControlHandler(h http.Handler) http.Handler {
 func (h cacheControlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "GET" && strings.Contains(r.Header.Get("User-Agent"), "Mozilla") {
 		// For all browser requests set appropriate Cache-Control policies
-		match, e := regexp.MatchString(reservedBucket+`/([^/]+\.js|favicon.ico)`, r.URL.Path)
-		if e != nil {
-			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
+		match, err := regexp.MatchString(reservedBucket+`/([^/]+\.js|favicon.ico)`, r.URL.Path)
+		if err != nil {
+			errorIf(err, "Unable to initialize regex for reserved bucket matching.")
+			writeErrorResponse(w, r, eInternalError())
 			return
 		}
 		if match {
@@ -148,7 +149,7 @@ func setPrivateBucketHandler(h http.Handler) http.Handler {
 func (h minioPrivateBucketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// For all non browser requests, reject access to 'reservedBucket'.
 	if !strings.Contains(r.Header.Get("User-Agent"), "Mozilla") && path.Clean(r.URL.Path) == reservedBucket {
-		writeErrorResponse(w, r, ErrAllAccessDisabled, r.URL.Path)
+		writeErrorResponse(w, r, eAllAccessDisabled(reservedBucket))
 		return
 	}
 	h.handler.ServeHTTP(w, r)
@@ -163,14 +164,15 @@ var amzDateFormats = []string{
 }
 
 // parseAmzDate - parses date string into supported amz date formats.
-func parseAmzDate(amzDateStr string) (amzDate time.Time, apiErr APIErrorCode) {
+func parseAmzDate(amzDateStr string) (amzDate time.Time, err error) {
 	for _, dateFormat := range amzDateFormats {
-		amzDate, e := time.Parse(dateFormat, amzDateStr)
-		if e == nil {
-			return amzDate, ErrNone
+		amzDate, err = time.Parse(dateFormat, amzDateStr)
+		if err == nil {
+			return amzDate, nil
 		}
 	}
-	return time.Time{}, ErrMalformedDate
+
+	return time.Time{}, eMalformedDate(amzDateStr)
 }
 
 // Supported Amz date headers.
@@ -181,7 +183,7 @@ var amzDateHeaders = []string{
 
 // parseAmzDateHeader - parses supported amz date headers, in
 // supported amz date formats.
-func parseAmzDateHeader(req *http.Request) (time.Time, APIErrorCode) {
+func parseAmzDateHeader(req *http.Request) (time.Time, error) {
 	for _, amzDateHeader := range amzDateHeaders {
 		amzDateStr := req.Header.Get(http.CanonicalHeaderKey(amzDateHeader))
 		if amzDateStr != "" {
@@ -189,7 +191,7 @@ func parseAmzDateHeader(req *http.Request) (time.Time, APIErrorCode) {
 		}
 	}
 	// Date header missing.
-	return time.Time{}, ErrMissingDateHeader
+	return time.Time{}, eMissingDateHeader()
 }
 
 type timeValidityHandler struct {
@@ -206,18 +208,18 @@ func (h timeValidityHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if aType == authTypeSigned || aType == authTypeSignedV2 || aType == authTypeStreamingSigned {
 		// Verify if date headers are set, if not reject the request
 		amzDate, apiErr := parseAmzDateHeader(r)
-		if apiErr != ErrNone {
+		if apiErr != nil {
 			// All our internal APIs are sensitive towards Date
 			// header, for all requests where Date header is not
 			// present we will reject such clients.
-			writeErrorResponse(w, r, apiErr, r.URL.Path)
+			writeErrorResponse(w, r, apiErr)
 			return
 		}
 		// Verify if the request date header is shifted by less than globalMaxSkewTime parameter in the past
 		// or in the future, reject request otherwise.
 		curTime := time.Now().UTC()
 		if curTime.Sub(amzDate) > globalMaxSkewTime || amzDate.Sub(curTime) > globalMaxSkewTime {
-			writeErrorResponse(w, r, ErrRequestTimeTooSkewed, r.URL.Path)
+			writeErrorResponse(w, r, eRequestTimeTooSkewed())
 			return
 		}
 	}
@@ -265,20 +267,20 @@ func (h resourceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// If bucketName is present and not objectName check for bucket level resource queries.
 	if bucketName != "" && objectName == "" {
 		if ignoreNotImplementedBucketResources(r) {
-			writeErrorResponse(w, r, ErrNotImplemented, r.URL.Path)
+			writeErrorResponse(w, r, eNotImplemented())
 			return
 		}
 	}
 	// If bucketName and objectName are present check for its resource queries.
 	if bucketName != "" && objectName != "" {
 		if ignoreNotImplementedObjectResources(r) {
-			writeErrorResponse(w, r, ErrNotImplemented, r.URL.Path)
+			writeErrorResponse(w, r, eNotImplemented())
 			return
 		}
 	}
 	// A put method on path "/" doesn't make sense, ignore it.
 	if r.Method == "PUT" && r.URL.Path == "/" {
-		writeErrorResponse(w, r, ErrNotImplemented, r.URL.Path)
+		writeErrorResponse(w, r, eNotImplemented())
 		return
 	}
 

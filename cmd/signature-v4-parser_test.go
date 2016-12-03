@@ -92,7 +92,7 @@ func TestParseCredentialHeader(t *testing.T) {
 	testCases := []struct {
 		inputCredentialStr  string
 		expectedCredentials credentialHeader
-		expectedErrCode     APIErrorCode
+		expectedErrCode     string
 	}{
 		// Test Case - 1.
 		// Test case with no '=' in te inputCredentialStr.
@@ -160,7 +160,7 @@ func TestParseCredentialHeader(t *testing.T) {
 			inputCredentialStr: generateCredentialStr(
 				"Z7IXGOO6BZ0REAN1Q26I",
 				time.Now().UTC().Format(yyyymmdd),
-				"us-west-1",
+				"us-east-1",
 				"ABCD",
 				"ABCD"),
 			expectedCredentials: credentialHeader{},
@@ -173,7 +173,7 @@ func TestParseCredentialHeader(t *testing.T) {
 			inputCredentialStr: generateCredentialStr(
 				"Z7IXGOO6BZ0REAN1Q26I",
 				time.Now().UTC().Format(yyyymmdd),
-				"us-west-1",
+				"us-east-1",
 				"s3",
 				"ABCD"),
 			expectedCredentials: credentialHeader{},
@@ -186,14 +186,14 @@ func TestParseCredentialHeader(t *testing.T) {
 			inputCredentialStr: generateCredentialStr(
 				"Z7IXGOO6BZ0REAN1Q26I",
 				sampleTimeStr,
-				"us-west-1",
+				"us-east-1",
 				"s3",
 				"aws4_request"),
 			expectedCredentials: generateCredentials(
 				t,
 				"Z7IXGOO6BZ0REAN1Q26I",
 				sampleTimeStr,
-				"us-west-1",
+				"us-east-1",
 				"s3",
 				"aws4_request"),
 			expectedErrCode: ErrNone,
@@ -201,12 +201,18 @@ func TestParseCredentialHeader(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		actualCredential, actualErrCode := parseCredentialHeader(testCase.inputCredentialStr)
-		// validating the credential fields.
-		if testCase.expectedErrCode != actualErrCode {
-			t.Fatalf("Test %d: Expected the APIErrCode to be %d, got %d", i+1, testCase.expectedErrCode, actualErrCode)
-		}
-		if actualErrCode == ErrNone {
+		actualCredential, err := parseCredentialHeader(testCase.inputCredentialStr)
+		if err != nil {
+			aerr, ok := err.(APIError)
+			if !ok {
+				t.Fatal("Unable to validate APIError", err)
+			}
+			actualErrCode := aerr.Code()
+			// validating the credential fields.
+			if testCase.expectedErrCode != actualErrCode {
+				t.Fatalf("Test %d: Expected the APIErrCode to be %s, got %s", i+1, testCase.expectedErrCode, actualErrCode)
+			}
+		} else {
 			validateCredentialfields(t, i+1, testCase.expectedCredentials, actualCredential)
 		}
 	}
@@ -217,7 +223,7 @@ func TestParseSignature(t *testing.T) {
 	testCases := []struct {
 		inputSignElement string
 		expectedSignStr  string
-		expectedErrCode  APIErrorCode
+		expectedErrCode  string
 	}{
 		// Test case - 1.
 		// SignElemenet doesn't have 2 parts on an attempt to split at '='.
@@ -251,11 +257,17 @@ func TestParseSignature(t *testing.T) {
 		},
 	}
 	for i, testCase := range testCases {
-		actualSignStr, actualErrCode := parseSignature(testCase.inputSignElement)
-		if testCase.expectedErrCode != actualErrCode {
-			t.Fatalf("Test %d: Expected the APIErrCode to be %d, got %d", i+1, testCase.expectedErrCode, actualErrCode)
-		}
-		if actualErrCode == ErrNone {
+		actualSignStr, err := parseSignature(testCase.inputSignElement)
+		if err != nil {
+			aerr, ok := err.(APIError)
+			if !ok {
+				t.Fatal("Unable to validate APIError", err)
+			}
+			actualErrCode := aerr.Code()
+			if testCase.expectedErrCode != actualErrCode {
+				t.Fatalf("Test %d: Expected the APIErrCode to be %s, got %s", i+1, testCase.expectedErrCode, actualErrCode)
+			}
+		} else {
 			if testCase.expectedSignStr != actualSignStr {
 				t.Errorf("Test %d: Expected the result to be \"%s\", but got \"%s\". ", i+1, testCase.expectedSignStr, actualSignStr)
 
@@ -265,12 +277,12 @@ func TestParseSignature(t *testing.T) {
 	}
 }
 
-// TestParseSignedHeaders - validates the logic for extracting the signature string.
-func TestParseSignedHeaders(t *testing.T) {
+// TestParseSignedHeader - validates the logic for extracting the signed header string.
+func TestParseSignedHeader(t *testing.T) {
 	testCases := []struct {
 		inputSignElement      string
 		expectedSignedHeaders []string
-		expectedErrCode       APIErrorCode
+		expectedErrCode       string
 	}{
 		// Test case - 1.
 		// SignElemenet doesn't have 2 parts on an attempt to split at '='.
@@ -297,11 +309,17 @@ func TestParseSignedHeaders(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		actualSignedHeaders, actualErrCode := parseSignedHeader(testCase.inputSignElement)
-		if testCase.expectedErrCode != actualErrCode {
-			t.Errorf("Test %d: Expected the APIErrCode to be %d, got %d", i+1, testCase.expectedErrCode, actualErrCode)
-		}
-		if actualErrCode == ErrNone {
+		actualSignedHeaders, err := parseSignedHeader(testCase.inputSignElement)
+		if err != nil {
+			aerr, ok := err.(APIError)
+			if !ok {
+				t.Fatal("Unable to validate APIError", err)
+			}
+			actualErrCode := aerr.Code()
+			if testCase.expectedErrCode != actualErrCode {
+				t.Errorf("Test %d: Expected the APIErrCode to be %s, got %s", i+1, testCase.expectedErrCode, actualErrCode)
+			}
+		} else {
 			if strings.Join(testCase.expectedSignedHeaders, ",") != strings.Join(actualSignedHeaders, ",") {
 				t.Errorf("Test %d: Expected the result to be \"%v\", but got \"%v\". ", i+1, testCase.expectedSignedHeaders, actualSignedHeaders)
 
@@ -317,7 +335,7 @@ func TestParseSignV4(t *testing.T) {
 	testCases := []struct {
 		inputV4AuthStr    string
 		expectedAuthField signValues
-		expectedErrCode   APIErrorCode
+		expectedErrCode   string
 	}{
 		// Test case - 1.
 		// Test case with empty auth string.
@@ -360,7 +378,7 @@ func TestParseSignV4(t *testing.T) {
 					generateCredentialStr(
 						"Z7IXGOO6BZ0REAN1Q26I",
 						sampleTimeStr,
-						"us-west-1",
+						"us-east-1",
 						"s3",
 						"aws4_request"),
 					// Incorrect SignedHeader field.
@@ -382,7 +400,7 @@ func TestParseSignV4(t *testing.T) {
 					generateCredentialStr(
 						"Z7IXGOO6BZ0REAN1Q26I",
 						sampleTimeStr,
-						"us-west-1",
+						"us-east-1",
 						"s3",
 						"aws4_request"),
 					// valid SignedHeader.
@@ -403,7 +421,7 @@ func TestParseSignV4(t *testing.T) {
 					generateCredentialStr(
 						"Z7IXGOO6BZ0REAN1Q26I",
 						sampleTimeStr,
-						"us-west-1",
+						"us-east-1",
 						"s3",
 						"aws4_request"),
 					// valid SignedHeader.
@@ -418,7 +436,7 @@ func TestParseSignV4(t *testing.T) {
 					t,
 					"Z7IXGOO6BZ0REAN1Q26I",
 					sampleTimeStr,
-					"us-west-1",
+					"us-east-1",
 					"s3",
 					"aws4_request"),
 				SignedHeaders: []string{"host", "x-amz-content-sha256", "x-amz-date"},
@@ -429,13 +447,17 @@ func TestParseSignV4(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		parsedAuthField, actualErrCode := parseSignV4(testCase.inputV4AuthStr)
-
-		if testCase.expectedErrCode != actualErrCode {
-			t.Fatalf("Test %d: Expected the APIErrCode to be %d, got %d", i+1, testCase.expectedErrCode, actualErrCode)
-		}
-
-		if actualErrCode == ErrNone {
+		parsedAuthField, err := parseSignV4(testCase.inputV4AuthStr)
+		if err != nil {
+			aerr, ok := err.(APIError)
+			if !ok {
+				t.Fatal("Unable to validate APIError", err)
+			}
+			actualErrCode := aerr.Code()
+			if testCase.expectedErrCode != actualErrCode {
+				t.Fatalf("Test %d: Expected the APIErrCode to be %s, got %s", i+1, testCase.expectedErrCode, actualErrCode)
+			}
+		} else {
 			// validating the extracted/parsed credential fields.
 			validateCredentialfields(t, i+1, testCase.expectedAuthField.Credential, parsedAuthField.Credential)
 
@@ -458,7 +480,7 @@ func TestParseSignV4(t *testing.T) {
 func TestDoesV4PresignParamsExist(t *testing.T) {
 	testCases := []struct {
 		inputQueryKeyVals []string
-		expectedErrCode   APIErrorCode
+		expectedErrCode   string
 	}{
 		// Test case - 1.
 		// contains all query param keys which are necessary for v4 presign request.
@@ -555,11 +577,16 @@ func TestDoesV4PresignParamsExist(t *testing.T) {
 
 			inputQuery.Set(testCase.inputQueryKeyVals[j], testCase.inputQueryKeyVals[j+1])
 		}
-
-		actualErrCode := doesV4PresignParamsExist(inputQuery)
-
-		if testCase.expectedErrCode != actualErrCode {
-			t.Fatalf("Test %d: Expected the APIErrCode to be %d, got %d", i+1, testCase.expectedErrCode, actualErrCode)
+		err := doesV4PresignParamsExist(inputQuery)
+		if err != nil {
+			aerr, ok := err.(APIError)
+			if !ok {
+				t.Fatal("Unable to validate APIError", err)
+			}
+			actualErrCode := aerr.Code()
+			if testCase.expectedErrCode != actualErrCode {
+				t.Fatalf("Test %d: Expected the APIErrCode to be %s, got %s", i+1, testCase.expectedErrCode, actualErrCode)
+			}
 		}
 	}
 
@@ -567,6 +594,12 @@ func TestDoesV4PresignParamsExist(t *testing.T) {
 
 // TestParsePreSignV4 - Validates the parsing logic of Presignied v4 request from its url query values.
 func TestParsePreSignV4(t *testing.T) {
+	root, err := newTestConfig("us-east-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer removeAll(root)
+
 	// converts the duration in seconds into string format.
 	getDurationStr := func(expires int) string {
 		return strconv.FormatInt(int64(expires), 10)
@@ -579,7 +612,7 @@ func TestParsePreSignV4(t *testing.T) {
 	testCases := []struct {
 		inputQueryKeyVals     []string
 		expectedPreSignValues preSignValues
-		expectedErrCode       APIErrorCode
+		expectedErrCode       string
 	}{
 		// Test case - 1.
 		// A Valid v4 presign URL requires the following params to be in the query.
@@ -641,7 +674,7 @@ func TestParsePreSignV4(t *testing.T) {
 				"X-Amz-Credential", joinWithSlash(
 					"Z7IXGOO6BZ0REAN1Q26I",
 					sampleTimeStr,
-					"us-west-1",
+					"us-east-1",
 					"s3",
 					"aws4_request"),
 				// invalid "X-Amz-Date" query.
@@ -664,7 +697,7 @@ func TestParsePreSignV4(t *testing.T) {
 				"X-Amz-Credential", joinWithSlash(
 					"Z7IXGOO6BZ0REAN1Q26I",
 					sampleTimeStr,
-					"us-west-1",
+					"us-east-1",
 					"s3",
 					"aws4_request"),
 				// valid "X-Amz-Date" query.
@@ -686,7 +719,7 @@ func TestParsePreSignV4(t *testing.T) {
 				"X-Amz-Credential", joinWithSlash(
 					"Z7IXGOO6BZ0REAN1Q26I",
 					sampleTimeStr,
-					"us-west-1",
+					"us-east-1",
 					"s3",
 					"aws4_request"),
 				// valid "X-Amz-Date" query.
@@ -708,7 +741,7 @@ func TestParsePreSignV4(t *testing.T) {
 				"X-Amz-Credential", joinWithSlash(
 					"Z7IXGOO6BZ0REAN1Q26I",
 					sampleTimeStr,
-					"us-west-1",
+					"us-east-1",
 					"s3",
 					"aws4_request"),
 				// valid "X-Amz-Date" query.
@@ -731,7 +764,7 @@ func TestParsePreSignV4(t *testing.T) {
 				"X-Amz-Credential", joinWithSlash(
 					"Z7IXGOO6BZ0REAN1Q26I",
 					sampleTimeStr,
-					"us-west-1",
+					"us-east-1",
 					"s3",
 					"aws4_request"),
 				// valid "X-Amz-Date" query.
@@ -747,7 +780,7 @@ func TestParsePreSignV4(t *testing.T) {
 						t,
 						"Z7IXGOO6BZ0REAN1Q26I",
 						sampleTimeStr,
-						"us-west-1",
+						"us-east-1",
 						"s3",
 						"aws4_request",
 					),
@@ -772,11 +805,17 @@ func TestParsePreSignV4(t *testing.T) {
 			inputQuery.Set(testCase.inputQueryKeyVals[j], testCase.inputQueryKeyVals[j+1])
 		}
 		// call the function under test.
-		parsedPreSign, actualErrCode := parsePreSignV4(inputQuery)
-		if testCase.expectedErrCode != actualErrCode {
-			t.Fatalf("Test %d: Expected the APIErrCode to be %d, got %d", i+1, testCase.expectedErrCode, actualErrCode)
-		}
-		if actualErrCode == ErrNone {
+		parsedPreSign, err := parsePreSignV4(inputQuery)
+		if err != nil {
+			aerr, ok := err.(APIError)
+			if !ok {
+				t.Fatal("Unable to validate APIError", err)
+			}
+			actualErrCode := aerr.Code()
+			if testCase.expectedErrCode != actualErrCode {
+				t.Fatalf("Test %d: Expected the APIErrCode to be %s, got %s", i+1, testCase.expectedErrCode, actualErrCode)
+			}
+		} else {
 			// validating credentials.
 			validateCredentialfields(t, i+1, testCase.expectedPreSignValues.Credential, parsedPreSign.Credential)
 			// validating signed headers.
