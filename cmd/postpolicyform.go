@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"reflect"
 	"strconv"
 	"strings"
@@ -33,6 +34,11 @@ func toString(val interface{}) string {
 		return v
 	}
 	return ""
+}
+
+// toLowerString - safely convert interface to lower string
+func toLowerString(val interface{}) string {
+	return strings.ToLower(toString(val))
 }
 
 // toInteger _ Safely convert interface to integer without causing panic.
@@ -117,7 +123,7 @@ func parsePostPolicyForm(policy string) (PostPolicyForm, error) {
 				}
 				// {"acl": "public-read" } is an alternate way to indicate - [ "eq", "$acl", "public-read" ]
 				// In this case we will just collapse this into "eq" for all use cases.
-				parsedPolicy.Conditions.Policies["$"+k] = struct {
+				parsedPolicy.Conditions.Policies["$"+strings.ToLower(k)] = struct {
 					Operator string
 					Value    string
 				}{
@@ -129,7 +135,7 @@ func parsePostPolicyForm(policy string) (PostPolicyForm, error) {
 			if len(condt) != 3 { // Return error if we have insufficient elements.
 				return parsedPolicy, fmt.Errorf("Malformed conditional fields %s of type %s found in POST policy form", condt, reflect.TypeOf(condt).String())
 			}
-			switch toString(condt[0]) {
+			switch toLowerString(condt[0]) {
 			case "eq", "starts-with":
 				for _, v := range condt { // Pre-check all values for type.
 					if !isString(v) {
@@ -137,7 +143,7 @@ func parsePostPolicyForm(policy string) (PostPolicyForm, error) {
 						return parsedPolicy, fmt.Errorf("Unknown type %s of conditional field value %s found in POST policy form", reflect.TypeOf(condt).String(), condt)
 					}
 				}
-				operator, matchType, value := toString(condt[0]), toString(condt[1]), toString(condt[2])
+				operator, matchType, value := toLowerString(condt[0]), toLowerString(condt[1]), toString(condt[2])
 				parsedPolicy.Conditions.Policies[matchType] = struct {
 					Operator string
 					Value    string
@@ -174,40 +180,74 @@ func parsePostPolicyForm(policy string) (PostPolicyForm, error) {
 	return parsedPolicy, nil
 }
 
+// startWithConds - map which indicates if a given condition supports starts-with policy operator
+var startsWithConds = map[string]bool{
+	"$acl":                 true,
+	"$bucket":              false,
+	"$cache-control":       true,
+	"$content-type":        true,
+	"$content-disposition": true,
+	"$content-encoding":    true,
+	"$expires":             true,
+	"$key":                 true,
+	"$success_action_redirect": true,
+	"$redirect":                true,
+	"$success_action_status":   false,
+	"$x-amz-algorithm":         false,
+	"$x-amz-credential":        false,
+	"$x-amz-date":              false,
+}
+
+// checkPolicyCond returns a boolean to indicate if a condition is satisified according
+// to the passed operator
+func checkPolicyCond(op string, input1, input2 string) bool {
+	switch op {
+	case "eq":
+		return input1 == input2
+	case "starts-with":
+		return strings.HasPrefix(input1, input2)
+	}
+	return false
+}
+
 // checkPostPolicy - apply policy conditions and validate input values.
+// (http://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-HTTPPOSTConstructPolicy.html)
 func checkPostPolicy(formValues map[string]string, postPolicyForm PostPolicyForm) APIErrorCode {
+	// Check if policy document expiry date is still not reached
 	if !postPolicyForm.Expiration.After(time.Now().UTC()) {
 		return ErrPolicyAlreadyExpired
 	}
-	if postPolicyForm.Conditions.Policies["$bucket"].Operator == "eq" {
-		if formValues["Bucket"] != postPolicyForm.Conditions.Policies["$bucket"].Value {
+
+	// Flag to indicate if all policies conditions are satisfied
+	condPassed := true
+
+	// Iterate over policy conditions and check them against received form fields
+	for cond, v := range postPolicyForm.Conditions.Policies {
+		// Form fields names are in canonical format, convert conditions names
+		// to canonical for simplification purpose, so `$key` will become `Key`
+		formCanonicalName := http.CanonicalHeaderKey(strings.TrimPrefix(cond, "$"))
+		// Operator for the current policy condition
+		op := v.Operator
+		// If the current policy condition is known
+		if startsWithSupported, condFound := startsWithConds[cond]; condFound {
+			// Check if the current condition supports starts-with operator
+			if op == "starts-with" && !startsWithSupported {
+				return ErrAccessDenied
+			}
+			// Check if current policy condition is satisfied
+			condPassed = checkPolicyCond(op, formValues[formCanonicalName], v.Value)
+		} else {
+			// This covers all conditions X-Amz-Meta-* and X-Amz-*
+			if strings.HasPrefix(cond, "$x-amz-meta-") || strings.HasPrefix(cond, "$x-amz-") {
+				// Check if policy condition is satisfied
+				condPassed = checkPolicyCond(op, formValues[formCanonicalName], v.Value)
+			}
+		}
+		// Check if current policy condition is satisfied, quit immediatly otherwise
+		if !condPassed {
 			return ErrAccessDenied
 		}
 	}
-	if postPolicyForm.Conditions.Policies["$x-amz-date"].Operator == "eq" {
-		if formValues["X-Amz-Date"] != postPolicyForm.Conditions.Policies["$x-amz-date"].Value {
-			return ErrAccessDenied
-		}
-	}
-	if postPolicyForm.Conditions.Policies["$Content-Type"].Operator == "starts-with" {
-		if !strings.HasPrefix(formValues["Content-Type"], postPolicyForm.Conditions.Policies["$Content-Type"].Value) {
-			return ErrAccessDenied
-		}
-	}
-	if postPolicyForm.Conditions.Policies["$Content-Type"].Operator == "eq" {
-		if formValues["Content-Type"] != postPolicyForm.Conditions.Policies["$Content-Type"].Value {
-			return ErrAccessDenied
-		}
-	}
-	if postPolicyForm.Conditions.Policies["$key"].Operator == "starts-with" {
-		if !strings.HasPrefix(formValues["Key"], postPolicyForm.Conditions.Policies["$key"].Value) {
-			return ErrAccessDenied
-		}
-	}
-	if postPolicyForm.Conditions.Policies["$key"].Operator == "eq" {
-		if formValues["Key"] != postPolicyForm.Conditions.Policies["$key"].Value {
-			return ErrAccessDenied
-		}
-	}
+
 	return ErrNone
 }
