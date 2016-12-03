@@ -243,7 +243,7 @@ func checkPostPolicy(formValues map[string]string, postPolicyForm PostPolicyForm
 				condPassed = checkPolicyCond(op, formValues[formCanonicalName], v.Value)
 			}
 		}
-		// Check if current policy condition is satisfied, quit immediatly otherwise
+		// Check if current policy condition is satisfied, quit immediately otherwise
 		if !condPassed {
 			return ErrAccessDenied
 		}
