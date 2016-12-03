@@ -115,13 +115,14 @@ func (b *backgroundAppend) complete(disk StorageAPI, bucket, object, uploadID st
 // Called after complete-multipart-upload or abort-multipart-upload so that the appendParts go-routine is not left dangling.
 func (b *backgroundAppend) abort(uploadID string) {
 	b.Lock()
-	defer b.Unlock()
 	info, ok := b.infoMap[uploadID]
 	if !ok {
+		b.Unlock()
 		return
 	}
 	delete(b.infoMap, uploadID)
-	close(info.abortCh)
+	b.Unlock()
+	info.abortCh <- struct{}{}
 }
 
 // This is run as a go-routine that appends the parts in the background.
