@@ -637,11 +637,12 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 // the directory at '.minio.sys/multipart/bucket/object/uploadID' holding
 // all the upload parts.
 func (fs fsObjects) abortMultipartUpload(bucket, object, uploadID string) error {
+	// Signal appendParts routine to stop waiting for new parts to arrive.
+	fs.bgAppend.abort(uploadID)
 	// Cleanup all uploaded parts.
 	if err := cleanupUploadedParts(bucket, object, uploadID, fs.storage); err != nil {
 		return err
 	}
-	fs.bgAppend.abort(uploadID)
 	// remove entry from uploads.json with quorum
 	if err := fs.removeUploadID(bucket, object, uploadID); err != nil {
 		return toObjectErr(err, bucket, object)
