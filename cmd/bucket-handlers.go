@@ -374,13 +374,13 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	}
 	bucket := mux.Vars(r)["bucket"]
 	formValues["Bucket"] = bucket
-	object := formValues["Key"]
 
-	if fileName != "" && strings.Contains(object, "${filename}") {
+	if fileName != "" && strings.Contains(formValues["Key"], "${filename}") {
 		// S3 feature to replace ${filename} found in Key form field
 		// by the filename attribute passed in multipart
-		object = strings.Replace(object, "${filename}", fileName, -1)
+		formValues["Key"] = strings.Replace(formValues["Key"], "${filename}", fileName, -1)
 	}
+	object := formValues["Key"]
 
 	// Verify policy signature.
 	apiErr := doesPolicySignatureMatch(formValues)
