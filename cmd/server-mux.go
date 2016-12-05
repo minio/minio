@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"crypto/tls"
 	"errors"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -75,7 +76,9 @@ func NewConnMux(c net.Conn) *ConnMux {
 func (c *ConnMux) PeekProtocol() string {
 	buf, err := c.bufrw.Peek(maxHTTPVerbLen)
 	if err != nil {
-		errorIf(err, "Unable to peek into the protocol")
+		if err != io.EOF {
+			errorIf(err, "Unable to peek into the protocol")
+		}
 		return "http"
 	}
 	for _, m := range defaultHTTP1Methods {
