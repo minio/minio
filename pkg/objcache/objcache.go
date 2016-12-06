@@ -73,6 +73,9 @@ type Cache struct {
 // the items in the cache never expire (by default), and must be deleted
 // manually.
 func New(maxSize uint64, expiry time.Duration) *Cache {
+	if maxSize == 0 {
+		panic("objcache: setting maximum cache size to zero is forbidden.")
+	}
 	C := &Cache{
 		maxSize: maxSize,
 		entries: make(map[string]*buffer),
