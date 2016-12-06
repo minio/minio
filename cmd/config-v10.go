@@ -44,10 +44,16 @@ type serverConfigV10 struct {
 
 // initConfig - initialize server config and indicate if we are creating a new file or we are just loading
 func initConfig() (bool, error) {
+	// Initialize server config.
+	srvCfg := &serverConfigV10{}
+	srvCfg.rwMutex = &sync.RWMutex{}
+	// Hold mutex lock.
+	serverConfig.rwMutex.Lock()
+	defer serverConfig.rwMutex.Unlock()
+
+	srvCfg.Version = globalMinioConfigVersion
+
 	if !isConfigFileExists() {
-		// Initialize server config.
-		srvCfg := &serverConfigV10{}
-		srvCfg.Version = globalMinioConfigVersion
 		srvCfg.Region = "us-east-1"
 		srvCfg.Credential = mustGenAccessKeys()
 
@@ -68,7 +74,6 @@ func initConfig() (bool, error) {
 		srvCfg.Notify.NATS["1"] = natsNotify{}
 		srvCfg.Notify.PostgreSQL = make(map[string]postgreSQLNotify)
 		srvCfg.Notify.PostgreSQL["1"] = postgreSQLNotify{}
-		srvCfg.rwMutex = &sync.RWMutex{}
 
 		// Create config path.
 		err := createConfigPath()
@@ -89,9 +94,6 @@ func initConfig() (bool, error) {
 	if _, err = os.Stat(configFile); err != nil {
 		return false, err
 	}
-	srvCfg := &serverConfigV10{}
-	srvCfg.Version = globalMinioConfigVersion
-	srvCfg.rwMutex = &sync.RWMutex{}
 	qc, err := quick.New(srvCfg)
 	if err != nil {
 		return false, err
