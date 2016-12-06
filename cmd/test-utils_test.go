@@ -62,6 +62,9 @@ func init() {
 
 	// Disable printing console messages during tests.
 	color.Output = ioutil.Discard
+
+	// Enable caching.
+	setMaxMemory()
 }
 
 func prepareFS() (ObjectLayer, string, error) {

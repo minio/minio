@@ -19,6 +19,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"runtime/debug"
 	"sort"
 	"strings"
 	"sync"
@@ -42,8 +43,9 @@ const (
 	// Uploads metadata file carries per multipart object metadata.
 	uploadsJSONFile = "uploads.json"
 
-	// 8GiB cache by default.
-	maxCacheSize = 8 * humanize.GiByte
+	// Represents the minimum required RAM size before
+	// we enable caching.
+	minRAMSize = 8 * humanize.GiByte
 
 	// Maximum erasure blocks.
 	maxErasureBlocks = 16
@@ -92,9 +94,6 @@ func newXLObjects(storageDisks []StorageAPI) (ObjectLayer, error) {
 	// Calculate data and parity blocks.
 	dataBlocks, parityBlocks := len(newStorageDisks)/2, len(newStorageDisks)/2
 
-	// Initialize object cache.
-	objCache := objcache.New(globalMaxCacheSize, globalCacheExpiry)
-
 	// Initialize list pool.
 	listPool := newTreeWalkPool(globalLookupTimeout)
 
@@ -103,13 +102,25 @@ func newXLObjects(storageDisks []StorageAPI) (ObjectLayer, error) {
 
 	// Initialize xl objects.
 	xl := &xlObjects{
-		mutex:           &sync.Mutex{},
-		storageDisks:    newStorageDisks,
-		dataBlocks:      dataBlocks,
-		parityBlocks:    parityBlocks,
-		listPool:        listPool,
-		objCache:        objCache,
-		objCacheEnabled: !objCacheDisabled,
+		mutex:        &sync.Mutex{},
+		storageDisks: newStorageDisks,
+		dataBlocks:   dataBlocks,
+		parityBlocks: parityBlocks,
+		listPool:     listPool,
+	}
+
+	// Object cache is enabled when _MINIO_CACHE env is missing.
+	// and cache size is > 0.
+	xl.objCacheEnabled = !objCacheDisabled && globalMaxCacheSize > 0
+
+	// Check if object cache is enabled.
+	if xl.objCacheEnabled {
+		// Initialize object cache.
+		objCache := objcache.New(globalMaxCacheSize, globalCacheExpiry)
+		objCache.OnEviction = func(key string) {
+			debug.FreeOSMemory()
+		}
+		xl.objCache = objCache
 	}
 
 	// Initialize meta volume, if volume already exists ignores it.

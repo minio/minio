@@ -61,8 +61,10 @@ var (
 
 	globalIsDistXL = false // "Is Distributed?" flag.
 
-	// Maximum cache size.
-	globalMaxCacheSize = uint64(maxCacheSize)
+	// Maximum cache size. Defaults to disabled.
+	// Caching is enabled only for RAM size > 8GiB.
+	globalMaxCacheSize = uint64(0)
+
 	// Cache expiry.
 	globalCacheExpiry = objcache.DefaultExpiry
 	// Minio local server address (in `host:port` format)

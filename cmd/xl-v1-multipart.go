@@ -708,17 +708,21 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	destLock := nsMutex.NewNSLock(bucket, object)
 	destLock.Lock()
 	defer func() {
-		// A new complete multipart upload invalidates any
-		// previously cached object in memory.
-		xl.objCache.Delete(path.Join(bucket, object))
+		if xl.objCacheEnabled {
+			// A new complete multipart upload invalidates any
+			// previously cached object in memory.
+			xl.objCache.Delete(path.Join(bucket, object))
+		}
 
 		// This lock also protects the cache namespace.
 		destLock.Unlock()
 
-		// Prefetch the object from disk by triggering a fake GetObject call
-		// Unlike a regular single PutObject,  multipart PutObject is comes in
-		// stages and it is harder to cache.
-		go xl.GetObject(bucket, object, 0, objectSize, ioutil.Discard)
+		if xl.objCacheEnabled {
+			// Prefetch the object from disk by triggering a fake GetObject call
+			// Unlike a regular single PutObject,  multipart PutObject is comes in
+			// stages and it is harder to cache.
+			go xl.GetObject(bucket, object, 0, objectSize, ioutil.Discard)
+		}
 	}()
 
 	// Rename if an object already exists to temporary location.
