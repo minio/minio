@@ -77,7 +77,7 @@ func setMaxMemory() error {
 		return err
 	}
 	if err == nil && stats.TotalRAM < globalMaxCacheSize {
-		globalMaxCacheSize = (80 / 100) * stats.TotalRAM
+		globalMaxCacheSize = uint64(float64(80*stats.TotalRAM) / 100)
 	}
 	return nil
 }
