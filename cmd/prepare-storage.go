@@ -201,6 +201,13 @@ func retryFormattingDisks(firstDisk bool, endpoints []*url.URL, storageDisks []S
 	// Indicate to our routine to exit cleanly upon return.
 	defer close(doneCh)
 
+	// prepare getElapsedTime() to calculate elapsed time since we started trying formatting disks.
+	// All times are rounded to avoid showing milli, micro and nano seconds
+	formatStartTime := time.Now().Round(time.Second)
+	getElapsedTime := func() string {
+		return time.Now().Round(time.Second).Sub(formatStartTime).String()
+	}
+
 	// Wait on the jitter retry loop.
 	retryTimerCh := newRetryTimer(time.Second, time.Second*30, MaxJitter, doneCh)
 	for {
@@ -239,16 +246,18 @@ func retryFormattingDisks(firstDisk bool, endpoints []*url.URL, storageDisks []S
 					return err
 				case WaitForQuorum:
 					console.Printf(
-						"Initializing data volume. Waiting for minimum %d servers to come online.\n",
-						len(storageDisks)/2+1,
+						"Initializing data volume. Waiting for minimum %d servers to come online. (elapsed %s)\n",
+						len(storageDisks)/2+1, getElapsedTime(),
 					)
 				case WaitForConfig:
 					// Print configuration errors.
 					printConfigErrMsg(storageDisks, sErrs, printOnceFn())
 				case WaitForAll:
-					console.Println("Initializing data volume for first time. Waiting for other servers to come online")
+					console.Printf("Initializing data volume for first time. Waiting for other servers to come online (elapsed %s)\n",
+						getElapsedTime())
 				case WaitForFormatting:
-					console.Println("Initializing data volume for first time. Waiting for first server to come online")
+					console.Println("Initializing data volume for first time. Waiting for first server to come online (elapsed %s)\n",
+						getElapsedTime())
 				}
 				continue
 			} // else We have FS backend now. Check fs format as well now.
