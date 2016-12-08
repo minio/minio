@@ -91,9 +91,9 @@ func (b *backgroundAppend) append(disk StorageAPI, bucket, object, uploadID stri
 // Called on complete-multipart-upload. Returns nil if the required parts have been appended.
 func (b *backgroundAppend) complete(disk StorageAPI, bucket, object, uploadID string, meta fsMetaV1) error {
 	b.Lock()
+	defer b.Unlock()
 	info, ok := b.infoMap[uploadID]
 	delete(b.infoMap, uploadID)
-	b.Unlock()
 	if !ok {
 		return errPartsMissing
 	}
@@ -115,13 +115,12 @@ func (b *backgroundAppend) complete(disk StorageAPI, bucket, object, uploadID st
 // Called after complete-multipart-upload or abort-multipart-upload so that the appendParts go-routine is not left dangling.
 func (b *backgroundAppend) abort(uploadID string) {
 	b.Lock()
+	defer b.Unlock()
 	info, ok := b.infoMap[uploadID]
 	if !ok {
-		b.Unlock()
 		return
 	}
 	delete(b.infoMap, uploadID)
-	b.Unlock()
 	info.abortCh <- struct{}{}
 }
 
