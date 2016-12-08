@@ -19,11 +19,12 @@ package cmd
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"hash"
 	"io"
 
 	"github.com/klauspost/reedsolomon"
-	"github.com/minio/blake2b-simd"
+	"golang.org/x/crypto/blake2b"
 )
 
 // newHashWriters - inititialize a slice of hashes for the disk count.
@@ -39,11 +40,19 @@ func newHashWriters(diskCount int, algo string) []hash.Hash {
 func newHash(algo string) hash.Hash {
 	switch algo {
 	case "blake2b":
-		return blake2b.New512()
+		h, err := blake2b.New512(nil)
+		if err != nil {
+			panic(fmt.Sprintf("impossible situation: %s", err))
+		}
+		return h
 	// Add new hashes here.
 	default:
 		// Default to blake2b.
-		return blake2b.New512()
+		h, err := blake2b.New512(nil)
+		if err != nil {
+			panic(fmt.Sprintf("impossible situation: %s", err))
+		}
+		return h
 	}
 }
 
