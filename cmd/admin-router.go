@@ -29,9 +29,9 @@ func registerAdminRouter(mux *router.Router) {
 	adminRouter := mux.NewRoute().PathPrefix("/").Subrouter()
 	/// Admin operations
 	// Service status
-	adminRouter.Methods("GET").Headers("service", "").HandlerFunc(adminAPI.ServiceStatusHandler)
+	adminRouter.Methods("GET").Queries("service", "").Headers(minioAdminOpHeader, "status").HandlerFunc(adminAPI.ServiceStatusHandler)
 	// Service stop
-	adminRouter.Methods("POST").Headers("service", "", minioAdminOpHeader, "stop").HandlerFunc(adminAPI.ServiceStopHandler)
+	adminRouter.Methods("POST").Queries("service", "").Headers(minioAdminOpHeader, "stop").HandlerFunc(adminAPI.ServiceStopHandler)
 	// Service restart
-	adminRouter.Methods("POST").Headers("service", "", minioAdminOpHeader, "restart").HandlerFunc(adminAPI.ServiceRestartHandler)
+	adminRouter.Methods("POST").Queries("service", "").Headers(minioAdminOpHeader, "restart").HandlerFunc(adminAPI.ServiceRestartHandler)
 }
