@@ -161,9 +161,11 @@ func (b *backgroundAppend) appendParts(disk StorageAPI, bucket, object, uploadID
 		case <-info.abortCh:
 			// abort-multipart-upload closed abortCh to end the appendParts go-routine.
 			disk.DeleteFile(minioMetaTmpBucket, uploadID)
+			close(info.timeoutCh) // So that any racing PutObjectPart does not leave a dangling go-routine.
 			return
 		case <-info.completeCh:
 			// complete-multipart-upload closed completeCh to end the appendParts go-routine.
+			close(info.timeoutCh) // So that any racing PutObjectPart does not leave a dangling go-routine.
 			return
 		case <-time.After(appendPartsTimeout):
 			// Timeout the goroutine to garbage collect its resources. This would happen if the client initiates
