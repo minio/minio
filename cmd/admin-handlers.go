@@ -16,42 +16,41 @@
 
 package cmd
 
-import (
-	"fmt"
-	"net/http"
-)
+import "net/http"
 
 const (
-	minioAdminAuthHeader = "MIN-ADM-1"
-	minioAdminOpHeader   = "X-Minio-Operation"
+	minioAdminOpHeader = "X-Minio-Operation"
 )
 
 func (adminAPI adminAPIHandlers) ServiceStatusHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("status: ", r)
 	adminErr := checkRequestAuthType(r, "", "", "")
 	if adminErr != ErrNone {
 		writeErrorResponse(w, r, adminErr, r.URL.Path)
 		return
 	}
+	// FIXME: Servicestatus command is not yet implemented in handleServiceSignals
+	globalServiceSignalCh <- serviceStatus
 	w.WriteHeader(http.StatusOK)
 }
 
 func (adminAPI adminAPIHandlers) ServiceStopHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("stop: ", r)
 	adminErr := checkRequestAuthType(r, "", "", "")
 	if adminErr != ErrNone {
 		writeErrorResponse(w, r, adminErr, r.URL.Path)
 		return
 	}
+	// Reply to the client before stopping minio server.
 	w.WriteHeader(http.StatusOK)
+	globalServiceSignalCh <- serviceStop
 }
 
 func (adminAPI adminAPIHandlers) ServiceRestartHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("restart: ", r)
 	adminErr := checkRequestAuthType(r, "", "", "")
 	if adminErr != ErrNone {
 		writeErrorResponse(w, r, adminErr, r.URL.Path)
 		return
 	}
+	// Reply to the client before restarting minio server.
 	w.WriteHeader(http.StatusOK)
+	globalServiceSignalCh <- serviceRestart
 }
