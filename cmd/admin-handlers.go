@@ -26,7 +26,7 @@ const (
 	minioAdminOpHeader   = "X-Minio-Operation"
 )
 
-func (api objectAPIHandlers) ServiceStatusHandler(w http.ResponseWriter, r *http.Request) {
+func (adminAPI adminAPIHandlers) ServiceStatusHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("status: ", r)
 	adminErr := checkRequestAuthType(r, "", "", "")
 	if adminErr != ErrNone {
@@ -36,7 +36,7 @@ func (api objectAPIHandlers) ServiceStatusHandler(w http.ResponseWriter, r *http
 	w.WriteHeader(http.StatusOK)
 }
 
-func (api objectAPIHandlers) ServiceStopHandler(w http.ResponseWriter, r *http.Request) {
+func (adminAPI adminAPIHandlers) ServiceStopHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("stop: ", r)
 	adminErr := checkRequestAuthType(r, "", "", "")
 	if adminErr != ErrNone {
@@ -46,7 +46,7 @@ func (api objectAPIHandlers) ServiceStopHandler(w http.ResponseWriter, r *http.R
 	w.WriteHeader(http.StatusOK)
 }
 
-func (api objectAPIHandlers) ServiceRestartHandler(w http.ResponseWriter, r *http.Request) {
+func (adminAPI adminAPIHandlers) ServiceRestartHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("restart: ", r)
 	adminErr := checkRequestAuthType(r, "", "", "")
 	if adminErr != ErrNone {

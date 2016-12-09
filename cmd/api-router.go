@@ -96,12 +96,4 @@ func registerAPIRouter(mux *router.Router) {
 
 	// ListBuckets
 	apiRouter.Methods("GET").HandlerFunc(api.ListBucketsHandler)
-
-	/// Admin operations
-	// Service status
-	apiRouter.Methods("GET").Headers("service", "").HandlerFunc(api.ServiceStatusHandler)
-	// Service stop
-	apiRouter.Methods("POST").Headers("service", "", minioAdminOpHeader, "stop").HandlerFunc(api.ServiceStopHandler)
-	// Service restart
-	apiRouter.Methods("POST").Headers("service", "", minioAdminOpHeader, "restart").HandlerFunc(api.ServiceRestartHandler)
 }

@@ -117,6 +117,9 @@ func configureServerHandler(srvCmdConfig serverCmdConfig) (http.Handler, error) 
 		}
 	}
 
+	// Add Admin router.
+	registerAdminRouter(mux)
+
 	// Add API router.
 	registerAPIRouter(mux)
 
