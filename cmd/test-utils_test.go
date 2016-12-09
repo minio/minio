@@ -432,6 +432,39 @@ func StartTestPeersRPCServer(t TestErrHandler, instanceType string) TestServer {
 	return testRPCServer
 }
 
+// Sets the global config path to empty string.
+func resetGlobalConfigPath() {
+	setGlobalConfigPath("")
+}
+
+// sets globalObjectAPI to `nil`.
+func resetGlobalObjectAPI() {
+	globalObjLayerMutex.Lock()
+	globalObjectAPI = nil
+	globalObjLayerMutex.Unlock()
+}
+
+// reset the value of the Global server config.
+// set it to `nil`.
+func resetGlobalConfig() {
+	// hold the mutex lock before a new config is assigned.
+	serverConfigMu.Lock()
+	// Save the loaded config globally.
+	serverConfig = nil
+	serverConfigMu.Unlock()
+}
+
+// Resets all the globals used modified in tests.
+// Resetting ensures that the changes made to globals by one test doesn't affect others.
+func resetTestGlobals() {
+	// set globalObjectAPI to `nil`.
+	resetGlobalObjectAPI()
+	// Reset config path set.
+	resetGlobalConfigPath()
+	// Reset Global server config.
+	resetGlobalConfig()
+}
+
 // Configure the server for the test run.
 func newTestConfig(bucketLocation string) (rootPath string, err error) {
 	// Get test root.
