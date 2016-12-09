@@ -129,6 +129,8 @@ func (b *backgroundAppend) abort(uploadID string) {
 func (b *backgroundAppend) appendParts(disk StorageAPI, bucket, object, uploadID string, info bgAppendPartsInfo) {
 	// Holds the list of parts that is already appended to the "append" file.
 	appendMeta := fsMetaV1{}
+	// Allocate staging read buffer.
+	buf := make([]byte, readSizeV1)
 	for {
 		select {
 		case input := <-info.inputCh:
@@ -151,7 +153,7 @@ func (b *backgroundAppend) appendParts(disk StorageAPI, bucket, object, uploadID
 					}
 					break
 				}
-				if err := appendPart(disk, bucket, object, uploadID, part); err != nil {
+				if err := appendPart(disk, bucket, object, uploadID, part, buf); err != nil {
 					disk.DeleteFile(minioMetaTmpBucket, uploadID)
 					appendMeta.Parts = nil
 					input.errCh <- err
@@ -183,12 +185,11 @@ func (b *backgroundAppend) appendParts(disk StorageAPI, bucket, object, uploadID
 
 // Appends the "part" to the append-file inside "tmp/" that finally gets moved to the actual location
 // upon complete-multipart-upload.
-func appendPart(disk StorageAPI, bucket, object, uploadID string, part objectPartInfo) error {
+func appendPart(disk StorageAPI, bucket, object, uploadID string, part objectPartInfo, buf []byte) error {
 	partPath := pathJoin(bucket, object, uploadID, part.Name)
 
 	offset := int64(0)
 	totalLeft := part.Size
-	buf := make([]byte, readSizeV1)
 	for totalLeft > 0 {
 		curLeft := int64(readSizeV1)
 		if totalLeft < readSizeV1 {

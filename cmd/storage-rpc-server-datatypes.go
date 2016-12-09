@@ -57,8 +57,8 @@ type ReadFileArgs struct {
 	// Starting offset to start reading into Buffer.
 	Offset int64
 
-	// Data size read from the path at offset.
-	Size int
+	// Data buffer read from the path at offset.
+	Buffer []byte
 }
 
 // PrepareFileArgs represents append file RPC arguments.

@@ -253,11 +253,9 @@ func retryFormattingDisks(firstDisk bool, endpoints []*url.URL, storageDisks []S
 					// Print configuration errors.
 					printConfigErrMsg(storageDisks, sErrs, printOnceFn())
 				case WaitForAll:
-					console.Printf("Initializing data volume for first time. Waiting for other servers to come online (elapsed %s)\n",
-						getElapsedTime())
+					console.Printf("Initializing data volume for first time. Waiting for other servers to come online (elapsed %s)\n", getElapsedTime())
 				case WaitForFormatting:
-					console.Println("Initializing data volume for first time. Waiting for first server to come online (elapsed %s)\n",
-						getElapsedTime())
+					console.Printf("Initializing data volume for first time. Waiting for first server to come online (elapsed %s)\n", getElapsedTime())
 				}
 				continue
 			} // else We have FS backend now. Check fs format as well now.
