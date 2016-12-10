@@ -68,7 +68,7 @@ func (c cmdType) toServiceSignal() serviceSignal {
 	return serviceStatus
 }
 
-func serviceSignalReceiver(cmd cmdType, t *testing.T) {
+func mockServiceSignalReceiver(cmd cmdType, t *testing.T) {
 	expectedCmd := cmd.toServiceSignal()
 	serviceCmd := <-globalServiceSignalCh
 	if serviceCmd != expectedCmd {
@@ -97,7 +97,7 @@ func testServicesCmdHandler(cmd cmdType, t *testing.T) {
 	defer removeAll(rootPath)
 
 	// Setting up a go routine to simulate ServerMux's handleServiceSignals
-	go serviceSignalReceiver(cmd, t)
+	go mockServiceSignalReceiver(cmd, t)
 	credentials := serverConfig.GetCredential()
 	adminRouter := router.NewRouter()
 	registerAdminRouter(adminRouter)
