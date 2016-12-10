@@ -361,9 +361,9 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 		return "", toObjectErr(err, minioMetaMultipartBucket, uploadIDPath)
 	}
 
+	// Append the part in background.
+	errCh := fs.bgAppend.append(fs.storage, bucket, object, uploadID, fsMeta)
 	go func() {
-		// Append the part in background.
-		errCh := fs.bgAppend.append(fs.storage, bucket, object, uploadID, fsMeta)
 		// Also receive the error so that the appendParts go-routine does not block on send.
 		// But the error received is ignored as fs.PutObjectPart() would have already
 		// returned success to the client.
