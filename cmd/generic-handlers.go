@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -65,40 +65,64 @@ func (h requestSizeLimitHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 	h.handler.ServeHTTP(w, r)
 }
 
-// Adds redirect rules for incoming requests.
-type redirectHandler struct {
-	handler        http.Handler
-	locationPrefix string
-}
-
 // Reserved bucket.
 const (
 	reservedBucket = "/minio"
 )
 
+// Adds redirect rules for incoming requests.
+type redirectHandler struct {
+	handler http.Handler
+}
+
 func setBrowserRedirectHandler(h http.Handler) http.Handler {
-	return redirectHandler{handler: h, locationPrefix: reservedBucket}
+	return redirectHandler{handler: h}
+}
+
+// Fetch redirect location if urlPath satisfies certain
+// criteria. Some special names are considered to be
+// redirectable, this is purely internal function and
+// serves only limited purpose on redirect-handler for
+// browser requests.
+func getRedirectLocation(urlPath string) (rLocation string) {
+	if urlPath == reservedBucket {
+		rLocation = reservedBucket + "/"
+	}
+	if contains([]string{
+		"/",
+		"/webrpc",
+		"/login",
+		"/favicon.ico",
+	}, urlPath) {
+		rLocation = reservedBucket + urlPath
+	}
+	return rLocation
+}
+
+// guessIsBrowserReq - returns true if the request is browser.
+// This implementation just validates user-agent and
+// looks for "Mozilla" string. This is no way certifiable
+// way to know if the request really came from a browser
+// since User-Agent's can be arbitrary. But this is just
+// a best effort function.
+func guessIsBrowserReq(req *http.Request) bool {
+	if req == nil {
+		return false
+	}
+	return strings.Contains(req.Header.Get("User-Agent"), "Mozilla")
 }
 
 func (h redirectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	aType := getRequestAuthType(r)
-	// Re-direct only for JWT and anonymous requests coming from web-browser.
+	// Re-direct only for JWT and anonymous requests from browser.
 	if aType == authTypeJWT || aType == authTypeAnonymous {
-		// Re-direction handled specifically for browsers.
-		if strings.Contains(r.Header.Get("User-Agent"), "Mozilla") {
-			switch r.URL.Path {
-			case "/", "/webrpc", "/login", "/favicon.ico":
-				// '/' is redirected to 'locationPrefix/'
-				// '/webrpc' is redirected to 'locationPrefix/webrpc'
-				// '/login' is redirected to 'locationPrefix/login'
-				location := h.locationPrefix + r.URL.Path
-				// Redirect to new location.
-				http.Redirect(w, r, location, http.StatusTemporaryRedirect)
-				return
-			case h.locationPrefix:
-				// locationPrefix is redirected to 'locationPrefix/'
-				location := h.locationPrefix + "/"
-				http.Redirect(w, r, location, http.StatusTemporaryRedirect)
+		// Re-direction is handled specifically for browser requests.
+		if guessIsBrowserReq(r) && globalIsBrowserEnabled {
+			// Fetch the redirect location if any.
+			redirectLocation := getRedirectLocation(r.URL.Path)
+			if redirectLocation != "" {
+				// Employ a temporary re-direct.
+				http.Redirect(w, r, redirectLocation, http.StatusTemporaryRedirect)
 				return
 			}
 		}
@@ -116,10 +140,11 @@ func setBrowserCacheControlHandler(h http.Handler) http.Handler {
 }
 
 func (h cacheControlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.Method == "GET" && strings.Contains(r.Header.Get("User-Agent"), "Mozilla") {
+	if r.Method == "GET" && guessIsBrowserReq(r) && globalIsBrowserEnabled {
 		// For all browser requests set appropriate Cache-Control policies
-		match, e := regexp.MatchString(reservedBucket+`/([^/]+\.js|favicon.ico)`, r.URL.Path)
-		if e != nil {
+		match, err := regexp.Match(reservedBucket+`/([^/]+\.js|favicon.ico)`, []byte(r.URL.Path))
+		if err != nil {
+			errorIf(err, "Unable to match incoming URL %s", r.URL)
 			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
 			return
 		}
@@ -147,11 +172,20 @@ func setPrivateBucketHandler(h http.Handler) http.Handler {
 
 func (h minioPrivateBucketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// For all non browser requests, reject access to 'reservedBucket'.
-	if !strings.Contains(r.Header.Get("User-Agent"), "Mozilla") && path.Clean(r.URL.Path) == reservedBucket {
+	if !guessIsBrowserReq(r) && path.Clean(r.URL.Path) == reservedBucket {
 		writeErrorResponse(w, r, ErrAllAccessDisabled, r.URL.Path)
 		return
 	}
 	h.handler.ServeHTTP(w, r)
+}
+
+type timeValidityHandler struct {
+	handler http.Handler
+}
+
+// setTimeValidityHandler to validate parsable time over http header
+func setTimeValidityHandler(h http.Handler) http.Handler {
+	return timeValidityHandler{h}
 }
 
 // Supported Amz date formats.
@@ -162,21 +196,21 @@ var amzDateFormats = []string{
 	// Add new AMZ date formats here.
 }
 
-// parseAmzDate - parses date string into supported amz date formats.
-func parseAmzDate(amzDateStr string) (amzDate time.Time, apiErr APIErrorCode) {
-	for _, dateFormat := range amzDateFormats {
-		amzDate, e := time.Parse(dateFormat, amzDateStr)
-		if e == nil {
-			return amzDate, ErrNone
-		}
-	}
-	return time.Time{}, ErrMalformedDate
-}
-
 // Supported Amz date headers.
 var amzDateHeaders = []string{
 	"x-amz-date",
 	"date",
+}
+
+// parseAmzDate - parses date string into supported amz date formats.
+func parseAmzDate(amzDateStr string) (amzDate time.Time, apiErr APIErrorCode) {
+	for _, dateFormat := range amzDateFormats {
+		amzDate, err := time.Parse(dateFormat, amzDateStr)
+		if err == nil {
+			return amzDate, ErrNone
+		}
+	}
+	return time.Time{}, ErrMalformedDate
 }
 
 // parseAmzDateHeader - parses supported amz date headers, in
@@ -190,15 +224,6 @@ func parseAmzDateHeader(req *http.Request) (time.Time, APIErrorCode) {
 	}
 	// Date header missing.
 	return time.Time{}, ErrMissingDateHeader
-}
-
-type timeValidityHandler struct {
-	handler http.Handler
-}
-
-// setTimeValidityHandler to validate parsable time over http header
-func setTimeValidityHandler(h http.Handler) http.Handler {
-	return timeValidityHandler{h}
 }
 
 func (h timeValidityHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -247,47 +272,6 @@ func setIgnoreResourcesHandler(h http.Handler) http.Handler {
 	return resourceHandler{h}
 }
 
-// Resource handler ServeHTTP() wrapper
-func (h resourceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Skip the first element which is usually '/' and split the rest.
-	splits := strings.SplitN(r.URL.Path[1:], "/", 2)
-
-	// Save bucketName and objectName extracted from url Path.
-	var bucketName, objectName string
-	if len(splits) == 1 {
-		bucketName = splits[0]
-	}
-	if len(splits) == 2 {
-		bucketName = splits[0]
-		objectName = splits[1]
-	}
-
-	// If bucketName is present and not objectName check for bucket level resource queries.
-	if bucketName != "" && objectName == "" {
-		if ignoreNotImplementedBucketResources(r) {
-			writeErrorResponse(w, r, ErrNotImplemented, r.URL.Path)
-			return
-		}
-	}
-	// If bucketName and objectName are present check for its resource queries.
-	if bucketName != "" && objectName != "" {
-		if ignoreNotImplementedObjectResources(r) {
-			writeErrorResponse(w, r, ErrNotImplemented, r.URL.Path)
-			return
-		}
-	}
-	// A put method on path "/" doesn't make sense, ignore it.
-	if r.Method == "PUT" && r.URL.Path == "/" {
-		writeErrorResponse(w, r, ErrNotImplemented, r.URL.Path)
-		return
-	}
-
-	// Serve HTTP.
-	h.handler.ServeHTTP(w, r)
-}
-
-//// helpers
-
 // Checks requests for not implemented Bucket resources
 func ignoreNotImplementedBucketResources(req *http.Request) bool {
 	for name := range req.URL.Query() {
@@ -327,4 +311,43 @@ var notimplementedObjectResourceNames = map[string]bool{
 	"torrent": true,
 	"acl":     true,
 	"policy":  true,
+}
+
+// Resource handler ServeHTTP() wrapper
+func (h resourceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Skip the first element which is usually '/' and split the rest.
+	splits := strings.SplitN(r.URL.Path[1:], "/", 2)
+
+	// Save bucketName and objectName extracted from url Path.
+	var bucketName, objectName string
+	if len(splits) == 1 {
+		bucketName = splits[0]
+	}
+	if len(splits) == 2 {
+		bucketName = splits[0]
+		objectName = splits[1]
+	}
+
+	// If bucketName is present and not objectName check for bucket level resource queries.
+	if bucketName != "" && objectName == "" {
+		if ignoreNotImplementedBucketResources(r) {
+			writeErrorResponse(w, r, ErrNotImplemented, r.URL.Path)
+			return
+		}
+	}
+	// If bucketName and objectName are present check for its resource queries.
+	if bucketName != "" && objectName != "" {
+		if ignoreNotImplementedObjectResources(r) {
+			writeErrorResponse(w, r, ErrNotImplemented, r.URL.Path)
+			return
+		}
+	}
+	// A put method on path "/" doesn't make sense, ignore it.
+	if r.Method == "PUT" && r.URL.Path == "/" {
+		writeErrorResponse(w, r, ErrNotImplemented, r.URL.Path)
+		return
+	}
+
+	// Serve HTTP.
+	h.handler.ServeHTTP(w, r)
 }

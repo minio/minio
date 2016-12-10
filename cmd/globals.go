@@ -18,6 +18,8 @@ package cmd
 
 import (
 	"crypto/x509"
+	"os"
+	"strings"
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
@@ -60,6 +62,10 @@ var (
 	// Add new global flags here.
 
 	globalIsDistXL = false // "Is Distributed?" flag.
+
+	// This flag is set to 'true' by default, it is set to `false`
+	// when MINIO_BROWSER env is set to 'off'.
+	globalIsBrowserEnabled = !strings.EqualFold(os.Getenv("MINIO_BROWSER"), "off")
 
 	// Maximum cache size. Defaults to disabled.
 	// Caching is enabled only for RAM size > 8GiB.
