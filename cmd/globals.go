@@ -59,7 +59,11 @@ var (
 	globalConfigDir = mustGetConfigPath() // config-dir flag set via command line
 	// Add new global flags here.
 
-	globalIsDistXL = false // "Is Distributed?" flag.
+	// Indicates if the running minio server is distributed setup.
+	globalIsDistXL = false
+
+	// Indicates if the running minio server is on a shared backend.
+	globalIsSharedBackend = false
 
 	// Maximum cache size. Defaults to disabled.
 	// Caching is enabled only for RAM size > 8GiB.

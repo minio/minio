@@ -289,7 +289,7 @@ func TestInitEventNotifier(t *testing.T) {
 	}
 
 	// needed to load listener config from disk for testing (in
-	// single peer mode, the listener config is ingored, but here
+	// single peer mode, the listener config is ignored, but here
 	// we want to test the loading from disk too.)
 	globalIsDistXL = true
 
