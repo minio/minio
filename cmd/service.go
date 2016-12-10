@@ -41,7 +41,7 @@ var globalServiceDoneCh chan struct{}
 // Initialize service mutex once.
 func init() {
 	globalServiceDoneCh = make(chan struct{}, 1)
-	globalServiceSignalCh = make(chan serviceSignal, 1)
+	globalServiceSignalCh = make(chan serviceSignal)
 }
 
 // restartProcess starts a new process passing it the active fd's. It
