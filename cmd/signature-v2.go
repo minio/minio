@@ -37,6 +37,7 @@ const (
 // http://docs.aws.amazon.com/AmazonS3/latest/dev/RESTAuthentication.html#RESTAuthenticationStringToSign
 
 // Whitelist resource list that will be used in query string for signature-V2 calculation.
+// The list should be alphabetically sorted
 var resourceList = []string{
 	"acl",
 	"delete",
@@ -47,6 +48,12 @@ var resourceList = []string{
 	"partNumber",
 	"policy",
 	"requestPayment",
+	"response-cache-control",
+	"response-content-disposition",
+	"response-content-encoding",
+	"response-content-language",
+	"response-content-type",
+	"response-expires",
 	"torrent",
 	"uploadId",
 	"uploads",
