@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -166,63 +165,15 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
 	}
-	// Parse bucket policy.
-	var policy = &bucketPolicy{}
-	err = parseBucketPolicy(bytes.NewReader(policyBytes), policy)
-	if err != nil {
-		errorIf(err, "Unable to parse bucket policy.")
-		writeErrorResponse(w, r, ErrInvalidPolicyDocument, r.URL.Path)
-		return
-	}
 
-	// Parse check bucket policy.
-	if s3Error := checkBucketPolicyResources(bucket, policy); s3Error != ErrNone {
+	// Parse validate and save bucket policy.
+	if s3Error := parseAndPersistBucketPolicy(bucket, policyBytes, objAPI); s3Error != ErrNone {
 		writeErrorResponse(w, r, s3Error, r.URL.Path)
-		return
-	}
-
-	// Save bucket policy.
-	if err = persistAndNotifyBucketPolicyChange(bucket, policyChange{false, policy}, objAPI); err != nil {
-		switch err.(type) {
-		case BucketNameInvalid:
-			writeErrorResponse(w, r, ErrInvalidBucketName, r.URL.Path)
-		default:
-			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
-		}
 		return
 	}
 
 	// Success.
 	writeSuccessNoContent(w)
-}
-
-// persistAndNotifyBucketPolicyChange - takes a policyChange argument,
-// persists it to storage, and notify nodes in the cluster about the
-// change. In-memory state is updated in response to the notification.
-func persistAndNotifyBucketPolicyChange(bucket string, pCh policyChange, objAPI ObjectLayer) error {
-	// Acquire a write lock on bucket before modifying its
-	// configuration.
-	bucketLock := nsMutex.NewNSLock(bucket, "")
-	bucketLock.Lock()
-	// Release lock after notifying peers
-	defer bucketLock.Unlock()
-
-	if pCh.IsRemove {
-		if err := removeBucketPolicy(bucket, objAPI); err != nil {
-			return err
-		}
-	} else {
-		if pCh.BktPolicy == nil {
-			return errInvalidArgument
-		}
-		if err := writeBucketPolicy(bucket, objAPI, pCh.BktPolicy); err != nil {
-			return err
-		}
-	}
-
-	// Notify all peers (including self) to update in-memory state
-	S3PeersUpdateBucketPolicy(bucket, pCh)
-	return nil
 }
 
 // DeleteBucketPolicyHandler - DELETE Bucket policy

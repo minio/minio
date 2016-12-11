@@ -62,11 +62,6 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 		return traceError(errUnexpected)
 	}
 
-	// Lock the object before reading.
-	objectLock := nsMutex.NewNSLock(bucket, object)
-	objectLock.RLock()
-	defer objectLock.RUnlock()
-
 	// Read metadata associated with the object from all disks.
 	metaArr, errs := readAllXLMetadata(xl.storageDisks, bucket, object)
 	// Do we have read quorum?
@@ -221,10 +216,6 @@ func (xl xlObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 	if err := checkGetObjArgs(bucket, object); err != nil {
 		return ObjectInfo{}, err
 	}
-
-	objectLock := nsMutex.NewNSLock(bucket, object)
-	objectLock.RLock()
-	defer objectLock.RUnlock()
 
 	info, err := xl.getObjectInfo(bucket, object)
 	if err != nil {
@@ -485,11 +476,6 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 		}
 	}
 
-	// Lock the object.
-	objectLock := nsMutex.NewNSLock(bucket, object)
-	objectLock.Lock()
-	defer objectLock.Unlock()
-
 	// Check if an object is present as one of the parent dir.
 	// -- FIXME. (needs a new kind of lock).
 	if xl.parentDirIsObject(bucket, path.Dir(object)) {
@@ -605,10 +591,6 @@ func (xl xlObjects) DeleteObject(bucket, object string) (err error) {
 	if err = checkDelObjArgs(bucket, object); err != nil {
 		return err
 	}
-
-	objectLock := nsMutex.NewNSLock(bucket, object)
-	objectLock.Lock()
-	defer objectLock.Unlock()
 
 	// Validate object exists.
 	if !xl.isObject(bucket, object) {

@@ -96,6 +96,11 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	// Lock the object before reading.
+	objectLock := globalNSMutex.NewNSLock(bucket, object)
+	objectLock.RLock()
+	defer objectLock.RUnlock()
+
 	objInfo, err := objectAPI.GetObjectInfo(bucket, object)
 	if err != nil {
 		errorIf(err, "Unable to fetch object info.")
@@ -195,6 +200,11 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// Lock the object before reading.
+	objectLock := globalNSMutex.NewNSLock(bucket, object)
+	objectLock.RLock()
+	defer objectLock.RUnlock()
+
 	objInfo, err := objectAPI.GetObjectInfo(bucket, object)
 	if err != nil {
 		errorIf(err, "Unable to fetch object info.")
@@ -269,6 +279,11 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// Lock the object before reading.
+	objectRLock := globalNSMutex.NewNSLock(sourceBucket, sourceObject)
+	objectRLock.RLock()
+	defer objectRLock.RUnlock()
+
 	objInfo, err := objectAPI.GetObjectInfo(sourceBucket, sourceObject)
 	if err != nil {
 		errorIf(err, "Unable to fetch object info.")
@@ -311,6 +326,11 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	delete(metadata, "md5Sum")
 
 	sha256sum := ""
+
+	objectWLock := globalNSMutex.NewNSLock(bucket, object)
+	objectWLock.Lock()
+	defer objectWLock.Unlock()
+
 	// Create the object.
 	objInfo, err = objectAPI.PutObject(bucket, object, size, pipeReader, metadata, sha256sum)
 	if err != nil {
@@ -399,6 +419,11 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	metadata["md5Sum"] = hex.EncodeToString(md5Bytes)
 
 	sha256sum := ""
+
+	// Lock the object.
+	objectLock := globalNSMutex.NewNSLock(bucket, object)
+	objectLock.Lock()
+	defer objectLock.Unlock()
 
 	var objInfo ObjectInfo
 	switch rAuthType {
@@ -731,6 +756,11 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 		completeParts = append(completeParts, part)
 	}
 
+	// Hold write lock on the object.
+	destLock := globalNSMutex.NewNSLock(bucket, object)
+	destLock.Lock()
+	defer destLock.Unlock()
+
 	md5Sum, err = objectAPI.CompleteMultipartUpload(bucket, object, uploadID, completeParts)
 	if err != nil {
 		err = errorCause(err)
@@ -800,6 +830,10 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 		writeErrorResponse(w, r, s3Error, r.URL.Path)
 		return
 	}
+
+	objectLock := globalNSMutex.NewNSLock(bucket, object)
+	objectLock.Lock()
+	defer objectLock.Unlock()
 
 	/// http://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectDELETE.html
 	/// Ignore delete object errors, since we are suppposed to reply
