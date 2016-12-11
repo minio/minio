@@ -31,7 +31,7 @@ func healFormatXL(storageDisks []StorageAPI) (err error) {
 	// Generic format check.
 	// - if (no quorum) return error
 	// - if (disks not recognized) // Always error.
-	if err = genericFormatCheck(formatConfigs, sErrs); err != nil {
+	if err = genericFormatCheckXL(formatConfigs, sErrs); err != nil {
 		return err
 	}
 
