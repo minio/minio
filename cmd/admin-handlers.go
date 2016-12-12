@@ -16,7 +16,10 @@
 
 package cmd
 
-import "net/http"
+import (
+	"encoding/json"
+	"net/http"
+)
 
 const (
 	minioAdminOpHeader = "X-Minio-Operation"
@@ -28,9 +31,14 @@ func (adminAPI adminAPIHandlers) ServiceStatusHandler(w http.ResponseWriter, r *
 		writeErrorResponse(w, r, adminErr, r.URL.Path)
 		return
 	}
-	// FIXME: Servicestatus command is not yet implemented in handleServiceSignals
-	globalServiceSignalCh <- serviceStatus
+	storageInfo := newObjectLayerFn().StorageInfo()
+	jsonBytes, err := json.Marshal(storageInfo)
+	if err != nil {
+		writeErrorResponseNoHeader(w, r, ErrInternalError, r.URL.Path)
+		errorIf(err, "Failed to marshal storage info into json.")
+	}
 	w.WriteHeader(http.StatusOK)
+	writeSuccessResponse(w, jsonBytes)
 }
 
 func (adminAPI adminAPIHandlers) ServiceStopHandler(w http.ResponseWriter, r *http.Request) {

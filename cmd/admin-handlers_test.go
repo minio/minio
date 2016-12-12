@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -95,9 +96,25 @@ func testServicesCmdHandler(cmd cmdType, t *testing.T) {
 		t.Fatalf("Unable to initialize server config. %s", err)
 	}
 	defer removeAll(rootPath)
+	if cmd == statusCmd {
+		// Initializing objectLayer and corresponding
+		// []StorageAPI since DiskInfo() method requires it.
+		objLayer, fsDir, fsErr := prepareFS()
+		if fsErr != nil {
+			t.Fatalf("failed to initialize XL based object layer - %v.", fsErr)
+		}
+		defer removeRoots([]string{fsDir})
+		globalObjLayerMutex.Lock()
+		globalObjectAPI = objLayer
+		globalObjLayerMutex.Unlock()
+	}
 
-	// Setting up a go routine to simulate ServerMux's handleServiceSignals
-	go mockServiceSignalReceiver(cmd, t)
+	// Setting up a go routine to simulate ServerMux's
+	// handleServiceSignals for stop and restart commands.
+	switch cmd {
+	case stopCmd, restartCmd:
+		go mockServiceSignalReceiver(cmd, t)
+	}
 	credentials := serverConfig.GetCredential()
 	adminRouter := router.NewRouter()
 	registerAdminRouter(adminRouter)
@@ -109,8 +126,20 @@ func testServicesCmdHandler(cmd cmdType, t *testing.T) {
 	}
 	adminRouter.ServeHTTP(rec, req)
 
+	if cmd == statusCmd {
+		expectedInfo := newObjectLayerFn().StorageInfo()
+		receivedInfo := StorageInfo{}
+		if jsonErr := json.Unmarshal(rec.Body.Bytes(), &receivedInfo); jsonErr != nil {
+			t.Errorf("Failed to unmarshal StorageInfo - %v", jsonErr)
+		}
+		if expectedInfo != receivedInfo {
+			t.Errorf("Expected storage info and received storage info differ, %v %v", expectedInfo, receivedInfo)
+		}
+	}
+
 	if rec.Code != http.StatusOK {
-		t.Errorf("Expected to receive %d status code but received %d", http.StatusOK, rec.Code)
+		t.Errorf("Expected to receive %d status code but received %d",
+			http.StatusOK, rec.Code)
 	}
 }
 
