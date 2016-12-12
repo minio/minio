@@ -34,6 +34,7 @@ const lockCheckValidityInterval = 2 * time.Minute
 // LockArgs besides lock name, holds Token and Timestamp for session
 // authentication and validation server restart.
 type LockArgs struct {
+	loginServer
 	Name      string
 	Token     string
 	Timestamp time.Time
@@ -124,25 +125,6 @@ func registerStorageLockers(mux *router.Router, lockServers []*lockServer) error
 }
 
 ///  Distributed lock handlers
-
-// LoginHandler - handles LoginHandler RPC call.
-func (l *lockServer) LoginHandler(args *RPCLoginArgs, reply *RPCLoginReply) error {
-	jwt, err := newJWT(defaultInterNodeJWTExpiry, serverConfig.GetCredential())
-	if err != nil {
-		return err
-	}
-	if err = jwt.Authenticate(args.Username, args.Password); err != nil {
-		return err
-	}
-	token, err := jwt.GenerateToken(args.Username)
-	if err != nil {
-		return err
-	}
-	reply.Token = token
-	reply.Timestamp = time.Now().UTC()
-	reply.ServerVersion = Version
-	return nil
-}
 
 // Lock - rpc handler for (single) write lock operation.
 func (l *lockServer) Lock(args *LockArgs, reply *bool) error {
