@@ -223,7 +223,8 @@ func retryFormattingDisks(firstDisk bool, endpoints []*url.URL, storageDisks []S
 			if len(formatConfigs) == 1 {
 				err := genericFormatCheckFS(formatConfigs[0], sErrs[0])
 				if err != nil {
-					if err == errUnformattedDisk {
+					// For an new directory or existing data.
+					if err == errUnformattedDisk || err == errCorruptedFormat {
 						return initFormatFS(storageDisks[0])
 					}
 					return err
