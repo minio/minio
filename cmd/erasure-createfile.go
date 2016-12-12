@@ -29,7 +29,7 @@ import (
 // all the disks, writes also calculate individual block's checksum
 // for future bit-rot protection.
 func erasureCreateFile(disks []StorageAPI, volume, path string, reader io.Reader, blockSize int64, dataBlocks int, parityBlocks int, algo string, writeQuorum int) (bytesWritten int64, checkSums []string, err error) {
-	// Allocated blockSized buffer for reading.
+	// Allocated blockSized buffer for reading from incoming stream.
 	buf := make([]byte, blockSize)
 
 	hashWriters := newHashWriters(len(disks), algo)

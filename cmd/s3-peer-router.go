@@ -27,11 +27,13 @@ const (
 )
 
 type s3PeerAPIHandlers struct {
+	loginServer
 	bms BucketMetaState
 }
 
 func registerS3PeerRPCRouter(mux *router.Router) error {
 	s3PeerHandlers := &s3PeerAPIHandlers{
+		loginServer{},
 		&localBucketMetaState{
 			ObjectAPI: newObjectLayerFn,
 		},

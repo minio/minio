@@ -18,6 +18,8 @@
 
 package cmd
 
+import "github.com/minio/minio/pkg/sys"
+
 func setMaxOpenFiles() error {
 	// Golang uses Win32 file API (CreateFile, WriteFile, ReadFile,
 	// CloseHandle, etc.), then you don't have a limit on open files
@@ -26,6 +28,15 @@ func setMaxOpenFiles() error {
 }
 
 func setMaxMemory() error {
-	// TODO: explore if Win32 API's provide anything special here.
+	// Make sure globalMaxCacheSize is less than RAM size.
+	stats, err := sys.GetStats()
+	if err != nil && err != sys.ErrNotImplemented {
+		return err
+	}
+	// If TotalRAM is <= minRAMSize we proceed to enable cache.
+	// cache is always 50% of the totalRAM.
+	if err == nil && stats.TotalRAM >= minRAMSize {
+		globalMaxCacheSize = uint64(float64(50*stats.TotalRAM) / 100)
+	}
 	return nil
 }

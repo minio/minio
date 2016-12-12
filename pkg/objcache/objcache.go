@@ -22,6 +22,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"runtime/debug"
 	"sync"
 	"time"
 )
@@ -31,6 +32,13 @@ var NoExpiry = time.Duration(0)
 
 // DefaultExpiry represents default time duration value when individual entries will be expired.
 var DefaultExpiry = time.Duration(72 * time.Hour) // 72hrs.
+
+// DefaultBufferRatio represents default ratio used to calculate the
+// individual cache entry buffer size.
+var DefaultBufferRatio = uint64(10)
+
+// DefaultGCPercent represents default garbage collection target percentage.
+var DefaultGCPercent = 20
 
 // buffer represents the in memory cache of a single entry.
 // buffer carries value of the data and last accessed time.
@@ -46,8 +54,15 @@ type Cache struct {
 	// read/write requests for cache
 	mutex sync.Mutex
 
+	// Once is used for resetting GC once after
+	// peak cache usage.
+	onceGC sync.Once
+
 	// maxSize is a total size for overall cache
 	maxSize uint64
+
+	// maxCacheEntrySize is a total size per key buffer.
+	maxCacheEntrySize uint64
 
 	// currentSize is a current size in memory
 	currentSize uint64
@@ -68,24 +83,58 @@ type Cache struct {
 	stopGC chan struct{}
 }
 
-// New - Return a new cache with a given default expiry duration.
-// If the expiry duration is less than one (or NoExpiry),
-// the items in the cache never expire (by default), and must be deleted
-// manually.
+// New - Return a new cache with a given default expiry
+// duration. If the expiry duration is less than one
+// (or NoExpiry), the items in the cache never expire
+// (by default), and must be deleted manually.
 func New(maxSize uint64, expiry time.Duration) *Cache {
-	C := &Cache{
-		maxSize: maxSize,
-		entries: make(map[string]*buffer),
-		expiry:  expiry,
+	if maxSize == 0 {
+		panic("objcache: setting maximum cache size to zero is forbidden.")
+	}
+
+	// A garbage collection is triggered when the ratio
+	// of freshly allocated data to live data remaining
+	// after the previous collection reaches this percentage.
+	//
+	// - https://golang.org/pkg/runtime/debug/#SetGCPercent
+	//
+	// This means that by default GC is triggered after
+	// we've allocated an extra amount of memory proportional
+	// to the amount already in use.
+	//
+	// If gcpercent=100 and we're using 4M, we'll gc again
+	// when we get to 8M.
+	//
+	// Set this value to 20% if caching is enabled.
+	debug.SetGCPercent(DefaultGCPercent)
+
+	// Max cache entry size - indicates the
+	// maximum buffer per key that can be held in
+	// memory. Currently this value is 1/10th
+	// the size of requested cache size.
+	maxCacheEntrySize := func() uint64 {
+		i := maxSize / DefaultBufferRatio
+		if i == 0 {
+			i = maxSize
+		}
+		return i
+	}()
+	c := &Cache{
+		onceGC:            sync.Once{},
+		maxSize:           maxSize,
+		maxCacheEntrySize: maxCacheEntrySize,
+		entries:           make(map[string]*buffer),
+		expiry:            expiry,
 	}
 	// We have expiry start the janitor routine.
 	if expiry > 0 {
-		C.stopGC = make(chan struct{})
+		// Initialize a new stop GC channel.
+		c.stopGC = make(chan struct{})
 
 		// Start garbage collection routine to expire objects.
-		C.startGC()
+		c.StartGC()
 	}
-	return C
+	return c
 }
 
 // ErrKeyNotFoundInCache - key not found in cache.
@@ -96,18 +145,6 @@ var ErrCacheFull = errors.New("Not enough space in cache")
 
 // ErrExcessData - excess data was attempted to be written on cache.
 var ErrExcessData = errors.New("Attempted excess write on cache")
-
-// Used for adding entry to the object cache. Implements io.WriteCloser
-type cacheBuffer struct {
-	*bytes.Buffer // Implements io.Writer
-	onClose       func() error
-}
-
-// On close, onClose() is called which checks if all object contents
-// have been written so that it can save the buffer to the cache.
-func (c cacheBuffer) Close() (err error) {
-	return c.onClose()
-}
 
 // Create - validates if object size fits with in cache size limit and returns a io.WriteCloser
 // to which object contents can be written and finally Close()'d. During Close() we
@@ -123,29 +160,46 @@ func (c *Cache) Create(key string, size int64) (w io.WriteCloser, err error) {
 	}() // Do not crash the server.
 
 	valueLen := uint64(size)
-	// Check if the size of the object is not bigger than the capacity of the cache.
-	if c.maxSize > 0 && valueLen > c.maxSize {
+	// Check if the size of the object is > 1/10th the size
+	// of the cache, if yes then we ignore it.
+	if valueLen > c.maxCacheEntrySize {
 		return nil, ErrCacheFull
 	}
 
-	// Will hold the object contents.
-	buf := bytes.NewBuffer(make([]byte, 0, size))
+	// Check if the incoming size is going to exceed
+	// the effective cache size, if yes return error
+	// instead.
+	c.mutex.Lock()
+	if c.currentSize+valueLen > c.maxSize {
+		c.mutex.Unlock()
+		return nil, ErrCacheFull
+	}
+	// Change GC percent if the current cache usage
+	// is already 75% of the maximum allowed usage.
+	if c.currentSize > (75 * c.maxSize / 100) {
+		c.onceGC.Do(func() { debug.SetGCPercent(DefaultGCPercent - 10) })
+	}
+	c.mutex.Unlock()
+
+	cbuf := &cappedWriter{
+		offset: 0,
+		cap:    size,
+		buffer: make([]byte, size),
+	}
 
 	// Function called on close which saves the object contents
 	// to the object cache.
 	onClose := func() error {
 		c.mutex.Lock()
 		defer c.mutex.Unlock()
-		if size != int64(buf.Len()) {
+		if size != cbuf.offset {
+			cbuf.Reset() // Reset resets the buffer to be empty.
 			// Full object not available hence do not save buf to object cache.
 			return io.ErrShortBuffer
 		}
-		if c.maxSize > 0 && c.currentSize+valueLen > c.maxSize {
-			return ErrExcessData
-		}
 		// Full object available in buf, save it to cache.
 		c.entries[key] = &buffer{
-			value:        buf.Bytes(),
+			value:        cbuf.buffer,
 			lastAccessed: time.Now().UTC(), // Save last accessed time.
 		}
 		// Account for the memory allocated above.
@@ -153,12 +207,10 @@ func (c *Cache) Create(key string, size int64) (w io.WriteCloser, err error) {
 		return nil
 	}
 
-	// Object contents that is written - cacheBuffer.Write(data)
+	// Object contents that is written - cappedWriter.Write(data)
 	// will be accumulated in buf which implements io.Writer.
-	return cacheBuffer{
-		buf,
-		onClose,
-	}, nil
+	cbuf.onClose = onClose
+	return cbuf, nil
 }
 
 // Open - open the in-memory file, returns an in memory read seeker.
@@ -212,17 +264,17 @@ func (c *Cache) gc() {
 
 // StopGC sends a message to the expiry routine to stop
 // expiring cached entries. NOTE: once this is called, cached
-// entries will not be expired if the consumer has called this.
+// entries will not be expired, be careful if you are using this.
 func (c *Cache) StopGC() {
 	if c.stopGC != nil {
 		c.stopGC <- struct{}{}
 	}
 }
 
-// startGC starts running a routine ticking at expiry interval, on each interval
-// this routine does a sweep across the cache entries and garbage collects all the
-// expired entries.
-func (c *Cache) startGC() {
+// StartGC starts running a routine ticking at expiry interval,
+// on each interval this routine does a sweep across the cache
+// entries and garbage collects all the expired entries.
+func (c *Cache) StartGC() {
 	go func() {
 		for {
 			select {
@@ -239,9 +291,10 @@ func (c *Cache) startGC() {
 
 // Deletes a requested entry from the cache.
 func (c *Cache) delete(key string) {
-	if buf, ok := c.entries[key]; ok {
+	if _, ok := c.entries[key]; ok {
+		deletedSize := uint64(len(c.entries[key].value))
 		delete(c.entries, key)
-		c.currentSize -= uint64(len(buf.value))
+		c.currentSize -= deletedSize
 		c.totalEvicted++
 	}
 }

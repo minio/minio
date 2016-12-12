@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -148,6 +147,9 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 	if !isJWTReqAuthenticated(r) {
 		return toJSONError(errAuthentication)
 	}
+	bucketLock := globalNSMutex.NewNSLock(args.BucketName, "")
+	bucketLock.Lock()
+	defer bucketLock.Unlock()
 	if err := objectAPI.MakeBucket(args.BucketName); err != nil {
 		return toJSONError(err, args.BucketName)
 	}
@@ -272,6 +274,11 @@ func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs,
 	if !isJWTReqAuthenticated(r) {
 		return toJSONError(errAuthentication)
 	}
+
+	objectLock := globalNSMutex.NewNSLock(args.BucketName, args.ObjectName)
+	objectLock.Lock()
+	defer objectLock.Unlock()
+
 	if err := objectAPI.DeleteObject(args.BucketName, args.ObjectName); err != nil {
 		if isErrObjectNotFound(err) {
 			// Ignore object not found error.
@@ -478,16 +485,15 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	// Extract incoming metadata if any.
 	metadata := extractMetadataFromHeader(r.Header)
 
-	sha256sum := ""
-	if _, err := objectAPI.PutObject(bucket, object, -1, r.Body, metadata, sha256sum); err != nil {
-		writeWebErrorResponse(w, err)
-		return
-	}
+	// Lock the object.
+	objectLock := globalNSMutex.NewNSLock(bucket, object)
+	objectLock.Lock()
+	defer objectLock.Unlock()
 
-	// Fetch object info for notifications.
-	objInfo, err := objectAPI.GetObjectInfo(bucket, object)
+	sha256sum := ""
+	objInfo, err := objectAPI.PutObject(bucket, object, -1, r.Body, metadata, sha256sum)
 	if err != nil {
-		errorIf(err, "Unable to fetch object info for \"%s\"", path.Join(bucket, object))
+		writeWebErrorResponse(w, err)
 		return
 	}
 
@@ -533,6 +539,11 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	}
 	// Add content disposition.
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", path.Base(object)))
+
+	// Lock the object before reading.
+	objectLock := globalNSMutex.NewNSLock(bucket, object)
+	objectLock.RLock()
+	defer objectLock.RUnlock()
 
 	objInfo, err := objectAPI.GetObjectInfo(bucket, object)
 	if err != nil {
@@ -691,16 +702,8 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 		return toJSONError(err)
 	}
 
-	// Parse bucket policy.
-	var policy = &bucketPolicy{}
-	err = parseBucketPolicy(bytes.NewReader(data), policy)
-	if err != nil {
-		errorIf(err, "Unable to parse bucket policy.")
-		return toJSONError(err, args.BucketName)
-	}
-
-	// Parse check bucket policy.
-	if s3Error := checkBucketPolicyResources(args.BucketName, policy); s3Error != ErrNone {
+	// Parse validate and save bucket policy.
+	if s3Error := parseAndPersistBucketPolicy(args.BucketName, data, objectAPI); s3Error != ErrNone {
 		apiErr := getAPIError(s3Error)
 		var err error
 		if apiErr.Code == "XMinioPolicyNesting" {
@@ -708,12 +711,6 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 		} else {
 			err = errors.New(apiErr.Description)
 		}
-		return toJSONError(err, args.BucketName)
-	}
-
-	// TODO: update policy statements according to bucket name,
-	// prefix and policy arguments.
-	if err := persistAndNotifyBucketPolicyChange(args.BucketName, policyChange{false, policy}, objectAPI); err != nil {
 		return toJSONError(err, args.BucketName)
 	}
 	reply.UIVersion = miniobrowser.UIVersion
@@ -808,8 +805,7 @@ func toJSONError(err error, params ...string) (jerr *json2.Error) {
 	case "InvalidBucketName":
 		if len(params) > 0 {
 			jerr = &json2.Error{
-				Message: fmt.Sprintf("Bucket Name %s is invalid. Lowercase letters, period and numerals are the only allowed characters.",
-					params[0]),
+				Message: fmt.Sprintf("Bucket Name %s is invalid. Lowercase letters, period and numerals are the only allowed characters.", params[0]),
 			}
 		}
 	// Bucket not found custom error message.

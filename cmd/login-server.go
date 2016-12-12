@@ -16,24 +16,26 @@
 
 package cmd
 
-import "io"
+import "time"
 
-func fsCreateFile(disk StorageAPI, reader io.Reader, buf []byte, tmpBucket, tempObj string) (int64, error) {
-	bytesWritten := int64(0)
-	// Read the buffer till io.EOF and append the read data to the temporary file.
-	for {
-		n, rErr := reader.Read(buf)
-		if rErr != nil && rErr != io.EOF {
-			return 0, traceError(rErr)
-		}
-		bytesWritten += int64(n)
-		wErr := disk.AppendFile(tmpBucket, tempObj, buf[0:n])
-		if wErr != nil {
-			return 0, traceError(wErr)
-		}
-		if rErr == io.EOF {
-			break
-		}
+type loginServer struct {
+}
+
+// LoginHandler - Handles JWT based RPC logic.
+func (b loginServer) LoginHandler(args *RPCLoginArgs, reply *RPCLoginReply) error {
+	jwt, err := newJWT(defaultInterNodeJWTExpiry, serverConfig.GetCredential())
+	if err != nil {
+		return err
 	}
-	return bytesWritten, nil
+	if err = jwt.Authenticate(args.Username, args.Password); err != nil {
+		return err
+	}
+	token, err := jwt.GenerateToken(args.Username)
+	if err != nil {
+		return err
+	}
+	reply.Token = token
+	reply.Timestamp = time.Now().UTC()
+	reply.ServerVersion = Version
+	return nil
 }

@@ -16,7 +16,7 @@ A stand-alone Minio server would go down if the server hosting the disks goes of
 
 For example, an 8-node distributed Minio setup, with 1 disk per node would stay put, even if upto 4 nodes are offline. But, you'll need atleast 5 nodes online to create new objects.
 
-## Limitations
+### Limits
 
 As with Minio in stand-alone mode, distributed Minio has a per tenant limit of minimum 4 and maximum 16 drives (imposed by erasure code). This helps maintain simplicity and yet remain scalable. If you need a multiple tenant setup, you can easily spin multiple Minio instances managed by orchestration tools like Kubernetes.
 

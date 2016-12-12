@@ -81,10 +81,18 @@ func newFSObjects(storage StorageAPI) (ObjectLayer, error) {
 // Should be called when process shuts down.
 func (fs fsObjects) Shutdown() error {
 	// List if there are any multipart entries.
-	_, err := fs.storage.ListDir(minioMetaBucket, mpartMetaPrefix)
-	if err != errFileNotFound {
-		// A nil err means that multipart directory is not empty hence do not remove '.minio.sys' volume.
+	prefix := ""
+	entries, err := fs.storage.ListDir(minioMetaMultipartBucket, prefix)
+	if err != nil {
 		// A non nil err means that an unexpected error occurred
+		return toObjectErr(traceError(err))
+	}
+	if len(entries) > 0 {
+		// Should not remove .minio.sys if there are any multipart
+		// uploads were found.
+		return nil
+	}
+	if err = fs.storage.DeleteVol(minioMetaMultipartBucket); err != nil {
 		return toObjectErr(traceError(err))
 	}
 	// List if there are any bucket configuration entries.
@@ -94,10 +102,17 @@ func (fs fsObjects) Shutdown() error {
 		// A non nil err means that an unexpected error occurred
 		return toObjectErr(traceError(err))
 	}
-	// Cleanup everything else.
-	prefix := ""
-	if err = cleanupDir(fs.storage, minioMetaBucket, prefix); err != nil {
+	// Cleanup and delete tmp bucket.
+	if err = cleanupDir(fs.storage, minioMetaTmpBucket, prefix); err != nil {
 		return err
+	}
+	if err = fs.storage.DeleteVol(minioMetaTmpBucket); err != nil {
+		return toObjectErr(traceError(err))
+	}
+
+	// Remove format.json and delete .minio.sys bucket
+	if err = fs.storage.DeleteFile(minioMetaBucket, fsFormatJSONFile); err != nil {
+		return toObjectErr(traceError(err))
 	}
 	if err = fs.storage.DeleteVol(minioMetaBucket); err != nil {
 		if err != errVolumeNotEmpty {
@@ -204,13 +219,8 @@ func (fs fsObjects) DeleteBucket(bucket string) error {
 
 // GetObject - get an object.
 func (fs fsObjects) GetObject(bucket, object string, offset int64, length int64, writer io.Writer) (err error) {
-	// Verify if bucket is valid.
-	if !IsValidBucketName(bucket) {
-		return traceError(BucketNameInvalid{Bucket: bucket})
-	}
-	// Verify if object is valid.
-	if !IsValidObjectName(object) {
-		return traceError(ObjectNameInvalid{Bucket: bucket, Object: object})
+	if err = checkGetObjArgs(bucket, object); err != nil {
+		return err
 	}
 	// Offset and length cannot be negative.
 	if offset < 0 || length < 0 {
@@ -235,11 +245,6 @@ func (fs fsObjects) GetObject(bucket, object string, offset int64, length int64,
 	if offset+length > fi.Size {
 		return traceError(InvalidRange{offset, length, fi.Size})
 	}
-
-	// Lock the object before reading.
-	objectLock := nsMutex.NewNSLock(bucket, object)
-	objectLock.RLock()
-	defer objectLock.RUnlock()
 
 	var totalLeft = length
 	bufSize := int64(readSizeV1)
@@ -315,8 +320,7 @@ func (fs fsObjects) getObjectInfo(bucket, object string) (ObjectInfo, error) {
 		}
 	}
 
-	// Guess content-type from the extension if possible.
-	return ObjectInfo{
+	objInfo := ObjectInfo{
 		Bucket:          bucket,
 		Name:            object,
 		ModTime:         fi.ModTime,
@@ -325,34 +329,29 @@ func (fs fsObjects) getObjectInfo(bucket, object string) (ObjectInfo, error) {
 		MD5Sum:          fsMeta.Meta["md5Sum"],
 		ContentType:     fsMeta.Meta["content-type"],
 		ContentEncoding: fsMeta.Meta["content-encoding"],
-		UserDefined:     fsMeta.Meta,
-	}, nil
+	}
+
+	// md5Sum has already been extracted into objInfo.MD5Sum.  We
+	// need to remove it from fsMeta.Meta to avoid it from appearing as
+	// part of response headers. e.g, X-Minio-* or X-Amz-*.
+	delete(fsMeta.Meta, "md5Sum")
+	objInfo.UserDefined = fsMeta.Meta
+
+	return objInfo, nil
 }
 
 // GetObjectInfo - get object info.
 func (fs fsObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
-	// Verify if bucket is valid.
-	if !IsValidBucketName(bucket) {
-		return ObjectInfo{}, traceError(BucketNameInvalid{Bucket: bucket})
-	}
-	// Verify if object is valid.
-	if !IsValidObjectName(object) {
-		return ObjectInfo{}, traceError(ObjectNameInvalid{Bucket: bucket, Object: object})
+	if err := checkGetObjArgs(bucket, object); err != nil {
+		return ObjectInfo{}, err
 	}
 	return fs.getObjectInfo(bucket, object)
 }
 
 // PutObject - create an object.
 func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (objInfo ObjectInfo, err error) {
-	// Verify if bucket is valid.
-	if !IsValidBucketName(bucket) {
-		return ObjectInfo{}, traceError(BucketNameInvalid{Bucket: bucket})
-	}
-	if !IsValidObjectName(object) {
-		return ObjectInfo{}, traceError(ObjectNameInvalid{
-			Bucket: bucket,
-			Object: object,
-		})
+	if err = checkPutObjectArgs(bucket, object, fs); err != nil {
+		return ObjectInfo{}, err
 	}
 	// No metadata is set, allocate a new one.
 	if metadata == nil {
@@ -388,45 +387,37 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 		limitDataReader = data
 	}
 
-	if size == 0 {
-		// For size 0 we write a 0byte file.
-		err = fs.storage.AppendFile(minioMetaTmpBucket, tempObj, []byte(""))
+	// Prepare file to avoid disk fragmentation
+	if size > 0 {
+		err = fs.storage.PrepareFile(minioMetaTmpBucket, tempObj, size)
 		if err != nil {
-			fs.storage.DeleteFile(minioMetaTmpBucket, tempObj)
-			return ObjectInfo{}, toObjectErr(traceError(err), bucket, object)
-		}
-	} else {
-
-		// Prepare file to avoid disk fragmentation
-		if size > 0 {
-			err = fs.storage.PrepareFile(minioMetaTmpBucket, tempObj, size)
-			if err != nil {
-				return ObjectInfo{}, toObjectErr(err, bucket, object)
-			}
-		}
-
-		// Allocate a buffer to Read() from request body
-		bufSize := int64(readSizeV1)
-		if size > 0 && bufSize > size {
-			bufSize = size
-		}
-		buf := make([]byte, int(bufSize))
-		teeReader := io.TeeReader(limitDataReader, multiWriter)
-		var bytesWritten int64
-		bytesWritten, err = fsCreateFile(fs.storage, teeReader, buf, minioMetaTmpBucket, tempObj)
-		if err != nil {
-			fs.storage.DeleteFile(minioMetaTmpBucket, tempObj)
-			errorIf(err, "Failed to create object %s/%s", bucket, object)
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
-
-		// Should return IncompleteBody{} error when reader has fewer
-		// bytes than specified in request header.
-		if bytesWritten < size {
-			fs.storage.DeleteFile(minioMetaTmpBucket, tempObj)
-			return ObjectInfo{}, traceError(IncompleteBody{})
-		}
 	}
+
+	// Allocate a buffer to Read() from request body
+	bufSize := int64(readSizeV1)
+	if size > 0 && bufSize > size {
+		bufSize = size
+	}
+
+	buf := make([]byte, int(bufSize))
+	teeReader := io.TeeReader(limitDataReader, multiWriter)
+	var bytesWritten int64
+	bytesWritten, err = fsCreateFile(fs.storage, teeReader, buf, minioMetaTmpBucket, tempObj)
+	if err != nil {
+		fs.storage.DeleteFile(minioMetaTmpBucket, tempObj)
+		errorIf(err, "Failed to create object %s/%s", bucket, object)
+		return ObjectInfo{}, toObjectErr(err, bucket, object)
+	}
+
+	// Should return IncompleteBody{} error when reader has fewer
+	// bytes than specified in request header.
+	if bytesWritten < size {
+		fs.storage.DeleteFile(minioMetaTmpBucket, tempObj)
+		return ObjectInfo{}, traceError(IncompleteBody{})
+	}
+
 	// Delete the temporary object in the case of a
 	// failure. If PutObject succeeds, then there would be
 	// nothing to delete.
@@ -454,56 +445,44 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 		}
 	}
 
-	// Lock the object before committing the object.
-	objectLock := nsMutex.NewNSLock(bucket, object)
-	objectLock.RLock()
-	defer objectLock.RUnlock()
-
 	// Entire object was written to the temp location, now it's safe to rename it to the actual location.
 	err = fs.storage.RenameFile(minioMetaTmpBucket, tempObj, bucket, object)
 	if err != nil {
 		return ObjectInfo{}, toObjectErr(traceError(err), bucket, object)
 	}
 
-	// Save additional metadata. Initialize `fs.json` values.
-	fsMeta := newFSMetaV1()
-	fsMeta.Meta = metadata
+	if bucket != minioMetaBucket {
+		// Save objects' metadata in `fs.json`.
+		// Skip creating fs.json if bucket is .minio.sys as the object would have been created
+		// by minio's S3 layer (ex. policy.json)
+		fsMeta := newFSMetaV1()
+		fsMeta.Meta = metadata
 
-	fsMetaPath := path.Join(bucketMetaPrefix, bucket, object, fsMetaJSONFile)
-	if err = writeFSMetadata(fs.storage, minioMetaBucket, fsMetaPath, fsMeta); err != nil {
-		return ObjectInfo{}, toObjectErr(traceError(err), bucket, object)
+		fsMetaPath := path.Join(bucketMetaPrefix, bucket, object, fsMetaJSONFile)
+		if err = writeFSMetadata(fs.storage, minioMetaBucket, fsMetaPath, fsMeta); err != nil {
+			return ObjectInfo{}, toObjectErr(traceError(err), bucket, object)
+		}
 	}
 
-	objInfo, err = fs.getObjectInfo(bucket, object)
-	if err == nil {
-		// If MINIO_ENABLE_FSMETA is not enabled objInfo.MD5Sum will be empty.
-		objInfo.MD5Sum = newMD5Hex
-	}
-	return objInfo, err
+	return fs.getObjectInfo(bucket, object)
 }
 
 // DeleteObject - deletes an object from a bucket, this operation is destructive
 // and there are no rollbacks supported.
 func (fs fsObjects) DeleteObject(bucket, object string) error {
-	// Verify if bucket is valid.
-	if !IsValidBucketName(bucket) {
-		return traceError(BucketNameInvalid{Bucket: bucket})
-	}
-	if !IsValidObjectName(object) {
-		return traceError(ObjectNameInvalid{Bucket: bucket, Object: object})
+	if err := checkDelObjArgs(bucket, object); err != nil {
+		return err
 	}
 
-	// Lock the object before deleting so that an in progress GetObject does not return
-	// corrupt data or there is no race with a PutObject.
-	objectLock := nsMutex.NewNSLock(bucket, object)
-	objectLock.RLock()
-	defer objectLock.RUnlock()
-
-	err := fs.storage.DeleteFile(minioMetaBucket, path.Join(bucketMetaPrefix, bucket, object, fsMetaJSONFile))
-	if err != nil && err != errFileNotFound {
-		return toObjectErr(traceError(err), bucket, object)
+	if bucket != minioMetaBucket {
+		// We don't store fs.json for minio-S3-layer created files like policy.json,
+		// hence we don't try to delete fs.json for such files.
+		err := fs.storage.DeleteFile(minioMetaBucket, path.Join(bucketMetaPrefix, bucket, object, fsMetaJSONFile))
+		if err != nil && err != errFileNotFound {
+			return toObjectErr(traceError(err), bucket, object)
+		}
 	}
-	if err = fs.storage.DeleteFile(bucket, object); err != nil {
+	if err := fs.storage.DeleteFile(bucket, object); err != nil {
 		return toObjectErr(traceError(err), bucket, object)
 	}
 	return nil
@@ -526,31 +505,8 @@ func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 		return
 	}
 
-	// Verify if bucket is valid.
-	if !IsValidBucketName(bucket) {
-		return ListObjectsInfo{}, traceError(BucketNameInvalid{Bucket: bucket})
-	}
-	// Verify if bucket exists.
-	if !fs.isBucketExist(bucket) {
-		return ListObjectsInfo{}, traceError(BucketNotFound{Bucket: bucket})
-	}
-	if !IsValidObjectPrefix(prefix) {
-		return ListObjectsInfo{}, traceError(ObjectNameInvalid{Bucket: bucket, Object: prefix})
-	}
-	// Verify if delimiter is anything other than '/', which we do not support.
-	if delimiter != "" && delimiter != slashSeparator {
-		return ListObjectsInfo{}, traceError(UnsupportedDelimiter{
-			Delimiter: delimiter,
-		})
-	}
-	// Verify if marker has prefix.
-	if marker != "" {
-		if !strings.HasPrefix(marker, prefix) {
-			return ListObjectsInfo{}, traceError(InvalidMarkerPrefixCombination{
-				Marker: marker,
-				Prefix: prefix,
-			})
-		}
+	if err := checkListObjsArgs(bucket, prefix, marker, delimiter, fs); err != nil {
+		return ListObjectsInfo{}, err
 	}
 
 	// With max keys of zero we have reached eof, return right here.

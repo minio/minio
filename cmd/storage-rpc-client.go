@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"bytes"
 	"io"
 	"net"
 	"net/rpc"
@@ -366,6 +367,13 @@ func (n *networkStorage) ReadFile(volume string, path string, offset int64, buff
 		}
 	}()
 
+	defer func() {
+		if r := recover(); r != nil {
+			// Recover any panic from allocation, and return error.
+			err = bytes.ErrTooLarge
+		}
+	}() // Do not crash the server.
+
 	// Take remote disk offline if the total network errors.
 	// are more than maximum allowable IO error limit.
 	if n.networkIOErrCount > maxAllowedNetworkIOError {
@@ -377,10 +385,12 @@ func (n *networkStorage) ReadFile(volume string, path string, offset int64, buff
 		Vol:    volume,
 		Path:   path,
 		Offset: offset,
-		Size:   len(buffer),
+		Buffer: buffer,
 	}, &result)
+
 	// Copy results to buffer.
 	copy(buffer, result)
+
 	// Return length of result, err if any.
 	return int64(len(result)), toStorageErr(err)
 }

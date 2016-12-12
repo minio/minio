@@ -50,13 +50,8 @@ var objectOpIgnoredErrs = []error{
 // object to be read at. length indicates the total length of the
 // object requested by client.
 func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) error {
-	// Verify if bucket is valid.
-	if !IsValidBucketName(bucket) {
-		return traceError(BucketNameInvalid{Bucket: bucket})
-	}
-	// Verify if object is valid.
-	if !IsValidObjectName(object) {
-		return traceError(ObjectNameInvalid{Bucket: bucket, Object: object})
+	if err := checkGetObjArgs(bucket, object); err != nil {
+		return err
 	}
 	// Start offset and length cannot be negative.
 	if startOffset < 0 || length < 0 {
@@ -66,11 +61,6 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 	if writer == nil {
 		return traceError(errUnexpected)
 	}
-
-	// Lock the object before reading.
-	objectLock := nsMutex.NewNSLock(bucket, object)
-	objectLock.RLock()
-	defer objectLock.RUnlock()
 
 	// Read metadata associated with the object from all disks.
 	metaArr, errs := readAllXLMetadata(xl.storageDisks, bucket, object)
@@ -223,18 +213,9 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 
 // GetObjectInfo - reads object metadata and replies back ObjectInfo.
 func (xl xlObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
-	// Verify if bucket is valid.
-	if !IsValidBucketName(bucket) {
-		return ObjectInfo{}, BucketNameInvalid{Bucket: bucket}
+	if err := checkGetObjArgs(bucket, object); err != nil {
+		return ObjectInfo{}, err
 	}
-	// Verify if object is valid.
-	if !IsValidObjectName(object) {
-		return ObjectInfo{}, ObjectNameInvalid{Bucket: bucket, Object: object}
-	}
-
-	objectLock := nsMutex.NewNSLock(bucket, object)
-	objectLock.RLock()
-	defer objectLock.RUnlock()
 
 	info, err := xl.getObjectInfo(bucket, object)
 	if err != nil {
@@ -365,19 +346,8 @@ func renameObject(disks []StorageAPI, srcBucket, srcObject, dstBucket, dstObject
 // writes `xl.json` which carries the necessary metadata for future
 // object operations.
 func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (objInfo ObjectInfo, err error) {
-	// Verify if bucket is valid.
-	if !IsValidBucketName(bucket) {
-		return ObjectInfo{}, traceError(BucketNameInvalid{Bucket: bucket})
-	}
-	// Verify bucket exists.
-	if !xl.isBucketExist(bucket) {
-		return ObjectInfo{}, traceError(BucketNotFound{Bucket: bucket})
-	}
-	if !IsValidObjectName(object) {
-		return ObjectInfo{}, traceError(ObjectNameInvalid{
-			Bucket: bucket,
-			Object: object,
-		})
+	if err = checkPutObjectArgs(bucket, object, xl); err != nil {
+		return ObjectInfo{}, err
 	}
 	// No metadata is set, allocate a new one.
 	if metadata == nil {
@@ -506,11 +476,6 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 		}
 	}
 
-	// Lock the object.
-	objectLock := nsMutex.NewNSLock(bucket, object)
-	objectLock.Lock()
-	defer objectLock.Unlock()
-
 	// Check if an object is present as one of the parent dir.
 	// -- FIXME. (needs a new kind of lock).
 	if xl.parentDirIsObject(bucket, path.Dir(object)) {
@@ -623,17 +588,9 @@ func (xl xlObjects) deleteObject(bucket, object string) error {
 // any error as it is not necessary for the handler to reply back a
 // response to the client request.
 func (xl xlObjects) DeleteObject(bucket, object string) (err error) {
-	// Verify if bucket is valid.
-	if !IsValidBucketName(bucket) {
-		return traceError(BucketNameInvalid{Bucket: bucket})
+	if err = checkDelObjArgs(bucket, object); err != nil {
+		return err
 	}
-	if !IsValidObjectName(object) {
-		return traceError(ObjectNameInvalid{Bucket: bucket, Object: object})
-	}
-
-	objectLock := nsMutex.NewNSLock(bucket, object)
-	objectLock.Lock()
-	defer objectLock.Unlock()
 
 	// Validate object exists.
 	if !xl.isObject(bucket, object) {
@@ -646,8 +603,10 @@ func (xl xlObjects) DeleteObject(bucket, object string) (err error) {
 		return toObjectErr(err, bucket, object)
 	}
 
-	// Delete from the cache.
-	xl.objCache.Delete(pathJoin(bucket, object))
+	if xl.objCacheEnabled {
+		// Delete from the cache.
+		xl.objCache.Delete(pathJoin(bucket, object))
+	}
 
 	// Success.
 	return nil

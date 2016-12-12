@@ -201,6 +201,13 @@ func retryFormattingDisks(firstDisk bool, endpoints []*url.URL, storageDisks []S
 	// Indicate to our routine to exit cleanly upon return.
 	defer close(doneCh)
 
+	// prepare getElapsedTime() to calculate elapsed time since we started trying formatting disks.
+	// All times are rounded to avoid showing milli, micro and nano seconds
+	formatStartTime := time.Now().Round(time.Second)
+	getElapsedTime := func() string {
+		return time.Now().Round(time.Second).Sub(formatStartTime).String()
+	}
+
 	// Wait on the jitter retry loop.
 	retryTimerCh := newRetryTimer(time.Second, time.Second*30, MaxJitter, doneCh)
 	for {
@@ -213,51 +220,59 @@ func retryFormattingDisks(firstDisk bool, endpoints []*url.URL, storageDisks []S
 				// for disks not being available.
 				printRetryMsg(sErrs, storageDisks)
 			}
-			// Check if this is a XL or distributed XL, anything > 1 is considered XL backend.
-			if len(formatConfigs) > 1 {
-				switch prepForInitXL(firstDisk, sErrs, len(storageDisks)) {
-				case Abort:
-					return errCorruptedFormat
-				case FormatDisks:
-					console.Eraseline()
-					printFormatMsg(endpoints, storageDisks, printOnceFn())
-					return initFormatXL(storageDisks)
-				case InitObjectLayer:
-					console.Eraseline()
-					// Validate formats load before proceeding forward.
-					err := genericFormatCheck(formatConfigs, sErrs)
-					if err == nil {
-						printRegularMsg(endpoints, storageDisks, printOnceFn())
+			if len(formatConfigs) == 1 {
+				err := genericFormatCheckFS(formatConfigs[0], sErrs[0])
+				if err != nil {
+					if err == errUnformattedDisk {
+						return initFormatFS(storageDisks[0])
 					}
 					return err
-				case WaitForHeal:
-					// Validate formats load before proceeding forward.
-					err := genericFormatCheck(formatConfigs, sErrs)
-					if err == nil {
-						printHealMsg(endpoints, storageDisks, printOnceFn())
-					}
-					return err
-				case WaitForQuorum:
-					console.Printf(
-						"Initializing data volume. Waiting for minimum %d servers to come online.\n",
-						len(storageDisks)/2+1,
-					)
-				case WaitForConfig:
-					// Print configuration errors.
-					printConfigErrMsg(storageDisks, sErrs, printOnceFn())
-				case WaitForAll:
-					console.Println("Initializing data volume for first time. Waiting for other servers to come online")
-				case WaitForFormatting:
-					console.Println("Initializing data volume for first time. Waiting for first server to come online")
 				}
-				continue
-			} // else We have FS backend now. Check fs format as well now.
-			if isFormatFound(formatConfigs) {
+				return nil
+			} // Check if this is a XL or distributed XL, anything > 1 is considered XL backend.
+			// Pre-emptively check if one of the formatted disks
+			// is invalid. This function returns success for the
+			// most part unless one of the formats is not consistent
+			// with expected XL format. For example if a user is trying
+			// to pool FS backend.
+			if err := checkFormatXLValues(formatConfigs); err != nil {
+				return err
+			}
+			switch prepForInitXL(firstDisk, sErrs, len(storageDisks)) {
+			case Abort:
+				return errCorruptedFormat
+			case FormatDisks:
 				console.Eraseline()
-				// Validate formats load before proceeding forward.
-				return genericFormatCheck(formatConfigs, sErrs)
-			} // else initialize the format for FS.
-			return initFormatFS(storageDisks[0])
+				printFormatMsg(endpoints, storageDisks, printOnceFn())
+				return initFormatXL(storageDisks)
+			case InitObjectLayer:
+				console.Eraseline()
+				// Validate formats loaded before proceeding forward.
+				err := genericFormatCheckXL(formatConfigs, sErrs)
+				if err == nil {
+					printRegularMsg(endpoints, storageDisks, printOnceFn())
+				}
+				return err
+			case WaitForHeal:
+				// Validate formats loaded before proceeding forward.
+				err := genericFormatCheckXL(formatConfigs, sErrs)
+				if err == nil {
+					printHealMsg(endpoints, storageDisks, printOnceFn())
+				}
+				return err
+			case WaitForQuorum:
+				console.Printf(
+					"Initializing data volume. Waiting for minimum %d servers to come online. (elapsed %s)\n",
+					len(storageDisks)/2+1, getElapsedTime(),
+				)
+			case WaitForConfig:
+				// Print configuration errors.
+				printConfigErrMsg(storageDisks, sErrs, printOnceFn())
+			case WaitForAll:
+				console.Printf("Initializing data volume for first time. Waiting for other servers to come online (elapsed %s)\n", getElapsedTime())
+			case WaitForFormatting:
+				console.Printf("Initializing data volume for first time. Waiting for first server to come online (elapsed %s)\n", getElapsedTime())
+			}
 		case <-globalServiceDoneCh:
 			return errors.New("Initializing data volumes gracefully stopped")
 		}

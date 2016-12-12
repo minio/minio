@@ -206,23 +206,24 @@ func loadAllFormats(bootstrapDisks []StorageAPI) ([]*formatConfigV1, []error) {
 	return formatConfigs, sErrs
 }
 
-// genericFormatCheck - validates and returns error.
+// genericFormatCheckFS - validates format config and returns an error if any.
+func genericFormatCheckFS(formatConfig *formatConfigV1, sErr error) (err error) {
+	if sErr != nil {
+		return sErr
+	}
+	// Successfully read, validate if FS.
+	if !isFSFormat(formatConfig) {
+		return errFSDiskFormat
+	}
+	return nil
+}
+
+// genericFormatCheckXL - validates and returns error.
 // if (no quorum) return error
 // if (any disk is corrupt) return error // phase2
 // if (jbod inconsistent) return error // phase2
 // if (disks not recognized) // Always error.
-func genericFormatCheck(formatConfigs []*formatConfigV1, sErrs []error) (err error) {
-	if len(formatConfigs) == 1 {
-		// Successfully read, validate further.
-		if sErrs[0] == nil {
-			if !isFSFormat(formatConfigs[0]) {
-				return errFSDiskFormat
-			}
-			return nil
-		} // Returns error here.
-		return sErrs[0]
-	}
-
+func genericFormatCheckXL(formatConfigs []*formatConfigV1, sErrs []error) (err error) {
 	// Calculate the errors.
 	var (
 		errCorruptFormatCount = 0
@@ -248,12 +249,12 @@ func genericFormatCheck(formatConfigs []*formatConfigV1, sErrs []error) (err err
 	// Calculate read quorum.
 	readQuorum := len(formatConfigs) / 2
 
-	// Validate the err count under tolerant limit.
+	// Validate the err count under read quorum.
 	if errCount > len(formatConfigs)-readQuorum {
 		return errXLReadQuorum
 	}
 
-	// Check if number of corrupted format under quorum
+	// Check if number of corrupted format under read quorum
 	if errCorruptFormatCount > len(formatConfigs)-readQuorum {
 		return errCorruptedFormat
 	}
@@ -793,8 +794,7 @@ func loadFormatXL(bootstrapDisks []StorageAPI, readQuorum int) (disks []StorageA
 	return reorderDisks(bootstrapDisks, formatConfigs)
 }
 
-// checkFormatXL - verifies if format.json format is intact.
-func checkFormatXL(formatConfigs []*formatConfigV1) error {
+func checkFormatXLValues(formatConfigs []*formatConfigV1) error {
 	for _, formatXL := range formatConfigs {
 		if formatXL == nil {
 			continue
@@ -812,6 +812,14 @@ func checkFormatXL(formatConfigs []*formatConfigV1) error {
 		if len(formatConfigs) != len(formatXL.XL.JBOD) {
 			return fmt.Errorf("Number of disks %d did not match the backend format %d", len(formatConfigs), len(formatXL.XL.JBOD))
 		}
+	}
+	return nil
+}
+
+// checkFormatXL - verifies if format.json format is intact.
+func checkFormatXL(formatConfigs []*formatConfigV1) error {
+	if err := checkFormatXLValues(formatConfigs); err != nil {
+		return err
 	}
 	if err := checkJBODConsistency(formatConfigs); err != nil {
 		return err

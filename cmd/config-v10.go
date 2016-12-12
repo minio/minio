@@ -23,8 +23,11 @@ import (
 	"github.com/minio/minio/pkg/quick"
 )
 
+// Read Write mutex for safe access to ServerConfig.
+var serverConfigMu sync.RWMutex
+
 // serverConfigV10 server configuration version '10' which is like version '9'
-// except it drops support of syslog config
+// except it drops support of syslog config.
 type serverConfigV10 struct {
 	Version string `json:"version"`
 
@@ -37,9 +40,6 @@ type serverConfigV10 struct {
 
 	// Notification queue configuration.
 	Notify notifier `json:"notify"`
-
-	// Read Write mutex.
-	rwMutex *sync.RWMutex
 }
 
 // initConfig - initialize server config and indicate if we are creating a new file or we are just loading
@@ -68,16 +68,18 @@ func initConfig() (bool, error) {
 		srvCfg.Notify.NATS["1"] = natsNotify{}
 		srvCfg.Notify.PostgreSQL = make(map[string]postgreSQLNotify)
 		srvCfg.Notify.PostgreSQL["1"] = postgreSQLNotify{}
-		srvCfg.rwMutex = &sync.RWMutex{}
 
 		// Create config path.
 		err := createConfigPath()
 		if err != nil {
 			return false, err
 		}
-
+		// hold the mutex lock before a new config is assigned.
 		// Save the new config globally.
+		// unlock the mutex.
+		serverConfigMu.Lock()
 		serverConfig = srvCfg
+		serverConfigMu.Unlock()
 
 		// Save config into file.
 		return true, serverConfig.Save()
@@ -91,7 +93,6 @@ func initConfig() (bool, error) {
 	}
 	srvCfg := &serverConfigV10{}
 	srvCfg.Version = globalMinioConfigVersion
-	srvCfg.rwMutex = &sync.RWMutex{}
 	qc, err := quick.New(srvCfg)
 	if err != nil {
 		return false, err
@@ -99,8 +100,12 @@ func initConfig() (bool, error) {
 	if err := qc.Load(configFile); err != nil {
 		return false, err
 	}
+
+	// hold the mutex lock before a new config is assigned.
+	serverConfigMu.Lock()
 	// Save the loaded config globally.
 	serverConfig = srvCfg
+	serverConfigMu.Unlock()
 	// Set the version properly after the unmarshalled json is loaded.
 	serverConfig.Version = globalMinioConfigVersion
 
@@ -112,168 +117,191 @@ var serverConfig *serverConfigV10
 
 // GetVersion get current config version.
 func (s serverConfigV10) GetVersion() string {
-	s.rwMutex.RLock()
-	defer s.rwMutex.RUnlock()
+	serverConfigMu.RLock()
+	defer serverConfigMu.RUnlock()
+
 	return s.Version
 }
 
 /// Logger related.
 
 func (s *serverConfigV10) SetAMQPNotifyByID(accountID string, amqpn amqpNotify) {
-	s.rwMutex.Lock()
-	defer s.rwMutex.Unlock()
+	serverConfigMu.Lock()
+	defer serverConfigMu.Unlock()
+
 	s.Notify.AMQP[accountID] = amqpn
 }
 
 func (s serverConfigV10) GetAMQP() map[string]amqpNotify {
-	s.rwMutex.RLock()
-	defer s.rwMutex.RUnlock()
+	serverConfigMu.RLock()
+	defer serverConfigMu.RUnlock()
+
 	return s.Notify.AMQP
 }
 
 // GetAMQPNotify get current AMQP logger.
 func (s serverConfigV10) GetAMQPNotifyByID(accountID string) amqpNotify {
-	s.rwMutex.RLock()
-	defer s.rwMutex.RUnlock()
+	serverConfigMu.RLock()
+	defer serverConfigMu.RUnlock()
+
 	return s.Notify.AMQP[accountID]
 }
 
 //
 func (s *serverConfigV10) SetNATSNotifyByID(accountID string, natsn natsNotify) {
-	s.rwMutex.Lock()
-	defer s.rwMutex.Unlock()
+	serverConfigMu.Lock()
+	defer serverConfigMu.Unlock()
+
 	s.Notify.NATS[accountID] = natsn
 }
 
 func (s serverConfigV10) GetNATS() map[string]natsNotify {
-	s.rwMutex.RLock()
-	defer s.rwMutex.RUnlock()
+	serverConfigMu.RLock()
+	defer serverConfigMu.RUnlock()
 	return s.Notify.NATS
 }
 
 // GetNATSNotify get current NATS logger.
 func (s serverConfigV10) GetNATSNotifyByID(accountID string) natsNotify {
-	s.rwMutex.RLock()
-	defer s.rwMutex.RUnlock()
+	serverConfigMu.RLock()
+	defer serverConfigMu.RUnlock()
+
 	return s.Notify.NATS[accountID]
 }
 
 func (s *serverConfigV10) SetElasticSearchNotifyByID(accountID string, esNotify elasticSearchNotify) {
-	s.rwMutex.Lock()
-	defer s.rwMutex.Unlock()
+	serverConfigMu.Lock()
+	defer serverConfigMu.Unlock()
+
 	s.Notify.ElasticSearch[accountID] = esNotify
 }
 
 func (s serverConfigV10) GetElasticSearch() map[string]elasticSearchNotify {
-	s.rwMutex.RLock()
-	defer s.rwMutex.RUnlock()
+	serverConfigMu.RLock()
+	defer serverConfigMu.RUnlock()
+
 	return s.Notify.ElasticSearch
 }
 
 // GetElasticSearchNotify get current ElasicSearch logger.
 func (s serverConfigV10) GetElasticSearchNotifyByID(accountID string) elasticSearchNotify {
-	s.rwMutex.RLock()
-	defer s.rwMutex.RUnlock()
+	serverConfigMu.RLock()
+	defer serverConfigMu.RUnlock()
+
 	return s.Notify.ElasticSearch[accountID]
 }
 
 func (s *serverConfigV10) SetRedisNotifyByID(accountID string, rNotify redisNotify) {
-	s.rwMutex.Lock()
-	defer s.rwMutex.Unlock()
+	serverConfigMu.Lock()
+	defer serverConfigMu.Unlock()
+
 	s.Notify.Redis[accountID] = rNotify
 }
 
 func (s serverConfigV10) GetRedis() map[string]redisNotify {
-	s.rwMutex.RLock()
-	defer s.rwMutex.RUnlock()
+	serverConfigMu.RLock()
+	defer serverConfigMu.RUnlock()
+
 	return s.Notify.Redis
 }
 
 // GetRedisNotify get current Redis logger.
 func (s serverConfigV10) GetRedisNotifyByID(accountID string) redisNotify {
-	s.rwMutex.RLock()
-	defer s.rwMutex.RUnlock()
+	serverConfigMu.RLock()
+	defer serverConfigMu.RUnlock()
+
 	return s.Notify.Redis[accountID]
 }
 
 func (s *serverConfigV10) SetPostgreSQLNotifyByID(accountID string, pgn postgreSQLNotify) {
-	s.rwMutex.Lock()
-	defer s.rwMutex.Unlock()
+	serverConfigMu.Lock()
+	defer serverConfigMu.Unlock()
+
 	s.Notify.PostgreSQL[accountID] = pgn
 }
 
 func (s serverConfigV10) GetPostgreSQL() map[string]postgreSQLNotify {
-	s.rwMutex.RLock()
-	defer s.rwMutex.RUnlock()
+	serverConfigMu.RLock()
+	defer serverConfigMu.RUnlock()
+
 	return s.Notify.PostgreSQL
 }
 
 func (s serverConfigV10) GetPostgreSQLNotifyByID(accountID string) postgreSQLNotify {
-	s.rwMutex.RLock()
-	defer s.rwMutex.RUnlock()
+	serverConfigMu.RLock()
+	defer serverConfigMu.RUnlock()
+
 	return s.Notify.PostgreSQL[accountID]
 }
 
 // SetFileLogger set new file logger.
 func (s *serverConfigV10) SetFileLogger(flogger fileLogger) {
-	s.rwMutex.Lock()
-	defer s.rwMutex.Unlock()
+	serverConfigMu.Lock()
+	defer serverConfigMu.Unlock()
+
 	s.Logger.File = flogger
 }
 
 // GetFileLogger get current file logger.
 func (s serverConfigV10) GetFileLogger() fileLogger {
-	s.rwMutex.RLock()
-	defer s.rwMutex.RUnlock()
+	serverConfigMu.RLock()
+	defer serverConfigMu.RUnlock()
+
 	return s.Logger.File
 }
 
 // SetConsoleLogger set new console logger.
 func (s *serverConfigV10) SetConsoleLogger(clogger consoleLogger) {
-	s.rwMutex.Lock()
-	defer s.rwMutex.Unlock()
+	serverConfigMu.Lock()
+	defer serverConfigMu.Unlock()
+
 	s.Logger.Console = clogger
 }
 
 // GetConsoleLogger get current console logger.
 func (s serverConfigV10) GetConsoleLogger() consoleLogger {
-	s.rwMutex.RLock()
-	defer s.rwMutex.RUnlock()
+	serverConfigMu.RLock()
+	defer serverConfigMu.RUnlock()
+
 	return s.Logger.Console
 }
 
 // SetRegion set new region.
 func (s *serverConfigV10) SetRegion(region string) {
-	s.rwMutex.Lock()
-	defer s.rwMutex.Unlock()
+	serverConfigMu.Lock()
+	defer serverConfigMu.Unlock()
+
 	s.Region = region
 }
 
 // GetRegion get current region.
 func (s serverConfigV10) GetRegion() string {
-	s.rwMutex.RLock()
-	defer s.rwMutex.RUnlock()
+	serverConfigMu.RLock()
+	defer serverConfigMu.RUnlock()
+
 	return s.Region
 }
 
 // SetCredentials set new credentials.
 func (s *serverConfigV10) SetCredential(creds credential) {
-	s.rwMutex.Lock()
-	defer s.rwMutex.Unlock()
+	serverConfigMu.Lock()
+	defer serverConfigMu.Unlock()
+
 	s.Credential = creds
 }
 
 // GetCredentials get current credentials.
 func (s serverConfigV10) GetCredential() credential {
-	s.rwMutex.RLock()
-	defer s.rwMutex.RUnlock()
+	serverConfigMu.RLock()
+	defer serverConfigMu.RUnlock()
+
 	return s.Credential
 }
 
 // Save config.
 func (s serverConfigV10) Save() error {
-	s.rwMutex.RLock()
-	defer s.rwMutex.RUnlock()
+	serverConfigMu.RLock()
+	defer serverConfigMu.RUnlock()
 
 	// get config file.
 	configFile, err := getConfigFile()

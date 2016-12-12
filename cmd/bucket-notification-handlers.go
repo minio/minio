@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"path"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -174,7 +173,7 @@ func PutBucketNotificationConfig(bucket string, ncfg *notificationConfig, objAPI
 
 	// Acquire a write lock on bucket before modifying its
 	// configuration.
-	bucketLock := nsMutex.NewNSLock(bucket, "")
+	bucketLock := globalNSMutex.NewNSLock(bucket, "")
 	bucketLock.Lock()
 	// Release lock after notifying peers
 	defer bucketLock.Unlock()
@@ -381,7 +380,7 @@ func AddBucketListenerConfig(bucket string, lcfg *listenerConfig, objAPI ObjectL
 
 	// Acquire a write lock on bucket before modifying its
 	// configuration.
-	bucketLock := nsMutex.NewNSLock(bucket, "")
+	bucketLock := globalNSMutex.NewNSLock(bucket, "")
 	bucketLock.Lock()
 	// Release lock after notifying peers
 	defer bucketLock.Unlock()
@@ -423,7 +422,7 @@ func RemoveBucketListenerConfig(bucket string, lcfg *listenerConfig, objAPI Obje
 
 	// Acquire a write lock on bucket before modifying its
 	// configuration.
-	bucketLock := nsMutex.NewNSLock(bucket, "")
+	bucketLock := globalNSMutex.NewNSLock(bucket, "")
 	bucketLock.Lock()
 	// Release lock after notifying peers
 	defer bucketLock.Unlock()
@@ -440,15 +439,4 @@ func RemoveBucketListenerConfig(bucket string, lcfg *listenerConfig, objAPI Obje
 	// persistence success - now update in-memory globals on all
 	// peers (including local)
 	S3PeersUpdateBucketListener(bucket, updatedLcfgs)
-}
-
-// Removes notification.xml for a given bucket, only used during DeleteBucket.
-func removeNotificationConfig(bucket string, objAPI ObjectLayer) error {
-	// Verify bucket is valid.
-	if !IsValidBucketName(bucket) {
-		return BucketNameInvalid{Bucket: bucket}
-	}
-
-	notificationConfigPath := path.Join(bucketConfigPrefix, bucket, bucketNotificationConfig)
-	return objAPI.DeleteObject(minioMetaBucket, notificationConfigPath)
 }

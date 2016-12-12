@@ -664,36 +664,58 @@ func TestReduceFormatErrs(t *testing.T) {
 	}
 }
 
-// Tests for genericFormatCheck()
-func TestGenericFormatCheck(t *testing.T) {
+// Tests for genericFormatCheckFS()
+func TestGenericFormatCheckFS(t *testing.T) {
+	// Generate format configs for XL.
+	formatConfigs := genFormatXLInvalidJBOD()
+
+	// Validate disk format is fs, should fail.
+	if err := genericFormatCheckFS(formatConfigs[0], nil); err != errFSDiskFormat {
+		t.Fatalf("Unexpected error, expected %s, got %s", errFSDiskFormat, err)
+	}
+
+	// Validate disk is unformatted, should fail.
+	if err := genericFormatCheckFS(nil, errUnformattedDisk); err != errUnformattedDisk {
+		t.Fatalf("Unexpected error, expected %s, got %s", errUnformattedDisk, err)
+	}
+
+	// Validate when disk is in FS format.
+	format := newFSFormatV1()
+	if err := genericFormatCheckFS(format, nil); err != nil {
+		t.Fatalf("Unexpected error should pass, failed with %s", err)
+	}
+}
+
+// Tests for genericFormatCheckXL()
+func TestGenericFormatCheckXL(t *testing.T) {
 	var errs []error
 	formatConfigs := genFormatXLInvalidJBOD()
 
 	// Some disks has corrupted formats, one faulty disk
 	errs = []error{nil, nil, errCorruptedFormat, errCorruptedFormat, errCorruptedFormat, errCorruptedFormat,
 		errCorruptedFormat, errFaultyDisk}
-	if err := genericFormatCheck(formatConfigs, errs); err != errCorruptedFormat {
+	if err := genericFormatCheckXL(formatConfigs, errs); err != errCorruptedFormat {
 		t.Fatal("Got unexpected err: ", err)
 	}
 
 	// Many faulty disks
 	errs = []error{nil, nil, errFaultyDisk, errFaultyDisk, errFaultyDisk, errFaultyDisk,
 		errCorruptedFormat, errFaultyDisk}
-	if err := genericFormatCheck(formatConfigs, errs); err != errXLReadQuorum {
+	if err := genericFormatCheckXL(formatConfigs, errs); err != errXLReadQuorum {
 		t.Fatal("Got unexpected err: ", err)
 	}
 
 	// All formats successfully loaded
 	errs = []error{nil, nil, nil, nil, nil, nil, nil, nil}
-	if err := genericFormatCheck(formatConfigs, errs); err == nil {
+	if err := genericFormatCheckXL(formatConfigs, errs); err == nil {
 		t.Fatalf("Should fail here")
 	}
 	errs = []error{nil}
-	if err := genericFormatCheck([]*formatConfigV1{genFormatFS()}, errs); err != nil {
-		t.Fatal("Got unexpected err: ", err)
+	if err := genericFormatCheckXL([]*formatConfigV1{genFormatFS()}, errs); err == nil {
+		t.Fatalf("Should fail here")
 	}
 	errs = []error{errFaultyDisk}
-	if err := genericFormatCheck([]*formatConfigV1{genFormatFS()}, errs); err == nil {
+	if err := genericFormatCheckXL([]*formatConfigV1{genFormatFS()}, errs); err == nil {
 		t.Fatalf("Should fail here")
 	}
 }

@@ -27,7 +27,7 @@ import (
 )
 
 // Helper to generate integer sequences into a friendlier user consumable format.
-func int2Str(i int, t int) string {
+func formatInts(i int, t int) string {
 	if i < 10 {
 		if t < 10 {
 			return fmt.Sprintf("0%d/0%d", i, t)
@@ -111,7 +111,7 @@ func getHealMsg(endpoints []*url.URL, storageDisks []StorageAPI) string {
 		}
 		msg += fmt.Sprintf(
 			"\n[%s] %s - %s %s",
-			int2Str(i+1, len(storageDisks)),
+			formatInts(i+1, len(storageDisks)),
 			endpoints[i],
 			humanize.IBytes(uint64(info.Total)),
 			func() string {
@@ -141,7 +141,7 @@ func getStorageInitMsg(titleMsg string, endpoints []*url.URL, storageDisks []Sto
 		}
 		msg += fmt.Sprintf(
 			"\n[%s] %s - %s %s",
-			int2Str(i+1, len(storageDisks)),
+			formatInts(i+1, len(storageDisks)),
 			endpoints[i],
 			humanize.IBytes(uint64(info.Total)),
 			func() string {
@@ -178,7 +178,7 @@ func getConfigErrMsg(storageDisks []StorageAPI, sErrs []error) string {
 		}
 		msg += fmt.Sprintf(
 			"\n[%s] %s : %s",
-			int2Str(i+1, len(storageDisks)),
+			formatInts(i+1, len(storageDisks)),
 			storageDisks[i],
 			sErrs[i],
 		)

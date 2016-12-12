@@ -16,26 +16,6 @@
 
 package cmd
 
-import "time"
-
-func (s3 *s3PeerAPIHandlers) LoginHandler(args *RPCLoginArgs, reply *RPCLoginReply) error {
-	jwt, err := newJWT(defaultInterNodeJWTExpiry, serverConfig.GetCredential())
-	if err != nil {
-		return err
-	}
-	if err = jwt.Authenticate(args.Username, args.Password); err != nil {
-		return err
-	}
-	token, err := jwt.GenerateToken(args.Username)
-	if err != nil {
-		return err
-	}
-	reply.Token = token
-	reply.ServerVersion = Version
-	reply.Timestamp = time.Now().UTC()
-	return nil
-}
-
 // SetBucketNotificationPeerArgs - Arguments collection to SetBucketNotificationPeer RPC
 // call
 type SetBucketNotificationPeerArgs struct {
@@ -46,6 +26,13 @@ type SetBucketNotificationPeerArgs struct {
 
 	// Notification config for the given bucket.
 	NCfg *notificationConfig
+}
+
+// BucketUpdate - implements bucket notification updates,
+// the underlying operation is a network call updates all
+// the peers participating in bucket notification.
+func (s *SetBucketNotificationPeerArgs) BucketUpdate(client BucketMetaState) error {
+	return client.UpdateBucketNotification(s)
 }
 
 func (s3 *s3PeerAPIHandlers) SetBucketNotificationPeer(args *SetBucketNotificationPeerArgs, reply *GenericReply) error {
@@ -66,6 +53,13 @@ type SetBucketListenerPeerArgs struct {
 
 	// Listener config for a given bucket.
 	LCfg []listenerConfig
+}
+
+// BucketUpdate - implements bucket listener updates,
+// the underlying operation is a network call updates all
+// the peers participating in listen bucket notification.
+func (s *SetBucketListenerPeerArgs) BucketUpdate(client BucketMetaState) error {
+	return client.UpdateBucketListener(s)
 }
 
 func (s3 *s3PeerAPIHandlers) SetBucketListenerPeer(args *SetBucketListenerPeerArgs, reply *GenericReply) error {
@@ -108,6 +102,13 @@ type SetBucketPolicyPeerArgs struct {
 
 	// Policy change (serialized to JSON)
 	PChBytes []byte
+}
+
+// BucketUpdate - implements bucket policy updates,
+// the underlying operation is a network call updates all
+// the peers participating for new set/unset policies.
+func (s *SetBucketPolicyPeerArgs) BucketUpdate(client BucketMetaState) error {
+	return client.UpdateBucketPolicy(s)
 }
 
 // tell receiving server to update a bucket policy

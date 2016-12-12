@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -148,72 +147,70 @@ func checkMainSyntax(c *cli.Context) {
 	}
 }
 
+// Check for updates and print a notification message
+func checkUpdate() {
+	// Do not print update messages, if quiet flag is set.
+	if !globalQuiet {
+		updateMsg, _, err := getReleaseUpdate(minioUpdateStableURL, 1*time.Second)
+		if err != nil {
+			// Ignore any errors during getReleaseUpdate(), possibly
+			// because of network errors.
+			return
+		}
+		if updateMsg.Update {
+			console.Println(updateMsg)
+		}
+	}
+}
+
+// Generic Minio initialization to create/load config, prepare loggers, etc..
+func minioInit() {
+	// Sets new config directory.
+	setGlobalConfigPath(globalConfigDir)
+
+	// Migrate any old version of config / state files to newer format.
+	migrate()
+
+	// Initialize config.
+	configCreated, err := initConfig()
+	if err != nil {
+		console.Fatalf("Unable to initialize minio config. Err: %s.\n", err)
+	}
+	if configCreated {
+		console.Println("Created minio configuration file at " + mustGetConfigPath())
+	}
+
+	// Enable all loggers by now so we can use errorIf() and fatalIf()
+	enableLoggers()
+
+	// Fetch access keys from environment variables and update the config.
+	accessKey := os.Getenv("MINIO_ACCESS_KEY")
+	secretKey := os.Getenv("MINIO_SECRET_KEY")
+	if accessKey != "" && secretKey != "" {
+		// Set new credentials.
+		serverConfig.SetCredential(credential{
+			AccessKeyID:     accessKey,
+			SecretAccessKey: secretKey,
+		})
+	}
+	if !isValidAccessKey(serverConfig.GetCredential().AccessKeyID) {
+		fatalIf(errInvalidArgument, "Invalid access key. Accept only a string starting with a alphabetic and containing from 5 to 20 characters.")
+	}
+	if !isValidSecretKey(serverConfig.GetCredential().SecretAccessKey) {
+		fatalIf(errInvalidArgument, "Invalid secret key. Accept only a string containing from 8 to 40 characters.")
+	}
+
+	// Init the error tracing module.
+	initError()
+
+}
+
 // Main main for minio server.
 func Main() {
 	app := registerApp()
 	app.Before = func(c *cli.Context) error {
-		configDir := c.GlobalString("config-dir")
-		if configDir == "" {
-			fatalIf(errors.New("Config directory is empty"), "Unable to get config file.")
-		}
-		// Sets new config directory.
-		setGlobalConfigPath(configDir)
-
 		// Valid input arguments to main.
 		checkMainSyntax(c)
-
-		// Migrate any old version of config / state files to newer format.
-		migrate()
-
-		// Initialize config.
-		configCreated, err := initConfig()
-		if err != nil {
-			console.Fatalf("Unable to initialize minio config. Err: %s.\n", err)
-		}
-		if configCreated {
-			console.Println("Created minio configuration file at " + mustGetConfigPath())
-		}
-
-		// Enable all loggers by now so we can use errorIf() and fatalIf()
-		enableLoggers()
-
-		// Fetch access keys from environment variables and update the config.
-		accessKey := os.Getenv("MINIO_ACCESS_KEY")
-		secretKey := os.Getenv("MINIO_SECRET_KEY")
-		if accessKey != "" && secretKey != "" {
-			// Set new credentials.
-			serverConfig.SetCredential(credential{
-				AccessKeyID:     accessKey,
-				SecretAccessKey: secretKey,
-			})
-		}
-		if !isValidAccessKey(serverConfig.GetCredential().AccessKeyID) {
-			fatalIf(errInvalidArgument, "Invalid access key. Accept only a string starting with a alphabetic and containing from 5 to 20 characters.")
-		}
-		if !isValidSecretKey(serverConfig.GetCredential().SecretAccessKey) {
-			fatalIf(errInvalidArgument, "Invalid secret key. Accept only a string containing from 8 to 40 characters.")
-		}
-
-		// Init the error tracing module.
-		initError()
-
-		// Set global quiet flag.
-		globalQuiet = c.Bool("quiet") || c.GlobalBool("quiet")
-
-		// Do not print update messages, if quiet flag is set.
-		if !globalQuiet {
-			if c.Args().Get(0) != "update" {
-				updateMsg, _, err := getReleaseUpdate(minioUpdateStableURL, 1*time.Second)
-				if err != nil {
-					// Ignore any errors during getReleaseUpdate(), possibly
-					// because of network errors.
-					return nil
-				}
-				if updateMsg.Update {
-					console.Println(updateMsg)
-				}
-			}
-		}
 		return nil
 	}
 

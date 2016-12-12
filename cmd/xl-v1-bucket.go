@@ -36,10 +36,6 @@ func (xl xlObjects) MakeBucket(bucket string) error {
 		return traceError(BucketNameInvalid{Bucket: bucket})
 	}
 
-	bucketLock := nsMutex.NewNSLock(bucket, "")
-	bucketLock.Lock()
-	defer bucketLock.Unlock()
-
 	// Initialize sync waitgroup.
 	var wg = &sync.WaitGroup{}
 
@@ -146,29 +142,12 @@ func (xl xlObjects) getBucketInfo(bucketName string) (bucketInfo BucketInfo, err
 	return BucketInfo{}, err
 }
 
-// Checks whether bucket exists.
-func (xl xlObjects) isBucketExist(bucket string) bool {
-	// Check whether bucket exists.
-	_, err := xl.getBucketInfo(bucket)
-	if err != nil {
-		if err == errVolumeNotFound {
-			return false
-		}
-		return false
-	}
-	return true
-}
-
 // GetBucketInfo - returns BucketInfo for a bucket.
 func (xl xlObjects) GetBucketInfo(bucket string) (BucketInfo, error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
 		return BucketInfo{}, BucketNameInvalid{Bucket: bucket}
 	}
-
-	bucketLock := nsMutex.NewNSLock(bucket, "")
-	bucketLock.RLock()
-	defer bucketLock.RUnlock()
 
 	bucketInfo, err := xl.getBucketInfo(bucket)
 	if err != nil {
@@ -239,10 +218,6 @@ func (xl xlObjects) DeleteBucket(bucket string) error {
 	if !IsValidBucketName(bucket) {
 		return BucketNameInvalid{Bucket: bucket}
 	}
-
-	bucketLock := nsMutex.NewNSLock(bucket, "")
-	bucketLock.Lock()
-	defer bucketLock.Unlock()
 
 	// Collect if all disks report volume not found.
 	var wg = &sync.WaitGroup{}

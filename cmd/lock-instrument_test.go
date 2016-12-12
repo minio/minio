@@ -119,26 +119,26 @@ func verifyRPCLockInfoResponse(l lockStateCase, rpcLockInfoMap map[string]*Syste
 	}
 }
 
-// Asserts the lock counter from the global nsMutex inmemory lock with the expected one.
+// Asserts the lock counter from the global globalNSMutex inmemory lock with the expected one.
 func verifyGlobalLockStats(l lockStateCase, t *testing.T, testNum int) {
-	nsMutex.lockMapMutex.Lock()
+	globalNSMutex.lockMapMutex.Lock()
 
 	// Verifying the lock stats.
-	if nsMutex.globalLockCounter != int64(l.expectedGlobalLockCount) {
+	if globalNSMutex.globalLockCounter != int64(l.expectedGlobalLockCount) {
 		t.Errorf("Test %d: Expected the global lock counter to be %v, but got %v", testNum, int64(l.expectedGlobalLockCount),
-			nsMutex.globalLockCounter)
+			globalNSMutex.globalLockCounter)
 	}
 	// verify the count for total blocked locks.
-	if nsMutex.blockedCounter != int64(l.expectedBlockedLockCount) {
+	if globalNSMutex.blockedCounter != int64(l.expectedBlockedLockCount) {
 		t.Errorf("Test %d: Expected the total blocked lock counter to be %v, but got %v", testNum, int64(l.expectedBlockedLockCount),
-			nsMutex.blockedCounter)
+			globalNSMutex.blockedCounter)
 	}
 	// verify the count for total running locks.
-	if nsMutex.runningLockCounter != int64(l.expectedRunningLockCount) {
+	if globalNSMutex.runningLockCounter != int64(l.expectedRunningLockCount) {
 		t.Errorf("Test %d: Expected the total running lock counter to be %v, but got %v", testNum, int64(l.expectedRunningLockCount),
-			nsMutex.runningLockCounter)
+			globalNSMutex.runningLockCounter)
 	}
-	nsMutex.lockMapMutex.Unlock()
+	globalNSMutex.lockMapMutex.Unlock()
 	// Verifying again with the JSON response of the lock info.
 	// Verifying the lock stats.
 	sysLockState, err := getSystemLockState()
@@ -164,35 +164,35 @@ func verifyGlobalLockStats(l lockStateCase, t *testing.T, testNum int) {
 
 // Verify the lock counter for entries of given <volume, path> pair.
 func verifyLockStats(l lockStateCase, t *testing.T, testNum int) {
-	nsMutex.lockMapMutex.Lock()
-	defer nsMutex.lockMapMutex.Unlock()
+	globalNSMutex.lockMapMutex.Lock()
+	defer globalNSMutex.lockMapMutex.Unlock()
 	param := nsParam{l.volume, l.path}
 
 	// Verify the total locks (blocked+running) for given <vol,path> pair.
-	if nsMutex.debugLockMap[param].ref != int64(l.expectedVolPathLockCount) {
+	if globalNSMutex.debugLockMap[param].ref != int64(l.expectedVolPathLockCount) {
 		t.Errorf("Test %d: Expected the total lock count for volume: \"%s\", path: \"%s\" to be %v, but got %v", testNum,
-			param.volume, param.path, int64(l.expectedVolPathLockCount), nsMutex.debugLockMap[param].ref)
+			param.volume, param.path, int64(l.expectedVolPathLockCount), globalNSMutex.debugLockMap[param].ref)
 	}
 	// Verify the total running locks for given <volume, path> pair.
-	if nsMutex.debugLockMap[param].running != int64(l.expectedVolPathRunningCount) {
+	if globalNSMutex.debugLockMap[param].running != int64(l.expectedVolPathRunningCount) {
 		t.Errorf("Test %d: Expected the total running locks for volume: \"%s\", path: \"%s\" to be %v, but got %v", testNum, param.volume, param.path,
-			int64(l.expectedVolPathRunningCount), nsMutex.debugLockMap[param].running)
+			int64(l.expectedVolPathRunningCount), globalNSMutex.debugLockMap[param].running)
 	}
 	// Verify the total blocked locks for givne <volume, path> pair.
-	if nsMutex.debugLockMap[param].blocked != int64(l.expectedVolPathBlockCount) {
+	if globalNSMutex.debugLockMap[param].blocked != int64(l.expectedVolPathBlockCount) {
 		t.Errorf("Test %d:  Expected the total blocked locks for volume: \"%s\", path: \"%s\"  to be %v, but got %v", testNum, param.volume, param.path,
-			int64(l.expectedVolPathBlockCount), nsMutex.debugLockMap[param].blocked)
+			int64(l.expectedVolPathBlockCount), globalNSMutex.debugLockMap[param].blocked)
 	}
 }
 
-// verifyLockState - function which asserts the expected lock info in the system with the actual values in the nsMutex.
+// verifyLockState - function which asserts the expected lock info in the system with the actual values in the globalNSMutex.
 func verifyLockState(l lockStateCase, t *testing.T, testNum int) {
 	param := nsParam{l.volume, l.path}
 
 	verifyGlobalLockStats(l, t, testNum)
-	nsMutex.lockMapMutex.Lock()
+	globalNSMutex.lockMapMutex.Lock()
 	// Verifying the lock statuS fields.
-	if debugLockMap, ok := nsMutex.debugLockMap[param]; ok {
+	if debugLockMap, ok := globalNSMutex.debugLockMap[param]; ok {
 		if lockInfo, ok := debugLockMap.lockInfo[l.opsID]; ok {
 			// Validating the lock type filed in the debug lock information.
 			if l.readLock {
@@ -222,7 +222,7 @@ func verifyLockState(l lockStateCase, t *testing.T, testNum int) {
 		t.Errorf("Test case %d: Debug lock entry for volume: %s, path: %s doesn't exist", testNum, param.volume, param.path)
 	}
 	// verifyLockStats holds its own lock.
-	nsMutex.lockMapMutex.Unlock()
+	globalNSMutex.lockMapMutex.Unlock()
 
 	// verify the lock count.
 	verifyLockStats(l, t, testNum)
@@ -319,7 +319,7 @@ func TestNsLockMapStatusBlockedToRunning(t *testing.T) {
 	param := nsParam{testCases[0].volume, testCases[0].path}
 	// Testing before the initialization done.
 	// Since the data structures for
-	actualErr := nsMutex.statusBlockedToRunning(param, testCases[0].lockSource,
+	actualErr := globalNSMutex.statusBlockedToRunning(param, testCases[0].lockSource,
 		testCases[0].opsID, testCases[0].readLock)
 
 	expectedErr := LockInfoVolPathMissing{testCases[0].volume, testCases[0].path}
@@ -327,14 +327,14 @@ func TestNsLockMapStatusBlockedToRunning(t *testing.T) {
 		t.Fatalf("Errors mismatch: Expected \"%s\", got \"%s\"", expectedErr, actualErr)
 	}
 
-	nsMutex = &nsLockMap{
+	globalNSMutex = &nsLockMap{
 		// entries of <volume,path> -> stateInfo of locks, for instrumentation purpose.
 		debugLockMap: make(map[nsParam]*debugLockInfoPerVolumePath),
 		lockMap:      make(map[nsParam]*nsLock),
 	}
 	// Entry for <volume, path> pair is set to nil. Should fail with `errLockNotInitialized`.
-	nsMutex.debugLockMap[param] = nil
-	actualErr = nsMutex.statusBlockedToRunning(param, testCases[0].lockSource,
+	globalNSMutex.debugLockMap[param] = nil
+	actualErr = globalNSMutex.statusBlockedToRunning(param, testCases[0].lockSource,
 		testCases[0].opsID, testCases[0].readLock)
 
 	if errorCause(actualErr) != errLockNotInitialized {
@@ -342,14 +342,14 @@ func TestNsLockMapStatusBlockedToRunning(t *testing.T) {
 	}
 
 	// Setting the lock info the be `nil`.
-	nsMutex.debugLockMap[param] = &debugLockInfoPerVolumePath{
+	globalNSMutex.debugLockMap[param] = &debugLockInfoPerVolumePath{
 		lockInfo: nil, // setting the lockinfo to nil.
 		ref:      0,
 		blocked:  0,
 		running:  0,
 	}
 
-	actualErr = nsMutex.statusBlockedToRunning(param, testCases[0].lockSource,
+	actualErr = globalNSMutex.statusBlockedToRunning(param, testCases[0].lockSource,
 		testCases[0].opsID, testCases[0].readLock)
 
 	expectedOpsErr := LockInfoOpsIDNotFound{testCases[0].volume, testCases[0].path, testCases[0].opsID}
@@ -359,7 +359,7 @@ func TestNsLockMapStatusBlockedToRunning(t *testing.T) {
 
 	// Next case: ase whether an attempt to change the state of the lock to "Running" done,
 	// but the initial state if already "Running". Such an attempt should fail
-	nsMutex.debugLockMap[param] = &debugLockInfoPerVolumePath{
+	globalNSMutex.debugLockMap[param] = &debugLockInfoPerVolumePath{
 		lockInfo: make(map[string]debugLockInfo),
 		ref:      0,
 		blocked:  0,
@@ -368,13 +368,13 @@ func TestNsLockMapStatusBlockedToRunning(t *testing.T) {
 
 	// Setting the status of the lock to be "Running".
 	// The initial state of the lock should set to "Blocked", otherwise its not possible to change the state from "Blocked" -> "Running".
-	nsMutex.debugLockMap[param].lockInfo[testCases[0].opsID] = debugLockInfo{
+	globalNSMutex.debugLockMap[param].lockInfo[testCases[0].opsID] = debugLockInfo{
 		lockSource: "/home/vadmeste/work/go/src/github.com/minio/minio/xl-v1-object.go:683 +0x2a",
 		status:     "Running", // State set to "Running". Should fail with `LockInfoStateNotBlocked`.
 		since:      time.Now().UTC(),
 	}
 
-	actualErr = nsMutex.statusBlockedToRunning(param, testCases[0].lockSource,
+	actualErr = globalNSMutex.statusBlockedToRunning(param, testCases[0].lockSource,
 		testCases[0].opsID, testCases[0].readLock)
 
 	expectedBlockErr := LockInfoStateNotBlocked{testCases[0].volume, testCases[0].path, testCases[0].opsID}
@@ -390,22 +390,22 @@ func TestNsLockMapStatusBlockedToRunning(t *testing.T) {
 		param := nsParam{testCase.volume, testCase.path}
 		// status of the lock to be set to "Blocked", before setting Blocked->Running.
 		if testCase.setBlocked {
-			nsMutex.lockMapMutex.Lock()
-			err := nsMutex.statusNoneToBlocked(param, testCase.lockSource, testCase.opsID, testCase.readLock)
+			globalNSMutex.lockMapMutex.Lock()
+			err := globalNSMutex.statusNoneToBlocked(param, testCase.lockSource, testCase.opsID, testCase.readLock)
 			if err != nil {
 				t.Fatalf("Test %d: Initializing the initial state to Blocked failed <ERROR> %s", i+1, err)
 			}
-			nsMutex.lockMapMutex.Unlock()
+			globalNSMutex.lockMapMutex.Unlock()
 		}
 		// invoking the method under test.
-		actualErr = nsMutex.statusBlockedToRunning(param, testCase.lockSource, testCase.opsID, testCase.readLock)
+		actualErr = globalNSMutex.statusBlockedToRunning(param, testCase.lockSource, testCase.opsID, testCase.readLock)
 		if errorCause(actualErr) != testCase.expectedErr {
 			t.Fatalf("Test %d: Errors mismatch: Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, actualErr)
 		}
 		// In case of no error proceed with validating the lock state information.
 		if actualErr == nil {
 			// debug entry for given <volume, path> pair should exist.
-			if debugLockMap, ok := nsMutex.debugLockMap[param]; ok {
+			if debugLockMap, ok := globalNSMutex.debugLockMap[param]; ok {
 				if lockInfo, ok := debugLockMap.lockInfo[testCase.opsID]; ok {
 					// Validating the lock type filed in the debug lock information.
 					if testCase.readLock {
@@ -514,7 +514,7 @@ func TestNsLockMapStatusNoneToBlocked(t *testing.T) {
 	param := nsParam{testCases[0].volume, testCases[0].path}
 	// Testing before the initialization done.
 	// Since the data structures for
-	actualErr := nsMutex.statusBlockedToRunning(param, testCases[0].lockSource,
+	actualErr := globalNSMutex.statusBlockedToRunning(param, testCases[0].lockSource,
 		testCases[0].opsID, testCases[0].readLock)
 
 	expectedErr := LockInfoVolPathMissing{testCases[0].volume, testCases[0].path}
@@ -524,13 +524,13 @@ func TestNsLockMapStatusNoneToBlocked(t *testing.T) {
 
 	// Iterate over the cases and assert the result.
 	for i, testCase := range testCases {
-		nsMutex.lockMapMutex.Lock()
+		globalNSMutex.lockMapMutex.Lock()
 		param := nsParam{testCase.volume, testCase.path}
-		actualErr := nsMutex.statusNoneToBlocked(param, testCase.lockSource, testCase.opsID, testCase.readLock)
+		actualErr := globalNSMutex.statusNoneToBlocked(param, testCase.lockSource, testCase.opsID, testCase.readLock)
 		if actualErr != testCase.expectedErr {
 			t.Fatalf("Test %d: Errors mismatch: Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, actualErr)
 		}
-		nsMutex.lockMapMutex.Unlock()
+		globalNSMutex.lockMapMutex.Unlock()
 		if actualErr == nil {
 			verifyLockState(testCase, t, i+1)
 		}
@@ -559,7 +559,7 @@ func TestNsLockMapDeleteLockInfoEntryForOps(t *testing.T) {
 	param := nsParam{testCases[0].volume, testCases[0].path}
 	// Testing before the initialization done.
 
-	actualErr := nsMutex.deleteLockInfoEntryForOps(param, testCases[0].opsID)
+	actualErr := globalNSMutex.deleteLockInfoEntryForOps(param, testCases[0].opsID)
 
 	expectedErr := LockInfoVolPathMissing{testCases[0].volume, testCases[0].path}
 	if errorCause(actualErr) != expectedErr {
@@ -568,17 +568,17 @@ func TestNsLockMapDeleteLockInfoEntryForOps(t *testing.T) {
 
 	// Case - 2.
 	// Lock state is set to Running and then an attempt to delete the info for non-existent opsID done.
-	nsMutex.lockMapMutex.Lock()
-	err := nsMutex.statusNoneToBlocked(param, testCases[0].lockSource, testCases[0].opsID, testCases[0].readLock)
+	globalNSMutex.lockMapMutex.Lock()
+	err := globalNSMutex.statusNoneToBlocked(param, testCases[0].lockSource, testCases[0].opsID, testCases[0].readLock)
 	if err != nil {
 		t.Fatalf("Setting lock status to Blocked failed: <ERROR> %s", err)
 	}
-	nsMutex.lockMapMutex.Unlock()
-	err = nsMutex.statusBlockedToRunning(param, testCases[0].lockSource, testCases[0].opsID, testCases[0].readLock)
+	globalNSMutex.lockMapMutex.Unlock()
+	err = globalNSMutex.statusBlockedToRunning(param, testCases[0].lockSource, testCases[0].opsID, testCases[0].readLock)
 	if err != nil {
 		t.Fatalf("Setting lock status to Running failed: <ERROR> %s", err)
 	}
-	actualErr = nsMutex.deleteLockInfoEntryForOps(param, "non-existent-OpsID")
+	actualErr = globalNSMutex.deleteLockInfoEntryForOps(param, "non-existent-OpsID")
 
 	expectedOpsIDErr := LockInfoOpsIDNotFound{param.volume, param.path, "non-existent-OpsID"}
 	if errorCause(actualErr) != expectedOpsIDErr {
@@ -589,7 +589,7 @@ func TestNsLockMapDeleteLockInfoEntryForOps(t *testing.T) {
 	// All metrics should be 0 after deleting the entry.
 
 	// Verify that the entry the opsID exists.
-	if debugLockMap, ok := nsMutex.debugLockMap[param]; ok {
+	if debugLockMap, ok := globalNSMutex.debugLockMap[param]; ok {
 		if _, ok := debugLockMap.lockInfo[testCases[0].opsID]; !ok {
 			t.Fatalf("Entry for OpsID \"%s\" in <volume> %s, <path> %s should have existed. ", testCases[0].opsID, param.volume, param.path)
 		}
@@ -597,27 +597,27 @@ func TestNsLockMapDeleteLockInfoEntryForOps(t *testing.T) {
 		t.Fatalf("Entry for <volume> %s, <path> %s should have existed. ", param.volume, param.path)
 	}
 
-	actualErr = nsMutex.deleteLockInfoEntryForOps(param, testCases[0].opsID)
+	actualErr = globalNSMutex.deleteLockInfoEntryForOps(param, testCases[0].opsID)
 	if actualErr != nil {
 		t.Fatalf("Expected the error to be <nil>, but got <ERROR> %s", actualErr)
 	}
 
 	// Verify that the entry for the opsId doesn't exists.
-	if debugLockMap, ok := nsMutex.debugLockMap[param]; ok {
+	if debugLockMap, ok := globalNSMutex.debugLockMap[param]; ok {
 		if _, ok := debugLockMap.lockInfo[testCases[0].opsID]; ok {
 			t.Fatalf("The entry for opsID \"%s\" should have been deleted", testCases[0].opsID)
 		}
 	} else {
 		t.Fatalf("Entry for <volume> %s, <path> %s should have existed. ", param.volume, param.path)
 	}
-	if nsMutex.runningLockCounter != int64(0) {
-		t.Errorf("Expected the count of total running locks to be %v, but got %v", int64(0), nsMutex.runningLockCounter)
+	if globalNSMutex.runningLockCounter != int64(0) {
+		t.Errorf("Expected the count of total running locks to be %v, but got %v", int64(0), globalNSMutex.runningLockCounter)
 	}
-	if nsMutex.blockedCounter != int64(0) {
-		t.Errorf("Expected the count of total blocked locks to be %v, but got %v", int64(0), nsMutex.blockedCounter)
+	if globalNSMutex.blockedCounter != int64(0) {
+		t.Errorf("Expected the count of total blocked locks to be %v, but got %v", int64(0), globalNSMutex.blockedCounter)
 	}
-	if nsMutex.globalLockCounter != int64(0) {
-		t.Errorf("Expected the count of all locks to be %v, but got %v", int64(0), nsMutex.globalLockCounter)
+	if globalNSMutex.globalLockCounter != int64(0) {
+		t.Errorf("Expected the count of all locks to be %v, but got %v", int64(0), globalNSMutex.globalLockCounter)
 	}
 }
 
@@ -643,7 +643,7 @@ func TestNsLockMapDeleteLockInfoEntryForVolumePath(t *testing.T) {
 	// Case where an attempt to delete the entry for non-existent <volume, path> pair is done.
 	// Set the status of the lock to blocked and then to running.
 	param := nsParam{testCases[0].volume, testCases[0].path}
-	actualErr := nsMutex.deleteLockInfoEntryForVolumePath(param)
+	actualErr := globalNSMutex.deleteLockInfoEntryForVolumePath(param)
 	expectedNilErr := LockInfoVolPathMissing{param.volume, param.path}
 	if errorCause(actualErr) != expectedNilErr {
 		t.Fatalf("Errors mismatch: Expected \"%s\", got \"%s\"", expectedNilErr, actualErr)
@@ -654,39 +654,39 @@ func TestNsLockMapDeleteLockInfoEntryForVolumePath(t *testing.T) {
 	// All metrics should be 0 after deleting the entry.
 
 	// Registering the entry first.
-	nsMutex.lockMapMutex.Lock()
-	err := nsMutex.statusNoneToBlocked(param, testCases[0].lockSource, testCases[0].opsID, testCases[0].readLock)
+	globalNSMutex.lockMapMutex.Lock()
+	err := globalNSMutex.statusNoneToBlocked(param, testCases[0].lockSource, testCases[0].opsID, testCases[0].readLock)
 	if err != nil {
 		t.Fatalf("Setting lock status to Blocked failed: <ERROR> %s", err)
 	}
-	nsMutex.lockMapMutex.Unlock()
-	err = nsMutex.statusBlockedToRunning(param, testCases[0].lockSource, testCases[0].opsID, testCases[0].readLock)
+	globalNSMutex.lockMapMutex.Unlock()
+	err = globalNSMutex.statusBlockedToRunning(param, testCases[0].lockSource, testCases[0].opsID, testCases[0].readLock)
 	if err != nil {
 		t.Fatalf("Setting lock status to Running failed: <ERROR> %s", err)
 	}
 	// Verify that the entry the for given <volume, path> exists.
-	if _, ok := nsMutex.debugLockMap[param]; !ok {
+	if _, ok := globalNSMutex.debugLockMap[param]; !ok {
 		t.Fatalf("Entry for <volume> %s, <path> %s should have existed.", param.volume, param.path)
 	}
 	// first delete the entry for the operation ID.
-	_ = nsMutex.deleteLockInfoEntryForOps(param, testCases[0].opsID)
-	actualErr = nsMutex.deleteLockInfoEntryForVolumePath(param)
+	_ = globalNSMutex.deleteLockInfoEntryForOps(param, testCases[0].opsID)
+	actualErr = globalNSMutex.deleteLockInfoEntryForVolumePath(param)
 	if actualErr != nil {
 		t.Fatalf("Expected the error to be <nil>, but got <ERROR> %s", actualErr)
 	}
 
 	// Verify that the entry for the opsId doesn't exists.
-	if _, ok := nsMutex.debugLockMap[param]; ok {
+	if _, ok := globalNSMutex.debugLockMap[param]; ok {
 		t.Fatalf("Entry for <volume> %s, <path> %s should have been deleted. ", param.volume, param.path)
 	}
 	// The lock count values should be 0.
-	if nsMutex.runningLockCounter != int64(0) {
-		t.Errorf("Expected the count of total running locks to be %v, but got %v", int64(0), nsMutex.runningLockCounter)
+	if globalNSMutex.runningLockCounter != int64(0) {
+		t.Errorf("Expected the count of total running locks to be %v, but got %v", int64(0), globalNSMutex.runningLockCounter)
 	}
-	if nsMutex.blockedCounter != int64(0) {
-		t.Errorf("Expected the count of total blocked locks to be %v, but got %v", int64(0), nsMutex.blockedCounter)
+	if globalNSMutex.blockedCounter != int64(0) {
+		t.Errorf("Expected the count of total blocked locks to be %v, but got %v", int64(0), globalNSMutex.blockedCounter)
 	}
-	if nsMutex.globalLockCounter != int64(0) {
-		t.Errorf("Expected the count of all locks to be %v, but got %v", int64(0), nsMutex.globalLockCounter)
+	if globalNSMutex.globalLockCounter != int64(0) {
+		t.Errorf("Expected the count of all locks to be %v, but got %v", int64(0), globalNSMutex.globalLockCounter)
 	}
 }

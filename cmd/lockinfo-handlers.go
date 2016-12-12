@@ -61,16 +61,16 @@ type OpsLockState struct {
 
 // Read entire state of the locks in the system and return.
 func getSystemLockState() (SystemLockState, error) {
-	nsMutex.lockMapMutex.Lock()
-	defer nsMutex.lockMapMutex.Unlock()
+	globalNSMutex.lockMapMutex.Lock()
+	defer globalNSMutex.lockMapMutex.Unlock()
 
 	lockState := SystemLockState{}
 
-	lockState.TotalBlockedLocks = nsMutex.blockedCounter
-	lockState.TotalLocks = nsMutex.globalLockCounter
-	lockState.TotalAcquiredLocks = nsMutex.runningLockCounter
+	lockState.TotalBlockedLocks = globalNSMutex.blockedCounter
+	lockState.TotalLocks = globalNSMutex.globalLockCounter
+	lockState.TotalAcquiredLocks = globalNSMutex.runningLockCounter
 
-	for param, debugLock := range nsMutex.debugLockMap {
+	for param, debugLock := range globalNSMutex.debugLockMap {
 		volLockInfo := VolumeLockInfo{}
 		volLockInfo.Bucket = param.volume
 		volLockInfo.Object = param.path

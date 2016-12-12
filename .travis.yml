@@ -13,6 +13,7 @@ env:
 - ARCH=i686
 
 script:
+- make
 - make test GOFLAGS="-race"
 - make coverage
 
