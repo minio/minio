@@ -29,30 +29,10 @@ import (
 // Storage server implements rpc primitives to facilitate exporting a
 // disk over a network.
 type storageServer struct {
+	loginServer
 	storage   StorageAPI
 	path      string
 	timestamp time.Time
-}
-
-/// Auth operations
-
-// Login - login handler.
-func (s *storageServer) LoginHandler(args *RPCLoginArgs, reply *RPCLoginReply) error {
-	jwt, err := newJWT(defaultInterNodeJWTExpiry, serverConfig.GetCredential())
-	if err != nil {
-		return err
-	}
-	if err = jwt.Authenticate(args.Username, args.Password); err != nil {
-		return err
-	}
-	token, err := jwt.GenerateToken(args.Username)
-	if err != nil {
-		return err
-	}
-	reply.Token = token
-	reply.Timestamp = time.Now().UTC()
-	reply.ServerVersion = Version
-	return nil
 }
 
 /// Storage operations handlers.
