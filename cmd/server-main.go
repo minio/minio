@@ -361,6 +361,17 @@ func checkServerSyntax(c *cli.Context) {
 	}
 }
 
+func isAnyEndpointLocal(eps []*url.URL) bool {
+	anyLocalEp := false
+	for _, ep := range eps {
+		if isLocalStorage(ep) {
+			anyLocalEp = true
+			break
+		}
+	}
+	return anyLocalEp
+}
+
 // serverMain handler called for 'minio server' command.
 func serverMain(c *cli.Context) {
 	if !c.Args().Present() || c.Args().First() == "help" {
@@ -403,14 +414,7 @@ func serverMain(c *cli.Context) {
 	fatalIf(err, "Unable to parse storage endpoints %s", c.Args())
 
 	// Should exit gracefully if none of the endpoints passed as command line argument is local to this server.
-	anyLocalEp := false
-	for _, ep := range endpoints {
-		if isLocalStorage(ep) {
-			anyLocalEp = true
-			break
-		}
-	}
-	if !anyLocalEp {
+	if !isAnyEndpointLocal(endpoints) {
 		fatalIf(errors.New("No endpoint is local to this server"), "No endpoint is local to this server.")
 	}
 
