@@ -347,3 +347,32 @@ func TestInitServerConfig(t *testing.T) {
 		initServerConfig(ctx)
 	}
 }
+
+// Tests isAnyEndpointLocal function with inputs such that it returns true and false respectively.
+func TestIsAnyEndpointLocal(t *testing.T) {
+	testCases := []struct {
+		disks  []string
+		result bool
+	}{
+		{
+			disks: []string{"http://4.4.4.4/mnt/disk1",
+				"http://4.4.4.4/mnt/disk1"},
+			result: false,
+		},
+		{
+			disks: []string{"http://localhost/mnt/disk1",
+				"http://localhost/mnt/disk1"},
+			result: true,
+		},
+	}
+	for i, test := range testCases {
+		endpoints, err := parseStorageEndpoints(test.disks)
+		if err != nil {
+			t.Fatalf("Test %d - Failed to parse storage endpoints %v", i+1, err)
+		}
+		actual := isAnyEndpointLocal(endpoints)
+		if actual != test.result {
+			t.Errorf("Test %d - Expected %v but received %v", i+1, test.result, actual)
+		}
+	}
+}

@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -360,6 +361,18 @@ func checkServerSyntax(c *cli.Context) {
 	}
 }
 
+// Checks if any of the endpoints supplied is local to a server instance.
+func isAnyEndpointLocal(eps []*url.URL) bool {
+	anyLocalEp := false
+	for _, ep := range eps {
+		if isLocalStorage(ep) {
+			anyLocalEp = true
+			break
+		}
+	}
+	return anyLocalEp
+}
+
 // serverMain handler called for 'minio server' command.
 func serverMain(c *cli.Context) {
 	if !c.Args().Present() || c.Args().First() == "help" {
@@ -400,6 +413,11 @@ func serverMain(c *cli.Context) {
 	// Disks to be used in server init.
 	endpoints, err := parseStorageEndpoints(c.Args())
 	fatalIf(err, "Unable to parse storage endpoints %s", c.Args())
+
+	// Should exit gracefully if none of the endpoints passed as command line argument is local to this server.
+	if !isAnyEndpointLocal(endpoints) {
+		fatalIf(errors.New("No endpoint is local to this server"), "None of the disks supplied are local to this instance. Please check the disks supplied.")
+	}
 
 	storageDisks, err := initStorageDisks(endpoints)
 	fatalIf(err, "Unable to initialize storage disk(s).")
