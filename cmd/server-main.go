@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -400,6 +401,18 @@ func serverMain(c *cli.Context) {
 	// Disks to be used in server init.
 	endpoints, err := parseStorageEndpoints(c.Args())
 	fatalIf(err, "Unable to parse storage endpoints %s", c.Args())
+
+	// Should exit gracefully if none of the endpoints passed as command line argument is local to this server.
+	anyLocalEp := false
+	for _, ep := range endpoints {
+		if isLocalStorage(ep) {
+			anyLocalEp = true
+			break
+		}
+	}
+	if !anyLocalEp {
+		fatalIf(errors.New("No endpoint is local to this server"), "No endpoint is local to this server.")
+	}
 
 	storageDisks, err := initStorageDisks(endpoints)
 	fatalIf(err, "Unable to initialize storage disk(s).")
