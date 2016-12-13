@@ -348,6 +348,7 @@ func TestInitServerConfig(t *testing.T) {
 	}
 }
 
+// Tests isAnyEndpointLocal function with inputs such that it returns true and false respectively.
 func TestIsAnyEndpointLocal(t *testing.T) {
 	testCases := []struct {
 		disks  []string

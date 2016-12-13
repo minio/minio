@@ -361,6 +361,7 @@ func checkServerSyntax(c *cli.Context) {
 	}
 }
 
+// Checks if any of the endpoints supplied is local to a server instance.
 func isAnyEndpointLocal(eps []*url.URL) bool {
 	anyLocalEp := false
 	for _, ep := range eps {
@@ -415,7 +416,7 @@ func serverMain(c *cli.Context) {
 
 	// Should exit gracefully if none of the endpoints passed as command line argument is local to this server.
 	if !isAnyEndpointLocal(endpoints) {
-		fatalIf(errors.New("No endpoint is local to this server"), "No endpoint is local to this server.")
+		fatalIf(errors.New("No endpoint is local to this server"), "None of the disks supplied are local to this instance. Please check the disks supplied.")
 	}
 
 	storageDisks, err := initStorageDisks(endpoints)
