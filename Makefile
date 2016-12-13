@@ -61,11 +61,11 @@ checks:
 	@(env bash $(PWD)/buildscripts/checkgopath.sh)
 
 getdeps: checks
-	@go get -u github.com/golang/lint/golint && echo "Installed golint:"
-	@go get -u github.com/fzipp/gocyclo && echo "Installed gocyclo:"
-	@go get -u github.com/remyoudompheng/go-misc/deadcode && echo "Installed deadcode:"
-	@go get -u github.com/client9/misspell/cmd/misspell && echo "Installed misspell:"
-	@go get -u github.com/gordonklaus/ineffassign && echo "Installed ineffassign:"
+	@echo "Installing golint:" && go get -u github.com/golang/lint/golint
+	@echo "Installing gocyclo:" && go get -u github.com/fzipp/gocyclo
+	@echo "Installing deadcode:" && go get -u github.com/remyoudompheng/go-misc/deadcode
+	@echo "Installing misspell:" && go get -u github.com/client9/misspell/cmd/misspell
+	@echo "Installing ineffassign:" && go get -u github.com/gordonklaus/ineffassign
 
 verifiers: vet fmt lint cyclo spelling
 
