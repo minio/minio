@@ -62,6 +62,10 @@ func migrateConfig() error {
 	if err := migrateV9ToV10(); err != nil {
 		return err
 	}
+	// Migrate version '10' to '11'.
+	if err := migrateV10ToV11(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -629,6 +633,94 @@ func migrateV9ToV10() error {
 	console.Println(
 		"Migration from version ‘" +
 			cv9.Version + "’ to ‘" + srvConfig.Version +
+			"’ completed successfully.",
+	)
+	return nil
+}
+
+// Version '10' to '11' migration. Add support for Kafka
+// notifications.
+func migrateV10ToV11() error {
+	cv10, err := loadConfigV10()
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("Unable to load config version ‘10’. %v", err)
+	}
+	if cv10.Version != "10" {
+		return nil
+	}
+
+	// Copy over fields from V10 into V11 config struct
+	srvConfig := &serverConfigV11{}
+	srvConfig.Version = "11"
+	srvConfig.Credential = cv10.Credential
+	srvConfig.Region = cv10.Region
+	if srvConfig.Region == "" {
+		// Region needs to be set for AWS Signature Version 4.
+		srvConfig.Region = "us-east-1"
+	}
+	srvConfig.Logger.Console = cv10.Logger.Console
+	srvConfig.Logger.File = cv10.Logger.File
+
+	// check and set notifiers config
+	if len(cv10.Notify.AMQP) == 0 {
+		srvConfig.Notify.AMQP = make(map[string]amqpNotify)
+		srvConfig.Notify.AMQP["1"] = amqpNotify{}
+	} else {
+		srvConfig.Notify.AMQP = cv10.Notify.AMQP
+	}
+	if len(cv10.Notify.NATS) == 0 {
+		srvConfig.Notify.NATS = make(map[string]natsNotify)
+		srvConfig.Notify.NATS["1"] = natsNotify{}
+	} else {
+		srvConfig.Notify.NATS = cv10.Notify.NATS
+	}
+	if len(cv10.Notify.ElasticSearch) == 0 {
+		srvConfig.Notify.ElasticSearch = make(map[string]elasticSearchNotify)
+		srvConfig.Notify.ElasticSearch["1"] = elasticSearchNotify{}
+	} else {
+		srvConfig.Notify.ElasticSearch = cv10.Notify.ElasticSearch
+	}
+	if len(cv10.Notify.Redis) == 0 {
+		srvConfig.Notify.Redis = make(map[string]redisNotify)
+		srvConfig.Notify.Redis["1"] = redisNotify{}
+	} else {
+		srvConfig.Notify.Redis = cv10.Notify.Redis
+	}
+	if len(cv10.Notify.PostgreSQL) == 0 {
+		srvConfig.Notify.PostgreSQL = make(map[string]postgreSQLNotify)
+		srvConfig.Notify.PostgreSQL["1"] = postgreSQLNotify{}
+	} else {
+		srvConfig.Notify.PostgreSQL = cv10.Notify.PostgreSQL
+	}
+	// V10 will not have a Kafka config. So we initialize one here.
+	srvConfig.Notify.Kafka = make(map[string]kafkaNotify)
+	srvConfig.Notify.Kafka["1"] = kafkaNotify{}
+
+	qc, err := quick.New(srvConfig)
+	if err != nil {
+		return fmt.Errorf("Unable to initialize the quick config. %v",
+			err)
+	}
+	configFile, err := getConfigFile()
+	if err != nil {
+		return fmt.Errorf("Unable to get config file. %v", err)
+	}
+
+	err = qc.Save(configFile)
+	if err != nil {
+		return fmt.Errorf(
+			"Failed to migrate config from ‘"+
+				cv10.Version+"’ to ‘"+srvConfig.Version+
+				"’ failed. %v", err,
+		)
+	}
+
+	console.Println(
+		"Migration from version ‘" +
+			cv10.Version + "’ to ‘" + srvConfig.Version +
 			"’ completed successfully.",
 	)
 	return nil

@@ -13,6 +13,12 @@
 			"revisionTime": "2016-07-13T13:44:25+03:00"
 		},
 		{
+			"checksumSHA1": "/5cvgU+J4l7EhMXTK76KaCAfOuU=",
+			"path": "github.com/davecgh/go-spew/spew",
+			"revision": "346938d642f2ec3594ed81d874461961cd0faa76",
+			"revisionTime": "2016-10-29T20:57:26Z"
+		},
+		{
 			"path": "github.com/dgrijalva/jwt-go",
 			"revision": "01aeca54ebda6e0fbfafd0a524d234159c05ec20",
 			"revisionTime": "2016-07-05T13:30:06-07:00"
@@ -28,6 +34,24 @@
 			"revisionTime": "2016-06-23T09:40:21+08:00"
 		},
 		{
+			"checksumSHA1": "y2Kh4iPlgCPXSGTCcFpzePYdzzg=",
+			"path": "github.com/eapache/go-resiliency/breaker",
+			"revision": "b86b1ec0dd4209a588dc1285cdd471e73525c0b3",
+			"revisionTime": "2016-01-04T19:15:39Z"
+		},
+		{
+			"checksumSHA1": "WHl96RVZlOOdF4Lb1OOadMpw8ls=",
+			"path": "github.com/eapache/go-xerial-snappy",
+			"revision": "bb955e01b9346ac19dc29eb16586c90ded99a98c",
+			"revisionTime": "2016-06-09T14:24:08Z"
+		},
+		{
+			"checksumSHA1": "oCCs6kDanizatplM5e/hX76busE=",
+			"path": "github.com/eapache/queue",
+			"revision": "44cc805cf13205b55f69e14bcb69867d1ae92f98",
+			"revisionTime": "2016-08-05T00:47:13Z"
+		},
+		{
 			"path": "github.com/elazarl/go-bindata-assetfs",
 			"revision": "57eb5e1fc594ad4b0b1dbea7b286d299e0cb43c2",
 			"revisionTime": "2015-12-24T06:54:52+02:00"
@@ -36,6 +60,12 @@
 			"path": "github.com/fatih/color",
 			"revision": "87d4004f2ab62d0d255e0a38f1680aa534549fe3",
 			"revisionTime": "2016-06-10T14:06:02+03:00"
+		},
+		{
+			"checksumSHA1": "2a/SsTUBMKtcM6VtpbdPGO+c6c8=",
+			"path": "github.com/golang/snappy",
+			"revision": "d9eb7a3d35ec988b8585d4a0068e462c27d28380",
+			"revisionTime": "2016-05-29T05:00:41Z"
 		},
 		{
 			"path": "github.com/gorilla/context",
@@ -71,6 +101,12 @@
 			"path": "github.com/klauspost/cpuid",
 			"revision": "349c675778172472f5e8f3a3e0fe187e302e5a10",
 			"revisionTime": "2016-01-06T11:44:51+01:00"
+		},
+		{
+			"checksumSHA1": "BM6ZlNJmtKy3GBoWwg2X55gnZ4A=",
+			"path": "github.com/klauspost/crc32",
+			"revision": "cb6bfca970f6908083f26f39a79009d608efd5cd",
+			"revisionTime": "2016-10-16T15:41:25Z"
 		},
 		{
 			"checksumSHA1": "XRii0aDqXZvztXflEB2EE9TRoks=",
@@ -227,6 +263,12 @@
 			"path": "golang.org/x/net/context",
 			"revision": "a728288923b47049b2ce791836767ffbe964a5bd",
 			"revisionTime": "2016-07-07T15:24:52-07:00"
+		},
+		{
+			"checksumSHA1": "p36nkSZUaOs/7Wtcy/FduBLgm8g=",
+			"path": "gopkg.in/Shopify/sarama.v1",
+			"revision": "bd61cae2be85fa6ff40eb23dcdd24567967ac2ae",
+			"revisionTime": "2016-08-30T13:25:53Z"
 		},
 		{
 			"path": "gopkg.in/check.v1",
