@@ -34,7 +34,6 @@ const lockCheckValidityInterval = 2 * time.Minute
 // LockArgs besides lock name, holds Token and Timestamp for session
 // authentication and validation server restart.
 type LockArgs struct {
-	loginServer
 	Name      string
 	Token     string
 	Timestamp time.Time
@@ -70,6 +69,7 @@ func isWriteLock(lri []lockRequesterInfo) bool {
 
 // lockServer is type for RPC handlers
 type lockServer struct {
+	loginServer
 	rpcPath string
 	mutex   sync.Mutex
 	lockMap map[string][]lockRequesterInfo

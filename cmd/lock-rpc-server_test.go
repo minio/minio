@@ -48,26 +48,20 @@ func createLockTestServer(t *testing.T) (string, *lockServer, string) {
 		t.Fatalf("unable initialize config file, %s", err)
 	}
 
-	jwt, err := newJWT(defaultJWTExpiry, serverConfig.GetCredential())
-	if err != nil {
-		t.Fatalf("unable to get new JWT, %s", err)
-	}
-
-	err = jwt.Authenticate(serverConfig.GetCredential().AccessKeyID, serverConfig.GetCredential().SecretAccessKey)
-	if err != nil {
-		t.Fatalf("unable for JWT to authenticate, %s", err)
-	}
-
-	token, err := jwt.GenerateToken(serverConfig.GetCredential().AccessKeyID)
-	if err != nil {
-		t.Fatalf("unable for JWT to generate token, %s", err)
-	}
-
 	locker := &lockServer{
-		rpcPath: "rpc-path",
-		mutex:   sync.Mutex{},
-		lockMap: make(map[string][]lockRequesterInfo),
+		loginServer: loginServer{},
+		rpcPath:     "rpc-path",
+		mutex:       sync.Mutex{},
+		lockMap:     make(map[string][]lockRequesterInfo),
 	}
+	creds := serverConfig.GetCredential()
+	loginArgs := RPCLoginArgs{Username: creds.AccessKeyID, Password: creds.SecretAccessKey}
+	loginReply := RPCLoginReply{}
+	err = locker.LoginHandler(&loginArgs, &loginReply)
+	if err != nil {
+		t.Fatalf("Failed to login to lock server - %v", err)
+	}
+	token := loginReply.Token
 
 	return testPath, locker, token
 }
