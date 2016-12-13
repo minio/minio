@@ -40,7 +40,7 @@ Below examples will clarify further:
 
 Example 1: Start distributed Minio instance with 1 drive each on 8 nodes, by running this command on all the 8 nodes.
 
-```shell
+```
 $ export MINIO_ACCESS_KEY=<ACCESS_KEY>
 $ export MINIO_SECRET_KEY=<SECRET_KEY>
 $ minio server http://192.168.1.11/export1 http://192.168.1.12/export2 \
@@ -53,7 +53,7 @@ $ minio server http://192.168.1.11/export1 http://192.168.1.12/export2 \
 
 Example 2: Start distributed Minio instance with 4 drives each on 4 nodes, by running this command on all the 4 nodes.
 
-```shell
+```
 $ export MINIO_ACCESS_KEY=<ACCESS_KEY>
 $ export MINIO_SECRET_KEY=<SECRET_KEY>
 $ minio server http://192.168.1.11/export1 http://192.168.1.11/export2 \

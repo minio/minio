@@ -3,7 +3,7 @@
 ## 1. Test Minio on Docker.
 Minio generates new access and secret keys each time you run this command. Container state is lost after you end this session. This mode is only intended for testing purpose.
 
-```sh
+```
 
 docker run -p 9000:9000 minio/minio server /export
 
@@ -13,7 +13,7 @@ docker run -p 9000:9000 minio/minio server /export
 
 Minio container requires a persistent volume to store configuration and application data. Following command maps local persistent directories from the host OS to virtual config `~/.minio` and export `/export` directories.
 
-```sh
+```
 
 docker run -p 9000:9000 --name minio1 \
   -v /mnt/export/minio1:/export \
@@ -26,7 +26,7 @@ docker run -p 9000:9000 --name minio1 \
 
 To override Minio's auto-generated keys, you may pass secret and access keys explicitly as environment variables. Minio server also allows regular strings as access and secret keys.
 
-```sh
+```
 
 docker run -p 9000:9000 --name minio1 \
   -e "MINIO_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE" \
@@ -43,7 +43,7 @@ This example shows how to run 4 node Minio cluster inside different docker conta
 
 ### Run `docker-compose`
 
-```sh
+```
 docker-compose pull
 docker-compose up
 ```

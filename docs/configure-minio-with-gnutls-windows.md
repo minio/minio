@@ -61,7 +61,7 @@ encryption_key
 
 Now, it is time to generate the public certificate using this command:
 
-```sh
+```
 certtool.exe --generate-self-signed --load-privkey private.key --template cert.cnf --outfile public.crt 
 ```
 

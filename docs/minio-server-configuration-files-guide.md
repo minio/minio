@@ -7,7 +7,7 @@ Minio Server configurations are stored in file name ``.minio``.  It's a hidden f
 
 **This how the structure of the directory looks like:**
 
-```sh
+```
 $ tree ~/.minio/
 /Users/supernova/.minio/
 ├── certs
@@ -24,7 +24,7 @@ $ tree ~/.minio/
 ##### ``config.json``
 config.json is the configuration file for Minio, it gets generated after you install and start Minio.
 
-```sh
+```
 
 $ cat config.json
 {
