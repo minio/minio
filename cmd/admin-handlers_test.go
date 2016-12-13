@@ -96,6 +96,14 @@ func testServicesCmdHandler(cmd cmdType, t *testing.T) {
 		t.Fatalf("Unable to initialize server config. %s", err)
 	}
 	defer removeAll(rootPath)
+
+	// Initialize admin peers to make admin RPC calls.
+	eps, err := parseStorageEndpoints([]string{"http://localhost"})
+	if err != nil {
+		t.Fatalf("Failed to parse storage end point - %v", err)
+	}
+	initGlobalAdminPeers(eps)
+
 	if cmd == statusCmd {
 		// Initializing objectLayer and corresponding
 		// []StorageAPI since DiskInfo() method requires it.

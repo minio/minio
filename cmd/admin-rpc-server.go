@@ -16,12 +16,20 @@
 
 package cmd
 
+import (
+	"net/rpc"
+
+	router "github.com/gorilla/mux"
+)
+
+const servicePath = "/service"
+
 type serviceCmd struct {
 	loginServer
 }
 
 // Shutdown - Shutdown this instance of minio server.
-func (s serviceCmd) Shutdown(args *GenericArgs, reply *GenericReply) error {
+func (s *serviceCmd) Shutdown(args *GenericArgs, reply *GenericReply) error {
 	if !isRPCTokenValid(args.Token) {
 		return errInvalidToken
 	}
@@ -30,10 +38,22 @@ func (s serviceCmd) Shutdown(args *GenericArgs, reply *GenericReply) error {
 }
 
 // Restart - Restart this instance of minio server.
-func (s serviceCmd) Restart(args *GenericArgs, reply *GenericReply) error {
+func (s *serviceCmd) Restart(args *GenericArgs, reply *GenericReply) error {
 	if !isRPCTokenValid(args.Token) {
 		return errInvalidToken
 	}
 	globalServiceSignalCh <- serviceRestart
+	return nil
+}
+
+func registerAdminRPCRouter(mux *router.Router) error {
+	adminRPCHandler := &serviceCmd{}
+	adminRPCServer := rpc.NewServer()
+	err := adminRPCServer.RegisterName("Service", adminRPCHandler)
+	if err != nil {
+		return traceError(err)
+	}
+	adminRouter := mux.NewRoute().PathPrefix(reservedBucket).Subrouter()
+	adminRouter.Path(servicePath).Handler(adminRPCServer)
 	return nil
 }

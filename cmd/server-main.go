@@ -464,6 +464,9 @@ func serverMain(c *cli.Context) {
 	// Initialize S3 Peers inter-node communication
 	initGlobalS3Peers(endpoints)
 
+	// Initialize Admin Peers inter-node communication
+	initGlobalAdminPeers(endpoints)
+
 	// Start server, automatically configures TLS if certs are available.
 	go func(tls bool) {
 		var lerr error

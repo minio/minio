@@ -49,7 +49,7 @@ func (adminAPI adminAPIHandlers) ServiceStopHandler(w http.ResponseWriter, r *ht
 	}
 	// Reply to the client before stopping minio server.
 	w.WriteHeader(http.StatusOK)
-	globalServiceSignalCh <- serviceStop
+	sendServiceCmd(globalAdminPeers, serviceStop)
 }
 
 func (adminAPI adminAPIHandlers) ServiceRestartHandler(w http.ResponseWriter, r *http.Request) {
@@ -60,5 +60,5 @@ func (adminAPI adminAPIHandlers) ServiceRestartHandler(w http.ResponseWriter, r 
 	}
 	// Reply to the client before restarting minio server.
 	w.WriteHeader(http.StatusOK)
-	globalServiceSignalCh <- serviceRestart
+	sendServiceCmd(globalAdminPeers, serviceRestart)
 }
