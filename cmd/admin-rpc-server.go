@@ -16,31 +16,8 @@
 
 package cmd
 
-import "time"
-
 type serviceCmd struct {
-}
-
-/// Auth operations
-
-// Login - logging into the corresponding RPC service using JWT.
-func (s serviceCmd) LoginHandler(args *RPCLoginArgs, reply *RPCLoginReply) error {
-	jwt, err := newJWT(defaultInterNodeJWTExpiry, serverConfig.GetCredential())
-	if err != nil {
-		return err
-	}
-	if err = jwt.Authenticate(args.Username, args.Password); err != nil {
-		return err
-	}
-	token, err := jwt.GenerateToken(args.Username)
-	if err != nil {
-		return err
-	}
-	reply.Token = token
-	reply.Timestamp = time.Now().UTC()
-	reply.ServerVersion = Version
-	return nil
-
+	loginServer
 }
 
 // Shutdown - Shutdown this instance of minio server.
