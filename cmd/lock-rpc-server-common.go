@@ -58,9 +58,11 @@ func (l *lockServer) removeEntry(name, uid string, lri *[]lockRequesterInfo) boo
 }
 
 // Validate lock args.
+// - validate time stamp.
+// - validate jwt token.
 func (l *lockServer) validateLockArgs(args *LockArgs) error {
 	curTime := time.Now().UTC()
-	if curTime.Sub(args.Timestamp) > globalMaxSkewTime {
+	if curTime.Sub(args.Timestamp) > globalMaxSkewTime || args.Timestamp.Sub(curTime) > globalMaxSkewTime {
 		return errServerTimeMismatch
 	}
 	if !isRPCTokenValid(args.Token) {
