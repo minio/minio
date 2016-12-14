@@ -6,13 +6,13 @@ Minio server is light enough to be bundled with the application stack, similar t
 
 ## Docker Container
 ### Stable
-```sh
+```
 $ docker pull minio/minio
 $ docker run -p 9000:9000 minio/minio server /export
 ```
 
 ### Edge
-```sh
+```
 $ docker pull minio/minio:edge
 $ docker run -p 9000:9000 minio/minio:edge server /export
 ```
@@ -22,7 +22,7 @@ Please visit Minio Docker quickstart guide for more [here](https://docs.minio.io
 ### Homebrew
 Install minio packages using [Homebrew](http://brew.sh/)
 
-```sh
+```
 $ brew install minio
 $ minio server ~/Photos
 ```
@@ -31,7 +31,7 @@ $ minio server ~/Photos
 | Platform| Architecture | URL|
 | ----------| -------- | ------|
 |Apple OS X|64-bit Intel|https://dl.minio.io/server/minio/release/darwin-amd64/minio|
-```sh
+```
 $ chmod 755 minio
 $ ./minio server ~/Photos
 ```
@@ -43,7 +43,7 @@ $ ./minio server ~/Photos
 |GNU/Linux|64-bit Intel|https://dl.minio.io/server/minio/release/linux-amd64/minio|
 ||32-bit Intel|https://dl.minio.io/server/minio/release/linux-386/minio|
 ||32-bit ARM|https://dl.minio.io/server/minio/release/linux-arm/minio|
-```sh
+```
 $ chmod +x minio
 $ ./minio server ~/Photos
 ```
@@ -54,7 +54,7 @@ $ ./minio server ~/Photos
 | ----------| -------- | ------|
 |Microsoft Windows|64-bit|https://dl.minio.io/server/minio/release/windows-amd64/minio.exe|
 ||32-bit|https://dl.minio.io/server/minio/release/windows-386/minio.exe|
-```sh
+```
 C:\Users\Username\Downloads> minio.exe server D:\Photos
 ```
 
@@ -63,7 +63,7 @@ C:\Users\Username\Downloads> minio.exe server D:\Photos
 | Platform| Architecture | URL|
 | ----------| -------- | ------|
 |FreeBSD|64-bit|https://dl.minio.io/server/minio/release/freebsd-amd64/minio|
-```sh
+```
 $ chmod 755 minio
 $ ./minio server ~/Photos
 ```
@@ -73,7 +73,7 @@ Please visit official zfs FreeBSD guide for more details [here](https://www.free
 
 Source installation is only intended for developers and advanced users. If you do not have a working Golang environment, please follow [How to install Golang](https://docs.minio.io/docs/how-to-install-golang).
 
-```sh
+```
 
 $ go get -u github.com/minio/minio
 

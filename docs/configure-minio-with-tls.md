@@ -20,19 +20,19 @@ You need to download [generate_cert.go](https://golang.org/src/crypto/tls/genera
 
 `generate_cert.go` already provides SAN certificates with DNS and IP entries:
 
-```sh
+```
   go run generate_cert.go -ca --host "10.10.0.3"
 ```
 
 ### With OpenSSL:
 
 Generate the private key:
-```sh
+```
 openssl genrsa -out private.key 1024
 ```
 
 Generate the self-signed certificate:
-```sh
+```
 openssl req -new -x509 -days 3650 -key private.key -out public.crt -subj "/C=country/ST=state/L=location/O=organization/CN=domain"
 ```
 

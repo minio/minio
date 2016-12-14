@@ -16,7 +16,7 @@ In this document we will illustrate how to set up replication between two Minio 
 
 ### Setup minio1
 
-```sh
+```
 $ ./minio server minio1-data/
 
 Endpoint:  http://127.0.0.1:9000  http://192.168.1.11:9000
@@ -29,7 +29,7 @@ Region:    us-east-1
 
 Alias is a short name to your cloud storage service  for ``Minio client``. End-point, access and secret keys are supplied by your cloud storage provider. API signature is an optional argument. By default, it is set to ``S3v4``.
 
-```sh
+```
 $ ./mc config host add minio1 http://192.168.1.11:9000 MURIVYBYNPTYE7O8I779 lVbZmz4CvGkBl7JKw5icuL7RCcSvpBJTkAJTFQwz
 ```
 
@@ -37,7 +37,7 @@ $ ./mc config host add minio1 http://192.168.1.11:9000 MURIVYBYNPTYE7O8I779 lVbZ
 
 We have created few buckets using [``mc mb``](https://docs.minio.io/docs/minio-client-complete-guide#mb) and added objects to it using [``mc cp``](https://docs.minio.io/docs/minio-client-complete-guide#cp) Minio client commands. 
 
-```sh
+```
 $ ./mc mb minio1/mybucket
 $ ./mc cp myfile.txt minio1/bucket1
 $ ./mc ls minio1
@@ -48,7 +48,7 @@ $ ./mc ls minio1
 
 ### Setup minio2 
 
-```sh
+```
 $ ./minio server minio2-data/
 
 Endpoint:  http://127.0.0.1:9000  http://192.168.1.12:9000
@@ -58,7 +58,7 @@ Region:    us-east-1
 ...
 ```
 
-```sh
+```
 $ ./mc config host add minio2 http://192.168.1.12:9000 YRDRWWQLEWS9OBJ31GZ2 y2sSWzx5ytwvkELcxOuSaQ8n3doNqoIilRpb5Kjj
 ```
 
@@ -66,11 +66,11 @@ $ ./mc config host add minio2 http://192.168.1.12:9000 YRDRWWQLEWS9OBJ31GZ2 y2sS
 
 We are creating destination bucket ``mbucket`` on ``minio2`` and adding ``minio2`` alias. The bucket ``mbucket`` will be used to mirror data directory of ``minio1``. 
 
-```sh
+```
 $ ./mc mb minio1/mbucket
 ```
 
-```sh
+```
 $ ./mc config host add minio2 http://192.168.1.12:9000 YRDRWWQLEWS9OBJ31GZ2 y2sSWzx5ytwvkELcxOuSaQ8n3doNqoIilRpb5Kjj
 
 ```
@@ -85,7 +85,7 @@ Add crontab configuration on `minio1` providing path of data directory, ``minio1
 
 ``--force`` option with ``mc mirror``  overwrites the destination contents, this would keep your contents in sync. 
 
-```sh
+```
 
 #!/bin/bash
 datadir="/home/minio/minio1-data/"
@@ -97,14 +97,14 @@ $MC_PATH --quiet  mirror --force $minio1 $minio2
 
 Set executable permissions on the script before adding a cron entry.
 
-```sh
+```
 
 $ chmod 755 /home/minio/minio.sh
 ```
 
 Set a new cron entry to run ``minio.sh`` script once every 30mins.
 
-```sh
+```
 
 $ crontab -e
 */30 * * * * /home/minio/minio.sh 

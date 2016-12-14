@@ -17,7 +17,7 @@ Minio server is running on port 9002, 9003, 9004 with associated data directory 
 
 **Minio server on port ``9002``**
 
-```sh
+```
 $ ./minio -C ~/.m1config server --address 192.168.1.11:9002 ~/data1/
 
 Endpoint:  http://192.168.1.11:9002
@@ -28,7 +28,7 @@ Region:    us-east-1
 
 **Minio server on port ``9003``**
 
-```sh
+```
 $ ./minio -C ~/.m2config server --address 192.168.1.11:9003 ~/data2/                                                
 
 Endpoint:  http://192.168.1.11:9003
@@ -39,7 +39,7 @@ Region:    us-east-1
 
 **Minio server on port ``9004``**
 
-```sh
+```
 $ ./minio -C ~/.m3config server --address 192.168.1.11:9004 ~/data3/                                                 
 
 Endpoint:  http://192.168.1.11:9004
@@ -50,7 +50,7 @@ Region:    us-east-1
 
 This is how directory structure will look like for ``minio1``, replace it with your local setup.
 
-```sh
+```
 $ tree -la minio1/
 minio1/
 ├── data1
@@ -66,7 +66,7 @@ minio1/
 
 Using terminal comamnd ``netstat`` we can see ``Minio Server`` is running on different ports on same machine.
 
-```sh
+```
 $ netstat -ntlp | grep minio
 tcp        0      0 192.168.1.11:9002       0.0.0.0:*               LISTEN      29573/minio     
 tcp        0      0 192.168.1.11:9003       0.0.0.0:*               LISTEN      29597/minio     
