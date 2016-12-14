@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -261,48 +260,36 @@ func isDistributedSetup(eps []*url.URL) bool {
 	return false
 }
 
-// We just exit for invalid endpoints.
-func checkEndpointsSyntax(eps []*url.URL, disks []string) {
+// Check if the endpoints are following expected syntax, i.e
+// valid scheme, valid path across all platforms.
+func checkEndpointsSyntax(eps []*url.URL, disks []string) error {
 	for i, u := range eps {
 		switch u.Scheme {
-		case "", "http", "https":
-			// Scheme is "" for FS and singlenode-XL, hence pass.
+		case "":
+			// "/" is not allowed.
+			if u.Path == "" || u.Path == "/" {
+				return fmt.Errorf("Root path is not allowed : %s (%s)", u.Path, disks[i])
+			}
+		case "http", "https":
+			// "http://server1/" is not allowed
+			if u.Path == "" || u.Path == "/" || u.Path == "\\" {
+				return fmt.Errorf("Root path is not allowed : %s (%s)", u.Path, disks[i])
+			}
 		default:
 			if runtime.GOOS == "windows" {
 				// On windows for "C:\export" scheme will be "C"
 				matched, err := regexp.MatchString("^[a-zA-Z]$", u.Scheme)
-				fatalIf(err, "Parsing scheme : %s (%s)", u.Scheme, disks[i])
+				if err != nil {
+					return fmt.Errorf("Invalid scheme : %s (%s), ERROR %s", u.Scheme, disks[i], err)
+				}
 				if matched {
 					break
 				}
 			}
-			fatalIf(errInvalidArgument, "Invalid scheme : %s (%s)", u.Scheme, disks[i])
-		}
-		if runtime.GOOS == "windows" {
-			if u.Scheme == "http" || u.Scheme == "https" {
-				// "http://server1/" is not allowed
-				if u.Path == "" || u.Path == "/" || u.Path == "\\" {
-					fatalIf(errInvalidArgument, "Empty path for %s", disks[i])
-				}
-			}
-		} else {
-			if u.Scheme == "http" || u.Scheme == "https" {
-				// "http://server1/" is not allowed.
-				if u.Path == "" || u.Path == "/" {
-					fatalIf(errInvalidArgument, "Empty path for %s", disks[i])
-				}
-			} else {
-				// "/" is not allowed.
-				if u.Path == "" || u.Path == "/" {
-					fatalIf(errInvalidArgument, "Empty path for %s", disks[i])
-				}
-			}
+			return fmt.Errorf("Invalid scheme : %s (%s)", u.Scheme, disks[i])
 		}
 	}
-
-	if err := checkDuplicateEndpoints(eps); err != nil {
-		fatalIf(errInvalidArgument, "Duplicate entries in %s", strings.Join(disks, " "))
-	}
+	return nil
 }
 
 // Make sure all the command line parameters are OK and exit in case of invalid parameters.
@@ -315,11 +302,18 @@ func checkServerSyntax(c *cli.Context) {
 	// Verify syntax for all the XL disks.
 	disks := c.Args()
 	endpoints, err := parseStorageEndpoints(disks)
-	fatalIf(err, "Unable to parse storage endpoints %s", disks)
-	checkEndpointsSyntax(endpoints, disks)
+	fatalIf(err, "Unable to parse storage endpoints %s", strings.Join(disks, " "))
+
+	// Validate if endpoints follow the expected syntax.
+	err = checkEndpointsSyntax(endpoints, disks)
+	fatalIf(err, "Invalid endpoints found %s", strings.Join(disks, " "))
+
+	// Validate for duplicate endpoints are supplied.
+	err = checkDuplicateEndpoints(endpoints)
+	fatalIf(err, "Duplicate entries in %s", strings.Join(disks, " "))
 
 	if len(endpoints) > 1 {
-		// For XL setup.
+		// Validate if we have sufficient disks for XL setup.
 		err = checkSufficientDisks(endpoints)
 		fatalIf(err, "Storage endpoint error.")
 	}
@@ -361,7 +355,7 @@ func checkServerSyntax(c *cli.Context) {
 	}
 }
 
-// Checks if any of the endpoints supplied is local to a server instance.
+// Checks if any of the endpoints supplied is local to this server.
 func isAnyEndpointLocal(eps []*url.URL) bool {
 	anyLocalEp := false
 	for _, ep := range eps {
@@ -385,6 +379,7 @@ func serverMain(c *cli.Context) {
 	// Initialization routine, such as config loading, enable logging, ..
 	minioInit()
 
+	// Check for minio updates from dl.minio.io
 	checkUpdate()
 
 	// Server address.
@@ -414,9 +409,10 @@ func serverMain(c *cli.Context) {
 	endpoints, err := parseStorageEndpoints(c.Args())
 	fatalIf(err, "Unable to parse storage endpoints %s", c.Args())
 
-	// Should exit gracefully if none of the endpoints passed as command line argument is local to this server.
+	// Should exit gracefully if none of the endpoints passed
+	// as command line args are local to this server.
 	if !isAnyEndpointLocal(endpoints) {
-		fatalIf(errors.New("No endpoint is local to this server"), "None of the disks supplied are local to this instance. Please check the disks supplied.")
+		fatalIf(errInvalidArgument, "None of the disks passed as command line args are local to this server.")
 	}
 
 	storageDisks, err := initStorageDisks(endpoints)

@@ -197,6 +197,8 @@ func TestParseStorageEndpoints(t *testing.T) {
 	globalMinioHost = ""
 }
 
+// Test check endpoints syntax function for syntax verification
+// across various scenarios of inputs.
 func TestCheckEndpointsSyntax(t *testing.T) {
 	var testCases []string
 	if runtime.GOOS == "windows" {
@@ -221,19 +223,36 @@ func TestCheckEndpointsSyntax(t *testing.T) {
 	for _, disk := range testCases {
 		eps, err := parseStorageEndpoints([]string{disk})
 		if err != nil {
-			t.Error(disk, err)
-			continue
+			t.Fatalf("Unable to parse %s, error %s", disk, err)
 		}
-		// This will fatalIf() if endpoint is invalid.
-		checkEndpointsSyntax(eps, []string{disk})
+		if err = checkEndpointsSyntax(eps, []string{disk}); err != nil {
+			t.Errorf("Invalid endpoints %s", err)
+		}
+	}
+	eps, err := parseStorageEndpoints([]string{"/"})
+	if err != nil {
+		t.Fatalf("Unable to parse /, error %s", err)
+	}
+	if err = checkEndpointsSyntax(eps, []string{"/"}); err == nil {
+		t.Error("Should fail, passed instead")
+	}
+	eps, err = parseStorageEndpoints([]string{"http://localhost/"})
+	if err != nil {
+		t.Fatalf("Unable to parse http://localhost/, error %s", err)
+	}
+	if err = checkEndpointsSyntax(eps, []string{"http://localhost/"}); err == nil {
+		t.Error("Should fail, passed instead")
 	}
 }
 
+// Tests check server syntax.
 func TestCheckServerSyntax(t *testing.T) {
 	app := cli.NewApp()
 	app.Commands = []cli.Command{serverCmd}
 	serverFlagSet := flag.NewFlagSet("server", 0)
-	cli.NewContext(app, serverFlagSet, nil)
+	serverFlagSet.String("address", ":9000", "")
+	ctx := cli.NewContext(app, serverFlagSet, serverFlagSet)
+
 	disksGen := func(n int) []string {
 		disks, err := getRandomDisks(n)
 		if err != nil {
@@ -247,21 +266,14 @@ func TestCheckServerSyntax(t *testing.T) {
 		disksGen(8),
 		disksGen(16),
 	}
+
 	for i, disks := range testCases {
 		err := serverFlagSet.Parse(disks)
 		if err != nil {
 			t.Errorf("Test %d failed to parse arguments %s", i+1, disks)
 		}
 		defer removeRoots(disks)
-		endpoints, err := parseStorageEndpoints(disks)
-		if err != nil {
-			t.Fatalf("Test %d : Unexpected error %s", i+1, err)
-		}
-		checkEndpointsSyntax(endpoints, disks)
-		_, err = initStorageDisks(endpoints)
-		if err != nil {
-			t.Errorf("Test %d : disk init failed : %s", i+1, err)
-		}
+		checkServerSyntax(ctx)
 	}
 }
 
