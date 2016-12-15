@@ -26,9 +26,9 @@ const (
 )
 
 func (adminAPI adminAPIHandlers) ServiceStatusHandler(w http.ResponseWriter, r *http.Request) {
-	adminErr := checkRequestAuthType(r, "", "", "")
-	if adminErr != ErrNone {
-		writeErrorResponse(w, r, adminErr, r.URL.Path)
+	adminAPIErr := checkRequestAuthType(r, "", "", "")
+	if adminAPIErr != ErrNone {
+		writeErrorResponse(w, r, adminAPIErr, r.URL.Path)
 		return
 	}
 	storageInfo := newObjectLayerFn().StorageInfo()
@@ -42,9 +42,9 @@ func (adminAPI adminAPIHandlers) ServiceStatusHandler(w http.ResponseWriter, r *
 }
 
 func (adminAPI adminAPIHandlers) ServiceStopHandler(w http.ResponseWriter, r *http.Request) {
-	adminErr := checkRequestAuthType(r, "", "", "")
-	if adminErr != ErrNone {
-		writeErrorResponse(w, r, adminErr, r.URL.Path)
+	adminAPIErr := checkRequestAuthType(r, "", "", "")
+	if adminAPIErr != ErrNone {
+		writeErrorResponse(w, r, adminAPIErr, r.URL.Path)
 		return
 	}
 	// Reply to the client before stopping minio server.
@@ -53,9 +53,9 @@ func (adminAPI adminAPIHandlers) ServiceStopHandler(w http.ResponseWriter, r *ht
 }
 
 func (adminAPI adminAPIHandlers) ServiceRestartHandler(w http.ResponseWriter, r *http.Request) {
-	adminErr := checkRequestAuthType(r, "", "", "")
-	if adminErr != ErrNone {
-		writeErrorResponse(w, r, adminErr, r.URL.Path)
+	adminAPIErr := checkRequestAuthType(r, "", "", "")
+	if adminAPIErr != ErrNone {
+		writeErrorResponse(w, r, adminAPIErr, r.URL.Path)
 		return
 	}
 	// Reply to the client before restarting minio server.
