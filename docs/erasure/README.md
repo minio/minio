@@ -49,7 +49,7 @@ Example: Start Minio server in a 12 drives setup.
 
 ```sh
 
-$ minio server /mnt/export1/backend /mnt/export2/backend /mnt/export3/backend /mnt/export4/backend /mnt/export5/backend /mnt/export6/backend /mnt/export7/backend /mnt/export8/backend /mnt/export9/backend /mnt/export10/backend /mnt/export11/backend /mnt/export12/backend
+minio server /mnt/export1/backend /mnt/export2/backend /mnt/export3/backend /mnt/export4/backend /mnt/export5/backend /mnt/export6/backend /mnt/export7/backend /mnt/export8/backend /mnt/export9/backend /mnt/export10/backend /mnt/export11/backend /mnt/export12/backend
 
 ```
 

@@ -18,13 +18,13 @@ Start ZFS service
 
 ```sh
 
-# service zfs start
+ service zfs start
 
 ```
 
 ```sh
 
-# dd if=/dev/zero of=/zfs bs=1M count=4000
+ dd if=/dev/zero of=/zfs bs=1M count=4000
 
 ```
 
@@ -32,7 +32,7 @@ Configure a loopback device on the `/zfs` file.
 
 ```sh
 
-# mdconfig -a -t vnode -f /zfs
+ mdconfig -a -t vnode -f /zfs
 
 ```
 
@@ -40,13 +40,13 @@ Create zfs pool
 
 ```sh
 
-# zpool create minio-example /dev/md0
+ zpool create minio-example /dev/md0
 
 ```
 
 ```sh
 
-# df /minio-example
+ df /minio-example
 Filesystem    512-blocks Used   Avail Capacity  Mounted on
 minio-example    7872440   38 7872402     0%    /minio-example
 
@@ -56,8 +56,8 @@ Verify if it is writable
 
 ```sh
 
-# touch /minio-example/testfile
-# ls -l /minio-example/testfile
+touch /minio-example/testfile
+ ls -l /minio-example/testfile
 -rw-r--r--  1 root  wheel  0 Apr 26 00:51 /minio-example/testfile
 
 ```
@@ -69,8 +69,8 @@ However, this pool is not taking advantage of any ZFS features, so let's create 
 
 ```sh
 
-# zfs create minio-example/compressed-objects
-# zfs set compression=lz4 minio-example/compressed-objects
+ zfs create minio-example/compressed-objects
+ zfs set compression=lz4 minio-example/compressed-objects
 
 ```
 
@@ -78,7 +78,7 @@ To keep monitoring your pool use
 
 ```sh
 
-# zpool status
+ zpool status
   pool: minio-example
  state: ONLINE
   scan: none requested
@@ -98,7 +98,7 @@ Now start minio server on the ``/minio-example/compressed-objects``, change the 
 
 ```sh
 
-# chown -R minio-user:minio-user /minio-example/compressed-objects
+ chown -R minio-user:minio-user /minio-example/compressed-objects
 
 ```
 
@@ -106,9 +106,9 @@ Now login as ``minio-user`` and start minio server.
 
 ```sh
 
-$ curl https://dl.minio.io/server/minio/release/freebsd-amd64/minio > minio
-$ chmod 755 minio
-$ ./minio server /minio-example/compressed-objects
+curl https://dl.minio.io/server/minio/release/freebsd-amd64/minio > minio
+chmod 755 minio
+./minio server /minio-example/compressed-objects
 
 ```
 
@@ -126,7 +126,7 @@ It is possible to build the minio server from source on FreeBSD.  To do this we 
 We will need to install golang and GNU make:
 
 ```sh
-$ sudo pkg install go gmake
+sudo pkg install go gmake
 ```
 Now we can proceed with the normal build process of minio server as found [here](https://github.com/minio/minio/blob/master/CONTRIBUTING.md).  The only caveat is we need to specify gmake (GNU make) when building minio server as the current Makefile is not BSD make compatible:
 
