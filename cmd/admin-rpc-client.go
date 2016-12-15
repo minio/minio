@@ -65,20 +65,20 @@ func (rc remoteAdminClient) Restart() error {
 	return err
 }
 
-type controlPeer struct {
+type adminPeer struct {
 	addr    string
 	svcClnt stopRestarter
 }
-type controlPeers []controlPeer
+type adminPeers []adminPeer
 
-func makeControlPeers(eps []*url.URL) controlPeers {
-	var ret []controlPeer
+func makeControlPeers(eps []*url.URL) adminPeers {
+	var ret []adminPeer
 
 	// map to store peers that are already added to ret
 	seenAddr := make(map[string]bool)
 
 	// add local (self) as peer in the array
-	ret = append(ret, controlPeer{
+	ret = append(ret, adminPeer{
 		globalMinioAddr,
 		localAdminClient{},
 	})
@@ -102,7 +102,7 @@ func makeControlPeers(eps []*url.URL) controlPeers {
 				loginMethod: "Service.LoginHandler",
 			}
 
-			ret = append(ret, controlPeer{
+			ret = append(ret, adminPeer{
 				addr:    ep.Host,
 				svcClnt: &remoteAdminClient{newAuthClient(&cfg)},
 			})
@@ -117,7 +117,7 @@ func initGlobalAdminPeers(eps []*url.URL) {
 	globalAdminPeers = makeControlPeers(eps)
 }
 
-func invokeServiceCmd(cp controlPeer, cmd serviceSignal) (err error) {
+func invokeServiceCmd(cp adminPeer, cmd serviceSignal) (err error) {
 	switch cmd {
 	case serviceStop:
 		err = cp.svcClnt.Stop()
@@ -127,7 +127,7 @@ func invokeServiceCmd(cp controlPeer, cmd serviceSignal) (err error) {
 	return err
 }
 
-func sendServiceCmd(cps controlPeers, cmd serviceSignal) {
+func sendServiceCmd(cps adminPeers, cmd serviceSignal) {
 	// Send service command like stop or restart to all remote nodes and finally run on local node.
 	errs := make([]error, len(cps))
 	var wg sync.WaitGroup

@@ -85,7 +85,7 @@ var (
 	// CA root certificates, a nil value means system certs pool will be used
 	globalRootCAs *x509.CertPool
 
-	globalAdminPeers = controlPeers{}
+	globalAdminPeers = adminPeers{}
 	// Add new variable global values here.
 )
 

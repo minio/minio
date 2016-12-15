@@ -22,7 +22,7 @@ import (
 	router "github.com/gorilla/mux"
 )
 
-const servicePath = "/service"
+const servicePath = "/admin/service"
 
 type serviceCmd struct {
 	loginServer
