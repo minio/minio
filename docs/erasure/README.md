@@ -4,7 +4,7 @@ Minio protects data against hardware failures and silent data corruption using e
 
 ## 1. Prerequisites:
 
-Install Minio - [Minio Quickstart Guide](https://docs.minio.io/docs/minio)
+Install Minio - [Minio Quickstart Guide](https://docs.minio.io/docs/minio-quickstart-guide)
 
 ## What is Erasure Code?
 
