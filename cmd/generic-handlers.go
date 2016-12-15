@@ -19,7 +19,6 @@ package cmd
 import (
 	"net/http"
 	"path"
-	"regexp"
 	"strings"
 	"time"
 
@@ -142,21 +141,18 @@ func setBrowserCacheControlHandler(h http.Handler) http.Handler {
 func (h cacheControlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "GET" && guessIsBrowserReq(r) && globalIsBrowserEnabled {
 		// For all browser requests set appropriate Cache-Control policies
-		match, err := regexp.Match(reservedBucket+`/([^/]+\.js|favicon.ico)`, []byte(r.URL.Path))
-		if err != nil {
-			errorIf(err, "Unable to match incoming URL %s", r.URL)
-			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
-			return
-		}
-		if match {
-			// For assets set cache expiry of one year. For each release, the name
-			// of the asset name will change and hence it can not be served from cache.
-			w.Header().Set("Cache-Control", "max-age=31536000")
-		} else if strings.HasPrefix(r.URL.Path, reservedBucket+"/") {
-			// For non asset requests we serve index.html which will never be cached.
-			w.Header().Set("Cache-Control", "no-store")
+		if strings.HasPrefix(r.URL.Path, reservedBucket+"/") {
+			if strings.HasSuffix(r.URL.Path, ".js") || r.URL.Path == reservedBucket+"/favicon.ico" {
+				// For assets set cache expiry of one year. For each release, the name
+				// of the asset name will change and hence it can not be served from cache.
+				w.Header().Set("Cache-Control", "max-age=31536000")
+			} else {
+				// For non asset requests we serve index.html which will never be cached.
+				w.Header().Set("Cache-Control", "no-store")
+			}
 		}
 	}
+
 	h.handler.ServeHTTP(w, r)
 }
 
