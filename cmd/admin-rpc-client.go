@@ -23,28 +23,38 @@ import (
 	"sync"
 )
 
+// localAdminClient - represents admin operation to be executed locally.
 type localAdminClient struct {
 }
 
+// remoteAdminClient - represents admin operation to be executed
+// remotely, via RPC.
 type remoteAdminClient struct {
 	*AuthRPCClient
 }
 
+// stopRestarter - abstracts stop and restart operations for both
+// local and remote execution.
 type stopRestarter interface {
 	Stop() error
 	Restart() error
 }
 
+// Stop - Sends a message over channel to the go-routine responsible
+// for stopping the process.
 func (lc localAdminClient) Stop() error {
 	globalServiceSignalCh <- serviceStop
 	return nil
 }
 
+// Restart - Sends a message over channel to the go-routine
+// responsible for restarting the process.
 func (lc localAdminClient) Restart() error {
 	globalServiceSignalCh <- serviceRestart
 	return nil
 }
 
+// Stop - Sends stop command to remote server via RPC.
 func (rc remoteAdminClient) Stop() error {
 	args := GenericArgs{}
 	reply := GenericReply{}
@@ -55,6 +65,7 @@ func (rc remoteAdminClient) Stop() error {
 	return err
 }
 
+// Restart - Sends restart command to remote server via RPC.
 func (rc remoteAdminClient) Restart() error {
 	args := GenericArgs{}
 	reply := GenericReply{}
@@ -65,20 +76,24 @@ func (rc remoteAdminClient) Restart() error {
 	return err
 }
 
+// adminPeer - represents an entity that implements Stop and Restart methods.
 type adminPeer struct {
 	addr    string
 	svcClnt stopRestarter
 }
+
+// type alias for a collection of adminPeer.
 type adminPeers []adminPeer
 
-func makeControlPeers(eps []*url.URL) adminPeers {
-	var ret []adminPeer
+// makeAdminPeers - helper function to construct a collection of adminPeer.
+func makeAdminPeers(eps []*url.URL) adminPeers {
+	var servicePeers []adminPeer
 
 	// map to store peers that are already added to ret
 	seenAddr := make(map[string]bool)
 
 	// add local (self) as peer in the array
-	ret = append(ret, adminPeer{
+	servicePeers = append(servicePeers, adminPeer{
 		globalMinioAddr,
 		localAdminClient{},
 	})
@@ -102,7 +117,7 @@ func makeControlPeers(eps []*url.URL) adminPeers {
 				loginMethod: "Service.LoginHandler",
 			}
 
-			ret = append(ret, adminPeer{
+			servicePeers = append(servicePeers, adminPeer{
 				addr:    ep.Host,
 				svcClnt: &remoteAdminClient{newAuthClient(&cfg)},
 			})
@@ -110,13 +125,15 @@ func makeControlPeers(eps []*url.URL) adminPeers {
 		}
 	}
 
-	return ret
+	return servicePeers
 }
 
+// Initialize global adminPeer collection.
 func initGlobalAdminPeers(eps []*url.URL) {
-	globalAdminPeers = makeControlPeers(eps)
+	globalAdminPeers = makeAdminPeers(eps)
 }
 
+// invokeServiceCmd - Invoke Stop/Restart command.
 func invokeServiceCmd(cp adminPeer, cmd serviceSignal) (err error) {
 	switch cmd {
 	case serviceStop:
@@ -127,6 +144,8 @@ func invokeServiceCmd(cp adminPeer, cmd serviceSignal) (err error) {
 	return err
 }
 
+// sendServiceCmd - Invoke Stop/Restart command on remote peers
+// adminPeer followed by on the local peer.
 func sendServiceCmd(cps adminPeers, cmd serviceSignal) {
 	// Send service command like stop or restart to all remote nodes and finally run on local node.
 	errs := make([]error, len(cps))

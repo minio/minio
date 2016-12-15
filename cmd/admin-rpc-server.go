@@ -24,6 +24,8 @@ import (
 
 const servicePath = "/admin/service"
 
+// serviceCmd - exports RPC methods for service status, stop and
+// restart commands.
 type serviceCmd struct {
 	loginServer
 }
@@ -46,6 +48,8 @@ func (s *serviceCmd) Restart(args *GenericArgs, reply *GenericReply) error {
 	return nil
 }
 
+// registerAdminRPCRouter - registers RPC methods for service status,
+// stop and restart commands.
 func registerAdminRPCRouter(mux *router.Router) error {
 	adminRPCHandler := &serviceCmd{}
 	adminRPCServer := rpc.NewServer()

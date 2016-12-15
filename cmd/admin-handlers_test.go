@@ -69,7 +69,7 @@ func (c cmdType) toServiceSignal() serviceSignal {
 	return serviceStatus
 }
 
-func mockServiceSignalReceiver(cmd cmdType, t *testing.T) {
+func testServiceSignalReceiver(cmd cmdType, t *testing.T) {
 	expectedCmd := cmd.toServiceSignal()
 	serviceCmd := <-globalServiceSignalCh
 	if serviceCmd != expectedCmd {
@@ -121,7 +121,7 @@ func testServicesCmdHandler(cmd cmdType, t *testing.T) {
 	// handleServiceSignals for stop and restart commands.
 	switch cmd {
 	case stopCmd, restartCmd:
-		go mockServiceSignalReceiver(cmd, t)
+		go testServiceSignalReceiver(cmd, t)
 	}
 	credentials := serverConfig.GetCredential()
 	adminRouter := router.NewRouter()

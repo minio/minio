@@ -18,16 +18,19 @@ package cmd
 
 import router "github.com/gorilla/mux"
 
-// adminAPIHandlers implements and provides http handlers for Minio admin API.
+// adminAPIHandlers provides HTTP handlers for Minio admin API.
 type adminAPIHandlers struct {
 }
 
+// registerAdminRouter - Add handler functions for each service REST API routes.
 func registerAdminRouter(mux *router.Router) {
 
 	adminAPI := adminAPIHandlers{}
 	// Admin router
 	adminRouter := mux.NewRoute().PathPrefix("/").Subrouter()
+
 	/// Admin operations
+
 	// Service status
 	adminRouter.Methods("GET").Queries("service", "").Headers(minioAdminOpHeader, "status").HandlerFunc(adminAPI.ServiceStatusHandler)
 	// Service stop
