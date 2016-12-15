@@ -22,6 +22,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -99,20 +100,27 @@ func doesPresignV2SignatureMatch(r *http.Request) APIErrorCode {
 	var gotSignature string
 	var expires string
 	var accessKey string
+	var err error
 	for _, query := range queries {
 		keyval := strings.Split(query, "=")
 		switch keyval[0] {
 		case "AWSAccessKeyId":
-			accessKey = keyval[1]
+			accessKey, err = url.QueryUnescape(keyval[1])
 		case "Signature":
-			gotSignature = keyval[1]
+			gotSignature, err = url.QueryUnescape(keyval[1])
 		case "Expires":
-			expires = keyval[1]
+			expires, err = url.QueryUnescape(keyval[1])
 		default:
 			filteredQueries = append(filteredQueries, query)
 		}
 	}
+	// Check if the query unescaped properly.
+	if err != nil {
+		errorIf(err, "Unable to unescape query values", queries)
+		return ErrInvalidQueryParams
+	}
 
+	// Invalid access key.
 	if accessKey == "" {
 		return ErrInvalidQueryParams
 	}
@@ -128,12 +136,13 @@ func doesPresignV2SignatureMatch(r *http.Request) APIErrorCode {
 		return ErrMalformedExpires
 	}
 
+	// Check if the presigned URL has expired.
 	if expiresInt < time.Now().UTC().Unix() {
 		return ErrExpiredPresignRequest
 	}
 
 	expectedSignature := preSignatureV2(r.Method, encodedResource, strings.Join(filteredQueries, "&"), r.Header, expires)
-	if gotSignature != getURLEncodedName(expectedSignature) {
+	if gotSignature != expectedSignature {
 		return ErrSignatureDoesNotMatch
 	}
 
