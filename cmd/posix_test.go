@@ -31,7 +31,7 @@ import (
 // creates a temp dir and sets up posix layer.
 // returns posix layer, temp dir path to be used for the purpose of tests.
 func newPosixTestSetup() (StorageAPI, string, error) {
-	diskPath, err := ioutil.TempDir(os.TempDir(), "minio-")
+	diskPath, err := ioutil.TempDir(globalTestTmpDir, "minio-")
 	if err != nil {
 		return nil, "", err
 	}
@@ -45,7 +45,7 @@ func newPosixTestSetup() (StorageAPI, string, error) {
 
 // Tests posix.getDiskInfo()
 func TestGetDiskInfo(t *testing.T) {
-	path, err := ioutil.TempDir(os.TempDir(), "minio-")
+	path, err := ioutil.TempDir(globalTestTmpDir, "minio-")
 	if err != nil {
 		t.Fatalf("Unable to create a temporary directory, %s", err)
 	}
@@ -171,9 +171,9 @@ func TestReadAll(t *testing.T) {
 // TestNewPosix all the cases handled in posix storage layer initialization.
 func TestNewPosix(t *testing.T) {
 	// Temporary dir name.
-	tmpDirName := os.TempDir() + "/" + "minio-" + nextSuffix()
+	tmpDirName := globalTestTmpDir + "/" + "minio-" + nextSuffix()
 	// Temporary file name.
-	tmpFileName := os.TempDir() + "/" + "minio-" + nextSuffix()
+	tmpFileName := globalTestTmpDir + "/" + "minio-" + nextSuffix()
 	f, _ := os.Create(tmpFileName)
 	f.Close()
 	defer os.Remove(tmpFileName)

@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -135,7 +134,7 @@ func TestNewXL(t *testing.T) {
 		// Do not attempt to create this path, the test validates
 		// so that newFSObjects initializes non existing paths
 		// and successfully returns initialized object layer.
-		disk := filepath.Join(os.TempDir(), "minio-"+nextSuffix())
+		disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 		erasureDisks = append(erasureDisks, disk)
 		defer removeAll(disk)
 	}

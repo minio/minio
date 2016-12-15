@@ -133,6 +133,9 @@ const (
 var randN uint32
 var randmu sync.Mutex
 
+// Temp files created in default Tmp dir
+var globalTestTmpDir = os.TempDir()
+
 // reseed - returns a new seed every time the function is called.
 func reseed() uint32 {
 	return uint32(time.Now().UnixNano() + int64(os.Getpid()))
@@ -1572,14 +1575,14 @@ func getListenBucketNotificationURL(endPoint, bucketName string, prefixes, suffi
 
 // returns temp root directory. `
 func getTestRoot() (string, error) {
-	return ioutil.TempDir(os.TempDir(), "api-")
+	return ioutil.TempDir(globalTestTmpDir, "api-")
 }
 
 // getRandomDisks - Creates a slice of N random disks, each of the form - minio-XXX
 func getRandomDisks(N int) ([]string, error) {
 	var erasureDisks []string
 	for i := 0; i < N; i++ {
-		path, err := ioutil.TempDir(os.TempDir(), "minio-")
+		path, err := ioutil.TempDir(globalTestTmpDir, "minio-")
 		if err != nil {
 			// Remove directories created so far.
 			removeRoots(erasureDisks)

@@ -587,7 +587,7 @@ func initFSObjectsB(disk string, t *testing.B) (obj ObjectLayer) {
 // BenchmarkListObjects - Run ListObject Repeatedly and benchmark.
 func BenchmarkListObjects(b *testing.B) {
 	// Make a temporary directory to use as the obj.
-	directory, err := ioutil.TempDir("", "minio-list-benchmark")
+	directory, err := ioutil.TempDir(globalTestTmpDir, "minio-list-benchmark")
 	if err != nil {
 		b.Fatal(err)
 	}
