@@ -659,6 +659,31 @@ func loadAllQueueTargets() (map[string]*logrus.Logger, error) {
 		}
 		queueTargets[queueARN] = pgLog
 	}
+	// Load Kafka targets, initialize their respective loggers.
+	for accountID, kafkaN := range serverConfig.GetKafka() {
+		if !kafkaN.Enable {
+			continue
+		}
+		// Construct the queue ARN for Kafka.
+		queueARN := minioSqs + serverConfig.GetRegion() + ":" + accountID + ":" + queueTypeKafka
+		_, ok := queueTargets[queueARN]
+		if ok {
+			continue
+		}
+		// Using accountID initialize a new Kafka logrus instance.
+		kafkaLog, err := newKafkaNotify(accountID)
+		if err != nil {
+			// Encapsulate network error to be more informative.
+			if _, ok := err.(net.Error); ok {
+				return nil, &net.OpError{
+					Op: "Connecting to " + queueARN, Net: "tcp",
+					Err: err,
+				}
+			}
+			return nil, err
+		}
+		queueTargets[queueARN] = kafkaLog
+	}
 
 	// Successfully initialized queue targets.
 	return queueTargets, nil

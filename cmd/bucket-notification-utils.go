@@ -147,6 +147,10 @@ func isValidQueueID(queueARN string) bool {
 		pgN := serverConfig.GetPostgreSQLNotifyByID(sqsARN.AccountID)
 		// Postgres can work with only default conn. info.
 		return pgN.Enable
+	} else if isKafkaQueue(sqsARN) {
+		kafkaN := serverConfig.GetKafkaNotifyByID(sqsARN.AccountID)
+		return (kafkaN.Enable && len(kafkaN.Brokers) > 0 &&
+			kafkaN.Topic != "")
 	}
 	return false
 }
@@ -236,6 +240,7 @@ func validateNotificationConfig(nConfig notificationConfig) APIErrorCode {
 // - elasticsearch
 // - redis
 // - postgresql
+// - kafka
 func unmarshalSqsARN(queueARN string) (mSqs arnSQS) {
 	mSqs = arnSQS{}
 	if !strings.HasPrefix(queueARN, minioSqs+serverConfig.GetRegion()+":") {
@@ -253,6 +258,8 @@ func unmarshalSqsARN(queueARN string) (mSqs arnSQS) {
 		mSqs.Type = queueTypeRedis
 	case strings.HasSuffix(sqsType, queueTypePostgreSQL):
 		mSqs.Type = queueTypePostgreSQL
+	case strings.HasSuffix(sqsType, queueTypeKafka):
+		mSqs.Type = queueTypeKafka
 	} // Add more queues here.
 	mSqs.AccountID = strings.TrimSuffix(sqsType, ":"+mSqs.Type)
 	return mSqs

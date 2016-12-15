@@ -97,10 +97,13 @@ func TestServerConfigMigrateInexistentConfig(t *testing.T) {
 	if err := migrateV9ToV10(); err != nil {
 		t.Fatal("migrate v9 to v10 should succeed when no config file is found")
 	}
+	if err := migrateV10ToV11(); err != nil {
+		t.Fatal("migrate v10 to v11 should succeed when no config file is found")
+	}
 }
 
-// Test if a config migration from v2 to v10 is successfully done
-func TestServerConfigMigrateV2toV10(t *testing.T) {
+// Test if a config migration from v2 to v11 is successfully done
+func TestServerConfigMigrateV2toV11(t *testing.T) {
 	rootPath, err := newTestConfig("us-east-1")
 	if err != nil {
 		t.Fatalf("Init Test config failed")
@@ -199,5 +202,8 @@ func TestServerConfigMigrateFaultyConfig(t *testing.T) {
 	}
 	if err := migrateV9ToV10(); err == nil {
 		t.Fatal("migrateConfigV9ToV10() should fail with a corrupted json")
+	}
+	if err := migrateV10ToV11(); err == nil {
+		t.Fatal("migrateConfigV10ToV11() should fail with a corrupted json")
 	}
 }
