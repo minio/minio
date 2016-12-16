@@ -67,7 +67,8 @@ minio.exe server D:\Photos
 chmod 755 minio
 ./minio server ~/Photos
 ```
-Please visit official zfs FreeBSD guide for more details [here](https://www.freebsd.org/doc/handbook/zfs-quickstart.html)
+
+You can run Minio on FreeBSD with FreeNAS storage-backend - see [here](https://docs.minio.io/docs/how-to-run-minio-in-freenas) for more details.
 
 ## Install from Source
 
