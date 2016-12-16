@@ -448,11 +448,22 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	w.Header().Set("ETag", "\""+objInfo.MD5Sum+"\"")
 	w.Header().Set("Location", getObjectLocation(bucket, object))
 
-	// Set common headers.
-	setCommonHeaders(w)
+	// Decide what http response to send depending on success_action_status parameter
+	switch formValues[http.CanonicalHeaderKey("success_action_status")] {
+	case "201":
+		resp := encodeResponse(PostResponse{
+			Bucket:   bucket,
+			Key:      object,
+			ETag:     "\"" + objInfo.MD5Sum + "\"",
+			Location: getObjectLocation(bucket, object),
+		})
+		writeResponse(w, http.StatusCreated, resp)
 
-	// Write successful response.
-	writeSuccessNoContent(w)
+	case "200":
+		writeSuccessResponse(w, nil)
+	default:
+		writeSuccessNoContent(w)
+	}
 
 	// Notify object created event.
 	eventNotify(eventData{
