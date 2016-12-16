@@ -110,12 +110,21 @@ func configureServerHandler(srvCmdConfig serverCmdConfig) (http.Handler, error) 
 		registerDistXLRouters(mux, srvCmdConfig)
 	}
 
+	// Add Admin RPC router
+	err := registerAdminRPCRouter(mux)
+	if err != nil {
+		return nil, err
+	}
+
 	// Register web router when its enabled.
 	if globalIsBrowserEnabled {
 		if err := registerWebRouter(mux); err != nil {
 			return nil, err
 		}
 	}
+
+	// Add Admin router.
+	registerAdminRouter(mux)
 
 	// Add API router.
 	registerAPIRouter(mux)

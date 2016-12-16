@@ -41,7 +41,7 @@ var globalServiceDoneCh chan struct{}
 // Initialize service mutex once.
 func init() {
 	globalServiceDoneCh = make(chan struct{}, 1)
-	globalServiceSignalCh = make(chan serviceSignal, 1)
+	globalServiceSignalCh = make(chan serviceSignal)
 }
 
 // restartProcess starts a new process passing it the active fd's. It
@@ -80,36 +80,37 @@ func (m *ServerMux) handleServiceSignals() error {
 		globalServiceDoneCh <- struct{}{}
 	}
 
-	// Start listening on service signal. Monitor signals.
+	// Wait for SIGTERM in a go-routine.
 	trapCh := signalTrap(os.Interrupt, syscall.SIGTERM)
+	go func(<-chan bool) {
+		<-trapCh
+		globalServiceSignalCh <- serviceStop
+	}(trapCh)
+
+	// Start listening on service signal. Monitor signals.
 	for {
-		select {
-		case <-trapCh:
-			// Initiate graceful stop.
-			globalServiceSignalCh <- serviceStop
-		case signal := <-globalServiceSignalCh:
-			switch signal {
-			case serviceStatus:
-				/// We don't do anything for this.
-			case serviceRestart:
-				if err := m.Close(); err != nil {
-					errorIf(err, "Unable to close server gracefully")
-				}
-				if err := restartProcess(); err != nil {
-					errorIf(err, "Unable to restart the server.")
-				}
+		signal := <-globalServiceSignalCh
+		switch signal {
+		case serviceStatus:
+			/// We don't do anything for this.
+		case serviceRestart:
+			if err := m.Close(); err != nil {
+				errorIf(err, "Unable to close server gracefully")
+			}
+			if err := restartProcess(); err != nil {
+				errorIf(err, "Unable to restart the server.")
+			}
+			runExitFn(nil)
+		case serviceStop:
+			if err := m.Close(); err != nil {
+				errorIf(err, "Unable to close server gracefully")
+			}
+			objAPI := newObjectLayerFn()
+			if objAPI == nil {
+				// Server not initialized yet, exit happily.
 				runExitFn(nil)
-			case serviceStop:
-				if err := m.Close(); err != nil {
-					errorIf(err, "Unable to close server gracefully")
-				}
-				objAPI := newObjectLayerFn()
-				if objAPI == nil {
-					// Server not initialized yet, exit happily.
-					runExitFn(nil)
-				} else {
-					runExitFn(objAPI.Shutdown())
-				}
+			} else {
+				runExitFn(objAPI.Shutdown())
 			}
 		}
 	}
