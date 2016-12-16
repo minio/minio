@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"bytes"
-	"os"
 	"path/filepath"
 	"testing"
 )
@@ -37,7 +36,7 @@ func initFSObjects(disk string, t *testing.T) (obj ObjectLayer) {
 
 // TestReadFsMetadata - readFSMetadata testing with a healthy and faulty disk
 func TestReadFSMetadata(t *testing.T) {
-	disk := filepath.Join(os.TempDir(), "minio-"+nextSuffix())
+	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 	defer removeAll(disk)
 
 	obj := initFSObjects(disk, t)
@@ -84,7 +83,7 @@ func TestReadFSMetadata(t *testing.T) {
 
 // TestWriteFsMetadata - tests of writeFSMetadata with healthy and faulty disks
 func TestWriteFSMetadata(t *testing.T) {
-	disk := filepath.Join(os.TempDir(), "minio-"+nextSuffix())
+	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 	defer removeAll(disk)
 	obj := initFSObjects(disk, t)
 	fs := obj.(fsObjects)

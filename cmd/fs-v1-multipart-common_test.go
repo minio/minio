@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -26,7 +25,7 @@ import (
 // TestFSIsUploadExists - complete test with valid and invalid cases
 func TestFSIsUploadExists(t *testing.T) {
 	// Prepare for testing
-	disk := filepath.Join(os.TempDir(), "minio-"+nextSuffix())
+	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 	defer removeAll(disk)
 
 	obj := initFSObjects(disk, t)
@@ -70,7 +69,7 @@ func TestFSIsUploadExists(t *testing.T) {
 // TestFSWriteUploadJSON - tests for writeUploadJSON for FS
 func TestFSWriteUploadJSON(t *testing.T) {
 	// Prepare for tests
-	disk := filepath.Join(os.TempDir(), "minio-"+nextSuffix())
+	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 	defer removeAll(disk)
 
 	obj := initFSObjects(disk, t)
