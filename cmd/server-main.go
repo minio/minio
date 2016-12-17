@@ -111,8 +111,7 @@ func parseStorageEndpoints(eps []string) (endpoints []*url.URL, err error) {
 				// we return error as port is configurable only
 				// using "--address :port"
 				if port != "" {
-					errorIf(fmt.Errorf("Invalid argument %s, port configurable using --address :<port>", u.Host), "")
-					return nil, errInvalidArgument
+					return nil, fmt.Errorf("Invalid Argument %s, port configurable using --address :<port>", u.Host)
 				}
 				u.Host = net.JoinHostPort(u.Host, globalMinioPort)
 			} else {
@@ -120,8 +119,7 @@ func parseStorageEndpoints(eps []string) (endpoints []*url.URL, err error) {
 				// i.e if "--address host:port" is specified
 				// port info in u.Host is mandatory else return error.
 				if port == "" {
-					errorIf(fmt.Errorf("Invalid argument %s, port mandatory when --address <host>:<port> is used", u.Host), "")
-					return nil, errInvalidArgument
+					return nil, fmt.Errorf("Invalid Argument %s, port mandatory when --address <host>:<port> is used", u.Host)
 				}
 			}
 		}
@@ -326,7 +324,12 @@ func checkServerSyntax(c *cli.Context) {
 	if len(endpoints) > 1 {
 		// Validate if we have sufficient disks for XL setup.
 		err = checkSufficientDisks(endpoints)
-		fatalIf(err, "Storage endpoint error.")
+		fatalIf(err, "Invalid number of disks supplied.")
+	} else {
+		// Validate if we have invalid disk for FS setup.
+		if endpoints[0].Host != "" && endpoints[0].Scheme != "" {
+			fatalIf(errInvalidArgument, "%s, FS setup expects a filesystem path", endpoints[0])
+		}
 	}
 
 	if !isDistributedSetup(endpoints) {
