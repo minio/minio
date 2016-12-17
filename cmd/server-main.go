@@ -23,9 +23,9 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"strings"
 
-	"regexp"
 	"runtime"
 
 	"github.com/minio/cli"
@@ -260,35 +260,46 @@ func isDistributedSetup(eps []*url.URL) bool {
 	return false
 }
 
-// Check if the endpoints are following expected syntax, i.e
-// valid scheme, valid path across all platforms.
-func checkEndpointsSyntax(eps []*url.URL, disks []string) error {
-	for i, u := range eps {
-		switch u.Scheme {
-		case "":
-			// "/" is not allowed.
-			if u.Path == "" || u.Path == "/" {
-				return fmt.Errorf("Root path is not allowed : %s (%s)", u.Path, disks[i])
+// Check if endpoint is in expected syntax by valid scheme/path across all platforms.
+func checkEndpointURL(endpointURL *url.URL) (err error) {
+	// applicable to all OS.
+	if endpointURL.Scheme == "" || endpointURL.Scheme == "http" || endpointURL.Scheme == "https" {
+		urlPath := path.Clean(endpointURL.Path)
+		if urlPath == "" || urlPath == "." || urlPath == "/" || urlPath == `\` {
+			err = fmt.Errorf("Empty or root path is not allowed")
+		}
+
+		return err
+	}
+
+	// Applicable to Windows only.
+	if runtime.GOOS == "windows" {
+		// On Windows, endpoint can be a path with drive eg. C:\Export and its URL.Scheme is 'C'.
+		// Check if URL.Scheme is a single letter alphabet to represent a drive.
+		// Note: URL.Parse() converts scheme into lower case always.
+		if len(endpointURL.Scheme) == 1 && endpointURL.Scheme[0] >= 'a' && endpointURL.Scheme[0] <= 'z' {
+			// If endpoint is C:\ or C:\export, URL.Path does not have path information like \ or \export
+			// hence we directly work with endpoint.
+			urlPath := strings.SplitN(path.Clean(endpointURL.String()), ":", 2)[1]
+			if urlPath == "" || urlPath == "." || urlPath == "/" || urlPath == `\` {
+				err = fmt.Errorf("Empty or root path is not allowed")
 			}
-		case "http", "https":
-			// "http://server1/" is not allowed
-			if u.Path == "" || u.Path == "/" || u.Path == "\\" {
-				return fmt.Errorf("Root path is not allowed : %s (%s)", u.Path, disks[i])
-			}
-		default:
-			if runtime.GOOS == "windows" {
-				// On windows for "C:\export" scheme will be "C"
-				matched, err := regexp.MatchString("^[a-zA-Z]$", u.Scheme)
-				if err != nil {
-					return fmt.Errorf("Invalid scheme : %s (%s), ERROR %s", u.Scheme, disks[i], err)
-				}
-				if matched {
-					break
-				}
-			}
-			return fmt.Errorf("Invalid scheme : %s (%s)", u.Scheme, disks[i])
+
+			return err
 		}
 	}
+
+	return fmt.Errorf("Invalid scheme")
+}
+
+// Check if endpoints are in expected syntax by valid scheme/path across all platforms.
+func checkEndpointsSyntax(eps []*url.URL, disks []string) error {
+	for i, u := range eps {
+		if err := checkEndpointURL(u); err != nil {
+			return fmt.Errorf("%s: %s (%s)", err.Error(), u.Path, disks[i])
+		}
+	}
+
 	return nil
 }
 

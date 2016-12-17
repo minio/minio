@@ -200,48 +200,52 @@ func TestParseStorageEndpoints(t *testing.T) {
 // Test check endpoints syntax function for syntax verification
 // across various scenarios of inputs.
 func TestCheckEndpointsSyntax(t *testing.T) {
-	var testCases []string
-	if runtime.GOOS == "windows" {
-		testCases = []string{
-			"\\export",
-			"D:\\export",
-			"D:\\",
-			"D:",
-			"\\",
-		}
-	} else {
-		testCases = []string{
-			"/export",
-		}
-	}
-	testCasesCommon := []string{
+	successCases := []string{
 		"export",
+		"/export",
 		"http://localhost/export",
 		"https://localhost/export",
 	}
-	testCases = append(testCases, testCasesCommon...)
-	for _, disk := range testCases {
+
+	failureCases := []string{
+		"/",
+		"http://localhost",
+		"http://localhost/",
+		"ftp://localhost/export",
+		"server:/export",
+	}
+
+	if runtime.GOOS == "windows" {
+		successCases = append(successCases,
+			`\export`,
+			`D:\export`,
+		)
+
+		failureCases = append(failureCases,
+			"D:",
+			`D:\`,
+			`\`,
+		)
+	}
+
+	for _, disk := range successCases {
 		eps, err := parseStorageEndpoints([]string{disk})
 		if err != nil {
 			t.Fatalf("Unable to parse %s, error %s", disk, err)
 		}
 		if err = checkEndpointsSyntax(eps, []string{disk}); err != nil {
-			t.Errorf("Invalid endpoints %s", err)
+			t.Errorf("expected: <nil>, got: %s", err)
 		}
 	}
-	eps, err := parseStorageEndpoints([]string{"/"})
-	if err != nil {
-		t.Fatalf("Unable to parse /, error %s", err)
-	}
-	if err = checkEndpointsSyntax(eps, []string{"/"}); err == nil {
-		t.Error("Should fail, passed instead")
-	}
-	eps, err = parseStorageEndpoints([]string{"http://localhost/"})
-	if err != nil {
-		t.Fatalf("Unable to parse http://localhost/, error %s", err)
-	}
-	if err = checkEndpointsSyntax(eps, []string{"http://localhost/"}); err == nil {
-		t.Error("Should fail, passed instead")
+
+	for _, disk := range failureCases {
+		eps, err := parseStorageEndpoints([]string{disk})
+		if err != nil {
+			t.Fatalf("Unable to parse %s, error %s", disk, err)
+		}
+		if err = checkEndpointsSyntax(eps, []string{disk}); err == nil {
+			t.Errorf("expected: <error>, got: <nil>")
+		}
 	}
 }
 
