@@ -1859,6 +1859,8 @@ func testAPIAbortMultipartHandler(obj ObjectLayer, instanceType, bucketName stri
 		}
 	}
 
+	fmt.Printf("abort url = %s\n", getAbortMultipartUploadURL("", bucketName, objectName, uploadIDs[1]))
+
 	// create unsigned HTTP request for Abort multipart upload.
 	anonReq, err := newTestRequest("DELETE", getAbortMultipartUploadURL("", bucketName, objectName, uploadIDs[1]),
 		0, nil)

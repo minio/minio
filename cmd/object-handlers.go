@@ -19,6 +19,7 @@ package cmd
 import (
 	"encoding/hex"
 	"encoding/xml"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -661,6 +662,7 @@ func (api objectAPIHandlers) AbortMultipartUploadHandler(w http.ResponseWriter, 
 	uploadID, _, _, _ := getObjectResources(r.URL.Query())
 	if err := objectAPI.AbortMultipartUpload(bucket, object, uploadID); err != nil {
 		errorIf(err, "Unable to abort multipart upload.")
+		fmt.Printf("Unable to abort multipart upload. %s\n", err)
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
 	}

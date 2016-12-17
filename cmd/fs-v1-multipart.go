@@ -677,5 +677,5 @@ func (fs fsObjects) AbortMultipartUpload(bucket, object, uploadID string) error 
 	}
 
 	err := fs.abortMultipartUpload(bucket, object, uploadID)
-	return err
+	return traceError(err)
 }
