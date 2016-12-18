@@ -251,6 +251,14 @@ type DeleteObjectsResponse struct {
 	Errors []DeleteError `xml:"Error,omitempty"`
 }
 
+// PostResponse container for POST object request when success_action_status is set to 201
+type PostResponse struct {
+	Bucket   string
+	Key      string
+	ETag     string
+	Location string
+}
+
 // getLocation get URL location.
 func getLocation(r *http.Request) string {
 	return path.Clean(r.URL.Path) // Clean any trailing slashes.
@@ -474,21 +482,24 @@ func generateMultiDeleteResponse(quiet bool, deletedObjects []ObjectIdentifier, 
 	return deleteResp
 }
 
-// writeSuccessResponse write success headers and response if any.
-func writeSuccessResponse(w http.ResponseWriter, response []byte) {
+func writeResponse(w http.ResponseWriter, statusCode int, response []byte) {
 	setCommonHeaders(w)
+	w.WriteHeader(statusCode)
 	if response == nil {
-		w.WriteHeader(http.StatusOK)
 		return
 	}
 	w.Write(response)
 	w.(http.Flusher).Flush()
 }
 
+// writeSuccessResponse write success headers and response if any.
+func writeSuccessResponse(w http.ResponseWriter, response []byte) {
+	writeResponse(w, http.StatusOK, response)
+}
+
 // writeSuccessNoContent write success headers with http status 204
 func writeSuccessNoContent(w http.ResponseWriter) {
-	setCommonHeaders(w)
-	w.WriteHeader(http.StatusNoContent)
+	writeResponse(w, http.StatusNoContent, nil)
 }
 
 // writeErrorRespone write error headers
