@@ -63,7 +63,7 @@ func TestS3PeerRPC(t *testing.T) {
 func (s *TestRPCS3PeerSuite) testS3PeerRPC(t *testing.T) {
 	// Validate for invalid token.
 	args := GenericArgs{Token: "garbage", Timestamp: time.Now().UTC()}
-	rclient := newClient(s.testAuthConf.address, s.testAuthConf.path, false)
+	rclient := newRPCClient(s.testAuthConf.address, s.testAuthConf.path, false)
 	defer rclient.Close()
 	err := rclient.Call("S3.SetBucketNotificationPeer", &args, &GenericReply{})
 	if err != nil {

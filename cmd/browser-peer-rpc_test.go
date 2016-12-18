@@ -70,7 +70,7 @@ func (s *TestRPCBrowserPeerSuite) testBrowserPeerRPC(t *testing.T) {
 	// Validate for invalid token.
 	args := SetAuthPeerArgs{Creds: creds}
 	args.Token = "garbage"
-	rclient := newClient(s.testAuthConf.address, s.testAuthConf.path, false)
+	rclient := newRPCClient(s.testAuthConf.address, s.testAuthConf.path, false)
 	defer rclient.Close()
 	err := rclient.Call("BrowserPeer.SetAuthPeer", &args, &GenericReply{})
 	if err != nil {
@@ -89,7 +89,7 @@ func (s *TestRPCBrowserPeerSuite) testBrowserPeerRPC(t *testing.T) {
 	}
 
 	// Validate for failure in login handler with previous credentials.
-	rclient = newClient(s.testAuthConf.address, s.testAuthConf.path, false)
+	rclient = newRPCClient(s.testAuthConf.address, s.testAuthConf.path, false)
 	defer rclient.Close()
 	rargs := &RPCLoginArgs{
 		Username: s.testAuthConf.accessKey,
