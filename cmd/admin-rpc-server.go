@@ -18,20 +18,35 @@ package cmd
 
 import (
 	"net/rpc"
+	"time"
 
 	router "github.com/gorilla/mux"
 )
 
-const servicePath = "/admin/service"
+const adminPath = "/admin"
 
-// serviceCmd - exports RPC methods for service status, stop and
+// adminCmd - exports RPC methods for service status, stop and
 // restart commands.
-type serviceCmd struct {
+type adminCmd struct {
 	AuthRPCServer
 }
 
+// ListLocksQuery - wraps ListLocks API's query values to send over RPC.
+type ListLocksQuery struct {
+	AuthRPCArgs
+	bucket  string
+	prefix  string
+	relTime time.Duration
+}
+
+// ListLocksReply - wraps ListLocks response over RPC.
+type ListLocksReply struct {
+	AuthRPCReply
+	volLocks []VolumeLockInfo
+}
+
 // Shutdown - Shutdown this instance of minio server.
-func (s *serviceCmd) Shutdown(args *AuthRPCArgs, reply *AuthRPCReply) error {
+func (s *adminCmd) Shutdown(args *AuthRPCArgs, reply *AuthRPCReply) error {
 	if err := args.IsAuthenticated(); err != nil {
 		return err
 	}
@@ -41,7 +56,7 @@ func (s *serviceCmd) Shutdown(args *AuthRPCArgs, reply *AuthRPCReply) error {
 }
 
 // Restart - Restart this instance of minio server.
-func (s *serviceCmd) Restart(args *AuthRPCArgs, reply *AuthRPCReply) error {
+func (s *adminCmd) Restart(args *AuthRPCArgs, reply *AuthRPCReply) error {
 	if err := args.IsAuthenticated(); err != nil {
 		return err
 	}
@@ -50,16 +65,23 @@ func (s *serviceCmd) Restart(args *AuthRPCArgs, reply *AuthRPCReply) error {
 	return nil
 }
 
+// ListLocks - lists locks held by requests handled by this server instance.
+func (s *adminCmd) ListLocks(query *ListLocksQuery, reply *ListLocksReply) error {
+	volLocks := listLocksInfo(query.bucket, query.prefix, query.relTime)
+	*reply = ListLocksReply{volLocks: volLocks}
+	return nil
+}
+
 // registerAdminRPCRouter - registers RPC methods for service status,
 // stop and restart commands.
 func registerAdminRPCRouter(mux *router.Router) error {
-	adminRPCHandler := &serviceCmd{}
+	adminRPCHandler := &adminCmd{}
 	adminRPCServer := rpc.NewServer()
-	err := adminRPCServer.RegisterName("Service", adminRPCHandler)
+	err := adminRPCServer.RegisterName("Admin", adminRPCHandler)
 	if err != nil {
 		return traceError(err)
 	}
 	adminRouter := mux.NewRoute().PathPrefix(reservedBucket).Subrouter()
-	adminRouter.Path(servicePath).Handler(adminRPCServer)
+	adminRouter.Path(adminPath).Handler(adminRPCServer)
 	return nil
 }

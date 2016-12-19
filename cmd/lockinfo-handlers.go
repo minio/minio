@@ -16,7 +16,10 @@
 
 package cmd
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 // SystemLockState - Structure to fill the lock state of entire object storage.
 // That is the total locks held, total calls blocked on locks and state of all the locks for the entire system.
@@ -26,7 +29,7 @@ type SystemLockState struct {
 	// be released.
 	TotalBlockedLocks int64 `json:"totalBlockedLocks"`
 	// Count of operations which has successfully acquired the lock but
-	// hasn't unlocked yet( operation in progress).
+	// hasn't unlocked yet (operation in progress).
 	TotalAcquiredLocks int64            `json:"totalAcquiredLocks"`
 	LocksInfoPerObject []VolumeLockInfo `json:"locksInfoPerObject"`
 }
@@ -64,11 +67,13 @@ func getSystemLockState() (SystemLockState, error) {
 	globalNSMutex.lockMapMutex.Lock()
 	defer globalNSMutex.lockMapMutex.Unlock()
 
-	lockState := SystemLockState{}
-
-	lockState.TotalBlockedLocks = globalNSMutex.counters.blocked
-	lockState.TotalLocks = globalNSMutex.counters.total
-	lockState.TotalAcquiredLocks = globalNSMutex.counters.granted
+	// Fetch current time once instead of fetching system time for every lock.
+	timeNow := time.Now().UTC()
+	lockState := SystemLockState{
+		TotalAcquiredLocks: globalNSMutex.counters.granted,
+		TotalLocks:         globalNSMutex.counters.total,
+		TotalBlockedLocks:  globalNSMutex.counters.blocked,
+	}
 
 	for param, debugLock := range globalNSMutex.debugLockMap {
 		volLockInfo := VolumeLockInfo{}
@@ -84,10 +89,57 @@ func getSystemLockState() (SystemLockState, error) {
 				LockType:    lockInfo.lType,
 				Status:      lockInfo.status,
 				Since:       lockInfo.since,
-				Duration:    time.Now().UTC().Sub(lockInfo.since),
+				Duration:    timeNow.Sub(lockInfo.since),
 			})
 		}
 		lockState.LocksInfoPerObject = append(lockState.LocksInfoPerObject, volLockInfo)
 	}
 	return lockState, nil
+}
+
+// listLocksInfo - Fetches locks held on bucket, matching prefix older than relTime.
+func listLocksInfo(bucket, prefix string, relTime time.Duration) []VolumeLockInfo {
+	globalNSMutex.lockMapMutex.Lock()
+	defer globalNSMutex.lockMapMutex.Unlock()
+
+	// Fetch current time once instead of fetching system time for every lock.
+	timeNow := time.Now().UTC()
+	volumeLocks := []VolumeLockInfo{}
+
+	for param, debugLock := range globalNSMutex.debugLockMap {
+		if param.volume != bucket {
+			continue
+		}
+		// N B empty prefix matches all param.path.
+		if !strings.HasPrefix(param.path, prefix) {
+			continue
+		}
+
+		volLockInfo := VolumeLockInfo{
+			Bucket:                param.volume,
+			Object:                param.path,
+			LocksOnObject:         debugLock.counters.total,
+			TotalBlockedLocks:     debugLock.counters.blocked,
+			LocksAcquiredOnObject: debugLock.counters.granted,
+		}
+		// Filter locks that are held on bucket, prefix.
+		for opsID, lockInfo := range debugLock.lockInfo {
+			elapsed := timeNow.Sub(lockInfo.since)
+			if elapsed < relTime {
+				continue
+			}
+			// Add locks that are older than relTime.
+			volLockInfo.LockDetailsOnObject = append(volLockInfo.LockDetailsOnObject,
+				OpsLockState{
+					OperationID: opsID,
+					LockSource:  lockInfo.lockSource,
+					LockType:    lockInfo.lType,
+					Status:      lockInfo.status,
+					Since:       lockInfo.since,
+					Duration:    elapsed,
+				})
+			volumeLocks = append(volumeLocks, volLockInfo)
+		}
+	}
+	return volumeLocks
 }

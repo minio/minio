@@ -28,7 +28,7 @@ func testAdminCmd(cmd cmdType, t *testing.T) {
 	}
 	defer removeAll(rootPath)
 
-	adminServer := serviceCmd{}
+	adminServer := adminCmd{}
 	creds := serverConfig.GetCredential()
 	args := LoginRPCArgs{
 		Username:    creds.AccessKey,

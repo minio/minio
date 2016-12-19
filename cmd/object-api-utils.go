@@ -49,7 +49,7 @@ var isIPAddress = regexp.MustCompile(`^(\d+\.){3}\d+$`)
 // See: http://docs.aws.amazon.com/AmazonS3/latest/dev/BucketRestrictions.html
 func IsValidBucketName(bucket string) bool {
 	// Special case when bucket is equal to 'metaBucket'.
-	if bucket == minioMetaBucket {
+	if bucket == minioMetaBucket || bucket == minioMetaMultipartBucket {
 		return true
 	}
 	if len(bucket) < 3 || len(bucket) > 63 {

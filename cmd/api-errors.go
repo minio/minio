@@ -110,6 +110,7 @@ const (
 	ErrInvalidQuerySignatureAlgo
 	ErrInvalidQueryParams
 	ErrBucketAlreadyOwnedByYou
+	ErrInvalidDuration
 	// Add new error codes here.
 
 	// Bucket notification related errors.
@@ -476,6 +477,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Code:           "BucketAlreadyOwnedByYou",
 		Description:    "Your previous request to create the named bucket succeeded and you already own it.",
 		HTTPStatusCode: http.StatusConflict,
+	},
+	ErrInvalidDuration: {
+		Code:           "InvalidDuration",
+		Description:    "Relative duration provided in the request is invalid.",
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 
 	/// Bucket notification related errors.

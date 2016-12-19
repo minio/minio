@@ -21,12 +21,13 @@ package main
 
 import (
 	"log"
+	"time"
 
 	"github.com/minio/minio/pkg/madmin"
 )
 
 func main() {
-	// Note: YOUR-ACCESSKEYID, YOUR-SECRETACCESSKEY and my-bucketname are
+	// Note: YOUR-ACCESSKEYID, YOUR-SECRETACCESSKEY are
 	// dummy values, please replace them with original values.
 
 	// API requests are secure (HTTPS) if secure=true and insecure (HTTPS) otherwise.
@@ -36,9 +37,11 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	err = madmClnt.ServiceStop()
+	// Clear locks held on mybucket/myprefix older than olderThan seconds.
+	olderThan := time.Duration(30 * time.Second)
+	locksCleared, err := madmClnt.ClearLocks("mybucket", "myprefix", olderThan)
 	if err != nil {
 		log.Fatalln(err)
 	}
-	log.Println("Success")
+	log.Println(locksCleared)
 }
