@@ -178,6 +178,7 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 	testCasesV4 := []struct {
 		objectName         string
 		data               []byte
+		expectedHeaders    map[string]string
 		expectedRespStatus int
 		accessKey          string
 		secretKey          string
@@ -188,6 +189,7 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 			objectName:         "test",
 			data:               []byte("Hello, World"),
 			expectedRespStatus: http.StatusNoContent,
+			expectedHeaders:    map[string]string{"X-Amz-Meta-Uuid": "1234"},
 			accessKey:          credentials.AccessKeyID,
 			secretKey:          credentials.SecretAccessKey,
 			malformedBody:      false,
@@ -228,6 +230,18 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 		apiRouter.ServeHTTP(rec, req)
 		if rec.Code != testCase.expectedRespStatus {
 			t.Errorf("Test %d: %s: Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, rec.Code)
+		}
+		// When the operation is successful, check if sending metadata is successful too
+		if rec.Code == http.StatusNoContent {
+			objInfo, err := obj.GetObjectInfo(bucketName, testCase.objectName+"/upload.txt")
+			if err != nil {
+				t.Error("Unexpected error: ", err)
+			}
+			for k, v := range testCase.expectedHeaders {
+				if objInfo.UserDefined[k] != v {
+					t.Errorf("Expected to have header %s with value %s, but found value `%s` instead", k, v, objInfo.UserDefined[k])
+				}
+			}
 		}
 	}
 
@@ -475,6 +489,8 @@ func newPostRequestV4Generic(endPoint, bucketName, objectName string, objData []
 		"x-amz-signature":  signature,
 		"x-amz-date":       t.Format(iso8601DateFormat),
 		"x-amz-algorithm":  "AWS4-HMAC-SHA256",
+		"x-amz-meta-uuid":  "1234",
+		"Content-Encoding": "gzip",
 	}
 
 	// Create the multipart form.

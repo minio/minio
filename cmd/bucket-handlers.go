@@ -429,9 +429,8 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		}
 	}
 
-	// Save metadata.
-	metadata := make(map[string]string)
-	// Nothing to store right now.
+	// Extract metadata to be saved from received Form.
+	metadata := extractMetadataFromForm(formValues)
 
 	sha256sum := ""
 
