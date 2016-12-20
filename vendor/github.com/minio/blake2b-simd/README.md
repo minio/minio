@@ -24,7 +24,7 @@ This is a summary of the performance improvements. Full details are shown below.
 asm2plan9s
 ----------
 
-In order to be able to work more easily with AVX2/AVX instructions, a separate tool was developed to convert AVX2/AVX instructions into the corresponding BYTE sequence as accepted by Go assembly. See [asm2plan9s](https://github.com/fwessels/asm2plan9s) for more information.
+In order to be able to work more easily with AVX2/AVX instructions, a separate tool was developed to convert AVX2/AVX instructions into the corresponding BYTE sequence as accepted by Go assembly. See [asm2plan9s](https://github.com/minio/asm2plan9s) for more information.
 
 bt2sum
 ------

@@ -23,11 +23,12 @@ package blake2b
 func compressAVX2Loop(p []uint8, in, iv, t, f, shffle, out []uint64)
 
 func compressAVX2(d *digest, p []uint8) {
+	var (
+		in     [8]uint64
+		out    [8]uint64
+		shffle [8]uint64
+	)
 
-	in := make([]uint64, 8, 8)
-	out := make([]uint64, 8, 8)
-
-	shffle := make([]uint64, 8, 8)
 	// vector for PSHUFB instruction
 	shffle[0] = 0x0201000706050403
 	shffle[1] = 0x0a09080f0e0d0c0b
@@ -40,7 +41,7 @@ func compressAVX2(d *digest, p []uint8) {
 
 	in[0], in[1], in[2], in[3], in[4], in[5], in[6], in[7] = d.h[0], d.h[1], d.h[2], d.h[3], d.h[4], d.h[5], d.h[6], d.h[7]
 
-	compressAVX2Loop(p, in, iv[:], d.t[:], d.f[:], shffle, out)
+	compressAVX2Loop(p, in[:], iv[:], d.t[:], d.f[:], shffle[:], out[:])
 
 	d.h[0], d.h[1], d.h[2], d.h[3], d.h[4], d.h[5], d.h[6], d.h[7] = out[0], out[1], out[2], out[3], out[4], out[5], out[6], out[7]
 }

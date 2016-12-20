@@ -1,6 +1,6 @@
 {
 	"comment": "",
-	"ignore": "appengine test",
+	"ignore": "test",
 	"package": [
 		{
 			"path": "github.com/Sirupsen/logrus",
@@ -62,7 +62,7 @@
 			"revisionTime": "2016-06-10T14:06:02+03:00"
 		},
 		{
-			"checksumSHA1": "2a/SsTUBMKtcM6VtpbdPGO+c6c8=",
+			"checksumSHA1": "W+E/2xXcE1GmJ0Qb784ald0Fn6I=",
 			"path": "github.com/golang/snappy",
 			"revision": "d9eb7a3d35ec988b8585d4a0068e462c27d28380",
 			"revisionTime": "2016-05-29T05:00:41Z"
@@ -109,10 +109,10 @@
 			"revisionTime": "2016-10-16T15:41:25Z"
 		},
 		{
-			"checksumSHA1": "XRii0aDqXZvztXflEB2EE9TRoks=",
+			"checksumSHA1": "Pzd1bfm8Yj1radncaohNZu+UT1I=",
 			"path": "github.com/klauspost/reedsolomon",
-			"revision": "c54154da9e35cab25232314cf69ab9d78447f9a5",
-			"revisionTime": "2016-09-12T19:31:07Z"
+			"revision": "d0a56f72c0d40a6cdde43a1575ad9686a0098b70",
+			"revisionTime": "2016-10-28T07:13:20Z"
 		},
 		{
 			"checksumSHA1": "dNYxHiBLalTqluak2/Z8c3RsSEM=",
@@ -137,9 +137,10 @@
 			"revisionTime": "2015-12-11T09:06:21+09:00"
 		},
 		{
+			"checksumSHA1": "IgPoMBktWdCLuyzDBfzi34sT+jg=",
 			"path": "github.com/minio/blake2b-simd",
-			"revision": "25efc542f2c5064cf312cdca043790a7af861c4c",
-			"revisionTime": "2016-07-06T10:29:24+02:00"
+			"revision": "c50cace0dc7d72a80244a5f88ddd3e08a73db8de",
+			"revisionTime": "2016-07-22T09:38:12Z"
 		},
 		{
 			"path": "github.com/minio/cli",
@@ -187,10 +188,10 @@
 			"revisionTime": "2016-07-24T00:05:56Z"
 		},
 		{
-			"checksumSHA1": "i8Hl0yGP1jqorMgfFMoJCItnI38=",
+			"checksumSHA1": "URVle4qtadmW9w9BulDRHY3kxnA=",
 			"path": "github.com/minio/sha256-simd",
-			"revision": "6f50cd1d784b2bea46167b6929f16c0d12eefbfb",
-			"revisionTime": "2016-08-16T22:25:11Z"
+			"revision": "e82e73b775766b9011503e80e6772fc32b9afc5b",
+			"revisionTime": "2016-12-19T23:17:30Z"
 		},
 		{
 			"checksumSHA1": "Nj7vQ2GlvJiPP7sqJX5AurrDSD4=",
