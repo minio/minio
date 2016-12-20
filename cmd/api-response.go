@@ -492,17 +492,23 @@ func writeResponse(w http.ResponseWriter, statusCode int, response []byte) {
 	w.(http.Flusher).Flush()
 }
 
-// writeSuccessResponse write success headers and response if any.
+// writeSuccessResponse writes success headers and response if any.
 func writeSuccessResponse(w http.ResponseWriter, response []byte) {
 	writeResponse(w, http.StatusOK, response)
 }
 
-// writeSuccessNoContent write success headers with http status 204
+// writeSuccessNoContent writes success headers with http status 204
 func writeSuccessNoContent(w http.ResponseWriter) {
 	writeResponse(w, http.StatusNoContent, nil)
 }
 
-// writeErrorRespone write error headers
+// writeRedirectSeeOther writes Location header with http status 303
+func writeRedirectSeeOther(w http.ResponseWriter, location string) {
+	w.Header().Set("Location", location)
+	writeResponse(w, http.StatusSeeOther, nil)
+}
+
+// writeErrorRespone writes error headers
 func writeErrorResponse(w http.ResponseWriter, req *http.Request, errorCode APIErrorCode, resource string) {
 	apiError := getAPIError(errorCode)
 	// set common headers
