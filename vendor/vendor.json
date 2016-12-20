@@ -170,6 +170,18 @@
 			"revisionTime": "2016-09-04T08:12:15Z"
 		},
 		{
+			"checksumSHA1": "l95EyvF0yFAItXsXYqsZ6g7yGy4=",
+			"path": "github.com/minio/minio-go/pkg/s3signer",
+			"revision": "d02caa62b9e1034f93a82d41da806651a666c5a3",
+			"revisionTime": "2016-12-14T00:10:05Z"
+		},
+		{
+			"checksumSHA1": "bPvxFS1qu6W9lOqdt8aEfS5Sids=",
+			"path": "github.com/minio/minio-go/pkg/s3utils",
+			"revision": "532b920ff28900244a2ef7d07468003df36fe7c5",
+			"revisionTime": "2016-12-20T20:43:13Z"
+		},
+		{
 			"checksumSHA1": "A8QOw1aWwc+RtjGozY0XeS5varo=",
 			"path": "github.com/minio/minio-go/pkg/set",
 			"revision": "9e734013294ab153b0bdbe182738bcddd46f1947",

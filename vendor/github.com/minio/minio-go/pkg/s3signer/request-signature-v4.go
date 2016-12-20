@@ -24,8 +24,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/minio/minio-go/pkg/s3utils"
 )
 
 // Signature and API related constants.
@@ -187,7 +185,7 @@ func getCanonicalRequest(req http.Request) string {
 	req.URL.RawQuery = strings.Replace(req.URL.Query().Encode(), "+", "%20", -1)
 	canonicalRequest := strings.Join([]string{
 		req.Method,
-		s3utils.EncodePath(req.URL.Path),
+		urlEncodePath(req.URL.Path),
 		req.URL.RawQuery,
 		getCanonicalHeaders(req),
 		getSignedHeaders(req),
