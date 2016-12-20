@@ -326,10 +326,10 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
 		rec := httptest.NewRecorder()
 
-		// policy := buildGenericPolicy(curTime, testCase.accessKey, bucketName, testCase.objectName, false)
 		testCase.policy = fmt.Sprintf(testCase.policy, testCase.dates...)
+
 		req, perr := newPostRequestV4Generic("", bucketName, testCase.objectName, testCase.data, testCase.accessKey,
-			testCase.secretKey, curTime, []byte(testCase.policy), testCase.corruptedBase64, testCase.corruptedMultipart)
+			testCase.secretKey, curTime, []byte(testCase.policy), nil, testCase.corruptedBase64, testCase.corruptedMultipart)
 		if perr != nil {
 			t.Fatalf("Test %d: %s: Failed to create HTTP request for PostPolicyHandler: <ERROR> %v", i+1, instanceType, perr)
 		}
@@ -391,6 +391,93 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 		if rec.Code != testCase.expectedRespStatus {
 			t.Errorf("Test %d: %s: Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, rec.Code)
 		}
+	}
+
+}
+
+// Wrapper for calling TestPostPolicyBucketHandlerRedirect tests for both XL multiple disks and single node setup.
+func TestPostPolicyBucketHandlerRedirect(t *testing.T) {
+	ExecObjectLayerTest(t, testPostPolicyBucketHandlerRedirect)
+}
+
+// testPostPolicyBucketHandlerRedirect tests POST Object when success_action_redirect is specified
+func testPostPolicyBucketHandlerRedirect(obj ObjectLayer, instanceType string, t TestErrHandler) {
+	root, err := newTestConfig("us-east-1")
+	if err != nil {
+		t.Fatalf("Initializing config.json failed")
+	}
+	defer removeAll(root)
+
+	// Register event notifier.
+	err = initEventNotifier(obj)
+	if err != nil {
+		t.Fatalf("Initializing event notifiers failed")
+	}
+
+	// get random bucket name.
+	bucketName := getRandomBucketName()
+
+	// Key specified in Form data
+	keyName := "test/object"
+
+	// The final name of the upload object
+	targetObj := keyName + "/upload.txt"
+
+	// The url of success_action_redirect field
+	redirectURL := "http://www.google.com"
+
+	// Register the API end points with XL/FS object layer.
+	apiRouter := initTestAPIEndPoints(obj, []string{"PostPolicy"})
+
+	credentials := serverConfig.GetCredential()
+
+	curTime := time.Now().UTC()
+	curTimePlus5Min := curTime.Add(time.Minute * 5)
+
+	err = obj.MakeBucket(bucketName)
+	if err != nil {
+		// Failed to create newbucket, abort.
+		t.Fatalf("%s : %s", instanceType, err.Error())
+	}
+
+	// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
+	rec := httptest.NewRecorder()
+
+	dates := []interface{}{curTimePlus5Min.Format(expirationDateFormat), curTime.Format(iso8601DateFormat), curTime.Format(yyyymmdd)}
+	policy := `{"expiration": "%s","conditions":[["eq", "$bucket", "` + bucketName + `"], {"success_action_redirect":"` + redirectURL + `"},["starts-with", "$key", "test/"], ["eq", "$x-amz-algorithm", "AWS4-HMAC-SHA256"], ["eq", "$x-amz-date", "%s"], ["eq", "$x-amz-credential", "` + credentials.AccessKeyID + `/%s/us-east-1/s3/aws4_request"]]}`
+
+	// Generate the final policy document
+	policy = fmt.Sprintf(policy, dates...)
+
+	// Create a new POST request with success_action_redirect field specified
+	req, perr := newPostRequestV4Generic("", bucketName, keyName, []byte("objData"),
+		credentials.AccessKeyID, credentials.SecretAccessKey, curTime,
+		[]byte(policy), map[string]string{"success_action_redirect": redirectURL}, false, false)
+
+	if perr != nil {
+		t.Fatalf("%s: Failed to create HTTP request for PostPolicyHandler: <ERROR> %v", instanceType, perr)
+	}
+	// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic ofthe handler.
+	// Call the ServeHTTP to execute the handler.
+	apiRouter.ServeHTTP(rec, req)
+
+	// Check the status code, which must be 303 because success_action_redirect is specified
+	if rec.Code != http.StatusSeeOther {
+		t.Errorf("%s: Expected the response status to be `%d`, but instead found `%d`", instanceType, http.StatusSeeOther, rec.Code)
+	}
+
+	// Get the uploaded object info
+	info, err := obj.GetObjectInfo(bucketName, targetObj)
+	if err != nil {
+		t.Error("Unexpected error: ", err)
+	}
+
+	expectedLocation := fmt.Sprintf(redirectURL+"?bucket=%s&key=%s&etag=%s",
+		bucketName, getURLEncodedName(targetObj), getURLEncodedName("\""+info.MD5Sum+"\""))
+
+	// Check the new location url
+	if rec.HeaderMap.Get("Location") != expectedLocation {
+		t.Errorf("Unexpected location, expected = %s, found = `%s`", rec.HeaderMap.Get("Location"), expectedLocation)
 	}
 
 }
@@ -467,7 +554,8 @@ func buildGenericPolicy(t time.Time, accessKey, bucketName, objectName string, c
 	return policy
 }
 
-func newPostRequestV4Generic(endPoint, bucketName, objectName string, objData []byte, accessKey, secretKey string, t time.Time, policy []byte, corruptedB64 bool, corruptedMultipart bool) (*http.Request, error) {
+func newPostRequestV4Generic(endPoint, bucketName, objectName string, objData []byte, accessKey, secretKey string,
+	t time.Time, policy []byte, addFormData map[string]string, corruptedB64 bool, corruptedMultipart bool) (*http.Request, error) {
 	// Get the user credential.
 	credStr := getCredential(accessKey, serverConfig.GetRegion(), t)
 
@@ -491,6 +579,11 @@ func newPostRequestV4Generic(endPoint, bucketName, objectName string, objData []
 		"x-amz-algorithm":  "AWS4-HMAC-SHA256",
 		"x-amz-meta-uuid":  "1234",
 		"Content-Encoding": "gzip",
+	}
+
+	// Add form data
+	for k, v := range addFormData {
+		formData[k] = v
 	}
 
 	// Create the multipart form.
@@ -529,11 +622,11 @@ func newPostRequestV4Generic(endPoint, bucketName, objectName string, objData []
 func newPostRequestV4WithContentLength(endPoint, bucketName, objectName string, objData []byte, accessKey, secretKey string) (*http.Request, error) {
 	t := time.Now().UTC()
 	policy := buildGenericPolicy(t, accessKey, bucketName, objectName, true)
-	return newPostRequestV4Generic(endPoint, bucketName, objectName, objData, accessKey, secretKey, t, policy, false, false)
+	return newPostRequestV4Generic(endPoint, bucketName, objectName, objData, accessKey, secretKey, t, policy, nil, false, false)
 }
 
 func newPostRequestV4(endPoint, bucketName, objectName string, objData []byte, accessKey, secretKey string) (*http.Request, error) {
 	t := time.Now().UTC()
 	policy := buildGenericPolicy(t, accessKey, bucketName, objectName, false)
-	return newPostRequestV4Generic(endPoint, bucketName, objectName, objData, accessKey, secretKey, t, policy, false, false)
+	return newPostRequestV4Generic(endPoint, bucketName, objectName, objData, accessKey, secretKey, t, policy, nil, false, false)
 }
