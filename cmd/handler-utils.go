@@ -83,9 +83,9 @@ func extractMetadataFromHeader(header http.Header) map[string]string {
 	for key := range header {
 		cKey := http.CanonicalHeaderKey(key)
 		if strings.HasPrefix(cKey, "X-Amz-Meta-") {
-			metadata[cKey] = header.Get(cKey)
+			metadata[cKey] = header.Get(key)
 		} else if strings.HasPrefix(key, "X-Minio-Meta-") {
-			metadata[cKey] = header.Get(cKey)
+			metadata[cKey] = header.Get(key)
 		}
 	}
 	// Return.
