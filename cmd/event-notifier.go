@@ -301,8 +301,14 @@ func eventNotify(event eventData) {
 // structured notification config.
 func loadNotificationConfig(bucket string, objAPI ObjectLayer) (*notificationConfig, error) {
 	// Construct the notification config path.
-	notificationConfigPath := path.Join(bucketConfigPrefix, bucket, bucketNotificationConfig)
-	objInfo, err := objAPI.GetObjectInfo(minioMetaBucket, notificationConfigPath)
+	ncPath := path.Join(bucketConfigPrefix, bucket, bucketNotificationConfig)
+
+	// Acquire a write lock on notification config before modifying.
+	objLock := globalNSMutex.NewNSLock(minioMetaBucket, ncPath)
+	objLock.RLock()
+	defer objLock.RUnlock()
+
+	objInfo, err := objAPI.GetObjectInfo(minioMetaBucket, ncPath)
 	if err != nil {
 		// 'notification.xml' not found return
 		// 'errNoSuchNotifications'.  This is default when no
@@ -315,7 +321,7 @@ func loadNotificationConfig(bucket string, objAPI ObjectLayer) (*notificationCon
 		return nil, err
 	}
 	var buffer bytes.Buffer
-	err = objAPI.GetObject(minioMetaBucket, notificationConfigPath, 0, objInfo.Size, &buffer)
+	err = objAPI.GetObject(minioMetaBucket, ncPath, 0, objInfo.Size, &buffer)
 	if err != nil {
 		// 'notification.xml' not found return
 		// 'errNoSuchNotifications'.  This is default when no
@@ -350,8 +356,14 @@ func loadListenerConfig(bucket string, objAPI ObjectLayer) ([]listenerConfig, er
 	}
 
 	// Construct the notification config path.
-	listenerConfigPath := path.Join(bucketConfigPrefix, bucket, bucketListenerConfig)
-	objInfo, err := objAPI.GetObjectInfo(minioMetaBucket, listenerConfigPath)
+	lcPath := path.Join(bucketConfigPrefix, bucket, bucketListenerConfig)
+
+	// Acquire a write lock on notification config before modifying.
+	objLock := globalNSMutex.NewNSLock(minioMetaBucket, lcPath)
+	objLock.RLock()
+	defer objLock.RUnlock()
+
+	objInfo, err := objAPI.GetObjectInfo(minioMetaBucket, lcPath)
 	if err != nil {
 		// 'listener.json' not found return
 		// 'errNoSuchNotifications'.  This is default when no
@@ -364,7 +376,7 @@ func loadListenerConfig(bucket string, objAPI ObjectLayer) ([]listenerConfig, er
 		return nil, err
 	}
 	var buffer bytes.Buffer
-	err = objAPI.GetObject(minioMetaBucket, listenerConfigPath, 0, objInfo.Size, &buffer)
+	err = objAPI.GetObject(minioMetaBucket, lcPath, 0, objInfo.Size, &buffer)
 	if err != nil {
 		// 'notification.xml' not found return
 		// 'errNoSuchNotifications'.  This is default when no
@@ -399,6 +411,11 @@ func persistNotificationConfig(bucket string, ncfg *notificationConfig, obj Obje
 
 	// build path
 	ncPath := path.Join(bucketConfigPrefix, bucket, bucketNotificationConfig)
+	// Acquire a write lock on notification config before modifying.
+	objLock := globalNSMutex.NewNSLock(minioMetaBucket, ncPath)
+	objLock.Lock()
+	defer objLock.Unlock()
+
 	// write object to path
 	sha256Sum := getSHA256Hash(buf)
 	_, err = obj.PutObject(minioMetaBucket, ncPath, int64(len(buf)), bytes.NewReader(buf), nil, sha256Sum)
@@ -419,6 +436,11 @@ func persistListenerConfig(bucket string, lcfg []listenerConfig, obj ObjectLayer
 
 	// build path
 	lcPath := path.Join(bucketConfigPrefix, bucket, bucketListenerConfig)
+	// Acquire a write lock on notification config before modifying.
+	objLock := globalNSMutex.NewNSLock(minioMetaBucket, lcPath)
+	objLock.Lock()
+	defer objLock.Unlock()
+
 	// write object to path
 	sha256Sum := getSHA256Hash(buf)
 	_, err = obj.PutObject(minioMetaBucket, lcPath, int64(len(buf)), bytes.NewReader(buf), nil, sha256Sum)
@@ -428,12 +450,34 @@ func persistListenerConfig(bucket string, lcfg []listenerConfig, obj ObjectLayer
 	return err
 }
 
+// Removes notification.xml for a given bucket, only used during DeleteBucket.
+func removeNotificationConfig(bucket string, objAPI ObjectLayer) error {
+	// Verify bucket is valid.
+	if !IsValidBucketName(bucket) {
+		return BucketNameInvalid{Bucket: bucket}
+	}
+
+	ncPath := path.Join(bucketConfigPrefix, bucket, bucketNotificationConfig)
+
+	// Acquire a write lock on notification config before modifying.
+	objLock := globalNSMutex.NewNSLock(minioMetaBucket, ncPath)
+	objLock.Lock()
+	err := objAPI.DeleteObject(minioMetaBucket, ncPath)
+	objLock.Unlock()
+	return err
+}
+
 // Remove listener configuration from storage layer. Used when a bucket is deleted.
 func removeListenerConfig(bucket string, objAPI ObjectLayer) error {
 	// make the path
 	lcPath := path.Join(bucketConfigPrefix, bucket, bucketListenerConfig)
-	// remove it
-	return objAPI.DeleteObject(minioMetaBucket, lcPath)
+
+	// Acquire a write lock on notification config before modifying.
+	objLock := globalNSMutex.NewNSLock(minioMetaBucket, lcPath)
+	objLock.Lock()
+	err := objAPI.DeleteObject(minioMetaBucket, lcPath)
+	objLock.Unlock()
+	return err
 }
 
 // Loads both notification and listener config.
@@ -614,6 +658,31 @@ func loadAllQueueTargets() (map[string]*logrus.Logger, error) {
 			return nil, err
 		}
 		queueTargets[queueARN] = pgLog
+	}
+	// Load Kafka targets, initialize their respective loggers.
+	for accountID, kafkaN := range serverConfig.GetKafka() {
+		if !kafkaN.Enable {
+			continue
+		}
+		// Construct the queue ARN for Kafka.
+		queueARN := minioSqs + serverConfig.GetRegion() + ":" + accountID + ":" + queueTypeKafka
+		_, ok := queueTargets[queueARN]
+		if ok {
+			continue
+		}
+		// Using accountID initialize a new Kafka logrus instance.
+		kafkaLog, err := newKafkaNotify(accountID)
+		if err != nil {
+			// Encapsulate network error to be more informative.
+			if _, ok := err.(net.Error); ok {
+				return nil, &net.OpError{
+					Op: "Connecting to " + queueARN, Net: "tcp",
+					Err: err,
+				}
+			}
+			return nil, err
+		}
+		queueTargets[queueARN] = kafkaLog
 	}
 
 	// Successfully initialized queue targets.

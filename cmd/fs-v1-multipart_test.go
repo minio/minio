@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"bytes"
-	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -27,7 +26,7 @@ import (
 // TestNewMultipartUploadFaultyDisk - test NewMultipartUpload with faulty disks
 func TestNewMultipartUploadFaultyDisk(t *testing.T) {
 	// Prepare for tests
-	disk := filepath.Join(os.TempDir(), "minio-"+nextSuffix())
+	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 	defer removeAll(disk)
 	obj := initFSObjects(disk, t)
 
@@ -66,7 +65,7 @@ func TestPutObjectPartFaultyDisk(t *testing.T) {
 	defer removeAll(root)
 
 	// Prepare for tests
-	disk := filepath.Join(os.TempDir(), "minio-"+nextSuffix())
+	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 	defer removeAll(disk)
 	obj := initFSObjects(disk, t)
 	fs := obj.(fsObjects)
@@ -117,7 +116,7 @@ func TestPutObjectPartFaultyDisk(t *testing.T) {
 // TestCompleteMultipartUploadFaultyDisk - test CompleteMultipartUpload with faulty disks
 func TestCompleteMultipartUploadFaultyDisk(t *testing.T) {
 	// Prepare for tests
-	disk := filepath.Join(os.TempDir(), "minio-"+nextSuffix())
+	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 	defer removeAll(disk)
 	obj := initFSObjects(disk, t)
 
@@ -168,7 +167,7 @@ func TestCompleteMultipartUploadFaultyDisk(t *testing.T) {
 // TestListMultipartUploadsFaultyDisk - test ListMultipartUploads with faulty disks
 func TestListMultipartUploadsFaultyDisk(t *testing.T) {
 	// Prepare for tests
-	disk := filepath.Join(os.TempDir(), "minio-"+nextSuffix())
+	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 	defer removeAll(disk)
 	obj := initFSObjects(disk, t)
 	fs := obj.(fsObjects)

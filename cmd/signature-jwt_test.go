@@ -32,21 +32,21 @@ func TestNewJWT(t *testing.T) {
 	serverConfig = nil
 
 	// Test non-existent config directory.
-	path1, err := ioutil.TempDir("", "minio-")
+	path1, err := ioutil.TempDir(globalTestTmpDir, "minio-")
 	if err != nil {
 		t.Fatalf("Unable to create a temporary directory, %s", err)
 	}
 	defer removeAll(path1)
 
 	// Test empty config directory.
-	path2, err := ioutil.TempDir("", "minio-")
+	path2, err := ioutil.TempDir(globalTestTmpDir, "minio-")
 	if err != nil {
 		t.Fatalf("Unable to create a temporary directory, %s", err)
 	}
 	defer removeAll(path2)
 
 	// Test empty config file.
-	path3, err := ioutil.TempDir("", "minio-")
+	path3, err := ioutil.TempDir(globalTestTmpDir, "minio-")
 	if err != nil {
 		t.Fatalf("Unable to create a temporary directory, %s", err)
 	}
@@ -57,7 +57,7 @@ func TestNewJWT(t *testing.T) {
 	}
 
 	// Test initialized config file.
-	path4, err := ioutil.TempDir("", "minio-")
+	path4, err := ioutil.TempDir(globalTestTmpDir, "minio-")
 	if err != nil {
 		t.Fatalf("Unable to create a temporary directory, %s", err)
 	}

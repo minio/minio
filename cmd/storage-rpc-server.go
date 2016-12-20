@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"bytes"
 	"io"
 	"net/rpc"
 	"path"
@@ -30,30 +29,10 @@ import (
 // Storage server implements rpc primitives to facilitate exporting a
 // disk over a network.
 type storageServer struct {
+	loginServer
 	storage   StorageAPI
 	path      string
 	timestamp time.Time
-}
-
-/// Auth operations
-
-// Login - login handler.
-func (s *storageServer) LoginHandler(args *RPCLoginArgs, reply *RPCLoginReply) error {
-	jwt, err := newJWT(defaultInterNodeJWTExpiry, serverConfig.GetCredential())
-	if err != nil {
-		return err
-	}
-	if err = jwt.Authenticate(args.Username, args.Password); err != nil {
-		return err
-	}
-	token, err := jwt.GenerateToken(args.Username)
-	if err != nil {
-		return err
-	}
-	reply.Token = token
-	reply.Timestamp = time.Now().UTC()
-	reply.ServerVersion = Version
-	return nil
 }
 
 /// Storage operations handlers.
@@ -156,19 +135,12 @@ func (s *storageServer) ReadAllHandler(args *ReadFileArgs, reply *[]byte) error 
 
 // ReadFileHandler - read file handler is rpc wrapper to read file.
 func (s *storageServer) ReadFileHandler(args *ReadFileArgs, reply *[]byte) (err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			// Recover any panic and return ErrCacheFull.
-			err = bytes.ErrTooLarge
-		}
-	}() // Do not crash the server.
 	if !isRPCTokenValid(args.Token) {
 		return errInvalidToken
 	}
-	// Allocate the requested buffer from the client.
-	*reply = make([]byte, args.Size)
+
 	var n int64
-	n, err = s.storage.ReadFile(args.Vol, args.Path, args.Offset, *reply)
+	n, err = s.storage.ReadFile(args.Vol, args.Path, args.Offset, args.Buffer)
 	// Sending an error over the rpc layer, would cause unmarshalling to fail. In situations
 	// when we have short read i.e `io.ErrUnexpectedEOF` treat it as good condition and copy
 	// the buffer properly.
@@ -176,7 +148,7 @@ func (s *storageServer) ReadFileHandler(args *ReadFileArgs, reply *[]byte) (err 
 		// Reset to nil as good condition.
 		err = nil
 	}
-	*reply = (*reply)[0:n]
+	*reply = args.Buffer[0:n]
 	return err
 }
 

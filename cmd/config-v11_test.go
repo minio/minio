@@ -60,6 +60,13 @@ func TestServerConfig(t *testing.T) {
 		t.Errorf("Expecting Redis config %#v found %#v", redisNotify{}, savedNotifyCfg3)
 	}
 
+	// Set new kafka notification id.
+	serverConfig.SetKafkaNotifyByID("2", kafkaNotify{})
+	savedNotifyCfg4 := serverConfig.GetKafkaNotifyByID("2")
+	if !reflect.DeepEqual(savedNotifyCfg4, kafkaNotify{}) {
+		t.Errorf("Expecting Kafka config %#v found %#v", kafkaNotify{}, savedNotifyCfg4)
+	}
+
 	// Set new console logger.
 	serverConfig.SetConsoleLogger(consoleLogger{
 		Enable: true,

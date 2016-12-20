@@ -69,6 +69,7 @@ func isWriteLock(lri []lockRequesterInfo) bool {
 
 // lockServer is type for RPC handlers
 type lockServer struct {
+	loginServer
 	rpcPath string
 	mutex   sync.Mutex
 	lockMap map[string][]lockRequesterInfo
@@ -124,25 +125,6 @@ func registerStorageLockers(mux *router.Router, lockServers []*lockServer) error
 }
 
 ///  Distributed lock handlers
-
-// LoginHandler - handles LoginHandler RPC call.
-func (l *lockServer) LoginHandler(args *RPCLoginArgs, reply *RPCLoginReply) error {
-	jwt, err := newJWT(defaultInterNodeJWTExpiry, serverConfig.GetCredential())
-	if err != nil {
-		return err
-	}
-	if err = jwt.Authenticate(args.Username, args.Password); err != nil {
-		return err
-	}
-	token, err := jwt.GenerateToken(args.Username)
-	if err != nil {
-		return err
-	}
-	reply.Token = token
-	reply.Timestamp = time.Now().UTC()
-	reply.ServerVersion = Version
-	return nil
-}
 
 // Lock - rpc handler for (single) write lock operation.
 func (l *lockServer) Lock(args *LockArgs, reply *bool) error {
@@ -297,7 +279,7 @@ func (l *lockServer) lockMaintenance(interval time.Duration) {
 	// Validate if long lived locks are indeed clean.
 	for _, nlrip := range nlripLongLived {
 		// Initialize client based on the long live locks.
-		c := newClient(nlrip.lri.node, nlrip.lri.rpcPath, isSSL())
+		c := newRPCClient(nlrip.lri.node, nlrip.lri.rpcPath, isSSL())
 
 		var expired bool
 

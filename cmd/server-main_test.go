@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"errors"
 	"flag"
 	"net/http"
 	"os"
@@ -182,58 +183,91 @@ func TestParseStorageEndpoints(t *testing.T) {
 		expectedErr     error
 	}{
 		{"", "http://localhost/export", nil},
-		{"testhost", "http://localhost/export", errInvalidArgument},
-		{"", "http://localhost:9000/export", errInvalidArgument},
+		{
+			"testhost",
+			"http://localhost/export",
+			errors.New("Invalid Argument localhost, port mandatory when --address <host>:<port> is used"),
+		},
+		{
+			"",
+			"http://localhost:9000/export",
+			errors.New("Invalid Argument localhost:9000, port configurable using --address :<port>"),
+		},
 		{"testhost", "http://localhost:9000/export", nil},
 	}
 	for i, test := range testCases {
 		globalMinioHost = test.globalMinioHost
 		_, err := parseStorageEndpoints([]string{test.host})
-		if err != test.expectedErr {
-			t.Errorf("Test %d : got %v, expected %v", i+1, err, test.expectedErr)
+		if err != nil {
+			if err.Error() != test.expectedErr.Error() {
+				t.Errorf("Test %d : got %v, expected %v", i+1, err, test.expectedErr)
+			}
 		}
 	}
 	// Should be reset back to "" so that we don't affect other tests.
 	globalMinioHost = ""
 }
 
+// Test check endpoints syntax function for syntax verification
+// across various scenarios of inputs.
 func TestCheckEndpointsSyntax(t *testing.T) {
-	var testCases []string
-	if runtime.GOOS == "windows" {
-		testCases = []string{
-			"\\export",
-			"D:\\export",
-			"D:\\",
-			"D:",
-			"\\",
-		}
-	} else {
-		testCases = []string{
-			"/export",
-		}
-	}
-	testCasesCommon := []string{
+	successCases := []string{
 		"export",
+		"/export",
 		"http://localhost/export",
 		"https://localhost/export",
 	}
-	testCases = append(testCases, testCasesCommon...)
-	for _, disk := range testCases {
+
+	failureCases := []string{
+		"/",
+		"http://localhost",
+		"http://localhost/",
+		"ftp://localhost/export",
+		"server:/export",
+	}
+
+	if runtime.GOOS == "windows" {
+		successCases = append(successCases,
+			`\export`,
+			`D:\export`,
+		)
+
+		failureCases = append(failureCases,
+			"D:",
+			`D:\`,
+			`\`,
+		)
+	}
+
+	for _, disk := range successCases {
 		eps, err := parseStorageEndpoints([]string{disk})
 		if err != nil {
-			t.Error(disk, err)
-			continue
+			t.Fatalf("Unable to parse %s, error %s", disk, err)
 		}
-		// This will fatalIf() if endpoint is invalid.
-		checkEndpointsSyntax(eps, []string{disk})
+		if err = checkEndpointsSyntax(eps, []string{disk}); err != nil {
+			t.Errorf("expected: <nil>, got: %s", err)
+		}
+	}
+
+	for _, disk := range failureCases {
+		eps, err := parseStorageEndpoints([]string{disk})
+		if err != nil {
+			t.Fatalf("Unable to parse %s, error %s", disk, err)
+		}
+		if err = checkEndpointsSyntax(eps, []string{disk}); err == nil {
+			t.Errorf("expected: <error>, got: <nil>")
+		}
 	}
 }
 
+// Tests check server syntax.
 func TestCheckServerSyntax(t *testing.T) {
 	app := cli.NewApp()
 	app.Commands = []cli.Command{serverCmd}
 	serverFlagSet := flag.NewFlagSet("server", 0)
-	cli.NewContext(app, serverFlagSet, nil)
+	serverFlagSet.String("address", ":9000", "")
+	ctx := cli.NewContext(app, serverFlagSet, serverFlagSet)
+
 	disksGen := func(n int) []string {
 		disks, err := getRandomDisks(n)
 		if err != nil {
@@ -247,21 +281,14 @@ func TestCheckServerSyntax(t *testing.T) {
 		disksGen(8),
 		disksGen(16),
 	}
+
 	for i, disks := range testCases {
 		err := serverFlagSet.Parse(disks)
 		if err != nil {
 			t.Errorf("Test %d failed to parse arguments %s", i+1, disks)
 		}
 		defer removeRoots(disks)
-		endpoints, err := parseStorageEndpoints(disks)
-		if err != nil {
-			t.Fatalf("Test %d : Unexpected error %s", i+1, err)
-		}
-		checkEndpointsSyntax(endpoints, disks)
-		_, err = initStorageDisks(endpoints)
-		if err != nil {
-			t.Errorf("Test %d : disk init failed : %s", i+1, err)
-		}
+		checkServerSyntax(ctx)
 	}
 }
 
@@ -345,5 +372,34 @@ func TestInitServerConfig(t *testing.T) {
 			t.Fatalf("Test %d failed with %v", i+1, tErr)
 		}
 		initServerConfig(ctx)
+	}
+}
+
+// Tests isAnyEndpointLocal function with inputs such that it returns true and false respectively.
+func TestIsAnyEndpointLocal(t *testing.T) {
+	testCases := []struct {
+		disks  []string
+		result bool
+	}{
+		{
+			disks: []string{"http://4.4.4.4/mnt/disk1",
+				"http://4.4.4.4/mnt/disk1"},
+			result: false,
+		},
+		{
+			disks: []string{"http://localhost/mnt/disk1",
+				"http://localhost/mnt/disk1"},
+			result: true,
+		},
+	}
+	for i, test := range testCases {
+		endpoints, err := parseStorageEndpoints(test.disks)
+		if err != nil {
+			t.Fatalf("Test %d - Failed to parse storage endpoints %v", i+1, err)
+		}
+		actual := isAnyEndpointLocal(endpoints)
+		if actual != test.result {
+			t.Errorf("Test %d - Expected %v but received %v", i+1, test.result, actual)
+		}
 	}
 }

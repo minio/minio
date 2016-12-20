@@ -83,12 +83,38 @@ func extractMetadataFromHeader(header http.Header) map[string]string {
 	for key := range header {
 		cKey := http.CanonicalHeaderKey(key)
 		if strings.HasPrefix(cKey, "X-Amz-Meta-") {
-			metadata[cKey] = header.Get(cKey)
+			metadata[cKey] = header.Get(key)
 		} else if strings.HasPrefix(key, "X-Minio-Meta-") {
-			metadata[cKey] = header.Get(cKey)
+			metadata[cKey] = header.Get(key)
 		}
 	}
 	// Return.
+	return metadata
+}
+
+// extractMetadataFromForm extracts metadata from Post Form.
+func extractMetadataFromForm(formValues map[string]string) map[string]string {
+	metadata := make(map[string]string)
+	// Save standard supported headers.
+	for _, supportedHeader := range supportedHeaders {
+		canonicalHeader := http.CanonicalHeaderKey(supportedHeader)
+		// Form field names are case insensitive, look for both canonical
+		// and non canonical entries.
+		if _, ok := formValues[canonicalHeader]; ok {
+			metadata[supportedHeader] = formValues[canonicalHeader]
+		} else if _, ok := formValues[supportedHeader]; ok {
+			metadata[supportedHeader] = formValues[canonicalHeader]
+		}
+	}
+	// Go through all other form values for any additional headers that needs to be saved.
+	for key := range formValues {
+		cKey := http.CanonicalHeaderKey(key)
+		if strings.HasPrefix(cKey, "X-Amz-Meta-") {
+			metadata[cKey] = formValues[key]
+		} else if strings.HasPrefix(cKey, "X-Minio-Meta-") {
+			metadata[cKey] = formValues[key]
+		}
+	}
 	return metadata
 }
 

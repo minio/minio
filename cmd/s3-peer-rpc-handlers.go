@@ -16,26 +16,6 @@
 
 package cmd
 
-import "time"
-
-func (s3 *s3PeerAPIHandlers) LoginHandler(args *RPCLoginArgs, reply *RPCLoginReply) error {
-	jwt, err := newJWT(defaultInterNodeJWTExpiry, serverConfig.GetCredential())
-	if err != nil {
-		return err
-	}
-	if err = jwt.Authenticate(args.Username, args.Password); err != nil {
-		return err
-	}
-	token, err := jwt.GenerateToken(args.Username)
-	if err != nil {
-		return err
-	}
-	reply.Token = token
-	reply.ServerVersion = Version
-	reply.Timestamp = time.Now().UTC()
-	return nil
-}
-
 // SetBucketNotificationPeerArgs - Arguments collection to SetBucketNotificationPeer RPC
 // call
 type SetBucketNotificationPeerArgs struct {

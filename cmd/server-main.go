@@ -23,9 +23,10 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
+	"sort"
 	"strings"
 
-	"regexp"
 	"runtime"
 
 	"github.com/minio/cli"
@@ -55,8 +56,11 @@ FLAGS:
   {{end}}
 ENVIRONMENT VARIABLES:
   ACCESS:
-     MINIO_ACCESS_KEY: Username or access key of 5 to 20 characters in length.
-     MINIO_SECRET_KEY: Password or secret key of 8 to 40 characters in length.
+     MINIO_ACCESS_KEY: Custom username or access key of 5 to 20 characters in length.
+     MINIO_SECRET_KEY: Custom password or secret key of 8 to 40 characters in length.
+
+  BROWSER:
+     MINIO_BROWSER: To disable web browser access, set this value to "off".
 
 EXAMPLES:
   1. Start minio server on "/home/shared" directory.
@@ -108,8 +112,7 @@ func parseStorageEndpoints(eps []string) (endpoints []*url.URL, err error) {
 				// we return error as port is configurable only
 				// using "--address :port"
 				if port != "" {
-					errorIf(fmt.Errorf("Invalid argument %s, port configurable using --address :<port>", u.Host), "")
-					return nil, errInvalidArgument
+					return nil, fmt.Errorf("Invalid Argument %s, port configurable using --address :<port>", u.Host)
 				}
 				u.Host = net.JoinHostPort(u.Host, globalMinioPort)
 			} else {
@@ -117,8 +120,7 @@ func parseStorageEndpoints(eps []string) (endpoints []*url.URL, err error) {
 				// i.e if "--address host:port" is specified
 				// port info in u.Host is mandatory else return error.
 				if port == "" {
-					errorIf(fmt.Errorf("Invalid argument %s, port mandatory when --address <host>:<port> is used", u.Host), "")
-					return nil, errInvalidArgument
+					return nil, fmt.Errorf("Invalid Argument %s, port mandatory when --address <host>:<port> is used", u.Host)
 				}
 			}
 		}
@@ -257,48 +259,47 @@ func isDistributedSetup(eps []*url.URL) bool {
 	return false
 }
 
-// We just exit for invalid endpoints.
-func checkEndpointsSyntax(eps []*url.URL, disks []string) {
-	for i, u := range eps {
-		switch u.Scheme {
-		case "", "http", "https":
-			// Scheme is "" for FS and singlenode-XL, hence pass.
-		default:
-			if runtime.GOOS == "windows" {
-				// On windows for "C:\export" scheme will be "C"
-				matched, err := regexp.MatchString("^[a-zA-Z]$", u.Scheme)
-				fatalIf(err, "Parsing scheme : %s (%s)", u.Scheme, disks[i])
-				if matched {
-					break
-				}
-			}
-			fatalIf(errInvalidArgument, "Invalid scheme : %s (%s)", u.Scheme, disks[i])
+// Check if endpoint is in expected syntax by valid scheme/path across all platforms.
+func checkEndpointURL(endpointURL *url.URL) (err error) {
+	// applicable to all OS.
+	if endpointURL.Scheme == "" || endpointURL.Scheme == "http" || endpointURL.Scheme == "https" {
+		urlPath := path.Clean(endpointURL.Path)
+		if urlPath == "" || urlPath == "." || urlPath == "/" || urlPath == `\` {
+			err = fmt.Errorf("Empty or root path is not allowed")
 		}
-		if runtime.GOOS == "windows" {
-			if u.Scheme == "http" || u.Scheme == "https" {
-				// "http://server1/" is not allowed
-				if u.Path == "" || u.Path == "/" || u.Path == "\\" {
-					fatalIf(errInvalidArgument, "Empty path for %s", disks[i])
-				}
+
+		return err
+	}
+
+	// Applicable to Windows only.
+	if runtime.GOOS == "windows" {
+		// On Windows, endpoint can be a path with drive eg. C:\Export and its URL.Scheme is 'C'.
+		// Check if URL.Scheme is a single letter alphabet to represent a drive.
+		// Note: URL.Parse() converts scheme into lower case always.
+		if len(endpointURL.Scheme) == 1 && endpointURL.Scheme[0] >= 'a' && endpointURL.Scheme[0] <= 'z' {
+			// If endpoint is C:\ or C:\export, URL.Path does not have path information like \ or \export
+			// hence we directly work with endpoint.
+			urlPath := strings.SplitN(path.Clean(endpointURL.String()), ":", 2)[1]
+			if urlPath == "" || urlPath == "." || urlPath == "/" || urlPath == `\` {
+				err = fmt.Errorf("Empty or root path is not allowed")
 			}
-		} else {
-			if u.Scheme == "http" || u.Scheme == "https" {
-				// "http://server1/" is not allowed.
-				if u.Path == "" || u.Path == "/" {
-					fatalIf(errInvalidArgument, "Empty path for %s", disks[i])
-				}
-			} else {
-				// "/" is not allowed.
-				if u.Path == "" || u.Path == "/" {
-					fatalIf(errInvalidArgument, "Empty path for %s", disks[i])
-				}
-			}
+
+			return err
 		}
 	}
 
-	if err := checkDuplicateEndpoints(eps); err != nil {
-		fatalIf(errInvalidArgument, "Duplicate entries in %s", strings.Join(disks, " "))
+	return fmt.Errorf("Invalid scheme")
+}
+
+// Check if endpoints are in expected syntax by valid scheme/path across all platforms.
+func checkEndpointsSyntax(eps []*url.URL, disks []string) error {
+	for i, u := range eps {
+		if err := checkEndpointURL(u); err != nil {
+			return fmt.Errorf("%s: %s (%s)", err.Error(), u.Path, disks[i])
+		}
 	}
+
+	return nil
 }
 
 // Make sure all the command line parameters are OK and exit in case of invalid parameters.
@@ -311,13 +312,25 @@ func checkServerSyntax(c *cli.Context) {
 	// Verify syntax for all the XL disks.
 	disks := c.Args()
 	endpoints, err := parseStorageEndpoints(disks)
-	fatalIf(err, "Unable to parse storage endpoints %s", disks)
-	checkEndpointsSyntax(endpoints, disks)
+	fatalIf(err, "Unable to parse storage endpoints %s", strings.Join(disks, " "))
+
+	// Validate if endpoints follow the expected syntax.
+	err = checkEndpointsSyntax(endpoints, disks)
+	fatalIf(err, "Invalid endpoints found %s", strings.Join(disks, " "))
+
+	// Validate for duplicate endpoints are supplied.
+	err = checkDuplicateEndpoints(endpoints)
+	fatalIf(err, "Duplicate entries in %s", strings.Join(disks, " "))
 
 	if len(endpoints) > 1 {
-		// For XL setup.
+		// Validate if we have sufficient disks for XL setup.
 		err = checkSufficientDisks(endpoints)
-		fatalIf(err, "Storage endpoint error.")
+		fatalIf(err, "Invalid number of disks supplied.")
+	} else {
+		// Validate if we have invalid disk for FS setup.
+		if endpoints[0].Host != "" && endpoints[0].Scheme != "" {
+			fatalIf(errInvalidArgument, "%s, FS setup expects a filesystem path", endpoints[0])
+		}
 	}
 
 	if !isDistributedSetup(endpoints) {
@@ -357,6 +370,18 @@ func checkServerSyntax(c *cli.Context) {
 	}
 }
 
+// Checks if any of the endpoints supplied is local to this server.
+func isAnyEndpointLocal(eps []*url.URL) bool {
+	anyLocalEp := false
+	for _, ep := range eps {
+		if isLocalStorage(ep) {
+			anyLocalEp = true
+			break
+		}
+	}
+	return anyLocalEp
+}
+
 // serverMain handler called for 'minio server' command.
 func serverMain(c *cli.Context) {
 	if !c.Args().Present() || c.Args().First() == "help" {
@@ -369,6 +394,7 @@ func serverMain(c *cli.Context) {
 	// Initialization routine, such as config loading, enable logging, ..
 	minioInit()
 
+	// Check for minio updates from dl.minio.io
 	checkUpdate()
 
 	// Server address.
@@ -397,6 +423,18 @@ func serverMain(c *cli.Context) {
 	// Disks to be used in server init.
 	endpoints, err := parseStorageEndpoints(c.Args())
 	fatalIf(err, "Unable to parse storage endpoints %s", c.Args())
+
+	// Should exit gracefully if none of the endpoints passed
+	// as command line args are local to this server.
+	if !isAnyEndpointLocal(endpoints) {
+		fatalIf(errInvalidArgument, "None of the disks passed as command line args are local to this server.")
+	}
+
+	// Sort endpoints for consistent ordering across multiple
+	// nodes in a distributed setup. This is to avoid format.json
+	// corruption if the disks aren't supplied in the same order
+	// on all nodes.
+	sort.Sort(byHostPath(endpoints))
 
 	storageDisks, err := initStorageDisks(endpoints)
 	fatalIf(err, "Unable to initialize storage disk(s).")
@@ -446,6 +484,9 @@ func serverMain(c *cli.Context) {
 
 	// Initialize S3 Peers inter-node communication
 	initGlobalS3Peers(endpoints)
+
+	// Initialize Admin Peers inter-node communication
+	initGlobalAdminPeers(endpoints)
 
 	// Start server, automatically configures TLS if certs are available.
 	go func(tls bool) {

@@ -117,6 +117,12 @@ func TestObjCache(t *testing.T) {
 			cacheSize: 5,
 			closeErr:  ErrExcessData,
 		},
+		// Validate error excess data during write.
+		{
+			expiry:    NoExpiry,
+			cacheSize: 2048,
+			err:       ErrExcessData,
+		},
 	}
 
 	// Test 1 validating Open failure.
@@ -232,14 +238,30 @@ func TestObjCache(t *testing.T) {
 	if err = w.Close(); err != nil {
 		t.Errorf("Test case 7 expected to pass, failed instead %s", err)
 	}
-	w, err = cache.Create("test2", 1)
-	if err != nil {
+	_, err = cache.Create("test2", 1)
+	if err != ErrCacheFull {
 		t.Errorf("Test case 7 expected to pass, failed instead %s", err)
 	}
-	// Write '1' byte.
-	w.Write([]byte("H"))
-	if err = w.Close(); err != testCase.closeErr {
-		t.Errorf("Test case 7 expected to fail, passed instead")
+
+	// Test 8 validates rejecting Writes which write excess data.
+	testCase = testCases[7]
+	cache = New(testCase.cacheSize, testCase.expiry)
+	w, err = cache.Create("test1", 5)
+	if err != nil {
+		t.Errorf("Test case 8 expected to pass, failed instead %s", err)
+	}
+	// Write '5' bytes.
+	n, err := w.Write([]byte("Hello"))
+	if err != nil {
+		t.Errorf("Test case 8 expected to pass, failed instead %s", err)
+	}
+	if n != 5 {
+		t.Errorf("Test case 8 expected 5 bytes written, instead found %d", n)
+	}
+	// Write '1' more byte, should return error.
+	n, err = w.Write([]byte("W"))
+	if n == 0 && err != testCase.err {
+		t.Errorf("Test case 8 expected to fail with ErrExcessData, but failed with %s instead", err)
 	}
 }
 

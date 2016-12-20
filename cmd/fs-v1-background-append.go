@@ -91,9 +91,9 @@ func (b *backgroundAppend) append(disk StorageAPI, bucket, object, uploadID stri
 // Called on complete-multipart-upload. Returns nil if the required parts have been appended.
 func (b *backgroundAppend) complete(disk StorageAPI, bucket, object, uploadID string, meta fsMetaV1) error {
 	b.Lock()
+	defer b.Unlock()
 	info, ok := b.infoMap[uploadID]
 	delete(b.infoMap, uploadID)
-	b.Unlock()
 	if !ok {
 		return errPartsMissing
 	}
@@ -115,13 +115,12 @@ func (b *backgroundAppend) complete(disk StorageAPI, bucket, object, uploadID st
 // Called after complete-multipart-upload or abort-multipart-upload so that the appendParts go-routine is not left dangling.
 func (b *backgroundAppend) abort(uploadID string) {
 	b.Lock()
+	defer b.Unlock()
 	info, ok := b.infoMap[uploadID]
 	if !ok {
-		b.Unlock()
 		return
 	}
 	delete(b.infoMap, uploadID)
-	b.Unlock()
 	info.abortCh <- struct{}{}
 }
 
@@ -129,6 +128,8 @@ func (b *backgroundAppend) abort(uploadID string) {
 func (b *backgroundAppend) appendParts(disk StorageAPI, bucket, object, uploadID string, info bgAppendPartsInfo) {
 	// Holds the list of parts that is already appended to the "append" file.
 	appendMeta := fsMetaV1{}
+	// Allocate staging read buffer.
+	buf := make([]byte, readSizeV1)
 	for {
 		select {
 		case input := <-info.inputCh:
@@ -151,7 +152,7 @@ func (b *backgroundAppend) appendParts(disk StorageAPI, bucket, object, uploadID
 					}
 					break
 				}
-				if err := appendPart(disk, bucket, object, uploadID, part); err != nil {
+				if err := appendPart(disk, bucket, object, uploadID, part, buf); err != nil {
 					disk.DeleteFile(minioMetaTmpBucket, uploadID)
 					appendMeta.Parts = nil
 					input.errCh <- err
@@ -162,9 +163,11 @@ func (b *backgroundAppend) appendParts(disk StorageAPI, bucket, object, uploadID
 		case <-info.abortCh:
 			// abort-multipart-upload closed abortCh to end the appendParts go-routine.
 			disk.DeleteFile(minioMetaTmpBucket, uploadID)
+			close(info.timeoutCh) // So that any racing PutObjectPart does not leave a dangling go-routine.
 			return
 		case <-info.completeCh:
 			// complete-multipart-upload closed completeCh to end the appendParts go-routine.
+			close(info.timeoutCh) // So that any racing PutObjectPart does not leave a dangling go-routine.
 			return
 		case <-time.After(appendPartsTimeout):
 			// Timeout the goroutine to garbage collect its resources. This would happen if the client initiates
@@ -183,12 +186,11 @@ func (b *backgroundAppend) appendParts(disk StorageAPI, bucket, object, uploadID
 
 // Appends the "part" to the append-file inside "tmp/" that finally gets moved to the actual location
 // upon complete-multipart-upload.
-func appendPart(disk StorageAPI, bucket, object, uploadID string, part objectPartInfo) error {
+func appendPart(disk StorageAPI, bucket, object, uploadID string, part objectPartInfo, buf []byte) error {
 	partPath := pathJoin(bucket, object, uploadID, part.Name)
 
 	offset := int64(0)
 	totalLeft := part.Size
-	buf := make([]byte, readSizeV1)
 	for totalLeft > 0 {
 		curLeft := int64(readSizeV1)
 		if totalLeft < readSizeV1 {

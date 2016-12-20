@@ -38,6 +38,8 @@ const (
 	queueTypeRedis = "redis"
 	// Static string indicating queue type 'postgresql'.
 	queueTypePostgreSQL = "postgresql"
+	// Static string indicating queue type 'kafka'.
+	queueTypeKafka = "kafka"
 )
 
 // Topic type.
@@ -58,6 +60,7 @@ type notifier struct {
 	ElasticSearch map[string]elasticSearchNotify `json:"elasticsearch"`
 	Redis         map[string]redisNotify         `json:"redis"`
 	PostgreSQL    map[string]postgreSQLNotify    `json:"postgresql"`
+	Kafka         map[string]kafkaNotify         `json:"kafka"`
 	// Add new notification queues.
 }
 
@@ -151,6 +154,24 @@ func isPostgreSQLQueue(sqsArn arnSQS) bool {
 		return false
 	}
 	defer pgC.Close()
+	return true
+}
+
+// Returns true if queueArn is for Kafka.
+func isKafkaQueue(sqsArn arnSQS) bool {
+	if sqsArn.Type != queueTypeKafka {
+		return false
+	}
+	kafkaNotifyCfg := serverConfig.GetKafkaNotifyByID(sqsArn.AccountID)
+	if !kafkaNotifyCfg.Enable {
+		return false
+	}
+	kafkaC, err := dialKafka(kafkaNotifyCfg)
+	if err != nil {
+		errorIf(err, "Unable to dial Kafka server %#v", kafkaNotifyCfg)
+		return false
+	}
+	defer kafkaC.Close()
 	return true
 }
 

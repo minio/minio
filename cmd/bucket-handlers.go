@@ -19,6 +19,7 @@ package cmd
 import (
 	"encoding/base64"
 	"encoding/xml"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -334,6 +335,10 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	bucketLock := globalNSMutex.NewNSLock(bucket, "")
+	bucketLock.Lock()
+	defer bucketLock.Unlock()
+
 	// Proceed to creating a bucket.
 	err := objectAPI.MakeBucket(bucket)
 	if err != nil {
@@ -425,11 +430,14 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		}
 	}
 
-	// Save metadata.
-	metadata := make(map[string]string)
-	// Nothing to store right now.
+	// Extract metadata to be saved from received Form.
+	metadata := extractMetadataFromForm(formValues)
 
 	sha256sum := ""
+
+	objectLock := globalNSMutex.NewNSLock(bucket, object)
+	objectLock.Lock()
+	defer objectLock.Unlock()
 
 	objInfo, err := objectAPI.PutObject(bucket, object, -1, fileBody, metadata, sha256sum)
 	if err != nil {
@@ -440,11 +448,38 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	w.Header().Set("ETag", "\""+objInfo.MD5Sum+"\"")
 	w.Header().Set("Location", getObjectLocation(bucket, object))
 
-	// Set common headers.
-	setCommonHeaders(w)
+	successRedirect := formValues[http.CanonicalHeaderKey("success_action_redirect")]
+	successStatus := formValues[http.CanonicalHeaderKey("success_action_status")]
 
-	// Write successful response.
-	writeSuccessNoContent(w)
+	if successStatus == "" && successRedirect == "" {
+		writeSuccessNoContent(w)
+	} else {
+		if successRedirect != "" {
+			redirectURL := successRedirect + "?" + fmt.Sprintf("bucket=%s&key=%s&etag=%s",
+				bucket,
+				getURLEncodedName(object),
+				getURLEncodedName("\""+objInfo.MD5Sum+"\""))
+
+			writeRedirectSeeOther(w, redirectURL)
+		} else {
+			// Decide what http response to send depending on success_action_status parameter
+			switch successStatus {
+			case "201":
+				resp := encodeResponse(PostResponse{
+					Bucket:   bucket,
+					Key:      object,
+					ETag:     "\"" + objInfo.MD5Sum + "\"",
+					Location: getObjectLocation(bucket, object),
+				})
+				writeResponse(w, http.StatusCreated, resp)
+
+			case "200":
+				writeSuccessResponse(w, nil)
+			default:
+				writeSuccessNoContent(w)
+			}
+		}
+	}
 
 	// Notify object created event.
 	eventNotify(eventData{
@@ -478,6 +513,10 @@ func (api objectAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	bucketLock := globalNSMutex.NewNSLock(bucket, "")
+	bucketLock.RLock()
+	defer bucketLock.RUnlock()
+
 	if _, err := objectAPI.GetBucketInfo(bucket); err != nil {
 		errorIf(err, "Unable to fetch bucket info.")
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
@@ -502,6 +541,10 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
+
+	bucketLock := globalNSMutex.NewNSLock(bucket, "")
+	bucketLock.Lock()
+	defer bucketLock.Unlock()
 
 	// Attempt to delete bucket.
 	if err := objectAPI.DeleteBucket(bucket); err != nil {

@@ -73,7 +73,7 @@ func checkPathLength(pathName string) error {
 
 // isDirEmpty - returns whether given directory is empty or not.
 func isDirEmpty(dirname string) bool {
-	f, err := os.Open(dirname)
+	f, err := os.Open(preparePath(dirname))
 	if err != nil {
 		errorIf(func() error {
 			if !os.IsNotExist(err) {
@@ -129,7 +129,7 @@ func newPosix(path string) (StorageAPI, error) {
 	}
 	if os.IsNotExist(err) {
 		// Disk not found create it.
-		err = os.MkdirAll(preparePath(diskPath), 0777)
+		err = mkdirAll(diskPath, 0777)
 		if err != nil {
 			return nil, err
 		}
@@ -625,7 +625,7 @@ func (s *posix) createFile(volume, path string) (f *os.File, err error) {
 	} else {
 		// Create top level directories if they don't exist.
 		// with mode 0777 mkdir honors system umask.
-		if err = mkdirAll(preparePath(slashpath.Dir(filePath)), 0777); err != nil {
+		if err = mkdirAll(slashpath.Dir(filePath), 0777); err != nil {
 			// File path cannot be verified since one of the parents is a file.
 			if isSysErrNotDir(err) {
 				return nil, errFileAccessDenied
@@ -935,7 +935,7 @@ func (s *posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err e
 		// Destination does not exist, hence proceed with the rename.
 	}
 	// Creates all the parent directories, with mode 0777 mkdir honors system umask.
-	if err = mkdirAll(preparePath(slashpath.Dir(dstFilePath)), 0777); err != nil {
+	if err = mkdirAll(slashpath.Dir(dstFilePath), 0777); err != nil {
 		// File path cannot be verified since one of the parents is a file.
 		if isSysErrNotDir(err) {
 			return errFileAccessDenied

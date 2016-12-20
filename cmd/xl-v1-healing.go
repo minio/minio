@@ -31,7 +31,7 @@ func healFormatXL(storageDisks []StorageAPI) (err error) {
 	// Generic format check.
 	// - if (no quorum) return error
 	// - if (disks not recognized) // Always error.
-	if err = genericFormatCheck(formatConfigs, sErrs); err != nil {
+	if err = genericFormatCheckXL(formatConfigs, sErrs); err != nil {
 		return err
 	}
 
@@ -73,7 +73,7 @@ func (xl xlObjects) HealBucket(bucket string) error {
 
 // Heal bucket - create buckets on disks where it does not exist.
 func healBucket(storageDisks []StorageAPI, bucket string, writeQuorum int) error {
-	bucketLock := nsMutex.NewNSLock(bucket, "")
+	bucketLock := globalNSMutex.NewNSLock(bucket, "")
 	bucketLock.Lock()
 	defer bucketLock.Unlock()
 
@@ -126,7 +126,7 @@ func healBucket(storageDisks []StorageAPI, bucket string, writeQuorum int) error
 // heals `policy.json`, `notification.xml` and `listeners.json`.
 func healBucketMetadata(storageDisks []StorageAPI, bucket string, readQuorum int) error {
 	healBucketMetaFn := func(metaPath string) error {
-		metaLock := nsMutex.NewNSLock(minioMetaBucket, metaPath)
+		metaLock := globalNSMutex.NewNSLock(minioMetaBucket, metaPath)
 		metaLock.RLock()
 		defer metaLock.RUnlock()
 		// Heals the given file at metaPath.
@@ -346,7 +346,7 @@ func (xl xlObjects) HealObject(bucket, object string) error {
 	}
 
 	// Lock the object before healing.
-	objectLock := nsMutex.NewNSLock(bucket, object)
+	objectLock := globalNSMutex.NewNSLock(bucket, object)
 	objectLock.RLock()
 	defer objectLock.RUnlock()
 

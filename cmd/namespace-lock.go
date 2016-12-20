@@ -26,7 +26,7 @@ import (
 )
 
 // Global name space lock.
-var nsMutex *nsLockMap
+var globalNSMutex *nsLockMap
 
 // Initialize distributed locking only in case of distributed setup.
 // Returns if the setup is distributed or not on success.
@@ -57,15 +57,15 @@ func initDsyncNodes(eps []*url.URL) error {
 }
 
 // initNSLock - initialize name space lock map.
-func initNSLock(isDist bool) {
-	nsMutex = &nsLockMap{
-		isDist:  isDist,
-		lockMap: make(map[nsParam]*nsLock),
+func initNSLock(isDistXL bool) {
+	globalNSMutex = &nsLockMap{
+		isDistXL: isDistXL,
+		lockMap:  make(map[nsParam]*nsLock),
 	}
 
 	// Initialize nsLockMap with entry for instrumentation information.
 	// Entries of <volume,path> -> stateInfo of locks
-	nsMutex.debugLockMap = make(map[nsParam]*debugLockInfoPerVolumePath)
+	globalNSMutex.debugLockMap = make(map[nsParam]*debugLockInfoPerVolumePath)
 }
 
 // RWLocker - interface that any read-write locking library should implement.
@@ -98,7 +98,7 @@ type nsLockMap struct {
 
 	// Indicates whether the locking service is part
 	// of a distributed setup or not.
-	isDist       bool
+	isDistXL     bool
 	lockMap      map[nsParam]*nsLock
 	lockMapMutex sync.Mutex
 }
@@ -113,8 +113,8 @@ func (n *nsLockMap) lock(volume, path string, lockSource, opsID string, readLock
 	if !found {
 		nsLk = &nsLock{
 			RWLocker: func() RWLocker {
-				if n.isDist {
-					return dsync.NewDRWMutex(pathutil.Join(volume, path))
+				if n.isDistXL {
+					return dsync.NewDRWMutex(pathJoin(volume, path))
 				}
 				return &sync.RWMutex{}
 			}(),
@@ -126,7 +126,7 @@ func (n *nsLockMap) lock(volume, path string, lockSource, opsID string, readLock
 
 	// Change the state of the lock to be blocked for the given
 	// pair of <volume, path> and <OperationID> till the lock
-	// unblocks. The lock for accessing `nsMutex` is held inside
+	// unblocks. The lock for accessing `globalNSMutex` is held inside
 	// the function itself.
 	if err := n.statusNoneToBlocked(param, lockSource, opsID, readLock); err != nil {
 		errorIf(err, "Failed to set lock state to blocked")
@@ -226,7 +226,7 @@ func (n *nsLockMap) ForceUnlock(volume, path string) {
 	defer n.lockMapMutex.Unlock()
 
 	// Clarification on operation:
-	// - In case of FS or XL we call ForceUnlock on the local nsMutex
+	// - In case of FS or XL we call ForceUnlock on the local globalNSMutex
 	//   (since there is only a single server) which will cause the 'stuck'
 	//   mutex to be removed from the map. Existing operations for this
 	//   will continue to be blocked (and timeout). New operations on this
@@ -238,9 +238,8 @@ func (n *nsLockMap) ForceUnlock(volume, path string) {
 	//   that participated in granting the lock. Any pending dsync locks that
 	//   are blocking can now proceed as normal and any new locks will also
 	//   participate normally.
-
-	if n.isDist { // For distributed mode, broadcast ForceUnlock message.
-		dsync.NewDRWMutex(pathutil.Join(volume, path)).ForceUnlock()
+	if n.isDistXL { // For distributed mode, broadcast ForceUnlock message.
+		dsync.NewDRWMutex(pathJoin(volume, path)).ForceUnlock()
 	}
 
 	param := nsParam{volume, path}

@@ -443,3 +443,40 @@ func loadConfigV9() (*serverConfigV9, error) {
 	}
 	return srvCfg, nil
 }
+
+// serverConfigV10 server configuration version '10' which is like
+// version '9' except it drops support of syslog config, and makes the
+// RWMutex global (so it does not exist in this struct).
+type serverConfigV10 struct {
+	Version string `json:"version"`
+
+	// S3 API configuration.
+	Credential credential `json:"credential"`
+	Region     string     `json:"region"`
+
+	// Additional error logging configuration.
+	Logger logger `json:"logger"`
+
+	// Notification queue configuration.
+	Notify notifier `json:"notify"`
+}
+
+func loadConfigV10() (*serverConfigV10, error) {
+	configFile, err := getConfigFile()
+	if err != nil {
+		return nil, err
+	}
+	if _, err = os.Stat(configFile); err != nil {
+		return nil, err
+	}
+	srvCfg := &serverConfigV10{}
+	srvCfg.Version = "10"
+	qc, err := quick.New(srvCfg)
+	if err != nil {
+		return nil, err
+	}
+	if err := qc.Load(configFile); err != nil {
+		return nil, err
+	}
+	return srvCfg, nil
+}

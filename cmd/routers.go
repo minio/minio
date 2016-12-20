@@ -75,6 +75,30 @@ func newObjectLayer(storageDisks []StorageAPI) (ObjectLayer, error) {
 	return objAPI, nil
 }
 
+// Composed function registering routers for only distributed XL setup.
+func registerDistXLRouters(mux *router.Router, srvCmdConfig serverCmdConfig) error {
+	// Register storage rpc router only if its a distributed setup.
+	err := registerStorageRPCRouters(mux, srvCmdConfig)
+	if err != nil {
+		return err
+	}
+
+	// Register distributed namespace lock.
+	err = registerDistNSLockRouter(mux, srvCmdConfig)
+	if err != nil {
+		return err
+	}
+
+	// Register S3 peer communication router.
+	err = registerS3PeerRPCRouter(mux)
+	if err != nil {
+		return err
+	}
+
+	// Register RPC router for web related calls.
+	return registerBrowserPeerRPCRouter(mux)
+}
+
 // configureServer handler returns final handler for the http server.
 func configureServerHandler(srvCmdConfig serverCmdConfig) (http.Handler, error) {
 	// Initialize router. `SkipClean(true)` stops gorilla/mux from
@@ -83,33 +107,24 @@ func configureServerHandler(srvCmdConfig serverCmdConfig) (http.Handler, error) 
 
 	// Initialize distributed NS lock.
 	if globalIsDistXL {
-		// Register storage rpc router only if its a distributed setup.
-		err := registerStorageRPCRouters(mux, srvCmdConfig)
-		if err != nil {
-			return nil, err
-		}
-
-		// Register distributed namespace lock.
-		err = registerDistNSLockRouter(mux, srvCmdConfig)
-		if err != nil {
-			return nil, err
-		}
+		registerDistXLRouters(mux, srvCmdConfig)
 	}
 
-	// Register S3 peer communication router.
-	err := registerS3PeerRPCRouter(mux)
+	// Add Admin RPC router
+	err := registerAdminRPCRouter(mux)
 	if err != nil {
 		return nil, err
 	}
 
-	// Register RPC router for web related calls.
-	if err = registerBrowserPeerRPCRouter(mux); err != nil {
-		return nil, err
+	// Register web router when its enabled.
+	if globalIsBrowserEnabled {
+		if err := registerWebRouter(mux); err != nil {
+			return nil, err
+		}
 	}
 
-	if err = registerWebRouter(mux); err != nil {
-		return nil, err
-	}
+	// Add Admin router.
+	registerAdminRouter(mux)
 
 	// Add API router.
 	registerAPIRouter(mux)

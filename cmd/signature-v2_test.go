@@ -22,6 +22,7 @@ func TestResourceListSorting(t *testing.T) {
 	}
 }
 
+// Tests presigned v2 signature.
 func TestDoesPresignedV2SignatureMatch(t *testing.T) {
 	root, err := newTestConfig("us-east-1")
 	if err != nil {
@@ -72,6 +73,15 @@ func TestDoesPresignedV2SignatureMatch(t *testing.T) {
 			queryParams: map[string]string{
 				"Expires":        fmt.Sprintf("%d", now.Unix()+60),
 				"Signature":      "badsignature",
+				"AWSAccessKeyId": serverConfig.GetCredential().AccessKeyID,
+			},
+			expected: ErrSignatureDoesNotMatch,
+		},
+		// (5) Should error when the signature does not match.
+		{
+			queryParams: map[string]string{
+				"Expires":        fmt.Sprintf("%d", now.Unix()),
+				"Signature":      "zOM2YrY/yAQe15VWmT78OlBrK6g=",
 				"AWSAccessKeyId": serverConfig.GetCredential().AccessKeyID,
 			},
 			expected: ErrSignatureDoesNotMatch,

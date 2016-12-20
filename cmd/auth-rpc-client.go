@@ -111,7 +111,7 @@ func newAuthClient(cfg *authConfig) *AuthRPCClient {
 		// Save the config.
 		config: cfg,
 		// Initialize a new reconnectable rpc client.
-		rpc: newClient(cfg.address, cfg.path, cfg.secureConn),
+		rpc: newRPCClient(cfg.address, cfg.path, cfg.secureConn),
 		// Allocated auth client not logged in yet.
 		isLoggedIn: false,
 	}

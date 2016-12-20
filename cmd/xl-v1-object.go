@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"crypto/md5"
-	"crypto/sha256"
 	"encoding/hex"
 	"hash"
 	"io"
@@ -30,6 +29,7 @@ import (
 	"github.com/minio/minio/pkg/bpool"
 	"github.com/minio/minio/pkg/mimedb"
 	"github.com/minio/minio/pkg/objcache"
+	"github.com/minio/sha256-simd"
 )
 
 // list all errors which can be ignored in object operations.
@@ -61,11 +61,6 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 	if writer == nil {
 		return traceError(errUnexpected)
 	}
-
-	// Lock the object before reading.
-	objectLock := nsMutex.NewNSLock(bucket, object)
-	objectLock.RLock()
-	defer objectLock.RUnlock()
 
 	// Read metadata associated with the object from all disks.
 	metaArr, errs := readAllXLMetadata(xl.storageDisks, bucket, object)
@@ -221,10 +216,6 @@ func (xl xlObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 	if err := checkGetObjArgs(bucket, object); err != nil {
 		return ObjectInfo{}, err
 	}
-
-	objectLock := nsMutex.NewNSLock(bucket, object)
-	objectLock.RLock()
-	defer objectLock.RUnlock()
 
 	info, err := xl.getObjectInfo(bucket, object)
 	if err != nil {
@@ -485,11 +476,6 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 		}
 	}
 
-	// Lock the object.
-	objectLock := nsMutex.NewNSLock(bucket, object)
-	objectLock.Lock()
-	defer objectLock.Unlock()
-
 	// Check if an object is present as one of the parent dir.
 	// -- FIXME. (needs a new kind of lock).
 	if xl.parentDirIsObject(bucket, path.Dir(object)) {
@@ -606,10 +592,6 @@ func (xl xlObjects) DeleteObject(bucket, object string) (err error) {
 		return err
 	}
 
-	objectLock := nsMutex.NewNSLock(bucket, object)
-	objectLock.Lock()
-	defer objectLock.Unlock()
-
 	// Validate object exists.
 	if !xl.isObject(bucket, object) {
 		return traceError(ObjectNotFound{bucket, object})
@@ -621,8 +603,10 @@ func (xl xlObjects) DeleteObject(bucket, object string) (err error) {
 		return toObjectErr(err, bucket, object)
 	}
 
-	// Delete from the cache.
-	xl.objCache.Delete(pathJoin(bucket, object))
+	if xl.objCacheEnabled {
+		// Delete from the cache.
+		xl.objCache.Delete(pathJoin(bucket, object))
+	}
 
 	// Success.
 	return nil
