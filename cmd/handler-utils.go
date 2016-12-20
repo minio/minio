@@ -92,6 +92,32 @@ func extractMetadataFromHeader(header http.Header) map[string]string {
 	return metadata
 }
 
+// extractMetadataFromForm extracts metadata from Post Form.
+func extractMetadataFromForm(formValues map[string]string) map[string]string {
+	metadata := make(map[string]string)
+	// Save standard supported headers.
+	for _, supportedHeader := range supportedHeaders {
+		canonicalHeader := http.CanonicalHeaderKey(supportedHeader)
+		// Form field names are case insensitive, look for both canonical
+		// and non canonical entries.
+		if _, ok := formValues[canonicalHeader]; ok {
+			metadata[supportedHeader] = formValues[canonicalHeader]
+		} else if _, ok := formValues[supportedHeader]; ok {
+			metadata[supportedHeader] = formValues[canonicalHeader]
+		}
+	}
+	// Go through all other form values for any additional headers that needs to be saved.
+	for key := range formValues {
+		cKey := http.CanonicalHeaderKey(key)
+		if strings.HasPrefix(cKey, "X-Amz-Meta-") {
+			metadata[cKey] = formValues[key]
+		} else if strings.HasPrefix(cKey, "X-Minio-Meta-") {
+			metadata[cKey] = formValues[key]
+		}
+	}
+	return metadata
+}
+
 // Extract form fields and file data from a HTTP POST Policy
 func extractPostPolicyFormValues(reader *multipart.Reader) (filePart io.Reader, fileName string, formValues map[string]string, err error) {
 	/// HTML Form values
