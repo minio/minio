@@ -24,6 +24,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"sort"
 	"strings"
 
 	"runtime"
@@ -428,6 +429,12 @@ func serverMain(c *cli.Context) {
 	if !isAnyEndpointLocal(endpoints) {
 		fatalIf(errInvalidArgument, "None of the disks passed as command line args are local to this server.")
 	}
+
+	// Sort endpoints for consistent ordering across multiple
+	// nodes in a distributed setup. This is to avoid format.json
+	// corruption if the disks aren't supplied in the same order
+	// on all nodes.
+	sort.Sort(byHostPath(endpoints))
 
 	storageDisks, err := initStorageDisks(endpoints)
 	fatalIf(err, "Unable to initialize storage disk(s).")
