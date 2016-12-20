@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"crypto/md5"
-	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"hash"
@@ -26,6 +25,8 @@ import (
 	"path"
 	"strings"
 	"time"
+
+	"github.com/minio/sha256-simd"
 )
 
 // listMultipartUploads - lists all multipart uploads.

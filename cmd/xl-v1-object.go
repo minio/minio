@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"crypto/md5"
-	"crypto/sha256"
 	"encoding/hex"
 	"hash"
 	"io"
@@ -30,6 +29,7 @@ import (
 	"github.com/minio/minio/pkg/bpool"
 	"github.com/minio/minio/pkg/mimedb"
 	"github.com/minio/minio/pkg/objcache"
+	"github.com/minio/sha256-simd"
 )
 
 // list all errors which can be ignored in object operations.
