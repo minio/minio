@@ -19,7 +19,6 @@ package cmd
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"hash"
 	"io"
 	"sync"
@@ -41,18 +40,18 @@ func newHashWriters(diskCount int, algo string) []hash.Hash {
 func newHash(algo string) hash.Hash {
 	switch algo {
 	case "blake2b":
-		h, err := blake2b.New512(nil)
-		if err != nil {
-			panic(fmt.Sprintf("impossible situation: %s", err))
-		}
+		// ignore the error, because New512 without a key never fails
+		// New512 only returns a non-nil error, if the length of the passed
+		// key > 64 bytes - but we use blake2b as hash fucntion (no key)
+		h, _ := blake2b.New512(nil)
 		return h
 	// Add new hashes here.
 	default:
 		// Default to blake2b.
-		h, err := blake2b.New512(nil)
-		if err != nil {
-			panic(fmt.Sprintf("impossible situation: %s", err))
-		}
+		// ignore the error, because New512 without a key never fails
+		// New512 only returns a non-nil error, if the length of the passed
+		// key > 64 bytes - but we use blake2b as hash fucntion (no key)
+		h, _ := blake2b.New512(nil)
 		return h
 	}
 }
