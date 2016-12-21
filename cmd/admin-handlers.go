@@ -36,8 +36,8 @@ func (adminAPI adminAPIHandlers) ServiceStatusHandler(w http.ResponseWriter, r *
 	if err != nil {
 		writeErrorResponseNoHeader(w, r, ErrInternalError, r.URL.Path)
 		errorIf(err, "Failed to marshal storage info into json.")
+		return
 	}
-	w.WriteHeader(http.StatusOK)
 	writeSuccessResponse(w, jsonBytes)
 }
 
