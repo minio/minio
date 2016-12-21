@@ -33,8 +33,9 @@ const (
 	Unknown BackendType = iota
 	// Filesystem backend.
 	FS
-	// Multi disk single node XL backend.
+	// Multi disk XL (single, distributed) backend.
 	XL
+
 	// Add your own backend.
 )
 
@@ -48,6 +49,7 @@ type ServiceStatusMetadata struct {
 	Backend struct {
 		// Represents various backend types, currently on FS and XL.
 		Type BackendType
+
 		// Following fields are only meaningful if BackendType is XL.
 		OnlineDisks  int // Online disks during server startup.
 		OfflineDisks int // Offline disks during server startup.
@@ -67,7 +69,7 @@ func (adm *AdminClient) ServiceStatus() (ServiceStatusMetadata, error) {
 	reqData.customHeaders.Set(minioAdminOpHeader, "status")
 
 	// Execute GET on bucket to list objects.
-	resp, err := adm.client.executeMethod("GET", reqData)
+	resp, err := adm.executeMethod("GET", reqData)
 
 	defer closeResponse(resp)
 	if err != nil {
@@ -103,7 +105,7 @@ func (adm *AdminClient) ServiceStop() error {
 	reqData.customHeaders.Set(minioAdminOpHeader, "stop")
 
 	// Execute GET on bucket to list objects.
-	resp, err := adm.client.executeMethod("POST", reqData)
+	resp, err := adm.executeMethod("POST", reqData)
 
 	defer closeResponse(resp)
 	if err != nil {
@@ -127,7 +129,7 @@ func (adm *AdminClient) ServiceRestart() error {
 	reqData.customHeaders.Set(minioAdminOpHeader, "restart")
 
 	// Execute GET on bucket to list objects.
-	resp, err := adm.client.executeMethod("POST", reqData)
+	resp, err := adm.executeMethod("POST", reqData)
 
 	defer closeResponse(resp)
 	if err != nil {

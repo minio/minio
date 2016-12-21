@@ -36,8 +36,8 @@ import (
 	"github.com/minio/minio-go/pkg/s3utils"
 )
 
-// Client implements Amazon S3 compatible methods.
-type Client struct {
+// AdminClient implements Amazon S3 compatible methods.
+type AdminClient struct {
 	///  Standard options.
 
 	// AccessKeyID required for authorized requests.
@@ -82,9 +82,8 @@ const (
 	libraryUserAgent       = libraryUserAgentPrefix + libraryName + "/" + libraryVersion
 )
 
-// New - instantiate minio client Client, adds automatic verification
-// of signature.
-func New(endpoint string, accessKeyID, secretAccessKey string, secure bool) (*Client, error) {
+// New - instantiate minio client Client, adds automatic verification of signature.
+func New(endpoint string, accessKeyID, secretAccessKey string, secure bool) (*AdminClient, error) {
 	clnt, err := privateNew(endpoint, accessKeyID, secretAccessKey, secure)
 	if err != nil {
 		return nil, err
@@ -104,7 +103,7 @@ func redirectHeaders(req *http.Request, via []*http.Request) error {
 	return nil
 }
 
-func privateNew(endpoint, accessKeyID, secretAccessKey string, secure bool) (*Client, error) {
+func privateNew(endpoint, accessKeyID, secretAccessKey string, secure bool) (*AdminClient, error) {
 	// construct endpoint.
 	endpointURL, err := getEndpointURL(endpoint, secure)
 	if err != nil {
@@ -112,20 +111,18 @@ func privateNew(endpoint, accessKeyID, secretAccessKey string, secure bool) (*Cl
 	}
 
 	// instantiate new Client.
-	clnt := new(Client)
-	clnt.accessKeyID = accessKeyID
-	clnt.secretAccessKey = secretAccessKey
-
-	// Remember whether we are using https or not
-	clnt.secure = secure
-
-	// Save endpoint URL, user agent for future uses.
-	clnt.endpointURL = *endpointURL
-
-	// Instantiate http client and bucket location cache.
-	clnt.httpClient = &http.Client{
-		Transport:     http.DefaultTransport,
-		CheckRedirect: redirectHeaders,
+	clnt := &AdminClient{
+		accessKeyID:     accessKeyID,
+		secretAccessKey: secretAccessKey,
+		// Remember whether we are using https or not
+		secure: secure,
+		// Save endpoint URL, user agent for future uses.
+		endpointURL: *endpointURL,
+		// Instantiate http client and bucket location cache.
+		httpClient: &http.Client{
+			Transport:     http.DefaultTransport,
+			CheckRedirect: redirectHeaders,
+		},
 	}
 
 	// Return.
@@ -133,7 +130,7 @@ func privateNew(endpoint, accessKeyID, secretAccessKey string, secure bool) (*Cl
 }
 
 // SetAppInfo - add application details to user agent.
-func (c *Client) SetAppInfo(appName string, appVersion string) {
+func (c *AdminClient) SetAppInfo(appName string, appVersion string) {
 	// if app name and version is not set, we do not a new user
 	// agent.
 	if appName != "" && appVersion != "" {
@@ -147,7 +144,7 @@ func (c *Client) SetAppInfo(appName string, appVersion string) {
 }
 
 // SetCustomTransport - set new custom transport.
-func (c *Client) SetCustomTransport(customHTTPTransport http.RoundTripper) {
+func (c *AdminClient) SetCustomTransport(customHTTPTransport http.RoundTripper) {
 	// Set this to override default transport
 	// ``http.DefaultTransport``.
 	//
@@ -168,7 +165,7 @@ func (c *Client) SetCustomTransport(customHTTPTransport http.RoundTripper) {
 }
 
 // TraceOn - enable HTTP tracing.
-func (c *Client) TraceOn(outputStream io.Writer) {
+func (c *AdminClient) TraceOn(outputStream io.Writer) {
 	// if outputStream is nil then default to os.Stdout.
 	if outputStream == nil {
 		outputStream = os.Stdout
@@ -181,7 +178,7 @@ func (c *Client) TraceOn(outputStream io.Writer) {
 }
 
 // TraceOff - disable HTTP tracing.
-func (c *Client) TraceOff() {
+func (c *AdminClient) TraceOff() {
 	// Disable tracing.
 	c.isTraceEnabled = false
 }
@@ -199,7 +196,7 @@ type requestData struct {
 }
 
 // Filter out signature value from Authorization header.
-func (c Client) filterSignature(req *http.Request) {
+func (c AdminClient) filterSignature(req *http.Request) {
 	/// Signature V4 authorization header.
 
 	// Save the original auth.
@@ -219,7 +216,7 @@ func (c Client) filterSignature(req *http.Request) {
 }
 
 // dumpHTTP - dump HTTP request and response.
-func (c Client) dumpHTTP(req *http.Request, resp *http.Response) error {
+func (c AdminClient) dumpHTTP(req *http.Request, resp *http.Response) error {
 	// Starts http dump.
 	_, err := fmt.Fprintln(c.traceOutput, "---------START-HTTP---------")
 	if err != nil {
@@ -288,7 +285,7 @@ func (c Client) dumpHTTP(req *http.Request, resp *http.Response) error {
 }
 
 // do - execute http request.
-func (c Client) do(req *http.Request) (*http.Response, error) {
+func (c AdminClient) do(req *http.Request) (*http.Response, error) {
 	var resp *http.Response
 	var err error
 	// Do the request in a loop in case of 307 http is met since golang still doesn't
@@ -346,7 +343,7 @@ var successStatus = []int{
 // executeMethod - instantiates a given method, and retries the
 // request upon any error up to maxRetries attempts in a binomially
 // delayed manner using a standard back off algorithm.
-func (c Client) executeMethod(method string, reqData requestData) (res *http.Response, err error) {
+func (c AdminClient) executeMethod(method string, reqData requestData) (res *http.Response, err error) {
 
 	// Create a done channel to control 'ListObjects' go routine.
 	doneCh := make(chan struct{}, 1)
@@ -391,7 +388,7 @@ func (c Client) executeMethod(method string, reqData requestData) (res *http.Res
 }
 
 // set User agent.
-func (c Client) setUserAgent(req *http.Request) {
+func (c AdminClient) setUserAgent(req *http.Request) {
 	req.Header.Set("User-Agent", libraryUserAgent)
 	if c.appInfo.appName != "" && c.appInfo.appVersion != "" {
 		req.Header.Set("User-Agent", libraryUserAgent+" "+c.appInfo.appName+"/"+c.appInfo.appVersion)
@@ -399,7 +396,7 @@ func (c Client) setUserAgent(req *http.Request) {
 }
 
 // newRequest - instantiate a new HTTP request for a given method.
-func (c Client) newRequest(method string, reqData requestData) (req *http.Request, err error) {
+func (c AdminClient) newRequest(method string, reqData requestData) (req *http.Request, err error) {
 	// If no method is supplied default to 'POST'.
 	if method == "" {
 		method = "POST"
@@ -461,7 +458,7 @@ func (c Client) newRequest(method string, reqData requestData) (req *http.Reques
 }
 
 // makeTargetURL make a new target url.
-func (c Client) makeTargetURL(queryValues url.Values) (*url.URL, error) {
+func (c AdminClient) makeTargetURL(queryValues url.Values) (*url.URL, error) {
 
 	host := c.endpointURL.Host
 	scheme := c.endpointURL.Scheme

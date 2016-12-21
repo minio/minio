@@ -25,6 +25,12 @@ const (
 	minioAdminOpHeader = "X-Minio-Operation"
 )
 
+// ServiceStatusHandler - GET /?service
+// HTTP header x-minio-operation: status
+// ----------
+// This implementation of the GET operation fetches server status information.
+// provides total disk space available to use, online disks, offline disks and
+// quorum threshold.
 func (adminAPI adminAPIHandlers) ServiceStatusHandler(w http.ResponseWriter, r *http.Request) {
 	adminAPIErr := checkRequestAuthType(r, "", "", "")
 	if adminAPIErr != ErrNone {
@@ -41,6 +47,12 @@ func (adminAPI adminAPIHandlers) ServiceStatusHandler(w http.ResponseWriter, r *
 	writeSuccessResponse(w, jsonBytes)
 }
 
+// ServiceStopHandler - POST /?service
+// HTTP header x-minio-operation: stop
+// ----------
+// This implementation of the POST operation stops minio server gracefully,
+// in a distributed setup stops all the servers in the cluster. Body sent
+// if any on client request is ignored.
 func (adminAPI adminAPIHandlers) ServiceStopHandler(w http.ResponseWriter, r *http.Request) {
 	adminAPIErr := checkRequestAuthType(r, "", "", "")
 	if adminAPIErr != ErrNone {
@@ -52,6 +64,12 @@ func (adminAPI adminAPIHandlers) ServiceStopHandler(w http.ResponseWriter, r *ht
 	sendServiceCmd(globalAdminPeers, serviceStop)
 }
 
+// ServiceRestartHandler - POST /?service
+// HTTP header x-minio-operation: restart
+// ----------
+// This implementation of the POST operation restarts minio server gracefully,
+// in a distributed setup restarts all the servers in the cluster. Body sent
+// if any on client request is ignored.
 func (adminAPI adminAPIHandlers) ServiceRestartHandler(w http.ResponseWriter, r *http.Request) {
 	adminAPIErr := checkRequestAuthType(r, "", "", "")
 	if adminAPIErr != ErrNone {

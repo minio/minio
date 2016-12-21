@@ -26,7 +26,7 @@ const (
 	Unknown BackendType = iota
 	// Filesystem backend.
 	FS
-	// Multi disk single node XL backend.
+	// Multi disk XL (single, distributed) backend.
 	XL
 	// Add your own backend.
 )

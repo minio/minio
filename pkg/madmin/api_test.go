@@ -18,7 +18,15 @@
 // Package madmin_test
 package madmin_test
 
-import "testing"
+import (
+	"testing"
 
-func TestMAdminClient(t *testing.T) {
+	"github.com/minio/minio/pkg/madmin"
+)
+
+func TestMinioAdminClient(t *testing.T) {
+	_, err := madmin.New("localhost:9000", "food", "food123", true)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
