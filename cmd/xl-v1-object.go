@@ -53,10 +53,12 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 	if err := checkGetObjArgs(bucket, object); err != nil {
 		return err
 	}
-	// Start offset and length cannot be negative.
-	if startOffset < 0 || length < 0 {
+
+	// Start offset cannot be negative.
+	if startOffset < 0 {
 		return traceError(errUnexpected)
 	}
+
 	// Writer cannot be nil.
 	if writer == nil {
 		return traceError(errUnexpected)
@@ -88,13 +90,13 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 	// Reorder parts metadata based on erasure distribution order.
 	metaArr = getOrderedPartsMetadata(xlMeta.Erasure.Distribution, metaArr)
 
-	// Reply back invalid range if the input offset and length fall out of range.
-	if startOffset > xlMeta.Stat.Size || length > xlMeta.Stat.Size {
-		return traceError(InvalidRange{startOffset, length, xlMeta.Stat.Size})
+	// For negative length read everything.
+	if length < 0 {
+		length = xlMeta.Stat.Size - startOffset
 	}
 
-	// Reply if we have inputs with offset and length.
-	if startOffset+length > xlMeta.Stat.Size {
+	// Reply back invalid range if the input offset and length fall out of range.
+	if startOffset > xlMeta.Stat.Size || startOffset+length > xlMeta.Stat.Size {
 		return traceError(InvalidRange{startOffset, length, xlMeta.Stat.Size})
 	}
 

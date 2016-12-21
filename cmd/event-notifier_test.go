@@ -69,7 +69,7 @@ func TestInitEventNotifierFaultyDisks(t *testing.T) {
 	}
 
 	// Test initEventNotifier() with faulty disks
-	for i := 1; i <= 5; i++ {
+	for i := 1; i <= 3; i++ {
 		fs.storage = newNaughtyDisk(fsstorage, map[int]error{i: errFaultyDisk}, nil)
 		if err := initEventNotifier(fs); errorCause(err) != errFaultyDisk {
 			t.Fatal("Unexpected error:", err)

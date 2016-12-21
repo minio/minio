@@ -222,8 +222,8 @@ func (fs fsObjects) GetObject(bucket, object string, offset int64, length int64,
 	if err = checkGetObjArgs(bucket, object); err != nil {
 		return err
 	}
-	// Offset and length cannot be negative.
-	if offset < 0 || length < 0 {
+	// Offset cannot be negative.
+	if offset < 0 {
 		return toObjectErr(traceError(errUnexpected), bucket, object)
 	}
 	// Writer cannot be nil.
@@ -237,12 +237,13 @@ func (fs fsObjects) GetObject(bucket, object string, offset int64, length int64,
 		return toObjectErr(traceError(err), bucket, object)
 	}
 
-	// Reply back invalid range if the input offset and length fall out of range.
-	if offset > fi.Size || length > fi.Size {
-		return traceError(InvalidRange{offset, length, fi.Size})
+	// For negative length we read everything.
+	if length < 0 {
+		length = fi.Size - offset
 	}
-	// Reply if we have inputs with offset and length falling out of file size range.
-	if offset+length > fi.Size {
+
+	// Reply back invalid range if the input offset and length fall out of range.
+	if offset > fi.Size || offset+length > fi.Size {
 		return traceError(InvalidRange{offset, length, fi.Size})
 	}
 
@@ -291,6 +292,7 @@ func (fs fsObjects) GetObject(bucket, object string, offset int64, length int64,
 			break
 		}
 	}
+
 	// Returns any error.
 	return toObjectErr(err, bucket, object)
 }

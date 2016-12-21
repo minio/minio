@@ -308,20 +308,8 @@ func loadNotificationConfig(bucket string, objAPI ObjectLayer) (*notificationCon
 	objLock.RLock()
 	defer objLock.RUnlock()
 
-	objInfo, err := objAPI.GetObjectInfo(minioMetaBucket, ncPath)
-	if err != nil {
-		// 'notification.xml' not found return
-		// 'errNoSuchNotifications'.  This is default when no
-		// bucket notifications are found on the bucket.
-		if isErrObjectNotFound(err) || isErrIncompleteBody(err) {
-			return nil, errNoSuchNotifications
-		}
-		errorIf(err, "Unable to load bucket-notification for bucket %s", bucket)
-		// Returns error for other errors.
-		return nil, err
-	}
 	var buffer bytes.Buffer
-	err = objAPI.GetObject(minioMetaBucket, ncPath, 0, objInfo.Size, &buffer)
+	err := objAPI.GetObject(minioMetaBucket, ncPath, 0, -1, &buffer) // Read everything.
 	if err != nil {
 		// 'notification.xml' not found return
 		// 'errNoSuchNotifications'.  This is default when no
@@ -363,20 +351,8 @@ func loadListenerConfig(bucket string, objAPI ObjectLayer) ([]listenerConfig, er
 	objLock.RLock()
 	defer objLock.RUnlock()
 
-	objInfo, err := objAPI.GetObjectInfo(minioMetaBucket, lcPath)
-	if err != nil {
-		// 'listener.json' not found return
-		// 'errNoSuchNotifications'.  This is default when no
-		// bucket notifications are found on the bucket.
-		if isErrObjectNotFound(err) {
-			return nil, errNoSuchNotifications
-		}
-		errorIf(err, "Unable to load bucket-listeners for bucket %s", bucket)
-		// Returns error for other errors.
-		return nil, err
-	}
 	var buffer bytes.Buffer
-	err = objAPI.GetObject(minioMetaBucket, lcPath, 0, objInfo.Size, &buffer)
+	err := objAPI.GetObject(minioMetaBucket, lcPath, 0, -1, &buffer)
 	if err != nil {
 		// 'notification.xml' not found return
 		// 'errNoSuchNotifications'.  This is default when no
