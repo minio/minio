@@ -24,6 +24,7 @@ import (
 	"sync"
 
 	"github.com/klauspost/reedsolomon"
+	"github.com/minio/sha256-simd"
 	"golang.org/x/crypto/blake2b"
 )
 
@@ -37,23 +38,26 @@ func newHashWriters(diskCount int, algo string) []hash.Hash {
 }
 
 // newHash - gives you a newly allocated hash depending on the input algorithm.
-func newHash(algo string) hash.Hash {
+func newHash(algo string) (h hash.Hash) {
 	switch algo {
+	case "sha256":
+		// sha256 checksum specially on ARM64 platforms or whenever
+		// requested as dictated by `xl.json` entry.
+		h = sha256.New()
 	case "blake2b":
 		// ignore the error, because New512 without a key never fails
 		// New512 only returns a non-nil error, if the length of the passed
 		// key > 64 bytes - but we use blake2b as hash fucntion (no key)
-		h, _ := blake2b.New512(nil)
-		return h
+		h, _ = blake2b.New512(nil)
 	// Add new hashes here.
 	default:
 		// Default to blake2b.
 		// ignore the error, because New512 without a key never fails
 		// New512 only returns a non-nil error, if the length of the passed
 		// key > 64 bytes - but we use blake2b as hash fucntion (no key)
-		h, _ := blake2b.New512(nil)
-		return h
+		h, _ = blake2b.New512(nil)
 	}
+	return h
 }
 
 // Hash buffer pool is a pool of reusable

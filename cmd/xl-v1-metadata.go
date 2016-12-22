@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"path"
+	"runtime"
 	"sort"
 	"sync"
 	"time"
@@ -54,9 +55,28 @@ type checkSumInfo struct {
 }
 
 // Constant indicates current bit-rot algo used when creating objects.
-const (
-	bitRotAlgo = "blake2b"
-)
+// Depending on the architecture we are choosing a different checksum.
+var bitRotAlgo = getDefaultBitRotAlgo()
+
+// Get the default bit-rot algo depending on the architecture.
+// Currently this function defaults to "blake2b" as the preferred
+// checksum algorithm on all architectures except ARM64. On ARM64
+// we use sha256 (optimized using sha2 instructions of ARM NEON chip).
+func getDefaultBitRotAlgo() string {
+	switch runtime.GOARCH {
+	case "arm64":
+		// As a special case for ARM64 we use an optimized
+		// version of hash i.e sha256. This is done so that
+		// blake2b is sub-optimal and slower on ARM64.
+		// This would also allows erasure coded writes
+		// on ARM64 servers to be on-par with their
+		// counter-part X86_64 servers.
+		return "sha256"
+	default:
+		// Default for all other architectures we use blake2b.
+		return "blake2b"
+	}
+}
 
 // erasureInfo - carries erasure coding related information, block
 // distribution and checksums.
