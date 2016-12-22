@@ -47,14 +47,14 @@ func newHash(algo string) (h hash.Hash) {
 	case "blake2b":
 		// ignore the error, because New512 without a key never fails
 		// New512 only returns a non-nil error, if the length of the passed
-		// key > 64 bytes - but we use blake2b as hash fucntion (no key)
+		// key > 64 bytes - but we use blake2b as hash function (no key)
 		h, _ = blake2b.New512(nil)
 	// Add new hashes here.
 	default:
 		// Default to blake2b.
 		// ignore the error, because New512 without a key never fails
 		// New512 only returns a non-nil error, if the length of the passed
-		// key > 64 bytes - but we use blake2b as hash fucntion (no key)
+		// key > 64 bytes - but we use blake2b as hash function (no key)
 		h, _ = blake2b.New512(nil)
 	}
 	return h
