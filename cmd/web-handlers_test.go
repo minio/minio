@@ -100,7 +100,7 @@ func getWebRPCToken(apiRouter http.Handler, accessKey, secretKey string) (token 
 	rec := httptest.NewRecorder()
 	request := LoginArgs{Username: accessKey, Password: secretKey}
 	reply := &LoginRep{}
-	req, err := newTestWebRPCRequest("Web.Login", "", request)
+	req, err := newTestWebRPCRequest("Web"+loginMethodName, "", request)
 	if err != nil {
 		return "", err
 	}
@@ -193,7 +193,7 @@ func testStorageInfoWebHandler(obj ObjectLayer, instanceType string, t TestErrHa
 
 	rec := httptest.NewRecorder()
 
-	storageInfoRequest := GenericArgs{}
+	storageInfoRequest := AuthRPCArgs{}
 	storageInfoReply := &StorageInfoRep{}
 	req, err := newTestWebRPCRequest("Web.StorageInfo", authorization, storageInfoRequest)
 	if err != nil {
@@ -239,7 +239,7 @@ func testServerInfoWebHandler(obj ObjectLayer, instanceType string, t TestErrHan
 
 	rec := httptest.NewRecorder()
 
-	serverInfoRequest := GenericArgs{}
+	serverInfoRequest := AuthRPCArgs{}
 	serverInfoReply := &ServerInfoRep{}
 	req, err := newTestWebRPCRequest("Web.ServerInfo", authorization, serverInfoRequest)
 	if err != nil {
@@ -1204,7 +1204,7 @@ func TestWebCheckAuthorization(t *testing.T) {
 		"PresignedGet",
 	}
 	for _, rpcCall := range webRPCs {
-		args := &GenericArgs{}
+		args := &AuthRPCArgs{}
 		reply := &WebGenericRep{}
 		req, nerr := newTestWebRPCRequest("Web."+rpcCall, "Bearer fooauthorization", args)
 		if nerr != nil {
@@ -1288,7 +1288,7 @@ func TestWebObjectLayerNotReady(t *testing.T) {
 	webRPCs := []string{"StorageInfo", "MakeBucket", "ListBuckets", "ListObjects", "RemoveObject",
 		"GetBucketPolicy", "SetBucketPolicy", "ListAllBucketPolicies"}
 	for _, rpcCall := range webRPCs {
-		args := &GenericArgs{}
+		args := &AuthRPCArgs{}
 		reply := &WebGenericRep{}
 		req, nerr := newTestWebRPCRequest("Web."+rpcCall, authorization, args)
 		if nerr != nil {
@@ -1392,7 +1392,7 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 		"GetBucketPolicy", "SetBucketPolicy"}
 
 	for _, rpcCall := range webRPCs {
-		args := &GenericArgs{}
+		args := &AuthRPCArgs{}
 		reply := &WebGenericRep{}
 		req, nerr := newTestWebRPCRequest("Web."+rpcCall, authorization, args)
 		if nerr != nil {
@@ -1409,7 +1409,7 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 	}
 
 	// Test Web.StorageInfo
-	storageInfoRequest := GenericArgs{}
+	storageInfoRequest := AuthRPCArgs{}
 	storageInfoReply := &StorageInfoRep{}
 	req, err := newTestWebRPCRequest("Web.StorageInfo", authorization, storageInfoRequest)
 	if err != nil {

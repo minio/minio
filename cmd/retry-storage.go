@@ -233,6 +233,7 @@ func (f retryStorage) reInit() (err error) {
 			}
 			return err
 		}
+
 		// Attempt to load format to see if the disk is really
 		// a formatted disk and part of the cluster.
 		_, err = loadFormat(f.remoteStorage)
@@ -244,6 +245,7 @@ func (f retryStorage) reInit() (err error) {
 			}
 			return err
 		}
+
 		// Login and loading format was a success, break and proceed forward.
 		break
 	}

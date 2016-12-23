@@ -19,24 +19,25 @@ package cmd
 import (
 	"path"
 	"testing"
+	"time"
 )
 
 // API suite container common to both FS and XL.
 type TestRPCBrowserPeerSuite struct {
 	serverType   string
 	testServer   TestServer
-	testAuthConf *authConfig
+	testAuthConf authConfig
 }
 
 // Setting up the test suite and starting the Test server.
 func (s *TestRPCBrowserPeerSuite) SetUpSuite(c *testing.T) {
 	s.testServer = StartTestBrowserPeerRPCServer(c, s.serverType)
-	s.testAuthConf = &authConfig{
-		address:     s.testServer.Server.Listener.Addr().String(),
-		accessKey:   s.testServer.AccessKey,
-		secretKey:   s.testServer.SecretKey,
-		path:        path.Join(reservedBucket, browserPeerPath),
-		loginMethod: "BrowserPeer.LoginHandler",
+	s.testAuthConf = authConfig{
+		serverAddr:      s.testServer.Server.Listener.Addr().String(),
+		accessKey:       s.testServer.AccessKey,
+		secretKey:       s.testServer.SecretKey,
+		serviceEndpoint: path.Join(reservedBucket, browserPeerPath),
+		serviceName:     "BrowserPeer",
 	}
 }
 
@@ -69,10 +70,10 @@ func (s *TestRPCBrowserPeerSuite) testBrowserPeerRPC(t *testing.T) {
 
 	// Validate for invalid token.
 	args := SetAuthPeerArgs{Creds: creds}
-	args.Token = "garbage"
-	rclient := newRPCClient(s.testAuthConf.address, s.testAuthConf.path, false)
+	args.AuthToken = "garbage"
+	rclient := newRPCClient(s.testAuthConf.serverAddr, s.testAuthConf.serviceEndpoint, false)
 	defer rclient.Close()
-	err := rclient.Call("BrowserPeer.SetAuthPeer", &args, &GenericReply{})
+	err := rclient.Call("BrowserPeer.SetAuthPeer", &args, &AuthRPCReply{})
 	if err != nil {
 		if err.Error() != errInvalidToken.Error() {
 			t.Fatal(err)
@@ -81,22 +82,24 @@ func (s *TestRPCBrowserPeerSuite) testBrowserPeerRPC(t *testing.T) {
 
 	// Validate for successful Peer update.
 	args = SetAuthPeerArgs{Creds: creds}
-	client := newAuthClient(s.testAuthConf)
+	client := newAuthRPCClient(s.testAuthConf)
 	defer client.Close()
-	err = client.Call("BrowserPeer.SetAuthPeer", &args, &GenericReply{})
+	err = client.Call("BrowserPeer.SetAuthPeer", &args, &AuthRPCReply{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Validate for failure in login handler with previous credentials.
-	rclient = newRPCClient(s.testAuthConf.address, s.testAuthConf.path, false)
+	rclient = newRPCClient(s.testAuthConf.serverAddr, s.testAuthConf.serviceEndpoint, false)
 	defer rclient.Close()
-	rargs := &RPCLoginArgs{
-		Username: s.testAuthConf.accessKey,
-		Password: s.testAuthConf.secretKey,
+	rargs := &LoginRPCArgs{
+		Username:    creds.AccessKey,
+		Password:    creds.SecretKey,
+		Version:     Version,
+		RequestTime: time.Now().UTC(),
 	}
-	rreply := &RPCLoginReply{}
-	err = rclient.Call("BrowserPeer.LoginHandler", rargs, rreply)
+	rreply := &LoginRPCReply{}
+	err = rclient.Call("BrowserPeer"+loginMethodName, rargs, rreply)
 	if err != nil {
 		if err.Error() != errInvalidAccessKeyID.Error() {
 			t.Fatal(err)
@@ -104,20 +107,19 @@ func (s *TestRPCBrowserPeerSuite) testBrowserPeerRPC(t *testing.T) {
 	}
 
 	// Validate for success in loing handled with valid credetnails.
-	rargs = &RPCLoginArgs{
-		Username: creds.AccessKey,
-		Password: creds.SecretKey,
+	rargs = &LoginRPCArgs{
+		Username:    creds.AccessKey,
+		Password:    creds.SecretKey,
+		Version:     Version,
+		RequestTime: time.Now().UTC(),
 	}
-	rreply = &RPCLoginReply{}
-	err = rclient.Call("BrowserPeer.LoginHandler", rargs, rreply)
+	rreply = &LoginRPCReply{}
+	err = rclient.Call("BrowserPeer"+loginMethodName, rargs, rreply)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Validate all the replied fields after successful login.
-	if rreply.Token == "" {
+	if rreply.AuthToken == "" {
 		t.Fatalf("Generated token cannot be empty %s", errInvalidToken)
-	}
-	if rreply.Timestamp.IsZero() {
-		t.Fatal("Time stamp returned cannot be zero")
 	}
 }

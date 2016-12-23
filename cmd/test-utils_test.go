@@ -56,9 +56,11 @@ import (
 
 // Tests should initNSLock only once.
 func init() {
+	// Set as non-distributed.
+	globalIsDistXL = false
+
 	// Initialize name space lock.
-	isDist := false
-	initNSLock(isDist)
+	initNSLock(globalIsDistXL)
 
 	// Disable printing console messages during tests.
 	color.Output = ioutil.Discard
@@ -425,9 +427,6 @@ func StartTestPeersRPCServer(t TestErrHandler, instanceType string) TestServer {
 
 	// Run TestServer.
 	testRPCServer.Server = httptest.NewServer(mux)
-
-	// Set as non-distributed.
-	globalIsDistXL = false
 
 	// initialize remainder of serverCmdConfig
 	testRPCServer.SrvCmdCfg = srvCfg

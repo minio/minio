@@ -16,20 +16,28 @@
 
 package cmd
 
-import "time"
+// Base login method name.  It should be used along with service name.
+const loginMethodName = ".Login"
 
-type loginServer struct {
+// AuthRPCServer RPC server authenticates using JWT.
+type AuthRPCServer struct {
 }
 
-// LoginHandler - Handles JWT based RPC logic.
-func (b loginServer) LoginHandler(args *RPCLoginArgs, reply *RPCLoginReply) error {
+// Login - Handles JWT based RPC login.
+func (b AuthRPCServer) Login(args *LoginRPCArgs, reply *LoginRPCReply) error {
+	// Validate LoginRPCArgs
+	if err := args.IsValid(); err != nil {
+		return err
+	}
+
+	// Authenticate using JWT.
 	token, err := authenticateNode(args.Username, args.Password)
 	if err != nil {
 		return err
 	}
 
-	reply.Token = token
-	reply.Timestamp = time.Now().UTC()
-	reply.ServerVersion = Version
+	// Return the token.
+	reply.AuthToken = token
+
 	return nil
 }

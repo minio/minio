@@ -55,15 +55,15 @@ func (lc localAdminClient) Restart() error {
 
 // Stop - Sends stop command to remote server via RPC.
 func (rc remoteAdminClient) Stop() error {
-	args := GenericArgs{}
-	reply := GenericReply{}
+	args := AuthRPCArgs{}
+	reply := AuthRPCReply{}
 	return rc.Call("Service.Shutdown", &args, &reply)
 }
 
 // Restart - Sends restart command to remote server via RPC.
 func (rc remoteAdminClient) Restart() error {
-	args := GenericArgs{}
-	reply := GenericReply{}
+	args := AuthRPCArgs{}
+	reply := AuthRPCReply{}
 	return rc.Call("Service.Restart", &args, &reply)
 }
 
@@ -90,6 +90,7 @@ func makeAdminPeers(eps []*url.URL) adminPeers {
 	})
 	seenAddr[globalMinioAddr] = true
 
+	serverCred := serverConfig.GetCredential()
 	// iterate over endpoints to find new remote peers and add
 	// them to ret.
 	for _, ep := range eps {
@@ -100,17 +101,17 @@ func makeAdminPeers(eps []*url.URL) adminPeers {
 		// Check if the remote host has been added already
 		if !seenAddr[ep.Host] {
 			cfg := authConfig{
-				accessKey:   serverConfig.GetCredential().AccessKey,
-				secretKey:   serverConfig.GetCredential().SecretKey,
-				address:     ep.Host,
-				secureConn:  isSSL(),
-				path:        path.Join(reservedBucket, servicePath),
-				loginMethod: "Service.LoginHandler",
+				accessKey:       serverCred.AccessKey,
+				secretKey:       serverCred.SecretKey,
+				serverAddr:      ep.Host,
+				secureConn:      isSSL(),
+				serviceEndpoint: path.Join(reservedBucket, servicePath),
+				serviceName:     "Service",
 			}
 
 			servicePeers = append(servicePeers, adminPeer{
 				addr:    ep.Host,
-				svcClnt: &remoteAdminClient{newAuthClient(&cfg)},
+				svcClnt: &remoteAdminClient{newAuthRPCClient(cfg)},
 			})
 			seenAddr[ep.Host] = true
 		}

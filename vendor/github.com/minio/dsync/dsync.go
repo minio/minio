@@ -18,16 +18,11 @@ package dsync
 
 import "errors"
 
-const RpcPath = "/dsync"
-const DebugPath = "/debug"
-
-const DefaultPath = "/rpc/dsync"
-
 // Number of nodes participating in the distributed locking.
 var dnodeCount int
 
 // List of rpc client objects, one per lock server.
-var clnts []RPC
+var clnts []NetLocker
 
 // Index into rpc client array for server running on localhost
 var ownNode int
@@ -38,20 +33,21 @@ var dquorum int
 // Simple quorum for read operations, set to dNodeCount/2
 var dquorumReads int
 
-// SetNodesWithPath - initializes package-level global state variables such as clnts.
-// N B - This function should be called only once inside any program that uses
-// dsync.
-func SetNodesWithClients(rpcClnts []RPC, rpcOwnNode int) (err error) {
+// Init - initializes package-level global state variables such as clnts.
+// N B - This function should be called only once inside any program
+// that uses dsync.
+func Init(rpcClnts []NetLocker, rpcOwnNode int) (err error) {
 
 	// Validate if number of nodes is within allowable range.
 	if dnodeCount != 0 {
 		return errors.New("Cannot reinitialize dsync package")
-	} else if len(rpcClnts) < 4 {
-		return errors.New("Dsync not designed for less than 4 nodes")
+	}
+	if len(rpcClnts) < 4 {
+		return errors.New("Dsync is not designed for less than 4 nodes")
 	} else if len(rpcClnts) > 16 {
-		return errors.New("Dsync not designed for more than 16 nodes")
-	} else if len(rpcClnts)&1 == 1 {
-		return errors.New("Dsync not designed for an uneven number of nodes")
+		return errors.New("Dsync is not designed for more than 16 nodes")
+	} else if len(rpcClnts)%2 != 0 {
+		return errors.New("Dsync is not designed for an uneven number of nodes")
 	}
 
 	if rpcOwnNode > len(rpcClnts) {
@@ -61,8 +57,8 @@ func SetNodesWithClients(rpcClnts []RPC, rpcOwnNode int) (err error) {
 	dnodeCount = len(rpcClnts)
 	dquorum = dnodeCount/2 + 1
 	dquorumReads = dnodeCount / 2
-	// Initialize node name and rpc path for each RPCClient object.
-	clnts = make([]RPC, dnodeCount)
+	// Initialize node name and rpc path for each NetLocker object.
+	clnts = make([]NetLocker, dnodeCount)
 	copy(clnts, rpcClnts)
 
 	ownNode = rpcOwnNode

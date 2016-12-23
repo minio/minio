@@ -52,6 +52,7 @@ func makeS3Peers(eps []*url.URL) s3Peers {
 	})
 	seenAddr[globalMinioAddr] = true
 
+	serverCred := serverConfig.GetCredential()
 	// iterate over endpoints to find new remote peers and add
 	// them to ret.
 	for _, ep := range eps {
@@ -62,17 +63,17 @@ func makeS3Peers(eps []*url.URL) s3Peers {
 		// Check if the remote host has been added already
 		if !seenAddr[ep.Host] {
 			cfg := authConfig{
-				accessKey:   serverConfig.GetCredential().AccessKey,
-				secretKey:   serverConfig.GetCredential().SecretKey,
-				address:     ep.Host,
-				secureConn:  isSSL(),
-				path:        path.Join(reservedBucket, s3Path),
-				loginMethod: "S3.LoginHandler",
+				accessKey:       serverCred.AccessKey,
+				secretKey:       serverCred.SecretKey,
+				serverAddr:      ep.Host,
+				serviceEndpoint: path.Join(reservedBucket, s3Path),
+				secureConn:      isSSL(),
+				serviceName:     "S3",
 			}
 
 			ret = append(ret, s3Peer{
 				addr:      ep.Host,
-				bmsClient: &remoteBucketMetaState{newAuthClient(&cfg)},
+				bmsClient: &remoteBucketMetaState{newAuthRPCClient(cfg)},
 			})
 			seenAddr[ep.Host] = true
 		}

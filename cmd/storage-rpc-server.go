@@ -29,7 +29,7 @@ import (
 // Storage server implements rpc primitives to facilitate exporting a
 // disk over a network.
 type storageServer struct {
-	loginServer
+	AuthRPCServer
 	storage   StorageAPI
 	path      string
 	timestamp time.Time
@@ -38,10 +38,11 @@ type storageServer struct {
 /// Storage operations handlers.
 
 // DiskInfoHandler - disk info handler is rpc wrapper for DiskInfo operation.
-func (s *storageServer) DiskInfoHandler(args *GenericArgs, reply *disk.Info) error {
-	if !isAuthTokenValid(args.Token) {
-		return errInvalidToken
+func (s *storageServer) DiskInfoHandler(args *AuthRPCArgs, reply *disk.Info) error {
+	if err := args.IsAuthenticated(); err != nil {
+		return err
 	}
+
 	info, err := s.storage.DiskInfo()
 	*reply = info
 	return err
@@ -50,18 +51,20 @@ func (s *storageServer) DiskInfoHandler(args *GenericArgs, reply *disk.Info) err
 /// Volume operations handlers.
 
 // MakeVolHandler - make vol handler is rpc wrapper for MakeVol operation.
-func (s *storageServer) MakeVolHandler(args *GenericVolArgs, reply *GenericReply) error {
-	if !isAuthTokenValid(args.Token) {
-		return errInvalidToken
+func (s *storageServer) MakeVolHandler(args *GenericVolArgs, reply *AuthRPCReply) error {
+	if err := args.IsAuthenticated(); err != nil {
+		return err
 	}
+
 	return s.storage.MakeVol(args.Vol)
 }
 
 // ListVolsHandler - list vols handler is rpc wrapper for ListVols operation.
-func (s *storageServer) ListVolsHandler(args *GenericArgs, reply *ListVolsReply) error {
-	if !isAuthTokenValid(args.Token) {
-		return errInvalidToken
+func (s *storageServer) ListVolsHandler(args *AuthRPCArgs, reply *ListVolsReply) error {
+	if err := args.IsAuthenticated(); err != nil {
+		return err
 	}
+
 	vols, err := s.storage.ListVols()
 	if err != nil {
 		return err
@@ -72,9 +75,10 @@ func (s *storageServer) ListVolsHandler(args *GenericArgs, reply *ListVolsReply)
 
 // StatVolHandler - stat vol handler is a rpc wrapper for StatVol operation.
 func (s *storageServer) StatVolHandler(args *GenericVolArgs, reply *VolInfo) error {
-	if !isAuthTokenValid(args.Token) {
-		return errInvalidToken
+	if err := args.IsAuthenticated(); err != nil {
+		return err
 	}
+
 	volInfo, err := s.storage.StatVol(args.Vol)
 	if err != nil {
 		return err
@@ -85,10 +89,11 @@ func (s *storageServer) StatVolHandler(args *GenericVolArgs, reply *VolInfo) err
 
 // DeleteVolHandler - delete vol handler is a rpc wrapper for
 // DeleteVol operation.
-func (s *storageServer) DeleteVolHandler(args *GenericVolArgs, reply *GenericReply) error {
-	if !isAuthTokenValid(args.Token) {
-		return errInvalidToken
+func (s *storageServer) DeleteVolHandler(args *GenericVolArgs, reply *AuthRPCReply) error {
+	if err := args.IsAuthenticated(); err != nil {
+		return err
 	}
+
 	return s.storage.DeleteVol(args.Vol)
 }
 
@@ -96,9 +101,10 @@ func (s *storageServer) DeleteVolHandler(args *GenericVolArgs, reply *GenericRep
 
 // StatFileHandler - stat file handler is rpc wrapper to stat file.
 func (s *storageServer) StatFileHandler(args *StatFileArgs, reply *FileInfo) error {
-	if !isAuthTokenValid(args.Token) {
-		return errInvalidToken
+	if err := args.IsAuthenticated(); err != nil {
+		return err
 	}
+
 	fileInfo, err := s.storage.StatFile(args.Vol, args.Path)
 	if err != nil {
 		return err
@@ -109,9 +115,10 @@ func (s *storageServer) StatFileHandler(args *StatFileArgs, reply *FileInfo) err
 
 // ListDirHandler - list directory handler is rpc wrapper to list dir.
 func (s *storageServer) ListDirHandler(args *ListDirArgs, reply *[]string) error {
-	if !isAuthTokenValid(args.Token) {
-		return errInvalidToken
+	if err := args.IsAuthenticated(); err != nil {
+		return err
 	}
+
 	entries, err := s.storage.ListDir(args.Vol, args.Path)
 	if err != nil {
 		return err
@@ -122,9 +129,10 @@ func (s *storageServer) ListDirHandler(args *ListDirArgs, reply *[]string) error
 
 // ReadAllHandler - read all handler is rpc wrapper to read all storage API.
 func (s *storageServer) ReadAllHandler(args *ReadFileArgs, reply *[]byte) error {
-	if !isAuthTokenValid(args.Token) {
-		return errInvalidToken
+	if err := args.IsAuthenticated(); err != nil {
+		return err
 	}
+
 	buf, err := s.storage.ReadAll(args.Vol, args.Path)
 	if err != nil {
 		return err
@@ -135,8 +143,8 @@ func (s *storageServer) ReadAllHandler(args *ReadFileArgs, reply *[]byte) error 
 
 // ReadFileHandler - read file handler is rpc wrapper to read file.
 func (s *storageServer) ReadFileHandler(args *ReadFileArgs, reply *[]byte) (err error) {
-	if !isAuthTokenValid(args.Token) {
-		return errInvalidToken
+	if err = args.IsAuthenticated(); err != nil {
+		return err
 	}
 
 	var n int64
@@ -153,34 +161,38 @@ func (s *storageServer) ReadFileHandler(args *ReadFileArgs, reply *[]byte) (err 
 }
 
 // PrepareFileHandler - prepare file handler is rpc wrapper to prepare file.
-func (s *storageServer) PrepareFileHandler(args *PrepareFileArgs, reply *GenericReply) error {
-	if !isAuthTokenValid(args.Token) {
-		return errInvalidToken
+func (s *storageServer) PrepareFileHandler(args *PrepareFileArgs, reply *AuthRPCReply) error {
+	if err := args.IsAuthenticated(); err != nil {
+		return err
 	}
+
 	return s.storage.PrepareFile(args.Vol, args.Path, args.Size)
 }
 
 // AppendFileHandler - append file handler is rpc wrapper to append file.
-func (s *storageServer) AppendFileHandler(args *AppendFileArgs, reply *GenericReply) error {
-	if !isAuthTokenValid(args.Token) {
-		return errInvalidToken
+func (s *storageServer) AppendFileHandler(args *AppendFileArgs, reply *AuthRPCReply) error {
+	if err := args.IsAuthenticated(); err != nil {
+		return err
 	}
+
 	return s.storage.AppendFile(args.Vol, args.Path, args.Buffer)
 }
 
 // DeleteFileHandler - delete file handler is rpc wrapper to delete file.
-func (s *storageServer) DeleteFileHandler(args *DeleteFileArgs, reply *GenericReply) error {
-	if !isAuthTokenValid(args.Token) {
-		return errInvalidToken
+func (s *storageServer) DeleteFileHandler(args *DeleteFileArgs, reply *AuthRPCReply) error {
+	if err := args.IsAuthenticated(); err != nil {
+		return err
 	}
+
 	return s.storage.DeleteFile(args.Vol, args.Path)
 }
 
 // RenameFileHandler - rename file handler is rpc wrapper to rename file.
-func (s *storageServer) RenameFileHandler(args *RenameFileArgs, reply *GenericReply) error {
-	if !isAuthTokenValid(args.Token) {
-		return errInvalidToken
+func (s *storageServer) RenameFileHandler(args *RenameFileArgs, reply *AuthRPCReply) error {
+	if err := args.IsAuthenticated(); err != nil {
+		return err
 	}
+
 	return s.storage.RenameFile(args.SrcVol, args.SrcPath, args.DstVol, args.DstPath)
 }
 

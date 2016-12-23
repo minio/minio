@@ -19,7 +19,7 @@ package dsync
 import (
 	cryptorand "crypto/rand"
 	"fmt"
-	"log"
+	golog "log"
 	"math"
 	"math/rand"
 	"net"
@@ -34,6 +34,12 @@ var dsyncLog bool
 func init() {
 	// Check for DSYNC_LOG env variable, if set logging will be enabled for failed RPC operations.
 	dsyncLog = os.Getenv("DSYNC_LOG") == "1"
+}
+
+func log(msg ...interface{}) {
+	if dsyncLog {
+		golog.Println(msg...)
+	}
 }
 
 // DRWMutexAcquireTimeout - tolerance limit to wait for lock acquisition before.
@@ -58,23 +64,6 @@ func (g *Granted) isLocked() bool {
 
 func isLocked(uid string) bool {
 	return len(uid) > 0
-}
-
-type LockArgs struct {
-	Token     string
-	Timestamp time.Time
-	Name      string
-	Node      string
-	RPCPath   string
-	UID       string
-}
-
-func (l *LockArgs) SetToken(token string) {
-	l.Token = token
-}
-
-func (l *LockArgs) SetTimestamp(tstamp time.Time) {
-	l.Timestamp = tstamp
 }
 
 func NewDRWMutex(name string) *DRWMutex {
@@ -152,7 +141,7 @@ func (dm *DRWMutex) lockBlocking(isReadLock bool) {
 
 // lock tries to acquire the distributed lock, returning true or false
 //
-func lock(clnts []RPC, locks *[]string, lockName string, isReadLock bool) bool {
+func lock(clnts []NetLocker, locks *[]string, lockName string, isReadLock bool) bool {
 
 	// Create buffered channel of size equal to total number of nodes.
 	ch := make(chan Granted, dnodeCount)
@@ -160,25 +149,29 @@ func lock(clnts []RPC, locks *[]string, lockName string, isReadLock bool) bool {
 	for index, c := range clnts {
 
 		// broadcast lock request to all nodes
-		go func(index int, isReadLock bool, c RPC) {
+		go func(index int, isReadLock bool, c NetLocker) {
 			// All client methods issuing RPCs are thread-safe and goroutine-safe,
 			// i.e. it is safe to call them from multiple concurrently running go routines.
-			var locked bool
 			bytesUid := [16]byte{}
 			cryptorand.Read(bytesUid[:])
 			uid := fmt.Sprintf("%X", bytesUid[:])
-			args := LockArgs{Name: lockName, Node: clnts[ownNode].Node(), RPCPath: clnts[ownNode].RPCPath(), UID: uid}
+
+			args := LockArgs{
+				UID:             uid,
+				Resource:        lockName,
+				ServerAddr:      clnts[ownNode].ServerAddr(),
+				ServiceEndpoint: clnts[ownNode].ServiceEndpoint(),
+			}
+
+			var locked bool
+			var err error
 			if isReadLock {
-				if err := c.Call("Dsync.RLock", &args, &locked); err != nil {
-					if dsyncLog {
-						log.Println("Unable to call Dsync.RLock", err)
-					}
+				if locked, err = c.RLock(args); err != nil {
+					log("Unable to call RLock", err)
 				}
 			} else {
-				if err := c.Call("Dsync.Lock", &args, &locked); err != nil {
-					if dsyncLog {
-						log.Println("Unable to call Dsync.Lock", err)
-					}
+				if locked, err = c.Lock(args); err != nil {
+					log("Unable to call Lock", err)
 				}
 			}
 
@@ -284,7 +277,7 @@ func quorumMet(locks *[]string, isReadLock bool) bool {
 }
 
 // releaseAll releases all locks that are marked as locked
-func releaseAll(clnts []RPC, locks *[]string, lockName string, isReadLock bool) {
+func releaseAll(clnts []NetLocker, locks *[]string, lockName string, isReadLock bool) {
 	for lock := 0; lock < dnodeCount; lock++ {
 		if isLocked((*locks)[lock]) {
 			sendRelease(clnts[lock], lockName, (*locks)[lock], isReadLock)
@@ -385,7 +378,7 @@ func (dm *DRWMutex) ForceUnlock() {
 }
 
 // sendRelease sends a release message to a node that previously granted a lock
-func sendRelease(c RPC, name, uid string, isReadLock bool) {
+func sendRelease(c NetLocker, name, uid string, isReadLock bool) {
 
 	backOffArray := []time.Duration{
 		30 * time.Second, // 30secs.
@@ -396,53 +389,45 @@ func sendRelease(c RPC, name, uid string, isReadLock bool) {
 		1 * time.Hour,    // 1hr.
 	}
 
-	go func(c RPC, name string) {
+	go func(c NetLocker, name string) {
 
 		for _, backOff := range backOffArray {
 
 			// All client methods issuing RPCs are thread-safe and goroutine-safe,
 			// i.e. it is safe to call them from multiple concurrently running goroutines.
-			var unlocked bool
-			args := LockArgs{Name: name, UID: uid} // Just send name & uid (and leave out node and rpcPath; unimportant for unlocks)
+			args := LockArgs{
+				UID:             uid,
+				Resource:        name,
+				ServerAddr:      clnts[ownNode].ServerAddr(),
+				ServiceEndpoint: clnts[ownNode].ServiceEndpoint(),
+			}
+
+			var err error
 			if len(uid) == 0 {
-				if err := c.Call("Dsync.ForceUnlock", &args, &unlocked); err == nil {
-					// ForceUnlock delivered, exit out
-					return
-				} else if err != nil {
-					if dsyncLog {
-						log.Println("Unable to call Dsync.ForceUnlock", err)
-					}
-					if nErr, ok := err.(net.Error); ok && nErr.Timeout() {
-						// ForceUnlock possibly failed with server timestamp mismatch, server may have restarted.
-						return
-					}
+				if _, err = c.ForceUnlock(args); err != nil {
+					log("Unable to call ForceUnlock", err)
 				}
 			} else if isReadLock {
-				if err := c.Call("Dsync.RUnlock", &args, &unlocked); err == nil {
-					// RUnlock delivered, exit out
-					return
-				} else if err != nil {
-					if dsyncLog {
-						log.Println("Unable to call Dsync.RUnlock", err)
-					}
-					if nErr, ok := err.(net.Error); ok && nErr.Timeout() {
-						// RUnlock possibly failed with server timestamp mismatch, server may have restarted.
-						return
-					}
+				if _, err = c.RUnlock(args); err != nil {
+					log("Unable to call RUnlock", err)
 				}
 			} else {
-				if err := c.Call("Dsync.Unlock", &args, &unlocked); err == nil {
-					// Unlock delivered, exit out
-					return
-				} else if err != nil {
-					if dsyncLog {
-						log.Println("Unable to call Dsync.Unlock", err)
-					}
-					if nErr, ok := err.(net.Error); ok && nErr.Timeout() {
-						// Unlock possibly failed with server timestamp mismatch, server may have restarted.
-						return
-					}
+				if _, err = c.Unlock(args); err != nil {
+					log("Unable to call Unlock", err)
 				}
+			}
+
+			if err != nil {
+				// Ignore if err is net.Error and it is occurred due to timeout.
+				// The cause could have been server timestamp mismatch or server may have restarted.
+				// FIXME: This is minio specific behaviour and we would need a way to make it generically.
+				if nErr, ok := err.(net.Error); ok && nErr.Timeout() {
+					err = nil
+				}
+			}
+
+			if err == nil {
+				return
 			}
 
 			// Wait..

@@ -33,27 +33,26 @@ var globalNSMutex *nsLockMap
 func initDsyncNodes(eps []*url.URL) error {
 	cred := serverConfig.GetCredential()
 	// Initialize rpc lock client information only if this instance is a distributed setup.
-	clnts := make([]dsync.RPC, len(eps))
+	clnts := make([]dsync.NetLocker, len(eps))
 	myNode := -1
 	for index, ep := range eps {
 		if ep == nil {
 			return errInvalidArgument
 		}
-		clnts[index] = newAuthClient(&authConfig{
-			accessKey: cred.AccessKey,
-			secretKey: cred.SecretKey,
-			// Construct a new dsync server addr.
-			secureConn: isSSL(),
-			address:    ep.Host,
-			// Construct a new rpc path for the endpoint.
-			path:        pathutil.Join(lockRPCPath, getPath(ep)),
-			loginMethod: "Dsync.LoginHandler",
+		clnts[index] = newLockRPCClient(authConfig{
+			accessKey:       cred.AccessKey,
+			secretKey:       cred.SecretKey,
+			serverAddr:      ep.Host,
+			serviceEndpoint: pathutil.Join(lockRPCPath, getPath(ep)),
+			secureConn:      isSSL(),
+			serviceName:     "Dsync",
 		})
 		if isLocalStorage(ep) && myNode == -1 {
 			myNode = index
 		}
 	}
-	return dsync.SetNodesWithClients(clnts, myNode)
+
+	return dsync.Init(clnts, myNode)
 }
 
 // initNSLock - initialize name space lock map.

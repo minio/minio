@@ -193,7 +193,7 @@ The basic steps in the lock process are as follows:
 ### Unlock process
 
 The unlock process is really simple:
-- boardcast unlock message to all nodes that granted lock
+- broadcast unlock message to all nodes that granted lock
 - if a destination is not available, retry with gradually longer back-off window to still deliver
 - ignore the 'result' (cover for cases where destination node has gone down and came back up)
 

@@ -227,6 +227,11 @@ func TestSetNGetBucketNotification(t *testing.T) {
 }
 
 func TestInitEventNotifier(t *testing.T) {
+	currentIsDistXL := globalIsDistXL
+	defer func() {
+		globalIsDistXL = currentIsDistXL
+	}()
+
 	s := TestPeerRPCServerData{serverType: "XL"}
 
 	// setup and teardown
@@ -323,6 +328,11 @@ func TestInitEventNotifier(t *testing.T) {
 }
 
 func TestListenBucketNotification(t *testing.T) {
+	currentIsDistXL := globalIsDistXL
+	defer func() {
+		globalIsDistXL = currentIsDistXL
+	}()
+
 	s := TestPeerRPCServerData{serverType: "XL"}
 	// setup and teardown
 	s.Setup(t)

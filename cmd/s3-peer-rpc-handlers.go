@@ -20,7 +20,7 @@ package cmd
 // call
 type SetBucketNotificationPeerArgs struct {
 	// For Auth
-	GenericArgs
+	AuthRPCArgs
 
 	Bucket string
 
@@ -35,10 +35,9 @@ func (s *SetBucketNotificationPeerArgs) BucketUpdate(client BucketMetaState) err
 	return client.UpdateBucketNotification(s)
 }
 
-func (s3 *s3PeerAPIHandlers) SetBucketNotificationPeer(args *SetBucketNotificationPeerArgs, reply *GenericReply) error {
-	// check auth
-	if !isAuthTokenValid(args.Token) {
-		return errInvalidToken
+func (s3 *s3PeerAPIHandlers) SetBucketNotificationPeer(args *SetBucketNotificationPeerArgs, reply *AuthRPCReply) error {
+	if err := args.IsAuthenticated(); err != nil {
+		return err
 	}
 
 	return s3.bms.UpdateBucketNotification(args)
@@ -47,7 +46,7 @@ func (s3 *s3PeerAPIHandlers) SetBucketNotificationPeer(args *SetBucketNotificati
 // SetBucketListenerPeerArgs - Arguments collection to SetBucketListenerPeer RPC call
 type SetBucketListenerPeerArgs struct {
 	// For Auth
-	GenericArgs
+	AuthRPCArgs
 
 	Bucket string
 
@@ -62,10 +61,9 @@ func (s *SetBucketListenerPeerArgs) BucketUpdate(client BucketMetaState) error {
 	return client.UpdateBucketListener(s)
 }
 
-func (s3 *s3PeerAPIHandlers) SetBucketListenerPeer(args *SetBucketListenerPeerArgs, reply *GenericReply) error {
-	// check auth
-	if !isAuthTokenValid(args.Token) {
-		return errInvalidToken
+func (s3 *s3PeerAPIHandlers) SetBucketListenerPeer(args *SetBucketListenerPeerArgs, reply *AuthRPCReply) error {
+	if err := args.IsAuthenticated(); err != nil {
+		return err
 	}
 
 	return s3.bms.UpdateBucketListener(args)
@@ -74,7 +72,7 @@ func (s3 *s3PeerAPIHandlers) SetBucketListenerPeer(args *SetBucketListenerPeerAr
 // EventArgs - Arguments collection for Event RPC call
 type EventArgs struct {
 	// For Auth
-	GenericArgs
+	AuthRPCArgs
 
 	// event being sent
 	Event []NotificationEvent
@@ -84,10 +82,9 @@ type EventArgs struct {
 }
 
 // submit an event to the receiving server.
-func (s3 *s3PeerAPIHandlers) Event(args *EventArgs, reply *GenericReply) error {
-	// check auth
-	if !isAuthTokenValid(args.Token) {
-		return errInvalidToken
+func (s3 *s3PeerAPIHandlers) Event(args *EventArgs, reply *AuthRPCReply) error {
+	if err := args.IsAuthenticated(); err != nil {
+		return err
 	}
 
 	return s3.bms.SendEvent(args)
@@ -96,7 +93,7 @@ func (s3 *s3PeerAPIHandlers) Event(args *EventArgs, reply *GenericReply) error {
 // SetBucketPolicyPeerArgs - Arguments collection for SetBucketPolicyPeer RPC call
 type SetBucketPolicyPeerArgs struct {
 	// For Auth
-	GenericArgs
+	AuthRPCArgs
 
 	Bucket string
 
@@ -112,10 +109,9 @@ func (s *SetBucketPolicyPeerArgs) BucketUpdate(client BucketMetaState) error {
 }
 
 // tell receiving server to update a bucket policy
-func (s3 *s3PeerAPIHandlers) SetBucketPolicyPeer(args *SetBucketPolicyPeerArgs, reply *GenericReply) error {
-	// check auth
-	if !isAuthTokenValid(args.Token) {
-		return errInvalidToken
+func (s3 *s3PeerAPIHandlers) SetBucketPolicyPeer(args *SetBucketPolicyPeerArgs, reply *AuthRPCReply) error {
+	if err := args.IsAuthenticated(); err != nil {
+		return err
 	}
 
 	return s3.bms.UpdateBucketPolicy(args)

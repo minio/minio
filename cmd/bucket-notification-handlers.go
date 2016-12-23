@@ -404,8 +404,7 @@ func AddBucketListenerConfig(bucket string, lcfg *listenerConfig, objAPI ObjectL
 func RemoveBucketListenerConfig(bucket string, lcfg *listenerConfig, objAPI ObjectLayer) {
 	listenerCfgs := globalEventNotifier.GetBucketListenerConfig(bucket)
 
-	// remove listener with matching ARN - if not found ignore and
-	// exit.
+	// remove listener with matching ARN - if not found ignore and exit.
 	var updatedLcfgs []listenerConfig
 	found := false
 	for k, configuredLcfg := range listenerCfgs {

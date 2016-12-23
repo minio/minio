@@ -25,19 +25,19 @@ import (
 
 type TestRPCS3PeerSuite struct {
 	testServer   TestServer
-	testAuthConf *authConfig
+	testAuthConf authConfig
 	disks        []string
 }
 
 // Set up the suite and start the test server.
 func (s *TestRPCS3PeerSuite) SetUpSuite(t *testing.T) {
 	s.testServer, s.disks = StartTestS3PeerRPCServer(t)
-	s.testAuthConf = &authConfig{
-		address:     s.testServer.Server.Listener.Addr().String(),
-		accessKey:   s.testServer.AccessKey,
-		secretKey:   s.testServer.SecretKey,
-		path:        path.Join(reservedBucket, s3Path),
-		loginMethod: "S3.LoginHandler",
+	s.testAuthConf = authConfig{
+		serverAddr:      s.testServer.Server.Listener.Addr().String(),
+		accessKey:       s.testServer.AccessKey,
+		secretKey:       s.testServer.SecretKey,
+		serviceEndpoint: path.Join(reservedBucket, s3Path),
+		serviceName:     "S3",
 	}
 }
 
@@ -62,10 +62,10 @@ func TestS3PeerRPC(t *testing.T) {
 // Test S3 RPC handlers
 func (s *TestRPCS3PeerSuite) testS3PeerRPC(t *testing.T) {
 	// Validate for invalid token.
-	args := GenericArgs{Token: "garbage", Timestamp: time.Now().UTC()}
-	rclient := newRPCClient(s.testAuthConf.address, s.testAuthConf.path, false)
+	args := AuthRPCArgs{AuthToken: "garbage", RequestTime: time.Now().UTC()}
+	rclient := newRPCClient(s.testAuthConf.serverAddr, s.testAuthConf.serviceEndpoint, false)
 	defer rclient.Close()
-	err := rclient.Call("S3.SetBucketNotificationPeer", &args, &GenericReply{})
+	err := rclient.Call("S3.SetBucketNotificationPeer", &args, &AuthRPCReply{})
 	if err != nil {
 		if err.Error() != errInvalidToken.Error() {
 			t.Fatal(err)
@@ -74,16 +74,16 @@ func (s *TestRPCS3PeerSuite) testS3PeerRPC(t *testing.T) {
 
 	// Check bucket notification call works.
 	BNPArgs := SetBucketNotificationPeerArgs{Bucket: "bucket", NCfg: &notificationConfig{}}
-	client := newAuthClient(s.testAuthConf)
+	client := newAuthRPCClient(s.testAuthConf)
 	defer client.Close()
-	err = client.Call("S3.SetBucketNotificationPeer", &BNPArgs, &GenericReply{})
+	err = client.Call("S3.SetBucketNotificationPeer", &BNPArgs, &AuthRPCReply{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Check bucket listener update call works.
 	BLPArgs := SetBucketListenerPeerArgs{Bucket: "bucket", LCfg: nil}
-	err = client.Call("S3.SetBucketListenerPeer", &BLPArgs, &GenericReply{})
+	err = client.Call("S3.SetBucketListenerPeer", &BLPArgs, &AuthRPCReply{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,14 +95,14 @@ func (s *TestRPCS3PeerSuite) testS3PeerRPC(t *testing.T) {
 		t.Fatal(err)
 	}
 	BPPArgs := SetBucketPolicyPeerArgs{Bucket: "bucket", PChBytes: pChBytes}
-	err = client.Call("S3.SetBucketPolicyPeer", &BPPArgs, &GenericReply{})
+	err = client.Call("S3.SetBucketPolicyPeer", &BPPArgs, &AuthRPCReply{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Check event send event call works.
 	evArgs := EventArgs{Event: nil, Arn: "localhost:9000"}
-	err = client.Call("S3.Event", &evArgs, &GenericReply{})
+	err = client.Call("S3.Event", &evArgs, &AuthRPCReply{})
 	if err != nil {
 		t.Fatal(err)
 	}

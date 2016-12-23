@@ -232,6 +232,12 @@ func TestLocalAddress(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		return
 	}
+
+	currentIsDistXL := globalIsDistXL
+	defer func() {
+		globalIsDistXL = currentIsDistXL
+	}()
+
 	// need to set this to avoid stale values from other tests.
 	globalMinioPort = "9000"
 	globalMinioHost = ""

@@ -20,32 +20,32 @@ import "testing"
 
 // Tests authorized RPC client.
 func TestAuthRPCClient(t *testing.T) {
-	authCfg := &authConfig{
+	authCfg := authConfig{
+		accessKey:       "123",
+		secretKey:       "123",
+		serverAddr:      "localhost:9000",
+		serviceEndpoint: "/rpc/disk",
+		secureConn:      false,
+		serviceName:     "MyPackage",
+	}
+	authRPC := newAuthRPCClient(authCfg)
+	if authRPC.ServerAddr() != authCfg.serverAddr {
+		t.Fatalf("Unexpected node value %s, but expected %s", authRPC.ServerAddr(), authCfg.serverAddr)
+	}
+	if authRPC.ServiceEndpoint() != authCfg.serviceEndpoint {
+		t.Fatalf("Unexpected node value %s, but expected %s", authRPC.ServiceEndpoint(), authCfg.serviceEndpoint)
+	}
+	authCfg = authConfig{
 		accessKey:   "123",
 		secretKey:   "123",
 		secureConn:  false,
-		address:     "localhost:9000",
-		path:        "/rpc/disk",
-		loginMethod: "MyPackage.LoginHandler",
+		serviceName: "MyPackage",
 	}
-	authRPC := newAuthClient(authCfg)
-	if authRPC.Node() != authCfg.address {
-		t.Fatalf("Unexpected node value %s, but expected %s", authRPC.Node(), authCfg.address)
+	authRPC = newAuthRPCClient(authCfg)
+	if authRPC.ServerAddr() != authCfg.serverAddr {
+		t.Fatalf("Unexpected node value %s, but expected %s", authRPC.ServerAddr(), authCfg.serverAddr)
 	}
-	if authRPC.RPCPath() != authCfg.path {
-		t.Fatalf("Unexpected node value %s, but expected %s", authRPC.RPCPath(), authCfg.path)
-	}
-	authCfg = &authConfig{
-		accessKey:   "123",
-		secretKey:   "123",
-		secureConn:  false,
-		loginMethod: "MyPackage.LoginHandler",
-	}
-	authRPC = newAuthClient(authCfg)
-	if authRPC.Node() != authCfg.address {
-		t.Fatalf("Unexpected node value %s, but expected %s", authRPC.Node(), authCfg.address)
-	}
-	if authRPC.RPCPath() != authCfg.path {
-		t.Fatalf("Unexpected node value %s, but expected %s", authRPC.RPCPath(), authCfg.path)
+	if authRPC.ServiceEndpoint() != authCfg.serviceEndpoint {
+		t.Fatalf("Unexpected node value %s, but expected %s", authRPC.ServiceEndpoint(), authCfg.serviceEndpoint)
 	}
 }

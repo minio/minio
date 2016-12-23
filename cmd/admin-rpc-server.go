@@ -27,23 +27,25 @@ const servicePath = "/admin/service"
 // serviceCmd - exports RPC methods for service status, stop and
 // restart commands.
 type serviceCmd struct {
-	loginServer
+	AuthRPCServer
 }
 
 // Shutdown - Shutdown this instance of minio server.
-func (s *serviceCmd) Shutdown(args *GenericArgs, reply *GenericReply) error {
-	if !isAuthTokenValid(args.Token) {
-		return errInvalidToken
+func (s *serviceCmd) Shutdown(args *AuthRPCArgs, reply *AuthRPCReply) error {
+	if err := args.IsAuthenticated(); err != nil {
+		return err
 	}
+
 	globalServiceSignalCh <- serviceStop
 	return nil
 }
 
 // Restart - Restart this instance of minio server.
-func (s *serviceCmd) Restart(args *GenericArgs, reply *GenericReply) error {
-	if !isAuthTokenValid(args.Token) {
-		return errInvalidToken
+func (s *serviceCmd) Restart(args *AuthRPCArgs, reply *AuthRPCReply) error {
+	if err := args.IsAuthenticated(); err != nil {
+		return err
 	}
+
 	globalServiceSignalCh <- serviceRestart
 	return nil
 }

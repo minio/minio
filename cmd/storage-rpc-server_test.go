@@ -87,108 +87,113 @@ func TestStorageRPCInvalidToken(t *testing.T) {
 	defer removeAll(st.configDir)
 
 	storageRPC := st.stServer
-	timestamp := time.Now().UTC()
-	ga := GenericArgs{
-		Token:     st.token,
-		Timestamp: timestamp,
-	}
-	// Construct an invalid token.
-	badga := ga
-	badga.Token = "invalidToken"
 
 	// Following test cases are meant to exercise the invalid
 	// token code path of the storage RPC methods.
-
 	var err error
-	gva := GenericVolArgs{
-		GenericArgs: badga,
+	badAuthRPCArgs := AuthRPCArgs{AuthToken: "invalidToken"}
+	badGenericVolArgs := GenericVolArgs{
+		AuthRPCArgs: badAuthRPCArgs,
 		Vol:         "myvol",
 	}
 	// 1. DiskInfoHandler
 	diskInfoReply := &disk.Info{}
-	err = storageRPC.DiskInfoHandler(&badga, diskInfoReply)
+	badAuthRPCArgs.RequestTime = time.Now().UTC()
+	err = storageRPC.DiskInfoHandler(&badAuthRPCArgs, diskInfoReply)
 	errorIfInvalidToken(t, err)
 
 	// 2. MakeVolHandler
-	makeVolArgs := &gva
-	makeVolReply := &GenericReply{}
+	makeVolArgs := &badGenericVolArgs
+	makeVolArgs.AuthRPCArgs.RequestTime = time.Now().UTC()
+	makeVolReply := &AuthRPCReply{}
 	err = storageRPC.MakeVolHandler(makeVolArgs, makeVolReply)
 	errorIfInvalidToken(t, err)
 
 	// 3. ListVolsHandler
 	listVolReply := &ListVolsReply{}
-	err = storageRPC.ListVolsHandler(&badga, listVolReply)
+	badAuthRPCArgs.RequestTime = time.Now().UTC()
+	err = storageRPC.ListVolsHandler(&badAuthRPCArgs, listVolReply)
 	errorIfInvalidToken(t, err)
 
 	// 4. StatVolHandler
 	statVolReply := &VolInfo{}
-	statVolArgs := &gva
+	statVolArgs := &badGenericVolArgs
+	statVolArgs.AuthRPCArgs.RequestTime = time.Now().UTC()
 	err = storageRPC.StatVolHandler(statVolArgs, statVolReply)
 	errorIfInvalidToken(t, err)
 
 	// 5. DeleteVolHandler
-	deleteVolArgs := &gva
-	deleteVolReply := &GenericReply{}
+	deleteVolArgs := &badGenericVolArgs
+	deleteVolArgs.AuthRPCArgs.RequestTime = time.Now().UTC()
+	deleteVolReply := &AuthRPCReply{}
 	err = storageRPC.DeleteVolHandler(deleteVolArgs, deleteVolReply)
 	errorIfInvalidToken(t, err)
 
 	// 6. StatFileHandler
 	statFileArgs := &StatFileArgs{
-		GenericArgs: badga,
+		AuthRPCArgs: badAuthRPCArgs,
 	}
+	statFileArgs.AuthRPCArgs.RequestTime = time.Now().UTC()
 	statReply := &FileInfo{}
 	err = storageRPC.StatFileHandler(statFileArgs, statReply)
 	errorIfInvalidToken(t, err)
 
 	// 7. ListDirHandler
 	listDirArgs := &ListDirArgs{
-		GenericArgs: badga,
+		AuthRPCArgs: badAuthRPCArgs,
 	}
+	listDirArgs.AuthRPCArgs.RequestTime = time.Now().UTC()
 	listDirReply := &[]string{}
 	err = storageRPC.ListDirHandler(listDirArgs, listDirReply)
 	errorIfInvalidToken(t, err)
 
 	// 8. ReadAllHandler
 	readFileArgs := &ReadFileArgs{
-		GenericArgs: badga,
+		AuthRPCArgs: badAuthRPCArgs,
 	}
+	readFileArgs.AuthRPCArgs.RequestTime = time.Now().UTC()
 	readFileReply := &[]byte{}
 	err = storageRPC.ReadAllHandler(readFileArgs, readFileReply)
 	errorIfInvalidToken(t, err)
 
 	// 9. ReadFileHandler
+	readFileArgs.AuthRPCArgs.RequestTime = time.Now().UTC()
 	err = storageRPC.ReadFileHandler(readFileArgs, readFileReply)
 	errorIfInvalidToken(t, err)
 
 	// 10. PrepareFileHandler
 	prepFileArgs := &PrepareFileArgs{
-		GenericArgs: badga,
+		AuthRPCArgs: badAuthRPCArgs,
 	}
-	prepFileReply := &GenericReply{}
+	prepFileArgs.AuthRPCArgs.RequestTime = time.Now().UTC()
+	prepFileReply := &AuthRPCReply{}
 	err = storageRPC.PrepareFileHandler(prepFileArgs, prepFileReply)
 	errorIfInvalidToken(t, err)
 
 	// 11. AppendFileHandler
 	appendArgs := &AppendFileArgs{
-		GenericArgs: badga,
+		AuthRPCArgs: badAuthRPCArgs,
 	}
-	appendReply := &GenericReply{}
+	appendArgs.AuthRPCArgs.RequestTime = time.Now().UTC()
+	appendReply := &AuthRPCReply{}
 	err = storageRPC.AppendFileHandler(appendArgs, appendReply)
 	errorIfInvalidToken(t, err)
 
 	// 12. DeleteFileHandler
 	delFileArgs := &DeleteFileArgs{
-		GenericArgs: badga,
+		AuthRPCArgs: badAuthRPCArgs,
 	}
-	delFileRely := &GenericReply{}
+	delFileArgs.AuthRPCArgs.RequestTime = time.Now().UTC()
+	delFileRely := &AuthRPCReply{}
 	err = storageRPC.DeleteFileHandler(delFileArgs, delFileRely)
 	errorIfInvalidToken(t, err)
 
 	// 13. RenameFileHandler
 	renameArgs := &RenameFileArgs{
-		GenericArgs: badga,
+		AuthRPCArgs: badAuthRPCArgs,
 	}
-	renameReply := &GenericReply{}
+	renameArgs.AuthRPCArgs.RequestTime = time.Now().UTC()
+	renameReply := &AuthRPCReply{}
 	err = storageRPC.RenameFileHandler(renameArgs, renameReply)
 	errorIfInvalidToken(t, err)
 }

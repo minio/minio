@@ -30,9 +30,14 @@ func testAdminCmd(cmd cmdType, t *testing.T) {
 
 	adminServer := serviceCmd{}
 	creds := serverConfig.GetCredential()
-	reply := RPCLoginReply{}
-	args := RPCLoginArgs{Username: creds.AccessKey, Password: creds.SecretKey}
-	err = adminServer.LoginHandler(&args, &reply)
+	args := LoginRPCArgs{
+		Username:    creds.AccessKey,
+		Password:    creds.SecretKey,
+		Version:     Version,
+		RequestTime: time.Now().UTC(),
+	}
+	reply := LoginRPCReply{}
+	err = adminServer.Login(&args, &reply)
 	if err != nil {
 		t.Fatalf("Failed to login to admin server - %v", err)
 	}
@@ -42,37 +47,16 @@ func testAdminCmd(cmd cmdType, t *testing.T) {
 		<-globalServiceSignalCh
 	}()
 
-	validToken := reply.Token
-	timeNow := time.Now().UTC()
-	testCases := []struct {
-		ga          GenericArgs
-		expectedErr error
-	}{
-		// Valid case
-		{
-			ga:          GenericArgs{Token: validToken, Timestamp: timeNow},
-			expectedErr: nil,
-		},
-		// Invalid token
-		{
-			ga:          GenericArgs{Token: "invalidToken", Timestamp: timeNow},
-			expectedErr: errInvalidToken,
-		},
-	}
-
-	genReply := GenericReply{}
-	for i, test := range testCases {
-		switch cmd {
-		case stopCmd:
-			err = adminServer.Shutdown(&test.ga, &genReply)
-			if err != test.expectedErr {
-				t.Errorf("Test %d: Expected error %v but received %v", i+1, test.expectedErr, err)
-			}
-		case restartCmd:
-			err = adminServer.Restart(&test.ga, &genReply)
-			if err != test.expectedErr {
-				t.Errorf("Test %d: Expected error %v but received %v", i+1, test.expectedErr, err)
-			}
+	ga := AuthRPCArgs{AuthToken: reply.AuthToken, RequestTime: time.Now().UTC()}
+	genReply := AuthRPCReply{}
+	switch cmd {
+	case stopCmd:
+		if err = adminServer.Shutdown(&ga, &genReply); err != nil {
+			t.Errorf("stopCmd: Expected: <nil>, got: %v", err)
+		}
+	case restartCmd:
+		if err = adminServer.Restart(&ga, &genReply); err != nil {
+			t.Errorf("restartCmd: Expected: <nil>, got: %v", err)
 		}
 	}
 }
