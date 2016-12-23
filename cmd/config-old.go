@@ -301,7 +301,7 @@ type configV6 struct {
 	Logger loggerV6 `json:"logger"`
 
 	// Notification queue configuration.
-	Notify notifier `json:"notify"`
+	Notify notifierV1 `json:"notify"`
 }
 
 // loadConfigV6 load config version '6'.
@@ -325,6 +325,16 @@ func loadConfigV6() (*configV6, error) {
 	return c, nil
 }
 
+// Notifier represents collection of supported notification queues.
+type notifierV1 struct {
+	AMQP          map[string]amqpNotify          `json:"amqp"`
+	NATS          map[string]natsNotifyV1        `json:"nats"`
+	ElasticSearch map[string]elasticSearchNotify `json:"elasticsearch"`
+	Redis         map[string]redisNotify         `json:"redis"`
+	PostgreSQL    map[string]postgreSQLNotify    `json:"postgresql"`
+	Kafka         map[string]kafkaNotify         `json:"kafka"`
+}
+
 // configV7 server configuration version '7'.
 type serverConfigV7 struct {
 	Version string `json:"version"`
@@ -337,7 +347,7 @@ type serverConfigV7 struct {
 	Logger loggerV6 `json:"logger"`
 
 	// Notification queue configuration.
-	Notify notifier `json:"notify"`
+	Notify notifierV1 `json:"notify"`
 
 	// Read Write mutex.
 	rwMutex *sync.RWMutex
@@ -377,7 +387,7 @@ type serverConfigV8 struct {
 	Logger loggerV6 `json:"logger"`
 
 	// Notification queue configuration.
-	Notify notifier `json:"notify"`
+	Notify notifierV1 `json:"notify"`
 
 	// Read Write mutex.
 	rwMutex *sync.RWMutex
@@ -417,7 +427,7 @@ type serverConfigV9 struct {
 	Logger loggerV6 `json:"logger"`
 
 	// Notification queue configuration.
-	Notify notifier `json:"notify"`
+	Notify notifierV1 `json:"notify"`
 
 	// Read Write mutex.
 	rwMutex *sync.RWMutex
@@ -458,7 +468,7 @@ type serverConfigV10 struct {
 	Logger logger `json:"logger"`
 
 	// Notification queue configuration.
-	Notify notifier `json:"notify"`
+	Notify notifierV1 `json:"notify"`
 }
 
 func loadConfigV10() (*serverConfigV10, error) {
@@ -471,6 +481,54 @@ func loadConfigV10() (*serverConfigV10, error) {
 	}
 	srvCfg := &serverConfigV10{}
 	srvCfg.Version = "10"
+	qc, err := quick.New(srvCfg)
+	if err != nil {
+		return nil, err
+	}
+	if err := qc.Load(configFile); err != nil {
+		return nil, err
+	}
+	return srvCfg, nil
+}
+
+// natsNotifyV1 - structure was valid until config V 11
+type natsNotifyV1 struct {
+	Enable       bool   `json:"enable"`
+	Address      string `json:"address"`
+	Subject      string `json:"subject"`
+	Username     string `json:"username"`
+	Password     string `json:"password"`
+	Token        string `json:"token"`
+	Secure       bool   `json:"secure"`
+	PingInterval int64  `json:"pingInterval"`
+}
+
+// serverConfigV11 server configuration version '11' which is like
+// version '10' except it adds support for Kafka notifications.
+type serverConfigV11 struct {
+	Version string `json:"version"`
+
+	// S3 API configuration.
+	Credential credential `json:"credential"`
+	Region     string     `json:"region"`
+
+	// Additional error logging configuration.
+	Logger logger `json:"logger"`
+
+	// Notification queue configuration.
+	Notify notifierV1 `json:"notify"`
+}
+
+func loadConfigV11() (*serverConfigV11, error) {
+	configFile, err := getConfigFile()
+	if err != nil {
+		return nil, err
+	}
+	if _, err = os.Stat(configFile); err != nil {
+		return nil, err
+	}
+	srvCfg := &serverConfigV11{}
+	srvCfg.Version = "11"
 	qc, err := quick.New(srvCfg)
 	if err != nil {
 		return nil, err

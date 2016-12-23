@@ -20,53 +20,117 @@ import (
 	"io/ioutil"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/nats-io/go-nats-streaming"
 	"github.com/nats-io/nats"
 )
+
+// natsNotifyStreaming contains specific options related to connection
+// to a NATS streaming server
+type natsNotifyStreaming struct {
+	Enable             bool   `json:"enable"`
+	ClusterID          string `json:"clusterID"`
+	ClientID           string `json:"clientID"`
+	Async              bool   `json:"async"`
+	MaxPubAcksInflight int    `json:"maxPubAcksInflight"`
+}
 
 // natsNotify - represents logrus compatible NATS hook.
 // All fields represent NATS configuration details.
 type natsNotify struct {
-	Enable       bool   `json:"enable"`
-	Address      string `json:"address"`
-	Subject      string `json:"subject"`
-	Username     string `json:"username"`
-	Password     string `json:"password"`
-	Token        string `json:"token"`
-	Secure       bool   `json:"secure"`
-	PingInterval int64  `json:"pingInterval"`
+	Enable       bool                `json:"enable"`
+	Address      string              `json:"address"`
+	Subject      string              `json:"subject"`
+	Username     string              `json:"username"`
+	Password     string              `json:"password"`
+	Token        string              `json:"token"`
+	Secure       bool                `json:"secure"`
+	PingInterval int64               `json:"pingInterval"`
+	Streaming    natsNotifyStreaming `json:"streaming"`
 }
 
-type natsConn struct {
-	params natsNotify
-	*nats.Conn
+// natsIOConn abstracts connection to any type of NATS server
+type natsIOConn struct {
+	params   natsNotify
+	natsConn *nats.Conn
+	stanConn stan.Conn
 }
 
-// dialNATS - dials and returns an natsConn instance,
+// dialNATS - dials and returns an natsIOConn instance,
 // for sending notifications. Returns error if nats logger
 // is not enabled.
-func dialNATS(natsL natsNotify) (natsConn, error) {
+func dialNATS(natsL natsNotify, testDial bool) (natsIOConn, error) {
 	if !natsL.Enable {
-		return natsConn{}, errNotifyNotEnabled
+		return natsIOConn{}, errNotifyNotEnabled
 	}
-	// Configure and connect to NATS server
-	natsC := nats.DefaultOptions
-	natsC.Url = "nats://" + natsL.Address
-	natsC.User = natsL.Username
-	natsC.Password = natsL.Password
-	natsC.Token = natsL.Token
-	natsC.Secure = natsL.Secure
-	conn, err := natsC.Connect()
-	if err != nil {
-		return natsConn{}, err
+
+	// Construct natsIOConn which holds all NATS connection information
+	conn := natsIOConn{params: natsL}
+
+	if natsL.Streaming.Enable {
+		// Construct scheme to differentiate between clear and TLS connections
+		scheme := "nats"
+		if natsL.Secure {
+			scheme = "tls"
+		}
+		// Construct address URL
+		addressURL := scheme + "://" + natsL.Username + ":" + natsL.Password + "@" + natsL.Address
+		// Fetch the user-supplied client ID and provide a random one if not provided
+		clientID := natsL.Streaming.ClientID
+		if clientID == "" {
+			clientID = mustGetUUID()
+		}
+		// Add test suffix to clientID to avoid clientID already registered error
+		if testDial {
+			clientID += "-test"
+		}
+		connOpts := []stan.Option{
+			stan.NatsURL(addressURL),
+		}
+		// Setup MaxPubAcksInflight parameter
+		if natsL.Streaming.MaxPubAcksInflight > 0 {
+			connOpts = append(connOpts,
+				stan.MaxPubAcksInflight(natsL.Streaming.MaxPubAcksInflight))
+		}
+		// Do the real connection to the NATS server
+		sc, err := stan.Connect(natsL.Streaming.ClusterID, clientID, connOpts...)
+		if err != nil {
+			return natsIOConn{}, err
+		}
+		// Save the created connection
+		conn.stanConn = sc
+	} else {
+		// Configure and connect to NATS server
+		natsC := nats.DefaultOptions
+		natsC.Url = "nats://" + natsL.Address
+		natsC.User = natsL.Username
+		natsC.Password = natsL.Password
+		natsC.Token = natsL.Token
+		natsC.Secure = natsL.Secure
+		// Do the real connection
+		nc, err := natsC.Connect()
+		if err != nil {
+			return natsIOConn{}, err
+		}
+		// Save the created connection
+		conn.natsConn = nc
 	}
-	return natsConn{Conn: conn, params: natsL}, nil
+	return conn, nil
+}
+
+// closeNATS - close the underlying NATS connection
+func closeNATS(conn natsIOConn) {
+	if conn.params.Streaming.Enable {
+		conn.stanConn.Close()
+	} else {
+		conn.natsConn.Close()
+	}
 }
 
 func newNATSNotify(accountID string) (*logrus.Logger, error) {
 	natsL := serverConfig.GetNATSNotifyByID(accountID)
 
 	// Connect to nats server.
-	natsC, err := dialNATS(natsL)
+	natsC, err := dialNATS(natsL, false)
 	if err != nil {
 		return nil, err
 	}
@@ -87,21 +151,34 @@ func newNATSNotify(accountID string) (*logrus.Logger, error) {
 }
 
 // Fire is called when an event should be sent to the message broker
-func (n natsConn) Fire(entry *logrus.Entry) error {
-	ch := n.Conn
+func (n natsIOConn) Fire(entry *logrus.Entry) error {
 	body, err := entry.Reader()
 	if err != nil {
 		return err
 	}
-	err = ch.Publish(n.params.Subject, body.Bytes())
-	if err != nil {
-		return err
+	if n.params.Streaming.Enable {
+		// Streaming flag is enabled, publish the log synchronously or asynchronously
+		// depending on the user supplied parameter
+		if n.params.Streaming.Async {
+			_, err = n.stanConn.PublishAsync(n.params.Subject, body.Bytes(), nil)
+		} else {
+			err = n.stanConn.Publish(n.params.Subject, body.Bytes())
+		}
+		if err != nil {
+			return err
+		}
+	} else {
+		// Publish the log
+		err = n.natsConn.Publish(n.params.Subject, body.Bytes())
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
 // Levels is available logging levels.
-func (n natsConn) Levels() []logrus.Level {
+func (n natsIOConn) Levels() []logrus.Level {
 	return []logrus.Level{
 		logrus.InfoLevel,
 	}

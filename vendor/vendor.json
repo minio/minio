@@ -62,6 +62,24 @@
 			"revisionTime": "2016-06-10T14:06:02+03:00"
 		},
 		{
+			"checksumSHA1": "3yco0089CSJ4qbyUccpbDC2+dPg=",
+			"path": "github.com/gogo/protobuf/gogoproto",
+			"revision": "84af2615df1ba1d35cc975ba94b64ee67d6c196e",
+			"revisionTime": "2016-12-20T17:02:12Z"
+		},
+		{
+			"checksumSHA1": "6ZxSmrIx3Jd15aou16oG0HPylP4=",
+			"path": "github.com/gogo/protobuf/proto",
+			"revision": "84af2615df1ba1d35cc975ba94b64ee67d6c196e",
+			"revisionTime": "2016-12-20T17:02:12Z"
+		},
+		{
+			"checksumSHA1": "EaY86bsi1nucvO0/UKvp/A72aC8=",
+			"path": "github.com/gogo/protobuf/protoc-gen-gogo/descriptor",
+			"revision": "84af2615df1ba1d35cc975ba94b64ee67d6c196e",
+			"revisionTime": "2016-12-20T17:02:12Z"
+		},
+		{
 			"checksumSHA1": "W+E/2xXcE1GmJ0Qb784ald0Fn6I=",
 			"path": "github.com/golang/snappy",
 			"revision": "d9eb7a3d35ec988b8585d4a0068e462c27d28380",
@@ -198,6 +216,36 @@
 			"path": "github.com/minio/sha256-simd",
 			"revision": "e82e73b775766b9011503e80e6772fc32b9afc5b",
 			"revisionTime": "2016-12-19T23:17:30Z"
+		},
+		{
+			"checksumSHA1": "zvQr4zOz1/g/Fui6co0sctxrJ28=",
+			"path": "github.com/nats-io/go-nats",
+			"revision": "6b6bf392d34d01f57cc563ae123f00c13778bd57",
+			"revisionTime": "2016-11-20T20:21:26Z"
+		},
+		{
+			"checksumSHA1": "8Z7LvciW35L7fbH0IaSoBMae+3o=",
+			"path": "github.com/nats-io/go-nats-streaming",
+			"revision": "077898146bfbb849a620202e7e5eaaf707492206",
+			"revisionTime": "2016-12-16T19:10:29Z"
+		},
+		{
+			"checksumSHA1": "16sV1MZ45lYmv2tXfKHCz+ZLvyY=",
+			"path": "github.com/nats-io/go-nats-streaming/pb",
+			"revision": "077898146bfbb849a620202e7e5eaaf707492206",
+			"revisionTime": "2016-12-16T19:10:29Z"
+		},
+		{
+			"checksumSHA1": "Q2c9uTEIGhSIddv5pntYdFNtUdk=",
+			"path": "github.com/nats-io/go-nats/encoders/builtin",
+			"revision": "6b6bf392d34d01f57cc563ae123f00c13778bd57",
+			"revisionTime": "2016-11-20T20:21:26Z"
+		},
+		{
+			"checksumSHA1": "LhbIA/oMWpscEPPK9Wrx5GLcz44=",
+			"path": "github.com/nats-io/go-nats/util",
+			"revision": "6b6bf392d34d01f57cc563ae123f00c13778bd57",
+			"revisionTime": "2016-11-20T20:21:26Z"
 		},
 		{
 			"checksumSHA1": "Nj7vQ2GlvJiPP7sqJX5AurrDSD4=",
