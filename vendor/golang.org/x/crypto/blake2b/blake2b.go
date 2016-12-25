@@ -23,6 +23,12 @@ const (
 	Size256 = 32
 )
 
+var (
+	useAVX2 bool
+	useAVX  bool
+	useSSE4 bool
+)
+
 var errKeySize = errors.New("blake2b: invalid key size")
 
 var iv = [8]uint64{
