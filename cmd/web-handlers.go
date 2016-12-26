@@ -52,7 +52,7 @@ func isJWTReqAuthenticated(req *http.Request) bool {
 		if _, ok := token.Method.(*jwtgo.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
 		}
-		return []byte(jwt.SecretAccessKey), nil
+		return []byte(jwt.SecretKey), nil
 	}
 	token, err := jwtreq.ParseFromRequest(req, jwtreq.AuthorizationHeaderExtractor, reqCallback)
 	if err != nil {
@@ -347,9 +347,9 @@ func (web webAPIHandlers) GenerateAuth(r *http.Request, args *WebGenericArgs, re
 	if !isJWTReqAuthenticated(r) {
 		return toJSONError(errAuthentication)
 	}
-	cred := mustGenAccessKeys()
-	reply.AccessKey = cred.AccessKeyID
-	reply.SecretKey = cred.SecretAccessKey
+	cred := newCredential()
+	reply.AccessKey = cred.AccessKey
+	reply.SecretKey = cred.SecretKey
 	reply.UIVersion = miniobrowser.UIVersion
 	return nil
 }
@@ -375,8 +375,8 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 
 	// Initialize jwt with the new access keys, fail if not possible.
 	jwt, err := newJWT(defaultJWTExpiry, credential{
-		AccessKeyID:     args.AccessKey,
-		SecretAccessKey: args.SecretKey,
+		AccessKey: args.AccessKey,
+		SecretKey: args.SecretKey,
 	}) // JWT Expiry set to 24Hrs.
 	if err != nil {
 		return toJSONError(err)
@@ -460,8 +460,8 @@ func (web *webAPIHandlers) GetAuth(r *http.Request, args *WebGenericArgs, reply 
 		return toJSONError(errAuthentication)
 	}
 	creds := serverConfig.GetCredential()
-	reply.AccessKey = creds.AccessKeyID
-	reply.SecretKey = creds.SecretAccessKey
+	reply.AccessKey = creds.AccessKey
+	reply.SecretKey = creds.SecretKey
 	reply.UIVersion = miniobrowser.UIVersion
 	return nil
 }
@@ -531,7 +531,7 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 		if _, ok := token.Method.(*jwtgo.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
 		}
-		return []byte(jwt.SecretAccessKey), nil
+		return []byte(jwt.SecretKey), nil
 	})
 	if e != nil || !token.Valid {
 		writeWebErrorResponse(w, errAuthentication)
@@ -760,8 +760,8 @@ func presignedGet(host, bucket, object string, expiry int64) string {
 	cred := serverConfig.GetCredential()
 	region := serverConfig.GetRegion()
 
-	accessKey := cred.AccessKeyID
-	secretKey := cred.SecretAccessKey
+	accessKey := cred.AccessKey
+	secretKey := cred.SecretKey
 
 	date := time.Now().UTC()
 	dateStr := date.Format(iso8601Format)

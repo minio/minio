@@ -63,8 +63,8 @@ func TestBrowserPeerRPC(t *testing.T) {
 func (s *TestRPCBrowserPeerSuite) testBrowserPeerRPC(t *testing.T) {
 	// Construct RPC call arguments.
 	creds := credential{
-		AccessKeyID:     "abcd1",
-		SecretAccessKey: "abcd1234",
+		AccessKey: "abcd1",
+		SecretKey: "abcd1234",
 	}
 
 	// Validate for invalid token.
@@ -105,8 +105,8 @@ func (s *TestRPCBrowserPeerSuite) testBrowserPeerRPC(t *testing.T) {
 
 	// Validate for success in loing handled with valid credetnails.
 	rargs = &RPCLoginArgs{
-		Username: creds.AccessKeyID,
-		Password: creds.SecretAccessKey,
+		Username: creds.AccessKey,
+		Password: creds.SecretKey,
 	}
 	rreply = &RPCLoginReply{}
 	err = rclient.Call("BrowserPeer.LoginHandler", rargs, rreply)

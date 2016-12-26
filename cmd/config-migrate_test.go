@@ -148,11 +148,11 @@ func TestServerConfigMigrateV2toV11(t *testing.T) {
 	}
 
 	// Check if accessKey and secretKey are not altered during migration
-	if serverConfig.Credential.AccessKeyID != accessKey {
-		t.Fatalf("Access key lost during migration, expected: %v, found:%v", accessKey, serverConfig.Credential.AccessKeyID)
+	if serverConfig.Credential.AccessKey != accessKey {
+		t.Fatalf("Access key lost during migration, expected: %v, found:%v", accessKey, serverConfig.Credential.AccessKey)
 	}
-	if serverConfig.Credential.SecretAccessKey != secretKey {
-		t.Fatalf("Secret key lost during migration, expected: %v, found: %v", secretKey, serverConfig.Credential.SecretAccessKey)
+	if serverConfig.Credential.SecretKey != secretKey {
+		t.Fatalf("Secret key lost during migration, expected: %v, found: %v", secretKey, serverConfig.Credential.SecretKey)
 	}
 
 	// Initialize server config and check again if everything is fine

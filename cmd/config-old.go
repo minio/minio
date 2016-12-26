@@ -10,9 +10,9 @@ import (
 
 /////////////////// Config V1 ///////////////////
 type configV1 struct {
-	Version         string `json:"version"`
-	AccessKeyID     string `json:"accessKeyId"`
-	SecretAccessKey string `json:"secretAccessKey"`
+	Version   string `json:"version"`
+	AccessKey string `json:"accessKeyId"`
+	SecretKey string `json:"secretAccessKey"`
 }
 
 // loadConfigV1 load config
@@ -41,9 +41,9 @@ func loadConfigV1() (*configV1, error) {
 type configV2 struct {
 	Version     string `json:"version"`
 	Credentials struct {
-		AccessKeyID     string `json:"accessKeyId"`
-		SecretAccessKey string `json:"secretAccessKey"`
-		Region          string `json:"region"`
+		AccessKey string `json:"accessKeyId"`
+		SecretKey string `json:"secretAccessKey"`
+		Region    string `json:"region"`
 	} `json:"credentials"`
 	MongoLogger struct {
 		Addr       string `json:"addr"`

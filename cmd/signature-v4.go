@@ -171,7 +171,7 @@ func doesPolicySignatureV4Match(formValues map[string]string) APIErrorCode {
 	}
 
 	// Verify if the access key id matches.
-	if credHeader.accessKey != cred.AccessKeyID {
+	if credHeader.accessKey != cred.AccessKey {
 		return ErrInvalidAccessKeyID
 	}
 
@@ -188,7 +188,7 @@ func doesPolicySignatureV4Match(formValues map[string]string) APIErrorCode {
 	}
 
 	// Get signing key.
-	signingKey := getSigningKey(cred.SecretAccessKey, t, region)
+	signingKey := getSigningKey(cred.SecretKey, t, region)
 
 	// Get signature.
 	newSignature := getSignature(signingKey, formValues["Policy"])
@@ -217,7 +217,7 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 	}
 
 	// Verify if the access key id matches.
-	if pSignValues.Credential.accessKey != cred.AccessKeyID {
+	if pSignValues.Credential.accessKey != cred.AccessKey {
 		return ErrInvalidAccessKeyID
 	}
 
@@ -268,7 +268,7 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 	query.Set("X-Amz-Date", t.Format(iso8601Format))
 	query.Set("X-Amz-Expires", strconv.Itoa(expireSeconds))
 	query.Set("X-Amz-SignedHeaders", getSignedHeaders(extractedSignedHeaders))
-	query.Set("X-Amz-Credential", cred.AccessKeyID+"/"+getScope(t, sRegion))
+	query.Set("X-Amz-Credential", cred.AccessKey+"/"+getScope(t, sRegion))
 
 	// Save other headers available in the request parameters.
 	for k, v := range req.URL.Query() {
@@ -313,7 +313,7 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 	presignedStringToSign := getStringToSign(presignedCanonicalReq, t, region)
 
 	// Get hmac presigned signing key.
-	presignedSigningKey := getSigningKey(cred.SecretAccessKey, t, region)
+	presignedSigningKey := getSigningKey(cred.SecretKey, t, region)
 
 	// Get new signature.
 	newSignature := getSignature(presignedSigningKey, presignedStringToSign)
@@ -369,7 +369,7 @@ func doesSignatureMatch(hashedPayload string, r *http.Request, region string) AP
 	}
 
 	// Verify if the access key id matches.
-	if signV4Values.Credential.accessKey != cred.AccessKeyID {
+	if signV4Values.Credential.accessKey != cred.AccessKey {
 		return ErrInvalidAccessKeyID
 	}
 
@@ -410,7 +410,7 @@ func doesSignatureMatch(hashedPayload string, r *http.Request, region string) AP
 	stringToSign := getStringToSign(canonicalRequest, t, region)
 
 	// Get hmac signing key.
-	signingKey := getSigningKey(cred.SecretAccessKey, t, region)
+	signingKey := getSigningKey(cred.SecretKey, t, region)
 
 	// Calculate signature.
 	newSignature := getSignature(signingKey, stringToSign)

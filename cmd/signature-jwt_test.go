@@ -190,11 +190,11 @@ func TestAuthenticate(t *testing.T) {
 		// Authentication error.
 		{"myuser", "mypassword", errInvalidAccessKeyID},
 		// Authentication error.
-		{serverConfig.GetCredential().AccessKeyID, "mypassword", errAuthentication},
+		{serverConfig.GetCredential().AccessKey, "mypassword", errAuthentication},
 		// Success.
-		{serverConfig.GetCredential().AccessKeyID, serverConfig.GetCredential().SecretAccessKey, nil},
+		{serverConfig.GetCredential().AccessKey, serverConfig.GetCredential().SecretKey, nil},
 		// Success when access key contains leading/trailing spaces.
-		{" " + serverConfig.GetCredential().AccessKeyID + " ", serverConfig.GetCredential().SecretAccessKey, nil},
+		{" " + serverConfig.GetCredential().AccessKey + " ", serverConfig.GetCredential().SecretKey, nil},
 	}
 
 	// Run tests.

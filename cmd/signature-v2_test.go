@@ -55,7 +55,7 @@ func TestDoesPresignedV2SignatureMatch(t *testing.T) {
 			queryParams: map[string]string{
 				"Expires":        "60s",
 				"Signature":      "badsignature",
-				"AWSAccessKeyId": serverConfig.GetCredential().AccessKeyID,
+				"AWSAccessKeyId": serverConfig.GetCredential().AccessKey,
 			},
 			expected: ErrMalformedExpires,
 		},
@@ -64,7 +64,7 @@ func TestDoesPresignedV2SignatureMatch(t *testing.T) {
 			queryParams: map[string]string{
 				"Expires":        "60",
 				"Signature":      "badsignature",
-				"AWSAccessKeyId": serverConfig.GetCredential().AccessKeyID,
+				"AWSAccessKeyId": serverConfig.GetCredential().AccessKey,
 			},
 			expected: ErrExpiredPresignRequest,
 		},
@@ -73,7 +73,7 @@ func TestDoesPresignedV2SignatureMatch(t *testing.T) {
 			queryParams: map[string]string{
 				"Expires":        fmt.Sprintf("%d", now.Unix()+60),
 				"Signature":      "badsignature",
-				"AWSAccessKeyId": serverConfig.GetCredential().AccessKeyID,
+				"AWSAccessKeyId": serverConfig.GetCredential().AccessKey,
 			},
 			expected: ErrSignatureDoesNotMatch,
 		},
@@ -82,7 +82,7 @@ func TestDoesPresignedV2SignatureMatch(t *testing.T) {
 			queryParams: map[string]string{
 				"Expires":        fmt.Sprintf("%d", now.Unix()),
 				"Signature":      "zOM2YrY/yAQe15VWmT78OlBrK6g=",
-				"AWSAccessKeyId": serverConfig.GetCredential().AccessKeyID,
+				"AWSAccessKeyId": serverConfig.GetCredential().AccessKey,
 			},
 			expected: ErrSignatureDoesNotMatch,
 		},
@@ -126,7 +126,7 @@ func TestValidateV2AuthHeader(t *testing.T) {
 	if err := serverConfig.Save(); err != nil {
 		t.Fatal(err)
 	}
-	accessID := serverConfig.GetCredential().AccessKeyID
+	accessID := serverConfig.GetCredential().AccessKey
 
 	testCases := []struct {
 		authString    string
@@ -207,9 +207,9 @@ func TestDoesPolicySignatureV2Match(t *testing.T) {
 		signature string
 		errCode   APIErrorCode
 	}{
-		{"invalidAccessKey", policy, calculateSignatureV2(policy, creds.SecretAccessKey), ErrInvalidAccessKeyID},
-		{creds.AccessKeyID, policy, calculateSignatureV2("random", creds.SecretAccessKey), ErrSignatureDoesNotMatch},
-		{creds.AccessKeyID, policy, calculateSignatureV2(policy, creds.SecretAccessKey), ErrNone},
+		{"invalidAccessKey", policy, calculateSignatureV2(policy, creds.SecretKey), ErrInvalidAccessKeyID},
+		{creds.AccessKey, policy, calculateSignatureV2("random", creds.SecretKey), ErrSignatureDoesNotMatch},
+		{creds.AccessKey, policy, calculateSignatureV2(policy, creds.SecretKey), ErrNone},
 	}
 	for i, test := range testCases {
 		formValues := make(map[string]string)

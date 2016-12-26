@@ -199,8 +199,8 @@ func UnstartedTestServer(t TestErrHandler, instanceType string) TestServer {
 	if err != nil {
 		t.Fatalf("Unexpected error %s", err)
 	}
-	testServer.AccessKey = credentials.AccessKeyID
-	testServer.SecretKey = credentials.SecretAccessKey
+	testServer.AccessKey = credentials.AccessKey
+	testServer.SecretKey = credentials.SecretKey
 
 	objLayer, storageDisks, err := initObjectLayer(testServer.Disks)
 	if err != nil {
@@ -361,8 +361,8 @@ func StartTestStorageRPCServer(t TestErrHandler, instanceType string, diskN int)
 
 	testRPCServer.Root = root
 	testRPCServer.Disks = endpoints
-	testRPCServer.AccessKey = credentials.AccessKeyID
-	testRPCServer.SecretKey = credentials.SecretAccessKey
+	testRPCServer.AccessKey = credentials.AccessKey
+	testRPCServer.SecretKey = credentials.SecretKey
 
 	// Run TestServer.
 	testRPCServer.Server = httptest.NewServer(initTestStorageRPCEndPoint(serverCmdConfig{
@@ -396,8 +396,8 @@ func StartTestPeersRPCServer(t TestErrHandler, instanceType string) TestServer {
 
 	testRPCServer.Root = root
 	testRPCServer.Disks = endpoints
-	testRPCServer.AccessKey = credentials.AccessKeyID
-	testRPCServer.SecretKey = credentials.SecretAccessKey
+	testRPCServer.AccessKey = credentials.AccessKey
+	testRPCServer.SecretKey = credentials.SecretKey
 
 	// create temporary backend for the test server.
 	objLayer, storageDisks, err := initObjectLayer(endpoints)
@@ -2131,8 +2131,8 @@ func StartTestBrowserPeerRPCServer(t TestErrHandler, instanceType string) TestSe
 	credentials := serverConfig.GetCredential()
 
 	testRPCServer.Root = root
-	testRPCServer.AccessKey = credentials.AccessKeyID
-	testRPCServer.SecretKey = credentials.SecretAccessKey
+	testRPCServer.AccessKey = credentials.AccessKey
+	testRPCServer.SecretKey = credentials.SecretKey
 
 	// Initialize and run the TestServer.
 	testRPCServer.Server = httptest.NewServer(initTestBrowserPeerRPCEndPoint())
@@ -2152,8 +2152,8 @@ func StartTestS3PeerRPCServer(t TestErrHandler) (TestServer, []string) {
 	credentials := serverConfig.GetCredential()
 
 	testRPCServer.Root = root
-	testRPCServer.AccessKey = credentials.AccessKeyID
-	testRPCServer.SecretKey = credentials.SecretAccessKey
+	testRPCServer.AccessKey = credentials.AccessKey
+	testRPCServer.SecretKey = credentials.SecretKey
 
 	// init disks
 	objLayer, fsDirs, err := prepareXL()

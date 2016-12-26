@@ -25,23 +25,26 @@ import (
 	"strconv"
 )
 
-// Static alphanumeric table used for generating unique request ids
-var alphaNumericTable = []byte("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+const requestIDLen = 16
 
-// newRequestID generates and returns request ID string.
-func newRequestID() string {
-	alpha := make([]byte, 16)
-	rand.Read(alpha)
-	for i := 0; i < 16; i++ {
-		alpha[i] = alphaNumericTable[alpha[i]%byte(len(alphaNumericTable))]
+// mustGetRequestID generates and returns request ID string.
+func mustGetRequestID() string {
+	reqBytes := make([]byte, requestIDLen)
+	if _, err := rand.Read(reqBytes); err != nil {
+		panic(err)
 	}
-	return string(alpha)
+
+	for i := 0; i < requestIDLen; i++ {
+		reqBytes[i] = alphaNumericTable[reqBytes[i]%alphaNumericTableLen]
+	}
+
+	return string(reqBytes)
 }
 
 // Write http common headers
 func setCommonHeaders(w http.ResponseWriter) {
 	// Set unique request ID for each reply.
-	w.Header().Set("X-Amz-Request-Id", newRequestID())
+	w.Header().Set("X-Amz-Request-Id", mustGetRequestID())
 	w.Header().Set("Server", ("Minio/" + ReleaseTag + " (" + runtime.GOOS + "; " + runtime.GOARCH + ")"))
 	w.Header().Set("Accept-Ranges", "bytes")
 }

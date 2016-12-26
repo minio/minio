@@ -45,12 +45,12 @@ func createTestStorageServer(t *testing.T) *testStorageRPCServer {
 		t.Fatalf("unable to get new JWT, %s", err)
 	}
 
-	err = jwt.Authenticate(serverConfig.GetCredential().AccessKeyID, serverConfig.GetCredential().SecretAccessKey)
+	err = jwt.Authenticate(serverConfig.GetCredential().AccessKey, serverConfig.GetCredential().SecretKey)
 	if err != nil {
 		t.Fatalf("unable for JWT to authenticate, %s", err)
 	}
 
-	token, err := jwt.GenerateToken(serverConfig.GetCredential().AccessKeyID)
+	token, err := jwt.GenerateToken(serverConfig.GetCredential().AccessKey)
 	if err != nil {
 		t.Fatalf("unable for JWT to generate token, %s", err)
 	}

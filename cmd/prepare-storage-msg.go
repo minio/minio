@@ -103,7 +103,7 @@ func getHealMsg(endpoints []*url.URL, storageDisks []StorageAPI) string {
 	//	msg += "MINIO_SECRET_KEY=%s "
 	//	msg += "minio control heal %s"
 	//	creds := serverConfig.GetCredential()
-	//	msg = fmt.Sprintf(msg, creds.AccessKeyID, creds.SecretAccessKey, getHealEndpoint(isSSL(), endpoints[0]))
+	//	msg = fmt.Sprintf(msg, creds.AccessKey, creds.SecretKey, getHealEndpoint(isSSL(), endpoints[0]))
 	disksInfo, _, _ := getDisksInfo(storageDisks)
 	for i, info := range disksInfo {
 		if storageDisks[i] == nil {

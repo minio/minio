@@ -67,12 +67,12 @@ var resourceList = []string{
 func doesPolicySignatureV2Match(formValues map[string]string) APIErrorCode {
 	cred := serverConfig.GetCredential()
 	accessKey := formValues["Awsaccesskeyid"]
-	if accessKey != cred.AccessKeyID {
+	if accessKey != cred.AccessKey {
 		return ErrInvalidAccessKeyID
 	}
 	signature := formValues["Signature"]
 	policy := formValues["Policy"]
-	if signature != calculateSignatureV2(policy, cred.SecretAccessKey) {
+	if signature != calculateSignatureV2(policy, cred.SecretKey) {
 		return ErrSignatureDoesNotMatch
 	}
 	return ErrNone
@@ -126,7 +126,7 @@ func doesPresignV2SignatureMatch(r *http.Request) APIErrorCode {
 	}
 
 	// Validate if access key id same.
-	if accessKey != cred.AccessKeyID {
+	if accessKey != cred.AccessKey {
 		return ErrInvalidAccessKeyID
 	}
 
@@ -150,7 +150,7 @@ func doesPresignV2SignatureMatch(r *http.Request) APIErrorCode {
 }
 
 // Authorization = "AWS" + " " + AWSAccessKeyId + ":" + Signature;
-// Signature = Base64( HMAC-SHA1( YourSecretAccessKeyID, UTF-8-Encoding-Of( StringToSign ) ) );
+// Signature = Base64( HMAC-SHA1( YourSecretKey, UTF-8-Encoding-Of( StringToSign ) ) );
 //
 // StringToSign = HTTP-Verb + "\n" +
 //  	Content-Md5 + "\n" +
@@ -193,7 +193,7 @@ func validateV2AuthHeader(v2Auth string) APIErrorCode {
 
 	// Access credentials.
 	cred := serverConfig.GetCredential()
-	if keySignFields[0] != cred.AccessKeyID {
+	if keySignFields[0] != cred.AccessKey {
 		return ErrInvalidAccessKeyID
 	}
 
@@ -239,15 +239,15 @@ func calculateSignatureV2(stringToSign string, secret string) string {
 func preSignatureV2(method string, encodedResource string, encodedQuery string, headers http.Header, expires string) string {
 	cred := serverConfig.GetCredential()
 	stringToSign := presignV2STS(method, encodedResource, encodedQuery, headers, expires)
-	return calculateSignatureV2(stringToSign, cred.SecretAccessKey)
+	return calculateSignatureV2(stringToSign, cred.SecretKey)
 }
 
 // Return signature-v2 authrization header.
 func signatureV2(method string, encodedResource string, encodedQuery string, headers http.Header) string {
 	cred := serverConfig.GetCredential()
 	stringToSign := signV2STS(method, encodedResource, encodedQuery, headers)
-	signature := calculateSignatureV2(stringToSign, cred.SecretAccessKey)
-	return fmt.Sprintf("%s %s:%s", signV2Algorithm, cred.AccessKeyID, signature)
+	signature := calculateSignatureV2(stringToSign, cred.SecretKey)
+	return fmt.Sprintf("%s %s:%s", signV2Algorithm, cred.AccessKey, signature)
 }
 
 // Return canonical headers.

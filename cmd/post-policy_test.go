@@ -154,9 +154,9 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 		accessKey      string
 		secretKey      string
 	}{
-		{http.StatusForbidden, "invalidaccesskey", credentials.SecretAccessKey},
-		{http.StatusForbidden, credentials.AccessKeyID, "invalidsecretkey"},
-		{http.StatusNoContent, credentials.AccessKeyID, credentials.SecretAccessKey},
+		{http.StatusForbidden, "invalidaccesskey", credentials.SecretKey},
+		{http.StatusForbidden, credentials.AccessKey, "invalidsecretkey"},
+		{http.StatusNoContent, credentials.AccessKey, credentials.SecretKey},
 	}
 
 	for i, test := range testCasesV2 {
@@ -190,8 +190,8 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 			data:               []byte("Hello, World"),
 			expectedRespStatus: http.StatusNoContent,
 			expectedHeaders:    map[string]string{"X-Amz-Meta-Uuid": "1234"},
-			accessKey:          credentials.AccessKeyID,
-			secretKey:          credentials.SecretAccessKey,
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
 			malformedBody:      false,
 		},
 		// Bad case invalid request.
@@ -208,8 +208,8 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 			objectName:         "test",
 			data:               []byte("Hello, World"),
 			expectedRespStatus: http.StatusBadRequest,
-			accessKey:          credentials.AccessKeyID,
-			secretKey:          credentials.SecretAccessKey,
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
 			malformedBody:      true,
 		},
 	}
@@ -262,20 +262,20 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 			objectName:         "test",
 			data:               []byte("Hello, World"),
 			expectedRespStatus: http.StatusNoContent,
-			accessKey:          credentials.AccessKeyID,
-			secretKey:          credentials.SecretAccessKey,
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
 			dates:              []interface{}{curTimePlus5Min.Format(expirationDateFormat), curTime.Format(iso8601DateFormat), curTime.Format(yyyymmdd)},
-			policy:             `{"expiration": "%s","conditions":[["eq", "$bucket", "` + bucketName + `"], ["starts-with", "$key", "test/"], ["eq", "$x-amz-algorithm", "AWS4-HMAC-SHA256"], ["eq", "$x-amz-date", "%s"], ["eq", "$x-amz-credential", "` + credentials.AccessKeyID + `/%s/us-east-1/s3/aws4_request"]]}`,
+			policy:             `{"expiration": "%s","conditions":[["eq", "$bucket", "` + bucketName + `"], ["starts-with", "$key", "test/"], ["eq", "$x-amz-algorithm", "AWS4-HMAC-SHA256"], ["eq", "$x-amz-date", "%s"], ["eq", "$x-amz-credential", "` + credentials.AccessKey + `/%s/us-east-1/s3/aws4_request"]]}`,
 		},
 		// Corrupted Base 64 result
 		{
 			objectName:         "test",
 			data:               []byte("Hello, World"),
 			expectedRespStatus: http.StatusBadRequest,
-			accessKey:          credentials.AccessKeyID,
-			secretKey:          credentials.SecretAccessKey,
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
 			dates:              []interface{}{curTimePlus5Min.Format(expirationDateFormat), curTime.Format(iso8601DateFormat), curTime.Format(yyyymmdd)},
-			policy:             `{"expiration": "%s","conditions":[["eq", "$bucket", "` + bucketName + `"], ["starts-with", "$key", "test/"], ["eq", "$x-amz-algorithm", "AWS4-HMAC-SHA256"], ["eq", "$x-amz-date", "%s"], ["eq", "$x-amz-credential", "` + credentials.AccessKeyID + `/%s/us-east-1/s3/aws4_request"]]}`,
+			policy:             `{"expiration": "%s","conditions":[["eq", "$bucket", "` + bucketName + `"], ["starts-with", "$key", "test/"], ["eq", "$x-amz-algorithm", "AWS4-HMAC-SHA256"], ["eq", "$x-amz-date", "%s"], ["eq", "$x-amz-credential", "` + credentials.AccessKey + `/%s/us-east-1/s3/aws4_request"]]}`,
 			corruptedBase64:    true,
 		},
 		// Corrupted Multipart body
@@ -283,10 +283,10 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 			objectName:         "test",
 			data:               []byte("Hello, World"),
 			expectedRespStatus: http.StatusBadRequest,
-			accessKey:          credentials.AccessKeyID,
-			secretKey:          credentials.SecretAccessKey,
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
 			dates:              []interface{}{curTimePlus5Min.Format(expirationDateFormat), curTime.Format(iso8601DateFormat), curTime.Format(yyyymmdd)},
-			policy:             `{"expiration": "%s","conditions":[["eq", "$bucket", "` + bucketName + `"], ["starts-with", "$key", "test/"], ["eq", "$x-amz-algorithm", "AWS4-HMAC-SHA256"], ["eq", "$x-amz-date", "%s"], ["eq", "$x-amz-credential", "` + credentials.AccessKeyID + `/%s/us-east-1/s3/aws4_request"]]}`,
+			policy:             `{"expiration": "%s","conditions":[["eq", "$bucket", "` + bucketName + `"], ["starts-with", "$key", "test/"], ["eq", "$x-amz-algorithm", "AWS4-HMAC-SHA256"], ["eq", "$x-amz-date", "%s"], ["eq", "$x-amz-credential", "` + credentials.AccessKey + `/%s/us-east-1/s3/aws4_request"]]}`,
 			corruptedMultipart: true,
 		},
 
@@ -305,18 +305,18 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 			objectName:         "test",
 			data:               []byte("Hello, World"),
 			expectedRespStatus: http.StatusBadRequest,
-			accessKey:          credentials.AccessKeyID,
-			secretKey:          credentials.SecretAccessKey,
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
 			dates:              []interface{}{curTime.Add(-1 * time.Minute * 5).Format(expirationDateFormat), curTime.Format(iso8601DateFormat), curTime.Format(yyyymmdd)},
-			policy:             `{"expiration": "%s","conditions":[["eq", "$bucket", "` + bucketName + `"], ["starts-with", "$key", "test/"], ["eq", "$x-amz-algorithm", "AWS4-HMAC-SHA256"], ["eq", "$x-amz-date", "%s"], ["eq", "$x-amz-credential", "` + credentials.AccessKeyID + `/%s/us-east-1/s3/aws4_request"]]}`,
+			policy:             `{"expiration": "%s","conditions":[["eq", "$bucket", "` + bucketName + `"], ["starts-with", "$key", "test/"], ["eq", "$x-amz-algorithm", "AWS4-HMAC-SHA256"], ["eq", "$x-amz-date", "%s"], ["eq", "$x-amz-credential", "` + credentials.AccessKey + `/%s/us-east-1/s3/aws4_request"]]}`,
 		},
 		// Corrupted policy document
 		{
 			objectName:         "test",
 			data:               []byte("Hello, World"),
 			expectedRespStatus: http.StatusBadRequest,
-			accessKey:          credentials.AccessKeyID,
-			secretKey:          credentials.SecretAccessKey,
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
 			dates:              []interface{}{curTimePlus5Min.Format(expirationDateFormat), curTime.Format(iso8601DateFormat), curTime.Format(yyyymmdd)},
 			policy:             `{"3/aws4_request"]]}`,
 		},
@@ -354,8 +354,8 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 			objectName:         "test",
 			data:               bytes.Repeat([]byte("a"), 1025),
 			expectedRespStatus: http.StatusNoContent,
-			accessKey:          credentials.AccessKeyID,
-			secretKey:          credentials.SecretAccessKey,
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
 			malformedBody:      false,
 		},
 		// Failed with entity too small.
@@ -363,8 +363,8 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 			objectName:         "test",
 			data:               bytes.Repeat([]byte("a"), 1023),
 			expectedRespStatus: http.StatusBadRequest,
-			accessKey:          credentials.AccessKeyID,
-			secretKey:          credentials.SecretAccessKey,
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
 			malformedBody:      false,
 		},
 		// Failed with entity too large.
@@ -372,8 +372,8 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 			objectName:         "test",
 			data:               bytes.Repeat([]byte("a"), (1*humanize.MiByte)+1),
 			expectedRespStatus: http.StatusBadRequest,
-			accessKey:          credentials.AccessKeyID,
-			secretKey:          credentials.SecretAccessKey,
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
 			malformedBody:      false,
 		},
 	}
@@ -444,14 +444,14 @@ func testPostPolicyBucketHandlerRedirect(obj ObjectLayer, instanceType string, t
 	rec := httptest.NewRecorder()
 
 	dates := []interface{}{curTimePlus5Min.Format(expirationDateFormat), curTime.Format(iso8601DateFormat), curTime.Format(yyyymmdd)}
-	policy := `{"expiration": "%s","conditions":[["eq", "$bucket", "` + bucketName + `"], {"success_action_redirect":"` + redirectURL + `"},["starts-with", "$key", "test/"], ["eq", "$x-amz-algorithm", "AWS4-HMAC-SHA256"], ["eq", "$x-amz-date", "%s"], ["eq", "$x-amz-credential", "` + credentials.AccessKeyID + `/%s/us-east-1/s3/aws4_request"]]}`
+	policy := `{"expiration": "%s","conditions":[["eq", "$bucket", "` + bucketName + `"], {"success_action_redirect":"` + redirectURL + `"},["starts-with", "$key", "test/"], ["eq", "$x-amz-algorithm", "AWS4-HMAC-SHA256"], ["eq", "$x-amz-date", "%s"], ["eq", "$x-amz-credential", "` + credentials.AccessKey + `/%s/us-east-1/s3/aws4_request"]]}`
 
 	// Generate the final policy document
 	policy = fmt.Sprintf(policy, dates...)
 
 	// Create a new POST request with success_action_redirect field specified
 	req, perr := newPostRequestV4Generic("", bucketName, keyName, []byte("objData"),
-		credentials.AccessKeyID, credentials.SecretAccessKey, curTime,
+		credentials.AccessKey, credentials.SecretKey, curTime,
 		[]byte(policy), map[string]string{"success_action_redirect": redirectURL}, false, false)
 
 	if perr != nil {

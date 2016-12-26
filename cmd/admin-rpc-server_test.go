@@ -31,7 +31,7 @@ func testAdminCmd(cmd cmdType, t *testing.T) {
 	adminServer := serviceCmd{}
 	creds := serverConfig.GetCredential()
 	reply := RPCLoginReply{}
-	args := RPCLoginArgs{Username: creds.AccessKeyID, Password: creds.SecretAccessKey}
+	args := RPCLoginArgs{Username: creds.AccessKey, Password: creds.SecretKey}
 	err = adminServer.LoginHandler(&args, &reply)
 	if err != nil {
 		t.Fatalf("Failed to login to admin server - %v", err)

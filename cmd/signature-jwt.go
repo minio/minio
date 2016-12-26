@@ -43,10 +43,10 @@ const (
 
 // newJWT - returns new JWT object.
 func newJWT(expiry time.Duration, cred credential) (*JWT, error) {
-	if !isValidAccessKey(cred.AccessKeyID) {
+	if !isAccessKeyValid(cred.AccessKey) {
 		return nil, errInvalidAccessKeyLength
 	}
-	if !isValidSecretKey(cred.SecretAccessKey) {
+	if !isSecretKeyValid(cred.SecretKey) {
 		return nil, errInvalidSecretKeyLength
 	}
 	return &JWT{cred, expiry}, nil
@@ -60,7 +60,7 @@ func (jwt *JWT) GenerateToken(accessKey string) (string, error) {
 	// Trim spaces.
 	accessKey = strings.TrimSpace(accessKey)
 
-	if !isValidAccessKey(accessKey) {
+	if !isAccessKeyValid(accessKey) {
 		return "", errInvalidAccessKeyLength
 	}
 
@@ -71,7 +71,7 @@ func (jwt *JWT) GenerateToken(accessKey string) (string, error) {
 		"iat": tUTCNow.Unix(),
 		"sub": accessKey,
 	})
-	return token.SignedString([]byte(jwt.SecretAccessKey))
+	return token.SignedString([]byte(jwt.SecretKey))
 }
 
 var errInvalidAccessKeyID = errors.New("The access key ID you provided does not exist in our records")
@@ -82,18 +82,18 @@ func (jwt *JWT) Authenticate(accessKey, secretKey string) error {
 	// Trim spaces.
 	accessKey = strings.TrimSpace(accessKey)
 
-	if !isValidAccessKey(accessKey) {
+	if !isAccessKeyValid(accessKey) {
 		return errInvalidAccessKeyLength
 	}
-	if !isValidSecretKey(secretKey) {
+	if !isSecretKeyValid(secretKey) {
 		return errInvalidSecretKeyLength
 	}
 
-	if accessKey != jwt.AccessKeyID {
+	if accessKey != jwt.AccessKey {
 		return errInvalidAccessKeyID
 	}
 
-	hashedSecretKey, _ := bcrypt.GenerateFromPassword([]byte(jwt.SecretAccessKey), bcrypt.DefaultCost)
+	hashedSecretKey, _ := bcrypt.GenerateFromPassword([]byte(jwt.SecretKey), bcrypt.DefaultCost)
 	if bcrypt.CompareHashAndPassword(hashedSecretKey, []byte(secretKey)) != nil {
 		return errAuthentication
 	}
