@@ -124,19 +124,19 @@ func verifyGlobalLockStats(l lockStateCase, t *testing.T, testNum int) {
 	globalNSMutex.lockMapMutex.Lock()
 
 	// Verifying the lock stats.
-	if globalNSMutex.globalLockCounter != int64(l.expectedGlobalLockCount) {
+	if globalNSMutex.counters.total != int64(l.expectedGlobalLockCount) {
 		t.Errorf("Test %d: Expected the global lock counter to be %v, but got %v", testNum, int64(l.expectedGlobalLockCount),
-			globalNSMutex.globalLockCounter)
+			globalNSMutex.counters.total)
 	}
 	// verify the count for total blocked locks.
-	if globalNSMutex.blockedCounter != int64(l.expectedBlockedLockCount) {
+	if globalNSMutex.counters.blocked != int64(l.expectedBlockedLockCount) {
 		t.Errorf("Test %d: Expected the total blocked lock counter to be %v, but got %v", testNum, int64(l.expectedBlockedLockCount),
-			globalNSMutex.blockedCounter)
+			globalNSMutex.counters.blocked)
 	}
 	// verify the count for total running locks.
-	if globalNSMutex.runningLockCounter != int64(l.expectedRunningLockCount) {
+	if globalNSMutex.counters.granted != int64(l.expectedRunningLockCount) {
 		t.Errorf("Test %d: Expected the total running lock counter to be %v, but got %v", testNum, int64(l.expectedRunningLockCount),
-			globalNSMutex.runningLockCounter)
+			globalNSMutex.counters.granted)
 	}
 	globalNSMutex.lockMapMutex.Unlock()
 	// Verifying again with the JSON response of the lock info.
@@ -169,19 +169,19 @@ func verifyLockStats(l lockStateCase, t *testing.T, testNum int) {
 	param := nsParam{l.volume, l.path}
 
 	// Verify the total locks (blocked+running) for given <vol,path> pair.
-	if globalNSMutex.debugLockMap[param].ref != int64(l.expectedVolPathLockCount) {
+	if globalNSMutex.debugLockMap[param].counters.total != int64(l.expectedVolPathLockCount) {
 		t.Errorf("Test %d: Expected the total lock count for volume: \"%s\", path: \"%s\" to be %v, but got %v", testNum,
-			param.volume, param.path, int64(l.expectedVolPathLockCount), globalNSMutex.debugLockMap[param].ref)
+			param.volume, param.path, int64(l.expectedVolPathLockCount), globalNSMutex.debugLockMap[param].counters.total)
 	}
 	// Verify the total running locks for given <volume, path> pair.
-	if globalNSMutex.debugLockMap[param].running != int64(l.expectedVolPathRunningCount) {
+	if globalNSMutex.debugLockMap[param].counters.granted != int64(l.expectedVolPathRunningCount) {
 		t.Errorf("Test %d: Expected the total running locks for volume: \"%s\", path: \"%s\" to be %v, but got %v", testNum, param.volume, param.path,
-			int64(l.expectedVolPathRunningCount), globalNSMutex.debugLockMap[param].running)
+			int64(l.expectedVolPathRunningCount), globalNSMutex.debugLockMap[param].counters.granted)
 	}
 	// Verify the total blocked locks for givne <volume, path> pair.
-	if globalNSMutex.debugLockMap[param].blocked != int64(l.expectedVolPathBlockCount) {
+	if globalNSMutex.debugLockMap[param].counters.blocked != int64(l.expectedVolPathBlockCount) {
 		t.Errorf("Test %d:  Expected the total blocked locks for volume: \"%s\", path: \"%s\"  to be %v, but got %v", testNum, param.volume, param.path,
-			int64(l.expectedVolPathBlockCount), globalNSMutex.debugLockMap[param].blocked)
+			int64(l.expectedVolPathBlockCount), globalNSMutex.debugLockMap[param].counters.blocked)
 	}
 }
 
@@ -230,16 +230,19 @@ func verifyLockState(l lockStateCase, t *testing.T, testNum int) {
 
 // TestNewDebugLockInfoPerVolumePath -  Validates the values initialized by newDebugLockInfoPerVolumePath().
 func TestNewDebugLockInfoPerVolumePath(t *testing.T) {
-	lockInfo := newDebugLockInfoPerVolumePath()
+	lockInfo := &debugLockInfoPerVolumePath{
+		lockInfo: make(map[string]debugLockInfo),
+		counters: &lockStat{},
+	}
 
-	if lockInfo.ref != 0 {
-		t.Errorf("Expected initial reference value of total locks to be 0, got %d", lockInfo.ref)
+	if lockInfo.counters.total != 0 {
+		t.Errorf("Expected initial reference value of total locks to be 0, got %d", lockInfo.counters.total)
 	}
-	if lockInfo.blocked != 0 {
-		t.Errorf("Expected initial reference of blocked locks to be 0, got %d", lockInfo.blocked)
+	if lockInfo.counters.blocked != 0 {
+		t.Errorf("Expected initial reference of blocked locks to be 0, got %d", lockInfo.counters.blocked)
 	}
-	if lockInfo.running != 0 {
-		t.Errorf("Expected initial reference value of held locks to be 0, got %d", lockInfo.running)
+	if lockInfo.counters.granted != 0 {
+		t.Errorf("Expected initial reference value of held locks to be 0, got %d", lockInfo.counters.granted)
 	}
 }
 
@@ -300,7 +303,7 @@ func TestNsLockMapStatusBlockedToRunning(t *testing.T) {
 			readLock:   true,
 			setBlocked: false,
 			// expected metrics.
-			expectedErr: LockInfoOriginNotFound{"my-bucket", "my-object", "abcd1234", "Bad Origin"},
+			expectedErr: LockInfoOriginMismatch{"my-bucket", "my-object", "abcd1234", "Bad Origin"},
 		},
 		// Test case - 5.
 		// Test case with write lock.
@@ -332,21 +335,11 @@ func TestNsLockMapStatusBlockedToRunning(t *testing.T) {
 		debugLockMap: make(map[nsParam]*debugLockInfoPerVolumePath),
 		lockMap:      make(map[nsParam]*nsLock),
 	}
-	// Entry for <volume, path> pair is set to nil. Should fail with `errLockNotInitialized`.
-	globalNSMutex.debugLockMap[param] = nil
-	actualErr = globalNSMutex.statusBlockedToRunning(param, testCases[0].lockSource,
-		testCases[0].opsID, testCases[0].readLock)
-
-	if errorCause(actualErr) != errLockNotInitialized {
-		t.Fatalf("Errors mismatch: Expected \"%s\", got \"%s\"", errLockNotInitialized, actualErr)
-	}
 
 	// Setting the lock info the be `nil`.
 	globalNSMutex.debugLockMap[param] = &debugLockInfoPerVolumePath{
 		lockInfo: nil, // setting the lockinfo to nil.
-		ref:      0,
-		blocked:  0,
-		running:  0,
+		counters: &lockStat{},
 	}
 
 	actualErr = globalNSMutex.statusBlockedToRunning(param, testCases[0].lockSource,
@@ -361,9 +354,7 @@ func TestNsLockMapStatusBlockedToRunning(t *testing.T) {
 	// but the initial state if already "Running". Such an attempt should fail
 	globalNSMutex.debugLockMap[param] = &debugLockInfoPerVolumePath{
 		lockInfo: make(map[string]debugLockInfo),
-		ref:      0,
-		blocked:  0,
-		running:  0,
+		counters: &lockStat{},
 	}
 
 	// Setting the status of the lock to be "Running".
@@ -610,14 +601,14 @@ func TestNsLockMapDeleteLockInfoEntryForOps(t *testing.T) {
 	} else {
 		t.Fatalf("Entry for <volume> %s, <path> %s should have existed. ", param.volume, param.path)
 	}
-	if globalNSMutex.runningLockCounter != int64(0) {
-		t.Errorf("Expected the count of total running locks to be %v, but got %v", int64(0), globalNSMutex.runningLockCounter)
+	if globalNSMutex.counters.granted != int64(0) {
+		t.Errorf("Expected the count of total running locks to be %v, but got %v", int64(0), globalNSMutex.counters.granted)
 	}
-	if globalNSMutex.blockedCounter != int64(0) {
-		t.Errorf("Expected the count of total blocked locks to be %v, but got %v", int64(0), globalNSMutex.blockedCounter)
+	if globalNSMutex.counters.blocked != int64(0) {
+		t.Errorf("Expected the count of total blocked locks to be %v, but got %v", int64(0), globalNSMutex.counters.blocked)
 	}
-	if globalNSMutex.globalLockCounter != int64(0) {
-		t.Errorf("Expected the count of all locks to be %v, but got %v", int64(0), globalNSMutex.globalLockCounter)
+	if globalNSMutex.counters.total != int64(0) {
+		t.Errorf("Expected the count of all locks to be %v, but got %v", int64(0), globalNSMutex.counters.total)
 	}
 }
 
@@ -680,13 +671,13 @@ func TestNsLockMapDeleteLockInfoEntryForVolumePath(t *testing.T) {
 		t.Fatalf("Entry for <volume> %s, <path> %s should have been deleted. ", param.volume, param.path)
 	}
 	// The lock count values should be 0.
-	if globalNSMutex.runningLockCounter != int64(0) {
-		t.Errorf("Expected the count of total running locks to be %v, but got %v", int64(0), globalNSMutex.runningLockCounter)
+	if globalNSMutex.counters.granted != int64(0) {
+		t.Errorf("Expected the count of total running locks to be %v, but got %v", int64(0), globalNSMutex.counters.granted)
 	}
-	if globalNSMutex.blockedCounter != int64(0) {
-		t.Errorf("Expected the count of total blocked locks to be %v, but got %v", int64(0), globalNSMutex.blockedCounter)
+	if globalNSMutex.counters.blocked != int64(0) {
+		t.Errorf("Expected the count of total blocked locks to be %v, but got %v", int64(0), globalNSMutex.counters.blocked)
 	}
-	if globalNSMutex.globalLockCounter != int64(0) {
-		t.Errorf("Expected the count of all locks to be %v, but got %v", int64(0), globalNSMutex.globalLockCounter)
+	if globalNSMutex.counters.total != int64(0) {
+		t.Errorf("Expected the count of all locks to be %v, but got %v", int64(0), globalNSMutex.counters.total)
 	}
 }

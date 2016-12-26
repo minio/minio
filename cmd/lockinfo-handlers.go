@@ -66,17 +66,17 @@ func getSystemLockState() (SystemLockState, error) {
 
 	lockState := SystemLockState{}
 
-	lockState.TotalBlockedLocks = globalNSMutex.blockedCounter
-	lockState.TotalLocks = globalNSMutex.globalLockCounter
-	lockState.TotalAcquiredLocks = globalNSMutex.runningLockCounter
+	lockState.TotalBlockedLocks = globalNSMutex.counters.blocked
+	lockState.TotalLocks = globalNSMutex.counters.total
+	lockState.TotalAcquiredLocks = globalNSMutex.counters.granted
 
 	for param, debugLock := range globalNSMutex.debugLockMap {
 		volLockInfo := VolumeLockInfo{}
 		volLockInfo.Bucket = param.volume
 		volLockInfo.Object = param.path
-		volLockInfo.LocksOnObject = debugLock.ref
-		volLockInfo.TotalBlockedLocks = debugLock.blocked
-		volLockInfo.LocksAcquiredOnObject = debugLock.running
+		volLockInfo.LocksOnObject = debugLock.counters.total
+		volLockInfo.TotalBlockedLocks = debugLock.counters.blocked
+		volLockInfo.LocksAcquiredOnObject = debugLock.counters.granted
 		for opsID, lockInfo := range debugLock.lockInfo {
 			volLockInfo.LockDetailsOnObject = append(volLockInfo.LockDetailsOnObject, OpsLockState{
 				OperationID: opsID,
