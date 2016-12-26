@@ -6,18 +6,20 @@
 
 package blake2b
 
-var useAVX2 = supportAVX2()
-var useAVX = supportAVX()
-var useSSE4 = supportSSE4()
+func init() {
+	useAVX2 = supportsAVX2()
+	useAVX = supportsAVX()
+	useSSE4 = supportsSSE4()
+}
 
 //go:noescape
-func supportSSE4() bool
+func supportsSSE4() bool
 
 //go:noescape
-func supportAVX() bool
+func supportsAVX() bool
 
 //go:noescape
-func supportAVX2() bool
+func supportsAVX2() bool
 
 //go:noescape
 func hashBlocksAVX2(h *[8]uint64, c *[2]uint64, flag uint64, blocks []byte)
