@@ -61,6 +61,7 @@ func initNSLock(isDistXL bool) {
 	globalNSMutex = &nsLockMap{
 		isDistXL: isDistXL,
 		lockMap:  make(map[nsParam]*nsLock),
+		counters: &lockStat{},
 	}
 
 	// Initialize nsLockMap with entry for instrumentation information.
@@ -91,10 +92,8 @@ type nsLock struct {
 // Unlock, RLock and RUnlock.
 type nsLockMap struct {
 	// Lock counter used for lock debugging.
-	globalLockCounter  int64                                   // Total locks held.
-	blockedCounter     int64                                   // Total operations blocked waiting for locks.
-	runningLockCounter int64                                   // Total locks held but not released yet.
-	debugLockMap       map[nsParam]*debugLockInfoPerVolumePath // Info for instrumentation on locks.
+	counters     *lockStat
+	debugLockMap map[nsParam]*debugLockInfoPerVolumePath // Info for instrumentation on locks.
 
 	// Indicates whether the locking service is part
 	// of a distributed setup or not.
