@@ -303,7 +303,7 @@ func TestNsLockMapStatusBlockedToRunning(t *testing.T) {
 			readLock:   true,
 			setBlocked: false,
 			// expected metrics.
-			expectedErr: LockInfoOriginNotFound{"my-bucket", "my-object", "abcd1234", "Bad Origin"},
+			expectedErr: LockInfoOriginMismatch{"my-bucket", "my-object", "abcd1234", "Bad Origin"},
 		},
 		// Test case - 5.
 		// Test case with write lock.
@@ -334,14 +334,6 @@ func TestNsLockMapStatusBlockedToRunning(t *testing.T) {
 		// entries of <volume,path> -> stateInfo of locks, for instrumentation purpose.
 		debugLockMap: make(map[nsParam]*debugLockInfoPerVolumePath),
 		lockMap:      make(map[nsParam]*nsLock),
-	}
-	// Entry for <volume, path> pair is set to nil. Should fail with `errLockNotInitialized`.
-	globalNSMutex.debugLockMap[param] = nil
-	actualErr = globalNSMutex.statusBlockedToRunning(param, testCases[0].lockSource,
-		testCases[0].opsID, testCases[0].readLock)
-
-	if errorCause(actualErr) != errLockNotInitialized {
-		t.Fatalf("Errors mismatch: Expected \"%s\", got \"%s\"", errLockNotInitialized, actualErr)
 	}
 
 	// Setting the lock info the be `nil`.

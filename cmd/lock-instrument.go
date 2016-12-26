@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"errors"
 	"fmt"
 	"time"
 )
@@ -36,39 +35,39 @@ const (
 	debugWLockStr lockType = "WLock"
 )
 
-// Struct containing information of status (ready/running/blocked) of an operation with given operation ID.
+// debugLockInfo - represents a single lock's information, uniquely identified by opsID.
+// See debugLockInfoPerVolumePath for more context.
 type debugLockInfo struct {
 	// "RLock" or "WLock".
 	lType lockType
-	// Contains the trace of the function which invoked the lock, obtained from runtime.
+	// Contains the backtrace of incl. the function which called (r)(un)lock.
 	lockSource string
-	// Status can be running/ready/blocked.
+	// Status can be running/blocked.
 	status statusType
-	// Time info of the since how long the status holds true.
+	// Time of last status update.
 	since time.Time
 }
 
 // debugLockInfoPerVolumePath - lock state information on all locks held on (volume, path).
 type debugLockInfoPerVolumePath struct {
 	counters *lockStat                // Holds stats of lock held on (volume, path)
-	lockInfo map[string]debugLockInfo // map of [opsID] debugLockInfo{operation, status, since} .
+	lockInfo map[string]debugLockInfo // Lock information per operation ID.
 }
 
-// LockInfoOriginNotFound - While changing the state of the lock info its important that the entry for
-// lock at a given origin exists, if not `LockInfoOriginNotFound` is returned.
-type LockInfoOriginNotFound struct {
+// LockInfoOriginMismatch - represents error when lock origin don't match.
+type LockInfoOriginMismatch struct {
 	volume     string
 	path       string
 	opsID      string
 	lockSource string
 }
 
-func (l LockInfoOriginNotFound) Error() string {
-	return fmt.Sprintf("No lock state stored for the lock origined at \"%s\", for <volume> %s, <path> %s, <opsID> %s",
+func (l LockInfoOriginMismatch) Error() string {
+	return fmt.Sprintf("No lock state stored for the lock originated at \"%s\", for <volume> %s, <path> %s, <opsID> %s",
 		l.lockSource, l.volume, l.path, l.opsID)
 }
 
-// LockInfoVolPathMissing - Error interface. Returned when the info the
+// LockInfoVolPathMissing - represents error when lock information is missing for a given (volume, path).
 type LockInfoVolPathMissing struct {
 	volume string
 	path   string
@@ -78,8 +77,7 @@ func (l LockInfoVolPathMissing) Error() string {
 	return fmt.Sprintf("No entry in debug Lock Map for Volume: %s, path: %s", l.volume, l.path)
 }
 
-// LockInfoOpsIDNotFound - Returned when the lock state info exists, but the entry for
-// given operation ID doesn't exist.
+// LockInfoOpsIDNotFound - represents error when lock info entry for a given operation ID doesn't exist.
 type LockInfoOpsIDNotFound struct {
 	volume string
 	path   string
@@ -90,8 +88,7 @@ func (l LockInfoOpsIDNotFound) Error() string {
 	return fmt.Sprintf("No entry in lock info for <Operation ID> %s, <volume> %s, <path> %s", l.opsID, l.volume, l.path)
 }
 
-// LockInfoStateNotBlocked - When an attempt to change the state of the lock form `blocked` to `running` is done,
-// its necessary that the state before the transsition is "blocked", otherwise LockInfoStateNotBlocked returned.
+// LockInfoStateNotBlocked - represents error when lock info isn't in blocked state when it should be.
 type LockInfoStateNotBlocked struct {
 	volume string
 	path   string
@@ -102,9 +99,7 @@ func (l LockInfoStateNotBlocked) Error() string {
 	return fmt.Sprintf("Lock state should be \"Blocked\" for <volume> %s, <path> %s, <opsID> %s", l.volume, l.path, l.opsID)
 }
 
-var errLockNotInitialized = errors.New("Debug lockMap not initialized")
-
-// Initialize lock info volume path.
+// Initialize lock info for given (volume, path).
 func (n *nsLockMap) initLockInfoForVolumePath(param nsParam) {
 	n.debugLockMap[param] = &debugLockInfoPerVolumePath{
 		lockInfo: make(map[string]debugLockInfo),
@@ -114,87 +109,67 @@ func (n *nsLockMap) initLockInfoForVolumePath(param nsParam) {
 
 // Change the state of the lock from Blocked to Running.
 func (n *nsLockMap) statusBlockedToRunning(param nsParam, lockSource, opsID string, readLock bool) error {
-	// This operation is not executed under the scope nsLockMap.mutex.Lock(), lock has to be explicitly held here.
+	// This function is called outside nsLockMap.mutex.Lock(), so must be held explicitly.
 	n.lockMapMutex.Lock()
 	defer n.lockMapMutex.Unlock()
-	// new state info to be set for the lock.
-	newLockInfo := debugLockInfo{
-		lockSource: lockSource,
-		status:     runningStatus,
-		since:      time.Now().UTC(),
-	}
 
-	// Set lock type.
-	if readLock {
-		newLockInfo.lType = debugRLockStr
-	} else {
-		newLockInfo.lType = debugWLockStr
-	}
-
-	// Check whether the lock info entry for <volume, path> pair already exists and its not `nil`.
-	debugLockMap, ok := n.debugLockMap[param]
+	// Check whether the lock info entry for <volume, path> pair already exists.
+	_, ok := n.debugLockMap[param]
 	if !ok {
-		// The lock state info foe given <volume, path> pair should already exist.
-		// If not return `LockInfoVolPathMissing`.
 		return traceError(LockInfoVolPathMissing{param.volume, param.path})
 	}
-	//  ``debugLockMap`` entry containing lock info for `param <volume, path>` is `nil`.
-	if debugLockMap == nil {
-		return traceError(errLockNotInitialized)
-	}
+
+	// Check whether lock info entry for the given `opsID` exists.
 	lockInfo, ok := n.debugLockMap[param].lockInfo[opsID]
 	if !ok {
-		// The lock info entry for given `opsID` should already exist for given <volume, path> pair.
-		// If not return `LockInfoOpsIDNotFound`.
 		return traceError(LockInfoOpsIDNotFound{param.volume, param.path, opsID})
 	}
-	// The entry for the lock origined at `lockSource` should already exist. If not return `LockInfoOriginNotFound`.
+
+	// Check whether lockSource is same.
 	if lockInfo.lockSource != lockSource {
-		return traceError(LockInfoOriginNotFound{param.volume, param.path, opsID, lockSource})
+		return traceError(LockInfoOriginMismatch{param.volume, param.path, opsID, lockSource})
 	}
-	// Status of the lock should already be set to "Blocked". If not return `LockInfoStateNotBlocked`.
+
+	// Status of the lock should be set to "Blocked".
 	if lockInfo.status != blockedStatus {
 		return traceError(LockInfoStateNotBlocked{param.volume, param.path, opsID})
 	}
-	// All checks finished. Changing the status of the operation from blocked to running and updating the time.
-	n.debugLockMap[param].lockInfo[opsID] = newLockInfo
+	// Change lock status to running and update the time.
+	n.debugLockMap[param].lockInfo[opsID] = newDebugLockInfo(lockSource, runningStatus, readLock)
 
-	// After locking unblocks decrease the blocked counter.
-	// Increase the running counter.
+	// Update global lock stats.
 	n.counters.lockGranted()
+	// Update (volume, pair) lock stats.
 	n.debugLockMap[param].counters.lockGranted()
 	return nil
 }
 
-// Change the state of the lock from Ready to Blocked.
-func (n *nsLockMap) statusNoneToBlocked(param nsParam, lockSource, opsID string, readLock bool) error {
-	newLockInfo := debugLockInfo{
+// newDebugLockInfo - Constructs a debugLockInfo value given lock source, status and type.
+func newDebugLockInfo(lockSource string, status statusType, readLock bool) debugLockInfo {
+	lType := debugRLockStr
+	if readLock {
+		lType = debugRLockStr
+	} else {
+		lType = debugWLockStr
+	}
+	return debugLockInfo{
 		lockSource: lockSource,
-		status:     blockedStatus,
+		lType:      lType,
+		status:     status,
 		since:      time.Now().UTC(),
 	}
-	if readLock {
-		newLockInfo.lType = debugRLockStr
-	} else {
-		newLockInfo.lType = debugWLockStr
-	}
+}
 
-	lockInfo, ok := n.debugLockMap[param]
+// Change the state of the lock to Blocked.
+func (n *nsLockMap) statusNoneToBlocked(param nsParam, lockSource, opsID string, readLock bool) error {
+	_, ok := n.debugLockMap[param]
 	if !ok {
-		// State info entry for the given <volume, pair> doesn't exist, initializing it.
-		n.initLockInfoForVolumePath(param)
-	}
-	if lockInfo == nil {
-		//  *lockInfo is nil, initialize here.
+		// Lock info entry for (volume, pair) doesn't exist, initialize it.
 		n.initLockInfoForVolumePath(param)
 	}
 
-	// lockInfo is a map[string]debugLockInfo, which holds map[OperationID]{status,time, origin} of the lock.
-	if n.debugLockMap[param].lockInfo == nil {
-		n.debugLockMap[param].lockInfo = make(map[string]debugLockInfo)
-	}
-	// The status of the operation with the given operation ID is marked blocked till its gets unblocked from the lock.
-	n.debugLockMap[param].lockInfo[opsID] = newLockInfo
+	// Mark lock status blocked for given opsID.
+	n.debugLockMap[param].lockInfo[opsID] = newDebugLockInfo(lockSource, blockedStatus, readLock)
 	// Update global lock stats.
 	n.counters.lockWaiting()
 	// Update (volume, path) lock stats.
@@ -202,8 +177,8 @@ func (n *nsLockMap) statusNoneToBlocked(param nsParam, lockSource, opsID string,
 	return nil
 }
 
-// deleteLockInfoEntry - Deletes the lock state information for given
-// <volume, path> pair. Called when nsLk.ref count is 0.
+// deleteLockInfoEntry - Deletes the lock information for given (volume, path).
+// Called when nsLk.ref count is 0.
 func (n *nsLockMap) deleteLockInfoEntryForVolumePath(param nsParam) error {
 	// delete the lock info for the given operation.
 	if _, found := n.debugLockMap[param]; !found {
@@ -224,9 +199,9 @@ func (n *nsLockMap) deleteLockInfoEntryForVolumePath(param nsParam) error {
 	return nil
 }
 
-// deleteLockInfoEntry - Deletes the entry for given opsID in the lock state information
-// of given <volume, path> pair. Called when the nsLk ref count for the given
-// <volume, path> pair is not 0.
+// deleteLockInfoEntry - Deletes lock info entry for given opsID.
+// Called when the nsLk ref count for the given (volume, path) is
+// not 0.
 func (n *nsLockMap) deleteLockInfoEntryForOps(param nsParam, opsID string) error {
 	// delete the lock info for the given operation.
 	infoMap, found := n.debugLockMap[param]
@@ -237,7 +212,7 @@ func (n *nsLockMap) deleteLockInfoEntryForOps(param nsParam, opsID string) error
 	// the entry for the given operation with the operation ID.
 	opsIDLock, foundInfo := infoMap.lockInfo[opsID]
 	if !foundInfo {
-		// Unlock request with invalid opertion ID not accepted.
+		// Unlock request with invalid operation ID not accepted.
 		return traceError(LockInfoOpsIDNotFound{param.volume, param.path, opsID})
 	}
 	// Update global and (volume, path) lock status.
