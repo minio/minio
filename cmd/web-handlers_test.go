@@ -149,7 +149,7 @@ func testLoginWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler)
 		{"", "foo", false},
 		{"azerty", "", false},
 		{"azerty", "foo", false},
-		{credentials.AccessKeyID, credentials.SecretAccessKey, true},
+		{credentials.AccessKey, credentials.SecretKey, true},
 	}
 
 	// Iterating over the test cases, calling the function under test and asserting the response.
@@ -186,7 +186,7 @@ func testStorageInfoWebHandler(obj ObjectLayer, instanceType string, t TestErrHa
 
 	credentials := serverConfig.GetCredential()
 
-	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKeyID, credentials.SecretAccessKey)
+	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatal("Cannot authenticate")
 	}
@@ -232,7 +232,7 @@ func testServerInfoWebHandler(obj ObjectLayer, instanceType string, t TestErrHan
 
 	credentials := serverConfig.GetCredential()
 
-	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKeyID, credentials.SecretAccessKey)
+	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatal("Cannot authenticate")
 	}
@@ -278,7 +278,7 @@ func testMakeBucketWebHandler(obj ObjectLayer, instanceType string, t TestErrHan
 
 	credentials := serverConfig.GetCredential()
 
-	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKeyID, credentials.SecretAccessKey)
+	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatal("Cannot authenticate")
 	}
@@ -338,7 +338,7 @@ func testListBucketsWebHandler(obj ObjectLayer, instanceType string, t TestErrHa
 
 	credentials := serverConfig.GetCredential()
 
-	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKeyID, credentials.SecretAccessKey)
+	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatal("Cannot authenticate")
 	}
@@ -397,7 +397,7 @@ func testListObjectsWebHandler(obj ObjectLayer, instanceType string, t TestErrHa
 
 	rec := httptest.NewRecorder()
 
-	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKeyID, credentials.SecretAccessKey)
+	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatal("Cannot authenticate")
 	}
@@ -468,7 +468,7 @@ func testRemoveObjectWebHandler(obj ObjectLayer, instanceType string, t TestErrH
 	credentials := serverConfig.GetCredential()
 
 	rec := httptest.NewRecorder()
-	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKeyID, credentials.SecretAccessKey)
+	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatal("Cannot authenticate")
 	}
@@ -544,7 +544,7 @@ func testGenerateAuthWebHandler(obj ObjectLayer, instanceType string, t TestErrH
 	credentials := serverConfig.GetCredential()
 
 	rec := httptest.NewRecorder()
-	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKeyID, credentials.SecretAccessKey)
+	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatal("Cannot authenticate")
 	}
@@ -590,7 +590,7 @@ func testSetAuthWebHandler(obj ObjectLayer, instanceType string, t TestErrHandle
 	credentials := serverConfig.GetCredential()
 
 	rec := httptest.NewRecorder()
-	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKeyID, credentials.SecretAccessKey)
+	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatal("Cannot authenticate")
 	}
@@ -651,7 +651,7 @@ func testGetAuthWebHandler(obj ObjectLayer, instanceType string, t TestErrHandle
 	credentials := serverConfig.GetCredential()
 
 	rec := httptest.NewRecorder()
-	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKeyID, credentials.SecretAccessKey)
+	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatal("Cannot authenticate")
 	}
@@ -670,7 +670,7 @@ func testGetAuthWebHandler(obj ObjectLayer, instanceType string, t TestErrHandle
 	if err != nil {
 		t.Fatalf("Failed, %v", err)
 	}
-	if getAuthReply.AccessKey != credentials.AccessKeyID || getAuthReply.SecretKey != credentials.SecretAccessKey {
+	if getAuthReply.AccessKey != credentials.AccessKey || getAuthReply.SecretKey != credentials.SecretKey {
 		t.Fatalf("Failed to get correct auth keys")
 	}
 }
@@ -696,7 +696,7 @@ func testUploadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler
 	credentials := serverConfig.GetCredential()
 
 	rec := httptest.NewRecorder()
-	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKeyID, credentials.SecretAccessKey)
+	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatal("Cannot authenticate")
 	}
@@ -760,7 +760,7 @@ func testDownloadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandl
 	credentials := serverConfig.GetCredential()
 
 	rec := httptest.NewRecorder()
-	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKeyID, credentials.SecretAccessKey)
+	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatal("Cannot authenticate")
 	}
@@ -815,7 +815,7 @@ func testWebPresignedGetHandler(obj ObjectLayer, instanceType string, t TestErrH
 
 	credentials := serverConfig.GetCredential()
 
-	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKeyID, credentials.SecretAccessKey)
+	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatal("Cannot authenticate")
 	}
@@ -928,7 +928,7 @@ func testWebGetBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestE
 
 	credentials := serverConfig.GetCredential()
 
-	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKeyID, credentials.SecretAccessKey)
+	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatal("Cannot authenticate")
 	}
@@ -1011,7 +1011,7 @@ func testWebListAllBucketPoliciesHandler(obj ObjectLayer, instanceType string, t
 
 	credentials := serverConfig.GetCredential()
 
-	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKeyID, credentials.SecretAccessKey)
+	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatal("Cannot authenticate")
 	}
@@ -1117,7 +1117,7 @@ func testWebSetBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestE
 
 	credentials := serverConfig.GetCredential()
 
-	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKeyID, credentials.SecretAccessKey)
+	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatal("Cannot authenticate")
 	}
@@ -1278,7 +1278,7 @@ func TestWebObjectLayerNotReady(t *testing.T) {
 	rec := httptest.NewRecorder()
 
 	credentials := serverConfig.GetCredential()
-	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKeyID, credentials.SecretAccessKey)
+	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatal("Cannot authenticate", err)
 	}
@@ -1382,7 +1382,7 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 	rec := httptest.NewRecorder()
 
 	credentials := serverConfig.GetCredential()
-	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKeyID, credentials.SecretAccessKey)
+	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatal("Cannot authenticate", err)
 	}

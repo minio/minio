@@ -62,8 +62,8 @@ func makeS3Peers(eps []*url.URL) s3Peers {
 		// Check if the remote host has been added already
 		if !seenAddr[ep.Host] {
 			cfg := authConfig{
-				accessKey:   serverConfig.GetCredential().AccessKeyID,
-				secretKey:   serverConfig.GetCredential().SecretAccessKey,
+				accessKey:   serverConfig.GetCredential().AccessKey,
+				secretKey:   serverConfig.GetCredential().SecretKey,
 				address:     ep.Host,
 				secureConn:  isSSL(),
 				path:        path.Join(reservedBucket, s3Path),

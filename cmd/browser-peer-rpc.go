@@ -103,8 +103,8 @@ func updateCredsOnPeers(creds credential) map[string]error {
 
 			// Initialize client
 			client := newAuthClient(&authConfig{
-				accessKey:   serverConfig.GetCredential().AccessKeyID,
-				secretKey:   serverConfig.GetCredential().SecretAccessKey,
+				accessKey:   serverConfig.GetCredential().AccessKey,
+				secretKey:   serverConfig.GetCredential().SecretKey,
 				address:     peers[ix],
 				secureConn:  isSSL(),
 				path:        path.Join(reservedBucket, browserPeerPath),

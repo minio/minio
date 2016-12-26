@@ -74,7 +74,7 @@ func isRPCTokenValid(tokenStr string) bool {
 		if _, ok := token.Method.(*jwtgo.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
 		}
-		return []byte(jwt.SecretAccessKey), nil
+		return []byte(jwt.SecretKey), nil
 	})
 	if err != nil {
 		errorIf(err, "Unable to parse JWT token string")

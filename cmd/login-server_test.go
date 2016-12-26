@@ -32,7 +32,7 @@ func TestLoginHandler(t *testing.T) {
 	}{
 		// Valid username and password
 		{
-			args:        RPCLoginArgs{Username: creds.AccessKeyID, Password: creds.SecretAccessKey},
+			args:        RPCLoginArgs{Username: creds.AccessKey, Password: creds.SecretKey},
 			expectedErr: nil,
 		},
 		// Invalid username length
@@ -47,12 +47,12 @@ func TestLoginHandler(t *testing.T) {
 		},
 		// Invalid username
 		{
-			args:        RPCLoginArgs{Username: "aaaaa", Password: creds.SecretAccessKey},
+			args:        RPCLoginArgs{Username: "aaaaa", Password: creds.SecretKey},
 			expectedErr: errInvalidAccessKeyID,
 		},
 		// Invalid password
 		{
-			args:        RPCLoginArgs{Username: creds.AccessKeyID, Password: "aaaaaaaa"},
+			args:        RPCLoginArgs{Username: creds.AccessKey, Password: "aaaaaaaa"},
 			expectedErr: errAuthentication,
 		},
 	}

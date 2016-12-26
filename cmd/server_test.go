@@ -94,14 +94,10 @@ func (s *TestSuiteCommon) TearDownSuite(c *C) {
 }
 
 func (s *TestSuiteCommon) TestAuth(c *C) {
-	secretID, err := genSecretAccessKey()
-	c.Assert(err, IsNil)
+	cred := newCredential()
 
-	accessID, err := genAccessKeyID()
-	c.Assert(err, IsNil)
-
-	c.Assert(len(secretID), Equals, secretKeyMaxLen)
-	c.Assert(len(accessID), Equals, accessKeyMaxLen)
+	c.Assert(len(cred.AccessKey), Equals, accessKeyMaxLen)
+	c.Assert(len(cred.SecretKey), Equals, secretKeyMaxLen)
 }
 
 func (s *TestSuiteCommon) TestBucketSQSNotification(c *C) {

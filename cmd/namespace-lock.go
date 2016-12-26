@@ -40,8 +40,8 @@ func initDsyncNodes(eps []*url.URL) error {
 			return errInvalidArgument
 		}
 		clnts[index] = newAuthClient(&authConfig{
-			accessKey: cred.AccessKeyID,
-			secretKey: cred.SecretAccessKey,
+			accessKey: cred.AccessKey,
+			secretKey: cred.SecretKey,
 			// Construct a new dsync server addr.
 			secureConn: isSSL(),
 			address:    ep.Host,

@@ -47,7 +47,7 @@ func parseCredentialHeader(credElement string) (credentialHeader, APIErrorCode) 
 	if len(credElements) != 5 {
 		return credentialHeader{}, ErrCredMalformed
 	}
-	if !isValidAccessKey(credElements[0]) {
+	if !isAccessKeyValid(credElements[0]) {
 		return credentialHeader{}, ErrInvalidAccessKeyID
 	}
 	// Save access key id.

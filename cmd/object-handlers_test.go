@@ -97,8 +97,8 @@ func testAPIHeadObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		{
 			bucketName:         bucketName,
 			objectName:         objectName,
-			accessKey:          credentials.AccessKeyID,
-			secretKey:          credentials.SecretAccessKey,
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
 			expectedRespStatus: http.StatusOK,
 		},
 		// Test case - 2.
@@ -106,8 +106,8 @@ func testAPIHeadObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		{
 			bucketName:         bucketName,
 			objectName:         "abcd",
-			accessKey:          credentials.AccessKeyID,
-			secretKey:          credentials.SecretAccessKey,
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
 			expectedRespStatus: http.StatusNotFound,
 		},
 		// Test case - 3.
@@ -117,7 +117,7 @@ func testAPIHeadObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 			bucketName:         bucketName,
 			objectName:         objectName,
 			accessKey:          "Invalid-AccessID",
-			secretKey:          credentials.SecretAccessKey,
+			secretKey:          credentials.SecretKey,
 			expectedRespStatus: http.StatusForbidden,
 		},
 	}
@@ -248,8 +248,8 @@ func testAPIGetObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			bucketName: bucketName,
 			objectName: objectName,
 			byteRange:  "",
-			accessKey:  credentials.AccessKeyID,
-			secretKey:  credentials.SecretAccessKey,
+			accessKey:  credentials.AccessKey,
+			secretKey:  credentials.SecretKey,
 
 			expectedContent:    bytesData[0].byteData,
 			expectedRespStatus: http.StatusOK,
@@ -260,8 +260,8 @@ func testAPIGetObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			bucketName: bucketName,
 			objectName: "abcd",
 			byteRange:  "",
-			accessKey:  credentials.AccessKeyID,
-			secretKey:  credentials.SecretAccessKey,
+			accessKey:  credentials.AccessKey,
+			secretKey:  credentials.SecretKey,
 
 			expectedContent:    encodeResponse(getAPIErrorResponse(getAPIError(ErrNoSuchKey), getGetObjectURL("", bucketName, "abcd"))),
 			expectedRespStatus: http.StatusNotFound,
@@ -272,8 +272,8 @@ func testAPIGetObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			bucketName: bucketName,
 			objectName: objectName,
 			byteRange:  "bytes=10-100",
-			accessKey:  credentials.AccessKeyID,
-			secretKey:  credentials.SecretAccessKey,
+			accessKey:  credentials.AccessKey,
+			secretKey:  credentials.SecretKey,
 
 			expectedContent:    bytesData[0].byteData[10:101],
 			expectedRespStatus: http.StatusPartialContent,
@@ -284,8 +284,8 @@ func testAPIGetObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			bucketName: bucketName,
 			objectName: objectName,
 			byteRange:  "bytes=-0",
-			accessKey:  credentials.AccessKeyID,
-			secretKey:  credentials.SecretAccessKey,
+			accessKey:  credentials.AccessKey,
+			secretKey:  credentials.SecretKey,
 
 			expectedContent:    encodeResponse(getAPIErrorResponse(getAPIError(ErrInvalidRange), getGetObjectURL("", bucketName, objectName))),
 			expectedRespStatus: http.StatusRequestedRangeNotSatisfiable,
@@ -297,8 +297,8 @@ func testAPIGetObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			bucketName: bucketName,
 			objectName: objectName,
 			byteRange:  "bytes=10-1000000000000000",
-			accessKey:  credentials.AccessKeyID,
-			secretKey:  credentials.SecretAccessKey,
+			accessKey:  credentials.AccessKey,
+			secretKey:  credentials.SecretKey,
 
 			expectedContent:    bytesData[0].byteData[10:],
 			expectedRespStatus: http.StatusPartialContent,
@@ -311,7 +311,7 @@ func testAPIGetObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			objectName: objectName,
 			byteRange:  "",
 			accessKey:  "Invalid-AccessID",
-			secretKey:  credentials.SecretAccessKey,
+			secretKey:  credentials.SecretKey,
 
 			expectedContent:    encodeResponse(getAPIErrorResponse(getAPIError(ErrInvalidAccessKeyID), getGetObjectURL("", bucketName, objectName))),
 			expectedRespStatus: http.StatusForbidden,
@@ -470,8 +470,8 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 			chunkSize:          64 * humanize.KiByte,
 			expectedContent:    []byte{},
 			expectedRespStatus: http.StatusOK,
-			accessKey:          credentials.AccessKeyID,
-			secretKey:          credentials.SecretAccessKey,
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
 			shouldPass:         true,
 		},
 		// Test case - 2
@@ -484,8 +484,8 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 			chunkSize:          1 * humanize.KiByte,
 			expectedContent:    []byte{},
 			expectedRespStatus: http.StatusOK,
-			accessKey:          credentials.AccessKeyID,
-			secretKey:          credentials.SecretAccessKey,
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
 			shouldPass:         true,
 		},
 		// Test case - 3
@@ -512,8 +512,8 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 			chunkSize:          64 * humanize.KiByte,
 			expectedContent:    []byte{},
 			expectedRespStatus: http.StatusBadRequest,
-			accessKey:          credentials.AccessKeyID,
-			secretKey:          credentials.SecretAccessKey,
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
 			shouldPass:         false,
 			removeAuthHeader:   true,
 		},
@@ -527,8 +527,8 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 			chunkSize:          100 * humanize.KiByte,
 			expectedContent:    []byte{},
 			expectedRespStatus: http.StatusOK,
-			accessKey:          credentials.AccessKeyID,
-			secretKey:          credentials.SecretAccessKey,
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
 			shouldPass:         false,
 		},
 		// Test case - 6
@@ -541,8 +541,8 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 			chunkSize:          1024,
 			expectedContent:    []byte{},
 			expectedRespStatus: http.StatusInternalServerError,
-			accessKey:          credentials.AccessKeyID,
-			secretKey:          credentials.SecretAccessKey,
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
 			shouldPass:         false,
 			fault:              malformedEncoding,
 		},
@@ -556,8 +556,8 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 			chunkSize:          1024,
 			expectedContent:    []byte{},
 			expectedRespStatus: http.StatusBadRequest,
-			accessKey:          credentials.AccessKeyID,
-			secretKey:          credentials.SecretAccessKey,
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
 			shouldPass:         false,
 			fault:              unexpectedEOF,
 		},
@@ -571,8 +571,8 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 			chunkSize:          1024,
 			expectedContent:    []byte{},
 			expectedRespStatus: http.StatusForbidden,
-			accessKey:          credentials.AccessKeyID,
-			secretKey:          credentials.SecretAccessKey,
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
 			shouldPass:         false,
 			fault:              signatureMismatch,
 		},
@@ -587,8 +587,8 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 			chunkSize:          1024,
 			expectedContent:    []byte{},
 			expectedRespStatus: http.StatusForbidden,
-			accessKey:          credentials.AccessKeyID,
-			secretKey:          credentials.SecretAccessKey,
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
 			shouldPass:         false,
 			fault:              chunkDateMismatch,
 		},
@@ -602,8 +602,8 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 			chunkSize:          1024,
 			expectedContent:    []byte{},
 			expectedRespStatus: http.StatusInternalServerError,
-			accessKey:          credentials.AccessKeyID,
-			secretKey:          credentials.SecretAccessKey,
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
 			shouldPass:         false,
 			fault:              tooBigDecodedLength,
 		},
@@ -733,8 +733,8 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			objectName: objectName,
 			data:       bytesData,
 			dataLen:    len(bytesData),
-			accessKey:  credentials.AccessKeyID,
-			secretKey:  credentials.SecretAccessKey,
+			accessKey:  credentials.AccessKey,
+			secretKey:  credentials.SecretKey,
 
 			expectedRespStatus: http.StatusOK,
 		},
@@ -746,7 +746,7 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			data:       bytesData,
 			dataLen:    len(bytesData),
 			accessKey:  "Wrong-AcessID",
-			secretKey:  credentials.SecretAccessKey,
+			secretKey:  credentials.SecretKey,
 
 			expectedRespStatus: http.StatusForbidden,
 		},
@@ -758,8 +758,8 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			headers:            copySourceHeader,
 			data:               bytesData,
 			dataLen:            len(bytesData),
-			accessKey:          credentials.AccessKeyID,
-			secretKey:          credentials.SecretAccessKey,
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
 			expectedRespStatus: http.StatusBadRequest,
 		},
 		// Test case - 4.
@@ -770,8 +770,8 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			headers:            invalidMD5Header,
 			data:               bytesData,
 			dataLen:            len(bytesData),
-			accessKey:          credentials.AccessKeyID,
-			secretKey:          credentials.SecretAccessKey,
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
 			expectedRespStatus: http.StatusBadRequest,
 		},
 		// Test case - 5.
@@ -781,8 +781,8 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			objectName:         objectName,
 			data:               bytesData,
 			dataLen:            len(bytesData),
-			accessKey:          credentials.AccessKeyID,
-			secretKey:          credentials.SecretAccessKey,
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
 			fault:              TooBigObject,
 			expectedRespStatus: http.StatusBadRequest,
 		},
@@ -793,8 +793,8 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			objectName:         objectName,
 			data:               bytesData,
 			dataLen:            len(bytesData),
-			accessKey:          credentials.AccessKeyID,
-			secretKey:          credentials.SecretAccessKey,
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
 			fault:              MissingContentLength,
 			expectedRespStatus: http.StatusLengthRequired,
 		},
@@ -991,8 +991,8 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 			bucketName:       bucketName,
 			newObjectName:    "newObject1",
 			copySourceHeader: url.QueryEscape("/" + bucketName + "/" + objectName),
-			accessKey:        credentials.AccessKeyID,
-			secretKey:        credentials.SecretAccessKey,
+			accessKey:        credentials.AccessKey,
+			secretKey:        credentials.SecretKey,
 
 			expectedRespStatus: http.StatusOK,
 		},
@@ -1003,8 +1003,8 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 			bucketName:       bucketName,
 			newObjectName:    "newObject1",
 			copySourceHeader: url.QueryEscape("/"),
-			accessKey:        credentials.AccessKeyID,
-			secretKey:        credentials.SecretAccessKey,
+			accessKey:        credentials.AccessKey,
+			secretKey:        credentials.SecretKey,
 
 			expectedRespStatus: http.StatusBadRequest,
 		},
@@ -1014,8 +1014,8 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 			bucketName:       bucketName,
 			newObjectName:    objectName,
 			copySourceHeader: url.QueryEscape("/" + bucketName + "/" + objectName),
-			accessKey:        credentials.AccessKeyID,
-			secretKey:        credentials.SecretAccessKey,
+			accessKey:        credentials.AccessKey,
+			secretKey:        credentials.SecretKey,
 
 			expectedRespStatus: http.StatusBadRequest,
 		},
@@ -1027,8 +1027,8 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 			bucketName:       bucketName,
 			newObjectName:    objectName,
 			copySourceHeader: url.QueryEscape("/" + bucketName + "/" + "non-existent-object"),
-			accessKey:        credentials.AccessKeyID,
-			secretKey:        credentials.SecretAccessKey,
+			accessKey:        credentials.AccessKey,
+			secretKey:        credentials.SecretKey,
 
 			expectedRespStatus: http.StatusNotFound,
 		},
@@ -1040,19 +1040,19 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 			bucketName:       "non-existent-destination-bucket",
 			newObjectName:    objectName,
 			copySourceHeader: url.QueryEscape("/" + bucketName + "/" + objectName),
-			accessKey:        credentials.AccessKeyID,
-			secretKey:        credentials.SecretAccessKey,
+			accessKey:        credentials.AccessKey,
+			secretKey:        credentials.SecretKey,
 
 			expectedRespStatus: http.StatusNotFound,
 		},
 		// Test case - 6.
-		// Case with invalid AccessKeyID.
+		// Case with invalid AccessKey.
 		{
 			bucketName:       bucketName,
 			newObjectName:    objectName,
 			copySourceHeader: url.QueryEscape("/" + bucketName + "/" + objectName),
 			accessKey:        "Invalid-AccessID",
-			secretKey:        credentials.SecretAccessKey,
+			secretKey:        credentials.SecretKey,
 
 			expectedRespStatus: http.StatusForbidden,
 		},
@@ -1175,7 +1175,7 @@ func testAPINewMultipartHandler(obj ObjectLayer, instanceType, bucketName string
 	rec := httptest.NewRecorder()
 	// construct HTTP request for NewMultipart upload.
 	req, err := newTestSignedRequestV4("POST", getNewMultipartURL("", bucketName, objectName),
-		0, nil, credentials.AccessKeyID, credentials.SecretAccessKey)
+		0, nil, credentials.AccessKey, credentials.SecretKey)
 
 	if err != nil {
 		t.Fatalf("Failed to create HTTP request for NewMultipart Request: <ERROR> %v", err)
@@ -1208,7 +1208,7 @@ func testAPINewMultipartHandler(obj ObjectLayer, instanceType, bucketName string
 	// construct HTTP request for NewMultipart upload.
 	// Setting an invalid accessID.
 	req, err = newTestSignedRequestV4("POST", getNewMultipartURL("", bucketName, objectName),
-		0, nil, "Invalid-AccessID", credentials.SecretAccessKey)
+		0, nil, "Invalid-AccessID", credentials.SecretKey)
 
 	if err != nil {
 		t.Fatalf("Failed to create HTTP request for NewMultipart Request: <ERROR> %v", err)
@@ -1227,7 +1227,7 @@ func testAPINewMultipartHandler(obj ObjectLayer, instanceType, bucketName string
 	recV2 := httptest.NewRecorder()
 	// construct HTTP request for NewMultipartUpload endpoint.
 	reqV2, err := newTestSignedRequestV2("POST", getNewMultipartURL("", bucketName, objectName),
-		0, nil, credentials.AccessKeyID, credentials.SecretAccessKey)
+		0, nil, credentials.AccessKey, credentials.SecretKey)
 
 	if err != nil {
 		t.Fatalf("Failed to create HTTP request for NewMultipart Request: <ERROR> %v", err)
@@ -1260,7 +1260,7 @@ func testAPINewMultipartHandler(obj ObjectLayer, instanceType, bucketName string
 	// construct HTTP request for NewMultipartUpload endpoint.
 	// Setting invalid AccessID.
 	reqV2, err = newTestSignedRequestV2("POST", getNewMultipartURL("", bucketName, objectName),
-		0, nil, "Invalid-AccessID", credentials.SecretAccessKey)
+		0, nil, "Invalid-AccessID", credentials.SecretKey)
 
 	if err != nil {
 		t.Fatalf("Failed to create HTTP request for NewMultipart Request: <ERROR> %v", err)
@@ -1331,7 +1331,7 @@ func testAPINewMultipartHandlerParallel(obj ObjectLayer, instanceType, bucketNam
 			defer wg.Done()
 			rec := httptest.NewRecorder()
 			// construct HTTP request NewMultipartUpload.
-			req, err := newTestSignedRequestV4("POST", getNewMultipartURL("", bucketName, objectName), 0, nil, credentials.AccessKeyID, credentials.SecretAccessKey)
+			req, err := newTestSignedRequestV4("POST", getNewMultipartURL("", bucketName, objectName), 0, nil, credentials.AccessKey, credentials.SecretKey)
 
 			if err != nil {
 				t.Fatalf("Failed to create HTTP request for NewMultipart request: <ERROR> %v", err)
@@ -1527,8 +1527,8 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 			object:    objectName,
 			uploadID:  uploadIDs[0],
 			parts:     inputParts[0].parts,
-			accessKey: credentials.AccessKeyID,
-			secretKey: credentials.SecretAccessKey,
+			accessKey: credentials.AccessKey,
+			secretKey: credentials.SecretKey,
 
 			expectedContent: encodeResponse(getAPIErrorResponse(getAPIError(toAPIErrorCode(BadDigest{})),
 				getGetObjectURL("", bucketName, objectName))),
@@ -1542,8 +1542,8 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 			object:    objectName,
 			uploadID:  uploadIDs[0],
 			parts:     []completePart{},
-			accessKey: credentials.AccessKeyID,
-			secretKey: credentials.SecretAccessKey,
+			accessKey: credentials.AccessKey,
+			secretKey: credentials.SecretKey,
 
 			expectedContent: encodeResponse(getAPIErrorResponse(getAPIError(ErrMalformedXML),
 				getGetObjectURL("", bucketName, objectName))),
@@ -1557,8 +1557,8 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 			object:    objectName,
 			uploadID:  "abc",
 			parts:     inputParts[0].parts,
-			accessKey: credentials.AccessKeyID,
-			secretKey: credentials.SecretAccessKey,
+			accessKey: credentials.AccessKey,
+			secretKey: credentials.SecretKey,
 
 			expectedContent: encodeResponse(getAPIErrorResponse(getAPIError(toAPIErrorCode(InvalidUploadID{UploadID: "abc"})),
 				getGetObjectURL("", bucketName, objectName))),
@@ -1571,8 +1571,8 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 			object:    objectName,
 			uploadID:  uploadIDs[0],
 			parts:     inputParts[1].parts,
-			accessKey: credentials.AccessKeyID,
-			secretKey: credentials.SecretAccessKey,
+			accessKey: credentials.AccessKey,
+			secretKey: credentials.SecretKey,
 
 			expectedContent: encodeResponse(completeMultipartAPIError{int64(4), int64(5242880), 1, "e2fc714c4727ee9395f324cd2e7f331f",
 				getAPIErrorResponse(getAPIError(toAPIErrorCode(PartTooSmall{PartNumber: 1})),
@@ -1586,8 +1586,8 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 			object:    objectName,
 			uploadID:  uploadIDs[0],
 			parts:     inputParts[2].parts,
-			accessKey: credentials.AccessKeyID,
-			secretKey: credentials.SecretAccessKey,
+			accessKey: credentials.AccessKey,
+			secretKey: credentials.SecretKey,
 
 			expectedContent: encodeResponse(getAPIErrorResponse(getAPIError(toAPIErrorCode(InvalidPart{})),
 				getGetObjectURL("", bucketName, objectName))),
@@ -1601,8 +1601,8 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 			object:    objectName,
 			uploadID:  uploadIDs[0],
 			parts:     inputParts[3].parts,
-			accessKey: credentials.AccessKeyID,
-			secretKey: credentials.SecretAccessKey,
+			accessKey: credentials.AccessKey,
+			secretKey: credentials.SecretKey,
 
 			expectedContent: encodeResponse(getAPIErrorResponse(getAPIError(ErrInvalidPartOrder),
 				getGetObjectURL("", bucketName, objectName))),
@@ -1617,7 +1617,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 			uploadID:  uploadIDs[0],
 			parts:     inputParts[4].parts,
 			accessKey: "Invalid-AccessID",
-			secretKey: credentials.SecretAccessKey,
+			secretKey: credentials.SecretKey,
 
 			expectedContent: encodeResponse(getAPIErrorResponse(getAPIError(ErrInvalidAccessKeyID),
 				getGetObjectURL("", bucketName, objectName))),
@@ -1631,8 +1631,8 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 			object:    objectName,
 			uploadID:  uploadIDs[0],
 			parts:     inputParts[4].parts,
-			accessKey: credentials.AccessKeyID,
-			secretKey: credentials.SecretAccessKey,
+			accessKey: credentials.AccessKey,
+			secretKey: credentials.SecretKey,
 
 			expectedContent:    encodedSuccessResponse,
 			expectedRespStatus: http.StatusOK,
@@ -1813,8 +1813,8 @@ func testAPIAbortMultipartHandler(obj ObjectLayer, instanceType, bucketName stri
 			bucket:             bucketName,
 			object:             objectName,
 			uploadID:           uploadIDs[0],
-			accessKey:          credentials.AccessKeyID,
-			secretKey:          credentials.SecretAccessKey,
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
 			expectedRespStatus: http.StatusNoContent,
 		},
 		// Test case - 2.
@@ -1823,8 +1823,8 @@ func testAPIAbortMultipartHandler(obj ObjectLayer, instanceType, bucketName stri
 			bucket:             bucketName,
 			object:             objectName,
 			uploadID:           "nonexistent-upload-id",
-			accessKey:          credentials.AccessKeyID,
-			secretKey:          credentials.SecretAccessKey,
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
 			expectedRespStatus: http.StatusNotFound,
 		},
 		// Test case - 3.
@@ -1834,7 +1834,7 @@ func testAPIAbortMultipartHandler(obj ObjectLayer, instanceType, bucketName stri
 			object:             objectName,
 			uploadID:           uploadIDs[0],
 			accessKey:          "Invalid-AccessID",
-			secretKey:          credentials.SecretAccessKey,
+			secretKey:          credentials.SecretKey,
 			expectedRespStatus: http.StatusForbidden,
 		},
 	}
@@ -1957,8 +1957,8 @@ func testAPIDeleteObjectHandler(obj ObjectLayer, instanceType, bucketName string
 		{
 			bucketName: bucketName,
 			objectName: objectName,
-			accessKey:  credentials.AccessKeyID,
-			secretKey:  credentials.SecretAccessKey,
+			accessKey:  credentials.AccessKey,
+			secretKey:  credentials.SecretKey,
 
 			expectedRespStatus: http.StatusNoContent,
 		},
@@ -1968,8 +1968,8 @@ func testAPIDeleteObjectHandler(obj ObjectLayer, instanceType, bucketName string
 		{
 			bucketName: bucketName,
 			objectName: objectName,
-			accessKey:  credentials.AccessKeyID,
-			secretKey:  credentials.SecretAccessKey,
+			accessKey:  credentials.AccessKey,
+			secretKey:  credentials.SecretKey,
 
 			expectedRespStatus: http.StatusNoContent,
 		},
@@ -1980,7 +1980,7 @@ func testAPIDeleteObjectHandler(obj ObjectLayer, instanceType, bucketName string
 			bucketName: bucketName,
 			objectName: objectName,
 			accessKey:  "Invalid-AccessKey",
-			secretKey:  credentials.SecretAccessKey,
+			secretKey:  credentials.SecretKey,
 
 			expectedRespStatus: http.StatusForbidden,
 		},
@@ -2070,7 +2070,7 @@ func testAPIPutObjectPartHandlerPreSign(obj ObjectLayer, instanceType, bucketNam
 	testObject := "testobject"
 	rec := httptest.NewRecorder()
 	req, err := newTestSignedRequestV4("POST", getNewMultipartURL("", bucketName, "testobject"),
-		0, nil, credentials.AccessKeyID, credentials.SecretAccessKey)
+		0, nil, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatalf("[%s] - Failed to create a signed request to initiate multipart upload for %s/%s: <ERROR> %v",
 			instanceType, bucketName, testObject, err)
@@ -2096,7 +2096,7 @@ func testAPIPutObjectPartHandlerPreSign(obj ObjectLayer, instanceType, bucketNam
 		t.Fatalf("[%s] - Failed to create an unsigned request to put object part for %s/%s <ERROR> %v",
 			instanceType, bucketName, testObject, err)
 	}
-	err = preSignV2(req, credentials.AccessKeyID, credentials.SecretAccessKey, int64(10*60*60))
+	err = preSignV2(req, credentials.AccessKey, credentials.SecretKey, int64(10*60*60))
 	if err != nil {
 		t.Fatalf("[%s] - Failed to presign an unsigned request to put object part for %s/%s <ERROR> %v",
 			instanceType, bucketName, testObject, err)
@@ -2113,7 +2113,7 @@ func testAPIPutObjectPartHandlerPreSign(obj ObjectLayer, instanceType, bucketNam
 		t.Fatalf("[%s] - Failed to create an unsigned request to put object part for %s/%s <ERROR> %v",
 			instanceType, bucketName, testObject, err)
 	}
-	err = preSignV4(req, credentials.AccessKeyID, credentials.SecretAccessKey, int64(10*60*60))
+	err = preSignV4(req, credentials.AccessKey, credentials.SecretKey, int64(10*60*60))
 	if err != nil {
 		t.Fatalf("[%s] - Failed to presign an unsigned request to put object part for %s/%s <ERROR> %v",
 			instanceType, bucketName, testObject, err)
@@ -2136,7 +2136,7 @@ func testAPIPutObjectPartHandlerStreaming(obj ObjectLayer, instanceType, bucketN
 	testObject := "testobject"
 	rec := httptest.NewRecorder()
 	req, err := newTestSignedRequestV4("POST", getNewMultipartURL("", bucketName, "testobject"),
-		0, nil, credentials.AccessKeyID, credentials.SecretAccessKey)
+		0, nil, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatalf("[%s] - Failed to create a signed request to initiate multipart upload for %s/%s: <ERROR> %v",
 			instanceType, bucketName, testObject, err)
@@ -2171,7 +2171,7 @@ func testAPIPutObjectPartHandlerStreaming(obj ObjectLayer, instanceType, bucketN
 		rec = httptest.NewRecorder()
 		req, err = newTestStreamingSignedRequest("PUT",
 			getPutObjectPartURL("", bucketName, testObject, mpartResp.UploadID, "1"),
-			5, 1, bytes.NewReader([]byte("hello")), credentials.AccessKeyID, credentials.SecretAccessKey)
+			5, 1, bytes.NewReader([]byte("hello")), credentials.AccessKey, credentials.SecretKey)
 
 		if err != nil {
 			t.Fatalf("Failed to create new streaming signed HTTP request: <ERROR> %v.", err)
@@ -2273,8 +2273,8 @@ func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName strin
 			reader:     bytes.NewReader([]byte("hello")),
 			partNumber: "1",
 			fault:      None,
-			accessKey:  credentials.AccessKeyID,
-			secretKey:  credentials.SecretAccessKey,
+			accessKey:  credentials.AccessKey,
+			secretKey:  credentials.SecretKey,
 
 			expectedAPIError: noAPIErr,
 		},
@@ -2285,8 +2285,8 @@ func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName strin
 			reader:     bytes.NewReader([]byte("hello")),
 			partNumber: "9999999999999999999",
 			fault:      None,
-			accessKey:  credentials.AccessKeyID,
-			secretKey:  credentials.SecretAccessKey,
+			accessKey:  credentials.AccessKey,
+			secretKey:  credentials.SecretKey,
 
 			expectedAPIError: invalidPart,
 		},
@@ -2297,8 +2297,8 @@ func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName strin
 			reader:     bytes.NewReader([]byte("hello")),
 			partNumber: strconv.Itoa(maxPartID + 1),
 			fault:      None,
-			accessKey:  credentials.AccessKeyID,
-			secretKey:  credentials.SecretAccessKey,
+			accessKey:  credentials.AccessKey,
+			secretKey:  credentials.SecretKey,
 
 			expectedAPIError: invalidMaxParts,
 		},
@@ -2309,8 +2309,8 @@ func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName strin
 			reader:     bytes.NewReader([]byte("hello")),
 			partNumber: "1",
 			fault:      MissingContentLength,
-			accessKey:  credentials.AccessKeyID,
-			secretKey:  credentials.SecretAccessKey,
+			accessKey:  credentials.AccessKey,
+			secretKey:  credentials.SecretKey,
 
 			expectedAPIError: missingContent,
 		},
@@ -2321,8 +2321,8 @@ func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName strin
 			reader:     bytes.NewReader([]byte("hello")),
 			partNumber: "1",
 			fault:      TooBigObject,
-			accessKey:  credentials.AccessKeyID,
-			secretKey:  credentials.SecretAccessKey,
+			accessKey:  credentials.AccessKey,
+			secretKey:  credentials.SecretKey,
 
 			expectedAPIError: entityTooLarge,
 		},
@@ -2333,8 +2333,8 @@ func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName strin
 			reader:     bytes.NewReader([]byte("hello")),
 			partNumber: "1",
 			fault:      BadSignature,
-			accessKey:  credentials.AccessKeyID,
-			secretKey:  credentials.SecretAccessKey,
+			accessKey:  credentials.AccessKey,
+			secretKey:  credentials.SecretKey,
 
 			expectedAPIError: badSigning,
 		},
@@ -2346,8 +2346,8 @@ func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName strin
 			reader:     bytes.NewReader([]byte("hello")),
 			partNumber: "1",
 			fault:      BadMD5,
-			accessKey:  credentials.AccessKeyID,
-			secretKey:  credentials.SecretAccessKey,
+			accessKey:  credentials.AccessKey,
+			secretKey:  credentials.SecretKey,
 
 			expectedAPIError: badChecksum,
 		},
@@ -2358,8 +2358,8 @@ func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName strin
 			reader:     bytes.NewReader([]byte("hello")),
 			partNumber: "1",
 			fault:      MissingUploadID,
-			accessKey:  credentials.AccessKeyID,
-			secretKey:  credentials.SecretAccessKey,
+			accessKey:  credentials.AccessKey,
+			secretKey:  credentials.SecretKey,
 
 			expectedAPIError: noSuchUploadID,
 		},
@@ -2372,7 +2372,7 @@ func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName strin
 			partNumber: "1",
 			fault:      None,
 			accessKey:  "Invalid-AccessID",
-			secretKey:  credentials.SecretAccessKey,
+			secretKey:  credentials.SecretKey,
 
 			expectedAPIError: invalidAccessID,
 		},
@@ -2541,7 +2541,7 @@ func testAPIListObjectPartsHandlerPreSign(obj ObjectLayer, instanceType, bucketN
 	testObject := "testobject"
 	rec := httptest.NewRecorder()
 	req, err := newTestSignedRequestV4("POST", getNewMultipartURL("", bucketName, testObject),
-		0, nil, credentials.AccessKeyID, credentials.SecretAccessKey)
+		0, nil, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatalf("[%s] - Failed to create a signed request to initiate multipart upload for %s/%s: <ERROR> %v",
 			instanceType, bucketName, testObject, err)
@@ -2564,7 +2564,7 @@ func testAPIListObjectPartsHandlerPreSign(obj ObjectLayer, instanceType, bucketN
 	rec = httptest.NewRecorder()
 	req, err = newTestSignedRequestV4("PUT",
 		getPutObjectPartURL("", bucketName, testObject, mpartResp.UploadID, "1"),
-		int64(len("hello")), bytes.NewReader([]byte("hello")), credentials.AccessKeyID, credentials.SecretAccessKey)
+		int64(len("hello")), bytes.NewReader([]byte("hello")), credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatalf("[%s] - Failed to create a signed request to initiate multipart upload for %s/%s: <ERROR> %v",
 			instanceType, bucketName, testObject, err)
@@ -2584,7 +2584,7 @@ func testAPIListObjectPartsHandlerPreSign(obj ObjectLayer, instanceType, bucketN
 			instanceType, bucketName, mpartResp.UploadID)
 	}
 
-	err = preSignV2(req, credentials.AccessKeyID, credentials.SecretAccessKey, int64(10*60*60))
+	err = preSignV2(req, credentials.AccessKey, credentials.SecretKey, int64(10*60*60))
 	if err != nil {
 		t.Fatalf("[%s] - Failed to presignV2 an unsigned request to list object parts for bucket %s, uploadId %s",
 			instanceType, bucketName, mpartResp.UploadID)
@@ -2604,7 +2604,7 @@ func testAPIListObjectPartsHandlerPreSign(obj ObjectLayer, instanceType, bucketN
 			instanceType, bucketName, mpartResp.UploadID)
 	}
 
-	err = preSignV4(req, credentials.AccessKeyID, credentials.SecretAccessKey, int64(10*60*60))
+	err = preSignV4(req, credentials.AccessKey, credentials.SecretKey, int64(10*60*60))
 	if err != nil {
 		t.Fatalf("[%s] - Failed to presignV2 an unsigned request to list object parts for bucket %s, uploadId %s",
 			instanceType, bucketName, mpartResp.UploadID)
@@ -2724,7 +2724,7 @@ func testAPIListObjectPartsHandler(obj ObjectLayer, instanceType, bucketName str
 			// constructing a v4 signed HTTP request for ListMultipartUploads.
 			reqV4, err = newTestSignedRequestV4("GET",
 				getListMultipartURLWithParams("", bucketName, testObject, uploadID, test.maxParts, test.partNumberMarker, ""),
-				0, nil, credentials.AccessKeyID, credentials.SecretAccessKey)
+				0, nil, credentials.AccessKey, credentials.SecretKey)
 
 			if err != nil {
 				t.Fatalf("Failed to create a V4 signed request to list object parts for %s/%s: <ERROR> %v.",
@@ -2734,7 +2734,7 @@ func testAPIListObjectPartsHandler(obj ObjectLayer, instanceType, bucketName str
 			// construct HTTP request for PutObject Part Object endpoint.
 			reqV2, err = newTestSignedRequestV2("GET",
 				getListMultipartURLWithParams("", bucketName, testObject, uploadID, test.maxParts, test.partNumberMarker, ""),
-				0, nil, credentials.AccessKeyID, credentials.SecretAccessKey)
+				0, nil, credentials.AccessKey, credentials.SecretKey)
 
 			if err != nil {
 				t.Fatalf("Failed to create a V2 signed request to list object parts for %s/%s: <ERROR> %v.",

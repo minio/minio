@@ -189,14 +189,14 @@ func minioInit() {
 	if accessKey != "" && secretKey != "" {
 		// Set new credentials.
 		serverConfig.SetCredential(credential{
-			AccessKeyID:     accessKey,
-			SecretAccessKey: secretKey,
+			AccessKey: accessKey,
+			SecretKey: secretKey,
 		})
 	}
-	if !isValidAccessKey(serverConfig.GetCredential().AccessKeyID) {
+	if !isAccessKeyValid(serverConfig.GetCredential().AccessKey) {
 		fatalIf(errInvalidArgument, "Invalid access key. Accept only a string starting with a alphabetic and containing from 5 to 20 characters.")
 	}
-	if !isValidSecretKey(serverConfig.GetCredential().SecretAccessKey) {
+	if !isSecretKeyValid(serverConfig.GetCredential().SecretKey) {
 		fatalIf(errInvalidArgument, "Invalid secret key. Accept only a string containing from 8 to 40 characters.")
 	}
 

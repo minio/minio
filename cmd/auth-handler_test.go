@@ -301,7 +301,7 @@ func mustNewRequest(method string, urlStr string, contentLength int64, body io.R
 func mustNewSignedRequest(method string, urlStr string, contentLength int64, body io.ReadSeeker, t *testing.T) *http.Request {
 	req := mustNewRequest(method, urlStr, contentLength, body, t)
 	cred := serverConfig.GetCredential()
-	if err := signRequestV4(req, cred.AccessKeyID, cred.SecretAccessKey); err != nil {
+	if err := signRequestV4(req, cred.AccessKey, cred.SecretKey); err != nil {
 		t.Fatalf("Unable to inititalized new signed http request %s", err)
 	}
 	return req

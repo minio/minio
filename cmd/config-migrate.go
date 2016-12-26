@@ -112,8 +112,8 @@ func migrateV2ToV3() error {
 	srvConfig.Version = "3"
 	srvConfig.Addr = ":9000"
 	srvConfig.Credential = credential{
-		AccessKeyID:     cv2.Credentials.AccessKeyID,
-		SecretAccessKey: cv2.Credentials.SecretAccessKey,
+		AccessKey: cv2.Credentials.AccessKey,
+		SecretKey: cv2.Credentials.SecretKey,
 	}
 	srvConfig.Region = cv2.Credentials.Region
 	if srvConfig.Region == "" {

@@ -104,8 +104,8 @@ func newStorageRPC(ep *url.URL) (StorageAPI, error) {
 	rpcAddr := ep.Host
 
 	// Initialize rpc client with network address and rpc path.
-	accessKeyID := serverConfig.GetCredential().AccessKeyID
-	secretAccessKey := serverConfig.GetCredential().SecretAccessKey
+	accessKeyID := serverConfig.GetCredential().AccessKey
+	secretAccessKey := serverConfig.GetCredential().SecretKey
 	if ep.User != nil {
 		accessKeyID = ep.User.Username()
 		if key, set := ep.User.Password(); set {

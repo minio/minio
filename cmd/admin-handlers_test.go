@@ -83,7 +83,7 @@ func getAdminCmdRequest(cmd cmdType, cred credential) (*http.Request, error) {
 		return nil, err
 	}
 	req.Header.Set(minioAdminOpHeader, cmd.String())
-	err = signRequestV4(req, cred.AccessKeyID, cred.SecretAccessKey)
+	err = signRequestV4(req, cred.AccessKey, cred.SecretKey)
 	if err != nil {
 		return nil, err
 	}

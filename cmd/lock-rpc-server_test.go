@@ -55,7 +55,7 @@ func createLockTestServer(t *testing.T) (string, *lockServer, string) {
 		lockMap:     make(map[string][]lockRequesterInfo),
 	}
 	creds := serverConfig.GetCredential()
-	loginArgs := RPCLoginArgs{Username: creds.AccessKeyID, Password: creds.SecretAccessKey}
+	loginArgs := RPCLoginArgs{Username: creds.AccessKey, Password: creds.SecretKey}
 	loginReply := RPCLoginReply{}
 	err = locker.LoginHandler(&loginArgs, &loginReply)
 	if err != nil {

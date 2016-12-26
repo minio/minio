@@ -209,7 +209,7 @@ func testGetBucketNotificationHandler(obj ObjectLayer, instanceType, bucketName 
 	}
 	rec := httptest.NewRecorder()
 	req, err := newTestSignedRequestV4("GET", getGetBucketNotificationURL("", bucketName),
-		0, nil, credentials.AccessKeyID, credentials.SecretAccessKey)
+		0, nil, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatalf("%s: Failed to create HTTP testRequest for ListenBucketNotification: <ERROR> %v", instanceType, err)
 	}
@@ -222,7 +222,7 @@ func testGetBucketNotificationHandler(obj ObjectLayer, instanceType, bucketName 
 	}
 	rec = httptest.NewRecorder()
 	req, err = newTestSignedRequestV4("GET", getGetBucketNotificationURL("", bucketName),
-		0, nil, credentials.AccessKeyID, credentials.SecretAccessKey)
+		0, nil, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatalf("%s: Failed to create HTTP testRequest for ListenBucketNotification: <ERROR> %v", instanceType, err)
 	}
@@ -268,7 +268,7 @@ func testListenBucketNotificationNilHandler(obj ObjectLayer, instanceType, bucke
 			[]string{"*.jpg"}, []string{
 				"s3:ObjectCreated:*",
 				"s3:ObjectRemoved:*",
-			}), 0, nil, credentials.AccessKeyID, credentials.SecretAccessKey)
+			}), 0, nil, credentials.AccessKey, credentials.SecretKey)
 	if tErr != nil {
 		t.Fatalf("%s: Failed to create HTTP testRequest for ListenBucketNotification: <ERROR> %v", instanceType, tErr)
 	}
@@ -294,7 +294,7 @@ func testRemoveNotificationConfig(obj ObjectLayer, instanceType, bucketName stri
 	testRec := httptest.NewRecorder()
 	testReq, tErr := newTestSignedRequestV4("PUT", getPutBucketNotificationURL("", randBucket),
 		int64(len(sampleNotificationBytes)), bytes.NewReader(sampleNotificationBytes),
-		credentials.AccessKeyID, credentials.SecretAccessKey)
+		credentials.AccessKey, credentials.SecretKey)
 	if tErr != nil {
 		t.Fatalf("%s: Failed to create HTTP testRequest for PutBucketNotification: <ERROR> %v", instanceType, tErr)
 	}

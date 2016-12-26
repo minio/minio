@@ -50,7 +50,7 @@ func initConfig() (bool, error) {
 		srvCfg := &serverConfigV11{}
 		srvCfg.Version = globalMinioConfigVersion
 		srvCfg.Region = "us-east-1"
-		srvCfg.Credential = mustGenAccessKeys()
+		srvCfg.Credential = newCredential()
 
 		// Enable console logger by default on a fresh run.
 		srvCfg.Logger.Console = consoleLogger{
