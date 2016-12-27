@@ -72,3 +72,15 @@ type credential struct {
 func newCredential() credential {
 	return credential{mustGetAccessKey(), mustGetSecretKey()}
 }
+
+func getCredential(accessKey, secretKey string) (credential, error) {
+	if !isAccessKeyValid(accessKey) {
+		return credential{}, errInvalidAccessKeyLength
+	}
+
+	if !isSecretKeyValid(secretKey) {
+		return credential{}, errInvalidSecretKeyLength
+	}
+
+	return credential{accessKey, secretKey}, nil
+}

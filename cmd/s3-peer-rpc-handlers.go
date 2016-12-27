@@ -37,7 +37,7 @@ func (s *SetBucketNotificationPeerArgs) BucketUpdate(client BucketMetaState) err
 
 func (s3 *s3PeerAPIHandlers) SetBucketNotificationPeer(args *SetBucketNotificationPeerArgs, reply *GenericReply) error {
 	// check auth
-	if !isRPCTokenValid(args.Token) {
+	if !isAuthTokenValid(args.Token) {
 		return errInvalidToken
 	}
 
@@ -64,7 +64,7 @@ func (s *SetBucketListenerPeerArgs) BucketUpdate(client BucketMetaState) error {
 
 func (s3 *s3PeerAPIHandlers) SetBucketListenerPeer(args *SetBucketListenerPeerArgs, reply *GenericReply) error {
 	// check auth
-	if !isRPCTokenValid(args.Token) {
+	if !isAuthTokenValid(args.Token) {
 		return errInvalidToken
 	}
 
@@ -86,7 +86,7 @@ type EventArgs struct {
 // submit an event to the receiving server.
 func (s3 *s3PeerAPIHandlers) Event(args *EventArgs, reply *GenericReply) error {
 	// check auth
-	if !isRPCTokenValid(args.Token) {
+	if !isAuthTokenValid(args.Token) {
 		return errInvalidToken
 	}
 
@@ -114,7 +114,7 @@ func (s *SetBucketPolicyPeerArgs) BucketUpdate(client BucketMetaState) error {
 // tell receiving server to update a bucket policy
 func (s3 *s3PeerAPIHandlers) SetBucketPolicyPeer(args *SetBucketPolicyPeerArgs, reply *GenericReply) error {
 	// check auth
-	if !isRPCTokenValid(args.Token) {
+	if !isAuthTokenValid(args.Token) {
 		return errInvalidToken
 	}
 

@@ -23,17 +23,11 @@ type loginServer struct {
 
 // LoginHandler - Handles JWT based RPC logic.
 func (b loginServer) LoginHandler(args *RPCLoginArgs, reply *RPCLoginReply) error {
-	jwt, err := newJWT(defaultInterNodeJWTExpiry, serverConfig.GetCredential())
+	token, err := authenticateNode(args.Username, args.Password)
 	if err != nil {
 		return err
 	}
-	if err = jwt.Authenticate(args.Username, args.Password); err != nil {
-		return err
-	}
-	token, err := jwt.GenerateToken(args.Username)
-	if err != nil {
-		return err
-	}
+
 	reply.Token = token
 	reply.Timestamp = time.Now().UTC()
 	reply.ServerVersion = Version

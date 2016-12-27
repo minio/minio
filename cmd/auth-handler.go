@@ -224,7 +224,7 @@ func (a authHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	} else if aType == authTypeJWT {
 		// Validate Authorization header if its valid for JWT request.
-		if !isJWTReqAuthenticated(r) {
+		if !isHTTPRequestValid(r) {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}

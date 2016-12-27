@@ -65,7 +65,7 @@ func (l *lockServer) validateLockArgs(args *LockArgs) error {
 	if curTime.Sub(args.Timestamp) > globalMaxSkewTime || args.Timestamp.Sub(curTime) > globalMaxSkewTime {
 		return errServerTimeMismatch
 	}
-	if !isRPCTokenValid(args.Token) {
+	if !isAuthTokenValid(args.Token) {
 		return errInvalidToken
 	}
 	return nil

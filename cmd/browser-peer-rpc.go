@@ -25,17 +25,11 @@ import (
 // Login handler implements JWT login token generator, which upon login request
 // along with username and password is generated.
 func (br *browserPeerAPIHandlers) LoginHandler(args *RPCLoginArgs, reply *RPCLoginReply) error {
-	jwt, err := newJWT(defaultInterNodeJWTExpiry, serverConfig.GetCredential())
+	token, err := authenticateWeb(args.Username, args.Password)
 	if err != nil {
 		return err
 	}
-	if err = jwt.Authenticate(args.Username, args.Password); err != nil {
-		return err
-	}
-	token, err := jwt.GenerateToken(args.Username)
-	if err != nil {
-		return err
-	}
+
 	reply.Token = token
 	reply.ServerVersion = Version
 	reply.Timestamp = time.Now().UTC()
@@ -54,13 +48,13 @@ type SetAuthPeerArgs struct {
 // SetAuthPeer - Update to new credentials sent from a peer Minio
 // server. Since credentials are already validated on the sending
 // peer, here we just persist to file and update in-memory config. All
-// subsequently running isRPCTokenValid() calls will fail, and clients
+// subsequently running isAuthTokenValid() calls will fail, and clients
 // will be forced to re-establish connections. Connections will be
 // re-established only when the sending client has also updated its
 // credentials.
 func (br *browserPeerAPIHandlers) SetAuthPeer(args SetAuthPeerArgs, reply *GenericReply) error {
 	// Check auth
-	if !isRPCTokenValid(args.Token) {
+	if !isAuthTokenValid(args.Token) {
 		return errInvalidToken
 	}
 
