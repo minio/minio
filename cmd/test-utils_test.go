@@ -1077,8 +1077,8 @@ func signRequestV4(req *http.Request, accessKey, secretKey string) error {
 	return nil
 }
 
-// getCredential generate a credential string.
-func getCredential(accessKeyID, location string, t time.Time) string {
+// getCredentialString generate a credential string.
+func getCredentialString(accessKeyID, location string, t time.Time) string {
 	return accessKeyID + "/" + getScope(t, location)
 }
 

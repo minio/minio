@@ -545,7 +545,7 @@ func buildGenericPolicy(t time.Time, accessKey, bucketName, objectName string, c
 	// Expire the request five minutes from now.
 	expirationTime := t.Add(time.Minute * 5)
 
-	credStr := getCredential(accessKey, serverConfig.GetRegion(), t)
+	credStr := getCredentialString(accessKey, serverConfig.GetRegion(), t)
 	// Create a new post policy.
 	policy := newPostPolicyBytesV4(credStr, bucketName, objectName, expirationTime)
 	if contentLengthRange {
@@ -557,7 +557,7 @@ func buildGenericPolicy(t time.Time, accessKey, bucketName, objectName string, c
 func newPostRequestV4Generic(endPoint, bucketName, objectName string, objData []byte, accessKey, secretKey string,
 	t time.Time, policy []byte, addFormData map[string]string, corruptedB64 bool, corruptedMultipart bool) (*http.Request, error) {
 	// Get the user credential.
-	credStr := getCredential(accessKey, serverConfig.GetRegion(), t)
+	credStr := getCredentialString(accessKey, serverConfig.GetRegion(), t)
 
 	// Only need the encoding.
 	encodedPolicy := base64.StdEncoding.EncodeToString(policy)

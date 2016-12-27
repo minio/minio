@@ -32,7 +32,7 @@ type serviceCmd struct {
 
 // Shutdown - Shutdown this instance of minio server.
 func (s *serviceCmd) Shutdown(args *GenericArgs, reply *GenericReply) error {
-	if !isRPCTokenValid(args.Token) {
+	if !isAuthTokenValid(args.Token) {
 		return errInvalidToken
 	}
 	globalServiceSignalCh <- serviceStop
@@ -41,7 +41,7 @@ func (s *serviceCmd) Shutdown(args *GenericArgs, reply *GenericReply) error {
 
 // Restart - Restart this instance of minio server.
 func (s *serviceCmd) Restart(args *GenericArgs, reply *GenericReply) error {
-	if !isRPCTokenValid(args.Token) {
+	if !isAuthTokenValid(args.Token) {
 		return errInvalidToken
 	}
 	globalServiceSignalCh <- serviceRestart

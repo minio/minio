@@ -29,38 +29,12 @@ import (
 	"strings"
 	"time"
 
-	jwtgo "github.com/dgrijalva/jwt-go"
-	jwtreq "github.com/dgrijalva/jwt-go/request"
 	"github.com/dustin/go-humanize"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/rpc/v2/json2"
 	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/miniobrowser"
 )
-
-// isJWTReqAuthenticated validates if any incoming request to be a
-// valid JWT authenticated request.
-func isJWTReqAuthenticated(req *http.Request) bool {
-	jwt, err := newJWT(defaultJWTExpiry, serverConfig.GetCredential())
-	if err != nil {
-		errorIf(err, "unable to initialize a new JWT")
-		return false
-	}
-
-	var reqCallback jwtgo.Keyfunc
-	reqCallback = func(token *jwtgo.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwtgo.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
-		}
-		return []byte(jwt.SecretKey), nil
-	}
-	token, err := jwtreq.ParseFromRequest(req, jwtreq.AuthorizationHeaderExtractor, reqCallback)
-	if err != nil {
-		errorIf(err, "token parsing failed")
-		return false
-	}
-	return token.Valid
-}
 
 // WebGenericArgs - empty struct for calls that don't accept arguments
 // for ex. ServerInfo, GenerateAuth
@@ -84,7 +58,7 @@ type ServerInfoRep struct {
 
 // ServerInfo - get server info.
 func (web *webAPIHandlers) ServerInfo(r *http.Request, args *WebGenericArgs, reply *ServerInfoRep) error {
-	if !isJWTReqAuthenticated(r) {
+	if !isHTTPRequestValid(r) {
 		return toJSONError(errAuthentication)
 	}
 	host, err := os.Hostname()
@@ -125,7 +99,7 @@ func (web *webAPIHandlers) StorageInfo(r *http.Request, args *GenericArgs, reply
 	if objectAPI == nil {
 		return toJSONError(errServerNotInitialized)
 	}
-	if !isJWTReqAuthenticated(r) {
+	if !isHTTPRequestValid(r) {
 		return toJSONError(errAuthentication)
 	}
 	reply.StorageInfo = objectAPI.StorageInfo()
@@ -144,7 +118,7 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 	if objectAPI == nil {
 		return toJSONError(errServerNotInitialized)
 	}
-	if !isJWTReqAuthenticated(r) {
+	if !isHTTPRequestValid(r) {
 		return toJSONError(errAuthentication)
 	}
 	bucketLock := globalNSMutex.NewNSLock(args.BucketName, "")
@@ -177,7 +151,7 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 	if objectAPI == nil {
 		return toJSONError(errServerNotInitialized)
 	}
-	if !isJWTReqAuthenticated(r) {
+	if !isHTTPRequestValid(r) {
 		return toJSONError(errAuthentication)
 	}
 	buckets, err := objectAPI.ListBuckets()
@@ -227,7 +201,7 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 	if objectAPI == nil {
 		return toJSONError(errServerNotInitialized)
 	}
-	if !isJWTReqAuthenticated(r) {
+	if !isHTTPRequestValid(r) {
 		return toJSONError(errAuthentication)
 	}
 	marker := ""
@@ -271,7 +245,7 @@ func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs,
 	if objectAPI == nil {
 		return toJSONError(errServerNotInitialized)
 	}
-	if !isJWTReqAuthenticated(r) {
+	if !isHTTPRequestValid(r) {
 		return toJSONError(errAuthentication)
 	}
 
@@ -318,19 +292,11 @@ type LoginRep struct {
 
 // Login - user login handler.
 func (web *webAPIHandlers) Login(r *http.Request, args *LoginArgs, reply *LoginRep) error {
-	jwt, err := newJWT(defaultJWTExpiry, serverConfig.GetCredential())
+	token, err := authenticateWeb(args.Username, args.Password)
 	if err != nil {
 		return toJSONError(err)
 	}
 
-	if err = jwt.Authenticate(args.Username, args.Password); err != nil {
-		return toJSONError(err)
-	}
-
-	token, err := jwt.GenerateToken(args.Username)
-	if err != nil {
-		return toJSONError(err)
-	}
 	reply.Token = token
 	reply.UIVersion = miniobrowser.UIVersion
 	return nil
@@ -344,7 +310,7 @@ type GenerateAuthReply struct {
 }
 
 func (web webAPIHandlers) GenerateAuth(r *http.Request, args *WebGenericArgs, reply *GenerateAuthReply) error {
-	if !isJWTReqAuthenticated(r) {
+	if !isHTTPRequestValid(r) {
 		return toJSONError(errAuthentication)
 	}
 	cred := newCredential()
@@ -369,41 +335,16 @@ type SetAuthReply struct {
 
 // SetAuth - Set accessKey and secretKey credentials.
 func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *SetAuthReply) error {
-	if !isJWTReqAuthenticated(r) {
+	if !isHTTPRequestValid(r) {
 		return toJSONError(errAuthentication)
 	}
 
-	// Initialize jwt with the new access keys, fail if not possible.
-	jwt, err := newJWT(defaultJWTExpiry, credential{
-		AccessKey: args.AccessKey,
-		SecretKey: args.SecretKey,
-	}) // JWT Expiry set to 24Hrs.
+	// As we already validated the authentication, we save given access/secret keys.
+	cred, err := getCredential(args.AccessKey, args.SecretKey)
 	if err != nil {
 		return toJSONError(err)
 	}
 
-	// Authenticate the secret key properly.
-	if err = jwt.Authenticate(args.AccessKey, args.SecretKey); err != nil {
-		return toJSONError(err)
-
-	}
-
-	unexpErrsMsg := "Unexpected error(s) occurred - please check minio server logs."
-	gaveUpMsg := func(errMsg error, moreErrors bool) *json2.Error {
-		msg := fmt.Sprintf(
-			"We gave up due to: '%s', but there were more errors. Please check minio server logs.",
-			errMsg.Error(),
-		)
-		var err *json2.Error
-		if moreErrors {
-			err = toJSONError(errors.New(msg))
-		} else {
-			err = toJSONError(errMsg)
-		}
-		return err
-	}
-
-	cred := credential{args.AccessKey, args.SecretKey}
 	// Notify all other Minio peers to update credentials
 	errsMap := updateCredsOnPeers(cred)
 
@@ -427,19 +368,21 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 		// Since the error message may be very long to display
 		// on the browser, we tell the user to check the
 		// server logs.
-		return toJSONError(errors.New(unexpErrsMsg))
+		return toJSONError(errors.New("unexpected error(s) occurred - please check minio server logs"))
 	}
 
-	// Did we have peer errors?
-	var moreErrors bool
-	if len(errsMap) > 0 {
-		moreErrors = true
-	}
-
-	// Generate a JWT token.
-	token, err := jwt.GenerateToken(args.AccessKey)
+	// As we have updated access/secret key, generate new auth token.
+	token, err := authenticateWeb(args.AccessKey, args.SecretKey)
 	if err != nil {
-		return gaveUpMsg(err, moreErrors)
+		// Did we have peer errors?
+		if len(errsMap) > 0 {
+			err = fmt.Errorf(
+				"we gave up due to: '%s', but there were more errors. Please check minio server logs",
+				err.Error(),
+			)
+		}
+
+		return toJSONError(err)
 	}
 
 	reply.Token = token
@@ -456,7 +399,7 @@ type GetAuthReply struct {
 
 // GetAuth - return accessKey and secretKey credentials.
 func (web *webAPIHandlers) GetAuth(r *http.Request, args *WebGenericArgs, reply *GetAuthReply) error {
-	if !isJWTReqAuthenticated(r) {
+	if !isHTTPRequestValid(r) {
 		return toJSONError(errAuthentication)
 	}
 	creds := serverConfig.GetCredential()
@@ -474,7 +417,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !isJWTReqAuthenticated(r) {
+	if !isHTTPRequestValid(r) {
 		writeWebErrorResponse(w, errAuthentication)
 		return
 	}
@@ -519,24 +462,13 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
-	tokenStr := r.URL.Query().Get("token")
+	token := r.URL.Query().Get("token")
 
-	jwt, err := newJWT(defaultJWTExpiry, serverConfig.GetCredential()) // Expiry set to 24Hrs.
-	if err != nil {
-		errorIf(err, "error in getting new JWT")
-		return
-	}
-
-	token, e := jwtgo.Parse(tokenStr, func(token *jwtgo.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwtgo.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
-		}
-		return []byte(jwt.SecretKey), nil
-	})
-	if e != nil || !token.Valid {
+	if !isAuthTokenValid(token) {
 		writeWebErrorResponse(w, errAuthentication)
 		return
 	}
+
 	// Add content disposition.
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", path.Base(object)))
 
@@ -601,7 +533,7 @@ func (web *webAPIHandlers) GetBucketPolicy(r *http.Request, args *GetBucketPolic
 		return toJSONError(errServerNotInitialized)
 	}
 
-	if !isJWTReqAuthenticated(r) {
+	if !isHTTPRequestValid(r) {
 		return toJSONError(errAuthentication)
 	}
 
@@ -640,7 +572,7 @@ func (web *webAPIHandlers) ListAllBucketPolicies(r *http.Request, args *ListAllB
 		return toJSONError(errServerNotInitialized)
 	}
 
-	if !isJWTReqAuthenticated(r) {
+	if !isHTTPRequestValid(r) {
 		return toJSONError(errAuthentication)
 	}
 
@@ -673,7 +605,7 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 		return toJSONError(errServerNotInitialized)
 	}
 
-	if !isJWTReqAuthenticated(r) {
+	if !isHTTPRequestValid(r) {
 		return toJSONError(errAuthentication)
 	}
 
@@ -741,7 +673,7 @@ type PresignedGetRep struct {
 
 // PresignedGET - returns presigned-Get url.
 func (web *webAPIHandlers) PresignedGet(r *http.Request, args *PresignedGetArgs, reply *PresignedGetRep) error {
-	if !isJWTReqAuthenticated(r) {
+	if !isHTTPRequestValid(r) {
 		return toJSONError(errAuthentication)
 	}
 

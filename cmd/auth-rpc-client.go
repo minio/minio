@@ -17,12 +17,9 @@
 package cmd
 
 import (
-	"fmt"
 	"net/rpc"
 	"sync"
 	"time"
-
-	jwtgo "github.com/dgrijalva/jwt-go"
 )
 
 // GenericReply represents any generic RPC reply.
@@ -61,27 +58,6 @@ type RPCLoginReply struct {
 	Token         string
 	Timestamp     time.Time
 	ServerVersion string
-}
-
-// Validates if incoming token is valid.
-func isRPCTokenValid(tokenStr string) bool {
-	jwt, err := newJWT(defaultInterNodeJWTExpiry, serverConfig.GetCredential())
-	if err != nil {
-		errorIf(err, "Unable to initialize JWT")
-		return false
-	}
-	token, err := jwtgo.Parse(tokenStr, func(token *jwtgo.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwtgo.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
-		}
-		return []byte(jwt.SecretKey), nil
-	})
-	if err != nil {
-		errorIf(err, "Unable to parse JWT token string")
-		return false
-	}
-	// Return if token is valid.
-	return token.Valid
 }
 
 // Auth config represents authentication credentials and Login method name to be used
