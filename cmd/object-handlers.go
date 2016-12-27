@@ -19,7 +19,6 @@ package cmd
 import (
 	"encoding/hex"
 	"encoding/xml"
-	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -228,14 +227,32 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 	w.WriteHeader(http.StatusOK)
 }
 
+// Extract metadata relevant for an CopyObject operation based on conditional
+// header values specified in X-Amz-Metadata-Directive.
+func getCpObjMetadataFromHeader(header http.Header, defaultMeta map[string]string) map[string]string {
+	// if x-amz-metadata-directive says REPLACE then
+	// we extract metadata from the input headers.
+	if isMetadataReplace(header) {
+		return extractMetadataFromHeader(header)
+	}
+	// if x-amz-metadata-directive says COPY then we
+	// return the default metadata.
+	if isMetadataCopy(header) {
+		return defaultMeta
+	}
+	// Copy is default behavior if not x-amz-metadata-directive is set.
+	return defaultMeta
+}
+
 // CopyObjectHandler - Copy Object
 // ----------
 // This implementation of the PUT operation adds an object to a bucket
 // while reading the object from another source.
 func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	bucket := vars["bucket"]
-	object := vars["object"]
+	dstBucket := vars["bucket"]
+	dstObject := vars["object"]
+	cpDestPath := "/" + path.Join(dstBucket, dstObject)
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -243,51 +260,58 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if s3Error := checkRequestAuthType(r, bucket, "s3:PutObject", serverConfig.GetRegion()); s3Error != ErrNone {
+	if s3Error := checkRequestAuthType(r, dstBucket, "s3:PutObject", serverConfig.GetRegion()); s3Error != ErrNone {
 		writeErrorResponse(w, r, s3Error, r.URL.Path)
 		return
 	}
 
 	// TODO: Reject requests where body/payload is present, for now we don't even read it.
 
-	// objectSource
-	objectSource, err := url.QueryUnescape(r.Header.Get("X-Amz-Copy-Source"))
+	// Copy source path.
+	cpSrcPath, err := url.QueryUnescape(r.Header.Get("X-Amz-Copy-Source"))
 	if err != nil {
 		// Save unescaped string as is.
-		objectSource = r.Header.Get("X-Amz-Copy-Source")
+		cpSrcPath = r.Header.Get("X-Amz-Copy-Source")
 	}
 
-	// Skip the first element if it is '/', split the rest.
-	objectSource = strings.TrimPrefix(objectSource, "/")
-	splits := strings.SplitN(objectSource, "/", 2)
-
-	// Save sourceBucket and sourceObject extracted from url Path.
-	var sourceBucket, sourceObject string
-	if len(splits) == 2 {
-		sourceBucket = splits[0]
-		sourceObject = splits[1]
-	}
-	// If source object is empty, reply back error.
-	if sourceObject == "" {
+	srcBucket, srcObject := path2BucketAndObject(cpSrcPath)
+	// If source object is empty or bucket is empty, reply back invalid copy source.
+	if srcObject == "" || srcBucket == "" {
 		writeErrorResponse(w, r, ErrInvalidCopySource, r.URL.Path)
 		return
 	}
 
-	// Source and destination objects cannot be same, reply back error.
-	if sourceObject == object && sourceBucket == bucket {
-		writeErrorResponse(w, r, ErrInvalidCopyDest, r.URL.Path)
+	// Check if metadata directive is valid.
+	if !isMetadataDirectiveValid(r.Header) {
+		writeErrorResponse(w, r, ErrInvalidMetadataDirective, r.URL.Path)
 		return
 	}
 
-	// Lock the object before reading.
-	objectRLock := globalNSMutex.NewNSLock(sourceBucket, sourceObject)
-	objectRLock.RLock()
-	defer objectRLock.RUnlock()
+	cpSrcDstSame := cpSrcPath == cpDestPath
+	// Hold write lock on destination since in both cases
+	// - if source and destination are same
+	// - if source and destination are different
+	// it is the sole mutating state.
+	objectDWLock := globalNSMutex.NewNSLock(dstBucket, dstObject)
+	objectDWLock.Lock()
+	defer objectDWLock.Unlock()
 
-	objInfo, err := objectAPI.GetObjectInfo(sourceBucket, sourceObject)
+	// if source and destination are different, we have to hold
+	// additional read lock as well to protect against writes on
+	// source.
+	if !cpSrcDstSame {
+		// Hold read locks on source object only if we are
+		// going to read data from source object.
+		objectSRLock := globalNSMutex.NewNSLock(srcBucket, srcObject)
+		objectSRLock.RLock()
+		defer objectSRLock.RUnlock()
+
+	}
+
+	objInfo, err := objectAPI.GetObjectInfo(srcBucket, srcObject)
 	if err != nil {
 		errorIf(err, "Unable to fetch object info.")
-		writeErrorResponse(w, r, toAPIErrorCode(err), objectSource)
+		writeErrorResponse(w, r, toAPIErrorCode(err), cpSrcPath)
 		return
 	}
 
@@ -298,50 +322,34 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 	/// maximum Upload size for object in a single CopyObject operation.
 	if isMaxObjectSize(objInfo.Size) {
-		writeErrorResponse(w, r, ErrEntityTooLarge, objectSource)
+		writeErrorResponse(w, r, ErrEntityTooLarge, cpSrcPath)
 		return
 	}
 
-	// Size of object.
-	size := objInfo.Size
+	defaultMeta := objInfo.UserDefined
 
-	pipeReader, pipeWriter := io.Pipe()
-	go func() {
-		startOffset := int64(0) // Read the whole file.
-		// Get the object.
-		gErr := objectAPI.GetObject(sourceBucket, sourceObject, startOffset, size, pipeWriter)
-		if gErr != nil {
-			errorIf(gErr, "Unable to read an object.")
-			pipeWriter.CloseWithError(gErr)
-			return
-		}
-		pipeWriter.Close() // Close.
-	}()
+	// Make sure to remove saved md5sum, object might have been uploaded
+	// as multipart which doesn't have a standard md5sum, we just let
+	// CopyObject calculate a new one.
+	delete(defaultMeta, "md5Sum")
 
-	// Save other metadata if available.
-	metadata := objInfo.UserDefined
+	newMetadata := getCpObjMetadataFromHeader(r.Header, defaultMeta)
+	// Check if x-amz-metadata-directive was not set to REPLACE and source,
+	// desination are same objects.
+	if !isMetadataReplace(r.Header) && cpSrcDstSame {
+		// If x-amz-metadata-directive is not set to REPLACE then we need
+		// to error out if source and destination are same.
+		writeErrorResponse(w, r, ErrInvalidCopyDest, r.URL.Path)
+		return
+	}
 
-	// Remove the etag from source metadata because if it was uploaded as a multipart object
-	// then its ETag will not be MD5sum of the object.
-	delete(metadata, "md5Sum")
-
-	sha256sum := ""
-
-	objectWLock := globalNSMutex.NewNSLock(bucket, object)
-	objectWLock.Lock()
-	defer objectWLock.Unlock()
-
-	// Create the object.
-	objInfo, err = objectAPI.PutObject(bucket, object, size, pipeReader, metadata, sha256sum)
+	// Copy source object to destination, if source and destination
+	// object is same then only metadata is updated.
+	objInfo, err = objectAPI.CopyObject(srcBucket, srcObject, dstBucket, dstObject, newMetadata)
 	if err != nil {
-		// Close the this end of the pipe upon error in PutObject.
-		pipeReader.CloseWithError(err)
-		errorIf(err, "Unable to create an object.")
 		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
 		return
 	}
-	// Explicitly close the reader, before fetching object info.
-	pipeReader.Close()
 
 	md5Sum := objInfo.MD5Sum
 	response := generateCopyObjectResponse(md5Sum, objInfo.ModTime)
@@ -354,7 +362,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	// Notify object created event.
 	eventNotify(eventData{
 		Type:    ObjectCreatedCopy,
-		Bucket:  bucket,
+		Bucket:  dstBucket,
 		ObjInfo: objInfo,
 		ReqParams: map[string]string{
 			"sourceIPAddress": r.RemoteAddr,

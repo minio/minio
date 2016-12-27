@@ -62,6 +62,7 @@ const (
 	ErrInvalidPartNumberMarker
 	ErrInvalidRequestBody
 	ErrInvalidCopySource
+	ErrInvalidMetadataDirective
 	ErrInvalidCopyDest
 	ErrInvalidPolicyDocument
 	ErrInvalidObjectState
@@ -145,12 +146,17 @@ const (
 var errorCodeResponse = map[APIErrorCode]APIError{
 	ErrInvalidCopyDest: {
 		Code:           "InvalidRequest",
-		Description:    "This copy request is illegal because it is trying to copy an object to itself.",
+		Description:    "This copy request is illegal because it is trying to copy an object to itself without changing the object's metadata, storage class, website redirect location or encryption attributes.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrInvalidCopySource: {
 		Code:           "InvalidArgument",
 		Description:    "Copy Source must mention the source bucket and key: sourcebucket/sourcekey.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidMetadataDirective: {
+		Code:           "InvalidArgument",
+		Description:    "Unknown metadata directive.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrInvalidRequestBody: {

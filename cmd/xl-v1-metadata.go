@@ -311,6 +311,14 @@ func deleteAllXLMetadata(disks []StorageAPI, bucket, prefix string, errs []error
 	wg.Wait()
 }
 
+// Rename `xl.json` content to destination location for each disk in order.
+func renameXLMetadata(disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry string, quorum int) error {
+	isDir := false
+	srcXLJSON := path.Join(srcEntry, xlMetaJSONFile)
+	dstXLJSON := path.Join(dstEntry, xlMetaJSONFile)
+	return rename(disks, srcBucket, srcXLJSON, dstBucket, dstXLJSON, isDir, quorum)
+}
+
 // writeUniqueXLMetadata - writes unique `xl.json` content for each disk in order.
 func writeUniqueXLMetadata(disks []StorageAPI, bucket, prefix string, xlMetas []xlMetaV1, quorum int) error {
 	var wg = &sync.WaitGroup{}

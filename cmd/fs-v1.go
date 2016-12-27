@@ -217,7 +217,65 @@ func (fs fsObjects) DeleteBucket(bucket string) error {
 
 /// Object Operations
 
-// GetObject - get an object.
+// CopyObject - copy object source object to destination object.
+// if source object and destination object are same we only
+// update metadata.
+func (fs fsObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string, metadata map[string]string) (ObjectInfo, error) {
+	// Stat the file to get file size.
+	fi, err := fs.storage.StatFile(srcBucket, srcObject)
+	if err != nil {
+		return ObjectInfo{}, toObjectErr(traceError(err), srcBucket, srcObject)
+	}
+
+	// Check if this request is only metadata update.
+	cpMetadataOnly := strings.EqualFold(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
+	if cpMetadataOnly {
+		// Save objects' metadata in `fs.json`.
+		fsMeta := newFSMetaV1()
+		fsMeta.Meta = metadata
+
+		fsMetaPath := pathJoin(bucketMetaPrefix, dstBucket, dstObject, fsMetaJSONFile)
+		if err = writeFSMetadata(fs.storage, minioMetaBucket, fsMetaPath, fsMeta); err != nil {
+			return ObjectInfo{}, toObjectErr(err, dstBucket, dstObject)
+		}
+
+		// Get object info.
+		return fs.getObjectInfo(dstBucket, dstObject)
+	}
+
+	// Length of the file to read.
+	length := fi.Size
+
+	// Initialize pipe.
+	pipeReader, pipeWriter := io.Pipe()
+
+	go func() {
+		startOffset := int64(0) // Read the whole file.
+		if gerr := fs.GetObject(srcBucket, srcObject, startOffset, length, pipeWriter); gerr != nil {
+			errorIf(gerr, "Unable to read %s/%s.", srcBucket, srcObject)
+			pipeWriter.CloseWithError(gerr)
+			return
+		}
+		pipeWriter.Close() // Close writer explicitly signalling we wrote all data.
+	}()
+
+	objInfo, err := fs.PutObject(dstBucket, dstObject, length, pipeReader, metadata, "")
+	if err != nil {
+		return ObjectInfo{}, toObjectErr(err, dstBucket, dstObject)
+	}
+
+	// Explicitly close the reader.
+	pipeReader.Close()
+
+	return objInfo, nil
+}
+
+// GetObject - reads an object from the disk.
+// Supports additional parameters like offset and length
+// which are synonymous with HTTP Range requests.
+//
+// startOffset indicates the starting read location of the object.
+// length indicates the total length of the object.
 func (fs fsObjects) GetObject(bucket, object string, offset int64, length int64, writer io.Writer) (err error) {
 	if err = checkGetObjArgs(bucket, object); err != nil {
 		return err
@@ -254,50 +312,14 @@ func (fs fsObjects) GetObject(bucket, object string, offset int64, length int64,
 	}
 	// Allocate a staging buffer.
 	buf := make([]byte, int(bufSize))
-	for {
-		// Figure out the right size for the buffer.
-		curLeft := bufSize
-		if totalLeft < bufSize {
-			curLeft = totalLeft
-		}
-		// Reads the file at offset.
-		nr, er := fs.storage.ReadFile(bucket, object, offset, buf[:curLeft])
-		if nr > 0 {
-			// Write to response writer.
-			nw, ew := writer.Write(buf[0:nr])
-			if nw > 0 {
-				// Decrement whats left to write.
-				totalLeft -= int64(nw)
-
-				// Progress the offset
-				offset += int64(nw)
-			}
-			if ew != nil {
-				err = traceError(ew)
-				break
-			}
-			if nr != int64(nw) {
-				err = traceError(io.ErrShortWrite)
-				break
-			}
-		}
-		if er == io.EOF || er == io.ErrUnexpectedEOF {
-			break
-		}
-		if er != nil {
-			err = traceError(er)
-			break
-		}
-		if totalLeft == 0 {
-			break
-		}
+	if err = fsReadFile(fs.storage, bucket, object, writer, totalLeft, offset, buf); err != nil {
+		// Returns any error.
+		return toObjectErr(err, bucket, object)
 	}
-
-	// Returns any error.
-	return toObjectErr(err, bucket, object)
+	return nil
 }
 
-// getObjectInfo - get object info.
+// getObjectInfo - wrapper for reading object metadata and constructs ObjectInfo.
 func (fs fsObjects) getObjectInfo(bucket, object string) (ObjectInfo, error) {
 	fi, err := fs.storage.StatFile(bucket, object)
 	if err != nil {
@@ -342,7 +364,7 @@ func (fs fsObjects) getObjectInfo(bucket, object string) (ObjectInfo, error) {
 	return objInfo, nil
 }
 
-// GetObjectInfo - get object info.
+// GetObjectInfo - reads object metadata and replies back ObjectInfo.
 func (fs fsObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 	if err := checkGetObjArgs(bucket, object); err != nil {
 		return ObjectInfo{}, err
@@ -350,7 +372,10 @@ func (fs fsObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 	return fs.getObjectInfo(bucket, object)
 }
 
-// PutObject - create an object.
+// PutObject - creates an object upon reading from the input stream
+// until EOF, writes data directly to configured filesystem path.
+// Additionally writes `fs.json` which carries the necessary metadata
+// for future object operations.
 func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (objInfo ObjectInfo, err error) {
 	if err = checkPutObjectArgs(bucket, object, fs); err != nil {
 		return ObjectInfo{}, err

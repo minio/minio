@@ -981,19 +981,25 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		bucketName       string
 		newObjectName    string // name of the newly copied object.
 		copySourceHeader string // data for "X-Amz-Copy-Source" header. Contains the object to be copied in the URL.
+		metadataGarbage  bool
+		metadataReplace  bool
+		metadataCopy     bool
+		metadata         map[string]string
 		accessKey        string
 		secretKey        string
 		// expected output.
 		expectedRespStatus int
 	}{
-		// Test case - 1.
+		// Test case - 1, copy metadata from newObject1, ignore request headers.
 		{
 			bucketName:       bucketName,
 			newObjectName:    "newObject1",
 			copySourceHeader: url.QueryEscape("/" + bucketName + "/" + objectName),
 			accessKey:        credentials.AccessKey,
 			secretKey:        credentials.SecretKey,
-
+			metadata: map[string]string{
+				"Content-Type": "application/json",
+			},
 			expectedRespStatus: http.StatusOK,
 		},
 
@@ -1008,6 +1014,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 
 			expectedRespStatus: http.StatusBadRequest,
 		},
+
 		// Test case - 3.
 		// Test case with new object name is same as object to be copied.
 		{
@@ -1019,7 +1026,58 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 
 			expectedRespStatus: http.StatusBadRequest,
 		},
+
 		// Test case - 4.
+		// Test case with new object name is same as object to be copied
+		// but metadata is updated.
+		{
+			bucketName:       bucketName,
+			newObjectName:    objectName,
+			copySourceHeader: url.QueryEscape("/" + bucketName + "/" + objectName),
+			metadata: map[string]string{
+				"Content-Type": "application/json",
+			},
+			metadataReplace: true,
+			accessKey:       credentials.AccessKey,
+			secretKey:       credentials.SecretKey,
+
+			expectedRespStatus: http.StatusOK,
+		},
+
+		// Test case - 5.
+		// Test case with invalid metadata-directive.
+		{
+			bucketName:       bucketName,
+			newObjectName:    "newObject1",
+			copySourceHeader: url.QueryEscape("/" + bucketName + "/" + objectName),
+			metadata: map[string]string{
+				"Content-Type": "application/json",
+			},
+			metadataGarbage: true,
+			accessKey:       credentials.AccessKey,
+			secretKey:       credentials.SecretKey,
+
+			expectedRespStatus: http.StatusBadRequest,
+		},
+
+		// Test case - 6.
+		// Test case with new object name is same as object to be copied
+		// fail with BadRequest.
+		{
+			bucketName:       bucketName,
+			newObjectName:    objectName,
+			copySourceHeader: url.QueryEscape("/" + bucketName + "/" + objectName),
+			metadata: map[string]string{
+				"Content-Type": "application/json",
+			},
+			metadataCopy: true,
+			accessKey:    credentials.AccessKey,
+			secretKey:    credentials.SecretKey,
+
+			expectedRespStatus: http.StatusBadRequest,
+		},
+
+		// Test case - 7.
 		// Test case with non-existent source file.
 		// Case for the purpose of failing `api.ObjectAPI.GetObjectInfo`.
 		// Expecting the response status code to http.StatusNotFound (404).
@@ -1032,7 +1090,8 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 
 			expectedRespStatus: http.StatusNotFound,
 		},
-		// Test case - 5.
+
+		// Test case - 8.
 		// Test case with non-existent source file.
 		// Case for the purpose of failing `api.ObjectAPI.PutObject`.
 		// Expecting the response status code to http.StatusNotFound (404).
@@ -1045,7 +1104,8 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 
 			expectedRespStatus: http.StatusNotFound,
 		},
-		// Test case - 6.
+
+		// Test case - 9.
 		// Case with invalid AccessKey.
 		{
 			bucketName:       bucketName,
@@ -1059,7 +1119,8 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 	}
 
 	for i, testCase := range testCases {
-		var req, reqV2 *http.Request
+		var req *http.Request
+		var reqV2 *http.Request
 		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
 		rec := httptest.NewRecorder()
 		// construct HTTP request for copy object.
@@ -1072,6 +1133,19 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		// "X-Amz-Copy-Source" header contains the information about the source bucket and the object to copied.
 		if testCase.copySourceHeader != "" {
 			req.Header.Set("X-Amz-Copy-Source", testCase.copySourceHeader)
+		}
+		// Add custom metadata.
+		for k, v := range testCase.metadata {
+			req.Header.Set(k, v)
+		}
+		if testCase.metadataReplace {
+			req.Header.Set("X-Amz-Metadata-Directive", "REPLACE")
+		}
+		if testCase.metadataCopy {
+			req.Header.Set("X-Amz-Metadata-Directive", "COPY")
+		}
+		if testCase.metadataGarbage {
+			req.Header.Set("X-Amz-Metadata-Directive", "Unknown")
 		}
 		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
 		// Call the ServeHTTP to execute the handler, `func (api objectAPIHandlers) CopyObjectHandler` handles the request.
@@ -1104,6 +1178,20 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		// "X-Amz-Copy-Source" header contains the information about the source bucket and the object to copied.
 		if testCase.copySourceHeader != "" {
 			reqV2.Header.Set("X-Amz-Copy-Source", testCase.copySourceHeader)
+		}
+
+		// Add custom metadata.
+		for k, v := range testCase.metadata {
+			reqV2.Header.Set(k, v+"+x")
+		}
+		if testCase.metadataReplace {
+			reqV2.Header.Set("X-Amz-Metadata-Directive", "REPLACE")
+		}
+		if testCase.metadataCopy {
+			reqV2.Header.Set("X-Amz-Metadata-Directive", "COPY")
+		}
+		if testCase.metadataGarbage {
+			reqV2.Header.Set("X-Amz-Metadata-Directive", "Unknown")
 		}
 
 		err = signRequestV2(reqV2, testCase.accessKey, testCase.secretKey)
