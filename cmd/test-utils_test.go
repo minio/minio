@@ -65,6 +65,9 @@ func init() {
 
 	// Enable caching.
 	setMaxMemory()
+
+	// Tests don't need to retry.
+	globalMaxStorageRetryThreshold = 1
 }
 
 func prepareFS() (ObjectLayer, string, error) {
@@ -1945,6 +1948,12 @@ func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 // ExecObjectLayerDiskAlteredTest - executes object layer tests while altering
 // disks in between tests. Creates XL ObjectLayer instance and runs test for XL layer.
 func ExecObjectLayerDiskAlteredTest(t *testing.T, objTest objTestDiskNotFoundType) {
+	configPath, err := newTestConfig("us-east-1")
+	if err != nil {
+		t.Fatal("Failed to create config directory", err)
+	}
+	defer removeAll(configPath)
+
 	objLayer, fsDirs, err := prepareXL()
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for XL setup: %s", err)

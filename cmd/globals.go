@@ -79,13 +79,20 @@ var (
 	globalMinioPort = "9000"
 	// Holds the host that was passed using --address
 	globalMinioHost = ""
+
 	// Peer communication struct
 	globalS3Peers = s3Peers{}
 
 	// CA root certificates, a nil value means system certs pool will be used
 	globalRootCAs *x509.CertPool
 
+	// List of admin peers.
 	globalAdminPeers = adminPeers{}
+
+	// Attempt to retry only this many number of times before
+	// giving up on the remote disk entirely.
+	globalMaxStorageRetryThreshold = 3
+
 	// Add new variable global values here.
 )
 
