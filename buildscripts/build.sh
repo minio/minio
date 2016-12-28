@@ -70,12 +70,14 @@ main() {
     done
 
     read -p "If you want to build for all, Just press Enter: " chosen_osarch
-    if [ "$chosen_osarch" = "" ]; then
+    if [ "$chosen_osarch" = "" ] || [ "$chosen_osarch" = "all" ]; then
         for each_osarch in ${SUPPORTED_OSARCH}; do
             go_build ${each_osarch}
         done
     else
-        go_build ${chosen_osarch}
+        for each_osarch in $(echo $chosen_osarch | sed 's/,/ /g'); do
+            go_build ${each_osarch}
+        done
     fi
 
 }
