@@ -6,13 +6,13 @@ Minio server is light enough to be bundled with the application stack, similar t
 
 ## Docker Container
 ### Stable
-```sh
+```
 docker pull minio/minio
 docker run -p 9000:9000 minio/minio server /export
 ```
 
 ### Edge
-```sh
+```
 docker pull minio/minio:edge
 docker run -p 9000:9000 minio/minio:edge server /export
 ```
