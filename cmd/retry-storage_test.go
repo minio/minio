@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"bytes"
-	"net/rpc"
 	"reflect"
 	"testing"
 )
@@ -41,7 +40,7 @@ func TestRetryStorage(t *testing.T) {
 			t.Fatal("storage disk is not *retryStorage type")
 		}
 		storageDisks[i] = &retryStorage{newNaughtyDisk(retryDisk, map[int]error{
-			1: rpc.ErrShutdown,
+			1: errDiskNotFound,
 		}, nil)}
 	}
 
@@ -54,14 +53,14 @@ func TestRetryStorage(t *testing.T) {
 			t.Fatal("storage disk is not *retryStorage type")
 		}
 		storageDisks[i] = &retryStorage{newNaughtyDisk(retryDisk, map[int]error{
-			1: rpc.ErrShutdown,
+			1: errDiskNotFound,
 		}, nil)}
 	}
 
 	for _, disk := range storageDisks {
 		err = disk.Init()
-		if err != rpc.ErrShutdown {
-			t.Fatal("Expected rpc.ErrShutdown, got", err)
+		if err != errDiskNotFound {
+			t.Fatal("Expected errDiskNotFound, got", err)
 		}
 	}
 
@@ -79,7 +78,7 @@ func TestRetryStorage(t *testing.T) {
 			t.Fatal("storage disk is not *retryStorage type")
 		}
 		storageDisks[i] = &retryStorage{newNaughtyDisk(retryDisk, map[int]error{
-			1: rpc.ErrShutdown,
+			1: errDiskNotFound,
 		}, nil)}
 	}
 
@@ -99,7 +98,7 @@ func TestRetryStorage(t *testing.T) {
 			t.Fatal("storage disk is not *retryStorage type")
 		}
 		storageDisks[i] = &retryStorage{newNaughtyDisk(retryDisk, map[int]error{
-			1: rpc.ErrShutdown,
+			1: errDiskNotFound,
 		}, nil)}
 	}
 
@@ -116,7 +115,7 @@ func TestRetryStorage(t *testing.T) {
 			t.Fatal("storage disk is not *retryStorage type")
 		}
 		storageDisks[i] = &retryStorage{newNaughtyDisk(retryDisk, map[int]error{
-			1: rpc.ErrShutdown,
+			1: errDiskNotFound,
 		}, nil)}
 	}
 
@@ -133,7 +132,7 @@ func TestRetryStorage(t *testing.T) {
 			t.Fatal("storage disk is not *retryStorage type")
 		}
 		storageDisks[i] = &retryStorage{newNaughtyDisk(retryDisk, map[int]error{
-			1: rpc.ErrShutdown,
+			1: errDiskNotFound,
 		}, nil)}
 	}
 
@@ -153,7 +152,7 @@ func TestRetryStorage(t *testing.T) {
 			t.Fatal("storage disk is not *retryStorage type")
 		}
 		storageDisks[i] = &retryStorage{newNaughtyDisk(retryDisk, map[int]error{
-			1: rpc.ErrShutdown,
+			1: errDiskNotFound,
 		}, nil)}
 	}
 
@@ -170,7 +169,7 @@ func TestRetryStorage(t *testing.T) {
 			t.Fatal("storage disk is not *retryStorage type")
 		}
 		storageDisks[i] = &retryStorage{newNaughtyDisk(retryDisk, map[int]error{
-			1: rpc.ErrShutdown,
+			1: errDiskNotFound,
 		}, nil)}
 	}
 
@@ -187,7 +186,7 @@ func TestRetryStorage(t *testing.T) {
 			t.Fatal("storage disk is not *retryStorage type")
 		}
 		storageDisks[i] = &retryStorage{newNaughtyDisk(retryDisk, map[int]error{
-			1: rpc.ErrShutdown,
+			1: errDiskNotFound,
 		}, nil)}
 	}
 
@@ -204,7 +203,7 @@ func TestRetryStorage(t *testing.T) {
 			t.Fatal("storage disk is not *retryStorage type")
 		}
 		storageDisks[i] = &retryStorage{newNaughtyDisk(retryDisk, map[int]error{
-			1: rpc.ErrShutdown,
+			1: errDiskNotFound,
 		}, nil)}
 	}
 
@@ -225,7 +224,7 @@ func TestRetryStorage(t *testing.T) {
 			t.Fatal("storage disk is not *retryStorage type")
 		}
 		storageDisks[i] = &retryStorage{newNaughtyDisk(retryDisk, map[int]error{
-			1: rpc.ErrShutdown,
+			1: errDiskNotFound,
 		}, nil)}
 	}
 
@@ -250,7 +249,7 @@ func TestRetryStorage(t *testing.T) {
 			t.Fatal("storage disk is not *retryStorage type")
 		}
 		storageDisks[i] = &retryStorage{newNaughtyDisk(retryDisk, map[int]error{
-			1: rpc.ErrShutdown,
+			1: errDiskNotFound,
 		}, nil)}
 	}
 
@@ -270,7 +269,7 @@ func TestRetryStorage(t *testing.T) {
 			t.Fatal("storage disk is not *retryStorage type")
 		}
 		storageDisks[i] = &retryStorage{newNaughtyDisk(retryDisk, map[int]error{
-			1: rpc.ErrShutdown,
+			1: errDiskNotFound,
 		}, nil)}
 	}
 
@@ -287,7 +286,7 @@ func TestRetryStorage(t *testing.T) {
 			t.Fatal("storage disk is not *retryStorage type")
 		}
 		storageDisks[i] = &retryStorage{newNaughtyDisk(retryDisk, map[int]error{
-			1: rpc.ErrShutdown,
+			1: errDiskNotFound,
 		}, nil)}
 	}
 
@@ -308,7 +307,7 @@ func TestRetryStorage(t *testing.T) {
 			t.Fatal("storage disk is not *retryStorage type")
 		}
 		storageDisks[i] = &retryStorage{newNaughtyDisk(retryDisk, map[int]error{
-			1: rpc.ErrShutdown,
+			1: errDiskNotFound,
 		}, nil)}
 	}
 

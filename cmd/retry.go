@@ -90,7 +90,7 @@ func newRetryTimer(unit time.Duration, cap time.Duration, jitter float64, doneCh
 
 	go func() {
 		defer close(attemptCh)
-		var nextBackoff int
+		nextBackoff := 1
 		for {
 			select {
 			// Attempts starts.

@@ -52,6 +52,10 @@ func toStorageErr(err error) error {
 		return errDiskNotFound
 	}
 
+	if err == rpc.ErrShutdown {
+		return errDiskNotFound
+	}
+
 	switch err.Error() {
 	case io.EOF.Error():
 		return io.EOF
@@ -143,19 +147,21 @@ const maxAllowedNetworkIOError = 1024
 // Initializes the remote RPC connection by attempting a login attempt.
 func (n *networkStorage) Init() (err error) {
 	// Attempt a login to reconnect.
-	return n.rpcClient.Login()
+	err = n.rpcClient.Login()
+	return toStorageErr(err)
 }
 
 // Closes the underlying RPC connection.
 func (n *networkStorage) Close() (err error) {
 	// Close the underlying connection.
-	return n.rpcClient.Close()
+	err = n.rpcClient.Close()
+	return toStorageErr(err)
 }
 
 // DiskInfo - fetch disk information for a remote disk.
 func (n *networkStorage) DiskInfo() (info disk.Info, err error) {
 	defer func() {
-		if err == errDiskNotFound || err == rpc.ErrShutdown {
+		if err == errDiskNotFound {
 			atomic.AddInt32(&n.networkIOErrCount, 1)
 		}
 	}()
@@ -176,7 +182,7 @@ func (n *networkStorage) DiskInfo() (info disk.Info, err error) {
 // MakeVol - create a volume on a remote disk.
 func (n *networkStorage) MakeVol(volume string) (err error) {
 	defer func() {
-		if err == errDiskNotFound || err == rpc.ErrShutdown {
+		if err == errDiskNotFound {
 			atomic.AddInt32(&n.networkIOErrCount, 1)
 		}
 	}()
@@ -198,7 +204,7 @@ func (n *networkStorage) MakeVol(volume string) (err error) {
 // ListVols - List all volumes on a remote disk.
 func (n *networkStorage) ListVols() (vols []VolInfo, err error) {
 	defer func() {
-		if err == errDiskNotFound || err == rpc.ErrShutdown {
+		if err == errDiskNotFound {
 			atomic.AddInt32(&n.networkIOErrCount, 1)
 		}
 	}()
@@ -220,7 +226,7 @@ func (n *networkStorage) ListVols() (vols []VolInfo, err error) {
 // StatVol - get volume info over the network.
 func (n *networkStorage) StatVol(volume string) (volInfo VolInfo, err error) {
 	defer func() {
-		if err == errDiskNotFound || err == rpc.ErrShutdown {
+		if err == errDiskNotFound {
 			atomic.AddInt32(&n.networkIOErrCount, 1)
 		}
 	}()
@@ -241,7 +247,7 @@ func (n *networkStorage) StatVol(volume string) (volInfo VolInfo, err error) {
 // DeleteVol - Deletes a volume over the network.
 func (n *networkStorage) DeleteVol(volume string) (err error) {
 	defer func() {
-		if err == errDiskNotFound || err == rpc.ErrShutdown {
+		if err == errDiskNotFound {
 			atomic.AddInt32(&n.networkIOErrCount, 1)
 		}
 	}()
@@ -264,7 +270,7 @@ func (n *networkStorage) DeleteVol(volume string) (err error) {
 
 func (n *networkStorage) PrepareFile(volume, path string, length int64) (err error) {
 	defer func() {
-		if err == errDiskNotFound || err == rpc.ErrShutdown {
+		if err == errDiskNotFound {
 			atomic.AddInt32(&n.networkIOErrCount, 1)
 		}
 	}()
@@ -288,7 +294,7 @@ func (n *networkStorage) PrepareFile(volume, path string, length int64) (err err
 // AppendFile - append file writes buffer to a remote network path.
 func (n *networkStorage) AppendFile(volume, path string, buffer []byte) (err error) {
 	defer func() {
-		if err == errDiskNotFound || err == rpc.ErrShutdown {
+		if err == errDiskNotFound {
 			atomic.AddInt32(&n.networkIOErrCount, 1)
 		}
 	}()
@@ -313,7 +319,7 @@ func (n *networkStorage) AppendFile(volume, path string, buffer []byte) (err err
 // StatFile - get latest Stat information for a file at path.
 func (n *networkStorage) StatFile(volume, path string) (fileInfo FileInfo, err error) {
 	defer func() {
-		if err == errDiskNotFound || err == rpc.ErrShutdown {
+		if err == errDiskNotFound {
 			atomic.AddInt32(&n.networkIOErrCount, 1)
 		}
 	}()
@@ -339,7 +345,7 @@ func (n *networkStorage) StatFile(volume, path string) (fileInfo FileInfo, err e
 // not use this on large files as it would cause server to crash.
 func (n *networkStorage) ReadAll(volume, path string) (buf []byte, err error) {
 	defer func() {
-		if err == errDiskNotFound || err == rpc.ErrShutdown {
+		if err == errDiskNotFound {
 			atomic.AddInt32(&n.networkIOErrCount, 1)
 		}
 	}()
@@ -362,7 +368,7 @@ func (n *networkStorage) ReadAll(volume, path string) (buf []byte, err error) {
 // ReadFile - reads a file at remote path and fills the buffer.
 func (n *networkStorage) ReadFile(volume string, path string, offset int64, buffer []byte) (m int64, err error) {
 	defer func() {
-		if err == errDiskNotFound || err == rpc.ErrShutdown {
+		if err == errDiskNotFound {
 			atomic.AddInt32(&n.networkIOErrCount, 1)
 		}
 	}()
@@ -398,7 +404,7 @@ func (n *networkStorage) ReadFile(volume string, path string, offset int64, buff
 // ListDir - list all entries at prefix.
 func (n *networkStorage) ListDir(volume, path string) (entries []string, err error) {
 	defer func() {
-		if err == errDiskNotFound || err == rpc.ErrShutdown {
+		if err == errDiskNotFound {
 			atomic.AddInt32(&n.networkIOErrCount, 1)
 		}
 	}()
@@ -422,7 +428,7 @@ func (n *networkStorage) ListDir(volume, path string) (entries []string, err err
 // DeleteFile - Delete a file at path.
 func (n *networkStorage) DeleteFile(volume, path string) (err error) {
 	defer func() {
-		if err == errDiskNotFound || err == rpc.ErrShutdown {
+		if err == errDiskNotFound {
 			atomic.AddInt32(&n.networkIOErrCount, 1)
 		}
 	}()
@@ -446,7 +452,7 @@ func (n *networkStorage) DeleteFile(volume, path string) (err error) {
 // RenameFile - rename a remote file from source to destination.
 func (n *networkStorage) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err error) {
 	defer func() {
-		if err == errDiskNotFound || err == rpc.ErrShutdown {
+		if err == errDiskNotFound {
 			atomic.AddInt32(&n.networkIOErrCount, 1)
 		}
 	}()

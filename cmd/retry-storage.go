@@ -17,7 +17,7 @@
 package cmd
 
 import (
-	"net/rpc"
+	"time"
 
 	"github.com/minio/minio/pkg/disk"
 )
@@ -48,7 +48,7 @@ func (f retryStorage) Close() (err error) {
 // DiskInfo - a retryable implementation of disk info.
 func (f retryStorage) DiskInfo() (info disk.Info, err error) {
 	info, err = f.remoteStorage.DiskInfo()
-	if err == rpc.ErrShutdown {
+	if err == errDiskNotFound {
 		err = f.reInit()
 		if err == nil {
 			return f.remoteStorage.DiskInfo()
@@ -60,7 +60,7 @@ func (f retryStorage) DiskInfo() (info disk.Info, err error) {
 // MakeVol - a retryable implementation of creating a volume.
 func (f retryStorage) MakeVol(volume string) (err error) {
 	err = f.remoteStorage.MakeVol(volume)
-	if err == rpc.ErrShutdown {
+	if err == errDiskNotFound {
 		err = f.reInit()
 		if err == nil {
 			return f.remoteStorage.MakeVol(volume)
@@ -72,7 +72,7 @@ func (f retryStorage) MakeVol(volume string) (err error) {
 // ListVols - a retryable implementation of listing all the volumes.
 func (f retryStorage) ListVols() (vols []VolInfo, err error) {
 	vols, err = f.remoteStorage.ListVols()
-	if err == rpc.ErrShutdown {
+	if err == errDiskNotFound {
 		err = f.reInit()
 		if err == nil {
 			return f.remoteStorage.ListVols()
@@ -84,7 +84,7 @@ func (f retryStorage) ListVols() (vols []VolInfo, err error) {
 // StatVol - a retryable implementation of stating a volume.
 func (f retryStorage) StatVol(volume string) (vol VolInfo, err error) {
 	vol, err = f.remoteStorage.StatVol(volume)
-	if err == rpc.ErrShutdown {
+	if err == errDiskNotFound {
 		err = f.reInit()
 		if err == nil {
 			return f.remoteStorage.StatVol(volume)
@@ -96,7 +96,7 @@ func (f retryStorage) StatVol(volume string) (vol VolInfo, err error) {
 // DeleteVol - a retryable implementation of deleting a volume.
 func (f retryStorage) DeleteVol(volume string) (err error) {
 	err = f.remoteStorage.DeleteVol(volume)
-	if err == rpc.ErrShutdown {
+	if err == errDiskNotFound {
 		err = f.reInit()
 		if err == nil {
 			return f.remoteStorage.DeleteVol(volume)
@@ -108,7 +108,7 @@ func (f retryStorage) DeleteVol(volume string) (err error) {
 // PrepareFile - a retryable implementation of preparing a file.
 func (f retryStorage) PrepareFile(volume, path string, length int64) (err error) {
 	err = f.remoteStorage.PrepareFile(volume, path, length)
-	if err == rpc.ErrShutdown {
+	if err == errDiskNotFound {
 		err = f.reInit()
 		if err == nil {
 			return f.remoteStorage.PrepareFile(volume, path, length)
@@ -120,7 +120,7 @@ func (f retryStorage) PrepareFile(volume, path string, length int64) (err error)
 // AppendFile - a retryable implementation of append to a file.
 func (f retryStorage) AppendFile(volume, path string, buffer []byte) (err error) {
 	err = f.remoteStorage.AppendFile(volume, path, buffer)
-	if err == rpc.ErrShutdown {
+	if err == errDiskNotFound {
 		err = f.reInit()
 		if err == nil {
 			return f.remoteStorage.AppendFile(volume, path, buffer)
@@ -132,7 +132,7 @@ func (f retryStorage) AppendFile(volume, path string, buffer []byte) (err error)
 // StatFile - a retryable implementation of stating a file.
 func (f retryStorage) StatFile(volume, path string) (fileInfo FileInfo, err error) {
 	fileInfo, err = f.remoteStorage.StatFile(volume, path)
-	if err == rpc.ErrShutdown {
+	if err == errDiskNotFound {
 		err = f.reInit()
 		if err == nil {
 			return f.remoteStorage.StatFile(volume, path)
@@ -144,7 +144,7 @@ func (f retryStorage) StatFile(volume, path string) (fileInfo FileInfo, err erro
 // ReadAll - a retryable implementation of reading all the content from a file.
 func (f retryStorage) ReadAll(volume, path string) (buf []byte, err error) {
 	buf, err = f.remoteStorage.ReadAll(volume, path)
-	if err == rpc.ErrShutdown {
+	if err == errDiskNotFound {
 		err = f.reInit()
 		if err == nil {
 			return f.remoteStorage.ReadAll(volume, path)
@@ -156,7 +156,7 @@ func (f retryStorage) ReadAll(volume, path string) (buf []byte, err error) {
 // ReadFile - a retryable implementation of reading at offset from a file.
 func (f retryStorage) ReadFile(volume, path string, offset int64, buffer []byte) (m int64, err error) {
 	m, err = f.remoteStorage.ReadFile(volume, path, offset, buffer)
-	if err == rpc.ErrShutdown {
+	if err == errDiskNotFound {
 		err = f.reInit()
 		if err == nil {
 			return f.remoteStorage.ReadFile(volume, path, offset, buffer)
@@ -168,7 +168,7 @@ func (f retryStorage) ReadFile(volume, path string, offset int64, buffer []byte)
 // ListDir - a retryable implementation of listing directory entries.
 func (f retryStorage) ListDir(volume, path string) (entries []string, err error) {
 	entries, err = f.remoteStorage.ListDir(volume, path)
-	if err == rpc.ErrShutdown {
+	if err == errDiskNotFound {
 		err = f.reInit()
 		if err == nil {
 			return f.remoteStorage.ListDir(volume, path)
@@ -180,7 +180,7 @@ func (f retryStorage) ListDir(volume, path string) (entries []string, err error)
 // DeleteFile - a retryable implementation of deleting a file.
 func (f retryStorage) DeleteFile(volume, path string) (err error) {
 	err = f.remoteStorage.DeleteFile(volume, path)
-	if err == rpc.ErrShutdown {
+	if err == errDiskNotFound {
 		err = f.reInit()
 		if err == nil {
 			return f.remoteStorage.DeleteFile(volume, path)
@@ -189,36 +189,50 @@ func (f retryStorage) DeleteFile(volume, path string) (err error) {
 	return err
 }
 
-// Connect and attempt to load the format from a disconnected node.
-func (f retryStorage) reInit() (err error) {
-	err = f.remoteStorage.Close()
-	if err != nil {
-		return err
-	}
-	err = f.remoteStorage.Init()
-	if err == nil {
-		_, err = loadFormat(f.remoteStorage)
-		// For load format returning network shutdown
-		// we now treat it like disk not available.
-		if err == rpc.ErrShutdown {
-			err = errDiskNotFound
-		}
-		return err
-	}
-	if err == rpc.ErrShutdown {
-		err = errDiskNotFound
-	}
-	return err
-}
-
 // RenameFile - a retryable implementation of renaming a file.
 func (f retryStorage) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err error) {
 	err = f.remoteStorage.RenameFile(srcVolume, srcPath, dstVolume, dstPath)
-	if err == rpc.ErrShutdown {
+	if err == errDiskNotFound {
 		err = f.reInit()
 		if err == nil {
 			return f.remoteStorage.RenameFile(srcVolume, srcPath, dstVolume, dstPath)
 		}
+	}
+	return err
+}
+
+// Connect and attempt to load the format from a disconnected node,
+// attempts three times before giving up.
+func (f retryStorage) reInit() (err error) {
+	// Close the underlying connection.
+	f.remoteStorage.Close() // Error here is purposefully ignored.
+
+	doneCh := make(chan struct{})
+	defer close(doneCh)
+	for i := range newRetryTimer(time.Second, time.Second*30, MaxJitter, doneCh) {
+		// Initialize and make a new login attempt.
+		err = f.remoteStorage.Init()
+		if err != nil {
+			// No need to return error until the retry count
+			// threshold has reached.
+			if i < globalMaxStorageRetryThreshold {
+				continue
+			}
+			return err
+		}
+		// Attempt to load format to see if the disk is really
+		// a formatted disk and part of the cluster.
+		_, err = loadFormat(f.remoteStorage)
+		if err != nil {
+			// No need to return error until the retry count
+			// threshold has reached.
+			if i < globalMaxStorageRetryThreshold {
+				continue
+			}
+			return err
+		}
+		// Login and loading format was a success, break and proceed forward.
+		break
 	}
 	return err
 }
