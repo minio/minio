@@ -771,8 +771,8 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 
 	md5Sum, err = objectAPI.CompleteMultipartUpload(bucket, object, uploadID, completeParts)
 	if err != nil {
-		err = errorCause(err)
 		errorIf(err, "Unable to complete multipart upload.")
+		err = errorCause(err)
 		switch oErr := err.(type) {
 		case PartTooSmall:
 			// Write part too small error.

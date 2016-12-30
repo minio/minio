@@ -132,7 +132,7 @@ func TestNewXL(t *testing.T) {
 	var erasureDisks []string
 	for i := 0; i < nDisks; i++ {
 		// Do not attempt to create this path, the test validates
-		// so that newFSObjects initializes non existing paths
+		// so that newXLObjects initializes non existing paths
 		// and successfully returns initialized object layer.
 		disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 		erasureDisks = append(erasureDisks, disk)
@@ -155,18 +155,18 @@ func TestNewXL(t *testing.T) {
 		t.Fatal("Unexpected error: ", err)
 	}
 
-	_, err = waitForFormatDisks(true, endpoints, nil)
+	_, err = waitForFormatXLDisks(true, endpoints, nil)
 	if err != errInvalidArgument {
 		t.Fatalf("Expecting error, got %s", err)
 	}
 
-	_, err = waitForFormatDisks(true, nil, storageDisks)
+	_, err = waitForFormatXLDisks(true, nil, storageDisks)
 	if err != errInvalidArgument {
 		t.Fatalf("Expecting error, got %s", err)
 	}
 
 	// Initializes all erasure disks
-	formattedDisks, err := waitForFormatDisks(true, endpoints, storageDisks)
+	formattedDisks, err := waitForFormatXLDisks(true, endpoints, storageDisks)
 	if err != nil {
 		t.Fatalf("Unable to format disks for erasure, %s", err)
 	}

@@ -18,10 +18,14 @@ package cmd
 
 import (
 	"encoding/json"
+	"io"
+	"io/ioutil"
 	"path"
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/minio/minio/pkg/lock"
 )
 
 // A uploadInfo represents the s3 compatible spec.
@@ -67,6 +71,44 @@ func (u *uploadsV1) RemoveUploadID(uploadID string) {
 	}
 }
 
+// IsEmpty - is true if no more uploads available.
+func (u *uploadsV1) IsEmpty() bool {
+	return len(u.Uploads) == 0
+}
+
+func (u *uploadsV1) WriteTo(writer io.Writer) (n int64, err error) {
+	// Serialize to prepare to write to disk.
+	var uplBytes []byte
+	uplBytes, err = json.Marshal(u)
+	if err != nil {
+		return 0, traceError(err)
+	}
+	if err = writer.(*lock.RWLockedFile).Truncate(0); err != nil {
+		return 0, traceError(err)
+	}
+	_, err = writer.Write(uplBytes)
+	if err != nil {
+		return 0, traceError(err)
+	}
+	return int64(len(uplBytes)), nil
+}
+
+func (u *uploadsV1) ReadFrom(reader io.Reader) (n int64, err error) {
+	var uploadIDBytes []byte
+	uploadIDBytes, err = ioutil.ReadAll(reader)
+	if err != nil {
+		return 0, traceError(err)
+	}
+	if len(uploadIDBytes) == 0 {
+		return 0, traceError(io.EOF)
+	}
+	// Decode `uploads.json`.
+	if err = json.Unmarshal(uploadIDBytes, u); err != nil {
+		return 0, traceError(err)
+	}
+	return int64(len(uploadIDBytes)), nil
+}
+
 // readUploadsJSON - get all the saved uploads JSON.
 func readUploadsJSON(bucket, object string, disk StorageAPI) (uploadIDs uploadsV1, err error) {
 	uploadJSONPath := path.Join(bucket, object, uploadsJSONFile)
@@ -100,8 +142,7 @@ func writeUploadJSON(u *uploadsV1, uploadsPath, tmpPath string, disk StorageAPI)
 		return traceError(wErr)
 	}
 
-	// Write `uploads.json` to disk. First to tmp location and
-	// then rename.
+	// Write `uploads.json` to disk. First to tmp location and then rename.
 	if wErr = disk.AppendFile(minioMetaTmpBucket, tmpPath, uplBytes); wErr != nil {
 		return traceError(wErr)
 	}

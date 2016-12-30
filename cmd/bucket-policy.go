@@ -24,6 +24,10 @@ import (
 	"sync"
 )
 
+const (
+	bucketPolicyConfig = "policy.json"
+)
+
 // Variable represents bucket policies in memory.
 var globalBucketPolicies *bucketPolicies
 
@@ -143,7 +147,7 @@ func getOldBucketsConfigPath() (string, error) {
 // readBucketPolicyJSON - reads bucket policy for an input bucket, returns BucketPolicyNotFound
 // if bucket policy is not found.
 func readBucketPolicyJSON(bucket string, objAPI ObjectLayer) (bucketPolicyReader io.Reader, err error) {
-	policyPath := pathJoin(bucketConfigPrefix, bucket, policyJSON)
+	policyPath := pathJoin(bucketConfigPrefix, bucket, bucketPolicyConfig)
 
 	// Acquire a read lock on policy config before reading.
 	objLock := globalNSMutex.NewNSLock(minioMetaBucket, policyPath)
@@ -185,7 +189,7 @@ func readBucketPolicy(bucket string, objAPI ObjectLayer) (*bucketPolicy, error) 
 // removeBucketPolicy - removes any previously written bucket policy. Returns BucketPolicyNotFound
 // if no policies are found.
 func removeBucketPolicy(bucket string, objAPI ObjectLayer) error {
-	policyPath := pathJoin(bucketConfigPrefix, bucket, policyJSON)
+	policyPath := pathJoin(bucketConfigPrefix, bucket, bucketPolicyConfig)
 	// Acquire a write lock on policy config before modifying.
 	objLock := globalNSMutex.NewNSLock(minioMetaBucket, policyPath)
 	objLock.Lock()
@@ -208,7 +212,7 @@ func writeBucketPolicy(bucket string, objAPI ObjectLayer, bpy *bucketPolicy) err
 		errorIf(err, "Unable to marshal bucket policy '%v' to JSON", *bpy)
 		return err
 	}
-	policyPath := pathJoin(bucketConfigPrefix, bucket, policyJSON)
+	policyPath := pathJoin(bucketConfigPrefix, bucket, bucketPolicyConfig)
 	// Acquire a write lock on policy config before modifying.
 	objLock := globalNSMutex.NewNSLock(minioMetaBucket, policyPath)
 	objLock.Lock()

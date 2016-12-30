@@ -107,11 +107,11 @@ func testServicesCmdHandler(cmd cmdType, t *testing.T) {
 	if cmd == statusCmd {
 		// Initializing objectLayer and corresponding
 		// []StorageAPI since DiskInfo() method requires it.
-		objLayer, fsDir, fsErr := prepareFS()
+		objLayer, fsDirs, fsErr := prepareXL()
 		if fsErr != nil {
 			t.Fatalf("failed to initialize XL based object layer - %v.", fsErr)
 		}
-		defer removeRoots([]string{fsDir})
+		defer removeRoots(fsDirs)
 		globalObjLayerMutex.Lock()
 		globalObjectAPI = objLayer
 		globalObjLayerMutex.Unlock()

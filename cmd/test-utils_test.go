@@ -56,9 +56,9 @@ import (
 
 // Tests should initNSLock only once.
 func init() {
+	isDistXL := false
 	// Initialize name space lock.
-	isDist := false
-	initNSLock(isDist)
+	initNSLock(isDistXL)
 
 	// Disable printing console messages during tests.
 	color.Output = ioutil.Discard
@@ -71,7 +71,8 @@ func init() {
 }
 
 func prepareFS() (ObjectLayer, string, error) {
-	fsDirs, err := getRandomDisks(1)
+	nDisks := 1
+	fsDirs, err := getRandomDisks(nDisks)
 	if err != nil {
 		return nil, "", err
 	}
@@ -79,12 +80,15 @@ func prepareFS() (ObjectLayer, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	obj, _, err := initObjectLayer(endpoints)
+	fsPath, err := url.QueryUnescape(endpoints[0].String())
 	if err != nil {
-		removeRoots(fsDirs)
 		return nil, "", err
 	}
-	return obj, fsDirs[0], nil
+	obj, err := newFSObjects(fsPath)
+	if err != nil {
+		return nil, "", err
+	}
+	return obj, endpoints[0].Path, nil
 }
 
 func prepareXL() (ObjectLayer, []string, error) {
@@ -105,6 +109,17 @@ func prepareXL() (ObjectLayer, []string, error) {
 	return obj, fsDirs, nil
 }
 
+// Initialize FS objects.
+func initFSObjects(disk string, t *testing.T) (obj ObjectLayer) {
+	newTestConfig("us-east-1")
+	var err error
+	obj, err = newFSObjects(disk)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return obj
+}
+
 // TestErrHandler - Golang Testing.T and Testing.B, and gocheck.C satisfy this interface.
 // This makes it easy to run the TestServer from any of the tests.
 // Using this interface, functionalities to be used in tests can be made generalized, and can be integrated in benchmarks/unit tests/go check suite tests.
@@ -119,6 +134,7 @@ type TestErrHandler interface {
 const (
 	// FSTestStr is the string which is used as notation for Single node ObjectLayer in the unit tests.
 	FSTestStr string = "FS"
+
 	// XLTestStr is the string which is used as notation for XL ObjectLayer in the unit tests.
 	XLTestStr string = "XL"
 )
@@ -339,7 +355,7 @@ func initTestStorageRPCEndPoint(srvCmdConfig serverCmdConfig) http.Handler {
 	return muxRouter
 }
 
-// StartTestStorageRPCServer - Creates a temp XL/FS backend and initializes storage RPC end points,
+// StartTestStorageRPCServer - Creates a temp XL backend and initializes storage RPC end points,
 // then starts a test server with those storage RPC end points registered.
 func StartTestStorageRPCServer(t TestErrHandler, instanceType string, diskN int) TestServer {
 	// create temporary backend for the test server.
@@ -1603,12 +1619,12 @@ func initObjectLayer(endpoints []*url.URL) (ObjectLayer, []StorageAPI, error) {
 		return nil, nil, err
 	}
 
-	formattedDisks, err := waitForFormatDisks(true, endpoints, storageDisks)
+	formattedDisks, err := waitForFormatXLDisks(true, endpoints, storageDisks)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	objLayer, err := newObjectLayer(formattedDisks)
+	objLayer, err := newXLObjectLayer(formattedDisks)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1700,7 +1716,7 @@ func initAPIHandlerTest(obj ObjectLayer, endpoints []string) (bucketName string,
 		// failed to create newbucket, return err.
 		return "", nil, err
 	}
-	// Register the API end points with XL/FS object layer.
+	// Register the API end points with XL object layer.
 	// Registering only the GetObject handler.
 	apiRouter = initTestAPIEndPoints(obj, endpoints)
 	return bucketName, apiRouter, nil
@@ -1901,7 +1917,6 @@ func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endpoints [
 	if err != nil {
 		t.Fatalf("Initialzation of API handler tests failed: <ERROR> %s", err)
 	}
-	credentials = serverConfig.GetCredential()
 	// Executing the object layer tests for XL.
 	objAPITest(objLayer, XLTestStr, bucketXL, xlAPIRouter, credentials, t)
 	// clean up the temporary test backend.
@@ -2091,7 +2106,7 @@ func registerAPIFunctions(muxRouter *router.Router, objLayer ObjectLayer, apiFun
 	registerBucketLevelFunc(bucketRouter, api, apiFunctions...)
 }
 
-// Takes in XL/FS object layer, and the list of API end points to be tested/required, registers the API end points and returns the HTTP handler.
+// Takes in XL object layer, and the list of API end points to be tested/required, registers the API end points and returns the HTTP handler.
 // Need isolated registration of API end points while writing unit tests for end points.
 // All the API end points are registered only for the default case.
 func initTestAPIEndPoints(objLayer ObjectLayer, apiFunctions []string) http.Handler {

@@ -18,6 +18,8 @@ package cmd
 
 import (
 	"errors"
+	"io"
+	"os"
 	"reflect"
 	"sync"
 	"time"
@@ -30,15 +32,16 @@ import (
 var errPartsMissing = errors.New("required parts missing")
 
 // Error sent when appendParts go-routine has waited long enough and timedout.
-var errAppendPartsTimeout = errors.New("appendParts goroutine timeout")
+var errAppendPartsTimeout = errors.New("appendParts go-routine timeout")
 
 // Timeout value for the appendParts go-routine.
 var appendPartsTimeout = 24 * 60 * 60 * time.Second // 24 hours.
 
 // Holds a map of uploadID->appendParts go-routine
 type backgroundAppend struct {
-	infoMap map[string]bgAppendPartsInfo
 	sync.Mutex
+	infoMap    map[string]bgAppendPartsInfo
+	appendFile io.WriteCloser
 }
 
 // Input to the appendParts go-routine
@@ -56,9 +59,9 @@ type bgAppendPartsInfo struct {
 }
 
 // Called after a part is uploaded so that it can be appended in the background.
-func (b *backgroundAppend) append(disk StorageAPI, bucket, object, uploadID string, meta fsMetaV1) chan error {
-	b.Lock()
-	info, ok := b.infoMap[uploadID]
+func (fs fsObjects) append(bucket, object, uploadID string, meta fsMetaV1) chan error {
+	fs.bgAppend.Lock()
+	info, ok := fs.bgAppend.infoMap[uploadID]
 	if !ok {
 		// Corresponding appendParts go-routine was not found, create a new one. Would happen when the first
 		// part of a multipart upload is uploaded.
@@ -68,11 +71,11 @@ func (b *backgroundAppend) append(disk StorageAPI, bucket, object, uploadID stri
 		completeCh := make(chan struct{})
 
 		info = bgAppendPartsInfo{inputCh, timeoutCh, abortCh, completeCh}
-		b.infoMap[uploadID] = info
+		fs.bgAppend.infoMap[uploadID] = info
 
-		go b.appendParts(disk, bucket, object, uploadID, info)
+		go fs.appendParts(bucket, object, uploadID, info)
 	}
-	b.Unlock()
+	fs.bgAppend.Unlock()
 	errCh := make(chan error)
 	go func() {
 		// send input in a goroutine as send on the inputCh can block if appendParts go-routine
@@ -89,11 +92,11 @@ func (b *backgroundAppend) append(disk StorageAPI, bucket, object, uploadID stri
 }
 
 // Called on complete-multipart-upload. Returns nil if the required parts have been appended.
-func (b *backgroundAppend) complete(disk StorageAPI, bucket, object, uploadID string, meta fsMetaV1) error {
-	b.Lock()
-	defer b.Unlock()
-	info, ok := b.infoMap[uploadID]
-	delete(b.infoMap, uploadID)
+func (fs *fsObjects) complete(bucket, object, uploadID string, meta fsMetaV1) error {
+	fs.bgAppend.Lock()
+	defer fs.bgAppend.Unlock()
+	info, ok := fs.bgAppend.infoMap[uploadID]
+	delete(fs.bgAppend.infoMap, uploadID)
 	if !ok {
 		return errPartsMissing
 	}
@@ -106,26 +109,25 @@ func (b *backgroundAppend) complete(disk StorageAPI, bucket, object, uploadID st
 	case info.inputCh <- bgAppendPartsInput{meta, errCh}:
 	}
 	err := <-errCh
-
 	close(info.completeCh)
-
 	return err
 }
 
 // Called after complete-multipart-upload or abort-multipart-upload so that the appendParts go-routine is not left dangling.
-func (b *backgroundAppend) abort(uploadID string) {
-	b.Lock()
-	defer b.Unlock()
-	info, ok := b.infoMap[uploadID]
+func (fs fsObjects) abort(uploadID string) {
+	fs.bgAppend.Lock()
+	defer fs.bgAppend.Unlock()
+	info, ok := fs.bgAppend.infoMap[uploadID]
 	if !ok {
 		return
 	}
-	delete(b.infoMap, uploadID)
+	delete(fs.bgAppend.infoMap, uploadID)
 	info.abortCh <- struct{}{}
 }
 
 // This is run as a go-routine that appends the parts in the background.
-func (b *backgroundAppend) appendParts(disk StorageAPI, bucket, object, uploadID string, info bgAppendPartsInfo) {
+func (fs fsObjects) appendParts(bucket, object, uploadID string, info bgAppendPartsInfo) {
+	appendPath := pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID, uploadID)
 	// Holds the list of parts that is already appended to the "append" file.
 	appendMeta := fsMetaV1{}
 	// Allocate staging read buffer.
@@ -152,8 +154,8 @@ func (b *backgroundAppend) appendParts(disk StorageAPI, bucket, object, uploadID
 					}
 					break
 				}
-				if err := appendPart(disk, bucket, object, uploadID, part, buf); err != nil {
-					disk.DeleteFile(minioMetaTmpBucket, uploadID)
+				if err := fs.appendPart(bucket, object, uploadID, part, buf); err != nil {
+					fsRemoveFile(appendPath)
 					appendMeta.Parts = nil
 					input.errCh <- err
 					break
@@ -162,7 +164,7 @@ func (b *backgroundAppend) appendParts(disk StorageAPI, bucket, object, uploadID
 			}
 		case <-info.abortCh:
 			// abort-multipart-upload closed abortCh to end the appendParts go-routine.
-			disk.DeleteFile(minioMetaTmpBucket, uploadID)
+			fsRemoveFile(appendPath)
 			close(info.timeoutCh) // So that any racing PutObjectPart does not leave a dangling go-routine.
 			return
 		case <-info.completeCh:
@@ -172,11 +174,11 @@ func (b *backgroundAppend) appendParts(disk StorageAPI, bucket, object, uploadID
 		case <-time.After(appendPartsTimeout):
 			// Timeout the goroutine to garbage collect its resources. This would happen if the client initiates
 			// a multipart upload and does not complete/abort it.
-			b.Lock()
-			delete(b.infoMap, uploadID)
-			b.Unlock()
+			fs.bgAppend.Lock()
+			delete(fs.bgAppend.infoMap, uploadID)
+			fs.bgAppend.Unlock()
 			// Delete the temporary append file as well.
-			disk.DeleteFile(minioMetaTmpBucket, uploadID)
+			fsRemoveFile(appendPath)
 
 			close(info.timeoutCh)
 			return
@@ -186,29 +188,34 @@ func (b *backgroundAppend) appendParts(disk StorageAPI, bucket, object, uploadID
 
 // Appends the "part" to the append-file inside "tmp/" that finally gets moved to the actual location
 // upon complete-multipart-upload.
-func appendPart(disk StorageAPI, bucket, object, uploadID string, part objectPartInfo, buf []byte) error {
-	partPath := pathJoin(bucket, object, uploadID, part.Name)
+func (fs fsObjects) appendPart(bucket, object, uploadID string, part objectPartInfo, buf []byte) error {
+	partPath := pathJoin(fs.fsPath, minioMetaMultipartBucket, bucket, object, uploadID, part.Name)
 
 	offset := int64(0)
-	totalLeft := part.Size
-	for totalLeft > 0 {
-		curLeft := int64(readSizeV1)
-		if totalLeft < readSizeV1 {
-			curLeft = totalLeft
+	// Read each file part to start writing to the temporary concatenated object.
+	file, size, err := fsOpenFile(partPath, offset)
+	if err != nil {
+		if err == errFileNotFound {
+			return errPartsMissing
 		}
-		n, err := disk.ReadFile(minioMetaMultipartBucket, partPath, offset, buf[:curLeft])
-		if err != nil {
-			// Check for EOF/ErrUnexpectedEOF not needed as it should never happen as we know
-			// the exact size of the file and hence know the size of buf[]
-			// EOF/ErrUnexpectedEOF indicates that the length of file was shorter than part.Size and
-			// hence considered as an error condition.
-			return err
-		}
-		if err = disk.AppendFile(minioMetaTmpBucket, uploadID, buf[:n]); err != nil {
-			return err
-		}
-		offset += n
-		totalLeft -= n
+		return err
 	}
-	return nil
+	defer file.Close()
+
+	tmpObjPath := pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID, uploadID)
+	// No need to hold a lock, this is a unique file and will be only written
+	// to one one process per uploadID per minio process.
+	wfile, err := os.OpenFile(preparePath(tmpObjPath), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0666)
+	if err != nil {
+		return err
+	}
+	defer wfile.Close()
+
+	// Fallocate more space as we concatenate.
+	if err = fsFAllocate(int(wfile.Fd()), 0, size); err != nil {
+		return err
+	}
+
+	_, err = io.CopyBuffer(wfile, file, buf)
+	return err
 }

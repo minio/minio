@@ -194,25 +194,6 @@ func TestExtractSignedHeaders(t *testing.T) {
 	}
 }
 
-// TestFindHost - tests the logic to find whether "host" is part of signed headers.
-func TestFindHost(t *testing.T) {
-	// doesn't contain "host".
-	signedHeaders := []string{"x-amz-content-sha256", "x-amz-date"}
-	errCode := findHost(signedHeaders)
-	// expected to error out with code ErrUnsignedHeaders .
-	if errCode != ErrUnsignedHeaders {
-		t.Fatalf("Expected the APIErrorCode to be %d, but got %d", ErrUnsignedHeaders, errCode)
-	}
-
-	// adding "host".
-	signedHeaders = append(signedHeaders, "host")
-	// epxected to pass.
-	errCode = findHost(signedHeaders)
-	if errCode != ErrNone {
-		t.Fatalf("Expected the APIErrorCode to be %d, but got %d", ErrNone, errCode)
-	}
-}
-
 // TestSignV4TrimAll - tests the logic of TrimAll() function
 func TestSignV4TrimAll(t *testing.T) {
 	testCases := []struct {

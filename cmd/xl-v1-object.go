@@ -505,9 +505,9 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 
 	onlineDisks := getOrderedDisks(xlMeta.Erasure.Distribution, xl.storageDisks)
 
-	// Delete temporary object in the event of failure. If
-	// PutObject succeeded there would be no temporary object to
-	// delete.
+	// Delete temporary object in the event of failure.
+	// If PutObject succeeded there would be no temporary
+	// object to delete.
 	defer xl.deleteObject(minioMetaTmpBucket, tempObj)
 
 	if size > 0 {

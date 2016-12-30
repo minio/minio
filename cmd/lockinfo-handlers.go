@@ -58,36 +58,3 @@ type OpsLockState struct {
 	Since       time.Time     `json:"statusSince"`    // Time when the lock was initially held.
 	Duration    time.Duration `json:"statusDuration"` // Duration since the lock was held.
 }
-
-// Read entire state of the locks in the system and return.
-func getSystemLockState() (SystemLockState, error) {
-	globalNSMutex.lockMapMutex.Lock()
-	defer globalNSMutex.lockMapMutex.Unlock()
-
-	lockState := SystemLockState{}
-
-	lockState.TotalBlockedLocks = globalNSMutex.counters.blocked
-	lockState.TotalLocks = globalNSMutex.counters.total
-	lockState.TotalAcquiredLocks = globalNSMutex.counters.granted
-
-	for param, debugLock := range globalNSMutex.debugLockMap {
-		volLockInfo := VolumeLockInfo{}
-		volLockInfo.Bucket = param.volume
-		volLockInfo.Object = param.path
-		volLockInfo.LocksOnObject = debugLock.counters.total
-		volLockInfo.TotalBlockedLocks = debugLock.counters.blocked
-		volLockInfo.LocksAcquiredOnObject = debugLock.counters.granted
-		for opsID, lockInfo := range debugLock.lockInfo {
-			volLockInfo.LockDetailsOnObject = append(volLockInfo.LockDetailsOnObject, OpsLockState{
-				OperationID: opsID,
-				LockSource:  lockInfo.lockSource,
-				LockType:    lockInfo.lType,
-				Status:      lockInfo.status,
-				Since:       lockInfo.since,
-				Duration:    time.Now().UTC().Sub(lockInfo.since),
-			})
-		}
-		lockState.LocksInfoPerObject = append(lockState.LocksInfoPerObject, volLockInfo)
-	}
-	return lockState, nil
-}

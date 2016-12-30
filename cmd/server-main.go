@@ -311,6 +311,8 @@ func checkServerSyntax(c *cli.Context) {
 
 	// Verify syntax for all the XL disks.
 	disks := c.Args()
+
+	// Parse disks check if they comply with expected URI style.
 	endpoints, err := parseStorageEndpoints(disks)
 	fatalIf(err, "Unable to parse storage endpoints %s", strings.Join(disks, " "))
 
@@ -325,7 +327,7 @@ func checkServerSyntax(c *cli.Context) {
 	if len(endpoints) > 1 {
 		// Validate if we have sufficient disks for XL setup.
 		err = checkSufficientDisks(endpoints)
-		fatalIf(err, "Invalid number of disks supplied.")
+		fatalIf(err, "Insufficient number of disks.")
 	} else {
 		// Validate if we have invalid disk for FS setup.
 		if endpoints[0].Host != "" && endpoints[0].Scheme != "" {
@@ -394,7 +396,7 @@ func serverMain(c *cli.Context) {
 	// Initialization routine, such as config loading, enable logging, ..
 	minioInit()
 
-	// Check for minio updates from dl.minio.io
+	// Check for new updates from dl.minio.io.
 	checkUpdate()
 
 	// Server address.
@@ -416,9 +418,12 @@ func serverMain(c *cli.Context) {
 	globalMinioPort = portStr
 
 	// Check server syntax and exit in case of errors.
-	// Done after globalMinioHost and globalMinioPort is set as parseStorageEndpoints()
-	// depends on it.
+	// Done after globalMinioHost and globalMinioPort is set
+	// as parseStorageEndpoints() depends on it.
 	checkServerSyntax(c)
+
+	// Initialize server config.
+	initServerConfig(c)
 
 	// Disks to be used in server init.
 	endpoints, err := parseStorageEndpoints(c.Args())
@@ -436,26 +441,28 @@ func serverMain(c *cli.Context) {
 	// on all nodes.
 	sort.Sort(byHostPath(endpoints))
 
-	storageDisks, err := initStorageDisks(endpoints)
-	fatalIf(err, "Unable to initialize storage disk(s).")
-
-	// Cleanup objects that weren't successfully written into the namespace.
-	fatalIf(houseKeeping(storageDisks), "Unable to purge temporary files.")
-
-	// Initialize server config.
-	initServerConfig(c)
-
-	// First disk argument check if it is local.
-	firstDisk := isLocalStorage(endpoints[0])
-
-	// Check if endpoints are part of distributed setup.
-	globalIsDistXL = isDistributedSetup(endpoints)
-
 	// Configure server.
 	srvConfig := serverCmdConfig{
-		serverAddr:   serverAddr,
-		endpoints:    endpoints,
-		storageDisks: storageDisks,
+		serverAddr: serverAddr,
+		endpoints:  endpoints,
+	}
+
+	// For disks > 1 automatically becomes XL setup.
+	isXL := len(endpoints) > 1
+	var storageDisks []StorageAPI
+	if isXL {
+		var derr error
+		storageDisks, derr = initStorageDisks(endpoints)
+		fatalIf(derr, "Unable to initialize storage disk(s).")
+
+		// Cleanup objects that weren't successfully written into the namespace.
+		fatalIf(houseKeeping(storageDisks), "Unable to purge temporary files.")
+
+		// Check if endpoints are part of distributed setup.
+		globalIsDistXL = isDistributedSetup(endpoints)
+
+		// Save storage disks.
+		srvConfig.storageDisks = storageDisks
 	}
 
 	// Configure server.
@@ -464,7 +471,15 @@ func serverMain(c *cli.Context) {
 
 	// Set nodes for dsync for distributed setup.
 	if globalIsDistXL {
-		fatalIf(initDsyncNodes(endpoints), "Unable to initialize distributed locking")
+		fatalIf(initDsyncNodes(endpoints), "Unable to initialize distributed locking clients")
+	}
+
+	if globalIsDistXL {
+		// Initialize S3 Peers inter-node communication only in distributed setup.
+		initGlobalS3Peers(endpoints)
+
+		// Initialize Admin Peers inter-node communication only in distributed setup.
+		initGlobalAdminPeers(endpoints)
 	}
 
 	// Initialize name space lock.
@@ -482,12 +497,6 @@ func serverMain(c *cli.Context) {
 	// Initialize local server address
 	globalMinioAddr = getLocalAddress(srvConfig)
 
-	// Initialize S3 Peers inter-node communication
-	initGlobalS3Peers(endpoints)
-
-	// Initialize Admin Peers inter-node communication
-	initGlobalAdminPeers(endpoints)
-
 	// Start server, automatically configures TLS if certs are available.
 	go func(tls bool) {
 		var lerr error
@@ -499,13 +508,8 @@ func serverMain(c *cli.Context) {
 		fatalIf(lerr, "Failed to start minio server.")
 	}(tls)
 
-	// Wait for formatting of disks.
-	formattedDisks, err := waitForFormatDisks(firstDisk, endpoints, storageDisks)
-	fatalIf(err, "formatting storage disks failed")
-
-	// Once formatted, initialize object layer.
-	newObject, err := newObjectLayer(formattedDisks)
-	fatalIf(err, "intializing object layer failed")
+	newObject, err := newObjectLayer(srvConfig, isXL)
+	fatalIf(err, "Initializing object layer failed")
 
 	globalObjLayerMutex.Lock()
 	globalObjectAPI = newObject
@@ -516,4 +520,41 @@ func serverMain(c *cli.Context) {
 
 	// Waits on the server.
 	<-globalServiceDoneCh
+}
+
+// Initialize object layer for the supplied disks, newObject is nil upon any error.
+func newObjectLayer(srvCmdCfg serverCmdConfig, isXL bool) (newObject ObjectLayer, err error) {
+	// First disk argument check if it is local.
+	firstDisk := isLocalStorage(srvCmdCfg.endpoints[0])
+
+	// For FS only, directly use the disk.
+	if !isXL {
+		// Unescape is needed for some UNC paths on windows
+		// which are of this form \\127.0.0.1\\export\test.
+		var fsPath string
+		fsPath, err = url.QueryUnescape(srvCmdCfg.endpoints[0].String())
+		if err != nil {
+			return nil, err
+		}
+		newObject, err = newFSObjects(fsPath)
+		if err != nil {
+			return nil, err
+		}
+		// FS initialized, return.
+		return newObject, nil
+	}
+
+	// Wait for formatting disks for XL backend.
+	var formattedDisks []StorageAPI
+	formattedDisks, err = waitForFormatXLDisks(firstDisk, srvCmdCfg.endpoints, srvCmdCfg.storageDisks)
+	if err != nil {
+		return nil, err
+	}
+
+	// Once XL formatted, initialize object layer.
+	newObject, err = newXLObjectLayer(formattedDisks)
+	if err != nil {
+		return nil, err
+	}
+	return newObject, nil
 }

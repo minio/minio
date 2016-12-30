@@ -149,20 +149,6 @@ func reduceFormatErrs(errs []error, diskCount int) (err error) {
 	return nil
 }
 
-// creates format.json, the FS format info in minioMetaBucket.
-func initFormatFS(storageDisk StorageAPI) error {
-	// Initialize meta volume, if volume already exists ignores it.
-	if err := initMetaVolume([]StorageAPI{storageDisk}); err != nil {
-		return fmt.Errorf("Unable to initialize '.minio.sys' meta volume, %s", err)
-	}
-	return saveFSFormatData(storageDisk, newFSFormatV1())
-}
-
-// loads format.json from minioMetaBucket if it exists.
-func loadFormatFS(storageDisk StorageAPI) (format *formatConfigV1, err error) {
-	return loadFormat(storageDisk)
-}
-
 // loadAllFormats - load all format config from all input disks in parallel.
 func loadAllFormats(bootstrapDisks []StorageAPI) ([]*formatConfigV1, []error) {
 	// Initialize sync waitgroup.
@@ -204,18 +190,6 @@ func loadAllFormats(bootstrapDisks []StorageAPI) ([]*formatConfigV1, []error) {
 	}
 	// Return all formats and nil
 	return formatConfigs, sErrs
-}
-
-// genericFormatCheckFS - validates format config and returns an error if any.
-func genericFormatCheckFS(formatConfig *formatConfigV1, sErr error) (err error) {
-	if sErr != nil {
-		return sErr
-	}
-	// Successfully read, validate if FS.
-	if !isFSFormat(formatConfig) {
-		return errFSDiskFormat
-	}
-	return nil
 }
 
 // genericFormatCheckXL - validates and returns error.

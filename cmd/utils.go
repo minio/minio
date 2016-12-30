@@ -144,29 +144,6 @@ func contains(stringList []string, element string) bool {
 	return false
 }
 
-// Contains endpoint returns true if endpoint found in the list of input endpoints.
-func containsEndpoint(endpoints []*url.URL, endpoint *url.URL) bool {
-	for _, ep := range endpoints {
-		if *ep == *endpoint {
-			return true
-		}
-	}
-	return false
-}
-
-// urlPathSplit - split url path into bucket and object components.
-func urlPathSplit(urlPath string) (bucketName, prefixName string) {
-	if urlPath == "" {
-		return urlPath, ""
-	}
-	urlPath = strings.TrimPrefix(urlPath, "/")
-	i := strings.Index(urlPath, "/")
-	if i != -1 {
-		return urlPath[:i], urlPath[i+1:]
-	}
-	return urlPath, ""
-}
-
 // Starts a profiler returns nil if profiler is not enabled, caller needs to handle this.
 func startProfiler(profiler string) interface {
 	Stop()
