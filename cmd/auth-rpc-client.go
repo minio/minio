@@ -76,7 +76,6 @@ type AuthRPCClient struct {
 	mu            sync.Mutex
 	config        *authConfig
 	rpc           *RPCClient // reconnect'able rpc client built on top of net/rpc Client
-	isLoggedIn    bool       // Indicates if the auth client has been logged in and token is valid.
 	serverToken   string     // Disk rpc JWT based token.
 	serverVersion string     // Server version exchanged by the RPC.
 }
@@ -88,8 +87,6 @@ func newAuthClient(cfg *authConfig) *AuthRPCClient {
 		config: cfg,
 		// Initialize a new reconnectable rpc client.
 		rpc: newRPCClient(cfg.address, cfg.path, cfg.secureConn),
-		// Allocated auth client not logged in yet.
-		isLoggedIn: false,
 	}
 }
 
@@ -97,7 +94,7 @@ func newAuthClient(cfg *authConfig) *AuthRPCClient {
 func (authClient *AuthRPCClient) Close() error {
 	authClient.mu.Lock()
 	// reset token on closing a connection
-	authClient.isLoggedIn = false
+	authClient.serverToken = ""
 	authClient.mu.Unlock()
 	return authClient.rpc.Close()
 }
@@ -109,7 +106,7 @@ func (authClient *AuthRPCClient) Login() (err error) {
 	defer authClient.mu.Unlock()
 
 	// Return if already logged in.
-	if authClient.isLoggedIn {
+	if authClient.serverToken != "" {
 		return nil
 	}
 
@@ -135,7 +132,6 @@ func (authClient *AuthRPCClient) Login() (err error) {
 	// Set token, time stamp as received from a successful login call.
 	authClient.serverToken = reply.Token
 	authClient.serverVersion = reply.ServerVersion
-	authClient.isLoggedIn = true
 	return nil
 }
 
@@ -146,21 +142,34 @@ func (authClient *AuthRPCClient) Call(serviceMethod string, args interface {
 	SetToken(token string)
 	SetTimestamp(tstamp time.Time)
 }, reply interface{}) (err error) {
-	// On successful login, attempt the call.
-	if err = authClient.Login(); err == nil {
-		// Set token and timestamp before the rpc call.
-		args.SetToken(authClient.serverToken)
-		args.SetTimestamp(time.Now().UTC())
+	loginAndCallFn := func() error {
+		// On successful login, proceed to attempt the requested service method.
+		if err = authClient.Login(); err == nil {
+			// Set token and timestamp before the rpc call.
+			args.SetToken(authClient.serverToken)
+			args.SetTimestamp(time.Now().UTC())
 
-		// Call the underlying rpc.
-		err = authClient.rpc.Call(serviceMethod, args, reply)
-
-		// Invalidate token, and mark it for re-login on subsequent reconnect.
-		if err == rpc.ErrShutdown {
-			authClient.mu.Lock()
-			authClient.isLoggedIn = false
-			authClient.mu.Unlock()
+			// Finally make the network call using net/rpc client.
+			err = authClient.rpc.Call(serviceMethod, args, reply)
 		}
+		return err
+	}
+	doneCh := make(chan struct{})
+	defer close(doneCh)
+	for i := range newRetryTimer(time.Second, time.Second*30, MaxJitter, doneCh) {
+		// Invalidate token, and mark it for re-login and
+		// reconnect upon rpc shutdown.
+		if err = loginAndCallFn(); err == rpc.ErrShutdown {
+			// Close the underlying connection, and proceed to reconnect
+			// if we haven't reached the retry threshold.
+			authClient.Close()
+
+			// No need to return error until the retry count threshold has reached.
+			if i < globalMaxAuthRPCRetryThreshold {
+				continue
+			}
+		}
+		break
 	}
 	return err
 }

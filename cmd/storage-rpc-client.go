@@ -23,7 +23,9 @@ import (
 	"net/rpc"
 	"net/url"
 	"path"
+	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/minio/minio/pkg/disk"
 )
@@ -32,7 +34,7 @@ type networkStorage struct {
 	networkIOErrCount int32 // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
 	netAddr           string
 	netPath           string
-	rpcClient         *AuthRPCClient
+	rpcClient         *storageRPCClient
 }
 
 const (
@@ -97,6 +99,104 @@ func toStorageErr(err error) error {
 	return err
 }
 
+// storageRPCClient is a wrapper type for RPCClient which provides JWT based authentication across reconnects.
+type storageRPCClient struct {
+	sync.Mutex
+	cfg           storageConfig
+	rpc           *RPCClient // reconnect'able rpc client built on top of net/rpc Client
+	serverToken   string     // Disk rpc JWT based token.
+	serverVersion string     // Server version exchanged by the RPC.
+}
+
+// Storage config represents authentication credentials and Login
+// method name to be used for fetching JWT tokens from the storage
+// server.
+type storageConfig struct {
+	addr       string // Network address path of storage RPC server.
+	path       string // Network storage path for HTTP dial.
+	secureConn bool   // Indicates if this storage RPC is on a secured connection.
+	creds      credential
+}
+
+// newStorageClient - returns a jwt based authenticated (go) storage rpc client.
+func newStorageClient(storageCfg storageConfig) *storageRPCClient {
+	return &storageRPCClient{
+		// Save the config.
+		cfg: storageCfg,
+		rpc: newRPCClient(storageCfg.addr, storageCfg.path, storageCfg.secureConn),
+	}
+}
+
+// Close - closes underlying rpc connection.
+func (storageClient *storageRPCClient) Close() error {
+	storageClient.Lock()
+	// reset token on closing a connection
+	storageClient.serverToken = ""
+	storageClient.Unlock()
+	return storageClient.rpc.Close()
+}
+
+// Login - a jwt based authentication is performed with rpc server.
+func (storageClient *storageRPCClient) Login() (err error) {
+	storageClient.Lock()
+	// As soon as the function returns unlock,
+	defer storageClient.Unlock()
+
+	// Return if token is already set.
+	if storageClient.serverToken != "" {
+		return nil
+	}
+
+	reply := RPCLoginReply{}
+	if err = storageClient.rpc.Call("Storage.LoginHandler", RPCLoginArgs{
+		Username: storageClient.cfg.creds.AccessKey,
+		Password: storageClient.cfg.creds.SecretKey,
+	}, &reply); err != nil {
+		return err
+	}
+
+	// Validate if version do indeed match.
+	if reply.ServerVersion != Version {
+		return errServerVersionMismatch
+	}
+
+	// Validate if server timestamp is skewed.
+	curTime := time.Now().UTC()
+	if curTime.Sub(reply.Timestamp) > globalMaxSkewTime {
+		return errServerTimeMismatch
+	}
+
+	// Set token, time stamp as received from a successful login call.
+	storageClient.serverToken = reply.Token
+	storageClient.serverVersion = reply.ServerVersion
+	return nil
+}
+
+// Call - If rpc connection isn't established yet since previous disconnect,
+// connection is established, a jwt authenticated login is performed and then
+// the call is performed.
+func (storageClient *storageRPCClient) Call(serviceMethod string, args interface {
+	SetToken(token string)
+	SetTimestamp(tstamp time.Time)
+}, reply interface{}) (err error) {
+	// On successful login, attempt the call.
+	if err = storageClient.Login(); err != nil {
+		return err
+	}
+	// Set token and timestamp before the rpc call.
+	args.SetToken(storageClient.serverToken)
+	args.SetTimestamp(time.Now().UTC())
+
+	// Call the underlying rpc.
+	err = storageClient.rpc.Call(serviceMethod, args, reply)
+
+	// Invalidate token, and mark it for re-login.
+	if err == rpc.ErrShutdown {
+		storageClient.Close()
+	}
+	return err
+}
+
 // Initialize new storage rpc client.
 func newStorageRPC(ep *url.URL) (StorageAPI, error) {
 	if ep == nil {
@@ -108,28 +208,28 @@ func newStorageRPC(ep *url.URL) (StorageAPI, error) {
 	rpcAddr := ep.Host
 
 	// Initialize rpc client with network address and rpc path.
-	accessKeyID := serverConfig.GetCredential().AccessKey
-	secretAccessKey := serverConfig.GetCredential().SecretKey
+	accessKey := serverConfig.GetCredential().AccessKey
+	secretKey := serverConfig.GetCredential().SecretKey
 	if ep.User != nil {
-		accessKeyID = ep.User.Username()
+		accessKey = ep.User.Username()
 		if key, set := ep.User.Password(); set {
-			secretAccessKey = key
+			secretKey = key
 		}
 	}
-	rpcClient := newAuthClient(&authConfig{
-		accessKey:   accessKeyID,
-		secretKey:   secretAccessKey,
-		secureConn:  isSSL(),
-		address:     rpcAddr,
-		path:        rpcPath,
-		loginMethod: "Storage.LoginHandler",
-	})
 
 	// Initialize network storage.
 	ndisk := &networkStorage{
-		netAddr:   ep.Host,
-		netPath:   getPath(ep),
-		rpcClient: rpcClient,
+		netAddr: ep.Host,
+		netPath: getPath(ep),
+		rpcClient: newStorageClient(storageConfig{
+			addr: rpcAddr,
+			path: rpcPath,
+			creds: credential{
+				AccessKey: accessKey,
+				SecretKey: secretKey,
+			},
+			secureConn: isSSL(),
+		}),
 	}
 
 	// Returns successfully here.

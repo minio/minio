@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"net/rpc"
 	"net/url"
 	"path"
 	"sync"
@@ -58,22 +57,14 @@ func (lc localAdminClient) Restart() error {
 func (rc remoteAdminClient) Stop() error {
 	args := GenericArgs{}
 	reply := GenericReply{}
-	err := rc.Call("Service.Shutdown", &args, &reply)
-	if err != nil && err == rpc.ErrShutdown {
-		rc.Close()
-	}
-	return err
+	return rc.Call("Service.Shutdown", &args, &reply)
 }
 
 // Restart - Sends restart command to remote server via RPC.
 func (rc remoteAdminClient) Restart() error {
 	args := GenericArgs{}
 	reply := GenericReply{}
-	err := rc.Call("Service.Restart", &args, &reply)
-	if err != nil && err == rpc.ErrShutdown {
-		rc.Close()
-	}
-	return err
+	return rc.Call("Service.Restart", &args, &reply)
 }
 
 // adminPeer - represents an entity that implements Stop and Restart methods.
