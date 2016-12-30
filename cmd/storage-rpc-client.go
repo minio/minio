@@ -241,8 +241,14 @@ func (n *networkStorage) String() string {
 	return n.netAddr + ":" + n.netPath
 }
 
-// maximum allowed network IOError.
-const maxAllowedNetworkIOError = 1024
+// Network IO error count is kept at 256 with some simple
+// math. Before we reject the disk completely. The combination
+// of retry logic and total error count roughly comes around
+// 2.5secs ( 2 * 5 * time.Millisecond * 256) which is when we
+// basically take the disk offline completely. This is considered
+// sufficient time tradeoff to avoid large delays in-terms of
+// incoming i/o.
+const maxAllowedNetworkIOError = 256 // maximum allowed network IOError.
 
 // Initializes the remote RPC connection by attempting a login attempt.
 func (n *networkStorage) Init() (err error) {

@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"reflect"
 	"testing"
+	"time"
 )
 
 // Tests retry storage.
@@ -39,9 +40,14 @@ func TestRetryStorage(t *testing.T) {
 		if !ok {
 			t.Fatal("storage disk is not *retryStorage type")
 		}
-		storageDisks[i] = &retryStorage{newNaughtyDisk(retryDisk, map[int]error{
-			1: errDiskNotFound,
-		}, nil)}
+		storageDisks[i] = &retryStorage{
+			remoteStorage: newNaughtyDisk(retryDisk, map[int]error{
+				1: errDiskNotFound,
+			}, nil),
+			maxRetryAttempts: 1,
+			retryUnit:        time.Millisecond,
+			retryCap:         time.Millisecond * 10,
+		}
 	}
 
 	// Validate all the conditions for retrying calls.
@@ -52,9 +58,14 @@ func TestRetryStorage(t *testing.T) {
 		if !ok {
 			t.Fatal("storage disk is not *retryStorage type")
 		}
-		storageDisks[i] = &retryStorage{newNaughtyDisk(retryDisk, map[int]error{
-			1: errDiskNotFound,
-		}, nil)}
+		storageDisks[i] = &retryStorage{
+			remoteStorage: newNaughtyDisk(retryDisk, map[int]error{
+				1: errDiskNotFound,
+			}, nil),
+			maxRetryAttempts: 1,
+			retryUnit:        time.Millisecond,
+			retryCap:         time.Millisecond * 10,
+		}
 	}
 
 	for _, disk := range storageDisks {
@@ -77,9 +88,14 @@ func TestRetryStorage(t *testing.T) {
 		if !ok {
 			t.Fatal("storage disk is not *retryStorage type")
 		}
-		storageDisks[i] = &retryStorage{newNaughtyDisk(retryDisk, map[int]error{
-			1: errDiskNotFound,
-		}, nil)}
+		storageDisks[i] = &retryStorage{
+			remoteStorage: newNaughtyDisk(retryDisk, map[int]error{
+				1: errDiskNotFound,
+			}, nil),
+			maxRetryAttempts: 1,
+			retryUnit:        time.Millisecond,
+			retryCap:         time.Millisecond * 10,
+		}
 	}
 
 	for _, disk := range storageDisks {
@@ -97,9 +113,14 @@ func TestRetryStorage(t *testing.T) {
 		if !ok {
 			t.Fatal("storage disk is not *retryStorage type")
 		}
-		storageDisks[i] = &retryStorage{newNaughtyDisk(retryDisk, map[int]error{
-			1: errDiskNotFound,
-		}, nil)}
+		storageDisks[i] = &retryStorage{
+			remoteStorage: newNaughtyDisk(retryDisk, map[int]error{
+				1: errDiskNotFound,
+			}, nil),
+			maxRetryAttempts: 1,
+			retryUnit:        time.Millisecond,
+			retryCap:         time.Millisecond * 10,
+		}
 	}
 
 	for _, disk := range storageDisks {
@@ -114,9 +135,14 @@ func TestRetryStorage(t *testing.T) {
 		if !ok {
 			t.Fatal("storage disk is not *retryStorage type")
 		}
-		storageDisks[i] = &retryStorage{newNaughtyDisk(retryDisk, map[int]error{
-			1: errDiskNotFound,
-		}, nil)}
+		storageDisks[i] = &retryStorage{
+			remoteStorage: newNaughtyDisk(retryDisk, map[int]error{
+				1: errDiskNotFound,
+			}, nil),
+			maxRetryAttempts: 1,
+			retryUnit:        time.Millisecond,
+			retryCap:         time.Millisecond * 10,
+		}
 	}
 
 	for _, disk := range storageDisks {
@@ -131,9 +157,14 @@ func TestRetryStorage(t *testing.T) {
 		if !ok {
 			t.Fatal("storage disk is not *retryStorage type")
 		}
-		storageDisks[i] = &retryStorage{newNaughtyDisk(retryDisk, map[int]error{
-			1: errDiskNotFound,
-		}, nil)}
+		storageDisks[i] = &retryStorage{
+			remoteStorage: newNaughtyDisk(retryDisk, map[int]error{
+				1: errDiskNotFound,
+			}, nil),
+			maxRetryAttempts: 1,
+			retryUnit:        time.Millisecond,
+			retryCap:         time.Millisecond * 10,
+		}
 	}
 
 	for _, disk := range storageDisks {
@@ -151,9 +182,14 @@ func TestRetryStorage(t *testing.T) {
 		if !ok {
 			t.Fatal("storage disk is not *retryStorage type")
 		}
-		storageDisks[i] = &retryStorage{newNaughtyDisk(retryDisk, map[int]error{
-			1: errDiskNotFound,
-		}, nil)}
+		storageDisks[i] = &retryStorage{
+			remoteStorage: newNaughtyDisk(retryDisk, map[int]error{
+				1: errDiskNotFound,
+			}, nil),
+			maxRetryAttempts: 1,
+			retryUnit:        time.Millisecond,
+			retryCap:         time.Millisecond * 10,
+		}
 	}
 
 	for _, disk := range storageDisks {
@@ -168,9 +204,14 @@ func TestRetryStorage(t *testing.T) {
 		if !ok {
 			t.Fatal("storage disk is not *retryStorage type")
 		}
-		storageDisks[i] = &retryStorage{newNaughtyDisk(retryDisk, map[int]error{
-			1: errDiskNotFound,
-		}, nil)}
+		storageDisks[i] = &retryStorage{
+			remoteStorage: newNaughtyDisk(retryDisk, map[int]error{
+				1: errDiskNotFound,
+			}, nil),
+			maxRetryAttempts: 1,
+			retryUnit:        time.Millisecond,
+			retryCap:         time.Millisecond * 10,
+		}
 	}
 
 	for _, disk := range storageDisks {
@@ -185,9 +226,14 @@ func TestRetryStorage(t *testing.T) {
 		if !ok {
 			t.Fatal("storage disk is not *retryStorage type")
 		}
-		storageDisks[i] = &retryStorage{newNaughtyDisk(retryDisk, map[int]error{
-			1: errDiskNotFound,
-		}, nil)}
+		storageDisks[i] = &retryStorage{
+			remoteStorage: newNaughtyDisk(retryDisk, map[int]error{
+				1: errDiskNotFound,
+			}, nil),
+			maxRetryAttempts: 1,
+			retryUnit:        time.Millisecond,
+			retryCap:         time.Millisecond * 10,
+		}
 	}
 
 	for _, disk := range storageDisks {
@@ -202,9 +248,14 @@ func TestRetryStorage(t *testing.T) {
 		if !ok {
 			t.Fatal("storage disk is not *retryStorage type")
 		}
-		storageDisks[i] = &retryStorage{newNaughtyDisk(retryDisk, map[int]error{
-			1: errDiskNotFound,
-		}, nil)}
+		storageDisks[i] = &retryStorage{
+			remoteStorage: newNaughtyDisk(retryDisk, map[int]error{
+				1: errDiskNotFound,
+			}, nil),
+			maxRetryAttempts: 1,
+			retryUnit:        time.Millisecond,
+			retryCap:         time.Millisecond * 10,
+		}
 	}
 
 	for _, disk := range storageDisks {
@@ -223,9 +274,14 @@ func TestRetryStorage(t *testing.T) {
 		if !ok {
 			t.Fatal("storage disk is not *retryStorage type")
 		}
-		storageDisks[i] = &retryStorage{newNaughtyDisk(retryDisk, map[int]error{
-			1: errDiskNotFound,
-		}, nil)}
+		storageDisks[i] = &retryStorage{
+			remoteStorage: newNaughtyDisk(retryDisk, map[int]error{
+				1: errDiskNotFound,
+			}, nil),
+			maxRetryAttempts: 1,
+			retryUnit:        time.Millisecond,
+			retryCap:         time.Millisecond * 10,
+		}
 	}
 
 	for _, disk := range storageDisks {
@@ -248,9 +304,14 @@ func TestRetryStorage(t *testing.T) {
 		if !ok {
 			t.Fatal("storage disk is not *retryStorage type")
 		}
-		storageDisks[i] = &retryStorage{newNaughtyDisk(retryDisk, map[int]error{
-			1: errDiskNotFound,
-		}, nil)}
+		storageDisks[i] = &retryStorage{
+			remoteStorage: newNaughtyDisk(retryDisk, map[int]error{
+				1: errDiskNotFound,
+			}, nil),
+			maxRetryAttempts: 1,
+			retryUnit:        time.Millisecond,
+			retryCap:         time.Millisecond * 10,
+		}
 	}
 
 	for _, disk := range storageDisks {
@@ -268,9 +329,14 @@ func TestRetryStorage(t *testing.T) {
 		if !ok {
 			t.Fatal("storage disk is not *retryStorage type")
 		}
-		storageDisks[i] = &retryStorage{newNaughtyDisk(retryDisk, map[int]error{
-			1: errDiskNotFound,
-		}, nil)}
+		storageDisks[i] = &retryStorage{
+			remoteStorage: newNaughtyDisk(retryDisk, map[int]error{
+				1: errDiskNotFound,
+			}, nil),
+			maxRetryAttempts: 1,
+			retryUnit:        time.Millisecond,
+			retryCap:         time.Millisecond * 10,
+		}
 	}
 
 	for _, disk := range storageDisks {
@@ -285,9 +351,14 @@ func TestRetryStorage(t *testing.T) {
 		if !ok {
 			t.Fatal("storage disk is not *retryStorage type")
 		}
-		storageDisks[i] = &retryStorage{newNaughtyDisk(retryDisk, map[int]error{
-			1: errDiskNotFound,
-		}, nil)}
+		storageDisks[i] = &retryStorage{
+			remoteStorage: newNaughtyDisk(retryDisk, map[int]error{
+				1: errDiskNotFound,
+			}, nil),
+			maxRetryAttempts: 1,
+			retryUnit:        time.Millisecond,
+			retryCap:         time.Millisecond * 10,
+		}
 	}
 
 	for _, disk := range storageDisks {
@@ -306,9 +377,14 @@ func TestRetryStorage(t *testing.T) {
 		if !ok {
 			t.Fatal("storage disk is not *retryStorage type")
 		}
-		storageDisks[i] = &retryStorage{newNaughtyDisk(retryDisk, map[int]error{
-			1: errDiskNotFound,
-		}, nil)}
+		storageDisks[i] = &retryStorage{
+			remoteStorage: newNaughtyDisk(retryDisk, map[int]error{
+				1: errDiskNotFound,
+			}, nil),
+			maxRetryAttempts: 1,
+			retryUnit:        time.Millisecond,
+			retryCap:         time.Millisecond * 10,
+		}
 	}
 
 	for _, disk := range storageDisks {

@@ -311,16 +311,40 @@ func waitForFormatDisks(firstDisk bool, endpoints []*url.URL, storageDisks []Sto
 	if storageDisks == nil {
 		return nil, errInvalidArgument
 	}
+
+	// Retryable disks before formatting, we need to have a larger
+	// retry window so that we wait enough amount of time before
+	// the disks come online.
+	retryDisks := make([]StorageAPI, len(storageDisks))
+	for i, storage := range storageDisks {
+		retryDisks[i] = &retryStorage{
+			remoteStorage:    storage,
+			maxRetryAttempts: globalStorageInitRetryThreshold,
+			retryUnit:        time.Second,
+			retryCap:         time.Second * 30, // 30 seconds.
+		}
+	}
+
 	// Start retry loop retrying until disks are formatted properly, until we have reached
 	// a conditional quorum of formatted disks.
-	err = retryFormattingDisks(firstDisk, endpoints, storageDisks)
+	err = retryFormattingDisks(firstDisk, endpoints, retryDisks)
 	if err != nil {
 		return nil, err
 	}
+
 	// Initialize the disk into a formatted disks wrapper.
 	formattedDisks = make([]StorageAPI, len(storageDisks))
 	for i, storage := range storageDisks {
-		formattedDisks[i] = &retryStorage{storage}
+		// After formatting is done we need a smaller time
+		// window and lower retry value before formatting.
+		formattedDisks[i] = &retryStorage{
+			remoteStorage:    storage,
+			maxRetryAttempts: globalStorageRetryThreshold,
+			retryUnit:        time.Millisecond,
+			retryCap:         time.Millisecond * 5, // 5 milliseconds.
+		}
 	}
+
+	// Success.
 	return formattedDisks, nil
 }

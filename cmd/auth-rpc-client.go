@@ -22,6 +22,10 @@ import (
 	"time"
 )
 
+// Attempt to retry only this many number of times before
+// giving up on the remote RPC entirely.
+const globalAuthRPCRetryThreshold = 1
+
 // GenericReply represents any generic RPC reply.
 type GenericReply struct{}
 
@@ -165,7 +169,7 @@ func (authClient *AuthRPCClient) Call(serviceMethod string, args interface {
 			authClient.Close()
 
 			// No need to return error until the retry count threshold has reached.
-			if i < globalMaxAuthRPCRetryThreshold {
+			if i < globalAuthRPCRetryThreshold {
 				continue
 			}
 		}
