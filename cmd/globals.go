@@ -89,14 +89,6 @@ var (
 	// List of admin peers.
 	globalAdminPeers = adminPeers{}
 
-	// Attempt to retry only this many number of times before
-	// giving up on the remote disk entirely.
-	globalMaxStorageRetryThreshold = 3
-
-	// Attempt to retry only this many number of times before
-	// giving up on the remote RPC entirely.
-	globalMaxAuthRPCRetryThreshold = 1
-
 	// Add new variable global values here.
 )
 

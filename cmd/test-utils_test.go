@@ -65,9 +65,6 @@ func init() {
 
 	// Enable caching.
 	setMaxMemory()
-
-	// Tests don't need to retry.
-	globalMaxStorageRetryThreshold = 1
 }
 
 func prepareFS() (ObjectLayer, string, error) {
@@ -1656,7 +1653,12 @@ func prepareNErroredDisks(storageDisks []StorageAPI, offline int, err error, t *
 	}
 
 	for i := 0; i < offline; i++ {
-		storageDisks[i] = &naughtyDisk{disk: &retryStorage{storageDisks[i]}, defaultErr: err}
+		storageDisks[i] = &naughtyDisk{disk: &retryStorage{
+			remoteStorage:    storageDisks[i],
+			maxRetryAttempts: 1,
+			retryUnit:        time.Millisecond,
+			retryCap:         time.Millisecond * 10,
+		}, defaultErr: err}
 	}
 	return storageDisks
 }

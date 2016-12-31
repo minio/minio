@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 // TestNewFS - tests initialization of all input disks
@@ -86,7 +87,12 @@ func TestNewFS(t *testing.T) {
 	if err != errInvalidArgument {
 		t.Errorf("Expecting error invalid argument, got %s", err)
 	}
-	_, err = newFSObjects(&retryStorage{xlStorageDisks[0]})
+	_, err = newFSObjects(&retryStorage{
+		remoteStorage:    xlStorageDisks[0],
+		maxRetryAttempts: 1,
+		retryUnit:        time.Millisecond,
+		retryCap:         time.Millisecond * 10,
+	})
 	if err != nil {
 		errMsg := "Unable to recognize backend format, Disk is not in FS format."
 		if err.Error() == errMsg {

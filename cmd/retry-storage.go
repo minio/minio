@@ -22,12 +22,25 @@ import (
 	"github.com/minio/minio/pkg/disk"
 )
 
+const (
+	// Attempt to retry only this many number of times before
+	// giving up on the remote disk entirely during initialization.
+	globalStorageInitRetryThreshold = 4
+
+	// Attempt to retry only this many number of times before
+	// giving up on the remote disk entirely after initialization.
+	globalStorageRetryThreshold = 1
+)
+
 // Retry storage is an instance of StorageAPI which
 // additionally verifies upon network shutdown if the
 // underlying storage is available and is really
 // formatted.
 type retryStorage struct {
-	remoteStorage StorageAPI
+	remoteStorage    StorageAPI
+	maxRetryAttempts int
+	retryUnit        time.Duration
+	retryCap         time.Duration
 }
 
 // String representation of remoteStorage.
@@ -209,13 +222,13 @@ func (f retryStorage) reInit() (err error) {
 
 	doneCh := make(chan struct{})
 	defer close(doneCh)
-	for i := range newRetryTimer(time.Second, time.Second*30, MaxJitter, doneCh) {
+	for i := range newRetryTimer(f.retryUnit, f.retryCap, MaxJitter, doneCh) {
 		// Initialize and make a new login attempt.
 		err = f.remoteStorage.Init()
 		if err != nil {
 			// No need to return error until the retry count
 			// threshold has reached.
-			if i < globalMaxStorageRetryThreshold {
+			if i < f.maxRetryAttempts {
 				continue
 			}
 			return err
@@ -226,7 +239,7 @@ func (f retryStorage) reInit() (err error) {
 		if err != nil {
 			// No need to return error until the retry count
 			// threshold has reached.
-			if i < globalMaxStorageRetryThreshold {
+			if i < f.maxRetryAttempts {
 				continue
 			}
 			return err
