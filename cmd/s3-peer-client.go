@@ -17,11 +17,8 @@
 package cmd
 
 import (
-	"encoding/json"
-	"fmt"
 	"net/url"
 	"path"
-	"sync"
 )
 
 // s3Peer structs contains the address of a peer in the cluster, and
@@ -29,12 +26,27 @@ import (
 type s3Peer struct {
 	// address in `host:port` format
 	addr string
-	// BucketMetaState client interface
-	bmsClient BucketMetaState
+	// Generic list of registered APIs
+	APIs map[string]interface{}
 }
 
 // type representing all peers in the cluster
 type s3Peers []s3Peer
+
+// interface to satisfy to implement new S3 Peer API
+type s3PeersAPI interface {
+	// Return Client API for local use
+	NewLocalClient() interface{}
+	// Return Client API to use with a remote node
+	NewRemoteClient(*AuthRPCClient) interface{}
+	// Return the API Name
+	APIName() string
+}
+
+// The list of registered APIs to use for local and remote nodes
+var registeredPeersAPI = []s3PeersAPI{
+	&s3PeerBucketMetaStateAPI{},
+}
 
 // makeS3Peers makes an s3Peers struct value from the given urls
 // slice. The urls slice is assumed to be non-empty and free of nil
@@ -46,10 +58,11 @@ func makeS3Peers(eps []*url.URL) s3Peers {
 	seenAddr := make(map[string]bool)
 
 	// add local (self) as peer in the array
-	ret = append(ret, s3Peer{
-		globalMinioAddr,
-		&localBucketMetaState{ObjectAPI: newObjectLayerFn},
-	})
+	localPeer := s3Peer{addr: globalMinioAddr, APIs: make(map[string]interface{})}
+	for _, api := range registeredPeersAPI {
+		localPeer.APIs[api.APIName()] = api.NewLocalClient()
+	}
+	ret = append(ret, localPeer)
 	seenAddr[globalMinioAddr] = true
 
 	// iterate over endpoints to find new remote peers and add
@@ -58,7 +71,6 @@ func makeS3Peers(eps []*url.URL) s3Peers {
 		if ep.Host == "" {
 			continue
 		}
-
 		// Check if the remote host has been added already
 		if !seenAddr[ep.Host] {
 			cfg := authConfig{
@@ -69,11 +81,11 @@ func makeS3Peers(eps []*url.URL) s3Peers {
 				path:        path.Join(reservedBucket, s3Path),
 				loginMethod: "S3.LoginHandler",
 			}
-
-			ret = append(ret, s3Peer{
-				addr:      ep.Host,
-				bmsClient: &remoteBucketMetaState{newAuthClient(&cfg)},
-			})
+			remotePeer := s3Peer{addr: ep.Host, APIs: make(map[string]interface{})}
+			for _, api := range registeredPeersAPI {
+				remotePeer.APIs[api.APIName()] = api.NewRemoteClient(newAuthClient(&cfg))
+			}
+			ret = append(ret, remotePeer)
 			seenAddr[ep.Host] = true
 		}
 	}
@@ -87,112 +99,15 @@ func initGlobalS3Peers(eps []*url.URL) {
 	globalS3Peers = makeS3Peers(eps)
 }
 
-// GetPeerClient - fetch BucketMetaState interface by peer address
-func (s3p s3Peers) GetPeerClient(peer string) BucketMetaState {
+// GetPeerClientByAPI - fetch client interface by peer address
+func (s3p s3Peers) GetPeerClientByAPI(peer string, api string) interface{} {
 	for _, p := range s3p {
 		if p.addr == peer {
-			return p.bmsClient
+			client, ok := p.APIs[api]
+			if ok {
+				return client
+			}
 		}
 	}
 	return nil
-}
-
-// SendUpdate sends bucket metadata updates to all given peer
-// indices. The update calls are sent in parallel, and errors are
-// returned per peer in an array. The returned error arrayslice is
-// always as long as s3p.peers.addr.
-//
-// The input peerIndex slice can be nil if the update is to be sent to
-// all peers. This is the common case.
-//
-// The updates are sent via a type implementing the BucketMetaState
-// interface. This makes sure that the local node is directly updated,
-// and remote nodes are updated via RPC calls.
-func (s3p s3Peers) SendUpdate(peerIndex []int, args BucketUpdater) []error {
-
-	// peer error array
-	errs := make([]error, len(s3p))
-
-	// Start a wait group and make RPC requests to peers.
-	var wg sync.WaitGroup
-
-	// Function that sends update to peer at `index`
-	sendUpdateToPeer := func(index int) {
-		defer wg.Done()
-		errs[index] = args.BucketUpdate(s3p[index].bmsClient)
-	}
-
-	// Special (but common) case of peerIndex == nil, implies send
-	// update to all peers.
-	if peerIndex == nil {
-		for idx := 0; idx < len(s3p); idx++ {
-			wg.Add(1)
-			go sendUpdateToPeer(idx)
-		}
-	} else {
-		// Send update only to given peer indices.
-		for _, idx := range peerIndex {
-			// check idx is in array bounds.
-			if !(idx >= 0 && idx < len(s3p)) {
-				errorIf(
-					fmt.Errorf("Bad peer index %d input to SendUpdate()", idx),
-					"peerIndex out of bounds",
-				)
-				continue
-			}
-			wg.Add(1)
-			go sendUpdateToPeer(idx)
-		}
-	}
-
-	// Wait for requests to complete and return
-	wg.Wait()
-	return errs
-}
-
-// S3PeersUpdateBucketNotification - Sends Update Bucket notification
-// request to all peers. Currently we log an error and continue.
-func S3PeersUpdateBucketNotification(bucket string, ncfg *notificationConfig) {
-	setBNPArgs := &SetBucketNotificationPeerArgs{Bucket: bucket, NCfg: ncfg}
-	errs := globalS3Peers.SendUpdate(nil, setBNPArgs)
-	for idx, err := range errs {
-		errorIf(
-			err,
-			"Error sending update bucket notification to %s - %v",
-			globalS3Peers[idx].addr, err,
-		)
-	}
-}
-
-// S3PeersUpdateBucketListener - Sends Update Bucket listeners request
-// to all peers. Currently we log an error and continue.
-func S3PeersUpdateBucketListener(bucket string, lcfg []listenerConfig) {
-	setBLPArgs := &SetBucketListenerPeerArgs{Bucket: bucket, LCfg: lcfg}
-	errs := globalS3Peers.SendUpdate(nil, setBLPArgs)
-	for idx, err := range errs {
-		errorIf(
-			err,
-			"Error sending update bucket listener to %s - %v",
-			globalS3Peers[idx].addr, err,
-		)
-	}
-}
-
-// S3PeersUpdateBucketPolicy - Sends update bucket policy request to
-// all peers. Currently we log an error and continue.
-func S3PeersUpdateBucketPolicy(bucket string, pCh policyChange) {
-	byts, err := json.Marshal(pCh)
-	if err != nil {
-		errorIf(err, "Failed to marshal policyChange - this is a BUG!")
-		return
-	}
-	setBPPArgs := &SetBucketPolicyPeerArgs{Bucket: bucket, PChBytes: byts}
-	errs := globalS3Peers.SendUpdate(nil, setBPPArgs)
-	for idx, err := range errs {
-		errorIf(
-			err,
-			"Error sending update bucket policy to %s - %v",
-			globalS3Peers[idx].addr, err,
-		)
-	}
 }
