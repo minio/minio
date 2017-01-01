@@ -144,7 +144,8 @@ assert_check_golang_env() {
 }
 
 assert_check_deps() {
-    installed_git_version=$(git version | awk '{print $NF}')
+    # support unusual Git versions such as: 2.7.4 (Apple Git-66)
+    installed_git_version=$(git version | perl -ne '$_ =~ m/git version (.*?)( |$)/; print "$1\n";')
     if ! check_minimum_version "${GIT_VERSION}" "${installed_git_version}"; then
         echo "ERROR"
         echo "Git version '${installed_git_version}' not supported."
