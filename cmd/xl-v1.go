@@ -169,10 +169,10 @@ func getDisksInfo(disks []StorageAPI) (disksInfo []disk.Info, onlineDisks int, o
 		info, err := storageDisk.DiskInfo()
 		if err != nil {
 			errorIf(err, "Unable to fetch disk info for %#v", storageDisk)
-			if err == errDiskNotFound {
+			if isErr(err, baseErrs...) {
 				offlineDisks++
+				continue
 			}
-			continue
 		}
 		onlineDisks++
 		disksInfo[i] = info

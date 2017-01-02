@@ -121,17 +121,31 @@ func errorsCause(errs []error) []error {
 	return cerrs
 }
 
-var baseIgnoredErrs = []error{
+// Collection of basic errors.
+var baseErrs = []error{
 	errDiskNotFound,
 	errFaultyDisk,
 	errFaultyRemoteDisk,
 }
+
+var baseIgnoredErrs = baseErrs
 
 // isErrIgnored returns whether given error is ignored or not.
 func isErrIgnored(err error, ignoredErrs ...error) bool {
 	err = errorCause(err)
 	for _, ignoredErr := range ignoredErrs {
 		if ignoredErr == err {
+			return true
+		}
+	}
+	return false
+}
+
+// isErr returns whether given error is exact error.
+func isErr(err error, errs ...error) bool {
+	err = errorCause(err)
+	for _, exactErr := range errs {
+		if err == exactErr {
 			return true
 		}
 	}
