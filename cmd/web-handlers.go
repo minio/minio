@@ -151,21 +151,23 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 	if objectAPI == nil {
 		return toJSONError(errServerNotInitialized)
 	}
-	if !isHTTPRequestValid(r) {
-		return toJSONError(errAuthentication)
-	}
+	authenticated := isHTTPRequestValid(r)
 	buckets, err := objectAPI.ListBuckets()
 	if err != nil {
 		return toJSONError(err)
 	}
 	for _, bucket := range buckets {
-		// List all buckets which are not private.
-		if bucket.Name != path.Base(reservedBucket) {
-			reply.Buckets = append(reply.Buckets, WebBucketInfo{
-				Name:         bucket.Name,
-				CreationDate: bucket.Created,
-			})
+		if bucket.Name == path.Base(reservedBucket) {
+			continue
 		}
+		if !authenticated && !isBucketActionAllowed("s3:ListBucket", bucket.Name, "") {
+			continue
+		}
+
+		reply.Buckets = append(reply.Buckets, WebBucketInfo{
+			Name:         bucket.Name,
+			CreationDate: bucket.Created,
+		})
 	}
 	reply.UIVersion = miniobrowser.UIVersion
 	return nil
@@ -197,13 +199,23 @@ type WebObjectInfo struct {
 
 // ListObjects - list objects api.
 func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, reply *ListObjectsRep) error {
+	reply.UIVersion = miniobrowser.UIVersion
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
 		return toJSONError(errServerNotInitialized)
 	}
-	if !isHTTPRequestValid(r) {
-		return toJSONError(errAuthentication)
+	switch {
+	case isHTTPRequestValid(r):
+		break
+	case isBucketActionAllowed("s3:GetObject", args.BucketName, args.Prefix):
+		break
+	case isBucketActionAllowed("s3:ListBucket", args.BucketName, args.Prefix):
+		// This is for ListObjects at the bucket level which will have empty prefix.
+		break
+	default:
+		return nil
 	}
+
 	marker := ""
 	for {
 		lo, err := objectAPI.ListObjects(args.BucketName, args.Prefix, marker, "/", 1000)
@@ -228,7 +240,6 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 			break
 		}
 	}
-	reply.UIVersion = miniobrowser.UIVersion
 	return nil
 }
 
@@ -420,13 +431,14 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !isHTTPRequestValid(r) {
-		writeWebErrorResponse(w, errAuthentication)
-		return
-	}
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
+
+	if !isHTTPRequestValid(r) && !isBucketActionAllowed("s3:PutObject", bucket, object) {
+		writeWebErrorResponse(w, errAuthentication)
+		return
+	}
 
 	// Extract incoming metadata if any.
 	metadata := extractMetadataFromHeader(r.Header)
@@ -467,7 +479,7 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	object := vars["object"]
 	token := r.URL.Query().Get("token")
 
-	if !isAuthTokenValid(token) {
+	if !isAuthTokenValid(token) && !isBucketActionAllowed("s3:GetObject", bucket, object) {
 		writeWebErrorResponse(w, errAuthentication)
 		return
 	}
