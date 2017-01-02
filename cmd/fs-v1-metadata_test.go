@@ -72,7 +72,7 @@ func TestReadFSMetadata(t *testing.T) {
 	}
 
 	// Test with corrupted disk
-	fsStorage := fs.storage.(*retryStorage)
+	fsStorage := fs.storage.(*posix)
 	naughty := newNaughtyDisk(fsStorage, nil, errFaultyDisk)
 	fs.storage = naughty
 	if _, err := readFSMetadata(fs.storage, ".minio.sys", fsPath); errorCause(err) != errFaultyDisk {
@@ -110,7 +110,7 @@ func TestWriteFSMetadata(t *testing.T) {
 	}
 
 	// Reading metadata with a corrupted disk
-	fsStorage := fs.storage.(*retryStorage)
+	fsStorage := fs.storage.(*posix)
 	for i := 1; i <= 2; i++ {
 		naughty := newNaughtyDisk(fsStorage, map[int]error{i: errFaultyDisk, i + 1: errFaultyDisk}, nil)
 		fs.storage = naughty

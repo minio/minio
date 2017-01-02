@@ -65,7 +65,7 @@ func TestUpdateUploadJSON(t *testing.T) {
 
 	// make some disks faulty to simulate a failure.
 	for i := range xl.storageDisks[:9] {
-		xl.storageDisks[i] = newNaughtyDisk(xl.storageDisks[i].(*retryStorage), nil, errFaultyDisk)
+		xl.storageDisks[i] = newNaughtyDisk(xl.storageDisks[i].(*posix), nil, errFaultyDisk)
 	}
 
 	testErrVal := xl.updateUploadJSON(bucket, object, "222abc", time.Now().UTC(), false)

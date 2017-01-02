@@ -84,9 +84,8 @@ EXAMPLES:
 }
 
 type serverCmdConfig struct {
-	serverAddr   string
-	endpoints    []*url.URL
-	storageDisks []StorageAPI
+	serverAddr string
+	endpoints  []*url.URL
 }
 
 // Parse an array of end-points (from the command line)
@@ -436,12 +435,6 @@ func serverMain(c *cli.Context) {
 	// on all nodes.
 	sort.Sort(byHostPath(endpoints))
 
-	storageDisks, err := initStorageDisks(endpoints)
-	fatalIf(err, "Unable to initialize storage disk(s).")
-
-	// Cleanup objects that weren't successfully written into the namespace.
-	fatalIf(houseKeeping(storageDisks), "Unable to purge temporary files.")
-
 	// Initialize server config.
 	initServerConfig(c)
 
@@ -453,9 +446,8 @@ func serverMain(c *cli.Context) {
 
 	// Configure server.
 	srvConfig := serverCmdConfig{
-		serverAddr:   serverAddr,
-		endpoints:    endpoints,
-		storageDisks: storageDisks,
+		serverAddr: serverAddr,
+		endpoints:  endpoints,
 	}
 
 	// Configure server.
@@ -500,12 +492,15 @@ func serverMain(c *cli.Context) {
 	}(tls)
 
 	// Wait for formatting of disks.
-	formattedDisks, err := waitForFormatDisks(firstDisk, endpoints, storageDisks)
-	fatalIf(err, "formatting storage disks failed")
+	formattedDisks, err := waitForFormatDisks(firstDisk, endpoints)
+	fatalIf(err, "Formatting storage disks failed")
+
+	// Cleanup objects that weren't successfully written into the namespace.
+	fatalIf(houseKeeping(formattedDisks), "Unable to purge temporary files.")
 
 	// Once formatted, initialize object layer.
 	newObject, err := newObjectLayer(formattedDisks)
-	fatalIf(err, "intializing object layer failed")
+	fatalIf(err, "Intializing object layer failed")
 
 	globalObjLayerMutex.Lock()
 	globalObjectAPI = newObject

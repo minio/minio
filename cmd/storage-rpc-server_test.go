@@ -56,7 +56,7 @@ func createTestStorageServer(t *testing.T) *testStorageRPCServer {
 		t.Fatalf("unable to parse storage endpoints, %s", err)
 	}
 
-	storageDisks, err := initStorageDisks(endpoints)
+	storageDisks, err := initStorageDisks(endpoints, defaultRetryConfig)
 	if err != nil {
 		t.Fatalf("unable to initialize storage disks, %s", err)
 	}

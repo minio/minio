@@ -60,10 +60,6 @@ func houseKeeping(storageDisks []StorageAPI) error {
 		if disk == nil {
 			continue
 		}
-		if _, ok := disk.(*networkStorage); ok {
-			// Skip remote disks.
-			continue
-		}
 		wg.Add(1)
 		go func(index int, disk StorageAPI) {
 			// Indicate this wait group is done.
@@ -173,14 +169,6 @@ func getPath(ep *url.URL) string {
 		diskPath = ep.Path
 	}
 	return diskPath
-}
-
-// Depending on the disk type network or local, initialize storage API.
-func newStorageAPI(ep *url.URL) (storage StorageAPI, err error) {
-	if isLocalStorage(ep) {
-		return newPosix(getPath(ep))
-	}
-	return newStorageRPC(ep)
 }
 
 var initMetaVolIgnoredErrs = append(baseIgnoredErrs, errVolumeExists)

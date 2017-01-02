@@ -55,7 +55,7 @@ func TestStorageInfo(t *testing.T) {
 		t.Fatalf("Unexpected error %s", err)
 	}
 
-	storageDisks, err := initStorageDisks(endpoints)
+	storageDisks, err := initStorageDisks(endpoints, defaultRetryConfig)
 	if err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
@@ -150,23 +150,13 @@ func TestNewXL(t *testing.T) {
 		t.Fatalf("Unable to initialize erasure, %s", err)
 	}
 
-	storageDisks, err := initStorageDisks(endpoints)
-	if err != nil {
-		t.Fatal("Unexpected error: ", err)
-	}
-
-	_, err = waitForFormatDisks(true, endpoints, nil)
-	if err != errInvalidArgument {
-		t.Fatalf("Expecting error, got %s", err)
-	}
-
-	_, err = waitForFormatDisks(true, nil, storageDisks)
+	_, err = waitForFormatDisks(true, nil)
 	if err != errInvalidArgument {
 		t.Fatalf("Expecting error, got %s", err)
 	}
 
 	// Initializes all erasure disks
-	formattedDisks, err := waitForFormatDisks(true, endpoints, storageDisks)
+	formattedDisks, err := waitForFormatDisks(true, endpoints)
 	if err != nil {
 		t.Fatalf("Unable to format disks for erasure, %s", err)
 	}

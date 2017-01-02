@@ -234,9 +234,9 @@ func TestLocalAddress(t *testing.T) {
 	}
 
 	currentIsDistXL := globalIsDistXL
-	defer func() {
-		globalIsDistXL = currentIsDistXL
-	}()
+	defer func(isDist bool) {
+		globalIsDistXL = isDist
+	}(currentIsDistXL)
 
 	// need to set this to avoid stale values from other tests.
 	globalMinioPort = "9000"

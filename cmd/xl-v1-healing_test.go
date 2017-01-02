@@ -94,9 +94,9 @@ func TestHealFormatXL(t *testing.T) {
 	}
 	xl = obj.(*xlObjects)
 	for i := range xl.storageDisks {
-		posixDisk, ok := xl.storageDisks[i].(*retryStorage)
+		posixDisk, ok := xl.storageDisks[i].(*posix)
 		if !ok {
-			t.Fatal("storage disk is not *retryStorage type")
+			t.Fatal("storage disk is not *posix type")
 		}
 		xl.storageDisks[i] = newNaughtyDisk(posixDisk, nil, errDiskFull)
 	}
@@ -226,9 +226,9 @@ func TestHealFormatXL(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	posixDisk, ok := xl.storageDisks[3].(*retryStorage)
+	posixDisk, ok := xl.storageDisks[3].(*posix)
 	if !ok {
-		t.Fatal("storage disk is not *retryStorage type")
+		t.Fatal("storage disk is not *posix type")
 	}
 	xl.storageDisks[3] = newNaughtyDisk(posixDisk, nil, errDiskNotFound)
 	expectedErr := fmt.Errorf("Unable to initialize format %s and %s", errSomeDiskOffline, errSomeDiskUnformatted)
@@ -365,9 +365,9 @@ func TestQuickHeal(t *testing.T) {
 	}
 
 	// Corrupt one of the disks to return unformatted disk.
-	posixDisk, ok := xl.storageDisks[0].(*retryStorage)
+	posixDisk, ok := xl.storageDisks[0].(*posix)
 	if !ok {
-		t.Fatal("storage disk is not *retryStorage type")
+		t.Fatal("storage disk is not *posix type")
 	}
 	xl.storageDisks[0] = newNaughtyDisk(posixDisk, nil, errUnformattedDisk)
 	if err = quickHeal(xl.storageDisks, xl.writeQuorum, xl.readQuorum); err != errUnformattedDisk {
@@ -414,9 +414,9 @@ func TestQuickHeal(t *testing.T) {
 	}
 	xl = obj.(*xlObjects)
 	// Corrupt one of the disks to return unformatted disk.
-	posixDisk, ok = xl.storageDisks[0].(*retryStorage)
+	posixDisk, ok = xl.storageDisks[0].(*posix)
 	if !ok {
-		t.Fatal("storage disk is not *retryStorage type")
+		t.Fatal("storage disk is not *posix type")
 	}
 	xl.storageDisks[0] = newNaughtyDisk(posixDisk, nil, errDiskNotFound)
 	if err = quickHeal(xl.storageDisks, xl.writeQuorum, xl.readQuorum); err != nil {

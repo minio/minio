@@ -54,7 +54,7 @@ func TestInitEventNotifierFaultyDisks(t *testing.T) {
 	}
 
 	fs := obj.(fsObjects)
-	fsstorage := fs.storage.(*retryStorage)
+	fsstorage := fs.storage.(*posix)
 
 	listenARN := "arn:minio:sns:us-east-1:1:listen"
 	queueARN := "arn:minio:sqs:us-east-1:1:redis"
@@ -228,9 +228,9 @@ func TestSetNGetBucketNotification(t *testing.T) {
 
 func TestInitEventNotifier(t *testing.T) {
 	currentIsDistXL := globalIsDistXL
-	defer func() {
-		globalIsDistXL = currentIsDistXL
-	}()
+	defer func(isDist bool) {
+		globalIsDistXL = isDist
+	}(currentIsDistXL)
 
 	s := TestPeerRPCServerData{serverType: "XL"}
 
@@ -329,9 +329,9 @@ func TestInitEventNotifier(t *testing.T) {
 
 func TestListenBucketNotification(t *testing.T) {
 	currentIsDistXL := globalIsDistXL
-	defer func() {
-		globalIsDistXL = currentIsDistXL
-	}()
+	defer func(isDist bool) {
+		globalIsDistXL = isDist
+	}(currentIsDistXL)
 
 	s := TestPeerRPCServerData{serverType: "XL"}
 	// setup and teardown

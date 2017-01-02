@@ -18,12 +18,14 @@ package cmd
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"net"
 	"net/rpc"
 	"net/url"
 	"path"
 	"sync/atomic"
+	"time"
 
 	"github.com/minio/minio/pkg/disk"
 )
@@ -31,6 +33,8 @@ import (
 type networkStorage struct {
 	networkIOErrCount int32 // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
 	rpcClient         *AuthRPCClient
+	retryCfg          retryConfig
+	verifyServerFunc  func() error
 }
 
 const (
@@ -95,8 +99,17 @@ func toStorageErr(err error) error {
 	return err
 }
 
+var defaultStorageRetryConfig = retryConfig{
+	isRetryableErr: func(err error) bool {
+		return err == rpc.ErrShutdown || err == errDiskNotFound
+	},
+	maxAttempts:  1,
+	timerUnit:    time.Millisecond,
+	timerMaxTime: 5 * time.Millisecond,
+}
+
 // Initialize new storage rpc client.
-func newStorageRPC(ep *url.URL) (StorageAPI, error) {
+func newStorageRPC(ep *url.URL, rCfg retryConfig) (StorageAPI, error) {
 	if ep == nil {
 		return nil, errInvalidArgument
 	}
@@ -115,20 +128,33 @@ func newStorageRPC(ep *url.URL) (StorageAPI, error) {
 		}
 	}
 
-	storageAPI := &networkStorage{
-		rpcClient: newAuthRPCClient(authConfig{
-			accessKey:        accessKey,
-			secretKey:        secretKey,
-			serverAddr:       rpcAddr,
-			serviceEndpoint:  rpcPath,
-			secureConn:       isSSL(),
-			serviceName:      "Storage",
-			disableReconnect: true,
-		}),
+	netStorage := &networkStorage{}
+	netStorage.rpcClient = newAuthRPCClient(authConfig{
+		accessKey:       accessKey,
+		secretKey:       secretKey,
+		serverAddr:      rpcAddr,
+		serviceEndpoint: rpcPath,
+		secureConn:      isSSL(),
+		serviceName:     "Storage",
+	})
+	netStorage.retryCfg = rCfg
+	netStorage.verifyServerFunc = func() error {
+		// FIXME: This is basic server validation check by reading format.json.
+		//        However there could be many possible misconfiguration currently
+		//        we don't handle.
+		// Read format config file to validate the server.
+		buf, err := netStorage.readAll(minioMetaBucket, formatConfigFile, nil)
+		if err != nil {
+			// Unmarshal read config file.
+			format := formatConfigV1{}
+			err = json.Unmarshal(buf, &format)
+		}
+
+		return err
 	}
 
 	// Returns successfully here.
-	return storageAPI, nil
+	return netStorage, nil
 }
 
 // Stringer interface compatible representation of network device.
@@ -145,17 +171,12 @@ func (n *networkStorage) String() string {
 // incoming i/o.
 const maxAllowedNetworkIOError = 256 // maximum allowed network IOError.
 
-// Init - attempts a login to reconnect.
-func (n *networkStorage) Init() error {
-	err := n.rpcClient.Login()
-	return toStorageErr(err)
-}
-
-// Closes the underlying RPC connection.
-func (n *networkStorage) Close() (err error) {
-	// Close the underlying connection.
-	err = n.rpcClient.Close()
-	return toStorageErr(err)
+// call executes RPC call with default verify server function and retry config.
+func (n *networkStorage) call(serviceMethod string, args interface {
+	SetAuthToken(authToken string)
+	SetRequestTime(requestTime time.Time)
+}, reply interface{}) (err error) {
+	return n.rpcClient.Call(serviceMethod, args, reply, n.verifyServerFunc, n.retryCfg)
 }
 
 // DiskInfo - fetch disk information for a remote disk.
@@ -173,7 +194,7 @@ func (n *networkStorage) DiskInfo() (info disk.Info, err error) {
 	}
 
 	args := AuthRPCArgs{}
-	if err = n.rpcClient.Call("Storage.DiskInfoHandler", &args, &info); err != nil {
+	if err = n.call("Storage.DiskInfoHandler", &args, &info); err != nil {
 		return disk.Info{}, toStorageErr(err)
 	}
 	return info, nil
@@ -193,9 +214,9 @@ func (n *networkStorage) MakeVol(volume string) (err error) {
 		return errFaultyRemoteDisk
 	}
 
-	reply := AuthRPCReply{}
 	args := GenericVolArgs{Vol: volume}
-	if err := n.rpcClient.Call("Storage.MakeVolHandler", &args, &reply); err != nil {
+	reply := AuthRPCReply{}
+	if err := n.call("Storage.MakeVolHandler", &args, &reply); err != nil {
 		return toStorageErr(err)
 	}
 	return nil
@@ -215,8 +236,9 @@ func (n *networkStorage) ListVols() (vols []VolInfo, err error) {
 		return nil, errFaultyRemoteDisk
 	}
 
+	args := AuthRPCArgs{}
 	ListVols := ListVolsReply{}
-	err = n.rpcClient.Call("Storage.ListVolsHandler", &AuthRPCArgs{}, &ListVols)
+	err = n.call("Storage.ListVolsHandler", &args, &ListVols)
 	if err != nil {
 		return nil, toStorageErr(err)
 	}
@@ -238,7 +260,7 @@ func (n *networkStorage) StatVol(volume string) (volInfo VolInfo, err error) {
 	}
 
 	args := GenericVolArgs{Vol: volume}
-	if err = n.rpcClient.Call("Storage.StatVolHandler", &args, &volInfo); err != nil {
+	if err = n.call("Storage.StatVolHandler", &args, &volInfo); err != nil {
 		return VolInfo{}, toStorageErr(err)
 	}
 	return volInfo, nil
@@ -258,9 +280,9 @@ func (n *networkStorage) DeleteVol(volume string) (err error) {
 		return errFaultyRemoteDisk
 	}
 
-	reply := AuthRPCReply{}
 	args := GenericVolArgs{Vol: volume}
-	if err := n.rpcClient.Call("Storage.DeleteVolHandler", &args, &reply); err != nil {
+	reply := AuthRPCReply{}
+	if err := n.call("Storage.DeleteVolHandler", &args, &reply); err != nil {
 		return toStorageErr(err)
 	}
 	return nil
@@ -280,12 +302,9 @@ func (n *networkStorage) PrepareFile(volume, path string, length int64) (err err
 		return errFaultyRemoteDisk
 	}
 
+	args := PrepareFileArgs{Vol: volume, Path: path, Size: length}
 	reply := AuthRPCReply{}
-	if err = n.rpcClient.Call("Storage.PrepareFileHandler", &PrepareFileArgs{
-		Vol:  volume,
-		Path: path,
-		Size: length,
-	}, &reply); err != nil {
+	if err = n.call("Storage.PrepareFileHandler", &args, &reply); err != nil {
 		return toStorageErr(err)
 	}
 	return nil
@@ -305,12 +324,9 @@ func (n *networkStorage) AppendFile(volume, path string, buffer []byte) (err err
 		return errFaultyRemoteDisk
 	}
 
+	args := AppendFileArgs{Vol: volume, Path: path, Buffer: buffer}
 	reply := AuthRPCReply{}
-	if err = n.rpcClient.Call("Storage.AppendFileHandler", &AppendFileArgs{
-		Vol:    volume,
-		Path:   path,
-		Buffer: buffer,
-	}, &reply); err != nil {
+	if err = n.call("Storage.AppendFileHandler", &args, &reply); err != nil {
 		return toStorageErr(err)
 	}
 	return nil
@@ -330,10 +346,8 @@ func (n *networkStorage) StatFile(volume, path string) (fileInfo FileInfo, err e
 		return FileInfo{}, errFaultyRemoteDisk
 	}
 
-	if err = n.rpcClient.Call("Storage.StatFileHandler", &StatFileArgs{
-		Vol:  volume,
-		Path: path,
-	}, &fileInfo); err != nil {
+	args := StatFileArgs{Vol: volume, Path: path}
+	if err = n.call("Storage.StatFileHandler", &args, &fileInfo); err != nil {
 		return FileInfo{}, toStorageErr(err)
 	}
 	return fileInfo, nil
@@ -343,7 +357,7 @@ func (n *networkStorage) StatFile(volume, path string) (fileInfo FileInfo, err e
 // contents in a byte slice. Returns buf == nil if err != nil.
 // This API is meant to be used on files which have small memory footprint, do
 // not use this on large files as it would cause server to crash.
-func (n *networkStorage) ReadAll(volume, path string) (buf []byte, err error) {
+func (n *networkStorage) readAll(volume, path string, verifyServerFunc func() error) (buf []byte, err error) {
 	defer func() {
 		if err == errDiskNotFound {
 			atomic.AddInt32(&n.networkIOErrCount, 1)
@@ -356,13 +370,15 @@ func (n *networkStorage) ReadAll(volume, path string) (buf []byte, err error) {
 		return nil, errFaultyRemoteDisk
 	}
 
-	if err = n.rpcClient.Call("Storage.ReadAllHandler", &ReadAllArgs{
-		Vol:  volume,
-		Path: path,
-	}, &buf); err != nil {
+	args := ReadAllArgs{Vol: volume, Path: path}
+	if err = n.rpcClient.Call("Storage.ReadAllHandler", &args, &buf, verifyServerFunc, n.retryCfg); err != nil {
 		return nil, toStorageErr(err)
 	}
 	return buf, nil
+}
+
+func (n *networkStorage) ReadAll(volume, path string) (buf []byte, err error) {
+	return n.readAll(volume, path, n.verifyServerFunc)
 }
 
 // ReadFile - reads a file at remote path and fills the buffer.
@@ -387,12 +403,8 @@ func (n *networkStorage) ReadFile(volume string, path string, offset int64, buff
 	}
 
 	var result []byte
-	err = n.rpcClient.Call("Storage.ReadFileHandler", &ReadFileArgs{
-		Vol:    volume,
-		Path:   path,
-		Offset: offset,
-		Buffer: buffer,
-	}, &result)
+	args := ReadFileArgs{Vol: volume, Path: path, Offset: offset, Buffer: buffer}
+	err = n.call("Storage.ReadFileHandler", &args, &result)
 
 	// Copy results to buffer.
 	copy(buffer, result)
@@ -415,10 +427,8 @@ func (n *networkStorage) ListDir(volume, path string) (entries []string, err err
 		return nil, errFaultyRemoteDisk
 	}
 
-	if err = n.rpcClient.Call("Storage.ListDirHandler", &ListDirArgs{
-		Vol:  volume,
-		Path: path,
-	}, &entries); err != nil {
+	args := ListDirArgs{Vol: volume, Path: path}
+	if err = n.call("Storage.ListDirHandler", &args, &entries); err != nil {
 		return nil, toStorageErr(err)
 	}
 	// Return successfully unmarshalled results.
@@ -439,11 +449,9 @@ func (n *networkStorage) DeleteFile(volume, path string) (err error) {
 		return errFaultyRemoteDisk
 	}
 
+	args := DeleteFileArgs{Vol: volume, Path: path}
 	reply := AuthRPCReply{}
-	if err = n.rpcClient.Call("Storage.DeleteFileHandler", &DeleteFileArgs{
-		Vol:  volume,
-		Path: path,
-	}, &reply); err != nil {
+	if err = n.call("Storage.DeleteFileHandler", &args, &reply); err != nil {
 		return toStorageErr(err)
 	}
 	return nil
@@ -463,13 +471,14 @@ func (n *networkStorage) RenameFile(srcVolume, srcPath, dstVolume, dstPath strin
 		return errFaultyRemoteDisk
 	}
 
-	reply := AuthRPCReply{}
-	if err = n.rpcClient.Call("Storage.RenameFileHandler", &RenameFileArgs{
+	args := RenameFileArgs{
 		SrcVol:  srcVolume,
 		SrcPath: srcPath,
 		DstVol:  dstVolume,
 		DstPath: dstPath,
-	}, &reply); err != nil {
+	}
+	reply := AuthRPCReply{}
+	if err = n.call("Storage.RenameFileHandler", &args, &reply); err != nil {
 		return toStorageErr(err)
 	}
 	return nil

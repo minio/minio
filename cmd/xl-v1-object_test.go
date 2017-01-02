@@ -135,7 +135,7 @@ func TestXLDeleteObjectDiskNotFound(t *testing.T) {
 	// for a 16 disk setup, quorum is 9. To simulate disks not found yet
 	// quorum is available, we remove disks leaving quorum disks behind.
 	for i := range xl.storageDisks[:7] {
-		xl.storageDisks[i] = newNaughtyDisk(xl.storageDisks[i].(*retryStorage), nil, errFaultyDisk)
+		xl.storageDisks[i] = newNaughtyDisk(xl.storageDisks[i].(*posix), nil, errFaultyDisk)
 	}
 	err = obj.DeleteObject(bucket, object)
 	if err != nil {
@@ -195,7 +195,7 @@ func TestGetObjectNoQuorum(t *testing.T) {
 		}
 		for i := range xl.storageDisks[:9] {
 			switch diskType := xl.storageDisks[i].(type) {
-			case *retryStorage:
+			case *posix:
 				xl.storageDisks[i] = newNaughtyDisk(diskType, diskErrors, errFaultyDisk)
 			case *naughtyDisk:
 				xl.storageDisks[i] = newNaughtyDisk(diskType.disk, diskErrors, errFaultyDisk)
@@ -246,7 +246,7 @@ func TestPutObjectNoQuorum(t *testing.T) {
 		}
 		for i := range xl.storageDisks[:9] {
 			switch diskType := xl.storageDisks[i].(type) {
-			case *retryStorage:
+			case *posix:
 				xl.storageDisks[i] = newNaughtyDisk(diskType, diskErrors, errFaultyDisk)
 			case *naughtyDisk:
 				xl.storageDisks[i] = newNaughtyDisk(diskType.disk, diskErrors, errFaultyDisk)

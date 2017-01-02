@@ -109,26 +109,26 @@ type remoteBucketMetaState struct {
 // change to remote peer via RPC call.
 func (rc *remoteBucketMetaState) UpdateBucketNotification(args *SetBucketNotificationPeerArgs) error {
 	reply := AuthRPCReply{}
-	return rc.Call("S3.SetBucketNotificationPeer", args, &reply)
+	return rc.Call("S3.SetBucketNotificationPeer", args, &reply, nil, defaultRetryConfig)
 }
 
 // remoteBucketMetaState.UpdateBucketListener - sends bucket listener change to
 // remote peer via RPC call.
 func (rc *remoteBucketMetaState) UpdateBucketListener(args *SetBucketListenerPeerArgs) error {
 	reply := AuthRPCReply{}
-	return rc.Call("S3.SetBucketListenerPeer", args, &reply)
+	return rc.Call("S3.SetBucketListenerPeer", args, &reply, nil, defaultRetryConfig)
 }
 
 // remoteBucketMetaState.UpdateBucketPolicy - sends bucket policy change to remote
 // peer via RPC call.
 func (rc *remoteBucketMetaState) UpdateBucketPolicy(args *SetBucketPolicyPeerArgs) error {
 	reply := AuthRPCReply{}
-	return rc.Call("S3.SetBucketPolicyPeer", args, &reply)
+	return rc.Call("S3.SetBucketPolicyPeer", args, &reply, nil, defaultRetryConfig)
 }
 
 // remoteBucketMetaState.SendEvent - sends event for bucket listener to remote
 // peer via RPC call.
 func (rc *remoteBucketMetaState) SendEvent(args *EventArgs) error {
 	reply := AuthRPCReply{}
-	return rc.Call("S3.Event", args, &reply)
+	return rc.Call("S3.Event", args, &reply, nil, defaultRetryConfig)
 }
