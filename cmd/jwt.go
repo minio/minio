@@ -43,6 +43,7 @@ var errInvalidSecretKeyLength = errors.New("Invalid secret key, secret key shoul
 
 var errInvalidAccessKeyID = errors.New("The access key ID you provided does not exist in our records")
 var errAuthentication = errors.New("Authentication failed, check your access credentials")
+var errNoAuthToken = errors.New("JWT token missing")
 
 func authenticateJWT(accessKey, secretKey string, expiry time.Duration) (string, error) {
 	// Trim spaces.
@@ -113,4 +114,19 @@ func isHTTPRequestValid(req *http.Request) bool {
 	}
 
 	return jwtToken.Valid
+}
+
+func webReqestAuthenticate(req *http.Request) error {
+	jwtToken, err := jwtreq.ParseFromRequest(req, jwtreq.AuthorizationHeaderExtractor, keyFuncCallback)
+	if err != nil {
+		if err == jwtreq.ErrNoTokenInRequest {
+			return errNoAuthToken
+		}
+		return errAuthentication
+	}
+
+	if !jwtToken.Valid {
+		return errAuthentication
+	}
+	return nil
 }

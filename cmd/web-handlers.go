@@ -151,7 +151,10 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 	if objectAPI == nil {
 		return toJSONError(errServerNotInitialized)
 	}
-	authenticated := isHTTPRequestValid(r)
+	authErr := webReqestAuthenticate(r)
+	if authErr == errAuthentication {
+		return toJSONError(authErr)
+	}
 	buckets, err := objectAPI.ListBuckets()
 	if err != nil {
 		return toJSONError(err)
@@ -160,7 +163,7 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 		if bucket.Name == path.Base(reservedBucket) {
 			continue
 		}
-		if !authenticated && !isBucketActionAllowed("s3:ListBucket", bucket.Name, "") {
+		if authErr != nil && !isBucketActionAllowed("s3:ListBucket", bucket.Name, "") {
 			continue
 		}
 
@@ -204,8 +207,11 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 	if objectAPI == nil {
 		return toJSONError(errServerNotInitialized)
 	}
+	authErr := webReqestAuthenticate(r)
 	switch {
-	case isHTTPRequestValid(r):
+	case authErr == errAuthentication:
+		return toJSONError(authErr)
+	case authErr == nil:
 		break
 	case isBucketActionAllowed("s3:GetObject", args.BucketName, args.Prefix):
 		break
@@ -435,7 +441,12 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	bucket := vars["bucket"]
 	object := vars["object"]
 
-	if !isHTTPRequestValid(r) && !isBucketActionAllowed("s3:PutObject", bucket, object) {
+	authErr := webReqestAuthenticate(r)
+	if authErr == errAuthentication {
+		writeWebErrorResponse(w, errAuthentication)
+		return
+	}
+	if authErr != nil && !isBucketActionAllowed("s3:PutObject", bucket, object) {
 		writeWebErrorResponse(w, errAuthentication)
 		return
 	}
