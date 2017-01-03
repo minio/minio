@@ -294,6 +294,9 @@ type LoginRep struct {
 func (web *webAPIHandlers) Login(r *http.Request, args *LoginArgs, reply *LoginRep) error {
 	token, err := authenticateWeb(args.Username, args.Password)
 	if err != nil {
+		// Make sure to log errors related to browser login,
+		// for security and auditing reasons.
+		errorIf(err, "Unable to login request from %s", r.RemoteAddr)
 		return toJSONError(err)
 	}
 
@@ -768,11 +771,28 @@ func toWebAPIError(err error) APIError {
 			HTTPStatusCode: http.StatusForbidden,
 			Description:    err.Error(),
 		}
-	}
-	if err == errServerNotInitialized {
+	} else if err == errServerNotInitialized {
 		return APIError{
 			Code:           "XMinioServerNotInitialized",
 			HTTPStatusCode: http.StatusServiceUnavailable,
+			Description:    err.Error(),
+		}
+	} else if err == errInvalidAccessKeyLength {
+		return APIError{
+			Code:           "AccessDenied",
+			HTTPStatusCode: http.StatusForbidden,
+			Description:    err.Error(),
+		}
+	} else if err == errInvalidSecretKeyLength {
+		return APIError{
+			Code:           "AccessDenied",
+			HTTPStatusCode: http.StatusForbidden,
+			Description:    err.Error(),
+		}
+	} else if err == errInvalidAccessKeyID {
+		return APIError{
+			Code:           "AccessDenied",
+			HTTPStatusCode: http.StatusForbidden,
 			Description:    err.Error(),
 		}
 	}

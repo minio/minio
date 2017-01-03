@@ -149,6 +149,7 @@ func testLoginWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler)
 		{"", "foo", false},
 		{"azerty", "", false},
 		{"azerty", "foo", false},
+		{"azerty", "azerty123", false},
 		{credentials.AccessKey, credentials.SecretKey, true},
 	}
 
