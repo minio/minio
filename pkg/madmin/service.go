@@ -77,7 +77,7 @@ func (adm *AdminClient) ServiceStatus() (ServiceStatusMetadata, error) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return ServiceStatusMetadata{}, errors.New("Got " + resp.Status)
+		return ServiceStatusMetadata{}, errors.New("Got HTTP Status: " + resp.Status)
 	}
 
 	respBytes, err := ioutil.ReadAll(resp.Body)
@@ -113,7 +113,7 @@ func (adm *AdminClient) ServiceStop() error {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return errors.New("Got " + resp.Status)
+		return errors.New("Got HTTP Status: " + resp.Status)
 	}
 
 	return nil
@@ -137,7 +137,7 @@ func (adm *AdminClient) ServiceRestart() error {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return errors.New("Got " + resp.Status)
+		return errors.New("Got HTTP Status: " + resp.Status)
 	}
 	return nil
 }

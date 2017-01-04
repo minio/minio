@@ -29,7 +29,7 @@ func registerAdminRouter(mux *router.Router) {
 	// Admin router
 	adminRouter := mux.NewRoute().PathPrefix("/").Subrouter()
 
-	/// Admin operations
+	/// Service operations
 
 	// Service status
 	adminRouter.Methods("GET").Queries("service", "").Headers(minioAdminOpHeader, "status").HandlerFunc(adminAPI.ServiceStatusHandler)
@@ -37,4 +37,12 @@ func registerAdminRouter(mux *router.Router) {
 	adminRouter.Methods("POST").Queries("service", "").Headers(minioAdminOpHeader, "stop").HandlerFunc(adminAPI.ServiceStopHandler)
 	// Service restart
 	adminRouter.Methods("POST").Queries("service", "").Headers(minioAdminOpHeader, "restart").HandlerFunc(adminAPI.ServiceRestartHandler)
+
+	/// Lock operations
+
+	// List Locks
+	adminRouter.Methods("GET").Queries("lock", "").Headers(minioAdminOpHeader, "list").HandlerFunc(adminAPI.ListLocksHandler)
+
+	// Clear locks
+	adminRouter.Methods("POST").Queries("lock", "").Headers(minioAdminOpHeader, "clear").HandlerFunc(adminAPI.ClearLocksHandler)
 }
