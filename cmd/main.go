@@ -190,20 +190,14 @@ func minioInit(ctx *cli.Context) {
 	enableLoggers()
 
 	// Fetch access keys from environment variables and update the config.
-	globalEnvAccessKey = os.Getenv("MINIO_ACCESS_KEY")
-	globalEnvSecretKey = os.Getenv("MINIO_SECRET_KEY")
-	if globalEnvAccessKey != "" && globalEnvSecretKey != "" {
+	accessKey := os.Getenv("MINIO_ACCESS_KEY")
+	secretKey := os.Getenv("MINIO_SECRET_KEY")
+	if accessKey != "" && secretKey != "" {
+		creds, err := getCredential(accessKey, secretKey)
+		fatalIf(err, "Credentials are invalid, please set proper credentials `minio server --help`")
+
 		// Set new credentials.
-		serverConfig.SetCredential(credential{
-			AccessKey: globalEnvAccessKey,
-			SecretKey: globalEnvSecretKey,
-		})
-	}
-	if !isAccessKeyValid(serverConfig.GetCredential().AccessKey) {
-		fatalIf(errInvalidArgument, "Invalid access key. Accept only a string starting with a alphabetic and containing from 5 to 20 characters.")
-	}
-	if !isSecretKeyValid(serverConfig.GetCredential().SecretKey) {
-		fatalIf(errInvalidArgument, "Invalid secret key. Accept only a string containing from 8 to 40 characters.")
+		serverConfig.SetCredential(creds)
 	}
 
 	// Init the error tracing module.

@@ -19,6 +19,8 @@ package cmd
 import (
 	"crypto/rand"
 	"encoding/base64"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 const (
@@ -65,14 +67,31 @@ func isSecretKeyValid(secretKey string) bool {
 
 // credential container for access and secret keys.
 type credential struct {
-	AccessKey string `json:"accessKey"`
-	SecretKey string `json:"secretKey"`
+	AccessKey     string `json:"accessKey,omitempty"`
+	SecretKey     string `json:"secretKey,omitempty"`
+	SecretKeyHash []byte `json:"secretKeyHash,omitempty"`
 }
 
+// Generate a bcrypt hashed key for input secret key.
+func mustGetHashedSecretKey(secretKey string) []byte {
+	hashedSecretKey, err := bcrypt.GenerateFromPassword([]byte(secretKey), bcrypt.DefaultCost)
+	if err != nil {
+		panic(err)
+	}
+	return hashedSecretKey
+}
+
+// Initialize a new credential object.
 func newCredential() credential {
-	return credential{mustGetAccessKey(), mustGetSecretKey()}
+	secretKey := mustGetSecretKey()
+	accessKey := mustGetAccessKey()
+
+	secretHash := mustGetHashedSecretKey(secretKey)
+	return credential{accessKey, secretKey, secretHash}
 }
 
+// Converts accessKey and secretKeys into credential object which
+// contains bcrypt secret key hash for future validation.
 func getCredential(accessKey, secretKey string) (credential, error) {
 	if !isAccessKeyValid(accessKey) {
 		return credential{}, errInvalidAccessKeyLength
@@ -82,5 +101,6 @@ func getCredential(accessKey, secretKey string) (credential, error) {
 		return credential{}, errInvalidSecretKeyLength
 	}
 
-	return credential{accessKey, secretKey}, nil
+	secretHash := mustGetHashedSecretKey(secretKey)
+	return credential{accessKey, secretKey, secretHash}, nil
 }

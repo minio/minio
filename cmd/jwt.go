@@ -65,8 +65,7 @@ func authenticateJWT(accessKey, secretKey string, expiry time.Duration) (string,
 
 	// Validate secret key.
 	// Using bcrypt to avoid timing attacks.
-	hashedSecretKey, _ := bcrypt.GenerateFromPassword([]byte(serverCred.SecretKey), bcrypt.DefaultCost)
-	if bcrypt.CompareHashAndPassword(hashedSecretKey, []byte(secretKey)) != nil {
+	if bcrypt.CompareHashAndPassword(serverCred.SecretKeyHash, []byte(secretKey)) != nil {
 		return "", errAuthentication
 	}
 

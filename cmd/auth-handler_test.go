@@ -315,7 +315,12 @@ func TestIsReqAuthenticated(t *testing.T) {
 	}
 	defer removeAll(path)
 
-	serverConfig.SetCredential(credential{"myuser", "mypassword"})
+	creds, err := getCredential("myuser", "mypassword")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	serverConfig.SetCredential(creds)
 
 	// List of test cases for validating http request authentication.
 	testCases := []struct {
