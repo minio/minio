@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,11 +20,27 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"strconv"
 	"time"
 )
 
 const (
 	minioAdminOpHeader = "X-Minio-Operation"
+)
+
+// Type-safe query params.
+type mgmtQueryKey string
+
+// Only valid query params for list/clear locks management APIs.
+const (
+	mgmtBucket    mgmtQueryKey = "bucket"
+	mgmtObject    mgmtQueryKey = "object"
+	mgmtPrefix    mgmtQueryKey = "prefix"
+	mgmtOlderThan mgmtQueryKey = "older-than"
+	mgmtDelimiter mgmtQueryKey = "delimiter"
+	mgmtMarker    mgmtQueryKey = "marker"
+	mgmtMaxKey    mgmtQueryKey = "max-key"
+	mgmtDryRun    mgmtQueryKey = "dry-run"
 )
 
 // ServiceStatusHandler - GET /?service
@@ -63,32 +79,21 @@ func (adminAPI adminAPIHandlers) ServiceRestartHandler(w http.ResponseWriter, r 
 	}
 
 	// Reply to the client before restarting minio server.
-	w.WriteHeader(http.StatusOK)
+	writeSuccessResponseHeadersOnly(w)
 
 	sendServiceCmd(globalAdminPeers, serviceRestart)
 }
 
-// Type-safe lock query params.
-type lockQueryKey string
-
-// Only valid query params for list/clear locks management APIs.
-const (
-	lockBucket    lockQueryKey = "bucket"
-	lockPrefix    lockQueryKey = "prefix"
-	lockOlderThan lockQueryKey = "older-than"
-)
-
 // validateLockQueryParams - Validates query params for list/clear locks management APIs.
 func validateLockQueryParams(vars url.Values) (string, string, time.Duration, APIErrorCode) {
-	bucket := vars.Get(string(lockBucket))
-	prefix := vars.Get(string(lockPrefix))
-	relTimeStr := vars.Get(string(lockOlderThan))
+	bucket := vars.Get(string(mgmtBucket))
+	prefix := vars.Get(string(mgmtPrefix))
+	relTimeStr := vars.Get(string(mgmtOlderThan))
 
 	// N B empty bucket name is invalid
 	if !IsValidBucketName(bucket) {
 		return "", "", time.Duration(0), ErrInvalidBucketName
 	}
-
 	// empty prefix is valid.
 	if !IsValidObjectPrefix(prefix) {
 		return "", "", time.Duration(0), ErrInvalidObjectName
@@ -194,4 +199,177 @@ func (adminAPI adminAPIHandlers) ClearLocksHandler(w http.ResponseWriter, r *htt
 
 	// Reply with list of locks cleared, as json.
 	writeSuccessResponseJSON(w, jsonBytes)
+}
+
+// validateHealQueryParams - Validates query params for heal list management API.
+func validateHealQueryParams(vars url.Values) (string, string, string, string, int, APIErrorCode) {
+	bucket := vars.Get(string(mgmtBucket))
+	prefix := vars.Get(string(mgmtPrefix))
+	marker := vars.Get(string(mgmtMarker))
+	delimiter := vars.Get(string(mgmtDelimiter))
+	maxKeyStr := vars.Get(string(mgmtMaxKey))
+
+	// N B empty bucket name is invalid
+	if !IsValidBucketName(bucket) {
+		return "", "", "", "", 0, ErrInvalidBucketName
+	}
+
+	// empty prefix is valid.
+	if !IsValidObjectPrefix(prefix) {
+		return "", "", "", "", 0, ErrInvalidObjectName
+	}
+
+	// check if maxKey is a valid integer.
+	maxKey, err := strconv.Atoi(maxKeyStr)
+	if err != nil {
+		return "", "", "", "", 0, ErrInvalidMaxKeys
+	}
+
+	// Validate prefix, marker, delimiter and maxKey.
+	apiErr := validateListObjectsArgs(prefix, marker, delimiter, maxKey)
+	if apiErr != ErrNone {
+		return "", "", "", "", 0, apiErr
+	}
+
+	return bucket, prefix, marker, delimiter, maxKey, ErrNone
+}
+
+// ListObjectsHealHandler - GET /?heal&bucket=mybucket&prefix=myprefix&marker=mymarker&delimiter=&mydelimiter&maxKey=1000
+// - bucket is mandatory query parameter
+// - rest are optional query parameters
+// List upto maxKey objects that need healing in a given bucket matching the given prefix.
+func (adminAPI adminAPIHandlers) ListObjectsHealHandler(w http.ResponseWriter, r *http.Request) {
+	// Get object layer instance.
+	objLayer := newObjectLayerFn()
+	if objLayer == nil {
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+		return
+	}
+
+	// Validate request signature.
+	adminAPIErr := checkRequestAuthType(r, "", "", "")
+	if adminAPIErr != ErrNone {
+		writeErrorResponse(w, adminAPIErr, r.URL)
+		return
+	}
+
+	// Validate query params.
+	vars := r.URL.Query()
+	bucket, prefix, marker, delimiter, maxKey, adminAPIErr := validateHealQueryParams(vars)
+	if adminAPIErr != ErrNone {
+		writeErrorResponse(w, adminAPIErr, r.URL)
+		return
+	}
+
+	// Get the list objects to be healed.
+	objectInfos, err := objLayer.ListObjectsHeal(bucket, prefix, marker, delimiter, maxKey)
+	if err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
+	listResponse := generateListObjectsV1Response(bucket, prefix, marker, delimiter, maxKey, objectInfos)
+	// Write success response.
+	writeSuccessResponseXML(w, encodeResponse(listResponse))
+}
+
+// HealBucketHandler - POST /?heal&bucket=mybucket
+// - bucket is mandatory query parameter
+// Heal a given bucket, if present.
+func (adminAPI adminAPIHandlers) HealBucketHandler(w http.ResponseWriter, r *http.Request) {
+	// Get object layer instance.
+	objLayer := newObjectLayerFn()
+	if objLayer == nil {
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+		return
+	}
+
+	// Validate request signature.
+	adminAPIErr := checkRequestAuthType(r, "", "", "")
+	if adminAPIErr != ErrNone {
+		writeErrorResponse(w, adminAPIErr, r.URL)
+		return
+	}
+
+	// Validate bucket name and check if it exists.
+	vars := r.URL.Query()
+	bucket := vars.Get(string(mgmtBucket))
+	if err := checkBucketExist(bucket, objLayer); err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
+	// if dry-run=yes, then only perform validations and return success.
+	if isDryRun(vars) {
+		writeSuccessResponseHeadersOnly(w)
+		return
+	}
+
+	// Heal the given bucket.
+	err := objLayer.HealBucket(bucket)
+	if err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
+	// Return 200 on success.
+	writeSuccessResponseHeadersOnly(w)
+}
+
+// isDryRun - returns true if dry-run query param was set to yes and false otherwise.
+func isDryRun(qval url.Values) bool {
+	if dryRun := qval.Get(string(mgmtDryRun)); dryRun == "yes" {
+		return true
+	}
+	return false
+}
+
+// HealObjectHandler - POST /?heal&bucket=mybucket&object=myobject
+// - bucket and object are both mandatory query parameters
+// Heal a given object, if present.
+func (adminAPI adminAPIHandlers) HealObjectHandler(w http.ResponseWriter, r *http.Request) {
+	// Get object layer instance.
+	objLayer := newObjectLayerFn()
+	if objLayer == nil {
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+		return
+	}
+
+	// Validate request signature.
+	adminAPIErr := checkRequestAuthType(r, "", "", "")
+	if adminAPIErr != ErrNone {
+		writeErrorResponse(w, adminAPIErr, r.URL)
+		return
+	}
+
+	vars := r.URL.Query()
+	bucket := vars.Get(string(mgmtBucket))
+	object := vars.Get(string(mgmtObject))
+
+	// Validate bucket and object names.
+	if err := checkBucketAndObjectNames(bucket, object); err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
+	// Check if object exists.
+	if _, err := objLayer.GetObjectInfo(bucket, object); err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
+	// if dry-run=yes, then only perform validations and return success.
+	if isDryRun(vars) {
+		writeSuccessResponseHeadersOnly(w)
+		return
+	}
+
+	err := objLayer.HealObject(bucket, object)
+	if err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
+	// Return 200 on success.
+	writeSuccessResponseHeadersOnly(w)
 }

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,6 +59,21 @@ type BucketInfo struct {
 	Created time.Time
 }
 
+type healStatus int
+
+const (
+	canHeal           healStatus = iota // Object can be healed
+	corrupted                           // Object can't be healed
+	quorumUnavailable                   // Object can't be healed until read quorum is available
+)
+
+// HealInfo - represents healing related information of an object.
+type HealInfo struct {
+	Status              healStatus
+	MissingDataCount    int
+	MissingPartityCount int
+}
+
 // ObjectInfo - represents object metadata.
 type ObjectInfo struct {
 	// Name of the bucket.
@@ -89,6 +104,7 @@ type ObjectInfo struct {
 
 	// User-Defined metadata
 	UserDefined map[string]string
+	HealInfo    *HealInfo `xml:"HealInfo,omitempty"`
 }
 
 // ListPartsInfo - represents list of all parts.

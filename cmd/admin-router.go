@@ -41,7 +41,15 @@ func registerAdminRouter(mux *router.Router) {
 
 	// List Locks
 	adminRouter.Methods("GET").Queries("lock", "").Headers(minioAdminOpHeader, "list").HandlerFunc(adminAPI.ListLocksHandler)
-
 	// Clear locks
 	adminRouter.Methods("POST").Queries("lock", "").Headers(minioAdminOpHeader, "clear").HandlerFunc(adminAPI.ClearLocksHandler)
+
+	/// Heal operations
+
+	// List Objects needing heal.
+	adminRouter.Methods("GET").Queries("heal", "").Headers(minioAdminOpHeader, "list").HandlerFunc(adminAPI.ListObjectsHealHandler)
+	// Heal Buckets.
+	adminRouter.Methods("POST").Queries("heal", "").Headers(minioAdminOpHeader, "bucket").HandlerFunc(adminAPI.HealBucketHandler)
+	// Heal Objects.
+	adminRouter.Methods("POST").Queries("heal", "").Headers(minioAdminOpHeader, "object").HandlerFunc(adminAPI.HealObjectHandler)
 }
