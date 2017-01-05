@@ -152,7 +152,7 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 		return toJSONError(errServerNotInitialized)
 	}
 	authErr := webReqestAuthenticate(r)
-	if authErr == errAuthentication {
+	if authErr != nil {
 		return toJSONError(authErr)
 	}
 	buckets, err := objectAPI.ListBuckets()
@@ -161,9 +161,6 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 	}
 	for _, bucket := range buckets {
 		if bucket.Name == path.Base(reservedBucket) {
-			continue
-		}
-		if authErr != nil && !isBucketActionAllowed("s3:ListBucket", bucket.Name, "") {
 			continue
 		}
 
@@ -185,6 +182,7 @@ type ListObjectsArgs struct {
 // ListObjectsRep - list objects response.
 type ListObjectsRep struct {
 	Objects   []WebObjectInfo `json:"objects"`
+	Writable  bool            `json:"writable"` // Used by client to show "upload file" button.
 	UIVersion string          `json:"uiVersion"`
 }
 
@@ -207,21 +205,26 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 	if objectAPI == nil {
 		return toJSONError(errServerNotInitialized)
 	}
+	prefix := args.Prefix + "test" // To test if GetObject/PutObject with the specified prefix is allowed.
+	readable := isBucketActionAllowed("s3:GetObject", args.BucketName, prefix)
+	writable := isBucketActionAllowed("s3:PutObject", args.BucketName, prefix)
 	authErr := webReqestAuthenticate(r)
 	switch {
 	case authErr == errAuthentication:
 		return toJSONError(authErr)
 	case authErr == nil:
 		break
-	case isBucketActionAllowed("s3:GetObject", args.BucketName, args.Prefix):
+	case readable && writable:
+		reply.Writable = true
 		break
-	case isBucketActionAllowed("s3:ListBucket", args.BucketName, args.Prefix):
-		// This is for ListObjects at the bucket level which will have empty prefix.
+	case readable:
 		break
+	case writable:
+		reply.Writable = true
+		return nil
 	default:
 		return nil
 	}
-
 	marker := ""
 	for {
 		lo, err := objectAPI.ListObjects(args.BucketName, args.Prefix, marker, "/", 1000)

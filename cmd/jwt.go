@@ -107,15 +107,12 @@ func isAuthTokenValid(tokenString string) bool {
 }
 
 func isHTTPRequestValid(req *http.Request) bool {
-	jwtToken, err := jwtreq.ParseFromRequest(req, jwtreq.AuthorizationHeaderExtractor, keyFuncCallback)
-	if err != nil {
-		errorIf(err, "Unable to parse JWT token string")
-		return false
-	}
-
-	return jwtToken.Valid
+	return webReqestAuthenticate(req) == nil
 }
 
+// Check if the request is authenticated.
+// Returns nil if the request is authenticated. errNoAuthToken if token missing.
+// Returns errAuthentication for all other errors.
 func webReqestAuthenticate(req *http.Request) error {
 	jwtToken, err := jwtreq.ParseFromRequest(req, jwtreq.AuthorizationHeaderExtractor, keyFuncCallback)
 	if err != nil {
