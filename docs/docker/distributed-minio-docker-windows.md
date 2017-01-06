@@ -2,7 +2,7 @@
 
 ## 1. Prerequisites
 
-Install Install Docker Toolbox for Windows from [here](http://www.docker.com/products/docker-toolbox)
+Install Docker Toolbox for Windows from [here](http://www.docker.com/products/docker-toolbox)
 
 ## 2. Installation 
 
@@ -24,7 +24,7 @@ curl https://raw.githubusercontent.com/minio/minio/master/docs/docker/docker-com
 ```
 docker-compose.exe up
 ```
-Minio browser will be simply accessible at one of the port 9001-9004.
+Minio browser will be simply accessible at one of the ports 9001-9004.
 
 ## 3. Explore Further
 
