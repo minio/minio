@@ -42,12 +42,12 @@ const (
 func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter, r *http.Request) {
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
-		writeErrorResponse(w, r, ErrServerNotInitialized, r.URL.Path)
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
 		return
 	}
 
 	if s3Error := checkRequestAuthType(r, "", "", serverConfig.GetRegion()); s3Error != ErrNone {
-		writeErrorResponse(w, r, s3Error, r.URL.Path)
+		writeErrorResponse(w, s3Error, r.URL)
 		return
 	}
 
@@ -57,7 +57,7 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 	_, err := objAPI.GetBucketInfo(bucket)
 	if err != nil {
 		errorIf(err, "Unable to find bucket info.")
-		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 
@@ -65,7 +65,7 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 	nConfig, err := loadNotificationConfig(bucket, objAPI)
 	if err != nil && err != errNoSuchNotifications {
 		errorIf(err, "Unable to read notification configuration.")
-		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 	// For no notifications we write a dummy XML.
@@ -77,11 +77,12 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 	if err != nil {
 		// For any marshalling failure.
 		errorIf(err, "Unable to marshal notification configuration into XML.", err)
-		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
+
 	// Success.
-	writeSuccessResponse(w, notificationBytes)
+	writeSuccessResponseXML(w, notificationBytes)
 }
 
 // PutBucketNotificationHandler - Minio notification feature enables
@@ -95,12 +96,12 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter, r *http.Request) {
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
-		writeErrorResponse(w, r, ErrServerNotInitialized, r.URL.Path)
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
 		return
 	}
 
 	if s3Error := checkRequestAuthType(r, "", "", serverConfig.GetRegion()); s3Error != ErrNone {
-		writeErrorResponse(w, r, s3Error, r.URL.Path)
+		writeErrorResponse(w, s3Error, r.URL)
 		return
 	}
 
@@ -110,7 +111,7 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 	_, err := objectAPI.GetBucketInfo(bucket)
 	if err != nil {
 		errorIf(err, "Unable to find bucket info.")
-		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 
@@ -118,7 +119,7 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 	// always needs a Content-Length if incoming request is not chunked.
 	if !contains(r.TransferEncoding, "chunked") {
 		if r.ContentLength == -1 {
-			writeErrorResponse(w, r, ErrMissingContentLength, r.URL.Path)
+			writeErrorResponse(w, ErrMissingContentLength, r.URL)
 			return
 		}
 	}
@@ -132,7 +133,7 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 	}
 	if err != nil {
 		errorIf(err, "Unable to read incoming body.")
-		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 
@@ -141,25 +142,25 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 	notificationConfigBytes := buffer.Bytes()
 	if err = xml.Unmarshal(notificationConfigBytes, &notificationCfg); err != nil {
 		errorIf(err, "Unable to parse notification configuration XML.")
-		writeErrorResponse(w, r, ErrMalformedXML, r.URL.Path)
+		writeErrorResponse(w, ErrMalformedXML, r.URL)
 		return
 	} // Successfully marshalled notification configuration.
 
 	// Validate unmarshalled bucket notification configuration.
 	if s3Error := validateNotificationConfig(notificationCfg); s3Error != ErrNone {
-		writeErrorResponse(w, r, s3Error, r.URL.Path)
+		writeErrorResponse(w, s3Error, r.URL)
 		return
 	}
 
 	// Put bucket notification config.
 	err = PutBucketNotificationConfig(bucket, &notificationCfg, objectAPI)
 	if err != nil {
-		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 
 	// Success.
-	writeSuccessResponse(w, nil)
+	writeSuccessResponseHeadersOnly(w)
 }
 
 // PutBucketNotificationConfig - Put a new notification config for a
@@ -249,12 +250,12 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 	// Validate if bucket exists.
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
-		writeErrorResponse(w, r, ErrServerNotInitialized, r.URL.Path)
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
 		return
 	}
 
 	if s3Error := checkRequestAuthType(r, "", "", serverConfig.GetRegion()); s3Error != ErrNone {
-		writeErrorResponse(w, r, s3Error, r.URL.Path)
+		writeErrorResponse(w, s3Error, r.URL)
 		return
 	}
 
@@ -265,19 +266,19 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 	prefixes, suffixes, events := getListenBucketNotificationResources(r.URL.Query())
 
 	if err := validateFilterValues(prefixes); err != ErrNone {
-		writeErrorResponse(w, r, err, r.URL.Path)
+		writeErrorResponse(w, err, r.URL)
 		return
 	}
 
 	if err := validateFilterValues(suffixes); err != ErrNone {
-		writeErrorResponse(w, r, err, r.URL.Path)
+		writeErrorResponse(w, err, r.URL)
 		return
 	}
 
 	// Validate all the resource events.
 	for _, event := range events {
 		if errCode := checkEvent(event); errCode != ErrNone {
-			writeErrorResponse(w, r, errCode, r.URL.Path)
+			writeErrorResponse(w, errCode, r.URL)
 			return
 		}
 	}
@@ -285,7 +286,7 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 	_, err := objAPI.GetBucketInfo(bucket)
 	if err != nil {
 		errorIf(err, "Unable to get bucket info.")
-		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 
@@ -338,7 +339,7 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 	// Add channel for listener events
 	if err = globalEventNotifier.AddListenerChan(accountARN, nEventCh); err != nil {
 		errorIf(err, "Error adding a listener!")
-		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 	// Remove listener channel after the writer has closed or the
@@ -355,7 +356,7 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 
 	err = AddBucketListenerConfig(bucket, &lc, objAPI)
 	if err != nil {
-		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 	defer RemoveBucketListenerConfig(bucket, &lc, objAPI)
