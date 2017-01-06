@@ -1,6 +1,6 @@
 # Publish Minio events via NATS [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/minio/minio?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
-[Minio](https://www.minio.io) server supports Amazon S3 compatible bucket event notification. In this recipe we will learn how to set up bucket notifications using [NATS](http://nats.io/). 
+[Minio](https://www.minio.io) server supports Amazon S3 compatible bucket event notifications. In this recipe we will learn how to set up bucket notifications using [NATS](http://nats.io/). 
 
 ## 1. Prerequisites
 
@@ -16,7 +16,7 @@ Install NATS  from [here](http://nats.io/).
 
 ### Step 1: Add NATS endpoint to Minio
 
-The default location of Minio server configuration file is ``~/.minio/config.json``. Update the NATS configuration block in ``config.json`` as follows.
+The default location of Minio server configuration file is ``~/.minio/config.json``. Update the NATS configuration block in ``config.json`` as follows:
 
 ```
 "nats": {
@@ -34,7 +34,7 @@ The default location of Minio server configuration file is ``~/.minio/config.jso
 ```
 Restart the Minio server to reflect config changes made above. ``bucketevents`` is the subject used by NATS in this example.
 
-If you are running Minio in [distributed setup](https://docs.minio.io/docs/distributed-minio-quickstart-guide), modify ``~/.minio/config.json`` with these local changes on all the nodes.
+If you are running [distributed Minio](https://docs.minio.io/docs/distributed-minio-quickstart-guide), modify ``~/.minio/config.json`` with these local changes on all the nodes.
 
 ### Step 2: Enable bucket notification using Minio client
 

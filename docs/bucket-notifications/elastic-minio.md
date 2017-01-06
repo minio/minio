@@ -1,6 +1,6 @@
 # Publish Minio events via Elasticsearch [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/minio/minio?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
-[Minio](https://www.minio.io) server supports Amazon S3 compatible bucket event notification. In this recipe we will learn how to set up bucket notifications using [Elasticsearch](https://www.elastic.co/) server. 
+[Minio](https://www.minio.io) server supports Amazon S3 compatible bucket event notifications. In this recipe we will learn how to set up bucket notifications using [Elasticsearch](https://www.elastic.co/) server. 
 
 ## 1. Prerequisites
 
@@ -16,7 +16,7 @@ Install Elasticsearch 2.4 from [here](https://www.elastic.co/downloads/past-rele
 
 ### Step 1: Add Elasticsearch endpoint to Minio
 
-The default location of Minio server configuration file is ``~/.minio/config.json``. Update the Elasticsearch configuration block in ``config.json`` as follows.
+The default location of Minio server configuration file is ``~/.minio/config.json``. Update the Elasticsearch configuration block in ``config.json`` as follows:
 
 ```
 "elasticsearch": {
@@ -29,7 +29,7 @@ The default location of Minio server configuration file is ``~/.minio/config.jso
 ```
 Restart the Minio server to reflect config changes made above. ``bucketevents`` is the index used by Elasticsearch.
 
-If you are running Minio in [distributed setup](https://docs.minio.io/docs/distributed-minio-quickstart-guide), modify ``~/.minio/config.json`` with these local changes on all the nodes.
+If you are running [distributed Minio](https://docs.minio.io/docs/distributed-minio-quickstart-guide), modify ``~/.minio/config.json`` with these local changes on all the nodes.
 
 ### Step 2: Enable bucket notification using Minio client
 
