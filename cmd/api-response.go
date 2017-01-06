@@ -19,6 +19,7 @@ package cmd
 import (
 	"encoding/xml"
 	"net/http"
+	"net/url"
 	"path"
 	"time"
 )
@@ -482,51 +483,67 @@ func generateMultiDeleteResponse(quiet bool, deletedObjects []ObjectIdentifier, 
 	return deleteResp
 }
 
-func writeResponse(w http.ResponseWriter, statusCode int, response []byte) {
+func writeResponse(w http.ResponseWriter, statusCode int, response []byte, mType mimeType) {
 	setCommonHeaders(w)
-	w.WriteHeader(statusCode)
-	if response == nil {
-		return
+	if mType != mimeNone {
+		w.Header().Set("Content-Type", string(mType))
 	}
-	w.Write(response)
-	w.(http.Flusher).Flush()
+	w.WriteHeader(statusCode)
+	if response != nil {
+		w.Write(response)
+		w.(http.Flusher).Flush()
+	}
 }
 
-// writeSuccessResponse writes success headers and response if any.
-func writeSuccessResponse(w http.ResponseWriter, response []byte) {
-	writeResponse(w, http.StatusOK, response)
+// mimeType represents various MIME type used API responses.
+type mimeType string
+
+const (
+	// Means no response type.
+	mimeNone mimeType = ""
+	// Means response type is JSON.
+	mimeJSON mimeType = "application/json"
+	// Means response type is XML.
+	mimeXML mimeType = "application/xml"
+)
+
+// writeSuccessResponseJSON writes success headers and response if any,
+// with content-type set to `application/json`.
+func writeSuccessResponseJSON(w http.ResponseWriter, response []byte) {
+	writeResponse(w, http.StatusOK, response, mimeJSON)
+}
+
+// writeSuccessResponseXML writes success headers and response if any,
+// with content-type set to `application/xml`.
+func writeSuccessResponseXML(w http.ResponseWriter, response []byte) {
+	writeResponse(w, http.StatusOK, response, mimeXML)
 }
 
 // writeSuccessNoContent writes success headers with http status 204
 func writeSuccessNoContent(w http.ResponseWriter) {
-	writeResponse(w, http.StatusNoContent, nil)
+	writeResponse(w, http.StatusNoContent, nil, mimeNone)
 }
 
 // writeRedirectSeeOther writes Location header with http status 303
 func writeRedirectSeeOther(w http.ResponseWriter, location string) {
 	w.Header().Set("Location", location)
-	writeResponse(w, http.StatusSeeOther, nil)
+	writeResponse(w, http.StatusSeeOther, nil, mimeNone)
+}
+
+func writeSuccessResponseHeadersOnly(w http.ResponseWriter) {
+	writeResponse(w, http.StatusOK, nil, mimeNone)
 }
 
 // writeErrorRespone writes error headers
-func writeErrorResponse(w http.ResponseWriter, req *http.Request, errorCode APIErrorCode, resource string) {
-	apiError := getAPIError(errorCode)
-	// set common headers
-	setCommonHeaders(w)
-	// write Header
-	w.WriteHeader(apiError.HTTPStatusCode)
-	writeErrorResponseNoHeader(w, req, errorCode, resource)
-}
-
-func writeErrorResponseNoHeader(w http.ResponseWriter, req *http.Request, errorCode APIErrorCode, resource string) {
+func writeErrorResponse(w http.ResponseWriter, errorCode APIErrorCode, reqURL *url.URL) {
 	apiError := getAPIError(errorCode)
 	// Generate error response.
-	errorResponse := getAPIErrorResponse(apiError, resource)
+	errorResponse := getAPIErrorResponse(apiError, reqURL.Path)
 	encodedErrorResponse := encodeResponse(errorResponse)
-	// HEAD should have no body, do not attempt to write to it
-	if req.Method != "HEAD" {
-		// write error body
-		w.Write(encodedErrorResponse)
-		w.(http.Flusher).Flush()
-	}
+	writeResponse(w, apiError.HTTPStatusCode, encodedErrorResponse, mimeXML)
+}
+
+func writeErrorResponseHeadersOnly(w http.ResponseWriter, errorCode APIErrorCode) {
+	apiError := getAPIError(errorCode)
+	writeResponse(w, apiError.HTTPStatusCode, nil, mimeNone)
 }

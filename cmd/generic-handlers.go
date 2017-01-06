@@ -169,7 +169,7 @@ func setPrivateBucketHandler(h http.Handler) http.Handler {
 func (h minioPrivateBucketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// For all non browser requests, reject access to 'reservedBucket'.
 	if !guessIsBrowserReq(r) && path.Clean(r.URL.Path) == reservedBucket {
-		writeErrorResponse(w, r, ErrAllAccessDisabled, r.URL.Path)
+		writeErrorResponse(w, ErrAllAccessDisabled, r.URL)
 		return
 	}
 	h.handler.ServeHTTP(w, r)
@@ -231,14 +231,14 @@ func (h timeValidityHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			// All our internal APIs are sensitive towards Date
 			// header, for all requests where Date header is not
 			// present we will reject such clients.
-			writeErrorResponse(w, r, apiErr, r.URL.Path)
+			writeErrorResponse(w, apiErr, r.URL)
 			return
 		}
 		// Verify if the request date header is shifted by less than globalMaxSkewTime parameter in the past
 		// or in the future, reject request otherwise.
 		curTime := time.Now().UTC()
 		if curTime.Sub(amzDate) > globalMaxSkewTime || amzDate.Sub(curTime) > globalMaxSkewTime {
-			writeErrorResponse(w, r, ErrRequestTimeTooSkewed, r.URL.Path)
+			writeErrorResponse(w, ErrRequestTimeTooSkewed, r.URL)
 			return
 		}
 	}
@@ -327,20 +327,20 @@ func (h resourceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// If bucketName is present and not objectName check for bucket level resource queries.
 	if bucketName != "" && objectName == "" {
 		if ignoreNotImplementedBucketResources(r) {
-			writeErrorResponse(w, r, ErrNotImplemented, r.URL.Path)
+			writeErrorResponse(w, ErrNotImplemented, r.URL)
 			return
 		}
 	}
 	// If bucketName and objectName are present check for its resource queries.
 	if bucketName != "" && objectName != "" {
 		if ignoreNotImplementedObjectResources(r) {
-			writeErrorResponse(w, r, ErrNotImplemented, r.URL.Path)
+			writeErrorResponse(w, ErrNotImplemented, r.URL)
 			return
 		}
 	}
 	// A put method on path "/" doesn't make sense, ignore it.
 	if r.Method == "PUT" && r.URL.Path == "/" {
-		writeErrorResponse(w, r, ErrNotImplemented, r.URL.Path)
+		writeErrorResponse(w, ErrNotImplemented, r.URL)
 		return
 	}
 

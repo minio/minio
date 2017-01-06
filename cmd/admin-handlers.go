@@ -35,19 +35,19 @@ const (
 func (adminAPI adminAPIHandlers) ServiceStatusHandler(w http.ResponseWriter, r *http.Request) {
 	adminAPIErr := checkRequestAuthType(r, "", "", "")
 	if adminAPIErr != ErrNone {
-		writeErrorResponse(w, r, adminAPIErr, r.URL.Path)
+		writeErrorResponse(w, adminAPIErr, r.URL)
 		return
 	}
 	storageInfo := newObjectLayerFn().StorageInfo()
 	jsonBytes, err := json.Marshal(storageInfo)
 	if err != nil {
-		writeErrorResponseNoHeader(w, r, ErrInternalError, r.URL.Path)
+		writeErrorResponse(w, ErrInternalError, r.URL)
 		errorIf(err, "Failed to marshal storage info into json.")
 		return
 	}
 	// Reply with storage information (across nodes in a
 	// distributed setup) as json.
-	writeSuccessResponse(w, jsonBytes)
+	writeSuccessResponseJSON(w, jsonBytes)
 }
 
 // ServiceStopHandler - POST /?service
@@ -58,11 +58,13 @@ func (adminAPI adminAPIHandlers) ServiceStatusHandler(w http.ResponseWriter, r *
 func (adminAPI adminAPIHandlers) ServiceStopHandler(w http.ResponseWriter, r *http.Request) {
 	adminAPIErr := checkRequestAuthType(r, "", "", "")
 	if adminAPIErr != ErrNone {
-		writeErrorResponse(w, r, adminAPIErr, r.URL.Path)
+		writeErrorResponse(w, adminAPIErr, r.URL)
 		return
 	}
+
 	// Reply to the client before stopping minio server.
 	w.WriteHeader(http.StatusOK)
+
 	sendServiceCmd(globalAdminPeers, serviceStop)
 }
 
@@ -74,11 +76,13 @@ func (adminAPI adminAPIHandlers) ServiceStopHandler(w http.ResponseWriter, r *ht
 func (adminAPI adminAPIHandlers) ServiceRestartHandler(w http.ResponseWriter, r *http.Request) {
 	adminAPIErr := checkRequestAuthType(r, "", "", "")
 	if adminAPIErr != ErrNone {
-		writeErrorResponse(w, r, adminAPIErr, r.URL.Path)
+		writeErrorResponse(w, adminAPIErr, r.URL)
 		return
 	}
+
 	// Reply to the client before restarting minio server.
 	w.WriteHeader(http.StatusOK)
+
 	sendServiceCmd(globalAdminPeers, serviceRestart)
 }
 
@@ -131,14 +135,14 @@ func validateLockQueryParams(vars url.Values) (string, string, time.Duration, AP
 func (adminAPI adminAPIHandlers) ListLocksHandler(w http.ResponseWriter, r *http.Request) {
 	adminAPIErr := checkRequestAuthType(r, "", "", "")
 	if adminAPIErr != ErrNone {
-		writeErrorResponse(w, r, adminAPIErr, r.URL.Path)
+		writeErrorResponse(w, adminAPIErr, r.URL)
 		return
 	}
 
 	vars := r.URL.Query()
 	bucket, prefix, relTime, adminAPIErr := validateLockQueryParams(vars)
 	if adminAPIErr != ErrNone {
-		writeErrorResponse(w, r, adminAPIErr, r.URL.Path)
+		writeErrorResponse(w, adminAPIErr, r.URL)
 		return
 	}
 
@@ -146,7 +150,7 @@ func (adminAPI adminAPIHandlers) ListLocksHandler(w http.ResponseWriter, r *http
 	// are available since relTime.
 	volLocks, err := listPeerLocksInfo(globalAdminPeers, bucket, prefix, relTime)
 	if err != nil {
-		writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
+		writeErrorResponse(w, ErrInternalError, r.URL)
 		errorIf(err, "Failed to fetch lock information from remote nodes.")
 		return
 	}
@@ -154,14 +158,14 @@ func (adminAPI adminAPIHandlers) ListLocksHandler(w http.ResponseWriter, r *http
 	// Marshal list of locks as json.
 	jsonBytes, err := json.Marshal(volLocks)
 	if err != nil {
-		writeErrorResponseNoHeader(w, r, ErrInternalError, r.URL.Path)
+		writeErrorResponse(w, ErrInternalError, r.URL)
 		errorIf(err, "Failed to marshal lock information into json.")
 		return
 	}
 
 	// Reply with list of locks held on bucket, matching prefix
 	// older than relTime supplied, as json.
-	writeSuccessResponse(w, jsonBytes)
+	writeSuccessResponseJSON(w, jsonBytes)
 }
 
 // ClearLocksHandler - POST /?lock&bucket=mybucket&prefix=myprefix&older-than=relTime
@@ -173,14 +177,14 @@ func (adminAPI adminAPIHandlers) ListLocksHandler(w http.ResponseWriter, r *http
 func (adminAPI adminAPIHandlers) ClearLocksHandler(w http.ResponseWriter, r *http.Request) {
 	adminAPIErr := checkRequestAuthType(r, "", "", "")
 	if adminAPIErr != ErrNone {
-		writeErrorResponse(w, r, adminAPIErr, r.URL.Path)
+		writeErrorResponse(w, adminAPIErr, r.URL)
 		return
 	}
 
 	vars := r.URL.Query()
 	bucket, prefix, relTime, adminAPIErr := validateLockQueryParams(vars)
 	if adminAPIErr != ErrNone {
-		writeErrorResponse(w, r, adminAPIErr, r.URL.Path)
+		writeErrorResponse(w, adminAPIErr, r.URL)
 		return
 	}
 
@@ -188,7 +192,7 @@ func (adminAPI adminAPIHandlers) ClearLocksHandler(w http.ResponseWriter, r *htt
 	// are available since relTime.
 	volLocks, err := listPeerLocksInfo(globalAdminPeers, bucket, prefix, relTime)
 	if err != nil {
-		writeErrorResponseNoHeader(w, r, ErrInternalError, r.URL.Path)
+		writeErrorResponse(w, ErrInternalError, r.URL)
 		errorIf(err, "Failed to fetch lock information from remote nodes.")
 		return
 	}
@@ -196,14 +200,16 @@ func (adminAPI adminAPIHandlers) ClearLocksHandler(w http.ResponseWriter, r *htt
 	// Marshal list of locks as json.
 	jsonBytes, err := json.Marshal(volLocks)
 	if err != nil {
-		writeErrorResponseNoHeader(w, r, ErrInternalError, r.URL.Path)
+		writeErrorResponse(w, ErrInternalError, r.URL)
 		errorIf(err, "Failed to marshal lock information into json.")
 		return
 	}
+
 	// Remove lock matching bucket/prefix older than relTime.
 	for _, volLock := range volLocks {
 		globalNSMutex.ForceUnlock(volLock.Bucket, volLock.Object)
 	}
+
 	// Reply with list of locks cleared, as json.
-	writeSuccessResponse(w, jsonBytes)
+	writeSuccessResponseJSON(w, jsonBytes)
 }

@@ -231,5 +231,5 @@ func (a authHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		a.handler.ServeHTTP(w, r)
 		return
 	}
-	writeErrorResponse(w, r, ErrSignatureVersionNotSupported, r.URL.Path)
+	writeErrorResponse(w, ErrSignatureVersionNotSupported, r.URL)
 }

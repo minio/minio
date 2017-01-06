@@ -59,7 +59,7 @@ func checkCopyObjectPreconditions(w http.ResponseWriter, r *http.Request, objInf
 		if !ifModifiedSince(objInfo.ModTime, ifModifiedSinceHeader) {
 			// If the object is not modified since the specified time.
 			writeHeaders()
-			writeErrorResponse(w, r, ErrPreconditionFailed, r.URL.Path)
+			writeErrorResponse(w, ErrPreconditionFailed, r.URL)
 			return true
 		}
 	}
@@ -71,7 +71,7 @@ func checkCopyObjectPreconditions(w http.ResponseWriter, r *http.Request, objInf
 		if ifModifiedSince(objInfo.ModTime, ifUnmodifiedSinceHeader) {
 			// If the object is modified since the specified time.
 			writeHeaders()
-			writeErrorResponse(w, r, ErrPreconditionFailed, r.URL.Path)
+			writeErrorResponse(w, ErrPreconditionFailed, r.URL)
 			return true
 		}
 	}
@@ -83,7 +83,7 @@ func checkCopyObjectPreconditions(w http.ResponseWriter, r *http.Request, objInf
 		if objInfo.MD5Sum != "" && !isETagEqual(objInfo.MD5Sum, ifMatchETagHeader) {
 			// If the object ETag does not match with the specified ETag.
 			writeHeaders()
-			writeErrorResponse(w, r, ErrPreconditionFailed, r.URL.Path)
+			writeErrorResponse(w, ErrPreconditionFailed, r.URL)
 			return true
 		}
 	}
@@ -95,7 +95,7 @@ func checkCopyObjectPreconditions(w http.ResponseWriter, r *http.Request, objInf
 		if objInfo.MD5Sum != "" && isETagEqual(objInfo.MD5Sum, ifNoneMatchETagHeader) {
 			// If the object ETag matches with the specified ETag.
 			writeHeaders()
-			writeErrorResponse(w, r, ErrPreconditionFailed, r.URL.Path)
+			writeErrorResponse(w, ErrPreconditionFailed, r.URL)
 			return true
 		}
 	}
@@ -152,7 +152,7 @@ func checkPreconditions(w http.ResponseWriter, r *http.Request, objInfo ObjectIn
 		if ifModifiedSince(objInfo.ModTime, ifUnmodifiedSinceHeader) {
 			// If the object is modified since the specified time.
 			writeHeaders()
-			writeErrorResponse(w, r, ErrPreconditionFailed, r.URL.Path)
+			writeErrorResponse(w, ErrPreconditionFailed, r.URL)
 			return true
 		}
 	}
@@ -164,7 +164,7 @@ func checkPreconditions(w http.ResponseWriter, r *http.Request, objInfo ObjectIn
 		if !isETagEqual(objInfo.MD5Sum, ifMatchETagHeader) {
 			// If the object ETag does not match with the specified ETag.
 			writeHeaders()
-			writeErrorResponse(w, r, ErrPreconditionFailed, r.URL.Path)
+			writeErrorResponse(w, ErrPreconditionFailed, r.URL)
 			return true
 		}
 	}
