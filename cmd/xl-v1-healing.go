@@ -137,7 +137,7 @@ func healBucketMetadata(storageDisks []StorageAPI, bucket string, readQuorum int
 	}
 
 	// Heal `policy.json` for missing entries, ignores if `policy.json` is not found.
-	policyPath := pathJoin(bucketConfigPrefix, bucket, policyJSON)
+	policyPath := pathJoin(bucketConfigPrefix, bucket, bucketPolicyConfig)
 	if err := healBucketMetaFn(policyPath); err != nil {
 		return err
 	}

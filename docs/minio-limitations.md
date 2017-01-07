@@ -22,12 +22,12 @@ We found the following APIs to be redundant or less useful outside of AWS. If yo
 |:---|:---|
 |Maximum number of buckets| no-limit|
 |Maximum number of objects per bucket| no-limit|
-|Maximum object size|	5 TB|
+|Maximum object size|	5 TiB|
 |Minimum object size| 0 B|
-|Maximum object size per PUT operation| 5 GB|
+|Maximum object size per PUT operation| 5 GiB|
 |Maximum number of parts per upload| 	10,000|
-|Part size|5 MB to 5 GB. Last part can be 0 B to 5 GB|
-|Maximum number of parts returned per list parts request|	1000|
+|Part size|5 MiB to 5 GiB. Last part can be 0 B to 5 GiB|
+|Maximum number of parts returned per list parts request| 1000|
 |Maximum number of objects returned per list objects request| 1000|
 |Maximum number of multipart uploads returned per list multipart uploads request| 1000|
 

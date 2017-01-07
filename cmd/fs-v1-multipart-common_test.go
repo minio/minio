@@ -19,52 +19,7 @@ package cmd
 import (
 	"path/filepath"
 	"testing"
-	"time"
 )
-
-// TestFSIsUploadExists - complete test with valid and invalid cases
-func TestFSIsUploadExists(t *testing.T) {
-	// Prepare for testing
-	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
-	defer removeAll(disk)
-
-	obj := initFSObjects(disk, t)
-	fs := obj.(fsObjects)
-
-	bucketName := "bucket"
-	objectName := "object"
-
-	if err := obj.MakeBucket(bucketName); err != nil {
-		t.Fatal("Unexpected err: ", err)
-	}
-
-	uploadID, err := obj.NewMultipartUpload(bucketName, objectName, nil)
-	if err != nil {
-		t.Fatal("Unexpected err: ", err)
-	}
-	// Test with valid upload id
-	if exists := fs.isUploadIDExists(bucketName, objectName, uploadID); !exists {
-		t.Fatal("Wrong result, expected: ", exists)
-	}
-
-	// Test with inexistant bucket/object names
-	if exists := fs.isUploadIDExists("bucketfoo", "objectfoo", uploadID); exists {
-		t.Fatal("Wrong result, expected: ", !exists)
-	}
-
-	// Test with inexistant upload ID
-	if exists := fs.isUploadIDExists(bucketName, objectName, uploadID+"-ff"); exists {
-		t.Fatal("Wrong result, expected: ", !exists)
-	}
-
-	// isUploadIdExists with a faulty disk should return false
-	fsStorage := fs.storage.(*retryStorage)
-	naughty := newNaughtyDisk(fsStorage, nil, errFaultyDisk)
-	fs.storage = naughty
-	if exists := fs.isUploadIDExists(bucketName, objectName, uploadID); exists {
-		t.Fatal("Wrong result, expected: ", !exists)
-	}
-}
 
 // TestFSWriteUploadJSON - tests for writeUploadJSON for FS
 func TestFSWriteUploadJSON(t *testing.T) {
@@ -73,31 +28,21 @@ func TestFSWriteUploadJSON(t *testing.T) {
 	defer removeAll(disk)
 
 	obj := initFSObjects(disk, t)
-	fs := obj.(fsObjects)
 
 	bucketName := "bucket"
 	objectName := "object"
 
 	obj.MakeBucket(bucketName)
-	uploadID, err := obj.NewMultipartUpload(bucketName, objectName, nil)
+	_, err := obj.NewMultipartUpload(bucketName, objectName, nil)
 	if err != nil {
 		t.Fatal("Unexpected err: ", err)
 	}
 
+	// newMultipartUpload will fail.
+	removeAll(disk) // Remove disk.
+	_, err = obj.NewMultipartUpload(bucketName, objectName, nil)
 	if err != nil {
-		t.Fatal("Unexpected err: ", err)
-	}
-
-	if err := fs.addUploadID(bucketName, objectName, uploadID, time.Now().UTC()); err != nil {
-		t.Fatal("Unexpected err: ", err)
-	}
-
-	// isUploadIdExists with a faulty disk should return false
-	fsStorage := fs.storage.(*retryStorage)
-	for i := 1; i <= 3; i++ {
-		naughty := newNaughtyDisk(fsStorage, map[int]error{i: errFaultyDisk}, nil)
-		fs.storage = naughty
-		if err := fs.addUploadID(bucketName, objectName, uploadID, time.Now().UTC()); errorCause(err) != errFaultyDisk {
+		if _, ok := errorCause(err).(BucketNotFound); !ok {
 			t.Fatal("Unexpected err: ", err)
 		}
 	}

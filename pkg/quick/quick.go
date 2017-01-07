@@ -298,7 +298,7 @@ func (d config) Diff(c Config) ([]structs.Field, error) {
 	currFields := structs.Fields(d.Data())
 	newFields := structs.Fields(c.Data())
 
-	found := false
+	var found bool
 	for _, currField := range currFields {
 		found = false
 		for _, newField := range newFields {
@@ -324,7 +324,7 @@ func (d config) DeepDiff(c Config) ([]structs.Field, error) {
 	currFields := structs.Fields(d.Data())
 	newFields := structs.Fields(c.Data())
 
-	found := false
+	var found bool
 	for _, currField := range currFields {
 		found = false
 		for _, newField := range newFields {

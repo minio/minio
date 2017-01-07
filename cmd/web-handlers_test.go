@@ -461,7 +461,7 @@ func testListObjectsWebHandler(obj ObjectLayer, instanceType string, t TestErrHa
 	verifyReply(reply)
 
 	// Unauthenticated ListObjects should fail.
-	err, reply = test("")
+	err, _ = test("")
 	if err == nil {
 		t.Fatalf("Expected error `%s`", err)
 	}
@@ -870,7 +870,7 @@ func testDownloadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandl
 	}
 
 	// Unauthenticated download should fail.
-	code, bodyContent = test("")
+	code, _ = test("")
 	if code != http.StatusForbidden {
 		t.Fatalf("Expected the response status to be 403, but instead found `%d`", code)
 	}

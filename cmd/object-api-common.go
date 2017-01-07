@@ -48,6 +48,12 @@ func init() {
 	globalObjLayerMutex = &sync.Mutex{}
 }
 
+// Check if the disk is remote.
+func isRemoteDisk(disk StorageAPI) bool {
+	_, ok := disk.(*networkStorage)
+	return ok
+}
+
 // House keeping code for FS/XL and distributed Minio setup.
 func houseKeeping(storageDisks []StorageAPI) error {
 	var wg = &sync.WaitGroup{}
@@ -60,8 +66,8 @@ func houseKeeping(storageDisks []StorageAPI) error {
 		if disk == nil {
 			continue
 		}
-		if _, ok := disk.(*networkStorage); ok {
-			// Skip remote disks.
+		// Skip remote disks.
+		if isRemoteDisk(disk) {
 			continue
 		}
 		wg.Add(1)

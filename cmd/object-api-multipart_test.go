@@ -1207,7 +1207,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 	}
 
 	for i, testCase := range testCases {
-		// fmt.Println(testCase) // uncomment to peek into the test cases.
+		// fmt.Println(i+1, testCase) // uncomment to peek into the test cases.
 		actualResult, actualErr := obj.ListMultipartUploads(testCase.bucket, testCase.prefix, testCase.keyMarker, testCase.uploadIDMarker, testCase.delimiter, testCase.maxUploads)
 		if actualErr != nil && testCase.shouldPass {
 			t.Errorf("Test %d: %s: Expected to pass, but failed with: <ERROR> %s", i+1, instanceType, actualErr.Error())
@@ -1520,7 +1520,7 @@ func TestListObjectParts(t *testing.T) {
 	ExecObjectLayerTest(t, testListObjectParts)
 }
 
-// testListMultipartUploads - Tests validate listing of multipart uploads.
+// testListObjectParts - test validate listing of object parts.
 func testListObjectParts(obj ObjectLayer, instanceType string, t TestErrHandler) {
 
 	bucketNames := []string{"minio-bucket", "minio-2-bucket"}

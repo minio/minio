@@ -70,7 +70,8 @@ import (
 type InitActions int
 
 const (
-	// FormatDisks - see above table for disk states where it is applicable.
+	// FormatDisks - see above table for disk states where it
+	// is applicable.
 	FormatDisks InitActions = iota
 
 	// WaitForHeal - Wait for disks to heal.
@@ -82,10 +83,12 @@ const (
 	// WaitForAll - Wait for all disks to be online.
 	WaitForAll
 
-	// WaitForFormatting - Wait for formatting to be triggered from the '1st' server in the cluster.
+	// WaitForFormatting - Wait for formatting to be triggered
+	// from the '1st' server in the cluster.
 	WaitForFormatting
 
-	// WaitForConfig - Wait for all servers to have the same config including (credentials, version and time).
+	// WaitForConfig - Wait for all servers to have the same config
+	// including (credentials, version and time).
 	WaitForConfig
 
 	// InitObjectLayer - Initialize object layer.
@@ -96,8 +99,8 @@ const (
 	Abort
 )
 
-// Quick error to actions converts looking for specific errors which need to
-// be returned quickly and server should wait instead.
+// Quick error to actions converts looking for specific errors
+// which need to be returned quickly and server should wait instead.
 func quickErrToActions(errMap map[error]int) InitActions {
 	var action InitActions
 	switch {
@@ -187,7 +190,7 @@ func printRetryMsg(sErrs []error, storageDisks []StorageAPI) {
 
 // Implements a jitter backoff loop for formatting all disks during
 // initialization of the server.
-func retryFormattingDisks(firstDisk bool, endpoints []*url.URL, storageDisks []StorageAPI) error {
+func retryFormattingXLDisks(firstDisk bool, endpoints []*url.URL, storageDisks []StorageAPI) error {
 	if len(endpoints) == 0 {
 		return errInvalidArgument
 	}
@@ -220,17 +223,6 @@ func retryFormattingDisks(firstDisk bool, endpoints []*url.URL, storageDisks []S
 				// for disks not being available.
 				printRetryMsg(sErrs, storageDisks)
 			}
-			if len(formatConfigs) == 1 {
-				err := genericFormatCheckFS(formatConfigs[0], sErrs[0])
-				if err != nil {
-					// For an new directory or existing data.
-					if err == errUnformattedDisk || err == errCorruptedFormat {
-						return initFormatFS(storageDisks[0])
-					}
-					return err
-				}
-				return nil
-			} // Check if this is a XL or distributed XL, anything > 1 is considered XL backend.
 			// Pre-emptively check if one of the formatted disks
 			// is invalid. This function returns success for the
 			// most part unless one of the formats is not consistent
@@ -239,6 +231,7 @@ func retryFormattingDisks(firstDisk bool, endpoints []*url.URL, storageDisks []S
 			if err := checkFormatXLValues(formatConfigs); err != nil {
 				return err
 			}
+			// Check if this is a XL or distributed XL, anything > 1 is considered XL backend.
 			switch prepForInitXL(firstDisk, sErrs, len(storageDisks)) {
 			case Abort:
 				return errCorruptedFormat
@@ -300,7 +293,7 @@ func initStorageDisks(endpoints []*url.URL) ([]StorageAPI, error) {
 }
 
 // Format disks before initialization object layer.
-func waitForFormatDisks(firstDisk bool, endpoints []*url.URL, storageDisks []StorageAPI) (formattedDisks []StorageAPI, err error) {
+func waitForFormatXLDisks(firstDisk bool, endpoints []*url.URL, storageDisks []StorageAPI) (formattedDisks []StorageAPI, err error) {
 	if len(endpoints) == 0 {
 		return nil, errInvalidArgument
 	}
@@ -327,7 +320,7 @@ func waitForFormatDisks(firstDisk bool, endpoints []*url.URL, storageDisks []Sto
 
 	// Start retry loop retrying until disks are formatted properly, until we have reached
 	// a conditional quorum of formatted disks.
-	err = retryFormattingDisks(firstDisk, endpoints, retryDisks)
+	err = retryFormattingXLDisks(firstDisk, endpoints, retryDisks)
 	if err != nil {
 		return nil, err
 	}

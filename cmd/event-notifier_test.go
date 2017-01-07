@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"bytes"
 	"fmt"
 	"net"
 	"reflect"
@@ -34,11 +35,11 @@ func TestInitEventNotifierFaultyDisks(t *testing.T) {
 	// remove the root directory after the test ends.
 	defer removeAll(rootPath)
 
-	disks, err := getRandomDisks(1)
+	disks, err := getRandomDisks(4)
 	if err != nil {
 		t.Fatal("Unable to create directories for FS backend. ", err)
 	}
-	defer removeAll(disks[0])
+	defer removeRoots(disks)
 	endpoints, err := parseStorageEndpoints(disks)
 	if err != nil {
 		t.Fatal(err)
@@ -53,8 +54,7 @@ func TestInitEventNotifierFaultyDisks(t *testing.T) {
 		t.Fatal("Unexpected error:", err)
 	}
 
-	fs := obj.(fsObjects)
-	fsstorage := fs.storage.(*retryStorage)
+	xl := obj.(*xlObjects)
 
 	listenARN := "arn:minio:sns:us-east-1:1:listen"
 	queueARN := "arn:minio:sqs:us-east-1:1:redis"
@@ -64,14 +64,18 @@ func TestInitEventNotifierFaultyDisks(t *testing.T) {
 	notificationXML += "<TopicConfiguration><Event>s3:ObjectRemoved:*</Event><Event>s3:ObjectRemoved:*</Event><Topic>" + listenARN + "</Topic></TopicConfiguration>"
 	notificationXML += "<QueueConfiguration><Event>s3:ObjectRemoved:*</Event><Event>s3:ObjectRemoved:*</Event><Queue>" + queueARN + "</Queue></QueueConfiguration>"
 	notificationXML += "</NotificationConfiguration>"
-	if err := fsstorage.AppendFile(minioMetaBucket, bucketConfigPrefix+"/"+bucketName+"/"+bucketNotificationConfig, []byte(notificationXML)); err != nil {
+	size := int64(len([]byte(notificationXML)))
+	reader := bytes.NewReader([]byte(notificationXML))
+	if _, err := xl.PutObject(minioMetaBucket, bucketConfigPrefix+"/"+bucketName+"/"+bucketNotificationConfig, size, reader, nil, ""); err != nil {
 		t.Fatal("Unexpected error:", err)
 	}
 
+	for i, d := range xl.storageDisks {
+		xl.storageDisks[i] = newNaughtyDisk(d.(*retryStorage), nil, errFaultyDisk)
+	}
 	// Test initEventNotifier() with faulty disks
 	for i := 1; i <= 3; i++ {
-		fs.storage = newNaughtyDisk(fsstorage, map[int]error{i: errFaultyDisk}, nil)
-		if err := initEventNotifier(fs); errorCause(err) != errFaultyDisk {
+		if err := initEventNotifier(xl); errorCause(err) != errFaultyDisk {
 			t.Fatal("Unexpected error:", err)
 		}
 	}
@@ -387,7 +391,7 @@ func TestInitEventNotifier(t *testing.T) {
 	}
 
 	// needed to load listener config from disk for testing (in
-	// single peer mode, the listener config is ingored, but here
+	// single peer mode, the listener config is ignored, but here
 	// we want to test the loading from disk too.)
 	globalIsDistXL = true
 

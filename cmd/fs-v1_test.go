@@ -18,81 +18,26 @@ package cmd
 
 import (
 	"bytes"
+	"fmt"
+	"os"
 	"path/filepath"
 	"testing"
-	"time"
 )
 
 // TestNewFS - tests initialization of all input disks
 // and constructs a valid `FS` object layer.
 func TestNewFS(t *testing.T) {
 	// Do not attempt to create this path, the test validates
-	// so that newFSObjects initializes non existing paths
+	// so that newFSObjectLayer initializes non existing paths
 	// and successfully returns initialized object layer.
 	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 	defer removeAll(disk)
 
-	// Setup to test errFSDiskFormat.
-	disks := []string{}
-	for i := 0; i < 6; i++ {
-		xlDisk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
-		defer removeAll(xlDisk)
-		disks = append(disks, xlDisk)
-	}
-
-	endpoints, err := parseStorageEndpoints([]string{disk})
-	if err != nil {
-		t.Fatal("Uexpected error: ", err)
-	}
-
-	fsStorageDisks, err := initStorageDisks(endpoints)
-	if err != nil {
-		t.Fatal("Uexpected error: ", err)
-	}
-
-	endpoints, err = parseStorageEndpoints(disks)
-	if err != nil {
-		t.Fatal("Uexpected error: ", err)
-	}
-
-	xlStorageDisks, err := initStorageDisks(endpoints)
-	if err != nil {
-		t.Fatal("Uexpected error: ", err)
-	}
-
-	// Initializes all disks with XL
-	formattedDisks, err := waitForFormatDisks(true, endpoints, xlStorageDisks)
-	if err != nil {
-		t.Fatalf("Unable to format XL %s", err)
-	}
-	_, err = newXLObjects(formattedDisks)
-	if err != nil {
-		t.Fatalf("Unable to initialize XL object, %s", err)
-	}
-
-	testCases := []struct {
-		disk        StorageAPI
-		expectedErr error
-	}{
-		{fsStorageDisks[0], nil},
-		{xlStorageDisks[0], errFSDiskFormat},
-	}
-
-	for _, testCase := range testCases {
-		if _, err = waitForFormatDisks(true, endpoints, []StorageAPI{testCase.disk}); err != testCase.expectedErr {
-			t.Errorf("expected: %s, got :%s", testCase.expectedErr, err)
-		}
-	}
-	_, err = newFSObjects(nil)
+	_, err := newFSObjectLayer("")
 	if err != errInvalidArgument {
 		t.Errorf("Expecting error invalid argument, got %s", err)
 	}
-	_, err = newFSObjects(&retryStorage{
-		remoteStorage:    xlStorageDisks[0],
-		maxRetryAttempts: 1,
-		retryUnit:        time.Millisecond,
-		retryCap:         time.Millisecond * 10,
-	})
+	_, err = newFSObjectLayer(disk)
 	if err != nil {
 		errMsg := "Unable to recognize backend format, Disk is not in FS format."
 		if err.Error() == errMsg {
@@ -113,10 +58,10 @@ func TestFSShutdown(t *testing.T) {
 	bucketName := "testbucket"
 	objectName := "object"
 	// Create and return an fsObject with its path in the disk
-	prepareTest := func() (fsObjects, string) {
+	prepareTest := func() (*fsObjects, string) {
 		disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 		obj := initFSObjects(disk, t)
-		fs := obj.(fsObjects)
+		fs := obj.(*fsObjects)
 		objectContent := "12345"
 		obj.MakeBucket(bucketName)
 		sha256sum := ""
@@ -135,12 +80,10 @@ func TestFSShutdown(t *testing.T) {
 	for i := 1; i <= 5; i++ {
 		fs, disk := prepareTest()
 		fs.DeleteObject(bucketName, objectName)
-		fsStorage := fs.storage.(*retryStorage)
-		fs.storage = newNaughtyDisk(fsStorage, map[int]error{i: errFaultyDisk}, nil)
-		if err := fs.Shutdown(); errorCause(err) != errFaultyDisk {
+		removeAll(disk)
+		if err := fs.Shutdown(); err != nil {
 			t.Fatal(i, ", Got unexpected fs shutdown error: ", err)
 		}
-		removeAll(disk)
 	}
 }
 
@@ -150,26 +93,38 @@ func TestFSLoadFormatFS(t *testing.T) {
 	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 	defer removeAll(disk)
 
-	obj := initFSObjects(disk, t)
-	fs := obj.(fsObjects)
+	// Assign a new UUID.
+	uuid := mustGetUUID()
 
-	// Regular format loading
-	_, err := loadFormatFS(fs.storage)
+	// Initialize meta volume, if volume already exists ignores it.
+	if err := initMetaVolumeFS(disk, uuid); err != nil {
+		t.Fatal(err)
+	}
+
+	fsFormatPath := pathJoin(disk, minioMetaBucket, fsFormatJSONFile)
+	if err := saveFormatFS(preparePath(fsFormatPath), newFSFormatV1()); err != nil {
+		t.Fatal("Should not fail here", err)
+	}
+	_, err := loadFormatFS(disk)
 	if err != nil {
 		t.Fatal("Should not fail here", err)
 	}
 	// Loading corrupted format file
-	fs.storage.AppendFile(minioMetaBucket, fsFormatJSONFile, []byte{'b'})
-	_, err = loadFormatFS(fs.storage)
+	file, err := os.OpenFile(preparePath(fsFormatPath), os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0666)
+	if err != nil {
+		t.Fatal("Should not fail here", err)
+	}
+	file.Write([]byte{'b'})
+	file.Close()
+	_, err = loadFormatFS(disk)
 	if err == nil {
 		t.Fatal("Should return an error here")
 	}
-	// Loading format file from faulty disk
-	fsStorage := fs.storage.(*retryStorage)
-	fs.storage = newNaughtyDisk(fsStorage, nil, errFaultyDisk)
-	_, err = loadFormatFS(fs.storage)
-	if err != errFaultyDisk {
-		t.Fatal("Should return faulty disk error")
+	// Loading format file from disk not found.
+	removeAll(disk)
+	_, err = loadFormatFS(disk)
+	if err != nil && err != errUnformattedDisk {
+		t.Fatal("Should return unformatted disk, but got", err)
 	}
 }
 
@@ -180,7 +135,7 @@ func TestFSGetBucketInfo(t *testing.T) {
 	defer removeAll(disk)
 
 	obj := initFSObjects(disk, t)
-	fs := obj.(fsObjects)
+	fs := obj.(*fsObjects)
 	bucketName := "bucket"
 
 	obj.MakeBucket(bucketName)
@@ -200,14 +155,12 @@ func TestFSGetBucketInfo(t *testing.T) {
 		t.Fatal("BucketNameInvalid error not returned")
 	}
 
-	// Loading format file from faulty disk
-	fsStorage := fs.storage.(*retryStorage)
-	fs.storage = newNaughtyDisk(fsStorage, nil, errFaultyDisk)
+	// Check for buckets and should get disk not found.
+	removeAll(disk)
 	_, err = fs.GetBucketInfo(bucketName)
-	if errorCause(err) != errFaultyDisk {
-		t.Fatal("errFaultyDisk error not returned")
+	if !isSameType(errorCause(err), BucketNotFound{}) {
+		t.Fatal("BucketNotFound error not returned")
 	}
-
 }
 
 // TestFSDeleteObject - test fs.DeleteObject() with healthy and corrupted disks
@@ -217,7 +170,7 @@ func TestFSDeleteObject(t *testing.T) {
 	defer removeAll(disk)
 
 	obj := initFSObjects(disk, t)
-	fs := obj.(fsObjects)
+	fs := obj.(*fsObjects)
 	bucketName := "bucket"
 	objectName := "object"
 
@@ -229,12 +182,16 @@ func TestFSDeleteObject(t *testing.T) {
 	if err := fs.DeleteObject("fo", objectName); !isSameType(errorCause(err), BucketNameInvalid{}) {
 		t.Fatal("Unexpected error: ", err)
 	}
+	// Test with bucket does not exist
+	if err := fs.DeleteObject("foobucket", "fooobject"); !isSameType(errorCause(err), BucketNotFound{}) {
+		t.Fatal("Unexpected error: ", err)
+	}
 	// Test with invalid object name
 	if err := fs.DeleteObject(bucketName, "\\"); !isSameType(errorCause(err), ObjectNameInvalid{}) {
 		t.Fatal("Unexpected error: ", err)
 	}
-	// Test with inexist bucket/object
-	if err := fs.DeleteObject("foobucket", "fooobject"); !isSameType(errorCause(err), BucketNotFound{}) {
+	// Test with object does not exist.
+	if err := fs.DeleteObject(bucketName, "foooobject"); !isSameType(errorCause(err), ObjectNotFound{}) {
 		t.Fatal("Unexpected error: ", err)
 	}
 	// Test with valid condition
@@ -242,11 +199,12 @@ func TestFSDeleteObject(t *testing.T) {
 		t.Fatal("Unexpected error: ", err)
 	}
 
-	// Loading format file from faulty disk
-	fsStorage := fs.storage.(*retryStorage)
-	fs.storage = newNaughtyDisk(fsStorage, nil, errFaultyDisk)
-	if err := fs.DeleteObject(bucketName, objectName); errorCause(err) != errFaultyDisk {
-		t.Fatal("Unexpected error: ", err)
+	// Delete object should err disk not found.
+	removeAll(disk)
+	if err := fs.DeleteObject(bucketName, objectName); err != nil {
+		if !isSameType(errorCause(err), BucketNotFound{}) {
+			t.Fatal("Unexpected error: ", err)
+		}
 	}
 
 }
@@ -258,7 +216,7 @@ func TestFSDeleteBucket(t *testing.T) {
 	defer removeAll(disk)
 
 	obj := initFSObjects(disk, t)
-	fs := obj.(fsObjects)
+	fs := obj.(*fsObjects)
 	bucketName := "bucket"
 
 	err := obj.MakeBucket(bucketName)
@@ -267,29 +225,27 @@ func TestFSDeleteBucket(t *testing.T) {
 	}
 
 	// Test with an invalid bucket name
-	if err := fs.DeleteBucket("fo"); !isSameType(errorCause(err), BucketNameInvalid{}) {
+	if err = fs.DeleteBucket("fo"); !isSameType(errorCause(err), BucketNameInvalid{}) {
 		t.Fatal("Unexpected error: ", err)
 	}
 	// Test with an inexistant bucket
-	if err := fs.DeleteBucket("foobucket"); !isSameType(errorCause(err), BucketNotFound{}) {
+	if err = fs.DeleteBucket("foobucket"); !isSameType(errorCause(err), BucketNotFound{}) {
 		t.Fatal("Unexpected error: ", err)
 	}
 	// Test with a valid case
-	if err := fs.DeleteBucket(bucketName); err != nil {
+	if err = fs.DeleteBucket(bucketName); err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
 
 	obj.MakeBucket(bucketName)
 
-	// Loading format file from faulty disk
-	fsStorage := fs.storage.(*retryStorage)
-	for i := 1; i <= 2; i++ {
-		fs.storage = newNaughtyDisk(fsStorage, map[int]error{i: errFaultyDisk}, nil)
-		if err := fs.DeleteBucket(bucketName); errorCause(err) != errFaultyDisk {
+	// Delete bucker should get error disk not found.
+	removeAll(disk)
+	if err = fs.DeleteBucket(bucketName); err != nil {
+		if !isSameType(errorCause(err), BucketNotFound{}) {
 			t.Fatal("Unexpected error: ", err)
 		}
 	}
-
 }
 
 // TestFSListBuckets - tests for fs ListBuckets
@@ -299,7 +255,7 @@ func TestFSListBuckets(t *testing.T) {
 	defer removeAll(disk)
 
 	obj := initFSObjects(disk, t)
-	fs := obj.(fsObjects)
+	fs := obj.(*fsObjects)
 
 	bucketName := "bucket"
 	if err := obj.MakeBucket(bucketName); err != nil {
@@ -307,28 +263,40 @@ func TestFSListBuckets(t *testing.T) {
 	}
 
 	// Create a bucket with invalid name
-	if err := fs.storage.MakeVol("vo^"); err != nil {
+	if err := mkdirAll(pathJoin(fs.fsPath, "vo^"), 0777); err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
+	f, err := os.Create(pathJoin(fs.fsPath, "test"))
+	if err != nil {
+		t.Fatal("Unexpected error: ", err)
+	}
+	f.Close()
 
-	// Test
+	// Test list buckets to have only one entry.
 	buckets, err := fs.ListBuckets()
 	if err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
 	if len(buckets) != 1 {
-		t.Fatal("ListBuckets not working properly")
+		t.Fatal("ListBuckets not working properly", buckets)
 	}
 
-	// Test ListBuckets with faulty disks
-	fsStorage := fs.storage.(*retryStorage)
-	for i := 1; i <= 2; i++ {
-		fs.storage = newNaughtyDisk(fsStorage, nil, errFaultyDisk)
-		if _, err := fs.ListBuckets(); errorCause(err) != errFaultyDisk {
+	// Test ListBuckets with disk not found.
+	removeAll(disk)
+
+	if _, err := fs.ListBuckets(); err != nil {
+		if errorCause(err) != errDiskNotFound {
 			t.Fatal("Unexpected error: ", err)
 		}
 	}
 
+	longPath := fmt.Sprintf("%0256d", 1)
+	fs.fsPath = longPath
+	if _, err := fs.ListBuckets(); err != nil {
+		if errorCause(err) != errFileNameTooLong {
+			t.Fatal("Unexpected error: ", err)
+		}
+	}
 }
 
 // TestFSHealObject - tests for fs HealObject

@@ -30,32 +30,23 @@ import (
 
 // Prepare benchmark backend
 func prepareBenchmarkBackend(instanceType string) (ObjectLayer, []string, error) {
-	var nDisks int
 	switch instanceType {
 	// Total number of disks for FS backend is set to 1.
 	case FSTestStr:
-		nDisks = 1
-		// Total number of disks for FS backend is set to 16.
+		obj, disk, err := prepareFS()
+		if err != nil {
+			return nil, nil, err
+		}
+		return obj, []string{disk}, nil
+	// Total number of disks for XL backend is set to 16.
 	case XLTestStr:
-		nDisks = 16
-	default:
-		nDisks = 1
+		return prepareXL()
 	}
-	// get `nDisks` random disks.
-	disks, err := getRandomDisks(nDisks)
+	obj, disk, err := prepareFS()
 	if err != nil {
 		return nil, nil, err
 	}
-	endpoints, err := parseStorageEndpoints(disks)
-	if err != nil {
-		return nil, nil, err
-	}
-	// initialize object layer.
-	obj, _, err := initObjectLayer(endpoints)
-	if err != nil {
-		return nil, nil, err
-	}
-	return obj, disks, nil
+	return obj, []string{disk}, nil
 }
 
 // Benchmark utility functions for ObjectLayer.PutObject().

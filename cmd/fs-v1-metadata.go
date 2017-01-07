@@ -18,7 +18,15 @@ package cmd
 
 import (
 	"encoding/json"
+	"io"
+	"io/ioutil"
+	"os"
+	pathutil "path"
 	"sort"
+	"strings"
+
+	"github.com/minio/minio/pkg/lock"
+	"github.com/minio/minio/pkg/mimedb"
 )
 
 const (
@@ -36,6 +44,50 @@ type fsMetaV1 struct {
 	// Metadata map for current object `fs.json`.
 	Meta  map[string]string `json:"meta,omitempty"`
 	Parts []objectPartInfo  `json:"parts,omitempty"`
+}
+
+// Converts metadata to object info.
+func (m fsMetaV1) ToObjectInfo(bucket, object string, fi os.FileInfo) ObjectInfo {
+	if len(m.Meta) == 0 {
+		m.Meta = make(map[string]string)
+	}
+
+	// Guess content-type from the extension if possible.
+	if m.Meta["content-type"] == "" {
+		if objectExt := pathutil.Ext(object); objectExt != "" {
+			if content, ok := mimedb.DB[strings.ToLower(strings.TrimPrefix(objectExt, "."))]; ok {
+				m.Meta["content-type"] = content.ContentType
+			}
+		}
+	}
+
+	objInfo := ObjectInfo{
+		Bucket: bucket,
+		Name:   object,
+	}
+
+	// We set file into only if its valid.
+	objInfo.ModTime = timeSentinel
+	if fi != nil {
+		objInfo.ModTime = fi.ModTime()
+		objInfo.Size = fi.Size()
+		objInfo.IsDir = fi.IsDir()
+	}
+
+	objInfo.MD5Sum = m.Meta["md5Sum"]
+	objInfo.ContentType = m.Meta["content-type"]
+	objInfo.ContentEncoding = m.Meta["content-encoding"]
+
+	// md5Sum has already been extracted into objInfo.MD5Sum.  We
+	// need to remove it from m.Meta to avoid it from appearing as
+	// part of response headers. e.g, X-Minio-* or X-Amz-*.
+	delete(m.Meta, "md5Sum")
+
+	// Save all the other userdefined API.
+	objInfo.UserDefined = m.Meta
+
+	// Success..
+	return objInfo
 }
 
 // ObjectPartIndex - returns the index of matching object part number.
@@ -73,41 +125,43 @@ func (m *fsMetaV1) AddObjectPart(partNumber int, partName string, partETag strin
 	sort.Sort(byObjectPartNumber(m.Parts))
 }
 
-// readFSMetadata - returns the object metadata `fs.json` content.
-func readFSMetadata(disk StorageAPI, bucket, filePath string) (fsMeta fsMetaV1, err error) {
-	// Read all `fs.json`.
-	buf, err := disk.ReadAll(bucket, filePath)
+func (m *fsMetaV1) WriteTo(writer io.Writer) (n int64, err error) {
+	var metadataBytes []byte
+	metadataBytes, err = json.Marshal(m)
 	if err != nil {
-		return fsMetaV1{}, traceError(err)
+		return 0, traceError(err)
 	}
 
-	// Decode `fs.json` into fsMeta structure.
-	if err = json.Unmarshal(buf, &fsMeta); err != nil {
-		return fsMetaV1{}, traceError(err)
+	if err = writer.(*lock.LockedFile).Truncate(0); err != nil {
+		return 0, traceError(err)
+	}
+
+	if _, err = writer.Write(metadataBytes); err != nil {
+		return 0, traceError(err)
 	}
 
 	// Success.
-	return fsMeta, nil
+	return int64(len(metadataBytes)), nil
 }
 
-// Write fsMeta to fs.json or fs-append.json.
-func writeFSMetadata(disk StorageAPI, bucket, filePath string, fsMeta fsMetaV1) error {
-	tmpPath := mustGetUUID()
-	metadataBytes, err := json.Marshal(fsMeta)
+func (m *fsMetaV1) ReadFrom(reader io.Reader) (n int64, err error) {
+	var metadataBytes []byte
+	metadataBytes, err = ioutil.ReadAll(reader)
 	if err != nil {
-		return traceError(err)
+		return 0, traceError(err)
 	}
-	if err = disk.AppendFile(minioMetaTmpBucket, tmpPath, metadataBytes); err != nil {
-		return traceError(err)
+
+	if len(metadataBytes) == 0 {
+		return 0, traceError(io.EOF)
 	}
-	err = disk.RenameFile(minioMetaTmpBucket, tmpPath, bucket, filePath)
-	if err != nil {
-		err = disk.DeleteFile(minioMetaTmpBucket, tmpPath)
-		if err != nil {
-			return traceError(err)
-		}
+
+	// Decode `fs.json` into fsMeta structure.
+	if err = json.Unmarshal(metadataBytes, m); err != nil {
+		return 0, traceError(err)
 	}
-	return nil
+
+	// Success.
+	return int64(len(metadataBytes)), nil
 }
 
 // newFSMetaV1 - initializes new fsMetaV1.
@@ -130,21 +184,49 @@ func newFSFormatV1() (format *formatConfigV1) {
 	}
 }
 
-// isFSFormat - returns whether given formatConfigV1 is FS type or not.
-func isFSFormat(format *formatConfigV1) bool {
-	return format.Format == "fs"
+// loads format.json from minioMetaBucket if it exists.
+func loadFormatFS(fsPath string) (*formatConfigV1, error) {
+	rlk, err := lock.RLockedOpenFile(pathJoin(fsPath, minioMetaBucket, fsFormatJSONFile))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, errUnformattedDisk
+		}
+		return nil, err
+	}
+	defer rlk.Close()
+
+	formatBytes, err := ioutil.ReadAll(rlk)
+	if err != nil {
+		return nil, err
+	}
+
+	format := &formatConfigV1{}
+	if err = json.Unmarshal(formatBytes, format); err != nil {
+		return nil, err
+	}
+
+	return format, nil
 }
 
 // writes FS format (format.json) into minioMetaBucket.
-func saveFSFormatData(storage StorageAPI, fsFormat *formatConfigV1) error {
+func saveFormatFS(formatPath string, fsFormat *formatConfigV1) error {
 	metadataBytes, err := json.Marshal(fsFormat)
 	if err != nil {
 		return err
 	}
-	// fsFormatJSONFile - format.json file stored in minioMetaBucket(.minio) directory.
-	if err = storage.AppendFile(minioMetaBucket, fsFormatJSONFile, metadataBytes); err != nil {
+
+	// fsFormatJSONFile - format.json file stored in minioMetaBucket(.minio.sys) directory.
+	lk, err := lock.LockedOpenFile(preparePath(formatPath), os.O_CREATE|os.O_WRONLY, 0600)
+	if err != nil {
 		return err
 	}
+	defer lk.Close()
+
+	if _, err = lk.Write(metadataBytes); err != nil {
+		return err
+	}
+
+	// Success.
 	return nil
 }
 
@@ -153,11 +235,13 @@ func isPartsSame(uploadedParts []objectPartInfo, completeParts []completePart) b
 	if len(uploadedParts) != len(completeParts) {
 		return false
 	}
+
 	for i := range completeParts {
 		if uploadedParts[i].Number != completeParts[i].PartNumber ||
 			uploadedParts[i].ETag != completeParts[i].ETag {
 			return false
 		}
 	}
+
 	return true
 }
