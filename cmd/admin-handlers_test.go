@@ -111,6 +111,11 @@ func getServiceCmdRequest(cmd cmdType, cred credential) (*http.Request, error) {
 // testServicesCmdHandler - parametrizes service subcommand tests on
 // cmdType value.
 func testServicesCmdHandler(cmd cmdType, t *testing.T) {
+	// reset globals.
+	// this is to make sure that the tests are not affected by modified value.
+	resetTestGlobals()
+	// initialize NSLock.
+	initNSLock(false)
 	// Initialize configuration for access/secret credentials.
 	rootPath, err := newTestConfig("us-east-1")
 	if err != nil {
@@ -194,6 +199,12 @@ func TestServiceRestartHandler(t *testing.T) {
 
 // Test for locks list management REST API.
 func TestListLocksHandler(t *testing.T) {
+	// reset globals.
+	// this is to make sure that the tests are not affected by modified globals.
+	resetTestGlobals()
+	// initialize NSLock.
+	initNSLock(false)
+
 	rootPath, err := newTestConfig("us-east-1")
 	if err != nil {
 		t.Fatalf("Unable to initialize server config. %s", err)
@@ -272,6 +283,12 @@ func TestListLocksHandler(t *testing.T) {
 
 // Test for locks clear management REST API.
 func TestClearLocksHandler(t *testing.T) {
+	// reset globals.
+	// this is to make sure that the tests are not affected by modified globals.
+	resetTestGlobals()
+	// initialize NSLock.
+	initNSLock(false)
+
 	rootPath, err := newTestConfig("us-east-1")
 	if err != nil {
 		t.Fatalf("Unable to initialize server config. %s", err)
@@ -347,6 +364,11 @@ func TestClearLocksHandler(t *testing.T) {
 
 // Test for lock query param validation helper function.
 func TestValidateLockQueryParams(t *testing.T) {
+	// reset globals.
+	// this is to make sure that the tests are not affected by modified globals.
+	resetTestGlobals()
+	// initialize NSLock.
+	initNSLock(false)
 	// Sample query values for test cases.
 	allValidVal := url.Values{}
 	allValidVal.Set(string(lockBucket), "bucket")

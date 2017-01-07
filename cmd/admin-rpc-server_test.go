@@ -22,6 +22,10 @@ import (
 )
 
 func testAdminCmd(cmd cmdType, t *testing.T) {
+	// reset globals.
+	// this is to make sure that the tests are not affected by modified globals.
+	resetTestGlobals()
+
 	rootPath, err := newTestConfig("us-east-1")
 	if err != nil {
 		t.Fatalf("Failed to create test config - %v", err)
