@@ -41,7 +41,7 @@ If you are running [distributed Minio](https://docs.minio.io/docs/distributed-mi
 
 ### Step 2: Enable bucket notification using Minio client
 
-In this recipe we will enable bucket events only when JPEG images are uploaded or deleted from ``images`` bucket on ``myminio`` server. Here ARN value is ``arn:minio:sqs:us-east-1:1:amqp``. To understand more about ARN please follow [AWS ARN](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html) documentation.
+We will enable bucket events only when JPEG images are uploaded or deleted from ``images`` bucket on ``myminio`` server. Here ARN value is ``arn:minio:sqs:us-east-1:1:amqp``. To understand more about ARN please follow [AWS ARN](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html) documentation.
 
 ```
 mc mb myminio/images
@@ -50,7 +50,7 @@ mc events list myminio/images
 arn:minio:sqs:us-east-1:1:amqp s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
 ```
 
-### Step 3: Testing at RabbitMQ
+### Step 3: Testing on RabbitMQ
 
 Below python script waits on queue exchange ``bucketevents`` and prints event notification on console. It uses [pika python client](https://www.rabbitmq.com/tutorials/tutorial-three-python.html) library for RabbitMQ.
 

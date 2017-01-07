@@ -34,7 +34,7 @@ If you are running [distributed Minio](https://docs.minio.io/docs/distributed-mi
 
 ### Step 2: Enable bucket notification using Minio client
 
-In this recipe we will enable bucket events only when JPEG images are uploaded or deleted from ``images`` bucket on ``myminio`` server. Here ARN value is ``arn:minio:sqs:us-east-1:1:redis``. To understand more about ARN please follow [AWS ARN](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html) documentation.
+We will enable bucket events only when JPEG images are uploaded or deleted from ``images`` bucket on ``myminio`` server. Here ARN value is ``arn:minio:sqs:us-east-1:1:redis``. To understand more about ARN please follow [AWS ARN](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html) documentation.
 
 ```
 mc mb myminio/images
@@ -43,7 +43,7 @@ mc events list myminio/images
 arn:minio:sqs:us-east-1:1:redis s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
 ```
 
-### Step 3: Testing at Redis
+### Step 3: Testing on Redis
 
 Redis comes with handy command line interface, redis-cli. It uses ``monitor`` command to print all notification on console.
 
