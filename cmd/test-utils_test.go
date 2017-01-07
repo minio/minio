@@ -456,6 +456,23 @@ func resetGlobalConfig() {
 	serverConfigMu.Unlock()
 }
 
+// reset global NSLock.
+func resetGlobalNSLock() {
+	if globalNSMutex != nil {
+		globalNSMutex = nil
+	}
+}
+
+// reset global event notifier.
+func resetGlobalEventNotifier() {
+	globalEventNotifier = nil
+}
+
+// reset Global event notifier.
+func resetGlobalEventnotify() {
+	globalEventNotifier = nil
+}
+
 // Resets all the globals used modified in tests.
 // Resetting ensures that the changes made to globals by one test doesn't affect others.
 func resetTestGlobals() {
@@ -465,6 +482,10 @@ func resetTestGlobals() {
 	resetGlobalConfigPath()
 	// Reset Global server config.
 	resetGlobalConfig()
+	// Reset global NSLock.
+	resetGlobalNSLock()
+	// Reset global event notifier.
+	resetGlobalEventnotify()
 }
 
 // Configure the server for the test run.
@@ -1876,6 +1897,11 @@ func ExecObjectLayerAPINilTest(t TestErrHandler, bucketName, objectName, instanc
 // ExecObjectLayerAPITest - executes object layer API tests.
 // Creates single node and XL ObjectLayer instance, registers the specified API end points and runs test for both the layers.
 func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endpoints []string) {
+	// reset globals.
+	// this is to make sure that the tests are not affected by modified value.
+	resetTestGlobals()
+	// initialize NSLock.
+	initNSLock(false)
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
 	rootPath, err := newTestConfig("us-east-1")

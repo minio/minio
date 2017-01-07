@@ -20,6 +20,10 @@ import "testing"
 
 // Tests authorized RPC client.
 func TestAuthRPCClient(t *testing.T) {
+	// reset globals.
+	// this is to make sure that the tests are not affected by modified globals.
+	resetTestGlobals()
+
 	authCfg := authConfig{
 		accessKey:       "123",
 		secretKey:       "123",

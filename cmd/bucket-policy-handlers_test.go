@@ -945,7 +945,7 @@ func TestBucketPolicyConditionMatch(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		t.Run(fmt.Sprintf("Test case %d: Failed.", i+1), func(t *testing.T) {
+		t.Run(fmt.Sprintf("Case %d", i+1), func(t *testing.T) {
 			// call the function under test and assert the result with the expected result.
 			doesMatch := bucketPolicyConditionMatch(tc.condition, tc.statementCondition)
 			if tc.expectedMatch != doesMatch {
