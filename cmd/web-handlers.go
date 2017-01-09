@@ -223,7 +223,7 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 		reply.Writable = true
 		return nil
 	default:
-		return nil
+		return errAuthentication
 	}
 	marker := ""
 	for {
