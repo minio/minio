@@ -350,7 +350,7 @@ func TestLockRpcServerForceUnlock(t *testing.T) {
 	}
 
 	// Then test force unlock of a lock that does not exist (not returning an error)
-	laForce.dsyncLockArgs.UID = ""
+	laForce.LockArgs.UID = ""
 	laForce.SetRequestTime(time.Now().UTC())
 	err = locker.ForceUnlock(&laForce, &result)
 	if err != nil {

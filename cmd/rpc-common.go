@@ -103,9 +103,9 @@ type LoginRPCReply struct {
 // LockArgs represents arguments for any authenticated lock RPC call.
 type LockArgs struct {
 	AuthRPCArgs
-	dsyncLockArgs dsync.LockArgs
+	LockArgs dsync.LockArgs
 }
 
 func newLockArgs(args dsync.LockArgs) LockArgs {
-	return LockArgs{dsyncLockArgs: args}
+	return LockArgs{LockArgs: args}
 }
