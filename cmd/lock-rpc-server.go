@@ -137,14 +137,14 @@ func (l *lockServer) Lock(args *LockArgs, reply *bool) error {
 	if err := args.IsAuthenticated(); err != nil {
 		return err
 	}
-	_, *reply = l.lockMap[args.dsyncLockArgs.Resource]
+	_, *reply = l.lockMap[args.LockArgs.Resource]
 	if !*reply { // No locks held on the given name, so claim write lock
-		l.lockMap[args.dsyncLockArgs.Resource] = []lockRequesterInfo{
+		l.lockMap[args.LockArgs.Resource] = []lockRequesterInfo{
 			{
 				writer:        true,
-				node:          args.dsyncLockArgs.ServerAddr,
-				rpcPath:       args.dsyncLockArgs.ServiceEndpoint,
-				uid:           args.dsyncLockArgs.UID,
+				node:          args.LockArgs.ServerAddr,
+				rpcPath:       args.LockArgs.ServiceEndpoint,
+				uid:           args.LockArgs.UID,
 				timestamp:     time.Now().UTC(),
 				timeLastCheck: time.Now().UTC(),
 			},
@@ -162,14 +162,14 @@ func (l *lockServer) Unlock(args *LockArgs, reply *bool) error {
 		return err
 	}
 	var lri []lockRequesterInfo
-	if lri, *reply = l.lockMap[args.dsyncLockArgs.Resource]; !*reply { // No lock is held on the given name
-		return fmt.Errorf("Unlock attempted on an unlocked entity: %s", args.dsyncLockArgs.Resource)
+	if lri, *reply = l.lockMap[args.LockArgs.Resource]; !*reply { // No lock is held on the given name
+		return fmt.Errorf("Unlock attempted on an unlocked entity: %s", args.LockArgs.Resource)
 	}
 	if *reply = isWriteLock(lri); !*reply { // Unless it is a write lock
-		return fmt.Errorf("Unlock attempted on a read locked entity: %s (%d read locks active)", args.dsyncLockArgs.Resource, len(lri))
+		return fmt.Errorf("Unlock attempted on a read locked entity: %s (%d read locks active)", args.LockArgs.Resource, len(lri))
 	}
-	if !l.removeEntry(args.dsyncLockArgs.Resource, args.dsyncLockArgs.UID, &lri) {
-		return fmt.Errorf("Unlock unable to find corresponding lock for uid: %s", args.dsyncLockArgs.UID)
+	if !l.removeEntry(args.LockArgs.Resource, args.LockArgs.UID, &lri) {
+		return fmt.Errorf("Unlock unable to find corresponding lock for uid: %s", args.LockArgs.UID)
 	}
 	return nil
 }
@@ -183,18 +183,18 @@ func (l *lockServer) RLock(args *LockArgs, reply *bool) error {
 	}
 	lrInfo := lockRequesterInfo{
 		writer:        false,
-		node:          args.dsyncLockArgs.ServerAddr,
-		rpcPath:       args.dsyncLockArgs.ServiceEndpoint,
-		uid:           args.dsyncLockArgs.UID,
+		node:          args.LockArgs.ServerAddr,
+		rpcPath:       args.LockArgs.ServiceEndpoint,
+		uid:           args.LockArgs.UID,
 		timestamp:     time.Now().UTC(),
 		timeLastCheck: time.Now().UTC(),
 	}
-	if lri, ok := l.lockMap[args.dsyncLockArgs.Resource]; ok {
+	if lri, ok := l.lockMap[args.LockArgs.Resource]; ok {
 		if *reply = !isWriteLock(lri); *reply { // Unless there is a write lock
-			l.lockMap[args.dsyncLockArgs.Resource] = append(l.lockMap[args.dsyncLockArgs.Resource], lrInfo)
+			l.lockMap[args.LockArgs.Resource] = append(l.lockMap[args.LockArgs.Resource], lrInfo)
 		}
 	} else { // No locks held on the given name, so claim (first) read lock
-		l.lockMap[args.dsyncLockArgs.Resource] = []lockRequesterInfo{lrInfo}
+		l.lockMap[args.LockArgs.Resource] = []lockRequesterInfo{lrInfo}
 		*reply = true
 	}
 	return nil
@@ -208,14 +208,14 @@ func (l *lockServer) RUnlock(args *LockArgs, reply *bool) error {
 		return err
 	}
 	var lri []lockRequesterInfo
-	if lri, *reply = l.lockMap[args.dsyncLockArgs.Resource]; !*reply { // No lock is held on the given name
-		return fmt.Errorf("RUnlock attempted on an unlocked entity: %s", args.dsyncLockArgs.Resource)
+	if lri, *reply = l.lockMap[args.LockArgs.Resource]; !*reply { // No lock is held on the given name
+		return fmt.Errorf("RUnlock attempted on an unlocked entity: %s", args.LockArgs.Resource)
 	}
 	if *reply = !isWriteLock(lri); !*reply { // A write-lock is held, cannot release a read lock
-		return fmt.Errorf("RUnlock attempted on a write locked entity: %s", args.dsyncLockArgs.Resource)
+		return fmt.Errorf("RUnlock attempted on a write locked entity: %s", args.LockArgs.Resource)
 	}
-	if !l.removeEntry(args.dsyncLockArgs.Resource, args.dsyncLockArgs.UID, &lri) {
-		return fmt.Errorf("RUnlock unable to find corresponding read lock for uid: %s", args.dsyncLockArgs.UID)
+	if !l.removeEntry(args.LockArgs.Resource, args.LockArgs.UID, &lri) {
+		return fmt.Errorf("RUnlock unable to find corresponding read lock for uid: %s", args.LockArgs.UID)
 	}
 	return nil
 }
@@ -227,11 +227,11 @@ func (l *lockServer) ForceUnlock(args *LockArgs, reply *bool) error {
 	if err := args.IsAuthenticated(); err != nil {
 		return err
 	}
-	if len(args.dsyncLockArgs.UID) != 0 {
-		return fmt.Errorf("ForceUnlock called with non-empty UID: %s", args.dsyncLockArgs.UID)
+	if len(args.LockArgs.UID) != 0 {
+		return fmt.Errorf("ForceUnlock called with non-empty UID: %s", args.LockArgs.UID)
 	}
-	if _, ok := l.lockMap[args.dsyncLockArgs.Resource]; ok { // Only clear lock when set
-		delete(l.lockMap, args.dsyncLockArgs.Resource) // Remove the lock (irrespective of write or read lock)
+	if _, ok := l.lockMap[args.LockArgs.Resource]; ok { // Only clear lock when set
+		delete(l.lockMap, args.LockArgs.Resource) // Remove the lock (irrespective of write or read lock)
 	}
 	*reply = true
 	return nil
@@ -245,17 +245,17 @@ func (l *lockServer) Expired(args *LockArgs, reply *bool) error {
 		return err
 	}
 	// Lock found, proceed to verify if belongs to given uid.
-	if lri, ok := l.lockMap[args.dsyncLockArgs.Resource]; ok {
+	if lri, ok := l.lockMap[args.LockArgs.Resource]; ok {
 		// Check whether uid is still active
 		for _, entry := range lri {
-			if entry.uid == args.dsyncLockArgs.UID {
+			if entry.uid == args.LockArgs.UID {
 				*reply = false // When uid found, lock is still active so return not expired.
 				return nil     // When uid found *reply is set to true.
 			}
 		}
 	}
-	// When we get here lock is no longer active due to either args.dsyncLockArgs.Resource
-	// being absent from map or uid not found for given args.dsyncLockArgs.Resource
+	// When we get here lock is no longer active due to either args.LockArgs.Resource
+	// being absent from map or uid not found for given args.LockArgs.Resource
 	*reply = true
 	return nil
 }
