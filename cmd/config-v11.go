@@ -71,6 +71,8 @@ func initConfig() (bool, error) {
 		srvCfg.Notify.PostgreSQL["1"] = postgreSQLNotify{}
 		srvCfg.Notify.Kafka = make(map[string]kafkaNotify)
 		srvCfg.Notify.Kafka["1"] = kafkaNotify{}
+		srvCfg.Notify.Webhook = make(map[string]webhookNotify)
+		srvCfg.Notify.Webhook["1"] = webhookNotify{}
 
 		// Create config path.
 		err := createConfigPath()
@@ -206,6 +208,28 @@ func (s serverConfigV11) GetRedis() map[string]redisNotify {
 	defer serverConfigMu.RUnlock()
 
 	return s.Notify.Redis
+}
+
+func (s serverConfigV11) GetWebhook() map[string]webhookNotify {
+	serverConfigMu.RLock()
+	defer serverConfigMu.RUnlock()
+
+	return s.Notify.Webhook
+}
+
+// GetWebhookNotifyByID get current Webhook logger.
+func (s serverConfigV11) GetWebhookNotifyByID(accountID string) webhookNotify {
+	serverConfigMu.RLock()
+	defer serverConfigMu.RUnlock()
+
+	return s.Notify.Webhook[accountID]
+}
+
+func (s *serverConfigV11) SetWebhookNotifyByID(accountID string, pgn webhookNotify) {
+	serverConfigMu.Lock()
+	defer serverConfigMu.Unlock()
+
+	s.Notify.Webhook[accountID] = pgn
 }
 
 // GetRedisNotify get current Redis logger.
