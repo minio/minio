@@ -26,9 +26,9 @@ import (
 // Read Write mutex for safe access to ServerConfig.
 var serverConfigMu sync.RWMutex
 
-// serverConfigV12 server configuration version '12' which is like
-// version '11' except it adds support for NATS streaming notifications.
-type serverConfigV12 struct {
+// serverConfigV13 server configuration version '13' which is like
+// version '12' except it adds support for webhook notification.
+type serverConfigV13 struct {
 	Version string `json:"version"`
 
 	// S3 API configuration.
@@ -47,7 +47,7 @@ type serverConfigV12 struct {
 func initConfig() (bool, error) {
 	if !isConfigFileExists() {
 		// Initialize server config.
-		srvCfg := &serverConfigV12{}
+		srvCfg := &serverConfigV13{}
 		srvCfg.Version = globalMinioConfigVersion
 		srvCfg.Region = "us-east-1"
 		srvCfg.Credential = newCredential()
@@ -71,12 +71,15 @@ func initConfig() (bool, error) {
 		srvCfg.Notify.PostgreSQL["1"] = postgreSQLNotify{}
 		srvCfg.Notify.Kafka = make(map[string]kafkaNotify)
 		srvCfg.Notify.Kafka["1"] = kafkaNotify{}
+		srvCfg.Notify.Webhook = make(map[string]webhookNotify)
+		srvCfg.Notify.Webhook["1"] = webhookNotify{}
 
 		// Create config path.
 		err := createConfigPath()
 		if err != nil {
 			return false, err
 		}
+
 		// hold the mutex lock before a new config is assigned.
 		// Save the new config globally.
 		// unlock the mutex.
@@ -94,7 +97,7 @@ func initConfig() (bool, error) {
 	if _, err = os.Stat(configFile); err != nil {
 		return false, err
 	}
-	srvCfg := &serverConfigV12{}
+	srvCfg := &serverConfigV13{}
 	srvCfg.Version = globalMinioConfigVersion
 	qc, err := quick.New(srvCfg)
 	if err != nil {
@@ -116,10 +119,10 @@ func initConfig() (bool, error) {
 }
 
 // serverConfig server config.
-var serverConfig *serverConfigV12
+var serverConfig *serverConfigV13
 
 // GetVersion get current config version.
-func (s serverConfigV12) GetVersion() string {
+func (s serverConfigV13) GetVersion() string {
 	serverConfigMu.RLock()
 	defer serverConfigMu.RUnlock()
 
@@ -128,14 +131,14 @@ func (s serverConfigV12) GetVersion() string {
 
 /// Logger related.
 
-func (s *serverConfigV12) SetAMQPNotifyByID(accountID string, amqpn amqpNotify) {
+func (s *serverConfigV13) SetAMQPNotifyByID(accountID string, amqpn amqpNotify) {
 	serverConfigMu.Lock()
 	defer serverConfigMu.Unlock()
 
 	s.Notify.AMQP[accountID] = amqpn
 }
 
-func (s serverConfigV12) GetAMQP() map[string]amqpNotify {
+func (s serverConfigV13) GetAMQP() map[string]amqpNotify {
 	serverConfigMu.RLock()
 	defer serverConfigMu.RUnlock()
 
@@ -143,7 +146,7 @@ func (s serverConfigV12) GetAMQP() map[string]amqpNotify {
 }
 
 // GetAMQPNotify get current AMQP logger.
-func (s serverConfigV12) GetAMQPNotifyByID(accountID string) amqpNotify {
+func (s serverConfigV13) GetAMQPNotifyByID(accountID string) amqpNotify {
 	serverConfigMu.RLock()
 	defer serverConfigMu.RUnlock()
 
@@ -151,35 +154,35 @@ func (s serverConfigV12) GetAMQPNotifyByID(accountID string) amqpNotify {
 }
 
 //
-func (s *serverConfigV12) SetNATSNotifyByID(accountID string, natsn natsNotify) {
+func (s *serverConfigV13) SetNATSNotifyByID(accountID string, natsn natsNotify) {
 	serverConfigMu.Lock()
 	defer serverConfigMu.Unlock()
 
 	s.Notify.NATS[accountID] = natsn
 }
 
-func (s serverConfigV12) GetNATS() map[string]natsNotify {
+func (s serverConfigV13) GetNATS() map[string]natsNotify {
 	serverConfigMu.RLock()
 	defer serverConfigMu.RUnlock()
 	return s.Notify.NATS
 }
 
 // GetNATSNotify get current NATS logger.
-func (s serverConfigV12) GetNATSNotifyByID(accountID string) natsNotify {
+func (s serverConfigV13) GetNATSNotifyByID(accountID string) natsNotify {
 	serverConfigMu.RLock()
 	defer serverConfigMu.RUnlock()
 
 	return s.Notify.NATS[accountID]
 }
 
-func (s *serverConfigV12) SetElasticSearchNotifyByID(accountID string, esNotify elasticSearchNotify) {
+func (s *serverConfigV13) SetElasticSearchNotifyByID(accountID string, esNotify elasticSearchNotify) {
 	serverConfigMu.Lock()
 	defer serverConfigMu.Unlock()
 
 	s.Notify.ElasticSearch[accountID] = esNotify
 }
 
-func (s serverConfigV12) GetElasticSearch() map[string]elasticSearchNotify {
+func (s serverConfigV13) GetElasticSearch() map[string]elasticSearchNotify {
 	serverConfigMu.RLock()
 	defer serverConfigMu.RUnlock()
 
@@ -187,50 +190,72 @@ func (s serverConfigV12) GetElasticSearch() map[string]elasticSearchNotify {
 }
 
 // GetElasticSearchNotify get current ElasicSearch logger.
-func (s serverConfigV12) GetElasticSearchNotifyByID(accountID string) elasticSearchNotify {
+func (s serverConfigV13) GetElasticSearchNotifyByID(accountID string) elasticSearchNotify {
 	serverConfigMu.RLock()
 	defer serverConfigMu.RUnlock()
 
 	return s.Notify.ElasticSearch[accountID]
 }
 
-func (s *serverConfigV12) SetRedisNotifyByID(accountID string, rNotify redisNotify) {
+func (s *serverConfigV13) SetRedisNotifyByID(accountID string, rNotify redisNotify) {
 	serverConfigMu.Lock()
 	defer serverConfigMu.Unlock()
 
 	s.Notify.Redis[accountID] = rNotify
 }
 
-func (s serverConfigV12) GetRedis() map[string]redisNotify {
+func (s serverConfigV13) GetRedis() map[string]redisNotify {
 	serverConfigMu.RLock()
 	defer serverConfigMu.RUnlock()
 
 	return s.Notify.Redis
 }
 
+func (s serverConfigV13) GetWebhook() map[string]webhookNotify {
+	serverConfigMu.RLock()
+	defer serverConfigMu.RUnlock()
+
+	return s.Notify.Webhook
+}
+
+// GetWebhookNotifyByID get current Webhook logger.
+func (s serverConfigV13) GetWebhookNotifyByID(accountID string) webhookNotify {
+	serverConfigMu.RLock()
+	defer serverConfigMu.RUnlock()
+
+	return s.Notify.Webhook[accountID]
+}
+
+func (s *serverConfigV13) SetWebhookNotifyByID(accountID string, pgn webhookNotify) {
+	serverConfigMu.Lock()
+	defer serverConfigMu.Unlock()
+
+	s.Notify.Webhook[accountID] = pgn
+}
+
 // GetRedisNotify get current Redis logger.
-func (s serverConfigV12) GetRedisNotifyByID(accountID string) redisNotify {
+func (s serverConfigV13) GetRedisNotifyByID(accountID string) redisNotify {
 	serverConfigMu.RLock()
 	defer serverConfigMu.RUnlock()
 
 	return s.Notify.Redis[accountID]
 }
 
-func (s *serverConfigV12) SetPostgreSQLNotifyByID(accountID string, pgn postgreSQLNotify) {
+func (s *serverConfigV13) SetPostgreSQLNotifyByID(accountID string, pgn postgreSQLNotify) {
 	serverConfigMu.Lock()
 	defer serverConfigMu.Unlock()
 
 	s.Notify.PostgreSQL[accountID] = pgn
 }
 
-func (s serverConfigV12) GetPostgreSQL() map[string]postgreSQLNotify {
+func (s serverConfigV13) GetPostgreSQL() map[string]postgreSQLNotify {
 	serverConfigMu.RLock()
 	defer serverConfigMu.RUnlock()
 
 	return s.Notify.PostgreSQL
 }
 
-func (s serverConfigV12) GetPostgreSQLNotifyByID(accountID string) postgreSQLNotify {
+func (s serverConfigV13) GetPostgreSQLNotifyByID(accountID string) postgreSQLNotify {
 	serverConfigMu.RLock()
 	defer serverConfigMu.RUnlock()
 
@@ -238,21 +263,21 @@ func (s serverConfigV12) GetPostgreSQLNotifyByID(accountID string) postgreSQLNot
 }
 
 // Kafka related functions
-func (s *serverConfigV12) SetKafkaNotifyByID(accountID string, kn kafkaNotify) {
+func (s *serverConfigV13) SetKafkaNotifyByID(accountID string, kn kafkaNotify) {
 	serverConfigMu.Lock()
 	defer serverConfigMu.Unlock()
 
 	s.Notify.Kafka[accountID] = kn
 }
 
-func (s serverConfigV12) GetKafka() map[string]kafkaNotify {
+func (s serverConfigV13) GetKafka() map[string]kafkaNotify {
 	serverConfigMu.RLock()
 	defer serverConfigMu.RUnlock()
 
 	return s.Notify.Kafka
 }
 
-func (s serverConfigV12) GetKafkaNotifyByID(accountID string) kafkaNotify {
+func (s serverConfigV13) GetKafkaNotifyByID(accountID string) kafkaNotify {
 	serverConfigMu.RLock()
 	defer serverConfigMu.RUnlock()
 
@@ -260,7 +285,7 @@ func (s serverConfigV12) GetKafkaNotifyByID(accountID string) kafkaNotify {
 }
 
 // SetFileLogger set new file logger.
-func (s *serverConfigV12) SetFileLogger(flogger fileLogger) {
+func (s *serverConfigV13) SetFileLogger(flogger fileLogger) {
 	serverConfigMu.Lock()
 	defer serverConfigMu.Unlock()
 
@@ -268,7 +293,7 @@ func (s *serverConfigV12) SetFileLogger(flogger fileLogger) {
 }
 
 // GetFileLogger get current file logger.
-func (s serverConfigV12) GetFileLogger() fileLogger {
+func (s serverConfigV13) GetFileLogger() fileLogger {
 	serverConfigMu.RLock()
 	defer serverConfigMu.RUnlock()
 
@@ -276,7 +301,7 @@ func (s serverConfigV12) GetFileLogger() fileLogger {
 }
 
 // SetConsoleLogger set new console logger.
-func (s *serverConfigV12) SetConsoleLogger(clogger consoleLogger) {
+func (s *serverConfigV13) SetConsoleLogger(clogger consoleLogger) {
 	serverConfigMu.Lock()
 	defer serverConfigMu.Unlock()
 
@@ -284,7 +309,7 @@ func (s *serverConfigV12) SetConsoleLogger(clogger consoleLogger) {
 }
 
 // GetConsoleLogger get current console logger.
-func (s serverConfigV12) GetConsoleLogger() consoleLogger {
+func (s serverConfigV13) GetConsoleLogger() consoleLogger {
 	serverConfigMu.RLock()
 	defer serverConfigMu.RUnlock()
 
@@ -292,7 +317,7 @@ func (s serverConfigV12) GetConsoleLogger() consoleLogger {
 }
 
 // SetRegion set new region.
-func (s *serverConfigV12) SetRegion(region string) {
+func (s *serverConfigV13) SetRegion(region string) {
 	serverConfigMu.Lock()
 	defer serverConfigMu.Unlock()
 
@@ -300,7 +325,7 @@ func (s *serverConfigV12) SetRegion(region string) {
 }
 
 // GetRegion get current region.
-func (s serverConfigV12) GetRegion() string {
+func (s serverConfigV13) GetRegion() string {
 	serverConfigMu.RLock()
 	defer serverConfigMu.RUnlock()
 
@@ -308,7 +333,7 @@ func (s serverConfigV12) GetRegion() string {
 }
 
 // SetCredentials set new credentials.
-func (s *serverConfigV12) SetCredential(creds credential) {
+func (s *serverConfigV13) SetCredential(creds credential) {
 	serverConfigMu.Lock()
 	defer serverConfigMu.Unlock()
 
@@ -316,7 +341,7 @@ func (s *serverConfigV12) SetCredential(creds credential) {
 }
 
 // GetCredentials get current credentials.
-func (s serverConfigV12) GetCredential() credential {
+func (s serverConfigV13) GetCredential() credential {
 	serverConfigMu.RLock()
 	defer serverConfigMu.RUnlock()
 
@@ -324,7 +349,7 @@ func (s serverConfigV12) GetCredential() credential {
 }
 
 // Save config.
-func (s serverConfigV12) Save() error {
+func (s serverConfigV13) Save() error {
 	serverConfigMu.RLock()
 	defer serverConfigMu.RUnlock()
 

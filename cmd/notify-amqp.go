@@ -82,7 +82,7 @@ func newAMQPNotify(accountID string) (*logrus.Logger, error) {
 	return amqpLog, nil
 }
 
-// Fire is called when an event should be sent to the message broker.k
+// Fire is called when an event should be sent to the message broker.
 func (q amqpConn) Fire(entry *logrus.Entry) error {
 	ch, err := q.Connection.Channel()
 	if err != nil {

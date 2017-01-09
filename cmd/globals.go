@@ -19,6 +19,7 @@ package cmd
 import (
 	"crypto/x509"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -36,7 +37,7 @@ const (
 
 // minio configuration related constants.
 const (
-	globalMinioConfigVersion      = "12"
+	globalMinioConfigVersion      = "13"
 	globalMinioConfigDir          = ".minio"
 	globalMinioCertsDir           = "certs"
 	globalMinioCertsCADir         = "CAs"
@@ -95,6 +96,9 @@ var (
 
 	// List of admin peers.
 	globalAdminPeers = adminPeers{}
+
+	// Minio server user agent string.
+	globalServerUserAgent = "Minio/" + ReleaseTag + " (" + runtime.GOOS + "; " + runtime.GOARCH + ")"
 
 	// Add new variable global values here.
 )

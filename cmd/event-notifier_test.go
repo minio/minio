@@ -77,6 +77,99 @@ func TestInitEventNotifierFaultyDisks(t *testing.T) {
 	}
 }
 
+// InitEventNotifierWithPostgreSQL - tests InitEventNotifier when PostgreSQL is not prepared
+func TestInitEventNotifierWithPostgreSQL(t *testing.T) {
+	// initialize the server and obtain the credentials and root.
+	// credentials are necessary to sign the HTTP request.
+	rootPath, err := newTestConfig("us-east-1")
+	if err != nil {
+		t.Fatalf("Init Test config failed")
+	}
+	// remove the root directory after the test ends.
+	defer removeAll(rootPath)
+
+	disks, err := getRandomDisks(1)
+	defer removeAll(disks[0])
+	if err != nil {
+		t.Fatal("Unable to create directories for FS backend. ", err)
+	}
+	endpoints, err := parseStorageEndpoints(disks)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fs, _, err := initObjectLayer(endpoints)
+	if err != nil {
+		t.Fatal("Unable to initialize FS backend.", err)
+	}
+
+	serverConfig.SetPostgreSQLNotifyByID("1", postgreSQLNotify{Enable: true})
+	if err := initEventNotifier(fs); err == nil {
+		t.Fatal("PostgreSQL config didn't fail.")
+	}
+}
+
+// InitEventNotifierWithNATS - tests InitEventNotifier when NATS is not prepared
+func TestInitEventNotifierWithNATS(t *testing.T) {
+	// initialize the server and obtain the credentials and root.
+	// credentials are necessary to sign the HTTP request.
+	rootPath, err := newTestConfig("us-east-1")
+	if err != nil {
+		t.Fatalf("Init Test config failed")
+	}
+	// remove the root directory after the test ends.
+	defer removeAll(rootPath)
+
+	disks, err := getRandomDisks(1)
+	defer removeAll(disks[0])
+	if err != nil {
+		t.Fatal("Unable to create directories for FS backend. ", err)
+	}
+	endpoints, err := parseStorageEndpoints(disks)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fs, _, err := initObjectLayer(endpoints)
+	if err != nil {
+		t.Fatal("Unable to initialize FS backend.", err)
+	}
+
+	serverConfig.SetNATSNotifyByID("1", natsNotify{Enable: true})
+	if err := initEventNotifier(fs); err == nil {
+		t.Fatal("NATS config didn't fail.")
+	}
+}
+
+// InitEventNotifierWithWebHook - tests InitEventNotifier when WebHook is not prepared
+func TestInitEventNotifierWithWebHook(t *testing.T) {
+	// initialize the server and obtain the credentials and root.
+	// credentials are necessary to sign the HTTP request.
+	rootPath, err := newTestConfig("us-east-1")
+	if err != nil {
+		t.Fatalf("Init Test config failed")
+	}
+	// remove the root directory after the test ends.
+	defer removeAll(rootPath)
+
+	disks, err := getRandomDisks(1)
+	defer removeAll(disks[0])
+	if err != nil {
+		t.Fatal("Unable to create directories for FS backend. ", err)
+	}
+	endpoints, err := parseStorageEndpoints(disks)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fs, _, err := initObjectLayer(endpoints)
+	if err != nil {
+		t.Fatal("Unable to initialize FS backend.", err)
+	}
+
+	serverConfig.SetWebhookNotifyByID("1", webhookNotify{Enable: true})
+	if err := initEventNotifier(fs); err == nil {
+		t.Fatal("WebHook config didn't fail.")
+	}
+}
+
 // InitEventNotifierWithAMQP - tests InitEventNotifier when AMQP is not prepared
 func TestInitEventNotifierWithAMQP(t *testing.T) {
 	// initialize the server and obtain the credentials and root.

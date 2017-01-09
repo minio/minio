@@ -100,7 +100,37 @@ func (s *TestSuiteCommon) TestAuth(c *C) {
 	c.Assert(len(cred.SecretKey), Equals, secretKeyMaxLen)
 }
 
-func (s *TestSuiteCommon) TestBucketSQSNotification(c *C) {
+func (s *TestSuiteCommon) TestBucketSQSNotificationWebHook(c *C) {
+	// Sample bucket notification.
+	bucketNotificationBuf := `<NotificationConfiguration><QueueConfiguration><Event>s3:ObjectCreated:Put</Event><Filter><S3Key><FilterRule><Name>prefix</Name><Value>images/</Value></FilterRule></S3Key></Filter><Id>1</Id><Queue>arn:minio:sqs:us-east-1:444455556666:webhook</Queue></QueueConfiguration></NotificationConfiguration>`
+	// generate a random bucket Name.
+	bucketName := getRandomBucketName()
+	// HTTP request to create the bucket.
+	request, err := newTestSignedRequest("PUT", getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey, s.signer)
+	c.Assert(err, IsNil)
+
+	client := http.Client{Transport: s.transport}
+	// execute the request.
+	response, err := client.Do(request)
+	c.Assert(err, IsNil)
+
+	// assert the http response status code.
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	request, err = newTestSignedRequest("PUT", getPutNotificationURL(s.endPoint, bucketName),
+		int64(len(bucketNotificationBuf)), bytes.NewReader([]byte(bucketNotificationBuf)), s.accessKey, s.secretKey, s.signer)
+	c.Assert(err, IsNil)
+
+	client = http.Client{Transport: s.transport}
+	// execute the HTTP request.
+	response, err = client.Do(request)
+
+	c.Assert(err, IsNil)
+	verifyError(c, response, "InvalidArgument", "A specified destination ARN does not exist or is not well-formed. Verify the destination ARN.", http.StatusBadRequest)
+}
+
+func (s *TestSuiteCommon) TestBucketSQSNotificationAMQP(c *C) {
 	// Sample bucket notification.
 	bucketNotificationBuf := `<NotificationConfiguration><QueueConfiguration><Event>s3:ObjectCreated:Put</Event><Filter><S3Key><FilterRule><Name>prefix</Name><Value>images/</Value></FilterRule></S3Key></Filter><Id>1</Id><Queue>arn:minio:sqs:us-east-1:444455556666:amqp</Queue></QueueConfiguration></NotificationConfiguration>`
 	// generate a random bucket Name.

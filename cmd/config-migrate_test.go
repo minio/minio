@@ -101,7 +101,10 @@ func TestServerConfigMigrateInexistentConfig(t *testing.T) {
 		t.Fatal("migrate v10 to v11 should succeed when no config file is found")
 	}
 	if err := migrateV11ToV12(); err != nil {
-		t.Fatal("migrate v10 to v11 should succeed when no config file is found")
+		t.Fatal("migrate v11 to v12 should succeed when no config file is found")
+	}
+	if err := migrateV12ToV13(); err != nil {
+		t.Fatal("migrate v12 to v13 should succeed when no config file is found")
 	}
 }
 
@@ -212,5 +215,7 @@ func TestServerConfigMigrateFaultyConfig(t *testing.T) {
 	if err := migrateV11ToV12(); err == nil {
 		t.Fatal("migrateConfigV11ToV12() should fail with a corrupted json")
 	}
-
+	if err := migrateV12ToV13(); err == nil {
+		t.Fatal("migrateConfigV12ToV13() should fail with a corrupted json")
+	}
 }

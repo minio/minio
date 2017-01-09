@@ -21,7 +21,6 @@ import (
 	"encoding/xml"
 	"fmt"
 	"net/http"
-	"runtime"
 	"strconv"
 	"time"
 )
@@ -36,7 +35,7 @@ func mustGetRequestID(t time.Time) string {
 func setCommonHeaders(w http.ResponseWriter) {
 	// Set unique request ID for each reply.
 	w.Header().Set(responseRequestIDKey, mustGetRequestID(time.Now().UTC()))
-	w.Header().Set("Server", ("Minio/" + ReleaseTag + " (" + runtime.GOOS + "; " + runtime.GOARCH + ")"))
+	w.Header().Set("Server", globalServerUserAgent)
 	w.Header().Set("Accept-Ranges", "bytes")
 }
 

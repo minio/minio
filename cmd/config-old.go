@@ -325,10 +325,22 @@ func loadConfigV6() (*configV6, error) {
 	return c, nil
 }
 
-// Notifier represents collection of supported notification queues.
+// Notifier represents collection of supported notification queues in version
+// 1 without NATS streaming.
 type notifierV1 struct {
 	AMQP          map[string]amqpNotify          `json:"amqp"`
 	NATS          map[string]natsNotifyV1        `json:"nats"`
+	ElasticSearch map[string]elasticSearchNotify `json:"elasticsearch"`
+	Redis         map[string]redisNotify         `json:"redis"`
+	PostgreSQL    map[string]postgreSQLNotify    `json:"postgresql"`
+	Kafka         map[string]kafkaNotify         `json:"kafka"`
+}
+
+// Notifier represents collection of supported notification queues in version 2
+// with NATS streaming but without webhook.
+type notifierV2 struct {
+	AMQP          map[string]amqpNotify          `json:"amqp"`
+	NATS          map[string]natsNotify          `json:"nats"`
 	ElasticSearch map[string]elasticSearchNotify `json:"elasticsearch"`
 	Redis         map[string]redisNotify         `json:"redis"`
 	PostgreSQL    map[string]postgreSQLNotify    `json:"postgresql"`
@@ -529,6 +541,42 @@ func loadConfigV11() (*serverConfigV11, error) {
 	}
 	srvCfg := &serverConfigV11{}
 	srvCfg.Version = "11"
+	qc, err := quick.New(srvCfg)
+	if err != nil {
+		return nil, err
+	}
+	if err := qc.Load(configFile); err != nil {
+		return nil, err
+	}
+	return srvCfg, nil
+}
+
+// serverConfigV12 server configuration version '12' which is like
+// version '11' except it adds support for NATS streaming notifications.
+type serverConfigV12 struct {
+	Version string `json:"version"`
+
+	// S3 API configuration.
+	Credential credential `json:"credential"`
+	Region     string     `json:"region"`
+
+	// Additional error logging configuration.
+	Logger logger `json:"logger"`
+
+	// Notification queue configuration.
+	Notify notifierV2 `json:"notify"`
+}
+
+func loadConfigV12() (*serverConfigV12, error) {
+	configFile, err := getConfigFile()
+	if err != nil {
+		return nil, err
+	}
+	if _, err = os.Stat(configFile); err != nil {
+		return nil, err
+	}
+	srvCfg := &serverConfigV12{}
+	srvCfg.Version = "12"
 	qc, err := quick.New(srvCfg)
 	if err != nil {
 		return nil, err
