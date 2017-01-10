@@ -78,7 +78,7 @@ func isBucketActionAllowed(action, bucket, prefix string) bool {
 	if policy == nil {
 		return false
 	}
-	resource := AWSResourcePrefix + path.Join(bucket, prefix)
+	resource := bucketARNPrefix + path.Join(bucket, prefix)
 	var conditionKeyMap map[string]set.StringSet
 	// Validate action, resource and conditions with current policy statements.
 	if !bucketPolicyEvalStatements(action, resource, conditionKeyMap, policy.Statements) {

@@ -426,7 +426,8 @@ func testListObjectsWebHandler(obj ObjectLayer, instanceType string, t TestErrHa
 	test := func(token string) (error, *ListObjectsRep) {
 		listObjectsRequest := ListObjectsArgs{BucketName: bucketName, Prefix: ""}
 		listObjectsReply := &ListObjectsRep{}
-		req, err := newTestWebRPCRequest("Web.ListObjects", token, listObjectsRequest)
+		var req *http.Request
+		req, err = newTestWebRPCRequest("Web.ListObjects", token, listObjectsRequest)
 		if err != nil {
 			t.Fatalf("Failed to create HTTP request: <ERROR> %v", err)
 		}
@@ -729,7 +730,6 @@ func testUploadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler
 	credentials := serverConfig.GetCredential()
 	content := []byte("temporary file's content")
 
-	rec := httptest.NewRecorder()
 	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatal("Cannot authenticate")
@@ -739,7 +739,9 @@ func testUploadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler
 	bucketName := getRandomBucketName()
 
 	test := func(token string) int {
-		req, err := http.NewRequest("PUT", "/minio/upload/"+bucketName+"/"+objectName, nil)
+		rec := httptest.NewRecorder()
+		var req *http.Request
+		req, err = http.NewRequest("PUT", "/minio/upload/"+bucketName+"/"+objectName, nil)
 		if err != nil {
 			t.Fatalf("Cannot create upload request, %v", err)
 		}
@@ -765,7 +767,7 @@ func testUploadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler
 	// Authenticated upload should succeed.
 	code := test(authorization)
 	if code != http.StatusOK {
-		t.Fatalf("Expected the response status to be 200, but instead found `%d`", rec.Code)
+		t.Fatalf("Expected the response status to be 200, but instead found `%d`", code)
 	}
 
 	var byteBuffer bytes.Buffer
@@ -781,7 +783,7 @@ func testUploadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler
 	// Unauthenticated upload should fail.
 	code = test("")
 	if code != http.StatusForbidden {
-		t.Fatalf("Expected the response status to be 403, but instead found `%d`", rec.Code)
+		t.Fatalf("Expected the response status to be 403, but instead found `%d`", code)
 	}
 
 	policy := bucketPolicy{
@@ -793,8 +795,8 @@ func testUploadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler
 
 	// Unauthenticated upload with WRITE policy should succeed.
 	code = test("")
-	if rec.Code != http.StatusOK {
-		t.Fatalf("Expected the response status to be 200, but instead found `%d`", rec.Code)
+	if code != http.StatusOK {
+		t.Fatalf("Expected the response status to be 200, but instead found `%d`", code)
 	}
 }
 
@@ -832,7 +834,8 @@ func testDownloadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandl
 		if token != "" {
 			path = path + token
 		}
-		req, err := http.NewRequest("GET", path, nil)
+		var req *http.Request
+		req, err = http.NewRequest("GET", path, nil)
 
 		if err != nil {
 			t.Fatalf("Cannot create upload request, %v", err)
