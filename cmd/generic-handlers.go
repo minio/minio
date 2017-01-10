@@ -311,18 +311,7 @@ var notimplementedObjectResourceNames = map[string]bool{
 
 // Resource handler ServeHTTP() wrapper
 func (h resourceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Skip the first element which is usually '/' and split the rest.
-	splits := strings.SplitN(r.URL.Path[1:], "/", 2)
-
-	// Save bucketName and objectName extracted from url Path.
-	var bucketName, objectName string
-	if len(splits) == 1 {
-		bucketName = splits[0]
-	}
-	if len(splits) == 2 {
-		bucketName = splits[0]
-		objectName = splits[1]
-	}
+	bucketName, objectName := urlPath2BucketObjectName(r.URL)
 
 	// If bucketName is present and not objectName check for bucket level resource queries.
 	if bucketName != "" && objectName == "" {

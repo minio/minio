@@ -70,6 +70,38 @@ func checkDuplicateStrings(list []string) error {
 	return nil
 }
 
+// splitStr splits a string into n parts, empty strings are added
+// if we are not able to reach n elements
+func splitStr(path, sep string, n int) []string {
+	splits := strings.SplitN(path, sep, n)
+	// Add empty strings if we found elements less than nr
+	for i := n - len(splits); i > 0; i-- {
+		splits = append(splits, "")
+	}
+	return splits
+}
+
+// Convert url path into bucket and object name.
+func urlPath2BucketObjectName(u *url.URL) (bucketName, objectName string) {
+	if u == nil {
+		// Empty url, return bucket and object names.
+		return
+	}
+
+	// Trim any preceding slash separator.
+	urlPath := strings.TrimPrefix(u.Path, slashSeparator)
+
+	// Split urlpath using slash separator into a given number of
+	// expected tokens.
+	tokens := splitStr(urlPath, slashSeparator, 2)
+
+	// Extract bucket and objects.
+	bucketName, objectName = tokens[0], tokens[1]
+
+	// Success.
+	return bucketName, objectName
+}
+
 // checkDuplicates - function to validate if there are duplicates in a slice of endPoints.
 func checkDuplicateEndpoints(endpoints []*url.URL) error {
 	var strs []string
