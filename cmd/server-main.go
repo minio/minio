@@ -18,9 +18,7 @@ package cmd
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net"
-	"net/http"
 	"net/url"
 	"os"
 	"path"
@@ -127,69 +125,6 @@ func parseStorageEndpoints(eps []string) (endpoints []*url.URL, err error) {
 		endpoints = append(endpoints, u)
 	}
 	return endpoints, nil
-}
-
-// getListenIPs - gets all the ips to listen on.
-func getListenIPs(serverAddr string) (hosts []string, port string, err error) {
-	var host string
-	host, port, err = net.SplitHostPort(serverAddr)
-	if err != nil {
-		return nil, port, fmt.Errorf("Unable to parse host address %s", err)
-	}
-	if host == "" {
-		var ipv4s []net.IP
-		ipv4s, err = getInterfaceIPv4s()
-		if err != nil {
-			return nil, port, fmt.Errorf("Unable reverse sorted ips from hosts %s", err)
-		}
-		for _, ip := range ipv4s {
-			hosts = append(hosts, ip.String())
-		}
-		return hosts, port, nil
-	} // if host != "" {
-	// Proceed to append itself, since user requested a specific endpoint.
-	hosts = append(hosts, host)
-	return hosts, port, nil
-}
-
-// Finalizes the endpoints based on the host list and port.
-func finalizeEndpoints(tls bool, apiServer *http.Server) (endPoints []string) {
-	// Verify current scheme.
-	scheme := "http"
-	if tls {
-		scheme = "https"
-	}
-
-	// Get list of listen ips and port.
-	hosts, port, err := getListenIPs(apiServer.Addr)
-	fatalIf(err, "Unable to get list of ips to listen on")
-
-	// Construct proper endpoints.
-	for _, host := range hosts {
-		endPoints = append(endPoints, fmt.Sprintf("%s://%s:%s", scheme, host, port))
-	}
-
-	// Success.
-	return endPoints
-}
-
-// loadRootCAs fetches CA files provided in minio config and adds them to globalRootCAs
-// Currently under Windows, there is no way to load system + user CAs at the same time
-func loadRootCAs() {
-	caFiles := mustGetCAFiles()
-	if len(caFiles) == 0 {
-		return
-	}
-	// Get system cert pool, and empty cert pool under Windows because it is not supported
-	globalRootCAs = mustGetSystemCertPool()
-	// Load custom root CAs for client requests
-	for _, caFile := range mustGetCAFiles() {
-		caCert, err := ioutil.ReadFile(caFile)
-		if err != nil {
-			fatalIf(err, "Unable to load a CA file")
-		}
-		globalRootCAs.AppendCertsFromPEM(caCert)
-	}
 }
 
 // initServerConfig initialize server config.
@@ -430,6 +365,9 @@ func serverMain(c *cli.Context) {
 		fatalIf(errInvalidArgument, "None of the disks passed as command line args are local to this server.")
 	}
 
+	// Is TLS configured?.
+	tls := isSSL()
+
 	// Sort endpoints for consistent ordering across multiple
 	// nodes in a distributed setup. This is to avoid format.json
 	// corruption if the disks aren't supplied in the same order
@@ -473,14 +411,14 @@ func serverMain(c *cli.Context) {
 	// Initialize a new HTTP server.
 	apiServer := NewServerMux(serverAddr, handler)
 
-	// If https.
-	tls := isSSL()
-
-	// Fetch endpoints which we are going to serve from.
-	endPoints := finalizeEndpoints(tls, apiServer.Server)
-
-	// Initialize local server address
+	// Set the global minio addr for this server.
 	globalMinioAddr = getLocalAddress(srvConfig)
+
+	// Determine API endpoints where we are going to serve the S3 API from.
+	apiEndPoints := finalizeAPIEndpoints(tls, apiServer.Server)
+
+	// Set the global API endpoints value.
+	globalAPIEndpoints = apiEndPoints
 
 	// Initialize S3 Peers inter-node communication
 	initGlobalS3Peers(endpoints)
@@ -512,7 +450,7 @@ func serverMain(c *cli.Context) {
 	globalObjLayerMutex.Unlock()
 
 	// Prints the formatted startup message once object layer is initialized.
-	printStartupMessage(endPoints)
+	printStartupMessage(apiEndPoints)
 
 	// Waits on the server.
 	<-globalServiceDoneCh

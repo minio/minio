@@ -88,49 +88,76 @@ type eventData struct {
 // New notification event constructs a new notification event message from
 // input request metadata which completed successfully.
 func newNotificationEvent(event eventData) NotificationEvent {
-	/// Construct a new object created event.
+	// Fetch the region.
 	region := serverConfig.GetRegion()
-	tnow := time.Now().UTC()
-	sequencer := fmt.Sprintf("%X", tnow.UnixNano())
+
+	// Fetch the credentials.
+	creds := serverConfig.GetCredential()
+
+	// Time when Minio finished processing the request.
+	eventTime := time.Now().UTC()
+
+	// API endpoint is captured here to be returned back
+	// to the client for it to differentiate from which
+	// server the request came from.
+	var apiEndpoint string
+	if len(globalAPIEndpoints) >= 1 {
+		apiEndpoint = globalAPIEndpoints[0]
+	}
+
+	// Fetch a hexadecimal representation of event time in nano seconds.
+	uniqueID := mustGetRequestID(eventTime)
+
+	/// Construct a new object created event.
+
 	// Following blocks fills in all the necessary details of s3
 	// event message structure.
 	// http://docs.aws.amazon.com/AmazonS3/latest/dev/notification-content-structure.html
 	nEvent := NotificationEvent{
-		EventVersion:      "2.0",
-		EventSource:       "aws:s3",
+		EventVersion:      eventVersion,
+		EventSource:       eventSource,
 		AwsRegion:         region,
-		EventTime:         tnow.Format(timeFormatAMZ),
+		EventTime:         eventTime.Format(timeFormatAMZ),
 		EventName:         event.Type.String(),
-		UserIdentity:      defaultIdentity(),
+		UserIdentity:      identity{creds.AccessKey},
 		RequestParameters: event.ReqParams,
-		ResponseElements:  map[string]string{},
+		ResponseElements: map[string]string{
+			responseRequestIDKey: uniqueID,
+			// Following is a custom response element to indicate
+			// event origin server endpoint.
+			responseOriginEndpointKey: apiEndpoint,
+		},
 		S3: eventMeta{
-			SchemaVersion:   "1.0",
-			ConfigurationID: "Config",
+			SchemaVersion:   eventSchemaVersion,
+			ConfigurationID: eventConfigID,
 			Bucket: bucketMeta{
 				Name:          event.Bucket,
-				OwnerIdentity: defaultIdentity(),
-				ARN:           "arn:aws:s3:::" + event.Bucket,
+				OwnerIdentity: identity{creds.AccessKey},
+				ARN:           bucketARNPrefix + event.Bucket,
 			},
 		},
 	}
 
+	// Escape the object name. For example "red flower.jpg" becomes "red+flower.jpg".
 	escapedObj := url.QueryEscape(event.ObjInfo.Name)
+
 	// For delete object event type, we do not need to set ETag and Size.
 	if event.Type == ObjectRemovedDelete {
 		nEvent.S3.Object = objectMeta{
 			Key:       escapedObj,
-			Sequencer: sequencer,
+			Sequencer: uniqueID,
 		}
 		return nEvent
 	}
+
 	// For all other events we should set ETag and Size.
 	nEvent.S3.Object = objectMeta{
 		Key:       escapedObj,
 		ETag:      event.ObjInfo.MD5Sum,
 		Size:      event.ObjInfo.Size,
-		Sequencer: sequencer,
+		Sequencer: uniqueID,
 	}
+
 	// Success.
 	return nEvent
 }

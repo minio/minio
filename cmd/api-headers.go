@@ -18,33 +18,24 @@ package cmd
 
 import (
 	"bytes"
-	"crypto/rand"
 	"encoding/xml"
+	"fmt"
 	"net/http"
 	"runtime"
 	"strconv"
+	"time"
 )
 
-const requestIDLen = 16
-
-// mustGetRequestID generates and returns request ID string.
-func mustGetRequestID() string {
-	reqBytes := make([]byte, requestIDLen)
-	if _, err := rand.Read(reqBytes); err != nil {
-		panic(err)
-	}
-
-	for i := 0; i < requestIDLen; i++ {
-		reqBytes[i] = alphaNumericTable[reqBytes[i]%alphaNumericTableLen]
-	}
-
-	return string(reqBytes)
+// Returns a hexadecimal representation of time at the
+// time response is sent to the client.
+func mustGetRequestID(t time.Time) string {
+	return fmt.Sprintf("%X", t.UnixNano())
 }
 
 // Write http common headers
 func setCommonHeaders(w http.ResponseWriter) {
 	// Set unique request ID for each reply.
-	w.Header().Set("X-Amz-Request-Id", mustGetRequestID())
+	w.Header().Set(responseRequestIDKey, mustGetRequestID(time.Now().UTC()))
 	w.Header().Set("Server", ("Minio/" + ReleaseTag + " (" + runtime.GOOS + "; " + runtime.GOARCH + ")"))
 	w.Header().Set("Accept-Ranges", "bytes")
 }

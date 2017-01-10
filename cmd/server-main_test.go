@@ -63,7 +63,7 @@ func TestGetListenIPs(t *testing.T) {
 	}
 }
 
-func TestFinalizeEndpoints(t *testing.T) {
+func TestFinalizeAPIEndpoints(t *testing.T) {
 	testCases := []struct {
 		tls  bool
 		addr string
@@ -75,7 +75,7 @@ func TestFinalizeEndpoints(t *testing.T) {
 	}
 
 	for i, test := range testCases {
-		endPoints := finalizeEndpoints(test.tls, &http.Server{Addr: test.addr})
+		endPoints := finalizeAPIEndpoints(test.tls, &http.Server{Addr: test.addr})
 		if len(endPoints) <= 0 {
 			t.Errorf("Test case %d returned with no API end points for %s",
 				i+1, test.addr)

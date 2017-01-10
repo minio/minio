@@ -114,13 +114,9 @@ func (eventName EventName) String() string {
 	}
 }
 
-// Indentity represents the user id, this is a compliance field.
+// Indentity represents the accessKey who caused the event.
 type identity struct {
 	PrincipalID string `json:"principalId"`
-}
-
-func defaultIdentity() identity {
-	return identity{"minio"}
 }
 
 // Notification event bucket metadata.
@@ -139,6 +135,21 @@ type objectMeta struct {
 	Sequencer string `json:"sequencer"`
 }
 
+const (
+	// Event schema version number defaulting to the value in S3 spec.
+	// ref: http://docs.aws.amazon.com/AmazonS3/latest/dev/notification-content-structure.html
+	eventSchemaVersion = "1.0"
+
+	// Default ID found in bucket notification configuration.
+	// ref: http://docs.aws.amazon.com/AmazonS3/latest/dev/notification-content-structure.html
+	eventConfigID = "Config"
+)
+
+const (
+	// Response element origin endpoint key.
+	responseOriginEndpointKey = "x-minio-origin-endpoint"
+)
+
 // Notification event server specific metadata.
 type eventMeta struct {
 	SchemaVersion   string     `json:"s3SchemaVersion"`
@@ -146,6 +157,16 @@ type eventMeta struct {
 	Bucket          bucketMeta `json:"bucket"`
 	Object          objectMeta `json:"object"`
 }
+
+const (
+	// Event source static value defaulting to the value in S3 spec.
+	// ref: http://docs.aws.amazon.com/AmazonS3/latest/dev/notification-content-structure.html
+	eventSource = "aws:s3"
+
+	// Event version number defaulting to the value in S3 spec.
+	// ref: http://docs.aws.amazon.com/AmazonS3/latest/dev/notification-content-structure.html
+	eventVersion = "2.0"
+)
 
 // NotificationEvent represents an Amazon an S3 bucket notification event.
 type NotificationEvent struct {

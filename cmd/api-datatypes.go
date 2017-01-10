@@ -20,6 +20,11 @@ import (
 	"encoding/xml"
 )
 
+const (
+	// Response request id.
+	responseRequestIDKey = "x-amz-request-id"
+)
+
 // ObjectIdentifier carries key name for the object to delete.
 type ObjectIdentifier struct {
 	ObjectName string `xml:"Key"`
