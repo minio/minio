@@ -220,6 +220,94 @@ func TestMaxPartID(t *testing.T) {
 	}
 }
 
+// Tests extracting bucket and objectname from various types of URL paths.
+func TestURL2BucketObjectName(t *testing.T) {
+	testCases := []struct {
+		u              *url.URL
+		bucket, object string
+	}{
+		// Test case 1 normal case.
+		{
+			u: &url.URL{
+				Path: "/bucket/object",
+			},
+			bucket: "bucket",
+			object: "object",
+		},
+		// Test case 2 where url only has separator.
+		{
+			u: &url.URL{
+				Path: "/",
+			},
+			bucket: "",
+			object: "",
+		},
+		// Test case 3 only bucket is present.
+		{
+			u: &url.URL{
+				Path: "/bucket",
+			},
+			bucket: "bucket",
+			object: "",
+		},
+		// Test case 4 many separators and object is a directory.
+		{
+			u: &url.URL{
+				Path: "/bucket/object/1/",
+			},
+			bucket: "bucket",
+			object: "object/1/",
+		},
+		// Test case 5 object has many trailing separators.
+		{
+			u: &url.URL{
+				Path: "/bucket/object/1///",
+			},
+			bucket: "bucket",
+			object: "object/1///",
+		},
+		// Test case 6 object has only trailing separators.
+		{
+			u: &url.URL{
+				Path: "/bucket/object///////",
+			},
+			bucket: "bucket",
+			object: "object///////",
+		},
+		// Test case 7 object has preceding separators.
+		{
+			u: &url.URL{
+				Path: "/bucket////object////",
+			},
+			bucket: "bucket",
+			object: "///object////",
+		},
+		// Test case 8 url is not allocated.
+		{
+			u:      nil,
+			bucket: "",
+			object: "",
+		},
+		// Test case 9 url path is empty.
+		{
+			u:      &url.URL{},
+			bucket: "",
+			object: "",
+		},
+	}
+
+	// Validate all test cases.
+	for i, testCase := range testCases {
+		bucketName, objectName := urlPath2BucketObjectName(testCase.u)
+		if bucketName != testCase.bucket {
+			t.Errorf("Test %d: failed expected bucket name \"%s\", got \"%s\"", i+1, testCase.bucket, bucketName)
+		}
+		if objectName != testCase.object {
+			t.Errorf("Test %d: failed expected bucket name \"%s\", got \"%s\"", i+1, testCase.object, objectName)
+		}
+	}
+}
+
 // Add tests for starting and stopping different profilers.
 func TestStartProfiler(t *testing.T) {
 	if startProfiler("") != nil {
