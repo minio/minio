@@ -67,7 +67,7 @@ func makeS3Peers(eps []*url.URL) s3Peers {
 				secretKey:       serverCred.SecretKey,
 				serverAddr:      ep.Host,
 				serviceEndpoint: path.Join(reservedBucket, s3Path),
-				secureConn:      isSSL(),
+				secureConn:      globalIsSSL,
 				serviceName:     "S3",
 			}
 

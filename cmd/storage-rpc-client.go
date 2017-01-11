@@ -121,7 +121,7 @@ func newStorageRPC(ep *url.URL) (StorageAPI, error) {
 			secretKey:        secretKey,
 			serverAddr:       rpcAddr,
 			serviceEndpoint:  rpcPath,
-			secureConn:       isSSL(),
+			secureConn:       globalIsSSL,
 			serviceName:      "Storage",
 			disableReconnect: true,
 		}),

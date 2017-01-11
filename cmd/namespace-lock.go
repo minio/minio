@@ -44,7 +44,7 @@ func initDsyncNodes(eps []*url.URL) error {
 			secretKey:       cred.SecretKey,
 			serverAddr:      ep.Host,
 			serviceEndpoint: pathutil.Join(lockRPCPath, getPath(ep)),
-			secureConn:      isSSL(),
+			secureConn:      globalIsSSL,
 			serviceName:     "Dsync",
 		})
 		if isLocalStorage(ep) && myNode == -1 {

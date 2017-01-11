@@ -289,7 +289,7 @@ func (l *lockServer) lockMaintenance(interval time.Duration) {
 			secretKey:       serverCred.SecretKey,
 			serverAddr:      nlrip.lri.node,
 			serviceEndpoint: nlrip.lri.rpcPath,
-			secureConn:      isSSL(),
+			secureConn:      globalIsSSL,
 			serviceName:     "Dsync",
 		})
 
