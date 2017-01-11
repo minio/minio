@@ -141,12 +141,12 @@ func xlShouldHeal(partsMetadata []xlMetaV1, errs []error) bool {
 // xlHealStat - returns a structure which describes how many data,
 // parity erasure blocks are missing and if it is possible to heal
 // with the blocks present.
-func xlHealStat(xl xlObjects, partsMetadata []xlMetaV1, errs []error) HealInfo {
+func xlHealStat(xl xlObjects, partsMetadata []xlMetaV1, errs []error) HealObjectInfo {
 	// Less than quorum erasure coded blocks of the object have the same create time.
 	// This object can't be healed with the information we have.
 	modTime, count := commonTime(listObjectModtimes(partsMetadata, errs))
 	if count < xl.readQuorum {
-		return HealInfo{
+		return HealObjectInfo{
 			Status:              quorumUnavailable,
 			MissingDataCount:    0,
 			MissingPartityCount: 0,
@@ -156,7 +156,7 @@ func xlHealStat(xl xlObjects, partsMetadata []xlMetaV1, errs []error) HealInfo {
 	// If there isn't a valid xlMeta then we can't heal the object.
 	xlMeta, err := pickValidXLMeta(partsMetadata, modTime)
 	if err != nil {
-		return HealInfo{
+		return HealObjectInfo{
 			Status:              corrupted,
 			MissingDataCount:    0,
 			MissingPartityCount: 0,
@@ -183,7 +183,7 @@ func xlHealStat(xl xlObjects, partsMetadata []xlMetaV1, errs []error) HealInfo {
 
 	// This object can be healed. We have enough object metadata
 	// to reconstruct missing erasure coded blocks.
-	return HealInfo{
+	return HealObjectInfo{
 		Status:              canHeal,
 		MissingDataCount:    missingDataCount,
 		MissingPartityCount: missingParityCount,

@@ -171,8 +171,8 @@ __Example__
             log.Fatalln(err)
             return
         }
-        if object.HealInfo != nil {
-            switch healInfo := *object.HealInfo; healInfo.Status {
+        if object.HealObjectInfo != nil {
+            switch healInfo := *object.HealObjectInfo; healInfo.Status {
             case madmin.CanHeal:
                 fmt.Println(object.Key, " can be healed.")
             case madmin.QuorumUnavailable:
@@ -182,6 +182,34 @@ __Example__
             }
         }
         fmt.Println("object: ", object)
+    }
+```
+
+<a name="ListBucketsList"></a>
+### ListBucketsList() error
+If successful returns information on the list of buckets that need healing.
+
+__Example__
+
+``` go
+    // List buckets that need healing 
+    healBucketsList, err := madmClnt.ListBucketsHeal()
+    if err != nil {
+        fmt.Println(err)
+        return
+    }
+    for bucket := range healBucketsList {
+        if bucket.HealBucketInfo != nil {
+            switch healInfo := *object.HealBucketInfo; healInfo.Status {
+            case madmin.CanHeal:
+                fmt.Println(bucket.Key, " can be healed.")
+            case madmin.QuorumUnavailable:
+                fmt.Println(bucket.Key, " can't be healed until quorum is available.")
+            case madmin.Corrupted:
+                fmt.Println(bucket.Key, " can't be healed, not enough information.")
+            }
+        }
+        fmt.Println("bucket: ", bucket)
     }
 ```
 

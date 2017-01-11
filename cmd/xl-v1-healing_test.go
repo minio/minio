@@ -423,3 +423,66 @@ func TestQuickHeal(t *testing.T) {
 		t.Fatal("Got an unexpected error: ", err)
 	}
 }
+
+// TestListBucketsHeal lists buckets heal result
+func TestListBucketsHeal(t *testing.T) {
+	root, err := newTestConfig("us-east-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer removeAll(root)
+
+	nDisks := 16
+	fsDirs, err := getRandomDisks(nDisks)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer removeRoots(fsDirs)
+
+	endpoints, err := parseStorageEndpoints(fsDirs)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	obj, _, err := initObjectLayer(endpoints)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a bucket that won't get corrupted
+	saneBucket := "sanebucket"
+	if err = obj.MakeBucket(saneBucket); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a bucket that will be removed in some disks
+	corruptedBucketName := getRandomBucketName()
+	if err = obj.MakeBucket(corruptedBucketName); err != nil {
+		t.Fatal(err)
+	}
+
+	xl := obj.(*xlObjects)
+
+	// Remove bucket in disk 0, 1 and 2
+	for i := 0; i <= 2; i++ {
+		if err = xl.storageDisks[i].DeleteVol(corruptedBucketName); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// List the missing buckets.
+	buckets, err := xl.ListBucketsHeal()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Check the number of buckets in list buckets heal result
+	if len(buckets) != 1 {
+		t.Fatalf("Length of missing buckets is incorrect, expected: 1, found: %d", len(buckets))
+	}
+
+	// Check the name of bucket in list buckets heal result
+	if buckets[0].Name != corruptedBucketName {
+		t.Fatalf("Name of missing bucket is incorrect, expected: %s, found: %s", corruptedBucketName, buckets[0].Name)
+	}
+}

@@ -159,11 +159,11 @@ func (xl xlObjects) listObjectsHeal(bucket, prefix, marker, delimiter string, ma
 		if xlShouldHeal(partsMetadata, errs) {
 			healStat := xlHealStat(xl, partsMetadata, errs)
 			result.Objects = append(result.Objects, ObjectInfo{
-				Name:     objInfo.Name,
-				ModTime:  objInfo.ModTime,
-				Size:     objInfo.Size,
-				IsDir:    false,
-				HealInfo: &healStat,
+				Name:           objInfo.Name,
+				ModTime:        objInfo.ModTime,
+				Size:           objInfo.Size,
+				IsDir:          false,
+				HealObjectInfo: &healStat,
 			})
 		}
 		objectLock.RUnlock()

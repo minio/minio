@@ -50,6 +50,20 @@ type StorageInfo struct {
 	}
 }
 
+type healStatus int
+
+const (
+	healthy           healStatus = iota // Object is healthy
+	canHeal                             // Object can be healed
+	corrupted                           // Object can't be healed
+	quorumUnavailable                   // Object can't be healed until read quorum is available
+)
+
+// HealBucketInfo - represents healing related information of a bucket.
+type HealBucketInfo struct {
+	Status healStatus
+}
+
 // BucketInfo - represents bucket metadata.
 type BucketInfo struct {
 	// Name of the bucket.
@@ -57,18 +71,13 @@ type BucketInfo struct {
 
 	// Date and time when the bucket was created.
 	Created time.Time
+
+	// Healing information
+	HealBucketInfo *HealBucketInfo `xml:"HealBucketInfo,omitempty"`
 }
 
-type healStatus int
-
-const (
-	canHeal           healStatus = iota // Object can be healed
-	corrupted                           // Object can't be healed
-	quorumUnavailable                   // Object can't be healed until read quorum is available
-)
-
-// HealInfo - represents healing related information of an object.
-type HealInfo struct {
+// HealObjectInfo - represents healing related information of an object.
+type HealObjectInfo struct {
 	Status              healStatus
 	MissingDataCount    int
 	MissingPartityCount int
@@ -103,8 +112,8 @@ type ObjectInfo struct {
 	ContentEncoding string
 
 	// User-Defined metadata
-	UserDefined map[string]string
-	HealInfo    *HealInfo `xml:"HealInfo,omitempty"`
+	UserDefined    map[string]string
+	HealObjectInfo *HealObjectInfo `xml:"HealObjectInfo,omitempty"`
 }
 
 // ListPartsInfo - represents list of all parts.

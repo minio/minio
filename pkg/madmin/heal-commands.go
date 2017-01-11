@@ -63,20 +63,65 @@ type commonPrefix struct {
 	Prefix string
 }
 
+// Owner - bucket owner/principal
+type Owner struct {
+	ID          string
+	DisplayName string
+}
+
+// Bucket container for bucket metadata
+type Bucket struct {
+	Name         string
+	CreationDate string // time string of format "2006-01-02T15:04:05.000Z"
+
+	HealBucketInfo *HealBucketInfo `xml:"HealBucketInfo,omitempty"`
+}
+
+// ListBucketsHealResponse - format for list buckets response
+type ListBucketsHealResponse struct {
+	XMLName xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ ListAllMyBucketsResult" json:"-"`
+
+	Owner Owner
+
+	// Container for one or more buckets.
+	Buckets struct {
+		Buckets []Bucket `xml:"Bucket"`
+	} // Buckets are nested
+}
+
 // HealStatus - represents different states of healing an object could be in.
 type healStatus int
 
 const (
+	// Healthy - Object that is already healthy
+	Healthy healStatus = iota
 	// CanHeal - Object can be healed
-	CanHeal healStatus = iota
+	CanHeal
 	// Corrupted - Object can't be healed
 	Corrupted
 	// QuorumUnavailable - Object can't be healed until read quorum is available
 	QuorumUnavailable
 )
 
-// HealInfo - represents healing related information of an object.
-type HealInfo struct {
+// HealBucketInfo - represents healing related information of a bucket.
+type HealBucketInfo struct {
+	Status healStatus
+}
+
+// BucketInfo - represents bucket metadata.
+type BucketInfo struct {
+	// Name of the bucket.
+	Name string
+
+	// Date and time when the bucket was created.
+	Created time.Time
+
+	// Healing information
+	HealBucketInfo *HealBucketInfo `xml:"HealBucketInfo,omitempty"`
+}
+
+// HealObjectInfo - represents healing related information of an object.
+type HealObjectInfo struct {
 	Status              healStatus
 	MissingDataCount    int
 	MissingPartityCount int
@@ -108,8 +153,8 @@ type ObjectInfo struct {
 	StorageClass string `json:"storageClass"`
 
 	// Error
-	Err      error     `json:"-"`
-	HealInfo *HealInfo `json:"healInfo,omitempty"`
+	Err            error           `json:"-"`
+	HealObjectInfo *HealObjectInfo `json:"healObjectInfo,omitempty"`
 }
 
 type healQueryKey string
@@ -143,7 +188,7 @@ func (adm *AdminClient) listObjectsHeal(bucket, prefix, delimiter, marker string
 	queryVal := mkHealQueryVal(bucket, prefix, marker, delimiter, maxKeyStr)
 
 	hdrs := make(http.Header)
-	hdrs.Set(minioAdminOpHeader, "list")
+	hdrs.Set(minioAdminOpHeader, "list-objects")
 
 	reqData := requestData{
 		queryValues:   queryVal,
@@ -238,6 +283,58 @@ func (adm *AdminClient) ListObjectsHeal(bucket, prefix string, recursive bool, d
 		}
 	}(objectStatCh)
 	return objectStatCh, nil
+}
+
+const timeFormatAMZLong = "2006-01-02T15:04:05.000Z" // Reply date format with nanosecond precision.
+
+// ListBucketsHeal - issues heal bucket list API request
+func (adm *AdminClient) ListBucketsHeal() ([]BucketInfo, error) {
+	queryVal := url.Values{}
+	queryVal.Set("heal", "")
+
+	hdrs := make(http.Header)
+	hdrs.Set(minioAdminOpHeader, "list-buckets")
+
+	reqData := requestData{
+		queryValues:   queryVal,
+		customHeaders: hdrs,
+	}
+
+	// Execute GET on /?heal to list objects needing heal.
+	resp, err := adm.executeMethod("GET", reqData)
+
+	defer closeResponse(resp)
+	if err != nil {
+		return []BucketInfo{}, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return []BucketInfo{}, errors.New("Got HTTP Status: " + resp.Status)
+	}
+
+	var listBucketsHealResult ListBucketsHealResponse
+
+	err = xml.NewDecoder(resp.Body).Decode(&listBucketsHealResult)
+	if err != nil {
+		return []BucketInfo{}, err
+	}
+
+	var bucketsToBeHealed []BucketInfo
+
+	for _, bucket := range listBucketsHealResult.Buckets.Buckets {
+		creationDate, err := time.Parse(timeFormatAMZLong, bucket.CreationDate)
+		if err != nil {
+			return []BucketInfo{}, err
+		}
+		bucketsToBeHealed = append(bucketsToBeHealed,
+			BucketInfo{
+				Name:           bucket.Name,
+				Created:        creationDate,
+				HealBucketInfo: bucket.HealBucketInfo,
+			})
+	}
+
+	return bucketsToBeHealed, nil
 }
 
 // HealBucket - Heal the given bucket

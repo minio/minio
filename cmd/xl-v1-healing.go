@@ -19,6 +19,7 @@ package cmd
 import (
 	"fmt"
 	"path"
+	"sort"
 	"sync"
 )
 
@@ -153,9 +154,11 @@ func healBucketMetadata(storageDisks []StorageAPI, bucket string, readQuorum int
 	return healBucketMetaFn(lConfigPath)
 }
 
-// listBucketNames list all bucket names from all disks to heal.
-func listBucketNames(storageDisks []StorageAPI) (bucketNames map[string]struct{}, err error) {
-	bucketNames = make(map[string]struct{})
+// listAllBuckets lists all buckets from all disks. It also
+// returns the occurrence of each buckets in all disks
+func listAllBuckets(storageDisks []StorageAPI) (buckets map[string]VolInfo, bucketsOcc map[string]int, err error) {
+	buckets = make(map[string]VolInfo)
+	bucketsOcc = make(map[string]int)
 	for _, disk := range storageDisks {
 		if disk == nil {
 			continue
@@ -173,7 +176,10 @@ func listBucketNames(storageDisks []StorageAPI) (bucketNames map[string]struct{}
 				if isMinioMetaBucketName(volInfo.Name) {
 					continue
 				}
-				bucketNames[volInfo.Name] = struct{}{}
+				// Increase counter per bucket name
+				bucketsOcc[volInfo.Name]++
+				// Save volume info under bucket name
+				buckets[volInfo.Name] = volInfo
 			}
 			continue
 		}
@@ -183,7 +189,101 @@ func listBucketNames(storageDisks []StorageAPI) (bucketNames map[string]struct{}
 		}
 		break
 	}
-	return bucketNames, err
+	return buckets, bucketsOcc, err
+}
+
+// reduceHealStatus - fetches the worst heal status in a provided slice
+func reduceHealStatus(status []healStatus) healStatus {
+	worstStatus := healthy
+	for _, st := range status {
+		if st > worstStatus {
+			worstStatus = st
+		}
+	}
+	return worstStatus
+}
+
+// bucketHealStatus - returns the heal status of the provided bucket. Internally,
+// this function lists all object heal status of objects inside meta bucket config
+// directory and returns the worst heal status that can be found
+func (xl xlObjects) bucketHealStatus(bucketName string) (healStatus, error) {
+	// A list of all the bucket config files
+	configFiles := []string{bucketPolicyConfig, bucketNotificationConfig, bucketListenerConfig}
+	// The status of buckets config files
+	configsHealStatus := make([]healStatus, len(configFiles))
+	// The list of errors found during checking heal status of each config file
+	configsErrs := make([]error, len(configFiles))
+	// The path of meta bucket that contains all config files
+	configBucket := path.Join(minioMetaBucket, bucketConfigPrefix, bucketName)
+
+	// Check of config files heal status in go-routines
+	var wg sync.WaitGroup
+	// Loop over config files
+	for idx, configFile := range configFiles {
+		wg.Add(1)
+		// Compute heal status of current config file
+		go func(bucket, object string, index int) {
+			defer wg.Done()
+			// Check
+			listObjectsHeal, err := xl.listObjectsHeal(bucket, object, "", "", 1)
+			// If any error, save and immediately quit
+			if err != nil {
+				configsErrs[index] = err
+				return
+			}
+			// Check if current bucket contains any not healthy config file and save heal status
+			if len(listObjectsHeal.Objects) > 0 {
+				configsHealStatus[index] = listObjectsHeal.Objects[0].HealObjectInfo.Status
+			}
+		}(configBucket, configFile, idx)
+	}
+	wg.Wait()
+
+	// Return any found error
+	for _, err := range configsErrs {
+		if err != nil {
+			return healthy, err
+		}
+	}
+
+	// Reduce and return heal status
+	return reduceHealStatus(configsHealStatus), nil
+}
+
+// ListBucketsHeal - Find all buckets that need to be healed
+func (xl xlObjects) ListBucketsHeal() ([]BucketInfo, error) {
+	listBuckets := []BucketInfo{}
+	// List all buckets that can be found in all disks
+	buckets, occ, err := listAllBuckets(xl.storageDisks)
+	if err != nil {
+		return listBuckets, err
+	}
+	// Iterate over all buckets
+	for _, currBucket := range buckets {
+		// Check the status of bucket metadata
+		bucketHealStatus, err := xl.bucketHealStatus(currBucket.Name)
+		if err != nil {
+			return []BucketInfo{}, err
+		}
+		// If all metadata are sane, check if the bucket directory is present in all disks
+		if bucketHealStatus == healthy && occ[currBucket.Name] != len(xl.storageDisks) {
+			// Current bucket is missing in some of the storage disks
+			bucketHealStatus = canHeal
+		}
+		// Add current bucket to the returned result if not healthy
+		if bucketHealStatus != healthy {
+			listBuckets = append(listBuckets,
+				BucketInfo{
+					Name:           currBucket.Name,
+					Created:        currBucket.Created,
+					HealBucketInfo: &HealBucketInfo{Status: bucketHealStatus},
+				})
+		}
+
+	}
+	// Sort found buckets
+	sort.Sort(byBucketName(listBuckets))
+	return listBuckets, nil
 }
 
 // This function is meant for all the healing that needs to be done
@@ -196,7 +296,7 @@ func listBucketNames(storageDisks []StorageAPI) (bucketNames map[string]struct{}
 // - add support for healing dangling `xl.json`.
 func quickHeal(storageDisks []StorageAPI, writeQuorum int, readQuorum int) error {
 	// List all bucket names from all disks.
-	bucketNames, err := listBucketNames(storageDisks)
+	bucketNames, _, err := listAllBuckets(storageDisks)
 	if err != nil {
 		return err
 	}
