@@ -90,6 +90,9 @@ var (
 	// CA root certificates, a nil value means system certs pool will be used
 	globalRootCAs *x509.CertPool
 
+	// IsSSL indicates if the server is configured with SSL.
+	globalIsSSL bool
+
 	// List of admin peers.
 	globalAdminPeers = adminPeers{}
 
@@ -124,4 +127,7 @@ func setGlobalsFromContext(c *cli.Context) {
 	}
 	// Set global quiet flag.
 	globalQuiet = c.Bool("quiet") || c.GlobalBool("quiet")
+
+	// Is TLS configured?.
+	globalIsSSL = isSSL()
 }

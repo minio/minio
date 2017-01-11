@@ -44,11 +44,8 @@ func mainVersion(ctx *cli.Context) {
 		cli.ShowCommandHelpAndExit(ctx, "version", 1)
 	}
 
-	// Set global variables after parsing passed arguments
-	setGlobalsFromContext(ctx)
-
 	// Initialization routine, such as config loading, enable logging, ..
-	minioInit()
+	minioInit(ctx)
 
 	if globalQuiet {
 		return

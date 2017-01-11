@@ -17,12 +17,14 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
 	"os"
 	"path"
 	"sort"
+	"strconv"
 	"strings"
 
 	"runtime"
@@ -296,11 +298,10 @@ func checkServerSyntax(c *cli.Context) {
 		}
 	}
 
-	tls := isSSL()
 	for _, ep := range endpoints {
-		if ep.Scheme == "https" && !tls {
+		if ep.Scheme == "https" && !globalIsSSL {
 			// Certificates should be provided for https configuration.
-			fatalIf(errInvalidArgument, "Certificates not provided for https")
+			fatalIf(errInvalidArgument, "Certificates not provided for secure configuration")
 		}
 	}
 }
@@ -317,17 +318,47 @@ func isAnyEndpointLocal(eps []*url.URL) bool {
 	return anyLocalEp
 }
 
+// Returned when there are no ports.
+var errEmptyPort = errors.New("Port cannot be empty or '0', please use `--address` to pick a specific port")
+
+// Convert an input address of form host:port into, host and port, returns if any.
+func getHostPort(address string) (host, port string, err error) {
+	// Check if requested port is available.
+	host, port, err = net.SplitHostPort(address)
+	if err != nil {
+		return "", "", err
+	}
+
+	// Empty ports.
+	if port == "0" || port == "" {
+		// Port zero or empty means use requested to choose any freely available
+		// port. Avoid this since it won't work with any configured clients,
+		// can lead to serious loss of availability.
+		return "", "", errEmptyPort
+	}
+
+	// Parse port.
+	if _, err = strconv.Atoi(port); err != nil {
+		return "", "", err
+	}
+
+	// Check if port is available.
+	if err = checkPortAvailability(port); err != nil {
+		return "", "", err
+	}
+
+	// Success.
+	return host, port, nil
+}
+
 // serverMain handler called for 'minio server' command.
 func serverMain(c *cli.Context) {
 	if !c.Args().Present() || c.Args().First() == "help" {
 		cli.ShowCommandHelpAndExit(c, "server", 1)
 	}
 
-	// Set global variables after parsing passed arguments
-	setGlobalsFromContext(c)
-
 	// Initialization routine, such as config loading, enable logging, ..
-	minioInit()
+	minioInit(c)
 
 	// Check for minio updates from dl.minio.io
 	checkUpdate()
@@ -335,20 +366,9 @@ func serverMain(c *cli.Context) {
 	// Server address.
 	serverAddr := c.String("address")
 
-	// Check if requested port is available.
-	host, portStr, err := net.SplitHostPort(serverAddr)
-	fatalIf(err, "Unable to parse %s.", serverAddr)
-	if portStr == "0" || portStr == "" {
-		// Port zero or empty means use requested to choose any freely available
-		// port. Avoid this since it won't work with any configured clients,
-		// can lead to serious loss of availability.
-		fatalIf(errInvalidArgument, "Invalid port `%s`, please use `--address` to pick a specific port", portStr)
-	}
-	globalMinioHost = host
-
-	// Check if requested port is available.
-	fatalIf(checkPortAvailability(portStr), "Port unavailable %s", portStr)
-	globalMinioPort = portStr
+	var err error
+	globalMinioHost, globalMinioPort, err = getHostPort(serverAddr)
+	fatalIf(err, "Unable to extract host and port %s", serverAddr)
 
 	// Check server syntax and exit in case of errors.
 	// Done after globalMinioHost and globalMinioPort is set as parseStorageEndpoints()
@@ -364,9 +384,6 @@ func serverMain(c *cli.Context) {
 	if !isAnyEndpointLocal(endpoints) {
 		fatalIf(errInvalidArgument, "None of the disks passed as command line args are local to this server.")
 	}
-
-	// Is TLS configured?.
-	tls := isSSL()
 
 	// Sort endpoints for consistent ordering across multiple
 	// nodes in a distributed setup. This is to avoid format.json
@@ -415,7 +432,8 @@ func serverMain(c *cli.Context) {
 	globalMinioAddr = getLocalAddress(srvConfig)
 
 	// Determine API endpoints where we are going to serve the S3 API from.
-	apiEndPoints := finalizeAPIEndpoints(tls, apiServer.Server)
+	apiEndPoints, err := finalizeAPIEndpoints(apiServer.Server)
+	fatalIf(err, "Unable to finalize API endpoints for %s", apiServer.Server.Addr)
 
 	// Set the global API endpoints value.
 	globalAPIEndpoints = apiEndPoints
@@ -427,15 +445,13 @@ func serverMain(c *cli.Context) {
 	initGlobalAdminPeers(endpoints)
 
 	// Start server, automatically configures TLS if certs are available.
-	go func(tls bool) {
-		var lerr error
+	go func() {
 		cert, key := "", ""
-		if tls {
+		if globalIsSSL {
 			cert, key = mustGetCertFile(), mustGetKeyFile()
 		}
-		lerr = apiServer.ListenAndServe(cert, key)
-		fatalIf(lerr, "Failed to start minio server.")
-	}(tls)
+		fatalIf(apiServer.ListenAndServe(cert, key), "Failed to start minio server.")
+	}()
 
 	// Wait for formatting of disks.
 	formattedDisks, err := waitForFormatDisks(firstDisk, endpoints, storageDisks)

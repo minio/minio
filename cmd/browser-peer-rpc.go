@@ -106,7 +106,7 @@ func updateCredsOnPeers(creds credential) map[string]error {
 				accessKey:       serverCred.AccessKey,
 				secretKey:       serverCred.SecretKey,
 				serverAddr:      peers[ix],
-				secureConn:      isSSL(),
+				secureConn:      globalIsSSL,
 				serviceEndpoint: path.Join(reservedBucket, browserPeerPath),
 				serviceName:     "Browser",
 			})

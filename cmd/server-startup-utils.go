@@ -40,22 +40,27 @@ func getListenIPs(serverAddr string) (hosts []string, port string, err error) {
 		}
 		return hosts, port, nil
 	} // if host != "" {
+
 	// Proceed to append itself, since user requested a specific endpoint.
 	hosts = append(hosts, host)
+
+	// Success.
 	return hosts, port, nil
 }
 
 // Finalizes the API endpoints based on the host list and port.
-func finalizeAPIEndpoints(tls bool, apiServer *http.Server) (endPoints []string) {
+func finalizeAPIEndpoints(apiServer *http.Server) (endPoints []string, err error) {
 	// Verify current scheme.
 	scheme := "http"
-	if tls {
+	if globalIsSSL {
 		scheme = "https"
 	}
 
 	// Get list of listen ips and port.
-	hosts, port, err := getListenIPs(apiServer.Addr)
-	fatalIf(err, "Unable to get list of ips to listen on")
+	hosts, port, err1 := getListenIPs(apiServer.Addr)
+	if err1 != nil {
+		return nil, err1
+	}
 
 	// Construct proper endpoints.
 	for _, host := range hosts {
@@ -63,5 +68,5 @@ func finalizeAPIEndpoints(tls bool, apiServer *http.Server) (endPoints []string)
 	}
 
 	// Success.
-	return endPoints
+	return endPoints, nil
 }

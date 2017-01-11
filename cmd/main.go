@@ -164,7 +164,10 @@ func checkUpdate() {
 }
 
 // Generic Minio initialization to create/load config, prepare loggers, etc..
-func minioInit() {
+func minioInit(ctx *cli.Context) {
+	// Set global variables after parsing passed arguments
+	setGlobalsFromContext(ctx)
+
 	// Sets new config directory.
 	setGlobalConfigPath(globalConfigDir)
 

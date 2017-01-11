@@ -99,11 +99,7 @@ func getHealEndpoint(tls bool, firstEndpoint *url.URL) (cEndpoint *url.URL) {
 func getHealMsg(endpoints []*url.URL, storageDisks []StorageAPI) string {
 	msg := fmt.Sprintln("\nData volume requires HEALING. Healing is not implemented yet stay tuned:")
 	// FIXME:  Enable this after we bring in healing.
-	//	msg += "MINIO_ACCESS_KEY=%s "
-	//	msg += "MINIO_SECRET_KEY=%s "
-	//	msg += "minio control heal %s"
-	//	creds := serverConfig.GetCredential()
-	//	msg = fmt.Sprintf(msg, creds.AccessKey, creds.SecretKey, getHealEndpoint(isSSL(), endpoints[0]))
+	//	msg := "mc admin heal myminio"
 	disksInfo, _, _ := getDisksInfo(storageDisks)
 	for i, info := range disksInfo {
 		if storageDisks[i] == nil {

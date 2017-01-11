@@ -63,20 +63,66 @@ func TestGetListenIPs(t *testing.T) {
 	}
 }
 
+// Tests get host port.
+func TestGetHostPort(t *testing.T) {
+	testCases := []struct {
+		addr string
+		err  error
+	}{
+		// Test 1 - successful.
+		{
+			addr: ":" + getFreePort(),
+			err:  nil,
+		},
+		// Test 2 port empty.
+		{
+			addr: ":0",
+			err:  errEmptyPort,
+		},
+		// Test 3 port empty.
+		{
+			addr: ":",
+			err:  errEmptyPort,
+		},
+		// Test 4 invalid port.
+		{
+			addr: "linux:linux",
+			err:  errors.New("strconv.ParseInt: parsing \"linux\": invalid syntax"),
+		},
+		// Test 5 port not present.
+		{
+			addr: "hostname",
+			err:  errors.New("missing port in address hostname"),
+		},
+	}
+
+	// Validate all tests.
+	for i, testCase := range testCases {
+		_, _, err := getHostPort(testCase.addr)
+		if err != nil {
+			if err.Error() != testCase.err.Error() {
+				t.Fatalf("Test %d: Error: %s", i+1, err)
+			}
+		}
+	}
+}
+
+// Tests finalize api endpoints.
 func TestFinalizeAPIEndpoints(t *testing.T) {
 	testCases := []struct {
-		tls  bool
 		addr string
 	}{
-		{false, ":80"},
-		{true, ":80"},
-		{false, "localhost:80"},
-		{true, "localhost:80"},
+		{":80"},
+		{":80"},
+		{"localhost:80"},
+		{"localhost:80"},
 	}
 
 	for i, test := range testCases {
-		endPoints := finalizeAPIEndpoints(test.tls, &http.Server{Addr: test.addr})
-		if len(endPoints) <= 0 {
+		endPoints, err := finalizeAPIEndpoints(&http.Server{
+			Addr: test.addr,
+		})
+		if err != nil && len(endPoints) <= 0 {
 			t.Errorf("Test case %d returned with no API end points for %s",
 				i+1, test.addr)
 		}
