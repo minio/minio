@@ -67,6 +67,13 @@ func TestServerConfig(t *testing.T) {
 		t.Errorf("Expecting Kafka config %#v found %#v", kafkaNotify{}, savedNotifyCfg4)
 	}
 
+	// Set new Webhook notification id.
+	serverConfig.SetWebhookNotifyByID("2", webhookNotify{})
+	savedNotifyCfg5 := serverConfig.GetWebhookNotifyByID("2")
+	if !reflect.DeepEqual(savedNotifyCfg5, webhookNotify{}) {
+		t.Errorf("Expecting Webhook config %#v found %#v", webhookNotify{}, savedNotifyCfg3)
+	}
+
 	// Set new console logger.
 	serverConfig.SetConsoleLogger(consoleLogger{
 		Enable: true,

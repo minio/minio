@@ -612,6 +612,28 @@ func loadAllQueueTargets() (map[string]*logrus.Logger, error) {
 		}
 		queueTargets[queueARN] = redisLog
 	}
+
+	// Load Webhook targets, initialize their respective loggers.
+	for accountID, webhookN := range serverConfig.GetWebhook() {
+		if !webhookN.Enable {
+			continue
+		}
+		// Construct the queue ARN for Webhook.
+		queueARN := minioSqs + serverConfig.GetRegion() + ":" + accountID + ":" + queueTypeWebhook
+		_, ok := queueTargets[queueARN]
+		if ok {
+			continue
+		}
+
+		// Using accountID we can now initialize a new Webhook logrus instance.
+		webhookLog, err := newWebhookNotify(accountID)
+		if err != nil {
+
+			return nil, err
+		}
+		queueTargets[queueARN] = webhookLog
+	}
+
 	// Load elastic targets, initialize their respective loggers.
 	for accountID, elasticN := range serverConfig.GetElasticSearch() {
 		if !elasticN.Enable {
@@ -637,6 +659,7 @@ func loadAllQueueTargets() (map[string]*logrus.Logger, error) {
 		}
 		queueTargets[queueARN] = elasticLog
 	}
+
 	// Load PostgreSQL targets, initialize their respective loggers.
 	for accountID, pgN := range serverConfig.GetPostgreSQL() {
 		if !pgN.Enable {
