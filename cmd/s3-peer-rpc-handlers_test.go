@@ -76,14 +76,14 @@ func (s *TestRPCS3PeerSuite) testS3PeerRPC(t *testing.T) {
 	BNPArgs := SetBucketNotificationPeerArgs{Bucket: "bucket", NCfg: &notificationConfig{}}
 	client := newAuthRPCClient(s.testAuthConf)
 	defer client.Close()
-	err = client.Call("S3.SetBucketNotificationPeer", &BNPArgs, &AuthRPCReply{})
+	err = client.Call("S3.SetBucketNotificationPeer", &BNPArgs, &AuthRPCReply{}, nil, defaultRetryConfig)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Check bucket listener update call works.
 	BLPArgs := SetBucketListenerPeerArgs{Bucket: "bucket", LCfg: nil}
-	err = client.Call("S3.SetBucketListenerPeer", &BLPArgs, &AuthRPCReply{})
+	err = client.Call("S3.SetBucketListenerPeer", &BLPArgs, &AuthRPCReply{}, nil, defaultRetryConfig)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,14 +95,14 @@ func (s *TestRPCS3PeerSuite) testS3PeerRPC(t *testing.T) {
 		t.Fatal(err)
 	}
 	BPPArgs := SetBucketPolicyPeerArgs{Bucket: "bucket", PChBytes: pChBytes}
-	err = client.Call("S3.SetBucketPolicyPeer", &BPPArgs, &AuthRPCReply{})
+	err = client.Call("S3.SetBucketPolicyPeer", &BPPArgs, &AuthRPCReply{}, nil, defaultRetryConfig)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Check event send event call works.
 	evArgs := EventArgs{Event: nil, Arn: "localhost:9000"}
-	err = client.Call("S3.Event", &evArgs, &AuthRPCReply{})
+	err = client.Call("S3.Event", &evArgs, &AuthRPCReply{}, nil, defaultRetryConfig)
 	if err != nil {
 		t.Fatal(err)
 	}

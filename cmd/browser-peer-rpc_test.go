@@ -84,7 +84,7 @@ func (s *TestRPCBrowserPeerSuite) testBrowserPeerRPC(t *testing.T) {
 	args = SetAuthPeerArgs{Creds: creds}
 	client := newAuthRPCClient(s.testAuthConf)
 	defer client.Close()
-	err = client.Call("BrowserPeer.SetAuthPeer", &args, &AuthRPCReply{})
+	err = client.Call("BrowserPeer.SetAuthPeer", &args, &AuthRPCReply{}, nil, defaultRetryConfig)
 	if err != nil {
 		t.Fatal(err)
 	}

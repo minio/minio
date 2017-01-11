@@ -147,13 +147,13 @@ func (s *TestRPCStorageSuite) SetUpSuite(c *testing.T) {
 
 	for _, ep := range s.testServer.Disks {
 		ep.Host = listenAddress
-		storageDisk, err := newStorageRPC(ep)
+		storageDisk, err := newStorageRPC(ep, defaultStorageRetryConfig)
 		if err != nil {
 			c.Fatal("Unable to initialize RPC client", err)
 		}
 		s.remoteDisks = append(s.remoteDisks, storageDisk)
 	}
-	_, err := newStorageRPC(nil)
+	_, err := newStorageRPC(nil, retryConfig{})
 	if err != errInvalidArgument {
 		c.Fatalf("Unexpected error %s, expecting %s", err, errInvalidArgument)
 	}
@@ -161,7 +161,7 @@ func (s *TestRPCStorageSuite) SetUpSuite(c *testing.T) {
 	if err != nil {
 		c.Fatal("Unexpected error", err)
 	}
-	_, err = newStorageRPC(u)
+	_, err = newStorageRPC(u, defaultStorageRetryConfig)
 	if err != nil {
 		c.Fatal("Unexpected error", err)
 	}
@@ -216,7 +216,7 @@ func (s *TestRPCStorageSuite) testRPCStorageDisksInfo(t *testing.T) {
 // Test storage vol operations.
 func (s *TestRPCStorageSuite) testRPCStorageVolOps(t *testing.T) {
 	for _, storageDisk := range s.remoteDisks {
-		numVols := 0
+		numVols := 1 // We have minioMetaBucket by default.
 		err := storageDisk.MakeVol("myvol")
 		if err != nil {
 			t.Error("Unable to initiate MakeVol", err)
@@ -263,8 +263,8 @@ func (s *TestRPCStorageSuite) testRPCStorageVolOps(t *testing.T) {
 		if err != nil {
 			t.Error("Unable to initiate ListVol")
 		}
-		if len(vols) > 0 {
-			t.Errorf("Expected no volumes but found %d", len(vols))
+		if len(vols) > 1 {
+			t.Errorf("Expected 1 volume but found %d", len(vols))
 		}
 	}
 }
@@ -370,8 +370,8 @@ func (s *TestRPCStorageSuite) testRPCStorageListDir(t *testing.T) {
 			t.Error("Unable to initiate DeleteVol", err)
 		}
 		vols, err := storageDisk.ListVols()
-		if len(vols) != 0 {
-			t.Errorf("Expected no volumes but found %d", dirCount)
+		if len(vols) > 1 {
+			t.Errorf("Expected 1 volume but found %d", len(vols))
 		}
 	}
 }

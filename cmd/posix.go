@@ -193,16 +193,6 @@ func (s *posix) String() string {
 	return s.diskPath
 }
 
-// Init - this is a dummy call.
-func (s *posix) Init() error {
-	return nil
-}
-
-// Close - this is a dummy call.
-func (s *posix) Close() error {
-	return nil
-}
-
 // DiskInfo provides current information about disk space usage,
 // total free inodes and underlying filesystem.
 func (s *posix) DiskInfo() (info disk.Info, err error) {

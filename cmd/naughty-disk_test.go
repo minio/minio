@@ -28,7 +28,7 @@ import (
 // Programmed errors are stored in errors field.
 type naughtyDisk struct {
 	// The real disk
-	disk *retryStorage
+	disk StorageAPI
 	// Programmed errors: API call number => error to return
 	errors map[int]error
 	// The error to return when no error value is programmed
@@ -39,26 +39,12 @@ type naughtyDisk struct {
 	mu sync.Mutex
 }
 
-func newNaughtyDisk(d *retryStorage, errs map[int]error, defaultErr error) *naughtyDisk {
+func newNaughtyDisk(d StorageAPI, errs map[int]error, defaultErr error) *naughtyDisk {
 	return &naughtyDisk{disk: d, errors: errs, defaultErr: defaultErr}
 }
 
 func (d *naughtyDisk) String() string {
 	return d.disk.String()
-}
-
-func (d *naughtyDisk) Init() (err error) {
-	if err = d.calcError(); err != nil {
-		return err
-	}
-	return d.disk.Init()
-}
-
-func (d *naughtyDisk) Close() (err error) {
-	if err = d.calcError(); err != nil {
-		return err
-	}
-	return d.disk.Close()
 }
 
 func (d *naughtyDisk) calcError() (err error) {

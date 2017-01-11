@@ -16,7 +16,11 @@
 
 package cmd
 
-import "github.com/minio/dsync"
+import (
+	"time"
+
+	"github.com/minio/dsync"
+)
 
 // LockRPCClient is authenticable lock RPC client compatible to dsync.NetLocker
 type LockRPCClient struct {
@@ -28,44 +32,52 @@ func newLockRPCClient(config authConfig) *LockRPCClient {
 	return &LockRPCClient{newAuthRPCClient(config)}
 }
 
+// call executes RPC call with default retry config.
+func (lockRPCClient *LockRPCClient) call(serviceMethod string, args interface {
+	SetAuthToken(authToken string)
+	SetRequestTime(requestTime time.Time)
+}, reply interface{}) (err error) {
+	return lockRPCClient.Call(serviceMethod, args, reply, nil, defaultRetryConfig)
+}
+
 // RLock calls read lock RPC.
 func (lockRPCClient *LockRPCClient) RLock(args dsync.LockArgs) (reply bool, err error) {
 	lockArgs := newLockArgs(args)
-	err = lockRPCClient.AuthRPCClient.Call("Dsync.RLock", &lockArgs, &reply)
+	err = lockRPCClient.call("Dsync.RLock", &lockArgs, &reply)
 	return reply, err
 }
 
 // Lock calls write lock RPC.
 func (lockRPCClient *LockRPCClient) Lock(args dsync.LockArgs) (reply bool, err error) {
 	lockArgs := newLockArgs(args)
-	err = lockRPCClient.AuthRPCClient.Call("Dsync.Lock", &lockArgs, &reply)
+	err = lockRPCClient.call("Dsync.Lock", &lockArgs, &reply)
 	return reply, err
 }
 
 // RUnlock calls read unlock RPC.
 func (lockRPCClient *LockRPCClient) RUnlock(args dsync.LockArgs) (reply bool, err error) {
 	lockArgs := newLockArgs(args)
-	err = lockRPCClient.AuthRPCClient.Call("Dsync.RUnlock", &lockArgs, &reply)
+	err = lockRPCClient.call("Dsync.RUnlock", &lockArgs, &reply)
 	return reply, err
 }
 
 // Unlock calls write unlock RPC.
 func (lockRPCClient *LockRPCClient) Unlock(args dsync.LockArgs) (reply bool, err error) {
 	lockArgs := newLockArgs(args)
-	err = lockRPCClient.AuthRPCClient.Call("Dsync.Unlock", &lockArgs, &reply)
+	err = lockRPCClient.call("Dsync.Unlock", &lockArgs, &reply)
 	return reply, err
 }
 
 // ForceUnlock calls force unlock RPC.
 func (lockRPCClient *LockRPCClient) ForceUnlock(args dsync.LockArgs) (reply bool, err error) {
 	lockArgs := newLockArgs(args)
-	err = lockRPCClient.AuthRPCClient.Call("Dsync.ForceUnlock", &lockArgs, &reply)
+	err = lockRPCClient.call("Dsync.ForceUnlock", &lockArgs, &reply)
 	return reply, err
 }
 
 // Expired calls expired RPC.
 func (lockRPCClient *LockRPCClient) Expired(args dsync.LockArgs) (reply bool, err error) {
 	lockArgs := newLockArgs(args)
-	err = lockRPCClient.AuthRPCClient.Call("Dsync.Expired", &lockArgs, &reply)
+	err = lockRPCClient.call("Dsync.Expired", &lockArgs, &reply)
 	return reply, err
 }

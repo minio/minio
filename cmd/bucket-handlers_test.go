@@ -749,7 +749,8 @@ func testAPIDeleteMultipleObjectsHandler(obj ObjectLayer, instanceType, bucketNa
 
 		// Verify whether the bucket obtained object is same as the one created.
 		if testCase.expectedContent != nil && !bytes.Equal(testCase.expectedContent, actualContent) {
-			t.Errorf("Test %d : Minio %s: Object content differs from expected value.", i+1, instanceType)
+			t.Errorf("Test %d : Minio %s: expected: %s, got: %s", i+1, instanceType,
+				string(testCase.expectedContent), string(actualContent))
 		}
 	}
 

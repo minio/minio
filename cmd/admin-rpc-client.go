@@ -60,18 +60,26 @@ func (lc localAdminClient) ListLocks(bucket, prefix string, relTime time.Duratio
 	return listLocksInfo(bucket, prefix, relTime), nil
 }
 
+// call - executes RPC call with default retry config.
+func (rc remoteAdminClient) call(serviceMethod string, args interface {
+	SetAuthToken(authToken string)
+	SetRequestTime(requestTime time.Time)
+}, reply interface{}) (err error) {
+	return rc.Call(serviceMethod, args, reply, nil, defaultRetryConfig)
+}
+
 // Stop - Sends stop command to remote server via RPC.
 func (rc remoteAdminClient) Stop() error {
 	args := AuthRPCArgs{}
 	reply := AuthRPCReply{}
-	return rc.Call("Admin.Shutdown", &args, &reply)
+	return rc.call("Admin.Shutdown", &args, &reply)
 }
 
 // Restart - Sends restart command to remote server via RPC.
 func (rc remoteAdminClient) Restart() error {
 	args := AuthRPCArgs{}
 	reply := AuthRPCReply{}
-	return rc.Call("Admin.Restart", &args, &reply)
+	return rc.call("Admin.Restart", &args, &reply)
 }
 
 // ListLocks - Sends list locks command to remote server via RPC.
@@ -82,7 +90,7 @@ func (rc remoteAdminClient) ListLocks(bucket, prefix string, relTime time.Durati
 		relTime: relTime,
 	}
 	var reply ListLocksReply
-	if err := rc.Call("Admin.ListLocks", &listArgs, &reply); err != nil {
+	if err := rc.call("Admin.ListLocks", &listArgs, &reply); err != nil {
 		return nil, err
 	}
 	return reply.volLocks, nil

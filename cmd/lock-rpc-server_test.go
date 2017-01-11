@@ -451,9 +451,9 @@ func TestLockServers(t *testing.T) {
 	}
 
 	currentIsDistXL := globalIsDistXL
-	defer func() {
-		globalIsDistXL = currentIsDistXL
-	}()
+	defer func(isDist bool) {
+		globalIsDistXL = isDist
+	}(currentIsDistXL)
 
 	globalMinioHost = ""
 	testCases := []struct {
