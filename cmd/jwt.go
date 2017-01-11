@@ -43,6 +43,7 @@ var errInvalidSecretKeyLength = errors.New("Invalid secret key, secret key shoul
 
 var errInvalidAccessKeyID = errors.New("The access key ID you provided does not exist in our records")
 var errAuthentication = errors.New("Authentication failed, check your access credentials")
+var errNoAuthToken = errors.New("JWT token missing")
 
 func authenticateJWT(accessKey, secretKey string, expiry time.Duration) (string, error) {
 	// Trim spaces.
@@ -106,11 +107,23 @@ func isAuthTokenValid(tokenString string) bool {
 }
 
 func isHTTPRequestValid(req *http.Request) bool {
+	return webReqestAuthenticate(req) == nil
+}
+
+// Check if the request is authenticated.
+// Returns nil if the request is authenticated. errNoAuthToken if token missing.
+// Returns errAuthentication for all other errors.
+func webReqestAuthenticate(req *http.Request) error {
 	jwtToken, err := jwtreq.ParseFromRequest(req, jwtreq.AuthorizationHeaderExtractor, keyFuncCallback)
 	if err != nil {
-		errorIf(err, "Unable to parse JWT token string")
-		return false
+		if err == jwtreq.ErrNoTokenInRequest {
+			return errNoAuthToken
+		}
+		return errAuthentication
 	}
 
-	return jwtToken.Valid
+	if !jwtToken.Valid {
+		return errAuthentication
+	}
+	return nil
 }

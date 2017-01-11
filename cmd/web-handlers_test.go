@@ -19,6 +19,7 @@ package cmd
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -422,30 +423,62 @@ func testListObjectsWebHandler(obj ObjectLayer, instanceType string, t TestErrHa
 		t.Fatalf("Was not able to upload an object, %v", err)
 	}
 
-	listObjectsRequest := ListObjectsArgs{BucketName: bucketName, Prefix: ""}
-	listObjectsReply := &ListObjectsRep{}
-	req, err := newTestWebRPCRequest("Web.ListObjects", authorization, listObjectsRequest)
-	if err != nil {
-		t.Fatalf("Failed to create HTTP request: <ERROR> %v", err)
+	test := func(token string) (error, *ListObjectsRep) {
+		listObjectsRequest := ListObjectsArgs{BucketName: bucketName, Prefix: ""}
+		listObjectsReply := &ListObjectsRep{}
+		var req *http.Request
+		req, err = newTestWebRPCRequest("Web.ListObjects", token, listObjectsRequest)
+		if err != nil {
+			t.Fatalf("Failed to create HTTP request: <ERROR> %v", err)
+		}
+		apiRouter.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			return fmt.Errorf("Expected the response status to be 200, but instead found `%d`", rec.Code), listObjectsReply
+		}
+		err = getTestWebRPCResponse(rec, &listObjectsReply)
+		if err != nil {
+			return err, listObjectsReply
+		}
+		return nil, listObjectsReply
 	}
-	apiRouter.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("Expected the response status to be 200, but instead found `%d`", rec.Code)
-	}
-	err = getTestWebRPCResponse(rec, &listObjectsReply)
-	if err != nil {
-		t.Fatalf("Failed, %v", err)
-	}
-	if len(listObjectsReply.Objects) == 0 {
-		t.Fatalf("Cannot find the object")
-	}
-	if listObjectsReply.Objects[0].Key != objectName {
-		t.Fatalf("Found another object other than already created by PutObject")
-	}
-	if listObjectsReply.Objects[0].Size != int64(objectSize) {
-		t.Fatalf("Found a object with the same name but with a different size")
+	verifyReply := func(reply *ListObjectsRep) {
+		if len(reply.Objects) == 0 {
+			t.Fatalf("Cannot find the object")
+		}
+		if reply.Objects[0].Key != objectName {
+			t.Fatalf("Found another object other than already created by PutObject")
+		}
+		if reply.Objects[0].Size != int64(objectSize) {
+			t.Fatalf("Found a object with the same name but with a different size")
+		}
 	}
 
+	// Authenticated ListObjects should succeed.
+	err, reply := test(authorization)
+	if err != nil {
+		t.Fatal(err)
+	}
+	verifyReply(reply)
+
+	// Unauthenticated ListObjects should fail.
+	err, reply = test("")
+	if err == nil {
+		t.Fatalf("Expected error `%s`", err)
+	}
+
+	policy := bucketPolicy{
+		Version:    "1.0",
+		Statements: []policyStatement{getReadOnlyObjectStatement(bucketName, "")},
+	}
+
+	globalBucketPolicies.SetBucketPolicy(bucketName, policyChange{false, &policy})
+
+	// Unauthenticated ListObjects with READ bucket policy should succeed.
+	err, reply = test("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	verifyReply(reply)
 }
 
 // Wrapper for calling RemoveObject Web Handler
@@ -695,8 +728,8 @@ func testUploadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler
 	defer removeAll(rootPath)
 
 	credentials := serverConfig.GetCredential()
+	content := []byte("temporary file's content")
 
-	rec := httptest.NewRecorder()
 	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatal("Cannot authenticate")
@@ -704,6 +737,26 @@ func testUploadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler
 
 	objectName := "test.file"
 	bucketName := getRandomBucketName()
+
+	test := func(token string) int {
+		rec := httptest.NewRecorder()
+		var req *http.Request
+		req, err = http.NewRequest("PUT", "/minio/upload/"+bucketName+"/"+objectName, nil)
+		if err != nil {
+			t.Fatalf("Cannot create upload request, %v", err)
+		}
+
+		req.Header.Set("Content-Length", strconv.Itoa(len(content)))
+		req.Header.Set("x-amz-date", "20160814T114029Z")
+		req.Header.Set("Accept", "*/*")
+		req.Body = ioutil.NopCloser(bytes.NewReader(content))
+
+		if token != "" {
+			req.Header.Set("Authorization", "Bearer "+authorization)
+		}
+		apiRouter.ServeHTTP(rec, req)
+		return rec.Code
+	}
 	// Create bucket.
 	err = obj.MakeBucket(bucketName)
 	if err != nil {
@@ -711,22 +764,10 @@ func testUploadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler
 		t.Fatalf("%s : %s", instanceType, err)
 	}
 
-	content := []byte("temporary file's content")
-
-	req, err := http.NewRequest("PUT", "/minio/upload/"+bucketName+"/"+objectName, nil)
-	req.Header.Set("Authorization", "Bearer "+authorization)
-	req.Header.Set("Content-Length", strconv.Itoa(len(content)))
-	req.Header.Set("x-amz-date", "20160814T114029Z")
-	req.Header.Set("Accept", "*/*")
-	req.Body = ioutil.NopCloser(bytes.NewReader(content))
-
-	if err != nil {
-		t.Fatalf("Cannot create upload request, %v", err)
-	}
-
-	apiRouter.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("Expected the response status to be 200, but instead found `%d`", rec.Code)
+	// Authenticated upload should succeed.
+	code := test(authorization)
+	if code != http.StatusOK {
+		t.Fatalf("Expected the response status to be 200, but instead found `%d`", code)
 	}
 
 	var byteBuffer bytes.Buffer
@@ -737,6 +778,25 @@ func testUploadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler
 
 	if bytes.Compare(byteBuffer.Bytes(), content) != 0 {
 		t.Fatalf("The upload file is different from the download file")
+	}
+
+	// Unauthenticated upload should fail.
+	code = test("")
+	if code != http.StatusForbidden {
+		t.Fatalf("Expected the response status to be 403, but instead found `%d`", code)
+	}
+
+	policy := bucketPolicy{
+		Version:    "1.0",
+		Statements: []policyStatement{getWriteOnlyObjectStatement(bucketName, "")},
+	}
+
+	globalBucketPolicies.SetBucketPolicy(bucketName, policyChange{false, &policy})
+
+	// Unauthenticated upload with WRITE policy should succeed.
+	code = test("")
+	if code != http.StatusOK {
+		t.Fatalf("Expected the response status to be 200, but instead found `%d`", code)
 	}
 }
 
@@ -760,7 +820,6 @@ func testDownloadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandl
 
 	credentials := serverConfig.GetCredential()
 
-	rec := httptest.NewRecorder()
 	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatal("Cannot authenticate")
@@ -768,6 +827,24 @@ func testDownloadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandl
 
 	objectName := "test.file"
 	bucketName := getRandomBucketName()
+
+	test := func(token string) (int, []byte) {
+		rec := httptest.NewRecorder()
+		path := "/minio/download/" + bucketName + "/" + objectName + "?token="
+		if token != "" {
+			path = path + token
+		}
+		var req *http.Request
+		req, err = http.NewRequest("GET", path, nil)
+
+		if err != nil {
+			t.Fatalf("Cannot create upload request, %v", err)
+		}
+
+		apiRouter.ServeHTTP(rec, req)
+		return rec.Code, rec.Body.Bytes()
+	}
+
 	// Create bucket.
 	err = obj.MakeBucket(bucketName)
 	if err != nil {
@@ -781,18 +858,37 @@ func testDownloadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandl
 		t.Fatalf("Was not able to upload an object, %v", err)
 	}
 
-	req, err := http.NewRequest("GET", "/minio/download/"+bucketName+"/"+objectName+"?token="+authorization, nil)
+	// Authenticated download should succeed.
+	code, bodyContent := test(authorization)
 
-	if err != nil {
-		t.Fatalf("Cannot create upload request, %v", err)
+	if code != http.StatusOK {
+		t.Fatalf("Expected the response status to be 200, but instead found `%d`", code)
 	}
 
-	apiRouter.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("Expected the response status to be 200, but instead found `%d`", rec.Code)
+	if bytes.Compare(bodyContent, content) != 0 {
+		t.Fatalf("The downloaded file is corrupted")
 	}
 
-	if bytes.Compare(rec.Body.Bytes(), content) != 0 {
+	// Unauthenticated download should fail.
+	code, bodyContent = test("")
+	if code != http.StatusForbidden {
+		t.Fatalf("Expected the response status to be 403, but instead found `%d`", code)
+	}
+
+	policy := bucketPolicy{
+		Version:    "1.0",
+		Statements: []policyStatement{getReadOnlyObjectStatement(bucketName, "")},
+	}
+
+	globalBucketPolicies.SetBucketPolicy(bucketName, policyChange{false, &policy})
+
+	// Unauthenticated download with READ policy should succeed.
+	code, bodyContent = test("")
+	if code != http.StatusOK {
+		t.Fatalf("Expected the response status to be 200, but instead found `%d`", code)
+	}
+
+	if bytes.Compare(bodyContent, content) != 0 {
 		t.Fatalf("The downloaded file is corrupted")
 	}
 }

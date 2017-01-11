@@ -23,6 +23,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"path"
 	"strings"
 	"sync"
 
@@ -69,6 +70,21 @@ func enforceBucketPolicy(bucket string, action string, reqURL *url.URL) (s3Error
 		return ErrAccessDenied
 	}
 	return ErrNone
+}
+
+// Check if the action is allowed on the bucket/prefix.
+func isBucketActionAllowed(action, bucket, prefix string) bool {
+	policy := globalBucketPolicies.GetBucketPolicy(bucket)
+	if policy == nil {
+		return false
+	}
+	resource := bucketARNPrefix + path.Join(bucket, prefix)
+	var conditionKeyMap map[string]set.StringSet
+	// Validate action, resource and conditions with current policy statements.
+	if !bucketPolicyEvalStatements(action, resource, conditionKeyMap, policy.Statements) {
+		return false
+	}
+	return true
 }
 
 // GetBucketLocationHandler - GET Bucket location.
