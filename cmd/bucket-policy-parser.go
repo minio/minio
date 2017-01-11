@@ -29,11 +29,6 @@ import (
 	"github.com/minio/minio-go/pkg/set"
 )
 
-const (
-	// AWSResourcePrefix - bucket policy resource prefix.
-	AWSResourcePrefix = "arn:aws:s3:::"
-)
-
 // supportedActionMap - lists all the actions supported by minio.
 var supportedActionMap = set.CreateStringSet("*", "s3:*", "s3:GetObject",
 	"s3:ListBucket", "s3:PutObject", "s3:GetBucketLocation", "s3:DeleteObject",
@@ -111,11 +106,11 @@ func isValidResources(resources set.StringSet) (err error) {
 		return err
 	}
 	for resource := range resources {
-		if !strings.HasPrefix(resource, AWSResourcePrefix) {
+		if !strings.HasPrefix(resource, bucketARNPrefix) {
 			err = errors.New("Unsupported resource style found: ‘" + resource + "’, please validate your policy document")
 			return err
 		}
-		resourceSuffix := strings.SplitAfter(resource, AWSResourcePrefix)[1]
+		resourceSuffix := strings.SplitAfter(resource, bucketARNPrefix)[1]
 		if len(resourceSuffix) == 0 || strings.HasPrefix(resourceSuffix, "/") {
 			err = errors.New("Invalid resource style found: ‘" + resource + "’, please validate your policy document")
 			return err
@@ -236,7 +231,7 @@ func checkBucketPolicyResources(bucket string, bucketPolicy *bucketPolicy) APIEr
 	for _, statement := range bucketPolicy.Statements {
 		for action := range statement.Actions {
 			for resource := range statement.Resources {
-				resourcePrefix := strings.SplitAfter(resource, AWSResourcePrefix)[1]
+				resourcePrefix := strings.SplitAfter(resource, bucketARNPrefix)[1]
 				if _, ok := invalidPrefixActions[action]; ok {
 					// Resource prefix is not equal to bucket for
 					// prefix invalid actions, reject them.

@@ -79,7 +79,7 @@ func getReadWriteObjectStatement(bucketName, objectPrefix string) policyStatemen
 	objectResourceStatement.Principal = map[string]interface{}{
 		"AWS": "*",
 	}
-	objectResourceStatement.Resources = set.CreateStringSet([]string{fmt.Sprintf("%s%s", AWSResourcePrefix, bucketName+"/"+objectPrefix+"*")}...)
+	objectResourceStatement.Resources = set.CreateStringSet([]string{fmt.Sprintf("%s%s", bucketARNPrefix, bucketName+"/"+objectPrefix+"*")}...)
 	objectResourceStatement.Actions = set.CreateStringSet(readWriteObjectActions...)
 	return objectResourceStatement
 }
@@ -91,7 +91,7 @@ func getReadWriteBucketStatement(bucketName, objectPrefix string) policyStatemen
 	bucketResourceStatement.Principal = map[string]interface{}{
 		"AWS": "*",
 	}
-	bucketResourceStatement.Resources = set.CreateStringSet([]string{fmt.Sprintf("%s%s", AWSResourcePrefix, bucketName)}...)
+	bucketResourceStatement.Resources = set.CreateStringSet([]string{fmt.Sprintf("%s%s", bucketARNPrefix, bucketName)}...)
 	bucketResourceStatement.Actions = set.CreateStringSet(readWriteBucketActions...)
 	return bucketResourceStatement
 }
@@ -111,7 +111,7 @@ func getReadOnlyBucketStatement(bucketName, objectPrefix string) policyStatement
 	bucketResourceStatement.Principal = map[string]interface{}{
 		"AWS": "*",
 	}
-	bucketResourceStatement.Resources = set.CreateStringSet([]string{fmt.Sprintf("%s%s", AWSResourcePrefix, bucketName)}...)
+	bucketResourceStatement.Resources = set.CreateStringSet([]string{fmt.Sprintf("%s%s", bucketARNPrefix, bucketName)}...)
 	bucketResourceStatement.Actions = set.CreateStringSet(readOnlyBucketActions...)
 	return bucketResourceStatement
 }
@@ -123,7 +123,7 @@ func getReadOnlyObjectStatement(bucketName, objectPrefix string) policyStatement
 	objectResourceStatement.Principal = map[string]interface{}{
 		"AWS": "*",
 	}
-	objectResourceStatement.Resources = set.CreateStringSet([]string{fmt.Sprintf("%s%s", AWSResourcePrefix, bucketName+"/"+objectPrefix+"*")}...)
+	objectResourceStatement.Resources = set.CreateStringSet([]string{fmt.Sprintf("%s%s", bucketARNPrefix, bucketName+"/"+objectPrefix+"*")}...)
 	objectResourceStatement.Actions = set.CreateStringSet(readOnlyObjectActions...)
 	return objectResourceStatement
 }
@@ -144,7 +144,7 @@ func getWriteOnlyBucketStatement(bucketName, objectPrefix string) policyStatemen
 	bucketResourceStatement.Principal = map[string]interface{}{
 		"AWS": "*",
 	}
-	bucketResourceStatement.Resources = set.CreateStringSet([]string{fmt.Sprintf("%s%s", AWSResourcePrefix, bucketName)}...)
+	bucketResourceStatement.Resources = set.CreateStringSet([]string{fmt.Sprintf("%s%s", bucketARNPrefix, bucketName)}...)
 	bucketResourceStatement.Actions = set.CreateStringSet(writeOnlyBucketActions...)
 	return bucketResourceStatement
 }
@@ -156,7 +156,7 @@ func getWriteOnlyObjectStatement(bucketName, objectPrefix string) policyStatemen
 	objectResourceStatement.Principal = map[string]interface{}{
 		"AWS": "*",
 	}
-	objectResourceStatement.Resources = set.CreateStringSet([]string{fmt.Sprintf("%s%s", AWSResourcePrefix, bucketName+"/"+objectPrefix+"*")}...)
+	objectResourceStatement.Resources = set.CreateStringSet([]string{fmt.Sprintf("%s%s", bucketARNPrefix, bucketName+"/"+objectPrefix+"*")}...)
 	objectResourceStatement.Actions = set.CreateStringSet(writeOnlyObjectActions...)
 	return objectResourceStatement
 }
@@ -269,19 +269,19 @@ func TestIsValidResources(t *testing.T) {
 		// Empty Resources.
 		{[]string{}, errors.New("Resource list cannot be empty"), false},
 		// Test case - 2.
-		// A valid resource should have prefix "arn:aws:s3:::".
+		// A valid resource should have prefix bucketARNPrefix.
 		{[]string{"my-resource"}, errors.New("Unsupported resource style found: ‘my-resource’, please validate your policy document"), false},
 		// Test case - 3.
-		// A Valid resource should have bucket name followed by "arn:aws:s3:::".
-		{[]string{"arn:aws:s3:::"}, errors.New("Invalid resource style found: ‘arn:aws:s3:::’, please validate your policy document"), false},
+		// A Valid resource should have bucket name followed by bucketARNPrefix.
+		{[]string{bucketARNPrefix}, errors.New("Invalid resource style found: ‘arn:aws:s3:::’, please validate your policy document"), false},
 		// Test Case - 4.
-		// Valid resource shouldn't have slash('/') followed by "arn:aws:s3:::".
-		{[]string{"arn:aws:s3:::/"}, errors.New("Invalid resource style found: ‘arn:aws:s3:::/’, please validate your policy document"), false},
+		// Valid resource shouldn't have slash('/') followed by bucketARNPrefix.
+		{[]string{bucketARNPrefix + "/"}, errors.New("Invalid resource style found: ‘arn:aws:s3:::/’, please validate your policy document"), false},
 
 		// Test cases with valid Resources.
-		{[]string{"arn:aws:s3:::my-bucket"}, nil, true},
-		{[]string{"arn:aws:s3:::my-bucket/Asia/*"}, nil, true},
-		{[]string{"arn:aws:s3:::my-bucket/Asia/India/*"}, nil, true},
+		{[]string{bucketARNPrefix + "my-bucket"}, nil, true},
+		{[]string{bucketARNPrefix + "my-bucket/Asia/*"}, nil, true},
+		{[]string{bucketARNPrefix + "my-bucket/Asia/India/*"}, nil, true},
 	}
 	for i, testCase := range testCases {
 		err := isValidResources(set.CreateStringSet(testCase.resources...))

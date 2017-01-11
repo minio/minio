@@ -56,7 +56,7 @@ func enforceBucketPolicy(bucket string, action string, reqURL *url.URL) (s3Error
 	}
 
 	// Construct resource in 'arn:aws:s3:::examplebucket/object' format.
-	resource := AWSResourcePrefix + strings.TrimSuffix(strings.TrimPrefix(reqURL.Path, "/"), "/")
+	resource := bucketARNPrefix + strings.TrimSuffix(strings.TrimPrefix(reqURL.Path, "/"), "/")
 
 	// Get conditions for policy verification.
 	conditionKeyMap := make(map[string]set.StringSet)

@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"crypto/rand"
 	"fmt"
 	"time"
 )
@@ -225,5 +226,13 @@ func (n *nsLockMap) deleteLockInfoEntryForOps(param nsParam, opsID string) error
 
 // Return randomly generated string ID
 func getOpsID() string {
-	return mustGetRequestID()
+	const opsIDLen = 16
+	opsIDBytes := make([]byte, opsIDLen)
+	if _, err := rand.Read(opsIDBytes); err != nil {
+		panic(err)
+	}
+	for i := 0; i < opsIDLen; i++ {
+		opsIDBytes[i] = alphaNumericTable[opsIDBytes[i]%alphaNumericTableLen]
+	}
+	return string(opsIDBytes)
 }

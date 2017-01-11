@@ -24,6 +24,12 @@ import (
 	"sync"
 )
 
+const (
+	// Static prefix to be used while constructing bucket ARN.
+	// refer to S3 docs for more info.
+	bucketARNPrefix = "arn:" + eventSource + ":::"
+)
+
 // Variable represents bucket policies in memory.
 var globalBucketPolicies *bucketPolicies
 

@@ -18,11 +18,12 @@ package cmd
 
 import (
 	"testing"
+	"time"
 )
 
 func TestNewRequestID(t *testing.T) {
 	// Ensure that it returns an alphanumeric result of length 16.
-	var id = mustGetRequestID()
+	var id = mustGetRequestID(time.Now().UTC())
 
 	if len(id) != 16 {
 		t.Fail()
