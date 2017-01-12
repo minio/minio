@@ -1,0 +1,26 @@
+
+- [ ] Better constructors, options handling
+- [ ] Functions for callback settings after connection created.
+- [ ] Better options for subscriptions. Slow Consumer state settable, Go routines vs Inline.
+- [ ] Move off of channels for subscribers, use syncPool linkedLists, etc with highwater.
+- [ ] Test for valid subjects on publish and subscribe?
+- [ ] SyncSubscriber and Next for EncodedConn
+- [ ] Fast Publisher?
+- [ ] pooling for structs used? leaky bucket?
+- [ ] Timeout 0 should work as no timeout
+- [x] Ping timer
+- [x] Name in Connect for gnatsd
+- [x] Asynchronous error handling
+- [x] Parser rewrite
+- [x] Reconnect
+- [x] Hide Lock
+- [x] Easier encoder interface
+- [x] QueueSubscribeSync
+- [x] Make nats specific errors prefixed with 'nats:'
+- [x] API test for closed connection
+- [x] TLS/SSL
+- [x] Stats collection
+- [x] Disconnect detection
+- [x] Optimized Publish (coalescing)
+- [x] Do Examples via Go style
+- [x] Standardized Errors

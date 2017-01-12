@@ -66,6 +66,11 @@ func migrateConfig() error {
 	if err := migrateV10ToV11(); err != nil {
 		return err
 	}
+	// Migrate version '11' to '12'.
+	if err := migrateV11ToV12(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -423,7 +428,7 @@ func migrateV7ToV8() error {
 	srvConfig.Logger.File = cv7.Logger.File
 	srvConfig.Logger.Syslog = cv7.Logger.Syslog
 	srvConfig.Notify.AMQP = make(map[string]amqpNotify)
-	srvConfig.Notify.NATS = make(map[string]natsNotify)
+	srvConfig.Notify.NATS = make(map[string]natsNotifyV1)
 	srvConfig.Notify.ElasticSearch = make(map[string]elasticSearchNotify)
 	srvConfig.Notify.Redis = make(map[string]redisNotify)
 	srvConfig.Notify.PostgreSQL = make(map[string]postgreSQLNotify)
@@ -433,7 +438,7 @@ func migrateV7ToV8() error {
 		srvConfig.Notify.AMQP = cv7.Notify.AMQP
 	}
 	if len(cv7.Notify.NATS) == 0 {
-		srvConfig.Notify.NATS["1"] = natsNotify{}
+		srvConfig.Notify.NATS["1"] = natsNotifyV1{}
 	} else {
 		srvConfig.Notify.NATS = cv7.Notify.NATS
 	}
@@ -502,8 +507,8 @@ func migrateV8ToV9() error {
 		srvConfig.Notify.AMQP = cv8.Notify.AMQP
 	}
 	if len(cv8.Notify.NATS) == 0 {
-		srvConfig.Notify.NATS = make(map[string]natsNotify)
-		srvConfig.Notify.NATS["1"] = natsNotify{}
+		srvConfig.Notify.NATS = make(map[string]natsNotifyV1)
+		srvConfig.Notify.NATS["1"] = natsNotifyV1{}
 	} else {
 		srvConfig.Notify.NATS = cv8.Notify.NATS
 	}
@@ -587,8 +592,8 @@ func migrateV9ToV10() error {
 		srvConfig.Notify.AMQP = cv9.Notify.AMQP
 	}
 	if len(cv9.Notify.NATS) == 0 {
-		srvConfig.Notify.NATS = make(map[string]natsNotify)
-		srvConfig.Notify.NATS["1"] = natsNotify{}
+		srvConfig.Notify.NATS = make(map[string]natsNotifyV1)
+		srvConfig.Notify.NATS["1"] = natsNotifyV1{}
 	} else {
 		srvConfig.Notify.NATS = cv9.Notify.NATS
 	}
@@ -672,8 +677,8 @@ func migrateV10ToV11() error {
 		srvConfig.Notify.AMQP = cv10.Notify.AMQP
 	}
 	if len(cv10.Notify.NATS) == 0 {
-		srvConfig.Notify.NATS = make(map[string]natsNotify)
-		srvConfig.Notify.NATS["1"] = natsNotify{}
+		srvConfig.Notify.NATS = make(map[string]natsNotifyV1)
+		srvConfig.Notify.NATS["1"] = natsNotifyV1{}
 	} else {
 		srvConfig.Notify.NATS = cv10.Notify.NATS
 	}
@@ -721,6 +726,112 @@ func migrateV10ToV11() error {
 	console.Println(
 		"Migration from version ‘" +
 			cv10.Version + "’ to ‘" + srvConfig.Version +
+			"’ completed successfully.",
+	)
+	return nil
+}
+
+// Version '11' to '12' migration. Add support for NATS streaming
+// notifications.
+func migrateV11ToV12() error {
+	cv11, err := loadConfigV11()
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("Unable to load config version ‘11’. %v", err)
+	}
+	if cv11.Version != "11" {
+		return nil
+	}
+
+	// Copy over fields from V11 into V12 config struct
+	srvConfig := &serverConfigV12{}
+	srvConfig.Version = "12"
+	srvConfig.Credential = cv11.Credential
+	srvConfig.Region = cv11.Region
+	if srvConfig.Region == "" {
+		// Region needs to be set for AWS Signature Version 4.
+		srvConfig.Region = "us-east-1"
+	}
+	srvConfig.Logger.Console = cv11.Logger.Console
+	srvConfig.Logger.File = cv11.Logger.File
+
+	// check and set notifiers config
+	if len(cv11.Notify.AMQP) == 0 {
+		srvConfig.Notify.AMQP = make(map[string]amqpNotify)
+		srvConfig.Notify.AMQP["1"] = amqpNotify{}
+	} else {
+		srvConfig.Notify.AMQP = cv11.Notify.AMQP
+	}
+	if len(cv11.Notify.ElasticSearch) == 0 {
+		srvConfig.Notify.ElasticSearch = make(map[string]elasticSearchNotify)
+		srvConfig.Notify.ElasticSearch["1"] = elasticSearchNotify{}
+	} else {
+		srvConfig.Notify.ElasticSearch = cv11.Notify.ElasticSearch
+	}
+	if len(cv11.Notify.Redis) == 0 {
+		srvConfig.Notify.Redis = make(map[string]redisNotify)
+		srvConfig.Notify.Redis["1"] = redisNotify{}
+	} else {
+		srvConfig.Notify.Redis = cv11.Notify.Redis
+	}
+	if len(cv11.Notify.PostgreSQL) == 0 {
+		srvConfig.Notify.PostgreSQL = make(map[string]postgreSQLNotify)
+		srvConfig.Notify.PostgreSQL["1"] = postgreSQLNotify{}
+	} else {
+		srvConfig.Notify.PostgreSQL = cv11.Notify.PostgreSQL
+	}
+	if len(cv11.Notify.Kafka) == 0 {
+		srvConfig.Notify.Kafka = make(map[string]kafkaNotify)
+		srvConfig.Notify.Kafka["1"] = kafkaNotify{}
+	} else {
+		srvConfig.Notify.Kafka = cv11.Notify.Kafka
+	}
+
+	// V12 will have an updated config of nats. So we create a new one or we
+	// update the old one if found.
+	if len(cv11.Notify.NATS) == 0 {
+		srvConfig.Notify.NATS = make(map[string]natsNotify)
+		srvConfig.Notify.NATS["1"] = natsNotify{}
+	} else {
+		srvConfig.Notify.NATS = make(map[string]natsNotify)
+		for k, v := range cv11.Notify.NATS {
+			n := natsNotify{}
+			n.Enable = v.Enable
+			n.Address = v.Address
+			n.Subject = v.Subject
+			n.Username = v.Username
+			n.Password = v.Password
+			n.Token = v.Token
+			n.Secure = v.Secure
+			n.PingInterval = v.PingInterval
+			srvConfig.Notify.NATS[k] = n
+		}
+	}
+
+	qc, err := quick.New(srvConfig)
+	if err != nil {
+		return fmt.Errorf("Unable to initialize the quick config. %v",
+			err)
+	}
+	configFile, err := getConfigFile()
+	if err != nil {
+		return fmt.Errorf("Unable to get config file. %v", err)
+	}
+
+	err = qc.Save(configFile)
+	if err != nil {
+		return fmt.Errorf(
+			"Failed to migrate config from ‘"+
+				cv11.Version+"’ to ‘"+srvConfig.Version+
+				"’ failed. %v", err,
+		)
+	}
+
+	console.Println(
+		"Migration from version ‘" +
+			cv11.Version + "’ to ‘" + srvConfig.Version +
 			"’ completed successfully.",
 	)
 	return nil

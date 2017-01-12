@@ -93,12 +93,12 @@ func isNATSQueue(sqsArn arnSQS) bool {
 		return false
 	}
 	// Connect to nats server to validate.
-	natsC, err := dialNATS(natsL)
+	natsC, err := dialNATS(natsL, true)
 	if err != nil {
 		errorIf(err, "Unable to connect to nats service. %#v", natsL)
 		return false
 	}
-	defer natsC.Close()
+	closeNATS(natsC)
 	return true
 }
 
