@@ -38,28 +38,34 @@ type SystemLockState struct {
 type VolumeLockInfo struct {
 	Bucket string `json:"bucket"`
 	Object string `json:"object"`
+
 	// All locks blocked + running for given <volume,path> pair.
-	LocksOnObject int64 `json:"locksOnObject"`
+	LocksOnObject int64 `json:"-"`
 	// Count of operations which has successfully acquired the lock
 	// but hasn't unlocked yet( operation in progress).
-	LocksAcquiredOnObject int64 `json:"locksAcquiredOnObject"`
+	LocksAcquiredOnObject int64 `json:"-"`
 	// Count of operations which are blocked waiting for the lock
 	// to be released.
-	TotalBlockedLocks int64 `json:"locksBlockedOnObject"`
+	TotalBlockedLocks int64 `json:"-"`
+
+	// Count of all read locks
+	TotalReadLocks int64 `json:"readLocks"`
+	// Count of all write locks
+	TotalWriteLocks int64 `json:"writeLocks"`
 	// State information containing state of the locks for all operations
 	// on given <volume,path> pair.
-	LockDetailsOnObject []OpsLockState `json:"lockDetailsOnObject"`
+	LockDetailsOnObject []OpsLockState `json:"lockOwners"`
 }
 
 // OpsLockState - structure to fill in state information of the lock.
 // structure to fill in status information for each operation with given operation ID.
 type OpsLockState struct {
-	OperationID string        `json:"opsID"`          // String containing operation ID.
-	LockSource  string        `json:"lockSource"`     // Operation type (GetObject, PutObject...)
-	LockType    lockType      `json:"lockType"`       // Lock type (RLock, WLock)
-	Status      statusType    `json:"status"`         // Status can be Running/Ready/Blocked.
-	Since       time.Time     `json:"statusSince"`    // Time when the lock was initially held.
-	Duration    time.Duration `json:"statusDuration"` // Duration since the lock was held.
+	OperationID string        `json:"id"`       // String containing operation ID.
+	LockSource  string        `json:"source"`   // Operation type (GetObject, PutObject...)
+	LockType    lockType      `json:"type"`     // Lock type (RLock, WLock)
+	Status      statusType    `json:"status"`   // Status can be Running/Ready/Blocked.
+	Since       time.Time     `json:"since"`    // Time when the lock was initially held.
+	Duration    time.Duration `json:"duration"` // Duration since the lock was held.
 }
 
 // Read entire state of the locks in the system and return.
@@ -74,6 +80,8 @@ func getSystemLockState() (SystemLockState, error) {
 		TotalLocks:         globalNSMutex.counters.total,
 		TotalBlockedLocks:  globalNSMutex.counters.blocked,
 	}
+
+	var totalReadLocks, totalWriteLocks int64
 
 	for param, debugLock := range globalNSMutex.debugLockMap {
 		volLockInfo := VolumeLockInfo{}
@@ -91,7 +99,16 @@ func getSystemLockState() (SystemLockState, error) {
 				Since:       lockInfo.since,
 				Duration:    timeNow.Sub(lockInfo.since),
 			})
+			switch lockInfo.lType {
+			case debugRLockStr:
+				totalReadLocks++
+			case debugWLockStr:
+				totalWriteLocks++
+			}
 		}
+		volLockInfo.TotalReadLocks = totalReadLocks
+		volLockInfo.TotalWriteLocks = totalWriteLocks
+
 		lockState.LocksInfoPerObject = append(lockState.LocksInfoPerObject, volLockInfo)
 	}
 	return lockState, nil
