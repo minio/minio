@@ -37,13 +37,13 @@ type httpConn struct {
 	Endpoint string
 }
 
-// Lookup host address by dialing.
-func lookupHost(addr string) error {
+// Lookup endpoint address by successfully dialing.
+func lookupEndpoint(u *url.URL) error {
 	dialer := &net.Dialer{
 		Timeout:   300 * time.Millisecond,
 		KeepAlive: 300 * time.Millisecond,
 	}
-	nconn, err := dialer.Dial("tcp", addr)
+	nconn, err := dialer.Dial("tcp", canonicalAddr(u))
 	if err != nil {
 		return err
 	}
@@ -63,7 +63,7 @@ func newWebhookNotify(accountID string) (*logrus.Logger, error) {
 		return nil, err
 	}
 
-	if err = lookupHost(u.Host); err != nil {
+	if err = lookupEndpoint(u); err != nil {
 		return nil, err
 	}
 
