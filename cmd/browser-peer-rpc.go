@@ -108,7 +108,7 @@ func updateCredsOnPeers(creds credential) map[string]error {
 				serverAddr:      peers[ix],
 				secureConn:      globalIsSSL,
 				serviceEndpoint: path.Join(reservedBucket, browserPeerPath),
-				serviceName:     "Browser",
+				serviceName:     "BrowserPeer",
 			})
 
 			// Construct RPC call arguments.
@@ -116,14 +116,14 @@ func updateCredsOnPeers(creds credential) map[string]error {
 
 			// Make RPC call - we only care about error
 			// response and not the reply.
-			err := client.Call("Browser.SetAuthPeer", &args, &AuthRPCReply{})
+			err := client.Call("BrowserPeer.SetAuthPeer", &args, &AuthRPCReply{})
 
 			// We try a bit hard (3 attempts with 1 second delay)
 			// to set creds on peers in case of failure.
 			if err != nil {
 				for i := 0; i < 2; i++ {
 					time.Sleep(1 * time.Second) // 1 second delay.
-					err = client.Call("Browser.SetAuthPeer", &args, &AuthRPCReply{})
+					err = client.Call("BrowserPeer.SetAuthPeer", &args, &AuthRPCReply{})
 					if err == nil {
 						break
 					}
