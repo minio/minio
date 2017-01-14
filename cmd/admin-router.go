@@ -33,8 +33,7 @@ func registerAdminRouter(mux *router.Router) {
 
 	// Service status
 	adminRouter.Methods("GET").Queries("service", "").Headers(minioAdminOpHeader, "status").HandlerFunc(adminAPI.ServiceStatusHandler)
-	// Service stop
-	adminRouter.Methods("POST").Queries("service", "").Headers(minioAdminOpHeader, "stop").HandlerFunc(adminAPI.ServiceStopHandler)
+
 	// Service restart
 	adminRouter.Methods("POST").Queries("service", "").Headers(minioAdminOpHeader, "restart").HandlerFunc(adminAPI.ServiceRestartHandler)
 

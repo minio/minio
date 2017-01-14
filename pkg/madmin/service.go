@@ -95,30 +95,6 @@ func (adm *AdminClient) ServiceStatus() (ServiceStatusMetadata, error) {
 	return storageInfo, nil
 }
 
-// ServiceStop - Call Service Stop Management API to stop a specified Minio server
-func (adm *AdminClient) ServiceStop() error {
-	//
-	reqData := requestData{}
-	reqData.queryValues = make(url.Values)
-	reqData.queryValues.Set("service", "")
-	reqData.customHeaders = make(http.Header)
-	reqData.customHeaders.Set(minioAdminOpHeader, "stop")
-
-	// Execute GET on bucket to list objects.
-	resp, err := adm.executeMethod("POST", reqData)
-
-	defer closeResponse(resp)
-	if err != nil {
-		return err
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return errors.New("Got HTTP Status: " + resp.Status)
-	}
-
-	return nil
-}
-
 // ServiceRestart - Call Service Restart API to restart a specified Minio server
 func (adm *AdminClient) ServiceRestart() error {
 	//

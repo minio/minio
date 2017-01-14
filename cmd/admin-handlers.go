@@ -50,24 +50,6 @@ func (adminAPI adminAPIHandlers) ServiceStatusHandler(w http.ResponseWriter, r *
 	writeSuccessResponseJSON(w, jsonBytes)
 }
 
-// ServiceStopHandler - POST /?service
-// HTTP header x-minio-operation: stop
-// ----------
-// Stops minio server gracefully. In a distributed setup, stops all the
-// servers in the cluster.
-func (adminAPI adminAPIHandlers) ServiceStopHandler(w http.ResponseWriter, r *http.Request) {
-	adminAPIErr := checkRequestAuthType(r, "", "", "")
-	if adminAPIErr != ErrNone {
-		writeErrorResponse(w, adminAPIErr, r.URL)
-		return
-	}
-
-	// Reply to the client before stopping minio server.
-	w.WriteHeader(http.StatusOK)
-
-	sendServiceCmd(globalAdminPeers, serviceStop)
-}
-
 // ServiceRestartHandler - POST /?service
 // HTTP header x-minio-operation: restart
 // ----------

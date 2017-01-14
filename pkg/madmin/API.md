@@ -39,7 +39,6 @@ func main() {
 | Service operations|LockInfo operations|Healing operations|
 |:---|:---|:---|
 |[`ServiceStatus`](#ServiceStatus)| | |
-|[`ServiceStop`](#ServiceStop)| | |
 |[`ServiceRestart`](#ServiceRestart)| | |
 
 ## 1. Constructor
@@ -95,23 +94,6 @@ Fetch service status, replies disk space used, backend type and total disks offl
 		log.Fatalln(err)
 	}
 	log.Printf("%#v\n", st)
-
- ```
-
-<a name="ServiceStop"></a>
-### ServiceStop() (error)
-If successful shuts down the running minio service, for distributed setup stops all remote minio servers.
-
- __Example__
-
- 
- ```go
-
-	st, err := madmClnt.ServiceStop()
-	if err != nil {
-		log.Fatalln(err)
-	}
-	log.Printf("Succes")
 
  ```
 
