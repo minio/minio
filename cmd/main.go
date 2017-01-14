@@ -190,13 +190,11 @@ func minioInit(ctx *cli.Context) {
 	enableLoggers()
 
 	// Fetch access keys from environment variables and update the config.
-	accessKey := os.Getenv("MINIO_ACCESS_KEY")
-	secretKey := os.Getenv("MINIO_SECRET_KEY")
-	if accessKey != "" && secretKey != "" {
+	if globalEnvAccessKey != "" && globalEnvSecretKey != "" {
 		// Set new credentials.
 		serverConfig.SetCredential(credential{
-			AccessKey: accessKey,
-			SecretKey: secretKey,
+			AccessKey: globalEnvAccessKey,
+			SecretKey: globalEnvSecretKey,
 		})
 	}
 	if !isAccessKeyValid(serverConfig.GetCredential().AccessKey) {

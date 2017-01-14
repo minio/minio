@@ -19,6 +19,8 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"encoding/xml"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -33,8 +35,8 @@ type cmdType int
 
 const (
 	statusCmd cmdType = iota
-	stopCmd
 	restartCmd
+	setCreds
 )
 
 // String - String representation for cmdType
@@ -42,10 +44,10 @@ func (c cmdType) String() string {
 	switch c {
 	case statusCmd:
 		return "status"
-	case stopCmd:
-		return "stop"
 	case restartCmd:
 		return "restart"
+	case setCreds:
+		return "set-credentials"
 	}
 	return ""
 }
@@ -57,6 +59,8 @@ func (c cmdType) apiMethod() string {
 	case statusCmd:
 		return "GET"
 	case restartCmd:
+		return "POST"
+	case setCreds:
 		return "POST"
 	}
 	return "GET"
@@ -86,15 +90,19 @@ func testServiceSignalReceiver(cmd cmdType, t *testing.T) {
 
 // getServiceCmdRequest - Constructs a management REST API request for service
 // subcommands for a given cmdType value.
-func getServiceCmdRequest(cmd cmdType, cred credential) (*http.Request, error) {
+func getServiceCmdRequest(cmd cmdType, cred credential, body []byte) (*http.Request, error) {
 	req, err := newTestRequest(cmd.apiMethod(), "/?service", 0, nil)
 	if err != nil {
 		return nil, err
 	}
 
+	// Set body
+	req.Body = ioutil.NopCloser(bytes.NewReader(body))
+
 	// minioAdminOpHeader is to identify the request as a
 	// management REST API request.
 	req.Header.Set(minioAdminOpHeader, cmd.String())
+	req.Header.Set("X-Amz-Content-Sha256", getSHA256Hash(body))
 
 	// management REST API uses signature V4 for authentication.
 	err = signRequestV4(req, cred.AccessKey, cred.SecretKey)
@@ -106,7 +114,7 @@ func getServiceCmdRequest(cmd cmdType, cred credential) (*http.Request, error) {
 
 // testServicesCmdHandler - parametrizes service subcommand tests on
 // cmdType value.
-func testServicesCmdHandler(cmd cmdType, t *testing.T) {
+func testServicesCmdHandler(cmd cmdType, args map[string]interface{}, t *testing.T) {
 	// reset globals.
 	// this is to make sure that the tests are not affected by modified value.
 	resetTestGlobals()
@@ -147,19 +155,25 @@ func testServicesCmdHandler(cmd cmdType, t *testing.T) {
 
 	// Setting up a go routine to simulate ServerMux's
 	// handleServiceSignals for stop and restart commands.
-	switch cmd {
-	case stopCmd, restartCmd:
+	if cmd == restartCmd {
 		go testServiceSignalReceiver(cmd, t)
 	}
 	credentials := serverConfig.GetCredential()
 	adminRouter := router.NewRouter()
 	registerAdminRouter(adminRouter)
 
-	rec := httptest.NewRecorder()
-	req, err := getServiceCmdRequest(cmd, credentials)
+	var body []byte
+
+	if cmd == setCreds {
+		body, _ = xml.Marshal(setCredsReq{Username: args["username"].(string), Password: args["password"].(string)})
+	}
+
+	req, err := getServiceCmdRequest(cmd, credentials, body)
 	if err != nil {
 		t.Fatalf("Failed to build service status request %v", err)
 	}
+
+	rec := httptest.NewRecorder()
 	adminRouter.ServeHTTP(rec, req)
 
 	if cmd == statusCmd {
@@ -173,20 +187,37 @@ func testServicesCmdHandler(cmd cmdType, t *testing.T) {
 		}
 	}
 
+	if cmd == setCreds {
+		// Check if new credentials are set
+		cred := serverConfig.GetCredential()
+		if cred.AccessKey != args["username"].(string) {
+			t.Errorf("Wrong access key, expected = %s, found = %s", args["username"].(string), cred.AccessKey)
+		}
+		if cred.SecretKey != args["password"].(string) {
+			t.Errorf("Wrong secret key, expected = %s, found = %s", args["password"].(string), cred.SecretKey)
+		}
+
+	}
+
 	if rec.Code != http.StatusOK {
-		t.Errorf("Expected to receive %d status code but received %d",
-			http.StatusOK, rec.Code)
+		resp, _ := ioutil.ReadAll(rec.Body)
+		t.Errorf("Expected to receive %d status code but received %d. Body (%s)",
+			http.StatusOK, rec.Code, string(resp))
 	}
 }
 
 // Test for service status management REST API.
 func TestServiceStatusHandler(t *testing.T) {
-	testServicesCmdHandler(statusCmd, t)
+	testServicesCmdHandler(statusCmd, nil, t)
 }
 
 // Test for service restart management REST API.
 func TestServiceRestartHandler(t *testing.T) {
-	testServicesCmdHandler(restartCmd, t)
+	testServicesCmdHandler(restartCmd, nil, t)
+}
+
+func TestServiceSetCreds(t *testing.T) {
+	testServicesCmdHandler(setCreds, map[string]interface{}{"username": "minio", "password": "minio123"}, t)
 }
 
 // mkLockQueryVal - helper function to build lock query param.

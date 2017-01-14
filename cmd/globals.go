@@ -101,6 +101,12 @@ var (
 	// Minio server user agent string.
 	globalServerUserAgent = "Minio/" + ReleaseTag + " (" + runtime.GOOS + "; " + runtime.GOARCH + ")"
 
+	// Access key passed from the environment
+	globalEnvAccessKey = os.Getenv("MINIO_ACCESS_KEY")
+
+	// Secret key passed from the environment
+	globalEnvSecretKey = os.Getenv("MINIO_SECRET_KEY")
+
 	// Add new variable global values here.
 )
 

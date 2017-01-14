@@ -17,7 +17,9 @@
 package madmin
 
 import (
+	"crypto/md5"
 	"crypto/sha256"
+	"encoding/xml"
 	"io"
 	"io/ioutil"
 	"net"
@@ -33,6 +35,19 @@ func sum256(data []byte) []byte {
 	hash := sha256.New()
 	hash.Write(data)
 	return hash.Sum(nil)
+}
+
+// sumMD5 calculate sumMD5 sum for an input byte array.
+func sumMD5(data []byte) []byte {
+	hash := md5.New()
+	hash.Write(data)
+	return hash.Sum(nil)
+}
+
+// xmlDecoder provide decoded value in xml.
+func xmlDecoder(body io.Reader, v interface{}) error {
+	d := xml.NewDecoder(body)
+	return d.Decode(v)
 }
 
 // getEndpointURL - construct a new endpoint.

@@ -140,6 +140,9 @@ const (
 	// Add new extended error codes here.
 	// Please open a https://github.com/minio/minio/issues before adding
 	// new error codes here.
+
+	ErrAdminInvalidAccessKey
+	ErrAdminInvalidSecretKey
 )
 
 // error code to APIError structure, these fields carry respective
@@ -574,6 +577,17 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "Server not initialized, please try again.",
 		HTTPStatusCode: http.StatusServiceUnavailable,
 	},
+	ErrAdminInvalidAccessKey: {
+		Code:           "XMinioAdminInvalidAccessKey",
+		Description:    "The access key is invalid.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrAdminInvalidSecretKey: {
+		Code:           "XMinioAdminInvalidSecretKey",
+		Description:    "The secret key is invalid.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+
 	// Add your error structure here.
 }
 

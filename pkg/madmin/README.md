@@ -106,6 +106,7 @@ go run service-status.go
 
 * [`ServiceStatus`](./API.md#ServiceStatus)
 * [`ServiceRestart`](./API.md#ServiceRestart)
+* [`ServiceSetCredentials`](./API.md#ServiceSetCredentials)
 
 ## Full Examples
 
@@ -113,6 +114,7 @@ go run service-status.go
 
 * [service-status.go](https://github.com/minio/minio/blob/master/pkg/madmin/examples/service-status.go)
 * [service-restart.go](https://github.com/minio/minio/blob/master/pkg/madmin/examples/service-restart.go)
+* [service-set-credentials.go](https://github.com/minio/minio/blob/master/pkg/madmin/examples/service-set-credentials.go)
 
 ## Contribute
 
