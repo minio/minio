@@ -23,7 +23,7 @@ _init() {
     fi
 
     # List of supported architectures
-    SUPPORTED_OSARCH='linux/386 linux/amd64 linux/arm windows/386 windows/amd64 darwin/amd64 freebsd/amd64'
+    SUPPORTED_OSARCH='linux/386 linux/amd64 linux/arm linux/arm64 windows/386 windows/amd64 darwin/amd64 freebsd/amd64'
 
     ## System binaries
     CP=`which cp`
@@ -47,18 +47,54 @@ go_build() {
     release_shasum="$release_str/$os-$arch/$(basename $package).shasum"
 
     # Go build to build the binary.
-    GOOS=$os GOARCH=$arch go build --ldflags "${LDFLAGS}" -o $release_bin
+    if [ "${arch}" == "arm" ]; then
+        # Release binary downloadable name
+        release_real_bin_6="$release_str/$os-${arch}6vl/$(basename $package)"
 
-    # Create copy
-    if [ $os == "windows" ]; then
-        $CP -p $release_bin ${release_real_bin}.exe
+        release_bin_6="$release_str/$os-${arch}6vl/$(basename $package).$release_tag"
+        ## Support building for ARM6vl
+        GOARM=6 GOOS=$os GOARCH=$arch go build --ldflags "${LDFLAGS}" -o $release_bin_6
+
+        ## Copy
+        $CP -p $release_bin_6 $release_real_bin_6
+
+        # Release shasum name
+        release_shasum_6="$release_str/$os-${arch}6vl/$(basename $package).shasum"
+
+        # Calculate shasum
+        shasum_str=$(${SHASUM} ${release_bin_6})
+        echo ${shasum_str} | $SED "s/$release_str\/$os-${arch}6vl\///g" > $release_shasum_6
+
+        # Release binary downloadable name
+        release_real_bin_7="$release_str/$os-$arch/$(basename $package)"
+
+        release_bin_7="$release_str/$os-$arch/$(basename $package).$release_tag"
+        ## Support building for ARM7vl
+        GOARM=7 GOOS=$os GOARCH=$arch go build --ldflags "${LDFLAGS}" -o $release_bin_7
+
+        ## Copy
+        $CP -p $release_bin_7 $release_real_bin_7
+
+        # Release shasum name
+        release_shasum_7="$release_str/$os-$arch/$(basename $package).shasum"
+
+        # Calculate shasum
+        shasum_str=$(${SHASUM} ${release_bin_7})
+        echo ${shasum_str} | $SED "s/$release_str\/$os-$arch\///g" > $release_shasum_7
     else
-        $CP -p $release_bin $release_real_bin
-    fi
+        GOOS=$os GOARCH=$arch go build --ldflags "${LDFLAGS}" -o $release_bin
 
-    # Calculate shasum
-    shasum_str=$(${SHASUM} ${release_bin})
-    echo ${shasum_str} | $SED "s/$release_str\/$os-$arch\///g" > $release_shasum
+        # Create copy
+        if [ $os == "windows" ]; then
+            $CP -p $release_bin ${release_real_bin}.exe
+        else
+            $CP -p $release_bin $release_real_bin
+        fi
+
+        # Calculate shasum
+        shasum_str=$(${SHASUM} ${release_bin})
+        echo ${shasum_str} | $SED "s/$release_str\/$os-$arch\///g" > $release_shasum
+    fi
 }
 
 main() {
