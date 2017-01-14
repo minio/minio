@@ -45,16 +45,6 @@ type ListLocksReply struct {
 	volLocks []VolumeLockInfo
 }
 
-// Shutdown - Shutdown this instance of minio server.
-func (s *adminCmd) Shutdown(args *AuthRPCArgs, reply *AuthRPCReply) error {
-	if err := args.IsAuthenticated(); err != nil {
-		return err
-	}
-
-	globalServiceSignalCh <- serviceStop
-	return nil
-}
-
 // Restart - Restart this instance of minio server.
 func (s *adminCmd) Restart(args *AuthRPCArgs, reply *AuthRPCReply) error {
 	if err := args.IsAuthenticated(); err != nil {

@@ -56,8 +56,6 @@ func (c cmdType) apiMethod() string {
 	switch c {
 	case statusCmd:
 		return "GET"
-	case stopCmd:
-		return "POST"
 	case restartCmd:
 		return "POST"
 	}
@@ -70,8 +68,6 @@ func (c cmdType) toServiceSignal() serviceSignal {
 	switch c {
 	case statusCmd:
 		return serviceStatus
-	case stopCmd:
-		return serviceStop
 	case restartCmd:
 		return serviceRestart
 	}
@@ -185,11 +181,6 @@ func testServicesCmdHandler(cmd cmdType, t *testing.T) {
 // Test for service status management REST API.
 func TestServiceStatusHandler(t *testing.T) {
 	testServicesCmdHandler(statusCmd, t)
-}
-
-// Test for service stop management REST API.
-func TestServiceStopHandler(t *testing.T) {
-	testServicesCmdHandler(stopCmd, t)
 }
 
 // Test for service restart management REST API.

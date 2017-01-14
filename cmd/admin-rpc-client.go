@@ -36,16 +36,8 @@ type remoteAdminClient struct {
 // adminCmdRunner - abstracts local and remote execution of admin
 // commands like service stop and service restart.
 type adminCmdRunner interface {
-	Stop() error
 	Restart() error
 	ListLocks(bucket, prefix string, relTime time.Duration) ([]VolumeLockInfo, error)
-}
-
-// Stop - Sends a message over channel to the go-routine responsible
-// for stopping the process.
-func (lc localAdminClient) Stop() error {
-	globalServiceSignalCh <- serviceStop
-	return nil
 }
 
 // Restart - Sends a message over channel to the go-routine
@@ -58,13 +50,6 @@ func (lc localAdminClient) Restart() error {
 // ListLocks - Fetches lock information from local lock instrumentation.
 func (lc localAdminClient) ListLocks(bucket, prefix string, relTime time.Duration) ([]VolumeLockInfo, error) {
 	return listLocksInfo(bucket, prefix, relTime), nil
-}
-
-// Stop - Sends stop command to remote server via RPC.
-func (rc remoteAdminClient) Stop() error {
-	args := AuthRPCArgs{}
-	reply := AuthRPCReply{}
-	return rc.Call("Admin.Shutdown", &args, &reply)
 }
 
 // Restart - Sends restart command to remote server via RPC.
@@ -88,7 +73,7 @@ func (rc remoteAdminClient) ListLocks(bucket, prefix string, relTime time.Durati
 	return reply.volLocks, nil
 }
 
-// adminPeer - represents an entity that implements Stop and Restart methods.
+// adminPeer - represents an entity that implements Restart methods.
 type adminPeer struct {
 	addr      string
 	cmdRunner adminCmdRunner
@@ -146,18 +131,16 @@ func initGlobalAdminPeers(eps []*url.URL) {
 	globalAdminPeers = makeAdminPeers(eps)
 }
 
-// invokeServiceCmd - Invoke Stop/Restart command.
+// invokeServiceCmd - Invoke Restart command.
 func invokeServiceCmd(cp adminPeer, cmd serviceSignal) (err error) {
 	switch cmd {
-	case serviceStop:
-		err = cp.cmdRunner.Stop()
 	case serviceRestart:
 		err = cp.cmdRunner.Restart()
 	}
 	return err
 }
 
-// sendServiceCmd - Invoke Stop/Restart command on remote peers
+// sendServiceCmd - Invoke Restart command on remote peers
 // adminPeer followed by on the local peer.
 func sendServiceCmd(cps adminPeers, cmd serviceSignal) {
 	// Send service command like stop or restart to all remote nodes and finally run on local node.

@@ -105,7 +105,6 @@ go run service-status.go
 ### API Reference : Service Operations
 
 * [`ServiceStatus`](./API.md#ServiceStatus)
-* [`ServiceStop`](./API.md#ServiceStop)
 * [`ServiceRestart`](./API.md#ServiceRestart)
 
 ## Full Examples
@@ -113,7 +112,6 @@ go run service-status.go
 #### Full Examples : Service Operations
 
 * [service-status.go](https://github.com/minio/minio/blob/master/pkg/madmin/examples/service-status.go)
-* [service-stop.go](https://github.com/minio/minio/blob/master/pkg/madmin/examples/service-stop.go)
 * [service-restart.go](https://github.com/minio/minio/blob/master/pkg/madmin/examples/service-restart.go)
 
 ## Contribute

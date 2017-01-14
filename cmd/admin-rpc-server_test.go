@@ -47,26 +47,18 @@ func testAdminCmd(cmd cmdType, t *testing.T) {
 	}
 
 	go func() {
-		// mocking signal receiver
+		// A test signal receiver
 		<-globalServiceSignalCh
 	}()
 
 	ga := AuthRPCArgs{AuthToken: reply.AuthToken, RequestTime: time.Now().UTC()}
 	genReply := AuthRPCReply{}
 	switch cmd {
-	case stopCmd:
-		if err = adminServer.Shutdown(&ga, &genReply); err != nil {
-			t.Errorf("stopCmd: Expected: <nil>, got: %v", err)
-		}
 	case restartCmd:
 		if err = adminServer.Restart(&ga, &genReply); err != nil {
 			t.Errorf("restartCmd: Expected: <nil>, got: %v", err)
 		}
 	}
-}
-
-func TestAdminShutdown(t *testing.T) {
-	testAdminCmd(stopCmd, t)
 }
 
 func TestAdminRestart(t *testing.T) {
