@@ -1,4 +1,4 @@
-# Minio Admin Library. [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/Minio/minio?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+# Minio Admin Library. [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
 The Minio Admin Golang Client SDK provides APIs to manage Minio services.
 
 This quickstart guide will show you how to install the Minio Admin client SDK, connect to Minio admin service, and provide a walkthrough of a simple file uploader. 

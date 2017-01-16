@@ -1,4 +1,4 @@
-# Minio Erasure Code Quickstart Guide [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/minio/minio?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+# Minio Erasure Code Quickstart Guide [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
 
 Minio protects data against hardware failures and silent data corruption using erasure code and checksums. You may lose  half the number (N/2) of drives and still be able to recover the data.
 
