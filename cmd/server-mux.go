@@ -151,6 +151,15 @@ type ListenerMuxAcceptRes struct {
 	err  error
 }
 
+// Default keep alive interval timeout, on your Linux system to figure out
+// maximum probes sent
+//
+// $ cat /proc/sys/net/ipv4/tcp_keepalive_probes
+// 9
+//
+// Effective value of total keep alive comes upto 9 x 3 * time.Minute = 27 Minutes.
+var defaultKeepAliveTimeout = 3 * time.Minute // 3 minutes.
+
 // newListenerMux listens and wraps accepted connections with tls after protocol peeking
 func newListenerMux(listener net.Listener, config *tls.Config) *ListenerMux {
 	l := ListenerMux{
@@ -163,11 +172,24 @@ func newListenerMux(listener net.Listener, config *tls.Config) *ListenerMux {
 	go func() {
 		// Loop for accepting new connections
 		for {
-			conn, err := l.Listener.Accept()
+			// Extract tcp listener.
+			tcpListener, ok := l.Listener.(*net.TCPListener)
+			if !ok {
+				l.acceptResCh <- ListenerMuxAcceptRes{err: errInvalidArgument}
+				return
+			}
+
+			// Use accept TCP method to receive the connection.
+			conn, err := tcpListener.AcceptTCP()
 			if err != nil {
 				l.acceptResCh <- ListenerMuxAcceptRes{err: err}
 				return
 			}
+
+			// Enable keep alive for each connection.
+			conn.SetKeepAlive(true)
+			conn.SetKeepAlivePeriod(defaultKeepAliveTimeout)
+
 			// Wrap the connection with ConnMux to be able to peek the data in the incoming connection
 			// and decide if we need to wrap the connection itself with a TLS or not
 			go func(conn net.Conn) {
