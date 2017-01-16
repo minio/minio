@@ -165,11 +165,11 @@ func checkUpdate() {
 
 // Generic Minio initialization to create/load config, prepare loggers, etc..
 func minioInit(ctx *cli.Context) {
-	// Sets new config directory.
-	setGlobalConfigPath(globalConfigDir)
-
 	// Set global variables after parsing passed arguments
 	setGlobalsFromContext(ctx)
+
+	// Sets new config directory.
+	setGlobalConfigPath(globalConfigDir)
 
 	// Is TLS configured?.
 	globalIsSSL = isSSL()
