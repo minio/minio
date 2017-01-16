@@ -129,9 +129,7 @@ func setGlobalsFromContext(c *cli.Context) {
 	if globalConfigDir == "" {
 		console.Fatalf("Unable to get config file. Config directory is empty.")
 	}
+
 	// Set global quiet flag.
 	globalQuiet = c.Bool("quiet") || c.GlobalBool("quiet")
-
-	// Is TLS configured?.
-	globalIsSSL = isSSL()
 }
