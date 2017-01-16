@@ -48,6 +48,19 @@ var fsTreeWalkIgnoredErrs = []error{
 	errVolumeNotFound,
 }
 
+// policy.json and notification.xml allowed only in .minio.sys
+func IsValidObjectNameFS(bucket, object string) bool {
+	var reservedObjectNames = map[string]bool{
+		"policy.json":      true,
+		"notification.xml": true,
+	}
+
+	if bucket != minioMetaBucket && reservedObjectNames[object] {
+		return false
+	}
+	return true
+}
+
 // newFSObjects - initialize new fs object layer.
 func newFSObjects(storage StorageAPI) (ObjectLayer, error) {
 	if storage == nil {
@@ -379,6 +392,12 @@ func (fs fsObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (objInfo ObjectInfo, err error) {
 	if err = checkPutObjectArgs(bucket, object, fs); err != nil {
 		return ObjectInfo{}, err
+	}
+	if !IsValidObjectNameFS(bucket, object) {
+		return ObjectInfo{}, traceError(ObjectNameInvalid{
+			Bucket: bucket,
+			Object: object,
+		})
 	}
 	// No metadata is set, allocate a new one.
 	if metadata == nil {
