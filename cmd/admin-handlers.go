@@ -18,6 +18,8 @@ package cmd
 
 import (
 	"encoding/json"
+	"encoding/xml"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -82,6 +84,76 @@ func (adminAPI adminAPIHandlers) ServiceRestartHandler(w http.ResponseWriter, r 
 	writeSuccessResponseHeadersOnly(w)
 
 	sendServiceCmd(globalAdminPeers, serviceRestart)
+}
+
+// setCredsReq request
+type setCredsReq struct {
+	Username string `xml:"username"`
+	Password string `xml:"password"`
+}
+
+// ServiceCredsHandler - POST /?service
+// HTTP header x-minio-operation: creds
+// ----------
+// Update credentials in a minio server. In a distributed setup, update all the servers
+// in the cluster.
+func (adminAPI adminAPIHandlers) ServiceCredentialsHandler(w http.ResponseWriter, r *http.Request) {
+	// Authenticate request
+	adminAPIErr := checkRequestAuthType(r, "", "", "")
+	if adminAPIErr != ErrNone {
+		writeErrorResponse(w, adminAPIErr, r.URL)
+		return
+	}
+
+	// Avoid setting new credentials when they are already passed
+	// by the environnement
+	if globalEnvAccessKey != "" || globalEnvSecretKey != "" {
+		writeErrorResponse(w, ErrMethodNotAllowed, r.URL)
+		return
+	}
+
+	// Load request body
+	inputData, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		writeErrorResponse(w, ErrInternalError, r.URL)
+		return
+	}
+
+	// Unmarshal request body
+	var req setCredsReq
+	err = xml.Unmarshal(inputData, &req)
+	if err != nil {
+		errorIf(err, "Cannot unmarshal credentials request")
+		writeErrorResponse(w, ErrMalformedXML, r.URL)
+		return
+	}
+
+	// Check passed credentials
+	cred, err := getCredential(req.Username, req.Password)
+	switch err {
+	case errInvalidAccessKeyLength:
+		writeErrorResponse(w, ErrAdminInvalidAccessKey, r.URL)
+		return
+	case errInvalidSecretKeyLength:
+		writeErrorResponse(w, ErrAdminInvalidSecretKey, r.URL)
+		return
+	}
+
+	// Notify all other Minio peers to update credentials
+	updateErrs := updateCredsOnPeers(cred)
+	for peer, err := range updateErrs {
+		errorIf(err, "Unable to update credentials on peer %s.", peer)
+	}
+
+	// Update local credentials
+	serverConfig.SetCredential(cred)
+	if err = serverConfig.Save(); err != nil {
+		writeErrorResponse(w, ErrInternalError, r.URL)
+		return
+	}
+
+	// At this stage, the operation is successful, return 200 OK
+	w.WriteHeader(http.StatusOK)
 }
 
 // validateLockQueryParams - Validates query params for list/clear locks management APIs.

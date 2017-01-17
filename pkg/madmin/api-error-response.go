@@ -16,7 +16,10 @@
 
 package madmin
 
-import "encoding/xml"
+import (
+	"encoding/xml"
+	"net/http"
+)
 
 /* **** SAMPLE ERROR RESPONSE ****
 <?xml version="1.0" encoding="UTF-8"?>
@@ -48,6 +51,29 @@ type ErrorResponse struct {
 // Error - Returns HTTP error string
 func (e ErrorResponse) Error() string {
 	return e.Message
+}
+
+const (
+	reportIssue = "Please report this issue at https://github.com/minio/minio-go/issues."
+)
+
+// httpRespToErrorResponse returns a new encoded ErrorResponse
+// structure as error.
+func httpRespToErrorResponse(resp *http.Response) error {
+	if resp == nil {
+		msg := "Response is empty. " + reportIssue
+		return ErrInvalidArgument(msg)
+	}
+	var errResp ErrorResponse
+	// Decode the xml error
+	err := xmlDecoder(resp.Body, &errResp)
+	if err != nil {
+		return ErrorResponse{
+			Code:    resp.Status,
+			Message: "Failed to parse server response.",
+		}
+	}
+	return errResp
 }
 
 // ErrInvalidArgument - Invalid argument response.

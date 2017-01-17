@@ -6,9 +6,9 @@
 
 ## List of management APIs
 - Service
-  - Stop
   - Restart
   - Status
+  - SetCredentials
 
 - Locks
   - List
@@ -17,11 +17,6 @@
 - Healing
 
 ### Service Management APIs
-* Stop
-  - POST /?service
-  - x-minio-operation: stop
-  - Response: On success 200
-
 * Restart
   - POST /?service
   - x-minio-operation: restart
@@ -31,6 +26,43 @@
   - GET /?service
   - x-minio-operation: status
   - Response: On success 200, return json formatted StorageInfo object.
+
+* SetCredentials
+  - GET /?service
+  - x-minio-operation: set-credentials
+  - Response: Success 200
+  - Possible error responses
+    - ErrMethodNotAllowed
+    <Error>
+        <Code>MethodNotAllowed</Code>
+        <Message>The specified method is not allowed against this resource.</Message>
+        <Key></Key>
+        <BucketName></BucketName>
+        <Resource>/</Resource>
+        <RequestId>3L137</RequestId>
+        <HostId>3L137</HostId>
+    </Error>
+    - ErrAdminBadCred
+    <Error>
+        <Code>XMinioBadCred</Code>
+        <Message>XMinioBadCred</Message>
+        <Key></Key>
+        <BucketName></BucketName>
+        <Resource>/</Resource>
+        <RequestId>3L137</RequestId>
+        <HostId>3L137</HostId>
+    </Error>
+    - ErrInternalError
+    <Error>
+        <Code>InternalError</Code>
+        <Message>We encountered an internal error, please try again.</Message>
+        <Key></Key>
+        <BucketName></BucketName>
+        <Resource>/</Resource>
+        <RequestId>3L137</RequestId>
+        <HostId>3L137</HostId>
+    </Error>
+
 
 ### Lock Management APIs
 * ListLocks
