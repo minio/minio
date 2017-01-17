@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@ import (
 // Test InitEventNotifier with faulty disks
 func TestInitEventNotifierFaultyDisks(t *testing.T) {
 	// Prepare for tests
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
@@ -85,7 +85,7 @@ func TestInitEventNotifierFaultyDisks(t *testing.T) {
 func TestInitEventNotifierWithPostgreSQL(t *testing.T) {
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
@@ -116,7 +116,7 @@ func TestInitEventNotifierWithPostgreSQL(t *testing.T) {
 func TestInitEventNotifierWithNATS(t *testing.T) {
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
@@ -147,7 +147,7 @@ func TestInitEventNotifierWithNATS(t *testing.T) {
 func TestInitEventNotifierWithWebHook(t *testing.T) {
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
@@ -178,7 +178,7 @@ func TestInitEventNotifierWithWebHook(t *testing.T) {
 func TestInitEventNotifierWithAMQP(t *testing.T) {
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
@@ -209,7 +209,7 @@ func TestInitEventNotifierWithAMQP(t *testing.T) {
 func TestInitEventNotifierWithElasticSearch(t *testing.T) {
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
@@ -240,7 +240,7 @@ func TestInitEventNotifierWithElasticSearch(t *testing.T) {
 func TestInitEventNotifierWithRedis(t *testing.T) {
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
@@ -346,7 +346,7 @@ func TestInitEventNotifier(t *testing.T) {
 	filterRules := []filterRule{
 		{
 			Name:  "prefix",
-			Value: "minio",
+			Value: globalMinioDefaultOwnerID,
 		},
 		{
 			Name:  "suffix",
@@ -569,7 +569,7 @@ func TestAddRemoveBucketListenerConfig(t *testing.T) {
 	filterRules := []filterRule{
 		{
 			Name:  "prefix",
-			Value: "minio",
+			Value: globalMinioDefaultOwnerID,
 		},
 		{
 			Name:  "suffix",

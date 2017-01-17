@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -110,7 +110,7 @@ func prepareXL() (ObjectLayer, []string, error) {
 
 // Initialize FS objects.
 func initFSObjects(disk string, t *testing.T) (obj ObjectLayer) {
-	newTestConfig("us-east-1")
+	newTestConfig(globalMinioDefaultRegion)
 	var err error
 	obj, err = newFSObjectLayer(disk)
 	if err != nil {
@@ -203,7 +203,7 @@ func UnstartedTestServer(t TestErrHandler, instanceType string) TestServer {
 		t.Fatal("Failed to create disks for the backend")
 	}
 
-	root, err := newTestConfig("us-east-1")
+	root, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("%s", err)
 	}
@@ -367,7 +367,7 @@ func StartTestStorageRPCServer(t TestErrHandler, instanceType string, diskN int)
 		t.Fatalf("%s", err)
 	}
 
-	root, err := newTestConfig("us-east-1")
+	root, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("%s", err)
 	}
@@ -402,7 +402,7 @@ func StartTestPeersRPCServer(t TestErrHandler, instanceType string) TestServer {
 		t.Fatalf("%s", err)
 	}
 
-	root, err := newTestConfig("us-east-1")
+	root, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("%s", err)
 	}
@@ -691,7 +691,7 @@ func signStreamingRequest(req *http.Request, accessKey, secretKey string, currTi
 	// Get scope.
 	scope := strings.Join([]string{
 		currTime.Format(yyyymmdd),
-		"us-east-1",
+		globalMinioDefaultRegion,
 		"s3",
 		"aws4_request",
 	}, "/")
@@ -701,7 +701,7 @@ func signStreamingRequest(req *http.Request, accessKey, secretKey string, currTi
 	stringToSign = stringToSign + getSHA256Hash([]byte(canonicalRequest))
 
 	date := sumHMAC([]byte("AWS4"+secretKey), []byte(currTime.Format(yyyymmdd)))
-	region := sumHMAC(date, []byte("us-east-1"))
+	region := sumHMAC(date, []byte(globalMinioDefaultRegion))
 	service := sumHMAC(region, []byte("s3"))
 	signingKey := sumHMAC(service, []byte("aws4_request"))
 
@@ -1919,7 +1919,7 @@ func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endpoints [
 	initNSLock(false)
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Unable to initialize server config. %s", err)
 	}
@@ -1964,7 +1964,7 @@ type objTestDiskNotFoundType func(obj ObjectLayer, instanceType string, dirs []s
 func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatal("Unexpected error", err)
 	}
@@ -1989,7 +1989,7 @@ func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 // ExecObjectLayerDiskAlteredTest - executes object layer tests while altering
 // disks in between tests. Creates XL ObjectLayer instance and runs test for XL layer.
 func ExecObjectLayerDiskAlteredTest(t *testing.T, objTest objTestDiskNotFoundType) {
-	configPath, err := newTestConfig("us-east-1")
+	configPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatal("Failed to create config directory", err)
 	}
@@ -2010,7 +2010,7 @@ type objTestStaleFilesType func(obj ObjectLayer, instanceType string, dirs []str
 // ExecObjectLayerStaleFilesTest - executes object layer tests those leaves stale
 // files/directories under .minio/tmp.  Creates XL ObjectLayer instance and runs test for XL layer.
 func ExecObjectLayerStaleFilesTest(t *testing.T, objTest objTestStaleFilesType) {
-	configPath, err := newTestConfig("us-east-1")
+	configPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatal("Failed to create config directory", err)
 	}
@@ -2169,7 +2169,7 @@ func initTestBrowserPeerRPCEndPoint() http.Handler {
 }
 
 func StartTestBrowserPeerRPCServer(t TestErrHandler, instanceType string) TestServer {
-	root, err := newTestConfig("us-east-1")
+	root, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("%s", err)
 	}
@@ -2190,7 +2190,7 @@ func StartTestBrowserPeerRPCServer(t TestErrHandler, instanceType string) TestSe
 }
 
 func StartTestS3PeerRPCServer(t TestErrHandler) (TestServer, []string) {
-	root, err := newTestConfig("us-east-1")
+	root, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("%s", err)
 	}

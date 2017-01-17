@@ -675,15 +675,11 @@ func getAPIError(code APIErrorCode) APIError {
 // getErrorResponse gets in standard error and resource value and
 // provides a encodable populated response values
 func getAPIErrorResponse(err APIError, resource string) APIErrorResponse {
-	var data = APIErrorResponse{}
-	data.Code = err.Code
-	data.Message = err.Description
-	if resource != "" {
-		data.Resource = resource
+	return APIErrorResponse{
+		Code:      err.Code,
+		Message:   err.Description,
+		Resource:  resource,
+		RequestID: "3L137",
+		HostID:    "3L137",
 	}
-	// TODO implement this in future
-	data.RequestID = "3L137"
-	data.HostID = "3L137"
-
-	return data
 }

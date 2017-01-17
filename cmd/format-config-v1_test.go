@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -812,7 +812,7 @@ func TestLoadFormatXLErrs(t *testing.T) {
 
 // Tests for healFormatXLCorruptedDisks() with cases which lead to errors
 func TestHealFormatXLCorruptedDisksErrs(t *testing.T) {
-	root, err := newTestConfig("us-east-1")
+	root, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -968,7 +968,7 @@ func TestHealFormatXLCorruptedDisksErrs(t *testing.T) {
 
 // Tests for healFormatXLFreshDisks() with cases which lead to errors
 func TestHealFormatXLFreshDisksErrs(t *testing.T) {
-	root, err := newTestConfig("us-east-1")
+	root, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatal(err)
 	}

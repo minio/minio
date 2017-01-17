@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,9 +39,9 @@ func isValidLocationConstraint(r *http.Request) (s3Error APIErrorCode) {
 		// Once region has been obtained we proceed to verify it.
 		incomingRegion := locationConstraint.Location
 		if incomingRegion == "" {
-			// Location constraint is empty for region "us-east-1",
+			// Location constraint is empty for region globalMinioDefaultRegion,
 			// in accordance with protocol.
-			incomingRegion = "us-east-1"
+			incomingRegion = globalMinioDefaultRegion
 		}
 		// Return errInvalidRegion if location constraint does not match
 		// with configured region.

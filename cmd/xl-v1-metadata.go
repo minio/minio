@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,6 +54,14 @@ type checkSumInfo struct {
 	Hash      string `json:"hash"`
 }
 
+// Various algorithms supported by bit-rot protection feature.
+const (
+	// "sha256" is specifically used on arm64 bit platforms.
+	sha256Algo = "sha256"
+	// Rest of the platforms default to blake2b.
+	blake2bAlgo = "blake2b"
+)
+
 // Constant indicates current bit-rot algo used when creating objects.
 // Depending on the architecture we are choosing a different checksum.
 var bitRotAlgo = getDefaultBitRotAlgo()
@@ -71,10 +79,10 @@ func getDefaultBitRotAlgo() string {
 		// This would also allows erasure coded writes
 		// on ARM64 servers to be on-par with their
 		// counter-part X86_64 servers.
-		return "sha256"
+		return sha256Algo
 	default:
 		// Default for all other architectures we use blake2b.
-		return "blake2b"
+		return blake2bAlgo
 	}
 }
 
@@ -135,11 +143,22 @@ type xlMetaV1 struct {
 	Parts []objectPartInfo `json:"parts,omitempty"`
 }
 
+// XL metadata constants.
+const (
+	// XL meta version.
+	xlMetaVersion = "1.0.0"
+
+	// XL meta format string.
+	xlMetaFormat = "xl"
+
+	// Add new constants here.
+)
+
 // newXLMetaV1 - initializes new xlMetaV1, adds version, allocates a fresh erasure info.
 func newXLMetaV1(object string, dataBlocks, parityBlocks int) (xlMeta xlMetaV1) {
 	xlMeta = xlMetaV1{}
-	xlMeta.Version = "1.0.0"
-	xlMeta.Format = "xl"
+	xlMeta.Version = xlMetaVersion
+	xlMeta.Format = xlMetaFormat
 	xlMeta.Minio.Release = ReleaseTag
 	xlMeta.Erasure = erasureInfo{
 		Algorithm:    erasureAlgorithmKlauspost,
@@ -154,7 +173,7 @@ func newXLMetaV1(object string, dataBlocks, parityBlocks int) (xlMeta xlMetaV1) 
 // IsValid - tells if the format is sane by validating the version
 // string and format style.
 func (m xlMetaV1) IsValid() bool {
-	return m.Version == "1.0.0" && m.Format == "xl"
+	return m.Version == xlMetaVersion && m.Format == xlMetaFormat
 }
 
 // objectPartIndex - returns the index of matching object part number.

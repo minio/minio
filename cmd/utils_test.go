@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -275,7 +275,7 @@ func TestStartProfiler(t *testing.T) {
 
 // Tests fetch local address.
 func TestLocalAddress(t *testing.T) {
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == globalWindowsOSName {
 		return
 	}
 
@@ -297,19 +297,19 @@ func TestLocalAddress(t *testing.T) {
 			isDistXL: true,
 			srvCmdConfig: serverCmdConfig{
 				endpoints: []*url.URL{{
-					Scheme: "http",
+					Scheme: httpScheme,
 					Host:   "localhost:9000",
 					Path:   "/mnt/disk1",
 				}, {
-					Scheme: "http",
+					Scheme: httpScheme,
 					Host:   "1.1.1.2:9000",
 					Path:   "/mnt/disk2",
 				}, {
-					Scheme: "http",
+					Scheme: httpScheme,
 					Host:   "1.1.2.1:9000",
 					Path:   "/mnt/disk3",
 				}, {
-					Scheme: "http",
+					Scheme: httpScheme,
 					Host:   "1.1.2.2:9000",
 					Path:   "/mnt/disk4",
 				}},
@@ -338,19 +338,19 @@ func TestLocalAddress(t *testing.T) {
 			isDistXL: true,
 			srvCmdConfig: serverCmdConfig{
 				endpoints: []*url.URL{{
-					Scheme: "http",
+					Scheme: httpScheme,
 					Host:   "1.1.1.1:9000",
 					Path:   "/mnt/disk2",
 				}, {
-					Scheme: "http",
+					Scheme: httpScheme,
 					Host:   "1.1.1.2:9000",
 					Path:   "/mnt/disk2",
 				}, {
-					Scheme: "http",
+					Scheme: httpScheme,
 					Host:   "1.1.2.1:9000",
 					Path:   "/mnt/disk3",
 				}, {
-					Scheme: "http",
+					Scheme: httpScheme,
 					Host:   "1.1.2.2:9000",
 					Path:   "/mnt/disk4",
 				}},

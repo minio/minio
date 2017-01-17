@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,7 +34,7 @@ func TestSysErrors(t *testing.T) {
 	if !ok {
 		t.Fatalf("Unexpected error expecting %s", syscall.ENOTDIR)
 	}
-	if runtime.GOOS != "windows" {
+	if runtime.GOOS != globalWindowsOSName {
 		pathErr = &os.PathError{Err: syscall.ENOTEMPTY}
 		ok = isSysErrNotEmpty(pathErr)
 		if !ok {
@@ -47,7 +47,7 @@ func TestSysErrors(t *testing.T) {
 			t.Fatal("Unexpected error expecting 0x91")
 		}
 	}
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == globalWindowsOSName {
 		pathErr = &os.PathError{Err: syscall.Errno(0x03)}
 		ok = isSysErrPathNotFound(pathErr)
 		if !ok {

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,7 +51,7 @@ func (fs fsObjects) deleteUploadsJSON(bucket, object, uploadID string) error {
 	uploadsMetaPath := pathJoin(uploadPath, uploadsJSONFile)
 
 	// Special case for windows please read through.
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == globalWindowsOSName {
 		// Ordinarily windows does not permit deletion or renaming of files still
 		// in use, but if all open handles to that file were opened with FILE_SHARE_DELETE
 		// then it can permit renames and deletions of open files.

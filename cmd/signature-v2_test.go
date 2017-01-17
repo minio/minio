@@ -24,7 +24,7 @@ func TestResourceListSorting(t *testing.T) {
 
 // Tests presigned v2 signature.
 func TestDoesPresignedV2SignatureMatch(t *testing.T) {
-	root, err := newTestConfig("us-east-1")
+	root, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatal("Unable to initialize test config.")
 	}

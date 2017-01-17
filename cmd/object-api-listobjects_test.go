@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015-2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015-2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -588,7 +588,7 @@ func BenchmarkListObjects(b *testing.B) {
 	}
 	defer removeAll(directory)
 	// initialize the root directory.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		b.Fatalf("Unable to initialize config. %s", err)
 	}

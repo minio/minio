@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1061,7 +1061,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 		{
 			MaxUploads:     10,
 			IsTruncated:    false,
-			Prefix:         "minio",
+			Prefix:         globalMinioDefaultOwnerID,
 			UploadIDMarker: uploadIDs[4],
 			Uploads: []uploadMetadata{
 				{
@@ -1201,7 +1201,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 		//	Test case with `prefix` and `KeyMarker` (Test number 48).
 		{bucketNames[2], "minio-object", objectNames[1], "", "", 10, listMultipartResults[34], nil, true},
 		//	Test case with `prefix` and `uploadIDMarker` (Test number 49).
-		// {bucketNames[2], "minio", "", uploadIDs[4], "", 10, listMultipartResults[35], nil, true},
+		// {bucketNames[2], globalMinioDefaultOwnerID, "", uploadIDs[4], "", 10, listMultipartResults[35], nil, true},
 		//	Test case with `KeyMarker` and `uploadIDMarker` (Test number 50).
 		// {bucketNames[2], "minio-object.txt", "", uploadIDs[5], "", 10, listMultipartResults[36], nil, true},
 	}

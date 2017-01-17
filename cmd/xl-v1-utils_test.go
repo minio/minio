@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -131,9 +131,9 @@ func TestHashOrder(t *testing.T) {
 // newTestXLMetaV1 - initializes new xlMetaV1, adds version, allocates a fresh erasure info and metadata.
 func newTestXLMetaV1() xlMetaV1 {
 	xlMeta := xlMetaV1{}
-	xlMeta.Version = "1.0.0"
-	xlMeta.Format = "xl"
-	xlMeta.Minio.Release = "1.0.0"
+	xlMeta.Version = xlMetaVersion
+	xlMeta.Format = xlMetaFormat
+	xlMeta.Minio.Release = "test"
 	xlMeta.Erasure = erasureInfo{
 		Algorithm:    "klauspost/reedsolomon/vandermonde",
 		DataBlocks:   5,

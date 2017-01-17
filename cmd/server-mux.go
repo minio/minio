@@ -71,6 +71,12 @@ func NewConnMux(c net.Conn) *ConnMux {
 	}
 }
 
+const (
+	protocolTLS   = "tls"
+	protocolHTTP1 = "http"
+	protocolHTTP2 = "http2"
+)
+
 // PeekProtocol - reads the first bytes, then checks if it is similar
 // to one of the default http methods
 func (c *ConnMux) PeekProtocol() string {
@@ -79,19 +85,19 @@ func (c *ConnMux) PeekProtocol() string {
 		if err != io.EOF {
 			errorIf(err, "Unable to peek into the protocol")
 		}
-		return "http"
+		return protocolHTTP1
 	}
 	for _, m := range defaultHTTP1Methods {
 		if strings.HasPrefix(string(buf), m) {
-			return "http"
+			return protocolHTTP1
 		}
 	}
 	for _, m := range defaultHTTP2Methods {
 		if strings.HasPrefix(string(buf), m) {
-			return "http2"
+			return protocolHTTP2
 		}
 	}
-	return "tls"
+	return protocolTLS
 }
 
 // Read - streams the ConnMux buffer when reset flag is activated, otherwise
@@ -194,10 +200,14 @@ func newListenerMux(listener net.Listener, config *tls.Config) *ListenerMux {
 			// and decide if we need to wrap the connection itself with a TLS or not
 			go func(conn net.Conn) {
 				connMux := NewConnMux(conn)
-				if connMux.PeekProtocol() == "tls" {
-					l.acceptResCh <- ListenerMuxAcceptRes{conn: tls.Server(connMux, l.config)}
+				if connMux.PeekProtocol() == protocolTLS {
+					l.acceptResCh <- ListenerMuxAcceptRes{
+						conn: tls.Server(connMux, l.config),
+					}
 				} else {
-					l.acceptResCh <- ListenerMuxAcceptRes{conn: connMux}
+					l.acceptResCh <- ListenerMuxAcceptRes{
+						conn: connMux,
+					}
 				}
 			}(conn)
 		}
@@ -367,7 +377,7 @@ func (m *ServerMux) ListenAndServe(certFile, keyFile string) (err error) {
 		if tlsEnabled && r.TLS == nil {
 			// TLS is enabled but Request is not TLS configured
 			u := url.URL{
-				Scheme:   "https",
+				Scheme:   httpsScheme,
 				Opaque:   r.URL.Opaque,
 				User:     r.URL.User,
 				Host:     r.Host,

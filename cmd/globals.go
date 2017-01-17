@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,6 +45,11 @@ const (
 	globalMinioKeyFile            = "private.key"
 	globalMinioConfigFile         = "config.json"
 	globalMinioCertExpireWarnDays = time.Hour * 24 * 30 // 30 days.
+
+	globalMinioDefaultRegion       = "us-east-1"
+	globalMinioDefaultOwnerID      = "minio"
+	globalMinioDefaultStorageClass = "STANDARD"
+	globalWindowsOSName            = "windows"
 	// Add new global values here.
 )
 
@@ -118,10 +123,8 @@ var (
 
 // global colors.
 var (
-	colorRed   = color.New(color.FgRed).SprintFunc()
-	colorBold  = color.New(color.Bold).SprintFunc()
-	colorBlue  = color.New(color.FgBlue).SprintfFunc()
-	colorGreen = color.New(color.FgGreen).SprintfFunc()
+	colorBold = color.New(color.Bold).SprintFunc()
+	colorBlue = color.New(color.FgBlue).SprintfFunc()
 )
 
 // Parse command arguments and set global variables accordingly

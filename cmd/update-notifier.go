@@ -66,7 +66,7 @@ func colorizeUpdateMessage(updateString string, newerThan time.Duration) string 
 	default:
 		// on windows terminal turn off unicode characters.
 		var top, bottom, sideBar string
-		if runtime.GOOS == "windows" {
+		if runtime.GOOS == globalWindowsOSName {
 			top = yellow("*" + strings.Repeat("*", maxContentWidth) + "*")
 			bottom = yellow("*" + strings.Repeat("*", maxContentWidth) + "*")
 			sideBar = yellow("|")

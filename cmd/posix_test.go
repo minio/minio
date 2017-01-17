@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -286,7 +286,7 @@ func TestPosixMakeVol(t *testing.T) {
 	}
 
 	// TestPosix for permission denied.
-	if runtime.GOOS != "windows" {
+	if runtime.GOOS != globalWindowsOSName {
 		// Initialize posix storage layer for permission denied error.
 		posix, err := newPosix("/usr")
 		if err != nil {
@@ -377,7 +377,7 @@ func TestPosixDeleteVol(t *testing.T) {
 	}
 
 	// TestPosix for permission denied.
-	if runtime.GOOS != "windows" {
+	if runtime.GOOS != globalWindowsOSName {
 		// Initialize posix storage layer for permission denied error.
 		posixStorage, err = newPosix("/usr")
 		if err != nil {
@@ -656,7 +656,7 @@ func TestPosixPosixListDir(t *testing.T) {
 	}
 
 	// TestPosix for permission denied.
-	if runtime.GOOS != "windows" {
+	if runtime.GOOS != globalWindowsOSName {
 		// Initialize posix storage layer for permission denied error.
 		posixStorage, err = newPosix("/usr")
 		if err != nil {
@@ -770,7 +770,7 @@ func TestPosixDeleteFile(t *testing.T) {
 	}
 
 	// TestPosix for permission denied.
-	if runtime.GOOS != "windows" {
+	if runtime.GOOS != globalWindowsOSName {
 		// Initialize posix storage layer for permission denied error.
 		posixStorage, err = newPosix("/usr")
 		if err != nil {
@@ -881,7 +881,7 @@ func TestPosixReadFile(t *testing.T) {
 			-1, 5,
 			nil,
 			func() error {
-				if runtime.GOOS == "windows" {
+				if runtime.GOOS == globalWindowsOSName {
 					return &os.PathError{
 						Op:   "seek",
 						Path: preparePath(slashpath.Join(path, "success-vol", "myobject")),
@@ -937,7 +937,7 @@ func TestPosixReadFile(t *testing.T) {
 		if err != nil && testCase.expectedErr != nil {
 			// Validate if the type string of the errors are an exact match.
 			if err.Error() != testCase.expectedErr.Error() {
-				if runtime.GOOS != "windows" {
+				if runtime.GOOS != globalWindowsOSName {
 					t.Errorf("Case: %d %#v, expected: %s, got: %s", i+1, testCase, testCase.expectedErr, err)
 				} else {
 					var resultErrno, expectErrno uintptr
@@ -1075,7 +1075,7 @@ func TestPosixAppendFile(t *testing.T) {
 	}
 
 	// TestPosix for permission denied.
-	if runtime.GOOS != "windows" {
+	if runtime.GOOS != globalWindowsOSName {
 		// Initialize posix storage layer for permission denied error.
 		posixStorage, err = newPosix("/usr")
 		if err != nil {
@@ -1162,7 +1162,7 @@ func TestPosixPrepareFile(t *testing.T) {
 	}
 
 	// TestPosix for permission denied.
-	if runtime.GOOS != "windows" {
+	if runtime.GOOS != globalWindowsOSName {
 		// Initialize posix storage layer for permission denied error.
 		posixStorage, err = newPosix("/usr")
 		if err != nil {

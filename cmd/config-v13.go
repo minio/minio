@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,7 +49,7 @@ func initConfig() (bool, error) {
 		// Initialize server config.
 		srvCfg := &serverConfigV13{}
 		srvCfg.Version = globalMinioConfigVersion
-		srvCfg.Region = "us-east-1"
+		srvCfg.Region = globalMinioDefaultRegion
 		srvCfg.Credential = newCredential()
 
 		// Enable console logger by default on a fresh run.

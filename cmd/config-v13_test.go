@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,14 +22,14 @@ import (
 )
 
 func TestServerConfig(t *testing.T) {
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
 	// remove the root directory after the test ends.
 	defer removeAll(rootPath)
 
-	if serverConfig.GetRegion() != "us-east-1" {
+	if serverConfig.GetRegion() != globalMinioDefaultRegion {
 		t.Errorf("Expecting region `us-east-1` found %s", serverConfig.GetRegion())
 	}
 

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -115,7 +115,7 @@ func TestPostPolicyBucketHandler(t *testing.T) {
 
 // testPostPolicyBucketHandler - Tests validate post policy handler uploading objects.
 func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	root, err := newTestConfig("us-east-1")
+	root, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Initializing config.json failed")
 	}
@@ -402,7 +402,7 @@ func TestPostPolicyBucketHandlerRedirect(t *testing.T) {
 
 // testPostPolicyBucketHandlerRedirect tests POST Object when success_action_redirect is specified
 func testPostPolicyBucketHandlerRedirect(obj ObjectLayer, instanceType string, t TestErrHandler) {
-	root, err := newTestConfig("us-east-1")
+	root, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Initializing config.json failed")
 	}

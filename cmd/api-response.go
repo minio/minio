@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -278,8 +278,8 @@ func generateListBucketsResponse(buckets []BucketInfo) ListBucketsResponse {
 	var data = ListBucketsResponse{}
 	var owner = Owner{}
 
-	owner.ID = "minio"
-	owner.DisplayName = "minio"
+	owner.ID = globalMinioDefaultOwnerID
+	owner.DisplayName = globalMinioDefaultOwnerID
 
 	for _, bucket := range buckets {
 		var listbucket = Bucket{}
@@ -301,8 +301,8 @@ func generateListObjectsV1Response(bucket, prefix, marker, delimiter string, max
 	var owner = Owner{}
 	var data = ListObjectsResponse{}
 
-	owner.ID = "minio"
-	owner.DisplayName = "minio"
+	owner.ID = globalMinioDefaultOwnerID
+	owner.DisplayName = globalMinioDefaultOwnerID
 
 	for _, object := range resp.Objects {
 		var content = Object{}
@@ -315,7 +315,7 @@ func generateListObjectsV1Response(bucket, prefix, marker, delimiter string, max
 			content.ETag = "\"" + object.MD5Sum + "\""
 		}
 		content.Size = object.Size
-		content.StorageClass = "STANDARD"
+		content.StorageClass = globalMinioDefaultStorageClass
 		content.Owner = owner
 		// object.HealInfo is non-empty only when resp is constructed in ListObjectsHeal.
 		content.HealInfo = object.HealInfo
@@ -349,8 +349,8 @@ func generateListObjectsV2Response(bucket, prefix, token, startAfter, delimiter 
 	var data = ListObjectsV2Response{}
 
 	if fetchOwner {
-		owner.ID = "minio"
-		owner.DisplayName = "minio"
+		owner.ID = globalMinioDefaultOwnerID
+		owner.DisplayName = globalMinioDefaultOwnerID
 	}
 
 	for _, object := range resp.Objects {
@@ -364,7 +364,7 @@ func generateListObjectsV2Response(bucket, prefix, token, startAfter, delimiter 
 			content.ETag = "\"" + object.MD5Sum + "\""
 		}
 		content.Size = object.Size
-		content.StorageClass = "STANDARD"
+		content.StorageClass = globalMinioDefaultStorageClass
 		content.Owner = owner
 		contents = append(contents, content)
 	}
@@ -423,11 +423,11 @@ func generateListPartsResponse(partsInfo ListPartsInfo) ListPartsResponse {
 	listPartsResponse.Bucket = partsInfo.Bucket
 	listPartsResponse.Key = partsInfo.Object
 	listPartsResponse.UploadID = partsInfo.UploadID
-	listPartsResponse.StorageClass = "STANDARD"
-	listPartsResponse.Initiator.ID = "minio"
-	listPartsResponse.Initiator.DisplayName = "minio"
-	listPartsResponse.Owner.ID = "minio"
-	listPartsResponse.Owner.DisplayName = "minio"
+	listPartsResponse.StorageClass = globalMinioDefaultStorageClass
+	listPartsResponse.Initiator.ID = globalMinioDefaultOwnerID
+	listPartsResponse.Initiator.DisplayName = globalMinioDefaultOwnerID
+	listPartsResponse.Owner.ID = globalMinioDefaultOwnerID
+	listPartsResponse.Owner.DisplayName = globalMinioDefaultOwnerID
 
 	listPartsResponse.MaxParts = partsInfo.MaxParts
 	listPartsResponse.PartNumberMarker = partsInfo.PartNumberMarker

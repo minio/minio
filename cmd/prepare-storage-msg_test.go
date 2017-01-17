@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,11 +27,11 @@ func TestGetHealEndpoint(t *testing.T) {
 	// Test for a SSL scheme.
 	tls := true
 	hURL := getHealEndpoint(tls, &url.URL{
-		Scheme: "http",
+		Scheme: httpScheme,
 		Host:   "localhost:9000",
 	})
 	sHURL := &url.URL{
-		Scheme: "https",
+		Scheme: httpsScheme,
 		Host:   "localhost:9000",
 	}
 	if !reflect.DeepEqual(hURL, sHURL) {
@@ -41,11 +41,11 @@ func TestGetHealEndpoint(t *testing.T) {
 	// Test a non-TLS scheme.
 	tls = false
 	hURL = getHealEndpoint(tls, &url.URL{
-		Scheme: "https",
+		Scheme: httpsScheme,
 		Host:   "localhost:9000",
 	})
 	sHURL = &url.URL{
-		Scheme: "http",
+		Scheme: httpScheme,
 		Host:   "localhost:9000",
 	}
 	if !reflect.DeepEqual(hURL, sHURL) {
@@ -61,7 +61,7 @@ func TestGetHealEndpoint(t *testing.T) {
 			Path: "/export",
 		})
 		sHURL = &url.URL{
-			Scheme: "http",
+			Scheme: httpScheme,
 			Host:   "",
 		}
 		globalMinioAddr = ""
@@ -73,7 +73,7 @@ func TestGetHealEndpoint(t *testing.T) {
 
 // Tests heal message to be correct and properly formatted.
 func TestHealMsg(t *testing.T) {
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatal("Unable to initialize test config", err)
 	}

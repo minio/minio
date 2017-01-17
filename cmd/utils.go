@@ -102,9 +102,15 @@ func urlPath2BucketObjectName(u *url.URL) (bucketName, objectName string) {
 	return bucketName, objectName
 }
 
+// URI scheme constants.
+const (
+	httpScheme  = "http"
+	httpsScheme = "https"
+)
+
 var portMap = map[string]string{
-	"http":  "80",
-	"https": "443",
+	httpScheme:  "80",
+	httpsScheme: "443",
 }
 
 // Given a string of the form "host", "host:port", or "[ipv6::address]:port",

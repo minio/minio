@@ -84,7 +84,7 @@ func parseReleaseData(data string) (time.Time, error) {
 	if len(releaseDateSplits) < 3 {
 		return time.Time{}, (errors.New("Update data malformed"))
 	}
-	if releaseDateSplits[0] != "minio" {
+	if releaseDateSplits[0] != globalMinioDefaultOwnerID {
 		return time.Time{}, (errors.New("Update data malformed, missing minio tag"))
 	}
 	// "OFFICIAL" tag is still kept for backward compatibility.
@@ -126,14 +126,14 @@ func isDocker() bool {
 
 // Check if the minio server binary was built with source.
 func isSourceBuild() bool {
-	return Version == "DEVELOPMENT.GOGET"
+	return Version == goGetTag
 }
 
 // Fetch the current version of the Minio server binary.
 func getCurrentMinioVersion() (current time.Time, err error) {
 	// For development builds we check for binary modTime
 	// to validate against latest minio server release.
-	if Version != "DEVELOPMENT.GOGET" {
+	if Version != goGetTag {
 		// Parse current minio version into RFC3339.
 		current, err = time.Parse(time.RFC3339, Version)
 		if err != nil {
@@ -164,7 +164,7 @@ func getReleaseUpdate(updateURL string, duration time.Duration) (updateMsg updat
 		downloadURL = "docker pull minio/minio"
 	} else {
 		switch runtime.GOOS {
-		case "windows":
+		case globalWindowsOSName:
 			// For windows.
 			downloadURL = newUpdateURLPrefix + "/minio.exe"
 		default:

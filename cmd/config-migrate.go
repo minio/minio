@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -127,7 +127,7 @@ func migrateV2ToV3() error {
 	srvConfig.Region = cv2.Credentials.Region
 	if srvConfig.Region == "" {
 		// Region needs to be set for AWS Signature V4.
-		srvConfig.Region = "us-east-1"
+		srvConfig.Region = globalMinioDefaultRegion
 	}
 	srvConfig.Logger.Console = consoleLogger{
 		Enable: true,
@@ -191,7 +191,7 @@ func migrateV3ToV4() error {
 	srvConfig.Region = cv3.Region
 	if srvConfig.Region == "" {
 		// Region needs to be set for AWS Signature Version 4.
-		srvConfig.Region = "us-east-1"
+		srvConfig.Region = globalMinioDefaultRegion
 	}
 	srvConfig.Logger.Console = cv3.Logger.Console
 	srvConfig.Logger.File = cv3.Logger.File
@@ -237,7 +237,7 @@ func migrateV4ToV5() error {
 	srvConfig.Region = cv4.Region
 	if srvConfig.Region == "" {
 		// Region needs to be set for AWS Signature Version 4.
-		srvConfig.Region = "us-east-1"
+		srvConfig.Region = globalMinioDefaultRegion
 	}
 	srvConfig.Logger.Console = cv4.Logger.Console
 	srvConfig.Logger.File = cv4.Logger.File
@@ -286,7 +286,7 @@ func migrateV5ToV6() error {
 	srvConfig.Region = cv5.Region
 	if srvConfig.Region == "" {
 		// Region needs to be set for AWS Signature Version 4.
-		srvConfig.Region = "us-east-1"
+		srvConfig.Region = globalMinioDefaultRegion
 	}
 	srvConfig.Logger.Console = cv5.Logger.Console
 	srvConfig.Logger.File = cv5.Logger.File
@@ -362,7 +362,7 @@ func migrateV6ToV7() error {
 	srvConfig.Region = cv6.Region
 	if srvConfig.Region == "" {
 		// Region needs to be set for AWS Signature Version 4.
-		srvConfig.Region = "us-east-1"
+		srvConfig.Region = globalMinioDefaultRegion
 	}
 	srvConfig.Logger.Console = cv6.Logger.Console
 	srvConfig.Logger.File = cv6.Logger.File
@@ -426,7 +426,7 @@ func migrateV7ToV8() error {
 	srvConfig.Region = cv7.Region
 	if srvConfig.Region == "" {
 		// Region needs to be set for AWS Signature Version 4.
-		srvConfig.Region = "us-east-1"
+		srvConfig.Region = globalMinioDefaultRegion
 	}
 	srvConfig.Logger.Console = cv7.Logger.Console
 	srvConfig.Logger.File = cv7.Logger.File
@@ -496,7 +496,7 @@ func migrateV8ToV9() error {
 	srvConfig.Region = cv8.Region
 	if srvConfig.Region == "" {
 		// Region needs to be set for AWS Signature Version 4.
-		srvConfig.Region = "us-east-1"
+		srvConfig.Region = globalMinioDefaultRegion
 	}
 	srvConfig.Logger.Console = cv8.Logger.Console
 	srvConfig.Logger.Console.Level = "error"
@@ -583,7 +583,7 @@ func migrateV9ToV10() error {
 	srvConfig.Region = cv9.Region
 	if srvConfig.Region == "" {
 		// Region needs to be set for AWS Signature Version 4.
-		srvConfig.Region = "us-east-1"
+		srvConfig.Region = globalMinioDefaultRegion
 	}
 	srvConfig.Logger.Console = cv9.Logger.Console
 	srvConfig.Logger.File = cv9.Logger.File
@@ -668,7 +668,7 @@ func migrateV10ToV11() error {
 	srvConfig.Region = cv10.Region
 	if srvConfig.Region == "" {
 		// Region needs to be set for AWS Signature Version 4.
-		srvConfig.Region = "us-east-1"
+		srvConfig.Region = globalMinioDefaultRegion
 	}
 	srvConfig.Logger.Console = cv10.Logger.Console
 	srvConfig.Logger.File = cv10.Logger.File
@@ -756,7 +756,7 @@ func migrateV11ToV12() error {
 	srvConfig.Region = cv11.Region
 	if srvConfig.Region == "" {
 		// Region needs to be set for AWS Signature Version 4.
-		srvConfig.Region = "us-east-1"
+		srvConfig.Region = globalMinioDefaultRegion
 	}
 	srvConfig.Logger.Console = cv11.Logger.Console
 	srvConfig.Logger.File = cv11.Logger.File
@@ -861,7 +861,7 @@ func migrateV12ToV13() error {
 	srvConfig.Region = cv12.Region
 	if srvConfig.Region == "" {
 		// Region needs to be set for AWS Signature Version 4.
-		srvConfig.Region = "us-east-1"
+		srvConfig.Region = globalMinioDefaultRegion
 	}
 	srvConfig.Logger.Console = cv12.Logger.Console
 	srvConfig.Logger.File = cv12.Logger.File

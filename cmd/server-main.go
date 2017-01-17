@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -195,36 +195,45 @@ func isDistributedSetup(eps []*url.URL) bool {
 	return false
 }
 
+// Returns true if path is empty, or equals to '.', '/', '\' characters.
+func isPathSentinel(path string) bool {
+	return path == "" || path == "." || path == "/" || path == `\`
+}
+
+// Returned when path is empty or root path.
+var errEmptyRootPath = errors.New("Empty or root path is not allowed")
+
+// Invalid scheme passed.
+var errInvalidScheme = errors.New("Invalid scheme")
+
 // Check if endpoint is in expected syntax by valid scheme/path across all platforms.
 func checkEndpointURL(endpointURL *url.URL) (err error) {
-	// applicable to all OS.
-	if endpointURL.Scheme == "" || endpointURL.Scheme == "http" || endpointURL.Scheme == "https" {
-		urlPath := path.Clean(endpointURL.Path)
-		if urlPath == "" || urlPath == "." || urlPath == "/" || urlPath == `\` {
-			err = fmt.Errorf("Empty or root path is not allowed")
+	// Applicable to all OS.
+	if endpointURL.Scheme == "" || endpointURL.Scheme == httpScheme || endpointURL.Scheme == httpsScheme {
+		if isPathSentinel(path.Clean(endpointURL.Path)) {
+			err = errEmptyRootPath
 		}
 
 		return err
 	}
 
 	// Applicable to Windows only.
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == globalWindowsOSName {
 		// On Windows, endpoint can be a path with drive eg. C:\Export and its URL.Scheme is 'C'.
 		// Check if URL.Scheme is a single letter alphabet to represent a drive.
 		// Note: URL.Parse() converts scheme into lower case always.
 		if len(endpointURL.Scheme) == 1 && endpointURL.Scheme[0] >= 'a' && endpointURL.Scheme[0] <= 'z' {
 			// If endpoint is C:\ or C:\export, URL.Path does not have path information like \ or \export
 			// hence we directly work with endpoint.
-			urlPath := strings.SplitN(path.Clean(endpointURL.String()), ":", 2)[1]
-			if urlPath == "" || urlPath == "." || urlPath == "/" || urlPath == `\` {
-				err = fmt.Errorf("Empty or root path is not allowed")
+			if isPathSentinel(strings.SplitN(path.Clean(endpointURL.String()), ":", 2)[1]) {
+				err = errEmptyRootPath
 			}
 
 			return err
 		}
 	}
 
-	return fmt.Errorf("Invalid scheme")
+	return errInvalidScheme
 }
 
 // Check if endpoints are in expected syntax by valid scheme/path across all platforms.
@@ -300,7 +309,7 @@ func checkServerSyntax(c *cli.Context) {
 	}
 
 	for _, ep := range endpoints {
-		if ep.Scheme == "https" && !globalIsSSL {
+		if ep.Scheme == httpsScheme && !globalIsSSL {
 			// Certificates should be provided for https configuration.
 			fatalIf(errInvalidArgument, "Certificates not provided for secure configuration")
 		}

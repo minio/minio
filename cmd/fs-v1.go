@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -179,7 +179,7 @@ func newFSObjectLayer(fsPath string) (ObjectLayer, error) {
 func (fs fsObjects) checkDiskFree() (err error) {
 	// We don't validate disk space or inode utilization on windows.
 	// Each windows calls to 'GetVolumeInformationW' takes around 3-5seconds.
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == globalWindowsOSName {
 		return nil
 	}
 

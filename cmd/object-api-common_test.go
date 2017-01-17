@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -106,7 +106,7 @@ func TestGetPath(t *testing.T) {
 		epStr string
 		path  string
 	}
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == globalWindowsOSName {
 		testCases = []struct {
 			epStr string
 			path  string
