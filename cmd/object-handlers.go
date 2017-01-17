@@ -733,7 +733,6 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	// Get upload id.
 	uploadID, _, _, _ := getObjectResources(r.URL.Query())
 
-	var md5Sum string
 	completeMultipartBytes, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		errorIf(err, "Unable to complete multipart upload.")
@@ -768,7 +767,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	destLock.Lock()
 	defer destLock.Unlock()
 
-	md5Sum, err = objectAPI.CompleteMultipartUpload(bucket, object, uploadID, completeParts)
+	objInfo, err := objectAPI.CompleteMultipartUpload(bucket, object, uploadID, completeParts)
 	if err != nil {
 		errorIf(err, "Unable to complete multipart upload.")
 		err = errorCause(err)
@@ -786,7 +785,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	// Get object location.
 	location := getLocation(r)
 	// Generate complete multipart response.
-	response := generateCompleteMultpartUploadResponse(bucket, object, location, md5Sum)
+	response := generateCompleteMultpartUploadResponse(bucket, object, location, objInfo.MD5Sum)
 	encodedSuccessResponse := encodeResponse(response)
 	if err != nil {
 		errorIf(err, "Unable to parse CompleteMultipartUpload response")
@@ -795,17 +794,10 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	}
 
 	// Set etag.
-	w.Header().Set("ETag", "\""+md5Sum+"\"")
+	w.Header().Set("ETag", "\""+objInfo.MD5Sum+"\"")
 
 	// Write success response.
 	writeSuccessResponseXML(w, encodedSuccessResponse)
-
-	// Fetch object info for notifications.
-	objInfo, err := objectAPI.GetObjectInfo(bucket, object)
-	if err != nil {
-		errorIf(err, "Unable to fetch object info for \"%s\"", path.Join(bucket, object))
-		return
-	}
 
 	// Notify object created event.
 	eventNotify(eventData{
