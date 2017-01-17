@@ -21,6 +21,7 @@ import (
 	"flag"
 	"net/http"
 	"os"
+	"reflect"
 	"runtime"
 	"testing"
 
@@ -222,6 +223,63 @@ func TestCheckSufficientDisks(t *testing.T) {
 	}
 }
 
+// Tests initializing new object layer.
+func TestNewObjectLayer(t *testing.T) {
+	// Tests for FS object layer.
+	nDisks := 1
+	disks, err := getRandomDisks(nDisks)
+	if err != nil {
+		t.Fatal("Failed to create disks for the backend")
+	}
+	defer removeRoots(disks)
+
+	endpoints, err := parseStorageEndpoints(disks)
+	if err != nil {
+		t.Fatal("Unexpected parse error", err)
+	}
+
+	obj, err := newObjectLayer(serverCmdConfig{
+		serverAddr: ":9000",
+		endpoints:  endpoints,
+	})
+	if err != nil {
+		t.Fatal("Unexpected object layer initialization error", err)
+	}
+	_, ok := obj.(*fsObjects)
+	if !ok {
+		t.Fatal("Unexpected object layer detected", reflect.TypeOf(obj))
+	}
+
+	// Tests for XL object layer initialization.
+
+	// Create temporary backend for the test server.
+	nDisks = 16
+	disks, err = getRandomDisks(nDisks)
+	if err != nil {
+		t.Fatal("Failed to create disks for the backend")
+	}
+	defer removeRoots(disks)
+
+	endpoints, err = parseStorageEndpoints(disks)
+	if err != nil {
+		t.Fatal("Unexpected parse error", err)
+	}
+
+	obj, err = newObjectLayer(serverCmdConfig{
+		serverAddr: ":9000",
+		endpoints:  endpoints,
+	})
+	if err != nil {
+		t.Fatal("Unexpected object layer initialization error", err)
+	}
+
+	_, ok = obj.(*xlObjects)
+	if !ok {
+		t.Fatal("Unexpected object layer detected", reflect.TypeOf(obj))
+	}
+}
+
+// Tests parsing various types of input endpoints and paths.
 func TestParseStorageEndpoints(t *testing.T) {
 	testCases := []struct {
 		globalMinioHost string

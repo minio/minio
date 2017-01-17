@@ -119,6 +119,39 @@ func verifyRPCLockInfoResponse(l lockStateCase, rpcLockInfoMap map[string]*Syste
 	}
 }
 
+// Read entire state of the locks in the system and return.
+func getSystemLockState() (SystemLockState, error) {
+	globalNSMutex.lockMapMutex.Lock()
+	defer globalNSMutex.lockMapMutex.Unlock()
+
+	lockState := SystemLockState{}
+
+	lockState.TotalBlockedLocks = globalNSMutex.counters.blocked
+	lockState.TotalLocks = globalNSMutex.counters.total
+	lockState.TotalAcquiredLocks = globalNSMutex.counters.granted
+
+	for param, debugLock := range globalNSMutex.debugLockMap {
+		volLockInfo := VolumeLockInfo{}
+		volLockInfo.Bucket = param.volume
+		volLockInfo.Object = param.path
+		volLockInfo.LocksOnObject = debugLock.counters.total
+		volLockInfo.TotalBlockedLocks = debugLock.counters.blocked
+		volLockInfo.LocksAcquiredOnObject = debugLock.counters.granted
+		for opsID, lockInfo := range debugLock.lockInfo {
+			volLockInfo.LockDetailsOnObject = append(volLockInfo.LockDetailsOnObject, OpsLockState{
+				OperationID: opsID,
+				LockSource:  lockInfo.lockSource,
+				LockType:    lockInfo.lType,
+				Status:      lockInfo.status,
+				Since:       lockInfo.since,
+				Duration:    time.Now().UTC().Sub(lockInfo.since),
+			})
+		}
+		lockState.LocksInfoPerObject = append(lockState.LocksInfoPerObject, volLockInfo)
+	}
+	return lockState, nil
+}
+
 // Asserts the lock counter from the global globalNSMutex inmemory lock with the expected one.
 func verifyGlobalLockStats(l lockStateCase, t *testing.T, testNum int) {
 	globalNSMutex.lockMapMutex.Lock()

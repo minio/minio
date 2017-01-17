@@ -42,6 +42,17 @@ func isSysErrIO(err error) bool {
 	return err == syscall.EIO
 }
 
+// Check if the given error corresponds to EISDIR (is a directory).
+func isSysErrIsDir(err error) bool {
+	if pathErr, ok := err.(*os.PathError); ok {
+		switch pathErr.Err {
+		case syscall.EISDIR:
+			return true
+		}
+	}
+	return false
+}
+
 // Check if the given error corresponds to ENOTDIR (is not a directory).
 func isSysErrNotDir(err error) bool {
 	if pathErr, ok := err.(*os.PathError); ok {

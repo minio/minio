@@ -106,13 +106,6 @@ func getURLEncodedName(name string) string {
 	return encodedName
 }
 
-func findHost(signedHeaders []string) APIErrorCode {
-	if contains(signedHeaders, "host") {
-		return ErrNone
-	}
-	return ErrUnsignedHeaders
-}
-
 // extractSignedHeaders extract signed headers from Authorization header
 func extractSignedHeaders(signedHeaders []string, reqHeaders http.Header) (http.Header, APIErrorCode) {
 	// find whether "host" is part of list of signed headers.

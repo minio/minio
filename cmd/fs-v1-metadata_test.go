@@ -18,30 +18,34 @@ package cmd
 
 import (
 	"bytes"
+	"io"
+	"os"
 	"path/filepath"
 	"testing"
 )
 
-func initFSObjects(disk string, t *testing.T) (obj ObjectLayer) {
-	endpoints, err := parseStorageEndpoints([]string{disk})
-	if err != nil {
-		t.Fatal(err)
+// Tests ToObjectInfo function.
+func TestFSV1MetadataObjInfo(t *testing.T) {
+	fsMeta := newFSMetaV1()
+	objInfo := fsMeta.ToObjectInfo("testbucket", "testobject", nil)
+	if objInfo.Size != 0 {
+		t.Fatal("Unexpected object info value for Size", objInfo.Size)
 	}
-	obj, _, err = initObjectLayer(endpoints)
-	if err != nil {
-		t.Fatal("Unexpected err: ", err)
+	if objInfo.ModTime != timeSentinel {
+		t.Fatal("Unexpected object info value for ModTime ", objInfo.ModTime)
 	}
-	return obj
+	if objInfo.IsDir {
+		t.Fatal("Unexpected object info value for IsDir", objInfo.IsDir)
+	}
 }
 
-// TestReadFsMetadata - readFSMetadata testing with a healthy and faulty disk
+// TestReadFSMetadata - readFSMetadata testing with a healthy and faulty disk
 func TestReadFSMetadata(t *testing.T) {
 	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 	defer removeAll(disk)
 
 	obj := initFSObjects(disk, t)
-
-	fs := obj.(fsObjects)
+	fs := obj.(*fsObjects)
 
 	bucketName := "bucket"
 	objectName := "object"
@@ -56,37 +60,42 @@ func TestReadFSMetadata(t *testing.T) {
 	}
 
 	// Construct the full path of fs.json
-	fsPath := "buckets/" + bucketName + "/" + objectName + "/fs.json"
+	fsPath := pathJoin("buckets", bucketName, objectName, "fs.json")
+	fsPath = pathJoin(fs.fsPath, minioMetaBucket, fsPath)
 
+	rlk, err := fs.rwPool.Open(fsPath)
+	if err != nil {
+		t.Fatal("Unexpected error ", err)
+	}
+	defer rlk.Close()
+
+	sectionReader := io.NewSectionReader(rlk, 0, rlk.Size())
 	// Regular fs metadata reading, no errors expected
-	if _, err := readFSMetadata(fs.storage, ".minio.sys", fsPath); err != nil {
+	fsMeta := fsMetaV1{}
+	if _, err = fsMeta.ReadFrom(sectionReader); err != nil {
 		t.Fatal("Unexpected error ", err)
 	}
 
 	// Corrupted fs.json
-	if err := fs.storage.AppendFile(".minio.sys", fsPath, []byte{'a'}); err != nil {
+	file, err := os.OpenFile(preparePath(fsPath), os.O_APPEND|os.O_WRONLY, 0666)
+	if err != nil {
 		t.Fatal("Unexpected error ", err)
 	}
-	if _, err := readFSMetadata(fs.storage, ".minio.sys", fsPath); err == nil {
+	file.Write([]byte{'a'})
+	file.Close()
+	fsMeta = fsMetaV1{}
+	if _, err := fsMeta.ReadFrom(sectionReader); err == nil {
 		t.Fatal("Should fail", err)
 	}
-
-	// Test with corrupted disk
-	fsStorage := fs.storage.(*retryStorage)
-	naughty := newNaughtyDisk(fsStorage, nil, errFaultyDisk)
-	fs.storage = naughty
-	if _, err := readFSMetadata(fs.storage, ".minio.sys", fsPath); errorCause(err) != errFaultyDisk {
-		t.Fatal("Should fail", err)
-	}
-
 }
 
-// TestWriteFsMetadata - tests of writeFSMetadata with healthy and faulty disks
+// TestWriteFSMetadata - tests of writeFSMetadata with healthy disk.
 func TestWriteFSMetadata(t *testing.T) {
 	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 	defer removeAll(disk)
+
 	obj := initFSObjects(disk, t)
-	fs := obj.(fsObjects)
+	fs := obj.(*fsObjects)
 
 	bucketName := "bucket"
 	objectName := "object"
@@ -100,24 +109,27 @@ func TestWriteFSMetadata(t *testing.T) {
 		t.Fatal("Unexpected err: ", err)
 	}
 
-	// Construct the complete path of fs.json
-	fsPath := "buckets/" + bucketName + "/" + objectName + "/fs.json"
+	// Construct the full path of fs.json
+	fsPath := pathJoin("buckets", bucketName, objectName, "fs.json")
+	fsPath = pathJoin(fs.fsPath, minioMetaBucket, fsPath)
 
-	// Fs metadata reading, no errors expected (healthy disk)
-	fsMeta, err := readFSMetadata(fs.storage, ".minio.sys", fsPath)
+	rlk, err := fs.rwPool.Open(fsPath)
 	if err != nil {
 		t.Fatal("Unexpected error ", err)
 	}
+	defer rlk.Close()
 
-	// Reading metadata with a corrupted disk
-	fsStorage := fs.storage.(*retryStorage)
-	for i := 1; i <= 2; i++ {
-		naughty := newNaughtyDisk(fsStorage, map[int]error{i: errFaultyDisk, i + 1: errFaultyDisk}, nil)
-		fs.storage = naughty
-		if err = writeFSMetadata(fs.storage, ".minio.sys", fsPath, fsMeta); errorCause(err) != errFaultyDisk {
-			t.Fatal("Unexpected error", i, err)
-
-		}
+	sectionReader := io.NewSectionReader(rlk, 0, rlk.Size())
+	// FS metadata reading, no errors expected (healthy disk)
+	fsMeta := fsMetaV1{}
+	_, err = fsMeta.ReadFrom(sectionReader)
+	if err != nil {
+		t.Fatal("Unexpected error ", err)
 	}
-
+	if fsMeta.Version != "1.0.0" {
+		t.Fatalf("Unexpected version %s", fsMeta.Version)
+	}
+	if fsMeta.Format != "fs" {
+		t.Fatalf("Unexpected format %s", fsMeta.Format)
+	}
 }

@@ -351,6 +351,9 @@ func (s *TestRPCStorageSuite) testRPCStorageListDir(t *testing.T) {
 			}
 		}
 		dirs, err := storageDisk.ListDir("myvol", "")
+		if err != nil {
+			t.Error(err)
+		}
 		if len(dirs) != dirCount {
 			t.Errorf("Expected %d directories but found only %d", dirCount, len(dirs))
 		}
@@ -361,6 +364,9 @@ func (s *TestRPCStorageSuite) testRPCStorageListDir(t *testing.T) {
 			}
 		}
 		dirs, err = storageDisk.ListDir("myvol", "")
+		if err != nil {
+			t.Error(err)
+		}
 		if len(dirs) != 0 {
 			t.Errorf("Expected no directories but found %d", dirCount)
 		}
@@ -370,6 +376,9 @@ func (s *TestRPCStorageSuite) testRPCStorageListDir(t *testing.T) {
 			t.Error("Unable to initiate DeleteVol", err)
 		}
 		vols, err := storageDisk.ListVols()
+		if err != nil {
+			t.Error(err)
+		}
 		if len(vols) != 0 {
 			t.Errorf("Expected no volumes but found %d", dirCount)
 		}

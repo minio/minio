@@ -147,7 +147,7 @@ func (n *nsLockMap) statusBlockedToRunning(param nsParam, lockSource, opsID stri
 
 // newDebugLockInfo - Constructs a debugLockInfo value given lock source, status and type.
 func newDebugLockInfo(lockSource string, status statusType, readLock bool) debugLockInfo {
-	lType := debugRLockStr
+	var lType lockType
 	if readLock {
 		lType = debugRLockStr
 	} else {

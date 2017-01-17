@@ -28,53 +28,6 @@ func newObjectLayerFn() ObjectLayer {
 	return globalObjectAPI
 }
 
-// newObjectLayer - initialize any object layer depending on the number of disks.
-func newObjectLayer(storageDisks []StorageAPI) (ObjectLayer, error) {
-	var objAPI ObjectLayer
-	var err error
-	if len(storageDisks) == 1 {
-		// Initialize FS object layer.
-		objAPI, err = newFSObjects(storageDisks[0])
-	} else {
-		// Initialize XL object layer.
-		objAPI, err = newXLObjects(storageDisks)
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	// The following actions are performed here, so that any
-	// requests coming in early in the bootup sequence don't fail
-	// unexpectedly - e.g. if initEventNotifier was initialized
-	// after this function completes, an event could be generated
-	// before the notification system is ready, causing event
-	// drops or crashes.
-
-	// Migrate bucket policy from configDir to .minio.sys/buckets/
-	err = migrateBucketPolicyConfig(objAPI)
-	if err != nil {
-		errorIf(err, "Unable to migrate bucket policy from config directory")
-		return nil, err
-	}
-
-	err = cleanupOldBucketPolicyConfigs()
-	if err != nil {
-		errorIf(err, "Unable to clean up bucket policy from config directory.")
-		return nil, err
-	}
-
-	// Initialize and load bucket policies.
-	err = initBucketPolicies(objAPI)
-	fatalIf(err, "Unable to load all bucket policies.")
-
-	// Initialize a new event notifier.
-	err = initEventNotifier(objAPI)
-	fatalIf(err, "Unable to initialize event notification.")
-
-	// Success.
-	return objAPI, nil
-}
-
 // Composed function registering routers for only distributed XL setup.
 func registerDistXLRouters(mux *router.Router, srvCmdConfig serverCmdConfig) error {
 	// Register storage rpc router only if its a distributed setup.

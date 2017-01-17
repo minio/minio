@@ -68,52 +68,6 @@ type OpsLockState struct {
 	Duration    time.Duration `json:"duration"` // Duration since the lock was held.
 }
 
-// Read entire state of the locks in the system and return.
-func getSystemLockState() (SystemLockState, error) {
-	globalNSMutex.lockMapMutex.Lock()
-	defer globalNSMutex.lockMapMutex.Unlock()
-
-	// Fetch current time once instead of fetching system time for every lock.
-	timeNow := time.Now().UTC()
-	lockState := SystemLockState{
-		TotalAcquiredLocks: globalNSMutex.counters.granted,
-		TotalLocks:         globalNSMutex.counters.total,
-		TotalBlockedLocks:  globalNSMutex.counters.blocked,
-	}
-
-	var totalReadLocks, totalWriteLocks int64
-
-	for param, debugLock := range globalNSMutex.debugLockMap {
-		volLockInfo := VolumeLockInfo{}
-		volLockInfo.Bucket = param.volume
-		volLockInfo.Object = param.path
-		volLockInfo.LocksOnObject = debugLock.counters.total
-		volLockInfo.TotalBlockedLocks = debugLock.counters.blocked
-		volLockInfo.LocksAcquiredOnObject = debugLock.counters.granted
-		for opsID, lockInfo := range debugLock.lockInfo {
-			volLockInfo.LockDetailsOnObject = append(volLockInfo.LockDetailsOnObject, OpsLockState{
-				OperationID: opsID,
-				LockSource:  lockInfo.lockSource,
-				LockType:    lockInfo.lType,
-				Status:      lockInfo.status,
-				Since:       lockInfo.since,
-				Duration:    timeNow.Sub(lockInfo.since),
-			})
-			switch lockInfo.lType {
-			case debugRLockStr:
-				totalReadLocks++
-			case debugWLockStr:
-				totalWriteLocks++
-			}
-		}
-		volLockInfo.TotalReadLocks = totalReadLocks
-		volLockInfo.TotalWriteLocks = totalWriteLocks
-
-		lockState.LocksInfoPerObject = append(lockState.LocksInfoPerObject, volLockInfo)
-	}
-	return lockState, nil
-}
-
 // listLocksInfo - Fetches locks held on bucket, matching prefix older than relTime.
 func listLocksInfo(bucket, prefix string, relTime time.Duration) []VolumeLockInfo {
 	globalNSMutex.lockMapMutex.Lock()

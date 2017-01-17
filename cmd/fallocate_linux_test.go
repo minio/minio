@@ -18,18 +18,12 @@
 
 package cmd
 
-import "syscall"
+import "testing"
 
-// Fallocate uses the linux Fallocate syscall, which helps us to be
-// sure that subsequent writes on a file just created will not fail,
-// in addition, file allocation will be contigous on the disk
-func Fallocate(fd int, offset int64, len int64) error {
-	// No need to attempt fallocate for 0 length.
-	if len == 0 {
-		return nil
+// Tests allocate.
+func TestFallocate(t *testing.T) {
+	err := Fallocate(0, 0, 0)
+	if err != nil {
+		t.Fatal("Unexpected error in fallocate for length 0:", err)
 	}
-	// Don't extend size of file even if offset + len is
-	// greater than file size from <bits/fcntl-linux.h>.
-	fallocFLKeepSize := uint32(1)
-	return syscall.Fallocate(fd, fallocFLKeepSize, offset, len)
 }

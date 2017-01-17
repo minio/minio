@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,26 @@
 
 package cmd
 
-import "errors"
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
 
-// errFSDiskFormat - returned when given disk format is other than FS format.
-var errFSDiskFormat = errors.New("Disk is not in FS format")
+	router "github.com/gorilla/mux"
+)
+
+// Test cross domain xml handler.
+func TestCrossXMLHandler(t *testing.T) {
+	// Server initialization.
+	mux := router.NewRouter().SkipClean(true)
+	handler := setCrossDomainPolicy(mux)
+	srv := httptest.NewServer(handler)
+
+	resp, err := http.Get(srv.URL + crossDomainXMLEntity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatal("Unexpected http status received", resp.Status)
+	}
+}

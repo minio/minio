@@ -1145,8 +1145,8 @@ func (s *TestSuiteCommon) TestSHA256Mismatch(c *C) {
 	}
 }
 
-// TestNotBeAbleToCreateObjectInNonexistentBucket - Validates the error response
-// on an attempt to upload an object into a non-existent bucket.
+// TestPutObjectLongName - Validates the error response
+// on an attempt to upload an object with long name.
 func (s *TestSuiteCommon) TestPutObjectLongName(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()
