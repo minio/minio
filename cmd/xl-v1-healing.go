@@ -169,8 +169,8 @@ func listBucketNames(storageDisks []StorageAPI) (bucketNames map[string]struct{}
 				if !IsValidBucketName(volInfo.Name) {
 					continue
 				}
-				// Ignore the volume special bucket.
-				if volInfo.Name == minioMetaBucket {
+				// Skip special volume buckets.
+				if isMinioMetaBucketName(volInfo.Name) {
 					continue
 				}
 				bucketNames[volInfo.Name] = struct{}{}

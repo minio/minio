@@ -322,7 +322,7 @@ func readAllXLMetadata(disks []StorageAPI, bucket, object string) ([]xlMetaV1, [
 	return metadataArray, errs
 }
 
-// Return ordered partsMetadata depeinding on distribution.
+// Return ordered partsMetadata depending on distribution.
 func getOrderedPartsMetadata(distribution []int, partsMetadata []xlMetaV1) (orderedPartsMetadata []xlMetaV1) {
 	orderedPartsMetadata = make([]xlMetaV1, len(partsMetadata))
 	for index := range partsMetadata {

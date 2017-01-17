@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@ package cmd
 import "time"
 
 // commonTime returns a maximally occurring time from a list of time.
-func commonTime(modTimes []time.Time) (modTime time.Time) {
+func commonTime(modTimes []time.Time) (modTime time.Time, count int) {
 	var maxima int // Counter for remembering max occurrence of elements.
 	timeOccurenceMap := make(map[time.Time]int)
 	// Ignore the uuid sentinel and count the rest.
@@ -32,13 +32,17 @@ func commonTime(modTimes []time.Time) (modTime time.Time) {
 	// Find the common cardinality from previously collected
 	// occurrences of elements.
 	for time, count := range timeOccurenceMap {
-		if count > maxima {
+		if count == maxima && time.After(modTime) {
+			maxima = count
+			modTime = time
+
+		} else if count > maxima {
 			maxima = count
 			modTime = time
 		}
 	}
 	// Return the collected common uuid.
-	return modTime
+	return modTime, maxima
 }
 
 // Beginning of unix time is treated as sentinel value here.
@@ -85,7 +89,7 @@ func listOnlineDisks(disks []StorageAPI, partsMetadata []xlMetaV1, errs []error)
 	modTimes := listObjectModtimes(partsMetadata, errs)
 
 	// Reduce list of UUIDs to a single common value.
-	modTime = commonTime(modTimes)
+	modTime, _ = commonTime(modTimes)
 
 	// Create a new online disks slice, which have common uuid.
 	for index, t := range modTimes {
@@ -119,7 +123,7 @@ func outDatedDisks(disks []StorageAPI, partsMetadata []xlMetaV1, errs []error) (
 
 // Returns if the object should be healed.
 func xlShouldHeal(partsMetadata []xlMetaV1, errs []error) bool {
-	modTime := commonTime(listObjectModtimes(partsMetadata, errs))
+	modTime, _ := commonTime(listObjectModtimes(partsMetadata, errs))
 	for index := range partsMetadata {
 		if errs[index] == errDiskNotFound {
 			continue
@@ -132,4 +136,56 @@ func xlShouldHeal(partsMetadata []xlMetaV1, errs []error) bool {
 		}
 	}
 	return false
+}
+
+// xlHealStat - returns a structure which describes how many data,
+// parity erasure blocks are missing and if it is possible to heal
+// with the blocks present.
+func xlHealStat(xl xlObjects, partsMetadata []xlMetaV1, errs []error) HealInfo {
+	// Less than quorum erasure coded blocks of the object have the same create time.
+	// This object can't be healed with the information we have.
+	modTime, count := commonTime(listObjectModtimes(partsMetadata, errs))
+	if count < xl.readQuorum {
+		return HealInfo{
+			Status:              quorumUnavailable,
+			MissingDataCount:    0,
+			MissingPartityCount: 0,
+		}
+	}
+
+	// If there isn't a valid xlMeta then we can't heal the object.
+	xlMeta, err := pickValidXLMeta(partsMetadata, modTime)
+	if err != nil {
+		return HealInfo{
+			Status:              corrupted,
+			MissingDataCount:    0,
+			MissingPartityCount: 0,
+		}
+	}
+
+	// Compute heal statistics like bytes to be healed, missing
+	// data and missing parity count.
+	missingDataCount := 0
+	missingParityCount := 0
+
+	for i, err := range errs {
+		// xl.json is not found, which implies the erasure
+		// coded blocks are unavailable in the corresponding disk.
+		// First half of the disks are data and the rest are parity.
+		if realErr := errorCause(err); realErr == errFileNotFound || realErr == errDiskNotFound {
+			if xlMeta.Erasure.Distribution[i]-1 < xl.dataBlocks {
+				missingDataCount++
+			} else {
+				missingParityCount++
+			}
+		}
+	}
+
+	// This object can be healed. We have enough object metadata
+	// to reconstruct missing erasure coded blocks.
+	return HealInfo{
+		Status:              canHeal,
+		MissingDataCount:    missingDataCount,
+		MissingPartityCount: missingParityCount,
+	}
 }

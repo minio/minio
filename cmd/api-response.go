@@ -197,6 +197,7 @@ type Object struct {
 
 	// The class of storage used to store the object.
 	StorageClass string
+	HealInfo     *HealInfo `xml:"HealInfo,omitempty"`
 }
 
 // CopyObjectResponse container returns ETag and LastModified of the successfully copied object
@@ -316,6 +317,8 @@ func generateListObjectsV1Response(bucket, prefix, marker, delimiter string, max
 		content.Size = object.Size
 		content.StorageClass = "STANDARD"
 		content.Owner = owner
+		// object.HealInfo is non-empty only when resp is constructed in ListObjectsHeal.
+		content.HealInfo = object.HealInfo
 		contents = append(contents, content)
 	}
 	// TODO - support EncodingType in xml decoding

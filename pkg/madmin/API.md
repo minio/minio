@@ -9,29 +9,29 @@
 package main
 
 import (
-	"fmt"
+    "fmt"
 
-	"github.com/minio/minio/pkg/madmin"
+    "github.com/minio/minio/pkg/madmin"
 )
 
 func main() {
-	// Use a secure connection.
-	ssl := true
+    // Use a secure connection.
+    ssl := true
 
-	// Initialize minio client object.
-	mdmClnt, err := madmin.New("your-minio.example.com:9000", "YOUR-ACCESSKEYID", "YOUR-SECRETKEY", ssl)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
+    // Initialize minio client object.
+    mdmClnt, err := madmin.New("your-minio.example.com:9000", "YOUR-ACCESSKEYID", "YOUR-SECRETKEY", ssl)
+    if err != nil {
+        fmt.Println(err)
+        return
+    }
 
-	// Fetch service status.
-	st, err := mdmClnt.ServiceStatus()
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	fmt.Printf("%#v\n", st)
+    // Fetch service status.
+    st, err := mdmClnt.ServiceStatus()
+    if err != nil {
+        fmt.Println(err)
+        return
+    }
+    fmt.Printf("%#v\n", st)
 }
 
 ```
@@ -62,16 +62,16 @@ __Parameters__
 
 <a name="ServiceStatus"></a>
 ### ServiceStatus() (ServiceStatusMetadata, error)
-Fetch service status, replies disk space used, backend type and total disks offline/online (XL). 
+Fetch service status, replies disk space used, backend type and total disks offline/online (applicable in distributed mode).
 
 | Param  | Type  | Description  |
 |---|---|---|
-|`serviceStatus`  | _ServiceStatusMetadata_  | Represents current server status info in following format: | 
+|`serviceStatus`  | _ServiceStatusMetadata_  | Represents current server status info in following format: |
 
 
 | Param  | Type  | Description  |
 |---|---|---|
-|`st.Total`  | _int64_  | Total disk space. | 
+|`st.Total`  | _int64_  | Total disk space. |
 |`st.Free`  | _int64_  | Free disk space. |
 |`st.Backend`| _struct{}_ | Represents backend type embedded structure. |
 
@@ -86,7 +86,7 @@ Fetch service status, replies disk space used, backend type and total disks offl
 
  __Example__
 
- 
+
  ```go
 
 	st, err := madmClnt.ServiceStatus()
@@ -103,7 +103,7 @@ If successful restarts the running minio service, for distributed setup restarts
 
  __Example__
 
- 
+
  ```go
 
 
@@ -111,7 +111,108 @@ If successful restarts the running minio service, for distributed setup restarts
 	if err != nil {
 		log.Fatalln(err)
 	}
-	log.Printf("Succes")
+	log.Printf("Success")
 
  ```
+<a name="ListLocks"></a>
+### ListLocks(bucket, prefix string, olderThan time.Duration) ([]VolumeLockInfo, error)
+If successful returns information on the list of locks held on ``bucket`` matching ``prefix`` older than ``olderThan`` seconds.
 
+__Example__
+
+``` go
+    volLocks, err := madmClnt.ListLocks("mybucket", "myprefix", 30 * time.Second)
+    if err != nil {
+        log.Fatalln(err)
+    }
+    log.Println("List of locks: ", volLocks)
+
+```
+
+<a name="ClearLocks"></a>
+### ClearLocks(bucket, prefix string, olderThan time.Duration) ([]VolumeLockInfo, error)
+If successful returns information on the list of locks cleared on ``bucket`` matching ``prefix`` older than ``olderThan`` seconds.
+
+__Example__
+
+``` go
+    volLocks, err := madmClnt.ClearLocks("mybucket", "myprefix", 30 * time.Second)
+    if err != nil {
+        log.Fatalln(err)
+    }
+    log.Println("List of locks cleared: ", volLocks)
+
+```
+
+<a name="ListObjectsHeal"></a>
+### ListObjectsHeal(bucket, prefix string, recursive bool, doneCh <-chan struct{}) (<-chan ObjectInfo, error)
+If successful returns information on the list of objects that need healing in ``bucket`` matching ``prefix``.
+
+__Example__
+
+``` go
+    // Create a done channel to control 'ListObjectsHeal' go routine.
+    doneCh := make(chan struct{})
+
+    // Indicate to our routine to exit cleanly upon return.
+    defer close(doneCh)
+
+    // Set true if recursive listing is needed.
+    isRecursive := true
+    // List objects that need healing for a given bucket and
+    // prefix.
+    healObjectCh, err := madmClnt.ListObjectsHeal("mybucket", "myprefix", isRecursive, doneCh)
+    if err != nil {
+        fmt.Println(err)
+        return
+    }
+    for object := range healObjectsCh {
+        if object.Err != nil {
+            log.Fatalln(err)
+            return
+        }
+        if object.HealInfo != nil {
+            switch healInfo := *object.HealInfo; healInfo.Status {
+            case madmin.CanHeal:
+                fmt.Println(object.Key, " can be healed.")
+            case madmin.QuorumUnavailable:
+                fmt.Println(object.Key, " can't be healed until quorum is available.")
+            case madmin.Corrupted:
+                fmt.Println(object.Key, " can't be healed, not enough information.")
+            }
+        }
+        fmt.Println("object: ", object)
+    }
+```
+
+<a name="HealBucket"></a>
+### HealBucket(bucket string, isDryRun bool) error
+If bucket is successfully healed returns nil, otherwise returns error indicating the reason for failure. If isDryRun is true, then the bucket is not healed, but heal bucket request is validated by the server. e.g, if the bucket exists, if bucket name is valid etc.
+
+__Example__
+
+``` go
+    isDryRun := false
+    err := madmClnt.HealBucket("mybucket", isDryRun)
+    if err != nil {
+        log.Fatalln(err)
+    }
+    log.Println("successfully healed mybucket")
+
+```
+
+<a name="HealObject"></a>
+### HealObject(bucket, object string, isDryRun bool) error
+If object is successfully healed returns nil, otherwise returns error indicating the reason for failure. If isDryRun is true, then the object is not healed, but heal object request is validated by the server. e.g, if the object exists, if object name is valid etc.
+
+__Example__
+
+``` go
+    isDryRun := false
+    err := madmClnt.HealObject("mybucket", "myobject", isDryRun)
+    if err != nil {
+        log.Fatalln(err)
+    }
+    log.Println("successfully healed mybucket/myobject")
+
+```

@@ -175,3 +175,40 @@ func TestGetCompleteMultipartMD5(t *testing.T) {
 		}
 	}
 }
+
+// TestIsMinioBucketName - Tests isMinioBucketName helper function.
+func TestIsMinioMetaBucketName(t *testing.T) {
+	testCases := []struct {
+		bucket string
+		result bool
+	}{
+		// Minio meta bucket.
+		{
+			bucket: minioMetaBucket,
+			result: true,
+		},
+		// Minio meta bucket.
+		{
+			bucket: minioMetaMultipartBucket,
+			result: true,
+		},
+		// Minio meta bucket.
+		{
+			bucket: minioMetaTmpBucket,
+			result: true,
+		},
+		// Normal bucket
+		{
+			bucket: "mybucket",
+			result: false,
+		},
+	}
+
+	for i, test := range testCases {
+		actual := isMinioMetaBucketName(test.bucket)
+		if actual != test.result {
+			t.Errorf("Test %d - expected %v but received %v",
+				i+1, test.result, actual)
+		}
+	}
+}

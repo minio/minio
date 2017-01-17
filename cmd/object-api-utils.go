@@ -43,13 +43,21 @@ const (
 var validBucket = regexp.MustCompile(`^[a-z0-9][a-z0-9\.\-]{1,61}[a-z0-9]$`)
 var isIPAddress = regexp.MustCompile(`^(\d+\.){3}\d+$`)
 
+// isMinioBucket returns true if given bucket is a Minio internal
+// bucket and false otherwise.
+func isMinioMetaBucketName(bucket string) bool {
+	return bucket == minioMetaBucket ||
+		bucket == minioMetaMultipartBucket ||
+		bucket == minioMetaTmpBucket
+}
+
 // IsValidBucketName verifies a bucket name in accordance with Amazon's
 // requirements. It must be 3-63 characters long, can contain dashes
 // and periods, but must begin and end with a lowercase letter or a number.
 // See: http://docs.aws.amazon.com/AmazonS3/latest/dev/BucketRestrictions.html
 func IsValidBucketName(bucket string) bool {
-	// Special case when bucket is equal to 'metaBucket'.
-	if bucket == minioMetaBucket || bucket == minioMetaMultipartBucket {
+	// Special case when bucket is equal to one of the meta buckets.
+	if isMinioMetaBucketName(bucket) {
 		return true
 	}
 	if len(bucket) < 3 || len(bucket) > 63 {
