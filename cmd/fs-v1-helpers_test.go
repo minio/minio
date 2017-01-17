@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"bytes"
-	"runtime"
 	"testing"
 )
 
@@ -395,11 +394,5 @@ func TestFSRemoves(t *testing.T) {
 
 	if err = fsRemoveAll("my-obj-del-0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001"); err != errFileNameTooLong {
 		t.Fatal(err)
-	}
-
-	if runtime.GOOS != "windows" {
-		if err = fsRemoveAll("/usr"); err != errVolumeAccessDenied {
-			t.Fatal(err)
-		}
 	}
 }
