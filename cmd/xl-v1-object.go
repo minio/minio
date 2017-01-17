@@ -638,6 +638,8 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 		ContentEncoding: xlMeta.Meta["content-encoding"],
 		UserDefined:     xlMeta.Meta,
 	}
+
+	// Success, return object info.
 	return objInfo, nil
 }
 

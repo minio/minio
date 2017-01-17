@@ -116,11 +116,11 @@ func testMultipartObjectCreation(obj ObjectLayer, instanceType string, c TestErr
 		}
 		completedParts.Parts = append(completedParts.Parts, completePart{PartNumber: i, ETag: calculatedMD5sum})
 	}
-	md5Sum, err := obj.CompleteMultipartUpload("bucket", "key", uploadID, completedParts.Parts)
+	objInfo, err := obj.CompleteMultipartUpload("bucket", "key", uploadID, completedParts.Parts)
 	if err != nil {
 		c.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
-	if md5Sum != "7d364cb728ce42a74a96d22949beefb2-10" {
+	if objInfo.MD5Sum != "7d364cb728ce42a74a96d22949beefb2-10" {
 		c.Errorf("Md5 mismtch")
 	}
 }

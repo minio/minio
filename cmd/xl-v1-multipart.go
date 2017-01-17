@@ -575,9 +575,9 @@ func (xl xlObjects) ListObjectParts(bucket, object, uploadID string, partNumberM
 // md5sums of all the parts.
 //
 // Implements S3 compatible Complete multipart API.
-func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, uploadID string, parts []completePart) (string, error) {
+func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, uploadID string, parts []completePart) (ObjectInfo, error) {
 	if err := checkCompleteMultipartArgs(bucket, object, xl); err != nil {
-		return "", err
+		return ObjectInfo{}, err
 	}
 
 	// Hold lock so that
@@ -592,12 +592,12 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	defer uploadIDLock.Unlock()
 
 	if !xl.isUploadIDExists(bucket, object, uploadID) {
-		return "", traceError(InvalidUploadID{UploadID: uploadID})
+		return ObjectInfo{}, traceError(InvalidUploadID{UploadID: uploadID})
 	}
 	// Calculate s3 compatible md5sum for complete multipart.
 	s3MD5, err := getCompleteMultipartMD5(parts)
 	if err != nil {
-		return "", err
+		return ObjectInfo{}, err
 	}
 
 	uploadIDPath := pathJoin(bucket, object, uploadID)
@@ -606,7 +606,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	partsMetadata, errs := readAllXLMetadata(xl.storageDisks, minioMetaMultipartBucket, uploadIDPath)
 	// Do we have writeQuorum?.
 	if !isDiskQuorum(errs, xl.writeQuorum) {
-		return "", toObjectErr(traceError(errXLWriteQuorum), bucket, object)
+		return ObjectInfo{}, toObjectErr(traceError(errXLWriteQuorum), bucket, object)
 	}
 
 	onlineDisks, modTime := listOnlineDisks(xl.storageDisks, partsMetadata, errs)
@@ -617,7 +617,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	// Pick one from the first valid metadata.
 	xlMeta, err := pickValidXLMeta(partsMetadata, modTime)
 	if err != nil {
-		return "", err
+		return ObjectInfo{}, err
 	}
 
 	// Order online disks in accordance with distribution order.
@@ -637,17 +637,17 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 		partIdx := objectPartIndex(currentXLMeta.Parts, part.PartNumber)
 		// All parts should have same part number.
 		if partIdx == -1 {
-			return "", traceError(InvalidPart{})
+			return ObjectInfo{}, traceError(InvalidPart{})
 		}
 
 		// All parts should have same ETag as previously generated.
 		if currentXLMeta.Parts[partIdx].ETag != part.ETag {
-			return "", traceError(BadDigest{})
+			return ObjectInfo{}, traceError(BadDigest{})
 		}
 
 		// All parts except the last part has to be atleast 5MB.
 		if (i < len(parts)-1) && !isMinAllowedPartSize(currentXLMeta.Parts[partIdx].Size) {
-			return "", traceError(PartTooSmall{
+			return ObjectInfo{}, traceError(PartTooSmall{
 				PartNumber: part.PartNumber,
 				PartSize:   currentXLMeta.Parts[partIdx].Size,
 				PartETag:   part.ETag,
@@ -675,7 +675,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 
 	// Check if an object is present as one of the parent dir.
 	if xl.parentDirIsObject(bucket, path.Dir(object)) {
-		return "", toObjectErr(traceError(errFileAccessDenied), bucket, object)
+		return ObjectInfo{}, toObjectErr(traceError(errFileAccessDenied), bucket, object)
 	}
 
 	// Save the final object size and modtime.
@@ -697,11 +697,11 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 
 	// Write unique `xl.json` for each disk.
 	if err = writeUniqueXLMetadata(onlineDisks, minioMetaTmpBucket, tempUploadIDPath, partsMetadata, xl.writeQuorum); err != nil {
-		return "", toObjectErr(err, minioMetaTmpBucket, tempUploadIDPath)
+		return ObjectInfo{}, toObjectErr(err, minioMetaTmpBucket, tempUploadIDPath)
 	}
 	rErr := commitXLMetadata(onlineDisks, minioMetaTmpBucket, tempUploadIDPath, minioMetaMultipartBucket, uploadIDPath, xl.writeQuorum)
 	if rErr != nil {
-		return "", toObjectErr(rErr, minioMetaMultipartBucket, uploadIDPath)
+		return ObjectInfo{}, toObjectErr(rErr, minioMetaMultipartBucket, uploadIDPath)
 	}
 
 	defer func() {
@@ -725,7 +725,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 		// regardless of `xl.json` status and rolled back in case of errors.
 		err = renameObject(xl.storageDisks, bucket, object, minioMetaTmpBucket, uniqueID, xl.writeQuorum)
 		if err != nil {
-			return "", toObjectErr(err, bucket, object)
+			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
 	}
 
@@ -744,7 +744,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 
 	// Rename the multipart object to final location.
 	if err = renameObject(onlineDisks, minioMetaMultipartBucket, uploadIDPath, bucket, object, xl.writeQuorum); err != nil {
-		return "", toObjectErr(err, bucket, object)
+		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
 	// Delete the previously successfully renamed object.
@@ -760,11 +760,23 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 
 	// remove entry from uploads.json with quorum
 	if err = xl.removeUploadID(bucket, object, uploadID); err != nil {
-		return "", toObjectErr(err, minioMetaMultipartBucket, path.Join(bucket, object))
+		return ObjectInfo{}, toObjectErr(err, minioMetaMultipartBucket, path.Join(bucket, object))
 	}
 
-	// Return md5sum.
-	return s3MD5, nil
+	objInfo := ObjectInfo{
+		IsDir:           false,
+		Bucket:          bucket,
+		Name:            object,
+		Size:            xlMeta.Stat.Size,
+		ModTime:         xlMeta.Stat.ModTime,
+		MD5Sum:          xlMeta.Meta["md5Sum"],
+		ContentType:     xlMeta.Meta["content-type"],
+		ContentEncoding: xlMeta.Meta["content-encoding"],
+		UserDefined:     xlMeta.Meta,
+	}
+
+	// Success, return object info.
+	return objInfo, nil
 }
 
 // abortMultipartUpload - wrapper for purging an ongoing multipart
