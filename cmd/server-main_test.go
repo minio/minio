@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -133,7 +133,7 @@ func TestFinalizeAPIEndpoints(t *testing.T) {
 // Tests all the expected input disks for function checkSufficientDisks.
 func TestCheckSufficientDisks(t *testing.T) {
 	var xlDisks []string
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == globalWindowsOSName {
 		xlDisks = []string{
 			"C:\\mnt\\backend1",
 			"C:\\mnt\\backend2",
@@ -330,7 +330,7 @@ func TestCheckEndpointsSyntax(t *testing.T) {
 		"server:/export",
 	}
 
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == globalWindowsOSName {
 		successCases = append(successCases,
 			`\export`,
 			`D:\export`,
@@ -401,7 +401,7 @@ func TestIsDistributedSetup(t *testing.T) {
 		disks  []string
 		result bool
 	}
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == globalWindowsOSName {
 		testCases = []struct {
 			disks  []string
 			result bool
@@ -457,7 +457,7 @@ func TestIsDistributedSetup(t *testing.T) {
 
 func TestInitServerConfig(t *testing.T) {
 	ctx := &cli.Context{}
-	root, err := newTestConfig("us-east-1")
+	root, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatal("Failed to set up test config")
 	}

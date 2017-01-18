@@ -40,7 +40,7 @@ func (p postHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // Tests web hook initialization.
 func TestNewWebHookNotify(t *testing.T) {
-	root, err := newTestConfig("us-east-1")
+	root, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatal(err)
 	}

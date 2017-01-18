@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -164,11 +164,22 @@ func (m *fsMetaV1) ReadFrom(reader io.Reader) (n int64, err error) {
 	return int64(len(metadataBytes)), nil
 }
 
+// FS metadata constants.
+const (
+	// FS backend meta version.
+	fsMetaVersion = "1.0.0"
+
+	// FS backend meta format.
+	fsMetaFormat = "fs"
+
+	// Add more constants here.
+)
+
 // newFSMetaV1 - initializes new fsMetaV1.
 func newFSMetaV1() (fsMeta fsMetaV1) {
 	fsMeta = fsMetaV1{}
-	fsMeta.Version = "1.0.0"
-	fsMeta.Format = "fs"
+	fsMeta.Version = fsMetaVersion
+	fsMeta.Format = fsMetaFormat
 	fsMeta.Minio.Release = ReleaseTag
 	return fsMeta
 }

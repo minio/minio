@@ -139,7 +139,7 @@ func setBrowserCacheControlHandler(h http.Handler) http.Handler {
 }
 
 func (h cacheControlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.Method == "GET" && guessIsBrowserReq(r) && globalIsBrowserEnabled {
+	if r.Method == httpGET && guessIsBrowserReq(r) && globalIsBrowserEnabled {
 		// For all browser requests set appropriate Cache-Control policies
 		if strings.HasPrefix(r.URL.Path, reservedBucket+"/") {
 			if strings.HasSuffix(r.URL.Path, ".js") || r.URL.Path == reservedBucket+"/favicon.ico" {
@@ -249,11 +249,31 @@ type resourceHandler struct {
 	handler http.Handler
 }
 
+// List of http methods.
+const (
+	httpGET     = "GET"
+	httpPUT     = "PUT"
+	httpHEAD    = "HEAD"
+	httpPOST    = "POST"
+	httpDELETE  = "DELETE"
+	httpOPTIONS = "OPTIONS"
+)
+
+// List of default allowable HTTP methods.
+var defaultAllowableHTTPMethods = []string{
+	httpGET,
+	httpPUT,
+	httpHEAD,
+	httpPOST,
+	httpDELETE,
+	httpOPTIONS,
+}
+
 // setCorsHandler handler for CORS (Cross Origin Resource Sharing)
 func setCorsHandler(h http.Handler) http.Handler {
 	c := cors.New(cors.Options{
 		AllowedOrigins: []string{"*"},
-		AllowedMethods: []string{"GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedMethods: defaultAllowableHTTPMethods,
 		AllowedHeaders: []string{"*"},
 		ExposedHeaders: []string{"ETag"},
 	})
@@ -328,7 +348,7 @@ func (h resourceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	// A put method on path "/" doesn't make sense, ignore it.
-	if r.Method == "PUT" && r.URL.Path == "/" {
+	if r.Method == httpPUT && r.URL.Path == "/" {
 		writeErrorResponse(w, ErrNotImplemented, r.URL)
 		return
 	}

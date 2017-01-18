@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -153,7 +153,7 @@ func TestInitListeners(t *testing.T) {
 		}
 	}
 	// Windows doesn't have 'localhost' hostname.
-	if runtime.GOOS != "windows" {
+	if runtime.GOOS != globalWindowsOSName {
 		listeners, err := initListeners("localhost:"+getFreePort(), &tls.Config{})
 		if err != nil {
 			t.Fatalf("Test 3: Unable to initialize listeners %s", err)
@@ -395,7 +395,7 @@ func TestListenAndServeTLS(t *testing.T) {
 			res, _ := client.Get("http://" + addr)
 			// Without TLS we expect a re-direction from http to https
 			// And also the request is not rejected.
-			if res != nil && res.StatusCode == http.StatusOK && res.Request.URL.Scheme == "https" {
+			if res != nil && res.StatusCode == http.StatusOK && res.Request.URL.Scheme == httpsScheme {
 				okNoTLS = true
 			}
 		}

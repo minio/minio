@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -159,12 +159,12 @@ func getPath(ep *url.URL) string {
 	}
 	var diskPath string
 	// For windows ep.Path is usually empty
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == globalWindowsOSName {
 		switch ep.Scheme {
 		case "":
 			// Eg. "minio server .\export"
 			diskPath = ep.Path
-		case "http", "https":
+		case httpScheme, httpsScheme:
 			// For full URLs windows drive is part of URL path.
 			// Eg: http://ip:port/C:\mydrive
 			// For windows trim off the preceding "/".

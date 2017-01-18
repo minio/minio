@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,7 +50,7 @@ func TestDoesPolicySignatureMatch(t *testing.T) {
 		// (1) It should fail if the access key is incorrect.
 		{
 			form: map[string]string{
-				"X-Amz-Credential": fmt.Sprintf(credentialTemplate, "EXAMPLEINVALIDEXAMPL", now.Format(yyyymmdd), "us-east-1"),
+				"X-Amz-Credential": fmt.Sprintf(credentialTemplate, "EXAMPLEINVALIDEXAMPL", now.Format(yyyymmdd), globalMinioDefaultRegion),
 			},
 			expected: ErrInvalidAccessKeyID,
 		},
@@ -64,14 +64,14 @@ func TestDoesPolicySignatureMatch(t *testing.T) {
 		// (3) It should fail if the date is invalid (or missing, in this case).
 		{
 			form: map[string]string{
-				"X-Amz-Credential": fmt.Sprintf(credentialTemplate, accessKey, now.Format(yyyymmdd), "us-east-1"),
+				"X-Amz-Credential": fmt.Sprintf(credentialTemplate, accessKey, now.Format(yyyymmdd), globalMinioDefaultRegion),
 			},
 			expected: ErrMalformedDate,
 		},
 		// (4) It should fail with a bad signature.
 		{
 			form: map[string]string{
-				"X-Amz-Credential": fmt.Sprintf(credentialTemplate, accessKey, now.Format(yyyymmdd), "us-east-1"),
+				"X-Amz-Credential": fmt.Sprintf(credentialTemplate, accessKey, now.Format(yyyymmdd), globalMinioDefaultRegion),
 				"X-Amz-Date":       now.Format(iso8601Format),
 				"X-Amz-Signature":  "invalidsignature",
 				"Policy":           "policy",
@@ -81,9 +81,9 @@ func TestDoesPolicySignatureMatch(t *testing.T) {
 		// (5) It should succeed if everything is correct.
 		{
 			form: map[string]string{
-				"X-Amz-Credential": fmt.Sprintf(credentialTemplate, accessKey, now.Format(yyyymmdd), "us-east-1"),
+				"X-Amz-Credential": fmt.Sprintf(credentialTemplate, accessKey, now.Format(yyyymmdd), globalMinioDefaultRegion),
 				"X-Amz-Date":       now.Format(iso8601Format),
-				"X-Amz-Signature":  getSignature(getSigningKey(serverConfig.GetCredential().SecretKey, now, "us-east-1"), "policy"),
+				"X-Amz-Signature":  getSignature(getSigningKey(serverConfig.GetCredential().SecretKey, now, globalMinioDefaultRegion), "policy"),
 				"Policy":           "policy",
 			},
 			expected: ErrNone,
@@ -100,7 +100,7 @@ func TestDoesPolicySignatureMatch(t *testing.T) {
 }
 
 func TestDoesPresignedSignatureMatch(t *testing.T) {
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +121,7 @@ func TestDoesPresignedSignatureMatch(t *testing.T) {
 	}{
 		// (0) Should error without a set URL query.
 		{
-			region:   "us-east-1",
+			region:   globalMinioDefaultRegion,
 			expected: ErrInvalidQueryParams,
 		},
 		// (1) Should error on an invalid access key.
@@ -162,7 +162,7 @@ func TestDoesPresignedSignatureMatch(t *testing.T) {
 				"X-Amz-Credential":     fmt.Sprintf(credentialTemplate, accessKeyID, now.Format(yyyymmdd), "us-west-1"),
 				"X-Amz-Content-Sha256": payloadSHA256,
 			},
-			region:   "us-east-1",
+			region:   globalMinioDefaultRegion,
 			expected: ErrInvalidRegion,
 		},
 		// (4) Should NOT fail with an invalid region if it doesn't verify it.

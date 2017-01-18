@@ -39,9 +39,10 @@ import (
 
 // AWS Signature Version '4' constants.
 const (
-	signV4Algorithm = "AWS4-HMAC-SHA256"
-	iso8601Format   = "20060102T150405Z"
-	yyyymmdd        = "20060102"
+	signV4Algorithm     = "AWS4-HMAC-SHA256"
+	iso8601Format       = "20060102T150405Z"
+	yyyymmdd            = "20060102"
+	presignedHostHeader = "host"
 )
 
 // getCanonicalHeaders generate a list of request headers with their values
@@ -52,7 +53,7 @@ func getCanonicalHeaders(signedHeaders http.Header, host string) string {
 		headers = append(headers, strings.ToLower(k))
 		vals[strings.ToLower(k)] = vv
 	}
-	headers = append(headers, "host")
+	headers = append(headers, presignedHostHeader)
 	sort.Strings(headers)
 
 	var buf bytes.Buffer
@@ -60,7 +61,7 @@ func getCanonicalHeaders(signedHeaders http.Header, host string) string {
 		buf.WriteString(k)
 		buf.WriteByte(':')
 		switch {
-		case k == "host":
+		case k == presignedHostHeader:
 			buf.WriteString(host)
 			fallthrough
 		default:
@@ -82,7 +83,7 @@ func getSignedHeaders(signedHeaders http.Header) string {
 	for k := range signedHeaders {
 		headers = append(headers, strings.ToLower(k))
 	}
-	headers = append(headers, "host")
+	headers = append(headers, presignedHostHeader)
 	sort.Strings(headers)
 	return strings.Join(headers, ";")
 }

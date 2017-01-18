@@ -51,9 +51,9 @@ func getListenIPs(serverAddr string) (hosts []string, port string, err error) {
 // Finalizes the API endpoints based on the host list and port.
 func finalizeAPIEndpoints(apiServer *http.Server) (endPoints []string, err error) {
 	// Verify current scheme.
-	scheme := "http"
+	scheme := httpScheme
 	if globalIsSSL {
-		scheme = "https"
+		scheme = httpsScheme
 	}
 
 	// Get list of listen ips and port.

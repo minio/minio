@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -188,7 +188,7 @@ func TestRPCStorageClient(t *testing.T) {
 
 func (s *TestRPCStorageSuite) testRPCStorageClient(t *testing.T) {
 	// TODO - Fix below tests to run on windows.
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == globalWindowsOSName {
 		return
 	}
 	s.testRPCStorageDisksInfo(t)

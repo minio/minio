@@ -27,6 +27,31 @@ import (
 	"time"
 )
 
+// startWithConds - map which indicates if a given condition supports starts-with policy operator
+var startsWithConds = map[string]bool{
+	"$acl":                 true,
+	"$bucket":              false,
+	"$cache-control":       true,
+	"$content-type":        true,
+	"$content-disposition": true,
+	"$content-encoding":    true,
+	"$expires":             true,
+	"$key":                 true,
+	"$success_action_redirect": true,
+	"$redirect":                true,
+	"$success_action_status":   false,
+	"$x-amz-algorithm":         false,
+	"$x-amz-credential":        false,
+	"$x-amz-date":              false,
+}
+
+// Add policy conditionals.
+const (
+	policyCondEqual         = "eq"
+	policyCondStartsWith    = "starts-with"
+	policyCondContentLength = "content-length-range"
+)
+
 // toString - Safely convert interface to string without causing panic.
 func toString(val interface{}) string {
 	switch v := val.(type) {
@@ -127,7 +152,7 @@ func parsePostPolicyForm(policy string) (PostPolicyForm, error) {
 					Operator string
 					Value    string
 				}{
-					Operator: "eq",
+					Operator: policyCondEqual,
 					Value:    toString(v),
 				}
 			}
@@ -136,7 +161,7 @@ func parsePostPolicyForm(policy string) (PostPolicyForm, error) {
 				return parsedPolicy, fmt.Errorf("Malformed conditional fields %s of type %s found in POST policy form", condt, reflect.TypeOf(condt).String())
 			}
 			switch toLowerString(condt[0]) {
-			case "eq", "starts-with":
+			case policyCondEqual, policyCondStartsWith:
 				for _, v := range condt { // Pre-check all values for type.
 					if !isString(v) {
 						// All values must be of type string.
@@ -151,7 +176,7 @@ func parsePostPolicyForm(policy string) (PostPolicyForm, error) {
 					Operator: operator,
 					Value:    value,
 				}
-			case "content-length-range":
+			case policyCondContentLength:
 				min, err := toInteger(condt[1])
 				if err != nil {
 					return parsedPolicy, err
@@ -180,31 +205,13 @@ func parsePostPolicyForm(policy string) (PostPolicyForm, error) {
 	return parsedPolicy, nil
 }
 
-// startWithConds - map which indicates if a given condition supports starts-with policy operator
-var startsWithConds = map[string]bool{
-	"$acl":                 true,
-	"$bucket":              false,
-	"$cache-control":       true,
-	"$content-type":        true,
-	"$content-disposition": true,
-	"$content-encoding":    true,
-	"$expires":             true,
-	"$key":                 true,
-	"$success_action_redirect": true,
-	"$redirect":                true,
-	"$success_action_status":   false,
-	"$x-amz-algorithm":         false,
-	"$x-amz-credential":        false,
-	"$x-amz-date":              false,
-}
-
 // checkPolicyCond returns a boolean to indicate if a condition is satisified according
 // to the passed operator
 func checkPolicyCond(op string, input1, input2 string) bool {
 	switch op {
-	case "eq":
+	case policyCondEqual:
 		return input1 == input2
-	case "starts-with":
+	case policyCondStartsWith:
 		return strings.HasPrefix(input1, input2)
 	}
 	return false
@@ -231,7 +238,7 @@ func checkPostPolicy(formValues map[string]string, postPolicyForm PostPolicyForm
 		// If the current policy condition is known
 		if startsWithSupported, condFound := startsWithConds[cond]; condFound {
 			// Check if the current condition supports starts-with operator
-			if op == "starts-with" && !startsWithSupported {
+			if op == policyCondStartsWith && !startsWithSupported {
 				return ErrAccessDenied
 			}
 			// Check if current policy condition is satisfied

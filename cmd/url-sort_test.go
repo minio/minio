@@ -38,17 +38,17 @@ func TestSortByHostPath(t *testing.T) {
 			},
 			expected: []*url.URL{
 				{
-					Scheme: "http",
+					Scheme: httpScheme,
 					Host:   "abcd.com:9000",
 					Path:   "/a/b/c",
 				},
 				{
-					Scheme: "http",
+					Scheme: httpScheme,
 					Host:   "abcd.com:9000",
 					Path:   "/a/b/d",
 				},
 				{
-					Scheme: "http",
+					Scheme: httpScheme,
 					Host:   "abcd.com:9000",
 					Path:   "/a/b/e",
 				},
@@ -62,17 +62,17 @@ func TestSortByHostPath(t *testing.T) {
 			},
 			expected: []*url.URL{
 				{
-					Scheme: "http",
+					Scheme: httpScheme,
 					Host:   "abcd.com:9000",
 					Path:   "/a/b/c",
 				},
 				{
-					Scheme: "http",
+					Scheme: httpScheme,
 					Host:   "defg.com:9000",
 					Path:   "/a/b/c",
 				},
 				{
-					Scheme: "http",
+					Scheme: httpScheme,
 					Host:   "hijk.com:9000",
 					Path:   "/a/b/c",
 				},

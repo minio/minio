@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,7 +37,7 @@ func TestGetRequestAuthType(t *testing.T) {
 			req: &http.Request{
 				URL: &url.URL{
 					Host:   "localhost:9000",
-					Scheme: "http",
+					Scheme: httpScheme,
 					Path:   "/",
 				},
 				Header: http.Header{
@@ -54,7 +54,7 @@ func TestGetRequestAuthType(t *testing.T) {
 			req: &http.Request{
 				URL: &url.URL{
 					Host:   "localhost:9000",
-					Scheme: "http",
+					Scheme: httpScheme,
 					Path:   "/",
 				},
 				Header: http.Header{
@@ -69,7 +69,7 @@ func TestGetRequestAuthType(t *testing.T) {
 			req: &http.Request{
 				URL: &url.URL{
 					Host:   "localhost:9000",
-					Scheme: "http",
+					Scheme: httpScheme,
 					Path:   "/",
 				},
 				Header: http.Header{
@@ -84,7 +84,7 @@ func TestGetRequestAuthType(t *testing.T) {
 			req: &http.Request{
 				URL: &url.URL{
 					Host:     "localhost:9000",
-					Scheme:   "http",
+					Scheme:   httpScheme,
 					Path:     "/",
 					RawQuery: "X-Amz-Credential=EXAMPLEINVALIDEXAMPL%2Fs3%2F20160314%2Fus-east-1",
 				},
@@ -97,7 +97,7 @@ func TestGetRequestAuthType(t *testing.T) {
 			req: &http.Request{
 				URL: &url.URL{
 					Host:   "localhost:9000",
-					Scheme: "http",
+					Scheme: httpScheme,
 					Path:   "/",
 				},
 				Header: http.Header{
@@ -309,7 +309,7 @@ func mustNewSignedRequest(method string, urlStr string, contentLength int64, bod
 
 // Tests is requested authenticated function, tests replies for s3 errors.
 func TestIsReqAuthenticated(t *testing.T) {
-	path, err := newTestConfig("us-east-1")
+	path, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("unable initialize config file, %s", err)
 	}

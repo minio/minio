@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,7 +49,7 @@ func TestNewFS(t *testing.T) {
 // TestFSShutdown - initialize a new FS object layer then calls
 // Shutdown to check returned results
 func TestFSShutdown(t *testing.T) {
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatal(err)
 	}

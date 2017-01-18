@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -130,7 +130,7 @@ func testLoginWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler)
 	apiRouter := initTestWebRPCEndPoint(obj)
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
@@ -179,7 +179,7 @@ func testStorageInfoWebHandler(obj ObjectLayer, instanceType string, t TestErrHa
 	apiRouter := initTestWebRPCEndPoint(obj)
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
@@ -225,7 +225,7 @@ func testServerInfoWebHandler(obj ObjectLayer, instanceType string, t TestErrHan
 	apiRouter := initTestWebRPCEndPoint(obj)
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
@@ -271,7 +271,7 @@ func testMakeBucketWebHandler(obj ObjectLayer, instanceType string, t TestErrHan
 	apiRouter := initTestWebRPCEndPoint(obj)
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
@@ -331,7 +331,7 @@ func testListBucketsWebHandler(obj ObjectLayer, instanceType string, t TestErrHa
 	apiRouter := initTestWebRPCEndPoint(obj)
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
@@ -388,7 +388,7 @@ func testListObjectsWebHandler(obj ObjectLayer, instanceType string, t TestErrHa
 	apiRouter := initTestWebRPCEndPoint(obj)
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
@@ -492,7 +492,7 @@ func testRemoveObjectWebHandler(obj ObjectLayer, instanceType string, t TestErrH
 	apiRouter := initTestWebRPCEndPoint(obj)
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
@@ -568,7 +568,7 @@ func testGenerateAuthWebHandler(obj ObjectLayer, instanceType string, t TestErrH
 	apiRouter := initTestWebRPCEndPoint(obj)
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
@@ -614,7 +614,7 @@ func testSetAuthWebHandler(obj ObjectLayer, instanceType string, t TestErrHandle
 	apiRouter := initTestWebRPCEndPoint(obj)
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
@@ -675,7 +675,7 @@ func testGetAuthWebHandler(obj ObjectLayer, instanceType string, t TestErrHandle
 	apiRouter := initTestWebRPCEndPoint(obj)
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
@@ -720,7 +720,7 @@ func testUploadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler
 	apiRouter := initTestWebRPCEndPoint(obj)
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
@@ -811,7 +811,7 @@ func testDownloadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandl
 	apiRouter := initTestWebRPCEndPoint(obj)
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
@@ -903,7 +903,7 @@ func testWebPresignedGetHandler(obj ObjectLayer, instanceType string, t TestErrH
 	apiRouter := initTestWebRPCEndPoint(obj)
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
@@ -1016,7 +1016,7 @@ func testWebGetBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestE
 	apiRouter := initTestWebRPCEndPoint(obj)
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
@@ -1099,7 +1099,7 @@ func testWebListAllBucketPoliciesHandler(obj ObjectLayer, instanceType string, t
 	apiRouter := initTestWebRPCEndPoint(obj)
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
@@ -1205,7 +1205,7 @@ func testWebSetBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestE
 	apiRouter := initTestWebRPCEndPoint(obj)
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
@@ -1283,7 +1283,7 @@ func TestWebCheckAuthorization(t *testing.T) {
 	apiRouter := initTestWebRPCEndPoint(obj)
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatal("Init Test config failed", err)
 	}
@@ -1365,7 +1365,7 @@ func TestWebObjectLayerNotReady(t *testing.T) {
 
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatal("Init Test config failed", err)
 	}
@@ -1444,7 +1444,7 @@ func TestWebObjectLayerNotReady(t *testing.T) {
 
 // TestWebObjectLayerFaultyDisks - Test Web RPC responses with faulty disks
 func TestWebObjectLayerFaultyDisks(t *testing.T) {
-	root, err := newTestConfig("us-east-1")
+	root, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1469,7 +1469,7 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatal("Init Test config failed", err)
 	}

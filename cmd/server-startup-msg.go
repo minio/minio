@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -118,7 +118,7 @@ func printCLIAccessMsg(endPoint string) {
 
 	// Configure 'mc', following block prints platform specific information for minio client.
 	console.Println(colorBlue("\nCommand-line Access: ") + mcQuickStartGuide)
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == globalWindowsOSName {
 		mcMessage := fmt.Sprintf("$ mc.exe config host add myminio %s %s %s", endPoint, cred.AccessKey, cred.SecretKey)
 		console.Println(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
 	} else {

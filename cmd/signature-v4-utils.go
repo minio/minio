@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,12 +49,12 @@ func skipContentSha256Cksum(r *http.Request) bool {
 // isValidRegion - verify if incoming region value is valid with configured Region.
 func isValidRegion(reqRegion string, confRegion string) bool {
 	if confRegion == "" || confRegion == "US" {
-		confRegion = "us-east-1"
+		confRegion = globalMinioDefaultRegion
 	}
 	// Some older s3 clients set region as "US" instead of
-	// "us-east-1", handle it.
+	// globalMinioDefaultRegion, handle it.
 	if reqRegion == "US" {
-		reqRegion = "us-east-1"
+		reqRegion = globalMinioDefaultRegion
 	}
 	return reqRegion == confRegion
 }

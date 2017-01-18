@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -121,7 +121,7 @@ func testServicesCmdHandler(cmd cmdType, args map[string]interface{}, t *testing
 	// initialize NSLock.
 	initNSLock(false)
 	// Initialize configuration for access/secret credentials.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Unable to initialize server config. %s", err)
 	}
@@ -238,7 +238,7 @@ func TestListLocksHandler(t *testing.T) {
 	// initialize NSLock.
 	initNSLock(false)
 
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Unable to initialize server config. %s", err)
 	}
@@ -323,7 +323,7 @@ func TestClearLocksHandler(t *testing.T) {
 	// initialize NSLock.
 	initNSLock(false)
 
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Unable to initialize server config. %s", err)
 	}

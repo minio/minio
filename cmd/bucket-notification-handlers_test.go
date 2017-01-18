@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,7 +47,7 @@ func newFlushWriter(writer io.Writer) http.ResponseWriter {
 // Tests write notification code.
 func TestWriteNotification(t *testing.T) {
 	// Initialize a new test config.
-	root, err := newTestConfig("us-east-1")
+	root, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Unable to initialize test config %s", err)
 	}
@@ -112,7 +112,7 @@ func TestWriteNotification(t *testing.T) {
 
 func TestSendBucketNotification(t *testing.T) {
 	// Initialize a new test config.
-	root, err := newTestConfig("us-east-1")
+	root, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Unable to initialize test config %s", err)
 	}
@@ -185,7 +185,7 @@ func testGetBucketNotificationHandler(obj ObjectLayer, instanceType, bucketName 
 	filterRules := []filterRule{
 		{
 			Name:  "prefix",
-			Value: "minio",
+			Value: globalMinioDefaultOwnerID,
 		},
 		{
 			Name:  "suffix",

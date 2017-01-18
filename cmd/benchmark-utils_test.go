@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -148,7 +148,7 @@ func runPutObjectPartBenchmark(b *testing.B, obj ObjectLayer, partSize int) {
 
 // creates XL/FS backend setup, obtains the object layer and calls the runPutObjectPartBenchmark function.
 func benchmarkPutObjectPart(b *testing.B, instanceType string, objSize int) {
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		b.Fatalf("Unable to initialize config. %s", err)
 	}
@@ -167,7 +167,7 @@ func benchmarkPutObjectPart(b *testing.B, instanceType string, objSize int) {
 
 // creates XL/FS backend setup, obtains the object layer and calls the runPutObjectBenchmark function.
 func benchmarkPutObject(b *testing.B, instanceType string, objSize int) {
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		b.Fatalf("Unable to initialize config. %s", err)
 	}
@@ -186,7 +186,7 @@ func benchmarkPutObject(b *testing.B, instanceType string, objSize int) {
 
 // creates XL/FS backend setup, obtains the object layer and runs parallel benchmark for put object.
 func benchmarkPutObjectParallel(b *testing.B, instanceType string, objSize int) {
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		b.Fatalf("Unable to initialize config. %s", err)
 	}
@@ -206,7 +206,7 @@ func benchmarkPutObjectParallel(b *testing.B, instanceType string, objSize int) 
 // Benchmark utility functions for ObjectLayer.GetObject().
 // Creates Object layer setup ( MakeBucket, PutObject) and then runs the benchmark.
 func runGetObjectBenchmark(b *testing.B, obj ObjectLayer, objSize int) {
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		b.Fatalf("Unable to initialize config. %s", err)
 	}
@@ -275,7 +275,7 @@ func generateBytesData(size int) []byte {
 
 // creates XL/FS backend setup, obtains the object layer and calls the runGetObjectBenchmark function.
 func benchmarkGetObject(b *testing.B, instanceType string, objSize int) {
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		b.Fatalf("Unable to initialize config. %s", err)
 	}
@@ -294,7 +294,7 @@ func benchmarkGetObject(b *testing.B, instanceType string, objSize int) {
 
 // creates XL/FS backend setup, obtains the object layer and runs parallel benchmark for ObjectLayer.GetObject() .
 func benchmarkGetObjectParallel(b *testing.B, instanceType string, objSize int) {
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		b.Fatalf("Unable to initialize config. %s", err)
 	}
@@ -314,7 +314,7 @@ func benchmarkGetObjectParallel(b *testing.B, instanceType string, objSize int) 
 // Parallel benchmark utility functions for ObjectLayer.PutObject().
 // Creates Object layer setup ( MakeBucket ) and then runs the PutObject benchmark.
 func runPutObjectBenchmarkParallel(b *testing.B, obj ObjectLayer, objSize int) {
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		b.Fatalf("Unable to initialize config. %s", err)
 	}
@@ -362,7 +362,7 @@ func runPutObjectBenchmarkParallel(b *testing.B, obj ObjectLayer, objSize int) {
 // Parallel benchmark utility functions for ObjectLayer.GetObject().
 // Creates Object layer setup ( MakeBucket, PutObject) and then runs the benchmark.
 func runGetObjectBenchmarkParallel(b *testing.B, obj ObjectLayer, objSize int) {
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		b.Fatalf("Unable to initialize config. %s", err)
 	}

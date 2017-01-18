@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -100,7 +100,7 @@ func (api objectAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r *
 		return
 	}
 
-	if s3Error := checkRequestAuthType(r, bucket, "s3:GetBucketLocation", "us-east-1"); s3Error != ErrNone {
+	if s3Error := checkRequestAuthType(r, bucket, "s3:GetBucketLocation", globalMinioDefaultRegion); s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
 		return
 	}
@@ -115,7 +115,7 @@ func (api objectAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r *
 	encodedSuccessResponse := encodeResponse(LocationResponse{})
 	// Get current region.
 	region := serverConfig.GetRegion()
-	if region != "us-east-1" {
+	if region != globalMinioDefaultRegion {
 		encodedSuccessResponse = encodeResponse(LocationResponse{
 			Location: region,
 		})
@@ -187,7 +187,7 @@ func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.R
 	}
 
 	// ListBuckets does not have any bucket action.
-	s3Error := checkRequestAuthType(r, "", "", "us-east-1")
+	s3Error := checkRequestAuthType(r, "", "", globalMinioDefaultRegion)
 	if s3Error == ErrInvalidRegion {
 		// Clients like boto3 send listBuckets() call signed with region that is configured.
 		s3Error = checkRequestAuthType(r, "", "", serverConfig.GetRegion())
@@ -334,7 +334,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// PutBucket does not have any bucket action.
-	if s3Error := checkRequestAuthType(r, "", "", "us-east-1"); s3Error != ErrNone {
+	if s3Error := checkRequestAuthType(r, "", "", globalMinioDefaultRegion); s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
 		return
 	}
