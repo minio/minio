@@ -326,6 +326,12 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// Check if have available space
+	if err = objectAPI.CanCreateFile(objInfo.Size); err != nil {
+		writeErrorResponse(w, ErrStorageFull, r.URL)
+		return
+	}
+
 	defaultMeta := objInfo.UserDefined
 
 	// Make sure to remove saved md5sum, object might have been uploaded
@@ -417,6 +423,12 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	/// maximum Upload size for objects in a single operation
 	if isMaxObjectSize(size) {
 		writeErrorResponse(w, ErrEntityTooLarge, r.URL)
+		return
+	}
+
+	// Check if have available space
+	if err = objectAPI.CanCreateFile(size); err != nil {
+		writeErrorResponse(w, ErrStorageFull, r.URL)
 		return
 	}
 
@@ -572,6 +584,12 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	/// maximum Upload size for multipart objects in a single operation
 	if isMaxObjectSize(size) {
 		writeErrorResponse(w, ErrEntityTooLarge, r.URL)
+		return
+	}
+
+	// Check if have available space
+	if err = objectAPI.CanCreateFile(size); err != nil {
+		writeErrorResponse(w, ErrStorageFull, r.URL)
 		return
 	}
 

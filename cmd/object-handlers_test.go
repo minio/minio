@@ -39,6 +39,7 @@ const (
 	None Fault = iota
 	MissingContentLength
 	TooBigObject
+	NotEnoughFreeSpace
 	TooBigDecodedLength
 	BadSignature
 	BadMD5
@@ -798,6 +799,18 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			fault:              MissingContentLength,
 			expectedRespStatus: http.StatusLengthRequired,
 		},
+		// Test case - 7.
+		// Test Case with object greater than available space on the FS
+		{
+			bucketName:         bucketName,
+			objectName:         objectName,
+			data:               bytesData,
+			dataLen:            len(bytesData),
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
+			fault:              NotEnoughFreeSpace,
+			expectedRespStatus: http.StatusInternalServerError,
+		},
 	}
 	// Iterating over the cases, fetching the object validating the response.
 	for i, testCase := range testCases {
@@ -820,6 +833,9 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			req.TransferEncoding = []string{}
 		case TooBigObject:
 			req.ContentLength = maxObjectSize + 1
+		case NotEnoughFreeSpace:
+			req.ContentLength = int64(float64(freeSpaceOnFs) * 1.1)
+
 		}
 		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
 		// Call the ServeHTTP to execute the handler,`func (api objectAPIHandlers) GetObjectHandler`  handles the request.
@@ -863,6 +879,8 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			reqV2.TransferEncoding = []string{}
 		case TooBigObject:
 			reqV2.ContentLength = maxObjectSize + 1
+		case NotEnoughFreeSpace:
+			reqV2.ContentLength = int64(float64(freeSpaceOnFs) * 1.1)
 		}
 
 		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.

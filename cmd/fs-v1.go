@@ -83,6 +83,12 @@ func initMetaVolumeFS(fsPath, fsUUID string) error {
 
 }
 
+// Get disk space which is available for storing data
+func availableDiskSpace(totalSpace int64) int64 {
+	// Remove 5% from free space for cumulative disk space used for journalling, inodes etc.
+	return int64(float64(totalSpace) * 0.95)
+}
+
 // newFSObjectLayer - initialize new fs object layer.
 func newFSObjectLayer(fsPath string) (ObjectLayer, error) {
 	if fsPath == "" {
@@ -189,9 +195,7 @@ func (fs fsObjects) checkDiskFree() (err error) {
 		return err
 	}
 
-	// Remove 5% from free space for cumulative disk space used for journalling, inodes etc.
-	availableDiskSpace := float64(di.Free) * 0.95
-	if int64(availableDiskSpace) <= fs.minFreeSpace {
+	if availableDiskSpace(di.Free) <= fs.minFreeSpace {
 		return errDiskFull
 	}
 
@@ -226,6 +230,31 @@ func (fs fsObjects) StorageInfo() StorageInfo {
 	}
 	storageInfo.Backend.Type = FS
 	return storageInfo
+}
+
+// Check if have sufficient space and inodes for the file
+func (fs fsObjects) CanCreateFile(fileSize int64) error {
+	di, err := getDiskInfo(fs.fsPath)
+	if nil != err {
+		return err
+	}
+
+	if availableDiskSpace(di.Free)-fileSize <= fs.minFreeSpace {
+		return errDiskFull
+	}
+
+	// Some filesystems do not implement a way to provide total inodes available, instead inodes
+	// are allocated based on available disk space. For example CephFS, StoreNext CVFS, AzureFile driver.
+	// Allow for the available disk to be separately validate and we will validate inodes only if
+	// total inodes are provided by the underlying filesystem.
+	if di.Files != 0 {
+		availableFiles := int64(di.Ffree)
+		if (availableFiles - 1) <= fs.minFreeInodes {
+			return errDiskFull
+		}
+	}
+
+	return nil
 }
 
 /// Bucket operations

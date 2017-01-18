@@ -69,6 +69,32 @@ func init() {
 	setMaxMemory()
 }
 
+const freeSpaceOnFs = int64(0.5 * float64(maxObjectSize))
+
+type mockedFS struct {
+	ObjectLayer
+}
+
+func (m mockedFS) CanCreateFile(fileSize int64) error {
+	if fileSize > freeSpaceOnFs {
+		return errDiskFull
+	}
+
+	return nil
+}
+
+type mockedXL struct {
+	ObjectLayer
+}
+
+func (m mockedXL) CanCreateFile(fileSize int64) error {
+	if fileSize > freeSpaceOnFs {
+		return errDiskFull
+	}
+
+	return nil
+}
+
 func prepareFS() (ObjectLayer, string, error) {
 	nDisks := 1
 	fsDirs, err := getRandomDisks(nDisks)
@@ -87,7 +113,8 @@ func prepareFS() (ObjectLayer, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	return obj, endpoints[0].Path, nil
+
+	return mockedFS{obj}, endpoints[0].Path, nil
 }
 
 func prepareXL() (ObjectLayer, []string, error) {
@@ -106,6 +133,11 @@ func prepareXL() (ObjectLayer, []string, error) {
 		return nil, nil, err
 	}
 	return obj, fsDirs, nil
+}
+
+func prepareMockedXL() (ObjectLayer, []string, error) {
+	obj, fsDirs, err := prepareXL()
+	return mockedXL{obj}, fsDirs, err
 }
 
 // Initialize FS objects.
@@ -1935,7 +1967,7 @@ func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endpoints [
 	// Executing the object layer tests for single node setup.
 	objAPITest(objLayer, FSTestStr, bucketFS, fsAPIRouter, credentials, t)
 
-	objLayer, xlDisks, err := prepareXL()
+	objLayer, xlDisks, err := prepareMockedXL()
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for XL setup: %s", err)
 	}
