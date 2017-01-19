@@ -48,6 +48,7 @@ type ObjectLayer interface {
 
 	// Healing operations.
 	HealBucket(bucket string) error
+	ListBucketsHeal() (buckets []BucketInfo, err error)
 	HealObject(bucket, object string) error
 	ListObjectsHeal(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error)
 }

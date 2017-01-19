@@ -687,7 +687,7 @@ func TestListObjectsHealHandler(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Test %d - Failed to construct list objects needing heal request - %v", i+1, err)
 		}
-		req.Header.Set(minioAdminOpHeader, "list")
+		req.Header.Set(minioAdminOpHeader, "list-objects")
 
 		cred := serverConfig.GetCredential()
 		err = signRequestV4(req, cred.AccessKey, cred.SecretKey)

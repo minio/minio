@@ -345,6 +345,34 @@ func (adminAPI adminAPIHandlers) ListObjectsHealHandler(w http.ResponseWriter, r
 	writeSuccessResponseXML(w, encodeResponse(listResponse))
 }
 
+// ListBucketsHealHandler - GET /?heal
+func (adminAPI adminAPIHandlers) ListBucketsHealHandler(w http.ResponseWriter, r *http.Request) {
+	// Get object layer instance.
+	objLayer := newObjectLayerFn()
+	if objLayer == nil {
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+		return
+	}
+
+	// Validate request signature.
+	adminAPIErr := checkRequestAuthType(r, "", "", "")
+	if adminAPIErr != ErrNone {
+		writeErrorResponse(w, adminAPIErr, r.URL)
+		return
+	}
+
+	// Get the list buckets to be healed.
+	bucketsInfo, err := objLayer.ListBucketsHeal()
+	if err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
+	listResponse := generateListBucketsResponse(bucketsInfo)
+	// Write success response.
+	writeSuccessResponseXML(w, encodeResponse(listResponse))
+}
+
 // HealBucketHandler - POST /?heal&bucket=mybucket
 // - bucket is mandatory query parameter
 // Heal a given bucket, if present.

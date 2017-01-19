@@ -181,8 +181,9 @@ type CommonPrefix struct {
 
 // Bucket container for bucket metadata
 type Bucket struct {
-	Name         string
-	CreationDate string // time string of format "2006-01-02T15:04:05.000Z"
+	Name           string
+	CreationDate   string          // time string of format "2006-01-02T15:04:05.000Z"
+	HealBucketInfo *HealBucketInfo `xml:"HealBucketInfo,omitempty"`
 }
 
 // Object container for object metadata
@@ -196,8 +197,8 @@ type Object struct {
 	Owner Owner
 
 	// The class of storage used to store the object.
-	StorageClass string
-	HealInfo     *HealInfo `xml:"HealInfo,omitempty"`
+	StorageClass   string
+	HealObjectInfo *HealObjectInfo `xml:"HealObjectInfo,omitempty"`
 }
 
 // CopyObjectResponse container returns ETag and LastModified of the successfully copied object
@@ -285,6 +286,7 @@ func generateListBucketsResponse(buckets []BucketInfo) ListBucketsResponse {
 		var listbucket = Bucket{}
 		listbucket.Name = bucket.Name
 		listbucket.CreationDate = bucket.Created.Format(timeFormatAMZLong)
+		listbucket.HealBucketInfo = bucket.HealBucketInfo
 		listbuckets = append(listbuckets, listbucket)
 	}
 
@@ -317,8 +319,8 @@ func generateListObjectsV1Response(bucket, prefix, marker, delimiter string, max
 		content.Size = object.Size
 		content.StorageClass = globalMinioDefaultStorageClass
 		content.Owner = owner
-		// object.HealInfo is non-empty only when resp is constructed in ListObjectsHeal.
-		content.HealInfo = object.HealInfo
+		// object.HealObjectInfo is non-empty only when resp is constructed in ListObjectsHeal.
+		content.HealObjectInfo = object.HealObjectInfo
 		contents = append(contents, content)
 	}
 	// TODO - support EncodingType in xml decoding

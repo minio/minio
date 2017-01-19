@@ -897,3 +897,8 @@ func (fs fsObjects) HealBucket(bucket string) error {
 func (fs fsObjects) ListObjectsHeal(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
 	return ListObjectsInfo{}, traceError(NotImplemented{})
 }
+
+// ListBucketsHeal - list all buckets to be healed. Valid only for XL
+func (fs fsObjects) ListBucketsHeal() ([]BucketInfo, error) {
+	return []BucketInfo{}, traceError(NotImplemented{})
+}

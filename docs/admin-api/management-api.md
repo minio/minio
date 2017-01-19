@@ -112,3 +112,9 @@
     - ErrInvalidBucketName
     - ErrInvalidObjectName
     - ErrInvalidDuration
+
+### Healing
+
+* ListBucketsHeal
+  - GET /?heal
+  - x-minio-operation: list-buckets
