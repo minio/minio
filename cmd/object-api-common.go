@@ -22,6 +22,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	humanize "github.com/dustin/go-humanize"
 )
@@ -52,6 +53,32 @@ func init() {
 func isRemoteDisk(disk StorageAPI) bool {
 	_, ok := disk.(*networkStorage)
 	return ok
+}
+
+// Checks if the object is a directory, this logic uses
+// if size == 0 and object ends with slashSeparator then
+// returns true.
+func isObjectDir(object string, size int64) bool {
+	return strings.HasSuffix(object, slashSeparator) && size == 0
+}
+
+// Converts just bucket, object metadata into ObjectInfo datatype.
+func dirObjectInfo(bucket, object string, size int64, metadata map[string]string) ObjectInfo {
+	// This is a special case with size as '0' and object ends with
+	// a slash separator, we treat it like a valid operation and
+	// return success.
+	md5Sum := metadata["md5Sum"]
+	delete(metadata, "md5Sum")
+	return ObjectInfo{
+		Bucket:      bucket,
+		Name:        object,
+		ModTime:     time.Now().UTC(),
+		ContentType: "application/octet-stream",
+		IsDir:       true,
+		Size:        size,
+		MD5Sum:      md5Sum,
+		UserDefined: metadata,
+	}
 }
 
 // House keeping code for FS/XL and distributed Minio setup.

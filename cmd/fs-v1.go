@@ -542,6 +542,12 @@ func (fs fsObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 // Additionally writes `fs.json` which carries the necessary metadata
 // for future object operations.
 func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (objInfo ObjectInfo, err error) {
+	// This is a special case with size as '0' and object ends with
+	// a slash separator, we treat it like a valid operation and
+	// return success.
+	if isObjectDir(object, size) {
+		return dirObjectInfo(bucket, object, size, metadata), nil
+	}
 	if err = checkPutObjectArgs(bucket, object, fs); err != nil {
 		return ObjectInfo{}, err
 	}
