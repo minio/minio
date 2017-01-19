@@ -1,4 +1,4 @@
-# Publish Minio events via Redis [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/minio/minio?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+# Publish Minio events via Redis [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)  
 
 [Minio](https://www.minio.io) server supports Amazon S3 compatible bucket event notifications. In this recipe we will learn how to set up bucket notifications using [Redis](http://redis.io/documentation).
 
@@ -28,7 +28,7 @@ The default location of Minio server configuration file is ``~/.minio/config.jso
 			}
 		}
 ```
-Restart the Minio server to reflect config changes made above. ``bucketevents`` is the key used by Redis in this example.
+``bucketevents`` is the key used by Redis in this example.
 
 If you are running [distributed Minio](https://docs.minio.io/docs/distributed-minio-quickstart-guide), modify ``~/.minio/config.json`` with these local changes on all the nodes.
 
@@ -45,7 +45,7 @@ arn:minio:sqs:us-east-1:1:redis s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: su
 
 ### Step 3: Testing on Redis
 
-Redis comes with handy command line interface, redis-cli. It uses ``monitor`` command to print all notification on console.
+Redis comes with handy command line interface, redis-cli to print all notifications on the console.
 
 ```
 redis-cli -a yoursecret
@@ -57,7 +57,7 @@ Open another terminal and upload a JPEG image into ``images`` bucket.
 mc cp myphoto.jpg myminio/images
 ```
 
-Below ``redis-cli`` prints event notification on console.
+Below ``redis-cli`` prints event notification on the console.
 
 ```
 redis-cli -a yoursecret

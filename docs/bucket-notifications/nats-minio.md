@@ -1,4 +1,4 @@
-# Publish Minio events via NATS [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/minio/minio?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+# Publish Minio events via NATS [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
 
 [Minio](https://www.minio.io) server supports Amazon S3 compatible bucket event notifications. In this recipe we will learn how to set up bucket notifications using [NATS](http://nats.io/). 
 
@@ -32,7 +32,7 @@ The default location of Minio server configuration file is ``~/.minio/config.jso
             }
         },
 ```
-Restart the Minio server to reflect config changes made above. ``bucketevents`` is the subject used by NATS in this example.
+``bucketevents`` is the subject used by NATS in this example.
 
 If you are running [distributed Minio](https://docs.minio.io/docs/distributed-minio-quickstart-guide), modify ``~/.minio/config.json`` with these local changes on all the nodes.
 
@@ -92,7 +92,7 @@ Open another terminal and upload a JPEG image into ``images`` bucket.
 mc cp myphoto.jpg myminio/images
 ```
 
-Below terminal running nats.go program prints event notification on console.
+The example ``nats.go`` program prints event notification to console.
 
 ```
 go run nats.go 

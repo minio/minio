@@ -1,4 +1,4 @@
-# Publish Minio events via RabbitMQ [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/minio/minio?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+# Publish Minio events via RabbitMQ [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
 
 [Minio](https://www.minio.io) server supports Amazon S3 compatible bucket event notifications. In this recipe we will learn how to set up bucket notifications using [RabbitMQ](https://www.rabbitmq.com/) server. 
 
@@ -35,7 +35,7 @@ The default location of Minio server configuration file is ``~/.minio/config.jso
 			}
         }
 ```
-Restart the Minio server to reflect config changes made above. Minio supports all the exchange available in [RabbitMQ](https://www.rabbitmq.com/). For this setup we are using ``fanout`` exchange.
+Minio supports all the exchange available in [RabbitMQ](https://www.rabbitmq.com/). For this setup we are using ``fanout`` exchange.
 
 If you are running [distributed Minio](https://docs.minio.io/docs/distributed-minio-quickstart-guide), modify ``~/.minio/config.json`` with these local changes on all the nodes.
 
@@ -52,7 +52,7 @@ arn:minio:sqs:us-east-1:1:amqp s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suf
 
 ### Step 3: Testing on RabbitMQ
 
-Below python script waits on queue exchange ``bucketevents`` and prints event notification on console. It uses [pika python client](https://www.rabbitmq.com/tutorials/tutorial-three-python.html) library for RabbitMQ.
+Below python script waits on queue exchange ``bucketevents`` and prints event notification on console. It uses [Pika Python Client](https://www.rabbitmq.com/tutorials/tutorial-three-python.html), a library for RabbitMQ will be used in this python program.
 
 ```py
 #!/usr/bin/env python
