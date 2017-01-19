@@ -35,7 +35,7 @@ The default location of Minio server configuration file is ``~/.minio/config.jso
 			}
         }
 ```
-Minio supports all the exchange available in [RabbitMQ](https://www.rabbitmq.com/). For this setup we are using ``fanout`` exchange.
+Restart Minio server to reflect config changes. Minio supports all the exchange available in [RabbitMQ](https://www.rabbitmq.com/). For this setup we are using ``fanout`` exchange.
 
 If you are running [distributed Minio](https://docs.minio.io/docs/distributed-minio-quickstart-guide), modify ``~/.minio/config.json`` with these local changes on all the nodes.
 

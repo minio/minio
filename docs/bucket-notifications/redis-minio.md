@@ -28,7 +28,7 @@ The default location of Minio server configuration file is ``~/.minio/config.jso
 			}
 		}
 ```
-``bucketevents`` is the key used by Redis in this example.
+Restart Minio server to reflect config changes. ``bucketevents`` is the key used by Redis in this example.
 
 If you are running [distributed Minio](https://docs.minio.io/docs/distributed-minio-quickstart-guide), modify ``~/.minio/config.json`` with these local changes on all the nodes.
 
@@ -45,7 +45,7 @@ arn:minio:sqs:us-east-1:1:redis s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: su
 
 ### Step 3: Testing on Redis
 
-Redis comes with handy command line interface, redis-cli to print all notifications on the console.
+Redis comes with handy command line interface ``redis-cli`` to print all notifications on the console.
 
 ```
 redis-cli -a yoursecret
@@ -57,7 +57,7 @@ Open another terminal and upload a JPEG image into ``images`` bucket.
 mc cp myphoto.jpg myminio/images
 ```
 
-Below ``redis-cli`` prints event notification on the console.
+``redis-cli`` prints event notification to the console.
 
 ```
 redis-cli -a yoursecret

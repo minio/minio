@@ -32,7 +32,7 @@ The default location of Minio server configuration file is ``~/.minio/config.jso
                         }
                 }
 ```
-``bucketevents`` is the database table used by PostgreSQL in this example.
+Restart Minio server to reflect config changes. ``bucketevents`` is the database table used by PostgreSQL in this example.
 
 If you are running [distributed Minio](https://docs.minio.io/docs/distributed-minio-quickstart-guide), modify ``~/.minio/config.json`` with these local changes on all the nodes.
 
@@ -55,7 +55,7 @@ Open another terminal and upload a JPEG image into ``images`` bucket.
 mc cp myphoto.jpg myminio/images
 ```
 
-PostgreSQL terminal lists the saved event notification logs.
+Open PostgreSQL terminal to list saved event notification logs.
 
 ```
 bucketevents_db=# select * from bucketevents;

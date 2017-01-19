@@ -32,7 +32,7 @@ The default location of Minio server configuration file is ``~/.minio/config.jso
             }
         },
 ```
-``bucketevents`` is the subject used by NATS in this example.
+Restart Minio server to reflect config changes. ``bucketevents`` is the subject used by NATS in this example.
 
 If you are running [distributed Minio](https://docs.minio.io/docs/distributed-minio-quickstart-guide), modify ``~/.minio/config.json`` with these local changes on all the nodes.
 

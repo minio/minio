@@ -27,7 +27,7 @@ The default location of Minio server configuration file is ``~/.minio/config.jso
                         }
                 },
 ```
-``bucketevents`` is the index used by Elasticsearch.
+Restart Minio server to reflect config changes. ``bucketevents`` is the index used by Elasticsearch.
 
 If you are running [distributed Minio](https://docs.minio.io/docs/distributed-minio-quickstart-guide), modify ``~/.minio/config.json`` with these local changes on all the nodes.
 
