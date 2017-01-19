@@ -199,7 +199,7 @@ func (fs fsObjects) checkDiskFree() (err error) {
 	// are allocated based on available disk space. For example CephFS, StoreNext CVFS, AzureFile driver.
 	// Allow for the available disk to be separately validate and we will validate inodes only if
 	// total inodes are provided by the underlying filesystem.
-	if di.Files != 0 {
+	if di.Files != 0 && di.FSType != "NFS" {
 		availableFiles := int64(di.Ffree)
 		if availableFiles <= fs.minFreeInodes {
 			return errDiskFull
