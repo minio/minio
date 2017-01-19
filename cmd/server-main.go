@@ -425,17 +425,17 @@ func serverMain(c *cli.Context) {
 	handler, err := configureServerHandler(srvConfig)
 	fatalIf(err, "Unable to configure one of server's RPC services.")
 
-	// Initialize S3 Peers inter-node communication only in distributed setup.
-	initGlobalS3Peers(endpoints)
-
-	// Initialize Admin Peers inter-node communication only in distributed setup.
-	initGlobalAdminPeers(endpoints)
-
 	// Initialize a new HTTP server.
 	apiServer := NewServerMux(serverAddr, handler)
 
 	// Set the global minio addr for this server.
 	globalMinioAddr = getLocalAddress(srvConfig)
+
+	// Initialize S3 Peers inter-node communication only in distributed setup.
+	initGlobalS3Peers(endpoints)
+
+	// Initialize Admin Peers inter-node communication only in distributed setup.
+	initGlobalAdminPeers(endpoints)
 
 	// Determine API endpoints where we are going to serve the S3 API from.
 	apiEndPoints, err := finalizeAPIEndpoints(apiServer.Server)
