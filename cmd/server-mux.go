@@ -108,10 +108,12 @@ func (c *ConnMux) Read(b []byte) (int, error) {
 
 // Close the connection.
 func (c *ConnMux) Close() (err error) {
-	if err = c.bufrw.Flush(); err != nil {
-		return err
-	}
-	return c.Conn.Close()
+	// Make sure that we always close a connection,
+	// even if the bufioWriter flush sends an error.
+	defer c.Conn.Close()
+
+	// Flush and write to the connection.
+	return c.bufrw.Flush()
 }
 
 // ListenerMux wraps the standard net.Listener to inspect
