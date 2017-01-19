@@ -100,7 +100,12 @@ func (api objectAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r *
 		return
 	}
 
-	if s3Error := checkRequestAuthType(r, bucket, "s3:GetBucketLocation", globalMinioDefaultRegion); s3Error != ErrNone {
+	s3Error := checkRequestAuthType(r, bucket, "s3:GetBucketLocation", globalMinioDefaultRegion)
+	if s3Error == ErrInvalidRegion {
+		// Clients like boto3 send getBucketLocation() call signed with region that is configured.
+		s3Error = checkRequestAuthType(r, "", "s3:GetBucketLocation", serverConfig.GetRegion())
+	}
+	if s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
 		return
 	}
@@ -334,7 +339,12 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// PutBucket does not have any bucket action.
-	if s3Error := checkRequestAuthType(r, "", "", globalMinioDefaultRegion); s3Error != ErrNone {
+	s3Error := checkRequestAuthType(r, "", "", globalMinioDefaultRegion)
+	if s3Error == ErrInvalidRegion {
+		// Clients like boto3 send putBucket() call signed with region that is configured.
+		s3Error = checkRequestAuthType(r, "", "", serverConfig.GetRegion())
+	}
+	if s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
 		return
 	}
