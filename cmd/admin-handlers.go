@@ -46,6 +46,18 @@ const (
 	mgmtDryRun    mgmtQueryKey = "dry-run"
 )
 
+// ServerVersion - server version
+type ServerVersion struct {
+	Version  string `json:"version"`
+	CommitID string `json:"commitID"`
+}
+
+// ServerStatus - contains the response of service status API
+type ServerStatus struct {
+	StorageInfo   StorageInfo   `json:"storageInfo"`
+	ServerVersion ServerVersion `json:"serverVersion"`
+}
+
 // ServiceStatusHandler - GET /?service
 // HTTP header x-minio-operation: status
 // ----------
@@ -57,8 +69,20 @@ func (adminAPI adminAPIHandlers) ServiceStatusHandler(w http.ResponseWriter, r *
 		writeErrorResponse(w, adminAPIErr, r.URL)
 		return
 	}
+
+	// Fetch storage backend information
 	storageInfo := newObjectLayerFn().StorageInfo()
-	jsonBytes, err := json.Marshal(storageInfo)
+	// Fetch server version
+	serverVersion := ServerVersion{Version: Version, CommitID: CommitID}
+
+	// Create API response
+	serverStatus := ServerStatus{
+		StorageInfo:   storageInfo,
+		ServerVersion: serverVersion,
+	}
+
+	// Marshal API response
+	jsonBytes, err := json.Marshal(serverStatus)
 	if err != nil {
 		writeErrorResponse(w, ErrInternalError, r.URL)
 		errorIf(err, "Failed to marshal storage info into json.")

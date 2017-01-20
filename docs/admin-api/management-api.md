@@ -25,7 +25,7 @@
 * Status
   - GET /?service
   - x-minio-operation: status
-  - Response: On success 200, return json formatted StorageInfo object.
+  - Response: On success 200, return json formatted object which contains StorageInfo and ServerVersion structures
 
 * SetCredentials
   - GET /?service

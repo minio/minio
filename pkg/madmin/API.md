@@ -74,9 +74,11 @@ Fetch service status, replies disk space used, backend type and total disks offl
 
 | Param  | Type  | Description  |
 |---|---|---|
-|`st.Total`  | _int64_  | Total disk space. |
-|`st.Free`  | _int64_  | Free disk space. |
-|`st.Backend`| _struct{}_ | Represents backend type embedded structure. |
+|`st.ServerVersion.Version`  | _string_  | Server version. |
+|`st.ServerVersion.CommitID`  | _string_  | Server commit id. |
+|`st.StorageInfo.Total`  | _int64_  | Total disk space. |
+|`st.StorageInfo.Free`  | _int64_  | Free disk space. |
+|`st.StorageInfo.Backend`| _struct{}_ | Represents backend type embedded structure. |
 
 | Param | Type | Description |
 |---|---|---|
