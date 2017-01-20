@@ -154,11 +154,6 @@ func newFSObjectLayer(fsPath string) (ObjectLayer, error) {
 		},
 	}
 
-	// Validate if disk has enough free space to use.
-	if err = fs.checkDiskFree(); err != nil {
-		return nil, err
-	}
-
 	// Initialize and load bucket policies.
 	err = initBucketPolicies(fs)
 	if err != nil {
