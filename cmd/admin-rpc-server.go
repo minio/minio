@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"errors"
 	"net/rpc"
 	"time"
 
@@ -24,6 +25,8 @@ import (
 )
 
 const adminPath = "/admin"
+
+var errUnsupportedBackend = errors.New("not supported for non erasure-code backend")
 
 // adminCmd - exports RPC methods for service status, stop and
 // restart commands.
@@ -57,8 +60,48 @@ func (s *adminCmd) Restart(args *AuthRPCArgs, reply *AuthRPCReply) error {
 
 // ListLocks - lists locks held by requests handled by this server instance.
 func (s *adminCmd) ListLocks(query *ListLocksQuery, reply *ListLocksReply) error {
+	if err := query.IsAuthenticated(); err != nil {
+		return err
+	}
 	volLocks := listLocksInfo(query.bucket, query.prefix, query.relTime)
 	*reply = ListLocksReply{volLocks: volLocks}
+	return nil
+}
+
+// ReInitDisk - reinitialize storage disks and object layer to use the
+// new format.
+func (s *adminCmd) ReInitDisks(args *AuthRPCArgs, reply *AuthRPCReply) error {
+	if err := args.IsAuthenticated(); err != nil {
+		return err
+	}
+
+	if !globalIsXL {
+		return errUnsupportedBackend
+	}
+
+	// Get the current object layer instance.
+	objLayer := newObjectLayerFn()
+
+	// Initialize new disks to include the newly formatted disks.
+	bootstrapDisks, err := initStorageDisks(globalEndpoints)
+	if err != nil {
+		return err
+	}
+
+	// Initialize new object layer with newly formatted disks.
+	newObjectAPI, err := newXLObjects(bootstrapDisks)
+	if err != nil {
+		return err
+	}
+
+	// Replace object layer with newly formatted storage.
+	globalObjLayerMutex.Lock()
+	globalObjectAPI = newObjectAPI
+	globalObjLayerMutex.Unlock()
+
+	// Shutdown storage belonging to old object layer instance.
+	objLayer.Shutdown()
+
 	return nil
 }
 

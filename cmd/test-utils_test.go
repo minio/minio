@@ -488,6 +488,14 @@ func resetGlobalEventnotify() {
 	globalEventNotifier = nil
 }
 
+func resetGlobalEndpoints() {
+	globalEndpoints = []*url.URL{}
+}
+
+func resetGlobalIsXL() {
+	globalIsXL = false
+}
+
 // Resets all the globals used modified in tests.
 // Resetting ensures that the changes made to globals by one test doesn't affect others.
 func resetTestGlobals() {
@@ -501,6 +509,10 @@ func resetTestGlobals() {
 	resetGlobalNSLock()
 	// Reset global event notifier.
 	resetGlobalEventnotify()
+	// Reset global endpoints.
+	resetGlobalEndpoints()
+	// Reset global isXL flag.
+	resetGlobalIsXL()
 }
 
 // Configure the server for the test run.

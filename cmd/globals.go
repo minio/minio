@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"crypto/x509"
+	"net/url"
 	"os"
 	"runtime"
 	"strings"
@@ -70,6 +71,9 @@ var (
 	// Indicates if the running minio server is distributed setup.
 	globalIsDistXL = false
 
+	// Indicates if the running minio server is an erasure-code backend.
+	globalIsXL = false
+
 	// This flag is set to 'true' by default, it is set to `false`
 	// when MINIO_BROWSER env is set to 'off'.
 	globalIsBrowserEnabled = !strings.EqualFold(os.Getenv("MINIO_BROWSER"), "off")
@@ -111,6 +115,9 @@ var (
 
 	// Secret key passed from the environment
 	globalEnvSecretKey = os.Getenv("MINIO_SECRET_KEY")
+
+	// url.URL endpoints of disks that belong to the object storage.
+	globalEndpoints = []*url.URL{}
 
 	// Add new variable global values here.
 )

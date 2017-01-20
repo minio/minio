@@ -19,6 +19,7 @@ package cmd
 import (
 	"encoding/json"
 	"encoding/xml"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -374,6 +375,7 @@ func (adminAPI adminAPIHandlers) ListBucketsHealHandler(w http.ResponseWriter, r
 }
 
 // HealBucketHandler - POST /?heal&bucket=mybucket
+// - x-minio-operation = bucket
 // - bucket is mandatory query parameter
 // Heal a given bucket, if present.
 func (adminAPI adminAPIHandlers) HealBucketHandler(w http.ResponseWriter, r *http.Request) {
@@ -425,6 +427,7 @@ func isDryRun(qval url.Values) bool {
 }
 
 // HealObjectHandler - POST /?heal&bucket=mybucket&object=myobject
+// - x-minio-operation = object
 // - bucket and object are both mandatory query parameters
 // Heal a given object, if present.
 func (adminAPI adminAPIHandlers) HealObjectHandler(w http.ResponseWriter, r *http.Request) {
@@ -469,6 +472,72 @@ func (adminAPI adminAPIHandlers) HealObjectHandler(w http.ResponseWriter, r *htt
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
+
+	// Return 200 on success.
+	writeSuccessResponseHeadersOnly(w)
+}
+
+// HealFormatHandler - POST /?heal
+// - x-minio-operation = format
+// - bucket and object are both mandatory query parameters
+// Heal a given object, if present.
+func (adminAPI adminAPIHandlers) HealFormatHandler(w http.ResponseWriter, r *http.Request) {
+	// Get current object layer instance.
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil {
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+		return
+	}
+
+	// Validate request signature.
+	adminAPIErr := checkRequestAuthType(r, "", "", "")
+	if adminAPIErr != ErrNone {
+		writeErrorResponse(w, adminAPIErr, r.URL)
+		return
+	}
+
+	// Check if this setup is an erasure code backend, since
+	// heal-format is only applicable to single node XL and
+	// distributed XL setup.
+	if !globalIsXL {
+		writeErrorResponse(w, ErrNotImplemented, r.URL)
+		return
+	}
+
+	// Create a new set of storage instances to heal format.json.
+	bootstrapDisks, err := initStorageDisks(globalEndpoints)
+	if err != nil {
+		fmt.Println(traceError(err))
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
+	// Heal format.json on available storage.
+	err = healFormatXL(bootstrapDisks)
+	if err != nil {
+		fmt.Println(traceError(err))
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
+	// Instantiate new object layer with newly formatted storage.
+	newObjectAPI, err := newXLObjects(bootstrapDisks)
+	if err != nil {
+		fmt.Println(traceError(err))
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
+	// Set object layer with newly formatted storage to globalObjectAPI.
+	globalObjLayerMutex.Lock()
+	globalObjectAPI = newObjectAPI
+	globalObjLayerMutex.Unlock()
+
+	// Shutdown storage belonging to old object layer instance.
+	objectAPI.Shutdown()
+
+	// Inform peers to reinitialize storage with newly formatted storage.
+	reInitPeerDisks(globalAdminPeers)
 
 	// Return 200 on success.
 	writeSuccessResponseHeadersOnly(w)
