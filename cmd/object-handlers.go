@@ -409,7 +409,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			return
 		}
 	}
-	if size == -1 && !contains(r.TransferEncoding, "chunked") {
+	if size == -1 {
 		writeErrorResponse(w, ErrMissingContentLength, r.URL)
 		return
 	}

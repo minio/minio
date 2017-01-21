@@ -142,18 +142,15 @@ func (api objectAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *ht
 	}
 
 	// If Content-Length is unknown or zero, deny the
-	// request. PutBucketPolicy always needs a Content-Length if
-	// incoming request is not chunked.
-	if !contains(r.TransferEncoding, "chunked") {
-		if r.ContentLength == -1 || r.ContentLength == 0 {
-			writeErrorResponse(w, ErrMissingContentLength, r.URL)
-			return
-		}
-		// If Content-Length is greater than maximum allowed policy size.
-		if r.ContentLength > maxAccessPolicySize {
-			writeErrorResponse(w, ErrEntityTooLarge, r.URL)
-			return
-		}
+	// request. PutBucketPolicy always needs a Content-Length.
+	if r.ContentLength == -1 || r.ContentLength == 0 {
+		writeErrorResponse(w, ErrMissingContentLength, r.URL)
+		return
+	}
+	// If Content-Length is greater than maximum allowed policy size.
+	if r.ContentLength > maxAccessPolicySize {
+		writeErrorResponse(w, ErrEntityTooLarge, r.URL)
+		return
 	}
 
 	// Read access policy up to maxAccessPolicySize.

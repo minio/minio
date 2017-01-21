@@ -115,13 +115,11 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 		return
 	}
 
-	// If Content-Length is unknown or zero, deny the request. PutBucketNotification
-	// always needs a Content-Length if incoming request is not chunked.
-	if !contains(r.TransferEncoding, "chunked") {
-		if r.ContentLength == -1 {
-			writeErrorResponse(w, ErrMissingContentLength, r.URL)
-			return
-		}
+	// If Content-Length is unknown or zero, deny the request.
+	// PutBucketNotification always needs a Content-Length.
+	if r.ContentLength == -1 || r.ContentLength == 0 {
+		writeErrorResponse(w, ErrMissingContentLength, r.URL)
+		return
 	}
 
 	// Reads the incoming notification configuration.
