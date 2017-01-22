@@ -71,6 +71,7 @@ func NewConnMux(c net.Conn) *ConnMux {
 	}
 }
 
+// List of protocols to be detected by PeekProtocol function.
 const (
 	protocolTLS   = "tls"
 	protocolHTTP1 = "http"
@@ -78,26 +79,33 @@ const (
 )
 
 // PeekProtocol - reads the first bytes, then checks if it is similar
-// to one of the default http methods
-func (c *ConnMux) PeekProtocol() string {
+// to one of the default http methods. Returns error if there are any
+// errors in peeking over the connection.
+func (c *ConnMux) PeekProtocol() (string, error) {
+	// Peek for HTTP verbs.
 	buf, err := c.bufrw.Peek(maxHTTPVerbLen)
 	if err != nil {
-		if err != io.EOF {
-			errorIf(err, "Unable to peek into the protocol")
-		}
-		return protocolHTTP1
+		return "", err
 	}
-	for _, m := range defaultHTTP1Methods {
-		if strings.HasPrefix(string(buf), m) {
-			return protocolHTTP1
-		}
-	}
+
+	// Check for HTTP2 methods first.
 	for _, m := range defaultHTTP2Methods {
 		if strings.HasPrefix(string(buf), m) {
-			return protocolHTTP2
+			return protocolHTTP2, nil
 		}
 	}
-	return protocolTLS
+
+	// Check for HTTP1 methods.
+	for _, m := range defaultHTTP1Methods {
+		if strings.HasPrefix(string(buf), m) {
+			return protocolHTTP1, nil
+		}
+	}
+
+	// Default to TLS, this is not a real indication
+	// that the connection is TLS but that will be
+	// validated later by doing a handshake.
+	return protocolTLS, nil
 }
 
 // Read - streams the ConnMux buffer when reset flag is activated, otherwise
@@ -165,8 +173,8 @@ type ListenerMuxAcceptRes struct {
 // $ cat /proc/sys/net/ipv4/tcp_keepalive_probes
 // 9
 //
-// Effective value of total keep alive comes upto 9 x 3 * time.Minute = 27 Minutes.
-var defaultKeepAliveTimeout = 3 * time.Minute // 3 minutes.
+// Effective value of total keep alive comes upto 9 x 10 * time.Second = 1.5 Minutes.
+var defaultKeepAliveTimeout = 10 * time.Second // 10 seconds.
 
 // newListenerMux listens and wraps accepted connections with tls after protocol peeking
 func newListenerMux(listener net.Listener, config *tls.Config) *ListenerMux {
@@ -198,20 +206,42 @@ func newListenerMux(listener net.Listener, config *tls.Config) *ListenerMux {
 			conn.SetKeepAlive(true)
 			conn.SetKeepAlivePeriod(defaultKeepAliveTimeout)
 
+			// Allocate new conn muxer.
+			connMux := NewConnMux(conn)
+
 			// Wrap the connection with ConnMux to be able to peek the data in the incoming connection
 			// and decide if we need to wrap the connection itself with a TLS or not
-			go func(conn net.Conn) {
-				connMux := NewConnMux(conn)
-				if connMux.PeekProtocol() == protocolTLS {
-					l.acceptResCh <- ListenerMuxAcceptRes{
-						conn: tls.Server(connMux, l.config),
+			go func(connMux *ConnMux) {
+				protocol, err := connMux.PeekProtocol()
+				if err != nil {
+					// io.EOF is usually returned by non-http clients,
+					// just close the connection to avoid any leak.
+					if err != io.EOF {
+						errorIf(err, "Unable to peek into incoming protocol")
 					}
-				} else {
+					connMux.Close()
+					return
+				}
+				switch protocol {
+				case protocolTLS:
+					tlsConn := tls.Server(connMux, l.config)
+					// Make sure to handshake so that we know that this
+					// is a TLS connection, if not we should close and reject
+					// such a connection.
+					if err = tlsConn.Handshake(); err != nil {
+						errorIf(err, "TLS handshake failed")
+						tlsConn.Close()
+						return
+					}
+					l.acceptResCh <- ListenerMuxAcceptRes{
+						conn: tlsConn,
+					}
+				default:
 					l.acceptResCh <- ListenerMuxAcceptRes{
 						conn: connMux,
 					}
 				}
-			}(conn)
+			}(connMux)
 		}
 	}()
 	return &l
@@ -284,10 +314,7 @@ type ServerMux struct {
 func NewServerMux(addr string, handler http.Handler) *ServerMux {
 	m := &ServerMux{
 		Server: &http.Server{
-			Addr: addr,
-			// Do not add any timeouts Golang net.Conn
-			// closes connections right after 10mins even
-			// if they are not idle.
+			Addr:           addr,
 			Handler:        handler,
 			MaxHeaderBytes: 1 << 20,
 		},
@@ -349,7 +376,28 @@ func (m *ServerMux) ListenAndServe(certFile, keyFile string) (err error) {
 
 	tlsEnabled := certFile != "" && keyFile != ""
 
-	config := &tls.Config{} // Always instantiate.
+	config := &tls.Config{
+		// Causes servers to use Go's default ciphersuite preferences,
+		// which are tuned to avoid attacks. Does nothing on clients.
+		PreferServerCipherSuites: true,
+		// Only use curves which have assembly implementations
+		CurvePreferences: []tls.CurveID{
+			tls.CurveP256,
+		},
+		// Set minimum version to TLS 1.2
+		MinVersion: tls.VersionTLS12,
+		CipherSuites: []uint16{
+			tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+
+			// Best disabled, as they don't provide Forward Secrecy,
+			// but might be necessary for some clients
+			// tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
+			// tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
+		},
+	} // Always instantiate.
 
 	if tlsEnabled {
 		// Configure TLS in the server
