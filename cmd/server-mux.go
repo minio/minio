@@ -111,6 +111,8 @@ func (c *ConnMux) PeekProtocol() (string, error) {
 // Read - streams the ConnMux buffer when reset flag is activated, otherwise
 // streams from the incoming network connection
 func (c *ConnMux) Read(b []byte) (int, error) {
+	// Push read deadline
+	c.Conn.SetReadDeadline(time.Now().Add(defaultTCPReadTimeout))
 	return c.bufrw.Read(b)
 }
 
@@ -176,6 +178,9 @@ type ListenerMuxAcceptRes struct {
 // Effective value of total keep alive comes upto 9 x 10 * time.Second = 1.5 Minutes.
 var defaultKeepAliveTimeout = 10 * time.Second // 10 seconds.
 
+// Timeout to close connection when a client is not sending any data
+var defaultTCPReadTimeout = 30 * time.Second
+
 // newListenerMux listens and wraps accepted connections with tls after protocol peeking
 func newListenerMux(listener net.Listener, config *tls.Config) *ListenerMux {
 	l := ListenerMux{
@@ -201,6 +206,9 @@ func newListenerMux(listener net.Listener, config *tls.Config) *ListenerMux {
 				l.acceptResCh <- ListenerMuxAcceptRes{err: err}
 				return
 			}
+
+			// Enable Read timeout
+			conn.SetReadDeadline(time.Now().Add(defaultTCPReadTimeout))
 
 			// Enable keep alive for each connection.
 			conn.SetKeepAlive(true)
