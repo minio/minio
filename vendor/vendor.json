@@ -200,10 +200,10 @@
 			"revisionTime": "2016-08-18T00:31:20Z"
 		},
 		{
-			"checksumSHA1": "Npl9R1pdTKB5LDiGh/hls8nMNQc=",
+			"checksumSHA1": "lkkQ8bAbNRvg9AceSmuAfh3udFg=",
 			"path": "github.com/minio/miniobrowser",
-			"revision": "d9214007ee7c5404358031c3e5af7df69300f874",
-			"revisionTime": "2016-11-24T00:39:49Z"
+			"revision": "10e951aa618d52796584f9dd233353a52d104c8d",
+			"revisionTime": "2017-01-23T04:37:46Z"
 		},
 		{
 			"checksumSHA1": "GOSe2XEQI4AYwrMoLZu8vtmzkJM=",
