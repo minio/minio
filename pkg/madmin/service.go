@@ -41,8 +41,8 @@ const (
 	// Add your own backend.
 )
 
-// ServiceStatusMetadata - represents total capacity of underlying storage.
-type ServiceStatusMetadata struct {
+// StorageInfo - represents total capacity of underlying storage.
+type StorageInfo struct {
 	// Total disk space.
 	Total int64
 	// Free available disk space.
@@ -60,10 +60,23 @@ type ServiceStatusMetadata struct {
 	}
 }
 
+// ServerVersion - server version
+type ServerVersion struct {
+	Version  string `json:"version"`
+	CommitID string `json:"commitID"`
+}
+
+// ServiceStatusMetadata - contains the response of service status API
+type ServiceStatusMetadata struct {
+	StorageInfo   StorageInfo   `json:"storageInfo"`
+	ServerVersion ServerVersion `json:"serverVersion"`
+}
+
 // ServiceStatus - Connect to a minio server and call Service Status Management API
 // to fetch server's storage information represented by ServiceStatusMetadata structure
 func (adm *AdminClient) ServiceStatus() (ServiceStatusMetadata, error) {
 
+	// Prepare web service request
 	reqData := requestData{}
 	reqData.queryValues = make(url.Values)
 	reqData.queryValues.Set("service", "")
@@ -72,29 +85,30 @@ func (adm *AdminClient) ServiceStatus() (ServiceStatusMetadata, error) {
 
 	// Execute GET on bucket to list objects.
 	resp, err := adm.executeMethod("GET", reqData)
-
 	defer closeResponse(resp)
 	if err != nil {
 		return ServiceStatusMetadata{}, err
 	}
 
+	// Check response http status code
 	if resp.StatusCode != http.StatusOK {
 		return ServiceStatusMetadata{}, errors.New("Got HTTP Status: " + resp.Status)
 	}
+
+	// Unmarshal the server's json response
+	var serviceStatus ServiceStatusMetadata
 
 	respBytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return ServiceStatusMetadata{}, err
 	}
 
-	var storageInfo ServiceStatusMetadata
-
-	err = json.Unmarshal(respBytes, &storageInfo)
+	err = json.Unmarshal(respBytes, &serviceStatus)
 	if err != nil {
 		return ServiceStatusMetadata{}, err
 	}
 
-	return storageInfo, nil
+	return serviceStatus, nil
 }
 
 // ServiceRestart - Call Service Restart API to restart a specified Minio server

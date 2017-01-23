@@ -227,8 +227,11 @@ func testServicesCmdHandler(cmd cmdType, args map[string]interface{}, t *testing
 	adminTestBed.mux.ServeHTTP(rec, req)
 
 	if cmd == statusCmd {
-		expectedInfo := newObjectLayerFn().StorageInfo()
-		receivedInfo := StorageInfo{}
+		expectedInfo := ServerStatus{
+			StorageInfo:   newObjectLayerFn().StorageInfo(),
+			ServerVersion: ServerVersion{Version: Version, CommitID: CommitID},
+		}
+		receivedInfo := ServerStatus{}
 		if jsonErr := json.Unmarshal(rec.Body.Bytes(), &receivedInfo); jsonErr != nil {
 			t.Errorf("Failed to unmarshal StorageInfo - %v", jsonErr)
 		}
