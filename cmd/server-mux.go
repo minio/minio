@@ -191,20 +191,20 @@ func newListenerMux(listener net.Listener, config *tls.Config) *ListenerMux {
 	}
 	// Start listening, wrap connections with tls when needed
 	go func() {
+		// Extract tcp listener.
+		tcpListener, ok := l.Listener.(*net.TCPListener)
+		if !ok {
+			l.acceptResCh <- ListenerMuxAcceptRes{err: errInvalidArgument}
+			return
+		}
+
 		// Loop for accepting new connections
 		for {
-			// Extract tcp listener.
-			tcpListener, ok := l.Listener.(*net.TCPListener)
-			if !ok {
-				l.acceptResCh <- ListenerMuxAcceptRes{err: errInvalidArgument}
-				return
-			}
-
 			// Use accept TCP method to receive the connection.
 			conn, err := tcpListener.AcceptTCP()
 			if err != nil {
 				l.acceptResCh <- ListenerMuxAcceptRes{err: err}
-				return
+				continue
 			}
 
 			// Enable Read timeout
