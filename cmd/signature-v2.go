@@ -92,9 +92,10 @@ func doesPresignV2SignatureMatch(r *http.Request) APIErrorCode {
 	if encodedResource == "" {
 		splits := strings.Split(r.URL.Path, "?")
 		if len(splits) > 0 {
-			encodedResource = splits[0]
+			encodedResource = getURLEncodedName(splits[0])
 		}
 	}
+
 	queries := strings.Split(encodedQuery, "&")
 	var filteredQueries []string
 	var gotSignature string
