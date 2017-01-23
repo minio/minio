@@ -163,6 +163,14 @@ func newXLObjects(storageDisks []StorageAPI) (ObjectLayer, error) {
 // Shutdown function for object storage interface.
 func (xl xlObjects) Shutdown() error {
 	// Add any object layer shutdown activities here.
+	for _, disk := range xl.storageDisks {
+		// This closes storage rpc client connections if any.
+		// Otherwise this is a no-op.
+		if disk == nil {
+			continue
+		}
+		disk.Close()
+	}
 	return nil
 }
 

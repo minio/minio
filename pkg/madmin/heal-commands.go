@@ -403,3 +403,32 @@ func (adm *AdminClient) HealObject(bucket, object string, dryrun bool) error {
 
 	return nil
 }
+
+// HealFormat - heal storage format on available disks.
+func (adm *AdminClient) HealFormat() error {
+	queryVal := url.Values{}
+	queryVal.Set("heal", "")
+
+	// Set x-minio-operation to format.
+	hdrs := make(http.Header)
+	hdrs.Set(minioAdminOpHeader, "format")
+
+	reqData := requestData{
+		queryValues:   queryVal,
+		customHeaders: hdrs,
+	}
+
+	// Execute POST on /?heal to heal storage format.
+	resp, err := adm.executeMethod("POST", reqData)
+
+	defer closeResponse(resp)
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return errors.New("Got HTTP Status: " + resp.Status)
+	}
+
+	return nil
+}

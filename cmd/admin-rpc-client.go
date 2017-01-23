@@ -38,6 +38,7 @@ type remoteAdminClient struct {
 type adminCmdRunner interface {
 	Restart() error
 	ListLocks(bucket, prefix string, relTime time.Duration) ([]VolumeLockInfo, error)
+	ReInitDisks() error
 }
 
 // Restart - Sends a message over channel to the go-routine
@@ -71,6 +72,20 @@ func (rc remoteAdminClient) ListLocks(bucket, prefix string, relTime time.Durati
 		return nil, err
 	}
 	return reply.volLocks, nil
+}
+
+// ReInitDisks - There is nothing to do here, heal format REST API
+// handler has already formatted and reinitialized the local disks.
+func (lc localAdminClient) ReInitDisks() error {
+	return nil
+}
+
+// ReInitDisks - Signals peers via RPC to reinitialize their disks and
+// object layer.
+func (rc remoteAdminClient) ReInitDisks() error {
+	args := AuthRPCArgs{}
+	reply := AuthRPCReply{}
+	return rc.Call("Admin.ReInitDisks", &args, &reply)
 }
 
 // adminPeer - represents an entity that implements Restart methods.
@@ -159,6 +174,8 @@ func sendServiceCmd(cps adminPeers, cmd serviceSignal) {
 	errs[0] = invokeServiceCmd(cps[0], cmd)
 }
 
+// listPeerLocksInfo - fetch list of locks held on the given bucket,
+// matching prefix older than relTime from all peer servers.
 func listPeerLocksInfo(peers adminPeers, bucket, prefix string, relTime time.Duration) ([]VolumeLockInfo, error) {
 	// Used to aggregate volume lock information from all nodes.
 	allLocks := make([][]VolumeLockInfo, len(peers))
@@ -205,4 +222,22 @@ func listPeerLocksInfo(peers adminPeers, bucket, prefix string, relTime time.Dur
 		groupedLockInfos = append(groupedLockInfos, volLocks...)
 	}
 	return groupedLockInfos, nil
+}
+
+// reInitPeerDisks - reinitialize disks and object layer on peer servers to use the new format.
+func reInitPeerDisks(peers adminPeers) error {
+	errs := make([]error, len(peers))
+
+	// Send ReInitDisks RPC call to all nodes.
+	// for local adminPeer this is a no-op.
+	wg := sync.WaitGroup{}
+	for i, peer := range peers {
+		wg.Add(1)
+		go func(idx int, peer adminPeer) {
+			defer wg.Done()
+			errs[idx] = peer.cmdRunner.ReInitDisks()
+		}(i, peer)
+	}
+	wg.Wait()
+	return nil
 }

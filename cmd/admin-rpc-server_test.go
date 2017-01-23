@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"net/url"
 	"testing"
 	"time"
 )
@@ -61,6 +62,85 @@ func testAdminCmd(cmd cmdType, t *testing.T) {
 	}
 }
 
+// TestAdminRestart - test for Admin.Restart RPC service.
 func TestAdminRestart(t *testing.T) {
 	testAdminCmd(restartCmd, t)
+}
+
+// TestReInitDisks - test for Admin.ReInitDisks RPC service.
+func TestReInitDisks(t *testing.T) {
+	// Reset global variables to start afresh.
+	resetTestGlobals()
+
+	rootPath, err := newTestConfig("us-east-1")
+	if err != nil {
+		t.Fatalf("Unable to initialize server config. %s", err)
+	}
+	defer removeAll(rootPath)
+
+	// Initializing objectLayer for HealFormatHandler.
+	_, xlDirs, xlErr := initTestXLObjLayer()
+	if xlErr != nil {
+		t.Fatalf("failed to initialize XL based object layer - %v.", xlErr)
+	}
+	defer removeRoots(xlDirs)
+
+	// Set globalEndpoints for a single node XL setup.
+	for _, xlDir := range xlDirs {
+		globalEndpoints = append(globalEndpoints, &url.URL{Path: xlDir})
+	}
+
+	// Setup admin rpc server for an XL backend.
+	globalIsXL = true
+	adminServer := adminCmd{}
+	creds := serverConfig.GetCredential()
+	args := LoginRPCArgs{
+		Username:    creds.AccessKey,
+		Password:    creds.SecretKey,
+		Version:     Version,
+		RequestTime: time.Now().UTC(),
+	}
+	reply := LoginRPCReply{}
+	err = adminServer.Login(&args, &reply)
+	if err != nil {
+		t.Fatalf("Failed to login to admin server - %v", err)
+	}
+
+	authArgs := AuthRPCArgs{
+		AuthToken:   reply.AuthToken,
+		RequestTime: time.Now().UTC(),
+	}
+	authReply := AuthRPCReply{}
+
+	err = adminServer.ReInitDisks(&authArgs, &authReply)
+	if err != nil {
+		t.Errorf("Expected to pass, but failed with %v", err)
+	}
+
+	// Negative test case with admin rpc server setup for FS.
+	globalIsXL = false
+	fsAdminServer := adminCmd{}
+	fsArgs := LoginRPCArgs{
+		Username:    creds.AccessKey,
+		Password:    creds.SecretKey,
+		Version:     Version,
+		RequestTime: time.Now().UTC(),
+	}
+	fsReply := LoginRPCReply{}
+	err = fsAdminServer.Login(&fsArgs, &fsReply)
+	if err != nil {
+		t.Fatalf("Failed to login to fs admin server - %v", err)
+	}
+
+	authArgs = AuthRPCArgs{
+		AuthToken:   fsReply.AuthToken,
+		RequestTime: time.Now().UTC(),
+	}
+	authReply = AuthRPCReply{}
+	// Attempt ReInitDisks service on a FS backend.
+	err = fsAdminServer.ReInitDisks(&authArgs, &authReply)
+	if err != errUnsupportedBackend {
+		t.Errorf("Expected to fail with %v, but received %v",
+			errUnsupportedBackend, err)
+	}
 }

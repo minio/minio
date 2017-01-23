@@ -418,6 +418,12 @@ func serverMain(c *cli.Context) {
 		fatalIf(initDsyncNodes(endpoints), "Unable to initialize distributed locking clients")
 	}
 
+	// Set globalIsXL if erasure code backend is about to be
+	// initialized for the given endpoints.
+	if len(endpoints) > 1 {
+		globalIsXL = true
+	}
+
 	// Initialize name space lock.
 	initNSLock(globalIsDistXL)
 
@@ -452,6 +458,9 @@ func serverMain(c *cli.Context) {
 		}
 		fatalIf(apiServer.ListenAndServe(cert, key), "Failed to start minio server.")
 	}()
+
+	// Set endpoints of []*url.URL type to globalEndpoints.
+	globalEndpoints = endpoints
 
 	newObject, err := newObjectLayer(srvConfig)
 	fatalIf(err, "Initializing object layer failed")

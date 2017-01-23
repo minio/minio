@@ -38,8 +38,11 @@ func main() {
 
 | Service operations|LockInfo operations|Healing operations|
 |:---|:---|:---|
-|[`ServiceStatus`](#ServiceStatus)| | |
-|[`ServiceRestart`](#ServiceRestart)| | |
+|[`ServiceStatus`](#ServiceStatus)| [`ListLocks`](#ListLocks)| [`ListObjectsHeal`](#ListObjectsHeal)|
+|[`ServiceRestart`](#ServiceRestart)| [`ClearLocks`](#ClearLocks)| [`ListBucketsHeal`](#ListBucketsHeal)|
+| | |[`HealBucket`](#HealBucket) |
+| | |[`HealObject`](#HealObject)|
+| | |[`HealFormat`](#HealFormat)|
 
 ## 1. Constructor
 <a name="Minio"></a>
@@ -185,14 +188,14 @@ __Example__
     }
 ```
 
-<a name="ListBucketsList"></a>
-### ListBucketsList() error
+<a name="ListBucketsHeal"></a>
+### ListBucketsHeal() error
 If successful returns information on the list of buckets that need healing.
 
 __Example__
 
 ``` go
-    // List buckets that need healing 
+    // List buckets that need healing
     healBucketsList, err := madmClnt.ListBucketsHeal()
     if err != nil {
         fmt.Println(err)
@@ -242,5 +245,21 @@ __Example__
         log.Fatalln(err)
     }
     log.Println("successfully healed mybucket/myobject")
+
+```
+
+<a name="HealFormat"></a>
+### HealFormat() error
+Heal storage format on available disks. This is used when disks were replaced or were found with missing format. This is supported only for erasure-coded backend.
+
+__Example__
+
+``` go
+    err := madmClnt.HealFormat()
+    if err != nil {
+        log.Fatalln(err)
+    }
+
+    log.Println("successfully healed storage format on available disks.")
 
 ```

@@ -29,6 +29,79 @@ import (
 	router "github.com/gorilla/mux"
 )
 
+// adminXLTestBed - encapsulates subsystems that need to be setup for
+// admin-handler unit tests.
+type adminXLTestBed struct {
+	configPath string
+	xlDirs     []string
+	objLayer   ObjectLayer
+	mux        *router.Router
+}
+
+// prepareAdminXLTestBed - helper function that setups a single-node
+// XL backend for admin-handler tests.
+func prepareAdminXLTestBed() (*adminXLTestBed, error) {
+	// reset global variables to start afresh.
+	resetTestGlobals()
+	// Initialize minio server config.
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
+	if err != nil {
+		return nil, err
+	}
+	// Initializing objectLayer for HealFormatHandler.
+	objLayer, xlDirs, xlErr := initTestXLObjLayer()
+	if xlErr != nil {
+		return nil, xlErr
+	}
+
+	// Set globalEndpoints for a single node XL setup.
+	for _, xlDir := range xlDirs {
+		globalEndpoints = append(globalEndpoints, &url.URL{
+			Path: xlDir,
+		})
+	}
+
+	// Set globalIsXL to indicate that the setup uses an erasure code backend.
+	globalIsXL = true
+
+	// initialize NSLock.
+	isDistXL := false
+	initNSLock(isDistXL)
+
+	// Setup admin mgmt REST API handlers.
+	adminRouter := router.NewRouter()
+	registerAdminRouter(adminRouter)
+
+	return &adminXLTestBed{
+		configPath: rootPath,
+		xlDirs:     xlDirs,
+		objLayer:   objLayer,
+		mux:        adminRouter,
+	}, nil
+}
+
+// TearDown - method that resets the test bed for subsequent unit
+// tests to start afresh.
+func (atb *adminXLTestBed) TearDown() {
+	removeAll(atb.configPath)
+	removeRoots(atb.xlDirs)
+	resetTestGlobals()
+}
+
+// initTestObjLayer - Helper function to initialize an XL-based object
+// layer and set globalObjectAPI.
+func initTestXLObjLayer() (ObjectLayer, []string, error) {
+	objLayer, xlDirs, xlErr := prepareXL()
+	if xlErr != nil {
+		return nil, nil, xlErr
+	}
+	// Make objLayer available to all internal services via globalObjectAPI.
+	globalObjLayerMutex.Lock()
+	globalObjectAPI = objLayer
+	globalObjLayerMutex.Unlock()
+	return objLayer, xlDirs, nil
+}
+
 // cmdType - Represents different service subcomands like status, stop
 // and restart.
 type cmdType int
@@ -115,17 +188,11 @@ func getServiceCmdRequest(cmd cmdType, cred credential, body []byte) (*http.Requ
 // testServicesCmdHandler - parametrizes service subcommand tests on
 // cmdType value.
 func testServicesCmdHandler(cmd cmdType, args map[string]interface{}, t *testing.T) {
-	// reset globals.
-	// this is to make sure that the tests are not affected by modified value.
-	resetTestGlobals()
-	// initialize NSLock.
-	initNSLock(false)
-	// Initialize configuration for access/secret credentials.
-	rootPath, err := newTestConfig(globalMinioDefaultRegion)
+	adminTestBed, err := prepareAdminXLTestBed()
 	if err != nil {
-		t.Fatalf("Unable to initialize server config. %s", err)
+		t.Fatal("Failed to initialize a single node XL backend for admin handler tests.")
 	}
-	defer removeAll(rootPath)
+	defer adminTestBed.TearDown()
 
 	// Initialize admin peers to make admin RPC calls. Note: In a
 	// single node setup, this degenerates to a simple function
@@ -139,29 +206,12 @@ func testServicesCmdHandler(cmd cmdType, args map[string]interface{}, t *testing
 	globalMinioAddr = eps[0].Host
 	initGlobalAdminPeers(eps)
 
-	if cmd == statusCmd {
-		// Initializing objectLayer and corresponding
-		// []StorageAPI since DiskInfo() method requires it.
-		objLayer, xlDirs, xlErr := prepareXL()
-		if xlErr != nil {
-			t.Fatalf("failed to initialize XL based object layer - %v.", xlErr)
-		}
-		defer removeRoots(xlDirs)
-		// Make objLayer available to all internal services via globalObjectAPI.
-		globalObjLayerMutex.Lock()
-		globalObjectAPI = objLayer
-		globalObjLayerMutex.Unlock()
-	}
-
 	// Setting up a go routine to simulate ServerMux's
 	// handleServiceSignals for stop and restart commands.
 	if cmd == restartCmd {
 		go testServiceSignalReceiver(cmd, t)
 	}
 	credentials := serverConfig.GetCredential()
-	adminRouter := router.NewRouter()
-	registerAdminRouter(adminRouter)
-
 	var body []byte
 
 	if cmd == setCreds {
@@ -174,7 +224,7 @@ func testServicesCmdHandler(cmd cmdType, args map[string]interface{}, t *testing
 	}
 
 	rec := httptest.NewRecorder()
-	adminRouter.ServeHTTP(rec, req)
+	adminTestBed.mux.ServeHTTP(rec, req)
 
 	if cmd == statusCmd {
 		expectedInfo := newObjectLayerFn().StorageInfo()
@@ -232,17 +282,11 @@ func mkLockQueryVal(bucket, prefix, relTimeStr string) url.Values {
 
 // Test for locks list management REST API.
 func TestListLocksHandler(t *testing.T) {
-	// reset globals.
-	// this is to make sure that the tests are not affected by modified globals.
-	resetTestGlobals()
-	// initialize NSLock.
-	initNSLock(false)
-
-	rootPath, err := newTestConfig(globalMinioDefaultRegion)
+	adminTestBed, err := prepareAdminXLTestBed()
 	if err != nil {
-		t.Fatalf("Unable to initialize server config. %s", err)
+		t.Fatal("Failed to initialize a single node XL backend for admin handler tests.")
 	}
-	defer removeAll(rootPath)
+	defer adminTestBed.TearDown()
 
 	// Initialize admin peers to make admin RPC calls.
 	eps, err := parseStorageEndpoints([]string{"http://localhost"})
@@ -253,10 +297,6 @@ func TestListLocksHandler(t *testing.T) {
 	// Set globalMinioAddr to be able to distinguish local endpoints from remote.
 	globalMinioAddr = eps[0].Host
 	initGlobalAdminPeers(eps)
-
-	// Setup admin mgmt REST API handlers.
-	adminRouter := router.NewRouter()
-	registerAdminRouter(adminRouter)
 
 	testCases := []struct {
 		bucket         string
@@ -308,7 +348,7 @@ func TestListLocksHandler(t *testing.T) {
 			t.Fatalf("Test %d - Failed to sign list locks request - %v", i+1, err)
 		}
 		rec := httptest.NewRecorder()
-		adminRouter.ServeHTTP(rec, req)
+		adminTestBed.mux.ServeHTTP(rec, req)
 		if test.expectedStatus != rec.Code {
 			t.Errorf("Test %d - Expected HTTP status code %d but received %d", i+1, test.expectedStatus, rec.Code)
 		}
@@ -317,17 +357,11 @@ func TestListLocksHandler(t *testing.T) {
 
 // Test for locks clear management REST API.
 func TestClearLocksHandler(t *testing.T) {
-	// reset globals.
-	// this is to make sure that the tests are not affected by modified globals.
-	resetTestGlobals()
-	// initialize NSLock.
-	initNSLock(false)
-
-	rootPath, err := newTestConfig(globalMinioDefaultRegion)
+	adminTestBed, err := prepareAdminXLTestBed()
 	if err != nil {
-		t.Fatalf("Unable to initialize server config. %s", err)
+		t.Fatal("Failed to initialize a single node XL backend for admin handler tests.")
 	}
-	defer removeAll(rootPath)
+	defer adminTestBed.TearDown()
 
 	// Initialize admin peers to make admin RPC calls.
 	eps, err := parseStorageEndpoints([]string{"http://localhost"})
@@ -335,10 +369,6 @@ func TestClearLocksHandler(t *testing.T) {
 		t.Fatalf("Failed to parse storage end point - %v", err)
 	}
 	initGlobalAdminPeers(eps)
-
-	// Setup admin mgmt REST API handlers.
-	adminRouter := router.NewRouter()
-	registerAdminRouter(adminRouter)
 
 	testCases := []struct {
 		bucket         string
@@ -390,7 +420,7 @@ func TestClearLocksHandler(t *testing.T) {
 			t.Fatalf("Test %d - Failed to sign clear locks request - %v", i+1, err)
 		}
 		rec := httptest.NewRecorder()
-		adminRouter.ServeHTTP(rec, req)
+		adminTestBed.mux.ServeHTTP(rec, req)
 		if test.expectedStatus != rec.Code {
 			t.Errorf("Test %d - Expected HTTP status code %d but received %d", i+1, test.expectedStatus, rec.Code)
 		}
@@ -556,36 +586,19 @@ func TestValidateHealQueryParams(t *testing.T) {
 
 // TestListObjectsHeal - Test for ListObjectsHealHandler.
 func TestListObjectsHealHandler(t *testing.T) {
-	rootPath, err := newTestConfig("us-east-1")
+	adminTestBed, err := prepareAdminXLTestBed()
 	if err != nil {
-		t.Fatalf("Unable to initialize server config. %s", err)
+		t.Fatal("Failed to initialize a single node XL backend for admin handler tests.")
 	}
-	defer removeAll(rootPath)
+	defer adminTestBed.TearDown()
 
-	// Initializing objectLayer and corresponding []StorageAPI
-	// since ListObjectsHeal() method requires it.
-	objLayer, xlDirs, xlErr := prepareXL()
-	if xlErr != nil {
-		t.Fatalf("failed to initialize XL based object layer - %v.", xlErr)
-	}
-	defer removeRoots(xlDirs)
-
-	err = objLayer.MakeBucket("mybucket")
+	err = adminTestBed.objLayer.MakeBucket("mybucket")
 	if err != nil {
 		t.Fatalf("Failed to make bucket - %v", err)
 	}
 
 	// Delete bucket after running all test cases.
-	defer objLayer.DeleteBucket("mybucket")
-
-	// Make objLayer available to all internal services via globalObjectAPI.
-	globalObjLayerMutex.Lock()
-	globalObjectAPI = objLayer
-	globalObjLayerMutex.Unlock()
-
-	// Setup admin mgmt REST API handlers.
-	adminRouter := router.NewRouter()
-	registerAdminRouter(adminRouter)
+	defer adminTestBed.objLayer.DeleteBucket("mybucket")
 
 	testCases := []struct {
 		bucket     string
@@ -695,7 +708,7 @@ func TestListObjectsHealHandler(t *testing.T) {
 			t.Fatalf("Test %d - Failed to sign list objects needing heal request - %v", i+1, err)
 		}
 		rec := httptest.NewRecorder()
-		adminRouter.ServeHTTP(rec, req)
+		adminTestBed.mux.ServeHTTP(rec, req)
 		if test.statusCode != rec.Code {
 			t.Errorf("Test %d - Expected HTTP status code %d but received %d", i+1, test.statusCode, rec.Code)
 		}
@@ -704,36 +717,19 @@ func TestListObjectsHealHandler(t *testing.T) {
 
 // TestHealBucketHandler - Test for HealBucketHandler.
 func TestHealBucketHandler(t *testing.T) {
-	rootPath, err := newTestConfig("us-east-1")
+	adminTestBed, err := prepareAdminXLTestBed()
 	if err != nil {
-		t.Fatalf("Unable to initialize server config. %s", err)
+		t.Fatal("Failed to initialize a single node XL backend for admin handler tests.")
 	}
-	defer removeAll(rootPath)
+	defer adminTestBed.TearDown()
 
-	// Initializing objectLayer and corresponding []StorageAPI
-	// since MakeBucket() and DeleteBucket() methods requires it.
-	objLayer, xlDirs, xlErr := prepareXL()
-	if xlErr != nil {
-		t.Fatalf("failed to initialize XL based object layer - %v.", xlErr)
-	}
-	defer removeRoots(xlDirs)
-
-	err = objLayer.MakeBucket("mybucket")
+	err = adminTestBed.objLayer.MakeBucket("mybucket")
 	if err != nil {
 		t.Fatalf("Failed to make bucket - %v", err)
 	}
 
 	// Delete bucket after running all test cases.
-	defer objLayer.DeleteBucket("mybucket")
-
-	// Make objLayer available to all internal services via globalObjectAPI.
-	globalObjLayerMutex.Lock()
-	globalObjectAPI = objLayer
-	globalObjLayerMutex.Unlock()
-
-	// Setup admin mgmt REST API handlers.
-	adminRouter := router.NewRouter()
-	registerAdminRouter(adminRouter)
+	defer adminTestBed.objLayer.DeleteBucket("mybucket")
 
 	testCases := []struct {
 		bucket     string
@@ -771,7 +767,8 @@ func TestHealBucketHandler(t *testing.T) {
 
 		req, err := newTestRequest("POST", "/?"+queryVal.Encode(), 0, nil)
 		if err != nil {
-			t.Fatalf("Test %d - Failed to construct heal bucket request - %v", i+1, err)
+			t.Fatalf("Test %d - Failed to construct heal bucket request - %v",
+				i+1, err)
 		}
 
 		req.Header.Set(minioAdminOpHeader, "bucket")
@@ -779,12 +776,14 @@ func TestHealBucketHandler(t *testing.T) {
 		cred := serverConfig.GetCredential()
 		err = signRequestV4(req, cred.AccessKey, cred.SecretKey)
 		if err != nil {
-			t.Fatalf("Test %d - Failed to sign heal bucket request - %v", i+1, err)
+			t.Fatalf("Test %d - Failed to sign heal bucket request - %v",
+				i+1, err)
 		}
 		rec := httptest.NewRecorder()
-		adminRouter.ServeHTTP(rec, req)
+		adminTestBed.mux.ServeHTTP(rec, req)
 		if test.statusCode != rec.Code {
-			t.Errorf("Test %d - Expected HTTP status code %d but received %d", i+1, test.statusCode, rec.Code)
+			t.Errorf("Test %d - Expected HTTP status code %d but received %d",
+				i+1, test.statusCode, rec.Code)
 		}
 
 	}
@@ -792,29 +791,22 @@ func TestHealBucketHandler(t *testing.T) {
 
 // TestHealObjectHandler - Test for HealObjectHandler.
 func TestHealObjectHandler(t *testing.T) {
-	rootPath, err := newTestConfig("us-east-1")
+	adminTestBed, err := prepareAdminXLTestBed()
 	if err != nil {
-		t.Fatalf("Unable to initialize server config. %s", err)
+		t.Fatal("Failed to initialize a single node XL backend for admin handler tests.")
 	}
-	defer removeAll(rootPath)
-
-	// Initializing objectLayer and corresponding []StorageAPI
-	// since MakeBucket(), PutObject() and DeleteBucket() method requires it.
-	objLayer, xlDirs, xlErr := prepareXL()
-	if xlErr != nil {
-		t.Fatalf("failed to initialize XL based object layer - %v.", xlErr)
-	}
-	defer removeRoots(xlDirs)
+	defer adminTestBed.TearDown()
 
 	// Create an object myobject under bucket mybucket.
 	bucketName := "mybucket"
 	objName := "myobject"
-	err = objLayer.MakeBucket(bucketName)
+	err = adminTestBed.objLayer.MakeBucket(bucketName)
 	if err != nil {
 		t.Fatalf("Failed to make bucket %s - %v", bucketName, err)
 	}
 
-	_, err = objLayer.PutObject(bucketName, objName, int64(len("hello")), bytes.NewReader([]byte("hello")), nil, "")
+	_, err = adminTestBed.objLayer.PutObject(bucketName, objName,
+		int64(len("hello")), bytes.NewReader([]byte("hello")), nil, "")
 	if err != nil {
 		t.Fatalf("Failed to create %s - %v", objName, err)
 	}
@@ -823,16 +815,7 @@ func TestHealObjectHandler(t *testing.T) {
 	defer func(objLayer ObjectLayer, bucketName, objName string) {
 		objLayer.DeleteObject(bucketName, objName)
 		objLayer.DeleteBucket(bucketName)
-	}(objLayer, bucketName, objName)
-
-	// Make objLayer available to all internal services via globalObjectAPI.
-	globalObjLayerMutex.Lock()
-	globalObjectAPI = objLayer
-	globalObjLayerMutex.Unlock()
-
-	// Setup admin mgmt REST API handlers.
-	adminRouter := router.NewRouter()
-	registerAdminRouter(adminRouter)
+	}(adminTestBed.objLayer, bucketName, objName)
 
 	testCases := []struct {
 		bucket     string
@@ -899,9 +882,42 @@ func TestHealObjectHandler(t *testing.T) {
 			t.Fatalf("Test %d - Failed to sign heal object request - %v", i+1, err)
 		}
 		rec := httptest.NewRecorder()
-		adminRouter.ServeHTTP(rec, req)
+		adminTestBed.mux.ServeHTTP(rec, req)
 		if test.statusCode != rec.Code {
 			t.Errorf("Test %d - Expected HTTP status code %d but received %d", i+1, test.statusCode, rec.Code)
 		}
+	}
+}
+
+// TestHealFormatHandler - test for HealFormatHandler.
+func TestHealFormatHandler(t *testing.T) {
+	adminTestBed, err := prepareAdminXLTestBed()
+	if err != nil {
+		t.Fatal("Failed to initialize a single node XL backend for admin handler tests.")
+	}
+	defer adminTestBed.TearDown()
+
+	// Prepare query params for heal-format mgmt REST API.
+	queryVal := url.Values{}
+	queryVal.Set("heal", "")
+	req, err := newTestRequest("POST", "/?"+queryVal.Encode(), 0, nil)
+	if err != nil {
+		t.Fatalf("Failed to construct heal object request - %v", err)
+	}
+
+	// Set x-minio-operation header to format.
+	req.Header.Set(minioAdminOpHeader, "format")
+
+	// Sign the request using signature v4.
+	cred := serverConfig.GetCredential()
+	err = signRequestV4(req, cred.AccessKey, cred.SecretKey)
+	if err != nil {
+		t.Fatalf("Failed to sign heal object request - %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	adminTestBed.mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("Expected to succeed but failed with %d", rec.Code)
 	}
 }
