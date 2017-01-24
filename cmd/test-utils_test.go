@@ -1739,20 +1739,25 @@ func prepareXLStorageDisks(t *testing.T) ([]StorageAPI, []string) {
 // initializes the specified API endpoints for the tests.
 // initialies the root and returns its path.
 // return credentials.
-func initAPIHandlerTest(obj ObjectLayer, endpoints []string) (bucketName string, apiRouter http.Handler, err error) {
+func initAPIHandlerTest(obj ObjectLayer, endpoints []string) (string, http.Handler, error) {
 	// get random bucket name.
-	bucketName = getRandomBucketName()
+	bucketName := getRandomBucketName()
 
 	// Create bucket.
-	err = obj.MakeBucket(bucketName)
+	err := obj.MakeBucket(bucketName)
 	if err != nil {
 		// failed to create newbucket, return err.
 		return "", nil, err
 	}
 	// Register the API end points with XL object layer.
 	// Registering only the GetObject handler.
-	apiRouter = initTestAPIEndPoints(obj, endpoints)
-	return bucketName, apiRouter, nil
+	apiRouter := initTestAPIEndPoints(obj, endpoints)
+	var f http.HandlerFunc
+	f = func(w http.ResponseWriter, r *http.Request) {
+		r.RequestURI = r.URL.RequestURI()
+		apiRouter.ServeHTTP(w, r)
+	}
+	return bucketName, f, nil
 }
 
 // ExecObjectLayerAPIAnonTest - Helper function to validate object Layer API handler

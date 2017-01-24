@@ -85,16 +85,9 @@ func doesPresignV2SignatureMatch(r *http.Request) APIErrorCode {
 	// Access credentials.
 	cred := serverConfig.GetCredential()
 
-	// url.RawPath will be valid if path has any encoded characters, if not it will
-	// be empty - in which case we need to consider url.Path (bug in net/http?)
-	encodedResource := r.URL.RawPath
-	encodedQuery := r.URL.RawQuery
-	if encodedResource == "" {
-		splits := strings.Split(r.URL.Path, "?")
-		if len(splits) > 0 {
-			encodedResource = getURLEncodedName(splits[0])
-		}
-	}
+	// r.RequestURI will have raw encoded URI as sent by the client.
+	splits := splitStr(r.RequestURI, "?", 2)
+	encodedResource, encodedQuery := splits[0], splits[1]
 
 	queries := strings.Split(encodedQuery, "&")
 	var filteredQueries []string
@@ -213,19 +206,9 @@ func doesSignV2Match(r *http.Request) APIErrorCode {
 		return apiError
 	}
 
-	// Encode path:
-	//   url.RawPath will be valid if path has any encoded characters, if not it will
-	//   be empty - in which case we need to consider url.Path (bug in net/http?)
-	encodedResource := r.URL.RawPath
-	if encodedResource == "" {
-		splits := strings.Split(r.URL.Path, "?")
-		if len(splits) > 0 {
-			encodedResource = getURLEncodedName(splits[0])
-		}
-	}
-
-	// Encode query strings
-	encodedQuery := r.URL.Query().Encode()
+	// r.RequestURI will have raw encoded URI as sent by the client.
+	splits := splitStr(r.RequestURI, "?", 2)
+	encodedResource, encodedQuery := splits[0], splits[1]
 
 	expectedAuth := signatureV2(r.Method, encodedResource, encodedQuery, r.Header)
 	if v2Auth != expectedAuth {

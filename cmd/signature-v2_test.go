@@ -101,6 +101,8 @@ func TestDoesPresignedV2SignatureMatch(t *testing.T) {
 		if e != nil {
 			t.Errorf("(%d) failed to create http.Request, got %v", i, e)
 		}
+		// Should be set since we are simulating a http server.
+		req.RequestURI = req.URL.RequestURI()
 
 		// Do the same for the headers.
 		for key, value := range testCase.headers {
