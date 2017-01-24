@@ -187,7 +187,7 @@ func getServiceCmdRequest(cmd cmdType, cred credential, body []byte) (*http.Requ
 
 // testServicesCmdHandler - parametrizes service subcommand tests on
 // cmdType value.
-func testServicesCmdHandler(cmd cmdType, args map[string]interface{}, t *testing.T) {
+func testServicesCmdHandler(cmd cmdType, t *testing.T) {
 	adminTestBed, err := prepareAdminXLTestBed()
 	if err != nil {
 		t.Fatal("Failed to initialize a single node XL backend for admin handler tests.")
@@ -214,10 +214,6 @@ func testServicesCmdHandler(cmd cmdType, args map[string]interface{}, t *testing
 	credentials := serverConfig.GetCredential()
 	var body []byte
 
-	if cmd == setCreds {
-		body, _ = xml.Marshal(setCredsReq{Username: args["username"].(string), Password: args["password"].(string)})
-	}
-
 	req, err := getServiceCmdRequest(cmd, credentials, body)
 	if err != nil {
 		t.Fatalf("Failed to build service status request %v", err)
@@ -240,18 +236,6 @@ func testServicesCmdHandler(cmd cmdType, args map[string]interface{}, t *testing
 		}
 	}
 
-	if cmd == setCreds {
-		// Check if new credentials are set
-		cred := serverConfig.GetCredential()
-		if cred.AccessKey != args["username"].(string) {
-			t.Errorf("Wrong access key, expected = %s, found = %s", args["username"].(string), cred.AccessKey)
-		}
-		if cred.SecretKey != args["password"].(string) {
-			t.Errorf("Wrong secret key, expected = %s, found = %s", args["password"].(string), cred.SecretKey)
-		}
-
-	}
-
 	if rec.Code != http.StatusOK {
 		resp, _ := ioutil.ReadAll(rec.Body)
 		t.Errorf("Expected to receive %d status code but received %d. Body (%s)",
@@ -261,16 +245,94 @@ func testServicesCmdHandler(cmd cmdType, args map[string]interface{}, t *testing
 
 // Test for service status management REST API.
 func TestServiceStatusHandler(t *testing.T) {
-	testServicesCmdHandler(statusCmd, nil, t)
+	testServicesCmdHandler(statusCmd, t)
 }
 
 // Test for service restart management REST API.
 func TestServiceRestartHandler(t *testing.T) {
-	testServicesCmdHandler(restartCmd, nil, t)
+	testServicesCmdHandler(restartCmd, t)
 }
 
+// Test for service set creds management REST API.
 func TestServiceSetCreds(t *testing.T) {
-	testServicesCmdHandler(setCreds, map[string]interface{}{"username": "minio", "password": "minio123"}, t)
+	adminTestBed, err := prepareAdminXLTestBed()
+	if err != nil {
+		t.Fatal("Failed to initialize a single node XL backend for admin handler tests.")
+	}
+	defer adminTestBed.TearDown()
+
+	// Initialize admin peers to make admin RPC calls. Note: In a
+	// single node setup, this degenerates to a simple function
+	// call under the hood.
+	eps, err := parseStorageEndpoints([]string{"http://localhost"})
+	if err != nil {
+		t.Fatalf("Failed to parse storage end point - %v", err)
+	}
+
+	// Set globalMinioAddr to be able to distinguish local endpoints from remote.
+	globalMinioAddr = eps[0].Host
+	initGlobalAdminPeers(eps)
+
+	credentials := serverConfig.GetCredential()
+	var body []byte
+
+	testCases := []struct {
+		Username           string
+		Password           string
+		EnvKeysSet         bool
+		ExpectedStatusCode int
+	}{
+		// Bad secret key
+		{"minio", "minio", false, http.StatusBadRequest},
+		// Bad  secret key set from the env
+		{"minio", "minio", true, http.StatusMethodNotAllowed},
+		// Good keys set from the env
+		{"minio", "minio123", true, http.StatusMethodNotAllowed},
+		// Successful operation should be the last one to do not change server credentials during tests.
+		{"minio", "minio123", false, http.StatusOK},
+	}
+	for i, testCase := range testCases {
+		// Set or unset environement keys
+		if !testCase.EnvKeysSet {
+			globalEnvAccessKey = ""
+			globalEnvSecretKey = ""
+		} else {
+			globalEnvAccessKey = testCase.Username
+			globalEnvSecretKey = testCase.Password
+		}
+
+		// Construct setCreds request body
+		body, _ = xml.Marshal(setCredsReq{Username: testCase.Username, Password: testCase.Password})
+		// Construct setCreds request
+		req, err := getServiceCmdRequest(setCreds, credentials, body)
+		if err != nil {
+			t.Fatalf("Failed to build service status request %v", err)
+		}
+
+		rec := httptest.NewRecorder()
+
+		// Execute request
+		adminTestBed.mux.ServeHTTP(rec, req)
+
+		// Check if the http code response is expected
+		if rec.Code != testCase.ExpectedStatusCode {
+			t.Errorf("Test %d: Wrong status code, expected = %d, found = %d", i+1, testCase.ExpectedStatusCode, rec.Code)
+			resp, _ := ioutil.ReadAll(rec.Body)
+			t.Errorf("Expected to receive %d status code but received %d. Body (%s)",
+				http.StatusOK, rec.Code, string(resp))
+		}
+
+		// If we got 200 OK, check if new credentials are really set
+		if rec.Code == http.StatusOK {
+			cred := serverConfig.GetCredential()
+			if cred.AccessKey != testCase.Username {
+				t.Errorf("Test %d: Wrong access key, expected = %s, found = %s", i+1, testCase.Username, cred.AccessKey)
+			}
+			if cred.SecretKey != testCase.Password {
+				t.Errorf("Test %d: Wrong secret key, expected = %s, found = %s", i+1, testCase.Password, cred.SecretKey)
+			}
+		}
+	}
 }
 
 // mkLockQueryVal - helper function to build lock query param.
