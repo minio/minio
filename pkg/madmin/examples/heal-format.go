@@ -39,8 +39,16 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	// Heal storage format on available disks.
-	err = madmClnt.HealFormat()
+	// Attempt healing format in dry-run mode.
+	isDryRun := true
+	err = madmClnt.HealFormat(isDryRun)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	// Perform actual healing of format.
+	isDryRun = false
+	err = madmClnt.HealFormat(isDryRun)
 	if err != nil {
 		log.Fatalln(err)
 	}

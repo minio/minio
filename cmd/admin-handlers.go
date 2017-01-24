@@ -398,7 +398,7 @@ func (adminAPI adminAPIHandlers) ListBucketsHealHandler(w http.ResponseWriter, r
 	writeSuccessResponseXML(w, encodeResponse(listResponse))
 }
 
-// HealBucketHandler - POST /?heal&bucket=mybucket
+// HealBucketHandler - POST /?heal&bucket=mybucket&dry-run
 // - x-minio-operation = bucket
 // - bucket is mandatory query parameter
 // Heal a given bucket, if present.
@@ -425,7 +425,7 @@ func (adminAPI adminAPIHandlers) HealBucketHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	// if dry-run=yes, then only perform validations and return success.
+	// if dry-run is present in query-params, then only perform validations and return success.
 	if isDryRun(vars) {
 		writeSuccessResponseHeadersOnly(w)
 		return
@@ -442,15 +442,16 @@ func (adminAPI adminAPIHandlers) HealBucketHandler(w http.ResponseWriter, r *htt
 	writeSuccessResponseHeadersOnly(w)
 }
 
-// isDryRun - returns true if dry-run query param was set to yes and false otherwise.
+// isDryRun - returns true if dry-run query param was set and false otherwise.
+// otherwise.
 func isDryRun(qval url.Values) bool {
-	if dryRun := qval.Get(string(mgmtDryRun)); dryRun == "yes" {
+	if _, dryRun := qval[string(mgmtDryRun)]; dryRun {
 		return true
 	}
 	return false
 }
 
-// HealObjectHandler - POST /?heal&bucket=mybucket&object=myobject
+// HealObjectHandler - POST /?heal&bucket=mybucket&object=myobject&dry-run
 // - x-minio-operation = object
 // - bucket and object are both mandatory query parameters
 // Heal a given object, if present.
@@ -485,7 +486,8 @@ func (adminAPI adminAPIHandlers) HealObjectHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	// if dry-run=yes, then only perform validations and return success.
+	// if dry-run is set in query params then perform validations
+	// and return success.
 	if isDryRun(vars) {
 		writeSuccessResponseHeadersOnly(w)
 		return
@@ -501,7 +503,7 @@ func (adminAPI adminAPIHandlers) HealObjectHandler(w http.ResponseWriter, r *htt
 	writeSuccessResponseHeadersOnly(w)
 }
 
-// HealFormatHandler - POST /?heal
+// HealFormatHandler - POST /?heal&dry-run
 // - x-minio-operation = format
 // - bucket and object are both mandatory query parameters
 // Heal a given object, if present.
@@ -525,6 +527,14 @@ func (adminAPI adminAPIHandlers) HealFormatHandler(w http.ResponseWriter, r *htt
 	// distributed XL setup.
 	if !globalIsXL {
 		writeErrorResponse(w, ErrNotImplemented, r.URL)
+		return
+	}
+
+	// if dry-run is set in query-params, return success as
+	// validations are successful so far.
+	vars := r.URL.Query()
+	if isDryRun(vars) {
+		writeSuccessResponseHeadersOnly(w)
 		return
 	}
 
