@@ -31,6 +31,7 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/minio/minio-go/pkg/s3signer"
 	"github.com/minio/minio-go/pkg/s3utils"
@@ -161,6 +162,13 @@ func (c *AdminClient) SetCustomTransport(customHTTPTransport http.RoundTripper) 
 	//
 	if c.httpClient != nil {
 		c.httpClient.Transport = customHTTPTransport
+	}
+}
+
+// SetTimeout - set http client timeout.
+func (c *AdminClient) SetTimeout(timeout time.Duration) {
+	if c.httpClient != nil {
+		c.httpClient.Timeout = timeout
 	}
 }
 
