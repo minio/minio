@@ -16,9 +16,12 @@
 
 import url from 'url'
 import Moment from 'moment'
+import browserHistory from 'react-router/lib/browserHistory'
 import web from './web'
 import * as utils from './utils'
 import storage from 'local-storage-fallback'
+
+import { minioBrowserPrefix } from './constants'
 
 export const SET_WEB = 'SET_WEB'
 export const SET_CURRENT_BUCKET = 'SET_CURRENT_BUCKET'
@@ -311,6 +314,8 @@ export const selectPrefix = prefix => {
         }))
         dispatch(setLoadBucket(''))
         dispatch(setLoadPath(''))
+	// Use browserHistory.replace instead of push so that browser back button works fine.
+	browserHistory.replace(`${minioBrowserPrefix}/login`)
       })
   }
 }
