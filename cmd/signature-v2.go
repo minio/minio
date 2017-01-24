@@ -86,12 +86,8 @@ func doesPresignV2SignatureMatch(r *http.Request) APIErrorCode {
 	cred := serverConfig.GetCredential()
 
 	// r.RequestURI will have raw encoded URI as sent by the client.
-	splits := strings.Split(r.RequestURI, "?")
-	encodedResource := splits[0]
-	encodedQuery := ""
-	if len(splits) > 1 {
-		encodedQuery = splits[1]
-	}
+	splits := splitStr(r.RequestURI, "?", 2)
+	encodedResource, encodedQuery := splits[0], splits[1]
 
 	queries := strings.Split(encodedQuery, "&")
 	var filteredQueries []string
@@ -211,12 +207,8 @@ func doesSignV2Match(r *http.Request) APIErrorCode {
 	}
 
 	// r.RequestURI will have raw encoded URI as sent by the client.
-	splits := strings.Split(r.RequestURI, "?")
-	encodedResource := splits[0]
-	encodedQuery := ""
-	if len(splits) > 1 {
-		encodedQuery = splits[1]
-	}
+	splits := splitStr(r.RequestURI, "?", 2)
+	encodedResource, encodedQuery := splits[0], splits[1]
 
 	expectedAuth := signatureV2(r.Method, encodedResource, encodedQuery, r.Header)
 	if v2Auth != expectedAuth {
