@@ -344,7 +344,7 @@ func (adm *AdminClient) HealBucket(bucket string, dryrun bool) error {
 	queryVal.Set("heal", "")
 	queryVal.Set(string(healBucket), bucket)
 	if dryrun {
-		queryVal.Set(string(healDryRun), "yes")
+		queryVal.Set(string(healDryRun), "")
 	}
 
 	hdrs := make(http.Header)
@@ -378,7 +378,7 @@ func (adm *AdminClient) HealObject(bucket, object string, dryrun bool) error {
 	queryVal.Set(string(healBucket), bucket)
 	queryVal.Set(string(healObject), object)
 	if dryrun {
-		queryVal.Set(string(healDryRun), "yes")
+		queryVal.Set(string(healDryRun), "")
 	}
 
 	hdrs := make(http.Header)
@@ -405,9 +405,12 @@ func (adm *AdminClient) HealObject(bucket, object string, dryrun bool) error {
 }
 
 // HealFormat - heal storage format on available disks.
-func (adm *AdminClient) HealFormat() error {
+func (adm *AdminClient) HealFormat(dryrun bool) error {
 	queryVal := url.Values{}
 	queryVal.Set("heal", "")
+	if dryrun {
+		queryVal.Set(string(healDryRun), "")
+	}
 
 	// Set x-minio-operation to format.
 	hdrs := make(http.Header)

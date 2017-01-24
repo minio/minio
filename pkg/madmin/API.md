@@ -251,13 +251,20 @@ __Example__
 ```
 
 <a name="HealFormat"></a>
-### HealFormat() error
+### HealFormat(isDryRun bool) error
 Heal storage format on available disks. This is used when disks were replaced or were found with missing format. This is supported only for erasure-coded backend.
 
 __Example__
 
 ``` go
-    err := madmClnt.HealFormat()
+    isDryRun := true
+    err := madmClnt.HealFormat(isDryRun)
+    if err != nil {
+        log.Fatalln(err)
+    }
+
+    isDryRun = false
+    err = madmClnt.HealFormat(isDryRun)
     if err != nil {
         log.Fatalln(err)
     }
