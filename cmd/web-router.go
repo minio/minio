@@ -25,7 +25,7 @@ import (
 	router "github.com/gorilla/mux"
 	jsonrpc "github.com/gorilla/rpc/v2"
 	"github.com/gorilla/rpc/v2/json2"
-	"github.com/minio/miniobrowser"
+	"github.com/minio/minio/browser"
 )
 
 // webAPI container for Web API.

@@ -200,12 +200,6 @@
 			"revisionTime": "2016-08-18T00:31:20Z"
 		},
 		{
-			"checksumSHA1": "lkkQ8bAbNRvg9AceSmuAfh3udFg=",
-			"path": "github.com/minio/miniobrowser",
-			"revision": "10e951aa618d52796584f9dd233353a52d104c8d",
-			"revisionTime": "2017-01-23T04:37:46Z"
-		},
-		{
 			"checksumSHA1": "GOSe2XEQI4AYwrMoLZu8vtmzkJM=",
 			"path": "github.com/minio/redigo/redis",
 			"revision": "5e2117cd32d677a36dcd8c9c83776a065555653b",
