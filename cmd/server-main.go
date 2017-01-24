@@ -21,9 +21,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
-	"path"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -151,45 +149,6 @@ func initServerConfig(c *cli.Context) {
 	// Do not fail if this is not allowed, lower limits are fine as well.
 }
 
-// Validate if input disks are sufficient for initializing XL.
-func checkSufficientDisks(eps []*url.URL) error {
-	// Verify total number of disks.
-	total := len(eps)
-	if total > maxErasureBlocks {
-		return errXLMaxDisks
-	}
-	if total < minErasureBlocks {
-		return errXLMinDisks
-	}
-
-	// isEven function to verify if a given number if even.
-	isEven := func(number int) bool {
-		return number%2 == 0
-	}
-
-	// Verify if we have even number of disks.
-	// only combination of 4, 6, 8, 10, 12, 14, 16 are supported.
-	if !isEven(total) {
-		return errXLNumDisks
-	}
-
-	// Success.
-	return nil
-}
-
-// Returns if slice of disks is a distributed setup.
-func isDistributedSetup(eps []*url.URL) bool {
-	// Validate if one the disks is not local.
-	for _, ep := range eps {
-		if !isLocalStorage(ep) {
-			// One or more disks supplied as arguments are
-			// not attached to the local node.
-			return true
-		}
-	}
-	return false
-}
-
 // Returns true if path is empty, or equals to '.', '/', '\' characters.
 func isPathSentinel(path string) bool {
 	return path == "" || path == "." || path == "/" || path == `\`
@@ -201,171 +160,21 @@ var errEmptyRootPath = errors.New("Empty or root path is not allowed")
 // Invalid scheme passed.
 var errInvalidScheme = errors.New("Invalid scheme")
 
-// Check if endpoint is in expected syntax by valid scheme/path across all platforms.
-func checkEndpointURL(endpointURL *url.URL) (err error) {
-	// Applicable to all OS.
-	if endpointURL.Scheme == "" || endpointURL.Scheme == httpScheme || endpointURL.Scheme == httpsScheme {
-		if isPathSentinel(path.Clean(endpointURL.Path)) {
-			err = errEmptyRootPath
-		}
-
-		return err
-	}
-
-	// Applicable to Windows only.
-	if runtime.GOOS == globalWindowsOSName {
-		// On Windows, endpoint can be a path with drive eg. C:\Export and its URL.Scheme is 'C'.
-		// Check if URL.Scheme is a single letter alphabet to represent a drive.
-		// Note: URL.Parse() converts scheme into lower case always.
-		if len(endpointURL.Scheme) == 1 && endpointURL.Scheme[0] >= 'a' && endpointURL.Scheme[0] <= 'z' {
-			// If endpoint is C:\ or C:\export, URL.Path does not have path information like \ or \export
-			// hence we directly work with endpoint.
-			if isPathSentinel(strings.SplitN(path.Clean(endpointURL.String()), ":", 2)[1]) {
-				err = errEmptyRootPath
-			}
-
-			return err
-		}
-	}
-
-	return errInvalidScheme
-}
-
-// Check if endpoints are in expected syntax by valid scheme/path across all platforms.
-func checkEndpointsSyntax(eps []*url.URL, disks []string) error {
-	for i, u := range eps {
-		if err := checkEndpointURL(u); err != nil {
-			return fmt.Errorf("%s: %s (%s)", err.Error(), u.Path, disks[i])
-		}
-	}
-
-	return nil
-}
-
-// Make sure all the command line parameters are OK and exit in case of invalid parameters.
-func checkServerSyntax(c *cli.Context) {
-	serverAddr := c.String("address")
-
-	host, portStr, err := net.SplitHostPort(serverAddr)
-	fatalIf(err, "Unable to parse %s.", serverAddr)
-
-	// Verify syntax for all the XL disks.
-	disks := c.Args()
-
-	// Parse disks check if they comply with expected URI style.
-	endpoints, err := parseStorageEndpoints(disks)
-	fatalIf(err, "Unable to parse storage endpoints %s", strings.Join(disks, " "))
-
-	// Validate if endpoints follow the expected syntax.
-	err = checkEndpointsSyntax(endpoints, disks)
-	fatalIf(err, "Invalid endpoints found %s", strings.Join(disks, " "))
-
-	// Validate for duplicate endpoints are supplied.
-	err = checkDuplicateEndpoints(endpoints)
-	fatalIf(err, "Duplicate entries in %s", strings.Join(disks, " "))
-
-	if len(endpoints) > 1 {
-		// Validate if we have sufficient disks for XL setup.
-		err = checkSufficientDisks(endpoints)
-		fatalIf(err, "Insufficient number of disks.")
-	} else {
-		// Validate if we have invalid disk for FS setup.
-		if endpoints[0].Host != "" && endpoints[0].Scheme != "" {
-			fatalIf(errInvalidArgument, "%s, FS setup expects a filesystem path", endpoints[0])
-		}
-	}
-
-	if !isDistributedSetup(endpoints) {
-		// for FS and singlenode-XL validation is done, return.
-		return
-	}
-
-	// Rest of the checks applies only to distributed XL setup.
-	if host != "" {
-		// We are here implies --address host:port is passed, hence the user is trying
-		// to run one minio process per export disk.
-		if portStr == "" {
-			fatalIf(errInvalidArgument, "Port missing, Host:Port should be specified for --address")
-		}
-		foundCnt := 0
-		for _, ep := range endpoints {
-			if ep.Host == serverAddr {
-				foundCnt++
-			}
-		}
-		if foundCnt == 0 {
-			// --address host:port should be available in the XL disk list.
-			fatalIf(errInvalidArgument, "%s is not available in %s", serverAddr, strings.Join(disks, " "))
-		}
-		if foundCnt > 1 {
-			// --address host:port should match exactly one entry in the XL disk list.
-			fatalIf(errInvalidArgument, "%s matches % entries in %s", serverAddr, foundCnt, strings.Join(disks, " "))
-		}
-	}
-
-	for _, ep := range endpoints {
-		if ep.Scheme == httpsScheme && !globalIsSSL {
-			// Certificates should be provided for https configuration.
-			fatalIf(errInvalidArgument, "Certificates not provided for secure configuration")
-		}
-	}
-}
-
-// Checks if any of the endpoints supplied is local to this server.
-func isAnyEndpointLocal(eps []*url.URL) bool {
-	anyLocalEp := false
-	for _, ep := range eps {
-		if isLocalStorage(ep) {
-			anyLocalEp = true
-			break
-		}
-	}
-	return anyLocalEp
-}
-
 // Returned when there are no ports.
 var errEmptyPort = errors.New("Port cannot be empty or '0', please use `--address` to pick a specific port")
 
-// Convert an input address of form host:port into, host and port, returns if any.
-func getHostPort(address string) (host, port string, err error) {
-	// Check if requested port is available.
-	host, port, err = net.SplitHostPort(address)
-	if err != nil {
-		return "", "", err
-	}
-
-	// Empty ports.
-	if port == "0" || port == "" {
-		// Port zero or empty means use requested to choose any freely available
-		// port. Avoid this since it won't work with any configured clients,
-		// can lead to serious loss of availability.
-		return "", "", errEmptyPort
-	}
-
-	// Parse port.
-	if _, err = strconv.Atoi(port); err != nil {
-		return "", "", err
-	}
-
-	if runtime.GOOS == "darwin" {
-		// On macOS, if a process already listens on 127.0.0.1:PORT, net.Listen() falls back
-		// to IPv6 address ie minio will start listening on IPv6 address whereas another
-		// (non-)minio process is listening on IPv4 of given port.
-		// To avoid this error sutiation we check for port availability only for macOS.
-		if err = checkPortAvailability(port); err != nil {
-			return "", "", err
-		}
-	}
-
-	// Success.
-	return host, port, nil
-}
-
 // serverMain handler called for 'minio server' command.
 func serverMain(c *cli.Context) {
-	if !c.Args().Present() || c.Args().First() == "help" {
+	args := c.Args()
+	if !args.Present() || args.First() == "help" {
 		cli.ShowCommandHelpAndExit(c, "server", 1)
 	}
+
+	serverAddr := c.String("address")
+
+	// Verify syntax of serverAddr and args.
+	setup, err := NewSetup(serverAddr, args...)
+	fatalIf(err, "Command line argument error")
 
 	// Initializes server config, certs, logging and system settings.
 	initServerConfig(c)
@@ -373,27 +182,20 @@ func serverMain(c *cli.Context) {
 	// Check for new updates from dl.minio.io.
 	checkUpdate()
 
-	// Server address.
-	serverAddr := c.String("address")
-
-	var err error
-	globalMinioHost, globalMinioPort, err = getHostPort(serverAddr)
-	fatalIf(err, "Unable to extract host and port %s", serverAddr)
-
-	// Check server syntax and exit in case of errors.
-	// Done after globalMinioHost and globalMinioPort is set
-	// as parseStorageEndpoints() depends on it.
-	checkServerSyntax(c)
+	globalSetup = setup
+	globalMinioHost, globalMinioPort = mustSplitHostPort(setup.ServerAddr())
+	if runtime.GOOS == "darwin" {
+		// On macOS, if a process already listens on 127.0.0.1:PORT, net.Listen() falls back
+		// to IPv6 address ie minio will start listening on IPv6 address whereas another
+		// (non-)minio process is listening on IPv4 of given port.
+		// To avoid this error sutiation we check for port availability only for macOS.
+		err = checkPortAvailability(globalMinioPort)
+		fatalIf(err, "Port already in use", globalMinioPort)
+	}
 
 	// Disks to be used in server init.
-	endpoints, err := parseStorageEndpoints(c.Args())
-	fatalIf(err, "Unable to parse storage endpoints %s", c.Args())
-
-	// Should exit gracefully if none of the endpoints passed
-	// as command line args are local to this server.
-	if !isAnyEndpointLocal(endpoints) {
-		fatalIf(errInvalidArgument, "None of the disks passed as command line args are local to this server.")
-	}
+	endpoints, err := parseStorageEndpoints(args)
+	fatalIf(err, "Unable to parse storage endpoints %s", args)
 
 	// Sort endpoints for consistent ordering across multiple
 	// nodes in a distributed setup. This is to avoid format.json
@@ -407,17 +209,14 @@ func serverMain(c *cli.Context) {
 		endpoints:  endpoints,
 	}
 
-	// Check if endpoints are part of distributed setup.
-	globalIsDistXL = isDistributedSetup(endpoints)
-
-	// Set nodes for dsync for distributed setup.
-	if globalIsDistXL {
-		fatalIf(initDsyncNodes(endpoints), "Unable to initialize distributed locking clients")
-	}
-
-	// Set globalIsXL if erasure code backend is about to be
-	// initialized for the given endpoints.
-	if len(endpoints) > 1 {
+	// Check if endpoints are part of distributed XL setup.
+	if globalSetup.Type() == DistXLSetupType {
+		err = initDsyncNodes(endpoints)
+		fatalIf(err, "Unable to initialize distributed locking clients")
+		// TODO: remove globalIsDistXL
+		globalIsDistXL = true
+	} else if globalSetup.Type() == XLSetupType {
+		// TODO: remove globalIsXL
 		globalIsXL = true
 	}
 

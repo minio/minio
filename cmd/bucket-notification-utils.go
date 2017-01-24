@@ -16,7 +16,12 @@
 
 package cmd
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+
+	"github.com/minio/minio-go/pkg/set"
+)
 
 // List of valid event types.
 var suppportedEventTypes = map[string]struct{}{
@@ -200,16 +205,14 @@ func validateQueueConfigs(queueConfigs []queueConfig) APIErrorCode {
 
 // Check all the queue configs for any duplicates.
 func checkDuplicateQueueConfigs(configs []queueConfig) APIErrorCode {
-	var queueConfigARNS []string
-
-	// Navigate through each configs and count the entries.
+	// Check whether given configs contain duplicates.
+	sset := set.NewStringSet()
 	for _, config := range configs {
-		queueConfigARNS = append(queueConfigARNS, config.QueueARN)
+		sset.Add(config.QueueARN)
 	}
 
-	// Check if there are any duplicate counts.
-	if err := checkDuplicateStrings(queueConfigARNS); err != nil {
-		errorIf(err, "Invalid queue configs found.")
+	if len(sset) != len(configs) {
+		errorIf(fmt.Errorf("Overlapping configuration"), "Invalid queue configs found.")
 		return ErrOverlappingConfigs
 	}
 
