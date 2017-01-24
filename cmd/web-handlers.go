@@ -33,7 +33,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/gorilla/rpc/v2/json2"
 	"github.com/minio/minio-go/pkg/policy"
-	"github.com/minio/miniobrowser"
+	"github.com/minio/minio/browser"
 )
 
 // WebGenericArgs - empty struct for calls that don't accept arguments
