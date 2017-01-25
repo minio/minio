@@ -97,7 +97,7 @@ func (fs fsObjects) deleteUploadsJSON(bucket, object, uploadID string) error {
 // slice is empty then we remove/purge the file.
 func (fs fsObjects) removeUploadID(bucket, object, uploadID string, rwlk *lock.LockedFile) error {
 	uploadIDs := uploadsV1{}
-	_, err := uploadIDs.ReadFrom(io.NewSectionReader(rwlk, 0, rwlk.Size()))
+	_, err := uploadIDs.ReadFrom(rwlk)
 	if err != nil {
 		return err
 	}
@@ -121,7 +121,7 @@ func (fs fsObjects) removeUploadID(bucket, object, uploadID string, rwlk *lock.L
 func (fs fsObjects) addUploadID(bucket, object, uploadID string, initiated time.Time, rwlk *lock.LockedFile) error {
 	uploadIDs := uploadsV1{}
 
-	_, err := uploadIDs.ReadFrom(io.NewSectionReader(rwlk, 0, rwlk.Size()))
+	_, err := uploadIDs.ReadFrom(rwlk)
 	// For all unexpected errors, we return.
 	if err != nil && errorCause(err) != io.EOF {
 		return err

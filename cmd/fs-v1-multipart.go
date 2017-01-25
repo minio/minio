@@ -52,7 +52,7 @@ func (fs fsObjects) listMultipartUploadIDs(bucketName, objectName, uploadIDMarke
 
 	// Read `uploads.json`.
 	uploadIDs := uploadsV1{}
-	if _, err = uploadIDs.ReadFrom(io.NewSectionReader(rlk, 0, rlk.Size())); err != nil {
+	if _, err = uploadIDs.ReadFrom(rlk.LockedFile); err != nil {
 		return nil, false, err
 	}
 
@@ -378,7 +378,7 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	defer rwlk.Close()
 
 	fsMeta := fsMetaV1{}
-	_, err = fsMeta.ReadFrom(io.NewSectionReader(rwlk, 0, rwlk.Size()))
+	_, err = fsMeta.ReadFrom(rwlk)
 	if err != nil {
 		return "", toObjectErr(err, minioMetaMultipartBucket, fsMetaPath)
 	}
@@ -499,7 +499,7 @@ func (fs fsObjects) listObjectParts(bucket, object, uploadID string, partNumberM
 	defer fs.rwPool.Close(fsMetaPath)
 
 	fsMeta := fsMetaV1{}
-	_, err = fsMeta.ReadFrom((io.NewSectionReader(metaFile, 0, metaFile.Size())))
+	_, err = fsMeta.ReadFrom(metaFile.LockedFile)
 	if err != nil {
 		return ListPartsInfo{}, toObjectErr(err, minioMetaBucket, fsMetaPath)
 	}
@@ -630,7 +630,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 
 	fsMeta := fsMetaV1{}
 	// Read saved fs metadata for ongoing multipart.
-	_, err = fsMeta.ReadFrom(io.NewSectionReader(rlk, 0, rlk.Size()))
+	_, err = fsMeta.ReadFrom(rlk.LockedFile)
 	if err != nil {
 		fs.rwPool.Close(fsMetaPathMultipart)
 		return ObjectInfo{}, toObjectErr(err, minioMetaMultipartBucket, fsMetaPathMultipart)

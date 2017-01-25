@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"bytes"
-	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -69,10 +68,9 @@ func TestReadFSMetadata(t *testing.T) {
 	}
 	defer rlk.Close()
 
-	sectionReader := io.NewSectionReader(rlk, 0, rlk.Size())
 	// Regular fs metadata reading, no errors expected
 	fsMeta := fsMetaV1{}
-	if _, err = fsMeta.ReadFrom(sectionReader); err != nil {
+	if _, err = fsMeta.ReadFrom(rlk.LockedFile); err != nil {
 		t.Fatal("Unexpected error ", err)
 	}
 
@@ -84,7 +82,7 @@ func TestReadFSMetadata(t *testing.T) {
 	file.Write([]byte{'a'})
 	file.Close()
 	fsMeta = fsMetaV1{}
-	if _, err := fsMeta.ReadFrom(sectionReader); err == nil {
+	if _, err := fsMeta.ReadFrom(rlk.LockedFile); err == nil {
 		t.Fatal("Should fail", err)
 	}
 }
@@ -119,10 +117,9 @@ func TestWriteFSMetadata(t *testing.T) {
 	}
 	defer rlk.Close()
 
-	sectionReader := io.NewSectionReader(rlk, 0, rlk.Size())
 	// FS metadata reading, no errors expected (healthy disk)
 	fsMeta := fsMetaV1{}
-	_, err = fsMeta.ReadFrom(sectionReader)
+	_, err = fsMeta.ReadFrom(rlk.LockedFile)
 	if err != nil {
 		t.Fatal("Unexpected error ", err)
 	}
