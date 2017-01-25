@@ -24,8 +24,8 @@ import (
 	"sync"
 
 	"github.com/klauspost/reedsolomon"
+	"github.com/minio/blake2b-simd"
 	"github.com/minio/sha256-simd"
-	"golang.org/x/crypto/blake2b"
 )
 
 // newHashWriters - inititialize a slice of hashes for the disk count.
@@ -48,14 +48,14 @@ func newHash(algo string) (h hash.Hash) {
 		// ignore the error, because New512 without a key never fails
 		// New512 only returns a non-nil error, if the length of the passed
 		// key > 64 bytes - but we use blake2b as hash function (no key)
-		h, _ = blake2b.New512(nil)
+		h = blake2b.New512()
 	// Add new hashes here.
 	default:
 		// Default to blake2b.
 		// ignore the error, because New512 without a key never fails
 		// New512 only returns a non-nil error, if the length of the passed
 		// key > 64 bytes - but we use blake2b as hash function (no key)
-		h, _ = blake2b.New512(nil)
+		h = blake2b.New512()
 	}
 	return h
 }

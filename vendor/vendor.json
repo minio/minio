@@ -155,6 +155,12 @@
 			"revisionTime": "2015-12-11T09:06:21+09:00"
 		},
 		{
+			"checksumSHA1": "4gphCNVXIjp5ytz3+S3SD3Dp948=",
+			"path": "github.com/minio/blake2b-simd",
+			"revision": "3f5f724cb5b182a5c278d6d3d55b40e7f8c2efb4",
+			"revisionTime": "2016-07-23T06:10:19Z"
+		},
+		{
 			"path": "github.com/minio/cli",
 			"revision": "c4a07c7b68db77ccd119183fb1d01dd5972434ab",
 			"revisionTime": "2015-11-18T20:00:48-08:00"
