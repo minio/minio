@@ -5,7 +5,7 @@ easily deployed on Swarm to create a multi-tenant, highly-available and scalable
 
 ## Why deploy Minio on Swarm?
 
-Modern, cloud-native applications are desgined around the needs of various tenants. A Minio instance best serves the needs of a 
+Modern, cloud-native applications are designed around the needs of various tenants. A Minio instance best serves the needs of a 
 single tenant. As and when required, you can spin new Minio instances to handle the needs of new tenant. With recent advancements in 
 DevOps and Cloud deployment strategies, it doesn't make sense for Minio to manage the infrastructure it is running on. That task can be 
 safely handed over to orchestration tools like Docker Swarm. 
@@ -19,7 +19,7 @@ We recommend Docker Engine v1.13.0 (Docker Compose v 3.0) as the starting point.
 
 ## 1. Prerequisites
 
-You are familiar with [Swarm mdoe key concepts](https://docs.docker.com/engine/swarm/key-concepts/), and have a cluster of atleast 4 [networked host machines](https://docs.docker.com/engine/swarm/swarm-tutorial/#/three-networked-host-machines).
+You are familiar with [Swarm mode key concepts](https://docs.docker.com/engine/swarm/key-concepts/), and have a cluster of preferably 4 [networked host machines](https://docs.docker.com/engine/swarm/swarm-tutorial/#/three-networked-host-machines).
 
 ## 2. Create a Swarm
 
