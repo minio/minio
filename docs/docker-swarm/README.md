@@ -11,5 +11,11 @@ DevOps and Cloud deployment strategies, it doesn't make sense for Minio to manag
 safely handed over to orchestration tools like Docker Swarm. 
 
 This is why, Minio is designed to work in conjunction with external orchestrators. Not only this enables keeping each tenant relatively 
-small and thus limit the failure domain, it also makes deploying new Minio instance as easy as launching a [Swarm service](https://docs.docker.com/engine/swarm/key-concepts/#/services-and-tasks). 
-This makes sure, when you scale, the complexity doesn't scale proportionately. 
+small and thus limit the failure domain, it also makes deploying new Minio instance as easy as launching a [Swarm service](https://docs.docker.com/engine/swarm/key-concepts/#/services-and-tasks). This ensures that as you scale, the complexity doesn't scale proportionately. 
+
+# Get started
+
+We recommend Docker Engine v1.13.0 (Docker Compose v 3.0) as the starting point. This is because of [cross-compatibility](https://docs.docker.com/compose/compose-file/#version-3) between Compose and the Docker Engine’s swarm mode. 
+
+## 1. Prerequisites
+
