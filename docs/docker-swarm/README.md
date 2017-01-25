@@ -15,7 +15,7 @@ small and thus limit the failure domain, it also makes deploying new Minio insta
 
 # Get started
 
-We recommend Docker Engine v1.13.0 (Docker Compose v 3.0) as the starting point. This is because of [cross-compatibility](https://docs.docker.com/compose/compose-file/#version-3) between Compose and the Docker Engine’s swarm mode. 
+We recommend Docker Engine v1.13.0 (Docker Compose v 3.0) as the starting point. This is because of [cross-compatibility](https://docs.docker.com/compose/compose-file/#version-3) between Compose and the Docker Engine’s swarm mode, i.e. same Compose file can be used to deploy service on Swarm or Docker Componse. 
 
 ## 1. Prerequisites
 
