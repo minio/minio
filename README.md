@@ -42,6 +42,7 @@ chmod 755 minio
 | ----------| -------- | ------|
 |GNU/Linux|64-bit Intel|https://dl.minio.io/server/minio/release/linux-amd64/minio|
 ||32-bit Intel|https://dl.minio.io/server/minio/release/linux-386/minio|
+||64-bit ARMv8 (aarch64)|https://dl.minio.io/server/minio/release/linux-arm64/|
 ||32-bit ARM|https://dl.minio.io/server/minio/release/linux-arm/minio|
 ```sh
 chmod +x minio
