@@ -26,12 +26,13 @@ func compressGeneric(d *digest, p []uint8) {
 		v13 := iv[5] ^ d.t[1]
 		v14 := iv[6] ^ d.f[0]
 		v15 := iv[7] ^ d.f[1]
-		var m [16]uint64
 
 		j := 0
-		for i := 0; i < 16; i++ {
-			m[i] = uint64(p[j]) | uint64(p[j+1])<<8 | uint64(p[j+2])<<16 | uint64(p[j+3])<<24 |
-				uint64(p[j+4])<<32 | uint64(p[j+5])<<40 | uint64(p[j+6])<<48 | uint64(p[j+7])<<56
+		var m [16]uint64
+		for i := range m {
+			m[i] = uint64(p[j]) | uint64(p[j+1])<<8 | uint64(p[j+2])<<16 |
+				uint64(p[j+3])<<24 | uint64(p[j+4])<<32 | uint64(p[j+5])<<40 |
+				uint64(p[j+6])<<48 | uint64(p[j+7])<<56
 			j += 8
 		}
 

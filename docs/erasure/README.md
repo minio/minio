@@ -1,10 +1,10 @@
-# Minio Erasure Code Quickstart Guide [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/minio/minio?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+# Minio Erasure Code Quickstart Guide [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
 
 Minio protects data against hardware failures and silent data corruption using erasure code and checksums. You may lose  half the number (N/2) of drives and still be able to recover the data.
 
 ## 1. Prerequisites:
 
-Install Minio - [Minio Quickstart Guide](https://docs.minio.io/docs/minio)
+Install Minio - [Minio Quickstart Guide](https://docs.minio.io/docs/minio-quickstart-guide)
 
 ## What is Erasure Code?
 
@@ -49,7 +49,7 @@ Example: Start Minio server in a 12 drives setup.
 
 ```sh
 
-$ minio server /mnt/export1/backend /mnt/export2/backend /mnt/export3/backend /mnt/export4/backend /mnt/export5/backend /mnt/export6/backend /mnt/export7/backend /mnt/export8/backend /mnt/export9/backend /mnt/export10/backend /mnt/export11/backend /mnt/export12/backend
+minio server /mnt/export1/backend /mnt/export2/backend /mnt/export3/backend /mnt/export4/backend /mnt/export5/backend /mnt/export6/backend /mnt/export7/backend /mnt/export8/backend /mnt/export9/backend /mnt/export10/backend /mnt/export11/backend /mnt/export12/backend
 
 ```
 

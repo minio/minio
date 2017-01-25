@@ -31,7 +31,9 @@ const (
 )
 
 // The Type exporting methods exposed for RPC calls.
-type browserPeerAPIHandlers struct{}
+type browserPeerAPIHandlers struct {
+	AuthRPCServer
+}
 
 // Register RPC router
 func registerBrowserPeerRPCRouter(mux *router.Router) error {

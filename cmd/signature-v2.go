@@ -22,6 +22,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -66,12 +67,12 @@ var resourceList = []string{
 func doesPolicySignatureV2Match(formValues map[string]string) APIErrorCode {
 	cred := serverConfig.GetCredential()
 	accessKey := formValues["Awsaccesskeyid"]
-	if accessKey != cred.AccessKeyID {
+	if accessKey != cred.AccessKey {
 		return ErrInvalidAccessKeyID
 	}
 	signature := formValues["Signature"]
 	policy := formValues["Policy"]
-	if signature != calculateSignatureV2(policy, cred.SecretAccessKey) {
+	if signature != calculateSignatureV2(policy, cred.SecretKey) {
 		return ErrSignatureDoesNotMatch
 	}
 	return ErrNone
@@ -84,41 +85,47 @@ func doesPresignV2SignatureMatch(r *http.Request) APIErrorCode {
 	// Access credentials.
 	cred := serverConfig.GetCredential()
 
-	// url.RawPath will be valid if path has any encoded characters, if not it will
-	// be empty - in which case we need to consider url.Path (bug in net/http?)
-	encodedResource := r.URL.RawPath
-	encodedQuery := r.URL.RawQuery
-	if encodedResource == "" {
-		splits := strings.Split(r.URL.Path, "?")
-		if len(splits) > 0 {
-			encodedResource = splits[0]
-		}
-	}
+	// r.RequestURI will have raw encoded URI as sent by the client.
+	splits := splitStr(r.RequestURI, "?", 2)
+	encodedResource, encodedQuery := splits[0], splits[1]
+
 	queries := strings.Split(encodedQuery, "&")
 	var filteredQueries []string
 	var gotSignature string
 	var expires string
 	var accessKey string
+	var err error
 	for _, query := range queries {
 		keyval := strings.Split(query, "=")
 		switch keyval[0] {
 		case "AWSAccessKeyId":
-			accessKey = keyval[1]
+			accessKey, err = url.QueryUnescape(keyval[1])
 		case "Signature":
-			gotSignature = keyval[1]
+			gotSignature, err = url.QueryUnescape(keyval[1])
 		case "Expires":
-			expires = keyval[1]
+			expires, err = url.QueryUnescape(keyval[1])
 		default:
-			filteredQueries = append(filteredQueries, query)
+			unescapedQuery, qerr := url.QueryUnescape(query)
+			if qerr == nil {
+				filteredQueries = append(filteredQueries, unescapedQuery)
+			} else {
+				err = qerr
+			}
+		}
+		// Check if the query unescaped properly.
+		if err != nil {
+			errorIf(err, "Unable to unescape query values", queries)
+			return ErrInvalidQueryParams
 		}
 	}
 
+	// Invalid access key.
 	if accessKey == "" {
 		return ErrInvalidQueryParams
 	}
 
 	// Validate if access key id same.
-	if accessKey != cred.AccessKeyID {
+	if accessKey != cred.AccessKey {
 		return ErrInvalidAccessKeyID
 	}
 
@@ -128,12 +135,13 @@ func doesPresignV2SignatureMatch(r *http.Request) APIErrorCode {
 		return ErrMalformedExpires
 	}
 
+	// Check if the presigned URL has expired.
 	if expiresInt < time.Now().UTC().Unix() {
 		return ErrExpiredPresignRequest
 	}
 
 	expectedSignature := preSignatureV2(r.Method, encodedResource, strings.Join(filteredQueries, "&"), r.Header, expires)
-	if gotSignature != getURLEncodedName(expectedSignature) {
+	if gotSignature != expectedSignature {
 		return ErrSignatureDoesNotMatch
 	}
 
@@ -141,7 +149,7 @@ func doesPresignV2SignatureMatch(r *http.Request) APIErrorCode {
 }
 
 // Authorization = "AWS" + " " + AWSAccessKeyId + ":" + Signature;
-// Signature = Base64( HMAC-SHA1( YourSecretAccessKeyID, UTF-8-Encoding-Of( StringToSign ) ) );
+// Signature = Base64( HMAC-SHA1( YourSecretKey, UTF-8-Encoding-Of( StringToSign ) ) );
 //
 // StringToSign = HTTP-Verb + "\n" +
 //  	Content-Md5 + "\n" +
@@ -184,7 +192,7 @@ func validateV2AuthHeader(v2Auth string) APIErrorCode {
 
 	// Access credentials.
 	cred := serverConfig.GetCredential()
-	if keySignFields[0] != cred.AccessKeyID {
+	if keySignFields[0] != cred.AccessKey {
 		return ErrInvalidAccessKeyID
 	}
 
@@ -198,19 +206,9 @@ func doesSignV2Match(r *http.Request) APIErrorCode {
 		return apiError
 	}
 
-	// Encode path:
-	//   url.RawPath will be valid if path has any encoded characters, if not it will
-	//   be empty - in which case we need to consider url.Path (bug in net/http?)
-	encodedResource := r.URL.RawPath
-	if encodedResource == "" {
-		splits := strings.Split(r.URL.Path, "?")
-		if len(splits) > 0 {
-			encodedResource = getURLEncodedName(splits[0])
-		}
-	}
-
-	// Encode query strings
-	encodedQuery := r.URL.Query().Encode()
+	// r.RequestURI will have raw encoded URI as sent by the client.
+	splits := splitStr(r.RequestURI, "?", 2)
+	encodedResource, encodedQuery := splits[0], splits[1]
 
 	expectedAuth := signatureV2(r.Method, encodedResource, encodedQuery, r.Header)
 	if v2Auth != expectedAuth {
@@ -230,15 +228,15 @@ func calculateSignatureV2(stringToSign string, secret string) string {
 func preSignatureV2(method string, encodedResource string, encodedQuery string, headers http.Header, expires string) string {
 	cred := serverConfig.GetCredential()
 	stringToSign := presignV2STS(method, encodedResource, encodedQuery, headers, expires)
-	return calculateSignatureV2(stringToSign, cred.SecretAccessKey)
+	return calculateSignatureV2(stringToSign, cred.SecretKey)
 }
 
 // Return signature-v2 authrization header.
 func signatureV2(method string, encodedResource string, encodedQuery string, headers http.Header) string {
 	cred := serverConfig.GetCredential()
 	stringToSign := signV2STS(method, encodedResource, encodedQuery, headers)
-	signature := calculateSignatureV2(stringToSign, cred.SecretAccessKey)
-	return fmt.Sprintf("%s %s:%s", signV2Algorithm, cred.AccessKeyID, signature)
+	signature := calculateSignatureV2(stringToSign, cred.SecretKey)
+	return fmt.Sprintf("%s %s:%s", signV2Algorithm, cred.AccessKey, signature)
 }
 
 // Return canonical headers.

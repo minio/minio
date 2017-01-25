@@ -40,7 +40,7 @@ func TestBucketPolicyResourceMatch(t *testing.T) {
 
 	// generates resource prefix.
 	generateResource := func(bucketName, objectName string) string {
-		return AWSResourcePrefix + bucketName + "/" + objectName
+		return bucketARNPrefix + bucketName + "/" + objectName
 	}
 
 	testCases := []struct {
@@ -50,30 +50,30 @@ func TestBucketPolicyResourceMatch(t *testing.T) {
 	}{
 		// Test case 1-4.
 		// Policy with resource ending with bucket/* allows access to all objects inside the given bucket.
-		{generateResource("minio-bucket", ""), generateStatement(fmt.Sprintf("%s%s", AWSResourcePrefix, "minio-bucket"+"/*")), true},
-		{generateResource("minio-bucket", ""), generateStatement(fmt.Sprintf("%s%s", AWSResourcePrefix, "minio-bucket"+"/*")), true},
-		{generateResource("minio-bucket", ""), generateStatement(fmt.Sprintf("%s%s", AWSResourcePrefix, "minio-bucket"+"/*")), true},
-		{generateResource("minio-bucket", ""), generateStatement(fmt.Sprintf("%s%s", AWSResourcePrefix, "minio-bucket"+"/*")), true},
+		{generateResource("minio-bucket", ""), generateStatement(fmt.Sprintf("%s%s", bucketARNPrefix, "minio-bucket"+"/*")), true},
+		{generateResource("minio-bucket", ""), generateStatement(fmt.Sprintf("%s%s", bucketARNPrefix, "minio-bucket"+"/*")), true},
+		{generateResource("minio-bucket", ""), generateStatement(fmt.Sprintf("%s%s", bucketARNPrefix, "minio-bucket"+"/*")), true},
+		{generateResource("minio-bucket", ""), generateStatement(fmt.Sprintf("%s%s", bucketARNPrefix, "minio-bucket"+"/*")), true},
 		// Test case - 5.
 		// Policy with resource ending with bucket/oo* should not allow access to bucket/output.txt.
-		{generateResource("minio-bucket", "output.txt"), generateStatement(fmt.Sprintf("%s%s", AWSResourcePrefix, "minio-bucket"+"/oo*")), false},
+		{generateResource("minio-bucket", "output.txt"), generateStatement(fmt.Sprintf("%s%s", bucketARNPrefix, "minio-bucket"+"/oo*")), false},
 		// Test case - 6.
 		// Policy with resource ending with bucket/oo* should allow access to bucket/ootput.txt.
-		{generateResource("minio-bucket", "ootput.txt"), generateStatement(fmt.Sprintf("%s%s", AWSResourcePrefix, "minio-bucket"+"/oo*")), true},
+		{generateResource("minio-bucket", "ootput.txt"), generateStatement(fmt.Sprintf("%s%s", bucketARNPrefix, "minio-bucket"+"/oo*")), true},
 		// Test case - 7.
 		// Policy with resource ending with bucket/oo* allows access to all sub-dirs starting with "oo" inside given bucket.
-		{generateResource("minio-bucket", "oop-bucket/my-file"), generateStatement(fmt.Sprintf("%s%s", AWSResourcePrefix, "minio-bucket"+"/oo*")), true},
+		{generateResource("minio-bucket", "oop-bucket/my-file"), generateStatement(fmt.Sprintf("%s%s", bucketARNPrefix, "minio-bucket"+"/oo*")), true},
 		// Test case - 8.
-		{generateResource("minio-bucket", "Asia/India/1.pjg"), generateStatement(fmt.Sprintf("%s%s", AWSResourcePrefix, "minio-bucket"+"/Asia/Japan/*")), false},
+		{generateResource("minio-bucket", "Asia/India/1.pjg"), generateStatement(fmt.Sprintf("%s%s", bucketARNPrefix, "minio-bucket"+"/Asia/Japan/*")), false},
 		// Test case - 9.
-		{generateResource("minio-bucket", "Asia/India/1.pjg"), generateStatement(fmt.Sprintf("%s%s", AWSResourcePrefix, "minio-bucket"+"/Asia/Japan/*")), false},
+		{generateResource("minio-bucket", "Asia/India/1.pjg"), generateStatement(fmt.Sprintf("%s%s", bucketARNPrefix, "minio-bucket"+"/Asia/Japan/*")), false},
 		// Test case - 10.
 		// Proves that the name space is flat.
-		{generateResource("minio-bucket", "Africa/Bihar/India/design_info.doc/Bihar"), generateStatement(fmt.Sprintf("%s%s", AWSResourcePrefix,
+		{generateResource("minio-bucket", "Africa/Bihar/India/design_info.doc/Bihar"), generateStatement(fmt.Sprintf("%s%s", bucketARNPrefix,
 			"minio-bucket"+"/*/India/*/Bihar")), true},
 		// Test case - 11.
 		// Proves that the name space is flat.
-		{generateResource("minio-bucket", "Asia/China/India/States/Bihar/output.txt"), generateStatement(fmt.Sprintf("%s%s", AWSResourcePrefix,
+		{generateResource("minio-bucket", "Asia/China/India/States/Bihar/output.txt"), generateStatement(fmt.Sprintf("%s%s", bucketARNPrefix,
 			"minio-bucket"+"/*/India/*/Bihar/*")), true},
 	}
 	for i, testCase := range testCases {
@@ -277,8 +277,8 @@ func testPutBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 			bucketPolicyReader: bytes.NewReader([]byte(fmt.Sprintf(bucketPolicyTemplate, bucketName, bucketName))),
 
 			policyLen:          len(fmt.Sprintf(bucketPolicyTemplate, bucketName, bucketName)),
-			accessKey:          credentials.AccessKeyID,
-			secretKey:          credentials.SecretAccessKey,
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
 			expectedRespStatus: http.StatusNoContent,
 		},
 		// Test case - 2.
@@ -289,8 +289,8 @@ func testPutBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 			bucketPolicyReader: bytes.NewReader([]byte(fmt.Sprintf(bucketPolicyTemplate, bucketName, bucketName))),
 
 			policyLen:          maxAccessPolicySize + 1,
-			accessKey:          credentials.AccessKeyID,
-			secretKey:          credentials.SecretAccessKey,
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
 			expectedRespStatus: http.StatusBadRequest,
 		},
 		// Test case - 3.
@@ -301,8 +301,8 @@ func testPutBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 			bucketPolicyReader: bytes.NewReader([]byte(fmt.Sprintf(bucketPolicyTemplate, bucketName, bucketName))),
 
 			policyLen:          0,
-			accessKey:          credentials.AccessKeyID,
-			secretKey:          credentials.SecretAccessKey,
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
 			expectedRespStatus: http.StatusLengthRequired,
 		},
 		// Test case - 4.
@@ -312,8 +312,8 @@ func testPutBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 			bucketPolicyReader: nil,
 
 			policyLen:          10,
-			accessKey:          credentials.AccessKeyID,
-			secretKey:          credentials.SecretAccessKey,
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
 			expectedRespStatus: http.StatusBadRequest,
 		},
 		// Test case - 5.
@@ -336,8 +336,8 @@ func testPutBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 			bucketPolicyReader: bytes.NewReader([]byte("dummy-policy")),
 
 			policyLen:          len([]byte("dummy-policy")),
-			accessKey:          credentials.AccessKeyID,
-			secretKey:          credentials.SecretAccessKey,
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
 			expectedRespStatus: http.StatusBadRequest,
 		},
 		// Test case - 7.
@@ -348,8 +348,8 @@ func testPutBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 			bucketPolicyReader: bytes.NewReader([]byte(fmt.Sprintf(bucketPolicyTemplate, bucketName, bucketName))),
 
 			policyLen:          len(fmt.Sprintf(bucketPolicyTemplate, bucketName, bucketName)),
-			accessKey:          credentials.AccessKeyID,
-			secretKey:          credentials.SecretAccessKey,
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
 			expectedRespStatus: http.StatusBadRequest,
 		},
 		// Test case - 8.
@@ -361,8 +361,8 @@ func testPutBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 			bucketPolicyReader: bytes.NewReader([]byte(fmt.Sprintf(bucketPolicyTemplate, "non-existent-bucket", "non-existent-bucket"))),
 
 			policyLen:          len(fmt.Sprintf(bucketPolicyTemplate, bucketName, bucketName)),
-			accessKey:          credentials.AccessKeyID,
-			secretKey:          credentials.SecretAccessKey,
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
 			expectedRespStatus: http.StatusNotFound,
 		},
 		// Test case - 9.
@@ -374,8 +374,8 @@ func testPutBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 			bucketPolicyReader: bytes.NewReader([]byte(fmt.Sprintf(bucketPolicyTemplate, ".invalid-bucket", ".invalid-bucket"))),
 
 			policyLen:          len(fmt.Sprintf(bucketPolicyTemplate, bucketName, bucketName)),
-			accessKey:          credentials.AccessKeyID,
-			secretKey:          credentials.SecretAccessKey,
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
 			expectedRespStatus: http.StatusBadRequest,
 		},
 	}
@@ -469,7 +469,7 @@ func testGetBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 		// expected Response.
 		expectedRespStatus int
 	}{
-		{bucketName, credentials.AccessKeyID, credentials.SecretAccessKey, http.StatusNoContent},
+		{bucketName, credentials.AccessKey, credentials.SecretKey, http.StatusNoContent},
 	}
 
 	// Iterating over the cases and writing the bucket policy.
@@ -520,8 +520,8 @@ func testGetBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 		// Case which valid inputs, expected to return success status of 200OK.
 		{
 			bucketName:           bucketName,
-			accessKey:            credentials.AccessKeyID,
-			secretKey:            credentials.SecretAccessKey,
+			accessKey:            credentials.AccessKey,
+			secretKey:            credentials.SecretKey,
 			expectedBucketPolicy: bucketPolicyTemplate,
 			expectedRespStatus:   http.StatusOK,
 		},
@@ -529,8 +529,8 @@ func testGetBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 		// Case with non-existent bucket name.
 		{
 			bucketName:           "non-existent-bucket",
-			accessKey:            credentials.AccessKeyID,
-			secretKey:            credentials.SecretAccessKey,
+			accessKey:            credentials.AccessKey,
+			secretKey:            credentials.SecretKey,
 			expectedBucketPolicy: bucketPolicyTemplate,
 			expectedRespStatus:   http.StatusNotFound,
 		},
@@ -538,8 +538,8 @@ func testGetBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 		// Case with invalid bucket name.
 		{
 			bucketName:           ".invalid-bucket-name",
-			accessKey:            credentials.AccessKeyID,
-			secretKey:            credentials.SecretAccessKey,
+			accessKey:            credentials.AccessKey,
+			secretKey:            credentials.SecretKey,
 			expectedBucketPolicy: "",
 			expectedRespStatus:   http.StatusBadRequest,
 		},
@@ -693,8 +693,8 @@ func testDeleteBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName str
 	}{
 		{
 			bucketName:         bucketName,
-			accessKey:          credentials.AccessKeyID,
-			secretKey:          credentials.SecretAccessKey,
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
 			expectedRespStatus: http.StatusNoContent,
 		},
 	}
@@ -731,24 +731,24 @@ func testDeleteBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName str
 		// Test case - 1.
 		{
 			bucketName:         bucketName,
-			accessKey:          credentials.AccessKeyID,
-			secretKey:          credentials.SecretAccessKey,
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
 			expectedRespStatus: http.StatusNoContent,
 		},
 		// Test case - 2.
 		// Case with non-existent-bucket.
 		{
 			bucketName:         "non-existent-bucket",
-			accessKey:          credentials.AccessKeyID,
-			secretKey:          credentials.SecretAccessKey,
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
 			expectedRespStatus: http.StatusNotFound,
 		},
 		// Test case - 3.
 		// Case with invalid bucket name.
 		{
 			bucketName:         ".invalid-bucket-name",
-			accessKey:          credentials.AccessKeyID,
-			secretKey:          credentials.SecretAccessKey,
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
 			expectedRespStatus: http.StatusBadRequest,
 		},
 	}
@@ -945,7 +945,7 @@ func TestBucketPolicyConditionMatch(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		t.Run(fmt.Sprintf("Test case %d: Failed.", i+1), func(t *testing.T) {
+		t.Run(fmt.Sprintf("Case %d", i+1), func(t *testing.T) {
 			// call the function under test and assert the result with the expected result.
 			doesMatch := bucketPolicyConditionMatch(tc.condition, tc.statementCondition)
 			if tc.expectedMatch != doesMatch {

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@ import (
 
 // Tests validate bucket LocationConstraint.
 func TestIsValidLocationContraint(t *testing.T) {
-	path, err := newTestConfig("us-east-1")
+	path, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("unable initialize config file, %s", err)
 	}
@@ -63,12 +63,12 @@ func TestIsValidLocationContraint(t *testing.T) {
 		expectedCode            APIErrorCode
 	}{
 		// Test case - 1.
-		{"us-east-1", "us-east-1", ErrNone},
+		{globalMinioDefaultRegion, globalMinioDefaultRegion, ErrNone},
 		// Test case - 2.
 		// In case of empty request body ErrNone is returned.
-		{"", "us-east-1", ErrNone},
+		{"", globalMinioDefaultRegion, ErrNone},
 		// Test case - 3.
-		{"eu-central-1", "us-east-1", ErrInvalidRegion},
+		{"eu-central-1", globalMinioDefaultRegion, ErrInvalidRegion},
 	}
 	for i, testCase := range testCases {
 		inputRequest, e := createExpectedRequest(&http.Request{}, testCase.locationForInputRequest)

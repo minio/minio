@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -93,4 +93,40 @@ func TestCertificateNotExpired(t *testing.T) {
 	if msg != "" {
 		t.Fatalf("Expected empty message was: %s", msg)
 	}
+}
+
+// Test printing server common message.
+func TestPrintServerCommonMessage(t *testing.T) {
+	root, err := newTestConfig(globalMinioDefaultRegion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer removeAll(root)
+
+	apiEndpoints := []string{"127.0.0.1:9000"}
+	printServerCommonMsg(apiEndpoints)
+}
+
+// Tests print cli access message.
+func TestPrintCLIAccessMsg(t *testing.T) {
+	root, err := newTestConfig(globalMinioDefaultRegion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer removeAll(root)
+
+	apiEndpoints := []string{"127.0.0.1:9000"}
+	printCLIAccessMsg(apiEndpoints[0])
+}
+
+// Test print startup message.
+func TestPrintStartupMessage(t *testing.T) {
+	root, err := newTestConfig(globalMinioDefaultRegion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer removeAll(root)
+
+	apiEndpoints := []string{"127.0.0.1:9000"}
+	printStartupMessage(apiEndpoints)
 }

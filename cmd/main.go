@@ -164,9 +164,15 @@ func checkUpdate() {
 }
 
 // Generic Minio initialization to create/load config, prepare loggers, etc..
-func minioInit() {
+func minioInit(ctx *cli.Context) {
+	// Set global variables after parsing passed arguments
+	setGlobalsFromContext(ctx)
+
 	// Sets new config directory.
 	setGlobalConfigPath(globalConfigDir)
+
+	// Is TLS configured?.
+	globalIsSSL = isSSL()
 
 	// Migrate any old version of config / state files to newer format.
 	migrate()
@@ -184,19 +190,17 @@ func minioInit() {
 	enableLoggers()
 
 	// Fetch access keys from environment variables and update the config.
-	accessKey := os.Getenv("MINIO_ACCESS_KEY")
-	secretKey := os.Getenv("MINIO_SECRET_KEY")
-	if accessKey != "" && secretKey != "" {
+	if globalEnvAccessKey != "" && globalEnvSecretKey != "" {
 		// Set new credentials.
 		serverConfig.SetCredential(credential{
-			AccessKeyID:     accessKey,
-			SecretAccessKey: secretKey,
+			AccessKey: globalEnvAccessKey,
+			SecretKey: globalEnvSecretKey,
 		})
 	}
-	if !isValidAccessKey(serverConfig.GetCredential().AccessKeyID) {
+	if !isAccessKeyValid(serverConfig.GetCredential().AccessKey) {
 		fatalIf(errInvalidArgument, "Invalid access key. Accept only a string starting with a alphabetic and containing from 5 to 20 characters.")
 	}
-	if !isValidSecretKey(serverConfig.GetCredential().SecretAccessKey) {
+	if !isSecretKeyValid(serverConfig.GetCredential().SecretKey) {
 		fatalIf(errInvalidArgument, "Invalid secret key. Accept only a string containing from 8 to 40 characters.")
 	}
 

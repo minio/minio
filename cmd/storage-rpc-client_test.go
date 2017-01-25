@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -52,7 +52,7 @@ func TestStorageErr(t *testing.T) {
 			err:         &net.OpError{},
 		},
 		{
-			expectedErr: rpc.ErrShutdown,
+			expectedErr: errDiskNotFound,
 			err:         rpc.ErrShutdown,
 		},
 		{
@@ -188,7 +188,7 @@ func TestRPCStorageClient(t *testing.T) {
 
 func (s *TestRPCStorageSuite) testRPCStorageClient(t *testing.T) {
 	// TODO - Fix below tests to run on windows.
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == globalWindowsOSName {
 		return
 	}
 	s.testRPCStorageDisksInfo(t)
@@ -351,6 +351,9 @@ func (s *TestRPCStorageSuite) testRPCStorageListDir(t *testing.T) {
 			}
 		}
 		dirs, err := storageDisk.ListDir("myvol", "")
+		if err != nil {
+			t.Error(err)
+		}
 		if len(dirs) != dirCount {
 			t.Errorf("Expected %d directories but found only %d", dirCount, len(dirs))
 		}
@@ -361,6 +364,9 @@ func (s *TestRPCStorageSuite) testRPCStorageListDir(t *testing.T) {
 			}
 		}
 		dirs, err = storageDisk.ListDir("myvol", "")
+		if err != nil {
+			t.Error(err)
+		}
 		if len(dirs) != 0 {
 			t.Errorf("Expected no directories but found %d", dirCount)
 		}
@@ -370,6 +376,9 @@ func (s *TestRPCStorageSuite) testRPCStorageListDir(t *testing.T) {
 			t.Error("Unable to initiate DeleteVol", err)
 		}
 		vols, err := storageDisk.ListVols()
+		if err != nil {
+			t.Error(err)
+		}
 		if len(vols) != 0 {
 			t.Errorf("Expected no volumes but found %d", dirCount)
 		}

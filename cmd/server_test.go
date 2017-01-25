@@ -94,17 +94,86 @@ func (s *TestSuiteCommon) TearDownSuite(c *C) {
 }
 
 func (s *TestSuiteCommon) TestAuth(c *C) {
-	secretID, err := genSecretAccessKey()
-	c.Assert(err, IsNil)
+	cred := newCredential()
 
-	accessID, err := genAccessKeyID()
-	c.Assert(err, IsNil)
-
-	c.Assert(len(secretID), Equals, secretKeyMaxLen)
-	c.Assert(len(accessID), Equals, accessKeyMaxLen)
+	c.Assert(len(cred.AccessKey), Equals, accessKeyMaxLen)
+	c.Assert(len(cred.SecretKey), Equals, secretKeyMaxLen)
 }
 
-func (s *TestSuiteCommon) TestBucketSQSNotification(c *C) {
+func (s *TestSuiteCommon) TestBucketSQSNotificationWebHook(c *C) {
+	// Sample bucket notification.
+	bucketNotificationBuf := `<NotificationConfiguration><QueueConfiguration><Event>s3:ObjectCreated:Put</Event><Filter><S3Key><FilterRule><Name>prefix</Name><Value>images/</Value></FilterRule></S3Key></Filter><Id>1</Id><Queue>arn:minio:sqs:us-east-1:444455556666:webhook</Queue></QueueConfiguration></NotificationConfiguration>`
+	// generate a random bucket Name.
+	bucketName := getRandomBucketName()
+	// HTTP request to create the bucket.
+	request, err := newTestSignedRequest("PUT", getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey, s.signer)
+	c.Assert(err, IsNil)
+
+	client := http.Client{Transport: s.transport}
+	// execute the request.
+	response, err := client.Do(request)
+	c.Assert(err, IsNil)
+
+	// assert the http response status code.
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	request, err = newTestSignedRequest("PUT", getPutNotificationURL(s.endPoint, bucketName),
+		int64(len(bucketNotificationBuf)), bytes.NewReader([]byte(bucketNotificationBuf)), s.accessKey, s.secretKey, s.signer)
+	c.Assert(err, IsNil)
+
+	client = http.Client{Transport: s.transport}
+	// execute the HTTP request.
+	response, err = client.Do(request)
+
+	c.Assert(err, IsNil)
+	verifyError(c, response, "InvalidArgument", "A specified destination ARN does not exist or is not well-formed. Verify the destination ARN.", http.StatusBadRequest)
+}
+
+func (s *TestSuiteCommon) TestObjectDir(c *C) {
+	bucketName := getRandomBucketName()
+	// HTTP request to create the bucket.
+	request, err := newTestSignedRequest("PUT", getMakeBucketURL(s.endPoint, bucketName),
+		0, nil, s.accessKey, s.secretKey, s.signer)
+	c.Assert(err, IsNil)
+
+	client := http.Client{Transport: s.transport}
+	// execute the request.
+	response, err := client.Do(request)
+	c.Assert(err, IsNil)
+
+	// assert the http response status code.
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	request, err = newTestSignedRequest("PUT", getPutObjectURL(s.endPoint, bucketName, "my-object-directory/"),
+		0, nil, s.accessKey, s.secretKey, s.signer)
+	c.Assert(err, IsNil)
+
+	client = http.Client{Transport: s.transport}
+	// execute the HTTP request.
+	response, err = client.Do(request)
+
+	c.Assert(err, IsNil)
+	// assert the http response status code.
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
+	request, err = newTestSignedRequest("PUT", getPutObjectURL(s.endPoint, bucketName, "my-object-directory/"),
+		0, nil, s.accessKey, s.secretKey, s.signer)
+	c.Assert(err, IsNil)
+
+	helloReader := bytes.NewReader([]byte("Hello, World"))
+	request.ContentLength = helloReader.Size()
+	request.Body = ioutil.NopCloser(helloReader)
+
+	client = http.Client{Transport: s.transport}
+	// execute the HTTP request.
+	response, err = client.Do(request)
+
+	c.Assert(err, IsNil)
+	verifyError(c, response, "XMinioInvalidObjectName", "Object name contains unsupported characters. Unsupported characters are `^*|\\\"", http.StatusBadRequest)
+}
+
+func (s *TestSuiteCommon) TestBucketSQSNotificationAMQP(c *C) {
 	// Sample bucket notification.
 	bucketNotificationBuf := `<NotificationConfiguration><QueueConfiguration><Event>s3:ObjectCreated:Put</Event><Filter><S3Key><FilterRule><Name>prefix</Name><Value>images/</Value></FilterRule></S3Key></Filter><Id>1</Id><Queue>arn:minio:sqs:us-east-1:444455556666:amqp</Queue></QueueConfiguration></NotificationConfiguration>`
 	// generate a random bucket Name.
@@ -1109,7 +1178,9 @@ func (s *TestSuiteCommon) TestSHA256Mismatch(c *C) {
 		c.Assert(request.Header.Get("x-amz-content-sha256"), Equals, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
 	}
 	// Set the body to generate signature mismatch.
-	request.Body = ioutil.NopCloser(bytes.NewReader([]byte("Hello, World")))
+	helloReader := bytes.NewReader([]byte("Hello, World"))
+	request.ContentLength = helloReader.Size()
+	request.Body = ioutil.NopCloser(helloReader)
 	c.Assert(err, IsNil)
 	// execute the HTTP request.
 	response, err = client.Do(request)
@@ -1119,8 +1190,8 @@ func (s *TestSuiteCommon) TestSHA256Mismatch(c *C) {
 	}
 }
 
-// TestNotBeAbleToCreateObjectInNonexistentBucket - Validates the error response
-// on an attempt to upload an object into a non-existent bucket.
+// TestPutObjectLongName - Validates the error response
+// on an attempt to upload an object with long name.
 func (s *TestSuiteCommon) TestPutObjectLongName(c *C) {
 	// generate a random bucket name.
 	bucketName := getRandomBucketName()

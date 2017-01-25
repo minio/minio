@@ -16,7 +16,10 @@
 
 package cmd
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 // SystemLockState - Structure to fill the lock state of entire object storage.
 // That is the total locks held, total calls blocked on locks and state of all the locks for the entire system.
@@ -26,7 +29,7 @@ type SystemLockState struct {
 	// be released.
 	TotalBlockedLocks int64 `json:"totalBlockedLocks"`
 	// Count of operations which has successfully acquired the lock but
-	// hasn't unlocked yet( operation in progress).
+	// hasn't unlocked yet (operation in progress).
 	TotalAcquiredLocks int64            `json:"totalAcquiredLocks"`
 	LocksInfoPerObject []VolumeLockInfo `json:"locksInfoPerObject"`
 }
@@ -35,59 +38,79 @@ type SystemLockState struct {
 type VolumeLockInfo struct {
 	Bucket string `json:"bucket"`
 	Object string `json:"object"`
+
 	// All locks blocked + running for given <volume,path> pair.
-	LocksOnObject int64 `json:"locksOnObject"`
+	LocksOnObject int64 `json:"-"`
 	// Count of operations which has successfully acquired the lock
 	// but hasn't unlocked yet( operation in progress).
-	LocksAcquiredOnObject int64 `json:"locksAcquiredOnObject"`
+	LocksAcquiredOnObject int64 `json:"-"`
 	// Count of operations which are blocked waiting for the lock
 	// to be released.
-	TotalBlockedLocks int64 `json:"locksBlockedOnObject"`
+	TotalBlockedLocks int64 `json:"-"`
+
+	// Count of all read locks
+	TotalReadLocks int64 `json:"readLocks"`
+	// Count of all write locks
+	TotalWriteLocks int64 `json:"writeLocks"`
 	// State information containing state of the locks for all operations
 	// on given <volume,path> pair.
-	LockDetailsOnObject []OpsLockState `json:"lockDetailsOnObject"`
+	LockDetailsOnObject []OpsLockState `json:"lockOwners"`
 }
 
 // OpsLockState - structure to fill in state information of the lock.
 // structure to fill in status information for each operation with given operation ID.
 type OpsLockState struct {
-	OperationID string        `json:"opsID"`          // String containing operation ID.
-	LockSource  string        `json:"lockSource"`     // Operation type (GetObject, PutObject...)
-	LockType    lockType      `json:"lockType"`       // Lock type (RLock, WLock)
-	Status      statusType    `json:"status"`         // Status can be Running/Ready/Blocked.
-	Since       time.Time     `json:"statusSince"`    // Time when the lock was initially held.
-	Duration    time.Duration `json:"statusDuration"` // Duration since the lock was held.
+	OperationID string        `json:"id"`       // String containing operation ID.
+	LockSource  string        `json:"source"`   // Operation type (GetObject, PutObject...)
+	LockType    lockType      `json:"type"`     // Lock type (RLock, WLock)
+	Status      statusType    `json:"status"`   // Status can be Running/Ready/Blocked.
+	Since       time.Time     `json:"since"`    // Time when the lock was initially held.
+	Duration    time.Duration `json:"duration"` // Duration since the lock was held.
 }
 
-// Read entire state of the locks in the system and return.
-func getSystemLockState() (SystemLockState, error) {
+// listLocksInfo - Fetches locks held on bucket, matching prefix older than relTime.
+func listLocksInfo(bucket, prefix string, relTime time.Duration) []VolumeLockInfo {
 	globalNSMutex.lockMapMutex.Lock()
 	defer globalNSMutex.lockMapMutex.Unlock()
 
-	lockState := SystemLockState{}
-
-	lockState.TotalBlockedLocks = globalNSMutex.blockedCounter
-	lockState.TotalLocks = globalNSMutex.globalLockCounter
-	lockState.TotalAcquiredLocks = globalNSMutex.runningLockCounter
+	// Fetch current time once instead of fetching system time for every lock.
+	timeNow := time.Now().UTC()
+	volumeLocks := []VolumeLockInfo{}
 
 	for param, debugLock := range globalNSMutex.debugLockMap {
-		volLockInfo := VolumeLockInfo{}
-		volLockInfo.Bucket = param.volume
-		volLockInfo.Object = param.path
-		volLockInfo.LocksOnObject = debugLock.ref
-		volLockInfo.TotalBlockedLocks = debugLock.blocked
-		volLockInfo.LocksAcquiredOnObject = debugLock.running
-		for opsID, lockInfo := range debugLock.lockInfo {
-			volLockInfo.LockDetailsOnObject = append(volLockInfo.LockDetailsOnObject, OpsLockState{
-				OperationID: opsID,
-				LockSource:  lockInfo.lockSource,
-				LockType:    lockInfo.lType,
-				Status:      lockInfo.status,
-				Since:       lockInfo.since,
-				Duration:    time.Now().UTC().Sub(lockInfo.since),
-			})
+		if param.volume != bucket {
+			continue
 		}
-		lockState.LocksInfoPerObject = append(lockState.LocksInfoPerObject, volLockInfo)
+		// N B empty prefix matches all param.path.
+		if !strings.HasPrefix(param.path, prefix) {
+			continue
+		}
+
+		volLockInfo := VolumeLockInfo{
+			Bucket:                param.volume,
+			Object:                param.path,
+			LocksOnObject:         debugLock.counters.total,
+			TotalBlockedLocks:     debugLock.counters.blocked,
+			LocksAcquiredOnObject: debugLock.counters.granted,
+		}
+		// Filter locks that are held on bucket, prefix.
+		for opsID, lockInfo := range debugLock.lockInfo {
+			elapsed := timeNow.Sub(lockInfo.since)
+			if elapsed < relTime {
+				continue
+			}
+			// Add locks that are older than relTime.
+			volLockInfo.LockDetailsOnObject = append(volLockInfo.LockDetailsOnObject,
+				OpsLockState{
+					OperationID: opsID,
+					LockSource:  lockInfo.lockSource,
+					LockType:    lockInfo.lType,
+					Status:      lockInfo.status,
+					Since:       lockInfo.since,
+					Duration:    elapsed,
+				})
+			volumeLocks = append(volumeLocks, volLockInfo)
+		}
 	}
-	return lockState, nil
+	return volumeLocks
 }

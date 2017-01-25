@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -82,8 +82,8 @@ func TestIsValidRegion(t *testing.T) {
 	}{
 
 		{"", "", false},
-		{"us-east-1", "", true},
-		{"us-east-1", "US", true},
+		{globalMinioDefaultRegion, "", true},
+		{globalMinioDefaultRegion, "US", true},
 		{"us-west-1", "US", false},
 		{"us-west-1", "us-west-1", true},
 		// "US" was old naming convention for 'us-east-1'.
@@ -191,25 +191,6 @@ func TestExtractSignedHeaders(t *testing.T) {
 	_, errCode = extractSignedHeaders(signedHeaders, inputHeader)
 	if errCode != ErrUnsignedHeaders {
 		t.Fatalf("Expected the APIErrorCode to %d, but got %d", ErrUnsignedHeaders, errCode)
-	}
-}
-
-// TestFindHost - tests the logic to find whether "host" is part of signed headers.
-func TestFindHost(t *testing.T) {
-	// doesn't contain "host".
-	signedHeaders := []string{"x-amz-content-sha256", "x-amz-date"}
-	errCode := findHost(signedHeaders)
-	// expected to error out with code ErrUnsignedHeaders .
-	if errCode != ErrUnsignedHeaders {
-		t.Fatalf("Expected the APIErrorCode to be %d, but got %d", ErrUnsignedHeaders, errCode)
-	}
-
-	// adding "host".
-	signedHeaders = append(signedHeaders, "host")
-	// epxected to pass.
-	errCode = findHost(signedHeaders)
-	if errCode != ErrNone {
-		t.Fatalf("Expected the APIErrorCode to be %d, but got %d", ErrNone, errCode)
 	}
 }
 

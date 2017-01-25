@@ -24,28 +24,28 @@ import (
 
 // Login handler implements JWT login token generator, which upon login request
 // along with username and password is generated.
-func (br *browserPeerAPIHandlers) LoginHandler(args *RPCLoginArgs, reply *RPCLoginReply) error {
-	jwt, err := newJWT(defaultInterNodeJWTExpiry, serverConfig.GetCredential())
+func (br *browserPeerAPIHandlers) Login(args *LoginRPCArgs, reply *LoginRPCReply) error {
+	// Validate LoginRPCArgs
+	if err := args.IsValid(); err != nil {
+		return err
+	}
+
+	// Authenticate using JWT.
+	token, err := authenticateWeb(args.Username, args.Password)
 	if err != nil {
 		return err
 	}
-	if err = jwt.Authenticate(args.Username, args.Password); err != nil {
-		return err
-	}
-	token, err := jwt.GenerateToken(args.Username)
-	if err != nil {
-		return err
-	}
-	reply.Token = token
-	reply.ServerVersion = Version
-	reply.Timestamp = time.Now().UTC()
+
+	// Return the token.
+	reply.AuthToken = token
+
 	return nil
 }
 
 // SetAuthPeerArgs - Arguments collection for SetAuth RPC call
 type SetAuthPeerArgs struct {
 	// For Auth
-	GenericArgs
+	AuthRPCArgs
 
 	// New credentials that receiving peer should update to.
 	Creds credential
@@ -54,14 +54,13 @@ type SetAuthPeerArgs struct {
 // SetAuthPeer - Update to new credentials sent from a peer Minio
 // server. Since credentials are already validated on the sending
 // peer, here we just persist to file and update in-memory config. All
-// subsequently running isRPCTokenValid() calls will fail, and clients
+// subsequently running isAuthTokenValid() calls will fail, and clients
 // will be forced to re-establish connections. Connections will be
 // re-established only when the sending client has also updated its
 // credentials.
-func (br *browserPeerAPIHandlers) SetAuthPeer(args SetAuthPeerArgs, reply *GenericReply) error {
-	// Check auth
-	if !isRPCTokenValid(args.Token) {
-		return errInvalidToken
+func (br *browserPeerAPIHandlers) SetAuthPeer(args SetAuthPeerArgs, reply *AuthRPCReply) error {
+	if err := args.IsAuthenticated(); err != nil {
+		return err
 	}
 
 	// Update credentials in memory
@@ -88,6 +87,7 @@ func updateCredsOnPeers(creds credential) map[string]error {
 	errs := make([]error, len(peers))
 	var wg sync.WaitGroup
 
+	serverCred := serverConfig.GetCredential()
 	// Launch go routines to send request to each peer in parallel.
 	for ix := range peers {
 		wg.Add(1)
@@ -102,13 +102,13 @@ func updateCredsOnPeers(creds credential) map[string]error {
 			}
 
 			// Initialize client
-			client := newAuthClient(&authConfig{
-				accessKey:   serverConfig.GetCredential().AccessKeyID,
-				secretKey:   serverConfig.GetCredential().SecretAccessKey,
-				address:     peers[ix],
-				secureConn:  isSSL(),
-				path:        path.Join(reservedBucket, browserPeerPath),
-				loginMethod: "Browser.LoginHandler",
+			client := newAuthRPCClient(authConfig{
+				accessKey:       serverCred.AccessKey,
+				secretKey:       serverCred.SecretKey,
+				serverAddr:      peers[ix],
+				secureConn:      globalIsSSL,
+				serviceEndpoint: path.Join(reservedBucket, browserPeerPath),
+				serviceName:     "BrowserPeer",
 			})
 
 			// Construct RPC call arguments.
@@ -116,14 +116,14 @@ func updateCredsOnPeers(creds credential) map[string]error {
 
 			// Make RPC call - we only care about error
 			// response and not the reply.
-			err := client.Call("Browser.SetAuthPeer", &args, &GenericReply{})
+			err := client.Call("BrowserPeer.SetAuthPeer", &args, &AuthRPCReply{})
 
 			// We try a bit hard (3 attempts with 1 second delay)
 			// to set creds on peers in case of failure.
 			if err != nil {
 				for i := 0; i < 2; i++ {
 					time.Sleep(1 * time.Second) // 1 second delay.
-					err = client.Call("Browser.SetAuthPeer", &args, &GenericReply{})
+					err = client.Call("BrowserPeer.SetAuthPeer", &args, &AuthRPCReply{})
 					if err == nil {
 						break
 					}

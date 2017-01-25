@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,6 +42,17 @@ func isSysErrIO(err error) bool {
 	return err == syscall.EIO
 }
 
+// Check if the given error corresponds to EISDIR (is a directory).
+func isSysErrIsDir(err error) bool {
+	if pathErr, ok := err.(*os.PathError); ok {
+		switch pathErr.Err {
+		case syscall.EISDIR:
+			return true
+		}
+	}
+	return false
+}
+
 // Check if the given error corresponds to ENOTDIR (is not a directory).
 func isSysErrNotDir(err error) bool {
 	if pathErr, ok := err.(*os.PathError); ok {
@@ -68,7 +79,7 @@ func isSysErrTooLong(err error) bool {
 // and ERROR_DIR_NOT_EMPTY for windows (directory not empty).
 func isSysErrNotEmpty(err error) bool {
 	if pathErr, ok := err.(*os.PathError); ok {
-		if runtime.GOOS == "windows" {
+		if runtime.GOOS == globalWindowsOSName {
 			if errno, _ok := pathErr.Err.(syscall.Errno); _ok && errno == 0x91 {
 				// ERROR_DIR_NOT_EMPTY
 				return true
@@ -84,7 +95,7 @@ func isSysErrNotEmpty(err error) bool {
 
 // Check if the given error corresponds to the specific ERROR_PATH_NOT_FOUND for windows
 func isSysErrPathNotFound(err error) bool {
-	if runtime.GOOS != "windows" {
+	if runtime.GOOS != globalWindowsOSName {
 		return false
 	}
 	if pathErr, ok := err.(*os.PathError); ok {
@@ -98,7 +109,7 @@ func isSysErrPathNotFound(err error) bool {
 
 // Check if the given error corresponds to the specific ERROR_INVALID_HANDLE for windows
 func isSysErrHandleInvalid(err error) bool {
-	if runtime.GOOS != "windows" {
+	if runtime.GOOS != globalWindowsOSName {
 		return false
 	}
 	// Check if err contains ERROR_INVALID_HANDLE errno

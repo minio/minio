@@ -38,6 +38,10 @@ const (
 	queueTypeRedis = "redis"
 	// Static string indicating queue type 'postgresql'.
 	queueTypePostgreSQL = "postgresql"
+	// Static string indicating queue type 'kafka'.
+	queueTypeKafka = "kafka"
+	// Static string for Webhooks
+	queueTypeWebhook = "webhook"
 )
 
 // Topic type.
@@ -58,6 +62,8 @@ type notifier struct {
 	ElasticSearch map[string]elasticSearchNotify `json:"elasticsearch"`
 	Redis         map[string]redisNotify         `json:"redis"`
 	PostgreSQL    map[string]postgreSQLNotify    `json:"postgresql"`
+	Kafka         map[string]kafkaNotify         `json:"kafka"`
+	Webhook       map[string]webhookNotify       `json:"webhook"`
 	// Add new notification queues.
 }
 
@@ -90,12 +96,24 @@ func isNATSQueue(sqsArn arnSQS) bool {
 		return false
 	}
 	// Connect to nats server to validate.
-	natsC, err := dialNATS(natsL)
+	natsC, err := dialNATS(natsL, true)
 	if err != nil {
 		errorIf(err, "Unable to connect to nats service. %#v", natsL)
 		return false
 	}
-	defer natsC.Close()
+	closeNATS(natsC)
+	return true
+}
+
+// Returns true if queueArn is for an Webhook queue
+func isWebhookQueue(sqsArn arnSQS) bool {
+	if sqsArn.Type != queueTypeWebhook {
+		return false
+	}
+	rNotify := serverConfig.GetWebhookNotifyByID(sqsArn.AccountID)
+	if !rNotify.Enable {
+		return false
+	}
 	return true
 }
 
@@ -151,6 +169,24 @@ func isPostgreSQLQueue(sqsArn arnSQS) bool {
 		return false
 	}
 	defer pgC.Close()
+	return true
+}
+
+// Returns true if queueArn is for Kafka.
+func isKafkaQueue(sqsArn arnSQS) bool {
+	if sqsArn.Type != queueTypeKafka {
+		return false
+	}
+	kafkaNotifyCfg := serverConfig.GetKafkaNotifyByID(sqsArn.AccountID)
+	if !kafkaNotifyCfg.Enable {
+		return false
+	}
+	kafkaC, err := dialKafka(kafkaNotifyCfg)
+	if err != nil {
+		errorIf(err, "Unable to dial Kafka server %#v", kafkaNotifyCfg)
+		return false
+	}
+	defer kafkaC.Close()
 	return true
 }
 

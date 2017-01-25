@@ -18,31 +18,24 @@ package cmd
 
 import (
 	"bytes"
-	"crypto/rand"
 	"encoding/xml"
+	"fmt"
 	"net/http"
-	"runtime"
 	"strconv"
+	"time"
 )
 
-// Static alphanumeric table used for generating unique request ids
-var alphaNumericTable = []byte("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")
-
-// newRequestID generates and returns request ID string.
-func newRequestID() string {
-	alpha := make([]byte, 16)
-	rand.Read(alpha)
-	for i := 0; i < 16; i++ {
-		alpha[i] = alphaNumericTable[alpha[i]%byte(len(alphaNumericTable))]
-	}
-	return string(alpha)
+// Returns a hexadecimal representation of time at the
+// time response is sent to the client.
+func mustGetRequestID(t time.Time) string {
+	return fmt.Sprintf("%X", t.UnixNano())
 }
 
 // Write http common headers
 func setCommonHeaders(w http.ResponseWriter) {
 	// Set unique request ID for each reply.
-	w.Header().Set("X-Amz-Request-Id", newRequestID())
-	w.Header().Set("Server", ("Minio/" + ReleaseTag + " (" + runtime.GOOS + "; " + runtime.GOARCH + ")"))
+	w.Header().Set(responseRequestIDKey, mustGetRequestID(time.Now().UTC()))
+	w.Header().Set("Server", globalServerUserAgent)
 	w.Header().Set("Accept-Ranges", "bytes")
 }
 

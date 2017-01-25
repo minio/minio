@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -218,7 +218,7 @@ func TestValidEvents(t *testing.T) {
 
 // Tests queue arn validation.
 func TestQueueARN(t *testing.T) {
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("unable initialize config file, %s", err)
 	}
@@ -228,6 +228,12 @@ func TestQueueARN(t *testing.T) {
 		queueARN string
 		errCode  APIErrorCode
 	}{
+
+		// Valid webhook queue arn.
+		{
+			queueARN: "arn:minio:sqs:us-east-1:1:webhook",
+			errCode:  ErrNone,
+		},
 		// Valid redis queue arn.
 		{
 			queueARN: "arn:minio:sqs:us-east-1:1:redis",
@@ -296,7 +302,7 @@ func TestQueueARN(t *testing.T) {
 
 // Test unmarshal queue arn.
 func TestUnmarshalSQSARN(t *testing.T) {
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("unable initialize config file, %s", err)
 	}
@@ -306,6 +312,11 @@ func TestUnmarshalSQSARN(t *testing.T) {
 		queueARN string
 		Type     string
 	}{
+		// Valid webhook queue arn.
+		{
+			queueARN: "arn:minio:sqs:us-east-1:1:webhook",
+			Type:     "webhook",
+		},
 		// Valid redis queue arn.
 		{
 			queueARN: "arn:minio:sqs:us-east-1:1:redis",

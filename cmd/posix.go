@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -157,7 +157,7 @@ func getDiskInfo(diskPath string) (di disk.Info, err error) {
 func (s *posix) checkDiskFree() (err error) {
 	// We don't validate disk space or inode utilization on windows.
 	// Each windows calls to 'GetVolumeInformationW' takes around 3-5seconds.
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == globalWindowsOSName {
 		return nil
 	}
 
@@ -177,7 +177,7 @@ func (s *posix) checkDiskFree() (err error) {
 	// are allocated based on available disk space. For example CephFS, StoreNext CVFS, AzureFile driver.
 	// Allow for the available disk to be separately validate and we will validate inodes only if
 	// total inodes are provided by the underlying filesystem.
-	if di.Files != 0 {
+	if di.Files != 0 && di.FSType != "NFS" {
 		availableFiles := int64(di.Ffree)
 		if availableFiles <= s.minFreeInodes {
 			return errDiskFull
@@ -652,7 +652,6 @@ func (s *posix) createFile(volume, path string) (f *os.File, err error) {
 // PrepareFile - run prior actions before creating a new file for optimization purposes
 // Currently we use fallocate when available to avoid disk fragmentation as much as possible
 func (s *posix) PrepareFile(volume, path string, fileSize int64) (err error) {
-
 	// It doesn't make sense to create a negative-sized file
 	if fileSize <= 0 {
 		return errInvalidArgument

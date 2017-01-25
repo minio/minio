@@ -39,9 +39,10 @@ import (
 
 // AWS Signature Version '4' constants.
 const (
-	signV4Algorithm = "AWS4-HMAC-SHA256"
-	iso8601Format   = "20060102T150405Z"
-	yyyymmdd        = "20060102"
+	signV4Algorithm     = "AWS4-HMAC-SHA256"
+	iso8601Format       = "20060102T150405Z"
+	yyyymmdd            = "20060102"
+	presignedHostHeader = "host"
 )
 
 // getCanonicalHeaders generate a list of request headers with their values
@@ -52,7 +53,7 @@ func getCanonicalHeaders(signedHeaders http.Header, host string) string {
 		headers = append(headers, strings.ToLower(k))
 		vals[strings.ToLower(k)] = vv
 	}
-	headers = append(headers, "host")
+	headers = append(headers, presignedHostHeader)
 	sort.Strings(headers)
 
 	var buf bytes.Buffer
@@ -60,7 +61,7 @@ func getCanonicalHeaders(signedHeaders http.Header, host string) string {
 		buf.WriteString(k)
 		buf.WriteByte(':')
 		switch {
-		case k == "host":
+		case k == presignedHostHeader:
 			buf.WriteString(host)
 			fallthrough
 		default:
@@ -82,7 +83,7 @@ func getSignedHeaders(signedHeaders http.Header) string {
 	for k := range signedHeaders {
 		headers = append(headers, strings.ToLower(k))
 	}
-	headers = append(headers, "host")
+	headers = append(headers, presignedHostHeader)
 	sort.Strings(headers)
 	return strings.Join(headers, ";")
 }
@@ -171,7 +172,7 @@ func doesPolicySignatureV4Match(formValues map[string]string) APIErrorCode {
 	}
 
 	// Verify if the access key id matches.
-	if credHeader.accessKey != cred.AccessKeyID {
+	if credHeader.accessKey != cred.AccessKey {
 		return ErrInvalidAccessKeyID
 	}
 
@@ -188,7 +189,7 @@ func doesPolicySignatureV4Match(formValues map[string]string) APIErrorCode {
 	}
 
 	// Get signing key.
-	signingKey := getSigningKey(cred.SecretAccessKey, t, region)
+	signingKey := getSigningKey(cred.SecretKey, t, region)
 
 	// Get signature.
 	newSignature := getSignature(signingKey, formValues["Policy"])
@@ -217,7 +218,7 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 	}
 
 	// Verify if the access key id matches.
-	if pSignValues.Credential.accessKey != cred.AccessKeyID {
+	if pSignValues.Credential.accessKey != cred.AccessKey {
 		return ErrInvalidAccessKeyID
 	}
 
@@ -268,7 +269,7 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 	query.Set("X-Amz-Date", t.Format(iso8601Format))
 	query.Set("X-Amz-Expires", strconv.Itoa(expireSeconds))
 	query.Set("X-Amz-SignedHeaders", getSignedHeaders(extractedSignedHeaders))
-	query.Set("X-Amz-Credential", cred.AccessKeyID+"/"+getScope(t, sRegion))
+	query.Set("X-Amz-Credential", cred.AccessKey+"/"+getScope(t, sRegion))
 
 	// Save other headers available in the request parameters.
 	for k, v := range req.URL.Query() {
@@ -313,7 +314,7 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 	presignedStringToSign := getStringToSign(presignedCanonicalReq, t, region)
 
 	// Get hmac presigned signing key.
-	presignedSigningKey := getSigningKey(cred.SecretAccessKey, t, region)
+	presignedSigningKey := getSigningKey(cred.SecretKey, t, region)
 
 	// Get new signature.
 	newSignature := getSignature(presignedSigningKey, presignedStringToSign)
@@ -369,7 +370,7 @@ func doesSignatureMatch(hashedPayload string, r *http.Request, region string) AP
 	}
 
 	// Verify if the access key id matches.
-	if signV4Values.Credential.accessKey != cred.AccessKeyID {
+	if signV4Values.Credential.accessKey != cred.AccessKey {
 		return ErrInvalidAccessKeyID
 	}
 
@@ -410,7 +411,7 @@ func doesSignatureMatch(hashedPayload string, r *http.Request, region string) AP
 	stringToSign := getStringToSign(canonicalRequest, t, region)
 
 	// Get hmac signing key.
-	signingKey := getSigningKey(cred.SecretAccessKey, t, region)
+	signingKey := getSigningKey(cred.SecretKey, t, region)
 
 	// Calculate signature.
 	newSignature := getSignature(signingKey, stringToSign)

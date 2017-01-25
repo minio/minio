@@ -88,49 +88,76 @@ type eventData struct {
 // New notification event constructs a new notification event message from
 // input request metadata which completed successfully.
 func newNotificationEvent(event eventData) NotificationEvent {
-	/// Construct a new object created event.
+	// Fetch the region.
 	region := serverConfig.GetRegion()
-	tnow := time.Now().UTC()
-	sequencer := fmt.Sprintf("%X", tnow.UnixNano())
+
+	// Fetch the credentials.
+	creds := serverConfig.GetCredential()
+
+	// Time when Minio finished processing the request.
+	eventTime := time.Now().UTC()
+
+	// API endpoint is captured here to be returned back
+	// to the client for it to differentiate from which
+	// server the request came from.
+	var apiEndpoint string
+	if len(globalAPIEndpoints) >= 1 {
+		apiEndpoint = globalAPIEndpoints[0]
+	}
+
+	// Fetch a hexadecimal representation of event time in nano seconds.
+	uniqueID := mustGetRequestID(eventTime)
+
+	/// Construct a new object created event.
+
 	// Following blocks fills in all the necessary details of s3
 	// event message structure.
 	// http://docs.aws.amazon.com/AmazonS3/latest/dev/notification-content-structure.html
 	nEvent := NotificationEvent{
-		EventVersion:      "2.0",
-		EventSource:       "aws:s3",
+		EventVersion:      eventVersion,
+		EventSource:       eventSource,
 		AwsRegion:         region,
-		EventTime:         tnow.Format(timeFormatAMZ),
+		EventTime:         eventTime.Format(timeFormatAMZ),
 		EventName:         event.Type.String(),
-		UserIdentity:      defaultIdentity(),
+		UserIdentity:      identity{creds.AccessKey},
 		RequestParameters: event.ReqParams,
-		ResponseElements:  map[string]string{},
+		ResponseElements: map[string]string{
+			responseRequestIDKey: uniqueID,
+			// Following is a custom response element to indicate
+			// event origin server endpoint.
+			responseOriginEndpointKey: apiEndpoint,
+		},
 		S3: eventMeta{
-			SchemaVersion:   "1.0",
-			ConfigurationID: "Config",
+			SchemaVersion:   eventSchemaVersion,
+			ConfigurationID: eventConfigID,
 			Bucket: bucketMeta{
 				Name:          event.Bucket,
-				OwnerIdentity: defaultIdentity(),
-				ARN:           "arn:aws:s3:::" + event.Bucket,
+				OwnerIdentity: identity{creds.AccessKey},
+				ARN:           bucketARNPrefix + event.Bucket,
 			},
 		},
 	}
 
+	// Escape the object name. For example "red flower.jpg" becomes "red+flower.jpg".
 	escapedObj := url.QueryEscape(event.ObjInfo.Name)
+
 	// For delete object event type, we do not need to set ETag and Size.
 	if event.Type == ObjectRemovedDelete {
 		nEvent.S3.Object = objectMeta{
 			Key:       escapedObj,
-			Sequencer: sequencer,
+			Sequencer: uniqueID,
 		}
 		return nEvent
 	}
+
 	// For all other events we should set ETag and Size.
 	nEvent.S3.Object = objectMeta{
 		Key:       escapedObj,
 		ETag:      event.ObjInfo.MD5Sum,
 		Size:      event.ObjInfo.Size,
-		Sequencer: sequencer,
+		Sequencer: uniqueID,
 	}
+
 	// Success.
 	return nEvent
 }
@@ -308,20 +335,8 @@ func loadNotificationConfig(bucket string, objAPI ObjectLayer) (*notificationCon
 	objLock.RLock()
 	defer objLock.RUnlock()
 
-	objInfo, err := objAPI.GetObjectInfo(minioMetaBucket, ncPath)
-	if err != nil {
-		// 'notification.xml' not found return
-		// 'errNoSuchNotifications'.  This is default when no
-		// bucket notifications are found on the bucket.
-		if isErrObjectNotFound(err) || isErrIncompleteBody(err) {
-			return nil, errNoSuchNotifications
-		}
-		errorIf(err, "Unable to load bucket-notification for bucket %s", bucket)
-		// Returns error for other errors.
-		return nil, err
-	}
 	var buffer bytes.Buffer
-	err = objAPI.GetObject(minioMetaBucket, ncPath, 0, objInfo.Size, &buffer)
+	err := objAPI.GetObject(minioMetaBucket, ncPath, 0, -1, &buffer) // Read everything.
 	if err != nil {
 		// 'notification.xml' not found return
 		// 'errNoSuchNotifications'.  This is default when no
@@ -363,20 +378,8 @@ func loadListenerConfig(bucket string, objAPI ObjectLayer) ([]listenerConfig, er
 	objLock.RLock()
 	defer objLock.RUnlock()
 
-	objInfo, err := objAPI.GetObjectInfo(minioMetaBucket, lcPath)
-	if err != nil {
-		// 'listener.json' not found return
-		// 'errNoSuchNotifications'.  This is default when no
-		// bucket notifications are found on the bucket.
-		if isErrObjectNotFound(err) {
-			return nil, errNoSuchNotifications
-		}
-		errorIf(err, "Unable to load bucket-listeners for bucket %s", bucket)
-		// Returns error for other errors.
-		return nil, err
-	}
 	var buffer bytes.Buffer
-	err = objAPI.GetObject(minioMetaBucket, lcPath, 0, objInfo.Size, &buffer)
+	err := objAPI.GetObject(minioMetaBucket, lcPath, 0, -1, &buffer)
 	if err != nil {
 		// 'notification.xml' not found return
 		// 'errNoSuchNotifications'.  This is default when no
@@ -609,6 +612,28 @@ func loadAllQueueTargets() (map[string]*logrus.Logger, error) {
 		}
 		queueTargets[queueARN] = redisLog
 	}
+
+	// Load Webhook targets, initialize their respective loggers.
+	for accountID, webhookN := range serverConfig.GetWebhook() {
+		if !webhookN.Enable {
+			continue
+		}
+		// Construct the queue ARN for Webhook.
+		queueARN := minioSqs + serverConfig.GetRegion() + ":" + accountID + ":" + queueTypeWebhook
+		_, ok := queueTargets[queueARN]
+		if ok {
+			continue
+		}
+
+		// Using accountID we can now initialize a new Webhook logrus instance.
+		webhookLog, err := newWebhookNotify(accountID)
+		if err != nil {
+
+			return nil, err
+		}
+		queueTargets[queueARN] = webhookLog
+	}
+
 	// Load elastic targets, initialize their respective loggers.
 	for accountID, elasticN := range serverConfig.GetElasticSearch() {
 		if !elasticN.Enable {
@@ -634,6 +659,7 @@ func loadAllQueueTargets() (map[string]*logrus.Logger, error) {
 		}
 		queueTargets[queueARN] = elasticLog
 	}
+
 	// Load PostgreSQL targets, initialize their respective loggers.
 	for accountID, pgN := range serverConfig.GetPostgreSQL() {
 		if !pgN.Enable {
@@ -658,6 +684,31 @@ func loadAllQueueTargets() (map[string]*logrus.Logger, error) {
 			return nil, err
 		}
 		queueTargets[queueARN] = pgLog
+	}
+	// Load Kafka targets, initialize their respective loggers.
+	for accountID, kafkaN := range serverConfig.GetKafka() {
+		if !kafkaN.Enable {
+			continue
+		}
+		// Construct the queue ARN for Kafka.
+		queueARN := minioSqs + serverConfig.GetRegion() + ":" + accountID + ":" + queueTypeKafka
+		_, ok := queueTargets[queueARN]
+		if ok {
+			continue
+		}
+		// Using accountID initialize a new Kafka logrus instance.
+		kafkaLog, err := newKafkaNotify(accountID)
+		if err != nil {
+			// Encapsulate network error to be more informative.
+			if _, ok := err.(net.Error); ok {
+				return nil, &net.OpError{
+					Op: "Connecting to " + queueARN, Net: "tcp",
+					Err: err,
+				}
+			}
+			return nil, err
+		}
+		queueTargets[queueARN] = kafkaLog
 	}
 
 	// Successfully initialized queue targets.

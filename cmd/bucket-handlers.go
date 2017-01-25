@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,9 +19,11 @@ package cmd
 import (
 	"encoding/base64"
 	"encoding/xml"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"path"
 	"strings"
 	"sync"
 
@@ -55,7 +57,7 @@ func enforceBucketPolicy(bucket string, action string, reqURL *url.URL) (s3Error
 	}
 
 	// Construct resource in 'arn:aws:s3:::examplebucket/object' format.
-	resource := AWSResourcePrefix + strings.TrimSuffix(strings.TrimPrefix(reqURL.Path, "/"), "/")
+	resource := bucketARNPrefix + strings.TrimSuffix(strings.TrimPrefix(reqURL.Path, "/"), "/")
 
 	// Get conditions for policy verification.
 	conditionKeyMap := make(map[string]set.StringSet)
@@ -70,6 +72,21 @@ func enforceBucketPolicy(bucket string, action string, reqURL *url.URL) (s3Error
 	return ErrNone
 }
 
+// Check if the action is allowed on the bucket/prefix.
+func isBucketActionAllowed(action, bucket, prefix string) bool {
+	policy := globalBucketPolicies.GetBucketPolicy(bucket)
+	if policy == nil {
+		return false
+	}
+	resource := bucketARNPrefix + path.Join(bucket, prefix)
+	var conditionKeyMap map[string]set.StringSet
+	// Validate action, resource and conditions with current policy statements.
+	if !bucketPolicyEvalStatements(action, resource, conditionKeyMap, policy.Statements) {
+		return false
+	}
+	return true
+}
+
 // GetBucketLocationHandler - GET Bucket location.
 // -------------------------
 // This operation returns bucket location.
@@ -79,18 +96,23 @@ func (api objectAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r *
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
-		writeErrorResponse(w, r, ErrServerNotInitialized, r.URL.Path)
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
 		return
 	}
 
-	if s3Error := checkRequestAuthType(r, bucket, "s3:GetBucketLocation", "us-east-1"); s3Error != ErrNone {
-		writeErrorResponse(w, r, s3Error, r.URL.Path)
+	s3Error := checkRequestAuthType(r, bucket, "s3:GetBucketLocation", globalMinioDefaultRegion)
+	if s3Error == ErrInvalidRegion {
+		// Clients like boto3 send getBucketLocation() call signed with region that is configured.
+		s3Error = checkRequestAuthType(r, "", "s3:GetBucketLocation", serverConfig.GetRegion())
+	}
+	if s3Error != ErrNone {
+		writeErrorResponse(w, s3Error, r.URL)
 		return
 	}
 
 	if _, err := objectAPI.GetBucketInfo(bucket); err != nil {
 		errorIf(err, "Unable to fetch bucket info.")
-		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 
@@ -98,13 +120,14 @@ func (api objectAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r *
 	encodedSuccessResponse := encodeResponse(LocationResponse{})
 	// Get current region.
 	region := serverConfig.GetRegion()
-	if region != "us-east-1" {
+	if region != globalMinioDefaultRegion {
 		encodedSuccessResponse = encodeResponse(LocationResponse{
 			Location: region,
 		})
 	}
-	setCommonHeaders(w) // Write headers.
-	writeSuccessResponse(w, encodedSuccessResponse)
+
+	// Write success response.
+	writeSuccessResponseXML(w, encodedSuccessResponse)
 }
 
 // ListMultipartUploadsHandler - GET Bucket (List Multipart uploads)
@@ -121,24 +144,24 @@ func (api objectAPIHandlers) ListMultipartUploadsHandler(w http.ResponseWriter, 
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
-		writeErrorResponse(w, r, ErrServerNotInitialized, r.URL.Path)
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
 		return
 	}
 
 	if s3Error := checkRequestAuthType(r, bucket, "s3:ListBucketMultipartUploads", serverConfig.GetRegion()); s3Error != ErrNone {
-		writeErrorResponse(w, r, s3Error, r.URL.Path)
+		writeErrorResponse(w, s3Error, r.URL)
 		return
 	}
 
 	prefix, keyMarker, uploadIDMarker, delimiter, maxUploads, _ := getBucketMultipartResources(r.URL.Query())
 	if maxUploads < 0 {
-		writeErrorResponse(w, r, ErrInvalidMaxUploads, r.URL.Path)
+		writeErrorResponse(w, ErrInvalidMaxUploads, r.URL)
 		return
 	}
 	if keyMarker != "" {
 		// Marker not common with prefix is not implemented.
 		if !strings.HasPrefix(keyMarker, prefix) {
-			writeErrorResponse(w, r, ErrNotImplemented, r.URL.Path)
+			writeErrorResponse(w, ErrNotImplemented, r.URL)
 			return
 		}
 	}
@@ -146,16 +169,15 @@ func (api objectAPIHandlers) ListMultipartUploadsHandler(w http.ResponseWriter, 
 	listMultipartsInfo, err := objectAPI.ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarker, delimiter, maxUploads)
 	if err != nil {
 		errorIf(err, "Unable to list multipart uploads.")
-		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 	// generate response
 	response := generateListMultipartUploadsResponse(bucket, listMultipartsInfo)
 	encodedSuccessResponse := encodeResponse(response)
-	// write headers.
-	setCommonHeaders(w)
+
 	// write success response.
-	writeSuccessResponse(w, encodedSuccessResponse)
+	writeSuccessResponseXML(w, encodedSuccessResponse)
 }
 
 // ListBucketsHandler - GET Service.
@@ -165,35 +187,34 @@ func (api objectAPIHandlers) ListMultipartUploadsHandler(w http.ResponseWriter, 
 func (api objectAPIHandlers) ListBucketsHandler(w http.ResponseWriter, r *http.Request) {
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
-		writeErrorResponse(w, r, ErrServerNotInitialized, r.URL.Path)
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
 		return
 	}
 
 	// ListBuckets does not have any bucket action.
-	s3Error := checkRequestAuthType(r, "", "", "us-east-1")
+	s3Error := checkRequestAuthType(r, "", "", globalMinioDefaultRegion)
 	if s3Error == ErrInvalidRegion {
 		// Clients like boto3 send listBuckets() call signed with region that is configured.
 		s3Error = checkRequestAuthType(r, "", "", serverConfig.GetRegion())
 	}
 	if s3Error != ErrNone {
-		writeErrorResponse(w, r, s3Error, r.URL.Path)
+		writeErrorResponse(w, s3Error, r.URL)
 		return
 	}
 	// Invoke the list buckets.
 	bucketsInfo, err := objectAPI.ListBuckets()
 	if err != nil {
 		errorIf(err, "Unable to list buckets.")
-		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 
 	// Generate response.
 	response := generateListBucketsResponse(bucketsInfo)
 	encodedSuccessResponse := encodeResponse(response)
-	// Write headers.
-	setCommonHeaders(w)
+
 	// Write response.
-	writeSuccessResponse(w, encodedSuccessResponse)
+	writeSuccessResponseXML(w, encodedSuccessResponse)
 }
 
 // DeleteMultipleObjectsHandler - deletes multiple objects.
@@ -203,26 +224,26 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
-		writeErrorResponse(w, r, ErrServerNotInitialized, r.URL.Path)
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
 		return
 	}
 
 	if s3Error := checkRequestAuthType(r, bucket, "s3:DeleteObject", serverConfig.GetRegion()); s3Error != ErrNone {
-		writeErrorResponse(w, r, s3Error, r.URL.Path)
+		writeErrorResponse(w, s3Error, r.URL)
 		return
 	}
 
 	// Content-Length is required and should be non-zero
 	// http://docs.aws.amazon.com/AmazonS3/latest/API/multiobjectdeleteapi.html
 	if r.ContentLength <= 0 {
-		writeErrorResponse(w, r, ErrMissingContentLength, r.URL.Path)
+		writeErrorResponse(w, ErrMissingContentLength, r.URL)
 		return
 	}
 
 	// Content-Md5 is requied should be set
 	// http://docs.aws.amazon.com/AmazonS3/latest/API/multiobjectdeleteapi.html
 	if _, ok := r.Header["Content-Md5"]; !ok {
-		writeErrorResponse(w, r, ErrMissingContentMD5, r.URL.Path)
+		writeErrorResponse(w, ErrMissingContentMD5, r.URL)
 		return
 	}
 
@@ -232,7 +253,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	// Read incoming body XML bytes.
 	if _, err := io.ReadFull(r.Body, deleteXMLBytes); err != nil {
 		errorIf(err, "Unable to read HTTP body.")
-		writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
+		writeErrorResponse(w, ErrInternalError, r.URL)
 		return
 	}
 
@@ -240,7 +261,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	deleteObjects := &DeleteObjectsRequest{}
 	if err := xml.Unmarshal(deleteXMLBytes, deleteObjects); err != nil {
 		errorIf(err, "Unable to unmarshal delete objects request XML.")
-		writeErrorResponse(w, r, ErrMalformedXML, r.URL.Path)
+		writeErrorResponse(w, ErrMalformedXML, r.URL)
 		return
 	}
 
@@ -288,10 +309,9 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	// Generate response
 	response := generateMultiDeleteResponse(deleteObjects.Quiet, deletedObjects, deleteErrors)
 	encodedSuccessResponse := encodeResponse(response)
-	// Write headers
-	setCommonHeaders(w)
+
 	// Write success response.
-	writeSuccessResponse(w, encodedSuccessResponse)
+	writeSuccessResponseXML(w, encodedSuccessResponse)
 
 	// Notify deleted event for objects.
 	for _, dobj := range deletedObjects {
@@ -314,13 +334,18 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Request) {
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
-		writeErrorResponse(w, r, ErrServerNotInitialized, r.URL.Path)
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
 		return
 	}
 
 	// PutBucket does not have any bucket action.
-	if s3Error := checkRequestAuthType(r, "", "", "us-east-1"); s3Error != ErrNone {
-		writeErrorResponse(w, r, s3Error, r.URL.Path)
+	s3Error := checkRequestAuthType(r, "", "", globalMinioDefaultRegion)
+	if s3Error == ErrInvalidRegion {
+		// Clients like boto3 send putBucket() call signed with region that is configured.
+		s3Error = checkRequestAuthType(r, "", "", serverConfig.GetRegion())
+	}
+	if s3Error != ErrNone {
+		writeErrorResponse(w, s3Error, r.URL)
 		return
 	}
 
@@ -330,7 +355,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	// Validate if incoming location constraint is valid, reject
 	// requests which do not follow valid region requirements.
 	if s3Error := isValidLocationConstraint(r); s3Error != ErrNone {
-		writeErrorResponse(w, r, s3Error, r.URL.Path)
+		writeErrorResponse(w, s3Error, r.URL)
 		return
 	}
 
@@ -342,12 +367,14 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	err := objectAPI.MakeBucket(bucket)
 	if err != nil {
 		errorIf(err, "Unable to create a bucket.")
-		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
+
 	// Make sure to add Location information here only for bucket
 	w.Header().Set("Location", getLocation(r))
-	writeSuccessResponse(w, nil)
+
+	writeSuccessResponseHeadersOnly(w)
 }
 
 // PostPolicyBucketHandler - POST policy
@@ -357,7 +384,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *http.Request) {
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
-		writeErrorResponse(w, r, ErrServerNotInitialized, r.URL.Path)
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
 		return
 	}
 
@@ -366,14 +393,14 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	reader, err := r.MultipartReader()
 	if err != nil {
 		errorIf(err, "Unable to initialize multipart reader.")
-		writeErrorResponse(w, r, ErrMalformedPOSTRequest, r.URL.Path)
+		writeErrorResponse(w, ErrMalformedPOSTRequest, r.URL)
 		return
 	}
 
 	fileBody, fileName, formValues, err := extractPostPolicyFormValues(reader)
 	if err != nil {
 		errorIf(err, "Unable to parse form values.")
-		writeErrorResponse(w, r, ErrMalformedPOSTRequest, r.URL.Path)
+		writeErrorResponse(w, ErrMalformedPOSTRequest, r.URL)
 		return
 	}
 	bucket := mux.Vars(r)["bucket"]
@@ -389,25 +416,25 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	// Verify policy signature.
 	apiErr := doesPolicySignatureMatch(formValues)
 	if apiErr != ErrNone {
-		writeErrorResponse(w, r, apiErr, r.URL.Path)
+		writeErrorResponse(w, apiErr, r.URL)
 		return
 	}
 
 	policyBytes, err := base64.StdEncoding.DecodeString(formValues["Policy"])
 	if err != nil {
-		writeErrorResponse(w, r, ErrMalformedPOSTRequest, r.URL.Path)
+		writeErrorResponse(w, ErrMalformedPOSTRequest, r.URL)
 		return
 	}
 
 	postPolicyForm, err := parsePostPolicyForm(string(policyBytes))
 	if err != nil {
-		writeErrorResponse(w, r, ErrMalformedPOSTRequest, r.URL.Path)
+		writeErrorResponse(w, ErrMalformedPOSTRequest, r.URL)
 		return
 	}
 
 	// Make sure formValues adhere to policy restrictions.
 	if apiErr = checkPostPolicy(formValues, postPolicyForm); apiErr != ErrNone {
-		writeErrorResponse(w, r, apiErr, r.URL.Path)
+		writeErrorResponse(w, apiErr, r.URL)
 		return
 	}
 
@@ -429,9 +456,8 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		}
 	}
 
-	// Save metadata.
-	metadata := make(map[string]string)
-	// Nothing to store right now.
+	// Extract metadata to be saved from received Form.
+	metadata := extractMetadataFromForm(formValues)
 
 	sha256sum := ""
 
@@ -442,17 +468,43 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	objInfo, err := objectAPI.PutObject(bucket, object, -1, fileBody, metadata, sha256sum)
 	if err != nil {
 		errorIf(err, "Unable to create object.")
-		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 	w.Header().Set("ETag", "\""+objInfo.MD5Sum+"\"")
 	w.Header().Set("Location", getObjectLocation(bucket, object))
 
-	// Set common headers.
-	setCommonHeaders(w)
+	successRedirect := formValues[http.CanonicalHeaderKey("success_action_redirect")]
+	successStatus := formValues[http.CanonicalHeaderKey("success_action_status")]
 
-	// Write successful response.
-	writeSuccessNoContent(w)
+	if successStatus == "" && successRedirect == "" {
+		writeSuccessNoContent(w)
+	} else {
+		if successRedirect != "" {
+			redirectURL := successRedirect + "?" + fmt.Sprintf("bucket=%s&key=%s&etag=%s",
+				bucket,
+				getURLEncodedName(object),
+				getURLEncodedName("\""+objInfo.MD5Sum+"\""))
+
+			writeRedirectSeeOther(w, redirectURL)
+		} else {
+			// Decide what http response to send depending on success_action_status parameter
+			switch successStatus {
+			case "201":
+				resp := encodeResponse(PostResponse{
+					Bucket:   bucket,
+					Key:      object,
+					ETag:     "\"" + objInfo.MD5Sum + "\"",
+					Location: getObjectLocation(bucket, object),
+				})
+				writeResponse(w, http.StatusCreated, resp, "application/xml")
+			case "200":
+				writeSuccessResponseHeadersOnly(w)
+			default:
+				writeSuccessNoContent(w)
+			}
+		}
+	}
 
 	// Notify object created event.
 	eventNotify(eventData{
@@ -477,12 +529,12 @@ func (api objectAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.Re
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
-		writeErrorResponse(w, r, ErrServerNotInitialized, r.URL.Path)
+		writeErrorResponseHeadersOnly(w, ErrServerNotInitialized)
 		return
 	}
 
 	if s3Error := checkRequestAuthType(r, bucket, "s3:ListBucket", serverConfig.GetRegion()); s3Error != ErrNone {
-		writeErrorResponse(w, r, s3Error, r.URL.Path)
+		writeErrorResponseHeadersOnly(w, s3Error)
 		return
 	}
 
@@ -492,23 +544,24 @@ func (api objectAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.Re
 
 	if _, err := objectAPI.GetBucketInfo(bucket); err != nil {
 		errorIf(err, "Unable to fetch bucket info.")
-		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
+		writeErrorResponseHeadersOnly(w, toAPIErrorCode(err))
 		return
 	}
-	writeSuccessResponse(w, nil)
+
+	writeSuccessResponseHeadersOnly(w)
 }
 
 // DeleteBucketHandler - Delete bucket
 func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.Request) {
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
-		writeErrorResponse(w, r, ErrServerNotInitialized, r.URL.Path)
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
 		return
 	}
 
 	// DeleteBucket does not have any bucket action.
 	if s3Error := checkRequestAuthType(r, "", "", serverConfig.GetRegion()); s3Error != ErrNone {
-		writeErrorResponse(w, r, s3Error, r.URL.Path)
+		writeErrorResponse(w, s3Error, r.URL)
 		return
 	}
 
@@ -522,7 +575,7 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 	// Attempt to delete bucket.
 	if err := objectAPI.DeleteBucket(bucket); err != nil {
 		errorIf(err, "Unable to delete a bucket.")
-		writeErrorResponse(w, r, toAPIErrorCode(err), r.URL.Path)
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 

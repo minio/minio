@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1061,7 +1061,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 		{
 			MaxUploads:     10,
 			IsTruncated:    false,
-			Prefix:         "minio",
+			Prefix:         globalMinioDefaultOwnerID,
 			UploadIDMarker: uploadIDs[4],
 			Uploads: []uploadMetadata{
 				{
@@ -1201,13 +1201,13 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 		//	Test case with `prefix` and `KeyMarker` (Test number 48).
 		{bucketNames[2], "minio-object", objectNames[1], "", "", 10, listMultipartResults[34], nil, true},
 		//	Test case with `prefix` and `uploadIDMarker` (Test number 49).
-		// {bucketNames[2], "minio", "", uploadIDs[4], "", 10, listMultipartResults[35], nil, true},
+		// {bucketNames[2], globalMinioDefaultOwnerID, "", uploadIDs[4], "", 10, listMultipartResults[35], nil, true},
 		//	Test case with `KeyMarker` and `uploadIDMarker` (Test number 50).
 		// {bucketNames[2], "minio-object.txt", "", uploadIDs[5], "", 10, listMultipartResults[36], nil, true},
 	}
 
 	for i, testCase := range testCases {
-		// fmt.Println(testCase) // uncomment to peek into the test cases.
+		// fmt.Println(i+1, testCase) // uncomment to peek into the test cases.
 		actualResult, actualErr := obj.ListMultipartUploads(testCase.bucket, testCase.prefix, testCase.keyMarker, testCase.uploadIDMarker, testCase.delimiter, testCase.maxUploads)
 		if actualErr != nil && testCase.shouldPass {
 			t.Errorf("Test %d: %s: Expected to pass, but failed with: <ERROR> %s", i+1, instanceType, actualErr.Error())
@@ -1520,7 +1520,7 @@ func TestListObjectParts(t *testing.T) {
 	ExecObjectLayerTest(t, testListObjectParts)
 }
 
-// testListMultipartUploads - Tests validate listing of multipart uploads.
+// testListObjectParts - test validate listing of object parts.
 func testListObjectParts(obj ObjectLayer, instanceType string, t TestErrHandler) {
 
 	bucketNames := []string{"minio-bucket", "minio-2-bucket"}
@@ -1930,7 +1930,7 @@ func testObjectCompleteMultipartUpload(obj ObjectLayer, instanceType string, t T
 		if actualErr == nil && testCase.shouldPass {
 
 			// Asserting IsTruncated.
-			if actualResult != testCase.expectedS3MD5 {
+			if actualResult.MD5Sum != testCase.expectedS3MD5 {
 				t.Errorf("Test %d: %s: Expected the result to be \"%v\", but found it to \"%v\"", i+1, instanceType, testCase.expectedS3MD5, actualResult)
 			}
 		}

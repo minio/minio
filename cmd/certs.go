@@ -145,3 +145,22 @@ func parseCertificateChain(bytes []byte) ([]*x509.Certificate, error) {
 	}
 	return certs, nil
 }
+
+// loadRootCAs fetches CA files provided in minio config and adds them to globalRootCAs
+// Currently under Windows, there is no way to load system + user CAs at the same time
+func loadRootCAs() {
+	caFiles := mustGetCAFiles()
+	if len(caFiles) == 0 {
+		return
+	}
+	// Get system cert pool, and empty cert pool under Windows because it is not supported
+	globalRootCAs = mustGetSystemCertPool()
+	// Load custom root CAs for client requests
+	for _, caFile := range caFiles {
+		caCert, err := ioutil.ReadFile(caFile)
+		if err != nil {
+			fatalIf(err, "Unable to load a CA file")
+		}
+		globalRootCAs.AppendCertsFromPEM(caCert)
+	}
+}

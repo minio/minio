@@ -21,6 +21,9 @@ import "net/http"
 // Standard cross domain policy information located at https://s3.amazonaws.com/crossdomain.xml
 const crossDomainXML = `<?xml version="1.0"?><!DOCTYPE cross-domain-policy SYSTEM "http://www.adobe.com/xml/dtds/cross-domain-policy.dtd"><cross-domain-policy><allow-access-from domain="*" secure="false" /></cross-domain-policy>`
 
+// Standard path where an app would find cross domain policy information.
+const crossDomainXMLEntity = "/crossdomain.xml"
+
 // Cross domain policy implements http.Handler interface, implementing a custom ServerHTTP.
 type crossDomainPolicy struct {
 	handler http.Handler
@@ -38,7 +41,7 @@ func setCrossDomainPolicy(h http.Handler) http.Handler {
 func (c crossDomainPolicy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Look for 'crossdomain.xml' in the incoming request.
 	switch r.URL.Path {
-	case "/crossdomain.xml":
+	case crossDomainXMLEntity:
 		// Write the standard cross domain policy xml.
 		w.Write([]byte(crossDomainXML))
 		// Request completed, no need to serve to other handlers.

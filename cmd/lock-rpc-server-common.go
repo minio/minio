@@ -57,18 +57,6 @@ func (l *lockServer) removeEntry(name, uid string, lri *[]lockRequesterInfo) boo
 	return false
 }
 
-// Validate lock args.
-func (l *lockServer) validateLockArgs(args *LockArgs) error {
-	curTime := time.Now().UTC()
-	if curTime.Sub(args.Timestamp) > globalMaxSkewTime {
-		return errServerTimeMismatch
-	}
-	if !isRPCTokenValid(args.Token) {
-		return errInvalidToken
-	}
-	return nil
-}
-
 // getLongLivedLocks returns locks that are older than a certain time and
 // have not been 'checked' for validity too soon enough
 func getLongLivedLocks(m map[string][]lockRequesterInfo, interval time.Duration) []nameLockRequesterInfoPair {

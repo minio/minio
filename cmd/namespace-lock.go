@@ -28,32 +28,39 @@ import (
 // Global name space lock.
 var globalNSMutex *nsLockMap
 
+// RWLocker - locker interface extends sync.Locker
+// to introduce RLock, RUnlock.
+type RWLocker interface {
+	sync.Locker
+	RLock()
+	RUnlock()
+}
+
 // Initialize distributed locking only in case of distributed setup.
 // Returns if the setup is distributed or not on success.
 func initDsyncNodes(eps []*url.URL) error {
 	cred := serverConfig.GetCredential()
 	// Initialize rpc lock client information only if this instance is a distributed setup.
-	clnts := make([]dsync.RPC, len(eps))
+	clnts := make([]dsync.NetLocker, len(eps))
 	myNode := -1
 	for index, ep := range eps {
 		if ep == nil {
 			return errInvalidArgument
 		}
-		clnts[index] = newAuthClient(&authConfig{
-			accessKey: cred.AccessKeyID,
-			secretKey: cred.SecretAccessKey,
-			// Construct a new dsync server addr.
-			secureConn: isSSL(),
-			address:    ep.Host,
-			// Construct a new rpc path for the endpoint.
-			path:        pathutil.Join(lockRPCPath, getPath(ep)),
-			loginMethod: "Dsync.LoginHandler",
+		clnts[index] = newLockRPCClient(authConfig{
+			accessKey:       cred.AccessKey,
+			secretKey:       cred.SecretKey,
+			serverAddr:      ep.Host,
+			serviceEndpoint: pathutil.Join(lockRPCPath, getPath(ep)),
+			secureConn:      globalIsSSL,
+			serviceName:     "Dsync",
 		})
 		if isLocalStorage(ep) && myNode == -1 {
 			myNode = index
 		}
 	}
-	return dsync.SetNodesWithClients(clnts, myNode)
+
+	return dsync.Init(clnts, myNode)
 }
 
 // initNSLock - initialize name space lock map.
@@ -61,18 +68,12 @@ func initNSLock(isDistXL bool) {
 	globalNSMutex = &nsLockMap{
 		isDistXL: isDistXL,
 		lockMap:  make(map[nsParam]*nsLock),
+		counters: &lockStat{},
 	}
 
 	// Initialize nsLockMap with entry for instrumentation information.
 	// Entries of <volume,path> -> stateInfo of locks
 	globalNSMutex.debugLockMap = make(map[nsParam]*debugLockInfoPerVolumePath)
-}
-
-// RWLocker - interface that any read-write locking library should implement.
-type RWLocker interface {
-	sync.Locker
-	RLock()
-	RUnlock()
 }
 
 // nsParam - carries name space resource.
@@ -91,13 +92,10 @@ type nsLock struct {
 // Unlock, RLock and RUnlock.
 type nsLockMap struct {
 	// Lock counter used for lock debugging.
-	globalLockCounter  int64                                   // Total locks held.
-	blockedCounter     int64                                   // Total operations blocked waiting for locks.
-	runningLockCounter int64                                   // Total locks held but not released yet.
-	debugLockMap       map[nsParam]*debugLockInfoPerVolumePath // Info for instrumentation on locks.
+	counters     *lockStat
+	debugLockMap map[nsParam]*debugLockInfoPerVolumePath // Info for instrumentation on locks.
 
-	// Indicates whether the locking service is part
-	// of a distributed setup or not.
+	// Indicates if namespace is part of a distributed setup.
 	isDistXL     bool
 	lockMap      map[nsParam]*nsLock
 	lockMapMutex sync.Mutex
@@ -258,14 +256,14 @@ func (n *nsLockMap) ForceUnlock(volume, path string) {
 
 // lockInstance - frontend/top-level interface for namespace locks.
 type lockInstance struct {
-	n                   *nsLockMap
+	ns                  *nsLockMap
 	volume, path, opsID string
 }
 
 // NewNSLock - returns a lock instance for a given volume and
 // path. The returned lockInstance object encapsulates the nsLockMap,
 // volume, path and operation ID.
-func (n *nsLockMap) NewNSLock(volume, path string) *lockInstance {
+func (n *nsLockMap) NewNSLock(volume, path string) RWLocker {
 	return &lockInstance{n, volume, path, getOpsID()}
 }
 
@@ -273,24 +271,24 @@ func (n *nsLockMap) NewNSLock(volume, path string) *lockInstance {
 func (li *lockInstance) Lock() {
 	lockSource := callerSource()
 	readLock := false
-	li.n.lock(li.volume, li.path, lockSource, li.opsID, readLock)
+	li.ns.lock(li.volume, li.path, lockSource, li.opsID, readLock)
 }
 
 // Unlock - block until write lock is released.
 func (li *lockInstance) Unlock() {
 	readLock := false
-	li.n.unlock(li.volume, li.path, li.opsID, readLock)
+	li.ns.unlock(li.volume, li.path, li.opsID, readLock)
 }
 
 // RLock - block until read lock is taken.
 func (li *lockInstance) RLock() {
 	lockSource := callerSource()
 	readLock := true
-	li.n.lock(li.volume, li.path, lockSource, li.opsID, readLock)
+	li.ns.lock(li.volume, li.path, lockSource, li.opsID, readLock)
 }
 
 // RUnlock - block until read lock is released.
 func (li *lockInstance) RUnlock() {
 	readLock := true
-	li.n.unlock(li.volume, li.path, li.opsID, readLock)
+	li.ns.unlock(li.volume, li.path, li.opsID, readLock)
 }

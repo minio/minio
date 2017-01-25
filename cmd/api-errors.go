@@ -62,6 +62,7 @@ const (
 	ErrInvalidPartNumberMarker
 	ErrInvalidRequestBody
 	ErrInvalidCopySource
+	ErrInvalidMetadataDirective
 	ErrInvalidCopyDest
 	ErrInvalidPolicyDocument
 	ErrInvalidObjectState
@@ -109,6 +110,7 @@ const (
 	ErrInvalidQuerySignatureAlgo
 	ErrInvalidQueryParams
 	ErrBucketAlreadyOwnedByYou
+	ErrInvalidDuration
 	// Add new error codes here.
 
 	// Bucket notification related errors.
@@ -138,6 +140,9 @@ const (
 	// Add new extended error codes here.
 	// Please open a https://github.com/minio/minio/issues before adding
 	// new error codes here.
+
+	ErrAdminInvalidAccessKey
+	ErrAdminInvalidSecretKey
 )
 
 // error code to APIError structure, these fields carry respective
@@ -145,12 +150,17 @@ const (
 var errorCodeResponse = map[APIErrorCode]APIError{
 	ErrInvalidCopyDest: {
 		Code:           "InvalidRequest",
-		Description:    "This copy request is illegal because it is trying to copy an object to itself.",
+		Description:    "This copy request is illegal because it is trying to copy an object to itself without changing the object's metadata, storage class, website redirect location or encryption attributes.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrInvalidCopySource: {
 		Code:           "InvalidArgument",
 		Description:    "Copy Source must mention the source bucket and key: sourcebucket/sourcekey.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidMetadataDirective: {
+		Code:           "InvalidArgument",
+		Description:    "Unknown metadata directive.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrInvalidRequestBody: {
@@ -471,6 +481,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "Your previous request to create the named bucket succeeded and you already own it.",
 		HTTPStatusCode: http.StatusConflict,
 	},
+	ErrInvalidDuration: {
+		Code:           "InvalidDuration",
+		Description:    "Relative duration provided in the request is invalid.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 
 	/// Bucket notification related errors.
 	ErrEventNotification: {
@@ -562,6 +577,17 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "Server not initialized, please try again.",
 		HTTPStatusCode: http.StatusServiceUnavailable,
 	},
+	ErrAdminInvalidAccessKey: {
+		Code:           "XMinioAdminInvalidAccessKey",
+		Description:    "The access key is invalid.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrAdminInvalidSecretKey: {
+		Code:           "XMinioAdminInvalidSecretKey",
+		Description:    "The secret key is invalid.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+
 	// Add your error structure here.
 }
 
@@ -649,15 +675,11 @@ func getAPIError(code APIErrorCode) APIError {
 // getErrorResponse gets in standard error and resource value and
 // provides a encodable populated response values
 func getAPIErrorResponse(err APIError, resource string) APIErrorResponse {
-	var data = APIErrorResponse{}
-	data.Code = err.Code
-	data.Message = err.Description
-	if resource != "" {
-		data.Resource = resource
+	return APIErrorResponse{
+		Code:      err.Code,
+		Message:   err.Description,
+		Resource:  resource,
+		RequestID: "3L137",
+		HostID:    "3L137",
 	}
-	// TODO implement this in future
-	data.RequestID = "3L137"
-	data.HostID = "3L137"
-
-	return data
 }

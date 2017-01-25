@@ -1,4 +1,4 @@
-# Distributed Minio Quickstart Guide [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/minio/minio?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
+# Distributed Minio Quickstart Guide [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
 
 Minio in distributed mode lets you pool multiple drives (even on different machines) into a single object storage server. As drives are distributed across several nodes, distributed Minio can withstand multiple node failures and yet ensure full data protection.
 
@@ -41,9 +41,9 @@ Below examples will clarify further:
 Example 1: Start distributed Minio instance with 1 drive each on 8 nodes, by running this command on all the 8 nodes.
 
 ```shell
-$ export MINIO_ACCESS_KEY=<ACCESS_KEY>
-$ export MINIO_SECRET_KEY=<SECRET_KEY>
-$ minio server http://192.168.1.11/export1 http://192.168.1.12/export2 \
+export MINIO_ACCESS_KEY=<ACCESS_KEY>
+export MINIO_SECRET_KEY=<SECRET_KEY>
+minio server http://192.168.1.11/export1 http://192.168.1.12/export2 \
                http://192.168.1.13/export3 http://192.168.1.14/export4 \
                http://192.168.1.15/export5 http://192.168.1.16/export6 \
                http://192.168.1.17/export7 http://192.168.1.18/export8
@@ -54,9 +54,9 @@ $ minio server http://192.168.1.11/export1 http://192.168.1.12/export2 \
 Example 2: Start distributed Minio instance with 4 drives each on 4 nodes, by running this command on all the 4 nodes.
 
 ```shell
-$ export MINIO_ACCESS_KEY=<ACCESS_KEY>
-$ export MINIO_SECRET_KEY=<SECRET_KEY>
-$ minio server http://192.168.1.11/export1 http://192.168.1.11/export2 \
+export MINIO_ACCESS_KEY=<ACCESS_KEY>
+export MINIO_SECRET_KEY=<SECRET_KEY>
+minio server http://192.168.1.11/export1 http://192.168.1.11/export2 \
                http://192.168.1.11/export3 http://192.168.1.11/export4 \
                http://192.168.1.12/export1 http://192.168.1.12/export2 \
                http://192.168.1.12/export3 http://192.168.1.12/export4 \

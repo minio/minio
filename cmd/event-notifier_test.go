@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"bytes"
 	"fmt"
 	"net"
 	"reflect"
@@ -27,18 +28,18 @@ import (
 // Test InitEventNotifier with faulty disks
 func TestInitEventNotifierFaultyDisks(t *testing.T) {
 	// Prepare for tests
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
 	// remove the root directory after the test ends.
 	defer removeAll(rootPath)
 
-	disks, err := getRandomDisks(1)
+	disks, err := getRandomDisks(4)
 	if err != nil {
 		t.Fatal("Unable to create directories for FS backend. ", err)
 	}
-	defer removeAll(disks[0])
+	defer removeRoots(disks)
 	endpoints, err := parseStorageEndpoints(disks)
 	if err != nil {
 		t.Fatal(err)
@@ -53,8 +54,7 @@ func TestInitEventNotifierFaultyDisks(t *testing.T) {
 		t.Fatal("Unexpected error:", err)
 	}
 
-	fs := obj.(fsObjects)
-	fsstorage := fs.storage.(*retryStorage)
+	xl := obj.(*xlObjects)
 
 	listenARN := "arn:minio:sns:us-east-1:1:listen"
 	queueARN := "arn:minio:sqs:us-east-1:1:redis"
@@ -64,16 +64,113 @@ func TestInitEventNotifierFaultyDisks(t *testing.T) {
 	notificationXML += "<TopicConfiguration><Event>s3:ObjectRemoved:*</Event><Event>s3:ObjectRemoved:*</Event><Topic>" + listenARN + "</Topic></TopicConfiguration>"
 	notificationXML += "<QueueConfiguration><Event>s3:ObjectRemoved:*</Event><Event>s3:ObjectRemoved:*</Event><Queue>" + queueARN + "</Queue></QueueConfiguration>"
 	notificationXML += "</NotificationConfiguration>"
-	if err := fsstorage.AppendFile(minioMetaBucket, bucketConfigPrefix+"/"+bucketName+"/"+bucketNotificationConfig, []byte(notificationXML)); err != nil {
+	size := int64(len([]byte(notificationXML)))
+	reader := bytes.NewReader([]byte(notificationXML))
+	if _, err := xl.PutObject(minioMetaBucket, bucketConfigPrefix+"/"+bucketName+"/"+bucketNotificationConfig, size, reader, nil, ""); err != nil {
 		t.Fatal("Unexpected error:", err)
 	}
 
+	for i, d := range xl.storageDisks {
+		xl.storageDisks[i] = newNaughtyDisk(d.(*retryStorage), nil, errFaultyDisk)
+	}
 	// Test initEventNotifier() with faulty disks
-	for i := 1; i <= 5; i++ {
-		fs.storage = newNaughtyDisk(fsstorage, map[int]error{i: errFaultyDisk}, nil)
-		if err := initEventNotifier(fs); errorCause(err) != errFaultyDisk {
+	for i := 1; i <= 3; i++ {
+		if err := initEventNotifier(xl); errorCause(err) != errFaultyDisk {
 			t.Fatal("Unexpected error:", err)
 		}
+	}
+}
+
+// InitEventNotifierWithPostgreSQL - tests InitEventNotifier when PostgreSQL is not prepared
+func TestInitEventNotifierWithPostgreSQL(t *testing.T) {
+	// initialize the server and obtain the credentials and root.
+	// credentials are necessary to sign the HTTP request.
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
+	if err != nil {
+		t.Fatalf("Init Test config failed")
+	}
+	// remove the root directory after the test ends.
+	defer removeAll(rootPath)
+
+	disks, err := getRandomDisks(1)
+	defer removeAll(disks[0])
+	if err != nil {
+		t.Fatal("Unable to create directories for FS backend. ", err)
+	}
+	endpoints, err := parseStorageEndpoints(disks)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fs, _, err := initObjectLayer(endpoints)
+	if err != nil {
+		t.Fatal("Unable to initialize FS backend.", err)
+	}
+
+	serverConfig.SetPostgreSQLNotifyByID("1", postgreSQLNotify{Enable: true})
+	if err := initEventNotifier(fs); err == nil {
+		t.Fatal("PostgreSQL config didn't fail.")
+	}
+}
+
+// InitEventNotifierWithNATS - tests InitEventNotifier when NATS is not prepared
+func TestInitEventNotifierWithNATS(t *testing.T) {
+	// initialize the server and obtain the credentials and root.
+	// credentials are necessary to sign the HTTP request.
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
+	if err != nil {
+		t.Fatalf("Init Test config failed")
+	}
+	// remove the root directory after the test ends.
+	defer removeAll(rootPath)
+
+	disks, err := getRandomDisks(1)
+	defer removeAll(disks[0])
+	if err != nil {
+		t.Fatal("Unable to create directories for FS backend. ", err)
+	}
+	endpoints, err := parseStorageEndpoints(disks)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fs, _, err := initObjectLayer(endpoints)
+	if err != nil {
+		t.Fatal("Unable to initialize FS backend.", err)
+	}
+
+	serverConfig.SetNATSNotifyByID("1", natsNotify{Enable: true})
+	if err := initEventNotifier(fs); err == nil {
+		t.Fatal("NATS config didn't fail.")
+	}
+}
+
+// InitEventNotifierWithWebHook - tests InitEventNotifier when WebHook is not prepared
+func TestInitEventNotifierWithWebHook(t *testing.T) {
+	// initialize the server and obtain the credentials and root.
+	// credentials are necessary to sign the HTTP request.
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
+	if err != nil {
+		t.Fatalf("Init Test config failed")
+	}
+	// remove the root directory after the test ends.
+	defer removeAll(rootPath)
+
+	disks, err := getRandomDisks(1)
+	defer removeAll(disks[0])
+	if err != nil {
+		t.Fatal("Unable to create directories for FS backend. ", err)
+	}
+	endpoints, err := parseStorageEndpoints(disks)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fs, _, err := initObjectLayer(endpoints)
+	if err != nil {
+		t.Fatal("Unable to initialize FS backend.", err)
+	}
+
+	serverConfig.SetWebhookNotifyByID("1", webhookNotify{Enable: true})
+	if err := initEventNotifier(fs); err == nil {
+		t.Fatal("WebHook config didn't fail.")
 	}
 }
 
@@ -81,7 +178,7 @@ func TestInitEventNotifierFaultyDisks(t *testing.T) {
 func TestInitEventNotifierWithAMQP(t *testing.T) {
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
@@ -112,7 +209,7 @@ func TestInitEventNotifierWithAMQP(t *testing.T) {
 func TestInitEventNotifierWithElasticSearch(t *testing.T) {
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
@@ -143,7 +240,7 @@ func TestInitEventNotifierWithElasticSearch(t *testing.T) {
 func TestInitEventNotifierWithRedis(t *testing.T) {
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
@@ -227,6 +324,11 @@ func TestSetNGetBucketNotification(t *testing.T) {
 }
 
 func TestInitEventNotifier(t *testing.T) {
+	currentIsDistXL := globalIsDistXL
+	defer func() {
+		globalIsDistXL = currentIsDistXL
+	}()
+
 	s := TestPeerRPCServerData{serverType: "XL"}
 
 	// setup and teardown
@@ -244,7 +346,7 @@ func TestInitEventNotifier(t *testing.T) {
 	filterRules := []filterRule{
 		{
 			Name:  "prefix",
-			Value: "minio",
+			Value: globalMinioDefaultOwnerID,
 		},
 		{
 			Name:  "suffix",
@@ -289,7 +391,7 @@ func TestInitEventNotifier(t *testing.T) {
 	}
 
 	// needed to load listener config from disk for testing (in
-	// single peer mode, the listener config is ingored, but here
+	// single peer mode, the listener config is ignored, but here
 	// we want to test the loading from disk too.)
 	globalIsDistXL = true
 
@@ -323,6 +425,11 @@ func TestInitEventNotifier(t *testing.T) {
 }
 
 func TestListenBucketNotification(t *testing.T) {
+	currentIsDistXL := globalIsDistXL
+	defer func() {
+		globalIsDistXL = currentIsDistXL
+	}()
+
 	s := TestPeerRPCServerData{serverType: "XL"}
 	// setup and teardown
 	s.Setup(t)
@@ -462,7 +569,7 @@ func TestAddRemoveBucketListenerConfig(t *testing.T) {
 	filterRules := []filterRule{
 		{
 			Name:  "prefix",
-			Value: "minio",
+			Value: globalMinioDefaultOwnerID,
 		},
 		{
 			Name:  "suffix",

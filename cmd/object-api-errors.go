@@ -352,16 +352,6 @@ func isErrBucketPolicyNotFound(err error) bool {
 	return false
 }
 
-// Check if error type is ObjectNameInvalid.
-func isErrObjectNameInvalid(err error) bool {
-	err = errorCause(err)
-	switch err.(type) {
-	case ObjectNameInvalid:
-		return true
-	}
-	return false
-}
-
 // Check if error type is ObjectNotFound.
 func isErrObjectNotFound(err error) bool {
 	err = errorCause(err)

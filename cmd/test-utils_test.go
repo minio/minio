@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,9 +56,11 @@ import (
 
 // Tests should initNSLock only once.
 func init() {
+	// Set as non-distributed.
+	globalIsDistXL = false
+
 	// Initialize name space lock.
-	isDist := false
-	initNSLock(isDist)
+	initNSLock(globalIsDistXL)
 
 	// Disable printing console messages during tests.
 	color.Output = ioutil.Discard
@@ -68,7 +70,8 @@ func init() {
 }
 
 func prepareFS() (ObjectLayer, string, error) {
-	fsDirs, err := getRandomDisks(1)
+	nDisks := 1
+	fsDirs, err := getRandomDisks(nDisks)
 	if err != nil {
 		return nil, "", err
 	}
@@ -76,12 +79,15 @@ func prepareFS() (ObjectLayer, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	obj, _, err := initObjectLayer(endpoints)
+	fsPath, err := url.QueryUnescape(endpoints[0].String())
 	if err != nil {
-		removeRoots(fsDirs)
 		return nil, "", err
 	}
-	return obj, fsDirs[0], nil
+	obj, err := newFSObjectLayer(fsPath)
+	if err != nil {
+		return nil, "", err
+	}
+	return obj, endpoints[0].Path, nil
 }
 
 func prepareXL() (ObjectLayer, []string, error) {
@@ -102,6 +108,17 @@ func prepareXL() (ObjectLayer, []string, error) {
 	return obj, fsDirs, nil
 }
 
+// Initialize FS objects.
+func initFSObjects(disk string, t *testing.T) (obj ObjectLayer) {
+	newTestConfig(globalMinioDefaultRegion)
+	var err error
+	obj, err = newFSObjectLayer(disk)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return obj
+}
+
 // TestErrHandler - Golang Testing.T and Testing.B, and gocheck.C satisfy this interface.
 // This makes it easy to run the TestServer from any of the tests.
 // Using this interface, functionalities to be used in tests can be made generalized, and can be integrated in benchmarks/unit tests/go check suite tests.
@@ -116,6 +133,7 @@ type TestErrHandler interface {
 const (
 	// FSTestStr is the string which is used as notation for Single node ObjectLayer in the unit tests.
 	FSTestStr string = "FS"
+
 	// XLTestStr is the string which is used as notation for XL ObjectLayer in the unit tests.
 	XLTestStr string = "XL"
 )
@@ -132,6 +150,9 @@ const (
 // chance the file doesn't exist yet.
 var randN uint32
 var randmu sync.Mutex
+
+// Temp files created in default Tmp dir
+var globalTestTmpDir = os.TempDir()
 
 // reseed - returns a new seed every time the function is called.
 func reseed() uint32 {
@@ -182,7 +203,7 @@ func UnstartedTestServer(t TestErrHandler, instanceType string) TestServer {
 		t.Fatal("Failed to create disks for the backend")
 	}
 
-	root, err := newTestConfig("us-east-1")
+	root, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("%s", err)
 	}
@@ -196,18 +217,18 @@ func UnstartedTestServer(t TestErrHandler, instanceType string) TestServer {
 	if err != nil {
 		t.Fatalf("Unexpected error %s", err)
 	}
-	testServer.AccessKey = credentials.AccessKeyID
-	testServer.SecretKey = credentials.SecretAccessKey
+	testServer.AccessKey = credentials.AccessKey
+	testServer.SecretKey = credentials.SecretKey
 
-	objLayer, storageDisks, err := initObjectLayer(testServer.Disks)
+	objLayer, _, err := initObjectLayer(testServer.Disks)
 	if err != nil {
 		t.Fatalf("Failed obtaining Temp Backend: <ERROR> %s", err)
 	}
 
 	srvCmdCfg := serverCmdConfig{
-		endpoints:    testServer.Disks,
-		storageDisks: storageDisks,
+		endpoints: testServer.Disks,
 	}
+
 	httpHandler, err := configureServerHandler(
 		srvCmdCfg,
 	)
@@ -333,7 +354,7 @@ func initTestStorageRPCEndPoint(srvCmdConfig serverCmdConfig) http.Handler {
 	return muxRouter
 }
 
-// StartTestStorageRPCServer - Creates a temp XL/FS backend and initializes storage RPC end points,
+// StartTestStorageRPCServer - Creates a temp XL backend and initializes storage RPC end points,
 // then starts a test server with those storage RPC end points registered.
 func StartTestStorageRPCServer(t TestErrHandler, instanceType string, diskN int) TestServer {
 	// create temporary backend for the test server.
@@ -346,7 +367,7 @@ func StartTestStorageRPCServer(t TestErrHandler, instanceType string, diskN int)
 		t.Fatalf("%s", err)
 	}
 
-	root, err := newTestConfig("us-east-1")
+	root, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("%s", err)
 	}
@@ -358,8 +379,8 @@ func StartTestStorageRPCServer(t TestErrHandler, instanceType string, diskN int)
 
 	testRPCServer.Root = root
 	testRPCServer.Disks = endpoints
-	testRPCServer.AccessKey = credentials.AccessKeyID
-	testRPCServer.SecretKey = credentials.SecretAccessKey
+	testRPCServer.AccessKey = credentials.AccessKey
+	testRPCServer.SecretKey = credentials.SecretKey
 
 	// Run TestServer.
 	testRPCServer.Server = httptest.NewServer(initTestStorageRPCEndPoint(serverCmdConfig{
@@ -381,7 +402,7 @@ func StartTestPeersRPCServer(t TestErrHandler, instanceType string) TestServer {
 		t.Fatalf("%s", err)
 	}
 
-	root, err := newTestConfig("us-east-1")
+	root, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("%s", err)
 	}
@@ -393,11 +414,11 @@ func StartTestPeersRPCServer(t TestErrHandler, instanceType string) TestServer {
 
 	testRPCServer.Root = root
 	testRPCServer.Disks = endpoints
-	testRPCServer.AccessKey = credentials.AccessKeyID
-	testRPCServer.SecretKey = credentials.SecretAccessKey
+	testRPCServer.AccessKey = credentials.AccessKey
+	testRPCServer.SecretKey = credentials.SecretKey
 
 	// create temporary backend for the test server.
-	objLayer, storageDisks, err := initObjectLayer(endpoints)
+	objLayer, _, err := initObjectLayer(endpoints)
 	if err != nil {
 		t.Fatalf("Failed obtaining Temp Backend: <ERROR> %s", err)
 	}
@@ -408,8 +429,7 @@ func StartTestPeersRPCServer(t TestErrHandler, instanceType string) TestServer {
 	globalObjLayerMutex.Unlock()
 
 	srvCfg := serverCmdConfig{
-		endpoints:    endpoints,
-		storageDisks: storageDisks,
+		endpoints: endpoints,
 	}
 
 	mux := router.NewRouter()
@@ -423,13 +443,76 @@ func StartTestPeersRPCServer(t TestErrHandler, instanceType string) TestServer {
 	// Run TestServer.
 	testRPCServer.Server = httptest.NewServer(mux)
 
-	// Set as non-distributed.
-	globalIsDistXL = false
-
 	// initialize remainder of serverCmdConfig
 	testRPCServer.SrvCmdCfg = srvCfg
 
 	return testRPCServer
+}
+
+// Sets the global config path to empty string.
+func resetGlobalConfigPath() {
+	setGlobalConfigPath("")
+}
+
+// sets globalObjectAPI to `nil`.
+func resetGlobalObjectAPI() {
+	globalObjLayerMutex.Lock()
+	globalObjectAPI = nil
+	globalObjLayerMutex.Unlock()
+}
+
+// reset the value of the Global server config.
+// set it to `nil`.
+func resetGlobalConfig() {
+	// hold the mutex lock before a new config is assigned.
+	serverConfigMu.Lock()
+	// Save the loaded config globally.
+	serverConfig = nil
+	serverConfigMu.Unlock()
+}
+
+// reset global NSLock.
+func resetGlobalNSLock() {
+	if globalNSMutex != nil {
+		globalNSMutex = nil
+	}
+}
+
+// reset global event notifier.
+func resetGlobalEventNotifier() {
+	globalEventNotifier = nil
+}
+
+// reset Global event notifier.
+func resetGlobalEventnotify() {
+	globalEventNotifier = nil
+}
+
+func resetGlobalEndpoints() {
+	globalEndpoints = []*url.URL{}
+}
+
+func resetGlobalIsXL() {
+	globalIsXL = false
+}
+
+// Resets all the globals used modified in tests.
+// Resetting ensures that the changes made to globals by one test doesn't affect others.
+func resetTestGlobals() {
+	// set globalObjectAPI to `nil`.
+	resetGlobalObjectAPI()
+	// Reset config path set.
+	resetGlobalConfigPath()
+	// Reset Global server config.
+	resetGlobalConfig()
+	// Reset global NSLock.
+	resetGlobalNSLock()
+	// Reset global event notifier.
+	resetGlobalEventnotify()
+	// Reset global endpoints.
+	resetGlobalEndpoints()
+	// Reset global isXL flag.
+	resetGlobalIsXL()
 }
 
 // Configure the server for the test run.
@@ -620,7 +703,7 @@ func signStreamingRequest(req *http.Request, accessKey, secretKey string, currTi
 	// Get scope.
 	scope := strings.Join([]string{
 		currTime.Format(yyyymmdd),
-		"us-east-1",
+		globalMinioDefaultRegion,
 		"s3",
 		"aws4_request",
 	}, "/")
@@ -630,7 +713,7 @@ func signStreamingRequest(req *http.Request, accessKey, secretKey string, currTi
 	stringToSign = stringToSign + getSHA256Hash([]byte(canonicalRequest))
 
 	date := sumHMAC([]byte("AWS4"+secretKey), []byte(currTime.Format(yyyymmdd)))
-	region := sumHMAC(date, []byte("us-east-1"))
+	region := sumHMAC(date, []byte(globalMinioDefaultRegion))
 	service := sumHMAC(region, []byte("s3"))
 	signingKey := sumHMAC(service, []byte("aws4_request"))
 
@@ -1041,8 +1124,8 @@ func signRequestV4(req *http.Request, accessKey, secretKey string) error {
 	return nil
 }
 
-// getCredential generate a credential string.
-func getCredential(accessKeyID, location string, t time.Time) string {
+// getCredentialString generate a credential string.
+func getCredentialString(accessKeyID, location string, t time.Time) string {
 	return accessKeyID + "/" + getScope(t, location)
 }
 
@@ -1539,14 +1622,14 @@ func getListenBucketNotificationURL(endPoint, bucketName string, prefixes, suffi
 
 // returns temp root directory. `
 func getTestRoot() (string, error) {
-	return ioutil.TempDir(os.TempDir(), "api-")
+	return ioutil.TempDir(globalTestTmpDir, "api-")
 }
 
 // getRandomDisks - Creates a slice of N random disks, each of the form - minio-XXX
 func getRandomDisks(N int) ([]string, error) {
 	var erasureDisks []string
 	for i := 0; i < N; i++ {
-		path, err := ioutil.TempDir(os.TempDir(), "minio-")
+		path, err := ioutil.TempDir(globalTestTmpDir, "minio-")
 		if err != nil {
 			// Remove directories created so far.
 			removeRoots(erasureDisks)
@@ -1564,12 +1647,12 @@ func initObjectLayer(endpoints []*url.URL) (ObjectLayer, []StorageAPI, error) {
 		return nil, nil, err
 	}
 
-	formattedDisks, err := waitForFormatDisks(true, endpoints, storageDisks)
+	formattedDisks, err := waitForFormatXLDisks(true, endpoints, storageDisks)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	objLayer, err := newObjectLayer(formattedDisks)
+	objLayer, err := newXLObjectLayer(formattedDisks)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1617,7 +1700,12 @@ func prepareNErroredDisks(storageDisks []StorageAPI, offline int, err error, t *
 	}
 
 	for i := 0; i < offline; i++ {
-		storageDisks[i] = &naughtyDisk{disk: &retryStorage{storageDisks[i]}, defaultErr: err}
+		storageDisks[i] = &naughtyDisk{disk: &retryStorage{
+			remoteStorage:    storageDisks[i],
+			maxRetryAttempts: 1,
+			retryUnit:        time.Millisecond,
+			retryCap:         time.Millisecond * 10,
+		}, defaultErr: err}
 	}
 	return storageDisks
 }
@@ -1651,20 +1739,25 @@ func prepareXLStorageDisks(t *testing.T) ([]StorageAPI, []string) {
 // initializes the specified API endpoints for the tests.
 // initialies the root and returns its path.
 // return credentials.
-func initAPIHandlerTest(obj ObjectLayer, endpoints []string) (bucketName string, apiRouter http.Handler, err error) {
+func initAPIHandlerTest(obj ObjectLayer, endpoints []string) (string, http.Handler, error) {
 	// get random bucket name.
-	bucketName = getRandomBucketName()
+	bucketName := getRandomBucketName()
 
 	// Create bucket.
-	err = obj.MakeBucket(bucketName)
+	err := obj.MakeBucket(bucketName)
 	if err != nil {
 		// failed to create newbucket, return err.
 		return "", nil, err
 	}
-	// Register the API end points with XL/FS object layer.
+	// Register the API end points with XL object layer.
 	// Registering only the GetObject handler.
-	apiRouter = initTestAPIEndPoints(obj, endpoints)
-	return bucketName, apiRouter, nil
+	apiRouter := initTestAPIEndPoints(obj, endpoints)
+	var f http.HandlerFunc
+	f = func(w http.ResponseWriter, r *http.Request) {
+		r.RequestURI = r.URL.RequestURI()
+		apiRouter.ServeHTTP(w, r)
+	}
+	return bucketName, f, nil
 }
 
 // ExecObjectLayerAPIAnonTest - Helper function to validate object Layer API handler
@@ -1836,9 +1929,14 @@ func ExecObjectLayerAPINilTest(t TestErrHandler, bucketName, objectName, instanc
 // ExecObjectLayerAPITest - executes object layer API tests.
 // Creates single node and XL ObjectLayer instance, registers the specified API end points and runs test for both the layers.
 func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endpoints []string) {
+	// reset globals.
+	// this is to make sure that the tests are not affected by modified value.
+	resetTestGlobals()
+	// initialize NSLock.
+	initNSLock(false)
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Unable to initialize server config. %s", err)
 	}
@@ -1862,7 +1960,6 @@ func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endpoints [
 	if err != nil {
 		t.Fatalf("Initialzation of API handler tests failed: <ERROR> %s", err)
 	}
-	credentials = serverConfig.GetCredential()
 	// Executing the object layer tests for XL.
 	objAPITest(objLayer, XLTestStr, bucketXL, xlAPIRouter, credentials, t)
 	// clean up the temporary test backend.
@@ -1884,7 +1981,7 @@ type objTestDiskNotFoundType func(obj ObjectLayer, instanceType string, dirs []s
 func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatal("Unexpected error", err)
 	}
@@ -1909,6 +2006,12 @@ func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 // ExecObjectLayerDiskAlteredTest - executes object layer tests while altering
 // disks in between tests. Creates XL ObjectLayer instance and runs test for XL layer.
 func ExecObjectLayerDiskAlteredTest(t *testing.T, objTest objTestDiskNotFoundType) {
+	configPath, err := newTestConfig(globalMinioDefaultRegion)
+	if err != nil {
+		t.Fatal("Failed to create config directory", err)
+	}
+	defer removeAll(configPath)
+
 	objLayer, fsDirs, err := prepareXL()
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for XL setup: %s", err)
@@ -1924,7 +2027,7 @@ type objTestStaleFilesType func(obj ObjectLayer, instanceType string, dirs []str
 // ExecObjectLayerStaleFilesTest - executes object layer tests those leaves stale
 // files/directories under .minio/tmp.  Creates XL ObjectLayer instance and runs test for XL layer.
 func ExecObjectLayerStaleFilesTest(t *testing.T, objTest objTestStaleFilesType) {
-	configPath, err := newTestConfig("us-east-1")
+	configPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatal("Failed to create config directory", err)
 	}
@@ -2046,7 +2149,7 @@ func registerAPIFunctions(muxRouter *router.Router, objLayer ObjectLayer, apiFun
 	registerBucketLevelFunc(bucketRouter, api, apiFunctions...)
 }
 
-// Takes in XL/FS object layer, and the list of API end points to be tested/required, registers the API end points and returns the HTTP handler.
+// Takes in XL object layer, and the list of API end points to be tested/required, registers the API end points and returns the HTTP handler.
 // Need isolated registration of API end points while writing unit tests for end points.
 // All the API end points are registered only for the default case.
 func initTestAPIEndPoints(objLayer ObjectLayer, apiFunctions []string) http.Handler {
@@ -2083,7 +2186,7 @@ func initTestBrowserPeerRPCEndPoint() http.Handler {
 }
 
 func StartTestBrowserPeerRPCServer(t TestErrHandler, instanceType string) TestServer {
-	root, err := newTestConfig("us-east-1")
+	root, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("%s", err)
 	}
@@ -2095,8 +2198,8 @@ func StartTestBrowserPeerRPCServer(t TestErrHandler, instanceType string) TestSe
 	credentials := serverConfig.GetCredential()
 
 	testRPCServer.Root = root
-	testRPCServer.AccessKey = credentials.AccessKeyID
-	testRPCServer.SecretKey = credentials.SecretAccessKey
+	testRPCServer.AccessKey = credentials.AccessKey
+	testRPCServer.SecretKey = credentials.SecretKey
 
 	// Initialize and run the TestServer.
 	testRPCServer.Server = httptest.NewServer(initTestBrowserPeerRPCEndPoint())
@@ -2104,7 +2207,7 @@ func StartTestBrowserPeerRPCServer(t TestErrHandler, instanceType string) TestSe
 }
 
 func StartTestS3PeerRPCServer(t TestErrHandler) (TestServer, []string) {
-	root, err := newTestConfig("us-east-1")
+	root, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("%s", err)
 	}
@@ -2116,8 +2219,8 @@ func StartTestS3PeerRPCServer(t TestErrHandler) (TestServer, []string) {
 	credentials := serverConfig.GetCredential()
 
 	testRPCServer.Root = root
-	testRPCServer.AccessKey = credentials.AccessKeyID
-	testRPCServer.SecretKey = credentials.SecretAccessKey
+	testRPCServer.AccessKey = credentials.AccessKey
+	testRPCServer.SecretKey = credentials.SecretKey
 
 	// init disks
 	objLayer, fsDirs, err := prepareXL()

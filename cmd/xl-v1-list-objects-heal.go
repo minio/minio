@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -58,7 +58,9 @@ func listDirHealFactory(isLeaf isLeafFunc, disks ...StorageAPI) listDirFunc {
 			// find elements in entries which are not in mergedentries
 			for _, entry := range entries {
 				idx := sort.SearchStrings(mergedEntries, entry)
-				if mergedEntries[idx] == entry {
+				// idx different from len(mergedEntries) means entry is not found
+				// in mergedEntries
+				if idx < len(mergedEntries) {
 					continue
 				}
 				newEntries = append(newEntries, entry)
@@ -118,8 +120,15 @@ func (xl xlObjects) listObjectsHeal(bucket, prefix, marker, delimiter string, ma
 			objInfo.Name = entry
 			objInfo.IsDir = true
 		} else {
-			objInfo.Bucket = bucket
-			objInfo.Name = entry
+			var err error
+			objInfo, err = xl.getObjectInfo(bucket, entry)
+			if err != nil {
+				// Ignore errFileNotFound
+				if errorCause(err) == errFileNotFound {
+					continue
+				}
+				return ListObjectsInfo{}, toObjectErr(err, bucket, prefix)
+			}
 		}
 		nextMarker = objInfo.Name
 		objInfos = append(objInfos, objInfo)
@@ -148,11 +157,13 @@ func (xl xlObjects) listObjectsHeal(bucket, prefix, marker, delimiter string, ma
 		objectLock.RLock()
 		partsMetadata, errs := readAllXLMetadata(xl.storageDisks, bucket, objInfo.Name)
 		if xlShouldHeal(partsMetadata, errs) {
+			healStat := xlHealStat(xl, partsMetadata, errs)
 			result.Objects = append(result.Objects, ObjectInfo{
-				Name:    objInfo.Name,
-				ModTime: objInfo.ModTime,
-				Size:    objInfo.Size,
-				IsDir:   false,
+				Name:           objInfo.Name,
+				ModTime:        objInfo.ModTime,
+				Size:           objInfo.Size,
+				IsDir:          false,
+				HealObjectInfo: &healStat,
 			})
 		}
 		objectLock.RUnlock()

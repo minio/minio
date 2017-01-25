@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,9 +39,9 @@ func isValidLocationConstraint(r *http.Request) (s3Error APIErrorCode) {
 		// Once region has been obtained we proceed to verify it.
 		incomingRegion := locationConstraint.Location
 		if incomingRegion == "" {
-			// Location constraint is empty for region "us-east-1",
+			// Location constraint is empty for region globalMinioDefaultRegion,
 			// in accordance with protocol.
-			incomingRegion = "us-east-1"
+			incomingRegion = globalMinioDefaultRegion
 		}
 		// Return errInvalidRegion if location constraint does not match
 		// with configured region.
@@ -65,6 +65,45 @@ var supportedHeaders = []string{
 	// Add more supported headers here.
 }
 
+// isMetadataDirectiveValid - check if metadata-directive is valid.
+func isMetadataDirectiveValid(h http.Header) bool {
+	_, ok := h[http.CanonicalHeaderKey("X-Amz-Metadata-Directive")]
+	if ok {
+		// Check atleast set metadata-directive is valid.
+		return (isMetadataCopy(h) || isMetadataReplace(h))
+	}
+	// By default if x-amz-metadata-directive is not we
+	// treat it as 'COPY' this function returns true.
+	return true
+}
+
+// Check if the metadata COPY is requested.
+func isMetadataCopy(h http.Header) bool {
+	return h.Get("X-Amz-Metadata-Directive") == "COPY"
+}
+
+// Check if the metadata REPLACE is requested.
+func isMetadataReplace(h http.Header) bool {
+	return h.Get("X-Amz-Metadata-Directive") == "REPLACE"
+}
+
+// Splits an incoming path into bucket and object components.
+func path2BucketAndObject(path string) (bucket, object string) {
+	// Skip the first element if it is '/', split the rest.
+	path = strings.TrimPrefix(path, "/")
+	pathComponents := strings.SplitN(path, "/", 2)
+
+	// Save the bucket and object extracted from path.
+	switch len(pathComponents) {
+	case 1:
+		bucket = pathComponents[0]
+	case 2:
+		bucket = pathComponents[0]
+		object = pathComponents[1]
+	}
+	return bucket, object
+}
+
 // extractMetadataFromHeader extracts metadata from HTTP header.
 func extractMetadataFromHeader(header http.Header) map[string]string {
 	metadata := make(map[string]string)
@@ -83,12 +122,38 @@ func extractMetadataFromHeader(header http.Header) map[string]string {
 	for key := range header {
 		cKey := http.CanonicalHeaderKey(key)
 		if strings.HasPrefix(cKey, "X-Amz-Meta-") {
-			metadata[cKey] = header.Get(cKey)
+			metadata[cKey] = header.Get(key)
 		} else if strings.HasPrefix(key, "X-Minio-Meta-") {
-			metadata[cKey] = header.Get(cKey)
+			metadata[cKey] = header.Get(key)
 		}
 	}
 	// Return.
+	return metadata
+}
+
+// extractMetadataFromForm extracts metadata from Post Form.
+func extractMetadataFromForm(formValues map[string]string) map[string]string {
+	metadata := make(map[string]string)
+	// Save standard supported headers.
+	for _, supportedHeader := range supportedHeaders {
+		canonicalHeader := http.CanonicalHeaderKey(supportedHeader)
+		// Form field names are case insensitive, look for both canonical
+		// and non canonical entries.
+		if _, ok := formValues[canonicalHeader]; ok {
+			metadata[supportedHeader] = formValues[canonicalHeader]
+		} else if _, ok := formValues[supportedHeader]; ok {
+			metadata[supportedHeader] = formValues[canonicalHeader]
+		}
+	}
+	// Go through all other form values for any additional headers that needs to be saved.
+	for key := range formValues {
+		cKey := http.CanonicalHeaderKey(key)
+		if strings.HasPrefix(cKey, "X-Amz-Meta-") {
+			metadata[cKey] = formValues[key]
+		} else if strings.HasPrefix(cKey, "X-Minio-Meta-") {
+			metadata[cKey] = formValues[key]
+		}
+	}
 	return metadata
 }
 

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,7 +47,7 @@ func newFlushWriter(writer io.Writer) http.ResponseWriter {
 // Tests write notification code.
 func TestWriteNotification(t *testing.T) {
 	// Initialize a new test config.
-	root, err := newTestConfig("us-east-1")
+	root, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Unable to initialize test config %s", err)
 	}
@@ -112,7 +112,7 @@ func TestWriteNotification(t *testing.T) {
 
 func TestSendBucketNotification(t *testing.T) {
 	// Initialize a new test config.
-	root, err := newTestConfig("us-east-1")
+	root, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Unable to initialize test config %s", err)
 	}
@@ -185,7 +185,7 @@ func testGetBucketNotificationHandler(obj ObjectLayer, instanceType, bucketName 
 	filterRules := []filterRule{
 		{
 			Name:  "prefix",
-			Value: "minio",
+			Value: globalMinioDefaultOwnerID,
 		},
 		{
 			Name:  "suffix",
@@ -209,7 +209,7 @@ func testGetBucketNotificationHandler(obj ObjectLayer, instanceType, bucketName 
 	}
 	rec := httptest.NewRecorder()
 	req, err := newTestSignedRequestV4("GET", getGetBucketNotificationURL("", bucketName),
-		0, nil, credentials.AccessKeyID, credentials.SecretAccessKey)
+		0, nil, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatalf("%s: Failed to create HTTP testRequest for ListenBucketNotification: <ERROR> %v", instanceType, err)
 	}
@@ -222,7 +222,7 @@ func testGetBucketNotificationHandler(obj ObjectLayer, instanceType, bucketName 
 	}
 	rec = httptest.NewRecorder()
 	req, err = newTestSignedRequestV4("GET", getGetBucketNotificationURL("", bucketName),
-		0, nil, credentials.AccessKeyID, credentials.SecretAccessKey)
+		0, nil, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatalf("%s: Failed to create HTTP testRequest for ListenBucketNotification: <ERROR> %v", instanceType, err)
 	}
@@ -268,7 +268,7 @@ func testListenBucketNotificationNilHandler(obj ObjectLayer, instanceType, bucke
 			[]string{"*.jpg"}, []string{
 				"s3:ObjectCreated:*",
 				"s3:ObjectRemoved:*",
-			}), 0, nil, credentials.AccessKeyID, credentials.SecretAccessKey)
+			}), 0, nil, credentials.AccessKey, credentials.SecretKey)
 	if tErr != nil {
 		t.Fatalf("%s: Failed to create HTTP testRequest for ListenBucketNotification: <ERROR> %v", instanceType, tErr)
 	}
@@ -294,7 +294,7 @@ func testRemoveNotificationConfig(obj ObjectLayer, instanceType, bucketName stri
 	testRec := httptest.NewRecorder()
 	testReq, tErr := newTestSignedRequestV4("PUT", getPutBucketNotificationURL("", randBucket),
 		int64(len(sampleNotificationBytes)), bytes.NewReader(sampleNotificationBytes),
-		credentials.AccessKeyID, credentials.SecretAccessKey)
+		credentials.AccessKey, credentials.SecretKey)
 	if tErr != nil {
 		t.Fatalf("%s: Failed to create HTTP testRequest for PutBucketNotification: <ERROR> %v", instanceType, tErr)
 	}

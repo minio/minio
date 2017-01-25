@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"crypto/md5"
-	"crypto/sha256"
 	"encoding/hex"
 	"hash"
 	"io"
@@ -30,6 +29,7 @@ import (
 	"github.com/minio/minio/pkg/bpool"
 	"github.com/minio/minio/pkg/mimedb"
 	"github.com/minio/minio/pkg/objcache"
+	"github.com/minio/sha256-simd"
 )
 
 // list all errors which can be ignored in object operations.
@@ -42,21 +42,115 @@ var objectOpIgnoredErrs = []error{
 
 /// Object Operations
 
+// CopyObject - copy object source object to destination object.
+// if source object and destination object are same we only
+// update metadata.
+func (xl xlObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string, metadata map[string]string) (ObjectInfo, error) {
+	// Read metadata associated with the object from all disks.
+	metaArr, errs := readAllXLMetadata(xl.storageDisks, srcBucket, srcObject)
+	// Do we have read quorum?
+	if !isDiskQuorum(errs, xl.readQuorum) {
+		return ObjectInfo{}, traceError(InsufficientReadQuorum{}, errs...)
+	}
+
+	if reducedErr := reduceReadQuorumErrs(errs, objectOpIgnoredErrs, xl.readQuorum); reducedErr != nil {
+		return ObjectInfo{}, toObjectErr(reducedErr, srcBucket, srcObject)
+	}
+
+	// List all online disks.
+	onlineDisks, modTime := listOnlineDisks(xl.storageDisks, metaArr, errs)
+
+	// Pick latest valid metadata.
+	xlMeta, err := pickValidXLMeta(metaArr, modTime)
+	if err != nil {
+		return ObjectInfo{}, toObjectErr(err, srcBucket, srcObject)
+	}
+
+	// Reorder online disks based on erasure distribution order.
+	onlineDisks = getOrderedDisks(xlMeta.Erasure.Distribution, onlineDisks)
+
+	// Length of the file to read.
+	length := xlMeta.Stat.Size
+
+	// Check if this request is only metadata update.
+	cpMetadataOnly := strings.EqualFold(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
+	if cpMetadataOnly {
+		xlMeta.Meta = metadata
+		partsMetadata := make([]xlMetaV1, len(xl.storageDisks))
+		// Update `xl.json` content on each disks.
+		for index := range partsMetadata {
+			partsMetadata[index] = xlMeta
+		}
+
+		tempObj := mustGetUUID()
+
+		// Write unique `xl.json` for each disk.
+		if err = writeUniqueXLMetadata(onlineDisks, minioMetaTmpBucket, tempObj, partsMetadata, xl.writeQuorum); err != nil {
+			return ObjectInfo{}, toObjectErr(err, srcBucket, srcObject)
+		}
+		// Rename atomically `xl.json` from tmp location to destination for each disk.
+		if err = renameXLMetadata(onlineDisks, minioMetaTmpBucket, tempObj, srcBucket, srcObject, xl.writeQuorum); err != nil {
+			return ObjectInfo{}, toObjectErr(err, srcBucket, srcObject)
+		}
+
+		objInfo := ObjectInfo{
+			IsDir:           false,
+			Bucket:          srcBucket,
+			Name:            srcObject,
+			Size:            xlMeta.Stat.Size,
+			ModTime:         xlMeta.Stat.ModTime,
+			MD5Sum:          xlMeta.Meta["md5Sum"],
+			ContentType:     xlMeta.Meta["content-type"],
+			ContentEncoding: xlMeta.Meta["content-encoding"],
+		}
+		// md5Sum has already been extracted into objInfo.MD5Sum.  We
+		// need to remove it from xlMetaMap to avoid it from appearing as
+		// part of response headers. e.g, X-Minio-* or X-Amz-*.
+		delete(xlMeta.Meta, "md5Sum")
+		objInfo.UserDefined = xlMeta.Meta
+		return objInfo, nil
+	}
+
+	// Initialize pipe.
+	pipeReader, pipeWriter := io.Pipe()
+
+	go func() {
+		startOffset := int64(0) // Read the whole file.
+		if gerr := xl.GetObject(srcBucket, srcObject, startOffset, length, pipeWriter); gerr != nil {
+			errorIf(gerr, "Unable to read %s of the object `%s/%s`.", srcBucket, srcObject)
+			pipeWriter.CloseWithError(toObjectErr(gerr, srcBucket, srcObject))
+			return
+		}
+		pipeWriter.Close() // Close writer explicitly signalling we wrote all data.
+	}()
+
+	objInfo, err := xl.PutObject(dstBucket, dstObject, length, pipeReader, metadata, "")
+	if err != nil {
+		return ObjectInfo{}, toObjectErr(err, dstBucket, dstObject)
+	}
+
+	// Explicitly close the reader.
+	pipeReader.Close()
+
+	return objInfo, nil
+}
+
 // GetObject - reads an object erasured coded across multiple
 // disks. Supports additional parameters like offset and length
-// which is synonymous with HTTP Range requests.
+// which are synonymous with HTTP Range requests.
 //
-// startOffset indicates the location at which the client requested
-// object to be read at. length indicates the total length of the
-// object requested by client.
+// startOffset indicates the starting read location of the object.
+// length indicates the total length of the object.
 func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) error {
 	if err := checkGetObjArgs(bucket, object); err != nil {
 		return err
 	}
-	// Start offset and length cannot be negative.
-	if startOffset < 0 || length < 0 {
+
+	// Start offset cannot be negative.
+	if startOffset < 0 {
 		return traceError(errUnexpected)
 	}
+
 	// Writer cannot be nil.
 	if writer == nil {
 		return traceError(errUnexpected)
@@ -88,13 +182,13 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 	// Reorder parts metadata based on erasure distribution order.
 	metaArr = getOrderedPartsMetadata(xlMeta.Erasure.Distribution, metaArr)
 
-	// Reply back invalid range if the input offset and length fall out of range.
-	if startOffset > xlMeta.Stat.Size || length > xlMeta.Stat.Size {
-		return traceError(InvalidRange{startOffset, length, xlMeta.Stat.Size})
+	// For negative length read everything.
+	if length < 0 {
+		length = xlMeta.Stat.Size - startOffset
 	}
 
-	// Reply if we have inputs with offset and length.
-	if startOffset+length > xlMeta.Stat.Size {
+	// Reply back invalid range if the input offset and length fall out of range.
+	if startOffset > xlMeta.Stat.Size || startOffset+length > xlMeta.Stat.Size {
 		return traceError(InvalidRange{startOffset, length, xlMeta.Stat.Size})
 	}
 
@@ -253,13 +347,13 @@ func (xl xlObjects) getObjectInfo(bucket, object string) (objInfo ObjectInfo, er
 	return objInfo, nil
 }
 
-func undoRename(disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry string, isPart bool, errs []error) {
+func undoRename(disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry string, isDir bool, errs []error) {
 	var wg = &sync.WaitGroup{}
 	// Undo rename object on disks where RenameFile succeeded.
 
 	// If srcEntry/dstEntry are objects then add a trailing slash to copy
 	// over all the parts inside the object directory
-	if !isPart {
+	if isDir {
 		srcEntry = retainSlash(srcEntry)
 		dstEntry = retainSlash(dstEntry)
 	}
@@ -282,14 +376,14 @@ func undoRename(disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry str
 
 // rename - common function that renamePart and renameObject use to rename
 // the respective underlying storage layer representations.
-func rename(disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry string, isPart bool, quorum int) error {
+func rename(disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry string, isDir bool, quorum int) error {
 	// Initialize sync waitgroup.
 	var wg = &sync.WaitGroup{}
 
 	// Initialize list of errors.
 	var errs = make([]error, len(disks))
 
-	if !isPart {
+	if isDir {
 		dstEntry = retainSlash(dstEntry)
 		srcEntry = retainSlash(srcEntry)
 	}
@@ -317,7 +411,7 @@ func rename(disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry string,
 	// otherwise return failure. Cleanup successful renames.
 	if !isDiskQuorum(errs, quorum) {
 		// Undo all the partial rename operations.
-		undoRename(disks, srcBucket, srcEntry, dstBucket, dstEntry, isPart, errs)
+		undoRename(disks, srcBucket, srcEntry, dstBucket, dstEntry, isDir, errs)
 		return traceError(errXLWriteQuorum)
 	}
 	return reduceWriteQuorumErrs(errs, objectOpIgnoredErrs, quorum)
@@ -328,8 +422,8 @@ func rename(disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry string,
 // not have a readQuorum partially renamed files are renamed back to
 // its proper location.
 func renamePart(disks []StorageAPI, srcBucket, srcPart, dstBucket, dstPart string, quorum int) error {
-	isPart := true
-	return rename(disks, srcBucket, srcPart, dstBucket, dstPart, isPart, quorum)
+	isDir := false
+	return rename(disks, srcBucket, srcPart, dstBucket, dstPart, isDir, quorum)
 }
 
 // renameObject - renames all source objects to destination object
@@ -337,8 +431,8 @@ func renamePart(disks []StorageAPI, srcBucket, srcPart, dstBucket, dstPart strin
 // not have a readQuorum partially renamed files are renamed back to
 // its proper location.
 func renameObject(disks []StorageAPI, srcBucket, srcObject, dstBucket, dstObject string, quorum int) error {
-	isPart := false
-	return rename(disks, srcBucket, srcObject, dstBucket, dstObject, isPart, quorum)
+	isDir := true
+	return rename(disks, srcBucket, srcObject, dstBucket, dstObject, isDir, quorum)
 }
 
 // PutObject - creates an object upon reading from the input stream
@@ -346,6 +440,12 @@ func renameObject(disks []StorageAPI, srcBucket, srcObject, dstBucket, dstObject
 // writes `xl.json` which carries the necessary metadata for future
 // object operations.
 func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (objInfo ObjectInfo, err error) {
+	// This is a special case with size as '0' and object ends with
+	// a slash separator, we treat it like a valid operation and
+	// return success.
+	if isObjectDir(object, size) {
+		return dirObjectInfo(bucket, object, size, metadata), nil
+	}
 	if err = checkPutObjectArgs(bucket, object, xl); err != nil {
 		return ObjectInfo{}, err
 	}
@@ -411,9 +511,9 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 
 	onlineDisks := getOrderedDisks(xlMeta.Erasure.Distribution, xl.storageDisks)
 
-	// Delete temporary object in the event of failure. If
-	// PutObject succeeded there would be no temporary object to
-	// delete.
+	// Delete temporary object in the event of failure.
+	// If PutObject succeeded there would be no temporary
+	// object to delete.
 	defer xl.deleteObject(minioMetaTmpBucket, tempObj)
 
 	if size > 0 {
@@ -544,6 +644,8 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 		ContentEncoding: xlMeta.Meta["content-encoding"],
 		UserDefined:     xlMeta.Meta,
 	}
+
+	// Success, return object info.
 	return objInfo, nil
 }
 

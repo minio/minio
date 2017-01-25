@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,21 +43,31 @@ func getFormatStr(strLen int, padding int) string {
 }
 
 // Prints the formatted startup message.
-func printStartupMessage(endPoints []string) {
+func printStartupMessage(apiEndPoints []string) {
 	// If quiet flag is set do not print startup message.
 	if globalQuiet {
 		return
 	}
-	printServerCommonMsg(endPoints)
-	printCLIAccessMsg(endPoints[0])
+
+	// Prints credential, region and browser access.
+	printServerCommonMsg(apiEndPoints)
+
+	// Prints `mc` cli configuration message chooses
+	// first endpoint as default.
+	printCLIAccessMsg(apiEndPoints[0])
+
+	// Prints documentation message.
 	printObjectAPIMsg()
 
+	// Object layer is initialized then print StorageInfo.
 	objAPI := newObjectLayerFn()
 	if objAPI != nil {
 		printStorageInfo(objAPI.StorageInfo())
 	}
 
-	if isSSL() {
+	// SSL is configured reads certification chain, prints
+	// authority and expiry.
+	if globalIsSSL {
 		certs, err := readCertificateChain()
 		fatalIf(err, "Unable to read certificate chain.")
 		printCertificateMsg(certs)
@@ -65,23 +75,23 @@ func printStartupMessage(endPoints []string) {
 }
 
 // Prints common server startup message. Prints credential, region and browser access.
-func printServerCommonMsg(endPoints []string) {
+func printServerCommonMsg(apiEndpoints []string) {
 	// Get saved credentials.
 	cred := serverConfig.GetCredential()
 
 	// Get saved region.
 	region := serverConfig.GetRegion()
 
-	endPointStr := strings.Join(endPoints, "  ")
+	apiEndpointStr := strings.Join(apiEndpoints, "  ")
 	// Colorize the message and print.
-	console.Println(colorBlue("\nEndpoint: ") + colorBold(fmt.Sprintf(getFormatStr(len(endPointStr), 1), endPointStr)))
-	console.Println(colorBlue("AccessKey: ") + colorBold(fmt.Sprintf("%s ", cred.AccessKeyID)))
-	console.Println(colorBlue("SecretKey: ") + colorBold(fmt.Sprintf("%s ", cred.SecretAccessKey)))
+	console.Println(colorBlue("\nEndpoint: ") + colorBold(fmt.Sprintf(getFormatStr(len(apiEndpointStr), 1), apiEndpointStr)))
+	console.Println(colorBlue("AccessKey: ") + colorBold(fmt.Sprintf("%s ", cred.AccessKey)))
+	console.Println(colorBlue("SecretKey: ") + colorBold(fmt.Sprintf("%s ", cred.SecretKey)))
 	console.Println(colorBlue("Region: ") + colorBold(fmt.Sprintf(getFormatStr(len(region), 3), region)))
 	printEventNotifiers()
 
 	console.Println(colorBlue("\nBrowser Access:"))
-	console.Println(fmt.Sprintf(getFormatStr(len(endPointStr), 3), endPointStr))
+	console.Println(fmt.Sprintf(getFormatStr(len(apiEndpointStr), 3), apiEndpointStr))
 }
 
 // Prints bucket notification configurations.
@@ -108,11 +118,11 @@ func printCLIAccessMsg(endPoint string) {
 
 	// Configure 'mc', following block prints platform specific information for minio client.
 	console.Println(colorBlue("\nCommand-line Access: ") + mcQuickStartGuide)
-	if runtime.GOOS == "windows" {
-		mcMessage := fmt.Sprintf("$ mc.exe config host add myminio %s %s %s", endPoint, cred.AccessKeyID, cred.SecretAccessKey)
+	if runtime.GOOS == globalWindowsOSName {
+		mcMessage := fmt.Sprintf("$ mc.exe config host add myminio %s %s %s", endPoint, cred.AccessKey, cred.SecretKey)
 		console.Println(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
 	} else {
-		mcMessage := fmt.Sprintf("$ mc config host add myminio %s %s %s", endPoint, cred.AccessKeyID, cred.SecretAccessKey)
+		mcMessage := fmt.Sprintf("$ mc config host add myminio %s %s %s", endPoint, cred.AccessKey, cred.SecretKey)
 		console.Println(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
 	}
 }

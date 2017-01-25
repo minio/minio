@@ -76,6 +76,24 @@ type xlObjects struct {
 // list of all errors that can be ignored in tree walk operation in XL
 var xlTreeWalkIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied, errVolumeNotFound, errFileNotFound)
 
+// newXLObjectLayer - initialize any object layer depending on the number of disks.
+func newXLObjectLayer(storageDisks []StorageAPI) (ObjectLayer, error) {
+	// Initialize XL object layer.
+	objAPI, err := newXLObjects(storageDisks)
+	fatalIf(err, "Unable to initialize XL object layer.")
+
+	// Initialize and load bucket policies.
+	err = initBucketPolicies(objAPI)
+	fatalIf(err, "Unable to load all bucket policies.")
+
+	// Initialize a new event notifier.
+	err = initEventNotifier(objAPI)
+	fatalIf(err, "Unable to initialize event notification.")
+
+	// Success.
+	return objAPI, nil
+}
+
 // newXLObjects - initialize new xl object layer.
 func newXLObjects(storageDisks []StorageAPI) (ObjectLayer, error) {
 	if storageDisks == nil {
@@ -145,6 +163,14 @@ func newXLObjects(storageDisks []StorageAPI) (ObjectLayer, error) {
 // Shutdown function for object storage interface.
 func (xl xlObjects) Shutdown() error {
 	// Add any object layer shutdown activities here.
+	for _, disk := range xl.storageDisks {
+		// This closes storage rpc client connections if any.
+		// Otherwise this is a no-op.
+		if disk == nil {
+			continue
+		}
+		disk.Close()
+	}
 	return nil
 }
 
@@ -169,10 +195,10 @@ func getDisksInfo(disks []StorageAPI) (disksInfo []disk.Info, onlineDisks int, o
 		info, err := storageDisk.DiskInfo()
 		if err != nil {
 			errorIf(err, "Unable to fetch disk info for %#v", storageDisk)
-			if err == errDiskNotFound {
+			if isErr(err, baseErrs...) {
 				offlineDisks++
+				continue
 			}
-			continue
 		}
 		onlineDisks++
 		disksInfo[i] = info

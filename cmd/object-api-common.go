@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	humanize "github.com/dustin/go-humanize"
 )
@@ -48,6 +49,38 @@ func init() {
 	globalObjLayerMutex = &sync.Mutex{}
 }
 
+// Check if the disk is remote.
+func isRemoteDisk(disk StorageAPI) bool {
+	_, ok := disk.(*networkStorage)
+	return ok
+}
+
+// Checks if the object is a directory, this logic uses
+// if size == 0 and object ends with slashSeparator then
+// returns true.
+func isObjectDir(object string, size int64) bool {
+	return strings.HasSuffix(object, slashSeparator) && size == 0
+}
+
+// Converts just bucket, object metadata into ObjectInfo datatype.
+func dirObjectInfo(bucket, object string, size int64, metadata map[string]string) ObjectInfo {
+	// This is a special case with size as '0' and object ends with
+	// a slash separator, we treat it like a valid operation and
+	// return success.
+	md5Sum := metadata["md5Sum"]
+	delete(metadata, "md5Sum")
+	return ObjectInfo{
+		Bucket:      bucket,
+		Name:        object,
+		ModTime:     time.Now().UTC(),
+		ContentType: "application/octet-stream",
+		IsDir:       true,
+		Size:        size,
+		MD5Sum:      md5Sum,
+		UserDefined: metadata,
+	}
+}
+
 // House keeping code for FS/XL and distributed Minio setup.
 func houseKeeping(storageDisks []StorageAPI) error {
 	var wg = &sync.WaitGroup{}
@@ -60,8 +93,8 @@ func houseKeeping(storageDisks []StorageAPI) error {
 		if disk == nil {
 			continue
 		}
-		if _, ok := disk.(*networkStorage); ok {
-			// Skip remote disks.
+		// Skip remote disks.
+		if isRemoteDisk(disk) {
 			continue
 		}
 		wg.Add(1)
@@ -153,12 +186,12 @@ func getPath(ep *url.URL) string {
 	}
 	var diskPath string
 	// For windows ep.Path is usually empty
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == globalWindowsOSName {
 		switch ep.Scheme {
 		case "":
 			// Eg. "minio server .\export"
 			diskPath = ep.Path
-		case "http", "https":
+		case httpScheme, httpsScheme:
 			// For full URLs windows drive is part of URL path.
 			// Eg: http://ip:port/C:\mydrive
 			// For windows trim off the preceding "/".

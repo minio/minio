@@ -56,7 +56,7 @@ func getChunkSignature(seedSignature string, date time.Time, hashedChunk string)
 		hashedChunk
 
 	// Get hmac signing key.
-	signingKey := getSigningKey(cred.SecretAccessKey, date, region)
+	signingKey := getSigningKey(cred.SecretKey, date, region)
 
 	// Calculate signature.
 	newSignature := getSignature(signingKey, stringToSign)
@@ -101,7 +101,7 @@ func calculateSeedSignature(r *http.Request) (signature string, date time.Time, 
 		return "", time.Time{}, errCode
 	}
 	// Verify if the access key id matches.
-	if signV4Values.Credential.accessKey != cred.AccessKeyID {
+	if signV4Values.Credential.accessKey != cred.AccessKey {
 		return "", time.Time{}, ErrInvalidAccessKeyID
 	}
 
@@ -138,7 +138,7 @@ func calculateSeedSignature(r *http.Request) (signature string, date time.Time, 
 	stringToSign := getStringToSign(canonicalRequest, date, region)
 
 	// Get hmac signing key.
-	signingKey := getSigningKey(cred.SecretAccessKey, date, region)
+	signingKey := getSigningKey(cred.SecretKey, date, region)
 
 	// Calculate signature.
 	newSignature := getSignature(signingKey, stringToSign)

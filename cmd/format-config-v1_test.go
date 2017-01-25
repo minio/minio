@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -664,28 +664,6 @@ func TestReduceFormatErrs(t *testing.T) {
 	}
 }
 
-// Tests for genericFormatCheckFS()
-func TestGenericFormatCheckFS(t *testing.T) {
-	// Generate format configs for XL.
-	formatConfigs := genFormatXLInvalidJBOD()
-
-	// Validate disk format is fs, should fail.
-	if err := genericFormatCheckFS(formatConfigs[0], nil); err != errFSDiskFormat {
-		t.Fatalf("Unexpected error, expected %s, got %s", errFSDiskFormat, err)
-	}
-
-	// Validate disk is unformatted, should fail.
-	if err := genericFormatCheckFS(nil, errUnformattedDisk); err != errUnformattedDisk {
-		t.Fatalf("Unexpected error, expected %s, got %s", errUnformattedDisk, err)
-	}
-
-	// Validate when disk is in FS format.
-	format := newFSFormatV1()
-	if err := genericFormatCheckFS(format, nil); err != nil {
-		t.Fatalf("Unexpected error should pass, failed with %s", err)
-	}
-}
-
 // Tests for genericFormatCheckXL()
 func TestGenericFormatCheckXL(t *testing.T) {
 	var errs []error
@@ -834,7 +812,7 @@ func TestLoadFormatXLErrs(t *testing.T) {
 
 // Tests for healFormatXLCorruptedDisks() with cases which lead to errors
 func TestHealFormatXLCorruptedDisksErrs(t *testing.T) {
-	root, err := newTestConfig("us-east-1")
+	root, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -990,7 +968,7 @@ func TestHealFormatXLCorruptedDisksErrs(t *testing.T) {
 
 // Tests for healFormatXLFreshDisks() with cases which lead to errors
 func TestHealFormatXLFreshDisksErrs(t *testing.T) {
-	root, err := newTestConfig("us-east-1")
+	root, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatal(err)
 	}

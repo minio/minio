@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015-2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015-2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -571,29 +571,24 @@ func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
 
 // Initialize FS backend for the benchmark.
 func initFSObjectsB(disk string, t *testing.B) (obj ObjectLayer) {
-	endPoints, err := parseStorageEndpoints([]string{disk})
+	var err error
+	obj, err = newFSObjectLayer(disk)
 	if err != nil {
 		t.Fatal("Unexpected err: ", err)
 	}
-
-	obj, _, err = initObjectLayer(endPoints)
-	if err != nil {
-		t.Fatal("Unexpected err: ", err)
-	}
-
 	return obj
 }
 
 // BenchmarkListObjects - Run ListObject Repeatedly and benchmark.
 func BenchmarkListObjects(b *testing.B) {
 	// Make a temporary directory to use as the obj.
-	directory, err := ioutil.TempDir("", "minio-list-benchmark")
+	directory, err := ioutil.TempDir(globalTestTmpDir, "minio-list-benchmark")
 	if err != nil {
 		b.Fatal(err)
 	}
 	defer removeAll(directory)
 	// initialize the root directory.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		b.Fatalf("Unable to initialize config. %s", err)
 	}

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ const (
 	Unknown BackendType = iota
 	// Filesystem backend.
 	FS
-	// Multi disk single node XL backend.
+	// Multi disk XL (single, distributed) backend.
 	XL
 	// Add your own backend.
 )
@@ -50,6 +50,20 @@ type StorageInfo struct {
 	}
 }
 
+type healStatus int
+
+const (
+	healthy           healStatus = iota // Object is healthy
+	canHeal                             // Object can be healed
+	corrupted                           // Object can't be healed
+	quorumUnavailable                   // Object can't be healed until read quorum is available
+)
+
+// HealBucketInfo - represents healing related information of a bucket.
+type HealBucketInfo struct {
+	Status healStatus
+}
+
 // BucketInfo - represents bucket metadata.
 type BucketInfo struct {
 	// Name of the bucket.
@@ -57,6 +71,16 @@ type BucketInfo struct {
 
 	// Date and time when the bucket was created.
 	Created time.Time
+
+	// Healing information
+	HealBucketInfo *HealBucketInfo `xml:"HealBucketInfo,omitempty"`
+}
+
+// HealObjectInfo - represents healing related information of an object.
+type HealObjectInfo struct {
+	Status              healStatus
+	MissingDataCount    int
+	MissingPartityCount int
 }
 
 // ObjectInfo - represents object metadata.
@@ -88,7 +112,8 @@ type ObjectInfo struct {
 	ContentEncoding string
 
 	// User-Defined metadata
-	UserDefined map[string]string
+	UserDefined    map[string]string
+	HealObjectInfo *HealObjectInfo `xml:"HealObjectInfo,omitempty"`
 }
 
 // ListPartsInfo - represents list of all parts.

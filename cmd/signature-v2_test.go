@@ -22,8 +22,9 @@ func TestResourceListSorting(t *testing.T) {
 	}
 }
 
+// Tests presigned v2 signature.
 func TestDoesPresignedV2SignatureMatch(t *testing.T) {
-	root, err := newTestConfig("us-east-1")
+	root, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatal("Unable to initialize test config.")
 	}
@@ -54,7 +55,7 @@ func TestDoesPresignedV2SignatureMatch(t *testing.T) {
 			queryParams: map[string]string{
 				"Expires":        "60s",
 				"Signature":      "badsignature",
-				"AWSAccessKeyId": serverConfig.GetCredential().AccessKeyID,
+				"AWSAccessKeyId": serverConfig.GetCredential().AccessKey,
 			},
 			expected: ErrMalformedExpires,
 		},
@@ -63,7 +64,7 @@ func TestDoesPresignedV2SignatureMatch(t *testing.T) {
 			queryParams: map[string]string{
 				"Expires":        "60",
 				"Signature":      "badsignature",
-				"AWSAccessKeyId": serverConfig.GetCredential().AccessKeyID,
+				"AWSAccessKeyId": serverConfig.GetCredential().AccessKey,
 			},
 			expected: ErrExpiredPresignRequest,
 		},
@@ -72,7 +73,16 @@ func TestDoesPresignedV2SignatureMatch(t *testing.T) {
 			queryParams: map[string]string{
 				"Expires":        fmt.Sprintf("%d", now.Unix()+60),
 				"Signature":      "badsignature",
-				"AWSAccessKeyId": serverConfig.GetCredential().AccessKeyID,
+				"AWSAccessKeyId": serverConfig.GetCredential().AccessKey,
+			},
+			expected: ErrSignatureDoesNotMatch,
+		},
+		// (5) Should error when the signature does not match.
+		{
+			queryParams: map[string]string{
+				"Expires":        fmt.Sprintf("%d", now.Unix()+60),
+				"Signature":      "zOM2YrY/yAQe15VWmT78OlBrK6g=",
+				"AWSAccessKeyId": serverConfig.GetCredential().AccessKey,
 			},
 			expected: ErrSignatureDoesNotMatch,
 		},
@@ -91,6 +101,8 @@ func TestDoesPresignedV2SignatureMatch(t *testing.T) {
 		if e != nil {
 			t.Errorf("(%d) failed to create http.Request, got %v", i, e)
 		}
+		// Should be set since we are simulating a http server.
+		req.RequestURI = req.URL.RequestURI()
 
 		// Do the same for the headers.
 		for key, value := range testCase.headers {
@@ -116,7 +128,7 @@ func TestValidateV2AuthHeader(t *testing.T) {
 	if err := serverConfig.Save(); err != nil {
 		t.Fatal(err)
 	}
-	accessID := serverConfig.GetCredential().AccessKeyID
+	accessID := serverConfig.GetCredential().AccessKey
 
 	testCases := []struct {
 		authString    string
@@ -197,9 +209,9 @@ func TestDoesPolicySignatureV2Match(t *testing.T) {
 		signature string
 		errCode   APIErrorCode
 	}{
-		{"invalidAccessKey", policy, calculateSignatureV2(policy, creds.SecretAccessKey), ErrInvalidAccessKeyID},
-		{creds.AccessKeyID, policy, calculateSignatureV2("random", creds.SecretAccessKey), ErrSignatureDoesNotMatch},
-		{creds.AccessKeyID, policy, calculateSignatureV2(policy, creds.SecretAccessKey), ErrNone},
+		{"invalidAccessKey", policy, calculateSignatureV2(policy, creds.SecretKey), ErrInvalidAccessKeyID},
+		{creds.AccessKey, policy, calculateSignatureV2("random", creds.SecretKey), ErrSignatureDoesNotMatch},
+		{creds.AccessKey, policy, calculateSignatureV2(policy, creds.SecretKey), ErrNone},
 	}
 	for i, test := range testCases {
 		formValues := make(map[string]string)

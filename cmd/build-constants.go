@@ -22,12 +22,15 @@ var (
 	// GOPATH - GOPATH value at the time of build.
 	GOPATH = ""
 
+	// Go get development tag.
+	goGetTag = "DEVELOPMENT.GOGET"
+
 	// Version - version time.RFC3339.
-	Version = "DEVELOPMENT.GOGET"
+	Version = goGetTag
 	// ReleaseTag - release tag in TAG.%Y-%m-%dT%H-%M-%SZ.
-	ReleaseTag = "DEVELOPMENT.GOGET"
+	ReleaseTag = goGetTag
 	// CommitID - latest commit id.
-	CommitID = "DEVELOPMENT.GOGET"
+	CommitID = goGetTag
 	// ShortCommitID - first 12 characters from CommitID.
 	ShortCommitID = CommitID[:12]
 )

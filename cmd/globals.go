@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,9 @@ package cmd
 
 import (
 	"crypto/x509"
+	"net/url"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -36,7 +38,7 @@ const (
 
 // minio configuration related constants.
 const (
-	globalMinioConfigVersion      = "10"
+	globalMinioConfigVersion      = "13"
 	globalMinioConfigDir          = ".minio"
 	globalMinioCertsDir           = "certs"
 	globalMinioCertsCADir         = "CAs"
@@ -44,6 +46,11 @@ const (
 	globalMinioKeyFile            = "private.key"
 	globalMinioConfigFile         = "config.json"
 	globalMinioCertExpireWarnDays = time.Hour * 24 * 30 // 30 days.
+
+	globalMinioDefaultRegion       = "us-east-1"
+	globalMinioDefaultOwnerID      = "minio"
+	globalMinioDefaultStorageClass = "STANDARD"
+	globalWindowsOSName            = "windows"
 	// Add new global values here.
 )
 
@@ -61,7 +68,11 @@ var (
 	globalConfigDir = mustGetConfigPath() // config-dir flag set via command line
 	// Add new global flags here.
 
-	globalIsDistXL = false // "Is Distributed?" flag.
+	// Indicates if the running minio server is distributed setup.
+	globalIsDistXL = false
+
+	// Indicates if the running minio server is an erasure-code backend.
+	globalIsXL = false
 
 	// This flag is set to 'true' by default, it is set to `false`
 	// when MINIO_BROWSER env is set to 'off'.
@@ -73,17 +84,40 @@ var (
 
 	// Cache expiry.
 	globalCacheExpiry = objcache.DefaultExpiry
+
 	// Minio local server address (in `host:port` format)
 	globalMinioAddr = ""
 	// Minio default port, can be changed through command line.
 	globalMinioPort = "9000"
 	// Holds the host that was passed using --address
 	globalMinioHost = ""
+
+	// Holds the list of API endpoints for a given server.
+	globalAPIEndpoints = []string{}
+
 	// Peer communication struct
 	globalS3Peers = s3Peers{}
 
 	// CA root certificates, a nil value means system certs pool will be used
 	globalRootCAs *x509.CertPool
+
+	// IsSSL indicates if the server is configured with SSL.
+	globalIsSSL bool
+
+	// List of admin peers.
+	globalAdminPeers = adminPeers{}
+
+	// Minio server user agent string.
+	globalServerUserAgent = "Minio/" + ReleaseTag + " (" + runtime.GOOS + "; " + runtime.GOARCH + ")"
+
+	// Access key passed from the environment
+	globalEnvAccessKey = os.Getenv("MINIO_ACCESS_KEY")
+
+	// Secret key passed from the environment
+	globalEnvSecretKey = os.Getenv("MINIO_SECRET_KEY")
+
+	// url.URL endpoints of disks that belong to the object storage.
+	globalEndpoints = []*url.URL{}
 
 	// Add new variable global values here.
 )
@@ -96,10 +130,8 @@ var (
 
 // global colors.
 var (
-	colorRed   = color.New(color.FgRed).SprintFunc()
-	colorBold  = color.New(color.Bold).SprintFunc()
-	colorBlue  = color.New(color.FgBlue).SprintfFunc()
-	colorGreen = color.New(color.FgGreen).SprintfFunc()
+	colorBold = color.New(color.Bold).SprintFunc()
+	colorBlue = color.New(color.FgBlue).SprintfFunc()
 )
 
 // Parse command arguments and set global variables accordingly
@@ -114,6 +146,7 @@ func setGlobalsFromContext(c *cli.Context) {
 	if globalConfigDir == "" {
 		console.Fatalf("Unable to get config file. Config directory is empty.")
 	}
+
 	// Set global quiet flag.
 	globalQuiet = c.Bool("quiet") || c.GlobalBool("quiet")
 }

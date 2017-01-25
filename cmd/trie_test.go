@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,7 +55,7 @@ func TestPrefixMatch(t *testing.T) {
 	trie = newTrie()
 
 	// Feed it some fodder: only 'minio' and 'miny-os' should trip the matcher.
-	trie.Insert("minio")
+	trie.Insert(globalMinioDefaultOwnerID)
 	trie.Insert("amazon")
 	trie.Insert("cheerio")
 	trie.Insert("miny-o's")
@@ -65,7 +65,7 @@ func TestPrefixMatch(t *testing.T) {
 		t.Errorf("expected two matches, got: %d", len(matches))
 	}
 
-	if matches[0] != "minio" && matches[1] != "minio" {
+	if matches[0] != globalMinioDefaultOwnerID && matches[1] != globalMinioDefaultOwnerID {
 		t.Errorf("expected one match to be 'minio', got: '%s' and '%s'", matches[0], matches[1])
 	}
 }

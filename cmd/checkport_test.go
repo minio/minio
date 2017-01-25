@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,7 +47,7 @@ func TestCheckPortAvailability(t *testing.T) {
 		err = checkPortAvailability(test.port)
 
 		// Skip if the os is windows due to https://github.com/golang/go/issues/7598
-		if err == nil && runtime.GOOS != "windows" {
+		if err == nil && runtime.GOOS != globalWindowsOSName {
 			t.Fatalf("checkPortAvailability should fail for port: %s. Error: %v", test.port, err)
 		}
 	}

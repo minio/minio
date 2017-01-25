@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ package cmd
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -100,7 +101,7 @@ func getWebRPCToken(apiRouter http.Handler, accessKey, secretKey string) (token 
 	rec := httptest.NewRecorder()
 	request := LoginArgs{Username: accessKey, Password: secretKey}
 	reply := &LoginRep{}
-	req, err := newTestWebRPCRequest("Web.Login", "", request)
+	req, err := newTestWebRPCRequest("Web"+loginMethodName, "", request)
 	if err != nil {
 		return "", err
 	}
@@ -129,7 +130,7 @@ func testLoginWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler)
 	apiRouter := initTestWebRPCEndPoint(obj)
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
@@ -149,7 +150,8 @@ func testLoginWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler)
 		{"", "foo", false},
 		{"azerty", "", false},
 		{"azerty", "foo", false},
-		{credentials.AccessKeyID, credentials.SecretAccessKey, true},
+		{"azerty", "azerty123", false},
+		{credentials.AccessKey, credentials.SecretKey, true},
 	}
 
 	// Iterating over the test cases, calling the function under test and asserting the response.
@@ -177,7 +179,7 @@ func testStorageInfoWebHandler(obj ObjectLayer, instanceType string, t TestErrHa
 	apiRouter := initTestWebRPCEndPoint(obj)
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
@@ -186,14 +188,14 @@ func testStorageInfoWebHandler(obj ObjectLayer, instanceType string, t TestErrHa
 
 	credentials := serverConfig.GetCredential()
 
-	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKeyID, credentials.SecretAccessKey)
+	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatal("Cannot authenticate")
 	}
 
 	rec := httptest.NewRecorder()
 
-	storageInfoRequest := GenericArgs{}
+	storageInfoRequest := AuthRPCArgs{}
 	storageInfoReply := &StorageInfoRep{}
 	req, err := newTestWebRPCRequest("Web.StorageInfo", authorization, storageInfoRequest)
 	if err != nil {
@@ -223,7 +225,7 @@ func testServerInfoWebHandler(obj ObjectLayer, instanceType string, t TestErrHan
 	apiRouter := initTestWebRPCEndPoint(obj)
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
@@ -232,14 +234,14 @@ func testServerInfoWebHandler(obj ObjectLayer, instanceType string, t TestErrHan
 
 	credentials := serverConfig.GetCredential()
 
-	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKeyID, credentials.SecretAccessKey)
+	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatal("Cannot authenticate")
 	}
 
 	rec := httptest.NewRecorder()
 
-	serverInfoRequest := GenericArgs{}
+	serverInfoRequest := AuthRPCArgs{}
 	serverInfoReply := &ServerInfoRep{}
 	req, err := newTestWebRPCRequest("Web.ServerInfo", authorization, serverInfoRequest)
 	if err != nil {
@@ -269,7 +271,7 @@ func testMakeBucketWebHandler(obj ObjectLayer, instanceType string, t TestErrHan
 	apiRouter := initTestWebRPCEndPoint(obj)
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
@@ -278,7 +280,7 @@ func testMakeBucketWebHandler(obj ObjectLayer, instanceType string, t TestErrHan
 
 	credentials := serverConfig.GetCredential()
 
-	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKeyID, credentials.SecretAccessKey)
+	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatal("Cannot authenticate")
 	}
@@ -329,7 +331,7 @@ func testListBucketsWebHandler(obj ObjectLayer, instanceType string, t TestErrHa
 	apiRouter := initTestWebRPCEndPoint(obj)
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
@@ -338,7 +340,7 @@ func testListBucketsWebHandler(obj ObjectLayer, instanceType string, t TestErrHa
 
 	credentials := serverConfig.GetCredential()
 
-	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKeyID, credentials.SecretAccessKey)
+	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatal("Cannot authenticate")
 	}
@@ -386,7 +388,7 @@ func testListObjectsWebHandler(obj ObjectLayer, instanceType string, t TestErrHa
 	apiRouter := initTestWebRPCEndPoint(obj)
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
@@ -397,7 +399,7 @@ func testListObjectsWebHandler(obj ObjectLayer, instanceType string, t TestErrHa
 
 	rec := httptest.NewRecorder()
 
-	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKeyID, credentials.SecretAccessKey)
+	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatal("Cannot authenticate")
 	}
@@ -421,30 +423,62 @@ func testListObjectsWebHandler(obj ObjectLayer, instanceType string, t TestErrHa
 		t.Fatalf("Was not able to upload an object, %v", err)
 	}
 
-	listObjectsRequest := ListObjectsArgs{BucketName: bucketName, Prefix: ""}
-	listObjectsReply := &ListObjectsRep{}
-	req, err := newTestWebRPCRequest("Web.ListObjects", authorization, listObjectsRequest)
-	if err != nil {
-		t.Fatalf("Failed to create HTTP request: <ERROR> %v", err)
+	test := func(token string) (error, *ListObjectsRep) {
+		listObjectsRequest := ListObjectsArgs{BucketName: bucketName, Prefix: ""}
+		listObjectsReply := &ListObjectsRep{}
+		var req *http.Request
+		req, err = newTestWebRPCRequest("Web.ListObjects", token, listObjectsRequest)
+		if err != nil {
+			t.Fatalf("Failed to create HTTP request: <ERROR> %v", err)
+		}
+		apiRouter.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			return fmt.Errorf("Expected the response status to be 200, but instead found `%d`", rec.Code), listObjectsReply
+		}
+		err = getTestWebRPCResponse(rec, &listObjectsReply)
+		if err != nil {
+			return err, listObjectsReply
+		}
+		return nil, listObjectsReply
 	}
-	apiRouter.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("Expected the response status to be 200, but instead found `%d`", rec.Code)
-	}
-	err = getTestWebRPCResponse(rec, &listObjectsReply)
-	if err != nil {
-		t.Fatalf("Failed, %v", err)
-	}
-	if len(listObjectsReply.Objects) == 0 {
-		t.Fatalf("Cannot find the object")
-	}
-	if listObjectsReply.Objects[0].Key != objectName {
-		t.Fatalf("Found another object other than already created by PutObject")
-	}
-	if listObjectsReply.Objects[0].Size != int64(objectSize) {
-		t.Fatalf("Found a object with the same name but with a different size")
+	verifyReply := func(reply *ListObjectsRep) {
+		if len(reply.Objects) == 0 {
+			t.Fatalf("Cannot find the object")
+		}
+		if reply.Objects[0].Key != objectName {
+			t.Fatalf("Found another object other than already created by PutObject")
+		}
+		if reply.Objects[0].Size != int64(objectSize) {
+			t.Fatalf("Found a object with the same name but with a different size")
+		}
 	}
 
+	// Authenticated ListObjects should succeed.
+	err, reply := test(authorization)
+	if err != nil {
+		t.Fatal(err)
+	}
+	verifyReply(reply)
+
+	// Unauthenticated ListObjects should fail.
+	err, _ = test("")
+	if err == nil {
+		t.Fatalf("Expected error `%s`", err)
+	}
+
+	policy := bucketPolicy{
+		Version:    "1.0",
+		Statements: []policyStatement{getReadOnlyObjectStatement(bucketName, "")},
+	}
+
+	globalBucketPolicies.SetBucketPolicy(bucketName, policyChange{false, &policy})
+
+	// Unauthenticated ListObjects with READ bucket policy should succeed.
+	err, reply = test("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	verifyReply(reply)
 }
 
 // Wrapper for calling RemoveObject Web Handler
@@ -458,7 +492,7 @@ func testRemoveObjectWebHandler(obj ObjectLayer, instanceType string, t TestErrH
 	apiRouter := initTestWebRPCEndPoint(obj)
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
@@ -468,7 +502,7 @@ func testRemoveObjectWebHandler(obj ObjectLayer, instanceType string, t TestErrH
 	credentials := serverConfig.GetCredential()
 
 	rec := httptest.NewRecorder()
-	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKeyID, credentials.SecretAccessKey)
+	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatal("Cannot authenticate")
 	}
@@ -534,7 +568,7 @@ func testGenerateAuthWebHandler(obj ObjectLayer, instanceType string, t TestErrH
 	apiRouter := initTestWebRPCEndPoint(obj)
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
@@ -544,7 +578,7 @@ func testGenerateAuthWebHandler(obj ObjectLayer, instanceType string, t TestErrH
 	credentials := serverConfig.GetCredential()
 
 	rec := httptest.NewRecorder()
-	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKeyID, credentials.SecretAccessKey)
+	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatal("Cannot authenticate")
 	}
@@ -580,7 +614,7 @@ func testSetAuthWebHandler(obj ObjectLayer, instanceType string, t TestErrHandle
 	apiRouter := initTestWebRPCEndPoint(obj)
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
@@ -590,7 +624,7 @@ func testSetAuthWebHandler(obj ObjectLayer, instanceType string, t TestErrHandle
 	credentials := serverConfig.GetCredential()
 
 	rec := httptest.NewRecorder()
-	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKeyID, credentials.SecretAccessKey)
+	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatal("Cannot authenticate")
 	}
@@ -641,7 +675,7 @@ func testGetAuthWebHandler(obj ObjectLayer, instanceType string, t TestErrHandle
 	apiRouter := initTestWebRPCEndPoint(obj)
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
@@ -651,7 +685,7 @@ func testGetAuthWebHandler(obj ObjectLayer, instanceType string, t TestErrHandle
 	credentials := serverConfig.GetCredential()
 
 	rec := httptest.NewRecorder()
-	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKeyID, credentials.SecretAccessKey)
+	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatal("Cannot authenticate")
 	}
@@ -670,7 +704,7 @@ func testGetAuthWebHandler(obj ObjectLayer, instanceType string, t TestErrHandle
 	if err != nil {
 		t.Fatalf("Failed, %v", err)
 	}
-	if getAuthReply.AccessKey != credentials.AccessKeyID || getAuthReply.SecretKey != credentials.SecretAccessKey {
+	if getAuthReply.AccessKey != credentials.AccessKey || getAuthReply.SecretKey != credentials.SecretKey {
 		t.Fatalf("Failed to get correct auth keys")
 	}
 }
@@ -686,7 +720,7 @@ func testUploadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler
 	apiRouter := initTestWebRPCEndPoint(obj)
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
@@ -694,15 +728,35 @@ func testUploadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler
 	defer removeAll(rootPath)
 
 	credentials := serverConfig.GetCredential()
+	content := []byte("temporary file's content")
 
-	rec := httptest.NewRecorder()
-	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKeyID, credentials.SecretAccessKey)
+	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatal("Cannot authenticate")
 	}
 
 	objectName := "test.file"
 	bucketName := getRandomBucketName()
+
+	test := func(token string) int {
+		rec := httptest.NewRecorder()
+		var req *http.Request
+		req, err = http.NewRequest("PUT", "/minio/upload/"+bucketName+"/"+objectName, nil)
+		if err != nil {
+			t.Fatalf("Cannot create upload request, %v", err)
+		}
+
+		req.Header.Set("Content-Length", strconv.Itoa(len(content)))
+		req.Header.Set("x-amz-date", "20160814T114029Z")
+		req.Header.Set("Accept", "*/*")
+		req.Body = ioutil.NopCloser(bytes.NewReader(content))
+
+		if token != "" {
+			req.Header.Set("Authorization", "Bearer "+authorization)
+		}
+		apiRouter.ServeHTTP(rec, req)
+		return rec.Code
+	}
 	// Create bucket.
 	err = obj.MakeBucket(bucketName)
 	if err != nil {
@@ -710,22 +764,10 @@ func testUploadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler
 		t.Fatalf("%s : %s", instanceType, err)
 	}
 
-	content := []byte("temporary file's content")
-
-	req, err := http.NewRequest("PUT", "/minio/upload/"+bucketName+"/"+objectName, nil)
-	req.Header.Set("Authorization", "Bearer "+authorization)
-	req.Header.Set("Content-Length", strconv.Itoa(len(content)))
-	req.Header.Set("x-amz-date", "20160814T114029Z")
-	req.Header.Set("Accept", "*/*")
-	req.Body = ioutil.NopCloser(bytes.NewReader(content))
-
-	if err != nil {
-		t.Fatalf("Cannot create upload request, %v", err)
-	}
-
-	apiRouter.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("Expected the response status to be 200, but instead found `%d`", rec.Code)
+	// Authenticated upload should succeed.
+	code := test(authorization)
+	if code != http.StatusOK {
+		t.Fatalf("Expected the response status to be 200, but instead found `%d`", code)
 	}
 
 	var byteBuffer bytes.Buffer
@@ -736,6 +778,25 @@ func testUploadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler
 
 	if bytes.Compare(byteBuffer.Bytes(), content) != 0 {
 		t.Fatalf("The upload file is different from the download file")
+	}
+
+	// Unauthenticated upload should fail.
+	code = test("")
+	if code != http.StatusForbidden {
+		t.Fatalf("Expected the response status to be 403, but instead found `%d`", code)
+	}
+
+	policy := bucketPolicy{
+		Version:    "1.0",
+		Statements: []policyStatement{getWriteOnlyObjectStatement(bucketName, "")},
+	}
+
+	globalBucketPolicies.SetBucketPolicy(bucketName, policyChange{false, &policy})
+
+	// Unauthenticated upload with WRITE policy should succeed.
+	code = test("")
+	if code != http.StatusOK {
+		t.Fatalf("Expected the response status to be 200, but instead found `%d`", code)
 	}
 }
 
@@ -750,7 +811,7 @@ func testDownloadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandl
 	apiRouter := initTestWebRPCEndPoint(obj)
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
@@ -759,14 +820,31 @@ func testDownloadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandl
 
 	credentials := serverConfig.GetCredential()
 
-	rec := httptest.NewRecorder()
-	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKeyID, credentials.SecretAccessKey)
+	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatal("Cannot authenticate")
 	}
 
 	objectName := "test.file"
 	bucketName := getRandomBucketName()
+
+	test := func(token string) (int, []byte) {
+		rec := httptest.NewRecorder()
+		path := "/minio/download/" + bucketName + "/" + objectName + "?token="
+		if token != "" {
+			path = path + token
+		}
+		var req *http.Request
+		req, err = http.NewRequest("GET", path, nil)
+
+		if err != nil {
+			t.Fatalf("Cannot create upload request, %v", err)
+		}
+
+		apiRouter.ServeHTTP(rec, req)
+		return rec.Code, rec.Body.Bytes()
+	}
+
 	// Create bucket.
 	err = obj.MakeBucket(bucketName)
 	if err != nil {
@@ -780,18 +858,37 @@ func testDownloadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandl
 		t.Fatalf("Was not able to upload an object, %v", err)
 	}
 
-	req, err := http.NewRequest("GET", "/minio/download/"+bucketName+"/"+objectName+"?token="+authorization, nil)
+	// Authenticated download should succeed.
+	code, bodyContent := test(authorization)
 
-	if err != nil {
-		t.Fatalf("Cannot create upload request, %v", err)
+	if code != http.StatusOK {
+		t.Fatalf("Expected the response status to be 200, but instead found `%d`", code)
 	}
 
-	apiRouter.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("Expected the response status to be 200, but instead found `%d`", rec.Code)
+	if bytes.Compare(bodyContent, content) != 0 {
+		t.Fatalf("The downloaded file is corrupted")
 	}
 
-	if bytes.Compare(rec.Body.Bytes(), content) != 0 {
+	// Unauthenticated download should fail.
+	code, _ = test("")
+	if code != http.StatusForbidden {
+		t.Fatalf("Expected the response status to be 403, but instead found `%d`", code)
+	}
+
+	policy := bucketPolicy{
+		Version:    "1.0",
+		Statements: []policyStatement{getReadOnlyObjectStatement(bucketName, "")},
+	}
+
+	globalBucketPolicies.SetBucketPolicy(bucketName, policyChange{false, &policy})
+
+	// Unauthenticated download with READ policy should succeed.
+	code, bodyContent = test("")
+	if code != http.StatusOK {
+		t.Fatalf("Expected the response status to be 200, but instead found `%d`", code)
+	}
+
+	if bytes.Compare(bodyContent, content) != 0 {
 		t.Fatalf("The downloaded file is corrupted")
 	}
 }
@@ -806,7 +903,7 @@ func testWebPresignedGetHandler(obj ObjectLayer, instanceType string, t TestErrH
 	apiRouter := initTestWebRPCEndPoint(obj)
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
@@ -815,7 +912,7 @@ func testWebPresignedGetHandler(obj ObjectLayer, instanceType string, t TestErrH
 
 	credentials := serverConfig.GetCredential()
 
-	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKeyID, credentials.SecretAccessKey)
+	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatal("Cannot authenticate")
 	}
@@ -919,7 +1016,7 @@ func testWebGetBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestE
 	apiRouter := initTestWebRPCEndPoint(obj)
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
@@ -928,7 +1025,7 @@ func testWebGetBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestE
 
 	credentials := serverConfig.GetCredential()
 
-	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKeyID, credentials.SecretAccessKey)
+	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatal("Cannot authenticate")
 	}
@@ -947,14 +1044,14 @@ func testWebGetBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestE
 				Actions:   set.CreateStringSet("s3:GetBucketLocation", "s3:ListBucket"),
 				Effect:    "Allow",
 				Principal: map[string][]string{"AWS": {"*"}},
-				Resources: set.CreateStringSet("arn:aws:s3:::" + bucketName),
+				Resources: set.CreateStringSet(bucketARNPrefix + bucketName),
 				Sid:       "",
 			},
 			{
 				Actions:   set.CreateStringSet("s3:GetObject"),
 				Effect:    "Allow",
 				Principal: map[string][]string{"AWS": {"*"}},
-				Resources: set.CreateStringSet("arn:aws:s3:::" + bucketName + "/*"),
+				Resources: set.CreateStringSet(bucketARNPrefix + bucketName + "/*"),
 				Sid:       "",
 			},
 		},
@@ -1002,7 +1099,7 @@ func testWebListAllBucketPoliciesHandler(obj ObjectLayer, instanceType string, t
 	apiRouter := initTestWebRPCEndPoint(obj)
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
@@ -1011,7 +1108,7 @@ func testWebListAllBucketPoliciesHandler(obj ObjectLayer, instanceType string, t
 
 	credentials := serverConfig.GetCredential()
 
-	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKeyID, credentials.SecretAccessKey)
+	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatal("Cannot authenticate")
 	}
@@ -1030,7 +1127,7 @@ func testWebListAllBucketPoliciesHandler(obj ObjectLayer, instanceType string, t
 				Actions:   set.CreateStringSet("s3:GetBucketLocation"),
 				Effect:    "Allow",
 				Principal: map[string][]string{"AWS": {"*"}},
-				Resources: set.CreateStringSet("arn:aws:s3:::" + bucketName),
+				Resources: set.CreateStringSet(bucketARNPrefix + bucketName),
 				Sid:       "",
 			},
 			{
@@ -1042,14 +1139,14 @@ func testWebListAllBucketPoliciesHandler(obj ObjectLayer, instanceType string, t
 				},
 				Effect:    "Allow",
 				Principal: map[string][]string{"AWS": {"*"}},
-				Resources: set.CreateStringSet("arn:aws:s3:::" + bucketName),
+				Resources: set.CreateStringSet(bucketARNPrefix + bucketName),
 				Sid:       "",
 			},
 			{
 				Actions:   set.CreateStringSet("s3:ListBucketMultipartUploads"),
 				Effect:    "Allow",
 				Principal: map[string][]string{"AWS": {"*"}},
-				Resources: set.CreateStringSet("arn:aws:s3:::" + bucketName),
+				Resources: set.CreateStringSet(bucketARNPrefix + bucketName),
 				Sid:       "",
 			},
 			{
@@ -1057,7 +1154,7 @@ func testWebListAllBucketPoliciesHandler(obj ObjectLayer, instanceType string, t
 					"s3:GetObject", "s3:ListMultipartUploadParts", "s3:PutObject"),
 				Effect:    "Allow",
 				Principal: map[string][]string{"AWS": {"*"}},
-				Resources: set.CreateStringSet("arn:aws:s3:::" + bucketName + "/hello*"),
+				Resources: set.CreateStringSet(bucketARNPrefix + bucketName + "/hello*"),
 				Sid:       "",
 			},
 		},
@@ -1108,7 +1205,7 @@ func testWebSetBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestE
 	apiRouter := initTestWebRPCEndPoint(obj)
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
@@ -1117,7 +1214,7 @@ func testWebSetBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestE
 
 	credentials := serverConfig.GetCredential()
 
-	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKeyID, credentials.SecretAccessKey)
+	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatal("Cannot authenticate")
 	}
@@ -1186,7 +1283,7 @@ func TestWebCheckAuthorization(t *testing.T) {
 	apiRouter := initTestWebRPCEndPoint(obj)
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatal("Init Test config failed", err)
 	}
@@ -1204,7 +1301,7 @@ func TestWebCheckAuthorization(t *testing.T) {
 		"PresignedGet",
 	}
 	for _, rpcCall := range webRPCs {
-		args := &GenericArgs{}
+		args := &AuthRPCArgs{}
 		reply := &WebGenericRep{}
 		req, nerr := newTestWebRPCRequest("Web."+rpcCall, "Bearer fooauthorization", args)
 		if nerr != nil {
@@ -1268,7 +1365,7 @@ func TestWebObjectLayerNotReady(t *testing.T) {
 
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatal("Init Test config failed", err)
 	}
@@ -1278,7 +1375,7 @@ func TestWebObjectLayerNotReady(t *testing.T) {
 	rec := httptest.NewRecorder()
 
 	credentials := serverConfig.GetCredential()
-	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKeyID, credentials.SecretAccessKey)
+	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatal("Cannot authenticate", err)
 	}
@@ -1288,7 +1385,7 @@ func TestWebObjectLayerNotReady(t *testing.T) {
 	webRPCs := []string{"StorageInfo", "MakeBucket", "ListBuckets", "ListObjects", "RemoveObject",
 		"GetBucketPolicy", "SetBucketPolicy", "ListAllBucketPolicies"}
 	for _, rpcCall := range webRPCs {
-		args := &GenericArgs{}
+		args := &AuthRPCArgs{}
 		reply := &WebGenericRep{}
 		req, nerr := newTestWebRPCRequest("Web."+rpcCall, authorization, args)
 		if nerr != nil {
@@ -1347,7 +1444,7 @@ func TestWebObjectLayerNotReady(t *testing.T) {
 
 // TestWebObjectLayerFaultyDisks - Test Web RPC responses with faulty disks
 func TestWebObjectLayerFaultyDisks(t *testing.T) {
-	root, err := newTestConfig("us-east-1")
+	root, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1372,7 +1469,7 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatal("Init Test config failed", err)
 	}
@@ -1382,7 +1479,7 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 	rec := httptest.NewRecorder()
 
 	credentials := serverConfig.GetCredential()
-	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKeyID, credentials.SecretAccessKey)
+	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatal("Cannot authenticate", err)
 	}
@@ -1392,7 +1489,7 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 		"GetBucketPolicy", "SetBucketPolicy"}
 
 	for _, rpcCall := range webRPCs {
-		args := &GenericArgs{}
+		args := &AuthRPCArgs{}
 		reply := &WebGenericRep{}
 		req, nerr := newTestWebRPCRequest("Web."+rpcCall, authorization, args)
 		if nerr != nil {
@@ -1409,7 +1506,7 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 	}
 
 	// Test Web.StorageInfo
-	storageInfoRequest := GenericArgs{}
+	storageInfoRequest := AuthRPCArgs{}
 	storageInfoReply := &StorageInfoRep{}
 	req, err := newTestWebRPCRequest("Web.StorageInfo", authorization, storageInfoRequest)
 	if err != nil {

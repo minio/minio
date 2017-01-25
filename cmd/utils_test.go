@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -126,48 +126,6 @@ func TestMaxObjectSize(t *testing.T) {
 	}
 }
 
-// Test urlPathSplit.
-func TestURLPathSplit(t *testing.T) {
-	type test struct {
-		urlPath    string
-		bucketName string
-		prefixName string
-	}
-
-	testCases := []test{
-		{
-			urlPath:    "/b/c/",
-			bucketName: "b",
-			prefixName: "c/",
-		},
-		{
-			urlPath:    "c/aa",
-			bucketName: "c",
-			prefixName: "aa",
-		},
-		{
-			urlPath:    "",
-			bucketName: "",
-			prefixName: "",
-		},
-		{
-			urlPath:    "/b",
-			bucketName: "b",
-			prefixName: "",
-		},
-	}
-
-	for i, testCase := range testCases {
-		bucketName, prefixName := urlPathSplit(testCase.urlPath)
-		if bucketName != testCase.bucketName {
-			t.Errorf("Tets %d: Expected %s, %s", i+1, testCase.bucketName, bucketName)
-		}
-		if prefixName != testCase.prefixName {
-			t.Errorf("Tets %d: Expected %s, %s", i+1, testCase.bucketName, bucketName)
-		}
-	}
-}
-
 // Tests minimum allowed part size.
 func TestMinAllowedPartSize(t *testing.T) {
 	sizes := []struct {
@@ -220,6 +178,94 @@ func TestMaxPartID(t *testing.T) {
 	}
 }
 
+// Tests extracting bucket and objectname from various types of URL paths.
+func TestURL2BucketObjectName(t *testing.T) {
+	testCases := []struct {
+		u              *url.URL
+		bucket, object string
+	}{
+		// Test case 1 normal case.
+		{
+			u: &url.URL{
+				Path: "/bucket/object",
+			},
+			bucket: "bucket",
+			object: "object",
+		},
+		// Test case 2 where url only has separator.
+		{
+			u: &url.URL{
+				Path: "/",
+			},
+			bucket: "",
+			object: "",
+		},
+		// Test case 3 only bucket is present.
+		{
+			u: &url.URL{
+				Path: "/bucket",
+			},
+			bucket: "bucket",
+			object: "",
+		},
+		// Test case 4 many separators and object is a directory.
+		{
+			u: &url.URL{
+				Path: "/bucket/object/1/",
+			},
+			bucket: "bucket",
+			object: "object/1/",
+		},
+		// Test case 5 object has many trailing separators.
+		{
+			u: &url.URL{
+				Path: "/bucket/object/1///",
+			},
+			bucket: "bucket",
+			object: "object/1///",
+		},
+		// Test case 6 object has only trailing separators.
+		{
+			u: &url.URL{
+				Path: "/bucket/object///////",
+			},
+			bucket: "bucket",
+			object: "object///////",
+		},
+		// Test case 7 object has preceding separators.
+		{
+			u: &url.URL{
+				Path: "/bucket////object////",
+			},
+			bucket: "bucket",
+			object: "///object////",
+		},
+		// Test case 8 url is not allocated.
+		{
+			u:      nil,
+			bucket: "",
+			object: "",
+		},
+		// Test case 9 url path is empty.
+		{
+			u:      &url.URL{},
+			bucket: "",
+			object: "",
+		},
+	}
+
+	// Validate all test cases.
+	for i, testCase := range testCases {
+		bucketName, objectName := urlPath2BucketObjectName(testCase.u)
+		if bucketName != testCase.bucket {
+			t.Errorf("Test %d: failed expected bucket name \"%s\", got \"%s\"", i+1, testCase.bucket, bucketName)
+		}
+		if objectName != testCase.object {
+			t.Errorf("Test %d: failed expected bucket name \"%s\", got \"%s\"", i+1, testCase.object, objectName)
+		}
+	}
+}
+
 // Add tests for starting and stopping different profilers.
 func TestStartProfiler(t *testing.T) {
 	if startProfiler("") != nil {
@@ -229,9 +275,15 @@ func TestStartProfiler(t *testing.T) {
 
 // Tests fetch local address.
 func TestLocalAddress(t *testing.T) {
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == globalWindowsOSName {
 		return
 	}
+
+	currentIsDistXL := globalIsDistXL
+	defer func() {
+		globalIsDistXL = currentIsDistXL
+	}()
+
 	// need to set this to avoid stale values from other tests.
 	globalMinioPort = "9000"
 	globalMinioHost = ""
@@ -245,19 +297,19 @@ func TestLocalAddress(t *testing.T) {
 			isDistXL: true,
 			srvCmdConfig: serverCmdConfig{
 				endpoints: []*url.URL{{
-					Scheme: "http",
+					Scheme: httpScheme,
 					Host:   "localhost:9000",
 					Path:   "/mnt/disk1",
 				}, {
-					Scheme: "http",
+					Scheme: httpScheme,
 					Host:   "1.1.1.2:9000",
 					Path:   "/mnt/disk2",
 				}, {
-					Scheme: "http",
+					Scheme: httpScheme,
 					Host:   "1.1.2.1:9000",
 					Path:   "/mnt/disk3",
 				}, {
-					Scheme: "http",
+					Scheme: httpScheme,
 					Host:   "1.1.2.2:9000",
 					Path:   "/mnt/disk4",
 				}},
@@ -286,19 +338,19 @@ func TestLocalAddress(t *testing.T) {
 			isDistXL: true,
 			srvCmdConfig: serverCmdConfig{
 				endpoints: []*url.URL{{
-					Scheme: "http",
+					Scheme: httpScheme,
 					Host:   "1.1.1.1:9000",
 					Path:   "/mnt/disk2",
 				}, {
-					Scheme: "http",
+					Scheme: httpScheme,
 					Host:   "1.1.1.2:9000",
 					Path:   "/mnt/disk2",
 				}, {
-					Scheme: "http",
+					Scheme: httpScheme,
 					Host:   "1.1.2.1:9000",
 					Path:   "/mnt/disk3",
 				}, {
-					Scheme: "http",
+					Scheme: httpScheme,
 					Host:   "1.1.2.2:9000",
 					Path:   "/mnt/disk4",
 				}},

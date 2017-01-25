@@ -19,7 +19,6 @@ package cmd
 import (
 	"net/http"
 	"path"
-	"regexp"
 	"strings"
 	"time"
 
@@ -140,23 +139,20 @@ func setBrowserCacheControlHandler(h http.Handler) http.Handler {
 }
 
 func (h cacheControlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.Method == "GET" && guessIsBrowserReq(r) && globalIsBrowserEnabled {
+	if r.Method == httpGET && guessIsBrowserReq(r) && globalIsBrowserEnabled {
 		// For all browser requests set appropriate Cache-Control policies
-		match, err := regexp.Match(reservedBucket+`/([^/]+\.js|favicon.ico)`, []byte(r.URL.Path))
-		if err != nil {
-			errorIf(err, "Unable to match incoming URL %s", r.URL)
-			writeErrorResponse(w, r, ErrInternalError, r.URL.Path)
-			return
-		}
-		if match {
-			// For assets set cache expiry of one year. For each release, the name
-			// of the asset name will change and hence it can not be served from cache.
-			w.Header().Set("Cache-Control", "max-age=31536000")
-		} else if strings.HasPrefix(r.URL.Path, reservedBucket+"/") {
-			// For non asset requests we serve index.html which will never be cached.
-			w.Header().Set("Cache-Control", "no-store")
+		if strings.HasPrefix(r.URL.Path, reservedBucket+"/") {
+			if strings.HasSuffix(r.URL.Path, ".js") || r.URL.Path == reservedBucket+"/favicon.ico" {
+				// For assets set cache expiry of one year. For each release, the name
+				// of the asset name will change and hence it can not be served from cache.
+				w.Header().Set("Cache-Control", "max-age=31536000")
+			} else {
+				// For non asset requests we serve index.html which will never be cached.
+				w.Header().Set("Cache-Control", "no-store")
+			}
 		}
 	}
+
 	h.handler.ServeHTTP(w, r)
 }
 
@@ -173,7 +169,7 @@ func setPrivateBucketHandler(h http.Handler) http.Handler {
 func (h minioPrivateBucketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// For all non browser requests, reject access to 'reservedBucket'.
 	if !guessIsBrowserReq(r) && path.Clean(r.URL.Path) == reservedBucket {
-		writeErrorResponse(w, r, ErrAllAccessDisabled, r.URL.Path)
+		writeErrorResponse(w, ErrAllAccessDisabled, r.URL)
 		return
 	}
 	h.handler.ServeHTTP(w, r)
@@ -235,14 +231,14 @@ func (h timeValidityHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			// All our internal APIs are sensitive towards Date
 			// header, for all requests where Date header is not
 			// present we will reject such clients.
-			writeErrorResponse(w, r, apiErr, r.URL.Path)
+			writeErrorResponse(w, apiErr, r.URL)
 			return
 		}
 		// Verify if the request date header is shifted by less than globalMaxSkewTime parameter in the past
 		// or in the future, reject request otherwise.
 		curTime := time.Now().UTC()
 		if curTime.Sub(amzDate) > globalMaxSkewTime || amzDate.Sub(curTime) > globalMaxSkewTime {
-			writeErrorResponse(w, r, ErrRequestTimeTooSkewed, r.URL.Path)
+			writeErrorResponse(w, ErrRequestTimeTooSkewed, r.URL)
 			return
 		}
 	}
@@ -253,11 +249,31 @@ type resourceHandler struct {
 	handler http.Handler
 }
 
+// List of http methods.
+const (
+	httpGET     = "GET"
+	httpPUT     = "PUT"
+	httpHEAD    = "HEAD"
+	httpPOST    = "POST"
+	httpDELETE  = "DELETE"
+	httpOPTIONS = "OPTIONS"
+)
+
+// List of default allowable HTTP methods.
+var defaultAllowableHTTPMethods = []string{
+	httpGET,
+	httpPUT,
+	httpHEAD,
+	httpPOST,
+	httpDELETE,
+	httpOPTIONS,
+}
+
 // setCorsHandler handler for CORS (Cross Origin Resource Sharing)
 func setCorsHandler(h http.Handler) http.Handler {
 	c := cors.New(cors.Options{
 		AllowedOrigins: []string{"*"},
-		AllowedMethods: []string{"GET", "HEAD", "POST", "PUT"},
+		AllowedMethods: defaultAllowableHTTPMethods,
 		AllowedHeaders: []string{"*"},
 		ExposedHeaders: []string{"ETag"},
 	})
@@ -315,36 +331,25 @@ var notimplementedObjectResourceNames = map[string]bool{
 
 // Resource handler ServeHTTP() wrapper
 func (h resourceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Skip the first element which is usually '/' and split the rest.
-	splits := strings.SplitN(r.URL.Path[1:], "/", 2)
-
-	// Save bucketName and objectName extracted from url Path.
-	var bucketName, objectName string
-	if len(splits) == 1 {
-		bucketName = splits[0]
-	}
-	if len(splits) == 2 {
-		bucketName = splits[0]
-		objectName = splits[1]
-	}
+	bucketName, objectName := urlPath2BucketObjectName(r.URL)
 
 	// If bucketName is present and not objectName check for bucket level resource queries.
 	if bucketName != "" && objectName == "" {
 		if ignoreNotImplementedBucketResources(r) {
-			writeErrorResponse(w, r, ErrNotImplemented, r.URL.Path)
+			writeErrorResponse(w, ErrNotImplemented, r.URL)
 			return
 		}
 	}
 	// If bucketName and objectName are present check for its resource queries.
 	if bucketName != "" && objectName != "" {
 		if ignoreNotImplementedObjectResources(r) {
-			writeErrorResponse(w, r, ErrNotImplemented, r.URL.Path)
+			writeErrorResponse(w, ErrNotImplemented, r.URL)
 			return
 		}
 	}
 	// A put method on path "/" doesn't make sense, ignore it.
-	if r.Method == "PUT" && r.URL.Path == "/" {
-		writeErrorResponse(w, r, ErrNotImplemented, r.URL.Path)
+	if r.Method == httpPUT && r.URL.Path == "/" {
+		writeErrorResponse(w, ErrNotImplemented, r.URL)
 		return
 	}
 

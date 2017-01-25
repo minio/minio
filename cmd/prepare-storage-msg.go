@@ -65,9 +65,9 @@ func printHealMsg(endpoints []*url.URL, storageDisks []StorageAPI, fn printOnceF
 // for single node XL, distributed XL and when minio server is bound
 // to a specific ip:port.
 func getHealEndpoint(tls bool, firstEndpoint *url.URL) (cEndpoint *url.URL) {
-	scheme := "http"
+	scheme := httpScheme
 	if tls {
-		scheme = "https"
+		scheme = httpsScheme
 	}
 	cEndpoint = &url.URL{
 		Scheme: scheme,
@@ -93,17 +93,19 @@ func getHealEndpoint(tls bool, firstEndpoint *url.URL) (cEndpoint *url.URL) {
 	return cEndpoint
 }
 
+// Disks offline and online strings..
+const (
+	diskOffline = "offline"
+	diskOnline  = "online"
+)
+
 // Constructs a formatted heal message, when cluster is found to be in state where it requires healing.
 // healing is optional, server continues to initialize object layer after printing this message.
 // it is upto the end user to perform a heal if needed.
 func getHealMsg(endpoints []*url.URL, storageDisks []StorageAPI) string {
 	msg := fmt.Sprintln("\nData volume requires HEALING. Healing is not implemented yet stay tuned:")
 	// FIXME:  Enable this after we bring in healing.
-	//	msg += "MINIO_ACCESS_KEY=%s "
-	//	msg += "MINIO_SECRET_KEY=%s "
-	//	msg += "minio control heal %s"
-	//	creds := serverConfig.GetCredential()
-	//	msg = fmt.Sprintf(msg, creds.AccessKeyID, creds.SecretAccessKey, getHealEndpoint(isSSL(), endpoints[0]))
+	//	msg := "mc admin heal myminio"
 	disksInfo, _, _ := getDisksInfo(storageDisks)
 	for i, info := range disksInfo {
 		if storageDisks[i] == nil {
@@ -116,9 +118,9 @@ func getHealMsg(endpoints []*url.URL, storageDisks []StorageAPI) string {
 			humanize.IBytes(uint64(info.Total)),
 			func() string {
 				if info.Total > 0 {
-					return "online"
+					return diskOnline
 				}
-				return "offline"
+				return diskOffline
 			}(),
 		)
 	}
@@ -146,9 +148,9 @@ func getStorageInitMsg(titleMsg string, endpoints []*url.URL, storageDisks []Sto
 			humanize.IBytes(uint64(info.Total)),
 			func() string {
 				if info.Total > 0 {
-					return "online"
+					return diskOnline
 				}
-				return "offline"
+				return diskOffline
 			}(),
 		)
 	}

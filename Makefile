@@ -71,64 +71,64 @@ verifiers: vet fmt lint cyclo spelling
 
 vet:
 	@echo "Running $@:"
-	@GO15VENDOREXPERIMENT=1 go tool vet -all ./cmd
-	@GO15VENDOREXPERIMENT=1 go tool vet -all ./pkg
-	@GO15VENDOREXPERIMENT=1 go tool vet -shadow=true ./cmd
-	@GO15VENDOREXPERIMENT=1 go tool vet -shadow=true ./pkg
+	@go tool vet -all ./cmd
+	@go tool vet -all ./pkg
+	@go tool vet -shadow=true ./cmd
+	@go tool vet -shadow=true ./pkg
 
 fmt:
 	@echo "Running $@:"
-	@GO15VENDOREXPERIMENT=1 gofmt -s -l cmd
-	@GO15VENDOREXPERIMENT=1 gofmt -s -l pkg
+	@gofmt -s -l cmd
+	@gofmt -s -l pkg
 
 lint:
 	@echo "Running $@:"
-	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/golint -set_exit_status github.com/minio/minio/cmd...
-	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/golint -set_exit_status github.com/minio/minio/pkg...
+	@${GOPATH}/bin/golint -set_exit_status github.com/minio/minio/cmd...
+	@${GOPATH}/bin/golint -set_exit_status github.com/minio/minio/pkg...
 
 ineffassign:
 	@echo "Running $@:"
-	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/ineffassign .
+	@${GOPATH}/bin/ineffassign .
 
 cyclo:
 	@echo "Running $@:"
-	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/gocyclo -over 100 cmd
-	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/gocyclo -over 100 pkg
+	@${GOPATH}/bin/gocyclo -over 100 cmd
+	@${GOPATH}/bin/gocyclo -over 100 pkg
 
 build: getdeps verifiers $(UI_ASSETS)
 
 deadcode:
-	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/deadcode
+	@${GOPATH}/bin/deadcode
 
 spelling:
-	@-GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/misspell -error `find cmd/`
-	@-GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/misspell -error `find pkg/`
-	@-GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/misspell -error `find docs/`
+	@${GOPATH}/bin/misspell -error `find cmd/`
+	@${GOPATH}/bin/misspell -error `find pkg/`
+	@${GOPATH}/bin/misspell -error `find docs/`
 
 test: build
 	@echo "Running all minio testing:"
-	@GO15VENDOREXPERIMENT=1 go test $(GOFLAGS) github.com/minio/minio/cmd...
-	@GO15VENDOREXPERIMENT=1 go test $(GOFLAGS) github.com/minio/minio/pkg...
+	@go test $(GOFLAGS) github.com/minio/minio/cmd...
+	@go test $(GOFLAGS) github.com/minio/minio/pkg...
 
 coverage: build
 	@echo "Running all coverage for minio:"
-	@GO15VENDOREXPERIMENT=1 ./buildscripts/go-coverage.sh
+	@./buildscripts/go-coverage.sh
 
 gomake-all: build
 	@echo "Installing minio:"
-	@GO15VENDOREXPERIMENT=1 go build --ldflags $(BUILD_LDFLAGS) -o $(GOPATH)/bin/minio
+	@go build --ldflags $(BUILD_LDFLAGS) -o $(GOPATH)/bin/minio
 
 pkg-add:
-	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/govendor add $(PKG)
+	${GOPATH}/bin/govendor add $(PKG)
 
 pkg-update:
-	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/govendor update $(PKG)
+	${GOPATH}/bin/govendor update $(PKG)
 
 pkg-remove:
-	@GO15VENDOREXPERIMENT=1 ${GOPATH}/bin/govendor remove $(PKG)
+	${GOPATH}/bin/govendor remove $(PKG)
 
 pkg-list:
-	@GO15VENDOREXPERIMENT=1 $(GOPATH)/bin/govendor list
+	@$(GOPATH)/bin/govendor list
 
 install: gomake-all
 

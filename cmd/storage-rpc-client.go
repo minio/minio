@@ -23,15 +23,12 @@ import (
 	"net/rpc"
 	"net/url"
 	"path"
-	"sync/atomic"
 
 	"github.com/minio/minio/pkg/disk"
 )
 
 type networkStorage struct {
 	networkIOErrCount int32 // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
-	netAddr           string
-	netPath           string
 	rpcClient         *AuthRPCClient
 }
 
@@ -49,6 +46,10 @@ func toStorageErr(err error) error {
 
 	switch err.(type) {
 	case *net.OpError:
+		return errDiskNotFound
+	}
+
+	if err == rpc.ErrShutdown {
 		return errDiskNotFound
 	}
 
@@ -103,70 +104,53 @@ func newStorageRPC(ep *url.URL) (StorageAPI, error) {
 	rpcPath := path.Join(storageRPCPath, getPath(ep))
 	rpcAddr := ep.Host
 
-	// Initialize rpc client with network address and rpc path.
-	accessKeyID := serverConfig.GetCredential().AccessKeyID
-	secretAccessKey := serverConfig.GetCredential().SecretAccessKey
+	serverCred := serverConfig.GetCredential()
+	accessKey := serverCred.AccessKey
+	secretKey := serverCred.SecretKey
 	if ep.User != nil {
-		accessKeyID = ep.User.Username()
-		if key, set := ep.User.Password(); set {
-			secretAccessKey = key
+		accessKey = ep.User.Username()
+		if password, ok := ep.User.Password(); ok {
+			secretKey = password
 		}
 	}
-	rpcClient := newAuthClient(&authConfig{
-		accessKey:   accessKeyID,
-		secretKey:   secretAccessKey,
-		secureConn:  isSSL(),
-		address:     rpcAddr,
-		path:        rpcPath,
-		loginMethod: "Storage.LoginHandler",
-	})
 
-	// Initialize network storage.
-	ndisk := &networkStorage{
-		netAddr:   ep.Host,
-		netPath:   getPath(ep),
-		rpcClient: rpcClient,
+	storageAPI := &networkStorage{
+		rpcClient: newAuthRPCClient(authConfig{
+			accessKey:        accessKey,
+			secretKey:        secretKey,
+			serverAddr:       rpcAddr,
+			serviceEndpoint:  rpcPath,
+			secureConn:       globalIsSSL,
+			serviceName:      "Storage",
+			disableReconnect: true,
+		}),
 	}
 
 	// Returns successfully here.
-	return ndisk, nil
+	return storageAPI, nil
 }
 
 // Stringer interface compatible representation of network device.
 func (n *networkStorage) String() string {
-	return n.netAddr + ":" + n.netPath
+	return n.rpcClient.ServerAddr() + ":" + n.rpcClient.ServiceEndpoint()
 }
 
-// maximum allowed network IOError.
-const maxAllowedNetworkIOError = 1024
-
-// Initializes the remote RPC connection by attempting a login attempt.
-func (n *networkStorage) Init() (err error) {
-	// Attempt a login to reconnect.
-	return n.rpcClient.Login()
+// Init - attempts a login to reconnect.
+func (n *networkStorage) Init() error {
+	err := n.rpcClient.Login()
+	return toStorageErr(err)
 }
 
 // Closes the underlying RPC connection.
 func (n *networkStorage) Close() (err error) {
 	// Close the underlying connection.
-	return n.rpcClient.Close()
+	err = n.rpcClient.Close()
+	return toStorageErr(err)
 }
 
 // DiskInfo - fetch disk information for a remote disk.
 func (n *networkStorage) DiskInfo() (info disk.Info, err error) {
-	defer func() {
-		if err == errDiskNotFound || err == rpc.ErrShutdown {
-			atomic.AddInt32(&n.networkIOErrCount, 1)
-		}
-	}()
-
-	// Take remote disk offline if the total network errors.
-	// are more than maximum allowable IO error limit.
-	if n.networkIOErrCount > maxAllowedNetworkIOError {
-		return disk.Info{}, errFaultyRemoteDisk
-	}
-
-	args := GenericArgs{}
+	args := AuthRPCArgs{}
 	if err = n.rpcClient.Call("Storage.DiskInfoHandler", &args, &info); err != nil {
 		return disk.Info{}, toStorageErr(err)
 	}
@@ -175,19 +159,7 @@ func (n *networkStorage) DiskInfo() (info disk.Info, err error) {
 
 // MakeVol - create a volume on a remote disk.
 func (n *networkStorage) MakeVol(volume string) (err error) {
-	defer func() {
-		if err == errDiskNotFound || err == rpc.ErrShutdown {
-			atomic.AddInt32(&n.networkIOErrCount, 1)
-		}
-	}()
-
-	// Take remote disk offline if the total network errors.
-	// are more than maximum allowable IO error limit.
-	if n.networkIOErrCount > maxAllowedNetworkIOError {
-		return errFaultyRemoteDisk
-	}
-
-	reply := GenericReply{}
+	reply := AuthRPCReply{}
 	args := GenericVolArgs{Vol: volume}
 	if err := n.rpcClient.Call("Storage.MakeVolHandler", &args, &reply); err != nil {
 		return toStorageErr(err)
@@ -197,20 +169,8 @@ func (n *networkStorage) MakeVol(volume string) (err error) {
 
 // ListVols - List all volumes on a remote disk.
 func (n *networkStorage) ListVols() (vols []VolInfo, err error) {
-	defer func() {
-		if err == errDiskNotFound || err == rpc.ErrShutdown {
-			atomic.AddInt32(&n.networkIOErrCount, 1)
-		}
-	}()
-
-	// Take remote disk offline if the total network errors.
-	// are more than maximum allowable IO error limit.
-	if n.networkIOErrCount > maxAllowedNetworkIOError {
-		return nil, errFaultyRemoteDisk
-	}
-
 	ListVols := ListVolsReply{}
-	err = n.rpcClient.Call("Storage.ListVolsHandler", &GenericArgs{}, &ListVols)
+	err = n.rpcClient.Call("Storage.ListVolsHandler", &AuthRPCArgs{}, &ListVols)
 	if err != nil {
 		return nil, toStorageErr(err)
 	}
@@ -219,18 +179,6 @@ func (n *networkStorage) ListVols() (vols []VolInfo, err error) {
 
 // StatVol - get volume info over the network.
 func (n *networkStorage) StatVol(volume string) (volInfo VolInfo, err error) {
-	defer func() {
-		if err == errDiskNotFound || err == rpc.ErrShutdown {
-			atomic.AddInt32(&n.networkIOErrCount, 1)
-		}
-	}()
-
-	// Take remote disk offline if the total network errors.
-	// are more than maximum allowable IO error limit.
-	if n.networkIOErrCount > maxAllowedNetworkIOError {
-		return VolInfo{}, errFaultyRemoteDisk
-	}
-
 	args := GenericVolArgs{Vol: volume}
 	if err = n.rpcClient.Call("Storage.StatVolHandler", &args, &volInfo); err != nil {
 		return VolInfo{}, toStorageErr(err)
@@ -240,19 +188,7 @@ func (n *networkStorage) StatVol(volume string) (volInfo VolInfo, err error) {
 
 // DeleteVol - Deletes a volume over the network.
 func (n *networkStorage) DeleteVol(volume string) (err error) {
-	defer func() {
-		if err == errDiskNotFound || err == rpc.ErrShutdown {
-			atomic.AddInt32(&n.networkIOErrCount, 1)
-		}
-	}()
-
-	// Take remote disk offline if the total network errors.
-	// are more than maximum allowable IO error limit.
-	if n.networkIOErrCount > maxAllowedNetworkIOError {
-		return errFaultyRemoteDisk
-	}
-
-	reply := GenericReply{}
+	reply := AuthRPCReply{}
 	args := GenericVolArgs{Vol: volume}
 	if err := n.rpcClient.Call("Storage.DeleteVolHandler", &args, &reply); err != nil {
 		return toStorageErr(err)
@@ -263,18 +199,7 @@ func (n *networkStorage) DeleteVol(volume string) (err error) {
 // File operations.
 
 func (n *networkStorage) PrepareFile(volume, path string, length int64) (err error) {
-	defer func() {
-		if err == errDiskNotFound || err == rpc.ErrShutdown {
-			atomic.AddInt32(&n.networkIOErrCount, 1)
-		}
-	}()
-	// Take remote disk offline if the total network errors.
-	// are more than maximum allowable IO error limit.
-	if n.networkIOErrCount > maxAllowedNetworkIOError {
-		return errFaultyRemoteDisk
-	}
-
-	reply := GenericReply{}
+	reply := AuthRPCReply{}
 	if err = n.rpcClient.Call("Storage.PrepareFileHandler", &PrepareFileArgs{
 		Vol:  volume,
 		Path: path,
@@ -287,19 +212,7 @@ func (n *networkStorage) PrepareFile(volume, path string, length int64) (err err
 
 // AppendFile - append file writes buffer to a remote network path.
 func (n *networkStorage) AppendFile(volume, path string, buffer []byte) (err error) {
-	defer func() {
-		if err == errDiskNotFound || err == rpc.ErrShutdown {
-			atomic.AddInt32(&n.networkIOErrCount, 1)
-		}
-	}()
-
-	// Take remote disk offline if the total network errors.
-	// are more than maximum allowable IO error limit.
-	if n.networkIOErrCount > maxAllowedNetworkIOError {
-		return errFaultyRemoteDisk
-	}
-
-	reply := GenericReply{}
+	reply := AuthRPCReply{}
 	if err = n.rpcClient.Call("Storage.AppendFileHandler", &AppendFileArgs{
 		Vol:    volume,
 		Path:   path,
@@ -312,18 +225,6 @@ func (n *networkStorage) AppendFile(volume, path string, buffer []byte) (err err
 
 // StatFile - get latest Stat information for a file at path.
 func (n *networkStorage) StatFile(volume, path string) (fileInfo FileInfo, err error) {
-	defer func() {
-		if err == errDiskNotFound || err == rpc.ErrShutdown {
-			atomic.AddInt32(&n.networkIOErrCount, 1)
-		}
-	}()
-
-	// Take remote disk offline if the total network errors.
-	// are more than maximum allowable IO error limit.
-	if n.networkIOErrCount > maxAllowedNetworkIOError {
-		return FileInfo{}, errFaultyRemoteDisk
-	}
-
 	if err = n.rpcClient.Call("Storage.StatFileHandler", &StatFileArgs{
 		Vol:  volume,
 		Path: path,
@@ -338,18 +239,6 @@ func (n *networkStorage) StatFile(volume, path string) (fileInfo FileInfo, err e
 // This API is meant to be used on files which have small memory footprint, do
 // not use this on large files as it would cause server to crash.
 func (n *networkStorage) ReadAll(volume, path string) (buf []byte, err error) {
-	defer func() {
-		if err == errDiskNotFound || err == rpc.ErrShutdown {
-			atomic.AddInt32(&n.networkIOErrCount, 1)
-		}
-	}()
-
-	// Take remote disk offline if the total network errors.
-	// are more than maximum allowable IO error limit.
-	if n.networkIOErrCount > maxAllowedNetworkIOError {
-		return nil, errFaultyRemoteDisk
-	}
-
 	if err = n.rpcClient.Call("Storage.ReadAllHandler", &ReadAllArgs{
 		Vol:  volume,
 		Path: path,
@@ -362,23 +251,11 @@ func (n *networkStorage) ReadAll(volume, path string) (buf []byte, err error) {
 // ReadFile - reads a file at remote path and fills the buffer.
 func (n *networkStorage) ReadFile(volume string, path string, offset int64, buffer []byte) (m int64, err error) {
 	defer func() {
-		if err == errDiskNotFound || err == rpc.ErrShutdown {
-			atomic.AddInt32(&n.networkIOErrCount, 1)
-		}
-	}()
-
-	defer func() {
 		if r := recover(); r != nil {
 			// Recover any panic from allocation, and return error.
 			err = bytes.ErrTooLarge
 		}
 	}() // Do not crash the server.
-
-	// Take remote disk offline if the total network errors.
-	// are more than maximum allowable IO error limit.
-	if n.networkIOErrCount > maxAllowedNetworkIOError {
-		return 0, errFaultyRemoteDisk
-	}
 
 	var result []byte
 	err = n.rpcClient.Call("Storage.ReadFileHandler", &ReadFileArgs{
@@ -397,18 +274,6 @@ func (n *networkStorage) ReadFile(volume string, path string, offset int64, buff
 
 // ListDir - list all entries at prefix.
 func (n *networkStorage) ListDir(volume, path string) (entries []string, err error) {
-	defer func() {
-		if err == errDiskNotFound || err == rpc.ErrShutdown {
-			atomic.AddInt32(&n.networkIOErrCount, 1)
-		}
-	}()
-
-	// Take remote disk offline if the total network errors.
-	// are more than maximum allowable IO error limit.
-	if n.networkIOErrCount > maxAllowedNetworkIOError {
-		return nil, errFaultyRemoteDisk
-	}
-
 	if err = n.rpcClient.Call("Storage.ListDirHandler", &ListDirArgs{
 		Vol:  volume,
 		Path: path,
@@ -421,19 +286,7 @@ func (n *networkStorage) ListDir(volume, path string) (entries []string, err err
 
 // DeleteFile - Delete a file at path.
 func (n *networkStorage) DeleteFile(volume, path string) (err error) {
-	defer func() {
-		if err == errDiskNotFound || err == rpc.ErrShutdown {
-			atomic.AddInt32(&n.networkIOErrCount, 1)
-		}
-	}()
-
-	// Take remote disk offline if the total network errors.
-	// are more than maximum allowable IO error limit.
-	if n.networkIOErrCount > maxAllowedNetworkIOError {
-		return errFaultyRemoteDisk
-	}
-
-	reply := GenericReply{}
+	reply := AuthRPCReply{}
 	if err = n.rpcClient.Call("Storage.DeleteFileHandler", &DeleteFileArgs{
 		Vol:  volume,
 		Path: path,
@@ -445,19 +298,7 @@ func (n *networkStorage) DeleteFile(volume, path string) (err error) {
 
 // RenameFile - rename a remote file from source to destination.
 func (n *networkStorage) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err error) {
-	defer func() {
-		if err == errDiskNotFound || err == rpc.ErrShutdown {
-			atomic.AddInt32(&n.networkIOErrCount, 1)
-		}
-	}()
-
-	// Take remote disk offline if the total network errors.
-	// are more than maximum allowable IO error limit.
-	if n.networkIOErrCount > maxAllowedNetworkIOError {
-		return errFaultyRemoteDisk
-	}
-
-	reply := GenericReply{}
+	reply := AuthRPCReply{}
 	if err = n.rpcClient.Call("Storage.RenameFileHandler", &RenameFileArgs{
 		SrcVol:  srcVolume,
 		SrcPath: srcPath,

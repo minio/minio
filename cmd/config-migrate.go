@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -62,6 +62,19 @@ func migrateConfig() error {
 	if err := migrateV9ToV10(); err != nil {
 		return err
 	}
+	// Migrate version '10' to '11'.
+	if err := migrateV10ToV11(); err != nil {
+		return err
+	}
+	// Migrate version '11' to '12'.
+	if err := migrateV11ToV12(); err != nil {
+		return err
+	}
+	// Migration version '12' to '13'.
+	if err := migrateV12ToV13(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -108,13 +121,13 @@ func migrateV2ToV3() error {
 	srvConfig.Version = "3"
 	srvConfig.Addr = ":9000"
 	srvConfig.Credential = credential{
-		AccessKeyID:     cv2.Credentials.AccessKeyID,
-		SecretAccessKey: cv2.Credentials.SecretAccessKey,
+		AccessKey: cv2.Credentials.AccessKey,
+		SecretKey: cv2.Credentials.SecretKey,
 	}
 	srvConfig.Region = cv2.Credentials.Region
 	if srvConfig.Region == "" {
 		// Region needs to be set for AWS Signature V4.
-		srvConfig.Region = "us-east-1"
+		srvConfig.Region = globalMinioDefaultRegion
 	}
 	srvConfig.Logger.Console = consoleLogger{
 		Enable: true,
@@ -178,7 +191,7 @@ func migrateV3ToV4() error {
 	srvConfig.Region = cv3.Region
 	if srvConfig.Region == "" {
 		// Region needs to be set for AWS Signature Version 4.
-		srvConfig.Region = "us-east-1"
+		srvConfig.Region = globalMinioDefaultRegion
 	}
 	srvConfig.Logger.Console = cv3.Logger.Console
 	srvConfig.Logger.File = cv3.Logger.File
@@ -224,7 +237,7 @@ func migrateV4ToV5() error {
 	srvConfig.Region = cv4.Region
 	if srvConfig.Region == "" {
 		// Region needs to be set for AWS Signature Version 4.
-		srvConfig.Region = "us-east-1"
+		srvConfig.Region = globalMinioDefaultRegion
 	}
 	srvConfig.Logger.Console = cv4.Logger.Console
 	srvConfig.Logger.File = cv4.Logger.File
@@ -273,7 +286,7 @@ func migrateV5ToV6() error {
 	srvConfig.Region = cv5.Region
 	if srvConfig.Region == "" {
 		// Region needs to be set for AWS Signature Version 4.
-		srvConfig.Region = "us-east-1"
+		srvConfig.Region = globalMinioDefaultRegion
 	}
 	srvConfig.Logger.Console = cv5.Logger.Console
 	srvConfig.Logger.File = cv5.Logger.File
@@ -349,7 +362,7 @@ func migrateV6ToV7() error {
 	srvConfig.Region = cv6.Region
 	if srvConfig.Region == "" {
 		// Region needs to be set for AWS Signature Version 4.
-		srvConfig.Region = "us-east-1"
+		srvConfig.Region = globalMinioDefaultRegion
 	}
 	srvConfig.Logger.Console = cv6.Logger.Console
 	srvConfig.Logger.File = cv6.Logger.File
@@ -413,13 +426,13 @@ func migrateV7ToV8() error {
 	srvConfig.Region = cv7.Region
 	if srvConfig.Region == "" {
 		// Region needs to be set for AWS Signature Version 4.
-		srvConfig.Region = "us-east-1"
+		srvConfig.Region = globalMinioDefaultRegion
 	}
 	srvConfig.Logger.Console = cv7.Logger.Console
 	srvConfig.Logger.File = cv7.Logger.File
 	srvConfig.Logger.Syslog = cv7.Logger.Syslog
 	srvConfig.Notify.AMQP = make(map[string]amqpNotify)
-	srvConfig.Notify.NATS = make(map[string]natsNotify)
+	srvConfig.Notify.NATS = make(map[string]natsNotifyV1)
 	srvConfig.Notify.ElasticSearch = make(map[string]elasticSearchNotify)
 	srvConfig.Notify.Redis = make(map[string]redisNotify)
 	srvConfig.Notify.PostgreSQL = make(map[string]postgreSQLNotify)
@@ -429,7 +442,7 @@ func migrateV7ToV8() error {
 		srvConfig.Notify.AMQP = cv7.Notify.AMQP
 	}
 	if len(cv7.Notify.NATS) == 0 {
-		srvConfig.Notify.NATS["1"] = natsNotify{}
+		srvConfig.Notify.NATS["1"] = natsNotifyV1{}
 	} else {
 		srvConfig.Notify.NATS = cv7.Notify.NATS
 	}
@@ -483,7 +496,7 @@ func migrateV8ToV9() error {
 	srvConfig.Region = cv8.Region
 	if srvConfig.Region == "" {
 		// Region needs to be set for AWS Signature Version 4.
-		srvConfig.Region = "us-east-1"
+		srvConfig.Region = globalMinioDefaultRegion
 	}
 	srvConfig.Logger.Console = cv8.Logger.Console
 	srvConfig.Logger.Console.Level = "error"
@@ -498,8 +511,8 @@ func migrateV8ToV9() error {
 		srvConfig.Notify.AMQP = cv8.Notify.AMQP
 	}
 	if len(cv8.Notify.NATS) == 0 {
-		srvConfig.Notify.NATS = make(map[string]natsNotify)
-		srvConfig.Notify.NATS["1"] = natsNotify{}
+		srvConfig.Notify.NATS = make(map[string]natsNotifyV1)
+		srvConfig.Notify.NATS["1"] = natsNotifyV1{}
 	} else {
 		srvConfig.Notify.NATS = cv8.Notify.NATS
 	}
@@ -570,7 +583,7 @@ func migrateV9ToV10() error {
 	srvConfig.Region = cv9.Region
 	if srvConfig.Region == "" {
 		// Region needs to be set for AWS Signature Version 4.
-		srvConfig.Region = "us-east-1"
+		srvConfig.Region = globalMinioDefaultRegion
 	}
 	srvConfig.Logger.Console = cv9.Logger.Console
 	srvConfig.Logger.File = cv9.Logger.File
@@ -583,8 +596,8 @@ func migrateV9ToV10() error {
 		srvConfig.Notify.AMQP = cv9.Notify.AMQP
 	}
 	if len(cv9.Notify.NATS) == 0 {
-		srvConfig.Notify.NATS = make(map[string]natsNotify)
-		srvConfig.Notify.NATS["1"] = natsNotify{}
+		srvConfig.Notify.NATS = make(map[string]natsNotifyV1)
+		srvConfig.Notify.NATS["1"] = natsNotifyV1{}
 	} else {
 		srvConfig.Notify.NATS = cv9.Notify.NATS
 	}
@@ -629,6 +642,294 @@ func migrateV9ToV10() error {
 	console.Println(
 		"Migration from version ‘" +
 			cv9.Version + "’ to ‘" + srvConfig.Version +
+			"’ completed successfully.",
+	)
+	return nil
+}
+
+// Version '10' to '11' migration. Add support for Kafka
+// notifications.
+func migrateV10ToV11() error {
+	cv10, err := loadConfigV10()
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("Unable to load config version ‘10’. %v", err)
+	}
+	if cv10.Version != "10" {
+		return nil
+	}
+
+	// Copy over fields from V10 into V11 config struct
+	srvConfig := &serverConfigV11{}
+	srvConfig.Version = "11"
+	srvConfig.Credential = cv10.Credential
+	srvConfig.Region = cv10.Region
+	if srvConfig.Region == "" {
+		// Region needs to be set for AWS Signature Version 4.
+		srvConfig.Region = globalMinioDefaultRegion
+	}
+	srvConfig.Logger.Console = cv10.Logger.Console
+	srvConfig.Logger.File = cv10.Logger.File
+
+	// check and set notifiers config
+	if len(cv10.Notify.AMQP) == 0 {
+		srvConfig.Notify.AMQP = make(map[string]amqpNotify)
+		srvConfig.Notify.AMQP["1"] = amqpNotify{}
+	} else {
+		srvConfig.Notify.AMQP = cv10.Notify.AMQP
+	}
+	if len(cv10.Notify.NATS) == 0 {
+		srvConfig.Notify.NATS = make(map[string]natsNotifyV1)
+		srvConfig.Notify.NATS["1"] = natsNotifyV1{}
+	} else {
+		srvConfig.Notify.NATS = cv10.Notify.NATS
+	}
+	if len(cv10.Notify.ElasticSearch) == 0 {
+		srvConfig.Notify.ElasticSearch = make(map[string]elasticSearchNotify)
+		srvConfig.Notify.ElasticSearch["1"] = elasticSearchNotify{}
+	} else {
+		srvConfig.Notify.ElasticSearch = cv10.Notify.ElasticSearch
+	}
+	if len(cv10.Notify.Redis) == 0 {
+		srvConfig.Notify.Redis = make(map[string]redisNotify)
+		srvConfig.Notify.Redis["1"] = redisNotify{}
+	} else {
+		srvConfig.Notify.Redis = cv10.Notify.Redis
+	}
+	if len(cv10.Notify.PostgreSQL) == 0 {
+		srvConfig.Notify.PostgreSQL = make(map[string]postgreSQLNotify)
+		srvConfig.Notify.PostgreSQL["1"] = postgreSQLNotify{}
+	} else {
+		srvConfig.Notify.PostgreSQL = cv10.Notify.PostgreSQL
+	}
+	// V10 will not have a Kafka config. So we initialize one here.
+	srvConfig.Notify.Kafka = make(map[string]kafkaNotify)
+	srvConfig.Notify.Kafka["1"] = kafkaNotify{}
+
+	qc, err := quick.New(srvConfig)
+	if err != nil {
+		return fmt.Errorf("Unable to initialize the quick config. %v",
+			err)
+	}
+	configFile, err := getConfigFile()
+	if err != nil {
+		return fmt.Errorf("Unable to get config file. %v", err)
+	}
+
+	err = qc.Save(configFile)
+	if err != nil {
+		return fmt.Errorf(
+			"Failed to migrate config from ‘"+
+				cv10.Version+"’ to ‘"+srvConfig.Version+
+				"’ failed. %v", err,
+		)
+	}
+
+	console.Println(
+		"Migration from version ‘" +
+			cv10.Version + "’ to ‘" + srvConfig.Version +
+			"’ completed successfully.",
+	)
+	return nil
+}
+
+// Version '11' to '12' migration. Add support for NATS streaming
+// notifications.
+func migrateV11ToV12() error {
+	cv11, err := loadConfigV11()
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("Unable to load config version ‘11’. %v", err)
+	}
+	if cv11.Version != "11" {
+		return nil
+	}
+
+	// Copy over fields from V11 into V12 config struct
+	srvConfig := &serverConfigV12{}
+	srvConfig.Version = "12"
+	srvConfig.Credential = cv11.Credential
+	srvConfig.Region = cv11.Region
+	if srvConfig.Region == "" {
+		// Region needs to be set for AWS Signature Version 4.
+		srvConfig.Region = globalMinioDefaultRegion
+	}
+	srvConfig.Logger.Console = cv11.Logger.Console
+	srvConfig.Logger.File = cv11.Logger.File
+
+	// check and set notifiers config
+	if len(cv11.Notify.AMQP) == 0 {
+		srvConfig.Notify.AMQP = make(map[string]amqpNotify)
+		srvConfig.Notify.AMQP["1"] = amqpNotify{}
+	} else {
+		srvConfig.Notify.AMQP = cv11.Notify.AMQP
+	}
+	if len(cv11.Notify.ElasticSearch) == 0 {
+		srvConfig.Notify.ElasticSearch = make(map[string]elasticSearchNotify)
+		srvConfig.Notify.ElasticSearch["1"] = elasticSearchNotify{}
+	} else {
+		srvConfig.Notify.ElasticSearch = cv11.Notify.ElasticSearch
+	}
+	if len(cv11.Notify.Redis) == 0 {
+		srvConfig.Notify.Redis = make(map[string]redisNotify)
+		srvConfig.Notify.Redis["1"] = redisNotify{}
+	} else {
+		srvConfig.Notify.Redis = cv11.Notify.Redis
+	}
+	if len(cv11.Notify.PostgreSQL) == 0 {
+		srvConfig.Notify.PostgreSQL = make(map[string]postgreSQLNotify)
+		srvConfig.Notify.PostgreSQL["1"] = postgreSQLNotify{}
+	} else {
+		srvConfig.Notify.PostgreSQL = cv11.Notify.PostgreSQL
+	}
+	if len(cv11.Notify.Kafka) == 0 {
+		srvConfig.Notify.Kafka = make(map[string]kafkaNotify)
+		srvConfig.Notify.Kafka["1"] = kafkaNotify{}
+	} else {
+		srvConfig.Notify.Kafka = cv11.Notify.Kafka
+	}
+
+	// V12 will have an updated config of nats. So we create a new one or we
+	// update the old one if found.
+	if len(cv11.Notify.NATS) == 0 {
+		srvConfig.Notify.NATS = make(map[string]natsNotify)
+		srvConfig.Notify.NATS["1"] = natsNotify{}
+	} else {
+		srvConfig.Notify.NATS = make(map[string]natsNotify)
+		for k, v := range cv11.Notify.NATS {
+			n := natsNotify{}
+			n.Enable = v.Enable
+			n.Address = v.Address
+			n.Subject = v.Subject
+			n.Username = v.Username
+			n.Password = v.Password
+			n.Token = v.Token
+			n.Secure = v.Secure
+			n.PingInterval = v.PingInterval
+			srvConfig.Notify.NATS[k] = n
+		}
+	}
+
+	qc, err := quick.New(srvConfig)
+	if err != nil {
+		return fmt.Errorf("Unable to initialize the quick config. %v",
+			err)
+	}
+	configFile, err := getConfigFile()
+	if err != nil {
+		return fmt.Errorf("Unable to get config file. %v", err)
+	}
+
+	err = qc.Save(configFile)
+	if err != nil {
+		return fmt.Errorf(
+			"Failed to migrate config from ‘"+
+				cv11.Version+"’ to ‘"+srvConfig.Version+
+				"’ failed. %v", err,
+		)
+	}
+
+	console.Println(
+		"Migration from version ‘" +
+			cv11.Version + "’ to ‘" + srvConfig.Version +
+			"’ completed successfully.",
+	)
+	return nil
+}
+
+// Version '12' to '13' migration. Add support for custom webhook endpoint.
+func migrateV12ToV13() error {
+	cv12, err := loadConfigV12()
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("Unable to load config version ‘12’. %v", err)
+	}
+	if cv12.Version != "12" {
+		return nil
+	}
+
+	// Copy over fields from V12 into V13 config struct
+	srvConfig := &serverConfigV13{}
+	srvConfig.Version = "13"
+	srvConfig.Credential = cv12.Credential
+	srvConfig.Region = cv12.Region
+	if srvConfig.Region == "" {
+		// Region needs to be set for AWS Signature Version 4.
+		srvConfig.Region = globalMinioDefaultRegion
+	}
+	srvConfig.Logger.Console = cv12.Logger.Console
+	srvConfig.Logger.File = cv12.Logger.File
+
+	// check and set notifiers config
+	if len(cv12.Notify.AMQP) == 0 {
+		srvConfig.Notify.AMQP = make(map[string]amqpNotify)
+		srvConfig.Notify.AMQP["1"] = amqpNotify{}
+	} else {
+		srvConfig.Notify.AMQP = cv12.Notify.AMQP
+	}
+	if len(cv12.Notify.ElasticSearch) == 0 {
+		srvConfig.Notify.ElasticSearch = make(map[string]elasticSearchNotify)
+		srvConfig.Notify.ElasticSearch["1"] = elasticSearchNotify{}
+	} else {
+		srvConfig.Notify.ElasticSearch = cv12.Notify.ElasticSearch
+	}
+	if len(cv12.Notify.Redis) == 0 {
+		srvConfig.Notify.Redis = make(map[string]redisNotify)
+		srvConfig.Notify.Redis["1"] = redisNotify{}
+	} else {
+		srvConfig.Notify.Redis = cv12.Notify.Redis
+	}
+	if len(cv12.Notify.PostgreSQL) == 0 {
+		srvConfig.Notify.PostgreSQL = make(map[string]postgreSQLNotify)
+		srvConfig.Notify.PostgreSQL["1"] = postgreSQLNotify{}
+	} else {
+		srvConfig.Notify.PostgreSQL = cv12.Notify.PostgreSQL
+	}
+	if len(cv12.Notify.Kafka) == 0 {
+		srvConfig.Notify.Kafka = make(map[string]kafkaNotify)
+		srvConfig.Notify.Kafka["1"] = kafkaNotify{}
+	} else {
+		srvConfig.Notify.Kafka = cv12.Notify.Kafka
+	}
+	if len(cv12.Notify.NATS) == 0 {
+		srvConfig.Notify.NATS = make(map[string]natsNotify)
+		srvConfig.Notify.NATS["1"] = natsNotify{}
+	} else {
+		srvConfig.Notify.NATS = cv12.Notify.NATS
+	}
+
+	// V12 will not have a webhook config. So we initialize one here.
+	srvConfig.Notify.Webhook = make(map[string]webhookNotify)
+	srvConfig.Notify.Webhook["1"] = webhookNotify{}
+
+	qc, err := quick.New(srvConfig)
+	if err != nil {
+		return fmt.Errorf("Unable to initialize the quick config. %v",
+			err)
+	}
+	configFile, err := getConfigFile()
+	if err != nil {
+		return fmt.Errorf("Unable to get config file. %v", err)
+	}
+
+	err = qc.Save(configFile)
+	if err != nil {
+		return fmt.Errorf(
+			"Failed to migrate config from ‘"+
+				cv12.Version+"’ to ‘"+srvConfig.Version+
+				"’ failed. %v", err,
+		)
+	}
+
+	console.Println(
+		"Migration from version ‘" +
+			cv12.Version + "’ to ‘" + srvConfig.Version +
 			"’ completed successfully.",
 	)
 	return nil

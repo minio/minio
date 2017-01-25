@@ -131,6 +131,7 @@ func isValidQueueID(queueARN string) bool {
 	// Unmarshals QueueARN into structured object.
 	sqsARN := unmarshalSqsARN(queueARN)
 	// Is Queue identifier valid?.
+
 	if isAMQPQueue(sqsARN) { // AMQP eueue.
 		amqpN := serverConfig.GetAMQPNotifyByID(sqsARN.AccountID)
 		return amqpN.Enable && amqpN.URL != ""
@@ -147,6 +148,13 @@ func isValidQueueID(queueARN string) bool {
 		pgN := serverConfig.GetPostgreSQLNotifyByID(sqsARN.AccountID)
 		// Postgres can work with only default conn. info.
 		return pgN.Enable
+	} else if isKafkaQueue(sqsARN) {
+		kafkaN := serverConfig.GetKafkaNotifyByID(sqsARN.AccountID)
+		return (kafkaN.Enable && len(kafkaN.Brokers) > 0 &&
+			kafkaN.Topic != "")
+	} else if isWebhookQueue(sqsARN) {
+		webhookN := serverConfig.GetWebhookNotifyByID(sqsARN.AccountID)
+		return webhookN.Enable && webhookN.Endpoint != ""
 	}
 	return false
 }
@@ -236,6 +244,8 @@ func validateNotificationConfig(nConfig notificationConfig) APIErrorCode {
 // - elasticsearch
 // - redis
 // - postgresql
+// - kafka
+// - webhook
 func unmarshalSqsARN(queueARN string) (mSqs arnSQS) {
 	mSqs = arnSQS{}
 	if !strings.HasPrefix(queueARN, minioSqs+serverConfig.GetRegion()+":") {
@@ -253,6 +263,10 @@ func unmarshalSqsARN(queueARN string) (mSqs arnSQS) {
 		mSqs.Type = queueTypeRedis
 	case strings.HasSuffix(sqsType, queueTypePostgreSQL):
 		mSqs.Type = queueTypePostgreSQL
+	case strings.HasSuffix(sqsType, queueTypeKafka):
+		mSqs.Type = queueTypeKafka
+	case strings.HasSuffix(sqsType, queueTypeWebhook):
+		mSqs.Type = queueTypeWebhook
 	} // Add more queues here.
 	mSqs.AccountID = strings.TrimSuffix(sqsType, ":"+mSqs.Type)
 	return mSqs

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@ import (
 
 // Test if config v1 is purged
 func TestServerConfigMigrateV1(t *testing.T) {
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
@@ -58,7 +58,7 @@ func TestServerConfigMigrateV1(t *testing.T) {
 // Test if all migrate code returns nil when config file does not
 // exist
 func TestServerConfigMigrateInexistentConfig(t *testing.T) {
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
@@ -97,11 +97,20 @@ func TestServerConfigMigrateInexistentConfig(t *testing.T) {
 	if err := migrateV9ToV10(); err != nil {
 		t.Fatal("migrate v9 to v10 should succeed when no config file is found")
 	}
+	if err := migrateV10ToV11(); err != nil {
+		t.Fatal("migrate v10 to v11 should succeed when no config file is found")
+	}
+	if err := migrateV11ToV12(); err != nil {
+		t.Fatal("migrate v11 to v12 should succeed when no config file is found")
+	}
+	if err := migrateV12ToV13(); err != nil {
+		t.Fatal("migrate v12 to v13 should succeed when no config file is found")
+	}
 }
 
-// Test if a config migration from v2 to v10 is successfully done
-func TestServerConfigMigrateV2toV10(t *testing.T) {
-	rootPath, err := newTestConfig("us-east-1")
+// Test if a config migration from v2 to v12 is successfully done
+func TestServerConfigMigrateV2toV12(t *testing.T) {
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
@@ -145,11 +154,11 @@ func TestServerConfigMigrateV2toV10(t *testing.T) {
 	}
 
 	// Check if accessKey and secretKey are not altered during migration
-	if serverConfig.Credential.AccessKeyID != accessKey {
-		t.Fatalf("Access key lost during migration, expected: %v, found:%v", accessKey, serverConfig.Credential.AccessKeyID)
+	if serverConfig.Credential.AccessKey != accessKey {
+		t.Fatalf("Access key lost during migration, expected: %v, found:%v", accessKey, serverConfig.Credential.AccessKey)
 	}
-	if serverConfig.Credential.SecretAccessKey != secretKey {
-		t.Fatalf("Secret key lost during migration, expected: %v, found: %v", secretKey, serverConfig.Credential.SecretAccessKey)
+	if serverConfig.Credential.SecretKey != secretKey {
+		t.Fatalf("Secret key lost during migration, expected: %v, found: %v", secretKey, serverConfig.Credential.SecretKey)
 	}
 
 	// Initialize server config and check again if everything is fine
@@ -160,7 +169,7 @@ func TestServerConfigMigrateV2toV10(t *testing.T) {
 
 // Test if all migrate code returns error with corrupted config files
 func TestServerConfigMigrateFaultyConfig(t *testing.T) {
-	rootPath, err := newTestConfig("us-east-1")
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
@@ -199,5 +208,14 @@ func TestServerConfigMigrateFaultyConfig(t *testing.T) {
 	}
 	if err := migrateV9ToV10(); err == nil {
 		t.Fatal("migrateConfigV9ToV10() should fail with a corrupted json")
+	}
+	if err := migrateV10ToV11(); err == nil {
+		t.Fatal("migrateConfigV10ToV11() should fail with a corrupted json")
+	}
+	if err := migrateV11ToV12(); err == nil {
+		t.Fatal("migrateConfigV11ToV12() should fail with a corrupted json")
+	}
+	if err := migrateV12ToV13(); err == nil {
+		t.Fatal("migrateConfigV12ToV13() should fail with a corrupted json")
 	}
 }
