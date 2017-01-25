@@ -93,9 +93,13 @@ func (u *uploadsV1) WriteTo(writer io.Writer) (n int64, err error) {
 	return int64(len(uplBytes)), nil
 }
 
-func (u *uploadsV1) ReadFrom(reader io.Reader) (n int64, err error) {
+func (u *uploadsV1) ReadFrom(lk *lock.LockedFile) (n int64, err error) {
 	var uploadIDBytes []byte
-	uploadIDBytes, err = ioutil.ReadAll(reader)
+	fi, err := lk.Stat()
+	if err != nil {
+		return 0, traceError(err)
+	}
+	uploadIDBytes, err = ioutil.ReadAll(io.NewSectionReader(lk, 0, fi.Size()))
 	if err != nil {
 		return 0, traceError(err)
 	}

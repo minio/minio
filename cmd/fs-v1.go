@@ -505,7 +505,7 @@ func (fs fsObjects) getObjectInfo(bucket, object string) (ObjectInfo, error) {
 	if err == nil {
 		// Read from fs metadata only if it exists.
 		defer fs.rwPool.Close(fsMetaPath)
-		if _, rerr := fsMeta.ReadFrom(io.NewSectionReader(rlk, 0, rlk.Size())); rerr != nil {
+		if _, rerr := fsMeta.ReadFrom(rlk.LockedFile); rerr != nil {
 			return ObjectInfo{}, toObjectErr(rerr, bucket, object)
 		}
 	}

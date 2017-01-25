@@ -144,9 +144,14 @@ func (m *fsMetaV1) WriteTo(writer io.Writer) (n int64, err error) {
 	return int64(len(metadataBytes)), nil
 }
 
-func (m *fsMetaV1) ReadFrom(reader io.Reader) (n int64, err error) {
+func (m *fsMetaV1) ReadFrom(lk *lock.LockedFile) (n int64, err error) {
 	var metadataBytes []byte
-	metadataBytes, err = ioutil.ReadAll(reader)
+	fi, err := lk.Stat()
+	if err != nil {
+		return 0, traceError(err)
+	}
+
+	metadataBytes, err = ioutil.ReadAll(io.NewSectionReader(lk, 0, fi.Size()))
 	if err != nil {
 		return 0, traceError(err)
 	}

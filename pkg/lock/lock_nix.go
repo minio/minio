@@ -71,5 +71,5 @@ func LockedOpenFile(path string, flag int, perm os.FileMode) (*LockedFile, error
 		}
 	}
 
-	return &LockedFile{File: f, size: st.Size()}, nil
+	return &LockedFile{File: f}, nil
 }
