@@ -182,7 +182,7 @@ func mkHealQueryVal(bucket, prefix, marker, delimiter, maxKeyStr string) url.Val
 }
 
 // listObjectsHeal - issues heal list API request for a batch of maxKeys objects to be healed.
-func (adm *AdminClient) listObjectsHeal(bucket, prefix, delimiter, marker string, maxKeys int) (listBucketHealResult, error) {
+func (adm *AdminClient) listObjectsHeal(bucket, prefix, marker, delimiter string, maxKeys int) (listBucketHealResult, error) {
 	// Construct query params.
 	maxKeyStr := fmt.Sprintf("%d", maxKeys)
 	queryVal := mkHealQueryVal(bucket, prefix, marker, delimiter, maxKeyStr)
