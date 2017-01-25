@@ -76,17 +76,17 @@ func (u *uploadsV1) IsEmpty() bool {
 	return len(u.Uploads) == 0
 }
 
-func (u *uploadsV1) WriteTo(writer io.Writer) (n int64, err error) {
+func (u *uploadsV1) WriteTo(lk *lock.LockedFile) (n int64, err error) {
 	// Serialize to prepare to write to disk.
 	var uplBytes []byte
 	uplBytes, err = json.Marshal(u)
 	if err != nil {
 		return 0, traceError(err)
 	}
-	if err = writer.(*lock.LockedFile).Truncate(0); err != nil {
+	if err = lk.Truncate(0); err != nil {
 		return 0, traceError(err)
 	}
-	_, err = writer.Write(uplBytes)
+	_, err = lk.Write(uplBytes)
 	if err != nil {
 		return 0, traceError(err)
 	}

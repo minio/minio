@@ -125,18 +125,18 @@ func (m *fsMetaV1) AddObjectPart(partNumber int, partName string, partETag strin
 	sort.Sort(byObjectPartNumber(m.Parts))
 }
 
-func (m *fsMetaV1) WriteTo(writer io.Writer) (n int64, err error) {
+func (m *fsMetaV1) WriteTo(lk *lock.LockedFile) (n int64, err error) {
 	var metadataBytes []byte
 	metadataBytes, err = json.Marshal(m)
 	if err != nil {
 		return 0, traceError(err)
 	}
 
-	if err = writer.(*lock.LockedFile).Truncate(0); err != nil {
+	if err = lk.Truncate(0); err != nil {
 		return 0, traceError(err)
 	}
 
-	if _, err = writer.Write(metadataBytes); err != nil {
+	if _, err = lk.Write(metadataBytes); err != nil {
 		return 0, traceError(err)
 	}
 
