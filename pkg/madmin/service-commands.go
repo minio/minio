@@ -92,7 +92,7 @@ func (adm *AdminClient) ServiceStatus() (ServiceStatusMetadata, error) {
 
 	// Check response http status code
 	if resp.StatusCode != http.StatusOK {
-		return ServiceStatusMetadata{}, errors.New("Got HTTP Status: " + resp.Status)
+		return ServiceStatusMetadata{}, httpRespToErrorResponse(resp)
 	}
 
 	// Unmarshal the server's json response
@@ -129,7 +129,7 @@ func (adm *AdminClient) ServiceRestart() error {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return errors.New("Got HTTP Status: " + resp.Status)
+		return httpRespToErrorResponse(resp)
 	}
 	return nil
 }

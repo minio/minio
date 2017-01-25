@@ -19,7 +19,6 @@ package madmin
 
 import (
 	"encoding/xml"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -207,7 +206,8 @@ func (adm *AdminClient) listObjectsHeal(bucket, prefix, marker, delimiter string
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return toBeHealedObjects, errors.New("Got HTTP Status: " + resp.Status)
+		return toBeHealedObjects, httpRespToErrorResponse(resp)
+
 	}
 
 	err = xml.NewDecoder(resp.Body).Decode(&toBeHealedObjects)
@@ -309,7 +309,7 @@ func (adm *AdminClient) ListBucketsHeal() ([]BucketInfo, error) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return []BucketInfo{}, errors.New("Got HTTP Status: " + resp.Status)
+		return []BucketInfo{}, httpRespToErrorResponse(resp)
 	}
 
 	var listBucketsHealResult ListBucketsHealResponse
@@ -364,7 +364,7 @@ func (adm *AdminClient) HealBucket(bucket string, dryrun bool) error {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return errors.New("Got HTTP Status: " + resp.Status)
+		return httpRespToErrorResponse(resp)
 	}
 
 	return nil
@@ -398,7 +398,7 @@ func (adm *AdminClient) HealObject(bucket, object string, dryrun bool) error {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return errors.New("Got HTTP Status: " + resp.Status)
+		return httpRespToErrorResponse(resp)
 	}
 
 	return nil
@@ -430,7 +430,7 @@ func (adm *AdminClient) HealFormat(dryrun bool) error {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return errors.New("Got HTTP Status: " + resp.Status)
+		return httpRespToErrorResponse(resp)
 	}
 
 	return nil

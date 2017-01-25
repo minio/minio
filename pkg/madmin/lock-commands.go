@@ -19,7 +19,6 @@ package madmin
 
 import (
 	"encoding/json"
-	"errors"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -118,7 +117,7 @@ func (adm *AdminClient) ListLocks(bucket, prefix string, olderThan time.Duration
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, errors.New("Got HTTP Status: " + resp.Status)
+		return nil, httpRespToErrorResponse(resp)
 	}
 
 	return getLockInfos(resp.Body)
@@ -150,7 +149,7 @@ func (adm *AdminClient) ClearLocks(bucket, prefix string, olderThan time.Duratio
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, errors.New("Got HTTP Status: " + resp.Status)
+		return nil, httpRespToErrorResponse(resp)
 	}
 
 	return getLockInfos(resp.Body)
