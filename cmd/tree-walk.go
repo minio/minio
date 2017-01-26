@@ -95,53 +95,30 @@ type listDirFunc func(bucket, prefixDir, prefixEntry string) (entries []string, 
 // 4. XL backend multipart listing - isLeaf is true if the entry is a directory and contains uploads.json
 type isLeafFunc func(string, string) bool
 
-// Returns function "listDir" of the type listDirFunc.
-// isLeaf - is used by listDir function to check if an entry is a leaf or non-leaf entry.
-// disks - used for doing disk.ListDir(). FS passes single disk argument, XL passes a list of disks.
-func listDirFactory(isLeaf isLeafFunc, treeWalkIgnoredErrs []error, disks ...StorageAPI) listDirFunc {
-	// listDir - lists all the entries at a given prefix and given entry in the prefix.
-	listDir := func(bucket, prefixDir, prefixEntry string) (entries []string, delayIsLeaf bool, err error) {
-		for _, disk := range disks {
-			if disk == nil {
-				continue
-			}
-			entries, err = disk.ListDir(bucket, prefixDir)
-			if err == nil {
-				// Listing needs to be sorted.
-				sort.Strings(entries)
+func filterListEntries(bucket, prefixDir string, entries []string, prefixEntry string, isLeaf isLeafFunc) ([]string, bool) {
+	// Listing needs to be sorted.
+	sort.Strings(entries)
 
-				// Filter entries that have the prefix prefixEntry.
-				entries = filterMatchingPrefix(entries, prefixEntry)
+	// Filter entries that have the prefix prefixEntry.
+	entries = filterMatchingPrefix(entries, prefixEntry)
 
-				// Can isLeaf() check be delayed till when it has to be sent down the
-				// treeWalkResult channel?
-				delayIsLeaf = delayIsLeafCheck(entries)
-				if delayIsLeaf {
-					return entries, delayIsLeaf, nil
-				}
-
-				// isLeaf() check has to happen here so that trailing "/" for objects can be removed.
-				for i, entry := range entries {
-					if isLeaf(bucket, pathJoin(prefixDir, entry)) {
-						entries[i] = strings.TrimSuffix(entry, slashSeparator)
-					}
-				}
-				// Sort again after removing trailing "/" for objects as the previous sort
-				// does not hold good anymore.
-				sort.Strings(entries)
-				return entries, delayIsLeaf, nil
-			}
-			// For any reason disk was deleted or goes offline, continue
-			// and list from other disks if possible.
-			if isErrIgnored(err, treeWalkIgnoredErrs...) {
-				continue
-			}
-			break
-		}
-		// Return error at the end.
-		return nil, false, traceError(err)
+	// Can isLeaf() check be delayed till when it has to be sent down the
+	// treeWalkResult channel?
+	delayIsLeaf := delayIsLeafCheck(entries)
+	if delayIsLeaf {
+		return entries, true
 	}
-	return listDir
+
+	// isLeaf() check has to happen here so that trailing "/" for objects can be removed.
+	for i, entry := range entries {
+		if isLeaf(bucket, pathJoin(prefixDir, entry)) {
+			entries[i] = strings.TrimSuffix(entry, slashSeparator)
+		}
+	}
+	// Sort again after removing trailing "/" for objects as the previous sort
+	// does not hold good anymore.
+	sort.Strings(entries)
+	return entries, false
 }
 
 // treeWalk walks directory tree recursively pushing treeWalkResult into the channel as and when it encounters files.
