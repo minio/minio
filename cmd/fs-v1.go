@@ -731,37 +731,11 @@ func (fs fsObjects) listDirFactory(isLeaf isLeafFunc) listDirFunc {
 	// listDir - lists all the entries at a given prefix and given entry in the prefix.
 	listDir := func(bucket, prefixDir, prefixEntry string) (entries []string, delayIsLeaf bool, err error) {
 		entries, err = readDir(pathJoin(fs.fsPath, bucket, prefixDir))
-		if err == nil {
-			// Listing needs to be sorted.
-			sort.Strings(entries)
-
-			// Filter entries that have the prefix prefixEntry.
-			entries = filterMatchingPrefix(entries, prefixEntry)
-
-			// Can isLeaf() check be delayed till when it has to be sent down the
-			// treeWalkResult channel?
-			delayIsLeaf = delayIsLeafCheck(entries)
-			if delayIsLeaf {
-				return entries, delayIsLeaf, nil
-			}
-
-			// isLeaf() check has to happen here so that trailing "/" for objects can be removed.
-			for i, entry := range entries {
-				if isLeaf(bucket, pathJoin(prefixDir, entry)) {
-					entries[i] = strings.TrimSuffix(entry, slashSeparator)
-				}
-			}
-
-			// Sort again after removing trailing "/" for objects as the previous sort
-			// does not hold good anymore.
-			sort.Strings(entries)
-
-			// Succes.
-			return entries, delayIsLeaf, nil
-		} // Return error at the end.
-
-		// Error.
-		return nil, false, err
+		if err != nil {
+			return nil, false, err
+		}
+		entries, delayIsLeaf = filterListEntries(bucket, prefixDir, entries, prefixEntry, isLeaf)
+		return entries, delayIsLeaf, nil
 	}
 
 	// Return list factory instance.
