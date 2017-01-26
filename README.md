@@ -5,17 +5,34 @@ Minio is an object storage server released under Apache License v2.0. It is comp
 Minio server is light enough to be bundled with the application stack, similar to NodeJS, Redis and MySQL.
 
 ## Docker Container
+
 ### Stable
+
+```sh
+docker run -p 9000:9000 --name minio -d minio/minio server /export
 ```
-docker pull minio/minio
-docker run -p 9000:9000 minio/minio server /export
+
+
+The `--name` parameter means you can check the Minio container easily, the `-p` override sets the port Minio will be accessible by, `9000` is the default and `-d` runs Minio in the background as a daemon.
+
+Then retrieve your `AccessKey` and `SecretKey` with the following command:
+
+```sh
+docker logs minio
+```
+
+Files will be stored inside the container, if you want Minio to use a mounted filesystem from your host such as `/mnt/ssd1` then type in the following:
+
+```sh
+docker run -p 9000:9000 --name minio -v /mnt/ssd1:/export -d minio/minio server /export
 ```
 
 ### Edge
+
 ```
-docker pull minio/minio:edge
-docker run -p 9000:9000 minio/minio:edge server /export
+docker run -p 9000:9000 --name minio -d minio/minio:edge server /export
 ```
+
 Please visit Minio Docker quickstart guide for more [here](https://docs.minio.io/docs/minio-docker-quickstart-guide)
 
 ## OS X
