@@ -506,7 +506,12 @@ func (fs fsObjects) getObjectInfo(bucket, object string) (ObjectInfo, error) {
 		// Read from fs metadata only if it exists.
 		defer fs.rwPool.Close(fsMetaPath)
 		if _, rerr := fsMeta.ReadFrom(rlk.LockedFile); rerr != nil {
-			return ObjectInfo{}, toObjectErr(rerr, bucket, object)
+			// `fs.json` can be empty due to previously failed
+			// PutObject() transaction, if we arrive at such
+			// a situation we just ignore and continue.
+			if errorCause(rerr) != io.EOF {
+				return ObjectInfo{}, toObjectErr(rerr, bucket, object)
+			}
 		}
 	}
 
