@@ -633,7 +633,7 @@ func (fs fsObjects) listObjectParts(bucket, object, uploadID string, partNumberM
 		partNamePath := pathJoin(fs.fsPath, minioMetaMultipartBucket, uploadIDPath, part.Name)
 		fi, err = fsStatFile(partNamePath)
 		if err != nil {
-			return ListPartsInfo{}, toObjectErr(traceError(err), minioMetaMultipartBucket, partNamePath)
+			return ListPartsInfo{}, toObjectErr(err, minioMetaMultipartBucket, partNamePath)
 		}
 		result.Parts = append(result.Parts, partInfo{
 			PartNumber:   part.Number,
@@ -883,7 +883,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	multipartObjectDir := pathJoin(fs.fsPath, minioMetaMultipartBucket, bucket, object)
 	multipartUploadIDDir := pathJoin(multipartObjectDir, uploadID)
 	if err = fsRemoveUploadIDPath(multipartObjectDir, multipartUploadIDDir); err != nil {
-		return ObjectInfo{}, toObjectErr(traceError(err), bucket, object)
+		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
 	// Remove entry from `uploads.json`.
@@ -893,7 +893,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 
 	fi, err := fsStatFile(fsNSObjPath)
 	if err != nil {
-		return ObjectInfo{}, toObjectErr(traceError(err), bucket, object)
+		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
 	// Return object info.
@@ -961,7 +961,7 @@ func (fs fsObjects) AbortMultipartUpload(bucket, object, uploadID string) error 
 	multipartObjectDir := pathJoin(fs.fsPath, minioMetaMultipartBucket, bucket, object)
 	multipartUploadIDDir := pathJoin(multipartObjectDir, uploadID)
 	if err = fsRemoveUploadIDPath(multipartObjectDir, multipartUploadIDDir); err != nil {
-		return toObjectErr(traceError(err), bucket, object)
+		return toObjectErr(err, bucket, object)
 	}
 
 	// Remove entry from `uploads.json`.
