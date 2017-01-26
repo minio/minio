@@ -22,8 +22,12 @@
 
 package main // import "github.com/minio/minio"
 
-import minio "github.com/minio/minio/cmd"
+import (
+	"os"
+
+	minio "github.com/minio/minio/cmd"
+)
 
 func main() {
-	minio.Main()
+	minio.Main(os.Args, os.Exit)
 }

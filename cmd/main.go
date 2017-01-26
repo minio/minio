@@ -190,6 +190,8 @@ func minioInit(ctx *cli.Context) {
 	enableLoggers()
 
 	// Fetch access keys from environment variables and update the config.
+	globalEnvAccessKey = os.Getenv("MINIO_ACCESS_KEY")
+	globalEnvSecretKey = os.Getenv("MINIO_SECRET_KEY")
 	if globalEnvAccessKey != "" && globalEnvSecretKey != "" {
 		// Set new credentials.
 		serverConfig.SetCredential(credential{
@@ -210,7 +212,7 @@ func minioInit(ctx *cli.Context) {
 }
 
 // Main main for minio server.
-func Main() {
+func Main(args []string, exitFn func(int)) {
 	app := registerApp()
 	app.Before = func(c *cli.Context) error {
 		// Valid input arguments to main.
@@ -224,5 +226,7 @@ func Main() {
 	}
 
 	// Run the app - exit on error.
-	app.RunAndExitOnError()
+	if err := app.Run(args); err != nil {
+		exitFn(1)
+	}
 }
