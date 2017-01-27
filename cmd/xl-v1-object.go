@@ -198,8 +198,14 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 		return traceError(InvalidRange{startOffset, length, xlMeta.Stat.Size})
 	}
 
+	// Calculate endOffset according to length
+	endOffset := startOffset
+	if length > 0 {
+		endOffset += length - 1
+	}
+
 	// Get last part index to read given length.
-	lastPartIndex, _, err := xlMeta.ObjectToPartOffset(startOffset + length - 1)
+	lastPartIndex, _, err := xlMeta.ObjectToPartOffset(endOffset)
 	if err != nil {
 		return traceError(InvalidRange{startOffset, length, xlMeta.Stat.Size})
 	}
