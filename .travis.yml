@@ -14,7 +14,7 @@ env:
 
 script:
 - make
-- make test GOFLAGS="-race"
+- make test GOFLAGS="-race -v"
 - make coverage
 
 after_success:
