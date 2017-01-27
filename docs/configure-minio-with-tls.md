@@ -44,6 +44,8 @@ To make Minio aware about your generated key and certificate, you will need to p
 
 Minio can be configured to connect to other servers, whether Minio nodes or servers like NATs, Redis. If these servers use certificates that are not registered in one of the known certificates authorities, you can make Minio server trust these CAs by dropping these certificates under `~/.minio/certs/CAs/` in your Minio config path.
 
+You need to use tools like [certbot](https://certbot.eff.org/) but you need access to your DNS provider which allows for handshaking to happen to validate the domain names.
+
 # Explore Further
 * [Minio Quickstart Guide](https://docs.minio.io/docs/minio-quickstart-guide)
 * [Minio Client Complete Guide](https://docs.minio.io/docs/minio-client-complete-guide)
