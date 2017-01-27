@@ -119,6 +119,9 @@ func (n httpConn) Fire(entry *logrus.Entry) error {
 		return err
 	}
 
+	// Make sure to close the response body so the connection can be re-used.
+	defer resp.Body.Close()
+
 	if resp.StatusCode != http.StatusOK &&
 		resp.StatusCode != http.StatusAccepted &&
 		resp.StatusCode != http.StatusContinue {
