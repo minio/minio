@@ -363,16 +363,18 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 	}
 
 	// As we already validated the authentication, we save given access/secret keys.
-	cred, err := getCredential(args.AccessKey, args.SecretKey)
+	creds, err := getCredential(args.AccessKey, args.SecretKey)
 	if err != nil {
 		return toJSONError(err)
 	}
 
 	// Notify all other Minio peers to update credentials
-	errsMap := updateCredsOnPeers(cred)
+	errsMap := updateCredsOnPeers(creds)
 
 	// Update local credentials
-	serverConfig.SetCredential(cred)
+	serverConfig.SetCredential(creds)
+
+	// Persist updated credentials.
 	if err = serverConfig.Save(); err != nil {
 		errsMap[globalMinioAddr] = err
 	}
@@ -506,14 +508,7 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	objectLock.RLock()
 	defer objectLock.RUnlock()
 
-	objInfo, err := objectAPI.GetObjectInfo(bucket, object)
-	if err != nil {
-		writeWebErrorResponse(w, err)
-		return
-	}
-	offset := int64(0)
-	err = objectAPI.GetObject(bucket, object, offset, objInfo.Size, w)
-	if err != nil {
+	if err := objectAPI.GetObject(bucket, object, 0, -1, w); err != nil {
 		/// No need to print error, response writer already written to.
 		return
 	}

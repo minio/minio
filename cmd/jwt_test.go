@@ -75,10 +75,40 @@ func testAuthenticate(authType string, t *testing.T) {
 	}
 }
 
-func TestNodeAuthenticate(t *testing.T) {
+func TestAuthenticateNode(t *testing.T) {
 	testAuthenticate("node", t)
 }
 
-func TestWebAuthenticate(t *testing.T) {
+func TestAuthenticateWeb(t *testing.T) {
 	testAuthenticate("web", t)
+}
+
+func BenchmarkAuthenticateNode(b *testing.B) {
+	testPath, err := newTestConfig(globalMinioDefaultRegion)
+	if err != nil {
+		b.Fatalf("unable initialize config file, %s", err)
+	}
+	defer removeAll(testPath)
+
+	creds := serverConfig.GetCredential()
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		authenticateNode(creds.AccessKey, creds.SecretKey)
+	}
+}
+
+func BenchmarkAuthenticateWeb(b *testing.B) {
+	testPath, err := newTestConfig(globalMinioDefaultRegion)
+	if err != nil {
+		b.Fatalf("unable initialize config file, %s", err)
+	}
+	defer removeAll(testPath)
+
+	creds := serverConfig.GetCredential()
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		authenticateWeb(creds.AccessKey, creds.SecretKey)
+	}
 }

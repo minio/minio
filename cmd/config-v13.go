@@ -90,10 +90,12 @@ func initConfig() (bool, error) {
 		// Save config into file.
 		return true, serverConfig.Save()
 	}
+
 	configFile, err := getConfigFile()
 	if err != nil {
 		return false, err
 	}
+
 	if _, err = os.Stat(configFile); err != nil {
 		return false, err
 	}
@@ -103,7 +105,13 @@ func initConfig() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if err := qc.Load(configFile); err != nil {
+
+	if err = qc.Load(configFile); err != nil {
+		return false, err
+	}
+
+	srvCfg.Credential, err = getCredential(srvCfg.Credential.AccessKey, srvCfg.Credential.SecretKey)
+	if err != nil {
 		return false, err
 	}
 
@@ -112,6 +120,7 @@ func initConfig() (bool, error) {
 	// Save the loaded config globally.
 	serverConfig = srvCfg
 	serverConfigMu.Unlock()
+
 	// Set the version properly after the unmarshalled json is loaded.
 	serverConfig.Version = globalMinioConfigVersion
 
@@ -337,6 +346,7 @@ func (s *serverConfigV13) SetCredential(creds credential) {
 	serverConfigMu.Lock()
 	defer serverConfigMu.Unlock()
 
+	// Set updated credential.
 	s.Credential = creds
 }
 

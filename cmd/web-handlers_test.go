@@ -1533,10 +1533,6 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("Expected the response status to be 200, but instead found `%d`", rec.Code)
 	}
-	resp := string(rec.Body.Bytes())
-	if !strings.Contains(resp, "We encountered an internal error, please try again.") {
-		t.Fatalf("Unexpected error message, expected: `Invalid token`, found: `%s`", resp)
-	}
 
 	// Test authorization of Web.Upload
 	content := []byte("temporary file's content")
@@ -1552,9 +1548,5 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 	apiRouter.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("Expected the response status to be 200, but instead found `%d`", rec.Code)
-	}
-	resp = string(rec.Body.Bytes())
-	if !strings.Contains(resp, "We encountered an internal error, please try again.") {
-		t.Fatalf("Unexpected error message, expected: `Invalid token`, found: `%s`", resp)
 	}
 }

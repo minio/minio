@@ -131,8 +131,8 @@ func (adminAPI adminAPIHandlers) ServiceCredentialsHandler(w http.ResponseWriter
 	}
 
 	// Avoid setting new credentials when they are already passed
-	// by the environnement
-	if globalEnvAccessKey != "" || globalEnvSecretKey != "" {
+	// by the environment.
+	if globalIsEnvCreds {
 		writeErrorResponse(w, ErrMethodNotAllowed, r.URL)
 		return
 	}

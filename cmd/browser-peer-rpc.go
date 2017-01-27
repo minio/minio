@@ -63,8 +63,13 @@ func (br *browserPeerAPIHandlers) SetAuthPeer(args SetAuthPeerArgs, reply *AuthR
 		return err
 	}
 
+	creds, err := getCredential(args.Creds.AccessKey, args.Creds.SecretKey)
+	if err != nil {
+		return err
+	}
+
 	// Update credentials in memory
-	serverConfig.SetCredential(args.Creds)
+	serverConfig.SetCredential(creds)
 
 	// Save credentials to config file
 	if err := serverConfig.Save(); err != nil {

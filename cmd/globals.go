@@ -110,11 +110,8 @@ var (
 	// Minio server user agent string.
 	globalServerUserAgent = "Minio/" + ReleaseTag + " (" + runtime.GOOS + "; " + runtime.GOARCH + ")"
 
-	// Global server's access key
-	globalEnvAccessKey = ""
-
-	// Global server's secret key
-	globalEnvSecretKey = ""
+	// Set to true if credentials were passed from env, default is false.
+	globalIsEnvCreds = false
 
 	// url.URL endpoints of disks that belong to the object storage.
 	globalEndpoints = []*url.URL{}
