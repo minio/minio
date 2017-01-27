@@ -56,10 +56,9 @@ func setGetRespHeaders(w http.ResponseWriter, reqParams url.Values) {
 func errAllowableObjectNotFound(bucket string, r *http.Request) APIErrorCode {
 	if getRequestAuthType(r) == authTypeAnonymous {
 		//we care about the bucket as a whole, not a particular resource
-		url := *r.URL
-		url.Path = "/" + bucket
-
-		if s3Error := enforceBucketPolicy(bucket, "s3:ListBucket", &url); s3Error != ErrNone {
+		resource := "/" + bucket
+		if s3Error := enforceBucketPolicy(bucket, "s3:ListBucket", resource,
+			r.Referer(), r.URL.Query()); s3Error != ErrNone {
 			return ErrAccessDenied
 		}
 	}
@@ -440,7 +439,8 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	case authTypeAnonymous:
 		// http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
-		if s3Error := enforceBucketPolicy(bucket, "s3:PutObject", r.URL); s3Error != ErrNone {
+		if s3Error := enforceBucketPolicy(bucket, "s3:PutObject", r.URL.Path,
+			r.Referer(), r.URL.Query()); s3Error != ErrNone {
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
@@ -600,7 +600,8 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		return
 	case authTypeAnonymous:
 		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
-		if s3Error := enforceBucketPolicy(bucket, "s3:PutObject", r.URL); s3Error != ErrNone {
+		if s3Error := enforceBucketPolicy(bucket, "s3:PutObject", r.URL.Path,
+			r.Referer(), r.URL.Query()); s3Error != ErrNone {
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}

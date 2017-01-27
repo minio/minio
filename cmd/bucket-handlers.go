@@ -33,7 +33,7 @@ import (
 
 // http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
 // Enforces bucket policies for a bucket for a given tatusaction.
-func enforceBucketPolicy(bucket string, action string, reqURL *url.URL) (s3Error APIErrorCode) {
+func enforceBucketPolicy(bucket, action, resource, referer string, queryParams url.Values) (s3Error APIErrorCode) {
 	// Verify if bucket actually exists
 	if err := checkBucketExist(bucket, newObjectLayerFn()); err != nil {
 		err = errorCause(err)
@@ -57,16 +57,21 @@ func enforceBucketPolicy(bucket string, action string, reqURL *url.URL) (s3Error
 	}
 
 	// Construct resource in 'arn:aws:s3:::examplebucket/object' format.
-	resource := bucketARNPrefix + strings.TrimSuffix(strings.TrimPrefix(reqURL.Path, "/"), "/")
+	arn := bucketARNPrefix + strings.TrimSuffix(strings.TrimPrefix(resource, "/"), "/")
 
 	// Get conditions for policy verification.
 	conditionKeyMap := make(map[string]set.StringSet)
-	for queryParam := range reqURL.Query() {
-		conditionKeyMap[queryParam] = set.CreateStringSet(reqURL.Query().Get(queryParam))
+	for queryParam := range queryParams {
+		conditionKeyMap[queryParam] = set.CreateStringSet(queryParams.Get(queryParam))
+	}
+
+	// Add request referer to conditionKeyMap if present.
+	if referer != "" {
+		conditionKeyMap["referer"] = set.CreateStringSet(referer)
 	}
 
 	// Validate action, resource and conditions with current policy statements.
-	if !bucketPolicyEvalStatements(action, resource, conditionKeyMap, policy.Statements) {
+	if !bucketPolicyEvalStatements(action, arn, conditionKeyMap, policy.Statements) {
 		return ErrAccessDenied
 	}
 	return ErrNone
