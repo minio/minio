@@ -606,6 +606,11 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrSignatureDoesNotMatch
 	case errContentSHA256Mismatch:
 		apiErr = ErrContentSHA256Mismatch
+	case errDataTooLarge:
+		apiErr = ErrEntityTooLarge
+	case errDataTooSmall:
+		apiErr = ErrEntityTooSmall
+
 	}
 
 	if apiErr != ErrNone {

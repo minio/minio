@@ -82,6 +82,9 @@ var (
 	// Caching is enabled only for RAM size > 8GiB.
 	globalMaxCacheSize = uint64(0)
 
+	// Maximum size of internal objects parts
+	globalPutPartSize = int64(64 * 1024 * 1024)
+
 	// Cache expiry.
 	globalCacheExpiry = objcache.DefaultExpiry
 

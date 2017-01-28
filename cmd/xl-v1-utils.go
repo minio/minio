@@ -343,3 +343,30 @@ func getOrderedDisks(distribution []int, disks []StorageAPI) (orderedDisks []Sto
 	}
 	return orderedDisks
 }
+
+// getPartSizeFromIdx predicts the part size according to its index. It also
+// returns -1 when totalSize is also -1.
+func getPartSizeFromIdx(totalSize int64, partSize int64, partIndex int) int64 {
+	if partSize == 0 {
+		panic("Part size cannot be nil.")
+	}
+	if partIndex < 1 {
+		panic("Part index should be greater than 1.")
+	}
+	switch totalSize {
+	case -1, 0:
+		return totalSize
+	}
+	// Compute the total count of parts
+	partsCount := totalSize/partSize + 1
+	// Return the part's size
+	switch {
+	case int64(partIndex) < partsCount:
+		return partSize
+	case int64(partIndex) == partsCount:
+		// Size of last part
+		return totalSize % partSize
+	default:
+		return 0
+	}
+}
