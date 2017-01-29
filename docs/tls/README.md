@@ -1,6 +1,6 @@
 # How to secure access to Minio server with TLS [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
 
-In this document, we will configure Minio servers with TLS certificates. Steps for Windows could be found [here](https://github.com/minio/minio/blob/master/docs/configure-minio-with-gnutls-windows.md).
+In this document, we will configure Minio servers with TLS certificates for both Linux and Windows.
 
 ## 1. Prerequisites
 
