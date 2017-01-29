@@ -352,9 +352,14 @@ func getHostPort(address string) (host, port string, err error) {
 		return "", "", err
 	}
 
-	// Check if port is available.
-	if err = checkPortAvailability(port); err != nil {
-		return "", "", err
+	if runtime.GOOS == "darwin" {
+		// On macOS, if a process already listens on 127.0.0.1:PORT, net.Listen() falls back
+		// to IPv6 address ie minio will start listening on IPv6 address whereas another
+		// (non-)minio process is listening on IPv4 of given port.
+		// To avoid this error sutiation we check for port availability only for macOS.
+		if err = checkPortAvailability(port); err != nil {
+			return "", "", err
+		}
 	}
 
 	// Success.
