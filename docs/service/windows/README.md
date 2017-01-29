@@ -23,7 +23,6 @@ It is a good (and secure) practice to create a new user, assign rights to the da
 ![Configure user](https://raw.githubusercontent.com/minio/minio/master/docs/screenshots/windows-configure-user.png)
 
 ## Delete Minio service
-
 ```
 c:\nssm.exe remove Minio
 ```
