@@ -71,6 +71,10 @@ func actionMatch(pattern, action string) bool {
 	return wildcard.MatchSimple(pattern, action)
 }
 
+func refererMatch(pattern, referer string) bool {
+	return wildcard.MatchSimple(pattern, referer)
+}
+
 // Verify if given resource matches with policy statement.
 func bucketPolicyResourceMatch(resource string, statement policyStatement) bool {
 	// the resource rule for object could contain "*" wild card.
@@ -85,33 +89,55 @@ func bucketPolicyConditionMatch(conditions map[string]set.StringSet, statement p
 	// Supports following conditions.
 	// - StringEquals
 	// - StringNotEquals
+	// - StringLike
+	// - StringNotLike
 	//
 	// Supported applicable condition keys for each conditions.
 	// - s3:prefix
 	// - s3:max-keys
-	var conditionMatches = true
+	// - s3:aws-Referer
+
 	for condition, conditionKeyVal := range statement.Conditions {
 		if condition == "StringEquals" {
 			if !conditionKeyVal["s3:prefix"].Equals(conditions["prefix"]) {
-				conditionMatches = false
-				break
+				return false
 			}
 			if !conditionKeyVal["s3:max-keys"].Equals(conditions["max-keys"]) {
-				conditionMatches = false
-				break
+				return false
 			}
 		} else if condition == "StringNotEquals" {
 			if !conditionKeyVal["s3:prefix"].Equals(conditions["prefix"]) {
-				conditionMatches = false
-				break
+				return false
 			}
 			if !conditionKeyVal["s3:max-keys"].Equals(conditions["max-keys"]) {
-				conditionMatches = false
-				break
+				return false
 			}
+		} else if condition == "StringLike" {
+			awsReferers := conditionKeyVal["aws:Referer"]
+			// wildcard match of referer in statement was not empty.
+			// StringLike has a match, i.e, condition evaluates to true.
+			for referer := range conditions["referer"] {
+				if !awsReferers.FuncMatch(refererMatch, referer).IsEmpty() {
+					return true
+				}
+			}
+			// No matching referer found, so the condition is false.
+			return false
+		} else if condition == "StringNotLike" {
+			awsReferers := conditionKeyVal["aws:Referer"]
+			// wildcard match of referer in statement was not empty.
+			// StringNotLike has a match, i.e, condition evaluates to false.
+			for referer := range conditions["referer"] {
+				if !awsReferers.FuncMatch(refererMatch, referer).IsEmpty() {
+					return false
+				}
+			}
+			// No matching referer found, so the condition is true.
+			return true
 		}
 	}
-	return conditionMatches
+	// No conditions were present in the statement, so trivially true (always).
+	return true
 }
 
 // PutBucketPolicyHandler - PUT Bucket policy

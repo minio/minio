@@ -942,6 +942,34 @@ func TestBucketPolicyConditionMatch(t *testing.T) {
 
 			expectedMatch: false,
 		},
+		// Test case - 9.
+		// StringLike condition matches.
+		{
+			statementCondition: getStatementWithCondition("StringLike", "aws:Referer", "http://www.example.com/"),
+			condition:          getInnerMap("referer", "http://www.example.com/"),
+			expectedMatch:      true,
+		},
+		// Test case - 10.
+		// StringLike condition doesn't match.
+		{
+			statementCondition: getStatementWithCondition("StringLike", "aws:Referer", "http://www.example.com/"),
+			condition:          getInnerMap("referer", "www.somethingelse.com"),
+			expectedMatch:      false,
+		},
+		// Test case - 11.
+		// StringNotLike condition evaluates to false.
+		{
+			statementCondition: getStatementWithCondition("StringNotLike", "aws:Referer", "http://www.example.com/"),
+			condition:          getInnerMap("referer", "http://www.example.com/"),
+			expectedMatch:      false,
+		},
+		// Test case - 12.
+		// StringNotLike condition evaluates to true.
+		{
+			statementCondition: getStatementWithCondition("StringNotLike", "aws:Referer", "http://www.example.com/"),
+			condition:          getInnerMap("referer", "http://somethingelse.com/"),
+			expectedMatch:      true,
+		},
 	}
 
 	for i, tc := range testCases {

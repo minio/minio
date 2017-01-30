@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio-go/pkg/set"
 )
 
@@ -342,6 +343,18 @@ func TestIsValidPrincipals(t *testing.T) {
 	}
 }
 
+// getEmptyConditionKeyMap - returns a function that generates a
+// condition key map for a given key.
+func getEmptyConditionKeyMap(conditionKey string) func() map[string]map[string]set.StringSet {
+	emptyConditonGenerator := func() map[string]map[string]set.StringSet {
+		emptyMap := make(map[string]set.StringSet)
+		conditions := make(map[string]map[string]set.StringSet)
+		conditions[conditionKey] = emptyMap
+		return conditions
+	}
+	return emptyConditonGenerator
+}
+
 // Tests validate policyStatement condition validator.
 func TestIsValidConditions(t *testing.T) {
 	// returns empty conditions map.
@@ -350,22 +363,17 @@ func TestIsValidConditions(t *testing.T) {
 	}
 
 	// returns map with the "StringEquals" set to empty map.
-	setEmptyStringEquals := func() map[string]map[string]set.StringSet {
-		emptyMap := make(map[string]set.StringSet)
-		conditions := make(map[string]map[string]set.StringSet)
-		conditions["StringEquals"] = emptyMap
-		return conditions
-
-	}
+	setEmptyStringEquals := getEmptyConditionKeyMap("StringEquals")
 
 	// returns map with the "StringNotEquals" set to empty map.
-	setEmptyStringNotEquals := func() map[string]map[string]set.StringSet {
-		emptyMap := make(map[string]set.StringSet)
-		conditions := make(map[string]map[string]set.StringSet)
-		conditions["StringNotEquals"] = emptyMap
-		return conditions
+	setEmptyStringNotEquals := getEmptyConditionKeyMap("StringNotEquals")
 
-	}
+	// returns map with the "StringLike" set to empty map.
+	setEmptyStringLike := getEmptyConditionKeyMap("StringLike")
+
+	// returns map with the "StringNotLike" set to empty map.
+	setEmptyStringNotLike := getEmptyConditionKeyMap("StringNotLike")
+
 	// Generate conditions.
 	generateConditions := func(key1, key2, value string) map[string]map[string]set.StringSet {
 		innerMap := make(map[string]set.StringSet)
@@ -377,11 +385,11 @@ func TestIsValidConditions(t *testing.T) {
 
 	// generate ambigious conditions.
 	generateAmbigiousConditions := func() map[string]map[string]set.StringSet {
-		innerMap := make(map[string]set.StringSet)
-		innerMap["s3:prefix"] = set.CreateStringSet("Asia/")
+		prefixMap := make(map[string]set.StringSet)
+		prefixMap["s3:prefix"] = set.CreateStringSet("Asia/")
 		conditions := make(map[string]map[string]set.StringSet)
-		conditions["StringEquals"] = innerMap
-		conditions["StringNotEquals"] = innerMap
+		conditions["StringEquals"] = prefixMap
+		conditions["StringNotEquals"] = prefixMap
 		return conditions
 	}
 
@@ -417,6 +425,8 @@ func TestIsValidConditions(t *testing.T) {
 		setEmptyConditions(),
 		setEmptyStringEquals(),
 		setEmptyStringNotEquals(),
+		setEmptyStringLike(),
+		setEmptyStringNotLike(),
 		generateConditions("StringEquals", "s3:prefix", "Asia/"),
 		generateConditions("StringEquals", "s3:max-keys", "100"),
 		generateConditions("StringNotEquals", "s3:prefix", "Asia/"),
@@ -464,7 +474,11 @@ func TestIsValidConditions(t *testing.T) {
 		{testConditions[9], nil, true},
 		// Test case - 11.
 		{testConditions[10], nil, true},
-		// Test case 10.
+		// Test case - 12.
+		{testConditions[11], nil, true},
+		// Test case - 13.
+		{testConditions[11], nil, true},
+		// Test case - 14.
 		{testConditions[11], nil, true},
 	}
 	for i, testCase := range testCases {
@@ -706,6 +720,67 @@ func TestParseBucketPolicy(t *testing.T) {
 			if testCase.expectedPolicy.String() != actualAccessPolicy.String() {
 				t.Errorf("Test %d: The expected statements from resource statement generator doesn't match the actual statements", i+1)
 			}
+		}
+	}
+}
+
+func TestAWSRefererCondition(t *testing.T) {
+	resource := set.CreateStringSet([]string{
+		fmt.Sprintf("%s%s", bucketARNPrefix, "minio-bucket"+"/"+"Asia"+"*"),
+	}...)
+
+	conditionsKeyMap := make(policy.ConditionKeyMap)
+	conditionsKeyMap.Add("aws:Referer",
+		set.CreateStringSet("www.example.com",
+			"http://www.example.com"))
+
+	requestConditionKeyMap := make(map[string]set.StringSet)
+	requestConditionKeyMap["referer"] = set.CreateStringSet("www.example.com")
+
+	testCases := []struct {
+		effect       string
+		conditionKey string
+		match        bool
+	}{
+		{
+			effect:       "Allow",
+			conditionKey: "StringLike",
+			match:        true,
+		},
+		{
+			effect:       "Allow",
+			conditionKey: "StringNotLike",
+			match:        false,
+		},
+		{
+			effect:       "Deny",
+			conditionKey: "StringLike",
+			match:        true,
+		},
+		{
+			effect:       "Deny",
+			conditionKey: "StringNotLike",
+			match:        false,
+		},
+	}
+
+	for i, test := range testCases {
+		conditions := make(map[string]map[string]set.StringSet)
+		conditions[test.conditionKey] = conditionsKeyMap
+
+		allowStatement := policyStatement{
+			Sid:    "Testing AWS referer condition",
+			Effect: test.effect,
+			Principal: map[string]interface{}{
+				"AWS": "*",
+			},
+			Resources:  resource,
+			Conditions: conditions,
+		}
+
+		if result := bucketPolicyConditionMatch(requestConditionKeyMap, allowStatement); result != test.match {
+			t.Errorf("Test %d -  Expected conditons to evaluate to %v but got %v",
+				i+1, test.match, result)
 		}
 	}
 }
