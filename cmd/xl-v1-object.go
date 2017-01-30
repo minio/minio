@@ -287,7 +287,7 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 			// Set checksum algo only once, while it is possible to have
 			// different algos per block because of our `xl.json`.
 			// It is not a requirement, set this only once for all the disks.
-			if ckSumAlgo != "" {
+			if ckSumAlgo == "" {
 				ckSumAlgo = ckSumInfo.Algorithm
 			}
 		}
