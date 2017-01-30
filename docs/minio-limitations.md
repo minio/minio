@@ -47,4 +47,3 @@ We found the following APIs to be redundant or less useful outside of AWS. If yo
 
 - ObjectACL (Use bucket policies instead)
 - ObjectTorrent
-- ObjectCopyPart

@@ -22,6 +22,16 @@ import (
 	"time"
 )
 
+// Validates the preconditions for CopyObjectPart, returns true if CopyObjectPart
+// operation should not proceed. Preconditions supported are:
+//  x-amz-copy-source-if-modified-since
+//  x-amz-copy-source-if-unmodified-since
+//  x-amz-copy-source-if-match
+//  x-amz-copy-source-if-none-match
+func checkCopyObjectPartPreconditions(w http.ResponseWriter, r *http.Request, objInfo ObjectInfo) bool {
+	return checkCopyObjectPreconditions(w, r, objInfo)
+}
+
 // Validates the preconditions for CopyObject, returns true if CopyObject operation should not proceed.
 // Preconditions supported are:
 //  x-amz-copy-source-if-modified-since

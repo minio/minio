@@ -918,6 +918,324 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 
 }
 
+// Wrapper for calling Copy Object Part API handler tests for both XL multiple disks and single node setup.
+func TestAPICopyObjectPartHandler(t *testing.T) {
+	defer DetectTestLeak(t)()
+	ExecObjectLayerAPITest(t, testAPICopyObjectPartHandler, []string{"CopyObjectPart"})
+}
+
+func testAPICopyObjectPartHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
+	credentials credential, t *testing.T) {
+
+	objectName := "test-object"
+	// register event notifier.
+	err := initEventNotifier(obj)
+	if err != nil {
+		t.Fatalf("Initializing event notifiers failed")
+	}
+
+	// set of byte data for PutObject.
+	// object has to be created before running tests for Copy Object.
+	// this is required even to assert the copied object,
+	bytesData := []struct {
+		byteData []byte
+	}{
+		{generateBytesData(6 * humanize.KiByte)},
+	}
+
+	// set of inputs for uploading the objects before tests for downloading is done.
+	putObjectInputs := []struct {
+		bucketName    string
+		objectName    string
+		contentLength int64
+		textData      []byte
+		metaData      map[string]string
+	}{
+		// case - 1.
+		{bucketName, objectName, int64(len(bytesData[0].byteData)), bytesData[0].byteData, make(map[string]string)},
+	}
+	sha256sum := ""
+	// iterate through the above set of inputs and upload the object.
+	for i, input := range putObjectInputs {
+		// uploading the object.
+		_, err = obj.PutObject(input.bucketName, input.objectName, input.contentLength, bytes.NewBuffer(input.textData), input.metaData, sha256sum)
+		// if object upload fails stop the test.
+		if err != nil {
+			t.Fatalf("Put Object case %d:  Error uploading object: <ERROR> %v", i+1, err)
+		}
+	}
+
+	// Initiate Multipart upload for testing PutObjectPartHandler.
+	testObject := "testobject"
+
+	// PutObjectPart API HTTP Handler has to be tested in isolation,
+	// that is without any other handler being registered,
+	// That's why NewMultipartUpload is initiated using ObjectLayer.
+	uploadID, err := obj.NewMultipartUpload(bucketName, testObject, nil)
+	if err != nil {
+		// Failed to create NewMultipartUpload, abort.
+		t.Fatalf("Minio %s : <ERROR>  %s", instanceType, err)
+	}
+
+	// test cases with inputs and expected result for Copy Object.
+	testCases := []struct {
+		bucketName        string
+		copySourceHeader  string // data for "X-Amz-Copy-Source" header. Contains the object to be copied in the URL.
+		copySourceRange   string // data for "X-Amz-Copy-Source-Range" header, contains the byte range offsets of data to be copied.
+		uploadID          string // uploadID of the transaction.
+		invalidPartNumber bool   // Sets an invalid multipart.
+		maximumPartNumber bool   // Sets a maximum parts.
+		accessKey         string
+		secretKey         string
+		// expected output.
+		expectedRespStatus int
+	}{
+		// Test case - 1, copy part 1 from from newObject1, ignore request headers.
+		{
+			bucketName:         bucketName,
+			uploadID:           uploadID,
+			copySourceHeader:   url.QueryEscape("/" + bucketName + "/" + objectName),
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
+			expectedRespStatus: http.StatusOK,
+		},
+
+		// Test case - 2.
+		// Test case with invalid source object.
+		{
+			bucketName:       bucketName,
+			uploadID:         uploadID,
+			copySourceHeader: url.QueryEscape("/"),
+			accessKey:        credentials.AccessKey,
+			secretKey:        credentials.SecretKey,
+
+			expectedRespStatus: http.StatusBadRequest,
+		},
+
+		// Test case - 3.
+		// Test case with new object name is same as object to be copied.
+		// Fail with file not found.
+		{
+			bucketName:       bucketName,
+			uploadID:         uploadID,
+			copySourceHeader: url.QueryEscape("/" + bucketName + "/" + testObject),
+			accessKey:        credentials.AccessKey,
+			secretKey:        credentials.SecretKey,
+
+			expectedRespStatus: http.StatusNotFound,
+		},
+
+		// Test case - 4.
+		// Test case with valid byte range.
+		{
+			bucketName:       bucketName,
+			uploadID:         uploadID,
+			copySourceHeader: url.QueryEscape("/" + bucketName + "/" + objectName),
+			copySourceRange:  "bytes=500-4096",
+			accessKey:        credentials.AccessKey,
+			secretKey:        credentials.SecretKey,
+
+			expectedRespStatus: http.StatusOK,
+		},
+
+		// Test case - 5.
+		// Test case with invalid byte range.
+		{
+			bucketName:       bucketName,
+			uploadID:         uploadID,
+			copySourceHeader: url.QueryEscape("/" + bucketName + "/" + objectName),
+			copySourceRange:  "bytes=6145-",
+			accessKey:        credentials.AccessKey,
+			secretKey:        credentials.SecretKey,
+
+			expectedRespStatus: http.StatusRequestedRangeNotSatisfiable,
+		},
+
+		// Test case - 6.
+		// Test case with object name missing from source.
+		// fail with BadRequest.
+		{
+			bucketName:       bucketName,
+			uploadID:         uploadID,
+			copySourceHeader: url.QueryEscape("//123"),
+			accessKey:        credentials.AccessKey,
+			secretKey:        credentials.SecretKey,
+
+			expectedRespStatus: http.StatusBadRequest,
+		},
+
+		// Test case - 7.
+		// Test case with non-existent source file.
+		// Case for the purpose of failing `api.ObjectAPI.GetObjectInfo`.
+		// Expecting the response status code to http.StatusNotFound (404).
+		{
+			bucketName:       bucketName,
+			uploadID:         uploadID,
+			copySourceHeader: url.QueryEscape("/" + bucketName + "/" + "non-existent-object"),
+			accessKey:        credentials.AccessKey,
+			secretKey:        credentials.SecretKey,
+
+			expectedRespStatus: http.StatusNotFound,
+		},
+
+		// Test case - 8.
+		// Test case with non-existent source file.
+		// Case for the purpose of failing `api.ObjectAPI.PutObjectPart`.
+		// Expecting the response status code to http.StatusNotFound (404).
+		{
+			bucketName:       "non-existent-destination-bucket",
+			uploadID:         uploadID,
+			copySourceHeader: url.QueryEscape("/" + bucketName + "/" + objectName),
+			accessKey:        credentials.AccessKey,
+			secretKey:        credentials.SecretKey,
+
+			expectedRespStatus: http.StatusNotFound,
+		},
+
+		// Test case - 9.
+		// Case with invalid AccessKey.
+		{
+			bucketName:       bucketName,
+			uploadID:         uploadID,
+			copySourceHeader: url.QueryEscape("/" + bucketName + "/" + objectName),
+			accessKey:        "Invalid-AccessID",
+			secretKey:        credentials.SecretKey,
+
+			expectedRespStatus: http.StatusForbidden,
+		},
+
+		// Test case - 10.
+		// Case with non-existent upload id.
+		{
+			bucketName:       bucketName,
+			uploadID:         "-1",
+			copySourceHeader: url.QueryEscape("/" + bucketName + "/" + objectName),
+			accessKey:        credentials.AccessKey,
+			secretKey:        credentials.SecretKey,
+
+			expectedRespStatus: http.StatusNotFound,
+		},
+		// Test case - 11.
+		// invalid part number.
+		{
+			bucketName:         bucketName,
+			uploadID:           uploadID,
+			copySourceHeader:   url.QueryEscape("/" + bucketName + "/" + objectName),
+			invalidPartNumber:  true,
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
+			expectedRespStatus: http.StatusOK,
+		},
+		// Test case - 12.
+		// maximum part number.
+		{
+			bucketName:         bucketName,
+			uploadID:           uploadID,
+			copySourceHeader:   url.QueryEscape("/" + bucketName + "/" + objectName),
+			maximumPartNumber:  true,
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
+			expectedRespStatus: http.StatusOK,
+		},
+	}
+
+	for i, testCase := range testCases {
+		var req *http.Request
+		var reqV2 *http.Request
+		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
+		rec := httptest.NewRecorder()
+		if !testCase.invalidPartNumber || !testCase.maximumPartNumber {
+			// construct HTTP request for copy object.
+			req, err = newTestSignedRequestV4("PUT", getCopyObjectPartURL("", testCase.bucketName, testObject, testCase.uploadID, "1"), 0, nil, testCase.accessKey, testCase.secretKey)
+		} else if testCase.invalidPartNumber {
+			req, err = newTestSignedRequestV4("PUT", getCopyObjectPartURL("", testCase.bucketName, testObject, testCase.uploadID, "abc"), 0, nil, testCase.accessKey, testCase.secretKey)
+		} else if testCase.maximumPartNumber {
+			req, err = newTestSignedRequestV4("PUT", getCopyObjectPartURL("", testCase.bucketName, testObject, testCase.uploadID, "99999"), 0, nil, testCase.accessKey, testCase.secretKey)
+		}
+		if err != nil {
+			t.Fatalf("Test %d: Failed to create HTTP request for copy Object: <ERROR> %v", i+1, err)
+		}
+
+		// "X-Amz-Copy-Source" header contains the information about the source bucket and the object to copied.
+		if testCase.copySourceHeader != "" {
+			req.Header.Set("X-Amz-Copy-Source", testCase.copySourceHeader)
+		}
+		if testCase.copySourceRange != "" {
+			req.Header.Set("X-Amz-Copy-Source-Range", testCase.copySourceRange)
+		}
+		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
+		// Call the ServeHTTP to execute the handler, `func (api objectAPIHandlers) CopyObjectHandler` handles the request.
+		apiRouter.ServeHTTP(rec, req)
+		// Assert the response code with the expected status.
+		if rec.Code != testCase.expectedRespStatus {
+			t.Fatalf("Test %d: %s:  Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, rec.Code)
+		}
+		if rec.Code == http.StatusOK {
+			// See if the new part has been uploaded.
+			// testing whether the copy was successful.
+			var results ListPartsInfo
+			results, err = obj.ListObjectParts(testCase.bucketName, testObject, testCase.uploadID, 0, 1)
+			if err != nil {
+				t.Fatalf("Test %d: %s: Failed to look for copied object part: <ERROR> %s", i+1, instanceType, err)
+			}
+			if len(results.Parts) != 1 {
+				t.Fatalf("Test %d: %s: Expected only one entry returned %d entries", i+1, instanceType, len(results.Parts))
+			}
+		}
+
+		// Verify response of the V2 signed HTTP request.
+		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
+		recV2 := httptest.NewRecorder()
+
+		reqV2, err = newTestRequest("PUT", getCopyObjectPartURL("", testCase.bucketName, testObject, testCase.uploadID, "1"), 0, nil)
+		if err != nil {
+			t.Fatalf("Test %d: Failed to create HTTP request for copy Object: <ERROR> %v", i+1, err)
+		}
+		// "X-Amz-Copy-Source" header contains the information about the source bucket and the object to copied.
+		if testCase.copySourceHeader != "" {
+			reqV2.Header.Set("X-Amz-Copy-Source", testCase.copySourceHeader)
+		}
+		if testCase.copySourceRange != "" {
+			reqV2.Header.Set("X-Amz-Copy-Source-Range", testCase.copySourceRange)
+		}
+
+		err = signRequestV2(reqV2, testCase.accessKey, testCase.secretKey)
+		if err != nil {
+			t.Fatalf("Failed to V2 Sign the HTTP request: %v.", err)
+		}
+
+		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
+		// Call the ServeHTTP to execute the handler.
+		apiRouter.ServeHTTP(recV2, reqV2)
+		if recV2.Code != testCase.expectedRespStatus {
+			t.Errorf("Test %d: %s: Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, recV2.Code)
+		}
+	}
+
+	// HTTP request for testing when `ObjectLayer` is set to `nil`.
+	// There is no need to use an existing bucket and valid input for creating the request
+	// since the `objectLayer==nil`  check is performed before any other checks inside the handlers.
+	// The only aim is to generate an HTTP request in a way that the relevant/registered end point is evoked/called.
+	nilBucket := "dummy-bucket"
+	nilObject := "dummy-object"
+
+	nilReq, err := newTestSignedRequestV4("PUT", getCopyObjectPartURL("", nilBucket, nilObject, "0", "0"),
+		0, bytes.NewReader([]byte("testNilObjLayer")), "", "")
+	if err != nil {
+		t.Errorf("Minio %s: Failed to create http request for testing the response when object Layer is set to `nil`.", instanceType)
+	}
+
+	// Below is how CopyObjectPartHandler is registered.
+	// bucket.Methods("PUT").Path("/{object:.+}").HeadersRegexp("X-Amz-Copy-Source", ".*?(\\/|%2F).*?").HandlerFunc(api.CopyObjectPartHandler).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}")
+	// Its necessary to set the "X-Amz-Copy-Source" header for the request to be accepted by the handler.
+	nilReq.Header.Set("X-Amz-Copy-Source", url.QueryEscape("/"+nilBucket+"/"+nilObject))
+
+	// execute the object layer set to `nil` test.
+	// `ExecObjectLayerAPINilTest` manages the operation.
+	ExecObjectLayerAPINilTest(t, nilBucket, nilObject, instanceType, apiRouter, nilReq)
+
+}
+
 // Wrapper for calling Copy Object API handler tests for both XL multiple disks and single node setup.
 func TestAPICopyObjectHandler(t *testing.T) {
 	defer DetectTestLeak(t)()

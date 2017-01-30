@@ -1419,6 +1419,13 @@ func getPutObjectPartURL(endPoint, bucketName, objectName, uploadID, partNumber 
 	return makeTestTargetURL(endPoint, bucketName, objectName, queryValues)
 }
 
+func getCopyObjectPartURL(endPoint, bucketName, objectName, uploadID, partNumber string) string {
+	queryValues := url.Values{}
+	queryValues.Set("uploadId", uploadID)
+	queryValues.Set("partNumber", partNumber)
+	return makeTestTargetURL(endPoint, bucketName, objectName, queryValues)
+}
+
 // return URL for fetching object from the bucket.
 func getGetObjectURL(endPoint, bucketName, objectName string) string {
 	return makeTestTargetURL(endPoint, bucketName, objectName, url.Values{})
@@ -1883,22 +1890,22 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, testName, bucketName, objectName, 
 	}
 }
 
-// ExecObjectLayerAPINilTest - Sets the object layer to `nil`, and calls rhe registered object layer API endpoint, and assert the error response.
-// The purpose is to validate the API handlers response when the object layer is uninitialized.
-// Usage hint: Should be used at the end of the API end points tests (ex: check the last few lines of `testAPIListObjectPartsHandler`), need a sample HTTP request
-// to be sent as argument so that the relevant handler is called,
-// the handler registration is expected to be done since its called from within the API handler tests,
-// the reference to the registered HTTP handler has to be sent as an argument.
+// ExecObjectLayerAPINilTest - Sets the object layer to `nil`, and calls rhe registered object layer API endpoint,
+// and assert the error response. The purpose is to validate the API handlers response when the object layer is uninitialized.
+// Usage hint: Should be used at the end of the API end points tests (ex: check the last few lines of `testAPIListObjectPartsHandler`),
+// need a sample HTTP request to be sent as argument so that the relevant handler is called, the handler registration is expected
+// to be done since its called from within the API handler tests, the reference to the registered HTTP handler has to be sent
+// as an argument.
 func ExecObjectLayerAPINilTest(t TestErrHandler, bucketName, objectName, instanceType string, apiRouter http.Handler, req *http.Request) {
 	// httptest Recorder to capture all the response by the http handler.
 	rec := httptest.NewRecorder()
 
 	// The  API handler gets the referece to the object layer via the global object Layer,
 	// setting it to `nil` in order test for handlers response for uninitialized object layer.
-
 	globalObjLayerMutex.Lock()
 	globalObjectAPI = nil
 	globalObjLayerMutex.Unlock()
+
 	// call the HTTP handler.
 	apiRouter.ServeHTTP(rec, req)
 
@@ -1909,7 +1916,8 @@ func ExecObjectLayerAPINilTest(t TestErrHandler, bucketName, objectName, instanc
 		t.Errorf("Object API Nil Test expected to fail with %d, but failed with %d", serverNotInitializedErr, rec.Code)
 	}
 	// expected error response in bytes when objectLayer is not initialized, or set to `nil`.
-	expectedErrResponse := encodeResponse(getAPIErrorResponse(getAPIError(ErrServerNotInitialized), getGetObjectURL("", bucketName, objectName)))
+	expectedErrResponse := encodeResponse(getAPIErrorResponse(getAPIError(ErrServerNotInitialized),
+		getGetObjectURL("", bucketName, objectName)))
 
 	// HEAD HTTP Request doesn't contain body in its response,
 	// for other type of HTTP requests compare the response body content with the expected one.
@@ -2093,6 +2101,9 @@ func registerBucketLevelFunc(bucket *router.Router, api objectAPIHandlers, apiFu
 		case "NewMultipart":
 			// Register New Multipart upload handler.
 			bucket.Methods("POST").Path("/{object:.+}").HandlerFunc(api.NewMultipartUploadHandler).Queries("uploads", "")
+		case "CopyObjectPart":
+			// Register CopyObjectPart handler.
+			bucket.Methods("PUT").Path("/{object:.+}").HeadersRegexp("X-Amz-Copy-Source", ".*?(\\/|%2F).*?").HandlerFunc(api.CopyObjectPartHandler).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}")
 		case "PutObjectPart":
 			// Register PutObjectPart handler.
 			bucket.Methods("PUT").Path("/{object:.+}").HandlerFunc(api.PutObjectPartHandler).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}")
