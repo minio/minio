@@ -627,8 +627,11 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 		}
 	}
 
+	// We always allow empty part.
+	allowEmpty := true
+
 	// Erasure code data and write across all disks.
-	sizeWritten, checkSums, err := erasureCreateFile(onlineDisks, minioMetaTmpBucket, tmpPartPath, teeReader, xlMeta.Erasure.BlockSize, xl.dataBlocks, xl.parityBlocks, bitRotAlgo, xl.writeQuorum)
+	sizeWritten, checkSums, err := erasureCreateFile(onlineDisks, minioMetaTmpBucket, tmpPartPath, teeReader, allowEmpty, xlMeta.Erasure.BlockSize, xl.dataBlocks, xl.parityBlocks, bitRotAlgo, xl.writeQuorum)
 	if err != nil {
 		return "", toObjectErr(err, bucket, object)
 	}
