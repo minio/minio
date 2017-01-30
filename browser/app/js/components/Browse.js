@@ -414,10 +414,10 @@ export default class Browse extends React.Component {
     let freePercent = free * 100 / total
 
     if (web.LoggedIn()) {
-      browserDropdownButton = <BrowserDropdown fullScreen={ this.fullScreen.bind(this) }
-                                showAbout={ this.showAbout.bind(this) }
-                                showSettings={ this.showSettings.bind(this) }
-                                logout={ this.logout.bind(this) } />
+      browserDropdownButton = <BrowserDropdown fullScreenFunc={ this.fullScreen.bind(this) }
+                                aboutFunc={ this.showAbout.bind(this) }
+                                settingsFunc={ this.showSettings.bind(this) }
+                                logoutFunc={ this.logout.bind(this) } />
     } else {
       loginButton = <a className='btn btn-danger' href='/minio/login'>Login</a>
     }

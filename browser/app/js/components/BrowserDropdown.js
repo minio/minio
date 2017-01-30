@@ -18,7 +18,7 @@ import React from 'react'
 import connect from 'react-redux/lib/components/connect'
 import Dropdown from 'react-bootstrap/lib/Dropdown'
 
-let BrowserDropdown = ({fullScreen, showAbout, showSettings, logout}) => {
+let BrowserDropdown = ({fullScreenFunc, aboutFunc, settingsFunc, logoutFunc}) => {
   return (
     <li>
       <Dropdown pullRight id="top-right-menu">
@@ -30,7 +30,7 @@ let BrowserDropdown = ({fullScreen, showAbout, showSettings, logout}) => {
             <a target="_blank" href="https://github.com/minio/miniobrowser">Github <i className="fa fa-github"></i></a>
           </li>
           <li>
-            <a href="" onClick={ fullScreen }>Fullscreen <i className="fa fa-expand"></i></a>
+            <a href="" onClick={ fullScreenFunc }>Fullscreen <i className="fa fa-expand"></i></a>
           </li>
           <li>
             <a target="_blank" href="https://docs.minio.io/">Documentation <i className="fa fa-book"></i></a>
@@ -39,13 +39,13 @@ let BrowserDropdown = ({fullScreen, showAbout, showSettings, logout}) => {
             <a target="_blank" href="https://slack.minio.io">Ask for help <i className="fa fa-question-circle"></i></a>
           </li>
           <li>
-            <a href="" onClick={ showAbout }>About <i className="fa fa-info-circle"></i></a>
+            <a href="" onClick={ aboutFunc }>About <i className="fa fa-info-circle"></i></a>
           </li>
           <li>
-            <a href="" onClick={ showSettings }>Settings <i className="fa fa-cog"></i></a>
+            <a href="" onClick={ settingsFunc }>Settings <i className="fa fa-cog"></i></a>
           </li>
           <li>
-            <a href="" onClick={ logout }>Sign Out <i className="fa fa-sign-out"></i></a>
+            <a href="" onClick={ logoutFunc }>Sign Out <i className="fa fa-sign-out"></i></a>
           </li>
         </Dropdown.Menu>
       </Dropdown>
