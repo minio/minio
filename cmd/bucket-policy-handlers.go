@@ -98,22 +98,32 @@ func bucketPolicyConditionMatch(conditions map[string]set.StringSet, statement p
 	// - s3:aws-Referer
 
 	for condition, conditionKeyVal := range statement.Conditions {
+		prefixConditon := conditionKeyVal["s3:prefix"]
+		maxKeyCondition := conditionKeyVal["s3:max-keys"]
 		if condition == "StringEquals" {
-			if !conditionKeyVal["s3:prefix"].Equals(conditions["prefix"]) {
+			// If there is no condition with "s3:prefix" or "s3:max-keys" condition key
+			// then there is nothing to check condition against.
+			if !prefixConditon.IsEmpty() && !prefixConditon.Equals(conditions["prefix"]) {
 				return false
 			}
-			if !conditionKeyVal["s3:max-keys"].Equals(conditions["max-keys"]) {
+			if !maxKeyCondition.IsEmpty() && !maxKeyCondition.Equals(conditions["max-keys"]) {
 				return false
 			}
 		} else if condition == "StringNotEquals" {
-			if !conditionKeyVal["s3:prefix"].Equals(conditions["prefix"]) {
+			// If there is no condition with "s3:prefix" or "s3:max-keys" condition key
+			// then there is nothing to check condition against.
+			if !prefixConditon.IsEmpty() && prefixConditon.Equals(conditions["prefix"]) {
 				return false
 			}
-			if !conditionKeyVal["s3:max-keys"].Equals(conditions["max-keys"]) {
+			if !maxKeyCondition.IsEmpty() && maxKeyCondition.Equals(conditions["max-keys"]) {
 				return false
 			}
 		} else if condition == "StringLike" {
 			awsReferers := conditionKeyVal["aws:Referer"]
+			// Skip empty condition, it is trivially satisfied.
+			if awsReferers.IsEmpty() {
+				continue
+			}
 			// wildcard match of referer in statement was not empty.
 			// StringLike has a match, i.e, condition evaluates to true.
 			for referer := range conditions["referer"] {
@@ -125,6 +135,10 @@ func bucketPolicyConditionMatch(conditions map[string]set.StringSet, statement p
 			return false
 		} else if condition == "StringNotLike" {
 			awsReferers := conditionKeyVal["aws:Referer"]
+			// Skip empty condition, it is trivially satisfied.
+			if awsReferers.IsEmpty() {
+				continue
+			}
 			// wildcard match of referer in statement was not empty.
 			// StringNotLike has a match, i.e, condition evaluates to false.
 			for referer := range conditions["referer"] {
