@@ -97,6 +97,9 @@ func bucketPolicyConditionMatch(conditions map[string]set.StringSet, statement p
 	// - s3:max-keys
 	// - s3:aws-Referer
 
+	// The following loop evaluates the logical AND of all the
+	// conditions in the statement. Note: we can break out of the
+	// loop if and only if a condition evaluates to false.
 	for condition, conditionKeyVal := range statement.Conditions {
 		if condition == "StringEquals" {
 			if !conditionKeyVal["s3:prefix"].Equals(conditions["prefix"]) {
@@ -116,13 +119,17 @@ func bucketPolicyConditionMatch(conditions map[string]set.StringSet, statement p
 			awsReferers := conditionKeyVal["aws:Referer"]
 			// wildcard match of referer in statement was not empty.
 			// StringLike has a match, i.e, condition evaluates to true.
+			refererFound := false
 			for referer := range conditions["referer"] {
 				if !awsReferers.FuncMatch(refererMatch, referer).IsEmpty() {
-					return true
+					refererFound = true
+					break
 				}
 			}
 			// No matching referer found, so the condition is false.
-			return false
+			if !refererFound {
+				return false
+			}
 		} else if condition == "StringNotLike" {
 			awsReferers := conditionKeyVal["aws:Referer"]
 			// wildcard match of referer in statement was not empty.
@@ -132,11 +139,9 @@ func bucketPolicyConditionMatch(conditions map[string]set.StringSet, statement p
 					return false
 				}
 			}
-			// No matching referer found, so the condition is true.
-			return true
 		}
 	}
-	// No conditions were present in the statement, so trivially true (always).
+
 	return true
 }
 

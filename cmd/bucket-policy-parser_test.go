@@ -433,7 +433,12 @@ func TestIsValidConditions(t *testing.T) {
 		generateConditions("StringNotEquals", "s3:max-keys", "100"),
 	}
 
+	getObjectActionSet := set.CreateStringSet("s3:GetObject")
+	roBucketActionSet := set.CreateStringSet(readOnlyBucketActions...)
+	maxKeysConditionErr := fmt.Errorf("Unsupported condition key %s for the given actions %s, "+
+		"please validate your policy document", "s3:max-keys", getObjectActionSet)
 	testCases := []struct {
+		inputActions   set.StringSet
 		inputCondition map[string]map[string]set.StringSet
 		// expected result.
 		expectedErr error
@@ -443,46 +448,44 @@ func TestIsValidConditions(t *testing.T) {
 		// Malformed conditions.
 		// Test case - 1.
 		// "StringValues" is an invalid type.
-		{testConditions[0], fmt.Errorf("Unsupported condition type 'StringValues', " +
+		{roBucketActionSet, testConditions[0], fmt.Errorf("Unsupported condition type 'StringValues', " +
 			"please validate your policy document"), false},
 		// Test case - 2.
 		// "s3:Object" is an invalid key.
-		{testConditions[1], fmt.Errorf("Unsupported condition key " +
+		{roBucketActionSet, testConditions[1], fmt.Errorf("Unsupported condition key " +
 			"'StringEquals', please validate your policy document"), false},
 		// Test case - 3.
 		// Test case with Ambigious conditions set.
-		{testConditions[2], fmt.Errorf("Ambigious condition values for key 's3:prefix', " +
+		{roBucketActionSet, testConditions[2], fmt.Errorf("Ambigious condition values for key 's3:prefix', " +
 			"please validate your policy document"), false},
 		// Test case - 4.
 		// Test case with valid and invalid condition types.
-		{testConditions[3], fmt.Errorf("Unsupported condition type 'InvalidType', " +
+		{roBucketActionSet, testConditions[3], fmt.Errorf("Unsupported condition type 'InvalidType', " +
 			"please validate your policy document"), false},
 		// Test case - 5.
 		// Test case with valid and invalid condition keys.
-		{testConditions[4], fmt.Errorf("Unsupported condition key 'StringEquals', " +
+		{roBucketActionSet, testConditions[4], fmt.Errorf("Unsupported condition key 'StringEquals', " +
 			"please validate your policy document"), false},
 		// Test cases with valid conditions.
 		// Test case - 6.
-		{testConditions[5], nil, true},
+		{roBucketActionSet, testConditions[5], nil, true},
 		// Test case - 7.
-		{testConditions[6], nil, true},
+		{roBucketActionSet, testConditions[6], nil, true},
 		// Test case - 8.
-		{testConditions[7], nil, true},
+		{roBucketActionSet, testConditions[7], nil, true},
 		// Test case - 9.
-		{testConditions[8], nil, true},
+		{roBucketActionSet, testConditions[8], nil, true},
 		// Test case - 10.
-		{testConditions[9], nil, true},
+		{roBucketActionSet, testConditions[9], nil, true},
 		// Test case - 11.
-		{testConditions[10], nil, true},
+		{roBucketActionSet, testConditions[10], nil, true},
 		// Test case - 12.
-		{testConditions[11], nil, true},
+		{roBucketActionSet, testConditions[11], nil, true},
 		// Test case - 13.
-		{testConditions[11], nil, true},
-		// Test case - 14.
-		{testConditions[11], nil, true},
+		{getObjectActionSet, testConditions[11], maxKeysConditionErr, false},
 	}
 	for i, testCase := range testCases {
-		actualErr := isValidConditions(testCase.inputCondition)
+		actualErr := isValidConditions(testCase.inputActions, testCase.inputCondition)
 		if actualErr != nil && testCase.shouldPass {
 			t.Errorf("Test %d: Expected to pass, but failed with: <ERROR> %s", i+1, actualErr.Error())
 		}
