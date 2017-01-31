@@ -208,6 +208,13 @@ type CopyObjectResponse struct {
 	ETag         string   // md5sum of the copied object.
 }
 
+// CopyObjectPartResponse container returns ETag and LastModified of the successfully copied object
+type CopyObjectPartResponse struct {
+	XMLName      xml.Name `xml:"http://s3.amazonaws.com/doc/2006-03-01/ CopyPartResult" json:"-"`
+	LastModified string   // time string of format "2006-01-02T15:04:05.000Z"
+	ETag         string   // md5sum of the copied object part.
+}
+
 // Initiator inherit from Owner struct, fields are same
 type Initiator Owner
 
@@ -394,6 +401,14 @@ func generateListObjectsV2Response(bucket, prefix, token, startAfter, delimiter 
 // generates CopyObjectResponse from etag and lastModified time.
 func generateCopyObjectResponse(etag string, lastModified time.Time) CopyObjectResponse {
 	return CopyObjectResponse{
+		ETag:         "\"" + etag + "\"",
+		LastModified: lastModified.UTC().Format(timeFormatAMZLong),
+	}
+}
+
+// generates CopyObjectPartResponse from etag and lastModified time.
+func generateCopyObjectPartResponse(etag string, lastModified time.Time) CopyObjectPartResponse {
+	return CopyObjectPartResponse{
 		ETag:         "\"" + etag + "\"",
 		LastModified: lastModified.UTC().Format(timeFormatAMZLong),
 	}

@@ -145,7 +145,7 @@ type ListPartsInfo struct {
 	IsTruncated bool
 
 	// List of all parts.
-	Parts []partInfo
+	Parts []PartInfo
 
 	EncodingType string // Not supported yet.
 }
@@ -220,8 +220,8 @@ type ListObjectsInfo struct {
 	Prefixes []string
 }
 
-// partInfo - represents individual part metadata.
-type partInfo struct {
+// PartInfo - represents individual part metadata.
+type PartInfo struct {
 	// Part number that identifies the part. This is a positive integer between
 	// 1 and 10,000.
 	PartNumber int

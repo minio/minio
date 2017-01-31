@@ -499,7 +499,8 @@ func (xl xlObjects) newMultipartUpload(bucket string, object string, meta map[st
 	uploadIDPath := path.Join(bucket, object, uploadID)
 	tempUploadIDPath := uploadID
 	// Write updated `xl.json` to all disks.
-	if err := writeSameXLMetadata(xl.storageDisks, minioMetaTmpBucket, tempUploadIDPath, xlMeta, xl.writeQuorum, xl.readQuorum); err != nil {
+	err := writeSameXLMetadata(xl.storageDisks, minioMetaTmpBucket, tempUploadIDPath, xlMeta, xl.writeQuorum, xl.readQuorum)
+	if err != nil {
 		return "", toObjectErr(err, minioMetaTmpBucket, tempUploadIDPath)
 	}
 	// delete the tmp path later in case we fail to rename (ignore
@@ -538,14 +539,49 @@ func (xl xlObjects) NewMultipartUpload(bucket, object string, meta map[string]st
 	return xl.newMultipartUpload(bucket, object, meta)
 }
 
+// CopyObjectPart - reads incoming stream and internally erasure codes
+// them. This call is similar to put object part operation but the source
+// data is read from an existing object.
+//
+// Implements S3 compatible Upload Part Copy API.
+func (xl xlObjects) CopyObjectPart(srcBucket, srcObject, dstBucket, dstObject, uploadID string, partID int, startOffset int64, length int64) (PartInfo, error) {
+	if err := checkNewMultipartArgs(srcBucket, srcObject, xl); err != nil {
+		return PartInfo{}, err
+	}
+
+	// Initialize pipe.
+	pipeReader, pipeWriter := io.Pipe()
+
+	go func() {
+		startOffset := int64(0) // Read the whole file.
+		if gerr := xl.GetObject(srcBucket, srcObject, startOffset, length, pipeWriter); gerr != nil {
+			errorIf(gerr, "Unable to read %s of the object `%s/%s`.", srcBucket, srcObject)
+			pipeWriter.CloseWithError(toObjectErr(gerr, srcBucket, srcObject))
+			return
+		}
+		pipeWriter.Close() // Close writer explicitly signalling we wrote all data.
+	}()
+
+	partInfo, err := xl.PutObjectPart(dstBucket, dstObject, uploadID, partID, length, pipeReader, "", "")
+	if err != nil {
+		return PartInfo{}, toObjectErr(err, dstBucket, dstObject)
+	}
+
+	// Explicitly close the reader.
+	pipeReader.Close()
+
+	// Success.
+	return partInfo, nil
+}
+
 // PutObjectPart - reads incoming stream and internally erasure codes
 // them. This call is similar to single put operation but it is part
 // of the multipart transaction.
 //
 // Implements S3 compatible Upload Part API.
-func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, size int64, data io.Reader, md5Hex string, sha256sum string) (string, error) {
+func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, size int64, data io.Reader, md5Hex string, sha256sum string) (PartInfo, error) {
 	if err := checkPutObjectPartArgs(bucket, object, xl); err != nil {
-		return "", err
+		return PartInfo{}, err
 	}
 
 	var partsMetadata []xlMetaV1
@@ -558,14 +594,15 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	// Validates if upload ID exists.
 	if !xl.isUploadIDExists(bucket, object, uploadID) {
 		preUploadIDLock.RUnlock()
-		return "", traceError(InvalidUploadID{UploadID: uploadID})
+		return PartInfo{}, traceError(InvalidUploadID{UploadID: uploadID})
 	}
+
 	// Read metadata associated with the object from all disks.
 	partsMetadata, errs = readAllXLMetadata(xl.storageDisks, minioMetaMultipartBucket,
 		uploadIDPath)
 	if !isDiskQuorum(errs, xl.writeQuorum) {
 		preUploadIDLock.RUnlock()
-		return "", toObjectErr(traceError(errXLWriteQuorum), bucket, object)
+		return PartInfo{}, toObjectErr(traceError(errXLWriteQuorum), bucket, object)
 	}
 	preUploadIDLock.RUnlock()
 
@@ -575,7 +612,7 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	// Pick one from the first valid metadata.
 	xlMeta, err := pickValidXLMeta(partsMetadata, modTime)
 	if err != nil {
-		return "", err
+		return PartInfo{}, err
 	}
 
 	onlineDisks = getOrderedDisks(xlMeta.Erasure.Distribution, onlineDisks)
@@ -633,13 +670,13 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	// Erasure code data and write across all disks.
 	sizeWritten, checkSums, err := erasureCreateFile(onlineDisks, minioMetaTmpBucket, tmpPartPath, teeReader, allowEmpty, xlMeta.Erasure.BlockSize, xl.dataBlocks, xl.parityBlocks, bitRotAlgo, xl.writeQuorum)
 	if err != nil {
-		return "", toObjectErr(err, bucket, object)
+		return PartInfo{}, toObjectErr(err, bucket, object)
 	}
 
 	// Should return IncompleteBody{} error when reader has fewer bytes
 	// than specified in request header.
 	if sizeWritten < size {
-		return "", traceError(IncompleteBody{})
+		return PartInfo{}, traceError(IncompleteBody{})
 	}
 
 	// For size == -1, perhaps client is sending in chunked encoding
@@ -653,14 +690,14 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	if md5Hex != "" {
 		if newMD5Hex != md5Hex {
 			// Returns md5 mismatch.
-			return "", traceError(BadDigest{md5Hex, newMD5Hex})
+			return PartInfo{}, traceError(BadDigest{md5Hex, newMD5Hex})
 		}
 	}
 
 	if sha256sum != "" {
 		newSHA256sum := hex.EncodeToString(sha256Writer.Sum(nil))
 		if newSHA256sum != sha256sum {
-			return "", traceError(SHA256Mismatch{})
+			return PartInfo{}, traceError(SHA256Mismatch{})
 		}
 	}
 
@@ -671,20 +708,20 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 
 	// Validate again if upload ID still exists.
 	if !xl.isUploadIDExists(bucket, object, uploadID) {
-		return "", traceError(InvalidUploadID{UploadID: uploadID})
+		return PartInfo{}, traceError(InvalidUploadID{UploadID: uploadID})
 	}
 
 	// Rename temporary part file to its final location.
 	partPath := path.Join(uploadIDPath, partSuffix)
 	err = renamePart(onlineDisks, minioMetaTmpBucket, tmpPartPath, minioMetaMultipartBucket, partPath, xl.writeQuorum)
 	if err != nil {
-		return "", toObjectErr(err, minioMetaMultipartBucket, partPath)
+		return PartInfo{}, toObjectErr(err, minioMetaMultipartBucket, partPath)
 	}
 
 	// Read metadata again because it might be updated with parallel upload of another part.
 	partsMetadata, errs = readAllXLMetadata(onlineDisks, minioMetaMultipartBucket, uploadIDPath)
 	if !isDiskQuorum(errs, xl.writeQuorum) {
-		return "", toObjectErr(traceError(errXLWriteQuorum), bucket, object)
+		return PartInfo{}, toObjectErr(traceError(errXLWriteQuorum), bucket, object)
 	}
 
 	// Get current highest version based on re-read partsMetadata.
@@ -693,7 +730,7 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	// Pick one from the first valid metadata.
 	xlMeta, err = pickValidXLMeta(partsMetadata, modTime)
 	if err != nil {
-		return "", err
+		return PartInfo{}, err
 	}
 
 	// Once part is successfully committed, proceed with updating XL metadata.
@@ -720,15 +757,25 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 
 	// Writes a unique `xl.json` each disk carrying new checksum related information.
 	if err = writeUniqueXLMetadata(onlineDisks, minioMetaTmpBucket, tempXLMetaPath, partsMetadata, xl.writeQuorum); err != nil {
-		return "", toObjectErr(err, minioMetaTmpBucket, tempXLMetaPath)
+		return PartInfo{}, toObjectErr(err, minioMetaTmpBucket, tempXLMetaPath)
 	}
 	rErr := commitXLMetadata(onlineDisks, minioMetaTmpBucket, tempXLMetaPath, minioMetaMultipartBucket, uploadIDPath, xl.writeQuorum)
 	if rErr != nil {
-		return "", toObjectErr(rErr, minioMetaMultipartBucket, uploadIDPath)
+		return PartInfo{}, toObjectErr(rErr, minioMetaMultipartBucket, uploadIDPath)
+	}
+
+	fi, err := xl.statPart(bucket, object, uploadID, partSuffix)
+	if err != nil {
+		return PartInfo{}, toObjectErr(rErr, minioMetaMultipartBucket, partSuffix)
 	}
 
 	// Return success.
-	return newMD5Hex, nil
+	return PartInfo{
+		PartNumber:   partID,
+		LastModified: fi.ModTime,
+		ETag:         newMD5Hex,
+		Size:         fi.Size,
+	}, nil
 }
 
 // listObjectParts - wrapper reading `xl.json` for a given object and
@@ -772,7 +819,7 @@ func (xl xlObjects) listObjectParts(bucket, object, uploadID string, partNumberM
 		if err != nil {
 			return ListPartsInfo{}, toObjectErr(err, minioMetaBucket, path.Join(uploadID, part.Name))
 		}
-		result.Parts = append(result.Parts, partInfo{
+		result.Parts = append(result.Parts, PartInfo{
 			PartNumber:   part.Number,
 			ETag:         part.ETag,
 			LastModified: fi.ModTime,
