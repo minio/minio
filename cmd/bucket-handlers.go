@@ -393,6 +393,13 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		return
 	}
 
+	// Require Content-Length to be set in the request
+	size := r.ContentLength
+	if size < 0 {
+		writeErrorResponse(w, ErrMissingContentLength, r.URL)
+		return
+	}
+
 	// Here the parameter is the size of the form data that should
 	// be loaded in memory, the remaining being put in temporary files.
 	reader, err := r.MultipartReader()
@@ -402,12 +409,28 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	fileBody, fileName, formValues, err := extractPostPolicyFormValues(reader)
+	// Read multipart data and save in memory and in the disk if needed
+	form, err := reader.ReadForm(maxFormMemory)
+	if err != nil {
+		errorIf(err, "Unable to initialize multipart reader.")
+		writeErrorResponse(w, ErrMalformedPOSTRequest, r.URL)
+		return
+	}
+
+	// Remove all tmp files creating during multipart upload
+	defer form.RemoveAll()
+
+	// Extract all form fields
+	fileBody, fileName, fileSize, formValues, err := extractPostPolicyFormValues(form)
 	if err != nil {
 		errorIf(err, "Unable to parse form values.")
 		writeErrorResponse(w, ErrMalformedPOSTRequest, r.URL)
 		return
 	}
+
+	// Close multipart file
+	defer fileBody.Close()
+
 	bucket := mux.Vars(r)["bucket"]
 	formValues["Bucket"] = bucket
 
@@ -443,21 +466,20 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	// Use rangeReader to ensure that object size is within expected range.
+	// Ensure that the object size is within expected range, also the file size
+	// should not exceed the maximum single Put size (5 GiB)
 	lengthRange := postPolicyForm.Conditions.ContentLengthRange
 	if lengthRange.Valid {
-		// If policy restricted the size of the object.
-		fileBody = &rangeReader{
-			Reader: fileBody,
-			Min:    lengthRange.Min,
-			Max:    lengthRange.Max,
+		if fileSize < lengthRange.Min {
+			errorIf(err, "Unable to create object.")
+			writeErrorResponse(w, toAPIErrorCode(errDataTooSmall), r.URL)
+			return
 		}
-	} else {
-		// Default values of min/max size of the object.
-		fileBody = &rangeReader{
-			Reader: fileBody,
-			Min:    0,
-			Max:    maxObjectSize,
+
+		if fileSize > lengthRange.Max || fileSize > maxObjectSize {
+			errorIf(err, "Unable to create object.")
+			writeErrorResponse(w, toAPIErrorCode(errDataTooLarge), r.URL)
+			return
 		}
 	}
 
@@ -470,7 +492,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	objectLock.Lock()
 	defer objectLock.Unlock()
 
-	objInfo, err := objectAPI.PutObject(bucket, object, -1, fileBody, metadata, sha256sum)
+	objInfo, err := objectAPI.PutObject(bucket, object, fileSize, fileBody, metadata, sha256sum)
 	if err != nil {
 		errorIf(err, "Unable to create object.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
