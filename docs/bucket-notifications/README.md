@@ -1,6 +1,6 @@
 [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
 
-Minio server supports Amazon S3 compatible bucket event notification for following targets [AMQP](https://www.amqp.org/about/what), [Elasticsearch](https://www.elastic.co/guide/en/elasticsearch/reference/current/getting-started.html) , [Redis](http://redis.io/documentation), [nats.io](http://nats.io/) and [PostgreSQL](https://www.postgresql.org).
+Minio server supports Amazon S3 compatible bucket event notification for the following targets [AMQP](https://www.amqp.org/about/what), [Elasticsearch](https://www.elastic.co/guide/en/elasticsearch/reference/current/getting-started.html) , [Redis](http://redis.io/documentation), [nats.io](http://nats.io/), [PostgreSQL](https://www.postgresql.org) and [kafka](https://kafka.apache.org/).
 
 ##  Prerequisites
 
@@ -13,7 +13,8 @@ Minio server supports Amazon S3 compatible bucket event notification for followi
 | [`Elasticsearch`](#Elasticsearch) |    
 | [`Redis`](#Redis) |    
 | [`NATS`](#NATS) |    
-| [`PostgreSQL`](#PostgreSQL) |    
+| [`PostgreSQL`](#PostgreSQL) | 
+| [`kafka`](#kafka) |       
 
 <a name="RabbitMQ"></a>
 ## Publish Minio events via RabbitMQ 
@@ -43,13 +44,11 @@ The default location of Minio server configuration file is ``~/.minio/config.jso
 			}
         }
 ```
-Restart Minio server to reflect config changes. Minio supports all the exchange available in [RabbitMQ](https://www.rabbitmq.com/). For this setup we are using ``fanout`` exchange.
-
-If you are running [distributed Minio](https://docs.minio.io/docs/distributed-minio-quickstart-guide), modify ``~/.minio/config.json`` with these local changes on all the nodes.
+Restart Minio server to reflect config changes. Minio supports all the exchange available in [RabbitMQ](https://www.rabbitmq.com/). For this setup, we are using ``fanout`` exchange.
 
 ### Step 2: Enable bucket notification using Minio client
 
-We will enable bucket events only when JPEG images are uploaded or deleted from ``images`` bucket on ``myminio`` server. Here ARN value is ``arn:minio:sqs:us-east-1:1:amqp``. To understand more about ARN please follow [AWS ARN](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html) documentation.
+We will enable bucket event notification to trigger whenever a JPEG image is uploaded or deleted ``images`` bucket on ``myminio`` server. Here ARN value is ``arn:minio:sqs:us-east-1:1:amqp``. To understand more about ARN please follow [AWS ARN](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html) documentation.
 
 ```
 mc mb myminio/images
@@ -58,9 +57,9 @@ mc events list myminio/images
 arn:minio:sqs:us-east-1:1:amqp s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
 ```
 
-### Step 3: Testing on RabbitMQ
+### Step 3: Test on RabbitMQ
 
-Below python script waits on queue exchange ``bucketevents`` and prints event notification on console. It uses [Pika Python Client](https://www.rabbitmq.com/tutorials/tutorial-three-python.html), a library for RabbitMQ will be used in this python program.
+The python program below waits on the queue exchange ``bucketevents`` and prints event notifications on the console. We use [Pika Python Client](https://www.rabbitmq.com/tutorials/tutorial-three-python.html) library to do this. 
 
 ```py
 #!/usr/bin/env python
@@ -91,14 +90,13 @@ channel.basic_consume(callback,
 channel.start_consuming()
 ```
 
-
-Execute this example python script to watch for RabbitMQ events on the console.
+Execute this example python program to watch for RabbitMQ events on the console.
 
 ```py
 python rabbit.py
 ```
 
-Open another terminal and upload a JPEG image into “images” bucket.
+Open another terminal and upload a JPEG image into ``images`` bucket.
 
 ```
 mc cp myphoto.jpg myminio/images
@@ -132,11 +130,9 @@ The default location of Minio server configuration file is ``~/.minio/config.jso
 ```
 Restart Minio server to reflect config changes. ``bucketevents`` is the index used by Elasticsearch.
 
-If you are running [distributed Minio](https://docs.minio.io/docs/distributed-minio-quickstart-guide), modify ``~/.minio/config.json`` with these local changes on all the nodes.
-
 ### Step 2: Enable bucket notification using Minio client
 
-We will enable bucket events only when JPEG images are uploaded or deleted from ``images`` bucket on ``myminio`` server. Here ARN value is ``arn:minio:sqs:us-east-1:1:elasticsearch``. To understand more about ARN please follow [AWS ARN](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html) documentation.
+We will enable bucket event notification to trigger whenever a JPEG image is uploaded or deleted from ``images`` bucket on ``myminio`` server. Here ARN value is ``arn:minio:sqs:us-east-1:1:elasticsearch``. To understand more about ARN please follow [AWS ARN](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html) documentation.
 
 ```
 mc mb myminio/images
@@ -145,7 +141,7 @@ mc events list myminio/images
 arn:minio:sqs:us-east-1:1:elasticsearch s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
 ```
 
-### Step 3: Testing on Elasticsearch
+### Step 3: Test on Elasticsearch
 
 Upload a JPEG image into ``images`` bucket, this is the bucket which has been configured for event notification.
 
@@ -153,7 +149,7 @@ Upload a JPEG image into ``images`` bucket, this is the bucket which has been co
 mc cp myphoto.jpg myminio/images
 ```
 
-Running ``curl`` we can see Elasticsearch has created a new index name ``bucketevents``.
+Run ``curl`` to see new index name ``bucketevents`` in your Elasticsearch setup.
 
 ```
 curl -XGET '127.0.0.1:9200/_cat/indices?v'
@@ -242,11 +238,9 @@ The default location of Minio server configuration file is ``~/.minio/config.jso
 ```
 Restart Minio server to reflect config changes. ``bucketevents`` is the key used by Redis in this example.
 
-If you are running [distributed Minio](https://docs.minio.io/docs/distributed-minio-quickstart-guide), modify ``~/.minio/config.json`` with these local changes on all the nodes.
-
 ### Step 2: Enable bucket notification using Minio client
 
-We will enable bucket events only when JPEG images are uploaded or deleted from ``images`` bucket on ``myminio`` server. Here ARN value is ``arn:minio:sqs:us-east-1:1:redis``. To understand more about ARN please follow [AWS ARN](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html) documentation.
+We will enable bucket event notification to trigger whenever a JPEG image is uploaded or deleted from ``images`` bucket on ``myminio`` server. Here ARN value is ``arn:minio:sqs:us-east-1:1:redis``. To understand more about ARN please follow [AWS ARN](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html) documentation.
 
 ```
 mc mb myminio/images
@@ -255,9 +249,9 @@ mc events list myminio/images
 arn:minio:sqs:us-east-1:1:redis s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
 ```
 
-### Step 3: Testing on Redis
+### Step 3: Test on Redis
 
-Redis comes with handy command line interface ``redis-cli`` to print all notifications on the console.
+Redis comes with a handy command line interface ``redis-cli`` to print all notifications on the console.
 
 ```
 redis-cli -a yoursecret
@@ -286,6 +280,7 @@ Install NATS  from [here](http://nats.io/).
 ## Recipe steps
 
 ### Step 1: Add NATS endpoint to Minio
+
 The default location of Minio server configuration file is ``~/.minio/config.json``. Update the NATS configuration block in ``config.json`` as follows:
 
 ```
@@ -304,11 +299,9 @@ The default location of Minio server configuration file is ``~/.minio/config.jso
 ```
 Restart Minio server to reflect config changes. ``bucketevents`` is the subject used by NATS in this example.
 
-If you are running [distributed Minio](https://docs.minio.io/docs/distributed-minio-quickstart-guide), modify ``~/.minio/config.json`` with these local changes on all the nodes.
-
 ### Step 2: Enable bucket notification using Minio client
 
-We will enable bucket events only when JPEG images are uploaded or deleted from ``images`` bucket on ``myminio`` server. Here ARN value is ``arn:minio:sqs:us-east-1:1:nats``. To understand more about ARN please follow [AWS ARN](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html) documentation.
+We will enable bucket event notification to trigger whenever a JPEG image is uploaded or deleted from ``images`` bucket on ``myminio`` server. Here ARN value is ``arn:minio:sqs:us-east-1:1:nats``. To understand more about ARN please follow [AWS ARN](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html) documentation.
 
 ```
 mc mb myminio/images
@@ -317,7 +310,7 @@ mc events list myminio/images
 arn:minio:sqs:us-east-1:1:nats s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
 ```
 
-### Step 3: Testing on NATS
+### Step 3: Test on NATS
 
 Using this program below we can log the bucket notification added to NATS.
 
@@ -372,7 +365,6 @@ go run nats.go
 ```
 
 <a name="PostgreSQL"></a>
-
 ## Publish Minio events via PostgreSQL
 
 Install PostgreSQL from [here](https://www.postgresql.org/).
@@ -399,11 +391,9 @@ The default location of Minio server configuration file is ``~/.minio/config.jso
 ```
 Restart Minio server to reflect config changes. ``bucketevents`` is the database table used by PostgreSQL in this example.
 
-If you are running [distributed Minio](https://docs.minio.io/docs/distributed-minio-quickstart-guide), modify ``~/.minio/config.json`` with these local changes on all the nodes.
-
 ### Step 2: Enable bucket notification using Minio client
 
-We will enable bucket events only when JPEG images are uploaded or deleted from ``images`` bucket on ``myminio`` server. Here ARN value is ``arn:minio:sqs:us-east-1:1:postgresql``. To understand more about ARN please follow [AWS ARN](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html) documentation.
+We will enable bucket event notification to trigger whenever a JPEG image is uploaded or deleted from ``images`` bucket on ``myminio`` server. Here ARN value is ``arn:minio:sqs:us-east-1:1:postgresql``. To understand more about ARN please follow [AWS ARN](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html) documentation.
 
 ```
 mc mb myminio/images
@@ -412,7 +402,7 @@ mc events list myminio/images
 arn:minio:sqs:us-east-1:1:postgresql s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
 ```
 
-### Step 3: Testing on PostgreSQL
+### Step 3: Test on PostgreSQL
 
 Open another terminal and upload a JPEG image into ``images`` bucket.
 
@@ -420,7 +410,7 @@ Open another terminal and upload a JPEG image into ``images`` bucket.
 mc cp myphoto.jpg myminio/images
 ```
 
-Open PostgreSQL terminal to list saved event notification logs.
+Open PostgreSQL terminal to list the saved event notification logs.
 
 ```
 bucketevents_db=# select * from bucketevents;
@@ -431,5 +421,57 @@ key         |                      value
 (1 row)
 ```	
 
+<a name="kafka"></a>
+## Publish Minio events via kafka
 
+Install kafka from [here](http://kafka.apache.org/).
 
+## Recipe steps
+
+### Step 1: Add kafka endpoint to Minio
+
+The default location of Minio server configuration file is ``~/.minio/config.json``. Update the kafka configuration block in ``config.json`` as follows:
+
+```
+"kafka": {
+        "1": {
+                "enable": true,
+                "brokers": ["localhost:9092"],
+                "topic": "bucketevents"
+        }
+}
+```
+Restart Minio server to reflect config changes. ``bucketevents`` is the topic used by kafka in this example.
+
+### Step 2: Enable bucket notification using Minio client
+
+We will enable bucket event notification to trigger whenever a JPEG image is uploaded or deleted from ``images`` bucket on ``myminio`` server. Here ARN value is ``arn:minio:sqs:us-east-1:1:kafka``. To understand more about ARN please follow [AWS ARN](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html) documentation.
+
+```
+mc mb myminio/images
+mc events add  myminio/images arn:minio:sqs:us-east-1:1:kafka --suffix .jpg
+mc events list myminio/images
+arn:minio:sqs:us-east-1:1:kafka s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
+```
+
+### Step 3: Test on kafka
+
+We used ``[kafkacat](https://github.com/edenhill/kafkacat)`` to print all notifications on the console.
+
+```
+kafkacat -b localhost:9092 -t bucketevents
+```
+
+Open another terminal and upload a JPEG image into ``images`` bucket.
+
+```
+mc cp myphoto.jpg myminio/images
+```
+
+``kafkacat`` prints the event notification to the console.
+
+```
+kafkacat -b localhost:9092 -t bucketevents
+{"EventType":"s3:ObjectCreated:Put","Key":"images/myphoto.jpg","Records":[{"eventVersion":"2.0","eventSource":"aws:s3","awsRegion":"us-east-1","eventTime":"2017-01-31T10:01:51Z","eventName":"s3:ObjectCreated:Put","userIdentity":{"principalId":"88QR09S7IOT4X1IBAQ9B"},"requestParameters":{"sourceIPAddress":"192.173.5.2:57904"},"responseElements":{"x-amz-request-id":"149ED2FD25589220","x-minio-origin-endpoint":"http://192.173.5.2:9000"},"s3":{"s3SchemaVersion":"1.0","configurationId":"Config","bucket":{"name":"images","ownerIdentity":{"principalId":"88QR09S7IOT4X1IBAQ9B"},"arn":"arn:aws:s3:::images"},"object":{"key":"myphoto.jpg","size":541596,"eTag":"04451d05b4faf4d62f3d538156115e2a","sequencer":"149ED2FD25589220"}}}],"level":"info","msg":"","time":"2017-01-31T15:31:51+05:30"}
+```
+*Note* If you are running [distributed Minio](https://docs.minio.io/docs/distributed-minio-quickstart-guide), modify ``~/.minio/config.json`` on all the nodes with your bucket event notification backend configuration.
