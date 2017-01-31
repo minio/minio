@@ -296,11 +296,6 @@ export default class Browse extends React.Component {
     browserHistory.push(`${minioBrowserPrefix}/login`)
   }
 
-  landingPage(e) {
-    e.preventDefault()
-    this.props.dispatch(actions.selectBucket(this.props.buckets[0]))
-  }
-
   fullScreen(e) {
     e.preventDefault()
     let el = document.documentElement
@@ -489,8 +484,7 @@ export default class Browse extends React.Component {
                    'file-explorer': true,
                    'toggled': sidebarStatus
                  }) }>
-        <SideBar landingPage={ this.landingPage.bind(this) }
-          searchBuckets={ this.searchBuckets.bind(this) }
+        <SideBar searchBuckets={ this.searchBuckets.bind(this) }
           selectBucket={ this.selectBucket.bind(this) }
           clickOutside={ this.hideSidebar.bind(this) }
           showPolicy={ this.showBucketPolicy.bind(this) } />
