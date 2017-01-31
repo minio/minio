@@ -353,9 +353,33 @@ func TestGetPartSizeFromIdx(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		s := getPartSizeFromIdx(testCase.totalSize, testCase.partSize, testCase.partIndex)
-		if s != testCase.expectedSize {
+		s, err := getPartSizeFromIdx(testCase.totalSize, testCase.partSize, testCase.partIndex)
+		if err != nil {
+			t.Errorf("Test %d: Expected to pass but failed. %s", i+1, err)
+		}
+		if err == nil && s != testCase.expectedSize {
 			t.Errorf("Test %d: The calculated part size is incorrect: expected = %d, found = %d\n", i+1, testCase.expectedSize, s)
+		}
+	}
+
+	testCasesFailure := []struct {
+		totalSize int64
+		partSize  int64
+		partIndex int
+		err       error
+	}{
+		// partSize is 0, error.
+		{10, 0, 1, errPartSizeZero},
+		{10, 1, 0, errPartSizeIndex},
+	}
+
+	for i, testCaseFailure := range testCasesFailure {
+		_, err := getPartSizeFromIdx(testCaseFailure.totalSize, testCaseFailure.partSize, testCaseFailure.partIndex)
+		if err == nil {
+			t.Errorf("Test %d: Expected to failed but passed. %s", i+1, err)
+		}
+		if err != nil && errorCause(err) != testCaseFailure.err {
+			t.Errorf("Test %d: Expected err %s, but got %s", i+1, testCaseFailure.err, errorCause(err))
 		}
 	}
 }
