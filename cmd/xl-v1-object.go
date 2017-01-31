@@ -542,7 +542,11 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 
 		// Calculate the size of the current part, if size is unknown, curPartSize wil be unknown too.
 		// allowEmptyPart will always be true if this is the first part and false otherwise.
-		curPartSize := getPartSizeFromIdx(size, globalPutPartSize, partIdx)
+		var curPartSize int64
+		curPartSize, err = getPartSizeFromIdx(size, globalPutPartSize, partIdx)
+		if err != nil {
+			return ObjectInfo{}, toObjectErr(err, bucket, object)
+		}
 
 		// Prepare file for eventual optimization in the disk
 		if curPartSize > 0 {
@@ -593,7 +597,17 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 
 		// If we didn't write anything or we know that the next part doesn't have any
 		// data to write, we should quit this loop immediately
-		if partSizeWritten == 0 || getPartSizeFromIdx(size, globalPutPartSize, partIdx+1) == 0 {
+		if partSizeWritten == 0 {
+			break
+		}
+
+		// Check part size for the next index.
+		var partSize int64
+		partSize, err = getPartSizeFromIdx(size, globalPutPartSize, partIdx+1)
+		if err != nil {
+			return ObjectInfo{}, toObjectErr(err, bucket, object)
+		}
+		if partSize == 0 {
 			break
 		}
 	}
