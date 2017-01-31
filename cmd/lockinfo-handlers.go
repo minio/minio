@@ -68,8 +68,8 @@ type OpsLockState struct {
 	Duration    time.Duration `json:"duration"` // Duration since the lock was held.
 }
 
-// listLocksInfo - Fetches locks held on bucket, matching prefix older than relTime.
-func listLocksInfo(bucket, prefix string, relTime time.Duration) []VolumeLockInfo {
+// listLocksInfo - Fetches locks held on bucket, matching prefix held for longer than duration.
+func listLocksInfo(bucket, prefix string, duration time.Duration) []VolumeLockInfo {
 	globalNSMutex.lockMapMutex.Lock()
 	defer globalNSMutex.lockMapMutex.Unlock()
 
@@ -95,11 +95,12 @@ func listLocksInfo(bucket, prefix string, relTime time.Duration) []VolumeLockInf
 		}
 		// Filter locks that are held on bucket, prefix.
 		for opsID, lockInfo := range debugLock.lockInfo {
+			// filter locks that were held for longer than duration.
 			elapsed := timeNow.Sub(lockInfo.since)
-			if elapsed < relTime {
+			if elapsed < duration {
 				continue
 			}
-			// Add locks that are older than relTime.
+			// Add locks that are held for longer than duration.
 			volLockInfo.LockDetailsOnObject = append(volLockInfo.LockDetailsOnObject,
 				OpsLockState{
 					OperationID: opsID,

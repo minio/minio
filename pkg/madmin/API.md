@@ -120,8 +120,8 @@ If successful restarts the running minio service, for distributed setup restarts
 
  ```
 <a name="ListLocks"></a>
-### ListLocks(bucket, prefix string, olderThan time.Duration) ([]VolumeLockInfo, error)
-If successful returns information on the list of locks held on ``bucket`` matching ``prefix`` older than ``olderThan`` seconds.
+### ListLocks(bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error)
+If successful returns information on the list of locks held on ``bucket`` matching ``prefix`` for  longer than ``duration`` seconds.
 
 __Example__
 
@@ -135,8 +135,8 @@ __Example__
 ```
 
 <a name="ClearLocks"></a>
-### ClearLocks(bucket, prefix string, olderThan time.Duration) ([]VolumeLockInfo, error)
-If successful returns information on the list of locks cleared on ``bucket`` matching ``prefix`` older than ``olderThan`` seconds.
+### ClearLocks(bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error)
+If successful returns information on the list of locks cleared on ``bucket`` matching ``prefix`` for longer than ``duration`` seconds.
 
 __Example__
 

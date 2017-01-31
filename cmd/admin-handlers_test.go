@@ -334,12 +334,12 @@ func TestServiceSetCreds(t *testing.T) {
 }
 
 // mkLockQueryVal - helper function to build lock query param.
-func mkLockQueryVal(bucket, prefix, relTimeStr string) url.Values {
+func mkLockQueryVal(bucket, prefix, durationStr string) url.Values {
 	qVal := url.Values{}
 	qVal.Set("lock", "")
 	qVal.Set(string(mgmtBucket), bucket)
 	qVal.Set(string(mgmtPrefix), prefix)
-	qVal.Set(string(mgmtOlderThan), relTimeStr)
+	qVal.Set(string(mgmtLockDuration), durationStr)
 	return qVal
 }
 
@@ -364,41 +364,41 @@ func TestListLocksHandler(t *testing.T) {
 	testCases := []struct {
 		bucket         string
 		prefix         string
-		relTime        string
+		duration       string
 		expectedStatus int
 	}{
 		// Test 1 - valid testcase
 		{
 			bucket:         "mybucket",
 			prefix:         "myobject",
-			relTime:        "1s",
+			duration:       "1s",
 			expectedStatus: http.StatusOK,
 		},
 		// Test 2 - invalid duration
 		{
 			bucket:         "mybucket",
 			prefix:         "myprefix",
-			relTime:        "invalidDuration",
+			duration:       "invalidDuration",
 			expectedStatus: http.StatusBadRequest,
 		},
 		// Test 3 - invalid bucket name
 		{
 			bucket:         `invalid\\Bucket`,
 			prefix:         "myprefix",
-			relTime:        "1h",
+			duration:       "1h",
 			expectedStatus: http.StatusBadRequest,
 		},
 		// Test 4 - invalid prefix
 		{
 			bucket:         "mybucket",
 			prefix:         `invalid\\Prefix`,
-			relTime:        "1h",
+			duration:       "1h",
 			expectedStatus: http.StatusBadRequest,
 		},
 	}
 
 	for i, test := range testCases {
-		queryVal := mkLockQueryVal(test.bucket, test.prefix, test.relTime)
+		queryVal := mkLockQueryVal(test.bucket, test.prefix, test.duration)
 		req, err := newTestRequest("GET", "/?"+queryVal.Encode(), 0, nil)
 		if err != nil {
 			t.Fatalf("Test %d - Failed to construct list locks request - %v", i+1, err)
@@ -436,41 +436,41 @@ func TestClearLocksHandler(t *testing.T) {
 	testCases := []struct {
 		bucket         string
 		prefix         string
-		relTime        string
+		duration       string
 		expectedStatus int
 	}{
 		// Test 1 - valid testcase
 		{
 			bucket:         "mybucket",
 			prefix:         "myobject",
-			relTime:        "1s",
+			duration:       "1s",
 			expectedStatus: http.StatusOK,
 		},
 		// Test 2 - invalid duration
 		{
 			bucket:         "mybucket",
 			prefix:         "myprefix",
-			relTime:        "invalidDuration",
+			duration:       "invalidDuration",
 			expectedStatus: http.StatusBadRequest,
 		},
 		// Test 3 - invalid bucket name
 		{
 			bucket:         `invalid\\Bucket`,
 			prefix:         "myprefix",
-			relTime:        "1h",
+			duration:       "1h",
 			expectedStatus: http.StatusBadRequest,
 		},
 		// Test 4 - invalid prefix
 		{
 			bucket:         "mybucket",
 			prefix:         `invalid\\Prefix`,
-			relTime:        "1h",
+			duration:       "1h",
 			expectedStatus: http.StatusBadRequest,
 		},
 	}
 
 	for i, test := range testCases {
-		queryVal := mkLockQueryVal(test.bucket, test.prefix, test.relTime)
+		queryVal := mkLockQueryVal(test.bucket, test.prefix, test.duration)
 		req, err := newTestRequest("POST", "/?"+queryVal.Encode(), 0, nil)
 		if err != nil {
 			t.Fatalf("Test %d - Failed to construct clear locks request - %v", i+1, err)

@@ -36,14 +36,14 @@ type mgmtQueryKey string
 
 // Only valid query params for list/clear locks management APIs.
 const (
-	mgmtBucket    mgmtQueryKey = "bucket"
-	mgmtObject    mgmtQueryKey = "object"
-	mgmtPrefix    mgmtQueryKey = "prefix"
-	mgmtOlderThan mgmtQueryKey = "older-than"
-	mgmtDelimiter mgmtQueryKey = "delimiter"
-	mgmtMarker    mgmtQueryKey = "marker"
-	mgmtMaxKey    mgmtQueryKey = "max-key"
-	mgmtDryRun    mgmtQueryKey = "dry-run"
+	mgmtBucket       mgmtQueryKey = "bucket"
+	mgmtObject       mgmtQueryKey = "object"
+	mgmtPrefix       mgmtQueryKey = "prefix"
+	mgmtLockDuration mgmtQueryKey = "duration"
+	mgmtDelimiter    mgmtQueryKey = "delimiter"
+	mgmtMarker       mgmtQueryKey = "marker"
+	mgmtMaxKey       mgmtQueryKey = "max-key"
+	mgmtDryRun       mgmtQueryKey = "dry-run"
 )
 
 // ServerVersion - server version
@@ -185,7 +185,7 @@ func (adminAPI adminAPIHandlers) ServiceCredentialsHandler(w http.ResponseWriter
 func validateLockQueryParams(vars url.Values) (string, string, time.Duration, APIErrorCode) {
 	bucket := vars.Get(string(mgmtBucket))
 	prefix := vars.Get(string(mgmtPrefix))
-	relTimeStr := vars.Get(string(mgmtOlderThan))
+	durationStr := vars.Get(string(mgmtLockDuration))
 
 	// N B empty bucket name is invalid
 	if !IsValidBucketName(bucket) {
@@ -198,24 +198,24 @@ func validateLockQueryParams(vars url.Values) (string, string, time.Duration, AP
 
 	// If older-than parameter was empty then set it to 0s to list
 	// all locks older than now.
-	if relTimeStr == "" {
-		relTimeStr = "0s"
+	if durationStr == "" {
+		durationStr = "0s"
 	}
-	relTime, err := time.ParseDuration(relTimeStr)
+	duration, err := time.ParseDuration(durationStr)
 	if err != nil {
 		errorIf(err, "Failed to parse duration passed as query value.")
 		return "", "", time.Duration(0), ErrInvalidDuration
 	}
 
-	return bucket, prefix, relTime, ErrNone
+	return bucket, prefix, duration, ErrNone
 }
 
-// ListLocksHandler - GET /?lock&bucket=mybucket&prefix=myprefix&older-than=rel_time
+// ListLocksHandler - GET /?lock&bucket=mybucket&prefix=myprefix&duration=duration
 // - bucket is a mandatory query parameter
 // - prefix and older-than are optional query parameters
 // HTTP header x-minio-operation: list
 // ---------
-// Lists locks held on a given bucket, prefix and relative time.
+// Lists locks held on a given bucket, prefix and duration it was held for.
 func (adminAPI adminAPIHandlers) ListLocksHandler(w http.ResponseWriter, r *http.Request) {
 	adminAPIErr := checkRequestAuthType(r, "", "", "")
 	if adminAPIErr != ErrNone {
@@ -224,15 +224,15 @@ func (adminAPI adminAPIHandlers) ListLocksHandler(w http.ResponseWriter, r *http
 	}
 
 	vars := r.URL.Query()
-	bucket, prefix, relTime, adminAPIErr := validateLockQueryParams(vars)
+	bucket, prefix, duration, adminAPIErr := validateLockQueryParams(vars)
 	if adminAPIErr != ErrNone {
 		writeErrorResponse(w, adminAPIErr, r.URL)
 		return
 	}
 
 	// Fetch lock information of locks matching bucket/prefix that
-	// are available since relTime.
-	volLocks, err := listPeerLocksInfo(globalAdminPeers, bucket, prefix, relTime)
+	// are available for longer than duration.
+	volLocks, err := listPeerLocksInfo(globalAdminPeers, bucket, prefix, duration)
 	if err != nil {
 		writeErrorResponse(w, ErrInternalError, r.URL)
 		errorIf(err, "Failed to fetch lock information from remote nodes.")
@@ -248,16 +248,16 @@ func (adminAPI adminAPIHandlers) ListLocksHandler(w http.ResponseWriter, r *http
 	}
 
 	// Reply with list of locks held on bucket, matching prefix
-	// older than relTime supplied, as json.
+	// held longer than duration supplied, as json.
 	writeSuccessResponseJSON(w, jsonBytes)
 }
 
-// ClearLocksHandler - POST /?lock&bucket=mybucket&prefix=myprefix&older-than=relTime
+// ClearLocksHandler - POST /?lock&bucket=mybucket&prefix=myprefix&duration=duration
 // - bucket is a mandatory query parameter
 // - prefix and older-than are optional query parameters
 // HTTP header x-minio-operation: clear
 // ---------
-// Clear locks held on a given bucket, prefix and relative time.
+// Clear locks held on a given bucket, prefix and duration it was held for.
 func (adminAPI adminAPIHandlers) ClearLocksHandler(w http.ResponseWriter, r *http.Request) {
 	adminAPIErr := checkRequestAuthType(r, "", "", "")
 	if adminAPIErr != ErrNone {
@@ -266,15 +266,15 @@ func (adminAPI adminAPIHandlers) ClearLocksHandler(w http.ResponseWriter, r *htt
 	}
 
 	vars := r.URL.Query()
-	bucket, prefix, relTime, adminAPIErr := validateLockQueryParams(vars)
+	bucket, prefix, duration, adminAPIErr := validateLockQueryParams(vars)
 	if adminAPIErr != ErrNone {
 		writeErrorResponse(w, adminAPIErr, r.URL)
 		return
 	}
 
 	// Fetch lock information of locks matching bucket/prefix that
-	// are available since relTime.
-	volLocks, err := listPeerLocksInfo(globalAdminPeers, bucket, prefix, relTime)
+	// are held for longer than duration.
+	volLocks, err := listPeerLocksInfo(globalAdminPeers, bucket, prefix, duration)
 	if err != nil {
 		writeErrorResponse(w, ErrInternalError, r.URL)
 		errorIf(err, "Failed to fetch lock information from remote nodes.")
@@ -289,7 +289,7 @@ func (adminAPI adminAPIHandlers) ClearLocksHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	// Remove lock matching bucket/prefix older than relTime.
+	// Remove lock matching bucket/prefix held longer than duration.
 	for _, volLock := range volLocks {
 		globalNSMutex.ForceUnlock(volLock.Bucket, volLock.Object)
 	}

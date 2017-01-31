@@ -483,7 +483,7 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	},
 	ErrInvalidDuration: {
 		Code:           "InvalidDuration",
-		Description:    "Relative duration provided in the request is invalid.",
+		Description:    "Duration provided in the request is invalid.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 
