@@ -45,34 +45,34 @@ func TestListLocksInfo(t *testing.T) {
 	testCases := []struct {
 		bucket   string
 		prefix   string
-		relTime  time.Duration
+		duration time.Duration
 		numLocks int
 	}{
 		// Test 1 - Matches all the locks acquired above.
 		{
 			bucket:   "bucket1",
 			prefix:   "prefix1",
-			relTime:  time.Duration(0 * time.Second),
+			duration: time.Duration(0 * time.Second),
 			numLocks: 20,
 		},
 		// Test 2 - Bucket doesn't match.
 		{
 			bucket:   "bucket",
 			prefix:   "prefix1",
-			relTime:  time.Duration(0 * time.Second),
+			duration: time.Duration(0 * time.Second),
 			numLocks: 0,
 		},
 		// Test 3 - Prefix doesn't match.
 		{
 			bucket:   "bucket1",
 			prefix:   "prefix11",
-			relTime:  time.Duration(0 * time.Second),
+			duration: time.Duration(0 * time.Second),
 			numLocks: 0,
 		},
 	}
 
 	for i, test := range testCases {
-		actual := listLocksInfo(test.bucket, test.prefix, test.relTime)
+		actual := listLocksInfo(test.bucket, test.prefix, test.duration)
 		if len(actual) != test.numLocks {
 			t.Errorf("Test %d - Expected %d locks but observed %d locks",
 				i+1, test.numLocks, len(actual))

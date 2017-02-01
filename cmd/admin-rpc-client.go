@@ -37,7 +37,7 @@ type remoteAdminClient struct {
 // commands like service stop and service restart.
 type adminCmdRunner interface {
 	Restart() error
-	ListLocks(bucket, prefix string, relTime time.Duration) ([]VolumeLockInfo, error)
+	ListLocks(bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error)
 	ReInitDisks() error
 }
 
@@ -49,8 +49,8 @@ func (lc localAdminClient) Restart() error {
 }
 
 // ListLocks - Fetches lock information from local lock instrumentation.
-func (lc localAdminClient) ListLocks(bucket, prefix string, relTime time.Duration) ([]VolumeLockInfo, error) {
-	return listLocksInfo(bucket, prefix, relTime), nil
+func (lc localAdminClient) ListLocks(bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error) {
+	return listLocksInfo(bucket, prefix, duration), nil
 }
 
 // Restart - Sends restart command to remote server via RPC.
@@ -61,11 +61,11 @@ func (rc remoteAdminClient) Restart() error {
 }
 
 // ListLocks - Sends list locks command to remote server via RPC.
-func (rc remoteAdminClient) ListLocks(bucket, prefix string, relTime time.Duration) ([]VolumeLockInfo, error) {
+func (rc remoteAdminClient) ListLocks(bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error) {
 	listArgs := ListLocksQuery{
-		bucket:  bucket,
-		prefix:  prefix,
-		relTime: relTime,
+		bucket:   bucket,
+		prefix:   prefix,
+		duration: duration,
 	}
 	var reply ListLocksReply
 	if err := rc.Call("Admin.ListLocks", &listArgs, &reply); err != nil {
@@ -175,8 +175,8 @@ func sendServiceCmd(cps adminPeers, cmd serviceSignal) {
 }
 
 // listPeerLocksInfo - fetch list of locks held on the given bucket,
-// matching prefix older than relTime from all peer servers.
-func listPeerLocksInfo(peers adminPeers, bucket, prefix string, relTime time.Duration) ([]VolumeLockInfo, error) {
+// matching prefix held longer than duration from all peer servers.
+func listPeerLocksInfo(peers adminPeers, bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error) {
 	// Used to aggregate volume lock information from all nodes.
 	allLocks := make([][]VolumeLockInfo, len(peers))
 	errs := make([]error, len(peers))
@@ -188,11 +188,11 @@ func listPeerLocksInfo(peers adminPeers, bucket, prefix string, relTime time.Dur
 		go func(idx int, remotePeer adminPeer) {
 			defer wg.Done()
 			// `remotePeers` is right-shifted by one position relative to `peers`
-			allLocks[idx], errs[idx] = remotePeer.cmdRunner.ListLocks(bucket, prefix, relTime)
+			allLocks[idx], errs[idx] = remotePeer.cmdRunner.ListLocks(bucket, prefix, duration)
 		}(i+1, remotePeer)
 	}
 	wg.Wait()
-	allLocks[0], errs[0] = localPeer.cmdRunner.ListLocks(bucket, prefix, relTime)
+	allLocks[0], errs[0] = localPeer.cmdRunner.ListLocks(bucket, prefix, duration)
 
 	// Summarizing errors received for ListLocks RPC across all
 	// nodes.  N B the possible unavailability of quorum in errors

@@ -37,9 +37,9 @@ type adminCmd struct {
 // ListLocksQuery - wraps ListLocks API's query values to send over RPC.
 type ListLocksQuery struct {
 	AuthRPCArgs
-	bucket  string
-	prefix  string
-	relTime time.Duration
+	bucket   string
+	prefix   string
+	duration time.Duration
 }
 
 // ListLocksReply - wraps ListLocks response over RPC.
@@ -63,7 +63,7 @@ func (s *adminCmd) ListLocks(query *ListLocksQuery, reply *ListLocksReply) error
 	if err := query.IsAuthenticated(); err != nil {
 		return err
 	}
-	volLocks := listLocksInfo(query.bucket, query.prefix, query.relTime)
+	volLocks := listLocksInfo(query.bucket, query.prefix, query.duration)
 	*reply = ListLocksReply{volLocks: volLocks}
 	return nil
 }

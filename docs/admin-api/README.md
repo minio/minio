@@ -66,9 +66,9 @@
 
 ### Lock Management APIs
 * ListLocks
-  - GET /?lock&bucket=mybucket&prefix=myprefix&older-than=rel_time
+  - GET /?lock&bucket=mybucket&prefix=myprefix&duration=duration
   - x-minio-operation: list
-  - Response: On success 200, json encoded response containing all locks held, older than rel_time. e.g, older than 3 hours.
+  - Response: On success 200, json encoded response containing all locks held, for longer than duration.
   - Possible error responses
     - ErrInvalidBucketName
     <Error>
@@ -95,7 +95,7 @@
     - ErrInvalidDuration
       <Error>
           <Code>InvalidDuration</Code>
-          <Message>Relative duration provided in the request is invalid.</Message>
+          <Message>Duration provided in the request is invalid.</Message>
           <Key></Key>
           <BucketName></BucketName>
           <Resource>/</Resource>
@@ -105,9 +105,9 @@
 
 
 * ClearLocks
-  - POST /?lock&bucket=mybucket&prefix=myprefix&older-than=rel_time
+  - POST /?lock&bucket=mybucket&prefix=myprefix&duration=duration
   - x-minio-operation: clear
-  - Response: On success 200, json encoded response containing all locks cleared, older than rel_time. e.g, older than 3 hours.
+  - Response: On success 200, json encoded response containing all locks cleared, for longer than duration.
   - Possible error responses, similar to errors listed in ListLocks.
     - ErrInvalidBucketName
     - ErrInvalidObjectName
