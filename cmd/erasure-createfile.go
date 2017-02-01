@@ -137,9 +137,5 @@ func appendFile(disks []StorageAPI, volume, path string, enBlocks [][]byte, hash
 	// Wait for all the appends to finish.
 	wg.Wait()
 
-	// Do we have write quorum?.
-	if !isDiskQuorum(wErrs, writeQuorum) {
-		return traceError(errXLWriteQuorum)
-	}
 	return reduceWriteQuorumErrs(wErrs, objectOpIgnoredErrs, writeQuorum)
 }

@@ -22,7 +22,6 @@ import (
 	"io/ioutil"
 	"path"
 	"sort"
-	"sync"
 	"time"
 
 	"github.com/minio/minio/pkg/lock"
@@ -157,45 +156,6 @@ func writeUploadJSON(u *uploadsV1, uploadsPath, tmpPath string, disk StorageAPI)
 			return traceError(dErr)
 		}
 		return traceError(wErr)
-	}
-	return nil
-}
-
-// Wrapper which removes all the uploaded parts.
-func cleanupUploadedParts(bucket, object, uploadID string, storageDisks ...StorageAPI) error {
-	var errs = make([]error, len(storageDisks))
-	var wg = &sync.WaitGroup{}
-
-	// Construct uploadIDPath.
-	uploadIDPath := path.Join(bucket, object, uploadID)
-
-	// Cleanup uploadID for all disks.
-	for index, disk := range storageDisks {
-		if disk == nil {
-			errs[index] = traceError(errDiskNotFound)
-			continue
-		}
-		wg.Add(1)
-		// Cleanup each uploadID in a routine.
-		go func(index int, disk StorageAPI) {
-			defer wg.Done()
-			err := cleanupDir(disk, minioMetaMultipartBucket, uploadIDPath)
-			if err != nil {
-				errs[index] = err
-				return
-			}
-			errs[index] = nil
-		}(index, disk)
-	}
-
-	// Wait for all the cleanups to finish.
-	wg.Wait()
-
-	// Return first error.
-	for _, err := range errs {
-		if err != nil {
-			return err
-		}
 	}
 	return nil
 }
