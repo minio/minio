@@ -93,12 +93,12 @@ func getLockInfos(body io.Reader) ([]VolumeLockInfo, error) {
 
 // ListLocks - Calls List Locks Management API to fetch locks matching
 // bucket, prefix and held before the duration supplied.
-func (adm *AdminClient) ListLocks(bucket, prefix string, olderThan time.Duration) ([]VolumeLockInfo, error) {
+func (adm *AdminClient) ListLocks(bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error) {
 	queryVal := make(url.Values)
 	queryVal.Set("lock", "")
 	queryVal.Set("bucket", bucket)
 	queryVal.Set("prefix", prefix)
-	queryVal.Set("older-than", olderThan.String())
+	queryVal.Set("duration", duration.String())
 
 	hdrs := make(http.Header)
 	hdrs.Set(minioAdminOpHeader, "list")
@@ -125,12 +125,12 @@ func (adm *AdminClient) ListLocks(bucket, prefix string, olderThan time.Duration
 
 // ClearLocks - Calls Clear Locks Management API to clear locks held
 // on bucket, matching prefix older than duration supplied.
-func (adm *AdminClient) ClearLocks(bucket, prefix string, olderThan time.Duration) ([]VolumeLockInfo, error) {
+func (adm *AdminClient) ClearLocks(bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error) {
 	queryVal := make(url.Values)
 	queryVal.Set("lock", "")
 	queryVal.Set("bucket", bucket)
 	queryVal.Set("prefix", prefix)
-	queryVal.Set("older-than", olderThan.String())
+	queryVal.Set("duration", duration.String())
 
 	hdrs := make(http.Header)
 	hdrs.Set(minioAdminOpHeader, "clear")
