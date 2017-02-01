@@ -83,23 +83,6 @@ func reduceWriteQuorumErrs(errs []error, ignoredErrs []error, writeQuorum int) (
 	return reduceQuorumErrs(errs, ignoredErrs, writeQuorum, errXLWriteQuorum)
 }
 
-// List of all errors which are ignored while verifying quorum.
-var quorumIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied)
-
-// Validates if we have quorum based on the errors related to disk only.
-// Returns 'true' if we have quorum, 'false' if we don't.
-func isDiskQuorum(errs []error, minQuorumCount int) bool {
-	var count int
-	errs = errorsCause(errs)
-	for _, err := range errs {
-		// Check if the error can be ignored for quorum verification.
-		if !isErrIgnored(err, quorumIgnoredErrs...) {
-			count++
-		}
-	}
-	return count >= minQuorumCount
-}
-
 // Similar to 'len(slice)' but returns  the actual elements count
 // skipping the unallocated elements.
 func diskCount(disks []StorageAPI) int {

@@ -34,12 +34,7 @@ import (
 )
 
 // list all errors which can be ignored in object operations.
-var objectOpIgnoredErrs = []error{
-	errDiskNotFound,
-	errDiskAccessDenied,
-	errFaultyDisk,
-	errFaultyRemoteDisk,
-}
+var objectOpIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied)
 
 /// Object Operations
 
@@ -49,11 +44,6 @@ var objectOpIgnoredErrs = []error{
 func (xl xlObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string, metadata map[string]string) (ObjectInfo, error) {
 	// Read metadata associated with the object from all disks.
 	metaArr, errs := readAllXLMetadata(xl.storageDisks, srcBucket, srcObject)
-	// Do we have read quorum?
-	if !isDiskQuorum(errs, xl.readQuorum) {
-		return ObjectInfo{}, traceError(InsufficientReadQuorum{}, errs...)
-	}
-
 	if reducedErr := reduceReadQuorumErrs(errs, objectOpIgnoredErrs, xl.readQuorum); reducedErr != nil {
 		return ObjectInfo{}, toObjectErr(reducedErr, srcBucket, srcObject)
 	}
@@ -159,11 +149,6 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 
 	// Read metadata associated with the object from all disks.
 	metaArr, errs := readAllXLMetadata(xl.storageDisks, bucket, object)
-	// Do we have read quorum?
-	if !isDiskQuorum(errs, xl.readQuorum) {
-		return traceError(InsufficientReadQuorum{}, errs...)
-	}
-
 	if reducedErr := reduceReadQuorumErrs(errs, objectOpIgnoredErrs, xl.readQuorum); reducedErr != nil {
 		return toObjectErr(reducedErr, bucket, object)
 	}
@@ -416,12 +401,12 @@ func rename(disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry string,
 
 	// We can safely allow RenameFile errors up to len(xl.storageDisks) - xl.writeQuorum
 	// otherwise return failure. Cleanup successful renames.
-	if !isDiskQuorum(errs, quorum) {
+	err := reduceWriteQuorumErrs(errs, objectOpIgnoredErrs, quorum)
+	if errorCause(err) == errXLWriteQuorum {
 		// Undo all the partial rename operations.
 		undoRename(disks, srcBucket, srcEntry, dstBucket, dstEntry, isDir, errs)
-		return traceError(errXLWriteQuorum)
 	}
-	return reduceWriteQuorumErrs(errs, objectOpIgnoredErrs, quorum)
+	return err
 }
 
 // renamePart - renames a part of the source object to the destination
@@ -751,13 +736,7 @@ func (xl xlObjects) deleteObject(bucket, object string) error {
 	// Wait for all routines to finish.
 	wg.Wait()
 
-	// Do we have write quorum?
-	if !isDiskQuorum(dErrs, xl.writeQuorum) {
-		// Return errXLWriteQuorum if errors were more than allowed write quorum.
-		return traceError(errXLWriteQuorum)
-	}
-
-	return nil
+	return reduceWriteQuorumErrs(dErrs, objectOpIgnoredErrs, xl.writeQuorum)
 }
 
 // DeleteObject - deletes an object, this call doesn't necessary reply

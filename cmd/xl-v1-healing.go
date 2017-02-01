@@ -109,18 +109,12 @@ func healBucket(storageDisks []StorageAPI, bucket string, writeQuorum int) error
 	// Wait for all make vol to finish.
 	wg.Wait()
 
-	// Do we have write quorum?.
-	if !isDiskQuorum(dErrs, writeQuorum) {
+	reducedErr := reduceWriteQuorumErrs(dErrs, bucketOpIgnoredErrs, writeQuorum)
+	if errorCause(reducedErr) == errXLWriteQuorum {
 		// Purge successfully created buckets if we don't have writeQuorum.
 		undoMakeBucket(storageDisks, bucket)
-		return toObjectErr(traceError(errXLWriteQuorum), bucket)
 	}
-
-	// Verify we have any other errors which should be returned as failure.
-	if reducedErr := reduceWriteQuorumErrs(dErrs, bucketOpIgnoredErrs, writeQuorum); reducedErr != nil {
-		return toObjectErr(reducedErr, bucket)
-	}
-	return nil
+	return reducedErr
 }
 
 // Heals all the metadata associated for a given bucket, this function
