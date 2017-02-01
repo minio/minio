@@ -91,16 +91,26 @@ func newRetryTimer(unit time.Duration, cap time.Duration, jitter float64, doneCh
 	go func() {
 		defer close(attemptCh)
 		nextBackoff := 0
+		// Channel used to signal after the expiry of backoff wait seconds.
+		var timer *time.Timer
 		for {
-			select {
-			// Attempts starts.
+			select { // Attempts starts.
 			case attemptCh <- nextBackoff:
 				nextBackoff++
 			case <-doneCh:
 				// Stop the routine.
 				return
 			}
-			time.Sleep(exponentialBackoffWait(nextBackoff))
+			timer = time.NewTimer(exponentialBackoffWait(nextBackoff))
+			// wait till next backoff time or till doneCh gets a message.
+			select {
+			case <-timer.C:
+			case <-doneCh:
+				// stop the timer and return.
+				timer.Stop()
+				return
+			}
+
 		}
 	}()
 	return attemptCh
