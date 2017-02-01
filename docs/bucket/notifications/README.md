@@ -1,4 +1,4 @@
-# Minio Bucket Notification Reference Guide [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
+# Minio Bucket Notification Guide [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
 
 Minio server supports Amazon S3 compatible bucket event notification for the following targets
 
