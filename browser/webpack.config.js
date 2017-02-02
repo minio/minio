@@ -58,7 +58,6 @@ var exports = {
     historyApiFallback: {
       index: '/minio/'
     },
-    port: 8888,
     proxy: {
       '/minio/webrpc': {
 	target: 'http://localhost:9000',
@@ -98,7 +97,7 @@ var exports = {
 if (process.env.NODE_ENV === 'dev') {
   exports.entry = [
     'webpack/hot/dev-server',
-    'webpack-dev-server/client?http://localhost:8888',
+    'webpack-dev-server/client?http://localhost:8080',
     path.resolve(__dirname, 'app/index.js')
   ]
 }
