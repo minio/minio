@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"io"
-	"io/ioutil"
 	"mime/multipart"
 	"net/http"
 	"strings"
@@ -158,33 +157,49 @@ func extractMetadataFromForm(formValues map[string]string) map[string]string {
 }
 
 // Extract form fields and file data from a HTTP POST Policy
-func extractPostPolicyFormValues(reader *multipart.Reader) (filePart io.Reader, fileName string, formValues map[string]string, err error) {
+func extractPostPolicyFormValues(form *multipart.Form) (filePart io.ReadCloser, fileName string, fileSize int64, formValues map[string]string, err error) {
 	/// HTML Form values
 	formValues = make(map[string]string)
 	fileName = ""
-	for err == nil {
-		var part *multipart.Part
-		part, err = reader.NextPart()
-		if part != nil {
-			canonicalFormName := http.CanonicalHeaderKey(part.FormName())
-			if canonicalFormName != "File" {
-				var buffer []byte
-				limitReader := io.LimitReader(part, maxFormFieldSize+1)
-				buffer, err = ioutil.ReadAll(limitReader)
-				if err != nil {
-					return nil, "", nil, err
-				}
-				if int64(len(buffer)) > maxFormFieldSize {
-					return nil, "", nil, errSizeUnexpected
-				}
-				formValues[canonicalFormName] = string(buffer)
-			} else {
-				filePart = part
-				fileName = part.FileName()
-				// As described in S3 spec, we expect file to be the last form field
-				break
+
+	// Iterate over form values
+	for k, v := range form.Value {
+		canonicalFormName := http.CanonicalHeaderKey(k)
+		// Check if value's field exceeds S3 limit
+		if int64(len(v[0])) > maxFormFieldSize {
+			return nil, "", 0, nil, errSizeUnexpected
+		}
+		// Set the form value
+		formValues[canonicalFormName] = v[0]
+	}
+
+	// Iterator until we find a valid File field and break
+	for k, v := range form.File {
+		canonicalFormName := http.CanonicalHeaderKey(k)
+		if canonicalFormName == "File" {
+			if len(v) == 0 {
+				return nil, "", 0, nil, errInvalidArgument
 			}
+			// Fetch fileHeader which has the uploaded file information
+			fileHeader := v[0]
+			// Set filename
+			fileName = fileHeader.Filename
+			// Open the uploaded part
+			filePart, err = fileHeader.Open()
+			// Compute file size
+			fileSize, err = filePart.(io.Seeker).Seek(0, 2)
+			if err != nil {
+				return nil, "", 0, nil, err
+			}
+			// Reset Seek to the beginning
+			_, err = filePart.(io.Seeker).Seek(0, 0)
+			if err != nil {
+				return nil, "", 0, nil, err
+			}
+			// File found and ready for reading
+			break
 		}
 	}
-	return filePart, fileName, formValues, nil
+
+	return filePart, fileName, fileSize, formValues, nil
 }

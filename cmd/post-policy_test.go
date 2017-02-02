@@ -342,46 +342,66 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 	}
 
 	testCases2 := []struct {
-		objectName         string
-		data               []byte
-		expectedRespStatus int
-		accessKey          string
-		secretKey          string
-		malformedBody      bool
+		objectName          string
+		data                []byte
+		expectedRespStatus  int
+		accessKey           string
+		secretKey           string
+		malformedBody       bool
+		ignoreContentLength bool
 	}{
 		// Success case.
 		{
-			objectName:         "test",
-			data:               bytes.Repeat([]byte("a"), 1025),
-			expectedRespStatus: http.StatusNoContent,
-			accessKey:          credentials.AccessKey,
-			secretKey:          credentials.SecretKey,
-			malformedBody:      false,
+			objectName:          "test",
+			data:                bytes.Repeat([]byte("a"), 1025),
+			expectedRespStatus:  http.StatusNoContent,
+			accessKey:           credentials.AccessKey,
+			secretKey:           credentials.SecretKey,
+			malformedBody:       false,
+			ignoreContentLength: false,
+		},
+		// Failed with Content-Length not specified.
+		{
+			objectName:          "test",
+			data:                bytes.Repeat([]byte("a"), 1025),
+			expectedRespStatus:  http.StatusNoContent,
+			accessKey:           credentials.AccessKey,
+			secretKey:           credentials.SecretKey,
+			malformedBody:       false,
+			ignoreContentLength: true,
 		},
 		// Failed with entity too small.
 		{
-			objectName:         "test",
-			data:               bytes.Repeat([]byte("a"), 1023),
-			expectedRespStatus: http.StatusBadRequest,
-			accessKey:          credentials.AccessKey,
-			secretKey:          credentials.SecretKey,
-			malformedBody:      false,
+			objectName:          "test",
+			data:                bytes.Repeat([]byte("a"), 1023),
+			expectedRespStatus:  http.StatusBadRequest,
+			accessKey:           credentials.AccessKey,
+			secretKey:           credentials.SecretKey,
+			malformedBody:       false,
+			ignoreContentLength: false,
 		},
 		// Failed with entity too large.
 		{
-			objectName:         "test",
-			data:               bytes.Repeat([]byte("a"), (1*humanize.MiByte)+1),
-			expectedRespStatus: http.StatusBadRequest,
-			accessKey:          credentials.AccessKey,
-			secretKey:          credentials.SecretKey,
-			malformedBody:      false,
+			objectName:          "test",
+			data:                bytes.Repeat([]byte("a"), (1*humanize.MiByte)+1),
+			expectedRespStatus:  http.StatusBadRequest,
+			accessKey:           credentials.AccessKey,
+			secretKey:           credentials.SecretKey,
+			malformedBody:       false,
+			ignoreContentLength: false,
 		},
 	}
 
 	for i, testCase := range testCases2 {
 		// initialize HTTP NewRecorder, this records any mutations to response writer inside the handler.
 		rec := httptest.NewRecorder()
-		req, perr := newPostRequestV4WithContentLength("", bucketName, testCase.objectName, testCase.data, testCase.accessKey, testCase.secretKey)
+		var req *http.Request
+		var perr error
+		if testCase.ignoreContentLength {
+			req, perr = newPostRequestV4("", bucketName, testCase.objectName, testCase.data, testCase.accessKey, testCase.secretKey)
+		} else {
+			req, perr = newPostRequestV4WithContentLength("", bucketName, testCase.objectName, testCase.data, testCase.accessKey, testCase.secretKey)
+		}
 		if perr != nil {
 			t.Fatalf("Test %d: %s: Failed to create HTTP request for PostPolicyHandler: <ERROR> %v", i+1, instanceType, perr)
 		}
