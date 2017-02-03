@@ -449,8 +449,8 @@ func serverMain(c *cli.Context) {
 	initGlobalAdminPeers(endpoints)
 
 	// Determine API endpoints where we are going to serve the S3 API from.
-	apiEndPoints, err := finalizeAPIEndpoints(apiServer.Server)
-	fatalIf(err, "Unable to finalize API endpoints for %s", apiServer.Server.Addr)
+	apiEndPoints, err := finalizeAPIEndpoints(apiServer.Addr)
+	fatalIf(err, "Unable to finalize API endpoints for %s", apiServer.Addr)
 
 	// Set the global API endpoints value.
 	globalAPIEndpoints = apiEndPoints

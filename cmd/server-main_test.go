@@ -19,7 +19,6 @@ package cmd
 import (
 	"errors"
 	"flag"
-	"net/http"
 	"os"
 	"reflect"
 	"runtime"
@@ -120,9 +119,7 @@ func TestFinalizeAPIEndpoints(t *testing.T) {
 	}
 
 	for i, test := range testCases {
-		endPoints, err := finalizeAPIEndpoints(&http.Server{
-			Addr: test.addr,
-		})
+		endPoints, err := finalizeAPIEndpoints(test.addr)
 		if err != nil && len(endPoints) <= 0 {
 			t.Errorf("Test case %d returned with no API end points for %s",
 				i+1, test.addr)

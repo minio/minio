@@ -29,7 +29,6 @@ import (
 	"math/big"
 	"net"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"runtime"
 	"sync"
@@ -181,113 +180,111 @@ func TestClose(t *testing.T) {
 }
 
 func TestServerMux(t *testing.T) {
-	ts := httptest.NewUnstartedServer(nil)
-	defer ts.Close()
+	var err error
+	var got []byte
+	var res *http.Response
 
 	// Create ServerMux
-	m := NewServerMux("", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	m := NewServerMux("127.0.0.1:0", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, "hello")
 	}))
+	// Start serving requests
+	go m.ListenAndServe("", "")
 
-	// Set the test server config to the mux
-	ts.Config = m.Server
-	ts.Start()
-
-	// Create a ListenerMux
-	lm := &ListenerMux{
-		Listener: ts.Listener,
-		config:   &tls.Config{},
-		cond:     sync.NewCond(&sync.Mutex{}),
+	// Issue a GET request. Since we started server in a goroutine, it could be not ready
+	// at this point. So we allow until 5 failed retries before declare there is an error
+	for i := 0; i < 5; i++ {
+		// Sleep one second
+		time.Sleep(1 * time.Second)
+		// Check if one listener is ready
+		m.mu.Lock()
+		if len(m.listeners) == 0 {
+			m.mu.Unlock()
+			continue
+		}
+		m.mu.Unlock()
+		// Issue the GET request
+		client := http.Client{}
+		m.mu.Lock()
+		res, err = client.Get("http://" + m.listeners[0].Addr().String())
+		m.mu.Unlock()
+		if err != nil {
+			continue
+		}
+		// Read the request response
+		got, err = ioutil.ReadAll(res.Body)
 	}
-	m.listeners = []*ListenerMux{lm}
 
-	client := http.Client{}
-	res, err := client.Get(ts.URL)
+	// Check for error persisted after 5 times
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	got, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	// Check the web service response
 	if string(got) != "hello" {
 		t.Errorf("got %q, want hello", string(got))
 	}
-
-	// Make sure there is only 1 connection
-	m.mu.Lock()
-	if len(m.conns) < 1 {
-		t.Fatal("Should have 1 connections")
-	}
-	m.mu.Unlock()
-
-	// Close the server
-	m.Close()
-
-	// Make sure there are zero connections
-	m.mu.Lock()
-	if len(m.conns) > 0 {
-		t.Fatal("Should have 0 connections")
-	}
-	m.mu.Unlock()
 }
 
 func TestServerCloseBlocking(t *testing.T) {
-	ts := httptest.NewUnstartedServer(nil)
-	defer ts.Close()
-
 	// Create ServerMux
-	m := NewServerMux("", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	m := NewServerMux("127.0.0.1:0", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, "hello")
 	}))
 
-	// Set the test server config to the mux
-	ts.Config = m.Server
-	ts.Start()
+	// Start serving requests in a goroutine
+	go m.ListenAndServe("", "")
 
-	// Create a ListenerMux.
-	lm := &ListenerMux{
-		Listener: ts.Listener,
-		config:   &tls.Config{},
-		cond:     sync.NewCond(&sync.Mutex{}),
-	}
-	m.listeners = []*ListenerMux{lm}
-
-	dial := func() net.Conn {
-		c, cerr := net.Dial("tcp", ts.Listener.Addr().String())
-		if cerr != nil {
-			t.Fatal(cerr)
+	// Dial, try until 5 times before declaring a failure
+	dial := func() (net.Conn, error) {
+		var c net.Conn
+		var err error
+		for i := 0; i < 5; i++ {
+			// Sleep one second in case of the server is not ready yet
+			time.Sleep(1 * time.Second)
+			// Check if there is at least one listener configured
+			m.mu.Lock()
+			if len(m.listeners) == 0 {
+				m.mu.Unlock()
+				continue
+			}
+			m.mu.Unlock()
+			// Run the actual Dial
+			m.mu.Lock()
+			c, err = net.Dial("tcp", m.listeners[0].Addr().String())
+			m.mu.Unlock()
+			if err != nil {
+				continue
+			}
 		}
-		return c
+		return c, err
 	}
 
 	// Dial to open a StateNew but don't send anything
-	cnew := dial()
+	cnew, err := dial()
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer cnew.Close()
 
 	// Dial another connection but idle after a request to have StateIdle
-	cidle := dial()
+	cidle, err := dial()
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer cidle.Close()
+
 	cidle.Write([]byte("HEAD / HTTP/1.1\r\nHost: foo\r\n\r\n"))
-	_, err := http.ReadResponse(bufio.NewReader(cidle), nil)
+	_, err = http.ReadResponse(bufio.NewReader(cidle), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Make sure we don't block forever.
 	m.Close()
-
-	// Make sure there are zero connections
-	m.mu.Lock()
-	if len(m.conns) > 0 {
-		t.Fatal("Should have 0 connections")
-	}
-	m.mu.Unlock()
 }
 
-func TestListenAndServePlain(t *testing.T) {
+func TestServerListenAndServePlain(t *testing.T) {
 	wait := make(chan struct{})
 	addr := net.JoinHostPort("127.0.0.1", getFreePort())
 	errc := make(chan error)
@@ -295,8 +292,6 @@ func TestListenAndServePlain(t *testing.T) {
 
 	// Initialize done channel specifically for each tests.
 	globalServiceDoneCh = make(chan struct{}, 1)
-	// Initialize signal channel specifically for each tests.
-	globalServiceSignalCh = make(chan serviceSignal, 1)
 
 	// Create ServerMux and when we receive a request we stop waiting
 	m := NewServerMux(addr, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -337,7 +332,7 @@ func TestListenAndServePlain(t *testing.T) {
 	}
 }
 
-func TestListenAndServeTLS(t *testing.T) {
+func TestServerListenAndServeTLS(t *testing.T) {
 	wait := make(chan struct{})
 	addr := net.JoinHostPort("127.0.0.1", getFreePort())
 	errc := make(chan error)
