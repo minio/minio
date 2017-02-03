@@ -19,7 +19,7 @@ We recommend Docker Engine v1.13.0 (Docker Compose v 3.0) as the starting point.
 
 ## 1. Prerequisites
 
-You are familiar with [Swarm mode key concepts](https://docs.docker.com/engine/swarm/key-concepts/), and have a cluster of preferably 4 [networked host machines](https://docs.docker.com/engine/swarm/swarm-tutorial/#/three-networked-host-machines).
+You are familiar with [Swarm mode key concepts](https://docs.docker.com/engine/swarm/key-concepts/), and have a cluster of atleast 4 [networked host machines](https://docs.docker.com/engine/swarm/swarm-tutorial/#/three-networked-host-machines).
 
 ## 2. Create a Swarm
 
