@@ -111,12 +111,12 @@ func isValidResources(resources set.StringSet) (err error) {
 		return err
 	}
 	for resource := range resources {
-		if !strings.HasPrefix(resource, bucketARNPrefix) {
+		if !hasPrefix(resource, bucketARNPrefix) {
 			err = errors.New("Unsupported resource style found: ‘" + resource + "’, please validate your policy document")
 			return err
 		}
 		resourceSuffix := strings.SplitAfter(resource, bucketARNPrefix)[1]
-		if len(resourceSuffix) == 0 || strings.HasPrefix(resourceSuffix, "/") {
+		if len(resourceSuffix) == 0 || hasPrefix(resourceSuffix, "/") {
 			err = errors.New("Invalid resource style found: ‘" + resource + "’, please validate your policy document")
 			return err
 		}
@@ -282,7 +282,7 @@ func checkBucketPolicyResources(bucket string, bucketPolicy *bucketPolicy) APIEr
 		// nesting. Reject such rules.
 		for _, otherResource := range resources {
 			// Common prefix reject such rules.
-			if strings.HasPrefix(otherResource, resource) {
+			if hasPrefix(otherResource, resource) {
 				return ErrPolicyNesting
 			}
 		}

@@ -52,10 +52,6 @@ func readDir(dirPath string) (entries []string, err error) {
 			return nil, err
 		}
 		for _, fi := range fis {
-			// Skip special files, if found.
-			if hasPosixReservedPrefix(fi.Name()) {
-				continue
-			}
 			// Stat symbolic link and follow to get the final value.
 			if fi.Mode()&os.ModeSymlink == os.ModeSymlink {
 				var st os.FileInfo

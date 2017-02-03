@@ -135,7 +135,7 @@ func testTreeWalkPrefix(t *testing.T, listDir listDirFunc, isLeaf isLeafFunc) {
 
 	// Check if all entries received on the channel match the prefix.
 	for res := range twResultCh {
-		if !strings.HasPrefix(res.entry, prefix) {
+		if !hasPrefix(res.entry, prefix) {
 			t.Errorf("Entry %s doesn't match prefix %s", res.entry, prefix)
 		}
 	}

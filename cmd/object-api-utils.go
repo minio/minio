@@ -22,6 +22,7 @@ import (
 	"io"
 	"path"
 	"regexp"
+	"runtime"
 	"strings"
 	"unicode/utf8"
 
@@ -91,10 +92,10 @@ func IsValidObjectName(object string) bool {
 	if len(object) == 0 {
 		return false
 	}
-	if strings.HasSuffix(object, slashSeparator) {
+	if hasSuffix(object, slashSeparator) {
 		return false
 	}
-	if strings.HasPrefix(object, slashSeparator) {
+	if hasPrefix(object, slashSeparator) {
 		return false
 	}
 	return IsValidObjectPrefix(object)
@@ -157,6 +158,26 @@ func getCompleteMultipartMD5(parts []completePart) (string, error) {
 	}
 	s3MD5 := fmt.Sprintf("%s-%d", getMD5Hash(finalMD5Bytes), len(parts))
 	return s3MD5, nil
+}
+
+// Prefix matcher string matches prefix in a platform specific way.
+// For example on windows since its case insensitive we are supposed
+// to do case insensitive checks.
+func hasPrefix(s string, prefix string) bool {
+	if runtime.GOOS == "windows" {
+		return strings.HasPrefix(strings.ToLower(s), strings.ToLower(prefix))
+	}
+	return strings.HasPrefix(s, prefix)
+}
+
+// Suffix matcher string matches suffix in a platform specific way.
+// For example on windows since its case insensitive we are supposed
+// to do case insensitive checks.
+func hasSuffix(s string, suffix string) bool {
+	if runtime.GOOS == "windows" {
+		return strings.HasSuffix(strings.ToLower(s), strings.ToLower(suffix))
+	}
+	return strings.HasSuffix(s, suffix)
 }
 
 // byBucketName is a collection satisfying sort.Interface.

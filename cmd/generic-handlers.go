@@ -141,8 +141,8 @@ func setBrowserCacheControlHandler(h http.Handler) http.Handler {
 func (h cacheControlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method == httpGET && guessIsBrowserReq(r) && globalIsBrowserEnabled {
 		// For all browser requests set appropriate Cache-Control policies
-		if strings.HasPrefix(r.URL.Path, reservedBucket+"/") {
-			if strings.HasSuffix(r.URL.Path, ".js") || r.URL.Path == reservedBucket+"/favicon.ico" {
+		if hasPrefix(r.URL.Path, reservedBucket+"/") {
+			if hasSuffix(r.URL.Path, ".js") || r.URL.Path == reservedBucket+"/favicon.ico" {
 				// For assets set cache expiry of one year. For each release, the name
 				// of the asset name will change and hence it can not be served from cache.
 				w.Header().Set("Cache-Control", "max-age=31536000")

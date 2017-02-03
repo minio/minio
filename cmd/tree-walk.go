@@ -67,7 +67,7 @@ func filterMatchingPrefix(entries []string, prefixEntry string) []string {
 		if start == end {
 			break
 		}
-		if strings.HasPrefix(entries[start], prefixEntry) {
+		if hasPrefix(entries[start], prefixEntry) {
 			break
 		}
 		start++
@@ -76,7 +76,7 @@ func filterMatchingPrefix(entries []string, prefixEntry string) []string {
 		if start == end {
 			break
 		}
-		if strings.HasPrefix(entries[end-1], prefixEntry) {
+		if hasPrefix(entries[end-1], prefixEntry) {
 			break
 		}
 		end--
@@ -173,7 +173,7 @@ func doTreeWalk(bucket, prefixDir, entryPrefixMatch, marker string, recursive bo
 				// Skip as the marker would already be listed in the previous listing.
 				continue
 			}
-			if recursive && !strings.HasSuffix(entry, slashSeparator) {
+			if recursive && !hasSuffix(entry, slashSeparator) {
 				// We should not skip for recursive listing and if markerDir is a directory
 				// for ex. if marker is "four/five.txt" markerDir will be "four/" which
 				// should not be skipped, instead it will need to be treeWalk()'ed into.
@@ -182,7 +182,7 @@ func doTreeWalk(bucket, prefixDir, entryPrefixMatch, marker string, recursive bo
 				continue
 			}
 		}
-		if recursive && strings.HasSuffix(entry, slashSeparator) {
+		if recursive && hasSuffix(entry, slashSeparator) {
 			// If the entry is a directory, we will need recurse into it.
 			markerArg := ""
 			if entry == markerDir {
