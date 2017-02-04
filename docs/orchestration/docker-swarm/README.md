@@ -9,25 +9,37 @@ Docker Engine provides cluster management and orchestration features in Swarm mo
 
 ## 2. Create a Swarm
 
-SSH into the machine where you want to run your manager node. If the machine is named as `manager`, the command to SSH is
+SSH into the machine where you want to run your manager node. If the machine is named `manager`, command to SSH is
 
 ```shell
 docker-machine ssh manager
 ```
-Once you are logged in to the designated manager node, create the Swarm by 
+After logging in to the designated manager node, create the Swarm by 
 
 ```shell
 docker swarm init --advertise-addr <MANAGER-IP>
 ```
 
-You can find detailed steps to create the Swarm on [Docker documentation site](https://docs.docker.com/engine/swarm/swarm-tutorial/create-swarm/). Finally, [add worker nodes](https://docs.docker.com/engine/swarm/swarm-tutorial/add-nodes/) to the Swarm.
+Find detailed steps to create the Swarm on [Docker documentation site](https://docs.docker.com/engine/swarm/swarm-tutorial/create-swarm/). After the manager is up, [add worker nodes](https://docs.docker.com/engine/swarm/swarm-tutorial/add-nodes/) to the Swarm.
 
-## 3. Deploy distributed Minio service
+## 3. Deploy distributed Minio services
 
-Download and save the [Docker compose file](./docker-compose.yaml) on your Docker Swarm master. 
+Download the [Docker compose file](./docker-compose.yaml) on your Swarm master. Then execute the command
 
-Alternatly, you can use the 
+```shell
+docker stack deploy --compose-file=docker-compose.yaml minio_stack
+```
+This deploys services described in the Compose file as Docker stack. Look up the `docker stack` [command reference](https://docs.docker.com/engine/reference/commandline/stack/) for more info. 
 
+## 4. Remove distributed Minio services
+
+Remove the distributed Minio servies and related network by
+
+```shell
+docker stack rm minio_stack
+```
+
+### Notes
 
 
 
