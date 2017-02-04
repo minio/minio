@@ -2,7 +2,7 @@
 
 Kubernetes constructs like Deployments and StatefulSets provide perfect platform to deploy Minio server in standalone, distributed or shared mode. In addition, using Minio [Helm](https://helm.sh) Chart, you can deploy Minio server with a single command on your cluster. 
 
-Minio Helm Chart offers great deal of [customizeability](#configuration), still if you'd rather like to deploy Minio using custom config files, you can do that as well. This [blog post](https://blog.minio.io/build-aws-s3-compatible-cloud-storage-on-gcp-with-minio-and-kubernetes-159cc99caea8#.8zesfh6tc) offers an introduction to running Minio on Kubernetes using .yaml configuration files.
+Minio Helm Chart offers great deal of [customizability](#configuration), still if you'd rather like to deploy Minio using custom config files, you can do that as well. This [blog post](https://blog.minio.io/build-aws-s3-compatible-cloud-storage-on-gcp-with-minio-and-kubernetes-159cc99caea8#.8zesfh6tc) offers an introduction to running Minio on Kubernetes using .yaml configuration files.
 
 ## 1. Prerequisites
 
