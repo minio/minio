@@ -11,10 +11,10 @@ While storage has been traditionally thought of as complicated, Minio changes th
 
 ## Orchestration platforms
 
-Minio server can be easily deployed on orchestration platforms. Below list 
+Below is the list of documented orchestration platforms for Minio server: 
 
 | Orchestration platforms|
 |:---|
 | [`Kubernetes`](./kubernetes) |
-| [`DC/OS`](./dcos) |
 | [`Docker Swam`](./docker-swarm) |
+| [`DC/OS`](./dcos) |
