@@ -27,7 +27,7 @@ Above command deploys Minio on the Kubernetes cluster in the default configurati
 | `image`                    | Minio image name                    | `minio/minio`                                           |
 | `imageTag`                 | Minio image tag. Possible values listed [here](https://hub.docker.com/r/minio/minio/tags/).| `latest`|
 | `imagePullPolicy`          | Image pull policy                   | `Always`                                                |
-| `mode`                     | Minio server mode (`standalone` or `distributed`)| `standalone`                               |
+| `mode`                     | Minio server mode (`standalone`, `shared` or `distributed`)| `standalone`                     |
 | `numberOfNodes`            | Number of nodes (applicable only for Minio distributed mode). Should be 4 <= x <= 16 | `4`    |
 | `accessKey`                | Default access key                  | `AKIAIOSFODNN7EXAMPLE`                                  |
 | `secretKey`                | Default secret key                  | `wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY`              |
@@ -57,18 +57,7 @@ Alternately, you can provide a YAML file that specifies parameter values while i
 $ helm install --name my-release -f values.yaml stable/minio
 ```
 
-## 3. Uninstalling the Chart
-
-Assuming your release is named as `my-release`, delete it using the command:
-
-```bash
-$ helm delete my-release
-```
-
-The command removes all the Kubernetes components associated with the chart and deletes the release.
-
-Distributed Minio
------------
+### Distributed Minio
 
 This chart provisions a Minio server in standalone mode, by default. To provision Minio server in [distributed mode](https://docs.minio.io/docs/distributed-minio-quickstart-guide), set the `mode` field to `distributed`,
 
@@ -84,13 +73,28 @@ $ helm install --set mode=distributed,numberOfNodes=8 stable/minio
 
 This provisions Minio server in distributed mode with 8 nodes. Note that the `numberOfNodes` value should be an integer between 4 and 16 (inclusive).
 
-### StatefulSet [limitations](http://kubernetes.io/docs/concepts/abstractions/controllers/statefulsets/#limitations) applicable to distributed Minio
+#### StatefulSet [limitations](http://kubernetes.io/docs/concepts/abstractions/controllers/statefulsets/#limitations) applicable to distributed Minio
 
 1. StatefulSets need persistent storage, so the `persistence.enabled` flag is ignored when `mode` is set to `distributed`.
 2. When uninstalling a distributed Minio release, you'll need to manually delete volumes associated with the StatefulSet.
 
-Persistence
------------
+### Shared Minio
+
+To provision Minio servers in [shared mode](https://github.com/minio/minio/blob/master/docs/shared-backend/README.md), set the `mode` field to `shared`,
+
+```bash
+$ helm install --set mode=shared stable/minio
+```
+
+This provisions 4 Minio server nodes backed by single storage. To change the number of nodes in your shared Minio deployment, set the `numberOfNodes` field,
+
+```bash
+$ helm install --set mode=shared,numberOfNodes=8 stable/minio
+```
+
+This provisions Minio server in shared mode with 8 nodes.
+
+### Persistence
 
 This chart provisions a PersistentVolumeClaim and mounts corresponding persistent volume to default location `/export`. You'll need physical storage available in the Kubernetes cluster for this to work. If you'd rather use `emptyDir`, disable PersistentVolumeClaim by:
 
@@ -99,6 +103,16 @@ $ helm install --set persistence.enabled=false stable/minio
 ```
 
 > *"An emptyDir volume is first created when a Pod is assigned to a Node, and exists as long as that Pod is running on that node. When a Pod is removed from a node for any reason, the data in the emptyDir is deleted forever."*
+
+## 3. Uninstalling the Chart
+
+Assuming your release is named as `my-release`, delete it using the command:
+
+```bash
+$ helm delete my-release
+```
+
+The command removes all the Kubernetes components associated with the chart and deletes the release.
 
 ### Notes
 
