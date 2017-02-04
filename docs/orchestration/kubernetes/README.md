@@ -25,7 +25,7 @@ Above command deploys Minio on the Kubernetes cluster in the default configurati
 | Parameter                  | Description                         | Default                                                 |
 |----------------------------|-------------------------------------|---------------------------------------------------------|
 | `image`                    | Minio image name                    | `minio/minio`                                           |
-| `imageTag`                 | Minio image tag. Possible values listed [here](https://hub.docker.com/r/minio/minio/tags/).| `latest`|
+| `imageTag`                 | Minio image tag. Possible values listed [here](https://hub.docker.com/r/minio/minio/tags/).| `RELEASE.2017-01-25T03-14-52Z`|
 | `imagePullPolicy`          | Image pull policy                   | `Always`                                                |
 | `mode`                     | Minio server mode (`standalone`, `shared` or `distributed`)| `standalone`                     |
 | `numberOfNodes`            | Number of nodes (applicable only for Minio distributed mode). Should be 4 <= x <= 16 | `4`    |
@@ -75,8 +75,8 @@ This provisions Minio server in distributed mode with 8 nodes. Note that the `nu
 
 #### StatefulSet [limitations](http://kubernetes.io/docs/concepts/abstractions/controllers/statefulsets/#limitations) applicable to distributed Minio
 
-1. StatefulSets need persistent storage, so the `persistence.enabled` flag is ignored when `mode` is set to `distributed`.
-2. When uninstalling a distributed Minio release, you'll need to manually delete volumes associated with the StatefulSet.
+* StatefulSets need persistent storage, so the `persistence.enabled` flag is ignored when `mode` is set to `distributed`.
+* When uninstalling a distributed Minio release, you'll need to manually delete volumes associated with the StatefulSet.
 
 ### Shared Minio
 
@@ -116,13 +116,13 @@ The command removes all the Kubernetes components associated with the chart and 
 
 ### Notes
 
-* An instance of a chart running in a Kubernetes cluster is called a release. Each release is identified by a unique name within the cluster. Helm automatically assigns a unique release name after installing the chart. You can also set your preferred name by:
+* An instance of a chart running in a Kubernetes cluster is called a release. Helm automatically assigns a unique release name after installing the chart. You can also set your preferred name by:
 
 ```bash
 $ helm install --name my-release stable/minio
 ```
 
-* By default a pre-generated access and secret key will be used. To override the default keys, pass the access and secret keys as arguments to helm install.
+* To override the default keys, pass the access and secret keys as arguments to helm install.
 
 ```bash
 $ helm install --set accessKey=myaccesskey,secretKey=mysecretkey \
