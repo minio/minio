@@ -4,13 +4,15 @@ Docker Engine provides cluster management and orchestration features in Swarm mo
 
 ## 1. Prerequisites
 
-Familiarity with [Swarm mode key concepts](https://docs.docker.com/engine/swarm/key-concepts/), and a cluster of atleast 4 [networked host machines](https://docs.docker.com/engine/swarm/swarm-tutorial/#/three-networked-host-machines).
+Familiarity with [Swarm mode key concepts](https://docs.docker.com/engine/swarm/key-concepts/), and a cluster of atleast 4 [networked host machines](https://docs.docker.com/engine/swarm/swarm-tutorial/#/three-networked-host-machines). 
 
 ## 2. Create a Swarm
 
-Create a Swarm by [adding a manager](https://docs.docker.com/engine/swarm/swarm-tutorial/create-swarm/) node to your cluster. Once the manager is up, [add worker nodes](https://docs.docker.com/engine/swarm/swarm-tutorial/add-nodes/) to the Swarm. .
+Create a Swarm by [adding manager](https://docs.docker.com/engine/swarm/swarm-tutorial/create-swarm/) node to your cluster. Once a manager is up, [add worker nodes](https://docs.docker.com/engine/swarm/swarm-tutorial/add-nodes/) to the Swarm.
 
 ## 3. Deploy distributed Minio service
+
+
 
 
 
