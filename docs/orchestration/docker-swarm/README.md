@@ -37,7 +37,7 @@ After the stack is successfully deployed, you should be able to access Minio ser
 
 ## 4. Remove distributed Minio services
 
-Remove the distributed Minio servies and related network by
+Remove the distributed Minio services and related network by
 
 ```shell
 docker stack rm minio_stack
@@ -45,7 +45,7 @@ docker stack rm minio_stack
 
 ### Notes
 
-* By default the Docker Compose file uses the Docker image for latest Minio server release. You can change the image tag to pull a specfic [Minio Docker image](https://hub.docker.com/r/minio/minio/). 
+* By default the Docker Compose file uses the Docker image for latest Minio server release. You can change the image tag to pull a specific [Minio Docker image](https://hub.docker.com/r/minio/minio/). 
 
 * There are 4 minio distributed instances created by default. You can add more Minio services (upto total 16) to your Minio Swarm deployment. To add a deployment
   * Replicate a service definition and change the name of the new service appropriately.
