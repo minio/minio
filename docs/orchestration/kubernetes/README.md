@@ -1,24 +1,26 @@
 # Deploy Minio on Kubernetes [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
 
-This chart bootstraps Minio deployment on a [Kubernetes](http://kubernetes.io) cluster using the [Helm](https://helm.sh) package manager.
+Kubernetes constructs like Deployments and StatefulSets provide perfect platform to deploy Minio server in standalone, distributed or shared mode. In addition, using Minio [Helm](https://helm.sh) Chart, you can deploy Minio server with a single command on your cluster. 
+
+Minio Helm Chart offers great deal of [customizeability](#configuration), still if you'd rather like to deploy Minio using custom config files, you can do that as well. This [blog post](https://blog.minio.io/build-aws-s3-compatible-cloud-storage-on-gcp-with-minio-and-kubernetes-159cc99caea8#.8zesfh6tc) offers an introduction to running Minio on Kubernetes using .yaml configuration files.
 
 ## 1. Prerequisites
 
 * Kubernetes 1.4+ with Beta APIs enabled for default standalone mode.
 * Kubernetes 1.5+ with Beta APIs enabled to run Minio in [distributed mode](#distributed-minio).
-* PV provisioner support in the underlying infrastructure.
+* PV provisioner support in the underlying infrastructure. 
+* Helm package manager [installed](https://github.com/kubernetes/helm#install) on your Kubernetes cluster. 
 
-## 2. Installing Minio Helm Chart
+## 2. Deploy Minio using Helm Chart
 
-Install this chart using:
+Install Minio chart by
 
 ```bash
 $ helm install stable/minio
 ```
+Above command deploys Minio on the Kubernetes cluster in the default configuration. Below section lists all the configurable parameters of the Minio chart and their default values.
 
-The command deploys Minio on the Kubernetes cluster in the default configuration. The [configuration](#configuration) section lists the parameters that can be configured during installation.
-
-The following tables lists the configurable parameters of the Minio chart and their default values.
+### Configuration
 
 | Parameter                  | Description                         | Default                                                 |
 |----------------------------|-------------------------------------|---------------------------------------------------------|
@@ -39,8 +41,6 @@ The following tables lists the configurable parameters of the Minio chart and th
 | `persistence.accessMode`   | ReadWriteOnce or ReadOnly           | `ReadWriteOnce`                                         |
 | `resources`                | CPU/Memory resource requests/limits | Memory: `256Mi`, CPU: `100m`                            |
 
-Some of the parameters above map to the env variables defined in the [Minio DockerHub image](https://hub.docker.com/r/minio/minio/).
-
 You can specify each parameter using the `--set key=value[,key=value]` argument to `helm install`. For example,
 
 ```bash
@@ -56,8 +56,6 @@ Alternately, you can provide a YAML file that specifies parameter values while i
 ```bash
 $ helm install --name my-release -f values.yaml stable/minio
 ```
-
-> **Tip**: You can use the default [values.yaml](values.yaml)
 
 ## 3. Uninstalling the Chart
 
