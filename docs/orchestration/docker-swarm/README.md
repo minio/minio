@@ -33,7 +33,7 @@ docker stack deploy --compose-file=docker-compose.yaml minio_stack
 ```
 This deploys services described in the Compose file as Docker stack `minio_stack`. Look up the `docker stack` [command reference](https://docs.docker.com/engine/reference/commandline/stack/) for more info. 
 
-After the stack is successfully deployed, you should be able to access Minio server via [Minio Client](https://docs.minio.io/docs/minio-client-complete-guide) `mc` or your browser at http://[Node_Public_IP_Address]:[9001]
+After the stack is successfully deployed, you should be able to access Minio server via [Minio Client](https://docs.minio.io/docs/minio-client-complete-guide) `mc` or your browser at http://[Node_Public_IP_Address]:[Expose_Port_on_Host]
 
 ## 4. Remove distributed Minio services
 
@@ -59,4 +59,10 @@ docker stack rm minio_stack
 
 * Minio services in the Docker compose file expose ports 9001 to 9004. This allows multiple services to run on a host. Explore other configuration options in [Docker documentation](https://docs.docker.com/compose/compose-file/#/ports).
 
-
+### Explore Further
+- [Minio Erasure Code QuickStart Guide](https://docs.minio.io/docs/minio-erasure-code-quickstart-guide)
+- [Use `mc` with Minio Server](https://docs.minio.io/docs/minio-client-quickstart-guide)
+- [Use `aws-cli` with Minio Server](https://docs.minio.io/docs/aws-cli-with-minio)
+- [Use `s3cmd` with Minio Server](https://docs.minio.io/docs/s3cmd-with-minio)
+- [Use `minio-go` SDK with Minio Server](https://docs.minio.io/docs/golang-client-quickstart-guide)
+- [The Minio documentation website](https://docs.minio.io)
