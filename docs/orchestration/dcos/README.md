@@ -1,57 +1,36 @@
-## Prerequisites
+# Deploy Minio on DC/OS [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
 
-- DC/OS 1.8 or later
-- [Marathon-LB](https://dcos.io/docs/1.8/usage/service-discovery/marathon-lb/usage/) must be installed and running
+To deploy Minio on DC/OS, you can use a Universe package, or create a customized config file. We at Minio recently released an [official universe package](https://github.com/mesosphere/universe/tree/version-3.x/repo/packages/M/minio/0) to enable single click Minio deployment on a DC/OS cluster.
+
+## 1. Prerequisites
+
+- DC/OS 1.8 or later running on your cluster. 
+- [Marathon-LB](https://dcos.io/docs/1.8/usage/service-discovery/marathon-lb/usage/) installed and running.
 - IP address of the public agent(s) where Marathon-LB or an available hostname configured to point to the public agent(s) where Marathon-LB is running.
 
-## Setting up Minio 
+## 2. Setting up Minio 
 
-Before starting, identify the IP address or hostname of a public agent where Marathon-LB is running. 
+You can install Minio Universe package using the DC/OS GUI or CLI. 
 
-- Visit the Universe page in DC/OS, and click on the "Install Package" button underneath Minio.
+### Minio installation on DC/OS GUI 
 
-![Install Minio](img/install.png)
+Visit the DC/OS admin page, and click on “Universe” on the left menu bar. Then click on the “Packages” tab and search for Minio. Once you see the package, click the “Install” button on the right hand side. Then, enter configuration values like the storage and service type you’d like to use with your Minio instance. Finally enter the public Marathon-LB IP address under “networking >> public-agent”, and click “Review and Install”.
 
-- Click on "Advanced Installation" and navigate to the "networking" tab. Specify the IP address or hostname of the public agent where Marathon-LB is running. Make sure you remove the leading http:// and the trailing / from the IP. 
+This completes the install process. Before you can access Minio server, get the access key and secret key from the Minio container logs. Click on “Services” and select Minio service in DC/OS admin page. Then go to the “logs” tab and copy the accesskey and secretkey.
 
-![Configure IP](img/ip.png)
+### Minio installation on DC/OS CLI
 
-- We're ready to install! Click the green "Review and Install" button, verify your settings are correct and then click "Install". Navigate to the services UI to see Minio being deployed.
- 
-- Once Minio has been deployed, navigate to the IP/hostname you used earlier for virtual host. You should see the following login page.
+To install Minio package via CLI, type
 
-![Minio browser](img/browser.png)
-
-## Using Browser Console
-
-- The access key and secret key for the browser console can be obtained from minio service logs.
-
-![Minio browser](img/logs.png)
-
-- Navigate to services UI and click on Minio and go to the logs section. Copy the _AccessKey_ and _SecretKey_ and use it to log into the browser console.
-
-![Minio browser](img/use-keys.png)
-
-- Once you have successfully loggedin you should see the following screen. 
-
-![Minio browser](img/home.png)
-
-## Install Minio Client
-
-Minio Client (mc) is a CLI tool which provides a modern alternative to UNIX commands like ls, cat, cp, mirror, diff etc, to operate on filesystems and Amazon S3 compatible cloud storage service.
-
-[Click here](https://docs.minio.io/docs/minio-client-quickstart-guide) for instructions on installing mc.
-
-## Configure Minio Client
-
-```sh
-mc config host add <ALIAS> <YOUR-S3-ENDPOINT> <YOUR-ACCESS-KEY> <YOUR-SECRET-KEY> <API-SIGNATURE>
+```bash
+$ dcos package install minio
 ```
 
-*Example: Create a new bucket named "my-bucket" on http://52.53.213.170:9000*
+## 3. Uninstalling Minio
 
-```sh
-mc config host add minio-dcos http://52.53.213.179:9000 2TT97MX8MWWZGCBWQULV mdXXJwo0bxO7XUfOuOMaUu255u0QKYsddEXjVBzd
-mc mb minio-dcos/my-bucket
-Bucket created successfully ‘minio-dcos/my-bucket’.
+To uninstall Minio package via CLI, type
+
+```bash
+$ dcos package uninstall minio
 ```
+
