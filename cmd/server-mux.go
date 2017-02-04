@@ -309,31 +309,27 @@ func (l *ListenerMux) Accept() (net.Conn, error) {
 
 // ServerMux - the main mux server
 type ServerMux struct {
-	*http.Server
-	listeners       []*ListenerMux
-	WaitGroup       *sync.WaitGroup
-	GracefulTimeout time.Duration
-	mu              sync.Mutex // guards closed, conns, and listener
-	closed          bool
-	conns           map[net.Conn]http.ConnState // except terminal states
+	Addr      string
+	handler   http.Handler
+	listeners []*ListenerMux
+
+	gracefulWait    *sync.WaitGroup
+	gracefulTimeout time.Duration
+
+	mu     sync.Mutex // guards closed, and listener
+	closed bool
 }
 
 // NewServerMux constructor to create a ServerMux
 func NewServerMux(addr string, handler http.Handler) *ServerMux {
 	m := &ServerMux{
-		Server: &http.Server{
-			Addr:           addr,
-			Handler:        handler,
-			MaxHeaderBytes: 1 << 20,
-		},
-		WaitGroup: &sync.WaitGroup{},
+		Addr:    addr,
+		handler: handler,
 		// Wait for 5 seconds for new incoming connnections, otherwise
 		// forcibly close them during graceful stop or restart.
-		GracefulTimeout: 5 * time.Second,
+		gracefulTimeout: 5 * time.Second,
+		gracefulWait:    &sync.WaitGroup{},
 	}
-
-	// Track connection state
-	m.connState()
 
 	// Returns configured HTTP server.
 	return m
@@ -421,7 +417,7 @@ func (m *ServerMux) ListenAndServe(certFile, keyFile string) (err error) {
 
 	go m.handleServiceSignals()
 
-	listeners, err := initListeners(m.Server.Addr, config)
+	listeners, err := initListeners(m.Addr, config)
 	if err != nil {
 		return err
 	}
@@ -445,8 +441,11 @@ func (m *ServerMux) ListenAndServe(certFile, keyFile string) (err error) {
 			}
 			http.Redirect(w, r, u.String(), http.StatusTemporaryRedirect)
 		} else {
-			// Execute registered handlers
-			m.Server.Handler.ServeHTTP(w, r)
+			// Execute registered handlers, protect with a waitgroup
+			// to accomplish a graceful shutdown when the user asks to quit
+			m.gracefulWait.Add(1)
+			m.handler.ServeHTTP(w, r)
+			m.gracefulWait.Done()
 		}
 	})
 
@@ -470,6 +469,7 @@ func (m *ServerMux) ListenAndServe(certFile, keyFile string) (err error) {
 // Close initiates the graceful shutdown
 func (m *ServerMux) Close() error {
 	m.mu.Lock()
+
 	if m.closed {
 		m.mu.Unlock()
 		return errors.New("Server has been closed")
@@ -484,76 +484,21 @@ func (m *ServerMux) Close() error {
 			return err
 		}
 	}
-
-	m.SetKeepAlivesEnabled(false)
-	// Force close any idle and new connections. Waiting for other connections
-	// to close on their own (within the timeout period)
-	for c, st := range m.conns {
-		if st == http.StateIdle || st == http.StateNew {
-			c.Close()
-		}
-	}
-
-	// If the GracefulTimeout happens then forcefully close all connections
-	t := time.AfterFunc(m.GracefulTimeout, func() {
-		for c := range m.conns {
-			c.Close()
-		}
-	})
-
-	// Wait for graceful timeout of connections.
-	defer t.Stop()
-
 	m.mu.Unlock()
 
-	// Block until all connections are closed
-	m.WaitGroup.Wait()
+	// Prepare for a graceful shutdown
+	waitSignal := make(chan struct{})
+	go func() {
+		defer close(waitSignal)
+		m.gracefulWait.Wait()
+	}()
+
+	select {
+	// Wait for everything to be properly closed
+	case <-waitSignal:
+	// Forced shutdown
+	case <-time.After(m.gracefulTimeout):
+	}
 
 	return nil
-}
-
-// connState setups the ConnState tracking hook to know which connections are idle
-func (m *ServerMux) connState() {
-	// Set our ConnState to track idle connections
-	m.Server.ConnState = func(c net.Conn, cs http.ConnState) {
-		m.mu.Lock()
-		defer m.mu.Unlock()
-
-		switch cs {
-		case http.StateNew:
-			// New connections increment the WaitGroup and are added the the conns dictionary
-			m.WaitGroup.Add(1)
-			if m.conns == nil {
-				m.conns = make(map[net.Conn]http.ConnState)
-			}
-			m.conns[c] = cs
-		case http.StateActive:
-			// Only update status to StateActive if it's in the conns dictionary
-			if _, ok := m.conns[c]; ok {
-				m.conns[c] = cs
-			}
-		case http.StateIdle:
-			// Only update status to StateIdle if it's in the conns dictionary
-			if _, ok := m.conns[c]; ok {
-				m.conns[c] = cs
-			}
-
-			// If we've already closed then we need to close this connection.
-			// We don't allow connections to become idle after server is closed
-			if m.closed {
-				c.Close()
-			}
-		case http.StateHijacked, http.StateClosed:
-			// If the connection is hijacked or closed we forget it
-			m.forgetConn(c)
-		}
-	}
-}
-
-// forgetConn removes c from conns and decrements WaitGroup
-func (m *ServerMux) forgetConn(c net.Conn) {
-	if _, ok := m.conns[c]; ok {
-		delete(m.conns, c)
-		m.WaitGroup.Done()
-	}
 }
