@@ -59,6 +59,8 @@ docker stack rm minio_stack
 
 * Minio services in the Docker compose file expose ports 9001 to 9004. This allows multiple services to run on a host. Explore other configuration options in [Docker documentation](https://docs.docker.com/compose/compose-file/#/ports).
 
+* Docker Swarm uses ingress load balancing by default. You can configure [external load balancer based](https://docs.docker.com/engine/swarm/ingress/#/configure-an-external-load-balancer) on requirements. 
+
 ### Explore Further
 - [Minio Erasure Code QuickStart Guide](https://docs.minio.io/docs/minio-erasure-code-quickstart-guide)
 - [Use `mc` with Minio Server](https://docs.minio.io/docs/minio-client-quickstart-guide)
