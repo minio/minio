@@ -21,6 +21,8 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"runtime"
+	"strings"
 
 	humanize "github.com/dustin/go-humanize"
 	mux "github.com/gorilla/mux"
@@ -63,6 +65,10 @@ func bucketPolicyActionMatch(action string, statement policyStatement) bool {
 
 // Match function matches wild cards in 'pattern' for resource.
 func resourceMatch(pattern, resource string) bool {
+	if runtime.GOOS == "windows" {
+		// For windows specifically make sure we are case insensitive.
+		return wildcard.Match(strings.ToLower(pattern), strings.ToLower(resource))
+	}
 	return wildcard.Match(pattern, resource)
 }
 

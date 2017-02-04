@@ -165,7 +165,7 @@ func (api objectAPIHandlers) ListMultipartUploadsHandler(w http.ResponseWriter, 
 	}
 	if keyMarker != "" {
 		// Marker not common with prefix is not implemented.
-		if !strings.HasPrefix(keyMarker, prefix) {
+		if !hasPrefix(keyMarker, prefix) {
 			writeErrorResponse(w, ErrNotImplemented, r.URL)
 			return
 		}

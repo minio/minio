@@ -69,26 +69,6 @@ func setupTestReadDirEmpty(t *testing.T) (testResults []result) {
 	return testResults
 }
 
-// Test to read empty directory with only reserved names.
-func setupTestReadDirReserved(t *testing.T) (testResults []result) {
-	dir := mustSetupDir(t)
-	entries := []string{}
-	// Create a file with reserved name.
-	for _, reservedName := range posixReservedPrefix {
-		if err := ioutil.WriteFile(filepath.Join(dir, reservedName), []byte{}, os.ModePerm); err != nil {
-			// For cleanup, its required to add these entries into test results.
-			testResults = append(testResults, result{dir, entries})
-			t.Fatalf("Unable to create file, %s", err)
-		}
-		// entries = append(entries, reservedName) - reserved files are skipped.
-	}
-	sort.Strings(entries)
-
-	// Add entries slice for this test directory.
-	testResults = append(testResults, result{dir, entries})
-	return testResults
-}
-
 // Test to read non-empty directory with only files.
 func setupTestReadDirFiles(t *testing.T) (testResults []result) {
 	dir := mustSetupDir(t)
@@ -198,8 +178,6 @@ func TestReadDir(t *testing.T) {
 
 	// Setup and capture test results for empty directory.
 	testResults = append(testResults, setupTestReadDirEmpty(t)...)
-	// Setup and capture test results for reserved files.
-	testResults = append(testResults, setupTestReadDirReserved(t)...)
 	// Setup and capture test results for directory with only files.
 	testResults = append(testResults, setupTestReadDirFiles(t)...)
 	// Setup and capture test results for directory with files and directories.

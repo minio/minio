@@ -16,10 +16,7 @@
 
 package cmd
 
-import (
-	"strings"
-	"time"
-)
+import "time"
 
 // SystemLockState - Structure to fill the lock state of entire object storage.
 // That is the total locks held, total calls blocked on locks and state of all the locks for the entire system.
@@ -82,7 +79,7 @@ func listLocksInfo(bucket, prefix string, duration time.Duration) []VolumeLockIn
 			continue
 		}
 		// N B empty prefix matches all param.path.
-		if !strings.HasPrefix(param.path, prefix) {
+		if !hasPrefix(param.path, prefix) {
 			continue
 		}
 

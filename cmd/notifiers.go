@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"errors"
-	"strings"
 
 	"github.com/minio/minio/pkg/wildcard"
 )
@@ -206,9 +205,9 @@ func filterRuleMatch(object string, frs []filterRule) bool {
 	var prefixMatch, suffixMatch = true, true
 	for _, fr := range frs {
 		if isValidFilterNamePrefix(fr.Name) {
-			prefixMatch = strings.HasPrefix(object, fr.Value)
+			prefixMatch = hasPrefix(object, fr.Value)
 		} else if isValidFilterNameSuffix(fr.Name) {
-			suffixMatch = strings.HasSuffix(object, fr.Value)
+			suffixMatch = hasSuffix(object, fr.Value)
 		}
 	}
 	return prefixMatch && suffixMatch

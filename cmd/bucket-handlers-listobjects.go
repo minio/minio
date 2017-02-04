@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"net/http"
-	"strings"
 
 	"github.com/gorilla/mux"
 )
@@ -44,7 +43,7 @@ func validateListObjectsArgs(prefix, marker, delimiter string, maxKeys int) APIE
 	// Marker is set validate pre-condition.
 	if marker != "" {
 		// Marker not common with prefix is not implemented.
-		if !strings.HasPrefix(marker, prefix) {
+		if !hasPrefix(marker, prefix) {
 			return ErrNotImplemented
 		}
 	}
