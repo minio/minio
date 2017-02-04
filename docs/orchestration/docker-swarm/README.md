@@ -33,7 +33,7 @@ docker stack deploy --compose-file=docker-compose.yaml minio_stack
 ```
 This deploys services described in the Compose file as Docker stack `minio_stack`. Look up the `docker stack` [command reference](https://docs.docker.com/engine/reference/commandline/stack/) for more info. 
 
-After the stack is successfully deployed, you should be able to access Minio server via Minio Client [`mc`](https://docs.minio.io/docs/minio-client-complete-guide) or your browser at http://<Node-Public-IP>:<9001>
+After the stack is successfully deployed, you should be able to access Minio server via [Minio Client]((https://docs.minio.io/docs/minio-client-complete-guide) `mc` or your browser at http://<Node_Public_IP_Address>:<9001>
 
 ## 4. Remove distributed Minio services
 
