@@ -58,16 +58,16 @@ var defaultHTTP1Methods = []string{
 // connections on the same listeners.
 type ConnMux struct {
 	net.Conn
-	bufrw *bufio.ReadWriter
+	// To peek net.Conn incoming data
+	peeker *bufio.Reader
 }
 
 // NewConnMux - creates a new ConnMux instance
 func NewConnMux(c net.Conn) *ConnMux {
 	br := bufio.NewReader(c)
-	bw := bufio.NewWriter(c)
 	return &ConnMux{
-		Conn:  c,
-		bufrw: bufio.NewReadWriter(br, bw),
+		Conn:   c,
+		peeker: bufio.NewReader(br),
 	}
 }
 
@@ -83,7 +83,7 @@ const (
 // errors in peeking over the connection.
 func (c *ConnMux) PeekProtocol() (string, error) {
 	// Peek for HTTP verbs.
-	buf, err := c.bufrw.Peek(maxHTTPVerbLen)
+	buf, err := c.peeker.Peek(maxHTTPVerbLen)
 	if err != nil {
 		return "", err
 	}
@@ -110,20 +110,31 @@ func (c *ConnMux) PeekProtocol() (string, error) {
 
 // Read - streams the ConnMux buffer when reset flag is activated, otherwise
 // streams from the incoming network connection
-func (c *ConnMux) Read(b []byte) (int, error) {
+func (c *ConnMux) Read(b []byte) (n int, e error) {
 	// Push read deadline
 	c.Conn.SetReadDeadline(time.Now().Add(defaultTCPReadTimeout))
-	return c.bufrw.Read(b)
+
+	// Update server's connection statistics
+	defer func() {
+		globalConnStats.incInputBytes(n)
+	}()
+
+	return c.peeker.Read(b)
+}
+
+func (c *ConnMux) Write(b []byte) (n int, e error) {
+	// Update server's connection statistics
+	defer func() {
+		globalConnStats.incOutputBytes(n)
+	}()
+	// Run the underlying net.Conn Write() func
+	return c.Conn.Write(b)
 }
 
 // Close the connection.
 func (c *ConnMux) Close() (err error) {
 	// Make sure that we always close a connection,
-	// even if the bufioWriter flush sends an error.
-	defer c.Conn.Close()
-
-	// Flush and write to the connection.
-	return c.bufrw.Flush()
+	return c.Conn.Close()
 }
 
 // ListenerMux wraps the standard net.Listener to inspect
