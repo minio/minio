@@ -124,9 +124,9 @@ func getScope(t time.Time, region string) string {
 }
 
 // getStringToSign a string based on selected query values.
-func getStringToSign(canonicalRequest string, t time.Time, region string) string {
+func getStringToSign(canonicalRequest string, t time.Time, scope string) string {
 	stringToSign := signV4Algorithm + "\n" + t.Format(iso8601Format) + "\n"
-	stringToSign = stringToSign + getScope(t, region) + "\n"
+	stringToSign = stringToSign + scope + "\n"
 	canonicalRequestBytes := sha256.Sum256([]byte(canonicalRequest))
 	stringToSign = stringToSign + hex.EncodeToString(canonicalRequestBytes[:])
 	return stringToSign
@@ -182,14 +182,8 @@ func doesPolicySignatureV4Match(formValues map[string]string) APIErrorCode {
 		return ErrInvalidRegion
 	}
 
-	// Parse date string.
-	t, e := time.Parse(iso8601Format, formValues["X-Amz-Date"])
-	if e != nil {
-		return ErrMalformedDate
-	}
-
 	// Get signing key.
-	signingKey := getSigningKey(cred.SecretKey, t, region)
+	signingKey := getSigningKey(cred.SecretKey, credHeader.scope.date, region)
 
 	// Get signature.
 	newSignature := getSignature(signingKey, formValues["Policy"])
@@ -311,10 +305,10 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 	presignedCanonicalReq := getCanonicalRequest(extractedSignedHeaders, hashedPayload, encodedQuery, req.URL.Path, req.Method, req.Host)
 
 	// Get string to sign from canonical request.
-	presignedStringToSign := getStringToSign(presignedCanonicalReq, t, region)
+	presignedStringToSign := getStringToSign(presignedCanonicalReq, t, pSignValues.Credential.getScope())
 
 	// Get hmac presigned signing key.
-	presignedSigningKey := getSigningKey(cred.SecretKey, t, region)
+	presignedSigningKey := getSigningKey(cred.SecretKey, pSignValues.Credential.scope.date, region)
 
 	// Get new signature.
 	newSignature := getSignature(presignedSigningKey, presignedStringToSign)
@@ -408,10 +402,10 @@ func doesSignatureMatch(hashedPayload string, r *http.Request, region string) AP
 	canonicalRequest := getCanonicalRequest(extractedSignedHeaders, hashedPayload, queryStr, req.URL.Path, req.Method, req.Host)
 
 	// Get string to sign from canonical request.
-	stringToSign := getStringToSign(canonicalRequest, t, region)
+	stringToSign := getStringToSign(canonicalRequest, t, signV4Values.Credential.getScope())
 
 	// Get hmac signing key.
-	signingKey := getSigningKey(cred.SecretKey, t, region)
+	signingKey := getSigningKey(cred.SecretKey, signV4Values.Credential.scope.date, region)
 
 	// Calculate signature.
 	newSignature := getSignature(signingKey, stringToSign)

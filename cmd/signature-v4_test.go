@@ -61,14 +61,7 @@ func TestDoesPolicySignatureMatch(t *testing.T) {
 			},
 			expected: ErrInvalidRegion,
 		},
-		// (3) It should fail if the date is invalid (or missing, in this case).
-		{
-			form: map[string]string{
-				"X-Amz-Credential": fmt.Sprintf(credentialTemplate, accessKey, now.Format(yyyymmdd), globalMinioDefaultRegion),
-			},
-			expected: ErrMalformedDate,
-		},
-		// (4) It should fail with a bad signature.
+		// (3) It should fail with a bad signature.
 		{
 			form: map[string]string{
 				"X-Amz-Credential": fmt.Sprintf(credentialTemplate, accessKey, now.Format(yyyymmdd), globalMinioDefaultRegion),
@@ -78,7 +71,7 @@ func TestDoesPolicySignatureMatch(t *testing.T) {
 			},
 			expected: ErrSignatureDoesNotMatch,
 		},
-		// (5) It should succeed if everything is correct.
+		// (4) It should succeed if everything is correct.
 		{
 			form: map[string]string{
 				"X-Amz-Credential": fmt.Sprintf(credentialTemplate, accessKey, now.Format(yyyymmdd), globalMinioDefaultRegion),

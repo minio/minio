@@ -135,10 +135,10 @@ func calculateSeedSignature(r *http.Request) (signature string, date time.Time, 
 	canonicalRequest := getCanonicalRequest(extractedSignedHeaders, payload, queryStr, req.URL.Path, req.Method, req.Host)
 
 	// Get string to sign from canonical request.
-	stringToSign := getStringToSign(canonicalRequest, date, region)
+	stringToSign := getStringToSign(canonicalRequest, date, signV4Values.Credential.getScope())
 
 	// Get hmac signing key.
-	signingKey := getSigningKey(cred.SecretKey, date, region)
+	signingKey := getSigningKey(cred.SecretKey, signV4Values.Credential.scope.date, region)
 
 	// Calculate signature.
 	newSignature := getSignature(signingKey, stringToSign)

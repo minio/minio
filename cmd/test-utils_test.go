@@ -893,7 +893,8 @@ func preSignV4(req *http.Request, accessKeyID, secretAccessKey string, expires i
 
 	region := serverConfig.GetRegion()
 	date := time.Now().UTC()
-	credential := fmt.Sprintf("%s/%s", accessKeyID, getScope(date, region))
+	scope := getScope(date, region)
+	credential := fmt.Sprintf("%s/%s", accessKeyID, scope)
 
 	// Set URL query.
 	query := req.URL.Query()
@@ -909,7 +910,7 @@ func preSignV4(req *http.Request, accessKeyID, secretAccessKey string, expires i
 
 	queryStr := strings.Replace(query.Encode(), "+", "%20", -1)
 	canonicalRequest := getCanonicalRequest(extractedSignedHeaders, unsignedPayload, queryStr, req.URL.Path, req.Method, req.Host)
-	stringToSign := getStringToSign(canonicalRequest, date, region)
+	stringToSign := getStringToSign(canonicalRequest, date, scope)
 	signingKey := getSigningKey(secretAccessKey, date, region)
 	signature := getSignature(signingKey, stringToSign)
 
