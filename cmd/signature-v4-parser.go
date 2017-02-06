@@ -34,6 +34,16 @@ type credentialHeader struct {
 	}
 }
 
+// Return scope string.
+func (c credentialHeader) getScope() string {
+	return strings.Join([]string{
+		c.scope.date.Format(yyyymmdd),
+		c.scope.region,
+		c.scope.service,
+		c.scope.request,
+	}, "/")
+}
+
 // parse credentialHeader string into its structured form.
 func parseCredentialHeader(credElement string) (credentialHeader, APIErrorCode) {
 	creds := strings.Split(strings.TrimSpace(credElement), "=")
