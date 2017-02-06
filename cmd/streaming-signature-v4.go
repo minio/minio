@@ -221,6 +221,7 @@ const (
 	readChunkTrailer
 	readChunk
 	verifyChunk
+	eofChunk
 )
 
 func (cs chunkState) String() string {
@@ -234,6 +235,9 @@ func (cs chunkState) String() string {
 		stateString = "readChunk"
 	case verifyChunk:
 		stateString = "verifyChunk"
+	case eofChunk:
+		stateString = "eofChunk"
+
 	}
 	return stateString
 }
@@ -309,10 +313,13 @@ func (cr *s3ChunkedReader) Read(buf []byte) (n int, err error) {
 			// this follows the chaining.
 			cr.seedSignature = newSignature
 			cr.chunkSHA256Writer.Reset()
-			cr.state = readChunkHeader
 			if cr.lastChunk {
-				return n, nil
+				cr.state = eofChunk
+			} else {
+				cr.state = readChunkHeader
 			}
+		case eofChunk:
+			return n, io.EOF
 		}
 	}
 }

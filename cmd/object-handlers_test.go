@@ -489,6 +489,20 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 			shouldPass:         true,
 		},
 		// Test case - 3
+		// Empty data
+		{
+			bucketName:         bucketName,
+			objectName:         objectName,
+			data:               []byte{},
+			dataLen:            0,
+			chunkSize:          64 * humanize.KiByte,
+			expectedContent:    []byte{},
+			expectedRespStatus: http.StatusOK,
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
+			shouldPass:         true,
+		},
+		// Test case - 4
 		// Invalid access key id.
 		{
 			bucketName:         bucketName,
@@ -502,7 +516,7 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 			secretKey:          "",
 			shouldPass:         false,
 		},
-		// Test case - 4
+		// Test case - 5
 		// Wrong auth header returns as bad request.
 		{
 			bucketName:         bucketName,
@@ -517,7 +531,7 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 			shouldPass:         false,
 			removeAuthHeader:   true,
 		},
-		// Test case - 5
+		// Test case - 6
 		// Large chunk size.. also passes.
 		{
 			bucketName:         bucketName,
@@ -531,7 +545,7 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 			secretKey:          credentials.SecretKey,
 			shouldPass:         false,
 		},
-		// Test case - 6
+		// Test case - 7
 		// Chunk with malformed encoding.
 		{
 			bucketName:         bucketName,
@@ -546,7 +560,7 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 			shouldPass:         false,
 			fault:              malformedEncoding,
 		},
-		// Test case - 7
+		// Test case - 8
 		// Chunk with shorter than advertised chunk data.
 		{
 			bucketName:         bucketName,
@@ -561,7 +575,7 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 			shouldPass:         false,
 			fault:              unexpectedEOF,
 		},
-		// Test case - 8
+		// Test case - 9
 		// Chunk with first chunk data byte tampered.
 		{
 			bucketName:         bucketName,
@@ -576,7 +590,7 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 			shouldPass:         false,
 			fault:              signatureMismatch,
 		},
-		// Test case - 9
+		// Test case - 10
 		// Different date (timestamps) used in seed signature calculation
 		// and chunks signature calculation.
 		{
@@ -592,7 +606,7 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 			shouldPass:         false,
 			fault:              chunkDateMismatch,
 		},
-		// Test case - 10
+		// Test case - 11
 		// Set x-amz-decoded-content-length to a value too big to hold in int64.
 		{
 			bucketName:         bucketName,
@@ -669,11 +683,11 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 			}
 
 			buffer := new(bytes.Buffer)
-			err = obj.GetObject(testCase.bucketName, testCase.objectName, 0, int64(bytesDataLen), buffer)
+			err = obj.GetObject(testCase.bucketName, testCase.objectName, 0, int64(testCase.dataLen), buffer)
 			if err != nil {
 				t.Fatalf("Test %d: %s: Failed to fetch the copied object: <ERROR> %s", i+1, instanceType, err)
 			}
-			if !bytes.Equal(bytesData, buffer.Bytes()) {
+			if !bytes.Equal(testCase.data, buffer.Bytes()) {
 				t.Errorf("Test %d: %s: Data Mismatch: Data fetched back from the uploaded object doesn't match the original one.", i+1, instanceType)
 			}
 			buffer.Reset()
