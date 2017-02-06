@@ -17,6 +17,6 @@ Below is the list of documented orchestration platforms for Minio server:
 
 | Orchestration platforms|
 |:---|
-| [`Kubernetes`](./kubernetes/README.md) |
-| [`Docker Swarm`](./docker-swarm/README.md) |
-| [`DC/OS`](./dcos/README.md) |
+| [`Kubernetes`](https://raw.githubusercontent.com/minio/minio/master/docs/orchestration/kubernetes/README.md) |
+| [`Docker Swarm`](https://raw.githubusercontent.com/minio/minio/master/docs/orchestration/docker-swarm/README.md) |
+| [`DC/OS`](https://raw.githubusercontent.com/minio/minio/master/docs/orchestration/dcos/README.md) |
