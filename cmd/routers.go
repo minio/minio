@@ -84,6 +84,8 @@ func configureServerHandler(srvCmdConfig serverCmdConfig) (http.Handler, error) 
 
 	// List of some generic handlers which are applied for all incoming requests.
 	var handlerFns = []HandlerFunc{
+		// Network statistics
+		setHTTPStatsHandler,
 		// Limits all requests size to a maximum fixed limit
 		setRequestSizeLimitHandler,
 		// Adds 'crossdomain.xml' policy handler to serve legacy flash clients.

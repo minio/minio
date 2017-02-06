@@ -356,3 +356,52 @@ func (h resourceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Serve HTTP.
 	h.handler.ServeHTTP(w, r)
 }
+
+// httpResponseRecorder wraps http.ResponseWriter
+// to record some useful http response data.
+type httpResponseRecorder struct {
+	http.ResponseWriter
+	http.Flusher
+	respStatusCode int
+}
+
+// Wraps ResponseWriter's Write()
+func (rww *httpResponseRecorder) Write(b []byte) (int, error) {
+	return rww.ResponseWriter.Write(b)
+}
+
+// Wraps ResponseWriter's Flush()
+func (rww *httpResponseRecorder) Flush() {
+	f, ok := rww.ResponseWriter.(http.Flusher)
+	if ok {
+		f.Flush()
+	}
+}
+
+// Wraps ResponseWriter's WriteHeader() and record
+// the response status code
+func (rww *httpResponseRecorder) WriteHeader(httpCode int) {
+	rww.respStatusCode = httpCode
+	rww.ResponseWriter.WriteHeader(httpCode)
+}
+
+// httpStatsHandler definition: gather HTTP statistics
+type httpStatsHandler struct {
+	handler http.Handler
+}
+
+// setHttpStatsHandler sets a http Stats Handler
+func setHTTPStatsHandler(h http.Handler) http.Handler {
+	return httpStatsHandler{handler: h}
+}
+
+func (h httpStatsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Wraps w to record http response information
+	ww := &httpResponseRecorder{ResponseWriter: w}
+
+	// Execute the request
+	h.handler.ServeHTTP(ww, r)
+
+	// Update http statistics
+	globalHTTPStats.updateStats(r, ww)
+}

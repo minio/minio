@@ -122,6 +122,11 @@ var (
 	// url.URL endpoints of disks that belong to the object storage.
 	globalEndpoints = []*url.URL{}
 
+	// Global server's network statistics
+	globalConnStats = newConnStats()
+	// Global HTTP request statisitics
+	globalHTTPStats = newHTTPStats()
+
 	// Add new variable global values here.
 )
 
