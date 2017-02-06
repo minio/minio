@@ -26,6 +26,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"runtime"
 
@@ -473,6 +474,9 @@ func serverMain(c *cli.Context) {
 	globalObjLayerMutex.Lock()
 	globalObjectAPI = newObject
 	globalObjLayerMutex.Unlock()
+
+	// Set startup time
+	globalBootTime = time.Now().UTC()
 
 	// Prints the formatted startup message once object layer is initialized.
 	printStartupMessage(apiEndPoints)

@@ -19,6 +19,7 @@ package cmd
 import (
 	"net/url"
 	"path"
+	"sort"
 	"sync"
 	"time"
 )
@@ -39,6 +40,7 @@ type adminCmdRunner interface {
 	Restart() error
 	ListLocks(bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error)
 	ReInitDisks() error
+	Uptime() (time.Duration, error)
 }
 
 // Restart - Sends a message over channel to the go-routine
@@ -86,6 +88,28 @@ func (rc remoteAdminClient) ReInitDisks() error {
 	args := AuthRPCArgs{}
 	reply := AuthRPCReply{}
 	return rc.Call("Admin.ReInitDisks", &args, &reply)
+}
+
+// Uptime - Returns the uptime of this server. Timestamp is taken
+// after object layer is initialized.
+func (lc localAdminClient) Uptime() (time.Duration, error) {
+	if globalBootTime.IsZero() {
+		return time.Duration(0), errServerNotInitialized
+	}
+
+	return time.Now().UTC().Sub(globalBootTime), nil
+}
+
+// Uptime - returns the uptime of the server to which the RPC call is made.
+func (rc remoteAdminClient) Uptime() (time.Duration, error) {
+	args := AuthRPCArgs{}
+	reply := UptimeReply{}
+	err := rc.Call("Admin.Uptime", &args, &reply)
+	if err != nil {
+		return time.Duration(0), err
+	}
+
+	return reply.Uptime, nil
 }
 
 // adminPeer - represents an entity that implements Restart methods.
@@ -240,4 +264,66 @@ func reInitPeerDisks(peers adminPeers) error {
 	}
 	wg.Wait()
 	return nil
+}
+
+// uptimeSlice - used to sort uptimes in chronological order.
+type uptimeSlice []struct {
+	err    error
+	uptime time.Duration
+}
+
+func (ts uptimeSlice) Len() int {
+	return len(ts)
+}
+
+func (ts uptimeSlice) Less(i, j int) bool {
+	return ts[i].uptime < ts[j].uptime
+}
+
+func (ts uptimeSlice) Swap(i, j int) {
+	ts[i], ts[j] = ts[j], ts[i]
+}
+
+// getPeerUptimes - returns the uptime since the last time read quorum
+// was established on success. Otherwise returns errXLReadQuorum.
+func getPeerUptimes(peers adminPeers) (time.Duration, error) {
+	uptimes := make(uptimeSlice, len(peers))
+
+	// Get up time of all servers.
+	wg := sync.WaitGroup{}
+	for i, peer := range peers {
+		wg.Add(1)
+		go func(idx int, peer adminPeer) {
+			defer wg.Done()
+			uptimes[idx].uptime, uptimes[idx].err = peer.cmdRunner.Uptime()
+		}(i, peer)
+	}
+	wg.Wait()
+
+	// Sort uptimes in chronological order.
+	sort.Sort(uptimes)
+
+	// Pick the readQuorum'th uptime in chronological order. i.e,
+	// the time at which read quorum was (re-)established.
+	readQuorum := len(uptimes) / 2
+	validCount := 0
+	latestUptime := time.Duration(0)
+	for _, uptime := range uptimes {
+		if uptime.err != nil {
+			continue
+		}
+
+		validCount++
+		if validCount >= readQuorum {
+			latestUptime = uptime.uptime
+			break
+		}
+	}
+
+	// This implies there weren't read quorum number of servers up.
+	if latestUptime == time.Duration(0) {
+		return time.Duration(0), InsufficientReadQuorum{}
+	}
+
+	return latestUptime, nil
 }
