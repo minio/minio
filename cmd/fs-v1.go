@@ -569,9 +569,11 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 	fsMeta := newFSMetaV1()
 	fsMeta.Meta = metadata
 
+	minioMetaBucketDir := pathJoin(fs.fsPath, minioMetaBucket)
+	fsMetaPath := pathJoin(minioMetaBucketDir, bucketMetaPrefix, bucket, object, fsMetaJSONFile)
+
 	var wlk *lock.LockedFile
 	if bucket != minioMetaBucket {
-		fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fsMetaJSONFile)
 		wlk, err = fs.rwPool.Create(fsMetaPath)
 		if err != nil {
 			return ObjectInfo{}, toObjectErr(traceError(err), bucket, object)
@@ -618,6 +620,7 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 	bytesWritten, err := fsCreateFile(fsTmpObjPath, teeReader, buf, size)
 	if err != nil {
 		fsRemoveFile(fsTmpObjPath)
+		fsDeleteFile(minioMetaBucketDir, fsMetaPath)
 		errorIf(err, "Failed to create object %s/%s", bucket, object)
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
@@ -626,6 +629,7 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 	// bytes than specified in request header.
 	if bytesWritten < size {
 		fsRemoveFile(fsTmpObjPath)
+		fsDeleteFile(minioMetaBucketDir, fsMetaPath)
 		return ObjectInfo{}, traceError(IncompleteBody{})
 	}
 
@@ -645,6 +649,7 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 	if md5Hex != "" {
 		if newMD5Hex != md5Hex {
 			// Returns md5 mismatch.
+			fsDeleteFile(minioMetaBucketDir, fsMetaPath)
 			return ObjectInfo{}, traceError(BadDigest{md5Hex, newMD5Hex})
 		}
 	}
@@ -652,6 +657,7 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 	if sha256sum != "" {
 		newSHA256sum := hex.EncodeToString(sha256Writer.Sum(nil))
 		if newSHA256sum != sha256sum {
+			fsDeleteFile(minioMetaBucketDir, fsMetaPath)
 			return ObjectInfo{}, traceError(SHA256Mismatch{})
 		}
 	}
@@ -659,12 +665,14 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 	// Entire object was written to the temp location, now it's safe to rename it to the actual location.
 	fsNSObjPath := pathJoin(fs.fsPath, bucket, object)
 	if err = fsRenameFile(fsTmpObjPath, fsNSObjPath); err != nil {
+		fsDeleteFile(minioMetaBucketDir, fsMetaPath)
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
 	if bucket != minioMetaBucket {
 		// Write FS metadata after a successful namespace operation.
 		if _, err = fsMeta.WriteTo(wlk); err != nil {
+			fsDeleteFile(minioMetaBucketDir, fsMetaPath)
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
 	}
