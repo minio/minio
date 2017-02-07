@@ -35,9 +35,9 @@ test_script:
   # Unit tests
   - ps: Add-AppveyorTest "Unit Tests" -Outcome Running
   - mkdir build\coverage
-  - go test -timeout 15m -v -race github.com/minio/minio/cmd...
+  - go test -timeout 20m -v -race github.com/minio/minio/cmd...
   - go test -v -race github.com/minio/minio/pkg...
-  - go test -coverprofile=build\coverage\coverage.txt -covermode=atomic github.com/minio/minio/cmd
+  - go test -timeout 15m -coverprofile=build\coverage\coverage.txt -covermode=atomic github.com/minio/minio/cmd
   - ps: Update-AppveyorTest "Unit Tests" -Outcome Passed
 
 after_test:

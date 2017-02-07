@@ -163,6 +163,29 @@ func checkUpdate() {
 	}
 }
 
+// Initializes a new config if it doesn't exist, else migrates any old config
+// to newer config and finally loads the config to memory.
+func initConfig() {
+	envCreds := mustGetCredentialFromEnv()
+
+	// Config file does not exist, we create it fresh and return upon success.
+	if !isConfigFileExists() {
+		if err := newConfig(envCreds); err != nil {
+			console.Fatalf("Unable to initialize minio config for the first time. Err: %s.\n", err)
+		}
+		console.Println("Created minio configuration file successfully at " + mustGetConfigPath())
+		return
+	}
+
+	// Migrate any old version of config / state files to newer format.
+	migrate()
+
+	// Once we have migrated all the old config, now load them.
+	if err := loadConfig(envCreds); err != nil {
+		console.Fatalf("Unable to initialize minio config. Err: %s.\n", err)
+	}
+}
+
 // Generic Minio initialization to create/load config, prepare loggers, etc..
 func minioInit(ctx *cli.Context) {
 	// Set global variables after parsing passed arguments
@@ -174,31 +197,11 @@ func minioInit(ctx *cli.Context) {
 	// Is TLS configured?.
 	globalIsSSL = isSSL()
 
-	// Migrate any old version of config / state files to newer format.
-	migrate()
-
-	// Initialize config.
-	configCreated, err := initConfig()
-	if err != nil {
-		console.Fatalf("Unable to initialize minio config. Err: %s.\n", err)
-	}
-	if configCreated {
-		console.Println("Created minio configuration file at " + mustGetConfigPath())
-	}
+	// Initialize minio server config.
+	initConfig()
 
 	// Enable all loggers by now so we can use errorIf() and fatalIf()
 	enableLoggers()
-
-	// Fetch access keys from environment variables and update the config.
-	accessKey := os.Getenv("MINIO_ACCESS_KEY")
-	secretKey := os.Getenv("MINIO_SECRET_KEY")
-	if accessKey != "" && secretKey != "" {
-		creds, err := getCredential(accessKey, secretKey)
-		fatalIf(err, "Credentials are invalid, please set proper credentials `minio server --help`")
-
-		// Set new credentials.
-		serverConfig.SetCredential(creds)
-	}
 
 	// Init the error tracing module.
 	initError()

@@ -154,24 +154,25 @@ func (adminAPI adminAPIHandlers) ServiceCredentialsHandler(w http.ResponseWriter
 	}
 
 	// Check passed credentials
-	cred, err := getCredential(req.Username, req.Password)
-	switch err {
-	case errInvalidAccessKeyLength:
-		writeErrorResponse(w, ErrAdminInvalidAccessKey, r.URL)
-		return
-	case errInvalidSecretKeyLength:
-		writeErrorResponse(w, ErrAdminInvalidSecretKey, r.URL)
+	err = validateAuthKeys(req.Username, req.Password)
+	if err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 
+	creds := credential{
+		AccessKey: req.Username,
+		SecretKey: req.Password,
+	}
+
 	// Notify all other Minio peers to update credentials
-	updateErrs := updateCredsOnPeers(cred)
+	updateErrs := updateCredsOnPeers(creds)
 	for peer, err := range updateErrs {
 		errorIf(err, "Unable to update credentials on peer %s.", peer)
 	}
 
-	// Update local credentials
-	serverConfig.SetCredential(cred)
+	// Update local credentials in memory.
+	serverConfig.SetCredential(creds)
 	if err = serverConfig.Save(); err != nil {
 		writeErrorResponse(w, ErrInternalError, r.URL)
 		return

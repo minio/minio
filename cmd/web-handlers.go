@@ -362,10 +362,19 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 		return toJSONError(errAuthentication)
 	}
 
+	// If creds are set through ENV disallow changing credentials.
+	if globalIsEnvCreds {
+		return toJSONError(errChangeCredNotAllowed)
+	}
+
 	// As we already validated the authentication, we save given access/secret keys.
-	creds, err := getCredential(args.AccessKey, args.SecretKey)
-	if err != nil {
+	if err := validateAuthKeys(args.AccessKey, args.SecretKey); err != nil {
 		return toJSONError(err)
+	}
+
+	creds := credential{
+		AccessKey: args.AccessKey,
+		SecretKey: args.SecretKey,
 	}
 
 	// Notify all other Minio peers to update credentials
@@ -375,7 +384,7 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 	serverConfig.SetCredential(creds)
 
 	// Persist updated credentials.
-	if err = serverConfig.Save(); err != nil {
+	if err := serverConfig.Save(); err != nil {
 		errsMap[globalMinioAddr] = err
 	}
 
@@ -397,7 +406,7 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 	}
 
 	// As we have updated access/secret key, generate new auth token.
-	token, err := authenticateWeb(args.AccessKey, args.SecretKey)
+	token, err := authenticateWeb(creds.AccessKey, creds.SecretKey)
 	if err != nil {
 		// Did we have peer errors?
 		if len(errsMap) > 0 {
@@ -829,8 +838,13 @@ func toWebAPIError(err error) APIError {
 			HTTPStatusCode: http.StatusBadRequest,
 			Description:    err.Error(),
 		}
+	} else if err == errChangeCredNotAllowed {
+		return APIError{
+			Code:           "MethodNotAllowed",
+			HTTPStatusCode: http.StatusMethodNotAllowed,
+			Description:    err.Error(),
+		}
 	}
-
 	// Convert error type to api error code.
 	var apiErrCode APIErrorCode
 	switch err.(type) {

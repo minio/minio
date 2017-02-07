@@ -452,8 +452,14 @@ func TestIsDistributedSetup(t *testing.T) {
 	globalMinioHost = ""
 }
 
-func TestInitServerConfig(t *testing.T) {
-	ctx := &cli.Context{}
+// Tests init server.
+func TestInitServer(t *testing.T) {
+	app := cli.NewApp()
+	app.Commands = []cli.Command{serverCmd}
+	serverFlagSet := flag.NewFlagSet("server", 0)
+	serverFlagSet.String("address", ":9000", "")
+	ctx := cli.NewContext(app, serverFlagSet, serverFlagSet)
+
 	root, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatal("Failed to set up test config")
@@ -473,6 +479,7 @@ func TestInitServerConfig(t *testing.T) {
 			t.Fatalf("Test %d failed with %v", i+1, tErr)
 		}
 		initServerConfig(ctx)
+		os.Unsetenv(test.envVar)
 	}
 }
 

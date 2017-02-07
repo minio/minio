@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"net"
 	"net/url"
-	"os"
 	"path"
 	"sort"
 	"strconv"
@@ -128,21 +127,16 @@ func parseStorageEndpoints(eps []string) (endpoints []*url.URL, err error) {
 	return endpoints, nil
 }
 
-// initServerConfig initialize server config.
+// initServer initialize server config.
 func initServerConfig(c *cli.Context) {
+	// Initialization such as config generating/loading config, enable logging, ..
+	minioInit(c)
+
 	// Create certs path.
-	err := createCertsPath()
-	fatalIf(err, "Unable to create \"certs\" directory.")
+	fatalIf(createCertsPath(), "Unable to create \"certs\" directory.")
 
 	// Load user supplied root CAs
 	loadRootCAs()
-
-	// When credentials inherited from the env, server cmd has to save them in the disk
-	if os.Getenv("MINIO_ACCESS_KEY") != "" && os.Getenv("MINIO_SECRET_KEY") != "" {
-		// Env credentials are already loaded in serverConfig, just save in the disk
-		err = serverConfig.Save()
-		fatalIf(err, "Unable to save credentials in the disk.")
-	}
 
 	// Set maxOpenFiles, This is necessary since default operating
 	// system limits of 1024, 2048 are not enough for Minio server.
@@ -372,8 +366,8 @@ func serverMain(c *cli.Context) {
 		cli.ShowCommandHelpAndExit(c, "server", 1)
 	}
 
-	// Initialization routine, such as config loading, enable logging, ..
-	minioInit(c)
+	// Initializes server config, certs, logging and system settings.
+	initServerConfig(c)
 
 	// Check for new updates from dl.minio.io.
 	checkUpdate()
@@ -389,9 +383,6 @@ func serverMain(c *cli.Context) {
 	// Done after globalMinioHost and globalMinioPort is set
 	// as parseStorageEndpoints() depends on it.
 	checkServerSyntax(c)
-
-	// Initialize server config.
-	initServerConfig(c)
 
 	// Disks to be used in server init.
 	endpoints, err := parseStorageEndpoints(c.Args())
