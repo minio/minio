@@ -537,33 +537,29 @@ func (xl xlObjects) NewMultipartUpload(bucket, object string, meta map[string]st
 // data is read from an existing object.
 //
 // Implements S3 compatible Upload Part Copy API.
-func (xl xlObjects) CopyObjectPart(srcBucket, srcObject, dstBucket, dstObject, uploadID string, partID int, startOffset int64, length int64) (PartInfo, error) {
+func (xl xlObjects) CopyObjectPart(srcBucket, srcObject, dstBucket, dstObject, uploadID string, partID int, byteRange string, conditions Conditions) (PartInfo, error) {
 	if err := checkNewMultipartArgs(srcBucket, srcObject, xl); err != nil {
 		return PartInfo{}, err
 	}
 
-	// Initialize pipe.
-	pipeReader, pipeWriter := io.Pipe()
-
-	go func() {
-		if gerr := xl.GetObject(srcBucket, srcObject, startOffset, length, pipeWriter); gerr != nil {
-			errorIf(gerr, "Unable to read %s of the object `%s/%s`.", srcBucket, srcObject)
-			pipeWriter.CloseWithError(toObjectErr(gerr, srcBucket, srcObject))
-			return
-		}
-		pipeWriter.Close() // Close writer explicitly signalling we wrote all data.
-	}()
-
-	partInfo, err := xl.PutObjectPart(dstBucket, dstObject, uploadID, partID, length, pipeReader, "", "")
+	reader, objInfo, err := xl.GetObject(srcBucket, srcObject, byteRange, nil)
 	if err != nil {
-		return PartInfo{}, toObjectErr(err, dstBucket, dstObject)
+		return PartInfo{}, err
 	}
 
-	// Explicitly close the reader.
-	pipeReader.Close()
+	defer reader.Close()
 
-	// Success.
-	return partInfo, nil
+	// Verify before x-amz-copy-source preconditions before continuing with CopyObject.
+	if err = checkCopyObjectPartPreconditions(conditions, objInfo); err != nil {
+		return PartInfo{}, toObjectErr(err, srcBucket, srcObject)
+	}
+
+	/// maximum Upload size for object in a single CopyObject operation.
+	if isMaxObjectSize(objInfo.Size) {
+		return PartInfo{}, ObjectTooLarge{}
+	}
+
+	return xl.PutObjectPart(dstBucket, dstObject, uploadID, partID, -1, reader, "", "")
 }
 
 // PutObjectPart - reads incoming stream and internally erasure codes
@@ -1007,7 +1003,8 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 			// Prefetch the object from disk by triggering a fake GetObject call
 			// Unlike a regular single PutObject,  multipart PutObject is comes in
 			// stages and it is harder to cache.
-			go xl.GetObject(bucket, object, 0, objectSize, ioutil.Discard)
+			reader, _, _ := xl.GetObject(bucket, object, "", nil)
+			go io.Copy(ioutil.Discard, reader)
 		}
 	}()
 
@@ -1058,20 +1055,8 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 		return ObjectInfo{}, toObjectErr(err, minioMetaMultipartBucket, path.Join(bucket, object))
 	}
 
-	objInfo := ObjectInfo{
-		IsDir:           false,
-		Bucket:          bucket,
-		Name:            object,
-		Size:            xlMeta.Stat.Size,
-		ModTime:         xlMeta.Stat.ModTime,
-		MD5Sum:          xlMeta.Meta["md5Sum"],
-		ContentType:     xlMeta.Meta["content-type"],
-		ContentEncoding: xlMeta.Meta["content-encoding"],
-		UserDefined:     xlMeta.Meta,
-	}
-
 	// Success, return object info.
-	return objInfo, nil
+	return xlMeta.ToObjectInfo(bucket, object), nil
 }
 
 // Wrapper which removes all the uploaded parts.

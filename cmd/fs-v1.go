@@ -354,7 +354,7 @@ func (fs fsObjects) DeleteBucket(bucket string) error {
 // CopyObject - copy object source object to destination object.
 // if source object and destination object are same we only
 // update metadata.
-func (fs fsObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string, metadata map[string]string) (ObjectInfo, error) {
+func (fs fsObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string, conditions Conditions, metadata map[string]string) (ObjectInfo, error) {
 	if _, err := fs.statBucketDir(srcBucket); err != nil {
 		return ObjectInfo{}, toObjectErr(err, srcBucket)
 	}
@@ -363,6 +363,33 @@ func (fs fsObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string
 	fi, err := fsStatFile(pathJoin(fs.fsPath, srcBucket, srcObject))
 	if err != nil {
 		return ObjectInfo{}, toObjectErr(err, srcBucket, srcObject)
+	}
+
+	objInfo, err := fs.getObjectInfo(srcBucket, srcObject)
+	if err != nil {
+		return ObjectInfo{}, err
+	}
+
+	// Verify before x-amz-copy-source preconditions before continuing with CopyObject.
+	if err = checkCopyObjectPreconditions(conditions, objInfo); err != nil {
+		return ObjectInfo{}, toObjectErr(err, srcBucket, srcObject)
+	}
+
+	/// maximum Upload size for object in a single CopyObject operation.
+	if isMaxObjectSize(objInfo.Size) {
+		return ObjectInfo{}, ObjectTooLarge{}
+	}
+
+	defaultMeta := objInfo.UserDefined
+
+	// Make sure to remove saved md5sum, object might have been uploaded
+	// as multipart which doesn't have a standard md5sum, we just let
+	// CopyObject calculate a new one.
+	delete(defaultMeta, "md5Sum")
+
+	newMetadata := defaultMeta
+	if len(metadata) > 0 {
+		newMetadata = metadata
 	}
 
 	// Check if this request is only metadata update.
@@ -379,7 +406,7 @@ func (fs fsObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string
 
 		// Save objects' metadata in `fs.json`.
 		fsMeta := newFSMetaV1()
-		fsMeta.Meta = metadata
+		fsMeta.Meta = newMetadata
 		if _, err = fsMeta.WriteTo(wlk); err != nil {
 			return ObjectInfo{}, toObjectErr(err, srcBucket, srcObject)
 		}
@@ -388,31 +415,26 @@ func (fs fsObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string
 		return fsMeta.ToObjectInfo(srcBucket, srcObject, fi), nil
 	}
 
-	// Length of the file to read.
-	length := fi.Size()
-
-	// Initialize pipe.
-	pipeReader, pipeWriter := io.Pipe()
-
-	go func() {
-		var startOffset int64 // Read the whole file.
-		if gerr := fs.GetObject(srcBucket, srcObject, startOffset, length, pipeWriter); gerr != nil {
-			errorIf(gerr, "Unable to read %s/%s.", srcBucket, srcObject)
-			pipeWriter.CloseWithError(gerr)
-			return
-		}
-		pipeWriter.Close() // Close writer explicitly signalling we wrote all data.
-	}()
-
-	objInfo, err := fs.PutObject(dstBucket, dstObject, length, pipeReader, metadata, "")
+	reader, _, err := fs.GetObject(srcBucket, srcObject, "", nil)
 	if err != nil {
-		return ObjectInfo{}, toObjectErr(err, dstBucket, dstObject)
+		return ObjectInfo{}, err
 	}
+	defer reader.Close()
 
-	// Explicitly close the reader.
-	pipeReader.Close()
+	return fs.PutObject(dstBucket, dstObject, -1, reader, newMetadata, "")
+}
 
-	return objInfo, nil
+func getObjectRange(byteRange string, resourceSize int64) (objRange *objectRange, err error) {
+	objRange, err = parseObjectRange(byteRange, resourceSize)
+	if err != nil {
+		err1 := errorCause(err)
+		switch err1.(type) {
+		case InvalidRange:
+			return nil, err
+		} // else ignore rest of the errors.
+		errorIf(err, "Invalid range requested ignoring.")
+	}
+	return
 }
 
 // GetObject - reads an object from the disk.
@@ -421,63 +443,80 @@ func (fs fsObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string
 //
 // startOffset indicates the starting read location of the object.
 // length indicates the total length of the object.
-func (fs fsObjects) GetObject(bucket, object string, offset int64, length int64, writer io.Writer) (err error) {
-	if err = checkGetObjArgs(bucket, object); err != nil {
-		return err
+func (fs fsObjects) GetObject(bucket, object, byteRange string, conditions Conditions) (io.ReadCloser, ObjectInfo, error) {
+	if err := checkGetObjArgs(bucket, object); err != nil {
+		return nil, ObjectInfo{}, err
 	}
 
-	if _, err = fs.statBucketDir(bucket); err != nil {
-		return toObjectErr(err, bucket)
-	}
-
-	// Offset cannot be negative.
-	if offset < 0 {
-		return toObjectErr(traceError(errUnexpected), bucket, object)
-	}
-
-	// Writer cannot be nil.
-	if writer == nil {
-		return toObjectErr(traceError(errUnexpected), bucket, object)
+	if _, err := fs.statBucketDir(bucket); err != nil {
+		return nil, ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
 	if bucket != minioMetaBucket {
 		fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fsMetaJSONFile)
-		_, err = fs.rwPool.Open(fsMetaPath)
-		if err != nil && err != errFileNotFound {
-			return toObjectErr(traceError(err), bucket, object)
+		if _, err := fs.rwPool.Open(fsMetaPath); err != nil {
+			if err != errFileNotFound {
+				return nil, ObjectInfo{}, toObjectErr(traceError(err), bucket, object)
+			}
 		}
 		defer fs.rwPool.Close(fsMetaPath)
 	}
 
+	objInfo, err := fs.getObjectInfo(bucket, object)
+	if err != nil {
+		// No need to do toObjectErr, already converted by getObjectInfo().
+		return nil, ObjectInfo{}, err
+	}
+
+	if err = checkPreconditions(conditions, objInfo); err != nil {
+		return nil, ObjectInfo{}, err
+	}
+
+	objRange, err := getObjectRange(byteRange, objInfo.Size)
+	if err != nil {
+		return nil, ObjectInfo{}, err
+	}
+
+	length := objInfo.Size
+	startOffset := int64(0)
+	if objRange != nil {
+		length = objRange.getLength()
+		startOffset = objRange.offsetBegin
+	}
+
+	// Save object range.
+	objInfo.objRange = objRange
+
 	// Read the object, doesn't exist returns an s3 compatible error.
 	fsObjPath := pathJoin(fs.fsPath, bucket, object)
-	reader, size, err := fsOpenFile(fsObjPath, offset)
+	reader, err := fsOpenFile(fsObjPath, startOffset)
 	if err != nil {
-		return toObjectErr(err, bucket, object)
+		return nil, ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
-	defer reader.Close()
 
 	bufSize := int64(readSizeV1)
 	if length > 0 && bufSize > length {
 		bufSize = length
 	}
 
-	// For negative length we read everything.
-	if length < 0 {
-		length = size - offset
-	}
-
-	// Reply back invalid range if the input offset and length fall out of range.
-	if offset > size || offset+length > size {
-		return traceError(InvalidRange{offset, length, size})
-	}
-
 	// Allocate a staging buffer.
 	buf := make([]byte, int(bufSize))
 
-	_, err = io.CopyBuffer(writer, io.LimitReader(reader, length), buf)
+	limitReader := io.LimitReader(reader, length)
 
-	return toObjectErr(traceError(err), bucket, object)
+	pr, pw := io.Pipe()
+	go func(limitReader io.Reader, origReader io.ReadCloser) {
+		_, cerr := io.CopyBuffer(pw, limitReader, buf)
+		if cerr != nil {
+			pw.CloseWithError(cerr)
+			return
+		}
+		pw.Close()
+		origReader.Close()
+	}(limitReader, reader)
+
+	// Success.
+	return pr, objInfo, nil
 }
 
 // getObjectInfo - wrapper for reading object metadata and constructs ObjectInfo.

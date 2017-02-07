@@ -165,7 +165,7 @@ func TestFSCreateAndOpen(t *testing.T) {
 		t.Fatal("Unexpected error", err)
 	}
 
-	if _, _, err = fsOpenFile("", -1); errorCause(err) != errInvalidArgument {
+	if _, err = fsOpenFile("", -1); errorCause(err) != errInvalidArgument {
 		t.Fatal("Unexpected error", err)
 	}
 
@@ -203,14 +203,14 @@ func TestFSCreateAndOpen(t *testing.T) {
 		if errorCause(err) != testCase.expectedErr {
 			t.Errorf("Test case %d: Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, err)
 		}
-		_, _, err = fsOpenFile(pathJoin(path, testCase.srcVol, testCase.srcPath), 0)
+		_, err = fsOpenFile(pathJoin(path, testCase.srcVol, testCase.srcPath), 0)
 		if errorCause(err) != testCase.expectedErr {
 			t.Errorf("Test case %d: Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, err)
 		}
 	}
 
 	// Attempt to open a directory.
-	if _, _, err = fsOpenFile(pathJoin(path), 0); errorCause(err) != errIsNotRegular {
+	if _, err = fsOpenFile(pathJoin(path), 0); errorCause(err) != errIsNotRegular {
 		t.Fatal("Unexpected error", err)
 	}
 }

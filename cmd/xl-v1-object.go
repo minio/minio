@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"hash"
 	"io"
+	"io/ioutil"
 	"path"
 	"strconv"
 	"strings"
@@ -41,7 +42,7 @@ var objectOpIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied)
 // CopyObject - copy object source object to destination object.
 // if source object and destination object are same we only
 // update metadata.
-func (xl xlObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string, metadata map[string]string) (ObjectInfo, error) {
+func (xl xlObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string, conditions Conditions, metadata map[string]string) (ObjectInfo, error) {
 	// Read metadata associated with the object from all disks.
 	metaArr, errs := readAllXLMetadata(xl.storageDisks, srcBucket, srcObject)
 	if reducedErr := reduceReadQuorumErrs(errs, objectOpIgnoredErrs, xl.readQuorum); reducedErr != nil {
@@ -60,13 +61,35 @@ func (xl xlObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string
 	// Reorder online disks based on erasure distribution order.
 	onlineDisks = shuffleDisks(onlineDisks, xlMeta.Erasure.Distribution)
 
-	// Length of the file to read.
-	length := xlMeta.Stat.Size
+	objInfo := xlMeta.ToObjectInfo(srcBucket, srcObject)
+	// Verify before x-amz-copy-source preconditions before continuing with CopyObject.
+	if err = checkCopyObjectPreconditions(conditions, objInfo); err != nil {
+		return ObjectInfo{}, toObjectErr(err, srcBucket, srcObject)
+	}
+
+	/// maximum Upload size for object in a single CopyObject operation.
+	if isMaxObjectSize(objInfo.Size) {
+		return ObjectInfo{}, ObjectTooLarge{}
+	}
+
+	defaultMeta := objInfo.UserDefined
+
+	// Make sure to remove saved md5sum, object might have been uploaded
+	// as multipart which doesn't have a standard md5sum, we just let
+	// CopyObject calculate a new one.
+	delete(defaultMeta, "md5Sum")
+
+	newMetadata := defaultMeta
+	if len(metadata) > 0 {
+		newMetadata = metadata
+	}
 
 	// Check if this request is only metadata update.
 	cpMetadataOnly := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
 	if cpMetadataOnly {
-		xlMeta.Meta = metadata
+		// Save the new metadata.
+		xlMeta.Meta = newMetadata
+
 		partsMetadata := make([]xlMetaV1, len(xl.storageDisks))
 		// Update `xl.json` content on each disks.
 		for index := range partsMetadata {
@@ -84,46 +107,16 @@ func (xl xlObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string
 			return ObjectInfo{}, toObjectErr(err, srcBucket, srcObject)
 		}
 
-		objInfo := ObjectInfo{
-			IsDir:           false,
-			Bucket:          srcBucket,
-			Name:            srcObject,
-			Size:            xlMeta.Stat.Size,
-			ModTime:         xlMeta.Stat.ModTime,
-			MD5Sum:          xlMeta.Meta["md5Sum"],
-			ContentType:     xlMeta.Meta["content-type"],
-			ContentEncoding: xlMeta.Meta["content-encoding"],
-		}
-		// md5Sum has already been extracted into objInfo.MD5Sum.  We
-		// need to remove it from xlMetaMap to avoid it from appearing as
-		// part of response headers. e.g, X-Minio-* or X-Amz-*.
-		delete(xlMeta.Meta, "md5Sum")
-		objInfo.UserDefined = xlMeta.Meta
-		return objInfo, nil
+		// Return object info.
+		return xlMeta.ToObjectInfo(srcBucket, srcObject), nil
 	}
 
-	// Initialize pipe.
-	pipeReader, pipeWriter := io.Pipe()
-
-	go func() {
-		var startOffset int64 // Read the whole file.
-		if gerr := xl.GetObject(srcBucket, srcObject, startOffset, length, pipeWriter); gerr != nil {
-			errorIf(gerr, "Unable to read %s of the object `%s/%s`.", srcBucket, srcObject)
-			pipeWriter.CloseWithError(toObjectErr(gerr, srcBucket, srcObject))
-			return
-		}
-		pipeWriter.Close() // Close writer explicitly signalling we wrote all data.
-	}()
-
-	objInfo, err := xl.PutObject(dstBucket, dstObject, length, pipeReader, metadata, "")
+	reader, _, err := xl.GetObject(srcBucket, srcObject, "", nil)
 	if err != nil {
-		return ObjectInfo{}, toObjectErr(err, dstBucket, dstObject)
+		return ObjectInfo{}, err
 	}
-
-	// Explicitly close the reader.
-	pipeReader.Close()
-
-	return objInfo, nil
+	defer reader.Close()
+	return xl.PutObject(dstBucket, dstObject, -1, reader, newMetadata, "")
 }
 
 // GetObject - reads an object erasured coded across multiple
@@ -132,25 +125,15 @@ func (xl xlObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string
 //
 // startOffset indicates the starting read location of the object.
 // length indicates the total length of the object.
-func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) error {
+func (xl xlObjects) GetObject(bucket, object, byteRange string, conditions Conditions) (io.ReadCloser, ObjectInfo, error) {
 	if err := checkGetObjArgs(bucket, object); err != nil {
-		return err
-	}
-
-	// Start offset cannot be negative.
-	if startOffset < 0 {
-		return traceError(errUnexpected)
-	}
-
-	// Writer cannot be nil.
-	if writer == nil {
-		return traceError(errUnexpected)
+		return nil, ObjectInfo{}, err
 	}
 
 	// Read metadata associated with the object from all disks.
 	metaArr, errs := readAllXLMetadata(xl.storageDisks, bucket, object)
 	if reducedErr := reduceReadQuorumErrs(errs, objectOpIgnoredErrs, xl.readQuorum); reducedErr != nil {
-		return toObjectErr(reducedErr, bucket, object)
+		return nil, ObjectInfo{}, toObjectErr(reducedErr, bucket, object)
 	}
 
 	// List all online disks.
@@ -159,8 +142,28 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 	// Pick latest valid metadata.
 	xlMeta, err := pickValidXLMeta(metaArr, modTime)
 	if err != nil {
-		return err
+		return nil, ObjectInfo{}, err
 	}
+
+	objInfo := xlMeta.ToObjectInfo(bucket, object)
+	if err = checkPreconditions(conditions, objInfo); err != nil {
+		return nil, ObjectInfo{}, err
+	}
+
+	objRange, err := getObjectRange(byteRange, objInfo.Size)
+	if err != nil {
+		return nil, ObjectInfo{}, err
+	}
+
+	length := objInfo.Size
+	startOffset := int64(0)
+	if objRange != nil {
+		length = objRange.getLength()
+		startOffset = objRange.offsetBegin
+	}
+
+	// Save object range.
+	objInfo.objRange = objRange
 
 	// Reorder online disks based on erasure distribution order.
 	onlineDisks = shuffleDisks(onlineDisks, xlMeta.Erasure.Distribution)
@@ -168,20 +171,10 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 	// Reorder parts metadata based on erasure distribution order.
 	metaArr = shufflePartsMetadata(metaArr, xlMeta.Erasure.Distribution)
 
-	// For negative length read everything.
-	if length < 0 {
-		length = xlMeta.Stat.Size - startOffset
-	}
-
-	// Reply back invalid range if the input offset and length fall out of range.
-	if startOffset > xlMeta.Stat.Size || startOffset+length > xlMeta.Stat.Size {
-		return traceError(InvalidRange{startOffset, length, xlMeta.Stat.Size})
-	}
-
 	// Get start part index and offset.
 	partIndex, partOffset, err := xlMeta.ObjectToPartOffset(startOffset)
 	if err != nil {
-		return traceError(InvalidRange{startOffset, length, xlMeta.Stat.Size})
+		return nil, ObjectInfo{}, traceError(InvalidRange{startOffset, length, xlMeta.Stat.Size})
 	}
 
 	// Calculate endOffset according to length
@@ -193,11 +186,13 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 	// Get last part index to read given length.
 	lastPartIndex, _, err := xlMeta.ObjectToPartOffset(endOffset)
 	if err != nil {
-		return traceError(InvalidRange{startOffset, length, xlMeta.Stat.Size})
+		return nil, ObjectInfo{}, traceError(InvalidRange{startOffset, length, xlMeta.Stat.Size})
 	}
 
+	reader, writer := io.Pipe()
+
 	// Save the writer.
-	mw := writer
+	var mw io.Writer = writer
 
 	// Object cache enabled block.
 	if xlMeta.Stat.Size > 0 && xl.objCacheEnabled {
@@ -205,22 +200,12 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 		var cachedBuffer io.ReaderAt
 		cachedBuffer, err = xl.objCache.Open(path.Join(bucket, object), modTime)
 		if err == nil { // Cache hit
-			// Create a new section reader, starting at an offset with length.
-			reader := io.NewSectionReader(cachedBuffer, startOffset, length)
-
-			// Copy the data out.
-			if _, err = io.Copy(writer, reader); err != nil {
-				return traceError(err)
-			}
-
-			// Success.
-			return nil
-
+			return ioutil.NopCloser(io.NewSectionReader(cachedBuffer, startOffset, length)), objInfo, nil
 		} // Cache miss.
 
 		// For unknown error, return and error out.
 		if err != objcache.ErrKeyNotFoundInCache {
-			return traceError(err)
+			return nil, ObjectInfo{}, traceError(err)
 		} // Cache has not been found, fill the cache.
 
 		// Cache is only set if whole object is being read.
@@ -237,7 +222,7 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 			// Ignore error if cache is full, proceed to write the object.
 			if err != nil && err != objcache.ErrCacheFull {
 				// For any other error return here.
-				return toObjectErr(traceError(err), bucket, object)
+				return nil, ObjectInfo{}, toObjectErr(traceError(err), bucket, object)
 			}
 		}
 	}
@@ -247,57 +232,63 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 	chunkSize := getChunkSize(xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks)
 	pool := bpool.NewBytePool(chunkSize, len(onlineDisks))
 
-	// Read from all parts.
-	for ; partIndex <= lastPartIndex; partIndex++ {
-		if length == totalBytesRead {
-			break
-		}
-		// Save the current part name and size.
-		partName := xlMeta.Parts[partIndex].Name
-		partSize := xlMeta.Parts[partIndex].Size
-
-		readSize := partSize - partOffset
-		// readSize should be adjusted so that we don't write more data than what was requested.
-		if readSize > (length - totalBytesRead) {
-			readSize = length - totalBytesRead
-		}
-
-		// Get the checksums of the current part.
-		checkSums := make([]string, len(onlineDisks))
-		var ckSumAlgo string
-		for index, disk := range onlineDisks {
-			// Disk is not found skip the checksum.
-			if disk == nil {
-				checkSums[index] = ""
-				continue
+	go func(writer *io.PipeWriter) {
+		// Read from all parts.
+		for ; partIndex <= lastPartIndex; partIndex++ {
+			if length == totalBytesRead {
+				break
 			}
-			ckSumInfo := metaArr[index].Erasure.GetCheckSumInfo(partName)
-			checkSums[index] = ckSumInfo.Hash
-			// Set checksum algo only once, while it is possible to have
-			// different algos per block because of our `xl.json`.
-			// It is not a requirement, set this only once for all the disks.
-			if ckSumAlgo == "" {
-				ckSumAlgo = ckSumInfo.Algorithm
+			// Save the current part name and size.
+			partName := xlMeta.Parts[partIndex].Name
+			partSize := xlMeta.Parts[partIndex].Size
+
+			readSize := partSize - partOffset
+			// readSize should be adjusted so that we don't write more data than what was requested.
+			if readSize > (length - totalBytesRead) {
+				readSize = length - totalBytesRead
 			}
-		}
 
-		// Start erasure decoding and writing to the client.
-		n, err := erasureReadFile(mw, onlineDisks, bucket, pathJoin(object, partName), partOffset, readSize, partSize, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks, xlMeta.Erasure.ParityBlocks, checkSums, ckSumAlgo, pool)
-		if err != nil {
-			errorIf(err, "Unable to read %s of the object `%s/%s`.", partName, bucket, object)
-			return toObjectErr(err, bucket, object)
-		}
+			// Get the checksums of the current part.
+			checkSums := make([]string, len(onlineDisks))
+			var ckSumAlgo string
+			for index, disk := range onlineDisks {
+				// Disk is not found skip the checksum.
+				if disk == nil {
+					checkSums[index] = ""
+					continue
+				}
+				ckSumInfo := metaArr[index].Erasure.GetCheckSumInfo(partName)
+				checkSums[index] = ckSumInfo.Hash
+				// Set checksum algo only once, while it is possible to have
+				// different algos per block because of our `xl.json`.
+				// It is not a requirement, set this only once for all the disks.
+				if ckSumAlgo == "" {
+					ckSumAlgo = ckSumInfo.Algorithm
+				}
+			}
 
-		// Track total bytes read from disk and written to the client.
-		totalBytesRead += n
+			// Start erasure decoding and writing to the client.
+			n, err := erasureReadFile(mw, onlineDisks, bucket, pathJoin(object, partName), partOffset, readSize, partSize, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks, xlMeta.Erasure.ParityBlocks, checkSums, ckSumAlgo, pool)
+			if err != nil {
+				errorIf(err, "Unable to read %s of the object `%s/%s`.", partName, bucket, object)
+				writer.CloseWithError(err)
+				return
+			}
 
-		// partOffset will be valid only for the first part, hence reset it to 0 for
-		// the remaining parts.
-		partOffset = 0
-	} // End of read all parts loop.
+			// Track total bytes read from disk and written to the client.
+			totalBytesRead += n
+
+			// partOffset will be valid only for the first part, hence reset it to 0 for
+			// the remaining parts.
+			partOffset = 0
+		} // End of read all parts loop.
+
+		// Close the piped writer.
+		writer.Close()
+	}(writer)
 
 	// Return success.
-	return nil
+	return reader, objInfo, nil
 }
 
 // GetObjectInfo - reads object metadata and replies back ObjectInfo.
@@ -305,12 +296,7 @@ func (xl xlObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 	if err := checkGetObjArgs(bucket, object); err != nil {
 		return ObjectInfo{}, err
 	}
-
-	info, err := xl.getObjectInfo(bucket, object)
-	if err != nil {
-		return ObjectInfo{}, toObjectErr(err, bucket, object)
-	}
-	return info, nil
+	return xl.getObjectInfo(bucket, object)
 }
 
 // getObjectInfo - wrapper for reading object metadata and constructs ObjectInfo.
@@ -319,7 +305,7 @@ func (xl xlObjects) getObjectInfo(bucket, object string) (objInfo ObjectInfo, er
 	xlStat, xlMetaMap, err := xl.readXLMetaStat(bucket, object)
 	if err != nil {
 		// Return error.
-		return ObjectInfo{}, err
+		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
 	objInfo = ObjectInfo{
@@ -336,9 +322,10 @@ func (xl xlObjects) getObjectInfo(bucket, object string) (objInfo ObjectInfo, er
 	// md5Sum has already been extracted into objInfo.MD5Sum.  We
 	// need to remove it from xlMetaMap to avoid it from appearing as
 	// part of response headers. e.g, X-Minio-* or X-Amz-*.
-
 	delete(xlMetaMap, "md5Sum")
 	objInfo.UserDefined = xlMetaMap
+
+	// Success.
 	return objInfo, nil
 }
 
@@ -707,20 +694,8 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	// of the first disk
 	xlMeta = partsMetadata[0]
 
-	objInfo = ObjectInfo{
-		IsDir:           false,
-		Bucket:          bucket,
-		Name:            object,
-		Size:            xlMeta.Stat.Size,
-		ModTime:         xlMeta.Stat.ModTime,
-		MD5Sum:          xlMeta.Meta["md5Sum"],
-		ContentType:     xlMeta.Meta["content-type"],
-		ContentEncoding: xlMeta.Meta["content-encoding"],
-		UserDefined:     xlMeta.Meta,
-	}
-
 	// Success, return object info.
-	return objInfo, nil
+	return xlMeta.ToObjectInfo(bucket, object), nil
 }
 
 // deleteObject - wrapper for delete object, deletes an object from

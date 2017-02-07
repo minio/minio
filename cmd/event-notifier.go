@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"net/url"
 	"path"
@@ -348,12 +349,11 @@ func loadNotificationConfig(bucket string, objAPI ObjectLayer) (*notificationCon
 	objLock.RLock()
 	defer objLock.RUnlock()
 
-	var buffer bytes.Buffer
-	err := objAPI.GetObject(minioMetaBucket, ncPath, 0, -1, &buffer) // Read everything.
+	reader, _, err := objAPI.GetObject(minioMetaBucket, ncPath, "", nil)
 	if err != nil {
 		// 'notification.xml' not found return
 		// 'errNoSuchNotifications'.  This is default when no
-		// bucket notifications are found on the bucket.
+		// bucket notifications are found.
 		if isErrObjectNotFound(err) || isErrIncompleteBody(err) {
 			return nil, errNoSuchNotifications
 		}
@@ -363,7 +363,10 @@ func loadNotificationConfig(bucket string, objAPI ObjectLayer) (*notificationCon
 	}
 
 	// Unmarshal notification bytes.
-	notificationConfigBytes := buffer.Bytes()
+	notificationConfigBytes, err := ioutil.ReadAll(reader)
+	if err != nil {
+		return nil, err
+	}
 	notificationCfg := &notificationConfig{}
 	if err = xml.Unmarshal(notificationConfigBytes, &notificationCfg); err != nil {
 		return nil, err
@@ -391,13 +394,12 @@ func loadListenerConfig(bucket string, objAPI ObjectLayer) ([]listenerConfig, er
 	objLock.RLock()
 	defer objLock.RUnlock()
 
-	var buffer bytes.Buffer
-	err := objAPI.GetObject(minioMetaBucket, lcPath, 0, -1, &buffer)
+	reader, _, err := objAPI.GetObject(minioMetaBucket, lcPath, "", nil)
 	if err != nil {
-		// 'notification.xml' not found return
+		// 'listener.json' not found return
 		// 'errNoSuchNotifications'.  This is default when no
-		// bucket listeners are found on the bucket.
-		if isErrObjectNotFound(err) {
+		// bucket listeners are found.
+		if isErrObjectNotFound(err) || isErrIncompleteBody(err) {
 			return nil, errNoSuchNotifications
 		}
 		errorIf(err, "Unable to load bucket-listeners for bucket %s", bucket)
@@ -407,7 +409,11 @@ func loadListenerConfig(bucket string, objAPI ObjectLayer) ([]listenerConfig, er
 
 	// Unmarshal notification bytes.
 	var lCfg []listenerConfig
-	lConfigBytes := buffer.Bytes()
+	lConfigBytes, err := ioutil.ReadAll(reader)
+	if err != nil {
+		return nil, err
+	}
+
 	if err = json.Unmarshal(lConfigBytes, &lCfg); err != nil {
 		errorIf(err, "Unable to unmarshal listener config from JSON.")
 		return nil, err

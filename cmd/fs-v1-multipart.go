@@ -454,32 +454,29 @@ func partToAppend(fsMeta fsMetaV1, fsAppendMeta fsMetaV1) (part objectPartInfo, 
 // CopyObjectPart - similar to PutObjectPart but reads data from an existing
 // object. Internally incoming data is written to '.minio.sys/tmp' location
 // and safely renamed to '.minio.sys/multipart' for reach parts.
-func (fs fsObjects) CopyObjectPart(srcBucket, srcObject, dstBucket, dstObject, uploadID string, partID int, startOffset int64, length int64) (PartInfo, error) {
+func (fs fsObjects) CopyObjectPart(srcBucket, srcObject, dstBucket, dstObject, uploadID string, partID int, byteRange string, conditions Conditions) (PartInfo, error) {
 	if err := checkNewMultipartArgs(srcBucket, srcObject, fs); err != nil {
 		return PartInfo{}, err
 	}
 
-	// Initialize pipe.
-	pipeReader, pipeWriter := io.Pipe()
-
-	go func() {
-		if gerr := fs.GetObject(srcBucket, srcObject, startOffset, length, pipeWriter); gerr != nil {
-			errorIf(gerr, "Unable to read %s/%s.", srcBucket, srcObject)
-			pipeWriter.CloseWithError(gerr)
-			return
-		}
-		pipeWriter.Close() // Close writer explicitly signalling we wrote all data.
-	}()
-
-	partInfo, err := fs.PutObjectPart(dstBucket, dstObject, uploadID, partID, length, pipeReader, "", "")
+	reader, objInfo, err := fs.GetObject(srcBucket, srcObject, byteRange, nil)
 	if err != nil {
-		return PartInfo{}, toObjectErr(err, dstBucket, dstObject)
+		errorIf(err, "Unable to read %s/%s.", srcBucket, srcObject)
+		return PartInfo{}, err
+	}
+	defer reader.Close()
+
+	// Verify before x-amz-copy-source preconditions before continuing with CopyObject.
+	if err = checkCopyObjectPartPreconditions(conditions, objInfo); err != nil {
+		return PartInfo{}, toObjectErr(err, srcBucket, srcObject)
 	}
 
-	// Explicitly close the reader.
-	pipeReader.Close()
+	/// maximum Upload size for object in a single CopyObject operation.
+	if isMaxObjectSize(objInfo.Size) {
+		return PartInfo{}, ObjectTooLarge{}
+	}
 
-	return partInfo, nil
+	return fs.PutObjectPart(dstBucket, dstObject, uploadID, partID, -1, reader, "", "")
 }
 
 // PutObjectPart - reads incoming data until EOF for the part file on
@@ -863,8 +860,8 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 			multipartPartFile := pathJoin(fs.fsPath, minioMetaMultipartBucket, uploadIDPath, partSuffix)
 
 			var reader io.ReadCloser
-			var offset int64
-			reader, _, err = fsOpenFile(multipartPartFile, offset)
+			offset := int64(0)
+			reader, err = fsOpenFile(multipartPartFile, offset)
 			if err != nil {
 				fs.rwPool.Close(fsMetaPathMultipart)
 				if err == errFileNotFound {

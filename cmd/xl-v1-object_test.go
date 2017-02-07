@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"bytes"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"path"
@@ -161,6 +160,12 @@ func TestXLDeleteObjectDiskNotFound(t *testing.T) {
 }
 
 func TestGetObjectNoQuorum(t *testing.T) {
+	root, err := newTestConfig(globalMinioDefaultRegion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer removeAll(root)
+
 	// Create an instance of xl backend.
 	obj, fsDirs, err := prepareXL()
 	if err != nil {
@@ -187,12 +192,13 @@ func TestGetObjectNoQuorum(t *testing.T) {
 	// Make 9 disks offline, which leaves less than quorum number of disks
 	// in a 16 disk XL setup. The original disks are 'replaced' with
 	// naughtyDisks that fail after 'f' successful StorageAPI method
-	// invocations, where f - [0,2)
-	for f := 0; f < 2; f++ {
+	// invocations, where f - [0,1)
+	for f := 0; f < 1; f++ {
 		diskErrors := make(map[int]error)
 		for i := 0; i <= f; i++ {
 			diskErrors[i] = nil
 		}
+
 		for i := range xl.storageDisks[:9] {
 			switch diskType := xl.storageDisks[i].(type) {
 			case *retryStorage:
@@ -201,13 +207,15 @@ func TestGetObjectNoQuorum(t *testing.T) {
 				xl.storageDisks[i] = newNaughtyDisk(diskType.disk, diskErrors, errFaultyDisk)
 			}
 		}
-		// Fetch object from store.
-		err = xl.GetObject(bucket, object, 0, int64(len("abcd")), ioutil.Discard)
+
+		// Fetch object from object layer.
+		_, _, err = xl.GetObject(bucket, object, "", nil)
 		err = errorCause(err)
 		if err != toObjectErr(errXLReadQuorum, bucket, object) {
-			t.Errorf("Expected putObject to fail with %v, but failed with %v", toObjectErr(errXLWriteQuorum, bucket, object), err)
+			t.Errorf("Expected getObject to fail with %v, but failed with %v", toObjectErr(errXLWriteQuorum, bucket, object), err)
 		}
 	}
+
 	// Cleanup backend directories.
 	removeRoots(fsDirs)
 }

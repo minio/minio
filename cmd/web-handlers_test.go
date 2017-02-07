@@ -691,11 +691,11 @@ func testUploadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler
 	}
 
 	var byteBuffer bytes.Buffer
-	err = obj.GetObject(bucketName, objectName, 0, int64(len(content)), &byteBuffer)
+	reader, _, err := obj.GetObject(bucketName, objectName, "", nil)
 	if err != nil {
 		t.Fatalf("Failed, %v", err)
 	}
-
+	io.Copy(&byteBuffer, reader)
 	if bytes.Compare(byteBuffer.Bytes(), content) != 0 {
 		t.Fatalf("The upload file is different from the download file")
 	}

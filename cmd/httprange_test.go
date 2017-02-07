@@ -16,7 +16,10 @@
 
 package cmd
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // Test parseRequestRange()
 func TestParseRequestRange(t *testing.T) {
@@ -37,7 +40,11 @@ func TestParseRequestRange(t *testing.T) {
 	}
 
 	for _, successCase := range successCases {
-		hrange, err := parseRequestRange(successCase.rangeString, 10)
+		byteRange, err := getByteRange(successCase.rangeString)
+		if err != nil {
+			t.Fatalf("expected: <nil>, got: %s", err)
+		}
+		hrange, err := parseObjectRange(byteRange, 10)
 		if err != nil {
 			t.Fatalf("expected: <nil>, got: %s", err)
 		}
@@ -62,7 +69,6 @@ func TestParseRequestRange(t *testing.T) {
 		"bytes=2-+5",
 		"bytes=2--5",
 		"bytes=-",
-		"",
 		"2-5",
 		"bytes = 2-5",
 		"bytes=2 - 5",
@@ -70,7 +76,14 @@ func TestParseRequestRange(t *testing.T) {
 		"bytes=2-5 ",
 	}
 	for _, rangeString := range invalidRangeStrings {
-		if _, err := parseRequestRange(rangeString, 10); err == nil {
+		byteRange, err := getByteRange(rangeString)
+		if err == nil && !strings.HasPrefix(rangeString, byteRangePrefix) {
+			t.Fatalf("expected: an error, got: <nil>")
+		}
+		if strings.HasPrefix(rangeString, byteRangePrefix) && err != nil {
+			t.Fatalf("expected: <nil>, got: %s", err)
+		}
+		if _, err := parseObjectRange(byteRange, 10); err == nil && strings.HasPrefix(rangeString, byteRangePrefix) {
 			t.Fatalf("expected: an error, got: <nil>")
 		}
 	}
@@ -83,8 +96,17 @@ func TestParseRequestRange(t *testing.T) {
 		"bytes=-0",
 	}
 	for _, rangeString := range errorRangeString {
-		if _, err := parseRequestRange(rangeString, 10); err != errInvalidRange {
-			t.Fatalf("expected: %s, got: %s", errInvalidRange, err)
+		byteRange, err := getByteRange(rangeString)
+		if err != nil {
+			t.Fatalf("expected: <nil>, got: %s", err)
+		}
+		if _, err := parseObjectRange(byteRange, 10); err != nil {
+			err = errorCause(err)
+			switch err.(type) {
+			case InvalidRange:
+			default:
+				t.Fatalf("expected: InvalidRange, got: %s", err)
+			}
 		}
 	}
 }

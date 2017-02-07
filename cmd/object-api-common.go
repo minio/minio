@@ -18,6 +18,8 @@ package cmd
 
 import (
 	"net"
+	"net/http"
+	"net/textproto"
 	"net/url"
 	"runtime"
 	"sync"
@@ -307,4 +309,157 @@ func cleanupDir(storage StorageAPI, volume, dirPath string) error {
 	}
 	err := delFunc(retainSlash(pathJoin(dirPath)))
 	return err
+}
+
+// Conditions - conditions mime header.
+type Conditions map[string][]string
+
+// Get - get the condition key value.
+func (c Conditions) Get(key string) string {
+	return textproto.MIMEHeader(c).Get(key)
+}
+
+// Validates the preconditions. Returns true if GET/HEAD operation should not proceed.
+// Preconditions supported are:
+//  If-Modified-Since
+//  If-Unmodified-Since
+//  If-Match
+//  If-None-Match
+func checkPreconditions(conditions Conditions, objInfo ObjectInfo) error {
+	// If the object doesn't have a modtime (IsZero), or the modtime
+	// is obviously garbage (Unix time == 0), then ignore modtimes
+	// and don't process the If-Modified-Since header.
+	if objInfo.ModTime.IsZero() || objInfo.ModTime.Equal(time.Unix(0, 0)) {
+		return nil
+	}
+
+	// If-Modified-Since : Return the object only if it has been modified since the specified time,
+	// otherwise return a 304 (not modified).
+	ifModifiedSinceHeader := conditions.Get("If-Modified-Since")
+	if ifModifiedSinceHeader != "" {
+		if !ifModifiedSince(objInfo.ModTime, ifModifiedSinceHeader) {
+			return NotModified{}
+		}
+	}
+
+	// If-None-Match : Return the object only if its entity tag (ETag) is different from the
+	// one specified otherwise, return a 304 (not modified).
+	ifNoneMatchETagHeader := conditions.Get("If-None-Match")
+	if ifNoneMatchETagHeader != "" {
+		if isETagEqual(objInfo.MD5Sum, ifNoneMatchETagHeader) {
+			return NotModified{}
+		}
+	}
+
+	// If-Unmodified-Since : Return the object only if it has not been modified since the specified
+	// time, otherwise return a 412 (precondition failed).
+	ifUnmodifiedSinceHeader := conditions.Get("If-Unmodified-Since")
+	if ifUnmodifiedSinceHeader != "" {
+		if ifModifiedSince(objInfo.ModTime, ifUnmodifiedSinceHeader) {
+			return PrecondFailed{}
+		}
+	}
+
+	// If-Match : Return the object only if its entity tag (ETag) is the same as the one specified;
+	// otherwise return a 412 (precondition failed).
+	ifMatchETagHeader := conditions.Get("If-Match")
+	if ifMatchETagHeader != "" {
+		if !isETagEqual(objInfo.MD5Sum, ifMatchETagHeader) {
+			return PrecondFailed{}
+		}
+	}
+
+	// Object content should be written to client.
+	return nil
+}
+
+// returns true if object was modified after givenTime.
+func ifModifiedSince(objTime time.Time, givenTimeStr string) bool {
+	givenTime, err := time.Parse(http.TimeFormat, givenTimeStr)
+	if err != nil {
+		return true
+	}
+	// The Date-Modified header truncates sub-second precision, so
+	// use mtime < t+1s instead of mtime <= t to check for unmodified.
+	if objTime.After(givenTime.Add(1 * time.Second)) {
+		return true
+	}
+	return false
+}
+
+// canonicalizeETag returns ETag with leading and trailing double-quotes removed,
+// if any present
+func canonicalizeETag(etag string) string {
+	canonicalETag := strings.TrimPrefix(etag, "\"")
+	return strings.TrimSuffix(canonicalETag, "\"")
+}
+
+// isETagEqual return true if the canonical representations of two ETag strings
+// are equal, false otherwise
+func isETagEqual(left, right string) bool {
+	return canonicalizeETag(left) == canonicalizeETag(right)
+}
+
+// Validates the preconditions for CopyObjectPart, returns true if CopyObjectPart
+// operation should not proceed. Preconditions supported are:
+//  x-amz-copy-source-if-modified-since
+//  x-amz-copy-source-if-unmodified-since
+//  x-amz-copy-source-if-match
+//  x-amz-copy-source-if-none-match
+func checkCopyObjectPartPreconditions(conditions Conditions, objInfo ObjectInfo) error {
+	return checkCopyObjectPreconditions(conditions, objInfo)
+}
+
+// Validates the preconditions for CopyObject, returns true if CopyObject operation should not proceed.
+// Preconditions supported are:
+//  x-amz-copy-source-if-modified-since
+//  x-amz-copy-source-if-unmodified-since
+//  x-amz-copy-source-if-match
+//  x-amz-copy-source-if-none-match
+func checkCopyObjectPreconditions(conditions Conditions, objInfo ObjectInfo) error {
+	// If the object doesn't have a modtime (IsZero), or the modtime
+	// is obviously garbage (Unix time == 0), then ignore modtimes
+	// and don't process the If-Modified-Since header.
+	if objInfo.ModTime.IsZero() || objInfo.ModTime.Equal(time.Unix(0, 0)) {
+		return nil
+	}
+
+	// x-amz-copy-source-if-modified-since: Return the object only if it has been modified
+	// since the specified time otherwise return 412 (precondition failed).
+	ifModifiedSinceHeader := conditions.Get("x-amz-copy-source-if-modified-since")
+	if ifModifiedSinceHeader != "" {
+		if !ifModifiedSince(objInfo.ModTime, ifModifiedSinceHeader) {
+			return PrecondFailed{}
+		}
+	}
+
+	// x-amz-copy-source-if-unmodified-since : Return the object only if it has not been
+	// modified since the specified time, otherwise return a 412 (precondition failed).
+	ifUnmodifiedSinceHeader := conditions.Get("x-amz-copy-source-if-unmodified-since")
+	if ifUnmodifiedSinceHeader != "" {
+		if ifModifiedSince(objInfo.ModTime, ifUnmodifiedSinceHeader) {
+			return PrecondFailed{}
+		}
+	}
+
+	// x-amz-copy-source-if-match : Return the object only if its entity tag (ETag) is the
+	// same as the one specified; otherwise return a 412 (precondition failed).
+	ifMatchETagHeader := conditions.Get("x-amz-copy-source-if-match")
+	if ifMatchETagHeader != "" {
+		if objInfo.MD5Sum != "" && !isETagEqual(objInfo.MD5Sum, ifMatchETagHeader) {
+			return PrecondFailed{}
+		}
+	}
+
+	// If-None-Match : Return the object only if its entity tag (ETag) is different from the
+	// one specified otherwise, return a 304 (not modified).
+	ifNoneMatchETagHeader := conditions.Get("x-amz-copy-source-if-none-match")
+	if ifNoneMatchETagHeader != "" {
+		if objInfo.MD5Sum != "" && isETagEqual(objInfo.MD5Sum, ifNoneMatchETagHeader) {
+			return PrecondFailed{}
+		}
+	}
+
+	// Object content should be written to client.
+	return nil
 }

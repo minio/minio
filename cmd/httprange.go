@@ -23,99 +23,102 @@ import (
 	"strings"
 )
 
-const (
-	byteRangePrefix = "bytes="
-)
-
 // Valid byte position regexp
 var validBytePos = regexp.MustCompile(`^[0-9]+$`)
 
 // HttpRange specifies the byte range to be sent to the client.
-type httpRange struct {
+type objectRange struct {
 	offsetBegin  int64
 	offsetEnd    int64
 	resourceSize int64
 }
 
 // String populate range stringer interface
-func (hrange httpRange) String() string {
-	return fmt.Sprintf("bytes %d-%d/%d", hrange.offsetBegin, hrange.offsetEnd, hrange.resourceSize)
+func (r objectRange) String() string {
+	return fmt.Sprintf("bytes %d-%d/%d", r.offsetBegin, r.offsetEnd, r.resourceSize)
 }
 
 // getlength - get length from the range.
-func (hrange httpRange) getLength() int64 {
-	return 1 + hrange.offsetEnd - hrange.offsetBegin
+func (r objectRange) getLength() int64 {
+	return 1 + r.offsetEnd - r.offsetBegin
 }
 
-func parseRequestRange(rangeString string, resourceSize int64) (hrange *httpRange, err error) {
-	// Return error if given range string doesn't start with byte range prefix.
-	if !strings.HasPrefix(rangeString, byteRangePrefix) {
-		return nil, fmt.Errorf("'%s' does not start with '%s'", rangeString, byteRangePrefix)
+func parseObjectRange(objRangeStr string, resourceSize int64) (r *objectRange, err error) {
+	if len(objRangeStr) == 0 {
+		return nil, nil
 	}
-
-	// Trim byte range prefix.
-	byteRangeString := strings.TrimPrefix(rangeString, byteRangePrefix)
-
 	// Check if range string contains delimiter '-', else return error. eg. "bytes=8"
-	sepIndex := strings.Index(byteRangeString, "-")
+	sepIndex := strings.Index(objRangeStr, "-")
 	if sepIndex == -1 {
-		return nil, fmt.Errorf("'%s' does not have a valid range value", rangeString)
+		return nil, traceError(fmt.Errorf("'%s' does not have a valid range value", objRangeStr))
 	}
 
-	offsetBeginString := byteRangeString[:sepIndex]
+	offsetBeginStr := objRangeStr[:sepIndex]
 	offsetBegin := int64(-1)
-	// Convert offsetBeginString only if its not empty.
-	if len(offsetBeginString) > 0 {
-		if !validBytePos.MatchString(offsetBeginString) {
-			return nil, fmt.Errorf("'%s' does not have a valid first byte position value", rangeString)
+	// Convert offsetBeginStr only if its not empty.
+	if len(offsetBeginStr) > 0 {
+		if !validBytePos.MatchString(offsetBeginStr) {
+			return nil, traceError(fmt.Errorf("'%s' does not have a valid first byte position value", objRangeStr))
 		}
 
-		if offsetBegin, err = strconv.ParseInt(offsetBeginString, 10, 64); err != nil {
-			return nil, fmt.Errorf("'%s' does not have a valid first byte position value", rangeString)
+		if offsetBegin, err = strconv.ParseInt(offsetBeginStr, 10, 64); err != nil {
+			return nil, traceError(fmt.Errorf("'%s' does not have a valid first byte position value", objRangeStr))
 		}
 	}
 
-	offsetEndString := byteRangeString[sepIndex+1:]
+	offsetEndStr := objRangeStr[sepIndex+1:]
 	offsetEnd := int64(-1)
-	// Convert offsetEndString only if its not empty.
-	if len(offsetEndString) > 0 {
-		if !validBytePos.MatchString(offsetEndString) {
-			return nil, fmt.Errorf("'%s' does not have a valid last byte position value", rangeString)
+	// Convert offsetEndStr only if its not empty.
+	if len(offsetEndStr) > 0 {
+		if !validBytePos.MatchString(offsetEndStr) {
+			return nil, traceError(fmt.Errorf("'%s' does not have a valid last byte position value", objRangeStr))
 		}
 
-		if offsetEnd, err = strconv.ParseInt(offsetEndString, 10, 64); err != nil {
-			return nil, fmt.Errorf("'%s' does not have a valid last byte position value", rangeString)
+		if offsetEnd, err = strconv.ParseInt(offsetEndStr, 10, 64); err != nil {
+			return nil, traceError(fmt.Errorf("'%s' does not have a valid last byte position value", objRangeStr))
 		}
 	}
 
-	// rangeString contains first and last byte positions. eg. "bytes=2-5"
+	// objRangeStr contains first and last byte positions. eg. "bytes=2-5"
 	if offsetBegin > -1 && offsetEnd > -1 {
 		if offsetBegin > offsetEnd {
 			// Last byte position is not greater than first byte position. eg. "bytes=5-2"
-			return nil, fmt.Errorf("'%s' does not have valid range value", rangeString)
+			return nil, traceError(fmt.Errorf("'%s' does not have valid range value", objRangeStr))
 		}
 
 		// First and last byte positions should not be >= resourceSize.
 		if offsetBegin >= resourceSize {
-			return nil, errInvalidRange
+			return nil, traceError(InvalidRange{
+				offsetBegin:  offsetBegin,
+				offsetEnd:    offsetEnd,
+				resourceSize: resourceSize,
+			})
 		}
 
 		if offsetEnd >= resourceSize {
 			offsetEnd = resourceSize - 1
 		}
 	} else if offsetBegin > -1 {
-		// rangeString contains only first byte position. eg. "bytes=8-"
+		// objRangeStr contains only first byte position. eg. "bytes=8-"
 		if offsetBegin >= resourceSize {
 			// First byte position should not be >= resourceSize.
-			return nil, errInvalidRange
+			return nil, traceError(InvalidRange{
+				offsetBegin:  offsetBegin,
+				offsetEnd:    offsetEnd,
+				resourceSize: resourceSize,
+			})
 		}
 
 		offsetEnd = resourceSize - 1
 	} else if offsetEnd > -1 {
-		// rangeString contains only last byte position. eg. "bytes=-3"
+		// objRangeStr contains only last byte position. eg. "bytes=-3"
 		if offsetEnd == 0 {
 			// Last byte position should not be zero eg. "bytes=-0"
-			return nil, errInvalidRange
+			return nil, traceError(InvalidRange{
+				offsetBegin:  offsetBegin,
+				offsetEnd:    offsetEnd,
+				resourceSize: resourceSize,
+			})
 		}
 
 		if offsetEnd >= resourceSize {
@@ -126,9 +129,9 @@ func parseRequestRange(rangeString string, resourceSize int64) (hrange *httpRang
 
 		offsetEnd = resourceSize - 1
 	} else {
-		// rangeString contains first and last byte positions missing. eg. "bytes=-"
-		return nil, fmt.Errorf("'%s' does not have valid range value", rangeString)
+		// objRangeStr contains first and last byte positions missing. eg. "bytes=-"
+		return nil, traceError(fmt.Errorf("'%s' does not have valid range value", objRangeStr))
 	}
 
-	return &httpRange{offsetBegin, offsetEnd, resourceSize}, nil
+	return &objectRange{offsetBegin, offsetEnd, resourceSize}, nil
 }

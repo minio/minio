@@ -112,8 +112,16 @@ type ObjectInfo struct {
 	ContentEncoding string
 
 	// User-Defined metadata
-	UserDefined    map[string]string
+	UserDefined map[string]string
+
+	// Represents healing related information for a given object, usually null
+	// but has values when an object requires healing for example missing
+	// data count, parity count etc.
 	HealObjectInfo *HealObjectInfo `xml:"HealObjectInfo,omitempty"`
+
+	// Represents the requested range of the object, only present
+	// for internal uses only, never marshal is back to client.
+	objRange *objectRange
 }
 
 // ListPartsInfo - represents list of all parts.

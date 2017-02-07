@@ -209,10 +209,12 @@ func testMultipleObjectCreation(obj ObjectLayer, instanceType string, c TestErrH
 
 	for key, value := range objects {
 		var byteBuffer bytes.Buffer
-		err = obj.GetObject("bucket", key, 0, int64(len(value)), &byteBuffer)
+		var reader io.Reader
+		reader, _, err = obj.GetObject("bucket", key, "", nil)
 		if err != nil {
 			c.Fatalf("%s: <ERROR> %s", instanceType, err)
 		}
+		io.Copy(&byteBuffer, reader)
 		if !bytes.Equal(byteBuffer.Bytes(), value) {
 			c.Errorf("%s: Mismatch of GetObject data with the expected one.", instanceType)
 		}
@@ -456,10 +458,12 @@ func testObjectOverwriteWorks(obj ObjectLayer, instanceType string, c TestErrHan
 	}
 
 	var bytesBuffer bytes.Buffer
-	err = obj.GetObject("bucket", "object", 0, length, &bytesBuffer)
+	var reader io.Reader
+	reader, _, err = obj.GetObject("bucket", "object", "", nil)
 	if err != nil {
 		c.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
+	io.Copy(&bytesBuffer, reader)
 	if string(bytesBuffer.Bytes()) != "The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed." {
 		c.Errorf("%s: Invalid upload ID error mismatch.", instanceType)
 	}
@@ -523,10 +527,11 @@ func testPutObject(obj ObjectLayer, instanceType string, c TestErrHandler) {
 	if err != nil {
 		c.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
-	err = obj.GetObject("bucket", "object", 0, length, &bytesBuffer1)
+	reader, _, err := obj.GetObject("bucket", "object", "", nil)
 	if err != nil {
 		c.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
+	io.Copy(&bytesBuffer1, reader)
 	if len(bytesBuffer1.Bytes()) != len(content) {
 		c.Errorf("%s: Expected content length to be `%d`, but instead found `%d`", instanceType, len(content), len(bytesBuffer1.Bytes()))
 	}
@@ -536,10 +541,11 @@ func testPutObject(obj ObjectLayer, instanceType string, c TestErrHandler) {
 	if err != nil {
 		c.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
-	err = obj.GetObject("bucket", "object", 0, length, &bytesBuffer2)
+	reader, _, err = obj.GetObject("bucket", "object", "", nil)
 	if err != nil {
 		c.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
+	io.Copy(&bytesBuffer2, reader)
 	if len(bytesBuffer2.Bytes()) != len(content) {
 		c.Errorf("%s: Expected content length to be `%d`, but instead found `%d`", instanceType, len(content), len(bytesBuffer2.Bytes()))
 	}
@@ -566,10 +572,11 @@ func testPutObjectInSubdir(obj ObjectLayer, instanceType string, c TestErrHandle
 	}
 
 	var bytesBuffer bytes.Buffer
-	err = obj.GetObject("bucket", "dir1/dir2/object", 0, length, &bytesBuffer)
+	reader, _, err := obj.GetObject("bucket", "dir1/dir2/object", "", nil)
 	if err != nil {
 		c.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
+	io.Copy(&bytesBuffer, reader)
 	if len(bytesBuffer.Bytes()) != len(uploadContent) {
 		c.Errorf("%s: Expected length of downloaded data to be `%d`, but instead found `%d`",
 			instanceType, len(uploadContent), len(bytesBuffer.Bytes()))

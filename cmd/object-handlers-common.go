@@ -17,206 +17,34 @@
 package cmd
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
-	"time"
 )
 
-// Validates the preconditions for CopyObjectPart, returns true if CopyObjectPart
-// operation should not proceed. Preconditions supported are:
-//  x-amz-copy-source-if-modified-since
-//  x-amz-copy-source-if-unmodified-since
-//  x-amz-copy-source-if-match
-//  x-amz-copy-source-if-none-match
-func checkCopyObjectPartPreconditions(w http.ResponseWriter, r *http.Request, objInfo ObjectInfo) bool {
-	return checkCopyObjectPreconditions(w, r, objInfo)
+// Extract metadata relevant for an CopyObject operation based on conditional
+// header values specified in X-Amz-Metadata-Directive.
+func getCpObjMetadataFromHeader(h http.Header) map[string]string {
+	// if x-amz-metadata-directive says REPLACE then
+	// we extract metadata from the input headers.
+	if isMetadataReplace(h) {
+		return extractMetadataFromHeader(h)
+	}
+	return nil
 }
 
-// Validates the preconditions for CopyObject, returns true if CopyObject operation should not proceed.
-// Preconditions supported are:
-//  x-amz-copy-source-if-modified-since
-//  x-amz-copy-source-if-unmodified-since
-//  x-amz-copy-source-if-match
-//  x-amz-copy-source-if-none-match
-func checkCopyObjectPreconditions(w http.ResponseWriter, r *http.Request, objInfo ObjectInfo) bool {
-	// Return false for methods other than GET and HEAD.
-	if r.Method != "PUT" {
-		return false
-	}
-	// If the object doesn't have a modtime (IsZero), or the modtime
-	// is obviously garbage (Unix time == 0), then ignore modtimes
-	// and don't process the If-Modified-Since header.
-	if objInfo.ModTime.IsZero() || objInfo.ModTime.Equal(time.Unix(0, 0)) {
-		return false
-	}
+const (
+	byteRangePrefix = "bytes="
+)
 
-	// Headers to be set of object content is not going to be written to the client.
-	writeHeaders := func() {
-		// set common headers
-		setCommonHeaders(w)
-
-		// set object-related metadata headers
-		w.Header().Set("Last-Modified", objInfo.ModTime.UTC().Format(http.TimeFormat))
-
-		if objInfo.MD5Sum != "" {
-			w.Header().Set("ETag", "\""+objInfo.MD5Sum+"\"")
+func getByteRange(reqByteRange string) (byteRange string, err error) {
+	if len(reqByteRange) != 0 {
+		// Return error if given range string doesn't start with byte range prefix.
+		if !strings.HasPrefix(reqByteRange, byteRangePrefix) {
+			return "", fmt.Errorf("'%s' does not start with '%s'", reqByteRange, byteRangePrefix)
 		}
+		// Trim byte range prefix.
+		byteRange = strings.TrimPrefix(reqByteRange, byteRangePrefix)
 	}
-	// x-amz-copy-source-if-modified-since: Return the object only if it has been modified
-	// since the specified time otherwise return 412 (precondition failed).
-	ifModifiedSinceHeader := r.Header.Get("x-amz-copy-source-if-modified-since")
-	if ifModifiedSinceHeader != "" {
-		if !ifModifiedSince(objInfo.ModTime, ifModifiedSinceHeader) {
-			// If the object is not modified since the specified time.
-			writeHeaders()
-			writeErrorResponse(w, ErrPreconditionFailed, r.URL)
-			return true
-		}
-	}
-
-	// x-amz-copy-source-if-unmodified-since : Return the object only if it has not been
-	// modified since the specified time, otherwise return a 412 (precondition failed).
-	ifUnmodifiedSinceHeader := r.Header.Get("x-amz-copy-source-if-unmodified-since")
-	if ifUnmodifiedSinceHeader != "" {
-		if ifModifiedSince(objInfo.ModTime, ifUnmodifiedSinceHeader) {
-			// If the object is modified since the specified time.
-			writeHeaders()
-			writeErrorResponse(w, ErrPreconditionFailed, r.URL)
-			return true
-		}
-	}
-
-	// x-amz-copy-source-if-match : Return the object only if its entity tag (ETag) is the
-	// same as the one specified; otherwise return a 412 (precondition failed).
-	ifMatchETagHeader := r.Header.Get("x-amz-copy-source-if-match")
-	if ifMatchETagHeader != "" {
-		if objInfo.MD5Sum != "" && !isETagEqual(objInfo.MD5Sum, ifMatchETagHeader) {
-			// If the object ETag does not match with the specified ETag.
-			writeHeaders()
-			writeErrorResponse(w, ErrPreconditionFailed, r.URL)
-			return true
-		}
-	}
-
-	// If-None-Match : Return the object only if its entity tag (ETag) is different from the
-	// one specified otherwise, return a 304 (not modified).
-	ifNoneMatchETagHeader := r.Header.Get("x-amz-copy-source-if-none-match")
-	if ifNoneMatchETagHeader != "" {
-		if objInfo.MD5Sum != "" && isETagEqual(objInfo.MD5Sum, ifNoneMatchETagHeader) {
-			// If the object ETag matches with the specified ETag.
-			writeHeaders()
-			writeErrorResponse(w, ErrPreconditionFailed, r.URL)
-			return true
-		}
-	}
-	// Object content should be written to http.ResponseWriter
-	return false
-}
-
-// Validates the preconditions. Returns true if GET/HEAD operation should not proceed.
-// Preconditions supported are:
-//  If-Modified-Since
-//  If-Unmodified-Since
-//  If-Match
-//  If-None-Match
-func checkPreconditions(w http.ResponseWriter, r *http.Request, objInfo ObjectInfo) bool {
-	// Return false for methods other than GET and HEAD.
-	if r.Method != "GET" && r.Method != "HEAD" {
-		return false
-	}
-	// If the object doesn't have a modtime (IsZero), or the modtime
-	// is obviously garbage (Unix time == 0), then ignore modtimes
-	// and don't process the If-Modified-Since header.
-	if objInfo.ModTime.IsZero() || objInfo.ModTime.Equal(time.Unix(0, 0)) {
-		return false
-	}
-
-	// Headers to be set of object content is not going to be written to the client.
-	writeHeaders := func() {
-		// set common headers
-		setCommonHeaders(w)
-
-		// set object-related metadata headers
-		w.Header().Set("Last-Modified", objInfo.ModTime.UTC().Format(http.TimeFormat))
-
-		if objInfo.MD5Sum != "" {
-			w.Header().Set("ETag", "\""+objInfo.MD5Sum+"\"")
-		}
-	}
-	// If-Modified-Since : Return the object only if it has been modified since the specified time,
-	// otherwise return a 304 (not modified).
-	ifModifiedSinceHeader := r.Header.Get("If-Modified-Since")
-	if ifModifiedSinceHeader != "" {
-		if !ifModifiedSince(objInfo.ModTime, ifModifiedSinceHeader) {
-			// If the object is not modified since the specified time.
-			writeHeaders()
-			w.WriteHeader(http.StatusNotModified)
-			return true
-		}
-	}
-
-	// If-Unmodified-Since : Return the object only if it has not been modified since the specified
-	// time, otherwise return a 412 (precondition failed).
-	ifUnmodifiedSinceHeader := r.Header.Get("If-Unmodified-Since")
-	if ifUnmodifiedSinceHeader != "" {
-		if ifModifiedSince(objInfo.ModTime, ifUnmodifiedSinceHeader) {
-			// If the object is modified since the specified time.
-			writeHeaders()
-			writeErrorResponse(w, ErrPreconditionFailed, r.URL)
-			return true
-		}
-	}
-
-	// If-Match : Return the object only if its entity tag (ETag) is the same as the one specified;
-	// otherwise return a 412 (precondition failed).
-	ifMatchETagHeader := r.Header.Get("If-Match")
-	if ifMatchETagHeader != "" {
-		if !isETagEqual(objInfo.MD5Sum, ifMatchETagHeader) {
-			// If the object ETag does not match with the specified ETag.
-			writeHeaders()
-			writeErrorResponse(w, ErrPreconditionFailed, r.URL)
-			return true
-		}
-	}
-
-	// If-None-Match : Return the object only if its entity tag (ETag) is different from the
-	// one specified otherwise, return a 304 (not modified).
-	ifNoneMatchETagHeader := r.Header.Get("If-None-Match")
-	if ifNoneMatchETagHeader != "" {
-		if isETagEqual(objInfo.MD5Sum, ifNoneMatchETagHeader) {
-			// If the object ETag matches with the specified ETag.
-			writeHeaders()
-			w.WriteHeader(http.StatusNotModified)
-			return true
-		}
-	}
-	// Object content should be written to http.ResponseWriter
-	return false
-}
-
-// returns true if object was modified after givenTime.
-func ifModifiedSince(objTime time.Time, givenTimeStr string) bool {
-	givenTime, err := time.Parse(http.TimeFormat, givenTimeStr)
-	if err != nil {
-		return true
-	}
-	// The Date-Modified header truncates sub-second precision, so
-	// use mtime < t+1s instead of mtime <= t to check for unmodified.
-	if objTime.After(givenTime.Add(1 * time.Second)) {
-		return true
-	}
-	return false
-}
-
-// canonicalizeETag returns ETag with leading and trailing double-quotes removed,
-// if any present
-func canonicalizeETag(etag string) string {
-	canonicalETag := strings.TrimPrefix(etag, "\"")
-	return strings.TrimSuffix(canonicalETag, "\"")
-}
-
-// isETagEqual return true if the canonical representations of two ETag strings
-// are equal, false otherwise
-func isETagEqual(left, right string) bool {
-	return canonicalizeETag(left) == canonicalizeETag(right)
+	return
 }

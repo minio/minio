@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -563,10 +564,15 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	objectLock.RLock()
 	defer objectLock.RUnlock()
 
-	if err := objectAPI.GetObject(bucket, object, 0, -1, w); err != nil {
-		/// No need to print error, response writer already written to.
+	reader, _, err := objectAPI.GetObject(bucket, object, "", nil)
+	if err != nil {
+		errorIf(err, "Unable to fetch object")
+		writeWebErrorResponse(w, err)
 		return
 	}
+
+	// Start copying the data out.
+	io.Copy(w, reader)
 }
 
 // DownloadZipArgs - Argument for downloading a bunch of files as a zip file.
@@ -604,8 +610,8 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 
 	for _, object := range args.Objects {
 		// Writes compressed object file to the response.
-		zipit := func(objectName string) error {
-			info, err := objectAPI.GetObjectInfo(args.BucketName, objectName)
+		zipper := func(objectName string) error {
+			reader, info, err := objectAPI.GetObject(args.BucketName, objectName, "", nil)
 			if err != nil {
 				return err
 			}
@@ -620,12 +626,13 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 				writeWebErrorResponse(w, errUnexpected)
 				return err
 			}
-			return objectAPI.GetObject(args.BucketName, objectName, 0, info.Size, writer)
+			_, err = io.Copy(writer, reader)
+			return err
 		}
 
 		if !hasSuffix(object, slashSeparator) {
 			// If not a directory, compress the file and write it to response.
-			err := zipit(pathJoin(args.Prefix, object))
+			err := zipper(pathJoin(args.Prefix, object))
 			if err != nil {
 				return
 			}
@@ -642,7 +649,7 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 			}
 			marker = lo.NextMarker
 			for _, obj := range lo.Objects {
-				err = zipit(obj.Name)
+				err = zipper(obj.Name)
 				if err != nil {
 					return
 				}
