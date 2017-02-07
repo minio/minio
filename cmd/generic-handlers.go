@@ -17,6 +17,8 @@
 package cmd
 
 import (
+	"bufio"
+	"net"
 	"net/http"
 	"path"
 	"strings"
@@ -361,7 +363,6 @@ func (h resourceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // to record some useful http response data.
 type httpResponseRecorder struct {
 	http.ResponseWriter
-	http.Flusher
 	respStatusCode int
 }
 
@@ -372,10 +373,7 @@ func (rww *httpResponseRecorder) Write(b []byte) (int, error) {
 
 // Wraps ResponseWriter's Flush()
 func (rww *httpResponseRecorder) Flush() {
-	f, ok := rww.ResponseWriter.(http.Flusher)
-	if ok {
-		f.Flush()
-	}
+	rww.ResponseWriter.(http.Flusher).Flush()
 }
 
 // Wraps ResponseWriter's WriteHeader() and record
@@ -383,6 +381,10 @@ func (rww *httpResponseRecorder) Flush() {
 func (rww *httpResponseRecorder) WriteHeader(httpCode int) {
 	rww.respStatusCode = httpCode
 	rww.ResponseWriter.WriteHeader(httpCode)
+}
+
+func (rww *httpResponseRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	return rww.ResponseWriter.(http.Hijacker).Hijack()
 }
 
 // httpStatsHandler definition: gather HTTP statistics
