@@ -42,77 +42,88 @@ type serverConfigV13 struct {
 	Notify notifier `json:"notify"`
 }
 
-// initConfig - initialize server config and indicate if we are
-// creating a new file or we are just loading
-func initConfig() (bool, error) {
-	if !isConfigFileExists() {
-		// Initialize server config.
-		srvCfg := &serverConfigV13{}
-		srvCfg.Version = globalMinioConfigVersion
-		srvCfg.Region = globalMinioDefaultRegion
-		srvCfg.Credential = newCredential()
+// newConfig - initialize a new server config, saves creds from env
+// if globalIsEnvCreds is set otherwise generates a new set of keys
+// and those are saved.
+func newConfig(envCreds credential) error {
+	// Initialize server config.
+	srvCfg := &serverConfigV13{}
+	srvCfg.Version = globalMinioConfigVersion
+	srvCfg.Region = globalMinioDefaultRegion
 
-		// Enable console logger by default on a fresh run.
-		srvCfg.Logger.Console = consoleLogger{
-			Enable: true,
-			Level:  "error",
-		}
-
-		// Make sure to initialize notification configs.
-		srvCfg.Notify.AMQP = make(map[string]amqpNotify)
-		srvCfg.Notify.AMQP["1"] = amqpNotify{}
-		srvCfg.Notify.ElasticSearch = make(map[string]elasticSearchNotify)
-		srvCfg.Notify.ElasticSearch["1"] = elasticSearchNotify{}
-		srvCfg.Notify.Redis = make(map[string]redisNotify)
-		srvCfg.Notify.Redis["1"] = redisNotify{}
-		srvCfg.Notify.NATS = make(map[string]natsNotify)
-		srvCfg.Notify.NATS["1"] = natsNotify{}
-		srvCfg.Notify.PostgreSQL = make(map[string]postgreSQLNotify)
-		srvCfg.Notify.PostgreSQL["1"] = postgreSQLNotify{}
-		srvCfg.Notify.Kafka = make(map[string]kafkaNotify)
-		srvCfg.Notify.Kafka["1"] = kafkaNotify{}
-		srvCfg.Notify.Webhook = make(map[string]webhookNotify)
-		srvCfg.Notify.Webhook["1"] = webhookNotify{}
-
-		// Create config path.
-		err := createConfigPath()
-		if err != nil {
-			return false, err
-		}
-
-		// hold the mutex lock before a new config is assigned.
-		// Save the new config globally.
-		// unlock the mutex.
-		serverConfigMu.Lock()
-		serverConfig = srvCfg
-		serverConfigMu.Unlock()
-
-		// Save config into file.
-		return true, serverConfig.Save()
+	// If env is set for a fresh start, save them to config file.
+	if globalIsEnvCreds {
+		srvCfg.SetCredential(envCreds)
+	} else {
+		srvCfg.SetCredential(newCredential())
 	}
 
+	// Enable console logger by default on a fresh run.
+	srvCfg.Logger.Console = consoleLogger{
+		Enable: true,
+		Level:  "error",
+	}
+
+	// Make sure to initialize notification configs.
+	srvCfg.Notify.AMQP = make(map[string]amqpNotify)
+	srvCfg.Notify.AMQP["1"] = amqpNotify{}
+	srvCfg.Notify.ElasticSearch = make(map[string]elasticSearchNotify)
+	srvCfg.Notify.ElasticSearch["1"] = elasticSearchNotify{}
+	srvCfg.Notify.Redis = make(map[string]redisNotify)
+	srvCfg.Notify.Redis["1"] = redisNotify{}
+	srvCfg.Notify.NATS = make(map[string]natsNotify)
+	srvCfg.Notify.NATS["1"] = natsNotify{}
+	srvCfg.Notify.PostgreSQL = make(map[string]postgreSQLNotify)
+	srvCfg.Notify.PostgreSQL["1"] = postgreSQLNotify{}
+	srvCfg.Notify.Kafka = make(map[string]kafkaNotify)
+	srvCfg.Notify.Kafka["1"] = kafkaNotify{}
+	srvCfg.Notify.Webhook = make(map[string]webhookNotify)
+	srvCfg.Notify.Webhook["1"] = webhookNotify{}
+
+	// Create config path.
+	if err := createConfigPath(); err != nil {
+		return err
+	}
+
+	// hold the mutex lock before a new config is assigned.
+	// Save the new config globally.
+	// unlock the mutex.
+	serverConfigMu.Lock()
+	serverConfig = srvCfg
+	serverConfigMu.Unlock()
+
+	// Save config into file.
+	return serverConfig.Save()
+}
+
+// loadConfig - loads a new config from disk, overrides creds from env
+// if globalIsEnvCreds is set otherwise serves the creds from loaded
+// from the disk.
+func loadConfig(envCreds credential) error {
 	configFile, err := getConfigFile()
 	if err != nil {
-		return false, err
+		return err
 	}
 
 	if _, err = os.Stat(configFile); err != nil {
-		return false, err
+		return err
 	}
 	srvCfg := &serverConfigV13{}
 	srvCfg.Version = globalMinioConfigVersion
 	qc, err := quick.New(srvCfg)
 	if err != nil {
-		return false, err
+		return err
 	}
 
 	if err = qc.Load(configFile); err != nil {
-		return false, err
+		return err
 	}
 
-	srvCfg.Credential, err = getCredential(srvCfg.Credential.AccessKey, srvCfg.Credential.SecretKey)
-	if err != nil {
-		return false, err
+	// If env is set override the credentials from config file.
+	if globalIsEnvCreds {
+		srvCfg.SetCredential(envCreds)
+	} else {
+		srvCfg.SetCredential(srvCfg.Credential)
 	}
 
 	// hold the mutex lock before a new config is assigned.
@@ -123,8 +134,7 @@ func initConfig() (bool, error) {
 
 	// Set the version properly after the unmarshalled json is loaded.
 	serverConfig.Version = globalMinioConfigVersion
-
-	return false, nil
+	return nil
 }
 
 // serverConfig server config.
@@ -347,7 +357,7 @@ func (s *serverConfigV13) SetCredential(creds credential) {
 	defer serverConfigMu.Unlock()
 
 	// Set updated credential.
-	s.Credential = creds
+	s.Credential = newCredentialWithKeys(creds.AccessKey, creds.SecretKey)
 }
 
 // GetCredentials get current credentials.

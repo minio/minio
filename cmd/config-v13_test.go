@@ -106,7 +106,7 @@ func TestServerConfig(t *testing.T) {
 	setGlobalConfigPath(rootPath)
 
 	// Initialize server config.
-	if _, err := initConfig(); err != nil {
+	if err := loadConfig(credential{}); err != nil {
 		t.Fatalf("Unable to initialize from updated config file %s", err)
 	}
 }

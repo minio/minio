@@ -610,7 +610,10 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrEntityTooLarge
 	case errDataTooSmall:
 		apiErr = ErrEntityTooSmall
-
+	case errInvalidAccessKeyLength:
+		apiErr = ErrAdminInvalidAccessKey
+	case errInvalidSecretKeyLength:
+		apiErr = ErrAdminInvalidSecretKey
 	}
 
 	if apiErr != ErrNone {

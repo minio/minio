@@ -496,6 +496,10 @@ func resetGlobalIsXL() {
 	globalIsXL = false
 }
 
+func resetGlobalIsEnvs() {
+	globalIsEnvCreds = false
+}
+
 // Resets all the globals used modified in tests.
 // Resetting ensures that the changes made to globals by one test doesn't affect others.
 func resetTestGlobals() {
@@ -513,6 +517,8 @@ func resetTestGlobals() {
 	resetGlobalEndpoints()
 	// Reset global isXL flag.
 	resetGlobalIsXL()
+	// Reset global isEnvCreds flag.
+	resetGlobalIsEnvs()
 }
 
 // Configure the server for the test run.
@@ -527,7 +533,7 @@ func newTestConfig(bucketLocation string) (rootPath string, err error) {
 	setGlobalConfigPath(rootPath)
 
 	// Initialize server config.
-	if _, err = initConfig(); err != nil {
+	if err = newConfig(credential{}); err != nil {
 		return "", err
 	}
 
@@ -1790,6 +1796,7 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, testName, bucketName, objectName, 
 	failTestStr := func(testType, failMsg string) string {
 		return fmt.Sprintf("Minio %s: %s fail for \"%s\": \n<Error> %s", instanceType, testType, testName, failMsg)
 	}
+
 	// httptest Recorder to capture all the response by the http handler.
 	rec := httptest.NewRecorder()
 	// reading the body to preserve it so that it can be used again for second attempt of sending unsigned HTTP request.
@@ -1941,8 +1948,10 @@ func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endpoints [
 	// reset globals.
 	// this is to make sure that the tests are not affected by modified value.
 	resetTestGlobals()
+
 	// initialize NSLock.
 	initNSLock(false)
+
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
 	rootPath, err := newTestConfig(globalMinioDefaultRegion)
@@ -2025,6 +2034,7 @@ func ExecObjectLayerDiskAlteredTest(t *testing.T, objTest objTestDiskNotFoundTyp
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for XL setup: %s", err)
 	}
+
 	// Executing the object layer tests for XL.
 	objTest(objLayer, XLTestStr, fsDirs, t)
 	defer removeRoots(fsDirs)

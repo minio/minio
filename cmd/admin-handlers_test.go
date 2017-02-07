@@ -43,6 +43,7 @@ type adminXLTestBed struct {
 func prepareAdminXLTestBed() (*adminXLTestBed, error) {
 	// reset global variables to start afresh.
 	resetTestGlobals()
+
 	// Initialize minio server config.
 	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
