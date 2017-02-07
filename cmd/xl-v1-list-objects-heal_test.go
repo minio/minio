@@ -25,6 +25,8 @@ import (
 // TestListObjectsHeal - Tests ListObjectsHeal API for XL
 func TestListObjectsHeal(t *testing.T) {
 
+	initNSLock(false)
+
 	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
@@ -49,15 +51,15 @@ func TestListObjectsHeal(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Put 500 objects under sane dir
-	for i := 0; i < 500; i++ {
+	// Put 5 objects under sane dir
+	for i := 0; i < 5; i++ {
 		_, err = xl.PutObject(bucketName, "sane/"+objName+strconv.Itoa(i), int64(len("abcd")), bytes.NewReader([]byte("abcd")), nil, "")
 		if err != nil {
 			t.Fatalf("XL Object upload failed: <ERROR> %s", err)
 		}
 	}
 	// Put 500 objects under unsane/subdir dir
-	for i := 0; i < 500; i++ {
+	for i := 0; i < 5; i++ {
 		_, err = xl.PutObject(bucketName, "unsane/subdir/"+objName+strconv.Itoa(i), int64(len("abcd")), bytes.NewReader([]byte("abcd")), nil, "")
 		if err != nil {
 			t.Fatalf("XL Object upload failed: <ERROR> %s", err)
@@ -106,7 +108,7 @@ func TestListObjectsHeal(t *testing.T) {
 
 	// Test ListObjectsHeal when all objects under unsane need healing
 	xlObj := xl.(*xlObjects)
-	for i := 0; i < 500; i++ {
+	for i := 0; i < 5; i++ {
 		if err = xlObj.storageDisks[0].DeleteFile(bucketName, "unsane/subdir/"+objName+strconv.Itoa(i)+"/xl.json"); err != nil {
 			t.Fatal(err)
 		}
@@ -116,21 +118,21 @@ func TestListObjectsHeal(t *testing.T) {
 
 	testCases = []testData{
 		// Test ListObjectsHeal when all objects under unsane/ need to be healed
-		{bucketName, "", "", "", 1000, nil, 500},
+		{bucketName, "", "", "", 1000, nil, 5},
 		// List objects heal under unsane/, should return all elements
-		{bucketName, "unsane/", "", "", 1000, nil, 500},
+		{bucketName, "unsane/", "", "", 1000, nil, 5},
 		// List healing objects under sane/, should return 0
 		{bucketName, "sane/", "", "", 1000, nil, 0},
 		// Max Keys == 200
-		{bucketName, "unsane/", "", "", 200, nil, 200},
+		{bucketName, "unsane/", "", "", 2, nil, 2},
 		// Max key > 1000
-		{bucketName, "unsane/", "", "", 5000, nil, 500},
+		{bucketName, "unsane/", "", "", 5000, nil, 5},
 		// Prefix == Delimiter == "/"
-		{bucketName, "/", "", "/", 5000, nil, 0},
+		{bucketName, "/", "", "/", 1000, nil, 0},
 		// Max Keys == 0
 		{bucketName, "", "", "", 0, nil, 0},
 		// Testing with marker parameter
-		{bucketName, "", "unsane/subdir/" + objName + "0", "", 1000, nil, 499},
+		{bucketName, "", "unsane/subdir/" + objName + "0", "", 1000, nil, 4},
 	}
 	for i, testCase := range testCases {
 		testFunc(testCase, i+1)
