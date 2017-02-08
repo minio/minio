@@ -47,7 +47,7 @@ func setMaxOpenFiles() error {
 // by the user. This is done to honor the system limits and not crash.
 func setMaxMemory() error {
 	var rLimit syscall.Rlimit
-	err := syscall.Getrlimit(syscall.RLIMIT_CORE, &rLimit)
+	err := syscall.Getrlimit(syscall.RLIMIT_DATA, &rLimit)
 	if err != nil {
 		return err
 	}
@@ -55,11 +55,11 @@ func setMaxMemory() error {
 	// TO decrease this limit further user has to manually edit
 	// `/etc/security/limits.conf`
 	rLimit.Cur = rLimit.Max
-	err = syscall.Setrlimit(syscall.RLIMIT_CORE, &rLimit)
+	err = syscall.Setrlimit(syscall.RLIMIT_DATA, &rLimit)
 	if err != nil {
 		return err
 	}
-	err = syscall.Getrlimit(syscall.RLIMIT_CORE, &rLimit)
+	err = syscall.Getrlimit(syscall.RLIMIT_DATA, &rLimit)
 	if err != nil {
 		return err
 	}
