@@ -1,4 +1,4 @@
-//  +build !windows,!plan9
+//  +build !windows,!plan9,!openbsd
 
 /*
  * Minio Cloud Storage, (C) 2016 Minio, Inc.

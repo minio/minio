@@ -24,6 +24,22 @@ import (
 	"github.com/minio/minio/pkg/sys"
 )
 
+// For all unixes we need to bump allowed number of open files to a
+// higher value than its usual default of '1024'. The reasoning is
+// that this value is too small for a server.
+func setMaxOpenFiles() error {
+	var rLimit syscall.Rlimit
+	err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, &rLimit)
+	if err != nil {
+		return err
+	}
+	// Set the current limit to Max, it is usually around 4096.
+	// TO increase this limit further user has to manually edit
+	// `/etc/security/limits.conf`
+	rLimit.Cur = rLimit.Max
+	return syscall.Setrlimit(syscall.RLIMIT_NOFILE, &rLimit)
+}
+
 // Set max memory used by minio as a process, this value is usually
 // set to 'unlimited' but we need to validate additionally to verify
 // if any hard limit is set by the user, in such a scenario would need
