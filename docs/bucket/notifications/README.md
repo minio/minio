@@ -503,11 +503,15 @@ mc mb myminio/images
 mc mb myminio/images-thumbnail
 mc events add myminio/images arn:minio:sqs:us-east-1:1:webhook — events put — suffix .jpg
 ```
+
 Check if event notification is successfully configured by 
+
 ```
 mc events list myminio/images
 ```
+
 You should get a response like this
+
 ```
 arn:minio:sqs:us-east-1:1:webhook   s3:ObjectCreated:*   Filter: suffix=".jpg"
 ```
