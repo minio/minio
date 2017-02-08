@@ -20,6 +20,14 @@ package disk
 
 import "syscall"
 
+func b2s(bs []int8) string {
+	b := make([]byte, len(bs))
+	for i, v := range bs {
+		b[i] = byte(v)
+	}
+	return string(b)
+}
+
 // getFSType returns the filesystem type of the underlying mounted filesystem
 func getFSType(path string) (string, error) {
 	s := syscall.Statfs_t{}
@@ -27,10 +35,6 @@ func getFSType(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	// F_fstypename's type is []int8
-	fsTypeBytes := []byte{}
-	for _, i := range s.F_fstypename {
-		fsTypeBytes = append(fsTypeBytes, byte(i))
-	}
-	return string(fsTypeBytes), nil
+
+	return b2s(s.F_fstypename), nil
 }
