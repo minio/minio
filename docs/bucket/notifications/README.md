@@ -483,7 +483,7 @@ kafkacat -b localhost:9092 -t bucketevents
 
 ### Step 1: Add Webhook endpoint to Minio
 
-The default location of Minio server configuration file is ``~/.minio/config.json``. Update the Webhook configuration block in ``config.json`` as follows:
+The default location of Minio server configuration file is ``~/.minio/config.json``. Update the Webhook configuration block in ``config.json`` as follows
 
 ```
 "webhook": {
@@ -492,45 +492,52 @@ The default location of Minio server configuration file is ``~/.minio/config.jso
     "endpoint": "http://localhost:3000/"
 }
 ```
-Then restart the Minio server. Note that the endpoint needs to be live and reachable when you restart your Minio server.
+Here the endpoint is the server listening for webhook notifications. Save the file and restart the Minio server for changes to take effect. Note that the endpoint needs to be live and reachable when you restart your Minio server.
 
 ### Step 2: Enable bucket notification using Minio client
 
-We will enable bucket event notification to trigger whenever a JPEG image is uploaded or deleted from ``images`` bucket on ``myminio`` server. Here ARN value is ``arn:minio:sqs:us-east-1:1:webhook``. To understand more about ARN please follow [AWS ARN](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html) documentation.
+We will enable bucket event notification to trigger whenever a JPEG image is uploaded to ``images`` bucket on ``myminio`` server. Here ARN value is ``arn:minio:sqs:us-east-1:1:webhook``. To learn more about ARN please follow [AWS ARN](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html) documentation.
 
 ```
 mc mb myminio/images
+mc mb myminio/images-thumbnail
 mc events add myminio/images arn:minio:sqs:us-east-1:1:webhook — events put — suffix .jpg
+```
+Check if event notification is successfully configured by 
+```
 mc events list myminio/images
+```
+You should get a response like this
+```
+arn:minio:sqs:us-east-1:1:webhook   s3:ObjectCreated:*   Filter: suffix=".jpg"
 ```
 
 ### Step 3: Test with Thumbnailer
 
-We used [Thumbnailer](https://github.com/minio/thumbnailer) to listen for Minio notifications when a new JPEG file is loaded. Based on the notifications, Thumbnailer uploads a thumbnail of new image to Minio server. To start with, download and install Thumbnailer.
+We used [Thumbnailer](https://github.com/minio/thumbnailer) to listen for Minio notifications when a new JPEG file is uploaded (HTTP PUT). Triggered by a notification, Thumbnailer uploads a thumbnail of new image to Minio server. To start with, download and install Thumbnailer.
 
 ```
 git clone https://github.com/minio/thumbnailer/
 npm install
 ```
 
-Then open the Thumbnailer config file at ``config/default.json`` and add the configuration for your Minio server and then start the code by
+Then open the Thumbnailer config file at ``config/webhook.json`` and add the configuration for your Minio server and then start Thumbnailer by
 
 ```
 NODE_ENV=webhook node thumbnail-webhook.js
 ```
 
-Thumbnailer starts running at ``http://localhost:3000/``. Next, configure the Minio server to send notifications to this URL (as mentioned in previous step). Then upload a JPEG image to Minio server, 
+Thumbnailer starts running at ``http://localhost:3000/``. Next, configure the Minio server to send notifications to this URL (as mentioned in step 1) and use ``mc`` to set up bucket notifications (as mentioned in step 2). Then upload a JPEG image to Minio server by
 
 ```
-mc cp san-francisco.jpg myminio/images
+mc cp ~/images.jpg myminio/images
+.../images.jpg:  8.31 KB / 8.31 KB ┃▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓┃ 100.00% 59.42 KB/s 0s
 ```
 Wait a few moments, then check the bucket’s contents with mc ls — you will see a thumbnail appear.
 
 ```
-mc ls myminio/images
-
-san-francisco.jpg
-san-francisco-thumbnail.jpg
+mc ls myminio/images-thumbnail
+[2017-02-08 11:39:40 IST]   992B images-thumbnail.jpg
 ```
 
 
