@@ -1,7 +1,7 @@
-// +build darwin dragonfly freebsd linux netbsd
+// +build openbsd
 
 /*
- * Minio Cloud Storage, (C) 2015 Minio, Inc.
+ * Minio Cloud Storage, (C) 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,25 +18,19 @@
 
 package disk
 
-import (
-	"syscall"
-)
+import "syscall"
 
-// GetInfo returns total and free bytes available in a directory, e.g. `/`.
-func GetInfo(path string) (info Info, err error) {
+// getFSType returns the filesystem type of the underlying mounted filesystem
+func getFSType(path string) (string, error) {
 	s := syscall.Statfs_t{}
-	err = syscall.Statfs(path, &s)
+	err := syscall.Statfs(path, &s)
 	if err != nil {
-		return Info{}, err
+		return "", err
 	}
-	info = Info{}
-	info.Total = int64(s.Bsize) * int64(s.Blocks)
-	info.Free = int64(s.Bsize) * int64(s.Bavail)
-	info.Files = int64(s.Files)
-	info.Ffree = int64(s.Ffree)
-	info.FSType, err = getFSType(path)
-	if err != nil {
-		return Info{}, err
+	// F_fstypename's type is []int8
+	fsTypeBytes := []byte{}
+	for _, i := range s.F_fstypename {
+		fsTypeBytes = append(fsTypeBytes, byte(i))
 	}
-	return info, nil
+	return string(fsTypeBytes), nil
 }
