@@ -25,6 +25,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"time"
 )
 
 // BackendType - represents different backend types.
@@ -70,6 +71,7 @@ type ServerVersion struct {
 type ServiceStatusMetadata struct {
 	StorageInfo   StorageInfo   `json:"storageInfo"`
 	ServerVersion ServerVersion `json:"serverVersion"`
+	Uptime        time.Duration `json:"uptime"`
 }
 
 // ServiceStatus - Connect to a minio server and call Service Status Management API

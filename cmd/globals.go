@@ -124,8 +124,12 @@ var (
 
 	// Global server's network statistics
 	globalConnStats = newConnStats()
+
 	// Global HTTP request statisitics
 	globalHTTPStats = newHTTPStats()
+
+	// Time when object layer was initialized on start up.
+	globalBootTime time.Time
 
 	// Add new variable global values here.
 )

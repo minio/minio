@@ -25,6 +25,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"testing"
+	"time"
 
 	router "github.com/gorilla/mux"
 )
@@ -54,6 +55,9 @@ func prepareAdminXLTestBed() (*adminXLTestBed, error) {
 	if xlErr != nil {
 		return nil, xlErr
 	}
+
+	// Initialize boot time
+	globalBootTime = time.Now().UTC()
 
 	// Set globalEndpoints for a single node XL setup.
 	for _, xlDir := range xlDirs {
@@ -225,14 +229,13 @@ func testServicesCmdHandler(cmd cmdType, t *testing.T) {
 
 	if cmd == statusCmd {
 		expectedInfo := ServerStatus{
-			StorageInfo:   newObjectLayerFn().StorageInfo(),
 			ServerVersion: ServerVersion{Version: Version, CommitID: CommitID},
 		}
 		receivedInfo := ServerStatus{}
 		if jsonErr := json.Unmarshal(rec.Body.Bytes(), &receivedInfo); jsonErr != nil {
 			t.Errorf("Failed to unmarshal StorageInfo - %v", jsonErr)
 		}
-		if expectedInfo != receivedInfo {
+		if expectedInfo.ServerVersion != receivedInfo.ServerVersion {
 			t.Errorf("Expected storage info and received storage info differ, %v %v", expectedInfo, receivedInfo)
 		}
 	}

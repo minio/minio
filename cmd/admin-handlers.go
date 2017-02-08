@@ -19,7 +19,6 @@ package cmd
 import (
 	"encoding/json"
 	"encoding/xml"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -54,8 +53,8 @@ type ServerVersion struct {
 
 // ServerStatus - contains the response of service status API
 type ServerStatus struct {
-	StorageInfo   StorageInfo   `json:"storageInfo"`
 	ServerVersion ServerVersion `json:"serverVersion"`
+	Uptime        time.Duration `json:"uptime"`
 }
 
 // ServiceStatusHandler - GET /?service
@@ -70,15 +69,22 @@ func (adminAPI adminAPIHandlers) ServiceStatusHandler(w http.ResponseWriter, r *
 		return
 	}
 
-	// Fetch storage backend information
-	storageInfo := newObjectLayerFn().StorageInfo()
 	// Fetch server version
 	serverVersion := ServerVersion{Version: Version, CommitID: CommitID}
 
+	// Fetch uptimes from all peers. This may fail to due to lack
+	// of read-quorum availability.
+	uptime, err := getPeerUptimes(globalAdminPeers)
+	if err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		errorIf(err, "Possibly failed to get uptime from majority of servers.")
+		return
+	}
+
 	// Create API response
 	serverStatus := ServerStatus{
-		StorageInfo:   storageInfo,
 		ServerVersion: serverVersion,
+		Uptime:        uptime,
 	}
 
 	// Marshal API response
@@ -542,7 +548,6 @@ func (adminAPI adminAPIHandlers) HealFormatHandler(w http.ResponseWriter, r *htt
 	// Create a new set of storage instances to heal format.json.
 	bootstrapDisks, err := initStorageDisks(globalEndpoints)
 	if err != nil {
-		fmt.Println(traceError(err))
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -550,7 +555,6 @@ func (adminAPI adminAPIHandlers) HealFormatHandler(w http.ResponseWriter, r *htt
 	// Heal format.json on available storage.
 	err = healFormatXL(bootstrapDisks)
 	if err != nil {
-		fmt.Println(traceError(err))
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -558,7 +562,6 @@ func (adminAPI adminAPIHandlers) HealFormatHandler(w http.ResponseWriter, r *htt
 	// Instantiate new object layer with newly formatted storage.
 	newObjectAPI, err := newXLObjects(bootstrapDisks)
 	if err != nil {
-		fmt.Println(traceError(err))
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
