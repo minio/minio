@@ -1,4 +1,4 @@
-// +build openbsd
+// +build darwin freebsd dragonfly openbsd
 
 /*
  * Minio Cloud Storage, (C) 2017 Minio, Inc.
@@ -18,23 +18,7 @@
 
 package disk
 
-import "syscall"
-
-func b2s(bs []int8) string {
-	b := make([]byte, len(bs))
-	for i, v := range bs {
-		b[i] = byte(v)
-	}
-	return string(b)
-}
-
 // getFSType returns the filesystem type of the underlying mounted filesystem
-func getFSType(path string) (string, error) {
-	s := syscall.Statfs_t{}
-	err := syscall.Statfs(path, &s)
-	if err != nil {
-		return "", err
-	}
-
-	return b2s(s.F_fstypename), nil
+func getFSType(fstype [16]int8) string {
+	return b2s(fstype[:])
 }

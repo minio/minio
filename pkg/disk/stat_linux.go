@@ -1,7 +1,7 @@
-// +build darwin dragonfly freebsd linux netbsd
+// +build linux
 
 /*
- * Minio Cloud Storage, (C) 2015 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,9 +34,6 @@ func GetInfo(path string) (info Info, err error) {
 	info.Free = int64(s.Bsize) * int64(s.Bavail)
 	info.Files = int64(s.Files)
 	info.Ffree = int64(s.Ffree)
-	info.FSType, err = getFSType(path)
-	if err != nil {
-		return Info{}, err
-	}
+	info.FSType = getFSType(int64(s.Type))
 	return info, nil
 }

@@ -97,7 +97,7 @@ assert_is_supported_arch() {
 
 assert_is_supported_os() {
     case "${KNAME}" in
-        Linux | FreeBSD | OpenBSD )
+        Linux | FreeBSD | OpenBSD | NetBSD | DragonFly )
             return
             ;;
         Darwin )
@@ -113,7 +113,7 @@ assert_is_supported_os() {
         *)
             echo "ERROR"
             echo "OS '${KNAME}' is not supported."
-            echo "Supported OS: [Linux, FreeBSD, OpenBSD, Darwin]"
+            echo "Supported OS: [Linux, FreeBSD, OpenBSD, NetBSD, Darwin, DragonFly]"
             exit 1
     esac
 }

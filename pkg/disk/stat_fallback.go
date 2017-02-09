@@ -1,4 +1,4 @@
-// +build openbsd
+// +build netbsd solaris
 
 /*
  * Minio Cloud Storage, (C) 2017 Minio, Inc.
@@ -18,22 +18,7 @@
 
 package disk
 
-import (
-	"syscall"
-)
-
 // GetInfo returns total and free bytes available in a directory, e.g. `/`.
 func GetInfo(path string) (info Info, err error) {
-	s := syscall.Statfs_t{}
-	err = syscall.Statfs(path, &s)
-	if err != nil {
-		return Info{}, err
-	}
-	info = Info{}
-	info.Total = int64(s.F_bsize) * int64(s.F_blocks)
-	info.Free = int64(s.F_bsize) * int64(s.F_bavail)
-	info.Files = int64(s.F_files)
-	info.Ffree = int64(s.F_ffree)
-	info.FSType = getFSType(s.F_fstypename)
-	return info, nil
+	return Info{}, nil
 }

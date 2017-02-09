@@ -18,10 +18,7 @@
 
 package disk
 
-import (
-	"strconv"
-	"syscall"
-)
+import "strconv"
 
 // fsType2StrinMap - list of filesystems supported by donut
 var fsType2StringMap = map[string]string{
@@ -29,16 +26,11 @@ var fsType2StringMap = map[string]string{
 }
 
 // getFSType returns the filesystem type of the underlying mounted filesystem
-func getFSType(path string) (string, error) {
-	s := syscall.Statfs_t{}
-	err := syscall.Statfs(path, &s)
-	if err != nil {
-		return "", err
-	}
-	fsTypeHex := strconv.FormatUint(uint64(s.Type), 16)
+func getFSType(ftype int64) string {
+	fsTypeHex := strconv.FormatInt(ftype, 16)
 	fsTypeString, ok := fsType2StringMap[fsTypeHex]
 	if !ok {
-		return "UNKNOWN", nil
+		return "UNKNOWN"
 	}
-	return fsTypeString, nil
+	return fsTypeString
 }
