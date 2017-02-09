@@ -59,7 +59,7 @@ func dialAMQP(amqpL amqpNotify) (amqpConn, error) {
 }
 
 func newAMQPNotify(accountID string) (*logrus.Logger, error) {
-	amqpL := serverConfig.GetAMQPNotifyByID(accountID)
+	amqpL := serverConfig.Notify.GetAMQPByID(accountID)
 
 	// Connect to amqp server.
 	amqpC, err := dialAMQP(amqpL)

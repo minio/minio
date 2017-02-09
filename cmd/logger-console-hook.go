@@ -26,7 +26,7 @@ type consoleLogger struct {
 
 // enable console logger.
 func enableConsoleLogger() {
-	clogger := serverConfig.GetConsoleLogger()
+	clogger := serverConfig.Logger.GetConsole()
 	if !clogger.Enable {
 		return
 	}

@@ -52,7 +52,7 @@ func lookupEndpoint(u *url.URL) error {
 
 // Initializes new webhook logrus notifier.
 func newWebhookNotify(accountID string) (*logrus.Logger, error) {
-	rNotify := serverConfig.GetWebhookNotifyByID(accountID)
+	rNotify := serverConfig.Notify.GetWebhookByID(accountID)
 
 	if rNotify.Endpoint == "" {
 		return nil, errInvalidArgument

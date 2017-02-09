@@ -40,54 +40,54 @@ func TestServerConfig(t *testing.T) {
 	}
 
 	// Set new amqp notification id.
-	serverConfig.SetAMQPNotifyByID("2", amqpNotify{})
-	savedNotifyCfg1 := serverConfig.GetAMQPNotifyByID("2")
+	serverConfig.Notify.SetAMQPByID("2", amqpNotify{})
+	savedNotifyCfg1 := serverConfig.Notify.GetAMQPByID("2")
 	if !reflect.DeepEqual(savedNotifyCfg1, amqpNotify{}) {
 		t.Errorf("Expecting AMQP config %#v found %#v", amqpNotify{}, savedNotifyCfg1)
 	}
 
 	// Set new elastic search notification id.
-	serverConfig.SetElasticSearchNotifyByID("2", elasticSearchNotify{})
-	savedNotifyCfg2 := serverConfig.GetElasticSearchNotifyByID("2")
+	serverConfig.Notify.SetElasticSearchByID("2", elasticSearchNotify{})
+	savedNotifyCfg2 := serverConfig.Notify.GetElasticSearchByID("2")
 	if !reflect.DeepEqual(savedNotifyCfg2, elasticSearchNotify{}) {
 		t.Errorf("Expecting Elasticsearch config %#v found %#v", elasticSearchNotify{}, savedNotifyCfg2)
 	}
 
 	// Set new redis notification id.
-	serverConfig.SetRedisNotifyByID("2", redisNotify{})
-	savedNotifyCfg3 := serverConfig.GetRedisNotifyByID("2")
+	serverConfig.Notify.SetRedisByID("2", redisNotify{})
+	savedNotifyCfg3 := serverConfig.Notify.GetRedisByID("2")
 	if !reflect.DeepEqual(savedNotifyCfg3, redisNotify{}) {
 		t.Errorf("Expecting Redis config %#v found %#v", redisNotify{}, savedNotifyCfg3)
 	}
 
 	// Set new kafka notification id.
-	serverConfig.SetKafkaNotifyByID("2", kafkaNotify{})
-	savedNotifyCfg4 := serverConfig.GetKafkaNotifyByID("2")
+	serverConfig.Notify.SetKafkaByID("2", kafkaNotify{})
+	savedNotifyCfg4 := serverConfig.Notify.GetKafkaByID("2")
 	if !reflect.DeepEqual(savedNotifyCfg4, kafkaNotify{}) {
 		t.Errorf("Expecting Kafka config %#v found %#v", kafkaNotify{}, savedNotifyCfg4)
 	}
 
 	// Set new Webhook notification id.
-	serverConfig.SetWebhookNotifyByID("2", webhookNotify{})
-	savedNotifyCfg5 := serverConfig.GetWebhookNotifyByID("2")
+	serverConfig.Notify.SetWebhookByID("2", webhookNotify{})
+	savedNotifyCfg5 := serverConfig.Notify.GetWebhookByID("2")
 	if !reflect.DeepEqual(savedNotifyCfg5, webhookNotify{}) {
 		t.Errorf("Expecting Webhook config %#v found %#v", webhookNotify{}, savedNotifyCfg3)
 	}
 
 	// Set new console logger.
-	serverConfig.SetConsoleLogger(consoleLogger{
+	serverConfig.Logger.SetConsole(consoleLogger{
 		Enable: true,
 	})
-	consoleCfg := serverConfig.GetConsoleLogger()
+	consoleCfg := serverConfig.Logger.GetConsole()
 	if !reflect.DeepEqual(consoleCfg, consoleLogger{Enable: true}) {
 		t.Errorf("Expecting console logger config %#v found %#v", consoleLogger{Enable: true}, consoleCfg)
 	}
 
 	// Set new file logger.
-	serverConfig.SetFileLogger(fileLogger{
+	serverConfig.Logger.SetFile(fileLogger{
 		Enable: true,
 	})
-	fileCfg := serverConfig.GetFileLogger()
+	fileCfg := serverConfig.Logger.GetFile()
 	if !reflect.DeepEqual(fileCfg, fileLogger{Enable: true}) {
 		t.Errorf("Expecting file logger config %#v found %#v", fileLogger{Enable: true}, consoleCfg)
 	}
