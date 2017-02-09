@@ -83,6 +83,7 @@ const (
 	ErrInvalidPartOrder
 	ErrAuthorizationHeaderMalformed
 	ErrMalformedPOSTRequest
+	ErrPOSTFileRequired
 	ErrSignatureVersionNotSupported
 	ErrBucketNotEmpty
 	ErrAllAccessDisabled
@@ -331,6 +332,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	ErrMalformedPOSTRequest: {
 		Code:           "MalformedPOSTRequest",
 		Description:    "The body of your POST request is not well-formed multipart/form-data.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrPOSTFileRequired: {
+		Code:           "InvalidArgument",
+		Description:    "POST requires exactly one file upload per request.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrSignatureVersionNotSupported: {

@@ -428,6 +428,12 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		return
 	}
 
+	// Check if file is provided, error out otherwise.
+	if fileBody == nil {
+		writeErrorResponse(w, ErrPOSTFileRequired, r.URL)
+		return
+	}
+
 	// Close multipart file
 	defer fileBody.Close()
 

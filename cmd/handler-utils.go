@@ -167,7 +167,7 @@ func extractPostPolicyFormValues(form *multipart.Form) (filePart io.ReadCloser, 
 		canonicalFormName := http.CanonicalHeaderKey(k)
 		// Check if value's field exceeds S3 limit
 		if int64(len(v[0])) > maxFormFieldSize {
-			return nil, "", 0, nil, errSizeUnexpected
+			return nil, "", 0, nil, traceError(errSizeUnexpected)
 		}
 		// Set the form value
 		formValues[canonicalFormName] = v[0]
@@ -178,7 +178,7 @@ func extractPostPolicyFormValues(form *multipart.Form) (filePart io.ReadCloser, 
 		canonicalFormName := http.CanonicalHeaderKey(k)
 		if canonicalFormName == "File" {
 			if len(v) == 0 {
-				return nil, "", 0, nil, errInvalidArgument
+				return nil, "", 0, nil, traceError(errInvalidArgument)
 			}
 			// Fetch fileHeader which has the uploaded file information
 			fileHeader := v[0]
@@ -186,15 +186,18 @@ func extractPostPolicyFormValues(form *multipart.Form) (filePart io.ReadCloser, 
 			fileName = fileHeader.Filename
 			// Open the uploaded part
 			filePart, err = fileHeader.Open()
+			if err != nil {
+				return nil, "", 0, nil, traceError(err)
+			}
 			// Compute file size
 			fileSize, err = filePart.(io.Seeker).Seek(0, 2)
 			if err != nil {
-				return nil, "", 0, nil, err
+				return nil, "", 0, nil, traceError(err)
 			}
 			// Reset Seek to the beginning
 			_, err = filePart.(io.Seeker).Seek(0, 0)
 			if err != nil {
-				return nil, "", 0, nil, err
+				return nil, "", 0, nil, traceError(err)
 			}
 			// File found and ready for reading
 			break
