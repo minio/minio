@@ -17,9 +17,14 @@
 package cmd
 
 import (
+	"archive/zip"
 	"bytes"
+	"crypto/md5"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -793,6 +798,89 @@ func testDownloadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandl
 
 	if bytes.Compare(bodyContent, content) != 0 {
 		t.Fatalf("The downloaded file is corrupted")
+	}
+}
+
+// Test web.DownloadZip
+func TestWebHandlerDownloadZip(t *testing.T) {
+	ExecObjectLayerTest(t, testWebHandlerDownloadZip)
+}
+
+func testWebHandlerDownloadZip(obj ObjectLayer, instanceType string, t TestErrHandler) {
+	apiRouter := initTestWebRPCEndPoint(obj)
+	credentials := serverConfig.GetCredential()
+
+	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
+	if err != nil {
+		t.Fatal("Cannot authenticate")
+	}
+
+	bucket := getRandomBucketName()
+	fileOne := "aaaaaaaaaaaaaa"
+	fileTwo := "bbbbbbbbbbbbbb"
+	fileThree := "cccccccccccccc"
+
+	// Create bucket.
+	err = obj.MakeBucket(bucket)
+	if err != nil {
+		// failed to create newbucket, abort.
+		t.Fatalf("%s : %s", instanceType, err)
+	}
+
+	obj.PutObject(bucket, "a/one", int64(len(fileOne)), strings.NewReader(fileOne), nil, "")
+	obj.PutObject(bucket, "a/b/two", int64(len(fileTwo)), strings.NewReader(fileTwo), nil, "")
+	obj.PutObject(bucket, "a/c/three", int64(len(fileThree)), strings.NewReader(fileThree), nil, "")
+
+	test := func(token string) (int, []byte) {
+		rec := httptest.NewRecorder()
+		path := "/minio/zip" + "?token="
+		if token != "" {
+			path = path + token
+		}
+		args := DownloadZipArgs{
+			Objects:    []string{"one", "b/", "c/"},
+			Prefix:     "a/",
+			BucketName: bucket,
+		}
+
+		var argsData []byte
+		argsData, err = json.Marshal(args)
+		if err != nil {
+			return 0, nil
+		}
+		var req *http.Request
+		req, err = http.NewRequest("GET", path, bytes.NewBuffer(argsData))
+
+		if err != nil {
+			t.Fatalf("Cannot create upload request, %v", err)
+		}
+
+		apiRouter.ServeHTTP(rec, req)
+		return rec.Code, rec.Body.Bytes()
+	}
+	code, data := test("")
+	if code != 403 {
+		t.Fatal("Expected to receive authentication error")
+	}
+	code, data = test(authorization)
+	if code != 200 {
+		t.Fatal("web.DownloadsZip() failed")
+	}
+	reader, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := md5.New()
+	for _, file := range reader.File {
+		fileReader, err := file.Open()
+		if err != nil {
+			t.Fatal(err)
+		}
+		io.Copy(h, fileReader)
+	}
+	// Verify the md5 of the response.
+	if hex.EncodeToString(h.Sum(nil)) != "ac7196449b14bea42775d29e8bb29f50" {
+		t.Fatal("Incorrect zip contents")
 	}
 }
 

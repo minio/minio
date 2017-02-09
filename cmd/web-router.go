@@ -84,6 +84,7 @@ func registerWebRouter(mux *router.Router) error {
 	webBrowserRouter.Methods("POST").Path("/webrpc").Handler(webRPC)
 	webBrowserRouter.Methods("PUT").Path("/upload/{bucket}/{object:.+}").HandlerFunc(web.Upload)
 	webBrowserRouter.Methods("GET").Path("/download/{bucket}/{object:.+}").Queries("token", "{token:.*}").HandlerFunc(web.Download)
+	webBrowserRouter.Methods("GET").Path("/zip").Queries("token", "{token:.*}").HandlerFunc(web.DownloadZip)
 
 	// Add compression for assets.
 	compressedAssets := handlers.CompressHandler(http.StripPrefix(reservedBucket, http.FileServer(assetFS())))

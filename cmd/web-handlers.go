@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"archive/zip"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -527,6 +528,91 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	if err := objectAPI.GetObject(bucket, object, 0, -1, w); err != nil {
 		/// No need to print error, response writer already written to.
 		return
+	}
+}
+
+// DownloadZipArgs - Argument for downloading a bunch of files as a zip file.
+// JSON will look like:
+// '{"bucketname":"testbucket","prefix":"john/pics/","objects":["hawaii/","maldives/","sanjose.jpg"]}'
+type DownloadZipArgs struct {
+	Objects    []string `json:"objects"`    // can be files or sub-directories
+	Prefix     string   `json:"prefix"`     // current directory in the browser-ui
+	BucketName string   `json:"bucketname"` // bucket name.
+}
+
+// Takes a list of objects and creates a zip file that sent as the response body.
+func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
+	objectAPI := web.ObjectAPI()
+	if objectAPI == nil {
+		writeWebErrorResponse(w, errServerNotInitialized)
+		return
+	}
+
+	token := r.URL.Query().Get("token")
+
+	if !isAuthTokenValid(token) {
+		writeWebErrorResponse(w, errAuthentication)
+		return
+	}
+	var args DownloadZipArgs
+	decodeErr := json.NewDecoder(r.Body).Decode(&args)
+	if decodeErr != nil {
+		writeWebErrorResponse(w, decodeErr)
+		return
+	}
+
+	archive := zip.NewWriter(w)
+	defer archive.Close()
+
+	for _, object := range args.Objects {
+		// Writes compressed object file to the response.
+		zipit := func(objectName string) error {
+			info, err := objectAPI.GetObjectInfo(args.BucketName, objectName)
+			if err != nil {
+				return err
+			}
+			header := &zip.FileHeader{
+				Name:               strings.TrimPrefix(objectName, args.Prefix),
+				Method:             zip.Deflate,
+				UncompressedSize64: uint64(info.Size),
+				UncompressedSize:   uint32(info.Size),
+			}
+			writer, err := archive.CreateHeader(header)
+			if err != nil {
+				writeWebErrorResponse(w, errUnexpected)
+				return err
+			}
+			return objectAPI.GetObject(args.BucketName, objectName, 0, info.Size, writer)
+		}
+
+		if !strings.HasSuffix(object, "/") {
+			// If not a directory, compress the file and write it to response.
+			err := zipit(pathJoin(args.Prefix, object))
+			if err != nil {
+				return
+			}
+			continue
+		}
+
+		// For directories, list the contents recursively and write the objects as compressed
+		// date to the response writer.
+		marker := ""
+		for {
+			lo, err := objectAPI.ListObjects(args.BucketName, pathJoin(args.Prefix, object), marker, "", 1000)
+			if err != nil {
+				return
+			}
+			marker = lo.NextMarker
+			for _, obj := range lo.Objects {
+				err = zipit(obj.Name)
+				if err != nil {
+					return
+				}
+			}
+			if !lo.IsTruncated {
+				break
+			}
+		}
 	}
 }
 
