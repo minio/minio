@@ -47,6 +47,7 @@ import * as mime from '../mime'
 import { minioBrowserPrefix } from '../constants'
 import CopyToClipboard from 'react-copy-to-clipboard'
 import storage from 'local-storage-fallback'
+import InfiniteScroll from 'react-infinite-scroller';
 
 export default class Browse extends React.Component {
   componentDidMount() {
@@ -110,9 +111,6 @@ export default class Browse extends React.Component {
       if (!decPathname.endsWith('/'))
         decPathname += '/'
       if (decPathname === minioBrowserPrefix + '/') {
-        dispatch(actions.setCurrentBucket(''))
-        dispatch(actions.setCurrentPath(''))
-        dispatch(actions.setObjects([]))
         return
       }
       let obj = utils.pathSlice(decPathname)
@@ -138,6 +136,11 @@ export default class Browse extends React.Component {
     e.preventDefault()
     let {buckets} = this.props
     this.props.dispatch(actions.setVisibleBuckets(buckets.filter(bucket => bucket.indexOf(e.target.value) > -1)))
+  }
+
+  listObjects() {
+    const {dispatch} = this.props
+    dispatch(actions.listObjects())
   }
 
   selectPrefix(e, prefix) {
@@ -231,7 +234,7 @@ export default class Browse extends React.Component {
     })
       .then(() => {
         this.hideDeleteConfirmation()
-        dispatch(actions.selectPrefix(currentPath))
+        dispatch(actions.removeObject(deleteConfirmation.object))
       })
       .catch(e => dispatch(actions.showAlert({
         type: 'danger',
@@ -360,7 +363,6 @@ export default class Browse extends React.Component {
     }
   }
 
-
   render() {
     const {total, free} = this.props.storageInfo
     const {showMakeBucketModal, alert, sortNameOrder, sortSizeOrder, sortDateOrder, showAbout, showBucketPolicy} = this.props
@@ -370,7 +372,7 @@ export default class Browse extends React.Component {
     const {policies, currentBucket, currentPath} = this.props
     const {deleteConfirmation} = this.props
     const {shareObject} = this.props
-    const {web, prefixWritable} = this.props
+    const {web, prefixWritable, istruncated} = this.props
 
     // Don't always show the SettingsModal. This is done here instead of in
     // SettingsModal.js so as to allow for #componentWillMount to handle
@@ -476,7 +478,6 @@ export default class Browse extends React.Component {
                            </OverlayTrigger>
                          </Dropdown.Menu>
                        </Dropdown>
-
     }
 
     return (
@@ -545,10 +546,18 @@ export default class Browse extends React.Component {
               </header>
             </div>
             <div className="feb-container">
-              <ObjectsList dataType={ this.dataType.bind(this) }
-                selectPrefix={ this.selectPrefix.bind(this) }
-                showDeleteConfirmation={ this.showDeleteConfirmation.bind(this) }
-                shareObject={ this.shareObject.bind(this) } />
+              <InfiniteScroll loadMore={ this.listObjects.bind(this) }
+                hasMore={ istruncated }
+                useWindow={ true }
+                initialLoad={ false }>
+                <ObjectsList dataType={ this.dataType.bind(this) }
+                  selectPrefix={ this.selectPrefix.bind(this) }
+                  showDeleteConfirmation={ this.showDeleteConfirmation.bind(this) }
+                  shareObject={ this.shareObject.bind(this) } />
+              </InfiniteScroll>
+              <div className="text-center" style={ { display: istruncated ? 'block' : 'none' } }>
+                <span>Loading...</span>
+              </div>
             </div>
             <UploadModal />
             { createButton }
