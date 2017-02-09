@@ -106,7 +106,7 @@ func TestInitEventNotifierWithPostgreSQL(t *testing.T) {
 		t.Fatal("Unable to initialize FS backend.", err)
 	}
 
-	serverConfig.SetPostgreSQLNotifyByID("1", postgreSQLNotify{Enable: true})
+	serverConfig.Notify.SetPostgreSQLByID("1", postgreSQLNotify{Enable: true})
 	if err := initEventNotifier(fs); err == nil {
 		t.Fatal("PostgreSQL config didn't fail.")
 	}
@@ -137,7 +137,7 @@ func TestInitEventNotifierWithNATS(t *testing.T) {
 		t.Fatal("Unable to initialize FS backend.", err)
 	}
 
-	serverConfig.SetNATSNotifyByID("1", natsNotify{Enable: true})
+	serverConfig.Notify.SetNATSByID("1", natsNotify{Enable: true})
 	if err := initEventNotifier(fs); err == nil {
 		t.Fatal("NATS config didn't fail.")
 	}
@@ -168,7 +168,7 @@ func TestInitEventNotifierWithWebHook(t *testing.T) {
 		t.Fatal("Unable to initialize FS backend.", err)
 	}
 
-	serverConfig.SetWebhookNotifyByID("1", webhookNotify{Enable: true})
+	serverConfig.Notify.SetWebhookByID("1", webhookNotify{Enable: true})
 	if err := initEventNotifier(fs); err == nil {
 		t.Fatal("WebHook config didn't fail.")
 	}
@@ -199,7 +199,7 @@ func TestInitEventNotifierWithAMQP(t *testing.T) {
 		t.Fatal("Unable to initialize FS backend.", err)
 	}
 
-	serverConfig.SetAMQPNotifyByID("1", amqpNotify{Enable: true})
+	serverConfig.Notify.SetAMQPByID("1", amqpNotify{Enable: true})
 	if err := initEventNotifier(fs); err == nil {
 		t.Fatal("AMQP config didn't fail.")
 	}
@@ -230,7 +230,7 @@ func TestInitEventNotifierWithElasticSearch(t *testing.T) {
 		t.Fatal("Unable to initialize FS backend.", err)
 	}
 
-	serverConfig.SetElasticSearchNotifyByID("1", elasticSearchNotify{Enable: true})
+	serverConfig.Notify.SetElasticSearchByID("1", elasticSearchNotify{Enable: true})
 	if err := initEventNotifier(fs); err == nil {
 		t.Fatal("ElasticSearch config didn't fail.")
 	}
@@ -261,7 +261,7 @@ func TestInitEventNotifierWithRedis(t *testing.T) {
 		t.Fatal("Unable to initialize FS backend.", err)
 	}
 
-	serverConfig.SetRedisNotifyByID("1", redisNotify{Enable: true})
+	serverConfig.Notify.SetRedisByID("1", redisNotify{Enable: true})
 	if err := initEventNotifier(fs); err == nil {
 		t.Fatal("Redis config didn't fail.")
 	}

@@ -36,10 +36,10 @@ type serverConfigV13 struct {
 	Region     string     `json:"region"`
 
 	// Additional error logging configuration.
-	Logger logger `json:"logger"`
+	Logger *logger `json:"logger"`
 
 	// Notification queue configuration.
-	Notify notifier `json:"notify"`
+	Notify *notifier `json:"notify"`
 }
 
 // newConfig - initialize a new server config, saves creds from env
@@ -47,7 +47,10 @@ type serverConfigV13 struct {
 // and those are saved.
 func newConfig(envCreds credential) error {
 	// Initialize server config.
-	srvCfg := &serverConfigV13{}
+	srvCfg := &serverConfigV13{
+		Logger: &logger{},
+		Notify: &notifier{},
+	}
 	srvCfg.Version = globalMinioConfigVersion
 	srvCfg.Region = globalMinioDefaultRegion
 
@@ -146,193 +149,6 @@ func (s serverConfigV13) GetVersion() string {
 	defer serverConfigMu.RUnlock()
 
 	return s.Version
-}
-
-/// Logger related.
-
-func (s *serverConfigV13) SetAMQPNotifyByID(accountID string, amqpn amqpNotify) {
-	serverConfigMu.Lock()
-	defer serverConfigMu.Unlock()
-
-	s.Notify.AMQP[accountID] = amqpn
-}
-
-func (s serverConfigV13) GetAMQP() map[string]amqpNotify {
-	serverConfigMu.RLock()
-	defer serverConfigMu.RUnlock()
-
-	return s.Notify.AMQP
-}
-
-// GetAMQPNotify get current AMQP logger.
-func (s serverConfigV13) GetAMQPNotifyByID(accountID string) amqpNotify {
-	serverConfigMu.RLock()
-	defer serverConfigMu.RUnlock()
-
-	return s.Notify.AMQP[accountID]
-}
-
-//
-func (s *serverConfigV13) SetNATSNotifyByID(accountID string, natsn natsNotify) {
-	serverConfigMu.Lock()
-	defer serverConfigMu.Unlock()
-
-	s.Notify.NATS[accountID] = natsn
-}
-
-func (s serverConfigV13) GetNATS() map[string]natsNotify {
-	serverConfigMu.RLock()
-	defer serverConfigMu.RUnlock()
-	return s.Notify.NATS
-}
-
-// GetNATSNotify get current NATS logger.
-func (s serverConfigV13) GetNATSNotifyByID(accountID string) natsNotify {
-	serverConfigMu.RLock()
-	defer serverConfigMu.RUnlock()
-
-	return s.Notify.NATS[accountID]
-}
-
-func (s *serverConfigV13) SetElasticSearchNotifyByID(accountID string, esNotify elasticSearchNotify) {
-	serverConfigMu.Lock()
-	defer serverConfigMu.Unlock()
-
-	s.Notify.ElasticSearch[accountID] = esNotify
-}
-
-func (s serverConfigV13) GetElasticSearch() map[string]elasticSearchNotify {
-	serverConfigMu.RLock()
-	defer serverConfigMu.RUnlock()
-
-	return s.Notify.ElasticSearch
-}
-
-// GetElasticSearchNotify get current ElasicSearch logger.
-func (s serverConfigV13) GetElasticSearchNotifyByID(accountID string) elasticSearchNotify {
-	serverConfigMu.RLock()
-	defer serverConfigMu.RUnlock()
-
-	return s.Notify.ElasticSearch[accountID]
-}
-
-func (s *serverConfigV13) SetRedisNotifyByID(accountID string, rNotify redisNotify) {
-	serverConfigMu.Lock()
-	defer serverConfigMu.Unlock()
-
-	s.Notify.Redis[accountID] = rNotify
-}
-
-func (s serverConfigV13) GetRedis() map[string]redisNotify {
-	serverConfigMu.RLock()
-	defer serverConfigMu.RUnlock()
-
-	return s.Notify.Redis
-}
-
-func (s serverConfigV13) GetWebhook() map[string]webhookNotify {
-	serverConfigMu.RLock()
-	defer serverConfigMu.RUnlock()
-
-	return s.Notify.Webhook
-}
-
-// GetWebhookNotifyByID get current Webhook logger.
-func (s serverConfigV13) GetWebhookNotifyByID(accountID string) webhookNotify {
-	serverConfigMu.RLock()
-	defer serverConfigMu.RUnlock()
-
-	return s.Notify.Webhook[accountID]
-}
-
-func (s *serverConfigV13) SetWebhookNotifyByID(accountID string, pgn webhookNotify) {
-	serverConfigMu.Lock()
-	defer serverConfigMu.Unlock()
-
-	s.Notify.Webhook[accountID] = pgn
-}
-
-// GetRedisNotify get current Redis logger.
-func (s serverConfigV13) GetRedisNotifyByID(accountID string) redisNotify {
-	serverConfigMu.RLock()
-	defer serverConfigMu.RUnlock()
-
-	return s.Notify.Redis[accountID]
-}
-
-func (s *serverConfigV13) SetPostgreSQLNotifyByID(accountID string, pgn postgreSQLNotify) {
-	serverConfigMu.Lock()
-	defer serverConfigMu.Unlock()
-
-	s.Notify.PostgreSQL[accountID] = pgn
-}
-
-func (s serverConfigV13) GetPostgreSQL() map[string]postgreSQLNotify {
-	serverConfigMu.RLock()
-	defer serverConfigMu.RUnlock()
-
-	return s.Notify.PostgreSQL
-}
-
-func (s serverConfigV13) GetPostgreSQLNotifyByID(accountID string) postgreSQLNotify {
-	serverConfigMu.RLock()
-	defer serverConfigMu.RUnlock()
-
-	return s.Notify.PostgreSQL[accountID]
-}
-
-// Kafka related functions
-func (s *serverConfigV13) SetKafkaNotifyByID(accountID string, kn kafkaNotify) {
-	serverConfigMu.Lock()
-	defer serverConfigMu.Unlock()
-
-	s.Notify.Kafka[accountID] = kn
-}
-
-func (s serverConfigV13) GetKafka() map[string]kafkaNotify {
-	serverConfigMu.RLock()
-	defer serverConfigMu.RUnlock()
-
-	return s.Notify.Kafka
-}
-
-func (s serverConfigV13) GetKafkaNotifyByID(accountID string) kafkaNotify {
-	serverConfigMu.RLock()
-	defer serverConfigMu.RUnlock()
-
-	return s.Notify.Kafka[accountID]
-}
-
-// SetFileLogger set new file logger.
-func (s *serverConfigV13) SetFileLogger(flogger fileLogger) {
-	serverConfigMu.Lock()
-	defer serverConfigMu.Unlock()
-
-	s.Logger.File = flogger
-}
-
-// GetFileLogger get current file logger.
-func (s serverConfigV13) GetFileLogger() fileLogger {
-	serverConfigMu.RLock()
-	defer serverConfigMu.RUnlock()
-
-	return s.Logger.File
-}
-
-// SetConsoleLogger set new console logger.
-func (s *serverConfigV13) SetConsoleLogger(clogger consoleLogger) {
-	serverConfigMu.Lock()
-	defer serverConfigMu.Unlock()
-
-	s.Logger.Console = clogger
-}
-
-// GetConsoleLogger get current console logger.
-func (s serverConfigV13) GetConsoleLogger() consoleLogger {
-	serverConfigMu.RLock()
-	defer serverConfigMu.RUnlock()
-
-	return s.Logger.Console
 }
 
 // SetRegion set new region.

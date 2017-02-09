@@ -174,7 +174,7 @@ func dialPostgreSQL(pgN postgreSQLNotify) (pgConn, error) {
 }
 
 func newPostgreSQLNotify(accountID string) (*logrus.Logger, error) {
-	pgNotify := serverConfig.GetPostgreSQLNotifyByID(accountID)
+	pgNotify := serverConfig.Notify.GetPostgreSQLByID(accountID)
 
 	// Dial postgres
 	pgC, err := dialPostgreSQL(pgNotify)
