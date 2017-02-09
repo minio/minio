@@ -51,6 +51,8 @@ const (
 	globalMinioDefaultOwnerID      = "minio"
 	globalMinioDefaultStorageClass = "STANDARD"
 	globalWindowsOSName            = "windows"
+	globalNetBSDOSName             = "netbsd"
+	globalSolarisOSName            = "solaris"
 	// Add new global values here.
 )
 

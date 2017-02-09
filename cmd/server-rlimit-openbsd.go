@@ -1,7 +1,7 @@
-//  +build !windows,!plan9,!openbsd
+//  +build openbsd
 
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,7 +47,7 @@ func setMaxOpenFiles() error {
 // by the user. This is done to honor the system limits and not crash.
 func setMaxMemory() error {
 	var rLimit syscall.Rlimit
-	err := syscall.Getrlimit(syscall.RLIMIT_AS, &rLimit)
+	err := syscall.Getrlimit(syscall.RLIMIT_DATA, &rLimit)
 	if err != nil {
 		return err
 	}
@@ -55,11 +55,11 @@ func setMaxMemory() error {
 	// TO decrease this limit further user has to manually edit
 	// `/etc/security/limits.conf`
 	rLimit.Cur = rLimit.Max
-	err = syscall.Setrlimit(syscall.RLIMIT_AS, &rLimit)
+	err = syscall.Setrlimit(syscall.RLIMIT_DATA, &rLimit)
 	if err != nil {
 		return err
 	}
-	err = syscall.Getrlimit(syscall.RLIMIT_AS, &rLimit)
+	err = syscall.Getrlimit(syscall.RLIMIT_DATA, &rLimit)
 	if err != nil {
 		return err
 	}

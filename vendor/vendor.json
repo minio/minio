@@ -57,9 +57,10 @@
 			"revisionTime": "2015-12-24T06:54:52+02:00"
 		},
 		{
+			"checksumSHA1": "XEBl9iQQvfXNlwCSzyAOCqAlYEA=",
 			"path": "github.com/fatih/color",
-			"revision": "87d4004f2ab62d0d255e0a38f1680aa534549fe3",
-			"revisionTime": "2016-06-10T14:06:02+03:00"
+			"revision": "42c364ba490082e4815b5222728711b3440603eb",
+			"revisionTime": "2017-01-13T15:16:12Z"
 		},
 		{
 			"checksumSHA1": "3yco0089CSJ4qbyUccpbDC2+dPg=",
@@ -150,9 +151,10 @@
 			"revisionTime": "2016-06-03T00:08:27+09:00"
 		},
 		{
+			"checksumSHA1": "xZuhljnmBysJPta/lMyYmJdujCg=",
 			"path": "github.com/mattn/go-isatty",
-			"revision": "56b76bdf51f7708750eac80fa38b952bb9f32639",
-			"revisionTime": "2015-12-11T09:06:21+09:00"
+			"revision": "30a891c33c7cde7b02a981314b4228ec99380cca",
+			"revisionTime": "2016-11-23T14:36:37Z"
 		},
 		{
 			"checksumSHA1": "4gphCNVXIjp5ytz3+S3SD3Dp948=",

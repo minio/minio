@@ -1,7 +1,7 @@
-// +build darwin
+// +build linux
 
 /*
- * Minio Cloud Storage, (C) 2015 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,19 +18,22 @@
 
 package disk
 
-import "strconv"
+import (
+	"syscall"
+)
 
-// fsType2StrinMap - list of filesystems supported by donut
-var fsType2StringMap = map[string]string{
-	"11": "HFS",
-}
-
-// getFSType returns the filesystem type of the underlying mounted filesystem
-func getFSType(ftype int64) string {
-	fsTypeHex := strconv.FormatInt(ftype, 16)
-	fsTypeString, ok := fsType2StringMap[fsTypeHex]
-	if !ok {
-		return "UNKNOWN"
+// GetInfo returns total and free bytes available in a directory, e.g. `/`.
+func GetInfo(path string) (info Info, err error) {
+	s := syscall.Statfs_t{}
+	err = syscall.Statfs(path, &s)
+	if err != nil {
+		return Info{}, err
 	}
-	return fsTypeString
+	info = Info{}
+	info.Total = int64(s.Bsize) * int64(s.Blocks)
+	info.Free = int64(s.Bsize) * int64(s.Bavail)
+	info.Files = int64(s.Files)
+	info.Ffree = int64(s.Ffree)
+	info.FSType = getFSType(int64(s.Type))
+	return info, nil
 }

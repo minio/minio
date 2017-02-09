@@ -1,7 +1,7 @@
-// +build darwin
+// +build netbsd solaris
 
 /*
- * Minio Cloud Storage, (C) 2015 Minio, Inc.
+ * Minio Cloud Storage, (C) 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,19 +18,7 @@
 
 package disk
 
-import "strconv"
-
-// fsType2StrinMap - list of filesystems supported by donut
-var fsType2StringMap = map[string]string{
-	"11": "HFS",
-}
-
-// getFSType returns the filesystem type of the underlying mounted filesystem
-func getFSType(ftype int64) string {
-	fsTypeHex := strconv.FormatInt(ftype, 16)
-	fsTypeString, ok := fsType2StringMap[fsTypeHex]
-	if !ok {
-		return "UNKNOWN"
-	}
-	return fsTypeString
+// GetInfo returns total and free bytes available in a directory, e.g. `/`.
+func GetInfo(path string) (info Info, err error) {
+	return Info{}, nil
 }
