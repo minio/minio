@@ -33,7 +33,7 @@ func TestGetListenIPs(t *testing.T) {
 		port       string
 		shouldPass bool
 	}{
-		{"localhost", "9000", true},
+		{"127.0.0.1", "9000", true},
 		{"", "9000", true},
 		{"", "", false},
 	}
@@ -114,8 +114,8 @@ func TestFinalizeAPIEndpoints(t *testing.T) {
 	}{
 		{":80"},
 		{":80"},
-		{"localhost:80"},
-		{"localhost:80"},
+		{"127.0.0.1:80"},
+		{"127.0.0.1:80"},
 	}
 
 	for i, test := range testCases {
@@ -283,18 +283,18 @@ func TestParseStorageEndpoints(t *testing.T) {
 		host            string
 		expectedErr     error
 	}{
-		{"", "http://localhost/export", nil},
+		{"", "http://127.0.0.1/export", nil},
 		{
 			"testhost",
-			"http://localhost/export",
-			errors.New("Invalid Argument localhost, port mandatory when --address <host>:<port> is used"),
+			"http://127.0.0.1/export",
+			errors.New("Invalid Argument 127.0.0.1, port mandatory when --address <host>:<port> is used"),
 		},
 		{
 			"",
-			"http://localhost:9000/export",
-			errors.New("Invalid Argument localhost:9000, port configurable using --address :<port>"),
+			"http://127.0.0.1:9000/export",
+			errors.New("Invalid Argument 127.0.0.1:9000, port configurable using --address :<port>"),
 		},
-		{"testhost", "http://localhost:9000/export", nil},
+		{"testhost", "http://127.0.0.1:9000/export", nil},
 	}
 	for i, test := range testCases {
 		globalMinioHost = test.globalMinioHost
@@ -315,15 +315,15 @@ func TestCheckEndpointsSyntax(t *testing.T) {
 	successCases := []string{
 		"export",
 		"/export",
-		"http://localhost/export",
-		"https://localhost/export",
+		"http://127.0.0.1/export",
+		"https://127.0.0.1/export",
 	}
 
 	failureCases := []string{
 		"/",
-		"http://localhost",
-		"http://localhost/",
-		"ftp://localhost/export",
+		"http://127.0.0.1",
+		"http://127.0.0.1/",
+		"ftp://127.0.0.1/export",
 		"server:/export",
 	}
 
@@ -495,8 +495,8 @@ func TestIsAnyEndpointLocal(t *testing.T) {
 			result: false,
 		},
 		{
-			disks: []string{"http://localhost/mnt/disk1",
-				"http://localhost/mnt/disk1"},
+			disks: []string{"http://127.0.0.1/mnt/disk1",
+				"http://127.0.0.1/mnt/disk1"},
 			result: true,
 		},
 	}

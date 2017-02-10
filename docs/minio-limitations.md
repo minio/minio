@@ -1,5 +1,4 @@
 ## Minio Server Limits Per Tenant
-We found the following APIs to be redundant or less useful outside of AWS. If you have a different view on any of the APIs we missed, please open a [github issue](https://github.com/minio/minio/issues).
 
 ### Erasure Code (Multiple Drives / Servers)
 
@@ -31,19 +30,21 @@ We found the following APIs to be redundant or less useful outside of AWS. If yo
 |Maximum number of objects returned per list objects request| 1000|
 |Maximum number of multipart uploads returned per list multipart uploads request| 1000|
 
+We found the following APIs to be redundant or less useful outside of AWS S3. If you have a different view on any of the APIs we missed, please open a [github issue](https://github.com/minio/minio/issues).
+
 ###  List of Amazon S3 Bucket API's not supported on Minio.
 
-- BucketACL (Use bucket policies instead)
-- BucketCORS (CORS enabled by default)
-- BucketLifecycle (Not required for Minio's XL backend)
-- BucketReplication (Use `mc mirror` instead)
-- BucketVersions, BucketVersioning (Use `s3git`)
-- BucketWebsite (Use `caddy` or `nginx`)
-- BucketAnalytics, BucketMetrics, BucketLogging (Use bucket notification APIs)
+- BucketACL (Use [bucket policies](http://docs.minio.io/docs/minio-client-complete-guide#policy) instead)
+- BucketCORS (CORS enabled by default on all buckets for all HTTP verbs)
+- BucketLifecycle (Not required for Minio erasure coded backend)
+- BucketReplication (Use [`mc mirror`](http://docs.minio.io/docs/minio-client-complete-guide#mirror) instead)
+- BucketVersions, BucketVersioning (Use [`s3git`](https://github.com/s3git/s3git))
+- BucketWebsite (Use [`caddy`](https://github.com/mholt/caddy) or [`nginx`](https://www.nginx.com/resources/wiki/))
+- BucketAnalytics, BucketMetrics, BucketLogging (Use [bucket notification](http://docs.minio.io/docs/minio-client-complete-guide#events) APIs)
 - BucketRequestPayment
 - BucketTagging
 
 ### List of Amazon S3 Object API's not supported on Minio.
 
-- ObjectACL (Use bucket policies instead)
+- ObjectACL (Use [bucket policies](http://docs.minio.io/docs/minio-client-complete-guide#policy) instead)
 - ObjectTorrent

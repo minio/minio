@@ -1,6 +1,8 @@
 ## Backends
 
-Minio currently implements two types of backends namely.
+Minio currently implements two types of backends.
 
-- Filesystem layer (fs).
-- ErasureCode layer (XL).
+|    Minio    | FS | Erasure | Stability |
+|:-----------:|:----:|:----:|:---:|
+| Standalone  | x  | x  | Stable |
+| Distributed | x  | x  | Stable |

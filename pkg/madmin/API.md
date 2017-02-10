@@ -82,9 +82,9 @@ Fetch service status, replies disk space used, backend type and total disks offl
 
 | Param | Type | Description |
 |---|---|---|
-|`backend.Type` | _BackendType_ | Type of backend used by the server currently only FS or XL. |
-|`backend.OnlineDisks`| _int_ | Total number of disks online (only applies to XL backend), is empty for FS. |
-|`backend.OfflineDisks` | _int_ | Total number of disks offline (only applies to XL backend), is empty for FS. |
+|`backend.Type` | _BackendType_ | Type of backend used by the server currently only FS or Erasure. |
+|`backend.OnlineDisks`| _int_ | Total number of disks online (only applies to Erasure backend), is empty for FS. |
+|`backend.OfflineDisks` | _int_ | Total number of disks offline (only applies to Erasure backend), is empty for FS. |
 |`backend.ReadQuorum` | _int_ | Current total read quorum threshold before reads will be unavailable, is empty for FS. |
 |`backend.WriteQuorum` | _int_ | Current total write quorum threshold before writes will be unavailable, is empty for FS. |
 
