@@ -27,7 +27,6 @@ import OverlayTrigger from 'react-bootstrap/lib/OverlayTrigger'
 import Tooltip from 'react-bootstrap/lib/Tooltip'
 import Dropdown from 'react-bootstrap/lib/Dropdown'
 import MenuItem from 'react-bootstrap/lib/MenuItem'
-
 import InputGroup from '../components/InputGroup'
 import Dropzone from '../components/Dropzone'
 import ObjectsList from '../components/ObjectsList'
@@ -363,9 +362,27 @@ export default class Browse extends React.Component {
     }
   }
 
+  checkObject(e, objectName) {
+    const {dispatch} = this.props
+    e.target.checked ? dispatch(actions.checkedObjectsAdd(objectName)) : dispatch(actions.checkedObjectsRemove(objectName))
+  }
+
+  downloadAll() {
+    const {dispatch} = this.props
+    let req = {
+      bucketName: this.props.currentBucket,
+      objects: this.props.checkedObjects,
+      prefix: this.props.currentPath
+    }
+    let requestUrl = location.origin + "/minio/zip?token=" + localStorage.token
+
+    this.xhr = new XMLHttpRequest()
+    dispatch(actions.downloadAllasZip(requestUrl, req, this.xhr))
+  }
+
   render() {
     const {total, free} = this.props.storageInfo
-    const {showMakeBucketModal, alert, sortNameOrder, sortSizeOrder, sortDateOrder, showAbout, showBucketPolicy} = this.props
+    const {showMakeBucketModal, alert, sortNameOrder, sortSizeOrder, sortDateOrder, showAbout, showBucketPolicy, checkedObjects} = this.props
     const {version, memory, platform, runtime} = this.props.serverInfo
     const {sidebarStatus} = this.props
     const {showSettings} = this.props
@@ -435,7 +452,6 @@ export default class Browse extends React.Component {
                                 </li>
                               </ul>
                             </div>
-
     }
 
     let createButton = ''
@@ -490,6 +506,12 @@ export default class Browse extends React.Component {
           clickOutside={ this.hideSidebar.bind(this) }
           showPolicy={ this.showBucketPolicy.bind(this) } />
         <div className="fe-body">
+          <div className={ 'list-actions' + (classNames({
+                             ' list-actions-toggled': checkedObjects.length > 0
+                           })) }>
+            <span className="la-label"><i className="fa fa-check-circle" /> { checkedObjects.length } Objects selected</span>
+            <span className="la-actions pull-right"><button onClick={ this.downloadAll.bind(this) }> Download all as zip </button></span>
+          </div>
           <Dropzone>
             { alertBox }
             <header className="fe-header-mobile hidden-lg hidden-md">
@@ -515,7 +537,8 @@ export default class Browse extends React.Component {
             </header>
             <div className="feb-container">
               <header className="fesl-row" data-type="folder">
-                <div className="fesl-item fi-name" onClick={ this.sortObjectsByName.bind(this) } data-sort="name">
+                <div className="fesl-item fesl-item-icon"></div>
+                <div className="fesl-item fesl-item-name" onClick={ this.sortObjectsByName.bind(this) } data-sort="name">
                   Name
                   <i className={ classNames({
                                    'fesli-sort': true,
@@ -524,7 +547,7 @@ export default class Browse extends React.Component {
                                    'fa-sort-alpha-asc': !sortNameOrder
                                  }) } />
                 </div>
-                <div className="fesl-item fi-size" onClick={ this.sortObjectsBySize.bind(this) } data-sort="size">
+                <div className="fesl-item fesl-item-size" onClick={ this.sortObjectsBySize.bind(this) } data-sort="size">
                   Size
                   <i className={ classNames({
                                    'fesli-sort': true,
@@ -533,7 +556,7 @@ export default class Browse extends React.Component {
                                    'fa-sort-amount-asc': !sortSizeOrder
                                  }) } />
                 </div>
-                <div className="fesl-item fi-modified" onClick={ this.sortObjectsByDate.bind(this) } data-sort="last-modified">
+                <div className="fesl-item fesl-item-modified" onClick={ this.sortObjectsByDate.bind(this) } data-sort="last-modified">
                   Last Modified
                   <i className={ classNames({
                                    'fesli-sort': true,
@@ -542,7 +565,7 @@ export default class Browse extends React.Component {
                                    'fa-sort-numeric-asc': !sortDateOrder
                                  }) } />
                 </div>
-                <div className="fesl-item fi-actions"></div>
+                <div className="fesl-item fesl-item-actions"></div>
               </header>
             </div>
             <div className="feb-container">
@@ -553,7 +576,9 @@ export default class Browse extends React.Component {
                 <ObjectsList dataType={ this.dataType.bind(this) }
                   selectPrefix={ this.selectPrefix.bind(this) }
                   showDeleteConfirmation={ this.showDeleteConfirmation.bind(this) }
-                  shareObject={ this.shareObject.bind(this) } />
+                  shareObject={ this.shareObject.bind(this) }
+                  checkObject={ this.checkObject.bind(this) }
+                  checkedObjectsArray={ checkedObjects } />
               </InfiniteScroll>
               <div className="text-center" style={ { display: istruncated ? 'block' : 'none' } }>
                 <span>Loading...</span>

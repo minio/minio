@@ -849,7 +849,7 @@ func testWebHandlerDownloadZip(obj ObjectLayer, instanceType string, t TestErrHa
 			return 0, nil
 		}
 		var req *http.Request
-		req, err = http.NewRequest("GET", path, bytes.NewBuffer(argsData))
+		req, err = http.NewRequest("POST", path, bytes.NewBuffer(argsData))
 
 		if err != nil {
 			t.Fatalf("Cannot create upload request, %v", err)

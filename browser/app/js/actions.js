@@ -28,7 +28,6 @@ export const SET_CURRENT_BUCKET = 'SET_CURRENT_BUCKET'
 export const SET_CURRENT_PATH = 'SET_CURRENT_PATH'
 export const SET_BUCKETS = 'SET_BUCKETS'
 export const ADD_BUCKET = 'ADD_BUCKET'
-export const ADD_OBJECT = 'ADD_OBJECT'
 export const SET_VISIBLE_BUCKETS = 'SET_VISIBLE_BUCKETS'
 export const SET_OBJECTS = 'SET_OBJECTS'
 export const SET_STORAGE_INFO = 'SET_STORAGE_INFO'
@@ -57,6 +56,9 @@ export const SET_SHARE_OBJECT = 'SET_SHARE_OBJECT'
 export const DELETE_CONFIRMATION = 'DELETE_CONFIRMATION'
 export const SET_PREFIX_WRITABLE = 'SET_PREFIX_WRITABLE'
 export const REMOVE_OBJECT = 'REMOVE_OBJECT'
+export const CHECKED_OBJECTS_ADD = 'CHECKED_OBJECTS_ADD'
+export const CHECKED_OBJECTS_REMOVE = 'CHECKED_OBJECTS_REMOVE'
+export const CHECKED_OBJECTS_RESET = 'CHECKED_OBJECTS_RESET'
 
 export const showDeleteConfirmation = (object) => {
   return {
@@ -304,13 +306,13 @@ export const listObjects = () => {
       marker: marker
     })
       .then(res => {
-	let objects = res.objects
+        let objects = res.objects
         if (!objects)
           objects = []
         objects = objects.map(object => {
-	  object.name = object.name.replace(`${currentPath}`, '');
-	  return object
-	})
+          object.name = object.name.replace(`${currentPath}`, '');
+          return object
+        })
         dispatch(setObjects(objects, res.nextmarker, res.istruncated))
         dispatch(setPrefixWritable(res.writable))
         dispatch(setLoadBucket(''))
@@ -344,9 +346,9 @@ export const selectPrefix = prefix => {
         if (!objects)
           objects = []
         objects = objects.map(object => {
-	  object.name = object.name.replace(`${prefix}`, '');
-	  return object
-	})
+          object.name = object.name.replace(`${prefix}`, '');
+          return object
+        })
         dispatch(setObjects(
           objects,
           res.nextmarker,
@@ -407,6 +409,24 @@ export const setLoginError = () => {
   return {
     type: SET_LOGIN_ERROR,
     loginError: true
+  }
+}
+
+export const downloadAllasZip = (url, req, xhr) => {
+  return (dispatch) => {
+    xhr.open('POST', url, true)
+    xhr.responseType = 'blob'
+
+    xhr.onload = function(e) {
+      if (this.status == 200) {
+        var blob = new Blob([this.response], {
+          type: 'application/zip'
+        })
+        var blobUrl = window.URL.createObjectURL(blob);
+        window.location = blobUrl
+      }
+    };
+    xhr.send(JSON.stringify(req));
   }
 }
 
@@ -561,5 +581,26 @@ export const setPolicies = (policies) => {
   return {
     type: SET_POLICIES,
     policies
+  }
+}
+
+export const checkedObjectsAdd = (objectName) => {
+  return {
+    type: CHECKED_OBJECTS_ADD,
+    objectName
+  }
+}
+
+export const checkedObjectsRemove = (objectName) => {
+  return {
+    type: CHECKED_OBJECTS_REMOVE,
+    objectName
+  }
+}
+
+export const checkedObjectsReset = (objectName) => {
+  return {
+    type: CHECKED_OBJECTS_RESET,
+    objectName
   }
 }

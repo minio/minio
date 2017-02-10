@@ -71,6 +71,10 @@ var exports = {
 	target: 'http://localhost:9000',
 	secure: false
       },
+      '/minio/zip': {
+        target: 'http://localhost:9000',
+        secure: false
+      }
     }
   },
   plugins: [
