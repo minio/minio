@@ -36,8 +36,8 @@ const (
 	Unknown BackendType = iota
 	// Filesystem backend.
 	FS
-	// Multi disk XL (single, distributed) backend.
-	XL
+	// Multi disk Erasure (single, distributed) backend.
+	Erasure
 
 	// Add your own backend.
 )
@@ -50,10 +50,10 @@ type StorageInfo struct {
 	Free int64
 	// Backend type.
 	Backend struct {
-		// Represents various backend types, currently on FS and XL.
+		// Represents various backend types, currently on FS and Erasure.
 		Type BackendType
 
-		// Following fields are only meaningful if BackendType is XL.
+		// Following fields are only meaningful if BackendType is Erasure.
 		OnlineDisks  int // Online disks during server startup.
 		OfflineDisks int // Offline disks during server startup.
 		ReadQuorum   int // Minimum disks required for successful read operations.

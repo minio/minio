@@ -317,6 +317,7 @@ func getPeerUptimes(peers adminPeers) (time.Duration, error) {
 	latestUptime := time.Duration(0)
 	for _, uptime := range uptimes {
 		if uptime.err != nil {
+			errorIf(uptime.err, "Unable to fetch uptime")
 			continue
 		}
 

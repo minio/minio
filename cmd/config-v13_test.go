@@ -82,6 +82,10 @@ func TestServerConfig(t *testing.T) {
 	if !reflect.DeepEqual(consoleCfg, consoleLogger{Enable: true}) {
 		t.Errorf("Expecting console logger config %#v found %#v", consoleLogger{Enable: true}, consoleCfg)
 	}
+	// Set new console logger.
+	serverConfig.Logger.SetConsole(consoleLogger{
+		Enable: false,
+	})
 
 	// Set new file logger.
 	serverConfig.Logger.SetFile(fileLogger{
@@ -91,6 +95,10 @@ func TestServerConfig(t *testing.T) {
 	if !reflect.DeepEqual(fileCfg, fileLogger{Enable: true}) {
 		t.Errorf("Expecting file logger config %#v found %#v", fileLogger{Enable: true}, consoleCfg)
 	}
+	// Set new file logger.
+	serverConfig.Logger.SetFile(fileLogger{
+		Enable: false,
+	})
 
 	// Match version.
 	if serverConfig.GetVersion() != globalMinioConfigVersion {

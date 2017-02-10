@@ -202,7 +202,7 @@ func testServicesCmdHandler(cmd cmdType, t *testing.T) {
 	// Initialize admin peers to make admin RPC calls. Note: In a
 	// single node setup, this degenerates to a simple function
 	// call under the hood.
-	eps, err := parseStorageEndpoints([]string{"http://localhost"})
+	eps, err := parseStorageEndpoints([]string{"http://127.0.0.1"})
 	if err != nil {
 		t.Fatalf("Failed to parse storage end point - %v", err)
 	}
@@ -268,7 +268,7 @@ func TestServiceSetCreds(t *testing.T) {
 	// Initialize admin peers to make admin RPC calls. Note: In a
 	// single node setup, this degenerates to a simple function
 	// call under the hood.
-	eps, err := parseStorageEndpoints([]string{"http://localhost"})
+	eps, err := parseStorageEndpoints([]string{"http://127.0.0.1"})
 	if err != nil {
 		t.Fatalf("Failed to parse storage end point - %v", err)
 	}
@@ -356,7 +356,7 @@ func TestListLocksHandler(t *testing.T) {
 	defer adminTestBed.TearDown()
 
 	// Initialize admin peers to make admin RPC calls.
-	eps, err := parseStorageEndpoints([]string{"http://localhost"})
+	eps, err := parseStorageEndpoints([]string{"http://127.0.0.1"})
 	if err != nil {
 		t.Fatalf("Failed to parse storage end point - %v", err)
 	}
@@ -431,7 +431,7 @@ func TestClearLocksHandler(t *testing.T) {
 	defer adminTestBed.TearDown()
 
 	// Initialize admin peers to make admin RPC calls.
-	eps, err := parseStorageEndpoints([]string{"http://localhost"})
+	eps, err := parseStorageEndpoints([]string{"http://127.0.0.1"})
 	if err != nil {
 		t.Fatalf("Failed to parse storage end point - %v", err)
 	}
