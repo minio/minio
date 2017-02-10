@@ -28,25 +28,9 @@ import (
 	humanize "github.com/dustin/go-humanize"
 )
 
-// Prepare benchmark backend
+// Prepare XL/FS backend for benchmark.
 func prepareBenchmarkBackend(instanceType string) (ObjectLayer, []string, error) {
-	switch instanceType {
-	// Total number of disks for FS backend is set to 1.
-	case FSTestStr:
-		obj, disk, err := prepareFS()
-		if err != nil {
-			return nil, nil, err
-		}
-		return obj, []string{disk}, nil
-	// Total number of disks for XL backend is set to 16.
-	case XLTestStr:
-		return prepareXL()
-	}
-	obj, disk, err := prepareFS()
-	if err != nil {
-		return nil, nil, err
-	}
-	return obj, []string{disk}, nil
+	return prepareTestBackend(instanceType)
 }
 
 // Benchmark utility functions for ObjectLayer.PutObject().

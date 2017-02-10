@@ -75,19 +75,11 @@ func prepareFS() (ObjectLayer, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	endpoints, err := parseStorageEndpoints(fsDirs)
+	obj, err := newFSObjectLayer(fsDirs[0])
 	if err != nil {
 		return nil, "", err
 	}
-	fsPath, err := url.QueryUnescape(endpoints[0].String())
-	if err != nil {
-		return nil, "", err
-	}
-	obj, err := newFSObjectLayer(fsPath)
-	if err != nil {
-		return nil, "", err
-	}
-	return obj, endpoints[0].Path, nil
+	return obj, fsDirs[0], nil
 }
 
 func prepareXL() (ObjectLayer, []string, error) {
@@ -193,16 +185,18 @@ type TestServer struct {
 	SrvCmdCfg serverCmdConfig
 }
 
+// UnstartedTestServer - Configures a temp FS/XL backend,
+// initializes the endpoints and configures the test server.
+// The server should be started using the Start() method.
 func UnstartedTestServer(t TestErrHandler, instanceType string) TestServer {
 	// create an instance of TestServer.
 	testServer := TestServer{}
-	// create temporary backend for the test server.
-	nDisks := 16
-	disks, err := getRandomDisks(nDisks)
+	// return FS/XL object layer and temp backend.
+	objLayer, disks, err := prepareTestBackend(instanceType)
 	if err != nil {
-		t.Fatal("Failed to create disks for the backend")
+		t.Fatal(err)
 	}
-
+	// set the server configuration.
 	root, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("%s", err)
@@ -212,18 +206,14 @@ func UnstartedTestServer(t TestErrHandler, instanceType string) TestServer {
 	// Get credential.
 	credentials := serverConfig.GetCredential()
 
-	testServer.Root = root
+	testServer.Obj = objLayer
 	testServer.Disks, err = parseStorageEndpoints(disks)
 	if err != nil {
-		t.Fatalf("Unexpected error %s", err)
+		t.Fatalf("Unexpected error %v", err)
 	}
+	testServer.Root = root
 	testServer.AccessKey = credentials.AccessKey
 	testServer.SecretKey = credentials.SecretKey
-
-	objLayer, _, err := initObjectLayer(testServer.Disks)
-	if err != nil {
-		t.Fatalf("Failed obtaining Temp Backend: <ERROR> %s", err)
-	}
 
 	srvCmdCfg := serverCmdConfig{
 		endpoints: testServer.Disks,
@@ -238,10 +228,9 @@ func UnstartedTestServer(t TestErrHandler, instanceType string) TestServer {
 
 	// Run TestServer.
 	testServer.Server = httptest.NewUnstartedServer(httpHandler)
-
+	// obtain server address.
 	srvCmdCfg.serverAddr = testServer.Server.Listener.Addr().String()
 
-	testServer.Obj = objLayer
 	globalObjLayerMutex.Lock()
 	globalObjectAPI = objLayer
 	globalObjLayerMutex.Unlock()
@@ -1772,6 +1761,24 @@ func initAPIHandlerTest(obj ObjectLayer, endpoints []string) (string, http.Handl
 		apiRouter.ServeHTTP(w, r)
 	}
 	return bucketName, f, nil
+}
+
+// prepare test backend.
+// create FS/XL bankend.
+// return object layer, backend disks.
+func prepareTestBackend(instanceType string) (ObjectLayer, []string, error) {
+	switch instanceType {
+	// Total number of disks for XL backend is set to 16.
+	case XLTestStr:
+		return prepareXL()
+	default:
+		// return FS backend by default.
+		obj, disk, err := prepareFS()
+		if err != nil {
+			return nil, nil, err
+		}
+		return obj, []string{disk}, nil
+	}
 }
 
 // ExecObjectLayerAPIAnonTest - Helper function to validate object Layer API handler
