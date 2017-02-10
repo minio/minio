@@ -19,7 +19,6 @@ package cmd
 import (
 	"encoding/base64"
 	"encoding/xml"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -41,33 +40,6 @@ func cloneHeader(h http.Header) http.Header {
 
 	}
 	return h2
-}
-
-// checkDuplicates - function to validate if there are duplicates in a slice of strings.
-func checkDuplicateStrings(list []string) error {
-	// Empty lists are not allowed.
-	if len(list) == 0 {
-		return errInvalidArgument
-	}
-	// Empty keys are not allowed.
-	for _, key := range list {
-		if key == "" {
-			return errInvalidArgument
-		}
-	}
-	listMaps := make(map[string]int)
-	// Navigate through each configs and count the entries.
-	for _, key := range list {
-		listMaps[key]++
-	}
-	// Validate if there are any duplicate counts.
-	for key, count := range listMaps {
-		if count != 1 {
-			return fmt.Errorf("Duplicate key: \"%s\" found of count: \"%d\"", key, count)
-		}
-	}
-	// No duplicates.
-	return nil
 }
 
 // splitStr splits a string into n parts, empty strings are added
@@ -124,15 +96,6 @@ func canonicalAddr(u *url.URL) string {
 		return addr + ":" + portMap[u.Scheme]
 	}
 	return addr
-}
-
-// checkDuplicates - function to validate if there are duplicates in a slice of endPoints.
-func checkDuplicateEndpoints(endpoints []*url.URL) error {
-	var strs []string
-	for _, ep := range endpoints {
-		strs = append(strs, ep.String())
-	}
-	return checkDuplicateStrings(strs)
 }
 
 // Find local node through the command line arguments. Returns in `host:port` format.

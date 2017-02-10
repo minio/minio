@@ -133,6 +133,9 @@ var (
 	// Time when object layer was initialized on start up.
 	globalBootTime time.Time
 
+	// Global minio setup object.
+	globalSetup Setup
+
 	// Add new variable global values here.
 )
 
