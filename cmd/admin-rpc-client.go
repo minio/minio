@@ -287,6 +287,13 @@ func (ts uptimeSlice) Swap(i, j int) {
 // getPeerUptimes - returns the uptime since the last time read quorum
 // was established on success. Otherwise returns errXLReadQuorum.
 func getPeerUptimes(peers adminPeers) (time.Duration, error) {
+	// In a single node Erasure or FS backend setup the uptime of
+	// the setup is the uptime of the single minio server
+	// instance.
+	if !globalIsDistXL {
+		return time.Now().UTC().Sub(globalBootTime), nil
+	}
+
 	uptimes := make(uptimeSlice, len(peers))
 
 	// Get up time of all servers.
@@ -320,8 +327,9 @@ func getPeerUptimes(peers adminPeers) (time.Duration, error) {
 		}
 	}
 
-	// This implies there weren't read quorum number of servers up.
-	if latestUptime == time.Duration(0) {
+	// Less than readQuorum "Admin.Uptime" RPC call returned
+	// successfully, so read-quorum unavailable.
+	if validCount < readQuorum {
 		return time.Duration(0), InsufficientReadQuorum{}
 	}
 
