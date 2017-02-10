@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package cmd
+package trie
 
 import (
 	"testing"
@@ -23,7 +23,7 @@ import (
 // Simply make sure creating a new tree works.
 func TestNewTrie(t *testing.T) {
 	var trie *Trie
-	trie = newTrie()
+	trie = NewTrie()
 
 	if trie.size != 0 {
 		t.Errorf("expected size 0, got: %d", trie.size)
@@ -33,7 +33,7 @@ func TestNewTrie(t *testing.T) {
 // Ensure that we can insert new keys into the tree, then check the size.
 func TestInsert(t *testing.T) {
 	var trie *Trie
-	trie = newTrie()
+	trie = NewTrie()
 
 	// We need to have an empty tree to begin with.
 	if trie.size != 0 {
@@ -52,10 +52,10 @@ func TestInsert(t *testing.T) {
 // Ensure that PrefixMatch gives us the correct two keys in the tree.
 func TestPrefixMatch(t *testing.T) {
 	var trie *Trie
-	trie = newTrie()
+	trie = NewTrie()
 
 	// Feed it some fodder: only 'minio' and 'miny-os' should trip the matcher.
-	trie.Insert(globalMinioDefaultOwnerID)
+	trie.Insert("minio")
 	trie.Insert("amazon")
 	trie.Insert("cheerio")
 	trie.Insert("miny-o's")
@@ -65,7 +65,7 @@ func TestPrefixMatch(t *testing.T) {
 		t.Errorf("expected two matches, got: %d", len(matches))
 	}
 
-	if matches[0] != globalMinioDefaultOwnerID && matches[1] != globalMinioDefaultOwnerID {
+	if matches[0] != "minio" && matches[1] != "minio" {
 		t.Errorf("expected one match to be 'minio', got: '%s' and '%s'", matches[0], matches[1])
 	}
 }

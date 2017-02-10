@@ -94,7 +94,7 @@ func findClosestCommands(command string) []string {
 	sort.Strings(closestCommands)
 	// Suggest other close commands - allow missed, wrongly added and
 	// even transposed characters
-	for _, value := range commandsTree.walk(commandsTree.root) {
+	for _, value := range commandsTree.Walk(commandsTree.Root()) {
 		if sort.SearchStrings(closestCommands, value.(string)) < len(closestCommands) {
 			continue
 		}
