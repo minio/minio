@@ -178,13 +178,16 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 type ListObjectsArgs struct {
 	BucketName string `json:"bucketName"`
 	Prefix     string `json:"prefix"`
+	Marker     string `json:"marker"`
 }
 
 // ListObjectsRep - list objects response.
 type ListObjectsRep struct {
-	Objects   []WebObjectInfo `json:"objects"`
-	Writable  bool            `json:"writable"` // Used by client to show "upload file" button.
-	UIVersion string          `json:"uiVersion"`
+	Objects     []WebObjectInfo `json:"objects"`
+	NextMarker  string          `json:"nextmarker"`
+	IsTruncated bool            `json:"istruncated"`
+	Writable    bool            `json:"writable"` // Used by client to show "upload file" button.
+	UIVersion   string          `json:"uiVersion"`
 }
 
 // WebObjectInfo container for list objects metadata.
@@ -226,30 +229,26 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 	default:
 		return errAuthentication
 	}
-	marker := ""
-	for {
-		lo, err := objectAPI.ListObjects(args.BucketName, args.Prefix, marker, "/", 1000)
-		if err != nil {
-			return &json2.Error{Message: err.Error()}
-		}
-		marker = lo.NextMarker
-		for _, obj := range lo.Objects {
-			reply.Objects = append(reply.Objects, WebObjectInfo{
-				Key:          obj.Name,
-				LastModified: obj.ModTime,
-				Size:         obj.Size,
-				ContentType:  obj.ContentType,
-			})
-		}
-		for _, prefix := range lo.Prefixes {
-			reply.Objects = append(reply.Objects, WebObjectInfo{
-				Key: prefix,
-			})
-		}
-		if !lo.IsTruncated {
-			break
-		}
+	lo, err := objectAPI.ListObjects(args.BucketName, args.Prefix, args.Marker, slashSeparator, 1000)
+	if err != nil {
+		return &json2.Error{Message: err.Error()}
 	}
+	reply.NextMarker = lo.NextMarker
+	reply.IsTruncated = lo.IsTruncated
+	for _, obj := range lo.Objects {
+		reply.Objects = append(reply.Objects, WebObjectInfo{
+			Key:          obj.Name,
+			LastModified: obj.ModTime,
+			Size:         obj.Size,
+			ContentType:  obj.ContentType,
+		})
+	}
+	for _, prefix := range lo.Prefixes {
+		reply.Objects = append(reply.Objects, WebObjectInfo{
+			Key: prefix,
+		})
+	}
+
 	return nil
 }
 

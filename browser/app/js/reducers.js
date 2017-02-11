@@ -21,6 +21,7 @@ export default (state = {
     buckets: [],
     visibleBuckets: [],
     objects: [],
+    istruncated: true,
     storageInfo: {},
     serverInfo: {},
     currentBucket: '',
@@ -76,7 +77,15 @@ export default (state = {
       newState.currentBucket = action.currentBucket
       break
     case actions.SET_OBJECTS:
-      newState.objects = action.objects
+      if (!action.objects.length) {
+        newState.objects = []
+        newState.marker = ""
+        newState.istruncated = action.istruncated
+      } else {
+        newState.objects = [...newState.objects, ...action.objects]
+        newState.marker = action.marker
+        newState.istruncated = action.istruncated
+      }
       break
     case actions.SET_CURRENT_PATH:
       newState.currentPath = action.currentPath
@@ -170,6 +179,11 @@ export default (state = {
       break
     case actions.SET_PREFIX_WRITABLE:
       newState.prefixWritable = action.prefixWritable
+      break
+    case actions.REMOVE_OBJECT:
+      let idx = newState.objects.findIndex(object => object.name === action.object)
+      if (idx == -1) break
+      newState.objects = [...newState.objects.slice(0, idx), ...newState.objects.slice(idx + 1)]
       break
   }
   return newState

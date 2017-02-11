@@ -56,6 +56,7 @@ export const SET_POLICIES = 'SET_POLICIES'
 export const SET_SHARE_OBJECT = 'SET_SHARE_OBJECT'
 export const DELETE_CONFIRMATION = 'DELETE_CONFIRMATION'
 export const SET_PREFIX_WRITABLE = 'SET_PREFIX_WRITABLE'
+export const REMOVE_OBJECT = 'REMOVE_OBJECT'
 
 export const showDeleteConfirmation = (object) => {
   return {
@@ -206,6 +207,13 @@ export const showAlert = alert => {
   }
 }
 
+export const removeObject = object => {
+  return {
+    type: REMOVE_OBJECT,
+    object
+  }
+}
+
 export const setSidebarStatus = (status) => {
   return {
     type: SET_SIDEBAR_STATUS,
@@ -227,10 +235,12 @@ export const setVisibleBuckets = visibleBuckets => {
   }
 }
 
-export const setObjects = (objects) => {
+export const setObjects = (objects, marker, istruncated) => {
   return {
     type: SET_OBJECTS,
-    objects
+    objects,
+    marker,
+    istruncated
   }
 }
 
@@ -284,22 +294,55 @@ export const selectBucket = (newCurrentBucket, prefix) => {
   }
 }
 
+export const listObjects = () => {
+  return (dispatch, getState) => {
+    const {currentBucket, currentPath, marker, objects, istruncated, web} = getState()
+    if (!istruncated) return
+    web.ListObjects({
+      bucketName: currentBucket,
+      prefix: currentPath,
+      marker: marker
+    })
+      .then(res => {
+        let objects = res.objects
+        if (!objects.length)
+          objects = []
+        dispatch(setObjects(objects, res.nextmarker, res.istruncated))
+        dispatch(setPrefixWritable(res.writable))
+        dispatch(setLoadBucket(''))
+        dispatch(setLoadPath(''))
+      })
+      .catch(err => {
+        dispatch(showAlert({
+          type: 'danger',
+          message: err.message
+        }))
+        dispatch(setLoadBucket(''))
+        dispatch(setLoadPath(''))
+        // Use browserHistory.replace instead of push so that browser back button works fine.
+        browserHistory.replace(`${minioBrowserPrefix}/login`)
+      })
+  }
+}
+
 export const selectPrefix = prefix => {
   return (dispatch, getState) => {
     const {currentBucket, web} = getState()
+    dispatch(setObjects([], "", true))
     dispatch(setLoadPath(prefix))
     web.ListObjects({
       bucketName: currentBucket,
-      prefix
+      prefix,
+      marker: ""
     })
       .then(res => {
         let objects = res.objects
         if (!objects)
           objects = []
         dispatch(setObjects(
-          utils.sortObjectsByName(objects.map(object => {
-            object.name = object.name.replace(`${prefix}`, ''); return object
-          }))
+          objects,
+          res.nextmarker,
+          res.istruncated
         ))
         dispatch(setPrefixWritable(res.writable))
         dispatch(setSortNameOrder(false))
@@ -314,8 +357,8 @@ export const selectPrefix = prefix => {
         }))
         dispatch(setLoadBucket(''))
         dispatch(setLoadPath(''))
-	// Use browserHistory.replace instead of push so that browser back button works fine.
-	browserHistory.replace(`${minioBrowserPrefix}/login`)
+        // Use browserHistory.replace instead of push so that browser back button works fine.
+        browserHistory.replace(`${minioBrowserPrefix}/login`)
       })
   }
 }
