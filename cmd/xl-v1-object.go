@@ -202,19 +202,22 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 	// Object cache enabled block.
 	if xlMeta.Stat.Size > 0 && xl.objCacheEnabled {
 		// Validate if we have previous cache.
-		var cachedBuffer io.ReadSeeker
+		var cachedBuffer io.ReaderAt
 		cachedBuffer, err = xl.objCache.Open(path.Join(bucket, object), modTime)
-		if err == nil { // Cache hit.
-			// Advance the buffer to offset as if it was read.
-			if _, err = cachedBuffer.Seek(startOffset, 0); err != nil { // Seek to the offset.
+		if err == nil { // Cache hit
+			// Create a new section reader, starting at an offset with length.
+			reader := io.NewSectionReader(cachedBuffer, startOffset, length)
+
+			// Copy the data out.
+			if _, err = io.Copy(writer, reader); err != nil {
 				return traceError(err)
 			}
-			// Write the requested length.
-			if _, err = io.CopyN(writer, cachedBuffer, length); err != nil {
-				return traceError(err)
-			}
+
+			// Success.
 			return nil
+
 		} // Cache miss.
+
 		// For unknown error, return and error out.
 		if err != objcache.ErrKeyNotFoundInCache {
 			return traceError(err)
