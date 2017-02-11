@@ -65,12 +65,6 @@ VERSION:
   ` + Version +
 	`{{ "\n"}}`
 
-// init - check the environment before main starts
-func init() {
-	// Check if minio was compiled using a supported version of Golang.
-	checkGoVersion()
-}
-
 func migrate() {
 	// Migrate config file
 	err := migrateConfig()

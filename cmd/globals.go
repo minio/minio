@@ -31,11 +31,6 @@ import (
 	"github.com/minio/minio/pkg/objcache"
 )
 
-// Global constants for Minio.
-const (
-	minGoVersion = ">= 1.7" // Minio requires at least Go v1.7
-)
-
 // minio configuration related constants.
 const (
 	globalMinioConfigVersion      = "13"
