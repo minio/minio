@@ -107,6 +107,7 @@ spelling:
 
 test: build
 	@echo "Running all minio testing:"
+	@go test $(GOFLAGS) .
 	@go test $(GOFLAGS) github.com/minio/minio/cmd...
 	@go test $(GOFLAGS) github.com/minio/minio/pkg...
 
