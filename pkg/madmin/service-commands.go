@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,50 +28,9 @@ import (
 	"time"
 )
 
-// BackendType - represents different backend types.
-type BackendType int
-
-// Enum for different backend types.
-const (
-	Unknown BackendType = iota
-	// Filesystem backend.
-	FS
-	// Multi disk Erasure (single, distributed) backend.
-	Erasure
-
-	// Add your own backend.
-)
-
-// StorageInfo - represents total capacity of underlying storage.
-type StorageInfo struct {
-	// Total disk space.
-	Total int64
-	// Free available disk space.
-	Free int64
-	// Backend type.
-	Backend struct {
-		// Represents various backend types, currently on FS and Erasure.
-		Type BackendType
-
-		// Following fields are only meaningful if BackendType is Erasure.
-		OnlineDisks  int // Online disks during server startup.
-		OfflineDisks int // Offline disks during server startup.
-		ReadQuorum   int // Minimum disks required for successful read operations.
-		WriteQuorum  int // Minimum disks required for successful write operations.
-	}
-}
-
-// ServerVersion - server version
-type ServerVersion struct {
-	Version  string `json:"version"`
-	CommitID string `json:"commitID"`
-}
-
 // ServiceStatusMetadata - contains the response of service status API
 type ServiceStatusMetadata struct {
-	StorageInfo   StorageInfo   `json:"storageInfo"`
-	ServerVersion ServerVersion `json:"serverVersion"`
-	Uptime        time.Duration `json:"uptime"`
+	Uptime time.Duration `json:"uptime"`
 }
 
 // ServiceStatus - Connect to a minio server and call Service Status Management API
