@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,12 @@ var versionCmd = cli.Command{
 	Name:   "version",
 	Usage:  "Print version.",
 	Action: mainVersion,
-	Flags:  globalFlags,
+	Flags: []cli.Flag{
+		cli.BoolFlag{
+			Name:  "help, h",
+			Usage: "Show this help.",
+		},
+	},
 	CustomHelpTemplate: `NAME:
    minio {{.Name}} - {{.Usage}}
 
@@ -35,20 +40,13 @@ USAGE:
 FLAGS:
   {{range .Flags}}{{.}}
   {{end}}
-
-`,
+VERSION:
+  ` + Version + `{{"\n"}}`,
 }
 
 func mainVersion(ctx *cli.Context) {
 	if len(ctx.Args()) != 0 {
 		cli.ShowCommandHelpAndExit(ctx, "version", 1)
-	}
-
-	// Initialization routine, such as config loading, enable logging, ..
-	minioInit(ctx)
-
-	if globalQuiet {
-		return
 	}
 
 	console.Println("Version: " + Version)
