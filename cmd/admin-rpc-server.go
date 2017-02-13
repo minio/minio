@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"errors"
 	"net/rpc"
 	"time"
@@ -52,6 +53,12 @@ type ListLocksReply struct {
 type UptimeReply struct {
 	AuthRPCReply
 	Uptime time.Duration
+}
+
+// ConfigReply - wraps the server config response over RPC.
+type ConfigReply struct {
+	AuthRPCReply
+	Config []byte // json-marshalled bytes of serverConfigV13
 }
 
 // Restart - Restart this instance of minio server.
@@ -129,6 +136,25 @@ func (s *adminCmd) Uptime(args *AuthRPCArgs, reply *UptimeReply) error {
 		Uptime: time.Now().UTC().Sub(globalBootTime),
 	}
 
+	return nil
+}
+
+// GetConfig - returns the config.json of this server.
+func (s *adminCmd) GetConfig(args *AuthRPCArgs, reply *ConfigReply) error {
+	if err := args.IsAuthenticated(); err != nil {
+		return err
+	}
+
+	if serverConfig == nil {
+		return errors.New("config not present")
+	}
+
+	jsonBytes, err := json.Marshal(serverConfig)
+	if err != nil {
+		return err
+	}
+
+	reply.Config = jsonBytes
 	return nil
 }
 

@@ -36,13 +36,13 @@ func main() {
 
 ```
 
-| Service operations|LockInfo operations|Healing operations|
-|:---|:---|:---|
-|[`ServiceStatus`](#ServiceStatus)| [`ListLocks`](#ListLocks)| [`ListObjectsHeal`](#ListObjectsHeal)|
-|[`ServiceRestart`](#ServiceRestart)| [`ClearLocks`](#ClearLocks)| [`ListBucketsHeal`](#ListBucketsHeal)|
-| | |[`HealBucket`](#HealBucket) |
-| | |[`HealObject`](#HealObject)|
-| | |[`HealFormat`](#HealFormat)|
+| Service operations|LockInfo operations|Healing operations|Config operations|
+|:---|:---|:---|:---|
+|[`ServiceStatus`](#ServiceStatus)| [`ListLocks`](#ListLocks)| [`ListObjectsHeal`](#ListObjectsHeal)|[`GetConfig`](#GetConfig)|
+|[`ServiceRestart`](#ServiceRestart)| [`ClearLocks`](#ClearLocks)| [`ListBucketsHeal`](#ListBucketsHeal)||
+| | |[`HealBucket`](#HealBucket) ||
+| | |[`HealObject`](#HealObject)||
+| | |[`HealFormat`](#HealFormat)||
 
 ## 1. Constructor
 <a name="Minio"></a>
@@ -271,4 +271,25 @@ __Example__
 
     log.Println("successfully healed storage format on available disks.")
 
+```
+<a name="GetConfig"></a>
+### GetConfig() ([]byte, error)
+Get config.json of a minio setup.
+
+__Example__
+
+``` go
+    configBytes, err := madmClnt.GetConfig()
+    if err != nil {
+        log.Fatalf("failed due to: %v", err)
+    }
+
+    // Pretty-print config received as json.
+    var buf bytes.Buffer
+    err = json.Indent(buf, configBytes, "", "\t")
+    if err != nil {
+        log.Fatalf("failed due to: %v", err)
+    }
+
+    log.Println("config received successfully: ", string(buf.Bytes()))
 ```

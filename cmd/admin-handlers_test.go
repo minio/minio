@@ -988,3 +988,48 @@ func TestHealFormatHandler(t *testing.T) {
 		t.Errorf("Expected to succeed but failed with %d", rec.Code)
 	}
 }
+
+// TestGetConfigHandler - test for GetConfigHandler.
+func TestGetConfigHandler(t *testing.T) {
+	adminTestBed, err := prepareAdminXLTestBed()
+	if err != nil {
+		t.Fatal("Failed to initialize a single node XL backend for admin handler tests.")
+	}
+	defer adminTestBed.TearDown()
+
+	// Initialize admin peers to make admin RPC calls.
+	eps, err := parseStorageEndpoints([]string{"http://127.0.0.1"})
+	if err != nil {
+		t.Fatalf("Failed to parse storage end point - %v", err)
+	}
+
+	// Set globalMinioAddr to be able to distinguish local endpoints from remote.
+	globalMinioAddr = eps[0].Host
+	initGlobalAdminPeers(eps)
+
+	// Prepare query params for get-config mgmt REST API.
+	queryVal := url.Values{}
+	queryVal.Set("config", "")
+
+	req, err := newTestRequest("GET", "/?"+queryVal.Encode(), 0, nil)
+	if err != nil {
+		t.Fatalf("Failed to construct get-config object request - %v", err)
+	}
+
+	// Set x-minio-operation header to get.
+	req.Header.Set(minioAdminOpHeader, "get")
+
+	// Sign the request using signature v4.
+	cred := serverConfig.GetCredential()
+	err = signRequestV4(req, cred.AccessKey, cred.SecretKey)
+	if err != nil {
+		t.Fatalf("Failed to sign heal object request - %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	adminTestBed.mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("Expected to succeed but failed with %d", rec.Code)
+	}
+
+}
