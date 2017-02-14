@@ -23,9 +23,7 @@ You need to download [generate_cert.go](https://golang.org/src/crypto/tls/genera
 `generate_cert.go` already provides SAN certificates with DNS and IP entries:
 
 ```sh
-
 go run generate_cert.go -ca --host "10.10.0.3"
-
 ```
 
 #### With OpenSSL:
@@ -33,17 +31,13 @@ go run generate_cert.go -ca --host "10.10.0.3"
 Generate the private key:
 
 ```sh
-
 openssl genrsa -out private.key 1024
-
 ```
 
 Generate the self-signed certificate:
 
 ```sh
-
 openssl req -new -x509 -days 3650 -key private.key -out public.crt -subj "/C=country/ST=state/L=location/O=organization/CN=domain"
-
 ```
 
 ### Windows
@@ -57,9 +51,7 @@ Download and decompress the Windows version of GnuTLS from [here](http://www.gnu
 Make sure to add extracted GnuTLS binary path to your system path.
 
 ```
-
 setx path "%path%;C:\Users\MyUser\Downloads\gnutls-3.4.9-w64\bin"
-
 ```
 
 You may need to restart your powershell console for this to take affect.
@@ -69,9 +61,7 @@ You may need to restart your powershell console for this to take affect.
 Run the following command to create `private.key`
 
 ```
-
 certtool.exe --generate-privkey --outfile private.key 
-
 ```
 
 #### Generate public.crt
@@ -121,9 +111,7 @@ encryption_key
 Generate public certificate
 
 ```
-
 certtool.exe --generate-self-signed --load-privkey private.key --template cert.cnf --outfile public.crt 
-
 ```
 
 ## 3. Configure Minio with the generated certificate
