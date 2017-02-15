@@ -145,14 +145,13 @@ func checkMainSyntax(c *cli.Context) {
 func checkUpdate() {
 	// Do not print update messages, if quiet flag is set.
 	if !globalQuiet {
-		updateMsg, _, err := getReleaseUpdate(minioUpdateStableURL, 1*time.Second)
+		older, downloadURL, err := getUpdateInfo(1 * time.Second)
 		if err != nil {
-			// Ignore any errors during getReleaseUpdate(), possibly
-			// because of network errors.
+			// Its OK to ignore any errors during getUpdateInfo() here.
 			return
 		}
-		if updateMsg.Update {
-			console.Println(updateMsg)
+		if older > time.Duration(0) {
+			console.Println(colorizeUpdateMessage(downloadURL, older))
 		}
 	}
 }
