@@ -52,7 +52,7 @@ USAGE:
   minio {{.Name}} [FLAGS] PATH [PATH...]
 
 FLAGS:
-  {{range .Flags}}{{.}}
+  {{range .VisibleFlags}}{{.}}
   {{end}}
 ENVIRONMENT VARIABLES:
   ACCESS:
