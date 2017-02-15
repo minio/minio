@@ -304,9 +304,13 @@ export const listObjects = () => {
       marker: marker
     })
       .then(res => {
-        let objects = res.objects
-        if (!objects.length)
+	let objects = res.objects
+        if (!objects)
           objects = []
+        objects = objects.map(object => {
+	  object.name = object.name.replace(`${currentPath}`, '');
+	  return object
+	})
         dispatch(setObjects(objects, res.nextmarker, res.istruncated))
         dispatch(setPrefixWritable(res.writable))
         dispatch(setLoadBucket(''))
@@ -328,7 +332,7 @@ export const listObjects = () => {
 export const selectPrefix = prefix => {
   return (dispatch, getState) => {
     const {currentBucket, web} = getState()
-    dispatch(setObjects([], "", true))
+    dispatch(setObjects([], "", false))
     dispatch(setLoadPath(prefix))
     web.ListObjects({
       bucketName: currentBucket,
@@ -339,6 +343,10 @@ export const selectPrefix = prefix => {
         let objects = res.objects
         if (!objects)
           objects = []
+        objects = objects.map(object => {
+	  object.name = object.name.replace(`${prefix}`, '');
+	  return object
+	})
         dispatch(setObjects(
           objects,
           res.nextmarker,
