@@ -162,9 +162,22 @@ func newNotificationEvent(event eventData) NotificationEvent {
 	return nEvent
 }
 
-// Fetch the external target. No locking needed here since this map is
-// never written after initial startup.
+// Fetch all external targets. This returns a copy of the current map of
+// external notification targets.
+func (en eventNotifier) GetAllExternalTargets() map[string]*logrus.Logger {
+	en.external.rwMutex.RLock()
+	defer en.external.rwMutex.RUnlock()
+	targetsCopy := make(map[string]*logrus.Logger)
+	for k, v := range en.external.targets {
+		targetsCopy[k] = v
+	}
+	return targetsCopy
+}
+
+// Fetch the external target.
 func (en eventNotifier) GetExternalTarget(queueARN string) *logrus.Logger {
+	en.external.rwMutex.RLock()
+	defer en.external.rwMutex.RUnlock()
 	return en.external.targets[queueARN]
 }
 

@@ -39,6 +39,9 @@ func registerAdminRouter(mux *router.Router) {
 	// Service update credentials
 	adminRouter.Methods("POST").Queries("service", "").Headers(minioAdminOpHeader, "set-credentials").HandlerFunc(adminAPI.ServiceCredentialsHandler)
 
+	// Info operations
+	adminRouter.Methods("GET").Queries("info", "").HandlerFunc(adminAPI.ServerInfoHandler)
+
 	/// Lock operations
 
 	// List Locks

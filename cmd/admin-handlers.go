@@ -188,6 +188,98 @@ func (adminAPI adminAPIHandlers) ServiceCredentialsHandler(w http.ResponseWriter
 	w.WriteHeader(http.StatusOK)
 }
 
+// ServerProperties holds some server information such as, version, region
+// uptime, etc..
+type ServerProperties struct {
+	Uptime   time.Duration `json:"uptime"`
+	Version  string        `json:"version"`
+	CommitID string        `json:"commitID"`
+	Region   string        `json:"region"`
+	SQSARN   []string      `json:"sqsARN"`
+}
+
+// ServerConnStats holds transferred bytes from/to the server
+type ServerConnStats struct {
+	TotalInputBytes  uint64 `json:"transferred"`
+	TotalOutputBytes uint64 `json:"received"`
+	Throughput       uint64 `json:"throughput,omitempty"`
+}
+
+// ServerInfo holds the information that will be returned by ServerInfo API
+type ServerInfo struct {
+	StorageInfo StorageInfo      `json:"storage"`
+	ConnStats   ServerConnStats  `json:"network"`
+	Properties  ServerProperties `json:"server"`
+}
+
+// ServerInfoHandler - GET /?server-info
+// ----------
+// Get server information
+func (adminAPI adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Request) {
+	// Authenticate request
+	adminAPIErr := checkRequestAuthType(r, "", "", "")
+	if adminAPIErr != ErrNone {
+		writeErrorResponse(w, adminAPIErr, r.URL)
+		return
+	}
+
+	// Build storage info
+	objLayer := newObjectLayerFn()
+	if objLayer == nil {
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+		return
+	}
+	storage := objLayer.StorageInfo()
+
+	// Build list of enabled ARNs queues
+	var arns []string
+	for queueArn := range globalEventNotifier.GetAllExternalTargets() {
+		arns = append(arns, queueArn)
+	}
+
+	// Fetch uptimes from all peers. This may fail to due to lack
+	// of read-quorum availability.
+	uptime, err := getPeerUptimes(globalAdminPeers)
+	if err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		errorIf(err, "Unable to get uptime from majority of servers.")
+		return
+	}
+
+	// Build server properties information
+	properties := ServerProperties{
+		Version:  Version,
+		CommitID: CommitID,
+		Region:   serverConfig.GetRegion(),
+		SQSARN:   arns,
+		Uptime:   uptime,
+	}
+
+	// Build network info
+	connStats := ServerConnStats{
+		TotalInputBytes:  globalConnStats.getTotalInputBytes(),
+		TotalOutputBytes: globalConnStats.getTotalOutputBytes(),
+	}
+
+	// Build the whole returned information
+	info := ServerInfo{
+		StorageInfo: storage,
+		ConnStats:   connStats,
+		Properties:  properties,
+	}
+
+	// Marshal API response
+	jsonBytes, err := json.Marshal(info)
+	if err != nil {
+		writeErrorResponse(w, ErrInternalError, r.URL)
+		errorIf(err, "Failed to marshal storage info into json.")
+		return
+	}
+	// Reply with storage information (across nodes in a
+	// distributed setup) as json.
+	writeSuccessResponseJSON(w, jsonBytes)
+}
+
 // validateLockQueryParams - Validates query params for list/clear locks management APIs.
 func validateLockQueryParams(vars url.Values) (string, string, time.Duration, APIErrorCode) {
 	bucket := vars.Get(string(mgmtBucket))
