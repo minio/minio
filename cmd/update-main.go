@@ -53,7 +53,7 @@ USAGE:
    minio {{.Name}} [FLAGS]
 
 FLAGS:
-  {{range .Flags}}{{.}}
+  {{range .VisibleFlags}}{{.}}
   {{end}}
 EXIT STATUS:
    0 - You are already running the most recent version.

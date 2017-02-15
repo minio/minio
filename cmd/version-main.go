@@ -38,7 +38,7 @@ USAGE:
    minio {{.Name}}
 
 FLAGS:
-  {{range .Flags}}{{.}}
+  {{range .VisibleFlags}}{{.}}
   {{end}}
 VERSION:
   ` + Version + `{{"\n"}}`,
