@@ -25,6 +25,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"testing"
+	"time"
 
 	router "github.com/gorilla/mux"
 )
@@ -43,6 +44,7 @@ type adminXLTestBed struct {
 func prepareAdminXLTestBed() (*adminXLTestBed, error) {
 	// reset global variables to start afresh.
 	resetTestGlobals()
+
 	// Initialize minio server config.
 	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
@@ -53,6 +55,9 @@ func prepareAdminXLTestBed() (*adminXLTestBed, error) {
 	if xlErr != nil {
 		return nil, xlErr
 	}
+
+	// Initialize boot time
+	globalBootTime = time.Now().UTC()
 
 	// Set globalEndpoints for a single node XL setup.
 	for _, xlDir := range xlDirs {
@@ -197,7 +202,7 @@ func testServicesCmdHandler(cmd cmdType, t *testing.T) {
 	// Initialize admin peers to make admin RPC calls. Note: In a
 	// single node setup, this degenerates to a simple function
 	// call under the hood.
-	eps, err := parseStorageEndpoints([]string{"http://localhost"})
+	eps, err := parseStorageEndpoints([]string{"http://127.0.0.1"})
 	if err != nil {
 		t.Fatalf("Failed to parse storage end point - %v", err)
 	}
@@ -224,14 +229,13 @@ func testServicesCmdHandler(cmd cmdType, t *testing.T) {
 
 	if cmd == statusCmd {
 		expectedInfo := ServerStatus{
-			StorageInfo:   newObjectLayerFn().StorageInfo(),
 			ServerVersion: ServerVersion{Version: Version, CommitID: CommitID},
 		}
 		receivedInfo := ServerStatus{}
 		if jsonErr := json.Unmarshal(rec.Body.Bytes(), &receivedInfo); jsonErr != nil {
 			t.Errorf("Failed to unmarshal StorageInfo - %v", jsonErr)
 		}
-		if expectedInfo != receivedInfo {
+		if expectedInfo.ServerVersion != receivedInfo.ServerVersion {
 			t.Errorf("Expected storage info and received storage info differ, %v %v", expectedInfo, receivedInfo)
 		}
 	}
@@ -264,7 +268,7 @@ func TestServiceSetCreds(t *testing.T) {
 	// Initialize admin peers to make admin RPC calls. Note: In a
 	// single node setup, this degenerates to a simple function
 	// call under the hood.
-	eps, err := parseStorageEndpoints([]string{"http://localhost"})
+	eps, err := parseStorageEndpoints([]string{"http://127.0.0.1"})
 	if err != nil {
 		t.Fatalf("Failed to parse storage end point - %v", err)
 	}
@@ -294,11 +298,9 @@ func TestServiceSetCreds(t *testing.T) {
 	for i, testCase := range testCases {
 		// Set or unset environement keys
 		if !testCase.EnvKeysSet {
-			globalEnvAccessKey = ""
-			globalEnvSecretKey = ""
+			globalIsEnvCreds = false
 		} else {
-			globalEnvAccessKey = testCase.Username
-			globalEnvSecretKey = testCase.Password
+			globalIsEnvCreds = true
 		}
 
 		// Construct setCreds request body
@@ -336,12 +338,12 @@ func TestServiceSetCreds(t *testing.T) {
 }
 
 // mkLockQueryVal - helper function to build lock query param.
-func mkLockQueryVal(bucket, prefix, relTimeStr string) url.Values {
+func mkLockQueryVal(bucket, prefix, durationStr string) url.Values {
 	qVal := url.Values{}
 	qVal.Set("lock", "")
 	qVal.Set(string(mgmtBucket), bucket)
 	qVal.Set(string(mgmtPrefix), prefix)
-	qVal.Set(string(mgmtOlderThan), relTimeStr)
+	qVal.Set(string(mgmtLockDuration), durationStr)
 	return qVal
 }
 
@@ -354,7 +356,7 @@ func TestListLocksHandler(t *testing.T) {
 	defer adminTestBed.TearDown()
 
 	// Initialize admin peers to make admin RPC calls.
-	eps, err := parseStorageEndpoints([]string{"http://localhost"})
+	eps, err := parseStorageEndpoints([]string{"http://127.0.0.1"})
 	if err != nil {
 		t.Fatalf("Failed to parse storage end point - %v", err)
 	}
@@ -366,41 +368,41 @@ func TestListLocksHandler(t *testing.T) {
 	testCases := []struct {
 		bucket         string
 		prefix         string
-		relTime        string
+		duration       string
 		expectedStatus int
 	}{
 		// Test 1 - valid testcase
 		{
 			bucket:         "mybucket",
 			prefix:         "myobject",
-			relTime:        "1s",
+			duration:       "1s",
 			expectedStatus: http.StatusOK,
 		},
 		// Test 2 - invalid duration
 		{
 			bucket:         "mybucket",
 			prefix:         "myprefix",
-			relTime:        "invalidDuration",
+			duration:       "invalidDuration",
 			expectedStatus: http.StatusBadRequest,
 		},
 		// Test 3 - invalid bucket name
 		{
 			bucket:         `invalid\\Bucket`,
 			prefix:         "myprefix",
-			relTime:        "1h",
+			duration:       "1h",
 			expectedStatus: http.StatusBadRequest,
 		},
 		// Test 4 - invalid prefix
 		{
 			bucket:         "mybucket",
 			prefix:         `invalid\\Prefix`,
-			relTime:        "1h",
+			duration:       "1h",
 			expectedStatus: http.StatusBadRequest,
 		},
 	}
 
 	for i, test := range testCases {
-		queryVal := mkLockQueryVal(test.bucket, test.prefix, test.relTime)
+		queryVal := mkLockQueryVal(test.bucket, test.prefix, test.duration)
 		req, err := newTestRequest("GET", "/?"+queryVal.Encode(), 0, nil)
 		if err != nil {
 			t.Fatalf("Test %d - Failed to construct list locks request - %v", i+1, err)
@@ -429,7 +431,7 @@ func TestClearLocksHandler(t *testing.T) {
 	defer adminTestBed.TearDown()
 
 	// Initialize admin peers to make admin RPC calls.
-	eps, err := parseStorageEndpoints([]string{"http://localhost"})
+	eps, err := parseStorageEndpoints([]string{"http://127.0.0.1"})
 	if err != nil {
 		t.Fatalf("Failed to parse storage end point - %v", err)
 	}
@@ -438,41 +440,41 @@ func TestClearLocksHandler(t *testing.T) {
 	testCases := []struct {
 		bucket         string
 		prefix         string
-		relTime        string
+		duration       string
 		expectedStatus int
 	}{
 		// Test 1 - valid testcase
 		{
 			bucket:         "mybucket",
 			prefix:         "myobject",
-			relTime:        "1s",
+			duration:       "1s",
 			expectedStatus: http.StatusOK,
 		},
 		// Test 2 - invalid duration
 		{
 			bucket:         "mybucket",
 			prefix:         "myprefix",
-			relTime:        "invalidDuration",
+			duration:       "invalidDuration",
 			expectedStatus: http.StatusBadRequest,
 		},
 		// Test 3 - invalid bucket name
 		{
 			bucket:         `invalid\\Bucket`,
 			prefix:         "myprefix",
-			relTime:        "1h",
+			duration:       "1h",
 			expectedStatus: http.StatusBadRequest,
 		},
 		// Test 4 - invalid prefix
 		{
 			bucket:         "mybucket",
 			prefix:         `invalid\\Prefix`,
-			relTime:        "1h",
+			duration:       "1h",
 			expectedStatus: http.StatusBadRequest,
 		},
 	}
 
 	for i, test := range testCases {
-		queryVal := mkLockQueryVal(test.bucket, test.prefix, test.relTime)
+		queryVal := mkLockQueryVal(test.bucket, test.prefix, test.duration)
 		req, err := newTestRequest("POST", "/?"+queryVal.Encode(), 0, nil)
 		if err != nil {
 			t.Fatalf("Test %d - Failed to construct clear locks request - %v", i+1, err)

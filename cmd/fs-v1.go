@@ -245,7 +245,7 @@ func (fs fsObjects) statBucketDir(bucket string) (os.FileInfo, error) {
 	}
 	st, err := fsStatDir(bucketDir)
 	if err != nil {
-		return nil, traceError(err)
+		return nil, err
 	}
 	return st, nil
 }
@@ -259,7 +259,7 @@ func (fs fsObjects) MakeBucket(bucket string) error {
 	}
 
 	if err = fsMkdir(bucketDir); err != nil {
-		return toObjectErr(traceError(err), bucket)
+		return toObjectErr(err, bucket)
 	}
 
 	return nil
@@ -283,7 +283,7 @@ func (fs fsObjects) GetBucketInfo(bucket string) (BucketInfo, error) {
 // ListBuckets - list all s3 compatible buckets (directories) at fsPath.
 func (fs fsObjects) ListBuckets() ([]BucketInfo, error) {
 	if err := checkPathLength(fs.fsPath); err != nil {
-		return nil, err
+		return nil, traceError(err)
 	}
 	var bucketInfos []BucketInfo
 	entries, err := readDir(preparePath(fs.fsPath))
@@ -301,9 +301,9 @@ func (fs fsObjects) ListBuckets() ([]BucketInfo, error) {
 		fi, err = fsStatDir(pathJoin(fs.fsPath, entry))
 		if err != nil {
 			// If the directory does not exist, skip the entry.
-			if err == errVolumeNotFound {
+			if errorCause(err) == errVolumeNotFound {
 				continue
-			} else if err == errVolumeAccessDenied {
+			} else if errorCause(err) == errVolumeAccessDenied {
 				// Skip the entry if its a file.
 				continue
 			}
@@ -376,7 +376,7 @@ func (fs fsObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string
 	// Stat the file to get file size.
 	fi, err := fsStatFile(pathJoin(fs.fsPath, srcBucket, srcObject))
 	if err != nil {
-		return ObjectInfo{}, toObjectErr(traceError(err), srcBucket, srcObject)
+		return ObjectInfo{}, toObjectErr(err, srcBucket, srcObject)
 	}
 
 	// Check if this request is only metadata update.
@@ -386,7 +386,7 @@ func (fs fsObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string
 		var wlk *lock.LockedFile
 		wlk, err = fs.rwPool.Write(fsMetaPath)
 		if err != nil {
-			return ObjectInfo{}, toObjectErr(err, srcBucket, srcObject)
+			return ObjectInfo{}, toObjectErr(traceError(err), srcBucket, srcObject)
 		}
 		// This close will allow for locks to be synchronized on `fs.json`.
 		defer wlk.Close()
@@ -467,7 +467,7 @@ func (fs fsObjects) GetObject(bucket, object string, offset int64, length int64,
 	fsObjPath := pathJoin(fs.fsPath, bucket, object)
 	reader, size, err := fsOpenFile(fsObjPath, offset)
 	if err != nil {
-		return toObjectErr(traceError(err), bucket, object)
+		return toObjectErr(err, bucket, object)
 	}
 	defer reader.Close()
 
@@ -505,8 +505,13 @@ func (fs fsObjects) getObjectInfo(bucket, object string) (ObjectInfo, error) {
 	if err == nil {
 		// Read from fs metadata only if it exists.
 		defer fs.rwPool.Close(fsMetaPath)
-		if _, rerr := fsMeta.ReadFrom(io.NewSectionReader(rlk, 0, rlk.Size())); rerr != nil {
-			return ObjectInfo{}, toObjectErr(rerr, bucket, object)
+		if _, rerr := fsMeta.ReadFrom(rlk.LockedFile); rerr != nil {
+			// `fs.json` can be empty due to previously failed
+			// PutObject() transaction, if we arrive at such
+			// a situation we just ignore and continue.
+			if errorCause(rerr) != io.EOF {
+				return ObjectInfo{}, toObjectErr(rerr, bucket, object)
+			}
 		}
 	}
 
@@ -518,7 +523,7 @@ func (fs fsObjects) getObjectInfo(bucket, object string) (ObjectInfo, error) {
 	// Stat the file to get file size.
 	fi, err := fsStatFile(pathJoin(fs.fsPath, bucket, object))
 	if err != nil {
-		return ObjectInfo{}, toObjectErr(traceError(err), bucket, object)
+		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
 	return fsMeta.ToObjectInfo(bucket, object, fi), nil
@@ -569,7 +574,7 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 		fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fsMetaJSONFile)
 		wlk, err = fs.rwPool.Create(fsMetaPath)
 		if err != nil {
-			return ObjectInfo{}, toObjectErr(err, bucket, object)
+			return ObjectInfo{}, toObjectErr(traceError(err), bucket, object)
 		}
 		// This close will allow for locks to be synchronized on `fs.json`.
 		defer wlk.Close()
@@ -667,7 +672,7 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 	// Stat the file to fetch timestamp, size.
 	fi, err := fsStatFile(pathJoin(fs.fsPath, bucket, object))
 	if err != nil {
-		return ObjectInfo{}, toObjectErr(traceError(err), bucket, object)
+		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
 	// Success.
@@ -694,20 +699,20 @@ func (fs fsObjects) DeleteObject(bucket, object string) error {
 			defer rwlk.Close()
 		}
 		if lerr != nil && lerr != errFileNotFound {
-			return toObjectErr(lerr, bucket, object)
+			return toObjectErr(traceError(lerr), bucket, object)
 		}
 	}
 
 	// Delete the object.
 	if err := fsDeleteFile(pathJoin(fs.fsPath, bucket), pathJoin(fs.fsPath, bucket, object)); err != nil {
-		return toObjectErr(traceError(err), bucket, object)
+		return toObjectErr(err, bucket, object)
 	}
 
 	if bucket != minioMetaBucket {
 		// Delete the metadata object.
 		err := fsDeleteFile(minioMetaBucketDir, fsMetaPath)
-		if err != nil && err != errFileNotFound {
-			return toObjectErr(traceError(err), bucket, object)
+		if err != nil && errorCause(err) != errFileNotFound {
+			return toObjectErr(err, bucket, object)
 		}
 	}
 	return nil
@@ -726,37 +731,11 @@ func (fs fsObjects) listDirFactory(isLeaf isLeafFunc) listDirFunc {
 	// listDir - lists all the entries at a given prefix and given entry in the prefix.
 	listDir := func(bucket, prefixDir, prefixEntry string) (entries []string, delayIsLeaf bool, err error) {
 		entries, err = readDir(pathJoin(fs.fsPath, bucket, prefixDir))
-		if err == nil {
-			// Listing needs to be sorted.
-			sort.Strings(entries)
-
-			// Filter entries that have the prefix prefixEntry.
-			entries = filterMatchingPrefix(entries, prefixEntry)
-
-			// Can isLeaf() check be delayed till when it has to be sent down the
-			// treeWalkResult channel?
-			delayIsLeaf = delayIsLeafCheck(entries)
-			if delayIsLeaf {
-				return entries, delayIsLeaf, nil
-			}
-
-			// isLeaf() check has to happen here so that trailing "/" for objects can be removed.
-			for i, entry := range entries {
-				if isLeaf(bucket, pathJoin(prefixDir, entry)) {
-					entries[i] = strings.TrimSuffix(entry, slashSeparator)
-				}
-			}
-
-			// Sort again after removing trailing "/" for objects as the previous sort
-			// does not hold good anymore.
-			sort.Strings(entries)
-
-			// Succes.
-			return entries, delayIsLeaf, nil
-		} // Return error at the end.
-
-		// Error.
-		return nil, false, err
+		if err != nil {
+			return nil, false, err
+		}
+		entries, delayIsLeaf = filterListEntries(bucket, prefixDir, entries, prefixEntry, isLeaf)
+		return entries, delayIsLeaf, nil
 	}
 
 	// Return list factory instance.
@@ -811,7 +790,7 @@ func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 		var fi os.FileInfo
 		fi, err = fsStatFile(pathJoin(fs.fsPath, bucket, entry))
 		if err != nil {
-			return ObjectInfo{}, toObjectErr(traceError(err), bucket, entry)
+			return ObjectInfo{}, toObjectErr(err, bucket, entry)
 		}
 		fsMeta := fsMetaV1{}
 		return fsMeta.ToObjectInfo(bucket, entry, fi), nil

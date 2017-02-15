@@ -22,21 +22,26 @@ As with Minio in stand-alone mode, distributed Minio has a per tenant limit of m
 
 Note that with distributed Minio you can play around with the number of nodes and drives as long as the limits are adhered to. For example, you can have 2 nodes with 4 drives each, 4 nodes with 4 drives each, 8 nodes with 2 drives each, and so on.
 
+### Consistency Guarantees
+
+Minio follows strict **read-after-write** consistency model for all i/o operations both in distributed and standalone modes.
+
 # Get started
 
 If you're aware of stand-alone Minio set up, the process remains largely the same, as the Minio server automatically switches to stand-alone or distributed mode, depending on the command line parameters.
 
 ## 1. Prerequisites
 
-Install Minio - [Minio Quickstart Guide](https://docs.minio.io/docs/minio).
+Install Minio - [Minio Quickstart Guide](https://docs.minio.io/docs/minio-quickstart-guide).
 
 ## 2. Run distributed Minio
 
 To start a distributed Minio instance, you just need to pass drive locations as parameters to the minio server command. Then, you’ll need to run the same command on all the participating nodes.
 
-It is important to note here that all the nodes running distributed Minio need to have same access key and secret key. Otherwise nodes won't connect. To achieve this, you need to export access key and secret key as environment variables on all the nodes before executing Minio server command.
-
-Below examples will clarify further:
+*Note* 
+- All the nodes running distributed Minio need to have same access key and secret key for the nodes to connect. To achieve this, you need to export access key and secret key as environment variables on all the nodes before executing Minio server command.
+- Disks used for Minio distributed should be fresh with no pre-existing data. 
+- The IP addresses and drive paths below are for demonstration purposes only, you need to replace these with the actual IP addresses and drive paths/folders.
 
 Example 1: Start distributed Minio instance with 1 drive each on 8 nodes, by running this command on all the 8 nodes.
 
@@ -67,8 +72,6 @@ minio server http://192.168.1.11/export1 http://192.168.1.11/export2 \
 ```
 
 ![Distributed Minio, 4 nodes with 4 disks each](https://raw.githubusercontent.com/minio/minio/master/docs/screenshots/Architecture-diagram_distributed_16.png)
-
-Note that these IP addresses and drive paths are for demonstration purposes only, you need to replace these with the actual IP addresses and drive paths.
 
 ## 3. Test your setup
 

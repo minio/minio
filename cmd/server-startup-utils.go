@@ -19,7 +19,6 @@ package cmd
 import (
 	"fmt"
 	"net"
-	"net/http"
 )
 
 // getListenIPs - gets all the ips to listen on.
@@ -49,7 +48,7 @@ func getListenIPs(serverAddr string) (hosts []string, port string, err error) {
 }
 
 // Finalizes the API endpoints based on the host list and port.
-func finalizeAPIEndpoints(apiServer *http.Server) (endPoints []string, err error) {
+func finalizeAPIEndpoints(addr string) (endPoints []string, err error) {
 	// Verify current scheme.
 	scheme := httpScheme
 	if globalIsSSL {
@@ -57,7 +56,7 @@ func finalizeAPIEndpoints(apiServer *http.Server) (endPoints []string, err error
 	}
 
 	// Get list of listen ips and port.
-	hosts, port, err1 := getListenIPs(apiServer.Addr)
+	hosts, port, err1 := getListenIPs(addr)
 	if err1 != nil {
 		return nil, err1
 	}

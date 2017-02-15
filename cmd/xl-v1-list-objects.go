@@ -18,6 +18,34 @@ package cmd
 
 import "strings"
 
+// Returns function "listDir" of the type listDirFunc.
+// isLeaf - is used by listDir function to check if an entry is a leaf or non-leaf entry.
+// disks - used for doing disk.ListDir(). FS passes single disk argument, XL passes a list of disks.
+func listDirFactory(isLeaf isLeafFunc, treeWalkIgnoredErrs []error, disks ...StorageAPI) listDirFunc {
+	// listDir - lists all the entries at a given prefix and given entry in the prefix.
+	listDir := func(bucket, prefixDir, prefixEntry string) (entries []string, delayIsLeaf bool, err error) {
+		for _, disk := range disks {
+			if disk == nil {
+				continue
+			}
+			entries, err = disk.ListDir(bucket, prefixDir)
+			if err == nil {
+				entries, delayIsLeaf = filterListEntries(bucket, prefixDir, entries, prefixEntry, isLeaf)
+				return entries, delayIsLeaf, nil
+			}
+			// For any reason disk was deleted or goes offline, continue
+			// and list from other disks if possible.
+			if isErrIgnored(err, treeWalkIgnoredErrs...) {
+				continue
+			}
+			break
+		}
+		// Return error at the end.
+		return nil, false, traceError(err)
+	}
+	return listDir
+}
+
 // listObjects - wrapper function implemented over file tree walk.
 func (xl xlObjects) listObjects(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
 	// Default is recursive, if delimiter is set then list non recursive.

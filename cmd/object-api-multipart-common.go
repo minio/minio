@@ -22,7 +22,6 @@ import (
 	"io/ioutil"
 	"path"
 	"sort"
-	"sync"
 	"time"
 
 	"github.com/minio/minio/pkg/lock"
@@ -76,26 +75,30 @@ func (u *uploadsV1) IsEmpty() bool {
 	return len(u.Uploads) == 0
 }
 
-func (u *uploadsV1) WriteTo(writer io.Writer) (n int64, err error) {
+func (u *uploadsV1) WriteTo(lk *lock.LockedFile) (n int64, err error) {
 	// Serialize to prepare to write to disk.
 	var uplBytes []byte
 	uplBytes, err = json.Marshal(u)
 	if err != nil {
 		return 0, traceError(err)
 	}
-	if err = writer.(*lock.LockedFile).Truncate(0); err != nil {
+	if err = lk.Truncate(0); err != nil {
 		return 0, traceError(err)
 	}
-	_, err = writer.Write(uplBytes)
+	_, err = lk.Write(uplBytes)
 	if err != nil {
 		return 0, traceError(err)
 	}
 	return int64(len(uplBytes)), nil
 }
 
-func (u *uploadsV1) ReadFrom(reader io.Reader) (n int64, err error) {
+func (u *uploadsV1) ReadFrom(lk *lock.LockedFile) (n int64, err error) {
 	var uploadIDBytes []byte
-	uploadIDBytes, err = ioutil.ReadAll(reader)
+	fi, err := lk.Stat()
+	if err != nil {
+		return 0, traceError(err)
+	}
+	uploadIDBytes, err = ioutil.ReadAll(io.NewSectionReader(lk, 0, fi.Size()))
 	if err != nil {
 		return 0, traceError(err)
 	}
@@ -153,45 +156,6 @@ func writeUploadJSON(u *uploadsV1, uploadsPath, tmpPath string, disk StorageAPI)
 			return traceError(dErr)
 		}
 		return traceError(wErr)
-	}
-	return nil
-}
-
-// Wrapper which removes all the uploaded parts.
-func cleanupUploadedParts(bucket, object, uploadID string, storageDisks ...StorageAPI) error {
-	var errs = make([]error, len(storageDisks))
-	var wg = &sync.WaitGroup{}
-
-	// Construct uploadIDPath.
-	uploadIDPath := path.Join(bucket, object, uploadID)
-
-	// Cleanup uploadID for all disks.
-	for index, disk := range storageDisks {
-		if disk == nil {
-			errs[index] = traceError(errDiskNotFound)
-			continue
-		}
-		wg.Add(1)
-		// Cleanup each uploadID in a routine.
-		go func(index int, disk StorageAPI) {
-			defer wg.Done()
-			err := cleanupDir(disk, minioMetaMultipartBucket, uploadIDPath)
-			if err != nil {
-				errs[index] = err
-				return
-			}
-			errs[index] = nil
-		}(index, disk)
-	}
-
-	// Wait for all the cleanups to finish.
-	wg.Wait()
-
-	// Return first error.
-	for _, err := range errs {
-		if err != nil {
-			return err
-		}
 	}
 	return nil
 }

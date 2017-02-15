@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"archive/zip"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -151,7 +152,7 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 	if objectAPI == nil {
 		return toJSONError(errServerNotInitialized)
 	}
-	authErr := webReqestAuthenticate(r)
+	authErr := webRequestAuthenticate(r)
 	if authErr != nil {
 		return toJSONError(authErr)
 	}
@@ -177,13 +178,16 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 type ListObjectsArgs struct {
 	BucketName string `json:"bucketName"`
 	Prefix     string `json:"prefix"`
+	Marker     string `json:"marker"`
 }
 
 // ListObjectsRep - list objects response.
 type ListObjectsRep struct {
-	Objects   []WebObjectInfo `json:"objects"`
-	Writable  bool            `json:"writable"` // Used by client to show "upload file" button.
-	UIVersion string          `json:"uiVersion"`
+	Objects     []WebObjectInfo `json:"objects"`
+	NextMarker  string          `json:"nextmarker"`
+	IsTruncated bool            `json:"istruncated"`
+	Writable    bool            `json:"writable"` // Used by client to show "upload file" button.
+	UIVersion   string          `json:"uiVersion"`
 }
 
 // WebObjectInfo container for list objects metadata.
@@ -208,7 +212,7 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 	prefix := args.Prefix + "test" // To test if GetObject/PutObject with the specified prefix is allowed.
 	readable := isBucketActionAllowed("s3:GetObject", args.BucketName, prefix)
 	writable := isBucketActionAllowed("s3:PutObject", args.BucketName, prefix)
-	authErr := webReqestAuthenticate(r)
+	authErr := webRequestAuthenticate(r)
 	switch {
 	case authErr == errAuthentication:
 		return toJSONError(authErr)
@@ -225,30 +229,26 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 	default:
 		return errAuthentication
 	}
-	marker := ""
-	for {
-		lo, err := objectAPI.ListObjects(args.BucketName, args.Prefix, marker, "/", 1000)
-		if err != nil {
-			return &json2.Error{Message: err.Error()}
-		}
-		marker = lo.NextMarker
-		for _, obj := range lo.Objects {
-			reply.Objects = append(reply.Objects, WebObjectInfo{
-				Key:          obj.Name,
-				LastModified: obj.ModTime,
-				Size:         obj.Size,
-				ContentType:  obj.ContentType,
-			})
-		}
-		for _, prefix := range lo.Prefixes {
-			reply.Objects = append(reply.Objects, WebObjectInfo{
-				Key: prefix,
-			})
-		}
-		if !lo.IsTruncated {
-			break
-		}
+	lo, err := objectAPI.ListObjects(args.BucketName, args.Prefix, args.Marker, slashSeparator, 1000)
+	if err != nil {
+		return &json2.Error{Message: err.Error()}
 	}
+	reply.NextMarker = lo.NextMarker
+	reply.IsTruncated = lo.IsTruncated
+	for _, obj := range lo.Objects {
+		reply.Objects = append(reply.Objects, WebObjectInfo{
+			Key:          obj.Name,
+			LastModified: obj.ModTime,
+			Size:         obj.Size,
+			ContentType:  obj.ContentType,
+		})
+	}
+	for _, prefix := range lo.Prefixes {
+		reply.Objects = append(reply.Objects, WebObjectInfo{
+			Key: prefix,
+		})
+	}
+
 	return nil
 }
 
@@ -362,18 +362,29 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 		return toJSONError(errAuthentication)
 	}
 
+	// If creds are set through ENV disallow changing credentials.
+	if globalIsEnvCreds {
+		return toJSONError(errChangeCredNotAllowed)
+	}
+
 	// As we already validated the authentication, we save given access/secret keys.
-	cred, err := getCredential(args.AccessKey, args.SecretKey)
-	if err != nil {
+	if err := validateAuthKeys(args.AccessKey, args.SecretKey); err != nil {
 		return toJSONError(err)
 	}
 
+	creds := credential{
+		AccessKey: args.AccessKey,
+		SecretKey: args.SecretKey,
+	}
+
 	// Notify all other Minio peers to update credentials
-	errsMap := updateCredsOnPeers(cred)
+	errsMap := updateCredsOnPeers(creds)
 
 	// Update local credentials
-	serverConfig.SetCredential(cred)
-	if err = serverConfig.Save(); err != nil {
+	serverConfig.SetCredential(creds)
+
+	// Persist updated credentials.
+	if err := serverConfig.Save(); err != nil {
 		errsMap[globalMinioAddr] = err
 	}
 
@@ -395,7 +406,7 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 	}
 
 	// As we have updated access/secret key, generate new auth token.
-	token, err := authenticateWeb(args.AccessKey, args.SecretKey)
+	token, err := authenticateWeb(creds.AccessKey, creds.SecretKey)
 	if err != nil {
 		// Did we have peer errors?
 		if len(errsMap) > 0 {
@@ -444,13 +455,20 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	bucket := vars["bucket"]
 	object := vars["object"]
 
-	authErr := webReqestAuthenticate(r)
+	authErr := webRequestAuthenticate(r)
 	if authErr == errAuthentication {
 		writeWebErrorResponse(w, errAuthentication)
 		return
 	}
 	if authErr != nil && !isBucketActionAllowed("s3:PutObject", bucket, object) {
 		writeWebErrorResponse(w, errAuthentication)
+		return
+	}
+
+	// Require Content-Length to be set in the request
+	size := r.ContentLength
+	if size < 0 {
+		writeWebErrorResponse(w, errSizeUnspecified)
 		return
 	}
 
@@ -463,7 +481,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	defer objectLock.Unlock()
 
 	sha256sum := ""
-	objInfo, err := objectAPI.PutObject(bucket, object, -1, r.Body, metadata, sha256sum)
+	objInfo, err := objectAPI.PutObject(bucket, object, size, r.Body, metadata, sha256sum)
 	if err != nil {
 		writeWebErrorResponse(w, err)
 		return
@@ -506,16 +524,94 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	objectLock.RLock()
 	defer objectLock.RUnlock()
 
-	objInfo, err := objectAPI.GetObjectInfo(bucket, object)
-	if err != nil {
-		writeWebErrorResponse(w, err)
-		return
-	}
-	offset := int64(0)
-	err = objectAPI.GetObject(bucket, object, offset, objInfo.Size, w)
-	if err != nil {
+	if err := objectAPI.GetObject(bucket, object, 0, -1, w); err != nil {
 		/// No need to print error, response writer already written to.
 		return
+	}
+}
+
+// DownloadZipArgs - Argument for downloading a bunch of files as a zip file.
+// JSON will look like:
+// '{"bucketname":"testbucket","prefix":"john/pics/","objects":["hawaii/","maldives/","sanjose.jpg"]}'
+type DownloadZipArgs struct {
+	Objects    []string `json:"objects"`    // can be files or sub-directories
+	Prefix     string   `json:"prefix"`     // current directory in the browser-ui
+	BucketName string   `json:"bucketname"` // bucket name.
+}
+
+// Takes a list of objects and creates a zip file that sent as the response body.
+func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
+	objectAPI := web.ObjectAPI()
+	if objectAPI == nil {
+		writeWebErrorResponse(w, errServerNotInitialized)
+		return
+	}
+
+	token := r.URL.Query().Get("token")
+
+	if !isAuthTokenValid(token) {
+		writeWebErrorResponse(w, errAuthentication)
+		return
+	}
+	var args DownloadZipArgs
+	decodeErr := json.NewDecoder(r.Body).Decode(&args)
+	if decodeErr != nil {
+		writeWebErrorResponse(w, decodeErr)
+		return
+	}
+
+	archive := zip.NewWriter(w)
+	defer archive.Close()
+
+	for _, object := range args.Objects {
+		// Writes compressed object file to the response.
+		zipit := func(objectName string) error {
+			info, err := objectAPI.GetObjectInfo(args.BucketName, objectName)
+			if err != nil {
+				return err
+			}
+			header := &zip.FileHeader{
+				Name:               strings.TrimPrefix(objectName, args.Prefix),
+				Method:             zip.Deflate,
+				UncompressedSize64: uint64(info.Size),
+				UncompressedSize:   uint32(info.Size),
+			}
+			writer, err := archive.CreateHeader(header)
+			if err != nil {
+				writeWebErrorResponse(w, errUnexpected)
+				return err
+			}
+			return objectAPI.GetObject(args.BucketName, objectName, 0, info.Size, writer)
+		}
+
+		if !strings.HasSuffix(object, "/") {
+			// If not a directory, compress the file and write it to response.
+			err := zipit(pathJoin(args.Prefix, object))
+			if err != nil {
+				return
+			}
+			continue
+		}
+
+		// For directories, list the contents recursively and write the objects as compressed
+		// date to the response writer.
+		marker := ""
+		for {
+			lo, err := objectAPI.ListObjects(args.BucketName, pathJoin(args.Prefix, object), marker, "", 1000)
+			if err != nil {
+				return
+			}
+			marker = lo.NextMarker
+			for _, obj := range lo.Objects {
+				err = zipit(obj.Name)
+				if err != nil {
+					return
+				}
+			}
+			if !lo.IsTruncated {
+				break
+			}
+		}
 	}
 }
 
@@ -746,7 +842,7 @@ func presignedGet(host, bucket, object string, expiry int64) string {
 	var extractedSignedHeaders http.Header
 
 	canonicalRequest := getCanonicalRequest(extractedSignedHeaders, unsignedPayload, query, path, "GET", host)
-	stringToSign := getStringToSign(canonicalRequest, date, region)
+	stringToSign := getStringToSign(canonicalRequest, date, getScope(date, region))
 	signingKey := getSigningKey(secretKey, date, region)
 	signature := getSignature(signingKey, stringToSign)
 
@@ -821,8 +917,19 @@ func toWebAPIError(err error) APIError {
 			HTTPStatusCode: http.StatusForbidden,
 			Description:    err.Error(),
 		}
+	} else if err == errSizeUnspecified {
+		return APIError{
+			Code:           "InvalidRequest",
+			HTTPStatusCode: http.StatusBadRequest,
+			Description:    err.Error(),
+		}
+	} else if err == errChangeCredNotAllowed {
+		return APIError{
+			Code:           "MethodNotAllowed",
+			HTTPStatusCode: http.StatusMethodNotAllowed,
+			Description:    err.Error(),
+		}
 	}
-
 	// Convert error type to api error code.
 	var apiErrCode APIErrorCode
 	switch err.(type) {

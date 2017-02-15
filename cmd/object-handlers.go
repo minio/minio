@@ -56,10 +56,9 @@ func setGetRespHeaders(w http.ResponseWriter, reqParams url.Values) {
 func errAllowableObjectNotFound(bucket string, r *http.Request) APIErrorCode {
 	if getRequestAuthType(r) == authTypeAnonymous {
 		//we care about the bucket as a whole, not a particular resource
-		url := *r.URL
-		url.Path = "/" + bucket
-
-		if s3Error := enforceBucketPolicy(bucket, "s3:ListBucket", &url); s3Error != ErrNone {
+		resource := "/" + bucket
+		if s3Error := enforceBucketPolicy(bucket, "s3:ListBucket", resource,
+			r.Referer(), r.URL.Query()); s3Error != ErrNone {
 			return ErrAccessDenied
 		}
 	}
@@ -440,7 +439,8 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	case authTypeAnonymous:
 		// http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
-		if s3Error := enforceBucketPolicy(bucket, "s3:PutObject", r.URL); s3Error != ErrNone {
+		if s3Error := enforceBucketPolicy(bucket, "s3:PutObject", r.URL.Path,
+			r.Referer(), r.URL.Query()); s3Error != ErrNone {
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
@@ -531,7 +531,117 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 	writeSuccessResponseXML(w, encodedSuccessResponse)
 }
 
-// PutObjectPartHandler - Upload part
+// CopyObjectPartHandler - uploads a part by copying data from an existing object as data source.
+func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	dstBucket := vars["bucket"]
+	dstObject := vars["object"]
+
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+		return
+	}
+
+	if s3Error := checkRequestAuthType(r, dstBucket, "s3:PutObject", serverConfig.GetRegion()); s3Error != ErrNone {
+		writeErrorResponse(w, s3Error, r.URL)
+		return
+	}
+
+	// Copy source path.
+	cpSrcPath, err := url.QueryUnescape(r.Header.Get("X-Amz-Copy-Source"))
+	if err != nil {
+		// Save unescaped string as is.
+		cpSrcPath = r.Header.Get("X-Amz-Copy-Source")
+	}
+
+	srcBucket, srcObject := path2BucketAndObject(cpSrcPath)
+	// If source object is empty or bucket is empty, reply back invalid copy source.
+	if srcObject == "" || srcBucket == "" {
+		writeErrorResponse(w, ErrInvalidCopySource, r.URL)
+		return
+	}
+
+	uploadID := r.URL.Query().Get("uploadId")
+	partIDString := r.URL.Query().Get("partNumber")
+
+	partID, err := strconv.Atoi(partIDString)
+	if err != nil {
+		writeErrorResponse(w, ErrInvalidPart, r.URL)
+		return
+	}
+
+	// check partID with maximum part ID for multipart objects
+	if isMaxPartID(partID) {
+		writeErrorResponse(w, ErrInvalidMaxParts, r.URL)
+		return
+	}
+
+	// Hold read locks on source object only if we are
+	// going to read data from source object.
+	objectSRLock := globalNSMutex.NewNSLock(srcBucket, srcObject)
+	objectSRLock.RLock()
+	defer objectSRLock.RUnlock()
+
+	objInfo, err := objectAPI.GetObjectInfo(srcBucket, srcObject)
+	if err != nil {
+		errorIf(err, "Unable to fetch object info.")
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
+	// Get request range.
+	var hrange *httpRange
+	rangeHeader := r.Header.Get("x-amz-copy-source-range")
+	if rangeHeader != "" {
+		if hrange, err = parseRequestRange(rangeHeader, objInfo.Size); err != nil {
+			// Handle only errInvalidRange
+			// Ignore other parse error and treat it as regular Get request like Amazon S3.
+			if err == errInvalidRange {
+				writeErrorResponse(w, ErrInvalidRange, r.URL)
+				return
+			}
+
+			// log the error.
+			errorIf(err, "Invalid request range")
+		}
+	}
+
+	// Verify before x-amz-copy-source preconditions before continuing with CopyObject.
+	if checkCopyObjectPartPreconditions(w, r, objInfo) {
+		return
+	}
+
+	// Get the object.
+	startOffset := int64(0)
+	length := objInfo.Size
+	if hrange != nil {
+		startOffset = hrange.offsetBegin
+		length = hrange.getLength()
+	}
+
+	/// maximum copy size for multipart objects in a single operation
+	if isMaxObjectSize(length) {
+		writeErrorResponse(w, ErrEntityTooLarge, r.URL)
+		return
+	}
+
+	// Copy source object to destination, if source and destination
+	// object is same then only metadata is updated.
+	partInfo, err := objectAPI.CopyObjectPart(srcBucket, srcObject, dstBucket, dstObject, uploadID, partID, startOffset, length)
+	if err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
+	response := generateCopyObjectPartResponse(partInfo.ETag, partInfo.LastModified)
+	encodedSuccessResponse := encodeResponse(response)
+
+	// Write success response.
+	writeSuccessResponseXML(w, encodedSuccessResponse)
+}
+
+// PutObjectPartHandler - uploads an incoming part for an ongoing multipart operation.
 func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
@@ -590,7 +700,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	var partMD5 string
+	var partInfo PartInfo
 	incomingMD5 := hex.EncodeToString(md5Bytes)
 	sha256sum := ""
 	switch rAuthType {
@@ -600,12 +710,13 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		return
 	case authTypeAnonymous:
 		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
-		if s3Error := enforceBucketPolicy(bucket, "s3:PutObject", r.URL); s3Error != ErrNone {
+		if s3Error := enforceBucketPolicy(bucket, "s3:PutObject", r.URL.Path,
+			r.Referer(), r.URL.Query()); s3Error != ErrNone {
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
 		// No need to verify signature, anonymous request access is already allowed.
-		partMD5, err = objectAPI.PutObjectPart(bucket, object, uploadID, partID, size, r.Body, incomingMD5, sha256sum)
+		partInfo, err = objectAPI.PutObjectPart(bucket, object, uploadID, partID, size, r.Body, incomingMD5, sha256sum)
 	case authTypeStreamingSigned:
 		// Initialize stream signature verifier.
 		reader, s3Error := newSignV4ChunkedReader(r)
@@ -614,7 +725,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
-		partMD5, err = objectAPI.PutObjectPart(bucket, object, uploadID, partID, size, reader, incomingMD5, sha256sum)
+		partInfo, err = objectAPI.PutObjectPart(bucket, object, uploadID, partID, size, reader, incomingMD5, sha256sum)
 	case authTypeSignedV2, authTypePresignedV2:
 		s3Error := isReqAuthenticatedV2(r)
 		if s3Error != ErrNone {
@@ -622,7 +733,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
-		partMD5, err = objectAPI.PutObjectPart(bucket, object, uploadID, partID, size, r.Body, incomingMD5, sha256sum)
+		partInfo, err = objectAPI.PutObjectPart(bucket, object, uploadID, partID, size, r.Body, incomingMD5, sha256sum)
 	case authTypePresigned, authTypeSigned:
 		if s3Error := reqSignatureV4Verify(r); s3Error != ErrNone {
 			errorIf(errSignatureMismatch, dumpRequest(r))
@@ -633,7 +744,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		if !skipContentSha256Cksum(r) {
 			sha256sum = r.Header.Get("X-Amz-Content-Sha256")
 		}
-		partMD5, err = objectAPI.PutObjectPart(bucket, object, uploadID, partID, size, r.Body, incomingMD5, sha256sum)
+		partInfo, err = objectAPI.PutObjectPart(bucket, object, uploadID, partID, size, r.Body, incomingMD5, sha256sum)
 	}
 	if err != nil {
 		errorIf(err, "Unable to create object part.")
@@ -641,8 +752,8 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
-	if partMD5 != "" {
-		w.Header().Set("ETag", "\""+partMD5+"\"")
+	if partInfo.ETag != "" {
+		w.Header().Set("ETag", "\""+partInfo.ETag+"\"")
 	}
 
 	writeSuccessResponseHeadersOnly(w)

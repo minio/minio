@@ -82,9 +82,9 @@ Fetch service status, replies disk space used, backend type and total disks offl
 
 | Param | Type | Description |
 |---|---|---|
-|`backend.Type` | _BackendType_ | Type of backend used by the server currently only FS or XL. |
-|`backend.OnlineDisks`| _int_ | Total number of disks online (only applies to XL backend), is empty for FS. |
-|`backend.OfflineDisks` | _int_ | Total number of disks offline (only applies to XL backend), is empty for FS. |
+|`backend.Type` | _BackendType_ | Type of backend used by the server currently only FS or Erasure. |
+|`backend.OnlineDisks`| _int_ | Total number of disks online (only applies to Erasure backend), is empty for FS. |
+|`backend.OfflineDisks` | _int_ | Total number of disks offline (only applies to Erasure backend), is empty for FS. |
 |`backend.ReadQuorum` | _int_ | Current total read quorum threshold before reads will be unavailable, is empty for FS. |
 |`backend.WriteQuorum` | _int_ | Current total write quorum threshold before writes will be unavailable, is empty for FS. |
 
@@ -120,8 +120,8 @@ If successful restarts the running minio service, for distributed setup restarts
 
  ```
 <a name="ListLocks"></a>
-### ListLocks(bucket, prefix string, olderThan time.Duration) ([]VolumeLockInfo, error)
-If successful returns information on the list of locks held on ``bucket`` matching ``prefix`` older than ``olderThan`` seconds.
+### ListLocks(bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error)
+If successful returns information on the list of locks held on ``bucket`` matching ``prefix`` for  longer than ``duration`` seconds.
 
 __Example__
 
@@ -135,8 +135,8 @@ __Example__
 ```
 
 <a name="ClearLocks"></a>
-### ClearLocks(bucket, prefix string, olderThan time.Duration) ([]VolumeLockInfo, error)
-If successful returns information on the list of locks cleared on ``bucket`` matching ``prefix`` older than ``olderThan`` seconds.
+### ClearLocks(bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error)
+If successful returns information on the list of locks cleared on ``bucket`` matching ``prefix`` for longer than ``duration`` seconds.
 
 __Example__
 

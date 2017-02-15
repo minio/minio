@@ -162,9 +162,22 @@ func newNotificationEvent(event eventData) NotificationEvent {
 	return nEvent
 }
 
-// Fetch the external target. No locking needed here since this map is
-// never written after initial startup.
+// Fetch all external targets. This returns a copy of the current map of
+// external notification targets.
+func (en eventNotifier) GetAllExternalTargets() map[string]*logrus.Logger {
+	en.external.rwMutex.RLock()
+	defer en.external.rwMutex.RUnlock()
+	targetsCopy := make(map[string]*logrus.Logger)
+	for k, v := range en.external.targets {
+		targetsCopy[k] = v
+	}
+	return targetsCopy
+}
+
+// Fetch the external target.
 func (en eventNotifier) GetExternalTarget(queueARN string) *logrus.Logger {
+	en.external.rwMutex.RLock()
+	defer en.external.rwMutex.RUnlock()
 	return en.external.targets[queueARN]
 }
 
@@ -531,7 +544,7 @@ func loadAllBucketNotifications(objAPI ObjectLayer) (map[string]*notificationCon
 func loadAllQueueTargets() (map[string]*logrus.Logger, error) {
 	queueTargets := make(map[string]*logrus.Logger)
 	// Load all amqp targets, initialize their respective loggers.
-	for accountID, amqpN := range serverConfig.GetAMQP() {
+	for accountID, amqpN := range serverConfig.Notify.GetAMQP() {
 		if !amqpN.Enable {
 			continue
 		}
@@ -558,7 +571,7 @@ func loadAllQueueTargets() (map[string]*logrus.Logger, error) {
 		queueTargets[queueARN] = amqpLog
 	}
 	// Load all nats targets, initialize their respective loggers.
-	for accountID, natsN := range serverConfig.GetNATS() {
+	for accountID, natsN := range serverConfig.Notify.GetNATS() {
 		if !natsN.Enable {
 			continue
 		}
@@ -586,7 +599,7 @@ func loadAllQueueTargets() (map[string]*logrus.Logger, error) {
 	}
 
 	// Load redis targets, initialize their respective loggers.
-	for accountID, redisN := range serverConfig.GetRedis() {
+	for accountID, redisN := range serverConfig.Notify.GetRedis() {
 		if !redisN.Enable {
 			continue
 		}
@@ -614,7 +627,7 @@ func loadAllQueueTargets() (map[string]*logrus.Logger, error) {
 	}
 
 	// Load Webhook targets, initialize their respective loggers.
-	for accountID, webhookN := range serverConfig.GetWebhook() {
+	for accountID, webhookN := range serverConfig.Notify.GetWebhook() {
 		if !webhookN.Enable {
 			continue
 		}
@@ -635,7 +648,7 @@ func loadAllQueueTargets() (map[string]*logrus.Logger, error) {
 	}
 
 	// Load elastic targets, initialize their respective loggers.
-	for accountID, elasticN := range serverConfig.GetElasticSearch() {
+	for accountID, elasticN := range serverConfig.Notify.GetElasticSearch() {
 		if !elasticN.Enable {
 			continue
 		}
@@ -661,7 +674,7 @@ func loadAllQueueTargets() (map[string]*logrus.Logger, error) {
 	}
 
 	// Load PostgreSQL targets, initialize their respective loggers.
-	for accountID, pgN := range serverConfig.GetPostgreSQL() {
+	for accountID, pgN := range serverConfig.Notify.GetPostgreSQL() {
 		if !pgN.Enable {
 			continue
 		}
@@ -686,7 +699,7 @@ func loadAllQueueTargets() (map[string]*logrus.Logger, error) {
 		queueTargets[queueARN] = pgLog
 	}
 	// Load Kafka targets, initialize their respective loggers.
-	for accountID, kafkaN := range serverConfig.GetKafka() {
+	for accountID, kafkaN := range serverConfig.Notify.GetKafka() {
 		if !kafkaN.Enable {
 			continue
 		}

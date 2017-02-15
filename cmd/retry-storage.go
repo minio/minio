@@ -220,9 +220,12 @@ func (f retryStorage) reInit() (err error) {
 	// Close the underlying connection.
 	f.remoteStorage.Close() // Error here is purposefully ignored.
 
+	// Done channel is used to close any lingering retry routine, as soon
+	// as this function returns.
 	doneCh := make(chan struct{})
 	defer close(doneCh)
-	for i := range newRetryTimer(f.retryUnit, f.retryCap, MaxJitter, doneCh) {
+
+	for i := range newRetryTimer(f.retryUnit, f.retryCap, doneCh) {
 		// Initialize and make a new login attempt.
 		err = f.remoteStorage.Init()
 		if err != nil {

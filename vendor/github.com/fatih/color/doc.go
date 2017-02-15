@@ -37,6 +37,11 @@ separate color object.
     whiteBackground := red.Add(color.BgWhite)
     whiteBackground.Println("Red text with White background.")
 
+    // Use your own io.Writer output
+    color.New(color.FgBlue).Fprintln(myWriter, "blue color!")
+
+    blue := color.New(color.FgBlue)
+    blue.Fprint(myWriter, "This will print text in blue.")
 
 You can create PrintXxx functions to simplify even more:
 
@@ -48,6 +53,15 @@ You can create PrintXxx functions to simplify even more:
     // Mix up multiple attributes
     notice := color.New(color.Bold, color.FgGreen).PrintlnFunc()
     notice("don't forget this...")
+
+You can also FprintXxx functions to pass your own io.Writer:
+
+    blue := color.New(FgBlue).FprintfFunc()
+    blue(myWriter, "important notice: %s", stars)
+
+    // Mix up with multiple attributes
+    success := color.New(color.Bold, color.FgGreen).FprintlnFunc()
+    success(myWriter, don't forget this...")
 
 
 Or create SprintXxx functions to mix strings with other non-colorized strings:

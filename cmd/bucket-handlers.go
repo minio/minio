@@ -33,7 +33,7 @@ import (
 
 // http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
 // Enforces bucket policies for a bucket for a given tatusaction.
-func enforceBucketPolicy(bucket string, action string, reqURL *url.URL) (s3Error APIErrorCode) {
+func enforceBucketPolicy(bucket, action, resource, referer string, queryParams url.Values) (s3Error APIErrorCode) {
 	// Verify if bucket actually exists
 	if err := checkBucketExist(bucket, newObjectLayerFn()); err != nil {
 		err = errorCause(err)
@@ -57,16 +57,21 @@ func enforceBucketPolicy(bucket string, action string, reqURL *url.URL) (s3Error
 	}
 
 	// Construct resource in 'arn:aws:s3:::examplebucket/object' format.
-	resource := bucketARNPrefix + strings.TrimSuffix(strings.TrimPrefix(reqURL.Path, "/"), "/")
+	arn := bucketARNPrefix + strings.TrimSuffix(strings.TrimPrefix(resource, "/"), "/")
 
 	// Get conditions for policy verification.
 	conditionKeyMap := make(map[string]set.StringSet)
-	for queryParam := range reqURL.Query() {
-		conditionKeyMap[queryParam] = set.CreateStringSet(reqURL.Query().Get(queryParam))
+	for queryParam := range queryParams {
+		conditionKeyMap[queryParam] = set.CreateStringSet(queryParams.Get(queryParam))
+	}
+
+	// Add request referer to conditionKeyMap if present.
+	if referer != "" {
+		conditionKeyMap["referer"] = set.CreateStringSet(referer)
 	}
 
 	// Validate action, resource and conditions with current policy statements.
-	if !bucketPolicyEvalStatements(action, resource, conditionKeyMap, policy.Statements) {
+	if !bucketPolicyEvalStatements(action, arn, conditionKeyMap, policy.Statements) {
 		return ErrAccessDenied
 	}
 	return ErrNone
@@ -160,7 +165,7 @@ func (api objectAPIHandlers) ListMultipartUploadsHandler(w http.ResponseWriter, 
 	}
 	if keyMarker != "" {
 		// Marker not common with prefix is not implemented.
-		if !strings.HasPrefix(keyMarker, prefix) {
+		if !hasPrefix(keyMarker, prefix) {
 			writeErrorResponse(w, ErrNotImplemented, r.URL)
 			return
 		}
@@ -388,6 +393,13 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		return
 	}
 
+	// Require Content-Length to be set in the request
+	size := r.ContentLength
+	if size < 0 {
+		writeErrorResponse(w, ErrMissingContentLength, r.URL)
+		return
+	}
+
 	// Here the parameter is the size of the form data that should
 	// be loaded in memory, the remaining being put in temporary files.
 	reader, err := r.MultipartReader()
@@ -397,12 +409,34 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	fileBody, fileName, formValues, err := extractPostPolicyFormValues(reader)
+	// Read multipart data and save in memory and in the disk if needed
+	form, err := reader.ReadForm(maxFormMemory)
+	if err != nil {
+		errorIf(err, "Unable to initialize multipart reader.")
+		writeErrorResponse(w, ErrMalformedPOSTRequest, r.URL)
+		return
+	}
+
+	// Remove all tmp files creating during multipart upload
+	defer form.RemoveAll()
+
+	// Extract all form fields
+	fileBody, fileName, fileSize, formValues, err := extractPostPolicyFormValues(form)
 	if err != nil {
 		errorIf(err, "Unable to parse form values.")
 		writeErrorResponse(w, ErrMalformedPOSTRequest, r.URL)
 		return
 	}
+
+	// Check if file is provided, error out otherwise.
+	if fileBody == nil {
+		writeErrorResponse(w, ErrPOSTFileRequired, r.URL)
+		return
+	}
+
+	// Close multipart file
+	defer fileBody.Close()
+
 	bucket := mux.Vars(r)["bucket"]
 	formValues["Bucket"] = bucket
 
@@ -438,21 +472,20 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	// Use rangeReader to ensure that object size is within expected range.
+	// Ensure that the object size is within expected range, also the file size
+	// should not exceed the maximum single Put size (5 GiB)
 	lengthRange := postPolicyForm.Conditions.ContentLengthRange
 	if lengthRange.Valid {
-		// If policy restricted the size of the object.
-		fileBody = &rangeReader{
-			Reader: fileBody,
-			Min:    lengthRange.Min,
-			Max:    lengthRange.Max,
+		if fileSize < lengthRange.Min {
+			errorIf(err, "Unable to create object.")
+			writeErrorResponse(w, toAPIErrorCode(errDataTooSmall), r.URL)
+			return
 		}
-	} else {
-		// Default values of min/max size of the object.
-		fileBody = &rangeReader{
-			Reader: fileBody,
-			Min:    0,
-			Max:    maxObjectSize,
+
+		if fileSize > lengthRange.Max || fileSize > maxObjectSize {
+			errorIf(err, "Unable to create object.")
+			writeErrorResponse(w, toAPIErrorCode(errDataTooLarge), r.URL)
+			return
 		}
 	}
 
@@ -465,7 +498,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	objectLock.Lock()
 	defer objectLock.Unlock()
 
-	objInfo, err := objectAPI.PutObject(bucket, object, -1, fileBody, metadata, sha256sum)
+	objInfo, err := objectAPI.PutObject(bucket, object, fileSize, fileBody, metadata, sha256sum)
 	if err != nil {
 		errorIf(err, "Unable to create object.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)

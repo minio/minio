@@ -29,17 +29,22 @@ import (
 	"github.com/minio/minio-go/pkg/set"
 )
 
+var conditionKeyActionMap = map[string]set.StringSet{
+	"s3:prefix":   set.CreateStringSet("s3:ListBucket"),
+	"s3:max-keys": set.CreateStringSet("s3:ListBucket"),
+}
+
 // supportedActionMap - lists all the actions supported by minio.
 var supportedActionMap = set.CreateStringSet("*", "s3:*", "s3:GetObject",
 	"s3:ListBucket", "s3:PutObject", "s3:GetBucketLocation", "s3:DeleteObject",
 	"s3:AbortMultipartUpload", "s3:ListBucketMultipartUploads", "s3:ListMultipartUploadParts")
 
 // supported Conditions type.
-var supportedConditionsType = set.CreateStringSet("StringEquals", "StringNotEquals")
+var supportedConditionsType = set.CreateStringSet("StringEquals", "StringNotEquals", "StringLike", "StringNotLike")
 
 // Validate s3:prefix, s3:max-keys are present if not
 // supported keys for the conditions.
-var supportedConditionsKey = set.CreateStringSet("s3:prefix", "s3:max-keys")
+var supportedConditionsKey = set.CreateStringSet("s3:prefix", "s3:max-keys", "aws:Referer")
 
 // supportedEffectMap - supported effects.
 var supportedEffectMap = set.CreateStringSet("Allow", "Deny")
@@ -106,12 +111,12 @@ func isValidResources(resources set.StringSet) (err error) {
 		return err
 	}
 	for resource := range resources {
-		if !strings.HasPrefix(resource, bucketARNPrefix) {
+		if !hasPrefix(resource, bucketARNPrefix) {
 			err = errors.New("Unsupported resource style found: ‘" + resource + "’, please validate your policy document")
 			return err
 		}
 		resourceSuffix := strings.SplitAfter(resource, bucketARNPrefix)[1]
-		if len(resourceSuffix) == 0 || strings.HasPrefix(resourceSuffix, "/") {
+		if len(resourceSuffix) == 0 || hasPrefix(resourceSuffix, "/") {
 			err = errors.New("Invalid resource style found: ‘" + resource + "’, please validate your policy document")
 			return err
 		}
@@ -178,11 +183,12 @@ func isValidPrincipals(principal interface{}) (err error) {
 	return nil
 }
 
-// isValidConditions - are valid conditions.
-func isValidConditions(conditions map[string]map[string]set.StringSet) (err error) {
-	// Verify conditions should be valid.
-	// Validate if stringEquals, stringNotEquals are present
-	// if not throw an error.
+// isValidConditions - returns nil if the given conditions valid and
+// corresponding error otherwise.
+func isValidConditions(actions set.StringSet, conditions map[string]map[string]set.StringSet) (err error) {
+	// Verify conditions should be valid. Validate if only
+	// supported condition keys are present and return error
+	// otherwise.
 	conditionKeyVal := make(map[string]set.StringSet)
 	for conditionType := range conditions {
 		if !supportedConditionsType.Contains(conditionType) {
@@ -194,6 +200,15 @@ func isValidConditions(conditions map[string]map[string]set.StringSet) (err erro
 				err = fmt.Errorf("Unsupported condition key '%s', please validate your policy document", conditionType)
 				return err
 			}
+
+			compatibleActions := conditionKeyActionMap[key]
+			if !compatibleActions.IsEmpty() &&
+				compatibleActions.Intersection(actions).IsEmpty() {
+				err = fmt.Errorf("Unsupported condition key %s for the given actions %s, "+
+					"please validate your policy document", key, actions)
+				return err
+			}
+
 			conditionVal, ok := conditionKeyVal[key]
 			if ok && !value.Intersection(conditionVal).IsEmpty() {
 				err = fmt.Errorf("Ambigious condition values for key '%s', please validate your policy document", key)
@@ -222,8 +237,8 @@ func resourcePrefix(resource string) string {
 }
 
 // checkBucketPolicyResources validates Resources in unmarshalled bucket policy structure.
-// First valation of Resources done for given set of Actions.
-// Later its validated for recursive Resources.
+// - Resources are validated against the given set of Actions.
+// -
 func checkBucketPolicyResources(bucket string, bucketPolicy *bucketPolicy) APIErrorCode {
 	// Validate statements for special actions and collect resources
 	// for others to validate nesting.
@@ -267,7 +282,7 @@ func checkBucketPolicyResources(bucket string, bucketPolicy *bucketPolicy) APIEr
 		// nesting. Reject such rules.
 		for _, otherResource := range resources {
 			// Common prefix reject such rules.
-			if strings.HasPrefix(otherResource, resource) {
+			if hasPrefix(otherResource, resource) {
 				return ErrPolicyNesting
 			}
 		}
@@ -317,7 +332,7 @@ func parseBucketPolicy(bucketPolicyReader io.Reader, policy *bucketPolicy) (err 
 			return err
 		}
 		// Statement conditions should be valid.
-		if err := isValidConditions(statement.Conditions); err != nil {
+		if err := isValidConditions(statement.Actions, statement.Conditions); err != nil {
 			return err
 		}
 	}

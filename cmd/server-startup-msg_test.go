@@ -38,7 +38,7 @@ func TestStorageInfoMsg(t *testing.T) {
 			OfflineDisks int
 			ReadQuorum   int
 			WriteQuorum  int
-		}{XL, 7, 1, 4, 5},
+		}{Erasure, 7, 1, 4, 5},
 	}
 
 	if msg := getStorageInfoMsg(infoStorage); !strings.Contains(msg, "2.0 GiB Free, 10 GiB Total") || !strings.Contains(msg, "7 Online, 1 Offline") {

@@ -109,18 +109,12 @@ func healBucket(storageDisks []StorageAPI, bucket string, writeQuorum int) error
 	// Wait for all make vol to finish.
 	wg.Wait()
 
-	// Do we have write quorum?.
-	if !isDiskQuorum(dErrs, writeQuorum) {
+	reducedErr := reduceWriteQuorumErrs(dErrs, bucketOpIgnoredErrs, writeQuorum)
+	if errorCause(reducedErr) == errXLWriteQuorum {
 		// Purge successfully created buckets if we don't have writeQuorum.
 		undoMakeBucket(storageDisks, bucket)
-		return toObjectErr(traceError(errXLWriteQuorum), bucket)
 	}
-
-	// Verify we have any other errors which should be returned as failure.
-	if reducedErr := reduceWriteQuorumErrs(dErrs, bucketOpIgnoredErrs, writeQuorum); reducedErr != nil {
-		return toObjectErr(reducedErr, bucket)
-	}
-	return nil
+	return reducedErr
 }
 
 // Heals all the metadata associated for a given bucket, this function
@@ -344,22 +338,34 @@ func healObject(storageDisks []StorageAPI, bucket string, object string, quorum 
 			// Not an outdated disk.
 			continue
 		}
-		if errs[index] != nil {
-			// If there was an error (most likely errFileNotFound)
+
+		// errFileNotFound implies that xl.json is missing. We
+		// may have object parts still present in the object
+		// directory. This needs to be deleted for object to
+		// healed successfully.
+		if errs[index] != nil && !isErr(errs[index], errFileNotFound) {
 			continue
 		}
+
 		// Outdated object with the same name exists that needs to be deleted.
 		outDatedMeta := partsMetadata[index]
-		// Delete all the parts.
-		for partIndex := 0; partIndex < len(outDatedMeta.Parts); partIndex++ {
-			err := disk.DeleteFile(bucket, pathJoin(object, outDatedMeta.Parts[partIndex].Name))
-			if err != nil {
+		// Consult valid metadata picked when there is no
+		// metadata available on this disk.
+		if isErr(errs[index], errFileNotFound) {
+			outDatedMeta = latestMeta
+		}
+
+		// Delete all the parts. Ignore if parts are not found.
+		for _, part := range outDatedMeta.Parts {
+			err := disk.DeleteFile(bucket, pathJoin(object, part.Name))
+			if err != nil && !isErr(err, errFileNotFound) {
 				return traceError(err)
 			}
 		}
-		// Delete xl.json file.
+
+		// Delete xl.json file. Ignore if xl.json not found.
 		err := disk.DeleteFile(bucket, pathJoin(object, xlMetaJSONFile))
-		if err != nil {
+		if err != nil && !isErr(err, errFileNotFound) {
 			return traceError(err)
 		}
 	}

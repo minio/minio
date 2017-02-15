@@ -19,6 +19,7 @@ package cmd
 import (
 	"net/url"
 	"path"
+	"sort"
 	"sync"
 	"time"
 )
@@ -37,8 +38,9 @@ type remoteAdminClient struct {
 // commands like service stop and service restart.
 type adminCmdRunner interface {
 	Restart() error
-	ListLocks(bucket, prefix string, relTime time.Duration) ([]VolumeLockInfo, error)
+	ListLocks(bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error)
 	ReInitDisks() error
+	Uptime() (time.Duration, error)
 }
 
 // Restart - Sends a message over channel to the go-routine
@@ -49,8 +51,8 @@ func (lc localAdminClient) Restart() error {
 }
 
 // ListLocks - Fetches lock information from local lock instrumentation.
-func (lc localAdminClient) ListLocks(bucket, prefix string, relTime time.Duration) ([]VolumeLockInfo, error) {
-	return listLocksInfo(bucket, prefix, relTime), nil
+func (lc localAdminClient) ListLocks(bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error) {
+	return listLocksInfo(bucket, prefix, duration), nil
 }
 
 // Restart - Sends restart command to remote server via RPC.
@@ -61,11 +63,11 @@ func (rc remoteAdminClient) Restart() error {
 }
 
 // ListLocks - Sends list locks command to remote server via RPC.
-func (rc remoteAdminClient) ListLocks(bucket, prefix string, relTime time.Duration) ([]VolumeLockInfo, error) {
+func (rc remoteAdminClient) ListLocks(bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error) {
 	listArgs := ListLocksQuery{
-		bucket:  bucket,
-		prefix:  prefix,
-		relTime: relTime,
+		bucket:   bucket,
+		prefix:   prefix,
+		duration: duration,
 	}
 	var reply ListLocksReply
 	if err := rc.Call("Admin.ListLocks", &listArgs, &reply); err != nil {
@@ -86,6 +88,28 @@ func (rc remoteAdminClient) ReInitDisks() error {
 	args := AuthRPCArgs{}
 	reply := AuthRPCReply{}
 	return rc.Call("Admin.ReInitDisks", &args, &reply)
+}
+
+// Uptime - Returns the uptime of this server. Timestamp is taken
+// after object layer is initialized.
+func (lc localAdminClient) Uptime() (time.Duration, error) {
+	if globalBootTime.IsZero() {
+		return time.Duration(0), errServerNotInitialized
+	}
+
+	return time.Now().UTC().Sub(globalBootTime), nil
+}
+
+// Uptime - returns the uptime of the server to which the RPC call is made.
+func (rc remoteAdminClient) Uptime() (time.Duration, error) {
+	args := AuthRPCArgs{}
+	reply := UptimeReply{}
+	err := rc.Call("Admin.Uptime", &args, &reply)
+	if err != nil {
+		return time.Duration(0), err
+	}
+
+	return reply.Uptime, nil
 }
 
 // adminPeer - represents an entity that implements Restart methods.
@@ -175,8 +199,8 @@ func sendServiceCmd(cps adminPeers, cmd serviceSignal) {
 }
 
 // listPeerLocksInfo - fetch list of locks held on the given bucket,
-// matching prefix older than relTime from all peer servers.
-func listPeerLocksInfo(peers adminPeers, bucket, prefix string, relTime time.Duration) ([]VolumeLockInfo, error) {
+// matching prefix held longer than duration from all peer servers.
+func listPeerLocksInfo(peers adminPeers, bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error) {
 	// Used to aggregate volume lock information from all nodes.
 	allLocks := make([][]VolumeLockInfo, len(peers))
 	errs := make([]error, len(peers))
@@ -188,11 +212,11 @@ func listPeerLocksInfo(peers adminPeers, bucket, prefix string, relTime time.Dur
 		go func(idx int, remotePeer adminPeer) {
 			defer wg.Done()
 			// `remotePeers` is right-shifted by one position relative to `peers`
-			allLocks[idx], errs[idx] = remotePeer.cmdRunner.ListLocks(bucket, prefix, relTime)
+			allLocks[idx], errs[idx] = remotePeer.cmdRunner.ListLocks(bucket, prefix, duration)
 		}(i+1, remotePeer)
 	}
 	wg.Wait()
-	allLocks[0], errs[0] = localPeer.cmdRunner.ListLocks(bucket, prefix, relTime)
+	allLocks[0], errs[0] = localPeer.cmdRunner.ListLocks(bucket, prefix, duration)
 
 	// Summarizing errors received for ListLocks RPC across all
 	// nodes.  N B the possible unavailability of quorum in errors
@@ -240,4 +264,75 @@ func reInitPeerDisks(peers adminPeers) error {
 	}
 	wg.Wait()
 	return nil
+}
+
+// uptimeSlice - used to sort uptimes in chronological order.
+type uptimeSlice []struct {
+	err    error
+	uptime time.Duration
+}
+
+func (ts uptimeSlice) Len() int {
+	return len(ts)
+}
+
+func (ts uptimeSlice) Less(i, j int) bool {
+	return ts[i].uptime < ts[j].uptime
+}
+
+func (ts uptimeSlice) Swap(i, j int) {
+	ts[i], ts[j] = ts[j], ts[i]
+}
+
+// getPeerUptimes - returns the uptime since the last time read quorum
+// was established on success. Otherwise returns errXLReadQuorum.
+func getPeerUptimes(peers adminPeers) (time.Duration, error) {
+	// In a single node Erasure or FS backend setup the uptime of
+	// the setup is the uptime of the single minio server
+	// instance.
+	if !globalIsDistXL {
+		return time.Now().UTC().Sub(globalBootTime), nil
+	}
+
+	uptimes := make(uptimeSlice, len(peers))
+
+	// Get up time of all servers.
+	wg := sync.WaitGroup{}
+	for i, peer := range peers {
+		wg.Add(1)
+		go func(idx int, peer adminPeer) {
+			defer wg.Done()
+			uptimes[idx].uptime, uptimes[idx].err = peer.cmdRunner.Uptime()
+		}(i, peer)
+	}
+	wg.Wait()
+
+	// Sort uptimes in chronological order.
+	sort.Sort(uptimes)
+
+	// Pick the readQuorum'th uptime in chronological order. i.e,
+	// the time at which read quorum was (re-)established.
+	readQuorum := len(uptimes) / 2
+	validCount := 0
+	latestUptime := time.Duration(0)
+	for _, uptime := range uptimes {
+		if uptime.err != nil {
+			errorIf(uptime.err, "Unable to fetch uptime")
+			continue
+		}
+
+		validCount++
+		if validCount >= readQuorum {
+			latestUptime = uptime.uptime
+			break
+		}
+	}
+
+	// Less than readQuorum "Admin.Uptime" RPC call returned
+	// successfully, so read-quorum unavailable.
+	if validCount < readQuorum {
+		return time.Duration(0), InsufficientReadQuorum{}
+	}
+
+	return latestUptime, nil
 }

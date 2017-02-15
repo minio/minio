@@ -153,11 +153,20 @@ func getDiskInfo(diskPath string) (di disk.Info, err error) {
 	return di, err
 }
 
+// List of operating systems where we ignore disk space
+// verification.
+var ignoreDiskFreeOS = []string{
+	globalWindowsOSName,
+	globalNetBSDOSName,
+	globalSolarisOSName,
+}
+
 // checkDiskFree verifies if disk path has sufficient minimum free disk space and files.
 func (s *posix) checkDiskFree() (err error) {
 	// We don't validate disk space or inode utilization on windows.
 	// Each windows calls to 'GetVolumeInformationW' takes around 3-5seconds.
-	if runtime.GOOS == globalWindowsOSName {
+	// And StatFS is not supported by Go for solaris and netbsd.
+	if contains(ignoreDiskFreeOS, runtime.GOOS) {
 		return nil
 	}
 

@@ -48,7 +48,7 @@ func TestErasureHealFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Create a test file.
-	size, checkSums, err := erasureCreateFile(disks, "testbucket", "testobject1", bytes.NewReader(data), blockSize, dataBlocks, parityBlocks, bitRotAlgo, dataBlocks+1)
+	size, checkSums, err := erasureCreateFile(disks, "testbucket", "testobject1", bytes.NewReader(data), true, blockSize, dataBlocks, parityBlocks, bitRotAlgo, dataBlocks+1)
 	if err != nil {
 		t.Fatal(err)
 	}

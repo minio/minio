@@ -19,7 +19,6 @@ package cmd
 import (
 	"errors"
 	"flag"
-	"net/http"
 	"os"
 	"reflect"
 	"runtime"
@@ -34,7 +33,7 @@ func TestGetListenIPs(t *testing.T) {
 		port       string
 		shouldPass bool
 	}{
-		{"localhost", "9000", true},
+		{"127.0.0.1", "9000", true},
 		{"", "9000", true},
 		{"", "", false},
 	}
@@ -115,14 +114,12 @@ func TestFinalizeAPIEndpoints(t *testing.T) {
 	}{
 		{":80"},
 		{":80"},
-		{"localhost:80"},
-		{"localhost:80"},
+		{"127.0.0.1:80"},
+		{"127.0.0.1:80"},
 	}
 
 	for i, test := range testCases {
-		endPoints, err := finalizeAPIEndpoints(&http.Server{
-			Addr: test.addr,
-		})
+		endPoints, err := finalizeAPIEndpoints(test.addr)
 		if err != nil && len(endPoints) <= 0 {
 			t.Errorf("Test case %d returned with no API end points for %s",
 				i+1, test.addr)
@@ -286,18 +283,18 @@ func TestParseStorageEndpoints(t *testing.T) {
 		host            string
 		expectedErr     error
 	}{
-		{"", "http://localhost/export", nil},
+		{"", "http://127.0.0.1/export", nil},
 		{
 			"testhost",
-			"http://localhost/export",
-			errors.New("Invalid Argument localhost, port mandatory when --address <host>:<port> is used"),
+			"http://127.0.0.1/export",
+			errors.New("Invalid Argument 127.0.0.1, port mandatory when --address <host>:<port> is used"),
 		},
 		{
 			"",
-			"http://localhost:9000/export",
-			errors.New("Invalid Argument localhost:9000, port configurable using --address :<port>"),
+			"http://127.0.0.1:9000/export",
+			errors.New("Invalid Argument 127.0.0.1:9000, port configurable using --address :<port>"),
 		},
-		{"testhost", "http://localhost:9000/export", nil},
+		{"testhost", "http://127.0.0.1:9000/export", nil},
 	}
 	for i, test := range testCases {
 		globalMinioHost = test.globalMinioHost
@@ -318,15 +315,15 @@ func TestCheckEndpointsSyntax(t *testing.T) {
 	successCases := []string{
 		"export",
 		"/export",
-		"http://localhost/export",
-		"https://localhost/export",
+		"http://127.0.0.1/export",
+		"https://127.0.0.1/export",
 	}
 
 	failureCases := []string{
 		"/",
-		"http://localhost",
-		"http://localhost/",
-		"ftp://localhost/export",
+		"http://127.0.0.1",
+		"http://127.0.0.1/",
+		"ftp://127.0.0.1/export",
 		"server:/export",
 	}
 
@@ -455,8 +452,14 @@ func TestIsDistributedSetup(t *testing.T) {
 	globalMinioHost = ""
 }
 
-func TestInitServerConfig(t *testing.T) {
-	ctx := &cli.Context{}
+// Tests init server.
+func TestInitServer(t *testing.T) {
+	app := cli.NewApp()
+	app.Commands = []cli.Command{serverCmd}
+	serverFlagSet := flag.NewFlagSet("server", 0)
+	serverFlagSet.String("address", ":9000", "")
+	ctx := cli.NewContext(app, serverFlagSet, serverFlagSet)
+
 	root, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatal("Failed to set up test config")
@@ -476,6 +479,7 @@ func TestInitServerConfig(t *testing.T) {
 			t.Fatalf("Test %d failed with %v", i+1, tErr)
 		}
 		initServerConfig(ctx)
+		os.Unsetenv(test.envVar)
 	}
 }
 
@@ -491,8 +495,8 @@ func TestIsAnyEndpointLocal(t *testing.T) {
 			result: false,
 		},
 		{
-			disks: []string{"http://localhost/mnt/disk1",
-				"http://localhost/mnt/disk1"},
+			disks: []string{"http://127.0.0.1/mnt/disk1",
+				"http://127.0.0.1/mnt/disk1"},
 			result: true,
 		},
 	}

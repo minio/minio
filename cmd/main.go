@@ -53,23 +53,17 @@ DESCRIPTION:
   {{.Description}}
 
 USAGE:
-  minio {{if .Flags}}[flags] {{end}}command{{if .Flags}}{{end}} [arguments...]
+  minio {{if .VisibleFlags}}[flags] {{end}}command{{if .VisibleFlags}}{{end}} [arguments...]
 
 COMMANDS:
-  {{range .Commands}}{{join .Names ", "}}{{ "\t" }}{{.Usage}}
-  {{end}}{{if .Flags}}
+  {{range .VisibleCommands}}{{join .Names ", "}}{{ "\t" }}{{.Usage}}
+  {{end}}{{if .VisibleFlags}}
 FLAGS:
-  {{range .Flags}}{{.}}
+  {{range .VisibleFlags}}{{.}}
   {{end}}{{end}}
 VERSION:
   ` + Version +
 	`{{ "\n"}}`
-
-// init - check the environment before main starts
-func init() {
-	// Check if minio was compiled using a supported version of Golang.
-	checkGoVersion()
-}
 
 func migrate() {
 	// Migrate config file
@@ -94,7 +88,7 @@ func findClosestCommands(command string) []string {
 	sort.Strings(closestCommands)
 	// Suggest other close commands - allow missed, wrongly added and
 	// even transposed characters
-	for _, value := range commandsTree.walk(commandsTree.root) {
+	for _, value := range commandsTree.Walk(commandsTree.Root()) {
 		if sort.SearchStrings(closestCommands, value.(string)) < len(closestCommands) {
 			continue
 		}
@@ -151,15 +145,37 @@ func checkMainSyntax(c *cli.Context) {
 func checkUpdate() {
 	// Do not print update messages, if quiet flag is set.
 	if !globalQuiet {
-		updateMsg, _, err := getReleaseUpdate(minioUpdateStableURL, 1*time.Second)
+		older, downloadURL, err := getUpdateInfo(1 * time.Second)
 		if err != nil {
-			// Ignore any errors during getReleaseUpdate(), possibly
-			// because of network errors.
+			// Its OK to ignore any errors during getUpdateInfo() here.
 			return
 		}
-		if updateMsg.Update {
-			console.Println(updateMsg)
+		if older > time.Duration(0) {
+			console.Println(colorizeUpdateMessage(downloadURL, older))
 		}
+	}
+}
+
+// Initializes a new config if it doesn't exist, else migrates any old config
+// to newer config and finally loads the config to memory.
+func initConfig() {
+	envCreds := mustGetCredentialFromEnv()
+
+	// Config file does not exist, we create it fresh and return upon success.
+	if !isConfigFileExists() {
+		if err := newConfig(envCreds); err != nil {
+			console.Fatalf("Unable to initialize minio config for the first time. Err: %s.\n", err)
+		}
+		console.Println("Created minio configuration file successfully at " + mustGetConfigPath())
+		return
+	}
+
+	// Migrate any old version of config / state files to newer format.
+	migrate()
+
+	// Once we have migrated all the old config, now load them.
+	if err := loadConfig(envCreds); err != nil {
+		console.Fatalf("Unable to initialize minio config. Err: %s.\n", err)
 	}
 }
 
@@ -174,35 +190,11 @@ func minioInit(ctx *cli.Context) {
 	// Is TLS configured?.
 	globalIsSSL = isSSL()
 
-	// Migrate any old version of config / state files to newer format.
-	migrate()
-
-	// Initialize config.
-	configCreated, err := initConfig()
-	if err != nil {
-		console.Fatalf("Unable to initialize minio config. Err: %s.\n", err)
-	}
-	if configCreated {
-		console.Println("Created minio configuration file at " + mustGetConfigPath())
-	}
+	// Initialize minio server config.
+	initConfig()
 
 	// Enable all loggers by now so we can use errorIf() and fatalIf()
 	enableLoggers()
-
-	// Fetch access keys from environment variables and update the config.
-	if globalEnvAccessKey != "" && globalEnvSecretKey != "" {
-		// Set new credentials.
-		serverConfig.SetCredential(credential{
-			AccessKey: globalEnvAccessKey,
-			SecretKey: globalEnvSecretKey,
-		})
-	}
-	if !isAccessKeyValid(serverConfig.GetCredential().AccessKey) {
-		fatalIf(errInvalidArgument, "Invalid access key. Accept only a string starting with a alphabetic and containing from 5 to 20 characters.")
-	}
-	if !isSecretKeyValid(serverConfig.GetCredential().SecretKey) {
-		fatalIf(errInvalidArgument, "Invalid secret key. Accept only a string containing from 8 to 40 characters.")
-	}
 
 	// Init the error tracing module.
 	initError()
@@ -210,7 +202,7 @@ func minioInit(ctx *cli.Context) {
 }
 
 // Main main for minio server.
-func Main() {
+func Main(args []string, exitFn func(int)) {
 	app := registerApp()
 	app.Before = func(c *cli.Context) error {
 		// Valid input arguments to main.
@@ -224,5 +216,7 @@ func Main() {
 	}
 
 	// Run the app - exit on error.
-	app.RunAndExitOnError()
+	if err := app.Run(args); err != nil {
+		exitFn(1)
+	}
 }

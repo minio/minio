@@ -217,7 +217,7 @@ func (c *Cache) Create(key string, size int64) (w io.WriteCloser, err error) {
 // returns an error ErrNotFoundInCache, if the key does not exist.
 // Returns ErrKeyNotFoundInCache if entry's lastAccessedTime is older
 // than objModTime.
-func (c *Cache) Open(key string, objModTime time.Time) (io.ReadSeeker, error) {
+func (c *Cache) Open(key string, objModTime time.Time) (io.ReaderAt, error) {
 	// Entry exists, return the readable buffer.
 	c.mutex.Lock()
 	defer c.mutex.Unlock()

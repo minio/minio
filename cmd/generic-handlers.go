@@ -17,6 +17,8 @@
 package cmd
 
 import (
+	"bufio"
+	"net"
 	"net/http"
 	"path"
 	"strings"
@@ -141,8 +143,8 @@ func setBrowserCacheControlHandler(h http.Handler) http.Handler {
 func (h cacheControlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method == httpGET && guessIsBrowserReq(r) && globalIsBrowserEnabled {
 		// For all browser requests set appropriate Cache-Control policies
-		if strings.HasPrefix(r.URL.Path, reservedBucket+"/") {
-			if strings.HasSuffix(r.URL.Path, ".js") || r.URL.Path == reservedBucket+"/favicon.ico" {
+		if hasPrefix(r.URL.Path, reservedBucket+"/") {
+			if hasSuffix(r.URL.Path, ".js") || r.URL.Path == reservedBucket+"/favicon.ico" {
 				// For assets set cache expiry of one year. For each release, the name
 				// of the asset name will change and hence it can not be served from cache.
 				w.Header().Set("Cache-Control", "max-age=31536000")
@@ -355,4 +357,53 @@ func (h resourceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Serve HTTP.
 	h.handler.ServeHTTP(w, r)
+}
+
+// httpResponseRecorder wraps http.ResponseWriter
+// to record some useful http response data.
+type httpResponseRecorder struct {
+	http.ResponseWriter
+	respStatusCode int
+}
+
+// Wraps ResponseWriter's Write()
+func (rww *httpResponseRecorder) Write(b []byte) (int, error) {
+	return rww.ResponseWriter.Write(b)
+}
+
+// Wraps ResponseWriter's Flush()
+func (rww *httpResponseRecorder) Flush() {
+	rww.ResponseWriter.(http.Flusher).Flush()
+}
+
+// Wraps ResponseWriter's WriteHeader() and record
+// the response status code
+func (rww *httpResponseRecorder) WriteHeader(httpCode int) {
+	rww.respStatusCode = httpCode
+	rww.ResponseWriter.WriteHeader(httpCode)
+}
+
+func (rww *httpResponseRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	return rww.ResponseWriter.(http.Hijacker).Hijack()
+}
+
+// httpStatsHandler definition: gather HTTP statistics
+type httpStatsHandler struct {
+	handler http.Handler
+}
+
+// setHttpStatsHandler sets a http Stats Handler
+func setHTTPStatsHandler(h http.Handler) http.Handler {
+	return httpStatsHandler{handler: h}
+}
+
+func (h httpStatsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Wraps w to record http response information
+	ww := &httpResponseRecorder{ResponseWriter: w}
+
+	// Execute the request
+	h.handler.ServeHTTP(ww, r)
+
+	// Update http statistics
+	globalHTTPStats.updateStats(r, ww)
 }

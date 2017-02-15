@@ -913,7 +913,7 @@ func TestBucketPolicyConditionMatch(t *testing.T) {
 			statementCondition: getStatementWithCondition("StringNotEquals", "s3:prefix", "Asia/"),
 			condition:          getInnerMap("prefix", "Asia/"),
 
-			expectedMatch: true,
+			expectedMatch: false,
 		},
 		// Test case - 6.
 		// StringNotEquals condition doesn't match.
@@ -922,7 +922,7 @@ func TestBucketPolicyConditionMatch(t *testing.T) {
 			statementCondition: getStatementWithCondition("StringNotEquals", "s3:prefix", "Asia/"),
 			condition:          getInnerMap("prefix", "Africa/"),
 
-			expectedMatch: false,
+			expectedMatch: true,
 		},
 		// Test case - 7.
 		// StringNotEquals condition matches.
@@ -931,7 +931,7 @@ func TestBucketPolicyConditionMatch(t *testing.T) {
 			statementCondition: getStatementWithCondition("StringNotEquals", "s3:max-keys", "Asia/"),
 			condition:          getInnerMap("max-keys", "Asia/"),
 
-			expectedMatch: true,
+			expectedMatch: false,
 		},
 		// Test case - 8.
 		// StringNotEquals condition doesn't match.
@@ -940,7 +940,35 @@ func TestBucketPolicyConditionMatch(t *testing.T) {
 			statementCondition: getStatementWithCondition("StringNotEquals", "s3:max-keys", "Asia/"),
 			condition:          getInnerMap("max-keys", "Africa/"),
 
-			expectedMatch: false,
+			expectedMatch: true,
+		},
+		// Test case - 9.
+		// StringLike condition matches.
+		{
+			statementCondition: getStatementWithCondition("StringLike", "aws:Referer", "http://www.example.com/"),
+			condition:          getInnerMap("referer", "http://www.example.com/"),
+			expectedMatch:      true,
+		},
+		// Test case - 10.
+		// StringLike condition doesn't match.
+		{
+			statementCondition: getStatementWithCondition("StringLike", "aws:Referer", "http://www.example.com/"),
+			condition:          getInnerMap("referer", "www.somethingelse.com"),
+			expectedMatch:      false,
+		},
+		// Test case - 11.
+		// StringNotLike condition evaluates to false.
+		{
+			statementCondition: getStatementWithCondition("StringNotLike", "aws:Referer", "http://www.example.com/"),
+			condition:          getInnerMap("referer", "http://www.example.com/"),
+			expectedMatch:      false,
+		},
+		// Test case - 12.
+		// StringNotLike condition evaluates to true.
+		{
+			statementCondition: getStatementWithCondition("StringNotLike", "aws:Referer", "http://www.example.com/"),
+			condition:          getInnerMap("referer", "http://somethingelse.com/"),
+			expectedMatch:      true,
 		},
 	}
 
@@ -949,7 +977,8 @@ func TestBucketPolicyConditionMatch(t *testing.T) {
 			// call the function under test and assert the result with the expected result.
 			doesMatch := bucketPolicyConditionMatch(tc.condition, tc.statementCondition)
 			if tc.expectedMatch != doesMatch {
-				t.Errorf("Expected the match to be `%v`; got `%v`.", tc.expectedMatch, doesMatch)
+				t.Errorf("Expected the match to be `%v`; got `%v` - %v %v.",
+					tc.expectedMatch, doesMatch, tc.condition, tc.statementCondition)
 			}
 		})
 	}

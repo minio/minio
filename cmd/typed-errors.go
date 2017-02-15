@@ -33,6 +33,9 @@ var errContentSHA256Mismatch = errors.New("Content checksum SHA256 mismatch")
 // used when we deal with data larger than expected
 var errSizeUnexpected = errors.New("Data size larger than expected")
 
+// used when we deal with data with unknown size
+var errSizeUnspecified = errors.New("Data size is unspecified")
+
 // When upload object size is greater than 5G in a single PUT/POST operation.
 var errDataTooLarge = errors.New("Object size larger than allowed limit")
 

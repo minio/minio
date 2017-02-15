@@ -1,4 +1,4 @@
-// +build linux darwin dragonfly freebsd netbsd openbsd
+// +build linux darwin freebsd netbsd openbsd
 
 /*
  * Minio Cloud Storage, (C) 2016 Minio, Inc.
@@ -66,10 +66,6 @@ func parseDirents(dirPath string, buf []byte) (entries []string, err error) {
 		var name = string(bytes[0:clen(bytes[:])])
 		// Reserved names skip them.
 		if name == "." || name == ".." {
-			continue
-		}
-		// Skip special files.
-		if hasPosixReservedPrefix(name) {
 			continue
 		}
 

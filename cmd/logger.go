@@ -39,9 +39,39 @@ var log = struct {
 //   - console [default]
 //   - file
 type logger struct {
+	sync.RWMutex
 	Console consoleLogger `json:"console"`
 	File    fileLogger    `json:"file"`
 	// Add new loggers here.
+}
+
+/// Logger related.
+
+// SetFile set new file logger.
+func (l *logger) SetFile(flogger fileLogger) {
+	l.Lock()
+	defer l.Unlock()
+	l.File = flogger
+}
+
+// GetFileLogger get current file logger.
+func (l *logger) GetFile() fileLogger {
+	l.RLock()
+	defer l.RUnlock()
+	return l.File
+}
+
+// SetConsole set new console logger.
+func (l *logger) SetConsole(clogger consoleLogger) {
+	l.Lock()
+	defer l.Unlock()
+	l.Console = clogger
+}
+
+func (l *logger) GetConsole() consoleLogger {
+	l.RLock()
+	defer l.RUnlock()
+	return l.Console
 }
 
 // Get file, line, function name of the caller.

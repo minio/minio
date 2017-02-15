@@ -106,15 +106,18 @@ func testMultipartObjectCreation(obj ObjectLayer, instanceType string, c TestErr
 	for i := 1; i <= 10; i++ {
 		expectedMD5Sumhex := getMD5Hash(data)
 
-		var calculatedMD5sum string
-		calculatedMD5sum, err = obj.PutObjectPart("bucket", "key", uploadID, i, int64(len(data)), bytes.NewBuffer(data), expectedMD5Sumhex, "")
+		var calcPartInfo PartInfo
+		calcPartInfo, err = obj.PutObjectPart("bucket", "key", uploadID, i, int64(len(data)), bytes.NewBuffer(data), expectedMD5Sumhex, "")
 		if err != nil {
 			c.Errorf("%s: <ERROR> %s", instanceType, err)
 		}
-		if calculatedMD5sum != expectedMD5Sumhex {
+		if calcPartInfo.ETag != expectedMD5Sumhex {
 			c.Errorf("MD5 Mismatch")
 		}
-		completedParts.Parts = append(completedParts.Parts, completePart{PartNumber: i, ETag: calculatedMD5sum})
+		completedParts.Parts = append(completedParts.Parts, completePart{
+			PartNumber: i,
+			ETag:       calcPartInfo.ETag,
+		})
 	}
 	objInfo, err := obj.CompleteMultipartUpload("bucket", "key", uploadID, completedParts.Parts)
 	if err != nil {
@@ -153,12 +156,12 @@ func testMultipartObjectAbort(obj ObjectLayer, instanceType string, c TestErrHan
 		expectedMD5Sumhex := getMD5Hash([]byte(randomString))
 
 		metadata["md5"] = expectedMD5Sumhex
-		var calculatedMD5sum string
-		calculatedMD5sum, err = obj.PutObjectPart("bucket", "key", uploadID, i, int64(len(randomString)), bytes.NewBufferString(randomString), expectedMD5Sumhex, "")
+		var calcPartInfo PartInfo
+		calcPartInfo, err = obj.PutObjectPart("bucket", "key", uploadID, i, int64(len(randomString)), bytes.NewBufferString(randomString), expectedMD5Sumhex, "")
 		if err != nil {
 			c.Fatalf("%s: <ERROR> %s", instanceType, err)
 		}
-		if calculatedMD5sum != expectedMD5Sumhex {
+		if calcPartInfo.ETag != expectedMD5Sumhex {
 			c.Errorf("Md5 Mismatch")
 		}
 		parts[i] = expectedMD5Sumhex

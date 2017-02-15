@@ -52,7 +52,7 @@ func lookupEndpoint(u *url.URL) error {
 
 // Initializes new webhook logrus notifier.
 func newWebhookNotify(accountID string) (*logrus.Logger, error) {
-	rNotify := serverConfig.GetWebhookNotifyByID(accountID)
+	rNotify := serverConfig.Notify.GetWebhookByID(accountID)
 
 	if rNotify.Endpoint == "" {
 		return nil, errInvalidArgument
@@ -118,6 +118,9 @@ func (n httpConn) Fire(entry *logrus.Entry) error {
 	if err != nil {
 		return err
 	}
+
+	// Make sure to close the response body so the connection can be re-used.
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK &&
 		resp.StatusCode != http.StatusAccepted &&

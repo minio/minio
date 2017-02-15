@@ -119,17 +119,13 @@ func TestDoesPresignedV2SignatureMatch(t *testing.T) {
 
 // TestValidateV2AuthHeader - Tests validate the logic of V2 Authorization header validator.
 func TestValidateV2AuthHeader(t *testing.T) {
-	// Initialize server config.
-	if _, err := initConfig(); err != nil {
-		t.Fatal(err)
+	root, err := newTestConfig(globalMinioDefaultRegion)
+	if err != nil {
+		t.Fatal("Unable to initialize test config.")
 	}
+	defer removeAll(root)
 
-	// Save config.
-	if err := serverConfig.Save(); err != nil {
-		t.Fatal(err)
-	}
 	accessID := serverConfig.GetCredential().AccessKey
-
 	testCases := []struct {
 		authString    string
 		expectedError APIErrorCode
@@ -194,13 +190,11 @@ func TestValidateV2AuthHeader(t *testing.T) {
 }
 
 func TestDoesPolicySignatureV2Match(t *testing.T) {
-	if _, err := initConfig(); err != nil {
-		t.Fatal(err)
+	root, err := newTestConfig(globalMinioDefaultRegion)
+	if err != nil {
+		t.Fatal("Unable to initialize test config.")
 	}
-
-	if err := serverConfig.Save(); err != nil {
-		t.Fatal(err)
-	}
+	defer removeAll(root)
 	creds := serverConfig.GetCredential()
 	policy := "policy"
 	testCases := []struct {

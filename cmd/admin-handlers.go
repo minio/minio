@@ -19,7 +19,6 @@ package cmd
 import (
 	"encoding/json"
 	"encoding/xml"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -36,14 +35,14 @@ type mgmtQueryKey string
 
 // Only valid query params for list/clear locks management APIs.
 const (
-	mgmtBucket    mgmtQueryKey = "bucket"
-	mgmtObject    mgmtQueryKey = "object"
-	mgmtPrefix    mgmtQueryKey = "prefix"
-	mgmtOlderThan mgmtQueryKey = "older-than"
-	mgmtDelimiter mgmtQueryKey = "delimiter"
-	mgmtMarker    mgmtQueryKey = "marker"
-	mgmtMaxKey    mgmtQueryKey = "max-key"
-	mgmtDryRun    mgmtQueryKey = "dry-run"
+	mgmtBucket       mgmtQueryKey = "bucket"
+	mgmtObject       mgmtQueryKey = "object"
+	mgmtPrefix       mgmtQueryKey = "prefix"
+	mgmtLockDuration mgmtQueryKey = "duration"
+	mgmtDelimiter    mgmtQueryKey = "delimiter"
+	mgmtMarker       mgmtQueryKey = "marker"
+	mgmtMaxKey       mgmtQueryKey = "max-key"
+	mgmtDryRun       mgmtQueryKey = "dry-run"
 )
 
 // ServerVersion - server version
@@ -54,8 +53,8 @@ type ServerVersion struct {
 
 // ServerStatus - contains the response of service status API
 type ServerStatus struct {
-	StorageInfo   StorageInfo   `json:"storageInfo"`
 	ServerVersion ServerVersion `json:"serverVersion"`
+	Uptime        time.Duration `json:"uptime"`
 }
 
 // ServiceStatusHandler - GET /?service
@@ -70,15 +69,22 @@ func (adminAPI adminAPIHandlers) ServiceStatusHandler(w http.ResponseWriter, r *
 		return
 	}
 
-	// Fetch storage backend information
-	storageInfo := newObjectLayerFn().StorageInfo()
 	// Fetch server version
 	serverVersion := ServerVersion{Version: Version, CommitID: CommitID}
 
+	// Fetch uptimes from all peers. This may fail to due to lack
+	// of read-quorum availability.
+	uptime, err := getPeerUptimes(globalAdminPeers)
+	if err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		errorIf(err, "Possibly failed to get uptime from majority of servers.")
+		return
+	}
+
 	// Create API response
 	serverStatus := ServerStatus{
-		StorageInfo:   storageInfo,
 		ServerVersion: serverVersion,
+		Uptime:        uptime,
 	}
 
 	// Marshal API response
@@ -131,8 +137,8 @@ func (adminAPI adminAPIHandlers) ServiceCredentialsHandler(w http.ResponseWriter
 	}
 
 	// Avoid setting new credentials when they are already passed
-	// by the environnement
-	if globalEnvAccessKey != "" || globalEnvSecretKey != "" {
+	// by the environment.
+	if globalIsEnvCreds {
 		writeErrorResponse(w, ErrMethodNotAllowed, r.URL)
 		return
 	}
@@ -154,24 +160,25 @@ func (adminAPI adminAPIHandlers) ServiceCredentialsHandler(w http.ResponseWriter
 	}
 
 	// Check passed credentials
-	cred, err := getCredential(req.Username, req.Password)
-	switch err {
-	case errInvalidAccessKeyLength:
-		writeErrorResponse(w, ErrAdminInvalidAccessKey, r.URL)
-		return
-	case errInvalidSecretKeyLength:
-		writeErrorResponse(w, ErrAdminInvalidSecretKey, r.URL)
+	err = validateAuthKeys(req.Username, req.Password)
+	if err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 
+	creds := credential{
+		AccessKey: req.Username,
+		SecretKey: req.Password,
+	}
+
 	// Notify all other Minio peers to update credentials
-	updateErrs := updateCredsOnPeers(cred)
+	updateErrs := updateCredsOnPeers(creds)
 	for peer, err := range updateErrs {
 		errorIf(err, "Unable to update credentials on peer %s.", peer)
 	}
 
-	// Update local credentials
-	serverConfig.SetCredential(cred)
+	// Update local credentials in memory.
+	serverConfig.SetCredential(creds)
 	if err = serverConfig.Save(); err != nil {
 		writeErrorResponse(w, ErrInternalError, r.URL)
 		return
@@ -181,11 +188,103 @@ func (adminAPI adminAPIHandlers) ServiceCredentialsHandler(w http.ResponseWriter
 	w.WriteHeader(http.StatusOK)
 }
 
+// ServerProperties holds some server information such as, version, region
+// uptime, etc..
+type ServerProperties struct {
+	Uptime   time.Duration `json:"uptime"`
+	Version  string        `json:"version"`
+	CommitID string        `json:"commitID"`
+	Region   string        `json:"region"`
+	SQSARN   []string      `json:"sqsARN"`
+}
+
+// ServerConnStats holds transferred bytes from/to the server
+type ServerConnStats struct {
+	TotalInputBytes  uint64 `json:"transferred"`
+	TotalOutputBytes uint64 `json:"received"`
+	Throughput       uint64 `json:"throughput,omitempty"`
+}
+
+// ServerInfo holds the information that will be returned by ServerInfo API
+type ServerInfo struct {
+	StorageInfo StorageInfo      `json:"storage"`
+	ConnStats   ServerConnStats  `json:"network"`
+	Properties  ServerProperties `json:"server"`
+}
+
+// ServerInfoHandler - GET /?server-info
+// ----------
+// Get server information
+func (adminAPI adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Request) {
+	// Authenticate request
+	adminAPIErr := checkRequestAuthType(r, "", "", "")
+	if adminAPIErr != ErrNone {
+		writeErrorResponse(w, adminAPIErr, r.URL)
+		return
+	}
+
+	// Build storage info
+	objLayer := newObjectLayerFn()
+	if objLayer == nil {
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+		return
+	}
+	storage := objLayer.StorageInfo()
+
+	// Build list of enabled ARNs queues
+	var arns []string
+	for queueArn := range globalEventNotifier.GetAllExternalTargets() {
+		arns = append(arns, queueArn)
+	}
+
+	// Fetch uptimes from all peers. This may fail to due to lack
+	// of read-quorum availability.
+	uptime, err := getPeerUptimes(globalAdminPeers)
+	if err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		errorIf(err, "Unable to get uptime from majority of servers.")
+		return
+	}
+
+	// Build server properties information
+	properties := ServerProperties{
+		Version:  Version,
+		CommitID: CommitID,
+		Region:   serverConfig.GetRegion(),
+		SQSARN:   arns,
+		Uptime:   uptime,
+	}
+
+	// Build network info
+	connStats := ServerConnStats{
+		TotalInputBytes:  globalConnStats.getTotalInputBytes(),
+		TotalOutputBytes: globalConnStats.getTotalOutputBytes(),
+	}
+
+	// Build the whole returned information
+	info := ServerInfo{
+		StorageInfo: storage,
+		ConnStats:   connStats,
+		Properties:  properties,
+	}
+
+	// Marshal API response
+	jsonBytes, err := json.Marshal(info)
+	if err != nil {
+		writeErrorResponse(w, ErrInternalError, r.URL)
+		errorIf(err, "Failed to marshal storage info into json.")
+		return
+	}
+	// Reply with storage information (across nodes in a
+	// distributed setup) as json.
+	writeSuccessResponseJSON(w, jsonBytes)
+}
+
 // validateLockQueryParams - Validates query params for list/clear locks management APIs.
 func validateLockQueryParams(vars url.Values) (string, string, time.Duration, APIErrorCode) {
 	bucket := vars.Get(string(mgmtBucket))
 	prefix := vars.Get(string(mgmtPrefix))
-	relTimeStr := vars.Get(string(mgmtOlderThan))
+	durationStr := vars.Get(string(mgmtLockDuration))
 
 	// N B empty bucket name is invalid
 	if !IsValidBucketName(bucket) {
@@ -198,24 +297,24 @@ func validateLockQueryParams(vars url.Values) (string, string, time.Duration, AP
 
 	// If older-than parameter was empty then set it to 0s to list
 	// all locks older than now.
-	if relTimeStr == "" {
-		relTimeStr = "0s"
+	if durationStr == "" {
+		durationStr = "0s"
 	}
-	relTime, err := time.ParseDuration(relTimeStr)
+	duration, err := time.ParseDuration(durationStr)
 	if err != nil {
 		errorIf(err, "Failed to parse duration passed as query value.")
 		return "", "", time.Duration(0), ErrInvalidDuration
 	}
 
-	return bucket, prefix, relTime, ErrNone
+	return bucket, prefix, duration, ErrNone
 }
 
-// ListLocksHandler - GET /?lock&bucket=mybucket&prefix=myprefix&older-than=rel_time
+// ListLocksHandler - GET /?lock&bucket=mybucket&prefix=myprefix&duration=duration
 // - bucket is a mandatory query parameter
 // - prefix and older-than are optional query parameters
 // HTTP header x-minio-operation: list
 // ---------
-// Lists locks held on a given bucket, prefix and relative time.
+// Lists locks held on a given bucket, prefix and duration it was held for.
 func (adminAPI adminAPIHandlers) ListLocksHandler(w http.ResponseWriter, r *http.Request) {
 	adminAPIErr := checkRequestAuthType(r, "", "", "")
 	if adminAPIErr != ErrNone {
@@ -224,15 +323,15 @@ func (adminAPI adminAPIHandlers) ListLocksHandler(w http.ResponseWriter, r *http
 	}
 
 	vars := r.URL.Query()
-	bucket, prefix, relTime, adminAPIErr := validateLockQueryParams(vars)
+	bucket, prefix, duration, adminAPIErr := validateLockQueryParams(vars)
 	if adminAPIErr != ErrNone {
 		writeErrorResponse(w, adminAPIErr, r.URL)
 		return
 	}
 
 	// Fetch lock information of locks matching bucket/prefix that
-	// are available since relTime.
-	volLocks, err := listPeerLocksInfo(globalAdminPeers, bucket, prefix, relTime)
+	// are available for longer than duration.
+	volLocks, err := listPeerLocksInfo(globalAdminPeers, bucket, prefix, duration)
 	if err != nil {
 		writeErrorResponse(w, ErrInternalError, r.URL)
 		errorIf(err, "Failed to fetch lock information from remote nodes.")
@@ -248,16 +347,16 @@ func (adminAPI adminAPIHandlers) ListLocksHandler(w http.ResponseWriter, r *http
 	}
 
 	// Reply with list of locks held on bucket, matching prefix
-	// older than relTime supplied, as json.
+	// held longer than duration supplied, as json.
 	writeSuccessResponseJSON(w, jsonBytes)
 }
 
-// ClearLocksHandler - POST /?lock&bucket=mybucket&prefix=myprefix&older-than=relTime
+// ClearLocksHandler - POST /?lock&bucket=mybucket&prefix=myprefix&duration=duration
 // - bucket is a mandatory query parameter
 // - prefix and older-than are optional query parameters
 // HTTP header x-minio-operation: clear
 // ---------
-// Clear locks held on a given bucket, prefix and relative time.
+// Clear locks held on a given bucket, prefix and duration it was held for.
 func (adminAPI adminAPIHandlers) ClearLocksHandler(w http.ResponseWriter, r *http.Request) {
 	adminAPIErr := checkRequestAuthType(r, "", "", "")
 	if adminAPIErr != ErrNone {
@@ -266,15 +365,15 @@ func (adminAPI adminAPIHandlers) ClearLocksHandler(w http.ResponseWriter, r *htt
 	}
 
 	vars := r.URL.Query()
-	bucket, prefix, relTime, adminAPIErr := validateLockQueryParams(vars)
+	bucket, prefix, duration, adminAPIErr := validateLockQueryParams(vars)
 	if adminAPIErr != ErrNone {
 		writeErrorResponse(w, adminAPIErr, r.URL)
 		return
 	}
 
 	// Fetch lock information of locks matching bucket/prefix that
-	// are available since relTime.
-	volLocks, err := listPeerLocksInfo(globalAdminPeers, bucket, prefix, relTime)
+	// are held for longer than duration.
+	volLocks, err := listPeerLocksInfo(globalAdminPeers, bucket, prefix, duration)
 	if err != nil {
 		writeErrorResponse(w, ErrInternalError, r.URL)
 		errorIf(err, "Failed to fetch lock information from remote nodes.")
@@ -289,7 +388,7 @@ func (adminAPI adminAPIHandlers) ClearLocksHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	// Remove lock matching bucket/prefix older than relTime.
+	// Remove lock matching bucket/prefix held longer than duration.
 	for _, volLock := range volLocks {
 		globalNSMutex.ForceUnlock(volLock.Bucket, volLock.Object)
 	}
@@ -541,7 +640,6 @@ func (adminAPI adminAPIHandlers) HealFormatHandler(w http.ResponseWriter, r *htt
 	// Create a new set of storage instances to heal format.json.
 	bootstrapDisks, err := initStorageDisks(globalEndpoints)
 	if err != nil {
-		fmt.Println(traceError(err))
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -549,7 +647,6 @@ func (adminAPI adminAPIHandlers) HealFormatHandler(w http.ResponseWriter, r *htt
 	// Heal format.json on available storage.
 	err = healFormatXL(bootstrapDisks)
 	if err != nil {
-		fmt.Println(traceError(err))
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -557,7 +654,6 @@ func (adminAPI adminAPIHandlers) HealFormatHandler(w http.ResponseWriter, r *htt
 	// Instantiate new object layer with newly formatted storage.
 	newObjectAPI, err := newXLObjects(bootstrapDisks)
 	if err != nil {
-		fmt.Println(traceError(err))
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}

@@ -22,6 +22,8 @@ import (
 	"strconv"
 	"testing"
 	"time"
+
+	humanize "github.com/dustin/go-humanize"
 )
 
 // Tests caclculating disk count.
@@ -324,4 +326,60 @@ func TestGetXLMetaV1GJson10(t *testing.T) {
 		t.Errorf("gjson parsing of XLMeta failed")
 	}
 	compareXLMetaV1(t, unMarshalXLMeta, gjsonXLMeta)
+}
+
+// Test the predicted part size from the part index
+func TestGetPartSizeFromIdx(t *testing.T) {
+	// Create test cases
+	testCases := []struct {
+		totalSize    int64
+		partSize     int64
+		partIndex    int
+		expectedSize int64
+	}{
+		// Total size is - 1
+		{-1, 10, 1, -1},
+		// Total size is zero
+		{0, 10, 1, 0},
+		// part size 2MiB, total size 4MiB
+		{4 * humanize.MiByte, 2 * humanize.MiByte, 1, 2 * humanize.MiByte},
+		{4 * humanize.MiByte, 2 * humanize.MiByte, 2, 2 * humanize.MiByte},
+		{4 * humanize.MiByte, 2 * humanize.MiByte, 3, 0},
+		// part size 2MiB, total size 5MiB
+		{5 * humanize.MiByte, 2 * humanize.MiByte, 1, 2 * humanize.MiByte},
+		{5 * humanize.MiByte, 2 * humanize.MiByte, 2, 2 * humanize.MiByte},
+		{5 * humanize.MiByte, 2 * humanize.MiByte, 3, 1 * humanize.MiByte},
+		{5 * humanize.MiByte, 2 * humanize.MiByte, 4, 0},
+	}
+
+	for i, testCase := range testCases {
+		s, err := getPartSizeFromIdx(testCase.totalSize, testCase.partSize, testCase.partIndex)
+		if err != nil {
+			t.Errorf("Test %d: Expected to pass but failed. %s", i+1, err)
+		}
+		if err == nil && s != testCase.expectedSize {
+			t.Errorf("Test %d: The calculated part size is incorrect: expected = %d, found = %d\n", i+1, testCase.expectedSize, s)
+		}
+	}
+
+	testCasesFailure := []struct {
+		totalSize int64
+		partSize  int64
+		partIndex int
+		err       error
+	}{
+		// partSize is 0, error.
+		{10, 0, 1, errPartSizeZero},
+		{10, 1, 0, errPartSizeIndex},
+	}
+
+	for i, testCaseFailure := range testCasesFailure {
+		_, err := getPartSizeFromIdx(testCaseFailure.totalSize, testCaseFailure.partSize, testCaseFailure.partIndex)
+		if err == nil {
+			t.Errorf("Test %d: Expected to failed but passed. %s", i+1, err)
+		}
+		if err != nil && errorCause(err) != testCaseFailure.err {
+			t.Errorf("Test %d: Expected err %s, but got %s", i+1, testCaseFailure.err, errorCause(err))
+		}
+	}
 }

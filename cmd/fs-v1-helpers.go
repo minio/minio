@@ -27,20 +27,20 @@ import (
 // windows automatically.
 func fsRemoveFile(filePath string) (err error) {
 	if filePath == "" {
-		return errInvalidArgument
+		return traceError(errInvalidArgument)
 	}
 
 	if err = checkPathLength(filePath); err != nil {
-		return err
+		return traceError(err)
 	}
 
 	if err = os.Remove(preparePath(filePath)); err != nil {
 		if os.IsNotExist(err) {
-			return errFileNotFound
+			return traceError(errFileNotFound)
 		} else if os.IsPermission(err) {
-			return errFileAccessDenied
+			return traceError(errFileAccessDenied)
 		}
-		return err
+		return traceError(err)
 	}
 
 	return nil
@@ -50,43 +50,44 @@ func fsRemoveFile(filePath string) (err error) {
 // long paths for windows automatically.
 func fsRemoveAll(dirPath string) (err error) {
 	if dirPath == "" {
-		return errInvalidArgument
+		return traceError(errInvalidArgument)
 	}
 
 	if err = checkPathLength(dirPath); err != nil {
-		return err
+		return traceError(err)
 	}
 
 	if err = removeAll(dirPath); err != nil {
 		if os.IsPermission(err) {
-			return errVolumeAccessDenied
+			return traceError(errVolumeAccessDenied)
 		}
+		return traceError(err)
 	}
 
-	return err
-
+	return nil
 }
 
 // Removes a directory only if its empty, handles long
 // paths for windows automatically.
 func fsRemoveDir(dirPath string) (err error) {
 	if dirPath == "" {
-		return errInvalidArgument
+		return traceError(errInvalidArgument)
 	}
 
 	if err = checkPathLength(dirPath); err != nil {
-		return err
+		return traceError(err)
 	}
 
 	if err = os.Remove(preparePath(dirPath)); err != nil {
 		if os.IsNotExist(err) {
-			return errVolumeNotFound
+			return traceError(errVolumeNotFound)
 		} else if isSysErrNotEmpty(err) {
-			return errVolumeNotEmpty
+			return traceError(errVolumeNotEmpty)
 		}
+		return traceError(err)
 	}
 
-	return err
+	return nil
 }
 
 // Creates a new directory, parent dir should exist
@@ -95,26 +96,27 @@ func fsRemoveDir(dirPath string) (err error) {
 // are handled automatically.
 func fsMkdir(dirPath string) (err error) {
 	if dirPath == "" {
-		return errInvalidArgument
+		return traceError(errInvalidArgument)
 	}
 
 	if err = checkPathLength(dirPath); err != nil {
-		return err
+		return traceError(err)
 	}
 
 	if err = os.Mkdir(preparePath(dirPath), 0777); err != nil {
 		if os.IsExist(err) {
-			return errVolumeExists
+			return traceError(errVolumeExists)
 		} else if os.IsPermission(err) {
-			return errDiskAccessDenied
+			return traceError(errDiskAccessDenied)
 		} else if isSysErrNotDir(err) {
 			// File path cannot be verified since
 			// one of the parents is a file.
-			return errDiskAccessDenied
+			return traceError(errDiskAccessDenied)
 		} else if isSysErrPathNotFound(err) {
 			// Add specific case for windows.
-			return errDiskAccessDenied
+			return traceError(errDiskAccessDenied)
 		}
+		return traceError(err)
 	}
 
 	return nil
@@ -124,24 +126,24 @@ func fsMkdir(dirPath string) (err error) {
 // attributes upon success.
 func fsStatDir(statDir string) (os.FileInfo, error) {
 	if statDir == "" {
-		return nil, errInvalidArgument
+		return nil, traceError(errInvalidArgument)
 	}
 	if err := checkPathLength(statDir); err != nil {
-		return nil, err
+		return nil, traceError(err)
 	}
 
 	fi, err := os.Stat(preparePath(statDir))
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, errVolumeNotFound
+			return nil, traceError(errVolumeNotFound)
 		} else if os.IsPermission(err) {
-			return nil, errVolumeAccessDenied
+			return nil, traceError(errVolumeAccessDenied)
 		}
-		return nil, err
+		return nil, traceError(err)
 	}
 
 	if !fi.IsDir() {
-		return nil, errVolumeAccessDenied
+		return nil, traceError(errVolumeAccessDenied)
 	}
 
 	return fi, nil
@@ -150,28 +152,28 @@ func fsStatDir(statDir string) (os.FileInfo, error) {
 // Lookup if file exists, returns file attributes upon success
 func fsStatFile(statFile string) (os.FileInfo, error) {
 	if statFile == "" {
-		return nil, errInvalidArgument
+		return nil, traceError(errInvalidArgument)
 	}
 
 	if err := checkPathLength(statFile); err != nil {
-		return nil, err
+		return nil, traceError(err)
 	}
 
 	fi, err := os.Stat(preparePath(statFile))
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, errFileNotFound
+			return nil, traceError(errFileNotFound)
 		} else if os.IsPermission(err) {
-			return nil, errFileAccessDenied
+			return nil, traceError(errFileAccessDenied)
 		} else if isSysErrNotDir(err) {
-			return nil, errFileAccessDenied
+			return nil, traceError(errFileAccessDenied)
 		} else if isSysErrPathNotFound(err) {
-			return nil, errFileNotFound
+			return nil, traceError(errFileNotFound)
 		}
-		return nil, err
+		return nil, traceError(err)
 	}
 	if fi.IsDir() {
-		return nil, errFileNotFound
+		return nil, traceError(errFileNotFound)
 	}
 	return fi, nil
 }
@@ -180,44 +182,44 @@ func fsStatFile(statFile string) (os.FileInfo, error) {
 // a readable stream and the size of the readable stream.
 func fsOpenFile(readPath string, offset int64) (io.ReadCloser, int64, error) {
 	if readPath == "" || offset < 0 {
-		return nil, 0, errInvalidArgument
+		return nil, 0, traceError(errInvalidArgument)
 	}
 	if err := checkPathLength(readPath); err != nil {
-		return nil, 0, err
+		return nil, 0, traceError(err)
 	}
 
 	fr, err := os.Open(preparePath(readPath))
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, 0, errFileNotFound
+			return nil, 0, traceError(errFileNotFound)
 		} else if os.IsPermission(err) {
-			return nil, 0, errFileAccessDenied
+			return nil, 0, traceError(errFileAccessDenied)
 		} else if isSysErrNotDir(err) {
 			// File path cannot be verified since one of the parents is a file.
-			return nil, 0, errFileAccessDenied
+			return nil, 0, traceError(errFileAccessDenied)
 		} else if isSysErrPathNotFound(err) {
 			// Add specific case for windows.
-			return nil, 0, errFileNotFound
+			return nil, 0, traceError(errFileNotFound)
 		}
-		return nil, 0, err
+		return nil, 0, traceError(err)
 	}
 
 	// Stat to get the size of the file at path.
 	st, err := fr.Stat()
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, traceError(err)
 	}
 
 	// Verify if its not a regular file, since subsequent Seek is undefined.
 	if !st.Mode().IsRegular() {
-		return nil, 0, errIsNotRegular
+		return nil, 0, traceError(errIsNotRegular)
 	}
 
 	// Seek to the requested offset.
 	if offset > 0 {
 		_, err = fr.Seek(offset, os.SEEK_SET)
 		if err != nil {
-			return nil, 0, err
+			return nil, 0, traceError(err)
 		}
 	}
 
@@ -228,22 +230,22 @@ func fsOpenFile(readPath string, offset int64) (io.ReadCloser, int64, error) {
 // Creates a file and copies data from incoming reader. Staging buffer is used by io.CopyBuffer.
 func fsCreateFile(tempObjPath string, reader io.Reader, buf []byte, fallocSize int64) (int64, error) {
 	if tempObjPath == "" || reader == nil || buf == nil {
-		return 0, errInvalidArgument
+		return 0, traceError(errInvalidArgument)
 	}
 
 	if err := checkPathLength(tempObjPath); err != nil {
-		return 0, err
+		return 0, traceError(err)
 	}
 
 	if err := mkdirAll(pathutil.Dir(tempObjPath), 0777); err != nil {
-		return 0, err
+		return 0, traceError(err)
 	}
 
 	writer, err := os.OpenFile(preparePath(tempObjPath), os.O_CREATE|os.O_WRONLY, 0666)
 	if err != nil {
 		// File path cannot be verified since one of the parents is a file.
 		if isSysErrNotDir(err) {
-			return 0, errFileAccessDenied
+			return 0, traceError(errFileAccessDenied)
 		}
 		return 0, err
 	}
@@ -252,13 +254,13 @@ func fsCreateFile(tempObjPath string, reader io.Reader, buf []byte, fallocSize i
 	// Fallocate only if the size is final object is known.
 	if fallocSize > 0 {
 		if err = fsFAllocate(int(writer.Fd()), 0, fallocSize); err != nil {
-			return 0, err
+			return 0, traceError(err)
 		}
 	}
 
 	bytesWritten, err := io.CopyBuffer(writer, reader, buf)
 	if err != nil {
-		return 0, err
+		return 0, traceError(err)
 	}
 
 	return bytesWritten, nil
@@ -267,20 +269,20 @@ func fsCreateFile(tempObjPath string, reader io.Reader, buf []byte, fallocSize i
 // Removes uploadID at destination path.
 func fsRemoveUploadIDPath(basePath, uploadIDPath string) error {
 	if basePath == "" || uploadIDPath == "" {
-		return errInvalidArgument
+		return traceError(errInvalidArgument)
 	}
 
 	// List all the entries in uploadID.
 	entries, err := readDir(uploadIDPath)
 	if err != nil && err != errFileNotFound {
-		return err
+		return traceError(err)
 	}
 
 	// Delete all the entries obtained from previous readdir.
 	for _, entryPath := range entries {
 		err = fsDeleteFile(basePath, pathJoin(uploadIDPath, entryPath))
 		if err != nil && err != errFileNotFound {
-			return err
+			return traceError(err)
 		}
 	}
 
@@ -325,11 +327,11 @@ func fsRenameFile(sourcePath, destPath string) error {
 // this function additionally protects the basePath from being deleted.
 func fsDeleteFile(basePath, deletePath string) error {
 	if err := checkPathLength(basePath); err != nil {
-		return err
+		return traceError(err)
 	}
 
 	if err := checkPathLength(deletePath); err != nil {
-		return err
+		return traceError(err)
 	}
 
 	if basePath == deletePath {
@@ -340,11 +342,11 @@ func fsDeleteFile(basePath, deletePath string) error {
 	pathSt, err := os.Stat(preparePath(deletePath))
 	if err != nil {
 		if os.IsNotExist(err) {
-			return errFileNotFound
+			return traceError(errFileNotFound)
 		} else if os.IsPermission(err) {
-			return errFileAccessDenied
+			return traceError(errFileAccessDenied)
 		}
-		return err
+		return traceError(err)
 	}
 
 	if pathSt.IsDir() && !isDirEmpty(deletePath) {
@@ -355,13 +357,13 @@ func fsDeleteFile(basePath, deletePath string) error {
 	// Attempt to remove path.
 	if err = os.Remove(preparePath(deletePath)); err != nil {
 		if os.IsNotExist(err) {
-			return errFileNotFound
+			return traceError(errFileNotFound)
 		} else if os.IsPermission(err) {
-			return errFileAccessDenied
+			return traceError(errFileAccessDenied)
 		} else if isSysErrNotEmpty(err) {
-			return errVolumeNotEmpty
+			return traceError(errVolumeNotEmpty)
 		}
-		return err
+		return traceError(err)
 	}
 
 	// Recursively go down the next path and delete again.

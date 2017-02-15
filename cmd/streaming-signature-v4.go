@@ -135,10 +135,10 @@ func calculateSeedSignature(r *http.Request) (signature string, date time.Time, 
 	canonicalRequest := getCanonicalRequest(extractedSignedHeaders, payload, queryStr, req.URL.Path, req.Method, req.Host)
 
 	// Get string to sign from canonical request.
-	stringToSign := getStringToSign(canonicalRequest, date, region)
+	stringToSign := getStringToSign(canonicalRequest, date, signV4Values.Credential.getScope())
 
 	// Get hmac signing key.
-	signingKey := getSigningKey(cred.SecretKey, date, region)
+	signingKey := getSigningKey(cred.SecretKey, signV4Values.Credential.scope.date, region)
 
 	// Calculate signature.
 	newSignature := getSignature(signingKey, stringToSign)
@@ -221,6 +221,7 @@ const (
 	readChunkTrailer
 	readChunk
 	verifyChunk
+	eofChunk
 )
 
 func (cs chunkState) String() string {
@@ -234,6 +235,9 @@ func (cs chunkState) String() string {
 		stateString = "readChunk"
 	case verifyChunk:
 		stateString = "verifyChunk"
+	case eofChunk:
+		stateString = "eofChunk"
+
 	}
 	return stateString
 }
@@ -309,10 +313,13 @@ func (cr *s3ChunkedReader) Read(buf []byte) (n int, err error) {
 			// this follows the chaining.
 			cr.seedSignature = newSignature
 			cr.chunkSHA256Writer.Reset()
-			cr.state = readChunkHeader
 			if cr.lastChunk {
-				return n, nil
+				cr.state = eofChunk
+			} else {
+				cr.state = readChunkHeader
 			}
+		case eofChunk:
+			return n, io.EOF
 		}
 	}
 }

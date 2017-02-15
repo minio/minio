@@ -133,11 +133,12 @@ func runPutObjectPartBenchmark(b *testing.B, obj ObjectLayer, partSize int) {
 			}
 			metadata := make(map[string]string)
 			metadata["md5Sum"] = getMD5Hash([]byte(textPartData))
-			md5Sum, err = obj.PutObjectPart(bucket, object, uploadID, j, int64(len(textPartData)), bytes.NewBuffer(textPartData), metadata["md5Sum"], sha256sum)
+			var partInfo PartInfo
+			partInfo, err = obj.PutObjectPart(bucket, object, uploadID, j, int64(len(textPartData)), bytes.NewBuffer(textPartData), metadata["md5Sum"], sha256sum)
 			if err != nil {
 				b.Fatal(err)
 			}
-			if md5Sum != metadata["md5Sum"] {
+			if partInfo.ETag != metadata["md5Sum"] {
 				b.Fatalf("Write no: %d: Md5Sum mismatch during object write into the bucket: Expected %s, got %s", i+1, md5Sum, metadata["md5Sum"])
 			}
 		}
