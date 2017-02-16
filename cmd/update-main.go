@@ -38,23 +38,19 @@ var updateCmd = cli.Command{
 	Action: mainUpdate,
 	Flags: []cli.Flag{
 		cli.BoolFlag{
-			Name:  "help, h",
-			Usage: "Show this help.",
-		},
-		cli.BoolFlag{
 			Name:  "quiet",
 			Usage: "Disable any update messages.",
 		},
 	},
 	CustomHelpTemplate: `Name:
-   minio {{.Name}} - {{.Usage}}
+   {{.HelpName}} - {{.Usage}}
 
 USAGE:
-   minio {{.Name}} [FLAGS]
-
+   {{.HelpName}} {{if .VisibleFlags}}[FLAGS]{{end}}
+{{if .VisibleFlags}}
 FLAGS:
   {{range .VisibleFlags}}{{.}}
-  {{end}}
+  {{end}}{{end}}
 EXIT STATUS:
    0 - You are already running the most recent version.
    1 - New update is available.

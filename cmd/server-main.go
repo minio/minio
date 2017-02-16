@@ -46,14 +46,14 @@ var serverCmd = cli.Command{
 	Flags:  append(serverFlags, globalFlags...),
 	Action: serverMain,
 	CustomHelpTemplate: `NAME:
-  minio {{.Name}} - {{.Usage}}
+ {{.HelpName}} - {{.Usage}}
 
 USAGE:
-  minio {{.Name}} [FLAGS] PATH [PATH...]
-
+ {{.HelpName}} {{if .VisibleFlags}}[FLAGS] {{end}}PATH [PATH...]
+{{if .VisibleFlags}}
 FLAGS:
   {{range .VisibleFlags}}{{.}}
-  {{end}}
+  {{end}}{{end}}
 ENVIRONMENT VARIABLES:
   ACCESS:
      MINIO_ACCESS_KEY: Custom username or access key of 5 to 20 characters in length.
@@ -64,20 +64,20 @@ ENVIRONMENT VARIABLES:
 
 EXAMPLES:
   1. Start minio server on "/home/shared" directory.
-      $ minio {{.Name}} /home/shared
+      $ {{.HelpName}} /home/shared
 
   2. Start minio server bound to a specific IP:PORT.
-      $ minio {{.Name}} --address 192.168.1.101:9000 /home/shared
+      $ {{.HelpName}} --address 192.168.1.101:9000 /home/shared
 
   3. Start erasure coded minio server on a 12 disks server.
-      $ minio {{.Name}} /mnt/export1/ /mnt/export2/ /mnt/export3/ /mnt/export4/ \
+      $ {{.HelpName}} /mnt/export1/ /mnt/export2/ /mnt/export3/ /mnt/export4/ \
           /mnt/export5/ /mnt/export6/ /mnt/export7/ /mnt/export8/ /mnt/export9/ \
           /mnt/export10/ /mnt/export11/ /mnt/export12/
 
   4. Start erasure coded distributed minio server on a 4 node setup with 1 drive each. Run following commands on all the 4 nodes.
       $ export MINIO_ACCESS_KEY=minio
       $ export MINIO_SECRET_KEY=miniostorage
-      $ minio {{.Name}} http://192.168.1.11/mnt/export/ http://192.168.1.12/mnt/export/ \
+      $ {{.HelpName}} http://192.168.1.11/mnt/export/ http://192.168.1.12/mnt/export/ \
           http://192.168.1.13/mnt/export/ http://192.168.1.14/mnt/export/
 
 `,

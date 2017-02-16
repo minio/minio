@@ -49,7 +49,7 @@ DESCRIPTION:
   {{.Description}}
 
 USAGE:
-  minio {{if .VisibleFlags}}[flags] {{end}}command{{if .VisibleFlags}}{{end}} [arguments...]
+  {{.HelpName}} {{if .VisibleFlags}}[FLAGS] {{end}}COMMAND{{if .VisibleFlags}}{{end}} [ARGS...]
 
 COMMANDS:
   {{range .VisibleCommands}}{{join .Names ", "}}{{ "\t" }}{{.Usage}}
