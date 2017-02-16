@@ -29,10 +29,6 @@ import (
 var (
 	// global flags for minio.
 	globalFlags = []cli.Flag{
-		cli.BoolFlag{
-			Name:  "help, h",
-			Usage: "Show help.",
-		},
 		cli.StringFlag{
 			Name:  "config-dir, C",
 			Value: mustGetConfigPath(),
