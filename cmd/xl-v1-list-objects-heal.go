@@ -114,7 +114,7 @@ func (xl xlObjects) listObjectsHeal(bucket, prefix, marker, delimiter string, ma
 		}
 		entry := walkResult.entry
 		var objInfo ObjectInfo
-		if strings.HasSuffix(entry, slashSeparator) {
+		if hasSuffix(entry, slashSeparator) {
 			// Object name needs to be full path.
 			objInfo.Bucket = bucket
 			objInfo.Name = entry

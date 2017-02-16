@@ -19,7 +19,6 @@ package cmd
 import (
 	"crypto/md5"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"hash"
 	"io"
@@ -291,12 +290,11 @@ func (fs fsObjects) ListBuckets() ([]BucketInfo, error) {
 		return nil, toObjectErr(traceError(errDiskNotFound))
 	}
 
-	var invalidBucketNames []string
 	for _, entry := range entries {
-		if entry == minioMetaBucket+"/" || !strings.HasSuffix(entry, slashSeparator) {
+		// Ignore all reserved bucket names and invalid bucket names.
+		if isReservedOrInvalidBucket(entry) {
 			continue
 		}
-
 		var fi os.FileInfo
 		fi, err = fsStatDir(pathJoin(fs.fsPath, entry))
 		if err != nil {
@@ -310,22 +308,11 @@ func (fs fsObjects) ListBuckets() ([]BucketInfo, error) {
 			return nil, err
 		}
 
-		if !IsValidBucketName(fi.Name()) {
-			invalidBucketNames = append(invalidBucketNames, fi.Name())
-			continue
-		}
-
 		bucketInfos = append(bucketInfos, BucketInfo{
 			Name: fi.Name(),
-			// As os.Stat() doesn't carry other than ModTime(), use ModTime() as CreatedTime.
+			// As os.Stat() doesnt carry CreatedTime, use ModTime() as CreatedTime.
 			Created: fi.ModTime(),
 		})
-	}
-
-	// Print a user friendly message if we indeed skipped certain directories which are
-	// incompatible with S3's bucket name restrictions.
-	if len(invalidBucketNames) > 0 {
-		errorIf(errors.New("One or more invalid bucket names found"), "Skipping %s", invalidBucketNames)
 	}
 
 	// Sort bucket infos by bucket name.
@@ -780,7 +767,7 @@ func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 
 	// Convert entry to ObjectInfo
 	entryToObjectInfo := func(entry string) (objInfo ObjectInfo, err error) {
-		if strings.HasSuffix(entry, slashSeparator) {
+		if hasSuffix(entry, slashSeparator) {
 			// Object name needs to be full path.
 			objInfo.Name = entry
 			objInfo.IsDir = true
@@ -804,7 +791,7 @@ func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 			// bucket argument is unused as we don't need to StatFile
 			// to figure if it's a file, just need to check that the
 			// object string does not end with "/".
-			return !strings.HasSuffix(object, slashSeparator)
+			return !hasSuffix(object, slashSeparator)
 		}
 		listDir := fs.listDirFactory(isLeaf)
 		walkResultCh = startTreeWalk(bucket, prefix, marker, recursive, listDir, isLeaf, endWalkCh)

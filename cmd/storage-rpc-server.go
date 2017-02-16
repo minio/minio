@@ -233,7 +233,7 @@ func registerStorageRPCRouters(mux *router.Router, srvCmdConfig serverCmdConfig)
 			return traceError(err)
 		}
 		// Add minio storage routes.
-		storageRouter := mux.PathPrefix(reservedBucket).Subrouter()
+		storageRouter := mux.PathPrefix(minioReservedBucketPath).Subrouter()
 		storageRouter.Path(path.Join("/storage", stServer.path)).Handler(storageRPCServer)
 	}
 	return nil

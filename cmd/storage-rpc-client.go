@@ -34,7 +34,7 @@ type networkStorage struct {
 }
 
 const (
-	storageRPCPath = reservedBucket + "/storage"
+	storageRPCPath = minioReservedBucketPath + "/storage"
 )
 
 // Converts rpc.ServerError to underlying error. This function is

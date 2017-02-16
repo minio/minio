@@ -86,10 +86,10 @@ func traceError(e error, errs ...error) error {
 		fn := runtime.FuncForPC(pc)
 		file, line := fn.FileLine(pc)
 		name := fn.Name()
-		if strings.HasSuffix(name, "ServeHTTP") {
+		if hasSuffix(name, "ServeHTTP") {
 			break
 		}
-		if strings.HasSuffix(name, "runtime.") {
+		if hasSuffix(name, "runtime.") {
 			break
 		}
 

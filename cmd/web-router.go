@@ -39,7 +39,7 @@ type indexHandler struct {
 }
 
 func (h indexHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	r.URL.Path = reservedBucket + "/"
+	r.URL.Path = minioReservedBucketPath + "/"
 	h.handler.ServeHTTP(w, r)
 }
 
@@ -68,7 +68,7 @@ func registerWebRouter(mux *router.Router) error {
 	codec := json2.NewCodec()
 
 	// Minio browser router.
-	webBrowserRouter := mux.NewRoute().PathPrefix(reservedBucket).Subrouter()
+	webBrowserRouter := mux.NewRoute().PathPrefix(minioReservedBucketPath).Subrouter()
 
 	// Initialize json rpc handlers.
 	webRPC := jsonrpc.NewServer()
@@ -87,13 +87,13 @@ func registerWebRouter(mux *router.Router) error {
 	webBrowserRouter.Methods("GET").Path("/zip").Queries("token", "{token:.*}").HandlerFunc(web.DownloadZip)
 
 	// Add compression for assets.
-	compressedAssets := handlers.CompressHandler(http.StripPrefix(reservedBucket, http.FileServer(assetFS())))
+	compressedAssets := handlers.CompressHandler(http.StripPrefix(minioReservedBucketPath, http.FileServer(assetFS())))
 
 	// Serve javascript files and favicon from assets.
 	webBrowserRouter.Path(fmt.Sprintf("/{assets:[^/]+.js|%s}", specialAssets)).Handler(compressedAssets)
 
 	// Serve index.html for rest of the requests.
-	webBrowserRouter.Path("/{index:.*}").Handler(indexHandler{http.StripPrefix(reservedBucket, http.FileServer(assetFS()))})
+	webBrowserRouter.Path("/{index:.*}").Handler(indexHandler{http.StripPrefix(minioReservedBucketPath, http.FileServer(assetFS()))})
 
 	return nil
 }

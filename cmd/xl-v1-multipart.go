@@ -356,7 +356,7 @@ func (xl xlObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 			entry := strings.TrimPrefix(walkResult.entry, retainSlash(bucket))
 			// For an entry looking like a directory, store and
 			// continue the loop not need to fetch uploads.
-			if strings.HasSuffix(walkResult.entry, slashSeparator) {
+			if hasSuffix(walkResult.entry, slashSeparator) {
 				uploads = append(uploads, uploadMetadata{
 					Object: entry,
 				})
@@ -409,7 +409,7 @@ func (xl xlObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 	for _, upload := range uploads {
 		var objectName string
 		var uploadID string
-		if strings.HasSuffix(upload.Object, slashSeparator) {
+		if hasSuffix(upload.Object, slashSeparator) {
 			// All directory entries are common prefixes.
 			uploadID = "" // For common prefixes, upload ids are empty.
 			objectName = upload.Object
