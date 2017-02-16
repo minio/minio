@@ -129,7 +129,7 @@ func retainSlash(s string) string {
 func pathJoin(elem ...string) string {
 	trailingSlash := ""
 	if len(elem) > 0 {
-		if strings.HasSuffix(elem[len(elem)-1], slashSeparator) {
+		if hasSuffix(elem[len(elem)-1], slashSeparator) {
 			trailingSlash = "/"
 		}
 	}
@@ -178,6 +178,15 @@ func hasSuffix(s string, suffix string) bool {
 		return strings.HasSuffix(strings.ToLower(s), strings.ToLower(suffix))
 	}
 	return strings.HasSuffix(s, suffix)
+}
+
+// Ignores all reserved bucket names or invalid bucket names.
+func isReservedOrInvalidBucket(bucketEntry string) bool {
+	bucketEntry = strings.TrimSuffix(bucketEntry, slashSeparator)
+	if !IsValidBucketName(bucketEntry) {
+		return true
+	}
+	return bucketEntry == minioMetaBucket || bucketEntry == minioReservedBucket
 }
 
 // byBucketName is a collection satisfying sort.Interface.

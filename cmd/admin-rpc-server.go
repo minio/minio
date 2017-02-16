@@ -141,7 +141,7 @@ func registerAdminRPCRouter(mux *router.Router) error {
 	if err != nil {
 		return traceError(err)
 	}
-	adminRouter := mux.NewRoute().PathPrefix(reservedBucket).Subrouter()
+	adminRouter := mux.NewRoute().PathPrefix(minioReservedBucketPath).Subrouter()
 	adminRouter.Path(adminPath).Handler(adminRPCServer)
 	return nil
 }

@@ -278,7 +278,7 @@ func (fs fsObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 			}
 
 			entry := strings.TrimPrefix(walkResult.entry, retainSlash(bucket))
-			if strings.HasSuffix(walkResult.entry, slashSeparator) {
+			if hasSuffix(walkResult.entry, slashSeparator) {
 				uploads = append(uploads, uploadMetadata{
 					Object: entry,
 				})
@@ -314,7 +314,7 @@ func (fs fsObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 	for _, upload := range uploads {
 		var objectName string
 		var uploadID string
-		if strings.HasSuffix(upload.Object, slashSeparator) {
+		if hasSuffix(upload.Object, slashSeparator) {
 			// All directory entries are common prefixes.
 			uploadID = "" // Upload ids are empty for CommonPrefixes.
 			objectName = upload.Object

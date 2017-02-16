@@ -29,28 +29,28 @@ func TestRedirectLocation(t *testing.T) {
 	}{
 		{
 			// 1. When urlPath is '/minio'
-			urlPath:  reservedBucket,
-			location: reservedBucket + "/",
+			urlPath:  minioReservedBucketPath,
+			location: minioReservedBucketPath + "/",
 		},
 		{
 			// 2. When urlPath is '/'
 			urlPath:  "/",
-			location: reservedBucket + "/",
+			location: minioReservedBucketPath + "/",
 		},
 		{
 			// 3. When urlPath is '/webrpc'
 			urlPath:  "/webrpc",
-			location: reservedBucket + "/webrpc",
+			location: minioReservedBucketPath + "/webrpc",
 		},
 		{
 			// 4. When urlPath is '/login'
 			urlPath:  "/login",
-			location: reservedBucket + "/login",
+			location: minioReservedBucketPath + "/login",
 		},
 		{
 			// 5. When urlPath is '/favicon.ico'
 			urlPath:  "/favicon.ico",
-			location: reservedBucket + "/favicon.ico",
+			location: minioReservedBucketPath + "/favicon.ico",
 		},
 		{
 			// 6. When urlPath is '/unknown'

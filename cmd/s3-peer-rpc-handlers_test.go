@@ -36,7 +36,7 @@ func (s *TestRPCS3PeerSuite) SetUpSuite(t *testing.T) {
 		serverAddr:      s.testServer.Server.Listener.Addr().String(),
 		accessKey:       s.testServer.AccessKey,
 		secretKey:       s.testServer.SecretKey,
-		serviceEndpoint: path.Join(reservedBucket, s3Path),
+		serviceEndpoint: path.Join(minioReservedBucketPath, s3Path),
 		serviceName:     "S3",
 	}
 }

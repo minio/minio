@@ -161,10 +161,6 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 		return toJSONError(err)
 	}
 	for _, bucket := range buckets {
-		if bucket.Name == path.Base(reservedBucket) {
-			continue
-		}
-
 		reply.Buckets = append(reply.Buckets, WebBucketInfo{
 			Name:         bucket.Name,
 			CreationDate: bucket.Created,
@@ -584,7 +580,7 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 			return objectAPI.GetObject(args.BucketName, objectName, 0, info.Size, writer)
 		}
 
-		if !strings.HasSuffix(object, "/") {
+		if !hasSuffix(object, slashSeparator) {
 			// If not a directory, compress the file and write it to response.
 			err := zipit(pathJoin(args.Prefix, object))
 			if err != nil {

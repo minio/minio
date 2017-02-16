@@ -111,7 +111,7 @@ func updateCredsOnPeers(creds credential) map[string]error {
 				secretKey:       serverCred.SecretKey,
 				serverAddr:      peers[ix],
 				secureConn:      globalIsSSL,
-				serviceEndpoint: path.Join(reservedBucket, browserPeerPath),
+				serviceEndpoint: path.Join(minioReservedBucketPath, browserPeerPath),
 				serviceName:     "BrowserPeer",
 			})
 

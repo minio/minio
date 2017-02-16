@@ -36,7 +36,7 @@ func (s *TestRPCBrowserPeerSuite) SetUpSuite(c *testing.T) {
 		serverAddr:      s.testServer.Server.Listener.Addr().String(),
 		accessKey:       s.testServer.AccessKey,
 		secretKey:       s.testServer.SecretKey,
-		serviceEndpoint: path.Join(reservedBucket, browserPeerPath),
+		serviceEndpoint: path.Join(minioReservedBucketPath, browserPeerPath),
 		serviceName:     "BrowserPeer",
 	}
 }

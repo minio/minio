@@ -45,7 +45,7 @@ func registerBrowserPeerRPCRouter(mux *router.Router) error {
 		return traceError(err)
 	}
 
-	bpRouter := mux.NewRoute().PathPrefix(reservedBucket).Subrouter()
+	bpRouter := mux.NewRoute().PathPrefix(minioReservedBucketPath).Subrouter()
 	bpRouter.Path(browserPeerPath).Handler(bpRPCServer)
 	return nil
 }

@@ -150,7 +150,7 @@ func makeAdminPeers(eps []*url.URL) adminPeers {
 				secretKey:       serverCred.SecretKey,
 				serverAddr:      ep.Host,
 				secureConn:      globalIsSSL,
-				serviceEndpoint: path.Join(reservedBucket, adminPath),
+				serviceEndpoint: path.Join(minioReservedBucketPath, adminPath),
 				serviceName:     "Admin",
 			}
 
