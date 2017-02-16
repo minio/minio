@@ -87,12 +87,12 @@ func TestGetHostPort(t *testing.T) {
 		// Test 4 invalid port.
 		{
 			addr: "linux:linux",
-			err:  errors.New("strconv.ParseInt: parsing \"linux\": invalid syntax"),
+			err:  errors.New("strconv.Atoi: parsing \"linux\": invalid syntax"),
 		},
 		// Test 5 port not present.
 		{
 			addr: "hostname",
-			err:  errors.New("missing port in address hostname"),
+			err:  errors.New("address hostname: missing port in address"),
 		},
 	}
 

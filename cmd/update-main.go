@@ -60,9 +60,10 @@ VERSION:
   ` + Version + `{{"\n"}}`,
 }
 
-const releaseTagTimeLayout = "2006-01-02T15-04-05Z"
-
-const minioReleaseURL = "https://dl.minio.io/server/minio/release/" + runtime.GOOS + "-" + runtime.GOARCH + "/"
+const (
+	releaseTagTimeLayout = "2006-01-02T15-04-05Z"
+	minioReleaseURL      = "https://dl.minio.io/server/minio/release/" + runtime.GOOS + "-" + runtime.GOARCH + "/"
+)
 
 func getCurrentReleaseTime(minioVersion, minioBinaryPath string) (releaseTime time.Time, err error) {
 	if releaseTime, err = time.Parse(time.RFC3339, minioVersion); err == nil {
@@ -210,7 +211,7 @@ func getDownloadURL() (downloadURL string) {
 		return "docker pull minio/minio"
 	}
 
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == globalWindowsOSName {
 		return minioReleaseURL + "minio.exe"
 	}
 

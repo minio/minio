@@ -164,7 +164,7 @@ func getCompleteMultipartMD5(parts []completePart) (string, error) {
 // For example on windows since its case insensitive we are supposed
 // to do case insensitive checks.
 func hasPrefix(s string, prefix string) bool {
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == globalWindowsOSName {
 		return strings.HasPrefix(strings.ToLower(s), strings.ToLower(prefix))
 	}
 	return strings.HasPrefix(s, prefix)
@@ -174,7 +174,7 @@ func hasPrefix(s string, prefix string) bool {
 // For example on windows since its case insensitive we are supposed
 // to do case insensitive checks.
 func hasSuffix(s string, suffix string) bool {
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == globalWindowsOSName {
 		return strings.HasSuffix(strings.ToLower(s), strings.ToLower(suffix))
 	}
 	return strings.HasSuffix(s, suffix)
