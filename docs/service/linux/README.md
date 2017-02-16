@@ -28,7 +28,7 @@ EOT
 
 Download `minio.service` into  `/etc/systemd/system/`
 ```
-( cd /etc/systemd/system/; curl -O https://raw.githubusercontent.com/minio/minio-systemd/master/minio.service )
+( cd /etc/systemd/system/; curl -O https://raw.githubusercontent.com/minio/minio-service/master/linux-systemd/minio.service )
 ```
 
 ## Enable Minio service
