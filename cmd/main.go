@@ -29,10 +29,6 @@ import (
 var (
 	// global flags for minio.
 	globalFlags = []cli.Flag{
-		cli.BoolFlag{
-			Name:  "help, h",
-			Usage: "Show help.",
-		},
 		cli.StringFlag{
 			Name:  "config-dir, C",
 			Value: mustGetConfigPath(),
@@ -53,7 +49,7 @@ DESCRIPTION:
   {{.Description}}
 
 USAGE:
-  minio {{if .VisibleFlags}}[flags] {{end}}command{{if .VisibleFlags}}{{end}} [arguments...]
+  {{.HelpName}} {{if .VisibleFlags}}[FLAGS] {{end}}COMMAND{{if .VisibleFlags}}{{end}} [ARGS...]
 
 COMMANDS:
   {{range .VisibleCommands}}{{join .Names ", "}}{{ "\t" }}{{.Usage}}

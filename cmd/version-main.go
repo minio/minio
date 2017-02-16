@@ -25,21 +25,12 @@ var versionCmd = cli.Command{
 	Name:   "version",
 	Usage:  "Print version.",
 	Action: mainVersion,
-	Flags: []cli.Flag{
-		cli.BoolFlag{
-			Name:  "help, h",
-			Usage: "Show this help.",
-		},
-	},
 	CustomHelpTemplate: `NAME:
-   minio {{.Name}} - {{.Usage}}
+   {{.HelpName}} - {{.Usage}}
 
 USAGE:
-   minio {{.Name}}
+   {{.HelpName}}
 
-FLAGS:
-  {{range .VisibleFlags}}{{.}}
-  {{end}}
 VERSION:
   ` + Version + `{{"\n"}}`,
 }
