@@ -313,6 +313,9 @@ func eventNotifyForBucketListeners(eventType, objectName, bucketName string,
 // eventNotify notifies an event to relevant targets based on their
 // bucket configuration (notifications and listeners).
 func eventNotify(event eventData) {
+	if globalEventNotifier == nil {
+		return
+	}
 	// Notifies a new event.
 	// List of events reported through this function are
 	//  - s3:ObjectCreated:Put
