@@ -24,6 +24,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 
@@ -493,7 +494,7 @@ func testPostPolicyBucketHandlerRedirect(obj ObjectLayer, instanceType string, t
 	}
 
 	expectedLocation := fmt.Sprintf(redirectURL+"?bucket=%s&key=%s&etag=%s",
-		bucketName, getURLEncodedName(targetObj), getURLEncodedName("\""+info.MD5Sum+"\""))
+		bucketName, url.QueryEscape(targetObj), url.QueryEscape("\""+info.MD5Sum+"\""))
 
 	// Check the new location url
 	if rec.HeaderMap.Get("Location") != expectedLocation {
