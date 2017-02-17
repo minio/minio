@@ -16,41 +16,7 @@
 
 package cmd
 
-import (
-	"path/filepath"
-	"runtime"
-	"strings"
-)
-
 // preparePath rewrites path to handle any OS specific details.
 func preparePath(path string) string {
-	if runtime.GOOS == globalWindowsOSName {
-		// Microsoft Windows supports long path names using
-		// uniform naming convention (UNC).
-		return UNCPath(path)
-	}
-	return path
-}
-
-// UNCPath converts a absolute windows path to a UNC long path.
-func UNCPath(path string) string {
-	// Clean the path for any trailing "/".
-	path = filepath.Clean(path)
-
-	// UNC can NOT use "/", so convert all to "\".
-	path = filepath.FromSlash(path)
-
-	// If prefix is "\\", we already have a UNC path or server.
-	if strings.HasPrefix(path, `\\`) {
-
-		// If already long path, just keep it
-		if strings.HasPrefix(path, `\\?\`) {
-			return path
-		}
-
-		// Trim "\\" from path and add UNC prefix.
-		return `\\?\UNC\` + strings.TrimPrefix(path, `\\`)
-	}
-	path = `\\?\` + path
 	return path
 }

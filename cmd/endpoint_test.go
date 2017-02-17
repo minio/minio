@@ -232,7 +232,7 @@ func TestCreateEndpoints(t *testing.T) {
 		expectedSetupType  SetupType
 		expectedErr        error
 	}{
-		{"localhost", []string{}, "", EndpointList{}, -1, fmt.Errorf("missing port in address localhost")},
+		{"localhost", []string{}, "", EndpointList{}, -1, fmt.Errorf("address localhost: missing port in address")},
 
 		// FS Setup
 		{"localhost:9000", []string{"http://localhost/d1"}, "", EndpointList{}, -1, fmt.Errorf("use path style endpoint for FS setup")},

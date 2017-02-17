@@ -328,7 +328,7 @@ func getDownloadURL(buildDate time.Time) (downloadURL string) {
 	}
 
 	// For binary only installations, then we just show binary download link.
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == globalWindowsOSName {
 		return minioReleaseURL + "minio.exe"
 	}
 
