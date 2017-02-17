@@ -33,8 +33,8 @@ import (
 )
 
 const (
-	// Minio requires at least Go v1.7
-	minGoVersion        = "1.7"
+	// Minio requires at least Go 1.8
+	minGoVersion        = "1.8"
 	goVersionConstraint = ">= " + minGoVersion
 )
 

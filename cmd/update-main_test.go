@@ -48,12 +48,12 @@ func TestGetCurrentReleaseTime(t *testing.T) {
 	releaseTime2 := fi.ModTime().UTC()
 
 	errorMessage1 := "Unable to get ModTime of . stat : no such file or directory"
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == globalWindowsOSName {
 		errorMessage1 = "Unable to get ModTime of . Lstat : The system cannot find the path specified."
 	}
 
 	errorMessage2 := "Unable to get ModTime of non-existing-file. stat non-existing-file: no such file or directory"
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == globalWindowsOSName {
 		errorMessage2 = "Unable to get ModTime of non-existing-file. GetFileAttributesEx non-existing-file: The system cannot find the file specified."
 	}
 

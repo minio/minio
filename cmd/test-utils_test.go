@@ -993,14 +993,10 @@ func signRequestV2(req *http.Request, accessKey, secretKey string) error {
 		req.Header.Set("Date", d.Format(http.TimeFormat))
 	}
 
-	// url.RawPath will be valid if path has any encoded characters, if not it will
-	// be empty - in which case we need to consider url.Path (bug in net/http?)
-	encodedResource := req.URL.RawPath
-	if encodedResource == "" {
-		splits := strings.Split(req.URL.Path, "?")
-		if len(splits) > 0 {
-			encodedResource = getURLEncodedName(splits[0])
-		}
+	splits := strings.Split(req.URL.Path, "?")
+	var encodedResource string
+	if len(splits) > 0 {
+		encodedResource = getURLEncodedName(splits[0])
 	}
 	encodedQuery := req.URL.Query().Encode()
 
@@ -1142,16 +1138,9 @@ func newTestRequest(method, urlStr string, contentLength int64, body io.ReadSeek
 		method = "POST"
 	}
 
-	req, err := http.NewRequest(method, urlStr, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	// Add Content-Length
-	req.ContentLength = contentLength
-
 	// Save for subsequent use
 	var hashedPayload string
+	var md5Base64 string
 	switch {
 	case body == nil:
 		hashedPayload = getSHA256Hash([]byte{})
@@ -1161,21 +1150,25 @@ func newTestRequest(method, urlStr string, contentLength int64, body io.ReadSeek
 			return nil, err
 		}
 		hashedPayload = getSHA256Hash(payloadBytes)
-		md5Base64 := getMD5HashBase64(payloadBytes)
-		req.Header.Set("Content-Md5", md5Base64)
+		md5Base64 = getMD5HashBase64(payloadBytes)
 	}
-	req.Header.Set("x-amz-content-sha256", hashedPayload)
 	// Seek back to beginning.
 	if body != nil {
 		body.Seek(0, 0)
-		// Add body
-		req.Body = ioutil.NopCloser(body)
 	} else {
-		// this is added to avoid panic during ioutil.ReadAll(req.Body).
-		// th stack trace can be found here  https://github.com/minio/minio/pull/2074 .
-		// This is very similar to https://github.com/golang/go/issues/7527.
-		req.Body = ioutil.NopCloser(bytes.NewReader([]byte("")))
+		body = bytes.NewReader([]byte(""))
 	}
+	req, err := http.NewRequest(method, urlStr, body)
+	if err != nil {
+		return nil, err
+	}
+	if md5Base64 != "" {
+		req.Header.Set("Content-Md5", md5Base64)
+	}
+	req.Header.Set("x-amz-content-sha256", hashedPayload)
+
+	// Add Content-Length
+	req.ContentLength = contentLength
 
 	return req, nil
 }
