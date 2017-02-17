@@ -516,8 +516,8 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		if successRedirect != "" {
 			redirectURL := successRedirect + "?" + fmt.Sprintf("bucket=%s&key=%s&etag=%s",
 				bucket,
-				getURLEncodedName(object),
-				getURLEncodedName("\""+objInfo.MD5Sum+"\""))
+				url.QueryEscape(object),
+				url.QueryEscape("\""+objInfo.MD5Sum+"\""))
 
 			writeRedirectSeeOther(w, redirectURL)
 		} else {
