@@ -198,21 +198,27 @@ func TestServerMux(t *testing.T) {
 		time.Sleep(1 * time.Second)
 		// Check if one listener is ready
 		m.mu.Lock()
-		if len(m.listeners) == 0 {
-			m.mu.Unlock()
+		listenersCount := len(m.listeners)
+		m.mu.Unlock()
+		if listenersCount == 0 {
 			continue
 		}
+		m.mu.Lock()
+		listenerAddr := m.listeners[0].Addr().String()
 		m.mu.Unlock()
 		// Issue the GET request
 		client := http.Client{}
-		m.mu.Lock()
-		res, err = client.Get("http://" + m.listeners[0].Addr().String())
-		m.mu.Unlock()
+		res, err = client.Get("http://" + listenerAddr)
 		if err != nil {
 			continue
 		}
 		// Read the request response
 		got, err = ioutil.ReadAll(res.Body)
+		if err != nil {
+			continue
+		}
+		// We've got a response, quit the loop
+		break
 	}
 
 	// Check for error persisted after 5 times
