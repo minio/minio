@@ -34,7 +34,7 @@ type networkStorage struct {
 }
 
 const (
-	storageRPCPath = minioReservedBucketPath + "/storage"
+	storageRPCPath = "/storage"
 )
 
 // Converts rpc.ServerError to underlying error. This function is
@@ -102,7 +102,7 @@ func newStorageRPC(ep *url.URL) (StorageAPI, error) {
 	}
 
 	// Dial minio rpc storage http path.
-	rpcPath := path.Join(storageRPCPath, getPath(ep))
+	rpcPath := path.Join(minioReservedBucketPath, storageRPCPath, getPath(ep))
 	rpcAddr := ep.Host
 
 	serverCred := serverConfig.GetCredential()
