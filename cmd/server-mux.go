@@ -26,7 +26,12 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
+)
+
+const (
+	serverShutdownPoll = 500 * time.Millisecond
 )
 
 // The value chosen below is longest word chosen
@@ -324,11 +329,13 @@ type ServerMux struct {
 	handler   http.Handler
 	listeners []*ListenerMux
 
-	gracefulWait    *sync.WaitGroup
+	// Current number of concurrent http requests
+	currentReqs int32
+	// Time to wait before forcing server shutdown
 	gracefulTimeout time.Duration
 
-	mu     sync.Mutex // guards closed, and listener
-	closed bool
+	mu      sync.Mutex // guards closing, and listeners
+	closing bool
 }
 
 // NewServerMux constructor to create a ServerMux
@@ -339,7 +346,6 @@ func NewServerMux(addr string, handler http.Handler) *ServerMux {
 		// Wait for 5 seconds for new incoming connnections, otherwise
 		// forcibly close them during graceful stop or restart.
 		gracefulTimeout: 5 * time.Second,
-		gracefulWait:    &sync.WaitGroup{},
 	}
 
 	// Returns configured HTTP server.
@@ -452,11 +458,22 @@ func (m *ServerMux) ListenAndServe(certFile, keyFile string) (err error) {
 			}
 			http.Redirect(w, r, u.String(), http.StatusTemporaryRedirect)
 		} else {
-			// Execute registered handlers, protect with a waitgroup
-			// to accomplish a graceful shutdown when the user asks to quit
-			m.gracefulWait.Add(1)
+
+			// Return ServiceUnavailable for clients which are sending requests
+			// in shutdown phase
+			m.mu.Lock()
+			closing := m.closing
+			m.mu.Unlock()
+			if closing {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				return
+			}
+
+			// Execute registered handlers, update currentReqs to keep
+			// tracks of current requests currently processed by the server
+			atomic.AddInt32(&m.currentReqs, 1)
 			m.handler.ServeHTTP(w, r)
-			m.gracefulWait.Done()
+			atomic.AddInt32(&m.currentReqs, -1)
 		}
 	})
 
@@ -481,12 +498,12 @@ func (m *ServerMux) ListenAndServe(certFile, keyFile string) (err error) {
 func (m *ServerMux) Close() error {
 	m.mu.Lock()
 
-	if m.closed {
+	if m.closing {
 		m.mu.Unlock()
 		return errors.New("Server has been closed")
 	}
 	// Closed completely.
-	m.closed = true
+	m.closing = true
 
 	// Close the listeners.
 	for _, listener := range m.listeners {
@@ -497,19 +514,18 @@ func (m *ServerMux) Close() error {
 	}
 	m.mu.Unlock()
 
-	// Prepare for a graceful shutdown
-	waitSignal := make(chan struct{})
-	go func() {
-		defer close(waitSignal)
-		m.gracefulWait.Wait()
-	}()
-
-	select {
-	// Wait for everything to be properly closed
-	case <-waitSignal:
-	// Forced shutdown
-	case <-time.After(m.gracefulTimeout):
+	// Starting graceful shutdown. Check if all requests are finished
+	// in regular interval or force the shutdown
+	ticker := time.NewTicker(serverShutdownPoll)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-time.After(m.gracefulTimeout):
+			return nil
+		case <-ticker.C:
+			if atomic.LoadInt32(&m.currentReqs) <= 0 {
+				return nil
+			}
+		}
 	}
-
-	return nil
 }
