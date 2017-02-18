@@ -64,7 +64,7 @@ func (xl xlObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string
 	length := xlMeta.Stat.Size
 
 	// Check if this request is only metadata update.
-	cpMetadataOnly := strings.EqualFold(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
+	cpMetadataOnly := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
 	if cpMetadataOnly {
 		xlMeta.Meta = metadata
 		partsMetadata := make([]xlMetaV1, len(xl.storageDisks))

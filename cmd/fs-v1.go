@@ -26,7 +26,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
-	"strings"
 	"syscall"
 
 	"github.com/minio/minio/pkg/disk"
@@ -367,7 +366,7 @@ func (fs fsObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string
 	}
 
 	// Check if this request is only metadata update.
-	cpMetadataOnly := strings.EqualFold(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
+	cpMetadataOnly := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
 	if cpMetadataOnly {
 		fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, srcBucket, srcObject, fsMetaJSONFile)
 		var wlk *lock.LockedFile
