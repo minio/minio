@@ -51,7 +51,7 @@ func initDsyncNodes(eps []*url.URL) error {
 			accessKey:       cred.AccessKey,
 			secretKey:       cred.SecretKey,
 			serverAddr:      ep.Host,
-			serviceEndpoint: pathutil.Join(lockRPCPath, getPath(ep)),
+			serviceEndpoint: pathutil.Join(minioReservedBucketPath, lockRPCPath, getPath(ep)),
 			secureConn:      globalIsSSL,
 			serviceName:     "Dsync",
 		})
