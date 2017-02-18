@@ -23,9 +23,16 @@ import (
 	"testing"
 )
 
-// TestSortByHostPath - tests if ordering of urls are based on
+func sortIsEndpointsSorted(endpoints []*url.URL) bool {
+	return sort.SliceIsSorted(endpoints, func(i, j int) bool {
+		return (endpoints[i].Host + endpoints[i].Path) <
+			(endpoints[j].Host + endpoints[j].Path)
+	})
+}
+
+// TestSortEndpoints - tests if ordering of urls are based on
 // host+path concatenated.
-func TestSortByHostPath(t *testing.T) {
+func TestSortEndpoints(t *testing.T) {
 	testCases := []struct {
 		given    []string
 		expected []*url.URL
@@ -87,8 +94,8 @@ func TestSortByHostPath(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Test %d - Failed to parse storage endpoint %v", i+1, err)
 		}
-		sort.Sort(byHostPath(eps))
-		if !sort.IsSorted(byHostPath(eps)) {
+		sortEndpoints(eps)
+		if !sortIsEndpointsSorted(eps) {
 			t.Errorf("Test %d - Expected order %v but got %v", i+1, test.expected, eps)
 		}
 		if !reflect.DeepEqual(eps, test.expected) {

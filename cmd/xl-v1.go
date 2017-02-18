@@ -174,15 +174,6 @@ func (xl xlObjects) Shutdown() error {
 	return nil
 }
 
-// byDiskTotal is a collection satisfying sort.Interface.
-type byDiskTotal []disk.Info
-
-func (d byDiskTotal) Len() int      { return len(d) }
-func (d byDiskTotal) Swap(i, j int) { d[i], d[j] = d[j], d[i] }
-func (d byDiskTotal) Less(i, j int) bool {
-	return d[i].Total < d[j].Total
-}
-
 // getDisksInfo - fetch disks info across all other storage API.
 func getDisksInfo(disks []StorageAPI) (disksInfo []disk.Info, onlineDisks int, offlineDisks int) {
 	disksInfo = make([]disk.Info, len(disks))
@@ -219,7 +210,9 @@ func sortValidDisksInfo(disksInfo []disk.Info) []disk.Info {
 		}
 		validDisksInfo = append(validDisksInfo, diskInfo)
 	}
-	sort.Sort(byDiskTotal(validDisksInfo))
+	sort.Slice(validDisksInfo, func(i, j int) bool {
+		return validDisksInfo[i].Total < validDisksInfo[j].Total
+	})
 	return validDisksInfo
 }
 

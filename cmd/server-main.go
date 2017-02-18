@@ -22,7 +22,6 @@ import (
 	"net"
 	"net/url"
 	"path"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -399,7 +398,7 @@ func serverMain(c *cli.Context) {
 	// nodes in a distributed setup. This is to avoid format.json
 	// corruption if the disks aren't supplied in the same order
 	// on all nodes.
-	sort.Sort(byHostPath(endpoints))
+	sortEndpoints(endpoints)
 
 	// Configure server.
 	srvConfig := serverCmdConfig{

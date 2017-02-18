@@ -22,7 +22,6 @@ import (
 	"io/ioutil"
 	"os"
 	pathutil "path"
-	"sort"
 	"strings"
 
 	"github.com/minio/minio/pkg/lock"
@@ -122,7 +121,7 @@ func (m *fsMetaV1) AddObjectPart(partNumber int, partName string, partETag strin
 	m.Parts = append(m.Parts, partInfo)
 
 	// Parts in fsMeta should be in sorted order by part number.
-	sort.Sort(byObjectPartNumber(m.Parts))
+	sortParts(m.Parts)
 }
 
 func (m *fsMetaV1) WriteTo(lk *lock.LockedFile) (n int64, err error) {

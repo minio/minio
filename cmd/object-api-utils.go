@@ -189,13 +189,6 @@ func isReservedOrInvalidBucket(bucketEntry string) bool {
 	return bucketEntry == minioMetaBucket || bucketEntry == minioReservedBucket
 }
 
-// byBucketName is a collection satisfying sort.Interface.
-type byBucketName []BucketInfo
-
-func (d byBucketName) Len() int           { return len(d) }
-func (d byBucketName) Swap(i, j int)      { d[i], d[j] = d[j], d[i] }
-func (d byBucketName) Less(i, j int) bool { return d[i].Name < d[j].Name }
-
 // rangeReader returns a Reader that reads from r
 // but returns error after Max bytes read as errDataTooLarge.
 // but returns error if reader exits before reading Min bytes

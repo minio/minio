@@ -272,16 +272,11 @@ type uptimeSlice []struct {
 	uptime time.Duration
 }
 
-func (ts uptimeSlice) Len() int {
-	return len(ts)
-}
-
-func (ts uptimeSlice) Less(i, j int) bool {
-	return ts[i].uptime < ts[j].uptime
-}
-
-func (ts uptimeSlice) Swap(i, j int) {
-	ts[i], ts[j] = ts[j], ts[i]
+// Sorts uptimes slice by time duration.
+func sortUptimes(uptimes uptimeSlice) {
+	sort.Slice(uptimes, func(i, j int) bool {
+		return uptimes[i].uptime < uptimes[j].uptime
+	})
 }
 
 // getPeerUptimes - returns the uptime since the last time read quorum
@@ -308,7 +303,7 @@ func getPeerUptimes(peers adminPeers) (time.Duration, error) {
 	wg.Wait()
 
 	// Sort uptimes in chronological order.
-	sort.Sort(uptimes)
+	sortUptimes(uptimes)
 
 	// Pick the readQuorum'th uptime in chronological order. i.e,
 	// the time at which read quorum was (re-)established.

@@ -21,7 +21,6 @@ import (
 	"errors"
 	"path"
 	"runtime"
-	"sort"
 	"sync"
 	"time"
 )
@@ -39,13 +38,6 @@ type objectPartInfo struct {
 	ETag   string `json:"etag"`
 	Size   int64  `json:"size"`
 }
-
-// byObjectPartNumber is a collection satisfying sort.Interface.
-type byObjectPartNumber []objectPartInfo
-
-func (t byObjectPartNumber) Len() int           { return len(t) }
-func (t byObjectPartNumber) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
-func (t byObjectPartNumber) Less(i, j int) bool { return t[i].Number < t[j].Number }
 
 // checkSumInfo - carries checksums of individual scattered parts per disk.
 type checkSumInfo struct {
@@ -207,7 +199,7 @@ func (m *xlMetaV1) AddObjectPart(partNumber int, partName string, partETag strin
 	m.Parts = append(m.Parts, partInfo)
 
 	// Parts in xlMeta should be in sorted order by part number.
-	sort.Sort(byObjectPartNumber(m.Parts))
+	sortParts(m.Parts)
 }
 
 // ObjectToPartOffset - translate offset of an object to offset of its individual part.

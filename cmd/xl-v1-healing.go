@@ -19,7 +19,6 @@ package cmd
 import (
 	"fmt"
 	"path"
-	"sort"
 	"sync"
 )
 
@@ -246,38 +245,40 @@ func (xl xlObjects) bucketHealStatus(bucketName string) (healStatus, error) {
 
 // ListBucketsHeal - Find all buckets that need to be healed
 func (xl xlObjects) ListBucketsHeal() ([]BucketInfo, error) {
-	listBuckets := []BucketInfo{}
+	bucketInfos := []BucketInfo{}
 	// List all buckets that can be found in all disks
 	buckets, occ, err := listAllBuckets(xl.storageDisks)
 	if err != nil {
-		return listBuckets, err
+		return bucketInfos, err
 	}
 	// Iterate over all buckets
-	for _, currBucket := range buckets {
+	for _, cbi := range buckets {
 		// Check the status of bucket metadata
-		bucketHealStatus, err := xl.bucketHealStatus(currBucket.Name)
+		bucketHealStatus, err := xl.bucketHealStatus(cbi.Name)
 		if err != nil {
 			return []BucketInfo{}, err
 		}
 		// If all metadata are sane, check if the bucket directory is present in all disks
-		if bucketHealStatus == healthy && occ[currBucket.Name] != len(xl.storageDisks) {
+		if bucketHealStatus == healthy && occ[cbi.Name] != len(xl.storageDisks) {
 			// Current bucket is missing in some of the storage disks
 			bucketHealStatus = canHeal
 		}
 		// Add current bucket to the returned result if not healthy
 		if bucketHealStatus != healthy {
-			listBuckets = append(listBuckets,
+			bucketInfos = append(bucketInfos,
 				BucketInfo{
-					Name:           currBucket.Name,
-					Created:        currBucket.Created,
-					HealBucketInfo: &HealBucketInfo{Status: bucketHealStatus},
+					Name:    cbi.Name,
+					Created: cbi.Created,
+					HealBucketInfo: &HealBucketInfo{
+						Status: bucketHealStatus,
+					},
 				})
 		}
 
 	}
-	// Sort found buckets
-	sort.Sort(byBucketName(listBuckets))
-	return listBuckets, nil
+	// Sort buckets to be healed.
+	sortBucketInfos(bucketInfos)
+	return bucketInfos, nil
 }
 
 // This function is meant for all the healing that needs to be done

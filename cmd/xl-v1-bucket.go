@@ -16,10 +16,7 @@
 
 package cmd
 
-import (
-	"sort"
-	"sync"
-)
+import "sync"
 
 // list all errors that can be ignore in a bucket operation.
 var bucketOpIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied)
@@ -196,7 +193,7 @@ func (xl xlObjects) ListBuckets() ([]BucketInfo, error) {
 		return nil, toObjectErr(err)
 	}
 	// Sort by bucket name before returning.
-	sort.Sort(byBucketName(bucketInfos))
+	sortBucketInfos(bucketInfos)
 	return bucketInfos, nil
 }
 

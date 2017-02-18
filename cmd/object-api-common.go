@@ -20,6 +20,7 @@ import (
 	"net"
 	"net/url"
 	"runtime"
+	"sort"
 	"sync"
 	"time"
 
@@ -307,4 +308,18 @@ func cleanupDir(storage StorageAPI, volume, dirPath string) error {
 	}
 	err := delFunc(retainSlash(pathJoin(dirPath)))
 	return err
+}
+
+// Sorts objectPartInfo slice by part number in integer order.
+func sortParts(parts []objectPartInfo) {
+	sort.Slice(parts, func(i, j int) bool {
+		return parts[i].Number < parts[j].Number
+	})
+}
+
+// Sorts buckets slice by bucket name in lexical order.
+func sortBucketInfos(bucketInfos []BucketInfo) {
+	sort.Slice(bucketInfos, func(i, j int) bool {
+		return bucketInfos[i].Name < bucketInfos[j].Name
+	})
 }

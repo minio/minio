@@ -16,19 +16,15 @@
 
 package cmd
 
-import "net/url"
-
-type byHostPath []*url.URL
-
-func (s byHostPath) Swap(i, j int) {
-	s[i], s[j] = s[j], s[i]
-}
-
-func (s byHostPath) Len() int {
-	return len(s)
-}
+import (
+	"net/url"
+	"sort"
+)
 
 // Note: Host in url.URL includes the port too.
-func (s byHostPath) Less(i, j int) bool {
-	return (s[i].Host + s[i].Path) < (s[j].Host + s[j].Path)
+func sortEndpoints(endpoints []*url.URL) {
+	sort.Slice(endpoints, func(i, j int) bool {
+		return (endpoints[i].Host + endpoints[i].Path) <
+			(endpoints[j].Host + endpoints[j].Path)
+	})
 }

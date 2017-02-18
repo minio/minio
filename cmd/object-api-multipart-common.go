@@ -41,13 +41,11 @@ type uploadsV1 struct {
 	Uploads []uploadInfo `json:"uploadIds"` // Captures all the upload ids for a given object.
 }
 
-// byInitiatedTime is a collection satisfying sort.Interface.
-type byInitiatedTime []uploadInfo
-
-func (t byInitiatedTime) Len() int      { return len(t) }
-func (t byInitiatedTime) Swap(i, j int) { t[i], t[j] = t[j], t[i] }
-func (t byInitiatedTime) Less(i, j int) bool {
-	return t[i].Initiated.Before(t[j].Initiated)
+// Sorts uploads slice as latest initiated time.
+func sortUploads(uploads []uploadInfo) {
+	sort.Slice(uploads, func(i, j int) bool {
+		return uploads[i].Initiated.Before(uploads[j].Initiated)
+	})
 }
 
 // AddUploadID - adds a new upload id in order of its initiated time.
@@ -56,7 +54,7 @@ func (u *uploadsV1) AddUploadID(uploadID string, initiated time.Time) {
 		UploadID:  uploadID,
 		Initiated: initiated,
 	})
-	sort.Sort(byInitiatedTime(u.Uploads))
+	sortUploads(u.Uploads)
 }
 
 // RemoveUploadID - removes upload id from uploads metadata.

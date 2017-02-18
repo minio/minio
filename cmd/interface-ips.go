@@ -22,14 +22,11 @@ import (
 	"sort"
 )
 
-// byLastOctetValue implements sort.Interface used in sorting a list
-// of ip address by their last octet value.
-type byLastOctetValue []net.IP
-
-func (n byLastOctetValue) Len() int      { return len(n) }
-func (n byLastOctetValue) Swap(i, j int) { n[i], n[j] = n[j], n[i] }
-func (n byLastOctetValue) Less(i, j int) bool {
-	return []byte(n[i].To4())[3] < []byte(n[j].To4())[3]
+// Reverse sorts slice of *net.IP* by last octet.
+func reverseSortIpsByLastOctet(nips []net.IP) {
+	sort.Slice(nips, func(i, j int) bool {
+		return []byte(nips[i].To4())[3] > []byte(nips[j].To4())[3]
+	})
 }
 
 // getInterfaceIPv4s is synonymous to net.InterfaceAddrs()
@@ -47,6 +44,7 @@ func getInterfaceIPv4s() ([]net.IP, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Unable to determine network interface address. %s", err)
 	}
+
 	// Go through each return network address and collate IPv4 addresses.
 	var nips []net.IP
 	for _, addr := range addrs {
@@ -63,7 +61,8 @@ func getInterfaceIPv4s() ([]net.IP, error) {
 			}
 		}
 	}
-	// Sort the list of IPs by their last octet value.
-	sort.Sort(sort.Reverse(byLastOctetValue(nips)))
+
+	// Reverse sort the list of IPs by their last octet value.
+	reverseSortIpsByLastOctet(nips)
 	return nips, nil
 }

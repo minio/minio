@@ -25,7 +25,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strings"
 	"syscall"
 
@@ -316,7 +315,7 @@ func (fs fsObjects) ListBuckets() ([]BucketInfo, error) {
 	}
 
 	// Sort bucket infos by bucket name.
-	sort.Sort(byBucketName(bucketInfos))
+	sortBucketInfos(bucketInfos)
 
 	// Succes.
 	return bucketInfos, nil
