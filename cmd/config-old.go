@@ -1,3 +1,19 @@
+/*
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package cmd
 
 import (
@@ -7,6 +23,23 @@ import (
 
 	"github.com/minio/minio/pkg/quick"
 )
+
+func loadOldConfig(configFile string, config interface{}) (interface{}, error) {
+	if _, err := os.Stat(configFile); err != nil {
+		return nil, err
+	}
+
+	qc, err := quick.New(config)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = qc.Load(configFile); err != nil {
+		return nil, err
+	}
+
+	return config, nil
+}
 
 /////////////////// Config V1 ///////////////////
 type configV1 struct {
@@ -22,19 +55,11 @@ func loadConfigV1() (*configV1, error) {
 		return nil, err
 	}
 	configFile := filepath.Join(configPath, "fsUsers.json")
-	if _, err = os.Stat(configFile); err != nil {
+	config, err := loadOldConfig(configFile, &configV1{Version: "1"})
+	if config == nil {
 		return nil, err
 	}
-	c := &configV1{}
-	c.Version = "1"
-	qc, err := quick.New(c)
-	if err != nil {
-		return nil, err
-	}
-	if err := qc.Load(configFile); err != nil {
-		return nil, err
-	}
-	return c, nil
+	return config.(*configV1), err
 }
 
 /////////////////// Config V2 ///////////////////
@@ -65,19 +90,11 @@ func loadConfigV2() (*configV2, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, err = os.Stat(configFile); err != nil {
+	config, err := loadOldConfig(configFile, &configV2{Version: "2"})
+	if config == nil {
 		return nil, err
 	}
-	c := &configV2{}
-	c.Version = "2"
-	qc, err := quick.New(c)
-	if err != nil {
-		return nil, err
-	}
-	if err := qc.Load(configFile); err != nil {
-		return nil, err
-	}
-	return c, nil
+	return config.(*configV2), err
 }
 
 /////////////////// Config V3 ///////////////////
@@ -139,19 +156,11 @@ func loadConfigV3() (*configV3, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, err = os.Stat(configFile); err != nil {
+	config, err := loadOldConfig(configFile, &configV3{Version: "3"})
+	if config == nil {
 		return nil, err
 	}
-	c := &configV3{}
-	c.Version = "3"
-	qc, err := quick.New(c)
-	if err != nil {
-		return nil, err
-	}
-	if err := qc.Load(configFile); err != nil {
-		return nil, err
-	}
-	return c, nil
+	return config.(*configV3), err
 }
 
 // logger type representing version '4' logger config.
@@ -190,19 +199,11 @@ func loadConfigV4() (*configV4, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, err = os.Stat(configFile); err != nil {
+	config, err := loadOldConfig(configFile, &configV4{Version: "4"})
+	if config == nil {
 		return nil, err
 	}
-	c := &configV4{}
-	c.Version = "4"
-	qc, err := quick.New(c)
-	if err != nil {
-		return nil, err
-	}
-	if err := qc.Load(configFile); err != nil {
-		return nil, err
-	}
-	return c, nil
+	return config.(*configV4), err
 }
 
 // logger type representing version '5' logger config.
@@ -268,19 +269,11 @@ func loadConfigV5() (*configV5, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, err = os.Stat(configFile); err != nil {
+	config, err := loadOldConfig(configFile, &configV5{Version: "5"})
+	if config == nil {
 		return nil, err
 	}
-	c := &configV5{}
-	c.Version = "5"
-	qc, err := quick.New(c)
-	if err != nil {
-		return nil, err
-	}
-	if err := qc.Load(configFile); err != nil {
-		return nil, err
-	}
-	return c, nil
+	return config.(*configV5), err
 }
 
 type loggerV6 struct {
@@ -310,19 +303,11 @@ func loadConfigV6() (*configV6, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, err = os.Stat(configFile); err != nil {
+	config, err := loadOldConfig(configFile, &configV6{Version: "6"})
+	if config == nil {
 		return nil, err
 	}
-	c := &configV6{}
-	c.Version = "6"
-	qc, err := quick.New(c)
-	if err != nil {
-		return nil, err
-	}
-	if err := qc.Load(configFile); err != nil {
-		return nil, err
-	}
-	return c, nil
+	return config.(*configV6), err
 }
 
 // Notifier represents collection of supported notification queues in version
@@ -371,19 +356,11 @@ func loadConfigV7() (*serverConfigV7, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, err = os.Stat(configFile); err != nil {
+	config, err := loadOldConfig(configFile, &serverConfigV7{Version: "7"})
+	if config == nil {
 		return nil, err
 	}
-	c := &serverConfigV7{}
-	c.Version = "7"
-	qc, err := quick.New(c)
-	if err != nil {
-		return nil, err
-	}
-	if err := qc.Load(configFile); err != nil {
-		return nil, err
-	}
-	return c, nil
+	return config.(*serverConfigV7), err
 }
 
 // serverConfigV8 server configuration version '8'. Adds NATS notifier
@@ -411,19 +388,11 @@ func loadConfigV8() (*serverConfigV8, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, err = os.Stat(configFile); err != nil {
+	config, err := loadOldConfig(configFile, &serverConfigV8{Version: "8"})
+	if config == nil {
 		return nil, err
 	}
-	c := &serverConfigV8{}
-	c.Version = "8"
-	qc, err := quick.New(c)
-	if err != nil {
-		return nil, err
-	}
-	if err := qc.Load(configFile); err != nil {
-		return nil, err
-	}
-	return c, nil
+	return config.(*serverConfigV8), err
 }
 
 // serverConfigV9 server configuration version '9'. Adds PostgreSQL
@@ -450,20 +419,11 @@ func loadConfigV9() (*serverConfigV9, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, err = os.Stat(configFile); err != nil {
+	config, err := loadOldConfig(configFile, &serverConfigV9{Version: "9"})
+	if config == nil {
 		return nil, err
 	}
-	srvCfg := &serverConfigV9{}
-	srvCfg.Version = "9"
-	srvCfg.rwMutex = &sync.RWMutex{}
-	qc, err := quick.New(srvCfg)
-	if err != nil {
-		return nil, err
-	}
-	if err := qc.Load(configFile); err != nil {
-		return nil, err
-	}
-	return srvCfg, nil
+	return config.(*serverConfigV9), err
 }
 
 // serverConfigV10 server configuration version '10' which is like
@@ -488,19 +448,11 @@ func loadConfigV10() (*serverConfigV10, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, err = os.Stat(configFile); err != nil {
+	config, err := loadOldConfig(configFile, &serverConfigV10{Version: "10"})
+	if config == nil {
 		return nil, err
 	}
-	srvCfg := &serverConfigV10{}
-	srvCfg.Version = "10"
-	qc, err := quick.New(srvCfg)
-	if err != nil {
-		return nil, err
-	}
-	if err := qc.Load(configFile); err != nil {
-		return nil, err
-	}
-	return srvCfg, nil
+	return config.(*serverConfigV10), err
 }
 
 // natsNotifyV1 - structure was valid until config V 11
@@ -536,19 +488,11 @@ func loadConfigV11() (*serverConfigV11, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, err = os.Stat(configFile); err != nil {
+	config, err := loadOldConfig(configFile, &serverConfigV11{Version: "11"})
+	if config == nil {
 		return nil, err
 	}
-	srvCfg := &serverConfigV11{}
-	srvCfg.Version = "11"
-	qc, err := quick.New(srvCfg)
-	if err != nil {
-		return nil, err
-	}
-	if err := qc.Load(configFile); err != nil {
-		return nil, err
-	}
-	return srvCfg, nil
+	return config.(*serverConfigV11), err
 }
 
 // serverConfigV12 server configuration version '12' which is like
@@ -572,17 +516,9 @@ func loadConfigV12() (*serverConfigV12, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, err = os.Stat(configFile); err != nil {
+	config, err := loadOldConfig(configFile, &serverConfigV12{Version: "12"})
+	if config == nil {
 		return nil, err
 	}
-	srvCfg := &serverConfigV12{}
-	srvCfg.Version = "12"
-	qc, err := quick.New(srvCfg)
-	if err != nil {
-		return nil, err
-	}
-	if err := qc.Load(configFile); err != nil {
-		return nil, err
-	}
-	return srvCfg, nil
+	return config.(*serverConfigV12), err
 }
