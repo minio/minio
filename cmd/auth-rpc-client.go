@@ -115,8 +115,10 @@ func (authClient *AuthRPCClient) call(serviceMethod string, args interface {
 }, reply interface{}) (err error) {
 	// On successful login, execute RPC call.
 	if err = authClient.Login(); err == nil {
+		authClient.Lock()
 		// Set token and timestamp before the rpc call.
 		args.SetAuthToken(authClient.authToken)
+		authClient.Unlock()
 		args.SetRequestTime(time.Now().UTC())
 
 		// Do RPC call.
