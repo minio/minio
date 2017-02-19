@@ -104,6 +104,10 @@ func registerApp() *cli.App {
 	registerCommand(updateCmd)
 
 	// Set up app.
+	cli.HelpFlag = cli.BoolFlag{
+		Name:  "help, h",
+		Usage: "Show help.",
+	}
 	app := cli.NewApp()
 	app.Name = "Minio"
 	app.Author = "Minio.io"
@@ -111,6 +115,8 @@ func registerApp() *cli.App {
 	app.Usage = "Cloud Storage Server."
 	app.Description = `Minio is an Amazon S3 compatible object storage server. Use it to store photos, videos, VMs, containers, log files, or any blob of data as objects.`
 	app.Flags = globalFlags
+	app.HideVersion = true     // Hide `--version` flag, we already have `minio version`.
+	app.HideHelpCommand = true // Hide `help, h` command, we already have `minio --help`.
 	app.Commands = commands
 	app.CustomAppHelpTemplate = minioHelpTemplate
 	app.CommandNotFound = func(ctx *cli.Context, command string) {

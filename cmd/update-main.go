@@ -46,7 +46,7 @@ var updateCmd = cli.Command{
    {{.HelpName}} - {{.Usage}}
 
 USAGE:
-   {{.HelpName}} {{if .VisibleFlags}}[FLAGS]{{end}}
+   {{.HelpName}}{{if .VisibleFlags}} [FLAGS]{{end}}
 {{if .VisibleFlags}}
 FLAGS:
   {{range .VisibleFlags}}{{.}}
@@ -56,8 +56,10 @@ EXIT STATUS:
    1 - New update is available.
   -1 - Error in getting update information.
 
-VERSION:
-  ` + Version + `{{"\n"}}`,
+EXAMPLES:
+   1. Check if there is a new update available:
+       $ {{.HelpName}}
+`,
 }
 
 const releaseTagTimeLayout = "2006-01-02T15-04-05Z"

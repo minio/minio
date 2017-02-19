@@ -45,8 +45,10 @@ type App struct {
 	Flags []Flag
 	// Boolean to enable bash completion commands
 	EnableBashCompletion bool
-	// Boolean to hide built-in help command
+	// Boolean to hide built-in help flag
 	HideHelp bool
+	// Boolean to hide built-in help command
+	HideHelpCommand bool
 	// Boolean to hide built-in version flag and the VERSION section of help
 	HideVersion bool
 	// Populate on app startup, only gettable through method Categories()
@@ -144,9 +146,11 @@ func (a *App) Setup() {
 	}
 	a.Commands = newCmds
 
-	if a.Command(helpCommand.Name) == nil && !a.HideHelp {
-		a.Commands = append(a.Commands, helpCommand)
-		if (HelpFlag != BoolFlag{}) {
+	if a.Command(helpCommand.Name) == nil {
+		if !a.HideHelpCommand {
+			a.Commands = append(a.Commands, helpCommand)
+		}
+		if !a.HideHelp && (HelpFlag != BoolFlag{}) {
 			a.appendFlag(HelpFlag)
 		}
 	}
@@ -285,9 +289,11 @@ func (a *App) RunAndExitOnError() {
 func (a *App) RunAsSubcommand(ctx *Context) (err error) {
 	// append help to commands
 	if len(a.Commands) > 0 {
-		if a.Command(helpCommand.Name) == nil && !a.HideHelp {
-			a.Commands = append(a.Commands, helpCommand)
-			if (HelpFlag != BoolFlag{}) {
+		if a.Command(helpCommand.Name) == nil {
+			if !a.HideHelpCommand {
+				a.Commands = append(a.Commands, helpCommand)
+			}
+			if !a.HideHelp && (HelpFlag != BoolFlag{}) {
 				a.appendFlag(HelpFlag)
 			}
 		}
