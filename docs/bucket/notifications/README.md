@@ -1,6 +1,7 @@
 # Minio Bucket Notification Guide [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
 
-Minio server supports Amazon S3 compatible bucket event notification for the following targets
+Changes in a bucket, such as object uploads and removal, can be monitored using bucket event notification
+mechanism and can be published to the following targets:
 
 | Notification Targets|
 |:---|
