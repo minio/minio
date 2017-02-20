@@ -682,6 +682,13 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 				continue
 			}
 
+			objInfo, err := obj.GetObjectInfo(testCase.bucketName, testCase.objectName)
+			if err != nil {
+				t.Fatalf("Test %d: %s: Failed to fetch the copied object: <ERROR> %s", i+1, instanceType, err)
+			}
+			if objInfo.ContentEncoding == streamingContentEncoding {
+				t.Fatalf("Test %d: %s: ContentEncoding is set to \"aws-chunked\" which is unexpected", i+1, instanceType)
+			}
 			buffer := new(bytes.Buffer)
 			err = obj.GetObject(testCase.bucketName, testCase.objectName, 0, int64(testCase.dataLen), buffer)
 			if err != nil {
