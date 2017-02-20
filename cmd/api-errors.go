@@ -144,6 +144,7 @@ const (
 
 	ErrAdminInvalidAccessKey
 	ErrAdminInvalidSecretKey
+	ErrAdminConfigNoQuorum
 )
 
 // error code to APIError structure, these fields carry respective
@@ -592,6 +593,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Code:           "XMinioAdminInvalidSecretKey",
 		Description:    "The secret key is invalid.",
 		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrAdminConfigNoQuorum: {
+		Code:           "XMinioAdminConfigNoQuorum",
+		Description:    "Configuration update failed because server quorum was not met",
+		HTTPStatusCode: http.StatusServiceUnavailable,
 	},
 
 	// Add your error structure here.

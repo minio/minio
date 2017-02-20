@@ -19,7 +19,10 @@ package cmd
 import (
 	"encoding/json"
 	"errors"
+	"io/ioutil"
 	"net/rpc"
+	"os"
+	"path/filepath"
 	"time"
 
 	router "github.com/gorilla/mux"
@@ -155,6 +158,75 @@ func (s *adminCmd) GetConfig(args *AuthRPCArgs, reply *ConfigReply) error {
 	}
 
 	reply.Config = jsonBytes
+	return nil
+}
+
+// WriteConfigArgs - wraps the bytes to be written and temporary file name.
+type WriteConfigArgs struct {
+	AuthRPCArgs
+	TmpFileName string
+	Buf         []byte
+}
+
+// WriteConfigReply - wraps the result of a writing config into a temporary file.
+// the remote node.
+type WriteConfigReply struct {
+	AuthRPCReply
+}
+
+func writeTmpConfigCommon(tmpFileName string, configBytes []byte) error {
+	configDir, err := getConfigPath()
+	if err != nil {
+		errorIf(err, "Failed to get config path")
+		return err
+	}
+
+	err = ioutil.WriteFile(filepath.Join(configDir, tmpFileName), configBytes, 0666)
+	if err != nil {
+		errorIf(err, "Failed to write to temporary config file.")
+		return err
+	}
+	return err
+}
+
+// WriteTmpConfig - writes the supplied config contents onto the
+// supplied temporary file.
+func (s *adminCmd) WriteTmpConfig(wArgs *WriteConfigArgs, wReply *WriteConfigReply) error {
+	if err := wArgs.IsAuthenticated(); err != nil {
+		return err
+	}
+
+	return writeTmpConfigCommon(wArgs.TmpFileName, wArgs.Buf)
+}
+
+// CommitConfigArgs - wraps the config file name that needs to be
+// committed into config.json on this node.
+type CommitConfigArgs struct {
+	AuthRPCArgs
+	FileName string
+}
+
+// CommitConfigReply - represents response to commit of config file on
+// this node.
+type CommitConfigReply struct {
+	AuthRPCReply
+}
+
+// CommitConfig - Renames the temporary file into config.json on this node.
+func (s *adminCmd) CommitConfig(cArgs *CommitConfigArgs, cReply *CommitConfigReply) error {
+	configDir, err := getConfigPath()
+	if err != nil {
+		errorIf(err, "Failed to get config path.")
+		return err
+	}
+
+	configFilePath := filepath.Join(configDir, globalMinioConfigFile)
+	err = os.Rename(filepath.Join(configDir, cArgs.FileName), configFilePath)
+	if err != nil {
+		errorIf(err, "Failed to rename config file.")
+		return err
+	}
+
 	return nil
 }
 

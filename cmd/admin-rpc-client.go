@@ -20,11 +20,24 @@ import (
 	"encoding/json"
 	"errors"
 	"net/url"
+	"os"
 	"path"
+	"path/filepath"
 	"reflect"
 	"sort"
 	"sync"
 	"time"
+)
+
+const (
+	// Admin service names
+	serviceRestartRPC = "Admin.Restart"
+	listLocksRPC      = "Admin.ListLocks"
+	reInitDisksRPC    = "Admin.ReInitDisks"
+	uptimeRPC         = "Admin.Uptime"
+	getConfigRPC      = "Admin.GetConfig"
+	writeTmpConfigRPC = "Admin.WriteTmpConfig"
+	commitConfigRPC   = "Admin.CommitConfig"
 )
 
 // localAdminClient - represents admin operation to be executed locally.
@@ -45,6 +58,8 @@ type adminCmdRunner interface {
 	ReInitDisks() error
 	Uptime() (time.Duration, error)
 	GetConfig() ([]byte, error)
+	WriteTmpConfig(tmpFileName string, configBytes []byte) error
+	CommitConfig(tmpFileName string) error
 }
 
 // Restart - Sends a message over channel to the go-routine
@@ -63,7 +78,7 @@ func (lc localAdminClient) ListLocks(bucket, prefix string, duration time.Durati
 func (rc remoteAdminClient) Restart() error {
 	args := AuthRPCArgs{}
 	reply := AuthRPCReply{}
-	return rc.Call("Admin.Restart", &args, &reply)
+	return rc.Call(serviceRestartRPC, &args, &reply)
 }
 
 // ListLocks - Sends list locks command to remote server via RPC.
@@ -74,7 +89,7 @@ func (rc remoteAdminClient) ListLocks(bucket, prefix string, duration time.Durat
 		duration: duration,
 	}
 	var reply ListLocksReply
-	if err := rc.Call("Admin.ListLocks", &listArgs, &reply); err != nil {
+	if err := rc.Call(listLocksRPC, &listArgs, &reply); err != nil {
 		return nil, err
 	}
 	return reply.volLocks, nil
@@ -91,7 +106,7 @@ func (lc localAdminClient) ReInitDisks() error {
 func (rc remoteAdminClient) ReInitDisks() error {
 	args := AuthRPCArgs{}
 	reply := AuthRPCReply{}
-	return rc.Call("Admin.ReInitDisks", &args, &reply)
+	return rc.Call(reInitDisksRPC, &args, &reply)
 }
 
 // Uptime - Returns the uptime of this server. Timestamp is taken
@@ -108,7 +123,7 @@ func (lc localAdminClient) Uptime() (time.Duration, error) {
 func (rc remoteAdminClient) Uptime() (time.Duration, error) {
 	args := AuthRPCArgs{}
 	reply := UptimeReply{}
-	err := rc.Call("Admin.Uptime", &args, &reply)
+	err := rc.Call(uptimeRPC, &args, &reply)
 	if err != nil {
 		return time.Duration(0), err
 	}
@@ -129,10 +144,68 @@ func (lc localAdminClient) GetConfig() ([]byte, error) {
 func (rc remoteAdminClient) GetConfig() ([]byte, error) {
 	args := AuthRPCArgs{}
 	reply := ConfigReply{}
-	if err := rc.Call("Admin.GetConfig", &args, &reply); err != nil {
+	if err := rc.Call(getConfigRPC, &args, &reply); err != nil {
 		return nil, err
 	}
 	return reply.Config, nil
+}
+
+// WriteTmpConfig - writes config file content to a temporary file on
+// the local server.
+func (lc localAdminClient) WriteTmpConfig(tmpFileName string, configBytes []byte) error {
+	return writeTmpConfigCommon(tmpFileName, configBytes)
+}
+
+// WriteTmpConfig - writes config file content to a temporary file on
+// a remote node.
+func (rc remoteAdminClient) WriteTmpConfig(tmpFileName string, configBytes []byte) error {
+	wArgs := WriteConfigArgs{
+		TmpFileName: tmpFileName,
+		Buf:         configBytes,
+	}
+
+	err := rc.Call(writeTmpConfigRPC, &wArgs, &WriteConfigReply{})
+	if err != nil {
+		errorIf(err, "Failed to write temporary config file.")
+		return err
+	}
+
+	return nil
+}
+
+// CommitConfig - Move the new config in tmpFileName onto config.json
+// on a local node.
+func (lc localAdminClient) CommitConfig(tmpFileName string) error {
+	configDir, err := getConfigPath()
+	if err != nil {
+		errorIf(err, "Failed to get config directory path.")
+		return err
+	}
+
+	configFilePath := filepath.Join(configDir, globalMinioConfigFile)
+	err = os.Rename(filepath.Join(configDir, tmpFileName), configFilePath)
+	if err != nil {
+		errorIf(err, "Failed to rename to config.json")
+		return err
+	}
+
+	return nil
+}
+
+// CommitConfig - Move the new config in tmpFileName onto config.json
+// on a remote node.
+func (rc remoteAdminClient) CommitConfig(tmpFileName string) error {
+	cArgs := CommitConfigArgs{
+		FileName: tmpFileName,
+	}
+	cReply := CommitConfigReply{}
+	err := rc.Call(commitConfigRPC, &cArgs, &cReply)
+	if err != nil {
+		errorIf(err, "Failed to rename config file.")
+		return err
+	}
+
+	return nil
 }
 
 // adminPeer - represents an entity that implements Restart methods.
@@ -488,4 +561,56 @@ func getValidServerConfig(serverConfigs []serverConfigV13, errs []error) (server
 	}
 
 	return configJSON, nil
+}
+
+// Write config contents into a temporary file on all nodes.
+func writeTmpConfigPeers(peers adminPeers, tmpFileName string, configBytes []byte) []error {
+	// For a single-node minio server setup.
+	if !globalIsDistXL {
+		err := peers[0].cmdRunner.WriteTmpConfig(tmpFileName, configBytes)
+		return []error{err}
+	}
+
+	errs := make([]error, len(peers))
+
+	// Write config into temporary file on all nodes.
+	wg := sync.WaitGroup{}
+	for i, peer := range peers {
+		wg.Add(1)
+		go func(idx int, peer adminPeer) {
+			defer wg.Done()
+			errs[idx] = peer.cmdRunner.WriteTmpConfig(tmpFileName, configBytes)
+		}(i, peer)
+	}
+	wg.Wait()
+
+	// Return bytes written and errors (if any) during writing
+	// temporary config file.
+	return errs
+}
+
+// Move config contents from the given temporary file onto config.json
+// on all nodes.
+func commitConfigPeers(peers adminPeers, tmpFileName string) []error {
+	// For a single-node minio server setup.
+	if !globalIsDistXL {
+		return []error{peers[0].cmdRunner.CommitConfig(tmpFileName)}
+	}
+
+	errs := make([]error, len(peers))
+
+	// Rename temporary config file into configDir/config.json on
+	// all nodes.
+	wg := sync.WaitGroup{}
+	for i, peer := range peers {
+		wg.Add(1)
+		go func(idx int, peer adminPeer) {
+			defer wg.Done()
+			errs[idx] = peer.cmdRunner.CommitConfig(tmpFileName)
+		}(i, peer)
+	}
+	wg.Wait()
+
+	// Return errors (if any) received during rename.
+	return errs
 }

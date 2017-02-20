@@ -144,6 +144,7 @@ func TestReInitDisks(t *testing.T) {
 	}
 }
 
+// TestGetConfig - Test for GetConfig admin RPC.
 func TestGetConfig(t *testing.T) {
 	// Reset global variables to start afresh.
 	resetTestGlobals()
@@ -183,5 +184,65 @@ func TestGetConfig(t *testing.T) {
 	err = json.Unmarshal(configReply.Config, &config)
 	if err != nil {
 		t.Errorf("Expected json unmarshal to pass but failed with %v", err)
+	}
+}
+
+// TestWriteAndCommitConfig - test for WriteTmpConfig and CommitConfig
+// RPC handler.
+func TestWriteAndCommitConfig(t *testing.T) {
+	// Reset global variables to start afresh.
+	resetTestGlobals()
+
+	rootPath, err := newTestConfig("us-east-1")
+	if err != nil {
+		t.Fatalf("Unable to initialize server config. %s", err)
+	}
+	defer removeAll(rootPath)
+
+	adminServer := adminCmd{}
+	creds := serverConfig.GetCredential()
+	args := LoginRPCArgs{
+		Username:    creds.AccessKey,
+		Password:    creds.SecretKey,
+		Version:     Version,
+		RequestTime: time.Now().UTC(),
+	}
+	reply := LoginRPCReply{}
+	err = adminServer.Login(&args, &reply)
+	if err != nil {
+		t.Fatalf("Failed to login to admin server - %v", err)
+	}
+
+	// Write temporary config.
+	buf := []byte("hello")
+	tmpFileName := mustGetUUID()
+	wArgs := WriteConfigArgs{
+		AuthRPCArgs: AuthRPCArgs{
+			AuthToken: reply.AuthToken,
+		},
+		TmpFileName: tmpFileName,
+		Buf:         buf,
+	}
+
+	err = adminServer.WriteTmpConfig(&wArgs, &WriteConfigReply{})
+	if err != nil {
+		t.Fatalf("Failed to write temporary config %v", err)
+	}
+
+	if err != nil {
+		t.Errorf("Expected to succeed but failed %v", err)
+	}
+
+	cArgs := CommitConfigArgs{
+		AuthRPCArgs: AuthRPCArgs{
+			AuthToken: reply.AuthToken,
+		},
+		FileName: tmpFileName,
+	}
+	cReply := CommitConfigReply{}
+
+	err = adminServer.CommitConfig(&cArgs, &cReply)
+	if err != nil {
+		t.Fatalf("Failed to commit config file %v", err)
 	}
 }
