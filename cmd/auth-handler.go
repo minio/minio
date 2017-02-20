@@ -63,7 +63,9 @@ func isRequestPostPolicySignatureV4(r *http.Request) bool {
 
 // Verify if the request has AWS Streaming Signature Version '4'. This is only valid for 'PUT' operation.
 func isRequestSignStreamingV4(r *http.Request) bool {
-	return r.Header.Get("x-amz-content-sha256") == streamingContentSHA256 && r.Method == httpPUT
+	return r.Header.Get("x-amz-content-sha256") == streamingContentSHA256 &&
+		r.Header.Get("content-encoding") == streamingContentEncoding &&
+		r.Method == httpPUT
 }
 
 // Authorization type.

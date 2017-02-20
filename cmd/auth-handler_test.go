@@ -43,6 +43,7 @@ func TestGetRequestAuthType(t *testing.T) {
 				Header: http.Header{
 					"Authorization":        []string{"AWS4-HMAC-SHA256 <cred_string>"},
 					"X-Amz-Content-Sha256": []string{streamingContentSHA256},
+					"Content-Encoding":     []string{streamingContentEncoding},
 				},
 				Method: "PUT",
 			},

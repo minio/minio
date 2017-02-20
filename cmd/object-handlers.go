@@ -421,6 +421,13 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 
 	// Extract metadata to be saved from incoming HTTP header.
 	metadata := extractMetadataFromHeader(r.Header)
+	if rAuthType == authTypeStreamingSigned {
+		// Make sure to delete the content-encoding parameter
+		// for a streaming signature which is set to value
+		// "aws-chunked"
+		delete(metadata, "content-encoding")
+	}
+
 	// Make sure we hex encode md5sum here.
 	metadata["md5Sum"] = hex.EncodeToString(md5Bytes)
 
