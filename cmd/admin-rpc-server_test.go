@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"net/url"
 	"testing"
 	"time"
@@ -142,5 +143,48 @@ func TestReInitDisks(t *testing.T) {
 	if err != errUnsupportedBackend {
 		t.Errorf("Expected to fail with %v, but received %v",
 			errUnsupportedBackend, err)
+	}
+}
+
+func TestGetConfig(t *testing.T) {
+	// Reset global variables to start afresh.
+	resetTestGlobals()
+
+	rootPath, err := newTestConfig("us-east-1")
+	if err != nil {
+		t.Fatalf("Unable to initialize server config. %s", err)
+	}
+	defer removeAll(rootPath)
+
+	adminServer := adminCmd{}
+	creds := serverConfig.GetCredential()
+	args := LoginRPCArgs{
+		Username:    creds.AccessKey,
+		Password:    creds.SecretKey,
+		Version:     Version,
+		RequestTime: time.Now().UTC(),
+	}
+	reply := LoginRPCReply{}
+	err = adminServer.Login(&args, &reply)
+	if err != nil {
+		t.Fatalf("Failed to login to admin server - %v", err)
+	}
+
+	authArgs := AuthRPCArgs{
+		AuthToken:   reply.AuthToken,
+		RequestTime: time.Now().UTC(),
+	}
+
+	configReply := ConfigReply{}
+
+	err = adminServer.GetConfig(&authArgs, &configReply)
+	if err != nil {
+		t.Errorf("Expected GetConfig to pass but failed with %v", err)
+	}
+
+	var config serverConfigV13
+	err = json.Unmarshal(configReply.Config, &config)
+	if err != nil {
+		t.Errorf("Expected json unmarshal to pass but failed with %v", err)
 	}
 }

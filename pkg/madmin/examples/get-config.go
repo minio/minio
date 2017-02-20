@@ -1,6 +1,4 @@
-// +build ignore
-
-/*
+/* +build ignore
  * Minio Cloud Storage, (C) 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,6 +18,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"log"
 
 	"github.com/minio/minio/pkg/madmin"
@@ -36,20 +36,17 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	// Heal bucket mybucket - dry run
-	isDryRun := true
-	err = madmClnt.HealBucket("mybucket", isDryRun)
+	configBytes, err := madmClnt.GetConfig()
 	if err != nil {
-		log.Fatalln(err)
-
+		log.Fatalf("failed due to: %v", err)
 	}
 
-	// Heal bucket mybucket - for real this time.
-	isDryRun := false
-	err = madmClnt.HealBucket("mybucket", isDryRun)
+	// Pretty-print config received as json.
+	var buf bytes.Buffer
+	err = json.Indent(&buf, configBytes, "", "\t")
 	if err != nil {
-		log.Fatalln(err)
+		log.Fatalf("failed due to: %v", err)
 	}
 
-	log.Println("successfully healed mybucket")
+	log.Println("config received successfully: ", string(buf.Bytes()))
 }

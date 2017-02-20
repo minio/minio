@@ -17,8 +17,11 @@
 package cmd
 
 import (
+	"encoding/json"
+	"errors"
 	"net/url"
 	"path"
+	"reflect"
 	"sort"
 	"sync"
 	"time"
@@ -41,6 +44,7 @@ type adminCmdRunner interface {
 	ListLocks(bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error)
 	ReInitDisks() error
 	Uptime() (time.Duration, error)
+	GetConfig() ([]byte, error)
 }
 
 // Restart - Sends a message over channel to the go-routine
@@ -110,6 +114,25 @@ func (rc remoteAdminClient) Uptime() (time.Duration, error) {
 	}
 
 	return reply.Uptime, nil
+}
+
+// GetConfig - returns config.json of the local server.
+func (lc localAdminClient) GetConfig() ([]byte, error) {
+	if serverConfig == nil {
+		return nil, errors.New("config not present")
+	}
+
+	return json.Marshal(serverConfig)
+}
+
+// GetConfig - returns config.json of the remote server.
+func (rc remoteAdminClient) GetConfig() ([]byte, error) {
+	args := AuthRPCArgs{}
+	reply := ConfigReply{}
+	if err := rc.Call("Admin.GetConfig", &args, &reply); err != nil {
+		return nil, err
+	}
+	return reply.Config, nil
 }
 
 // adminPeer - represents an entity that implements Restart methods.
@@ -335,4 +358,134 @@ func getPeerUptimes(peers adminPeers) (time.Duration, error) {
 	}
 
 	return latestUptime, nil
+}
+
+// getPeerConfig - Fetches config.json from all nodes in the setup and
+// returns the one that occurs in a majority of them.
+func getPeerConfig(peers adminPeers) ([]byte, error) {
+	if !globalIsDistXL {
+		return peers[0].cmdRunner.GetConfig()
+	}
+
+	errs := make([]error, len(peers))
+	configs := make([][]byte, len(peers))
+
+	// Get config from all servers.
+	wg := sync.WaitGroup{}
+	for i, peer := range peers {
+		wg.Add(1)
+		go func(idx int, peer adminPeer) {
+			defer wg.Done()
+			configs[idx], errs[idx] = peer.cmdRunner.GetConfig()
+		}(i, peer)
+	}
+	wg.Wait()
+
+	// Find the maximally occurring config among peers in a
+	// distributed setup.
+
+	serverConfigs := make([]serverConfigV13, len(peers))
+	for i, configBytes := range configs {
+		if errs[i] != nil {
+			continue
+		}
+
+		// Unmarshal the received config files.
+		err := json.Unmarshal(configBytes, &serverConfigs[i])
+		if err != nil {
+			errorIf(err, "Failed to unmarshal serverConfig from ", peers[i].addr)
+			return nil, err
+		}
+	}
+
+	configJSON, err := getValidServerConfig(serverConfigs, errs)
+	if err != nil {
+		errorIf(err, "Unable to find a valid server config")
+		return nil, traceError(err)
+	}
+
+	// Return the config.json that was present quorum or more
+	// number of disks.
+	return json.Marshal(configJSON)
+}
+
+// getValidServerConfig - finds the server config that is present in
+// quorum or more number of servers.
+func getValidServerConfig(serverConfigs []serverConfigV13, errs []error) (serverConfigV13, error) {
+	// majority-based quorum
+	quorum := len(serverConfigs)/2 + 1
+
+	// Count the number of disks a config.json was found in.
+	configCounter := make([]int, len(serverConfigs))
+
+	// We group equal serverConfigs by the lowest index of the
+	// same value;  e.g, let us take the following serverConfigs
+	// in a 4-node setup,
+	// serverConfigs == [c1, c2, c1, c1]
+	// configCounter == [3, 1, 0, 0]
+	// c1, c2 are the only distinct values that appear.  c1 is
+	// identified by 0, the lowest index it appears in and c2 is
+	// identified by 1. So, we need to find the number of times
+	// each of these distinct values occur.
+
+	// Invariants:
+
+	// 1. At the beginning of the i-th iteration, the number of
+	// unique configurations seen so far is equal to the number of
+	// non-zero counter values in config[:i].
+
+	// 2. At the beginning of the i-th iteration, the sum of
+	// elements of configCounter[:i] is equal to the number of
+	// non-error configurations seen so far.
+
+	// For each of the serverConfig ...
+	for i := range serverConfigs {
+		// Skip nodes where getConfig failed.
+		if errs[i] != nil {
+			continue
+		}
+		// Check if it is equal to any of the configurations
+		// seen so far. If j == i is reached then we have an
+		// unseen configuration.
+		for j := 0; j <= i; j++ {
+			if j < i && configCounter[j] == 0 {
+				// serverConfigs[j] is known to be
+				// equal to a value that was already
+				// seen. See example above for
+				// clarity.
+				continue
+			} else if j < i && reflect.DeepEqual(serverConfigs[i], serverConfigs[j]) {
+				// serverConfigs[i] is equal to
+				// serverConfigs[j], update
+				// serverConfigs[j]'s counter since it
+				// is the lower index.
+				configCounter[j]++
+				break
+			} else if j == i {
+				// serverConfigs[i] is equal to no
+				// other value seen before. It is
+				// unique so far.
+				configCounter[i] = 1
+				break
+			} // else invariants specified above are violated.
+		}
+	}
+
+	// We find the maximally occurring server config and check if
+	// there is quorum.
+	var configJSON serverConfigV13
+	maxOccurrence := 0
+	for i, count := range configCounter {
+		if maxOccurrence < count {
+			maxOccurrence = count
+			configJSON = serverConfigs[i]
+		}
+	}
+
+	// If quorum nodes don't agree.
+	if maxOccurrence < quorum {
+		return serverConfigV13{}, errXLWriteQuorum
+	}
+
+	return configJSON, nil
 }

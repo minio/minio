@@ -672,3 +672,32 @@ func (adminAPI adminAPIHandlers) HealFormatHandler(w http.ResponseWriter, r *htt
 	// Return 200 on success.
 	writeSuccessResponseHeadersOnly(w)
 }
+
+// GetConfigHandler - GET /?config
+// - x-minio-operation = get
+// Get config.json of this minio setup.
+func (adminAPI adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Request) {
+	// Validate request signature.
+	adminAPIErr := checkRequestAuthType(r, "", "", "")
+	if adminAPIErr != ErrNone {
+		writeErrorResponse(w, adminAPIErr, r.URL)
+		return
+	}
+
+	// check if objectLayer is initialized, if not return.
+	if newObjectLayerFn() == nil {
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+		return
+	}
+
+	// Get config.json from all nodes. In a single node setup, it
+	// returns local config.json.
+	configBytes, err := getPeerConfig(globalAdminPeers)
+	if err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		errorIf(err, "Failed to get config from peers")
+		return
+	}
+
+	writeSuccessResponseJSON(w, configBytes)
+}
