@@ -79,7 +79,6 @@ EXAMPLES:
       $ export MINIO_SECRET_KEY=miniostorage
       $ {{.HelpName}} http://192.168.1.11/mnt/export/ http://192.168.1.12/mnt/export/ \
           http://192.168.1.13/mnt/export/ http://192.168.1.14/mnt/export/
-
 `,
 }
 

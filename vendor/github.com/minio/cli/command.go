@@ -51,8 +51,10 @@ type Command struct {
 	// removed n version 2 since it only works under specific conditions so we
 	// backport here by exposing it as an option for compatibility.
 	SkipArgReorder bool
-	// Boolean to hide built-in help command
+	// Boolean to hide built-in help flag
 	HideHelp bool
+	// Boolean to hide built-in help command
+	HideHelpCommand bool
 	// Boolean to hide this command from help or completion
 	Hidden bool
 
@@ -261,6 +263,7 @@ func (c Command) startApp(ctx *Context) error {
 	app.Commands = c.Subcommands
 	app.Flags = c.Flags
 	app.HideHelp = c.HideHelp
+	app.HideHelpCommand = c.HideHelpCommand
 
 	app.Version = ctx.App.Version
 	app.HideVersion = ctx.App.HideVersion
@@ -301,5 +304,13 @@ func (c Command) startApp(ctx *Context) error {
 
 // VisibleFlags returns a slice of the Flags with Hidden=false
 func (c Command) VisibleFlags() []Flag {
-	return visibleFlags(c.Flags)
+	flags := c.Flags
+	if !c.HideHelp && (HelpFlag != BoolFlag{}) {
+		// append help to flags
+		flags = append(
+			flags,
+			HelpFlag,
+		)
+	}
+	return visibleFlags(flags)
 }
