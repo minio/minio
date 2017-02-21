@@ -119,6 +119,7 @@ func fatalIf(err error, msg string, data ...interface{}) {
 	if e, ok := err.(*Error); ok {
 		fields["stack"] = strings.Join(e.Trace(), " ")
 	}
+
 	for _, log := range log.loggers {
 		log.WithFields(fields).Fatalf(msg, data...)
 	}

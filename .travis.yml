@@ -14,7 +14,7 @@ env:
 
 script:
 - make
-- make test GOFLAGS="-timeout 20m -race -v"
+- make test GOFLAGS="-timeout 15m -race -v"
 - make coverage
 
 after_success:

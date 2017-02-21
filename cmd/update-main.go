@@ -22,6 +22,8 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -62,13 +64,22 @@ EXAMPLES:
 `,
 }
 
-const releaseTagTimeLayout = "2006-01-02T15-04-05Z"
-
-const minioReleaseURL = "https://dl.minio.io/server/minio/release/" + runtime.GOOS + "-" + runtime.GOARCH + "/"
+const (
+	minioReleaseTagTimeLayout = "2006-01-02T15-04-05Z"
+	minioReleaseURL           = "https://dl.minio.io/server/minio/release/" + runtime.GOOS + "-" + runtime.GOARCH + "/"
+)
 
 func getCurrentReleaseTime(minioVersion, minioBinaryPath string) (releaseTime time.Time, err error) {
 	if releaseTime, err = time.Parse(time.RFC3339, minioVersion); err == nil {
 		return releaseTime, err
+	}
+
+	if !filepath.IsAbs(minioBinaryPath) {
+		// Make sure to look for the absolute path of the binary.
+		minioBinaryPath, err = exec.LookPath(minioBinaryPath)
+		if err != nil {
+			return releaseTime, err
+		}
 	}
 
 	// Looks like version is minio non-standard, we use minio binary's ModTime as release time.
@@ -190,7 +201,7 @@ func parseReleaseData(data string) (releaseTime time.Time, err error) {
 		return releaseTime, err
 	}
 
-	releaseTime, err = time.Parse(releaseTagTimeLayout, fields[2])
+	releaseTime, err = time.Parse(minioReleaseTagTimeLayout, fields[2])
 	if err != nil {
 		err = fmt.Errorf("Unknown release time format. %s", err)
 	}

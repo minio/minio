@@ -17,11 +17,14 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"runtime"
 	"testing"
 	"time"
@@ -32,29 +35,59 @@ func TestGetCurrentReleaseTime(t *testing.T) {
 	releaseTime1, _ := time.Parse(time.RFC3339, minioVersion1)
 
 	minioVersion2 := "DEVELOPMENT.GOGET"
-	tmpfile, err := ioutil.TempFile("", "get-current-release-time-testcase")
+	tmpfile1, err := ioutil.TempFile("", "get-current-release-time-testcase-1")
 	if err != nil {
 		t.Fatalf("Unable to create temporary file. %s", err)
 	}
-	defer os.Remove(tmpfile.Name())
-	minioBinaryPath2 := tmpfile.Name()
-	fi, err := tmpfile.Stat()
+	defer os.Remove(tmpfile1.Name())
+
+	minioBinaryPath2 := tmpfile1.Name()
+	fi, err := tmpfile1.Stat()
 	if err != nil {
 		t.Fatalf("Unable to get temporary file info. %s", err)
 	}
-	if err = tmpfile.Close(); err != nil {
+	if err = tmpfile1.Close(); err != nil {
 		t.Fatalf("Unable to create temporary file. %s", err)
 	}
 	releaseTime2 := fi.ModTime().UTC()
 
-	errorMessage1 := "Unable to get ModTime of . stat : no such file or directory"
-	if runtime.GOOS == "windows" {
-		errorMessage1 = "Unable to get ModTime of . Lstat : The system cannot find the path specified."
+	minioBinaryPath3 := "go"
+	if runtime.GOOS == globalWindowsOSName {
+		minioBinaryPath3 = "go.exe"
 	}
+	goBinAbsPath, err := exec.LookPath(minioBinaryPath3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fi, err = os.Stat(goBinAbsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	releaseTime3 := fi.ModTime().UTC()
 
-	errorMessage2 := "Unable to get ModTime of non-existing-file. stat non-existing-file: no such file or directory"
+	// Get a non-absolute binary path.
+	minioBinaryPath4 := filepath.Base(tmpfile1.Name())
+
+	// Get a non-existent absolute binary path
+	minioBinaryPath5 := "/tmp/non-existent-file"
+	if runtime.GOOS == globalWindowsOSName {
+		minioBinaryPath5 = "C:\\tmp\\non-existent-file"
+	}
+	errorMessage1 := "exec: \"\": executable file not found in $PATH"
+	if runtime.GOOS == globalWindowsOSName {
+		errorMessage1 = "exec: \"\": executable file not found in %PATH%"
+	}
+	errorMessage2 := "exec: \"non-existent-file\": executable file not found in $PATH"
+	if runtime.GOOS == globalWindowsOSName {
+		errorMessage2 = "exec: \"non-existent-file\": executable file not found in %PATH%"
+	}
+	errorMessage3 := fmt.Sprintf("exec: \"%s\": executable file not found in $PATH", minioBinaryPath4)
+	if runtime.GOOS == globalWindowsOSName {
+		errorMessage3 = "exec: \"" + minioBinaryPath4 + "\": executable file not found in %PATH%"
+	}
+	errorMessage4 := "Unable to get ModTime of /tmp/non-existent-file. stat /tmp/non-existent-file: no such file or directory"
 	if runtime.GOOS == "windows" {
-		errorMessage2 = "Unable to get ModTime of non-existing-file. GetFileAttributesEx non-existing-file: The system cannot find the file specified."
+		errorMessage4 = "Unable to get ModTime of C:\\tmp\\non-existent-file. GetFileAttributesEx C:\\tmp\\non-existent-file: The system cannot find the path specified."
 	}
 
 	testCases := []struct {
@@ -66,11 +99,14 @@ func TestGetCurrentReleaseTime(t *testing.T) {
 		{minioVersion1, "", releaseTime1, nil},
 		{minioVersion1, minioBinaryPath2, releaseTime1, nil},
 		{minioVersion2, minioBinaryPath2, releaseTime2, nil},
+		{minioVersion2, minioBinaryPath3, releaseTime3, nil},
 		{"junk", minioBinaryPath2, releaseTime2, nil},
 		{"3.2.0", minioBinaryPath2, releaseTime2, nil},
-		{minioVersion2, "", time.Time{}, fmt.Errorf(errorMessage1)},
-		{"junk", "non-existing-file", time.Time{}, fmt.Errorf(errorMessage2)},
-		{"3.2.0", "non-existing-file", time.Time{}, fmt.Errorf(errorMessage2)},
+		{minioVersion2, "", time.Time{}, errors.New(errorMessage1)},
+		{"junk", "non-existent-file", time.Time{}, errors.New(errorMessage2)},
+		{"3.2.0", "non-existent-file", time.Time{}, errors.New(errorMessage2)},
+		{minioVersion2, minioBinaryPath4, time.Time{}, errors.New(errorMessage3)},
+		{minioVersion2, minioBinaryPath5, time.Time{}, errors.New(errorMessage4)},
 	}
 
 	if runtime.GOOS == "linux" {
@@ -79,7 +115,7 @@ func TestGetCurrentReleaseTime(t *testing.T) {
 			minioBinaryPath string
 			expectedResult  time.Time
 			expectedErr     error
-		}{"3.2a", "/proc/1/cwd", time.Time{}, fmt.Errorf("Unable to get ModTime of /proc/1/cwd. stat /proc/1/cwd: permission denied")})
+		}{"3.2a", "/proc/1/cwd", time.Time{}, errors.New("Unable to get ModTime of /proc/1/cwd. stat /proc/1/cwd: permission denied")})
 	}
 
 	for _, testCase := range testCases {
@@ -242,7 +278,7 @@ func TestDownloadReleaseData(t *testing.T) {
 }
 
 func TestParseReleaseData(t *testing.T) {
-	releaseTime, _ := time.Parse(releaseTagTimeLayout, "2016-10-07T01-16-39Z")
+	releaseTime, _ := time.Parse(minioReleaseTagTimeLayout, "2016-10-07T01-16-39Z")
 	testCases := []struct {
 		data           string
 		expectedResult time.Time
