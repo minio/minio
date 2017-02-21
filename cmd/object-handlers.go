@@ -483,7 +483,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		objInfo, err = objectAPI.PutObject(bucket, object, size, r.Body, metadata, sha256sum)
 	}
 	if err != nil {
-		errorIf(err, "Unable to create an object.")
+		errorIf(err, "Unable to create an object. %s", r.URL.Path)
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
