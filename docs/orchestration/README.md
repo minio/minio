@@ -1,22 +1,22 @@
 # Minio on orchestration platforms [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
 
-Minio is a cloud-native application designed to scale in a sustainable manner in multi-tenant environments. Orchestration platforms provide perfect launchpad for Minio to scale.  
-
-## What is cloud-native architecture?
-Cloud-native applications offer easy scale-out and hardware decoupling. They often have small footprints with no baggage of monolithic application era. This means, while the application itself appears to be pretty lightweight, it scales-out sustainably to achieve high availability and resilience.
-
-Take for example a web server. If running in a cloud environment, you wouldn't think twice before launching multiple instances of the server to handle extra load. This is because modern web servers don't have any hardware or software constraints. They scale-out to handle the extra load.
-
-While storage has been traditionally thought of as complicated, Minio changes that with its cloud-native architecture. As a true scale-out system, Minio scales with your tenants. As and when you need more storage, you can add a new Minio instance bound to a tenant.
-
-> In a cloud native environment, scalability is not a function of the application but the orchestration platform.
-
-## Orchestration platforms
-
-Below is the list of documented orchestration platforms for Minio server:
+Minio is a cloud-native application designed to scale in a sustainable manner in multi-tenant environments. Orchestration platforms provide perfect launchpad for Minio to scale. Below is the list of documented orchestration platforms for Minio server:
 
 | Orchestration platforms|
 |:---|
 | [`Kubernetes`](https://raw.githubusercontent.com/minio/minio/master/docs/orchestration/kubernetes/README.md) |
 | [`Docker Swarm`](https://raw.githubusercontent.com/minio/minio/master/docs/orchestration/docker-swarm/README.md) |
 | [`DC/OS`](https://raw.githubusercontent.com/minio/minio/master/docs/orchestration/dcos/README.md) |
+
+## Why is Minio cloud-native?
+The term cloud-native revolves around the idea of applications deployed as micro services, that can be scaled well. Its not about just retrofitting monolithic applications onto modern container based compute environment. A cloud-native application is portable and resilient by design, and can scale horizontally by simply replicating. Modern orchestration platforms like DC/OS, Kubernetes and Swarm make replicating and managing containers in huge clusters easier than ever.
+
+While containers provide isolated application execution environment, orchestration platforms allow seamless scaling by helping replicate and manage containers. Minio extends this by adding isolated storage environment for each tenant.
+
+Minio is built ground up on the cloud-native premise. With features like erasure-coding, distributed and shared setup, it focusses only on storage and does it very well. While, it can be scaled by just replicating Minio instances per tenant via an orchestration platform.  
+
+> In a cloud-native environment, scalability is not a function of the application but the orchestration platform.
+
+In a typical modern infrastructure deployment, application, Database, Key-store, etc. already live in containers and are managed by orchestration platforms. Minio brings robust, scalable, AWS S3 compatible object storage to the lot.
+
+![Cloud-native](https://raw.githubusercontent.com/minio/minio/master/docs/screenshots/Minio_Cloud_Native_Arch.png?raw=true)
