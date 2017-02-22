@@ -19,4 +19,4 @@ Minio is built ground up on the cloud-native premise. With features like erasure
 
 In a typical modern infrastructure deployment, application, Database, Key-store, etc. already live in containers and are managed by orchestration platforms. Minio brings robust, scalable, AWS S3 compatible object storage to the lot.
 
-![Cloud-native](https://raw.githubusercontent.com/minio/minio/master/docs/screenshots/Minio_Cloud_Native_Arch.png?raw=true)
+![Cloud-native](https://raw.githubusercontent.com/NitishT/minio/master/docs/screenshots/Minio_Cloud_Native_Arch.png?raw=true)
