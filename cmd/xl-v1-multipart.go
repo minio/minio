@@ -499,15 +499,15 @@ func (xl xlObjects) newMultipartUpload(bucket string, object string, meta map[st
 	// success.
 	defer xl.deleteObject(minioMetaTmpBucket, tempUploadIDPath)
 
-	// Attempt to rename temp upload object to actual upload path
-	// object
-	if rErr := renameObject(xl.storageDisks, minioMetaTmpBucket, tempUploadIDPath, minioMetaMultipartBucket, uploadIDPath, xl.writeQuorum); rErr != nil {
+	// Attempt to rename temp upload object to actual upload path object
+	rErr := renameObject(xl.storageDisks, minioMetaTmpBucket, tempUploadIDPath, minioMetaMultipartBucket, uploadIDPath, xl.writeQuorum)
+	if rErr != nil {
 		return "", toObjectErr(rErr, minioMetaMultipartBucket, uploadIDPath)
 	}
 
 	initiated := time.Now().UTC()
 	// Create or update 'uploads.json'
-	if err := xl.addUploadID(bucket, object, uploadID, initiated); err != nil {
+	if err = xl.addUploadID(bucket, object, uploadID, initiated); err != nil {
 		return "", err
 	}
 	// Return success.
@@ -885,6 +885,13 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	if !xl.isUploadIDExists(bucket, object, uploadID) {
 		return ObjectInfo{}, traceError(InvalidUploadID{UploadID: uploadID})
 	}
+
+	// Check if an object is present as one of the parent dir.
+	// -- FIXME. (needs a new kind of lock).
+	if xl.parentDirIsObject(bucket, path.Dir(object)) {
+		return ObjectInfo{}, toObjectErr(traceError(errFileAccessDenied), bucket, object)
+	}
+
 	// Calculate s3 compatible md5sum for complete multipart.
 	s3MD5, err := getCompleteMultipartMD5(parts)
 	if err != nil {
@@ -964,11 +971,6 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 		}
 	}
 
-	// Check if an object is present as one of the parent dir.
-	if xl.parentDirIsObject(bucket, path.Dir(object)) {
-		return ObjectInfo{}, toObjectErr(traceError(errFileAccessDenied), bucket, object)
-	}
-
 	// Save the final object size and modtime.
 	xlMeta.Stat.Size = objectSize
 	xlMeta.Stat.ModTime = time.Now().UTC()
@@ -990,6 +992,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	if err = writeUniqueXLMetadata(onlineDisks, minioMetaTmpBucket, tempUploadIDPath, partsMetadata, xl.writeQuorum); err != nil {
 		return ObjectInfo{}, toObjectErr(err, minioMetaTmpBucket, tempUploadIDPath)
 	}
+
 	rErr := commitXLMetadata(onlineDisks, minioMetaTmpBucket, tempUploadIDPath, minioMetaMultipartBucket, uploadIDPath, xl.writeQuorum)
 	if rErr != nil {
 		return ObjectInfo{}, toObjectErr(rErr, minioMetaMultipartBucket, uploadIDPath)
@@ -1008,13 +1011,17 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 		}
 	}()
 
-	// Rename if an object already exists to temporary location.
-	uniqueID := mustGetUUID()
 	if xl.isObject(bucket, object) {
+		// Rename if an object already exists to temporary location.
+		newUniqueID := mustGetUUID()
+
+		// Delete success renamed object.
+		defer xl.deleteObject(minioMetaTmpBucket, newUniqueID)
+
 		// NOTE: Do not use online disks slice here.
 		// The reason is that existing object should be purged
 		// regardless of `xl.json` status and rolled back in case of errors.
-		err = renameObject(xl.storageDisks, bucket, object, minioMetaTmpBucket, uniqueID, xl.writeQuorum)
+		err = renameObject(xl.storageDisks, bucket, object, minioMetaTmpBucket, newUniqueID, xl.writeQuorum)
 		if err != nil {
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
@@ -1037,9 +1044,6 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	if err = renameObject(onlineDisks, minioMetaMultipartBucket, uploadIDPath, bucket, object, xl.writeQuorum); err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
-
-	// Delete the previously successfully renamed object.
-	xl.deleteObject(minioMetaTmpBucket, uniqueID)
 
 	// Hold the lock so that two parallel
 	// complete-multipart-uploads do not leave a stale

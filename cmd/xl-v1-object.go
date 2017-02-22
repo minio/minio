@@ -439,11 +439,25 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	// a slash separator, we treat it like a valid operation and
 	// return success.
 	if isObjectDir(object, size) {
+		// Check if an object is present as one of the parent dir.
+		// -- FIXME. (needs a new kind of lock).
+		if xl.parentDirIsObject(bucket, path.Dir(object)) {
+			return ObjectInfo{}, toObjectErr(traceError(errFileAccessDenied), bucket, object)
+		}
 		return dirObjectInfo(bucket, object, size, metadata), nil
 	}
+
+	// Validate put object input args.
 	if err = checkPutObjectArgs(bucket, object, xl); err != nil {
 		return ObjectInfo{}, err
 	}
+
+	// Check if an object is present as one of the parent dir.
+	// -- FIXME. (needs a new kind of lock).
+	if xl.parentDirIsObject(bucket, path.Dir(object)) {
+		return ObjectInfo{}, toObjectErr(traceError(errFileAccessDenied), bucket, object)
+	}
+
 	// No metadata is set, allocate a new one.
 	if metadata == nil {
 		metadata = make(map[string]string)
@@ -526,7 +540,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 		// Compute part name
 		partName := "part." + strconv.Itoa(partIdx)
 		// Compute the path of current part
-		tempErasureObj := path.Join(uniqueID, partName)
+		tempErasureObj := pathJoin(uniqueID, partName)
 
 		// Calculate the size of the current part, if size is unknown, curPartSize wil be unknown too.
 		// allowEmptyPart will always be true if this is the first part and false otherwise.
@@ -645,16 +659,11 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 		}
 	}
 
-	// Check if an object is present as one of the parent dir.
-	// -- FIXME. (needs a new kind of lock).
-	if xl.parentDirIsObject(bucket, path.Dir(object)) {
-		return ObjectInfo{}, toObjectErr(traceError(errFileAccessDenied), bucket, object)
-	}
-
-	// Rename if an object already exists to temporary location.
-	newUniqueID := mustGetUUID()
 	if xl.isObject(bucket, object) {
-		// Delete the temporary copy of the object that existed before this PutObject request.
+		// Rename if an object already exists to temporary location.
+		newUniqueID := mustGetUUID()
+
+		// Delete successfully renamed object.
 		defer xl.deleteObject(minioMetaTmpBucket, newUniqueID)
 
 		// NOTE: Do not use online disks slice here.
