@@ -20,8 +20,7 @@ import humanize from 'humanize'
 import connect from 'react-redux/lib/components/connect'
 import Dropdown from 'react-bootstrap/lib/Dropdown'
 
-
-let ObjectsList = ({objects, currentPath, selectPrefix, dataType, showDeleteConfirmation, shareObject, loadPath}) => {
+let ObjectsList = ({objects, currentPath, selectPrefix, dataType, showDeleteConfirmation, shareObject, loadPath, checkObject, checkedObjectsArray}) => {
   const list = objects.map((object, i) => {
     let size = object.name.endsWith('/') ? '-' : humanize.filesize(object.size)
     let lastModified = object.name.endsWith('/') ? '-' : Moment(object.lastModified).format('lll')
@@ -39,20 +38,30 @@ let ObjectsList = ({objects, currentPath, selectPrefix, dataType, showDeleteConf
                         </Dropdown.Menu>
                       </Dropdown>
     }
+
+    let activeClass = checkedObjectsArray.indexOf(object.name) > -1 ? ' fesl-row-selected' : ''
+
     return (
-      <div key={ i } className={ "fesl-row " + loadingClass } data-type={ dataType(object.name, object.contentType) }>
-        <div className="fesl-item fi-name">
+      <div key={ i } className={ "fesl-row " + loadingClass + activeClass } data-type={ dataType(object.name, object.contentType) }>
+        <div className="fesl-item fesl-item-icon">
+          <div className="fi-select">
+            <input type="checkbox" name={ object.name } onChange={ (e) => checkObject(e, object.name) } />
+            <i className="fis-icon"></i>
+            <i className="fis-helper"></i>
+          </div>
+        </div>
+        <div className="fesl-item fesl-item-name">
           <a href="" onClick={ (e) => selectPrefix(e, `${currentPath}${object.name}`) }>
             { object.name }
           </a>
         </div>
-        <div className="fesl-item fi-size">
+        <div className="fesl-item fesl-item-size">
           { size }
         </div>
-        <div className="fesl-item fi-modified">
+        <div className="fesl-item fesl-item-modified">
           { lastModified }
         </div>
-        <div className="fesl-item fi-actions">
+        <div className="fesl-item fesl-item-actions">
           { actionButtons }
         </div>
       </div>

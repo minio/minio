@@ -56,7 +56,8 @@ export default (state = {
       url: '',
       expiry: 604800
     },
-    prefixWritable: false
+    prefixWritable: false,
+    checkedObjects: []
   }, action) => {
   let newState = Object.assign({}, state)
   switch (action.type) {
@@ -185,6 +186,20 @@ export default (state = {
       if (idx == -1) break
       newState.objects = [...newState.objects.slice(0, idx), ...newState.objects.slice(idx + 1)]
       break
+
+    case actions.CHECKED_OBJECTS_ADD:
+      newState.checkedObjects = [...newState.checkedObjects, action.objectName]
+      break
+    case actions.CHECKED_OBJECTS_REMOVE:
+      let index = newState.checkedObjects.indexOf(action.objectName)
+      if (index == -1) break
+      newState.checkedObjects = [...newState.checkedObjects.slice(0, index), ...newState.checkedObjects.slice(index + 1)]
+      break
+    case actions.CHECKED_OBJECTS_RESET:
+      newState.checkedObjects = []
+      break
   }
+  console.log(newState.checkedObjects)
+
   return newState
 }
