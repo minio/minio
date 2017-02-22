@@ -83,6 +83,7 @@ const (
 	ErrInvalidPartOrder
 	ErrAuthorizationHeaderMalformed
 	ErrMalformedPOSTRequest
+	ErrPOSTFileRequired
 	ErrSignatureVersionNotSupported
 	ErrBucketNotEmpty
 	ErrAllAccessDisabled
@@ -333,6 +334,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "The body of your POST request is not well-formed multipart/form-data.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrPOSTFileRequired: {
+		Code:           "InvalidArgument",
+		Description:    "POST requires exactly one file upload per request.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	ErrSignatureVersionNotSupported: {
 		Code:           "InvalidRequest",
 		Description:    "The authorization mechanism you have provided is not supported. Please use AWS4-HMAC-SHA256.",
@@ -483,7 +489,7 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	},
 	ErrInvalidDuration: {
 		Code:           "InvalidDuration",
-		Description:    "Relative duration provided in the request is invalid.",
+		Description:    "Duration provided in the request is invalid.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 
@@ -606,6 +612,14 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrSignatureDoesNotMatch
 	case errContentSHA256Mismatch:
 		apiErr = ErrContentSHA256Mismatch
+	case errDataTooLarge:
+		apiErr = ErrEntityTooLarge
+	case errDataTooSmall:
+		apiErr = ErrEntityTooSmall
+	case errInvalidAccessKeyLength:
+		apiErr = ErrAdminInvalidAccessKey
+	case errInvalidSecretKeyLength:
+		apiErr = ErrAdminInvalidSecretKey
 	}
 
 	if apiErr != ErrNone {

@@ -22,7 +22,7 @@ import connect from 'react-redux/lib/components/connect'
 
 import logo from '../../img/logo.svg'
 
-let SideBar = ({visibleBuckets, loadBucket, currentBucket, selectBucket, searchBuckets, landingPage, sidebarStatus, clickOutside, showPolicy}) => {
+let SideBar = ({visibleBuckets, loadBucket, currentBucket, selectBucket, searchBuckets, sidebarStatus, clickOutside, showPolicy}) => {
 
   const list = visibleBuckets.map((bucket, i) => {
     return <li className={ classNames({
@@ -44,8 +44,8 @@ let SideBar = ({visibleBuckets, loadBucket, currentBucket, selectBucket, searchB
                          'toggled': sidebarStatus
                        }) }>
         <div className="fes-header clearfix hidden-sm hidden-xs">
-          <a href="" onClick={ landingPage }><img src={ logo } alt="" />
-            <h2>Minio Browser</h2></a>
+          <img src={ logo } alt="" />
+          <h2>Minio Browser</h2>
         </div>
         <div className="fes-list">
           <div className="input-group ig-dark ig-left ig-search" style={ { display: web.LoggedIn() ? 'block' : 'none' } }>

@@ -24,7 +24,6 @@ import (
 	slashpath "path"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -153,11 +152,20 @@ func getDiskInfo(diskPath string) (di disk.Info, err error) {
 	return di, err
 }
 
+// List of operating systems where we ignore disk space
+// verification.
+var ignoreDiskFreeOS = []string{
+	globalWindowsOSName,
+	globalNetBSDOSName,
+	globalSolarisOSName,
+}
+
 // checkDiskFree verifies if disk path has sufficient minimum free disk space and files.
 func (s *posix) checkDiskFree() (err error) {
 	// We don't validate disk space or inode utilization on windows.
 	// Each windows calls to 'GetVolumeInformationW' takes around 3-5seconds.
-	if runtime.GOOS == globalWindowsOSName {
+	// And StatFS is not supported by Go for solaris and netbsd.
+	if contains(ignoreDiskFreeOS, runtime.GOOS) {
 		return nil
 	}
 
@@ -310,7 +318,7 @@ func listVols(dirPath string) ([]VolInfo, error) {
 	}
 	var volsInfo []VolInfo
 	for _, entry := range entries {
-		if !strings.HasSuffix(entry, slashSeparator) || !isValidVolname(slashpath.Clean(entry)) {
+		if !hasSuffix(entry, slashSeparator) || !isValidVolname(slashpath.Clean(entry)) {
 			// Skip if entry is neither a directory not a valid volume name.
 			continue
 		}
@@ -908,8 +916,8 @@ func (s *posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err e
 		}
 	}
 
-	srcIsDir := strings.HasSuffix(srcPath, slashSeparator)
-	dstIsDir := strings.HasSuffix(dstPath, slashSeparator)
+	srcIsDir := hasSuffix(srcPath, slashSeparator)
+	dstIsDir := hasSuffix(dstPath, slashSeparator)
 	// Either src and dst have to be directories or files, else return error.
 	if !(srcIsDir && dstIsDir || !srcIsDir && !dstIsDir) {
 		return errFileAccessDenied

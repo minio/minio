@@ -80,9 +80,6 @@ func TestRWLockedFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rlk.Size() != 0 {
-		t.Fatal("File size should be zero", rlk.Size())
-	}
 	isClosed := rlk.IsClosed()
 	if isClosed {
 		t.Fatal("File ref count shouldn't be zero")

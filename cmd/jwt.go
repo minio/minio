@@ -38,12 +38,15 @@ const (
 	defaultInterNodeJWTExpiry = 100 * 365 * 24 * time.Hour
 )
 
-var errInvalidAccessKeyLength = errors.New("Invalid access key, access key should be 5 to 20 characters in length")
-var errInvalidSecretKeyLength = errors.New("Invalid secret key, secret key should be 8 to 40 characters in length")
+var (
+	errInvalidAccessKeyLength = errors.New("Invalid access key, access key should be 5 to 20 characters in length")
+	errInvalidSecretKeyLength = errors.New("Invalid secret key, secret key should be 8 to 40 characters in length")
 
-var errInvalidAccessKeyID = errors.New("The access key ID you provided does not exist in our records")
-var errAuthentication = errors.New("Authentication failed, check your access credentials")
-var errNoAuthToken = errors.New("JWT token missing")
+	errInvalidAccessKeyID   = errors.New("The access key ID you provided does not exist in our records")
+	errChangeCredNotAllowed = errors.New("Changing access key and secret key not allowed")
+	errAuthentication       = errors.New("Authentication failed, check your access credentials")
+	errNoAuthToken          = errors.New("JWT token missing")
+)
 
 func authenticateJWT(accessKey, secretKey string, expiry time.Duration) (string, error) {
 	// Trim spaces.
@@ -65,9 +68,15 @@ func authenticateJWT(accessKey, secretKey string, expiry time.Duration) (string,
 
 	// Validate secret key.
 	// Using bcrypt to avoid timing attacks.
-	hashedSecretKey, _ := bcrypt.GenerateFromPassword([]byte(serverCred.SecretKey), bcrypt.DefaultCost)
-	if bcrypt.CompareHashAndPassword(hashedSecretKey, []byte(secretKey)) != nil {
-		return "", errAuthentication
+	if serverCred.secretKeyHash != nil {
+		if bcrypt.CompareHashAndPassword(serverCred.secretKeyHash, []byte(secretKey)) != nil {
+			return "", errAuthentication
+		}
+	} else {
+		// Secret key hash not set then generate and validate.
+		if bcrypt.CompareHashAndPassword(mustGetHashedSecretKey(serverCred.SecretKey), []byte(secretKey)) != nil {
+			return "", errAuthentication
+		}
 	}
 
 	utcNow := time.Now().UTC()
@@ -107,13 +116,13 @@ func isAuthTokenValid(tokenString string) bool {
 }
 
 func isHTTPRequestValid(req *http.Request) bool {
-	return webReqestAuthenticate(req) == nil
+	return webRequestAuthenticate(req) == nil
 }
 
 // Check if the request is authenticated.
 // Returns nil if the request is authenticated. errNoAuthToken if token missing.
 // Returns errAuthentication for all other errors.
-func webReqestAuthenticate(req *http.Request) error {
+func webRequestAuthenticate(req *http.Request) error {
 	jwtToken, err := jwtreq.ParseFromRequest(req, jwtreq.AuthorizationHeaderExtractor, keyFuncCallback)
 	if err != nil {
 		if err == jwtreq.ErrNoTokenInRequest {

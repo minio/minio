@@ -37,7 +37,7 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	// List locks held on mybucket/myprefix older than 30s.
+	// List locks held on mybucket/myprefix for longer than 30s.
 	locksHeld, err := madmClnt.ListLocks("mybucket", "myprefix", time.Duration(30*time.Second))
 	if err != nil {
 		log.Fatalln(err)

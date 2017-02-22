@@ -35,7 +35,7 @@ type localFile struct {
 }
 
 func enableFileLogger() {
-	flogger := serverConfig.GetFileLogger()
+	flogger := serverConfig.Logger.GetFile()
 	if !flogger.Enable || flogger.Filename == "" {
 		return
 	}

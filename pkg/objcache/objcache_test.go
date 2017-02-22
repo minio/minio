@@ -20,7 +20,6 @@ package objcache
 import (
 	"bytes"
 	"io"
-	"io/ioutil"
 	"testing"
 	"time"
 )
@@ -173,7 +172,8 @@ func TestObjCache(t *testing.T) {
 		t.Errorf("Test case 4 expected to pass, failed instead %s", err)
 	}
 	// Reads everything stored for key "test".
-	cbytes, err := ioutil.ReadAll(r)
+	cbytes := make([]byte, 5)
+	_, err = r.ReadAt(cbytes, 0)
 	if err != nil {
 		t.Errorf("Test case 4 expected to pass, failed instead %s", err)
 	}

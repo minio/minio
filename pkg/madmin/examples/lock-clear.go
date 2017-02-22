@@ -37,7 +37,7 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	// Clear locks held on mybucket/myprefix older than olderThan seconds.
+	// Clear locks held on mybucket/myprefix for longer than 30s.
 	olderThan := time.Duration(30 * time.Second)
 	locksCleared, err := madmClnt.ClearLocks("mybucket", "myprefix", olderThan)
 	if err != nil {

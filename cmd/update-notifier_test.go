@@ -24,12 +24,11 @@ import (
 
 // Tests update notifier string builder.
 func TestUpdateNotifier(t *testing.T) {
-	updateMsg := minioUpdateStableURL
-	colorUpdateMsg := colorizeUpdateMessage(updateMsg, time.Duration(72*time.Hour))
-	if strings.Index(colorUpdateMsg, "minutes") == -1 {
+	colorUpdateMsg := colorizeUpdateMessage(minioReleaseURL, time.Duration(72*time.Hour))
+	if !strings.Contains(colorUpdateMsg, "minutes") {
 		t.Fatal("Duration string not found in colorized update message", colorUpdateMsg)
 	}
-	if strings.Index(colorUpdateMsg, updateMsg) == -1 {
-		t.Fatal("Update message not found in colorized update message", updateMsg)
+	if !strings.Contains(colorUpdateMsg, minioReleaseURL) {
+		t.Fatal("Update message not found in colorized update message", minioReleaseURL)
 	}
 }

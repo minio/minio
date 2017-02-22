@@ -20,7 +20,6 @@ import (
 	"net"
 	"net/url"
 	"runtime"
-	"strings"
 	"sync"
 	"time"
 
@@ -59,7 +58,7 @@ func isRemoteDisk(disk StorageAPI) bool {
 // if size == 0 and object ends with slashSeparator then
 // returns true.
 func isObjectDir(object string, size int64) bool {
-	return strings.HasSuffix(object, slashSeparator) && size == 0
+	return hasSuffix(object, slashSeparator) && size == 0
 }
 
 // Converts just bucket, object metadata into ObjectInfo datatype.
@@ -284,7 +283,7 @@ func cleanupDir(storage StorageAPI, volume, dirPath string) error {
 	var delFunc func(string) error
 	// Function to delete entries recursively.
 	delFunc = func(entryPath string) error {
-		if !strings.HasSuffix(entryPath, slashSeparator) {
+		if !hasSuffix(entryPath, slashSeparator) {
 			// Delete the file entry.
 			return traceError(storage.DeleteFile(volume, entryPath))
 		}

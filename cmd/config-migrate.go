@@ -855,7 +855,10 @@ func migrateV12ToV13() error {
 	}
 
 	// Copy over fields from V12 into V13 config struct
-	srvConfig := &serverConfigV13{}
+	srvConfig := &serverConfigV13{
+		Logger: &logger{},
+		Notify: &notifier{},
+	}
 	srvConfig.Version = "13"
 	srvConfig.Credential = cv12.Credential
 	srvConfig.Region = cv12.Region

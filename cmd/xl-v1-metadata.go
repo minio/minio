@@ -368,13 +368,12 @@ func writeUniqueXLMetadata(disks []StorageAPI, bucket, prefix string, xlMetas []
 	// Wait for all the routines.
 	wg.Wait()
 
-	// Do we have write quorum?.
-	if !isDiskQuorum(mErrs, quorum) {
+	err := reduceWriteQuorumErrs(mErrs, objectOpIgnoredErrs, quorum)
+	if errorCause(err) == errXLWriteQuorum {
 		// Delete all `xl.json` successfully renamed.
 		deleteAllXLMetadata(disks, bucket, prefix, mErrs)
-		return traceError(errXLWriteQuorum)
 	}
-	return reduceWriteQuorumErrs(mErrs, objectOpIgnoredErrs, quorum)
+	return err
 }
 
 // writeSameXLMetadata - write `xl.json` on all disks in order.
@@ -407,11 +406,10 @@ func writeSameXLMetadata(disks []StorageAPI, bucket, prefix string, xlMeta xlMet
 	// Wait for all the routines.
 	wg.Wait()
 
-	// Do we have write Quorum?.
-	if !isDiskQuorum(mErrs, writeQuorum) {
+	err := reduceWriteQuorumErrs(mErrs, objectOpIgnoredErrs, writeQuorum)
+	if errorCause(err) == errXLWriteQuorum {
 		// Delete all `xl.json` successfully renamed.
 		deleteAllXLMetadata(disks, bucket, prefix, mErrs)
-		return traceError(errXLWriteQuorum)
 	}
-	return reduceWriteQuorumErrs(mErrs, objectOpIgnoredErrs, writeQuorum)
+	return err
 }

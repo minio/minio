@@ -244,7 +244,7 @@ func getStorageInfo(disks []StorageAPI) StorageInfo {
 		Free:  validDisksInfo[0].Free * int64(onlineDisks) / 2,
 	}
 
-	storageInfo.Backend.Type = XL
+	storageInfo.Backend.Type = Erasure
 	storageInfo.Backend.OnlineDisks = onlineDisks
 	storageInfo.Backend.OfflineDisks = offlineDisks
 	return storageInfo

@@ -62,18 +62,12 @@ func (xl xlObjects) MakeBucket(bucket string) error {
 	// Wait for all make vol to finish.
 	wg.Wait()
 
-	// Do we have write quorum?.
-	if !isDiskQuorum(dErrs, xl.writeQuorum) {
+	err := reduceWriteQuorumErrs(dErrs, bucketOpIgnoredErrs, xl.writeQuorum)
+	if errorCause(err) == errXLWriteQuorum {
 		// Purge successfully created buckets if we don't have writeQuorum.
 		undoMakeBucket(xl.storageDisks, bucket)
-		return toObjectErr(traceError(errXLWriteQuorum), bucket)
 	}
-
-	// Verify we have any other errors which should undo make bucket.
-	if reducedErr := reduceWriteQuorumErrs(dErrs, bucketOpIgnoredErrs, xl.writeQuorum); reducedErr != nil {
-		return toObjectErr(reducedErr, bucket)
-	}
-	return nil
+	return toObjectErr(err, bucket)
 }
 
 func (xl xlObjects) undoDeleteBucket(bucket string) {
@@ -171,13 +165,7 @@ func (xl xlObjects) listBuckets() (bucketsInfo []BucketInfo, err error) {
 			// should take care of this.
 			var bucketsInfo []BucketInfo
 			for _, volInfo := range volsInfo {
-				// StorageAPI can send volume names which are incompatible
-				// with buckets, handle it and skip them.
-				if !IsValidBucketName(volInfo.Name) {
-					continue
-				}
-				// Ignore the volume special bucket.
-				if volInfo.Name == minioMetaBucket {
+				if isReservedOrInvalidBucket(volInfo.Name) {
 					continue
 				}
 				bucketsInfo = append(bucketsInfo, BucketInfo{
@@ -253,15 +241,9 @@ func (xl xlObjects) DeleteBucket(bucket string) error {
 	// Wait for all the delete vols to finish.
 	wg.Wait()
 
-	if !isDiskQuorum(dErrs, xl.writeQuorum) {
+	err := reduceWriteQuorumErrs(dErrs, bucketOpIgnoredErrs, xl.writeQuorum)
+	if errorCause(err) == errXLWriteQuorum {
 		xl.undoDeleteBucket(bucket)
-		return toObjectErr(traceError(errXLWriteQuorum), bucket)
 	}
-
-	if reducedErr := reduceWriteQuorumErrs(dErrs, bucketOpIgnoredErrs, xl.writeQuorum); reducedErr != nil {
-		return toObjectErr(reducedErr, bucket)
-	}
-
-	// Success.
-	return nil
+	return toObjectErr(err, bucket)
 }

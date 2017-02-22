@@ -21,6 +21,8 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"runtime"
+	"strings"
 
 	humanize "github.com/dustin/go-humanize"
 	mux "github.com/gorilla/mux"
@@ -63,12 +65,20 @@ func bucketPolicyActionMatch(action string, statement policyStatement) bool {
 
 // Match function matches wild cards in 'pattern' for resource.
 func resourceMatch(pattern, resource string) bool {
+	if runtime.GOOS == "windows" {
+		// For windows specifically make sure we are case insensitive.
+		return wildcard.Match(strings.ToLower(pattern), strings.ToLower(resource))
+	}
 	return wildcard.Match(pattern, resource)
 }
 
 // Match function matches wild cards in 'pattern' for action.
 func actionMatch(pattern, action string) bool {
 	return wildcard.MatchSimple(pattern, action)
+}
+
+func refererMatch(pattern, referer string) bool {
+	return wildcard.MatchSimple(pattern, referer)
 }
 
 // Verify if given resource matches with policy statement.
@@ -85,33 +95,74 @@ func bucketPolicyConditionMatch(conditions map[string]set.StringSet, statement p
 	// Supports following conditions.
 	// - StringEquals
 	// - StringNotEquals
+	// - StringLike
+	// - StringNotLike
 	//
 	// Supported applicable condition keys for each conditions.
 	// - s3:prefix
 	// - s3:max-keys
-	var conditionMatches = true
+	// - s3:aws-Referer
+
+	// The following loop evaluates the logical AND of all the
+	// conditions in the statement. Note: we can break out of the
+	// loop if and only if a condition evaluates to false.
 	for condition, conditionKeyVal := range statement.Conditions {
+		prefixConditon := conditionKeyVal["s3:prefix"]
+		maxKeyCondition := conditionKeyVal["s3:max-keys"]
 		if condition == "StringEquals" {
-			if !conditionKeyVal["s3:prefix"].Equals(conditions["prefix"]) {
-				conditionMatches = false
-				break
+			// If there is no condition with "s3:prefix" or "s3:max-keys" condition key
+			// then there is nothing to check condition against.
+			if !prefixConditon.IsEmpty() && !prefixConditon.Equals(conditions["prefix"]) {
+				return false
 			}
-			if !conditionKeyVal["s3:max-keys"].Equals(conditions["max-keys"]) {
-				conditionMatches = false
-				break
+			if !maxKeyCondition.IsEmpty() && !maxKeyCondition.Equals(conditions["max-keys"]) {
+				return false
 			}
 		} else if condition == "StringNotEquals" {
-			if !conditionKeyVal["s3:prefix"].Equals(conditions["prefix"]) {
-				conditionMatches = false
-				break
+			// If there is no condition with "s3:prefix" or "s3:max-keys" condition key
+			// then there is nothing to check condition against.
+			if !prefixConditon.IsEmpty() && prefixConditon.Equals(conditions["prefix"]) {
+				return false
 			}
-			if !conditionKeyVal["s3:max-keys"].Equals(conditions["max-keys"]) {
-				conditionMatches = false
-				break
+			if !maxKeyCondition.IsEmpty() && maxKeyCondition.Equals(conditions["max-keys"]) {
+				return false
+			}
+		} else if condition == "StringLike" {
+			awsReferers := conditionKeyVal["aws:Referer"]
+			// Skip empty condition, it is trivially satisfied.
+			if awsReferers.IsEmpty() {
+				continue
+			}
+			// wildcard match of referer in statement was not empty.
+			// StringLike has a match, i.e, condition evaluates to true.
+			refererFound := false
+			for referer := range conditions["referer"] {
+				if !awsReferers.FuncMatch(refererMatch, referer).IsEmpty() {
+					refererFound = true
+					break
+				}
+			}
+			// No matching referer found, so the condition is false.
+			if !refererFound {
+				return false
+			}
+		} else if condition == "StringNotLike" {
+			awsReferers := conditionKeyVal["aws:Referer"]
+			// Skip empty condition, it is trivially satisfied.
+			if awsReferers.IsEmpty() {
+				continue
+			}
+			// wildcard match of referer in statement was not empty.
+			// StringNotLike has a match, i.e, condition evaluates to false.
+			for referer := range conditions["referer"] {
+				if !awsReferers.FuncMatch(refererMatch, referer).IsEmpty() {
+					return false
+				}
 			}
 		}
 	}
-	return conditionMatches
+
+	return true
 }
 
 // PutBucketPolicyHandler - PUT Bucket policy

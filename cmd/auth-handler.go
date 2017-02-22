@@ -63,7 +63,9 @@ func isRequestPostPolicySignatureV4(r *http.Request) bool {
 
 // Verify if the request has AWS Streaming Signature Version '4'. This is only valid for 'PUT' operation.
 func isRequestSignStreamingV4(r *http.Request) bool {
-	return r.Header.Get("x-amz-content-sha256") == streamingContentSHA256 && r.Method == httpPUT
+	return r.Header.Get("x-amz-content-sha256") == streamingContentSHA256 &&
+		r.Header.Get("content-encoding") == streamingContentEncoding &&
+		r.Method == httpPUT
 }
 
 // Authorization type.
@@ -125,7 +127,8 @@ func checkRequestAuthType(r *http.Request, bucket, policyAction, region string) 
 
 	if reqAuthType == authTypeAnonymous && policyAction != "" {
 		// http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
-		return enforceBucketPolicy(bucket, policyAction, r.URL)
+		return enforceBucketPolicy(bucket, policyAction, r.URL.Path,
+			r.Referer(), r.URL.Query())
 	}
 
 	// By default return ErrAccessDenied

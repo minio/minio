@@ -45,7 +45,7 @@ func registerS3PeerRPCRouter(mux *router.Router) error {
 		return traceError(err)
 	}
 
-	s3PeerRouter := mux.NewRoute().PathPrefix(reservedBucket).Subrouter()
+	s3PeerRouter := mux.NewRoute().PathPrefix(minioReservedBucketPath).Subrouter()
 	s3PeerRouter.Path(s3Path).Handler(s3PeerRPCServer)
 	return nil
 }

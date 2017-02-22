@@ -89,14 +89,7 @@ func RLockedOpenFile(path string) (*RLockedFile, error) {
 
 }
 
-// LockedFile represents a locked file, implements a helper
-// method Size(), represents the size of the underlying object.
+// LockedFile represents a locked file
 type LockedFile struct {
 	*os.File
-	size int64
-}
-
-// Size - size of the underlying locked file.
-func (l *LockedFile) Size() int64 {
-	return l.size
 }

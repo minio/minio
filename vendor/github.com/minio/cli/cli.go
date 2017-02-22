@@ -10,10 +10,12 @@
 //     app := cli.NewApp()
 //     app.Name = "greet"
 //     app.Usage = "say a greeting"
-//     app.Action = func(c *cli.Context) {
+//     app.Action = func(c *cli.Context) error {
 //       println("Greetings")
 //     }
 //
 //     app.Run(os.Args)
 //   }
 package cli
+
+//go:generate python ./generate-flag-types cli -i flag-types.json -o flag_generated.go

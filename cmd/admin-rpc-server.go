@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"errors"
 	"net/rpc"
 	"time"
@@ -37,15 +38,27 @@ type adminCmd struct {
 // ListLocksQuery - wraps ListLocks API's query values to send over RPC.
 type ListLocksQuery struct {
 	AuthRPCArgs
-	bucket  string
-	prefix  string
-	relTime time.Duration
+	bucket   string
+	prefix   string
+	duration time.Duration
 }
 
 // ListLocksReply - wraps ListLocks response over RPC.
 type ListLocksReply struct {
 	AuthRPCReply
 	volLocks []VolumeLockInfo
+}
+
+// UptimeReply - wraps the uptime response over RPC.
+type UptimeReply struct {
+	AuthRPCReply
+	Uptime time.Duration
+}
+
+// ConfigReply - wraps the server config response over RPC.
+type ConfigReply struct {
+	AuthRPCReply
+	Config []byte // json-marshalled bytes of serverConfigV13
 }
 
 // Restart - Restart this instance of minio server.
@@ -63,7 +76,7 @@ func (s *adminCmd) ListLocks(query *ListLocksQuery, reply *ListLocksReply) error
 	if err := query.IsAuthenticated(); err != nil {
 		return err
 	}
-	volLocks := listLocksInfo(query.bucket, query.prefix, query.relTime)
+	volLocks := listLocksInfo(query.bucket, query.prefix, query.duration)
 	*reply = ListLocksReply{volLocks: volLocks}
 	return nil
 }
@@ -105,6 +118,46 @@ func (s *adminCmd) ReInitDisks(args *AuthRPCArgs, reply *AuthRPCReply) error {
 	return nil
 }
 
+// Uptime - returns the time when object layer was initialized on this server.
+func (s *adminCmd) Uptime(args *AuthRPCArgs, reply *UptimeReply) error {
+	if err := args.IsAuthenticated(); err != nil {
+		return err
+	}
+
+	if globalBootTime.IsZero() {
+		return errServerNotInitialized
+	}
+
+	// N B The uptime is computed assuming that the system time is
+	// monotonic. This is not the case in time pkg in Go, see
+	// https://github.com/golang/go/issues/12914. This is expected
+	// to be fixed by go1.9.
+	*reply = UptimeReply{
+		Uptime: time.Now().UTC().Sub(globalBootTime),
+	}
+
+	return nil
+}
+
+// GetConfig - returns the config.json of this server.
+func (s *adminCmd) GetConfig(args *AuthRPCArgs, reply *ConfigReply) error {
+	if err := args.IsAuthenticated(); err != nil {
+		return err
+	}
+
+	if serverConfig == nil {
+		return errors.New("config not present")
+	}
+
+	jsonBytes, err := json.Marshal(serverConfig)
+	if err != nil {
+		return err
+	}
+
+	reply.Config = jsonBytes
+	return nil
+}
+
 // registerAdminRPCRouter - registers RPC methods for service status,
 // stop and restart commands.
 func registerAdminRPCRouter(mux *router.Router) error {
@@ -114,7 +167,7 @@ func registerAdminRPCRouter(mux *router.Router) error {
 	if err != nil {
 		return traceError(err)
 	}
-	adminRouter := mux.NewRoute().PathPrefix(reservedBucket).Subrouter()
+	adminRouter := mux.NewRoute().PathPrefix(minioReservedBucketPath).Subrouter()
 	adminRouter.Path(adminPath).Handler(adminRPCServer)
 	return nil
 }

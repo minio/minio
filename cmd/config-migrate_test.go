@@ -50,7 +50,7 @@ func TestServerConfigMigrateV1(t *testing.T) {
 	}
 
 	// Initialize server config and check again if everything is fine
-	if _, err := initConfig(); err != nil {
+	if err := loadConfig(credential{}); err != nil {
 		t.Fatalf("Unable to initialize from updated config file %s", err)
 	}
 }
@@ -143,7 +143,7 @@ func TestServerConfigMigrateV2toV12(t *testing.T) {
 	}
 
 	// Initialize server config and check again if everything is fine
-	if _, err := initConfig(); err != nil {
+	if err := loadConfig(credential{}); err != nil {
 		t.Fatalf("Unable to initialize from updated config file %s", err)
 	}
 
@@ -159,11 +159,6 @@ func TestServerConfigMigrateV2toV12(t *testing.T) {
 	}
 	if serverConfig.Credential.SecretKey != secretKey {
 		t.Fatalf("Secret key lost during migration, expected: %v, found: %v", secretKey, serverConfig.Credential.SecretKey)
-	}
-
-	// Initialize server config and check again if everything is fine
-	if _, err := initConfig(); err != nil {
-		t.Fatalf("Unable to initialize from updated config file %s", err)
 	}
 }
 

@@ -22,6 +22,33 @@ import (
 	"testing"
 )
 
+// TestFSWriteUploadJSON - tests for writeUploadJSON for FS
+func TestFSWriteUploadJSON(t *testing.T) {
+	// Prepare for tests
+	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
+	defer removeAll(disk)
+
+	obj := initFSObjects(disk, t)
+
+	bucketName := "bucket"
+	objectName := "object"
+
+	obj.MakeBucket(bucketName)
+	_, err := obj.NewMultipartUpload(bucketName, objectName, nil)
+	if err != nil {
+		t.Fatal("Unexpected err: ", err)
+	}
+
+	// newMultipartUpload will fail.
+	removeAll(disk) // Remove disk.
+	_, err = obj.NewMultipartUpload(bucketName, objectName, nil)
+	if err != nil {
+		if _, ok := errorCause(err).(BucketNotFound); !ok {
+			t.Fatal("Unexpected err: ", err)
+		}
+	}
+}
+
 // TestNewMultipartUploadFaultyDisk - test NewMultipartUpload with faulty disks
 func TestNewMultipartUploadFaultyDisk(t *testing.T) {
 	// Prepare for tests
