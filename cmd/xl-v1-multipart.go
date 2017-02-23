@@ -254,6 +254,8 @@ func commitXLMetadata(disks []StorageAPI, srcBucket, srcPrefix, dstBucket, dstPr
 			rErr := disk.RenameFile(srcBucket, srcJSONFile, dstBucket, dstJSONFile)
 			if rErr != nil {
 				mErrs[index] = traceError(rErr)
+				// Ignore disk which returned an error.
+				disks[index] = nil
 				return
 			}
 			mErrs[index] = nil

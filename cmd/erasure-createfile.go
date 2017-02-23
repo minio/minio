@@ -114,6 +114,7 @@ func appendFile(disks []StorageAPI, volume, path string, enBlocks [][]byte, hash
 	// Write encoded data to quorum disks in parallel.
 	for index, disk := range disks {
 		if disk == nil {
+			wErrs[index] = traceError(errDiskNotFound)
 			continue
 		}
 		wg.Add(1)
@@ -123,6 +124,8 @@ func appendFile(disks []StorageAPI, volume, path string, enBlocks [][]byte, hash
 			wErr := disk.AppendFile(volume, path, enBlocks[index])
 			if wErr != nil {
 				wErrs[index] = traceError(wErr)
+				// Ignore disk which returned an error.
+				disks[index] = nil
 				return
 			}
 
