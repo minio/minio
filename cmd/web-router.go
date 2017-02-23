@@ -47,9 +47,9 @@ const assetPrefix = "production"
 
 func assetFS() *assetfs.AssetFS {
 	return &assetfs.AssetFS{
-		Asset:     miniobrowser.Asset,
-		AssetDir:  miniobrowser.AssetDir,
-		AssetInfo: miniobrowser.AssetInfo,
+		Asset:     browser.Asset,
+		AssetDir:  browser.AssetDir,
+		AssetInfo: browser.AssetInfo,
 		Prefix:    assetPrefix,
 	}
 }

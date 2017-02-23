@@ -1,5 +1,5 @@
 /*
- * Minio Browser (C) 2016, 2017 Minio, Inc.
+ * Minio Cloud Storage (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@ let BrowserDropdown = ({fullScreenFunc, aboutFunc, settingsFunc, logoutFunc}) =>
         </Dropdown.Toggle>
         <Dropdown.Menu className="dropdown-menu-right">
           <li>
-            <a target="_blank" href="https://github.com/minio/miniobrowser">Github <i className="fa fa-github"></i></a>
+            <a target="_blank" href="https://github.com/minio/minio">Github <i className="fa fa-github"></i></a>
           </li>
           <li>
             <a href="" onClick={ fullScreenFunc }>Fullscreen <i className="fa fa-expand"></i></a>

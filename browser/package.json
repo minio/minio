@@ -1,5 +1,5 @@
 {
-  "name": "minio-browser",
+  "name": "browser",
   "version": "0.0.1",
   "description": "Minio Browser",
   "scripts": {
@@ -11,14 +11,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/minio/miniobrowser"
+    "url": "https://github.com/minio/minio"
   },
   "author": "Minio Inc",
   "license": "Apache-2.0",
   "bugs": {
-    "url": "https://github.com/minio/miniobrowser/issues"
+    "url": "https://github.com/minio/minio/issues"
   },
-  "homepage": "https://github.com/minio/miniobrowser",
+  "homepage": "https://github.com/minio/minio",
   "devDependencies": {
     "async": "^1.5.2",
     "babel-cli": "^6.14.0",
