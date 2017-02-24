@@ -58,7 +58,7 @@ func (xl xlObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string
 	}
 
 	// Reorder online disks based on erasure distribution order.
-	onlineDisks = getOrderedDisks(xlMeta.Erasure.Distribution, onlineDisks)
+	onlineDisks = shuffleDisks(onlineDisks, xlMeta.Erasure.Distribution)
 
 	// Length of the file to read.
 	length := xlMeta.Stat.Size
@@ -106,7 +106,7 @@ func (xl xlObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string
 	pipeReader, pipeWriter := io.Pipe()
 
 	go func() {
-		startOffset := int64(0) // Read the whole file.
+		var startOffset int64 // Read the whole file.
 		if gerr := xl.GetObject(srcBucket, srcObject, startOffset, length, pipeWriter); gerr != nil {
 			errorIf(gerr, "Unable to read %s of the object `%s/%s`.", srcBucket, srcObject)
 			pipeWriter.CloseWithError(toObjectErr(gerr, srcBucket, srcObject))
@@ -163,10 +163,10 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 	}
 
 	// Reorder online disks based on erasure distribution order.
-	onlineDisks = getOrderedDisks(xlMeta.Erasure.Distribution, onlineDisks)
+	onlineDisks = shuffleDisks(onlineDisks, xlMeta.Erasure.Distribution)
 
 	// Reorder parts metadata based on erasure distribution order.
-	metaArr = getOrderedPartsMetadata(xlMeta.Erasure.Distribution, metaArr)
+	metaArr = shufflePartsMetadata(metaArr, xlMeta.Erasure.Distribution)
 
 	// For negative length read everything.
 	if length < 0 {
@@ -242,7 +242,7 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 		}
 	}
 
-	totalBytesRead := int64(0)
+	var totalBytesRead int64
 
 	chunkSize := getChunkSize(xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks)
 	pool := bpool.NewBytePool(chunkSize, len(onlineDisks))
@@ -525,7 +525,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	}
 
 	// Order disks according to erasure distribution
-	onlineDisks := getOrderedDisks(partsMetadata[0].Erasure.Distribution, xl.storageDisks)
+	onlineDisks := shuffleDisks(xl.storageDisks, partsMetadata[0].Erasure.Distribution)
 
 	// Delete temporary object in the event of failure.
 	// If PutObject succeeded there would be no temporary
@@ -533,7 +533,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	defer xl.deleteObject(minioMetaTmpBucket, tempObj)
 
 	// Total size of the written object
-	sizeWritten := int64(0)
+	var sizeWritten int64
 
 	// Read data and split into parts - similar to multipart mechanism
 	for partIdx := 1; ; partIdx++ {
@@ -550,9 +550,10 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
 
-		// Prepare file for eventual optimization in the disk
+		// Hint the filesystem to pre-allocate one continuous large block.
+		// This is only an optimization.
 		if curPartSize > 0 {
-			// Calculate the real size of the part in the disk and prepare it for eventual optimization
+			// Calculate the real size of the part in the disk.
 			actualSize := xl.sizeOnDisk(curPartSize, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks)
 			for _, disk := range onlineDisks {
 				if disk != nil {

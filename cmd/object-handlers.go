@@ -133,7 +133,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// Get the object.
-	startOffset := int64(0)
+	var startOffset int64
 	length := objInfo.Size
 	if hrange != nil {
 		startOffset = hrange.offsetBegin
@@ -620,7 +620,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	}
 
 	// Get the object.
-	startOffset := int64(0)
+	var startOffset int64
 	length := objInfo.Size
 	if hrange != nil {
 		startOffset = hrange.offsetBegin

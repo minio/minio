@@ -116,7 +116,7 @@ func writeDataBlocks(dst io.Writer, enBlocks [][]byte, dataBlocks int, offset in
 	write := length
 
 	// Counter to increment total written.
-	totalWritten := int64(0)
+	var totalWritten int64
 
 	// Write all data blocks to dst.
 	for _, block := range enBlocks[:dataBlocks] {
@@ -180,7 +180,7 @@ func copyBuffer(writer io.Writer, disk StorageAPI, volume string, path string, b
 	}
 
 	// Starting offset for Reading the file.
-	startOffset := int64(0)
+	var startOffset int64
 
 	// Read until io.EOF.
 	for {
