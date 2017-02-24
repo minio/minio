@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"path"
 	"testing"
-	"time"
 )
 
 type TestRPCS3PeerSuite struct {
@@ -62,7 +61,7 @@ func TestS3PeerRPC(t *testing.T) {
 // Test S3 RPC handlers
 func (s *TestRPCS3PeerSuite) testS3PeerRPC(t *testing.T) {
 	// Validate for invalid token.
-	args := AuthRPCArgs{AuthToken: "garbage", RequestTime: time.Now().UTC()}
+	args := AuthRPCArgs{AuthToken: "garbage"}
 	rclient := newRPCClient(s.testAuthConf.serverAddr, s.testAuthConf.serviceEndpoint, false)
 	defer rclient.Close()
 	err := rclient.Call("S3.SetBucketNotificationPeer", &args, &AuthRPCReply{})

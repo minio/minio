@@ -98,33 +98,28 @@ func TestStorageRPCInvalidToken(t *testing.T) {
 	}
 	// 1. DiskInfoHandler
 	diskInfoReply := &disk.Info{}
-	badAuthRPCArgs.RequestTime = time.Now().UTC()
 	err = storageRPC.DiskInfoHandler(&badAuthRPCArgs, diskInfoReply)
 	errorIfInvalidToken(t, err)
 
 	// 2. MakeVolHandler
 	makeVolArgs := &badGenericVolArgs
-	makeVolArgs.AuthRPCArgs.RequestTime = time.Now().UTC()
 	makeVolReply := &AuthRPCReply{}
 	err = storageRPC.MakeVolHandler(makeVolArgs, makeVolReply)
 	errorIfInvalidToken(t, err)
 
 	// 3. ListVolsHandler
 	listVolReply := &ListVolsReply{}
-	badAuthRPCArgs.RequestTime = time.Now().UTC()
 	err = storageRPC.ListVolsHandler(&badAuthRPCArgs, listVolReply)
 	errorIfInvalidToken(t, err)
 
 	// 4. StatVolHandler
 	statVolReply := &VolInfo{}
 	statVolArgs := &badGenericVolArgs
-	statVolArgs.AuthRPCArgs.RequestTime = time.Now().UTC()
 	err = storageRPC.StatVolHandler(statVolArgs, statVolReply)
 	errorIfInvalidToken(t, err)
 
 	// 5. DeleteVolHandler
 	deleteVolArgs := &badGenericVolArgs
-	deleteVolArgs.AuthRPCArgs.RequestTime = time.Now().UTC()
 	deleteVolReply := &AuthRPCReply{}
 	err = storageRPC.DeleteVolHandler(deleteVolArgs, deleteVolReply)
 	errorIfInvalidToken(t, err)
@@ -133,7 +128,6 @@ func TestStorageRPCInvalidToken(t *testing.T) {
 	statFileArgs := &StatFileArgs{
 		AuthRPCArgs: badAuthRPCArgs,
 	}
-	statFileArgs.AuthRPCArgs.RequestTime = time.Now().UTC()
 	statReply := &FileInfo{}
 	err = storageRPC.StatFileHandler(statFileArgs, statReply)
 	errorIfInvalidToken(t, err)
@@ -142,7 +136,6 @@ func TestStorageRPCInvalidToken(t *testing.T) {
 	listDirArgs := &ListDirArgs{
 		AuthRPCArgs: badAuthRPCArgs,
 	}
-	listDirArgs.AuthRPCArgs.RequestTime = time.Now().UTC()
 	listDirReply := &[]string{}
 	err = storageRPC.ListDirHandler(listDirArgs, listDirReply)
 	errorIfInvalidToken(t, err)
@@ -151,13 +144,11 @@ func TestStorageRPCInvalidToken(t *testing.T) {
 	readFileArgs := &ReadFileArgs{
 		AuthRPCArgs: badAuthRPCArgs,
 	}
-	readFileArgs.AuthRPCArgs.RequestTime = time.Now().UTC()
 	readFileReply := &[]byte{}
 	err = storageRPC.ReadAllHandler(readFileArgs, readFileReply)
 	errorIfInvalidToken(t, err)
 
 	// 9. ReadFileHandler
-	readFileArgs.AuthRPCArgs.RequestTime = time.Now().UTC()
 	err = storageRPC.ReadFileHandler(readFileArgs, readFileReply)
 	errorIfInvalidToken(t, err)
 
@@ -165,7 +156,6 @@ func TestStorageRPCInvalidToken(t *testing.T) {
 	prepFileArgs := &PrepareFileArgs{
 		AuthRPCArgs: badAuthRPCArgs,
 	}
-	prepFileArgs.AuthRPCArgs.RequestTime = time.Now().UTC()
 	prepFileReply := &AuthRPCReply{}
 	err = storageRPC.PrepareFileHandler(prepFileArgs, prepFileReply)
 	errorIfInvalidToken(t, err)
@@ -174,7 +164,6 @@ func TestStorageRPCInvalidToken(t *testing.T) {
 	appendArgs := &AppendFileArgs{
 		AuthRPCArgs: badAuthRPCArgs,
 	}
-	appendArgs.AuthRPCArgs.RequestTime = time.Now().UTC()
 	appendReply := &AuthRPCReply{}
 	err = storageRPC.AppendFileHandler(appendArgs, appendReply)
 	errorIfInvalidToken(t, err)
@@ -183,7 +172,6 @@ func TestStorageRPCInvalidToken(t *testing.T) {
 	delFileArgs := &DeleteFileArgs{
 		AuthRPCArgs: badAuthRPCArgs,
 	}
-	delFileArgs.AuthRPCArgs.RequestTime = time.Now().UTC()
 	delFileRely := &AuthRPCReply{}
 	err = storageRPC.DeleteFileHandler(delFileArgs, delFileRely)
 	errorIfInvalidToken(t, err)
@@ -192,7 +180,6 @@ func TestStorageRPCInvalidToken(t *testing.T) {
 	renameArgs := &RenameFileArgs{
 		AuthRPCArgs: badAuthRPCArgs,
 	}
-	renameArgs.AuthRPCArgs.RequestTime = time.Now().UTC()
 	renameReply := &AuthRPCReply{}
 	err = storageRPC.RenameFileHandler(renameArgs, renameReply)
 	errorIfInvalidToken(t, err)

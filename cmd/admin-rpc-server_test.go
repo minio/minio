@@ -53,7 +53,7 @@ func testAdminCmd(cmd cmdType, t *testing.T) {
 		<-globalServiceSignalCh
 	}()
 
-	ga := AuthRPCArgs{AuthToken: reply.AuthToken, RequestTime: time.Now().UTC()}
+	ga := AuthRPCArgs{AuthToken: reply.AuthToken}
 	genReply := AuthRPCReply{}
 	switch cmd {
 	case restartCmd:
@@ -108,8 +108,7 @@ func TestReInitDisks(t *testing.T) {
 	}
 
 	authArgs := AuthRPCArgs{
-		AuthToken:   reply.AuthToken,
-		RequestTime: time.Now().UTC(),
+		AuthToken: reply.AuthToken,
 	}
 	authReply := AuthRPCReply{}
 
@@ -134,8 +133,7 @@ func TestReInitDisks(t *testing.T) {
 	}
 
 	authArgs = AuthRPCArgs{
-		AuthToken:   fsReply.AuthToken,
-		RequestTime: time.Now().UTC(),
+		AuthToken: fsReply.AuthToken,
 	}
 	authReply = AuthRPCReply{}
 	// Attempt ReInitDisks service on a FS backend.
@@ -171,8 +169,7 @@ func TestGetConfig(t *testing.T) {
 	}
 
 	authArgs := AuthRPCArgs{
-		AuthToken:   reply.AuthToken,
-		RequestTime: time.Now().UTC(),
+		AuthToken: reply.AuthToken,
 	}
 
 	configReply := ConfigReply{}
