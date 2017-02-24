@@ -371,9 +371,9 @@ func healObject(storageDisks []StorageAPI, bucket string, object string, quorum 
 	}
 
 	// Reorder so that we have data disks first and parity disks next.
-	latestDisks = getOrderedDisks(latestMeta.Erasure.Distribution, latestDisks)
-	outDatedDisks = getOrderedDisks(latestMeta.Erasure.Distribution, outDatedDisks)
-	partsMetadata = getOrderedPartsMetadata(latestMeta.Erasure.Distribution, partsMetadata)
+	latestDisks = shuffleDisks(latestDisks, latestMeta.Erasure.Distribution)
+	outDatedDisks = shuffleDisks(outDatedDisks, latestMeta.Erasure.Distribution)
+	partsMetadata = shufflePartsMetadata(partsMetadata, latestMeta.Erasure.Distribution)
 
 	// We write at temporary location and then rename to fianal location.
 	tmpID := mustGetUUID()

@@ -544,7 +544,7 @@ func (xl xlObjects) CopyObjectPart(srcBucket, srcObject, dstBucket, dstObject, u
 	pipeReader, pipeWriter := io.Pipe()
 
 	go func() {
-		startOffset := int64(0) // Read the whole file.
+		var startOffset int64 // Read the whole file.
 		if gerr := xl.GetObject(srcBucket, srcObject, startOffset, length, pipeWriter); gerr != nil {
 			errorIf(gerr, "Unable to read %s of the object `%s/%s`.", srcBucket, srcObject)
 			pipeWriter.CloseWithError(toObjectErr(gerr, srcBucket, srcObject))
@@ -607,8 +607,7 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 		return PartInfo{}, err
 	}
 
-	onlineDisks = getOrderedDisks(xlMeta.Erasure.Distribution, onlineDisks)
-	_ = getOrderedPartsMetadata(xlMeta.Erasure.Distribution, partsMetadata)
+	onlineDisks = shuffleDisks(onlineDisks, xlMeta.Erasure.Distribution)
 
 	// Need a unique name for the part being written in minioMetaBucket to
 	// accommodate concurrent PutObjectPart requests
@@ -919,10 +918,10 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	}
 
 	// Order online disks in accordance with distribution order.
-	onlineDisks = getOrderedDisks(xlMeta.Erasure.Distribution, onlineDisks)
+	onlineDisks = shuffleDisks(onlineDisks, xlMeta.Erasure.Distribution)
 
 	// Order parts metadata in accordance with distribution order.
-	partsMetadata = getOrderedPartsMetadata(xlMeta.Erasure.Distribution, partsMetadata)
+	partsMetadata = shufflePartsMetadata(partsMetadata, xlMeta.Erasure.Distribution)
 
 	// Save current xl meta for validation.
 	var currentXLMeta = xlMeta

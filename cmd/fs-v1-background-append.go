@@ -210,7 +210,7 @@ func (fs fsObjects) appendParts(bucket, object, uploadID string, info bgAppendPa
 func (fs fsObjects) appendPart(bucket, object, uploadID string, part objectPartInfo, buf []byte) error {
 	partPath := pathJoin(fs.fsPath, minioMetaMultipartBucket, bucket, object, uploadID, part.Name)
 
-	offset := int64(0)
+	var offset int64
 	// Read each file part to start writing to the temporary concatenated object.
 	file, size, err := fsOpenFile(partPath, offset)
 	if err != nil {

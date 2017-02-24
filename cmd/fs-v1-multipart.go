@@ -463,7 +463,7 @@ func (fs fsObjects) CopyObjectPart(srcBucket, srcObject, dstBucket, dstObject, u
 	pipeReader, pipeWriter := io.Pipe()
 
 	go func() {
-		startOffset := int64(0) // Read the whole file.
+		var startOffset int64 // Read the whole file.
 		if gerr := fs.GetObject(srcBucket, srcObject, startOffset, length, pipeWriter); gerr != nil {
 			errorIf(gerr, "Unable to read %s/%s.", srcBucket, srcObject)
 			pipeWriter.CloseWithError(gerr)
@@ -864,7 +864,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 			multipartPartFile := pathJoin(fs.fsPath, minioMetaMultipartBucket, uploadIDPath, partSuffix)
 
 			var reader io.ReadCloser
-			offset := int64(0)
+			var offset int64
 			reader, _, err = fsOpenFile(multipartPartFile, offset)
 			if err != nil {
 				fs.rwPool.Close(fsMetaPathMultipart)

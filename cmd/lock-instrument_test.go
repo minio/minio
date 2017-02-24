@@ -653,14 +653,14 @@ func TestNsLockMapDeleteLockInfoEntryForOps(t *testing.T) {
 	} else {
 		t.Fatalf("Entry for <volume> %s, <path> %s should have existed. ", param.volume, param.path)
 	}
-	if globalNSMutex.counters.granted != int64(0) {
-		t.Errorf("Expected the count of total running locks to be %v, but got %v", int64(0), globalNSMutex.counters.granted)
+	if globalNSMutex.counters.granted != 0 {
+		t.Errorf("Expected the count of total running locks to be %v, but got %v", 0, globalNSMutex.counters.granted)
 	}
-	if globalNSMutex.counters.blocked != int64(0) {
-		t.Errorf("Expected the count of total blocked locks to be %v, but got %v", int64(0), globalNSMutex.counters.blocked)
+	if globalNSMutex.counters.blocked != 0 {
+		t.Errorf("Expected the count of total blocked locks to be %v, but got %v", 0, globalNSMutex.counters.blocked)
 	}
-	if globalNSMutex.counters.total != int64(0) {
-		t.Errorf("Expected the count of all locks to be %v, but got %v", int64(0), globalNSMutex.counters.total)
+	if globalNSMutex.counters.total != 0 {
+		t.Errorf("Expected the count of all locks to be %v, but got %v", 0, globalNSMutex.counters.total)
 	}
 }
 
@@ -723,13 +723,13 @@ func TestNsLockMapDeleteLockInfoEntryForVolumePath(t *testing.T) {
 		t.Fatalf("Entry for <volume> %s, <path> %s should have been deleted. ", param.volume, param.path)
 	}
 	// The lock count values should be 0.
-	if globalNSMutex.counters.granted != int64(0) {
-		t.Errorf("Expected the count of total running locks to be %v, but got %v", int64(0), globalNSMutex.counters.granted)
+	if globalNSMutex.counters.granted != 0 {
+		t.Errorf("Expected the count of total running locks to be %v, but got %v", 0, globalNSMutex.counters.granted)
 	}
-	if globalNSMutex.counters.blocked != int64(0) {
-		t.Errorf("Expected the count of total blocked locks to be %v, but got %v", int64(0), globalNSMutex.counters.blocked)
+	if globalNSMutex.counters.blocked != 0 {
+		t.Errorf("Expected the count of total blocked locks to be %v, but got %v", 0, globalNSMutex.counters.blocked)
 	}
-	if globalNSMutex.counters.total != int64(0) {
-		t.Errorf("Expected the count of all locks to be %v, but got %v", int64(0), globalNSMutex.counters.total)
+	if globalNSMutex.counters.total != 0 {
+		t.Errorf("Expected the count of all locks to be %v, but got %v", 0, globalNSMutex.counters.total)
 	}
 }

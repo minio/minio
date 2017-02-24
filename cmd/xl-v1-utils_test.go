@@ -383,3 +383,51 @@ func TestGetPartSizeFromIdx(t *testing.T) {
 		}
 	}
 }
+
+func TestShuffleDisks(t *testing.T) {
+	nDisks := 16
+	disks, err := getRandomDisks(nDisks)
+	if err != nil {
+		t.Fatal(err)
+	}
+	endpoints, err := parseStorageEndpoints(disks)
+	if err != nil {
+		t.Fatal(err)
+	}
+	objLayer, _, err := initObjectLayer(endpoints)
+	if err != nil {
+		removeRoots(disks)
+		t.Fatal(err)
+	}
+	defer removeRoots(disks)
+	xl := objLayer.(*xlObjects)
+	testShuffleDisks(t, xl)
+}
+
+// Test shuffleDisks which returns shuffled slice of disks for their actual distribution.
+func testShuffleDisks(t *testing.T, xl *xlObjects) {
+	disks := xl.storageDisks
+	distribution := []int{16, 14, 12, 10, 8, 6, 4, 2, 1, 3, 5, 7, 9, 11, 13, 15}
+	shuffledDisks := shuffleDisks(disks, distribution)
+	// From the "distribution" above you can notice that:
+	// 1st data block is in the 9th disk (i.e distribution index 8)
+	// 2nd data block is in the 8th disk (i.e distribution index 7) and so on.
+	if shuffledDisks[0] != disks[8] ||
+		shuffledDisks[1] != disks[7] ||
+		shuffledDisks[2] != disks[9] ||
+		shuffledDisks[3] != disks[6] ||
+		shuffledDisks[4] != disks[10] ||
+		shuffledDisks[5] != disks[5] ||
+		shuffledDisks[6] != disks[11] ||
+		shuffledDisks[7] != disks[4] ||
+		shuffledDisks[8] != disks[12] ||
+		shuffledDisks[9] != disks[3] ||
+		shuffledDisks[10] != disks[13] ||
+		shuffledDisks[11] != disks[2] ||
+		shuffledDisks[12] != disks[14] ||
+		shuffledDisks[13] != disks[1] ||
+		shuffledDisks[14] != disks[15] ||
+		shuffledDisks[15] != disks[0] {
+		t.Errorf("shuffleDisks returned incorrect order.")
+	}
+}
