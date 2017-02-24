@@ -36,7 +36,7 @@ var serverFlags = []cli.Flag{
 	cli.StringFlag{
 		Name:  "address",
 		Value: ":9000",
-		Usage: `Bind to a specific IP:PORT. Defaults to ":9000".`,
+		Usage: "Bind to a specific ADDRESS:PORT, ADDRESS can be an IP or hostname.",
 	},
 }
 
@@ -66,7 +66,7 @@ EXAMPLES:
   1. Start minio server on "/home/shared" directory.
       $ {{.HelpName}} /home/shared
 
-  2. Start minio server bound to a specific IP:PORT.
+  2. Start minio server bound to a specific ADDRESS:PORT.
       $ {{.HelpName}} --address 192.168.1.101:9000 /home/shared
 
   3. Start erasure coded minio server on a 12 disks server.
