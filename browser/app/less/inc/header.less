@@ -2,14 +2,13 @@
     Header
 ----------------------------*/
 .fe-header {
-    padding: 45px 55px 20px;
-
-    @media(min-width: @screen-md-min) {
+    @media(min-width: (@screen-sm-min - 100)) {
         position: relative;
+        padding: 40px 40px 20px 45px;
     }
 
     @media(max-width: (@screen-xs-max - 100)) {
-        padding: 25px 25px 20px;
+        padding: 20px;
     }
 
     h2 {
@@ -237,6 +236,5 @@
         }
     }
 }
-
 
 

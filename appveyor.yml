@@ -11,11 +11,12 @@ clone_folder: c:\gopath\src\github.com\minio\minio
 
 # Environment variables
 environment:
+  GOROOT: c:\go17
   GOPATH: c:\gopath
 
 # scripts that run after cloning repository
 install:
-  - set PATH=%GOPATH%\bin;c:\go\bin;%PATH%
+  - set PATH=%GOPATH%\bin;c:\go17\bin;%PATH%
   - go version
   - go env
   - python --version
@@ -35,8 +36,8 @@ test_script:
   # Unit tests
   - ps: Add-AppveyorTest "Unit Tests" -Outcome Running
   - mkdir build\coverage
-  - go test -timeout 15m -v -race github.com/minio/minio/cmd...
-  - go test -v -race github.com/minio/minio/pkg...
+  - go test -timeout 15m -race github.com/minio/minio/cmd...
+  - go test -race github.com/minio/minio/pkg...
   - go test -coverprofile=build\coverage\coverage.txt -covermode=atomic github.com/minio/minio/cmd
   - ps: Update-AppveyorTest "Unit Tests" -Outcome Passed
 

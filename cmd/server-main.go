@@ -21,11 +21,11 @@ import (
 	"fmt"
 	"net"
 	"net/url"
-	"os"
 	"path"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"runtime"
 
@@ -36,7 +36,7 @@ var serverFlags = []cli.Flag{
 	cli.StringFlag{
 		Name:  "address",
 		Value: ":9000",
-		Usage: `Bind to a specific IP:PORT. Defaults to ":9000".`,
+		Usage: "Bind to a specific ADDRESS:PORT, ADDRESS can be an IP or hostname.",
 	},
 }
 
@@ -46,14 +46,14 @@ var serverCmd = cli.Command{
 	Flags:  append(serverFlags, globalFlags...),
 	Action: serverMain,
 	CustomHelpTemplate: `NAME:
-  minio {{.Name}} - {{.Usage}}
+ {{.HelpName}} - {{.Usage}}
 
 USAGE:
-  minio {{.Name}} [FLAGS] PATH [PATH...]
-
+ {{.HelpName}} {{if .VisibleFlags}}[FLAGS] {{end}}PATH [PATH...]
+{{if .VisibleFlags}}
 FLAGS:
-  {{range .Flags}}{{.}}
-  {{end}}
+  {{range .VisibleFlags}}{{.}}
+  {{end}}{{end}}
 ENVIRONMENT VARIABLES:
   ACCESS:
      MINIO_ACCESS_KEY: Custom username or access key of 5 to 20 characters in length.
@@ -64,22 +64,21 @@ ENVIRONMENT VARIABLES:
 
 EXAMPLES:
   1. Start minio server on "/home/shared" directory.
-      $ minio {{.Name}} /home/shared
+      $ {{.HelpName}} /home/shared
 
-  2. Start minio server bound to a specific IP:PORT.
-      $ minio {{.Name}} --address 192.168.1.101:9000 /home/shared
+  2. Start minio server bound to a specific ADDRESS:PORT.
+      $ {{.HelpName}} --address 192.168.1.101:9000 /home/shared
 
   3. Start erasure coded minio server on a 12 disks server.
-      $ minio {{.Name}} /mnt/export1/ /mnt/export2/ /mnt/export3/ /mnt/export4/ \
+      $ {{.HelpName}} /mnt/export1/ /mnt/export2/ /mnt/export3/ /mnt/export4/ \
           /mnt/export5/ /mnt/export6/ /mnt/export7/ /mnt/export8/ /mnt/export9/ \
           /mnt/export10/ /mnt/export11/ /mnt/export12/
 
   4. Start erasure coded distributed minio server on a 4 node setup with 1 drive each. Run following commands on all the 4 nodes.
       $ export MINIO_ACCESS_KEY=minio
       $ export MINIO_SECRET_KEY=miniostorage
-      $ minio {{.Name}} http://192.168.1.11/mnt/export/ http://192.168.1.12/mnt/export/ \
+      $ {{.HelpName}} http://192.168.1.11/mnt/export/ http://192.168.1.12/mnt/export/ \
           http://192.168.1.13/mnt/export/ http://192.168.1.14/mnt/export/
-
 `,
 }
 
@@ -128,21 +127,16 @@ func parseStorageEndpoints(eps []string) (endpoints []*url.URL, err error) {
 	return endpoints, nil
 }
 
-// initServerConfig initialize server config.
+// initServer initialize server config.
 func initServerConfig(c *cli.Context) {
+	// Initialization such as config generating/loading config, enable logging, ..
+	minioInit(c)
+
 	// Create certs path.
-	err := createCertsPath()
-	fatalIf(err, "Unable to create \"certs\" directory.")
+	fatalIf(createCertsPath(), "Unable to create \"certs\" directory.")
 
 	// Load user supplied root CAs
 	loadRootCAs()
-
-	// When credentials inherited from the env, server cmd has to save them in the disk
-	if os.Getenv("MINIO_ACCESS_KEY") != "" && os.Getenv("MINIO_SECRET_KEY") != "" {
-		// Env credentials are already loaded in serverConfig, just save in the disk
-		err = serverConfig.Save()
-		fatalIf(err, "Unable to save credentials in the disk.")
-	}
 
 	// Set maxOpenFiles, This is necessary since default operating
 	// system limits of 1024, 2048 are not enough for Minio server.
@@ -352,9 +346,14 @@ func getHostPort(address string) (host, port string, err error) {
 		return "", "", err
 	}
 
-	// Check if port is available.
-	if err = checkPortAvailability(port); err != nil {
-		return "", "", err
+	if runtime.GOOS == "darwin" {
+		// On macOS, if a process already listens on 127.0.0.1:PORT, net.Listen() falls back
+		// to IPv6 address ie minio will start listening on IPv6 address whereas another
+		// (non-)minio process is listening on IPv4 of given port.
+		// To avoid this error sutiation we check for port availability only for macOS.
+		if err = checkPortAvailability(port); err != nil {
+			return "", "", err
+		}
 	}
 
 	// Success.
@@ -367,8 +366,8 @@ func serverMain(c *cli.Context) {
 		cli.ShowCommandHelpAndExit(c, "server", 1)
 	}
 
-	// Initialization routine, such as config loading, enable logging, ..
-	minioInit(c)
+	// Initializes server config, certs, logging and system settings.
+	initServerConfig(c)
 
 	// Check for new updates from dl.minio.io.
 	checkUpdate()
@@ -384,9 +383,6 @@ func serverMain(c *cli.Context) {
 	// Done after globalMinioHost and globalMinioPort is set
 	// as parseStorageEndpoints() depends on it.
 	checkServerSyntax(c)
-
-	// Initialize server config.
-	initServerConfig(c)
 
 	// Disks to be used in server init.
 	endpoints, err := parseStorageEndpoints(c.Args())
@@ -444,8 +440,8 @@ func serverMain(c *cli.Context) {
 	initGlobalAdminPeers(endpoints)
 
 	// Determine API endpoints where we are going to serve the S3 API from.
-	apiEndPoints, err := finalizeAPIEndpoints(apiServer.Server)
-	fatalIf(err, "Unable to finalize API endpoints for %s", apiServer.Server.Addr)
+	apiEndPoints, err := finalizeAPIEndpoints(apiServer.Addr)
+	fatalIf(err, "Unable to finalize API endpoints for %s", apiServer.Addr)
 
 	// Set the global API endpoints value.
 	globalAPIEndpoints = apiEndPoints
@@ -471,6 +467,9 @@ func serverMain(c *cli.Context) {
 
 	// Prints the formatted startup message once object layer is initialized.
 	printStartupMessage(apiEndPoints)
+
+	// Set uptime time after object layer has initialized.
+	globalBootTime = time.Now().UTC()
 
 	// Waits on the server.
 	<-globalServiceDoneCh

@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"errors"
-	"strings"
 
 	"github.com/minio/minio/pkg/wildcard"
 )
@@ -55,24 +54,12 @@ const (
 
 var errNotifyNotEnabled = errors.New("requested notifier not enabled")
 
-// Notifier represents collection of supported notification queues.
-type notifier struct {
-	AMQP          map[string]amqpNotify          `json:"amqp"`
-	NATS          map[string]natsNotify          `json:"nats"`
-	ElasticSearch map[string]elasticSearchNotify `json:"elasticsearch"`
-	Redis         map[string]redisNotify         `json:"redis"`
-	PostgreSQL    map[string]postgreSQLNotify    `json:"postgresql"`
-	Kafka         map[string]kafkaNotify         `json:"kafka"`
-	Webhook       map[string]webhookNotify       `json:"webhook"`
-	// Add new notification queues.
-}
-
 // Returns true if queueArn is for an AMQP queue.
 func isAMQPQueue(sqsArn arnSQS) bool {
 	if sqsArn.Type != queueTypeAMQP {
 		return false
 	}
-	amqpL := serverConfig.GetAMQPNotifyByID(sqsArn.AccountID)
+	amqpL := serverConfig.Notify.GetAMQPByID(sqsArn.AccountID)
 	if !amqpL.Enable {
 		return false
 	}
@@ -91,7 +78,7 @@ func isNATSQueue(sqsArn arnSQS) bool {
 	if sqsArn.Type != queueTypeNATS {
 		return false
 	}
-	natsL := serverConfig.GetNATSNotifyByID(sqsArn.AccountID)
+	natsL := serverConfig.Notify.GetNATSByID(sqsArn.AccountID)
 	if !natsL.Enable {
 		return false
 	}
@@ -110,7 +97,7 @@ func isWebhookQueue(sqsArn arnSQS) bool {
 	if sqsArn.Type != queueTypeWebhook {
 		return false
 	}
-	rNotify := serverConfig.GetWebhookNotifyByID(sqsArn.AccountID)
+	rNotify := serverConfig.Notify.GetWebhookByID(sqsArn.AccountID)
 	if !rNotify.Enable {
 		return false
 	}
@@ -122,7 +109,7 @@ func isRedisQueue(sqsArn arnSQS) bool {
 	if sqsArn.Type != queueTypeRedis {
 		return false
 	}
-	rNotify := serverConfig.GetRedisNotifyByID(sqsArn.AccountID)
+	rNotify := serverConfig.Notify.GetRedisByID(sqsArn.AccountID)
 	if !rNotify.Enable {
 		return false
 	}
@@ -141,7 +128,7 @@ func isElasticQueue(sqsArn arnSQS) bool {
 	if sqsArn.Type != queueTypeElastic {
 		return false
 	}
-	esNotify := serverConfig.GetElasticSearchNotifyByID(sqsArn.AccountID)
+	esNotify := serverConfig.Notify.GetElasticSearchByID(sqsArn.AccountID)
 	if !esNotify.Enable {
 		return false
 	}
@@ -159,7 +146,7 @@ func isPostgreSQLQueue(sqsArn arnSQS) bool {
 	if sqsArn.Type != queueTypePostgreSQL {
 		return false
 	}
-	pgNotify := serverConfig.GetPostgreSQLNotifyByID(sqsArn.AccountID)
+	pgNotify := serverConfig.Notify.GetPostgreSQLByID(sqsArn.AccountID)
 	if !pgNotify.Enable {
 		return false
 	}
@@ -177,7 +164,7 @@ func isKafkaQueue(sqsArn arnSQS) bool {
 	if sqsArn.Type != queueTypeKafka {
 		return false
 	}
-	kafkaNotifyCfg := serverConfig.GetKafkaNotifyByID(sqsArn.AccountID)
+	kafkaNotifyCfg := serverConfig.Notify.GetKafkaByID(sqsArn.AccountID)
 	if !kafkaNotifyCfg.Enable {
 		return false
 	}
@@ -206,9 +193,9 @@ func filterRuleMatch(object string, frs []filterRule) bool {
 	var prefixMatch, suffixMatch = true, true
 	for _, fr := range frs {
 		if isValidFilterNamePrefix(fr.Name) {
-			prefixMatch = strings.HasPrefix(object, fr.Value)
+			prefixMatch = hasPrefix(object, fr.Value)
 		} else if isValidFilterNameSuffix(fr.Name) {
-			suffixMatch = strings.HasSuffix(object, fr.Value)
+			suffixMatch = hasSuffix(object, fr.Value)
 		}
 	}
 	return prefixMatch && suffixMatch

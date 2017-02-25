@@ -1,5 +1,5 @@
 /*
- * Minio Browser (C) 2016 Minio, Inc.
+ * Minio Cloud Storage (C) 2016 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ let Path = ({currentBucket, currentPath, selectPrefix}) => {
   }
 
   return (
-      <h2><span className="main"><a onClick={ (e) => selectPrefix(e, '') } href="">{ currentBucket }</a></span>{ path }</h2>
+    <h2><span className="main"><a onClick={ (e) => selectPrefix(e, '') } href="">{ currentBucket }</a></span>{ path }</h2>
   )
 }
 

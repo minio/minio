@@ -63,6 +63,10 @@ func (br *browserPeerAPIHandlers) SetAuthPeer(args SetAuthPeerArgs, reply *AuthR
 		return err
 	}
 
+	if err := validateAuthKeys(args.Creds.AccessKey, args.Creds.SecretKey); err != nil {
+		return err
+	}
+
 	// Update credentials in memory
 	serverConfig.SetCredential(args.Creds)
 
@@ -107,7 +111,7 @@ func updateCredsOnPeers(creds credential) map[string]error {
 				secretKey:       serverCred.SecretKey,
 				serverAddr:      peers[ix],
 				secureConn:      globalIsSSL,
-				serviceEndpoint: path.Join(reservedBucket, browserPeerPath),
+				serviceEndpoint: path.Join(minioReservedBucketPath, browserPeerPath),
 				serviceName:     "BrowserPeer",
 			})
 

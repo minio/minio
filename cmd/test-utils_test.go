@@ -496,6 +496,10 @@ func resetGlobalIsXL() {
 	globalIsXL = false
 }
 
+func resetGlobalIsEnvs() {
+	globalIsEnvCreds = false
+}
+
 // Resets all the globals used modified in tests.
 // Resetting ensures that the changes made to globals by one test doesn't affect others.
 func resetTestGlobals() {
@@ -513,6 +517,8 @@ func resetTestGlobals() {
 	resetGlobalEndpoints()
 	// Reset global isXL flag.
 	resetGlobalIsXL()
+	// Reset global isEnvCreds flag.
+	resetGlobalIsEnvs()
 }
 
 // Configure the server for the test run.
@@ -527,7 +533,7 @@ func newTestConfig(bucketLocation string) (rootPath string, err error) {
 	setGlobalConfigPath(rootPath)
 
 	// Initialize server config.
-	if _, err = initConfig(); err != nil {
+	if err = newConfig(credential{}); err != nil {
 		return "", err
 	}
 
@@ -893,7 +899,8 @@ func preSignV4(req *http.Request, accessKeyID, secretAccessKey string, expires i
 
 	region := serverConfig.GetRegion()
 	date := time.Now().UTC()
-	credential := fmt.Sprintf("%s/%s", accessKeyID, getScope(date, region))
+	scope := getScope(date, region)
+	credential := fmt.Sprintf("%s/%s", accessKeyID, scope)
 
 	// Set URL query.
 	query := req.URL.Query()
@@ -909,7 +916,7 @@ func preSignV4(req *http.Request, accessKeyID, secretAccessKey string, expires i
 
 	queryStr := strings.Replace(query.Encode(), "+", "%20", -1)
 	canonicalRequest := getCanonicalRequest(extractedSignedHeaders, unsignedPayload, queryStr, req.URL.Path, req.Method, req.Host)
-	stringToSign := getStringToSign(canonicalRequest, date, region)
+	stringToSign := getStringToSign(canonicalRequest, date, scope)
 	signingKey := getSigningKey(secretAccessKey, date, region)
 	signature := getSignature(signingKey, stringToSign)
 
@@ -1419,6 +1426,13 @@ func getPutObjectPartURL(endPoint, bucketName, objectName, uploadID, partNumber 
 	return makeTestTargetURL(endPoint, bucketName, objectName, queryValues)
 }
 
+func getCopyObjectPartURL(endPoint, bucketName, objectName, uploadID, partNumber string) string {
+	queryValues := url.Values{}
+	queryValues.Set("uploadId", uploadID)
+	queryValues.Set("partNumber", partNumber)
+	return makeTestTargetURL(endPoint, bucketName, objectName, queryValues)
+}
+
 // return URL for fetching object from the bucket.
 func getGetObjectURL(endPoint, bucketName, objectName string) string {
 	return makeTestTargetURL(endPoint, bucketName, objectName, url.Values{})
@@ -1782,6 +1796,7 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, testName, bucketName, objectName, 
 	failTestStr := func(testType, failMsg string) string {
 		return fmt.Sprintf("Minio %s: %s fail for \"%s\": \n<Error> %s", instanceType, testType, testName, failMsg)
 	}
+
 	// httptest Recorder to capture all the response by the http handler.
 	rec := httptest.NewRecorder()
 	// reading the body to preserve it so that it can be used again for second attempt of sending unsigned HTTP request.
@@ -1883,22 +1898,22 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, testName, bucketName, objectName, 
 	}
 }
 
-// ExecObjectLayerAPINilTest - Sets the object layer to `nil`, and calls rhe registered object layer API endpoint, and assert the error response.
-// The purpose is to validate the API handlers response when the object layer is uninitialized.
-// Usage hint: Should be used at the end of the API end points tests (ex: check the last few lines of `testAPIListObjectPartsHandler`), need a sample HTTP request
-// to be sent as argument so that the relevant handler is called,
-// the handler registration is expected to be done since its called from within the API handler tests,
-// the reference to the registered HTTP handler has to be sent as an argument.
+// ExecObjectLayerAPINilTest - Sets the object layer to `nil`, and calls rhe registered object layer API endpoint,
+// and assert the error response. The purpose is to validate the API handlers response when the object layer is uninitialized.
+// Usage hint: Should be used at the end of the API end points tests (ex: check the last few lines of `testAPIListObjectPartsHandler`),
+// need a sample HTTP request to be sent as argument so that the relevant handler is called, the handler registration is expected
+// to be done since its called from within the API handler tests, the reference to the registered HTTP handler has to be sent
+// as an argument.
 func ExecObjectLayerAPINilTest(t TestErrHandler, bucketName, objectName, instanceType string, apiRouter http.Handler, req *http.Request) {
 	// httptest Recorder to capture all the response by the http handler.
 	rec := httptest.NewRecorder()
 
 	// The  API handler gets the referece to the object layer via the global object Layer,
 	// setting it to `nil` in order test for handlers response for uninitialized object layer.
-
 	globalObjLayerMutex.Lock()
 	globalObjectAPI = nil
 	globalObjLayerMutex.Unlock()
+
 	// call the HTTP handler.
 	apiRouter.ServeHTTP(rec, req)
 
@@ -1909,7 +1924,8 @@ func ExecObjectLayerAPINilTest(t TestErrHandler, bucketName, objectName, instanc
 		t.Errorf("Object API Nil Test expected to fail with %d, but failed with %d", serverNotInitializedErr, rec.Code)
 	}
 	// expected error response in bytes when objectLayer is not initialized, or set to `nil`.
-	expectedErrResponse := encodeResponse(getAPIErrorResponse(getAPIError(ErrServerNotInitialized), getGetObjectURL("", bucketName, objectName)))
+	expectedErrResponse := encodeResponse(getAPIErrorResponse(getAPIError(ErrServerNotInitialized),
+		getGetObjectURL("", bucketName, objectName)))
 
 	// HEAD HTTP Request doesn't contain body in its response,
 	// for other type of HTTP requests compare the response body content with the expected one.
@@ -1932,8 +1948,10 @@ func ExecObjectLayerAPITest(t *testing.T, objAPITest objAPITestType, endpoints [
 	// reset globals.
 	// this is to make sure that the tests are not affected by modified value.
 	resetTestGlobals()
+
 	// initialize NSLock.
 	initNSLock(false)
+
 	// initialize the server and obtain the credentials and root.
 	// credentials are necessary to sign the HTTP request.
 	rootPath, err := newTestConfig(globalMinioDefaultRegion)
@@ -2016,6 +2034,7 @@ func ExecObjectLayerDiskAlteredTest(t *testing.T, objTest objTestDiskNotFoundTyp
 	if err != nil {
 		t.Fatalf("Initialization of object layer failed for XL setup: %s", err)
 	}
+
 	// Executing the object layer tests for XL.
 	objTest(objLayer, XLTestStr, fsDirs, t)
 	defer removeRoots(fsDirs)
@@ -2093,6 +2112,9 @@ func registerBucketLevelFunc(bucket *router.Router, api objectAPIHandlers, apiFu
 		case "NewMultipart":
 			// Register New Multipart upload handler.
 			bucket.Methods("POST").Path("/{object:.+}").HandlerFunc(api.NewMultipartUploadHandler).Queries("uploads", "")
+		case "CopyObjectPart":
+			// Register CopyObjectPart handler.
+			bucket.Methods("PUT").Path("/{object:.+}").HeadersRegexp("X-Amz-Copy-Source", ".*?(\\/|%2F).*?").HandlerFunc(api.CopyObjectPartHandler).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}")
 		case "PutObjectPart":
 			// Register PutObjectPart handler.
 			bucket.Methods("PUT").Path("/{object:.+}").HandlerFunc(api.PutObjectPartHandler).Queries("partNumber", "{partNumber:[0-9]+}", "uploadId", "{uploadId:.*}")

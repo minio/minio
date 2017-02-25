@@ -198,10 +198,11 @@ func retryFormattingXLDisks(firstDisk bool, endpoints []*url.URL, storageDisks [
 		return errInvalidArgument
 	}
 
-	// Create a done channel to control 'ListObjects' go routine.
-	doneCh := make(chan struct{}, 1)
+	// Done channel is used to close any lingering retry routine, as soon
+	// as this function returns.
+	doneCh := make(chan struct{})
 
-	// Indicate to our routine to exit cleanly upon return.
+	// Indicate to our retry routine to exit cleanly, upon this function return.
 	defer close(doneCh)
 
 	// prepare getElapsedTime() to calculate elapsed time since we started trying formatting disks.
@@ -212,7 +213,7 @@ func retryFormattingXLDisks(firstDisk bool, endpoints []*url.URL, storageDisks [
 	}
 
 	// Wait on the jitter retry loop.
-	retryTimerCh := newRetryTimer(time.Second, time.Second*30, MaxJitter, doneCh)
+	retryTimerCh := newRetryTimerSimple(doneCh)
 	for {
 		select {
 		case retryCount := <-retryTimerCh:

@@ -19,6 +19,11 @@ package cmd
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"os"
+
+	"github.com/minio/mc/pkg/console"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 const (
@@ -34,7 +39,7 @@ const (
 func mustGetAccessKey() string {
 	keyBytes := make([]byte, accessKeyMaxLen)
 	if _, err := rand.Read(keyBytes); err != nil {
-		panic(err)
+		console.Fatalf("Unable to generate access key. Err: %s.\n", err)
 	}
 
 	for i := 0; i < accessKeyMaxLen; i++ {
@@ -47,7 +52,7 @@ func mustGetAccessKey() string {
 func mustGetSecretKey() string {
 	keyBytes := make([]byte, secretKeyMaxLen)
 	if _, err := rand.Read(keyBytes); err != nil {
-		panic(err)
+		console.Fatalf("Unable to generate secret key. Err: %s.\n", err)
 	}
 
 	return string([]byte(base64.StdEncoding.EncodeToString(keyBytes))[:secretKeyMaxLen])
@@ -65,22 +70,70 @@ func isSecretKeyValid(secretKey string) bool {
 
 // credential container for access and secret keys.
 type credential struct {
-	AccessKey string `json:"accessKey"`
-	SecretKey string `json:"secretKey"`
+	AccessKey     string `json:"accessKey,omitempty"`
+	SecretKey     string `json:"secretKey,omitempty"`
+	secretKeyHash []byte
 }
 
+// Generate a bcrypt hashed key for input secret key.
+func mustGetHashedSecretKey(secretKey string) []byte {
+	hashedSecretKey, err := bcrypt.GenerateFromPassword([]byte(secretKey), bcrypt.DefaultCost)
+	if err != nil {
+		console.Fatalf("Unable to generate secret hash for secret key. Err: %s.\n", err)
+	}
+	return hashedSecretKey
+}
+
+// Initialize a new credential object
 func newCredential() credential {
-	return credential{mustGetAccessKey(), mustGetSecretKey()}
+	return newCredentialWithKeys(mustGetAccessKey(), mustGetSecretKey())
 }
 
-func getCredential(accessKey, secretKey string) (credential, error) {
+func newCredentialWithKeys(accessKey, secretKey string) credential {
+	secretHash := mustGetHashedSecretKey(secretKey)
+	return credential{accessKey, secretKey, secretHash}
+}
+
+// Validate incoming auth keys.
+func validateAuthKeys(accessKey, secretKey string) error {
+	// Validate the env values before proceeding.
 	if !isAccessKeyValid(accessKey) {
-		return credential{}, errInvalidAccessKeyLength
+		return errInvalidAccessKeyLength
 	}
-
 	if !isSecretKeyValid(secretKey) {
-		return credential{}, errInvalidSecretKeyLength
+		return errInvalidSecretKeyLength
+	}
+	return nil
+}
+
+// Variant of getCredentialFromEnv but upon error fails right here.
+func mustGetCredentialFromEnv() credential {
+	creds, err := getCredentialFromEnv()
+	if err != nil {
+		console.Fatalf("Unable to load credentials from environment. Err: %s.\n", err)
+	}
+	return creds
+}
+
+// Converts accessKey and secretKeys into credential object which
+// contains bcrypt secret key hash for future validation.
+func getCredentialFromEnv() (credential, error) {
+	// Fetch access keys from environment variables and update the config.
+	accessKey := os.Getenv("MINIO_ACCESS_KEY")
+	secretKey := os.Getenv("MINIO_SECRET_KEY")
+
+	// Envs are set globally.
+	globalIsEnvCreds = accessKey != "" && secretKey != ""
+
+	if globalIsEnvCreds {
+		// Validate the env values before proceeding.
+		if err := validateAuthKeys(accessKey, secretKey); err != nil {
+			return credential{}, err
+		}
+
+		// Return credential object.
+		return newCredentialWithKeys(accessKey, secretKey), nil
 	}
 
-	return credential{accessKey, secretKey}, nil
+	return credential{}, nil
 }

@@ -77,13 +77,11 @@ func TestFSShutdown(t *testing.T) {
 	removeAll(disk)
 
 	// Test Shutdown with faulty disk
-	for i := 1; i <= 5; i++ {
-		fs, disk := prepareTest()
-		fs.DeleteObject(bucketName, objectName)
-		removeAll(disk)
-		if err := fs.Shutdown(); err != nil {
-			t.Fatal(i, ", Got unexpected fs shutdown error: ", err)
-		}
+	fs, disk = prepareTest()
+	fs.DeleteObject(bucketName, objectName)
+	removeAll(disk)
+	if err := fs.Shutdown(); err != nil {
+		t.Fatal("Got unexpected fs shutdown error: ", err)
 	}
 }
 

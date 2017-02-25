@@ -23,6 +23,7 @@ import (
 	"net/rpc"
 	"net/url"
 	"path"
+	"strings"
 
 	"github.com/minio/minio/pkg/disk"
 )
@@ -33,7 +34,7 @@ type networkStorage struct {
 }
 
 const (
-	storageRPCPath = reservedBucket + "/storage"
+	storageRPCPath = "/storage"
 )
 
 // Converts rpc.ServerError to underlying error. This function is
@@ -101,7 +102,7 @@ func newStorageRPC(ep *url.URL) (StorageAPI, error) {
 	}
 
 	// Dial minio rpc storage http path.
-	rpcPath := path.Join(storageRPCPath, getPath(ep))
+	rpcPath := path.Join(minioReservedBucketPath, storageRPCPath, getPath(ep))
 	rpcAddr := ep.Host
 
 	serverCred := serverConfig.GetCredential()
@@ -132,20 +133,20 @@ func newStorageRPC(ep *url.URL) (StorageAPI, error) {
 
 // Stringer interface compatible representation of network device.
 func (n *networkStorage) String() string {
-	return n.rpcClient.ServerAddr() + ":" + n.rpcClient.ServiceEndpoint()
+	// Remove the storage RPC path prefix, internal paths are meaningless.
+	serviceEndpoint := strings.TrimPrefix(n.rpcClient.ServiceEndpoint(), storageRPCPath)
+	return n.rpcClient.ServerAddr() + ":" + serviceEndpoint
 }
 
 // Init - attempts a login to reconnect.
 func (n *networkStorage) Init() error {
-	err := n.rpcClient.Login()
-	return toStorageErr(err)
+	return toStorageErr(n.rpcClient.Login())
 }
 
 // Closes the underlying RPC connection.
-func (n *networkStorage) Close() (err error) {
+func (n *networkStorage) Close() error {
 	// Close the underlying connection.
-	err = n.rpcClient.Close()
-	return toStorageErr(err)
+	return toStorageErr(n.rpcClient.Close())
 }
 
 // DiskInfo - fetch disk information for a remote disk.

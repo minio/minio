@@ -1,5 +1,5 @@
 /*
- * Minio Browser (C) 2016 Minio, Inc.
+ * Minio Cloud Storage (C) 2016 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,7 +27,6 @@ import OverlayTrigger from 'react-bootstrap/lib/OverlayTrigger'
 import Tooltip from 'react-bootstrap/lib/Tooltip'
 import Dropdown from 'react-bootstrap/lib/Dropdown'
 import MenuItem from 'react-bootstrap/lib/MenuItem'
-
 import InputGroup from '../components/InputGroup'
 import Dropzone from '../components/Dropzone'
 import ObjectsList from '../components/ObjectsList'
@@ -47,6 +46,7 @@ import * as mime from '../mime'
 import { minioBrowserPrefix } from '../constants'
 import CopyToClipboard from 'react-copy-to-clipboard'
 import storage from 'local-storage-fallback'
+import InfiniteScroll from 'react-infinite-scroller';
 
 export default class Browse extends React.Component {
   componentDidMount() {
@@ -110,9 +110,6 @@ export default class Browse extends React.Component {
       if (!decPathname.endsWith('/'))
         decPathname += '/'
       if (decPathname === minioBrowserPrefix + '/') {
-        dispatch(actions.setCurrentBucket(''))
-        dispatch(actions.setCurrentPath(''))
-        dispatch(actions.setObjects([]))
         return
       }
       let obj = utils.pathSlice(decPathname)
@@ -138,6 +135,11 @@ export default class Browse extends React.Component {
     e.preventDefault()
     let {buckets} = this.props
     this.props.dispatch(actions.setVisibleBuckets(buckets.filter(bucket => bucket.indexOf(e.target.value) > -1)))
+  }
+
+  listObjects() {
+    const {dispatch} = this.props
+    dispatch(actions.listObjects())
   }
 
   selectPrefix(e, prefix) {
@@ -231,7 +233,7 @@ export default class Browse extends React.Component {
     })
       .then(() => {
         this.hideDeleteConfirmation()
-        dispatch(actions.selectPrefix(currentPath))
+        dispatch(actions.removeObject(deleteConfirmation.object))
       })
       .catch(e => dispatch(actions.showAlert({
         type: 'danger',
@@ -294,11 +296,6 @@ export default class Browse extends React.Component {
     e.preventDefault()
     web.Logout()
     browserHistory.push(`${minioBrowserPrefix}/login`)
-  }
-
-  landingPage(e) {
-    e.preventDefault()
-    this.props.dispatch(actions.selectBucket(this.props.buckets[0]))
   }
 
   fullScreen(e) {
@@ -365,17 +362,34 @@ export default class Browse extends React.Component {
     }
   }
 
+  checkObject(e, objectName) {
+    const {dispatch} = this.props
+    e.target.checked ? dispatch(actions.checkedObjectsAdd(objectName)) : dispatch(actions.checkedObjectsRemove(objectName))
+  }
+
+  downloadAll() {
+    const {dispatch} = this.props
+    let req = {
+      bucketName: this.props.currentBucket,
+      objects: this.props.checkedObjects,
+      prefix: this.props.currentPath
+    }
+    let requestUrl = location.origin + "/minio/zip?token=" + localStorage.token
+
+    this.xhr = new XMLHttpRequest()
+    dispatch(actions.downloadAllasZip(requestUrl, req, this.xhr))
+  }
 
   render() {
     const {total, free} = this.props.storageInfo
-    const {showMakeBucketModal, alert, sortNameOrder, sortSizeOrder, sortDateOrder, showAbout, showBucketPolicy} = this.props
+    const {showMakeBucketModal, alert, sortNameOrder, sortSizeOrder, sortDateOrder, showAbout, showBucketPolicy, checkedObjects} = this.props
     const {version, memory, platform, runtime} = this.props.serverInfo
     const {sidebarStatus} = this.props
     const {showSettings} = this.props
     const {policies, currentBucket, currentPath} = this.props
     const {deleteConfirmation} = this.props
     const {shareObject} = this.props
-    const {web, prefixWritable} = this.props
+    const {web, prefixWritable, istruncated} = this.props
 
     // Don't always show the SettingsModal. This is done here instead of in
     // SettingsModal.js so as to allow for #componentWillMount to handle
@@ -414,10 +428,10 @@ export default class Browse extends React.Component {
     let freePercent = free * 100 / total
 
     if (web.LoggedIn()) {
-      browserDropdownButton = <BrowserDropdown fullScreen={ this.fullScreen.bind(this) }
-                                showAbout={ this.showAbout.bind(this) }
-                                showSettings={ this.showSettings.bind(this) }
-                                logout={ this.logout.bind(this) } />
+      browserDropdownButton = <BrowserDropdown fullScreenFunc={ this.fullScreen.bind(this) }
+                                aboutFunc={ this.showAbout.bind(this) }
+                                settingsFunc={ this.showSettings.bind(this) }
+                                logoutFunc={ this.logout.bind(this) } />
     } else {
       loginButton = <a className='btn btn-danger' href='/minio/login'>Login</a>
     }
@@ -438,7 +452,6 @@ export default class Browse extends React.Component {
                                 </li>
                               </ul>
                             </div>
-
     }
 
     let createButton = ''
@@ -481,7 +494,6 @@ export default class Browse extends React.Component {
                            </OverlayTrigger>
                          </Dropdown.Menu>
                        </Dropdown>
-
     }
 
     return (
@@ -489,12 +501,17 @@ export default class Browse extends React.Component {
                    'file-explorer': true,
                    'toggled': sidebarStatus
                  }) }>
-        <SideBar landingPage={ this.landingPage.bind(this) }
-          searchBuckets={ this.searchBuckets.bind(this) }
+        <SideBar searchBuckets={ this.searchBuckets.bind(this) }
           selectBucket={ this.selectBucket.bind(this) }
           clickOutside={ this.hideSidebar.bind(this) }
           showPolicy={ this.showBucketPolicy.bind(this) } />
         <div className="fe-body">
+          <div className={ 'list-actions' + (classNames({
+                             ' list-actions-toggled': checkedObjects.length > 0
+                           })) }>
+            <span className="la-label"><i className="fa fa-check-circle" /> { checkedObjects.length } Objects selected</span>
+            <span className="la-actions pull-right"><button onClick={ this.downloadAll.bind(this) }> Download all as zip </button></span>
+          </div>
           <Dropzone>
             { alertBox }
             <header className="fe-header-mobile hidden-lg hidden-md">
@@ -520,7 +537,8 @@ export default class Browse extends React.Component {
             </header>
             <div className="feb-container">
               <header className="fesl-row" data-type="folder">
-                <div className="fesl-item fi-name" onClick={ this.sortObjectsByName.bind(this) } data-sort="name">
+                <div className="fesl-item fesl-item-icon"></div>
+                <div className="fesl-item fesl-item-name" onClick={ this.sortObjectsByName.bind(this) } data-sort="name">
                   Name
                   <i className={ classNames({
                                    'fesli-sort': true,
@@ -529,7 +547,7 @@ export default class Browse extends React.Component {
                                    'fa-sort-alpha-asc': !sortNameOrder
                                  }) } />
                 </div>
-                <div className="fesl-item fi-size" onClick={ this.sortObjectsBySize.bind(this) } data-sort="size">
+                <div className="fesl-item fesl-item-size" onClick={ this.sortObjectsBySize.bind(this) } data-sort="size">
                   Size
                   <i className={ classNames({
                                    'fesli-sort': true,
@@ -538,7 +556,7 @@ export default class Browse extends React.Component {
                                    'fa-sort-amount-asc': !sortSizeOrder
                                  }) } />
                 </div>
-                <div className="fesl-item fi-modified" onClick={ this.sortObjectsByDate.bind(this) } data-sort="last-modified">
+                <div className="fesl-item fesl-item-modified" onClick={ this.sortObjectsByDate.bind(this) } data-sort="last-modified">
                   Last Modified
                   <i className={ classNames({
                                    'fesli-sort': true,
@@ -547,14 +565,24 @@ export default class Browse extends React.Component {
                                    'fa-sort-numeric-asc': !sortDateOrder
                                  }) } />
                 </div>
-                <div className="fesl-item fi-actions"></div>
+                <div className="fesl-item fesl-item-actions"></div>
               </header>
             </div>
             <div className="feb-container">
-              <ObjectsList dataType={ this.dataType.bind(this) }
-                selectPrefix={ this.selectPrefix.bind(this) }
-                showDeleteConfirmation={ this.showDeleteConfirmation.bind(this) }
-                shareObject={ this.shareObject.bind(this) } />
+              <InfiniteScroll loadMore={ this.listObjects.bind(this) }
+                hasMore={ istruncated }
+                useWindow={ true }
+                initialLoad={ false }>
+                <ObjectsList dataType={ this.dataType.bind(this) }
+                  selectPrefix={ this.selectPrefix.bind(this) }
+                  showDeleteConfirmation={ this.showDeleteConfirmation.bind(this) }
+                  shareObject={ this.shareObject.bind(this) }
+                  checkObject={ this.checkObject.bind(this) }
+                  checkedObjectsArray={ checkedObjects } />
+              </InfiniteScroll>
+              <div className="text-center" style={ { display: istruncated ? 'block' : 'none' } }>
+                <span>Loading...</span>
+              </div>
             </div>
             <UploadModal />
             { createButton }

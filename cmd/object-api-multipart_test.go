@@ -346,7 +346,7 @@ func testObjectAPIPutObjectPart(obj ObjectLayer, instanceType string, t TestErrH
 
 	// Validate all the test cases.
 	for i, testCase := range testCases {
-		actualMd5Hex, actualErr := obj.PutObjectPart(testCase.bucketName, testCase.objName, testCase.uploadID, testCase.PartID, testCase.intputDataSize, bytes.NewBufferString(testCase.inputReaderData), testCase.inputMd5, testCase.inputSHA256)
+		actualInfo, actualErr := obj.PutObjectPart(testCase.bucketName, testCase.objName, testCase.uploadID, testCase.PartID, testCase.intputDataSize, bytes.NewBufferString(testCase.inputReaderData), testCase.inputMd5, testCase.inputSHA256)
 		// All are test cases above are expected to fail.
 		if actualErr != nil && testCase.shouldPass {
 			t.Errorf("Test %d: %s: Expected to pass, but failed with: <ERROR> %s.", i+1, instanceType, actualErr.Error())
@@ -363,8 +363,8 @@ func testObjectAPIPutObjectPart(obj ObjectLayer, instanceType string, t TestErrH
 		// Test passes as expected, but the output values are verified for correctness here.
 		if actualErr == nil && testCase.shouldPass {
 			// Asserting whether the md5 output is correct.
-			if testCase.inputMd5 != actualMd5Hex {
-				t.Errorf("Test %d: %s: Calculated Md5 different from the actual one %s.", i+1, instanceType, actualMd5Hex)
+			if testCase.inputMd5 != actualInfo.ETag {
+				t.Errorf("Test %d: %s: Calculated Md5 different from the actual one %s.", i+1, instanceType, actualInfo.ETag)
 			}
 		}
 	}
@@ -1344,7 +1344,7 @@ func testListObjectPartsDiskNotFound(obj ObjectLayer, instanceType string, disks
 			Object:   objectNames[0],
 			MaxParts: 10,
 			UploadID: uploadIDs[0],
-			Parts: []partInfo{
+			Parts: []PartInfo{
 				{
 					PartNumber: 1,
 					Size:       4,
@@ -1375,7 +1375,7 @@ func testListObjectPartsDiskNotFound(obj ObjectLayer, instanceType string, disks
 			NextPartNumberMarker: 3,
 			IsTruncated:          true,
 			UploadID:             uploadIDs[0],
-			Parts: []partInfo{
+			Parts: []PartInfo{
 				{
 					PartNumber: 1,
 					Size:       4,
@@ -1400,7 +1400,7 @@ func testListObjectPartsDiskNotFound(obj ObjectLayer, instanceType string, disks
 			MaxParts:    2,
 			IsTruncated: false,
 			UploadID:    uploadIDs[0],
-			Parts: []partInfo{
+			Parts: []PartInfo{
 				{
 					PartNumber: 4,
 					Size:       4,
@@ -1581,7 +1581,7 @@ func testListObjectParts(obj ObjectLayer, instanceType string, t TestErrHandler)
 			Object:   objectNames[0],
 			MaxParts: 10,
 			UploadID: uploadIDs[0],
-			Parts: []partInfo{
+			Parts: []PartInfo{
 				{
 					PartNumber: 1,
 					Size:       4,
@@ -1612,7 +1612,7 @@ func testListObjectParts(obj ObjectLayer, instanceType string, t TestErrHandler)
 			NextPartNumberMarker: 3,
 			IsTruncated:          true,
 			UploadID:             uploadIDs[0],
-			Parts: []partInfo{
+			Parts: []PartInfo{
 				{
 					PartNumber: 1,
 					Size:       4,
@@ -1637,7 +1637,7 @@ func testListObjectParts(obj ObjectLayer, instanceType string, t TestErrHandler)
 			MaxParts:    2,
 			IsTruncated: false,
 			UploadID:    uploadIDs[0],
-			Parts: []partInfo{
+			Parts: []PartInfo{
 				{
 					PartNumber: 4,
 					Size:       4,

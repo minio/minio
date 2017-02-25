@@ -16,11 +16,7 @@
 
 package cmd
 
-import (
-	"strings"
-
-	"github.com/skyrings/skyring-common/tools/uuid"
-)
+import "github.com/skyrings/skyring-common/tools/uuid"
 
 // Checks on GetObject arguments, bucket and object.
 func checkGetObjArgs(bucket, object string) error {
@@ -69,7 +65,7 @@ func checkListObjsArgs(bucket, prefix, marker, delimiter string, obj ObjectLayer
 		})
 	}
 	// Verify if marker has prefix.
-	if marker != "" && !strings.HasPrefix(marker, prefix) {
+	if marker != "" && !hasPrefix(marker, prefix) {
 		return traceError(InvalidMarkerPrefixCombination{
 			Marker: marker,
 			Prefix: prefix,
@@ -84,7 +80,7 @@ func checkListMultipartArgs(bucket, prefix, keyMarker, uploadIDMarker, delimiter
 		return err
 	}
 	if uploadIDMarker != "" {
-		if strings.HasSuffix(keyMarker, slashSeparator) {
+		if hasSuffix(keyMarker, slashSeparator) {
 			return traceError(InvalidUploadIDKeyCombination{
 				UploadIDMarker: uploadIDMarker,
 				KeyMarker:      keyMarker,

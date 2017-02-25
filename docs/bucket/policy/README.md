@@ -22,11 +22,14 @@ This package implements parsing and validating bucket access policies based on A
 
     StringEquals
     StringNotEquals
+    StringLike
+    StringNotLike
 
 Supported applicable condition keys for each conditions.
 
     s3:prefix
     s3:max-keys
+    aws:Referer
 
 ### Nested policy support.
 

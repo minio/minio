@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"archive/zip"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -83,7 +84,7 @@ func (web *webAPIHandlers) ServerInfo(r *http.Request, args *WebGenericArgs, rep
 	reply.MinioMemory = mem
 	reply.MinioPlatform = platform
 	reply.MinioRuntime = goruntime
-	reply.UIVersion = miniobrowser.UIVersion
+	reply.UIVersion = browser.UIVersion
 	return nil
 }
 
@@ -103,7 +104,7 @@ func (web *webAPIHandlers) StorageInfo(r *http.Request, args *AuthRPCArgs, reply
 		return toJSONError(errAuthentication)
 	}
 	reply.StorageInfo = objectAPI.StorageInfo()
-	reply.UIVersion = miniobrowser.UIVersion
+	reply.UIVersion = browser.UIVersion
 	return nil
 }
 
@@ -127,7 +128,7 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 	if err := objectAPI.MakeBucket(args.BucketName); err != nil {
 		return toJSONError(err, args.BucketName)
 	}
-	reply.UIVersion = miniobrowser.UIVersion
+	reply.UIVersion = browser.UIVersion
 	return nil
 }
 
@@ -151,7 +152,7 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 	if objectAPI == nil {
 		return toJSONError(errServerNotInitialized)
 	}
-	authErr := webReqestAuthenticate(r)
+	authErr := webRequestAuthenticate(r)
 	if authErr != nil {
 		return toJSONError(authErr)
 	}
@@ -160,16 +161,12 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 		return toJSONError(err)
 	}
 	for _, bucket := range buckets {
-		if bucket.Name == path.Base(reservedBucket) {
-			continue
-		}
-
 		reply.Buckets = append(reply.Buckets, WebBucketInfo{
 			Name:         bucket.Name,
 			CreationDate: bucket.Created,
 		})
 	}
-	reply.UIVersion = miniobrowser.UIVersion
+	reply.UIVersion = browser.UIVersion
 	return nil
 }
 
@@ -177,13 +174,16 @@ func (web *webAPIHandlers) ListBuckets(r *http.Request, args *WebGenericArgs, re
 type ListObjectsArgs struct {
 	BucketName string `json:"bucketName"`
 	Prefix     string `json:"prefix"`
+	Marker     string `json:"marker"`
 }
 
 // ListObjectsRep - list objects response.
 type ListObjectsRep struct {
-	Objects   []WebObjectInfo `json:"objects"`
-	Writable  bool            `json:"writable"` // Used by client to show "upload file" button.
-	UIVersion string          `json:"uiVersion"`
+	Objects     []WebObjectInfo `json:"objects"`
+	NextMarker  string          `json:"nextmarker"`
+	IsTruncated bool            `json:"istruncated"`
+	Writable    bool            `json:"writable"` // Used by client to show "upload file" button.
+	UIVersion   string          `json:"uiVersion"`
 }
 
 // WebObjectInfo container for list objects metadata.
@@ -200,7 +200,7 @@ type WebObjectInfo struct {
 
 // ListObjects - list objects api.
 func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, reply *ListObjectsRep) error {
-	reply.UIVersion = miniobrowser.UIVersion
+	reply.UIVersion = browser.UIVersion
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
 		return toJSONError(errServerNotInitialized)
@@ -208,7 +208,7 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 	prefix := args.Prefix + "test" // To test if GetObject/PutObject with the specified prefix is allowed.
 	readable := isBucketActionAllowed("s3:GetObject", args.BucketName, prefix)
 	writable := isBucketActionAllowed("s3:PutObject", args.BucketName, prefix)
-	authErr := webReqestAuthenticate(r)
+	authErr := webRequestAuthenticate(r)
 	switch {
 	case authErr == errAuthentication:
 		return toJSONError(authErr)
@@ -225,30 +225,26 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 	default:
 		return errAuthentication
 	}
-	marker := ""
-	for {
-		lo, err := objectAPI.ListObjects(args.BucketName, args.Prefix, marker, "/", 1000)
-		if err != nil {
-			return &json2.Error{Message: err.Error()}
-		}
-		marker = lo.NextMarker
-		for _, obj := range lo.Objects {
-			reply.Objects = append(reply.Objects, WebObjectInfo{
-				Key:          obj.Name,
-				LastModified: obj.ModTime,
-				Size:         obj.Size,
-				ContentType:  obj.ContentType,
-			})
-		}
-		for _, prefix := range lo.Prefixes {
-			reply.Objects = append(reply.Objects, WebObjectInfo{
-				Key: prefix,
-			})
-		}
-		if !lo.IsTruncated {
-			break
-		}
+	lo, err := objectAPI.ListObjects(args.BucketName, args.Prefix, args.Marker, slashSeparator, 1000)
+	if err != nil {
+		return &json2.Error{Message: err.Error()}
 	}
+	reply.NextMarker = lo.NextMarker
+	reply.IsTruncated = lo.IsTruncated
+	for _, obj := range lo.Objects {
+		reply.Objects = append(reply.Objects, WebObjectInfo{
+			Key:          obj.Name,
+			LastModified: obj.ModTime,
+			Size:         obj.Size,
+			ContentType:  obj.ContentType,
+		})
+	}
+	for _, prefix := range lo.Prefixes {
+		reply.Objects = append(reply.Objects, WebObjectInfo{
+			Key: prefix,
+		})
+	}
+
 	return nil
 }
 
@@ -276,7 +272,7 @@ func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs,
 	if err := objectAPI.DeleteObject(args.BucketName, args.ObjectName); err != nil {
 		if isErrObjectNotFound(err) {
 			// Ignore object not found error.
-			reply.UIVersion = miniobrowser.UIVersion
+			reply.UIVersion = browser.UIVersion
 			return nil
 		}
 		return toJSONError(err, args.BucketName, args.ObjectName)
@@ -294,7 +290,7 @@ func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs,
 		},
 	})
 
-	reply.UIVersion = miniobrowser.UIVersion
+	reply.UIVersion = browser.UIVersion
 	return nil
 }
 
@@ -321,7 +317,7 @@ func (web *webAPIHandlers) Login(r *http.Request, args *LoginArgs, reply *LoginR
 	}
 
 	reply.Token = token
-	reply.UIVersion = miniobrowser.UIVersion
+	reply.UIVersion = browser.UIVersion
 	return nil
 }
 
@@ -339,7 +335,7 @@ func (web webAPIHandlers) GenerateAuth(r *http.Request, args *WebGenericArgs, re
 	cred := newCredential()
 	reply.AccessKey = cred.AccessKey
 	reply.SecretKey = cred.SecretKey
-	reply.UIVersion = miniobrowser.UIVersion
+	reply.UIVersion = browser.UIVersion
 	return nil
 }
 
@@ -362,18 +358,29 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 		return toJSONError(errAuthentication)
 	}
 
+	// If creds are set through ENV disallow changing credentials.
+	if globalIsEnvCreds {
+		return toJSONError(errChangeCredNotAllowed)
+	}
+
 	// As we already validated the authentication, we save given access/secret keys.
-	cred, err := getCredential(args.AccessKey, args.SecretKey)
-	if err != nil {
+	if err := validateAuthKeys(args.AccessKey, args.SecretKey); err != nil {
 		return toJSONError(err)
 	}
 
+	creds := credential{
+		AccessKey: args.AccessKey,
+		SecretKey: args.SecretKey,
+	}
+
 	// Notify all other Minio peers to update credentials
-	errsMap := updateCredsOnPeers(cred)
+	errsMap := updateCredsOnPeers(creds)
 
 	// Update local credentials
-	serverConfig.SetCredential(cred)
-	if err = serverConfig.Save(); err != nil {
+	serverConfig.SetCredential(creds)
+
+	// Persist updated credentials.
+	if err := serverConfig.Save(); err != nil {
 		errsMap[globalMinioAddr] = err
 	}
 
@@ -395,7 +402,7 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 	}
 
 	// As we have updated access/secret key, generate new auth token.
-	token, err := authenticateWeb(args.AccessKey, args.SecretKey)
+	token, err := authenticateWeb(creds.AccessKey, creds.SecretKey)
 	if err != nil {
 		// Did we have peer errors?
 		if len(errsMap) > 0 {
@@ -409,7 +416,7 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 	}
 
 	reply.Token = token
-	reply.UIVersion = miniobrowser.UIVersion
+	reply.UIVersion = browser.UIVersion
 	return nil
 }
 
@@ -428,7 +435,7 @@ func (web *webAPIHandlers) GetAuth(r *http.Request, args *WebGenericArgs, reply 
 	creds := serverConfig.GetCredential()
 	reply.AccessKey = creds.AccessKey
 	reply.SecretKey = creds.SecretKey
-	reply.UIVersion = miniobrowser.UIVersion
+	reply.UIVersion = browser.UIVersion
 	return nil
 }
 
@@ -444,13 +451,20 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	bucket := vars["bucket"]
 	object := vars["object"]
 
-	authErr := webReqestAuthenticate(r)
+	authErr := webRequestAuthenticate(r)
 	if authErr == errAuthentication {
 		writeWebErrorResponse(w, errAuthentication)
 		return
 	}
 	if authErr != nil && !isBucketActionAllowed("s3:PutObject", bucket, object) {
 		writeWebErrorResponse(w, errAuthentication)
+		return
+	}
+
+	// Require Content-Length to be set in the request
+	size := r.ContentLength
+	if size < 0 {
+		writeWebErrorResponse(w, errSizeUnspecified)
 		return
 	}
 
@@ -463,7 +477,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	defer objectLock.Unlock()
 
 	sha256sum := ""
-	objInfo, err := objectAPI.PutObject(bucket, object, -1, r.Body, metadata, sha256sum)
+	objInfo, err := objectAPI.PutObject(bucket, object, size, r.Body, metadata, sha256sum)
 	if err != nil {
 		writeWebErrorResponse(w, err)
 		return
@@ -506,16 +520,94 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	objectLock.RLock()
 	defer objectLock.RUnlock()
 
-	objInfo, err := objectAPI.GetObjectInfo(bucket, object)
-	if err != nil {
-		writeWebErrorResponse(w, err)
-		return
-	}
-	offset := int64(0)
-	err = objectAPI.GetObject(bucket, object, offset, objInfo.Size, w)
-	if err != nil {
+	if err := objectAPI.GetObject(bucket, object, 0, -1, w); err != nil {
 		/// No need to print error, response writer already written to.
 		return
+	}
+}
+
+// DownloadZipArgs - Argument for downloading a bunch of files as a zip file.
+// JSON will look like:
+// '{"bucketname":"testbucket","prefix":"john/pics/","objects":["hawaii/","maldives/","sanjose.jpg"]}'
+type DownloadZipArgs struct {
+	Objects    []string `json:"objects"`    // can be files or sub-directories
+	Prefix     string   `json:"prefix"`     // current directory in the browser-ui
+	BucketName string   `json:"bucketname"` // bucket name.
+}
+
+// Takes a list of objects and creates a zip file that sent as the response body.
+func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
+	objectAPI := web.ObjectAPI()
+	if objectAPI == nil {
+		writeWebErrorResponse(w, errServerNotInitialized)
+		return
+	}
+
+	token := r.URL.Query().Get("token")
+
+	if !isAuthTokenValid(token) {
+		writeWebErrorResponse(w, errAuthentication)
+		return
+	}
+	var args DownloadZipArgs
+	decodeErr := json.NewDecoder(r.Body).Decode(&args)
+	if decodeErr != nil {
+		writeWebErrorResponse(w, decodeErr)
+		return
+	}
+
+	archive := zip.NewWriter(w)
+	defer archive.Close()
+
+	for _, object := range args.Objects {
+		// Writes compressed object file to the response.
+		zipit := func(objectName string) error {
+			info, err := objectAPI.GetObjectInfo(args.BucketName, objectName)
+			if err != nil {
+				return err
+			}
+			header := &zip.FileHeader{
+				Name:               strings.TrimPrefix(objectName, args.Prefix),
+				Method:             zip.Deflate,
+				UncompressedSize64: uint64(info.Size),
+				UncompressedSize:   uint32(info.Size),
+			}
+			writer, err := archive.CreateHeader(header)
+			if err != nil {
+				writeWebErrorResponse(w, errUnexpected)
+				return err
+			}
+			return objectAPI.GetObject(args.BucketName, objectName, 0, info.Size, writer)
+		}
+
+		if !hasSuffix(object, slashSeparator) {
+			// If not a directory, compress the file and write it to response.
+			err := zipit(pathJoin(args.Prefix, object))
+			if err != nil {
+				return
+			}
+			continue
+		}
+
+		// For directories, list the contents recursively and write the objects as compressed
+		// date to the response writer.
+		marker := ""
+		for {
+			lo, err := objectAPI.ListObjects(args.BucketName, pathJoin(args.Prefix, object), marker, "", 1000)
+			if err != nil {
+				return
+			}
+			marker = lo.NextMarker
+			for _, obj := range lo.Objects {
+				err = zipit(obj.Name)
+				if err != nil {
+					return
+				}
+			}
+			if !lo.IsTruncated {
+				break
+			}
+		}
 	}
 }
 
@@ -571,7 +663,7 @@ func (web *webAPIHandlers) GetBucketPolicy(r *http.Request, args *GetBucketPolic
 		return toJSONError(err, args.BucketName)
 	}
 
-	reply.UIVersion = miniobrowser.UIVersion
+	reply.UIVersion = browser.UIVersion
 	reply.Policy = policy.GetPolicy(policyInfo.Statements, args.BucketName, args.Prefix)
 
 	return nil
@@ -610,7 +702,7 @@ func (web *webAPIHandlers) ListAllBucketPolicies(r *http.Request, args *ListAllB
 		return toJSONError(err, args.BucketName)
 	}
 
-	reply.UIVersion = miniobrowser.UIVersion
+	reply.UIVersion = browser.UIVersion
 	for prefix, policy := range policy.GetPolicies(policyInfo.Statements, args.BucketName) {
 		reply.Policies = append(reply.Policies, bucketAccessPolicy{
 			Prefix: prefix,
@@ -655,7 +747,7 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 		if err != nil {
 			return toJSONError(err, args.BucketName)
 		}
-		reply.UIVersion = miniobrowser.UIVersion
+		reply.UIVersion = browser.UIVersion
 		return nil
 	}
 	data, err := json.Marshal(policyInfo)
@@ -674,7 +766,7 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 		}
 		return toJSONError(err, args.BucketName)
 	}
-	reply.UIVersion = miniobrowser.UIVersion
+	reply.UIVersion = browser.UIVersion
 	return nil
 }
 
@@ -711,7 +803,7 @@ func (web *webAPIHandlers) PresignedGet(r *http.Request, args *PresignedGetArgs,
 			Message: "Bucket and Object are mandatory arguments.",
 		}
 	}
-	reply.UIVersion = miniobrowser.UIVersion
+	reply.UIVersion = browser.UIVersion
 	reply.URL = presignedGet(args.HostName, args.BucketName, args.ObjectName, args.Expiry)
 	return nil
 }
@@ -746,7 +838,7 @@ func presignedGet(host, bucket, object string, expiry int64) string {
 	var extractedSignedHeaders http.Header
 
 	canonicalRequest := getCanonicalRequest(extractedSignedHeaders, unsignedPayload, query, path, "GET", host)
-	stringToSign := getStringToSign(canonicalRequest, date, region)
+	stringToSign := getStringToSign(canonicalRequest, date, getScope(date, region))
 	signingKey := getSigningKey(secretKey, date, region)
 	signature := getSignature(signingKey, stringToSign)
 
@@ -821,8 +913,19 @@ func toWebAPIError(err error) APIError {
 			HTTPStatusCode: http.StatusForbidden,
 			Description:    err.Error(),
 		}
+	} else if err == errSizeUnspecified {
+		return APIError{
+			Code:           "InvalidRequest",
+			HTTPStatusCode: http.StatusBadRequest,
+			Description:    err.Error(),
+		}
+	} else if err == errChangeCredNotAllowed {
+		return APIError{
+			Code:           "MethodNotAllowed",
+			HTTPStatusCode: http.StatusMethodNotAllowed,
+			Description:    err.Error(),
+		}
 	}
-
 	// Convert error type to api error code.
 	var apiErrCode APIErrorCode
 	switch err.(type) {

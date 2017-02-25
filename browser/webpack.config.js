@@ -1,5 +1,5 @@
 /*
- * Minio Browser (C) 2016 Minio, Inc.
+ * Minio Cloud Storage (C) 2016 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -71,6 +71,10 @@ var exports = {
 	target: 'http://localhost:9000',
 	secure: false
       },
+      '/minio/zip': {
+        target: 'http://localhost:9000',
+        secure: false
+      }
     }
   },
   plugins: [

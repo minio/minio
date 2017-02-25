@@ -22,6 +22,7 @@ import (
 	"io"
 	"path"
 	"regexp"
+	"runtime"
 	"strings"
 	"unicode/utf8"
 
@@ -91,10 +92,10 @@ func IsValidObjectName(object string) bool {
 	if len(object) == 0 {
 		return false
 	}
-	if strings.HasSuffix(object, slashSeparator) {
+	if hasSuffix(object, slashSeparator) {
 		return false
 	}
-	if strings.HasPrefix(object, slashSeparator) {
+	if hasPrefix(object, slashSeparator) {
 		return false
 	}
 	return IsValidObjectPrefix(object)
@@ -128,7 +129,7 @@ func retainSlash(s string) string {
 func pathJoin(elem ...string) string {
 	trailingSlash := ""
 	if len(elem) > 0 {
-		if strings.HasSuffix(elem[len(elem)-1], slashSeparator) {
+		if hasSuffix(elem[len(elem)-1], slashSeparator) {
 			trailingSlash = "/"
 		}
 	}
@@ -157,6 +158,43 @@ func getCompleteMultipartMD5(parts []completePart) (string, error) {
 	}
 	s3MD5 := fmt.Sprintf("%s-%d", getMD5Hash(finalMD5Bytes), len(parts))
 	return s3MD5, nil
+}
+
+// Prefix matcher string matches prefix in a platform specific way.
+// For example on windows since its case insensitive we are supposed
+// to do case insensitive checks.
+func hasPrefix(s string, prefix string) bool {
+	if runtime.GOOS == globalWindowsOSName {
+		return strings.HasPrefix(strings.ToLower(s), strings.ToLower(prefix))
+	}
+	return strings.HasPrefix(s, prefix)
+}
+
+// Suffix matcher string matches suffix in a platform specific way.
+// For example on windows since its case insensitive we are supposed
+// to do case insensitive checks.
+func hasSuffix(s string, suffix string) bool {
+	if runtime.GOOS == globalWindowsOSName {
+		return strings.HasSuffix(strings.ToLower(s), strings.ToLower(suffix))
+	}
+	return strings.HasSuffix(s, suffix)
+}
+
+// Validates if two strings are equal.
+func isStringEqual(s1 string, s2 string) bool {
+	if runtime.GOOS == globalWindowsOSName {
+		return strings.EqualFold(s1, s2)
+	}
+	return s1 == s2
+}
+
+// Ignores all reserved bucket names or invalid bucket names.
+func isReservedOrInvalidBucket(bucketEntry string) bool {
+	bucketEntry = strings.TrimSuffix(bucketEntry, slashSeparator)
+	if !IsValidBucketName(bucketEntry) {
+		return true
+	}
+	return bucketEntry == minioMetaBucket || bucketEntry == minioReservedBucket
 }
 
 // byBucketName is a collection satisfying sort.Interface.

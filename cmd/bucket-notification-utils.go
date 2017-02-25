@@ -133,27 +133,27 @@ func isValidQueueID(queueARN string) bool {
 	// Is Queue identifier valid?.
 
 	if isAMQPQueue(sqsARN) { // AMQP eueue.
-		amqpN := serverConfig.GetAMQPNotifyByID(sqsARN.AccountID)
+		amqpN := serverConfig.Notify.GetAMQPByID(sqsARN.AccountID)
 		return amqpN.Enable && amqpN.URL != ""
 	} else if isNATSQueue(sqsARN) {
-		natsN := serverConfig.GetNATSNotifyByID(sqsARN.AccountID)
+		natsN := serverConfig.Notify.GetNATSByID(sqsARN.AccountID)
 		return natsN.Enable && natsN.Address != ""
 	} else if isElasticQueue(sqsARN) { // Elastic queue.
-		elasticN := serverConfig.GetElasticSearchNotifyByID(sqsARN.AccountID)
+		elasticN := serverConfig.Notify.GetElasticSearchByID(sqsARN.AccountID)
 		return elasticN.Enable && elasticN.URL != ""
 	} else if isRedisQueue(sqsARN) { // Redis queue.
-		redisN := serverConfig.GetRedisNotifyByID(sqsARN.AccountID)
+		redisN := serverConfig.Notify.GetRedisByID(sqsARN.AccountID)
 		return redisN.Enable && redisN.Addr != ""
 	} else if isPostgreSQLQueue(sqsARN) {
-		pgN := serverConfig.GetPostgreSQLNotifyByID(sqsARN.AccountID)
+		pgN := serverConfig.Notify.GetPostgreSQLByID(sqsARN.AccountID)
 		// Postgres can work with only default conn. info.
 		return pgN.Enable
 	} else if isKafkaQueue(sqsARN) {
-		kafkaN := serverConfig.GetKafkaNotifyByID(sqsARN.AccountID)
+		kafkaN := serverConfig.Notify.GetKafkaByID(sqsARN.AccountID)
 		return (kafkaN.Enable && len(kafkaN.Brokers) > 0 &&
 			kafkaN.Topic != "")
 	} else if isWebhookQueue(sqsARN) {
-		webhookN := serverConfig.GetWebhookNotifyByID(sqsARN.AccountID)
+		webhookN := serverConfig.Notify.GetWebhookByID(sqsARN.AccountID)
 		return webhookN.Enable && webhookN.Endpoint != ""
 	}
 	return false
@@ -253,19 +253,19 @@ func unmarshalSqsARN(queueARN string) (mSqs arnSQS) {
 	}
 	sqsType := strings.TrimPrefix(queueARN, minioSqs+serverConfig.GetRegion()+":")
 	switch {
-	case strings.HasSuffix(sqsType, queueTypeAMQP):
+	case hasSuffix(sqsType, queueTypeAMQP):
 		mSqs.Type = queueTypeAMQP
-	case strings.HasSuffix(sqsType, queueTypeNATS):
+	case hasSuffix(sqsType, queueTypeNATS):
 		mSqs.Type = queueTypeNATS
-	case strings.HasSuffix(sqsType, queueTypeElastic):
+	case hasSuffix(sqsType, queueTypeElastic):
 		mSqs.Type = queueTypeElastic
-	case strings.HasSuffix(sqsType, queueTypeRedis):
+	case hasSuffix(sqsType, queueTypeRedis):
 		mSqs.Type = queueTypeRedis
-	case strings.HasSuffix(sqsType, queueTypePostgreSQL):
+	case hasSuffix(sqsType, queueTypePostgreSQL):
 		mSqs.Type = queueTypePostgreSQL
-	case strings.HasSuffix(sqsType, queueTypeKafka):
+	case hasSuffix(sqsType, queueTypeKafka):
 		mSqs.Type = queueTypeKafka
-	case strings.HasSuffix(sqsType, queueTypeWebhook):
+	case hasSuffix(sqsType, queueTypeWebhook):
 		mSqs.Type = queueTypeWebhook
 	} // Add more queues here.
 	mSqs.AccountID = strings.TrimSuffix(sqsType, ":"+mSqs.Type)

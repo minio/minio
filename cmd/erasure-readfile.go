@@ -192,7 +192,7 @@ func erasureReadFile(writer io.Writer, disks []StorageAPI, volume string, path s
 	}()
 
 	// Total bytes written to writer
-	bytesWritten := int64(0)
+	var bytesWritten int64
 
 	startBlock := offset / blockSize
 	endBlock := (offset + length) / blockSize
@@ -263,7 +263,7 @@ func erasureReadFile(writer io.Writer, disks []StorageAPI, volume string, path s
 		}
 
 		// Offset in enBlocks from where data should be read from.
-		enBlocksOffset := int64(0)
+		var enBlocksOffset int64
 
 		// Total data to be read from enBlocks.
 		enBlocksLength := curBlockSize

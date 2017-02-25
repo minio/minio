@@ -17,9 +17,14 @@
 package cmd
 
 import (
+	"archive/zip"
 	"bytes"
+	"crypto/md5"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -128,15 +133,6 @@ func TestWebHandlerLogin(t *testing.T) {
 func testLoginWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
-	// initialize the server and obtain the credentials and root.
-	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig(globalMinioDefaultRegion)
-	if err != nil {
-		t.Fatalf("Init Test config failed")
-	}
-	// remove the root directory after the test ends.
-	defer removeAll(rootPath)
-
 	credentials := serverConfig.GetCredential()
 
 	// test cases with sample input and expected output.
@@ -177,15 +173,6 @@ func testStorageInfoWebHandler(obj ObjectLayer, instanceType string, t TestErrHa
 	// get random bucket name.
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
-	// initialize the server and obtain the credentials and root.
-	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig(globalMinioDefaultRegion)
-	if err != nil {
-		t.Fatalf("Init Test config failed")
-	}
-	// remove the root directory after the test ends.
-	defer removeAll(rootPath)
-
 	credentials := serverConfig.GetCredential()
 
 	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
@@ -223,15 +210,6 @@ func TestWebHandlerServerInfo(t *testing.T) {
 func testServerInfoWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
-	// initialize the server and obtain the credentials and root.
-	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig(globalMinioDefaultRegion)
-	if err != nil {
-		t.Fatalf("Init Test config failed")
-	}
-	// remove the root directory after the test ends.
-	defer removeAll(rootPath)
-
 	credentials := serverConfig.GetCredential()
 
 	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
@@ -269,15 +247,6 @@ func TestWebHandlerMakeBucket(t *testing.T) {
 func testMakeBucketWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
-	// initialize the server and obtain the credentials and root.
-	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig(globalMinioDefaultRegion)
-	if err != nil {
-		t.Fatalf("Init Test config failed")
-	}
-	// remove the root directory after the test ends.
-	defer removeAll(rootPath)
-
 	credentials := serverConfig.GetCredential()
 
 	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
@@ -329,15 +298,6 @@ func TestWebHandlerListBuckets(t *testing.T) {
 func testListBucketsWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
-	// initialize the server and obtain the credentials and root.
-	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig(globalMinioDefaultRegion)
-	if err != nil {
-		t.Fatalf("Init Test config failed")
-	}
-	// remove the root directory after the test ends.
-	defer removeAll(rootPath)
-
 	credentials := serverConfig.GetCredential()
 
 	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
@@ -386,15 +346,6 @@ func TestWebHandlerListObjects(t *testing.T) {
 func testListObjectsWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
-	// initialize the server and obtain the credentials and root.
-	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig(globalMinioDefaultRegion)
-	if err != nil {
-		t.Fatalf("Init Test config failed")
-	}
-	// remove the root directory after the test ends.
-	defer removeAll(rootPath)
-
 	credentials := serverConfig.GetCredential()
 
 	rec := httptest.NewRecorder()
@@ -490,15 +441,6 @@ func TestWebHandlerRemoveObject(t *testing.T) {
 func testRemoveObjectWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
-	// initialize the server and obtain the credentials and root.
-	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig(globalMinioDefaultRegion)
-	if err != nil {
-		t.Fatalf("Init Test config failed")
-	}
-	// remove the root directory after the test ends.
-	defer removeAll(rootPath)
-
 	credentials := serverConfig.GetCredential()
 
 	rec := httptest.NewRecorder()
@@ -566,15 +508,6 @@ func TestWebHandlerGenerateAuth(t *testing.T) {
 func testGenerateAuthWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
-	// initialize the server and obtain the credentials and root.
-	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig(globalMinioDefaultRegion)
-	if err != nil {
-		t.Fatalf("Init Test config failed")
-	}
-	// remove the root directory after the test ends.
-	defer removeAll(rootPath)
-
 	credentials := serverConfig.GetCredential()
 
 	rec := httptest.NewRecorder()
@@ -612,15 +545,6 @@ func TestWebHandlerSetAuth(t *testing.T) {
 func testSetAuthWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
-	// initialize the server and obtain the credentials and root.
-	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig(globalMinioDefaultRegion)
-	if err != nil {
-		t.Fatalf("Init Test config failed")
-	}
-	// remove the root directory after the test ends.
-	defer removeAll(rootPath)
-
 	credentials := serverConfig.GetCredential()
 
 	rec := httptest.NewRecorder()
@@ -673,15 +597,6 @@ func TestWebHandlerGetAuth(t *testing.T) {
 func testGetAuthWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
-	// initialize the server and obtain the credentials and root.
-	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig(globalMinioDefaultRegion)
-	if err != nil {
-		t.Fatalf("Init Test config failed")
-	}
-	// remove the root directory after the test ends.
-	defer removeAll(rootPath)
-
 	credentials := serverConfig.GetCredential()
 
 	rec := httptest.NewRecorder()
@@ -718,18 +633,9 @@ func TestWebHandlerUpload(t *testing.T) {
 func testUploadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
-	// initialize the server and obtain the credentials and root.
-	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig(globalMinioDefaultRegion)
-	if err != nil {
-		t.Fatalf("Init Test config failed")
-	}
-	// remove the root directory after the test ends.
-	defer removeAll(rootPath)
-
 	credentials := serverConfig.GetCredential()
-	content := []byte("temporary file's content")
 
+	content := []byte("temporary file's content")
 	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatal("Cannot authenticate")
@@ -738,18 +644,23 @@ func testUploadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler
 	objectName := "test.file"
 	bucketName := getRandomBucketName()
 
-	test := func(token string) int {
+	test := func(token string, sendContentLength bool) int {
 		rec := httptest.NewRecorder()
-		var req *http.Request
-		req, err = http.NewRequest("PUT", "/minio/upload/"+bucketName+"/"+objectName, nil)
-		if err != nil {
-			t.Fatalf("Cannot create upload request, %v", err)
+		req, rErr := http.NewRequest("PUT", "/minio/upload/"+bucketName+"/"+objectName, nil)
+		if rErr != nil {
+			t.Fatalf("Cannot create upload request, %v", rErr)
 		}
 
-		req.Header.Set("Content-Length", strconv.Itoa(len(content)))
 		req.Header.Set("x-amz-date", "20160814T114029Z")
 		req.Header.Set("Accept", "*/*")
+
 		req.Body = ioutil.NopCloser(bytes.NewReader(content))
+
+		if !sendContentLength {
+			req.ContentLength = -1
+		} else {
+			req.ContentLength = int64(len(content))
+		}
 
 		if token != "" {
 			req.Header.Set("Authorization", "Bearer "+authorization)
@@ -765,7 +676,7 @@ func testUploadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler
 	}
 
 	// Authenticated upload should succeed.
-	code := test(authorization)
+	code := test(authorization, true)
 	if code != http.StatusOK {
 		t.Fatalf("Expected the response status to be 200, but instead found `%d`", code)
 	}
@@ -780,8 +691,14 @@ func testUploadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler
 		t.Fatalf("The upload file is different from the download file")
 	}
 
+	// Authenticated upload without content-length should fail
+	code = test(authorization, false)
+	if code != http.StatusBadRequest {
+		t.Fatalf("Expected the response status to be 200, but instead found `%d`", code)
+	}
+
 	// Unauthenticated upload should fail.
-	code = test("")
+	code = test("", true)
 	if code != http.StatusForbidden {
 		t.Fatalf("Expected the response status to be 403, but instead found `%d`", code)
 	}
@@ -794,13 +711,13 @@ func testUploadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler
 	globalBucketPolicies.SetBucketPolicy(bucketName, policyChange{false, &policy})
 
 	// Unauthenticated upload with WRITE policy should succeed.
-	code = test("")
+	code = test("", true)
 	if code != http.StatusOK {
 		t.Fatalf("Expected the response status to be 200, but instead found `%d`", code)
 	}
 }
 
-// Wrapper for calling Upload Handler
+// Wrapper for calling Download Handler
 func TestWebHandlerDownload(t *testing.T) {
 	ExecObjectLayerTest(t, testDownloadWebHandler)
 }
@@ -809,15 +726,6 @@ func TestWebHandlerDownload(t *testing.T) {
 func testDownloadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
-	// initialize the server and obtain the credentials and root.
-	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig(globalMinioDefaultRegion)
-	if err != nil {
-		t.Fatalf("Init Test config failed")
-	}
-	// remove the root directory after the test ends.
-	defer removeAll(rootPath)
-
 	credentials := serverConfig.GetCredential()
 
 	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
@@ -893,6 +801,89 @@ func testDownloadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandl
 	}
 }
 
+// Test web.DownloadZip
+func TestWebHandlerDownloadZip(t *testing.T) {
+	ExecObjectLayerTest(t, testWebHandlerDownloadZip)
+}
+
+func testWebHandlerDownloadZip(obj ObjectLayer, instanceType string, t TestErrHandler) {
+	apiRouter := initTestWebRPCEndPoint(obj)
+	credentials := serverConfig.GetCredential()
+
+	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
+	if err != nil {
+		t.Fatal("Cannot authenticate")
+	}
+
+	bucket := getRandomBucketName()
+	fileOne := "aaaaaaaaaaaaaa"
+	fileTwo := "bbbbbbbbbbbbbb"
+	fileThree := "cccccccccccccc"
+
+	// Create bucket.
+	err = obj.MakeBucket(bucket)
+	if err != nil {
+		// failed to create newbucket, abort.
+		t.Fatalf("%s : %s", instanceType, err)
+	}
+
+	obj.PutObject(bucket, "a/one", int64(len(fileOne)), strings.NewReader(fileOne), nil, "")
+	obj.PutObject(bucket, "a/b/two", int64(len(fileTwo)), strings.NewReader(fileTwo), nil, "")
+	obj.PutObject(bucket, "a/c/three", int64(len(fileThree)), strings.NewReader(fileThree), nil, "")
+
+	test := func(token string) (int, []byte) {
+		rec := httptest.NewRecorder()
+		path := "/minio/zip" + "?token="
+		if token != "" {
+			path = path + token
+		}
+		args := DownloadZipArgs{
+			Objects:    []string{"one", "b/", "c/"},
+			Prefix:     "a/",
+			BucketName: bucket,
+		}
+
+		var argsData []byte
+		argsData, err = json.Marshal(args)
+		if err != nil {
+			return 0, nil
+		}
+		var req *http.Request
+		req, err = http.NewRequest("POST", path, bytes.NewBuffer(argsData))
+
+		if err != nil {
+			t.Fatalf("Cannot create upload request, %v", err)
+		}
+
+		apiRouter.ServeHTTP(rec, req)
+		return rec.Code, rec.Body.Bytes()
+	}
+	code, data := test("")
+	if code != 403 {
+		t.Fatal("Expected to receive authentication error")
+	}
+	code, data = test(authorization)
+	if code != 200 {
+		t.Fatal("web.DownloadsZip() failed")
+	}
+	reader, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := md5.New()
+	for _, file := range reader.File {
+		fileReader, err := file.Open()
+		if err != nil {
+			t.Fatal(err)
+		}
+		io.Copy(h, fileReader)
+	}
+	// Verify the md5 of the response.
+	if hex.EncodeToString(h.Sum(nil)) != "ac7196449b14bea42775d29e8bb29f50" {
+		t.Fatal("Incorrect zip contents")
+	}
+}
+
 // Wrapper for calling PresignedGet handler
 func TestWebHandlerPresignedGetHandler(t *testing.T) {
 	ExecObjectLayerTest(t, testWebPresignedGetHandler)
@@ -901,15 +892,6 @@ func TestWebHandlerPresignedGetHandler(t *testing.T) {
 func testWebPresignedGetHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
-	// initialize the server and obtain the credentials and root.
-	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig(globalMinioDefaultRegion)
-	if err != nil {
-		t.Fatalf("Init Test config failed")
-	}
-	// remove the root directory after the test ends.
-	defer removeAll(rootPath)
-
 	credentials := serverConfig.GetCredential()
 
 	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
@@ -1014,15 +996,6 @@ func TestWebHandlerGetBucketPolicyHandler(t *testing.T) {
 func testWebGetBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
-	// initialize the server and obtain the credentials and root.
-	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig(globalMinioDefaultRegion)
-	if err != nil {
-		t.Fatalf("Init Test config failed")
-	}
-	// remove the root directory after the test ends.
-	defer removeAll(rootPath)
-
 	credentials := serverConfig.GetCredential()
 
 	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
@@ -1097,15 +1070,6 @@ func TestWebHandlerListAllBucketPoliciesHandler(t *testing.T) {
 func testWebListAllBucketPoliciesHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
-	// initialize the server and obtain the credentials and root.
-	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig(globalMinioDefaultRegion)
-	if err != nil {
-		t.Fatalf("Init Test config failed")
-	}
-	// remove the root directory after the test ends.
-	defer removeAll(rootPath)
-
 	credentials := serverConfig.GetCredential()
 
 	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
@@ -1203,15 +1167,6 @@ func TestWebHandlerSetBucketPolicyHandler(t *testing.T) {
 func testWebSetBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestWebRPCEndPoint(obj)
-	// initialize the server and obtain the credentials and root.
-	// credentials are necessary to sign the HTTP request.
-	rootPath, err := newTestConfig(globalMinioDefaultRegion)
-	if err != nil {
-		t.Fatalf("Init Test config failed")
-	}
-	// remove the root directory after the test ends.
-	defer removeAll(rootPath)
-
 	credentials := serverConfig.GetCredential()
 
 	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
@@ -1533,10 +1488,6 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("Expected the response status to be 200, but instead found `%d`", rec.Code)
 	}
-	resp := string(rec.Body.Bytes())
-	if !strings.Contains(resp, "We encountered an internal error, please try again.") {
-		t.Fatalf("Unexpected error message, expected: `Invalid token`, found: `%s`", resp)
-	}
 
 	// Test authorization of Web.Upload
 	content := []byte("temporary file's content")
@@ -1552,9 +1503,5 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 	apiRouter.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("Expected the response status to be 200, but instead found `%d`", rec.Code)
-	}
-	resp = string(rec.Body.Bytes())
-	if !strings.Contains(resp, "We encountered an internal error, please try again.") {
-		t.Fatalf("Unexpected error message, expected: `Invalid token`, found: `%s`", resp)
 	}
 }

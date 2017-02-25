@@ -16,13 +16,16 @@
 
 package cmd
 
-import "github.com/minio/cli"
+import (
+	"github.com/minio/cli"
+	"github.com/minio/minio/pkg/trie"
+)
 
 // Collection of minio commands currently supported are.
 var commands = []cli.Command{}
 
 // Collection of minio commands currently supported in a trie tree.
-var commandsTree = newTrie()
+var commandsTree = trie.NewTrie()
 
 // registerCommand registers a cli command.
 func registerCommand(command cli.Command) {

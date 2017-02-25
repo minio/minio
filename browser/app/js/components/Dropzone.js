@@ -1,5 +1,5 @@
 /*
- * Minio Browser (C) 2016 Minio, Inc.
+ * Minio Cloud Storage (C) 2016 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,11 +39,12 @@ export default class Dropzone extends React.Component {
     // won't handle child elements correctly.
     const style = {
       height: '100%',
-      borderWidth: '2px',
+      borderWidth: '0',
       borderStyle: 'dashed',
       borderColor: '#fff'
     }
     const activeStyle = {
+      borderWidth: '2px',
       borderColor: '#777'
     }
     const rejectStyle = {

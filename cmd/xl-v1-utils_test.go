@@ -22,6 +22,8 @@ import (
 	"strconv"
 	"testing"
 	"time"
+
+	humanize "github.com/dustin/go-humanize"
 )
 
 // Tests caclculating disk count.
@@ -324,4 +326,108 @@ func TestGetXLMetaV1GJson10(t *testing.T) {
 		t.Errorf("gjson parsing of XLMeta failed")
 	}
 	compareXLMetaV1(t, unMarshalXLMeta, gjsonXLMeta)
+}
+
+// Test the predicted part size from the part index
+func TestGetPartSizeFromIdx(t *testing.T) {
+	// Create test cases
+	testCases := []struct {
+		totalSize    int64
+		partSize     int64
+		partIndex    int
+		expectedSize int64
+	}{
+		// Total size is - 1
+		{-1, 10, 1, -1},
+		// Total size is zero
+		{0, 10, 1, 0},
+		// part size 2MiB, total size 4MiB
+		{4 * humanize.MiByte, 2 * humanize.MiByte, 1, 2 * humanize.MiByte},
+		{4 * humanize.MiByte, 2 * humanize.MiByte, 2, 2 * humanize.MiByte},
+		{4 * humanize.MiByte, 2 * humanize.MiByte, 3, 0},
+		// part size 2MiB, total size 5MiB
+		{5 * humanize.MiByte, 2 * humanize.MiByte, 1, 2 * humanize.MiByte},
+		{5 * humanize.MiByte, 2 * humanize.MiByte, 2, 2 * humanize.MiByte},
+		{5 * humanize.MiByte, 2 * humanize.MiByte, 3, 1 * humanize.MiByte},
+		{5 * humanize.MiByte, 2 * humanize.MiByte, 4, 0},
+	}
+
+	for i, testCase := range testCases {
+		s, err := getPartSizeFromIdx(testCase.totalSize, testCase.partSize, testCase.partIndex)
+		if err != nil {
+			t.Errorf("Test %d: Expected to pass but failed. %s", i+1, err)
+		}
+		if err == nil && s != testCase.expectedSize {
+			t.Errorf("Test %d: The calculated part size is incorrect: expected = %d, found = %d\n", i+1, testCase.expectedSize, s)
+		}
+	}
+
+	testCasesFailure := []struct {
+		totalSize int64
+		partSize  int64
+		partIndex int
+		err       error
+	}{
+		// partSize is 0, error.
+		{10, 0, 1, errPartSizeZero},
+		{10, 1, 0, errPartSizeIndex},
+	}
+
+	for i, testCaseFailure := range testCasesFailure {
+		_, err := getPartSizeFromIdx(testCaseFailure.totalSize, testCaseFailure.partSize, testCaseFailure.partIndex)
+		if err == nil {
+			t.Errorf("Test %d: Expected to failed but passed. %s", i+1, err)
+		}
+		if err != nil && errorCause(err) != testCaseFailure.err {
+			t.Errorf("Test %d: Expected err %s, but got %s", i+1, testCaseFailure.err, errorCause(err))
+		}
+	}
+}
+
+func TestShuffleDisks(t *testing.T) {
+	nDisks := 16
+	disks, err := getRandomDisks(nDisks)
+	if err != nil {
+		t.Fatal(err)
+	}
+	endpoints, err := parseStorageEndpoints(disks)
+	if err != nil {
+		t.Fatal(err)
+	}
+	objLayer, _, err := initObjectLayer(endpoints)
+	if err != nil {
+		removeRoots(disks)
+		t.Fatal(err)
+	}
+	defer removeRoots(disks)
+	xl := objLayer.(*xlObjects)
+	testShuffleDisks(t, xl)
+}
+
+// Test shuffleDisks which returns shuffled slice of disks for their actual distribution.
+func testShuffleDisks(t *testing.T, xl *xlObjects) {
+	disks := xl.storageDisks
+	distribution := []int{16, 14, 12, 10, 8, 6, 4, 2, 1, 3, 5, 7, 9, 11, 13, 15}
+	shuffledDisks := shuffleDisks(disks, distribution)
+	// From the "distribution" above you can notice that:
+	// 1st data block is in the 9th disk (i.e distribution index 8)
+	// 2nd data block is in the 8th disk (i.e distribution index 7) and so on.
+	if shuffledDisks[0] != disks[8] ||
+		shuffledDisks[1] != disks[7] ||
+		shuffledDisks[2] != disks[9] ||
+		shuffledDisks[3] != disks[6] ||
+		shuffledDisks[4] != disks[10] ||
+		shuffledDisks[5] != disks[5] ||
+		shuffledDisks[6] != disks[11] ||
+		shuffledDisks[7] != disks[4] ||
+		shuffledDisks[8] != disks[12] ||
+		shuffledDisks[9] != disks[3] ||
+		shuffledDisks[10] != disks[13] ||
+		shuffledDisks[11] != disks[2] ||
+		shuffledDisks[12] != disks[14] ||
+		shuffledDisks[13] != disks[1] ||
+		shuffledDisks[14] != disks[15] ||
+		shuffledDisks[15] != disks[0] {
+		t.Errorf("shuffleDisks returned incorrect order.")
+	}
 }

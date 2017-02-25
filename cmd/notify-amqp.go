@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"io/ioutil"
+	"net"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/streadway/amqp"
@@ -59,7 +60,7 @@ func dialAMQP(amqpL amqpNotify) (amqpConn, error) {
 }
 
 func newAMQPNotify(accountID string) (*logrus.Logger, error) {
-	amqpL := serverConfig.GetAMQPNotifyByID(accountID)
+	amqpL := serverConfig.Notify.GetAMQPByID(accountID)
 
 	// Connect to amqp server.
 	amqpC, err := dialAMQP(amqpL)
@@ -87,7 +88,14 @@ func (q amqpConn) Fire(entry *logrus.Entry) error {
 	ch, err := q.Connection.Channel()
 	if err != nil {
 		// Any other error other than connection closed, return.
-		if err != amqp.ErrClosed {
+		isClosedErr := false
+		if neterr, ok := err.(*net.OpError); ok &&
+			neterr.Err.Error() == "use of closed network connection" {
+			isClosedErr = true
+		} else if err == amqp.ErrClosed {
+			isClosedErr = true
+		}
+		if !isClosedErr {
 			return err
 		}
 		// Attempt to connect again.

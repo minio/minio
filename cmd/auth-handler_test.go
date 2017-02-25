@@ -36,13 +36,14 @@ func TestGetRequestAuthType(t *testing.T) {
 		{
 			req: &http.Request{
 				URL: &url.URL{
-					Host:   "localhost:9000",
+					Host:   "127.0.0.1:9000",
 					Scheme: httpScheme,
 					Path:   "/",
 				},
 				Header: http.Header{
 					"Authorization":        []string{"AWS4-HMAC-SHA256 <cred_string>"},
 					"X-Amz-Content-Sha256": []string{streamingContentSHA256},
+					"Content-Encoding":     []string{streamingContentEncoding},
 				},
 				Method: "PUT",
 			},
@@ -53,7 +54,7 @@ func TestGetRequestAuthType(t *testing.T) {
 		{
 			req: &http.Request{
 				URL: &url.URL{
-					Host:   "localhost:9000",
+					Host:   "127.0.0.1:9000",
 					Scheme: httpScheme,
 					Path:   "/",
 				},
@@ -68,7 +69,7 @@ func TestGetRequestAuthType(t *testing.T) {
 		{
 			req: &http.Request{
 				URL: &url.URL{
-					Host:   "localhost:9000",
+					Host:   "127.0.0.1:9000",
 					Scheme: httpScheme,
 					Path:   "/",
 				},
@@ -83,7 +84,7 @@ func TestGetRequestAuthType(t *testing.T) {
 		{
 			req: &http.Request{
 				URL: &url.URL{
-					Host:     "localhost:9000",
+					Host:     "127.0.0.1:9000",
 					Scheme:   httpScheme,
 					Path:     "/",
 					RawQuery: "X-Amz-Credential=EXAMPLEINVALIDEXAMPL%2Fs3%2F20160314%2Fus-east-1",
@@ -96,7 +97,7 @@ func TestGetRequestAuthType(t *testing.T) {
 		{
 			req: &http.Request{
 				URL: &url.URL{
-					Host:   "localhost:9000",
+					Host:   "127.0.0.1:9000",
 					Scheme: httpScheme,
 					Path:   "/",
 				},
@@ -315,7 +316,8 @@ func TestIsReqAuthenticated(t *testing.T) {
 	}
 	defer removeAll(path)
 
-	serverConfig.SetCredential(credential{"myuser", "mypassword"})
+	creds := newCredentialWithKeys("myuser", "mypassword")
+	serverConfig.SetCredential(creds)
 
 	// List of test cases for validating http request authentication.
 	testCases := []struct {
@@ -325,11 +327,11 @@ func TestIsReqAuthenticated(t *testing.T) {
 		// When request is nil, internal error is returned.
 		{nil, ErrInternalError},
 		// When request is unsigned, access denied is returned.
-		{mustNewRequest("GET", "http://localhost:9000", 0, nil, t), ErrAccessDenied},
+		{mustNewRequest("GET", "http://127.0.0.1:9000", 0, nil, t), ErrAccessDenied},
 		// When request is properly signed, but has bad Content-MD5 header.
-		{mustNewSignedRequest("PUT", "http://localhost:9000", 5, bytes.NewReader([]byte("hello")), t), ErrBadDigest},
+		{mustNewSignedRequest("PUT", "http://127.0.0.1:9000", 5, bytes.NewReader([]byte("hello")), t), ErrBadDigest},
 		// When request is properly signed, error is none.
-		{mustNewSignedRequest("GET", "http://localhost:9000", 0, nil, t), ErrNone},
+		{mustNewSignedRequest("GET", "http://127.0.0.1:9000", 0, nil, t), ErrNone},
 	}
 
 	// Validates all testcases.

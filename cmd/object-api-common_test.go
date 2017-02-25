@@ -116,8 +116,8 @@ func TestGetPath(t *testing.T) {
 			{"D:\\", "d:\\"},
 			{"D:", "d:"},
 			{"\\", "\\"},
-			{"http://localhost/d:/export", "d:/export"},
-			{"https://localhost/d:/export", "d:/export"},
+			{"http://127.0.0.1/d:/export", "d:/export"},
+			{"https://127.0.0.1/d:/export", "d:/export"},
 		}
 	} else {
 		testCases = []struct {
@@ -125,8 +125,8 @@ func TestGetPath(t *testing.T) {
 			path  string
 		}{
 			{"/export", "/export"},
-			{"http://localhost/export", "/export"},
-			{"https://localhost/export", "/export"},
+			{"http://127.0.0.1/export", "/export"},
+			{"https://127.0.0.1/export", "/export"},
 		}
 	}
 	testCasesCommon := []struct {
