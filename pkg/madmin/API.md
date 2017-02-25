@@ -36,13 +36,13 @@ func main() {
 
 ```
 
-| Service operations|LockInfo operations|Healing operations|Config operations|
-|:---|:---|:---|:---|
-|[`ServiceStatus`](#ServiceStatus)| [`ListLocks`](#ListLocks)| [`ListObjectsHeal`](#ListObjectsHeal)|[`GetConfig`](#GetConfig)|
-|[`ServiceRestart`](#ServiceRestart)| [`ClearLocks`](#ClearLocks)| [`ListBucketsHeal`](#ListBucketsHeal)||
-| | |[`HealBucket`](#HealBucket) ||
-| | |[`HealObject`](#HealObject)||
-| | |[`HealFormat`](#HealFormat)||
+| Service operations|LockInfo operations|Healing operations|Config operations| Misc |
+|:---|:---|:---|:---|:---|
+|[`ServiceStatus`](#ServiceStatus)| [`ListLocks`](#ListLocks)| [`ListObjectsHeal`](#ListObjectsHeal)|[`GetConfig`](#GetConfig)| [`SetCredentials`](#SetCredentials)|
+|[`ServiceRestart`](#ServiceRestart)| [`ClearLocks`](#ClearLocks)| [`ListBucketsHeal`](#ListBucketsHeal)|||
+| | |[`HealBucket`](#HealBucket) |||
+| | |[`HealObject`](#HealObject)|||
+| | |[`HealFormat`](#HealFormat)|||
 
 ## 1. Constructor
 <a name="Minio"></a>
@@ -119,6 +119,9 @@ If successful restarts the running minio service, for distributed setup restarts
 	log.Printf("Success")
 
  ```
+
+## 3. Lock operations
+
 <a name="ListLocks"></a>
 ### ListLocks(bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error)
 If successful returns information on the list of locks held on ``bucket`` matching ``prefix`` for  longer than ``duration`` seconds.
@@ -148,6 +151,8 @@ __Example__
     log.Println("List of locks cleared: ", volLocks)
 
 ```
+
+## 4. Heal operations
 
 <a name="ListObjectsHeal"></a>
 ### ListObjectsHeal(bucket, prefix string, recursive bool, doneCh <-chan struct{}) (<-chan ObjectInfo, error)
@@ -272,6 +277,9 @@ __Example__
     log.Println("successfully healed storage format on available disks.")
 
 ```
+
+## 5. Config operations
+
 <a name="GetConfig"></a>
 ### GetConfig() ([]byte, error)
 Get config.json of a minio setup.
@@ -293,3 +301,23 @@ __Example__
 
     log.Println("config received successfully: ", string(buf.Bytes()))
 ```
+
+## 6. Misc operations
+
+<a name="SetCredentials"></a>
+
+### SetCredentials() error 
+Set new credentials of a Minio setup.
+
+__Example__
+
+``` go
+    err = madmClnt.SetCredentials("YOUR-NEW-ACCESSKEY", "YOUR-NEW-SECRETKEY")
+    if err != nil {
+            log.Fatalln(err)
+    }
+    log.Println("New credentials successfully set.")
+
+```
+
+
