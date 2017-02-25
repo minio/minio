@@ -111,7 +111,6 @@ func (authClient *AuthRPCClient) Login() (err error) {
 // call makes a RPC call after logs into the server.
 func (authClient *AuthRPCClient) call(serviceMethod string, args interface {
 	SetAuthToken(authToken string)
-	SetRequestTime(requestTime time.Time)
 }, reply interface{}) (err error) {
 	// On successful login, execute RPC call.
 	if err = authClient.Login(); err == nil {
@@ -119,7 +118,6 @@ func (authClient *AuthRPCClient) call(serviceMethod string, args interface {
 		// Set token and timestamp before the rpc call.
 		args.SetAuthToken(authClient.authToken)
 		authClient.Unlock()
-		args.SetRequestTime(time.Now().UTC())
 
 		// Do RPC call.
 		err = authClient.rpcClient.Call(serviceMethod, args, reply)
@@ -130,7 +128,6 @@ func (authClient *AuthRPCClient) call(serviceMethod string, args interface {
 // Call executes RPC call till success or globalAuthRPCRetryThreshold on ErrShutdown.
 func (authClient *AuthRPCClient) Call(serviceMethod string, args interface {
 	SetAuthToken(authToken string)
-	SetRequestTime(requestTime time.Time)
 }, reply interface{}) (err error) {
 
 	// Done channel is used to close any lingering retry routine, as soon

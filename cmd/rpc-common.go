@@ -37,10 +37,6 @@ func isRequestTimeAllowed(requestTime time.Time) bool {
 type AuthRPCArgs struct {
 	// Authentication token to be verified by the server for every RPC call.
 	AuthToken string
-
-	// Request time to be verified by the server for every RPC call.
-	// This is an addition check over Authentication token for time drifting.
-	RequestTime time.Time
 }
 
 // SetAuthToken - sets the token to the supplied value.
@@ -48,21 +44,11 @@ func (args *AuthRPCArgs) SetAuthToken(authToken string) {
 	args.AuthToken = authToken
 }
 
-// SetRequestTime - sets the requestTime to the supplied value.
-func (args *AuthRPCArgs) SetRequestTime(requestTime time.Time) {
-	args.RequestTime = requestTime
-}
-
 // IsAuthenticated - validated whether this auth RPC args are already authenticated or not.
 func (args AuthRPCArgs) IsAuthenticated() error {
 	// Check whether the token is valid
 	if !isAuthTokenValid(args.AuthToken) {
 		return errInvalidToken
-	}
-
-	// Check if the request time is within the allowed skew limit.
-	if !isRequestTimeAllowed(args.RequestTime) {
-		return errServerTimeMismatch
 	}
 
 	// Good to go.
