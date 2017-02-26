@@ -395,6 +395,8 @@ func rename(disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry string,
 			err := disk.RenameFile(srcBucket, srcEntry, dstBucket, dstEntry)
 			if err != nil && err != errFileNotFound {
 				errs[index] = traceError(err)
+				// Ignore disk which returned an error.
+				disks[index] = nil
 			}
 		}(index, disk)
 	}

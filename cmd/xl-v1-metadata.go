@@ -361,6 +361,8 @@ func writeUniqueXLMetadata(disks []StorageAPI, bucket, prefix string, xlMetas []
 			err := writeXLMetadata(disk, bucket, prefix, xlMetas[index])
 			if err != nil {
 				mErrs[index] = err
+				// Ignore disk which returned an error.
+				disks[index] = nil
 			}
 		}(index, disk)
 	}
@@ -399,6 +401,8 @@ func writeSameXLMetadata(disks []StorageAPI, bucket, prefix string, xlMeta xlMet
 			err := writeXLMetadata(disk, bucket, prefix, metadata)
 			if err != nil {
 				mErrs[index] = err
+				// Ignore disk which returned an error.
+				disks[index] = nil
 			}
 		}(index, disk, xlMeta)
 	}
