@@ -39,7 +39,7 @@ func main() {
 | Service operations|LockInfo operations|Healing operations|Config operations| Misc |
 |:---|:---|:---|:---|:---|
 |[`ServiceStatus`](#ServiceStatus)| [`ListLocks`](#ListLocks)| [`ListObjectsHeal`](#ListObjectsHeal)|[`GetConfig`](#GetConfig)| [`SetCredentials`](#SetCredentials)|
-|[`ServiceRestart`](#ServiceRestart)| [`ClearLocks`](#ClearLocks)| [`ListBucketsHeal`](#ListBucketsHeal)|||
+|[`ServiceRestart`](#ServiceRestart)| [`ClearLocks`](#ClearLocks)| [`ListBucketsHeal`](#ListBucketsHeal)|[`SetConfig`](#SetConfig)||
 | | |[`HealBucket`](#HealBucket) |||
 | | |[`HealObject`](#HealObject)|||
 | | |[`HealFormat`](#HealFormat)|||
@@ -306,7 +306,7 @@ __Example__
 
 <a name="SetCredentials"></a>
 
-### SetCredentials() error 
+### SetCredentials() error
 Set new credentials of a Minio setup.
 
 __Example__
@@ -320,4 +320,35 @@ __Example__
 
 ```
 
+<a name="SetConfig"></a>
+### SetConfig(config io.Reader) (SetConfigResult, error)
+Set config.json of a minio setup and restart setup for configuration
+change to take effect.
 
+
+| Param  | Type  | Description  |
+|---|---|---|
+|`st.Status`            | _bool_  | true if set-config succeeded, false otherwise. |
+|`st.NodeSummary.Name`  | _string_  | Network address of the node. |
+|`st.NodeSummary.Err`   | _string_ | String representation of the error (if any) on the node.|
+
+
+__Example__
+
+``` go
+    config := bytes.NewReader([]byte(`config.json contents go here`))
+    result, err := madmClnt.SetConfig(config)
+    if err != nil {
+        log.Fatalf("failed due to: %v", err)
+    }
+
+    var buf bytes.Buffer
+    enc := json.NewEncoder(&buf)
+    enc.SetEscapeHTML(false)
+    enc.SetIndent("", "\t")
+    err = enc.Encode(result)
+    if err != nil {
+        log.Fatalln(err)
+    }
+    log.Println("SetConfig: ", string(buf.Bytes()))
+```

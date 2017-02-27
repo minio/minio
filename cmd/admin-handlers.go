@@ -17,8 +17,10 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"encoding/xml"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -27,7 +29,8 @@ import (
 )
 
 const (
-	minioAdminOpHeader = "X-Minio-Operation"
+	minioAdminOpHeader   = "X-Minio-Operation"
+	minioConfigTmpFormat = "config-%s.json"
 )
 
 // Type-safe query params.
@@ -694,10 +697,127 @@ func (adminAPI adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http
 	// returns local config.json.
 	configBytes, err := getPeerConfig(globalAdminPeers)
 	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		errorIf(err, "Failed to get config from peers")
+		writeErrorResponse(w, toAdminAPIErrCode(err), r.URL)
 		return
 	}
 
 	writeSuccessResponseJSON(w, configBytes)
+}
+
+// toAdminAPIErrCode - converts errXLWriteQuorum error to admin API
+// specific error.
+func toAdminAPIErrCode(err error) APIErrorCode {
+	switch err {
+	case errXLWriteQuorum:
+		return ErrAdminConfigNoQuorum
+	}
+	return toAPIErrorCode(err)
+}
+
+// SetConfigResult - represents detailed results of a set-config
+// operation.
+type nodeSummary struct {
+	Name string `json:"name"`
+	Err  string `json:"err"`
+}
+type setConfigResult struct {
+	NodeResults []nodeSummary `json:"nodeResults"`
+	Status      bool          `json:"status"`
+}
+
+// writeSetConfigResponse - writes setConfigResult value as json depending on the status.
+func writeSetConfigResponse(w http.ResponseWriter, peers adminPeers, errs []error, status bool, reqURL *url.URL) {
+	var nodeResults []nodeSummary
+	// Build nodeResults based on error values received during
+	// set-config operation.
+	for i := range errs {
+		nodeResults = append(nodeResults, nodeSummary{
+			Name: peers[i].addr,
+			Err:  fmt.Sprintf("%v", errs[i]),
+		})
+
+	}
+
+	result := setConfigResult{
+		Status:      status,
+		NodeResults: nodeResults,
+	}
+
+	// The following elaborate json encoding is to avoid escaping
+	// '<', '>' in <nil>. Note: json.Encoder.Encode() adds a
+	// gratuitous "\n".
+	var resultBuf bytes.Buffer
+	enc := json.NewEncoder(&resultBuf)
+	enc.SetEscapeHTML(false)
+	jsonErr := enc.Encode(result)
+	if jsonErr != nil {
+		writeErrorResponse(w, toAPIErrorCode(jsonErr), reqURL)
+		return
+	}
+
+	writeSuccessResponseJSON(w, resultBuf.Bytes())
+	return
+}
+
+// SetConfigHandler - PUT /?config
+// - x-minio-operation = set
+func (adminAPI adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Request) {
+	// Get current object layer instance.
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil {
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+		return
+	}
+
+	// Validate request signature.
+	adminAPIErr := checkRequestAuthType(r, "", "", "")
+	if adminAPIErr != ErrNone {
+		writeErrorResponse(w, adminAPIErr, r.URL)
+		return
+	}
+
+	// Read configuration bytes from request body.
+	configBytes, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		errorIf(err, "Failed to read config from request body.")
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
+	// Write config received from request onto a temporary file on
+	// all nodes.
+	tmpFileName := fmt.Sprintf(minioConfigTmpFormat, mustGetUUID())
+	errs := writeTmpConfigPeers(globalAdminPeers, tmpFileName, configBytes)
+
+	// Check if the operation succeeded in quorum or more nodes.
+	rErr := reduceWriteQuorumErrs(errs, nil, len(globalAdminPeers)/2+1)
+	if rErr != nil {
+		writeSetConfigResponse(w, globalAdminPeers, errs, false, r.URL)
+		return
+	}
+
+	// Take a lock on minio/config.json. NB minio is a reserved
+	// bucket name and wouldn't conflict with normal object
+	// operations.
+	configLock := globalNSMutex.NewNSLock(minioReservedBucket, globalMinioConfigFile)
+	configLock.Lock()
+	defer configLock.Unlock()
+
+	// Rename the temporary config file to config.json
+	errs = commitConfigPeers(globalAdminPeers, tmpFileName)
+	rErr = reduceWriteQuorumErrs(errs, nil, len(globalAdminPeers)/2+1)
+	if rErr != nil {
+		writeSetConfigResponse(w, globalAdminPeers, errs, false, r.URL)
+		return
+	}
+
+	// serverMux (cmd/server-mux.go) implements graceful shutdown,
+	// where all listeners are closed and process restart/shutdown
+	// happens after 5s or completion of all ongoing http
+	// requests, whichever is earlier.
+	writeSetConfigResponse(w, globalAdminPeers, errs, true, r.URL)
+
+	// Restart all node for the modified config to take effect.
+	sendServiceCmd(globalAdminPeers, serviceRestart)
 }

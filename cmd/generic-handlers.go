@@ -351,7 +351,7 @@ func (h resourceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	// A put method on path "/" doesn't make sense, ignore it.
-	if r.Method == httpPUT && r.URL.Path == "/" {
+	if r.Method == httpPUT && r.URL.Path == "/" && r.Header.Get(minioAdminOpHeader) == "" {
 		writeErrorResponse(w, ErrNotImplemented, r.URL)
 		return
 	}

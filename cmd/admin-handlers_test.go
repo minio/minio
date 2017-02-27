@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"encoding/xml"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -29,6 +30,102 @@ import (
 
 	router "github.com/gorilla/mux"
 )
+
+var configJSON = []byte(`{
+	"version": "13",
+	"credential": {
+		"accessKey": "minio",
+		"secretKey": "minio123"
+	},
+	"region": "us-west-1",
+	"logger": {
+		"console": {
+			"enable": true,
+			"level": "fatal"
+		},
+		"file": {
+			"enable": false,
+			"fileName": "",
+			"level": ""
+		}
+	},
+	"notify": {
+		"amqp": {
+			"1": {
+				"enable": false,
+				"url": "",
+				"exchange": "",
+				"routingKey": "",
+				"exchangeType": "",
+				"mandatory": false,
+				"immediate": false,
+				"durable": false,
+				"internal": false,
+				"noWait": false,
+				"autoDeleted": false
+			}
+		},
+		"nats": {
+			"1": {
+				"enable": false,
+				"address": "",
+				"subject": "",
+				"username": "",
+				"password": "",
+				"token": "",
+				"secure": false,
+				"pingInterval": 0,
+				"streaming": {
+					"enable": false,
+					"clusterID": "",
+					"clientID": "",
+					"async": false,
+					"maxPubAcksInflight": 0
+				}
+			}
+		},
+		"elasticsearch": {
+			"1": {
+				"enable": false,
+				"url": "",
+				"index": ""
+			}
+		},
+		"redis": {
+			"1": {
+				"enable": false,
+				"address": "",
+				"password": "",
+				"key": ""
+			}
+		},
+		"postgresql": {
+			"1": {
+				"enable": false,
+				"connectionString": "",
+				"table": "",
+				"host": "",
+				"port": "",
+				"user": "",
+				"password": "",
+				"database": ""
+			}
+		},
+		"kafka": {
+			"1": {
+				"enable": false,
+				"brokers": null,
+				"topic": ""
+			}
+		},
+		"webhook": {
+			"1": {
+				"enable": false,
+				"endpoint": ""
+			}
+		}
+	}
+}`)
 
 // adminXLTestBed - encapsulates subsystems that need to be setup for
 // admin-handler unit tests.
@@ -1032,4 +1129,160 @@ func TestGetConfigHandler(t *testing.T) {
 		t.Errorf("Expected to succeed but failed with %d", rec.Code)
 	}
 
+}
+
+// TestSetConfigHandler - test for SetConfigHandler.
+func TestSetConfigHandler(t *testing.T) {
+	adminTestBed, err := prepareAdminXLTestBed()
+	if err != nil {
+		t.Fatal("Failed to initialize a single node XL backend for admin handler tests.")
+	}
+	defer adminTestBed.TearDown()
+
+	// Initialize admin peers to make admin RPC calls.
+	eps, err := parseStorageEndpoints([]string{"http://127.0.0.1"})
+	if err != nil {
+		t.Fatalf("Failed to parse storage end point - %v", err)
+	}
+
+	// Set globalMinioAddr to be able to distinguish local endpoints from remote.
+	globalMinioAddr = eps[0].Host
+	initGlobalAdminPeers(eps)
+
+	// SetConfigHandler restarts minio setup - need to start a
+	// signal receiver to receive on globalServiceSignalCh.
+	go testServiceSignalReceiver(restartCmd, t)
+
+	// Prepare query params for set-config mgmt REST API.
+	queryVal := url.Values{}
+	queryVal.Set("config", "")
+
+	req, err := newTestRequest("PUT", "/?"+queryVal.Encode(), int64(len(configJSON)), bytes.NewReader(configJSON))
+	if err != nil {
+		t.Fatalf("Failed to construct get-config object request - %v", err)
+	}
+
+	// Set x-minio-operation header to set.
+	req.Header.Set(minioAdminOpHeader, "set")
+
+	// Sign the request using signature v4.
+	cred := serverConfig.GetCredential()
+	err = signRequestV4(req, cred.AccessKey, cred.SecretKey)
+	if err != nil {
+		t.Fatalf("Failed to sign heal object request - %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	adminTestBed.mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("Expected to succeed but failed with %d", rec.Code)
+	}
+
+	result := setConfigResult{}
+	err = json.NewDecoder(rec.Body).Decode(&result)
+	if err != nil {
+		t.Fatalf("Failed to decode set config result json %v", err)
+	}
+
+	if result.Status != true {
+		t.Error("Expected set-config to succeed, but failed")
+	}
+}
+
+// TestToAdminAPIErr - test for toAdminAPIErr helper function.
+func TestToAdminAPIErr(t *testing.T) {
+	testCases := []struct {
+		err            error
+		expectedAPIErr APIErrorCode
+	}{
+		// 1. Server not in quorum.
+		{
+			err:            errXLWriteQuorum,
+			expectedAPIErr: ErrAdminConfigNoQuorum,
+		},
+		// 2. No error.
+		{
+			err:            nil,
+			expectedAPIErr: ErrNone,
+		},
+		// 3. Non-admin API specific error.
+		{
+			err:            errDiskNotFound,
+			expectedAPIErr: toAPIErrorCode(errDiskNotFound),
+		},
+	}
+
+	for i, test := range testCases {
+		actualErr := toAdminAPIErrCode(test.err)
+		if actualErr != test.expectedAPIErr {
+			t.Errorf("Test %d: Expected %v but received %v",
+				i+1, test.expectedAPIErr, actualErr)
+		}
+	}
+}
+
+func TestWriteSetConfigResponse(t *testing.T) {
+	testCases := []struct {
+		status bool
+		errs   []error
+	}{
+		// 1. all nodes returned success.
+		{
+			status: true,
+			errs:   []error{nil, nil, nil, nil},
+		},
+		// 2. some nodes returned errors.
+		{
+			status: false,
+			errs:   []error{errDiskNotFound, nil, errDiskAccessDenied, errFaultyDisk},
+		},
+	}
+
+	testPeers := []adminPeer{
+		adminPeer{
+			addr: "localhost:9001",
+		},
+		adminPeer{
+			addr: "localhost:9002",
+		},
+		adminPeer{
+			addr: "localhost:9003",
+		},
+		adminPeer{
+			addr: "localhost:9004",
+		},
+	}
+
+	testURL, err := url.Parse("dummy.com")
+	if err != nil {
+		t.Fatalf("Failed to parse a place-holder url")
+	}
+
+	var actualResult setConfigResult
+	for i, test := range testCases {
+		rec := httptest.NewRecorder()
+		writeSetConfigResponse(rec, testPeers, test.errs, test.status, testURL)
+		resp := rec.Result()
+		jsonBytes, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			t.Fatalf("Test %d: Failed to read response %v", i+1, err)
+		}
+
+		err = json.Unmarshal(jsonBytes, &actualResult)
+		if err != nil {
+			t.Fatalf("Test %d: Failed to unmarshal json %v", i+1, err)
+		}
+		if actualResult.Status != test.status {
+			t.Errorf("Test %d: Expected status %v but received %v", i+1, test.status, actualResult.Status)
+		}
+		for p, res := range actualResult.NodeResults {
+			if res.Name != testPeers[p].addr {
+				t.Errorf("Test %d: Expected node name %s but received %s", i+1, testPeers[p].addr, res.Name)
+			}
+			expectedErrStr := fmt.Sprintf("%v", test.errs[p])
+			if res.Err != expectedErrStr {
+				t.Errorf("Test %d: Expected error %s but received %s", i+1, expectedErrStr, res.Err)
+			}
+		}
+	}
 }
