@@ -249,10 +249,12 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 }
 
 // RemoveObjectArgs - args to remove an object
+// JSON will look like:
+// '{"bucketname":"testbucket","prefix":"john/pics/","objects":["hawaii/","maldives/","sanjose.jpg"]}'
 type RemoveObjectArgs struct {
-	TargetHost string `json:"targetHost"`
-	BucketName string `json:"bucketName"`
-	ObjectName string `json:"objectName"`
+	Objects    []string `json:"objects"`    // can be files or sub-directories
+	Prefix     string   `json:"prefix"`     // current directory in the browser-ui
+	BucketName string   `json:"bucketname"` // bucket name.
 }
 
 // RemoveObject - removes an object.
@@ -264,31 +266,65 @@ func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs,
 	if !isHTTPRequestValid(r) {
 		return toJSONError(errAuthentication)
 	}
-
-	objectLock := globalNSMutex.NewNSLock(args.BucketName, args.ObjectName)
-	objectLock.Lock()
-	defer objectLock.Unlock()
-
-	if err := objectAPI.DeleteObject(args.BucketName, args.ObjectName); err != nil {
-		if isErrObjectNotFound(err) {
-			// Ignore object not found error.
-			reply.UIVersion = browser.UIVersion
-			return nil
+	if args.BucketName == "" || len(args.Objects) == 0 {
+		return toJSONError(errUnexpected)
+	}
+	var err error
+objectLoop:
+	for _, object := range args.Objects {
+		remove := func(objectName string) error {
+			objectLock := globalNSMutex.NewNSLock(args.BucketName, objectName)
+			objectLock.Lock()
+			defer objectLock.Unlock()
+			err = objectAPI.DeleteObject(args.BucketName, objectName)
+			if err == nil {
+				// Notify object deleted event.
+				eventNotify(eventData{
+					Type:   ObjectRemovedDelete,
+					Bucket: args.BucketName,
+					ObjInfo: ObjectInfo{
+						Name: objectName,
+					},
+					ReqParams: map[string]string{
+						"sourceIPAddress": r.RemoteAddr,
+					},
+				})
+			}
+			return err
 		}
-		return toJSONError(err, args.BucketName, args.ObjectName)
+		if !hasSuffix(object, slashSeparator) {
+			// If not a directory, compress the file and write it to response.
+			err = remove(pathJoin(args.Prefix, object))
+			if err != nil {
+				break objectLoop
+			}
+			continue
+		}
+		// For directories, list the contents recursively and remove.
+		marker := ""
+		for {
+			var lo ListObjectsInfo
+			lo, err = objectAPI.ListObjects(args.BucketName, pathJoin(args.Prefix, object), marker, "", 1000)
+			if err != nil {
+				break objectLoop
+			}
+			marker = lo.NextMarker
+			for _, obj := range lo.Objects {
+				err = remove(obj.Name)
+				if err != nil {
+					break objectLoop
+				}
+			}
+			if !lo.IsTruncated {
+				break
+			}
+		}
 	}
 
-	// Notify object deleted event.
-	eventNotify(eventData{
-		Type:   ObjectRemovedDelete,
-		Bucket: args.BucketName,
-		ObjInfo: ObjectInfo{
-			Name: args.ObjectName,
-		},
-		ReqParams: map[string]string{
-			"sourceIPAddress": r.RemoteAddr,
-		},
-	})
+	if err != nil && !isErrObjectNotFound(err) {
+		// Ignore object not found error.
+		return toJSONError(err, args.BucketName, "")
+	}
 
 	reply.UIVersion = browser.UIVersion
 	return nil
