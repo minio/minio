@@ -23,6 +23,7 @@ type ObjectLayer interface {
 	// Storage operations.
 	Shutdown() error
 	StorageInfo() StorageInfo
+	CanCreateFile(fileSize int64) error // check if have sufficient resources for the file
 
 	// Bucket operations.
 	MakeBucket(bucket string) error

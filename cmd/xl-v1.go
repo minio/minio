@@ -257,3 +257,12 @@ func (xl xlObjects) StorageInfo() StorageInfo {
 	storageInfo.Backend.WriteQuorum = xl.writeQuorum
 	return storageInfo
 }
+
+// Check if have sufficient resources for the file
+func (xl xlObjects) CanCreateFile(fileSize int64) error {
+	/* Currently xl storage backend doesn't check if it has available space when initializing
+	and when creating file.
+	TODO implement. See fs backend
+	*/
+	return nil
+}
