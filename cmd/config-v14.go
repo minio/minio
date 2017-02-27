@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"os"
+	"strings"
 	"sync"
 
 	"github.com/minio/minio/pkg/quick"
@@ -26,14 +27,15 @@ import (
 // Read Write mutex for safe access to ServerConfig.
 var serverConfigMu sync.RWMutex
 
-// serverConfigV13 server configuration version '13' which is like
-// version '12' except it adds support for webhook notification.
-type serverConfigV13 struct {
+// serverConfigV14 server configuration version '14' which is like
+// version '13' except it adds support of browser param.
+type serverConfigV14 struct {
 	Version string `json:"version"`
 
 	// S3 API configuration.
 	Credential credential `json:"credential"`
 	Region     string     `json:"region"`
+	Browser    string     `json:"browser"`
 
 	// Additional error logging configuration.
 	Logger *logger `json:"logger"`
@@ -42,12 +44,11 @@ type serverConfigV13 struct {
 	Notify *notifier `json:"notify"`
 }
 
-// newConfig - initialize a new server config, saves creds from env
-// if globalIsEnvCreds is set otherwise generates a new set of keys
-// and those are saved.
-func newConfig(envCreds credential) error {
+// newConfig - initialize a new server config, saves env parameters if
+// found, otherwise use default parameters
+func newConfig(envParams envParams) error {
 	// Initialize server config.
-	srvCfg := &serverConfigV13{
+	srvCfg := &serverConfigV14{
 		Logger: &logger{},
 		Notify: &notifier{},
 	}
@@ -56,9 +57,15 @@ func newConfig(envCreds credential) error {
 
 	// If env is set for a fresh start, save them to config file.
 	if globalIsEnvCreds {
-		srvCfg.SetCredential(envCreds)
+		srvCfg.SetCredential(envParams.creds)
 	} else {
 		srvCfg.SetCredential(newCredential())
+	}
+
+	if globalIsEnvBrowser {
+		srvCfg.SetBrowser(envParams.browser)
+	} else {
+		srvCfg.SetBrowser("on")
 	}
 
 	// Enable console logger by default on a fresh run.
@@ -99,10 +106,9 @@ func newConfig(envCreds credential) error {
 	return serverConfig.Save()
 }
 
-// loadConfig - loads a new config from disk, overrides creds from env
-// if globalIsEnvCreds is set otherwise serves the creds from loaded
-// from the disk.
-func loadConfig(envCreds credential) error {
+// loadConfig - loads a new config from disk, overrides params from env
+// if found and valid
+func loadConfig(envParams envParams) error {
 	configFile, err := getConfigFile()
 	if err != nil {
 		return err
@@ -111,7 +117,7 @@ func loadConfig(envCreds credential) error {
 	if _, err = os.Stat(configFile); err != nil {
 		return err
 	}
-	srvCfg := &serverConfigV13{}
+	srvCfg := &serverConfigV14{}
 	srvCfg.Version = globalMinioConfigVersion
 	qc, err := quick.New(srvCfg)
 	if err != nil {
@@ -124,9 +130,17 @@ func loadConfig(envCreds credential) error {
 
 	// If env is set override the credentials from config file.
 	if globalIsEnvCreds {
-		srvCfg.SetCredential(envCreds)
+		srvCfg.SetCredential(envParams.creds)
 	} else {
 		srvCfg.SetCredential(srvCfg.Credential)
+	}
+
+	if globalIsEnvBrowser {
+		srvCfg.SetBrowser(envParams.browser)
+	}
+
+	if strings.ToLower(srvCfg.GetBrowser()) == "off" {
+		globalIsBrowserEnabled = false
 	}
 
 	// hold the mutex lock before a new config is assigned.
@@ -141,10 +155,10 @@ func loadConfig(envCreds credential) error {
 }
 
 // serverConfig server config.
-var serverConfig *serverConfigV13
+var serverConfig *serverConfigV14
 
 // GetVersion get current config version.
-func (s serverConfigV13) GetVersion() string {
+func (s serverConfigV14) GetVersion() string {
 	serverConfigMu.RLock()
 	defer serverConfigMu.RUnlock()
 
@@ -152,7 +166,7 @@ func (s serverConfigV13) GetVersion() string {
 }
 
 // SetRegion set new region.
-func (s *serverConfigV13) SetRegion(region string) {
+func (s *serverConfigV14) SetRegion(region string) {
 	serverConfigMu.Lock()
 	defer serverConfigMu.Unlock()
 
@@ -160,7 +174,7 @@ func (s *serverConfigV13) SetRegion(region string) {
 }
 
 // GetRegion get current region.
-func (s serverConfigV13) GetRegion() string {
+func (s serverConfigV14) GetRegion() string {
 	serverConfigMu.RLock()
 	defer serverConfigMu.RUnlock()
 
@@ -168,7 +182,7 @@ func (s serverConfigV13) GetRegion() string {
 }
 
 // SetCredentials set new credentials.
-func (s *serverConfigV13) SetCredential(creds credential) {
+func (s *serverConfigV14) SetCredential(creds credential) {
 	serverConfigMu.Lock()
 	defer serverConfigMu.Unlock()
 
@@ -177,15 +191,32 @@ func (s *serverConfigV13) SetCredential(creds credential) {
 }
 
 // GetCredentials get current credentials.
-func (s serverConfigV13) GetCredential() credential {
+func (s serverConfigV14) GetCredential() credential {
 	serverConfigMu.RLock()
 	defer serverConfigMu.RUnlock()
 
 	return s.Credential
 }
 
+// SetBrowser set if browser is enabled.
+func (s *serverConfigV14) SetBrowser(v string) {
+	serverConfigMu.Lock()
+	defer serverConfigMu.Unlock()
+
+	// Set browser param
+	s.Browser = v
+}
+
+// GetCredentials get current credentials.
+func (s serverConfigV14) GetBrowser() string {
+	serverConfigMu.RLock()
+	defer serverConfigMu.RUnlock()
+
+	return s.Browser
+}
+
 // Save config.
-func (s serverConfigV13) Save() error {
+func (s serverConfigV14) Save() error {
 	serverConfigMu.RLock()
 	defer serverConfigMu.RUnlock()
 

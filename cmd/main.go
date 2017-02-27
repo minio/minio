@@ -159,14 +159,24 @@ func checkUpdate() {
 	}
 }
 
+// envParams holds all env parameters
+type envParams struct {
+	creds   credential
+	browser string
+}
+
 // Initializes a new config if it doesn't exist, else migrates any old config
 // to newer config and finally loads the config to memory.
 func initConfig() {
-	envCreds := mustGetCredentialFromEnv()
+
+	envs := envParams{
+		creds:   mustGetCredentialFromEnv(),
+		browser: mustGetBrowserFromEnv(),
+	}
 
 	// Config file does not exist, we create it fresh and return upon success.
 	if !isConfigFileExists() {
-		if err := newConfig(envCreds); err != nil {
+		if err := newConfig(envs); err != nil {
 			console.Fatalf("Unable to initialize minio config for the first time. Err: %s.\n", err)
 		}
 		console.Println("Created minio configuration file successfully at " + mustGetConfigPath())
@@ -177,7 +187,7 @@ func initConfig() {
 	migrate()
 
 	// Once we have migrated all the old config, now load them.
-	if err := loadConfig(envCreds); err != nil {
+	if err := loadConfig(envs); err != nil {
 		console.Fatalf("Unable to initialize minio config. Err: %s.\n", err)
 	}
 }

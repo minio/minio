@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"os"
 	"reflect"
 	"testing"
 )
@@ -114,7 +115,55 @@ func TestServerConfig(t *testing.T) {
 	setGlobalConfigPath(rootPath)
 
 	// Initialize server config.
-	if err := loadConfig(credential{}); err != nil {
+	if err := loadConfig(envParams{}); err != nil {
 		t.Fatalf("Unable to initialize from updated config file %s", err)
+	}
+}
+
+func TestServerConfigWithEnvs(t *testing.T) {
+
+	os.Setenv("MINIO_BROWSER", "off")
+	defer os.Unsetenv("MINIO_BROWSER")
+
+	os.Setenv("MINIO_ACCESS_KEY", "minio")
+	defer os.Unsetenv("MINIO_ACCESS_KEY")
+
+	os.Setenv("MINIO_SECRET_KEY", "minio123")
+	defer os.Unsetenv("MINIO_SECRET_KEY")
+
+	defer func() {
+		globalIsEnvBrowser = false
+		globalIsEnvCreds = false
+	}()
+
+	// Get test root.
+	rootPath, err := getTestRoot()
+	if err != nil {
+		t.Error(err)
+	}
+
+	// Do this only once here.
+	setGlobalConfigPath(rootPath)
+
+	// Init config
+	initConfig()
+
+	// remove the root directory after the test ends.
+	defer removeAll(rootPath)
+
+	// Check if serverConfig has
+	if serverConfig.GetBrowser() != "off" {
+		t.Errorf("Expecting browser `off` found %s", serverConfig.GetBrowser())
+	}
+
+	// Check if serverConfig has
+	cred := serverConfig.GetCredential()
+
+	if cred.AccessKey != "minio" {
+		t.Errorf("Expecting access key to be `minio` found %s", cred.AccessKey)
+	}
+
+	if cred.SecretKey != "minio123" {
+		t.Errorf("Expecting access key to be `minio123` found %s", cred.SecretKey)
 	}
 }

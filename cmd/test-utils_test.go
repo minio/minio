@@ -533,7 +533,7 @@ func newTestConfig(bucketLocation string) (rootPath string, err error) {
 	setGlobalConfigPath(rootPath)
 
 	// Initialize server config.
-	if err = newConfig(credential{}); err != nil {
+	if err = newConfig(envParams{}); err != nil {
 		return "", err
 	}
 

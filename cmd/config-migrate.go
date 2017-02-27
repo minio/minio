@@ -74,6 +74,10 @@ func migrateConfig() error {
 	if err := migrateV12ToV13(); err != nil {
 		return err
 	}
+	// Migration version '13' to '14'.
+	if err := migrateV13ToV14(); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -933,6 +937,108 @@ func migrateV12ToV13() error {
 	console.Println(
 		"Migration from version ‘" +
 			cv12.Version + "’ to ‘" + srvConfig.Version +
+			"’ completed successfully.",
+	)
+	return nil
+}
+
+// Version '13' to '14' migration. Add support for custom webhook endpoint.
+func migrateV13ToV14() error {
+	cv13, err := loadConfigV13()
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("Unable to load config version ‘13’. %v", err)
+	}
+	if cv13.Version != "13" {
+		return nil
+	}
+
+	// Copy over fields from V13 into V14 config struct
+	srvConfig := &serverConfigV14{
+		Logger: &logger{},
+		Notify: &notifier{},
+	}
+	srvConfig.Version = "14"
+	srvConfig.Credential = cv13.Credential
+	srvConfig.Region = cv13.Region
+	if srvConfig.Region == "" {
+		// Region needs to be set for AWS Signature Version 4.
+		srvConfig.Region = globalMinioDefaultRegion
+	}
+	srvConfig.Logger.Console = cv13.Logger.Console
+	srvConfig.Logger.File = cv13.Logger.File
+
+	// check and set notifiers config
+	if len(cv13.Notify.AMQP) == 0 {
+		srvConfig.Notify.AMQP = make(map[string]amqpNotify)
+		srvConfig.Notify.AMQP["1"] = amqpNotify{}
+	} else {
+		srvConfig.Notify.AMQP = cv13.Notify.AMQP
+	}
+	if len(cv13.Notify.ElasticSearch) == 0 {
+		srvConfig.Notify.ElasticSearch = make(map[string]elasticSearchNotify)
+		srvConfig.Notify.ElasticSearch["1"] = elasticSearchNotify{}
+	} else {
+		srvConfig.Notify.ElasticSearch = cv13.Notify.ElasticSearch
+	}
+	if len(cv13.Notify.Redis) == 0 {
+		srvConfig.Notify.Redis = make(map[string]redisNotify)
+		srvConfig.Notify.Redis["1"] = redisNotify{}
+	} else {
+		srvConfig.Notify.Redis = cv13.Notify.Redis
+	}
+	if len(cv13.Notify.PostgreSQL) == 0 {
+		srvConfig.Notify.PostgreSQL = make(map[string]postgreSQLNotify)
+		srvConfig.Notify.PostgreSQL["1"] = postgreSQLNotify{}
+	} else {
+		srvConfig.Notify.PostgreSQL = cv13.Notify.PostgreSQL
+	}
+	if len(cv13.Notify.Kafka) == 0 {
+		srvConfig.Notify.Kafka = make(map[string]kafkaNotify)
+		srvConfig.Notify.Kafka["1"] = kafkaNotify{}
+	} else {
+		srvConfig.Notify.Kafka = cv13.Notify.Kafka
+	}
+	if len(cv13.Notify.NATS) == 0 {
+		srvConfig.Notify.NATS = make(map[string]natsNotify)
+		srvConfig.Notify.NATS["1"] = natsNotify{}
+	} else {
+		srvConfig.Notify.NATS = cv13.Notify.NATS
+	}
+	if len(cv13.Notify.Webhook) == 0 {
+		srvConfig.Notify.Webhook = make(map[string]webhookNotify)
+		srvConfig.Notify.Webhook["1"] = webhookNotify{}
+	} else {
+		srvConfig.Notify.Webhook = cv13.Notify.Webhook
+	}
+
+	// Set the new browser parameter to true by default
+	srvConfig.Browser = "on"
+
+	qc, err := quick.New(srvConfig)
+	if err != nil {
+		return fmt.Errorf("Unable to initialize the quick config. %v",
+			err)
+	}
+	configFile, err := getConfigFile()
+	if err != nil {
+		return fmt.Errorf("Unable to get config file. %v", err)
+	}
+
+	err = qc.Save(configFile)
+	if err != nil {
+		return fmt.Errorf(
+			"Failed to migrate config from ‘"+
+				cv13.Version+"’ to ‘"+srvConfig.Version+
+				"’ failed. %v", err,
+		)
+	}
+
+	console.Println(
+		"Migration from version ‘" +
+			cv13.Version + "’ to ‘" + srvConfig.Version +
 			"’ completed successfully.",
 	)
 	return nil
