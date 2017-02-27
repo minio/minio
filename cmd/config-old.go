@@ -522,3 +522,31 @@ func loadConfigV12() (*serverConfigV12, error) {
 	}
 	return config.(*serverConfigV12), err
 }
+
+// serverConfigV13 server configuration version '13' which is like
+// version '12' except it adds support for webhook notification.
+type serverConfigV13 struct {
+	Version string `json:"version"`
+
+	// S3 API configuration.
+	Credential credential `json:"credential"`
+	Region     string     `json:"region"`
+
+	// Additional error logging configuration.
+	Logger *logger `json:"logger"`
+
+	// Notification queue configuration.
+	Notify *notifier `json:"notify"`
+}
+
+func loadConfigV13() (*serverConfigV13, error) {
+	configFile, err := getConfigFile()
+	if err != nil {
+		return nil, err
+	}
+	config, err := loadOldConfig(configFile, &serverConfigV13{Version: "13"})
+	if config == nil {
+		return nil, err
+	}
+	return config.(*serverConfigV13), err
+}

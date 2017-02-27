@@ -50,7 +50,7 @@ func TestServerConfigMigrateV1(t *testing.T) {
 	}
 
 	// Initialize server config and check again if everything is fine
-	if err := loadConfig(credential{}); err != nil {
+	if err := loadConfig(envParams{}); err != nil {
 		t.Fatalf("Unable to initialize from updated config file %s", err)
 	}
 }
@@ -106,10 +106,13 @@ func TestServerConfigMigrateInexistentConfig(t *testing.T) {
 	if err := migrateV12ToV13(); err != nil {
 		t.Fatal("migrate v12 to v13 should succeed when no config file is found")
 	}
+	if err := migrateV13ToV14(); err != nil {
+		t.Fatal("migrate v13 to v14 should succeed when no config file is found")
+	}
 }
 
 // Test if a config migration from v2 to v12 is successfully done
-func TestServerConfigMigrateV2toV12(t *testing.T) {
+func TestServerConfigMigrateV2toV14(t *testing.T) {
 	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
@@ -143,7 +146,7 @@ func TestServerConfigMigrateV2toV12(t *testing.T) {
 	}
 
 	// Initialize server config and check again if everything is fine
-	if err := loadConfig(credential{}); err != nil {
+	if err := loadConfig(envParams{}); err != nil {
 		t.Fatalf("Unable to initialize from updated config file %s", err)
 	}
 
@@ -212,5 +215,8 @@ func TestServerConfigMigrateFaultyConfig(t *testing.T) {
 	}
 	if err := migrateV12ToV13(); err == nil {
 		t.Fatal("migrateConfigV12ToV13() should fail with a corrupted json")
+	}
+	if err := migrateV13ToV14(); err == nil {
+		t.Fatal("migrateConfigV13ToV14() should fail with a corrupted json")
 	}
 }
