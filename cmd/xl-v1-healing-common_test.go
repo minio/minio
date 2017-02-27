@@ -81,3 +81,175 @@ func TestCommonTime(t *testing.T) {
 		}
 	}
 }
+
+// partsMetaFromModTimes - returns slice of modTimes given metadata of
+// an object part.
+func partsMetaFromModTimes(modTimes []time.Time) []xlMetaV1 {
+	var partsMetadata []xlMetaV1
+	for _, modTime := range modTimes {
+		partsMetadata = append(partsMetadata, xlMetaV1{
+			Stat: statInfo{
+				ModTime: modTime,
+			},
+		})
+	}
+	return partsMetadata
+}
+
+// toPosix - fetches *posix object from StorageAPI.
+func toPosix(disk StorageAPI) *posix {
+	retryDisk, ok := disk.(*retryStorage)
+	if !ok {
+		return nil
+	}
+	pDisk, ok := retryDisk.remoteStorage.(*posix)
+	if !ok {
+		return nil
+	}
+	return pDisk
+
+}
+
+// TestListOnlineDisks - checks if listOnlineDisks and outDatedDisks
+// are consistent with each other.
+func TestListOnlineDisks(t *testing.T) {
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
+	if err != nil {
+		t.Fatalf("Failed to initialize config - %v", err)
+	}
+	defer removeAll(rootPath)
+
+	obj, disks, err := prepareXL()
+	if err != nil {
+		t.Fatalf("Prepare XL backend failed - %v", err)
+	}
+	defer removeRoots(disks)
+
+	threeNanoSecs := time.Unix(0, 3).UTC()
+	fourNanoSecs := time.Unix(0, 4).UTC()
+	testCases := []struct {
+		modTimes     []time.Time
+		expectedTime time.Time
+		errs         []error
+	}{
+		{
+			modTimes: []time.Time{
+				threeNanoSecs,
+				threeNanoSecs,
+				threeNanoSecs,
+				threeNanoSecs,
+				threeNanoSecs,
+				threeNanoSecs,
+				threeNanoSecs,
+				threeNanoSecs,
+				fourNanoSecs,
+				fourNanoSecs,
+				fourNanoSecs,
+				fourNanoSecs,
+				fourNanoSecs,
+				fourNanoSecs,
+				fourNanoSecs,
+				fourNanoSecs,
+			},
+			expectedTime: fourNanoSecs,
+			errs: []error{
+				nil,
+				nil,
+				nil,
+				nil,
+				nil,
+				nil,
+				nil,
+				nil,
+				nil,
+				nil,
+				nil,
+				nil,
+				nil,
+				nil,
+				nil,
+				nil,
+			},
+		},
+		{
+			modTimes: []time.Time{
+				threeNanoSecs,
+				threeNanoSecs,
+				threeNanoSecs,
+				threeNanoSecs,
+				threeNanoSecs,
+				threeNanoSecs,
+				threeNanoSecs,
+				timeSentinel,
+				timeSentinel,
+				timeSentinel,
+				timeSentinel,
+				timeSentinel,
+				timeSentinel,
+				timeSentinel,
+				timeSentinel,
+				timeSentinel,
+			},
+			expectedTime: threeNanoSecs,
+			errs: []error{
+				// Disks that have a valid xl.json.
+				nil,
+				nil,
+				nil,
+				nil,
+				nil,
+				nil,
+				nil,
+				// Majority of disks don't have xl.json.
+				errFileNotFound,
+				errFileNotFound,
+				errFileNotFound,
+				errFileNotFound,
+				errFileNotFound,
+				errDiskAccessDenied,
+				errDiskNotFound,
+				errFileNotFound,
+				errFileNotFound,
+			},
+		},
+	}
+
+	xlDisks := obj.(*xlObjects).storageDisks
+	for i, test := range testCases {
+		partsMetadata := partsMetaFromModTimes(test.modTimes)
+
+		onlineDisks, modTime := listOnlineDisks(xlDisks, partsMetadata, test.errs)
+		outdatedDisks := outDatedDisks(xlDisks, onlineDisks, partsMetadata, test.errs)
+		if modTime.Equal(timeSentinel) {
+			t.Fatalf("Test %d: modTime should never be equal to timeSentinel, but found equal",
+				i+1)
+		}
+		if !modTime.Equal(test.expectedTime) {
+			t.Fatalf("Test %d: Expected modTime to be equal to %v but was found to be %v",
+				i+1, test.expectedTime, modTime)
+		}
+
+		// Check if a disk is considered both online and outdated,
+		// which is a contradiction.
+		overlappingDisks := make(map[string]*posix)
+		for _, onlineDisk := range onlineDisks {
+			if onlineDisk == nil {
+				continue
+			}
+			pDisk := toPosix(onlineDisk)
+			overlappingDisks[pDisk.diskPath] = pDisk
+		}
+
+		for _, outdatedDisk := range outdatedDisks {
+			if outdatedDisk == nil {
+				continue
+			}
+			pDisk := toPosix(outdatedDisk)
+			if _, ok := overlappingDisks[pDisk.diskPath]; ok {
+				t.Errorf("Test %d: Outdated disk %v was also detected as an online disk",
+					i+1, pDisk)
+			}
+		}
+
+	}
+}

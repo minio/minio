@@ -59,29 +59,23 @@ func bootModtimes(diskCount int) []time.Time {
 }
 
 // Extracts list of times from xlMetaV1 slice and returns, skips
-// slice elements which have errors. As a special error
-// errFileNotFound is treated as a initial good condition.
+// slice elements which have errors.
 func listObjectModtimes(partsMetadata []xlMetaV1, errs []error) (modTimes []time.Time) {
 	modTimes = bootModtimes(len(partsMetadata))
-	// Set a new time value, specifically set when
-	// error == errFileNotFound (this is needed when this is a
-	// fresh PutObject).
-	timeNow := time.Now().UTC()
 	for index, metadata := range partsMetadata {
-		if errs[index] == nil {
-			// Once the file is found, save the uuid saved on disk.
-			modTimes[index] = metadata.Stat.ModTime
-		} else if errs[index] == errFileNotFound {
-			// Once the file is not found then the epoch is current time.
-			modTimes[index] = timeNow
+		if errs[index] != nil {
+			continue
 		}
+		// Once the file is found, save the uuid saved on disk.
+		modTimes[index] = metadata.Stat.ModTime
 	}
 	return modTimes
 }
 
-// Returns slice of online disks needed.
-// - slice returing readable disks.
-// - modTime of the Object
+// listOnlineDisks - returns
+// - a slice of disks where disk having 'older' xl.json (or nothing)
+// are set to nil.
+// - latest (in time) of the maximally occurring modTime(s).
 func listOnlineDisks(disks []StorageAPI, partsMetadata []xlMetaV1, errs []error) (onlineDisks []StorageAPI, modTime time.Time) {
 	onlineDisks = make([]StorageAPI, len(disks))
 
@@ -102,18 +96,10 @@ func listOnlineDisks(disks []StorageAPI, partsMetadata []xlMetaV1, errs []error)
 	return onlineDisks, modTime
 }
 
-// Return disks with the outdated or missing object.
-func outDatedDisks(disks []StorageAPI, partsMetadata []xlMetaV1, errs []error) (outDatedDisks []StorageAPI) {
+// outDatedDisks - return disks which don't have the latest object (i.e xl.json).
+func outDatedDisks(disks, latestDisks []StorageAPI, partsMetadata []xlMetaV1, errs []error) (outDatedDisks []StorageAPI) {
 	outDatedDisks = make([]StorageAPI, len(disks))
-	latestDisks, _ := listOnlineDisks(disks, partsMetadata, errs)
 	for index, disk := range latestDisks {
-		if errorCause(errs[index]) == errFileNotFound {
-			outDatedDisks[index] = disks[index]
-			continue
-		}
-		if errs[index] != nil {
-			continue
-		}
 		if disk == nil {
 			outDatedDisks[index] = disks[index]
 		}
