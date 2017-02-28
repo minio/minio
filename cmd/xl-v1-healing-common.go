@@ -16,7 +16,11 @@
 
 package cmd
 
-import "time"
+import (
+	"encoding/hex"
+	"path/filepath"
+	"time"
+)
 
 // commonTime returns a maximally occurring time from a list of time.
 func commonTime(modTimes []time.Time) (modTime time.Time, count int) {
@@ -97,11 +101,37 @@ func listOnlineDisks(disks []StorageAPI, partsMetadata []xlMetaV1, errs []error)
 }
 
 // outDatedDisks - return disks which don't have the latest object (i.e xl.json).
-func outDatedDisks(disks, latestDisks []StorageAPI, partsMetadata []xlMetaV1, errs []error) (outDatedDisks []StorageAPI) {
+func outDatedDisks(disks, latestDisks []StorageAPI, partsMetadata []xlMetaV1,
+	bucket, object string) (outDatedDisks []StorageAPI) {
+
 	outDatedDisks = make([]StorageAPI, len(disks))
 	for index, disk := range latestDisks {
+		// disk either has an older xl.json or is not online.
 		if disk == nil {
 			outDatedDisks[index] = disks[index]
+			continue
+		}
+
+		// disk has a valid xl.json but may not have all the
+		// parts. This is considered an outdated disk, since
+		// it needs healing too.
+		for pIndex, part := range partsMetadata[index].Parts {
+			// compute blake2b sum of part.
+			hash := newHash(blake2bAlgo)
+			blakeBytes, hErr := hashSum(disk, bucket, filepath.Join(object, part.Name), hash)
+			if hErr != nil {
+				outDatedDisks[index] = disk
+				break
+			}
+
+			blakeSum := hex.EncodeToString(blakeBytes)
+			// if blake2b sum doesn't match for a part
+			// then this disk is outdated and needs
+			// healing.
+			if blakeSum != partsMetadata[index].Erasure.Checksum[pIndex].Hash {
+				outDatedDisks[index] = disk
+				break
+			}
 		}
 	}
 	return outDatedDisks

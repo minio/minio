@@ -17,6 +17,8 @@
 package cmd
 
 import (
+	"bytes"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -84,12 +86,20 @@ func TestCommonTime(t *testing.T) {
 
 // partsMetaFromModTimes - returns slice of modTimes given metadata of
 // an object part.
-func partsMetaFromModTimes(modTimes []time.Time) []xlMetaV1 {
+func partsMetaFromModTimes(modTimes []time.Time, checkSums []string) []xlMetaV1 {
 	var partsMetadata []xlMetaV1
-	for _, modTime := range modTimes {
+	for i, modTime := range modTimes {
 		partsMetadata = append(partsMetadata, xlMetaV1{
+			Erasure: erasureInfo{
+				Checksum: []checkSumInfo{{Hash: checkSums[i]}},
+			},
 			Stat: statInfo{
 				ModTime: modTime,
+			},
+			Parts: []objectPartInfo{
+				{
+					Name: "part.1",
+				},
 			},
 		})
 	}
@@ -125,32 +135,58 @@ func TestListOnlineDisks(t *testing.T) {
 	}
 	defer removeRoots(disks)
 
+	type tamperKind int
+	const (
+		noTamper    tamperKind = iota
+		deletePart  tamperKind = iota
+		corruptPart tamperKind = iota
+	)
 	threeNanoSecs := time.Unix(0, 3).UTC()
 	fourNanoSecs := time.Unix(0, 4).UTC()
+	modTimesThreeNone := []time.Time{
+		threeNanoSecs,
+		threeNanoSecs,
+		threeNanoSecs,
+		threeNanoSecs,
+		threeNanoSecs,
+		threeNanoSecs,
+		threeNanoSecs,
+		timeSentinel,
+		timeSentinel,
+		timeSentinel,
+		timeSentinel,
+		timeSentinel,
+		timeSentinel,
+		timeSentinel,
+		timeSentinel,
+		timeSentinel,
+	}
+	modTimesThreeFour := []time.Time{
+		threeNanoSecs,
+		threeNanoSecs,
+		threeNanoSecs,
+		threeNanoSecs,
+		threeNanoSecs,
+		threeNanoSecs,
+		threeNanoSecs,
+		threeNanoSecs,
+		fourNanoSecs,
+		fourNanoSecs,
+		fourNanoSecs,
+		fourNanoSecs,
+		fourNanoSecs,
+		fourNanoSecs,
+		fourNanoSecs,
+		fourNanoSecs,
+	}
 	testCases := []struct {
-		modTimes     []time.Time
-		expectedTime time.Time
-		errs         []error
+		modTimes       []time.Time
+		expectedTime   time.Time
+		errs           []error
+		_tamperBackend tamperKind
 	}{
 		{
-			modTimes: []time.Time{
-				threeNanoSecs,
-				threeNanoSecs,
-				threeNanoSecs,
-				threeNanoSecs,
-				threeNanoSecs,
-				threeNanoSecs,
-				threeNanoSecs,
-				threeNanoSecs,
-				fourNanoSecs,
-				fourNanoSecs,
-				fourNanoSecs,
-				fourNanoSecs,
-				fourNanoSecs,
-				fourNanoSecs,
-				fourNanoSecs,
-				fourNanoSecs,
-			},
+			modTimes:     modTimesThreeFour,
 			expectedTime: fourNanoSecs,
 			errs: []error{
 				nil,
@@ -170,26 +206,10 @@ func TestListOnlineDisks(t *testing.T) {
 				nil,
 				nil,
 			},
+			_tamperBackend: noTamper,
 		},
 		{
-			modTimes: []time.Time{
-				threeNanoSecs,
-				threeNanoSecs,
-				threeNanoSecs,
-				threeNanoSecs,
-				threeNanoSecs,
-				threeNanoSecs,
-				threeNanoSecs,
-				timeSentinel,
-				timeSentinel,
-				timeSentinel,
-				timeSentinel,
-				timeSentinel,
-				timeSentinel,
-				timeSentinel,
-				timeSentinel,
-				timeSentinel,
-			},
+			modTimes:     modTimesThreeNone,
 			expectedTime: threeNanoSecs,
 			errs: []error{
 				// Disks that have a valid xl.json.
@@ -211,26 +231,132 @@ func TestListOnlineDisks(t *testing.T) {
 				errFileNotFound,
 				errFileNotFound,
 			},
+			_tamperBackend: deletePart,
+		},
+		{
+			modTimes:     modTimesThreeNone,
+			expectedTime: threeNanoSecs,
+			errs: []error{
+				// Disks that have a valid xl.json.
+				nil,
+				nil,
+				nil,
+				nil,
+				nil,
+				nil,
+				nil,
+				// Majority of disks don't have xl.json.
+				errFileNotFound,
+				errFileNotFound,
+				errFileNotFound,
+				errFileNotFound,
+				errFileNotFound,
+				errDiskAccessDenied,
+				errDiskNotFound,
+				errFileNotFound,
+				errFileNotFound,
+			},
+			_tamperBackend: corruptPart,
 		},
 	}
 
+	bucket := "bucket"
+	object := "object"
+	data := bytes.Repeat([]byte("a"), 1024)
+	blakeHash := newHash(blake2bAlgo)
+	_, bErr := blakeHash.Write(data)
+	if bErr != nil {
+		t.Fatalf("Failed to compute blakeHash %v", bErr)
+	}
+
 	xlDisks := obj.(*xlObjects).storageDisks
+	// Calling erasureCreateFile on a temporary path to compute
+	// blake2b checksums.
+	_, checkSums, err := erasureCreateFile(xlDisks, minioMetaTmpBucket, object, bytes.NewReader(data), true, 1024*1024, 8, 8, blake2bAlgo, 9)
+	if err != nil {
+		t.Fatalf("Unable to create a temporary file to compute blake2b sum %v", err)
+	}
+
 	for i, test := range testCases {
-		partsMetadata := partsMetaFromModTimes(test.modTimes)
+		// Prepare bucket/object backend for the tests below.
+
+		// Cleanup from previous test.
+		obj.DeleteObject(bucket, object)
+		obj.DeleteBucket(bucket)
+
+		err = obj.MakeBucket("bucket")
+		if err != nil {
+			t.Fatalf("Failed to make a bucket %v", err)
+		}
+
+		_, err = obj.PutObject(bucket, object, int64(len(data)), bytes.NewReader(data), nil, "")
+		if err != nil {
+			t.Fatalf("Failed to putObject %v", err)
+		}
+
+		tamperedIndex := -1
+		switch test._tamperBackend {
+		case deletePart:
+			for index, err := range test.errs {
+				if err != nil {
+					continue
+				}
+				// Remove a part from a disk
+				// which has a valid xl.json,
+				// and check if that disk
+				// appears in outDatedDisks.
+				tamperedIndex = index
+				dErr := xlDisks[index].DeleteFile(bucket, filepath.Join(object, "part.1"))
+				if dErr != nil {
+					t.Fatalf("Test %d: Failed to delete %s - %v", i+1,
+						filepath.Join(object, "part.1"), dErr)
+				}
+				break
+			}
+		case corruptPart:
+			for index, err := range test.errs {
+				if err != nil {
+					continue
+				}
+				// Corrupt a part from a disk
+				// which has a valid xl.json,
+				// and check if that disk
+				// appears in outDatedDisks.
+				tamperedIndex = index
+				dErr := xlDisks[index].AppendFile(bucket, filepath.Join(object, "part.1"), []byte("corruption"))
+				if dErr != nil {
+					t.Fatalf("Test %d: Failed to append corrupting data at the end of file %s - %v",
+						i+1, filepath.Join(object, "part.1"), dErr)
+				}
+				break
+			}
+
+		}
+
+		partsMetadata := partsMetaFromModTimes(test.modTimes, checkSums)
 
 		onlineDisks, modTime := listOnlineDisks(xlDisks, partsMetadata, test.errs)
-		outdatedDisks := outDatedDisks(xlDisks, onlineDisks, partsMetadata, test.errs)
+		outdatedDisks := outDatedDisks(xlDisks, onlineDisks, partsMetadata, bucket, object)
 		if modTime.Equal(timeSentinel) {
 			t.Fatalf("Test %d: modTime should never be equal to timeSentinel, but found equal",
 				i+1)
 		}
+
+		if test._tamperBackend != noTamper {
+			if tamperedIndex != -1 && outdatedDisks[tamperedIndex] == nil {
+				t.Fatalf("Test %d: disk (%v) with part.1 missing or is an outdated disk, but wasn't listed by outDatedDisks",
+					i+1, onlineDisks[tamperedIndex])
+			}
+
+		}
+
 		if !modTime.Equal(test.expectedTime) {
 			t.Fatalf("Test %d: Expected modTime to be equal to %v but was found to be %v",
 				i+1, test.expectedTime, modTime)
 		}
 
 		// Check if a disk is considered both online and outdated,
-		// which is a contradiction.
+		// which is a contradiction, except if parts are missing.
 		overlappingDisks := make(map[string]*posix)
 		for _, onlineDisk := range onlineDisks {
 			if onlineDisk == nil {
@@ -240,16 +366,23 @@ func TestListOnlineDisks(t *testing.T) {
 			overlappingDisks[pDisk.diskPath] = pDisk
 		}
 
-		for _, outdatedDisk := range outdatedDisks {
+		for index, outdatedDisk := range outdatedDisks {
+			// ignore the intentionally tampered disk,
+			// this is expected to appear as outdated
+			// disk, since it doesn't have all the parts.
+			if index == tamperedIndex {
+				continue
+			}
+
 			if outdatedDisk == nil {
 				continue
 			}
+
 			pDisk := toPosix(outdatedDisk)
 			if _, ok := overlappingDisks[pDisk.diskPath]; ok {
-				t.Errorf("Test %d: Outdated disk %v was also detected as an online disk",
-					i+1, pDisk)
+				t.Errorf("Test %d: Outdated disk %v was also detected as an online disk - %v %v",
+					i+1, pDisk, onlineDisks, outdatedDisks)
 			}
 		}
-
 	}
 }
