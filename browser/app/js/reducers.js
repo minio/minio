@@ -83,7 +83,7 @@ export default (state = {
         newState.marker = ""
         newState.istruncated = action.istruncated
       } else {
-        newState.objects = [...newState.objects, ...action.objects]
+        newState.objects = [...action.objects]
         newState.marker = action.marker
         newState.istruncated = action.istruncated
       }
