@@ -28,15 +28,21 @@ func setMaxOpenFiles() error {
 }
 
 func setMaxMemory() error {
-	// Make sure globalMaxCacheSize is less than RAM size.
+	// Get total RAM.
 	stats, err := sys.GetStats()
-	if err != nil && err != sys.ErrNotImplemented {
+	if err != nil {
+		// Ignore sys.ErrNotImplemented error.
+		if err == sys.ErrNotImplemented {
+			err = nil
+		}
+
 		return err
 	}
-	// If TotalRAM is <= minRAMSize we proceed to enable cache.
-	// cache is always 50% of the totalRAM.
-	if err == nil && stats.TotalRAM >= minRAMSize {
-		globalMaxCacheSize = uint64(float64(50*stats.TotalRAM) / 100)
+
+	// Set 50% of total RAM to globalMaxCacheSize.
+	if stats.TotalRAM >= minRAMSize {
+		globalMaxCacheSize = stats.TotalRAM / 2
 	}
+
 	return nil
 }
