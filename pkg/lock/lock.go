@@ -20,7 +20,7 @@ package lock
 
 import (
 	"os"
-	"sync"
+	"sync/atomic"
 )
 
 // RLockedFile represents a read locked file, implements a special
@@ -28,38 +28,31 @@ import (
 // has reached zero, i.e when all the readers have given up their locks.
 type RLockedFile struct {
 	*LockedFile
-	mutex sync.Mutex
-	refs  int // Holds read lock refs.
+	refs int64 // Holds read lock refs.
 }
 
 // IsClosed - Check if the rlocked file is already closed.
 func (r *RLockedFile) IsClosed() bool {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-	return r.refs == 0
+	return atomic.LoadInt64(&r.refs) == 0
 }
 
 // IncLockRef - is used by called to indicate lock refs.
 func (r *RLockedFile) IncLockRef() {
-	r.mutex.Lock()
-	r.refs++
-	r.mutex.Unlock()
+	atomic.AddInt64(&r.refs, 1)
 }
 
 // Close - this closer implements a special closer
 // closes the underlying fd only when the refs
 // reach zero.
 func (r *RLockedFile) Close() (err error) {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-
-	if r.refs == 0 {
+	refs := atomic.LoadInt64(&r.refs)
+	if refs == 0 {
 		return os.ErrInvalid
 	}
 
-	r.refs--
-	if r.refs == 0 {
-		err = r.File.Close()
+	refs = atomic.AddInt64(&r.refs, -1)
+	if refs == 0 {
+		err = r.LockedFile.Close()
 	}
 
 	return err
