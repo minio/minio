@@ -3,6 +3,12 @@
 	"ignore": "test",
 	"package": [
 		{
+			"checksumSHA1": "rK3ght7KTtHGdm0V4+U7fv9+tUU=",
+			"path": "github.com/Azure/azure-sdk-for-go/storage",
+			"revision": "8e625d1702a32d01cef05a9252198d231c4af113",
+			"revisionTime": "2017-02-08T01:01:20Z"
+		},
+		{
 			"path": "github.com/Sirupsen/logrus",
 			"revision": "32055c351ea8b00b96d70f28db48d9840feaf0ec",
 			"revisionTime": "2016-07-12T20:17:32-04:00"
