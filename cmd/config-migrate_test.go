@@ -151,7 +151,7 @@ func TestServerConfigMigrateV2toV14(t *testing.T) {
 	}
 
 	// Check the version number in the upgraded config file
-	expectedVersion := globalMinioConfigVersion
+	expectedVersion := v14
 	if serverConfig.Version != expectedVersion {
 		t.Fatalf("Expect version "+expectedVersion+", found: %v", serverConfig.Version)
 	}

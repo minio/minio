@@ -31,7 +31,6 @@ import (
 
 // minio configuration related constants.
 const (
-	globalMinioConfigVersion      = "13"
 	globalMinioConfigDir          = ".minio"
 	globalMinioCertsDir           = "certs"
 	globalMinioCertsCADir         = "CAs"
