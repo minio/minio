@@ -277,7 +277,11 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	for index, object := range deleteObjects.Objects {
 		wg.Add(1)
 		go func(i int, obj ObjectIdentifier) {
+			objectLock := globalNSMutex.NewNSLock(bucket, obj.ObjectName)
+			objectLock.Lock()
+			defer objectLock.Unlock()
 			defer wg.Done()
+
 			dErr := objectAPI.DeleteObject(bucket, obj.ObjectName)
 			if dErr != nil {
 				dErrs[i] = dErr
