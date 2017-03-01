@@ -59,25 +59,35 @@ func setMaxMemory() error {
 	if err != nil {
 		return err
 	}
+
 	err = syscall.Getrlimit(syscall.RLIMIT_AS, &rLimit)
 	if err != nil {
 		return err
 	}
-	// Validate if rlimit memory is set to lower
-	// than max cache size. Then we should use such value.
-	if uint64(rLimit.Cur) < globalMaxCacheSize {
-		globalMaxCacheSize = uint64(float64(50*rLimit.Cur) / 100)
+	// If current rlimit is less than minRAMSize, do not set globalMaxCacheSize.
+	if rLimit.Cur < minRAMSize {
+		return nil
 	}
 
-	// Make sure globalMaxCacheSize is less than RAM size.
+	// Get total RAM.
 	stats, err := sys.GetStats()
-	if err != nil && err != sys.ErrNotImplemented {
+	if err != nil {
+		// Ignore sys.ErrNotImplemented error.
+		if err == sys.ErrNotImplemented {
+			err = nil
+		}
+
 		return err
 	}
-	// If TotalRAM is >= minRAMSize we proceed to enable cache.
-	// cache is always 50% of the totalRAM.
-	if err == nil && stats.TotalRAM >= minRAMSize {
-		globalMaxCacheSize = uint64(float64(50*stats.TotalRAM) / 100)
+
+	// Set 50% of current rlimit or total RAM to globalMaxCacheSize.
+	if stats.TotalRAM >= minRAMSize {
+		if rLimit.Cur < stats.TotalRAM {
+			globalMaxCacheSize = rLimit.Cur / 2
+		} else {
+			globalMaxCacheSize = stats.TotalRAM / 2
+		}
 	}
+
 	return nil
 }
