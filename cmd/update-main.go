@@ -155,6 +155,10 @@ func downloadReleaseData(releaseChecksumURL string, timeout time.Duration) (data
 
 	client := &http.Client{
 		Timeout: timeout,
+		Transport: &http.Transport{
+			// need to close connection after usage.
+			DisableKeepAlives: true,
+		},
 	}
 
 	resp, err := client.Do(req)
@@ -164,6 +168,7 @@ func downloadReleaseData(releaseChecksumURL string, timeout time.Duration) (data
 	if resp == nil {
 		return data, fmt.Errorf("No response from server to download URL %s", releaseChecksumURL)
 	}
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		return data, fmt.Errorf("Error downloading URL %s. Response: %v", releaseChecksumURL, resp.Status)
