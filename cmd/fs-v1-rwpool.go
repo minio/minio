@@ -49,7 +49,6 @@ func (fsi *fsIOPool) Open(path string) (*lock.RLockedFile, error) {
 	}
 
 	fsi.Lock()
-
 	rlkFile, ok := fsi.readersMap[path]
 	// File reference exists on map, validate if its
 	// really closed and we are safe to purge it.
@@ -68,7 +67,6 @@ func (fsi *fsIOPool) Open(path string) (*lock.RLockedFile, error) {
 			// Increment the lock ref, since the file is not closed yet
 			// and caller requested to read the file again.
 			rlkFile.IncLockRef()
-			fsi.readersMap[path] = rlkFile
 		}
 	}
 	fsi.Unlock()
@@ -115,7 +113,11 @@ func (fsi *fsIOPool) Open(path string) (*lock.RLockedFile, error) {
 				rlkFile.IncLockRef()
 				newRlkFile.Close()
 			}
+		} else {
+			// Save the newly acquired read locked file.
+			rlkFile = newRlkFile
 		}
+
 		// Save the rlkFile back on the map.
 		fsi.readersMap[path] = rlkFile
 		fsi.Unlock()
