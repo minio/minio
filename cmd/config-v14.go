@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"errors"
 	"os"
 	"strings"
 	"sync"
@@ -26,6 +27,9 @@ import (
 
 // Read Write mutex for safe access to ServerConfig.
 var serverConfigMu sync.RWMutex
+
+// Config version
+var v14 = "14"
 
 // serverConfigV14 server configuration version '14' which is like
 // version '13' except it adds support of browser param.
@@ -44,30 +48,15 @@ type serverConfigV14 struct {
 	Notify *notifier `json:"notify"`
 }
 
-// newConfig - initialize a new server config, saves env parameters if
-// found, otherwise use default parameters
-func newConfig(envParams envParams) error {
-	// Initialize server config.
+func newServerConfigV14() *serverConfigV14 {
 	srvCfg := &serverConfigV14{
-		Logger: &logger{},
-		Notify: &notifier{},
+		Version: v14,
+		Region:  globalMinioDefaultRegion,
+		Logger:  &logger{},
+		Notify:  &notifier{},
 	}
-	srvCfg.Version = globalMinioConfigVersion
-	srvCfg.Region = globalMinioDefaultRegion
-
-	// If env is set for a fresh start, save them to config file.
-	if globalIsEnvCreds {
-		srvCfg.SetCredential(envParams.creds)
-	} else {
-		srvCfg.SetCredential(newCredential())
-	}
-
-	if globalIsEnvBrowser {
-		srvCfg.SetBrowser(envParams.browser)
-	} else {
-		srvCfg.SetBrowser("on")
-	}
-
+	srvCfg.SetCredential(newCredential())
+	srvCfg.SetBrowser("on")
 	// Enable console logger by default on a fresh run.
 	srvCfg.Logger.Console = consoleLogger{
 		Enable: true,
@@ -89,6 +78,24 @@ func newConfig(envParams envParams) error {
 	srvCfg.Notify.Kafka["1"] = kafkaNotify{}
 	srvCfg.Notify.Webhook = make(map[string]webhookNotify)
 	srvCfg.Notify.Webhook["1"] = webhookNotify{}
+
+	return srvCfg
+}
+
+// newConfig - initialize a new server config, saves env parameters if
+// found, otherwise use default parameters
+func newConfig(envParams envParams) error {
+	// Initialize server config.
+	srvCfg := newServerConfigV14()
+
+	// If env is set for a fresh start, save them to config file.
+	if globalIsEnvCreds {
+		srvCfg.SetCredential(envParams.creds)
+	}
+
+	if globalIsEnvBrowser {
+		srvCfg.SetBrowser(envParams.browser)
+	}
 
 	// Create config path.
 	if err := createConfigPath(); err != nil {
@@ -117,8 +124,9 @@ func loadConfig(envParams envParams) error {
 	if _, err = os.Stat(configFile); err != nil {
 		return err
 	}
+
 	srvCfg := &serverConfigV14{}
-	srvCfg.Version = globalMinioConfigVersion
+
 	qc, err := quick.New(srvCfg)
 	if err != nil {
 		return err
@@ -131,8 +139,6 @@ func loadConfig(envParams envParams) error {
 	// If env is set override the credentials from config file.
 	if globalIsEnvCreds {
 		srvCfg.SetCredential(envParams.creds)
-	} else {
-		srvCfg.SetCredential(srvCfg.Credential)
 	}
 
 	if globalIsEnvBrowser {
@@ -149,8 +155,10 @@ func loadConfig(envParams envParams) error {
 	serverConfig = srvCfg
 	serverConfigMu.Unlock()
 
-	// Set the version properly after the unmarshalled json is loaded.
-	serverConfig.Version = globalMinioConfigVersion
+	if serverConfig.Version != v14 {
+		return errors.New("Unsupported config version `" + serverConfig.Version + "`.")
+	}
+
 	return nil
 }
 

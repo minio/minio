@@ -102,8 +102,8 @@ func TestServerConfig(t *testing.T) {
 	})
 
 	// Match version.
-	if serverConfig.GetVersion() != globalMinioConfigVersion {
-		t.Errorf("Expecting version %s found %s", serverConfig.GetVersion(), globalMinioConfigVersion)
+	if serverConfig.GetVersion() != v14 {
+		t.Errorf("Expecting version %s found %s", serverConfig.GetVersion(), v14)
 	}
 
 	// Attempt to save.
