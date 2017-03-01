@@ -330,7 +330,8 @@ change to take effect.
 |---|---|---|
 |`st.Status`            | _bool_  | true if set-config succeeded, false otherwise. |
 |`st.NodeSummary.Name`  | _string_  | Network address of the node. |
-|`st.NodeSummary.Err`   | _string_ | String representation of the error (if any) on the node.|
+|`st.NodeSummary.ErrSet`   | _bool_ | Bool representation indicating if an error is encountered with the node.|
+|`st.NodeSummary.ErrMsg`   | _string_ | String representation of the error (if any) on the node.|
 
 
 __Example__

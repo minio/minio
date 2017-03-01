@@ -1279,9 +1279,13 @@ func TestWriteSetConfigResponse(t *testing.T) {
 			if res.Name != testPeers[p].addr {
 				t.Errorf("Test %d: Expected node name %s but received %s", i+1, testPeers[p].addr, res.Name)
 			}
-			expectedErrStr := fmt.Sprintf("%v", test.errs[p])
-			if res.Err != expectedErrStr {
-				t.Errorf("Test %d: Expected error %s but received %s", i+1, expectedErrStr, res.Err)
+			expectedErrMsg := fmt.Sprintf("%v", test.errs[p])
+			if res.ErrMsg != expectedErrMsg {
+				t.Errorf("Test %d: Expected error %s but received %s", i+1, expectedErrMsg, res.ErrMsg)
+			}
+			expectedErrSet := test.errs[p] != nil
+			if res.ErrSet != expectedErrSet {
+				t.Errorf("Test %d: Expected ErrSet %v but received %v", i+1, expectedErrSet, res.ErrSet)
 			}
 		}
 	}

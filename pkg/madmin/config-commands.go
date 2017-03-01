@@ -33,8 +33,9 @@ const (
 // NodeSummary - represents the result of an operation part of
 // set-config on a node.
 type NodeSummary struct {
-	Name string `json:"name"`
-	Err  string `json:"err"`
+	Name   string `json:"name"`
+	ErrSet bool   `json:"errSet"`
+	ErrMsg string `json:"errMsg"`
 }
 
 // SetConfigResult - represents detailed results of a set-config
