@@ -468,7 +468,14 @@ func testRemoveObjectWebHandler(obj ObjectLayer, instanceType string, t TestErrH
 		t.Fatalf("Was not able to upload an object, %v", err)
 	}
 
-	removeObjectRequest := RemoveObjectArgs{BucketName: bucketName, ObjectName: objectName}
+	objectName = "a/object"
+	_, err = obj.PutObject(bucketName, objectName, int64(len(data)), bytes.NewReader(data),
+		map[string]string{"md5Sum": "c9a34cfc85d982698c6ac89f76071abd"}, "")
+	if err != nil {
+		t.Fatalf("Was not able to upload an object, %v", err)
+	}
+
+	removeObjectRequest := RemoveObjectArgs{BucketName: bucketName, Prefix: "", Objects: []string{"a/", "object"}}
 	removeObjectReply := &WebGenericRep{}
 	req, err := newTestWebRPCRequest("Web.RemoveObject", authorization, removeObjectRequest)
 	if err != nil {
@@ -483,7 +490,7 @@ func testRemoveObjectWebHandler(obj ObjectLayer, instanceType string, t TestErrH
 		t.Fatalf("Failed, %v", err)
 	}
 
-	removeObjectRequest = RemoveObjectArgs{BucketName: bucketName, ObjectName: objectName}
+	removeObjectRequest = RemoveObjectArgs{BucketName: bucketName, Prefix: "", Objects: []string{"a/", "object"}}
 	removeObjectReply = &WebGenericRep{}
 	req, err = newTestWebRPCRequest("Web.RemoveObject", authorization, removeObjectRequest)
 	if err != nil {
