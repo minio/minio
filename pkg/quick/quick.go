@@ -85,34 +85,12 @@ func New(data interface{}) (Config, error) {
 // CheckVersion - loads json and compares the version number provided returns back true or false - any failure
 // is returned as error.
 func CheckVersion(filename string, version string) (bool, error) {
-	_, err := os.Stat(filename)
-	if err != nil {
-		return false, err
-	}
-
-	fileData, err := ioutil.ReadFile(filename)
-	if err != nil {
-		return false, err
-	}
-
-	if runtime.GOOS == "windows" {
-		fileData = []byte(strings.Replace(string(fileData), "\r\n", "\n", -1))
-	}
 	data := struct {
 		Version string
 	}{
 		Version: "",
 	}
-	err = json.Unmarshal(fileData, &data)
-	if err != nil {
-		switch err := err.(type) {
-		case *json.SyntaxError:
-			return false, FormatJSONSyntaxError(bytes.NewReader(fileData), err)
-		default:
-			return false, err
-		}
-	}
-	config, err := New(data)
+	config, err := Load(filename, &data)
 	if err != nil {
 		return false, err
 	}
@@ -124,35 +102,14 @@ func CheckVersion(filename string, version string) (bool, error) {
 
 // Load - loads json config from filename for the a given struct data
 func Load(filename string, data interface{}) (Config, error) {
-	_, err := os.Stat(filename)
-	if err != nil {
-		return nil, err
-	}
-
-	fileData, err := ioutil.ReadFile(filename)
-	if err != nil {
-		return nil, err
-	}
-
-	if runtime.GOOS == "windows" {
-		fileData = []byte(strings.Replace(string(fileData), "\r\n", "\n", -1))
-	}
-
-	err = json.Unmarshal(fileData, &data)
-	if err != nil {
-		switch err := err.(type) {
-		case *json.SyntaxError:
-			return nil, FormatJSONSyntaxError(bytes.NewReader(fileData), err)
-		default:
-			return nil, err
-		}
-	}
-
 	config, err := New(data)
 	if err != nil {
 		return nil, err
 	}
-
+	err = config.Load(filename)
+	if err != nil {
+		return nil, err
+	}
 	return config, nil
 }
 
