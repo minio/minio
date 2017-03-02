@@ -21,90 +21,62 @@ import (
 	"encoding/pem"
 	"errors"
 	"io/ioutil"
-	"os"
 	"path/filepath"
 )
 
+// getCertsPath get certs path.
+func getCertsPath() string {
+	return filepath.Join(getConfigDir(), globalMinioCertsDir)
+}
+
+// getCertFile must get cert file.
+func getCertFile() string {
+	return filepath.Join(getCertsPath(), globalMinioCertFile)
+}
+
+// getKeyFile must get key file.
+func getKeyFile() string {
+	return filepath.Join(getCertsPath(), globalMinioKeyFile)
+}
+
 // createCertsPath create certs path.
 func createCertsPath() error {
-	certsPath, err := getCertsPath()
-	if err != nil {
-		return err
+	rootCAsPath := filepath.Join(getCertsPath(), globalMinioCertsCADir)
+	return mkdirAll(rootCAsPath, 0700)
+}
+
+// getCAFiles must get the list of the CA certificates stored in minio config dir
+func getCAFiles() (caCerts []string) {
+	CAsDir := filepath.Join(getCertsPath(), globalMinioCertsCADir)
+	if caFiles, err := ioutil.ReadDir(CAsDir); err == nil {
+		// Ignore any error.
+		for _, cert := range caFiles {
+			caCerts = append(caCerts, filepath.Join(CAsDir, cert.Name()))
+		}
 	}
-	if err := os.MkdirAll(certsPath, 0700); err != nil {
-		return err
-	}
-	rootCAsPath := filepath.Join(certsPath, globalMinioCertsCADir)
-	return os.MkdirAll(rootCAsPath, 0700)
+	return caCerts
 }
 
-// getCertsPath get certs path.
-func getCertsPath() (string, error) {
-	var certsPath string
-	configDir, err := getConfigPath()
-	if err != nil {
-		return "", err
-	}
-	certsPath = filepath.Join(configDir, globalMinioCertsDir)
-	return certsPath, nil
-}
-
-// mustGetCertsPath must get certs path.
-func mustGetCertsPath() string {
-	certsPath, err := getCertsPath()
-	fatalIf(err, "Failed to get certificate path.")
-	return certsPath
-}
-
-// mustGetCertFile must get cert file.
-func mustGetCertFile() string {
-	return filepath.Join(mustGetCertsPath(), globalMinioCertFile)
-}
-
-// mustGetKeyFile must get key file.
-func mustGetKeyFile() string {
-	return filepath.Join(mustGetCertsPath(), globalMinioKeyFile)
-}
-
-// mustGetCAFiles must get the list of the CA certificates stored in minio config dir
-func mustGetCAFiles() (caCerts []string) {
-	CAsDir := filepath.Join(mustGetCertsPath(), globalMinioCertsCADir)
-	caFiles, _ := ioutil.ReadDir(CAsDir)
-	for _, cert := range caFiles {
-		caCerts = append(caCerts, filepath.Join(CAsDir, cert.Name()))
-	}
-	return
-}
-
-// mustGetSystemCertPool returns empty cert pool in case of error (windows)
-func mustGetSystemCertPool() *x509.CertPool {
+// getSystemCertPool returns empty cert pool in case of error (windows)
+func getSystemCertPool() *x509.CertPool {
 	pool, err := x509.SystemCertPool()
 	if err != nil {
-		return x509.NewCertPool()
+		pool = x509.NewCertPool()
 	}
+
 	return pool
 }
 
 // isCertFileExists verifies if cert file exists, returns true if
 // found, false otherwise.
 func isCertFileExists() bool {
-	st, e := os.Stat(filepath.Join(mustGetCertsPath(), globalMinioCertFile))
-	// If file exists and is regular return true.
-	if e == nil && st.Mode().IsRegular() {
-		return true
-	}
-	return false
+	return isFile(getCertFile())
 }
 
 // isKeyFileExists verifies if key file exists, returns true if found,
 // false otherwise.
 func isKeyFileExists() bool {
-	st, e := os.Stat(filepath.Join(mustGetCertsPath(), globalMinioKeyFile))
-	// If file exists and is regular return true.
-	if e == nil && st.Mode().IsRegular() {
-		return true
-	}
-	return false
+	return isFile(getKeyFile())
 }
 
 // isSSL - returns true with both cert and key exists.
@@ -114,7 +86,7 @@ func isSSL() bool {
 
 // Reads certificated file and returns a list of parsed certificates.
 func readCertificateChain() ([]*x509.Certificate, error) {
-	bytes, err := ioutil.ReadFile(mustGetCertFile())
+	bytes, err := ioutil.ReadFile(getCertFile())
 	if err != nil {
 		return nil, err
 	}
@@ -149,12 +121,12 @@ func parseCertificateChain(bytes []byte) ([]*x509.Certificate, error) {
 // loadRootCAs fetches CA files provided in minio config and adds them to globalRootCAs
 // Currently under Windows, there is no way to load system + user CAs at the same time
 func loadRootCAs() {
-	caFiles := mustGetCAFiles()
+	caFiles := getCAFiles()
 	if len(caFiles) == 0 {
 		return
 	}
 	// Get system cert pool, and empty cert pool under Windows because it is not supported
-	globalRootCAs = mustGetSystemCertPool()
+	globalRootCAs = getSystemCertPool()
 	// Load custom root CAs for client requests
 	for _, caFile := range caFiles {
 		caCert, err := ioutil.ReadFile(caFile)

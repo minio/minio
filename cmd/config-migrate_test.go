@@ -31,7 +31,7 @@ func TestServerConfigMigrateV1(t *testing.T) {
 	// remove the root directory after the test ends.
 	defer removeAll(rootPath)
 
-	setGlobalConfigPath(rootPath)
+	setConfigDir(rootPath)
 
 	// Create a V1 config json file and store it
 	configJSON := "{ \"version\":\"1\", \"accessKeyId\":\"abcde\", \"secretAccessKey\":\"abcdefgh\"}"
@@ -65,7 +65,7 @@ func TestServerConfigMigrateInexistentConfig(t *testing.T) {
 	// remove the root directory after the test ends.
 	defer removeAll(rootPath)
 
-	setGlobalConfigPath(rootPath)
+	setConfigDir(rootPath)
 	configPath := rootPath + "/" + globalMinioConfigFile
 
 	// Remove config file
@@ -120,7 +120,7 @@ func TestServerConfigMigrateV2toV14(t *testing.T) {
 	// remove the root directory after the test ends.
 	defer removeAll(rootPath)
 
-	setGlobalConfigPath(rootPath)
+	setConfigDir(rootPath)
 	configPath := rootPath + "/" + globalMinioConfigFile
 
 	// Create a corrupted config file
@@ -174,7 +174,7 @@ func TestServerConfigMigrateFaultyConfig(t *testing.T) {
 	// remove the root directory after the test ends.
 	defer removeAll(rootPath)
 
-	setGlobalConfigPath(rootPath)
+	setConfigDir(rootPath)
 	configPath := rootPath + "/" + globalMinioConfigFile
 
 	// Create a corrupted config file

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,77 +17,62 @@
 package cmd
 
 import (
-	"os"
 	"path/filepath"
 	"sync"
 
-	"github.com/minio/go-homedir"
+	homedir "github.com/minio/go-homedir"
+	"github.com/minio/mc/pkg/console"
 )
 
-// configPath for custom config path only for testing purposes
-var customConfigPath string
-var configMu sync.Mutex
-
-// Sets a new config path.
-func setGlobalConfigPath(configPath string) {
-	configMu.Lock()
-	defer configMu.Unlock()
-	customConfigPath = configPath
+// ConfigDir - configuration directory with locking.
+type ConfigDir struct {
+	sync.Mutex
+	dir string
 }
 
-// getConfigPath get server config path
-func getConfigPath() (string, error) {
-	configMu.Lock()
-	defer configMu.Unlock()
+// Set - saves given directory as configuration directory.
+func (config *ConfigDir) Set(dir string) {
+	config.Lock()
+	defer config.Unlock()
 
-	if customConfigPath != "" {
-		return customConfigPath, nil
-	}
+	config.dir = dir
+}
+
+// Get - returns current configuration directory.
+func (config *ConfigDir) Get() string {
+	config.Lock()
+	defer config.Unlock()
+
+	return config.dir
+}
+
+func mustGetDefaultConfigDir() string {
 	homeDir, err := homedir.Dir()
 	if err != nil {
-		return "", err
+		console.Fatalln("Unable to get home directory.", err)
 	}
-	configPath := filepath.Join(homeDir, globalMinioConfigDir)
-	return configPath, nil
+
+	return filepath.Join(homeDir, globalMinioConfigDir)
 }
 
-// mustGetConfigPath must get server config path.
-func mustGetConfigPath() string {
-	configPath, err := getConfigPath()
-	if err != nil {
-		return ""
-	}
-	return configPath
+var configDir = &ConfigDir{dir: mustGetDefaultConfigDir()}
+
+func setConfigDir(dir string) {
+	configDir.Set(dir)
 }
 
-// createConfigPath create server config path.
-func createConfigPath() error {
-	configPath, err := getConfigPath()
-	if err != nil {
-		return err
-	}
-	return os.MkdirAll(configPath, 0700)
+func getConfigDir() string {
+	return configDir.Get()
 }
 
-// isConfigFileExists - returns true if config file exists.
+func createConfigDir() error {
+	return mkdirAll(getConfigDir(), 0700)
+}
+
+func getConfigFile() string {
+	return filepath.Join(getConfigDir(), globalMinioConfigFile)
+}
+
 func isConfigFileExists() bool {
-	path, err := getConfigFile()
-	if err != nil {
-		return false
-	}
-	st, err := os.Stat(path)
-	// If file exists and is regular return true.
-	if err == nil && st.Mode().IsRegular() {
-		return true
-	}
-	return false
-}
-
-// getConfigFile get server config file.
-func getConfigFile() (string, error) {
-	configPath, err := getConfigPath()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(configPath, globalMinioConfigFile), nil
+	return isFile(getConfigFile())
 }

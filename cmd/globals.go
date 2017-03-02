@@ -24,8 +24,6 @@ import (
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/fatih/color"
-	"github.com/minio/cli"
-	"github.com/minio/mc/pkg/console"
 )
 
 // minio configuration related constants.
@@ -60,10 +58,6 @@ const (
 )
 
 var (
-	globalQuiet     = false               // quiet flag set via command line.
-	globalConfigDir = mustGetConfigPath() // config-dir flag set via command line
-	// Add new global flags here.
-
 	// Indicates if the running minio server is distributed setup.
 	globalIsDistXL = false
 
@@ -131,20 +125,3 @@ var (
 	colorBold = color.New(color.Bold).SprintFunc()
 	colorBlue = color.New(color.FgBlue).SprintfFunc()
 )
-
-// Parse command arguments and set global variables accordingly
-func setGlobalsFromContext(c *cli.Context) {
-	// Set config dir
-	switch {
-	case c.IsSet("config-dir"):
-		globalConfigDir = c.String("config-dir")
-	case c.GlobalIsSet("config-dir"):
-		globalConfigDir = c.GlobalString("config-dir")
-	}
-	if globalConfigDir == "" {
-		console.Fatalf("Unable to get config file. Config directory is empty.")
-	}
-
-	// Set global quiet flag.
-	globalQuiet = c.Bool("quiet") || c.GlobalBool("quiet")
-}

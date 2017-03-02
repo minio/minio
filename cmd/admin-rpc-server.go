@@ -19,6 +19,7 @@ package cmd
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"net/rpc"
 	"os"
@@ -175,17 +176,9 @@ type WriteConfigReply struct {
 }
 
 func writeTmpConfigCommon(tmpFileName string, configBytes []byte) error {
-	configDir, err := getConfigPath()
-	if err != nil {
-		errorIf(err, "Failed to get config path")
-		return err
-	}
-
-	err = ioutil.WriteFile(filepath.Join(configDir, tmpFileName), configBytes, 0666)
-	if err != nil {
-		errorIf(err, "Failed to write to temporary config file.")
-		return err
-	}
+	tmpConfigFile := filepath.Join(getConfigDir(), tmpFileName)
+	err := ioutil.WriteFile(tmpConfigFile, configBytes, 0666)
+	errorIf(err, fmt.Sprintf("Failed to write to temporary config file %s", tmpConfigFile))
 	return err
 }
 
@@ -214,20 +207,12 @@ type CommitConfigReply struct {
 
 // CommitConfig - Renames the temporary file into config.json on this node.
 func (s *adminCmd) CommitConfig(cArgs *CommitConfigArgs, cReply *CommitConfigReply) error {
-	configDir, err := getConfigPath()
-	if err != nil {
-		errorIf(err, "Failed to get config path.")
-		return err
-	}
+	configFile := getConfigFile()
+	tmpConfigFile := filepath.Join(getConfigDir(), cArgs.FileName)
 
-	configFilePath := filepath.Join(configDir, globalMinioConfigFile)
-	err = os.Rename(filepath.Join(configDir, cArgs.FileName), configFilePath)
-	if err != nil {
-		errorIf(err, "Failed to rename config file.")
-		return err
-	}
-
-	return nil
+	err := os.Rename(tmpConfigFile, configFile)
+	errorIf(err, fmt.Sprintf("Failed to rename %s to %s", tmpConfigFile, configFile))
+	return err
 }
 
 // registerAdminRPCRouter - registers RPC methods for service status,

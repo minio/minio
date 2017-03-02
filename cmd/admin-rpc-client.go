@@ -19,6 +19,7 @@ package cmd
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/url"
 	"os"
 	"path"
@@ -176,20 +177,12 @@ func (rc remoteAdminClient) WriteTmpConfig(tmpFileName string, configBytes []byt
 // CommitConfig - Move the new config in tmpFileName onto config.json
 // on a local node.
 func (lc localAdminClient) CommitConfig(tmpFileName string) error {
-	configDir, err := getConfigPath()
-	if err != nil {
-		errorIf(err, "Failed to get config directory path.")
-		return err
-	}
+	configFile := getConfigFile()
+	tmpConfigFile := filepath.Join(getConfigDir(), tmpFileName)
 
-	configFilePath := filepath.Join(configDir, globalMinioConfigFile)
-	err = os.Rename(filepath.Join(configDir, tmpFileName), configFilePath)
-	if err != nil {
-		errorIf(err, "Failed to rename to config.json")
-		return err
-	}
-
-	return nil
+	err := os.Rename(tmpConfigFile, configFile)
+	errorIf(err, fmt.Sprintf("Failed to rename %s to %s", tmpConfigFile, configFile))
+	return err
 }
 
 // CommitConfig - Move the new config in tmpFileName onto config.json

@@ -262,3 +262,12 @@ func getBrowserFromEnv() (string, error) {
 	globalIsEnvBrowser = true
 	return strings.ToLower(b), nil
 }
+
+// isFile - returns whether given path is a file or not.
+func isFile(path string) bool {
+	if fi, err := os.Stat(path); err == nil {
+		return fi.Mode().IsRegular()
+	}
+
+	return false
+}

@@ -94,15 +94,10 @@ func purgeV1() error {
 	}
 
 	if cv1.Version == "1" {
-		console.Println("Removed unsupported config version ‘1’.")
-		/// Purge old fsUsers.json file
-		configPath, err := getConfigPath()
-		if err != nil {
-			return fmt.Errorf("Unable to retrieve config path. %v", err)
-		}
-
-		configFile := filepath.Join(configPath, "fsUsers.json")
+		// Purge old fsUsers.json file
+		configFile := filepath.Join(getConfigDir(), "fsUsers.json")
 		removeAll(configFile)
+		console.Println("Removed unsupported config version ‘1’.")
 		return nil
 	}
 	return fmt.Errorf("Failed to migrate unrecognized config version ‘" + cv1.Version + "’.")
@@ -158,12 +153,7 @@ func migrateV2ToV3() error {
 		return fmt.Errorf("Unable to initialize config. %v", err)
 	}
 
-	configFile, err := getConfigFile()
-	if err != nil {
-		return fmt.Errorf("Unable to get config file. %v", err)
-	}
-
-	// Migrate the config.
+	configFile := getConfigFile()
 	err = qc.Save(configFile)
 	if err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘"+cv2.Version+"’ to ‘"+srvConfig.Version+"’ failed. %v", err)
@@ -205,11 +195,8 @@ func migrateV3ToV4() error {
 	if err != nil {
 		return fmt.Errorf("Unable to initialize the quick config. %v", err)
 	}
-	configFile, err := getConfigFile()
-	if err != nil {
-		return fmt.Errorf("Unable to get config file. %v", err)
-	}
 
+	configFile := getConfigFile()
 	err = qc.Save(configFile)
 	if err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘"+cv3.Version+"’ to ‘"+srvConfig.Version+"’ failed. %v", err)
@@ -254,11 +241,8 @@ func migrateV4ToV5() error {
 	if err != nil {
 		return fmt.Errorf("Unable to initialize the quick config. %v", err)
 	}
-	configFile, err := getConfigFile()
-	if err != nil {
-		return fmt.Errorf("Unable to get config file. %v", err)
-	}
 
+	configFile := getConfigFile()
 	err = qc.Save(configFile)
 	if err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘"+cv4.Version+"’ to ‘"+srvConfig.Version+"’ failed. %v", err)
@@ -330,11 +314,8 @@ func migrateV5ToV6() error {
 	if err != nil {
 		return fmt.Errorf("Unable to initialize the quick config. %v", err)
 	}
-	configFile, err := getConfigFile()
-	if err != nil {
-		return fmt.Errorf("Unable to get config file. %v", err)
-	}
 
+	configFile := getConfigFile()
 	err = qc.Save(configFile)
 	if err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘"+cv5.Version+"’ to ‘"+srvConfig.Version+"’ failed. %v", err)
@@ -394,11 +375,8 @@ func migrateV6ToV7() error {
 	if err != nil {
 		return fmt.Errorf("Unable to initialize the quick config. %v", err)
 	}
-	configFile, err := getConfigFile()
-	if err != nil {
-		return fmt.Errorf("Unable to get config file. %v", err)
-	}
 
+	configFile := getConfigFile()
 	err = qc.Save(configFile)
 	if err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘"+cv6.Version+"’ to ‘"+srvConfig.Version+"’ failed. %v", err)
@@ -465,11 +443,8 @@ func migrateV7ToV8() error {
 	if err != nil {
 		return fmt.Errorf("Unable to initialize the quick config. %v", err)
 	}
-	configFile, err := getConfigFile()
-	if err != nil {
-		return fmt.Errorf("Unable to get config file. %v", err)
-	}
 
+	configFile := getConfigFile()
 	err = qc.Save(configFile)
 	if err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘"+cv7.Version+"’ to ‘"+srvConfig.Version+"’ failed. %v", err)
@@ -544,11 +519,8 @@ func migrateV8ToV9() error {
 		return fmt.Errorf("Unable to initialize the quick config. %v",
 			err)
 	}
-	configFile, err := getConfigFile()
-	if err != nil {
-		return fmt.Errorf("Unable to get config file. %v", err)
-	}
 
+	configFile := getConfigFile()
 	err = qc.Save(configFile)
 	if err != nil {
 		return fmt.Errorf(
@@ -629,11 +601,8 @@ func migrateV9ToV10() error {
 		return fmt.Errorf("Unable to initialize the quick config. %v",
 			err)
 	}
-	configFile, err := getConfigFile()
-	if err != nil {
-		return fmt.Errorf("Unable to get config file. %v", err)
-	}
 
+	configFile := getConfigFile()
 	err = qc.Save(configFile)
 	if err != nil {
 		return fmt.Errorf(
@@ -717,11 +686,8 @@ func migrateV10ToV11() error {
 		return fmt.Errorf("Unable to initialize the quick config. %v",
 			err)
 	}
-	configFile, err := getConfigFile()
-	if err != nil {
-		return fmt.Errorf("Unable to get config file. %v", err)
-	}
 
+	configFile := getConfigFile()
 	err = qc.Save(configFile)
 	if err != nil {
 		return fmt.Errorf(
@@ -823,11 +789,8 @@ func migrateV11ToV12() error {
 		return fmt.Errorf("Unable to initialize the quick config. %v",
 			err)
 	}
-	configFile, err := getConfigFile()
-	if err != nil {
-		return fmt.Errorf("Unable to get config file. %v", err)
-	}
 
+	configFile := getConfigFile()
 	err = qc.Save(configFile)
 	if err != nil {
 		return fmt.Errorf(
@@ -920,11 +883,8 @@ func migrateV12ToV13() error {
 		return fmt.Errorf("Unable to initialize the quick config. %v",
 			err)
 	}
-	configFile, err := getConfigFile()
-	if err != nil {
-		return fmt.Errorf("Unable to get config file. %v", err)
-	}
 
+	configFile := getConfigFile()
 	err = qc.Save(configFile)
 	if err != nil {
 		return fmt.Errorf(
@@ -1022,11 +982,8 @@ func migrateV13ToV14() error {
 		return fmt.Errorf("Unable to initialize the quick config. %v",
 			err)
 	}
-	configFile, err := getConfigFile()
-	if err != nil {
-		return fmt.Errorf("Unable to get config file. %v", err)
-	}
 
+	configFile := getConfigFile()
 	err = qc.Save(configFile)
 	if err != nil {
 		return fmt.Errorf(

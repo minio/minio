@@ -440,7 +440,7 @@ func StartTestPeersRPCServer(t TestErrHandler, instanceType string) TestServer {
 
 // Sets the global config path to empty string.
 func resetGlobalConfigPath() {
-	setGlobalConfigPath("")
+	setConfigDir("")
 }
 
 // sets globalObjectAPI to `nil`.
@@ -519,7 +519,7 @@ func newTestConfig(bucketLocation string) (rootPath string, err error) {
 	}
 
 	// Do this only once here.
-	setGlobalConfigPath(rootPath)
+	setConfigDir(rootPath)
 
 	// Initialize server config.
 	if err = newConfig(envParams{}); err != nil {
