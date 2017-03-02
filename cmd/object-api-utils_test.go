@@ -41,6 +41,8 @@ func TestIsValidBucketName(t *testing.T) {
 		{"testbucket", true},
 		{"1bucket", true},
 		{"bucket1", true},
+		{"a.b", true},
+		{"ab.a.bc", true},
 		// cases for which test should fail.
 		// passing invalid bucket names.
 		{"------", false},
@@ -59,11 +61,14 @@ func TestIsValidBucketName(t *testing.T) {
 		{"ends-with-a-dot.", false},
 		{"ends-with-a-dash-", false},
 		{"-starts-with-a-dash", false},
-		{"THIS-BEINGS-WITH-UPPERCASe", false},
+		{"THIS-BEGINS-WITH-UPPERCASe", false},
 		{"tHIS-ENDS-WITH-UPPERCASE", false},
-		{"ThisBeginsAndEndsWithUpperCase", false},
+		{"ThisBeginsAndEndsWithUpperCasE", false},
 		{"una ñina", false},
-		{"lalalallalallalalalallalallalala-theString-size-is-greater-than-64", false},
+		{"dash-.may-not-appear-next-to-dot", false},
+		{"dash.-may-not-appear-next-to-dot", false},
+		{"dash-.-may-not-appear-next-to-dot", false},
+		{"lalalallalallalalalallalallalala-thestring-size-is-greater-than-63", false},
 	}
 
 	for i, testCase := range testCases {
