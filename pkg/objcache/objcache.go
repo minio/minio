@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,18 +27,20 @@ import (
 	"time"
 )
 
-// NoExpiry represents caches to be permanent and can only be deleted.
-var NoExpiry = time.Duration(0)
+const (
+	// NoExpiry represents caches to be permanent and can only be deleted.
+	NoExpiry = time.Duration(0)
 
-// DefaultExpiry represents default time duration value when individual entries will be expired.
-var DefaultExpiry = time.Duration(72 * time.Hour) // 72hrs.
+	// DefaultExpiry represents three days time duration when individual entries will be expired.
+	DefaultExpiry = time.Duration(3 * 24 * time.Hour)
 
-// DefaultBufferRatio represents default ratio used to calculate the
-// individual cache entry buffer size.
-var DefaultBufferRatio = uint64(10)
+	// defaultBufferRatio represents default ratio used to calculate the
+	// individual cache entry buffer size.
+	defaultBufferRatio = uint64(10)
 
-// DefaultGCPercent represents default garbage collection target percentage.
-var DefaultGCPercent = 20
+	// defaultGCPercent represents default garbage collection target percentage.
+	defaultGCPercent = 20
+)
 
 // buffer represents the in memory cache of a single entry.
 // buffer carries value of the data and last accessed time.
@@ -87,9 +89,10 @@ type Cache struct {
 // duration. If the expiry duration is less than one
 // (or NoExpiry), the items in the cache never expire
 // (by default), and must be deleted manually.
-func New(maxSize uint64, expiry time.Duration) *Cache {
+func New(maxSize uint64, expiry time.Duration) (c *Cache, err error) {
 	if maxSize == 0 {
-		panic("objcache: setting maximum cache size to zero is forbidden.")
+		err = errors.New("invalid maximum cache size")
+		return c, err
 	}
 
 	// A garbage collection is triggered when the ratio
@@ -106,20 +109,20 @@ func New(maxSize uint64, expiry time.Duration) *Cache {
 	// when we get to 8M.
 	//
 	// Set this value to 20% if caching is enabled.
-	debug.SetGCPercent(DefaultGCPercent)
+	debug.SetGCPercent(defaultGCPercent)
 
 	// Max cache entry size - indicates the
 	// maximum buffer per key that can be held in
 	// memory. Currently this value is 1/10th
 	// the size of requested cache size.
 	maxCacheEntrySize := func() uint64 {
-		i := maxSize / DefaultBufferRatio
+		i := maxSize / defaultBufferRatio
 		if i == 0 {
 			i = maxSize
 		}
 		return i
 	}()
-	c := &Cache{
+	c = &Cache{
 		onceGC:            sync.Once{},
 		maxSize:           maxSize,
 		maxCacheEntrySize: maxCacheEntrySize,
@@ -134,7 +137,7 @@ func New(maxSize uint64, expiry time.Duration) *Cache {
 		// Start garbage collection routine to expire objects.
 		c.StartGC()
 	}
-	return c
+	return c, nil
 }
 
 // ErrKeyNotFoundInCache - key not found in cache.
@@ -177,7 +180,7 @@ func (c *Cache) Create(key string, size int64) (w io.WriteCloser, err error) {
 	// Change GC percent if the current cache usage
 	// is already 75% of the maximum allowed usage.
 	if c.currentSize > (75 * c.maxSize / 100) {
-		c.onceGC.Do(func() { debug.SetGCPercent(DefaultGCPercent - 10) })
+		c.onceGC.Do(func() { debug.SetGCPercent(defaultGCPercent - 10) })
 	}
 	c.mutex.Unlock()
 

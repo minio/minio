@@ -6,21 +6,23 @@ package objcache
 
     Package objcache implements in memory caching methods.
 
+CONSTANTS
+
+    const (
+    	// NoExpiry represents caches to be permanent and can only be deleted.
+    	NoExpiry = time.Duration(0)
+
+    	// DefaultExpiry represents three days time duration when individual entries will be expired.
+    	DefaultExpiry = time.Duration(3 * 24 * time.Hour)
+    )
+
 VARIABLES
-
-var DefaultExpiry = time.Duration(72 * time.Hour) // 72hrs.
-
-    DefaultExpiry represents default time duration value when individual
-    entries will be expired.
 
 var ErrCacheFull = errors.New("Not enough space in cache")
     ErrCacheFull - cache is full.
 
 var ErrKeyNotFoundInCache = errors.New("Key not found in cache")
     ErrKeyNotFoundInCache - key not found in cache.
-
-var NoExpiry = time.Duration(0)
-    NoExpiry represents caches to be permanent and can only be deleted.
 
 TYPES
 

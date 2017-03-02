@@ -16,17 +16,27 @@
 
 package cmd
 
-import (
-	"github.com/minio/minio/pkg/sys"
-)
+import "github.com/minio/minio/pkg/sys"
 
-func setMaxOpenFiles() error {
-	_, maxLimit, err := sys.GetMaxOpenFileLimit()
-	if err != nil {
+func setMaxResources() (err error) {
+	var maxLimit uint64
+
+	// Set open files limit to maximum.
+	if _, maxLimit, err = sys.GetMaxOpenFileLimit(); err != nil {
 		return err
 	}
 
-	return sys.SetMaxOpenFileLimit(maxLimit, maxLimit)
+	if err = sys.SetMaxOpenFileLimit(maxLimit, maxLimit); err != nil {
+		return err
+	}
+
+	// Set max memory limit as current memory limit.
+	if _, maxLimit, err = sys.GetMaxMemoryLimit(); err != nil {
+		return err
+	}
+
+	err = sys.SetMaxMemoryLimit(maxLimit, maxLimit)
+	return err
 }
 
 func getMaxCacheSize(curLimit, totalRAM uint64) (cacheSize uint64) {
@@ -45,29 +55,25 @@ func getMaxCacheSize(curLimit, totalRAM uint64) (cacheSize uint64) {
 	return cacheSize
 }
 
-func setMaxMemory() error {
+// GetMaxCacheSize returns maximum cache size based on current RAM size and memory limit.
+func GetMaxCacheSize() (cacheSize uint64, err error) {
 	// Get max memory limit
-	_, maxLimit, err := sys.GetMaxMemoryLimit()
-	if err != nil {
-		return err
-	}
-
-	// Set max memory limit as current memory limit.
-	if err = sys.SetMaxMemoryLimit(maxLimit, maxLimit); err != nil {
-		return err
+	var curLimit uint64
+	if curLimit, _, err = sys.GetMaxMemoryLimit(); err != nil {
+		return cacheSize, err
 	}
 
 	// Get total RAM.
-	stats, err := sys.GetStats()
-	if err != nil {
-		return err
+	var stats sys.Stats
+	if stats, err = sys.GetStats(); err != nil {
+		return cacheSize, err
 	}
 
 	// In some OS like windows, maxLimit is zero.  Set total RAM as maxLimit.
-	if maxLimit == 0 {
-		maxLimit = stats.TotalRAM
+	if curLimit == 0 {
+		curLimit = stats.TotalRAM
 	}
 
-	globalMaxCacheSize = getMaxCacheSize(maxLimit, stats.TotalRAM)
-	return nil
+	cacheSize = getMaxCacheSize(curLimit, stats.TotalRAM)
+	return cacheSize, err
 }

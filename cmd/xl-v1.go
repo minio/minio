@@ -127,14 +127,23 @@ func newXLObjects(storageDisks []StorageAPI) (ObjectLayer, error) {
 		listPool:     listPool,
 	}
 
-	// Object cache is enabled when _MINIO_CACHE env is missing.
-	// and cache size is > 0.
-	xl.objCacheEnabled = !objCacheDisabled && globalMaxCacheSize > 0
+	// Get cache size if _MINIO_CACHE environment variable is set.
+	var maxCacheSize uint64
+	if !objCacheDisabled {
+		maxCacheSize, err = GetMaxCacheSize()
+		errorIf(err, "Unable to get maximum cache size")
+
+		// Enable object cache if cache size is more than zero
+		xl.objCacheEnabled = maxCacheSize > 0
+	}
 
 	// Check if object cache is enabled.
 	if xl.objCacheEnabled {
 		// Initialize object cache.
-		objCache := objcache.New(globalMaxCacheSize, globalCacheExpiry)
+		objCache, err := objcache.New(maxCacheSize, objcache.DefaultExpiry)
+		if err != nil {
+			return nil, err
+		}
 		objCache.OnEviction = func(key string) {
 			debug.FreeOSMemory()
 		}
