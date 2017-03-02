@@ -138,16 +138,8 @@ func initServerConfig(c *cli.Context) {
 	// Load user supplied root CAs
 	loadRootCAs()
 
-	// Set maxOpenFiles, This is necessary since default operating
-	// system limits of 1024, 2048 are not enough for Minio server.
-	setMaxOpenFiles()
-
-	// Set maxMemory, This is necessary since default operating
-	// system limits might be changed and we need to make sure we
-	// do not crash the server so the set the maxCacheSize appropriately.
-	setMaxMemory()
-
-	// Do not fail if this is not allowed, lower limits are fine as well.
+	// Set system resources to maximum.
+	errorIf(setMaxResources(), "Unable to change resource limit")
 }
 
 // Validate if input disks are sufficient for initializing XL.

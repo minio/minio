@@ -26,7 +26,6 @@ import (
 	"github.com/fatih/color"
 	"github.com/minio/cli"
 	"github.com/minio/mc/pkg/console"
-	"github.com/minio/minio/pkg/objcache"
 )
 
 // minio configuration related constants.
@@ -78,15 +77,8 @@ var (
 	// Set to true if credentials were passed from env, default is false.
 	globalIsEnvCreds = false
 
-	// Maximum cache size. Defaults to disabled.
-	// Caching is enabled only for RAM size > 8GiB.
-	globalMaxCacheSize = uint64(0)
-
 	// Maximum size of internal objects parts
 	globalPutPartSize = int64(64 * 1024 * 1024)
-
-	// Cache expiry.
-	globalCacheExpiry = objcache.DefaultExpiry
 
 	// Minio local server address (in `host:port` format)
 	globalMinioAddr = ""
