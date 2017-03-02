@@ -12,15 +12,27 @@ import (
 	"github.com/Azure/azure-sdk-for-go/storage"
 )
 
-// AzureObjects - Azure Object layer
+const azureAPIVersion = "2016-05-31"
+
+// AzureObjects - Implements Object layer for Azure blob storage.
 type AzureObjects struct {
 	client storage.BlobStorageClient // Azure sdk client
 }
 
+// Convert azure errors to minio object layer errors.
+func azureToObjectError(err error, bucket, object string) error {
+	if e, ok := err.(storage.AzureStorageServiceError); ok {
+		if e.StatusCode == http.StatusNotFound {
+			return ObjectNotFound{bucket, object}
+		}
+	}
+	return err
+}
+
+// Inits azure blob storage client and returns AzureObjects.
 func newAzureLayer(account, key string) (ObjectLayer, error) {
 	useHTTPS := true
-	apiVersion := "2016-05-31"
-	c, err := storage.NewClient(account, key, storage.DefaultBaseURL, apiVersion, useHTTPS)
+	c, err := storage.NewClient(account, key, storage.DefaultBaseURL, azureAPIVersion, useHTTPS)
 	if err != nil {
 		return AzureObjects{}, err
 	}
@@ -28,12 +40,12 @@ func newAzureLayer(account, key string) (ObjectLayer, error) {
 	return &AzureObjects{client}, nil
 }
 
-// Shutdown - Not relavant to Azure.
+// Shutdown - Not relevant to Azure.
 func (a AzureObjects) Shutdown() error {
 	return nil
 }
 
-// StorageInfo - Not relavant to Azure.
+// StorageInfo - Not relevant to Azure.
 func (a AzureObjects) StorageInfo() StorageInfo {
 	return StorageInfo{}
 }
@@ -131,12 +143,7 @@ func (a AzureObjects) GetObject(bucket, object string, startOffset int64, length
 	}
 	rc, err := a.client.GetBlobRange(bucket, object, byteRange, nil)
 	if err != nil {
-		if e, ok := err.(storage.AzureStorageServiceError); ok {
-			if e.StatusCode == http.StatusNotFound {
-				return traceError(ObjectNotFound{bucket, object})
-			}
-		}
-		return traceError(err)
+		return traceError(azureToObjectError(err, bucket, object))
 	}
 	io.Copy(writer, rc)
 	rc.Close()
@@ -147,12 +154,7 @@ func (a AzureObjects) GetObject(bucket, object string, startOffset int64, length
 func (a AzureObjects) GetObjectInfo(bucket, object string) (objInfo ObjectInfo, err error) {
 	prop, err := a.client.GetBlobProperties(bucket, object)
 	if err != nil {
-		if e, ok := err.(storage.AzureStorageServiceError); ok {
-			if e.StatusCode == http.StatusNotFound {
-				return objInfo, traceError(ObjectNotFound{bucket, object})
-			}
-		}
-		return objInfo, traceError(err)
+		return objInfo, traceError(azureToObjectError(err, bucket, object))
 	}
 	t, err := time.Parse(time.RFC1123, prop.LastModified)
 	if err != nil {
@@ -181,12 +183,7 @@ func (a AzureObjects) PutObject(bucket, object string, size int64, data io.Reade
 func (a AzureObjects) CopyObject(srcBucket, srcObject, destBucket, destObject string, metadata map[string]string) (objInfo ObjectInfo, err error) {
 	err = a.client.CopyBlob(destBucket, destObject, a.client.GetBlobURL(srcBucket, srcObject))
 	if err != nil {
-		if e, ok := err.(storage.AzureStorageServiceError); ok {
-			if e.StatusCode == http.StatusNotFound {
-				return objInfo, traceError(ObjectNotFound{srcBucket, srcObject})
-			}
-		}
-		return objInfo, traceError(err)
+		return objInfo, traceError(azureToObjectError(err, srcBucket, srcObject))
 	}
 	return a.GetObjectInfo(destBucket, destObject)
 }
@@ -195,12 +192,7 @@ func (a AzureObjects) CopyObject(srcBucket, srcObject, destBucket, destObject st
 func (a AzureObjects) DeleteObject(bucket, object string) error {
 	err := a.client.DeleteBlob(bucket, object, nil)
 	if err != nil {
-		if e, ok := err.(storage.AzureStorageServiceError); ok {
-			if e.StatusCode == http.StatusNotFound {
-				return traceError(ObjectNotFound{bucket, object})
-			}
-		}
-		return traceError(err)
+		return traceError(azureToObjectError(err, bucket, object))
 	}
 
 	return nil
@@ -216,13 +208,14 @@ func (a AzureObjects) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMa
 		return result, nil
 	}
 	if len(resp.Parts) > 0 {
-		result.Uploads = []uploadMetadata{{prefix, prefix, time.Now(), ""}}
+		result.Uploads = []uploadMetadata{{prefix, prefix, time.Now().UTC(), ""}}
 	}
 	return result, nil
 }
 
 // NewMultipartUpload - Use Azure equivalent CreateBlockBlob.
 func (a AzureObjects) NewMultipartUpload(bucket, object string, metadata map[string]string) (uploadID string, err error) {
+	// Azure does not support multiple upload ids for an object. Hence we use object name itself as the uploadID.
 	uploadID = object
 	return uploadID, traceError(a.client.CreateBlockBlob(bucket, object))
 }
@@ -264,7 +257,7 @@ func (a AzureObjects) PutObjectPart(bucket, object, uploadID string, partID int,
 	}
 	info.PartNumber = partID
 	info.ETag = md5Hex
-	info.LastModified = time.Now()
+	info.LastModified = time.Now().UTC()
 	info.Size = size
 	return info, nil
 }
@@ -282,7 +275,7 @@ func (a AzureObjects) ListObjectParts(bucket, object, uploadID string, partNumbe
 		}
 		result.Parts = append(result.Parts, PartInfo{
 			partID,
-			time.Now(),
+			time.Now().UTC(),
 			md5Hex,
 			part.Size,
 		})
@@ -312,10 +305,7 @@ func (a AzureObjects) CompleteMultipartUpload(bucket, object, uploadID string, u
 	if err != nil {
 		return objInfo, traceError(err)
 	}
-	objInfo, err = a.GetObjectInfo(bucket, object)
-	if err != nil {
-	}
-	return objInfo, err
+	return a.GetObjectInfo(bucket, object)
 }
 
 // HealBucket - Not relevant.
