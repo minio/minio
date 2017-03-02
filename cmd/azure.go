@@ -12,7 +12,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/storage"
 )
 
-const azureAPIVersion = "2016-05-31"
+const globalAzureAPIVersion = "2016-05-31"
 
 // AzureObjects - Implements Object layer for Azure blob storage.
 type AzureObjects struct {
@@ -31,8 +31,9 @@ func azureToObjectError(err error, bucket, object string) error {
 
 // Inits azure blob storage client and returns AzureObjects.
 func newAzureLayer(account, key string) (ObjectLayer, error) {
+
 	useHTTPS := true
-	c, err := storage.NewClient(account, key, storage.DefaultBaseURL, azureAPIVersion, useHTTPS)
+	c, err := storage.NewClient(account, key, storage.DefaultBaseURL, globalAzureAPIVersion, useHTTPS)
 	if err != nil {
 		return AzureObjects{}, err
 	}
