@@ -30,6 +30,7 @@ import (
 	"runtime"
 
 	"github.com/minio/cli"
+	"github.com/minio/mc/pkg/console"
 )
 
 var serverFlags = []cli.Flag{
@@ -358,11 +359,28 @@ func serverMain(c *cli.Context) {
 		cli.ShowCommandHelpAndExit(c, "server", 1)
 	}
 
+	// Get quiet flag from command line argument.
+	quietFlag := c.Bool("quiet") || c.GlobalBool("quiet")
+
+	// Get configuration directory from command line argument.
+	configDir := c.String("config-dir")
+	if !c.IsSet("config-dir") && c.GlobalIsSet("config-dir") {
+		configDir = c.GlobalString("config-dir")
+	}
+	if configDir == "" {
+		console.Fatalf("Configuration directory cannot be empty.")
+	}
+
+	// Set configuration directory.
+	setConfigDir(configDir)
+
 	// Initializes server config, certs, logging and system settings.
 	initServerConfig(c)
 
 	// Check for new updates from dl.minio.io.
-	checkUpdate()
+	if !quietFlag {
+		checkUpdate()
+	}
 
 	// Server address.
 	serverAddr := c.String("address")
@@ -442,7 +460,7 @@ func serverMain(c *cli.Context) {
 	go func() {
 		cert, key := "", ""
 		if globalIsSSL {
-			cert, key = mustGetCertFile(), mustGetKeyFile()
+			cert, key = getCertFile(), getKeyFile()
 		}
 		fatalIf(apiServer.ListenAndServe(cert, key), "Failed to start minio server.")
 	}()
@@ -458,7 +476,9 @@ func serverMain(c *cli.Context) {
 	globalObjLayerMutex.Unlock()
 
 	// Prints the formatted startup message once object layer is initialized.
-	printStartupMessage(apiEndPoints)
+	if !quietFlag {
+		printStartupMessage(apiEndPoints)
+	}
 
 	// Set uptime time after object layer has initialized.
 	globalBootTime = time.Now().UTC()

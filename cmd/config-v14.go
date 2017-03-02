@@ -98,7 +98,7 @@ func newConfig(envParams envParams) error {
 	}
 
 	// Create config path.
-	if err := createConfigPath(); err != nil {
+	if err := createConfigDir(); err != nil {
 		return err
 	}
 
@@ -116,12 +116,8 @@ func newConfig(envParams envParams) error {
 // loadConfig - loads a new config from disk, overrides params from env
 // if found and valid
 func loadConfig(envParams envParams) error {
-	configFile, err := getConfigFile()
-	if err != nil {
-		return err
-	}
-
-	if _, err = os.Stat(configFile); err != nil {
+	configFile := getConfigFile()
+	if _, err := os.Stat(configFile); err != nil {
 		return err
 	}
 
@@ -229,10 +225,7 @@ func (s serverConfigV14) Save() error {
 	defer serverConfigMu.RUnlock()
 
 	// get config file.
-	configFile, err := getConfigFile()
-	if err != nil {
-		return err
-	}
+	configFile := getConfigFile()
 
 	// initialize quick.
 	qc, err := quick.New(&s)

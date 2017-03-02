@@ -112,7 +112,7 @@ func TestServerConfig(t *testing.T) {
 	}
 
 	// Do this only once here.
-	setGlobalConfigPath(rootPath)
+	setConfigDir(rootPath)
 
 	// Initialize server config.
 	if err := loadConfig(envParams{}); err != nil {
@@ -143,7 +143,7 @@ func TestServerConfigWithEnvs(t *testing.T) {
 	}
 
 	// Do this only once here.
-	setGlobalConfigPath(rootPath)
+	setConfigDir(rootPath)
 
 	// Init config
 	initConfig()

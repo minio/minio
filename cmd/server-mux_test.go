@@ -358,8 +358,8 @@ func TestServerListenAndServeTLS(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	certFile := mustGetCertFile()
-	keyFile := mustGetKeyFile()
+	certFile := getCertFile()
+	keyFile := getKeyFile()
 	defer os.RemoveAll(certFile)
 	defer os.RemoveAll(keyFile)
 
@@ -420,8 +420,8 @@ func TestServerListenAndServeTLS(t *testing.T) {
 
 // generateTestCert creates a cert and a key used for testing only
 func generateTestCert(host string) error {
-	certPath := mustGetCertFile()
-	keyPath := mustGetKeyFile()
+	certPath := getCertFile()
+	keyPath := getKeyFile()
 	priv, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return err

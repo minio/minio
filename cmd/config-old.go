@@ -50,11 +50,7 @@ type configV1 struct {
 
 // loadConfigV1 load config
 func loadConfigV1() (*configV1, error) {
-	configPath, err := getConfigPath()
-	if err != nil {
-		return nil, err
-	}
-	configFile := filepath.Join(configPath, "fsUsers.json")
+	configFile := filepath.Join(getConfigDir(), "fsUsers.json")
 	config, err := loadOldConfig(configFile, &configV1{Version: "1"})
 	if config == nil {
 		return nil, err
@@ -86,10 +82,7 @@ type configV2 struct {
 
 // loadConfigV2 load config version '2'.
 func loadConfigV2() (*configV2, error) {
-	configFile, err := getConfigFile()
-	if err != nil {
-		return nil, err
-	}
+	configFile := getConfigFile()
 	config, err := loadOldConfig(configFile, &configV2{Version: "2"})
 	if config == nil {
 		return nil, err
@@ -152,10 +145,7 @@ type configV3 struct {
 
 // loadConfigV3 load config version '3'.
 func loadConfigV3() (*configV3, error) {
-	configFile, err := getConfigFile()
-	if err != nil {
-		return nil, err
-	}
+	configFile := getConfigFile()
 	config, err := loadOldConfig(configFile, &configV3{Version: "3"})
 	if config == nil {
 		return nil, err
@@ -195,10 +185,7 @@ type configV4 struct {
 
 // loadConfigV4 load config version '4'.
 func loadConfigV4() (*configV4, error) {
-	configFile, err := getConfigFile()
-	if err != nil {
-		return nil, err
-	}
+	configFile := getConfigFile()
 	config, err := loadOldConfig(configFile, &configV4{Version: "4"})
 	if config == nil {
 		return nil, err
@@ -265,10 +252,7 @@ type configV5 struct {
 
 // loadConfigV5 load config version '5'.
 func loadConfigV5() (*configV5, error) {
-	configFile, err := getConfigFile()
-	if err != nil {
-		return nil, err
-	}
+	configFile := getConfigFile()
 	config, err := loadOldConfig(configFile, &configV5{Version: "5"})
 	if config == nil {
 		return nil, err
@@ -299,10 +283,7 @@ type configV6 struct {
 
 // loadConfigV6 load config version '6'.
 func loadConfigV6() (*configV6, error) {
-	configFile, err := getConfigFile()
-	if err != nil {
-		return nil, err
-	}
+	configFile := getConfigFile()
 	config, err := loadOldConfig(configFile, &configV6{Version: "6"})
 	if config == nil {
 		return nil, err
@@ -352,10 +333,7 @@ type serverConfigV7 struct {
 
 // loadConfigV7 load config version '7'.
 func loadConfigV7() (*serverConfigV7, error) {
-	configFile, err := getConfigFile()
-	if err != nil {
-		return nil, err
-	}
+	configFile := getConfigFile()
 	config, err := loadOldConfig(configFile, &serverConfigV7{Version: "7"})
 	if config == nil {
 		return nil, err
@@ -384,10 +362,7 @@ type serverConfigV8 struct {
 
 // loadConfigV8 load config version '8'.
 func loadConfigV8() (*serverConfigV8, error) {
-	configFile, err := getConfigFile()
-	if err != nil {
-		return nil, err
-	}
+	configFile := getConfigFile()
 	config, err := loadOldConfig(configFile, &serverConfigV8{Version: "8"})
 	if config == nil {
 		return nil, err
@@ -415,10 +390,7 @@ type serverConfigV9 struct {
 }
 
 func loadConfigV9() (*serverConfigV9, error) {
-	configFile, err := getConfigFile()
-	if err != nil {
-		return nil, err
-	}
+	configFile := getConfigFile()
 	config, err := loadOldConfig(configFile, &serverConfigV9{Version: "9"})
 	if config == nil {
 		return nil, err
@@ -444,10 +416,7 @@ type serverConfigV10 struct {
 }
 
 func loadConfigV10() (*serverConfigV10, error) {
-	configFile, err := getConfigFile()
-	if err != nil {
-		return nil, err
-	}
+	configFile := getConfigFile()
 	config, err := loadOldConfig(configFile, &serverConfigV10{Version: "10"})
 	if config == nil {
 		return nil, err
@@ -484,10 +453,7 @@ type serverConfigV11 struct {
 }
 
 func loadConfigV11() (*serverConfigV11, error) {
-	configFile, err := getConfigFile()
-	if err != nil {
-		return nil, err
-	}
+	configFile := getConfigFile()
 	config, err := loadOldConfig(configFile, &serverConfigV11{Version: "11"})
 	if config == nil {
 		return nil, err
@@ -512,10 +478,7 @@ type serverConfigV12 struct {
 }
 
 func loadConfigV12() (*serverConfigV12, error) {
-	configFile, err := getConfigFile()
-	if err != nil {
-		return nil, err
-	}
+	configFile := getConfigFile()
 	config, err := loadOldConfig(configFile, &serverConfigV12{Version: "12"})
 	if config == nil {
 		return nil, err
@@ -540,10 +503,7 @@ type serverConfigV13 struct {
 }
 
 func loadConfigV13() (*serverConfigV13, error) {
-	configFile, err := getConfigFile()
-	if err != nil {
-		return nil, err
-	}
+	configFile := getConfigFile()
 	config, err := loadOldConfig(configFile, &serverConfigV13{Version: "13"})
 	if config == nil {
 		return nil, err
