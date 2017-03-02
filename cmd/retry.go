@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -122,7 +122,7 @@ func newRetryTimerWithJitter(unit time.Duration, cap time.Duration, jitter float
 }
 
 // Default retry constants.
-var (
+const (
 	defaultRetryUnit = time.Second      // 1 second.
 	defaultRetryCap  = 30 * time.Second // 30 seconds.
 )
