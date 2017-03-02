@@ -1,12 +1,12 @@
-// +build linux
+// +build windows
 
 /*
- * Minio Cloud Storage, (C) 2016,2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *shouldP
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -18,14 +18,14 @@
 
 package sys
 
-import "syscall"
+// GetMaxMemoryLimit - returns the maximum size of the process's virtual memory (address space) in bytes.
+func GetMaxMemoryLimit() (curLimit, maxLimit uint64, err error) {
+	// Nothing to do for windows.
+	return curLimit, maxLimit, err
+}
 
-// GetStats - return system statistics.
-func GetStats() (stats Stats, err error) {
-	var si syscall.Sysinfo_t
-	if err = syscall.Sysinfo(&si); err == nil {
-		stats.TotalRAM = uint64(si.Totalram)
-	}
-
-	return stats, err
+// SetMaxMemoryLimit - sets the maximum size of the process's virtual memory (address space) in bytes.
+func SetMaxMemoryLimit(curLimit, maxLimit uint64) error {
+	// Nothing to do for windows.
+	return nil
 }
