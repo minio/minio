@@ -334,7 +334,7 @@ type ServerMux struct {
 	// Time to wait before forcing server shutdown
 	gracefulTimeout time.Duration
 
-	mu      sync.Mutex // guards closing, and listeners
+	mu      sync.RWMutex // guards closing, and listeners
 	closing bool
 }
 
@@ -461,9 +461,9 @@ func (m *ServerMux) ListenAndServe(certFile, keyFile string) (err error) {
 
 			// Return ServiceUnavailable for clients which are sending requests
 			// in shutdown phase
-			m.mu.Lock()
+			m.mu.RLock()
 			closing := m.closing
-			m.mu.Unlock()
+			m.mu.RUnlock()
 			if closing {
 				w.WriteHeader(http.StatusServiceUnavailable)
 				return
