@@ -21,10 +21,13 @@ type AzureObjects struct {
 
 // Convert azure errors to minio object layer errors.
 func azureToObjectError(err error, bucket, object string) error {
-	if e, ok := err.(storage.AzureStorageServiceError); ok {
-		if e.StatusCode == http.StatusNotFound {
-			return ObjectNotFound{bucket, object}
-		}
+	e, ok := err.(storage.AzureStorageServiceError)
+	if !ok {
+		return err
+	}
+	switch e.StatusCode {
+	case http.StatusNotFound:
+		return ObjectNotFound{bucket, object}
 	}
 	return err
 }
