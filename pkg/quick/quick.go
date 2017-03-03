@@ -1,7 +1,7 @@
 /*
  * Quick - Quick key value store for config files and persistent state files
  *
- * Minio Client (C) 2015 Minio, Inc.
+ * Quick (C) 2015 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,14 +19,11 @@
 package quick
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"reflect"
-	"runtime"
-	"strings"
 	"sync"
 
 	"github.com/fatih/structs"
@@ -151,7 +148,9 @@ func (d config) String() string {
 	return string(configBytes)
 }
 
-// Save writes config data in JSON format to a file.
+// Save writes config data to a file. Data format
+// is selected based on file extension or JSON if
+// not provided.
 func (d config) Save(filename string) error {
 	d.lock.Lock()
 	defer d.lock.Unlock()
@@ -179,38 +178,17 @@ func (d config) Save(filename string) error {
 			return err
 		}
 	}
-	// Proceed to create or overwrite file.
-	jsonData, err := json.MarshalIndent(d.data, "", "\t")
-	if err != nil {
-		return err
-	}
-
-	if runtime.GOOS == "windows" {
-		jsonData = []byte(strings.Replace(string(jsonData), "\n", "\r\n", -1))
-	}
 
 	// Save data.
-	return writeFile(filename, jsonData)
+	return saveFileConfig(filename, d.data)
 }
 
-// Load - loads JSON config from file and merge with currently set values
+// Load - loads config from file and merge with currently set values
+// File content format is guessed from the file name extension, if not
+// available, consider that we have JSON.
 func (d *config) Load(filename string) error {
 	d.lock.Lock()
 	defer d.lock.Unlock()
-
-	_, err := os.Stat(filename)
-	if err != nil {
-		return err
-	}
-
-	fileData, err := ioutil.ReadFile(filename)
-	if err != nil {
-		return err
-	}
-
-	if runtime.GOOS == "windows" {
-		fileData = []byte(strings.Replace(string(fileData), "\r\n", "\n", -1))
-	}
 
 	st := structs.New(d.data)
 	f, ok := st.FieldOk("Version")
@@ -218,14 +196,8 @@ func (d *config) Load(filename string) error {
 		return fmt.Errorf("Argument struct [%s] does not contain field \"Version\"", st.Name())
 	}
 
-	err = json.Unmarshal(fileData, d.data)
-	if err != nil {
-		switch err := err.(type) {
-		case *json.SyntaxError:
-			return FormatJSONSyntaxError(bytes.NewReader(fileData), err)
-		default:
-			return err
-		}
+	if err := loadFileConfig(filename, d.data); err != nil {
+		return err
 	}
 
 	if err := CheckData(d.data); err != nil {
