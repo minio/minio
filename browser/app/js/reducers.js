@@ -199,7 +199,6 @@ export default (state = {
       newState.checkedObjects = []
       break
   }
-  console.log(newState.checkedObjects)
 
   return newState
 }

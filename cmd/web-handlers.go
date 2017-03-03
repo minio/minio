@@ -250,7 +250,7 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 
 // RemoveObjectArgs - args to remove an object
 // JSON will look like:
-// '{"bucketname":"testbucket","prefix":"john/pics/","objects":["hawaii/","maldives/","sanjose.jpg"]}'
+// '{"bucketname":"testbucket","objects":["photos/hawaii/","photos/maldives/","photos/sanjose.jpg"]}'
 type RemoveObjectArgs struct {
 	Objects    []string `json:"objects"`    // can be files or sub-directories
 	Prefix     string   `json:"prefix"`     // current directory in the browser-ui
@@ -293,8 +293,8 @@ objectLoop:
 			return err
 		}
 		if !hasSuffix(object, slashSeparator) {
-			// If not a directory, compress the file and write it to response.
-			err = remove(pathJoin(args.Prefix, object))
+			// If not a directory, remove the object.
+			err = remove(object)
 			if err != nil {
 				break objectLoop
 			}
@@ -304,7 +304,7 @@ objectLoop:
 		marker := ""
 		for {
 			var lo ListObjectsInfo
-			lo, err = objectAPI.ListObjects(args.BucketName, pathJoin(args.Prefix, object), marker, "", 1000)
+			lo, err = objectAPI.ListObjects(args.BucketName, object, marker, "", 1000)
 			if err != nil {
 				break objectLoop
 			}

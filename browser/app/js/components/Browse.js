@@ -228,12 +228,13 @@ export default class Browse extends React.Component {
   removeObject() {
     const {web, dispatch, currentPath, currentBucket, deleteConfirmation} = this.props
     web.RemoveObject({
-      bucketName: currentBucket,
-      objectName: deleteConfirmation.object
+      bucketname: currentBucket,
+      objects: [deleteConfirmation.object]
     })
       .then(() => {
         this.hideDeleteConfirmation()
-        dispatch(actions.removeObject(deleteConfirmation.object))
+	let delObject = deleteConfirmation.object.replace(currentPath, '')
+        dispatch(actions.removeObject(delObject))
       })
       .catch(e => dispatch(actions.showAlert({
         type: 'danger',
