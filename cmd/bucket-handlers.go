@@ -486,7 +486,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 			return
 		}
 
-		if fileSize > lengthRange.Max || fileSize > maxObjectSize {
+		if fileSize > lengthRange.Max || isMaxObjectSize(fileSize) {
 			errorIf(err, "Unable to create object.")
 			writeErrorResponse(w, toAPIErrorCode(errDataTooLarge), r.URL)
 			return

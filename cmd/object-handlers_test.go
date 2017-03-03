@@ -840,7 +840,7 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			req.ContentLength = -1
 			req.TransferEncoding = []string{}
 		case TooBigObject:
-			req.ContentLength = maxObjectSize + 1
+			req.ContentLength = globalMaxObjectSize + 1
 		}
 		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
 		// Call the ServeHTTP to execute the handler,`func (api objectAPIHandlers) GetObjectHandler`  handles the request.
@@ -883,7 +883,7 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			reqV2.ContentLength = -1
 			reqV2.TransferEncoding = []string{}
 		case TooBigObject:
-			reqV2.ContentLength = maxObjectSize + 1
+			reqV2.ContentLength = globalMaxObjectSize + 1
 		}
 
 		// Since `apiRouter` satisfies `http.Handler` it has a ServeHTTP to execute the logic of the handler.
@@ -2722,7 +2722,7 @@ func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName strin
 		{
 			objectName: testObject,
 			reader:     bytes.NewReader([]byte("hello")),
-			partNumber: strconv.Itoa(maxPartID + 1),
+			partNumber: strconv.Itoa(globalMaxPartID + 1),
 			fault:      None,
 			accessKey:  credentials.AccessKey,
 			secretKey:  credentials.SecretKey,
@@ -2880,7 +2880,7 @@ func testAPIPutObjectPartHandler(obj ObjectLayer, instanceType, bucketName strin
 					// Setting the content length to a value greater than the max allowed size of a part.
 					// Used in test case  4.
 				case TooBigObject:
-					req.ContentLength = maxObjectSize + 1
+					req.ContentLength = globalMaxObjectSize + 1
 					// Malformed signature.
 					// Used in test case  6.
 				case BadSignature:

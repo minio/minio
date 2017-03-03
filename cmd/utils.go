@@ -170,27 +170,41 @@ func checkValidMD5(md5 string) ([]byte, error) {
 
 /// http://docs.aws.amazon.com/AmazonS3/latest/dev/UploadingObjects.html
 const (
-	// maximum object size per PUT request is 5GiB
-	maxObjectSize = 5 * humanize.GiByte
-	// minimum Part size for multipart upload is 5MiB
-	minPartSize = 5 * humanize.MiByte
-	// maximum Part ID for multipart upload is 10000 (Acceptable values range from 1 to 10000 inclusive)
-	maxPartID = 10000
+	// Maximum object size per PUT request is 16GiB.
+	// This is a divergence from S3 limit on purpose to support
+	// use cases where users are going to upload large files
+	// using 'curl' and presigned URL.
+	globalMaxObjectSize = 16 * humanize.GiByte
+
+	// Minimum Part size for multipart upload is 5MiB
+	globalMinPartSize = 5 * humanize.MiByte
+
+	// Maximum Part size for multipart upload is 5GiB
+	globalMaxPartSize = 5 * humanize.GiByte
+
+	// Maximum Part ID for multipart upload is 10000
+	// (Acceptable values range from 1 to 10000 inclusive)
+	globalMaxPartID = 10000
 )
 
 // isMaxObjectSize - verify if max object size
 func isMaxObjectSize(size int64) bool {
-	return size > maxObjectSize
+	return size > globalMaxObjectSize
+}
+
+// // Check if part size is more than maximum allowed size.
+func isMaxAllowedPartSize(size int64) bool {
+	return size > globalMaxPartSize
 }
 
 // Check if part size is more than or equal to minimum allowed size.
 func isMinAllowedPartSize(size int64) bool {
-	return size >= minPartSize
+	return size >= globalMinPartSize
 }
 
 // isMaxPartNumber - Check if part ID is greater than the maximum allowed ID.
 func isMaxPartID(partID int) bool {
-	return partID > maxPartID
+	return partID > globalMaxPartID
 }
 
 func contains(stringList []string, element string) bool {
