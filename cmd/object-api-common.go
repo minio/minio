@@ -38,14 +38,14 @@ const (
 )
 
 // Global object layer mutex, used for safely updating object layer.
-var globalObjLayerMutex *sync.Mutex
+var globalObjLayerMutex *sync.RWMutex
 
 // Global object layer, only accessed by newObjectLayerFn().
 var globalObjectAPI ObjectLayer
 
 func init() {
 	// Initialize this once per server initialization.
-	globalObjLayerMutex = &sync.Mutex{}
+	globalObjLayerMutex = &sync.RWMutex{}
 }
 
 // Check if the disk is remote.
