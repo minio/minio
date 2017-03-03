@@ -272,7 +272,9 @@ func TestListOnlineDisks(t *testing.T) {
 		partsMetadata := partsMetaFromModTimes(test.modTimes, xlMeta.Erasure.Checksum)
 
 		onlineDisks, modTime := listOnlineDisks(xlDisks, partsMetadata, test.errs)
-		outdatedDisks := outDatedDisks(xlDisks, onlineDisks, partsMetadata, bucket, object)
+		availableDisks, newErrs, err := disksWithAllParts(onlineDisks, partsMetadata, test.errs, bucket, object)
+		test.errs = newErrs
+		outdatedDisks := outDatedDisks(xlDisks, availableDisks, test.errs, partsMetadata, bucket, object)
 		if modTime.Equal(timeSentinel) {
 			t.Fatalf("Test %d: modTime should never be equal to timeSentinel, but found equal",
 				i+1)
@@ -280,8 +282,8 @@ func TestListOnlineDisks(t *testing.T) {
 
 		if test._tamperBackend != noTamper {
 			if tamperedIndex != -1 && outdatedDisks[tamperedIndex] == nil {
-				t.Fatalf("Test %d: disk (%v) with part.1 missing or is an outdated disk, but wasn't listed by outDatedDisks",
-					i+1, onlineDisks[tamperedIndex])
+				t.Fatalf("Test %d: disk (%v) with part.1 missing is an outdated disk, but wasn't listed by outDatedDisks",
+					i+1, xlDisks[tamperedIndex])
 			}
 
 		}
@@ -294,11 +296,11 @@ func TestListOnlineDisks(t *testing.T) {
 		// Check if a disk is considered both online and outdated,
 		// which is a contradiction, except if parts are missing.
 		overlappingDisks := make(map[string]*posix)
-		for _, onlineDisk := range onlineDisks {
-			if onlineDisk == nil {
+		for _, availableDisk := range availableDisks {
+			if availableDisk == nil {
 				continue
 			}
-			pDisk := toPosix(onlineDisk)
+			pDisk := toPosix(availableDisk)
 			overlappingDisks[pDisk.diskPath] = pDisk
 		}
 
@@ -317,7 +319,13 @@ func TestListOnlineDisks(t *testing.T) {
 			pDisk := toPosix(outdatedDisk)
 			if _, ok := overlappingDisks[pDisk.diskPath]; ok {
 				t.Errorf("Test %d: Outdated disk %v was also detected as an online disk - %v %v",
-					i+1, pDisk, onlineDisks, outdatedDisks)
+					i+1, pDisk, availableDisks, outdatedDisks)
+			}
+
+			// errors other than errFileNotFound doesn't imply that the disk is outdated.
+			if test.errs[index] != nil && test.errs[index] != errFileNotFound && outdatedDisk != nil {
+				t.Errorf("Test %d: error (%v) other than errFileNotFound doesn't imply that the disk (%v) could be outdated",
+					i+1, test.errs[index], pDisk)
 			}
 		}
 	}

@@ -76,6 +76,26 @@ func listObjectModtimes(partsMetadata []xlMetaV1, errs []error) (modTimes []time
 	return modTimes
 }
 
+// Notes:
+// There are 5 possible states a disk could be in,
+// 1. __online__             - has the latest copy of xl.json - returned by listOnlineDisks
+//
+// 2. __offline__            - err == errDiskNotFound
+//
+// 3. __availableWithParts__ - has the latest copy of xl.json and has all
+//                             parts with checksums matching; returned by disksWithAllParts
+//
+// 4. __outdated__           - returned by outDatedDisk, provided []StorageAPI
+//                             returned by diskWithAllParts is passed for latestDisks.
+//    - has an old copy of xl.json
+//    - doesn't have xl.json (errFileNotFound)
+//    - has the latest xl.json but one or more parts are corrupt
+//
+// 5. __missingParts__       - has the latest copy of xl.json but has some parts
+// missing.  This is identified separately since this may need manual
+// inspection to understand the root cause. E.g, this could be due to
+// backend filesystem corruption.
+
 // listOnlineDisks - returns
 // - a slice of disks where disk having 'older' xl.json (or nothing)
 // are set to nil.
@@ -101,39 +121,22 @@ func listOnlineDisks(disks []StorageAPI, partsMetadata []xlMetaV1, errs []error)
 }
 
 // outDatedDisks - return disks which don't have the latest object (i.e xl.json).
-func outDatedDisks(disks, latestDisks []StorageAPI, partsMetadata []xlMetaV1,
+// disks that are offline are not 'marked' outdated.
+func outDatedDisks(disks, latestDisks []StorageAPI, errs []error, partsMetadata []xlMetaV1,
 	bucket, object string) (outDatedDisks []StorageAPI) {
 
 	outDatedDisks = make([]StorageAPI, len(disks))
-	for index, disk := range latestDisks {
-		// disk either has an older xl.json or is not online.
-		if disk == nil {
-			outDatedDisks[index] = disks[index]
+	for index, latestDisk := range latestDisks {
+		if latestDisk != nil {
 			continue
 		}
-
-		// disk has a valid xl.json but may not have all the
-		// parts. This is considered an outdated disk, since
-		// it needs healing too.
-		for pIndex, part := range partsMetadata[index].Parts {
-			// compute blake2b sum of part.
-			hash := newHash(blake2bAlgo)
-			blakeBytes, hErr := hashSum(disk, bucket, filepath.Join(object, part.Name), hash)
-			if hErr != nil {
-				outDatedDisks[index] = disk
-				break
-			}
-
-			blakeSum := hex.EncodeToString(blakeBytes)
-			// if blake2b sum doesn't match for a part
-			// then this disk is outdated and needs
-			// healing.
-			if blakeSum != partsMetadata[index].Erasure.Checksum[pIndex].Hash {
-				outDatedDisks[index] = disk
-				break
-			}
+		// disk either has an older xl.json or doesn't have one.
+		switch errorCause(errs[index]) {
+		case nil, errFileNotFound:
+			outDatedDisks[index] = disks[index]
 		}
 	}
+
 	return outDatedDisks
 }
 
@@ -204,4 +207,50 @@ func xlHealStat(xl xlObjects, partsMetadata []xlMetaV1, errs []error) HealObject
 		MissingDataCount:    missingDataCount,
 		MissingPartityCount: missingParityCount,
 	}
+}
+
+// disksWithAllParts - This function needs to be called with
+// []StorageAPI returned by listOnlineDisks. Returns,
+// - disks which have all parts specified in the latest xl.json.
+// - errs updated to have errFileNotFound in place of disks that had
+// missing parts.
+// - non-nil error if any of the online disks failed during
+// calculating blake2b checksum.
+func disksWithAllParts(onlineDisks []StorageAPI, partsMetadata []xlMetaV1, errs []error, bucket, object string) ([]StorageAPI, []error, error) {
+	availableDisks := make([]StorageAPI, len(onlineDisks))
+	for index, onlineDisk := range onlineDisks {
+		if onlineDisk == nil {
+			continue
+		}
+		// disk has a valid xl.json but may not have all the
+		// parts. This is considered an outdated disk, since
+		// it needs healing too.
+		for pIndex, part := range partsMetadata[index].Parts {
+			// compute blake2b sum of part.
+			partPath := filepath.Join(object, part.Name)
+			hash := newHash(blake2bAlgo)
+			blakeBytes, hErr := hashSum(onlineDisk, bucket, partPath, hash)
+			if hErr == errFileNotFound {
+				errs[index] = errFileNotFound
+				continue
+			}
+
+			if hErr != nil && hErr != errFileNotFound {
+				return nil, nil, traceError(hErr)
+			}
+
+			partChecksum := partsMetadata[index].Erasure.Checksum[pIndex].Hash
+			blakeSum := hex.EncodeToString(blakeBytes)
+			// if blake2b sum doesn't match for a part
+			// then this disk is outdated and needs
+			// healing.
+			if blakeSum != partChecksum {
+				errs[index] = errFileNotFound
+				break
+			}
+			availableDisks[index] = onlineDisk
+		}
+	}
+
+	return availableDisks, errs, nil
 }
