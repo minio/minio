@@ -1422,6 +1422,12 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 	// Executing the object layer tests for XL.
 	defer removeRoots(fsDirs)
 
+	bucketName := "mybucket"
+	err = obj.MakeBucket(bucketName)
+	if err != nil {
+		t.Fatal("Cannot make bucket:", err)
+	}
+
 	// Set faulty disks to XL backend
 	xl := obj.(*xlObjects)
 	for i, d := range xl.storageDisks {
@@ -1449,13 +1455,23 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 	}
 
 	// Check if web rpc calls return errors with faulty disks.  ServerInfo, GenerateAuth, SetAuth, GetAuth are not concerned
-	webRPCs := []string{"MakeBucket", "ListBuckets", "ListObjects", "RemoveObject",
-		"GetBucketPolicy", "SetBucketPolicy"}
+	// RemoveObject is also not concerned since it always returns success.
+	webRPCs := []struct {
+		webRPCName string
+		ReqArgs    interface{}
+		RepArgs    interface{}
+	}{
+		{"MakeBucket", MakeBucketArgs{BucketName: bucketName}, WebGenericRep{}},
+		{"ListBuckets", AuthRPCArgs{}, ListBucketsRep{}},
+		{"ListObjects", ListObjectsArgs{BucketName: bucketName, Prefix: ""}, ListObjectsRep{}},
+		{"GetBucketPolicy", GetBucketPolicyArgs{BucketName: bucketName, Prefix: ""}, GetBucketPolicyRep{}},
+		{"SetBucketPolicy", SetBucketPolicyArgs{BucketName: bucketName, Prefix: "", Policy: "none"}, WebGenericRep{}},
+	}
 
 	for _, rpcCall := range webRPCs {
-		args := &AuthRPCArgs{}
-		reply := &WebGenericRep{}
-		req, nerr := newTestWebRPCRequest("Web."+rpcCall, authorization, args)
+		args := &rpcCall.ReqArgs
+		reply := &rpcCall.RepArgs
+		req, nerr := newTestWebRPCRequest("Web."+rpcCall.webRPCName, authorization, args)
 		if nerr != nil {
 			t.Fatalf("Test %s: Failed to create HTTP request: <ERROR> %v", rpcCall, nerr)
 		}
