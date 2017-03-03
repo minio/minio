@@ -20,7 +20,6 @@ import (
 	"bufio"
 	"net"
 	"net/http"
-	"path"
 	"strings"
 	"time"
 
@@ -161,17 +160,17 @@ func (h cacheControlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // Adds verification for incoming paths.
 type minioPrivateBucketHandler struct {
-	handler            http.Handler
-	reservedBucketPath string
+	handler http.Handler
 }
 
 func setPrivateBucketHandler(h http.Handler) http.Handler {
-	return minioPrivateBucketHandler{h, minioReservedBucketPath}
+	return minioPrivateBucketHandler{h}
 }
 
 func (h minioPrivateBucketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// For all non browser requests, reject access to 'reservedBucketPath'.
-	if !guessIsBrowserReq(r) && path.Clean(r.URL.Path) == h.reservedBucketPath {
+	// For all non browser requests, reject access to 'minioReservedBucketPath'.
+	bucketName, _ := urlPath2BucketObjectName(r.URL)
+	if !guessIsBrowserReq(r) && isMinioReservedBucket(bucketName) && isMinioMetaBucket(bucketName) {
 		writeErrorResponse(w, ErrAllAccessDisabled, r.URL)
 		return
 	}
