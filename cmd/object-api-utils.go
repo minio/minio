@@ -194,7 +194,17 @@ func isReservedOrInvalidBucket(bucketEntry string) bool {
 	if !IsValidBucketName(bucketEntry) {
 		return true
 	}
-	return bucketEntry == minioMetaBucket || bucketEntry == minioReservedBucket
+	return isMinioMetaBucket(bucketEntry) || isMinioReservedBucket(bucketEntry)
+}
+
+// Returns true if input bucket is a reserved minio meta bucket '.minio.sys'.
+func isMinioMetaBucket(bucketName string) bool {
+	return bucketName == minioMetaBucket
+}
+
+// Returns true if input bucket is a reserved minio bucket 'minio'.
+func isMinioReservedBucket(bucketName string) bool {
+	return bucketName == minioReservedBucket
 }
 
 // byBucketName is a collection satisfying sort.Interface.

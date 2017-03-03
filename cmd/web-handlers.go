@@ -113,7 +113,7 @@ type MakeBucketArgs struct {
 	BucketName string `json:"bucketName"`
 }
 
-// MakeBucket - make a bucket.
+// MakeBucket - creates a new bucket.
 func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, reply *WebGenericRep) error {
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
@@ -122,12 +122,19 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 	if !isHTTPRequestValid(r) {
 		return toJSONError(errAuthentication)
 	}
+
+	// Check if bucket is a reserved bucket name.
+	if isMinioMetaBucket(args.BucketName) || isMinioReservedBucket(args.BucketName) {
+		return toJSONError(errReservedBucket)
+	}
+
 	bucketLock := globalNSMutex.NewNSLock(args.BucketName, "")
 	bucketLock.Lock()
 	defer bucketLock.Unlock()
 	if err := objectAPI.MakeBucket(args.BucketName); err != nil {
 		return toJSONError(err, args.BucketName)
 	}
+
 	reply.UIVersion = browser.UIVersion
 	return nil
 }
@@ -890,6 +897,13 @@ func toJSONError(err error, params ...string) (jerr *json2.Error) {
 		Message: apiErr.Description,
 	}
 	switch apiErr.Code {
+	// Reserved bucket name provided.
+	case "AllAccessDisabled":
+		if len(params) > 0 {
+			jerr = &json2.Error{
+				Message: fmt.Sprintf("All access to this bucket %s has been disabled.", params[0]),
+			}
+		}
 	// Bucket name invalid with custom error message.
 	case "InvalidBucketName":
 		if len(params) > 0 {
@@ -959,6 +973,12 @@ func toWebAPIError(err error) APIError {
 		return APIError{
 			Code:           "MethodNotAllowed",
 			HTTPStatusCode: http.StatusMethodNotAllowed,
+			Description:    err.Error(),
+		}
+	} else if err == errReservedBucket {
+		return APIError{
+			Code:           "AllAccessDisabled",
+			HTTPStatusCode: http.StatusForbidden,
 			Description:    err.Error(),
 		}
 	}

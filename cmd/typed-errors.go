@@ -50,3 +50,7 @@ var errServerVersionMismatch = errors.New("Server versions do not match")
 
 // errServerTimeMismatch - server times are too far apart.
 var errServerTimeMismatch = errors.New("Server times are too far apart")
+
+// errReservedBucket - bucket name is reserved for Minio, usually
+// returned for 'minio', '.minio.sys'
+var errReservedBucket = errors.New("All access to this bucket is disabled")
