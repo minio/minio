@@ -628,7 +628,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	}
 
 	/// maximum copy size for multipart objects in a single operation
-	if isMaxObjectSize(length) {
+	if isMaxAllowedPartSize(length) {
 		writeErrorResponse(w, ErrEntityTooLarge, r.URL)
 		return
 	}
@@ -637,6 +637,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	// object is same then only metadata is updated.
 	partInfo, err := objectAPI.CopyObjectPart(srcBucket, srcObject, dstBucket, dstObject, uploadID, partID, startOffset, length)
 	if err != nil {
+		errorIf(err, "Unable to perform CopyObjectPart %s/%s", srcBucket, srcObject)
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -687,7 +688,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	}
 
 	/// maximum Upload size for multipart objects in a single operation
-	if isMaxObjectSize(size) {
+	if isMaxAllowedPartSize(size) {
 		writeErrorResponse(w, ErrEntityTooLarge, r.URL)
 		return
 	}

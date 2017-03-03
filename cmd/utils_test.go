@@ -110,12 +110,12 @@ func TestMaxObjectSize(t *testing.T) {
 		// Test - 1 - maximum object size.
 		{
 			true,
-			maxObjectSize + 1,
+			globalMaxObjectSize + 1,
 		},
 		// Test - 2 - not maximum object size.
 		{
 			false,
-			maxObjectSize - 1,
+			globalMaxObjectSize - 1,
 		},
 	}
 	for i, s := range sizes {
@@ -135,12 +135,12 @@ func TestMinAllowedPartSize(t *testing.T) {
 		// Test - 1 - within minimum part size.
 		{
 			true,
-			minPartSize + 1,
+			globalMinPartSize + 1,
 		},
 		// Test - 2 - smaller than minimum part size.
 		{
 			false,
-			minPartSize - 1,
+			globalMinPartSize - 1,
 		},
 	}
 
@@ -161,12 +161,12 @@ func TestMaxPartID(t *testing.T) {
 		// Test - 1 part number within max part number.
 		{
 			false,
-			maxPartID - 1,
+			globalMaxPartID - 1,
 		},
 		// Test - 2 part number bigger than max part number.
 		{
 			true,
-			maxPartID + 1,
+			globalMaxPartID + 1,
 		},
 	}
 

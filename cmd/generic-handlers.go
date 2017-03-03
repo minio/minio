@@ -46,9 +46,9 @@ func registerHandlers(mux *router.Router, handlerFns ...HandlerFunc) http.Handle
 // which is more than enough to accommodate any form data fields and headers.
 const requestFormDataSize = 64 * humanize.MiByte
 
-// For any HTTP request, request body should be not more than 5GiB + requestFormDataSize
-// where, 5GiB is the maximum allowed object size for object upload.
-const requestMaxBodySize = 5*humanize.GiByte + requestFormDataSize
+// For any HTTP request, request body should be not more than 16GiB + requestFormDataSize
+// where, 16GiB is the maximum allowed object size for object upload.
+const requestMaxBodySize = globalMaxObjectSize + requestFormDataSize
 
 type requestSizeLimitHandler struct {
 	handler     http.Handler

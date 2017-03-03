@@ -1239,16 +1239,16 @@ func TestWriteSetConfigResponse(t *testing.T) {
 	}
 
 	testPeers := []adminPeer{
-		adminPeer{
+		{
 			addr: "localhost:9001",
 		},
-		adminPeer{
+		{
 			addr: "localhost:9002",
 		},
-		adminPeer{
+		{
 			addr: "localhost:9003",
 		},
-		adminPeer{
+		{
 			addr: "localhost:9004",
 		},
 	}
