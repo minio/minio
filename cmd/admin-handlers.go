@@ -718,9 +718,11 @@ func toAdminAPIErrCode(err error) APIErrorCode {
 // SetConfigResult - represents detailed results of a set-config
 // operation.
 type nodeSummary struct {
-	Name string `json:"name"`
-	Err  string `json:"err"`
+	Name   string `json:"name"`
+	ErrSet bool   `json:"errSet"`
+	ErrMsg string `json:"errMsg"`
 }
+
 type setConfigResult struct {
 	NodeResults []nodeSummary `json:"nodeResults"`
 	Status      bool          `json:"status"`
@@ -733,8 +735,9 @@ func writeSetConfigResponse(w http.ResponseWriter, peers adminPeers, errs []erro
 	// set-config operation.
 	for i := range errs {
 		nodeResults = append(nodeResults, nodeSummary{
-			Name: peers[i].addr,
-			Err:  fmt.Sprintf("%v", errs[i]),
+			Name:   peers[i].addr,
+			ErrSet: errs[i] != nil,
+			ErrMsg: fmt.Sprintf("%v", errs[i]),
 		})
 
 	}
