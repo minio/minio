@@ -56,6 +56,8 @@ const (
 	ErrInvalidBucketName
 	ErrInvalidDigest
 	ErrInvalidRange
+	ErrInvalidCopyPartRange
+	ErrInvalidCopyPartRangeSource
 	ErrInvalidMaxKeys
 	ErrInvalidMaxUploads
 	ErrInvalidMaxParts
@@ -538,6 +540,16 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	ErrOverlappingConfigs: {
 		Code:           "InvalidArgument",
 		Description:    "Configurations overlap. Configurations on the same bucket cannot share a common event type.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidCopyPartRange: {
+		Code:           "InvalidArgument",
+		Description:    "The x-amz-copy-source-range value must be of the form bytes=first-last where first and last are the zero-based offsets of the first and last bytes to copy",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidCopyPartRangeSource: {
+		Code:           "InvalidArgument",
+		Description:    "Range specified is not valid for source object",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 
