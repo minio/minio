@@ -20,21 +20,43 @@ type AzureObjects struct {
 }
 
 // Convert azure errors to minio object layer errors.
-func azureToObjectError(err error, bucket, object string) error {
-	e, ok := err.(storage.AzureStorageServiceError)
+func azureToObjectError(err error, params ...string) error {
+	bucket := ""
+	object := ""
+	if len(params) == 1 {
+		bucket = params[0]
+	}
+	if len(params) == 2 {
+		object = params[1]
+	}
+	actualErr := err
+	traceErr, isTraceErr := err.(*Error)
+	if isTraceErr {
+		actualErr = traceErr.e
+	}
+
+	azureErr, ok := actualErr.(storage.AzureStorageServiceError)
 	if !ok {
+		// We don't interpret non Azure errors. As azure errors will
+		// have StatusCode to help to convert to object errors.
 		return err
 	}
-	switch e.StatusCode {
+	var objErr error
+	switch azureErr.StatusCode {
 	case http.StatusNotFound:
-		return ObjectNotFound{bucket, object}
+		objErr = ObjectNotFound{bucket, object}
 	}
-	return err
+	if isTraceErr {
+		// Incase the passed err was a trace Error then just replace the
+		// encapsulated error.
+		traceErr.e = objErr
+		return traceErr
+	}
+	return objErr
 }
 
 // Inits azure blob storage client and returns AzureObjects.
 func newAzureLayer(account, key string) (ObjectLayer, error) {
-
 	useHTTPS := true
 	c, err := storage.NewClient(account, key, storage.DefaultBaseURL, globalAzureAPIVersion, useHTTPS)
 	if err != nil {
@@ -56,7 +78,7 @@ func (a AzureObjects) StorageInfo() StorageInfo {
 
 // MakeBucket - Create bucket.
 func (a AzureObjects) MakeBucket(bucket string) error {
-	return traceError(a.client.CreateContainer(bucket, storage.ContainerAccessTypePrivate))
+	return azureToObjectError(traceError(a.client.CreateContainer(bucket, storage.ContainerAccessTypePrivate)), bucket)
 }
 
 // GetBucketInfo - Get bucket metadata.
@@ -66,7 +88,7 @@ func (a AzureObjects) GetBucketInfo(bucket string) (BucketInfo, error) {
 		Prefix: bucket,
 	})
 	if err != nil {
-		return BucketInfo{}, traceError(err)
+		return BucketInfo{}, azureToObjectError(traceError(err), bucket)
 	}
 	for _, container := range resp.Containers {
 		if container.Name == bucket {
@@ -87,7 +109,7 @@ func (a AzureObjects) GetBucketInfo(bucket string) (BucketInfo, error) {
 func (a AzureObjects) ListBuckets() (buckets []BucketInfo, err error) {
 	resp, err := a.client.ListContainers(storage.ListContainersParameters{})
 	if err != nil {
-		return nil, traceError(err)
+		return nil, azureToObjectError(traceError(err))
 	}
 	for _, container := range resp.Containers {
 		t, e := time.Parse(time.RFC1123, container.Properties.LastModified)
@@ -104,7 +126,7 @@ func (a AzureObjects) ListBuckets() (buckets []BucketInfo, err error) {
 
 // DeleteBucket - Use Azure equivalent DeleteContainer.
 func (a AzureObjects) DeleteBucket(bucket string) error {
-	return traceError(a.client.DeleteContainer(bucket))
+	return azureToObjectError(traceError(a.client.DeleteContainer(bucket)), bucket)
 }
 
 // ListObjects - Use Azure equivalent ListBlobs.
@@ -116,7 +138,7 @@ func (a AzureObjects) ListObjects(bucket, prefix, marker, delimiter string, maxK
 		MaxResults: uint(maxKeys),
 	})
 	if err != nil {
-		return result, traceError(err)
+		return result, azureToObjectError(traceError(err), bucket, prefix)
 	}
 	result.IsTruncated = resp.NextMarker != ""
 	result.NextMarker = resp.NextMarker
@@ -147,18 +169,18 @@ func (a AzureObjects) GetObject(bucket, object string, startOffset int64, length
 	}
 	rc, err := a.client.GetBlobRange(bucket, object, byteRange, nil)
 	if err != nil {
-		return traceError(azureToObjectError(err, bucket, object))
+		return azureToObjectError(traceError(err), bucket, object)
 	}
-	io.Copy(writer, rc)
+	_, err = io.Copy(writer, rc)
 	rc.Close()
-	return nil
+	return traceError(err)
 }
 
 // GetObjectInfo - Use Azure equivalent GetBlobProperties.
 func (a AzureObjects) GetObjectInfo(bucket, object string) (objInfo ObjectInfo, err error) {
 	prop, err := a.client.GetBlobProperties(bucket, object)
 	if err != nil {
-		return objInfo, traceError(azureToObjectError(err, bucket, object))
+		return objInfo, azureToObjectError(traceError(err), bucket, object)
 	}
 	t, err := time.Parse(time.RFC1123, prop.LastModified)
 	if err != nil {
@@ -178,7 +200,7 @@ func (a AzureObjects) GetObjectInfo(bucket, object string) (objInfo ObjectInfo, 
 func (a AzureObjects) PutObject(bucket, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (objInfo ObjectInfo, err error) {
 	err = a.client.CreateBlockBlobFromReader(bucket, object, uint64(size), data, nil)
 	if err != nil {
-		return objInfo, traceError(err)
+		return objInfo, azureToObjectError(traceError(err), bucket, object)
 	}
 	return a.GetObjectInfo(bucket, object)
 }
@@ -187,7 +209,7 @@ func (a AzureObjects) PutObject(bucket, object string, size int64, data io.Reade
 func (a AzureObjects) CopyObject(srcBucket, srcObject, destBucket, destObject string, metadata map[string]string) (objInfo ObjectInfo, err error) {
 	err = a.client.CopyBlob(destBucket, destObject, a.client.GetBlobURL(srcBucket, srcObject))
 	if err != nil {
-		return objInfo, traceError(azureToObjectError(err, srcBucket, srcObject))
+		return objInfo, azureToObjectError(traceError(err), srcBucket, srcObject)
 	}
 	return a.GetObjectInfo(destBucket, destObject)
 }
@@ -196,7 +218,7 @@ func (a AzureObjects) CopyObject(srcBucket, srcObject, destBucket, destObject st
 func (a AzureObjects) DeleteObject(bucket, object string) error {
 	err := a.client.DeleteBlob(bucket, object, nil)
 	if err != nil {
-		return traceError(azureToObjectError(err, bucket, object))
+		return azureToObjectError(traceError(err), bucket, object)
 	}
 
 	return nil
@@ -204,11 +226,17 @@ func (a AzureObjects) DeleteObject(bucket, object string) error {
 
 // ListMultipartUploads - Incomplete implementation, for now just return the prefix if it is an incomplete upload.
 func (a AzureObjects) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (result ListMultipartsInfo, err error) {
+	// FIXME: Full ListMultipartUploads is not supported yet. It is supported just enough to help our client libs to
+	// support re-uploads.
 	result.MaxUploads = maxUploads
 	result.Prefix = prefix
 	result.Delimiter = delimiter
 	resp, err := a.ListObjectParts(bucket, prefix, prefix, 1, 1000)
 	if err != nil {
+		// In case ListObjectParts returns error, it would mean that no such incomplete upload exists on
+		// azure storage - in which case we return nil. This plays a role for mc and our client libs. i.e client
+		// does ListMultipartUploads to figure the previous uploadID to continue uploading from where it left off.
+		// If we return error the upload never starts and always returns error.
 		return result, nil
 	}
 	if len(resp.Parts) > 0 {
@@ -219,9 +247,11 @@ func (a AzureObjects) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMa
 
 // NewMultipartUpload - Use Azure equivalent CreateBlockBlob.
 func (a AzureObjects) NewMultipartUpload(bucket, object string, metadata map[string]string) (uploadID string, err error) {
-	// Azure does not support multiple upload ids for an object. Hence we use object name itself as the uploadID.
+	// Azure doesn't return a unique upload ID and we use object name in place of it. Azure allows multiple uploads to
+	// co-exist as long as the user keeps the blocks uploaded (in block blobs) unique amongst concurrent upload attempts.
+	// Each concurrent client, keeps its own blockID list which it can commit.
 	uploadID = object
-	return uploadID, traceError(a.client.CreateBlockBlob(bucket, object))
+	return uploadID, azureToObjectError(traceError(a.client.CreateBlockBlob(bucket, object)))
 }
 
 // CopyObjectPart - Not implemented.
@@ -257,7 +287,7 @@ func (a AzureObjects) PutObjectPart(bucket, object, uploadID string, partID int,
 	id := azureGetBlockID(partID, md5Hex)
 	err = a.client.PutBlockWithLength(bucket, object, id, uint64(size), data, nil)
 	if err != nil {
-		return info, traceError(err)
+		return info, azureToObjectError(traceError(err), bucket, object)
 	}
 	info.PartNumber = partID
 	info.ETag = md5Hex
@@ -270,12 +300,12 @@ func (a AzureObjects) PutObjectPart(bucket, object, uploadID string, partID int,
 func (a AzureObjects) ListObjectParts(bucket, object, uploadID string, partNumberMarker int, maxParts int) (result ListPartsInfo, err error) {
 	resp, err := a.client.GetBlockList(bucket, object, storage.BlockListTypeUncommitted)
 	if err != nil {
-		return result, traceError(err)
+		return result, azureToObjectError(traceError(err), bucket, object)
 	}
 	for _, part := range resp.UncommittedBlocks {
 		partID, md5Hex, err := azureParseBlockID(part.Name)
 		if err != nil {
-			return result, traceError(err)
+			return result, err
 		}
 		result.Parts = append(result.Parts, PartInfo{
 			partID,
@@ -307,7 +337,7 @@ func (a AzureObjects) CompleteMultipartUpload(bucket, object, uploadID string, u
 	}
 	err = a.client.PutBlockList(bucket, object, blocks)
 	if err != nil {
-		return objInfo, traceError(err)
+		return objInfo, azureToObjectError(traceError(err), bucket, object)
 	}
 	return a.GetObjectInfo(bucket, object)
 }

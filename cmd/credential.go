@@ -33,13 +33,16 @@ const (
 
 	alphaNumericTable    = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 	alphaNumericTableLen = byte(len(alphaNumericTable))
+
+	secretKeyMaxLenAmazon = 40
+	secretKeyMaxLenAzure  = 100
 )
 
 var (
 	errInvalidAccessKeyLength = errors.New("Invalid access key, access key should be 5 to 20 characters in length")
 	errInvalidSecretKeyLength = errors.New("Invalid secret key, secret key should be 8 to 40 characters in length")
 )
-var secretKeyMaxLen = 40
+var secretKeyMaxLen = secretKeyMaxLenAmazon
 
 func mustGetAccessKey() string {
 	keyBytes := make([]byte, accessKeyMaxLen)

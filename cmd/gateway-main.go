@@ -49,7 +49,7 @@ func gatewayMain(ctx *cli.Context) {
 // Handler for 'minio gateway azure'.
 func azureMain(ctx *cli.Context) {
 	// Azure account key length is higher than the default limit.
-	secretKeyMaxLen = 100
+	secretKeyMaxLen = secretKeyMaxLenAzure
 
 	initServerConfig(ctx)
 
