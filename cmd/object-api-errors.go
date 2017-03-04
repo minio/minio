@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"errors"
 	"fmt"
 	"io"
 )
@@ -251,9 +250,6 @@ type IncompleteBody GenericError
 func (e IncompleteBody) Error() string {
 	return e.Bucket + "#" + e.Object + "has incomplete body"
 }
-
-// errInvalidRange - returned when given range value is not valid.
-var errInvalidRange = errors.New("Invalid range")
 
 // InvalidRange - invalid range typed error.
 type InvalidRange struct {

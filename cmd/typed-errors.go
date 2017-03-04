@@ -54,3 +54,10 @@ var errServerTimeMismatch = errors.New("Server times are too far apart")
 // errReservedBucket - bucket name is reserved for Minio, usually
 // returned for 'minio', '.minio.sys'
 var errReservedBucket = errors.New("All access to this bucket is disabled")
+
+// errInvalidRange - returned when given range value is not valid.
+var errInvalidRange = errors.New("Invalid range")
+
+// errInvalidRangeSource - returned when given range value exceeds
+// the source object size.
+var errInvalidRangeSource = errors.New("Range specified exceeds source object size")
