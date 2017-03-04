@@ -311,8 +311,10 @@ func quickHeal(storageDisks []StorageAPI, writeQuorum int, readQuorum int) error
 // Heals an object only the corrupted/missing erasure blocks.
 func healObject(storageDisks []StorageAPI, bucket string, object string, quorum int) error {
 	partsMetadata, errs := readAllXLMetadata(storageDisks, bucket, object)
-	// Use writeQuorum to avoid split-brain in xl.json (which is replicated).
-	if reducedErr := reduceWriteQuorumErrs(errs, nil, quorum); reducedErr != nil {
+	// readQuorum suffices for xl.json since we use monotonic
+	// system time to break the tie when a split-brain situation
+	// arises.
+	if reducedErr := reduceReadQuorumErrs(errs, nil, quorum); reducedErr != nil {
 		return toObjectErr(reducedErr, bucket, object)
 	}
 
@@ -329,6 +331,20 @@ func healObject(storageDisks []StorageAPI, bucket string, object string, quorum 
 	if aErr != nil {
 		return toObjectErr(aErr, bucket, object)
 	}
+
+	numAvailableDisks := 0
+	for _, disk := range availableDisks {
+		if disk != nil {
+			numAvailableDisks++
+		}
+	}
+
+	// If less than read quorum number of disks have all the parts
+	// of the data, we can't reconstruct the erasure-coded data.
+	if numAvailableDisks < quorum {
+		return toObjectErr(errXLReadQuorum, bucket, object)
+	}
+
 	// List of disks having outdated version of the object or missing object.
 	outDatedDisks := outDatedDisks(storageDisks, availableDisks, errs, partsMetadata,
 		bucket, object)
@@ -467,5 +483,5 @@ func (xl xlObjects) HealObject(bucket, object string) error {
 	defer objectLock.RUnlock()
 
 	// Heal the object.
-	return healObject(xl.storageDisks, bucket, object, xl.writeQuorum)
+	return healObject(xl.storageDisks, bucket, object, xl.readQuorum)
 }
