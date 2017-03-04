@@ -84,7 +84,7 @@ func azureMain(ctx *cli.Context) {
 	go func() {
 		cert, key := "", ""
 		if globalIsSSL {
-			cert, key = mustGetCertFile(), mustGetKeyFile()
+			cert, key = getCertFile(), getKeyFile()
 		}
 		fatalIf(apiServer.ListenAndServe(cert, key), "Failed to start minio server.")
 	}()
