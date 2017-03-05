@@ -1,3 +1,19 @@
+/*
+ * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package cmd
 
 import (
@@ -23,7 +39,7 @@ type AzureObjects struct {
 func azureToObjectError(err error, params ...string) error {
 	bucket := ""
 	object := ""
-	if len(params) == 1 {
+	if len(params) >= 1 {
 		bucket = params[0]
 	}
 	if len(params) == 2 {
@@ -163,10 +179,14 @@ func (a AzureObjects) ListObjects(bucket, prefix, marker, delimiter string, maxK
 
 // GetObject - Use Azure equivalent GetBlobRange.
 func (a AzureObjects) GetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) (err error) {
-	byteRange := fmt.Sprintf("%d-%d", startOffset, startOffset+length-1)
+	var byteRange string
+
 	if length == -1 {
 		byteRange = fmt.Sprintf("%d-", startOffset)
+	} else {
+		byteRange = fmt.Sprintf("%d-%d", startOffset, startOffset+length-1)
 	}
+
 	rc, err := a.client.GetBlobRange(bucket, object, byteRange, nil)
 	if err != nil {
 		return azureToObjectError(traceError(err), bucket, object)
@@ -322,6 +342,8 @@ func (a AzureObjects) ListObjectParts(bucket, object, uploadID string, partNumbe
 }
 
 // AbortMultipartUpload - Not Implemented.
+// There is no corresponding API in azure to abort an incomplete upload. The uncommmitted blocks
+// gets deleted after one week.
 func (a AzureObjects) AbortMultipartUpload(bucket, object, uploadID string) error {
 	return traceError(NotImplemented{})
 }
