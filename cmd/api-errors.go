@@ -56,6 +56,8 @@ const (
 	ErrInvalidBucketName
 	ErrInvalidDigest
 	ErrInvalidRange
+	ErrInvalidCopyPartRange
+	ErrInvalidCopyPartRangeSource
 	ErrInvalidMaxKeys
 	ErrInvalidMaxUploads
 	ErrInvalidMaxParts
@@ -144,6 +146,7 @@ const (
 
 	ErrAdminInvalidAccessKey
 	ErrAdminInvalidSecretKey
+	ErrAdminConfigNoQuorum
 )
 
 // error code to APIError structure, these fields carry respective
@@ -539,6 +542,16 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "Configurations overlap. Configurations on the same bucket cannot share a common event type.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrInvalidCopyPartRange: {
+		Code:           "InvalidArgument",
+		Description:    "The x-amz-copy-source-range value must be of the form bytes=first-last where first and last are the zero-based offsets of the first and last bytes to copy",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrInvalidCopyPartRangeSource: {
+		Code:           "InvalidArgument",
+		Description:    "Range specified is not valid for source object",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 
 	/// S3 extensions.
 	ErrContentSHA256Mismatch: {
@@ -592,6 +605,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Code:           "XMinioAdminInvalidSecretKey",
 		Description:    "The secret key is invalid.",
 		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrAdminConfigNoQuorum: {
+		Code:           "XMinioAdminConfigNoQuorum",
+		Description:    "Configuration update failed because server quorum was not met",
+		HTTPStatusCode: http.StatusServiceUnavailable,
 	},
 
 	// Add your error structure here.

@@ -30,6 +30,7 @@ import (
 	"runtime"
 
 	"github.com/minio/cli"
+	"github.com/minio/mc/pkg/console"
 )
 
 var serverFlags = []cli.Flag{
@@ -138,16 +139,8 @@ func initServerConfig(c *cli.Context) {
 	// Load user supplied root CAs
 	loadRootCAs()
 
-	// Set maxOpenFiles, This is necessary since default operating
-	// system limits of 1024, 2048 are not enough for Minio server.
-	setMaxOpenFiles()
-
-	// Set maxMemory, This is necessary since default operating
-	// system limits might be changed and we need to make sure we
-	// do not crash the server so the set the maxCacheSize appropriately.
-	setMaxMemory()
-
-	// Do not fail if this is not allowed, lower limits are fine as well.
+	// Set system resources to maximum.
+	errorIf(setMaxResources(), "Unable to change resource limit")
 }
 
 // Validate if input disks are sufficient for initializing XL.
@@ -366,11 +359,28 @@ func serverMain(c *cli.Context) {
 		cli.ShowCommandHelpAndExit(c, "server", 1)
 	}
 
+	// Get quiet flag from command line argument.
+	quietFlag := c.Bool("quiet") || c.GlobalBool("quiet")
+
+	// Get configuration directory from command line argument.
+	configDir := c.String("config-dir")
+	if !c.IsSet("config-dir") && c.GlobalIsSet("config-dir") {
+		configDir = c.GlobalString("config-dir")
+	}
+	if configDir == "" {
+		console.Fatalf("Configuration directory cannot be empty.")
+	}
+
+	// Set configuration directory.
+	setConfigDir(configDir)
+
 	// Initializes server config, certs, logging and system settings.
 	initServerConfig(c)
 
 	// Check for new updates from dl.minio.io.
-	checkUpdate()
+	if !quietFlag {
+		checkUpdate()
+	}
 
 	// Server address.
 	serverAddr := c.String("address")
@@ -450,7 +460,7 @@ func serverMain(c *cli.Context) {
 	go func() {
 		cert, key := "", ""
 		if globalIsSSL {
-			cert, key = mustGetCertFile(), mustGetKeyFile()
+			cert, key = getCertFile(), getKeyFile()
 		}
 		fatalIf(apiServer.ListenAndServe(cert, key), "Failed to start minio server.")
 	}()
@@ -466,7 +476,9 @@ func serverMain(c *cli.Context) {
 	globalObjLayerMutex.Unlock()
 
 	// Prints the formatted startup message once object layer is initialized.
-	printStartupMessage(apiEndPoints)
+	if !quietFlag {
+		printStartupMessage(apiEndPoints)
+	}
 
 	// Set uptime time after object layer has initialized.
 	globalBootTime = time.Now().UTC()

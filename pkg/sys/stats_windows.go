@@ -1,7 +1,7 @@
 // +build windows
 
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016,2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,12 +44,11 @@ type memoryStatusEx struct {
 func GetStats() (stats Stats, err error) {
 	var memInfo memoryStatusEx
 	memInfo.cbSize = uint32(unsafe.Sizeof(memInfo))
-	mem, _, _ := procGlobalMemoryStatusEx.Call(uintptr(unsafe.Pointer(&memInfo)))
-	if mem == 0 {
-		return Stats{}, syscall.GetLastError()
+	if mem, _, _ := procGlobalMemoryStatusEx.Call(uintptr(unsafe.Pointer(&memInfo))); mem == 0 {
+		err = syscall.GetLastError()
+	} else {
+		stats.TotalRAM = memInfo.ullTotalPhys
 	}
-	stats = Stats{
-		TotalRAM: memInfo.ullTotalPhys,
-	}
-	return stats, nil
+
+	return stats, err
 }

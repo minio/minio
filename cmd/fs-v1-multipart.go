@@ -463,7 +463,6 @@ func (fs fsObjects) CopyObjectPart(srcBucket, srcObject, dstBucket, dstObject, u
 	pipeReader, pipeWriter := io.Pipe()
 
 	go func() {
-		var startOffset int64 // Read the whole file.
 		if gerr := fs.GetObject(srcBucket, srcObject, startOffset, length, pipeWriter); gerr != nil {
 			errorIf(gerr, "Unable to read %s/%s.", srcBucket, srcObject)
 			pipeWriter.CloseWithError(gerr)

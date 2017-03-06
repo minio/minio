@@ -601,16 +601,12 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	var hrange *httpRange
 	rangeHeader := r.Header.Get("x-amz-copy-source-range")
 	if rangeHeader != "" {
-		if hrange, err = parseRequestRange(rangeHeader, objInfo.Size); err != nil {
+		if hrange, err = parseCopyPartRange(rangeHeader, objInfo.Size); err != nil {
 			// Handle only errInvalidRange
 			// Ignore other parse error and treat it as regular Get request like Amazon S3.
-			if err == errInvalidRange {
-				writeErrorResponse(w, ErrInvalidRange, r.URL)
-				return
-			}
-
-			// log the error.
-			errorIf(err, "Invalid request range")
+			errorIf(err, "Unable to extract range %s", rangeHeader)
+			writeCopyPartErr(w, err, r.URL)
+			return
 		}
 	}
 
@@ -623,12 +619,12 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	var startOffset int64
 	length := objInfo.Size
 	if hrange != nil {
-		startOffset = hrange.offsetBegin
 		length = hrange.getLength()
+		startOffset = hrange.offsetBegin
 	}
 
 	/// maximum copy size for multipart objects in a single operation
-	if isMaxObjectSize(length) {
+	if isMaxAllowedPartSize(length) {
 		writeErrorResponse(w, ErrEntityTooLarge, r.URL)
 		return
 	}
@@ -637,6 +633,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	// object is same then only metadata is updated.
 	partInfo, err := objectAPI.CopyObjectPart(srcBucket, srcObject, dstBucket, dstObject, uploadID, partID, startOffset, length)
 	if err != nil {
+		errorIf(err, "Unable to perform CopyObjectPart %s/%s", srcBucket, srcObject)
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -657,6 +654,12 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+		return
+	}
+
+	// X-Amz-Copy-Source shouldn't be set for this call.
+	if _, ok := r.Header["X-Amz-Copy-Source"]; ok {
+		writeErrorResponse(w, ErrInvalidCopySource, r.URL)
 		return
 	}
 
@@ -687,7 +690,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	}
 
 	/// maximum Upload size for multipart objects in a single operation
-	if isMaxObjectSize(size) {
+	if isMaxAllowedPartSize(size) {
 		writeErrorResponse(w, ErrEntityTooLarge, r.URL)
 		return
 	}

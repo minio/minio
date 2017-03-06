@@ -1,7 +1,7 @@
 /*
  * Quick - Quick key value store for config files and persistent state files
  *
- * Minio Client (C) 2015 Minio, Inc.
+ * Quick (C) 2015 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,11 @@ package quick_test
 
 import (
 	"encoding/json"
+	"io/ioutil"
 	"os"
+	"reflect"
+	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/minio/minio/pkg/quick"
@@ -120,6 +124,106 @@ func (s *MySuite) TestLoadFile(c *C) {
 	err = json.Unmarshal([]byte(config.String()), &saveMe2)
 	c.Assert(err, IsNil)
 	c.Assert(saveMe2, DeepEquals, saveMe1)
+}
+
+func (s *MySuite) TestYAMLFormat(c *C) {
+	testYAML := "test.yaml"
+	defer os.RemoveAll(testYAML)
+
+	type myStruct struct {
+		Version     string
+		User        string
+		Password    string
+		Directories []string
+	}
+
+	plainYAML := `version: "1"
+user: guest
+password: nopassword
+directories:
+- Work
+- Documents
+- Music
+`
+
+	if runtime.GOOS == "windows" {
+		plainYAML = strings.Replace(plainYAML, "\n", "\r\n", -1)
+	}
+
+	saveMe := myStruct{"1", "guest", "nopassword", []string{"Work", "Documents", "Music"}}
+
+	// Save format using
+	config, err := quick.New(&saveMe)
+	c.Assert(err, IsNil)
+	c.Assert(config, Not(IsNil))
+
+	err = config.Save(testYAML)
+	c.Assert(err, IsNil)
+
+	// Check if the saved structure in actually an YAML format
+	bytes, err := ioutil.ReadFile(testYAML)
+	c.Assert(err, IsNil)
+
+	c.Assert(plainYAML, Equals, string(bytes))
+
+	// Check if the loaded data is the same as the saved one
+	loadMe := myStruct{}
+	config, err = quick.New(&loadMe)
+	err = config.Load(testYAML)
+	c.Assert(err, IsNil)
+
+	c.Assert(reflect.DeepEqual(saveMe, loadMe), Equals, true)
+}
+
+func (s *MySuite) TestJSONFormat(c *C) {
+	testJSON := "test.json"
+	defer os.RemoveAll(testJSON)
+
+	type myStruct struct {
+		Version     string
+		User        string
+		Password    string
+		Directories []string
+	}
+
+	plainJSON := `{
+	"Version": "1",
+	"User": "guest",
+	"Password": "nopassword",
+	"Directories": [
+		"Work",
+		"Documents",
+		"Music"
+	]
+}`
+
+	if runtime.GOOS == "windows" {
+		plainJSON = strings.Replace(plainJSON, "\n", "\r\n", -1)
+	}
+
+	saveMe := myStruct{"1", "guest", "nopassword", []string{"Work", "Documents", "Music"}}
+
+	// Save format using
+	config, err := quick.New(&saveMe)
+	c.Assert(err, IsNil)
+	c.Assert(config, Not(IsNil))
+
+	err = config.Save(testJSON)
+	c.Assert(err, IsNil)
+
+	// Check if the saved structure in actually an JSON format
+	bytes, err := ioutil.ReadFile(testJSON)
+	c.Assert(err, IsNil)
+
+	c.Assert(plainJSON, Equals, string(bytes))
+
+	// Check if the loaded data is the same as the saved one
+	loadMe := myStruct{}
+	config, err = quick.New(&loadMe)
+	err = config.Load(testJSON)
+	c.Assert(err, IsNil)
+
+	c.Assert(reflect.DeepEqual(saveMe, loadMe), Equals, true)
 }
 
 func (s *MySuite) TestVersion(c *C) {

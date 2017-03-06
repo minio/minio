@@ -50,7 +50,6 @@ func (fsi *fsIOPool) Open(path string) (*lock.RLockedFile, error) {
 
 	fsi.Lock()
 	rlkFile, ok := fsi.readersMap[path]
-
 	// File reference exists on map, validate if its
 	// really closed and we are safe to purge it.
 	if ok && rlkFile != nil {
@@ -76,8 +75,9 @@ func (fsi *fsIOPool) Open(path string) (*lock.RLockedFile, error) {
 	// read lock mode.
 	if !ok {
 		var err error
+		var newRlkFile *lock.RLockedFile
 		// Open file for reading.
-		rlkFile, err = lock.RLockedOpenFile(preparePath(path))
+		newRlkFile, err = lock.RLockedOpenFile(preparePath(path))
 		if err != nil {
 			if os.IsNotExist(err) {
 				return nil, errFileNotFound
@@ -95,6 +95,30 @@ func (fsi *fsIOPool) Open(path string) (*lock.RLockedFile, error) {
 
 		// Save new reader on the map.
 		fsi.Lock()
+		rlkFile, ok = fsi.readersMap[path]
+		if ok && rlkFile != nil {
+			// If the file is closed and not removed from map is a bug.
+			if rlkFile.IsClosed() {
+				// Log this as an error.
+				errorIf(errUnexpected, "Unexpected entry found on the map %s", path)
+
+				// Purge the cached lock path from map.
+				delete(fsi.readersMap, path)
+
+				// Save the newly acquired read locked file.
+				rlkFile = newRlkFile
+			} else {
+				// Increment the lock ref, since the file is not closed yet
+				// and caller requested to read the file again.
+				rlkFile.IncLockRef()
+				newRlkFile.Close()
+			}
+		} else {
+			// Save the newly acquired read locked file.
+			rlkFile = newRlkFile
+		}
+
+		// Save the rlkFile back on the map.
 		fsi.readersMap[path] = rlkFile
 		fsi.Unlock()
 	}

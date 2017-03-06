@@ -20,7 +20,6 @@ import (
 	"bufio"
 	"net"
 	"net/http"
-	"path"
 	"strings"
 	"time"
 
@@ -47,9 +46,9 @@ func registerHandlers(mux *router.Router, handlerFns ...HandlerFunc) http.Handle
 // which is more than enough to accommodate any form data fields and headers.
 const requestFormDataSize = 64 * humanize.MiByte
 
-// For any HTTP request, request body should be not more than 5GiB + requestFormDataSize
-// where, 5GiB is the maximum allowed object size for object upload.
-const requestMaxBodySize = 5*humanize.GiByte + requestFormDataSize
+// For any HTTP request, request body should be not more than 16GiB + requestFormDataSize
+// where, 16GiB is the maximum allowed object size for object upload.
+const requestMaxBodySize = globalMaxObjectSize + requestFormDataSize
 
 type requestSizeLimitHandler struct {
 	handler     http.Handler
@@ -161,17 +160,17 @@ func (h cacheControlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // Adds verification for incoming paths.
 type minioPrivateBucketHandler struct {
-	handler            http.Handler
-	reservedBucketPath string
+	handler http.Handler
 }
 
 func setPrivateBucketHandler(h http.Handler) http.Handler {
-	return minioPrivateBucketHandler{h, minioReservedBucketPath}
+	return minioPrivateBucketHandler{h}
 }
 
 func (h minioPrivateBucketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// For all non browser requests, reject access to 'reservedBucketPath'.
-	if !guessIsBrowserReq(r) && path.Clean(r.URL.Path) == h.reservedBucketPath {
+	// For all non browser requests, reject access to 'minioReservedBucketPath'.
+	bucketName, _ := urlPath2BucketObjectName(r.URL)
+	if !guessIsBrowserReq(r) && isMinioReservedBucket(bucketName) && isMinioMetaBucket(bucketName) {
 		writeErrorResponse(w, ErrAllAccessDisabled, r.URL)
 		return
 	}
@@ -351,7 +350,7 @@ func (h resourceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	// A put method on path "/" doesn't make sense, ignore it.
-	if r.Method == httpPUT && r.URL.Path == "/" {
+	if r.Method == httpPUT && r.URL.Path == "/" && r.Header.Get(minioAdminOpHeader) == "" {
 		writeErrorResponse(w, ErrNotImplemented, r.URL)
 		return
 	}

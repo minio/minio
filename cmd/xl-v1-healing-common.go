@@ -16,7 +16,11 @@
 
 package cmd
 
-import "time"
+import (
+	"encoding/hex"
+	"path/filepath"
+	"time"
+)
 
 // commonTime returns a maximally occurring time from a list of time.
 func commonTime(modTimes []time.Time) (modTime time.Time, count int) {
@@ -59,29 +63,43 @@ func bootModtimes(diskCount int) []time.Time {
 }
 
 // Extracts list of times from xlMetaV1 slice and returns, skips
-// slice elements which have errors. As a special error
-// errFileNotFound is treated as a initial good condition.
+// slice elements which have errors.
 func listObjectModtimes(partsMetadata []xlMetaV1, errs []error) (modTimes []time.Time) {
 	modTimes = bootModtimes(len(partsMetadata))
-	// Set a new time value, specifically set when
-	// error == errFileNotFound (this is needed when this is a
-	// fresh PutObject).
-	timeNow := time.Now().UTC()
 	for index, metadata := range partsMetadata {
-		if errs[index] == nil {
-			// Once the file is found, save the uuid saved on disk.
-			modTimes[index] = metadata.Stat.ModTime
-		} else if errs[index] == errFileNotFound {
-			// Once the file is not found then the epoch is current time.
-			modTimes[index] = timeNow
+		if errs[index] != nil {
+			continue
 		}
+		// Once the file is found, save the uuid saved on disk.
+		modTimes[index] = metadata.Stat.ModTime
 	}
 	return modTimes
 }
 
-// Returns slice of online disks needed.
-// - slice returing readable disks.
-// - modTime of the Object
+// Notes:
+// There are 5 possible states a disk could be in,
+// 1. __online__             - has the latest copy of xl.json - returned by listOnlineDisks
+//
+// 2. __offline__            - err == errDiskNotFound
+//
+// 3. __availableWithParts__ - has the latest copy of xl.json and has all
+//                             parts with checksums matching; returned by disksWithAllParts
+//
+// 4. __outdated__           - returned by outDatedDisk, provided []StorageAPI
+//                             returned by diskWithAllParts is passed for latestDisks.
+//    - has an old copy of xl.json
+//    - doesn't have xl.json (errFileNotFound)
+//    - has the latest xl.json but one or more parts are corrupt
+//
+// 5. __missingParts__       - has the latest copy of xl.json but has some parts
+// missing.  This is identified separately since this may need manual
+// inspection to understand the root cause. E.g, this could be due to
+// backend filesystem corruption.
+
+// listOnlineDisks - returns
+// - a slice of disks where disk having 'older' xl.json (or nothing)
+// are set to nil.
+// - latest (in time) of the maximally occurring modTime(s).
 func listOnlineDisks(disks []StorageAPI, partsMetadata []xlMetaV1, errs []error) (onlineDisks []StorageAPI, modTime time.Time) {
 	onlineDisks = make([]StorageAPI, len(disks))
 
@@ -102,22 +120,23 @@ func listOnlineDisks(disks []StorageAPI, partsMetadata []xlMetaV1, errs []error)
 	return onlineDisks, modTime
 }
 
-// Return disks with the outdated or missing object.
-func outDatedDisks(disks []StorageAPI, partsMetadata []xlMetaV1, errs []error) (outDatedDisks []StorageAPI) {
+// outDatedDisks - return disks which don't have the latest object (i.e xl.json).
+// disks that are offline are not 'marked' outdated.
+func outDatedDisks(disks, latestDisks []StorageAPI, errs []error, partsMetadata []xlMetaV1,
+	bucket, object string) (outDatedDisks []StorageAPI) {
+
 	outDatedDisks = make([]StorageAPI, len(disks))
-	latestDisks, _ := listOnlineDisks(disks, partsMetadata, errs)
-	for index, disk := range latestDisks {
-		if errorCause(errs[index]) == errFileNotFound {
-			outDatedDisks[index] = disks[index]
+	for index, latestDisk := range latestDisks {
+		if latestDisk != nil {
 			continue
 		}
-		if errs[index] != nil {
-			continue
-		}
-		if disk == nil {
+		// disk either has an older xl.json or doesn't have one.
+		switch errorCause(errs[index]) {
+		case nil, errFileNotFound:
 			outDatedDisks[index] = disks[index]
 		}
 	}
+
 	return outDatedDisks
 }
 
@@ -188,4 +207,50 @@ func xlHealStat(xl xlObjects, partsMetadata []xlMetaV1, errs []error) HealObject
 		MissingDataCount:    missingDataCount,
 		MissingPartityCount: missingParityCount,
 	}
+}
+
+// disksWithAllParts - This function needs to be called with
+// []StorageAPI returned by listOnlineDisks. Returns,
+// - disks which have all parts specified in the latest xl.json.
+// - errs updated to have errFileNotFound in place of disks that had
+// missing parts.
+// - non-nil error if any of the online disks failed during
+// calculating blake2b checksum.
+func disksWithAllParts(onlineDisks []StorageAPI, partsMetadata []xlMetaV1, errs []error, bucket, object string) ([]StorageAPI, []error, error) {
+	availableDisks := make([]StorageAPI, len(onlineDisks))
+	for index, onlineDisk := range onlineDisks {
+		if onlineDisk == nil {
+			continue
+		}
+		// disk has a valid xl.json but may not have all the
+		// parts. This is considered an outdated disk, since
+		// it needs healing too.
+		for pIndex, part := range partsMetadata[index].Parts {
+			// compute blake2b sum of part.
+			partPath := filepath.Join(object, part.Name)
+			hash := newHash(blake2bAlgo)
+			blakeBytes, hErr := hashSum(onlineDisk, bucket, partPath, hash)
+			if hErr == errFileNotFound {
+				errs[index] = errFileNotFound
+				continue
+			}
+
+			if hErr != nil && hErr != errFileNotFound {
+				return nil, nil, traceError(hErr)
+			}
+
+			partChecksum := partsMetadata[index].Erasure.Checksum[pIndex].Hash
+			blakeSum := hex.EncodeToString(blakeBytes)
+			// if blake2b sum doesn't match for a part
+			// then this disk is outdated and needs
+			// healing.
+			if blakeSum != partChecksum {
+				errs[index] = errFileNotFound
+				break
+			}
+			availableDisks[index] = onlineDisk
+		}
+	}
+
+	return availableDisks, errs, nil
 }

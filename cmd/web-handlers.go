@@ -113,7 +113,7 @@ type MakeBucketArgs struct {
 	BucketName string `json:"bucketName"`
 }
 
-// MakeBucket - make a bucket.
+// MakeBucket - creates a new bucket.
 func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, reply *WebGenericRep) error {
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
@@ -122,12 +122,19 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 	if !isHTTPRequestValid(r) {
 		return toJSONError(errAuthentication)
 	}
+
+	// Check if bucket is a reserved bucket name.
+	if isMinioMetaBucket(args.BucketName) || isMinioReservedBucket(args.BucketName) {
+		return toJSONError(errReservedBucket)
+	}
+
 	bucketLock := globalNSMutex.NewNSLock(args.BucketName, "")
 	bucketLock.Lock()
 	defer bucketLock.Unlock()
 	if err := objectAPI.MakeBucket(args.BucketName); err != nil {
 		return toJSONError(err, args.BucketName)
 	}
+
 	reply.UIVersion = browser.UIVersion
 	return nil
 }
@@ -249,10 +256,12 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 }
 
 // RemoveObjectArgs - args to remove an object
+// JSON will look like:
+// '{"bucketname":"testbucket","objects":["photos/hawaii/","photos/maldives/","photos/sanjose.jpg"]}'
 type RemoveObjectArgs struct {
-	TargetHost string `json:"targetHost"`
-	BucketName string `json:"bucketName"`
-	ObjectName string `json:"objectName"`
+	Objects    []string `json:"objects"`    // can be files or sub-directories
+	Prefix     string   `json:"prefix"`     // current directory in the browser-ui
+	BucketName string   `json:"bucketname"` // bucket name.
 }
 
 // RemoveObject - removes an object.
@@ -264,31 +273,65 @@ func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs,
 	if !isHTTPRequestValid(r) {
 		return toJSONError(errAuthentication)
 	}
-
-	objectLock := globalNSMutex.NewNSLock(args.BucketName, args.ObjectName)
-	objectLock.Lock()
-	defer objectLock.Unlock()
-
-	if err := objectAPI.DeleteObject(args.BucketName, args.ObjectName); err != nil {
-		if isErrObjectNotFound(err) {
-			// Ignore object not found error.
-			reply.UIVersion = browser.UIVersion
-			return nil
+	if args.BucketName == "" || len(args.Objects) == 0 {
+		return toJSONError(errUnexpected)
+	}
+	var err error
+objectLoop:
+	for _, object := range args.Objects {
+		remove := func(objectName string) error {
+			objectLock := globalNSMutex.NewNSLock(args.BucketName, objectName)
+			objectLock.Lock()
+			defer objectLock.Unlock()
+			err = objectAPI.DeleteObject(args.BucketName, objectName)
+			if err == nil {
+				// Notify object deleted event.
+				eventNotify(eventData{
+					Type:   ObjectRemovedDelete,
+					Bucket: args.BucketName,
+					ObjInfo: ObjectInfo{
+						Name: objectName,
+					},
+					ReqParams: map[string]string{
+						"sourceIPAddress": r.RemoteAddr,
+					},
+				})
+			}
+			return err
 		}
-		return toJSONError(err, args.BucketName, args.ObjectName)
+		if !hasSuffix(object, slashSeparator) {
+			// If not a directory, remove the object.
+			err = remove(object)
+			if err != nil {
+				break objectLoop
+			}
+			continue
+		}
+		// For directories, list the contents recursively and remove.
+		marker := ""
+		for {
+			var lo ListObjectsInfo
+			lo, err = objectAPI.ListObjects(args.BucketName, object, marker, "", 1000)
+			if err != nil {
+				break objectLoop
+			}
+			marker = lo.NextMarker
+			for _, obj := range lo.Objects {
+				err = remove(obj.Name)
+				if err != nil {
+					break objectLoop
+				}
+			}
+			if !lo.IsTruncated {
+				break
+			}
+		}
 	}
 
-	// Notify object deleted event.
-	eventNotify(eventData{
-		Type:   ObjectRemovedDelete,
-		Bucket: args.BucketName,
-		ObjInfo: ObjectInfo{
-			Name: args.ObjectName,
-		},
-		ReqParams: map[string]string{
-			"sourceIPAddress": r.RemoteAddr,
-		},
-	})
+	if err != nil && !isErrObjectNotFound(err) {
+		// Ignore object not found error.
+		return toJSONError(err, args.BucketName, "")
+	}
 
 	reply.UIVersion = browser.UIVersion
 	return nil
@@ -854,6 +897,13 @@ func toJSONError(err error, params ...string) (jerr *json2.Error) {
 		Message: apiErr.Description,
 	}
 	switch apiErr.Code {
+	// Reserved bucket name provided.
+	case "AllAccessDisabled":
+		if len(params) > 0 {
+			jerr = &json2.Error{
+				Message: fmt.Sprintf("All access to this bucket %s has been disabled.", params[0]),
+			}
+		}
 	// Bucket name invalid with custom error message.
 	case "InvalidBucketName":
 		if len(params) > 0 {
@@ -923,6 +973,12 @@ func toWebAPIError(err error) APIError {
 		return APIError{
 			Code:           "MethodNotAllowed",
 			HTTPStatusCode: http.StatusMethodNotAllowed,
+			Description:    err.Error(),
+		}
+	} else if err == errReservedBucket {
+		return APIError{
+			Code:           "AllAccessDisabled",
+			HTTPStatusCode: http.StatusForbidden,
 			Description:    err.Error(),
 		}
 	}

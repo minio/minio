@@ -1,7 +1,7 @@
-// +build !linux,!windows,!darwin
+// +build openbsd netbsd freebsd dragonfly
 
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016,2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,28 @@
 
 package sys
 
-// GetStats - return system statistics for windows.
+import (
+	"encoding/binary"
+	"syscall"
+)
+
+func getHwPhysmem() (uint64, error) {
+	totalString, err := syscall.Sysctl("hw.physmem")
+	if err != nil {
+		return 0, err
+	}
+
+	// syscall.sysctl() helpfully assumes the result is a null-terminated string and
+	// removes the last byte of the result if it's 0 :/
+	totalString += "\x00"
+
+	total := uint64(binary.LittleEndian.Uint64([]byte(totalString)))
+
+	return total, nil
+}
+
+// GetStats - return system statistics for bsd.
 func GetStats() (stats Stats, err error) {
-	return Stats{}, ErrNotImplemented
+	stats.TotalRAM, err = getHwPhysmem()
+	return stats, err
 }

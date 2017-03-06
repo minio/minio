@@ -25,10 +25,7 @@ import (
 
 // Make sure we have a valid certs path.
 func TestGetCertsPath(t *testing.T) {
-	path, err := getCertsPath()
-	if err != nil {
-		t.Error(err)
-	}
+	path := getCertsPath()
 	if path == "" {
 		t.Errorf("expected path to not be an empty string, got: '%s'", path)
 	}
@@ -42,18 +39,18 @@ func TestGetCertsPath(t *testing.T) {
 	}
 
 	// This will error if something goes wrong, so just call it.
-	mustGetCertsPath()
+	getCertsPath()
 }
 
 // Ensure that the certificate and key file getters contain their respective
 // file name and endings.
 func TestGetFiles(t *testing.T) {
-	file := mustGetCertFile()
+	file := getCertFile()
 	if !strings.Contains(file, globalMinioCertFile) {
 		t.Errorf("CertFile does not contain %s", globalMinioCertFile)
 	}
 
-	file = mustGetKeyFile()
+	file = getKeyFile()
 	if !strings.Contains(file, globalMinioKeyFile) {
 		t.Errorf("KeyFile does not contain %s", globalMinioKeyFile)
 	}

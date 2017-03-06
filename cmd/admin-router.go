@@ -67,4 +67,6 @@ func registerAdminRouter(mux *router.Router) {
 
 	// Get config
 	adminRouter.Methods("GET").Queries("config", "").Headers(minioAdminOpHeader, "get").HandlerFunc(adminAPI.GetConfigHandler)
+	// Set Config
+	adminRouter.Methods("PUT").Queries("config", "").Headers(minioAdminOpHeader, "set").HandlerFunc(adminAPI.SetConfigHandler)
 }

@@ -22,10 +22,11 @@ import (
 	router "github.com/gorilla/mux"
 )
 
-func newObjectLayerFn() ObjectLayer {
-	globalObjLayerMutex.Lock()
-	defer globalObjLayerMutex.Unlock()
-	return globalObjectAPI
+func newObjectLayerFn() (layer ObjectLayer) {
+	globalObjLayerMutex.RLock()
+	layer = globalObjectAPI
+	globalObjLayerMutex.RUnlock()
+	return
 }
 
 // Composed function registering routers for only distributed XL setup.

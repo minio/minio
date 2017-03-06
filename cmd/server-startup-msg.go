@@ -44,11 +44,6 @@ func getFormatStr(strLen int, padding int) string {
 
 // Prints the formatted startup message.
 func printStartupMessage(apiEndPoints []string) {
-	// If quiet flag is set do not print startup message.
-	if globalQuiet {
-		return
-	}
-
 	// Prints credential, region and browser access.
 	printServerCommonMsg(apiEndPoints)
 

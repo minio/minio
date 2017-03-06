@@ -19,7 +19,11 @@ package cmd
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io/ioutil"
 	"net/rpc"
+	"os"
+	"path/filepath"
 	"time"
 
 	router "github.com/gorilla/mux"
@@ -156,6 +160,59 @@ func (s *adminCmd) GetConfig(args *AuthRPCArgs, reply *ConfigReply) error {
 
 	reply.Config = jsonBytes
 	return nil
+}
+
+// WriteConfigArgs - wraps the bytes to be written and temporary file name.
+type WriteConfigArgs struct {
+	AuthRPCArgs
+	TmpFileName string
+	Buf         []byte
+}
+
+// WriteConfigReply - wraps the result of a writing config into a temporary file.
+// the remote node.
+type WriteConfigReply struct {
+	AuthRPCReply
+}
+
+func writeTmpConfigCommon(tmpFileName string, configBytes []byte) error {
+	tmpConfigFile := filepath.Join(getConfigDir(), tmpFileName)
+	err := ioutil.WriteFile(tmpConfigFile, configBytes, 0666)
+	errorIf(err, fmt.Sprintf("Failed to write to temporary config file %s", tmpConfigFile))
+	return err
+}
+
+// WriteTmpConfig - writes the supplied config contents onto the
+// supplied temporary file.
+func (s *adminCmd) WriteTmpConfig(wArgs *WriteConfigArgs, wReply *WriteConfigReply) error {
+	if err := wArgs.IsAuthenticated(); err != nil {
+		return err
+	}
+
+	return writeTmpConfigCommon(wArgs.TmpFileName, wArgs.Buf)
+}
+
+// CommitConfigArgs - wraps the config file name that needs to be
+// committed into config.json on this node.
+type CommitConfigArgs struct {
+	AuthRPCArgs
+	FileName string
+}
+
+// CommitConfigReply - represents response to commit of config file on
+// this node.
+type CommitConfigReply struct {
+	AuthRPCReply
+}
+
+// CommitConfig - Renames the temporary file into config.json on this node.
+func (s *adminCmd) CommitConfig(cArgs *CommitConfigArgs, cReply *CommitConfigReply) error {
+	configFile := getConfigFile()
+	tmpConfigFile := filepath.Join(getConfigDir(), cArgs.FileName)
+
+	err := os.Rename(tmpConfigFile, configFile)
+	errorIf(err, fmt.Sprintf("Failed to rename %s to %s", tmpConfigFile, configFile))
+	return err
 }
 
 // registerAdminRPCRouter - registers RPC methods for service status,

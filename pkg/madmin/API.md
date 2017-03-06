@@ -36,13 +36,13 @@ func main() {
 
 ```
 
-| Service operations|LockInfo operations|Healing operations|Config operations|
-|:---|:---|:---|:---|
-|[`ServiceStatus`](#ServiceStatus)| [`ListLocks`](#ListLocks)| [`ListObjectsHeal`](#ListObjectsHeal)|[`GetConfig`](#GetConfig)|
-|[`ServiceRestart`](#ServiceRestart)| [`ClearLocks`](#ClearLocks)| [`ListBucketsHeal`](#ListBucketsHeal)||
-| | |[`HealBucket`](#HealBucket) ||
-| | |[`HealObject`](#HealObject)||
-| | |[`HealFormat`](#HealFormat)||
+| Service operations|LockInfo operations|Healing operations|Config operations| Misc |
+|:---|:---|:---|:---|:---|
+|[`ServiceStatus`](#ServiceStatus)| [`ListLocks`](#ListLocks)| [`ListObjectsHeal`](#ListObjectsHeal)|[`GetConfig`](#GetConfig)| [`SetCredentials`](#SetCredentials)|
+|[`ServiceRestart`](#ServiceRestart)| [`ClearLocks`](#ClearLocks)| [`ListBucketsHeal`](#ListBucketsHeal)|[`SetConfig`](#SetConfig)||
+| | |[`HealBucket`](#HealBucket) |||
+| | |[`HealObject`](#HealObject)|||
+| | |[`HealFormat`](#HealFormat)|||
 
 ## 1. Constructor
 <a name="Minio"></a>
@@ -119,6 +119,9 @@ If successful restarts the running minio service, for distributed setup restarts
 	log.Printf("Success")
 
  ```
+
+## 3. Lock operations
+
 <a name="ListLocks"></a>
 ### ListLocks(bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error)
 If successful returns information on the list of locks held on ``bucket`` matching ``prefix`` for  longer than ``duration`` seconds.
@@ -148,6 +151,8 @@ __Example__
     log.Println("List of locks cleared: ", volLocks)
 
 ```
+
+## 4. Heal operations
 
 <a name="ListObjectsHeal"></a>
 ### ListObjectsHeal(bucket, prefix string, recursive bool, doneCh <-chan struct{}) (<-chan ObjectInfo, error)
@@ -272,6 +277,9 @@ __Example__
     log.Println("successfully healed storage format on available disks.")
 
 ```
+
+## 5. Config operations
+
 <a name="GetConfig"></a>
 ### GetConfig() ([]byte, error)
 Get config.json of a minio setup.
@@ -292,4 +300,56 @@ __Example__
     }
 
     log.Println("config received successfully: ", string(buf.Bytes()))
+```
+
+## 6. Misc operations
+
+<a name="SetCredentials"></a>
+
+### SetCredentials() error
+Set new credentials of a Minio setup.
+
+__Example__
+
+``` go
+    err = madmClnt.SetCredentials("YOUR-NEW-ACCESSKEY", "YOUR-NEW-SECRETKEY")
+    if err != nil {
+            log.Fatalln(err)
+    }
+    log.Println("New credentials successfully set.")
+
+```
+
+<a name="SetConfig"></a>
+### SetConfig(config io.Reader) (SetConfigResult, error)
+Set config.json of a minio setup and restart setup for configuration
+change to take effect.
+
+
+| Param  | Type  | Description  |
+|---|---|---|
+|`st.Status`            | _bool_  | true if set-config succeeded, false otherwise. |
+|`st.NodeSummary.Name`  | _string_  | Network address of the node. |
+|`st.NodeSummary.ErrSet`   | _bool_ | Bool representation indicating if an error is encountered with the node.|
+|`st.NodeSummary.ErrMsg`   | _string_ | String representation of the error (if any) on the node.|
+
+
+__Example__
+
+``` go
+    config := bytes.NewReader([]byte(`config.json contents go here`))
+    result, err := madmClnt.SetConfig(config)
+    if err != nil {
+        log.Fatalf("failed due to: %v", err)
+    }
+
+    var buf bytes.Buffer
+    enc := json.NewEncoder(&buf)
+    enc.SetEscapeHTML(false)
+    enc.SetIndent("", "\t")
+    err = enc.Encode(result)
+    if err != nil {
+        log.Fatalln(err)
+    }
+    log.Println("SetConfig: ", string(buf.Bytes()))
 ```

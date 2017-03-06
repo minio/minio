@@ -311,6 +311,9 @@ func quickHeal(storageDisks []StorageAPI, writeQuorum int, readQuorum int) error
 // Heals an object only the corrupted/missing erasure blocks.
 func healObject(storageDisks []StorageAPI, bucket string, object string, quorum int) error {
 	partsMetadata, errs := readAllXLMetadata(storageDisks, bucket, object)
+	// readQuorum suffices for xl.json since we use monotonic
+	// system time to break the tie when a split-brain situation
+	// arises.
 	if reducedErr := reduceReadQuorumErrs(errs, nil, quorum); reducedErr != nil {
 		return toObjectErr(reducedErr, bucket, object)
 	}
@@ -322,12 +325,35 @@ func healObject(storageDisks []StorageAPI, bucket string, object string, quorum 
 
 	// List of disks having latest version of the object.
 	latestDisks, modTime := listOnlineDisks(storageDisks, partsMetadata, errs)
+
+	// List of disks having all parts as per latest xl.json.
+	availableDisks, errs, aErr := disksWithAllParts(latestDisks, partsMetadata, errs, bucket, object)
+	if aErr != nil {
+		return toObjectErr(aErr, bucket, object)
+	}
+
+	numAvailableDisks := 0
+	for _, disk := range availableDisks {
+		if disk != nil {
+			numAvailableDisks++
+		}
+	}
+
+	// If less than read quorum number of disks have all the parts
+	// of the data, we can't reconstruct the erasure-coded data.
+	if numAvailableDisks < quorum {
+		return toObjectErr(errXLReadQuorum, bucket, object)
+	}
+
 	// List of disks having outdated version of the object or missing object.
-	outDatedDisks := outDatedDisks(storageDisks, partsMetadata, errs)
-	// Latest xlMetaV1 for reference. If a valid metadata is not present, it is as good as object not found.
+	outDatedDisks := outDatedDisks(storageDisks, availableDisks, errs, partsMetadata,
+		bucket, object)
+
+	// Latest xlMetaV1 for reference. If a valid metadata is not
+	// present, it is as good as object not found.
 	latestMeta, pErr := pickValidXLMeta(partsMetadata, modTime)
 	if pErr != nil {
-		return pErr
+		return toObjectErr(pErr, bucket, object)
 	}
 
 	for index, disk := range outDatedDisks {
@@ -357,16 +383,16 @@ func healObject(storageDisks []StorageAPI, bucket string, object string, quorum 
 
 		// Delete all the parts. Ignore if parts are not found.
 		for _, part := range outDatedMeta.Parts {
-			err := disk.DeleteFile(bucket, pathJoin(object, part.Name))
-			if err != nil && !isErr(err, errFileNotFound) {
-				return traceError(err)
+			dErr := disk.DeleteFile(bucket, pathJoin(object, part.Name))
+			if dErr != nil && !isErr(dErr, errFileNotFound) {
+				return toObjectErr(traceError(dErr), bucket, object)
 			}
 		}
 
 		// Delete xl.json file. Ignore if xl.json not found.
-		err := disk.DeleteFile(bucket, pathJoin(object, xlMetaJSONFile))
-		if err != nil && !isErr(err, errFileNotFound) {
-			return traceError(err)
+		dErr := disk.DeleteFile(bucket, pathJoin(object, xlMetaJSONFile))
+		if dErr != nil && !isErr(dErr, errFileNotFound) {
+			return toObjectErr(traceError(dErr), bucket, object)
 		}
 	}
 
@@ -390,12 +416,12 @@ func healObject(storageDisks []StorageAPI, bucket string, object string, quorum 
 		erasure := latestMeta.Erasure
 		sumInfo := latestMeta.Erasure.GetCheckSumInfo(partName)
 		// Heal the part file.
-		checkSums, err := erasureHealFile(latestDisks, outDatedDisks,
+		checkSums, hErr := erasureHealFile(latestDisks, outDatedDisks,
 			bucket, pathJoin(object, partName),
 			minioMetaTmpBucket, pathJoin(tmpID, partName),
 			partSize, erasure.BlockSize, erasure.DataBlocks, erasure.ParityBlocks, sumInfo.Algorithm)
-		if err != nil {
-			return err
+		if hErr != nil {
+			return toObjectErr(hErr, bucket, object)
 		}
 		for index, sum := range checkSums {
 			if outDatedDisks[index] != nil {
@@ -418,9 +444,9 @@ func healObject(storageDisks []StorageAPI, bucket string, object string, quorum 
 	}
 
 	// Generate and write `xl.json` generated from other disks.
-	err := writeUniqueXLMetadata(outDatedDisks, minioMetaTmpBucket, tmpID, partsMetadata, diskCount(outDatedDisks))
-	if err != nil {
-		return toObjectErr(err, bucket, object)
+	aErr = writeUniqueXLMetadata(outDatedDisks, minioMetaTmpBucket, tmpID, partsMetadata, diskCount(outDatedDisks))
+	if aErr != nil {
+		return toObjectErr(aErr, bucket, object)
 	}
 
 	// Rename from tmp location to the actual location.
@@ -429,14 +455,14 @@ func healObject(storageDisks []StorageAPI, bucket string, object string, quorum 
 			continue
 		}
 		// Remove any lingering partial data from current namespace.
-		err = disk.DeleteFile(bucket, retainSlash(object))
-		if err != nil && err != errFileNotFound {
-			return traceError(err)
+		aErr = disk.DeleteFile(bucket, retainSlash(object))
+		if aErr != nil && aErr != errFileNotFound {
+			return toObjectErr(traceError(aErr), bucket, object)
 		}
 		// Attempt a rename now from healed data to final location.
-		err = disk.RenameFile(minioMetaTmpBucket, retainSlash(tmpID), bucket, retainSlash(object))
-		if err != nil {
-			return traceError(err)
+		aErr = disk.RenameFile(minioMetaTmpBucket, retainSlash(tmpID), bucket, retainSlash(object))
+		if aErr != nil {
+			return toObjectErr(traceError(aErr), bucket, object)
 		}
 	}
 	return nil

@@ -151,7 +151,7 @@ func checkBucketExist(bucket string, obj ObjectLayer) error {
 	}
 	_, err := obj.GetBucketInfo(bucket)
 	if err != nil {
-		return BucketNotFound{Bucket: bucket}
+		return errorCause(err)
 	}
 	return nil
 }

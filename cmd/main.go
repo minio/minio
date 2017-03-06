@@ -31,7 +31,7 @@ var (
 	globalFlags = []cli.Flag{
 		cli.StringFlag{
 			Name:  "config-dir, C",
-			Value: mustGetConfigPath(),
+			Value: getConfigDir(),
 			Usage: "Path to configuration directory.",
 		},
 		cli.BoolFlag{
@@ -133,43 +133,37 @@ func registerApp() *cli.App {
 	return app
 }
 
-// Verify main command syntax.
-func checkMainSyntax(c *cli.Context) {
-	configPath, err := getConfigPath()
-	if err != nil {
-		console.Fatalf("Unable to obtain user's home directory. \nError: %s\n", err)
-	}
-	if configPath == "" {
-		console.Fatalln("Config directory cannot be empty, please specify --config-dir <directoryname>.")
-	}
-}
-
 // Check for updates and print a notification message
 func checkUpdate() {
-	// Do not print update messages, if quiet flag is set.
-	if !globalQuiet {
-		older, downloadURL, err := getUpdateInfo(1 * time.Second)
-		if err != nil {
-			// Its OK to ignore any errors during getUpdateInfo() here.
-			return
-		}
+	// Its OK to ignore any errors during getUpdateInfo() here.
+	if older, downloadURL, err := getUpdateInfo(1 * time.Second); err == nil {
 		if older > time.Duration(0) {
 			console.Println(colorizeUpdateMessage(downloadURL, older))
 		}
 	}
 }
 
+// envParams holds all env parameters
+type envParams struct {
+	creds   credential
+	browser string
+}
+
 // Initializes a new config if it doesn't exist, else migrates any old config
 // to newer config and finally loads the config to memory.
 func initConfig() {
-	envCreds := mustGetCredentialFromEnv()
+
+	envs := envParams{
+		creds:   mustGetCredentialFromEnv(),
+		browser: mustGetBrowserFromEnv(),
+	}
 
 	// Config file does not exist, we create it fresh and return upon success.
 	if !isConfigFileExists() {
-		if err := newConfig(envCreds); err != nil {
+		if err := newConfig(envs); err != nil {
 			console.Fatalf("Unable to initialize minio config for the first time. Err: %s.\n", err)
 		}
-		console.Println("Created minio configuration file successfully at " + mustGetConfigPath())
+		console.Println("Created minio configuration file successfully at " + getConfigDir())
 		return
 	}
 
@@ -177,19 +171,13 @@ func initConfig() {
 	migrate()
 
 	// Once we have migrated all the old config, now load them.
-	if err := loadConfig(envCreds); err != nil {
+	if err := loadConfig(envs); err != nil {
 		console.Fatalf("Unable to initialize minio config. Err: %s.\n", err)
 	}
 }
 
 // Generic Minio initialization to create/load config, prepare loggers, etc..
 func minioInit(ctx *cli.Context) {
-	// Set global variables after parsing passed arguments
-	setGlobalsFromContext(ctx)
-
-	// Sets new config directory.
-	setGlobalConfigPath(globalConfigDir)
-
 	// Is TLS configured?.
 	globalIsSSL = isSSL()
 
@@ -207,11 +195,6 @@ func minioInit(ctx *cli.Context) {
 // Main main for minio server.
 func Main(args []string, exitFn func(int)) {
 	app := registerApp()
-	app.Before = func(c *cli.Context) error {
-		// Valid input arguments to main.
-		checkMainSyntax(c)
-		return nil
-	}
 
 	// Start profiler if env is set.
 	if profiler := os.Getenv("_MINIO_PROFILER"); profiler != "" {
