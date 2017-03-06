@@ -412,13 +412,14 @@ export const setLoginError = () => {
   }
 }
 
-export const downloadAllasZip = (url, req, xhr) => {
+export const downloadSelected = (url, req, xhr) => {
   return (dispatch) => {
     xhr.open('POST', url, true)
     xhr.responseType = 'blob'
 
     xhr.onload = function(e) {
       if (this.status == 200) {
+        dispatch(checkedObjectsReset())
         var blob = new Blob([this.response], {
           type: 'application/zip'
         })

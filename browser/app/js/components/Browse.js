@@ -226,15 +226,43 @@ export default class Browse extends React.Component {
   }
 
   removeObject() {
-    const {web, dispatch, currentPath, currentBucket, deleteConfirmation} = this.props
+    const {web, dispatch, currentPath, currentBucket, deleteConfirmation, checkedObjects} = this.props
+    let objects = checkedObjects.length > 0 ? checkedObjects : [deleteConfirmation.object]
+
     web.RemoveObject({
       bucketname: currentBucket,
-      objects: [deleteConfirmation.object]
+      objects: objects
     })
       .then(() => {
         this.hideDeleteConfirmation()
-	let delObject = deleteConfirmation.object.replace(currentPath, '')
-        dispatch(actions.removeObject(delObject))
+        if (checkedObjects.length > 0) {
+          for (let i = 0; i < checkedObjects.length; i++) {
+            dispatch(actions.removeObject(checkedObjects[i].replace(currentPath, '')))
+          }
+          dispatch(actions.checkedObjectsReset())
+        } else {
+          let delObject = deleteConfirmation.object.replace(currentPath, '')
+          dispatch(actions.removeObject(delObject))
+        }
+      })
+      .catch(e => dispatch(actions.showAlert({
+        type: 'danger',
+        message: e.message
+      })))
+  }
+
+  removeObjectSelected() {
+    const {web, dispatch, currentPath, currentBucket, checkedObjects} = this.props
+    web.RemoveObject({
+      bucketname: currentBucket,
+      objects: checkedObjects
+    })
+      .then(() => {
+        this.hideDeleteConfirmation()
+        for (let i = 0; i < checkedObjects.length; i++) {
+          dispatch(actions.removeObject(checkedObjects[i].replace(currentPath, '')))
+        }
+        dispatch(actions.checkedObjectsReset())
       })
       .catch(e => dispatch(actions.showAlert({
         type: 'danger',
@@ -368,7 +396,7 @@ export default class Browse extends React.Component {
     e.target.checked ? dispatch(actions.checkedObjectsAdd(objectName)) : dispatch(actions.checkedObjectsRemove(objectName))
   }
 
-  downloadAll() {
+  downloadSelected() {
     const {dispatch} = this.props
     let req = {
       bucketName: this.props.currentBucket,
@@ -378,7 +406,12 @@ export default class Browse extends React.Component {
     let requestUrl = location.origin + "/minio/zip?token=" + localStorage.token
 
     this.xhr = new XMLHttpRequest()
-    dispatch(actions.downloadAllasZip(requestUrl, req, this.xhr))
+    dispatch(actions.downloadSelected(requestUrl, req, this.xhr))
+  }
+
+  clearSelected() {
+    const {dispatch} = this.props
+    dispatch(actions.checkedObjectsReset())
   }
 
   render() {
@@ -511,7 +544,9 @@ export default class Browse extends React.Component {
                              ' list-actions-toggled': checkedObjects.length > 0
                            })) }>
             <span className="la-label"><i className="fa fa-check-circle" /> { checkedObjects.length } Objects selected</span>
-            <span className="la-actions pull-right"><button onClick={ this.downloadAll.bind(this) }> Download all as zip </button></span>
+            <span className="la-actions pull-right"><button onClick={ this.downloadSelected.bind(this) }> Download all as zip </button></span>
+            <span className="la-actions pull-right"><button onClick={ this.showDeleteConfirmation.bind(this) }> Delete selected </button></span>
+            <i className="la-close fa fa-times" onClick={ this.clearSelected.bind(this) }></i>
           </div>
           <Dropzone>
             { alertBox }
