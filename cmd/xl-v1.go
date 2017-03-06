@@ -151,7 +151,7 @@ func newXLObjects(storageDisks []StorageAPI) (ObjectLayer, error) {
 	}
 
 	// Initialize meta volume, if volume already exists ignores it.
-	if err = initMetaVolume(storageDisks); err != nil {
+	if err = initMetaVolume(xl.storageDisks); err != nil {
 		return nil, fmt.Errorf("Unable to initialize '.minio.sys' meta volume, %s", err)
 	}
 

@@ -252,6 +252,7 @@ func (xl xlObjects) ListBucketsHeal() ([]BucketInfo, error) {
 	if err != nil {
 		return listBuckets, err
 	}
+
 	// Iterate over all buckets
 	for _, currBucket := range buckets {
 		// Check the status of bucket metadata
@@ -275,6 +276,7 @@ func (xl xlObjects) ListBucketsHeal() ([]BucketInfo, error) {
 		}
 
 	}
+
 	// Sort found buckets
 	sort.Sort(byBucketName(listBuckets))
 	return listBuckets, nil
@@ -284,27 +286,29 @@ func (xl xlObjects) ListBucketsHeal() ([]BucketInfo, error) {
 // during startup i.e healing of buckets, bucket metadata (policy.json,
 // notification.xml, listeners.json) etc. Currently this function
 // supports quick healing of buckets, bucket metadata.
-//
-// TODO :-
-// - add support for healing dangling `uploads.json`.
-// - add support for healing dangling `xl.json`.
 func quickHeal(storageDisks []StorageAPI, writeQuorum int, readQuorum int) error {
-	// List all bucket names from all disks.
-	bucketNames, _, err := listAllBuckets(storageDisks)
+	// List all bucket name occurrence from all disks.
+	_, bucketOcc, err := listAllBuckets(storageDisks)
 	if err != nil {
 		return err
 	}
-	// All bucket names and bucket metadata should be healed.
-	for bucketName := range bucketNames {
-		// Heal bucket and then proceed to heal bucket metadata.
-		if err = healBucket(storageDisks, bucketName, writeQuorum); err == nil {
-			if err = healBucketMetadata(storageDisks, bucketName, readQuorum); err == nil {
-				continue
+
+	// All bucket names and bucket metadata that should be healed.
+	for bucketName, occCount := range bucketOcc {
+		// Heal bucket only if healing is needed.
+		if occCount != len(storageDisks) {
+			// Heal bucket and then proceed to heal bucket metadata if any.
+			if err = healBucket(storageDisks, bucketName, writeQuorum); err == nil {
+				if err = healBucketMetadata(storageDisks, bucketName, readQuorum); err == nil {
+					continue
+				}
+				return err
 			}
 			return err
 		}
-		return err
 	}
+
+	// Success.
 	return nil
 }
 
