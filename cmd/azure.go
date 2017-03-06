@@ -322,10 +322,20 @@ func (a AzureObjects) ListObjectParts(bucket, object, uploadID string, partNumbe
 	if err != nil {
 		return result, azureToObjectError(traceError(err), bucket, object)
 	}
+	tmpMaxParts := 0
+	partCount := 0 // Used for figuring out IsTruncated.
 	for _, part := range resp.UncommittedBlocks {
+		if tmpMaxParts == maxParts {
+			// Also takes care of the case if maxParts = 0
+			break
+		}
+		partCount++
 		partID, md5Hex, err := azureParseBlockID(part.Name)
 		if err != nil {
 			return result, err
+		}
+		if partID <= partNumberMarker {
+			continue
 		}
 		result.Parts = append(result.Parts, PartInfo{
 			partID,
@@ -333,11 +343,15 @@ func (a AzureObjects) ListObjectParts(bucket, object, uploadID string, partNumbe
 			md5Hex,
 			part.Size,
 		})
+		tmpMaxParts++
 	}
 	result.Bucket = bucket
 	result.Object = object
 	result.UploadID = uploadID
 	result.MaxParts = maxParts
+	if partCount < len(resp.UncommittedBlocks) {
+		result.IsTruncated = true
+	}
 	return result, nil
 }
 
