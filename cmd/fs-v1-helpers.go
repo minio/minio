@@ -241,6 +241,10 @@ func fsCreateFile(filePath string, reader io.Reader, buf []byte, fallocSize int6
 		return 0, traceError(err)
 	}
 
+	if err := checkDiskFree(pathutil.Dir(filePath)); err != nil {
+		return 0, traceError(err)
+	}
+
 	writer, err := os.OpenFile(preparePath(filePath), os.O_CREATE|os.O_WRONLY, 0666)
 	if err != nil {
 		// File path cannot be verified since one of the parents is a file.
