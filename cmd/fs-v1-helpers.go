@@ -228,20 +228,24 @@ func fsOpenFile(readPath string, offset int64) (io.ReadCloser, int64, error) {
 }
 
 // Creates a file and copies data from incoming reader. Staging buffer is used by io.CopyBuffer.
-func fsCreateFile(tempObjPath string, reader io.Reader, buf []byte, fallocSize int64) (int64, error) {
-	if tempObjPath == "" || reader == nil || buf == nil {
+func fsCreateFile(filePath string, reader io.Reader, buf []byte, fallocSize int64) (int64, error) {
+	if filePath == "" || reader == nil || buf == nil {
 		return 0, traceError(errInvalidArgument)
 	}
 
-	if err := checkPathLength(tempObjPath); err != nil {
+	if err := checkPathLength(filePath); err != nil {
 		return 0, traceError(err)
 	}
 
-	if err := mkdirAll(pathutil.Dir(tempObjPath), 0777); err != nil {
+	if err := mkdirAll(pathutil.Dir(filePath), 0777); err != nil {
 		return 0, traceError(err)
 	}
 
-	writer, err := os.OpenFile(preparePath(tempObjPath), os.O_CREATE|os.O_WRONLY, 0666)
+	if err := checkDiskFree(pathutil.Dir(filePath), fallocSize); err != nil {
+		return 0, traceError(err)
+	}
+
+	writer, err := os.OpenFile(preparePath(filePath), os.O_CREATE|os.O_WRONLY, 0666)
 	if err != nil {
 		// File path cannot be verified since one of the parents is a file.
 		if isSysErrNotDir(err) {
