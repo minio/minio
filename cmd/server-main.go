@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"os"
 	"path"
 	"sort"
 	"strconv"
@@ -81,6 +82,80 @@ EXAMPLES:
       $ {{.HelpName}} http://192.168.1.11/mnt/export/ http://192.168.1.12/mnt/export/ \
           http://192.168.1.13/mnt/export/ http://192.168.1.14/mnt/export/
 `,
+}
+
+// Check for updates and print a notification message
+func checkUpdate() {
+	// Its OK to ignore any errors during getUpdateInfo() here.
+	if older, downloadURL, err := getUpdateInfo(1 * time.Second); err == nil {
+		if older > time.Duration(0) {
+			console.Println(colorizeUpdateMessage(downloadURL, older))
+		}
+	}
+}
+
+// envParams holds all env parameters
+type envParams struct {
+	creds   credential
+	browser string
+}
+
+func migrate() {
+	// Migrate config file
+	err := migrateConfig()
+	fatalIf(err, "Config migration failed.")
+
+	// Migrate other configs here.
+}
+
+func enableLoggers() {
+	// Enable all loggers here.
+	enableConsoleLogger()
+	enableFileLogger()
+	// Add your logger here.
+}
+
+// Initializes a new config if it doesn't exist, else migrates any old config
+// to newer config and finally loads the config to memory.
+func initConfig() {
+
+	envs := envParams{
+		creds:   mustGetCredentialFromEnv(),
+		browser: mustGetBrowserFromEnv(),
+	}
+
+	// Config file does not exist, we create it fresh and return upon success.
+	if !isConfigFileExists() {
+		if err := newConfig(envs); err != nil {
+			console.Fatalf("Unable to initialize minio config for the first time. Err: %s.\n", err)
+		}
+		console.Println("Created minio configuration file successfully at " + getConfigDir())
+		return
+	}
+
+	// Migrate any old version of config / state files to newer format.
+	migrate()
+
+	// Once we have migrated all the old config, now load them.
+	if err := loadConfig(envs); err != nil {
+		console.Fatalf("Unable to initialize minio config. Err: %s.\n", err)
+	}
+}
+
+// Generic Minio initialization to create/load config, prepare loggers, etc..
+func minioInit(ctx *cli.Context) {
+	// Is TLS configured?.
+	globalIsSSL = isSSL()
+
+	// Initialize minio server config.
+	initConfig()
+
+	// Enable all loggers by now so we can use errorIf() and fatalIf()
+	enableLoggers()
+
+	// Init the error tracing module.
+	initError()
+
 }
 
 type serverCmdConfig struct {
@@ -368,11 +443,16 @@ func serverMain(c *cli.Context) {
 		configDir = c.GlobalString("config-dir")
 	}
 	if configDir == "" {
-		console.Fatalf("Configuration directory cannot be empty.")
+		console.Fatalln("Configuration directory cannot be empty.")
 	}
 
 	// Set configuration directory.
 	setConfigDir(configDir)
+
+	// Start profiler if env is set.
+	if profiler := os.Getenv("_MINIO_PROFILER"); profiler != "" {
+		globalProfiler = startProfiler(profiler)
+	}
 
 	// Initializes server config, certs, logging and system settings.
 	initServerConfig(c)
