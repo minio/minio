@@ -54,7 +54,7 @@ export default (state = {
     shareObject: {
       show: false,
       url: '',
-      expiry: 604800
+      object: ''
     },
     prefixWritable: false,
     checkedObjects: []

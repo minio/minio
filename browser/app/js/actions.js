@@ -80,11 +80,12 @@ export const hideDeleteConfirmation = () => {
   }
 }
 
-export const showShareObject = url => {
+export const showShareObject = (object, url) => {
   return {
     type: SET_SHARE_OBJECT,
     shareObject: {
-      url: url,
+      object,
+      url,
       show: true
     }
   }
@@ -106,9 +107,10 @@ export const shareObject = (object, expiry) => (dispatch, getState) => {
   let bucket = currentBucket
 
   if (!web.LoggedIn()) {
-    dispatch(showShareObject(`${host}/${bucket}/${object}`))
+    dispatch(showShareObject(object, `${host}/${bucket}/${object}`))
     return
   }
+
   web.PresignedGet({
     host,
     bucket,
@@ -116,7 +118,11 @@ export const shareObject = (object, expiry) => (dispatch, getState) => {
     expiry
   })
     .then(obj => {
-      dispatch(showShareObject(obj.url))
+      dispatch(showShareObject(object, obj.url))
+      dispatch(showAlert({
+        type: 'success',
+        message: `Object shared, expires in ${expiry} seconds`
+      }))
     })
     .catch(err => {
       dispatch(showAlert({
