@@ -36,16 +36,19 @@ const (
 // Type-safe query params.
 type mgmtQueryKey string
 
-// Only valid query params for list/clear locks management APIs.
+// Only valid query params for mgmt admin APIs.
 const (
-	mgmtBucket       mgmtQueryKey = "bucket"
-	mgmtObject       mgmtQueryKey = "object"
-	mgmtPrefix       mgmtQueryKey = "prefix"
-	mgmtLockDuration mgmtQueryKey = "duration"
-	mgmtDelimiter    mgmtQueryKey = "delimiter"
-	mgmtMarker       mgmtQueryKey = "marker"
-	mgmtMaxKey       mgmtQueryKey = "max-key"
-	mgmtDryRun       mgmtQueryKey = "dry-run"
+	mgmtBucket         mgmtQueryKey = "bucket"
+	mgmtObject         mgmtQueryKey = "object"
+	mgmtPrefix         mgmtQueryKey = "prefix"
+	mgmtLockDuration   mgmtQueryKey = "duration"
+	mgmtDelimiter      mgmtQueryKey = "delimiter"
+	mgmtMarker         mgmtQueryKey = "marker"
+	mgmtKeyMarker      mgmtQueryKey = "key-marker"
+	mgmtMaxKey         mgmtQueryKey = "max-key"
+	mgmtDryRun         mgmtQueryKey = "dry-run"
+	mgmtUploadIDMarker mgmtQueryKey = "upload-id-marker"
+	mgmtMaxUploads     mgmtQueryKey = "max-uploads"
 )
 
 // ServerVersion - server version
@@ -400,8 +403,57 @@ func (adminAPI adminAPIHandlers) ClearLocksHandler(w http.ResponseWriter, r *htt
 	writeSuccessResponseJSON(w, jsonBytes)
 }
 
-// validateHealQueryParams - Validates query params for heal list management API.
-func validateHealQueryParams(vars url.Values) (string, string, string, string, int, APIErrorCode) {
+// ListUploadsHealHandler - similar to listObjectsHealHandler
+// GET
+// /?heal&bucket=mybucket&prefix=myprefix&key-marker=mymarker&upload-id-marker=myuploadid&delimiter=mydelimiter&max-uploads=1000
+// - bucket is mandatory query parameter
+// - rest are optional query parameters List upto maxKey objects that
+// need healing in a given bucket matching the given prefix.
+func (adminAPI adminAPIHandlers) ListUploadsHealHandler(w http.ResponseWriter, r *http.Request) {
+	// Get object layer instance.
+	objLayer := newObjectLayerFn()
+	if objLayer == nil {
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+		return
+	}
+
+	// Validate request signature.
+	adminAPIErr := checkRequestAuthType(r, "", "", "")
+	if adminAPIErr != ErrNone {
+		writeErrorResponse(w, adminAPIErr, r.URL)
+		return
+	}
+
+	// Validate query params.
+	vars := r.URL.Query()
+	bucket := vars.Get(string(mgmtBucket))
+	prefix, keyMarker, uploadIDMarker, delimiter, maxUploads, _ := getBucketMultipartResources(r.URL.Query())
+
+	if err := checkListMultipartArgs(bucket, prefix, keyMarker, uploadIDMarker, delimiter, objLayer); err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
+	if maxUploads <= 0 || maxUploads > maxUploadsList {
+		writeErrorResponse(w, ErrInvalidMaxUploads, r.URL)
+		return
+	}
+
+	// Get the list objects to be healed.
+	listMultipartInfos, err := objLayer.ListUploadsHeal(bucket, prefix,
+		keyMarker, uploadIDMarker, delimiter, maxUploads)
+	if err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
+	listResponse := generateListMultipartUploadsResponse(bucket, listMultipartInfos)
+	// Write success response.
+	writeSuccessResponseXML(w, encodeResponse(listResponse))
+}
+
+// extractListObjectsHealQuery - Validates query params for heal objects list management API.
+func extractListObjectsHealQuery(vars url.Values) (string, string, string, string, int, APIErrorCode) {
 	bucket := vars.Get(string(mgmtBucket))
 	prefix := vars.Get(string(mgmtPrefix))
 	marker := vars.Get(string(mgmtMarker))
@@ -418,10 +470,13 @@ func validateHealQueryParams(vars url.Values) (string, string, string, string, i
 		return "", "", "", "", 0, ErrInvalidObjectName
 	}
 
-	// check if maxKey is a valid integer.
-	maxKey, err := strconv.Atoi(maxKeyStr)
-	if err != nil {
-		return "", "", "", "", 0, ErrInvalidMaxKeys
+	// check if maxKey is a valid integer, if present.
+	var maxKey int
+	var err error
+	if maxKeyStr != "" {
+		if maxKey, err = strconv.Atoi(maxKeyStr); err != nil {
+			return "", "", "", "", 0, ErrInvalidMaxKeys
+		}
 	}
 
 	// Validate prefix, marker, delimiter and maxKey.
@@ -454,7 +509,7 @@ func (adminAPI adminAPIHandlers) ListObjectsHealHandler(w http.ResponseWriter, r
 
 	// Validate query params.
 	vars := r.URL.Query()
-	bucket, prefix, marker, delimiter, maxKey, adminAPIErr := validateHealQueryParams(vars)
+	bucket, prefix, marker, delimiter, maxKey, adminAPIErr := extractListObjectsHealQuery(vars)
 	if adminAPIErr != ErrNone {
 		writeErrorResponse(w, adminAPIErr, r.URL)
 		return

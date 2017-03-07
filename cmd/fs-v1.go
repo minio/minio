@@ -827,3 +827,8 @@ func (fs fsObjects) ListObjectsHeal(bucket, prefix, marker, delimiter string, ma
 func (fs fsObjects) ListBucketsHeal() ([]BucketInfo, error) {
 	return []BucketInfo{}, traceError(NotImplemented{})
 }
+
+func (fs fsObjects) ListUploadsHeal(bucket, prefix, marker, uploadIDMarker,
+	delimiter string, maxUploads int) (ListMultipartsInfo, error) {
+	return ListMultipartsInfo{}, traceError(NotImplemented{})
+}

@@ -18,6 +18,8 @@ package cmd
 
 import (
 	"bytes"
+	"path"
+	"path/filepath"
 	"strconv"
 	"testing"
 )
@@ -138,4 +140,79 @@ func TestListObjectsHeal(t *testing.T) {
 		testFunc(testCase, i+1)
 	}
 
+}
+
+// Test for ListUploadsHeal API for XL.
+func TestListUploadsHeal(t *testing.T) {
+	initNSLock(false)
+
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
+	if err != nil {
+		t.Fatalf("Init Test config failed")
+	}
+	// Remove config directory after the test ends.
+	defer removeAll(rootPath)
+
+	// Create an instance of XL backend.
+	xl, fsDirs, err := prepareXL()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Cleanup backend directories on function return.
+	defer removeRoots(fsDirs)
+
+	bucketName := "bucket"
+	prefix := "prefix"
+	objName := path.Join(prefix, "obj")
+
+	// Create test bucket.
+	err = xl.MakeBucket(bucketName)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a new multipart upload.
+	uploadID, err := xl.NewMultipartUpload(bucketName, objName, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Upload a part.
+	data := bytes.Repeat([]byte("a"), 1024)
+	_, err = xl.PutObjectPart(bucketName, objName, uploadID, 1,
+		int64(len(data)), bytes.NewReader(data), "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Check if list uploads heal returns any uploads to be healed
+	// incorrectly.
+	listUploadsInfo, err := xl.ListUploadsHeal(bucketName, prefix, "", "", "", 1000)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// All uploads intact nothing to heal.
+	if len(listUploadsInfo.Uploads) != 0 {
+		t.Errorf("Expected no uploads but received %d", len(listUploadsInfo.Uploads))
+	}
+
+	// Delete the part from the first disk to make the upload (and
+	// its part) to appear in upload heal listing.
+	firstDisk := xl.(*xlObjects).storageDisks[0]
+	err = firstDisk.DeleteFile(minioMetaMultipartBucket,
+		filepath.Join(bucketName, objName, uploadID, xlMetaJSONFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	listUploadsInfo, err = xl.ListUploadsHeal(bucketName, prefix, "", "", "", 1000)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// One upload with missing xl.json on first disk.
+	if len(listUploadsInfo.Uploads) != 1 {
+		t.Errorf("Expected 1 upload but received %d", len(listUploadsInfo.Uploads))
+	}
 }

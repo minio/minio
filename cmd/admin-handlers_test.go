@@ -740,7 +740,7 @@ func TestValidateHealQueryParams(t *testing.T) {
 	}
 	for i, test := range testCases {
 		vars := mkListObjectsQueryVal(test.bucket, test.prefix, test.marker, test.delimiter, test.maxKeys)
-		_, _, _, _, _, actualErr := validateHealQueryParams(vars)
+		_, _, _, _, _, actualErr := extractListObjectsHealQuery(vars)
 		if actualErr != test.apiErr {
 			t.Errorf("Test %d - Expected %v but received %v",
 				i+1, getAPIError(test.apiErr), getAPIError(actualErr))
@@ -856,9 +856,6 @@ func TestListObjectsHealHandler(t *testing.T) {
 	}
 
 	for i, test := range testCases {
-		if i != 0 {
-			continue
-		}
 		queryVal := mkListObjectsQueryVal(test.bucket, test.prefix, test.marker, test.delimiter, test.maxKeys)
 		req, err := newTestRequest("GET", "/?"+queryVal.Encode(), 0, nil)
 		if err != nil {
@@ -1287,6 +1284,140 @@ func TestWriteSetConfigResponse(t *testing.T) {
 			if res.ErrSet != expectedErrSet {
 				t.Errorf("Test %d: Expected ErrSet %v but received %v", i+1, expectedErrSet, res.ErrSet)
 			}
+		}
+	}
+}
+
+// mkUploadsHealQuery - helper function to construct query values for
+// listUploadsHeal.
+func mkUploadsHealQuery(bucket, prefix, keyMarker, uploadIDMarker, delimiter, maxUploadsStr string) url.Values {
+
+	queryVal := make(url.Values)
+	queryVal.Set("heal", "")
+	queryVal.Set(string(mgmtBucket), bucket)
+	queryVal.Set(string(mgmtPrefix), prefix)
+	queryVal.Set(string(mgmtKeyMarker), keyMarker)
+	queryVal.Set(string(mgmtUploadIDMarker), uploadIDMarker)
+	queryVal.Set(string(mgmtDelimiter), delimiter)
+	queryVal.Set(string(mgmtMaxUploads), maxUploadsStr)
+	return queryVal
+}
+
+func TestListHealUploadsHandler(t *testing.T) {
+	adminTestBed, err := prepareAdminXLTestBed()
+	if err != nil {
+		t.Fatal("Failed to initialize a single node XL backend for admin handler tests.")
+	}
+	defer adminTestBed.TearDown()
+
+	err = adminTestBed.objLayer.MakeBucket("mybucket")
+	if err != nil {
+		t.Fatalf("Failed to make bucket - %v", err)
+	}
+
+	// Delete bucket after running all test cases.
+	defer adminTestBed.objLayer.DeleteBucket("mybucket")
+
+	testCases := []struct {
+		bucket     string
+		prefix     string
+		keyMarker  string
+		delimiter  string
+		maxKeys    string
+		statusCode int
+	}{
+		// 1. Valid params.
+		{
+			bucket:     "mybucket",
+			prefix:     "prefix",
+			keyMarker:  "prefix11",
+			delimiter:  "/",
+			maxKeys:    "10",
+			statusCode: http.StatusOK,
+		},
+		// 2. Valid params with empty prefix.
+		{
+			bucket:     "mybucket",
+			prefix:     "",
+			keyMarker:  "",
+			delimiter:  "/",
+			maxKeys:    "10",
+			statusCode: http.StatusOK,
+		},
+		// 3. Invalid params with invalid bucket.
+		{
+			bucket:     `invalid\\Bucket`,
+			prefix:     "prefix",
+			keyMarker:  "prefix11",
+			delimiter:  "/",
+			maxKeys:    "10",
+			statusCode: getAPIError(ErrInvalidBucketName).HTTPStatusCode,
+		},
+		// 4. Invalid params with invalid prefix.
+		{
+			bucket:     "mybucket",
+			prefix:     `invalid\\Prefix`,
+			keyMarker:  "prefix11",
+			delimiter:  "/",
+			maxKeys:    "10",
+			statusCode: getAPIError(ErrInvalidObjectName).HTTPStatusCode,
+		},
+		// 5. Invalid params with invalid maxKeys.
+		{
+			bucket:     "mybucket",
+			prefix:     "prefix",
+			keyMarker:  "prefix11",
+			delimiter:  "/",
+			maxKeys:    "-1",
+			statusCode: getAPIError(ErrInvalidMaxUploads).HTTPStatusCode,
+		},
+		// 6. Invalid params with unsupported prefix marker combination.
+		{
+			bucket:     "mybucket",
+			prefix:     "prefix",
+			keyMarker:  "notmatchingmarker",
+			delimiter:  "/",
+			maxKeys:    "10",
+			statusCode: getAPIError(ErrNotImplemented).HTTPStatusCode,
+		},
+		// 7. Invalid params with unsupported delimiter.
+		{
+			bucket:     "mybucket",
+			prefix:     "prefix",
+			keyMarker:  "notmatchingmarker",
+			delimiter:  "unsupported",
+			maxKeys:    "10",
+			statusCode: getAPIError(ErrNotImplemented).HTTPStatusCode,
+		},
+		// 8. Invalid params with invalid max Keys
+		{
+			bucket:     "mybucket",
+			prefix:     "prefix",
+			keyMarker:  "prefix11",
+			delimiter:  "/",
+			maxKeys:    "999999999999999999999999999",
+			statusCode: getAPIError(ErrInvalidMaxUploads).HTTPStatusCode,
+		},
+	}
+
+	for i, test := range testCases {
+		queryVal := mkUploadsHealQuery(test.bucket, test.prefix, test.keyMarker, "", test.delimiter, test.maxKeys)
+
+		req, err := newTestRequest("GET", "/?"+queryVal.Encode(), 0, nil)
+		if err != nil {
+			t.Fatalf("Test %d - Failed to construct list uploads needing heal request - %v", i+1, err)
+		}
+		req.Header.Set(minioAdminOpHeader, "list-uploads")
+
+		cred := serverConfig.GetCredential()
+		err = signRequestV4(req, cred.AccessKey, cred.SecretKey)
+		if err != nil {
+			t.Fatalf("Test %d - Failed to sign list uploads needing heal request - %v", i+1, err)
+		}
+		rec := httptest.NewRecorder()
+		adminTestBed.mux.ServeHTTP(rec, req)
+		if test.statusCode != rec.Code {
+			t.Errorf("Test %d - Expected HTTP status code %d but received %d", i+1, test.statusCode, rec.Code)
 		}
 	}
 }
