@@ -271,8 +271,8 @@ export default class Browse extends React.Component {
   shareObject(e, object) {
     e.preventDefault()
     const {dispatch} = this.props
-    let expiry = 5 * 24 * 60 * 60 // 5 days expiry by default
-    dispatch(actions.shareObject(object, expiry))
+    // let expiry = 5 * 24 * 60 * 60 // 5 days expiry by default
+    dispatch(actions.shareObject(object, 5, 0, 0))
   }
 
   hideShareObjectModal() {
@@ -375,8 +375,7 @@ export default class Browse extends React.Component {
       this.refs.expireDays.value = 7
     }
     const {dispatch} = this.props
-    let expiry = this.refs.expireDays.value * 24 * 60 * 60 + this.refs.expireHours.value * 60 * 60 + this.refs.expireMins.value * 60
-    dispatch(actions.shareObject(object, expiry))
+    dispatch(actions.shareObject(object, this.refs.expireDays.value, this.refs.expireHours.value, this.refs.expireMins.value))
   }
 
   checkObject(e, objectName) {

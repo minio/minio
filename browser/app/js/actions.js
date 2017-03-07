@@ -101,7 +101,7 @@ export const hideShareObject = () => {
   }
 }
 
-export const shareObject = (object, expiry) => (dispatch, getState) => {
+export const shareObject = (object, days, hours, minutes) => (dispatch, getState) => {
   const {currentBucket, web} = getState()
   let host = location.host
   let bucket = currentBucket
@@ -111,6 +111,7 @@ export const shareObject = (object, expiry) => (dispatch, getState) => {
     return
   }
 
+  let expiry = days * 24 * 60 * 60 + hours * 60 * 60 + minutes * 60
   web.PresignedGet({
     host,
     bucket,
@@ -121,7 +122,7 @@ export const shareObject = (object, expiry) => (dispatch, getState) => {
       dispatch(showShareObject(object, obj.url))
       dispatch(showAlert({
         type: 'success',
-        message: `Object shared, expires in ${expiry} seconds`
+        message: `Object shared. Expires in ${days} days ${hours} hours ${minutes} minutes.`
       }))
     })
     .catch(err => {
