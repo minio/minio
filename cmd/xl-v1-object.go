@@ -36,6 +36,25 @@ import (
 // list all errors which can be ignored in object operations.
 var objectOpIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied)
 
+// prepareFile hints the bottom layer to optimize the creation of a new object
+func (xl xlObjects) prepareFile(bucket, object string, size int64, onlineDisks []StorageAPI, blockSize int64, dataBlocks int) error {
+	pErrs := make([]error, len(onlineDisks))
+	// Calculate the real size of the part in one disk.
+	actualSize := xl.sizeOnDisk(size, blockSize, dataBlocks)
+	// Prepare object creation in a all disks
+	for index, disk := range onlineDisks {
+		if disk != nil {
+			if err := disk.PrepareFile(bucket, object, actualSize); err != nil {
+				// Save error to reduce it later
+				pErrs[index] = err
+				// Ignore later access to disk which generated the error
+				onlineDisks[index] = nil
+			}
+		}
+	}
+	return reduceWriteQuorumErrs(pErrs, objectOpIgnoredErrs, xl.writeQuorum)
+}
+
 /// Object Operations
 
 // CopyObject - copy object source object to destination object.
@@ -555,12 +574,9 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 		// Hint the filesystem to pre-allocate one continuous large block.
 		// This is only an optimization.
 		if curPartSize > 0 {
-			// Calculate the real size of the part in the disk.
-			actualSize := xl.sizeOnDisk(curPartSize, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks)
-			for _, disk := range onlineDisks {
-				if disk != nil {
-					disk.PrepareFile(minioMetaTmpBucket, tempErasureObj, actualSize)
-				}
+			pErr := xl.prepareFile(minioMetaTmpBucket, tempErasureObj, curPartSize, onlineDisks, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks)
+			if pErr != nil {
+				return ObjectInfo{}, toObjectErr(pErr, bucket, object)
 			}
 		}
 

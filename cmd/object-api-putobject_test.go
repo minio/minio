@@ -179,11 +179,11 @@ func testObjectAPIPutObject(obj ObjectLayer, instanceType string, t TestErrHandl
 // Wrapper for calling PutObject tests for both XL multiple disks case
 // when quorum is not available.
 func TestObjectAPIPutObjectDiskNotFound(t *testing.T) {
-	ExecObjectLayerDiskAlteredTest(t, testObjectAPIPutObjectDiskNotFOund)
+	ExecObjectLayerDiskAlteredTest(t, testObjectAPIPutObjectDiskNotFound)
 }
 
 // Tests validate correctness of PutObject.
-func testObjectAPIPutObjectDiskNotFOund(obj ObjectLayer, instanceType string, disks []string, t *testing.T) {
+func testObjectAPIPutObjectDiskNotFound(obj ObjectLayer, instanceType string, disks []string, t *testing.T) {
 	// Generating cases for which the PutObject fails.
 	bucket := "minio-bucket"
 	object := "minio-object"

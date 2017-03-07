@@ -648,11 +648,9 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	defer xl.deleteObject(minioMetaTmpBucket, tmpPart)
 
 	if size > 0 {
-		for _, disk := range onlineDisks {
-			if disk != nil {
-				actualSize := xl.sizeOnDisk(size, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks)
-				disk.PrepareFile(minioMetaTmpBucket, tmpPartPath, actualSize)
-			}
+		if pErr := xl.prepareFile(minioMetaTmpBucket, tmpPartPath, size, onlineDisks, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks); err != nil {
+			return PartInfo{}, toObjectErr(pErr, bucket, object)
+
 		}
 	}
 
