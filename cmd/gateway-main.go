@@ -60,7 +60,7 @@ func azureMain(ctx *cli.Context) {
 	initNSLock(globalIsDistXL)
 
 	router := mux.NewRouter().SkipClean(true)
-	registerAPIRouter(router)
+	registerGatewayAPIRouter(router, newObject)
 
 	var handlerFns = []HandlerFunc{
 		// Adds 'crossdomain.xml' policy handler to serve legacy flash clients.

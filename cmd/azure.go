@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/storage"
+	"github.com/minio/minio-go/pkg/policy"
 )
 
 const globalAzureAPIVersion = "2016-05-31"
@@ -72,7 +73,7 @@ func azureToObjectError(err error, params ...string) error {
 }
 
 // Inits azure blob storage client and returns AzureObjects.
-func newAzureLayer(account, key string) (ObjectLayer, error) {
+func newAzureLayer(account, key string) (GatewayLayer, error) {
 	useHTTPS := true
 	c, err := storage.NewClient(account, key, storage.DefaultBaseURL, globalAzureAPIVersion, useHTTPS)
 	if err != nil {
@@ -396,4 +397,113 @@ func (a AzureObjects) HealObject(bucket, object string) error {
 // ListObjectsHeal - Not relevant.
 func (a AzureObjects) ListObjectsHeal(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
 	return ListObjectsInfo{}, traceError(NotImplemented{})
+}
+
+// AnonGetObject - SendGET request without authentication.
+// This is needed when clients send GET requests on objects that can be downloaded without auth.
+func (a AzureObjects) AnonGetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) (err error) {
+	url := a.client.GetBlobURL(bucket, object)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return azureToObjectError(traceError(err), bucket, object)
+	}
+	var byteRange string
+
+	if length == -1 {
+		byteRange = fmt.Sprintf("%d-", startOffset)
+	} else {
+		byteRange = fmt.Sprintf("%d-%d", startOffset, startOffset+length-1)
+	}
+
+	req.Header.Add("Range", byteRange)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return azureToObjectError(traceError(err), bucket, object)
+	}
+
+	defer resp.Body.Close()
+	_, err = io.Copy(writer, resp.Body)
+	return traceError(err)
+}
+
+// GetObjectInfo - Send HEAD request without authentication and convert the
+// result to ObjectInfo.
+func (a AzureObjects) AnonGetObjectInfo(bucket, object string) (objInfo ObjectInfo, err error) {
+	resp, err := http.Head(a.client.GetBlobURL(bucket, object))
+	if err != nil {
+		return objInfo, azureToObjectError(traceError(err), bucket, object)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return objInfo, azureToObjectError(traceError(errUnexpected), bucket, object)
+	}
+
+	var contentLength int64
+	contentLengthStr := resp.Header.Get("Content-Length")
+	if contentLengthStr != "" {
+		contentLength, err = strconv.ParseInt(contentLengthStr, 0, 64)
+		if err != nil {
+			return objInfo, azureToObjectError(traceError(errUnexpected), bucket, object)
+		}
+	}
+
+	t, err := time.Parse(time.RFC1123, resp.Header.Get("Last-Modified"))
+	if err != nil {
+		return objInfo, traceError(err)
+	}
+	objInfo.ModTime = t
+	objInfo.Bucket = bucket
+	objInfo.ContentEncoding = resp.Header.Get("Content-Encoding")
+	objInfo.ContentType = resp.Header.Get("Content-Type")
+	objInfo.MD5Sum = resp.Header.Get("Etag")
+	objInfo.ModTime = t
+	objInfo.Name = object
+	objInfo.Size = contentLength
+	return
+}
+
+// SetBucketPolicies - Azure supports three types of container policies:
+// storage.ContainerAccessTypeContainer - readonly in minio terminology
+// storage.ContainerAccessTypeBlob - readonly without listing in minio terminology
+// storage.ContainerAccessTypePrivate - none in minio terminology
+// As the common denominator for minio and azure is readonly and none, we support
+// these two policies at the bucket level.
+func (a AzureObjects) SetBucketPolicies(bucket string, policies []bucketAccessPolicy) error {
+	prefix := bucket + "/*" // For all objects inside the bucket.
+	if len(policies) != 1 {
+		return traceError(PrefixAccessDenied{})
+	}
+	if policies[0].Prefix != prefix {
+		return traceError(PrefixAccessDenied{})
+	}
+	if policies[0].Policy != policy.BucketPolicyReadOnly {
+		return traceError(PrefixAccessDenied{})
+	}
+	perm := storage.ContainerPermissions{storage.ContainerAccessTypeContainer, nil}
+	err := a.client.SetContainerPermissions(bucket, perm, 0, "")
+	return azureToObjectError(traceError(err), bucket)
+}
+
+// GetBucketPolicies - Get the container ACL and convert it to canonical []bucketAccessPolicy
+func (a AzureObjects) GetBucketPolicies(bucket string) ([]bucketAccessPolicy, error) {
+	perm, err := a.client.GetContainerPermissions(bucket, 0, "")
+	if err != nil {
+		return nil, azureToObjectError(traceError(err), bucket)
+	}
+	switch perm.AccessType {
+	case storage.ContainerAccessTypePrivate:
+		return nil, nil
+	case storage.ContainerAccessTypeContainer:
+		return []bucketAccessPolicy{{"", policy.BucketPolicyReadOnly}}, nil
+	}
+	return nil, azureToObjectError(traceError(NotImplemented{}))
+}
+
+// DeleteBucketPolicies - Set the container ACL to "private"
+func (a AzureObjects) DeleteBucketPolicies(bucket string) error {
+	perm := storage.ContainerPermissions{storage.ContainerAccessTypePrivate, nil}
+	err := a.client.SetContainerPermissions(bucket, perm, 0, "")
+	return azureToObjectError(traceError(err))
 }
