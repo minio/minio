@@ -241,7 +241,7 @@ func fsCreateFile(filePath string, reader io.Reader, buf []byte, fallocSize int6
 		return 0, traceError(err)
 	}
 
-	if err := checkDiskFree(pathutil.Dir(filePath)); err != nil {
+	if err := checkDiskFree(pathutil.Dir(filePath), fallocSize); err != nil {
 		return 0, traceError(err)
 	}
 

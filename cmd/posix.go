@@ -154,7 +154,7 @@ var ignoreDiskFreeOS = []string{
 }
 
 // checkDiskFree verifies if disk path has sufficient minimum free disk space and files.
-func checkDiskFree(diskPath string) (err error) {
+func checkDiskFree(diskPath string, neededSpace int64) (err error) {
 	// We don't validate disk space or inode utilization on windows.
 	// Each windows calls to 'GetVolumeInformationW' takes around 3-5seconds.
 	// And StatFS is not supported by Go for solaris and netbsd.
@@ -183,6 +183,11 @@ func checkDiskFree(diskPath string) (err error) {
 		if availableFiles <= fsMinFreeInodes {
 			return errDiskFull
 		}
+	}
+
+	// Check if we have enough space to store data
+	if neededSpace > int64(availableDiskSpace) {
+		return errDiskFull
 	}
 
 	// Success.
@@ -599,11 +604,6 @@ func (s *posix) createFile(volume, path string) (f *os.File, err error) {
 		return nil, err
 	}
 
-	// Validate if disk is indeed free.
-	if err = checkDiskFree(s.diskPath); err != nil {
-		return nil, err
-	}
-
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
 		return nil, err
@@ -671,6 +671,11 @@ func (s *posix) PrepareFile(volume, path string, fileSize int64) (err error) {
 
 	if s.ioErrCount > maxAllowedIOError {
 		return errFaultyDisk
+	}
+
+	// Validate if disk is indeed free.
+	if err = checkDiskFree(s.diskPath, fileSize); err != nil {
+		return err
 	}
 
 	// Create file if not found
