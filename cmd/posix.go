@@ -129,9 +129,6 @@ func newPosix(path string) (StorageAPI, error) {
 			return nil, err
 		}
 	}
-	if err = checkDiskFree(fs.diskPath); err != nil {
-		return nil, err
-	}
 	return fs, nil
 }
 
