@@ -1,6 +1,9 @@
 go_import_path: github.com/minio/minio
 sudo: required
 
+services:
+ - docker
+
 dist: trusty
 
 language: go
@@ -13,12 +16,28 @@ env:
 - ARCH=i686
 
 script:
+# Refer https://blog.hypriot.com/post/setup-simple-ci-pipeline-for-arm-images/
+# prepare qemu
+- docker run --rm --privileged multiarch/qemu-user-static:register --reset
+# build image
+- docker build -t minio/minio:edge-armhf . -f Dockerfile.armhf
+# test image
+- docker run --rm minio/minio:edge-armhf version
+
+## Run all the tests
 - make
 - make test GOFLAGS="-timeout 15m -race -v"
 - make coverage
+
+# push image
+- >
+  if [ "$TRAVIS_BRANCH" == "master" ] && [ "$TRAVIS_PULL_REQUEST" == "false" ]; then
+    docker login -u="$DOCKER_USER" -p="$DOCKER_PASS"
+    docker push minio/minio:edge-armhf
+  fi
 
 after_success:
 - bash <(curl -s https://codecov.io/bash)
 
 go:
-- 1.7.4
+- 1.7.5
