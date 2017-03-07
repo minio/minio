@@ -251,25 +251,6 @@ export default class Browse extends React.Component {
       })))
   }
 
-  removeObjectSelected() {
-    const {web, dispatch, currentPath, currentBucket, checkedObjects} = this.props
-    web.RemoveObject({
-      bucketname: currentBucket,
-      objects: checkedObjects
-    })
-      .then(() => {
-        this.hideDeleteConfirmation()
-        for (let i = 0; i < checkedObjects.length; i++) {
-          dispatch(actions.removeObject(checkedObjects[i].replace(currentPath, '')))
-        }
-        dispatch(actions.checkedObjectsReset())
-      })
-      .catch(e => dispatch(actions.showAlert({
-        type: 'danger',
-        message: e.message
-      })))
-  }
-
   hideAlert(e) {
     e.preventDefault()
     const {dispatch} = this.props
