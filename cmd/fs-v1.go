@@ -24,11 +24,9 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"syscall"
 
-	"github.com/minio/minio/pkg/disk"
 	"github.com/minio/minio/pkg/lock"
 	"github.com/minio/sha256-simd"
 )
@@ -41,9 +39,6 @@ type fsObjects struct {
 	// Unique value to be used for all
 	// temporary transactions.
 	fsUUID string
-
-	minFreeSpace  int64
-	minFreeInodes int64
 
 	// FS rw pool.
 	rwPool *fsIOPool
@@ -139,10 +134,8 @@ func newFSObjectLayer(fsPath string) (ObjectLayer, error) {
 
 	// Initialize fs objects.
 	fs := &fsObjects{
-		fsPath:        fsPath,
-		fsUUID:        fsUUID,
-		minFreeSpace:  fsMinFreeSpace,
-		minFreeInodes: fsMinFreeInodes,
+		fsPath: fsPath,
+		fsUUID: fsUUID,
 		rwPool: &fsIOPool{
 			readersMap: make(map[string]*lock.RLockedFile),
 		},
@@ -166,41 +159,6 @@ func newFSObjectLayer(fsPath string) (ObjectLayer, error) {
 
 	// Return successfully initialized object layer.
 	return fs, nil
-}
-
-// checkDiskFree verifies if disk path has sufficient minimum free disk space and files.
-func (fs fsObjects) checkDiskFree() (err error) {
-	// We don't validate disk space or inode utilization on windows.
-	// Each windows calls to 'GetVolumeInformationW' takes around 3-5seconds.
-	if runtime.GOOS == globalWindowsOSName {
-		return nil
-	}
-
-	var di disk.Info
-	di, err = getDiskInfo(preparePath(fs.fsPath))
-	if err != nil {
-		return err
-	}
-
-	// Remove 5% from free space for cumulative disk space used for journalling, inodes etc.
-	availableDiskSpace := float64(di.Free) * 0.95
-	if int64(availableDiskSpace) <= fs.minFreeSpace {
-		return errDiskFull
-	}
-
-	// Some filesystems do not implement a way to provide total inodes available, instead inodes
-	// are allocated based on available disk space. For example CephFS, StoreNext CVFS, AzureFile driver.
-	// Allow for the available disk to be separately validate and we will validate inodes only if
-	// total inodes are provided by the underlying filesystem.
-	if di.Files != 0 && di.FSType != "NFS" {
-		availableFiles := int64(di.Ffree)
-		if availableFiles <= fs.minFreeInodes {
-			return errDiskFull
-		}
-	}
-
-	// Success.
-	return nil
 }
 
 // Should be called when process shuts down.
