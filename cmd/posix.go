@@ -602,6 +602,11 @@ func (s *posix) createFile(volume, path string) (f *os.File, err error) {
 		return nil, err
 	}
 
+	// Validate if disk is indeed free.
+	if err = checkDiskFree(s.diskPath); err != nil {
+		return nil, err
+	}
+
 	volumeDir, err := s.getVolDir(volume)
 	if err != nil {
 		return nil, err
@@ -669,11 +674,6 @@ func (s *posix) PrepareFile(volume, path string, fileSize int64) (err error) {
 
 	if s.ioErrCount > maxAllowedIOError {
 		return errFaultyDisk
-	}
-
-	// Validate if disk is indeed free.
-	if err = checkDiskFree(s.diskPath); err != nil {
-		return err
 	}
 
 	// Create file if not found
