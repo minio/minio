@@ -212,7 +212,7 @@ func (fs fsObjects) appendPart(bucket, object, uploadID string, part objectPartI
 
 	var offset int64
 	// Read each file part to start writing to the temporary concatenated object.
-	file, size, err := fsOpenFile(partPath, offset)
+	file, err := fsOpenFile(partPath, offset)
 	if err != nil {
 		if err == errFileNotFound {
 			return errPartsMissing
@@ -230,8 +230,14 @@ func (fs fsObjects) appendPart(bucket, object, uploadID string, part objectPartI
 	}
 	defer wfile.Close()
 
+	// Get the size of the part file.
+	st, err := file.Stat()
+	if err != nil {
+		return err
+	}
+
 	// Fallocate more space as we concatenate.
-	if err = fsFAllocate(int(wfile.Fd()), 0, size); err != nil {
+	if err = fsFAllocate(int(wfile.Fd()), 0, st.Size()); err != nil {
 		return err
 	}
 

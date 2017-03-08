@@ -683,18 +683,17 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 				continue
 			}
 
-			objInfo, err := obj.GetObjectInfo(testCase.bucketName, testCase.objectName)
+			var objInfo ObjectInfo
+			var buffer bytes.Buffer
+			var reader io.Reader
+			reader, objInfo, err = obj.GetObject(testCase.bucketName, testCase.objectName, "", nil)
 			if err != nil {
 				t.Fatalf("Test %d: %s: Failed to fetch the copied object: <ERROR> %s", i+1, instanceType, err)
 			}
 			if objInfo.ContentEncoding == streamingContentEncoding {
 				t.Fatalf("Test %d: %s: ContentEncoding is set to \"aws-chunked\" which is unexpected", i+1, instanceType)
 			}
-			buffer := new(bytes.Buffer)
-			err = obj.GetObject(testCase.bucketName, testCase.objectName, 0, int64(testCase.dataLen), buffer)
-			if err != nil {
-				t.Fatalf("Test %d: %s: Failed to fetch the copied object: <ERROR> %s", i+1, instanceType, err)
-			}
+			io.Copy(&buffer, reader)
 			if !bytes.Equal(testCase.data, buffer.Bytes()) {
 				t.Errorf("Test %d: %s: Data Mismatch: Data fetched back from the uploaded object doesn't match the original one.", i+1, instanceType)
 			}
@@ -854,10 +853,12 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			buffer := new(bytes.Buffer)
 
 			// Fetch the object to check whether the content is same as the one uploaded via PutObject.
-			err = obj.GetObject(testCase.bucketName, testCase.objectName, 0, int64(len(bytesData)), buffer)
+			var reader io.Reader
+			reader, _, err = obj.GetObject(testCase.bucketName, testCase.objectName, "", nil)
 			if err != nil {
 				t.Fatalf("Test %d: %s: Failed to fetch the copied object: <ERROR> %s", i+1, instanceType, err)
 			}
+			io.Copy(buffer, reader)
 			if !bytes.Equal(bytesData, buffer.Bytes()) {
 				t.Errorf("Test %d: %s: Data Mismatch: Data fetched back from the uploaded object doesn't match the original one.", i+1, instanceType)
 			}
@@ -897,10 +898,12 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 		if testCase.expectedRespStatus == http.StatusOK {
 			buffer := new(bytes.Buffer)
 			// Fetch the object to check whether the content is same as the one uploaded via PutObject.
-			err = obj.GetObject(testCase.bucketName, testCase.objectName, 0, int64(len(bytesData)), buffer)
+			var reader io.Reader
+			reader, _, err = obj.GetObject(testCase.bucketName, testCase.objectName, "", nil)
 			if err != nil {
 				t.Fatalf("Test %d: %s: Failed to fetch the copied object: <ERROR> %s", i+1, instanceType, err)
 			}
+			io.Copy(buffer, reader)
 			if !bytes.Equal(bytesData, buffer.Bytes()) {
 				t.Errorf("Test %d: %s: Data Mismatch: Data fetched back from the uploaded object doesn't match the original one.", i+1, instanceType)
 			}
@@ -1416,11 +1419,6 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		{generateBytesData(6 * humanize.KiByte)},
 	}
 
-	buffers := []*bytes.Buffer{
-		new(bytes.Buffer),
-		new(bytes.Buffer),
-	}
-
 	// set of inputs for uploading the objects before tests for downloading is done.
 	putObjectInputs := []struct {
 		bucketName    string
@@ -1626,16 +1624,19 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 			t.Fatalf("Test %d: %s:  Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, rec.Code)
 		}
 		if rec.Code == http.StatusOK {
+			var buffer bytes.Buffer
 			// See if the new object is formed.
 			// testing whether the copy was successful.
-			err = obj.GetObject(testCase.bucketName, testCase.newObjectName, 0, int64(len(bytesData[0].byteData)), buffers[0])
+			var reader io.Reader
+			reader, _, err = obj.GetObject(testCase.bucketName, testCase.newObjectName, "", nil)
 			if err != nil {
 				t.Fatalf("Test %d: %s: Failed to fetch the copied object: <ERROR> %s", i+1, instanceType, err)
 			}
-			if !bytes.Equal(bytesData[0].byteData, buffers[0].Bytes()) {
+			io.Copy(&buffer, reader)
+			if !bytes.Equal(bytesData[0].byteData, buffer.Bytes()) {
 				t.Errorf("Test %d: %s: Data Mismatch: Data fetched back from the copied object doesn't match the original one.", i+1, instanceType)
 			}
-			buffers[0].Reset()
+			buffer.Reset()
 		}
 
 		// Verify response of the V2 signed HTTP request.

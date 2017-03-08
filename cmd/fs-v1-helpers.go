@@ -180,51 +180,51 @@ func fsStatFile(statFile string) (os.FileInfo, error) {
 
 // Opens the file at given path, optionally from an offset. Upon success returns
 // a readable stream and the size of the readable stream.
-func fsOpenFile(readPath string, offset int64) (io.ReadCloser, int64, error) {
+func fsOpenFile(readPath string, offset int64) (*os.File, error) {
 	if readPath == "" || offset < 0 {
-		return nil, 0, traceError(errInvalidArgument)
+		return nil, traceError(errInvalidArgument)
 	}
 	if err := checkPathLength(readPath); err != nil {
-		return nil, 0, traceError(err)
+		return nil, traceError(err)
 	}
 
 	fr, err := os.Open(preparePath(readPath))
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, 0, traceError(errFileNotFound)
+			return nil, traceError(errFileNotFound)
 		} else if os.IsPermission(err) {
-			return nil, 0, traceError(errFileAccessDenied)
+			return nil, traceError(errFileAccessDenied)
 		} else if isSysErrNotDir(err) {
 			// File path cannot be verified since one of the parents is a file.
-			return nil, 0, traceError(errFileAccessDenied)
+			return nil, traceError(errFileAccessDenied)
 		} else if isSysErrPathNotFound(err) {
 			// Add specific case for windows.
-			return nil, 0, traceError(errFileNotFound)
+			return nil, traceError(errFileNotFound)
 		}
-		return nil, 0, traceError(err)
+		return nil, traceError(err)
 	}
 
 	// Stat to get the size of the file at path.
 	st, err := fr.Stat()
 	if err != nil {
-		return nil, 0, traceError(err)
+		return nil, traceError(err)
 	}
 
 	// Verify if its not a regular file, since subsequent Seek is undefined.
 	if !st.Mode().IsRegular() {
-		return nil, 0, traceError(errIsNotRegular)
+		return nil, traceError(errIsNotRegular)
 	}
 
 	// Seek to the requested offset.
 	if offset > 0 {
 		_, err = fr.Seek(offset, os.SEEK_SET)
 		if err != nil {
-			return nil, 0, traceError(err)
+			return nil, traceError(err)
 		}
 	}
 
 	// Success.
-	return fr, st.Size(), nil
+	return fr, nil
 }
 
 // Creates a file and copies data from incoming reader. Staging buffer is used by io.CopyBuffer.

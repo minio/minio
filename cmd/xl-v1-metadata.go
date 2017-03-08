@@ -231,6 +231,28 @@ func (m xlMetaV1) ObjectToPartOffset(offset int64) (partIndex int, partOffset in
 	return 0, 0, traceError(InvalidRange{})
 }
 
+// Converts metadata to object info.
+func (m xlMetaV1) ToObjectInfo(bucket, object string) ObjectInfo {
+	objInfo := ObjectInfo{
+		IsDir:           false,
+		Bucket:          bucket,
+		Name:            object,
+		Size:            m.Stat.Size,
+		ModTime:         m.Stat.ModTime,
+		MD5Sum:          m.Meta["md5Sum"],
+		ContentType:     m.Meta["content-type"],
+		ContentEncoding: m.Meta["content-encoding"],
+	}
+
+	// md5Sum has already been extracted into objInfo.MD5Sum.  We
+	// need to remove it from xlMetaMap to avoid it from appearing as
+	// part of response headers. e.g, X-Minio-* or X-Amz-*.
+
+	delete(m.Meta, "md5Sum")
+	objInfo.UserDefined = m.Meta
+	return objInfo
+}
+
 // pickValidXLMeta - picks one valid xlMeta content and returns from a
 // slice of xlmeta content. If no value is found this function panics
 // and dies.

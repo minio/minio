@@ -19,10 +19,10 @@ package cmd
 import (
 	"encoding/hex"
 	"encoding/xml"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"path"
 	"sort"
 	"strconv"
 	"strings"
@@ -99,9 +99,23 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	objectLock.RLock()
 	defer objectLock.RUnlock()
 
-	objInfo, err := objectAPI.GetObjectInfo(bucket, object)
+	byteRange, err := getByteRange(r.Header.Get("Range"))
 	if err != nil {
-		errorIf(err, "Unable to fetch object info.")
+		errorIf(err, "Invalid request range")
+		writeErrorResponse(w, ErrInvalidRange, r.URL)
+		return
+	}
+
+	// Reads the object at the requested range begin and end offsets.
+	reader, objInfo, err := objectAPI.GetObject(bucket, object, byteRange, Conditions(r.Header))
+	if err != nil {
+		switch errorCause(err).(type) {
+		case NotModified:
+			setObjectHeaders(w, objInfo)
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+		errorIf(err, "Unable to fetch object")
 		apiErr := toAPIErrorCode(err)
 		if apiErr == ErrNoSuchKey {
 			apiErr = errAllowableObjectNotFound(bucket, r)
@@ -110,70 +124,15 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Get request range.
-	var hrange *httpRange
-	rangeHeader := r.Header.Get("Range")
-	if rangeHeader != "" {
-		if hrange, err = parseRequestRange(rangeHeader, objInfo.Size); err != nil {
-			// Handle only errInvalidRange
-			// Ignore other parse error and treat it as regular Get request like Amazon S3.
-			if err == errInvalidRange {
-				writeErrorResponse(w, ErrInvalidRange, r.URL)
-				return
-			}
+	// Set headers on the first write.
+	// Set standard object headers.
+	setObjectHeaders(w, objInfo)
 
-			// log the error.
-			errorIf(err, "Invalid request range")
-		}
-	}
+	// Set any additional requested response headers.
+	setGetRespHeaders(w, r.URL.Query())
 
-	// Validate pre-conditions if any.
-	if checkPreconditions(w, r, objInfo) {
-		return
-	}
-
-	// Get the object.
-	var startOffset int64
-	length := objInfo.Size
-	if hrange != nil {
-		startOffset = hrange.offsetBegin
-		length = hrange.getLength()
-	}
-	// Indicates if any data was written to the http.ResponseWriter
-	dataWritten := false
-	// io.Writer type which keeps track if any data was written.
-	writer := funcToWriter(func(p []byte) (int, error) {
-		if !dataWritten {
-			// Set headers on the first write.
-			// Set standard object headers.
-			setObjectHeaders(w, objInfo, hrange)
-
-			// Set any additional requested response headers.
-			setGetRespHeaders(w, r.URL.Query())
-
-			dataWritten = true
-		}
-		return w.Write(p)
-	})
-
-	// Reads the object at startOffset and writes to mw.
-	if err := objectAPI.GetObject(bucket, object, startOffset, length, writer); err != nil {
-		errorIf(err, "Unable to write to client.")
-		if !dataWritten {
-			// Error response only if no data has been written to client yet. i.e if
-			// partial data has already been written before an error
-			// occurred then no point in setting StatusCode and
-			// sending error XML.
-			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-		}
-		return
-	}
-	if !dataWritten {
-		// If ObjectAPI.GetObject did not return error and no data has
-		// been written it would mean that it is a 0-byte object.
-		// call wrter.Write(nil) to set appropriate headers.
-		writer.Write(nil)
-	}
+	// Start copying the data out.
+	io.Copy(w, reader)
 }
 
 // HeadObjectHandler - HEAD Object
@@ -213,34 +172,22 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	// Validate pre-conditions if any.
-	if checkPreconditions(w, r, objInfo) {
+	if err = checkPreconditions(Conditions(r.Header), objInfo); err != nil {
+		notModified := NotModified{}
+		if err == notModified {
+			setObjectHeaders(w, objInfo)
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+		writeErrorResponseHeadersOnly(w, toAPIErrorCode(err))
 		return
 	}
 
 	// Set standard object headers.
-	setObjectHeaders(w, objInfo, nil)
+	setObjectHeaders(w, objInfo)
 
 	// Successful response.
 	w.WriteHeader(http.StatusOK)
-}
-
-// Extract metadata relevant for an CopyObject operation based on conditional
-// header values specified in X-Amz-Metadata-Directive.
-func getCpObjMetadataFromHeader(header http.Header, defaultMeta map[string]string) map[string]string {
-	// if x-amz-metadata-directive says REPLACE then
-	// we extract metadata from the input headers.
-	if isMetadataReplace(header) {
-		return extractMetadataFromHeader(header)
-	}
-
-	// if x-amz-metadata-directive says COPY then we
-	// return the default metadata.
-	if isMetadataCopy(header) {
-		return defaultMeta
-	}
-
-	// Copy is default behavior if not x-amz-metadata-directive is set.
-	return defaultMeta
 }
 
 // CopyObjectHandler - Copy Object
@@ -251,7 +198,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	vars := mux.Vars(r)
 	dstBucket := vars["bucket"]
 	dstObject := vars["object"]
-	cpDestPath := "/" + path.Join(dstBucket, dstObject)
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -286,7 +232,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	cpSrcDstSame := cpSrcPath == cpDestPath
 	// Hold write lock on destination since in both cases
 	// - if source and destination are same
 	// - if source and destination are different
@@ -295,6 +240,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	objectDWLock.Lock()
 	defer objectDWLock.Unlock()
 
+	cpSrcDstSame := strings.EqualFold(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
 	// if source and destination are different, we have to hold
 	// additional read lock as well to protect against writes on
 	// source.
@@ -307,32 +253,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 	}
 
-	objInfo, err := objectAPI.GetObjectInfo(srcBucket, srcObject)
-	if err != nil {
-		errorIf(err, "Unable to fetch object info.")
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-		return
-	}
-
-	// Verify before x-amz-copy-source preconditions before continuing with CopyObject.
-	if checkCopyObjectPreconditions(w, r, objInfo) {
-		return
-	}
-
-	/// maximum Upload size for object in a single CopyObject operation.
-	if isMaxObjectSize(objInfo.Size) {
-		writeErrorResponse(w, ErrEntityTooLarge, r.URL)
-		return
-	}
-
-	defaultMeta := objInfo.UserDefined
-
-	// Make sure to remove saved md5sum, object might have been uploaded
-	// as multipart which doesn't have a standard md5sum, we just let
-	// CopyObject calculate a new one.
-	delete(defaultMeta, "md5Sum")
-
-	newMetadata := getCpObjMetadataFromHeader(r.Header, defaultMeta)
+	metadata := getCpObjMetadataFromHeader(r.Header)
 	// Check if x-amz-metadata-directive was not set to REPLACE and source,
 	// desination are same objects.
 	if !isMetadataReplace(r.Header) && cpSrcDstSame {
@@ -344,7 +265,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 	// Copy source object to destination, if source and destination
 	// object is same then only metadata is updated.
-	objInfo, err = objectAPI.CopyObject(srcBucket, srcObject, dstBucket, dstObject, newMetadata)
+	objInfo, err := objectAPI.CopyObject(srcBucket, srcObject, dstBucket, dstObject, Conditions(r.Header), metadata)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
@@ -584,54 +505,21 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
+	byteRange, err := getByteRange(r.Header.Get("x-amz-copy-source-range"))
+	if err != nil {
+		errorIf(err, "Invalid request range")
+		writeErrorResponse(w, ErrInvalidRange, r.URL)
+		return
+	}
+
 	// Hold read locks on source object only if we are
 	// going to read data from source object.
 	objectSRLock := globalNSMutex.NewNSLock(srcBucket, srcObject)
 	objectSRLock.RLock()
 	defer objectSRLock.RUnlock()
 
-	objInfo, err := objectAPI.GetObjectInfo(srcBucket, srcObject)
-	if err != nil {
-		errorIf(err, "Unable to fetch object info.")
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-		return
-	}
-
-	// Get request range.
-	var hrange *httpRange
-	rangeHeader := r.Header.Get("x-amz-copy-source-range")
-	if rangeHeader != "" {
-		if hrange, err = parseCopyPartRange(rangeHeader, objInfo.Size); err != nil {
-			// Handle only errInvalidRange
-			// Ignore other parse error and treat it as regular Get request like Amazon S3.
-			errorIf(err, "Unable to extract range %s", rangeHeader)
-			writeCopyPartErr(w, err, r.URL)
-			return
-		}
-	}
-
-	// Verify before x-amz-copy-source preconditions before continuing with CopyObject.
-	if checkCopyObjectPartPreconditions(w, r, objInfo) {
-		return
-	}
-
-	// Get the object.
-	var startOffset int64
-	length := objInfo.Size
-	if hrange != nil {
-		length = hrange.getLength()
-		startOffset = hrange.offsetBegin
-	}
-
-	/// maximum copy size for multipart objects in a single operation
-	if isMaxAllowedPartSize(length) {
-		writeErrorResponse(w, ErrEntityTooLarge, r.URL)
-		return
-	}
-
-	// Copy source object to destination, if source and destination
-	// object is same then only metadata is updated.
-	partInfo, err := objectAPI.CopyObjectPart(srcBucket, srcObject, dstBucket, dstObject, uploadID, partID, startOffset, length)
+	// Copy object part from requested offsets with conditions.
+	partInfo, err := objectAPI.CopyObjectPart(srcBucket, srcObject, dstBucket, dstObject, uploadID, partID, byteRange, Conditions(r.Header))
 	if err != nil {
 		errorIf(err, "Unable to perform CopyObjectPart %s/%s", srcBucket, srcObject)
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)

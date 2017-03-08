@@ -103,6 +103,20 @@ func toObjectErr(err error, params ...string) error {
 	return err
 }
 
+// PrecondFailed - requested condition failed.
+type PrecondFailed struct{}
+
+func (e PrecondFailed) Error() string {
+	return "requested condition not satisfied"
+}
+
+// NotModified - content has not modified since the requested condition.
+type NotModified struct{}
+
+func (e NotModified) Error() string {
+	return "content not modified since the requested condition"
+}
+
 // SHA256Mismatch - when content sha256 does not match with what was sent from client.
 type SHA256Mismatch struct{}
 
@@ -326,6 +340,16 @@ type PolicyNesting struct{}
 
 func (e PolicyNesting) Error() string {
 	return "New bucket policy conflicts with an existing policy. Please try again with new prefix."
+}
+
+// InvalidCopyDest - invalid copy destination.
+type InvalidCopyDest struct {
+	DestBucket string
+	DestObject string
+}
+
+func (e InvalidCopyDest) Error() string {
+	return "Invalid copy destination " + pathJoin(e.DestBucket, e.DestObject)
 }
 
 // Check if error type is IncompleteBody.
