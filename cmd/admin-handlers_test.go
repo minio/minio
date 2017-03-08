@@ -1184,7 +1184,7 @@ func TestSetConfigHandler(t *testing.T) {
 		t.Fatalf("Failed to decode set config result json %v", err)
 	}
 
-	if result.Status != true {
+	if !result.Status {
 		t.Error("Expected set-config to succeed, but failed")
 	}
 }

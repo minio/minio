@@ -243,7 +243,7 @@ func testPaging(obj ObjectLayer, instanceType string, c TestErrHandler) {
 	if len(result.Objects) != 0 {
 		c.Errorf("%s: Number of objects in the result different from expected value.", instanceType)
 	}
-	if result.IsTruncated != false {
+	if result.IsTruncated {
 		c.Errorf("%s: Expected IsTruncated to be `false`, but instead found it to be `%v`", instanceType, result.IsTruncated)
 	}
 
@@ -263,7 +263,7 @@ func testPaging(obj ObjectLayer, instanceType string, c TestErrHandler) {
 		if len(result.Objects) != i+1 {
 			c.Errorf("%s: Expected length of objects to be %d, instead found to be %d", instanceType, len(result.Objects), i+1)
 		}
-		if result.IsTruncated != false {
+		if result.IsTruncated {
 			c.Errorf("%s: Expected IsTruncated to be `false`, but instead found it to be `%v`", instanceType, result.IsTruncated)
 		}
 	}
@@ -282,7 +282,7 @@ func testPaging(obj ObjectLayer, instanceType string, c TestErrHandler) {
 		if len(result.Objects) != 5 {
 			c.Errorf("%s: Expected length of objects to be %d, instead found to be %d", instanceType, 5, len(result.Objects))
 		}
-		if result.IsTruncated != true {
+		if !result.IsTruncated {
 			c.Errorf("%s: Expected IsTruncated to be `true`, but instead found it to be `%v`", instanceType, result.IsTruncated)
 		}
 	}
@@ -683,7 +683,7 @@ func testListObjectsTestsForNonExistantBucket(obj ObjectLayer, instanceType stri
 	if len(result.Objects) != 0 {
 		c.Fatalf("%s: Expected number of objects in the result to be `%d`, but instead found `%d`", instanceType, 0, len(result.Objects))
 	}
-	if result.IsTruncated != false {
+	if result.IsTruncated {
 		c.Fatalf("%s: Expected IsTruncated to be `false`, but instead found it to be `%v`", instanceType, result.IsTruncated)
 	}
 	if err.Error() != "Bucket not found: bucket" {

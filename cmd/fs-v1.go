@@ -67,12 +67,7 @@ func initMetaVolumeFS(fsPath, fsUUID string) error {
 	}
 
 	metaMultipartPath := pathJoin(fsPath, minioMetaMultipartBucket)
-	if err := mkdirAll(metaMultipartPath, 0777); err != nil {
-		return err
-	}
-
-	// Return success here.
-	return nil
+	return mkdirAll(metaMultipartPath, 0777)
 
 }
 

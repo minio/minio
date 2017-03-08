@@ -209,10 +209,7 @@ func writeNotification(w http.ResponseWriter, notification map[string][]Notifica
 	_, err = w.Write(append(notificationBytes, crlf...))
 	// Make sure we have flushed, this would set Transfer-Encoding: chunked.
 	w.(http.Flusher).Flush()
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
 // CRLF character used for chunked transfer in accordance with HTTP standards.
