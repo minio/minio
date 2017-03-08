@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -214,7 +214,7 @@ func (a AzureObjects) GetObjectInfo(bucket, object string) (objInfo ObjectInfo, 
 	objInfo.ModTime = t
 	objInfo.Name = object
 	objInfo.Size = prop.ContentLength
-	return
+	return objInfo, nil
 }
 
 // PutObject - Use Azure equivalent CreateBlockBlobFromReader.
