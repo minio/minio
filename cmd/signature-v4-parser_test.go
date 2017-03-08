@@ -569,7 +569,7 @@ func TestDoesV4PresignParamsExist(t *testing.T) {
 func TestParsePreSignV4(t *testing.T) {
 	// converts the duration in seconds into string format.
 	getDurationStr := func(expires int) string {
-		return strconv.FormatInt(int64(expires), 10)
+		return strconv.Itoa(expires)
 	}
 	// used in expected preSignValues, preSignValues.Date is of type time.Time .
 	queryTime := time.Now().UTC()

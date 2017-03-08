@@ -133,7 +133,7 @@ func (xl xlObjects) listObjectsHeal(bucket, prefix, marker, delimiter string, ma
 		nextMarker = objInfo.Name
 		objInfos = append(objInfos, objInfo)
 		i++
-		if walkResult.end == true {
+		if walkResult.end {
 			eof = true
 			break
 		}

@@ -238,12 +238,9 @@ func saveFormatFS(formatPath string, fsFormat *formatConfigV1) error {
 	}
 	defer lk.Close()
 
-	if _, err = lk.Write(metadataBytes); err != nil {
-		return err
-	}
-
+	_, err = lk.Write(metadataBytes)
 	// Success.
-	return nil
+	return err
 }
 
 // Return if the part info in uploadedParts and completeParts are same.

@@ -86,10 +86,7 @@ func isBucketActionAllowed(action, bucket, prefix string) bool {
 	resource := bucketARNPrefix + path.Join(bucket, prefix)
 	var conditionKeyMap map[string]set.StringSet
 	// Validate action, resource and conditions with current policy statements.
-	if !bucketPolicyEvalStatements(action, resource, conditionKeyMap, policy.Statements) {
-		return false
-	}
-	return true
+	return bucketPolicyEvalStatements(action, resource, conditionKeyMap, policy.Statements)
 }
 
 // GetBucketLocationHandler - GET Bucket location.

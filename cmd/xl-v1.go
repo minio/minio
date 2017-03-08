@@ -161,12 +161,7 @@ func newXLObjects(storageDisks []StorageAPI) (ObjectLayer, error) {
 	xl.writeQuorum = writeQuorum
 
 	// Do a quick heal on the buckets themselves for any discrepancies.
-	if err := quickHeal(xl.storageDisks, xl.writeQuorum, xl.readQuorum); err != nil {
-		return xl, err
-	}
-
-	// Return successfully initialized object layer.
-	return xl, nil
+	return xl, quickHeal(xl.storageDisks, xl.writeQuorum, xl.readQuorum)
 }
 
 // Shutdown function for object storage interface.

@@ -1690,9 +1690,7 @@ func removeDiskN(disks []string, n int) {
 // Makes a entire new copy of a StorageAPI slice.
 func deepCopyStorageDisks(storageDisks []StorageAPI) []StorageAPI {
 	newStorageDisks := make([]StorageAPI, len(storageDisks))
-	for i, disk := range storageDisks {
-		newStorageDisks[i] = disk
-	}
+	copy(newStorageDisks, storageDisks)
 	return newStorageDisks
 }
 

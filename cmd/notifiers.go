@@ -98,10 +98,7 @@ func isWebhookQueue(sqsArn arnSQS) bool {
 		return false
 	}
 	rNotify := serverConfig.Notify.GetWebhookByID(sqsArn.AccountID)
-	if !rNotify.Enable {
-		return false
-	}
-	return true
+	return rNotify.Enable
 }
 
 // Returns true if queueArn is for an Redis queue.

@@ -696,7 +696,7 @@ func testUploadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler
 		t.Fatalf("Failed, %v", err)
 	}
 
-	if bytes.Compare(byteBuffer.Bytes(), content) != 0 {
+	if !bytes.Equal(byteBuffer.Bytes(), content) {
 		t.Fatalf("The upload file is different from the download file")
 	}
 
@@ -782,7 +782,7 @@ func testDownloadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandl
 		t.Fatalf("Expected the response status to be 200, but instead found `%d`", code)
 	}
 
-	if bytes.Compare(bodyContent, content) != 0 {
+	if !bytes.Equal(bodyContent, content) {
 		t.Fatalf("The downloaded file is corrupted")
 	}
 
@@ -805,7 +805,7 @@ func testDownloadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandl
 		t.Fatalf("Expected the response status to be 200, but instead found `%d`", code)
 	}
 
-	if bytes.Compare(bodyContent, content) != 0 {
+	if !bytes.Equal(bodyContent, content) {
 		t.Fatalf("The downloaded file is corrupted")
 	}
 }
