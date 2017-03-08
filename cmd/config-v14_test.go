@@ -20,6 +20,8 @@ import (
 	"os"
 	"reflect"
 	"testing"
+
+	"github.com/tidwall/gjson"
 )
 
 func TestServerConfig(t *testing.T) {
@@ -166,4 +168,32 @@ func TestServerConfigWithEnvs(t *testing.T) {
 	if cred.SecretKey != "minio123" {
 		t.Errorf("Expecting access key to be `minio123` found %s", cred.SecretKey)
 	}
+}
+
+func TestCheckDupJSONKeys(t *testing.T) {
+	testCases := []struct {
+		json       string
+		shouldPass bool
+	}{
+		{`{}`, true},
+		{`{"version" : "13"}`, true},
+		{`{"version" : "13", "version": "14"}`, false},
+		{`{"version" : "13", "credential": {"accessKey": "12345"}}`, true},
+		{`{"version" : "13", "credential": {"accessKey": "12345", "accessKey":"12345"}}`, false},
+		{`{"version" : "13", "notify": {"amqp": {"1"}, "webhook":{"3"}}}`, true},
+		{`{"version" : "13", "notify": {"amqp": {"1"}, "amqp":{"3"}}}`, false},
+		{`{"version" : "13", "notify": {"amqp": {"1":{}, "2":{}}}}`, true},
+		{`{"version" : "13", "notify": {"amqp": {"1":{}, "1":{}}}}`, false},
+	}
+
+	for i, testCase := range testCases {
+		err := checkDupJSONKeys(gjson.Result{}, gjson.Parse(testCase.json))
+		if testCase.shouldPass && err != nil {
+			t.Errorf("Test %d, should pass but it failed with err = %v", i+1, err)
+		}
+		if !testCase.shouldPass && err == nil {
+			t.Errorf("Test %d, should fail but it succeed.", i+1)
+		}
+	}
+
 }

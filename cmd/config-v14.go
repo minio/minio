@@ -18,11 +18,13 @@ package cmd
 
 import (
 	"errors"
+	"io/ioutil"
 	"os"
 	"strings"
 	"sync"
 
 	"github.com/minio/minio/pkg/quick"
+	"github.com/tidwall/gjson"
 )
 
 // Read Write mutex for safe access to ServerConfig.
@@ -156,6 +158,60 @@ func loadConfig(envParams envParams) error {
 	}
 
 	return nil
+}
+
+// Check recursively if a key is duplicated in the same json scope
+// e.g.:
+//  `{ "key" : { "key" ..` is accepted
+//  `{ "key" : { "subkey" : "val1", "subkey": "val2" ..` throws subkey duplicated error
+func checkDupJSONKeys(key, value gjson.Result) error {
+
+	// Key occurences map of the current scope to count
+	// if there is any duplicated json key.
+	keysOcc := make(map[string]int)
+
+	// Holds the found error
+	var checkErr error
+
+	// Iterate over keys in the current json scope
+	value.ForEach(func(k, v gjson.Result) bool {
+		// If current key is not null, check if its
+		// value contains some duplicated keys.
+		if k.Type != gjson.Null {
+			keysOcc[k.String()]++
+			checkErr = checkDupJSONKeys(k, v)
+		}
+		return checkErr == nil
+	})
+
+	// Check found err
+	if checkErr != nil {
+		return errors.New(key.String() + " => " + checkErr.Error())
+	}
+
+	// Check for duplicated keys
+	for k, v := range keysOcc {
+		if v > 1 {
+			return errors.New(key.String() + " => `" + k + "` entry is duplicated")
+		}
+	}
+
+	return nil
+}
+
+// validateConfig checks for
+func validateConfig() error {
+	configFile := getConfigFile()
+	// Load config file
+	jsonBytes, err := ioutil.ReadFile(configFile)
+	if err != nil {
+		return err
+	}
+	// Create a fake rootKey since root json doesn't seem to have representation
+	// in gjson library.
+	rootKey := gjson.Result{Type: gjson.String, Str: configFile}
+	// Check if loaded json contains any duplicated keys
+	return checkDupJSONKeys(rootKey, gjson.Parse(string(jsonBytes)))
 }
 
 // serverConfig server config.
