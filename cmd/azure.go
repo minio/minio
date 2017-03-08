@@ -379,26 +379,6 @@ func (a AzureObjects) CompleteMultipartUpload(bucket, object, uploadID string, u
 	return a.GetObjectInfo(bucket, object)
 }
 
-// HealBucket - Not relevant.
-func (a AzureObjects) HealBucket(bucket string) error {
-	return traceError(NotImplemented{})
-}
-
-// ListBucketsHeal - Not relevant.
-func (a AzureObjects) ListBucketsHeal() (buckets []BucketInfo, err error) {
-	return nil, traceError(NotImplemented{})
-}
-
-// HealObject - Not relevant.
-func (a AzureObjects) HealObject(bucket, object string) error {
-	return traceError(NotImplemented{})
-}
-
-// ListObjectsHeal - Not relevant.
-func (a AzureObjects) ListObjectsHeal(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
-	return ListObjectsInfo{}, traceError(NotImplemented{})
-}
-
 // AnonGetObject - SendGET request without authentication.
 // This is needed when clients send GET requests on objects that can be downloaded without auth.
 func (a AzureObjects) AnonGetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) (err error) {
