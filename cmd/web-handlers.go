@@ -708,8 +708,8 @@ type ListAllBucketPoliciesArgs struct {
 	BucketName string `json:"bucketName"`
 }
 
-// Collection of canned bucket policy at a given prefix.
-type bucketAccessPolicy struct {
+// BucketAccessPolicy - Collection of canned bucket policy at a given prefix.
+type BucketAccessPolicy struct {
 	Prefix string              `json:"prefix"`
 	Policy policy.BucketPolicy `json:"policy"`
 }
@@ -717,7 +717,7 @@ type bucketAccessPolicy struct {
 // ListAllBucketPoliciesRep - get all bucket policy reply.
 type ListAllBucketPoliciesRep struct {
 	UIVersion string               `json:"uiVersion"`
-	Policies  []bucketAccessPolicy `json:"policies"`
+	Policies  []BucketAccessPolicy `json:"policies"`
 }
 
 // GetllBucketPolicy - get all bucket policy.
@@ -738,7 +738,7 @@ func (web *webAPIHandlers) ListAllBucketPolicies(r *http.Request, args *ListAllB
 
 	reply.UIVersion = browser.UIVersion
 	for prefix, policy := range policy.GetPolicies(policyInfo.Statements, args.BucketName) {
-		reply.Policies = append(reply.Policies, bucketAccessPolicy{
+		reply.Policies = append(reply.Policies, BucketAccessPolicy{
 			Prefix: prefix,
 			Policy: policy,
 		})

@@ -285,9 +285,9 @@ func (api gatewayAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *h
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
-	var policies []bucketAccessPolicy
+	var policies []BucketAccessPolicy
 	for prefix, policy := range policy.GetPolicies(policyInfo.Statements, bucket) {
-		policies = append(policies, bucketAccessPolicy{
+		policies = append(policies, BucketAccessPolicy{
 			Prefix: prefix,
 			Policy: policy,
 		})
