@@ -520,26 +520,26 @@ func (a AzureObjects) AnonListObjects(bucket, prefix, marker, delimiter string, 
 	}
 	url.RawQuery = q.Encode()
 
-	resp_, err := http.Get(url.String())
+	resp, err := http.Get(url.String())
 	if err != nil {
 		return result, azureToObjectError(traceError(err))
 	}
-	defer resp_.Body.Close()
+	defer resp.Body.Close()
 
-	var resp storage.BlobListResponse
+	var listResp storage.BlobListResponse
 
-	data, err := ioutil.ReadAll(resp_.Body)
+	data, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return result, azureToObjectError(traceError(err))
 	}
-	err = xml.Unmarshal(data, &resp)
+	err = xml.Unmarshal(data, &listResp)
 	if err != nil {
 		return result, azureToObjectError(traceError(err))
 	}
 
-	result.IsTruncated = resp.NextMarker != ""
-	result.NextMarker = resp.NextMarker
-	for _, object := range resp.Blobs {
+	result.IsTruncated = listResp.NextMarker != ""
+	result.NextMarker = listResp.NextMarker
+	for _, object := range listResp.Blobs {
 		t, e := time.Parse(time.RFC1123, object.Properties.LastModified)
 		if e != nil {
 			continue
@@ -554,7 +554,7 @@ func (a AzureObjects) AnonListObjects(bucket, prefix, marker, delimiter string, 
 			ContentEncoding: object.Properties.ContentEncoding,
 		})
 	}
-	result.Prefixes = resp.BlobPrefixes
+	result.Prefixes = listResp.BlobPrefixes
 	return result, nil
 }
 
