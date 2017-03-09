@@ -21,33 +21,51 @@ import (
 	"github.com/minio/cli"
 )
 
+var gatewayTemplate = `NAME:
+ {{.HelpName}} - {{.Usage}}
+
+USAGE:
+ {{.HelpName}} {{if .VisibleFlags}}[FLAGS] {{end}} BACKEND
+{{if .VisibleFlags}}
+FLAGS:
+  {{range .VisibleFlags}}{{.}}
+  {{end}}{{end}}
+ENVIRONMENT VARIABLES:
+  ACCESS:
+     MINIO_ACCESS_KEY: Custom username or access key of 5 to 20 characters in length.
+     MINIO_SECRET_KEY: Custom password or secret key of 8 to 100 characters in length.
+
+EXAMPLES:
+  1. Start minio gateway for Azure Blob Storage.
+      $ {{.HelpName}} azure
+
+  2. Start minio server bound to a specific ADDRESS:PORT.
+      $ {{.HelpName}} --address 192.168.1.101:9000 azure
+
+`
+
 var gatewayCmd = cli.Command{
-	Name:   "gateway",
-	Usage:  "Start in gateway mode.",
-	Action: gatewayMain,
-	Subcommands: []cli.Command{
-		{
-			Name:  "azure",
-			Usage: "Azure cloud",
-			Flags: []cli.Flag{
-				cli.StringFlag{
-					Name:  "address",
-					Value: ":9000",
-					Usage: "Bind to a specific ADDRESS:PORT, ADDRESS can be an IP or hostname.",
-				},
-			},
-			Action: azureMain,
-		},
-	},
+	Name:               "gateway",
+	Usage:              "Start in gateway mode.",
+	Action:             gatewayMain,
+	CustomHelpTemplate: gatewayTemplate,
+	Flags:              serverFlags,
 }
 
-// Handler for 'minio gateway' - show help.
-func gatewayMain(ctx *cli.Context) {
-	cli.ShowSubcommandHelp(ctx)
-}
+// // Handler for 'minio gateway' - show help.
+// func gatewayMain(ctx *cli.Context) {
+// 	// cli.ShowCommandHelpAndExit(ctx, "gateway", 1)
+// }
 
 // Handler for 'minio gateway azure'.
-func azureMain(ctx *cli.Context) {
+func gatewayMain(ctx *cli.Context) {
+	if !ctx.Args().Present() || ctx.Args().First() == "help" {
+		cli.ShowCommandHelpAndExit(ctx, "gateway", 1)
+	}
+	if ctx.Args().First() != "azure" {
+		cli.ShowCommandHelpAndExit(ctx, "gateway", 1)
+	}
+
 	// Azure account key length is higher than the default limit.
 	secretKeyMaxLen = secretKeyMaxLenAzure
 
