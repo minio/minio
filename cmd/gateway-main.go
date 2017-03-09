@@ -98,7 +98,7 @@ func gatewayMain(ctx *cli.Context) {
 	go func() {
 		cert, key := "", ""
 		if globalIsSSL {
-			cert, key = getCertFile(), getKeyFile()
+			cert, key = getPublicCertFile(), getPrivateKeyFile()
 		}
 		fatalIf(apiServer.ListenAndServe(cert, key), "Failed to start minio server.")
 	}()
