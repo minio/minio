@@ -53,11 +53,6 @@ var gatewayCmd = cli.Command{
 	HideHelpCommand:    true,
 }
 
-// // Handler for 'minio gateway' - show help.
-// func gatewayMain(ctx *cli.Context) {
-// 	// cli.ShowCommandHelpAndExit(ctx, "gateway", 1)
-// }
-
 // Handler for 'minio gateway azure'.
 func gatewayMain(ctx *cli.Context) {
 	if !ctx.Args().Present() || ctx.Args().First() == "help" {
