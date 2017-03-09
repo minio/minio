@@ -97,6 +97,7 @@ Minio Server comes with an embedded web based object browser. Point your web bro
 - [Use `s3cmd` with Minio Server](https://docs.minio.io/docs/s3cmd-with-minio)
 - [Use `minio-go` SDK with Minio Server](https://docs.minio.io/docs/golang-client-quickstart-guide)
 - [The Minio documentation website](https://docs.minio.io)
+- [Minio Gateway](https://github.com/minio/minio/blob/master/docs/gateway.md)
 
 ## Contribute to Minio Project
 Please follow Minio [Contributor's Guide](https://github.com/minio/minio/blob/master/CONTRIBUTING.md)
