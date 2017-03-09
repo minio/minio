@@ -134,10 +134,7 @@ func isLocalStorage(ep *url.URL) bool {
 	if globalMinioHost != "" && globalMinioPort != "" {
 		// if --address host:port was specified for distXL we short
 		// circuit only the endPoint that matches host:port
-		if net.JoinHostPort(globalMinioHost, globalMinioPort) == ep.Host {
-			return true
-		}
-		return false
+		return net.JoinHostPort(globalMinioHost, globalMinioPort) == ep.Host
 	}
 	// Split host to extract host information.
 	host, _, err := net.SplitHostPort(ep.Host)

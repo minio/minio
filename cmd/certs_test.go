@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,49 +17,86 @@
 package cmd
 
 import (
+	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
-	"strings"
+	"runtime"
 	"testing"
 )
 
-// Make sure we have a valid certs path.
-func TestGetCertsPath(t *testing.T) {
-	path := getCertsPath()
-	if path == "" {
-		t.Errorf("expected path to not be an empty string, got: '%s'", path)
-	}
-	// Ensure it contains some sort of path separator.
-	if !strings.ContainsRune(path, os.PathSeparator) {
-		t.Errorf("expected path to contain file separator")
-	}
-	// It should also be an absolute path.
-	if !filepath.IsAbs(path) {
-		t.Errorf("expected path to be an absolute path")
+func createTempFile(prefix, content string) (tempFile string, err error) {
+	var tmpfile *os.File
+
+	if tmpfile, err = ioutil.TempFile("", prefix); err != nil {
+		return tempFile, err
 	}
 
-	// This will error if something goes wrong, so just call it.
-	getCertsPath()
+	if _, err = tmpfile.Write([]byte(content)); err != nil {
+		return tempFile, err
+	}
+
+	if err = tmpfile.Close(); err != nil {
+		return tempFile, err
+	}
+
+	tempFile = tmpfile.Name()
+	return tempFile, err
 }
 
-// Ensure that the certificate and key file getters contain their respective
-// file name and endings.
-func TestGetFiles(t *testing.T) {
-	file := getCertFile()
-	if !strings.Contains(file, globalMinioCertFile) {
-		t.Errorf("CertFile does not contain %s", globalMinioCertFile)
+func TestParsePublicCertFile(t *testing.T) {
+	tempFile1, err := createTempFile("public-cert-file", "")
+	if err != nil {
+		t.Fatalf("Unable to create temporary file. %v", err)
 	}
+	defer os.Remove(tempFile1)
 
-	file = getKeyFile()
-	if !strings.Contains(file, globalMinioKeyFile) {
-		t.Errorf("KeyFile does not contain %s", globalMinioKeyFile)
+	tempFile2, err := createTempFile("public-cert-file",
+		`-----BEGIN CERTIFICATE-----
+MIICdTCCAd4CCQCO5G/W1xcE9TANBgkqhkiG9w0BAQUFADB/MQswCQYDVQQGEwJa
+WTEOMAwGA1UECBMFTWluaW8xETAPBgNVBAcTCEludGVybmV0MQ4wDAYDVQQKEwVN
+aW5pbzEOMAwGA1UECxMFTWluaW8xDjAMBgNVBAMTBU1pbmlvMR0wGwYJKoZIhvcN
+AQkBFg50ZXN0c0BtaW5pby5pbzAeFw0xNjEwMTQxMTM0MjJaFw0xNzEwMTQxMTM0
+MjJaMH8xCzAJBgNVBAYTAlpZMQ4wDAYDVQQIEwVNaW5pbzERMA8GA1UEBxMISW50
+ZXJuZXQxDjAMBgNVBA-some-junk-Q4wDAYDVQQLEwVNaW5pbzEOMAwGA1UEAxMF
+TWluaW8xHTAbBgkqhkiG9w0BCQEWDnRlc3RzQG1pbmlvLmlvMIGfMA0GCSqGSIb3
+DQEBAQUAA4GNADCBiQKBgQDwNUYB/Sj79WsUE8qnXzzh2glSzWxUE79sCOpQYK83
+HWkrl5WxlG8ZxDR1IQV9Ex/lzigJu8G+KXahon6a+3n5GhNrYRe5kIXHQHz0qvv4
+aMulqlnYpvSfC83aaO9GVBtwXS/O4Nykd7QBg4nZlazVmsGk7POOjhpjGShRsqpU
+JwIDAQABMA0GCSqGSIb3DQEBBQUAA4GBALqjOA6bD8BEl7hkQ8XwX/owSAL0URDe
+nUfCOsXgIIAqgw4uTCLOfCJVZNKmRT+KguvPAQ6Z80vau2UxPX5Q2Q+OHXDRrEnK
+FjqSBgLP06Qw7a++bshlWGTt5bHWOneW3EQikedckVuIKPkOCib9yGi4VmBBjdFE
+M9ofSEt/bdRD
+-----END CERTIFICATE-----`)
+	if err != nil {
+		t.Fatalf("Unable to create temporary file. %v", err)
 	}
-}
+	defer os.Remove(tempFile2)
 
-// Parses .crt file contents
-func TestParseCertificateChain(t *testing.T) {
-	// given
-	cert := `-----BEGIN CERTIFICATE-----
+	tempFile3, err := createTempFile("public-cert-file",
+		`-----BEGIN CERTIFICATE-----
+MIICdTCCAd4CCQCO5G/W1xcE9TANBgkqhkiG9w0BAQUFADB/MQswCQYDVQQGEwJa
+WTEOMAwGA1UECBMFTWluaW8xETAPBgNVBAcTCEludGVybmV0MQ4wDAYDVQQKEwVN
+aW5pbzEOMAwGA1UECxMFTWluaW8xDjAMBgNVBAMTBU1pbmlvMR0wGwYJKoZIhvcN
+AQkBFg50ZXN0c0BtaW5pby5pbzAeFw0xNjEwMTQxMTM0MjJaFw0xNzEwMTQxMTM0
+MjJaMH8xCzAJBgNVBAYTAlpZMQ4wDAYDVQQIEwVNaW5pbzERMA8GA1UEBxMISW50
+ZXJuZXQxDjAMBgNVBAabababababaQ4wDAYDVQQLEwVNaW5pbzEOMAwGA1UEAxMF
+TWluaW8xHTAbBgkqhkiG9w0BCQEWDnRlc3RzQG1pbmlvLmlvMIGfMA0GCSqGSIb3
+DQEBAQUAA4GNADCBiQKBgQDwNUYB/Sj79WsUE8qnXzzh2glSzWxUE79sCOpQYK83
+HWkrl5WxlG8ZxDR1IQV9Ex/lzigJu8G+KXahon6a+3n5GhNrYRe5kIXHQHz0qvv4
+aMulqlnYpvSfC83aaO9GVBtwXS/O4Nykd7QBg4nZlazVmsGk7POOjhpjGShRsqpU
+JwIDAQABMA0GCSqGSIb3DQEBBQUAA4GBALqjOA6bD8BEl7hkQ8XwX/owSAL0URDe
+nUfCOsXgIIAqgw4uTCLOfCJVZNKmRT+KguvPAQ6Z80vau2UxPX5Q2Q+OHXDRrEnK
+FjqSBgLP06Qw7a++bshlWGTt5bHWOneW3EQikedckVuIKPkOCib9yGi4VmBBjdFE
+M9ofSEt/bdRD
+-----END CERTIFICATE-----`)
+	if err != nil {
+		t.Fatalf("Unable to create temporary file. %v", err)
+	}
+	defer os.Remove(tempFile3)
+
+	tempFile4, err := createTempFile("public-cert-file",
+		`-----BEGIN CERTIFICATE-----
 MIICdTCCAd4CCQCO5G/W1xcE9TANBgkqhkiG9w0BAQUFADB/MQswCQYDVQQGEwJa
 WTEOMAwGA1UECBMFTWluaW8xETAPBgNVBAcTCEludGVybmV0MQ4wDAYDVQQKEwVN
 aW5pbzEOMAwGA1UECxMFTWluaW8xDjAMBgNVBAMTBU1pbmlvMR0wGwYJKoZIhvcN
@@ -74,35 +111,149 @@ JwIDAQABMA0GCSqGSIb3DQEBBQUAA4GBALqjOA6bD8BEl7hkQ8XwX/owSAL0URDe
 nUfCOsXgIIAqgw4uTCLOfCJVZNKmRT+KguvPAQ6Z80vau2UxPX5Q2Q+OHXDRrEnK
 FjqSBgLP06Qw7a++bshlWGTt5bHWOneW3EQikedckVuIKPkOCib9yGi4VmBBjdFE
 M9ofSEt/bdRD
------END CERTIFICATE-----`
-
-	// when
-	certs, err := parseCertificateChain([]byte(cert))
-
-	// then
+-----END CERTIFICATE-----`)
 	if err != nil {
-		t.Fatalf("Could not parse certificate: %s", err)
+		t.Fatalf("Unable to create temporary file. %v", err)
+	}
+	defer os.Remove(tempFile4)
+
+	tempFile5, err := createTempFile("public-cert-file",
+		`-----BEGIN CERTIFICATE-----
+MIICdTCCAd4CCQCO5G/W1xcE9TANBgkqhkiG9w0BAQUFADB/MQswCQYDVQQGEwJa
+WTEOMAwGA1UECBMFTWluaW8xETAPBgNVBAcTCEludGVybmV0MQ4wDAYDVQQKEwVN
+aW5pbzEOMAwGA1UECxMFTWluaW8xDjAMBgNVBAMTBU1pbmlvMR0wGwYJKoZIhvcN
+AQkBFg50ZXN0c0BtaW5pby5pbzAeFw0xNjEwMTQxMTM0MjJaFw0xNzEwMTQxMTM0
+MjJaMH8xCzAJBgNVBAYTAlpZMQ4wDAYDVQQIEwVNaW5pbzERMA8GA1UEBxMISW50
+ZXJuZXQxDjAMBgNVBAoTBU1pbmlvMQ4wDAYDVQQLEwVNaW5pbzEOMAwGA1UEAxMF
+TWluaW8xHTAbBgkqhkiG9w0BCQEWDnRlc3RzQG1pbmlvLmlvMIGfMA0GCSqGSIb3
+DQEBAQUAA4GNADCBiQKBgQDwNUYB/Sj79WsUE8qnXzzh2glSzWxUE79sCOpQYK83
+HWkrl5WxlG8ZxDR1IQV9Ex/lzigJu8G+KXahon6a+3n5GhNrYRe5kIXHQHz0qvv4
+aMulqlnYpvSfC83aaO9GVBtwXS/O4Nykd7QBg4nZlazVmsGk7POOjhpjGShRsqpU
+JwIDAQABMA0GCSqGSIb3DQEBBQUAA4GBALqjOA6bD8BEl7hkQ8XwX/owSAL0URDe
+nUfCOsXgIIAqgw4uTCLOfCJVZNKmRT+KguvPAQ6Z80vau2UxPX5Q2Q+OHXDRrEnK
+FjqSBgLP06Qw7a++bshlWGTt5bHWOneW3EQikedckVuIKPkOCib9yGi4VmBBjdFE
+M9ofSEt/bdRD
+-----END CERTIFICATE-----
+-----BEGIN CERTIFICATE-----
+MIICdTCCAd4CCQCO5G/W1xcE9TANBgkqhkiG9w0BAQUFADB/MQswCQYDVQQGEwJa
+WTEOMAwGA1UECBMFTWluaW8xETAPBgNVBAcTCEludGVybmV0MQ4wDAYDVQQKEwVN
+aW5pbzEOMAwGA1UECxMFTWluaW8xDjAMBgNVBAMTBU1pbmlvMR0wGwYJKoZIhvcN
+AQkBFg50ZXN0c0BtaW5pby5pbzAeFw0xNjEwMTQxMTM0MjJaFw0xNzEwMTQxMTM0
+MjJaMH8xCzAJBgNVBAYTAlpZMQ4wDAYDVQQIEwVNaW5pbzERMA8GA1UEBxMISW50
+ZXJuZXQxDjAMBgNVBAoTBU1pbmlvMQ4wDAYDVQQLEwVNaW5pbzEOMAwGA1UEAxMF
+TWluaW8xHTAbBgkqhkiG9w0BCQEWDnRlc3RzQG1pbmlvLmlvMIGfMA0GCSqGSIb3
+DQEBAQUAA4GNADCBiQKBgQDwNUYB/Sj79WsUE8qnXzzh2glSzWxUE79sCOpQYK83
+HWkrl5WxlG8ZxDR1IQV9Ex/lzigJu8G+KXahon6a+3n5GhNrYRe5kIXHQHz0qvv4
+aMulqlnYpvSfC83aaO9GVBtwXS/O4Nykd7QBg4nZlazVmsGk7POOjhpjGShRsqpU
+JwIDAQABMA0GCSqGSIb3DQEBBQUAA4GBALqjOA6bD8BEl7hkQ8XwX/owSAL0URDe
+nUfCOsXgIIAqgw4uTCLOfCJVZNKmRT+KguvPAQ6Z80vau2UxPX5Q2Q+OHXDRrEnK
+FjqSBgLP06Qw7a++bshlWGTt5bHWOneW3EQikedckVuIKPkOCib9yGi4VmBBjdFE
+M9ofSEt/bdRD
+-----END CERTIFICATE-----`)
+	if err != nil {
+		t.Fatalf("Unable to create temporary file. %v", err)
+	}
+	defer os.Remove(tempFile5)
+
+	nonexistentErr := fmt.Errorf("open nonexistent-file: no such file or directory")
+	if runtime.GOOS == "windows" {
+		// Below concatenation is done to get rid of goline error
+		// "error strings should not be capitalized or end with punctuation or a newline"
+		nonexistentErr = fmt.Errorf("open nonexistent-file:" + " The system cannot find the file specified.")
 	}
 
-	if len(certs) != 1 {
-		t.Fatalf("Expected number of certificates in chain was 1, actual: %d", len(certs))
+	testCases := []struct {
+		certFile          string
+		expectedResultLen int
+		expectedErr       error
+	}{
+		{"nonexistent-file", 0, nonexistentErr},
+		{tempFile1, 0, fmt.Errorf("Empty public certificate file %s", tempFile1)},
+		{tempFile2, 0, fmt.Errorf("Could not read PEM block from file %s", tempFile2)},
+		{tempFile3, 0, fmt.Errorf("asn1: structure error: sequence tag mismatch")},
+		{tempFile4, 1, nil},
+		{tempFile5, 2, nil},
 	}
 
-	if certs[0].Subject.CommonName != "Minio" {
-		t.Fatalf("Expected Subject.CommonName was Minio, actual: %s", certs[0].Subject.CommonName)
+	for _, testCase := range testCases {
+		certs, err := parsePublicCertFile(testCase.certFile)
+
+		if testCase.expectedErr == nil {
+			if err != nil {
+				t.Fatalf("error: expected = <nil>, got = %v", err)
+			}
+		} else if err == nil {
+			t.Fatalf("error: expected = %v, got = <nil>", testCase.expectedErr)
+		} else if testCase.expectedErr.Error() != err.Error() {
+			t.Fatalf("error: expected = %v, got = %v", testCase.expectedErr, err)
+		}
+
+		if len(certs) != testCase.expectedResultLen {
+			t.Fatalf("certs: expected = %v, got = %v", testCase.expectedResultLen, len(certs))
+		}
 	}
 }
 
-// Parses invalid .crt file contents and returns error
-func TestParseInvalidCertificateChain(t *testing.T) {
-	// given
-	cert := `This is now valid certificate`
+func TestGetRootCAs(t *testing.T) {
+	emptydir, err := ioutil.TempDir("", "test-get-root-cas")
+	if err != nil {
+		t.Fatalf("Unable create temp directory. %v", emptydir)
+	}
+	defer os.RemoveAll(emptydir)
 
-	// when
-	_, err := parseCertificateChain([]byte(cert))
+	dir1, err := ioutil.TempDir("", "test-get-root-cas")
+	if err != nil {
+		t.Fatalf("Unable create temp directory. %v", dir1)
+	}
+	defer os.RemoveAll(dir1)
+	if err = os.Mkdir(filepath.Join(dir1, "empty-dir"), 0755); err != nil {
+		t.Fatalf("Unable create empty dir. %v", err)
+	}
 
-	// then
-	if err == nil {
-		t.Fatalf("Expected error but none occurred")
+	dir2, err := ioutil.TempDir("", "test-get-root-cas")
+	if err != nil {
+		t.Fatalf("Unable create temp directory. %v", dir2)
+	}
+	defer os.RemoveAll(dir2)
+	if err = ioutil.WriteFile(filepath.Join(dir2, "empty-file"), []byte{}, 0644); err != nil {
+		t.Fatalf("Unable create test file. %v", err)
+	}
+
+	nonexistentErr := fmt.Errorf("open nonexistent-dir: no such file or directory")
+	if runtime.GOOS == "windows" {
+		// Below concatenation is done to get rid of goline error
+		// "error strings should not be capitalized or end with punctuation or a newline"
+		nonexistentErr = fmt.Errorf("open nonexistent-dir:" + " The system cannot find the file specified.")
+	}
+
+	err1 := fmt.Errorf("read %s: is a directory", filepath.Join(dir1, "empty-dir"))
+	if runtime.GOOS == "windows" {
+		// Below concatenation is done to get rid of goline error
+		// "error strings should not be capitalized or end with punctuation or a newline"
+		err1 = fmt.Errorf("read %s:"+" The handle is invalid.", filepath.Join(dir1, "empty-dir"))
+	}
+
+	testCases := []struct {
+		certCAsDir  string
+		expectedErr error
+	}{
+		{"nonexistent-dir", nonexistentErr},
+		{dir1, err1},
+		{emptydir, nil},
+		{dir2, nil},
+	}
+
+	for _, testCase := range testCases {
+		_, err := getRootCAs(testCase.certCAsDir)
+
+		if testCase.expectedErr == nil {
+			if err != nil {
+				t.Fatalf("error: expected = <nil>, got = %v", err)
+			}
+		} else if err == nil {
+			t.Fatalf("error: expected = %v, got = <nil>", testCase.expectedErr)
+		} else if testCase.expectedErr.Error() != err.Error() {
+			t.Fatalf("error: expected = %v, got = %v", testCase.expectedErr, err)
+		}
 	}
 }

@@ -803,7 +803,7 @@ func (adminAPI adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http
 	// Take a lock on minio/config.json. NB minio is a reserved
 	// bucket name and wouldn't conflict with normal object
 	// operations.
-	configLock := globalNSMutex.NewNSLock(minioReservedBucket, globalMinioConfigFile)
+	configLock := globalNSMutex.NewNSLock(minioReservedBucket, minioConfigFile)
 	configLock.Lock()
 	defer configLock.Unlock()
 

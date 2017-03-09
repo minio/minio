@@ -80,11 +80,12 @@ export const hideDeleteConfirmation = () => {
   }
 }
 
-export const showShareObject = url => {
+export const showShareObject = (object, url) => {
   return {
     type: SET_SHARE_OBJECT,
     shareObject: {
-      url: url,
+      object,
+      url,
       show: true
     }
   }
@@ -100,15 +101,17 @@ export const hideShareObject = () => {
   }
 }
 
-export const shareObject = (object, expiry) => (dispatch, getState) => {
+export const shareObject = (object, days, hours, minutes) => (dispatch, getState) => {
   const {currentBucket, web} = getState()
   let host = location.host
   let bucket = currentBucket
 
   if (!web.LoggedIn()) {
-    dispatch(showShareObject(`${host}/${bucket}/${object}`))
+    dispatch(showShareObject(object, `${host}/${bucket}/${object}`))
     return
   }
+
+  let expiry = days * 24 * 60 * 60 + hours * 60 * 60 + minutes * 60
   web.PresignedGet({
     host,
     bucket,
@@ -116,7 +119,11 @@ export const shareObject = (object, expiry) => (dispatch, getState) => {
     expiry
   })
     .then(obj => {
-      dispatch(showShareObject(obj.url))
+      dispatch(showShareObject(object, obj.url))
+      dispatch(showAlert({
+        type: 'success',
+        message: `Object shared. Expires in ${days} days ${hours} hours ${minutes} minutes.`
+      }))
     })
     .catch(err => {
       dispatch(showAlert({
@@ -412,13 +419,14 @@ export const setLoginError = () => {
   }
 }
 
-export const downloadAllasZip = (url, req, xhr) => {
+export const downloadSelected = (url, req, xhr) => {
   return (dispatch) => {
     xhr.open('POST', url, true)
     xhr.responseType = 'blob'
 
     xhr.onload = function(e) {
       if (this.status == 200) {
+        dispatch(checkedObjectsReset())
         var blob = new Blob([this.response], {
           type: 'application/zip'
         })

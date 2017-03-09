@@ -65,5 +65,5 @@ func main() {
 		console.Fatalln("Go runtime version check failed.", err)
 	}
 
-	minio.Main(os.Args, os.Exit)
+	minio.Main(os.Args)
 }
