@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,10 +22,10 @@ import (
 )
 
 var gatewayTemplate = `NAME:
- {{.HelpName}} - {{.Usage}}
+  {{.HelpName}} - {{.Usage}}
 
 USAGE:
- {{.HelpName}} {{if .VisibleFlags}}[FLAGS] {{end}} BACKEND
+  {{.HelpName}} {{if .VisibleFlags}}[FLAGS] {{end}} BACKEND
 {{if .VisibleFlags}}
 FLAGS:
   {{range .VisibleFlags}}{{.}}
@@ -36,10 +36,10 @@ ENVIRONMENT VARIABLES:
      MINIO_SECRET_KEY: Custom password or secret key of 8 to 100 characters in length.
 
 EXAMPLES:
-  1. Start minio gateway for Azure Blob Storage.
+  1. Start minio gateway server for Azure Blob Storage backend.
       $ {{.HelpName}} azure
 
-  2. Start minio server bound to a specific ADDRESS:PORT.
+  2. Start minio gateway server bound to a specific ADDRESS:PORT.
       $ {{.HelpName}} --address 192.168.1.101:9000 azure
 
 `
@@ -50,6 +50,7 @@ var gatewayCmd = cli.Command{
 	Action:             gatewayMain,
 	CustomHelpTemplate: gatewayTemplate,
 	Flags:              serverFlags,
+	HideHelpCommand:    true,
 }
 
 // // Handler for 'minio gateway' - show help.
