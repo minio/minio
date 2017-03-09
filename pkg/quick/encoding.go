@@ -122,8 +122,7 @@ func saveFileConfig(filename string, v interface{}) error {
 // decoder format according to the filename extension. If no
 // extension is provided, json will be selected by default.
 func loadFileConfig(filename string, v interface{}) error {
-	_, err := os.Stat(filename)
-	if err != nil {
+	if _, err := os.Stat(filename); err != nil {
 		return err
 	}
 	fileData, err := ioutil.ReadFile(filename)
@@ -133,10 +132,6 @@ func loadFileConfig(filename string, v interface{}) error {
 	if runtime.GOOS == "windows" {
 		fileData = []byte(strings.Replace(string(fileData), "\r\n", "\n", -1))
 	}
-	ext := filepath.Ext(filename)
 	// Unmarshal file's content
-	if err := toUnmarshaller(ext)(fileData, v); err != nil {
-		return err
-	}
-	return nil
+	return toUnmarshaller(filepath.Ext(filename))(fileData, v)
 }

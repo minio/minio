@@ -211,10 +211,7 @@ func (adm *AdminClient) listObjectsHeal(bucket, prefix, marker, delimiter string
 	}
 
 	err = xml.NewDecoder(resp.Body).Decode(&toBeHealedObjects)
-	if err != nil {
-		return toBeHealedObjects, err
-	}
-	return toBeHealedObjects, nil
+	return toBeHealedObjects, err
 }
 
 // ListObjectsHeal - Lists upto maxKeys objects that needing heal matching bucket, prefix, marker, delimiter.
