@@ -20,7 +20,6 @@ package madmin
 import (
 	"bytes"
 	"encoding/xml"
-	"errors"
 	"net/http"
 	"net/url"
 )
@@ -33,11 +32,6 @@ type setCredsReq struct {
 
 // SetCredentials - Call Set Credentials API to set new access and secret keys in the specified Minio server
 func (adm *AdminClient) SetCredentials(access, secret string) error {
-
-	// Disallow sending with the server if the connection is not secure
-	if !adm.secure {
-		return errors.New("setting new credentials requires HTTPS connection to the server")
-	}
 
 	// Setup new request
 	reqData := requestData{}
