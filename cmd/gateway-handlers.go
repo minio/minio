@@ -380,3 +380,29 @@ func (api gatewayAPIHandlers) GetBucketPolicyHandler(w http.ResponseWriter, r *h
 	// Write to client.
 	w.Write(policyBytes)
 }
+
+// GetBucketNotificationHandler - This implementation of the GET
+// operation uses the notification subresource to return the
+// notification configuration of a bucket. If notifications are
+// not enabled on the bucket, the operation returns an empty
+// NotificationConfiguration element.
+func (api gatewayAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter, r *http.Request) {
+	writeErrorResponse(w, ErrNotImplemented, r.URL)
+}
+
+// PutBucketNotificationHandler - Minio notification feature enables
+// you to receive notifications when certain events happen in your bucket.
+// Using this API, you can replace an existing notification configuration.
+// The configuration is an XML file that defines the event types that you
+// want Minio to publish and the destination where you want Minio to publish
+// an event notification when it detects an event of the specified type.
+// By default, your bucket has no event notifications configured. That is,
+// the notification configuration will be an empty NotificationConfiguration.
+func (api gatewayAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter, r *http.Request) {
+	writeErrorResponse(w, ErrNotImplemented, r.URL)
+}
+
+// ListenBucketNotificationHandler - list bucket notifications.
+func (api gatewayAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWriter, r *http.Request) {
+	writeErrorResponse(w, ErrNotImplemented, r.URL)
+}
