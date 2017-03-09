@@ -144,6 +144,9 @@ func initConfig() {
 
 // Generic Minio initialization to create/load config, prepare loggers, etc..
 func minioInit(ctx *cli.Context) {
+	// Create certs path.
+	fatalIf(createConfigDir(), "Unable to create \"certs\" directory.")
+
 	// Is TLS configured?.
 	globalIsSSL = isSSL()
 
@@ -155,7 +158,6 @@ func minioInit(ctx *cli.Context) {
 
 	// Init the error tracing module.
 	initError()
-
 }
 
 type serverCmdConfig struct {
@@ -208,11 +210,8 @@ func initServerConfig(c *cli.Context) {
 	// Initialization such as config generating/loading config, enable logging, ..
 	minioInit(c)
 
-	// Create certs path.
-	fatalIf(createCertsPath(), "Unable to create \"certs\" directory.")
-
 	// Load user supplied root CAs
-	loadRootCAs()
+	fatalIf(loadRootCAs(), "Unable to load a CA files")
 
 	// Set system resources to maximum.
 	errorIf(setMaxResources(), "Unable to change resource limit")
@@ -540,7 +539,7 @@ func serverMain(c *cli.Context) {
 	go func() {
 		cert, key := "", ""
 		if globalIsSSL {
-			cert, key = getCertFile(), getKeyFile()
+			cert, key = getPublicCertFile(), getPrivateKeyFile()
 		}
 		fatalIf(apiServer.ListenAndServe(cert, key), "Failed to start minio server.")
 	}()

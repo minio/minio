@@ -66,7 +66,7 @@ func TestServerConfigMigrateInexistentConfig(t *testing.T) {
 	defer removeAll(rootPath)
 
 	setConfigDir(rootPath)
-	configPath := rootPath + "/" + globalMinioConfigFile
+	configPath := rootPath + "/" + minioConfigFile
 
 	// Remove config file
 	if err := os.Remove(configPath); err != nil {
@@ -121,7 +121,7 @@ func TestServerConfigMigrateV2toV14(t *testing.T) {
 	defer removeAll(rootPath)
 
 	setConfigDir(rootPath)
-	configPath := rootPath + "/" + globalMinioConfigFile
+	configPath := rootPath + "/" + minioConfigFile
 
 	// Create a corrupted config file
 	if err := ioutil.WriteFile(configPath, []byte("{ \"version\":\"2\","), 0644); err != nil {
@@ -175,7 +175,7 @@ func TestServerConfigMigrateFaultyConfig(t *testing.T) {
 	defer removeAll(rootPath)
 
 	setConfigDir(rootPath)
-	configPath := rootPath + "/" + globalMinioConfigFile
+	configPath := rootPath + "/" + minioConfigFile
 
 	// Create a corrupted config file
 	if err := ioutil.WriteFile(configPath, []byte("{ \"version\":\""), 0644); err != nil {

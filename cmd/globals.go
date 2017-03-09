@@ -28,12 +28,6 @@ import (
 
 // minio configuration related constants.
 const (
-	globalMinioConfigDir          = ".minio"
-	globalMinioCertsDir           = "certs"
-	globalMinioCertsCADir         = "CAs"
-	globalMinioCertFile           = "public.crt"
-	globalMinioKeyFile            = "private.key"
-	globalMinioConfigFile         = "config.json"
 	globalMinioCertExpireWarnDays = time.Hour * 24 * 30 // 30 days.
 
 	globalMinioDefaultRegion       = "us-east-1"
