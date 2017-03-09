@@ -40,6 +40,16 @@ type amqpNotify struct {
 	AutoDeleted  bool   `json:"autoDeleted"`
 }
 
+func (a *amqpNotify) Validate() error {
+	if !a.Enable {
+		return nil
+	}
+	if _, err := checkNetURL(a.URL); err != nil {
+		return err
+	}
+	return nil
+}
+
 type amqpConn struct {
 	params amqpNotify
 	*amqp.Connection

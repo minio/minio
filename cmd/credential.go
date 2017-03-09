@@ -19,6 +19,7 @@ package cmd
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
 	"os"
 
 	"github.com/minio/mc/pkg/console"
@@ -73,6 +74,16 @@ type credential struct {
 	AccessKey     string `json:"accessKey,omitempty"`
 	SecretKey     string `json:"secretKey,omitempty"`
 	secretKeyHash []byte
+}
+
+func (c *credential) Validate() error {
+	if !isAccessKeyValid(c.AccessKey) {
+		return errors.New("Invalid access key")
+	}
+	if !isSecretKeyValid(c.SecretKey) {
+		return errors.New("Invalid secret key")
+	}
+	return nil
 }
 
 // Generate a bcrypt hashed key for input secret key.

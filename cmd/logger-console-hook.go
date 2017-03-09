@@ -16,12 +16,25 @@
 
 package cmd
 
-import "github.com/Sirupsen/logrus"
+import (
+	"fmt"
+	"strings"
+
+	"github.com/Sirupsen/logrus"
+)
 
 // consoleLogger - default logger if not other logging is enabled.
 type consoleLogger struct {
 	Enable bool   `json:"enable"`
 	Level  string `json:"level"`
+}
+
+func (c *consoleLogger) Validate() error {
+	level := strings.ToLower(c.Level)
+	if level != "error" && level != "fatal" && level != "" {
+		return fmt.Errorf("`%s` level value not recognized", c.Level)
+	}
+	return nil
 }
 
 // enable console logger.
