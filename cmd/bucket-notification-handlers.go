@@ -45,10 +45,6 @@ func (api objectAPIHandlers) GetBucketNotificationHandler(w http.ResponseWriter,
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
 		return
 	}
-	if globalEventNotifier == nil {
-		writeErrorResponse(w, ErrMethodNotAllowed, r.URL)
-		return
-	}
 
 	if s3Error := checkRequestAuthType(r, "", "", serverConfig.GetRegion()); s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
@@ -101,10 +97,6 @@ func (api objectAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter,
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
-		return
-	}
-	if globalEventNotifier == nil {
-		writeErrorResponse(w, ErrMethodNotAllowed, r.URL)
 		return
 	}
 
@@ -254,10 +246,6 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 	objAPI := api.ObjectAPI()
 	if objAPI == nil {
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
-		return
-	}
-	if globalEventNotifier == nil {
-		writeErrorResponse(w, ErrMethodNotAllowed, r.URL)
 		return
 	}
 
