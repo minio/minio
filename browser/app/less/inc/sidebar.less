@@ -7,7 +7,7 @@
 	position: fixed;
 	height: 100%;
 	overflow: hidden;
-	padding: 35px;
+	padding: 25px;
 
 	@media(min-width: @screen-md-min) {
 		.translate3d(0, 0, 0);
@@ -63,15 +63,15 @@
 	height: ~"calc(100vh - 260px)";
 	overflow: auto;
 	padding: 0;
-	margin: 0 -35px;
+	margin: 0 -25px;
 
 	& li {
 		position: relative;
 
 		& > a {
 			display: block;
-			padding: 10px 40px 12px 65px;
-			.text-overflow();
+			padding: 10px 45px 12px 55px;
+			word-wrap: break-word;
 
 			&:before {
 				font-family: FontAwesome;
@@ -79,7 +79,7 @@
 				font-size: 17px;
 				position: absolute;
 				top: 10px;
-				left: 35px;
+				left: 25px;
 				.opacity(0.8);
 			}
 
@@ -95,7 +95,7 @@
 		}
 
 		&.active {
-			background-color: rgba(0, 0, 0, 0.2);
+			background-color: #282e32;
 
 			& > a {
 				color: @white;
@@ -139,10 +139,10 @@
 	position: absolute;
 	top: 0;
 	right: 0;
-	width: 40px;
+	width: 35px;
 	height: 100%;
 	cursor: pointer;
-	background: url(../../img/more-h-light.svg) no-repeat left;
+	background: url(../../img/more-h-light.svg) no-repeat top 20px left;
 }
 
 /* Scrollbar */
