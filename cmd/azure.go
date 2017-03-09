@@ -58,7 +58,7 @@ func azureToObjectError(err error, params ...string) error {
 		// have StatusCode to help to convert to object errors.
 		return err
 	}
-	var objErr error
+	objErr := actualErr
 	switch azureErr.StatusCode {
 	case http.StatusNotFound:
 		objErr = ObjectNotFound{bucket, object}
