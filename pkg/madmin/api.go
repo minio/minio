@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -276,12 +276,7 @@ func (c AdminClient) dumpHTTP(req *http.Request, resp *http.Response) error {
 
 	// Ends the http dump.
 	_, err = fmt.Fprintln(c.traceOutput, "---------END-HTTP---------")
-	if err != nil {
-		return err
-	}
-
-	// Returns success.
-	return nil
+	return err
 }
 
 // do - execute http request.
