@@ -71,10 +71,8 @@ verifiers: vet fmt lint cyclo spelling
 
 vet:
 	@echo "Running $@:"
-	@go tool vet -all ./cmd
-	@go tool vet -all ./pkg
-	@go tool vet -shadow=true ./cmd
-	@go tool vet -shadow=true ./pkg
+	@go vet github.com/minio/minio/cmd/...
+	@go vet github.com/minio/minio/pkg/...
 
 fmt:
 	@echo "Running $@:"
