@@ -30,6 +30,8 @@ type GatewayLayer interface {
 	SetBucketPolicies(string, []BucketAccessPolicy) error
 	GetBucketPolicies(string) ([]BucketAccessPolicy, error)
 	DeleteBucketPolicies(string) error
+	AnonListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (result ListObjectsInfo, err error)
+	AnonGetBucketInfo(bucket string) (bucketInfo BucketInfo, err error)
 }
 
 // Implements and provides http handlers for S3 API.

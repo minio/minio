@@ -18,9 +18,12 @@ package cmd
 
 import (
 	"encoding/base64"
+	"encoding/xml"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -96,6 +99,34 @@ func (a AzureObjects) StorageInfo() StorageInfo {
 // MakeBucket - Create bucket.
 func (a AzureObjects) MakeBucket(bucket string) error {
 	return azureToObjectError(traceError(a.client.CreateContainer(bucket, storage.ContainerAccessTypePrivate)), bucket)
+}
+
+// AnonGetBucketInfo - Get bucket metadata.
+func (a AzureObjects) AnonGetBucketInfo(bucket string) (bucketInfo BucketInfo, err error) {
+	url, err := url.Parse(a.client.GetBlobURL(bucket, ""))
+	if err != nil {
+		return bucketInfo, azureToObjectError(traceError(err))
+	}
+	url.RawQuery = "restype=container"
+	resp, err := http.Head(url.String())
+	if err != nil {
+		return bucketInfo, azureToObjectError(traceError(err), bucket)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return bucketInfo, azureToObjectError(traceError(errUnexpected), bucket)
+	}
+
+	t, err := time.Parse(time.RFC1123, resp.Header.Get("Last-Modified"))
+	if err != nil {
+		return bucketInfo, traceError(err)
+	}
+	bucketInfo = BucketInfo{
+		Name:    bucket,
+		Created: t,
+	}
+	return bucketInfo, nil
 }
 
 // GetBucketInfo - Get bucket metadata.
@@ -442,6 +473,89 @@ func (a AzureObjects) AnonGetObjectInfo(bucket, object string) (objInfo ObjectIn
 	objInfo.Name = object
 	objInfo.Size = contentLength
 	return
+}
+
+// Copied from github.com/Azure/azure-sdk-for-go/storage/blob.go
+func azureListBlobsGetParameters(p storage.ListBlobsParameters) url.Values {
+	out := url.Values{}
+
+	if p.Prefix != "" {
+		out.Set("prefix", p.Prefix)
+	}
+	if p.Delimiter != "" {
+		out.Set("delimiter", p.Delimiter)
+	}
+	if p.Marker != "" {
+		out.Set("marker", p.Marker)
+	}
+	if p.Include != "" {
+		out.Set("include", p.Include)
+	}
+	if p.MaxResults != 0 {
+		out.Set("maxresults", fmt.Sprintf("%v", p.MaxResults))
+	}
+	if p.Timeout != 0 {
+		out.Set("timeout", fmt.Sprintf("%v", p.Timeout))
+	}
+
+	return out
+}
+
+// AnonListObjects - Use Azure equivalent ListBlobs.
+func (a AzureObjects) AnonListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (result ListObjectsInfo, err error) {
+	params := storage.ListBlobsParameters{
+		Prefix:     prefix,
+		Marker:     marker,
+		Delimiter:  delimiter,
+		MaxResults: uint(maxKeys),
+	}
+
+	q := azureListBlobsGetParameters(params)
+	q.Set("restype", "container")
+	q.Set("comp", "list")
+
+	url, err := url.Parse(a.client.GetBlobURL(bucket, ""))
+	if err != nil {
+		return result, azureToObjectError(traceError(err))
+	}
+	url.RawQuery = q.Encode()
+
+	resp_, err := http.Get(url.String())
+	if err != nil {
+		return result, azureToObjectError(traceError(err))
+	}
+	defer resp_.Body.Close()
+
+	var resp storage.BlobListResponse
+
+	data, err := ioutil.ReadAll(resp_.Body)
+	if err != nil {
+		return result, azureToObjectError(traceError(err))
+	}
+	err = xml.Unmarshal(data, &resp)
+	if err != nil {
+		return result, azureToObjectError(traceError(err))
+	}
+
+	result.IsTruncated = resp.NextMarker != ""
+	result.NextMarker = resp.NextMarker
+	for _, object := range resp.Blobs {
+		t, e := time.Parse(time.RFC1123, object.Properties.LastModified)
+		if e != nil {
+			continue
+		}
+		result.Objects = append(result.Objects, ObjectInfo{
+			Bucket:          bucket,
+			Name:            object.Name,
+			ModTime:         t,
+			Size:            object.Properties.ContentLength,
+			MD5Sum:          object.Properties.Etag,
+			ContentType:     object.Properties.ContentType,
+			ContentEncoding: object.Properties.ContentEncoding,
+		})
+	}
+	result.Prefixes = resp.BlobPrefixes
+	return result, nil
 }
 
 // SetBucketPolicies - Azure supports three types of container policies:

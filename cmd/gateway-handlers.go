@@ -434,3 +434,117 @@ func (api gatewayAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http
 	// Write success response.
 	writeSuccessNoContent(w)
 }
+
+// ListObjectsV1Handler - GET Bucket (List Objects) Version 1.
+// --------------------------
+// This implementation of the GET operation returns some or all (up to 1000)
+// of the objects in a bucket. You can use the request parameters as selection
+// criteria to return a subset of the objects in a bucket.
+//
+func (api gatewayAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *http.Request) {
+	vars := router.Vars(r)
+	bucket := vars["bucket"]
+
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+		return
+	}
+
+	reqAuthType := getRequestAuthType(r)
+
+	switch reqAuthType {
+	case authTypePresignedV2, authTypeSignedV2:
+		// Signature V2 validation.
+		s3Error := isReqAuthenticatedV2(r)
+		if s3Error != ErrNone {
+			errorIf(errSignatureMismatch, dumpRequest(r))
+			writeErrorResponse(w, s3Error, r.URL)
+			return
+		}
+	case authTypeSigned, authTypePresigned:
+		s3Error := isReqAuthenticated(r, serverConfig.GetRegion())
+		if s3Error != ErrNone {
+			errorIf(errSignatureMismatch, dumpRequest(r))
+			writeErrorResponse(w, s3Error, r.URL)
+			return
+		}
+	}
+
+	// Extract all the litsObjectsV1 query params to their native values.
+	prefix, marker, delimiter, maxKeys, _ := getListObjectsV1Args(r.URL.Query())
+
+	// Validate all the query params before beginning to serve the request.
+	if s3Error := validateListObjectsArgs(prefix, marker, delimiter, maxKeys); s3Error != ErrNone {
+		writeErrorResponse(w, s3Error, r.URL)
+		return
+	}
+
+	listObjects := objectAPI.ListObjects
+	if reqAuthType == authTypeAnonymous {
+		listObjects = objectAPI.AnonListObjects
+	}
+	// Inititate a list objects operation based on the input params.
+	// On success would return back ListObjectsInfo object to be
+	// marshalled into S3 compatible XML header.
+	listObjectsInfo, err := listObjects(bucket, prefix, marker, delimiter, maxKeys)
+	if err != nil {
+		errorIf(err, "Unable to list objects.")
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+	response := generateListObjectsV1Response(bucket, prefix, marker, delimiter, maxKeys, listObjectsInfo)
+
+	// Write success response.
+	writeSuccessResponseXML(w, encodeResponse(response))
+}
+
+// HeadBucketHandler - HEAD Bucket
+// ----------
+// This operation is useful to determine if a bucket exists.
+// The operation returns a 200 OK if the bucket exists and you
+// have permission to access it. Otherwise, the operation might
+// return responses such as 404 Not Found and 403 Forbidden.
+func (api gatewayAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.Request) {
+	vars := router.Vars(r)
+	bucket := vars["bucket"]
+
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponseHeadersOnly(w, ErrServerNotInitialized)
+		return
+	}
+
+	reqAuthType := getRequestAuthType(r)
+
+	switch reqAuthType {
+	case authTypePresignedV2, authTypeSignedV2:
+		// Signature V2 validation.
+		s3Error := isReqAuthenticatedV2(r)
+		if s3Error != ErrNone {
+			errorIf(errSignatureMismatch, dumpRequest(r))
+			writeErrorResponse(w, s3Error, r.URL)
+			return
+		}
+	case authTypeSigned, authTypePresigned:
+		s3Error := isReqAuthenticated(r, serverConfig.GetRegion())
+		if s3Error != ErrNone {
+			errorIf(errSignatureMismatch, dumpRequest(r))
+			writeErrorResponse(w, s3Error, r.URL)
+			return
+		}
+	}
+
+	getBucketInfo := objectAPI.GetBucketInfo
+	if reqAuthType == authTypeAnonymous {
+		getBucketInfo = objectAPI.AnonGetBucketInfo
+	}
+
+	if _, err := getBucketInfo(bucket); err != nil {
+		errorIf(err, "Unable to fetch bucket info.")
+		writeErrorResponseHeadersOnly(w, toAPIErrorCode(err))
+		return
+	}
+
+	writeSuccessResponseHeadersOnly(w)
+}
