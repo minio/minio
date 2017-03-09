@@ -373,7 +373,7 @@ func (web webAPIHandlers) GenerateAuth(r *http.Request, args *WebGenericArgs, re
 	if !isHTTPRequestValid(r) {
 		return toJSONError(errAuthentication)
 	}
-	cred := newCredential()
+	cred := mustGetNewCredential()
 	reply.AccessKey = cred.AccessKey
 	reply.SecretKey = cred.SecretKey
 	reply.UIVersion = browser.UIVersion
@@ -404,14 +404,9 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 		return toJSONError(errChangeCredNotAllowed)
 	}
 
-	// As we already validated the authentication, we save given access/secret keys.
-	if err := validateAuthKeys(args.AccessKey, args.SecretKey); err != nil {
+	creds, err := createCredential(args.AccessKey, args.SecretKey)
+	if err != nil {
 		return toJSONError(err)
-	}
-
-	creds := credential{
-		AccessKey: args.AccessKey,
-		SecretKey: args.SecretKey,
 	}
 
 	// Notify all other Minio peers to update credentials
@@ -421,7 +416,7 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 	serverConfig.SetCredential(creds)
 
 	// Persist updated credentials.
-	if err := serverConfig.Save(); err != nil {
+	if err = serverConfig.Save(); err != nil {
 		errsMap[globalMinioAddr] = err
 	}
 

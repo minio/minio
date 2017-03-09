@@ -63,9 +63,9 @@ func TestBrowserPeerRPC(t *testing.T) {
 // Tests for browser peer rpc.
 func (s *TestRPCBrowserPeerSuite) testBrowserPeerRPC(t *testing.T) {
 	// Construct RPC call arguments.
-	creds := credential{
-		AccessKey: "abcd1",
-		SecretKey: "abcd1234",
+	creds, err := createCredential("abcd1", "abcd1234")
+	if err != nil {
+		t.Fatalf("unable to create credential. %v", err)
 	}
 
 	// Validate for invalid token.
@@ -73,7 +73,7 @@ func (s *TestRPCBrowserPeerSuite) testBrowserPeerRPC(t *testing.T) {
 	args.AuthToken = "garbage"
 	rclient := newRPCClient(s.testAuthConf.serverAddr, s.testAuthConf.serviceEndpoint, false)
 	defer rclient.Close()
-	err := rclient.Call("BrowserPeer.SetAuthPeer", &args, &AuthRPCReply{})
+	err = rclient.Call("BrowserPeer.SetAuthPeer", &args, &AuthRPCReply{})
 	if err != nil {
 		if err.Error() != errInvalidToken.Error() {
 			t.Fatal(err)

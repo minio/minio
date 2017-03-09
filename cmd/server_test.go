@@ -94,7 +94,7 @@ func (s *TestSuiteCommon) TearDownSuite(c *C) {
 }
 
 func (s *TestSuiteCommon) TestAuth(c *C) {
-	cred := newCredential()
+	cred := mustGetNewCredential()
 
 	c.Assert(len(cred.AccessKey), Equals, accessKeyMaxLen)
 	c.Assert(len(cred.SecretKey), Equals, secretKeyMaxLen)

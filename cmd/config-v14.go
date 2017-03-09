@@ -57,7 +57,7 @@ func newServerConfigV14() *serverConfigV14 {
 		Logger:  &logger{},
 		Notify:  &notifier{},
 	}
-	srvCfg.SetCredential(newCredential())
+	srvCfg.SetCredential(mustGetNewCredential())
 	srvCfg.SetBrowser("on")
 	// Enable console logger by default on a fresh run.
 	srvCfg.Logger.Console = consoleLogger{
@@ -253,8 +253,8 @@ func validateConfig() error {
 	}
 
 	// Validate credential field
-	if err := srvCfg.Credential.Validate(); err != nil {
-		return err
+	if !srvCfg.Credential.IsValid() {
+		return errors.New("invalid credential")
 	}
 
 	// Validate logger field
@@ -303,7 +303,7 @@ func (s *serverConfigV14) SetCredential(creds credential) {
 	defer serverConfigMu.Unlock()
 
 	// Set updated credential.
-	s.Credential = newCredentialWithKeys(creds.AccessKey, creds.SecretKey)
+	s.Credential = creds
 }
 
 // GetCredentials get current credentials.

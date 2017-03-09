@@ -316,7 +316,11 @@ func TestIsReqAuthenticated(t *testing.T) {
 	}
 	defer removeAll(path)
 
-	creds := newCredentialWithKeys("myuser", "mypassword")
+	creds, err := createCredential("myuser", "mypassword")
+	if err != nil {
+		t.Fatalf("unable create credential, %s", err)
+	}
+
 	serverConfig.SetCredential(creds)
 
 	// List of test cases for validating http request authentication.
