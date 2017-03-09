@@ -104,6 +104,9 @@ func newGatewayConfig(accessKey, secretKey, region string) error {
 		SecretKey: secretKey,
 	})
 
+	// Set default printing to console.
+	srvCfg.Logger.SetConsole(consoleLogger{true, "error"})
+
 	// Set custom region.
 	srvCfg.SetRegion(region)
 
@@ -140,6 +143,9 @@ func gatewayMain(ctx *cli.Context) {
 	if err != nil {
 		console.Fatalf("Unable to initialize gateway config. Error: %s", err)
 	}
+
+	// Enable console logging.
+	enableConsoleLogger()
 
 	// Get quiet flag from command line argument.
 	quietFlag := ctx.Bool("quiet") || ctx.GlobalBool("quiet")
@@ -187,9 +193,7 @@ func gatewayMain(ctx *cli.Context) {
 	}()
 
 	apiEndPoints, err := finalizeAPIEndpoints(apiServer.Addr)
-	if err != nil {
-		console.Fatalf("Unable to finalize API endpoints for %s. Error: %s\n", apiServer.Addr, err)
-	}
+	fatalIf(err, "Unable to finalize API endpoints for %s", apiServer.Addr)
 
 	// Once endpoints are finalized, initialize the new object api.
 	globalObjLayerMutex.Lock()
