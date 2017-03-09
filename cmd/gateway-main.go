@@ -17,23 +17,27 @@
 package cmd
 
 import (
+	"fmt"
+	"os"
+
 	"github.com/gorilla/mux"
 	"github.com/minio/cli"
+	"github.com/minio/mc/pkg/console"
 )
 
 var gatewayTemplate = `NAME:
   {{.HelpName}} - {{.Usage}}
 
 USAGE:
-  {{.HelpName}} {{if .VisibleFlags}}[FLAGS] {{end}} BACKEND
+  {{.HelpName}} {{if .VisibleFlags}}[FLAGS]{{end}} BACKEND
 {{if .VisibleFlags}}
 FLAGS:
   {{range .VisibleFlags}}{{.}}
   {{end}}{{end}}
 ENVIRONMENT VARIABLES:
   ACCESS:
-     MINIO_ACCESS_KEY: Custom username or access key of 5 to 20 characters in length.
-     MINIO_SECRET_KEY: Custom password or secret key of 8 to 100 characters in length.
+     MINIO_ACCESS_KEY: Username or access key of your storage backend.
+     MINIO_SECRET_KEY: Password or secret key of your storage backend.
 
 EXAMPLES:
   1. Start minio gateway server for Azure Blob Storage backend.
@@ -41,37 +45,114 @@ EXAMPLES:
 
   2. Start minio gateway server bound to a specific ADDRESS:PORT.
       $ {{.HelpName}} --address 192.168.1.101:9000 azure
-
 `
 
 var gatewayCmd = cli.Command{
 	Name:               "gateway",
-	Usage:              "Start in gateway mode.",
+	Usage:              "Start object storage gateway server.",
 	Action:             gatewayMain,
 	CustomHelpTemplate: gatewayTemplate,
-	Flags:              serverFlags,
-	HideHelpCommand:    true,
+	Flags: append(serverFlags, cli.BoolFlag{
+		Name:  "quiet",
+		Usage: "Disable startup banner.",
+	}),
+	HideHelpCommand: true,
 }
 
-// Handler for 'minio gateway azure'.
+// Represents the type of the gateway backend.
+type gatewayBackend string
+
+const (
+	azureBackend gatewayBackend = "azure"
+	// Add more backends here.
+)
+
+// Returns access and secretkey set from environment variables.
+func mustGetGatewayCredsFromEnv() (accessKey, secretKey string) {
+	// Fetch access keys from environment variables.
+	accessKey = os.Getenv("MINIO_ACCESS_KEY")
+	secretKey = os.Getenv("MINIO_SECRET_KEY")
+	if accessKey == "" || secretKey == "" {
+		console.Fatalln("Access and secret keys are mandatory to run Minio gateway server.")
+	}
+	return accessKey, secretKey
+}
+
+// Initialize gateway layer depending on the backend type.
+// Supported backend types are
+//
+// - Azure Blob Storage.
+// - Add your favorite backend here.
+func newGatewayLayer(backendType, accessKey, secretKey string) (GatewayLayer, error) {
+	if gatewayBackend(backendType) != azureBackend {
+		return nil, fmt.Errorf("Unrecognized backend type %s", backendType)
+	}
+	return newAzureLayer(accessKey, secretKey)
+}
+
+// Initialize a new gateway config.
+//
+// DO NOT save this config, this is meant to be
+// only used in memory.
+func newGatewayConfig(accessKey, secretKey, region string) error {
+	// Initialize server config.
+	srvCfg := newServerConfigV14()
+
+	// If env is set for a fresh start, save them to config file.
+	srvCfg.SetCredential(credential{
+		AccessKey: accessKey,
+		SecretKey: secretKey,
+	})
+
+	// Set custom region.
+	srvCfg.SetRegion(region)
+
+	// Create certs path for SSL configuration.
+	if err := createConfigDir(); err != nil {
+		return err
+	}
+
+	// hold the mutex lock before a new config is assigned.
+	// Save the new config globally.
+	// unlock the mutex.
+	serverConfigMu.Lock()
+	serverConfig = srvCfg
+	serverConfigMu.Unlock()
+
+	return nil
+}
+
+// Handler for 'minio gateway'.
 func gatewayMain(ctx *cli.Context) {
 	if !ctx.Args().Present() || ctx.Args().First() == "help" {
 		cli.ShowCommandHelpAndExit(ctx, "gateway", 1)
 	}
-	if ctx.Args().First() != "azure" {
-		cli.ShowCommandHelpAndExit(ctx, "gateway", 1)
+
+	// Fetch access and secret key from env.
+	accessKey, secretKey := mustGetGatewayCredsFromEnv()
+
+	// Initialize new gateway config.
+	//
+	// TODO: add support for custom region when we add
+	// support for S3 backend storage, currently this can
+	// default to "us-east-1"
+	err := newGatewayConfig(accessKey, secretKey, "us-east-1")
+	if err != nil {
+		console.Fatalf("Unable to initialize gateway config. Error: %s", err)
 	}
 
-	// Azure account key length is higher than the default limit.
-	secretKeyMaxLen = secretKeyMaxLenAzure
+	// Get quiet flag from command line argument.
+	quietFlag := ctx.Bool("quiet") || ctx.GlobalBool("quiet")
 
-	initServerConfig(ctx)
+	// First argument is selected backend type.
+	backendType := ctx.Args().First()
 
-	creds := serverConfig.GetCredential()
-	newObject, err := newAzureLayer(creds.AccessKey, creds.SecretKey)
-	fatalIf(err, "Unable to init the azure module.")
+	newObject, err := newGatewayLayer(backendType, accessKey, secretKey)
+	if err != nil {
+		console.Fatalf("Unable to initialize gateway layer. Error: %s", err)
+	}
 
-	initNSLock(globalIsDistXL)
+	initNSLock(false) // Enable local namespace lock.
 
 	router := mux.NewRouter().SkipClean(true)
 	registerGatewayAPIRouter(router, newObject)
@@ -89,10 +170,10 @@ func gatewayMain(ctx *cli.Context) {
 		setAuthHandler,
 	}
 
-	handler := registerHandlers(router, handlerFns...)
+	apiServer := NewServerMux(ctx.String("address"), registerHandlers(router, handlerFns...))
 
-	serverAddr := ctx.String("address")
-	apiServer := NewServerMux(serverAddr, handler)
+	// Set if we are SSL enabled S3 gateway.
+	globalIsSSL = isSSL()
 
 	// Start server, automatically configures TLS if certs are available.
 	go func() {
@@ -100,16 +181,25 @@ func gatewayMain(ctx *cli.Context) {
 		if globalIsSSL {
 			cert, key = getPublicCertFile(), getPrivateKeyFile()
 		}
-		fatalIf(apiServer.ListenAndServe(cert, key), "Failed to start minio server.")
+		if aerr := apiServer.ListenAndServe(cert, key); aerr != nil {
+			console.Fatalf("Failed to start minio server. Error: %s\n", aerr)
+		}
 	}()
 
 	apiEndPoints, err := finalizeAPIEndpoints(apiServer.Addr)
-	fatalIf(err, "Unable to finalize API endpoints for %s", apiServer.Addr)
+	if err != nil {
+		console.Fatalf("Unable to finalize API endpoints for %s. Error: %s\n", apiServer.Addr, err)
+	}
+
+	// Once endpoints are finalized, initialize the new object api.
+	globalObjLayerMutex.Lock()
+	globalObjectAPI = newObject
+	globalObjLayerMutex.Unlock()
 
 	// Prints the formatted startup message once object layer is initialized.
-	printStartupMessage(apiEndPoints)
-
-	globalObjectAPI = newObject
+	if !quietFlag {
+		printGatewayStartupMessage(apiEndPoints, accessKey, secretKey)
+	}
 
 	<-globalServiceDoneCh
 }
