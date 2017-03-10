@@ -211,13 +211,7 @@ func (a AzureObjects) ListObjects(bucket, prefix, marker, delimiter string, maxK
 
 // GetObject - Use Azure equivalent GetBlobRange.
 func (a AzureObjects) GetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) (err error) {
-	var byteRange string
-
-	if length == -1 {
-		byteRange = fmt.Sprintf("%d-", startOffset)
-	} else {
-		byteRange = fmt.Sprintf("%d-%d", startOffset, startOffset+length-1)
-	}
+	byteRange := fmt.Sprintf("bytes=%d-%d", startOffset, startOffset+length-1)
 
 	rc, err := a.client.GetBlobRange(bucket, object, byteRange, nil)
 	if err != nil {
@@ -418,13 +412,7 @@ func (a AzureObjects) AnonGetObject(bucket, object string, startOffset int64, le
 	if err != nil {
 		return azureToObjectError(traceError(err), bucket, object)
 	}
-	var byteRange string
-
-	if length == -1 {
-		byteRange = fmt.Sprintf("%d-", startOffset)
-	} else {
-		byteRange = fmt.Sprintf("%d-%d", startOffset, startOffset+length-1)
-	}
+	byteRange := fmt.Sprintf("bytes=%d-%d", startOffset, startOffset+length-1)
 
 	req.Header.Add("Range", byteRange)
 
@@ -567,13 +555,13 @@ func (a AzureObjects) AnonListObjects(bucket, prefix, marker, delimiter string, 
 func (a AzureObjects) SetBucketPolicies(bucket string, policies []BucketAccessPolicy) error {
 	prefix := bucket + "/*" // For all objects inside the bucket.
 	if len(policies) != 1 {
-		return traceError(PrefixAccessDenied{})
+		return traceError(NotImplemented{})
 	}
 	if policies[0].Prefix != prefix {
-		return traceError(PrefixAccessDenied{})
+		return traceError(NotImplemented{})
 	}
 	if policies[0].Policy != policy.BucketPolicyReadOnly {
-		return traceError(PrefixAccessDenied{})
+		return traceError(NotImplemented{})
 	}
 	perm := storage.ContainerPermissions{
 		AccessType:     storage.ContainerAccessTypeContainer,
