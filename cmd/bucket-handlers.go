@@ -96,9 +96,28 @@ func isBucketActionAllowed(action, bucket, prefix string) bool {
 // -------------------------
 // This operation returns bucket location.
 func (api objectAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+		return
+	}
+
+	s3Error := checkRequestAuthType(r, bucket, "s3:GetBucketLocation", globalMinioDefaultRegion)
+	if s3Error == ErrInvalidRegion {
+		// Clients like boto3 send getBucketLocation() call signed with region that is configured.
+		s3Error = checkRequestAuthType(r, "", "s3:GetBucketLocation", serverConfig.GetRegion())
+	}
+	if s3Error != ErrNone {
+		writeErrorResponse(w, s3Error, r.URL)
+		return
+	}
+
+	if _, err := objectAPI.GetBucketInfo(bucket); err != nil {
+		errorIf(err, "Unable to fetch bucket info.")
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 

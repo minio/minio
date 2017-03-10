@@ -548,3 +548,64 @@ func (api gatewayAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.R
 
 	writeSuccessResponseHeadersOnly(w)
 }
+
+// GetBucketLocationHandler - GET Bucket location.
+// -------------------------
+// This operation returns bucket location.
+func (api gatewayAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r *http.Request) {
+	vars := router.Vars(r)
+	bucket := vars["bucket"]
+
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+		return
+	}
+	reqAuthType := getRequestAuthType(r)
+
+	switch reqAuthType {
+	case authTypePresignedV2, authTypeSignedV2:
+		// Signature V2 validation.
+		s3Error := isReqAuthenticatedV2(r)
+		if s3Error != ErrNone {
+			errorIf(errSignatureMismatch, dumpRequest(r))
+			writeErrorResponse(w, s3Error, r.URL)
+			return
+		}
+	case authTypeSigned, authTypePresigned:
+		s3Error := isReqAuthenticated(r, globalMinioDefaultRegion)
+		if s3Error == ErrInvalidRegion {
+			// Clients like boto3 send getBucketLocation() call signed with region that is configured.
+			s3Error = isReqAuthenticated(r, serverConfig.GetRegion())
+		}
+		if s3Error != ErrNone {
+			errorIf(errSignatureMismatch, dumpRequest(r))
+			writeErrorResponse(w, s3Error, r.URL)
+			return
+		}
+	}
+
+	getBucketInfo := objectAPI.GetBucketInfo
+	if reqAuthType == authTypeAnonymous {
+		getBucketInfo = objectAPI.AnonGetBucketInfo
+	}
+
+	if _, err := getBucketInfo(bucket); err != nil {
+		errorIf(err, "Unable to fetch bucket info.")
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
+	// Generate response.
+	encodedSuccessResponse := encodeResponse(LocationResponse{})
+	// Get current region.
+	region := serverConfig.GetRegion()
+	if region != globalMinioDefaultRegion {
+		encodedSuccessResponse = encodeResponse(LocationResponse{
+			Location: region,
+		})
+	}
+
+	// Write success response.
+	writeSuccessResponseXML(w, encodedSuccessResponse)
+}
