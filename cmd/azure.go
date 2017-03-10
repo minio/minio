@@ -18,11 +18,14 @@ package cmd
 
 import (
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/xml"
 	"fmt"
+	"hash"
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/textproto"
 	"net/url"
 	"strconv"
 	"strings"
@@ -30,6 +33,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/storage"
 	"github.com/minio/minio-go/pkg/policy"
+	"github.com/minio/sha256-simd"
 )
 
 const globalAzureAPIVersion = "2016-05-31"
@@ -41,6 +45,15 @@ type AzureObjects struct {
 
 // Convert azure errors to minio object layer errors.
 func azureToObjectError(err error, params ...string) error {
+	if err == nil {
+		return nil
+	}
+
+	e, ok := err.(*Error)
+	if ok {
+		err = e.e
+	}
+
 	bucket := ""
 	object := ""
 	if len(params) >= 1 {
@@ -49,30 +62,38 @@ func azureToObjectError(err error, params ...string) error {
 	if len(params) == 2 {
 		object = params[1]
 	}
-	actualErr := err
-	traceErr, isTraceErr := err.(*Error)
-	if isTraceErr {
-		actualErr = traceErr.e
-	}
 
-	azureErr, ok := actualErr.(storage.AzureStorageServiceError)
-	if !ok {
+	azureErr, az := err.(storage.AzureStorageServiceError)
+	if !az {
 		// We don't interpret non Azure errors. As azure errors will
 		// have StatusCode to help to convert to object errors.
 		return err
 	}
-	objErr := actualErr
-	switch azureErr.StatusCode {
-	case http.StatusNotFound:
-		objErr = ObjectNotFound{bucket, object}
+
+	switch azureErr.Code {
+	case "ContainerAlreadyExists":
+		err = BucketExists{Bucket: bucket}
+	case "InvalidResourceName":
+		err = BucketNameInvalid{Bucket: bucket}
+	default:
+		switch azureErr.StatusCode {
+		case http.StatusNotFound:
+			if object != "" {
+				err = ObjectNotFound{bucket, object}
+			} else {
+				err = BucketNotFound{Bucket: bucket}
+			}
+		case http.StatusBadRequest:
+			err = BucketNameInvalid{Bucket: bucket}
+		}
 	}
-	if isTraceErr {
+	if ok {
 		// Incase the passed err was a trace Error then just replace the
 		// encapsulated error.
-		traceErr.e = objErr
-		return traceErr
+		e.e = err
+		return e
 	}
-	return objErr
+	return err
 }
 
 // Inits azure blob storage client and returns AzureObjects.
@@ -98,7 +119,8 @@ func (a AzureObjects) StorageInfo() StorageInfo {
 
 // MakeBucket - Create bucket.
 func (a AzureObjects) MakeBucket(bucket string) error {
-	return azureToObjectError(traceError(a.client.CreateContainer(bucket, storage.ContainerAccessTypePrivate)), bucket)
+	err := a.client.CreateContainer(bucket, storage.ContainerAccessTypePrivate)
+	return azureToObjectError(traceError(err), bucket)
 }
 
 // AnonGetBucketInfo - Get bucket metadata.
@@ -115,7 +137,7 @@ func (a AzureObjects) AnonGetBucketInfo(bucket string) (bucketInfo BucketInfo, e
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return bucketInfo, azureToObjectError(traceError(errUnexpected), bucket)
+		return bucketInfo, azureToObjectError(traceError(anonErrToObjectErr(resp.StatusCode, bucket)), bucket)
 	}
 
 	t, err := time.Parse(time.RFC1123, resp.Header.Get("Last-Modified"))
@@ -210,8 +232,8 @@ func (a AzureObjects) ListObjects(bucket, prefix, marker, delimiter string, maxK
 }
 
 // GetObject - Use Azure equivalent GetBlobRange.
-func (a AzureObjects) GetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) (err error) {
-	byteRange := fmt.Sprintf("bytes=%d-%d", startOffset, startOffset+length-1)
+func (a AzureObjects) GetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) error {
+	byteRange := fmt.Sprintf("%d-%d", startOffset, startOffset+length-1)
 
 	rc, err := a.client.GetBlobRange(bucket, object, byteRange, nil)
 	if err != nil {
@@ -233,8 +255,11 @@ func (a AzureObjects) GetObjectInfo(bucket, object string) (objInfo ObjectInfo, 
 		return objInfo, traceError(err)
 	}
 	objInfo.Bucket = bucket
-	objInfo.ContentEncoding = prop.ContentEncoding
-	objInfo.ContentType = prop.ContentType
+	objInfo.UserDefined = make(map[string]string)
+	if prop.ContentEncoding != "" {
+		objInfo.UserDefined["Content-Encoding"] = prop.ContentEncoding
+	}
+	objInfo.UserDefined["Content-Type"] = prop.ContentType
 	objInfo.MD5Sum = prop.Etag
 	objInfo.ModTime = t
 	objInfo.Name = object
@@ -242,12 +267,37 @@ func (a AzureObjects) GetObjectInfo(bucket, object string) (objInfo ObjectInfo, 
 	return objInfo, nil
 }
 
+func canonicalMetadata(metadata map[string]string) (canonical map[string]string) {
+	canonical = make(map[string]string)
+	for k, v := range metadata {
+		canonical[textproto.CanonicalMIMEHeaderKey(k)] = v
+	}
+	return canonical
+}
+
 // PutObject - Use Azure equivalent CreateBlockBlobFromReader.
 func (a AzureObjects) PutObject(bucket, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (objInfo ObjectInfo, err error) {
-	err = a.client.CreateBlockBlobFromReader(bucket, object, uint64(size), data, nil)
+	var sha256Writer hash.Hash
+	if sha256sum != "" {
+		sha256Writer = sha256.New()
+	}
+
+	delete(metadata, "md5Sum")
+	teeReader := io.TeeReader(data, sha256Writer)
+
+	err = a.client.CreateBlockBlobFromReader(bucket, object, uint64(size), teeReader, canonicalMetadata(metadata))
 	if err != nil {
 		return objInfo, azureToObjectError(traceError(err), bucket, object)
 	}
+
+	if sha256sum != "" {
+		newSHA256sum := hex.EncodeToString(sha256Writer.Sum(nil))
+		if newSHA256sum != sha256sum {
+			a.client.DeleteBlob(bucket, object, nil)
+			return ObjectInfo{}, traceError(SHA256Mismatch{})
+		}
+	}
+
 	return a.GetObjectInfo(bucket, object)
 }
 
@@ -330,11 +380,27 @@ func azureParseBlockID(blockID string) (int, string, error) {
 
 // PutObjectPart - Use Azure equivalent PutBlockWithLength.
 func (a AzureObjects) PutObjectPart(bucket, object, uploadID string, partID int, size int64, data io.Reader, md5Hex string, sha256sum string) (info PartInfo, err error) {
+
+	var sha256Writer hash.Hash
+	if sha256sum != "" {
+		sha256Writer = sha256.New()
+	}
+
+	teeReader := io.TeeReader(data, sha256Writer)
+
 	id := azureGetBlockID(partID, md5Hex)
-	err = a.client.PutBlockWithLength(bucket, object, id, uint64(size), data, nil)
+	err = a.client.PutBlockWithLength(bucket, object, id, uint64(size), teeReader, nil)
 	if err != nil {
 		return info, azureToObjectError(traceError(err), bucket, object)
 	}
+
+	if sha256sum != "" {
+		newSHA256sum := hex.EncodeToString(sha256Writer.Sum(nil))
+		if newSHA256sum != sha256sum {
+			return PartInfo{}, traceError(SHA256Mismatch{})
+		}
+	}
+
 	info.PartNumber = partID
 	info.ETag = md5Hex
 	info.LastModified = time.Now().UTC()
@@ -412,18 +478,43 @@ func (a AzureObjects) AnonGetObject(bucket, object string, startOffset int64, le
 	if err != nil {
 		return azureToObjectError(traceError(err), bucket, object)
 	}
-	byteRange := fmt.Sprintf("bytes=%d-%d", startOffset, startOffset+length-1)
-
-	req.Header.Add("Range", byteRange)
+	req.Header.Add("Range", fmt.Sprintf("bytes=%d-%d", startOffset, startOffset+length-1))
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return azureToObjectError(traceError(err), bucket, object)
 	}
-
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return azureToObjectError(traceError(anonErrToObjectErr(resp.StatusCode, bucket, object)), bucket, object)
+	}
 	_, err = io.Copy(writer, resp.Body)
 	return traceError(err)
+}
+
+func anonErrToObjectErr(statusCode int, params ...string) error {
+	bucket := ""
+	object := ""
+	if len(params) >= 1 {
+		bucket = params[0]
+	}
+	if len(params) == 2 {
+		object = params[1]
+	}
+
+	switch statusCode {
+	case http.StatusNotFound:
+		if object != "" {
+			return ObjectNotFound{bucket, object}
+		}
+		return BucketNotFound{Bucket: bucket}
+	case http.StatusBadRequest:
+		if object != "" {
+			return ObjectNameInvalid{bucket, object}
+		}
+		return BucketNameInvalid{Bucket: bucket}
+	}
+	return errUnexpected
 }
 
 // AnonGetObjectInfo - Send HEAD request without authentication and convert the
@@ -436,7 +527,7 @@ func (a AzureObjects) AnonGetObjectInfo(bucket, object string) (objInfo ObjectIn
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return objInfo, azureToObjectError(traceError(errUnexpected), bucket, object)
+		return objInfo, azureToObjectError(traceError(anonErrToObjectErr(resp.StatusCode, bucket, object)), bucket, object)
 	}
 
 	var contentLength int64
@@ -452,10 +543,14 @@ func (a AzureObjects) AnonGetObjectInfo(bucket, object string) (objInfo ObjectIn
 	if err != nil {
 		return objInfo, traceError(err)
 	}
+
 	objInfo.ModTime = t
 	objInfo.Bucket = bucket
-	objInfo.ContentEncoding = resp.Header.Get("Content-Encoding")
-	objInfo.ContentType = resp.Header.Get("Content-Type")
+	objInfo.UserDefined = make(map[string]string)
+	if resp.Header.Get("Content-Encoding") != "" {
+		objInfo.UserDefined["Content-Encoding"] = resp.Header.Get("Content-Encoding")
+	}
+	objInfo.UserDefined["Content-Type"] = resp.Header.Get("Content-Type")
 	objInfo.MD5Sum = resp.Header.Get("Etag")
 	objInfo.ModTime = t
 	objInfo.Name = object

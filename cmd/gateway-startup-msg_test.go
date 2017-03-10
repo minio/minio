@@ -27,5 +27,5 @@ func TestPrintGatewayCommonMessage(t *testing.T) {
 // Test print gateway startup message.
 func TestPrintGatewayStartupMessage(t *testing.T) {
 	apiEndpoints := []string{"127.0.0.1:9000"}
-	printGatewayStartupMessage(apiEndpoints, "abcd1", "abcd123")
+	printGatewayStartupMessage(apiEndpoints, "abcd1", "abcd123", "azure")
 }

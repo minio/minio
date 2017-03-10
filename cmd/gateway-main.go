@@ -164,12 +164,17 @@ func gatewayMain(ctx *cli.Context) {
 	registerGatewayAPIRouter(router, newObject)
 
 	var handlerFns = []HandlerFunc{
+		// Limits all requests size to a maximum fixed limit
+		setRequestSizeLimitHandler,
 		// Adds 'crossdomain.xml' policy handler to serve legacy flash clients.
 		setCrossDomainPolicy,
 		// Validates all incoming requests to have a valid date header.
 		setTimeValidityHandler,
 		// CORS setting for all browser API requests.
 		setCorsHandler,
+		// Validates all incoming URL resources, for invalid/unsupported
+		// resources client receives a HTTP error.
+		setIgnoreResourcesHandler,
 		// Auth handler verifies incoming authorization headers and
 		// routes them accordingly. Client receives a HTTP error for
 		// invalid/unsupported signatures.
