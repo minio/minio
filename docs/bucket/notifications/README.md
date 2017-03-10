@@ -461,7 +461,7 @@ arn:minio:sqs:us-east-1:1:kafka s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: su
 We used [kafkacat](https://github.com/edenhill/kafkacat) to print all notifications on the console.
 
 ```
-kafkacat -b localhost:9092 -t bucketevents
+kafkacat -C -b localhost:9092 -t bucketevents
 ```
 
 Open another terminal and upload a JPEG image into ``images`` bucket.
