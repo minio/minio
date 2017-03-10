@@ -14,13 +14,9 @@
  * limitations under the License.
  */
 
-import url from 'url'
 import Moment from 'moment'
 import browserHistory from 'react-router/lib/browserHistory'
-import web from './web'
-import * as utils from './utils'
 import storage from 'local-storage-fallback'
-
 import { minioBrowserPrefix } from './constants'
 
 export const SET_WEB = 'SET_WEB'
