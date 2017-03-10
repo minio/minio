@@ -50,10 +50,14 @@ func azureToObjectError(err error, params ...string) error {
 	}
 
 	e, ok := err.(*Error)
-	if ok {
-		err = e.e
+	if !ok {
+		// Code should be fixed if this function is called without doing traceError()
+		// Else handling different situations in this function makes this function complicated.
+		errorIf(err, "Expected type *Error")
+		return err
 	}
 
+	err = e.e
 	bucket := ""
 	object := ""
 	if len(params) >= 1 {
@@ -63,11 +67,11 @@ func azureToObjectError(err error, params ...string) error {
 		object = params[1]
 	}
 
-	azureErr, az := err.(storage.AzureStorageServiceError)
-	if !az {
+	azureErr, ok := err.(storage.AzureStorageServiceError)
+	if !ok {
 		// We don't interpret non Azure errors. As azure errors will
 		// have StatusCode to help to convert to object errors.
-		return err
+		return e
 	}
 
 	switch azureErr.Code {
@@ -87,13 +91,8 @@ func azureToObjectError(err error, params ...string) error {
 			err = BucketNameInvalid{Bucket: bucket}
 		}
 	}
-	if ok {
-		// Incase the passed err was a trace Error then just replace the
-		// encapsulated error.
-		e.e = err
-		return e
-	}
-	return err
+	e.e = err
+	return e
 }
 
 // Inits azure blob storage client and returns AzureObjects.
