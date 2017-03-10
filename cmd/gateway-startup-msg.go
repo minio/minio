@@ -25,7 +25,7 @@ import (
 )
 
 // Prints the formatted startup message.
-func printGatewayStartupMessage(apiEndPoints []string, accessKey, secretKey string) {
+func printGatewayStartupMessage(apiEndPoints []string, accessKey, secretKey, backendType string) {
 	// Prints credential.
 	printGatewayCommonMsg(apiEndPoints, accessKey, secretKey)
 
@@ -36,10 +36,10 @@ func printGatewayStartupMessage(apiEndPoints []string, accessKey, secretKey stri
 	// Configure 'mc', following block prints platform specific information for minio client.
 	console.Println(colorBlue("\nCommand-line Access: ") + mcQuickStartGuide)
 	if runtime.GOOS == globalWindowsOSName {
-		mcMessage := fmt.Sprintf("$ mc.exe config host add myminio %s %s %s", endPoint, accessKey, secretKey)
+		mcMessage := fmt.Sprintf("$ mc.exe config host add my%s %s %s %s", backendType, endPoint, accessKey, secretKey)
 		console.Println(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
 	} else {
-		mcMessage := fmt.Sprintf("$ mc config host add myminio %s %s %s", endPoint, accessKey, secretKey)
+		mcMessage := fmt.Sprintf("$ mc config host add my%s %s %s %s", backendType, endPoint, accessKey, secretKey)
 		console.Println(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
 	}
 

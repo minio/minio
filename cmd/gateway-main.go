@@ -202,7 +202,7 @@ func gatewayMain(ctx *cli.Context) {
 
 	// Prints the formatted startup message once object layer is initialized.
 	if !quietFlag {
-		printGatewayStartupMessage(apiEndPoints, accessKey, secretKey)
+		printGatewayStartupMessage(apiEndPoints, accessKey, secretKey, backendType)
 	}
 
 	<-globalServiceDoneCh
