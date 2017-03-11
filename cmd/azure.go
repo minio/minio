@@ -232,14 +232,18 @@ func (a AzureObjects) ListObjects(bucket, prefix, marker, delimiter string, maxK
 
 // GetObject - Use Azure equivalent GetBlobRange.
 func (a AzureObjects) GetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) error {
-	var byteRange string
+	byteRange := fmt.Sprintf("%d-", startOffset)
 	if length > 0 && startOffset > 0 {
 		byteRange = fmt.Sprintf("%d-%d", startOffset, startOffset+length-1)
-	} else if startOffset > 0 {
-		byteRange = fmt.Sprintf("%d-", startOffset)
 	}
 
-	rc, err := a.client.GetBlobRange(bucket, object, byteRange, nil)
+	var rc io.ReadCloser
+	var err error
+	if startOffset == 0 && length == 0 {
+		rc, err = a.client.GetBlob(bucket, object)
+	} else {
+		rc, err = a.client.GetBlobRange(bucket, object, byteRange, nil)
+	}
 	if err != nil {
 		return azureToObjectError(traceError(err), bucket, object)
 	}
@@ -282,12 +286,13 @@ func canonicalMetadata(metadata map[string]string) (canonical map[string]string)
 // PutObject - Use Azure equivalent CreateBlockBlobFromReader.
 func (a AzureObjects) PutObject(bucket, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (objInfo ObjectInfo, err error) {
 	var sha256Writer hash.Hash
+	teeReader := data
 	if sha256sum != "" {
 		sha256Writer = sha256.New()
+		teeReader = io.TeeReader(data, sha256Writer)
 	}
 
 	delete(metadata, "md5Sum")
-	teeReader := io.TeeReader(data, sha256Writer)
 
 	err = a.client.CreateBlockBlobFromReader(bucket, object, uint64(size), teeReader, canonicalMetadata(metadata))
 	if err != nil {
