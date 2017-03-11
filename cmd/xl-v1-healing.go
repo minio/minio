@@ -477,10 +477,6 @@ func healObject(storageDisks []StorageAPI, bucket string, object string, quorum 
 // and later the disk comes back up again, heal on the object
 // should delete it.
 func (xl xlObjects) HealObject(bucket, object string) error {
-	if err := checkGetObjArgs(bucket, object); err != nil {
-		return err
-	}
-
 	// Lock the object before healing.
 	objectLock := globalNSMutex.NewNSLock(bucket, object)
 	objectLock.RLock()

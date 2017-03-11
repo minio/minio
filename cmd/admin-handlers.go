@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"path"
 	"strconv"
 	"time"
 )
@@ -49,6 +50,7 @@ const (
 	mgmtDryRun         mgmtQueryKey = "dry-run"
 	mgmtUploadIDMarker mgmtQueryKey = "upload-id-marker"
 	mgmtMaxUploads     mgmtQueryKey = "max-uploads"
+	mgmtUploadID       mgmtQueryKey = "upload-id"
 )
 
 // ServerVersion - server version
@@ -645,6 +647,75 @@ func (adminAPI adminAPIHandlers) HealObjectHandler(w http.ResponseWriter, r *htt
 	}
 
 	err := objLayer.HealObject(bucket, object)
+	if err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
+	// Return 200 on success.
+	writeSuccessResponseHeadersOnly(w)
+}
+
+// HealUploadHandler - POST /?heal&bucket=mybucket&object=myobject&upload-id=myuploadID&dry-run
+// - x-minio-operation = upload
+// - bucket, object and upload-id are mandatory query parameters
+// Heal a given upload, if present.
+func (adminAPI adminAPIHandlers) HealUploadHandler(w http.ResponseWriter, r *http.Request) {
+	// Get object layer instance.
+	objLayer := newObjectLayerFn()
+	if objLayer == nil {
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+		return
+	}
+
+	// Validate request signature.
+	adminAPIErr := checkRequestAuthType(r, "", "", "")
+	if adminAPIErr != ErrNone {
+		writeErrorResponse(w, adminAPIErr, r.URL)
+		return
+	}
+
+	vars := r.URL.Query()
+	bucket := vars.Get(string(mgmtBucket))
+	object := vars.Get(string(mgmtObject))
+	uploadID := vars.Get(string(mgmtUploadID))
+	uploadObj := path.Join(bucket, object, uploadID)
+
+	// Validate bucket and object names as supplied via query
+	// parameters.
+	if err := checkBucketAndObjectNames(bucket, object); err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
+	// Validate the bucket and object w.r.t backend representation
+	// of an upload.
+	if err := checkBucketAndObjectNames(minioMetaMultipartBucket,
+		uploadObj); err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
+	// Check if upload exists.
+	if _, err := objLayer.GetObjectInfo(minioMetaMultipartBucket,
+		uploadObj); err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
+	// if dry-run is set in query params then perform validations
+	// and return success.
+	if isDryRun(vars) {
+		writeSuccessResponseHeadersOnly(w)
+		return
+	}
+
+	//We are able to use HealObject for healing an upload since an
+	//ongoing upload has the same backend representation as an
+	//object.  The 'object' corresponding to a given bucket,
+	//object and uploadID is
+	//.minio.sys/multipart/bucket/object/uploadID.
+	err := objLayer.HealObject(minioMetaMultipartBucket, uploadObj)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
