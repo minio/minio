@@ -1,76 +1,58 @@
 # Shared Backend Minio Quickstart Guide [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
 
-Minio now supports shared backend across multiple instances.  This solves certain specific use cases.
+Minio shared mode lets you use single [NAS](https://en.wikipedia.org/wiki/Network-attached_storage) (like NFS, GlusterFS, and other 
+distributed filesystems) as the storage backend for multiple Minio servers. Synchronization among Minio servers is taken care by design. 
+Read more about the Minio shared mode design [here](https://github.com/minio/minio/blob/master/docs/shared-backend/DESIGN.md).
 
-## Use Cases
+Minio shared mode is developed to solve several real world use cases. Some of these are
 
-- Minio on NAS
-- Minio on Distributed Filesystems
-- Multi-user Shared Backend.
+- You have already invested in NAS and would like to use Minio to add S3 compatibility to your storage tier.
+- You need to use NAS with an S3 interface due to your application architecture requirements.
+- You expect huge traffic and need a load balanced S3 compatible server, serving files from a single NAS backend. 
 
-## Why Minio On Shared Backend?
-
-This feature allows Minio to serve a shared NAS drive across multiple Minio instances. There are no special configuration changes required to enable this feature. Access to files stored on NAS volume are locked and synchronized by default.
+With a proxy running in front of multiple, shared mode Minio servers, it is very easy to create a Highly Available, load balanced, AWS S3 compatible storage system. 
 
 # Get started
 
-If you're aware of stand-alone Minio set up, the installation and running remains the same.
+If you're aware of stand-alone Minio set up, the installation and running remains the same. 
 
 ## 1. Prerequisites
 
 Install Minio - [Minio Quickstart Guide](https://docs.minio.io/docs/minio).
 
-## 2. Run Minio On Shared Backend
+## 2. Run Minio on Shared Backend
 
-Below examples will clarify further for each operating system of your choice:
+To run Minio shared backend instances, you need to start multiple Minio servers pointing to the same backend storage. We'll see examples on how to do this in the following sections.
 
-### Ubuntu 16.04 LTS
+*Note*
 
-Run the following commands on all the object storage gateway servers where your NAS volume is accessible. By explicitly passing access and secret keys through the environment variable you make sure that all the gateway servers share the same key across.
+- All the nodes running shared Minio need to have same access key and secret key. To achieve this, we export access key and secret key as environment variables on all the nodes before executing Minio server command.
+- The drive paths below are for demonstration purposes only, you need to replace these with the actual drive paths/folders.
 
-Example 1: Start Minio instance on a shared backend mounted and available at `/mnt/nfs`.
+#### Minio shared mode on Ubuntu 16.04 LTS. 
 
-On linux server1
+You'll need the path to the shared volume, e.g. `/mnt/nfs`. Then run the following commands on all the nodes you'd like to launch Minio.
+
 ```sh
+export MINIO_ACCESS_KEY=<ACCESS_KEY>
+export MINIO_SECRET_KEY=<SECRET_KEY>
 minio server /mnt/nfs
 ```
 
-On linux server2
-```sh
-minio server /mnt/nfs
-```
+#### Minio shared mode on Windows 2012 Server
 
-### Windows 2012 Server
+You'll need the path to the shared volume, e.g. `\\remote-server\smb`. Then run the following commands on all the nodes you'd like to launch Minio.
 
-Run the following commands on all the object storage gateway servers where your NAS volume is accessible. By explicitly passing access and secret keys through the environment variable you make sure that all the gateway servers share the same key across.
-
-Example 1: Start Minio instance on a shared backend mounted and available at `\\remote-server\smb`.
-
-On windows server1
 ```cmd
 set MINIO_ACCESS_KEY=my-username
 set MINIO_SECRET_KEY=my-password
 minio.exe server \\remote-server\smb\export
 ```
 
-On windows server2
-```cmd
-set MINIO_ACCESS_KEY=my-username
-set MINIO_SECRET_KEY=my-password
-minio.exe server \\remote-server\smb\export
-```
+*Windows Tip*
 
-Alternatively if `\\remote-server\smb` is mounted as `M:\` drive.
+If a remote volume, e.g. `\\remote-server\smb` is mounted as a drive, e.g. `M:\`. You can use [`net use`](https://technet.microsoft.com/en-us/library/bb490717.aspx) command to map the drive to a folder. 
 
-On windows server1
-```cmd
-set MINIO_ACCESS_KEY=my-username
-set MINIO_SECRET_KEY=my-password
-net use m: \\remote-server\smb\export /P:Yes
-minio.exe server M:\export
-```
-
-On windows server2
 ```cmd
 set MINIO_ACCESS_KEY=my-username
 set MINIO_SECRET_KEY=my-password
@@ -80,7 +62,7 @@ minio.exe server M:\export
 
 ## 3. Test your setup
 
-To test this setup, access the Minio server via browser or [`mc`](https://docs.minio.io/docs/minio-client-quickstart-guide). You’ll see the uploaded files are accessible from the node2 endpoint as well.
+To test this setup, access the Minio server via browser or [`mc`](https://docs.minio.io/docs/minio-client-quickstart-guide). You’ll see the uploaded files are accessible from the all the Minio shared backend endpoints.
 
 ## Explore Further
 - [Use `mc` with Minio Server](https://docs.minio.io/docs/minio-client-quickstart-guide)
@@ -88,5 +70,3 @@ To test this setup, access the Minio server via browser or [`mc`](https://docs.m
 - [Use `s3cmd` with Minio Server](https://docs.minio.io/docs/s3cmd-with-minio)
 - [Use `minio-go` SDK with Minio Server](https://docs.minio.io/docs/golang-client-quickstart-guide)
 - [The Minio documentation website](https://docs.minio.io)
-
-
