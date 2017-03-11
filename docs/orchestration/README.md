@@ -4,9 +4,9 @@ Minio is a cloud-native application designed to scale in a sustainable manner in
 
 | Orchestration platforms|
 |:---|
-| [`Kubernetes`](https://raw.githubusercontent.com/minio/minio/master/docs/orchestration/kubernetes/README.md) |
-| [`Docker Swarm`](https://raw.githubusercontent.com/minio/minio/master/docs/orchestration/docker-swarm/README.md) |
-| [`DC/OS`](https://raw.githubusercontent.com/minio/minio/master/docs/orchestration/dcos/README.md) |
+| [`Kubernetes`](https://github.com/minio/minio/blob/master/docs/orchestration/kubernetes/README.md) |
+| [`Docker Swarm`](https://github.com/minio/minio/blob/master/docs/orchestration/docker-swarm/README.md) |
+| [`DC/OS`](https://github.com/minio/minio/blob/master/docs/orchestration/dcos/README.md) |
 
 ## Why is Minio cloud-native?
 The term cloud-native revolves around the idea of applications deployed as micro services, that can be scaled well. Its not about just retrofitting monolithic applications onto modern container based compute environment. A cloud-native application is portable and resilient by design, and can scale horizontally by simply replicating. Modern orchestration platforms like DC/OS, Kubernetes and Swarm make replicating and managing containers in huge clusters easier than ever.
