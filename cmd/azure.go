@@ -232,11 +232,12 @@ func (a AzureObjects) ListObjects(bucket, prefix, marker, delimiter string, maxK
 
 // GetObject - Use Azure equivalent GetBlobRange.
 func (a AzureObjects) GetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) error {
-	if length == 0 {
-		_, err := a.GetObjectInfo(bucket, object)
-		return err
+	var byteRange string
+	if length > 0 && startOffset > 0 {
+		byteRange = fmt.Sprintf("%d-%d", startOffset, startOffset+length-1)
+	} else if startOffset > 0 {
+		byteRange = fmt.Sprintf("%d-", startOffset)
 	}
-	byteRange := fmt.Sprintf("%d-%d", startOffset, startOffset+length-1)
 
 	rc, err := a.client.GetBlobRange(bucket, object, byteRange, nil)
 	if err != nil {
@@ -476,25 +477,28 @@ func (a AzureObjects) CompleteMultipartUpload(bucket, object, uploadID string, u
 // AnonGetObject - SendGET request without authentication.
 // This is needed when clients send GET requests on objects that can be downloaded without auth.
 func (a AzureObjects) AnonGetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) (err error) {
-	if length == 0 {
-		_, err := a.AnonGetObjectInfo(bucket, object)
-		return err
-	}
 	url := a.client.GetBlobURL(bucket, object)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return azureToObjectError(traceError(err), bucket, object)
 	}
-	req.Header.Add("Range", fmt.Sprintf("bytes=%d-%d", startOffset, startOffset+length-1))
+
+	if length > 0 && startOffset > 0 {
+		req.Header.Add("Range", fmt.Sprintf("bytes=%d-%d", startOffset, startOffset+length-1))
+	} else if startOffset > 0 {
+		req.Header.Add("Range", fmt.Sprintf("bytes=%d-", startOffset))
+	}
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return azureToObjectError(traceError(err), bucket, object)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
+
+	if resp.StatusCode != http.StatusPartialContent && resp.StatusCode != http.StatusOK {
 		return azureToObjectError(traceError(anonErrToObjectErr(resp.StatusCode, bucket, object)), bucket, object)
 	}
+
 	_, err = io.Copy(writer, resp.Body)
 	return traceError(err)
 }
