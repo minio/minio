@@ -19,7 +19,6 @@ package cmd
 import (
 	"encoding/base64"
 	"encoding/xml"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -327,9 +326,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 			ObjInfo: ObjectInfo{
 				Name: dobj.ObjectName,
 			},
-			ReqParams: map[string]string{
-				"sourceIPAddress": r.RemoteAddr,
-			},
+			ReqParams: extractReqParams(r),
 		})
 	}
 }
@@ -439,14 +436,25 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	defer fileBody.Close()
 
 	bucket := mux.Vars(r)["bucket"]
-	formValues["Bucket"] = bucket
+	formValues.Set("Bucket", bucket)
 
-	if fileName != "" && strings.Contains(formValues["Key"], "${filename}") {
+	if fileName != "" && strings.Contains(formValues.Get("Key"), "${filename}") {
 		// S3 feature to replace ${filename} found in Key form field
 		// by the filename attribute passed in multipart
-		formValues["Key"] = strings.Replace(formValues["Key"], "${filename}", fileName, -1)
+		formValues.Set("Key", strings.Replace(formValues.Get("Key"), "${filename}", fileName, -1))
 	}
-	object := formValues["Key"]
+	object := formValues.Get("Key")
+
+	successRedirect := formValues.Get("success_action_redirect")
+	successStatus := formValues.Get("success_action_status")
+	var redirectURL *url.URL
+	if successRedirect != "" {
+		redirectURL, err = url.Parse(successRedirect)
+		if err != nil {
+			writeErrorResponse(w, ErrMalformedPOSTRequest, r.URL)
+			return
+		}
+	}
 
 	// Verify policy signature.
 	apiErr := doesPolicySignatureMatch(formValues)
@@ -455,7 +463,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	policyBytes, err := base64.StdEncoding.DecodeString(formValues["Policy"])
+	policyBytes, err := base64.StdEncoding.DecodeString(formValues.Get("Policy"))
 	if err != nil {
 		writeErrorResponse(w, ErrMalformedPOSTRequest, r.URL)
 		return
@@ -492,7 +500,6 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 
 	// Extract metadata to be saved from received Form.
 	metadata := extractMetadataFromForm(formValues)
-
 	sha256sum := ""
 
 	objectLock := globalNSMutex.NewNSLock(bucket, object)
@@ -505,50 +512,40 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
-	w.Header().Set("ETag", "\""+objInfo.MD5Sum+"\"")
+
+	w.Header().Set("ETag", `"`+objInfo.MD5Sum+`"`)
 	w.Header().Set("Location", getObjectLocation(bucket, object))
 
-	successRedirect := formValues[http.CanonicalHeaderKey("success_action_redirect")]
-	successStatus := formValues[http.CanonicalHeaderKey("success_action_status")]
+	// Notify object created event.
+	defer eventNotify(eventData{
+		Type:      ObjectCreatedPost,
+		Bucket:    objInfo.Bucket,
+		ObjInfo:   objInfo,
+		ReqParams: extractReqParams(r),
+	})
 
-	if successStatus == "" && successRedirect == "" {
-		writeSuccessNoContent(w)
-	} else {
-		if successRedirect != "" {
-			redirectURL := successRedirect + "?" + fmt.Sprintf("bucket=%s&key=%s&etag=%s",
-				bucket,
-				getURLEncodedName(object),
-				getURLEncodedName("\""+objInfo.MD5Sum+"\""))
-
-			writeRedirectSeeOther(w, redirectURL)
-		} else {
-			// Decide what http response to send depending on success_action_status parameter
-			switch successStatus {
-			case "201":
-				resp := encodeResponse(PostResponse{
-					Bucket:   bucket,
-					Key:      object,
-					ETag:     "\"" + objInfo.MD5Sum + "\"",
-					Location: getObjectLocation(bucket, object),
-				})
-				writeResponse(w, http.StatusCreated, resp, "application/xml")
-			case "200":
-				writeSuccessResponseHeadersOnly(w)
-			default:
-				writeSuccessNoContent(w)
-			}
-		}
+	if successRedirect != "" {
+		// Replace raw query params..
+		redirectURL.RawQuery = getRedirectPostRawQuery(objInfo)
+		writeRedirectSeeOther(w, redirectURL.String())
+		return
 	}
 
-	// Notify object created event.
-	eventNotify(eventData{
-		Type:    ObjectCreatedPost,
-		Bucket:  bucket,
-		ObjInfo: objInfo,
-		ReqParams: map[string]string{
-			"sourceIPAddress": r.RemoteAddr,
-		},
-	})
+	// Decide what http response to send depending on success_action_status parameter
+	switch successStatus {
+	case "201":
+		resp := encodeResponse(PostResponse{
+			Bucket:   objInfo.Bucket,
+			Key:      objInfo.Name,
+			ETag:     `"` + objInfo.MD5Sum + `"`,
+			Location: getObjectLocation(objInfo.Bucket, objInfo.Name),
+		})
+		writeResponse(w, http.StatusCreated, resp, "application/xml")
+	case "200":
+		writeSuccessResponseHeadersOnly(w)
+	default:
+		writeSuccessNoContent(w)
+	}
 }
 
 // HeadBucketHandler - HEAD Bucket

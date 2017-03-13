@@ -24,6 +24,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 
@@ -444,7 +445,10 @@ func testPostPolicyBucketHandlerRedirect(obj ObjectLayer, instanceType string, t
 	targetObj := keyName + "/upload.txt"
 
 	// The url of success_action_redirect field
-	redirectURL := "http://www.google.com"
+	redirectURL, err := url.Parse("http://www.google.com")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Register the API end points with XL/FS object layer.
 	apiRouter := initTestAPIEndPoints(obj, []string{"PostPolicy"})
@@ -464,7 +468,7 @@ func testPostPolicyBucketHandlerRedirect(obj ObjectLayer, instanceType string, t
 	rec := httptest.NewRecorder()
 
 	dates := []interface{}{curTimePlus5Min.Format(expirationDateFormat), curTime.Format(iso8601DateFormat), curTime.Format(yyyymmdd)}
-	policy := `{"expiration": "%s","conditions":[["eq", "$bucket", "` + bucketName + `"], {"success_action_redirect":"` + redirectURL + `"},["starts-with", "$key", "test/"], ["eq", "$x-amz-algorithm", "AWS4-HMAC-SHA256"], ["eq", "$x-amz-date", "%s"], ["eq", "$x-amz-credential", "` + credentials.AccessKey + `/%s/us-east-1/s3/aws4_request"]]}`
+	policy := `{"expiration": "%s","conditions":[["eq", "$bucket", "` + bucketName + `"], {"success_action_redirect":"` + redirectURL.String() + `"},["starts-with", "$key", "test/"], ["eq", "$x-amz-algorithm", "AWS4-HMAC-SHA256"], ["eq", "$x-amz-date", "%s"], ["eq", "$x-amz-credential", "` + credentials.AccessKey + `/%s/us-east-1/s3/aws4_request"]]}`
 
 	// Generate the final policy document
 	policy = fmt.Sprintf(policy, dates...)
@@ -472,7 +476,7 @@ func testPostPolicyBucketHandlerRedirect(obj ObjectLayer, instanceType string, t
 	// Create a new POST request with success_action_redirect field specified
 	req, perr := newPostRequestV4Generic("", bucketName, keyName, []byte("objData"),
 		credentials.AccessKey, credentials.SecretKey, curTime,
-		[]byte(policy), map[string]string{"success_action_redirect": redirectURL}, false, false)
+		[]byte(policy), map[string]string{"success_action_redirect": redirectURL.String()}, false, false)
 
 	if perr != nil {
 		t.Fatalf("%s: Failed to create HTTP request for PostPolicyHandler: <ERROR> %v", instanceType, perr)
@@ -492,8 +496,8 @@ func testPostPolicyBucketHandlerRedirect(obj ObjectLayer, instanceType string, t
 		t.Error("Unexpected error: ", err)
 	}
 
-	expectedLocation := fmt.Sprintf(redirectURL+"?bucket=%s&key=%s&etag=%s",
-		bucketName, getURLEncodedName(targetObj), getURLEncodedName("\""+info.MD5Sum+"\""))
+	redirectURL.RawQuery = getRedirectPostRawQuery(info)
+	expectedLocation := redirectURL.String()
 
 	// Check the new location url
 	if rec.HeaderMap.Get("Location") != expectedLocation {

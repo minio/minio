@@ -18,12 +18,12 @@ package cmd
 
 import (
 	"encoding/base64"
+	"net/http"
 	"testing"
 )
 
 // Test Post Policy parsing and checking conditions
 func TestPostPolicyForm(t *testing.T) {
-
 	type testCase struct {
 		Bucket                   string
 		Key                      string
@@ -60,18 +60,18 @@ func TestPostPolicyForm(t *testing.T) {
 	}
 	// Validate all the test cases.
 	for i, tt := range testCases {
-		formValues := make(map[string]string)
-		formValues["Bucket"] = tt.Bucket
-		formValues["Acl"] = tt.ACL
-		formValues["Key"] = tt.Key
-		formValues["X-Amz-Date"] = tt.XAmzDate
-		formValues["X-Amz-Meta-Uuid"] = tt.XAmzMetaUUID
-		formValues["X-Amz-Server-Side-Encryption"] = tt.XAmzServerSideEncryption
-		formValues["X-Amz-Algorithm"] = tt.XAmzAlgorithm
-		formValues["X-Amz-Credential"] = tt.XAmzCredential
-		formValues["Content-Type"] = tt.ContentType
-		formValues["Policy"] = tt.Policy
-		formValues["Success_action_redirect"] = tt.SuccessActionRedirect
+		formValues := make(http.Header)
+		formValues.Set("Bucket", tt.Bucket)
+		formValues.Set("Acl", tt.ACL)
+		formValues.Set("Key", tt.Key)
+		formValues.Set("X-Amz-Date", tt.XAmzDate)
+		formValues.Set("X-Amz-Meta-Uuid", tt.XAmzMetaUUID)
+		formValues.Set("X-Amz-Server-Side-Encryption", tt.XAmzServerSideEncryption)
+		formValues.Set("X-Amz-Algorithm", tt.XAmzAlgorithm)
+		formValues.Set("X-Amz-Credential", tt.XAmzCredential)
+		formValues.Set("Content-Type", tt.ContentType)
+		formValues.Set("Policy", tt.Policy)
+		formValues.Set("Success_action_redirect", tt.SuccessActionRedirect)
 		policyBytes, err := base64.StdEncoding.DecodeString(tt.Policy)
 		if err != nil {
 			t.Fatal(err)

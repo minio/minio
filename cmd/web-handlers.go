@@ -292,9 +292,7 @@ objectLoop:
 					ObjInfo: ObjectInfo{
 						Name: objectName,
 					},
-					ReqParams: map[string]string{
-						"sourceIPAddress": r.RemoteAddr,
-					},
+					ReqParams: extractReqParams(r),
 				})
 			}
 			return err
@@ -528,12 +526,10 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 
 	// Notify object created event.
 	eventNotify(eventData{
-		Type:    ObjectCreatedPut,
-		Bucket:  bucket,
-		ObjInfo: objInfo,
-		ReqParams: map[string]string{
-			"sourceIPAddress": r.RemoteAddr,
-		},
+		Type:      ObjectCreatedPut,
+		Bucket:    bucket,
+		ObjInfo:   objInfo,
+		ReqParams: extractReqParams(r),
 	})
 }
 

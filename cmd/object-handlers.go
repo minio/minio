@@ -359,12 +359,10 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 	// Notify object created event.
 	eventNotify(eventData{
-		Type:    ObjectCreatedCopy,
-		Bucket:  dstBucket,
-		ObjInfo: objInfo,
-		ReqParams: map[string]string{
-			"sourceIPAddress": r.RemoteAddr,
-		},
+		Type:      ObjectCreatedCopy,
+		Bucket:    dstBucket,
+		ObjInfo:   objInfo,
+		ReqParams: extractReqParams(r),
 	})
 }
 
@@ -492,12 +490,10 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 
 	// Notify object created event.
 	eventNotify(eventData{
-		Type:    ObjectCreatedPut,
-		Bucket:  bucket,
-		ObjInfo: objInfo,
-		ReqParams: map[string]string{
-			"sourceIPAddress": r.RemoteAddr,
-		},
+		Type:      ObjectCreatedPut,
+		Bucket:    bucket,
+		ObjInfo:   objInfo,
+		ReqParams: extractReqParams(r),
 	})
 }
 
@@ -922,12 +918,10 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 
 	// Notify object created event.
 	eventNotify(eventData{
-		Type:    ObjectCreatedCompleteMultipartUpload,
-		Bucket:  bucket,
-		ObjInfo: objInfo,
-		ReqParams: map[string]string{
-			"sourceIPAddress": r.RemoteAddr,
-		},
+		Type:      ObjectCreatedCompleteMultipartUpload,
+		Bucket:    bucket,
+		ObjInfo:   objInfo,
+		ReqParams: extractReqParams(r),
 	})
 }
 
@@ -970,8 +964,6 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 		ObjInfo: ObjectInfo{
 			Name: object,
 		},
-		ReqParams: map[string]string{
-			"sourceIPAddress": r.RemoteAddr,
-		},
+		ReqParams: extractReqParams(r),
 	})
 }

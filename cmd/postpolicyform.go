@@ -219,7 +219,7 @@ func checkPolicyCond(op string, input1, input2 string) bool {
 
 // checkPostPolicy - apply policy conditions and validate input values.
 // (http://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-HTTPPOSTConstructPolicy.html)
-func checkPostPolicy(formValues map[string]string, postPolicyForm PostPolicyForm) APIErrorCode {
+func checkPostPolicy(formValues http.Header, postPolicyForm PostPolicyForm) APIErrorCode {
 	// Check if policy document expiry date is still not reached
 	if !postPolicyForm.Expiration.After(time.Now().UTC()) {
 		return ErrPolicyAlreadyExpired
@@ -242,12 +242,12 @@ func checkPostPolicy(formValues map[string]string, postPolicyForm PostPolicyForm
 				return ErrAccessDenied
 			}
 			// Check if current policy condition is satisfied
-			condPassed = checkPolicyCond(op, formValues[formCanonicalName], v.Value)
+			condPassed = checkPolicyCond(op, formValues.Get(formCanonicalName), v.Value)
 		} else {
 			// This covers all conditions X-Amz-Meta-* and X-Amz-*
 			if strings.HasPrefix(cond, "$x-amz-meta-") || strings.HasPrefix(cond, "$x-amz-") {
 				// Check if policy condition is satisfied
-				condPassed = checkPolicyCond(op, formValues[formCanonicalName], v.Value)
+				condPassed = checkPolicyCond(op, formValues.Get(formCanonicalName), v.Value)
 			}
 		}
 		// Check if current policy condition is satisfied, quit immediately otherwise
