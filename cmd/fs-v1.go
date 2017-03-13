@@ -470,6 +470,12 @@ func (fs fsObjects) getObjectInfo(bucket, object string) (ObjectInfo, error) {
 
 // GetObjectInfo - reads object metadata and replies back ObjectInfo.
 func (fs fsObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
+	// This is a special case with object whose name ends with
+	// a slash separator, we always return object not found here.
+	if hasSuffix(object, slashSeparator) {
+		return ObjectInfo{}, toObjectErr(traceError(errFileNotFound), bucket, object)
+	}
+
 	if err := checkGetObjArgs(bucket, object); err != nil {
 		return ObjectInfo{}, err
 	}

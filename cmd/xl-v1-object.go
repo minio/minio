@@ -321,6 +321,12 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 
 // GetObjectInfo - reads object metadata and replies back ObjectInfo.
 func (xl xlObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
+	// This is a special case with object whose name ends with
+	// a slash separator, we always return object not found here.
+	if hasSuffix(object, slashSeparator) {
+		return ObjectInfo{}, toObjectErr(traceError(errFileNotFound), bucket, object)
+	}
+
 	if err := checkGetObjArgs(bucket, object); err != nil {
 		return ObjectInfo{}, err
 	}
