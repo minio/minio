@@ -20,6 +20,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -105,6 +106,9 @@ func path2BucketAndObject(path string) (bucket, object string) {
 
 // extractMetadataFromHeader extracts metadata from HTTP header.
 func extractMetadataFromHeader(header http.Header) map[string]string {
+	if header == nil {
+		return nil
+	}
 	metadata := make(map[string]string)
 	// Save standard supported headers.
 	for _, supportedHeader := range supportedHeaders {
@@ -126,51 +130,67 @@ func extractMetadataFromHeader(header http.Header) map[string]string {
 			metadata[cKey] = header.Get(key)
 		}
 	}
-	// Return.
+
+	// Success.
 	return metadata
+}
+
+// The Query string for the redirect URL the client is
+// redirected on successful upload.
+func getRedirectPostRawQuery(objInfo ObjectInfo) string {
+	redirectValues := make(url.Values)
+	redirectValues.Set("bucket", objInfo.Bucket)
+	redirectValues.Set("key", objInfo.Name)
+	redirectValues.Set("etag", "\""+objInfo.MD5Sum+"\"")
+	return redirectValues.Encode()
+}
+
+// Extract request params to be sent with event notifiation.
+func extractReqParams(r *http.Request) map[string]string {
+	if r == nil {
+		return nil
+	}
+
+	// Success.
+	return map[string]string{
+		"sourceIPAddress": r.RemoteAddr,
+		// Add more fields here.
+	}
 }
 
 // extractMetadataFromForm extracts metadata from Post Form.
-func extractMetadataFromForm(formValues map[string]string) map[string]string {
-	metadata := make(map[string]string)
-	// Save standard supported headers.
-	for _, supportedHeader := range supportedHeaders {
-		canonicalHeader := http.CanonicalHeaderKey(supportedHeader)
-		// Form field names are case insensitive, look for both canonical
-		// and non canonical entries.
-		if _, ok := formValues[canonicalHeader]; ok {
-			metadata[supportedHeader] = formValues[canonicalHeader]
-		} else if _, ok := formValues[supportedHeader]; ok {
-			metadata[supportedHeader] = formValues[canonicalHeader]
+func extractMetadataFromForm(formValues http.Header) map[string]string {
+	return extractMetadataFromHeader(formValues)
+}
+
+// Validate form field size for s3 specification requirement.
+func validateFormFieldSize(formValues http.Header) error {
+	// Iterate over form values
+	for k := range formValues {
+		// Check if value's field exceeds S3 limit
+		if int64(len(formValues.Get(k))) > maxFormFieldSize {
+			return traceError(errSizeUnexpected)
 		}
 	}
-	// Go through all other form values for any additional headers that needs to be saved.
-	for key := range formValues {
-		cKey := http.CanonicalHeaderKey(key)
-		if strings.HasPrefix(cKey, "X-Amz-Meta-") {
-			metadata[cKey] = formValues[key]
-		} else if strings.HasPrefix(cKey, "X-Minio-Meta-") {
-			metadata[cKey] = formValues[key]
-		}
-	}
-	return metadata
+
+	// Success.
+	return nil
 }
 
 // Extract form fields and file data from a HTTP POST Policy
-func extractPostPolicyFormValues(form *multipart.Form) (filePart io.ReadCloser, fileName string, fileSize int64, formValues map[string]string, err error) {
+func extractPostPolicyFormValues(form *multipart.Form) (filePart io.ReadCloser, fileName string, fileSize int64, formValues http.Header, err error) {
 	/// HTML Form values
-	formValues = make(map[string]string)
 	fileName = ""
 
-	// Iterate over form values
+	// Canonicalize the form values into http.Header.
+	formValues = make(http.Header)
 	for k, v := range form.Value {
-		canonicalFormName := http.CanonicalHeaderKey(k)
-		// Check if value's field exceeds S3 limit
-		if int64(len(v[0])) > maxFormFieldSize {
-			return nil, "", 0, nil, traceError(errSizeUnexpected)
-		}
-		// Set the form value
-		formValues[canonicalFormName] = v[0]
+		formValues[http.CanonicalHeaderKey(k)] = v
+	}
+
+	// Validate form values.
+	if err = validateFormFieldSize(formValues); err != nil {
+		return nil, "", 0, nil, err
 	}
 
 	// Iterator until we find a valid File field and break

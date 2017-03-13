@@ -208,10 +208,10 @@ func TestDoesPolicySignatureV2Match(t *testing.T) {
 		{creds.AccessKey, policy, calculateSignatureV2(policy, creds.SecretKey), ErrNone},
 	}
 	for i, test := range testCases {
-		formValues := make(map[string]string)
-		formValues["Awsaccesskeyid"] = test.accessKey
-		formValues["Signature"] = test.signature
-		formValues["Policy"] = test.policy
+		formValues := make(http.Header)
+		formValues.Set("Awsaccesskeyid", test.accessKey)
+		formValues.Set("Signature", test.signature)
+		formValues.Set("Policy", test.policy)
 		errCode := doesPolicySignatureV2Match(formValues)
 		if errCode != test.errCode {
 			t.Fatalf("(%d) expected to get %s, instead got %s", i+1, niceError(test.errCode), niceError(errCode))
