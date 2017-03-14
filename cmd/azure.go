@@ -384,10 +384,13 @@ func (a AzureObjects) NewMultipartUpload(bucket, object string, metadata map[str
 	// co-exist as long as the user keeps the blocks uploaded (in block blobs) unique amongst concurrent upload attempts.
 	// Each concurrent client, keeps its own blockID list which it can commit.
 	uploadID = object
-	if len(metadata) > 0 {
-		a.multipartMeta.put(uploadID, canonicalMetadata(metadata))
+	if metadata == nil {
+		metadata = make(map[string]string)
+	} else {
+		metadata = canonicalMetadata(metadata)
 	}
-	return uploadID, azureToObjectError(traceError(a.client.CreateBlockBlob(bucket, object)))
+	a.multipartMeta.put(uploadID, metadata)
+	return uploadID, nil
 }
 
 // CopyObjectPart - Not implemented.
@@ -497,6 +500,10 @@ func (a AzureObjects) AbortMultipartUpload(bucket, object, uploadID string) erro
 
 // CompleteMultipartUpload - Use Azure equivalent PutBlockList.
 func (a AzureObjects) CompleteMultipartUpload(bucket, object, uploadID string, uploadedParts []completePart) (objInfo ObjectInfo, err error) {
+	meta := a.multipartMeta.get(uploadID)
+	if meta == nil {
+		return objInfo, traceError(InvalidUploadID{uploadID})
+	}
 	var blocks []storage.Block
 	for _, part := range uploadedParts {
 		blocks = append(blocks, storage.Block{
@@ -508,9 +515,18 @@ func (a AzureObjects) CompleteMultipartUpload(bucket, object, uploadID string, u
 	if err != nil {
 		return objInfo, azureToObjectError(traceError(err), bucket, object)
 	}
-	err = a.client.SetBlobMetadata(bucket, object, nil, a.multipartMeta.get(uploadID))
-	if err != nil {
-		return objInfo, azureToObjectError(traceError(err), bucket, object)
+	if len(meta) > 0 {
+		prop := storage.BlobHeaders{
+			ContentMD5:      meta["Content-Md5"],
+			ContentLanguage: meta["Content-Language"],
+			ContentEncoding: meta["Content-Encoding"],
+			ContentType:     meta["Content-Type"],
+			CacheControl:    meta["Cache-Control"],
+		}
+		err = a.client.SetBlobProperties(bucket, object, prop)
+		if err != nil {
+			return objInfo, azureToObjectError(traceError(err), bucket, object)
+		}
 	}
 	a.multipartMeta.del(uploadID)
 	return a.GetObjectInfo(bucket, object)
