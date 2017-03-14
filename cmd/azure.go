@@ -41,33 +41,36 @@ const globalAzureAPIVersion = "2016-05-31"
 
 // To store metadata during NewMultipartUpload which will be used after
 // CompleteMultipartUpload to call SetBlobMetadata.
-type azureMultipart struct {
+type azureMultipartMetaInfo struct {
 	meta map[string]map[string]string
-	mu   sync.Mutex
+	sync.Mutex
 }
 
-func (a *azureMultipart) get(key string) map[string]string {
-	a.mu.Lock()
-	defer a.mu.Unlock()
+// Return metadata map of the multipart object.
+func (a *azureMultipartMetaInfo) get(key string) map[string]string {
+	a.Lock()
+	defer a.Unlock()
 	return a.meta[key]
 }
 
-func (a *azureMultipart) put(key string, value map[string]string) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
+// Set metadata map for the multipart object.
+func (a *azureMultipartMetaInfo) set(key string, value map[string]string) {
+	a.Lock()
+	defer a.Unlock()
 	a.meta[key] = value
 }
 
-func (a *azureMultipart) del(key string) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
+// Delete metadata map for the multipart object.
+func (a *azureMultipartMetaInfo) del(key string) {
+	a.Lock()
+	defer a.Unlock()
 	delete(a.meta, key)
 }
 
 // AzureObjects - Implements Object layer for Azure blob storage.
 type AzureObjects struct {
-	client        storage.BlobStorageClient // Azure sdk client
-	multipartMeta azureMultipart
+	client   storage.BlobStorageClient // Azure sdk client
+	metaInfo azureMultipartMetaInfo
 }
 
 // Convert azure errors to minio object layer errors.
@@ -129,9 +132,10 @@ func newAzureLayer(account, key string) (GatewayLayer, error) {
 	if err != nil {
 		return AzureObjects{}, err
 	}
-	client := c.GetBlobService()
-	meta := azureMultipart{meta: make(map[string]map[string]string)}
-	return &AzureObjects{client: client, multipartMeta: meta}, nil
+	return &AzureObjects{
+		client:   c.GetBlobService(),
+		metaInfo: azureMultipartMetaInfo{meta: make(map[string]map[string]string)},
+	}, nil
 }
 
 // Shutdown - Not relevant to Azure.
@@ -389,7 +393,7 @@ func (a AzureObjects) NewMultipartUpload(bucket, object string, metadata map[str
 	} else {
 		metadata = canonicalMetadata(metadata)
 	}
-	a.multipartMeta.put(uploadID, metadata)
+	a.metaInfo.set(uploadID, metadata)
 	return uploadID, nil
 }
 
@@ -494,13 +498,13 @@ func (a AzureObjects) ListObjectParts(bucket, object, uploadID string, partNumbe
 // There is no corresponding API in azure to abort an incomplete upload. The uncommmitted blocks
 // gets deleted after one week.
 func (a AzureObjects) AbortMultipartUpload(bucket, object, uploadID string) error {
-	a.multipartMeta.del(uploadID)
+	a.metaInfo.del(uploadID)
 	return nil
 }
 
 // CompleteMultipartUpload - Use Azure equivalent PutBlockList.
 func (a AzureObjects) CompleteMultipartUpload(bucket, object, uploadID string, uploadedParts []completePart) (objInfo ObjectInfo, err error) {
-	meta := a.multipartMeta.get(uploadID)
+	meta := a.metaInfo.get(uploadID)
 	if meta == nil {
 		return objInfo, traceError(InvalidUploadID{uploadID})
 	}
@@ -528,7 +532,7 @@ func (a AzureObjects) CompleteMultipartUpload(bucket, object, uploadID string, u
 			return objInfo, azureToObjectError(traceError(err), bucket, object)
 		}
 	}
-	a.multipartMeta.del(uploadID)
+	a.metaInfo.del(uploadID)
 	return a.GetObjectInfo(bucket, object)
 }
 
