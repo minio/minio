@@ -504,6 +504,10 @@ func (a AzureObjects) AbortMultipartUpload(bucket, object, uploadID string) erro
 
 // CompleteMultipartUpload - Use Azure equivalent PutBlockList.
 func (a AzureObjects) CompleteMultipartUpload(bucket, object, uploadID string, uploadedParts []completePart) (objInfo ObjectInfo, err error) {
+	meta := a.metaInfo.get(uploadID)
+	if meta == nil {
+		return objInfo, traceError(InvalidUploadID{uploadID})
+	}
 	var blocks []storage.Block
 	for _, part := range uploadedParts {
 		blocks = append(blocks, storage.Block{
@@ -515,7 +519,6 @@ func (a AzureObjects) CompleteMultipartUpload(bucket, object, uploadID string, u
 	if err != nil {
 		return objInfo, azureToObjectError(traceError(err), bucket, object)
 	}
-	meta := a.metaInfo.get(uploadID)
 	if len(meta) > 0 {
 		prop := storage.BlobHeaders{
 			ContentMD5:      meta["Content-Md5"],
