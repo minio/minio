@@ -735,12 +735,13 @@ func (s *ObjectLayerAPISuite) TestGetDirectoryReturnsObjectNotFound(c *C) {
 
 // Tests validate that GetObject on an existing directory fails as expected.
 func testGetDirectoryReturnsObjectNotFound(obj ObjectLayer, instanceType string, c TestErrHandler) {
-	err := obj.MakeBucket("bucket")
+	bucketName := "bucket"
+	err := obj.MakeBucket(bucketName)
 	if err != nil {
 		c.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
 
-	_, err = obj.PutObject("bucket", "dir1/dir3/object",
+	_, err = obj.PutObject(bucketName, "dir1/dir3/object",
 		int64(len("The specified multipart upload does not exist. The upload ID might be invalid, or the multipart upload might have been aborted or completed.")),
 		bytes.NewBufferString("One or more of the specified parts could not be found. The part might not have been uploaded, or the specified entity tag might not have matched the part's entity tag."), nil, "")
 
@@ -748,41 +749,24 @@ func testGetDirectoryReturnsObjectNotFound(obj ObjectLayer, instanceType string,
 		c.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
 
-	_, err = obj.GetObjectInfo("bucket", "dir1")
-	if isErrObjectNotFound(err) {
-		err = errorCause(err)
-		err1 := err.(ObjectNotFound)
-		if err1.Bucket != "bucket" {
-			c.Errorf("%s: Expected the bucket name in the error message to be `%s`, but instead found `%s`",
-				instanceType, "bucket", err1.Bucket)
-		}
-		if err1.Object != "dir1" {
-			c.Errorf("%s: Expected the object name in the error message to be `%s`, but instead found `%s`",
-				instanceType, "dir1", err1.Object)
-		}
-	} else {
-		if err.Error() != "ObjectNotFound" {
-			c.Errorf("%s: Expected the error message to be `%s`, but instead found `%s`", instanceType,
-				"ObjectNotFound", err.Error())
-		}
-	}
-
-	_, err = obj.GetObjectInfo("bucket", "dir1/")
-	if isErrObjectNameInvalid(err) {
-		err = errorCause(err)
-		err1 := err.(ObjectNameInvalid)
-		if err1.Bucket != "bucket" {
-			c.Errorf("%s: Expected the bucket name in the error message to be `%s`, but instead found `%s`",
-				instanceType, "bucket", err1.Bucket)
-		}
-		if err1.Object != "dir1/" {
-			c.Errorf("%s: Expected the object name in the error message to be `%s`, but instead found `%s`",
-				instanceType, "dir1/", err1.Object)
-		}
-	} else {
-		// force a failure with a line number.
-		if err.Error() != "ObjectNotFound" {
-			c.Errorf("%s: Expected the error message to be `%s`, but instead found `%s`", instanceType, "ObjectNotFound", err.Error())
+	for i, objName := range []string{"dir1", "dir1/", "dir1/dir3", "dir1/dir3/"} {
+		_, err = obj.GetObjectInfo(bucketName, objName)
+		if isErrObjectNotFound(err) {
+			err = errorCause(err)
+			err1 := err.(ObjectNotFound)
+			if err1.Bucket != bucketName {
+				c.Errorf("Test %d, %s: Expected the bucket name in the error message to be `%s`, but instead found `%s`",
+					i+1, instanceType, bucketName, err1.Bucket)
+			}
+			if err1.Object != objName {
+				c.Errorf("Test %d, %s: Expected the object name in the error message to be `%s`, but instead found `%s`",
+					i+1, instanceType, objName, err1.Object)
+			}
+		} else {
+			if err.Error() != "ObjectNotFound" {
+				c.Errorf("Test %d, %s: Expected the error message to be `%s`, but instead found `%s`", i+1, instanceType,
+					"ObjectNotFound", err.Error())
+			}
 		}
 	}
 }
