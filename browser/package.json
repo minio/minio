@@ -26,6 +26,7 @@
     "babel-loader": "^6.2.5",
     "babel-plugin-syntax-object-rest-spread": "^6.13.0",
     "babel-plugin-transform-object-rest-spread": "^6.8.0",
+    "babel-polyfill": "^6.23.0",
     "babel-preset-es2015": "^6.14.0",
     "babel-preset-react": "^6.11.1",
     "babel-register": "^6.14.0",
@@ -67,7 +68,6 @@
   "dependencies": {
     "bootstrap": "^3.3.6",
     "classnames": "^2.2.3",
-    "es6-object-assign": "^1.0.3",
     "font-awesome": "^4.7.0",
     "humanize": "0.0.9",
     "json-loader": "^0.5.4",

@@ -44,8 +44,6 @@ import Web from './js/web'
 window.Web = Web
 
 import storage from 'local-storage-fallback'
-import objectAssign from 'es6-object-assign'
-objectAssign.polyfill()
 
 const store = applyMiddleware(thunkMiddleware)(createStore)(reducer)
 const Browse = connect(state => state)(_Browse)
