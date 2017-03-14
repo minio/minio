@@ -29,6 +29,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/storage"
@@ -38,9 +39,35 @@ import (
 
 const globalAzureAPIVersion = "2016-05-31"
 
+// To store metadata during NewMultipartUpload which will be used after
+// CompleteMultipartUpload to call SetBlobMetadata.
+type azureMultipart struct {
+	meta map[string]map[string]string
+	mu   sync.Mutex
+}
+
+func (a *azureMultipart) get(key string) map[string]string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.meta[key]
+}
+
+func (a *azureMultipart) put(key string, value map[string]string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.meta[key] = value
+}
+
+func (a *azureMultipart) del(key string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	delete(a.meta, key)
+}
+
 // AzureObjects - Implements Object layer for Azure blob storage.
 type AzureObjects struct {
-	client storage.BlobStorageClient // Azure sdk client
+	client        storage.BlobStorageClient // Azure sdk client
+	multipartMeta azureMultipart
 }
 
 // Convert azure errors to minio object layer errors.
@@ -103,7 +130,8 @@ func newAzureLayer(account, key string) (GatewayLayer, error) {
 		return AzureObjects{}, err
 	}
 	client := c.GetBlobService()
-	return &AzureObjects{client}, nil
+	meta := azureMultipart{meta: make(map[string]map[string]string)}
+	return &AzureObjects{client: client, multipartMeta: meta}, nil
 }
 
 // Shutdown - Not relevant to Azure.
@@ -356,6 +384,9 @@ func (a AzureObjects) NewMultipartUpload(bucket, object string, metadata map[str
 	// co-exist as long as the user keeps the blocks uploaded (in block blobs) unique amongst concurrent upload attempts.
 	// Each concurrent client, keeps its own blockID list which it can commit.
 	uploadID = object
+	if len(metadata) > 0 {
+		a.multipartMeta.put(uploadID, canonicalMetadata(metadata))
+	}
 	return uploadID, azureToObjectError(traceError(a.client.CreateBlockBlob(bucket, object)))
 }
 
@@ -460,7 +491,8 @@ func (a AzureObjects) ListObjectParts(bucket, object, uploadID string, partNumbe
 // There is no corresponding API in azure to abort an incomplete upload. The uncommmitted blocks
 // gets deleted after one week.
 func (a AzureObjects) AbortMultipartUpload(bucket, object, uploadID string) error {
-	return traceError(NotImplemented{})
+	a.multipartMeta.del(uploadID)
+	return nil
 }
 
 // CompleteMultipartUpload - Use Azure equivalent PutBlockList.
@@ -476,6 +508,11 @@ func (a AzureObjects) CompleteMultipartUpload(bucket, object, uploadID string, u
 	if err != nil {
 		return objInfo, azureToObjectError(traceError(err), bucket, object)
 	}
+	err = a.client.SetBlobMetadata(bucket, object, nil, a.multipartMeta.get(uploadID))
+	if err != nil {
+		return objInfo, azureToObjectError(traceError(err), bucket, object)
+	}
+	a.multipartMeta.del(uploadID)
 	return a.GetObjectInfo(bucket, object)
 }
 
