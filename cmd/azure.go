@@ -427,7 +427,9 @@ func azureParseBlockID(blockID string) (int, string, error) {
 
 // PutObjectPart - Use Azure equivalent PutBlockWithLength.
 func (a AzureObjects) PutObjectPart(bucket, object, uploadID string, partID int, size int64, data io.Reader, md5Hex string, sha256sum string) (info PartInfo, err error) {
-
+	if meta := a.metaInfo.get(uploadID); meta == nil {
+		return info, traceError(InvalidUploadID{})
+	}
 	var sha256Writer hash.Hash
 	if sha256sum != "" {
 		sha256Writer = sha256.New()
@@ -457,6 +459,14 @@ func (a AzureObjects) PutObjectPart(bucket, object, uploadID string, partID int,
 
 // ListObjectParts - Use Azure equivalent GetBlockList.
 func (a AzureObjects) ListObjectParts(bucket, object, uploadID string, partNumberMarker int, maxParts int) (result ListPartsInfo, err error) {
+	result.Bucket = bucket
+	result.Object = object
+	result.UploadID = uploadID
+	result.MaxParts = maxParts
+
+	if meta := a.metaInfo.get(uploadID); meta == nil {
+		return result, nil
+	}
 	resp, err := a.client.GetBlockList(bucket, object, storage.BlockListTypeUncommitted)
 	if err != nil {
 		return result, azureToObjectError(traceError(err), bucket, object)
@@ -484,10 +494,6 @@ func (a AzureObjects) ListObjectParts(bucket, object, uploadID string, partNumbe
 		})
 		tmpMaxParts++
 	}
-	result.Bucket = bucket
-	result.Object = object
-	result.UploadID = uploadID
-	result.MaxParts = maxParts
 	if partCount < len(resp.UncommittedBlocks) {
 		result.IsTruncated = true
 	}
