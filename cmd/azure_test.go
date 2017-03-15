@@ -18,10 +18,27 @@ package cmd
 
 import (
 	"net/http"
+	"reflect"
 	"testing"
 
 	"github.com/Azure/azure-sdk-for-go/storage"
 )
+
+// Test canonical metadata.
+func TestCanonicalMetadata(t *testing.T) {
+	metadata := map[string]string{
+		"accept-encoding":  "gzip",
+		"content-encoding": "gzip",
+	}
+	expectedCanonicalM := map[string]string{
+		"Accept-Encoding":  "gzip",
+		"Content-Encoding": "gzip",
+	}
+	actualCanonicalM := canonicalMetadata(metadata)
+	if !reflect.DeepEqual(actualCanonicalM, expectedCanonicalM) {
+		t.Fatalf("Test failed, expected %#v, got %#v", expectedCanonicalM, actualCanonicalM)
+	}
+}
 
 // Add tests for azure to object error.
 func TestAzureToObjectError(t *testing.T) {

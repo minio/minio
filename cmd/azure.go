@@ -19,13 +19,10 @@ package cmd
 import (
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/xml"
 	"fmt"
 	"hash"
 	"io"
-	"io/ioutil"
 	"net/http"
-	"net/textproto"
 	"net/url"
 	"strconv"
 	"strings"
@@ -141,51 +138,25 @@ func newAzureLayer(account, key string) (GatewayLayer, error) {
 	}, nil
 }
 
-// Shutdown - Not relevant to Azure.
+// Shutdown - save any gateway metadata to disk
+// if necessary and reload upon next restart.
 func (a AzureObjects) Shutdown() error {
+	// TODO
 	return nil
 }
 
-// StorageInfo - Not relevant to Azure.
+// StorageInfo - Not relevant to Azure backend.
 func (a AzureObjects) StorageInfo() StorageInfo {
 	return StorageInfo{}
 }
 
-// MakeBucket - Create bucket.
+// MakeBucket - Create a new container on azure backend.
 func (a AzureObjects) MakeBucket(bucket string) error {
 	err := a.client.CreateContainer(bucket, storage.ContainerAccessTypePrivate)
 	return azureToObjectError(traceError(err), bucket)
 }
 
-// AnonGetBucketInfo - Get bucket metadata.
-func (a AzureObjects) AnonGetBucketInfo(bucket string) (bucketInfo BucketInfo, err error) {
-	url, err := url.Parse(a.client.GetBlobURL(bucket, ""))
-	if err != nil {
-		return bucketInfo, azureToObjectError(traceError(err))
-	}
-	url.RawQuery = "restype=container"
-	resp, err := http.Head(url.String())
-	if err != nil {
-		return bucketInfo, azureToObjectError(traceError(err), bucket)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return bucketInfo, azureToObjectError(traceError(anonErrToObjectErr(resp.StatusCode, bucket)), bucket)
-	}
-
-	t, err := time.Parse(time.RFC1123, resp.Header.Get("Last-Modified"))
-	if err != nil {
-		return bucketInfo, traceError(err)
-	}
-	bucketInfo = BucketInfo{
-		Name:    bucket,
-		Created: t,
-	}
-	return bucketInfo, nil
-}
-
-// GetBucketInfo - Get bucket metadata.
+// GetBucketInfo - Get bucket metadata..
 func (a AzureObjects) GetBucketInfo(bucket string) (BucketInfo, error) {
 	// Azure does not have an equivalent call, hence use ListContainers.
 	resp, err := a.client.ListContainers(storage.ListContainersParameters{
@@ -197,19 +168,18 @@ func (a AzureObjects) GetBucketInfo(bucket string) (BucketInfo, error) {
 	for _, container := range resp.Containers {
 		if container.Name == bucket {
 			t, e := time.Parse(time.RFC1123, container.Properties.LastModified)
-			if e != nil {
-				continue
-			}
-			return BucketInfo{
-				Name:    bucket,
-				Created: t,
-			}, nil
+			if e == nil {
+				return BucketInfo{
+					Name:    bucket,
+					Created: t,
+				}, nil
+			} // else continue
 		}
 	}
-	return BucketInfo{}, traceError(BucketNotFound{})
+	return BucketInfo{}, traceError(BucketNotFound{Bucket: bucket})
 }
 
-// ListBuckets - Use Azure equivalent ListContainers.
+// ListBuckets - Lists all azure containers, uses Azure equivalent ListContainers.
 func (a AzureObjects) ListBuckets() (buckets []BucketInfo, err error) {
 	resp, err := a.client.ListContainers(storage.ListContainersParameters{})
 	if err != nil {
@@ -228,12 +198,13 @@ func (a AzureObjects) ListBuckets() (buckets []BucketInfo, err error) {
 	return buckets, nil
 }
 
-// DeleteBucket - Use Azure equivalent DeleteContainer.
+// DeleteBucket - delete a container on azure, uses Azure equivalent DeleteContainer.
 func (a AzureObjects) DeleteBucket(bucket string) error {
 	return azureToObjectError(traceError(a.client.DeleteContainer(bucket)), bucket)
 }
 
-// ListObjects - Use Azure equivalent ListBlobs.
+// ListObjects - lists all blobs on azure with in a container filtered by prefix
+// and marker, uses Azure equivalent ListBlobs.
 func (a AzureObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (result ListObjectsInfo, err error) {
 	resp, err := a.client.ListBlobs(bucket, storage.ListBlobsParameters{
 		Prefix:     prefix,
@@ -265,7 +236,12 @@ func (a AzureObjects) ListObjects(bucket, prefix, marker, delimiter string, maxK
 	return result, nil
 }
 
-// GetObject - Use Azure equivalent GetBlobRange.
+// GetObject - reads an object from azure. Supports additional
+// parameters like offset and length which are synonymous with
+// HTTP Range requests.
+//
+// startOffset indicates the starting read location of the object.
+// length indicates the total length of the object.
 func (a AzureObjects) GetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) error {
 	byteRange := fmt.Sprintf("%d-", startOffset)
 	if length > 0 && startOffset > 0 {
@@ -287,7 +263,8 @@ func (a AzureObjects) GetObject(bucket, object string, startOffset int64, length
 	return traceError(err)
 }
 
-// GetObjectInfo - Use Azure equivalent GetBlobProperties.
+// GetObjectInfo - reads blob metadata properties and replies back ObjectInfo,
+// uses zure equivalent GetBlobProperties.
 func (a AzureObjects) GetObjectInfo(bucket, object string) (objInfo ObjectInfo, err error) {
 	prop, err := a.client.GetBlobProperties(bucket, object)
 	if err != nil {
@@ -297,28 +274,35 @@ func (a AzureObjects) GetObjectInfo(bucket, object string) (objInfo ObjectInfo, 
 	if err != nil {
 		return objInfo, traceError(err)
 	}
-	objInfo.Bucket = bucket
-	objInfo.UserDefined = make(map[string]string)
+	objInfo = ObjectInfo{
+		Bucket:      bucket,
+		UserDefined: make(map[string]string),
+		MD5Sum:      prop.Etag,
+		ModTime:     t,
+		Name:        object,
+		Size:        prop.ContentLength,
+	}
 	if prop.ContentEncoding != "" {
 		objInfo.UserDefined["Content-Encoding"] = prop.ContentEncoding
 	}
 	objInfo.UserDefined["Content-Type"] = prop.ContentType
-	objInfo.MD5Sum = prop.Etag
-	objInfo.ModTime = t
-	objInfo.Name = object
-	objInfo.Size = prop.ContentLength
 	return objInfo, nil
 }
 
+// Canonicalize the metadata headers, without this azure-sdk calculates
+// incorrect signature. This attempt to canonicalize is to convert
+// any HTTP header which is of form say `accept-encoding` should be
+// converted to `Accept-Encoding` in its canonical form.
 func canonicalMetadata(metadata map[string]string) (canonical map[string]string) {
 	canonical = make(map[string]string)
 	for k, v := range metadata {
-		canonical[textproto.CanonicalMIMEHeaderKey(k)] = v
+		canonical[http.CanonicalHeaderKey(k)] = v
 	}
 	return canonical
 }
 
-// PutObject - Use Azure equivalent CreateBlockBlobFromReader.
+// PutObject - Create a new blob with the incoming data,
+// uses Azure equivalent CreateBlockBlobFromReader.
 func (a AzureObjects) PutObject(bucket, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (objInfo ObjectInfo, err error) {
 	var sha256Writer hash.Hash
 	teeReader := data
@@ -345,7 +329,8 @@ func (a AzureObjects) PutObject(bucket, object string, size int64, data io.Reade
 	return a.GetObjectInfo(bucket, object)
 }
 
-// CopyObject - Use Azure equivalent CopyBlob.
+// CopyObject - Copies a blob from source container to destination container.
+// Uses Azure equivalent CopyBlob API.
 func (a AzureObjects) CopyObject(srcBucket, srcObject, destBucket, destObject string, metadata map[string]string) (objInfo ObjectInfo, err error) {
 	err = a.client.CopyBlob(destBucket, destObject, a.client.GetBlobURL(srcBucket, srcObject))
 	if err != nil {
@@ -354,13 +339,13 @@ func (a AzureObjects) CopyObject(srcBucket, srcObject, destBucket, destObject st
 	return a.GetObjectInfo(destBucket, destObject)
 }
 
-// DeleteObject - Use azure equivalent DeleteBlob.
+// DeleteObject - Deletes a blob on azure container, uses Azure
+// equivalent DeleteBlob API.
 func (a AzureObjects) DeleteObject(bucket, object string) error {
 	err := a.client.DeleteBlob(bucket, object, nil)
 	if err != nil {
 		return azureToObjectError(traceError(err), bucket, object)
 	}
-
 	return nil
 }
 
@@ -549,35 +534,6 @@ func (a AzureObjects) CompleteMultipartUpload(bucket, object, uploadID string, u
 	return a.GetObjectInfo(bucket, object)
 }
 
-// AnonGetObject - SendGET request without authentication.
-// This is needed when clients send GET requests on objects that can be downloaded without auth.
-func (a AzureObjects) AnonGetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) (err error) {
-	url := a.client.GetBlobURL(bucket, object)
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return azureToObjectError(traceError(err), bucket, object)
-	}
-
-	if length > 0 && startOffset > 0 {
-		req.Header.Add("Range", fmt.Sprintf("bytes=%d-%d", startOffset, startOffset+length-1))
-	} else if startOffset > 0 {
-		req.Header.Add("Range", fmt.Sprintf("bytes=%d-", startOffset))
-	}
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return azureToObjectError(traceError(err), bucket, object)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusPartialContent && resp.StatusCode != http.StatusOK {
-		return azureToObjectError(traceError(anonErrToObjectErr(resp.StatusCode, bucket, object)), bucket, object)
-	}
-
-	_, err = io.Copy(writer, resp.Body)
-	return traceError(err)
-}
-
 func anonErrToObjectErr(statusCode int, params ...string) error {
 	bucket := ""
 	object := ""
@@ -601,47 +557,6 @@ func anonErrToObjectErr(statusCode int, params ...string) error {
 		return BucketNameInvalid{Bucket: bucket}
 	}
 	return errUnexpected
-}
-
-// AnonGetObjectInfo - Send HEAD request without authentication and convert the
-// result to ObjectInfo.
-func (a AzureObjects) AnonGetObjectInfo(bucket, object string) (objInfo ObjectInfo, err error) {
-	resp, err := http.Head(a.client.GetBlobURL(bucket, object))
-	if err != nil {
-		return objInfo, azureToObjectError(traceError(err), bucket, object)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return objInfo, azureToObjectError(traceError(anonErrToObjectErr(resp.StatusCode, bucket, object)), bucket, object)
-	}
-
-	var contentLength int64
-	contentLengthStr := resp.Header.Get("Content-Length")
-	if contentLengthStr != "" {
-		contentLength, err = strconv.ParseInt(contentLengthStr, 0, 64)
-		if err != nil {
-			return objInfo, azureToObjectError(traceError(errUnexpected), bucket, object)
-		}
-	}
-
-	t, err := time.Parse(time.RFC1123, resp.Header.Get("Last-Modified"))
-	if err != nil {
-		return objInfo, traceError(err)
-	}
-
-	objInfo.ModTime = t
-	objInfo.Bucket = bucket
-	objInfo.UserDefined = make(map[string]string)
-	if resp.Header.Get("Content-Encoding") != "" {
-		objInfo.UserDefined["Content-Encoding"] = resp.Header.Get("Content-Encoding")
-	}
-	objInfo.UserDefined["Content-Type"] = resp.Header.Get("Content-Type")
-	objInfo.MD5Sum = resp.Header.Get("Etag")
-	objInfo.ModTime = t
-	objInfo.Name = object
-	objInfo.Size = contentLength
-	return
 }
 
 // Copied from github.com/Azure/azure-sdk-for-go/storage/blob.go
@@ -668,63 +583,6 @@ func azureListBlobsGetParameters(p storage.ListBlobsParameters) url.Values {
 	}
 
 	return out
-}
-
-// AnonListObjects - Use Azure equivalent ListBlobs.
-func (a AzureObjects) AnonListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (result ListObjectsInfo, err error) {
-	params := storage.ListBlobsParameters{
-		Prefix:     prefix,
-		Marker:     marker,
-		Delimiter:  delimiter,
-		MaxResults: uint(maxKeys),
-	}
-
-	q := azureListBlobsGetParameters(params)
-	q.Set("restype", "container")
-	q.Set("comp", "list")
-
-	url, err := url.Parse(a.client.GetBlobURL(bucket, ""))
-	if err != nil {
-		return result, azureToObjectError(traceError(err))
-	}
-	url.RawQuery = q.Encode()
-
-	resp, err := http.Get(url.String())
-	if err != nil {
-		return result, azureToObjectError(traceError(err))
-	}
-	defer resp.Body.Close()
-
-	var listResp storage.BlobListResponse
-
-	data, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return result, azureToObjectError(traceError(err))
-	}
-	err = xml.Unmarshal(data, &listResp)
-	if err != nil {
-		return result, azureToObjectError(traceError(err))
-	}
-
-	result.IsTruncated = listResp.NextMarker != ""
-	result.NextMarker = listResp.NextMarker
-	for _, object := range listResp.Blobs {
-		t, e := time.Parse(time.RFC1123, object.Properties.LastModified)
-		if e != nil {
-			continue
-		}
-		result.Objects = append(result.Objects, ObjectInfo{
-			Bucket:          bucket,
-			Name:            object.Name,
-			ModTime:         t,
-			Size:            object.Properties.ContentLength,
-			MD5Sum:          object.Properties.Etag,
-			ContentType:     object.Properties.ContentType,
-			ContentEncoding: object.Properties.ContentEncoding,
-		})
-	}
-	result.Prefixes = listResp.BlobPrefixes
-	return result, nil
 }
 
 // SetBucketPolicies - Azure supports three types of container policies:
