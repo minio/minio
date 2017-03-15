@@ -43,7 +43,7 @@ const globalAzureAPIVersion = "2016-05-31"
 // CompleteMultipartUpload to call SetBlobMetadata.
 type azureMultipartMetaInfo struct {
 	meta map[string]map[string]string
-	sync.Mutex
+	*sync.Mutex
 }
 
 // Return metadata map of the multipart object.
@@ -133,8 +133,11 @@ func newAzureLayer(account, key string) (GatewayLayer, error) {
 		return AzureObjects{}, err
 	}
 	return &AzureObjects{
-		client:   c.GetBlobService(),
-		metaInfo: azureMultipartMetaInfo{meta: make(map[string]map[string]string)},
+		client: c.GetBlobService(),
+		metaInfo: azureMultipartMetaInfo{
+			meta:  make(map[string]map[string]string),
+			Mutex: &sync.Mutex{},
+		},
 	}, nil
 }
 
@@ -473,6 +476,7 @@ func (a AzureObjects) ListObjectParts(bucket, object, uploadID string, partNumbe
 	}
 	tmpMaxParts := 0
 	partCount := 0 // Used for figuring out IsTruncated.
+	nextPartNumberMarker := 0
 	for _, part := range resp.UncommittedBlocks {
 		if tmpMaxParts == maxParts {
 			// Also takes care of the case if maxParts = 0
@@ -493,10 +497,13 @@ func (a AzureObjects) ListObjectParts(bucket, object, uploadID string, partNumbe
 			part.Size,
 		})
 		tmpMaxParts++
+		nextPartNumberMarker = partID
 	}
 	if partCount < len(resp.UncommittedBlocks) {
 		result.IsTruncated = true
+		result.NextPartNumberMarker = nextPartNumberMarker
 	}
+
 	return result, nil
 }
 
