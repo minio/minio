@@ -20,8 +20,6 @@ import (
 	"fmt"
 	"runtime"
 	"strings"
-
-	"github.com/minio/mc/pkg/console"
 )
 
 // Prints the formatted startup message.
@@ -34,13 +32,13 @@ func printGatewayStartupMessage(apiEndPoints []string, accessKey, secretKey, bac
 	endPoint := apiEndPoints[0]
 
 	// Configure 'mc', following block prints platform specific information for minio client.
-	console.Println(colorBlue("\nCommand-line Access: ") + mcQuickStartGuide)
+	log.Println(colorBlue("\nCommand-line Access: ") + mcQuickStartGuide)
 	if runtime.GOOS == globalWindowsOSName {
 		mcMessage := fmt.Sprintf("$ mc.exe config host add my%s %s %s %s", backendType, endPoint, accessKey, secretKey)
-		console.Println(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
+		log.Println(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
 	} else {
 		mcMessage := fmt.Sprintf("$ mc config host add my%s %s %s %s", backendType, endPoint, accessKey, secretKey)
-		console.Println(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
+		log.Println(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
 	}
 
 	// Prints documentation message.
@@ -50,9 +48,7 @@ func printGatewayStartupMessage(apiEndPoints []string, accessKey, secretKey, bac
 	// authority and expiry.
 	if globalIsSSL {
 		certs, err := readCertificateChain()
-		if err != nil {
-			console.Fatalf("Unable to read certificate chain. Error: %s", err)
-		}
+		fatalIf(err, "Unable to read certificate chain")
 		printCertificateMsg(certs)
 	}
 }
@@ -61,7 +57,7 @@ func printGatewayStartupMessage(apiEndPoints []string, accessKey, secretKey, bac
 func printGatewayCommonMsg(apiEndpoints []string, accessKey, secretKey string) {
 	apiEndpointStr := strings.Join(apiEndpoints, "  ")
 	// Colorize the message and print.
-	console.Println(colorBlue("\nEndpoint: ") + colorBold(fmt.Sprintf(getFormatStr(len(apiEndpointStr), 1), apiEndpointStr)))
-	console.Println(colorBlue("AccessKey: ") + colorBold(fmt.Sprintf("%s ", accessKey)))
-	console.Println(colorBlue("SecretKey: ") + colorBold(fmt.Sprintf("%s ", secretKey)))
+	log.Println(colorBlue("\nEndpoint: ") + colorBold(fmt.Sprintf(getFormatStr(len(apiEndpointStr), 1), apiEndpointStr)))
+	log.Println(colorBlue("AccessKey: ") + colorBold(fmt.Sprintf("%s ", accessKey)))
+	log.Println(colorBlue("SecretKey: ") + colorBold(fmt.Sprintf("%s ", secretKey)))
 }

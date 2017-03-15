@@ -31,7 +31,6 @@ import (
 	"runtime"
 
 	"github.com/minio/cli"
-	"github.com/minio/mc/pkg/console"
 )
 
 var serverFlags = []cli.Flag{
@@ -89,7 +88,7 @@ func checkUpdate(mode string) {
 	// Its OK to ignore any errors during getUpdateInfo() here.
 	if older, downloadURL, err := getUpdateInfo(1*time.Second, mode); err == nil {
 		if older > time.Duration(0) {
-			console.Println(colorizeUpdateMessage(downloadURL, older))
+			log.Println(colorizeUpdateMessage(downloadURL, older))
 		}
 	}
 }
@@ -109,10 +108,19 @@ func migrate() {
 }
 
 func enableLoggers() {
-	// Enable all loggers here.
-	enableConsoleLogger()
-	enableFileLogger()
-	// Add your logger here.
+	fileLogTarget := serverConfig.Logger.GetFile()
+	if fileLogTarget.Enable {
+		err := InitFileLogger(&fileLogTarget)
+		fatalIf(err, "Unable to initialize file logger")
+		log.AddTarget(fileLogTarget)
+	}
+
+	consoleLogTarget := serverConfig.Logger.GetConsole()
+	if consoleLogTarget.Enable {
+		InitConsoleLogger(&consoleLogTarget)
+	}
+
+	log.SetConsoleTarget(consoleLogTarget)
 }
 
 // Initializes a new config if it doesn't exist, else migrates any old config
@@ -124,9 +132,8 @@ func initConfig() {
 	var cred credential
 	var err error
 	if accessKey != "" && secretKey != "" {
-		if cred, err = createCredential(accessKey, secretKey); err != nil {
-			console.Fatalf("Invalid access/secret Key set in environment. Err: %s.\n", err)
-		}
+		cred, err = createCredential(accessKey, secretKey)
+		fatalIf(err, "Invalid access/secret Key set in environment.")
 
 		// credential Envs are set globally.
 		globalIsEnvCreds = true
@@ -135,7 +142,7 @@ func initConfig() {
 	browser := os.Getenv("MINIO_BROWSER")
 	if browser != "" {
 		if !(strings.EqualFold(browser, "off") || strings.EqualFold(browser, "on")) {
-			console.Fatalf("Invalid value ‘%s’ in MINIO_BROWSER environment variable.", browser)
+			fatalIf(errors.New("invalid value"), "‘%s’ in MINIO_BROWSER environment variable.", browser)
 		}
 
 		// browser Envs are set globally, this doesn't represent
@@ -150,10 +157,9 @@ func initConfig() {
 
 	// Config file does not exist, we create it fresh and return upon success.
 	if !isConfigFileExists() {
-		if err := newConfig(envs); err != nil {
-			console.Fatalf("Unable to initialize minio config for the first time. Error: %s.\n", err)
-		}
-		console.Println("Created minio configuration file successfully at " + getConfigDir())
+		err := newConfig(envs)
+		fatalIf(err, "Unable to initialize minio config for the first time.")
+		log.Println("Created minio configuration file successfully at " + getConfigDir())
 		return
 	}
 
@@ -161,14 +167,12 @@ func initConfig() {
 	migrate()
 
 	// Validate config file
-	if err := validateConfig(); err != nil {
-		console.Fatalf("Cannot validate configuration file. Error: %s\n", err)
-	}
+	err = validateConfig()
+	fatalIf(err, "Cannot validate configuration file")
 
 	// Once we have migrated all the old config, now load them.
-	if err := loadConfig(envs); err != nil {
-		console.Fatalf("Unable to initialize minio config. Error: %s.\n", err)
-	}
+	err = loadConfig(envs)
+	fatalIf(err, "Unable to initialize minio config")
 }
 
 // Generic Minio initialization to create/load config, prepare loggers, etc..
@@ -464,6 +468,9 @@ func serverMain(c *cli.Context) {
 
 	// Get quiet flag from command line argument.
 	quietFlag := c.Bool("quiet") || c.GlobalBool("quiet")
+	if quietFlag {
+		log.EnableQuiet()
+	}
 
 	// Get configuration directory from command line argument.
 	configDir := c.String("config-dir")
@@ -471,7 +478,7 @@ func serverMain(c *cli.Context) {
 		configDir = c.GlobalString("config-dir")
 	}
 	if configDir == "" {
-		console.Fatalln("Configuration directory cannot be empty.")
+		fatalIf(errors.New("empty directory"), "Configuration directory cannot be empty.")
 	}
 
 	// Set configuration directory.

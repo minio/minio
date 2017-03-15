@@ -87,30 +87,26 @@ func TestServerConfig(t *testing.T) {
 		t.Errorf("Expecting Webhook config %#v found %#v", mySQLNotify{}, savedNotifyCfg6)
 	}
 
-	serverConfig.Logger.SetConsole(consoleLogger{
-		Enable: true,
-	})
+	consoleLogger := NewConsoleLogger()
+	serverConfig.Logger.SetConsole(consoleLogger)
 	consoleCfg := serverConfig.Logger.GetConsole()
-	if !reflect.DeepEqual(consoleCfg, consoleLogger{Enable: true}) {
-		t.Errorf("Expecting console logger config %#v found %#v", consoleLogger{Enable: true}, consoleCfg)
+	if !reflect.DeepEqual(consoleCfg, consoleLogger) {
+		t.Errorf("Expecting console logger config %#v found %#v", consoleLogger, consoleCfg)
 	}
 	// Set new console logger.
-	serverConfig.Logger.SetConsole(consoleLogger{
-		Enable: false,
-	})
+	consoleLogger.Enable = false
+	serverConfig.Logger.SetConsole(consoleLogger)
 
 	// Set new file logger.
-	serverConfig.Logger.SetFile(fileLogger{
-		Enable: true,
-	})
+	fileLogger := NewFileLogger("test-log-file")
+	serverConfig.Logger.SetFile(fileLogger)
 	fileCfg := serverConfig.Logger.GetFile()
-	if !reflect.DeepEqual(fileCfg, fileLogger{Enable: true}) {
-		t.Errorf("Expecting file logger config %#v found %#v", fileLogger{Enable: true}, consoleCfg)
+	if !reflect.DeepEqual(fileCfg, fileLogger) {
+		t.Errorf("Expecting file logger config %#v found %#v", fileLogger, fileCfg)
 	}
 	// Set new file logger.
-	serverConfig.Logger.SetFile(fileLogger{
-		Enable: false,
-	})
+	fileLogger.Enable = false
+	serverConfig.Logger.SetFile(fileLogger)
 
 	// Match version.
 	if serverConfig.GetVersion() != v16 {

@@ -21,7 +21,6 @@ import (
 	"sync"
 
 	homedir "github.com/minio/go-homedir"
-	"github.com/minio/mc/pkg/console"
 )
 
 const (
@@ -97,9 +96,7 @@ func (config *ConfigDir) GetPrivateKeyFile() string {
 
 func mustGetDefaultConfigDir() string {
 	homeDir, err := homedir.Dir()
-	if err != nil {
-		console.Fatalln("Unable to get home directory.", err)
-	}
+	fatalIf(err, "Unable to get home directory.")
 
 	return filepath.Join(homeDir, defaultMinioConfigDir)
 }

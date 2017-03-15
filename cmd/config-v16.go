@@ -44,7 +44,7 @@ type serverConfigV16 struct {
 	Browser    string     `json:"browser"`
 
 	// Additional error logging configuration.
-	Logger *logger `json:"logger"`
+	Logger *loggers `json:"logger"`
 
 	// Notification queue configuration.
 	Notify *notifier `json:"notify"`
@@ -54,15 +54,13 @@ func newServerConfigV16() *serverConfigV16 {
 	srvCfg := &serverConfigV16{
 		Version: v16,
 		Region:  globalMinioDefaultRegion,
-		Logger:  &logger{},
+		Logger:  &loggers{},
 		Notify:  &notifier{},
 	}
 	srvCfg.SetCredential(mustGetNewCredential())
 	srvCfg.SetBrowser("on")
 	// Enable console logger by default on a fresh run.
-	srvCfg.Logger.Console = consoleLogger{
-		Enable: true,
-	}
+	srvCfg.Logger.Console = NewConsoleLogger()
 
 	// Make sure to initialize notification configs.
 	srvCfg.Notify.AMQP = make(map[string]amqpNotify)
