@@ -34,38 +34,38 @@ func TestAzureToObjectError(t *testing.T) {
 			nil, nil, "", "",
 		},
 		{
-			errUnexpected, errUnexpected, "", "",
+			traceError(errUnexpected), errUnexpected, "", "",
 		},
 		{
 			traceError(errUnexpected), traceError(errUnexpected), "", "",
 		},
 		{
-			storage.AzureStorageServiceError{
+			traceError(storage.AzureStorageServiceError{
 				Code: "ContainerAlreadyExists",
-			}, BucketExists{Bucket: "bucket"}, "bucket", "",
+			}), BucketExists{Bucket: "bucket"}, "bucket", "",
 		},
 		{
-			storage.AzureStorageServiceError{
+			traceError(storage.AzureStorageServiceError{
 				Code: "InvalidResourceName",
-			}, BucketNameInvalid{Bucket: "bucket."}, "bucket.", "",
+			}), BucketNameInvalid{Bucket: "bucket."}, "bucket.", "",
 		},
 		{
-			storage.AzureStorageServiceError{
+			traceError(storage.AzureStorageServiceError{
 				StatusCode: http.StatusNotFound,
-			}, ObjectNotFound{
+			}), ObjectNotFound{
 				Bucket: "bucket",
 				Object: "object",
 			}, "bucket", "object",
 		},
 		{
-			storage.AzureStorageServiceError{
+			traceError(storage.AzureStorageServiceError{
 				StatusCode: http.StatusNotFound,
-			}, BucketNotFound{Bucket: "bucket"}, "bucket", "",
+			}), BucketNotFound{Bucket: "bucket"}, "bucket", "",
 		},
 		{
-			storage.AzureStorageServiceError{
+			traceError(storage.AzureStorageServiceError{
 				StatusCode: http.StatusBadRequest,
-			}, BucketNameInvalid{Bucket: "bucket."}, "bucket.", "",
+			}), BucketNameInvalid{Bucket: "bucket."}, "bucket.", "",
 		},
 	}
 	for i, testCase := range testCases {
