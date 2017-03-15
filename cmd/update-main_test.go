@@ -260,7 +260,7 @@ func TestDownloadReleaseData(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		result, err := downloadReleaseData(testCase.releaseChecksumURL, 1*time.Second)
+		result, err := downloadReleaseData(testCase.releaseChecksumURL, 1*time.Second, "")
 		if testCase.expectedErr == nil {
 			if err != nil {
 				t.Fatalf("error: expected: %v, got: %v", testCase.expectedErr, err)

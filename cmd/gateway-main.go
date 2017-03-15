@@ -207,6 +207,7 @@ func gatewayMain(ctx *cli.Context) {
 
 	// Prints the formatted startup message once object layer is initialized.
 	if !quietFlag {
+		checkUpdate(globalMinioModeGatewayAzure)
 		printGatewayStartupMessage(apiEndPoints, accessKey, secretKey, backendType)
 	}
 
