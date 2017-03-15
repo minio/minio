@@ -78,6 +78,10 @@ func migrateConfig() error {
 	if err := migrateV13ToV14(); err != nil {
 		return err
 	}
+	// Migration version '14' to '15'.
+	if err := migrateV14ToV15(); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -905,7 +909,7 @@ func migrateV12ToV13() error {
 	return nil
 }
 
-// Version '13' to '14' migration. Add support for custom webhook endpoint.
+// Version '13' to '14' migration. Add support for browser param.
 func migrateV13ToV14() error {
 	cv13, err := loadConfigV13()
 	if err != nil {
@@ -999,6 +1003,109 @@ func migrateV13ToV14() error {
 	console.Println(
 		"Migration from version ‘" +
 			cv13.Version + "’ to ‘" + srvConfig.Version +
+			"’ completed successfully.",
+	)
+	return nil
+}
+
+// Version '14' to '15' migration. Add support for MySQL notifications.
+func migrateV14ToV15() error {
+	cv14, err := loadConfigV14()
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("Unable to load config version ‘14’. %v", err)
+	}
+	if cv14.Version != "14" {
+		return nil
+	}
+
+	// Copy over fields from V14 into V15 config struct
+	srvConfig := &serverConfigV15{
+		Logger: &logger{},
+		Notify: &notifier{},
+	}
+	srvConfig.Version = "15"
+	srvConfig.Credential = cv14.Credential
+	srvConfig.Region = cv14.Region
+	if srvConfig.Region == "" {
+		// Region needs to be set for AWS Signature Version 4.
+		srvConfig.Region = globalMinioDefaultRegion
+	}
+	srvConfig.Logger.Console = cv14.Logger.Console
+	srvConfig.Logger.File = cv14.Logger.File
+
+	// check and set notifiers config
+	if len(cv14.Notify.AMQP) == 0 {
+		srvConfig.Notify.AMQP = make(map[string]amqpNotify)
+		srvConfig.Notify.AMQP["1"] = amqpNotify{}
+	} else {
+		srvConfig.Notify.AMQP = cv14.Notify.AMQP
+	}
+	if len(cv14.Notify.ElasticSearch) == 0 {
+		srvConfig.Notify.ElasticSearch = make(map[string]elasticSearchNotify)
+		srvConfig.Notify.ElasticSearch["1"] = elasticSearchNotify{}
+	} else {
+		srvConfig.Notify.ElasticSearch = cv14.Notify.ElasticSearch
+	}
+	if len(cv14.Notify.Redis) == 0 {
+		srvConfig.Notify.Redis = make(map[string]redisNotify)
+		srvConfig.Notify.Redis["1"] = redisNotify{}
+	} else {
+		srvConfig.Notify.Redis = cv14.Notify.Redis
+	}
+	if len(cv14.Notify.PostgreSQL) == 0 {
+		srvConfig.Notify.PostgreSQL = make(map[string]postgreSQLNotify)
+		srvConfig.Notify.PostgreSQL["1"] = postgreSQLNotify{}
+	} else {
+		srvConfig.Notify.PostgreSQL = cv14.Notify.PostgreSQL
+	}
+	if len(cv14.Notify.Kafka) == 0 {
+		srvConfig.Notify.Kafka = make(map[string]kafkaNotify)
+		srvConfig.Notify.Kafka["1"] = kafkaNotify{}
+	} else {
+		srvConfig.Notify.Kafka = cv14.Notify.Kafka
+	}
+	if len(cv14.Notify.NATS) == 0 {
+		srvConfig.Notify.NATS = make(map[string]natsNotify)
+		srvConfig.Notify.NATS["1"] = natsNotify{}
+	} else {
+		srvConfig.Notify.NATS = cv14.Notify.NATS
+	}
+	if len(cv14.Notify.Webhook) == 0 {
+		srvConfig.Notify.Webhook = make(map[string]webhookNotify)
+		srvConfig.Notify.Webhook["1"] = webhookNotify{}
+	} else {
+		srvConfig.Notify.Webhook = cv14.Notify.Webhook
+	}
+
+	// V14 will not have mysql support, so we add that here.
+	srvConfig.Notify.MySQL = make(map[string]mySQLNotify)
+	srvConfig.Notify.MySQL["1"] = mySQLNotify{}
+
+	// Load browser config from existing config in the file.
+	srvConfig.Browser = cv14.Browser
+
+	qc, err := quick.New(srvConfig)
+	if err != nil {
+		return fmt.Errorf("Unable to initialize the quick config. %v",
+			err)
+	}
+
+	configFile := getConfigFile()
+	err = qc.Save(configFile)
+	if err != nil {
+		return fmt.Errorf(
+			"Failed to migrate config from ‘"+
+				cv14.Version+"’ to ‘"+srvConfig.Version+
+				"’ failed. %v", err,
+		)
+	}
+
+	console.Println(
+		"Migration from version ‘" +
+			cv14.Version + "’ to ‘" + srvConfig.Version +
 			"’ completed successfully.",
 	)
 	return nil

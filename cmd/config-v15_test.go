@@ -76,10 +76,17 @@ func TestServerConfig(t *testing.T) {
 	serverConfig.Notify.SetWebhookByID("2", webhookNotify{})
 	savedNotifyCfg5 := serverConfig.Notify.GetWebhookByID("2")
 	if !reflect.DeepEqual(savedNotifyCfg5, webhookNotify{}) {
-		t.Errorf("Expecting Webhook config %#v found %#v", webhookNotify{}, savedNotifyCfg3)
+		t.Errorf("Expecting Webhook config %#v found %#v", webhookNotify{}, savedNotifyCfg5)
 	}
 
 	// Set new console logger.
+	// Set new Webhook notification id.
+	serverConfig.Notify.SetMySQLByID("2", mySQLNotify{})
+	savedNotifyCfg6 := serverConfig.Notify.GetMySQLByID("2")
+	if !reflect.DeepEqual(savedNotifyCfg6, mySQLNotify{}) {
+		t.Errorf("Expecting Webhook config %#v found %#v", mySQLNotify{}, savedNotifyCfg6)
+	}
+
 	serverConfig.Logger.SetConsole(consoleLogger{
 		Enable: true,
 	})
@@ -106,8 +113,8 @@ func TestServerConfig(t *testing.T) {
 	})
 
 	// Match version.
-	if serverConfig.GetVersion() != v14 {
-		t.Errorf("Expecting version %s found %s", serverConfig.GetVersion(), v14)
+	if serverConfig.GetVersion() != v15 {
+		t.Errorf("Expecting version %s found %s", serverConfig.GetVersion(), v15)
 	}
 
 	// Attempt to save.
@@ -212,7 +219,7 @@ func TestValidateConfig(t *testing.T) {
 
 	configPath := filepath.Join(rootPath, minioConfigFile)
 
-	v := v14
+	v := v15
 
 	testCases := []struct {
 		configData string
@@ -274,6 +281,9 @@ func TestValidateConfig(t *testing.T) {
 
 		// Test 19 - Test Webhook
 		{`{"version": "` + v + `", "credential": { "accessKey": "minio", "secretKey": "minio123" }, "region": "us-east-1", "browser": "on", "notify": { "webhook": { "1": { "enable": true, "endpoint": "" } }}}`, false},
+
+		// Test 19 - Test MySQL
+		{`{"version": "` + v + `", "credential": { "accessKey": "minio", "secretKey": "minio123" }, "region": "us-east-1", "browser": "on", "notify": { "mysql": { "1": { "enable": true, "dsnString": "",  "table": "", "host": "", "port": "", "user": "", "password": "", "database": "" }}}}`, false},
 	}
 
 	for i, testCase := range testCases {

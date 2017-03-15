@@ -510,3 +510,29 @@ func loadConfigV13() (*serverConfigV13, error) {
 	}
 	return config.(*serverConfigV13), err
 }
+
+// serverConfigV14 server configuration version '14' which is like
+// version '13' except it adds support of browser param.
+type serverConfigV14 struct {
+	Version string `json:"version"`
+
+	// S3 API configuration.
+	Credential credential `json:"credential"`
+	Region     string     `json:"region"`
+	Browser    string     `json:"browser"`
+
+	// Additional error logging configuration.
+	Logger *logger `json:"logger"`
+
+	// Notification queue configuration.
+	Notify *notifier `json:"notify"`
+}
+
+func loadConfigV14() (*serverConfigV14, error) {
+	configFile := getConfigFile()
+	config, err := loadOldConfig(configFile, &serverConfigV14{Version: "14"})
+	if config == nil {
+		return nil, err
+	}
+	return config.(*serverConfigV14), err
+}

@@ -37,6 +37,8 @@ const (
 	queueTypeRedis = "redis"
 	// Static string indicating queue type 'postgresql'.
 	queueTypePostgreSQL = "postgresql"
+	// Static string indicating queue type 'mysql'.
+	queueTypeMySQL = "mysql"
 	// Static string indicating queue type 'kafka'.
 	queueTypeKafka = "kafka"
 	// Static string for Webhooks
@@ -153,6 +155,24 @@ func isPostgreSQLQueue(sqsArn arnSQS) bool {
 		return false
 	}
 	defer pgC.Close()
+	return true
+}
+
+// Returns true if queueArn is for MySQL.
+func isMySQLQueue(sqsArn arnSQS) bool {
+	if sqsArn.Type != queueTypeMySQL {
+		return false
+	}
+	msqlNotify := serverConfig.Notify.GetMySQLByID(sqsArn.AccountID)
+	if !msqlNotify.Enable {
+		return false
+	}
+	myC, err := dialMySQL(msqlNotify)
+	if err != nil {
+		errorIf(err, "Unable to connect to MySQL server %#v", msqlNotify)
+		return false
+	}
+	defer myC.Close()
 	return true
 }
 

@@ -109,10 +109,13 @@ func TestServerConfigMigrateInexistentConfig(t *testing.T) {
 	if err := migrateV13ToV14(); err != nil {
 		t.Fatal("migrate v13 to v14 should succeed when no config file is found")
 	}
+	if err := migrateV14ToV15(); err != nil {
+		t.Fatal("migrate v14 to v15 should succeed when no config file is found")
+	}
 }
 
-// Test if a config migration from v2 to v12 is successfully done
-func TestServerConfigMigrateV2toV14(t *testing.T) {
+// Test if a config migration from v2 to v15 is successfully done
+func TestServerConfigMigrateV2toV15(t *testing.T) {
 	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
@@ -151,7 +154,7 @@ func TestServerConfigMigrateV2toV14(t *testing.T) {
 	}
 
 	// Check the version number in the upgraded config file
-	expectedVersion := v14
+	expectedVersion := v15
 	if serverConfig.Version != expectedVersion {
 		t.Fatalf("Expect version "+expectedVersion+", found: %v", serverConfig.Version)
 	}
@@ -218,5 +221,8 @@ func TestServerConfigMigrateFaultyConfig(t *testing.T) {
 	}
 	if err := migrateV13ToV14(); err == nil {
 		t.Fatal("migrateConfigV13ToV14() should fail with a corrupted json")
+	}
+	if err := migrateV14ToV15(); err == nil {
+		t.Fatal("migrateConfigV14ToV15() should fail with a corrupted json")
 	}
 }

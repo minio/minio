@@ -32,11 +32,11 @@ import (
 var serverConfigMu sync.RWMutex
 
 // Config version
-var v14 = "14"
+var v15 = "15"
 
-// serverConfigV14 server configuration version '14' which is like
-// version '13' except it adds support of browser param.
-type serverConfigV14 struct {
+// serverConfigV15 server configuration version '15' which is like
+// version '14' except it adds support of MySQL notifications.
+type serverConfigV15 struct {
 	Version string `json:"version"`
 
 	// S3 API configuration.
@@ -51,9 +51,9 @@ type serverConfigV14 struct {
 	Notify *notifier `json:"notify"`
 }
 
-func newServerConfigV14() *serverConfigV14 {
-	srvCfg := &serverConfigV14{
-		Version: v14,
+func newServerConfigV15() *serverConfigV15 {
+	srvCfg := &serverConfigV15{
+		Version: v15,
 		Region:  globalMinioDefaultRegion,
 		Logger:  &logger{},
 		Notify:  &notifier{},
@@ -77,6 +77,8 @@ func newServerConfigV14() *serverConfigV14 {
 	srvCfg.Notify.NATS["1"] = natsNotify{}
 	srvCfg.Notify.PostgreSQL = make(map[string]postgreSQLNotify)
 	srvCfg.Notify.PostgreSQL["1"] = postgreSQLNotify{}
+	srvCfg.Notify.MySQL = make(map[string]mySQLNotify)
+	srvCfg.Notify.MySQL["1"] = mySQLNotify{}
 	srvCfg.Notify.Kafka = make(map[string]kafkaNotify)
 	srvCfg.Notify.Kafka["1"] = kafkaNotify{}
 	srvCfg.Notify.Webhook = make(map[string]webhookNotify)
@@ -89,7 +91,7 @@ func newServerConfigV14() *serverConfigV14 {
 // found, otherwise use default parameters
 func newConfig(envParams envParams) error {
 	// Initialize server config.
-	srvCfg := newServerConfigV14()
+	srvCfg := newServerConfigV15()
 
 	// If env is set for a fresh start, save them to config file.
 	if globalIsEnvCreds {
@@ -124,7 +126,7 @@ func loadConfig(envParams envParams) error {
 		return err
 	}
 
-	srvCfg := &serverConfigV14{}
+	srvCfg := &serverConfigV15{}
 
 	qc, err := quick.New(srvCfg)
 	if err != nil {
@@ -154,7 +156,7 @@ func loadConfig(envParams envParams) error {
 	serverConfig = srvCfg
 	serverConfigMu.Unlock()
 
-	if serverConfig.Version != v14 {
+	if serverConfig.Version != v15 {
 		return errors.New("Unsupported config version `" + serverConfig.Version + "`.")
 	}
 
@@ -218,7 +220,7 @@ func validateConfig() error {
 	// Get file config path
 	configFile := getConfigFile()
 
-	srvCfg := &serverConfigV14{}
+	srvCfg := &serverConfigV15{}
 
 	// Load config file
 	qc, err := quick.New(srvCfg)
@@ -230,8 +232,8 @@ func validateConfig() error {
 	}
 
 	// Check if config version is valid
-	if srvCfg.GetVersion() != v14 {
-		return errors.New("bad config version, expected: " + v14)
+	if srvCfg.GetVersion() != v15 {
+		return errors.New("bad config version, expected: " + v15)
 	}
 
 	// Load config file json and check for duplication json keys
@@ -272,10 +274,10 @@ func validateConfig() error {
 }
 
 // serverConfig server config.
-var serverConfig *serverConfigV14
+var serverConfig *serverConfigV15
 
 // GetVersion get current config version.
-func (s serverConfigV14) GetVersion() string {
+func (s serverConfigV15) GetVersion() string {
 	serverConfigMu.RLock()
 	defer serverConfigMu.RUnlock()
 
@@ -283,7 +285,7 @@ func (s serverConfigV14) GetVersion() string {
 }
 
 // SetRegion set new region.
-func (s *serverConfigV14) SetRegion(region string) {
+func (s *serverConfigV15) SetRegion(region string) {
 	serverConfigMu.Lock()
 	defer serverConfigMu.Unlock()
 
@@ -295,7 +297,7 @@ func (s *serverConfigV14) SetRegion(region string) {
 }
 
 // GetRegion get current region.
-func (s serverConfigV14) GetRegion() string {
+func (s serverConfigV15) GetRegion() string {
 	serverConfigMu.RLock()
 	defer serverConfigMu.RUnlock()
 
@@ -308,7 +310,7 @@ func (s serverConfigV14) GetRegion() string {
 }
 
 // SetCredentials set new credentials.
-func (s *serverConfigV14) SetCredential(creds credential) {
+func (s *serverConfigV15) SetCredential(creds credential) {
 	serverConfigMu.Lock()
 	defer serverConfigMu.Unlock()
 
@@ -317,7 +319,7 @@ func (s *serverConfigV14) SetCredential(creds credential) {
 }
 
 // GetCredentials get current credentials.
-func (s serverConfigV14) GetCredential() credential {
+func (s serverConfigV15) GetCredential() credential {
 	serverConfigMu.RLock()
 	defer serverConfigMu.RUnlock()
 
@@ -325,7 +327,7 @@ func (s serverConfigV14) GetCredential() credential {
 }
 
 // SetBrowser set if browser is enabled.
-func (s *serverConfigV14) SetBrowser(v string) {
+func (s *serverConfigV15) SetBrowser(v string) {
 	serverConfigMu.Lock()
 	defer serverConfigMu.Unlock()
 
@@ -339,7 +341,7 @@ func (s *serverConfigV14) SetBrowser(v string) {
 }
 
 // GetCredentials get current credentials.
-func (s serverConfigV14) GetBrowser() string {
+func (s serverConfigV15) GetBrowser() string {
 	serverConfigMu.RLock()
 	defer serverConfigMu.RUnlock()
 
@@ -352,7 +354,7 @@ func (s serverConfigV14) GetBrowser() string {
 }
 
 // Save config.
-func (s serverConfigV14) Save() error {
+func (s serverConfigV15) Save() error {
 	serverConfigMu.RLock()
 	defer serverConfigMu.RUnlock()
 

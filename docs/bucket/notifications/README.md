@@ -10,6 +10,7 @@ mechanism and can be published to the following targets:
 | [`Redis`](#Redis) |
 | [`NATS`](#NATS) |
 | [`PostgreSQL`](#PostgreSQL) |
+| [`MySQL`](#MySQL) |
 | [`Apache Kafka`](#apache-kafka) |
 | [`Webhooks`](#webhooks) |
 
@@ -424,8 +425,90 @@ key         |                      value
 (1 row)
 ```
 
+<a name="MySQL"></a>
+## Publish Minio events via MySQL
+
+Install MySQL from [here](https://dev.mysql.com/downloads/mysql/). For illustrative purposes, we have set the root password as `password` and created a database called `miniodb` to store the events.
+
+### Step 1: Add MySQL server endpoint configuration to Minio
+
+The default location of Minio server configuration file is ``~/.minio/config.json``. The MySQL configuration is located in the `mysql` key under the `notify` top-level key. Create a configuration key-value pair here for your MySQL instance. The key is a name for your MySQL endpoint, and the value is a collection of key-value parameters described in the table below.
+
+| Parameter | Value type | Description |
+|:---|:---|:---|
+| `enable` | Boolean | (Required) Is this server endpoint configuration active/enabled? |
+| `dsnString` | String | (Optional) [Data-Source-Name connection string](https://github.com/go-sql-driver/mysql#dsn-data-source-name) for the MySQL server. If not specified, the connection information specified by the `host`, `port`, `user`, `password` and `database` parameters are used. |
+| `table` | String | (Required) Table name in which events will be stored/updated. If the table does not exist, the Minio server creates it at start-up.|
+| `host` | String | Host name of the MySQL server (used only if `dsnString` is empty). |
+| `port` | String | Port on which to connect to the MySQL server (used only if `dsnString` is empty). |
+| `user` | String | Database user-name (used only if `dsnString` is empty). |
+| `password` | String | Database password (used only if `dsnString` is empty). |
+| `database` | String | Database name (used only if `dsnString` is empty). |
+
+An example of MySQL configuration is as follows:
+
+```
+"mysql": {
+        "1": {
+                "enable": true,
+                "dsnString": "",
+                "table": "minio_images",
+                "host": "172.17.0.1",
+                "port": "3306",
+                "user": "root",
+                "password": "password",
+                "database": "miniodb"
+        }
+}
+```
+
+After updating the configuration file, restart the Minio server to put the changes into effect. The server will print a line like `SQS ARNs:  arn:minio:sqs:us-east-1:1:mysql` at start-up if there were no errors.
+
+Note that, you can add as many MySQL server endpoint configurations as needed by providing an identifier (like "1" in the example above) for the MySQL instance and an object of per-server configuration parameters.
+
+
+### Step 2: Enable bucket notification using Minio client
+
+We will now setup bucket notifications on a bucket named `images`. Whenever a JPEG image object is created/overwritten, a new row is added or an existing row is updated in the MySQL table configured above. When an existing object is deleted, the corresponding row is deleted from the MySQL table. Thus, the rows in the MySQL table, reflect the `.jpg` objects in the `images` bucket.
+
+To configure this bucket notification, we need the ARN printed by Minio in the previous step. Additional information about ARN is available [here](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html).
+
+With the `mc` tool, the configuration is very simple to add. Let us say that the Minio server is aliased as `myminio` in our mc configuration. Execute the following:
+
+```
+# Create bucket named `images` in myminio
+mc mb myminio/images
+# Add notification configuration on the `images` bucket using the MySQL ARN. The --suffix argument filters events.
+mc events add  myminio/images arn:minio:sqs:us-east-1:1:postgresql --suffix .jpg
+# Print out the notification configuration on the `images` bucket.
+mc events list myminio/images
+arn:minio:sqs:us-east-1:1:postgresql s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
+```
+
+### Step 3: Test on MySQL
+
+Open another terminal and upload a JPEG image into ``images`` bucket:
+
+```
+mc cp myphoto.jpg myminio/images
+```
+
+Open MySQL terminal and list the rows in the `minio_images` table.
+
+```
+$ mysql -h 172.17.0.1 -P 3306 -u root -p miniodb
+mysql> select * from minio_images;
++--------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| key_name           | value                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
++--------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| images/myphoto.jpg | {"Records": [{"s3": {"bucket": {"arn": "arn:aws:s3:::images", "name": "images", "ownerIdentity": {"principalId": "minio"}}, "object": {"key": "myphoto.jpg", "eTag": "467886be95c8ecfd71a2900e3f461b4f", "size": 26, "sequencer": "14AC59476F809FD3"}, "configurationId": "Config", "s3SchemaVersion": "1.0"}, "awsRegion": "us-east-1", "eventName": "s3:ObjectCreated:Put", "eventTime": "2017-03-16T11:29:00Z", "eventSource": "aws:s3", "eventVersion": "2.0", "userIdentity": {"principalId": "minio"}, "responseElements": {"x-amz-request-id": "14AC59476F809FD3", "x-minio-origin-endpoint": "http://192.168.86.110:9000"}, "requestParameters": {"sourceIPAddress": "127.0.0.1:38260"}}]} |
++--------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+1 row in set (0.01 sec)
+
+```
+
 <a name="apache-kafka"></a>
-## Publish Minio events via kafka
+## Publish Minio events via Kafka
 
 Install kafka from [here](http://kafka.apache.org/).
 
@@ -480,7 +563,7 @@ kafkacat -b localhost:9092 -t bucketevents
 <a name="webhooks"></a>
 ## Publish Minio events via Webhooks
 
-[Webhooks](https://en.wikipedia.org/wiki/Webhook) are a way to receive information when it happens, rather than continually polling for that data. 
+[Webhooks](https://en.wikipedia.org/wiki/Webhook) are a way to receive information when it happens, rather than continually polling for that data.
 
 ### Step 1: Add Webhook endpoint to Minio
 
@@ -505,7 +588,7 @@ mc mb myminio/images-thumbnail
 mc events add myminio/images arn:minio:sqs:us-east-1:1:webhook — events put — suffix .jpg
 ```
 
-Check if event notification is successfully configured by 
+Check if event notification is successfully configured by
 
 ```
 mc events list myminio/images
