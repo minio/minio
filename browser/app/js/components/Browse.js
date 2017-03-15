@@ -603,7 +603,7 @@ export default class Browse extends React.Component {
                   checkObject={ this.checkObject.bind(this) }
                   checkedObjectsArray={ checkedObjects } />
               </InfiniteScroll>
-              <div className="text-center" style={ { display: istruncated ? 'block' : 'none' } }>
+              <div className="text-center" style={ { display: (istruncated && currentBucket) ? 'block' : 'none' } }>
                 <span>Loading...</span>
               </div>
             </div>
