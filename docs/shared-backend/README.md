@@ -4,7 +4,7 @@ Minio shared mode lets you use single [NAS](https://en.wikipedia.org/wiki/Networ
 distributed filesystems) as the storage backend for multiple Minio servers. Synchronization among Minio servers is taken care by design. 
 Read more about the Minio shared mode design [here](https://github.com/minio/minio/blob/master/docs/shared-backend/DESIGN.md).
 
-Minio shared mode is developed to solve several real world use cases. Some of these are
+Minio shared mode is developed to solve several real world use cases, without any special configuration changes. Some of these are
 
 - You have already invested in NAS and would like to use Minio to add S3 compatibility to your storage tier.
 - You need to use NAS with an S3 interface due to your application architecture requirements.
