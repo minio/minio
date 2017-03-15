@@ -32,6 +32,16 @@ type redisNotify struct {
 	Key      string `json:"key"`
 }
 
+func (r *redisNotify) Validate() error {
+	if !r.Enable {
+		return nil
+	}
+	if _, err := checkNetURL(r.Addr); err != nil {
+		return err
+	}
+	return nil
+}
+
 type redisConn struct {
 	*redis.Pool
 	params redisNotify

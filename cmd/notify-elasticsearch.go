@@ -33,6 +33,16 @@ type elasticSearchNotify struct {
 	Index  string `json:"index"`
 }
 
+func (e *elasticSearchNotify) Validate() error {
+	if !e.Enable {
+		return nil
+	}
+	if _, err := checkNetURL(e.URL); err != nil {
+		return err
+	}
+	return nil
+}
+
 type elasticClient struct {
 	*elastic.Client
 	params elasticSearchNotify

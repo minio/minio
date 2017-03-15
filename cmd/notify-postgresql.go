@@ -84,6 +84,16 @@ type postgreSQLNotify struct {
 	Database string `json:"database"`
 }
 
+func (p *postgreSQLNotify) Validate() error {
+	if !p.Enable {
+		return nil
+	}
+	if _, err := checkNetURL(p.Host); err != nil {
+		return err
+	}
+	return nil
+}
+
 type pgConn struct {
 	connStr       string
 	table         string

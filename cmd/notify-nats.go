@@ -48,6 +48,16 @@ type natsNotify struct {
 	Streaming    natsNotifyStreaming `json:"streaming"`
 }
 
+func (n *natsNotify) Validate() error {
+	if !n.Enable {
+		return nil
+	}
+	if _, err := checkNetURL(n.Address); err != nil {
+		return err
+	}
+	return nil
+}
+
 // natsIOConn abstracts connection to any type of NATS server
 type natsIOConn struct {
 	params   natsNotify

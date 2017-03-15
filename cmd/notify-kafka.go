@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 
@@ -37,6 +38,16 @@ type kafkaNotify struct {
 
 	// Topic to which event notifications should be sent.
 	Topic string `json:"topic"`
+}
+
+func (k *kafkaNotify) Validate() error {
+	if !k.Enable {
+		return nil
+	}
+	if len(k.Brokers) == 0 {
+		return errors.New("No broker specified")
+	}
+	return nil
 }
 
 // kafkaConn contains the active connection to the Kafka cluster and

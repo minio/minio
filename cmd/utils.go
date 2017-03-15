@@ -285,3 +285,16 @@ func isFile(path string) bool {
 
 	return false
 }
+
+// checkNetURL - checks if passed address correspond
+// to a network address (and not file system path)
+func checkNetURL(address string) (*url.URL, error) {
+	u, err := url.Parse(address)
+	if err != nil {
+		return nil, fmt.Errorf("`%s` invalid: %s", address, err.Error())
+	}
+	if u.Host == "" {
+		return nil, fmt.Errorf("`%s` invalid network URL", address)
+	}
+	return u, nil
+}

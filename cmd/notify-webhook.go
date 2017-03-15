@@ -32,6 +32,16 @@ type webhookNotify struct {
 	Endpoint string `json:"endpoint"`
 }
 
+func (w *webhookNotify) Validate() error {
+	if !w.Enable {
+		return nil
+	}
+	if _, err := checkNetURL(w.Endpoint); err != nil {
+		return err
+	}
+	return nil
+}
+
 type httpConn struct {
 	*http.Client
 	Endpoint string

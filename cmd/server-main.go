@@ -127,7 +127,7 @@ func initConfig() {
 	// Config file does not exist, we create it fresh and return upon success.
 	if !isConfigFileExists() {
 		if err := newConfig(envs); err != nil {
-			console.Fatalf("Unable to initialize minio config for the first time. Err: %s.\n", err)
+			console.Fatalf("Unable to initialize minio config for the first time. Error: %s.\n", err)
 		}
 		console.Println("Created minio configuration file successfully at " + getConfigDir())
 		return
@@ -136,9 +136,14 @@ func initConfig() {
 	// Migrate any old version of config / state files to newer format.
 	migrate()
 
+	// Validate config file
+	if err := validateConfig(); err != nil {
+		console.Fatalf("Cannot validate configuration file. Error: %s\n", err)
+	}
+
 	// Once we have migrated all the old config, now load them.
 	if err := loadConfig(envs); err != nil {
-		console.Fatalf("Unable to initialize minio config. Err: %s.\n", err)
+		console.Fatalf("Unable to initialize minio config. Error: %s.\n", err)
 	}
 }
 

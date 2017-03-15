@@ -17,9 +17,13 @@
 package cmd
 
 import (
+	"io/ioutil"
 	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/tidwall/gjson"
 )
 
 func TestServerConfig(t *testing.T) {
@@ -166,4 +170,118 @@ func TestServerConfigWithEnvs(t *testing.T) {
 	if cred.SecretKey != "minio123" {
 		t.Errorf("Expecting access key to be `minio123` found %s", cred.SecretKey)
 	}
+}
+
+func TestCheckDupJSONKeys(t *testing.T) {
+	testCases := []struct {
+		json       string
+		shouldPass bool
+	}{
+		{`{}`, true},
+		{`{"version" : "13"}`, true},
+		{`{"version" : "13", "version": "14"}`, false},
+		{`{"version" : "13", "credential": {"accessKey": "12345"}}`, true},
+		{`{"version" : "13", "credential": {"accessKey": "12345", "accessKey":"12345"}}`, false},
+		{`{"version" : "13", "notify": {"amqp": {"1"}, "webhook":{"3"}}}`, true},
+		{`{"version" : "13", "notify": {"amqp": {"1"}, "amqp":{"3"}}}`, false},
+		{`{"version" : "13", "notify": {"amqp": {"1":{}, "2":{}}}}`, true},
+		{`{"version" : "13", "notify": {"amqp": {"1":{}, "1":{}}}}`, false},
+	}
+
+	for i, testCase := range testCases {
+		err := doCheckDupJSONKeys(gjson.Result{}, gjson.Parse(testCase.json))
+		if testCase.shouldPass && err != nil {
+			t.Errorf("Test %d, should pass but it failed with err = %v", i+1, err)
+		}
+		if !testCase.shouldPass && err == nil {
+			t.Errorf("Test %d, should fail but it succeed.", i+1)
+		}
+	}
+
+}
+
+func TestValidateConfig(t *testing.T) {
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
+	if err != nil {
+		t.Fatalf("Init Test config failed")
+	}
+	// remove the root directory after the test ends.
+	defer removeAll(rootPath)
+
+	configPath := filepath.Join(rootPath, minioConfigFile)
+
+	v := v14
+
+	testCases := []struct {
+		configData string
+		shouldPass bool
+	}{
+		// Test 1 - wrong json
+		{`{`, false},
+
+		// Test 2 - empty json
+		{`{}`, false},
+
+		// Test 3 - wrong config version
+		{`{"version": "10"}`, false},
+
+		// Test 4 - wrong browser parameter
+		{`{"version": "` + v + `", "browser": "foo"}`, false},
+
+		// Test 5 - missing credential
+		{`{"version": "` + v + `", "browser": "on"}`, false},
+
+		// Test 6 - missing secret key
+		{`{"version": "` + v + `", "browser": "on", "credential" : {"accessKey":"minio", "secretKey":""}}`, false},
+
+		// Test 7 - missing region
+		{`{"version": "` + v + `", "browser": "on", "credential" : {"accessKey":"minio", "secretKey":"minio123"}}`, false},
+
+		// Test 8 - success
+		{`{"version": "` + v + `", "browser": "on", "region":"us-east-1", "credential" : {"accessKey":"minio", "secretKey":"minio123"}}`, true},
+
+		// Test 9 - duplicated json keys
+		{`{"version": "` + v + `", "browser": "on", "browser": "on", "region":"us-east-1", "credential" : {"accessKey":"minio", "secretKey":"minio123"}}`, false},
+
+		// Test 10 - Wrong Console logger level
+		{`{"version": "` + v + `", "credential": { "accessKey": "minio", "secretKey": "minio123" }, "region": "us-east-1", "browser": "on", "logger": { "console": { "enable": true, "level": "foo" } }}`, false},
+
+		// Test 11 - Wrong File logger level
+		{`{"version": "` + v + `", "credential": { "accessKey": "minio", "secretKey": "minio123" }, "region": "us-east-1", "browser": "on", "logger": { "file": { "enable": true, "level": "foo" } }}`, false},
+
+		// Test 12 - Test AMQP
+		{`{"version": "` + v + `", "credential": { "accessKey": "minio", "secretKey": "minio123" }, "region": "us-east-1", "browser": "on", "notify": { "amqp": { "1": { "enable": true, "url": "", "exchange": "", "routingKey": "", "exchangeType": "", "mandatory": false, "immediate": false, "durable": false, "internal": false, "noWait": false, "autoDeleted": false }}}}`, false},
+
+		// Test 13 - Test NATS
+		{`{"version": "` + v + `", "credential": { "accessKey": "minio", "secretKey": "minio123" }, "region": "us-east-1", "browser": "on", "notify": { "nats": { "1": { "enable": true, "address": "", "subject": "", "username": "", "password": "", "token": "", "secure": false, "pingInterval": 0, "streaming": { "enable": false, "clusterID": "", "clientID": "", "async": false, "maxPubAcksInflight": 0 } } }}}`, false},
+
+		// Test 14 - Test ElasticSearch
+		{`{"version": "` + v + `", "credential": { "accessKey": "minio", "secretKey": "minio123" }, "region": "us-east-1", "browser": "on", "notify": { "elasticsearch": { "1": { "enable": true, "url": "", "index": "" } }}}`, false},
+
+		// Test 15 - Test Redis
+		{`{"version": "` + v + `", "credential": { "accessKey": "minio", "secretKey": "minio123" }, "region": "us-east-1", "browser": "on", "notify": { "redis": { "1": { "enable": true, "address": "", "password": "", "key": "" } }}}`, false},
+
+		// Test 16 - Test PostgreSQL
+		{`{"version": "` + v + `", "credential": { "accessKey": "minio", "secretKey": "minio123" }, "region": "us-east-1", "browser": "on", "notify": { "postgresql": { "1": { "enable": true, "connectionString": "", "table": "", "host": "", "port": "", "user": "", "password": "", "database": "" }}}}`, false},
+
+		// Test 17 - Test Kafka
+		{`{"version": "` + v + `", "credential": { "accessKey": "minio", "secretKey": "minio123" }, "region": "us-east-1", "browser": "on", "notify": { "kafka": { "1": { "enable": true, "brokers": null, "topic": "" } }}}`, false},
+
+		// Test 18 - Test Webhook
+		{`{"version": "` + v + `", "credential": { "accessKey": "minio", "secretKey": "minio123" }, "region": "us-east-1", "browser": "on", "notify": { "webhook": { "1": { "enable": true, "endpoint": "" } }}}`, false},
+	}
+
+	for i, testCase := range testCases {
+		if err := ioutil.WriteFile(configPath, []byte(testCase.configData), 0700); err != nil {
+			t.Error(err)
+		}
+		err := validateConfig()
+		if testCase.shouldPass && err != nil {
+			t.Errorf("Test %d, should pass but it failed with err = %v", i+1, err)
+		}
+		if !testCase.shouldPass && err == nil {
+			t.Errorf("Test %d, should fail but it succeed.", i+1)
+		}
+	}
+
 }
