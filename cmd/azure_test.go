@@ -108,7 +108,7 @@ func TestAzureGetBlockID(t *testing.T) {
 	for _, test := range testCases {
 		blockID := azureGetBlockID(test.partId, test.md5)
 		if blockID != test.blockID {
-			t.Fatal("%s is not equal to %s", blockID, test.blockID)
+			t.Fatalf("%s is not equal to %s", blockID, test.blockID)
 		}
 	}
 }
@@ -129,10 +129,10 @@ func TestAzureParseBlockID(t *testing.T) {
 			t.Fatal(err)
 		}
 		if partID != test.partId {
-			t.Fatal("%d not equal to %d", partID, test.partId)
+			t.Fatalf("%d not equal to %d", partID, test.partId)
 		}
 		if md5 != test.md5 {
-			t.Fatal("%s not equal to %s", md5, test.md5)
+			t.Fatalf("%s not equal to %s", md5, test.md5)
 		}
 	}
 	_, _, err := azureParseBlockID("junk")
