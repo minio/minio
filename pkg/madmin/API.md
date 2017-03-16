@@ -43,6 +43,7 @@ func main() {
 | | |[`HealBucket`](#HealBucket) |||
 | | |[`HealObject`](#HealObject)|||
 | | |[`HealFormat`](#HealFormat)|||
+| | |[`ListUploadsHeal`](#ListUploadsHeal)|||
 
 ## 1. Constructor
 <a name="Minio"></a>
@@ -352,4 +353,47 @@ __Example__
         log.Fatalln(err)
     }
     log.Println("SetConfig: ", string(buf.Bytes()))
+```
+
+<a name="ListUploadsHeal"> </a>
+### ListUploadsHeal(bucket, prefix string, recursive bool, doneCh <-chan struct{}) (<-chan UploadInfo, error)
+List ongoing multipart uploads that need healing.
+
+| Param  | Type  | Description  |
+|---|---|---|
+|`ui.Key` | _string_ | Name of the object being uploaded |
+|`ui.UploadID` | _string_ | UploadID of the ongoing multipart upload |
+|`ui.HealUploadInfo.Status` | _healStatus_| One of `Healthy`, `CanHeal`, `Corrupted`, `QuorumUnavailable`|
+|`ui.Err`| _error_ | non-nil if fetching fetching healing information failed |
+
+__Example__
+
+``` go
+
+    // Set true if recursive listing is needed.
+    isRecursive := true
+    // List objects that need healing for a given bucket and
+    // prefix.
+    healUploadsCh, err := madmClnt.ListUploadsHeal(bucket, prefix, isRecursive, doneCh)
+    if err != nil {
+        log.Fatalln("Failed to get list of uploads to be healed: ", err)
+    }
+
+    for upload := range healUploadsCh {
+        if upload.Err != nil {
+            log.Println("upload listing error: ", upload.Err)
+        }
+
+        if upload.HealUploadInfo != nil {
+            switch healInfo := *upload.HealUploadInfo; healInfo.Status {
+            case madmin.CanHeal:
+                fmt.Println(upload.Key, " can be healed.")
+            case madmin.QuorumUnavailable:
+                fmt.Println(upload.Key, " can't be healed until quorum is available.")
+            case madmin.Corrupted:
+                fmt.Println(upload.Key, " can't be healed, not enough information.")
+            }
+        }
+    }
+
 ```

@@ -53,6 +53,8 @@ func registerAdminRouter(mux *router.Router) {
 
 	// List Objects needing heal.
 	adminRouter.Methods("GET").Queries("heal", "").Headers(minioAdminOpHeader, "list-objects").HandlerFunc(adminAPI.ListObjectsHealHandler)
+	// List Uploads needing heal.
+	adminRouter.Methods("GET").Queries("heal", "").Headers(minioAdminOpHeader, "list-uploads").HandlerFunc(adminAPI.ListUploadsHealHandler)
 	// List Buckets needing heal.
 	adminRouter.Methods("GET").Queries("heal", "").Headers(minioAdminOpHeader, "list-buckets").HandlerFunc(adminAPI.ListBucketsHealHandler)
 

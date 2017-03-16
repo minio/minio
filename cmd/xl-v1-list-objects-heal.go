@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"path/filepath"
 	"sort"
 	"strings"
 )
@@ -204,4 +205,220 @@ func (xl xlObjects) ListObjectsHeal(bucket, prefix, marker, delimiter string, ma
 
 	// Return error at the end.
 	return ListObjectsInfo{}, toObjectErr(err, bucket, prefix)
+}
+
+// ListUploadsHeal - lists ongoing multipart uploads that require
+// healing in one or more disks.
+func (xl xlObjects) ListUploadsHeal(bucket, prefix, marker, uploadIDMarker,
+	delimiter string, maxUploads int) (ListMultipartsInfo, error) {
+
+	// For delimiter and prefix as '/' we do not list anything at all
+	// since according to s3 spec we stop at the 'delimiter' along
+	// with the prefix. On a flat namespace with 'prefix' as '/'
+	// we don't have any entries, since all the keys are of form 'keyName/...'
+	if delimiter == slashSeparator && prefix == slashSeparator {
+		return ListMultipartsInfo{}, nil
+	}
+
+	// Initiate a list operation.
+	listMultipartInfo, err := xl.listMultipartUploadsHeal(bucket, prefix,
+		marker, uploadIDMarker, delimiter, maxUploads)
+	if err != nil {
+		return ListMultipartsInfo{}, toObjectErr(err, bucket, prefix)
+	}
+
+	// We got the entries successfully return.
+	return listMultipartInfo, nil
+}
+
+// Fetches list of multipart uploadIDs given bucket, keyMarker, uploadIDMarker.
+func fetchMultipartUploadIDs(bucket, keyMarker, uploadIDMarker string,
+	maxUploads int, disks []StorageAPI) (uploads []uploadMetadata, end bool,
+	err error) {
+
+	// Hold a read lock on keyMarker path.
+	keyMarkerLock := globalNSMutex.NewNSLock(minioMetaMultipartBucket,
+		pathJoin(bucket, keyMarker))
+	keyMarkerLock.RLock()
+	for _, disk := range disks {
+		if disk == nil {
+			continue
+		}
+		uploads, end, err = listMultipartUploadIDs(bucket, keyMarker,
+			uploadIDMarker, maxUploads, disk)
+		if err == nil ||
+			!isErrIgnored(err, objMetadataOpIgnoredErrs...) {
+			break
+		}
+	}
+	keyMarkerLock.RUnlock()
+	return uploads, end, err
+}
+
+// listMultipartUploadsHeal - Returns a list of incomplete multipart
+// uploads that need to be healed.
+func (xl xlObjects) listMultipartUploadsHeal(bucket, prefix, keyMarker,
+	uploadIDMarker, delimiter string, maxUploads int) (ListMultipartsInfo, error) {
+
+	result := ListMultipartsInfo{
+		IsTruncated: true,
+		MaxUploads:  maxUploads,
+		KeyMarker:   keyMarker,
+		Prefix:      prefix,
+		Delimiter:   delimiter,
+	}
+
+	recursive := delimiter != slashSeparator
+
+	var uploads []uploadMetadata
+	var err error
+	// List all upload ids for the given keyMarker, starting from
+	// uploadIDMarker.
+	if uploadIDMarker != "" {
+		uploads, _, err = fetchMultipartUploadIDs(bucket, keyMarker,
+			uploadIDMarker, maxUploads, xl.getLoadBalancedDisks())
+		if err != nil {
+			return ListMultipartsInfo{}, err
+		}
+		maxUploads = maxUploads - len(uploads)
+	}
+
+	// We can't use path.Join() as it strips off the trailing '/'.
+	multipartPrefixPath := pathJoin(bucket, prefix)
+	// multipartPrefixPath should have a trailing '/' when prefix = "".
+	if prefix == "" {
+		multipartPrefixPath += slashSeparator
+	}
+
+	multipartMarkerPath := ""
+	if keyMarker != "" {
+		multipartMarkerPath = pathJoin(bucket, keyMarker)
+	}
+
+	// `heal bool` is used to differentiate listing of incomplete
+	// uploads (and parts) from a regular listing of incomplete
+	// parts by client SDKs or mc-like commands, within a treewalk
+	// pool.
+	heal := true
+	// The listing is truncated if we have maxUploads entries and
+	// there are more entries to be listed.
+	truncated := true
+	var walkerCh chan treeWalkResult
+	var walkerDoneCh chan struct{}
+	// Check if we have room left to send more uploads.
+	if maxUploads > 0 {
+		walkerCh, walkerDoneCh = xl.listPool.Release(listParams{
+			bucket:    minioMetaMultipartBucket,
+			recursive: recursive,
+			marker:    multipartMarkerPath,
+			prefix:    multipartPrefixPath,
+			heal:      heal,
+		})
+		if walkerCh == nil {
+			walkerDoneCh = make(chan struct{})
+			isLeaf := xl.isMultipartUpload
+			listDir := listDirFactory(isLeaf, xlTreeWalkIgnoredErrs,
+				xl.getLoadBalancedDisks()...)
+			walkerCh = startTreeWalk(minioMetaMultipartBucket,
+				multipartPrefixPath, multipartMarkerPath,
+				recursive, listDir, isLeaf, walkerDoneCh)
+		}
+		// Collect uploads until maxUploads limit is reached.
+		for walkResult := range walkerCh {
+			// Ignore errors like errDiskNotFound
+			// and errFileNotFound.
+			if isErrIgnored(walkResult.err,
+				xlTreeWalkIgnoredErrs...) {
+				continue
+			}
+			// For any error during tree walk we should
+			// return right away.
+			if walkResult.err != nil {
+				return ListMultipartsInfo{}, walkResult.err
+			}
+
+			entry := strings.TrimPrefix(walkResult.entry,
+				retainSlash(bucket))
+			// Skip entries that are not object directory.
+			if hasSuffix(walkResult.entry, slashSeparator) {
+				uploads = append(uploads, uploadMetadata{
+					Object: entry,
+				})
+				maxUploads--
+				if maxUploads == 0 {
+					break
+				}
+				continue
+			}
+
+			// For an object entry we get all its pending
+			// uploadIDs.
+			var newUploads []uploadMetadata
+			var end bool
+			uploadIDMarker = ""
+			newUploads, end, err = fetchMultipartUploadIDs(bucket, entry, uploadIDMarker,
+				maxUploads, xl.getLoadBalancedDisks())
+			if err != nil {
+				return ListMultipartsInfo{}, err
+			}
+			uploads = append(uploads, newUploads...)
+			maxUploads -= len(newUploads)
+			if end && walkResult.end {
+				truncated = false
+				break
+			}
+			if maxUploads == 0 {
+				break
+			}
+		}
+	}
+
+	// For all received uploads fill in the multiparts result.
+	for _, upload := range uploads {
+		var objectName string
+		var uploadID string
+		if hasSuffix(upload.Object, slashSeparator) {
+			// All directory entries are common
+			// prefixes. For common prefixes, upload ids
+			// are empty.
+			uploadID = ""
+			objectName = upload.Object
+			result.CommonPrefixes = append(result.CommonPrefixes, objectName)
+		} else {
+			// Check if upload needs healing.
+			uploadIDPath := filepath.Join(bucket, upload.Object, upload.UploadID)
+			partsMetadata, errs := readAllXLMetadata(xl.storageDisks,
+				minioMetaMultipartBucket, uploadIDPath)
+			if xlShouldHeal(partsMetadata, errs) {
+				healUploadInfo := xlHealStat(xl, partsMetadata, errs)
+				upload.HealUploadInfo = &healUploadInfo
+				result.Uploads = append(result.Uploads, upload)
+			}
+			uploadID = upload.UploadID
+			objectName = upload.Object
+		}
+
+		result.NextKeyMarker = objectName
+		result.NextUploadIDMarker = uploadID
+	}
+
+	if truncated {
+		// Put back the tree walk go-routine into the pool for
+		// subsequent use.
+		xl.listPool.Set(listParams{
+			bucket:    bucket,
+			recursive: recursive,
+			marker:    result.NextKeyMarker,
+			prefix:    prefix,
+			heal:      heal,
+		}, walkerCh, walkerDoneCh)
+	}
+
+	result.IsTruncated = truncated
+	// Result is not truncated, reset the markers.
+	if !result.IsTruncated {
+		result.NextKeyMarker = ""
+		result.NextUploadIDMarker = ""
+	}
+	return result, nil
 }
