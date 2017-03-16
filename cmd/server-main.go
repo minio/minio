@@ -128,7 +128,7 @@ func initConfig() {
 			console.Fatalf("Invalid access/secret Key set in environment. Err: %s.\n", err)
 		}
 
-		// Envs are set globally.
+		// credential Envs are set globally.
 		globalIsEnvCreds = true
 	}
 
@@ -138,7 +138,9 @@ func initConfig() {
 			console.Fatalf("Invalid value ‘%s’ in MINIO_BROWSER environment variable.", browser)
 		}
 
-		globalIsEnvBrowser = strings.EqualFold(browser, "off")
+		// browser Envs are set globally, this doesn't represent
+		// if browser is turned off or on.
+		globalIsEnvBrowser = true
 	}
 
 	envs := envParams{
