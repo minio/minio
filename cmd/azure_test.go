@@ -98,7 +98,7 @@ func TestAzureToObjectError(t *testing.T) {
 // Test azureGetBlockID().
 func TestAzureGetBlockID(t *testing.T) {
 	testCases := []struct {
-		partId  int
+		partID  int
 		md5     string
 		blockID string
 	}{
@@ -106,7 +106,7 @@ func TestAzureGetBlockID(t *testing.T) {
 		{2, "a7fb6b7b36ee4ed66b5546fac4690273", "MDAwMDIuYTdmYjZiN2IzNmVlNGVkNjZiNTU0NmZhYzQ2OTAyNzM="},
 	}
 	for _, test := range testCases {
-		blockID := azureGetBlockID(test.partId, test.md5)
+		blockID := azureGetBlockID(test.partID, test.md5)
 		if blockID != test.blockID {
 			t.Fatalf("%s is not equal to %s", blockID, test.blockID)
 		}
@@ -116,7 +116,7 @@ func TestAzureGetBlockID(t *testing.T) {
 // Test azureParseBlockID().
 func TestAzureParseBlockID(t *testing.T) {
 	testCases := []struct {
-		partId  int
+		partID  int
 		md5     string
 		blockID string
 	}{
@@ -128,8 +128,8 @@ func TestAzureParseBlockID(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if partID != test.partId {
-			t.Fatalf("%d not equal to %d", partID, test.partId)
+		if partID != test.partID {
+			t.Fatalf("%d not equal to %d", partID, test.partID)
 		}
 		if md5 != test.md5 {
 			t.Fatalf("%s not equal to %s", md5, test.md5)
