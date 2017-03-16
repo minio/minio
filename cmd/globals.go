@@ -36,6 +36,10 @@ const (
 	globalWindowsOSName            = "windows"
 	globalNetBSDOSName             = "netbsd"
 	globalSolarisOSName            = "solaris"
+	globalMinioModeFS              = "mode-server-fs"
+	globalMinioModeXL              = "mode-server-xl"
+	globalMinioModeDistXL          = "mode-server-distributed-xl"
+	globalMinioModeGatewayAzure    = "mode-gateway-azure"
 	// Add new global values here.
 )
 

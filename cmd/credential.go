@@ -27,19 +27,41 @@ import (
 )
 
 const (
-	accessKeyMinLen = 5
-	accessKeyMaxLen = 20
-	secretKeyMinLen = 8
-	secretKeyMaxLen = 40
-
-	alphaNumericTable    = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-	alphaNumericTableLen = byte(len(alphaNumericTable))
+	accessKeyMinLen       = 5
+	accessKeyMaxLen       = 20
+	secretKeyMinLen       = 8
+	secretKeyMaxLenAmazon = 40
+	alphaNumericTable     = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	alphaNumericTableLen  = byte(len(alphaNumericTable))
 )
 
 var (
 	errInvalidAccessKeyLength = errors.New("Invalid access key, access key should be 5 to 20 characters in length")
 	errInvalidSecretKeyLength = errors.New("Invalid secret key, secret key should be 8 to 40 characters in length")
 )
+var secretKeyMaxLen = secretKeyMaxLenAmazon
+
+func mustGetAccessKey() string {
+	keyBytes := make([]byte, accessKeyMaxLen)
+	if _, err := rand.Read(keyBytes); err != nil {
+		console.Fatalf("Unable to generate access key. Err: %s.\n", err)
+	}
+
+	for i := 0; i < accessKeyMaxLen; i++ {
+		keyBytes[i] = alphaNumericTable[keyBytes[i]%alphaNumericTableLen]
+	}
+
+	return string(keyBytes)
+}
+
+func mustGetSecretKey() string {
+	keyBytes := make([]byte, secretKeyMaxLen)
+	if _, err := rand.Read(keyBytes); err != nil {
+		console.Fatalf("Unable to generate secret key. Err: %s.\n", err)
+	}
+
+	return string([]byte(base64.StdEncoding.EncodeToString(keyBytes))[:secretKeyMaxLen])
+}
 
 // isAccessKeyValid - validate access key for right length.
 func isAccessKeyValid(accessKey string) bool {

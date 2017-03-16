@@ -48,10 +48,10 @@ var serverCmd = cli.Command{
 	Flags:  append(serverFlags, globalFlags...),
 	Action: serverMain,
 	CustomHelpTemplate: `NAME:
- {{.HelpName}} - {{.Usage}}
+  {{.HelpName}} - {{.Usage}}
 
 USAGE:
- {{.HelpName}} {{if .VisibleFlags}}[FLAGS] {{end}}PATH [PATH...]
+  {{.HelpName}} {{if .VisibleFlags}}[FLAGS] {{end}}PATH [PATH...]
 {{if .VisibleFlags}}
 FLAGS:
   {{range .VisibleFlags}}{{.}}
@@ -85,9 +85,9 @@ EXAMPLES:
 }
 
 // Check for updates and print a notification message
-func checkUpdate() {
+func checkUpdate(mode string) {
 	// Its OK to ignore any errors during getUpdateInfo() here.
-	if older, downloadURL, err := getUpdateInfo(1 * time.Second); err == nil {
+	if older, downloadURL, err := getUpdateInfo(1*time.Second, mode); err == nil {
 		if older > time.Duration(0) {
 			console.Println(colorizeUpdateMessage(downloadURL, older))
 		}
@@ -485,11 +485,6 @@ func serverMain(c *cli.Context) {
 	// Initializes server config, certs, logging and system settings.
 	initServerConfig(c)
 
-	// Check for new updates from dl.minio.io.
-	if !quietFlag {
-		checkUpdate()
-	}
-
 	// Server address.
 	serverAddr := c.String("address")
 
@@ -536,6 +531,18 @@ func serverMain(c *cli.Context) {
 	// initialized for the given endpoints.
 	if len(endpoints) > 1 {
 		globalIsXL = true
+	}
+
+	if !quietFlag {
+		// Check for new updates from dl.minio.io.
+		mode := globalMinioModeFS
+		if globalIsXL {
+			mode = globalMinioModeXL
+		}
+		if globalIsDistXL {
+			mode = globalMinioModeDistXL
+		}
+		checkUpdate(mode)
 	}
 
 	// Initialize name space lock.

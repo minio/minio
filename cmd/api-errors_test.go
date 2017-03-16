@@ -104,6 +104,10 @@ func TestAPIErrCode(t *testing.T) {
 			ErrStorageFull,
 		},
 		{
+			NotImplemented{},
+			ErrNotImplemented,
+		},
+		{
 			errSignatureMismatch,
 			ErrSignatureDoesNotMatch,
 		},

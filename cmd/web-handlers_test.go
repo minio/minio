@@ -1136,13 +1136,13 @@ func testWebListAllBucketPoliciesHandler(obj ObjectLayer, instanceType string, t
 		t.Fatal("Unexpected error: ", err)
 	}
 
-	testCaseResult1 := []bucketAccessPolicy{{
+	testCaseResult1 := []BucketAccessPolicy{{
 		Prefix: bucketName + "/hello*",
 		Policy: policy.BucketPolicyReadWrite,
 	}}
 	testCases := []struct {
 		bucketName     string
-		expectedResult []bucketAccessPolicy
+		expectedResult []BucketAccessPolicy
 	}{
 		{bucketName, testCaseResult1},
 	}

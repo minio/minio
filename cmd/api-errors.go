@@ -692,6 +692,8 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrEntityTooLarge
 	case ObjectTooSmall:
 		apiErr = ErrEntityTooSmall
+	case NotImplemented:
+		apiErr = ErrNotImplemented
 	default:
 		apiErr = ErrInternalError
 	}

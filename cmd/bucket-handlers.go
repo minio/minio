@@ -49,6 +49,10 @@ func enforceBucketPolicy(bucket, action, resource, referer string, queryParams u
 		return ErrInternalError
 	}
 
+	if globalBucketPolicies == nil {
+		return ErrAccessDenied
+	}
+
 	// Fetch bucket policy, if policy is not set return access denied.
 	policy := globalBucketPolicies.GetBucketPolicy(bucket)
 	if policy == nil {

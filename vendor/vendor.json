@@ -3,6 +3,12 @@
 	"ignore": "test",
 	"package": [
 		{
+			"checksumSHA1": "rK3ght7KTtHGdm0V4+U7fv9+tUU=",
+			"path": "github.com/Azure/azure-sdk-for-go/storage",
+			"revision": "8e625d1702a32d01cef05a9252198d231c4af113",
+			"revisionTime": "2017-02-08T01:01:20Z"
+		},
+		{
 			"path": "github.com/Sirupsen/logrus",
 			"revision": "32055c351ea8b00b96d70f28db48d9840feaf0ec",
 			"revisionTime": "2016-07-12T20:17:32-04:00"
@@ -175,10 +181,10 @@
 			"revisionTime": "2016-07-23T06:10:19Z"
 		},
 		{
-			"checksumSHA1": "7PcmjItrQSx/1sZ6Q395LCzT+iw=",
+			"checksumSHA1": "fUWokilZyc1QDKnIgCDJE8n1S9U=",
 			"path": "github.com/minio/cli",
-			"revision": "06bb2061ef1493532baf0444818eb5fb4c83caac",
-			"revisionTime": "2017-02-20T03:57:28Z"
+			"revision": "b8ae5507c0ceceecc22d5dbd386b58fbd4fdce72",
+			"revisionTime": "2017-02-27T07:32:28Z"
 		},
 		{
 			"checksumSHA1": "NBGyq2+iTtJvJ+ElG4FzHLe1WSY=",
