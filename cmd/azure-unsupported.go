@@ -35,3 +35,9 @@ func (a AzureObjects) HealObject(bucket, object string) error {
 func (a AzureObjects) ListObjectsHeal(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
 	return ListObjectsInfo{}, traceError(NotImplemented{})
 }
+
+// ListUploadsHeal - Not relevant.
+func (a AzureObjects) ListUploadsHeal(bucket, prefix, marker, uploadIDMarker,
+	delimiter string, maxUploads int) (ListMultipartsInfo, error) {
+	return ListMultipartsInfo{}, traceError(NotImplemented{})
+}

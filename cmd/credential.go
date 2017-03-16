@@ -27,13 +27,12 @@ import (
 )
 
 const (
-	accessKeyMinLen = 5
-	accessKeyMaxLen = 20
-	secretKeyMinLen = 8
-	secretKeyMaxLen = 40
-
-	alphaNumericTable    = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-	alphaNumericTableLen = byte(len(alphaNumericTable))
+	accessKeyMinLen       = 5
+	accessKeyMaxLen       = 20
+	secretKeyMinLen       = 8
+	secretKeyMaxLenAmazon = 40
+	alphaNumericTable     = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	alphaNumericTableLen  = byte(len(alphaNumericTable))
 )
 
 var (

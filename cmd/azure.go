@@ -363,7 +363,7 @@ func (a AzureObjects) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMa
 		// NewMultipartUpload.
 		return result, nil
 	}
-	result.Uploads = []uploadMetadata{{prefix, prefix, time.Now().UTC(), ""}}
+	result.Uploads = []uploadMetadata{{prefix, prefix, time.Now().UTC(), "", nil}}
 	return result, nil
 }
 
