@@ -165,16 +165,10 @@ func (adminAPI adminAPIHandlers) ServiceCredentialsHandler(w http.ResponseWriter
 		return
 	}
 
-	// Check passed credentials
-	err = validateAuthKeys(req.Username, req.Password)
+	creds, err := createCredential(req.Username, req.Password)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
-	}
-
-	creds := credential{
-		AccessKey: req.Username,
-		SecretKey: req.Password,
 	}
 
 	// Notify all other Minio peers to update credentials

@@ -39,6 +39,8 @@ func testAuthenticate(authType string, t *testing.T) {
 		{"user12345678901234567", "pass", errInvalidAccessKeyLength},
 		// Access key contains unsuppported characters.
 		{"!@#$", "pass", errInvalidAccessKeyLength},
+		// Success when access key contains leading/trailing spaces.
+		{" " + serverCred.AccessKey + " ", serverCred.SecretKey, errInvalidAccessKeyLength},
 		// Secret key too small.
 		{"myuser", "pass", errInvalidSecretKeyLength},
 		// Secret key too long.
@@ -49,8 +51,6 @@ func testAuthenticate(authType string, t *testing.T) {
 		{serverCred.AccessKey, "mypassword", errAuthentication},
 		// Success.
 		{serverCred.AccessKey, serverCred.SecretKey, nil},
-		// Success when access key contains leading/trailing spaces.
-		{" " + serverCred.AccessKey + " ", serverCred.SecretKey, nil},
 	}
 
 	// Run tests.

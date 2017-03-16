@@ -118,10 +118,32 @@ func enableLoggers() {
 // Initializes a new config if it doesn't exist, else migrates any old config
 // to newer config and finally loads the config to memory.
 func initConfig() {
+	accessKey := os.Getenv("MINIO_ACCESS_KEY")
+	secretKey := os.Getenv("MINIO_SECRET_KEY")
+
+	var cred credential
+	var err error
+	if accessKey != "" && secretKey != "" {
+		if cred, err = createCredential(accessKey, secretKey); err != nil {
+			console.Fatalf("Invalid access/secret Key set in environment. Err: %s.\n", err)
+		}
+
+		// Envs are set globally.
+		globalIsEnvCreds = true
+	}
+
+	browser := os.Getenv("MINIO_BROWSER")
+	if browser != "" {
+		if !(strings.EqualFold(browser, "off") || strings.EqualFold(browser, "on")) {
+			console.Fatalf("Invalid value ‘%s’ in MINIO_BROWSER environment variable.", browser)
+		}
+
+		globalIsEnvBrowser = strings.EqualFold(browser, "off")
+	}
 
 	envs := envParams{
-		creds:   mustGetCredentialFromEnv(),
-		browser: mustGetBrowserFromEnv(),
+		creds:   cred,
+		browser: browser,
 	}
 
 	// Config file does not exist, we create it fresh and return upon success.

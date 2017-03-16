@@ -29,7 +29,6 @@ import (
 	"encoding/json"
 
 	humanize "github.com/dustin/go-humanize"
-	"github.com/minio/mc/pkg/console"
 	"github.com/pkg/profile"
 )
 
@@ -253,28 +252,6 @@ func dumpRequest(r *http.Request) string {
 		return "<error dumping request>"
 	}
 	return string(jsonBytes)
-}
-
-// Variant of getBrowserFromEnv but upon error fails right here.
-func mustGetBrowserFromEnv() string {
-	browser, err := getBrowserFromEnv()
-	if err != nil {
-		console.Fatalf("Unable to load MINIO_BROWSER value from environment. Err: %s.\n", err)
-	}
-	return browser
-}
-
-//
-func getBrowserFromEnv() (string, error) {
-	b := os.Getenv("MINIO_BROWSER")
-	if strings.TrimSpace(b) == "" {
-		return "", nil
-	}
-	if !strings.EqualFold(b, "off") && !strings.EqualFold(b, "on") {
-		return "", errInvalidArgument
-	}
-	globalIsEnvBrowser = true
-	return strings.ToLower(b), nil
 }
 
 // isFile - returns whether given path is a file or not.

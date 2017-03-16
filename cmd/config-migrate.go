@@ -116,13 +116,16 @@ func migrateV2ToV3() error {
 	if cv2.Version != "2" {
 		return nil
 	}
+
+	cred, err := createCredential(cv2.Credentials.AccessKey, cv2.Credentials.SecretKey)
+	if err != nil {
+		return fmt.Errorf("Invalid credential in V2 configuration file. %v", err)
+	}
+
 	srvConfig := &configV3{}
 	srvConfig.Version = "3"
 	srvConfig.Addr = ":9000"
-	srvConfig.Credential = credential{
-		AccessKey: cv2.Credentials.AccessKey,
-		SecretKey: cv2.Credentials.SecretKey,
-	}
+	srvConfig.Credential = cred
 	srvConfig.Region = cv2.Credentials.Region
 	if srvConfig.Region == "" {
 		// Region needs to be set for AWS Signature V4.

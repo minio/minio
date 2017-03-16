@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
-	"os"
 
 	"github.com/minio/mc/pkg/console"
 
@@ -37,27 +36,10 @@ const (
 	alphaNumericTableLen = byte(len(alphaNumericTable))
 )
 
-func mustGetAccessKey() string {
-	keyBytes := make([]byte, accessKeyMaxLen)
-	if _, err := rand.Read(keyBytes); err != nil {
-		console.Fatalf("Unable to generate access key. Err: %s.\n", err)
-	}
-
-	for i := 0; i < accessKeyMaxLen; i++ {
-		keyBytes[i] = alphaNumericTable[keyBytes[i]%alphaNumericTableLen]
-	}
-
-	return string(keyBytes)
-}
-
-func mustGetSecretKey() string {
-	keyBytes := make([]byte, secretKeyMaxLen)
-	if _, err := rand.Read(keyBytes); err != nil {
-		console.Fatalf("Unable to generate secret key. Err: %s.\n", err)
-	}
-
-	return string([]byte(base64.StdEncoding.EncodeToString(keyBytes))[:secretKeyMaxLen])
-}
+var (
+	errInvalidAccessKeyLength = errors.New("Invalid access key, access key should be 5 to 20 characters in length")
+	errInvalidSecretKeyLength = errors.New("Invalid secret key, secret key should be 8 to 40 characters in length")
+)
 
 // isAccessKeyValid - validate access key for right length.
 func isAccessKeyValid(accessKey string) bool {
@@ -76,75 +58,72 @@ type credential struct {
 	secretKeyHash []byte
 }
 
-func (c *credential) Validate() error {
-	if !isAccessKeyValid(c.AccessKey) {
-		return errors.New("Invalid access key")
-	}
-	if !isSecretKeyValid(c.SecretKey) {
-		return errors.New("Invalid secret key")
-	}
-	return nil
+// IsValid - returns whether credential is valid or not.
+func (cred credential) IsValid() bool {
+	return isAccessKeyValid(cred.AccessKey) && isSecretKeyValid(cred.SecretKey)
 }
 
-// Generate a bcrypt hashed key for input secret key.
-func mustGetHashedSecretKey(secretKey string) []byte {
-	hashedSecretKey, err := bcrypt.GenerateFromPassword([]byte(secretKey), bcrypt.DefaultCost)
-	if err != nil {
-		console.Fatalf("Unable to generate secret hash for secret key. Err: %s.\n", err)
+// Equals - returns whether two credentials are equal or not.
+func (cred credential) Equal(ccred credential) bool {
+	if !ccred.IsValid() {
+		return false
 	}
-	return hashedSecretKey
+
+	if cred.secretKeyHash == nil {
+		secretKeyHash, err := bcrypt.GenerateFromPassword([]byte(cred.SecretKey), bcrypt.DefaultCost)
+		if err != nil {
+			errorIf(err, "Unable to generate hash of given password")
+			return false
+		}
+
+		cred.secretKeyHash = secretKeyHash
+	}
+
+	return (cred.AccessKey == ccred.AccessKey &&
+		bcrypt.CompareHashAndPassword(cred.secretKeyHash, []byte(ccred.SecretKey)) == nil)
+}
+
+func createCredential(accessKey, secretKey string) (cred credential, err error) {
+	if !isAccessKeyValid(accessKey) {
+		err = errInvalidAccessKeyLength
+	} else if !isSecretKeyValid(secretKey) {
+		err = errInvalidSecretKeyLength
+	} else {
+		var secretKeyHash []byte
+		secretKeyHash, err = bcrypt.GenerateFromPassword([]byte(secretKey), bcrypt.DefaultCost)
+		if err == nil {
+			cred.AccessKey = accessKey
+			cred.SecretKey = secretKey
+			cred.secretKeyHash = secretKeyHash
+		}
+	}
+
+	return cred, err
 }
 
 // Initialize a new credential object
-func newCredential() credential {
-	return newCredentialWithKeys(mustGetAccessKey(), mustGetSecretKey())
-}
-
-func newCredentialWithKeys(accessKey, secretKey string) credential {
-	secretHash := mustGetHashedSecretKey(secretKey)
-	return credential{accessKey, secretKey, secretHash}
-}
-
-// Validate incoming auth keys.
-func validateAuthKeys(accessKey, secretKey string) error {
-	// Validate the env values before proceeding.
-	if !isAccessKeyValid(accessKey) {
-		return errInvalidAccessKeyLength
+func mustGetNewCredential() credential {
+	// Generate access key.
+	keyBytes := make([]byte, accessKeyMaxLen)
+	if _, err := rand.Read(keyBytes); err != nil {
+		console.Fatalln("Unable to generate access key.", err)
 	}
-	if !isSecretKeyValid(secretKey) {
-		return errInvalidSecretKeyLength
+	for i := 0; i < accessKeyMaxLen; i++ {
+		keyBytes[i] = alphaNumericTable[keyBytes[i]%alphaNumericTableLen]
 	}
-	return nil
-}
+	accessKey := string(keyBytes)
 
-// Variant of getCredentialFromEnv but upon error fails right here.
-func mustGetCredentialFromEnv() credential {
-	creds, err := getCredentialFromEnv()
+	// Generate secret key.
+	keyBytes = make([]byte, secretKeyMaxLen)
+	if _, err := rand.Read(keyBytes); err != nil {
+		console.Fatalln("Unable to generate secret key.", err)
+	}
+	secretKey := string([]byte(base64.StdEncoding.EncodeToString(keyBytes))[:secretKeyMaxLen])
+
+	cred, err := createCredential(accessKey, secretKey)
 	if err != nil {
-		console.Fatalf("Unable to load credentials from environment. Err: %s.\n", err)
-	}
-	return creds
-}
-
-// Converts accessKey and secretKeys into credential object which
-// contains bcrypt secret key hash for future validation.
-func getCredentialFromEnv() (credential, error) {
-	// Fetch access keys from environment variables and update the config.
-	accessKey := os.Getenv("MINIO_ACCESS_KEY")
-	secretKey := os.Getenv("MINIO_SECRET_KEY")
-
-	// Envs are set globally.
-	globalIsEnvCreds = accessKey != "" && secretKey != ""
-
-	if globalIsEnvCreds {
-		// Validate the env values before proceeding.
-		if err := validateAuthKeys(accessKey, secretKey); err != nil {
-			return credential{}, err
-		}
-
-		// Return credential object.
-		return newCredentialWithKeys(accessKey, secretKey), nil
+		console.Fatalln("Unable to generate new credential.", err)
 	}
 
-	return credential{}, nil
+	return cred
 }
