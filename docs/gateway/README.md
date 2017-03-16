@@ -1,5 +1,5 @@
 # Minio Gateway [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
-Minio gateway adds Amazon S3 compatibility to third party cloud storage providers. Currently only Microsoft Azure Blob Storage is supported. 
+Minio Gateway adds Amazon S3 compatibility to third party cloud storage providers. Currently only Microsoft Azure Blob Storage is supported. 
 
 ## Run Minio Gateway for Azure Blob Storage
 ### Using Docker
