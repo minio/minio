@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/minio/redigo/redis"
+	"github.com/garyburd/redigo/redis"
 )
 
 // redisNotify to send logs to Redis server
