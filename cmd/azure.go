@@ -356,17 +356,14 @@ func (a AzureObjects) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMa
 	result.MaxUploads = maxUploads
 	result.Prefix = prefix
 	result.Delimiter = delimiter
-	resp, err := a.ListObjectParts(bucket, prefix, prefix, 1, 1000)
-	if err != nil {
-		// In case ListObjectParts returns error, it would mean that no such incomplete upload exists on
-		// azure storage - in which case we return nil. This plays a role for mc and our client libs. i.e client
-		// does ListMultipartUploads to figure the previous uploadID to continue uploading from where it left off.
-		// If we return error the upload never starts and always returns error.
+	meta := a.metaInfo.get(prefix)
+	if meta == nil {
+		// In case minio was restarted after NewMultipartUpload and before CompleteMultipartUpload we expect
+		// the client to do a fresh upload so that any metadata like content-type are sent again in the
+		// NewMultipartUpload.
 		return result, nil
 	}
-	if len(resp.Parts) > 0 {
-		result.Uploads = []uploadMetadata{{prefix, prefix, time.Now().UTC(), ""}}
-	}
+	result.Uploads = []uploadMetadata{{prefix, prefix, time.Now().UTC(), ""}}
 	return result, nil
 }
 
