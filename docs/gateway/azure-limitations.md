@@ -15,6 +15,5 @@ Gateway inherits the following Azure limitations:
 - Non-empty buckets get removed on a DeleteBucket() call.
 
 Other limitations:
-- Current implementation of ListMultipartUploads is incomplete. Right now it returns if the "prefix"
-  if the object with name "prefix" has any uploaded parts.
+- Current implementation of ListMultipartUploads is incomplete. Right now it returns if the object with name "prefix" has any uploaded parts.
 - Bucket notification not supported.
