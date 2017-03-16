@@ -25,7 +25,6 @@ import (
 	"path"
 	"sort"
 	"strconv"
-	"strings"
 
 	mux "github.com/gorilla/mux"
 )
@@ -874,8 +873,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	// Complete parts.
 	var completeParts []completePart
 	for _, part := range complMultipartUpload.Parts {
-		part.ETag = strings.TrimPrefix(part.ETag, "\"")
-		part.ETag = strings.TrimSuffix(part.ETag, "\"")
+		part.ETag = canonicalizeETag(part.ETag)
 		completeParts = append(completeParts, part)
 	}
 

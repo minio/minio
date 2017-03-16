@@ -26,7 +26,6 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strconv"
-	"strings"
 	"sync"
 	"testing"
 
@@ -1037,7 +1036,7 @@ func testAPICopyObjectPartHandlerSanity(obj ObjectLayer, instanceType, bucketNam
 
 		parts = append(parts, completePart{
 			PartNumber: partNumber,
-			ETag:       strings.Trim(resp.ETag, "\""),
+			ETag:       canonicalizeETag(resp.ETag),
 		})
 	}
 

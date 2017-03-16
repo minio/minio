@@ -2579,10 +2579,10 @@ func (s *TestSuiteCommon) TestObjectMultipart(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 	var parts []completePart
 	for _, part := range completeUploads.Parts {
-		part.ETag = strings.Trim(part.ETag, "\"")
+		part.ETag = canonicalizeETag(part.ETag)
 		parts = append(parts, part)
 	}
 	etag, err := getCompleteMultipartMD5(parts)
 	c.Assert(err, IsNil)
-	c.Assert(strings.Trim(response.Header.Get("Etag"), "\""), Equals, etag)
+	c.Assert(canonicalizeETag(response.Header.Get("Etag")), Equals, etag)
 }
