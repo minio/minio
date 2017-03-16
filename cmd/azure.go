@@ -350,9 +350,10 @@ func (a AzureObjects) DeleteObject(bucket, object string) error {
 }
 
 // ListMultipartUploads - Incomplete implementation, for now just return the prefix if it is an incomplete upload.
+// FIXME: Full ListMultipartUploads is not supported yet. It is supported just enough to help our client libs to
+// support re-uploads. a.client.ListBlobs() can be made to return entries which include uncommitted blobs using
+// which we need to filter out the committed blobs to get the list of uncommitted blobs.
 func (a AzureObjects) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (result ListMultipartsInfo, err error) {
-	// FIXME: Full ListMultipartUploads is not supported yet. It is supported just enough to help our client libs to
-	// support re-uploads.
 	result.MaxUploads = maxUploads
 	result.Prefix = prefix
 	result.Delimiter = delimiter
@@ -374,6 +375,7 @@ func (a AzureObjects) NewMultipartUpload(bucket, object string, metadata map[str
 	// Each concurrent client, keeps its own blockID list which it can commit.
 	uploadID = object
 	if metadata == nil {
+		// Store an empty map as a placeholder else ListObjectParts/PutObjectPart will not work properly.
 		metadata = make(map[string]string)
 	} else {
 		metadata = canonicalMetadata(metadata)
