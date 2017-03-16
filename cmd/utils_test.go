@@ -388,3 +388,30 @@ func TestLocalAddress(t *testing.T) {
 	}
 
 }
+
+// TestCheckURL tests valid address
+func TestCheckURL(t *testing.T) {
+	testCases := []struct {
+		addr       string
+		shouldPass bool
+	}{
+		{"", false},
+		{":", false},
+		{"localhost", true},
+		{"127.0.0.1", true},
+		{"http://localhost/", true},
+		{"http://127.0.0.1/", true},
+		{"proto://myhostname/path", true},
+	}
+
+	// Validates fetching local address.
+	for i, testCase := range testCases {
+		_, err := checkURL(testCase.addr)
+		if testCase.shouldPass && err != nil {
+			t.Errorf("Test %d: expected to pass but got an error: %v\n", i+1, err)
+		}
+		if !testCase.shouldPass && err == nil {
+			t.Errorf("Test %d: expected to fail but passed.", i+1)
+		}
+	}
+}

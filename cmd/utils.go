@@ -19,6 +19,7 @@ package cmd
 import (
 	"encoding/base64"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -263,15 +264,14 @@ func isFile(path string) bool {
 	return false
 }
 
-// checkNetURL - checks if passed address correspond
-// to a network address (and not file system path)
-func checkNetURL(address string) (*url.URL, error) {
+// checkURL - checks if passed address correspond
+func checkURL(address string) (*url.URL, error) {
+	if address == "" {
+		return nil, errors.New("Address cannot be empty")
+	}
 	u, err := url.Parse(address)
 	if err != nil {
 		return nil, fmt.Errorf("`%s` invalid: %s", address, err.Error())
-	}
-	if u.Host == "" {
-		return nil, fmt.Errorf("`%s` invalid network URL", address)
 	}
 	return u, nil
 }

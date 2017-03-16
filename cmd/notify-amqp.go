@@ -44,7 +44,7 @@ func (a *amqpNotify) Validate() error {
 	if !a.Enable {
 		return nil
 	}
-	if _, err := checkNetURL(a.URL); err != nil {
+	if _, err := checkURL(a.URL); err != nil {
 		return err
 	}
 	return nil

@@ -36,7 +36,7 @@ func (w *webhookNotify) Validate() error {
 	if !w.Enable {
 		return nil
 	}
-	if _, err := checkNetURL(w.Endpoint); err != nil {
+	if _, err := checkURL(w.Endpoint); err != nil {
 		return err
 	}
 	return nil
