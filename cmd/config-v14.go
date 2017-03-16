@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -244,12 +245,12 @@ func validateConfig() error {
 
 	// Validate region field
 	if srvCfg.GetRegion() == "" {
-		return errors.New("region config is empty")
+		return errors.New("Region config value cannot be empty")
 	}
 
 	// Validate browser field
 	if b := strings.ToLower(srvCfg.GetBrowser()); b != "on" && b != "off" {
-		return errors.New("invalid browser config")
+		return fmt.Errorf("Browser config value %s is invalid", b)
 	}
 
 	// Validate credential field
@@ -286,6 +287,10 @@ func (s *serverConfigV14) SetRegion(region string) {
 	serverConfigMu.Lock()
 	defer serverConfigMu.Unlock()
 
+	// Empty region means "us-east-1" by default from S3 spec.
+	if region == "" {
+		region = "us-east-1"
+	}
 	s.Region = region
 }
 
@@ -294,7 +299,12 @@ func (s serverConfigV14) GetRegion() string {
 	serverConfigMu.RLock()
 	defer serverConfigMu.RUnlock()
 
-	return s.Region
+	if s.Region != "" {
+		return s.Region
+	} // region empty
+
+	// Empty region means "us-east-1" by default from S3 spec.
+	return "us-east-1"
 }
 
 // SetCredentials set new credentials.
@@ -320,6 +330,11 @@ func (s *serverConfigV14) SetBrowser(v string) {
 	defer serverConfigMu.Unlock()
 
 	// Set browser param
+	if v == "" {
+		v = "on" // Browser is on by default.
+	}
+
+	// Set the new value.
 	s.Browser = v
 }
 
@@ -328,7 +343,12 @@ func (s serverConfigV14) GetBrowser() string {
 	serverConfigMu.RLock()
 	defer serverConfigMu.RUnlock()
 
-	return s.Browser
+	if s.Browser != "" {
+		return s.Browser
+	} // empty browser.
+
+	// Empty browser means "on" by default.
+	return "on"
 }
 
 // Save config.
