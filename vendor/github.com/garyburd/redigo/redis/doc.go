@@ -14,7 +14,7 @@
 
 // Package redis is a client for the Redis database.
 //
-// The Redigo FAQ (https://github.com/minio/redigo/wiki/FAQ) contains more
+// The Redigo FAQ (https://github.com/garyburd/redigo/wiki/FAQ) contains more
 // documentation about this package.
 //
 // Connections
@@ -99,7 +99,7 @@
 //
 // Concurrency
 //
-// Connections support one concurrent caller to the Recieve method and one
+// Connections support one concurrent caller to the Receive method and one
 // concurrent caller to the Send and Flush methods. No other concurrency is
 // supported including concurrent calls to the Do method.
 //
@@ -127,7 +127,7 @@
 // send and flush a subscription management command. The receive method
 // converts a pushed message to convenient types for use in a type switch.
 //
-//  psc := redis.PubSubConn{c}
+//  psc := redis.PubSubConn{Conn: c}
 //  psc.Subscribe("example")
 //  for {
 //      switch v := psc.Receive().(type) {
@@ -165,4 +165,13 @@
 //   if _, err := redis.Scan(reply, &value1, &value2); err != nil {
 //      // handle error
 //  }
-package redis // import "github.com/minio/redigo/redis"
+//
+// Errors
+//
+// Connection methods return error replies from the server as type redis.Error.
+//
+// Call the connection Err() method to determine if the connection encountered
+// non-recoverable error such as a network error or protocol parsing error. If
+// Err() returns a non-nil value, then the connection is not usable and should
+// be closed.
+package redis // import "github.com/garyburd/redigo/redis"

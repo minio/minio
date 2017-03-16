@@ -24,6 +24,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/garyburd/redigo/internal"
 )
 
 var nowFunc = time.Now // for testing
@@ -44,40 +46,26 @@ var (
 //
 // The following example shows how to use a pool in a web application. The
 // application creates a pool at application startup and makes it available to
-// request handlers using a global variable.
+// request handlers using a package level variable. The pool configuration used
+// here is an example, not a recommendation.
 //
-//  func newPool(server, password string) *redis.Pool {
-//      return &redis.Pool{
-//          MaxIdle: 3,
-//          IdleTimeout: 240 * time.Second,
-//          Dial: func () (redis.Conn, error) {
-//              c, err := redis.Dial("tcp", server)
-//              if err != nil {
-//                  return nil, err
-//              }
-//              if _, err := c.Do("AUTH", password); err != nil {
-//                  c.Close()
-//                  return nil, err
-//              }
-//              return c, err
-//          },
-//          TestOnBorrow: func(c redis.Conn, t time.Time) error {
-//              _, err := c.Do("PING")
-//              return err
-//          },
-//      }
+//  func newPool(addr string) *redis.Pool {
+//    return &redis.Pool{
+//      MaxIdle: 3,
+//      IdleTimeout: 240 * time.Second,
+//      Dial: func () (redis.Conn, error) { return redis.Dial("tcp", addr) },
+//    }
 //  }
 //
 //  var (
-//      pool *redis.Pool
-//      redisServer = flag.String("redisServer", ":6379", "")
-//      redisPassword = flag.String("redisPassword", "", "")
+//    pool *redis.Pool
+//    redisServer = flag.String("redisServer", ":6379", "")
 //  )
 //
 //  func main() {
-//      flag.Parse()
-//      pool = newPool(*redisServer, *redisPassword)
-//      ...
+//    flag.Parse()
+//    pool = newPool(*redisServer)
+//    ...
 //  }
 //
 // A request handler gets a connection from the pool and closes the connection
@@ -86,7 +74,44 @@ var (
 //  func serveHome(w http.ResponseWriter, r *http.Request) {
 //      conn := pool.Get()
 //      defer conn.Close()
-//      ....
+//      ...
+//  }
+//
+// Use the Dial function to authenticate connections with the AUTH command or
+// select a database with the SELECT command:
+//
+//  pool := &redis.Pool{
+//    // Other pool configuration not shown in this example.
+//    Dial: func () (redis.Conn, error) {
+//      c, err := redis.Dial("tcp", server)
+//      if err != nil {
+//        return nil, err
+//      }
+//      if _, err := c.Do("AUTH", password); err != nil {
+//        c.Close()
+//        return nil, err
+//      }
+//      if _, err := c.Do("SELECT", db); err != nil {
+//        c.Close()
+//        return nil, err
+//      }
+//      return c, nil
+//    }
+//  }
+//
+// Use the TestOnBorrow function to check the health of an idle connection
+// before the connection is returned to the application. This example PINGs
+// connections that have been idle more than a minute:
+//
+//  pool := &redis.Pool{
+//    // Other pool configuration not shown in this example.
+//    TestOnBorrow: func(c redis.Conn, t time.Time) error {
+//      if time.Since(t) < time.Minute {
+//        return nil
+//      }
+//      _, err := c.Do("PING")
+//      return err
+//    },
 //  }
 //
 type Pool struct {
@@ -326,14 +351,14 @@ func (pc *pooledConnection) Close() error {
 	}
 	pc.c = errorConnection{errConnClosed}
 
-	if pc.state&MultiState != 0 {
+	if pc.state&internal.MultiState != 0 {
 		c.Send("DISCARD")
-		pc.state &^= (MultiState | WatchState)
-	} else if pc.state&WatchState != 0 {
+		pc.state &^= (internal.MultiState | internal.WatchState)
+	} else if pc.state&internal.WatchState != 0 {
 		c.Send("UNWATCH")
-		pc.state &^= WatchState
+		pc.state &^= internal.WatchState
 	}
-	if pc.state&SubscribeState != 0 {
+	if pc.state&internal.SubscribeState != 0 {
 		c.Send("UNSUBSCRIBE")
 		c.Send("PUNSUBSCRIBE")
 		// To detect the end of the message stream, ask the server to echo
@@ -347,7 +372,7 @@ func (pc *pooledConnection) Close() error {
 				break
 			}
 			if p, ok := p.([]byte); ok && bytes.Equal(p, sentinel) {
-				pc.state &^= SubscribeState
+				pc.state &^= internal.SubscribeState
 				break
 			}
 		}
@@ -362,13 +387,13 @@ func (pc *pooledConnection) Err() error {
 }
 
 func (pc *pooledConnection) Do(commandName string, args ...interface{}) (reply interface{}, err error) {
-	ci := LookupCommandInfo(commandName)
+	ci := internal.LookupCommandInfo(commandName)
 	pc.state = (pc.state | ci.Set) &^ ci.Clear
 	return pc.c.Do(commandName, args...)
 }
 
 func (pc *pooledConnection) Send(commandName string, args ...interface{}) error {
-	ci := LookupCommandInfo(commandName)
+	ci := internal.LookupCommandInfo(commandName)
 	pc.state = (pc.state | ci.Set) &^ ci.Clear
 	return pc.c.Send(commandName, args...)
 }

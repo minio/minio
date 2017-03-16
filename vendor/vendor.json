@@ -63,6 +63,18 @@
 			"revisionTime": "2017-01-13T15:16:12Z"
 		},
 		{
+			"checksumSHA1": "2UmMbNHc8FBr98mJFN1k8ISOIHk=",
+			"path": "github.com/garyburd/redigo/internal",
+			"revision": "0d253a66e6e1349f4581d6d2b300ee434ee2da9f",
+			"revisionTime": "2017-02-16T21:49:44Z"
+		},
+		{
+			"checksumSHA1": "81OSg/NapmTaRpSS+oYsPVE0b1Y=",
+			"path": "github.com/garyburd/redigo/redis",
+			"revision": "0d253a66e6e1349f4581d6d2b300ee434ee2da9f",
+			"revisionTime": "2017-02-16T21:49:44Z"
+		},
+		{
 			"checksumSHA1": "3yco0089CSJ4qbyUccpbDC2+dPg=",
 			"path": "github.com/gogo/protobuf/gogoproto",
 			"revision": "84af2615df1ba1d35cc975ba94b64ee67d6c196e",
@@ -207,12 +219,6 @@
 			"path": "github.com/minio/minio-go/pkg/set",
 			"revision": "9e734013294ab153b0bdbe182738bcddd46f1947",
 			"revisionTime": "2016-08-18T00:31:20Z"
-		},
-		{
-			"checksumSHA1": "GOSe2XEQI4AYwrMoLZu8vtmzkJM=",
-			"path": "github.com/minio/redigo/redis",
-			"revision": "5e2117cd32d677a36dcd8c9c83776a065555653b",
-			"revisionTime": "2016-07-24T00:05:56Z"
 		},
 		{
 			"checksumSHA1": "URVle4qtadmW9w9BulDRHY3kxnA=",
