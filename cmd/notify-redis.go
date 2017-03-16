@@ -36,7 +36,7 @@ func (r *redisNotify) Validate() error {
 	if !r.Enable {
 		return nil
 	}
-	if _, err := checkNetURL(r.Addr); err != nil {
+	if _, err := checkURL(r.Addr); err != nil {
 		return err
 	}
 	return nil

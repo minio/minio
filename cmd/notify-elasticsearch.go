@@ -37,7 +37,7 @@ func (e *elasticSearchNotify) Validate() error {
 	if !e.Enable {
 		return nil
 	}
-	if _, err := checkNetURL(e.URL); err != nil {
+	if _, err := checkURL(e.URL); err != nil {
 		return err
 	}
 	return nil

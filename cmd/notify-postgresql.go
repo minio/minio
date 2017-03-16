@@ -88,7 +88,7 @@ func (p *postgreSQLNotify) Validate() error {
 	if !p.Enable {
 		return nil
 	}
-	if _, err := checkNetURL(p.Host); err != nil {
+	if _, err := checkURL(p.Host); err != nil {
 		return err
 	}
 	return nil

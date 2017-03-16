@@ -52,7 +52,7 @@ func (n *natsNotify) Validate() error {
 	if !n.Enable {
 		return nil
 	}
-	if _, err := checkNetURL(n.Address); err != nil {
+	if _, err := checkURL(n.Address); err != nil {
 		return err
 	}
 	return nil
