@@ -147,9 +147,9 @@ func getSignature(signingKey []byte, stringToSign string) string {
 }
 
 // Check to see if Policy is signed correctly.
-func doesPolicySignatureMatch(formValues map[string]string) APIErrorCode {
+func doesPolicySignatureMatch(formValues http.Header) APIErrorCode {
 	// For SignV2 - Signature field will be valid
-	if formValues["Signature"] != "" {
+	if _, ok := formValues["Signature"]; ok {
 		return doesPolicySignatureV2Match(formValues)
 	}
 	return doesPolicySignatureV4Match(formValues)
@@ -158,7 +158,7 @@ func doesPolicySignatureMatch(formValues map[string]string) APIErrorCode {
 // doesPolicySignatureMatch - Verify query headers with post policy
 //     - http://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-HTTPPOSTConstructPolicy.html
 // returns ErrNone if the signature matches.
-func doesPolicySignatureV4Match(formValues map[string]string) APIErrorCode {
+func doesPolicySignatureV4Match(formValues http.Header) APIErrorCode {
 	// Access credentials.
 	cred := serverConfig.GetCredential()
 
@@ -166,7 +166,7 @@ func doesPolicySignatureV4Match(formValues map[string]string) APIErrorCode {
 	region := serverConfig.GetRegion()
 
 	// Parse credential tag.
-	credHeader, err := parseCredentialHeader("Credential=" + formValues["X-Amz-Credential"])
+	credHeader, err := parseCredentialHeader("Credential=" + formValues.Get("X-Amz-Credential"))
 	if err != ErrNone {
 		return ErrMissingFields
 	}
@@ -186,12 +186,14 @@ func doesPolicySignatureV4Match(formValues map[string]string) APIErrorCode {
 	signingKey := getSigningKey(cred.SecretKey, credHeader.scope.date, region)
 
 	// Get signature.
-	newSignature := getSignature(signingKey, formValues["Policy"])
+	newSignature := getSignature(signingKey, formValues.Get("Policy"))
 
 	// Verify signature.
-	if newSignature != formValues["X-Amz-Signature"] {
+	if newSignature != formValues.Get("X-Amz-Signature") {
 		return ErrSignatureDoesNotMatch
 	}
+
+	// Success.
 	return ErrNone
 }
 

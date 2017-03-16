@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,12 +20,10 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	jwtgo "github.com/dgrijalva/jwt-go"
 	jwtreq "github.com/dgrijalva/jwt-go/request"
-	"golang.org/x/crypto/bcrypt"
 )
 
 const (
@@ -39,9 +37,6 @@ const (
 )
 
 var (
-	errInvalidAccessKeyLength = errors.New("Invalid access key, access key should be 5 to 20 characters in length")
-	errInvalidSecretKeyLength = errors.New("Invalid secret key, secret key should be 8 to 40 characters in length")
-
 	errInvalidAccessKeyID   = errors.New("The access key ID you provided does not exist in our records")
 	errChangeCredNotAllowed = errors.New("Changing access key and secret key not allowed")
 	errAuthentication       = errors.New("Authentication failed, check your access credentials")
@@ -49,34 +44,19 @@ var (
 )
 
 func authenticateJWT(accessKey, secretKey string, expiry time.Duration) (string, error) {
-	// Trim spaces.
-	accessKey = strings.TrimSpace(accessKey)
-
-	if !isAccessKeyValid(accessKey) {
-		return "", errInvalidAccessKeyLength
-	}
-	if !isSecretKeyValid(secretKey) {
-		return "", errInvalidSecretKeyLength
+	passedCredential, err := createCredential(accessKey, secretKey)
+	if err != nil {
+		return "", err
 	}
 
 	serverCred := serverConfig.GetCredential()
 
-	// Validate access key.
-	if accessKey != serverCred.AccessKey {
+	if serverCred.AccessKey != passedCredential.AccessKey {
 		return "", errInvalidAccessKeyID
 	}
 
-	// Validate secret key.
-	// Using bcrypt to avoid timing attacks.
-	if serverCred.secretKeyHash != nil {
-		if bcrypt.CompareHashAndPassword(serverCred.secretKeyHash, []byte(secretKey)) != nil {
-			return "", errAuthentication
-		}
-	} else {
-		// Secret key hash not set then generate and validate.
-		if bcrypt.CompareHashAndPassword(mustGetHashedSecretKey(serverCred.SecretKey), []byte(secretKey)) != nil {
-			return "", errAuthentication
-		}
+	if !serverCred.Equal(passedCredential) {
+		return "", errAuthentication
 	}
 
 	utcNow := time.Now().UTC()

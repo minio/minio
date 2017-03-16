@@ -18,10 +18,7 @@
 package madmin
 
 import (
-	"bytes"
 	"encoding/json"
-	"encoding/xml"
-	"errors"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -89,52 +86,6 @@ func (adm *AdminClient) ServiceRestart() error {
 		return err
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		return httpRespToErrorResponse(resp)
-	}
-	return nil
-}
-
-// setCredsReq - xml to send to the server to set new credentials
-type setCredsReq struct {
-	Username string `xml:"username"`
-	Password string `xml:"password"`
-}
-
-// ServiceSetCredentials - Call Service Set Credentials API to set new access and secret keys in the specified Minio server
-func (adm *AdminClient) ServiceSetCredentials(access, secret string) error {
-
-	// Disallow sending with the server if the connection is not secure
-	if !adm.secure {
-		return errors.New("setting new credentials requires HTTPS connection to the server")
-	}
-
-	// Setup new request
-	reqData := requestData{}
-	reqData.queryValues = make(url.Values)
-	reqData.queryValues.Set("service", "")
-	reqData.customHeaders = make(http.Header)
-	reqData.customHeaders.Set(minioAdminOpHeader, "set-credentials")
-
-	// Setup request's body
-	body, err := xml.Marshal(setCredsReq{Username: access, Password: secret})
-	if err != nil {
-		return err
-	}
-	reqData.contentBody = bytes.NewReader(body)
-	reqData.contentLength = int64(len(body))
-	reqData.contentMD5Bytes = sumMD5(body)
-	reqData.contentSHA256Bytes = sum256(body)
-
-	// Execute GET on bucket to list objects.
-	resp, err := adm.executeMethod("POST", reqData)
-
-	defer closeResponse(resp)
-	if err != nil {
-		return err
-	}
-
-	// Return error to the caller if http response code is different from 200
 	if resp.StatusCode != http.StatusOK {
 		return httpRespToErrorResponse(resp)
 	}

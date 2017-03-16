@@ -25,7 +25,6 @@ import (
 	"path"
 	"sort"
 	"strconv"
-	"strings"
 
 	mux "github.com/gorilla/mux"
 )
@@ -133,7 +132,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// Get the object.
-	startOffset := int64(0)
+	var startOffset int64
 	length := objInfo.Size
 	if hrange != nil {
 		startOffset = hrange.offsetBegin
@@ -359,12 +358,10 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 	// Notify object created event.
 	eventNotify(eventData{
-		Type:    ObjectCreatedCopy,
-		Bucket:  dstBucket,
-		ObjInfo: objInfo,
-		ReqParams: map[string]string{
-			"sourceIPAddress": r.RemoteAddr,
-		},
+		Type:      ObjectCreatedCopy,
+		Bucket:    dstBucket,
+		ObjInfo:   objInfo,
+		ReqParams: extractReqParams(r),
 	})
 }
 
@@ -421,6 +418,13 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 
 	// Extract metadata to be saved from incoming HTTP header.
 	metadata := extractMetadataFromHeader(r.Header)
+	if rAuthType == authTypeStreamingSigned {
+		// Make sure to delete the content-encoding parameter
+		// for a streaming signature which is set to value
+		// "aws-chunked"
+		delete(metadata, "content-encoding")
+	}
+
 	// Make sure we hex encode md5sum here.
 	metadata["md5Sum"] = hex.EncodeToString(md5Bytes)
 
@@ -476,7 +480,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		objInfo, err = objectAPI.PutObject(bucket, object, size, r.Body, metadata, sha256sum)
 	}
 	if err != nil {
-		errorIf(err, "Unable to create an object.")
+		errorIf(err, "Unable to create an object. %s", r.URL.Path)
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -485,12 +489,10 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 
 	// Notify object created event.
 	eventNotify(eventData{
-		Type:    ObjectCreatedPut,
-		Bucket:  bucket,
-		ObjInfo: objInfo,
-		ReqParams: map[string]string{
-			"sourceIPAddress": r.RemoteAddr,
-		},
+		Type:      ObjectCreatedPut,
+		Bucket:    bucket,
+		ObjInfo:   objInfo,
+		ReqParams: extractReqParams(r),
 	})
 }
 
@@ -594,16 +596,12 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	var hrange *httpRange
 	rangeHeader := r.Header.Get("x-amz-copy-source-range")
 	if rangeHeader != "" {
-		if hrange, err = parseRequestRange(rangeHeader, objInfo.Size); err != nil {
+		if hrange, err = parseCopyPartRange(rangeHeader, objInfo.Size); err != nil {
 			// Handle only errInvalidRange
 			// Ignore other parse error and treat it as regular Get request like Amazon S3.
-			if err == errInvalidRange {
-				writeErrorResponse(w, ErrInvalidRange, r.URL)
-				return
-			}
-
-			// log the error.
-			errorIf(err, "Invalid request range")
+			errorIf(err, "Unable to extract range %s", rangeHeader)
+			writeCopyPartErr(w, err, r.URL)
+			return
 		}
 	}
 
@@ -613,15 +611,15 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	}
 
 	// Get the object.
-	startOffset := int64(0)
+	var startOffset int64
 	length := objInfo.Size
 	if hrange != nil {
-		startOffset = hrange.offsetBegin
 		length = hrange.getLength()
+		startOffset = hrange.offsetBegin
 	}
 
 	/// maximum copy size for multipart objects in a single operation
-	if isMaxObjectSize(length) {
+	if isMaxAllowedPartSize(length) {
 		writeErrorResponse(w, ErrEntityTooLarge, r.URL)
 		return
 	}
@@ -630,6 +628,7 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	// object is same then only metadata is updated.
 	partInfo, err := objectAPI.CopyObjectPart(srcBucket, srcObject, dstBucket, dstObject, uploadID, partID, startOffset, length)
 	if err != nil {
+		errorIf(err, "Unable to perform CopyObjectPart %s/%s", srcBucket, srcObject)
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -650,6 +649,12 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+		return
+	}
+
+	// X-Amz-Copy-Source shouldn't be set for this call.
+	if _, ok := r.Header["X-Amz-Copy-Source"]; ok {
+		writeErrorResponse(w, ErrInvalidCopySource, r.URL)
 		return
 	}
 
@@ -680,7 +685,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 	}
 
 	/// maximum Upload size for multipart objects in a single operation
-	if isMaxObjectSize(size) {
+	if isMaxAllowedPartSize(size) {
 		writeErrorResponse(w, ErrEntityTooLarge, r.URL)
 		return
 	}
@@ -868,8 +873,7 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	// Complete parts.
 	var completeParts []completePart
 	for _, part := range complMultipartUpload.Parts {
-		part.ETag = strings.TrimPrefix(part.ETag, "\"")
-		part.ETag = strings.TrimSuffix(part.ETag, "\"")
+		part.ETag = canonicalizeETag(part.ETag)
 		completeParts = append(completeParts, part)
 	}
 
@@ -912,12 +916,10 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 
 	// Notify object created event.
 	eventNotify(eventData{
-		Type:    ObjectCreatedCompleteMultipartUpload,
-		Bucket:  bucket,
-		ObjInfo: objInfo,
-		ReqParams: map[string]string{
-			"sourceIPAddress": r.RemoteAddr,
-		},
+		Type:      ObjectCreatedCompleteMultipartUpload,
+		Bucket:    bucket,
+		ObjInfo:   objInfo,
+		ReqParams: extractReqParams(r),
 	})
 }
 
@@ -960,8 +962,6 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 		ObjInfo: ObjectInfo{
 			Name: object,
 		},
-		ReqParams: map[string]string{
-			"sourceIPAddress": r.RemoteAddr,
-		},
+		ReqParams: extractReqParams(r),
 	})
 }

@@ -121,35 +121,6 @@ func testGetReadDisks(t *testing.T, xl *xlObjects) {
 	}
 }
 
-// Test getOrderedDisks which returns ordered slice of disks from their
-// actual distribution.
-func testGetOrderedDisks(t *testing.T, xl *xlObjects) {
-	disks := xl.storageDisks
-	distribution := []int{16, 14, 12, 10, 8, 6, 4, 2, 1, 3, 5, 7, 9, 11, 13, 15}
-	orderedDisks := getOrderedDisks(distribution, disks)
-	// From the "distribution" above you can notice that:
-	// 1st data block is in the 9th disk (i.e distribution index 8)
-	// 2nd data block is in the 8th disk (i.e distribution index 7) and so on.
-	if orderedDisks[0] != disks[8] ||
-		orderedDisks[1] != disks[7] ||
-		orderedDisks[2] != disks[9] ||
-		orderedDisks[3] != disks[6] ||
-		orderedDisks[4] != disks[10] ||
-		orderedDisks[5] != disks[5] ||
-		orderedDisks[6] != disks[11] ||
-		orderedDisks[7] != disks[4] ||
-		orderedDisks[8] != disks[12] ||
-		orderedDisks[9] != disks[3] ||
-		orderedDisks[10] != disks[13] ||
-		orderedDisks[11] != disks[2] ||
-		orderedDisks[12] != disks[14] ||
-		orderedDisks[13] != disks[1] ||
-		orderedDisks[14] != disks[15] ||
-		orderedDisks[15] != disks[0] {
-		t.Errorf("getOrderedDisks returned incorrect order.")
-	}
-}
-
 // Test for isSuccessDataBlocks and isSuccessDecodeBlocks.
 func TestIsSuccessBlocks(t *testing.T) {
 	dataBlocks := 8
@@ -217,7 +188,7 @@ func TestIsSuccessBlocks(t *testing.T) {
 	}
 }
 
-// Wrapper function for testGetReadDisks, testGetOrderedDisks.
+// Wrapper function for testGetReadDisks, testShuffleDisks.
 func TestErasureReadUtils(t *testing.T) {
 	nDisks := 16
 	disks, err := getRandomDisks(nDisks)
@@ -236,7 +207,6 @@ func TestErasureReadUtils(t *testing.T) {
 	defer removeRoots(disks)
 	xl := objLayer.(*xlObjects)
 	testGetReadDisks(t, xl)
-	testGetOrderedDisks(t, xl)
 }
 
 // Simulates a faulty disk for ReadFile()

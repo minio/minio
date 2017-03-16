@@ -19,27 +19,15 @@ package cmd
 import (
 	"crypto/x509"
 	"net/url"
-	"os"
 	"runtime"
-	"strings"
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/fatih/color"
-	"github.com/minio/cli"
-	"github.com/minio/mc/pkg/console"
-	"github.com/minio/minio/pkg/objcache"
 )
 
 // minio configuration related constants.
 const (
-	globalMinioConfigVersion      = "13"
-	globalMinioConfigDir          = ".minio"
-	globalMinioCertsDir           = "certs"
-	globalMinioCertsCADir         = "CAs"
-	globalMinioCertFile           = "public.crt"
-	globalMinioKeyFile            = "private.key"
-	globalMinioConfigFile         = "config.json"
 	globalMinioCertExpireWarnDays = time.Hour * 24 * 30 // 30 days.
 
 	globalMinioDefaultRegion       = "us-east-1"
@@ -48,6 +36,10 @@ const (
 	globalWindowsOSName            = "windows"
 	globalNetBSDOSName             = "netbsd"
 	globalSolarisOSName            = "solaris"
+	globalMinioModeFS              = "mode-server-fs"
+	globalMinioModeXL              = "mode-server-xl"
+	globalMinioModeDistXL          = "mode-server-distributed-xl"
+	globalMinioModeGatewayAzure    = "mode-gateway-azure"
 	// Add new global values here.
 )
 
@@ -64,29 +56,21 @@ const (
 )
 
 var (
-	globalQuiet     = false               // quiet flag set via command line.
-	globalConfigDir = mustGetConfigPath() // config-dir flag set via command line
-	// Add new global flags here.
-
 	// Indicates if the running minio server is distributed setup.
 	globalIsDistXL = false
 
 	// Indicates if the running minio server is an erasure-code backend.
 	globalIsXL = false
 
-	// This flag is set to 'true' by default, it is set to `false`
-	// when MINIO_BROWSER env is set to 'off'.
-	globalIsBrowserEnabled = !strings.EqualFold(os.Getenv("MINIO_BROWSER"), "off")
-
-	// Maximum cache size. Defaults to disabled.
-	// Caching is enabled only for RAM size > 8GiB.
-	globalMaxCacheSize = uint64(0)
+	// This flag is set to 'true' by default
+	globalIsBrowserEnabled = true
+	// This flag is set to 'true' when MINIO_BROWSER env is set.
+	globalIsEnvBrowser = false
+	// Set to true if credentials were passed from env, default is false.
+	globalIsEnvCreds = false
 
 	// Maximum size of internal objects parts
 	globalPutPartSize = int64(64 * 1024 * 1024)
-
-	// Cache expiry.
-	globalCacheExpiry = objcache.DefaultExpiry
 
 	// Minio local server address (in `host:port` format)
 	globalMinioAddr = ""
@@ -112,9 +96,6 @@ var (
 
 	// Minio server user agent string.
 	globalServerUserAgent = "Minio/" + ReleaseTag + " (" + runtime.GOOS + "; " + runtime.GOARCH + ")"
-
-	// Set to true if credentials were passed from env, default is false.
-	globalIsEnvCreds = false
 
 	// url.URL endpoints of disks that belong to the object storage.
 	globalEndpoints = []*url.URL{}
@@ -142,20 +123,3 @@ var (
 	colorBold = color.New(color.Bold).SprintFunc()
 	colorBlue = color.New(color.FgBlue).SprintfFunc()
 )
-
-// Parse command arguments and set global variables accordingly
-func setGlobalsFromContext(c *cli.Context) {
-	// Set config dir
-	switch {
-	case c.IsSet("config-dir"):
-		globalConfigDir = c.String("config-dir")
-	case c.GlobalIsSet("config-dir"):
-		globalConfigDir = c.GlobalString("config-dir")
-	}
-	if globalConfigDir == "" {
-		console.Fatalf("Unable to get config file. Config directory is empty.")
-	}
-
-	// Set global quiet flag.
-	globalQuiet = c.Bool("quiet") || c.GlobalBool("quiet")
-}

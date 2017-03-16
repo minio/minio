@@ -22,6 +22,8 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -46,7 +48,7 @@ var updateCmd = cli.Command{
    {{.HelpName}} - {{.Usage}}
 
 USAGE:
-   {{.HelpName}} {{if .VisibleFlags}}[FLAGS]{{end}}
+   {{.HelpName}}{{if .VisibleFlags}} [FLAGS]{{end}}
 {{if .VisibleFlags}}
 FLAGS:
   {{range .VisibleFlags}}{{.}}
@@ -56,17 +58,28 @@ EXIT STATUS:
    1 - New update is available.
   -1 - Error in getting update information.
 
-VERSION:
-  ` + Version + `{{"\n"}}`,
+EXAMPLES:
+   1. Check if there is a new update available:
+       $ {{.HelpName}}
+`,
 }
 
-const releaseTagTimeLayout = "2006-01-02T15-04-05Z"
-
-const minioReleaseURL = "https://dl.minio.io/server/minio/release/" + runtime.GOOS + "-" + runtime.GOARCH + "/"
+const (
+	minioReleaseTagTimeLayout = "2006-01-02T15-04-05Z"
+	minioReleaseURL           = "https://dl.minio.io/server/minio/release/" + runtime.GOOS + "-" + runtime.GOARCH + "/"
+)
 
 func getCurrentReleaseTime(minioVersion, minioBinaryPath string) (releaseTime time.Time, err error) {
 	if releaseTime, err = time.Parse(time.RFC3339, minioVersion); err == nil {
 		return releaseTime, err
+	}
+
+	if !filepath.IsAbs(minioBinaryPath) {
+		// Make sure to look for the absolute path of the binary.
+		minioBinaryPath, err = exec.LookPath(minioBinaryPath)
+		if err != nil {
+			return releaseTime, err
+		}
 	}
 
 	// Looks like version is minio non-standard, we use minio binary's ModTime as release time.
@@ -120,8 +133,11 @@ func IsSourceBuild() bool {
 //   Minio (<OS>; <ARCH>[; docker][; source])  Minio/<VERSION> Minio/<RELEASE-TAG> Minio/<COMMIT-ID>
 //
 // For any change here should be discussed by openning an issue at https://github.com/minio/minio/issues.
-func getUserAgent() string {
+func getUserAgent(mode string) string {
 	userAgent := "Minio (" + runtime.GOOS + "; " + runtime.GOARCH
+	if mode != "" {
+		userAgent += "; " + mode
+	}
 	if IsDocker() {
 		userAgent += "; docker"
 	}
@@ -133,15 +149,19 @@ func getUserAgent() string {
 	return userAgent
 }
 
-func downloadReleaseData(releaseChecksumURL string, timeout time.Duration) (data string, err error) {
+func downloadReleaseData(releaseChecksumURL string, timeout time.Duration, mode string) (data string, err error) {
 	req, err := http.NewRequest("GET", releaseChecksumURL, nil)
 	if err != nil {
 		return data, err
 	}
-	req.Header.Set("User-Agent", getUserAgent())
+	req.Header.Set("User-Agent", getUserAgent(mode))
 
 	client := &http.Client{
 		Timeout: timeout,
+		Transport: &http.Transport{
+			// need to close connection after usage.
+			DisableKeepAlives: true,
+		},
 	}
 
 	resp, err := client.Do(req)
@@ -151,6 +171,7 @@ func downloadReleaseData(releaseChecksumURL string, timeout time.Duration) (data
 	if resp == nil {
 		return data, fmt.Errorf("No response from server to download URL %s", releaseChecksumURL)
 	}
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		return data, fmt.Errorf("Error downloading URL %s. Response: %v", releaseChecksumURL, resp.Status)
@@ -166,8 +187,8 @@ func downloadReleaseData(releaseChecksumURL string, timeout time.Duration) (data
 }
 
 // DownloadReleaseData - downloads release data from minio official server.
-func DownloadReleaseData(timeout time.Duration) (data string, err error) {
-	return downloadReleaseData(minioReleaseURL+"minio.shasum", timeout)
+func DownloadReleaseData(timeout time.Duration, mode string) (data string, err error) {
+	return downloadReleaseData(minioReleaseURL+"minio.shasum", timeout, mode)
 }
 
 func parseReleaseData(data string) (releaseTime time.Time, err error) {
@@ -188,7 +209,7 @@ func parseReleaseData(data string) (releaseTime time.Time, err error) {
 		return releaseTime, err
 	}
 
-	releaseTime, err = time.Parse(releaseTagTimeLayout, fields[2])
+	releaseTime, err = time.Parse(minioReleaseTagTimeLayout, fields[2])
 	if err != nil {
 		err = fmt.Errorf("Unknown release time format. %s", err)
 	}
@@ -196,8 +217,8 @@ func parseReleaseData(data string) (releaseTime time.Time, err error) {
 	return releaseTime, err
 }
 
-func getLatestReleaseTime(timeout time.Duration) (releaseTime time.Time, err error) {
-	data, err := DownloadReleaseData(timeout)
+func getLatestReleaseTime(timeout time.Duration, mode string) (releaseTime time.Time, err error) {
+	data, err := DownloadReleaseData(timeout, mode)
 	if err != nil {
 		return releaseTime, err
 	}
@@ -217,13 +238,13 @@ func getDownloadURL() (downloadURL string) {
 	return minioReleaseURL + "minio"
 }
 
-func getUpdateInfo(timeout time.Duration) (older time.Duration, downloadURL string, err error) {
+func getUpdateInfo(timeout time.Duration, mode string) (older time.Duration, downloadURL string, err error) {
 	currentReleaseTime, err := GetCurrentReleaseTime()
 	if err != nil {
 		return older, downloadURL, err
 	}
 
-	latestReleaseTime, err := getLatestReleaseTime(timeout)
+	latestReleaseTime, err := getLatestReleaseTime(timeout, mode)
 	if err != nil {
 		return older, downloadURL, err
 	}
@@ -248,7 +269,8 @@ func mainUpdate(ctx *cli.Context) {
 		}
 	}
 
-	older, downloadURL, err := getUpdateInfo(10 * time.Second)
+	minioMode := ""
+	older, downloadURL, err := getUpdateInfo(10*time.Second, minioMode)
 	if err != nil {
 		quietPrintln(err)
 		os.Exit(-1)

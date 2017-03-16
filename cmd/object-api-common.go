@@ -20,7 +20,6 @@ import (
 	"net"
 	"net/url"
 	"runtime"
-	"strings"
 	"sync"
 	"time"
 
@@ -39,14 +38,14 @@ const (
 )
 
 // Global object layer mutex, used for safely updating object layer.
-var globalObjLayerMutex *sync.Mutex
+var globalObjLayerMutex *sync.RWMutex
 
 // Global object layer, only accessed by newObjectLayerFn().
 var globalObjectAPI ObjectLayer
 
 func init() {
 	// Initialize this once per server initialization.
-	globalObjLayerMutex = &sync.Mutex{}
+	globalObjLayerMutex = &sync.RWMutex{}
 }
 
 // Check if the disk is remote.
@@ -59,7 +58,7 @@ func isRemoteDisk(disk StorageAPI) bool {
 // if size == 0 and object ends with slashSeparator then
 // returns true.
 func isObjectDir(object string, size int64) bool {
-	return strings.HasSuffix(object, slashSeparator) && size == 0
+	return hasSuffix(object, slashSeparator) && size == 0
 }
 
 // Converts just bucket, object metadata into ObjectInfo datatype.
@@ -135,10 +134,7 @@ func isLocalStorage(ep *url.URL) bool {
 	if globalMinioHost != "" && globalMinioPort != "" {
 		// if --address host:port was specified for distXL we short
 		// circuit only the endPoint that matches host:port
-		if net.JoinHostPort(globalMinioHost, globalMinioPort) == ep.Host {
-			return true
-		}
-		return false
+		return net.JoinHostPort(globalMinioHost, globalMinioPort) == ep.Host
 	}
 	// Split host to extract host information.
 	host, _, err := net.SplitHostPort(ep.Host)
@@ -284,7 +280,7 @@ func cleanupDir(storage StorageAPI, volume, dirPath string) error {
 	var delFunc func(string) error
 	// Function to delete entries recursively.
 	delFunc = func(entryPath string) error {
-		if !strings.HasSuffix(entryPath, slashSeparator) {
+		if !hasSuffix(entryPath, slashSeparator) {
 			// Delete the file entry.
 			return traceError(storage.DeleteFile(volume, entryPath))
 		}

@@ -43,6 +43,7 @@ func TestGetRequestAuthType(t *testing.T) {
 				Header: http.Header{
 					"Authorization":        []string{"AWS4-HMAC-SHA256 <cred_string>"},
 					"X-Amz-Content-Sha256": []string{streamingContentSHA256},
+					"Content-Encoding":     []string{streamingContentEncoding},
 				},
 				Method: "PUT",
 			},
@@ -315,7 +316,11 @@ func TestIsReqAuthenticated(t *testing.T) {
 	}
 	defer removeAll(path)
 
-	creds := newCredentialWithKeys("myuser", "mypassword")
+	creds, err := createCredential("myuser", "mypassword")
+	if err != nil {
+		t.Fatalf("unable create credential, %s", err)
+	}
+
 	serverConfig.SetCredential(creds)
 
 	// List of test cases for validating http request authentication.

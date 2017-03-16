@@ -36,6 +36,25 @@ import (
 // list all errors which can be ignored in object operations.
 var objectOpIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied)
 
+// prepareFile hints the bottom layer to optimize the creation of a new object
+func (xl xlObjects) prepareFile(bucket, object string, size int64, onlineDisks []StorageAPI, blockSize int64, dataBlocks int) error {
+	pErrs := make([]error, len(onlineDisks))
+	// Calculate the real size of the part in one disk.
+	actualSize := xl.sizeOnDisk(size, blockSize, dataBlocks)
+	// Prepare object creation in a all disks
+	for index, disk := range onlineDisks {
+		if disk != nil {
+			if err := disk.PrepareFile(bucket, object, actualSize); err != nil {
+				// Save error to reduce it later
+				pErrs[index] = err
+				// Ignore later access to disk which generated the error
+				onlineDisks[index] = nil
+			}
+		}
+	}
+	return reduceWriteQuorumErrs(pErrs, objectOpIgnoredErrs, xl.writeQuorum)
+}
+
 /// Object Operations
 
 // CopyObject - copy object source object to destination object.
@@ -58,13 +77,13 @@ func (xl xlObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string
 	}
 
 	// Reorder online disks based on erasure distribution order.
-	onlineDisks = getOrderedDisks(xlMeta.Erasure.Distribution, onlineDisks)
+	onlineDisks = shuffleDisks(onlineDisks, xlMeta.Erasure.Distribution)
 
 	// Length of the file to read.
 	length := xlMeta.Stat.Size
 
 	// Check if this request is only metadata update.
-	cpMetadataOnly := strings.EqualFold(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
+	cpMetadataOnly := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
 	if cpMetadataOnly {
 		xlMeta.Meta = metadata
 		partsMetadata := make([]xlMetaV1, len(xl.storageDisks))
@@ -106,7 +125,7 @@ func (xl xlObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string
 	pipeReader, pipeWriter := io.Pipe()
 
 	go func() {
-		startOffset := int64(0) // Read the whole file.
+		var startOffset int64 // Read the whole file.
 		if gerr := xl.GetObject(srcBucket, srcObject, startOffset, length, pipeWriter); gerr != nil {
 			errorIf(gerr, "Unable to read %s of the object `%s/%s`.", srcBucket, srcObject)
 			pipeWriter.CloseWithError(toObjectErr(gerr, srcBucket, srcObject))
@@ -163,10 +182,10 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 	}
 
 	// Reorder online disks based on erasure distribution order.
-	onlineDisks = getOrderedDisks(xlMeta.Erasure.Distribution, onlineDisks)
+	onlineDisks = shuffleDisks(onlineDisks, xlMeta.Erasure.Distribution)
 
 	// Reorder parts metadata based on erasure distribution order.
-	metaArr = getOrderedPartsMetadata(xlMeta.Erasure.Distribution, metaArr)
+	metaArr = shufflePartsMetadata(metaArr, xlMeta.Erasure.Distribution)
 
 	// For negative length read everything.
 	if length < 0 {
@@ -242,7 +261,7 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 		}
 	}
 
-	totalBytesRead := int64(0)
+	var totalBytesRead int64
 
 	chunkSize := getChunkSize(xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks)
 	pool := bpool.NewBytePool(chunkSize, len(onlineDisks))
@@ -302,6 +321,12 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 
 // GetObjectInfo - reads object metadata and replies back ObjectInfo.
 func (xl xlObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
+	// This is a special case with object whose name ends with
+	// a slash separator, we always return object not found here.
+	if hasSuffix(object, slashSeparator) {
+		return ObjectInfo{}, toObjectErr(traceError(errFileNotFound), bucket, object)
+	}
+
 	if err := checkGetObjArgs(bucket, object); err != nil {
 		return ObjectInfo{}, err
 	}
@@ -395,6 +420,8 @@ func rename(disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry string,
 			err := disk.RenameFile(srcBucket, srcEntry, dstBucket, dstEntry)
 			if err != nil && err != errFileNotFound {
 				errs[index] = traceError(err)
+				// Ignore disk which returned an error.
+				disks[index] = nil
 			}
 		}(index, disk)
 	}
@@ -439,11 +466,25 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	// a slash separator, we treat it like a valid operation and
 	// return success.
 	if isObjectDir(object, size) {
+		// Check if an object is present as one of the parent dir.
+		// -- FIXME. (needs a new kind of lock).
+		if xl.parentDirIsObject(bucket, path.Dir(object)) {
+			return ObjectInfo{}, toObjectErr(traceError(errFileAccessDenied), bucket, object)
+		}
 		return dirObjectInfo(bucket, object, size, metadata), nil
 	}
+
+	// Validate put object input args.
 	if err = checkPutObjectArgs(bucket, object, xl); err != nil {
 		return ObjectInfo{}, err
 	}
+
+	// Check if an object is present as one of the parent dir.
+	// -- FIXME. (needs a new kind of lock).
+	if xl.parentDirIsObject(bucket, path.Dir(object)) {
+		return ObjectInfo{}, toObjectErr(traceError(errFileAccessDenied), bucket, object)
+	}
+
 	// No metadata is set, allocate a new one.
 	if metadata == nil {
 		metadata = make(map[string]string)
@@ -511,7 +552,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	}
 
 	// Order disks according to erasure distribution
-	onlineDisks := getOrderedDisks(partsMetadata[0].Erasure.Distribution, xl.storageDisks)
+	onlineDisks := shuffleDisks(xl.storageDisks, partsMetadata[0].Erasure.Distribution)
 
 	// Delete temporary object in the event of failure.
 	// If PutObject succeeded there would be no temporary
@@ -519,14 +560,14 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	defer xl.deleteObject(minioMetaTmpBucket, tempObj)
 
 	// Total size of the written object
-	sizeWritten := int64(0)
+	var sizeWritten int64
 
 	// Read data and split into parts - similar to multipart mechanism
 	for partIdx := 1; ; partIdx++ {
 		// Compute part name
 		partName := "part." + strconv.Itoa(partIdx)
 		// Compute the path of current part
-		tempErasureObj := path.Join(uniqueID, partName)
+		tempErasureObj := pathJoin(uniqueID, partName)
 
 		// Calculate the size of the current part, if size is unknown, curPartSize wil be unknown too.
 		// allowEmptyPart will always be true if this is the first part and false otherwise.
@@ -536,14 +577,12 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
 
-		// Prepare file for eventual optimization in the disk
+		// Hint the filesystem to pre-allocate one continuous large block.
+		// This is only an optimization.
 		if curPartSize > 0 {
-			// Calculate the real size of the part in the disk and prepare it for eventual optimization
-			actualSize := xl.sizeOnDisk(curPartSize, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks)
-			for _, disk := range onlineDisks {
-				if disk != nil {
-					disk.PrepareFile(minioMetaTmpBucket, tempErasureObj, actualSize)
-				}
+			pErr := xl.prepareFile(minioMetaTmpBucket, tempErasureObj, curPartSize, onlineDisks, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks)
+			if pErr != nil {
+				return ObjectInfo{}, toObjectErr(pErr, bucket, object)
 			}
 		}
 
@@ -645,16 +684,11 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 		}
 	}
 
-	// Check if an object is present as one of the parent dir.
-	// -- FIXME. (needs a new kind of lock).
-	if xl.parentDirIsObject(bucket, path.Dir(object)) {
-		return ObjectInfo{}, toObjectErr(traceError(errFileAccessDenied), bucket, object)
-	}
-
-	// Rename if an object already exists to temporary location.
-	newUniqueID := mustGetUUID()
 	if xl.isObject(bucket, object) {
-		// Delete the temporary copy of the object that existed before this PutObject request.
+		// Rename if an object already exists to temporary location.
+		newUniqueID := mustGetUUID()
+
+		// Delete successfully renamed object.
 		defer xl.deleteObject(minioMetaTmpBucket, newUniqueID)
 
 		// NOTE: Do not use online disks slice here.

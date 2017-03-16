@@ -16,8 +16,6 @@
 
 package cmd
 
-import "strings"
-
 // Returns function "listDir" of the type listDirFunc.
 // isLeaf - is used by listDir function to check if an entry is a leaf or non-leaf entry.
 // disks - used for doing disk.ListDir(). FS passes single disk argument, XL passes a list of disks.
@@ -83,7 +81,7 @@ func (xl xlObjects) listObjects(bucket, prefix, marker, delimiter string, maxKey
 		}
 		entry := walkResult.entry
 		var objInfo ObjectInfo
-		if strings.HasSuffix(entry, slashSeparator) {
+		if hasSuffix(entry, slashSeparator) {
 			// Object name needs to be full path.
 			objInfo.Bucket = bucket
 			objInfo.Name = entry

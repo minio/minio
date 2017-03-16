@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"encoding/xml"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -29,6 +30,102 @@ import (
 
 	router "github.com/gorilla/mux"
 )
+
+var configJSON = []byte(`{
+	"version": "13",
+	"credential": {
+		"accessKey": "minio",
+		"secretKey": "minio123"
+	},
+	"region": "us-west-1",
+	"logger": {
+		"console": {
+			"enable": true,
+			"level": "fatal"
+		},
+		"file": {
+			"enable": false,
+			"fileName": "",
+			"level": ""
+		}
+	},
+	"notify": {
+		"amqp": {
+			"1": {
+				"enable": false,
+				"url": "",
+				"exchange": "",
+				"routingKey": "",
+				"exchangeType": "",
+				"mandatory": false,
+				"immediate": false,
+				"durable": false,
+				"internal": false,
+				"noWait": false,
+				"autoDeleted": false
+			}
+		},
+		"nats": {
+			"1": {
+				"enable": false,
+				"address": "",
+				"subject": "",
+				"username": "",
+				"password": "",
+				"token": "",
+				"secure": false,
+				"pingInterval": 0,
+				"streaming": {
+					"enable": false,
+					"clusterID": "",
+					"clientID": "",
+					"async": false,
+					"maxPubAcksInflight": 0
+				}
+			}
+		},
+		"elasticsearch": {
+			"1": {
+				"enable": false,
+				"url": "",
+				"index": ""
+			}
+		},
+		"redis": {
+			"1": {
+				"enable": false,
+				"address": "",
+				"password": "",
+				"key": ""
+			}
+		},
+		"postgresql": {
+			"1": {
+				"enable": false,
+				"connectionString": "",
+				"table": "",
+				"host": "",
+				"port": "",
+				"user": "",
+				"password": "",
+				"database": ""
+			}
+		},
+		"kafka": {
+			"1": {
+				"enable": false,
+				"brokers": null,
+				"topic": ""
+			}
+		},
+		"webhook": {
+			"1": {
+				"enable": false,
+				"endpoint": ""
+			}
+		}
+	}
+}`)
 
 // adminXLTestBed - encapsulates subsystems that need to be setup for
 // admin-handler unit tests.
@@ -643,7 +740,7 @@ func TestValidateHealQueryParams(t *testing.T) {
 	}
 	for i, test := range testCases {
 		vars := mkListObjectsQueryVal(test.bucket, test.prefix, test.marker, test.delimiter, test.maxKeys)
-		_, _, _, _, _, actualErr := validateHealQueryParams(vars)
+		_, _, _, _, _, actualErr := extractListObjectsHealQuery(vars)
 		if actualErr != test.apiErr {
 			t.Errorf("Test %d - Expected %v but received %v",
 				i+1, getAPIError(test.apiErr), getAPIError(actualErr))
@@ -759,9 +856,6 @@ func TestListObjectsHealHandler(t *testing.T) {
 	}
 
 	for i, test := range testCases {
-		if i != 0 {
-			continue
-		}
 		queryVal := mkListObjectsQueryVal(test.bucket, test.prefix, test.marker, test.delimiter, test.maxKeys)
 		req, err := newTestRequest("GET", "/?"+queryVal.Encode(), 0, nil)
 		if err != nil {
@@ -986,5 +1080,344 @@ func TestHealFormatHandler(t *testing.T) {
 	adminTestBed.mux.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Errorf("Expected to succeed but failed with %d", rec.Code)
+	}
+}
+
+// TestGetConfigHandler - test for GetConfigHandler.
+func TestGetConfigHandler(t *testing.T) {
+	adminTestBed, err := prepareAdminXLTestBed()
+	if err != nil {
+		t.Fatal("Failed to initialize a single node XL backend for admin handler tests.")
+	}
+	defer adminTestBed.TearDown()
+
+	// Initialize admin peers to make admin RPC calls.
+	eps, err := parseStorageEndpoints([]string{"http://127.0.0.1"})
+	if err != nil {
+		t.Fatalf("Failed to parse storage end point - %v", err)
+	}
+
+	// Set globalMinioAddr to be able to distinguish local endpoints from remote.
+	globalMinioAddr = eps[0].Host
+	initGlobalAdminPeers(eps)
+
+	// Prepare query params for get-config mgmt REST API.
+	queryVal := url.Values{}
+	queryVal.Set("config", "")
+
+	req, err := newTestRequest("GET", "/?"+queryVal.Encode(), 0, nil)
+	if err != nil {
+		t.Fatalf("Failed to construct get-config object request - %v", err)
+	}
+
+	// Set x-minio-operation header to get.
+	req.Header.Set(minioAdminOpHeader, "get")
+
+	// Sign the request using signature v4.
+	cred := serverConfig.GetCredential()
+	err = signRequestV4(req, cred.AccessKey, cred.SecretKey)
+	if err != nil {
+		t.Fatalf("Failed to sign heal object request - %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	adminTestBed.mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("Expected to succeed but failed with %d", rec.Code)
+	}
+
+}
+
+// TestSetConfigHandler - test for SetConfigHandler.
+func TestSetConfigHandler(t *testing.T) {
+	adminTestBed, err := prepareAdminXLTestBed()
+	if err != nil {
+		t.Fatal("Failed to initialize a single node XL backend for admin handler tests.")
+	}
+	defer adminTestBed.TearDown()
+
+	// Initialize admin peers to make admin RPC calls.
+	eps, err := parseStorageEndpoints([]string{"http://127.0.0.1"})
+	if err != nil {
+		t.Fatalf("Failed to parse storage end point - %v", err)
+	}
+
+	// Set globalMinioAddr to be able to distinguish local endpoints from remote.
+	globalMinioAddr = eps[0].Host
+	initGlobalAdminPeers(eps)
+
+	// SetConfigHandler restarts minio setup - need to start a
+	// signal receiver to receive on globalServiceSignalCh.
+	go testServiceSignalReceiver(restartCmd, t)
+
+	// Prepare query params for set-config mgmt REST API.
+	queryVal := url.Values{}
+	queryVal.Set("config", "")
+
+	req, err := newTestRequest("PUT", "/?"+queryVal.Encode(), int64(len(configJSON)), bytes.NewReader(configJSON))
+	if err != nil {
+		t.Fatalf("Failed to construct get-config object request - %v", err)
+	}
+
+	// Set x-minio-operation header to set.
+	req.Header.Set(minioAdminOpHeader, "set")
+
+	// Sign the request using signature v4.
+	cred := serverConfig.GetCredential()
+	err = signRequestV4(req, cred.AccessKey, cred.SecretKey)
+	if err != nil {
+		t.Fatalf("Failed to sign heal object request - %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	adminTestBed.mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("Expected to succeed but failed with %d", rec.Code)
+	}
+
+	result := setConfigResult{}
+	err = json.NewDecoder(rec.Body).Decode(&result)
+	if err != nil {
+		t.Fatalf("Failed to decode set config result json %v", err)
+	}
+
+	if !result.Status {
+		t.Error("Expected set-config to succeed, but failed")
+	}
+}
+
+// TestToAdminAPIErr - test for toAdminAPIErr helper function.
+func TestToAdminAPIErr(t *testing.T) {
+	testCases := []struct {
+		err            error
+		expectedAPIErr APIErrorCode
+	}{
+		// 1. Server not in quorum.
+		{
+			err:            errXLWriteQuorum,
+			expectedAPIErr: ErrAdminConfigNoQuorum,
+		},
+		// 2. No error.
+		{
+			err:            nil,
+			expectedAPIErr: ErrNone,
+		},
+		// 3. Non-admin API specific error.
+		{
+			err:            errDiskNotFound,
+			expectedAPIErr: toAPIErrorCode(errDiskNotFound),
+		},
+	}
+
+	for i, test := range testCases {
+		actualErr := toAdminAPIErrCode(test.err)
+		if actualErr != test.expectedAPIErr {
+			t.Errorf("Test %d: Expected %v but received %v",
+				i+1, test.expectedAPIErr, actualErr)
+		}
+	}
+}
+
+func TestWriteSetConfigResponse(t *testing.T) {
+	testCases := []struct {
+		status bool
+		errs   []error
+	}{
+		// 1. all nodes returned success.
+		{
+			status: true,
+			errs:   []error{nil, nil, nil, nil},
+		},
+		// 2. some nodes returned errors.
+		{
+			status: false,
+			errs:   []error{errDiskNotFound, nil, errDiskAccessDenied, errFaultyDisk},
+		},
+	}
+
+	testPeers := []adminPeer{
+		{
+			addr: "localhost:9001",
+		},
+		{
+			addr: "localhost:9002",
+		},
+		{
+			addr: "localhost:9003",
+		},
+		{
+			addr: "localhost:9004",
+		},
+	}
+
+	testURL, err := url.Parse("dummy.com")
+	if err != nil {
+		t.Fatalf("Failed to parse a place-holder url")
+	}
+
+	var actualResult setConfigResult
+	for i, test := range testCases {
+		rec := httptest.NewRecorder()
+		writeSetConfigResponse(rec, testPeers, test.errs, test.status, testURL)
+		resp := rec.Result()
+		jsonBytes, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			t.Fatalf("Test %d: Failed to read response %v", i+1, err)
+		}
+
+		err = json.Unmarshal(jsonBytes, &actualResult)
+		if err != nil {
+			t.Fatalf("Test %d: Failed to unmarshal json %v", i+1, err)
+		}
+		if actualResult.Status != test.status {
+			t.Errorf("Test %d: Expected status %v but received %v", i+1, test.status, actualResult.Status)
+		}
+		for p, res := range actualResult.NodeResults {
+			if res.Name != testPeers[p].addr {
+				t.Errorf("Test %d: Expected node name %s but received %s", i+1, testPeers[p].addr, res.Name)
+			}
+			expectedErrMsg := fmt.Sprintf("%v", test.errs[p])
+			if res.ErrMsg != expectedErrMsg {
+				t.Errorf("Test %d: Expected error %s but received %s", i+1, expectedErrMsg, res.ErrMsg)
+			}
+			expectedErrSet := test.errs[p] != nil
+			if res.ErrSet != expectedErrSet {
+				t.Errorf("Test %d: Expected ErrSet %v but received %v", i+1, expectedErrSet, res.ErrSet)
+			}
+		}
+	}
+}
+
+// mkUploadsHealQuery - helper function to construct query values for
+// listUploadsHeal.
+func mkUploadsHealQuery(bucket, prefix, keyMarker, uploadIDMarker, delimiter, maxUploadsStr string) url.Values {
+
+	queryVal := make(url.Values)
+	queryVal.Set("heal", "")
+	queryVal.Set(string(mgmtBucket), bucket)
+	queryVal.Set(string(mgmtPrefix), prefix)
+	queryVal.Set(string(mgmtKeyMarker), keyMarker)
+	queryVal.Set(string(mgmtUploadIDMarker), uploadIDMarker)
+	queryVal.Set(string(mgmtDelimiter), delimiter)
+	queryVal.Set(string(mgmtMaxUploads), maxUploadsStr)
+	return queryVal
+}
+
+func TestListHealUploadsHandler(t *testing.T) {
+	adminTestBed, err := prepareAdminXLTestBed()
+	if err != nil {
+		t.Fatal("Failed to initialize a single node XL backend for admin handler tests.")
+	}
+	defer adminTestBed.TearDown()
+
+	err = adminTestBed.objLayer.MakeBucket("mybucket")
+	if err != nil {
+		t.Fatalf("Failed to make bucket - %v", err)
+	}
+
+	// Delete bucket after running all test cases.
+	defer adminTestBed.objLayer.DeleteBucket("mybucket")
+
+	testCases := []struct {
+		bucket     string
+		prefix     string
+		keyMarker  string
+		delimiter  string
+		maxKeys    string
+		statusCode int
+	}{
+		// 1. Valid params.
+		{
+			bucket:     "mybucket",
+			prefix:     "prefix",
+			keyMarker:  "prefix11",
+			delimiter:  "/",
+			maxKeys:    "10",
+			statusCode: http.StatusOK,
+		},
+		// 2. Valid params with empty prefix.
+		{
+			bucket:     "mybucket",
+			prefix:     "",
+			keyMarker:  "",
+			delimiter:  "/",
+			maxKeys:    "10",
+			statusCode: http.StatusOK,
+		},
+		// 3. Invalid params with invalid bucket.
+		{
+			bucket:     `invalid\\Bucket`,
+			prefix:     "prefix",
+			keyMarker:  "prefix11",
+			delimiter:  "/",
+			maxKeys:    "10",
+			statusCode: getAPIError(ErrInvalidBucketName).HTTPStatusCode,
+		},
+		// 4. Invalid params with invalid prefix.
+		{
+			bucket:     "mybucket",
+			prefix:     `invalid\\Prefix`,
+			keyMarker:  "prefix11",
+			delimiter:  "/",
+			maxKeys:    "10",
+			statusCode: getAPIError(ErrInvalidObjectName).HTTPStatusCode,
+		},
+		// 5. Invalid params with invalid maxKeys.
+		{
+			bucket:     "mybucket",
+			prefix:     "prefix",
+			keyMarker:  "prefix11",
+			delimiter:  "/",
+			maxKeys:    "-1",
+			statusCode: getAPIError(ErrInvalidMaxUploads).HTTPStatusCode,
+		},
+		// 6. Invalid params with unsupported prefix marker combination.
+		{
+			bucket:     "mybucket",
+			prefix:     "prefix",
+			keyMarker:  "notmatchingmarker",
+			delimiter:  "/",
+			maxKeys:    "10",
+			statusCode: getAPIError(ErrNotImplemented).HTTPStatusCode,
+		},
+		// 7. Invalid params with unsupported delimiter.
+		{
+			bucket:     "mybucket",
+			prefix:     "prefix",
+			keyMarker:  "notmatchingmarker",
+			delimiter:  "unsupported",
+			maxKeys:    "10",
+			statusCode: getAPIError(ErrNotImplemented).HTTPStatusCode,
+		},
+		// 8. Invalid params with invalid max Keys
+		{
+			bucket:     "mybucket",
+			prefix:     "prefix",
+			keyMarker:  "prefix11",
+			delimiter:  "/",
+			maxKeys:    "999999999999999999999999999",
+			statusCode: getAPIError(ErrInvalidMaxUploads).HTTPStatusCode,
+		},
+	}
+
+	for i, test := range testCases {
+		queryVal := mkUploadsHealQuery(test.bucket, test.prefix, test.keyMarker, "", test.delimiter, test.maxKeys)
+
+		req, err := newTestRequest("GET", "/?"+queryVal.Encode(), 0, nil)
+		if err != nil {
+			t.Fatalf("Test %d - Failed to construct list uploads needing heal request - %v", i+1, err)
+		}
+		req.Header.Set(minioAdminOpHeader, "list-uploads")
+
+		cred := serverConfig.GetCredential()
+		err = signRequestV4(req, cred.AccessKey, cred.SecretKey)
+		if err != nil {
+			t.Fatalf("Test %d - Failed to sign list uploads needing heal request - %v", i+1, err)
+		}
+		rec := httptest.NewRecorder()
+		adminTestBed.mux.ServeHTTP(rec, req)
+		if test.statusCode != rec.Code {
+			t.Errorf("Test %d - Expected HTTP status code %d but received %d", i+1, test.statusCode, rec.Code)
+		}
 	}
 }

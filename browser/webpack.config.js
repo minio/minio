@@ -1,5 +1,5 @@
 /*
- * Minio Browser (C) 2016 Minio, Inc.
+ * Minio Cloud Storage (C) 2016 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ var purify = require("purifycss-webpack-plugin")
 var exports = {
   context: __dirname,
   entry: [
+    "babel-polyfill",
     path.resolve(__dirname, 'app/index.js')
   ],
   output: {
@@ -71,6 +72,10 @@ var exports = {
 	target: 'http://localhost:9000',
 	secure: false
       },
+      '/minio/zip': {
+        target: 'http://localhost:9000',
+        secure: false
+      }
     }
   },
   plugins: [
@@ -96,6 +101,7 @@ var exports = {
 
 if (process.env.NODE_ENV === 'dev') {
   exports.entry = [
+    "babel-polyfill",
     'webpack/hot/dev-server',
     'webpack-dev-server/client?http://localhost:8080',
     path.resolve(__dirname, 'app/index.js')

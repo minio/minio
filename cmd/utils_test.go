@@ -110,12 +110,12 @@ func TestMaxObjectSize(t *testing.T) {
 		// Test - 1 - maximum object size.
 		{
 			true,
-			maxObjectSize + 1,
+			globalMaxObjectSize + 1,
 		},
 		// Test - 2 - not maximum object size.
 		{
 			false,
-			maxObjectSize - 1,
+			globalMaxObjectSize - 1,
 		},
 	}
 	for i, s := range sizes {
@@ -135,12 +135,12 @@ func TestMinAllowedPartSize(t *testing.T) {
 		// Test - 1 - within minimum part size.
 		{
 			true,
-			minPartSize + 1,
+			globalMinPartSize + 1,
 		},
 		// Test - 2 - smaller than minimum part size.
 		{
 			false,
-			minPartSize - 1,
+			globalMinPartSize - 1,
 		},
 	}
 
@@ -161,12 +161,12 @@ func TestMaxPartID(t *testing.T) {
 		// Test - 1 part number within max part number.
 		{
 			false,
-			maxPartID - 1,
+			globalMaxPartID - 1,
 		},
 		// Test - 2 part number bigger than max part number.
 		{
 			true,
-			maxPartID + 1,
+			globalMaxPartID + 1,
 		},
 	}
 
@@ -387,4 +387,31 @@ func TestLocalAddress(t *testing.T) {
 		}
 	}
 
+}
+
+// TestCheckURL tests valid address
+func TestCheckURL(t *testing.T) {
+	testCases := []struct {
+		addr       string
+		shouldPass bool
+	}{
+		{"", false},
+		{":", false},
+		{"localhost", true},
+		{"127.0.0.1", true},
+		{"http://localhost/", true},
+		{"http://127.0.0.1/", true},
+		{"proto://myhostname/path", true},
+	}
+
+	// Validates fetching local address.
+	for i, testCase := range testCases {
+		_, err := checkURL(testCase.addr)
+		if testCase.shouldPass && err != nil {
+			t.Errorf("Test %d: expected to pass but got an error: %v\n", i+1, err)
+		}
+		if !testCase.shouldPass && err == nil {
+			t.Errorf("Test %d: expected to fail but passed.", i+1)
+		}
+	}
 }

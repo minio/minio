@@ -29,10 +29,15 @@ var versionCmd = cli.Command{
    {{.HelpName}} - {{.Usage}}
 
 USAGE:
-   {{.HelpName}}
-
-VERSION:
-  ` + Version + `{{"\n"}}`,
+   {{.HelpName}}{{if .VisibleFlags}} [FLAGS]{{end}}
+{{if .VisibleFlags}}
+FLAGS:
+  {{range .VisibleFlags}}{{.}}
+  {{end}}{{end}}
+EXAMPLES:
+   1. Prints server version:
+       $ {{.HelpName}}
+`,
 }
 
 func mainVersion(ctx *cli.Context) {

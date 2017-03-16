@@ -17,8 +17,10 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"encoding/xml"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -27,22 +29,26 @@ import (
 )
 
 const (
-	minioAdminOpHeader = "X-Minio-Operation"
+	minioAdminOpHeader   = "X-Minio-Operation"
+	minioConfigTmpFormat = "config-%s.json"
 )
 
 // Type-safe query params.
 type mgmtQueryKey string
 
-// Only valid query params for list/clear locks management APIs.
+// Only valid query params for mgmt admin APIs.
 const (
-	mgmtBucket       mgmtQueryKey = "bucket"
-	mgmtObject       mgmtQueryKey = "object"
-	mgmtPrefix       mgmtQueryKey = "prefix"
-	mgmtLockDuration mgmtQueryKey = "duration"
-	mgmtDelimiter    mgmtQueryKey = "delimiter"
-	mgmtMarker       mgmtQueryKey = "marker"
-	mgmtMaxKey       mgmtQueryKey = "max-key"
-	mgmtDryRun       mgmtQueryKey = "dry-run"
+	mgmtBucket         mgmtQueryKey = "bucket"
+	mgmtObject         mgmtQueryKey = "object"
+	mgmtPrefix         mgmtQueryKey = "prefix"
+	mgmtLockDuration   mgmtQueryKey = "duration"
+	mgmtDelimiter      mgmtQueryKey = "delimiter"
+	mgmtMarker         mgmtQueryKey = "marker"
+	mgmtKeyMarker      mgmtQueryKey = "key-marker"
+	mgmtMaxKey         mgmtQueryKey = "max-key"
+	mgmtDryRun         mgmtQueryKey = "dry-run"
+	mgmtUploadIDMarker mgmtQueryKey = "upload-id-marker"
+	mgmtMaxUploads     mgmtQueryKey = "max-uploads"
 )
 
 // ServerVersion - server version
@@ -159,16 +165,10 @@ func (adminAPI adminAPIHandlers) ServiceCredentialsHandler(w http.ResponseWriter
 		return
 	}
 
-	// Check passed credentials
-	err = validateAuthKeys(req.Username, req.Password)
+	creds, err := createCredential(req.Username, req.Password)
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
-	}
-
-	creds := credential{
-		AccessKey: req.Username,
-		SecretKey: req.Password,
 	}
 
 	// Notify all other Minio peers to update credentials
@@ -397,8 +397,57 @@ func (adminAPI adminAPIHandlers) ClearLocksHandler(w http.ResponseWriter, r *htt
 	writeSuccessResponseJSON(w, jsonBytes)
 }
 
-// validateHealQueryParams - Validates query params for heal list management API.
-func validateHealQueryParams(vars url.Values) (string, string, string, string, int, APIErrorCode) {
+// ListUploadsHealHandler - similar to listObjectsHealHandler
+// GET
+// /?heal&bucket=mybucket&prefix=myprefix&key-marker=mymarker&upload-id-marker=myuploadid&delimiter=mydelimiter&max-uploads=1000
+// - bucket is mandatory query parameter
+// - rest are optional query parameters List upto maxKey objects that
+// need healing in a given bucket matching the given prefix.
+func (adminAPI adminAPIHandlers) ListUploadsHealHandler(w http.ResponseWriter, r *http.Request) {
+	// Get object layer instance.
+	objLayer := newObjectLayerFn()
+	if objLayer == nil {
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+		return
+	}
+
+	// Validate request signature.
+	adminAPIErr := checkRequestAuthType(r, "", "", "")
+	if adminAPIErr != ErrNone {
+		writeErrorResponse(w, adminAPIErr, r.URL)
+		return
+	}
+
+	// Validate query params.
+	vars := r.URL.Query()
+	bucket := vars.Get(string(mgmtBucket))
+	prefix, keyMarker, uploadIDMarker, delimiter, maxUploads, _ := getBucketMultipartResources(r.URL.Query())
+
+	if err := checkListMultipartArgs(bucket, prefix, keyMarker, uploadIDMarker, delimiter, objLayer); err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
+	if maxUploads <= 0 || maxUploads > maxUploadsList {
+		writeErrorResponse(w, ErrInvalidMaxUploads, r.URL)
+		return
+	}
+
+	// Get the list objects to be healed.
+	listMultipartInfos, err := objLayer.ListUploadsHeal(bucket, prefix,
+		keyMarker, uploadIDMarker, delimiter, maxUploads)
+	if err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
+	listResponse := generateListMultipartUploadsResponse(bucket, listMultipartInfos)
+	// Write success response.
+	writeSuccessResponseXML(w, encodeResponse(listResponse))
+}
+
+// extractListObjectsHealQuery - Validates query params for heal objects list management API.
+func extractListObjectsHealQuery(vars url.Values) (string, string, string, string, int, APIErrorCode) {
 	bucket := vars.Get(string(mgmtBucket))
 	prefix := vars.Get(string(mgmtPrefix))
 	marker := vars.Get(string(mgmtMarker))
@@ -415,10 +464,13 @@ func validateHealQueryParams(vars url.Values) (string, string, string, string, i
 		return "", "", "", "", 0, ErrInvalidObjectName
 	}
 
-	// check if maxKey is a valid integer.
-	maxKey, err := strconv.Atoi(maxKeyStr)
-	if err != nil {
-		return "", "", "", "", 0, ErrInvalidMaxKeys
+	// check if maxKey is a valid integer, if present.
+	var maxKey int
+	var err error
+	if maxKeyStr != "" {
+		if maxKey, err = strconv.Atoi(maxKeyStr); err != nil {
+			return "", "", "", "", 0, ErrInvalidMaxKeys
+		}
 	}
 
 	// Validate prefix, marker, delimiter and maxKey.
@@ -451,7 +503,7 @@ func (adminAPI adminAPIHandlers) ListObjectsHealHandler(w http.ResponseWriter, r
 
 	// Validate query params.
 	vars := r.URL.Query()
-	bucket, prefix, marker, delimiter, maxKey, adminAPIErr := validateHealQueryParams(vars)
+	bucket, prefix, marker, delimiter, maxKey, adminAPIErr := extractListObjectsHealQuery(vars)
 	if adminAPIErr != ErrNone {
 		writeErrorResponse(w, adminAPIErr, r.URL)
 		return
@@ -671,4 +723,153 @@ func (adminAPI adminAPIHandlers) HealFormatHandler(w http.ResponseWriter, r *htt
 
 	// Return 200 on success.
 	writeSuccessResponseHeadersOnly(w)
+}
+
+// GetConfigHandler - GET /?config
+// - x-minio-operation = get
+// Get config.json of this minio setup.
+func (adminAPI adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Request) {
+	// Validate request signature.
+	adminAPIErr := checkRequestAuthType(r, "", "", "")
+	if adminAPIErr != ErrNone {
+		writeErrorResponse(w, adminAPIErr, r.URL)
+		return
+	}
+
+	// check if objectLayer is initialized, if not return.
+	if newObjectLayerFn() == nil {
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+		return
+	}
+
+	// Get config.json from all nodes. In a single node setup, it
+	// returns local config.json.
+	configBytes, err := getPeerConfig(globalAdminPeers)
+	if err != nil {
+		errorIf(err, "Failed to get config from peers")
+		writeErrorResponse(w, toAdminAPIErrCode(err), r.URL)
+		return
+	}
+
+	writeSuccessResponseJSON(w, configBytes)
+}
+
+// toAdminAPIErrCode - converts errXLWriteQuorum error to admin API
+// specific error.
+func toAdminAPIErrCode(err error) APIErrorCode {
+	switch err {
+	case errXLWriteQuorum:
+		return ErrAdminConfigNoQuorum
+	}
+	return toAPIErrorCode(err)
+}
+
+// SetConfigResult - represents detailed results of a set-config
+// operation.
+type nodeSummary struct {
+	Name   string `json:"name"`
+	ErrSet bool   `json:"errSet"`
+	ErrMsg string `json:"errMsg"`
+}
+
+type setConfigResult struct {
+	NodeResults []nodeSummary `json:"nodeResults"`
+	Status      bool          `json:"status"`
+}
+
+// writeSetConfigResponse - writes setConfigResult value as json depending on the status.
+func writeSetConfigResponse(w http.ResponseWriter, peers adminPeers, errs []error, status bool, reqURL *url.URL) {
+	var nodeResults []nodeSummary
+	// Build nodeResults based on error values received during
+	// set-config operation.
+	for i := range errs {
+		nodeResults = append(nodeResults, nodeSummary{
+			Name:   peers[i].addr,
+			ErrSet: errs[i] != nil,
+			ErrMsg: fmt.Sprintf("%v", errs[i]),
+		})
+
+	}
+
+	result := setConfigResult{
+		Status:      status,
+		NodeResults: nodeResults,
+	}
+
+	// The following elaborate json encoding is to avoid escaping
+	// '<', '>' in <nil>. Note: json.Encoder.Encode() adds a
+	// gratuitous "\n".
+	var resultBuf bytes.Buffer
+	enc := json.NewEncoder(&resultBuf)
+	enc.SetEscapeHTML(false)
+	jsonErr := enc.Encode(result)
+	if jsonErr != nil {
+		writeErrorResponse(w, toAPIErrorCode(jsonErr), reqURL)
+		return
+	}
+
+	writeSuccessResponseJSON(w, resultBuf.Bytes())
+	return
+}
+
+// SetConfigHandler - PUT /?config
+// - x-minio-operation = set
+func (adminAPI adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Request) {
+	// Get current object layer instance.
+	objectAPI := newObjectLayerFn()
+	if objectAPI == nil {
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+		return
+	}
+
+	// Validate request signature.
+	adminAPIErr := checkRequestAuthType(r, "", "", "")
+	if adminAPIErr != ErrNone {
+		writeErrorResponse(w, adminAPIErr, r.URL)
+		return
+	}
+
+	// Read configuration bytes from request body.
+	configBytes, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		errorIf(err, "Failed to read config from request body.")
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
+	// Write config received from request onto a temporary file on
+	// all nodes.
+	tmpFileName := fmt.Sprintf(minioConfigTmpFormat, mustGetUUID())
+	errs := writeTmpConfigPeers(globalAdminPeers, tmpFileName, configBytes)
+
+	// Check if the operation succeeded in quorum or more nodes.
+	rErr := reduceWriteQuorumErrs(errs, nil, len(globalAdminPeers)/2+1)
+	if rErr != nil {
+		writeSetConfigResponse(w, globalAdminPeers, errs, false, r.URL)
+		return
+	}
+
+	// Take a lock on minio/config.json. NB minio is a reserved
+	// bucket name and wouldn't conflict with normal object
+	// operations.
+	configLock := globalNSMutex.NewNSLock(minioReservedBucket, minioConfigFile)
+	configLock.Lock()
+	defer configLock.Unlock()
+
+	// Rename the temporary config file to config.json
+	errs = commitConfigPeers(globalAdminPeers, tmpFileName)
+	rErr = reduceWriteQuorumErrs(errs, nil, len(globalAdminPeers)/2+1)
+	if rErr != nil {
+		writeSetConfigResponse(w, globalAdminPeers, errs, false, r.URL)
+		return
+	}
+
+	// serverMux (cmd/server-mux.go) implements graceful shutdown,
+	// where all listeners are closed and process restart/shutdown
+	// happens after 5s or completion of all ongoing http
+	// requests, whichever is earlier.
+	writeSetConfigResponse(w, globalAdminPeers, errs, true, r.URL)
+
+	// Restart all node for the modified config to take effect.
+	sendServiceCmd(globalAdminPeers, serviceRestart)
 }

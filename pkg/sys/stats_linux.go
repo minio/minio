@@ -1,7 +1,7 @@
 // +build linux
 
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016,2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,13 +22,10 @@ import "syscall"
 
 // GetStats - return system statistics.
 func GetStats() (stats Stats, err error) {
-	si := syscall.Sysinfo_t{}
-	err = syscall.Sysinfo(&si)
-	if err != nil {
-		return
+	var si syscall.Sysinfo_t
+	if err = syscall.Sysinfo(&si); err == nil {
+		stats.TotalRAM = uint64(si.Totalram)
 	}
-	stats = Stats{
-		TotalRAM: uint64(si.Totalram),
-	}
-	return stats, nil
+
+	return stats, err
 }

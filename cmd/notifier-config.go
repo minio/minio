@@ -16,7 +16,10 @@
 
 package cmd
 
-import "sync"
+import (
+	"fmt"
+	"sync"
+)
 
 // Notifier represents collection of supported notification queues.
 type notifier struct {
@@ -41,6 +44,15 @@ func (a amqpConfigs) Clone() amqpConfigs {
 	return a2
 }
 
+func (a amqpConfigs) Validate() error {
+	for k, v := range a {
+		if err := v.Validate(); err != nil {
+			return fmt.Errorf("AMQP [%s] configuration invalid: %s", k, err.Error())
+		}
+	}
+	return nil
+}
+
 type natsConfigs map[string]natsNotify
 
 func (a natsConfigs) Clone() natsConfigs {
@@ -49,6 +61,15 @@ func (a natsConfigs) Clone() natsConfigs {
 		a2[k] = v
 	}
 	return a2
+}
+
+func (a natsConfigs) Validate() error {
+	for k, v := range a {
+		if err := v.Validate(); err != nil {
+			return fmt.Errorf("NATS [%s] configuration invalid: %s", k, err.Error())
+		}
+	}
+	return nil
 }
 
 type elasticSearchConfigs map[string]elasticSearchNotify
@@ -61,6 +82,15 @@ func (a elasticSearchConfigs) Clone() elasticSearchConfigs {
 	return a2
 }
 
+func (a elasticSearchConfigs) Validate() error {
+	for k, v := range a {
+		if err := v.Validate(); err != nil {
+			return fmt.Errorf("ElasticSearch [%s] configuration invalid: %s", k, err.Error())
+		}
+	}
+	return nil
+}
+
 type redisConfigs map[string]redisNotify
 
 func (a redisConfigs) Clone() redisConfigs {
@@ -69,6 +99,15 @@ func (a redisConfigs) Clone() redisConfigs {
 		a2[k] = v
 	}
 	return a2
+}
+
+func (a redisConfigs) Validate() error {
+	for k, v := range a {
+		if err := v.Validate(); err != nil {
+			return fmt.Errorf("Redis [%s] configuration invalid: %s", k, err.Error())
+		}
+	}
+	return nil
 }
 
 type postgreSQLConfigs map[string]postgreSQLNotify
@@ -81,6 +120,15 @@ func (a postgreSQLConfigs) Clone() postgreSQLConfigs {
 	return a2
 }
 
+func (a postgreSQLConfigs) Validate() error {
+	for k, v := range a {
+		if err := v.Validate(); err != nil {
+			return fmt.Errorf("PostgreSQL [%s] configuration invalid: %s", k, err.Error())
+		}
+	}
+	return nil
+}
+
 type kafkaConfigs map[string]kafkaNotify
 
 func (a kafkaConfigs) Clone() kafkaConfigs {
@@ -91,6 +139,15 @@ func (a kafkaConfigs) Clone() kafkaConfigs {
 	return a2
 }
 
+func (a kafkaConfigs) Validate() error {
+	for k, v := range a {
+		if err := v.Validate(); err != nil {
+			return fmt.Errorf("Kafka [%s] configuration invalid: %s", k, err.Error())
+		}
+	}
+	return nil
+}
+
 type webhookConfigs map[string]webhookNotify
 
 func (a webhookConfigs) Clone() webhookConfigs {
@@ -99,6 +156,43 @@ func (a webhookConfigs) Clone() webhookConfigs {
 		a2[k] = v
 	}
 	return a2
+}
+
+func (a webhookConfigs) Validate() error {
+	for k, v := range a {
+		if err := v.Validate(); err != nil {
+			return fmt.Errorf("Webhook [%s] configuration invalid: %s", k, err.Error())
+		}
+	}
+	return nil
+}
+
+func (n *notifier) Validate() error {
+	if n == nil {
+		return nil
+	}
+	if err := n.AMQP.Validate(); err != nil {
+		return err
+	}
+	if err := n.NATS.Validate(); err != nil {
+		return err
+	}
+	if err := n.ElasticSearch.Validate(); err != nil {
+		return err
+	}
+	if err := n.Redis.Validate(); err != nil {
+		return err
+	}
+	if err := n.PostgreSQL.Validate(); err != nil {
+		return err
+	}
+	if err := n.Kafka.Validate(); err != nil {
+		return err
+	}
+	if err := n.Webhook.Validate(); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (n *notifier) SetAMQPByID(accountID string, amqpn amqpNotify) {

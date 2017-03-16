@@ -146,7 +146,7 @@ func testObjectAPIPutObject(obj ObjectLayer, instanceType string, t TestErrHandl
 		// data with size different from the actual number of bytes available in the reader
 		{bucket, object, data, nil, "", int64(len(data) - 1), getMD5Hash(data[:len(data)-1]), nil},
 		{bucket, object, nilBytes, nil, "", int64(len(nilBytes) + 1), getMD5Hash(nilBytes), IncompleteBody{}},
-		{bucket, object, fiveMBBytes, nil, "", int64(0), getMD5Hash(fiveMBBytes), nil},
+		{bucket, object, fiveMBBytes, nil, "", 0, getMD5Hash(fiveMBBytes), nil},
 
 		// Test case 30
 		// valid data with X-Amz-Meta- meta
@@ -179,11 +179,11 @@ func testObjectAPIPutObject(obj ObjectLayer, instanceType string, t TestErrHandl
 // Wrapper for calling PutObject tests for both XL multiple disks case
 // when quorum is not available.
 func TestObjectAPIPutObjectDiskNotFound(t *testing.T) {
-	ExecObjectLayerDiskAlteredTest(t, testObjectAPIPutObjectDiskNotFOund)
+	ExecObjectLayerDiskAlteredTest(t, testObjectAPIPutObjectDiskNotFound)
 }
 
 // Tests validate correctness of PutObject.
-func testObjectAPIPutObjectDiskNotFOund(obj ObjectLayer, instanceType string, disks []string, t *testing.T) {
+func testObjectAPIPutObjectDiskNotFound(obj ObjectLayer, instanceType string, disks []string, t *testing.T) {
 	// Generating cases for which the PutObject fails.
 	bucket := "minio-bucket"
 	object := "minio-object"

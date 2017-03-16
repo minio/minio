@@ -166,12 +166,13 @@ type ListBucketsResponse struct {
 
 // Upload container for in progress multipart upload
 type Upload struct {
-	Key          string
-	UploadID     string `xml:"UploadId"`
-	Initiator    Initiator
-	Owner        Owner
-	StorageClass string
-	Initiated    string
+	Key            string
+	UploadID       string `xml:"UploadId"`
+	Initiator      Initiator
+	Owner          Owner
+	StorageClass   string
+	Initiated      string
+	HealUploadInfo *HealObjectInfo `xml:"HealObjectInfo,omitempty"`
 }
 
 // CommonPrefix container for prefix response in ListObjectsResponse
@@ -488,6 +489,7 @@ func generateListMultipartUploadsResponse(bucket string, multipartsInfo ListMult
 		newUpload.UploadID = upload.UploadID
 		newUpload.Key = upload.Object
 		newUpload.Initiated = upload.Initiated.UTC().Format(timeFormatAMZLong)
+		newUpload.HealUploadInfo = upload.HealUploadInfo
 		listMultipartUploadsResponse.Uploads[index] = newUpload
 	}
 	return listMultipartUploadsResponse

@@ -17,11 +17,28 @@
 package cmd
 
 import (
+	"encoding/json"
+	"errors"
+	"fmt"
 	"net/url"
+	"os"
 	"path"
+	"path/filepath"
+	"reflect"
 	"sort"
 	"sync"
 	"time"
+)
+
+const (
+	// Admin service names
+	serviceRestartRPC = "Admin.Restart"
+	listLocksRPC      = "Admin.ListLocks"
+	reInitDisksRPC    = "Admin.ReInitDisks"
+	uptimeRPC         = "Admin.Uptime"
+	getConfigRPC      = "Admin.GetConfig"
+	writeTmpConfigRPC = "Admin.WriteTmpConfig"
+	commitConfigRPC   = "Admin.CommitConfig"
 )
 
 // localAdminClient - represents admin operation to be executed locally.
@@ -41,6 +58,9 @@ type adminCmdRunner interface {
 	ListLocks(bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error)
 	ReInitDisks() error
 	Uptime() (time.Duration, error)
+	GetConfig() ([]byte, error)
+	WriteTmpConfig(tmpFileName string, configBytes []byte) error
+	CommitConfig(tmpFileName string) error
 }
 
 // Restart - Sends a message over channel to the go-routine
@@ -59,7 +79,7 @@ func (lc localAdminClient) ListLocks(bucket, prefix string, duration time.Durati
 func (rc remoteAdminClient) Restart() error {
 	args := AuthRPCArgs{}
 	reply := AuthRPCReply{}
-	return rc.Call("Admin.Restart", &args, &reply)
+	return rc.Call(serviceRestartRPC, &args, &reply)
 }
 
 // ListLocks - Sends list locks command to remote server via RPC.
@@ -70,7 +90,7 @@ func (rc remoteAdminClient) ListLocks(bucket, prefix string, duration time.Durat
 		duration: duration,
 	}
 	var reply ListLocksReply
-	if err := rc.Call("Admin.ListLocks", &listArgs, &reply); err != nil {
+	if err := rc.Call(listLocksRPC, &listArgs, &reply); err != nil {
 		return nil, err
 	}
 	return reply.volLocks, nil
@@ -87,7 +107,7 @@ func (lc localAdminClient) ReInitDisks() error {
 func (rc remoteAdminClient) ReInitDisks() error {
 	args := AuthRPCArgs{}
 	reply := AuthRPCReply{}
-	return rc.Call("Admin.ReInitDisks", &args, &reply)
+	return rc.Call(reInitDisksRPC, &args, &reply)
 }
 
 // Uptime - Returns the uptime of this server. Timestamp is taken
@@ -104,12 +124,81 @@ func (lc localAdminClient) Uptime() (time.Duration, error) {
 func (rc remoteAdminClient) Uptime() (time.Duration, error) {
 	args := AuthRPCArgs{}
 	reply := UptimeReply{}
-	err := rc.Call("Admin.Uptime", &args, &reply)
+	err := rc.Call(uptimeRPC, &args, &reply)
 	if err != nil {
 		return time.Duration(0), err
 	}
 
 	return reply.Uptime, nil
+}
+
+// GetConfig - returns config.json of the local server.
+func (lc localAdminClient) GetConfig() ([]byte, error) {
+	if serverConfig == nil {
+		return nil, errors.New("config not present")
+	}
+
+	return json.Marshal(serverConfig)
+}
+
+// GetConfig - returns config.json of the remote server.
+func (rc remoteAdminClient) GetConfig() ([]byte, error) {
+	args := AuthRPCArgs{}
+	reply := ConfigReply{}
+	if err := rc.Call(getConfigRPC, &args, &reply); err != nil {
+		return nil, err
+	}
+	return reply.Config, nil
+}
+
+// WriteTmpConfig - writes config file content to a temporary file on
+// the local server.
+func (lc localAdminClient) WriteTmpConfig(tmpFileName string, configBytes []byte) error {
+	return writeTmpConfigCommon(tmpFileName, configBytes)
+}
+
+// WriteTmpConfig - writes config file content to a temporary file on
+// a remote node.
+func (rc remoteAdminClient) WriteTmpConfig(tmpFileName string, configBytes []byte) error {
+	wArgs := WriteConfigArgs{
+		TmpFileName: tmpFileName,
+		Buf:         configBytes,
+	}
+
+	err := rc.Call(writeTmpConfigRPC, &wArgs, &WriteConfigReply{})
+	if err != nil {
+		errorIf(err, "Failed to write temporary config file.")
+		return err
+	}
+
+	return nil
+}
+
+// CommitConfig - Move the new config in tmpFileName onto config.json
+// on a local node.
+func (lc localAdminClient) CommitConfig(tmpFileName string) error {
+	configFile := getConfigFile()
+	tmpConfigFile := filepath.Join(getConfigDir(), tmpFileName)
+
+	err := os.Rename(tmpConfigFile, configFile)
+	errorIf(err, fmt.Sprintf("Failed to rename %s to %s", tmpConfigFile, configFile))
+	return err
+}
+
+// CommitConfig - Move the new config in tmpFileName onto config.json
+// on a remote node.
+func (rc remoteAdminClient) CommitConfig(tmpFileName string) error {
+	cArgs := CommitConfigArgs{
+		FileName: tmpFileName,
+	}
+	cReply := CommitConfigReply{}
+	err := rc.Call(commitConfigRPC, &cArgs, &cReply)
+	if err != nil {
+		errorIf(err, "Failed to rename config file.")
+		return err
+	}
+
+	return nil
 }
 
 // adminPeer - represents an entity that implements Restart methods.
@@ -150,7 +239,7 @@ func makeAdminPeers(eps []*url.URL) adminPeers {
 				secretKey:       serverCred.SecretKey,
 				serverAddr:      ep.Host,
 				secureConn:      globalIsSSL,
-				serviceEndpoint: path.Join(reservedBucket, adminPath),
+				serviceEndpoint: path.Join(minioReservedBucketPath, adminPath),
 				serviceName:     "Admin",
 			}
 
@@ -335,4 +424,186 @@ func getPeerUptimes(peers adminPeers) (time.Duration, error) {
 	}
 
 	return latestUptime, nil
+}
+
+// getPeerConfig - Fetches config.json from all nodes in the setup and
+// returns the one that occurs in a majority of them.
+func getPeerConfig(peers adminPeers) ([]byte, error) {
+	if !globalIsDistXL {
+		return peers[0].cmdRunner.GetConfig()
+	}
+
+	errs := make([]error, len(peers))
+	configs := make([][]byte, len(peers))
+
+	// Get config from all servers.
+	wg := sync.WaitGroup{}
+	for i, peer := range peers {
+		wg.Add(1)
+		go func(idx int, peer adminPeer) {
+			defer wg.Done()
+			configs[idx], errs[idx] = peer.cmdRunner.GetConfig()
+		}(i, peer)
+	}
+	wg.Wait()
+
+	// Find the maximally occurring config among peers in a
+	// distributed setup.
+
+	serverConfigs := make([]serverConfigV13, len(peers))
+	for i, configBytes := range configs {
+		if errs[i] != nil {
+			continue
+		}
+
+		// Unmarshal the received config files.
+		err := json.Unmarshal(configBytes, &serverConfigs[i])
+		if err != nil {
+			errorIf(err, "Failed to unmarshal serverConfig from ", peers[i].addr)
+			return nil, err
+		}
+	}
+
+	configJSON, err := getValidServerConfig(serverConfigs, errs)
+	if err != nil {
+		errorIf(err, "Unable to find a valid server config")
+		return nil, traceError(err)
+	}
+
+	// Return the config.json that was present quorum or more
+	// number of disks.
+	return json.Marshal(configJSON)
+}
+
+// getValidServerConfig - finds the server config that is present in
+// quorum or more number of servers.
+func getValidServerConfig(serverConfigs []serverConfigV13, errs []error) (serverConfigV13, error) {
+	// majority-based quorum
+	quorum := len(serverConfigs)/2 + 1
+
+	// Count the number of disks a config.json was found in.
+	configCounter := make([]int, len(serverConfigs))
+
+	// We group equal serverConfigs by the lowest index of the
+	// same value;  e.g, let us take the following serverConfigs
+	// in a 4-node setup,
+	// serverConfigs == [c1, c2, c1, c1]
+	// configCounter == [3, 1, 0, 0]
+	// c1, c2 are the only distinct values that appear.  c1 is
+	// identified by 0, the lowest index it appears in and c2 is
+	// identified by 1. So, we need to find the number of times
+	// each of these distinct values occur.
+
+	// Invariants:
+
+	// 1. At the beginning of the i-th iteration, the number of
+	// unique configurations seen so far is equal to the number of
+	// non-zero counter values in config[:i].
+
+	// 2. At the beginning of the i-th iteration, the sum of
+	// elements of configCounter[:i] is equal to the number of
+	// non-error configurations seen so far.
+
+	// For each of the serverConfig ...
+	for i := range serverConfigs {
+		// Skip nodes where getConfig failed.
+		if errs[i] != nil {
+			continue
+		}
+		// Check if it is equal to any of the configurations
+		// seen so far. If j == i is reached then we have an
+		// unseen configuration.
+		for j := 0; j <= i; j++ {
+			if j < i && configCounter[j] == 0 {
+				// serverConfigs[j] is known to be
+				// equal to a value that was already
+				// seen. See example above for
+				// clarity.
+				continue
+			} else if j < i && reflect.DeepEqual(serverConfigs[i], serverConfigs[j]) {
+				// serverConfigs[i] is equal to
+				// serverConfigs[j], update
+				// serverConfigs[j]'s counter since it
+				// is the lower index.
+				configCounter[j]++
+				break
+			} else if j == i {
+				// serverConfigs[i] is equal to no
+				// other value seen before. It is
+				// unique so far.
+				configCounter[i] = 1
+				break
+			} // else invariants specified above are violated.
+		}
+	}
+
+	// We find the maximally occurring server config and check if
+	// there is quorum.
+	var configJSON serverConfigV13
+	maxOccurrence := 0
+	for i, count := range configCounter {
+		if maxOccurrence < count {
+			maxOccurrence = count
+			configJSON = serverConfigs[i]
+		}
+	}
+
+	// If quorum nodes don't agree.
+	if maxOccurrence < quorum {
+		return serverConfigV13{}, errXLWriteQuorum
+	}
+
+	return configJSON, nil
+}
+
+// Write config contents into a temporary file on all nodes.
+func writeTmpConfigPeers(peers adminPeers, tmpFileName string, configBytes []byte) []error {
+	// For a single-node minio server setup.
+	if !globalIsDistXL {
+		err := peers[0].cmdRunner.WriteTmpConfig(tmpFileName, configBytes)
+		return []error{err}
+	}
+
+	errs := make([]error, len(peers))
+
+	// Write config into temporary file on all nodes.
+	wg := sync.WaitGroup{}
+	for i, peer := range peers {
+		wg.Add(1)
+		go func(idx int, peer adminPeer) {
+			defer wg.Done()
+			errs[idx] = peer.cmdRunner.WriteTmpConfig(tmpFileName, configBytes)
+		}(i, peer)
+	}
+	wg.Wait()
+
+	// Return bytes written and errors (if any) during writing
+	// temporary config file.
+	return errs
+}
+
+// Move config contents from the given temporary file onto config.json
+// on all nodes.
+func commitConfigPeers(peers adminPeers, tmpFileName string) []error {
+	// For a single-node minio server setup.
+	if !globalIsDistXL {
+		return []error{peers[0].cmdRunner.CommitConfig(tmpFileName)}
+	}
+
+	errs := make([]error, len(peers))
+
+	// Rename temporary config file into configDir/config.json on
+	// all nodes.
+	wg := sync.WaitGroup{}
+	for i, peer := range peers {
+		wg.Add(1)
+		go func(idx int, peer adminPeer) {
+			defer wg.Done()
+			errs[idx] = peer.cmdRunner.CommitConfig(tmpFileName)
+		}(i, peer)
+	}
+	wg.Wait()
+
+	// Return errors (if any) received during rename.
+	return errs
 }

@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/minio/redigo/redis"
+	"github.com/garyburd/redigo/redis"
 )
 
 // redisNotify to send logs to Redis server
@@ -30,6 +30,16 @@ type redisNotify struct {
 	Addr     string `json:"address"`
 	Password string `json:"password"`
 	Key      string `json:"key"`
+}
+
+func (r *redisNotify) Validate() error {
+	if !r.Enable {
+		return nil
+	}
+	if _, err := checkURL(r.Addr); err != nil {
+		return err
+	}
+	return nil
 }
 
 type redisConn struct {

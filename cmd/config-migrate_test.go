@@ -31,7 +31,7 @@ func TestServerConfigMigrateV1(t *testing.T) {
 	// remove the root directory after the test ends.
 	defer removeAll(rootPath)
 
-	setGlobalConfigPath(rootPath)
+	setConfigDir(rootPath)
 
 	// Create a V1 config json file and store it
 	configJSON := "{ \"version\":\"1\", \"accessKeyId\":\"abcde\", \"secretAccessKey\":\"abcdefgh\"}"
@@ -50,7 +50,7 @@ func TestServerConfigMigrateV1(t *testing.T) {
 	}
 
 	// Initialize server config and check again if everything is fine
-	if err := loadConfig(credential{}); err != nil {
+	if err := loadConfig(envParams{}); err != nil {
 		t.Fatalf("Unable to initialize from updated config file %s", err)
 	}
 }
@@ -65,8 +65,8 @@ func TestServerConfigMigrateInexistentConfig(t *testing.T) {
 	// remove the root directory after the test ends.
 	defer removeAll(rootPath)
 
-	setGlobalConfigPath(rootPath)
-	configPath := rootPath + "/" + globalMinioConfigFile
+	setConfigDir(rootPath)
+	configPath := rootPath + "/" + minioConfigFile
 
 	// Remove config file
 	if err := os.Remove(configPath); err != nil {
@@ -106,10 +106,13 @@ func TestServerConfigMigrateInexistentConfig(t *testing.T) {
 	if err := migrateV12ToV13(); err != nil {
 		t.Fatal("migrate v12 to v13 should succeed when no config file is found")
 	}
+	if err := migrateV13ToV14(); err != nil {
+		t.Fatal("migrate v13 to v14 should succeed when no config file is found")
+	}
 }
 
 // Test if a config migration from v2 to v12 is successfully done
-func TestServerConfigMigrateV2toV12(t *testing.T) {
+func TestServerConfigMigrateV2toV14(t *testing.T) {
 	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
@@ -117,8 +120,8 @@ func TestServerConfigMigrateV2toV12(t *testing.T) {
 	// remove the root directory after the test ends.
 	defer removeAll(rootPath)
 
-	setGlobalConfigPath(rootPath)
-	configPath := rootPath + "/" + globalMinioConfigFile
+	setConfigDir(rootPath)
+	configPath := rootPath + "/" + minioConfigFile
 
 	// Create a corrupted config file
 	if err := ioutil.WriteFile(configPath, []byte("{ \"version\":\"2\","), 0644); err != nil {
@@ -143,12 +146,12 @@ func TestServerConfigMigrateV2toV12(t *testing.T) {
 	}
 
 	// Initialize server config and check again if everything is fine
-	if err := loadConfig(credential{}); err != nil {
+	if err := loadConfig(envParams{}); err != nil {
 		t.Fatalf("Unable to initialize from updated config file %s", err)
 	}
 
 	// Check the version number in the upgraded config file
-	expectedVersion := globalMinioConfigVersion
+	expectedVersion := v14
 	if serverConfig.Version != expectedVersion {
 		t.Fatalf("Expect version "+expectedVersion+", found: %v", serverConfig.Version)
 	}
@@ -171,8 +174,8 @@ func TestServerConfigMigrateFaultyConfig(t *testing.T) {
 	// remove the root directory after the test ends.
 	defer removeAll(rootPath)
 
-	setGlobalConfigPath(rootPath)
-	configPath := rootPath + "/" + globalMinioConfigFile
+	setConfigDir(rootPath)
+	configPath := rootPath + "/" + minioConfigFile
 
 	// Create a corrupted config file
 	if err := ioutil.WriteFile(configPath, []byte("{ \"version\":\""), 0644); err != nil {
@@ -212,5 +215,8 @@ func TestServerConfigMigrateFaultyConfig(t *testing.T) {
 	}
 	if err := migrateV12ToV13(); err == nil {
 		t.Fatal("migrateConfigV12ToV13() should fail with a corrupted json")
+	}
+	if err := migrateV13ToV14(); err == nil {
+		t.Fatal("migrateConfigV13ToV14() should fail with a corrupted json")
 	}
 }

@@ -198,21 +198,27 @@ func TestServerMux(t *testing.T) {
 		time.Sleep(1 * time.Second)
 		// Check if one listener is ready
 		m.mu.Lock()
-		if len(m.listeners) == 0 {
-			m.mu.Unlock()
+		listenersCount := len(m.listeners)
+		m.mu.Unlock()
+		if listenersCount == 0 {
 			continue
 		}
+		m.mu.Lock()
+		listenerAddr := m.listeners[0].Addr().String()
 		m.mu.Unlock()
 		// Issue the GET request
 		client := http.Client{}
-		m.mu.Lock()
-		res, err = client.Get("http://" + m.listeners[0].Addr().String())
-		m.mu.Unlock()
+		res, err = client.Get("http://" + listenerAddr)
 		if err != nil {
 			continue
 		}
 		// Read the request response
 		got, err = ioutil.ReadAll(res.Body)
+		if err != nil {
+			continue
+		}
+		// We've got a response, quit the loop
+		break
 	}
 
 	// Check for error persisted after 5 times
@@ -348,12 +354,12 @@ func TestServerListenAndServeTLS(t *testing.T) {
 	}))
 
 	// Create a cert
-	err := createCertsPath()
+	err := createConfigDir()
 	if err != nil {
 		t.Fatal(err)
 	}
-	certFile := mustGetCertFile()
-	keyFile := mustGetKeyFile()
+	certFile := getPublicCertFile()
+	keyFile := getPrivateKeyFile()
 	defer os.RemoveAll(certFile)
 	defer os.RemoveAll(keyFile)
 
@@ -414,8 +420,8 @@ func TestServerListenAndServeTLS(t *testing.T) {
 
 // generateTestCert creates a cert and a key used for testing only
 func generateTestCert(host string) error {
-	certPath := mustGetCertFile()
-	keyPath := mustGetKeyFile()
+	certPath := getPublicCertFile()
+	keyPath := getPrivateKeyFile()
 	priv, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return err

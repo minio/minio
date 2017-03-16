@@ -1,5 +1,5 @@
 /*
- * Minio Browser (C) 2016 Minio, Inc.
+ * Minio Cloud Storage (C) 2016 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,13 +14,9 @@
  * limitations under the License.
  */
 
-import url from 'url'
 import Moment from 'moment'
 import browserHistory from 'react-router/lib/browserHistory'
-import web from './web'
-import * as utils from './utils'
 import storage from 'local-storage-fallback'
-
 import { minioBrowserPrefix } from './constants'
 
 export const SET_WEB = 'SET_WEB'
@@ -28,7 +24,6 @@ export const SET_CURRENT_BUCKET = 'SET_CURRENT_BUCKET'
 export const SET_CURRENT_PATH = 'SET_CURRENT_PATH'
 export const SET_BUCKETS = 'SET_BUCKETS'
 export const ADD_BUCKET = 'ADD_BUCKET'
-export const ADD_OBJECT = 'ADD_OBJECT'
 export const SET_VISIBLE_BUCKETS = 'SET_VISIBLE_BUCKETS'
 export const SET_OBJECTS = 'SET_OBJECTS'
 export const SET_STORAGE_INFO = 'SET_STORAGE_INFO'
@@ -57,6 +52,9 @@ export const SET_SHARE_OBJECT = 'SET_SHARE_OBJECT'
 export const DELETE_CONFIRMATION = 'DELETE_CONFIRMATION'
 export const SET_PREFIX_WRITABLE = 'SET_PREFIX_WRITABLE'
 export const REMOVE_OBJECT = 'REMOVE_OBJECT'
+export const CHECKED_OBJECTS_ADD = 'CHECKED_OBJECTS_ADD'
+export const CHECKED_OBJECTS_REMOVE = 'CHECKED_OBJECTS_REMOVE'
+export const CHECKED_OBJECTS_RESET = 'CHECKED_OBJECTS_RESET'
 
 export const showDeleteConfirmation = (object) => {
   return {
@@ -78,11 +76,12 @@ export const hideDeleteConfirmation = () => {
   }
 }
 
-export const showShareObject = url => {
+export const showShareObject = (object, url) => {
   return {
     type: SET_SHARE_OBJECT,
     shareObject: {
-      url: url,
+      object,
+      url,
       show: true
     }
   }
@@ -98,15 +97,17 @@ export const hideShareObject = () => {
   }
 }
 
-export const shareObject = (object, expiry) => (dispatch, getState) => {
+export const shareObject = (object, days, hours, minutes) => (dispatch, getState) => {
   const {currentBucket, web} = getState()
   let host = location.host
   let bucket = currentBucket
 
   if (!web.LoggedIn()) {
-    dispatch(showShareObject(`${host}/${bucket}/${object}`))
+    dispatch(showShareObject(object, `${host}/${bucket}/${object}`))
     return
   }
+
+  let expiry = days * 24 * 60 * 60 + hours * 60 * 60 + minutes * 60
   web.PresignedGet({
     host,
     bucket,
@@ -114,7 +115,11 @@ export const shareObject = (object, expiry) => (dispatch, getState) => {
     expiry
   })
     .then(obj => {
-      dispatch(showShareObject(obj.url))
+      dispatch(showShareObject(object, obj.url))
+      dispatch(showAlert({
+        type: 'success',
+        message: `Object shared. Expires in ${days} days ${hours} hours ${minutes} minutes.`
+      }))
     })
     .catch(err => {
       dispatch(showAlert({
@@ -304,13 +309,13 @@ export const listObjects = () => {
       marker: marker
     })
       .then(res => {
-	let objects = res.objects
+        let objects = res.objects
         if (!objects)
           objects = []
         objects = objects.map(object => {
-	  object.name = object.name.replace(`${currentPath}`, '');
-	  return object
-	})
+          object.name = object.name.replace(`${currentPath}`, '');
+          return object
+        })
         dispatch(setObjects(objects, res.nextmarker, res.istruncated))
         dispatch(setPrefixWritable(res.writable))
         dispatch(setLoadBucket(''))
@@ -344,9 +349,9 @@ export const selectPrefix = prefix => {
         if (!objects)
           objects = []
         objects = objects.map(object => {
-	  object.name = object.name.replace(`${prefix}`, '');
-	  return object
-	})
+          object.name = object.name.replace(`${prefix}`, '');
+          return object
+        })
         dispatch(setObjects(
           objects,
           res.nextmarker,
@@ -407,6 +412,25 @@ export const setLoginError = () => {
   return {
     type: SET_LOGIN_ERROR,
     loginError: true
+  }
+}
+
+export const downloadSelected = (url, req, xhr) => {
+  return (dispatch) => {
+    xhr.open('POST', url, true)
+    xhr.responseType = 'blob'
+
+    xhr.onload = function(e) {
+      if (this.status == 200) {
+        dispatch(checkedObjectsReset())
+        var blob = new Blob([this.response], {
+          type: 'application/zip'
+        })
+        var blobUrl = window.URL.createObjectURL(blob);
+        window.location = blobUrl
+      }
+    };
+    xhr.send(JSON.stringify(req));
   }
 }
 
@@ -561,5 +585,26 @@ export const setPolicies = (policies) => {
   return {
     type: SET_POLICIES,
     policies
+  }
+}
+
+export const checkedObjectsAdd = (objectName) => {
+  return {
+    type: CHECKED_OBJECTS_ADD,
+    objectName
+  }
+}
+
+export const checkedObjectsRemove = (objectName) => {
+  return {
+    type: CHECKED_OBJECTS_REMOVE,
+    objectName
+  }
+}
+
+export const checkedObjectsReset = (objectName) => {
+  return {
+    type: CHECKED_OBJECTS_RESET,
+    objectName
   }
 }

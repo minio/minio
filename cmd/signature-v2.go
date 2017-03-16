@@ -64,14 +64,14 @@ var resourceList = []string{
 	"website",
 }
 
-func doesPolicySignatureV2Match(formValues map[string]string) APIErrorCode {
+func doesPolicySignatureV2Match(formValues http.Header) APIErrorCode {
 	cred := serverConfig.GetCredential()
-	accessKey := formValues["Awsaccesskeyid"]
+	accessKey := formValues.Get("AWSAccessKeyId")
 	if accessKey != cred.AccessKey {
 		return ErrInvalidAccessKeyID
 	}
-	signature := formValues["Signature"]
-	policy := formValues["Policy"]
+	policy := formValues.Get("Policy")
+	signature := formValues.Get("Signature")
 	if signature != calculateSignatureV2(policy, cred.SecretKey) {
 		return ErrSignatureDoesNotMatch
 	}

@@ -213,9 +213,7 @@ func genFormatXLInvalidDisksOrder() []*formatConfigV1 {
 	}
 	// Re order jbod for failure case.
 	var jbod1 = make([]string, 8)
-	for i, j := range jbod {
-		jbod1[i] = j
-	}
+	copy(jbod1, jbod)
 	jbod1[1], jbod1[2] = jbod[2], jbod[1]
 	formatConfigs[2].XL.JBOD = jbod1
 	return formatConfigs
@@ -576,9 +574,7 @@ func TestSavedUUIDOrder(t *testing.T) {
 	}
 	// Re order jbod for failure case.
 	var jbod1 = make([]string, 8)
-	for i, j := range jbod {
-		jbod1[i] = j
-	}
+	copy(jbod1, jbod)
 	jbod1[1], jbod1[2] = jbod[2], jbod[1]
 	formatConfigs[2].XL.JBOD = jbod1
 	uuidTestCases[1].shouldPass = false

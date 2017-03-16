@@ -1,5 +1,5 @@
 /*
- * Minio Browser (C) 2016 Minio, Inc.
+ * Minio Cloud Storage (C) 2016 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +20,7 @@ import humanize from 'humanize'
 import connect from 'react-redux/lib/components/connect'
 import Dropdown from 'react-bootstrap/lib/Dropdown'
 
-
-let ObjectsList = ({objects, currentPath, selectPrefix, dataType, showDeleteConfirmation, shareObject, loadPath}) => {
+let ObjectsList = ({objects, currentPath, selectPrefix, dataType, showDeleteConfirmation, shareObject, loadPath, checkObject, checkedObjectsArray}) => {
   const list = objects.map((object, i) => {
     let size = object.name.endsWith('/') ? '-' : humanize.filesize(object.size)
     let lastModified = object.name.endsWith('/') ? '-' : Moment(object.lastModified).format('lll')
@@ -30,29 +29,51 @@ let ObjectsList = ({objects, currentPath, selectPrefix, dataType, showDeleteConf
     let deleteButton = ''
     if (web.LoggedIn())
       deleteButton = <a href="" className="fiad-action" onClick={ (e) => showDeleteConfirmation(e, `${currentPath}${object.name}`) }><i className="fa fa-trash"></i></a>
-    if (!object.name.endsWith('/')) {
-      actionButtons = <Dropdown id="fia-dropdown">
-                        <Dropdown.Toggle noCaret className="fia-toggle"></Dropdown.Toggle>
-                        <Dropdown.Menu>
-                          <a href="" className="fiad-action" onClick={ (e) => shareObject(e, `${currentPath}${object.name}`) }><i className="fa fa-copy"></i></a>
-                          { deleteButton }
-                        </Dropdown.Menu>
-                      </Dropdown>
+
+    if (!checkedObjectsArray.length > 0) {
+      if (!object.name.endsWith('/')) {
+        actionButtons = <Dropdown id={ "fia-dropdown-" + object.name.replace('.', '-') }>
+                          <Dropdown.Toggle noCaret className="fia-toggle"></Dropdown.Toggle>
+                          <Dropdown.Menu>
+                            <a href="" className="fiad-action" onClick={ (e) => shareObject(e, `${currentPath}${object.name}`) }><i className="fa fa-copy"></i></a>
+                            { deleteButton }
+                          </Dropdown.Menu>
+                        </Dropdown>
+      }
     }
+
+    let activeClass = ''
+    let isChecked = ''
+
+    if (checkedObjectsArray.indexOf(object.name) > -1) {
+      activeClass = ' fesl-row-selected'
+      isChecked = true
+    }
+
     return (
-      <div key={ i } className={ "fesl-row " + loadingClass } data-type={ dataType(object.name, object.contentType) }>
-        <div className="fesl-item fi-name">
+      <div key={ i } className={ "fesl-row " + loadingClass + activeClass } data-type={ dataType(object.name, object.contentType) }>
+        <div className="fesl-item fesl-item-icon">
+          <div className="fi-select">
+            <input type="checkbox"
+              name={ object.name }
+              checked={ isChecked }
+              onChange={ (e) => checkObject(e, object.name) } />
+            <i className="fis-icon"></i>
+            <i className="fis-helper"></i>
+          </div>
+        </div>
+        <div className="fesl-item fesl-item-name">
           <a href="" onClick={ (e) => selectPrefix(e, `${currentPath}${object.name}`) }>
             { object.name }
           </a>
         </div>
-        <div className="fesl-item fi-size">
+        <div className="fesl-item fesl-item-size">
           { size }
         </div>
-        <div className="fesl-item fi-modified">
+        <div className="fesl-item fesl-item-modified">
           { lastModified }
         </div>
-        <div className="fesl-item fi-actions">
+        <div className="fesl-item fesl-item-actions">
           { actionButtons }
         </div>
       </div>

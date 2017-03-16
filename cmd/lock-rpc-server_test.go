@@ -85,7 +85,6 @@ func TestLockRpcServerLock(t *testing.T) {
 		ServiceEndpoint: "rpc-path",
 	})
 	la.SetAuthToken(token)
-	la.SetRequestTime(time.Now().UTC())
 
 	// Claim a lock
 	var result bool
@@ -119,7 +118,6 @@ func TestLockRpcServerLock(t *testing.T) {
 		ServiceEndpoint: "rpc-path",
 	})
 	la2.SetAuthToken(token)
-	la2.SetRequestTime(time.Now().UTC())
 
 	err = locker.Lock(&la2, &result)
 	if err != nil {
@@ -143,7 +141,6 @@ func TestLockRpcServerUnlock(t *testing.T) {
 		ServiceEndpoint: "rpc-path",
 	})
 	la.SetAuthToken(token)
-	la.SetRequestTime(time.Now().UTC())
 
 	// First test return of error when attempting to unlock a lock that does not exist
 	var result bool
@@ -153,7 +150,6 @@ func TestLockRpcServerUnlock(t *testing.T) {
 	}
 
 	// Create lock (so that we can release)
-	la.SetRequestTime(time.Now().UTC())
 	err = locker.Lock(&la, &result)
 	if err != nil {
 		t.Errorf("Expected %#v, got %#v", nil, err)
@@ -162,7 +158,6 @@ func TestLockRpcServerUnlock(t *testing.T) {
 	}
 
 	// Finally test successful release of lock
-	la.SetRequestTime(time.Now().UTC())
 	err = locker.Unlock(&la, &result)
 	if err != nil {
 		t.Errorf("Expected %#v, got %#v", nil, err)
@@ -191,7 +186,6 @@ func TestLockRpcServerRLock(t *testing.T) {
 		ServiceEndpoint: "rpc-path",
 	})
 	la.SetAuthToken(token)
-	la.SetRequestTime(time.Now().UTC())
 
 	// Claim a lock
 	var result bool
@@ -225,7 +219,6 @@ func TestLockRpcServerRLock(t *testing.T) {
 		ServiceEndpoint: "rpc-path",
 	})
 	la2.SetAuthToken(token)
-	la2.SetRequestTime(time.Now().UTC())
 
 	err = locker.RLock(&la2, &result)
 	if err != nil {
@@ -249,7 +242,6 @@ func TestLockRpcServerRUnlock(t *testing.T) {
 		ServiceEndpoint: "rpc-path",
 	})
 	la.SetAuthToken(token)
-	la.SetRequestTime(time.Now().UTC())
 
 	// First test return of error when attempting to unlock a read-lock that does not exist
 	var result bool
@@ -259,7 +251,6 @@ func TestLockRpcServerRUnlock(t *testing.T) {
 	}
 
 	// Create first lock ... (so that we can release)
-	la.SetRequestTime(time.Now().UTC())
 	err = locker.RLock(&la, &result)
 	if err != nil {
 		t.Errorf("Expected %#v, got %#v", nil, err)
@@ -275,7 +266,6 @@ func TestLockRpcServerRUnlock(t *testing.T) {
 		ServiceEndpoint: "rpc-path",
 	})
 	la2.SetAuthToken(token)
-	la2.SetRequestTime(time.Now().UTC())
 
 	// ... and create a second lock on same resource
 	err = locker.RLock(&la2, &result)
@@ -286,7 +276,6 @@ func TestLockRpcServerRUnlock(t *testing.T) {
 	}
 
 	// Test successful release of first read lock
-	la.SetRequestTime(time.Now().UTC())
 	err = locker.RUnlock(&la, &result)
 	if err != nil {
 		t.Errorf("Expected %#v, got %#v", nil, err)
@@ -311,7 +300,6 @@ func TestLockRpcServerRUnlock(t *testing.T) {
 	}
 
 	// Finally test successful release of second (and last) read lock
-	la2.SetRequestTime(time.Now().UTC())
 	err = locker.RUnlock(&la2, &result)
 	if err != nil {
 		t.Errorf("Expected %#v, got %#v", nil, err)
@@ -340,7 +328,6 @@ func TestLockRpcServerForceUnlock(t *testing.T) {
 		ServiceEndpoint: "rpc-path",
 	})
 	laForce.SetAuthToken(token)
-	laForce.SetRequestTime(time.Now().UTC())
 
 	// First test that UID should be empty
 	var result bool
@@ -351,7 +338,6 @@ func TestLockRpcServerForceUnlock(t *testing.T) {
 
 	// Then test force unlock of a lock that does not exist (not returning an error)
 	laForce.LockArgs.UID = ""
-	laForce.SetRequestTime(time.Now().UTC())
 	err = locker.ForceUnlock(&laForce, &result)
 	if err != nil {
 		t.Errorf("Expected no error, got %#v", err)
@@ -364,7 +350,6 @@ func TestLockRpcServerForceUnlock(t *testing.T) {
 		ServiceEndpoint: "rpc-path",
 	})
 	la.SetAuthToken(token)
-	la.SetRequestTime(time.Now().UTC())
 
 	// Create lock ... (so that we can force unlock)
 	err = locker.Lock(&la, &result)
@@ -375,14 +360,12 @@ func TestLockRpcServerForceUnlock(t *testing.T) {
 	}
 
 	// Forcefully unlock the lock (not returning an error)
-	laForce.SetRequestTime(time.Now().UTC())
 	err = locker.ForceUnlock(&laForce, &result)
 	if err != nil {
 		t.Errorf("Expected no error, got %#v", err)
 	}
 
 	// Try to get lock again (should be granted)
-	la.SetRequestTime(time.Now().UTC())
 	err = locker.Lock(&la, &result)
 	if err != nil {
 		t.Errorf("Expected %#v, got %#v", nil, err)
@@ -391,7 +374,6 @@ func TestLockRpcServerForceUnlock(t *testing.T) {
 	}
 
 	// Finally forcefully unlock the lock once again
-	laForce.SetRequestTime(time.Now().UTC())
 	err = locker.ForceUnlock(&laForce, &result)
 	if err != nil {
 		t.Errorf("Expected no error, got %#v", err)
@@ -410,7 +392,6 @@ func TestLockRpcServerExpired(t *testing.T) {
 		ServiceEndpoint: "rpc-path",
 	})
 	la.SetAuthToken(token)
-	la.SetRequestTime(time.Now().UTC())
 
 	// Unknown lock at server will return expired = true
 	var expired bool
@@ -425,7 +406,6 @@ func TestLockRpcServerExpired(t *testing.T) {
 
 	// Create lock (so that we can test that it is not expired)
 	var result bool
-	la.SetRequestTime(time.Now().UTC())
 	err = locker.Lock(&la, &result)
 	if err != nil {
 		t.Errorf("Expected %#v, got %#v", nil, err)
@@ -433,7 +413,6 @@ func TestLockRpcServerExpired(t *testing.T) {
 		t.Errorf("Expected %#v, got %#v", true, result)
 	}
 
-	la.SetRequestTime(time.Now().UTC())
 	err = locker.Expired(&la, &expired)
 	if err != nil {
 		t.Errorf("Expected no error, got %#v", err)

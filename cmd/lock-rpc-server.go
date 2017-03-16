@@ -30,7 +30,7 @@ import (
 
 const (
 	// Lock rpc server endpoint.
-	lockRPCPath = "/minio/lock"
+	lockRPCPath = "/lock"
 
 	// Lock maintenance interval.
 	lockMaintenanceInterval = 1 * time.Minute // 1 minute.
@@ -122,8 +122,8 @@ func registerStorageLockers(mux *router.Router, lockServers []*lockServer) error
 		if err := lockRPCServer.RegisterName("Dsync", lockServer); err != nil {
 			return traceError(err)
 		}
-		lockRouter := mux.PathPrefix(reservedBucket).Subrouter()
-		lockRouter.Path(path.Join("/lock", lockServer.rpcPath)).Handler(lockRPCServer)
+		lockRouter := mux.PathPrefix(minioReservedBucketPath).Subrouter()
+		lockRouter.Path(path.Join(lockRPCPath, lockServer.rpcPath)).Handler(lockRPCServer)
 	}
 	return nil
 }

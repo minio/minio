@@ -1,5 +1,5 @@
 /*
- * Minio Browser (C) 2016 Minio, Inc.
+ * Minio Cloud Storage (C) 2016 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,7 +27,6 @@ import OverlayTrigger from 'react-bootstrap/lib/OverlayTrigger'
 import Tooltip from 'react-bootstrap/lib/Tooltip'
 import Dropdown from 'react-bootstrap/lib/Dropdown'
 import MenuItem from 'react-bootstrap/lib/MenuItem'
-
 import InputGroup from '../components/InputGroup'
 import Dropzone from '../components/Dropzone'
 import ObjectsList from '../components/ObjectsList'
@@ -227,14 +226,24 @@ export default class Browse extends React.Component {
   }
 
   removeObject() {
-    const {web, dispatch, currentPath, currentBucket, deleteConfirmation} = this.props
+    const {web, dispatch, currentPath, currentBucket, deleteConfirmation, checkedObjects} = this.props
+    let objects = checkedObjects.length > 0 ? checkedObjects : [deleteConfirmation.object]
+
     web.RemoveObject({
-      bucketName: currentBucket,
-      objectName: deleteConfirmation.object
+      bucketname: currentBucket,
+      objects: objects
     })
       .then(() => {
         this.hideDeleteConfirmation()
-        dispatch(actions.removeObject(deleteConfirmation.object))
+        if (checkedObjects.length > 0) {
+          for (let i = 0; i < checkedObjects.length; i++) {
+            dispatch(actions.removeObject(checkedObjects[i].replace(currentPath, '')))
+          }
+          dispatch(actions.checkedObjectsReset())
+        } else {
+          let delObject = deleteConfirmation.object.replace(currentPath, '')
+          dispatch(actions.removeObject(delObject))
+        }
       })
       .catch(e => dispatch(actions.showAlert({
         type: 'danger',
@@ -262,7 +271,8 @@ export default class Browse extends React.Component {
   shareObject(e, object) {
     e.preventDefault()
     const {dispatch} = this.props
-    dispatch(actions.shareObject(object))
+    // let expiry = 5 * 24 * 60 * 60 // 5 days expiry by default
+    dispatch(actions.shareObject(object, 5, 0, 0))
   }
 
   hideShareObjectModal() {
@@ -354,18 +364,46 @@ export default class Browse extends React.Component {
     this.refs.copyTextInput.select()
   }
 
-  handleExpireValue(targetInput, inc) {
+  handleExpireValue(targetInput, inc, object) {
     inc === -1 ? this.refs[targetInput].stepDown(1) : this.refs[targetInput].stepUp(1)
 
     if (this.refs.expireDays.value == 7) {
       this.refs.expireHours.value = 0
       this.refs.expireMins.value = 0
     }
+    if (this.refs.expireDays.value + this.refs.expireHours.value + this.refs.expireMins.value == 0) {
+      this.refs.expireDays.value = 7
+    }
+    const {dispatch} = this.props
+    dispatch(actions.shareObject(object, this.refs.expireDays.value, this.refs.expireHours.value, this.refs.expireMins.value))
+  }
+
+  checkObject(e, objectName) {
+    const {dispatch} = this.props
+    e.target.checked ? dispatch(actions.checkedObjectsAdd(objectName)) : dispatch(actions.checkedObjectsRemove(objectName))
+  }
+
+  downloadSelected() {
+    const {dispatch} = this.props
+    let req = {
+      bucketName: this.props.currentBucket,
+      objects: this.props.checkedObjects,
+      prefix: this.props.currentPath
+    }
+    let requestUrl = location.origin + "/minio/zip?token=" + localStorage.token
+
+    this.xhr = new XMLHttpRequest()
+    dispatch(actions.downloadSelected(requestUrl, req, this.xhr))
+  }
+
+  clearSelected() {
+    const {dispatch} = this.props
+    dispatch(actions.checkedObjectsReset())
   }
 
   render() {
     const {total, free} = this.props.storageInfo
-    const {showMakeBucketModal, alert, sortNameOrder, sortSizeOrder, sortDateOrder, showAbout, showBucketPolicy} = this.props
+    const {showMakeBucketModal, alert, sortNameOrder, sortSizeOrder, sortDateOrder, showAbout, showBucketPolicy, checkedObjects} = this.props
     const {version, memory, platform, runtime} = this.props.serverInfo
     const {sidebarStatus} = this.props
     const {showSettings} = this.props
@@ -435,7 +473,6 @@ export default class Browse extends React.Component {
                                 </li>
                               </ul>
                             </div>
-
     }
 
     let createButton = ''
@@ -490,6 +527,14 @@ export default class Browse extends React.Component {
           clickOutside={ this.hideSidebar.bind(this) }
           showPolicy={ this.showBucketPolicy.bind(this) } />
         <div className="fe-body">
+          <div className={ 'list-actions' + (classNames({
+                             ' list-actions-toggled': checkedObjects.length > 0
+                           })) }>
+            <span className="la-label"><i className="fa fa-check-circle" /> { checkedObjects.length } Objects selected</span>
+            <span className="la-actions pull-right"><button onClick={ this.downloadSelected.bind(this) }> Download all as zip </button></span>
+            <span className="la-actions pull-right"><button onClick={ this.showDeleteConfirmation.bind(this) }> Delete selected </button></span>
+            <i className="la-close fa fa-times" onClick={ this.clearSelected.bind(this) }></i>
+          </div>
           <Dropzone>
             { alertBox }
             <header className="fe-header-mobile hidden-lg hidden-md">
@@ -515,7 +560,8 @@ export default class Browse extends React.Component {
             </header>
             <div className="feb-container">
               <header className="fesl-row" data-type="folder">
-                <div className="fesl-item fi-name" onClick={ this.sortObjectsByName.bind(this) } data-sort="name">
+                <div className="fesl-item fesl-item-icon"></div>
+                <div className="fesl-item fesl-item-name" onClick={ this.sortObjectsByName.bind(this) } data-sort="name">
                   Name
                   <i className={ classNames({
                                    'fesli-sort': true,
@@ -524,7 +570,7 @@ export default class Browse extends React.Component {
                                    'fa-sort-alpha-asc': !sortNameOrder
                                  }) } />
                 </div>
-                <div className="fesl-item fi-size" onClick={ this.sortObjectsBySize.bind(this) } data-sort="size">
+                <div className="fesl-item fesl-item-size" onClick={ this.sortObjectsBySize.bind(this) } data-sort="size">
                   Size
                   <i className={ classNames({
                                    'fesli-sort': true,
@@ -533,7 +579,7 @@ export default class Browse extends React.Component {
                                    'fa-sort-amount-asc': !sortSizeOrder
                                  }) } />
                 </div>
-                <div className="fesl-item fi-modified" onClick={ this.sortObjectsByDate.bind(this) } data-sort="last-modified">
+                <div className="fesl-item fesl-item-modified" onClick={ this.sortObjectsByDate.bind(this) } data-sort="last-modified">
                   Last Modified
                   <i className={ classNames({
                                    'fesli-sort': true,
@@ -542,7 +588,7 @@ export default class Browse extends React.Component {
                                    'fa-sort-numeric-asc': !sortDateOrder
                                  }) } />
                 </div>
-                <div className="fesl-item fi-actions"></div>
+                <div className="fesl-item fesl-item-actions"></div>
               </header>
             </div>
             <div className="feb-container">
@@ -553,9 +599,11 @@ export default class Browse extends React.Component {
                 <ObjectsList dataType={ this.dataType.bind(this) }
                   selectPrefix={ this.selectPrefix.bind(this) }
                   showDeleteConfirmation={ this.showDeleteConfirmation.bind(this) }
-                  shareObject={ this.shareObject.bind(this) } />
+                  shareObject={ this.shareObject.bind(this) }
+                  checkObject={ this.checkObject.bind(this) }
+                  checkedObjectsArray={ checkedObjects } />
               </InfiniteScroll>
-              <div className="text-center" style={ { display: istruncated ? 'block' : 'none' } }>
+              <div className="text-center" style={ { display: (istruncated && currentBucket) ? 'block' : 'none' } }>
                 <span>Loading...</span>
               </div>
             </div>
@@ -673,7 +721,7 @@ export default class Browse extends React.Component {
                   </label>
                   <div className="set-expire">
                     <div className="set-expire-item">
-                      <i className="set-expire-increase" onClick={ this.handleExpireValue.bind(this, 'expireDays', 1) }></i>
+        <i className="set-expire-increase" onClick={ this.handleExpireValue.bind(this, 'expireDays', 1, shareObject.object) }></i>
                       <div className="set-expire-title">
                         Days
                       </div>
@@ -682,12 +730,12 @@ export default class Browse extends React.Component {
                           type="number"
                           min={ 0 }
                           max={ 7 }
-                          defaultValue={ 0 } />
+                          defaultValue={ 5 } />
                       </div>
-                      <i className="set-expire-decrease" onClick={ this.handleExpireValue.bind(this, 'expireDays', -1) }></i>
+        <i className="set-expire-decrease" onClick={ this.handleExpireValue.bind(this, 'expireDays', -1, shareObject.object) }></i>
                     </div>
                     <div className="set-expire-item">
-                      <i className="set-expire-increase" onClick={ this.handleExpireValue.bind(this, 'expireHours', 1) }></i>
+        <i className="set-expire-increase" onClick={ this.handleExpireValue.bind(this, 'expireHours', 1, shareObject.object) }></i>
                       <div className="set-expire-title">
                         Hours
                       </div>
@@ -695,30 +743,30 @@ export default class Browse extends React.Component {
                         <input ref="expireHours"
                           type="number"
                           min={ 0 }
-                          max={ 24 }
+                          max={ 23 }
                           defaultValue={ 0 } />
                       </div>
-                      <i className="set-expire-decrease" onClick={ this.handleExpireValue.bind(this, 'expireHours', -1) }></i>
+        <i className="set-expire-decrease" onClick={ this.handleExpireValue.bind(this, 'expireHours', -1, shareObject.object) }></i>
                     </div>
                     <div className="set-expire-item">
-                      <i className="set-expire-increase" onClick={ this.handleExpireValue.bind(this, 'expireMins', 1) }></i>
+        <i className="set-expire-increase" onClick={ this.handleExpireValue.bind(this, 'expireMins', 1, shareObject.object) }></i>
                       <div className="set-expire-title">
                         Minutes
                       </div>
                       <div className="set-expire-value">
                         <input ref="expireMins"
                           type="number"
-                          min={ 1 }
-                          max={ 60 }
-                          defaultValue={ 45 } />
+                          min={ 0 }
+                          max={ 59 }
+                          defaultValue={ 0 } />
                       </div>
-                      <i className="set-expire-decrease" onClick={ this.handleExpireValue.bind(this, 'expireMins', -1) }></i>
+        <i className="set-expire-decrease" onClick={ this.handleExpireValue.bind(this, 'expireMins', -1, shareObject.object) }></i>
                     </div>
-                  </div>
+        </div>
                 </div>
               </ModalBody>
               <div className="modal-footer">
-                <CopyToClipboard text={ shareObject.url } onCopy={ this.showMessage.bind(this) }>
+                <CopyToClipboard text={ window.location.protocol + '//' + shareObject.url } onCopy={ this.showMessage.bind(this) }>
                   <button className="btn btn-success">
                     Copy Link
                   </button>

@@ -40,7 +40,7 @@ var fsType2StringMap = map[string]string{
 func getFSType(ftype int64) string {
 	fsTypeHex := strconv.FormatInt(ftype, 16)
 	fsTypeString, ok := fsType2StringMap[fsTypeHex]
-	if ok == false {
+	if !ok {
 		return "UNKNOWN"
 	}
 	return fsTypeString

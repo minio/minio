@@ -367,7 +367,7 @@ func TestCheckServerSyntax(t *testing.T) {
 	app.Commands = []cli.Command{serverCmd}
 	serverFlagSet := flag.NewFlagSet("server", 0)
 	serverFlagSet.String("address", ":9000", "")
-	ctx := cli.NewContext(app, serverFlagSet, serverFlagSet)
+	ctx := cli.NewContext(app, serverFlagSet, nil)
 
 	disksGen := func(n int) []string {
 		disks, err := getRandomDisks(n)
@@ -458,7 +458,7 @@ func TestInitServer(t *testing.T) {
 	app.Commands = []cli.Command{serverCmd}
 	serverFlagSet := flag.NewFlagSet("server", 0)
 	serverFlagSet.String("address", ":9000", "")
-	ctx := cli.NewContext(app, serverFlagSet, serverFlagSet)
+	ctx := cli.NewContext(app, serverFlagSet, nil)
 
 	root, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {

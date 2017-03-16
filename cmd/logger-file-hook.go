@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"strings"
 
 	"github.com/Sirupsen/logrus"
 )
@@ -28,6 +29,14 @@ type fileLogger struct {
 	Enable   bool   `json:"enable"`
 	Filename string `json:"fileName"`
 	Level    string `json:"level"`
+}
+
+func (f *fileLogger) Validate() error {
+	level := strings.ToLower(f.Level)
+	if level != "error" && level != "fatal" && level != "" {
+		return fmt.Errorf("`%s` level value not recognized", f.Level)
+	}
+	return nil
 }
 
 type localFile struct {

@@ -248,6 +248,8 @@ type uploadMetadata struct {
 	Initiated time.Time
 
 	StorageClass string // Not supported yet.
+
+	HealUploadInfo *HealObjectInfo `xml:"HealUploadInfo,omitempty"`
 }
 
 // completePart - completed part container.

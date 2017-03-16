@@ -165,13 +165,7 @@ func (xl xlObjects) listBuckets() (bucketsInfo []BucketInfo, err error) {
 			// should take care of this.
 			var bucketsInfo []BucketInfo
 			for _, volInfo := range volsInfo {
-				// StorageAPI can send volume names which are incompatible
-				// with buckets, handle it and skip them.
-				if !IsValidBucketName(volInfo.Name) {
-					continue
-				}
-				// Ignore the volume special bucket.
-				if volInfo.Name == minioMetaBucket {
+				if isReservedOrInvalidBucket(volInfo.Name) {
 					continue
 				}
 				bucketsInfo = append(bucketsInfo, BucketInfo{

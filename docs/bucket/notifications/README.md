@@ -1,6 +1,7 @@
 # Minio Bucket Notification Guide [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
 
-Minio server supports Amazon S3 compatible bucket event notification for the following targets
+Changes in a bucket, such as object uploads and removal, can be monitored using bucket event notification
+mechanism and can be published to the following targets:
 
 | Notification Targets|
 |:---|
@@ -460,7 +461,7 @@ arn:minio:sqs:us-east-1:1:kafka s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: su
 We used [kafkacat](https://github.com/edenhill/kafkacat) to print all notifications on the console.
 
 ```
-kafkacat -b localhost:9092 -t bucketevents
+kafkacat -C -b localhost:9092 -t bucketevents
 ```
 
 Open another terminal and upload a JPEG image into ``images`` bucket.

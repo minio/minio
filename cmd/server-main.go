@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"os"
 	"path"
 	"sort"
 	"strconv"
@@ -30,13 +31,14 @@ import (
 	"runtime"
 
 	"github.com/minio/cli"
+	"github.com/minio/mc/pkg/console"
 )
 
 var serverFlags = []cli.Flag{
 	cli.StringFlag{
 		Name:  "address",
 		Value: ":9000",
-		Usage: `Bind to a specific IP:PORT. Defaults to ":9000".`,
+		Usage: "Bind to a specific ADDRESS:PORT, ADDRESS can be an IP or hostname.",
 	},
 }
 
@@ -46,10 +48,10 @@ var serverCmd = cli.Command{
 	Flags:  append(serverFlags, globalFlags...),
 	Action: serverMain,
 	CustomHelpTemplate: `NAME:
- {{.HelpName}} - {{.Usage}}
+  {{.HelpName}} - {{.Usage}}
 
 USAGE:
- {{.HelpName}} {{if .VisibleFlags}}[FLAGS] {{end}}PATH [PATH...]
+  {{.HelpName}} {{if .VisibleFlags}}[FLAGS] {{end}}PATH [PATH...]
 {{if .VisibleFlags}}
 FLAGS:
   {{range .VisibleFlags}}{{.}}
@@ -66,7 +68,7 @@ EXAMPLES:
   1. Start minio server on "/home/shared" directory.
       $ {{.HelpName}} /home/shared
 
-  2. Start minio server bound to a specific IP:PORT.
+  2. Start minio server bound to a specific ADDRESS:PORT.
       $ {{.HelpName}} --address 192.168.1.101:9000 /home/shared
 
   3. Start erasure coded minio server on a 12 disks server.
@@ -79,8 +81,112 @@ EXAMPLES:
       $ export MINIO_SECRET_KEY=miniostorage
       $ {{.HelpName}} http://192.168.1.11/mnt/export/ http://192.168.1.12/mnt/export/ \
           http://192.168.1.13/mnt/export/ http://192.168.1.14/mnt/export/
-
 `,
+}
+
+// Check for updates and print a notification message
+func checkUpdate(mode string) {
+	// Its OK to ignore any errors during getUpdateInfo() here.
+	if older, downloadURL, err := getUpdateInfo(1*time.Second, mode); err == nil {
+		if older > time.Duration(0) {
+			console.Println(colorizeUpdateMessage(downloadURL, older))
+		}
+	}
+}
+
+// envParams holds all env parameters
+type envParams struct {
+	creds   credential
+	browser string
+}
+
+func migrate() {
+	// Migrate config file
+	err := migrateConfig()
+	fatalIf(err, "Config migration failed.")
+
+	// Migrate other configs here.
+}
+
+func enableLoggers() {
+	// Enable all loggers here.
+	enableConsoleLogger()
+	enableFileLogger()
+	// Add your logger here.
+}
+
+// Initializes a new config if it doesn't exist, else migrates any old config
+// to newer config and finally loads the config to memory.
+func initConfig() {
+	accessKey := os.Getenv("MINIO_ACCESS_KEY")
+	secretKey := os.Getenv("MINIO_SECRET_KEY")
+
+	var cred credential
+	var err error
+	if accessKey != "" && secretKey != "" {
+		if cred, err = createCredential(accessKey, secretKey); err != nil {
+			console.Fatalf("Invalid access/secret Key set in environment. Err: %s.\n", err)
+		}
+
+		// credential Envs are set globally.
+		globalIsEnvCreds = true
+	}
+
+	browser := os.Getenv("MINIO_BROWSER")
+	if browser != "" {
+		if !(strings.EqualFold(browser, "off") || strings.EqualFold(browser, "on")) {
+			console.Fatalf("Invalid value ‘%s’ in MINIO_BROWSER environment variable.", browser)
+		}
+
+		// browser Envs are set globally, this doesn't represent
+		// if browser is turned off or on.
+		globalIsEnvBrowser = true
+	}
+
+	envs := envParams{
+		creds:   cred,
+		browser: browser,
+	}
+
+	// Config file does not exist, we create it fresh and return upon success.
+	if !isConfigFileExists() {
+		if err := newConfig(envs); err != nil {
+			console.Fatalf("Unable to initialize minio config for the first time. Error: %s.\n", err)
+		}
+		console.Println("Created minio configuration file successfully at " + getConfigDir())
+		return
+	}
+
+	// Migrate any old version of config / state files to newer format.
+	migrate()
+
+	// Validate config file
+	if err := validateConfig(); err != nil {
+		console.Fatalf("Cannot validate configuration file. Error: %s\n", err)
+	}
+
+	// Once we have migrated all the old config, now load them.
+	if err := loadConfig(envs); err != nil {
+		console.Fatalf("Unable to initialize minio config. Error: %s.\n", err)
+	}
+}
+
+// Generic Minio initialization to create/load config, prepare loggers, etc..
+func minioInit(ctx *cli.Context) {
+	// Create certs path.
+	fatalIf(createConfigDir(), "Unable to create \"certs\" directory.")
+
+	// Is TLS configured?.
+	globalIsSSL = isSSL()
+
+	// Initialize minio server config.
+	initConfig()
+
+	// Enable all loggers by now so we can use errorIf() and fatalIf()
+	enableLoggers()
+
+	// Init the error tracing module.
+	initError()
 }
 
 type serverCmdConfig struct {
@@ -133,22 +239,11 @@ func initServerConfig(c *cli.Context) {
 	// Initialization such as config generating/loading config, enable logging, ..
 	minioInit(c)
 
-	// Create certs path.
-	fatalIf(createCertsPath(), "Unable to create \"certs\" directory.")
-
 	// Load user supplied root CAs
-	loadRootCAs()
+	fatalIf(loadRootCAs(), "Unable to load a CA files")
 
-	// Set maxOpenFiles, This is necessary since default operating
-	// system limits of 1024, 2048 are not enough for Minio server.
-	setMaxOpenFiles()
-
-	// Set maxMemory, This is necessary since default operating
-	// system limits might be changed and we need to make sure we
-	// do not crash the server so the set the maxCacheSize appropriately.
-	setMaxMemory()
-
-	// Do not fail if this is not allowed, lower limits are fine as well.
+	// Set system resources to maximum.
+	errorIf(setMaxResources(), "Unable to change resource limit")
 }
 
 // Validate if input disks are sufficient for initializing XL.
@@ -367,11 +462,28 @@ func serverMain(c *cli.Context) {
 		cli.ShowCommandHelpAndExit(c, "server", 1)
 	}
 
+	// Get quiet flag from command line argument.
+	quietFlag := c.Bool("quiet") || c.GlobalBool("quiet")
+
+	// Get configuration directory from command line argument.
+	configDir := c.String("config-dir")
+	if !c.IsSet("config-dir") && c.GlobalIsSet("config-dir") {
+		configDir = c.GlobalString("config-dir")
+	}
+	if configDir == "" {
+		console.Fatalln("Configuration directory cannot be empty.")
+	}
+
+	// Set configuration directory.
+	setConfigDir(configDir)
+
+	// Start profiler if env is set.
+	if profiler := os.Getenv("_MINIO_PROFILER"); profiler != "" {
+		globalProfiler = startProfiler(profiler)
+	}
+
 	// Initializes server config, certs, logging and system settings.
 	initServerConfig(c)
-
-	// Check for new updates from dl.minio.io.
-	checkUpdate()
 
 	// Server address.
 	serverAddr := c.String("address")
@@ -421,6 +533,18 @@ func serverMain(c *cli.Context) {
 		globalIsXL = true
 	}
 
+	if !quietFlag {
+		// Check for new updates from dl.minio.io.
+		mode := globalMinioModeFS
+		if globalIsXL {
+			mode = globalMinioModeXL
+		}
+		if globalIsDistXL {
+			mode = globalMinioModeDistXL
+		}
+		checkUpdate(mode)
+	}
+
 	// Initialize name space lock.
 	initNSLock(globalIsDistXL)
 
@@ -451,7 +575,7 @@ func serverMain(c *cli.Context) {
 	go func() {
 		cert, key := "", ""
 		if globalIsSSL {
-			cert, key = mustGetCertFile(), mustGetKeyFile()
+			cert, key = getPublicCertFile(), getPrivateKeyFile()
 		}
 		fatalIf(apiServer.ListenAndServe(cert, key), "Failed to start minio server.")
 	}()
@@ -467,7 +591,9 @@ func serverMain(c *cli.Context) {
 	globalObjLayerMutex.Unlock()
 
 	// Prints the formatted startup message once object layer is initialized.
-	printStartupMessage(apiEndPoints)
+	if !quietFlag {
+		printStartupMessage(apiEndPoints)
+	}
 
 	// Set uptime time after object layer has initialized.
 	globalBootTime = time.Now().UTC()

@@ -39,45 +39,50 @@ func TestDoesPolicySignatureMatch(t *testing.T) {
 	accessKey := serverConfig.GetCredential().AccessKey
 
 	testCases := []struct {
-		form     map[string]string
+		form     http.Header
 		expected APIErrorCode
 	}{
 		// (0) It should fail if 'X-Amz-Credential' is missing.
 		{
-			form:     map[string]string{},
+			form:     http.Header{},
 			expected: ErrMissingFields,
 		},
 		// (1) It should fail if the access key is incorrect.
 		{
-			form: map[string]string{
-				"X-Amz-Credential": fmt.Sprintf(credentialTemplate, "EXAMPLEINVALIDEXAMPL", now.Format(yyyymmdd), globalMinioDefaultRegion),
+			form: http.Header{
+				"X-Amz-Credential": []string{fmt.Sprintf(credentialTemplate, "EXAMPLEINVALIDEXAMPL", now.Format(yyyymmdd), globalMinioDefaultRegion)},
 			},
 			expected: ErrInvalidAccessKeyID,
 		},
 		// (2) It should fail if the region is invalid.
 		{
-			form: map[string]string{
-				"X-Amz-Credential": fmt.Sprintf(credentialTemplate, accessKey, now.Format(yyyymmdd), "invalidregion"),
+			form: http.Header{
+				"X-Amz-Credential": []string{fmt.Sprintf(credentialTemplate, accessKey, now.Format(yyyymmdd), "invalidregion")},
 			},
 			expected: ErrInvalidRegion,
 		},
 		// (3) It should fail with a bad signature.
 		{
-			form: map[string]string{
-				"X-Amz-Credential": fmt.Sprintf(credentialTemplate, accessKey, now.Format(yyyymmdd), globalMinioDefaultRegion),
-				"X-Amz-Date":       now.Format(iso8601Format),
-				"X-Amz-Signature":  "invalidsignature",
-				"Policy":           "policy",
+			form: http.Header{
+				"X-Amz-Credential": []string{fmt.Sprintf(credentialTemplate, accessKey, now.Format(yyyymmdd), globalMinioDefaultRegion)},
+				"X-Amz-Date":       []string{now.Format(iso8601Format)},
+				"X-Amz-Signature":  []string{"invalidsignature"},
+				"Policy":           []string{"policy"},
 			},
 			expected: ErrSignatureDoesNotMatch,
 		},
 		// (4) It should succeed if everything is correct.
 		{
-			form: map[string]string{
-				"X-Amz-Credential": fmt.Sprintf(credentialTemplate, accessKey, now.Format(yyyymmdd), globalMinioDefaultRegion),
-				"X-Amz-Date":       now.Format(iso8601Format),
-				"X-Amz-Signature":  getSignature(getSigningKey(serverConfig.GetCredential().SecretKey, now, globalMinioDefaultRegion), "policy"),
-				"Policy":           "policy",
+			form: http.Header{
+				"X-Amz-Credential": []string{
+					fmt.Sprintf(credentialTemplate, accessKey, now.Format(yyyymmdd), globalMinioDefaultRegion),
+				},
+				"X-Amz-Date": []string{now.Format(iso8601Format)},
+				"X-Amz-Signature": []string{
+					getSignature(getSigningKey(serverConfig.GetCredential().SecretKey, now,
+						globalMinioDefaultRegion), "policy"),
+				},
+				"Policy": []string{"policy"},
 			},
 			expected: ErrNone,
 		},

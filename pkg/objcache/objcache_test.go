@@ -43,7 +43,11 @@ func TestObjExpiry(t *testing.T) {
 
 	// Test case 1 validates running of GC.
 	testCase := testCases[0]
-	cache := New(testCase.cacheSize, testCase.expiry)
+	cache, err := New(testCase.cacheSize, testCase.expiry)
+	if err != nil {
+		t.Fatalf("Unable to create new objcache")
+	}
+
 	cache.OnEviction = func(key string) {}
 	w, err := cache.Create("test", 1)
 	if err != nil {
@@ -126,15 +130,23 @@ func TestObjCache(t *testing.T) {
 
 	// Test 1 validating Open failure.
 	testCase := testCases[0]
-	cache := New(testCase.cacheSize, testCase.expiry)
-	_, err := cache.Open("test", fakeObjModTime)
+	cache, err := New(testCase.cacheSize, testCase.expiry)
+	if err != nil {
+		t.Fatalf("Unable to create new objcache")
+	}
+
+	_, err = cache.Open("test", fakeObjModTime)
 	if testCase.err != err {
 		t.Errorf("Test case 2 expected to pass, failed instead %s", err)
 	}
 
 	// Test 2 validating Create failure.
 	testCase = testCases[1]
-	cache = New(testCase.cacheSize, testCase.expiry)
+	cache, err = New(testCase.cacheSize, testCase.expiry)
+	if err != nil {
+		t.Fatalf("Unable to create new objcache")
+	}
+
 	_, err = cache.Create("test", 2)
 	if testCase.err != err {
 		t.Errorf("Test case 2 expected to pass, failed instead %s", err)
@@ -144,7 +156,11 @@ func TestObjCache(t *testing.T) {
 	// Subsequently we Close() without writing any data, to receive
 	// `io.ErrShortBuffer`
 	testCase = testCases[2]
-	cache = New(testCase.cacheSize, testCase.expiry)
+	cache, err = New(testCase.cacheSize, testCase.expiry)
+	if err != nil {
+		t.Fatalf("Unable to create new objcache")
+	}
+
 	w, err := cache.Create("test", 1)
 	if testCase.err != err {
 		t.Errorf("Test case 3 expected to pass, failed instead %s", err)
@@ -156,7 +172,11 @@ func TestObjCache(t *testing.T) {
 	// Test 4 validates Create and Close succeeds successfully caching
 	// the writes.
 	testCase = testCases[3]
-	cache = New(testCase.cacheSize, testCase.expiry)
+	cache, err = New(testCase.cacheSize, testCase.expiry)
+	if err != nil {
+		t.Fatalf("Unable to create new objcache")
+	}
+
 	w, err = cache.Create("test", 5)
 	if testCase.err != err {
 		t.Errorf("Test case 4 expected to pass, failed instead %s", err)
@@ -184,7 +204,11 @@ func TestObjCache(t *testing.T) {
 
 	// Test 5 validates Delete succeeds and Open fails with err
 	testCase = testCases[4]
-	cache = New(testCase.cacheSize, testCase.expiry)
+	cache, err = New(testCase.cacheSize, testCase.expiry)
+	if err != nil {
+		t.Fatalf("Unable to create new objcache")
+	}
+
 	w, err = cache.Create("test", 5)
 	if err != nil {
 		t.Errorf("Test case 5 expected to pass, failed instead %s", err)
@@ -204,7 +228,11 @@ func TestObjCache(t *testing.T) {
 
 	// Test 6 validates OnEviction being called upon Delete is being invoked.
 	testCase = testCases[5]
-	cache = New(testCase.cacheSize, testCase.expiry)
+	cache, err = New(testCase.cacheSize, testCase.expiry)
+	if err != nil {
+		t.Fatalf("Unable to create new objcache")
+	}
+
 	w, err = cache.Create("test", 5)
 	if err != nil {
 		t.Errorf("Test case 6 expected to pass, failed instead %s", err)
@@ -227,7 +255,11 @@ func TestObjCache(t *testing.T) {
 
 	// Test 7 validates rejecting requests when excess data is being saved.
 	testCase = testCases[6]
-	cache = New(testCase.cacheSize, testCase.expiry)
+	cache, err = New(testCase.cacheSize, testCase.expiry)
+	if err != nil {
+		t.Fatalf("Unable to create new objcache")
+	}
+
 	w, err = cache.Create("test1", 5)
 	if err != nil {
 		t.Errorf("Test case 7 expected to pass, failed instead %s", err)
@@ -245,7 +277,11 @@ func TestObjCache(t *testing.T) {
 
 	// Test 8 validates rejecting Writes which write excess data.
 	testCase = testCases[7]
-	cache = New(testCase.cacheSize, testCase.expiry)
+	cache, err = New(testCase.cacheSize, testCase.expiry)
+	if err != nil {
+		t.Fatalf("Unable to create new objcache")
+	}
+
 	w, err = cache.Create("test1", 5)
 	if err != nil {
 		t.Errorf("Test case 8 expected to pass, failed instead %s", err)
@@ -267,7 +303,11 @@ func TestObjCache(t *testing.T) {
 
 // TestStateEntryPurge - tests if objCache purges stale entry and returns ErrKeyNotFoundInCache.
 func TestStaleEntryPurge(t *testing.T) {
-	cache := New(1024, NoExpiry)
+	cache, err := New(1024, NoExpiry)
+	if err != nil {
+		t.Fatalf("Unable to create new objcache")
+	}
+
 	w, err := cache.Create("test", 5)
 	if err != nil {
 		t.Errorf("Test case expected to pass, failed instead %s", err)

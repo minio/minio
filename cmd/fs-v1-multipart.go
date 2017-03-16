@@ -278,7 +278,7 @@ func (fs fsObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 			}
 
 			entry := strings.TrimPrefix(walkResult.entry, retainSlash(bucket))
-			if strings.HasSuffix(walkResult.entry, slashSeparator) {
+			if hasSuffix(walkResult.entry, slashSeparator) {
 				uploads = append(uploads, uploadMetadata{
 					Object: entry,
 				})
@@ -314,7 +314,7 @@ func (fs fsObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 	for _, upload := range uploads {
 		var objectName string
 		var uploadID string
-		if strings.HasSuffix(upload.Object, slashSeparator) {
+		if hasSuffix(upload.Object, slashSeparator) {
 			// All directory entries are common prefixes.
 			uploadID = "" // Upload ids are empty for CommonPrefixes.
 			objectName = upload.Object
@@ -463,7 +463,6 @@ func (fs fsObjects) CopyObjectPart(srcBucket, srcObject, dstBucket, dstObject, u
 	pipeReader, pipeWriter := io.Pipe()
 
 	go func() {
-		startOffset := int64(0) // Read the whole file.
 		if gerr := fs.GetObject(srcBucket, srcObject, startOffset, length, pipeWriter); gerr != nil {
 			errorIf(gerr, "Unable to read %s/%s.", srcBucket, srcObject)
 			pipeWriter.CloseWithError(gerr)
@@ -864,7 +863,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 			multipartPartFile := pathJoin(fs.fsPath, minioMetaMultipartBucket, uploadIDPath, partSuffix)
 
 			var reader io.ReadCloser
-			offset := int64(0)
+			var offset int64
 			reader, _, err = fsOpenFile(multipartPartFile, offset)
 			if err != nil {
 				fs.rwPool.Close(fsMetaPathMultipart)

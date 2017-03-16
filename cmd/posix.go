@@ -24,7 +24,6 @@ import (
 	slashpath "path"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -41,11 +40,9 @@ const (
 
 // posix - implements StorageAPI interface.
 type posix struct {
-	ioErrCount    int32 // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
-	diskPath      string
-	minFreeSpace  int64
-	minFreeInodes int64
-	pool          sync.Pool
+	ioErrCount int32 // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
+	diskPath   string
+	pool       sync.Pool
 }
 
 // checkPathLength - returns error if given path name length more than 255
@@ -110,9 +107,7 @@ func newPosix(path string) (StorageAPI, error) {
 		return nil, err
 	}
 	fs := &posix{
-		diskPath:      diskPath,
-		minFreeSpace:  fsMinFreeSpace,
-		minFreeInodes: fsMinFreeInodes,
+		diskPath: diskPath,
 		// 1MiB buffer pool for posix internal operations.
 		pool: sync.Pool{
 			New: func() interface{} {
@@ -133,9 +128,6 @@ func newPosix(path string) (StorageAPI, error) {
 		if err != nil {
 			return nil, err
 		}
-	}
-	if err = fs.checkDiskFree(); err != nil {
-		return nil, err
 	}
 	return fs, nil
 }
@@ -162,7 +154,7 @@ var ignoreDiskFreeOS = []string{
 }
 
 // checkDiskFree verifies if disk path has sufficient minimum free disk space and files.
-func (s *posix) checkDiskFree() (err error) {
+func checkDiskFree(diskPath string, neededSpace int64) (err error) {
 	// We don't validate disk space or inode utilization on windows.
 	// Each windows calls to 'GetVolumeInformationW' takes around 3-5seconds.
 	// And StatFS is not supported by Go for solaris and netbsd.
@@ -171,14 +163,14 @@ func (s *posix) checkDiskFree() (err error) {
 	}
 
 	var di disk.Info
-	di, err = getDiskInfo(preparePath(s.diskPath))
+	di, err = getDiskInfo(preparePath(diskPath))
 	if err != nil {
 		return err
 	}
 
 	// Remove 5% from free space for cumulative disk space used for journalling, inodes etc.
 	availableDiskSpace := float64(di.Free) * 0.95
-	if int64(availableDiskSpace) <= s.minFreeSpace {
+	if int64(availableDiskSpace) <= fsMinFreeSpace {
 		return errDiskFull
 	}
 
@@ -188,9 +180,14 @@ func (s *posix) checkDiskFree() (err error) {
 	// total inodes are provided by the underlying filesystem.
 	if di.Files != 0 && di.FSType != "NFS" {
 		availableFiles := int64(di.Ffree)
-		if availableFiles <= s.minFreeInodes {
+		if availableFiles <= fsMinFreeInodes {
 			return errDiskFull
 		}
+	}
+
+	// Check if we have enough space to store data
+	if neededSpace > int64(availableDiskSpace) {
+		return errDiskFull
 	}
 
 	// Success.
@@ -319,7 +316,7 @@ func listVols(dirPath string) ([]VolInfo, error) {
 	}
 	var volsInfo []VolInfo
 	for _, entry := range entries {
-		if !strings.HasSuffix(entry, slashSeparator) || !isValidVolname(slashpath.Clean(entry)) {
+		if !hasSuffix(entry, slashSeparator) || !isValidVolname(slashpath.Clean(entry)) {
 			// Skip if entry is neither a directory not a valid volume name.
 			continue
 		}
@@ -677,7 +674,7 @@ func (s *posix) PrepareFile(volume, path string, fileSize int64) (err error) {
 	}
 
 	// Validate if disk is indeed free.
-	if err = s.checkDiskFree(); err != nil {
+	if err = checkDiskFree(s.diskPath, fileSize); err != nil {
 		return err
 	}
 
@@ -917,8 +914,8 @@ func (s *posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err e
 		}
 	}
 
-	srcIsDir := strings.HasSuffix(srcPath, slashSeparator)
-	dstIsDir := strings.HasSuffix(dstPath, slashSeparator)
+	srcIsDir := hasSuffix(srcPath, slashSeparator)
+	dstIsDir := hasSuffix(dstPath, slashSeparator)
 	// Either src and dst have to be directories or files, else return error.
 	if !(srcIsDir && dstIsDir || !srcIsDir && !dstIsDir) {
 		return errFileAccessDenied

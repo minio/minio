@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"strings"
 	"testing"
 	"time"
 )
@@ -26,10 +25,10 @@ import (
 func TestHumanizedDuration(t *testing.T) {
 	duration := time.Duration(90487000000000)
 	humanDuration := timeDurationToHumanizedDuration(duration)
-	if !strings.HasSuffix(humanDuration.String(), "seconds") {
+	if !hasSuffix(humanDuration.String(), "seconds") {
 		t.Fatal("Stringer method for humanized duration should have seconds.", humanDuration.String())
 	}
-	if strings.HasSuffix(humanDuration.StringShort(), "seconds") {
+	if hasSuffix(humanDuration.StringShort(), "seconds") {
 		t.Fatal("StringShorter method for humanized duration should not have seconds.", humanDuration.StringShort())
 	}
 
@@ -42,9 +41,9 @@ func TestHumanizedDuration(t *testing.T) {
 		t.Fatalf("Expected %#v, got %#v incorrect conversion of duration to humanized form",
 			expectedHumanSecDuration, humanSecDuration)
 	}
-	if strings.HasSuffix(humanSecDuration.String(), "days") ||
-		strings.HasSuffix(humanSecDuration.String(), "hours") ||
-		strings.HasSuffix(humanSecDuration.String(), "minutes") {
+	if hasSuffix(humanSecDuration.String(), "days") ||
+		hasSuffix(humanSecDuration.String(), "hours") ||
+		hasSuffix(humanSecDuration.String(), "minutes") {
 		t.Fatal("Stringer method for humanized duration should have only seconds.", humanSecDuration.String())
 	}
 
@@ -57,7 +56,7 @@ func TestHumanizedDuration(t *testing.T) {
 		t.Fatalf("Expected %#v, got %#v incorrect conversion of duration to humanized form",
 			expectedHumanMinDuration, humanMinDuration)
 	}
-	if strings.HasSuffix(humanMinDuration.String(), "hours") {
+	if hasSuffix(humanMinDuration.String(), "hours") {
 		t.Fatal("Stringer method for humanized duration should have only minutes.", humanMinDuration.String())
 	}
 
@@ -70,7 +69,7 @@ func TestHumanizedDuration(t *testing.T) {
 		t.Fatalf("Expected %#v, got %#v incorrect conversion of duration to humanized form",
 			expectedHumanHourDuration, humanHourDuration)
 	}
-	if strings.HasSuffix(humanHourDuration.String(), "days") {
+	if hasSuffix(humanHourDuration.String(), "days") {
 		t.Fatal("Stringer method for humanized duration should have hours.", humanHourDuration.String())
 	}
 }

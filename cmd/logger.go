@@ -47,6 +47,20 @@ type logger struct {
 
 /// Logger related.
 
+// Validate logger contents
+func (l *logger) Validate() error {
+	if l == nil {
+		return nil
+	}
+	if err := l.Console.Validate(); err != nil {
+		return fmt.Errorf("`Console` field: %s", err.Error())
+	}
+	if err := l.File.Validate(); err != nil {
+		return fmt.Errorf("`File` field: %s", err.Error())
+	}
+	return nil
+}
+
 // SetFile set new file logger.
 func (l *logger) SetFile(flogger fileLogger) {
 	l.Lock()
@@ -119,6 +133,7 @@ func fatalIf(err error, msg string, data ...interface{}) {
 	if e, ok := err.(*Error); ok {
 		fields["stack"] = strings.Join(e.Trace(), " ")
 	}
+
 	for _, log := range log.loggers {
 		log.WithFields(fields).Fatalf(msg, data...)
 	}

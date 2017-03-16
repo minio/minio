@@ -21,7 +21,6 @@ import (
 	"io/ioutil"
 	"reflect"
 	"sort"
-	"strings"
 	"testing"
 	"time"
 )
@@ -187,7 +186,7 @@ func TestTreeWalk(t *testing.T) {
 	}
 
 	isLeaf := func(volume, prefix string) bool {
-		return !strings.HasSuffix(prefix, slashSeparator)
+		return !hasSuffix(prefix, slashSeparator)
 	}
 	listDir := listDirFactory(isLeaf, xlTreeWalkIgnoredErrs, disk)
 	// Simple test for prefix based walk.
@@ -225,7 +224,7 @@ func TestTreeWalkTimeout(t *testing.T) {
 	}
 
 	isLeaf := func(volume, prefix string) bool {
-		return !strings.HasSuffix(prefix, slashSeparator)
+		return !hasSuffix(prefix, slashSeparator)
 	}
 	listDir := listDirFactory(isLeaf, xlTreeWalkIgnoredErrs, disk)
 
@@ -304,7 +303,7 @@ func TestListDir(t *testing.T) {
 
 	// create listDir function.
 	listDir := listDirFactory(func(volume, prefix string) bool {
-		return !strings.HasSuffix(prefix, slashSeparator)
+		return !hasSuffix(prefix, slashSeparator)
 	}, xlTreeWalkIgnoredErrs, disk1, disk2)
 
 	// Create file1 in fsDir1 and file2 in fsDir2.
@@ -376,7 +375,7 @@ func TestRecursiveTreeWalk(t *testing.T) {
 
 	// Simple isLeaf check, returns true if there is no trailing "/"
 	isLeaf := func(volume, prefix string) bool {
-		return !strings.HasSuffix(prefix, slashSeparator)
+		return !hasSuffix(prefix, slashSeparator)
 	}
 
 	// Create listDir function.
@@ -486,7 +485,7 @@ func TestSortedness(t *testing.T) {
 
 	// Simple isLeaf check, returns true if there is no trailing "/"
 	isLeaf := func(volume, prefix string) bool {
-		return !strings.HasSuffix(prefix, slashSeparator)
+		return !hasSuffix(prefix, slashSeparator)
 	}
 	// Create listDir function.
 	listDir := listDirFactory(isLeaf, xlTreeWalkIgnoredErrs, disk1)
@@ -563,7 +562,7 @@ func TestTreeWalkIsEnd(t *testing.T) {
 	}
 
 	isLeaf := func(volume, prefix string) bool {
-		return !strings.HasSuffix(prefix, slashSeparator)
+		return !hasSuffix(prefix, slashSeparator)
 	}
 	// Create listDir function.
 	listDir := listDirFactory(isLeaf, xlTreeWalkIgnoredErrs, disk1)

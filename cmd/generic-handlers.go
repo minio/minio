@@ -20,7 +20,6 @@ import (
 	"bufio"
 	"net"
 	"net/http"
-	"path"
 	"strings"
 	"time"
 
@@ -47,9 +46,9 @@ func registerHandlers(mux *router.Router, handlerFns ...HandlerFunc) http.Handle
 // which is more than enough to accommodate any form data fields and headers.
 const requestFormDataSize = 64 * humanize.MiByte
 
-// For any HTTP request, request body should be not more than 5GiB + requestFormDataSize
-// where, 5GiB is the maximum allowed object size for object upload.
-const requestMaxBodySize = 5*humanize.GiByte + requestFormDataSize
+// For any HTTP request, request body should be not more than 16GiB + requestFormDataSize
+// where, 16GiB is the maximum allowed object size for object upload.
+const requestMaxBodySize = globalMaxObjectSize + requestFormDataSize
 
 type requestSizeLimitHandler struct {
 	handler     http.Handler
@@ -68,7 +67,8 @@ func (h requestSizeLimitHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 
 // Reserved bucket.
 const (
-	reservedBucket = "/minio"
+	minioReservedBucket     = "minio"
+	minioReservedBucketPath = "/" + minioReservedBucket
 )
 
 // Adds redirect rules for incoming requests.
@@ -86,8 +86,8 @@ func setBrowserRedirectHandler(h http.Handler) http.Handler {
 // serves only limited purpose on redirect-handler for
 // browser requests.
 func getRedirectLocation(urlPath string) (rLocation string) {
-	if urlPath == reservedBucket {
-		rLocation = reservedBucket + "/"
+	if urlPath == minioReservedBucketPath {
+		rLocation = minioReservedBucketPath + "/"
 	}
 	if contains([]string{
 		"/",
@@ -95,7 +95,7 @@ func getRedirectLocation(urlPath string) (rLocation string) {
 		"/login",
 		"/favicon.ico",
 	}, urlPath) {
-		rLocation = reservedBucket + urlPath
+		rLocation = minioReservedBucketPath + urlPath
 	}
 	return rLocation
 }
@@ -143,8 +143,8 @@ func setBrowserCacheControlHandler(h http.Handler) http.Handler {
 func (h cacheControlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method == httpGET && guessIsBrowserReq(r) && globalIsBrowserEnabled {
 		// For all browser requests set appropriate Cache-Control policies
-		if hasPrefix(r.URL.Path, reservedBucket+"/") {
-			if hasSuffix(r.URL.Path, ".js") || r.URL.Path == reservedBucket+"/favicon.ico" {
+		if hasPrefix(r.URL.Path, minioReservedBucketPath+"/") {
+			if hasSuffix(r.URL.Path, ".js") || r.URL.Path == minioReservedBucketPath+"/favicon.ico" {
 				// For assets set cache expiry of one year. For each release, the name
 				// of the asset name will change and hence it can not be served from cache.
 				w.Header().Set("Cache-Control", "max-age=31536000")
@@ -160,17 +160,17 @@ func (h cacheControlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // Adds verification for incoming paths.
 type minioPrivateBucketHandler struct {
-	handler        http.Handler
-	reservedBucket string
+	handler http.Handler
 }
 
 func setPrivateBucketHandler(h http.Handler) http.Handler {
-	return minioPrivateBucketHandler{handler: h, reservedBucket: reservedBucket}
+	return minioPrivateBucketHandler{h}
 }
 
 func (h minioPrivateBucketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// For all non browser requests, reject access to 'reservedBucket'.
-	if !guessIsBrowserReq(r) && path.Clean(r.URL.Path) == reservedBucket {
+	// For all non browser requests, reject access to 'minioReservedBucketPath'.
+	bucketName, _ := urlPath2BucketObjectName(r.URL)
+	if !guessIsBrowserReq(r) && isMinioReservedBucket(bucketName) && isMinioMetaBucket(bucketName) {
 		writeErrorResponse(w, ErrAllAccessDisabled, r.URL)
 		return
 	}
@@ -350,7 +350,7 @@ func (h resourceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	// A put method on path "/" doesn't make sense, ignore it.
-	if r.Method == httpPUT && r.URL.Path == "/" {
+	if r.Method == httpPUT && r.URL.Path == "/" && r.Header.Get(minioAdminOpHeader) == "" {
 		writeErrorResponse(w, ErrNotImplemented, r.URL)
 		return
 	}

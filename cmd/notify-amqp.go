@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"io/ioutil"
+	"net"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/streadway/amqp"
@@ -37,6 +38,16 @@ type amqpNotify struct {
 	Internal     bool   `json:"internal"`
 	NoWait       bool   `json:"noWait"`
 	AutoDeleted  bool   `json:"autoDeleted"`
+}
+
+func (a *amqpNotify) Validate() error {
+	if !a.Enable {
+		return nil
+	}
+	if _, err := checkURL(a.URL); err != nil {
+		return err
+	}
+	return nil
 }
 
 type amqpConn struct {
@@ -87,7 +98,14 @@ func (q amqpConn) Fire(entry *logrus.Entry) error {
 	ch, err := q.Connection.Channel()
 	if err != nil {
 		// Any other error other than connection closed, return.
-		if err != amqp.ErrClosed {
+		isClosedErr := false
+		if neterr, ok := err.(*net.OpError); ok &&
+			neterr.Err.Error() == "use of closed network connection" {
+			isClosedErr = true
+		} else if err == amqp.ErrClosed {
+			isClosedErr = true
+		}
+		if !isClosedErr {
 			return err
 		}
 		// Attempt to connect again.

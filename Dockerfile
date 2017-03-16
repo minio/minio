@@ -1,16 +1,18 @@
-FROM golang:1.7-alpine
+FROM alpine:3.5
 
-WORKDIR /go/src/app
+ENV GOPATH /go
+ENV PATH $PATH:$GOPATH/bin
+ENV CGO_ENABLED 0
 
-COPY . /go/src/app
+WORKDIR /go/src/github.com/minio/
 
-RUN \
-	apk add --no-cache git && \
-	go-wrapper download && \
-	go-wrapper install -ldflags "-X github.com/minio/minio/cmd.Version=2017-02-16T01:47:30Z -X github.com/minio/minio/cmd.ReleaseTag=RELEASE.2017-02-16T01-47-30Z -X github.com/minio/minio/cmd.CommitID=3d98311d9f4ceb78dba996dcdc0751253241e697" && \
-	mkdir -p /export/docker && \
-	rm -rf /go/pkg /go/src && \
-	apk del git
+RUN  \
+     apk add --no-cache ca-certificates && \
+     apk add --no-cache --virtual .build-deps git go musl-dev && \
+     go get -v -d github.com/minio/minio && \
+     cd /go/src/github.com/minio/minio && \
+     go install -v -ldflags "$(go run buildscripts/gen-ldflags.go)" && \
+     rm -rf /go/pkg /go/src /usr/local/go && apk del .build-deps
 
 EXPOSE 9000
 ENTRYPOINT ["minio"]

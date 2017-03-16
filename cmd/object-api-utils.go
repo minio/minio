@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"io"
 	"path"
-	"regexp"
 	"runtime"
 	"strings"
 	"unicode/utf8"
@@ -38,11 +37,9 @@ const (
 	minioMetaMultipartBucket = minioMetaBucket + "/" + mpartMetaPrefix
 	// Minio Tmp meta prefix.
 	minioMetaTmpBucket = minioMetaBucket + "/tmp"
+	// DNS separator (period), used for bucket name validation.
+	dnsDelimiter = "."
 )
-
-// validBucket regexp.
-var validBucket = regexp.MustCompile(`^[a-z0-9][a-z0-9\.\-]{1,61}[a-z0-9]$`)
-var isIPAddress = regexp.MustCompile(`^(\d+\.){3}\d+$`)
 
 // isMinioBucket returns true if given bucket is a Minio internal
 // bucket and false otherwise.
@@ -52,10 +49,13 @@ func isMinioMetaBucketName(bucket string) bool {
 		bucket == minioMetaTmpBucket
 }
 
-// IsValidBucketName verifies a bucket name in accordance with Amazon's
-// requirements. It must be 3-63 characters long, can contain dashes
-// and periods, but must begin and end with a lowercase letter or a number.
-// See: http://docs.aws.amazon.com/AmazonS3/latest/dev/BucketRestrictions.html
+// IsValidBucketName verifies that a bucket name is in accordance with
+// Amazon's requirements (i.e. DNS naming conventions). It must be 3-63
+// characters long, and it must be a sequence of one or more labels
+// separated by periods. Each label can contain lowercase ascii
+// letters, decimal digits and hyphens, but must not begin or end with
+// a hyphen. See:
+// http://docs.aws.amazon.com/AmazonS3/latest/dev/BucketRestrictions.html
 func IsValidBucketName(bucket string) bool {
 	// Special case when bucket is equal to one of the meta buckets.
 	if isMinioMetaBucketName(bucket) {
@@ -64,12 +64,39 @@ func IsValidBucketName(bucket string) bool {
 	if len(bucket) < 3 || len(bucket) > 63 {
 		return false
 	}
-	if bucket[0] == '.' || bucket[len(bucket)-1] == '.' {
-		return false
+
+	// Split on dot and check each piece conforms to rules.
+	allNumbers := true
+	pieces := strings.Split(bucket, dnsDelimiter)
+	for _, piece := range pieces {
+		if len(piece) == 0 || piece[0] == '-' ||
+			piece[len(piece)-1] == '-' {
+			// Current piece has 0-length or starts or
+			// ends with a hyphen.
+			return false
+		}
+		// Now only need to check if each piece is a valid
+		// 'label' in AWS terminology and if the bucket looks
+		// like an IP address.
+		isNotNumber := false
+		for i := 0; i < len(piece); i++ {
+			switch {
+			case (piece[i] >= 'a' && piece[i] <= 'z' ||
+				piece[i] == '-'):
+				// Found a non-digit character, so
+				// this piece is not a number.
+				isNotNumber = true
+			case piece[i] >= '0' && piece[i] <= '9':
+				// Nothing to do.
+			default:
+				// Found invalid character.
+				return false
+			}
+		}
+		allNumbers = allNumbers && !isNotNumber
 	}
-	return (validBucket.MatchString(bucket) &&
-		!isIPAddress.MatchString(bucket) &&
-		!strings.Contains(bucket, ".."))
+	// Does the bucket name look like an IP address?
+	return !(len(pieces) == 4 && allNumbers)
 }
 
 // IsValidObjectName verifies an object name in accordance with Amazon's
@@ -129,7 +156,7 @@ func retainSlash(s string) string {
 func pathJoin(elem ...string) string {
 	trailingSlash := ""
 	if len(elem) > 0 {
-		if strings.HasSuffix(elem[len(elem)-1], slashSeparator) {
+		if hasSuffix(elem[len(elem)-1], slashSeparator) {
 			trailingSlash = "/"
 		}
 	}
@@ -164,7 +191,7 @@ func getCompleteMultipartMD5(parts []completePart) (string, error) {
 // For example on windows since its case insensitive we are supposed
 // to do case insensitive checks.
 func hasPrefix(s string, prefix string) bool {
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == globalWindowsOSName {
 		return strings.HasPrefix(strings.ToLower(s), strings.ToLower(prefix))
 	}
 	return strings.HasPrefix(s, prefix)
@@ -174,10 +201,37 @@ func hasPrefix(s string, prefix string) bool {
 // For example on windows since its case insensitive we are supposed
 // to do case insensitive checks.
 func hasSuffix(s string, suffix string) bool {
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == globalWindowsOSName {
 		return strings.HasSuffix(strings.ToLower(s), strings.ToLower(suffix))
 	}
 	return strings.HasSuffix(s, suffix)
+}
+
+// Validates if two strings are equal.
+func isStringEqual(s1 string, s2 string) bool {
+	if runtime.GOOS == globalWindowsOSName {
+		return strings.EqualFold(s1, s2)
+	}
+	return s1 == s2
+}
+
+// Ignores all reserved bucket names or invalid bucket names.
+func isReservedOrInvalidBucket(bucketEntry string) bool {
+	bucketEntry = strings.TrimSuffix(bucketEntry, slashSeparator)
+	if !IsValidBucketName(bucketEntry) {
+		return true
+	}
+	return isMinioMetaBucket(bucketEntry) || isMinioReservedBucket(bucketEntry)
+}
+
+// Returns true if input bucket is a reserved minio meta bucket '.minio.sys'.
+func isMinioMetaBucket(bucketName string) bool {
+	return bucketName == minioMetaBucket
+}
+
+// Returns true if input bucket is a reserved minio bucket 'minio'.
+func isMinioReservedBucket(bucketName string) bool {
+	return bucketName == minioReservedBucket
 }
 
 // byBucketName is a collection satisfying sort.Interface.

@@ -127,14 +127,23 @@ func newXLObjects(storageDisks []StorageAPI) (ObjectLayer, error) {
 		listPool:     listPool,
 	}
 
-	// Object cache is enabled when _MINIO_CACHE env is missing.
-	// and cache size is > 0.
-	xl.objCacheEnabled = !objCacheDisabled && globalMaxCacheSize > 0
+	// Get cache size if _MINIO_CACHE environment variable is set.
+	var maxCacheSize uint64
+	if !objCacheDisabled {
+		maxCacheSize, err = GetMaxCacheSize()
+		errorIf(err, "Unable to get maximum cache size")
+
+		// Enable object cache if cache size is more than zero
+		xl.objCacheEnabled = maxCacheSize > 0
+	}
 
 	// Check if object cache is enabled.
 	if xl.objCacheEnabled {
 		// Initialize object cache.
-		objCache := objcache.New(globalMaxCacheSize, globalCacheExpiry)
+		objCache, oerr := objcache.New(maxCacheSize, objcache.DefaultExpiry)
+		if oerr != nil {
+			return nil, oerr
+		}
 		objCache.OnEviction = func(key string) {
 			debug.FreeOSMemory()
 		}
@@ -142,7 +151,7 @@ func newXLObjects(storageDisks []StorageAPI) (ObjectLayer, error) {
 	}
 
 	// Initialize meta volume, if volume already exists ignores it.
-	if err = initMetaVolume(storageDisks); err != nil {
+	if err = initMetaVolume(xl.storageDisks); err != nil {
 		return nil, fmt.Errorf("Unable to initialize '.minio.sys' meta volume, %s", err)
 	}
 
@@ -152,12 +161,7 @@ func newXLObjects(storageDisks []StorageAPI) (ObjectLayer, error) {
 	xl.writeQuorum = writeQuorum
 
 	// Do a quick heal on the buckets themselves for any discrepancies.
-	if err := quickHeal(xl.storageDisks, xl.writeQuorum, xl.readQuorum); err != nil {
-		return xl, err
-	}
-
-	// Return successfully initialized object layer.
-	return xl, nil
+	return xl, quickHeal(xl.storageDisks, xl.writeQuorum, xl.readQuorum)
 }
 
 // Shutdown function for object storage interface.

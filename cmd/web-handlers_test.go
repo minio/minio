@@ -265,6 +265,8 @@ func testMakeBucketWebHandler(obj ObjectLayer, instanceType string, t TestErrHan
 		{"", false},
 		{".", false},
 		{"ab", false},
+		{"minio", false},
+		{".minio.sys", false},
 		{bucketName, true},
 	}
 
@@ -468,7 +470,14 @@ func testRemoveObjectWebHandler(obj ObjectLayer, instanceType string, t TestErrH
 		t.Fatalf("Was not able to upload an object, %v", err)
 	}
 
-	removeObjectRequest := RemoveObjectArgs{BucketName: bucketName, ObjectName: objectName}
+	objectName = "a/object"
+	_, err = obj.PutObject(bucketName, objectName, int64(len(data)), bytes.NewReader(data),
+		map[string]string{"md5Sum": "c9a34cfc85d982698c6ac89f76071abd"}, "")
+	if err != nil {
+		t.Fatalf("Was not able to upload an object, %v", err)
+	}
+
+	removeObjectRequest := RemoveObjectArgs{BucketName: bucketName, Objects: []string{"a/", "object"}}
 	removeObjectReply := &WebGenericRep{}
 	req, err := newTestWebRPCRequest("Web.RemoveObject", authorization, removeObjectRequest)
 	if err != nil {
@@ -483,7 +492,7 @@ func testRemoveObjectWebHandler(obj ObjectLayer, instanceType string, t TestErrH
 		t.Fatalf("Failed, %v", err)
 	}
 
-	removeObjectRequest = RemoveObjectArgs{BucketName: bucketName, ObjectName: objectName}
+	removeObjectRequest = RemoveObjectArgs{BucketName: bucketName, Objects: []string{"a/", "object"}}
 	removeObjectReply = &WebGenericRep{}
 	req, err = newTestWebRPCRequest("Web.RemoveObject", authorization, removeObjectRequest)
 	if err != nil {
@@ -687,7 +696,7 @@ func testUploadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler
 		t.Fatalf("Failed, %v", err)
 	}
 
-	if bytes.Compare(byteBuffer.Bytes(), content) != 0 {
+	if !bytes.Equal(byteBuffer.Bytes(), content) {
 		t.Fatalf("The upload file is different from the download file")
 	}
 
@@ -773,7 +782,7 @@ func testDownloadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandl
 		t.Fatalf("Expected the response status to be 200, but instead found `%d`", code)
 	}
 
-	if bytes.Compare(bodyContent, content) != 0 {
+	if !bytes.Equal(bodyContent, content) {
 		t.Fatalf("The downloaded file is corrupted")
 	}
 
@@ -796,7 +805,7 @@ func testDownloadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandl
 		t.Fatalf("Expected the response status to be 200, but instead found `%d`", code)
 	}
 
-	if bytes.Compare(bodyContent, content) != 0 {
+	if !bytes.Equal(bodyContent, content) {
 		t.Fatalf("The downloaded file is corrupted")
 	}
 }
@@ -849,7 +858,7 @@ func testWebHandlerDownloadZip(obj ObjectLayer, instanceType string, t TestErrHa
 			return 0, nil
 		}
 		var req *http.Request
-		req, err = http.NewRequest("GET", path, bytes.NewBuffer(argsData))
+		req, err = http.NewRequest("POST", path, bytes.NewBuffer(argsData))
 
 		if err != nil {
 			t.Fatalf("Cannot create upload request, %v", err)
@@ -1127,13 +1136,13 @@ func testWebListAllBucketPoliciesHandler(obj ObjectLayer, instanceType string, t
 		t.Fatal("Unexpected error: ", err)
 	}
 
-	testCaseResult1 := []bucketAccessPolicy{{
+	testCaseResult1 := []BucketAccessPolicy{{
 		Prefix: bucketName + "/hello*",
 		Policy: policy.BucketPolicyReadWrite,
 	}}
 	testCases := []struct {
 		bucketName     string
-		expectedResult []bucketAccessPolicy
+		expectedResult []BucketAccessPolicy
 	}{
 		{bucketName, testCaseResult1},
 	}
@@ -1413,6 +1422,12 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 	// Executing the object layer tests for XL.
 	defer removeRoots(fsDirs)
 
+	bucketName := "mybucket"
+	err = obj.MakeBucket(bucketName)
+	if err != nil {
+		t.Fatal("Cannot make bucket:", err)
+	}
+
 	// Set faulty disks to XL backend
 	xl := obj.(*xlObjects)
 	for i, d := range xl.storageDisks {
@@ -1440,13 +1455,23 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 	}
 
 	// Check if web rpc calls return errors with faulty disks.  ServerInfo, GenerateAuth, SetAuth, GetAuth are not concerned
-	webRPCs := []string{"MakeBucket", "ListBuckets", "ListObjects", "RemoveObject",
-		"GetBucketPolicy", "SetBucketPolicy"}
+	// RemoveObject is also not concerned since it always returns success.
+	webRPCs := []struct {
+		webRPCName string
+		ReqArgs    interface{}
+		RepArgs    interface{}
+	}{
+		{"MakeBucket", MakeBucketArgs{BucketName: bucketName}, WebGenericRep{}},
+		{"ListBuckets", AuthRPCArgs{}, ListBucketsRep{}},
+		{"ListObjects", ListObjectsArgs{BucketName: bucketName, Prefix: ""}, ListObjectsRep{}},
+		{"GetBucketPolicy", GetBucketPolicyArgs{BucketName: bucketName, Prefix: ""}, GetBucketPolicyRep{}},
+		{"SetBucketPolicy", SetBucketPolicyArgs{BucketName: bucketName, Prefix: "", Policy: "none"}, WebGenericRep{}},
+	}
 
 	for _, rpcCall := range webRPCs {
-		args := &AuthRPCArgs{}
-		reply := &WebGenericRep{}
-		req, nerr := newTestWebRPCRequest("Web."+rpcCall, authorization, args)
+		args := &rpcCall.ReqArgs
+		reply := &rpcCall.RepArgs
+		req, nerr := newTestWebRPCRequest("Web."+rpcCall.webRPCName, authorization, args)
 		if nerr != nil {
 			t.Fatalf("Test %s: Failed to create HTTP request: <ERROR> %v", rpcCall, nerr)
 		}

@@ -253,19 +253,19 @@ func unmarshalSqsARN(queueARN string) (mSqs arnSQS) {
 	}
 	sqsType := strings.TrimPrefix(queueARN, minioSqs+serverConfig.GetRegion()+":")
 	switch {
-	case strings.HasSuffix(sqsType, queueTypeAMQP):
+	case hasSuffix(sqsType, queueTypeAMQP):
 		mSqs.Type = queueTypeAMQP
-	case strings.HasSuffix(sqsType, queueTypeNATS):
+	case hasSuffix(sqsType, queueTypeNATS):
 		mSqs.Type = queueTypeNATS
-	case strings.HasSuffix(sqsType, queueTypeElastic):
+	case hasSuffix(sqsType, queueTypeElastic):
 		mSqs.Type = queueTypeElastic
-	case strings.HasSuffix(sqsType, queueTypeRedis):
+	case hasSuffix(sqsType, queueTypeRedis):
 		mSqs.Type = queueTypeRedis
-	case strings.HasSuffix(sqsType, queueTypePostgreSQL):
+	case hasSuffix(sqsType, queueTypePostgreSQL):
 		mSqs.Type = queueTypePostgreSQL
-	case strings.HasSuffix(sqsType, queueTypeKafka):
+	case hasSuffix(sqsType, queueTypeKafka):
 		mSqs.Type = queueTypeKafka
-	case strings.HasSuffix(sqsType, queueTypeWebhook):
+	case hasSuffix(sqsType, queueTypeWebhook):
 		mSqs.Type = queueTypeWebhook
 	} // Add more queues here.
 	mSqs.AccountID = strings.TrimSuffix(sqsType, ":"+mSqs.Type)
