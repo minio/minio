@@ -227,7 +227,7 @@ func (a AzureObjects) ListObjects(bucket, prefix, marker, delimiter string, maxK
 			Name:            object.Name,
 			ModTime:         t,
 			Size:            object.Properties.ContentLength,
-			MD5Sum:          object.Properties.Etag,
+			MD5Sum:          strings.Trim(object.Properties.Etag, "\""),
 			ContentType:     object.Properties.ContentType,
 			ContentEncoding: object.Properties.ContentEncoding,
 		})
@@ -277,7 +277,7 @@ func (a AzureObjects) GetObjectInfo(bucket, object string) (objInfo ObjectInfo, 
 	objInfo = ObjectInfo{
 		Bucket:      bucket,
 		UserDefined: make(map[string]string),
-		MD5Sum:      prop.Etag,
+		MD5Sum:      strings.Trim(prop.Etag, "\""),
 		ModTime:     t,
 		Name:        object,
 		Size:        prop.ContentLength,
