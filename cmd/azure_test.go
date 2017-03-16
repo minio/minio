@@ -94,3 +94,49 @@ func TestAzureToObjectError(t *testing.T) {
 		}
 	}
 }
+
+// Test azureGetBlockID().
+func TestAzureGetBlockID(t *testing.T) {
+	testCases := []struct {
+		partId  int
+		md5     string
+		blockID string
+	}{
+		{1, "d41d8cd98f00b204e9800998ecf8427e", "MDAwMDEuZDQxZDhjZDk4ZjAwYjIwNGU5ODAwOTk4ZWNmODQyN2U="},
+		{2, "a7fb6b7b36ee4ed66b5546fac4690273", "MDAwMDIuYTdmYjZiN2IzNmVlNGVkNjZiNTU0NmZhYzQ2OTAyNzM="},
+	}
+	for _, test := range testCases {
+		blockID := azureGetBlockID(test.partId, test.md5)
+		if blockID != test.blockID {
+			t.Fatal("%s is not equal to %s", blockID, test.blockID)
+		}
+	}
+}
+
+// Test azureParseBlockID().
+func TestAzureParseBlockID(t *testing.T) {
+	testCases := []struct {
+		partId  int
+		md5     string
+		blockID string
+	}{
+		{1, "d41d8cd98f00b204e9800998ecf8427e", "MDAwMDEuZDQxZDhjZDk4ZjAwYjIwNGU5ODAwOTk4ZWNmODQyN2U="},
+		{2, "a7fb6b7b36ee4ed66b5546fac4690273", "MDAwMDIuYTdmYjZiN2IzNmVlNGVkNjZiNTU0NmZhYzQ2OTAyNzM="},
+	}
+	for _, test := range testCases {
+		partID, md5, err := azureParseBlockID(test.blockID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if partID != test.partId {
+			t.Fatal("%d not equal to %d", partID, test.partId)
+		}
+		if md5 != test.md5 {
+			t.Fatal("%s not equal to %s", md5, test.md5)
+		}
+	}
+	_, _, err := azureParseBlockID("junk")
+	if err == nil {
+		t.Fatal("Expected azureParseBlockID() to return error")
+	}
+}
