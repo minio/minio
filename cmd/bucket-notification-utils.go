@@ -148,6 +148,10 @@ func isValidQueueID(queueARN string) bool {
 		pgN := serverConfig.Notify.GetPostgreSQLByID(sqsARN.AccountID)
 		// Postgres can work with only default conn. info.
 		return pgN.Enable
+	} else if isMySQLQueue(sqsARN) {
+		msqlN := serverConfig.Notify.GetMySQLByID(sqsARN.AccountID)
+		// Mysql can work with only default conn. info.
+		return msqlN.Enable
 	} else if isKafkaQueue(sqsARN) {
 		kafkaN := serverConfig.Notify.GetKafkaByID(sqsARN.AccountID)
 		return (kafkaN.Enable && len(kafkaN.Brokers) > 0 &&
@@ -244,6 +248,7 @@ func validateNotificationConfig(nConfig notificationConfig) APIErrorCode {
 // - elasticsearch
 // - redis
 // - postgresql
+// - mysql
 // - kafka
 // - webhook
 func unmarshalSqsARN(queueARN string) (mSqs arnSQS) {
@@ -263,6 +268,8 @@ func unmarshalSqsARN(queueARN string) (mSqs arnSQS) {
 		mSqs.Type = queueTypeRedis
 	case hasSuffix(sqsType, queueTypePostgreSQL):
 		mSqs.Type = queueTypePostgreSQL
+	case hasSuffix(sqsType, queueTypeMySQL):
+		mSqs.Type = queueTypeMySQL
 	case hasSuffix(sqsType, queueTypeKafka):
 		mSqs.Type = queueTypeKafka
 	case hasSuffix(sqsType, queueTypeWebhook):

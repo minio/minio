@@ -674,6 +674,25 @@ func loadAllQueueTargets() (map[string]*logrus.Logger, error) {
 		}
 	}
 
+	// Load MySQL targets, initialize their respective loggers.
+	for accountID, msqlN := range serverConfig.Notify.GetMySQL() {
+		if !msqlN.Enable {
+			continue
+		}
+
+		if queueARN, err := addQueueTarget(queueTargets, accountID, queueTypeMySQL, newMySQLNotify); err != nil {
+			if _, ok := err.(net.Error); ok {
+				err = &net.OpError{
+					Op:  "Connecting to " + queueARN,
+					Net: "tcp",
+					Err: err,
+				}
+			}
+
+			return nil, err
+		}
+	}
+
 	// Load Kafka targets, initialize their respective loggers.
 	for accountID, kafkaN := range serverConfig.Notify.GetKafka() {
 		if !kafkaN.Enable {

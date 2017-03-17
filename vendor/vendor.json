@@ -81,6 +81,12 @@
 			"revisionTime": "2017-02-16T21:49:44Z"
 		},
 		{
+			"checksumSHA1": "QD6LqgLz2JMxXqns8TaxtK9AuHs=",
+			"path": "github.com/go-sql-driver/mysql",
+			"revision": "2e00b5cd70399450106cec6431c2e2ce3cae5034",
+			"revisionTime": "2016-12-24T12:10:19Z"
+		},
+		{
 			"checksumSHA1": "3yco0089CSJ4qbyUccpbDC2+dPg=",
 			"path": "github.com/gogo/protobuf/gogoproto",
 			"revision": "84af2615df1ba1d35cc975ba94b64ee67d6c196e",
