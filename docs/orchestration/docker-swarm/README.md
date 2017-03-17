@@ -26,7 +26,7 @@ After the manager is up, [add worker nodes](https://docs.docker.com/engine/swarm
 
 ## 3. Deploy distributed Minio services
 
-Download the [Docker Compose file](./docker-compose.yaml) on your Swarm master. Then execute the command
+Download the [Docker Compose file](https://github.com/minio/minio/blob/master/docs/orchestration/docker-swarm/docker-compose.yaml) on your Swarm master. Then execute the command
 
 ```shell
 docker stack deploy --compose-file=docker-compose.yaml minio_stack
