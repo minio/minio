@@ -79,8 +79,8 @@ This doesn't apply for the writes because there is always one writer and many re
 An example here shows how the contention is handled with GetObject().
 
 GetObject() holds a read lock on `fs.json`.
-```go
 
+```go
 	fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fsMetaJSONFile)
 	rlk, err := fs.rwPool.Open(fsMetaPath)
 	if err != nil {
@@ -93,7 +93,6 @@ GetObject() holds a read lock on `fs.json`.
 	_, err = io.CopyBuffer(writer, reader, buf)
 
 ... after successful copy operation unlocks the read lock ...
-
 ```
 
 A concurrent PutObject is requested on the same object, PutObject() attempts a write lock on `fs.json`.
