@@ -231,6 +231,7 @@ const (
 	healDryRun         healQueryKey = "dry-run"
 	healUploadIDMarker healQueryKey = "upload-id-marker"
 	healMaxUpload      healQueryKey = "max-uploads"
+	healUploadID       healQueryKey = "upload-id"
 )
 
 // mkHealQueryVal - helper function to construct heal REST API query params.
@@ -418,6 +419,43 @@ func (adm *AdminClient) HealBucket(bucket string, dryrun bool) error {
 	}
 
 	// Execute POST on /?heal&bucket=mybucket to heal a bucket.
+	resp, err := adm.executeMethod("POST", reqData)
+
+	defer closeResponse(resp)
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return httpRespToErrorResponse(resp)
+	}
+
+	return nil
+}
+
+// HealUpload - Heal the given upload.
+func (adm *AdminClient) HealUpload(bucket, object, uploadID string, dryrun bool) error {
+	// Construct query params.
+	queryVal := url.Values{}
+	queryVal.Set("heal", "")
+	queryVal.Set(string(healBucket), bucket)
+	queryVal.Set(string(healObject), object)
+	queryVal.Set(string(healUploadID), uploadID)
+	if dryrun {
+		queryVal.Set(string(healDryRun), "")
+	}
+
+	hdrs := make(http.Header)
+	hdrs.Set(minioAdminOpHeader, "upload")
+
+	reqData := requestData{
+		queryValues:   queryVal,
+		customHeaders: hdrs,
+	}
+
+	// Execute POST on
+	// /?heal&bucket=mybucket&object=myobject&upload-id=uploadID
+	// to heal an upload.
 	resp, err := adm.executeMethod("POST", reqData)
 
 	defer closeResponse(resp)

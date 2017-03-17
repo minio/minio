@@ -17,7 +17,9 @@
 package cmd
 
 import (
+	"bytes"
 	"fmt"
+	"path/filepath"
 	"testing"
 )
 
@@ -484,5 +486,75 @@ func TestListBucketsHeal(t *testing.T) {
 	// Check the name of bucket in list buckets heal result
 	if buckets[0].Name != corruptedBucketName {
 		t.Fatalf("Name of missing bucket is incorrect, expected: %s, found: %s", corruptedBucketName, buckets[0].Name)
+	}
+}
+
+// Tests healing of object.
+func TestHealObjectXL(t *testing.T) {
+	root, err := newTestConfig(globalMinioDefaultRegion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer removeAll(root)
+
+	nDisks := 16
+	fsDirs, err := getRandomDisks(nDisks)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer removeRoots(fsDirs)
+
+	endpoints, err := parseStorageEndpoints(fsDirs)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Everything is fine, should return nil
+	obj, _, err := initObjectLayer(endpoints)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bucket := "bucket"
+	object := "object"
+	data := []byte("hello")
+	err = obj.MakeBucket(bucket)
+	if err != nil {
+		t.Fatalf("Failed to make a bucket - %v", err)
+	}
+
+	_, err = obj.PutObject(bucket, object, int64(len(data)), bytes.NewReader(data), nil, "")
+	if err != nil {
+		t.Fatalf("Failed to put an object - %v", err)
+	}
+
+	// Remove the object backend files from the first disk.
+	xl := obj.(*xlObjects)
+	firstDisk := xl.storageDisks[0]
+	err = firstDisk.DeleteFile(bucket, filepath.Join(object, xlMetaJSONFile))
+	if err != nil {
+		t.Fatalf("Failed to delete a file - %v", err)
+	}
+
+	err = obj.HealObject(bucket, object)
+	if err != nil {
+		t.Fatalf("Failed to heal object - %v", err)
+	}
+
+	_, err = firstDisk.StatFile(bucket, filepath.Join(object, xlMetaJSONFile))
+	if err != nil {
+		t.Errorf("Expected xl.json file to be present but stat failed - %v", err)
+	}
+
+	// Nil more than half the disks, to remove write quorum.
+	for i := 0; i <= len(xl.storageDisks)/2; i++ {
+		xl.storageDisks[i] = nil
+	}
+
+	// Try healing now, expect to receive errDiskNotFound.
+	err = obj.HealObject(bucket, object)
+	if errorCause(err) != errDiskNotFound {
+		t.Errorf("Expected %v but received %v", errDiskNotFound, err)
 	}
 }

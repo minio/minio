@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -1048,6 +1049,160 @@ func TestHealObjectHandler(t *testing.T) {
 			t.Errorf("Test %d - Expected HTTP status code %d but received %d", i+1, test.statusCode, rec.Code)
 		}
 	}
+
+}
+
+// buildAdminRequest - helper function to build an admin API request.
+func buildAdminRequest(queryVal url.Values, opHdr, method string,
+	contentLength int64, bodySeeker io.ReadSeeker) (*http.Request, error) {
+	req, err := newTestRequest(method, "/?"+queryVal.Encode(), contentLength, bodySeeker)
+	if err != nil {
+		return nil, traceError(err)
+	}
+
+	req.Header.Set(minioAdminOpHeader, opHdr)
+
+	cred := serverConfig.GetCredential()
+	err = signRequestV4(req, cred.AccessKey, cred.SecretKey)
+	if err != nil {
+		return nil, traceError(err)
+	}
+
+	return req, nil
+}
+
+// mkHealUploadQuery - helper to build HealUploadHandler query string.
+func mkHealUploadQuery(bucket, object, uploadID, dryRun string) url.Values {
+	queryVal := url.Values{}
+	queryVal.Set(string(mgmtBucket), bucket)
+	queryVal.Set(string(mgmtObject), object)
+	queryVal.Set(string(mgmtUploadID), uploadID)
+	queryVal.Set("heal", "")
+	queryVal.Set(string(mgmtDryRun), dryRun)
+	return queryVal
+}
+
+// TestHealUploadHandler - test for HealUploadHandler.
+func TestHealUploadHandler(t *testing.T) {
+	adminTestBed, err := prepareAdminXLTestBed()
+	if err != nil {
+		t.Fatal("Failed to initialize a single node XL backend for admin handler tests.")
+	}
+	defer adminTestBed.TearDown()
+
+	// Create an object myobject under bucket mybucket.
+	bucketName := "mybucket"
+	objName := "myobject"
+	err = adminTestBed.objLayer.MakeBucket(bucketName)
+	if err != nil {
+		t.Fatalf("Failed to make bucket %s - %v", bucketName, err)
+	}
+
+	// Create a new multipart upload.
+	uploadID, err := adminTestBed.objLayer.NewMultipartUpload(bucketName, objName, nil)
+	if err != nil {
+		t.Fatalf("Failed to create a new multipart upload %s/%s - %v",
+			bucketName, objName, err)
+	}
+
+	// Upload a part.
+	partID := 1
+	_, err = adminTestBed.objLayer.PutObjectPart(bucketName, objName, uploadID,
+		partID, int64(len("hello")), bytes.NewReader([]byte("hello")), "", "")
+	if err != nil {
+		t.Fatalf("Failed to upload part %d of %s/%s - %v", partID,
+			bucketName, objName, err)
+	}
+
+	testCases := []struct {
+		bucket     string
+		object     string
+		dryrun     string
+		statusCode int
+	}{
+		// 1. Valid test case.
+		{
+			bucket:     bucketName,
+			object:     objName,
+			statusCode: http.StatusOK,
+		},
+		// 2. Invalid bucket name.
+		{
+			bucket:     `invalid\\Bucket`,
+			object:     "myobject",
+			statusCode: http.StatusBadRequest,
+		},
+		// 3. Bucket not found.
+		{
+			bucket:     "bucketnotfound",
+			object:     "myobject",
+			statusCode: http.StatusNotFound,
+		},
+		// 4. Invalid object name.
+		{
+			bucket:     bucketName,
+			object:     `invalid\\Object`,
+			statusCode: http.StatusBadRequest,
+		},
+		// 5. Object not found.
+		{
+			bucket:     bucketName,
+			object:     "objectnotfound",
+			statusCode: http.StatusNotFound,
+		},
+		// 6. Valid test case with dry-run.
+		{
+			bucket:     bucketName,
+			object:     objName,
+			dryrun:     "yes",
+			statusCode: http.StatusOK,
+		},
+	}
+	for i, test := range testCases {
+		// Prepare query params.
+		queryVal := mkHealUploadQuery(test.bucket, test.object, uploadID, test.dryrun)
+		req, err := buildAdminRequest(queryVal, "upload", http.MethodPost, 0, nil)
+		if err != nil {
+			t.Fatalf("Test %d - Failed to construct heal object request - %v", i+1, err)
+		}
+		rec := httptest.NewRecorder()
+		adminTestBed.mux.ServeHTTP(rec, req)
+		if test.statusCode != rec.Code {
+			t.Errorf("Test %d - Expected HTTP status code %d but received %d", i+1, test.statusCode, rec.Code)
+		}
+	}
+
+	sample := testCases[0]
+	// Modify authorization header after signing to test signature
+	// mismatch handling.
+	queryVal := mkHealUploadQuery(sample.bucket, sample.object, uploadID, sample.dryrun)
+	req, err := buildAdminRequest(queryVal, "upload", "POST", 0, nil)
+	if err != nil {
+		t.Fatalf("Failed to construct heal object request - %v", err)
+	}
+
+	// Set x-amz-date to a date different than time of signing.
+	req.Header.Set("x-amz-date", time.Time{}.Format(iso8601Format))
+
+	rec := httptest.NewRecorder()
+	adminTestBed.mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("Expected %d but received %d", http.StatusBadRequest, rec.Code)
+	}
+
+	// Set objectAPI to nil to test Server not initialized case.
+	resetGlobalObjectAPI()
+	queryVal = mkHealUploadQuery(sample.bucket, sample.object, uploadID, sample.dryrun)
+	req, err = buildAdminRequest(queryVal, "upload", "POST", 0, nil)
+	if err != nil {
+		t.Fatalf("Failed to construct heal object request - %v", err)
+	}
+
+	rec = httptest.NewRecorder()
+	adminTestBed.mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("Expected %d but received %d", http.StatusServiceUnavailable, rec.Code)
+	}
 }
 
 // TestHealFormatHandler - test for HealFormatHandler.
@@ -1061,19 +1216,9 @@ func TestHealFormatHandler(t *testing.T) {
 	// Prepare query params for heal-format mgmt REST API.
 	queryVal := url.Values{}
 	queryVal.Set("heal", "")
-	req, err := newTestRequest("POST", "/?"+queryVal.Encode(), 0, nil)
+	req, err := buildAdminRequest(queryVal, "format", "POST", 0, nil)
 	if err != nil {
 		t.Fatalf("Failed to construct heal object request - %v", err)
-	}
-
-	// Set x-minio-operation header to format.
-	req.Header.Set(minioAdminOpHeader, "format")
-
-	// Sign the request using signature v4.
-	cred := serverConfig.GetCredential()
-	err = signRequestV4(req, cred.AccessKey, cred.SecretKey)
-	if err != nil {
-		t.Fatalf("Failed to sign heal object request - %v", err)
 	}
 
 	rec := httptest.NewRecorder()
@@ -1105,19 +1250,9 @@ func TestGetConfigHandler(t *testing.T) {
 	queryVal := url.Values{}
 	queryVal.Set("config", "")
 
-	req, err := newTestRequest("GET", "/?"+queryVal.Encode(), 0, nil)
+	req, err := buildAdminRequest(queryVal, "get", http.MethodGet, 0, nil)
 	if err != nil {
 		t.Fatalf("Failed to construct get-config object request - %v", err)
-	}
-
-	// Set x-minio-operation header to get.
-	req.Header.Set(minioAdminOpHeader, "get")
-
-	// Sign the request using signature v4.
-	cred := serverConfig.GetCredential()
-	err = signRequestV4(req, cred.AccessKey, cred.SecretKey)
-	if err != nil {
-		t.Fatalf("Failed to sign heal object request - %v", err)
 	}
 
 	rec := httptest.NewRecorder()
@@ -1154,19 +1289,10 @@ func TestSetConfigHandler(t *testing.T) {
 	queryVal := url.Values{}
 	queryVal.Set("config", "")
 
-	req, err := newTestRequest("PUT", "/?"+queryVal.Encode(), int64(len(configJSON)), bytes.NewReader(configJSON))
+	req, err := buildAdminRequest(queryVal, "set", http.MethodPut, int64(len(configJSON)),
+		bytes.NewReader(configJSON))
 	if err != nil {
 		t.Fatalf("Failed to construct get-config object request - %v", err)
-	}
-
-	// Set x-minio-operation header to set.
-	req.Header.Set(minioAdminOpHeader, "set")
-
-	// Sign the request using signature v4.
-	cred := serverConfig.GetCredential()
-	err = signRequestV4(req, cred.AccessKey, cred.SecretKey)
-	if err != nil {
-		t.Fatalf("Failed to sign heal object request - %v", err)
 	}
 
 	rec := httptest.NewRecorder()
@@ -1288,9 +1414,9 @@ func TestWriteSetConfigResponse(t *testing.T) {
 	}
 }
 
-// mkUploadsHealQuery - helper function to construct query values for
+// mkListUploadsHealQuery - helper function to construct query values for
 // listUploadsHeal.
-func mkUploadsHealQuery(bucket, prefix, keyMarker, uploadIDMarker, delimiter, maxUploadsStr string) url.Values {
+func mkListUploadsHealQuery(bucket, prefix, keyMarker, uploadIDMarker, delimiter, maxUploadsStr string) url.Values {
 
 	queryVal := make(url.Values)
 	queryVal.Set("heal", "")
@@ -1401,19 +1527,13 @@ func TestListHealUploadsHandler(t *testing.T) {
 	}
 
 	for i, test := range testCases {
-		queryVal := mkUploadsHealQuery(test.bucket, test.prefix, test.keyMarker, "", test.delimiter, test.maxKeys)
+		queryVal := mkListUploadsHealQuery(test.bucket, test.prefix, test.keyMarker, "", test.delimiter, test.maxKeys)
 
-		req, err := newTestRequest("GET", "/?"+queryVal.Encode(), 0, nil)
+		req, err := buildAdminRequest(queryVal, "list-uploads", http.MethodGet, 0, nil)
 		if err != nil {
 			t.Fatalf("Test %d - Failed to construct list uploads needing heal request - %v", i+1, err)
 		}
-		req.Header.Set(minioAdminOpHeader, "list-uploads")
 
-		cred := serverConfig.GetCredential()
-		err = signRequestV4(req, cred.AccessKey, cred.SecretKey)
-		if err != nil {
-			t.Fatalf("Test %d - Failed to sign list uploads needing heal request - %v", i+1, err)
-		}
 		rec := httptest.NewRecorder()
 		adminTestBed.mux.ServeHTTP(rec, req)
 		if test.statusCode != rec.Code {
