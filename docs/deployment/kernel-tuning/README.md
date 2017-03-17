@@ -68,4 +68,4 @@ sysctl -w kernel.sched_wakeup_granularity_ns=15
 
 ## Tuning Disks
 
-The recommendations for disk tuning are conveniently packaged in a well commented (shell script)[https://github.com/minio/minio/blob/master/docs/deployment/kernel-tuning/disk-tuning.sh]. Please review the shell script for our recommendations.
+The recommendations for disk tuning are conveniently packaged in a well commented [shell script](https://github.com/minio/minio/blob/master/docs/deployment/kernel-tuning/disk-tuning.sh). Please review the shell script for our recommendations.
