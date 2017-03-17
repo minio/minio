@@ -21,5 +21,4 @@ type fsMetaV1 struct {
 	Meta  map[string]string `json:"meta,omitempty"`
 	Parts []objectPartInfo  `json:"parts,omitempty"`
 }
-
 ```
