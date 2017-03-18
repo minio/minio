@@ -287,7 +287,7 @@ List ongoing multipart uploads that need healing.
 |---|---|---|
 |`ui.Key` | _string_ | Name of the object being uploaded |
 |`ui.UploadID` | _string_ | UploadID of the ongoing multipart upload |
-|`ui.HealUploadInfo.Status` | _healStatus_| One of `Healthy`, `CanHeal`, `Corrupted`, `QuorumUnavailable`|
+|`ui.HealUploadInfo.Status` | _HealStatus_| One of `Healthy`, `CanHeal`, `Corrupted`, `QuorumUnavailable`|
 |`ui.Err`| _error_ | non-nil if fetching fetching healing information failed |
 
 __Example__
