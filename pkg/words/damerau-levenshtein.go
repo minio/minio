@@ -1,5 +1,5 @@
 /*
- * Minio Client (C) 2014-2016 Minio, Inc.
+ * Minio Client (C) 2014, 2015, 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,11 +14,9 @@
  * limitations under the License.
  */
 
-package cmd
+package words
 
-import (
-	"math"
-)
+import "math"
 
 // Returns the minimum value of a slice of integers
 func minimum(integers []int) (minVal int) {
@@ -34,6 +32,7 @@ func minimum(integers []int) (minVal int) {
 // DamerauLevenshteinDistance calculates distance between two strings using an algorithm
 // described in https://en.wikipedia.org/wiki/Damerau-Levenshtein_distance
 func DamerauLevenshteinDistance(a string, b string) int {
+	var cost int
 	d := make([][]int, len(a)+1)
 	for i := 1; i <= len(a)+1; i++ {
 		d[i-1] = make([]int, len(b)+1)
@@ -44,7 +43,6 @@ func DamerauLevenshteinDistance(a string, b string) int {
 	for j := 0; j <= len(b); j++ {
 		d[0][j] = j
 	}
-	var cost int
 	for i := 1; i <= len(a); i++ {
 		for j := 1; j <= len(b); j++ {
 			if a[i-1] == b[j-1] {
