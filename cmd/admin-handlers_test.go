@@ -26,6 +26,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
 	"testing"
 	"time"
 
@@ -1445,12 +1446,13 @@ func TestListHealUploadsHandler(t *testing.T) {
 	defer adminTestBed.objLayer.DeleteBucket("mybucket")
 
 	testCases := []struct {
-		bucket     string
-		prefix     string
-		keyMarker  string
-		delimiter  string
-		maxKeys    string
-		statusCode int
+		bucket       string
+		prefix       string
+		keyMarker    string
+		delimiter    string
+		maxKeys      string
+		statusCode   int
+		expectedResp ListMultipartUploadsResponse
 	}{
 		// 1. Valid params.
 		{
@@ -1460,6 +1462,14 @@ func TestListHealUploadsHandler(t *testing.T) {
 			delimiter:  "/",
 			maxKeys:    "10",
 			statusCode: http.StatusOK,
+			expectedResp: ListMultipartUploadsResponse{
+				XMLName:    xml.Name{Space: "http://s3.amazonaws.com/doc/2006-03-01/", Local: "ListMultipartUploadsResult"},
+				Bucket:     "mybucket",
+				KeyMarker:  "prefix11",
+				Delimiter:  "/",
+				Prefix:     "prefix",
+				MaxUploads: 10,
+			},
 		},
 		// 2. Valid params with empty prefix.
 		{
@@ -1469,6 +1479,14 @@ func TestListHealUploadsHandler(t *testing.T) {
 			delimiter:  "/",
 			maxKeys:    "10",
 			statusCode: http.StatusOK,
+			expectedResp: ListMultipartUploadsResponse{
+				XMLName:    xml.Name{Space: "http://s3.amazonaws.com/doc/2006-03-01/", Local: "ListMultipartUploadsResult"},
+				Bucket:     "mybucket",
+				KeyMarker:  "",
+				Delimiter:  "/",
+				Prefix:     "",
+				MaxUploads: 10,
+			},
 		},
 		// 3. Invalid params with invalid bucket.
 		{
@@ -1536,8 +1554,29 @@ func TestListHealUploadsHandler(t *testing.T) {
 
 		rec := httptest.NewRecorder()
 		adminTestBed.mux.ServeHTTP(rec, req)
+
 		if test.statusCode != rec.Code {
 			t.Errorf("Test %d - Expected HTTP status code %d but received %d", i+1, test.statusCode, rec.Code)
 		}
+
+		// Compare result with the expected one only when we receive 200 OK
+		if rec.Code == http.StatusOK {
+			resp := rec.Result()
+			xmlBytes, err := ioutil.ReadAll(resp.Body)
+			if err != nil {
+				t.Errorf("Test %d: Failed to read response %v", i+1, err)
+			}
+
+			var actualResult ListMultipartUploadsResponse
+			err = xml.Unmarshal(xmlBytes, &actualResult)
+			if err != nil {
+				t.Errorf("Test %d: Failed to unmarshal xml %v", i+1, err)
+			}
+
+			if !reflect.DeepEqual(test.expectedResp, actualResult) {
+				t.Fatalf("Test %d: Unexpected response `%+v`, expected: `%+v`", i+1, test.expectedResp, actualResult)
+			}
+		}
+
 	}
 }

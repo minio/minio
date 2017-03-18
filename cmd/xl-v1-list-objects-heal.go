@@ -303,6 +303,8 @@ func (xl xlObjects) listMultipartUploadsHeal(bucket, prefix, keyMarker,
 	var walkerDoneCh chan struct{}
 	// Check if we have room left to send more uploads.
 	if maxUploads > 0 {
+		uploadsLeft := maxUploads
+
 		walkerCh, walkerDoneCh = xl.listPool.Release(listParams{
 			bucket:    minioMetaMultipartBucket,
 			recursive: recursive,
@@ -319,10 +321,14 @@ func (xl xlObjects) listMultipartUploadsHeal(bucket, prefix, keyMarker,
 				multipartPrefixPath, multipartMarkerPath,
 				recursive, listDir, isLeaf, walkerDoneCh)
 		}
-		// Collect uploads until maxUploads limit is reached.
-		for walkResult := range walkerCh {
-			// For any error during tree walk we should
-			// return right away.
+		// Collect uploads until leftUploads limit is reached.
+		for {
+			walkResult, ok := <-walkerCh
+			if !ok {
+				truncated = false
+				break
+			}
+			// For any error during tree walk, we should return right away.
 			if walkResult.err != nil {
 				return ListMultipartsInfo{}, walkResult.err
 			}
@@ -334,8 +340,8 @@ func (xl xlObjects) listMultipartUploadsHeal(bucket, prefix, keyMarker,
 				uploads = append(uploads, uploadMetadata{
 					Object: entry,
 				})
-				maxUploads--
-				if maxUploads == 0 {
+				uploadsLeft--
+				if uploadsLeft == 0 {
 					break
 				}
 				continue
@@ -347,20 +353,21 @@ func (xl xlObjects) listMultipartUploadsHeal(bucket, prefix, keyMarker,
 			var end bool
 			uploadIDMarker = ""
 			newUploads, end, err = fetchMultipartUploadIDs(bucket, entry, uploadIDMarker,
-				maxUploads, xl.getLoadBalancedDisks())
+				uploadsLeft, xl.getLoadBalancedDisks())
 			if err != nil {
 				return ListMultipartsInfo{}, err
 			}
 			uploads = append(uploads, newUploads...)
-			maxUploads -= len(newUploads)
+			uploadsLeft -= len(newUploads)
 			if end && walkResult.end {
 				truncated = false
 				break
 			}
-			if maxUploads == 0 {
+			if uploadsLeft == 0 {
 				break
 			}
 		}
+
 	}
 
 	// For all received uploads fill in the multiparts result.
