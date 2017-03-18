@@ -55,7 +55,16 @@ var gatewayCmd = cli.Command{
 	Flags: append(serverFlags, cli.BoolFlag{
 		Name:  "quiet",
 		Usage: "Disable startup banner.",
-	}),
+	},
+		cli.BoolFlag{
+			Name:  "cache",
+			Usage: "Enable caching.",
+		},
+		cli.StringFlag{
+			Name:  "cachepath",
+			Usage: "./cache/",
+		},
+	),
 	HideHelpCommand: true,
 }
 
@@ -64,6 +73,7 @@ type gatewayBackend string
 
 const (
 	azureBackend gatewayBackend = "azure"
+	s3Backend    gatewayBackend = "s3"
 	// Add more backends here.
 )
 
@@ -84,10 +94,13 @@ func mustGetGatewayCredsFromEnv() (accessKey, secretKey string) {
 // - Azure Blob Storage.
 // - Add your favorite backend here.
 func newGatewayLayer(backendType, accessKey, secretKey string) (GatewayLayer, error) {
-	if gatewayBackend(backendType) != azureBackend {
+	if gatewayBackend(backendType) == azureBackend {
+		return newAzureLayer(accessKey, secretKey)
+	} else if gatewayBackend(backendType) == s3Backend {
+		return newS3Layer()
+	} else {
 		return nil, fmt.Errorf("Unrecognized backend type %s", backendType)
 	}
-	return newAzureLayer(accessKey, secretKey)
 }
 
 // Initialize a new gateway config.
@@ -158,6 +171,10 @@ func gatewayMain(ctx *cli.Context) {
 		console.Fatalf("Unable to initialize gateway layer. Error: %s", err)
 	}
 
+	if ctx.Bool("cache") {
+		newObject = newCacheLayer(newObject, ctx.String("cachepath"))
+	}
+
 	initNSLock(false) // Enable local namespace lock.
 
 	router := mux.NewRouter().SkipClean(true)
@@ -210,6 +227,8 @@ func gatewayMain(ctx *cli.Context) {
 		mode := ""
 		if gatewayBackend(backendType) == azureBackend {
 			mode = globalMinioModeGatewayAzure
+		} else if gatewayBackend(backendType) == s3Backend {
+			mode = globalMinioModeGatewayS3
 		}
 		checkUpdate(mode)
 		printGatewayStartupMessage(apiEndPoints, accessKey, secretKey, backendType)
