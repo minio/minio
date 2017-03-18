@@ -364,7 +364,7 @@ func (a AzureObjects) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMa
 		// NewMultipartUpload.
 		return result, nil
 	}
-	result.Uploads = []uploadMetadata{{prefix, prefix, time.Now().UTC(), "", nil}}
+	result.Uploads = []uploadMetadata{{prefix, prefix, UTCNow(), "", nil}}
 	return result, nil
 }
 
@@ -439,7 +439,7 @@ func (a AzureObjects) PutObjectPart(bucket, object, uploadID string, partID int,
 
 	info.PartNumber = partID
 	info.ETag = md5Hex
-	info.LastModified = time.Now().UTC()
+	info.LastModified = UTCNow()
 	info.Size = size
 	return info, nil
 }
@@ -476,7 +476,7 @@ func (a AzureObjects) ListObjectParts(bucket, object, uploadID string, partNumbe
 		}
 		result.Parts = append(result.Parts, PartInfo{
 			partID,
-			time.Now().UTC(),
+			UTCNow(),
 			md5Hex,
 			part.Size,
 		})

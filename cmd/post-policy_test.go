@@ -37,7 +37,7 @@ const (
 )
 
 func newPostPolicyBytesV4WithContentRange(credential, bucketName, objectKey string, expiration time.Time) []byte {
-	t := time.Now().UTC()
+	t := UTCNow()
 	// Add the expiration date.
 	expirationStr := fmt.Sprintf(`"expiration": "%s"`, expiration.Format(expirationDateFormat))
 	// Add the bucket condition, only accept buckets equal to the one passed.
@@ -66,7 +66,7 @@ func newPostPolicyBytesV4WithContentRange(credential, bucketName, objectKey stri
 
 // newPostPolicyBytesV4 - creates a bare bones postpolicy string with key and bucket matches.
 func newPostPolicyBytesV4(credential, bucketName, objectKey string, expiration time.Time) []byte {
-	t := time.Now().UTC()
+	t := UTCNow()
 	// Add the expiration date.
 	expirationStr := fmt.Sprintf(`"expiration": "%s"`, expiration.Format(expirationDateFormat))
 	// Add the bucket condition, only accept buckets equal to the one passed.
@@ -136,7 +136,7 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 
 	credentials := serverConfig.GetCredential()
 
-	curTime := time.Now().UTC()
+	curTime := UTCNow()
 	curTimePlus5Min := curTime.Add(time.Minute * 5)
 
 	// bucketnames[0].
@@ -455,7 +455,7 @@ func testPostPolicyBucketHandlerRedirect(obj ObjectLayer, instanceType string, t
 
 	credentials := serverConfig.GetCredential()
 
-	curTime := time.Now().UTC()
+	curTime := UTCNow()
 	curTimePlus5Min := curTime.Add(time.Minute * 5)
 
 	err = obj.MakeBucket(bucketName)
@@ -517,7 +517,7 @@ func postPresignSignatureV4(policyBase64 string, t time.Time, secretAccessKey, l
 
 func newPostRequestV2(endPoint, bucketName, objectName string, accessKey, secretKey string) (*http.Request, error) {
 	// Expire the request five minutes from now.
-	expirationTime := time.Now().UTC().Add(time.Minute * 5)
+	expirationTime := UTCNow().Add(time.Minute * 5)
 	// Create a new post policy.
 	policy := newPostPolicyBytesV2(bucketName, objectName, expirationTime)
 	// Only need the encoding.
@@ -644,13 +644,13 @@ func newPostRequestV4Generic(endPoint, bucketName, objectName string, objData []
 }
 
 func newPostRequestV4WithContentLength(endPoint, bucketName, objectName string, objData []byte, accessKey, secretKey string) (*http.Request, error) {
-	t := time.Now().UTC()
+	t := UTCNow()
 	policy := buildGenericPolicy(t, accessKey, bucketName, objectName, true)
 	return newPostRequestV4Generic(endPoint, bucketName, objectName, objData, accessKey, secretKey, t, policy, nil, false, false)
 }
 
 func newPostRequestV4(endPoint, bucketName, objectName string, objData []byte, accessKey, secretKey string) (*http.Request, error) {
-	t := time.Now().UTC()
+	t := UTCNow()
 	policy := buildGenericPolicy(t, accessKey, bucketName, objectName, false)
 	return newPostRequestV4Generic(endPoint, bucketName, objectName, objData, accessKey, secretKey, t, policy, nil, false, false)
 }

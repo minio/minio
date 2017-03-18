@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // Signature and API related constants.
@@ -136,7 +135,7 @@ func doesPresignV2SignatureMatch(r *http.Request) APIErrorCode {
 	}
 
 	// Check if the presigned URL has expired.
-	if expiresInt < time.Now().UTC().Unix() {
+	if expiresInt < UTCNow().Unix() {
 		return ErrExpiredPresignRequest
 	}
 

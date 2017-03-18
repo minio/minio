@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -221,7 +221,7 @@ func checkPolicyCond(op string, input1, input2 string) bool {
 // (http://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-HTTPPOSTConstructPolicy.html)
 func checkPostPolicy(formValues http.Header, postPolicyForm PostPolicyForm) APIErrorCode {
 	// Check if policy document expiry date is still not reached
-	if !postPolicyForm.Expiration.After(time.Now().UTC()) {
+	if !postPolicyForm.Expiration.After(UTCNow()) {
 		return ErrPolicyAlreadyExpired
 	}
 

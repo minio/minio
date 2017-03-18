@@ -155,7 +155,7 @@ func prepareAdminXLTestBed() (*adminXLTestBed, error) {
 	}
 
 	// Initialize boot time
-	globalBootTime = time.Now().UTC()
+	globalBootTime = UTCNow()
 
 	// Set globalEndpoints for a single node XL setup.
 	for _, xlDir := range xlDirs {

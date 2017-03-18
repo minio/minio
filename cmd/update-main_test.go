@@ -31,7 +31,7 @@ import (
 )
 
 func TestGetCurrentReleaseTime(t *testing.T) {
-	minioVersion1 := time.Now().UTC().Format(time.RFC3339)
+	minioVersion1 := UTCNow().Format(time.RFC3339)
 	releaseTime1, _ := time.Parse(time.RFC3339, minioVersion1)
 
 	minioVersion2 := "DEVELOPMENT.GOGET"
@@ -223,7 +223,7 @@ func TestIsSourceBuild(t *testing.T) {
 		minioVersion   string
 		expectedResult bool
 	}{
-		{time.Now().UTC().Format(time.RFC3339), false},
+		{UTCNow().Format(time.RFC3339), false},
 		{"DEVELOPMENT.GOGET", true},
 		{"junk", true},
 		{"3.2.4", true},

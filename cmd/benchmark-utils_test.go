@@ -23,7 +23,6 @@ import (
 	"math/rand"
 	"strconv"
 	"testing"
-	"time"
 
 	humanize "github.com/dustin/go-humanize"
 )
@@ -245,7 +244,7 @@ func runGetObjectBenchmark(b *testing.B, obj ObjectLayer, objSize int) {
 func getRandomByte() []byte {
 	const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 	// seeding the random number generator.
-	rand.Seed(time.Now().UTC().UnixNano())
+	rand.Seed(UTCNow().UnixNano())
 	var b byte
 	// pick a character randomly.
 	b = letterBytes[rand.Intn(len(letterBytes))]

@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"runtime"
 	"strings"
-	"time"
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/mc/pkg/console"
@@ -161,7 +160,7 @@ func getCertificateChainMsg(certs []*x509.Certificate) string {
 	var expiringCerts int
 	for i := totalCerts - 1; i >= 0; i-- {
 		cert := certs[i]
-		if cert.NotAfter.Before(time.Now().UTC().Add(globalMinioCertExpireWarnDays)) {
+		if cert.NotAfter.Before(UTCNow().Add(globalMinioCertExpireWarnDays)) {
 			expiringCerts++
 			msg += fmt.Sprintf(colorBold("#%d %s will expire on %s\n"), expiringCerts, cert.Subject.CommonName, cert.NotAfter)
 		}

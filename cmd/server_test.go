@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1812,7 +1812,7 @@ func (s *TestSuiteCommon) TestGetPartialObjectMisAligned(c *C) {
 	1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,1234567890,
 	1234567890,1234567890,1234567890,123`
 
-	rand.Seed(time.Now().UTC().UnixNano())
+	rand.Seed(UTCNow().UnixNano())
 	// Create a misalgined data.
 	for i := 0; i < 13*rand.Intn(1<<16); i++ {
 		buffer.WriteString(fmt.Sprintf("[%05d] %s\n", i, line[:rand.Intn(1<<8)]))

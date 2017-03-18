@@ -19,7 +19,6 @@ package cmd
 import (
 	"net/http"
 	"testing"
-	"time"
 )
 
 // TestSkipContentSha256Cksum - Test validate the logic which decides whether
@@ -140,7 +139,7 @@ func TestExtractSignedHeaders(t *testing.T) {
 	// expected header values.
 	expectedHost := "play.minio.io:9000"
 	expectedContentSha256 := "1234abcd"
-	expectedTime := time.Now().UTC().Format(iso8601Format)
+	expectedTime := UTCNow().Format(iso8601Format)
 
 	// Creating input http header.
 	inputHeader := make(http.Header)

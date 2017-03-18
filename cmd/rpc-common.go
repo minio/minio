@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@ const rpcSkewTimeAllowed = 3 * time.Second
 
 func isRequestTimeAllowed(requestTime time.Time) bool {
 	// Check whether request time is within acceptable skew time.
-	utcNow := time.Now().UTC()
+	utcNow := UTCNow()
 	return !(requestTime.Sub(utcNow) > rpcSkewTimeAllowed ||
 		utcNow.Sub(requestTime) > rpcSkewTimeAllowed)
 }

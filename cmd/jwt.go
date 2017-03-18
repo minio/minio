@@ -59,7 +59,7 @@ func authenticateJWT(accessKey, secretKey string, expiry time.Duration) (string,
 		return "", errAuthentication
 	}
 
-	utcNow := time.Now().UTC()
+	utcNow := UTCNow()
 	token := jwtgo.NewWithClaims(jwtgo.SigningMethodHS512, jwtgo.MapClaims{
 		"exp": utcNow.Add(expiry).Unix(),
 		"iat": utcNow.Unix(),

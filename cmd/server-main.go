@@ -596,7 +596,7 @@ func serverMain(c *cli.Context) {
 	}
 
 	// Set uptime time after object layer has initialized.
-	globalBootTime = time.Now().UTC()
+	globalBootTime = UTCNow()
 
 	// Waits on the server.
 	<-globalServiceDoneCh

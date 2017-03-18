@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,6 @@ import (
 	"net/url"
 	"path"
 	"sync"
-	"time"
 
 	"github.com/Sirupsen/logrus"
 )
@@ -95,7 +94,7 @@ func newNotificationEvent(event eventData) NotificationEvent {
 	creds := serverConfig.GetCredential()
 
 	// Time when Minio finished processing the request.
-	eventTime := time.Now().UTC()
+	eventTime := UTCNow()
 
 	// API endpoint is captured here to be returned back
 	// to the client for it to differentiate from which

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2014-2016, 2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2014, 2015, 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,8 +49,8 @@ func TestUpdateUploadJSON(t *testing.T) {
 		isRemove  bool
 		errVal    error
 	}{
-		{"111abc", time.Now().UTC(), false, nil},
-		{"222abc", time.Now().UTC(), false, nil},
+		{"111abc", UTCNow(), false, nil},
+		{"222abc", UTCNow(), false, nil},
 		{"111abc", time.Time{}, true, nil},
 	}
 
@@ -68,7 +68,7 @@ func TestUpdateUploadJSON(t *testing.T) {
 		xl.storageDisks[i] = newNaughtyDisk(xl.storageDisks[i].(*retryStorage), nil, errFaultyDisk)
 	}
 
-	testErrVal := xl.updateUploadJSON(bucket, object, "222abc", time.Now().UTC(), false)
+	testErrVal := xl.updateUploadJSON(bucket, object, "222abc", UTCNow(), false)
 	if testErrVal == nil || testErrVal.Error() != errXLWriteQuorum.Error() {
 		t.Errorf("Expected write quorum error, but got: %v", testErrVal)
 	}

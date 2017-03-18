@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -145,8 +145,8 @@ func (l *lockServer) Lock(args *LockArgs, reply *bool) error {
 				node:          args.LockArgs.ServerAddr,
 				rpcPath:       args.LockArgs.ServiceEndpoint,
 				uid:           args.LockArgs.UID,
-				timestamp:     time.Now().UTC(),
-				timeLastCheck: time.Now().UTC(),
+				timestamp:     UTCNow(),
+				timeLastCheck: UTCNow(),
 			},
 		}
 	}
@@ -186,8 +186,8 @@ func (l *lockServer) RLock(args *LockArgs, reply *bool) error {
 		node:          args.LockArgs.ServerAddr,
 		rpcPath:       args.LockArgs.ServiceEndpoint,
 		uid:           args.LockArgs.UID,
-		timestamp:     time.Now().UTC(),
-		timeLastCheck: time.Now().UTC(),
+		timestamp:     UTCNow(),
+		timeLastCheck: UTCNow(),
 	}
 	if lri, ok := l.lockMap[args.LockArgs.Resource]; ok {
 		if *reply = !isWriteLock(lri); *reply { // Unless there is a write lock

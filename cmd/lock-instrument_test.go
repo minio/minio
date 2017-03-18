@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,7 @@
 
 package cmd
 
-import (
-	"testing"
-	"time"
-)
+import "testing"
 
 type lockStateCase struct {
 	volume      string
@@ -144,7 +141,7 @@ func getSystemLockState() (SystemLockState, error) {
 				LockType:    lockInfo.lType,
 				Status:      lockInfo.status,
 				Since:       lockInfo.since,
-				Duration:    time.Now().UTC().Sub(lockInfo.since),
+				Duration:    UTCNow().Sub(lockInfo.since),
 			})
 		}
 		lockState.LocksInfoPerObject = append(lockState.LocksInfoPerObject, volLockInfo)
@@ -414,7 +411,7 @@ func TestNsLockMapStatusBlockedToRunning(t *testing.T) {
 	globalNSMutex.debugLockMap[param].lockInfo[testCases[0].opsID] = debugLockInfo{
 		lockSource: "/home/vadmeste/work/go/src/github.com/minio/minio/xl-v1-object.go:683 +0x2a",
 		status:     "Running", // State set to "Running". Should fail with `LockInfoStateNotBlocked`.
-		since:      time.Now().UTC(),
+		since:      UTCNow(),
 	}
 
 	actualErr = globalNSMutex.statusBlockedToRunning(param, testCases[0].lockSource,

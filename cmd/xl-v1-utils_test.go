@@ -21,7 +21,6 @@ import (
 	"reflect"
 	"strconv"
 	"testing"
-	"time"
 
 	humanize "github.com/dustin/go-humanize"
 )
@@ -146,7 +145,7 @@ func newTestXLMetaV1() xlMetaV1 {
 	}
 	xlMeta.Stat = statInfo{
 		Size:    int64(20),
-		ModTime: time.Now().UTC(),
+		ModTime: UTCNow(),
 	}
 	// Set meta data.
 	xlMeta.Meta = make(map[string]string)

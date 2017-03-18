@@ -21,7 +21,6 @@ import (
 	"runtime"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/minio/dsync"
 )
@@ -61,7 +60,7 @@ func createLockTestServer(t *testing.T) (string, *lockServer, string) {
 		Username:    creds.AccessKey,
 		Password:    creds.SecretKey,
 		Version:     Version,
-		RequestTime: time.Now().UTC(),
+		RequestTime: UTCNow(),
 	}
 	loginReply := LoginRPCReply{}
 	err = locker.Login(&loginArgs, &loginReply)

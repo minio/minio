@@ -816,7 +816,7 @@ func newTestStreamingSignedBadChunkDateRequest(method, urlStr string, contentLen
 		return nil, err
 	}
 
-	currTime := time.Now().UTC()
+	currTime := UTCNow()
 	signature, err := signStreamingRequest(req, accessKey, secretKey, currTime)
 	if err != nil {
 		return nil, err
@@ -835,7 +835,7 @@ func newTestStreamingSignedRequest(method, urlStr string, contentLength, chunkSi
 		return nil, err
 	}
 
-	currTime := time.Now().UTC()
+	currTime := UTCNow()
 	signature, err := signStreamingRequest(req, accessKey, secretKey, currTime)
 	if err != nil {
 		return nil, err
@@ -887,7 +887,7 @@ func preSignV4(req *http.Request, accessKeyID, secretAccessKey string, expires i
 	}
 
 	region := serverConfig.GetRegion()
-	date := time.Now().UTC()
+	date := UTCNow()
 	scope := getScope(date, region)
 	credential := fmt.Sprintf("%s/%s", accessKeyID, scope)
 
@@ -926,7 +926,7 @@ func preSignV2(req *http.Request, accessKeyID, secretAccessKey string, expires i
 		return errors.New("Presign cannot be generated without access and secret keys")
 	}
 
-	d := time.Now().UTC()
+	d := UTCNow()
 	// Find epoch expires when the request will expire.
 	epochExpires := d.Unix() + expires
 
@@ -975,7 +975,7 @@ func preSignV2(req *http.Request, accessKeyID, secretAccessKey string, expires i
 // Sign given request using Signature V2.
 func signRequestV2(req *http.Request, accessKey, secretKey string) error {
 	// Initial time.
-	d := time.Now().UTC()
+	d := UTCNow()
 
 	// Add date if not present.
 	if date := req.Header.Get("Date"); date == "" {
@@ -1018,7 +1018,7 @@ func signRequestV4(req *http.Request, accessKey, secretKey string) error {
 		return fmt.Errorf("Invalid hashed payload")
 	}
 
-	currTime := time.Now().UTC()
+	currTime := UTCNow()
 
 	// Set x-amz-date.
 	req.Header.Set("x-amz-date", currTime.Format(iso8601Format))
@@ -1297,7 +1297,7 @@ func getTestWebRPCResponse(resp *httptest.ResponseRecorder, data interface{}) er
 	return nil
 }
 
-var src = rand.NewSource(time.Now().UTC().UnixNano())
+var src = rand.NewSource(UTCNow().UnixNano())
 
 // Function to generate random string for bucket/object names.
 func randString(n int) string {

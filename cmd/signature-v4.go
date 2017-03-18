@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -249,11 +249,11 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 
 	// If the host which signed the request is slightly ahead in time (by less than globalMaxSkewTime) the
 	// request should still be allowed.
-	if pSignValues.Date.After(time.Now().UTC().Add(globalMaxSkewTime)) {
+	if pSignValues.Date.After(UTCNow().Add(globalMaxSkewTime)) {
 		return ErrRequestNotReadyYet
 	}
 
-	if time.Now().UTC().Sub(pSignValues.Date) > time.Duration(pSignValues.Expires) {
+	if UTCNow().Sub(pSignValues.Date) > time.Duration(pSignValues.Expires) {
 		return ErrExpiredPresignRequest
 	}
 

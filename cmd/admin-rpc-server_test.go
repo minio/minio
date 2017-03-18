@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"net/url"
 	"testing"
-	"time"
 )
 
 func testAdminCmd(cmd cmdType, t *testing.T) {
@@ -40,7 +39,7 @@ func testAdminCmd(cmd cmdType, t *testing.T) {
 		Username:    creds.AccessKey,
 		Password:    creds.SecretKey,
 		Version:     Version,
-		RequestTime: time.Now().UTC(),
+		RequestTime: UTCNow(),
 	}
 	reply := LoginRPCReply{}
 	err = adminServer.Login(&args, &reply)
@@ -99,7 +98,7 @@ func TestReInitDisks(t *testing.T) {
 		Username:    creds.AccessKey,
 		Password:    creds.SecretKey,
 		Version:     Version,
-		RequestTime: time.Now().UTC(),
+		RequestTime: UTCNow(),
 	}
 	reply := LoginRPCReply{}
 	err = adminServer.Login(&args, &reply)
@@ -124,7 +123,7 @@ func TestReInitDisks(t *testing.T) {
 		Username:    creds.AccessKey,
 		Password:    creds.SecretKey,
 		Version:     Version,
-		RequestTime: time.Now().UTC(),
+		RequestTime: UTCNow(),
 	}
 	fsReply := LoginRPCReply{}
 	err = fsAdminServer.Login(&fsArgs, &fsReply)
@@ -161,7 +160,7 @@ func TestGetConfig(t *testing.T) {
 		Username:    creds.AccessKey,
 		Password:    creds.SecretKey,
 		Version:     Version,
-		RequestTime: time.Now().UTC(),
+		RequestTime: UTCNow(),
 	}
 	reply := LoginRPCReply{}
 	err = adminServer.Login(&args, &reply)
@@ -205,7 +204,7 @@ func TestWriteAndCommitConfig(t *testing.T) {
 		Username:    creds.AccessKey,
 		Password:    creds.SecretKey,
 		Version:     Version,
-		RequestTime: time.Now().UTC(),
+		RequestTime: UTCNow(),
 	}
 	reply := LoginRPCReply{}
 	err = adminServer.Login(&args, &reply)
