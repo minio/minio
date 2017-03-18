@@ -95,11 +95,11 @@ type ListBucketsHealResponse struct {
 }
 
 // HealStatus - represents different states of healing an object could be in.
-type healStatus int
+type HealStatus int
 
 const (
 	// Healthy - Object that is already healthy
-	Healthy healStatus = iota
+	Healthy HealStatus = iota
 	// CanHeal - Object can be healed
 	CanHeal
 	// Corrupted - Object can't be healed
@@ -110,7 +110,7 @@ const (
 
 // HealBucketInfo - represents healing related information of a bucket.
 type HealBucketInfo struct {
-	Status healStatus
+	Status HealStatus
 }
 
 // BucketInfo - represents bucket metadata.
@@ -127,7 +127,7 @@ type BucketInfo struct {
 
 // HealObjectInfo - represents healing related information of an object.
 type HealObjectInfo struct {
-	Status              healStatus
+	Status              HealStatus
 	MissingDataCount    int
 	MissingPartityCount int
 }
