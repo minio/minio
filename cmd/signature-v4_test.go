@@ -35,7 +35,7 @@ func niceError(code APIErrorCode) string {
 
 func TestDoesPolicySignatureMatch(t *testing.T) {
 	credentialTemplate := "%s/%s/%s/s3/aws4_request"
-	now := time.Now().UTC()
+	now := UTCNow()
 	accessKey := serverConfig.GetCredential().AccessKey
 
 	testCases := []struct {
@@ -106,7 +106,7 @@ func TestDoesPresignedSignatureMatch(t *testing.T) {
 
 	// sha256 hash of "payload"
 	payloadSHA256 := "239f59ed55e737c77147cf55ad0c1b030b6d7ee748a7426952f9b852d5a935e5"
-	now := time.Now().UTC()
+	now := UTCNow()
 	credentialTemplate := "%s/%s/%s/s3/aws4_request"
 
 	region := serverConfig.GetRegion()

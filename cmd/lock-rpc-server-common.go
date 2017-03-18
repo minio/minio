@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -66,7 +66,7 @@ func getLongLivedLocks(m map[string][]lockRequesterInfo, interval time.Duration)
 			// Check whether enough time has gone by since last check
 			if time.Since(lriArray[idx].timeLastCheck) >= interval {
 				rslt = append(rslt, nameLockRequesterInfoPair{name: name, lri: lriArray[idx]})
-				lriArray[idx].timeLastCheck = time.Now().UTC()
+				lriArray[idx].timeLastCheck = UTCNow()
 			}
 		}
 	}

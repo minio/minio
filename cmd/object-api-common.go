@@ -21,7 +21,6 @@ import (
 	"net/url"
 	"runtime"
 	"sync"
-	"time"
 
 	humanize "github.com/dustin/go-humanize"
 )
@@ -71,7 +70,7 @@ func dirObjectInfo(bucket, object string, size int64, metadata map[string]string
 	return ObjectInfo{
 		Bucket:      bucket,
 		Name:        object,
-		ModTime:     time.Now().UTC(),
+		ModTime:     UTCNow(),
 		ContentType: "application/octet-stream",
 		IsDir:       true,
 		Size:        size,

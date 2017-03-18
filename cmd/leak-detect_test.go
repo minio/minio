@@ -54,7 +54,7 @@ func (initialSnapShot LeakDetect) DetectLeak(t TestErrHandler) {
 	}
 	// Loop, waiting for goroutines to shut down.
 	// Wait up to 5 seconds, but finish as quickly as possible.
-	deadline := time.Now().UTC().Add(leakDetectDeadline * time.Second)
+	deadline := UTCNow().Add(leakDetectDeadline * time.Second)
 	for {
 		// get sack snapshot of relevant go routines.
 		leaked := initialSnapShot.CompareCurrentSnapshot()
@@ -63,7 +63,7 @@ func (initialSnapShot LeakDetect) DetectLeak(t TestErrHandler) {
 			return
 		}
 		// wait a test again will deadline.
-		if time.Now().UTC().Before(deadline) {
+		if UTCNow().Before(deadline) {
 			time.Sleep(leakDetectPauseTimeMs * time.Millisecond)
 			continue
 		}

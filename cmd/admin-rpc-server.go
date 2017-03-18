@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -137,7 +137,7 @@ func (s *adminCmd) Uptime(args *AuthRPCArgs, reply *UptimeReply) error {
 	// https://github.com/golang/go/issues/12914. This is expected
 	// to be fixed by go1.9.
 	*reply = UptimeReply{
-		Uptime: time.Now().UTC().Sub(globalBootTime),
+		Uptime: UTCNow().Sub(globalBootTime),
 	}
 
 	return nil

@@ -54,7 +54,7 @@ const NoJitter = 0.0
 
 // Global random source for fetching random values.
 var globalRandomSource = rand.New(&lockedRandSource{
-	src: rand.NewSource(time.Now().UTC().UnixNano()),
+	src: rand.NewSource(UTCNow().UnixNano()),
 })
 
 // newRetryTimerJitter creates a timer with exponentially increasing delays

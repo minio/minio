@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"math/rand"
 	"testing"
-	"time"
 
 	"reflect"
 
@@ -412,7 +411,7 @@ func TestErasureReadFileRandomOffsetLength(t *testing.T) {
 	}
 
 	// To generate random offset/length.
-	r := rand.New(rand.NewSource(time.Now().UTC().UnixNano()))
+	r := rand.New(rand.NewSource(UTCNow().UnixNano()))
 
 	// create pool buffer which will be used by erasureReadFile for
 	// reading from disks and erasure decoding.

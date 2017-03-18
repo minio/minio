@@ -557,7 +557,7 @@ func TestAddRemoveBucketListenerConfig(t *testing.T) {
 	}
 
 	// Add a topicConfig to an empty notificationConfig.
-	accountID := fmt.Sprintf("%d", time.Now().UTC().UnixNano())
+	accountID := fmt.Sprintf("%d", UTCNow().UnixNano())
 	accountARN := fmt.Sprintf(
 		"arn:minio:sqs:%s:%s:listen-%s",
 		serverConfig.GetRegion(),

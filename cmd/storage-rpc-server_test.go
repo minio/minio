@@ -19,7 +19,6 @@ package cmd
 import (
 	"net/url"
 	"testing"
-	"time"
 
 	"github.com/minio/minio/pkg/disk"
 )
@@ -63,7 +62,7 @@ func createTestStorageServer(t *testing.T) *testStorageRPCServer {
 	stServer := &storageServer{
 		storage:   storageDisks[0],
 		path:      "/disk1",
-		timestamp: time.Now().UTC(),
+		timestamp: UTCNow(),
 	}
 	return &testStorageRPCServer{
 		token:     token,

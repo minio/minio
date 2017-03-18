@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	"encoding/json"
 
@@ -274,4 +275,9 @@ func checkURL(address string) (*url.URL, error) {
 		return nil, fmt.Errorf("`%s` invalid: %s", address, err.Error())
 	}
 	return u, nil
+}
+
+// UTCNow - returns current UTC time.
+func UTCNow() time.Time {
+	return time.Now().UTC()
 }

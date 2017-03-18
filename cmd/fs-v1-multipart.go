@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,7 +48,7 @@ func (fs fsObjects) isMultipartUpload(bucket, prefix string) bool {
 
 // Delete uploads.json file wrapper handling a tricky case on windows.
 func (fs fsObjects) deleteUploadsJSON(bucket, object, uploadID string) error {
-	timeID := fmt.Sprintf("%X", time.Now().UTC().UnixNano())
+	timeID := fmt.Sprintf("%X", UTCNow().UnixNano())
 	tmpPath := pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID, uploadID+"+"+timeID)
 
 	multipartBucketPath := pathJoin(fs.fsPath, minioMetaMultipartBucket)
@@ -380,7 +380,7 @@ func (fs fsObjects) newMultipartUpload(bucket string, object string, meta map[st
 	fsMeta.Meta = meta
 
 	uploadID = mustGetUUID()
-	initiated := time.Now().UTC()
+	initiated := UTCNow()
 
 	// Add upload ID to uploads.json
 	uploadsPath := pathJoin(bucket, object, uploadsJSONFile)

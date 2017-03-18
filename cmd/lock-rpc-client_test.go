@@ -19,7 +19,6 @@ package cmd
 import (
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/minio/dsync"
 )
@@ -29,7 +28,7 @@ func TestLockRPCClient(t *testing.T) {
 	lkClient := newLockRPCClient(authConfig{
 		accessKey:       "abcd",
 		secretKey:       "abcd123",
-		serverAddr:      fmt.Sprintf("%X", time.Now().UTC().UnixNano()),
+		serverAddr:      fmt.Sprintf("%X", UTCNow().UnixNano()),
 		serviceEndpoint: pathJoin(lockRPCPath, "/test/1"),
 		secureConn:      false,
 		serviceName:     "Dsync",

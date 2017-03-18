@@ -438,8 +438,8 @@ func generateTestCert(host string) error {
 		Subject: pkix.Name{
 			Organization: []string{"Minio Test Cert"},
 		},
-		NotBefore: time.Now().UTC(),
-		NotAfter:  time.Now().UTC().Add(time.Minute * 1),
+		NotBefore: UTCNow(),
+		NotAfter:  UTCNow().Add(time.Minute * 1),
 
 		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},

@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2014-2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2014, 2015, 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -117,7 +117,7 @@ func (lc localAdminClient) Uptime() (time.Duration, error) {
 		return time.Duration(0), errServerNotInitialized
 	}
 
-	return time.Now().UTC().Sub(globalBootTime), nil
+	return UTCNow().Sub(globalBootTime), nil
 }
 
 // Uptime - returns the uptime of the server to which the RPC call is made.
@@ -380,7 +380,7 @@ func getPeerUptimes(peers adminPeers) (time.Duration, error) {
 	// the setup is the uptime of the single minio server
 	// instance.
 	if !globalIsDistXL {
-		return time.Now().UTC().Sub(globalBootTime), nil
+		return UTCNow().Sub(globalBootTime), nil
 	}
 
 	uptimes := make(uptimeSlice, len(peers))

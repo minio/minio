@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -478,7 +478,7 @@ func (xl xlObjects) newMultipartUpload(bucket string, object string, meta map[st
 		}
 		meta["content-type"] = contentType
 	}
-	xlMeta.Stat.ModTime = time.Now().UTC()
+	xlMeta.Stat.ModTime = UTCNow()
 	xlMeta.Meta = meta
 
 	// This lock needs to be held for any changes to the directory
@@ -507,7 +507,7 @@ func (xl xlObjects) newMultipartUpload(bucket string, object string, meta map[st
 		return "", toObjectErr(rErr, minioMetaMultipartBucket, uploadIDPath)
 	}
 
-	initiated := time.Now().UTC()
+	initiated := UTCNow()
 	// Create or update 'uploads.json'
 	if err = xl.addUploadID(bucket, object, uploadID, initiated); err != nil {
 		return "", err
@@ -725,7 +725,7 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	}
 
 	// Once part is successfully committed, proceed with updating XL metadata.
-	xlMeta.Stat.ModTime = time.Now().UTC()
+	xlMeta.Stat.ModTime = UTCNow()
 
 	// Add the current part.
 	xlMeta.AddObjectPart(partID, partSuffix, newMD5Hex, size)
@@ -971,7 +971,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 
 	// Save the final object size and modtime.
 	xlMeta.Stat.Size = objectSize
-	xlMeta.Stat.ModTime = time.Now().UTC()
+	xlMeta.Stat.ModTime = UTCNow()
 
 	// Save successfully calculated md5sum.
 	xlMeta.Meta["md5Sum"] = s3MD5
