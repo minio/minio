@@ -349,10 +349,6 @@ func (xl xlObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 			}
 			// For any walk error return right away.
 			if walkResult.err != nil {
-				// File not found or Disk not found is a valid case.
-				if isErrIgnored(walkResult.err, xlTreeWalkIgnoredErrs...) {
-					continue
-				}
 				return ListMultipartsInfo{}, err
 			}
 			entry := strings.TrimPrefix(walkResult.entry, retainSlash(bucket))
