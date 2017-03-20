@@ -29,6 +29,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/minio/minio-go/pkg/s3utils"
 )
 
 // Signature and API related constants.
@@ -45,16 +47,16 @@ func encodeURL2Path(u *url.URL) (path string) {
 		bucketName := hostSplits[0]
 		path = "/" + bucketName
 		path += u.Path
-		path = urlEncodePath(path)
+		path = s3utils.EncodePath(path)
 		return
 	}
 	if strings.HasSuffix(u.Host, ".storage.googleapis.com") {
 		path = "/" + strings.TrimSuffix(u.Host, ".storage.googleapis.com")
 		path += u.Path
-		path = urlEncodePath(path)
+		path = s3utils.EncodePath(path)
 		return
 	}
-	path = urlEncodePath(u.Path)
+	path = s3utils.EncodePath(u.Path)
 	return
 }
 
@@ -95,10 +97,10 @@ func PreSignV2(req http.Request, accessKeyID, secretAccessKey string, expires in
 	query.Set("Expires", strconv.FormatInt(epochExpires, 10))
 
 	// Encode query and save.
-	req.URL.RawQuery = queryEncode(query)
+	req.URL.RawQuery = s3utils.QueryEncode(query)
 
 	// Save signature finally.
-	req.URL.RawQuery += "&Signature=" + urlEncodePath(signature)
+	req.URL.RawQuery += "&Signature=" + s3utils.EncodePath(signature)
 
 	// Return.
 	return &req
@@ -287,7 +289,7 @@ func writeCanonicalizedResource(buf *bytes.Buffer, req http.Request, isPreSign b
 		// Get encoded URL path.
 		if len(requestURL.Query()) > 0 {
 			// Keep the usual queries unescaped for string to sign.
-			query, _ := url.QueryUnescape(queryEncode(requestURL.Query()))
+			query, _ := url.QueryUnescape(s3utils.QueryEncode(requestURL.Query()))
 			path = path + "?" + query
 		}
 		buf.WriteString(path)

@@ -85,10 +85,6 @@ func IsAmazonEndpoint(endpointURL url.URL) bool {
 		return true
 	}
 
-	if IsAmazonS3AccelerateEndpoint(endpointURL) {
-		return true
-	}
-
 	return endpointURL.Host == "s3.amazonaws.com"
 }
 
@@ -103,11 +99,6 @@ func IsAmazonChinaEndpoint(endpointURL url.URL) bool {
 		return false
 	}
 	return endpointURL.Host == "s3.cn-north-1.amazonaws.com.cn"
-}
-
-// IsAmazonS3AccelerateEndpoint - Match if it is an Amazon S3 Accelerate
-func IsAmazonS3AccelerateEndpoint(endpointURL url.URL) bool {
-	return strings.HasSuffix(endpointURL.Host, ".s3-accelerate.amazonaws.com")
 }
 
 // IsGoogleEndpoint - Match if it is exactly Google cloud storage endpoint.

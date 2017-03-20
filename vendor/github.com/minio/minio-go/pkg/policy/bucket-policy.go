@@ -34,7 +34,7 @@ const (
 	BucketPolicyWriteOnly              = "writeonly"
 )
 
-// isValidBucketPolicy - Is provided policy value supported.
+// IsValidBucketPolicy - returns true if policy is valid and supported, false otherwise.
 func (p BucketPolicy) IsValidBucketPolicy() bool {
 	switch p {
 	case BucketPolicyNone, BucketPolicyReadOnly, BucketPolicyReadWrite, BucketPolicyWriteOnly:
@@ -508,7 +508,7 @@ func getObjectPolicy(statement Statement) (readOnly bool, writeOnly bool) {
 	return readOnly, writeOnly
 }
 
-// Returns policy of given bucket name, prefix in given statements.
+// GetPolicy - Returns policy of given bucket name, prefix in given statements.
 func GetPolicy(statements []Statement, bucketName string, prefix string) BucketPolicy {
 	bucketResource := awsResourcePrefix + bucketName
 	objectResource := awsResourcePrefix + bucketName + "/" + prefix + "*"
@@ -563,7 +563,7 @@ func GetPolicy(statements []Statement, bucketName string, prefix string) BucketP
 	return policy
 }
 
-// GetPolicies returns a map of policies rules of given bucket name, prefix in given statements.
+// GetPolicies - returns a map of policies rules of given bucket name, prefix in given statements.
 func GetPolicies(statements []Statement, bucketName string) map[string]BucketPolicy {
 	policyRules := map[string]BucketPolicy{}
 	objResources := set.NewStringSet()
@@ -590,8 +590,7 @@ func GetPolicies(statements []Statement, bucketName string) map[string]BucketPol
 	return policyRules
 }
 
-// Returns new statements containing policy of given bucket name and
-// prefix are appended.
+// SetPolicy - Returns new statements containing policy of given bucket name and prefix are appended.
 func SetPolicy(statements []Statement, policy BucketPolicy, bucketName string, prefix string) []Statement {
 	out := removeStatements(statements, bucketName, prefix)
 	// fmt.Println("out = ")
