@@ -29,6 +29,10 @@ import (
 	"github.com/Sirupsen/logrus"
 )
 
+const (
+	minioEventSource = "minio:s3"
+)
+
 type externalNotifier struct {
 	// Per-bucket notification config. This is updated via
 	// PutBucketNotification API.
@@ -82,6 +86,9 @@ type eventData struct {
 	Bucket    string
 	ObjInfo   ObjectInfo
 	ReqParams map[string]string
+	Host      string
+	Port      string
+	UserAgent string
 }
 
 // New notification event constructs a new notification event message from
@@ -114,7 +121,7 @@ func newNotificationEvent(event eventData) NotificationEvent {
 	// http://docs.aws.amazon.com/AmazonS3/latest/dev/notification-content-structure.html
 	nEvent := NotificationEvent{
 		EventVersion:      eventVersion,
-		EventSource:       eventSource,
+		EventSource:       minioEventSource,
 		AwsRegion:         region,
 		EventTime:         eventTime.Format(timeFormatAMZ),
 		EventName:         event.Type.String(),
@@ -134,6 +141,11 @@ func newNotificationEvent(event eventData) NotificationEvent {
 				OwnerIdentity: identity{creds.AccessKey},
 				ARN:           bucketARNPrefix + event.Bucket,
 			},
+		},
+		Source: sourceInfo{
+			Host:      event.Host,
+			Port:      event.Port,
+			UserAgent: event.UserAgent,
 		},
 	}
 
