@@ -186,10 +186,22 @@ type configV5 struct {
 	Logger loggerV5 `json:"logger"`
 }
 
+// consoleLogger - default logger if not other logging is enabled.
+type consoleLoggerV1 struct {
+	Enable bool   `json:"enable"`
+	Level  string `json:"level"`
+}
+
+type fileLoggerV1 struct {
+	Enable   bool   `json:"enable"`
+	Filename string `json:"fileName"`
+	Level    string `json:"level"`
+}
+
 type loggerV6 struct {
-	Console consoleLogger  `json:"console"`
-	File    fileLogger     `json:"file"`
-	Syslog  syslogLoggerV3 `json:"syslog"`
+	Console consoleLoggerV1 `json:"console"`
+	File    fileLoggerV1    `json:"file"`
+	Syslog  syslogLoggerV3  `json:"syslog"`
 }
 
 // configV6 server configuration version '6'.
@@ -285,6 +297,12 @@ type serverConfigV9 struct {
 	rwMutex *sync.RWMutex
 }
 
+type loggerV7 struct {
+	sync.RWMutex
+	Console consoleLoggerV1 `json:"console"`
+	File    fileLoggerV1    `json:"file"`
+}
+
 // serverConfigV10 server configuration version '10' which is like
 // version '9' except it drops support of syslog config, and makes the
 // RWMutex global (so it does not exist in this struct).
@@ -296,7 +314,7 @@ type serverConfigV10 struct {
 	Region     string     `json:"region"`
 
 	// Additional error logging configuration.
-	Logger logger `json:"logger"`
+	Logger loggerV7 `json:"logger"`
 
 	// Notification queue configuration.
 	Notify notifierV1 `json:"notify"`
@@ -324,7 +342,7 @@ type serverConfigV11 struct {
 	Region     string     `json:"region"`
 
 	// Additional error logging configuration.
-	Logger logger `json:"logger"`
+	Logger loggerV7 `json:"logger"`
 
 	// Notification queue configuration.
 	Notify notifierV1 `json:"notify"`
@@ -340,7 +358,7 @@ type serverConfigV12 struct {
 	Region     string     `json:"region"`
 
 	// Additional error logging configuration.
-	Logger logger `json:"logger"`
+	Logger loggerV7 `json:"logger"`
 
 	// Notification queue configuration.
 	Notify notifierV2 `json:"notify"`
@@ -356,7 +374,7 @@ type serverConfigV13 struct {
 	Region     string     `json:"region"`
 
 	// Additional error logging configuration.
-	Logger *logger `json:"logger"`
+	Logger *loggerV7 `json:"logger"`
 
 	// Notification queue configuration.
 	Notify *notifier `json:"notify"`
@@ -373,7 +391,24 @@ type serverConfigV14 struct {
 	Browser    string     `json:"browser"`
 
 	// Additional error logging configuration.
-	Logger *logger `json:"logger"`
+	Logger *loggerV7 `json:"logger"`
+
+	// Notification queue configuration.
+	Notify *notifier `json:"notify"`
+}
+
+// serverConfigV15 server configuration version '15' which is like
+// version '14' except it adds mysql support
+type serverConfigV15 struct {
+	Version string `json:"version"`
+
+	// S3 API configuration.
+	Credential credential `json:"credential"`
+	Region     string     `json:"region"`
+	Browser    string     `json:"browser"`
+
+	// Additional error logging configuration.
+	Logger *loggerV7 `json:"logger"`
 
 	// Notification queue configuration.
 	Notify *notifier `json:"notify"`

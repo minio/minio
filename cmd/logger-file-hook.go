@@ -17,24 +17,25 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
-	"strings"
 
 	"github.com/Sirupsen/logrus"
 )
 
 type fileLogger struct {
 	Enable   bool   `json:"enable"`
-	Filename string `json:"fileName"`
-	Level    string `json:"level"`
+	Filename string `json:"filename"`
 }
 
 func (f *fileLogger) Validate() error {
-	level := strings.ToLower(f.Level)
-	if level != "error" && level != "fatal" && level != "" {
-		return fmt.Errorf("`%s` level value not recognized", f.Level)
+	if !f.Enable {
+		return nil
+	}
+	if f.Filename == "" {
+		return errors.New("Filename field empty")
 	}
 	return nil
 }
@@ -58,13 +59,10 @@ func enableFileLogger() {
 	// Add a local file hook.
 	fileLogger.Hooks.Add(&localFile{file})
 
-	lvl, err := logrus.ParseLevel(flogger.Level)
-	fatalIf(err, "Unknown log level found in the config file.")
-
 	// Set default JSON formatter.
 	fileLogger.Out = ioutil.Discard
 	fileLogger.Formatter = new(logrus.JSONFormatter)
-	fileLogger.Level = lvl // Minimum log level.
+	fileLogger.Level = logrus.DebugLevel // Minimum log level.
 
 	log.mu.Lock()
 	log.loggers = append(log.loggers, fileLogger)

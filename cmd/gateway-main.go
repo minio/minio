@@ -96,7 +96,7 @@ func newGatewayLayer(backendType, accessKey, secretKey string) (GatewayLayer, er
 // only used in memory.
 func newGatewayConfig(accessKey, secretKey, region string) error {
 	// Initialize server config.
-	srvCfg := newServerConfigV15()
+	srvCfg := newServerConfigV16()
 
 	// If env is set for a fresh start, save them to config file.
 	srvCfg.SetCredential(credential{
@@ -105,7 +105,7 @@ func newGatewayConfig(accessKey, secretKey, region string) error {
 	})
 
 	// Set default printing to console.
-	srvCfg.Logger.SetConsole(consoleLogger{true, "error"})
+	srvCfg.Logger.SetConsole(consoleLogger{true})
 
 	// Set custom region.
 	srvCfg.SetRegion(region)
