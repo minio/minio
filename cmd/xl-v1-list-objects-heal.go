@@ -107,10 +107,6 @@ func (xl xlObjects) listObjectsHeal(bucket, prefix, marker, delimiter string, ma
 		}
 		// For any walk error return right away.
 		if walkResult.err != nil {
-			// File not found is a valid case.
-			if walkResult.err == errFileNotFound {
-				return ListObjectsInfo{}, nil
-			}
 			return ListObjectsInfo{}, toObjectErr(walkResult.err, bucket, prefix)
 		}
 		entry := walkResult.entry
@@ -325,12 +321,6 @@ func (xl xlObjects) listMultipartUploadsHeal(bucket, prefix, keyMarker,
 		}
 		// Collect uploads until maxUploads limit is reached.
 		for walkResult := range walkerCh {
-			// Ignore errors like errDiskNotFound
-			// and errFileNotFound.
-			if isErrIgnored(walkResult.err,
-				xlTreeWalkIgnoredErrs...) {
-				continue
-			}
 			// For any error during tree walk we should
 			// return right away.
 			if walkResult.err != nil {
