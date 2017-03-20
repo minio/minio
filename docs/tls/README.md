@@ -4,7 +4,7 @@ In this document, we will configure Minio servers with TLS certificates for both
 
 ## 1. Prerequisites
 
-* Download Minio server from [here](https://docs.minio.io/docs/minio)
+* Download Minio server from [here](https://docs.minio.io/docs/minio-quickstart-guide)
 
 ## 2. Generate TLS certificate
 
