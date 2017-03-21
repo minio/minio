@@ -349,7 +349,7 @@ func (xl xlObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 			}
 			// For any walk error return right away.
 			if walkResult.err != nil {
-				return ListMultipartsInfo{}, err
+				return ListMultipartsInfo{}, walkResult.err
 			}
 			entry := strings.TrimPrefix(walkResult.entry, retainSlash(bucket))
 			// For an entry looking like a directory, store and
