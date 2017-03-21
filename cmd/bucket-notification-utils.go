@@ -29,6 +29,9 @@ var suppportedEventTypes = map[string]struct{}{
 	// Object removed event types.
 	"s3:ObjectRemoved:*":      {},
 	"s3:ObjectRemoved:Delete": {},
+	"s3:ObjectAccessed:Get":   {},
+	"s3:ObjectAccessed:Head":  {},
+	"s3:ObjectAccessed:*":     {},
 }
 
 // checkEvent - checks if an event is supported.

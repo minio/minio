@@ -94,6 +94,10 @@ const (
 	ObjectCreatedCompleteMultipartUpload
 	// ObjectRemovedDelete is s3:ObjectRemoved:Delete
 	ObjectRemovedDelete
+	// ObjectAccessedGet is s3:ObjectAccessed:Get
+	ObjectAccessedGet
+	// ObjectAccessedHead is s3:ObjectAccessed:Head
+	ObjectAccessedHead
 )
 
 // Stringer interface for event name.
@@ -109,6 +113,10 @@ func (eventName EventName) String() string {
 		return "s3:ObjectCreated:CompleteMultipartUpload"
 	case ObjectRemovedDelete:
 		return "s3:ObjectRemoved:Delete"
+	case ObjectAccessedGet:
+		return "s3:ObjectAccessed:Get"
+	case ObjectAccessedHead:
+		return "s3:ObjectAccessed:Head"
 	default:
 		return "s3:Unknown"
 	}
