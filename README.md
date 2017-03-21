@@ -30,7 +30,7 @@ minio server ~/Photos
 ### Binary Download
 | Platform| Architecture | URL|
 | ----------| -------- | ------|
-|Apple OS X|64-bit Intel|https://dl.minio.io/server/minio/release/darwin-amd64/minio|
+|Apple OS X|64-bit Intel|https://dl.minio.io/server/minio/release/darwin-amd64/minio |
 ```sh
 chmod 755 minio
 ./minio server ~/Photos
@@ -40,11 +40,11 @@ chmod 755 minio
 ### Binary Download
 | Platform| Architecture | URL|
 | ----------| -------- | ------|
-|GNU/Linux|64-bit Intel|https://dl.minio.io/server/minio/release/linux-amd64/minio|
-||32-bit Intel|https://dl.minio.io/server/minio/release/linux-386/minio|
-||32-bit ARM|https://dl.minio.io/server/minio/release/linux-arm/minio|
-||64-bit ARM|https://dl.minio.io/server/minio/release/linux-arm64/minio|
-||32-bit ARMv6|https://dl.minio.io/server/minio/release/linux-arm6vl/minio|
+|GNU/Linux|64-bit Intel|https://dl.minio.io/server/minio/release/linux-amd64/minio |
+|         |32-bit Intel|https://dl.minio.io/server/minio/release/linux-386/minio |
+|         |32-bit ARM|https://dl.minio.io/server/minio/release/linux-arm/minio |
+|         |64-bit ARM|https://dl.minio.io/server/minio/release/linux-arm64/minio |
+|         |32-bit ARMv6|https://dl.minio.io/server/minio/release/linux-arm6vl/minio |
 ```sh
 chmod +x minio
 ./minio server ~/Photos
@@ -54,8 +54,8 @@ chmod +x minio
 ### Binary Download
 | Platform| Architecture | URL|
 | ----------| -------- | ------|
-|Microsoft Windows|64-bit|https://dl.minio.io/server/minio/release/windows-amd64/minio.exe|
-||32-bit|https://dl.minio.io/server/minio/release/windows-386/minio.exe|
+|Microsoft Windows|64-bit|https://dl.minio.io/server/minio/release/windows-amd64/minio.exe |
+|                 |32-bit|https://dl.minio.io/server/minio/release/windows-386/minio.exe |
 ```sh
 minio.exe server D:\Photos
 ```
@@ -64,7 +64,7 @@ minio.exe server D:\Photos
 ### Binary Download
 | Platform| Architecture | URL|
 | ----------| -------- | ------|
-|FreeBSD|64-bit|https://dl.minio.io/server/minio/release/freebsd-amd64/minio|
+|FreeBSD|64-bit|https://dl.minio.io/server/minio/release/freebsd-amd64/minio |
 ```sh
 chmod 755 minio
 ./minio server ~/Photos
