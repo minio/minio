@@ -1,7 +1,7 @@
 /*
  * Quick - Quick key value store for config files and persistent state files
  *
- * Quick (C) 2015 Minio, Inc.
+ * Quick (C) 2015, 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,99 +47,11 @@ type config struct {
 	lock *sync.RWMutex
 }
 
-// CheckData - checks the validity of config data. Data should be of
-// type struct and contain a string type field called "Version".
-func CheckData(data interface{}) error {
-	if !structs.IsStruct(data) {
-		return fmt.Errorf("Invalid argument type. Expecing \"struct\" type")
-	}
-
-	st := structs.New(data)
-	f, ok := st.FieldOk("Version")
-	if !ok {
-		return fmt.Errorf("Invalid type of struct argument. No [%s.Version] field found", st.Name())
-	}
-
-	if f.Kind() != reflect.String {
-		return fmt.Errorf("Invalid type of struct argument. Expecting \"string\" type [%s.Version] field", st.Name())
-	}
-
-	return nil
-}
-
-// New - instantiate a new config
-func New(data interface{}) (Config, error) {
-	if err := CheckData(data); err != nil {
-		return nil, err
-	}
-
-	d := new(config)
-	d.data = data
-	d.lock = new(sync.RWMutex)
-	return d, nil
-}
-
-// CheckVersion - loads json and compares the version number provided returns back true or false - any failure
-// is returned as error.
-func CheckVersion(filename string, version string) (bool, error) {
-	data := struct {
-		Version string
-	}{
-		Version: "",
-	}
-	config, err := Load(filename, &data)
-	if err != nil {
-		return false, err
-	}
-	if config.Version() != version {
-		return false, nil
-	}
-	return true, nil
-}
-
-// Load - loads json config from filename for the a given struct data
-func Load(filename string, data interface{}) (Config, error) {
-	config, err := New(data)
-	if err != nil {
-		return nil, err
-	}
-	err = config.Load(filename)
-	if err != nil {
-		return nil, err
-	}
-	return config, nil
-}
-
 // Version returns the current config file format version
 func (d config) Version() string {
 	st := structs.New(d.data)
-
-	f, ok := st.FieldOk("Version")
-	if !ok {
-		return ""
-	}
-
-	val := f.Value()
-	ver, ok := val.(string)
-	if ok {
-		return ver
-	}
-	return ""
-}
-
-// writeFile writes data to a file named by filename.
-// If the file does not exist, writeFile creates it;
-// otherwise writeFile truncates it before writing.
-func writeFile(filename string, data []byte) error {
-	safeFile, err := safe.CreateFile(filename)
-	if err != nil {
-		return err
-	}
-	_, err = safeFile.Write(data)
-	if err != nil {
-		return err
-	}
-	return safeFile.Close()
+	f := st.Field("Version")
+	return f.Value().(string)
 }
 
 // String converts JSON config to printable string
@@ -155,26 +67,17 @@ func (d config) Save(filename string) error {
 	d.lock.Lock()
 	defer d.lock.Unlock()
 
-	// Check for existing file, if yes create a backup.
-	st, err := os.Stat(filename)
-	// If file exists and stat failed return here.
-	if err != nil && !os.IsNotExist(err) {
-		return err
-	}
-	// File exists and proceed to take backup.
-	if err == nil {
-		// File exists and is not a regular file return error.
-		if !st.Mode().IsRegular() {
-			return fmt.Errorf("%s is not a regular file", filename)
-		}
-		// Read old data.
-		var oldData []byte
-		oldData, err = ioutil.ReadFile(filename)
-		if err != nil {
+	// Backup if given file exists
+	oldData, err := ioutil.ReadFile(filename)
+	if err != nil {
+		// Ignore if file does not exist.
+		if !os.IsNotExist(err) {
 			return err
 		}
+	} else {
 		// Save read data to the backup file.
-		if err = writeFile(filename+".old", oldData); err != nil {
+		backupFilename := filename + ".old"
+		if err = writeFile(backupFilename, oldData); err != nil {
 			return err
 		}
 	}
@@ -186,26 +89,12 @@ func (d config) Save(filename string) error {
 // Load - loads config from file and merge with currently set values
 // File content format is guessed from the file name extension, if not
 // available, consider that we have JSON.
-func (d *config) Load(filename string) error {
+func (d config) Load(filename string) error {
 	d.lock.Lock()
 	defer d.lock.Unlock()
 
-	st := structs.New(d.data)
-	f, ok := st.FieldOk("Version")
-	if !ok {
-		return fmt.Errorf("Argument struct [%s] does not contain field \"Version\"", st.Name())
-	}
-
 	if err := loadFileConfig(filename, d.data); err != nil {
 		return err
-	}
-
-	if err := CheckData(d.data); err != nil {
-		return err
-	}
-
-	if (*d).Version() != f.Value() {
-		return fmt.Errorf("Version mismatch")
 	}
 
 	return nil
@@ -219,10 +108,6 @@ func (d config) Data() interface{} {
 //Diff  - list fields that are in A but not in B
 func (d config) Diff(c Config) ([]structs.Field, error) {
 	var fields []structs.Field
-	err := CheckData(c.Data())
-	if err != nil {
-		return []structs.Field{}, err
-	}
 
 	currFields := structs.Fields(d.Data())
 	newFields := structs.Fields(c.Data())
@@ -245,10 +130,6 @@ func (d config) Diff(c Config) ([]structs.Field, error) {
 //DeepDiff  - list fields in A that are missing or not equal to fields in B
 func (d config) DeepDiff(c Config) ([]structs.Field, error) {
 	var fields []structs.Field
-	err := CheckData(c.Data())
-	if err != nil {
-		return []structs.Field{}, err
-	}
 
 	currFields := structs.Fields(d.Data())
 	newFields := structs.Fields(c.Data())
@@ -266,4 +147,70 @@ func (d config) DeepDiff(c Config) ([]structs.Field, error) {
 		}
 	}
 	return fields, nil
+}
+
+// checkData - checks the validity of config data. Data should be of
+// type struct and contain a string type field called "Version".
+func checkData(data interface{}) error {
+	if !structs.IsStruct(data) {
+		return fmt.Errorf("interface must be struct type")
+	}
+
+	st := structs.New(data)
+	f, ok := st.FieldOk("Version")
+	if !ok {
+		return fmt.Errorf("struct ‘%s’ must have field ‘Version’", st.Name())
+	}
+
+	if f.Kind() != reflect.String {
+		return fmt.Errorf("‘Version’ field in struct ‘%s’ must be a string type", st.Name())
+	}
+
+	return nil
+}
+
+// writeFile writes data to a file named by filename.
+// If the file does not exist, writeFile creates it;
+// otherwise writeFile truncates it before writing.
+func writeFile(filename string, data []byte) error {
+	safeFile, err := safe.CreateFile(filename)
+	if err != nil {
+		return err
+	}
+	_, err = safeFile.Write(data)
+	if err != nil {
+		return err
+	}
+	return safeFile.Close()
+}
+
+// New - instantiate a new config
+func New(data interface{}) (Config, error) {
+	if err := checkData(data); err != nil {
+		return nil, err
+	}
+
+	d := new(config)
+	d.data = data
+	d.lock = new(sync.RWMutex)
+	return d, nil
+}
+
+// Load - loads json config from filename for the a given struct data
+func Load(filename string, data interface{}) (qc Config, err error) {
+	if qc, err = New(data); err == nil {
+		err = qc.Load(filename)
+	}
+
+	return qc, err
+}
+
+// Save - saves given configuration data into given file as JSON.
+func Save(filename string, data interface{}) (err error) {
+	var qc Config
+	if qc, err = New(data); err == nil {
+		err = qc.Save(filename)
+	}
+
+	return err
 }
