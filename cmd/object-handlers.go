@@ -173,6 +173,14 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		// call wrter.Write(nil) to set appropriate headers.
 		writer.Write(nil)
 	}
+
+	// Notify object accessed via a GET request.
+	eventNotify(eventData{
+		Type:      ObjectAccessedGet,
+		Bucket:    bucket,
+		ObjInfo:   objInfo,
+		ReqParams: extractReqParams(r),
+	})
 }
 
 // HeadObjectHandler - HEAD Object
@@ -221,6 +229,14 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 
 	// Successful response.
 	w.WriteHeader(http.StatusOK)
+
+	// Notify object accessed via a HEAD request.
+	eventNotify(eventData{
+		Type:      ObjectAccessedHead,
+		Bucket:    bucket,
+		ObjInfo:   objInfo,
+		ReqParams: extractReqParams(r),
+	})
 }
 
 // Extract metadata relevant for an CopyObject operation based on conditional
