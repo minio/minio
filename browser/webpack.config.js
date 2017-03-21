@@ -22,7 +22,6 @@ var purify = require("purifycss-webpack-plugin")
 var exports = {
   context: __dirname,
   entry: [
-    "babel-polyfill",
     path.resolve(__dirname, 'app/index.js')
   ],
   output: {
@@ -101,7 +100,6 @@ var exports = {
 
 if (process.env.NODE_ENV === 'dev') {
   exports.entry = [
-    "babel-polyfill",
     'webpack/hot/dev-server',
     'webpack-dev-server/client?http://localhost:8080',
     path.resolve(__dirname, 'app/index.js')

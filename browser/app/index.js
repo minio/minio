@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+import 'babel-polyfill'
 
 import './less/main.less'
 
@@ -44,7 +45,6 @@ import Web from './js/web'
 window.Web = Web
 
 import storage from 'local-storage-fallback'
-
 const store = applyMiddleware(thunkMiddleware)(createStore)(reducer)
 const Browse = connect(state => state)(_Browse)
 const Login = connect(state => state)(_Login)
