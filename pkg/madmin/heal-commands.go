@@ -627,6 +627,7 @@ func (adm *AdminClient) ListUploadsHeal(bucket, prefix string, recursive bool,
 				// Send upload info.
 				case uploadStatCh <- UploadInfo{
 					Key:            upload.Key,
+					UploadID:       upload.UploadID,
 					Initiated:      upload.Initiated,
 					HealUploadInfo: upload.HealUploadInfo,
 				}:
