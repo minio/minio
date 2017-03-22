@@ -109,8 +109,8 @@ func TestServerConfig(t *testing.T) {
 	serverConfig.Logger.SetFile(fileLogger)
 
 	// Match version.
-	if serverConfig.GetVersion() != v16 {
-		t.Errorf("Expecting version %s found %s", serverConfig.GetVersion(), v16)
+	if serverConfig.GetVersion() != v17 {
+		t.Errorf("Expecting version %s found %s", serverConfig.GetVersion(), v17)
 	}
 
 	// Attempt to save.
@@ -215,7 +215,7 @@ func TestValidateConfig(t *testing.T) {
 
 	configPath := filepath.Join(rootPath, minioConfigFile)
 
-	v := v16
+	v := v17
 
 	testCases := []struct {
 		configData string
@@ -275,8 +275,32 @@ func TestValidateConfig(t *testing.T) {
 		// Test 18 - Test Webhook
 		{`{"version": "` + v + `", "credential": { "accessKey": "minio", "secretKey": "minio123" }, "region": "us-east-1", "browser": "on", "notify": { "webhook": { "1": { "enable": true, "endpoint": "" } }}}`, false},
 
-		// Test 19 - Test MySQL
+		// Test 20 - Test MySQL
 		{`{"version": "` + v + `", "credential": { "accessKey": "minio", "secretKey": "minio123" }, "region": "us-east-1", "browser": "on", "notify": { "mysql": { "1": { "enable": true, "dsnString": "",  "table": "", "host": "", "port": "", "user": "", "password": "", "database": "" }}}}`, false},
+
+		// Test 21 - Test Format for MySQL
+		{`{"version": "` + v + `", "credential": { "accessKey": "minio", "secretKey": "minio123" }, "region": "us-east-1", "browser": "on", "notify": { "mysql": { "1": { "enable": true, "dsnString": "",  "format": "invalid", "table": "xxx", "host": "10.0.0.1", "port": "3306", "user": "abc", "password": "pqr", "database": "test1" }}}}`, false},
+
+		// Test 22 - Test valid Format for MySQL
+		{`{"version": "` + v + `", "credential": { "accessKey": "minio", "secretKey": "minio123" }, "region": "us-east-1", "browser": "on", "notify": { "mysql": { "1": { "enable": true, "dsnString": "",  "format": "namespace", "table": "xxx", "host": "10.0.0.1", "port": "3306", "user": "abc", "password": "pqr", "database": "test1" }}}}`, true},
+
+		// Test 23 - Test Format for PostgreSQL
+		{`{"version": "` + v + `", "credential": { "accessKey": "minio", "secretKey": "minio123" }, "region": "us-east-1", "browser": "on", "notify": { "postgresql": { "1": { "enable": true, "connectionString": "", "format": "invalid", "table": "xxx", "host": "myhost", "port": "5432", "user": "abc", "password": "pqr", "database": "test1" }}}}`, false},
+
+		// Test 24 - Test valid Format for PostgreSQL
+		{`{"version": "` + v + `", "credential": { "accessKey": "minio", "secretKey": "minio123" }, "region": "us-east-1", "browser": "on", "notify": { "postgresql": { "1": { "enable": true, "connectionString": "", "format": "namespace", "table": "xxx", "host": "myhost", "port": "5432", "user": "abc", "password": "pqr", "database": "test1" }}}}`, true},
+
+		// Test 25 - Test Format for ElasticSearch
+		{`{"version": "` + v + `", "credential": { "accessKey": "minio", "secretKey": "minio123" }, "region": "us-east-1", "browser": "on", "notify": { "elasticsearch": { "1": { "enable": true, "format": "invalid", "url": "example.com", "index": "myindex" } }}}`, false},
+
+		// Test 26 - Test valid Format for ElasticSearch
+		{`{"version": "` + v + `", "credential": { "accessKey": "minio", "secretKey": "minio123" }, "region": "us-east-1", "browser": "on", "notify": { "elasticsearch": { "1": { "enable": true, "format": "namespace", "url": "example.com", "index": "myindex" } }}}`, true},
+
+		// Test 27 - Test Format for Redis
+		{`{"version": "` + v + `", "credential": { "accessKey": "minio", "secretKey": "minio123" }, "region": "us-east-1", "browser": "on", "notify": { "redis": { "1": { "enable": true, "format": "invalid", "address": "example.com", "password": "xxx", "key": "key1" } }}}`, false},
+
+		// Test 28 - Test valid Format for Redis
+		{`{"version": "` + v + `", "credential": { "accessKey": "minio", "secretKey": "minio123" }, "region": "us-east-1", "browser": "on", "notify": { "redis": { "1": { "enable": true, "format": "namespace", "address": "example.com", "password": "xxx", "key": "key1" } }}}`, true},
 	}
 
 	for i, testCase := range testCases {

@@ -85,6 +85,10 @@ func migrateConfig() error {
 	if err := migrateV15ToV16(); err != nil {
 		return err
 	}
+	// Migration version '16' to '17'.
+	if err := migrateV16ToV17(); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -1080,5 +1084,126 @@ func migrateV15ToV16() error {
 	}
 
 	log.Printf("Migration from version ‘%s’ to ‘%s’ completed successfully.\n", cv15.Version, srvConfig.Version)
+	return nil
+}
+
+// Version '16' to '17' migration. Adds "format" configuration
+// parameter for database targets.
+func migrateV16ToV17() error {
+	configFile := getConfigFile()
+
+	cv16 := &serverConfigV16{}
+	_, err := quick.Load(configFile, cv16)
+	if os.IsNotExist(err) {
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("Unable to load config version ‘16’. %v", err)
+	}
+	if cv16.Version != "16" {
+		return nil
+	}
+
+	// Copy over fields from V16 into V17 config struct
+	srvConfig := &serverConfigV17{
+		Logger: &loggers{},
+		Notify: &notifier{},
+	}
+	srvConfig.Version = "17"
+	srvConfig.Credential = cv16.Credential
+	srvConfig.Region = cv16.Region
+	if srvConfig.Region == "" {
+		// Region needs to be set for AWS Signature Version 4.
+		srvConfig.Region = globalMinioDefaultRegion
+	}
+
+	srvConfig.Logger.Console = cv16.Logger.Console
+	srvConfig.Logger.File = cv16.Logger.File
+
+	// check and set notifiers config
+	if len(cv16.Notify.AMQP) == 0 {
+		srvConfig.Notify.AMQP = make(map[string]amqpNotify)
+		srvConfig.Notify.AMQP["1"] = amqpNotify{}
+	} else {
+		srvConfig.Notify.AMQP = cv16.Notify.AMQP
+	}
+	if len(cv16.Notify.ElasticSearch) == 0 {
+		srvConfig.Notify.ElasticSearch = make(map[string]elasticSearchNotify)
+		srvConfig.Notify.ElasticSearch["1"] = elasticSearchNotify{}
+	} else {
+		// IMPORTANT NOTE: Future migrations should remove
+		// this as existing configuration will already contain
+		// a value for the "format" parameter.
+		for k, v := range cv16.Notify.ElasticSearch.Clone() {
+			v.Format = formatNamespace
+			cv16.Notify.ElasticSearch[k] = v
+		}
+		srvConfig.Notify.ElasticSearch = cv16.Notify.ElasticSearch
+	}
+	if len(cv16.Notify.Redis) == 0 {
+		srvConfig.Notify.Redis = make(map[string]redisNotify)
+		srvConfig.Notify.Redis["1"] = redisNotify{}
+	} else {
+		// IMPORTANT NOTE: Future migrations should remove
+		// this as existing configuration will already contain
+		// a value for the "format" parameter.
+		for k, v := range cv16.Notify.Redis.Clone() {
+			v.Format = formatNamespace
+			cv16.Notify.Redis[k] = v
+		}
+		srvConfig.Notify.Redis = cv16.Notify.Redis
+	}
+	if len(cv16.Notify.PostgreSQL) == 0 {
+		srvConfig.Notify.PostgreSQL = make(map[string]postgreSQLNotify)
+		srvConfig.Notify.PostgreSQL["1"] = postgreSQLNotify{}
+	} else {
+		// IMPORTANT NOTE: Future migrations should remove
+		// this as existing configuration will already contain
+		// a value for the "format" parameter.
+		for k, v := range cv16.Notify.PostgreSQL.Clone() {
+			v.Format = formatNamespace
+			cv16.Notify.PostgreSQL[k] = v
+		}
+		srvConfig.Notify.PostgreSQL = cv16.Notify.PostgreSQL
+	}
+	if len(cv16.Notify.Kafka) == 0 {
+		srvConfig.Notify.Kafka = make(map[string]kafkaNotify)
+		srvConfig.Notify.Kafka["1"] = kafkaNotify{}
+	} else {
+		srvConfig.Notify.Kafka = cv16.Notify.Kafka
+	}
+	if len(cv16.Notify.NATS) == 0 {
+		srvConfig.Notify.NATS = make(map[string]natsNotify)
+		srvConfig.Notify.NATS["1"] = natsNotify{}
+	} else {
+		srvConfig.Notify.NATS = cv16.Notify.NATS
+	}
+	if len(cv16.Notify.Webhook) == 0 {
+		srvConfig.Notify.Webhook = make(map[string]webhookNotify)
+		srvConfig.Notify.Webhook["1"] = webhookNotify{}
+	} else {
+		srvConfig.Notify.Webhook = cv16.Notify.Webhook
+	}
+	if len(cv16.Notify.MySQL) == 0 {
+		srvConfig.Notify.MySQL = make(map[string]mySQLNotify)
+		srvConfig.Notify.MySQL["1"] = mySQLNotify{}
+	} else {
+		// IMPORTANT NOTE: Future migrations should remove
+		// this as existing configuration will already contain
+		// a value for the "format" parameter.
+		for k, v := range cv16.Notify.MySQL.Clone() {
+			v.Format = formatNamespace
+			cv16.Notify.MySQL[k] = v
+		}
+		srvConfig.Notify.MySQL = cv16.Notify.MySQL
+	}
+
+	// Load browser config from existing config in the file.
+	srvConfig.Browser = cv16.Browser
+
+	if err = quick.Save(configFile, srvConfig); err != nil {
+		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv16.Version, srvConfig.Version, err)
+	}
+
+	log.Printf("Migration from version ‘%s’ to ‘%s’ completed successfully.\n", cv16.Version, srvConfig.Version)
 	return nil
 }
