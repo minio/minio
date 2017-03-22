@@ -518,15 +518,36 @@ func TestHealObjectXL(t *testing.T) {
 
 	bucket := "bucket"
 	object := "object"
-	data := []byte("hello")
+	data := bytes.Repeat([]byte("a"), 5*1024*1024)
+
 	err = obj.MakeBucket(bucket)
 	if err != nil {
 		t.Fatalf("Failed to make a bucket - %v", err)
 	}
 
-	_, err = obj.PutObject(bucket, object, int64(len(data)), bytes.NewReader(data), nil, "")
+	// Create an object with multiple parts uploaded in decreasing
+	// part number.
+	uploadID, err := obj.NewMultipartUpload(bucket, object, nil)
 	if err != nil {
-		t.Fatalf("Failed to put an object - %v", err)
+		t.Fatalf("Failed to create a multipart upload - %v", err)
+	}
+
+	var uploadedParts []completePart
+	for _, partID := range []int{2, 1} {
+		pInfo, err := obj.PutObjectPart(bucket, object, uploadID, partID,
+			int64(len(data)), bytes.NewReader(data), "", "")
+		if err != nil {
+			t.Fatalf("Failed to upload a part - %v", err)
+		}
+		uploadedParts = append(uploadedParts, completePart{
+			PartNumber: pInfo.PartNumber,
+			ETag:       pInfo.ETag,
+		})
+	}
+
+	_, err = obj.CompleteMultipartUpload(bucket, object, uploadID, uploadedParts)
+	if err != nil {
+		t.Fatalf("Failed to complete multipart upload - %v", err)
 	}
 
 	// Remove the object backend files from the first disk.
