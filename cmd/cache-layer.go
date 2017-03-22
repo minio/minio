@@ -29,28 +29,33 @@ type cacheLayer struct {
 	cache *BucketCache
 }
 
+// Cache represents an object which will cache resources
 type Cache struct {
 	CachePath string
 }
 
+// Invalidate a resource from cache
 func (c *Cache) Invalidate(object string) error {
 	if _, err := os.Stat(path.Join(c.CachePath, object)); err != nil {
 		return err
-	} else {
-		return os.Remove(path.Join(c.CachePath, object))
 	}
+
+	return os.Remove(path.Join(c.CachePath, object))
 }
 
+// Retrieve a resource from cache named by object, returns error if not existent
 func (c *Cache) Retrieve(object string) (*Resource, error) {
-	if r, err := os.Open(path.Join(c.CachePath, object)); err != nil {
+	r, err := os.Open(path.Join(c.CachePath, object))
+	if err != nil {
 		return nil, err
-	} else {
-		return &Resource{
-			ReadCloser: r,
-		}, nil
 	}
+
+	return &Resource{
+		ReadCloser: r,
+	}, nil
 }
 
+// Store a resource in cache named object
 func (c *Cache) Store(object string, r *Resource) error {
 	defer r.Close()
 
@@ -63,6 +68,7 @@ func (c *Cache) Store(object string, r *Resource) error {
 	}
 }
 
+// NewDiskCache will return a cache on disk
 func NewDiskCache(path string) (*Cache, error) {
 	if _, err := os.Stat(path); err == nil {
 	} else if !os.IsNotExist(err) {
@@ -76,23 +82,27 @@ func NewDiskCache(path string) (*Cache, error) {
 	}, nil
 }
 
+// Resource represents a object in cache
 type Resource struct {
 	io.ReadCloser
 }
 
+// BucketCache represents an individual cache per bucket
 type BucketCache struct {
 	cache map[string]*Cache
 
 	CachePath string
 }
 
+// Get returns the cache for specified bucket
 func (bc *BucketCache) Get(bucket string) (*Cache, error) {
 	if _, ok := bc.cache[bucket]; !ok {
-		if cache, err := NewDiskCache(path.Join(bc.CachePath, bucket)); err != nil {
+		cache, err := NewDiskCache(path.Join(bc.CachePath, bucket))
+		if err != nil {
 			return nil, err
-		} else {
-			bc.cache[bucket] = cache
 		}
+
+		bc.cache[bucket] = cache
 	}
 
 	return bc.cache[bucket], nil
