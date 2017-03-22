@@ -235,9 +235,12 @@ func validateConfig() error {
 		return fmt.Errorf("Browser config value %s is invalid", b)
 	}
 
-	// Validate credential field
-	if !srvCfg.Credential.IsValid() {
-		return errors.New("invalid credential")
+	// Validate credential fields only when
+	// they are not set via the environment
+	if !globalIsEnvCreds {
+		if !srvCfg.Credential.IsValid() {
+			return errors.New("invalid credential")
+		}
 	}
 
 	// Validate logger field
