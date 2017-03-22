@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package quick_test
+package quick
 
 import (
 	"encoding/json"
@@ -27,7 +27,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/minio/minio/pkg/quick"
 	. "gopkg.in/check.v1"
 )
 
@@ -45,7 +44,7 @@ func (s *MySuite) TestSaveFailOnDir(c *C) {
 		Version string
 	}
 	saveMe := myStruct{"1"}
-	config, err := quick.New(&saveMe)
+	config, err := New(&saveMe)
 	c.Assert(err, IsNil)
 	c.Assert(config, Not(IsNil))
 	err = config.Save("test.json")
@@ -53,7 +52,7 @@ func (s *MySuite) TestSaveFailOnDir(c *C) {
 }
 
 func (s *MySuite) TestCheckData(c *C) {
-	err := quick.CheckData(nil)
+	err := checkData(nil)
 	c.Assert(err, Not(IsNil))
 
 	type myStructBadNoVersion struct {
@@ -62,7 +61,7 @@ func (s *MySuite) TestCheckData(c *C) {
 		Directories []string
 	}
 	saveMeBadNoVersion := myStructBadNoVersion{"guest", "nopassword", []string{"Work", "Documents", "Music"}}
-	err = quick.CheckData(&saveMeBadNoVersion)
+	err = checkData(&saveMeBadNoVersion)
 	c.Assert(err, Not(IsNil))
 
 	type myStructBadVersionInt struct {
@@ -71,7 +70,7 @@ func (s *MySuite) TestCheckData(c *C) {
 		Password string
 	}
 	saveMeBadVersionInt := myStructBadVersionInt{1, "guest", "nopassword"}
-	err = quick.CheckData(&saveMeBadVersionInt)
+	err = checkData(&saveMeBadVersionInt)
 	c.Assert(err, Not(IsNil))
 
 	type myStructGood struct {
@@ -82,7 +81,7 @@ func (s *MySuite) TestCheckData(c *C) {
 	}
 
 	saveMeGood := myStructGood{"1", "guest", "nopassword", []string{"Work", "Documents", "Music"}}
-	err = quick.CheckData(&saveMeGood)
+	err = checkData(&saveMeGood)
 	c.Assert(err, IsNil)
 }
 
@@ -94,15 +93,15 @@ func (s *MySuite) TestLoadFile(c *C) {
 		Directories []string
 	}
 	saveMe := myStruct{}
-	_, err := quick.Load("test.json", &saveMe)
+	_, err := Load("test.json", &saveMe)
 	c.Assert(err, Not(IsNil))
 
 	file, err := os.Create("test.json")
 	c.Assert(err, IsNil)
 	c.Assert(file.Close(), IsNil)
-	_, err = quick.Load("test.json", &saveMe)
+	_, err = Load("test.json", &saveMe)
 	c.Assert(err, Not(IsNil))
-	config, err := quick.New(&saveMe)
+	config, err := New(&saveMe)
 	c.Assert(err, IsNil)
 	err = config.Load("test-non-exist.json")
 	c.Assert(err, Not(IsNil))
@@ -110,13 +109,13 @@ func (s *MySuite) TestLoadFile(c *C) {
 	c.Assert(err, Not(IsNil))
 
 	saveMe = myStruct{"1", "guest", "nopassword", []string{"Work", "Documents", "Music"}}
-	config, err = quick.New(&saveMe)
+	config, err = New(&saveMe)
 	c.Assert(err, IsNil)
 	c.Assert(config, Not(IsNil))
 	err = config.Save("test.json")
 	c.Assert(err, IsNil)
 	saveMe1 := myStruct{}
-	_, err = quick.Load("test.json", &saveMe1)
+	_, err = Load("test.json", &saveMe1)
 	c.Assert(err, IsNil)
 	c.Assert(saveMe1, DeepEquals, saveMe)
 
@@ -153,7 +152,7 @@ directories:
 	saveMe := myStruct{"1", "guest", "nopassword", []string{"Work", "Documents", "Music"}}
 
 	// Save format using
-	config, err := quick.New(&saveMe)
+	config, err := New(&saveMe)
 	c.Assert(err, IsNil)
 	c.Assert(config, Not(IsNil))
 
@@ -168,7 +167,7 @@ directories:
 
 	// Check if the loaded data is the same as the saved one
 	loadMe := myStruct{}
-	config, err = quick.New(&loadMe)
+	config, err = New(&loadMe)
 	err = config.Load(testYAML)
 	c.Assert(err, IsNil)
 
@@ -204,7 +203,7 @@ func (s *MySuite) TestJSONFormat(c *C) {
 	saveMe := myStruct{"1", "guest", "nopassword", []string{"Work", "Documents", "Music"}}
 
 	// Save format using
-	config, err := quick.New(&saveMe)
+	config, err := New(&saveMe)
 	c.Assert(err, IsNil)
 	c.Assert(config, Not(IsNil))
 
@@ -219,44 +218,11 @@ func (s *MySuite) TestJSONFormat(c *C) {
 
 	// Check if the loaded data is the same as the saved one
 	loadMe := myStruct{}
-	config, err = quick.New(&loadMe)
+	config, err = New(&loadMe)
 	err = config.Load(testJSON)
 	c.Assert(err, IsNil)
 
 	c.Assert(reflect.DeepEqual(saveMe, loadMe), Equals, true)
-}
-
-func (s *MySuite) TestVersion(c *C) {
-	defer os.RemoveAll("test.json")
-	type myStruct struct {
-		Version     string
-		User        string
-		Password    string
-		Directories []string
-	}
-	saveMe := myStruct{"1", "guest", "nopassword", []string{"Work", "Documents", "Music"}}
-	config, err := quick.New(&saveMe)
-	c.Assert(err, IsNil)
-	c.Assert(config, Not(IsNil))
-	err = config.Save("test.json")
-	c.Assert(err, IsNil)
-
-	valid, err := quick.CheckVersion("test.json", "1")
-	c.Assert(err, IsNil)
-	c.Assert(valid, Equals, true)
-
-	valid, err = quick.CheckVersion("test.json", "2")
-	c.Assert(err, IsNil)
-	c.Assert(valid, Equals, false)
-
-	_, err = quick.CheckVersion("test1.json", "1")
-	c.Assert(err, Not(IsNil))
-
-	file, err := os.Create("test.json")
-	c.Assert(err, IsNil)
-	c.Assert(file.Close(), IsNil)
-	_, err = quick.CheckVersion("test.json", "1")
-	c.Assert(err, Not(IsNil))
 }
 
 func (s *MySuite) TestSaveLoad(c *C) {
@@ -268,14 +234,14 @@ func (s *MySuite) TestSaveLoad(c *C) {
 		Directories []string
 	}
 	saveMe := myStruct{"1", "guest", "nopassword", []string{"Work", "Documents", "Music"}}
-	config, err := quick.New(&saveMe)
+	config, err := New(&saveMe)
 	c.Assert(err, IsNil)
 	c.Assert(config, Not(IsNil))
 	err = config.Save("test.json")
 	c.Assert(err, IsNil)
 
 	loadMe := myStruct{Version: "1"}
-	newConfig, err := quick.New(&loadMe)
+	newConfig, err := New(&loadMe)
 	c.Assert(err, IsNil)
 	c.Assert(newConfig, Not(IsNil))
 	err = newConfig.Load("test.json")
@@ -298,14 +264,14 @@ func (s *MySuite) TestSaveBackup(c *C) {
 		Directories []string
 	}
 	saveMe := myStruct{"1", "guest", "nopassword", []string{"Work", "Documents", "Music"}}
-	config, err := quick.New(&saveMe)
+	config, err := New(&saveMe)
 	c.Assert(err, IsNil)
 	c.Assert(config, Not(IsNil))
 	err = config.Save("test.json")
 	c.Assert(err, IsNil)
 
 	loadMe := myStruct{Version: "1"}
-	newConfig, err := quick.New(&loadMe)
+	newConfig, err := New(&loadMe)
 	c.Assert(err, IsNil)
 	c.Assert(newConfig, Not(IsNil))
 	err = newConfig.Load("test.json")
@@ -316,7 +282,7 @@ func (s *MySuite) TestSaveBackup(c *C) {
 
 	mismatch := myStruct{"1.1", "guest", "nopassword", []string{"Work", "Documents", "Music"}}
 	c.Assert(newConfig.Data(), Not(DeepEquals), &mismatch)
-	config, err = quick.New(&mismatch)
+	config, err = New(&mismatch)
 	c.Assert(err, IsNil)
 	c.Assert(config, Not(IsNil))
 	err = config.Save("test.json")
@@ -331,7 +297,7 @@ func (s *MySuite) TestDiff(c *C) {
 		Directories []string
 	}
 	saveMe := myStruct{"1", "guest", "nopassword", []string{"Work", "Documents", "Music"}}
-	config, err := quick.New(&saveMe)
+	config, err := New(&saveMe)
 	c.Assert(err, IsNil)
 	c.Assert(config, Not(IsNil))
 
@@ -343,7 +309,7 @@ func (s *MySuite) TestDiff(c *C) {
 	}
 
 	mismatch := myNewStruct{"1", "nopassword", []string{"Work", "documents", "Music"}}
-	newConfig, err := quick.New(&mismatch)
+	newConfig, err := New(&mismatch)
 	c.Assert(err, IsNil)
 	c.Assert(newConfig, Not(IsNil))
 
@@ -365,12 +331,12 @@ func (s *MySuite) TestDeepDiff(c *C) {
 		Directories []string
 	}
 	saveMe := myStruct{"1", "guest", "nopassword", []string{"Work", "Documents", "Music"}}
-	config, err := quick.New(&saveMe)
+	config, err := New(&saveMe)
 	c.Assert(err, IsNil)
 	c.Assert(config, Not(IsNil))
 
 	mismatch := myStruct{"1", "Guest", "nopassword", []string{"Work", "documents", "Music"}}
-	newConfig, err := quick.New(&mismatch)
+	newConfig, err := New(&mismatch)
 	c.Assert(err, IsNil)
 	c.Assert(newConfig, Not(IsNil))
 

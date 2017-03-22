@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"os"
 	"strings"
 	"sync"
 
@@ -32,7 +31,7 @@ import (
 var serverConfigMu sync.RWMutex
 
 // Config version
-var v15 = "15"
+const v15 = "15"
 
 // serverConfigV15 server configuration version '15' which is like
 // version '14' except it adds support of MySQL notifications.
@@ -122,19 +121,13 @@ func newConfig(envParams envParams) error {
 // if found and valid
 func loadConfig(envParams envParams) error {
 	configFile := getConfigFile()
-	if _, err := os.Stat(configFile); err != nil {
-		return err
-	}
 
 	srvCfg := &serverConfigV15{}
-
-	qc, err := quick.New(srvCfg)
-	if err != nil {
+	if _, err := quick.Load(configFile, srvCfg); err != nil {
 		return err
 	}
-
-	if err = qc.Load(configFile); err != nil {
-		return err
+	if srvCfg.Version != v15 {
+		return fmt.Errorf("configuration version mismatch.  Expected: ‘%s’, Got: ‘%s’", srvCfg.Version, v15)
 	}
 
 	// If env is set override the credentials from config file.
@@ -155,11 +148,6 @@ func loadConfig(envParams envParams) error {
 	// Save the loaded config globally.
 	serverConfig = srvCfg
 	serverConfigMu.Unlock()
-
-	if serverConfig.Version != v15 {
-		return errors.New("Unsupported config version `" + serverConfig.Version + "`.")
-	}
-
 	return nil
 }
 
@@ -216,23 +204,15 @@ func checkDupJSONKeys(json string) error {
 
 // validateConfig checks for
 func validateConfig() error {
-
-	// Get file config path
 	configFile := getConfigFile()
 
 	srvCfg := &serverConfigV15{}
-
-	// Load config file
-	qc, err := quick.New(srvCfg)
-	if err != nil {
-		return err
-	}
-	if err = qc.Load(configFile); err != nil {
+	if _, err := quick.Load(configFile, srvCfg); err != nil {
 		return err
 	}
 
 	// Check if config version is valid
-	if srvCfg.GetVersion() != v15 {
+	if srvCfg.Version != v15 {
 		return errors.New("bad config version, expected: " + v15)
 	}
 
@@ -361,12 +341,6 @@ func (s serverConfigV15) Save() error {
 	// get config file.
 	configFile := getConfigFile()
 
-	// initialize quick.
-	qc, err := quick.New(&s)
-	if err != nil {
-		return err
-	}
-
 	// Save config file.
-	return qc.Save(configFile)
+	return quick.Save(configFile, &s)
 }
