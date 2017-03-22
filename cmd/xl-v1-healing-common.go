@@ -225,10 +225,10 @@ func disksWithAllParts(onlineDisks []StorageAPI, partsMetadata []xlMetaV1, errs 
 		// disk has a valid xl.json but may not have all the
 		// parts. This is considered an outdated disk, since
 		// it needs healing too.
-		for pIndex, part := range partsMetadata[index].Parts {
+		for _, part := range partsMetadata[index].Parts {
 			// compute blake2b sum of part.
 			partPath := filepath.Join(object, part.Name)
-			hash := newHash(blake2bAlgo)
+			hash := newHash(partsMetadata[index].Erasure.Algorithm)
 			blakeBytes, hErr := hashSum(onlineDisk, bucket, partPath, hash)
 			if hErr == errFileNotFound {
 				errs[index] = errFileNotFound
@@ -239,7 +239,7 @@ func disksWithAllParts(onlineDisks []StorageAPI, partsMetadata []xlMetaV1, errs 
 				return nil, nil, traceError(hErr)
 			}
 
-			partChecksum := partsMetadata[index].Erasure.Checksum[pIndex].Hash
+			partChecksum := partsMetadata[index].Erasure.GetCheckSumInfo(part.Name).Hash
 			blakeSum := hex.EncodeToString(blakeBytes)
 			// if blake2b sum doesn't match for a part
 			// then this disk is outdated and needs
