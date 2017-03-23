@@ -20,6 +20,7 @@ import (
 	"encoding/hex"
 	"encoding/xml"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/url"
 	"path"
@@ -372,12 +373,21 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	// Write success response.
 	writeSuccessResponseXML(w, encodedSuccessResponse)
 
+	// Get host and port from Request.RemoteAddr.
+	host, port, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host, port = "", ""
+	}
+
 	// Notify object created event.
 	eventNotify(eventData{
 		Type:      ObjectCreatedCopy,
 		Bucket:    dstBucket,
 		ObjInfo:   objInfo,
 		ReqParams: extractReqParams(r),
+		UserAgent: r.UserAgent(),
+		Host:      host,
+		Port:      port,
 	})
 }
 
@@ -503,12 +513,21 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	w.Header().Set("ETag", "\""+objInfo.MD5Sum+"\"")
 	writeSuccessResponseHeadersOnly(w)
 
+	// Get host and port from Request.RemoteAddr.
+	host, port, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host, port = "", ""
+	}
+
 	// Notify object created event.
 	eventNotify(eventData{
 		Type:      ObjectCreatedPut,
 		Bucket:    bucket,
 		ObjInfo:   objInfo,
 		ReqParams: extractReqParams(r),
+		UserAgent: r.UserAgent(),
+		Host:      host,
+		Port:      port,
 	})
 }
 
@@ -930,12 +949,21 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	// Write success response.
 	writeSuccessResponseXML(w, encodedSuccessResponse)
 
+	// Get host and port from Request.RemoteAddr.
+	host, port, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host, port = "", ""
+	}
+
 	// Notify object created event.
 	eventNotify(eventData{
 		Type:      ObjectCreatedCompleteMultipartUpload,
 		Bucket:    bucket,
 		ObjInfo:   objInfo,
 		ReqParams: extractReqParams(r),
+		UserAgent: r.UserAgent(),
+		Host:      host,
+		Port:      port,
 	})
 }
 
@@ -971,6 +999,12 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 	}
 	writeSuccessNoContent(w)
 
+	// Get host and port from Request.RemoteAddr.
+	host, port, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host, port = "", ""
+	}
+
 	// Notify object deleted event.
 	eventNotify(eventData{
 		Type:   ObjectRemovedDelete,
@@ -979,5 +1013,8 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 			Name: object,
 		},
 		ReqParams: extractReqParams(r),
+		UserAgent: r.UserAgent(),
+		Host:      host,
+		Port:      port,
 	})
 }

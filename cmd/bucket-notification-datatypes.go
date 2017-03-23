@@ -176,6 +176,14 @@ const (
 	eventVersion = "2.0"
 )
 
+// sourceInfo represents information on the client that triggered the
+// event notification.
+type sourceInfo struct {
+	Host      string `json:"host"`
+	Port      string `json:"port"`
+	UserAgent string `json:"userAgent"`
+}
+
 // NotificationEvent represents an Amazon an S3 bucket notification event.
 type NotificationEvent struct {
 	EventVersion      string            `json:"eventVersion"`
@@ -187,6 +195,7 @@ type NotificationEvent struct {
 	RequestParameters map[string]string `json:"requestParameters"`
 	ResponseElements  map[string]string `json:"responseElements"`
 	S3                eventMeta         `json:"s3"`
+	Source            sourceInfo        `json:"source"`
 }
 
 // Represents the minio sqs type and account id's.
