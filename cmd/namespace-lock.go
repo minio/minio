@@ -194,7 +194,7 @@ func (n *nsLockMap) unlock(volume, path, opsID string, readLock bool) {
 func (n *nsLockMap) Lock(volume, path, opsID string) {
 	readLock := false // This is a write lock.
 
-	lockSource := callerSource() // Useful for debugging
+	lockSource := getSource() // Useful for debugging
 	n.lock(volume, path, lockSource, opsID, readLock)
 }
 
@@ -208,7 +208,7 @@ func (n *nsLockMap) Unlock(volume, path, opsID string) {
 func (n *nsLockMap) RLock(volume, path, opsID string) {
 	readLock := true
 
-	lockSource := callerSource() // Useful for debugging
+	lockSource := getSource() // Useful for debugging
 	n.lock(volume, path, lockSource, opsID, readLock)
 }
 
@@ -269,7 +269,7 @@ func (n *nsLockMap) NewNSLock(volume, path string) RWLocker {
 
 // Lock - block until write lock is taken.
 func (li *lockInstance) Lock() {
-	lockSource := callerSource()
+	lockSource := getSource()
 	readLock := false
 	li.ns.lock(li.volume, li.path, lockSource, li.opsID, readLock)
 }
@@ -282,7 +282,7 @@ func (li *lockInstance) Unlock() {
 
 // RLock - block until read lock is taken.
 func (li *lockInstance) RLock() {
-	lockSource := callerSource()
+	lockSource := getSource()
 	readLock := true
 	li.ns.lock(li.volume, li.path, lockSource, li.opsID, readLock)
 }

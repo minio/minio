@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,141 +17,218 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
+	"io/ioutil"
 	"path"
 	"runtime"
 	"strings"
 	"sync"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/minio/mc/pkg/console"
 )
 
-type fields map[string]interface{}
+var log = NewLogger()
 
-var log = struct {
-	loggers []*logrus.Logger // All registered loggers.
-	mu      sync.Mutex
-}{}
-
-// logger carries logging configuration for various supported loggers.
-// Currently supported loggers are
-//
-//   - console [default]
-//   - file
-type logger struct {
+type loggers struct {
 	sync.RWMutex
-	Console consoleLogger `json:"console"`
-	File    fileLogger    `json:"file"`
-	// Add new loggers here.
+	Console ConsoleLogger `json:"console"`
+	File    FileLogger    `json:"file"`
 }
 
-/// Logger related.
+// Validate - Check whether loggers are valid or not.
+func (l *loggers) Validate() (err error) {
+	if l != nil {
+		fileLogger := l.GetFile()
+		if fileLogger.Enable && fileLogger.Filename == "" {
+			err = errors.New("Missing filename for enabled file logger")
+		}
+	}
 
-// Validate logger contents
-func (l *logger) Validate() error {
-	if l == nil {
-		return nil
-	}
-	if err := l.Console.Validate(); err != nil {
-		return fmt.Errorf("`Console` field: %s", err.Error())
-	}
-	if err := l.File.Validate(); err != nil {
-		return fmt.Errorf("`File` field: %s", err.Error())
-	}
-	return nil
+	return err
 }
 
 // SetFile set new file logger.
-func (l *logger) SetFile(flogger fileLogger) {
+func (l *loggers) SetFile(flogger FileLogger) {
 	l.Lock()
 	defer l.Unlock()
 	l.File = flogger
 }
 
 // GetFileLogger get current file logger.
-func (l *logger) GetFile() fileLogger {
+func (l *loggers) GetFile() FileLogger {
 	l.RLock()
 	defer l.RUnlock()
 	return l.File
 }
 
 // SetConsole set new console logger.
-func (l *logger) SetConsole(clogger consoleLogger) {
+func (l *loggers) SetConsole(clogger ConsoleLogger) {
 	l.Lock()
 	defer l.Unlock()
 	l.Console = clogger
 }
 
-func (l *logger) GetConsole() consoleLogger {
+// GetConsole get current console logger.
+func (l *loggers) GetConsole() ConsoleLogger {
 	l.RLock()
 	defer l.RUnlock()
 	return l.Console
 }
 
-// Get file, line, function name of the caller.
-func callerSource() string {
-	pc, file, line, success := runtime.Caller(2)
-	if !success {
-		file = "<unknown>"
-		line = 0
-	}
-	file = path.Base(file)
-	name := runtime.FuncForPC(pc).Name()
-	name = strings.TrimPrefix(name, "github.com/minio/minio/cmd.")
-	return fmt.Sprintf("[%s:%d:%s()]", file, line, name)
+// LogTarget - interface for log target.
+type LogTarget interface {
+	Fire(entry *logrus.Entry) error
+	String() string
 }
 
-// errorIf synonymous with fatalIf but doesn't exit on error != nil
+// BaseLogTarget - base log target.
+type BaseLogTarget struct {
+	Enable    bool `json:"enable"`
+	formatter logrus.Formatter
+}
+
+// Logger - higher level logger.
+type Logger struct {
+	logger        *logrus.Logger
+	consoleTarget ConsoleLogger
+	targets       []LogTarget
+	quiet         bool
+}
+
+// AddTarget - add logger to this hook.
+func (log *Logger) AddTarget(logTarget LogTarget) {
+	log.targets = append(log.targets, logTarget)
+}
+
+// SetConsoleTarget - sets console target to this hook.
+func (log *Logger) SetConsoleTarget(consoleTarget ConsoleLogger) {
+	log.consoleTarget = consoleTarget
+}
+
+// Fire - log entry handler to save logs.
+func (log *Logger) Fire(entry *logrus.Entry) (err error) {
+	if err = log.consoleTarget.Fire(entry); err != nil {
+		log.Printf("Unable to log to console target. %s\n", err)
+	}
+
+	for _, logTarget := range log.targets {
+		if err = logTarget.Fire(entry); err != nil {
+			log.Printf("Unable to log to target %s. %s\n", logTarget, err)
+		}
+	}
+
+	return err
+}
+
+// Levels - returns list of log levels support.
+func (log *Logger) Levels() []logrus.Level {
+	return []logrus.Level{
+		logrus.PanicLevel,
+		logrus.FatalLevel,
+		logrus.ErrorLevel,
+		logrus.WarnLevel,
+		logrus.InfoLevel,
+		logrus.DebugLevel,
+	}
+}
+
+// EnableQuiet - sets quiet option.
+func (log *Logger) EnableQuiet() {
+	log.quiet = true
+}
+
+// Println - wrapper to console.Println() with quiet flag.
+func (log *Logger) Println(args ...interface{}) {
+	if !log.quiet {
+		console.Println(args...)
+	}
+}
+
+// Printf - wrapper to console.Printf() with quiet flag.
+func (log *Logger) Printf(format string, args ...interface{}) {
+	if !log.quiet {
+		console.Printf(format, args...)
+	}
+}
+
+// NewLogger - returns new logger.
+func NewLogger() *Logger {
+	logger := logrus.New()
+	logger.Out = ioutil.Discard
+	logger.Level = logrus.DebugLevel
+
+	log := &Logger{
+		logger:        logger,
+		consoleTarget: NewConsoleLogger(),
+	}
+
+	logger.Hooks.Add(log)
+
+	return log
+}
+
+func getSource() string {
+	var funcName string
+	pc, filename, lineNum, ok := runtime.Caller(2)
+	if ok {
+		filename = path.Base(filename)
+		funcName = strings.TrimPrefix(runtime.FuncForPC(pc).Name(), "github.com/minio/minio/cmd.")
+	} else {
+		filename = "<unknown>"
+		lineNum = 0
+	}
+
+	return fmt.Sprintf("[%s:%d:%s()]", filename, lineNum, funcName)
+}
+
+func logIf(level logrus.Level, source string, err error, msg string, data ...interface{}) {
+	isErrIgnored := func(err error) (ok bool) {
+		err = errorCause(err)
+		switch err.(type) {
+		case BucketNotFound, BucketNotEmpty, BucketExists:
+			ok = true
+		case ObjectNotFound, ObjectExistsAsDirectory, BucketPolicyNotFound, InvalidUploadID, BadDigest:
+			ok = true
+		}
+
+		return ok
+	}
+
+	if err == nil || isErrIgnored(err) {
+		return
+	}
+
+	fields := logrus.Fields{
+		"source": source,
+		"cause":  err.Error(),
+	}
+
+	if terr, ok := err.(*Error); ok {
+		fields["stack"] = strings.Join(terr.Trace(), " ")
+	}
+
+	switch level {
+	case logrus.PanicLevel:
+		log.logger.WithFields(fields).Panicf(msg, data...)
+	case logrus.FatalLevel:
+		log.logger.WithFields(fields).Fatalf(msg, data...)
+	case logrus.ErrorLevel:
+		log.logger.WithFields(fields).Errorf(msg, data...)
+	case logrus.WarnLevel:
+		log.logger.WithFields(fields).Warnf(msg, data...)
+	case logrus.InfoLevel:
+		log.logger.WithFields(fields).Infof(msg, data...)
+	default:
+		log.logger.WithFields(fields).Debugf(msg, data...)
+	}
+}
+
 func errorIf(err error, msg string, data ...interface{}) {
-	if err == nil || !isErrLogged(err) {
-		return
-	}
-	source := callerSource()
-	fields := logrus.Fields{
-		"source": source,
-		"cause":  err.Error(),
-	}
-	if e, ok := err.(*Error); ok {
-		fields["stack"] = strings.Join(e.Trace(), " ")
-	}
-
-	for _, log := range log.loggers {
-		log.WithFields(fields).Errorf(msg, data...)
-	}
+	logIf(logrus.ErrorLevel, getSource(), err, msg, data...)
 }
 
-// fatalIf wrapper function which takes error and prints jsonic error messages.
 func fatalIf(err error, msg string, data ...interface{}) {
-	if err == nil || !isErrLogged(err) {
-		return
-	}
-	source := callerSource()
-	fields := logrus.Fields{
-		"source": source,
-		"cause":  err.Error(),
-	}
-	if e, ok := err.(*Error); ok {
-		fields["stack"] = strings.Join(e.Trace(), " ")
-	}
-
-	for _, log := range log.loggers {
-		log.WithFields(fields).Fatalf(msg, data...)
-	}
-}
-
-// returns false if error is not supposed to be logged.
-func isErrLogged(err error) (ok bool) {
-	ok = true
-	err = errorCause(err)
-	switch err.(type) {
-	case BucketNotFound, BucketNotEmpty, BucketExists:
-		ok = false
-	case ObjectNotFound, ObjectExistsAsDirectory:
-		ok = false
-	case BucketPolicyNotFound, InvalidUploadID:
-		ok = false
-	case BadDigest:
-		ok = false
-	}
-	return ok
+	logIf(logrus.FatalLevel, getSource(), err, msg, data...)
 }

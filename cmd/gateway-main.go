@@ -17,12 +17,12 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
 	"github.com/gorilla/mux"
 	"github.com/minio/cli"
-	"github.com/minio/mc/pkg/console"
 )
 
 var gatewayTemplate = `NAME:
@@ -73,7 +73,7 @@ func mustGetGatewayCredsFromEnv() (accessKey, secretKey string) {
 	accessKey = os.Getenv("MINIO_ACCESS_KEY")
 	secretKey = os.Getenv("MINIO_SECRET_KEY")
 	if accessKey == "" || secretKey == "" {
-		console.Fatalln("Access and secret keys are mandatory to run Minio gateway server.")
+		fatalIf(errors.New("Missing credentials"), "Access and secret keys are mandatory to run Minio gateway server.")
 	}
 	return accessKey, secretKey
 }
@@ -105,7 +105,7 @@ func newGatewayConfig(accessKey, secretKey, region string) error {
 	})
 
 	// Set default printing to console.
-	srvCfg.Logger.SetConsole(consoleLogger{true})
+	srvCfg.Logger.SetConsole(NewConsoleLogger())
 
 	// Set custom region.
 	srvCfg.SetRegion(region)
@@ -140,12 +140,7 @@ func gatewayMain(ctx *cli.Context) {
 	// support for S3 backend storage, currently this can
 	// default to "us-east-1"
 	err := newGatewayConfig(accessKey, secretKey, "us-east-1")
-	if err != nil {
-		console.Fatalf("Unable to initialize gateway config. Error: %s", err)
-	}
-
-	// Enable console logging.
-	enableConsoleLogger()
+	fatalIf(err, "Unable to initialize gateway config")
 
 	// Get quiet flag from command line argument.
 	quietFlag := ctx.Bool("quiet") || ctx.GlobalBool("quiet")
@@ -154,9 +149,7 @@ func gatewayMain(ctx *cli.Context) {
 	backendType := ctx.Args().First()
 
 	newObject, err := newGatewayLayer(backendType, accessKey, secretKey)
-	if err != nil {
-		console.Fatalf("Unable to initialize gateway layer. Error: %s", err)
-	}
+	fatalIf(err, "Unable to initialize gateway layer")
 
 	initNSLock(false) // Enable local namespace lock.
 
@@ -192,9 +185,9 @@ func gatewayMain(ctx *cli.Context) {
 		if globalIsSSL {
 			cert, key = getPublicCertFile(), getPrivateKeyFile()
 		}
-		if aerr := apiServer.ListenAndServe(cert, key); aerr != nil {
-			console.Fatalf("Failed to start minio server. Error: %s\n", aerr)
-		}
+
+		aerr := apiServer.ListenAndServe(cert, key)
+		fatalIf(aerr, "Failed to start minio server")
 	}()
 
 	apiEndPoints, err := finalizeAPIEndpoints(apiServer.Addr)

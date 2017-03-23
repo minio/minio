@@ -21,7 +21,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/minio/mc/pkg/console"
 	"github.com/minio/minio/pkg/quick"
 )
 
@@ -106,7 +105,7 @@ func purgeV1() error {
 	}
 
 	removeAll(configFile)
-	console.Println("Removed unsupported config version ‘1’.")
+	log.Println("Removed unsupported config version ‘1’.")
 	return nil
 }
 
@@ -164,7 +163,7 @@ func migrateV2ToV3() error {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv2.Version, srvConfig.Version, err)
 	}
 
-	console.Printf("Migration from version ‘%s’ to ‘%s’ completed successfully.\n", cv2.Version, srvConfig.Version)
+	log.Printf("Migration from version ‘%s’ to ‘%s’ completed successfully.\n", cv2.Version, srvConfig.Version)
 	return nil
 }
 
@@ -202,7 +201,7 @@ func migrateV3ToV4() error {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv3.Version, srvConfig.Version, err)
 	}
 
-	console.Printf("Migration from version ‘%s’ to ‘%s’ completed successfully.\n", cv3.Version, srvConfig.Version)
+	log.Printf("Migration from version ‘%s’ to ‘%s’ completed successfully.\n", cv3.Version, srvConfig.Version)
 	return nil
 }
 
@@ -243,7 +242,7 @@ func migrateV4ToV5() error {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv4.Version, srvConfig.Version, err)
 	}
 
-	console.Printf("Migration from version ‘%s’ to ‘%s’ completed successfully.\n", cv4.Version, srvConfig.Version)
+	log.Printf("Migration from version ‘%s’ to ‘%s’ completed successfully.\n", cv4.Version, srvConfig.Version)
 	return nil
 }
 
@@ -311,7 +310,7 @@ func migrateV5ToV6() error {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv5.Version, srvConfig.Version, err)
 	}
 
-	console.Printf("Migration from version ‘%s’ to ‘%s’ completed successfully.\n", cv5.Version, srvConfig.Version)
+	log.Printf("Migration from version ‘%s’ to ‘%s’ completed successfully.\n", cv5.Version, srvConfig.Version)
 	return nil
 }
 
@@ -367,7 +366,7 @@ func migrateV6ToV7() error {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv6.Version, srvConfig.Version, err)
 	}
 
-	console.Printf("Migration from version ‘%s’ to ‘%s’ completed successfully.\n", cv6.Version, srvConfig.Version)
+	log.Printf("Migration from version ‘%s’ to ‘%s’ completed successfully.\n", cv6.Version, srvConfig.Version)
 	return nil
 }
 
@@ -430,7 +429,7 @@ func migrateV7ToV8() error {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv7.Version, srvConfig.Version, err)
 	}
 
-	console.Printf("Migration from version ‘%s’ to ‘%s’ completed successfully.\n", cv7.Version, srvConfig.Version)
+	log.Printf("Migration from version ‘%s’ to ‘%s’ completed successfully.\n", cv7.Version, srvConfig.Version)
 	return nil
 }
 
@@ -500,7 +499,7 @@ func migrateV8ToV9() error {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv8.Version, srvConfig.Version, err)
 	}
 
-	console.Printf("Migration from version ‘%s’ to ‘%s’ completed successfully.\n", cv8.Version, srvConfig.Version)
+	log.Printf("Migration from version ‘%s’ to ‘%s’ completed successfully.\n", cv8.Version, srvConfig.Version)
 	return nil
 }
 
@@ -568,7 +567,7 @@ func migrateV9ToV10() error {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv9.Version, srvConfig.Version, err)
 	}
 
-	console.Printf("Migration from version ‘%s’ to ‘%s’ completed successfully.\n", cv9.Version, srvConfig.Version)
+	log.Printf("Migration from version ‘%s’ to ‘%s’ completed successfully.\n", cv9.Version, srvConfig.Version)
 	return nil
 }
 
@@ -639,7 +638,7 @@ func migrateV10ToV11() error {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv10.Version, srvConfig.Version, err)
 	}
 
-	console.Printf("Migration from version ‘%s’ to ‘%s’ completed successfully.\n", cv10.Version, srvConfig.Version)
+	log.Printf("Migration from version ‘%s’ to ‘%s’ completed successfully.\n", cv10.Version, srvConfig.Version)
 	return nil
 }
 
@@ -728,7 +727,7 @@ func migrateV11ToV12() error {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv11.Version, srvConfig.Version, err)
 	}
 
-	console.Printf("Migration from version ‘%s’ to ‘%s’ completed successfully.\n", cv11.Version, srvConfig.Version)
+	log.Printf("Migration from version ‘%s’ to ‘%s’ completed successfully.\n", cv11.Version, srvConfig.Version)
 	return nil
 }
 
@@ -808,7 +807,7 @@ func migrateV12ToV13() error {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv12.Version, srvConfig.Version, err)
 	}
 
-	console.Printf("Migration from version ‘%s’ to ‘%s’ completed successfully.\n", cv12.Version, srvConfig.Version)
+	log.Printf("Migration from version ‘%s’ to ‘%s’ completed successfully.\n", cv12.Version, srvConfig.Version)
 	return nil
 }
 
@@ -893,7 +892,7 @@ func migrateV13ToV14() error {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv13.Version, srvConfig.Version, err)
 	}
 
-	console.Printf("Migration from version ‘%s’ to ‘%s’ completed successfully.\n", cv13.Version, srvConfig.Version)
+	log.Printf("Migration from version ‘%s’ to ‘%s’ completed successfully.\n", cv13.Version, srvConfig.Version)
 	return nil
 }
 
@@ -982,7 +981,7 @@ func migrateV14ToV15() error {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv14.Version, srvConfig.Version, err)
 	}
 
-	console.Printf("Migration from version ‘%s’ to ‘%s’ completed successfully.\n", cv14.Version, srvConfig.Version)
+	log.Printf("Migration from version ‘%s’ to ‘%s’ completed successfully.\n", cv14.Version, srvConfig.Version)
 	return nil
 }
 
@@ -1004,7 +1003,7 @@ func migrateV15ToV16() error {
 
 	// Copy over fields from V15 into V16 config struct
 	srvConfig := &serverConfigV16{
-		Logger: &logger{},
+		Logger: &loggers{},
 		Notify: &notifier{},
 	}
 	srvConfig.Version = "16"
@@ -1069,14 +1068,17 @@ func migrateV15ToV16() error {
 	srvConfig.Browser = cv15.Browser
 
 	// Migrate console and file fields
-	srvConfig.Logger.Console = consoleLogger{Enable: cv15.Logger.Console.Enable}
-	srvConfig.Logger.File = fileLogger{Enable: cv15.Logger.File.Enable, Filename: cv15.Logger.File.Filename}
+	if cv15.Logger.Console.Enable {
+		srvConfig.Logger.Console = NewConsoleLogger()
+	}
+	if cv15.Logger.File.Enable {
+		srvConfig.Logger.File = NewFileLogger(cv15.Logger.File.Filename)
+	}
 
 	if err = quick.Save(configFile, srvConfig); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv15.Version, srvConfig.Version, err)
 	}
 
-	console.Printf("Migration from version ‘%s’ to ‘%s’ completed successfully.\n", cv15.Version, srvConfig.Version)
-
+	log.Printf("Migration from version ‘%s’ to ‘%s’ completed successfully.\n", cv15.Version, srvConfig.Version)
 	return nil
 }
