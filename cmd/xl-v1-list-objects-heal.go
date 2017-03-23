@@ -59,9 +59,8 @@ func listDirHealFactory(isLeaf isLeafFunc, disks ...StorageAPI) listDirFunc {
 			// find elements in entries which are not in mergedentries
 			for _, entry := range entries {
 				idx := sort.SearchStrings(mergedEntries, entry)
-				// idx different from len(mergedEntries) means entry is not found
-				// in mergedEntries
-				if idx < len(mergedEntries) {
+				// if entry is already present in mergedEntries don't add.
+				if idx < len(mergedEntries) && mergedEntries[idx] == entry {
 					continue
 				}
 				newEntries = append(newEntries, entry)
