@@ -16,24 +16,14 @@
 
 package cmd
 
-import (
-	"fmt"
-	"strings"
-
-	"github.com/Sirupsen/logrus"
-)
+import "github.com/Sirupsen/logrus"
 
 // consoleLogger - default logger if not other logging is enabled.
 type consoleLogger struct {
-	Enable bool   `json:"enable"`
-	Level  string `json:"level"`
+	Enable bool `json:"enable"`
 }
 
 func (c *consoleLogger) Validate() error {
-	level := strings.ToLower(c.Level)
-	if level != "error" && level != "fatal" && level != "" {
-		return fmt.Errorf("`%s` level value not recognized", c.Level)
-	}
 	return nil
 }
 
@@ -46,12 +36,7 @@ func enableConsoleLogger() {
 
 	consoleLogger := logrus.New()
 
-	// log.Out and log.Formatter use the default versions.
-	// Only set specific log level.
-	lvl, err := logrus.ParseLevel(clogger.Level)
-	fatalIf(err, "Unknown log level found in the config file.")
-
-	consoleLogger.Level = lvl
+	consoleLogger.Level = logrus.DebugLevel
 	consoleLogger.Formatter = new(logrus.TextFormatter)
 	log.mu.Lock()
 	log.loggers = append(log.loggers, consoleLogger)

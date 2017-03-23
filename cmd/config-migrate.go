@@ -82,6 +82,10 @@ func migrateConfig() error {
 	if err := migrateV14ToV15(); err != nil {
 		return err
 	}
+	// Migration version '15' to '16'.
+	if err := migrateV15ToV16(); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -136,11 +140,11 @@ func migrateV2ToV3() error {
 		// Region needs to be set for AWS Signature V4.
 		srvConfig.Region = globalMinioDefaultRegion
 	}
-	srvConfig.Logger.Console = consoleLogger{
+	srvConfig.Logger.Console = consoleLoggerV1{
 		Enable: true,
 		Level:  "fatal",
 	}
-	flogger := fileLogger{}
+	flogger := fileLoggerV1{}
 	flogger.Level = "error"
 	if cv2.FileLogger.Filename != "" {
 		flogger.Enable = true
@@ -745,7 +749,7 @@ func migrateV12ToV13() error {
 
 	// Copy over fields from V12 into V13 config struct
 	srvConfig := &serverConfigV13{
-		Logger: &logger{},
+		Logger: &loggerV7{},
 		Notify: &notifier{},
 	}
 	srvConfig.Version = "13"
@@ -825,7 +829,7 @@ func migrateV13ToV14() error {
 
 	// Copy over fields from V13 into V14 config struct
 	srvConfig := &serverConfigV14{
-		Logger: &logger{},
+		Logger: &loggerV7{},
 		Notify: &notifier{},
 	}
 	srvConfig.Version = "14"
@@ -910,7 +914,7 @@ func migrateV14ToV15() error {
 
 	// Copy over fields from V14 into V15 config struct
 	srvConfig := &serverConfigV15{
-		Logger: &logger{},
+		Logger: &loggerV7{},
 		Notify: &notifier{},
 	}
 	srvConfig.Version = "15"
@@ -979,5 +983,100 @@ func migrateV14ToV15() error {
 	}
 
 	console.Printf("Migration from version ‘%s’ to ‘%s’ completed successfully.\n", cv14.Version, srvConfig.Version)
+	return nil
+}
+
+// Version '15' to '16' migration. Remove log level in loggers
+// and rename 'fileName' filed in File logger to 'filename'
+func migrateV15ToV16() error {
+	configFile := getConfigFile()
+
+	cv15 := &serverConfigV15{}
+	_, err := quick.Load(configFile, cv15)
+	if os.IsNotExist(err) {
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("Unable to load config version ‘15’. %v", err)
+	}
+	if cv15.Version != "15" {
+		return nil
+	}
+
+	// Copy over fields from V15 into V16 config struct
+	srvConfig := &serverConfigV16{
+		Logger: &logger{},
+		Notify: &notifier{},
+	}
+	srvConfig.Version = "16"
+	srvConfig.Credential = cv15.Credential
+	srvConfig.Region = cv15.Region
+	if srvConfig.Region == "" {
+		// Region needs to be set for AWS Signature Version 4.
+		srvConfig.Region = globalMinioDefaultRegion
+	}
+
+	// check and set notifiers config
+	if len(cv15.Notify.AMQP) == 0 {
+		srvConfig.Notify.AMQP = make(map[string]amqpNotify)
+		srvConfig.Notify.AMQP["1"] = amqpNotify{}
+	} else {
+		srvConfig.Notify.AMQP = cv15.Notify.AMQP
+	}
+	if len(cv15.Notify.ElasticSearch) == 0 {
+		srvConfig.Notify.ElasticSearch = make(map[string]elasticSearchNotify)
+		srvConfig.Notify.ElasticSearch["1"] = elasticSearchNotify{}
+	} else {
+		srvConfig.Notify.ElasticSearch = cv15.Notify.ElasticSearch
+	}
+	if len(cv15.Notify.Redis) == 0 {
+		srvConfig.Notify.Redis = make(map[string]redisNotify)
+		srvConfig.Notify.Redis["1"] = redisNotify{}
+	} else {
+		srvConfig.Notify.Redis = cv15.Notify.Redis
+	}
+	if len(cv15.Notify.PostgreSQL) == 0 {
+		srvConfig.Notify.PostgreSQL = make(map[string]postgreSQLNotify)
+		srvConfig.Notify.PostgreSQL["1"] = postgreSQLNotify{}
+	} else {
+		srvConfig.Notify.PostgreSQL = cv15.Notify.PostgreSQL
+	}
+	if len(cv15.Notify.Kafka) == 0 {
+		srvConfig.Notify.Kafka = make(map[string]kafkaNotify)
+		srvConfig.Notify.Kafka["1"] = kafkaNotify{}
+	} else {
+		srvConfig.Notify.Kafka = cv15.Notify.Kafka
+	}
+	if len(cv15.Notify.NATS) == 0 {
+		srvConfig.Notify.NATS = make(map[string]natsNotify)
+		srvConfig.Notify.NATS["1"] = natsNotify{}
+	} else {
+		srvConfig.Notify.NATS = cv15.Notify.NATS
+	}
+	if len(cv15.Notify.Webhook) == 0 {
+		srvConfig.Notify.Webhook = make(map[string]webhookNotify)
+		srvConfig.Notify.Webhook["1"] = webhookNotify{}
+	} else {
+		srvConfig.Notify.Webhook = cv15.Notify.Webhook
+	}
+	if len(cv15.Notify.MySQL) == 0 {
+		srvConfig.Notify.MySQL = make(map[string]mySQLNotify)
+		srvConfig.Notify.MySQL["1"] = mySQLNotify{}
+	} else {
+		srvConfig.Notify.MySQL = cv15.Notify.MySQL
+	}
+
+	// Load browser config from existing config in the file.
+	srvConfig.Browser = cv15.Browser
+
+	// Migrate console and file fields
+	srvConfig.Logger.Console = consoleLogger{Enable: cv15.Logger.Console.Enable}
+	srvConfig.Logger.File = fileLogger{Enable: cv15.Logger.File.Enable, Filename: cv15.Logger.File.Filename}
+
+	if err = quick.Save(configFile, srvConfig); err != nil {
+		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv15.Version, srvConfig.Version, err)
+	}
+
+	console.Printf("Migration from version ‘%s’ to ‘%s’ completed successfully.\n", cv15.Version, srvConfig.Version)
+
 	return nil
 }
