@@ -37,7 +37,7 @@ openssl genrsa -out private.key 1024
 Generate the self-signed certificate:
 
 ```sh
-openssl req -new -x509 -days 3650 -key private.key -out public.crt -subj "/C=country/ST=state/L=location/O=organization/CN=domain"
+openssl req -new -x509 -days 3650 -key private.key -out public.crt -subj "/C=US/ST=state/L=location/O=organization/CN=domain"
 ```
 
 ### Windows
