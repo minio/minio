@@ -35,28 +35,19 @@ func listDirHealFactory(isLeaf isLeafFunc, disks ...StorageAPI) listDirFunc {
 			if err != nil {
 				continue
 			}
-			// Listing needs to be sorted.
-			sort.Strings(entries)
 
 			// Filter entries that have the prefix prefixEntry.
 			entries = filterMatchingPrefix(entries, prefixEntry)
 
-			// isLeaf() check has to happen here so that trailing "/" for objects can be removed.
+			// isLeaf() check has to happen here so that
+			// trailing "/" for objects can be removed.
 			for i, entry := range entries {
 				if isLeaf(bucket, pathJoin(prefixDir, entry)) {
 					entries[i] = strings.TrimSuffix(entry, slashSeparator)
 				}
 			}
-			// Sort again after removing trailing "/" for objects as the previous sort
-			// does not hold good anymore.
-			sort.Strings(entries)
-			if len(mergedEntries) == 0 {
-				// For the first successful disk.ListDir()
-				mergedEntries = entries
-				sort.Strings(mergedEntries)
-				continue
-			}
-			// find elements in entries which are not in mergedentries
+
+			// Find elements in entries which are not in mergedEntries
 			for _, entry := range entries {
 				idx := sort.SearchStrings(mergedEntries, entry)
 				// if entry is already present in mergedEntries don't add.
@@ -65,6 +56,7 @@ func listDirHealFactory(isLeaf isLeafFunc, disks ...StorageAPI) listDirFunc {
 				}
 				newEntries = append(newEntries, entry)
 			}
+
 			if len(newEntries) > 0 {
 				// Merge the entries and sort it.
 				mergedEntries = append(mergedEntries, newEntries...)
