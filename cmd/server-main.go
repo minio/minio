@@ -96,7 +96,7 @@ func checkUpdate(mode string) {
 // envParams holds all env parameters
 type envParams struct {
 	creds   credential
-	browser string
+	browser BrowserFlag
 }
 
 func migrate() {
@@ -139,20 +139,21 @@ func initConfig() {
 		globalIsEnvCreds = true
 	}
 
-	browser := os.Getenv("MINIO_BROWSER")
-	if browser != "" {
-		if !(strings.EqualFold(browser, "off") || strings.EqualFold(browser, "on")) {
-			fatalIf(errors.New("invalid value"), "‘%s’ in MINIO_BROWSER environment variable.", browser)
-		}
-
-		// browser Envs are set globally, this doesn't represent
-		// if browser is turned off or on.
-		globalIsEnvBrowser = true
-	}
-
 	envs := envParams{
 		creds:   cred,
-		browser: browser,
+		browser: BrowserFlag(true),
+	}
+
+	if browser := os.Getenv("MINIO_BROWSER"); browser != "" {
+		browserFlag, err := ParseBrowserFlag(browser)
+		if err != nil {
+			fatalIf(errors.New("invalid value"), "Unknown value ‘%s’ in MINIO_BROWSER environment variable.", browser)
+		}
+
+		// browser Envs are set globally, this does not represent
+		// if browser is turned off or on.
+		globalIsEnvBrowser = true
+		envs.browser = browserFlag
 	}
 
 	// Config file does not exist, we create it fresh and return upon success.

@@ -886,7 +886,7 @@ func migrateV13ToV14() error {
 	}
 
 	// Set the new browser parameter to true by default
-	srvConfig.Browser = "on"
+	srvConfig.Browser = true
 
 	if err = quick.Save(configFile, srvConfig); err != nil {
 		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv13.Version, srvConfig.Version, err)

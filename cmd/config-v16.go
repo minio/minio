@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"strings"
 	"sync"
 
 	"github.com/minio/minio/pkg/quick"
@@ -30,7 +29,7 @@ import (
 // Read Write mutex for safe access to ServerConfig.
 var serverConfigMu sync.RWMutex
 
-var v16 = "16"
+const v16 = "16"
 
 // serverConfigV16 server configuration version '16' which is like
 // version '15' except it removes log level field and renames `fileName`
@@ -39,9 +38,9 @@ type serverConfigV16 struct {
 	Version string `json:"version"`
 
 	// S3 API configuration.
-	Credential credential `json:"credential"`
-	Region     string     `json:"region"`
-	Browser    string     `json:"browser"`
+	Credential credential  `json:"credential"`
+	Region     string      `json:"region"`
+	Browser    BrowserFlag `json:"browser"`
 
 	// Additional error logging configuration.
 	Logger *loggers `json:"logger"`
@@ -52,13 +51,14 @@ type serverConfigV16 struct {
 
 func newServerConfigV16() *serverConfigV16 {
 	srvCfg := &serverConfigV16{
-		Version: v16,
-		Region:  globalMinioDefaultRegion,
-		Logger:  &loggers{},
-		Notify:  &notifier{},
+		Version:    v16,
+		Credential: mustGetNewCredential(),
+		Region:     globalMinioDefaultRegion,
+		Browser:    true,
+		Logger:     &loggers{},
+		Notify:     &notifier{},
 	}
-	srvCfg.SetCredential(mustGetNewCredential())
-	srvCfg.SetBrowser("on")
+
 	// Enable console logger by default on a fresh run.
 	srvCfg.Logger.Console = NewConsoleLogger()
 
@@ -117,10 +117,12 @@ func newConfig(envParams envParams) error {
 // loadConfig - loads a new config from disk, overrides params from env
 // if found and valid
 func loadConfig(envParams envParams) error {
-	configFile := getConfigFile()
+	srvCfg := &serverConfigV16{
+		Region:  globalMinioDefaultRegion,
+		Browser: true,
+	}
 
-	srvCfg := &serverConfigV16{}
-	if _, err := quick.Load(configFile, srvCfg); err != nil {
+	if _, err := quick.Load(getConfigFile(), srvCfg); err != nil {
 		return err
 	}
 	if srvCfg.Version != v16 {
@@ -136,7 +138,7 @@ func loadConfig(envParams envParams) error {
 		srvCfg.SetBrowser(envParams.browser)
 	}
 
-	if strings.ToLower(srvCfg.GetBrowser()) == "off" {
+	if !srvCfg.GetBrowser() {
 		globalIsBrowserEnabled = false
 	}
 
@@ -201,9 +203,12 @@ func checkDupJSONKeys(json string) error {
 
 // validateConfig checks for
 func validateConfig() error {
-	configFile := getConfigFile()
+	srvCfg := &serverConfigV16{
+		Region:  globalMinioDefaultRegion,
+		Browser: true,
+	}
 
-	srvCfg := &serverConfigV16{}
+	configFile := getConfigFile()
 	if _, err := quick.Load(configFile, srvCfg); err != nil {
 		return err
 	}
@@ -225,11 +230,6 @@ func validateConfig() error {
 	// Validate region field
 	if srvCfg.GetRegion() == "" {
 		return errors.New("Region config value cannot be empty")
-	}
-
-	// Validate browser field
-	if b := strings.ToLower(srvCfg.GetBrowser()); b != "on" && b != "off" {
-		return fmt.Errorf("Browser config value %s is invalid", b)
 	}
 
 	// Validate credential fields only when
@@ -307,30 +307,20 @@ func (s serverConfigV16) GetCredential() credential {
 }
 
 // SetBrowser set if browser is enabled.
-func (s *serverConfigV16) SetBrowser(v string) {
+func (s *serverConfigV16) SetBrowser(b BrowserFlag) {
 	serverConfigMu.Lock()
 	defer serverConfigMu.Unlock()
 
-	// Set browser param
-	if v == "" {
-		v = "on" // Browser is on by default.
-	}
-
 	// Set the new value.
-	s.Browser = v
+	s.Browser = b
 }
 
 // GetCredentials get current credentials.
-func (s serverConfigV16) GetBrowser() string {
+func (s serverConfigV16) GetBrowser() BrowserFlag {
 	serverConfigMu.RLock()
 	defer serverConfigMu.RUnlock()
 
-	if s.Browser != "" {
-		return s.Browser
-	} // empty browser.
-
-	// Empty browser means "on" by default.
-	return "on"
+	return s.Browser
 }
 
 // Save config.
