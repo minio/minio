@@ -141,19 +141,38 @@ func outDatedDisks(disks, latestDisks []StorageAPI, errs []error, partsMetadata 
 }
 
 // Returns if the object should be healed.
-func xlShouldHeal(partsMetadata []xlMetaV1, errs []error) bool {
-	modTime, _ := commonTime(listObjectModtimes(partsMetadata, errs))
-	for index := range partsMetadata {
-		if errs[index] == errDiskNotFound {
-			continue
-		}
-		if errs[index] != nil {
-			return true
-		}
-		if modTime != partsMetadata[index].Stat.ModTime {
+func xlShouldHeal(disks []StorageAPI, partsMetadata []xlMetaV1, errs []error, bucket, object string) bool {
+	onlineDisks, _ := listOnlineDisks(disks, partsMetadata,
+		errs)
+	// Return true even if one of the disks have stale data.
+	for _, disk := range onlineDisks {
+		if disk == nil {
 			return true
 		}
 	}
+
+	// Check if all parts of an object are available and their
+	// checksums are valid.
+	availableDisks, _, err := disksWithAllParts(onlineDisks, partsMetadata,
+		errs, bucket, object)
+	if err != nil {
+		// Note: This error is due to failure of blake2b
+		// checksum computation of a part. It doesn't clearly
+		// indicate if the object needs healing. At this
+		// juncture healing could fail with the same
+		// error. So, we choose to return that there is no
+		// need to heal.
+		return false
+	}
+
+	// Return true even if one disk has xl.json or one or more
+	// parts missing.
+	for _, disk := range availableDisks {
+		if disk == nil {
+			return true
+		}
+	}
+
 	return false
 }
 
@@ -232,7 +251,8 @@ func disksWithAllParts(onlineDisks []StorageAPI, partsMetadata []xlMetaV1, errs 
 			blakeBytes, hErr := hashSum(onlineDisk, bucket, partPath, hash)
 			if hErr == errFileNotFound {
 				errs[index] = errFileNotFound
-				continue
+				availableDisks[index] = nil
+				break
 			}
 
 			if hErr != nil && hErr != errFileNotFound {
@@ -246,6 +266,7 @@ func disksWithAllParts(onlineDisks []StorageAPI, partsMetadata []xlMetaV1, errs 
 			// healing.
 			if blakeSum != partChecksum {
 				errs[index] = errFileNotFound
+				availableDisks[index] = nil
 				break
 			}
 			availableDisks[index] = onlineDisk

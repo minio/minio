@@ -322,7 +322,7 @@ func healObject(storageDisks []StorageAPI, bucket string, object string, quorum 
 		return toObjectErr(reducedErr, bucket, object)
 	}
 
-	if !xlShouldHeal(partsMetadata, errs) {
+	if !xlShouldHeal(storageDisks, partsMetadata, errs, bucket, object) {
 		// There is nothing to heal.
 		return nil
 	}
