@@ -144,6 +144,13 @@ func (e BucketNotFound) Error() string {
 	return "Bucket not found: " + e.Bucket
 }
 
+// BucketAlreadyOwnedByYou already owned by you.
+type BucketAlreadyOwnedByYou GenericError
+
+func (e BucketAlreadyOwnedByYou) Error() string {
+	return "Bucket already owned by you: " + e.Bucket
+}
+
 // BucketNotEmpty bucket is not empty.
 type BucketNotEmpty GenericError
 

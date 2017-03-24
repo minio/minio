@@ -660,6 +660,8 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrInvalidBucketName
 	case BucketNotFound:
 		apiErr = ErrNoSuchBucket
+	case BucketAlreadyOwnedByYou:
+		apiErr = ErrBucketAlreadyOwnedByYou
 	case BucketNotEmpty:
 		apiErr = ErrBucketNotEmpty
 	case BucketExists:
