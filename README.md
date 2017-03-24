@@ -77,9 +77,7 @@ You can run Minio on FreeBSD with FreeNAS storage-backend - see [here](https://d
 Source installation is only intended for developers and advanced users. If you do not have a working Golang environment, please follow [How to install Golang](https://docs.minio.io/docs/how-to-install-golang).
 
 ```sh
-
 go get -u github.com/minio/minio
-
 ```
 
 ## Test using Minio Browser
