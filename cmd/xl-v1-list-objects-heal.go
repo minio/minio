@@ -144,7 +144,7 @@ func (xl xlObjects) listObjectsHeal(bucket, prefix, marker, delimiter string, ma
 		objectLock := globalNSMutex.NewNSLock(bucket, objInfo.Name)
 		objectLock.RLock()
 		partsMetadata, errs := readAllXLMetadata(xl.storageDisks, bucket, objInfo.Name)
-		if xlShouldHeal(partsMetadata, errs) {
+		if xlShouldHeal(xl.storageDisks, partsMetadata, errs, bucket, objInfo.Name) {
 			healStat := xlHealStat(xl, partsMetadata, errs)
 			result.Objects = append(result.Objects, ObjectInfo{
 				Name:           objInfo.Name,
@@ -377,7 +377,9 @@ func (xl xlObjects) listMultipartUploadsHeal(bucket, prefix, keyMarker,
 			uploadIDPath := filepath.Join(bucket, upload.Object, upload.UploadID)
 			partsMetadata, errs := readAllXLMetadata(xl.storageDisks,
 				minioMetaMultipartBucket, uploadIDPath)
-			if xlShouldHeal(partsMetadata, errs) {
+			if xlShouldHeal(xl.storageDisks, partsMetadata, errs,
+				minioMetaMultipartBucket, uploadIDPath) {
+
 				healUploadInfo := xlHealStat(xl, partsMetadata, errs)
 				upload.HealUploadInfo = &healUploadInfo
 				result.Uploads = append(result.Uploads, upload)
