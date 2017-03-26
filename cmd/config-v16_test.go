@@ -159,7 +159,7 @@ func TestServerConfigWithEnvs(t *testing.T) {
 	defer removeAll(rootPath)
 
 	// Check if serverConfig has
-	if serverConfig.GetBrowser() != "off" {
+	if serverConfig.GetBrowser() {
 		t.Errorf("Expecting browser `off` found %s", serverConfig.GetBrowser())
 	}
 
