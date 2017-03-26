@@ -24,11 +24,6 @@ import (
 	"path/filepath"
 )
 
-// isSSL - returns true with both cert and key exists.
-func isSSL() bool {
-	return isFile(getPublicCertFile()) && isFile(getPrivateKeyFile())
-}
-
 func parsePublicCertFile(certFile string) (certs []*x509.Certificate, err error) {
 	var bytes []byte
 
@@ -58,11 +53,6 @@ func parsePublicCertFile(certFile string) (certs []*x509.Certificate, err error)
 	}
 
 	return certs, err
-}
-
-// Reads certificate file and returns a list of parsed certificates.
-func readCertificateChain() ([]*x509.Certificate, error) {
-	return parsePublicCertFile(getPublicCertFile())
 }
 
 func getRootCAs(certsCAsDir string) (*x509.CertPool, error) {
@@ -100,9 +90,19 @@ func getRootCAs(certsCAsDir string) (*x509.CertPool, error) {
 	return rootCAs, nil
 }
 
-// loadRootCAs fetches CA files provided in minio config and adds them to globalRootCAs
-// Currently under Windows, there is no way to load system + user CAs at the same time
-func loadRootCAs() (err error) {
-	globalRootCAs, err = getRootCAs(getCADir())
-	return err
+func getSSLConfig() (publicCerts []*x509.Certificate, rootCAs *x509.CertPool, secureConn bool, err error) {
+	if !(isFile(getPublicCertFile()) && isFile(getPrivateKeyFile())) {
+		return publicCerts, rootCAs, secureConn, err
+	}
+
+	if publicCerts, err = parsePublicCertFile(getPublicCertFile()); err != nil {
+		return publicCerts, rootCAs, secureConn, err
+	}
+
+	if rootCAs, err = getRootCAs(getCADir()); err != nil {
+		return publicCerts, rootCAs, secureConn, err
+	}
+
+	secureConn = true
+	return publicCerts, rootCAs, secureConn, err
 }

@@ -50,7 +50,7 @@ func TestServerConfigMigrateV1(t *testing.T) {
 	}
 
 	// Initialize server config and check again if everything is fine
-	if err := loadConfig(envParams{}); err != nil {
+	if err := loadConfig(); err != nil {
 		t.Fatalf("Unable to initialize from updated config file %s", err)
 	}
 }
@@ -156,7 +156,7 @@ func TestServerConfigMigrateV2toV16(t *testing.T) {
 	}
 
 	// Initialize server config and check again if everything is fine
-	if err := loadConfig(envParams{}); err != nil {
+	if err := loadConfig(); err != nil {
 		t.Fatalf("Unable to initialize from updated config file %s", err)
 	}
 

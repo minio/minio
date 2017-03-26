@@ -18,13 +18,9 @@ package cmd
 
 import (
 	"errors"
-	"flag"
-	"os"
 	"reflect"
 	"runtime"
 	"testing"
-
-	"github.com/minio/cli"
 )
 
 func TestGetListenIPs(t *testing.T) {
@@ -361,38 +357,6 @@ func TestCheckEndpointsSyntax(t *testing.T) {
 	}
 }
 
-// Tests check server syntax.
-func TestCheckServerSyntax(t *testing.T) {
-	app := cli.NewApp()
-	app.Commands = []cli.Command{serverCmd}
-	serverFlagSet := flag.NewFlagSet("server", 0)
-	serverFlagSet.String("address", ":9000", "")
-	ctx := cli.NewContext(app, serverFlagSet, nil)
-
-	disksGen := func(n int) []string {
-		disks, err := getRandomDisks(n)
-		if err != nil {
-			t.Fatalf("Unable to initialie disks %s", err)
-		}
-		return disks
-	}
-	testCases := [][]string{
-		disksGen(1),
-		disksGen(4),
-		disksGen(8),
-		disksGen(16),
-	}
-
-	for i, disks := range testCases {
-		err := serverFlagSet.Parse(disks)
-		if err != nil {
-			t.Errorf("Test %d failed to parse arguments %s", i+1, disks)
-		}
-		defer removeRoots(disks)
-		checkServerSyntax(ctx)
-	}
-}
-
 func TestIsDistributedSetup(t *testing.T) {
 	var testCases []struct {
 		disks  []string
@@ -450,37 +414,6 @@ func TestIsDistributedSetup(t *testing.T) {
 	}
 	// Reset so that we don't affect other tests.
 	globalMinioHost = ""
-}
-
-// Tests init server.
-func TestInitServer(t *testing.T) {
-	app := cli.NewApp()
-	app.Commands = []cli.Command{serverCmd}
-	serverFlagSet := flag.NewFlagSet("server", 0)
-	serverFlagSet.String("address", ":9000", "")
-	ctx := cli.NewContext(app, serverFlagSet, nil)
-
-	root, err := newTestConfig(globalMinioDefaultRegion)
-	if err != nil {
-		t.Fatal("Failed to set up test config")
-	}
-	defer removeAll(root)
-
-	testCases := []struct {
-		envVar string
-		val    string
-	}{
-		{"MINIO_ACCESS_KEY", "abcd1"},
-		{"MINIO_SECRET_KEY", "abcd12345"},
-	}
-	for i, test := range testCases {
-		tErr := os.Setenv(test.envVar, test.val)
-		if tErr != nil {
-			t.Fatalf("Test %d failed with %v", i+1, tErr)
-		}
-		initServerConfig(ctx)
-		os.Unsetenv(test.envVar)
-	}
 }
 
 // Tests isAnyEndpointLocal function with inputs such that it returns true and false respectively.

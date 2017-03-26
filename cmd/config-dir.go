@@ -130,7 +130,3 @@ func getPublicCertFile() string {
 func getPrivateKeyFile() string {
 	return configDir.GetPrivateKeyFile()
 }
-
-func isConfigFileExists() bool {
-	return isFile(getConfigFile())
-}
