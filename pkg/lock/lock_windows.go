@@ -1,7 +1,7 @@
 // +build windows
 
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ package lock
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"syscall"
 	"unsafe"
@@ -68,13 +69,6 @@ func LockedOpenFile(path string, flag int, perm os.FileMode) (*LockedFile, error
 	return &LockedFile{File: f}, nil
 }
 
-func makeInheritSa() *syscall.SecurityAttributes {
-	var sa syscall.SecurityAttributes
-	sa.Length = uint32(unsafe.Sizeof(sa))
-	sa.InheritHandle = 1
-	return &sa
-}
-
 // perm param is ignored, on windows file perms/NT acls
 // are not octet combinations. Providing access to NT
 // acls is out of scope here.
@@ -95,33 +89,19 @@ func open(path string, flag int, perm os.FileMode) (*os.File, error) {
 	case syscall.O_WRONLY:
 		access = syscall.GENERIC_WRITE
 	case syscall.O_RDWR:
-		access = syscall.GENERIC_READ | syscall.GENERIC_WRITE
+		fallthrough
 	case syscall.O_RDWR | syscall.O_CREAT:
-		access = syscall.GENERIC_ALL
+		fallthrough
 	case syscall.O_WRONLY | syscall.O_CREAT:
-		access = syscall.GENERIC_ALL
-	}
-
-	if flag&syscall.O_APPEND != 0 {
-		access &^= syscall.GENERIC_WRITE
-		access |= syscall.FILE_APPEND_DATA
-	}
-
-	var sa *syscall.SecurityAttributes
-	if flag&syscall.O_CLOEXEC == 0 {
-		sa = makeInheritSa()
+		access = syscall.GENERIC_READ | syscall.GENERIC_WRITE
+	default:
+		return nil, fmt.Errorf("Unsupported flag (%d)", flag)
 	}
 
 	var createflag uint32
 	switch {
-	case flag&(syscall.O_CREAT|syscall.O_EXCL) == (syscall.O_CREAT | syscall.O_EXCL):
-		createflag = syscall.CREATE_NEW
-	case flag&(syscall.O_CREAT|syscall.O_TRUNC) == (syscall.O_CREAT | syscall.O_TRUNC):
-		createflag = syscall.CREATE_ALWAYS
 	case flag&syscall.O_CREAT == syscall.O_CREAT:
 		createflag = syscall.OPEN_ALWAYS
-	case flag&syscall.O_TRUNC == syscall.O_TRUNC:
-		createflag = syscall.TRUNCATE_EXISTING
 	default:
 		createflag = syscall.OPEN_EXISTING
 	}
@@ -129,7 +109,7 @@ func open(path string, flag int, perm os.FileMode) (*os.File, error) {
 	shareflag := uint32(syscall.FILE_SHARE_READ | syscall.FILE_SHARE_WRITE | syscall.FILE_SHARE_DELETE)
 	accessAttr := uint32(syscall.FILE_ATTRIBUTE_NORMAL | 0x80000000)
 
-	fd, err := syscall.CreateFile(pathp, access, shareflag, sa, createflag, accessAttr, 0)
+	fd, err := syscall.CreateFile(pathp, access, shareflag, nil, createflag, accessAttr, 0)
 	if err != nil {
 		return nil, err
 	}
