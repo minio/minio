@@ -29,12 +29,14 @@ import (
 // Read Write mutex for safe access to ServerConfig.
 var serverConfigMu sync.RWMutex
 
-const v16 = "16"
+// Config version
+const v17 = "17"
 
-// serverConfigV16 server configuration version '16' which is like
-// version '15' except it removes log level field and renames `fileName`
-// field of File logger to `filename`
-type serverConfigV16 struct {
+// serverConfigV17 server configuration version '17' which is like
+// version '16' except it adds support for "format" parameter in
+// database event notification targets: PostgreSQL, MySQL, Redis and
+// Elasticsearch.
+type serverConfigV17 struct {
 	Version string `json:"version"`
 
 	// S3 API configuration.
@@ -49,9 +51,9 @@ type serverConfigV16 struct {
 	Notify *notifier `json:"notify"`
 }
 
-func newServerConfigV16() *serverConfigV16 {
-	srvCfg := &serverConfigV16{
-		Version:    v16,
+func newServerConfigV17() *serverConfigV17 {
+	srvCfg := &serverConfigV17{
+		Version:    v17,
 		Credential: mustGetNewCredential(),
 		Region:     globalMinioDefaultRegion,
 		Browser:    true,
@@ -87,7 +89,7 @@ func newServerConfigV16() *serverConfigV16 {
 // found, otherwise use default parameters
 func newConfig(envParams envParams) error {
 	// Initialize server config.
-	srvCfg := newServerConfigV16()
+	srvCfg := newServerConfigV17()
 
 	// If env is set for a fresh start, save them to config file.
 	if globalIsEnvCreds {
@@ -117,7 +119,7 @@ func newConfig(envParams envParams) error {
 // loadConfig - loads a new config from disk, overrides params from env
 // if found and valid
 func loadConfig(envParams envParams) error {
-	srvCfg := &serverConfigV16{
+	srvCfg := &serverConfigV17{
 		Region:  globalMinioDefaultRegion,
 		Browser: true,
 	}
@@ -125,8 +127,8 @@ func loadConfig(envParams envParams) error {
 	if _, err := quick.Load(getConfigFile(), srvCfg); err != nil {
 		return err
 	}
-	if srvCfg.Version != v16 {
-		return fmt.Errorf("configuration version mismatch.  Expected: ‘%s’, Got: ‘%s’", srvCfg.Version, v16)
+	if srvCfg.Version != v17 {
+		return fmt.Errorf("configuration version mismatch. Expected: ‘%s’, Got: ‘%s’", srvCfg.Version, v17)
 	}
 
 	// If env is set override the credentials from config file.
@@ -203,7 +205,7 @@ func checkDupJSONKeys(json string) error {
 
 // validateConfig checks for
 func validateConfig() error {
-	srvCfg := &serverConfigV16{
+	srvCfg := &serverConfigV17{
 		Region:  globalMinioDefaultRegion,
 		Browser: true,
 	}
@@ -214,8 +216,8 @@ func validateConfig() error {
 	}
 
 	// Check if config version is valid
-	if srvCfg.Version != v16 {
-		return errors.New("bad config version, expected: " + v16)
+	if srvCfg.Version != v17 {
+		return errors.New("bad config version, expected: " + v17)
 	}
 
 	// Load config file json and check for duplication json keys
@@ -254,10 +256,10 @@ func validateConfig() error {
 }
 
 // serverConfig server config.
-var serverConfig *serverConfigV16
+var serverConfig *serverConfigV17
 
 // GetVersion get current config version.
-func (s serverConfigV16) GetVersion() string {
+func (s serverConfigV17) GetVersion() string {
 	serverConfigMu.RLock()
 	defer serverConfigMu.RUnlock()
 
@@ -265,7 +267,7 @@ func (s serverConfigV16) GetVersion() string {
 }
 
 // SetRegion set new region.
-func (s *serverConfigV16) SetRegion(region string) {
+func (s *serverConfigV17) SetRegion(region string) {
 	serverConfigMu.Lock()
 	defer serverConfigMu.Unlock()
 
@@ -277,7 +279,7 @@ func (s *serverConfigV16) SetRegion(region string) {
 }
 
 // GetRegion get current region.
-func (s serverConfigV16) GetRegion() string {
+func (s serverConfigV17) GetRegion() string {
 	serverConfigMu.RLock()
 	defer serverConfigMu.RUnlock()
 
@@ -290,7 +292,7 @@ func (s serverConfigV16) GetRegion() string {
 }
 
 // SetCredentials set new credentials.
-func (s *serverConfigV16) SetCredential(creds credential) {
+func (s *serverConfigV17) SetCredential(creds credential) {
 	serverConfigMu.Lock()
 	defer serverConfigMu.Unlock()
 
@@ -299,7 +301,7 @@ func (s *serverConfigV16) SetCredential(creds credential) {
 }
 
 // GetCredentials get current credentials.
-func (s serverConfigV16) GetCredential() credential {
+func (s serverConfigV17) GetCredential() credential {
 	serverConfigMu.RLock()
 	defer serverConfigMu.RUnlock()
 
@@ -307,16 +309,16 @@ func (s serverConfigV16) GetCredential() credential {
 }
 
 // SetBrowser set if browser is enabled.
-func (s *serverConfigV16) SetBrowser(b BrowserFlag) {
+func (s *serverConfigV17) SetBrowser(v BrowserFlag) {
 	serverConfigMu.Lock()
 	defer serverConfigMu.Unlock()
 
 	// Set the new value.
-	s.Browser = b
+	s.Browser = v
 }
 
 // GetCredentials get current credentials.
-func (s serverConfigV16) GetBrowser() BrowserFlag {
+func (s serverConfigV17) GetBrowser() BrowserFlag {
 	serverConfigMu.RLock()
 	defer serverConfigMu.RUnlock()
 
@@ -324,7 +326,7 @@ func (s serverConfigV16) GetBrowser() BrowserFlag {
 }
 
 // Save config.
-func (s serverConfigV16) Save() error {
+func (s serverConfigV17) Save() error {
 	serverConfigMu.RLock()
 	defer serverConfigMu.RUnlock()
 

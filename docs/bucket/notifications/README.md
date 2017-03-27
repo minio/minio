@@ -372,36 +372,72 @@ go run nats.go
 <a name="PostgreSQL"></a>
 ## Publish Minio events via PostgreSQL
 
-Install PostgreSQL from [here](https://www.postgresql.org/).
+Install [PostgreSQL](https://www.postgresql.org/) database server. For illustrative purposes, we have set the "postgres" user password as `password` and created a database called `minio_events` to store the events.
+
+This notification target supports two formats: _namespace_ and _access_.
+
+When the _namespace_ format is used, Minio synchronizes objects in the bucket with rows in the table. It creates rows with two columns: key and value. The key is the bucket and object name of an object that exists in Minio. The value is JSON encoded event data about the operation that created/replaced the object in Minio. When objects are updated or deleted, the corresponding row from this table is updated or deleted respectively.
+
+When the _access_ format is used, Minio appends events to a table. It creates rows with two columns: event_time and event_data. The event_time is the time at which the event occurred in the Minio server. The event_data is the JSON encoded event data about the operation on an object. No rows are deleted or modified in this format.
+
+The steps below show how to use this notification target in `namespace` format. The other format is very similar and is omitted for brevity.
 
 ### Step 1: Add PostgreSQL endpoint to Minio
 
-The default location of Minio server configuration file is ``~/.minio/config.json``. Update the PostgreSQL configuration block in ``config.json`` as follows:
+The default location of Minio server configuration file is ``~/.minio/config.json``. The PostgreSQL configuration is located in the `postgresql` key under the `notify` top-level key. Create a configuration key-value pair here for your PostgreSQL instance. The key is a name for your PostgreSQL endpoint, and the value is a collection of key-value parameters described in the table below.
+
+| Parameter | Type | Description |
+|:---|:---|:---|
+| `enable` | _bool_ | (Required) Is this server endpoint configuration active/enabled? |
+| `format` | _string_ | (Required) Either `namespace` or `access`. |
+| `connectionString` | _string_ | (Optional) [Connection string parameters](https://godoc.org/github.com/lib/pq#hdr-Connection_String_Parameters) for the PostgreSQL server. Can be used to set `sslmode` for example. |
+| `table` | _string_ | (Required) Table name in which events will be stored/updated. If the table does not exist, the Minio server creates it at start-up.|
+| `host` | _string_ | (Optional) Host name of the PostgreSQL server. Defaults to `localhost`|
+| `port` | _string_ | (Optional) Port on which to connect to PostgreSQL server. Defaults to `5432`. |
+| `user` | _string_ | (Optional) Database user name. Defaults to user running the server process. |
+| `password` | _string_ | (Optional) Database password. |
+| `database` | _string_ | (Optional) Database name. |
+
+An example of PostgreSQL configuration is as follows:
 
 ```
 "postgresql": {
     "1": {
         "enable": true,
-        "connectionString": "",
+        "format": "namespace",
+        "connectionString": "sslmode=disable",
         "table": "bucketevents",
         "host": "127.0.0.1",
         "port": "5432",
         "user": "postgres",
-        "password": "mypassword",
-        "database": "bucketevents_db"
+        "password": "password",
+        "database": "minio_events"
     }
 }
 ```
 
-Restart Minio server to reflect config changes. ``bucketevents`` is the database table used by PostgreSQL in this example.
+Note that for illustration here, we have disabled SSL. In the interest of security, for production this is not recommended.
+
+After updating the configuration file, restart the Minio server to put the changes into effect. The server will print a line like `SQS ARNs:  arn:minio:sqs:us-east-1:1:postgresql` at start-up if there were no errors.
+
+Note that, you can add as many PostgreSQL server endpoint configurations as needed by providing an identifier (like "1" in the example above) for the PostgreSQL instance and an object of per-server configuration parameters.
+
 
 ### Step 2: Enable bucket notification using Minio client
 
-We will enable bucket event notification to trigger whenever a JPEG image is uploaded or deleted from ``images`` bucket on ``myminio`` server. Here ARN value is ``arn:minio:sqs:us-east-1:1:postgresql``. To understand more about ARN please follow [AWS ARN](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html) documentation.
+We will now enable bucket event notifications on a bucket named `images`. Whenever a JPEG image is created/overwritten, a new row is added or an existing row is updated in the PostgreSQL configured above. When an existing object is deleted, the corresponding row is deleted from the PostgreSQL table. Thus, the rows in the PostgreSQL table, reflect the `.jpg` objects in the `images` bucket.
+
+To configure this bucket notification, we need the ARN printed by Minio in the previous step. Additional information about ARN is available [here](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html).
+
+With the `mc` tool, the configuration is very simple to add. Let us say that the Minio server is aliased as `myminio` in our mc configuration. Execute the following:
 
 ```
+# Create bucket named `images` in myminio
 mc mb myminio/images
-mc events add  myminio/images arn:minio:sqs:us-east-1:1:postgresql --suffix .jpg
+# Add notification configuration on the `images` bucket using the MySQL ARN. The --suffix argument filters events.
+mc events add myminio/images arn:minio:sqs:us-east-1:1:postgresql --suffix .jpg
+# Print out the notification configuration on the `images` bucket.
+mc events list myminio/images
 mc events list myminio/images
 arn:minio:sqs:us-east-1:1:postgresql s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
 ```
@@ -414,12 +450,13 @@ Open another terminal and upload a JPEG image into ``images`` bucket.
 mc cp myphoto.jpg myminio/images
 ```
 
-Open PostgreSQL terminal to list the saved event notification logs.
+Open PostgreSQL terminal to list the rows in the `bucketevents` table.
 
 ```
-bucketevents_db=# select * from bucketevents;
+$ psql -h 127.0.0.1 -u postgres -p minio_events
+minio_events=# select * from bucketevents;
 
-key         |                      value
+key                 |                      value
 --------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  images/myphoto.jpg | {"Records": [{"s3": {"bucket": {"arn": "arn:aws:s3:::images", "name": "images", "ownerIdentity": {"principalId": "minio"}}, "object": {"key": "myphoto.jpg", "eTag": "1d97bf45ecb37f7a7b699418070df08f", "size": 56060, "sequencer": "147CE57C70B31931"}, "configurationId": "Config", "s3SchemaVersion": "1.0"}, "awsRegion": "us-east-1", "eventName": "s3:ObjectCreated:Put", "eventTime": "2016-10-12T21:18:20Z", "eventSource": "aws:s3", "eventVersion": "2.0", "userIdentity": {"principalId": "minio"}, "responseElements": {}, "requestParameters": {"sourceIPAddress": "[::1]:39706"}}]}
 (1 row)
@@ -430,20 +467,29 @@ key         |                      value
 
 Install MySQL from [here](https://dev.mysql.com/downloads/mysql/). For illustrative purposes, we have set the root password as `password` and created a database called `miniodb` to store the events.
 
+This notification target supports two formats: _namespace_ and _access_.
+
+When the _namespace_ format is used, Minio synchronizes objects in the bucket with rows in the table. It creates rows with two columns: key_name and value. The key_name is the bucket and object name of an object that exists in Minio. The value is JSON encoded event data about the operation that created/replaced the object in Minio. When objects are updated or deleted, the corresponding row from this table is updated or deleted respectively.
+
+When the _access_ format is used, Minio appends events to a table. It creates rows with two columns: event_time and event_data. The event_time is the time at which the event occurred in the Minio server. The event_data is the JSON encoded event data about the operation on an object. No rows are deleted or modified in this format.
+
+The steps below show how to use this notification target in `namespace` format. The other format is very similar and is omitted for brevity.
+
 ### Step 1: Add MySQL server endpoint configuration to Minio
 
 The default location of Minio server configuration file is ``~/.minio/config.json``. The MySQL configuration is located in the `mysql` key under the `notify` top-level key. Create a configuration key-value pair here for your MySQL instance. The key is a name for your MySQL endpoint, and the value is a collection of key-value parameters described in the table below.
 
-| Parameter | Value type | Description |
+| Parameter | Type | Description |
 |:---|:---|:---|
-| `enable` | Boolean | (Required) Is this server endpoint configuration active/enabled? |
-| `dsnString` | String | (Optional) [Data-Source-Name connection string](https://github.com/go-sql-driver/mysql#dsn-data-source-name) for the MySQL server. If not specified, the connection information specified by the `host`, `port`, `user`, `password` and `database` parameters are used. |
-| `table` | String | (Required) Table name in which events will be stored/updated. If the table does not exist, the Minio server creates it at start-up.|
-| `host` | String | Host name of the MySQL server (used only if `dsnString` is empty). |
-| `port` | String | Port on which to connect to the MySQL server (used only if `dsnString` is empty). |
-| `user` | String | Database user-name (used only if `dsnString` is empty). |
-| `password` | String | Database password (used only if `dsnString` is empty). |
-| `database` | String | Database name (used only if `dsnString` is empty). |
+| `enable` | _bool_ | (Required) Is this server endpoint configuration active/enabled? |
+| `format` | _string_ | (Required) Either `namespace` or `access`. |
+| `dsnString` | _string_ | (Optional) [Data-Source-Name connection string](https://github.com/go-sql-driver/mysql#dsn-data-source-name) for the MySQL server. If not specified, the connection information specified by the `host`, `port`, `user`, `password` and `database` parameters are used. |
+| `table` | _string_ | (Required) Table name in which events will be stored/updated. If the table does not exist, the Minio server creates it at start-up.|
+| `host` | _string_ | Host name of the MySQL server (used only if `dsnString` is empty). |
+| `port` | _string_ | Port on which to connect to the MySQL server (used only if `dsnString` is empty). |
+| `user` | _string_ | Database user-name (used only if `dsnString` is empty). |
+| `password` | _string_ | Database password (used only if `dsnString` is empty). |
+| `database` | _string_ | Database name (used only if `dsnString` is empty). |
 
 An example of MySQL configuration is as follows:
 
@@ -479,7 +525,7 @@ With the `mc` tool, the configuration is very simple to add. Let us say that the
 # Create bucket named `images` in myminio
 mc mb myminio/images
 # Add notification configuration on the `images` bucket using the MySQL ARN. The --suffix argument filters events.
-mc events add  myminio/images arn:minio:sqs:us-east-1:1:postgresql --suffix .jpg
+mc events add myminio/images arn:minio:sqs:us-east-1:1:postgresql --suffix .jpg
 # Print out the notification configuration on the `images` bucket.
 mc events list myminio/images
 arn:minio:sqs:us-east-1:1:postgresql s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”

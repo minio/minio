@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"fmt"
 	"io/ioutil"
 	"time"
 
@@ -27,6 +28,7 @@ import (
 // redisNotify to send logs to Redis server
 type redisNotify struct {
 	Enable   bool   `json:"enable"`
+	Format   string `json:"format"`
 	Addr     string `json:"address"`
 	Password string `json:"password"`
 	Key      string `json:"key"`
@@ -35,6 +37,11 @@ type redisNotify struct {
 func (r *redisNotify) Validate() error {
 	if !r.Enable {
 		return nil
+	}
+	if r.Format != formatNamespace {
+		return fmt.Errorf(
+			"Redis Notifier Error: \"format\" must be \"%s\"",
+			formatNamespace)
 	}
 	if _, err := checkURL(r.Addr); err != nil {
 		return err
