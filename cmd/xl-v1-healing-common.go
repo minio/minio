@@ -185,9 +185,9 @@ func xlHealStat(xl xlObjects, partsMetadata []xlMetaV1, errs []error) HealObject
 	modTime, count := commonTime(listObjectModtimes(partsMetadata, errs))
 	if count < xl.readQuorum {
 		return HealObjectInfo{
-			Status:              quorumUnavailable,
-			MissingDataCount:    0,
-			MissingPartityCount: 0,
+			Status:             quorumUnavailable,
+			MissingDataCount:   0,
+			MissingParityCount: 0,
 		}
 	}
 
@@ -195,9 +195,9 @@ func xlHealStat(xl xlObjects, partsMetadata []xlMetaV1, errs []error) HealObject
 	xlMeta, err := pickValidXLMeta(partsMetadata, modTime)
 	if err != nil {
 		return HealObjectInfo{
-			Status:              corrupted,
-			MissingDataCount:    0,
-			MissingPartityCount: 0,
+			Status:             corrupted,
+			MissingDataCount:   0,
+			MissingParityCount: 0,
 		}
 	}
 
@@ -206,11 +206,16 @@ func xlHealStat(xl xlObjects, partsMetadata []xlMetaV1, errs []error) HealObject
 	missingDataCount := 0
 	missingParityCount := 0
 
+	disksMissing := false
 	for i, err := range errs {
 		// xl.json is not found, which implies the erasure
 		// coded blocks are unavailable in the corresponding disk.
 		// First half of the disks are data and the rest are parity.
-		if realErr := errorCause(err); realErr == errFileNotFound || realErr == errDiskNotFound {
+		switch realErr := errorCause(err); realErr {
+		case errDiskNotFound:
+			disksMissing = true
+			fallthrough
+		case errFileNotFound:
 			if xlMeta.Erasure.Distribution[i]-1 < xl.dataBlocks {
 				missingDataCount++
 			} else {
@@ -219,12 +224,22 @@ func xlHealStat(xl xlObjects, partsMetadata []xlMetaV1, errs []error) HealObject
 		}
 	}
 
+	// The object may not be healed completely, since some of the
+	// disks needing healing are unavailable.
+	if disksMissing {
+		return HealObjectInfo{
+			Status:             canPartiallyHeal,
+			MissingDataCount:   missingDataCount,
+			MissingParityCount: missingParityCount,
+		}
+	}
+
 	// This object can be healed. We have enough object metadata
 	// to reconstruct missing erasure coded blocks.
 	return HealObjectInfo{
-		Status:              canHeal,
-		MissingDataCount:    missingDataCount,
-		MissingPartityCount: missingParityCount,
+		Status:             canHeal,
+		MissingDataCount:   missingDataCount,
+		MissingParityCount: missingParityCount,
 	}
 }
 

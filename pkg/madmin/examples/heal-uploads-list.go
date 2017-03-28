@@ -64,6 +64,8 @@ func main() {
 			switch healInfo := *upload.HealUploadInfo; healInfo.Status {
 			case madmin.CanHeal:
 				fmt.Println(upload.Key, " can be healed.")
+			case madmin.CanPartiallyHeal:
+				fmt.Println(upload.Key, " can be healed partially. Some disks may be offline.")
 			case madmin.QuorumUnavailable:
 				fmt.Println(upload.Key, " can't be healed until quorum is available.")
 			case madmin.Corrupted:

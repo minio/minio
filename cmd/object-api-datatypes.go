@@ -57,6 +57,7 @@ const (
 	canHeal                             // Object can be healed
 	corrupted                           // Object can't be healed
 	quorumUnavailable                   // Object can't be healed until read quorum is available
+	canPartiallyHeal                    // Object can't be healed completely until outdated disk(s) are online.
 )
 
 // HealBucketInfo - represents healing related information of a bucket.
@@ -78,9 +79,9 @@ type BucketInfo struct {
 
 // HealObjectInfo - represents healing related information of an object.
 type HealObjectInfo struct {
-	Status              healStatus
-	MissingDataCount    int
-	MissingPartityCount int
+	Status             healStatus
+	MissingDataCount   int
+	MissingParityCount int
 }
 
 // ObjectInfo - represents object metadata.
