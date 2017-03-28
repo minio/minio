@@ -828,6 +828,25 @@ func newTestStreamingSignedBadChunkDateRequest(method, urlStr string, contentLen
 	return req, err
 }
 
+func newTestStreamingSignedCustomEncodingRequest(method, urlStr string, contentLength, chunkSize int64, body io.ReadSeeker, accessKey, secretKey, contentEncoding string) (*http.Request, error) {
+	req, err := newTestStreamingRequest(method, urlStr, contentLength, chunkSize, body)
+	if err != nil {
+		return nil, err
+	}
+
+	// Set custom encoding.
+	req.Header.Set("content-encoding", contentEncoding)
+
+	currTime := UTCNow()
+	signature, err := signStreamingRequest(req, accessKey, secretKey, currTime)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err = assembleStreamingChunks(req, body, chunkSize, secretKey, signature, currTime)
+	return req, err
+}
+
 // Returns new HTTP request object signed with streaming signature v4.
 func newTestStreamingSignedRequest(method, urlStr string, contentLength, chunkSize int64, body io.ReadSeeker, accessKey, secretKey string) (*http.Request, error) {
 	req, err := newTestStreamingRequest(method, urlStr, contentLength, chunkSize, body)
