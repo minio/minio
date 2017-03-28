@@ -57,14 +57,9 @@ var gatewayCmd = cli.Command{
 		Usage: "Disable startup banner.",
 	},
 		cli.StringFlag{
-			Name:  "s3-endpoint",
+			Name:  "endpoint",
 			Usage: "The endpoint.",
-			Value: "play.minio.io:9000",
-		},
-		cli.StringFlag{
-			Name:  "s3-location",
-			Usage: "The endpoint.",
-			Value: "us-east-1",
+			Value: "s3.amazonaws.com",
 		},
 		cli.BoolFlag{
 			Name:  "cache",
@@ -103,14 +98,15 @@ func mustGetGatewayCredsFromEnv() (accessKey, secretKey string) {
 //
 // - Azure Blob Storage.
 // - Add your favorite backend here.
-func newGatewayLayer(backendType, endpoint, location, accessKey, secretKey string) (GatewayLayer, error) {
-	if gatewayBackend(backendType) == azureBackend {
+func newGatewayLayer(backendType, endpoint, accessKey, secretKey string) (GatewayLayer, error) {
+	switch gatewayBackend(backendType) {
+	case azureBackend:
 		return newAzureLayer(accessKey, secretKey)
-	} else if gatewayBackend(backendType) == s3Backend {
-		return newS3Layer(endpoint, location, accessKey, secretKey)
-	} else {
-		return nil, fmt.Errorf("Unrecognized backend type %s", backendType)
+	case s3Backend:
+		return newS3Gateway(endpoint, accessKey, secretKey)
 	}
+
+	return nil, fmt.Errorf("Unrecognized backend type %s", backendType)
 }
 
 // Initialize a new gateway config.
@@ -176,7 +172,7 @@ func gatewayMain(ctx *cli.Context) {
 	// First argument is selected backend type.
 	backendType := ctx.Args().First()
 
-	newObject, err := newGatewayLayer(backendType, ctx.String("s3-endpoint"), ctx.String("s3-location"), accessKey, secretKey)
+	newObject, err := newGatewayLayer(backendType, ctx.String("endpoint"), accessKey, secretKey)
 	if err != nil {
 		console.Fatalf("Unable to initialize gateway layer. Error: %s", err)
 	}
