@@ -34,9 +34,9 @@ docker run -p 9000:9000 --name minio1 \
 
 ## Run Distributed Minio on Docker
 
-Distributed Minio can be deployed via Docker Compose or Swarm mode. The major difference between these two being, Docker Compose creates a single host, multi-container deployment, while Swarm mode creates a multi-host, multi-container deployment. This means that with Docker Compose you can quickly get started with Distributed Minio on your computer - ideal for development, testing, staging environments. While deploying Distributed Minio on Swarm offers a more robust, production level deployment.
+Distributed Minio can be deployed via [Docker Compose](https://docs.docker.com/compose/overview/) or [Swarm mode](https://docs.docker.com/engine/swarm/). The major difference between these two being, Docker Compose creates a single host, multi-container deployment, while Swarm mode creates a multi-host, multi-container deployment.
 
-Explore more on Docker Compose [here](https://docs.docker.com/compose/overview/) and Swarm mode [here](https://docs.docker.com/engine/swarm/).
+This means Docker Compose lets you quickly get started with Distributed Minio on your computer - ideal for development, testing, staging environments. While deploying Distributed Minio on Swarm offers a more robust, production level deployment.
 
 * To deploy Distributed Minio on Docker Compose, refer [this guide](http://docs.minio.io/docs/deploy-minio-on-docker-compose).
 * To deploy Distributed Minio on Docker Swarm, refer [this guide](https://docs.minio.io/docs/deploy-minio-on-docker-swarm).
