@@ -5,6 +5,7 @@ Minio is a cloud-native application designed to scale in a sustainable manner in
 | Orchestration platforms|
 |:---|
 | [`Docker Swarm`](http://docs.minio.io/docs/deploy-minio-on-docker-swarm) |
+| [`Docker Compose`](http://docs.minio.io/docs/deploy-minio-on-docker-compose) |
 | [`Kubernetes`](http://docs.minio.io/docs/deploy-minio-on-kubernetes) |
 | [`DC/OS`](http://docs.minio.io/docs/deploy-minio-on-dc-os) |
 

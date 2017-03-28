@@ -1,28 +1,20 @@
-# Minio Docker Quickstart Guide [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
+# Minio Docker Quickstart Guide [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
 
-## 1. Prerequisites
+## Prerequisites
 
-### GNU/Linux
-Install Docker for GNU/Linux from [here](https://www.docker.com/products/docker#/linux)
+Docker installed on your machine. Download the relevant installer from [here](https://www.docker.com/community-edition#/download).
 
-### Microsoft Windows
-Install Docker for Windows from [here](https://www.docker.com/products/docker#/windows)
+## Run Standalone Minio on Docker.
 
-### macOS
-Install Docker for macOS from [here](https://www.docker.com/products/docker#/mac)
-
-## 2. Test Minio on Docker.
-Minio generates new access and secret keys each time you run this command. Container state is lost after you end this session. This mode is only intended for testing purpose.
+Minio needs a persistent volume to store configuration and application data. However, for testing purposes, you can launch Minio by simply passing a directory (`/export` in the example below). This directory gets created in the container filesystem at the time of container start. But all the data is lost after container exits.
 
 ```sh
 docker run -p 9000:9000 minio/minio server /export
 ```
 
-## 3. Run Minio Standalone on Docker.
+To create a Minio container with persistent storage, you need to map local persistent directories from the host OS to virtual config `~/.minio` and export `/export` directories. To do this, run the below commands
 
-Minio container requires a persistent volume to store configuration and application data. Following command maps local persistent directories from the host OS to virtual config `~/.minio` and export `/export` directories.
-
-### GNU/Linux and macOS
+#### GNU/Linux and macOS
 
 ```sh
 docker run -p 9000:9000 --name minio1 \
@@ -31,7 +23,7 @@ docker run -p 9000:9000 --name minio1 \
   minio/minio server /export
 ```
 
-### Microsoft Windows
+#### Windows
 
 ```sh
 docker run -p 9000:9000 --name minio1 \
@@ -40,11 +32,22 @@ docker run -p 9000:9000 --name minio1 \
   minio/minio server /export
 ```
 
-## 4. Run Minio Standalone on Docker with Custom Access and Secret Keys
+## Run Distributed Minio on Docker
+
+Distributed Minio can be deployed via [Docker Compose](https://docs.docker.com/compose/overview/) or [Swarm mode](https://docs.docker.com/engine/swarm/). The major difference between these two being, Docker Compose creates a single host, multi-container deployment, while Swarm mode creates a multi-host, multi-container deployment.
+
+This means Docker Compose lets you quickly get started with Distributed Minio on your computer - ideal for development, testing, staging environments. While deploying Distributed Minio on Swarm offers a more robust, production level deployment.
+
+* To deploy Distributed Minio on Docker Compose, refer [this guide](http://docs.minio.io/docs/deploy-minio-on-docker-compose).
+* To deploy Distributed Minio on Docker Swarm, refer [this guide](https://docs.minio.io/docs/deploy-minio-on-docker-swarm).
+
+## Minio Docker Tips
+
+### Minio Custom Access and Secret Keys
 
 To override Minio's auto-generated keys, you may pass secret and access keys explicitly as environment variables. Minio server also allows regular strings as access and secret keys.
 
-### GNU/Linux and macOS
+#### GNU/Linux and macOS
 
 ```sh
 docker run -p 9000:9000 --name minio1 \
@@ -55,7 +58,7 @@ docker run -p 9000:9000 --name minio1 \
   minio/minio server /export
 ```
 
-### Microsoft Windows
+#### Windows
 
 ```sh
 docker run -p 9000:9000 --name minio1 \
@@ -65,31 +68,48 @@ docker run -p 9000:9000 --name minio1 \
   -v D:\export\minio1-config:/root/.minio \
   minio/minio server /export
 ```
+### Retrieving Container ID
 
-## 5. Test Distributed Minio on Docker
-
-This example shows how to run 4 node Minio cluster inside different docker containers using [docker-compose](https://docs.docker.com/compose/). Please download [docker-compose.yml](https://raw.githubusercontent.com/minio/minio/master/docs/docker/docker-compose.yml) to your current working directory, docker-compose pulls the Minio Docker image.
-
-
-#### Run `docker-compose` on GNU/Linux and macOS
+To use Docker commands on a specific container, you need to know the `Container ID` for that container. To get the `Container ID`, run
 
 ```sh
-docker-compose pull
-docker-compose up
+docker ps -a
 ```
 
-#### Run `docker-compose.exe` on Microsoft Windows
+`-a` flag makes sure you get all the containers (Created, Running, Exited). Then identify the `Container ID` from the output.
+
+### Starting and Stopping Containers
+
+To start a stopped container, you can use the [`docker start`](https://docs.docker.com/engine/reference/commandline/start/) command.
 
 ```sh
-docker-compose.exe pull
-docker-compose.exe up
+docker start <container_id>
 ```
 
-Each instance is accessible on the host at ports 9001 through 9004, proceed to access the Web browser at http://127.0.0.1:9001/
+To stop a running container, you can use the [`docker stop`](https://docs.docker.com/engine/reference/commandline/stop/) command.
 
-## 6. Explore Further
+```sh
+docker stop <container_id>
+```
+
+### Minio container logs
+
+To access Minio logs, you can use the [`docker logs`](https://docs.docker.com/engine/reference/commandline/logs/) command.
+
+```sh
+docker logs <container_id>
+```
+
+### Monitor Minio Docker Container
+
+To monitor the resources used by Minio container, you can use the [`docker stats`](https://docs.docker.com/engine/reference/commandline/stats/) command.
+
+```sh
+docker stats <container_id>
+```
+
+## Explore Further
 
 * [Minio Erasure Code QuickStart Guide](https://docs.minio.io/docs/minio-erasure-code-quickstart-guide)
 * [Distributed Minio Quickstart Guide ](https://docs.minio.io/docs/distributed-minio-quickstart-guide)
 * [Docker Compose](https://docs.docker.com/compose/)
-
