@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"crypto/tls"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -81,6 +82,7 @@ func newWebhookNotify(accountID string) (*logrus.Logger, error) {
 		// Configure aggressive timeouts for client posts.
 		Client: &http.Client{
 			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{RootCAs: globalRootCAs},
 				DialContext: (&net.Dialer{
 					Timeout:   5 * time.Second,
 					KeepAlive: 5 * time.Second,
