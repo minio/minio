@@ -1523,6 +1523,19 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		},
 
 		// Test case - 4.
+		// Test case with new object name is same as object to be copied.
+		// But source copy is without leading slash
+		{
+			bucketName:       bucketName,
+			newObjectName:    objectName,
+			copySourceHeader: url.QueryEscape(bucketName + "/" + objectName),
+			accessKey:        credentials.AccessKey,
+			secretKey:        credentials.SecretKey,
+
+			expectedRespStatus: http.StatusBadRequest,
+		},
+
+		// Test case - 5.
 		// Test case with new object name is same as object to be copied
 		// but metadata is updated.
 		{
@@ -1539,7 +1552,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 			expectedRespStatus: http.StatusOK,
 		},
 
-		// Test case - 5.
+		// Test case - 6.
 		// Test case with invalid metadata-directive.
 		{
 			bucketName:       bucketName,
@@ -1555,7 +1568,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 			expectedRespStatus: http.StatusBadRequest,
 		},
 
-		// Test case - 6.
+		// Test case - 7.
 		// Test case with new object name is same as object to be copied
 		// fail with BadRequest.
 		{
@@ -1572,7 +1585,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 			expectedRespStatus: http.StatusBadRequest,
 		},
 
-		// Test case - 7.
+		// Test case - 8.
 		// Test case with non-existent source file.
 		// Case for the purpose of failing `api.ObjectAPI.GetObjectInfo`.
 		// Expecting the response status code to http.StatusNotFound (404).
@@ -1586,7 +1599,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 			expectedRespStatus: http.StatusNotFound,
 		},
 
-		// Test case - 8.
+		// Test case - 9.
 		// Test case with non-existent source file.
 		// Case for the purpose of failing `api.ObjectAPI.PutObject`.
 		// Expecting the response status code to http.StatusNotFound (404).
@@ -1600,7 +1613,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 			expectedRespStatus: http.StatusNotFound,
 		},
 
-		// Test case - 9.
+		// Test case - 10.
 		// Case with invalid AccessKey.
 		{
 			bucketName:       bucketName,

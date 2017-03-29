@@ -23,7 +23,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"path"
 	"sort"
 	"strconv"
 
@@ -267,7 +266,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	vars := mux.Vars(r)
 	dstBucket := vars["bucket"]
 	dstObject := vars["object"]
-	cpDestPath := "/" + path.Join(dstBucket, dstObject)
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -302,7 +300,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	cpSrcDstSame := cpSrcPath == cpDestPath
+	cpSrcDstSame := srcBucket == dstBucket && srcObject == dstObject
 	// Hold write lock on destination since in both cases
 	// - if source and destination are same
 	// - if source and destination are different
