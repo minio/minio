@@ -82,6 +82,9 @@ func TestReduceErrs(t *testing.T) {
 			errDiskNotFound,
 		}, []error{errDiskNotFound}, errVolumeNotFound},
 		{[]error{}, []error{}, errXLReadQuorum},
+		{[]error{errFileNotFound, errFileNotFound, errFileNotFound,
+			errFileNotFound, errFileNotFound, nil, nil, nil, nil, nil},
+			nil, nil},
 	}
 	// Validates list of all the testcases for returning valid errors.
 	for i, testCase := range testCases {

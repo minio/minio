@@ -828,6 +828,25 @@ func newTestStreamingSignedBadChunkDateRequest(method, urlStr string, contentLen
 	return req, err
 }
 
+func newTestStreamingSignedCustomEncodingRequest(method, urlStr string, contentLength, chunkSize int64, body io.ReadSeeker, accessKey, secretKey, contentEncoding string) (*http.Request, error) {
+	req, err := newTestStreamingRequest(method, urlStr, contentLength, chunkSize, body)
+	if err != nil {
+		return nil, err
+	}
+
+	// Set custom encoding.
+	req.Header.Set("content-encoding", contentEncoding)
+
+	currTime := UTCNow()
+	signature, err := signStreamingRequest(req, accessKey, secretKey, currTime)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err = assembleStreamingChunks(req, body, chunkSize, secretKey, signature, currTime)
+	return req, err
+}
+
 // Returns new HTTP request object signed with streaming signature v4.
 func newTestStreamingSignedRequest(method, urlStr string, contentLength, chunkSize int64, body io.ReadSeeker, accessKey, secretKey string) (*http.Request, error) {
 	req, err := newTestStreamingRequest(method, urlStr, contentLength, chunkSize, body)
@@ -843,39 +862,6 @@ func newTestStreamingSignedRequest(method, urlStr string, contentLength, chunkSi
 
 	req, err = assembleStreamingChunks(req, body, chunkSize, secretKey, signature, currTime)
 	return req, err
-}
-
-// Replaces any occurring '/' in string, into its encoded
-// representation.
-func percentEncodeSlash(s string) string {
-	return strings.Replace(s, "/", "%2F", -1)
-}
-
-// queryEncode - encodes query values in their URL encoded form. In
-// addition to the percent encoding performed by getURLEncodedName()
-// used here, it also percent encodes '/' (forward slash)
-func queryEncode(v url.Values) string {
-	if v == nil {
-		return ""
-	}
-	var buf bytes.Buffer
-	keys := make([]string, 0, len(v))
-	for k := range v {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	for _, k := range keys {
-		vs := v[k]
-		prefix := percentEncodeSlash(getURLEncodedName(k)) + "="
-		for _, v := range vs {
-			if buf.Len() > 0 {
-				buf.WriteByte('&')
-			}
-			buf.WriteString(prefix)
-			buf.WriteString(percentEncodeSlash(getURLEncodedName(v)))
-		}
-	}
-	return buf.String()
 }
 
 // preSignV4 presign the request, in accordance with
@@ -912,7 +898,7 @@ func preSignV4(req *http.Request, accessKeyID, secretAccessKey string, expires i
 	req.URL.RawQuery = query.Encode()
 
 	// Add signature header to RawQuery.
-	req.URL.RawQuery += "&X-Amz-Signature=" + signature
+	req.URL.RawQuery += "&X-Amz-Signature=" + url.QueryEscape(signature)
 
 	// Construct the final presigned URL.
 	return nil
@@ -963,10 +949,10 @@ func preSignV2(req *http.Request, accessKeyID, secretAccessKey string, expires i
 	query.Set("Expires", strconv.FormatInt(epochExpires, 10))
 
 	// Encode query and save.
-	req.URL.RawQuery = queryEncode(query)
+	req.URL.RawQuery = query.Encode()
 
 	// Save signature finally.
-	req.URL.RawQuery += "&Signature=" + getURLEncodedName(signature)
+	req.URL.RawQuery += "&Signature=" + url.QueryEscape(signature)
 
 	// Success.
 	return nil
@@ -1398,7 +1384,7 @@ func makeTestTargetURL(endPoint, bucketName, objectName string, queryValues url.
 		urlStr = urlStr + getURLEncodedName(objectName)
 	}
 	if len(queryValues) > 0 {
-		urlStr = urlStr + "?" + queryEncode(queryValues)
+		urlStr = urlStr + "?" + queryValues.Encode()
 	}
 	return urlStr
 }

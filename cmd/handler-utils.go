@@ -158,6 +158,23 @@ func extractReqParams(r *http.Request) map[string]string {
 	}
 }
 
+// Trims away `aws-chunked` from the content-encoding header if present.
+// Streaming signature clients can have custom content-encoding such as
+// `aws-chunked,gzip` here we need to only save `gzip`.
+// For more refer http://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-streaming.html
+func trimAwsChunkedContentEncoding(contentEnc string) (trimmedContentEnc string) {
+	if contentEnc == "" {
+		return contentEnc
+	}
+	var newEncs []string
+	for _, enc := range strings.Split(contentEnc, ",") {
+		if enc != streamingContentEncoding {
+			newEncs = append(newEncs, enc)
+		}
+	}
+	return strings.Join(newEncs, ",")
+}
+
 // extractMetadataFromForm extracts metadata from Post Form.
 func extractMetadataFromForm(formValues http.Header) map[string]string {
 	return extractMetadataFromHeader(formValues)

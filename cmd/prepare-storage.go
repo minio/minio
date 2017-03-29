@@ -183,7 +183,7 @@ func printRetryMsg(sErrs []error, storageDisks []StorageAPI) {
 	for i, sErr := range sErrs {
 		switch sErr {
 		case errDiskNotFound, errFaultyDisk, errFaultyRemoteDisk:
-			console.Printf("Disk %s is still unreachable, with error %s\n", storageDisks[i], sErr)
+			errorIf(sErr, "Disk %s is still unreachable", storageDisks[i])
 		}
 	}
 }

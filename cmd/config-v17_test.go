@@ -87,34 +87,30 @@ func TestServerConfig(t *testing.T) {
 		t.Errorf("Expecting Webhook config %#v found %#v", mySQLNotify{}, savedNotifyCfg6)
 	}
 
-	serverConfig.Logger.SetConsole(consoleLogger{
-		Enable: true,
-	})
+	consoleLogger := NewConsoleLogger()
+	serverConfig.Logger.SetConsole(consoleLogger)
 	consoleCfg := serverConfig.Logger.GetConsole()
-	if !reflect.DeepEqual(consoleCfg, consoleLogger{Enable: true}) {
-		t.Errorf("Expecting console logger config %#v found %#v", consoleLogger{Enable: true}, consoleCfg)
+	if !reflect.DeepEqual(consoleCfg, consoleLogger) {
+		t.Errorf("Expecting console logger config %#v found %#v", consoleLogger, consoleCfg)
 	}
 	// Set new console logger.
-	serverConfig.Logger.SetConsole(consoleLogger{
-		Enable: false,
-	})
+	consoleLogger.Enable = false
+	serverConfig.Logger.SetConsole(consoleLogger)
 
 	// Set new file logger.
-	serverConfig.Logger.SetFile(fileLogger{
-		Enable: true,
-	})
+	fileLogger := NewFileLogger("test-log-file")
+	serverConfig.Logger.SetFile(fileLogger)
 	fileCfg := serverConfig.Logger.GetFile()
-	if !reflect.DeepEqual(fileCfg, fileLogger{Enable: true}) {
-		t.Errorf("Expecting file logger config %#v found %#v", fileLogger{Enable: true}, consoleCfg)
+	if !reflect.DeepEqual(fileCfg, fileLogger) {
+		t.Errorf("Expecting file logger config %#v found %#v", fileLogger, fileCfg)
 	}
 	// Set new file logger.
-	serverConfig.Logger.SetFile(fileLogger{
-		Enable: false,
-	})
+	fileLogger.Enable = false
+	serverConfig.Logger.SetFile(fileLogger)
 
 	// Match version.
-	if serverConfig.GetVersion() != v15 {
-		t.Errorf("Expecting version %s found %s", serverConfig.GetVersion(), v15)
+	if serverConfig.GetVersion() != v17 {
+		t.Errorf("Expecting version %s found %s", serverConfig.GetVersion(), v17)
 	}
 
 	// Attempt to save.
@@ -163,7 +159,7 @@ func TestServerConfigWithEnvs(t *testing.T) {
 	defer removeAll(rootPath)
 
 	// Check if serverConfig has
-	if serverConfig.GetBrowser() != "off" {
+	if serverConfig.GetBrowser() {
 		t.Errorf("Expecting browser `off` found %s", serverConfig.GetBrowser())
 	}
 
@@ -219,7 +215,7 @@ func TestValidateConfig(t *testing.T) {
 
 	configPath := filepath.Join(rootPath, minioConfigFile)
 
-	v := v15
+	v := v17
 
 	testCases := []struct {
 		configData string
@@ -255,35 +251,56 @@ func TestValidateConfig(t *testing.T) {
 		// Test 10 - duplicated json keys
 		{`{"version": "` + v + `", "browser": "on", "browser": "on", "region":"us-east-1", "credential" : {"accessKey":"minio", "secretKey":"minio123"}}`, false},
 
-		// Test 11 - Wrong Console logger level
-		{`{"version": "` + v + `", "credential": { "accessKey": "minio", "secretKey": "minio123" }, "region": "us-east-1", "browser": "on", "logger": { "console": { "enable": true, "level": "foo" } }}`, false},
+		// Test 11 - empty filename field in File
+		{`{"version": "` + v + `", "credential": { "accessKey": "minio", "secretKey": "minio123" }, "region": "us-east-1", "browser": "on", "logger": { "file": { "enable": true, "filename": "" } }}`, false},
 
-		// Test 12 - Wrong File logger level
-		{`{"version": "` + v + `", "credential": { "accessKey": "minio", "secretKey": "minio123" }, "region": "us-east-1", "browser": "on", "logger": { "file": { "enable": true, "level": "foo" } }}`, false},
-
-		// Test 13 - Test AMQP
+		// Test 12 - Test AMQP
 		{`{"version": "` + v + `", "credential": { "accessKey": "minio", "secretKey": "minio123" }, "region": "us-east-1", "browser": "on", "notify": { "amqp": { "1": { "enable": true, "url": "", "exchange": "", "routingKey": "", "exchangeType": "", "mandatory": false, "immediate": false, "durable": false, "internal": false, "noWait": false, "autoDeleted": false }}}}`, false},
 
-		// Test 14 - Test NATS
+		// Test 13 - Test NATS
 		{`{"version": "` + v + `", "credential": { "accessKey": "minio", "secretKey": "minio123" }, "region": "us-east-1", "browser": "on", "notify": { "nats": { "1": { "enable": true, "address": "", "subject": "", "username": "", "password": "", "token": "", "secure": false, "pingInterval": 0, "streaming": { "enable": false, "clusterID": "", "clientID": "", "async": false, "maxPubAcksInflight": 0 } } }}}`, false},
 
-		// Test 15 - Test ElasticSearch
+		// Test 14 - Test ElasticSearch
 		{`{"version": "` + v + `", "credential": { "accessKey": "minio", "secretKey": "minio123" }, "region": "us-east-1", "browser": "on", "notify": { "elasticsearch": { "1": { "enable": true, "url": "", "index": "" } }}}`, false},
 
-		// Test 16 - Test Redis
+		// Test 15 - Test Redis
 		{`{"version": "` + v + `", "credential": { "accessKey": "minio", "secretKey": "minio123" }, "region": "us-east-1", "browser": "on", "notify": { "redis": { "1": { "enable": true, "address": "", "password": "", "key": "" } }}}`, false},
 
-		// Test 17 - Test PostgreSQL
+		// Test 16 - Test PostgreSQL
 		{`{"version": "` + v + `", "credential": { "accessKey": "minio", "secretKey": "minio123" }, "region": "us-east-1", "browser": "on", "notify": { "postgresql": { "1": { "enable": true, "connectionString": "", "table": "", "host": "", "port": "", "user": "", "password": "", "database": "" }}}}`, false},
 
-		// Test 18 - Test Kafka
+		// Test 17 - Test Kafka
 		{`{"version": "` + v + `", "credential": { "accessKey": "minio", "secretKey": "minio123" }, "region": "us-east-1", "browser": "on", "notify": { "kafka": { "1": { "enable": true, "brokers": null, "topic": "" } }}}`, false},
 
-		// Test 19 - Test Webhook
+		// Test 18 - Test Webhook
 		{`{"version": "` + v + `", "credential": { "accessKey": "minio", "secretKey": "minio123" }, "region": "us-east-1", "browser": "on", "notify": { "webhook": { "1": { "enable": true, "endpoint": "" } }}}`, false},
 
-		// Test 19 - Test MySQL
+		// Test 20 - Test MySQL
 		{`{"version": "` + v + `", "credential": { "accessKey": "minio", "secretKey": "minio123" }, "region": "us-east-1", "browser": "on", "notify": { "mysql": { "1": { "enable": true, "dsnString": "",  "table": "", "host": "", "port": "", "user": "", "password": "", "database": "" }}}}`, false},
+
+		// Test 21 - Test Format for MySQL
+		{`{"version": "` + v + `", "credential": { "accessKey": "minio", "secretKey": "minio123" }, "region": "us-east-1", "browser": "on", "notify": { "mysql": { "1": { "enable": true, "dsnString": "",  "format": "invalid", "table": "xxx", "host": "10.0.0.1", "port": "3306", "user": "abc", "password": "pqr", "database": "test1" }}}}`, false},
+
+		// Test 22 - Test valid Format for MySQL
+		{`{"version": "` + v + `", "credential": { "accessKey": "minio", "secretKey": "minio123" }, "region": "us-east-1", "browser": "on", "notify": { "mysql": { "1": { "enable": true, "dsnString": "",  "format": "namespace", "table": "xxx", "host": "10.0.0.1", "port": "3306", "user": "abc", "password": "pqr", "database": "test1" }}}}`, true},
+
+		// Test 23 - Test Format for PostgreSQL
+		{`{"version": "` + v + `", "credential": { "accessKey": "minio", "secretKey": "minio123" }, "region": "us-east-1", "browser": "on", "notify": { "postgresql": { "1": { "enable": true, "connectionString": "", "format": "invalid", "table": "xxx", "host": "myhost", "port": "5432", "user": "abc", "password": "pqr", "database": "test1" }}}}`, false},
+
+		// Test 24 - Test valid Format for PostgreSQL
+		{`{"version": "` + v + `", "credential": { "accessKey": "minio", "secretKey": "minio123" }, "region": "us-east-1", "browser": "on", "notify": { "postgresql": { "1": { "enable": true, "connectionString": "", "format": "namespace", "table": "xxx", "host": "myhost", "port": "5432", "user": "abc", "password": "pqr", "database": "test1" }}}}`, true},
+
+		// Test 25 - Test Format for ElasticSearch
+		{`{"version": "` + v + `", "credential": { "accessKey": "minio", "secretKey": "minio123" }, "region": "us-east-1", "browser": "on", "notify": { "elasticsearch": { "1": { "enable": true, "format": "invalid", "url": "example.com", "index": "myindex" } }}}`, false},
+
+		// Test 26 - Test valid Format for ElasticSearch
+		{`{"version": "` + v + `", "credential": { "accessKey": "minio", "secretKey": "minio123" }, "region": "us-east-1", "browser": "on", "notify": { "elasticsearch": { "1": { "enable": true, "format": "namespace", "url": "example.com", "index": "myindex" } }}}`, true},
+
+		// Test 27 - Test Format for Redis
+		{`{"version": "` + v + `", "credential": { "accessKey": "minio", "secretKey": "minio123" }, "region": "us-east-1", "browser": "on", "notify": { "redis": { "1": { "enable": true, "format": "invalid", "address": "example.com", "password": "xxx", "key": "key1" } }}}`, false},
+
+		// Test 28 - Test valid Format for Redis
+		{`{"version": "` + v + `", "credential": { "accessKey": "minio", "secretKey": "minio123" }, "region": "us-east-1", "browser": "on", "notify": { "redis": { "1": { "enable": true, "format": "namespace", "address": "example.com", "password": "xxx", "key": "key1" } }}}`, true},
 	}
 
 	for i, testCase := range testCases {

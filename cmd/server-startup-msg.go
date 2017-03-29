@@ -23,7 +23,6 @@ import (
 	"strings"
 
 	humanize "github.com/dustin/go-humanize"
-	"github.com/minio/mc/pkg/console"
 )
 
 // Documentation links, these are part of message printing code.
@@ -78,14 +77,14 @@ func printServerCommonMsg(apiEndpoints []string) {
 
 	apiEndpointStr := strings.Join(apiEndpoints, "  ")
 	// Colorize the message and print.
-	console.Println(colorBlue("\nEndpoint: ") + colorBold(fmt.Sprintf(getFormatStr(len(apiEndpointStr), 1), apiEndpointStr)))
-	console.Println(colorBlue("AccessKey: ") + colorBold(fmt.Sprintf("%s ", cred.AccessKey)))
-	console.Println(colorBlue("SecretKey: ") + colorBold(fmt.Sprintf("%s ", cred.SecretKey)))
-	console.Println(colorBlue("Region: ") + colorBold(fmt.Sprintf(getFormatStr(len(region), 3), region)))
+	log.Println(colorBlue("\nEndpoint: ") + colorBold(fmt.Sprintf(getFormatStr(len(apiEndpointStr), 1), apiEndpointStr)))
+	log.Println(colorBlue("AccessKey: ") + colorBold(fmt.Sprintf("%s ", cred.AccessKey)))
+	log.Println(colorBlue("SecretKey: ") + colorBold(fmt.Sprintf("%s ", cred.SecretKey)))
+	log.Println(colorBlue("Region: ") + colorBold(fmt.Sprintf(getFormatStr(len(region), 3), region)))
 	printEventNotifiers()
 
-	console.Println(colorBlue("\nBrowser Access:"))
-	console.Println(fmt.Sprintf(getFormatStr(len(apiEndpointStr), 3), apiEndpointStr))
+	log.Println(colorBlue("\nBrowser Access:"))
+	log.Println(fmt.Sprintf(getFormatStr(len(apiEndpointStr), 3), apiEndpointStr))
 }
 
 // Prints bucket notification configurations.
@@ -103,7 +102,7 @@ func printEventNotifiers() {
 	for queueArn := range externalTargets {
 		arnMsg += colorBold(fmt.Sprintf(getFormatStr(len(queueArn), 1), queueArn))
 	}
-	console.Println(arnMsg)
+	log.Println(arnMsg)
 }
 
 // Prints startup message for command line access. Prints link to our documentation
@@ -113,23 +112,23 @@ func printCLIAccessMsg(endPoint string) {
 	cred := serverConfig.GetCredential()
 
 	// Configure 'mc', following block prints platform specific information for minio client.
-	console.Println(colorBlue("\nCommand-line Access: ") + mcQuickStartGuide)
+	log.Println(colorBlue("\nCommand-line Access: ") + mcQuickStartGuide)
 	if runtime.GOOS == globalWindowsOSName {
 		mcMessage := fmt.Sprintf("$ mc.exe config host add myminio %s %s %s", endPoint, cred.AccessKey, cred.SecretKey)
-		console.Println(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
+		log.Println(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
 	} else {
 		mcMessage := fmt.Sprintf("$ mc config host add myminio %s %s %s", endPoint, cred.AccessKey, cred.SecretKey)
-		console.Println(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
+		log.Println(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
 	}
 }
 
 // Prints startup message for Object API acces, prints link to our SDK documentation.
 func printObjectAPIMsg() {
-	console.Println(colorBlue("\nObject API (Amazon S3 compatible):"))
-	console.Println(colorBlue("   Go: ") + fmt.Sprintf(getFormatStr(len(goQuickStartGuide), 8), goQuickStartGuide))
-	console.Println(colorBlue("   Java: ") + fmt.Sprintf(getFormatStr(len(javaQuickStartGuide), 6), javaQuickStartGuide))
-	console.Println(colorBlue("   Python: ") + fmt.Sprintf(getFormatStr(len(pyQuickStartGuide), 4), pyQuickStartGuide))
-	console.Println(colorBlue("   JavaScript: ") + jsQuickStartGuide)
+	log.Println(colorBlue("\nObject API (Amazon S3 compatible):"))
+	log.Println(colorBlue("   Go: ") + fmt.Sprintf(getFormatStr(len(goQuickStartGuide), 8), goQuickStartGuide))
+	log.Println(colorBlue("   Java: ") + fmt.Sprintf(getFormatStr(len(javaQuickStartGuide), 6), javaQuickStartGuide))
+	log.Println(colorBlue("   Python: ") + fmt.Sprintf(getFormatStr(len(pyQuickStartGuide), 4), pyQuickStartGuide))
+	log.Println(colorBlue("   JavaScript: ") + jsQuickStartGuide)
 }
 
 // Get formatted disk/storage info message.
@@ -149,8 +148,8 @@ func getStorageInfoMsg(storageInfo StorageInfo) string {
 
 // Prints startup message of storage capacity and erasure information.
 func printStorageInfo(storageInfo StorageInfo) {
-	console.Println()
-	console.Println(getStorageInfoMsg(storageInfo))
+	log.Println()
+	log.Println(getStorageInfoMsg(storageInfo))
 }
 
 // Prints certificate expiry date warning
@@ -173,6 +172,5 @@ func getCertificateChainMsg(certs []*x509.Certificate) string {
 
 // Prints the certificate expiry message.
 func printCertificateMsg(certs []*x509.Certificate) {
-	console.Println(getCertificateChainMsg(certs))
-
+	log.Println(getCertificateChainMsg(certs))
 }

@@ -30,7 +30,6 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/minio/cli"
-	"github.com/minio/mc/pkg/console"
 )
 
 // Check for new software updates.
@@ -111,9 +110,7 @@ func isDocker(cgroupFile string) (bool, error) {
 // IsDocker - returns if the environment is docker or not.
 func IsDocker() bool {
 	found, err := isDocker("/proc/self/cgroup")
-	if err != nil {
-		console.Fatalf("Error in docker check: %s", err)
-	}
+	fatalIf(err, "Error in docker check.")
 
 	return found
 }
@@ -263,25 +260,23 @@ func mainUpdate(ctx *cli.Context) {
 	}
 
 	quiet := ctx.Bool("quiet") || ctx.GlobalBool("quiet")
-	quietPrintln := func(args ...interface{}) {
-		if !quiet {
-			console.Println(args...)
-		}
+	if quiet {
+		log.EnableQuiet()
 	}
 
 	minioMode := ""
 	older, downloadURL, err := getUpdateInfo(10*time.Second, minioMode)
 	if err != nil {
-		quietPrintln(err)
+		log.Println(err)
 		os.Exit(-1)
 	}
 
 	if older != time.Duration(0) {
-		quietPrintln(colorizeUpdateMessage(downloadURL, older))
+		log.Println(colorizeUpdateMessage(downloadURL, older))
 		os.Exit(1)
 	}
 
 	colorSprintf := color.New(color.FgGreen, color.Bold).SprintfFunc()
-	quietPrintln(colorSprintf("You are already running the most recent version of ‘minio’."))
+	log.Println(colorSprintf("You are already running the most recent version of ‘minio’."))
 	os.Exit(0)
 }

@@ -16,8 +16,6 @@
 #
 
 main() {
-    echo "Checking project is in GOPATH:"
-
     IFS=':' read -r -a paths <<< "$GOPATH"
     for path in "${paths[@]}"; do
         minio_path="$path/src/github.com/minio/minio"

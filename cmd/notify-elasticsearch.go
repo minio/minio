@@ -19,6 +19,7 @@ package cmd
 import (
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io/ioutil"
 
 	"github.com/Sirupsen/logrus"
@@ -29,6 +30,7 @@ import (
 // elasticQueue is a elasticsearch event notification queue.
 type elasticSearchNotify struct {
 	Enable bool   `json:"enable"`
+	Format string `json:"format"`
 	URL    string `json:"url"`
 	Index  string `json:"index"`
 }
@@ -36,6 +38,11 @@ type elasticSearchNotify struct {
 func (e *elasticSearchNotify) Validate() error {
 	if !e.Enable {
 		return nil
+	}
+	if e.Format != formatNamespace {
+		return fmt.Errorf(
+			"Elasticsearch Notifier Error: \"format\" must be \"%s\"",
+			formatNamespace)
 	}
 	if _, err := checkURL(e.URL); err != nil {
 		return err

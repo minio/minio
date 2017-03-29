@@ -4,7 +4,7 @@ In this document, we will configure Minio servers with TLS certificates for both
 
 ## 1. Prerequisites
 
-* Download Minio server from [here](https://docs.minio.io/docs/minio)
+* Download Minio server from [here](https://docs.minio.io/docs/minio-quickstart-guide)
 
 ## 2. Generate TLS certificate
 
@@ -37,7 +37,7 @@ openssl genrsa -out private.key 1024
 Generate the self-signed certificate:
 
 ```sh
-openssl req -new -x509 -days 3650 -key private.key -out public.crt -subj "/C=country/ST=state/L=location/O=organization/CN=domain"
+openssl req -new -x509 -days 3650 -key private.key -out public.crt -subj "/C=US/ST=state/L=location/O=organization/CN=domain"
 ```
 
 ### Windows

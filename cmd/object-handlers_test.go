@@ -459,6 +459,8 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 		shouldPass       bool
 		removeAuthHeader bool
 		fault            streamFault
+		// Custom content encoding.
+		contentEncoding string
 	}{
 		// Test case - 1.
 		// Fetching the entire object and validating its contents.
@@ -543,7 +545,7 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 			expectedRespStatus: http.StatusOK,
 			accessKey:          credentials.AccessKey,
 			secretKey:          credentials.SecretKey,
-			shouldPass:         false,
+			shouldPass:         true,
 		},
 		// Test case - 7
 		// Chunk with malformed encoding.
@@ -621,6 +623,21 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 			shouldPass:         false,
 			fault:              tooBigDecodedLength,
 		},
+		// Test case - 12
+		// Set custom content encoding should succeed and save the encoding properly.
+		{
+			bucketName:         bucketName,
+			objectName:         objectName,
+			data:               bytesData,
+			dataLen:            len(bytesData),
+			chunkSize:          100 * humanize.KiByte,
+			expectedContent:    []byte{},
+			expectedRespStatus: http.StatusOK,
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
+			shouldPass:         true,
+			contentEncoding:    "aws-chunked,gzip",
+		},
 	}
 	// Iterating over the cases, fetching the object validating the response.
 	for i, testCase := range testCases {
@@ -634,11 +651,16 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 				int64(testCase.dataLen), testCase.chunkSize, bytes.NewReader(testCase.data),
 				testCase.accessKey, testCase.secretKey)
 
-		} else {
+		} else if testCase.contentEncoding == "" {
 			req, err = newTestStreamingSignedRequest("PUT",
 				getPutObjectURL("", testCase.bucketName, testCase.objectName),
 				int64(testCase.dataLen), testCase.chunkSize, bytes.NewReader(testCase.data),
 				testCase.accessKey, testCase.secretKey)
+		} else if testCase.contentEncoding != "" {
+			req, err = newTestStreamingSignedCustomEncodingRequest("PUT",
+				getPutObjectURL("", testCase.bucketName, testCase.objectName),
+				int64(testCase.dataLen), testCase.chunkSize, bytes.NewReader(testCase.data),
+				testCase.accessKey, testCase.secretKey, testCase.contentEncoding)
 		}
 		if err != nil {
 			t.Fatalf("Test %d: Failed to create HTTP request for Put Object: <ERROR> %v", i+1, err)
@@ -681,13 +703,16 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 				t.Errorf("Test %d: %s: Object content differs from expected value.: %s", i+1, instanceType, string(actualContent))
 				continue
 			}
-
 			objInfo, err := obj.GetObjectInfo(testCase.bucketName, testCase.objectName)
 			if err != nil {
 				t.Fatalf("Test %d: %s: Failed to fetch the copied object: <ERROR> %s", i+1, instanceType, err)
 			}
 			if objInfo.ContentEncoding == streamingContentEncoding {
 				t.Fatalf("Test %d: %s: ContentEncoding is set to \"aws-chunked\" which is unexpected", i+1, instanceType)
+			}
+			expectedContentEncoding := trimAwsChunkedContentEncoding(testCase.contentEncoding)
+			if expectedContentEncoding != objInfo.ContentEncoding {
+				t.Fatalf("Test %d: %s: ContentEncoding is set to \"%s\" which is unexpected, expected \"%s\"", i+1, instanceType, objInfo.ContentEncoding, expectedContentEncoding)
 			}
 			buffer := new(bytes.Buffer)
 			err = obj.GetObject(testCase.bucketName, testCase.objectName, 0, int64(testCase.dataLen), buffer)
@@ -1498,6 +1523,19 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		},
 
 		// Test case - 4.
+		// Test case with new object name is same as object to be copied.
+		// But source copy is without leading slash
+		{
+			bucketName:       bucketName,
+			newObjectName:    objectName,
+			copySourceHeader: url.QueryEscape(bucketName + "/" + objectName),
+			accessKey:        credentials.AccessKey,
+			secretKey:        credentials.SecretKey,
+
+			expectedRespStatus: http.StatusBadRequest,
+		},
+
+		// Test case - 5.
 		// Test case with new object name is same as object to be copied
 		// but metadata is updated.
 		{
@@ -1514,7 +1552,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 			expectedRespStatus: http.StatusOK,
 		},
 
-		// Test case - 5.
+		// Test case - 6.
 		// Test case with invalid metadata-directive.
 		{
 			bucketName:       bucketName,
@@ -1530,7 +1568,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 			expectedRespStatus: http.StatusBadRequest,
 		},
 
-		// Test case - 6.
+		// Test case - 7.
 		// Test case with new object name is same as object to be copied
 		// fail with BadRequest.
 		{
@@ -1547,7 +1585,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 			expectedRespStatus: http.StatusBadRequest,
 		},
 
-		// Test case - 7.
+		// Test case - 8.
 		// Test case with non-existent source file.
 		// Case for the purpose of failing `api.ObjectAPI.GetObjectInfo`.
 		// Expecting the response status code to http.StatusNotFound (404).
@@ -1561,7 +1599,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 			expectedRespStatus: http.StatusNotFound,
 		},
 
-		// Test case - 8.
+		// Test case - 9.
 		// Test case with non-existent source file.
 		// Case for the purpose of failing `api.ObjectAPI.PutObject`.
 		// Expecting the response status code to http.StatusNotFound (404).
@@ -1575,7 +1613,7 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 			expectedRespStatus: http.StatusNotFound,
 		},
 
-		// Test case - 9.
+		// Test case - 10.
 		// Case with invalid AccessKey.
 		{
 			bucketName:       bucketName,

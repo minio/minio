@@ -43,6 +43,10 @@ const (
 	queueTypeKafka = "kafka"
 	// Static string for Webhooks
 	queueTypeWebhook = "webhook"
+
+	// Notifier format value constants
+	formatNamespace = "namespace"
+	formatAccess    = "access"
 )
 
 // Topic type.
