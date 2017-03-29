@@ -341,6 +341,12 @@
 			"revisionTime": "2016-07-07T15:24:52-07:00"
 		},
 		{
+			"checksumSHA1": "WHc3uByvGaMcnSoI21fhzYgbOgg=",
+			"path": "golang.org/x/net/context/ctxhttp",
+			"revision": "f2499483f923065a842d38eb4c7f1927e6fc6e6d",
+			"revisionTime": "2017-01-14T04:22:49Z"
+		},
+		{
 			"checksumSHA1": "p36nkSZUaOs/7Wtcy/FduBLgm8g=",
 			"path": "gopkg.in/Shopify/sarama.v1",
 			"revision": "bd61cae2be85fa6ff40eb23dcdd24567967ac2ae",
@@ -350,12 +356,6 @@
 			"path": "gopkg.in/check.v1",
 			"revision": "11d3bc7aa68e238947792f30573146a3231fc0f1",
 			"revisionTime": "2015-07-29T10:04:31+02:00"
-		},
-		{
-			"checksumSHA1": "eC4OV7g1tug838fPWrwflstr/TM=",
-			"path": "gopkg.in/olivere/elastic.v3",
-			"revision": "f7ae701daf3abe5dfb99f57b3f47738ec93c9c26",
-			"revisionTime": "2016-07-16T10:42:39Z"
 		},
 		{
 			"checksumSHA1": "lLdKOn9RPtFoTtPUNq5+sIInAiE=",
@@ -368,6 +368,18 @@
 			"path": "gopkg.in/olivere/elastic.v3/uritemplates",
 			"revision": "f7ae701daf3abe5dfb99f57b3f47738ec93c9c26",
 			"revisionTime": "2016-07-16T10:42:39Z"
+		},
+		{
+			"checksumSHA1": "ji4KugVW5dIfKLoFr1fE+3mT90A=",
+			"path": "gopkg.in/olivere/elastic.v5",
+			"revision": "cf4e58efdcee2e8e7c18dad44d51ed166fb256c2",
+			"revisionTime": "2017-03-26T10:11:08Z"
+		},
+		{
+			"checksumSHA1": "pCApZfp2CeDnWbNVsyzNO62ZUXA=",
+			"path": "gopkg.in/olivere/elastic.v5/uritemplates",
+			"revision": "cf4e58efdcee2e8e7c18dad44d51ed166fb256c2",
+			"revisionTime": "2017-03-26T10:11:08Z"
 		},
 		{
 			"checksumSHA1": "12GqsW8PiRPnezDDy0v4brZrndM=",
