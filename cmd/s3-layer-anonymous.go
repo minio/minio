@@ -9,12 +9,13 @@ func (l *s3Gateway) AnonGetObject(bucket string, key string, startOffset int64, 
 		return s3ToObjectError(traceError(err), bucket, key)
 	}
 
+	defer object.Close()
+
 	object.Seek(startOffset, io.SeekStart)
 	if _, err := io.CopyN(writer, object, length); err != nil {
 		return s3ToObjectError(traceError(err), bucket, key)
 	}
 
-	object.Close()
 	return nil
 }
 
@@ -36,7 +37,7 @@ func (l *s3Gateway) AnonListObjects(bucket string, prefix string, marker string,
 
 	result, err := l.anonClient.ListObjects(bucket, prefix, marker, delimiter, maxKeys)
 	if err != nil {
-		return ListObjectsInfo{}, err
+		return ListObjectsInfo{}, s3ToObjectError(traceError(err), bucket)
 	}
 
 	return fromMinioClientListBucketResult(bucket, result), nil
@@ -44,6 +45,12 @@ func (l *s3Gateway) AnonListObjects(bucket string, prefix string, marker string,
 
 // AnonGetBucketInfo - Get bucket metadata anonymously.
 func (l *s3Gateway) AnonGetBucketInfo(bucket string) (BucketInfo, error) {
+	if exists, err := l.anonClient.BucketExists(bucket); err != nil {
+		return BucketInfo{}, s3ToObjectError(traceError(err), bucket)
+	} else if !exists {
+		return BucketInfo{}, traceError(BucketNotFound{Bucket: bucket})
+	}
+
 	buckets, err := l.anonClient.ListBuckets()
 	if err != nil {
 		return BucketInfo{}, s3ToObjectError(traceError(err), bucket)

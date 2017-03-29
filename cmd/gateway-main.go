@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 
 	"github.com/gorilla/mux"
@@ -59,7 +60,7 @@ var gatewayCmd = cli.Command{
 		cli.StringFlag{
 			Name:  "endpoint",
 			Usage: "The endpoint.",
-			Value: "s3.amazonaws.com",
+			Value: "https://s3.amazonaws.com/",
 		},
 		cli.BoolFlag{
 			Name:  "cache",
@@ -103,7 +104,15 @@ func newGatewayLayer(backendType, endpoint, accessKey, secretKey string) (Gatewa
 	case azureBackend:
 		return newAzureLayer(accessKey, secretKey)
 	case s3Backend:
-		return newS3Gateway(endpoint, accessKey, secretKey)
+		useHttps := true
+		if u, err := url.Parse(endpoint); err != nil {
+			return nil, err
+		} else if u.Scheme == "http" || u.Scheme == "https" {
+			useHttps = (u.Scheme == "https")
+			endpoint = u.Host
+		}
+
+		return newS3Gateway(endpoint, useHttps, accessKey, secretKey)
 	}
 
 	return nil, fmt.Errorf("Unrecognized backend type %s", backendType)

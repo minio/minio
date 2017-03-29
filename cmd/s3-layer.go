@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"crypto/sha256"
-	"fmt"
 	"hash"
 	"io"
 	"net/http"
@@ -83,9 +82,6 @@ func s3ToObjectError(err error, params ...string) error {
 			Bucket: bucket,
 			Object: object,
 		}
-	default:
-		// should not be reached
-		err = fmt.Errorf("Undefined s3 object error: bucket=%s object=%s code=%s", bucket, object, minioErr.Code)
 	}
 
 	e.e = err
@@ -99,14 +95,14 @@ type s3Gateway struct {
 }
 
 // newS3Gateway returns s3 gatewaylayer
-func newS3Gateway(endpoint, accessKey, secretKey string) (GatewayLayer, error) {
+func newS3Gateway(endpoint string, https bool, accessKey, secretKey string) (GatewayLayer, error) {
 	// Initialize minio client object.
-	client, err := minio.NewCore(endpoint, accessKey, secretKey, true)
+	client, err := minio.NewCore(endpoint, accessKey, secretKey, https)
 	if err != nil {
 		return nil, err
 	}
 
-	anonClient, err := minio.NewCore(endpoint, "", "", true)
+	anonClient, err := minio.NewCore(endpoint, "", "", https)
 	if err != nil {
 		return nil, err
 	}
@@ -194,7 +190,7 @@ func (l *s3Gateway) ListObjects(bucket string, prefix string, marker string, del
 
 	result, err := l.Client.ListObjects(bucket, prefix, marker, delimiter, maxKeys)
 	if err != nil {
-		return ListObjectsInfo{}, err
+		return ListObjectsInfo{}, s3ToObjectError(traceError(err), bucket)
 	}
 
 	return fromMinioClientListBucketResult(bucket, result), nil
@@ -230,12 +226,12 @@ func (l *s3Gateway) GetObject(bucket string, key string, startOffset int64, leng
 		return s3ToObjectError(traceError(err), bucket, key)
 	}
 
+	defer object.Close()
+
 	object.Seek(startOffset, io.SeekStart)
 	if _, err := io.CopyN(writer, object, length); err != nil {
 		return s3ToObjectError(traceError(err), bucket, key)
 	}
-
-	object.Close()
 
 	return nil
 }
