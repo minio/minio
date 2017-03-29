@@ -809,8 +809,8 @@ func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 }
 
 // HealObject - no-op for fs. Valid only for XL.
-func (fs fsObjects) HealObject(bucket, object string) error {
-	return traceError(NotImplemented{})
+func (fs fsObjects) HealObject(bucket, object string) (int, int, error) {
+	return 0, 0, traceError(NotImplemented{})
 }
 
 // HealBucket - no-op for fs, Valid only for XL.

@@ -604,6 +604,11 @@ func isDryRun(qval url.Values) bool {
 	return false
 }
 
+type healObjectResult struct {
+	HealedCount  int
+	OfflineCount int
+}
+
 // HealObjectHandler - POST /?heal&bucket=mybucket&object=myobject&dry-run
 // - x-minio-operation = object
 // - bucket and object are both mandatory query parameters
@@ -646,14 +651,23 @@ func (adminAPI adminAPIHandlers) HealObjectHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	err := objLayer.HealObject(bucket, object)
+	numOfflineDisks, numHealedDisks, err := objLayer.HealObject(bucket, object)
+	if err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
+	jsonBytes, err := json.Marshal(healObjectResult{
+		HealedCount:  numHealedDisks,
+		OfflineCount: numOfflineDisks,
+	})
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 
 	// Return 200 on success.
-	writeSuccessResponseHeadersOnly(w)
+	writeSuccessResponseJSON(w, jsonBytes)
 }
 
 // HealUploadHandler - POST /?heal&bucket=mybucket&object=myobject&upload-id=myuploadID&dry-run
@@ -715,14 +729,23 @@ func (adminAPI adminAPIHandlers) HealUploadHandler(w http.ResponseWriter, r *htt
 	//object.  The 'object' corresponding to a given bucket,
 	//object and uploadID is
 	//.minio.sys/multipart/bucket/object/uploadID.
-	err := objLayer.HealObject(minioMetaMultipartBucket, uploadObj)
+	numOfflineDisks, numHealedDisks, err := objLayer.HealObject(minioMetaMultipartBucket, uploadObj)
+	if err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
+	jsonBytes, err := json.Marshal(healObjectResult{
+		HealedCount:  numHealedDisks,
+		OfflineCount: numOfflineDisks,
+	})
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 
 	// Return 200 on success.
-	writeSuccessResponseHeadersOnly(w)
+	writeSuccessResponseJSON(w, jsonBytes)
 }
 
 // HealFormatHandler - POST /?heal&dry-run

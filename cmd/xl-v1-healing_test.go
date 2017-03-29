@@ -558,7 +558,7 @@ func TestHealObjectXL(t *testing.T) {
 		t.Fatalf("Failed to delete a file - %v", err)
 	}
 
-	err = obj.HealObject(bucket, object)
+	_, _, err = obj.HealObject(bucket, object)
 	if err != nil {
 		t.Fatalf("Failed to heal object - %v", err)
 	}
@@ -574,7 +574,7 @@ func TestHealObjectXL(t *testing.T) {
 	}
 
 	// Try healing now, expect to receive errDiskNotFound.
-	err = obj.HealObject(bucket, object)
+	_, _, err = obj.HealObject(bucket, object)
 	if errorCause(err) != errDiskNotFound {
 		t.Errorf("Expected %v but received %v", errDiskNotFound, err)
 	}
