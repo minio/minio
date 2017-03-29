@@ -104,15 +104,15 @@ func newGatewayLayer(backendType, endpoint, accessKey, secretKey string) (Gatewa
 	case azureBackend:
 		return newAzureLayer(accessKey, secretKey)
 	case s3Backend:
-		useHttps := true
+		useHTTPs := true
 		if u, err := url.Parse(endpoint); err != nil {
 			return nil, err
 		} else if u.Scheme == "http" || u.Scheme == "https" {
-			useHttps = (u.Scheme == "https")
+			useHTTPs = (u.Scheme == "https")
 			endpoint = u.Host
 		}
 
-		return newS3Gateway(endpoint, useHttps, accessKey, secretKey)
+		return newS3Gateway(endpoint, useHTTPs, accessKey, secretKey)
 	}
 
 	return nil, fmt.Errorf("Unrecognized backend type %s", backendType)
