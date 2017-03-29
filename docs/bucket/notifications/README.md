@@ -223,28 +223,53 @@ curl -XGET '127.0.0.1:9200/bucketevents/_search?pretty=1'
 <a name="Redis"></a>
 ## Publish Minio events via Redis
 
-Install Redis from [here](http://redis.io/download).
+Install [Redis](http://redis.io/download) server. For illustrative purposes, we have set the database password as "yoursecret".
+
+This notification target supports two formats: _namespace_ and _access_.
+
+When the _namespace_ format is used, Minio synchronizes objects in the bucket with entries in a hash. For each entry, the key is formatted as "bucketName/objectName" for an object that exists in the bucket, and the value is the JSON-encoded event data about the operation that created/replaced the object in Minio. When objects are updated or deleted, the corresponding entry int he hash is updated or deleted respectively.
+
+When the _access_ format is used, Minio appends events to a list using [RPUSH](https://redis.io/commands/rpush). Each item in the list is a JSON encoded list with two items, where the first item is a timestamp string, and second item is a JSON object containing evnet data about the operation that happened in the bucket. No entries appended to the list are updated or deleted by Minio in this format.
+
+The steps below show how to use this notification target in `namespace` and `access` format.
 
 ### Step 1: Add Redis endpoint to Minio
 
-The default location of Minio server configuration file is ``~/.minio/config.json``. Update the Redis configuration block in ``config.json`` as follows:
+The default location of Minio server configuration file is ``~/.minio/config.json``. The Redis configuration is located in the `redis` key under the `notify` top-level key. Create a configuration key-value pair here for your Redis instance. The key is a name for your Redis endpoint, and the value is a collection of key-value parameters described in the table below.
+
+| Parameter | Type | Description |
+|:---|:---|:---|
+| `enable` | _bool_ | (Required) Is this server endpoint configuration active/enabled? |
+| `format` | _string_ | (Required) Either `namespace` or `access`. |
+| `address` | _string_ | (Required) The Redis server's address. For example: `localhost:6379`. |
+| `password` | _string_ | (Optional) The Redis server's password. |
+| `key` | _string_ | (Required) The name of the redis key under which events are stored. A hash is used in case of `namespace` format and a list in case of `access` format.|
+
+An example of Redis configuration is as follows:
+
 
 ```json
 "redis": {
     "1": {
-	"enable": true,
-	"address": "127.0.0.1:6379",
-	"password": "yoursecret",
-	"key": "bucketevents"
+        "enable": true,
+        "address": "127.0.0.1:6379",
+        "password": "yoursecret",
+        "key": "bucketevents"
     }
 }
 ```
 
-Restart Minio server to reflect config changes. ``bucketevents`` is the key used by Redis in this example.
+After updating the configuration file, restart the Minio server to put the changes into effect. The server will print a line like `SQS ARNs:  arn:minio:sqs:us-east-1:1:redis` at start-up if there were no errors.
+
+Note that, you can add as many Redis server endpoint configurations as needed by providing an identifier (like "1" in the example above) for the Redis instance and an object of per-server configuration parameters.
 
 ### Step 2: Enable bucket notification using Minio client
 
-We will enable bucket event notification to trigger whenever a JPEG image is uploaded or deleted from ``images`` bucket on ``myminio`` server. Here ARN value is ``arn:minio:sqs:us-east-1:1:redis``. To understand more about ARN please follow [AWS ARN](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html) documentation.
+We will now enable bucket event notifications on a bucket named `images`. Whenever a JPEG image is created/overwritten, a new key is added or an existing key is updated in the Redis hash configured above. When an existing object is deleted, the corresponding key is deleted from the Redis hash. Thus, the rows in the Redis hash, reflect the `.jpg` objects in the `images` bucket.
+
+To configure this bucket notification, we need the ARN printed by Minio in the previous step. Additional information about ARN is available [here](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html).
+
+With the `mc` tool, the configuration is very simple to add. Let us say that the Minio server is aliased as `myminio` in our mc configuration. Execute the following:
 
 ```
 mc mb myminio/images
@@ -255,10 +280,12 @@ arn:minio:sqs:us-east-1:1:redis s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: su
 
 ### Step 3: Test on Redis
 
-Redis comes with a handy command line interface ``redis-cli`` to print all notifications on the console.
+Start the `redis-cli` Redis client program to inspect the contents in Redis. Run the `monitor` Redis command. This prints each operation performed on Redis as it occurs.
 
 ```
 redis-cli -a yoursecret
+127.0.0.1:6379> monitor
+OK
 ```
 
 Open another terminal and upload a JPEG image into ``images`` bucket.
@@ -267,15 +294,18 @@ Open another terminal and upload a JPEG image into ``images`` bucket.
 mc cp myphoto.jpg myminio/images
 ```
 
-``redis-cli`` prints event notification to the console.
+In the previous terminal, you will now see the operation that Minio performs on Redis:
 
 ```
-redis-cli -a yoursecret
 127.0.0.1:6379> monitor
 OK
-1474321638.556108 [0 127.0.0.1:40190] "AUTH" "yoursecret"
-1474321638.556477 [0 127.0.0.1:40190] "RPUSH" "bucketevents" "{\"Records\":[{\"eventVersion\":\"2.0\",\"eventSource\":\"aws:s3\",\"awsRegion\":\"us-east-1\",\"eventTime\":\"2016-09-19T21:47:18.555Z\",\"eventName\":\"s3:ObjectCreated:Put\",\"userIdentity\":{\"principalId\":\"minio\"},\"requestParameters\":{\"sourceIPAddress\":\"[::1]:39250\"},\"responseElements\":{},\"s3\":{\"s3SchemaVersion\":\"1.0\",\"configurationId\":\"Config\",\"bucket\":{\"name\":\"images\",\"ownerIdentity\":{\"principalId\":\"minio\"},\"arn\":\"arn:aws:s3:::images\"},\"object\":{\"key\":\"myphoto.jpg\",\"size\":23745,\"sequencer\":\"1475D7B80ECBD853\"}}}],\"level\":\"info\",\"msg\":\"\",\"time\":\"2016-09-19T14:47:18-07:00\"}\n"
+1490686879.650649 [0 172.17.0.1:44710] "PING"
+1490686879.651061 [0 172.17.0.1:44710] "HSET" "minio_events" "images/myphoto.jpg" "{\"Records\":[{\"eventVersion\":\"2.0\",\"eventSource\":\"minio:s3\",\"awsRegion\":\"us-east-1\",\"eventTime\":\"2017-03-28T07:41:19Z\",\"eventName\":\"s3:ObjectCreated:Put\",\"userIdentity\":{\"principalId\":\"minio\"},\"requestParameters\":{\"sourceIPAddress\":\"127.0.0.1:52234\"},\"responseElements\":{\"x-amz-request-id\":\"14AFFBD1ACE5F632\",\"x-minio-origin-endpoint\":\"http://192.168.86.115:9000\"},\"s3\":{\"s3SchemaVersion\":\"1.0\",\"configurationId\":\"Config\",\"bucket\":{\"name\":\"images\",\"ownerIdentity\":{\"principalId\":\"minio\"},\"arn\":\"arn:aws:s3:::images\"},\"object\":{\"key\":\"myphoto.jpg\",\"size\":2586,\"eTag\":\"5d284463f9da279f060f0ea4d11af098\",\"sequencer\":\"14AFFBD1ACE5F632\"}},\"source\":{\"host\":\"127.0.0.1\",\"port\":\"52234\",\"userAgent\":\"Minio (linux; amd64) minio-go/2.0.3 mc/2017-02-15T17:57:25Z\"}}]}"
 ```
+
+Here we see that Minio performed `HSET` on `minio_events` key.
+
+In case, `access` format was used, then `minio_events` would be a list, and the Minio server would have performed an `RPUSH` to append to the list. A consumer of this list would ideally use `BLPOP` to remove list items from the left-end of the list.
 
 <a name="NATS"></a>
 ## Publish Minio events via NATS
