@@ -23,6 +23,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -480,6 +481,14 @@ func serverMain(c *cli.Context) {
 	}
 	if configDir == "" {
 		fatalIf(errors.New("empty directory"), "Configuration directory cannot be empty.")
+	}
+
+	// Disallow relative paths, figure out absolute paths.
+	{
+		configDirAbs, err := filepath.Abs(configDir)
+		fatalIf(err, "Unable to fetch absolute path for config directory %s", configDir)
+
+		configDir = configDirAbs
 	}
 
 	// Set configuration directory.
