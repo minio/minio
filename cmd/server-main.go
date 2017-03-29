@@ -169,7 +169,7 @@ func initConfig() {
 
 	// Validate config file
 	err = validateConfig()
-	fatalIf(err, "Cannot validate configuration file")
+	fatalIf(err, "Unable to validate configuration file")
 
 	// Once we have migrated all the old config, now load them.
 	err = loadConfig(envs)

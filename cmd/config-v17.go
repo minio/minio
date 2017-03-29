@@ -215,9 +215,10 @@ func validateConfig() error {
 		return err
 	}
 
-	// Check if config version is valid
 	if srvCfg.Version != v17 {
-		return errors.New("bad config version, expected: " + v17)
+		// Older binary but newer config version.
+		// Config version can never be older as it would have migrated.
+		return fmt.Errorf("Expected config version: %s, newer config version found: %s", v17, srvCfg.Version)
 	}
 
 	// Load config file json and check for duplication json keys
