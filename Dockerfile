@@ -16,4 +16,5 @@ RUN  \
 
 EXPOSE 9000
 ENTRYPOINT ["minio"]
+CMD ["server", "/export"]
 VOLUME ["/export"]
