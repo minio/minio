@@ -1377,7 +1377,7 @@ func TestWriteSetConfigResponse(t *testing.T) {
 		},
 	}
 
-	testURL, err := url.Parse("dummy.com")
+	testURL, err := url.Parse("http://dummy.com")
 	if err != nil {
 		t.Fatalf("Failed to parse a place-holder url")
 	}

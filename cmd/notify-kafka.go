@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"net"
 
 	"github.com/Sirupsen/logrus"
 
@@ -46,6 +47,12 @@ func (k *kafkaNotify) Validate() error {
 	}
 	if len(k.Brokers) == 0 {
 		return errors.New("No broker specified")
+	}
+	// Validate all specified brokers.
+	for _, brokerAddr := range k.Brokers {
+		if _, _, err := net.SplitHostPort(brokerAddr); err != nil {
+			return err
+		}
 	}
 	return nil
 }
