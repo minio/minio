@@ -26,27 +26,50 @@ Install RabbitMQ from [here](https://www.rabbitmq.com/).
 
 ### Step 1: Add AMQP endpoint to Minio
 
-The default location of Minio server configuration file is ``~/.minio/config.json``. Update the AMQP configuration block in ``config.json`` as follows:
+The default location of Minio server configuration file is ``~/.minio/config.json``. The AMQP configuration is located in the `amqp` key under the `notify` top-level key. Create a configuration key-value pair here for your AMQP instance. The key is a name for your AMQP endpoint, and the value is a collection of key-value parameters described in the table below.
+
+| Parameter | Type | Description |
+|:---|:---|:---|
+| `enable` | _bool_ | (Required) Is this server endpoint configuration active/enabled? |
+| `url` | _string_ | (Required) AMQP server endpoint, e.g. `amqp://myuser:mypassword@localhost:5672` |
+| `exchange` | _string_ | Name of the exchange. |
+| `routingKey` | _string_ | Routing key for publishing. |
+| `exchangeType` | _string_ | Kind of exchange. |
+| `deliveryMode` | _uint8_ | Delivery mode for publishing. 0 or 1 - transient; 2 - persistent. |
+| `mandatory` | _bool_ | Publishing related bool. |
+| `immediate` | _bool_ | Publishing related bool. |
+| `durable` | _bool_ | Exchange declaration related bool. |
+| `internal` | _bool_ | Exchange declaration related bool. |
+| `noWait` | _bool_ | Exchange declaration related bool. |
+| `autoDeleted` | _bool_ | Exchange declaration related bool. |
+
+An example configuration for RabbitMQ is shown below:
 
 ```json
 "amqp": {
     "1": {
-	"enable": true,
-	"url": "amqp://myuser:mypassword@localhost:5672",
-	"exchange": "bucketevents",
-	"routingKey": "bucketlogs",
-	"exchangeType": "fanout",
-	"mandatory": false,
-	"immediate": false,
-	"durable": false,
-	"internal": false,
-	"noWait": false,
-	"autoDeleted": false
+        "enable": true,
+        "url": "amqp://myuser:mypassword@localhost:5672",
+        "exchange": "bucketevents",
+        "routingKey": "bucketlogs",
+        "exchangeType": "fanout",
+        "deliveryMode": 0,
+        "mandatory": false,
+        "immediate": false,
+        "durable": false,
+        "internal": false,
+        "noWait": false,
+        "autoDeleted": false
     }
 }
 ```
 
-Restart Minio server to reflect config changes. Minio supports all the exchanges available in [RabbitMQ](https://www.rabbitmq.com/). For this setup, we are using ``fanout`` exchange.
+After updating the configuration file, restart the Minio server to put the changes into effect. The server will print a line like `SQS ARNs:  arn:minio:sqs:us-east-1:1:amqp` at start-up if there were no errors.
+
+Minio supports all the exchanges available in [RabbitMQ](https://www.rabbitmq.com/). For this setup, we are using ``fanout`` exchange.
+
+Note that, you can add as many AMQP server endpoint configurations as needed by providing an identifier (like "1" in the example above) for the AMQP instance and an object of per-server configuration parameters.
+
 
 ### Step 2: Enable bucket notification using Minio client
 

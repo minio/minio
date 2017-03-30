@@ -27,19 +27,18 @@ import (
 )
 
 // Config version
-const v17 = "17"
+const v18 = "18"
 
 var (
 	// serverConfig server config.
-	serverConfig   *serverConfigV17
+	serverConfig   *serverConfigV18
 	serverConfigMu sync.RWMutex
 )
 
-// serverConfigV17 server configuration version '17' which is like
-// version '16' except it adds support for "format" parameter in
-// database event notification targets: PostgreSQL, MySQL, Redis and
-// Elasticsearch.
-type serverConfigV17 struct {
+// serverConfigV18 server configuration version '18' which is like
+// version '17' except it adds support for "deliveryMode" parameter in
+// the AMQP notification target.
+type serverConfigV18 struct {
 	sync.RWMutex
 	Version string `json:"version"`
 
@@ -56,7 +55,7 @@ type serverConfigV17 struct {
 }
 
 // GetVersion get current config version.
-func (s *serverConfigV17) GetVersion() string {
+func (s *serverConfigV18) GetVersion() string {
 	s.RLock()
 	defer s.RUnlock()
 
@@ -64,7 +63,7 @@ func (s *serverConfigV17) GetVersion() string {
 }
 
 // SetRegion set new region.
-func (s *serverConfigV17) SetRegion(region string) {
+func (s *serverConfigV18) SetRegion(region string) {
 	s.Lock()
 	defer s.Unlock()
 
@@ -72,7 +71,7 @@ func (s *serverConfigV17) SetRegion(region string) {
 }
 
 // GetRegion get current region.
-func (s *serverConfigV17) GetRegion() string {
+func (s *serverConfigV18) GetRegion() string {
 	s.RLock()
 	defer s.RUnlock()
 
@@ -80,7 +79,7 @@ func (s *serverConfigV17) GetRegion() string {
 }
 
 // SetCredentials set new credentials.
-func (s *serverConfigV17) SetCredential(creds credential) {
+func (s *serverConfigV18) SetCredential(creds credential) {
 	s.Lock()
 	defer s.Unlock()
 
@@ -89,7 +88,7 @@ func (s *serverConfigV17) SetCredential(creds credential) {
 }
 
 // GetCredentials get current credentials.
-func (s *serverConfigV17) GetCredential() credential {
+func (s *serverConfigV18) GetCredential() credential {
 	s.RLock()
 	defer s.RUnlock()
 
@@ -97,7 +96,7 @@ func (s *serverConfigV17) GetCredential() credential {
 }
 
 // SetBrowser set if browser is enabled.
-func (s *serverConfigV17) SetBrowser(b bool) {
+func (s *serverConfigV18) SetBrowser(b bool) {
 	s.Lock()
 	defer s.Unlock()
 
@@ -106,7 +105,7 @@ func (s *serverConfigV17) SetBrowser(b bool) {
 }
 
 // GetCredentials get current credentials.
-func (s *serverConfigV17) GetBrowser() bool {
+func (s *serverConfigV18) GetBrowser() bool {
 	s.RLock()
 	defer s.RUnlock()
 
@@ -114,7 +113,7 @@ func (s *serverConfigV17) GetBrowser() bool {
 }
 
 // Save config.
-func (s *serverConfigV17) Save() error {
+func (s *serverConfigV18) Save() error {
 	s.RLock()
 	defer s.RUnlock()
 
@@ -122,9 +121,9 @@ func (s *serverConfigV17) Save() error {
 	return quick.Save(getConfigFile(), s)
 }
 
-func newServerConfigV17() *serverConfigV17 {
-	srvCfg := &serverConfigV17{
-		Version:    v17,
+func newServerConfigV18() *serverConfigV18 {
+	srvCfg := &serverConfigV18{
+		Version:    v18,
 		Credential: mustGetNewCredential(),
 		Region:     globalMinioDefaultRegion,
 		Browser:    true,
@@ -160,12 +159,13 @@ func newServerConfigV17() *serverConfigV17 {
 // found, otherwise use default parameters
 func newConfig() error {
 	// Initialize server config.
-	srvCfg := newServerConfigV17()
+	srvCfg := newServerConfigV18()
 
 	// If env is set override the credentials from config file.
 	if globalIsEnvCreds {
 		srvCfg.SetCredential(globalActiveCred)
 	}
+
 	if globalIsEnvBrowser {
 		srvCfg.SetBrowser(globalIsBrowserEnabled)
 	}
@@ -233,8 +233,8 @@ func checkDupJSONKeys(json string) error {
 }
 
 // getValidConfig - returns valid server configuration
-func getValidConfig() (*serverConfigV17, error) {
-	srvCfg := &serverConfigV17{
+func getValidConfig() (*serverConfigV18, error) {
+	srvCfg := &serverConfigV18{
 		Region:  globalMinioDefaultRegion,
 		Browser: true,
 	}
@@ -244,8 +244,8 @@ func getValidConfig() (*serverConfigV17, error) {
 		return nil, err
 	}
 
-	if srvCfg.Version != v17 {
-		return nil, fmt.Errorf("configuration version mismatch. Expected: ‘%s’, Got: ‘%s’", v17, srvCfg.Version)
+	if srvCfg.Version != v18 {
+		return nil, fmt.Errorf("configuration version mismatch. Expected: ‘%s’, Got: ‘%s’", v18, srvCfg.Version)
 	}
 
 	// Load config file json and check for duplication json keys

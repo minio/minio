@@ -430,3 +430,22 @@ type serverConfigV16 struct {
 	// Notification queue configuration.
 	Notify *notifier `json:"notify"`
 }
+
+// serverConfigV17 server configuration version '17' which is like
+// version '16' except it adds support for "format" parameter in
+// database event notification targets: PostgreSQL, MySQL, Redis and
+// Elasticsearch.
+type serverConfigV17 struct {
+	Version string `json:"version"`
+
+	// S3 API configuration.
+	Credential credential  `json:"credential"`
+	Region     string      `json:"region"`
+	Browser    BrowserFlag `json:"browser"`
+
+	// Additional error logging configuration.
+	Logger *loggers `json:"logger"`
+
+	// Notification queue configuration.
+	Notify *notifier `json:"notify"`
+}
