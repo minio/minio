@@ -144,6 +144,9 @@ func gatewayMain(ctx *cli.Context) {
 
 	// Get quiet flag from command line argument.
 	quietFlag := ctx.Bool("quiet") || ctx.GlobalBool("quiet")
+	if quietFlag {
+		log.EnableQuiet()
+	}
 
 	// First argument is selected backend type.
 	backendType := ctx.Args().First()
@@ -176,8 +179,8 @@ func gatewayMain(ctx *cli.Context) {
 
 	apiServer := NewServerMux(ctx.String("address"), registerHandlers(router, handlerFns...))
 
-	// Set if we are SSL enabled S3 gateway.
-	globalIsSSL = isSSL()
+	_, _, globalIsSSL, err = getSSLConfig()
+	fatalIf(err, "Invalid SSL key file")
 
 	// Start server, automatically configures TLS if certs are available.
 	go func() {

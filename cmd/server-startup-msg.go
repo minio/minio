@@ -61,9 +61,7 @@ func printStartupMessage(apiEndPoints []string) {
 	// SSL is configured reads certification chain, prints
 	// authority and expiry.
 	if globalIsSSL {
-		certs, err := readCertificateChain()
-		fatalIf(err, "Unable to read certificate chain.")
-		printCertificateMsg(certs)
+		printCertificateMsg(globalPublicCerts)
 	}
 }
 

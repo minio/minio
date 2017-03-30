@@ -109,6 +109,9 @@ var (
 	// Time when object layer was initialized on start up.
 	globalBootTime time.Time
 
+	globalActiveCred         credential
+	globalPublicCerts        []*x509.Certificate
+	globalXLObjCacheDisabled bool
 	// Add new variable global values here.
 )
 

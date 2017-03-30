@@ -122,7 +122,7 @@ func TestServerConfig(t *testing.T) {
 	setConfigDir(rootPath)
 
 	// Initialize server config.
-	if err := loadConfig(envParams{}); err != nil {
+	if err := loadConfig(); err != nil {
 		t.Fatalf("Unable to initialize from updated config file %s", err)
 	}
 }
@@ -149,6 +149,8 @@ func TestServerConfigWithEnvs(t *testing.T) {
 		t.Error(err)
 	}
 
+	serverHandleEnvVars()
+
 	// Do this only once here.
 	setConfigDir(rootPath)
 
@@ -160,7 +162,7 @@ func TestServerConfigWithEnvs(t *testing.T) {
 
 	// Check if serverConfig has
 	if serverConfig.GetBrowser() {
-		t.Errorf("Expecting browser `off` found %s", serverConfig.GetBrowser())
+		t.Errorf("Expecting browser is set to false found %v", serverConfig.GetBrowser())
 	}
 
 	// Check if serverConfig has

@@ -94,20 +94,6 @@ func checkUpdate(mode string) {
 	}
 }
 
-// envParams holds all env parameters
-type envParams struct {
-	creds   credential
-	browser BrowserFlag
-}
-
-func migrate() {
-	// Migrate config file
-	err := migrateConfig()
-	fatalIf(err, "Config migration failed.")
-
-	// Migrate other configs here.
-}
-
 func enableLoggers() {
 	fileLogTarget := serverConfig.Logger.GetFile()
 	if fileLogTarget.Enable {
@@ -122,77 +108,6 @@ func enableLoggers() {
 	}
 
 	log.SetConsoleTarget(consoleLogTarget)
-}
-
-// Initializes a new config if it doesn't exist, else migrates any old config
-// to newer config and finally loads the config to memory.
-func initConfig() {
-	accessKey := os.Getenv("MINIO_ACCESS_KEY")
-	secretKey := os.Getenv("MINIO_SECRET_KEY")
-
-	var cred credential
-	var err error
-	if accessKey != "" && secretKey != "" {
-		cred, err = createCredential(accessKey, secretKey)
-		fatalIf(err, "Invalid access/secret Key set in environment.")
-
-		// credential Envs are set globally.
-		globalIsEnvCreds = true
-	}
-
-	envs := envParams{
-		creds:   cred,
-		browser: BrowserFlag(true),
-	}
-
-	if browser := os.Getenv("MINIO_BROWSER"); browser != "" {
-		browserFlag, err := ParseBrowserFlag(browser)
-		if err != nil {
-			fatalIf(errors.New("invalid value"), "Unknown value ‘%s’ in MINIO_BROWSER environment variable.", browser)
-		}
-
-		// browser Envs are set globally, this does not represent
-		// if browser is turned off or on.
-		globalIsEnvBrowser = true
-		envs.browser = browserFlag
-	}
-
-	// Config file does not exist, we create it fresh and return upon success.
-	if !isConfigFileExists() {
-		err := newConfig(envs)
-		fatalIf(err, "Unable to initialize minio config for the first time.")
-		log.Println("Created minio configuration file successfully at " + getConfigDir())
-		return
-	}
-
-	// Migrate any old version of config / state files to newer format.
-	migrate()
-
-	// Validate config file
-	err = validateConfig()
-	fatalIf(err, "Unable to validate configuration file")
-
-	// Once we have migrated all the old config, now load them.
-	err = loadConfig(envs)
-	fatalIf(err, "Unable to initialize minio config")
-}
-
-// Generic Minio initialization to create/load config, prepare loggers, etc..
-func minioInit(ctx *cli.Context) {
-	// Create certs path.
-	fatalIf(createConfigDir(), "Unable to create \"certs\" directory.")
-
-	// Is TLS configured?.
-	globalIsSSL = isSSL()
-
-	// Initialize minio server config.
-	initConfig()
-
-	// Enable all loggers by now so we can use errorIf() and fatalIf()
-	enableLoggers()
-
-	// Init the error tracing module.
-	initError()
 }
 
 type serverCmdConfig struct {
@@ -238,18 +153,6 @@ func parseStorageEndpoints(eps []string) (endpoints []*url.URL, err error) {
 		endpoints = append(endpoints, u)
 	}
 	return endpoints, nil
-}
-
-// initServer initialize server config.
-func initServerConfig(c *cli.Context) {
-	// Initialization such as config generating/loading config, enable logging, ..
-	minioInit(c)
-
-	// Load user supplied root CAs
-	fatalIf(loadRootCAs(), "Unable to load a CA files")
-
-	// Set system resources to maximum.
-	errorIf(setMaxResources(), "Unable to change resource limit")
 }
 
 // Validate if input disks are sufficient for initializing XL.
@@ -344,21 +247,9 @@ func checkEndpointsSyntax(eps []*url.URL, disks []string) error {
 }
 
 // Make sure all the command line parameters are OK and exit in case of invalid parameters.
-func checkServerSyntax(c *cli.Context) {
-	serverAddr := c.String("address")
-
-	host, portStr, err := net.SplitHostPort(serverAddr)
-	fatalIf(err, "Unable to parse %s.", serverAddr)
-
-	// Verify syntax for all the XL disks.
-	disks := c.Args()
-
-	// Parse disks check if they comply with expected URI style.
-	endpoints, err := parseStorageEndpoints(disks)
-	fatalIf(err, "Unable to parse storage endpoints %s", strings.Join(disks, " "))
-
+func checkServerSyntax(endpoints []*url.URL, disks []string) {
 	// Validate if endpoints follow the expected syntax.
-	err = checkEndpointsSyntax(endpoints, disks)
+	err := checkEndpointsSyntax(endpoints, disks)
 	fatalIf(err, "Invalid endpoints found %s", strings.Join(disks, " "))
 
 	// Validate for duplicate endpoints are supplied.
@@ -382,25 +273,25 @@ func checkServerSyntax(c *cli.Context) {
 	}
 
 	// Rest of the checks applies only to distributed XL setup.
-	if host != "" {
+	if globalMinioHost != "" {
 		// We are here implies --address host:port is passed, hence the user is trying
 		// to run one minio process per export disk.
-		if portStr == "" {
+		if globalMinioPort == "" {
 			fatalIf(errInvalidArgument, "Port missing, Host:Port should be specified for --address")
 		}
 		foundCnt := 0
 		for _, ep := range endpoints {
-			if ep.Host == serverAddr {
+			if ep.Host == globalMinioAddr {
 				foundCnt++
 			}
 		}
 		if foundCnt == 0 {
 			// --address host:port should be available in the XL disk list.
-			fatalIf(errInvalidArgument, "%s is not available in %s", serverAddr, strings.Join(disks, " "))
+			fatalIf(errInvalidArgument, "%s is not available in %s", globalMinioAddr, strings.Join(disks, " "))
 		}
 		if foundCnt > 1 {
 			// --address host:port should match exactly one entry in the XL disk list.
-			fatalIf(errInvalidArgument, "%s matches % entries in %s", serverAddr, foundCnt, strings.Join(disks, " "))
+			fatalIf(errInvalidArgument, "%s matches % entries in %s", globalMinioAddr, foundCnt, strings.Join(disks, " "))
 		}
 	}
 
@@ -462,22 +353,23 @@ func getHostPort(address string) (host, port string, err error) {
 	return host, port, nil
 }
 
-// serverMain handler called for 'minio server' command.
-func serverMain(c *cli.Context) {
-	if !c.Args().Present() || c.Args().First() == "help" {
-		cli.ShowCommandHelpAndExit(c, "server", 1)
+func initConfig() {
+	// Config file does not exist, we create it fresh and return upon success.
+	if isFile(getConfigFile()) {
+		fatalIf(migrateConfig(), "Config migration failed.")
+		fatalIf(validateConfig(), "Unable to validate configuration file")
+		fatalIf(loadConfig(), "Unable to initialize minio config")
+	} else {
+		fatalIf(newConfig(), "Unable to initialize minio config for the first time.")
+		log.Println("Created minio configuration file successfully at " + getConfigDir())
 	}
+}
 
-	// Get quiet flag from command line argument.
-	quietFlag := c.Bool("quiet") || c.GlobalBool("quiet")
-	if quietFlag {
-		log.EnableQuiet()
-	}
-
+func serverHandleCmdArgs(ctx *cli.Context) {
 	// Get configuration directory from command line argument.
-	configDir := c.String("config-dir")
-	if !c.IsSet("config-dir") && c.GlobalIsSet("config-dir") {
-		configDir = c.GlobalString("config-dir")
+	configDir := ctx.String("config-dir")
+	if !ctx.IsSet("config-dir") && ctx.GlobalIsSet("config-dir") {
+		configDir = ctx.GlobalString("config-dir")
 	}
 	if configDir == "" {
 		fatalIf(errors.New("empty directory"), "Configuration directory cannot be empty.")
@@ -494,35 +386,16 @@ func serverMain(c *cli.Context) {
 	// Set configuration directory.
 	setConfigDir(configDir)
 
-	// Start profiler if env is set.
-	if profiler := os.Getenv("_MINIO_PROFILER"); profiler != "" {
-		globalProfiler = startProfiler(profiler)
-	}
-
-	// Initializes server config, certs, logging and system settings.
-	initServerConfig(c)
-
 	// Server address.
-	serverAddr := c.String("address")
+	globalMinioAddr = ctx.String("address")
 
 	var err error
-	globalMinioHost, globalMinioPort, err = getHostPort(serverAddr)
-	fatalIf(err, "Unable to extract host and port %s", serverAddr)
-
-	// Check server syntax and exit in case of errors.
-	// Done after globalMinioHost and globalMinioPort is set
-	// as parseStorageEndpoints() depends on it.
-	checkServerSyntax(c)
+	globalMinioHost, globalMinioPort, err = getHostPort(globalMinioAddr)
+	fatalIf(err, "Unable to extract host and port %s", globalMinioAddr)
 
 	// Disks to be used in server init.
-	endpoints, err := parseStorageEndpoints(c.Args())
-	fatalIf(err, "Unable to parse storage endpoints %s", c.Args())
-
-	// Should exit gracefully if none of the endpoints passed
-	// as command line args are local to this server.
-	if !isAnyEndpointLocal(endpoints) {
-		fatalIf(errInvalidArgument, "None of the disks passed as command line args are local to this server.")
-	}
+	endpoints, err := parseStorageEndpoints(ctx.Args())
+	fatalIf(err, "Unable to parse storage endpoints %s", ctx.Args())
 
 	// Sort endpoints for consistent ordering across multiple
 	// nodes in a distributed setup. This is to avoid format.json
@@ -530,25 +403,90 @@ func serverMain(c *cli.Context) {
 	// on all nodes.
 	sort.Sort(byHostPath(endpoints))
 
-	// Configure server.
-	srvConfig := serverCmdConfig{
-		serverAddr: serverAddr,
-		endpoints:  endpoints,
+	checkServerSyntax(endpoints, ctx.Args())
+
+	// Should exit gracefully if none of the endpoints passed
+	// as command line args are local to this server.
+	if !isAnyEndpointLocal(endpoints) {
+		fatalIf(errInvalidArgument, "None of the disks passed as command line args are local to this server.")
 	}
 
 	// Check if endpoints are part of distributed setup.
 	globalIsDistXL = isDistributedSetup(endpoints)
-
-	// Set nodes for dsync for distributed setup.
-	if globalIsDistXL {
-		fatalIf(initDsyncNodes(endpoints), "Unable to initialize distributed locking clients")
-	}
 
 	// Set globalIsXL if erasure code backend is about to be
 	// initialized for the given endpoints.
 	if len(endpoints) > 1 {
 		globalIsXL = true
 	}
+
+	// Set endpoints of []*url.URL type to globalEndpoints.
+	globalEndpoints = endpoints
+}
+
+func serverHandleEnvVars() {
+	// Start profiler if env is set.
+	if profiler := os.Getenv("_MINIO_PROFILER"); profiler != "" {
+		globalProfiler = startProfiler(profiler)
+	}
+
+	// Check if object cache is disabled.
+	globalXLObjCacheDisabled = strings.EqualFold(os.Getenv("_MINIO_CACHE"), "off")
+
+	accessKey := os.Getenv("MINIO_ACCESS_KEY")
+	secretKey := os.Getenv("MINIO_SECRET_KEY")
+	if accessKey != "" && secretKey != "" {
+		cred, err := createCredential(accessKey, secretKey)
+		fatalIf(err, "Invalid access/secret Key set in environment.")
+
+		// credential Envs are set globally.
+		globalIsEnvCreds = true
+		globalActiveCred = cred
+	}
+
+	if browser := os.Getenv("MINIO_BROWSER"); browser != "" {
+		browserFlag, err := ParseBrowserFlag(browser)
+		if err != nil {
+			fatalIf(errors.New("invalid value"), "Unknown value ‘%s’ in MINIO_BROWSER environment variable.", browser)
+		}
+
+		// browser Envs are set globally, this does not represent
+		// if browser is turned off or on.
+		globalIsEnvBrowser = true
+		globalIsBrowserEnabled = bool(browserFlag)
+	}
+}
+
+// serverMain handler called for 'minio server' command.
+func serverMain(ctx *cli.Context) {
+	if !ctx.Args().Present() || ctx.Args().First() == "help" {
+		cli.ShowCommandHelpAndExit(ctx, "server", 1)
+	}
+
+	// Get quiet flag from command line argument.
+	quietFlag := ctx.Bool("quiet") || ctx.GlobalBool("quiet")
+	if quietFlag {
+		log.EnableQuiet()
+	}
+
+	serverHandleCmdArgs(ctx)
+	serverHandleEnvVars()
+
+	// Create certs path.
+	fatalIf(createConfigDir(), "Unable to create configuration directories.")
+
+	initConfig()
+
+	// Enable loggers as per configuration file.
+	enableLoggers()
+
+	// Init the error tracing module.
+	initError()
+
+	// Check and load SSL certificates.
+	var err error
+	globalPublicCerts, globalRootCAs, globalIsSSL, err = getSSLConfig()
+	fatalIf(err, "Invalid SSL key file")
 
 	if !quietFlag {
 		// Check for new updates from dl.minio.io.
@@ -562,31 +500,42 @@ func serverMain(c *cli.Context) {
 		checkUpdate(mode)
 	}
 
+	// Set system resources to maximum.
+	errorIf(setMaxResources(), "Unable to change resource limit")
+
+	// Set nodes for dsync for distributed setup.
+	if globalIsDistXL {
+		fatalIf(initDsyncNodes(), "Unable to initialize distributed locking clients")
+	}
+
 	// Initialize name space lock.
 	initNSLock(globalIsDistXL)
+
+	// Configure server.
+	srvConfig := serverCmdConfig{
+		serverAddr: globalMinioAddr,
+		endpoints:  globalEndpoints,
+	}
 
 	// Configure server.
 	handler, err := configureServerHandler(srvConfig)
 	fatalIf(err, "Unable to configure one of server's RPC services.")
 
 	// Initialize a new HTTP server.
-	apiServer := NewServerMux(serverAddr, handler)
+	apiServer := NewServerMux(globalMinioAddr, handler)
 
 	// Set the global minio addr for this server.
 	globalMinioAddr = getLocalAddress(srvConfig)
 
 	// Initialize S3 Peers inter-node communication only in distributed setup.
-	initGlobalS3Peers(endpoints)
+	initGlobalS3Peers(globalEndpoints)
 
 	// Initialize Admin Peers inter-node communication only in distributed setup.
-	initGlobalAdminPeers(endpoints)
+	initGlobalAdminPeers(globalEndpoints)
 
 	// Determine API endpoints where we are going to serve the S3 API from.
-	apiEndPoints, err := finalizeAPIEndpoints(apiServer.Addr)
+	globalAPIEndpoints, err = finalizeAPIEndpoints(apiServer.Addr)
 	fatalIf(err, "Unable to finalize API endpoints for %s", apiServer.Addr)
-
-	// Set the global API endpoints value.
-	globalAPIEndpoints = apiEndPoints
 
 	// Start server, automatically configures TLS if certs are available.
 	go func() {
@@ -597,9 +546,6 @@ func serverMain(c *cli.Context) {
 		fatalIf(apiServer.ListenAndServe(cert, key), "Failed to start minio server.")
 	}()
 
-	// Set endpoints of []*url.URL type to globalEndpoints.
-	globalEndpoints = endpoints
-
 	newObject, err := newObjectLayer(srvConfig)
 	fatalIf(err, "Initializing object layer failed")
 
@@ -608,9 +554,7 @@ func serverMain(c *cli.Context) {
 	globalObjLayerMutex.Unlock()
 
 	// Prints the formatted startup message once object layer is initialized.
-	if !quietFlag {
-		printStartupMessage(apiEndPoints)
-	}
+	printStartupMessage(globalAPIEndpoints)
 
 	// Set uptime time after object layer has initialized.
 	globalBootTime = UTCNow()

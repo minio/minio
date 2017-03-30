@@ -87,17 +87,17 @@ func newServerConfigV17() *serverConfigV17 {
 
 // newConfig - initialize a new server config, saves env parameters if
 // found, otherwise use default parameters
-func newConfig(envParams envParams) error {
+func newConfig() error {
 	// Initialize server config.
 	srvCfg := newServerConfigV17()
 
 	// If env is set for a fresh start, save them to config file.
 	if globalIsEnvCreds {
-		srvCfg.SetCredential(envParams.creds)
+		srvCfg.SetCredential(globalActiveCred)
 	}
 
 	if globalIsEnvBrowser {
-		srvCfg.SetBrowser(envParams.browser)
+		srvCfg.SetBrowser(globalIsBrowserEnabled)
 	}
 
 	// Create config path.
@@ -118,7 +118,7 @@ func newConfig(envParams envParams) error {
 
 // loadConfig - loads a new config from disk, overrides params from env
 // if found and valid
-func loadConfig(envParams envParams) error {
+func loadConfig() error {
 	srvCfg := &serverConfigV17{
 		Region:  globalMinioDefaultRegion,
 		Browser: true,
@@ -133,15 +133,15 @@ func loadConfig(envParams envParams) error {
 
 	// If env is set override the credentials from config file.
 	if globalIsEnvCreds {
-		srvCfg.SetCredential(envParams.creds)
+		srvCfg.SetCredential(globalActiveCred)
+	} else {
+		globalActiveCred = srvCfg.GetCredential()
 	}
 
 	if globalIsEnvBrowser {
-		srvCfg.SetBrowser(envParams.browser)
-	}
-
-	if !srvCfg.GetBrowser() {
-		globalIsBrowserEnabled = false
+		srvCfg.SetBrowser(globalIsBrowserEnabled)
+	} else {
+		globalIsBrowserEnabled = srvCfg.GetBrowser()
 	}
 
 	// hold the mutex lock before a new config is assigned.
@@ -310,20 +310,20 @@ func (s serverConfigV17) GetCredential() credential {
 }
 
 // SetBrowser set if browser is enabled.
-func (s *serverConfigV17) SetBrowser(v BrowserFlag) {
+func (s *serverConfigV17) SetBrowser(b bool) {
 	serverConfigMu.Lock()
 	defer serverConfigMu.Unlock()
 
 	// Set the new value.
-	s.Browser = v
+	s.Browser = BrowserFlag(b)
 }
 
 // GetCredentials get current credentials.
-func (s serverConfigV17) GetBrowser() BrowserFlag {
+func (s serverConfigV17) GetBrowser() bool {
 	serverConfigMu.RLock()
 	defer serverConfigMu.RUnlock()
 
-	return s.Browser
+	return bool(s.Browser)
 }
 
 // Save config.
