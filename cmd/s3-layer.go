@@ -184,10 +184,6 @@ func (l *s3Gateway) DeleteBucket(bucket string) error {
 
 // ListObjects - lists all blobs in S3 bucket filtered by prefix
 func (l *s3Gateway) ListObjects(bucket string, prefix string, marker string, delimiter string, maxKeys int) (ListObjectsInfo, error) {
-	loi := ListObjectsInfo{}
-
-	loi.Objects = make([]ObjectInfo, maxKeys)
-
 	result, err := l.Client.ListObjects(bucket, prefix, marker, delimiter, maxKeys)
 	if err != nil {
 		return ListObjectsInfo{}, s3ToObjectError(traceError(err), bucket)
