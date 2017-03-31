@@ -17,9 +17,6 @@
 package cmd
 
 import (
-	"net"
-	"net/url"
-	"runtime"
 	"sync"
 
 	humanize "github.com/dustin/go-humanize"
@@ -132,90 +129,13 @@ func houseKeeping(storageDisks []StorageAPI) error {
 	return nil
 }
 
-// Check if a network path is local to this node.
-func isLocalStorage(ep *url.URL) bool {
-	if ep.Host == "" {
-		return true
-	}
-	if globalMinioHost != "" && globalMinioPort != "" {
-		// if --address host:port was specified for distXL we short
-		// circuit only the endPoint that matches host:port
-		return net.JoinHostPort(globalMinioHost, globalMinioPort) == ep.Host
-	}
-	// Split host to extract host information.
-	host, _, err := net.SplitHostPort(ep.Host)
-	if err != nil {
-		errorIf(err, "Cannot split host port")
-		return false
-	}
-	// Resolve host to address to check if the IP is loopback.
-	// If address resolution fails, assume it's a non-local host.
-	addrs, err := net.LookupHost(host)
-	if err != nil {
-		errorIf(err, "Failed to lookup host")
-		return false
-	}
-	for _, addr := range addrs {
-		if ip := net.ParseIP(addr); ip.IsLoopback() {
-			return true
-		}
-	}
-	iaddrs, err := net.InterfaceAddrs()
-	if err != nil {
-		errorIf(err, "Unable to list interface addresses")
-		return false
-	}
-	for _, addr := range addrs {
-		for _, iaddr := range iaddrs {
-			ip, _, err := net.ParseCIDR(iaddr.String())
-			if err != nil {
-				errorIf(err, "Unable to parse CIDR")
-				return false
-			}
-			if ip.String() == addr {
-				return true
-			}
-
-		}
-	}
-	return false
-}
-
-// Fetch the path component from *url.URL*.
-func getPath(ep *url.URL) string {
-	if ep == nil {
-		return ""
-	}
-	var diskPath string
-	// For windows ep.Path is usually empty
-	if runtime.GOOS == globalWindowsOSName {
-		switch ep.Scheme {
-		case "":
-			// Eg. "minio server .\export"
-			diskPath = ep.Path
-		case httpScheme, httpsScheme:
-			// For full URLs windows drive is part of URL path.
-			// Eg: http://ip:port/C:\mydrive
-			// For windows trim off the preceding "/".
-			diskPath = ep.Path[1:]
-		default:
-			// For the rest url splits drive letter into
-			// Scheme contruct the disk path back.
-			diskPath = ep.Scheme + ":" + ep.Opaque
-		}
-	} else {
-		// For other operating systems ep.Path is non empty.
-		diskPath = ep.Path
-	}
-	return diskPath
-}
-
 // Depending on the disk type network or local, initialize storage API.
-func newStorageAPI(ep *url.URL) (storage StorageAPI, err error) {
-	if isLocalStorage(ep) {
-		return newPosix(getPath(ep))
+func newStorageAPI(endpoint Endpoint) (storage StorageAPI, err error) {
+	if endpoint.IsLocal {
+		return newPosix(endpoint.Path)
 	}
-	return newStorageRPC(ep)
+
+	return newStorageRPC(endpoint), nil
 }
 
 var initMetaVolIgnoredErrs = append(baseIgnoredErrs, errVolumeExists)

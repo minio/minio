@@ -227,10 +227,10 @@
 			"revisionTime": "2016-12-20T20:43:13Z"
 		},
 		{
-			"checksumSHA1": "A8QOw1aWwc+RtjGozY0XeS5varo=",
+			"checksumSHA1": "maUy+dbN6VfTTnfErrAW2lLit1w=",
 			"path": "github.com/minio/minio-go/pkg/set",
-			"revision": "9e734013294ab153b0bdbe182738bcddd46f1947",
-			"revisionTime": "2016-08-18T00:31:20Z"
+			"revision": "7a3619e41885dcbcfafee193c10eb80530c2be53",
+			"revisionTime": "2017-02-17T20:03:45Z"
 		},
 		{
 			"checksumSHA1": "URVle4qtadmW9w9BulDRHY3kxnA=",

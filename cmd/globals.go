@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"crypto/x509"
-	"net/url"
 	"runtime"
 	"time"
 
@@ -85,9 +84,6 @@ var (
 	// Holds the host that was passed using --address
 	globalMinioHost = ""
 
-	// Holds the list of API endpoints for a given server.
-	globalAPIEndpoints = []string{}
-
 	// Peer communication struct
 	globalS3Peers = s3Peers{}
 
@@ -103,8 +99,7 @@ var (
 	// Minio server user agent string.
 	globalServerUserAgent = "Minio/" + ReleaseTag + " (" + runtime.GOOS + "; " + runtime.GOARCH + ")"
 
-	// url.URL endpoints of disks that belong to the object storage.
-	globalEndpoints = []*url.URL{}
+	globalEndpoints EndpointList
 
 	// Global server's network statistics
 	globalConnStats = newConnStats()

@@ -18,8 +18,6 @@ package cmd
 
 import (
 	"fmt"
-	"net"
-	"net/url"
 	"sync"
 
 	humanize "github.com/dustin/go-humanize"
@@ -52,43 +50,9 @@ func printOnceFn() printOnceFunc {
 }
 
 // Prints custom message when healing is required for XL and Distributed XL backend.
-func printHealMsg(endpoints []*url.URL, storageDisks []StorageAPI, fn printOnceFunc) {
+func printHealMsg(endpoints EndpointList, storageDisks []StorageAPI, fn printOnceFunc) {
 	msg := getHealMsg(endpoints, storageDisks)
 	fn(msg)
-}
-
-// Heal endpoint constructs the final endpoint URL for control heal command.
-// Disk heal endpoint needs to be just a URL and no special paths.
-// This function constructs the right endpoint under various conditions
-// for single node XL, distributed XL and when minio server is bound
-// to a specific ip:port.
-func getHealEndpoint(tls bool, firstEndpoint *url.URL) (cEndpoint *url.URL) {
-	scheme := httpScheme
-	if tls {
-		scheme = httpsScheme
-	}
-	cEndpoint = &url.URL{
-		Scheme: scheme,
-	}
-	// Bind to `--address host:port` was specified.
-	if globalMinioHost != "" {
-		cEndpoint.Host = net.JoinHostPort(globalMinioHost, globalMinioPort)
-		return cEndpoint
-	}
-	// For distributed XL setup.
-	if firstEndpoint.Host != "" {
-		cEndpoint.Host = firstEndpoint.Host
-		return cEndpoint
-	}
-	// For single node XL setup, we need to find the endpoint.
-	cEndpoint.Host = globalMinioAddr
-	// Fetch all the listening ips. For single node XL we
-	// just use the first host.
-	hosts, _, err := getListenIPs(cEndpoint.Host)
-	if err == nil {
-		cEndpoint.Host = net.JoinHostPort(hosts[0], globalMinioPort)
-	}
-	return cEndpoint
 }
 
 // Disks offline and online strings..
@@ -100,7 +64,7 @@ const (
 // Constructs a formatted heal message, when cluster is found to be in state where it requires healing.
 // healing is optional, server continues to initialize object layer after printing this message.
 // it is upto the end user to perform a heal if needed.
-func getHealMsg(endpoints []*url.URL, storageDisks []StorageAPI) string {
+func getHealMsg(endpoints EndpointList, storageDisks []StorageAPI) string {
 	healFmtCmd := `"mc admin heal myminio"`
 	msg := fmt.Sprintf("New disk(s) were found, format them by running - %s\n",
 		healFmtCmd)
@@ -126,13 +90,13 @@ func getHealMsg(endpoints []*url.URL, storageDisks []StorageAPI) string {
 }
 
 // Prints regular message when we have sufficient disks to start the cluster.
-func printRegularMsg(endpoints []*url.URL, storageDisks []StorageAPI, fn printOnceFunc) {
+func printRegularMsg(endpoints EndpointList, storageDisks []StorageAPI, fn printOnceFunc) {
 	msg := getStorageInitMsg("\nInitializing data volume.", endpoints, storageDisks)
 	fn(msg)
 }
 
 // Constructs a formatted regular message when we have sufficient disks to start the cluster.
-func getStorageInitMsg(titleMsg string, endpoints []*url.URL, storageDisks []StorageAPI) string {
+func getStorageInitMsg(titleMsg string, endpoints EndpointList, storageDisks []StorageAPI) string {
 	msg := colorBlue(titleMsg)
 	disksInfo, _, _ := getDisksInfo(storageDisks)
 	for i, info := range disksInfo {
@@ -156,7 +120,7 @@ func getStorageInitMsg(titleMsg string, endpoints []*url.URL, storageDisks []Sto
 }
 
 // Prints initialization message when cluster is being initialized for the first time.
-func printFormatMsg(endpoints []*url.URL, storageDisks []StorageAPI, fn printOnceFunc) {
+func printFormatMsg(endpoints EndpointList, storageDisks []StorageAPI, fn printOnceFunc) {
 	msg := getStorageInitMsg("\nInitializing data volume for the first time.", endpoints, storageDisks)
 	fn(msg)
 }

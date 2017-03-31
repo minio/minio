@@ -187,9 +187,6 @@ func gatewayMain(ctx *cli.Context) {
 		fatalIf(aerr, "Failed to start minio server")
 	}()
 
-	apiEndPoints, err := finalizeAPIEndpoints(apiServer.Addr)
-	fatalIf(err, "Unable to finalize API endpoints for %s", apiServer.Addr)
-
 	// Once endpoints are finalized, initialize the new object api.
 	globalObjLayerMutex.Lock()
 	globalObjectAPI = newObject
@@ -202,7 +199,8 @@ func gatewayMain(ctx *cli.Context) {
 			mode = globalMinioModeGatewayAzure
 		}
 		checkUpdate(mode)
-		printGatewayStartupMessage(apiEndPoints, accessKey, secretKey, backendType)
+		apiEndpoints := getAPIEndpoints(apiServer.Addr)
+		printGatewayStartupMessage(apiEndpoints, accessKey, secretKey, backendType)
 	}
 
 	<-globalServiceDoneCh

@@ -198,22 +198,20 @@ func (s *storageServer) RenameFileHandler(args *RenameFileArgs, reply *AuthRPCRe
 
 // Initialize new storage rpc.
 func newRPCServer(srvConfig serverCmdConfig) (servers []*storageServer, err error) {
-	for _, ep := range srvConfig.endpoints {
-		// e.g server:/mnt/disk1
-		if isLocalStorage(ep) {
-			// Get the posix path.
-			path := getPath(ep)
-			var storage StorageAPI
-			storage, err = newPosix(path)
+	for _, endpoint := range srvConfig.endpoints {
+		if endpoint.IsLocal {
+			storage, err := newPosix(endpoint.Path)
 			if err != nil && err != errDiskNotFound {
 				return nil, err
 			}
+
 			servers = append(servers, &storageServer{
 				storage: storage,
-				path:    path,
+				path:    endpoint.Path,
 			})
 		}
 	}
+
 	return servers, nil
 }
 

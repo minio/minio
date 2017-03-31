@@ -103,18 +103,17 @@ func registerDistNSLockRouter(mux *router.Router, serverConfig serverCmdConfig) 
 
 // Create one lock server for every local storage rpc server.
 func newLockServers(srvConfig serverCmdConfig) (lockServers []*lockServer) {
-	for _, ep := range srvConfig.endpoints {
+	for _, endpoint := range srvConfig.endpoints {
 		// Initialize new lock server for each local node.
-		if isLocalStorage(ep) {
-			// Create handler for lock RPCs
-			locker := &lockServer{
-				serviceEndpoint: getPath(ep),
+		if endpoint.IsLocal {
+			lockServers = append(lockServers, &lockServer{
+				serviceEndpoint: endpoint.Path,
 				mutex:           sync.Mutex{},
 				lockMap:         make(map[string][]lockRequesterInfo),
-			}
-			lockServers = append(lockServers, locker)
+			})
 		}
 	}
+
 	return lockServers
 }
 

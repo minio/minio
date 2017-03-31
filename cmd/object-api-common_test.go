@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"runtime"
 	"sync"
 	"testing"
 )
@@ -95,56 +94,6 @@ func TestHouseKeeping(t *testing.T) {
 		if actualErr != test.expectedErr {
 			t.Errorf("Test %d - actual error is %#v, expected error was %#v",
 				i+1, actualErr, test.expectedErr)
-		}
-	}
-}
-
-// Test getPath() - the path that needs to be passed to newPosix()
-func TestGetPath(t *testing.T) {
-	globalMinioHost = ""
-	var testCases []struct {
-		epStr string
-		path  string
-	}
-	if runtime.GOOS == globalWindowsOSName {
-		testCases = []struct {
-			epStr string
-			path  string
-		}{
-			{"\\export", "\\export"},
-			{"D:\\export", "d:\\export"},
-			{"D:\\", "d:\\"},
-			{"D:", "d:"},
-			{"\\", "\\"},
-			{"http://127.0.0.1/d:/export", "d:/export"},
-			{"https://127.0.0.1/d:/export", "d:/export"},
-		}
-	} else {
-		testCases = []struct {
-			epStr string
-			path  string
-		}{
-			{"/export", "/export"},
-			{"http://127.0.0.1/export", "/export"},
-			{"https://127.0.0.1/export", "/export"},
-		}
-	}
-	testCasesCommon := []struct {
-		epStr string
-		path  string
-	}{
-		{"export", "export"},
-	}
-	testCases = append(testCases, testCasesCommon...)
-	for i, test := range testCases {
-		eps, err := parseStorageEndpoints([]string{test.epStr})
-		if err != nil {
-			t.Errorf("Test %d: %s - %s", i+1, test.epStr, err)
-			continue
-		}
-		path := getPath(eps[0])
-		if path != test.path {
-			t.Errorf("Test %d: For endpoing %s, getPath() failed, got: %s, expected: %s,", i+1, test.epStr, path, test.path)
 		}
 	}
 }
