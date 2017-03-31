@@ -227,7 +227,12 @@ export default class Browse extends React.Component {
 
   removeObject() {
     const {web, dispatch, currentPath, currentBucket, deleteConfirmation, checkedObjects} = this.props
-    let objects = checkedObjects.length > 0 ? checkedObjects : [deleteConfirmation.object]
+    let objects = []
+    if (checkedObjects.length > 0) {
+      objects = checkedObjects.map(obj => `${currentPath}${obj}`)
+    } else {
+      objects = [deleteConfirmation.object]
+    }
 
     web.RemoveObject({
       bucketname: currentBucket,
@@ -721,7 +726,7 @@ export default class Browse extends React.Component {
                   </label>
                   <div className="set-expire">
                     <div className="set-expire-item">
-        <i className="set-expire-increase" onClick={ this.handleExpireValue.bind(this, 'expireDays', 1, shareObject.object) }></i>
+                      <i className="set-expire-increase" onClick={ this.handleExpireValue.bind(this, 'expireDays', 1, shareObject.object) }></i>
                       <div className="set-expire-title">
                         Days
                       </div>
@@ -732,10 +737,10 @@ export default class Browse extends React.Component {
                           max={ 7 }
                           defaultValue={ 5 } />
                       </div>
-        <i className="set-expire-decrease" onClick={ this.handleExpireValue.bind(this, 'expireDays', -1, shareObject.object) }></i>
+                      <i className="set-expire-decrease" onClick={ this.handleExpireValue.bind(this, 'expireDays', -1, shareObject.object) }></i>
                     </div>
                     <div className="set-expire-item">
-        <i className="set-expire-increase" onClick={ this.handleExpireValue.bind(this, 'expireHours', 1, shareObject.object) }></i>
+                      <i className="set-expire-increase" onClick={ this.handleExpireValue.bind(this, 'expireHours', 1, shareObject.object) }></i>
                       <div className="set-expire-title">
                         Hours
                       </div>
@@ -746,10 +751,10 @@ export default class Browse extends React.Component {
                           max={ 23 }
                           defaultValue={ 0 } />
                       </div>
-        <i className="set-expire-decrease" onClick={ this.handleExpireValue.bind(this, 'expireHours', -1, shareObject.object) }></i>
+                      <i className="set-expire-decrease" onClick={ this.handleExpireValue.bind(this, 'expireHours', -1, shareObject.object) }></i>
                     </div>
                     <div className="set-expire-item">
-        <i className="set-expire-increase" onClick={ this.handleExpireValue.bind(this, 'expireMins', 1, shareObject.object) }></i>
+                      <i className="set-expire-increase" onClick={ this.handleExpireValue.bind(this, 'expireMins', 1, shareObject.object) }></i>
                       <div className="set-expire-title">
                         Minutes
                       </div>
@@ -760,9 +765,9 @@ export default class Browse extends React.Component {
                           max={ 59 }
                           defaultValue={ 0 } />
                       </div>
-        <i className="set-expire-decrease" onClick={ this.handleExpireValue.bind(this, 'expireMins', -1, shareObject.object) }></i>
+                      <i className="set-expire-decrease" onClick={ this.handleExpireValue.bind(this, 'expireMins', -1, shareObject.object) }></i>
                     </div>
-        </div>
+                  </div>
                 </div>
               </ModalBody>
               <div className="modal-footer">
