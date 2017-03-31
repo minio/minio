@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"net"
 	"time"
@@ -27,14 +26,11 @@ import (
 	"github.com/garyburd/redigo/redis"
 )
 
-func makeRedisError(msg string, a ...interface{}) error {
-	s := fmt.Sprintf(msg, a...)
-	return fmt.Errorf("Redis Notifier Error: %s", s)
-}
-
 var (
-	rdNFormatError = makeRedisError(`"format" value is invalid - it must be one of "access" or "namespace".`)
-	rdNKeyError    = makeRedisError("Key was not specified in the configuration.")
+	redisErrFunc = newNotificationErrorFactory("Redis")
+
+	errRedisFormat   = redisErrFunc(`"format" value is invalid - it must be one of "access" or "namespace".`)
+	errRedisKeyError = redisErrFunc("Key was not specified in the configuration.")
 )
 
 // redisNotify to send logs to Redis server
@@ -51,13 +47,13 @@ func (r *redisNotify) Validate() error {
 		return nil
 	}
 	if r.Format != formatNamespace && r.Format != formatAccess {
-		return rdNFormatError
+		return errRedisFormat
 	}
 	if _, _, err := net.SplitHostPort(r.Addr); err != nil {
 		return err
 	}
 	if r.Key == "" {
-		return rdNKeyError
+		return errRedisKeyError
 	}
 	return nil
 }
@@ -106,13 +102,13 @@ func dialRedis(rNotify redisNotify) (*redis.Pool, error) {
 	// Check connection.
 	_, err := rConn.Do("PING")
 	if err != nil {
-		return nil, makeRedisError("Error connecting to server: %v", err)
+		return nil, redisErrFunc("Error connecting to server: %v", err)
 	}
 
 	// Test that Key is of desired type
 	reply, err := redis.String(rConn.Do("TYPE", rNotify.Key))
 	if err != nil {
-		return nil, makeRedisError("Error getting type of Key=%s: %v",
+		return nil, redisErrFunc("Error getting type of Key=%s: %v",
 			rNotify.Key, err)
 	}
 	if reply != "none" {
@@ -121,7 +117,7 @@ func dialRedis(rNotify redisNotify) (*redis.Pool, error) {
 			expectedType = "list"
 		}
 		if reply != expectedType {
-			return nil, makeRedisError(
+			return nil, redisErrFunc(
 				"Key=%s has type %s, but we expect it to be a %s",
 				rNotify.Key, reply, expectedType)
 		}
@@ -137,7 +133,7 @@ func newRedisNotify(accountID string) (*logrus.Logger, error) {
 	// Dial redis.
 	rPool, err := dialRedis(rNotify)
 	if err != nil {
-		return nil, err
+		return nil, redisErrFunc("Error dialing server: %v", err)
 	}
 
 	rrConn := redisConn{
@@ -175,7 +171,7 @@ func (r redisConn) Fire(entry *logrus.Entry) error {
 		if eventMatch(entryStr, []string{"s3:ObjectRemoved:*"}) {
 			_, err := rConn.Do("HDEL", r.params.Key, entry.Data["Key"])
 			if err != nil {
-				return makeRedisError("Error deleting entry: %v",
+				return redisErrFunc("Error deleting entry: %v",
 					err)
 			}
 			return nil
@@ -185,14 +181,14 @@ func (r redisConn) Fire(entry *logrus.Entry) error {
 			"Records": entry.Data["Records"],
 		})
 		if err != nil {
-			return makeRedisError(
+			return redisErrFunc(
 				"Unable to encode event %v to JSON: %v",
 				entry.Data["Records"], err)
 		}
 		_, err = rConn.Do("HSET", r.params.Key, entry.Data["Key"],
 			value)
 		if err != nil {
-			return makeRedisError("Error updating hash entry: %v",
+			return redisErrFunc("Error updating hash entry: %v",
 				err)
 		}
 	case formatAccess:
@@ -200,18 +196,18 @@ func (r redisConn) Fire(entry *logrus.Entry) error {
 		// records.
 		events, ok := entry.Data["Records"].([]NotificationEvent)
 		if !ok {
-			return makeRedisError("unable to extract event time due to conversion error of entry.Data[\"Records\"]=%v", entry.Data["Records"])
+			return redisErrFunc("unable to extract event time due to conversion error of entry.Data[\"Records\"]=%v", entry.Data["Records"])
 		}
 		eventTime := events[0].EventTime
 
 		listEntry := []interface{}{eventTime, entry.Data["Records"]}
 		jsonValue, err := json.Marshal(listEntry)
 		if err != nil {
-			return makeRedisError("JSON encoding error: %v", err)
+			return redisErrFunc("JSON encoding error: %v", err)
 		}
 		_, err = rConn.Do("RPUSH", r.params.Key, jsonValue)
 		if err != nil {
-			return makeRedisError("Error appending to Redis list: %v",
+			return redisErrFunc("Error appending to Redis list: %v",
 				err)
 		}
 	}

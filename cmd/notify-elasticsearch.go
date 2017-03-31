@@ -17,14 +17,20 @@
 package cmd
 
 import (
-	"encoding/hex"
-	"errors"
+	"context"
 	"fmt"
 	"io/ioutil"
+	"time"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/minio/sha256-simd"
-	"gopkg.in/olivere/elastic.v3"
+	"gopkg.in/olivere/elastic.v5"
+)
+
+var (
+	esErrFunc = newNotificationErrorFactory("Elasticsearch")
+
+	errESFormat = esErrFunc(`"format" value is invalid - it must be one of "%s" or "%s".`, formatNamespace, formatAccess)
+	errESIndex  = esErrFunc("Index name was not specified in the configuration.")
 )
 
 // elasticQueue is a elasticsearch event notification queue.
@@ -39,13 +45,14 @@ func (e *elasticSearchNotify) Validate() error {
 	if !e.Enable {
 		return nil
 	}
-	if e.Format != formatNamespace {
-		return fmt.Errorf(
-			"Elasticsearch Notifier Error: \"format\" must be \"%s\"",
-			formatNamespace)
+	if e.Format != formatNamespace && e.Format != formatAccess {
+		return errESFormat
 	}
 	if _, err := checkURL(e.URL); err != nil {
 		return err
+	}
+	if e.Index == "" {
+		return errESIndex
 	}
 	return nil
 }
@@ -60,15 +67,11 @@ func dialElastic(esNotify elasticSearchNotify) (*elastic.Client, error) {
 	if !esNotify.Enable {
 		return nil, errNotifyNotEnabled
 	}
-	client, err := elastic.NewClient(
+	return elastic.NewClient(
 		elastic.SetURL(esNotify.URL),
 		elastic.SetSniff(false),
 		elastic.SetMaxRetries(10),
 	)
-	if err != nil {
-		return nil, err
-	}
-	return client, nil
 }
 
 func newElasticNotify(accountID string) (*logrus.Logger, error) {
@@ -77,23 +80,26 @@ func newElasticNotify(accountID string) (*logrus.Logger, error) {
 	// Dial to elastic search.
 	client, err := dialElastic(esNotify)
 	if err != nil {
-		return nil, err
+		return nil, esErrFunc("Error dialing the server: %v", err)
 	}
 
 	// Use the IndexExists service to check if a specified index exists.
-	exists, err := client.IndexExists(esNotify.Index).Do()
+	exists, err := client.IndexExists(esNotify.Index).
+		Do(context.Background())
 	if err != nil {
-		return nil, err
+		return nil, esErrFunc("Error checking if index exists: %v", err)
 	}
 	// Index does not exist, attempt to create it.
 	if !exists {
 		var createIndex *elastic.IndicesCreateResult
-		createIndex, err = client.CreateIndex(esNotify.Index).Do()
+		createIndex, err = client.CreateIndex(esNotify.Index).
+			Do(context.Background())
 		if err != nil {
-			return nil, err
+			return nil, esErrFunc("Error creating index `%s`: %v",
+				esNotify.Index, err)
 		}
 		if !createIndex.Acknowledged {
-			return nil, errors.New("Index not created")
+			return nil, esErrFunc("Index not created")
 		}
 	}
 
@@ -118,7 +124,7 @@ func newElasticNotify(accountID string) (*logrus.Logger, error) {
 }
 
 // Fire is required to implement logrus hook
-func (q elasticClient) Fire(entry *logrus.Entry) error {
+func (q elasticClient) Fire(entry *logrus.Entry) (err error) {
 	// Reflect on eventType and Key on their native type.
 	entryStr, ok := entry.Data["EventType"].(string)
 	if !ok {
@@ -129,25 +135,44 @@ func (q elasticClient) Fire(entry *logrus.Entry) error {
 		return nil
 	}
 
-	// Calculate a unique key id. Choosing sha256 here.
-	shaKey := sha256.Sum256([]byte(keyStr))
-	keyStr = hex.EncodeToString(shaKey[:])
-
-	// If event matches as delete, we purge the previous index.
-	if eventMatch(entryStr, []string{"s3:ObjectRemoved:*"}) {
-		_, err := q.Client.Delete().Index(q.params.Index).
-			Type("event").Id(keyStr).Do()
-		if err != nil {
-			return err
+	switch q.params.Format {
+	case formatNamespace:
+		// If event matches as delete, we purge the previous index.
+		if eventMatch(entryStr, []string{"s3:ObjectRemoved:*"}) {
+			_, err = q.Client.Delete().Index(q.params.Index).
+				Type("event").Id(keyStr).Do(context.Background())
+			break
+		} // else we update elastic index or create a new one.
+		_, err = q.Client.Index().Index(q.params.Index).
+			Type("event").
+			BodyJson(map[string]interface{}{
+				"Records": entry.Data["Records"],
+			}).Id(keyStr).Do(context.Background())
+	case formatAccess:
+		// eventTime is taken from the first entry in the
+		// records.
+		events, ok := entry.Data["Records"].([]NotificationEvent)
+		if !ok {
+			return esErrFunc("Unable to extract event time due to conversion error of entry.Data[\"Records\"]=%v", entry.Data["Records"])
 		}
-		return nil
-	} // else we update elastic index or create a new one.
-	_, err := q.Client.Index().Index(q.params.Index).
-		Type("event").
-		BodyJson(map[string]interface{}{
-			"Records": entry.Data["Records"],
-		}).Id(keyStr).Do()
-	return err
+		var eventTime time.Time
+		eventTime, err = time.Parse(timeFormatAMZ, events[0].EventTime)
+		if err != nil {
+			return esErrFunc("Unable to parse event time \"%s\": %v",
+				events[0].EventTime, err)
+		}
+		// Extract event time in milliseconds for Elasticsearch.
+		eventTimeStr := fmt.Sprintf("%d", eventTime.UnixNano()/1000000)
+		_, err = q.Client.Index().Index(q.params.Index).Type("event").
+			Timestamp(eventTimeStr).
+			BodyJson(map[string]interface{}{
+				"Records": entry.Data["Records"],
+			}).Do(context.Background())
+	}
+	if err != nil {
+		return esErrFunc("Error inserting/deleting entry: %v", err)
+	}
+	return nil
 }
 
 // Required for logrus hook implementation
