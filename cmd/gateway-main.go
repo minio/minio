@@ -62,14 +62,6 @@ var gatewayCmd = cli.Command{
 			Usage: "The endpoint.",
 			Value: "https://s3.amazonaws.com/",
 		},
-		cli.BoolFlag{
-			Name:  "cache",
-			Usage: "Enable caching.",
-		},
-		cli.StringFlag{
-			Name:  "cachepath",
-			Value: "./cache/",
-		},
 	),
 	HideHelpCommand: true,
 }
@@ -178,10 +170,6 @@ func gatewayMain(ctx *cli.Context) {
 
 	newObject, err := newGatewayLayer(backendType, ctx.String("endpoint"), accessKey, secretKey)
 	fatalIf(err, "Unable to initialize gateway layer. Error: %s", err)
-
-	if ctx.Bool("cache") {
-		newObject = newCacheLayer(newObject, ctx.String("cachepath"))
-	}
 
 	initNSLock(false) // Enable local namespace lock.
 
