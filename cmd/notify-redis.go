@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"time"
 
 	"github.com/Sirupsen/logrus"
@@ -52,7 +53,7 @@ func (r *redisNotify) Validate() error {
 	if r.Format != formatNamespace && r.Format != formatAccess {
 		return rdNFormatError
 	}
-	if _, err := checkURL(r.Addr); err != nil {
+	if _, _, err := net.SplitHostPort(r.Addr); err != nil {
 		return err
 	}
 	if r.Key == "" {
@@ -73,6 +74,7 @@ func dialRedis(rNotify redisNotify) (*redis.Pool, error) {
 	if !rNotify.Enable {
 		return nil, errNotifyNotEnabled
 	}
+
 	addr := rNotify.Addr
 	password := rNotify.Password
 	rPool := &redis.Pool{

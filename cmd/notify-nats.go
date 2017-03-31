@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"io/ioutil"
+	"net"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/nats-io/go-nats-streaming"
@@ -52,7 +53,7 @@ func (n *natsNotify) Validate() error {
 	if !n.Enable {
 		return nil
 	}
-	if _, err := checkURL(n.Address); err != nil {
+	if _, _, err := net.SplitHostPort(n.Address); err != nil {
 		return err
 	}
 	return nil
