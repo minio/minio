@@ -357,8 +357,7 @@ func initConfig() {
 	// Config file does not exist, we create it fresh and return upon success.
 	if isFile(getConfigFile()) {
 		fatalIf(migrateConfig(), "Config migration failed.")
-		fatalIf(validateConfig(), "Unable to validate configuration file")
-		fatalIf(loadConfig(), "Unable to initialize minio config")
+		fatalIf(loadConfig(), "Unable to load minio config file")
 	} else {
 		fatalIf(newConfig(), "Unable to initialize minio config for the first time.")
 		log.Println("Created minio configuration file successfully at " + getConfigDir())

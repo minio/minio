@@ -309,7 +309,7 @@ func TestValidateConfig(t *testing.T) {
 		if werr := ioutil.WriteFile(configPath, []byte(testCase.configData), 0700); werr != nil {
 			t.Fatal(werr)
 		}
-		verr := validateConfig()
+		_, verr := getValidConfig()
 		if testCase.shouldPass && verr != nil {
 			t.Errorf("Test %d, should pass but it failed with err = %v", i+1, verr)
 		}
