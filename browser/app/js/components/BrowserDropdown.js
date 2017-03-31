@@ -18,38 +18,43 @@ import React from 'react'
 import connect from 'react-redux/lib/components/connect'
 import Dropdown from 'react-bootstrap/lib/Dropdown'
 
+import iconMore from '../../img/icons/more-h.svg';
+import iconGithub from '../../img/icons/github.svg';
+import iconDocs from '../../img/icons/docs.svg';
+import iconHelp from '../../img/icons/help.svg';
+import iconOff from '../../img/icons/off.svg';
+import iconInfo from '../../img/icons/info.svg';
+import iconSettings from '../../img/icons/settings.svg';
+import iconFullscreen from '../../img/icons/fullscreen.svg';
+
+
 let BrowserDropdown = ({fullScreenFunc, aboutFunc, settingsFunc, logoutFunc}) => {
   return (
-    <li>
-      <Dropdown pullRight id="top-right-menu">
+    <nav className="top-links">
+      <div onClick={ aboutFunc }><img src={ iconInfo } alt=""/></div>
+      <div onClick={ settingsFunc } href=""><img src={ iconSettings } alt=""/></div>
+      <div onClick={ fullScreenFunc }><img src={ iconFullscreen } alt=""/></div>
+
+      <Dropdown pullRight id="dropdown-top-links">
         <Dropdown.Toggle noCaret>
-          <i className="fa fa-reorder"></i>
+          <span href=""><img src={ iconMore } alt=""/></span>
         </Dropdown.Toggle>
         <Dropdown.Menu className="dropdown-menu-right">
           <li>
-            <a target="_blank" href="https://github.com/minio/minio">Github <i className="fa fa-github"></i></a>
+            <a target="_blank" href="https://github.com/minio/minio">Github <img src={ iconGithub } alt=""/></a>
           </li>
           <li>
-            <a href="" onClick={ fullScreenFunc }>Fullscreen <i className="fa fa-expand"></i></a>
+            <a target="_blank" href="https://docs.minio.io/">Documentation  <img src={ iconDocs } alt=""/></a>
           </li>
           <li>
-            <a target="_blank" href="https://docs.minio.io/">Documentation <i className="fa fa-book"></i></a>
+            <a target="_blank" href="https://slack.minio.io">Ask for help  <img src={ iconHelp }  alt=""/></a>
           </li>
           <li>
-            <a target="_blank" href="https://slack.minio.io">Ask for help <i className="fa fa-question-circle"></i></a>
-          </li>
-          <li>
-            <a href="" onClick={ aboutFunc }>About <i className="fa fa-info-circle"></i></a>
-          </li>
-          <li>
-            <a href="" onClick={ settingsFunc }>Settings <i className="fa fa-cog"></i></a>
-          </li>
-          <li>
-            <a href="" onClick={ logoutFunc }>Sign Out <i className="fa fa-sign-out"></i></a>
+            <a href="" onClick={ logoutFunc }>Sign Out  <img src={ iconOff }  alt=""/></a>
           </li>
         </Dropdown.Menu>
       </Dropdown>
-    </li>
+    </nav>
   )
 }
 

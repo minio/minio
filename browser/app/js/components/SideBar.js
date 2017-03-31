@@ -24,62 +24,45 @@ import logo from '../../img/logo.svg'
 
 let SideBar = ({visibleBuckets, loadBucket, currentBucket, selectBucket, searchBuckets, sidebarStatus, clickOutside, showPolicy}) => {
 
-  const list = visibleBuckets.map((bucket, i) => {
-    return <li className={ classNames({
-                  'active': bucket === currentBucket
-                }) } key={ i } onClick={ (e) => selectBucket(e, bucket) }>
-             <a href="" className={ classNames({
-                                      'fesli-loading': bucket === loadBucket
-                                    }) }>
-               { bucket }
-             </a>
-             <i className="fesli-trigger" onClick={ showPolicy }></i>
-           </li>
-  })
+    const list = visibleBuckets.map ((bucket, i) => {
+        return  <li className={ classNames ({ 'buckets__list__active': bucket === currentBucket, 'fesli-loading': bucket === loadBucket })  } key={ i } onClick={ (e) => selectBucket (e, bucket) }>
+                    <span className="buckets__list__name">{ bucket }</span>
+                    <i className="buckets__list__actions" onClick={ showPolicy }></i>
+                </li>
+    })
 
-  return (
-    <ClickOutHandler onClickOut={ clickOutside }>
-      <div className={ classNames({
-                         'fe-sidebar': true,
-                         'toggled': sidebarStatus
-                       }) }>
-        <div className="fes-header clearfix hidden-sm hidden-xs">
-          <img src={ logo } alt="" />
-          <h2>Minio Browser</h2>
-        </div>
-        <div className="fes-list">
-          <div className="input-group ig-dark ig-left ig-search" style={ { display: web.LoggedIn() ? 'block' : 'none' } }>
-            <input className="ig-text"
-              type="text"
-              onChange={ searchBuckets }
-              placeholder="Search Buckets..." />
-            <i className="ig-helpers"></i>
-          </div>
-          <div className="fesl-inner">
-            <Scrollbars renderScrollbarVertical={ props => <div className="scrollbar-vertical" /> }>
-              <ul>
-                { list }
-              </ul>
-            </Scrollbars>
-          </div>
-        </div>
-        <div className="fes-host">
-          <i className="fa fa-globe"></i>
-          <a href="/">
-            { window.location.host }
-          </a>
-        </div>
-      </div>
-    </ClickOutHandler>
-  )
+    return (
+        <ClickOutHandler onClickOut={ clickOutside }>
+            <aside className={ classNames ({ 'sidebar': true, 'toggled': sidebarStatus}) }>
+
+                <div className="logo">
+                    <img className="logo__img" src={ logo } alt=""/>
+                    <div className="logo__title">
+                        <h2>Minio Browser</h2>
+                        <small>{ window.location.host }</small>
+                    </div>
+
+                </div>
+
+                <div className="buckets">
+                    <div className="buckets__search" style={ {display: web.LoggedIn () ? 'block' : 'none'} }>
+                        <input type="text" onChange={ searchBuckets } placeholder="Search Buckets..."/>
+                    </div>
+                    <ul className="buckets__list">
+                        { list }
+                    </ul>
+                </div>
+            </aside>
+        </ClickOutHandler>
+    )
 }
 
 // Subscribe it to state changes that affect only the sidebar.
-export default connect(state => {
-  return {
-    visibleBuckets: state.visibleBuckets,
-    loadBucket: state.loadBucket,
-    currentBucket: state.currentBucket,
-    sidebarStatus: state.sidebarStatus
-  }
-})(SideBar)
+export default connect (state => {
+    return {
+        visibleBuckets: state.visibleBuckets,
+        loadBucket: state.loadBucket,
+        currentBucket: state.currentBucket,
+        sidebarStatus: state.sidebarStatus
+    }
+}) (SideBar)

@@ -1,0 +1,33 @@
+.breadcrumb {
+    border-top: 1px solid @br-line-color;
+    border-bottom: 1px solid @br-line-color;
+    min-height: 42px;
+    padding: 7px 30px;
+
+    & > span {
+        cursor: pointer;
+        display: inline-block;
+        vertical-align: middle;
+        line-height: 100%;
+        .user-select(none);
+        color: @headings-color;
+        font-weight: 500;
+
+        & + span {
+            &:not(:last-child) {
+                &:before {
+                    content: '';
+                    width: 30px;
+                    height: 9px;
+                    display: inline-block;
+                    background: url(../../img/icons/chevron-sm.svg) no-repeat center;
+                }
+            }
+        }
+
+        &:nth-last-child(2) {
+            .opacity(0.6);
+            cursor: default;
+        }
+    }
+}

@@ -72,9 +72,9 @@ function authNotNeeded(nextState, replace) {
 }
 
 const App = (props) => {
-  return <div>
-           { props.children }
-         </div>
+  return React.cloneElement (
+           props.children
+        )
 }
 
 ReactDOM.render((
@@ -90,7 +90,7 @@ ReactDOM.render((
       </Route>
     </Router>
   </Provider>
-  ), document.getElementById('root'))
+  ), document.getElementById('browser'))
 
 //Page loader
 let delay = [0, 400]
@@ -99,7 +99,7 @@ let i = 0
 function handleLoader() {
   if (i < 2) {
     setTimeout(function() {
-      document.querySelector('.page-load').classList.add('pl-' + i)
+      document.querySelector('.page-loader').classList.add('page-loader--' + i)
       i++
       handleLoader()
     }, delay[i])
