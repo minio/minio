@@ -23,6 +23,7 @@
                 "exchange": "bucketevents",
                 "routingKey": "bucketlogs",
                 "exchangeType": "fanout",
+                "deliveryMode": 0,
                 "mandatory": false,
                 "immediate": false,
                 "durable": false,

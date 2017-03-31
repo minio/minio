@@ -109,8 +109,8 @@ func TestServerConfig(t *testing.T) {
 	serverConfig.Logger.SetFile(fileLogger)
 
 	// Match version.
-	if serverConfig.GetVersion() != v17 {
-		t.Errorf("Expecting version %s found %s", serverConfig.GetVersion(), v17)
+	if serverConfig.GetVersion() != v18 {
+		t.Errorf("Expecting version %s found %s", serverConfig.GetVersion(), v18)
 	}
 
 	// Attempt to save.
@@ -217,7 +217,7 @@ func TestValidateConfig(t *testing.T) {
 
 	configPath := filepath.Join(rootPath, minioConfigFile)
 
-	v := v17
+	v := v18
 
 	testCases := []struct {
 		configData string
