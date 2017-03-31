@@ -156,6 +156,7 @@ func newNotificationEvent(event eventData) NotificationEvent {
 	if event.Type == ObjectRemovedDelete {
 		nEvent.S3.Object = objectMeta{
 			Key:       escapedObj,
+			VersionID: "1",
 			Sequencer: uniqueID,
 		}
 		return nEvent
@@ -163,10 +164,13 @@ func newNotificationEvent(event eventData) NotificationEvent {
 
 	// For all other events we should set ETag and Size.
 	nEvent.S3.Object = objectMeta{
-		Key:       escapedObj,
-		ETag:      event.ObjInfo.MD5Sum,
-		Size:      event.ObjInfo.Size,
-		Sequencer: uniqueID,
+		Key:         escapedObj,
+		ETag:        event.ObjInfo.MD5Sum,
+		Size:        event.ObjInfo.Size,
+		ContentType: event.ObjInfo.ContentType,
+		UserDefined: event.ObjInfo.UserDefined,
+		VersionID:   "1",
+		Sequencer:   uniqueID,
 	}
 
 	// Success.

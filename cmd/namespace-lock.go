@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"errors"
-	"net/url"
 	pathutil "path"
 	"sync"
 
@@ -38,12 +37,12 @@ type RWLocker interface {
 
 // Initialize distributed locking only in case of distributed setup.
 // Returns if the setup is distributed or not on success.
-func initDsyncNodes(eps []*url.URL) error {
+func initDsyncNodes() error {
 	cred := serverConfig.GetCredential()
 	// Initialize rpc lock client information only if this instance is a distributed setup.
-	clnts := make([]dsync.NetLocker, len(eps))
+	clnts := make([]dsync.NetLocker, len(globalEndpoints))
 	myNode := -1
-	for index, ep := range eps {
+	for index, ep := range globalEndpoints {
 		if ep == nil {
 			return errInvalidArgument
 		}

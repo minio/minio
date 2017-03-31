@@ -124,16 +124,8 @@ func newGatewayConfig(accessKey, secretKey, region string) error {
 		SecretKey: secretKey,
 	})
 
-	// Set default printing to console.
-	srvCfg.Logger.SetConsole(NewConsoleLogger())
-
 	// Set custom region.
 	srvCfg.SetRegion(region)
-
-	// Create certs path for SSL configuration.
-	if err := createConfigDir(); err != nil {
-		return err
-	}
 
 	// hold the mutex lock before a new config is assigned.
 	// Save the new config globally.
@@ -159,14 +151,19 @@ func gatewayMain(ctx *cli.Context) {
 	// TODO: add support for custom region when we add
 	// support for S3 backend storage, currently this can
 	// default to "us-east-1"
-	err := newGatewayConfig(accessKey, secretKey, "us-east-1")
-	fatalIf(err, "Unable to initialize gateway config")
+	newGatewayConfig(accessKey, secretKey, globalMinioDefaultRegion)
 
 	// Get quiet flag from command line argument.
 	quietFlag := ctx.Bool("quiet") || ctx.GlobalBool("quiet")
+	if quietFlag {
+		log.EnableQuiet()
+	}
 
 	// First argument is selected backend type.
 	backendType := ctx.Args().First()
+
+	// Create certs path for SSL configuration.
+	fatalIf(createConfigDir(), "Unable to create configuration directory")
 
 	newObject, err := newGatewayLayer(backendType, ctx.String("endpoint"), accessKey, secretKey)
 	fatalIf(err, "Unable to initialize gateway layer. Error: %s", err)
@@ -196,8 +193,8 @@ func gatewayMain(ctx *cli.Context) {
 
 	apiServer := NewServerMux(ctx.String("address"), registerHandlers(router, handlerFns...))
 
-	// Set if we are SSL enabled S3 gateway.
-	globalIsSSL = isSSL()
+	_, _, globalIsSSL, err = getSSLConfig()
+	fatalIf(err, "Invalid SSL key file")
 
 	// Start server, automatically configures TLS if certs are available.
 	go func() {

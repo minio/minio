@@ -18,10 +18,8 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"runtime/debug"
 	"sort"
-	"strings"
 	"sync"
 
 	humanize "github.com/dustin/go-humanize"
@@ -115,9 +113,6 @@ func newXLObjects(storageDisks []StorageAPI) (ObjectLayer, error) {
 	// Initialize list pool.
 	listPool := newTreeWalkPool(globalLookupTimeout)
 
-	// Check if object cache is disabled.
-	objCacheDisabled := strings.EqualFold(os.Getenv("_MINIO_CACHE"), "off")
-
 	// Initialize xl objects.
 	xl := &xlObjects{
 		mutex:        &sync.Mutex{},
@@ -129,7 +124,7 @@ func newXLObjects(storageDisks []StorageAPI) (ObjectLayer, error) {
 
 	// Get cache size if _MINIO_CACHE environment variable is set.
 	var maxCacheSize uint64
-	if !objCacheDisabled {
+	if !globalXLObjCacheDisabled {
 		maxCacheSize, err = GetMaxCacheSize()
 		errorIf(err, "Unable to get maximum cache size")
 
