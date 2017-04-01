@@ -153,20 +153,21 @@ func (log *Logger) Printf(format string, args ...interface{}) {
 	}
 }
 
-// NewLogger - returns new logger.
+// NewLogger - returns a new initialized logger.
 func NewLogger() *Logger {
 	logger := logrus.New()
 	logger.Out = ioutil.Discard
 	logger.Level = logrus.DebugLevel
 
-	log := &Logger{
+	l := &Logger{
 		logger:        logger,
 		consoleTarget: NewConsoleLogger(),
 	}
 
-	logger.Hooks.Add(log)
+	// Adds a console logger.
+	logger.Hooks.Add(l)
 
-	return log
+	return l
 }
 
 func getSource() string {
