@@ -101,9 +101,9 @@ const (
 // healing is optional, server continues to initialize object layer after printing this message.
 // it is upto the end user to perform a heal if needed.
 func getHealMsg(endpoints []*url.URL, storageDisks []StorageAPI) string {
-	msg := fmt.Sprintln("\nData volume requires HEALING. Healing is not implemented yet stay tuned:")
-	// FIXME:  Enable this after we bring in healing.
-	//	msg := "mc admin heal myminio"
+	healFmtCmd := `"mc admin heal myminio"`
+	msg := fmt.Sprintf("New disk(s) were found, format them by running - %s\n",
+		healFmtCmd)
 	disksInfo, _, _ := getDisksInfo(storageDisks)
 	for i, info := range disksInfo {
 		if storageDisks[i] == nil {
