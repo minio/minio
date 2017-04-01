@@ -6,7 +6,13 @@ In this document, we will configure Minio servers with TLS certificates for both
 
 * Download Minio server from [here](https://docs.minio.io/docs/minio-quickstart-guide)
 
-## 2. Generate TLS certificate
+## 2. Configure with existing certificates
+
+Assuming that you are already having private and public certificates, you will need to copy them under `certs` in your Minio config directory using the names `private.key` and `public.crt` for key and public certificates respectively.
+
+If the certificate is signed by a certificate authority, `public.crt` should be the concatenation of the server's certificate, any intermediates, and the CA's root certificate.
+
+## 3. Generate certificates
 
 ### Linux
 
@@ -31,7 +37,7 @@ go run generate_cert.go -ca --host "10.10.0.3"
 Generate the private key:
 
 ```sh
-openssl genrsa -out private.key 1024
+openssl genrsa -out private.key 2048
 ```
 
 Generate the self-signed certificate:
@@ -113,10 +119,6 @@ Generate public certificate
 ```
 certtool.exe --generate-self-signed --load-privkey private.key --template cert.cnf --outfile public.crt 
 ```
-
-## 3. Configure Minio with the generated certificate
-
-Copy the generated key and certificate under `certs` in your Minio config path (by default in your HOME directory `~/.minio` on Linux or `C:\Users\<Username>\.minio` on Windows) using the names `private.key` and `public.crt` for key and certificate files respectively.
 
 ## 4. Install third-party CAs
 
