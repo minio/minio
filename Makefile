@@ -79,8 +79,8 @@ verifiers: vet fmt lint cyclo spelling
 
 vet:
 	@echo -n "Running $@: "
-	@go vet github.com/minio/minio/cmd/...
-	@go vet github.com/minio/minio/pkg/...
+	@go tool vet -atomic -bool -copylocks -nilfunc -printf -shadow -rangeloops -unreachable -unsafeptr -unusedresult cmd
+	@go tool vet -atomic -bool -copylocks -nilfunc -printf -shadow -rangeloops -unreachable -unsafeptr -unusedresult pkg
 	@echo "Done."
 
 fmt:

@@ -1162,9 +1162,9 @@ func TestHealUploadHandler(t *testing.T) {
 	for i, test := range testCases {
 		// Prepare query params.
 		queryVal := mkHealUploadQuery(test.bucket, test.object, uploadID, test.dryrun)
-		req, err := buildAdminRequest(queryVal, "upload", http.MethodPost, 0, nil)
-		if err != nil {
-			t.Fatalf("Test %d - Failed to construct heal object request - %v", i+1, err)
+		req, err1 := buildAdminRequest(queryVal, "upload", http.MethodPost, 0, nil)
+		if err1 != nil {
+			t.Fatalf("Test %d - Failed to construct heal object request - %v", i+1, err1)
 		}
 		rec := httptest.NewRecorder()
 		adminTestBed.mux.ServeHTTP(rec, req)
