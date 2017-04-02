@@ -11,8 +11,8 @@ func (l *s3Gateway) ListBucketsHeal() (buckets []BucketInfo, err error) {
 }
 
 // HealObject - Not relevant.
-func (l *s3Gateway) HealObject(bucket string, object string) error {
-	return traceError(NotImplemented{})
+func (l *s3Gateway) HealObject(bucket string, object string) (int, int, error) {
+	return 0, 0, traceError(NotImplemented{})
 }
 
 // ListObjectsHeal - Not relevant.
