@@ -131,22 +131,10 @@ func prepForInitXL(firstDisk bool, sErrs []error, diskCount int) InitActions {
 		return WaitForConfig
 	}
 
-	quorum := diskCount/2 + 1
+	readQuorum := diskCount / 2
 	disksOffline := errMap[errDiskNotFound]
 	disksFormatted := errMap[nil]
 	disksUnformatted := errMap[errUnformattedDisk]
-	disksCorrupted := errMap[errCorruptedFormat]
-
-	// No Quorum lots of offline disks, wait for quorum.
-	if disksOffline >= quorum {
-		return WaitForQuorum
-	}
-
-	// There is quorum or more corrupted disks, there is not enough good
-	// disks to reconstruct format.json.
-	if disksCorrupted >= quorum {
-		return Abort
-	}
 
 	// All disks are unformatted, proceed to formatting disks.
 	if disksUnformatted == diskCount {
@@ -157,23 +145,23 @@ func prepForInitXL(firstDisk bool, sErrs []error, diskCount int) InitActions {
 		return WaitForFormatting
 	}
 
+	// Already formatted and in quorum, proceed to initialization of object layer.
+	if disksFormatted >= readQuorum {
+		if disksFormatted+disksOffline == diskCount {
+			return InitObjectLayer
+		}
+		// Some of the formatted disks are possibly corrupted or unformatted, heal them.
+		return WaitForHeal
+	}
+
 	// Total disks unformatted are in quorum verify if we have some offline disks.
-	if disksUnformatted >= quorum {
+	if disksUnformatted >= readQuorum {
 		// Some disks offline and some disks unformatted, wait for all of them to come online.
 		if disksUnformatted+disksFormatted+disksOffline == diskCount {
 			return WaitForAll
 		}
 		// Some disks possibly corrupted and too many unformatted disks.
 		return Abort
-	}
-
-	// Already formatted and in quorum, proceed to initialization of object layer.
-	if disksFormatted >= quorum {
-		if disksFormatted+disksOffline == diskCount {
-			return InitObjectLayer
-		}
-		// Some of the formatted disks are possibly corrupted or unformatted, heal them.
-		return WaitForHeal
 	} // Exhausted all our checks, un-handled errors perhaps we Abort.
 	return WaitForQuorum
 }
