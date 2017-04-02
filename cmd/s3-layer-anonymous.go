@@ -31,10 +31,6 @@ func (l *s3Gateway) AnonGetObjectInfo(bucket string, object string) (ObjectInfo,
 
 // AnonListObjects - List objects anonymously
 func (l *s3Gateway) AnonListObjects(bucket string, prefix string, marker string, delimiter string, maxKeys int) (ListObjectsInfo, error) {
-	loi := ListObjectsInfo{}
-
-	loi.Objects = make([]ObjectInfo, maxKeys)
-
 	result, err := l.anonClient.ListObjects(bucket, prefix, marker, delimiter, maxKeys)
 	if err != nil {
 		return ListObjectsInfo{}, s3ToObjectError(traceError(err), bucket)
