@@ -242,18 +242,19 @@ __Example__
 ```
 
 <a name="HealObject"></a>
-### HealObject(bucket, object string, isDryRun bool) error
+### HealObject(bucket, object string, isDryRun bool) (HealObjectResult, error)
 If object is successfully healed returns nil, otherwise returns error indicating the reason for failure. If isDryRun is true, then the object is not healed, but heal object request is validated by the server. e.g, if the object exists, if object name is valid etc.
 
 __Example__
 
 ``` go
-    isDryRun := false
-    err := madmClnt.HealObject("mybucket", "myobject", isDryRun)
+    isDryRun = false
+    healResult, err := madmClnt.HealObject("mybucket", "myobject", isDryRun)
     if err != nil {
         log.Fatalln(err)
     }
-    log.Println("successfully healed mybucket/myobject")
+
+    log.Println("Heal-object result: ", healResult)
 
 ```
 
@@ -323,17 +324,17 @@ __Example__
 ```
 
 <a name="HealUpload"></a>
-### HealUpload(bucket, object, uploadID string, isDryRun bool) error
+### HealUpload(bucket, object, uploadID string, isDryRun bool) (HealObjectResult, error)
 If upload is successfully healed returns nil, otherwise returns error indicating the reason for failure. If isDryRun is true, then the upload is not healed, but heal upload request is validated by the server. e.g, if the upload exists, if upload name is valid etc.
 
 ``` go
     isDryRun = false
-    err = madmClnt.HealUpload("mybucket", "myobject", "myuploadID", isDryRun)
+    healResult, err := madmClnt.HealUpload("mybucket", "myobject", "myUploadID", isDryRun)
     if err != nil {
         log.Fatalln(err)
     }
 
-    log.Println("successfully healed mybucket/myobject/myuploadID")
+    log.Println("Heal-upload result: ", healResult)
 ```
 
 ## 5. Config operations

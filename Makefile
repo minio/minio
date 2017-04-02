@@ -1,7 +1,7 @@
 LDFLAGS := $(shell go run buildscripts/gen-ldflags.go)
 PWD := $(shell pwd)
 GOPATH := $(shell go env GOPATH)
-BUILD_LDFLAGS := '$(LDFLAGS)'
+BUILD_LDFLAGS := '$(LDFLAGS) -s -w'
 TAG := latest
 
 HOST ?= $(shell uname)
@@ -79,8 +79,8 @@ verifiers: vet fmt lint cyclo spelling
 
 vet:
 	@echo -n "Running $@: "
-	@go vet github.com/minio/minio/cmd/...
-	@go vet github.com/minio/minio/pkg/...
+	@go tool vet -atomic -bool -copylocks -nilfunc -printf -shadow -rangeloops -unreachable -unsafeptr -unusedresult cmd
+	@go tool vet -atomic -bool -copylocks -nilfunc -printf -shadow -rangeloops -unreachable -unsafeptr -unusedresult pkg
 	@echo "Done."
 
 fmt:

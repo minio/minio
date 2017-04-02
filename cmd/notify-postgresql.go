@@ -98,14 +98,11 @@ VALUES ($1, $2);`
 	tableExists = `SELECT 1 FROM %s;`
 )
 
-func makePGError(msg string, a ...interface{}) error {
-	s := fmt.Sprintf(msg, a...)
-	return fmt.Errorf("PostgreSQL Notifier Error: %s", s)
-}
-
 var (
-	pgNFormatError = makePGError(`"format" value is invalid - it must be one of "%s" or "%s".`, formatNamespace, formatAccess)
-	pgNTableError  = makePGError("Table was not specified in the configuration.")
+	pgErrFunc = newNotificationErrorFactory("PostgreSQL")
+
+	errPGFormatError = pgErrFunc(`"format" value is invalid - it must be one of "%s" or "%s".`, formatNamespace, formatAccess)
+	errPGTableError  = pgErrFunc("Table was not specified in the configuration.")
 )
 
 type postgreSQLNotify struct {
@@ -135,7 +132,7 @@ func (p *postgreSQLNotify) Validate() error {
 		return nil
 	}
 	if p.Format != formatNamespace && p.Format != formatAccess {
-		return pgNFormatError
+		return errPGFormatError
 	}
 	if p.ConnectionString == "" {
 		if _, err := checkURL(p.Host); err != nil {
@@ -143,7 +140,7 @@ func (p *postgreSQLNotify) Validate() error {
 		}
 	}
 	if p.Table == "" {
-		return pgNTableError
+		return errPGTableError
 	}
 	return nil
 }
@@ -182,7 +179,7 @@ func dialPostgreSQL(pgN postgreSQLNotify) (pgConn, error) {
 
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
-		return pgConn{}, makePGError(
+		return pgConn{}, pgErrFunc(
 			"Connection opening failure (connectionString=%s): %v",
 			connStr, err)
 	}
@@ -190,7 +187,7 @@ func dialPostgreSQL(pgN postgreSQLNotify) (pgConn, error) {
 	// ping to check that server is actually reachable.
 	err = db.Ping()
 	if err != nil {
-		return pgConn{}, makePGError("Ping to server failed with: %v",
+		return pgConn{}, pgErrFunc("Ping to server failed with: %v",
 			err)
 	}
 
@@ -206,7 +203,7 @@ func dialPostgreSQL(pgN postgreSQLNotify) (pgConn, error) {
 		_, errCreate := db.Exec(fmt.Sprintf(createStmt, pgN.Table))
 		if errCreate != nil {
 			// failed to create the table. error out.
-			return pgConn{}, makePGError(
+			return pgConn{}, pgErrFunc(
 				"'Select' failed with %v, then 'Create Table' failed with %v",
 				err, errCreate,
 			)
@@ -221,14 +218,14 @@ func dialPostgreSQL(pgN postgreSQLNotify) (pgConn, error) {
 		stmts["upsertRow"], err = db.Prepare(fmt.Sprintf(upsertRowForNS,
 			pgN.Table))
 		if err != nil {
-			return pgConn{}, makePGError(
+			return pgConn{}, pgErrFunc(
 				"create UPSERT prepared statement failed with: %v", err)
 		}
 		// delete statement
 		stmts["deleteRow"], err = db.Prepare(fmt.Sprintf(deleteRowForNS,
 			pgN.Table))
 		if err != nil {
-			return pgConn{}, makePGError(
+			return pgConn{}, pgErrFunc(
 				"create DELETE prepared statement failed with: %v", err)
 		}
 	case formatAccess:
@@ -236,7 +233,7 @@ func dialPostgreSQL(pgN postgreSQLNotify) (pgConn, error) {
 		stmts["insertRow"], err = db.Prepare(fmt.Sprintf(insertRowForAccess,
 			pgN.Table))
 		if err != nil {
-			return pgConn{}, makePGError(
+			return pgConn{}, pgErrFunc(
 				"create INSERT prepared statement failed with: %v", err)
 		}
 	}
@@ -279,7 +276,7 @@ func jsonEncodeEventData(d interface{}) ([]byte, error) {
 		"Records": d,
 	})
 	if err != nil {
-		return nil, makePGError(
+		return nil, pgErrFunc(
 			"Unable to encode event %v to JSON: %v", d, err)
 	}
 	return value, nil
@@ -301,7 +298,7 @@ func (pgC pgConn) Fire(entry *logrus.Entry) error {
 			// delete row from the table
 			_, err := pgC.preparedStmts["deleteRow"].Exec(entry.Data["Key"])
 			if err != nil {
-				return makePGError(
+				return pgErrFunc(
 					"Error deleting event with key=%v: %v",
 					entry.Data["Key"], err,
 				)
@@ -315,7 +312,7 @@ func (pgC pgConn) Fire(entry *logrus.Entry) error {
 			// upsert row into the table
 			_, err = pgC.preparedStmts["upsertRow"].Exec(entry.Data["Key"], value)
 			if err != nil {
-				return makePGError(
+				return pgErrFunc(
 					"Unable to upsert event with key=%v and value=%v: %v",
 					entry.Data["Key"], entry.Data["Records"], err,
 				)
@@ -326,11 +323,11 @@ func (pgC pgConn) Fire(entry *logrus.Entry) error {
 		// records.
 		events, ok := entry.Data["Records"].([]NotificationEvent)
 		if !ok {
-			return makePGError("unable to extract event time due to conversion error of entry.Data[\"Records\"]=%v", entry.Data["Records"])
+			return pgErrFunc("unable to extract event time due to conversion error of entry.Data[\"Records\"]=%v", entry.Data["Records"])
 		}
 		eventTime, err := time.Parse(timeFormatAMZ, events[0].EventTime)
 		if err != nil {
-			return makePGError("unable to parse event time \"%s\": %v",
+			return pgErrFunc("unable to parse event time \"%s\": %v",
 				events[0].EventTime, err)
 		}
 
@@ -341,7 +338,7 @@ func (pgC pgConn) Fire(entry *logrus.Entry) error {
 
 		_, err = pgC.preparedStmts["insertRow"].Exec(eventTime, value)
 		if err != nil {
-			return makePGError("Unable to insert event with value=%v: %v",
+			return pgErrFunc("Unable to insert event with value=%v: %v",
 				value, err)
 		}
 	}

@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/minio/minio/pkg/wildcard"
 )
@@ -220,4 +221,17 @@ func filterRuleMatch(object string, frs []filterRule) bool {
 		}
 	}
 	return prefixMatch && suffixMatch
+}
+
+// A type to represent dynamic error generation functions for
+// notifications.
+type notificationErrorFactoryFunc func(string, ...interface{}) error
+
+// A function to build dynamic error generation functions for
+// notifications by setting an error prefix string.
+func newNotificationErrorFactory(prefix string) notificationErrorFactoryFunc {
+	return func(msg string, a ...interface{}) error {
+		s := fmt.Sprintf(msg, a...)
+		return fmt.Errorf("%s: %s", prefix, s)
+	}
 }

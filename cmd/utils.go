@@ -266,13 +266,13 @@ func isFile(path string) bool {
 }
 
 // checkURL - checks if passed address correspond
-func checkURL(address string) (*url.URL, error) {
-	if address == "" {
+func checkURL(urlStr string) (*url.URL, error) {
+	if urlStr == "" {
 		return nil, errors.New("Address cannot be empty")
 	}
-	u, err := url.Parse(address)
+	u, err := url.Parse(urlStr)
 	if err != nil {
-		return nil, fmt.Errorf("`%s` invalid: %s", address, err.Error())
+		return nil, fmt.Errorf("`%s` invalid: %s", urlStr, err.Error())
 	}
 	return u, nil
 }

@@ -27,8 +27,8 @@ func (a AzureObjects) ListBucketsHeal() (buckets []BucketInfo, err error) {
 }
 
 // HealObject - Not relevant.
-func (a AzureObjects) HealObject(bucket, object string) error {
-	return traceError(NotImplemented{})
+func (a AzureObjects) HealObject(bucket, object string) (int, int, error) {
+	return 0, 0, traceError(NotImplemented{})
 }
 
 // ListObjectsHeal - Not relevant.

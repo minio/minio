@@ -60,8 +60,8 @@ func (a AzureObjects) AnonGetBucketInfo(bucket string) (bucketInfo BucketInfo, e
 // AnonGetObject - SendGET request without authentication.
 // This is needed when clients send GET requests on objects that can be downloaded without auth.
 func (a AzureObjects) AnonGetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) (err error) {
-	url := a.client.GetBlobURL(bucket, object)
-	req, err := http.NewRequest("GET", url, nil)
+	u := a.client.GetBlobURL(bucket, object)
+	req, err := http.NewRequest("GET", u, nil)
 	if err != nil {
 		return azureToObjectError(traceError(err), bucket, object)
 	}

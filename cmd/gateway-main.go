@@ -116,7 +116,7 @@ func newGatewayLayer(backendType, endpoint, accessKey, secretKey string) (Gatewa
 // only used in memory.
 func newGatewayConfig(accessKey, secretKey, region string) error {
 	// Initialize server config.
-	srvCfg := newServerConfigV17()
+	srvCfg := newServerConfigV18()
 
 	// If env is set for a fresh start, save them to config file.
 	srvCfg.SetCredential(credential{

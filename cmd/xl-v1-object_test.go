@@ -312,7 +312,7 @@ func TestHealing(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = xl.HealObject(bucket, object)
+	_, _, err = xl.HealObject(bucket, object)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -336,7 +336,7 @@ func TestHealing(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = xl.HealObject(bucket, object)
+	_, _, err = xl.HealObject(bucket, object)
 	if err != nil {
 		t.Fatal(err)
 	}

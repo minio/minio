@@ -90,14 +90,11 @@ VALUES (?, ?);`
 	tableExistsMySQL = `SELECT 1 FROM %s;`
 )
 
-func makeMySQLError(msg string, a ...interface{}) error {
-	s := fmt.Sprintf(msg, a...)
-	return fmt.Errorf("MySQL Notifier Error: %s", s)
-}
-
 var (
-	myNFormatError = makeMySQLError(`"format" value is invalid - it must be one of "%s" or "%s".`, formatNamespace, formatAccess)
-	myNTableError  = makeMySQLError("Table was not specified in the configuration.")
+	mysqlErrFunc = newNotificationErrorFactory("MySQL")
+
+	errMysqlFormat = mysqlErrFunc(`"format" value is invalid - it must be one of "%s" or "%s".`, formatNamespace, formatAccess)
+	errMysqlTable  = mysqlErrFunc("Table was not specified in the configuration.")
 )
 
 type mySQLNotify struct {
@@ -127,7 +124,7 @@ func (m *mySQLNotify) Validate() error {
 		return nil
 	}
 	if m.Format != formatNamespace && m.Format != formatAccess {
-		return myNFormatError
+		return errMysqlFormat
 	}
 	if m.DsnString == "" {
 		if _, err := checkURL(m.Host); err != nil {
@@ -135,7 +132,7 @@ func (m *mySQLNotify) Validate() error {
 		}
 	}
 	if m.Table == "" {
-		return myNTableError
+		return errMysqlTable
 	}
 	return nil
 }
@@ -169,7 +166,7 @@ func dialMySQL(msql mySQLNotify) (mySQLConn, error) {
 
 	db, err := sql.Open("mysql", dsnStr)
 	if err != nil {
-		return mySQLConn{}, makeMySQLError(
+		return mySQLConn{}, mysqlErrFunc(
 			"Connection opening failure (dsnStr=%s): %v",
 			dsnStr, err)
 	}
@@ -177,7 +174,7 @@ func dialMySQL(msql mySQLNotify) (mySQLConn, error) {
 	// ping to check that server is actually reachable.
 	err = db.Ping()
 	if err != nil {
-		return mySQLConn{}, makeMySQLError(
+		return mySQLConn{}, mysqlErrFunc(
 			"Ping to server failed with: %v", err)
 	}
 
@@ -193,7 +190,7 @@ func dialMySQL(msql mySQLNotify) (mySQLConn, error) {
 		_, errCreate := db.Exec(fmt.Sprintf(createStmt, msql.Table))
 		if errCreate != nil {
 			// failed to create the table. error out.
-			return mySQLConn{}, makeMySQLError(
+			return mySQLConn{}, mysqlErrFunc(
 				"'Select' failed with %v, then 'Create Table' failed with %v",
 				err, errCreate,
 			)
@@ -209,21 +206,21 @@ func dialMySQL(msql mySQLNotify) (mySQLConn, error) {
 			msql.Table))
 		if err != nil {
 			return mySQLConn{},
-				makeMySQLError("create UPSERT prepared statement failed with: %v", err)
+				mysqlErrFunc("create UPSERT prepared statement failed with: %v", err)
 		}
 		// delete statement
 		stmts["deleteRow"], err = db.Prepare(fmt.Sprintf(deleteRowForNSMySQL,
 			msql.Table))
 		if err != nil {
 			return mySQLConn{},
-				makeMySQLError("create DELETE prepared statement failed with: %v", err)
+				mysqlErrFunc("create DELETE prepared statement failed with: %v", err)
 		}
 	case formatAccess:
 		// insert statement
 		stmts["insertRow"], err = db.Prepare(fmt.Sprintf(insertRowForAccessMySQL,
 			msql.Table))
 		if err != nil {
-			return mySQLConn{}, makeMySQLError(
+			return mySQLConn{}, mysqlErrFunc(
 				"create INSERT prepared statement failed with: %v", err)
 		}
 
@@ -274,7 +271,7 @@ func (myC mySQLConn) Fire(entry *logrus.Entry) error {
 			"Records": d,
 		})
 		if err != nil {
-			return nil, makeMySQLError(
+			return nil, mysqlErrFunc(
 				"Unable to encode event %v to JSON: %v", d, err)
 		}
 		return value, nil
@@ -287,7 +284,7 @@ func (myC mySQLConn) Fire(entry *logrus.Entry) error {
 			// delete row from the table
 			_, err := myC.preparedStmts["deleteRow"].Exec(entry.Data["Key"])
 			if err != nil {
-				return makeMySQLError(
+				return mysqlErrFunc(
 					"Error deleting event with key = %v - got mysql error - %v",
 					entry.Data["Key"], err,
 				)
@@ -301,7 +298,7 @@ func (myC mySQLConn) Fire(entry *logrus.Entry) error {
 			// upsert row into the table
 			_, err = myC.preparedStmts["upsertRow"].Exec(entry.Data["Key"], value)
 			if err != nil {
-				return makeMySQLError(
+				return mysqlErrFunc(
 					"Unable to upsert event with Key=%v and Value=%v - got mysql error - %v",
 					entry.Data["Key"], entry.Data["Records"], err,
 				)
@@ -312,11 +309,11 @@ func (myC mySQLConn) Fire(entry *logrus.Entry) error {
 		// records.
 		events, ok := entry.Data["Records"].([]NotificationEvent)
 		if !ok {
-			return makeMySQLError("unable to extract event time due to conversion error of entry.Data[\"Records\"]=%v", entry.Data["Records"])
+			return mysqlErrFunc("unable to extract event time due to conversion error of entry.Data[\"Records\"]=%v", entry.Data["Records"])
 		}
 		eventTime, err := time.Parse(timeFormatAMZ, events[0].EventTime)
 		if err != nil {
-			return makeMySQLError("unable to parse event time \"%s\": %v",
+			return mysqlErrFunc("unable to parse event time \"%s\": %v",
 				events[0].EventTime, err)
 		}
 
@@ -327,7 +324,7 @@ func (myC mySQLConn) Fire(entry *logrus.Entry) error {
 
 		_, err = myC.preparedStmts["insertRow"].Exec(eventTime, value)
 		if err != nil {
-			return makeMySQLError("Unable to insert event with value=%v: %v",
+			return mysqlErrFunc("Unable to insert event with value=%v: %v",
 				value, err)
 		}
 	}

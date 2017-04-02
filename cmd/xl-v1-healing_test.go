@@ -534,10 +534,10 @@ func TestHealObjectXL(t *testing.T) {
 
 	var uploadedParts []completePart
 	for _, partID := range []int{2, 1} {
-		pInfo, err := obj.PutObjectPart(bucket, object, uploadID, partID,
+		pInfo, err1 := obj.PutObjectPart(bucket, object, uploadID, partID,
 			int64(len(data)), bytes.NewReader(data), "", "")
-		if err != nil {
-			t.Fatalf("Failed to upload a part - %v", err)
+		if err1 != nil {
+			t.Fatalf("Failed to upload a part - %v", err1)
 		}
 		uploadedParts = append(uploadedParts, completePart{
 			PartNumber: pInfo.PartNumber,
@@ -558,7 +558,7 @@ func TestHealObjectXL(t *testing.T) {
 		t.Fatalf("Failed to delete a file - %v", err)
 	}
 
-	err = obj.HealObject(bucket, object)
+	_, _, err = obj.HealObject(bucket, object)
 	if err != nil {
 		t.Fatalf("Failed to heal object - %v", err)
 	}
@@ -574,7 +574,7 @@ func TestHealObjectXL(t *testing.T) {
 	}
 
 	// Try healing now, expect to receive errDiskNotFound.
-	err = obj.HealObject(bucket, object)
+	_, _, err = obj.HealObject(bucket, object)
 	if errorCause(err) != errDiskNotFound {
 		t.Errorf("Expected %v but received %v", errDiskNotFound, err)
 	}

@@ -20,8 +20,10 @@
 package madmin
 
 import (
+	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"time"
@@ -104,8 +106,12 @@ const (
 	CanHeal
 	// Corrupted - Object can't be healed
 	Corrupted
-	// QuorumUnavailable - Object can't be healed until read quorum is available
+	// QuorumUnavailable - Object can't be healed until read
+	// quorum is available
 	QuorumUnavailable
+	// CanPartiallyHeal - Object can't be healed completely until
+	// disks with missing parts come online
+	CanPartiallyHeal
 )
 
 // HealBucketInfo - represents healing related information of a bucket.
@@ -127,9 +133,9 @@ type BucketInfo struct {
 
 // HealObjectInfo - represents healing related information of an object.
 type HealObjectInfo struct {
-	Status              HealStatus
-	MissingDataCount    int
-	MissingPartityCount int
+	Status             HealStatus
+	MissingDataCount   int
+	MissingParityCount int
 }
 
 // ObjectInfo container for object metadata.
@@ -434,7 +440,7 @@ func (adm *AdminClient) HealBucket(bucket string, dryrun bool) error {
 }
 
 // HealUpload - Heal the given upload.
-func (adm *AdminClient) HealUpload(bucket, object, uploadID string, dryrun bool) error {
+func (adm *AdminClient) HealUpload(bucket, object, uploadID string, dryrun bool) (HealObjectResult, error) {
 	// Construct query params.
 	queryVal := url.Values{}
 	queryVal.Set("heal", "")
@@ -460,18 +466,40 @@ func (adm *AdminClient) HealUpload(bucket, object, uploadID string, dryrun bool)
 
 	defer closeResponse(resp)
 	if err != nil {
-		return err
+		return HealObjectResult{}, err
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return httpRespToErrorResponse(resp)
+		return HealObjectResult{}, httpRespToErrorResponse(resp)
 	}
 
-	return nil
+	// Healing is not performed so heal object result is empty.
+	if dryrun {
+		return HealObjectResult{}, nil
+	}
+
+	jsonBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return HealObjectResult{}, err
+	}
+
+	healResult := HealObjectResult{}
+	err = json.Unmarshal(jsonBytes, &healResult)
+	if err != nil {
+		return HealObjectResult{}, err
+	}
+
+	return healResult, nil
+}
+
+// HealObjectResult - represents result of heal-object admin API.
+type HealObjectResult struct {
+	HealedCount  int // number of disks that were healed.
+	OfflineCount int // number of disks that needed healing but were offline.
 }
 
 // HealObject - Heal the given object.
-func (adm *AdminClient) HealObject(bucket, object string, dryrun bool) error {
+func (adm *AdminClient) HealObject(bucket, object string, dryrun bool) (HealObjectResult, error) {
 	// Construct query params.
 	queryVal := url.Values{}
 	queryVal.Set("heal", "")
@@ -494,14 +522,30 @@ func (adm *AdminClient) HealObject(bucket, object string, dryrun bool) error {
 
 	defer closeResponse(resp)
 	if err != nil {
-		return err
+		return HealObjectResult{}, err
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return httpRespToErrorResponse(resp)
+		return HealObjectResult{}, httpRespToErrorResponse(resp)
 	}
 
-	return nil
+	// Healing is not performed so heal object result is empty.
+	if dryrun {
+		return HealObjectResult{}, nil
+	}
+
+	jsonBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return HealObjectResult{}, err
+	}
+
+	healResult := HealObjectResult{}
+	err = json.Unmarshal(jsonBytes, &healResult)
+	if err != nil {
+		return HealObjectResult{}, err
+	}
+
+	return healResult, nil
 }
 
 // HealFormat - heal storage format on available disks.
