@@ -152,7 +152,7 @@ func (a AzureObjects) StorageInfo() StorageInfo {
 
 // MakeBucket - Create a new container on azure backend.
 func (a AzureObjects) MakeBucket(bucket string) error {
-	// will never be called, only satisfy ObjectLayer interfase
+	// will never be called, only satisfy ObjectLayer interface
 	return traceError(NotImplemented{})
 }
 

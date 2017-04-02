@@ -127,7 +127,7 @@ func (l *s3Gateway) StorageInfo() StorageInfo {
 
 // MakeBucket - Create a new container on S3 backend.
 func (l *s3Gateway) MakeBucket(bucket string) error {
-	// will never be called, only satisfy ObjectLayer interfase
+	// will never be called, only satisfy ObjectLayer interface
 	return traceError(NotImplemented{})
 }
 
