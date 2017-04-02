@@ -127,7 +127,13 @@ func (l *s3Gateway) StorageInfo() StorageInfo {
 
 // MakeBucket - Create a new container on S3 backend.
 func (l *s3Gateway) MakeBucket(bucket string) error {
-	err := l.Client.MakeBucket(bucket, "us-east-1")
+	// will never be called, only satisfy ObjectLayer interfase
+	return traceError(NotImplemented{})
+}
+
+// MakeBucket - Create a new container on S3 backend.
+func (l *s3Gateway) MakeBucketWithLocation(bucket, location string) error {
+	err := l.Client.MakeBucket(bucket, location)
 	if err != nil {
 		return s3ToObjectError(traceError(err), bucket)
 	}

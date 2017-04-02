@@ -25,6 +25,9 @@ import (
 // GatewayLayer - Interface to implement gateway mode.
 type GatewayLayer interface {
 	ObjectLayer
+
+	MakeBucketWithLocation(bucket, location string) error
+
 	AnonGetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) (err error)
 	AnonGetObjectInfo(bucket, object string) (objInfo ObjectInfo, err error)
 	SetBucketPolicies(string, []BucketAccessPolicy) error

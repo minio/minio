@@ -24,10 +24,8 @@ import (
 	"strings"
 )
 
-// Validates location constraint in PutBucket request body.
-// The location value in the request body should match the
-// region configured at serverConfig, otherwise error is returned.
-func isValidLocationConstraint(r *http.Request) (s3Error APIErrorCode) {
+// Parses location constraint in PutBucket request body.
+func parseLocationConstraint(r *http.Request) (location string, s3Error APIErrorCode) {
 	serverRegion := serverConfig.GetRegion()
 	// If the request has no body with content-length set to 0,
 	// we do not have to validate location constraint. Bucket will
@@ -49,11 +47,28 @@ func isValidLocationConstraint(r *http.Request) (s3Error APIErrorCode) {
 		if serverRegion != incomingRegion {
 			s3Error = ErrInvalidRegion
 		}
-		return s3Error
+		return incomingRegion, s3Error
 	}
+
 	errorIf(err, "Unable to xml decode location constraint")
 	// Treat all other failures as XML parsing errors.
-	return ErrMalformedXML
+	return "", ErrMalformedXML
+
+}
+
+// Validates location constraint in PutBucket request body.
+// The location value in the request body should match the
+// region configured at serverConfig, otherwise error is returned.
+func isValidLocationConstraint(r *http.Request) (s3Error APIErrorCode) {
+	serverRegion := serverConfig.GetRegion()
+
+	incomingRegion, s3Error := parseLocationConstraint(r)
+
+	if serverRegion != incomingRegion {
+		return ErrInvalidRegion
+	}
+
+	return s3Error
 }
 
 // Supported headers that needs to be extracted.

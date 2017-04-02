@@ -499,6 +499,65 @@ func (api gatewayAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWri
 	writeErrorResponse(w, ErrNotImplemented, r.URL)
 }
 
+// PutBucketHandler - PUT Bucket
+// ----------
+// This implementation of the PUT operation creates a new bucket for authenticated request
+func (api gatewayAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Request) {
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+		return
+	}
+
+	// PutBucket does not have any bucket action.
+	s3Error := checkRequestAuthType(r, "", "", globalMinioDefaultRegion)
+	if s3Error == ErrInvalidRegion {
+		// Clients like boto3 send putBucket() call signed with region that is configured.
+		s3Error = checkRequestAuthType(r, "", "", serverConfig.GetRegion())
+	}
+	if s3Error != ErrNone {
+		writeErrorResponse(w, s3Error, r.URL)
+		return
+	}
+
+	vars := router.Vars(r)
+	bucket := vars["bucket"]
+
+	// Validate if incoming location constraint is valid, reject
+	// requests which do not follow valid region requirements.
+	location, s3Error := parseLocationConstraint(r)
+	if s3Error != ErrNone {
+		writeErrorResponse(w, s3Error, r.URL)
+		return
+	}
+
+	// validating region here, because isValidLocationConstraint
+	// reads body which has been read already. So only validating
+	// region here.
+	serverRegion := serverConfig.GetRegion()
+	if serverRegion != location {
+		writeErrorResponse(w, ErrInvalidRegion, r.URL)
+		return
+	}
+
+	bucketLock := globalNSMutex.NewNSLock(bucket, "")
+	bucketLock.Lock()
+	defer bucketLock.Unlock()
+
+	// Proceed to creating a bucket.
+	err := objectAPI.MakeBucketWithLocation(bucket, location)
+	if err != nil {
+		errorIf(err, "Unable to create a bucket.")
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
+	// Make sure to add Location information here only for bucket
+	w.Header().Set("Location", getLocation(r))
+
+	writeSuccessResponseHeadersOnly(w)
+}
+
 // DeleteBucketHandler - Delete bucket
 func (api gatewayAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.Request) {
 	objectAPI := api.ObjectAPI()
