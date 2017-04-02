@@ -50,7 +50,7 @@ func TestInitEventNotifierFaultyDisks(t *testing.T) {
 	}
 
 	bucketName := "bucket"
-	if err := obj.MakeBucket(globalMinioDefaultRegion, bucketName); err != nil {
+	if err := obj.MakeBucket(bucketName); err != nil {
 		t.Fatal("Unexpected error:", err)
 	}
 
@@ -377,7 +377,7 @@ func TestInitEventNotifier(t *testing.T) {
 	}
 
 	// create bucket
-	if err := obj.MakeBucket(globalMinioDefaultRegion, bucketName); err != nil {
+	if err := obj.MakeBucket(bucketName); err != nil {
 		t.Fatal("Unexpected error:", err)
 	}
 
@@ -442,7 +442,7 @@ func TestListenBucketNotification(t *testing.T) {
 	objectName := "object"
 
 	// Create the bucket to listen on
-	if err := obj.MakeBucket(globalMinioDefaultRegion, bucketName); err != nil {
+	if err := obj.MakeBucket(bucketName); err != nil {
 		t.Fatal("Unexpected error:", err)
 	}
 
@@ -552,7 +552,7 @@ func TestAddRemoveBucketListenerConfig(t *testing.T) {
 
 	// Make a bucket to store topicConfigs.
 	randBucket := getRandomBucketName()
-	if err := obj.MakeBucket(globalMinioDefaultRegion, randBucket); err != nil {
+	if err := obj.MakeBucket(randBucket); err != nil {
 		t.Fatalf("Failed to make bucket %s", randBucket)
 	}
 

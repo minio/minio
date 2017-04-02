@@ -1731,7 +1731,7 @@ func initAPIHandlerTest(obj ObjectLayer, endpoints []string) (string, http.Handl
 	bucketName := getRandomBucketName()
 
 	// Create bucket.
-	err := obj.MakeBucket(globalMinioDefaultRegion, bucketName)
+	err := obj.MakeBucket(bucketName)
 	if err != nil {
 		// failed to create newbucket, return err.
 		return "", nil, err

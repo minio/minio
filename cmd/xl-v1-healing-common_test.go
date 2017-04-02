@@ -214,7 +214,7 @@ func TestListOnlineDisks(t *testing.T) {
 		obj.DeleteObject(bucket, object)
 		obj.DeleteBucket(bucket)
 
-		err = obj.MakeBucket(globalMinioDefaultRegion, "bucket")
+		err = obj.MakeBucket("bucket")
 		if err != nil {
 			t.Fatalf("Failed to make a bucket %v", err)
 		}
