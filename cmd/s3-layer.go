@@ -249,8 +249,7 @@ func fromMinioClientObjectInfo(bucket string, oi minio.ObjectInfo) ObjectInfo {
 	}
 }
 
-// GetObjectInfo - reads blob metadata properties and replies back ObjectInfo,
-// uses zure equivalent GetBlobProperties.
+// GetObjectInfo - reads object info and replies back ObjectInfo
 func (l *s3Gateway) GetObjectInfo(bucket string, object string) (objInfo ObjectInfo, err error) {
 	oi, err := l.Client.StatObject(bucket, object)
 	if err != nil {
