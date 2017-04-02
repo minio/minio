@@ -39,7 +39,7 @@ func TestIsValidLocationContraint(t *testing.T) {
 		Body:          ioutil.NopCloser(bytes.NewBuffer([]byte("<>"))),
 		ContentLength: int64(len("<>")),
 	}
-	if err := isValidLocationConstraint(malformedReq); err != ErrMalformedXML {
+	if _, err := isValidLocationConstraint(malformedReq); err != ErrMalformedXML {
 		t.Fatal("Unexpected error: ", err)
 	}
 
@@ -77,7 +77,7 @@ func TestIsValidLocationContraint(t *testing.T) {
 			t.Fatalf("Test %d: Failed to Marshal bucket configuration", i+1)
 		}
 		serverConfig.SetRegion(testCase.serverConfigRegion)
-		actualCode := isValidLocationConstraint(inputRequest)
+		_, actualCode := isValidLocationConstraint(inputRequest)
 		if testCase.expectedCode != actualCode {
 			t.Errorf("Test %d: Expected the APIErrCode to be %d, but instead found %d", i+1, testCase.expectedCode, actualCode)
 		}

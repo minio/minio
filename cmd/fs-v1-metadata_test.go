@@ -49,7 +49,7 @@ func TestReadFSMetadata(t *testing.T) {
 	bucketName := "bucket"
 	objectName := "object"
 
-	if err := obj.MakeBucket(bucketName); err != nil {
+	if err := obj.MakeBucket(globalMinioDefaultRegion, bucketName); err != nil {
 		t.Fatal("Unexpected err: ", err)
 	}
 	sha256sum := ""
@@ -98,7 +98,7 @@ func TestWriteFSMetadata(t *testing.T) {
 	bucketName := "bucket"
 	objectName := "object"
 
-	if err := obj.MakeBucket(bucketName); err != nil {
+	if err := obj.MakeBucket(globalMinioDefaultRegion, bucketName); err != nil {
 		t.Fatal("Unexpected err: ", err)
 	}
 	sha256sum := ""

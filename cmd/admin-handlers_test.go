@@ -758,7 +758,7 @@ func TestListObjectsHealHandler(t *testing.T) {
 	}
 	defer adminTestBed.TearDown()
 
-	err = adminTestBed.objLayer.MakeBucket("mybucket")
+	err = adminTestBed.objLayer.MakeBucket(globalMinioDefaultRegion, "mybucket")
 	if err != nil {
 		t.Fatalf("Failed to make bucket - %v", err)
 	}
@@ -886,7 +886,7 @@ func TestHealBucketHandler(t *testing.T) {
 	}
 	defer adminTestBed.TearDown()
 
-	err = adminTestBed.objLayer.MakeBucket("mybucket")
+	err = adminTestBed.objLayer.MakeBucket(globalMinioDefaultRegion, "mybucket")
 	if err != nil {
 		t.Fatalf("Failed to make bucket - %v", err)
 	}
@@ -963,7 +963,7 @@ func TestHealObjectHandler(t *testing.T) {
 	// Create an object myobject under bucket mybucket.
 	bucketName := "mybucket"
 	objName := "myobject"
-	err = adminTestBed.objLayer.MakeBucket(bucketName)
+	err = adminTestBed.objLayer.MakeBucket(globalMinioDefaultRegion, bucketName)
 	if err != nil {
 		t.Fatalf("Failed to make bucket %s - %v", bucketName, err)
 	}
@@ -1094,7 +1094,7 @@ func TestHealUploadHandler(t *testing.T) {
 	// Create an object myobject under bucket mybucket.
 	bucketName := "mybucket"
 	objName := "myobject"
-	err = adminTestBed.objLayer.MakeBucket(bucketName)
+	err = adminTestBed.objLayer.MakeBucket(globalMinioDefaultRegion, bucketName)
 	if err != nil {
 		t.Fatalf("Failed to make bucket %s - %v", bucketName, err)
 	}
@@ -1437,7 +1437,7 @@ func TestListHealUploadsHandler(t *testing.T) {
 	}
 	defer adminTestBed.TearDown()
 
-	err = adminTestBed.objLayer.MakeBucket("mybucket")
+	err = adminTestBed.objLayer.MakeBucket(globalMinioDefaultRegion, "mybucket")
 	if err != nil {
 		t.Fatalf("Failed to make bucket - %v", err)
 	}

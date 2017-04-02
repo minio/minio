@@ -38,7 +38,7 @@ func TestUpdateUploadJSON(t *testing.T) {
 	defer removeRoots(fsDirs)
 
 	bucket, object := "bucket", "object"
-	err = obj.MakeBucket(bucket)
+	err = obj.MakeBucket(globalMinioDefaultRegion, bucket)
 	if err != nil {
 		t.Fatal(err)
 	}
