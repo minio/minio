@@ -25,7 +25,7 @@ type ObjectLayer interface {
 	StorageInfo() StorageInfo
 
 	// Bucket operations.
-	MakeBucket(location, bucket string) error
+	MakeBucket(bucket string) error
 	GetBucketInfo(bucket string) (bucketInfo BucketInfo, err error)
 	ListBuckets() (buckets []BucketInfo, err error)
 	DeleteBucket(bucket string) error

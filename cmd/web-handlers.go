@@ -131,7 +131,7 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 	bucketLock := globalNSMutex.NewNSLock(args.BucketName, "")
 	bucketLock.Lock()
 	defer bucketLock.Unlock()
-	if err := objectAPI.MakeBucket(globalMinioDefaultRegion, args.BucketName); err != nil {
+	if err := objectAPI.MakeBucket(args.BucketName); err != nil {
 		return toJSONError(err, args.BucketName)
 	}
 

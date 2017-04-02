@@ -151,7 +151,7 @@ func (a AzureObjects) StorageInfo() StorageInfo {
 }
 
 // MakeBucket - Create a new container on azure backend.
-func (a AzureObjects) MakeBucket(location, bucket string) error {
+func (a AzureObjects) MakeBucket(bucket string) error {
 	err := a.client.CreateContainer(bucket, storage.ContainerAccessTypePrivate)
 	return azureToObjectError(traceError(err), bucket)
 }

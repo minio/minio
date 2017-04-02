@@ -126,8 +126,8 @@ func (l *s3Gateway) StorageInfo() StorageInfo {
 }
 
 // MakeBucket - Create a new container on S3 backend.
-func (l *s3Gateway) MakeBucket(location, bucket string) error {
-	err := l.Client.MakeBucket(bucket, location)
+func (l *s3Gateway) MakeBucket(bucket string) error {
+	err := l.Client.MakeBucket(bucket, "us-east-1")
 	if err != nil {
 		return s3ToObjectError(traceError(err), bucket)
 	}

@@ -372,8 +372,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 
 	// Validate if incoming location constraint is valid, reject
 	// requests which do not follow valid region requirements.
-	location, s3Error := isValidLocationConstraint(r)
-	if s3Error != ErrNone {
+	if s3Error := isValidLocationConstraint(r); s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
 		return
 	}
@@ -383,7 +382,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	defer bucketLock.Unlock()
 
 	// Proceed to creating a bucket.
-	err := objectAPI.MakeBucket(location, bucket)
+	err := objectAPI.MakeBucket(bucket)
 	if err != nil {
 		errorIf(err, "Unable to create a bucket.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
