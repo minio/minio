@@ -98,7 +98,6 @@ func newGatewayLayer(backendType, endpoint, accessKey, secretKey string) (Gatewa
 	case s3Backend:
 		useHTTPS := true
 		if u, err := url.Parse(endpoint); err != nil {
-			return nil, err
 		} else if u.Scheme == "http" || u.Scheme == "https" {
 			useHTTPS = (u.Scheme == "https")
 			endpoint = u.Host
