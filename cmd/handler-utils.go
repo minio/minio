@@ -24,36 +24,29 @@ import (
 	"strings"
 )
 
-// Validates location constraint in PutBucket request body.
-// The location value in the request body should match the
-// region configured at serverConfig, otherwise error is returned.
-func isValidLocationConstraint(r *http.Request) (s3Error APIErrorCode) {
-	serverRegion := serverConfig.GetRegion()
+// Parses location constraint from the incoming reader.
+func parseLocationConstraint(r *http.Request) (location string, s3Error APIErrorCode) {
 	// If the request has no body with content-length set to 0,
 	// we do not have to validate location constraint. Bucket will
 	// be created at default region.
 	locationConstraint := createBucketLocationConfiguration{}
 	err := xmlDecoder(r.Body, &locationConstraint, r.ContentLength)
-	if err == nil || err == io.EOF {
-		// Successfully decoded, proceed to verify the region.
-		// Once region has been obtained we proceed to verify it.
-		incomingRegion := locationConstraint.Location
-		if incomingRegion == "" {
-			// Location constraint is empty for region globalMinioDefaultRegion,
-			// in accordance with protocol.
-			incomingRegion = globalMinioDefaultRegion
-		}
-		// Return errInvalidRegion if location constraint does not match
-		// with configured region.
-		s3Error = ErrNone
-		if serverRegion != incomingRegion {
-			s3Error = ErrInvalidRegion
-		}
-		return s3Error
+	if err != nil && err != io.EOF {
+		errorIf(err, "Unable to xml decode location constraint")
+		// Treat all other failures as XML parsing errors.
+		return "", ErrMalformedXML
+	} // else for both err as nil or io.EOF
+	location = locationConstraint.Location
+	if location == "" {
+		location = globalMinioDefaultRegion
 	}
-	errorIf(err, "Unable to xml decode location constraint")
-	// Treat all other failures as XML parsing errors.
-	return ErrMalformedXML
+	return location, ErrNone
+}
+
+// Validates input location is same as configured region
+// of Minio server.
+func isValidLocation(location string) bool {
+	return serverConfig.GetRegion() == location
 }
 
 // Supported headers that needs to be extracted.
