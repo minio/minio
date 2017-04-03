@@ -39,7 +39,18 @@ const (
 	defaultBufferRatio = uint64(10)
 
 	// defaultGCPercent represents default garbage collection target percentage.
-	defaultGCPercent = 20
+	defaultGCPercent = 50
+)
+
+var (
+	// ErrKeyNotFoundInCache - key not found in cache.
+	ErrKeyNotFoundInCache = errors.New("Key not found in cache")
+
+	// ErrCacheFull - cache is full.
+	ErrCacheFull = errors.New("Not enough space in cache")
+
+	// ErrExcessData - excess data was attempted to be written on cache.
+	ErrExcessData = errors.New("Attempted excess write on cache")
 )
 
 // buffer represents the in memory cache of a single entry.
@@ -108,7 +119,7 @@ func New(maxSize uint64, expiry time.Duration) (c *Cache, err error) {
 	// If gcpercent=100 and we're using 4M, we'll gc again
 	// when we get to 8M.
 	//
-	// Set this value to 20% if caching is enabled.
+	// Set this value to 40% if caching is enabled.
 	debug.SetGCPercent(defaultGCPercent)
 
 	// Max cache entry size - indicates the
@@ -122,6 +133,7 @@ func New(maxSize uint64, expiry time.Duration) (c *Cache, err error) {
 		}
 		return i
 	}()
+
 	c = &Cache{
 		onceGC:            sync.Once{},
 		maxSize:           maxSize,
@@ -129,6 +141,7 @@ func New(maxSize uint64, expiry time.Duration) (c *Cache, err error) {
 		entries:           make(map[string]*buffer),
 		expiry:            expiry,
 	}
+
 	// We have expiry start the janitor routine.
 	if expiry > 0 {
 		// Initialize a new stop GC channel.
@@ -137,17 +150,9 @@ func New(maxSize uint64, expiry time.Duration) (c *Cache, err error) {
 		// Start garbage collection routine to expire objects.
 		c.StartGC()
 	}
+
 	return c, nil
 }
-
-// ErrKeyNotFoundInCache - key not found in cache.
-var ErrKeyNotFoundInCache = errors.New("Key not found in cache")
-
-// ErrCacheFull - cache is full.
-var ErrCacheFull = errors.New("Not enough space in cache")
-
-// ErrExcessData - excess data was attempted to be written on cache.
-var ErrExcessData = errors.New("Attempted excess write on cache")
 
 // Create - validates if object size fits with in cache size limit and returns a io.WriteCloser
 // to which object contents can be written and finally Close()'d. During Close() we
@@ -169,18 +174,19 @@ func (c *Cache) Create(key string, size int64) (w io.WriteCloser, err error) {
 		return nil, ErrCacheFull
 	}
 
-	// Check if the incoming size is going to exceed
-	// the effective cache size, if yes return error
-	// instead.
 	c.mutex.Lock()
+	// Check if the incoming size is going to exceed the
+	// effective cache size, if yes return error instead.
 	if c.currentSize+valueLen > c.maxSize {
 		c.mutex.Unlock()
 		return nil, ErrCacheFull
 	}
-	// Change GC percent if the current cache usage
-	// is already 75% of the maximum allowed usage.
-	if c.currentSize > (75 * c.maxSize / 100) {
-		c.onceGC.Do(func() { debug.SetGCPercent(defaultGCPercent - 10) })
+
+	// Change GC percent if the current cache usage might
+	// become 75% of the maximum allowed usage, change
+	// the GC percent.
+	if c.currentSize+valueLen > (75 * c.maxSize / 100) {
+		c.onceGC.Do(func() { debug.SetGCPercent(defaultGCPercent - 25) })
 	}
 	c.mutex.Unlock()
 
@@ -200,11 +206,13 @@ func (c *Cache) Create(key string, size int64) (w io.WriteCloser, err error) {
 			// Full object not available hence do not save buf to object cache.
 			return io.ErrShortBuffer
 		}
+
 		// Full object available in buf, save it to cache.
 		c.entries[key] = &buffer{
 			value:        cbuf.buffer,
 			lastAccessed: time.Now().UTC(), // Save last accessed time.
 		}
+
 		// Account for the memory allocated above.
 		c.currentSize += uint64(size)
 		return nil
@@ -213,6 +221,8 @@ func (c *Cache) Create(key string, size int64) (w io.WriteCloser, err error) {
 	// Object contents that is written - cappedWriter.Write(data)
 	// will be accumulated in buf which implements io.Writer.
 	cbuf.onClose = onClose
+
+	// Capped writer.
 	return cbuf, nil
 }
 
@@ -228,11 +238,13 @@ func (c *Cache) Open(key string, objModTime time.Time) (io.ReaderAt, error) {
 	if !ok {
 		return nil, ErrKeyNotFoundInCache
 	}
+
 	// Check if buf is recent copy of the object on disk.
 	if buf.lastAccessed.Before(objModTime) {
 		c.delete(key)
 		return nil, ErrKeyNotFoundInCache
 	}
+
 	buf.lastAccessed = time.Now().UTC()
 	return bytes.NewReader(buf.value), nil
 }
