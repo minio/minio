@@ -36,6 +36,7 @@ func setCommonHeaders(w http.ResponseWriter) {
 	// Set unique request ID for each reply.
 	w.Header().Set(responseRequestIDKey, mustGetRequestID(UTCNow()))
 	w.Header().Set("Server", globalServerUserAgent)
+	w.Header().Set("X-Amz-Bucket-Region", serverConfig.GetRegion())
 	w.Header().Set("Accept-Ranges", "bytes")
 }
 

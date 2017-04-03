@@ -370,10 +370,17 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
-	// Validate if incoming location constraint is valid, reject
-	// requests which do not follow valid region requirements.
-	if s3Error := isValidLocationConstraint(r); s3Error != ErrNone {
+	// Parse incoming location constraint.
+	location, s3Error := parseLocationConstraint(r)
+	if s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
+		return
+	}
+
+	// Validate if location sent by the client is valid, reject
+	// requests which do not follow valid region requirements.
+	if !isValidLocation(location) {
+		writeErrorResponse(w, ErrInvalidRegion, r.URL)
 		return
 	}
 
