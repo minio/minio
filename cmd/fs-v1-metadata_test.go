@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"bytes"
-	"os"
 	"path/filepath"
 	"testing"
 )
@@ -72,18 +71,6 @@ func TestReadFSMetadata(t *testing.T) {
 	fsMeta := fsMetaV1{}
 	if _, err = fsMeta.ReadFrom(rlk.LockedFile); err != nil {
 		t.Fatal("Unexpected error ", err)
-	}
-
-	// Corrupted fs.json
-	file, err := os.OpenFile(preparePath(fsPath), os.O_APPEND|os.O_WRONLY, 0666)
-	if err != nil {
-		t.Fatal("Unexpected error ", err)
-	}
-	file.Write([]byte{'a'})
-	file.Close()
-	fsMeta = fsMetaV1{}
-	if _, err := fsMeta.ReadFrom(rlk.LockedFile); err == nil {
-		t.Fatal("Should fail", err)
 	}
 }
 
