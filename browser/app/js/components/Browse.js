@@ -469,11 +469,11 @@ export default class Browse extends React.Component {
                               </div>
                               <ul>
                                 <li>
-                                  Used:
+                                  <span>Used: </span>
                                   { humanize.filesize(total - free) }
                                 </li>
                                 <li className="pull-right">
-                                  Free:
+                                  <span>Free: </span>
                                   { humanize.filesize(total - used) }
                                 </li>
                               </ul>
