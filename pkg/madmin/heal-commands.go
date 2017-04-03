@@ -440,7 +440,7 @@ func (adm *AdminClient) HealBucket(bucket string, dryrun bool) error {
 }
 
 // HealUpload - Heal the given upload.
-func (adm *AdminClient) HealUpload(bucket, object, uploadID string, dryrun bool) (HealObjectResult, error) {
+func (adm *AdminClient) HealUpload(bucket, object, uploadID string, dryrun bool) (HealResult, error) {
 	// Construct query params.
 	queryVal := url.Values{}
 	queryVal.Set("heal", "")
@@ -466,40 +466,40 @@ func (adm *AdminClient) HealUpload(bucket, object, uploadID string, dryrun bool)
 
 	defer closeResponse(resp)
 	if err != nil {
-		return HealObjectResult{}, err
+		return HealResult{}, err
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return HealObjectResult{}, httpRespToErrorResponse(resp)
+		return HealResult{}, httpRespToErrorResponse(resp)
 	}
 
 	// Healing is not performed so heal object result is empty.
 	if dryrun {
-		return HealObjectResult{}, nil
+		return HealResult{}, nil
 	}
 
 	jsonBytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return HealObjectResult{}, err
+		return HealResult{}, err
 	}
 
-	healResult := HealObjectResult{}
+	healResult := HealResult{}
 	err = json.Unmarshal(jsonBytes, &healResult)
 	if err != nil {
-		return HealObjectResult{}, err
+		return HealResult{}, err
 	}
 
 	return healResult, nil
 }
 
-// HealObjectResult - represents result of heal-object admin API.
-type HealObjectResult struct {
+// HealResult - represents result of heal-object admin API.
+type HealResult struct {
 	HealedCount  int // number of disks that were healed.
 	OfflineCount int // number of disks that needed healing but were offline.
 }
 
 // HealObject - Heal the given object.
-func (adm *AdminClient) HealObject(bucket, object string, dryrun bool) (HealObjectResult, error) {
+func (adm *AdminClient) HealObject(bucket, object string, dryrun bool) (HealResult, error) {
 	// Construct query params.
 	queryVal := url.Values{}
 	queryVal.Set("heal", "")
@@ -522,27 +522,27 @@ func (adm *AdminClient) HealObject(bucket, object string, dryrun bool) (HealObje
 
 	defer closeResponse(resp)
 	if err != nil {
-		return HealObjectResult{}, err
+		return HealResult{}, err
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return HealObjectResult{}, httpRespToErrorResponse(resp)
+		return HealResult{}, httpRespToErrorResponse(resp)
 	}
 
 	// Healing is not performed so heal object result is empty.
 	if dryrun {
-		return HealObjectResult{}, nil
+		return HealResult{}, nil
 	}
 
 	jsonBytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return HealObjectResult{}, err
+		return HealResult{}, err
 	}
 
-	healResult := HealObjectResult{}
+	healResult := HealResult{}
 	err = json.Unmarshal(jsonBytes, &healResult)
 	if err != nil {
-		return HealObjectResult{}, err
+		return HealResult{}, err
 	}
 
 	return healResult, nil

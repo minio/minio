@@ -242,7 +242,7 @@ __Example__
 ```
 
 <a name="HealObject"></a>
-### HealObject(bucket, object string, isDryRun bool) (HealObjectResult, error)
+### HealObject(bucket, object string, isDryRun bool) (HealResult, error)
 If object is successfully healed returns nil, otherwise returns error indicating the reason for failure. If isDryRun is true, then the object is not healed, but heal object request is validated by the server. e.g, if the object exists, if object name is valid etc.
 
 __Example__
@@ -324,7 +324,7 @@ __Example__
 ```
 
 <a name="HealUpload"></a>
-### HealUpload(bucket, object, uploadID string, isDryRun bool) (HealObjectResult, error)
+### HealUpload(bucket, object, uploadID string, isDryRun bool) (HealResult, error)
 If upload is successfully healed returns nil, otherwise returns error indicating the reason for failure. If isDryRun is true, then the upload is not healed, but heal upload request is validated by the server. e.g, if the upload exists, if upload name is valid etc.
 
 ``` go
