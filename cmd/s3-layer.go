@@ -88,7 +88,7 @@ func s3ToObjectError(err error, params ...string) error {
 	return e
 }
 
-// s3Gateway - Implements gateway for S3 and Minio blob storage.
+// s3Gateway - Implements gateway for Minio and S3 compatible object storage servers.
 type s3Gateway struct {
 	Client     *minio.Core
 	anonClient *minio.Core
