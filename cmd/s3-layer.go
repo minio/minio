@@ -396,6 +396,7 @@ func (l *s3Gateway) NewMultipartUpload(bucket string, object string, metadata ma
 
 // CopyObjectPart - copy part of object to other bucket and object
 func (l *s3Gateway) CopyObjectPart(srcBucket string, srcObject string, destBucket string, destObject string, uploadID string, partID int, startOffset int64, length int64) (info PartInfo, err error) {
+	// FIXME: implement CopyObjectPart
 	return PartInfo{}, traceError(NotImplemented{})
 }
 
