@@ -141,13 +141,17 @@ func TestExtractSignedHeaders(t *testing.T) {
 	expectedContentSha256 := "1234abcd"
 	expectedTime := UTCNow().Format(iso8601Format)
 
+	r, err := http.NewRequest("GET", "http://localhost", nil)
+	if err != nil {
+		t.Fatal("Unable to create http.Request :", err)
+	}
 	// Creating input http header.
-	inputHeader := make(http.Header)
+	inputHeader := r.Header
 	inputHeader.Set(signedHeaders[0], expectedHost)
 	inputHeader.Set(signedHeaders[1], expectedContentSha256)
 	inputHeader.Set(signedHeaders[2], expectedTime)
 	// calling the function being tested.
-	extractedSignedHeaders, errCode := extractSignedHeaders(signedHeaders, inputHeader)
+	extractedSignedHeaders, errCode := extractSignedHeaders(signedHeaders, r)
 	if errCode != ErrNone {
 		t.Fatalf("Expected the APIErrorCode to be %d, but got %d", ErrNone, errCode)
 	}
@@ -179,7 +183,7 @@ func TestExtractSignedHeaders(t *testing.T) {
 	// case where the headers doesn't contain the one of the signed header in the signed headers list.
 	signedHeaders = append(signedHeaders, " X-Amz-Credential")
 	// expected to fail with `ErrUnsignedHeaders`.
-	_, errCode = extractSignedHeaders(signedHeaders, inputHeader)
+	_, errCode = extractSignedHeaders(signedHeaders, r)
 	if errCode != ErrUnsignedHeaders {
 		t.Fatalf("Expected the APIErrorCode to %d, but got %d", ErrUnsignedHeaders, errCode)
 	}
@@ -187,7 +191,7 @@ func TestExtractSignedHeaders(t *testing.T) {
 	// case where the list of signed headers doesn't contain the host field.
 	signedHeaders = signedHeaders[1:]
 	// expected to fail with `ErrUnsignedHeaders`.
-	_, errCode = extractSignedHeaders(signedHeaders, inputHeader)
+	_, errCode = extractSignedHeaders(signedHeaders, r)
 	if errCode != ErrUnsignedHeaders {
 		t.Fatalf("Expected the APIErrorCode to %d, but got %d", ErrUnsignedHeaders, errCode)
 	}

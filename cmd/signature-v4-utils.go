@@ -107,7 +107,8 @@ func getURLEncodedName(name string) string {
 }
 
 // extractSignedHeaders extract signed headers from Authorization header
-func extractSignedHeaders(signedHeaders []string, reqHeaders http.Header) (http.Header, APIErrorCode) {
+func extractSignedHeaders(signedHeaders []string, r *http.Request) (http.Header, APIErrorCode) {
+	reqHeaders := r.Header
 	// find whether "host" is part of list of signed headers.
 	// if not return ErrUnsignedHeaders. "host" is mandatory.
 	if !contains(signedHeaders, "host") {
@@ -143,6 +144,10 @@ func extractSignedHeaders(signedHeaders []string, reqHeaders http.Header) (http.
 			// but its necessary to make sure that the "host" field exists in the list of signed parameters,
 			// the check is done above.
 			if header == "host" {
+				continue
+			}
+			if header == "transfer-encoding" {
+				extractedSignedHeaders[header] = r.TransferEncoding
 				continue
 			}
 			// If not found continue, we will stop here.
