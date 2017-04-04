@@ -1586,3 +1586,29 @@ func TestListHealUploadsHandler(t *testing.T) {
 
 	}
 }
+
+// Test for newHealResult helper function.
+func TestNewHealResult(t *testing.T) {
+	testCases := []struct {
+		healedDisks  int
+		offlineDisks int
+		state        healState
+	}{
+		// 1. No disks healed, no disks offline.
+		{0, 0, healNone},
+		// 2. No disks healed, non-zero disks offline.
+		{0, 1, healNone},
+		// 3. Non-zero disks healed, no disks offline.
+		{1, 0, healOK},
+		// 4. Non-zero disks healed, non-zero disks offline.
+		{1, 1, healPartial},
+	}
+
+	for i, test := range testCases {
+		actual := newHealResult(test.healedDisks, test.offlineDisks)
+		if actual.State != test.state {
+			t.Errorf("Test %d: Expected %v but received %v", i+1,
+				test.state, actual.State)
+		}
+	}
+}

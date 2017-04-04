@@ -630,9 +630,40 @@ func isDryRun(qval url.Values) bool {
 	return false
 }
 
-type healObjectResult struct {
-	HealedCount  int
-	OfflineCount int
+// healResult - represents result of a heal operation like
+// heal-object, heal-upload.
+type healResult struct {
+	State healState `json:"state"`
+}
+
+// healState - different states of heal operation
+type healState int
+
+const (
+	// healNone - none of the disks healed
+	healNone healState = iota
+	// healPartial - some disks were healed, others were offline
+	healPartial
+	// healOK - all disks were healed
+	healOK
+)
+
+// newHealResult - returns healResult given number of disks healed and
+// number of disks offline
+func newHealResult(numHealedDisks, numOfflineDisks int) healResult {
+	var state healState
+	switch {
+	case numHealedDisks == 0:
+		state = healNone
+
+	case numOfflineDisks > 0:
+		state = healPartial
+
+	default:
+		state = healOK
+	}
+
+	return healResult{State: state}
 }
 
 // HealObjectHandler - POST /?heal&bucket=mybucket&object=myobject&dry-run
@@ -683,10 +714,7 @@ func (adminAPI adminAPIHandlers) HealObjectHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	jsonBytes, err := json.Marshal(healObjectResult{
-		HealedCount:  numHealedDisks,
-		OfflineCount: numOfflineDisks,
-	})
+	jsonBytes, err := json.Marshal(newHealResult(numHealedDisks, numOfflineDisks))
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
@@ -761,10 +789,7 @@ func (adminAPI adminAPIHandlers) HealUploadHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	jsonBytes, err := json.Marshal(healObjectResult{
-		HealedCount:  numHealedDisks,
-		OfflineCount: numOfflineDisks,
-	})
+	jsonBytes, err := json.Marshal(newHealResult(numHealedDisks, numOfflineDisks))
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return

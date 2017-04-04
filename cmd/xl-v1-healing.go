@@ -336,12 +336,19 @@ func healObject(storageDisks []StorageAPI, bucket string, object string, quorum 
 		return 0, 0, toObjectErr(aErr, bucket, object)
 	}
 
-	numAvailableDisks := 0
+	// Number of disks which don't serve data.
 	numOfflineDisks := 0
-	for index, disk := range availableDisks {
+	for index, disk := range storageDisks {
 		switch {
 		case disk == nil, errs[index] == errDiskNotFound:
 			numOfflineDisks++
+		}
+	}
+
+	// Number of disks which have all parts of the given object.
+	numAvailableDisks := 0
+	for _, disk := range availableDisks {
+		switch {
 		case disk != nil:
 			numAvailableDisks++
 		}
@@ -357,6 +364,8 @@ func healObject(storageDisks []StorageAPI, bucket string, object string, quorum 
 	outDatedDisks := outDatedDisks(storageDisks, availableDisks, errs, partsMetadata,
 		bucket, object)
 
+	// Number of disks that had outdated content of the given
+	// object and are online to be healed.
 	numHealedDisks := 0
 	for _, disk := range outDatedDisks {
 		if disk != nil {
