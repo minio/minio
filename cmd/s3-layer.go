@@ -265,7 +265,7 @@ func (l *s3Gateway) GetObjectInfo(bucket string, object string) (objInfo ObjectI
 	return fromMinioClientObjectInfo(bucket, oi), nil
 }
 
-// PutObject - Create a new blob with the incoming data,
+// PutObject - Create a new object with the incoming data,
 func (l *s3Gateway) PutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (ObjectInfo, error) {
 	var sha256Writer hash.Hash
 
