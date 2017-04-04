@@ -1346,6 +1346,11 @@ func TestToAdminAPIErr(t *testing.T) {
 }
 
 func TestWriteSetConfigResponse(t *testing.T) {
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer removeAll(rootPath)
 	testCases := []struct {
 		status bool
 		errs   []error

@@ -1,5 +1,7 @@
+// +build !linux
+
 /*
- * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
+ * Minio Cloud Storage, (C) 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,17 +16,4 @@
  * limitations under the License.
  */
 
-package sys
-
-import "testing"
-
-// Test get stats result.
-func TestGetStats(t *testing.T) {
-	stats, err := GetStats()
-	if err != nil {
-		t.Errorf("Tests: Expected `nil`, Got %s", err)
-	}
-	if stats.TotalRAM == 0 {
-		t.Errorf("Tests: Expected `n > 0`, Got %d", stats.TotalRAM)
-	}
-}
+package cgroup
