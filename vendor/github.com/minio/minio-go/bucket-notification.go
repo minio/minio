@@ -28,10 +28,13 @@ type NotificationEventType string
 // 	http://docs.aws.amazon.com/AmazonS3/latest/dev/NotificationHowTo.html#notification-how-to-event-types-and-destinations
 const (
 	ObjectCreatedAll                     NotificationEventType = "s3:ObjectCreated:*"
-	ObjectCreatePut                                            = "s3:ObjectCreated:Put"
+	ObjectCreatedPut                                           = "s3:ObjectCreated:Put"
 	ObjectCreatedPost                                          = "s3:ObjectCreated:Post"
 	ObjectCreatedCopy                                          = "s3:ObjectCreated:Copy"
-	ObjectCreatedCompleteMultipartUpload                       = "sh:ObjectCreated:CompleteMultipartUpload"
+	ObjectCreatedCompleteMultipartUpload                       = "s3:ObjectCreated:CompleteMultipartUpload"
+	ObjectAccessedGet                                          = "s3:ObjectAccessed:Get"
+	ObjectAccessedHead                                         = "s3:ObjectAccessed:Head"
+	ObjectAccessedAll                                          = "s3:ObjectAccessed:*"
 	ObjectRemovedAll                                           = "s3:ObjectRemoved:*"
 	ObjectRemovedDelete                                        = "s3:ObjectRemoved:Delete"
 	ObjectRemovedDeleteMarkerCreated                           = "s3:ObjectRemoved:DeleteMarkerCreated"

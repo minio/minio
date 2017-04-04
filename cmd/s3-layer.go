@@ -269,15 +269,22 @@ func (l *s3Gateway) GetObjectInfo(bucket string, object string) (objInfo ObjectI
 func (l *s3Gateway) PutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (ObjectInfo, error) {
 	var sha256Writer hash.Hash
 
+	sha256sumBytes := []byte{}
+
 	teeReader := data
-	if sha256sum != "" {
+	if sha256sum == "" {
+	} else if b, err := hex.DecodeString(sha256sum); err != nil {
+		return ObjectInfo{}, s3ToObjectError(traceError(err), bucket, object)
+	} else {
+		sha256sumBytes = b
+
 		sha256Writer = sha256.New()
 		teeReader = io.TeeReader(data, sha256Writer)
 	}
 
 	delete(metadata, "md5Sum")
 
-	err := l.Client.PutObject(bucket, object, size, teeReader, toMinioClientMetadata(metadata))
+	oi, err := l.Client.PutObject(bucket, object, size, teeReader, nil, sha256sumBytes, toMinioClientMetadata(metadata))
 	if err != nil {
 		return ObjectInfo{}, s3ToObjectError(traceError(err), bucket, object)
 	}
@@ -290,12 +297,7 @@ func (l *s3Gateway) PutObject(bucket string, object string, size int64, data io.
 		}
 	}
 
-	oi, err := l.GetObjectInfo(bucket, object)
-	if err != nil {
-		return ObjectInfo{}, s3ToObjectError(traceError(err), bucket, object)
-	}
-
-	return oi, nil
+	return fromMinioClientObjectInfo(bucket, oi), nil
 }
 
 // CopyObject - Copies a blob from source container to destination container.

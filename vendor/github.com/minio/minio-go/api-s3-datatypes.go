@@ -42,7 +42,7 @@ type commonPrefix struct {
 }
 
 // listBucketResult container for listObjects V2 response.
-type listBucketV2Result struct {
+type ListBucketV2Result struct {
 	// A response can contain CommonPrefixes only if you have
 	// specified a delimiter.
 	CommonPrefixes []commonPrefix

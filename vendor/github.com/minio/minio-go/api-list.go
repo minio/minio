@@ -168,14 +168,14 @@ func (c Client) ListObjectsV2(bucketName, objectPrefix string, recursive bool, d
 // ?delimiter - A delimiter is a character you use to group keys.
 // ?prefix - Limits the response to keys that begin with the specified prefix.
 // ?max-keys - Sets the maximum number of keys returned in the response body.
-func (c Client) listObjectsV2Query(bucketName, objectPrefix, continuationToken string, fetchOwner bool, delimiter string, maxkeys int) (listBucketV2Result, error) {
+func (c Client) listObjectsV2Query(bucketName, objectPrefix, continuationToken string, fetchOwner bool, delimiter string, maxkeys int) (ListBucketV2Result, error) {
 	// Validate bucket name.
 	if err := isValidBucketName(bucketName); err != nil {
-		return listBucketV2Result{}, err
+		return ListBucketV2Result{}, err
 	}
 	// Validate object prefix.
 	if err := isValidObjectPrefix(objectPrefix); err != nil {
-		return listBucketV2Result{}, err
+		return ListBucketV2Result{}, err
 	}
 	// Get resources properly escaped and lined up before
 	// using them in http request.
@@ -216,16 +216,16 @@ func (c Client) listObjectsV2Query(bucketName, objectPrefix, continuationToken s
 	})
 	defer closeResponse(resp)
 	if err != nil {
-		return listBucketV2Result{}, err
+		return ListBucketV2Result{}, err
 	}
 	if resp != nil {
 		if resp.StatusCode != http.StatusOK {
-			return listBucketV2Result{}, httpRespToErrorResponse(resp, bucketName, "")
+			return ListBucketV2Result{}, httpRespToErrorResponse(resp, bucketName, "")
 		}
 	}
 
 	// Decode listBuckets XML.
-	listBucketResult := listBucketV2Result{}
+	listBucketResult := ListBucketV2Result{}
 	err = xmlDecoder(resp.Body, &listBucketResult)
 	if err != nil {
 		return listBucketResult, err

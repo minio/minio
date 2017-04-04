@@ -39,10 +39,14 @@ func (c Core) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int)
 	return c.listObjectsQuery(bucket, prefix, marker, delimiter, maxKeys)
 }
 
+// ListObjectsV2 - List the objects.
+func (c Core) ListObjectsV2(bucketName, objectPrefix, continuationToken string, fetchOwner bool, delimiter string, maxkeys int) (ListBucketV2Result, error) {
+	return c.listObjectsV2Query(bucketName, objectPrefix, continuationToken, fetchOwner, delimiter, maxkeys)
+}
+
 // PutObject - Upload object. Uploads using single PUT call.
-func (c Core) PutObject(bucket, object string, size int64, data io.Reader, metadata map[string][]string) error {
-	_, err := c.putObjectSingle(bucket, object, data, size, metadata, nil)
-	return err
+func (c Core) PutObject(bucket, object string, size int64, data io.Reader, md5Sum, sha256Sum []byte, metadata map[string][]string) (ObjectInfo, error) {
+	return c.putObjectDo(bucket, object, data, md5Sum, sha256Sum, size, metadata)
 }
 
 // NewMultipartUpload - Initiates new multipart upload and returns the new uploaID.
@@ -57,8 +61,8 @@ func (c Core) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarker, de
 }
 
 // PutObjectPart - Upload an object part.
-func (c Core) PutObjectPart(bucket, object, uploadID string, partID int, size int64, data io.Reader, md5Hex, sha256sum []byte) (ObjectPart, error) {
-	return c.uploadPart(bucket, object, uploadID, data, partID, md5Hex, sha256sum, size)
+func (c Core) PutObjectPart(bucket, object, uploadID string, partID int, size int64, data io.Reader, md5Sum, sha256Sum []byte) (ObjectPart, error) {
+	return c.uploadPart(bucket, object, uploadID, data, partID, md5Sum, sha256Sum, size)
 }
 
 // ListObjectParts - List uploaded parts of an incomplete upload.

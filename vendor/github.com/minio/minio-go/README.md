@@ -23,9 +23,7 @@ This document assumes that you have a working [Go development environment](https
 ## Download from Github
 
 ```sh
-
 go get -u github.com/minio/minio-go
-
 ```
 ## Initialize Minio Client
 
@@ -41,7 +39,6 @@ Minio client requires the following four parameters specified to connect to an A
 
 
 ```go
-
 package main
 
 import (
@@ -62,8 +59,6 @@ func main() {
 	}
 
 	log.Println("%v", minioClient) // minioClient is now setup
-
-
 ```
 
 ## Quick Start Example - File Uploader
@@ -131,14 +126,12 @@ func main() {
 #### Run FileUploader
 
 ```sh
-
 go run file-uploader.go
 2016/08/13 17:03:28 Successfully created mymusic 
 2016/08/13 17:03:40 Successfully uploaded golden-oldies.zip of size 16253413
 
 mc ls play/mymusic/
 [2016-05-27 16:02:16 PDT]  17MiB golden-oldies.zip
-
 ```
 
 ## API Reference

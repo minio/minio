@@ -74,6 +74,9 @@ type Client struct {
 	// S3 specific accelerated endpoint.
 	s3AccelerateEndpoint string
 
+	// Region endpoint
+	region string
+
 	// Random seed.
 	random *rand.Rand
 }
@@ -100,6 +103,7 @@ func NewV2(endpoint string, accessKeyID, secretAccessKey string, secure bool) (*
 	if err != nil {
 		return nil, err
 	}
+
 	// Set to use signature version '2'.
 	clnt.signature = SignatureV2
 	return clnt, nil
@@ -112,26 +116,40 @@ func NewV4(endpoint string, accessKeyID, secretAccessKey string, secure bool) (*
 	if err != nil {
 		return nil, err
 	}
+
 	// Set to use signature version '4'.
 	clnt.signature = SignatureV4
 	return clnt, nil
 }
 
-// New - instantiate minio client Client, adds automatic verification
-// of signature.
-func New(endpoint string, accessKeyID, secretAccessKey string, secure bool) (*Client, error) {
+// New - instantiate minio client Client, adds automatic verification of signature.
+func New(endpoint, accessKeyID, secretAccessKey string, secure bool) (*Client, error) {
+	return NewWithRegion(endpoint, accessKeyID, secretAccessKey, secure, "")
+}
+
+// NewWithRegion - instantiate minio client, with region configured. Unlike New(),
+// NewWithRegion avoids bucket-location lookup operations and it is slightly faster.
+// Use this function when if your application deals with single region.
+func NewWithRegion(endpoint, accessKeyID, secretAccessKey string, secure bool, region string) (*Client, error) {
 	clnt, err := privateNew(endpoint, accessKeyID, secretAccessKey, secure)
 	if err != nil {
 		return nil, err
 	}
+
 	// Google cloud storage should be set to signature V2, force it if not.
 	if s3utils.IsGoogleEndpoint(clnt.endpointURL) {
 		clnt.signature = SignatureV2
 	}
+
 	// If Amazon S3 set to signature v2.n
 	if s3utils.IsAmazonEndpoint(clnt.endpointURL) {
 		clnt.signature = SignatureV4
 	}
+
+	// Sets custom region, if region is empty bucket location cache is used automatically.
+	clnt.region = region
+
+	// Success..
 	return clnt, nil
 }
 
@@ -141,8 +159,7 @@ type lockedRandSource struct {
 	src rand.Source
 }
 
-// Int63 returns a non-negative pseudo-random 63-bit integer as an
-// int64.
+// Int63 returns a non-negative pseudo-random 63-bit integer as an int64.
 func (r *lockedRandSource) Int63() (n int64) {
 	r.lk.Lock()
 	n = r.src.Int63()
