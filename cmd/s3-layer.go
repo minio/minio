@@ -198,6 +198,36 @@ func (l *s3Gateway) ListObjects(bucket string, prefix string, marker string, del
 	return fromMinioClientListBucketResult(bucket, result), nil
 }
 
+// ListObjectsV2 - lists all blobs in S3 bucket filtered by prefix
+func (l *s3Gateway) ListObjectsV2(bucket, prefix, continuationToken string, fetchOwner bool, delimiter string, maxKeys int) (ListObjectsV2Info, error) {
+	result, err := l.Client.ListObjectsV2(bucket, prefix, continuationToken, fetchOwner, delimiter, maxKeys)
+	if err != nil {
+		return ListObjectsV2Info{}, s3ToObjectError(traceError(err), bucket)
+	}
+
+	return fromMinioClientListBucketV2Result(bucket, result), nil
+}
+
+// fromMinioClientListBucketResult - convert minio ListBucketResult to ListObjectsInfo
+func fromMinioClientListBucketV2Result(bucket string, result minio.ListBucketV2Result) ListObjectsV2Info {
+	objects := make([]ObjectInfo, len(result.Contents))
+
+	for i, oi := range result.Contents {
+		objects[i] = fromMinioClientObjectInfo(bucket, oi)
+	}
+
+	return ListObjectsV2Info{
+		IsTruncated: result.IsTruncated,
+		Prefixes: []string{
+			result.Prefix,
+		},
+		Objects: objects,
+
+		ContinuationToken:     result.ContinuationToken,
+		NextContinuationToken: result.NextContinuationToken,
+	}
+}
+
 // fromMinioClientListBucketResult - convert minio ListBucketResult to ListObjectsInfo
 func fromMinioClientListBucketResult(bucket string, result minio.ListBucketResult) ListObjectsInfo {
 	objects := make([]ObjectInfo, len(result.Contents))
