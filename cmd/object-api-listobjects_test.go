@@ -81,7 +81,7 @@ func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
 		{
 			IsTruncated: false,
 			Objects: []ObjectInfo{
-				{Name: "Asia-maps.png", ContentType: "image/png"},
+				{Name: "Asia-maps.png"},
 				{Name: "Asia/India/India-summer-photos-1"},
 				{Name: "Asia/India/Karnataka/Bangalore/Koramangala/pics"},
 				{Name: "newPrefix0"},
@@ -97,7 +97,7 @@ func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
 		{
 			IsTruncated: true,
 			Objects: []ObjectInfo{
-				{Name: "Asia-maps.png", ContentType: "image/png"},
+				{Name: "Asia-maps.png"},
 				{Name: "Asia/India/India-summer-photos-1"},
 				{Name: "Asia/India/Karnataka/Bangalore/Koramangala/pics"},
 				{Name: "newPrefix0"},
@@ -109,7 +109,7 @@ func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
 		{
 			IsTruncated: true,
 			Objects: []ObjectInfo{
-				{Name: "Asia-maps.png", ContentType: "image/png"},
+				{Name: "Asia-maps.png"},
 				{Name: "Asia/India/India-summer-photos-1"},
 				{Name: "Asia/India/Karnataka/Bangalore/Koramangala/pics"},
 				{Name: "newPrefix0"},
@@ -120,7 +120,7 @@ func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
 		{
 			IsTruncated: true,
 			Objects: []ObjectInfo{
-				{Name: "Asia-maps.png", ContentType: "image/png"},
+				{Name: "Asia-maps.png"},
 				{Name: "Asia/India/India-summer-photos-1"},
 				{Name: "Asia/India/Karnataka/Bangalore/Koramangala/pics"},
 			},
@@ -131,7 +131,7 @@ func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
 		{
 			IsTruncated: true,
 			Objects: []ObjectInfo{
-				{Name: "Asia-maps.png", ContentType: "image/png"},
+				{Name: "Asia-maps.png"},
 			},
 		},
 		// ListObjectsResult-5.
@@ -234,7 +234,7 @@ func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
 		{
 			IsTruncated: false,
 			Objects: []ObjectInfo{
-				{Name: "Asia-maps.png", ContentType: "image/png"},
+				{Name: "Asia-maps.png"},
 				{Name: "Asia/India/India-summer-photos-1"},
 				{Name: "Asia/India/Karnataka/Bangalore/Koramangala/pics"},
 				{Name: "newPrefix0"},
@@ -343,7 +343,7 @@ func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
 		{
 			IsTruncated: false,
 			Objects: []ObjectInfo{
-				{Name: "Asia-maps.png", ContentType: "image/png"},
+				{Name: "Asia-maps.png"},
 				{Name: "Asia/India/India-summer-photos-1"},
 				{Name: "Asia/India/Karnataka/Bangalore/Koramangala/pics"},
 			},
@@ -354,7 +354,7 @@ func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
 		{
 			IsTruncated: false,
 			Objects: []ObjectInfo{
-				{Name: "Asia-maps.png", ContentType: "image/png"},
+				{Name: "Asia-maps.png"},
 			},
 		},
 		// ListObjectsResult-26.
@@ -549,8 +549,8 @@ func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
 				if testCase.result.Objects[j].Name != result.Objects[j].Name {
 					t.Errorf("Test %d: %s: Expected object name to be \"%s\", but found \"%s\" instead", i+1, instanceType, testCase.result.Objects[j].Name, result.Objects[j].Name)
 				}
-				if testCase.result.Objects[j].ContentType != result.Objects[j].ContentType {
-					t.Errorf("Test %d: %s: Expected object contentType to be \"%s\", but found \"%s\" instead", i+1, instanceType, testCase.result.Objects[j].ContentType, result.Objects[j].ContentType)
+				if result.Objects[j].MD5Sum == "" {
+					t.Errorf("Test %d: %s: Expected md5sum to be not empty, but found empty instead", i+1, instanceType)
 				}
 
 			}

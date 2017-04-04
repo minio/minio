@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sort"
@@ -687,6 +688,41 @@ func (fs fsObjects) listDirFactory(isLeaf isLeafFunc) listDirFunc {
 	return listDir
 }
 
+// getObjectETag is a helper function, which returns only the md5sum
+// of the file on the disk.
+func (fs fsObjects) getObjectETag(bucket, entry string) (string, error) {
+	fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, entry, fsMetaJSONFile)
+
+	// Read `fs.json` to perhaps contend with
+	// parallel Put() operations.
+	rlk, err := fs.rwPool.Open(fsMetaPath)
+	// Ignore if `fs.json` is not available, this is true for pre-existing data.
+	if err != nil && err != errFileNotFound {
+		return "", toObjectErr(traceError(err), bucket, entry)
+	}
+
+	// If file is not found, we don't need to proceed forward.
+	if err == errFileNotFound {
+		return "", nil
+	}
+
+	// Read from fs metadata only if it exists.
+	defer fs.rwPool.Close(fsMetaPath)
+
+	fsMetaBuf, err := ioutil.ReadAll(rlk.LockedFile)
+	if err != nil {
+		// `fs.json` can be empty due to previously failed
+		// PutObject() transaction, if we arrive at such
+		// a situation we just ignore and continue.
+		if errorCause(err) != io.EOF {
+			return "", toObjectErr(err, bucket, entry)
+		}
+	}
+
+	fsMetaMap := parseFSMetaMap(fsMetaBuf)
+	return fsMetaMap["md5Sum"], nil
+}
+
 // ListObjects - list all objects at prefix upto maxKeys., optionally delimited by '/'. Maintains the list pool
 // state for future re-entrant list requests.
 func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
@@ -731,14 +767,33 @@ func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 			objInfo.IsDir = true
 			return
 		}
+
+		// Protect reading `fs.json`.
+		objectLock := globalNSMutex.NewNSLock(bucket, entry)
+		objectLock.RLock()
+		var md5Sum string
+		md5Sum, err = fs.getObjectETag(bucket, entry)
+		objectLock.RUnlock()
+		if err != nil {
+			return ObjectInfo{}, err
+		}
+
 		// Stat the file to get file size.
 		var fi os.FileInfo
 		fi, err = fsStatFile(pathJoin(fs.fsPath, bucket, entry))
 		if err != nil {
 			return ObjectInfo{}, toObjectErr(err, bucket, entry)
 		}
-		fsMeta := fsMetaV1{}
-		return fsMeta.ToObjectInfo(bucket, entry, fi), nil
+
+		// Success.
+		return ObjectInfo{
+			Name:    entry,
+			Bucket:  bucket,
+			Size:    fi.Size(),
+			ModTime: fi.ModTime(),
+			IsDir:   fi.IsDir(),
+			MD5Sum:  md5Sum,
+		}, nil
 	}
 
 	heal := false // true only for xl.ListObjectsHeal()
