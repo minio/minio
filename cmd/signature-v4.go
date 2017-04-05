@@ -235,7 +235,7 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 	}
 
 	// Extract all the signed headers along with its values.
-	extractedSignedHeaders, errCode := extractSignedHeaders(pSignValues.SignedHeaders, req.Header)
+	extractedSignedHeaders, errCode := extractSignedHeaders(pSignValues.SignedHeaders, r)
 	if errCode != ErrNone {
 		return errCode
 	}
@@ -360,7 +360,7 @@ func doesSignatureMatch(hashedPayload string, r *http.Request, region string) AP
 	}
 
 	// Extract all the signed headers along with its values.
-	extractedSignedHeaders, errCode := extractSignedHeaders(signV4Values.SignedHeaders, header)
+	extractedSignedHeaders, errCode := extractSignedHeaders(signV4Values.SignedHeaders, r)
 	if errCode != ErrNone {
 		return errCode
 	}

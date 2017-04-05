@@ -97,7 +97,7 @@ func calculateSeedSignature(r *http.Request) (signature string, date time.Time, 
 	}
 
 	// Extract all the signed headers along with its values.
-	extractedSignedHeaders, errCode := extractSignedHeaders(signV4Values.SignedHeaders, req.Header)
+	extractedSignedHeaders, errCode := extractSignedHeaders(signV4Values.SignedHeaders, r)
 	if errCode != ErrNone {
 		return "", time.Time{}, errCode
 	}
