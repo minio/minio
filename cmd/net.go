@@ -46,7 +46,6 @@ func splitHostPort(hostPort string) (host, port string, err error) {
 
 		host = hostPort
 		port = defaultPort
-		err = nil
 	}
 
 	p, err := strconv.Atoi(port)
@@ -56,7 +55,7 @@ func splitHostPort(hostPort string) (host, port string, err error) {
 		return "", "", fmt.Errorf("port number must be between 1 to 65536")
 	}
 
-	return host, port, err
+	return host, port, nil
 }
 
 func mustSplitHostPort(hostPort string) (host, port string) {
@@ -177,8 +176,8 @@ func CheckLocalServerAddr(serverAddr string) error {
 	p, err := strconv.Atoi(port)
 	if err != nil {
 		return fmt.Errorf("invalid port number")
-	} else if p < 1 {
-		return fmt.Errorf("port number should be greater than zero")
+	} else if p < 1 || p > 65536 {
+		return fmt.Errorf("port number must be between 1 to 65536")
 	}
 
 	if host != "" {

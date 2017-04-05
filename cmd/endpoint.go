@@ -22,6 +22,7 @@ import (
 	"net/url"
 	"path"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/minio/minio-go/pkg/set"
@@ -98,10 +99,23 @@ func NewEndpoint(arg string) (Endpoint, error) {
 			return Endpoint{}, fmt.Errorf("invalid URL endpoint format")
 		}
 
-		host, port, err := splitHostPort(u.Host)
+		host, port, err := net.SplitHostPort(u.Host)
 		if err != nil {
-			return Endpoint{}, fmt.Errorf("invalid URL endpoint format: %s", err)
+			if !strings.Contains(err.Error(), "missing port in address") {
+				return Endpoint{}, fmt.Errorf("invalid URL endpoint format: %s", err)
+			}
+
+			host = u.Host
+		} else {
+			var p int
+			p, err = strconv.Atoi(port)
+			if err != nil {
+				return Endpoint{}, fmt.Errorf("invalid URL endpoint format: invalid port number")
+			} else if p < 1 || p > 65536 {
+				return Endpoint{}, fmt.Errorf("invalid URL endpoint format: port number must be between 1 to 65536")
+			}
 		}
+
 		if host == "" {
 			return Endpoint{}, fmt.Errorf("invalid URL endpoint format: empty host name")
 		}
@@ -121,7 +135,6 @@ func NewEndpoint(arg string) (Endpoint, error) {
 
 		// If intersection of two IP sets is not empty, then the host is local host.
 		isLocal = !localIP4.Intersection(hostIPs).IsEmpty()
-		u.Host = net.JoinHostPort(host, port)
 	} else {
 		u = &url.URL{Path: path.Clean(arg)}
 		isLocal = true
@@ -219,30 +232,27 @@ func CreateEndpoints(serverAddr string, args ...string) (string, EndpointList, S
 	var err error
 
 	// Check whether serverAddr is valid for this host.
-	isServerAddrEmpty := (serverAddr == "")
-	if !isServerAddrEmpty {
-		if err = CheckLocalServerAddr(serverAddr); err != nil {
-			return serverAddr, endpoints, setupType, err
-		}
+	if err = CheckLocalServerAddr(serverAddr); err != nil {
+		return serverAddr, endpoints, setupType, err
 	}
 
-	// Normalize server address.
-	serverAddrHost, serverAddrPort := mustSplitHostPort(serverAddr)
-	serverAddr = net.JoinHostPort(serverAddrHost, serverAddrPort)
+	_, serverAddrPort := mustSplitHostPort(serverAddr)
 
 	// For single arg, return FS setup.
 	if len(args) == 1 {
 		var endpoint Endpoint
-		if endpoint, err = NewEndpoint(args[0]); err == nil {
-			if endpoint.Type() == PathEndpointType {
-				endpoints = append(endpoints, endpoint)
-				setupType = FSSetupType
-			} else {
-				err = fmt.Errorf("use path style endpoint for FS setup")
-			}
+		endpoint, err = NewEndpoint(args[0])
+		if err != nil {
+			return serverAddr, endpoints, setupType, err
 		}
 
-		return serverAddr, endpoints, setupType, err
+		if endpoint.Type() != PathEndpointType {
+			return serverAddr, endpoints, setupType, fmt.Errorf("use path style endpoint for FS setup")
+		}
+
+		endpoints = append(endpoints, endpoint)
+		setupType = FSSetupType
+		return serverAddr, endpoints, setupType, nil
 	}
 
 	// Convert args to endpoints
@@ -257,153 +267,89 @@ func CreateEndpoints(serverAddr string, args ...string) (string, EndpointList, S
 	}
 
 	// Here all endpoints are URL style.
+	endpointPathSet := set.NewStringSet()
+	localEndpointCount := 0
+	localServerAddrSet := set.NewStringSet()
+	localPortSet := set.NewStringSet()
+	for _, endpoint := range endpoints {
+		endpointPathSet.Add(endpoint.Path)
+		if endpoint.IsLocal {
+			localServerAddrSet.Add(endpoint.Host)
 
-	// Error out if same path is exported by different ports on same server.
+			var port string
+			_, port, err = net.SplitHostPort(endpoint.Host)
+			if err != nil {
+				port = serverAddrPort
+			}
+
+			localPortSet.Add(port)
+
+			localEndpointCount++
+		}
+	}
+
+	// No local endpoint found.
+	if localEndpointCount == 0 {
+		return serverAddr, endpoints, setupType, fmt.Errorf("no endpoint found for this host")
+	}
+
+	// Check whether same path is not used in endpoints of a host.
 	{
-		hostPathMap := make(map[string]set.StringSet)
+		pathIPMap := make(map[string]set.StringSet)
 		for _, endpoint := range endpoints {
-			hostPort := endpoint.Host
-			path := endpoint.Path
-			host, _ := mustSplitHostPort(hostPort)
-
-			pathSet, ok := hostPathMap[host]
-			if !ok {
-				pathSet = set.NewStringSet()
-			}
-
-			if pathSet.Contains(path) {
-				return serverAddr, endpoints, setupType, fmt.Errorf("same path can not be served from different port")
-			}
-
-			pathSet.Add(path)
-			hostPathMap[host] = pathSet
-		}
-	}
-
-	// Normalized args is used below if URL style endpoint is used for XL.
-	normArgs := make([]string, len(args))
-
-	// Get unique hosts.
-	var uniqueHosts []string
-	{
-		sset := set.NewStringSet()
-		for i, endpoint := range endpoints {
-			sset.Add(endpoint.Host)
-			normArgs[i] = endpoint.Path
-		}
-		uniqueHosts = sset.ToSlice()
-	}
-
-	// URL style endpoints are used for XL.
-	if len(uniqueHosts) == 1 {
-		endpoint := endpoints[0]
-		if !endpoint.IsLocal {
-			err = fmt.Errorf("no endpoint found for this host")
-			return serverAddr, endpoints, setupType, err
-		}
-
-		// Normalize endpoint's host ie endpoint's host might not have port, if so use default port.
-		endpointHost := uniqueHosts[0]
-		portFound := true
-		host, port, err := net.SplitHostPort(endpointHost)
-		if err != nil {
-			if !strings.Contains(err.Error(), "missing port in address") {
-				// This should not happen as we already constructed good endpoint.
-				fatalIf(err, "unexpected error when splitting endpoint's host port %s", endpointHost)
-			}
-
-			portFound = false
-			port = defaultPort
-			endpointHost = net.JoinHostPort(host, port)
-		}
-
-		if isServerAddrEmpty {
-			serverAddr = endpointHost
-		} else if portFound {
-			// As serverAddr is given, serverAddr and endpoint should have same port.
-			if serverAddrPort != port {
-				return serverAddr, endpoints, setupType, fmt.Errorf("server address and endpoint have different ports")
-			}
-		}
-
-		endpoints, _ = NewEndpointList(normArgs...)
-		setupType = XLSetupType
-		return serverAddr, endpoints, setupType, nil
-	}
-
-	isXLSetup := true
-	localhostPort := ""
-	var uniqueLocalHosts []string
-	{
-		uniqueLocalHostSet := set.NewStringSet()
-		for i, endpoint := range endpoints {
-			if endpoint.IsLocal {
-				uniqueLocalHostSet.Add(endpoint.Host)
-
-				_, port := mustSplitHostPort(endpoint.Host)
-				if i == 0 {
-					localhostPort = port
-				} else if localhostPort != port {
-					// Eventhough this endpoint is for local host, but previously
-					// assigned port of localhost and this endpoint's port is different.
-					// This means that not all endpoints are local ie not a XL setup.
-					isXLSetup = false
+			host, _ := mustSplitHostPort(endpoint.Host)
+			hostIPSet, _ := getHostIP4(host)
+			if IPSet, ok := pathIPMap[endpoint.Path]; ok {
+				if !IPSet.Intersection(hostIPSet).IsEmpty() {
+					err = fmt.Errorf("path '%s' can not be served from different address/port", endpoint.Path)
+					return serverAddr, endpoints, setupType, err
 				}
 			} else {
-				isXLSetup = false
+				pathIPMap[endpoint.Path] = hostIPSet
 			}
 		}
-
-		// Error out if no endpoint for this server.
-		if uniqueLocalHostSet.IsEmpty() {
-			return serverAddr, endpoints, setupType, fmt.Errorf("no endpoint found for this host")
-		}
-
-		uniqueLocalHosts = uniqueLocalHostSet.ToSlice()
 	}
 
-	if isXLSetup {
-		// TODO: In this case, we bind to 0.0.0.0 ie to all interfaces.
-		// The actual way to do is bind to only IPs in uniqueLocalHosts.
-		endpoints, _ = NewEndpointList(normArgs...)
-		serverAddr = net.JoinHostPort("", localhostPort)
+	// Check whether serverAddrPort matches at least in one of port used in local endpoints.
+	{
+		if !localPortSet.Contains(serverAddrPort) {
+			if len(localPortSet) > 1 {
+				err = fmt.Errorf("port number in server address must match with one of the port in local endpoints")
+			} else {
+				err = fmt.Errorf("server address and local endpoint have different ports")
+			}
+
+			return serverAddr, endpoints, setupType, err
+		}
+	}
+
+	// If all endpoints are pointing to local host and having same port number, then this is XL setup using URL style endpoints.
+	if len(endpoints) == localEndpointCount && len(localPortSet) == 1 {
+		if len(localServerAddrSet) > 1 {
+			// TODO: Eventhough all endpoints are local, the local host is referred by different IP/name.
+			// eg '172.0.0.1', 'localhost' and 'mylocalhostname' point to same local host.
+			//
+			// In this case, we bind to 0.0.0.0 ie to all interfaces.
+			// The actual way to do is bind to only IPs in uniqueLocalHosts.
+			serverAddr = net.JoinHostPort("", serverAddrPort)
+		}
+
+		endpointPaths := endpointPathSet.ToSlice()
+		endpoints, _ = NewEndpointList(endpointPaths...)
 		setupType = XLSetupType
 		return serverAddr, endpoints, setupType, nil
 	}
 
-	// This is Distribute setup.
-	if len(uniqueLocalHosts) == 1 {
-		host, port := mustSplitHostPort(uniqueLocalHosts[0])
-		if isServerAddrEmpty {
-			serverAddr = net.JoinHostPort(host, port)
-		} else {
-			// As serverAddr is given, serverAddr and endpoint should have same port.
-			if serverAddrPort != port {
-				return serverAddr, endpoints, setupType, fmt.Errorf("server address and endpoint have different ports")
-			}
-		}
-	} else {
-		// If length of uniqueLocalHosts is more than one,
-		// server address should be present with same port with the same or empty hostname.
-		if isServerAddrEmpty {
-			return serverAddr, endpoints, setupType, fmt.Errorf("for more than one endpoints for local host with different port, server address must be provided")
-		}
-
-		// Check if port in server address matches to port in at least one unique local hosts.
-		found := false
-		for _, host := range uniqueLocalHosts {
-			_, port := mustSplitHostPort(host)
-			if serverAddrPort == port {
-				found = true
-				break
-			}
-		}
-
-		if !found {
-			return serverAddr, endpoints, setupType, fmt.Errorf("port in server address does not match with local endpoints")
+	// Add missing port in all endpoints.
+	for i := range endpoints {
+		_, _, err := net.SplitHostPort(endpoints[i].Host)
+		if err != nil {
+			endpoints[i].Host = net.JoinHostPort(endpoints[i].Host, serverAddrPort)
 		}
 	}
 
+	// This is DistXL setup by using different ports in two or more local endpoints.
+	// This is DistXL setup.
 	setupType = DistXLSetupType
 	return serverAddr, endpoints, setupType, nil
 }

@@ -140,9 +140,7 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 
 	// Server address.
 	serverAddr := ctx.String("address")
-	if serverAddr == "" {
-		fatalIf(CheckLocalServerAddr(serverAddr), "Invalid address ‘%s’ in command line argument.", serverAddr)
-	}
+	fatalIf(CheckLocalServerAddr(serverAddr), "Invalid address ‘%s’ in command line argument.", serverAddr)
 
 	var setupType SetupType
 	var err error
@@ -157,8 +155,11 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 		fatalIf(checkPortAvailability(globalMinioPort), "Port %d already in use", globalMinioPort)
 	}
 
-	globalIsDistXL = (setupType == DistXLSetupType)
 	globalIsXL = (setupType == XLSetupType)
+	globalIsDistXL = (setupType == DistXLSetupType)
+	if globalIsDistXL {
+		globalIsXL = true
+	}
 }
 
 func serverHandleEnvVars() {

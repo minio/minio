@@ -26,10 +26,10 @@ import (
 )
 
 func TestNewEndpoint(t *testing.T) {
-	u1, _ := url.Parse("http://localhost:" + defaultPort + "/path")
-	u2, _ := url.Parse("https://example.org:" + defaultPort + "/path")
+	u1, _ := url.Parse("http://localhost/path")
+	u2, _ := url.Parse("https://example.org/path")
 	u3, _ := url.Parse("http://127.0.0.1:8080/path")
-	u4, _ := url.Parse("http://192.168.253.200:9000/path")
+	u4, _ := url.Parse("http://192.168.253.200/path")
 
 	errMsg := ": no such host"
 	if runtime.GOOS == "windows" {
@@ -116,6 +116,7 @@ func TestNewEndpointList(t *testing.T) {
 		// // It is valid WRT endpoint list that same path is expected with different port on same server.
 		{[]string{"https://127.0.0.1:9000/d1", "https://127.0.0.1:9001/d1", "https://127.0.0.1:9002/d1", "https://127.0.0.1:9003/d1"}, nil},
 		{[]string{"d1", "d2", "d3", "d1"}, fmt.Errorf("duplicate endpoints found")},
+		{[]string{"d1", "d2", "d3", "./d1"}, fmt.Errorf("duplicate endpoints found")},
 		{[]string{"http://localhost/d1", "http://localhost/d2", "http://localhost/d1", "http://localhost/d4"}, fmt.Errorf("duplicate endpoints found")},
 		{[]string{"d1", "d2", "d3", "d4", "d5"}, fmt.Errorf("total endpoints 5 found. For XL/Distribute, it should be 4, 6, 8, 10, 12, 14 or 16")},
 		{[]string{"ftp://server/d1", "http://server/d2", "http://server/d3", "http://server/d4"}, fmt.Errorf("'ftp://server/d1': invalid URL endpoint format")},
@@ -138,48 +139,131 @@ func TestNewEndpointList(t *testing.T) {
 }
 
 func TestCreateEndpoints(t *testing.T) {
-	_, err := getHostIP4("myserver")
+	case1u1, _ := url.Parse("http://example.com:10000/d4")
+	case1u2, _ := url.Parse("http://example.org:10000/d3")
+	case1u3, _ := url.Parse("http://localhost:10000/d1")
+	case1u4, _ := url.Parse("http://localhost:10000/d2")
+
+	case2u1, _ := url.Parse("http://example.com:10000/d4")
+	case2u2, _ := url.Parse("http://example.org:10000/d3")
+	case2u3, _ := url.Parse("http://localhost:10000/d1")
+	case2u4, _ := url.Parse("http://localhost:9000/d2")
+
+	case3u1, _ := url.Parse("http://example.com:80/d3")
+	case3u2, _ := url.Parse("http://example.net:80/d4")
+	case3u3, _ := url.Parse("http://example.org:9000/d2")
+	case3u4, _ := url.Parse("http://localhost:80/d1")
+
+	case4u1, _ := url.Parse("http://example.com:9000/d3")
+	case4u2, _ := url.Parse("http://example.net:9000/d4")
+	case4u3, _ := url.Parse("http://example.org:9000/d2")
+	case4u4, _ := url.Parse("http://localhost:9000/d1")
+
+	case5u1, _ := url.Parse("http://localhost:9000/d1")
+	case5u2, _ := url.Parse("http://localhost:9001/d2")
+	case5u3, _ := url.Parse("http://localhost:9002/d3")
+	case5u4, _ := url.Parse("http://localhost:9003/d4")
+
 	testCases := []struct {
-		serverAddr  string
-		args        []string
-		expectedErr error
+		serverAddr         string
+		args               []string
+		expectedServerAddr string
+		expectedEndpoints  EndpointList
+		expectedSetupType  SetupType
+		expectedErr        error
 	}{
-		// FS setup.
-		{"", []string{"d1"}, nil},
-		{"localhost:10000", []string{"/d1"}, nil},
-		// XL setup.
-		{"", []string{"/d1", "/d2", "d3", "d4"}, nil},
-		{"", []string{"http://localhost/d1", "http://localhost/d2", "http://localhost/d3", "http://localhost/d4"}, nil},
-		{":10000", []string{"http://localhost/d1", "http://localhost/d2", "http://localhost/d3", "http://localhost/d4"}, nil},
-		{":10000", []string{"http://localhost/d1", "http://localhost/d2", "http://127.0.0.1/d3", "http://localhost/d4"}, nil},
-		// Distribute setup.
-		{"", []string{"http://localhost/d1", "http://example.com/d1", "http://example.net/d1", "http://example.org/d1"}, nil},
-		{"", []string{"http://localhost:20000/d1", "http://example.com/d1", "http://example.net/d1", "http://example.org/d1"}, nil},
-		{"", []string{"http://localhost/d1", "http://localhost/d2", "http://example.org/d1", "http://example.org/d2"}, nil},
-		{"", []string{"http://localhost:10000/d1", "http://localhost:10000/d2", "http://example.org/d1", "http://example.org/d2"}, nil},
-		{":10000", []string{"http://localhost:10000/d1", "http://localhost:20000/d2", "http://example.org/d1", "http://example.org/d2"}, nil},
-		{":9000", []string{"http://localhost:9000/d1", "http://localhost:9001/d2", "http://localhost:9003/d3", "http://localhost:9004/d4"}, nil},
-		// Error setup.
-		{"myserver:10000", []string{"d1"}, err},
-		{"example.org:10000", []string{"d1"}, fmt.Errorf("host in server address should be this server")},
-		{"", []string{"http://localhost/d1"}, fmt.Errorf("use path style endpoint for FS setup")},
-		{"", []string{"https://example.org:9000/d1", "https://example.org:9001/d1", "https://example.com/d1", "https://example.com/d2"}, fmt.Errorf("same path can not be served from different port")},
-		{"localhost:10000", []string{"http://example.org/d1", "http://example.org/d2", "http://example.org/d3", "http://example.org/d4"}, fmt.Errorf("no endpoint found for this host")},
-		{"", []string{"https://example.org/d1", "https://example.com/d2", "https://example.net/d3", "https://example.edu/d4"}, fmt.Errorf("no endpoint found for this host")},
-		{":20000", []string{"http://localhost:10000/d1", "http://localhost:10000/d2", "http://example.org/d1", "http://example.org/d2"}, fmt.Errorf("server address and endpoint have different ports")},
-		{"", []string{"http://localhost:10000/d1", "http://localhost:20000/d2", "http://example.org/d1", "http://example.org/d2"}, fmt.Errorf("for more than one endpoints for local host with different port, server address must be provided")},
-		{":30000", []string{"http://localhost:10000/d1", "http://localhost:20000/d2", "http://example.org/d1", "http://example.org/d2"}, fmt.Errorf("port in server address does not match with local endpoints")},
+		{"localhost", []string{}, "", EndpointList{}, -1, fmt.Errorf("missing port in address localhost")},
+
+		// FS Setup
+		{":8000", []string{"http://localhost/d1"}, "", EndpointList{}, -1, fmt.Errorf("use path style endpoint for FS setup")},
+		{"localhost:9000", []string{"http://localhost/d1"}, "", EndpointList{}, -1, fmt.Errorf("use path style endpoint for FS setup")},
+		{":443", []string{"d1"}, ":443", EndpointList{Endpoint{URL: &url.URL{Path: "d1"}, IsLocal: true}}, FSSetupType, nil},
+		{"localhost:10000", []string{"/d1"}, "localhost:10000", EndpointList{Endpoint{URL: &url.URL{Path: "/d1"}, IsLocal: true}}, FSSetupType, nil},
+		{"localhost:10000", []string{"./d1"}, "localhost:10000", EndpointList{Endpoint{URL: &url.URL{Path: "d1"}, IsLocal: true}}, FSSetupType, nil},
+		{"localhost:10000", []string{`\d1`}, "localhost:10000", EndpointList{Endpoint{URL: &url.URL{Path: `\d1`}, IsLocal: true}}, FSSetupType, nil},
+		{"localhost:10000", []string{`.\d1`}, "localhost:10000", EndpointList{Endpoint{URL: &url.URL{Path: `.\d1`}, IsLocal: true}}, FSSetupType, nil},
+		// XL Setup with PathEndpointType
+		{":1234", []string{"/d1", "/d2", "d3", "d4"}, ":1234", EndpointList{
+			Endpoint{URL: &url.URL{Path: "/d1"}, IsLocal: true},
+			Endpoint{URL: &url.URL{Path: "/d2"}, IsLocal: true},
+			Endpoint{URL: &url.URL{Path: "d3"}, IsLocal: true},
+			Endpoint{URL: &url.URL{Path: "d4"}, IsLocal: true},
+		}, XLSetupType, nil},
+		{":8080", []string{"https://example.org/d1", "https://example.org/d2", "https://example.org/d3", "https://example.org/d4"}, "", EndpointList{}, -1, fmt.Errorf("no endpoint found for this host")},
+		{":8080", []string{"https://example.org/d1", "https://example.com/d2", "https://example.net:8000/d3", "https://example.edu/d1"}, "", EndpointList{}, -1, fmt.Errorf("no endpoint found for this host")},
+		{"localhost:9000", []string{"https://127.0.0.1:9000/d1", "https://localhost:9001/d1", "https://example.com/d1", "https://example.com/d2"}, "", EndpointList{}, -1, fmt.Errorf("path '/d1' can not be served from different address/port")},
+		{"localhost:9000", []string{"https://127.0.0.1:8000/d1", "https://localhost:9001/d2", "https://example.com/d1", "https://example.com/d2"}, "", EndpointList{}, -1, fmt.Errorf("port number in server address must match with one of the port in local endpoints")},
+		{"localhost:10000", []string{"https://127.0.0.1:8000/d1", "https://localhost:8000/d2", "https://example.com/d1", "https://example.com/d2"}, "", EndpointList{}, -1, fmt.Errorf("server address and local endpoint have different ports")},
+
+		{":9000", []string{"http://localhost/d1", "http://localhost/d2", "http://localhost/d3", "http://localhost/d4"}, ":9000", EndpointList{
+			Endpoint{URL: &url.URL{Path: "/d1"}, IsLocal: true},
+			Endpoint{URL: &url.URL{Path: "/d2"}, IsLocal: true},
+			Endpoint{URL: &url.URL{Path: "/d3"}, IsLocal: true},
+			Endpoint{URL: &url.URL{Path: "/d4"}, IsLocal: true},
+		}, XLSetupType, nil},
+
+		{"127.0.0.1:10000", []string{"http://localhost/d1", "http://localhost/d2", "http://127.0.0.1/d3", "http://127.0.0.1/d4"}, ":10000", EndpointList{
+			Endpoint{URL: &url.URL{Path: "/d1"}, IsLocal: true},
+			Endpoint{URL: &url.URL{Path: "/d2"}, IsLocal: true},
+			Endpoint{URL: &url.URL{Path: "/d3"}, IsLocal: true},
+			Endpoint{URL: &url.URL{Path: "/d4"}, IsLocal: true},
+		}, XLSetupType, nil},
+
+		{"127.0.0.1:10000", []string{"http://localhost/d1", "http://localhost/d2", "http://example.org/d3", "http://example.com/d4"}, "127.0.0.1:10000", EndpointList{
+			Endpoint{URL: case1u1, IsLocal: false},
+			Endpoint{URL: case1u2, IsLocal: false},
+			Endpoint{URL: case1u3, IsLocal: true},
+			Endpoint{URL: case1u4, IsLocal: true},
+		}, DistXLSetupType, nil},
+		{"127.0.0.1:10000", []string{"http://localhost/d1", "http://localhost:9000/d2", "http://example.org/d3", "http://example.com/d4"}, "127.0.0.1:10000", EndpointList{
+			Endpoint{URL: case2u1, IsLocal: false},
+			Endpoint{URL: case2u2, IsLocal: false},
+			Endpoint{URL: case2u3, IsLocal: true},
+			Endpoint{URL: case2u4, IsLocal: true},
+		}, DistXLSetupType, nil},
+
+		{":80", []string{"http://localhost/d1", "http://example.org:9000/d2", "http://example.com/d3", "http://example.net/d4"}, ":80", EndpointList{
+			Endpoint{URL: case3u1, IsLocal: false},
+			Endpoint{URL: case3u2, IsLocal: false},
+			Endpoint{URL: case3u3, IsLocal: false},
+			Endpoint{URL: case3u4, IsLocal: true},
+		}, DistXLSetupType, nil},
+
+		{":9000", []string{"http://localhost/d1", "http://example.org/d2", "http://example.com/d3", "http://example.net/d4"}, ":9000", EndpointList{
+			Endpoint{URL: case4u1, IsLocal: false},
+			Endpoint{URL: case4u2, IsLocal: false},
+			Endpoint{URL: case4u3, IsLocal: false},
+			Endpoint{URL: case4u4, IsLocal: true},
+		}, DistXLSetupType, nil},
+
+		{":9000", []string{"http://localhost:9000/d1", "http://localhost:9001/d2", "http://localhost:9002/d3", "http://localhost:9003/d4"}, ":9000", EndpointList{
+			Endpoint{URL: case5u1, IsLocal: true},
+			Endpoint{URL: case5u2, IsLocal: true},
+			Endpoint{URL: case5u3, IsLocal: true},
+			Endpoint{URL: case5u4, IsLocal: true},
+		}, DistXLSetupType, nil},
 	}
 
 	for _, testCase := range testCases {
-		_, _, _, err := CreateEndpoints(testCase.serverAddr, testCase.args...)
-		if testCase.expectedErr == nil {
+		serverAddr, endpoints, setupType, err := CreateEndpoints(testCase.serverAddr, testCase.args...)
+
+		if err == nil {
 			if testCase.expectedErr != nil {
-				t.Fatalf("error: expected = <nil>, got = %v", err)
+				t.Fatalf("error: expected = %v, got = <nil>", testCase.expectedErr)
+			} else {
+				if serverAddr != testCase.expectedServerAddr {
+					t.Fatalf("serverAddr: expected = %v, got = %v", testCase.expectedServerAddr, serverAddr)
+				}
+				if !reflect.DeepEqual(endpoints, testCase.expectedEndpoints) {
+					t.Fatalf("endpoints: expected = %v, got = %v", testCase.expectedEndpoints, endpoints)
+				}
+				if setupType != testCase.expectedSetupType {
+					t.Fatalf("setupType: expected = %v, got = %v", testCase.expectedSetupType, setupType)
+				}
 			}
-		} else if err == nil {
-			t.Fatalf("error: expected = %v, got = <nil>", testCase.expectedErr)
-		} else if testCase.expectedErr.Error() != err.Error() {
+		} else if testCase.expectedErr == nil {
+			t.Fatalf("error: expected = <nil>, got = %v", err)
+		} else if err.Error() != testCase.expectedErr.Error() {
 			t.Fatalf("error: expected = %v, got = %v", testCase.expectedErr, err)
 		}
 	}
