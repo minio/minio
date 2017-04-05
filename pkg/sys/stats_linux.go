@@ -62,9 +62,14 @@ func getSysinfoMemoryLimit() (limit uint64, err error) {
 		return 0, err
 	}
 
+	// Some fields in syscall.Sysinfo_t have different  integer sizes
+	// in different platform architectures. Cast all fields to uint64.
+	totalRAM := uint64(si.Totalram)
+	unit := uint64(si.Unit)
+
 	// Total RAM is always the multiplicative value
 	// of unit size and total ram.
-	limit = uint64(si.Unit) * si.Totalram
+	limit = unit * totalRAM
 	return limit, nil
 }
 
