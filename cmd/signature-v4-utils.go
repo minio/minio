@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -140,14 +141,21 @@ func extractSignedHeaders(signedHeaders []string, r *http.Request) (http.Header,
 				extractedSignedHeaders[header] = []string{"100-continue"}
 				continue
 			}
-			// the "host" field will not be found in the header map, it can be found in req.Host.
-			// but its necessary to make sure that the "host" field exists in the list of signed parameters,
-			// the check is done above.
+			// Go http server removes "host" from Request.Header
 			if header == "host" {
+				extractedSignedHeaders.Set(header, r.Host)
 				continue
 			}
+			// Go http server removes "transfer-encoding" from Request.Header
 			if header == "transfer-encoding" {
 				extractedSignedHeaders[header] = r.TransferEncoding
+				continue
+			}
+			if header == "content-length" {
+				// Signature-V4 spec excludes Content-Length from signed headers list for signature calculation.
+				// But some clients deviate from this rule. Hence we consider Content-Length for signature
+				// calculation to be compatible with such clients.
+				extractedSignedHeaders.Set(header, strconv.FormatInt(r.ContentLength, 10))
 				continue
 			}
 			// If not found continue, we will stop here.

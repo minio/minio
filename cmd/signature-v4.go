@@ -46,33 +46,26 @@ const (
 )
 
 // getCanonicalHeaders generate a list of request headers with their values
-func getCanonicalHeaders(signedHeaders http.Header, host string) string {
+func getCanonicalHeaders(signedHeaders http.Header) string {
 	var headers []string
 	vals := make(http.Header)
 	for k, vv := range signedHeaders {
 		headers = append(headers, strings.ToLower(k))
 		vals[strings.ToLower(k)] = vv
 	}
-	headers = append(headers, presignedHostHeader)
 	sort.Strings(headers)
 
 	var buf bytes.Buffer
 	for _, k := range headers {
 		buf.WriteString(k)
 		buf.WriteByte(':')
-		switch {
-		case k == presignedHostHeader:
-			buf.WriteString(host)
-			fallthrough
-		default:
-			for idx, v := range vals[k] {
-				if idx > 0 {
-					buf.WriteByte(',')
-				}
-				buf.WriteString(signV4TrimAll(v))
+		for idx, v := range vals[k] {
+			if idx > 0 {
+				buf.WriteByte(',')
 			}
-			buf.WriteByte('\n')
+			buf.WriteString(signV4TrimAll(v))
 		}
+		buf.WriteByte('\n')
 	}
 	return buf.String()
 }
@@ -83,7 +76,6 @@ func getSignedHeaders(signedHeaders http.Header) string {
 	for k := range signedHeaders {
 		headers = append(headers, strings.ToLower(k))
 	}
-	headers = append(headers, presignedHostHeader)
 	sort.Strings(headers)
 	return strings.Join(headers, ";")
 }
@@ -98,14 +90,14 @@ func getSignedHeaders(signedHeaders http.Header) string {
 //  <SignedHeaders>\n
 //  <HashedPayload>
 //
-func getCanonicalRequest(extractedSignedHeaders http.Header, payload, queryStr, urlPath, method, host string) string {
+func getCanonicalRequest(extractedSignedHeaders http.Header, payload, queryStr, urlPath, method string) string {
 	rawQuery := strings.Replace(queryStr, "+", "%20", -1)
 	encodedPath := getURLEncodedName(urlPath)
 	canonicalRequest := strings.Join([]string{
 		method,
 		encodedPath,
 		rawQuery,
-		getCanonicalHeaders(extractedSignedHeaders, host),
+		getCanonicalHeaders(extractedSignedHeaders),
 		getSignedHeaders(extractedSignedHeaders),
 		payload,
 	}, "\n")
@@ -304,7 +296,7 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 	/// Verify finally if signature is same.
 
 	// Get canonical request.
-	presignedCanonicalReq := getCanonicalRequest(extractedSignedHeaders, hashedPayload, encodedQuery, req.URL.Path, req.Method, req.Host)
+	presignedCanonicalReq := getCanonicalRequest(extractedSignedHeaders, hashedPayload, encodedQuery, req.URL.Path, req.Method)
 
 	// Get string to sign from canonical request.
 	presignedStringToSign := getStringToSign(presignedCanonicalReq, t, pSignValues.Credential.getScope())
@@ -344,19 +336,6 @@ func doesSignatureMatch(hashedPayload string, r *http.Request, region string) AP
 	// Hashed payload mismatch, return content sha256 mismatch.
 	if hashedPayload != req.Header.Get("X-Amz-Content-Sha256") {
 		return ErrContentSHA256Mismatch
-	}
-
-	header := req.Header
-
-	// Signature-V4 spec excludes Content-Length from signed headers list for signature calculation.
-	// But some clients deviate from this rule. Hence we consider Content-Length for signature
-	// calculation to be compatible with such clients.
-	for _, h := range signV4Values.SignedHeaders {
-		if h == "content-length" {
-			header = cloneHeader(req.Header)
-			header.Set("content-length", strconv.FormatInt(r.ContentLength, 10))
-			break
-		}
 	}
 
 	// Extract all the signed headers along with its values.
@@ -401,7 +380,7 @@ func doesSignatureMatch(hashedPayload string, r *http.Request, region string) AP
 	queryStr := req.URL.Query().Encode()
 
 	// Get canonical request.
-	canonicalRequest := getCanonicalRequest(extractedSignedHeaders, hashedPayload, queryStr, req.URL.Path, req.Method, req.Host)
+	canonicalRequest := getCanonicalRequest(extractedSignedHeaders, hashedPayload, queryStr, req.URL.Path, req.Method)
 
 	// Get string to sign from canonical request.
 	stringToSign := getStringToSign(canonicalRequest, t, signV4Values.Credential.getScope())
