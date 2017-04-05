@@ -120,7 +120,14 @@ func extractSignedHeaders(signedHeaders []string, r *http.Request) (http.Header,
 		// `host` will not be found in the headers, can be found in r.Host.
 		// but its alway necessary that the list of signed headers containing host in it.
 		val, ok := reqHeaders[http.CanonicalHeaderKey(header)]
-		if !ok {
+		if ok {
+			for _, enc := range val {
+				extractedSignedHeaders.Add(header, enc)
+			}
+			continue
+		}
+		switch header {
+		case "expect":
 			// Golang http server strips off 'Expect' header, if the
 			// client sent this as part of signed headers we need to
 			// handle otherwise we would see a signature mismatch.
@@ -137,31 +144,23 @@ func extractSignedHeaders(signedHeaders []string, r *http.Request) (http.Header,
 			// be sent, for the time being keep this work around.
 			// Adding a *TODO* to remove this later when Golang server
 			// doesn't filter out the 'Expect' header.
-			if header == "expect" {
-				extractedSignedHeaders[header] = []string{"100-continue"}
-				continue
-			}
+			extractedSignedHeaders.Set(header, "100-continue")
+		case "host":
 			// Go http server removes "host" from Request.Header
-			if header == "host" {
-				extractedSignedHeaders.Set(header, r.Host)
-				continue
+			extractedSignedHeaders.Set(header, r.Host)
+		case "transfer-encoding":
+			// Go http server removes "host" from Request.Header
+			for _, enc := range r.TransferEncoding {
+				extractedSignedHeaders.Add(header, enc)
 			}
-			// Go http server removes "transfer-encoding" from Request.Header
-			if header == "transfer-encoding" {
-				extractedSignedHeaders[header] = r.TransferEncoding
-				continue
-			}
-			if header == "content-length" {
-				// Signature-V4 spec excludes Content-Length from signed headers list for signature calculation.
-				// But some clients deviate from this rule. Hence we consider Content-Length for signature
-				// calculation to be compatible with such clients.
-				extractedSignedHeaders.Set(header, strconv.FormatInt(r.ContentLength, 10))
-				continue
-			}
-			// If not found continue, we will stop here.
+		case "content-length":
+			// Signature-V4 spec excludes Content-Length from signed headers list for signature calculation.
+			// But some clients deviate from this rule. Hence we consider Content-Length for signature
+			// calculation to be compatible with such clients.
+			extractedSignedHeaders.Set(header, strconv.FormatInt(r.ContentLength, 10))
+		default:
 			return nil, ErrUnsignedHeaders
 		}
-		extractedSignedHeaders[header] = val
 	}
 	return extractedSignedHeaders, ErrNone
 }

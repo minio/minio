@@ -381,7 +381,6 @@ func doesSignatureMatch(hashedPayload string, r *http.Request, region string) AP
 
 	// Get canonical request.
 	canonicalRequest := getCanonicalRequest(extractedSignedHeaders, hashedPayload, queryStr, req.URL.Path, req.Method)
-
 	// Get string to sign from canonical request.
 	stringToSign := getStringToSign(canonicalRequest, t, signV4Values.Credential.getScope())
 
