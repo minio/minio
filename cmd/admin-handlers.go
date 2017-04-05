@@ -207,14 +207,37 @@ type ServerConnStats struct {
 	Throughput       uint64 `json:"throughput,omitempty"`
 }
 
+// ServerHTTPMethodStats holds total number of HTTP operations from/to the server,
+// including the average duration the call was spent.
+type ServerHTTPMethodStats struct {
+	Count       uint64 `json:"count"`
+	AvgDuration string `json:"avgDuration"`
+}
+
+// ServerHTTPStats holds all type of http operations performed to/from the server
+// including their average execution time.
+type ServerHTTPStats struct {
+	TotalHEADStats     ServerHTTPMethodStats `json:"totalHEADs"`
+	SuccessHEADStats   ServerHTTPMethodStats `json:"successHEADs"`
+	TotalGETStats      ServerHTTPMethodStats `json:"totalGETs"`
+	SuccessGETStats    ServerHTTPMethodStats `json:"successGETs"`
+	TotalPUTStats      ServerHTTPMethodStats `json:"totalPUTs"`
+	SuccessPUTStats    ServerHTTPMethodStats `json:"successPUTs"`
+	TotalPOSTStats     ServerHTTPMethodStats `json:"totalPOSTs"`
+	SuccessPOSTStats   ServerHTTPMethodStats `json:"successPOSTs"`
+	TotalDELETEStats   ServerHTTPMethodStats `json:"totalDELETEs"`
+	SuccessDELETEStats ServerHTTPMethodStats `json:"successDELETEs"`
+}
+
 // ServerInfo holds the information that will be returned by ServerInfo API
 type ServerInfo struct {
 	StorageInfo StorageInfo      `json:"storage"`
 	ConnStats   ServerConnStats  `json:"network"`
+	HTTPStats   ServerHTTPStats  `json:"http"`
 	Properties  ServerProperties `json:"server"`
 }
 
-// ServerInfoHandler - GET /?server-info
+// ServerInfoHandler - GET /?info
 // ----------
 // Get server information
 func (adminAPI adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Request) {
@@ -262,11 +285,13 @@ func (adminAPI adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *htt
 		TotalInputBytes:  globalConnStats.getTotalInputBytes(),
 		TotalOutputBytes: globalConnStats.getTotalOutputBytes(),
 	}
+	httpStats := globalHTTPStats.toServerHTTPStats()
 
 	// Build the whole returned information
 	info := ServerInfo{
 		StorageInfo: storage,
 		ConnStats:   connStats,
+		HTTPStats:   httpStats,
 		Properties:  properties,
 	}
 
@@ -277,6 +302,7 @@ func (adminAPI adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *htt
 		errorIf(err, "Failed to marshal storage info into json.")
 		return
 	}
+
 	// Reply with storage information (across nodes in a
 	// distributed setup) as json.
 	writeSuccessResponseJSON(w, jsonBytes)
