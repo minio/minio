@@ -82,7 +82,7 @@ func TestGetHostIP(t *testing.T) {
 	for _, testCase := range testCases {
 		ipList, err := getHostIP4(testCase.host)
 		if testCase.expectedErr == nil {
-			if testCase.expectedErr != nil {
+			if err != nil {
 				t.Fatalf("error: expected = <nil>, got = %v", err)
 			}
 		} else if err == nil {
@@ -119,31 +119,37 @@ func TestGetAPIEndpoints(t *testing.T) {
 
 // Tests for port availability logic written for server startup sequence.
 func TestCheckPortAvailability(t *testing.T) {
-	tests := []struct {
-		port string
-	}{
-		{getFreePort()},
-		{getFreePort()},
+	// Make a port is not available.
+	port := getFreePort()
+	listener, err := net.Listen("tcp", net.JoinHostPort("", port))
+	if err != nil {
+		t.Fatalf("Unable to listen on port %v", port)
 	}
-	for _, test := range tests {
-		// This test should pass if the ports are available
-		err := checkPortAvailability(test.port)
-		if err != nil {
-			t.Fatalf("checkPortAvailability test failed for port: %s. Error: %v", test.port, err)
+	defer listener.Close()
+
+	testCases := []struct {
+		port        string
+		expectedErr error
+	}{
+		{port, fmt.Errorf("listen tcp :%v: bind: address already in use", port)},
+		{getFreePort(), nil},
+	}
+
+	for _, testCase := range testCases {
+		// On MS Windows, skip checking error case due to https://github.com/golang/go/issues/7598
+		if runtime.GOOS == globalWindowsOSName && testCase.expectedErr != nil {
+			continue
 		}
 
-		// Now use the ports and check again
-		ln, err := net.Listen("tcp", net.JoinHostPort("", test.port))
-		if err != nil {
-			t.Fail()
-		}
-		defer ln.Close()
-
-		err = checkPortAvailability(test.port)
-
-		// Skip if the os is windows due to https://github.com/golang/go/issues/7598
-		if err == nil && runtime.GOOS != globalWindowsOSName {
-			t.Fatalf("checkPortAvailability should fail for port: %s. Error: %v", test.port, err)
+		err := checkPortAvailability(testCase.port)
+		if testCase.expectedErr == nil {
+			if err != nil {
+				t.Fatalf("error: expected = <nil>, got = %v", err)
+			}
+		} else if err == nil {
+			t.Fatalf("error: expected = %v, got = <nil>", testCase.expectedErr)
+		} else if testCase.expectedErr.Error() != err.Error() {
+			t.Fatalf("error: expected = %v, got = %v", testCase.expectedErr, err)
 		}
 	}
 }
@@ -153,9 +159,9 @@ func TestCheckLocalServerAddr(t *testing.T) {
 		serverAddr  string
 		expectedErr error
 	}{
-		{"", nil},
 		{":54321", nil},
 		{"localhost:54321", nil},
+		{"", fmt.Errorf("missing port in address")},
 		{"localhost", fmt.Errorf("missing port in address localhost")},
 		{"example.org:54321", fmt.Errorf("host in server address should be this server")},
 		{":0", fmt.Errorf("port number must be between 1 to 65536")},
@@ -165,7 +171,7 @@ func TestCheckLocalServerAddr(t *testing.T) {
 	for _, testCase := range testCases {
 		err := CheckLocalServerAddr(testCase.serverAddr)
 		if testCase.expectedErr == nil {
-			if testCase.expectedErr != nil {
+			if err != nil {
 				t.Fatalf("error: expected = <nil>, got = %v", err)
 			}
 		} else if err == nil {
