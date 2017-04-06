@@ -297,7 +297,7 @@ func testServicesCmdHandler(cmd cmdType, t *testing.T) {
 	// single node setup, this degenerates to a simple function
 	// call under the hood.
 	globalMinioAddr = "127.0.0.1:9000"
-	initGlobalAdminPeers(mustGetNewEndpointList("http://127.0.0.1/d1"))
+	initGlobalAdminPeers(mustGetNewEndpointList("http://127.0.0.1:9000/d1"))
 
 	// Setting up a go routine to simulate ServerMux's
 	// handleServiceSignals for stop and restart commands.
@@ -357,7 +357,7 @@ func TestServiceSetCreds(t *testing.T) {
 	// single node setup, this degenerates to a simple function
 	// call under the hood.
 	globalMinioAddr = "127.0.0.1:9000"
-	initGlobalAdminPeers(mustGetNewEndpointList("http://127.0.0.1/d1"))
+	initGlobalAdminPeers(mustGetNewEndpointList("http://127.0.0.1:9000/d1"))
 
 	credentials := serverConfig.GetCredential()
 	var body []byte
@@ -439,7 +439,7 @@ func TestListLocksHandler(t *testing.T) {
 
 	// Initialize admin peers to make admin RPC calls.
 	globalMinioAddr = "127.0.0.1:9000"
-	initGlobalAdminPeers(mustGetNewEndpointList("http://127.0.0.1/d1"))
+	initGlobalAdminPeers(mustGetNewEndpointList("http://127.0.0.1:9000/d1"))
 
 	testCases := []struct {
 		bucket         string
@@ -507,7 +507,7 @@ func TestClearLocksHandler(t *testing.T) {
 	defer adminTestBed.TearDown()
 
 	// Initialize admin peers to make admin RPC calls.
-	initGlobalAdminPeers(mustGetNewEndpointList("http://127.0.0.1/d1"))
+	initGlobalAdminPeers(mustGetNewEndpointList("http://127.0.0.1:9000/d1"))
 
 	testCases := []struct {
 		bucket         string
@@ -1212,7 +1212,7 @@ func TestGetConfigHandler(t *testing.T) {
 
 	// Initialize admin peers to make admin RPC calls.
 	globalMinioAddr = "127.0.0.1:9000"
-	initGlobalAdminPeers(mustGetNewEndpointList("http://127.0.0.1/d1"))
+	initGlobalAdminPeers(mustGetNewEndpointList("http://127.0.0.1:9000/d1"))
 
 	// Prepare query params for get-config mgmt REST API.
 	queryVal := url.Values{}
@@ -1241,7 +1241,7 @@ func TestSetConfigHandler(t *testing.T) {
 
 	// Initialize admin peers to make admin RPC calls.
 	globalMinioAddr = "127.0.0.1:9000"
-	initGlobalAdminPeers(mustGetNewEndpointList("http://127.0.0.1/d1"))
+	initGlobalAdminPeers(mustGetNewEndpointList("http://127.0.0.1:9000/d1"))
 
 	// SetConfigHandler restarts minio setup - need to start a
 	// signal receiver to receive on globalServiceSignalCh.

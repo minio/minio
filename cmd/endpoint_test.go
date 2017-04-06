@@ -268,3 +268,30 @@ func TestCreateEndpoints(t *testing.T) {
 		}
 	}
 }
+
+func TestGetRemotePeers(t *testing.T) {
+	tempGlobalMinioPort := globalMinioPort
+	defer func() {
+		globalMinioPort = tempGlobalMinioPort
+	}()
+	globalMinioPort = "9000"
+
+	testCases := []struct {
+		endpointArgs   []string
+		expectedResult []string
+	}{
+		{[]string{"/d1", "/d2", "d3", "d4"}, []string{}},
+		{[]string{"http://localhost:9000/d1", "http://localhost:9000/d2", "http://example.org:9000/d3", "http://example.com:9000/d4"}, []string{"example.com:9000", "example.org:9000"}},
+		{[]string{"http://localhost:9000/d1", "http://localhost:10000/d2", "http://example.org:9000/d3", "http://example.com:9000/d4"}, []string{"example.com:9000", "example.org:9000", "localhost:10000"}},
+		{[]string{"http://localhost:9000/d1", "http://example.org:9000/d2", "http://example.com:9000/d3", "http://example.net:9000/d4"}, []string{"example.com:9000", "example.net:9000", "example.org:9000"}},
+		{[]string{"http://localhost:9000/d1", "http://localhost:9001/d2", "http://localhost:9002/d3", "http://localhost:9003/d4"}, []string{"localhost:9001", "localhost:9002", "localhost:9003"}},
+	}
+
+	for _, testCase := range testCases {
+		endpoints, _ := NewEndpointList(testCase.endpointArgs...)
+		remotePeers := GetRemotePeers(endpoints)
+		if !reflect.DeepEqual(remotePeers, testCase.expectedResult) {
+			t.Fatalf("expected: %v, got: %v", testCase.expectedResult, remotePeers)
+		}
+	}
+}

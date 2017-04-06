@@ -297,7 +297,11 @@ func CreateEndpoints(serverAddr string, args ...string) (string, EndpointList, S
 	{
 		pathIPMap := make(map[string]set.StringSet)
 		for _, endpoint := range endpoints {
-			host, _ := mustSplitHostPort(endpoint.Host)
+			var host string
+			host, _, err = net.SplitHostPort(endpoint.Host)
+			if err != nil {
+				host = endpoint.Host
+			}
 			hostIPSet, _ := getHostIP4(host)
 			if IPSet, ok := pathIPMap[endpoint.Path]; ok {
 				if !IPSet.Intersection(hostIPSet).IsEmpty() {

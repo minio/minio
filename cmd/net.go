@@ -22,46 +22,18 @@ import (
 	"os"
 	"sort"
 	"strconv"
-	"strings"
 	"syscall"
 
 	"github.com/minio/minio-go/pkg/set"
 )
 
-const defaultPort = "9000"
-
 // IPv4 addresses of local host.
 var localIP4 = mustGetLocalIP4()
 
-// splitHostPort is wrapper to net.SplitHostPort(), but ignores "missing port in address".
-// If port is missing, default port "9000" is returned.
-func splitHostPort(hostPort string) (host, port string, err error) {
-	host, port, err = net.SplitHostPort(hostPort)
-	if err != nil {
-		// Ignore "missing port in address" error as we use default port.
-		// This happens when hostPort = "" or hostPort = "server".
-		if !strings.Contains(err.Error(), "missing port in address") {
-			return "", "", err
-		}
-
-		host = hostPort
-		port = defaultPort
-	}
-
-	p, err := strconv.Atoi(port)
-	if err != nil {
-		return "", "", fmt.Errorf("invalid port number")
-	} else if p < 1 || p > 65536 {
-		return "", "", fmt.Errorf("port number must be between 1 to 65536")
-	}
-
-	return host, port, nil
-}
-
+// mustSplitHostPort is a wrapper to net.SplitHostPort() where error is assumed to be a fatal.
 func mustSplitHostPort(hostPort string) (host, port string) {
-	host, port, err := splitHostPort(hostPort)
+	host, port, err := net.SplitHostPort(hostPort)
 	fatalIf(err, "Unable to split host port %s", hostPort)
-
 	return host, port
 }
 

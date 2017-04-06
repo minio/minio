@@ -25,35 +25,23 @@ import (
 	"github.com/minio/minio-go/pkg/set"
 )
 
-func TestSplitHostPort(t *testing.T) {
+func TestMustSplitHostPort(t *testing.T) {
 	testCases := []struct {
 		hostPort     string
 		expectedHost string
 		expectedPort string
-		expectedErr  error
 	}{
-		{"", "", defaultPort, nil},
-		{":54321", "", "54321", nil},
-		{"server:54321", "server", "54321", nil},
-		{"server", "server", defaultPort, nil},
-		{":", "", "", fmt.Errorf("invalid port number")},
-		{":0", "", "", fmt.Errorf("port number must be between 1 to 65536")},
-		{":-10", "", "", fmt.Errorf("port number must be between 1 to 65536")},
-		{"server:100000000", "", "", fmt.Errorf("port number must be between 1 to 65536")},
+		{":54321", "", "54321"},
+		{"server:54321", "server", "54321"},
+		{":", "", ""},
+		{":0", "", "0"},
+		{":-10", "", "-10"},
+		{"server:100000000", "server", "100000000"},
+		{"server:https", "server", "https"},
 	}
 
 	for _, testCase := range testCases {
-		host, port, err := splitHostPort(testCase.hostPort)
-		if testCase.expectedErr == nil {
-			if testCase.expectedErr != nil {
-				t.Fatalf("error: expected = <nil>, got = %v", err)
-			}
-		} else if err == nil {
-			t.Fatalf("error: expected = %v, got = <nil>", testCase.expectedErr)
-		} else if testCase.expectedErr.Error() != err.Error() {
-			t.Fatalf("error: expected = %v, got = %v", testCase.expectedErr, err)
-		}
-
+		host, port := mustSplitHostPort(testCase.hostPort)
 		if testCase.expectedHost != host {
 			t.Fatalf("host: expected = %v, got = %v", testCase.expectedHost, host)
 		}
