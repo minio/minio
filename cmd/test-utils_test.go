@@ -889,11 +889,12 @@ func preSignV4(req *http.Request, accessKeyID, secretAccessKey string, expires i
 	query.Set("X-Amz-Credential", credential)
 	query.Set("X-Amz-Content-Sha256", unsignedPayload)
 
-	// Headers are empty, since "host" is the only header required to be signed for Presigned URLs.
-	var extractedSignedHeaders http.Header
+	// "host" is the only header required to be signed for Presigned URLs.
+	extractedSignedHeaders := make(http.Header)
+	extractedSignedHeaders.Set("host", req.Host)
 
 	queryStr := strings.Replace(query.Encode(), "+", "%20", -1)
-	canonicalRequest := getCanonicalRequest(extractedSignedHeaders, unsignedPayload, queryStr, req.URL.Path, req.Method, req.Host)
+	canonicalRequest := getCanonicalRequest(extractedSignedHeaders, unsignedPayload, queryStr, req.URL.Path, req.Method)
 	stringToSign := getStringToSign(canonicalRequest, date, scope)
 	signingKey := getSigningKey(secretAccessKey, date, region)
 	signature := getSignature(signingKey, stringToSign)
