@@ -155,6 +155,16 @@ func newXLObjects(storageDisks []StorageAPI) (ObjectLayer, error) {
 	xl.readQuorum = readQuorum
 	xl.writeQuorum = writeQuorum
 
+	// If the number of offline servers is equal to the readQuorum
+	// (i.e. the number of online servers also equals the
+	// readQuorum), we cannot perform quick-heal (no
+	// write-quorum). However reads may still be possible, so we
+	// skip quick-heal in this case, and continue.
+	offlineCount := len(newStorageDisks) - diskCount(newStorageDisks)
+	if offlineCount == readQuorum {
+		return xl, nil
+	}
+
 	// Do a quick heal on the buckets themselves for any discrepancies.
 	return xl, quickHeal(xl.storageDisks, xl.writeQuorum, xl.readQuorum)
 }
