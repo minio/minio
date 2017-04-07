@@ -26,6 +26,7 @@ import (
 	"encoding/hex"
 
 	minio "github.com/minio/minio-go"
+	"github.com/minio/minio-go/pkg/policy"
 )
 
 // Convert Minio errors to minio object layer errors.
@@ -530,16 +531,49 @@ func (l *s3Gateway) CompleteMultipartUpload(bucket string, object string, upload
 }
 
 // SetBucketPolicies - Set policy on bucket
-func (l *s3Gateway) SetBucketPolicies(string, []BucketAccessPolicy) error {
-	return traceError(NotImplemented{})
+func (l *s3Gateway) SetBucketPolicies(bucket string, policies []BucketAccessPolicy) error {
+	for _, policy := range policies {
+		if err := l.Client.SetBucketPolicy(bucket, policy.Prefix, policy.Policy); err != nil {
+			return s3ToObjectError(traceError(err), bucket, policy.Prefix)
+		}
+	}
+	return nil
+}
+
+// fromMinioClientListBucketPolicies converts from map[string]policy.BucketPolicy to []BucketAccessPolicy
+func fromMinioClientListBucketPolicies(bucketPolicies map[string]policy.BucketPolicy) []BucketAccessPolicy {
+	policies := make([]BucketAccessPolicy, 0)
+
+	for prefix, permission := range bucketPolicies {
+		policies = append(policies, BucketAccessPolicy{
+			Prefix: prefix,
+			Policy: policy.BucketPolicy(permission),
+		})
+	}
+
+	return policies
 }
 
 // GetBucketPolicies - Get policy on bucket
 func (l *s3Gateway) GetBucketPolicies(bucket string) ([]BucketAccessPolicy, error) {
-	return []BucketAccessPolicy{}, traceError(NotImplemented{})
+	bucketPolicies, err := l.Client.ListBucketPolicies(bucket, "")
+	if err != nil {
+		return []BucketAccessPolicy{}, s3ToObjectError(traceError(err), bucket, "")
+	}
+
+	return fromMinioClientListBucketPolicies(bucketPolicies), nil
 }
 
 // DeleteBucketPolicies - Delete all policies on bucket
-func (l *s3Gateway) DeleteBucketPolicies(string) error {
-	return traceError(NotImplemented{})
+func (l *s3Gateway) DeleteBucketPolicies(bucket string) error {
+	bucketPolicies, err := l.Client.ListBucketPolicies(bucket, "")
+	if err != nil {
+		return s3ToObjectError(traceError(err), bucket, "")
+	}
+
+	for prefix, _ := range bucketPolicies {
+		l.Client.SetBucketPolicy(bucket, prefix, policy.BucketPolicyNone)
+	}
+
+	return nil
 }
