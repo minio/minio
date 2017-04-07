@@ -398,12 +398,11 @@ func (s *TestSuiteCommon) TestListenBucketNotificationHandler(c *C) {
 	c.Assert(err, IsNil)
 	verifyError(c, response, "InvalidArgument", "Size of filter rule value cannot exceed 1024 bytes in UTF-8 representation", http.StatusBadRequest)
 
-	req, err = newTestSignedRequest("GET",
+	req, err = newTestSignedBadSHARequest("GET",
 		getListenBucketNotificationURL(s.endPoint, bucketName, []string{}, []string{}, validEvents),
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
-	req.Header.Set("x-amz-content-sha256", "somethingElse")
 	client = http.Client{Transport: s.transport}
 	// execute the request.
 	response, err = client.Do(req)

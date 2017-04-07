@@ -234,3 +234,31 @@ func TestSignV4TrimAll(t *testing.T) {
 		}
 	}
 }
+
+// Test getContentSha256Cksum
+func TestGetContentSha256Cksum(t *testing.T) {
+	testCases := []struct {
+		h        string // header SHA256
+		q        string // query SHA256
+		expected string // expected SHA256
+	}{
+		{"shastring", "", "shastring"},
+		{"", "", emptySHA256},
+		{"", "X-Amz-Credential=random", unsignedPayload},
+		{"", "X-Amz-Credential=random&X-Amz-Content-Sha256=shastring", "shastring"},
+	}
+
+	for i, testCase := range testCases {
+		r, err := http.NewRequest("GET", "http://localhost/?"+testCase.q, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if testCase.h != "" {
+			r.Header.Set("x-amz-content-sha256", testCase.h)
+		}
+		got := getContentSha256Cksum(r)
+		if got != testCase.expected {
+			t.Errorf("Test %d: got:%s expected:%s", i+1, got, testCase.expected)
+		}
+	}
+}
