@@ -175,33 +175,34 @@ func TestCreateEndpoints(t *testing.T) {
 		{"localhost", []string{}, "", EndpointList{}, -1, fmt.Errorf("missing port in address localhost")},
 
 		// FS Setup
-		{":8000", []string{"http://localhost/d1"}, "", EndpointList{}, -1, fmt.Errorf("use path style endpoint for FS setup")},
 		{"localhost:9000", []string{"http://localhost/d1"}, "", EndpointList{}, -1, fmt.Errorf("use path style endpoint for FS setup")},
 		{":443", []string{"d1"}, ":443", EndpointList{Endpoint{URL: &url.URL{Path: "d1"}, IsLocal: true}}, FSSetupType, nil},
 		{"localhost:10000", []string{"/d1"}, "localhost:10000", EndpointList{Endpoint{URL: &url.URL{Path: "/d1"}, IsLocal: true}}, FSSetupType, nil},
 		{"localhost:10000", []string{"./d1"}, "localhost:10000", EndpointList{Endpoint{URL: &url.URL{Path: "d1"}, IsLocal: true}}, FSSetupType, nil},
 		{"localhost:10000", []string{`\d1`}, "localhost:10000", EndpointList{Endpoint{URL: &url.URL{Path: `\d1`}, IsLocal: true}}, FSSetupType, nil},
 		{"localhost:10000", []string{`.\d1`}, "localhost:10000", EndpointList{Endpoint{URL: &url.URL{Path: `.\d1`}, IsLocal: true}}, FSSetupType, nil},
-		// XL Setup with PathEndpointType
-		{":1234", []string{"/d1", "/d2", "d3", "d4"}, ":1234", EndpointList{
-			Endpoint{URL: &url.URL{Path: "/d1"}, IsLocal: true},
-			Endpoint{URL: &url.URL{Path: "/d2"}, IsLocal: true},
-			Endpoint{URL: &url.URL{Path: "d3"}, IsLocal: true},
-			Endpoint{URL: &url.URL{Path: "d4"}, IsLocal: true},
-		}, XLSetupType, nil},
 		{":8080", []string{"https://example.org/d1", "https://example.org/d2", "https://example.org/d3", "https://example.org/d4"}, "", EndpointList{}, -1, fmt.Errorf("no endpoint found for this host")},
 		{":8080", []string{"https://example.org/d1", "https://example.com/d2", "https://example.net:8000/d3", "https://example.edu/d1"}, "", EndpointList{}, -1, fmt.Errorf("no endpoint found for this host")},
 		{"localhost:9000", []string{"https://127.0.0.1:9000/d1", "https://localhost:9001/d1", "https://example.com/d1", "https://example.com/d2"}, "", EndpointList{}, -1, fmt.Errorf("path '/d1' can not be served from different address/port")},
 		{"localhost:9000", []string{"https://127.0.0.1:8000/d1", "https://localhost:9001/d2", "https://example.com/d1", "https://example.com/d2"}, "", EndpointList{}, -1, fmt.Errorf("port number in server address must match with one of the port in local endpoints")},
 		{"localhost:10000", []string{"https://127.0.0.1:8000/d1", "https://localhost:8000/d2", "https://example.com/d1", "https://example.com/d2"}, "", EndpointList{}, -1, fmt.Errorf("server address and local endpoint have different ports")},
 
+		// XL Setup with PathEndpointType
+		{":1234", []string{"/d1", "/d2", "d3", "d4"}, ":1234",
+			EndpointList{
+				Endpoint{URL: &url.URL{Path: "/d1"}, IsLocal: true},
+				Endpoint{URL: &url.URL{Path: "/d2"}, IsLocal: true},
+				Endpoint{URL: &url.URL{Path: "d3"}, IsLocal: true},
+				Endpoint{URL: &url.URL{Path: "d4"}, IsLocal: true},
+			}, XLSetupType, nil},
+		// XL Setup with URLEndpointType
 		{":9000", []string{"http://localhost/d1", "http://localhost/d2", "http://localhost/d3", "http://localhost/d4"}, ":9000", EndpointList{
 			Endpoint{URL: &url.URL{Path: "/d1"}, IsLocal: true},
 			Endpoint{URL: &url.URL{Path: "/d2"}, IsLocal: true},
 			Endpoint{URL: &url.URL{Path: "/d3"}, IsLocal: true},
 			Endpoint{URL: &url.URL{Path: "/d4"}, IsLocal: true},
 		}, XLSetupType, nil},
-
+		// XL Setup with URLEndpointType having mixed naming to local host.
 		{"127.0.0.1:10000", []string{"http://localhost/d1", "http://localhost/d2", "http://127.0.0.1/d3", "http://127.0.0.1/d4"}, ":10000", EndpointList{
 			Endpoint{URL: &url.URL{Path: "/d1"}, IsLocal: true},
 			Endpoint{URL: &url.URL{Path: "/d2"}, IsLocal: true},
@@ -209,6 +210,7 @@ func TestCreateEndpoints(t *testing.T) {
 			Endpoint{URL: &url.URL{Path: "/d4"}, IsLocal: true},
 		}, XLSetupType, nil},
 
+		// DistXL type
 		{"127.0.0.1:10000", []string{"http://localhost/d1", "http://localhost/d2", "http://example.org/d3", "http://example.com/d4"}, "127.0.0.1:10000", EndpointList{
 			Endpoint{URL: case1u1, IsLocal: false},
 			Endpoint{URL: case1u2, IsLocal: false},
@@ -219,28 +221,25 @@ func TestCreateEndpoints(t *testing.T) {
 			Endpoint{URL: case2u1, IsLocal: false},
 			Endpoint{URL: case2u2, IsLocal: false},
 			Endpoint{URL: case2u3, IsLocal: true},
-			Endpoint{URL: case2u4, IsLocal: true},
+			Endpoint{URL: case2u4, IsLocal: false},
 		}, DistXLSetupType, nil},
-
 		{":80", []string{"http://localhost/d1", "http://example.org:9000/d2", "http://example.com/d3", "http://example.net/d4"}, ":80", EndpointList{
 			Endpoint{URL: case3u1, IsLocal: false},
 			Endpoint{URL: case3u2, IsLocal: false},
 			Endpoint{URL: case3u3, IsLocal: false},
 			Endpoint{URL: case3u4, IsLocal: true},
 		}, DistXLSetupType, nil},
-
 		{":9000", []string{"http://localhost/d1", "http://example.org/d2", "http://example.com/d3", "http://example.net/d4"}, ":9000", EndpointList{
 			Endpoint{URL: case4u1, IsLocal: false},
 			Endpoint{URL: case4u2, IsLocal: false},
 			Endpoint{URL: case4u3, IsLocal: false},
 			Endpoint{URL: case4u4, IsLocal: true},
 		}, DistXLSetupType, nil},
-
 		{":9000", []string{"http://localhost:9000/d1", "http://localhost:9001/d2", "http://localhost:9002/d3", "http://localhost:9003/d4"}, ":9000", EndpointList{
 			Endpoint{URL: case5u1, IsLocal: true},
-			Endpoint{URL: case5u2, IsLocal: true},
-			Endpoint{URL: case5u3, IsLocal: true},
-			Endpoint{URL: case5u4, IsLocal: true},
+			Endpoint{URL: case5u2, IsLocal: false},
+			Endpoint{URL: case5u3, IsLocal: false},
+			Endpoint{URL: case5u4, IsLocal: false},
 		}, DistXLSetupType, nil},
 	}
 

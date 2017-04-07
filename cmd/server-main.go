@@ -236,11 +236,10 @@ func serverMain(ctx *cli.Context) {
 	if !quietFlag {
 		// Check for new updates from dl.minio.io.
 		mode := globalMinioModeFS
-		if globalIsXL {
-			mode = globalMinioModeXL
-		}
 		if globalIsDistXL {
 			mode = globalMinioModeDistXL
+		} else if globalIsXL {
+			mode = globalMinioModeXL
 		}
 		checkUpdate(mode)
 	}

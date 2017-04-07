@@ -346,13 +346,15 @@ func CreateEndpoints(serverAddr string, args ...string) (string, EndpointList, S
 
 	// Add missing port in all endpoints.
 	for i := range endpoints {
-		_, _, err := net.SplitHostPort(endpoints[i].Host)
+		_, port, err := net.SplitHostPort(endpoints[i].Host)
 		if err != nil {
 			endpoints[i].Host = net.JoinHostPort(endpoints[i].Host, serverAddrPort)
+		} else if endpoints[i].IsLocal && serverAddrPort != port {
+			// If endpoint is local, but port is different than serverAddrPort, then make it as remote.
+			endpoints[i].IsLocal = false
 		}
 	}
 
-	// This is DistXL setup by using different ports in two or more local endpoints.
 	// This is DistXL setup.
 	setupType = DistXLSetupType
 	return serverAddr, endpoints, setupType, nil

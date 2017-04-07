@@ -1282,14 +1282,8 @@ func TestAdminServerInfo(t *testing.T) {
 	defer adminTestBed.TearDown()
 
 	// Initialize admin peers to make admin RPC calls.
-	eps, err := parseStorageEndpoints([]string{"http://127.0.0.1"})
-	if err != nil {
-		t.Fatalf("Failed to parse storage end point - %v", err)
-	}
-
-	// Set globalMinioAddr to be able to distinguish local endpoints from remote.
-	globalMinioAddr = eps[0].Host
-	initGlobalAdminPeers(eps)
+	globalMinioAddr = "127.0.0.1:9000"
+	initGlobalAdminPeers(mustGetNewEndpointList("http://127.0.0.1:9000/d1"))
 
 	// Prepare query params for set-config mgmt REST API.
 	queryVal := url.Values{}
