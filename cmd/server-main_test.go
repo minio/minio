@@ -32,10 +32,7 @@ func TestNewObjectLayer(t *testing.T) {
 	defer removeRoots(disks)
 
 	endpoints := mustGetNewEndpointList(disks...)
-	obj, err := newObjectLayer(serverCmdConfig{
-		serverAddr: ":9000",
-		endpoints:  endpoints,
-	})
+	obj, err := newObjectLayer(endpoints)
 	if err != nil {
 		t.Fatal("Unexpected object layer initialization error", err)
 	}
@@ -55,10 +52,7 @@ func TestNewObjectLayer(t *testing.T) {
 	defer removeRoots(disks)
 
 	endpoints = mustGetNewEndpointList(disks...)
-	obj, err = newObjectLayer(serverCmdConfig{
-		serverAddr: ":9000",
-		endpoints:  endpoints,
-	})
+	obj, err = newObjectLayer(endpoints)
 	if err != nil {
 		t.Fatal("Unexpected object layer initialization error", err)
 	}

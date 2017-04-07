@@ -250,7 +250,7 @@ func (s *TestPeerRPCServerData) Setup(t *testing.T) {
 	host, port := mustSplitHostPort(s.testServer.Server.Listener.Addr().String())
 	globalMinioHost = host
 	globalMinioPort = port
-	globalMinioAddr = getEndpointsLocalAddr(s.testServer.SrvCmdCfg.endpoints)
+	globalMinioAddr = getEndpointsLocalAddr(s.testServer.endpoints)
 
 	// initialize the peer client(s)
 	initGlobalS3Peers(s.testServer.Disks)

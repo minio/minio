@@ -103,11 +103,6 @@ func enableLoggers() {
 	log.SetConsoleTarget(consoleLogTarget)
 }
 
-type serverCmdConfig struct {
-	serverAddr string
-	endpoints  EndpointList
-}
-
 func initConfig() {
 	// Config file does not exist, we create it fresh and return upon success.
 	if isFile(getConfigFile()) {
@@ -256,13 +251,7 @@ func serverMain(ctx *cli.Context) {
 	initNSLock(globalIsDistXL)
 
 	// Configure server.
-	srvConfig := serverCmdConfig{
-		serverAddr: globalMinioAddr,
-		endpoints:  globalEndpoints,
-	}
-
-	// Configure server.
-	handler, err := configureServerHandler(srvConfig)
+	handler, err := configureServerHandler(globalEndpoints)
 	fatalIf(err, "Unable to configure one of server's RPC services.")
 
 	// Initialize a new HTTP server.
@@ -283,7 +272,7 @@ func serverMain(ctx *cli.Context) {
 		fatalIf(apiServer.ListenAndServe(cert, key), "Failed to start minio server.")
 	}()
 
-	newObject, err := newObjectLayer(srvConfig)
+	newObject, err := newObjectLayer(globalEndpoints)
 	fatalIf(err, "Initializing object layer failed")
 
 	globalObjLayerMutex.Lock()
@@ -302,16 +291,16 @@ func serverMain(ctx *cli.Context) {
 }
 
 // Initialize object layer with the supplied disks, objectLayer is nil upon any error.
-func newObjectLayer(srvCmdCfg serverCmdConfig) (newObject ObjectLayer, err error) {
+func newObjectLayer(endpoints EndpointList) (newObject ObjectLayer, err error) {
 	// For FS only, directly use the disk.
-	isFS := len(srvCmdCfg.endpoints) == 1
+	isFS := len(endpoints) == 1
 	if isFS {
 		// Initialize new FS object layer.
-		return newFSObjectLayer(srvCmdCfg.endpoints[0].Path)
+		return newFSObjectLayer(endpoints[0].Path)
 	}
 
 	// Initialize storage disks.
-	storageDisks, err := initStorageDisks(srvCmdCfg.endpoints)
+	storageDisks, err := initStorageDisks(endpoints)
 	if err != nil {
 		return nil, err
 	}
@@ -320,8 +309,8 @@ func newObjectLayer(srvCmdCfg serverCmdConfig) (newObject ObjectLayer, err error
 	var formattedDisks []StorageAPI
 
 	// First disk argument check if it is local.
-	firstDisk := srvCmdCfg.endpoints[0].IsLocal
-	formattedDisks, err = waitForFormatXLDisks(firstDisk, srvCmdCfg.endpoints, storageDisks)
+	firstDisk := endpoints[0].IsLocal
+	formattedDisks, err = waitForFormatXLDisks(firstDisk, endpoints, storageDisks)
 	if err != nil {
 		return nil, err
 	}

@@ -459,19 +459,19 @@ func TestLockServers(t *testing.T) {
 	globalMinioHost = ""
 	testCases := []struct {
 		isDistXL         bool
-		srvCmdConfig     serverCmdConfig
+		endpoints        EndpointList
 		totalLockServers int
 	}{
 		// Test - 1 one lock server initialized.
-		{true, serverCmdConfig{endpoints: case1Endpoints}, 1},
+		{true, case1Endpoints, 1},
 		// Test - 2 two servers possible.
-		{true, serverCmdConfig{endpoints: case2Endpoints}, 2},
+		{true, case2Endpoints, 2},
 	}
 
 	// Validates lock server initialization.
 	for i, testCase := range testCases {
 		globalIsDistXL = testCase.isDistXL
-		lockServers := newLockServers(testCase.srvCmdConfig)
+		lockServers := newLockServers(testCase.endpoints)
 		if len(lockServers) != testCase.totalLockServers {
 			t.Fatalf("Test %d: Expected total %d, got %d", i+1, testCase.totalLockServers, len(lockServers))
 		}

@@ -181,7 +181,7 @@ type TestServer struct {
 	SecretKey string
 	Server    *httptest.Server
 	Obj       ObjectLayer
-	SrvCmdCfg serverCmdConfig
+	endpoints EndpointList
 }
 
 // UnstartedTestServer - Configures a temp FS/XL backend,
@@ -211,28 +211,20 @@ func UnstartedTestServer(t TestErrHandler, instanceType string) TestServer {
 	testServer.AccessKey = credentials.AccessKey
 	testServer.SecretKey = credentials.SecretKey
 
-	srvCmdCfg := serverCmdConfig{
-		endpoints: testServer.Disks,
-	}
-
-	httpHandler, err := configureServerHandler(
-		srvCmdCfg,
-	)
+	httpHandler, err := configureServerHandler(testServer.Disks)
 	if err != nil {
 		t.Fatalf("Failed to configure one of the RPC services <ERROR> %s", err)
 	}
 
 	// Run TestServer.
 	testServer.Server = httptest.NewUnstartedServer(httpHandler)
-	// obtain server address.
-	srvCmdCfg.serverAddr = testServer.Server.Listener.Addr().String()
 
 	globalObjLayerMutex.Lock()
 	globalObjectAPI = objLayer
 	globalObjLayerMutex.Unlock()
 
 	// initialize peer rpc
-	host, port := mustSplitHostPort(srvCmdCfg.serverAddr)
+	host, port := mustSplitHostPort(testServer.Server.Listener.Addr().String())
 	globalMinioHost = host
 	globalMinioPort = port
 	globalMinioAddr = getEndpointsLocalAddr(testServer.Disks)
@@ -324,10 +316,10 @@ func StartTestServer(t TestErrHandler, instanceType string) TestServer {
 
 // Initializes storage RPC endpoints.
 // The object Layer will be a temp back used for testing purpose.
-func initTestStorageRPCEndPoint(srvCmdConfig serverCmdConfig) http.Handler {
+func initTestStorageRPCEndPoint(endpoints EndpointList) http.Handler {
 	// Initialize router.
 	muxRouter := router.NewRouter()
-	registerStorageRPCRouters(muxRouter, srvCmdConfig)
+	registerStorageRPCRouters(muxRouter, endpoints)
 	return muxRouter
 }
 
@@ -357,9 +349,7 @@ func StartTestStorageRPCServer(t TestErrHandler, instanceType string, diskN int)
 	testRPCServer.SecretKey = credentials.SecretKey
 
 	// Run TestServer.
-	testRPCServer.Server = httptest.NewServer(initTestStorageRPCEndPoint(serverCmdConfig{
-		endpoints: endpoints,
-	}))
+	testRPCServer.Server = httptest.NewServer(initTestStorageRPCEndPoint(endpoints))
 	return testRPCServer
 }
 
@@ -399,13 +389,9 @@ func StartTestPeersRPCServer(t TestErrHandler, instanceType string) TestServer {
 	testRPCServer.Obj = objLayer
 	globalObjLayerMutex.Unlock()
 
-	srvCfg := serverCmdConfig{
-		endpoints: endpoints,
-	}
-
 	mux := router.NewRouter()
 	// need storage layer for bucket config storage.
-	registerStorageRPCRouters(mux, srvCfg)
+	registerStorageRPCRouters(mux, endpoints)
 	// need API layer to send requests, etc.
 	registerAPIRouter(mux)
 	// module being tested is Peer RPCs router.
@@ -415,7 +401,7 @@ func StartTestPeersRPCServer(t TestErrHandler, instanceType string) TestServer {
 	testRPCServer.Server = httptest.NewServer(mux)
 
 	// initialize remainder of serverCmdConfig
-	testRPCServer.SrvCmdCfg = srvCfg
+	testRPCServer.endpoints = endpoints
 
 	return testRPCServer
 }
