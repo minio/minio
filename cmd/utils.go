@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -27,8 +28,6 @@ import (
 	"os"
 	"strings"
 	"time"
-
-	"encoding/json"
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/pkg/profile"
@@ -248,12 +247,15 @@ func dumpRequest(r *http.Request) string {
 		Path   string      `json:"path"`
 		Query  string      `json:"query"`
 		Header http.Header `json:"header"`
-	}{r.Method, r.URL.Path, r.URL.RawQuery, header}
-	jsonBytes, err := json.Marshal(req)
+	}{r.Method, getURLEncodedName(r.URL.Path), r.URL.RawQuery, header}
+	jsonBytes, err := json.Marshal(&req)
 	if err != nil {
-		return "<error dumping request>"
+		// Upon error just return Go-syntax representation of the value
+		return fmt.Sprintf("%#v", req)
 	}
-	return string(jsonBytes)
+	// Replace all '%' to '%%' so that printer format parser
+	// to ignore URL encoded values.
+	return strings.Replace(string(jsonBytes), "%", "%%", -1)
 }
 
 // isFile - returns whether given path is a file or not.
