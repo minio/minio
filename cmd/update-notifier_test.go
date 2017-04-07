@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@ import (
 // Tests update notifier string builder.
 func TestUpdateNotifier(t *testing.T) {
 	colorUpdateMsg := colorizeUpdateMessage(minioReleaseURL, time.Duration(72*time.Hour))
-	if !strings.Contains(colorUpdateMsg, "minutes") {
+	if !strings.Contains(colorUpdateMsg, "You are running an older version of Minio released 2 days from now") {
 		t.Fatal("Duration string not found in colorized update message", colorUpdateMsg)
 	}
 	if !strings.Contains(colorUpdateMsg, minioReleaseURL) {

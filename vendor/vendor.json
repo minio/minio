@@ -35,9 +35,10 @@
 			"revisionTime": "2016-07-05T13:30:06-07:00"
 		},
 		{
+			"checksumSHA1": "rhLUtXvcmouYuBwOq9X/nYKzvNg=",
 			"path": "github.com/dustin/go-humanize",
-			"revision": "fef948f2d241bd1fd0631108ecc2c9553bae60bf",
-			"revisionTime": "2016-06-23T09:40:21+08:00"
+			"revision": "259d2a102b871d17f30e3cd9881a642961a1e486",
+			"revisionTime": "2017-02-28T07:34:54Z"
 		},
 		{
 			"checksumSHA1": "y2Kh4iPlgCPXSGTCcFpzePYdzzg=",

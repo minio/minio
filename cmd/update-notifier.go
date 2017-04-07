@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/cheggaaa/pb"
+	humanize "github.com/dustin/go-humanize"
 	"github.com/fatih/color"
 )
 
@@ -36,14 +37,15 @@ func colorizeUpdateMessage(updateString string, newerThan time.Duration) string 
 	// Calculate length without color coding, due to ANSI color
 	// characters padded to actual string the final length is wrong
 	// than the original string length.
-	hTime := timeDurationToHumanizedDuration(newerThan)
-	line1Str := fmt.Sprintf(" Minio is %s old ", hTime.StringShort())
+	newerThanStr := humanize.Time(UTCNow().Add(newerThan))
+
+	line1Str := fmt.Sprintf("You are running an older version of Minio released %s", newerThanStr)
 	line2Str := fmt.Sprintf(" Update: %s ", updateString)
 	line1Length := len(line1Str)
 	line2Length := len(line2Str)
 
 	// Populate lines with color coding.
-	line1InColor := fmt.Sprintf(" Minio is %s old ", yellow(hTime.StringShort()))
+	line1InColor := fmt.Sprintf(" You are running an older version of Minio released %s ", yellow(newerThanStr))
 	line2InColor := fmt.Sprintf(" Update: %s ", cyan(updateString))
 
 	// calculate the rectangular box size.
