@@ -44,7 +44,7 @@ To start a distributed Minio instance, you just need to pass drive locations as 
 - Disks used for Minio distributed should be fresh with no pre-existing data. 
 - The IP addresses and drive paths below are for demonstration purposes only, you need to replace these with the actual IP addresses and drive paths/folders.
 - Servers running distributed Minio instances should be less than 3 seconds apart. You can use [NTP](http://www.ntp.org/) as a best practice to ensure consistent times across servers. 
-- Running Minio on Windows is experimental as of now. Please proceed with caution. 
+- Running Distributed Minio on Windows is experimental as of now. Please proceed with caution. 
 
 Example 1: Start distributed Minio instance with 1 drive each on 8 nodes, by running this command on all the 8 nodes.
 
