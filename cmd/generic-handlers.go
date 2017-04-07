@@ -401,9 +401,21 @@ func (h httpStatsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Wraps w to record http response information
 	ww := &httpResponseRecorder{ResponseWriter: w}
 
+	// Time start before the call is about to start.
+	tBefore := UTCNow()
+
 	// Execute the request
 	h.handler.ServeHTTP(ww, r)
 
+	// Time after call has completed.
+	tAfter := UTCNow()
+
+	// Time duration in secs since the call started.
+	//
+	// We don't need to do nanosecond precision in this
+	// simply for the fact that it is not human readable.
+	durationSecs := tAfter.Sub(tBefore).Seconds()
+
 	// Update http statistics
-	globalHTTPStats.updateStats(r, ww)
+	globalHTTPStats.updateStats(r, ww, durationSecs)
 }

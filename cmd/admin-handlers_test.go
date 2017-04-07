@@ -1313,6 +1313,52 @@ func TestSetConfigHandler(t *testing.T) {
 	}
 }
 
+func TestAdminServerInfo(t *testing.T) {
+	adminTestBed, err := prepareAdminXLTestBed()
+	if err != nil {
+		t.Fatal("Failed to initialize a single node XL backend for admin handler tests.")
+	}
+	defer adminTestBed.TearDown()
+
+	// Initialize admin peers to make admin RPC calls.
+	eps, err := parseStorageEndpoints([]string{"http://127.0.0.1"})
+	if err != nil {
+		t.Fatalf("Failed to parse storage end point - %v", err)
+	}
+
+	// Set globalMinioAddr to be able to distinguish local endpoints from remote.
+	globalMinioAddr = eps[0].Host
+	initGlobalAdminPeers(eps)
+
+	// Prepare query params for set-config mgmt REST API.
+	queryVal := url.Values{}
+	queryVal.Set("info", "")
+
+	req, err := buildAdminRequest(queryVal, "", http.MethodGet, 0, nil)
+	if err != nil {
+		t.Fatalf("Failed to construct get-config object request - %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	adminTestBed.mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("Expected to succeed but failed with %d", rec.Code)
+	}
+
+	result := ServerInfo{}
+	err = json.NewDecoder(rec.Body).Decode(&result)
+	if err != nil {
+		t.Fatalf("Failed to decode set config result json %v", err)
+	}
+
+	if result.StorageInfo.Free == 0 {
+		t.Error("Expected StorageInfo.Free to be non empty")
+	}
+	if result.Properties.Region != globalMinioDefaultRegion {
+		t.Errorf("Expected %s, got %s", globalMinioDefaultRegion, result.Properties.Region)
+	}
+}
+
 // TestToAdminAPIErr - test for toAdminAPIErr helper function.
 func TestToAdminAPIErr(t *testing.T) {
 	testCases := []struct {
