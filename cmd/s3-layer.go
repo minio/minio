@@ -22,6 +22,7 @@ import (
 	"io"
 	"net/http"
 	"path"
+	"strings"
 
 	"encoding/hex"
 
@@ -533,7 +534,8 @@ func (l *s3Gateway) CompleteMultipartUpload(bucket string, object string, upload
 // SetBucketPolicies - Set policy on bucket
 func (l *s3Gateway) SetBucketPolicies(bucket string, policies []BucketAccessPolicy) error {
 	for _, policy := range policies {
-		if err := l.Client.SetBucketPolicy(bucket, policy.Prefix, policy.Policy); err != nil {
+		prefix := strings.Trim(policy.Prefix, "*")
+		if err := l.Client.SetBucketPolicy(bucket, prefix, policy.Policy); err != nil {
 			return s3ToObjectError(traceError(err), bucket, policy.Prefix)
 		}
 	}
@@ -545,6 +547,7 @@ func fromMinioClientListBucketPolicies(bucketPolicies map[string]policy.BucketPo
 	policies := make([]BucketAccessPolicy, 0)
 
 	for prefix, permission := range bucketPolicies {
+		prefix := strings.Trim(prefix, "*")
 		policies = append(policies, BucketAccessPolicy{
 			Prefix: prefix,
 			Policy: policy.BucketPolicy(permission),
