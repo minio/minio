@@ -178,11 +178,17 @@ func isReqAuthenticated(r *http.Request, region string) (s3Error APIErrorCode) {
 		}
 	}
 
-	if !skipContentSha256Cksum(r) {
-		// Hashed payload mismatch, return content sha256 mismatch.
-		if getContentSha256Cksum(r) != getSHA256Hash(payload) {
-			return ErrContentSHA256Mismatch
-		}
+	if skipContentSha256Cksum(r) {
+		return ErrNone
+	}
+
+	// Verify that X-Amz-Content-Sha256 Header == sha256(payload)
+	sum := r.Header.Get("X-Amz-Content-Sha256")
+	if isRequestPresignedSignatureV4(r) {
+		sum = r.URL.Query().Get("X-Amz-Content-Sha256")
+	}
+	if sum != "" && sum != getSHA256Hash(payload) {
+		return ErrContentSHA256Mismatch
 	}
 	return ErrNone
 }

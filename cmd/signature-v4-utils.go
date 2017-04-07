@@ -49,18 +49,23 @@ func skipContentSha256Cksum(r *http.Request) bool {
 
 // Returns SHA256 for calculating canonical-request.
 func getContentSha256Cksum(r *http.Request) string {
-	defaultSum := emptySHA256
-	sum := r.Header.Get("X-Amz-Content-Sha256")
-
+	// For a presigned request we look at the query param for sha256.
 	if isRequestPresignedSignatureV4(r) {
-		defaultSum = unsignedPayload
-		sum = r.URL.Query().Get("X-Amz-Content-Sha256")
-	}
+		presignedCkSum := r.URL.Query().Get("X-Amz-Content-Sha256")
+		if presignedCkSum == "" {
+			// If not set presigned is defaulted to UNSIGNED-PAYLOAD.
+			return unsignedPayload
 
-	if sum == "" {
-		return defaultSum
+		}
+		return presignedCkSum
 	}
-	return sum
+	contentCkSum := r.Header.Get("X-Amz-Content-Sha256")
+	if contentCkSum == "" {
+		// If not set content checksum is defaulted to sha256([]byte("")).
+		contentCkSum = emptySHA256
+
+	}
+	return contentCkSum
 }
 
 // isValidRegion - verify if incoming region value is valid with configured Region.
