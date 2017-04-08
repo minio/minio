@@ -63,10 +63,10 @@ minio server http://192.168.1.11/export1 http://192.168.1.12/export2 \
 ```cmd
 set MINIO_ACCESS_KEY=<ACCESS_KEY>
 set MINIO_SECRET_KEY=<SECRET_KEY>
-minio.exe server http://192.168.1.11/C:\data http://192.168.1.12/C:\data ^
-                  http://192.168.1.13/C:\data http://192.168.1.14/C:\data ^
-                  http://192.168.1.15/C:\data http://192.168.1.16/C:\data ^
-                  http://192.168.1.17/C:\data http://192.168.1.18/C:\data
+minio.exe server http://192.168.1.11/C:\data http://192.168.1.12/C:/data ^
+                  http://192.168.1.13/C:\data http://192.168.1.14/C:/data ^
+                  http://192.168.1.15/C:\data http://192.168.1.16/C:/data ^
+                  http://192.168.1.17/C:\data http://192.168.1.18/C:/data
 ```
 
 ![Distributed Minio, 8 nodes with 1 disk each](https://raw.githubusercontent.com/minio/minio/master/docs/screenshots/Architecture-diagram_distributed_8.png)
@@ -93,14 +93,14 @@ minio server http://192.168.1.11/export1 http://192.168.1.11/export2 \
 ```cmd
 set MINIO_ACCESS_KEY=<ACCESS_KEY>
 set MINIO_SECRET_KEY=<SECRET_KEY>
-minio.exe server http://192.168.1.11/C:\data1 http://192.168.1.11/C:\data2 ^
-                  http://192.168.1.11/C:\data3 http://192.168.1.11/C:\data4 ^
-                  http://192.168.1.12/C:\data1 http://192.168.1.12/C:\data2 ^
-                  http://192.168.1.12/C:\data3 http://192.168.1.12/C:\data4 ^
-                  http://192.168.1.13/C:\data1 http://192.168.1.13/C:\data2 ^
-                  http://192.168.1.13/C:\data3 http://192.168.1.13/C:\data4 ^                  
-                  http://192.168.1.14/C:\data1 http://192.168.1.14/C:\data2 ^
-                  http://192.168.1.14/C:\data3 http://192.168.1.14/C:\data4
+minio.exe server http://192.168.1.11/C:/data1 http://192.168.1.11/C:/data2 ^
+                  http://192.168.1.11/C:/data3 http://192.168.1.11/C:/data4 ^
+                  http://192.168.1.12/C:/data1 http://192.168.1.12/C:/data2 ^
+                  http://192.168.1.12/C:/data3 http://192.168.1.12/C:/data4 ^
+                  http://192.168.1.13/C:/data1 http://192.168.1.13/C:/data2 ^
+                  http://192.168.1.13/C:/data3 http://192.168.1.13/C:/data4 ^                  
+                  http://192.168.1.14/C:/data1 http://192.168.1.14/C:/data2 ^
+                  http://192.168.1.14/C:/data3 http://192.168.1.14/C:/data4
 ```
 
 ![Distributed Minio, 4 nodes with 4 disks each](https://raw.githubusercontent.com/minio/minio/master/docs/screenshots/Architecture-diagram_distributed_16.png)
