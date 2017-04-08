@@ -55,7 +55,6 @@ func getContentSha256Cksum(r *http.Request) string {
 		if presignedCkSum == "" {
 			// If not set presigned is defaulted to UNSIGNED-PAYLOAD.
 			return unsignedPayload
-
 		}
 		return presignedCkSum
 	}
@@ -63,7 +62,6 @@ func getContentSha256Cksum(r *http.Request) string {
 	if contentCkSum == "" {
 		// If not set content checksum is defaulted to sha256([]byte("")).
 		contentCkSum = emptySHA256
-
 	}
 	return contentCkSum
 }

@@ -313,7 +313,7 @@ func mustNewSignedBadMD5Request(method string, urlStr string, contentLength int6
 	req.Header.Set("Content-Md5", "YWFhYWFhYWFhYWFhYWFhCg==")
 	cred := serverConfig.GetCredential()
 	if err := signRequestV4(req, cred.AccessKey, cred.SecretKey); err != nil {
-		t.Fatalf("Unable to inititalized new signed http request %s", err)
+		t.Fatalf("Unable to initialized new signed http request %s", err)
 	}
 	return req
 }

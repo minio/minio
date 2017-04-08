@@ -183,6 +183,7 @@ func isReqAuthenticated(r *http.Request, region string) (s3Error APIErrorCode) {
 	}
 
 	// Verify that X-Amz-Content-Sha256 Header == sha256(payload)
+	// If X-Amz-Content-Sha256 header is not sent then we don't calculate/verify sha256(payload)
 	sum := r.Header.Get("X-Amz-Content-Sha256")
 	if isRequestPresignedSignatureV4(r) {
 		sum = r.URL.Query().Get("X-Amz-Content-Sha256")
