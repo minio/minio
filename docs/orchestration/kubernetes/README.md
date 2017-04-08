@@ -133,4 +133,3 @@ $ helm install --set accessKey=myaccesskey,secretKey=mysecretkey \
 - [Minio Erasure Code QuickStart Guide](https://docs.minio.io/docs/minio-erasure-code-quickstart-guide)
 - [Kubernetes Documentation](https://kubernetes.io/docs/home/)
 - [Helm package manager for kubernetes](https://helm.sh/)
-
