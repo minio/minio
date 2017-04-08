@@ -33,9 +33,6 @@ Distributed Minio can be deployed via [Docker Compose](https://docs.minio.io/doc
 
 This means Docker Compose lets you quickly get started with Distributed Minio on your computer - ideal for development, testing, staging environments. While deploying Distributed Minio on Swarm offers a more robust, production level deployment.
 
-* To deploy Distributed Minio on Docker Compose, refer [this guide](http://docs.minio.io/docs/deploy-minio-on-docker-compose).
-* To deploy Distributed Minio on Docker Swarm, refer [this guide](https://docs.minio.io/docs/deploy-minio-on-docker-swarm).
-
 ## Minio Docker Tips
 
 ### Minio Custom Access and Secret Keys
