@@ -110,24 +110,6 @@ const (
 	httpsScheme = "https"
 )
 
-var portMap = map[string]string{
-	httpScheme:  "80",
-	httpsScheme: "443",
-}
-
-// Given a string of the form "host", "host:port", or "[ipv6::address]:port",
-// return true if the string includes a port.
-func hasPort(s string) bool { return strings.LastIndex(s, ":") > strings.LastIndex(s, "]") }
-
-// canonicalAddr returns url.Host but always with a ":port" suffix
-func canonicalAddr(u *url.URL) string {
-	addr := u.Host
-	if !hasPort(addr) {
-		return addr + ":" + portMap[u.Scheme]
-	}
-	return addr
-}
-
 // checkDuplicates - function to validate if there are duplicates in a slice of endPoints.
 func checkDuplicateEndpoints(endpoints []*url.URL) error {
 	var strs []string

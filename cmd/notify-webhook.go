@@ -17,12 +17,14 @@
 package cmd
 
 import (
+	"bytes"
 	"crypto/tls"
 	"fmt"
 	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/Sirupsen/logrus"
@@ -48,33 +50,126 @@ type httpConn struct {
 	Endpoint string
 }
 
-// Lookup endpoint address by successfully dialing.
-func lookupEndpoint(u *url.URL) error {
-	dialer := &net.Dialer{
-		Timeout:   300 * time.Millisecond,
-		KeepAlive: 300 * time.Millisecond,
+// List of success status.
+var successStatus = []int{
+	http.StatusOK,
+	http.StatusAccepted,
+	http.StatusContinue,
+	http.StatusNoContent,
+	http.StatusPartialContent,
+}
+
+// isNetErrorIgnored - is network error ignored.
+func isNetErrorIgnored(err error) bool {
+	if err == nil {
+		return false
 	}
-	nconn, err := dialer.Dial("tcp", canonicalAddr(u))
+	if strings.Contains(err.Error(), "Client.Timeout exceeded while awaiting headers") {
+		return true
+	}
+	switch err.(type) {
+	case net.Error:
+		switch err.(type) {
+		case *net.DNSError, *net.OpError, net.UnknownNetworkError:
+			return true
+		case *url.Error:
+			// For a URL error, where it replies back "connection closed"
+			// retry again.
+			if strings.Contains(err.Error(), "Connection closed by foreign host") {
+				return true
+			}
+		default:
+			if strings.Contains(err.Error(), "net/http: TLS handshake timeout") {
+				// If error is - tlsHandshakeTimeoutError, retry.
+				return true
+			} else if strings.Contains(err.Error(), "i/o timeout") {
+				// If error is - tcp timeoutError, retry.
+				return true
+			} else if strings.Contains(err.Error(), "connection timed out") {
+				// If err is a net.Dial timeout, retry.
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// Lookup endpoint address by successfully POSTting
+// a JSON which would send out minio release.
+func lookupEndpoint(urlStr string) error {
+	minioRelease := bytes.NewReader([]byte(ReleaseTag))
+	req, err := http.NewRequest("POST", urlStr, minioRelease)
 	if err != nil {
 		return err
 	}
-	return nconn.Close()
+
+	client := &http.Client{
+		Timeout: 1 * time.Second,
+		Transport: &http.Transport{
+			// need to close connection after usage.
+			DisableKeepAlives: true,
+		},
+	}
+
+	// Set content-type.
+	req.Header.Set("Content-Type", "application/json")
+
+	// Set proper server user-agent.
+	req.Header.Set("User-Agent", globalServerUserAgent)
+
+	// Retry if the request needs to be re-directed.
+	// This code is necessary since Go 1.7.x do not
+	// support retrying for http 307 for POST operation.
+	// https://github.com/golang/go/issues/7912
+	//
+	// FIXME: Remove this when we move to Go 1.8.
+	for {
+		resp, derr := client.Do(req)
+		if derr != nil {
+			if isNetErrorIgnored(derr) {
+				return nil
+			}
+			return derr
+		}
+		if resp == nil {
+			return fmt.Errorf("No response from server to download URL %s", urlStr)
+		}
+		resp.Body.Close()
+
+		// Redo the request with the new redirect url if http 307
+		// is returned, quit the loop otherwise
+		if resp.StatusCode == http.StatusTemporaryRedirect {
+			newURL, uerr := url.Parse(resp.Header.Get("Location"))
+			if uerr != nil {
+				return uerr
+			}
+			req.URL = newURL
+			continue
+		}
+
+		// For any known successful http status, return quickly.
+		for _, httpStatus := range successStatus {
+			if httpStatus == resp.StatusCode {
+				return nil
+			}
+		}
+
+		err = fmt.Errorf("Unexpected response from webhook server %s: (%s)", urlStr, resp.Status)
+		break
+	}
+
+	// Succes.
+	return err
 }
 
 // Initializes new webhook logrus notifier.
 func newWebhookNotify(accountID string) (*logrus.Logger, error) {
 	rNotify := serverConfig.Notify.GetWebhookByID(accountID)
-
 	if rNotify.Endpoint == "" {
 		return nil, errInvalidArgument
 	}
 
-	u, err := url.Parse(rNotify.Endpoint)
-	if err != nil {
-		return nil, err
-	}
-
-	if err = lookupEndpoint(u); err != nil {
+	if err := lookupEndpoint(rNotify.Endpoint); err != nil {
 		return nil, err
 	}
 
