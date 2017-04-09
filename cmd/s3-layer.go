@@ -534,7 +534,8 @@ func (l *s3Gateway) CompleteMultipartUpload(bucket string, object string, upload
 // SetBucketPolicies - Set policy on bucket
 func (l *s3Gateway) SetBucketPolicies(bucket string, policies []BucketAccessPolicy) error {
 	for _, policy := range policies {
-		prefix := strings.Trim(policy.Prefix, "*")
+		prefix := strings.TrimSuffix(policy.Prefix, "*")
+		prefix = strings.TrimPrefix(prefix, bucket+"/")
 		if err := l.Client.SetBucketPolicy(bucket, prefix, policy.Policy); err != nil {
 			return s3ToObjectError(traceError(err), bucket, policy.Prefix)
 		}
@@ -543,11 +544,12 @@ func (l *s3Gateway) SetBucketPolicies(bucket string, policies []BucketAccessPoli
 }
 
 // fromMinioClientListBucketPolicies converts from map[string]policy.BucketPolicy to []BucketAccessPolicy
-func fromMinioClientListBucketPolicies(bucketPolicies map[string]policy.BucketPolicy) []BucketAccessPolicy {
+func fromMinioClientListBucketPolicies(bucket string, bucketPolicies map[string]policy.BucketPolicy) []BucketAccessPolicy {
 	policies := make([]BucketAccessPolicy, 0)
 
 	for prefix, permission := range bucketPolicies {
-		prefix := strings.Trim(prefix, "*")
+		prefix := strings.TrimSuffix(prefix, "*")
+		prefix = strings.TrimPrefix(prefix, bucket+"/")
 		policies = append(policies, BucketAccessPolicy{
 			Prefix: prefix,
 			Policy: policy.BucketPolicy(permission),
@@ -563,8 +565,10 @@ func (l *s3Gateway) GetBucketPolicies(bucket string) ([]BucketAccessPolicy, erro
 	if err != nil {
 		return []BucketAccessPolicy{}, s3ToObjectError(traceError(err), bucket, "")
 	}
-
-	return fromMinioClientListBucketPolicies(bucketPolicies), nil
+	if len(bucketPolicies) == 0 {
+		return nil, PolicyNotFound{}
+	}
+	return fromMinioClientListBucketPolicies(bucket, bucketPolicies), nil
 }
 
 // DeleteBucketPolicies - Delete all policies on bucket
@@ -575,6 +579,8 @@ func (l *s3Gateway) DeleteBucketPolicies(bucket string) error {
 	}
 
 	for prefix, _ := range bucketPolicies {
+		prefix := strings.TrimSuffix(prefix, "*")
+		prefix = strings.TrimPrefix(prefix, bucket+"/")
 		l.Client.SetBucketPolicy(bucket, prefix, policy.BucketPolicyNone)
 	}
 

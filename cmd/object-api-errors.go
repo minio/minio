@@ -335,6 +335,12 @@ func (e PolicyNesting) Error() string {
 	return "New bucket policy conflicts with an existing policy. Please try again with new prefix."
 }
 
+type PolicyNotFound GenericError
+
+func (e PolicyNotFound) Error() string {
+	return "Policy not found"
+}
+
 // Check if error type is IncompleteBody.
 func isErrIncompleteBody(err error) bool {
 	err = errorCause(err)

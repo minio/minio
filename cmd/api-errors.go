@@ -696,6 +696,8 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrEntityTooSmall
 	case NotImplemented:
 		apiErr = ErrNotImplemented
+	case PolicyNotFound:
+		apiErr = ErrNoSuchBucketPolicy
 	default:
 		apiErr = ErrInternalError
 	}
