@@ -66,8 +66,14 @@ var (
 	globalIsBrowserEnabled = true
 	// This flag is set to 'true' when MINIO_BROWSER env is set.
 	globalIsEnvBrowser = false
+
 	// Set to true if credentials were passed from env, default is false.
 	globalIsEnvCreds = false
+
+	// This flag is set to 'true' wen MINIO_REGION env is set.
+	globalIsEnvRegion = false
+	// This flag is set to 'us-east-1' by default
+	globalServerRegion = globalMinioDefaultRegion
 
 	// Maximum size of internal objects parts
 	globalPutPartSize = int64(64 * 1024 * 1024)

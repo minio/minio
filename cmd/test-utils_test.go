@@ -490,6 +490,8 @@ func resetGlobalIsXL() {
 
 func resetGlobalIsEnvs() {
 	globalIsEnvCreds = false
+	globalIsEnvBrowser = false
+	globalIsEnvRegion = false
 }
 
 // Resets all the globals used modified in tests.
