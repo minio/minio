@@ -1177,6 +1177,29 @@ func newTestSignedRequest(method, urlStr string, contentLength int64, body io.Re
 	return newTestSignedRequestV4(method, urlStr, contentLength, body, accessKey, secretKey)
 }
 
+// Returns request with correct signature but with incorrect SHA256.
+func newTestSignedBadSHARequest(method, urlStr string, contentLength int64, body io.ReadSeeker, accessKey, secretKey string, signer signerType) (*http.Request, error) {
+	req, err := newTestRequest(method, urlStr, contentLength, body)
+	if err != nil {
+		return nil, err
+	}
+
+	// Anonymous request return early.
+	if accessKey == "" || secretKey == "" {
+		return req, nil
+	}
+
+	if signer == signerV2 {
+		err = signRequestV2(req, accessKey, secretKey)
+		req.Header.Del("x-amz-content-sha256")
+	} else {
+		req.Header.Set("x-amz-content-sha256", "92b165232fbd011da355eca0b033db22b934ba9af0145a437a832d27310b89f9")
+		err = signRequestV4(req, accessKey, secretKey)
+	}
+
+	return req, err
+}
+
 // Returns new HTTP request object signed with signature v2.
 func newTestSignedRequestV2(method, urlStr string, contentLength int64, body io.ReadSeeker, accessKey, secretKey string) (*http.Request, error) {
 	req, err := newTestRequest(method, urlStr, contentLength, body)

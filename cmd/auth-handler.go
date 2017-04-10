@@ -142,19 +142,16 @@ func isReqAuthenticatedV2(r *http.Request) (s3Error APIErrorCode) {
 	return doesPresignV2SignatureMatch(r)
 }
 
-func reqSignatureV4Verify(r *http.Request) (s3Error APIErrorCode) {
-	sha256sum := r.Header.Get("X-Amz-Content-Sha256")
-	// Skips calculating sha256 on the payload on server,
-	// if client requested for it.
-	if skipContentSha256Cksum(r) {
-		sha256sum = unsignedPayload
+func reqSignatureV4Verify(r *http.Request, region string) (s3Error APIErrorCode) {
+	sha256sum := getContentSha256Cksum(r)
+	switch {
+	case isRequestSignatureV4(r):
+		return doesSignatureMatch(sha256sum, r, region)
+	case isRequestPresignedSignatureV4(r):
+		return doesPresignedSignatureMatch(sha256sum, r, region)
+	default:
+		return ErrAccessDenied
 	}
-	if isRequestSignatureV4(r) {
-		return doesSignatureMatch(sha256sum, r, serverConfig.GetRegion())
-	} else if isRequestPresignedSignatureV4(r) {
-		return doesPresignedSignatureMatch(sha256sum, r, serverConfig.GetRegion())
-	}
-	return ErrAccessDenied
 }
 
 // Verify if request has valid AWS Signature Version '4'.
@@ -162,32 +159,39 @@ func isReqAuthenticated(r *http.Request, region string) (s3Error APIErrorCode) {
 	if r == nil {
 		return ErrInternalError
 	}
+	if errCode := reqSignatureV4Verify(r, region); errCode != ErrNone {
+		return errCode
+	}
 	payload, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		errorIf(err, "Unable to read request body for signature verification")
 		return ErrInternalError
 	}
+
+	// Populate back the payload.
+	r.Body = ioutil.NopCloser(bytes.NewReader(payload))
+
 	// Verify Content-Md5, if payload is set.
 	if r.Header.Get("Content-Md5") != "" {
 		if r.Header.Get("Content-Md5") != getMD5HashBase64(payload) {
 			return ErrBadDigest
 		}
 	}
-	// Populate back the payload.
-	r.Body = ioutil.NopCloser(bytes.NewReader(payload))
-	// Skips calculating sha256 on the payload on server, if client requested for it.
-	var sha256sum string
+
 	if skipContentSha256Cksum(r) {
-		sha256sum = unsignedPayload
-	} else {
-		sha256sum = getSHA256Hash(payload)
+		return ErrNone
 	}
-	if isRequestSignatureV4(r) {
-		return doesSignatureMatch(sha256sum, r, region)
-	} else if isRequestPresignedSignatureV4(r) {
-		return doesPresignedSignatureMatch(sha256sum, r, region)
+
+	// Verify that X-Amz-Content-Sha256 Header == sha256(payload)
+	// If X-Amz-Content-Sha256 header is not sent then we don't calculate/verify sha256(payload)
+	sum := r.Header.Get("X-Amz-Content-Sha256")
+	if isRequestPresignedSignatureV4(r) {
+		sum = r.URL.Query().Get("X-Amz-Content-Sha256")
 	}
-	return ErrAccessDenied
+	if sum != "" && sum != getSHA256Hash(payload) {
+		return ErrContentSHA256Mismatch
+	}
+	return ErrNone
 }
 
 // authHandler - handles all the incoming authorization headers and validates them if possible.

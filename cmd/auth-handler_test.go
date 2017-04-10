@@ -308,6 +308,16 @@ func mustNewSignedRequest(method string, urlStr string, contentLength int64, bod
 	return req
 }
 
+func mustNewSignedBadMD5Request(method string, urlStr string, contentLength int64, body io.ReadSeeker, t *testing.T) *http.Request {
+	req := mustNewRequest(method, urlStr, contentLength, body, t)
+	req.Header.Set("Content-Md5", "YWFhYWFhYWFhYWFhYWFhCg==")
+	cred := serverConfig.GetCredential()
+	if err := signRequestV4(req, cred.AccessKey, cred.SecretKey); err != nil {
+		t.Fatalf("Unable to initialized new signed http request %s", err)
+	}
+	return req
+}
+
 // Tests is requested authenticated function, tests replies for s3 errors.
 func TestIsReqAuthenticated(t *testing.T) {
 	path, err := newTestConfig(globalMinioDefaultRegion)
@@ -333,16 +343,13 @@ func TestIsReqAuthenticated(t *testing.T) {
 		// When request is unsigned, access denied is returned.
 		{mustNewRequest("GET", "http://127.0.0.1:9000", 0, nil, t), ErrAccessDenied},
 		// When request is properly signed, but has bad Content-MD5 header.
-		{mustNewSignedRequest("PUT", "http://127.0.0.1:9000", 5, bytes.NewReader([]byte("hello")), t), ErrBadDigest},
+		{mustNewSignedBadMD5Request("PUT", "http://127.0.0.1:9000/", 5, bytes.NewReader([]byte("hello")), t), ErrBadDigest},
 		// When request is properly signed, error is none.
 		{mustNewSignedRequest("GET", "http://127.0.0.1:9000", 0, nil, t), ErrNone},
 	}
 
 	// Validates all testcases.
 	for _, testCase := range testCases {
-		if testCase.s3Error == ErrBadDigest {
-			testCase.req.Header.Set("Content-Md5", "garbage")
-		}
 		if s3Error := isReqAuthenticated(testCase.req, serverConfig.GetRegion()); s3Error != testCase.s3Error {
 			t.Fatalf("Unexpected s3error returned wanted %d, got %d", testCase.s3Error, s3Error)
 		}

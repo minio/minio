@@ -210,12 +210,6 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 		return ErrInvalidAccessKeyID
 	}
 
-	// Hashed payload mismatch, return content sha256 mismatch.
-	contentSha256 := req.URL.Query().Get("X-Amz-Content-Sha256")
-	if contentSha256 != "" && hashedPayload != contentSha256 {
-		return ErrContentSHA256Mismatch
-	}
-
 	// Verify if region is valid.
 	sRegion := pSignValues.Credential.scope.region
 	// Should validate region, only if region is set.
@@ -233,7 +227,7 @@ func doesPresignedSignatureMatch(hashedPayload string, r *http.Request, region s
 	}
 	// Construct new query.
 	query := make(url.Values)
-	if contentSha256 != "" {
+	if req.URL.Query().Get("X-Amz-Content-Sha256") != "" {
 		query.Set("X-Amz-Content-Sha256", hashedPayload)
 	}
 
@@ -333,11 +327,6 @@ func doesSignatureMatch(hashedPayload string, r *http.Request, region string) AP
 		return err
 	}
 
-	// Hashed payload mismatch, return content sha256 mismatch.
-	if hashedPayload != req.Header.Get("X-Amz-Content-Sha256") {
-		return ErrContentSHA256Mismatch
-	}
-
 	// Extract all the signed headers along with its values.
 	extractedSignedHeaders, errCode := extractSignedHeaders(signV4Values.SignedHeaders, r)
 	if errCode != ErrNone {
@@ -381,6 +370,7 @@ func doesSignatureMatch(hashedPayload string, r *http.Request, region string) AP
 
 	// Get canonical request.
 	canonicalRequest := getCanonicalRequest(extractedSignedHeaders, hashedPayload, queryStr, req.URL.Path, req.Method)
+
 	// Get string to sign from canonical request.
 	stringToSign := getStringToSign(canonicalRequest, t, signV4Values.Credential.getScope())
 
