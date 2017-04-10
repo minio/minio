@@ -45,4 +45,5 @@ Each instance is now accessible on the host at ports 9001 through 9004, proceed 
 ### Explore Further
 - [Overview of Docker Compose](https://docs.docker.com/compose/overview/)
 - [Minio Docker Quickstart Guide](https://docs.minio.io/docs/minio-docker-quickstart-guide)
+- [Deploy Minio on Docker Swarm](https://docs.minio.io/docs/deploy-minio-on-docker-swarm)
 - [Minio Erasure Code QuickStart Guide](https://docs.minio.io/docs/minio-erasure-code-quickstart-guide)

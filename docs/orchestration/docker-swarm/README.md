@@ -62,6 +62,9 @@ docker stack rm minio_stack
 * Docker Swarm uses ingress load balancing by default. You can configure [external load balancer based](https://docs.docker.com/engine/swarm/ingress/#/configure-an-external-load-balancer) on requirements.
 
 ### Explore Further
-- [Minio Erasure Code QuickStart Guide](https://docs.minio.io/docs/minio-erasure-code-quickstart-guide)
 - [Overview of Docker Swarm mode](https://docs.docker.com/engine/swarm/)
 - [Minio Docker Quickstart Guide](https://docs.minio.io/docs/minio-docker-quickstart-guide)
+- [Deploy Minio on Docker Compose](https://docs.minio.io/docs/deploy-minio-on-docker-compose)
+- [Minio Erasure Code QuickStart Guide](https://docs.minio.io/docs/minio-erasure-code-quickstart-guide)
+
+
