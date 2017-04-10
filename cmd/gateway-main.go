@@ -19,6 +19,7 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 
 	"github.com/gorilla/mux"
@@ -83,11 +84,11 @@ func mustGetGatewayCredsFromEnv() (accessKey, secretKey string) {
 //
 // - Azure Blob Storage.
 // - Add your favorite backend here.
-func newGatewayLayer(backendType, endPoint, accessKey, secretKey string) (GatewayLayer, error) {
+func newGatewayLayer(backendType, endPoint, accessKey, secretKey string, secure bool) (GatewayLayer, error) {
 	if gatewayBackend(backendType) != azureBackend {
 		return nil, fmt.Errorf("Unrecognized backend type %s", backendType)
 	}
-	return newAzureLayer(endPoint, accessKey, secretKey)
+	return newAzureLayer(endPoint, accessKey, secretKey, secure)
 }
 
 // Initialize a new gateway config.
@@ -117,6 +118,25 @@ func newGatewayConfig(accessKey, secretKey, region string) error {
 	return nil
 }
 
+func getGatewayEndpoint(arg string) (endPoint string, secure bool, err error) {
+	u, err := url.Parse(arg)
+	if err != nil {
+		return "", false, err
+	}
+
+	switch u.Scheme {
+	case "http":
+		return u.Host, true, nil
+	case "https":
+		return u.Host, false, nil
+	case "":
+		// url.Parse("play.minio.io") puts play.minio.io in u.Path
+		return u.Path, true, nil
+	default:
+		return "", false, fmt.Errorf("Unrecognized scheme %s", u.Scheme)
+	}
+}
+
 // Handler for 'minio gateway'.
 func gatewayMain(ctx *cli.Context) {
 	if !ctx.Args().Present() || ctx.Args().First() == "help" {
@@ -144,12 +164,13 @@ func gatewayMain(ctx *cli.Context) {
 
 	// Second argument is endpoint.	If no endpoint is specified then the
 	// gateway implementation should use a default setting.
-	endPoint := ctx.Args().Get(1)
+	endPoint, secure, err := getGatewayEndpoint(ctx.Args().Get(1))
+	fatalIf(err, "Unable to parse endpoint")
 
 	// Create certs path for SSL configuration.
 	fatalIf(createConfigDir(), "Unable to create configuration directory")
 
-	newObject, err := newGatewayLayer(backendType, endPoint, accessKey, secretKey)
+	newObject, err := newGatewayLayer(backendType, endPoint, accessKey, secretKey, secure)
 	fatalIf(err, "Unable to initialize gateway layer")
 
 	initNSLock(false) // Enable local namespace lock.

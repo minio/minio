@@ -123,12 +123,11 @@ func azureToObjectError(err error, params ...string) error {
 }
 
 // Inits azure blob storage client and returns AzureObjects.
-func newAzureLayer(endPoint, account, key string) (GatewayLayer, error) {
-	useHTTPS := true
+func newAzureLayer(endPoint string, account, key string, secure bool) (GatewayLayer, error) {
 	if endPoint == "" {
 		endPoint = storage.DefaultBaseURL
 	}
-	c, err := storage.NewClient(account, key, endPoint, globalAzureAPIVersion, useHTTPS)
+	c, err := storage.NewClient(account, key, endPoint, globalAzureAPIVersion, secure)
 	if err != nil {
 		return AzureObjects{}, err
 	}
