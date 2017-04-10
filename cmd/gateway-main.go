@@ -83,11 +83,11 @@ func mustGetGatewayCredsFromEnv() (accessKey, secretKey string) {
 //
 // - Azure Blob Storage.
 // - Add your favorite backend here.
-func newGatewayLayer(backendType, accessKey, secretKey string) (GatewayLayer, error) {
+func newGatewayLayer(backendType, endPoint, accessKey, secretKey string) (GatewayLayer, error) {
 	if gatewayBackend(backendType) != azureBackend {
 		return nil, fmt.Errorf("Unrecognized backend type %s", backendType)
 	}
-	return newAzureLayer(accessKey, secretKey)
+	return newAzureLayer(endPoint, accessKey, secretKey)
 }
 
 // Initialize a new gateway config.
@@ -142,10 +142,14 @@ func gatewayMain(ctx *cli.Context) {
 	// First argument is selected backend type.
 	backendType := ctx.Args().First()
 
+	// Second argument is endpoint.	If no endpoint is specified then the
+	// gateway implementation should use a default setting.
+	endPoint := ctx.Args().Get(1)
+
 	// Create certs path for SSL configuration.
 	fatalIf(createConfigDir(), "Unable to create configuration directory")
 
-	newObject, err := newGatewayLayer(backendType, accessKey, secretKey)
+	newObject, err := newGatewayLayer(backendType, endPoint, accessKey, secretKey)
 	fatalIf(err, "Unable to initialize gateway layer")
 
 	initNSLock(false) // Enable local namespace lock.
