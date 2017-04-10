@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"regexp"
 
 	"github.com/gorilla/mux"
 	"github.com/minio/cli"
@@ -118,7 +119,16 @@ func newGatewayConfig(accessKey, secretKey, region string) error {
 	return nil
 }
 
-func getGatewayEndpoint(arg string) (endPoint string, secure bool, err error) {
+// Return endpoint.
+func parseGatewayEndpoint(arg string) (endPoint string, secure bool, err error) {
+	schemeSpecified, err := regexp.MatchString(".*://", endPoint)
+	if err != nil {
+		return "", false, err
+	}
+	if !schemeSpecified {
+		// Default connection will be "secure".
+		endPoint = "https://" + endPoint
+	}
 	u, err := url.Parse(arg)
 	if err != nil {
 		return "", false, err
@@ -129,9 +139,6 @@ func getGatewayEndpoint(arg string) (endPoint string, secure bool, err error) {
 		return u.Host, true, nil
 	case "https":
 		return u.Host, false, nil
-	case "":
-		// url.Parse("play.minio.io") puts play.minio.io in u.Path
-		return u.Path, true, nil
 	default:
 		return "", false, fmt.Errorf("Unrecognized scheme %s", u.Scheme)
 	}
@@ -164,7 +171,7 @@ func gatewayMain(ctx *cli.Context) {
 
 	// Second argument is endpoint.	If no endpoint is specified then the
 	// gateway implementation should use a default setting.
-	endPoint, secure, err := getGatewayEndpoint(ctx.Args().Get(1))
+	endPoint, secure, err := parseGatewayEndpoint(ctx.Args().Get(1))
 	fatalIf(err, "Unable to parse endpoint")
 
 	// Create certs path for SSL configuration.
