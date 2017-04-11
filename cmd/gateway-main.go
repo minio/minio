@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
-	"regexp"
+	"strings"
 
 	"github.com/gorilla/mux"
 	"github.com/minio/cli"
@@ -121,13 +121,10 @@ func newGatewayConfig(accessKey, secretKey, region string) error {
 
 // Return endpoint.
 func parseGatewayEndpoint(arg string) (endPoint string, secure bool, err error) {
-	schemeSpecified, err := regexp.MatchString(".*://", endPoint)
-	if err != nil {
-		return "", false, err
-	}
+	schemeSpecified := len(strings.Split(arg, "://")) > 1
 	if !schemeSpecified {
 		// Default connection will be "secure".
-		endPoint = "https://" + endPoint
+		arg = "https://" + arg
 	}
 	u, err := url.Parse(arg)
 	if err != nil {
@@ -136,9 +133,9 @@ func parseGatewayEndpoint(arg string) (endPoint string, secure bool, err error) 
 
 	switch u.Scheme {
 	case "http":
-		return u.Host, true, nil
-	case "https":
 		return u.Host, false, nil
+	case "https":
+		return u.Host, true, nil
 	default:
 		return "", false, fmt.Errorf("Unrecognized scheme %s", u.Scheme)
 	}
