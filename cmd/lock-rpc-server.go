@@ -30,7 +30,10 @@ import (
 
 const (
 	// Lock rpc server endpoint.
-	lockRPCPath = "/lock"
+	lockServicePath = "/lock"
+
+	// Lock rpc service name.
+	lockServiceName = "Dsync"
 
 	// Lock maintenance interval.
 	lockMaintenanceInterval = 1 * time.Minute // 1 minute.
@@ -39,17 +42,17 @@ const (
 	lockValidityCheckInterval = 2 * time.Minute // 2 minutes.
 )
 
-// lockRequesterInfo stores various info from the client for each lock that is requested
+// lockRequesterInfo stores various info from the client for each lock that is requested.
 type lockRequesterInfo struct {
-	writer        bool      // Bool whether write or read lock
-	node          string    // Network address of client claiming lock
-	rpcPath       string    // RPC path of client claiming lock
-	uid           string    // Uid to uniquely identify request of client
-	timestamp     time.Time // Timestamp set at the time of initialization
-	timeLastCheck time.Time // Timestamp for last check of validity of lock
+	writer          bool      // Bool whether write or read lock.
+	node            string    // Network address of client claiming lock.
+	serviceEndpoint string    // RPC path of client claiming lock.
+	uid             string    // UID to uniquely identify request of client.
+	timestamp       time.Time // Timestamp set at the time of initialization.
+	timeLastCheck   time.Time // Timestamp for last check of validity of lock.
 }
 
-// isWriteLock returns whether the lock is a write or read lock
+// isWriteLock returns whether the lock is a write or read lock.
 func isWriteLock(lri []lockRequesterInfo) bool {
 	return len(lri) == 1 && lri[0].writer
 }
@@ -57,9 +60,9 @@ func isWriteLock(lri []lockRequesterInfo) bool {
 // lockServer is type for RPC handlers
 type lockServer struct {
 	AuthRPCServer
-	rpcPath string
-	mutex   sync.Mutex
-	lockMap map[string][]lockRequesterInfo
+	serviceEndpoint string
+	mutex           sync.Mutex
+	lockMap         map[string][]lockRequesterInfo
 }
 
 // Start lock maintenance from all lock servers.
@@ -105,9 +108,9 @@ func newLockServers(srvConfig serverCmdConfig) (lockServers []*lockServer) {
 		if isLocalStorage(ep) {
 			// Create handler for lock RPCs
 			locker := &lockServer{
-				rpcPath: getPath(ep),
-				mutex:   sync.Mutex{},
-				lockMap: make(map[string][]lockRequesterInfo),
+				serviceEndpoint: getPath(ep),
+				mutex:           sync.Mutex{},
+				lockMap:         make(map[string][]lockRequesterInfo),
 			}
 			lockServers = append(lockServers, locker)
 		}
@@ -119,11 +122,11 @@ func newLockServers(srvConfig serverCmdConfig) (lockServers []*lockServer) {
 func registerStorageLockers(mux *router.Router, lockServers []*lockServer) error {
 	for _, lockServer := range lockServers {
 		lockRPCServer := rpc.NewServer()
-		if err := lockRPCServer.RegisterName("Dsync", lockServer); err != nil {
+		if err := lockRPCServer.RegisterName(lockServiceName, lockServer); err != nil {
 			return traceError(err)
 		}
 		lockRouter := mux.PathPrefix(minioReservedBucketPath).Subrouter()
-		lockRouter.Path(path.Join(lockRPCPath, lockServer.rpcPath)).Handler(lockRPCServer)
+		lockRouter.Path(path.Join(lockServicePath, lockServer.serviceEndpoint)).Handler(lockRPCServer)
 	}
 	return nil
 }
@@ -141,12 +144,12 @@ func (l *lockServer) Lock(args *LockArgs, reply *bool) error {
 	if !*reply { // No locks held on the given name, so claim write lock
 		l.lockMap[args.LockArgs.Resource] = []lockRequesterInfo{
 			{
-				writer:        true,
-				node:          args.LockArgs.ServerAddr,
-				rpcPath:       args.LockArgs.ServiceEndpoint,
-				uid:           args.LockArgs.UID,
-				timestamp:     UTCNow(),
-				timeLastCheck: UTCNow(),
+				writer:          true,
+				node:            args.LockArgs.ServerAddr,
+				serviceEndpoint: args.LockArgs.ServiceEndpoint,
+				uid:             args.LockArgs.UID,
+				timestamp:       UTCNow(),
+				timeLastCheck:   UTCNow(),
 			},
 		}
 	}
@@ -182,12 +185,12 @@ func (l *lockServer) RLock(args *LockArgs, reply *bool) error {
 		return err
 	}
 	lrInfo := lockRequesterInfo{
-		writer:        false,
-		node:          args.LockArgs.ServerAddr,
-		rpcPath:       args.LockArgs.ServiceEndpoint,
-		uid:           args.LockArgs.UID,
-		timestamp:     UTCNow(),
-		timeLastCheck: UTCNow(),
+		writer:          false,
+		node:            args.LockArgs.ServerAddr,
+		serviceEndpoint: args.LockArgs.ServiceEndpoint,
+		uid:             args.LockArgs.UID,
+		timestamp:       UTCNow(),
+		timeLastCheck:   UTCNow(),
 	}
 	if lri, ok := l.lockMap[args.LockArgs.Resource]; ok {
 		if *reply = !isWriteLock(lri); *reply { // Unless there is a write lock
@@ -288,13 +291,16 @@ func (l *lockServer) lockMaintenance(interval time.Duration) {
 			accessKey:       serverCred.AccessKey,
 			secretKey:       serverCred.SecretKey,
 			serverAddr:      nlrip.lri.node,
-			serviceEndpoint: nlrip.lri.rpcPath,
 			secureConn:      globalIsSSL,
-			serviceName:     "Dsync",
+			serviceEndpoint: nlrip.lri.serviceEndpoint,
+			serviceName:     lockServiceName,
 		})
 
 		// Call back to original server verify whether the lock is still active (based on name & uid)
-		expired, _ := c.Expired(dsync.LockArgs{UID: nlrip.lri.uid, Resource: nlrip.name})
+		expired, _ := c.Expired(dsync.LockArgs{
+			UID:      nlrip.lri.uid,
+			Resource: nlrip.name,
+		})
 
 		// Close the connection regardless of the call response.
 		c.rpcClient.Close()
