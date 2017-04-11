@@ -42,13 +42,3 @@ func (setupType SetupType) String() string {
 
 	return ""
 }
-
-// IsValid - checks whether this setup type is valid or not.
-func (setupType SetupType) IsValid() bool {
-	switch setupType {
-	case FSSetupType, XLSetupType, DistXLSetupType:
-		return true
-	}
-
-	return false
-}
