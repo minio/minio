@@ -70,7 +70,7 @@ func TestNewEndpoint(t *testing.T) {
 		{"http://:/path", Endpoint{}, -1, fmt.Errorf("invalid URL endpoint format: invalid port number")},
 		{"http://:8080/path", Endpoint{}, -1, fmt.Errorf("invalid URL endpoint format: empty host name")},
 		{"http://server:/path", Endpoint{}, -1, fmt.Errorf("invalid URL endpoint format: invalid port number")},
-		{"https://93.184.216.34:808080/path", Endpoint{}, -1, fmt.Errorf("invalid URL endpoint format: port number must be between 1 to 65536")},
+		{"https://93.184.216.34:808080/path", Endpoint{}, -1, fmt.Errorf("invalid URL endpoint format: port number must be between 1 to 65535")},
 		{"http://server:8080//", Endpoint{}, -1, fmt.Errorf("empty or root path is not supported in URL endpoint")},
 		{"http://server:8080/", Endpoint{}, -1, fmt.Errorf("empty or root path is not supported in URL endpoint")},
 		{"http://server/path", Endpoint{}, -1, fmt.Errorf("lookup server" + errMsg)},
@@ -168,6 +168,11 @@ func TestCreateEndpoints(t *testing.T) {
 	case5u3, _ := url.Parse("http://localhost:9002/d3")
 	case5u4, _ := url.Parse("http://localhost:9003/d4")
 
+	case6u1, _ := url.Parse("http://10.0.0.1:9000/export")
+	case6u2, _ := url.Parse("http://10.0.0.2:9000/export")
+	case6u3, _ := url.Parse("http://10.0.0.3:9000/export")
+	case6u4, _ := url.Parse("http://localhost:9001/export")
+
 	testCases := []struct {
 		serverAddr         string
 		args               []string
@@ -244,6 +249,13 @@ func TestCreateEndpoints(t *testing.T) {
 			Endpoint{URL: case5u2, IsLocal: false},
 			Endpoint{URL: case5u3, IsLocal: false},
 			Endpoint{URL: case5u4, IsLocal: false},
+		}, DistXLSetupType, nil},
+
+		{":9001", []string{"http://10.0.0.1:9000/export", "http://10.0.0.2:9000/export", "http://localhost:9001/export", "http://10.0.0.3:9000/export"}, ":9001", EndpointList{
+			Endpoint{URL: case6u1, IsLocal: false},
+			Endpoint{URL: case6u2, IsLocal: false},
+			Endpoint{URL: case6u3, IsLocal: false},
+			Endpoint{URL: case6u4, IsLocal: true},
 		}, DistXLSetupType, nil},
 	}
 

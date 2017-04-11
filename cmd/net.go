@@ -148,8 +148,8 @@ func CheckLocalServerAddr(serverAddr string) error {
 	p, err := strconv.Atoi(port)
 	if err != nil {
 		return fmt.Errorf("invalid port number")
-	} else if p < 1 || p > 65536 {
-		return fmt.Errorf("port number must be between 1 to 65536")
+	} else if p < 1 || p > 65535 {
+		return fmt.Errorf("port number must be between 1 to 65535")
 	}
 
 	if host != "" {

@@ -164,8 +164,8 @@ func TestCheckLocalServerAddr(t *testing.T) {
 		{"", fmt.Errorf("missing port in address")},
 		{"localhost", fmt.Errorf("missing port in address localhost")},
 		{"example.org:54321", fmt.Errorf("host in server address should be this server")},
-		{":0", fmt.Errorf("port number must be between 1 to 65536")},
-		{":-10", fmt.Errorf("port number must be between 1 to 65536")},
+		{":0", fmt.Errorf("port number must be between 1 to 65535")},
+		{":-10", fmt.Errorf("port number must be between 1 to 65535")},
 	}
 
 	for _, testCase := range testCases {
