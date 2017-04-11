@@ -42,6 +42,7 @@ func getFormatStr(strLen int, padding int) string {
 
 // Prints the formatted startup message.
 func printStartupMessage(apiEndPoints []string) {
+
 	// Prints credential, region and browser access.
 	printServerCommonMsg(apiEndPoints)
 
