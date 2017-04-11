@@ -44,7 +44,7 @@ func TestParseGatewayEndpoint(t *testing.T) {
 			errReturned != test.errReturned {
 			t.Errorf("Test %d: expected %s,%t,%t got %s,%t,%t",
 				i+1, test.endPoint, test.secure, test.errReturned,
-				endPoint, secure, errReturned, err)
+				endPoint, secure, errReturned)
 		}
 	}
 }
