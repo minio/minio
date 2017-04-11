@@ -1099,6 +1099,26 @@ func (s *TestSuiteCommon) TestPutObject(c *C) {
 	// asserted the contents of the fetched object with the expected result.
 	c.Assert(true, Equals, bytes.Equal(buffer2.Bytes(), []byte("hello world")))
 
+	// Test the response when object name ends with a slash.
+	// This is a special case with size as '0' and object ends with
+	// a slash separator, we treat it like a valid operation and
+	// return success.
+	// The response Etag headers should contain Md5Sum of empty string.
+	objectName = "objectwith/"
+	// create HTTP request for object upload.
+	request, err = newTestSignedRequest("PUT", getPutObjectURL(s.endPoint, bucketName, objectName),
+		0, nil, s.accessKey, s.secretKey, s.signer)
+	if s.signer == signerV2 {
+		c.Assert(err, IsNil)
+		err = signRequestV2(request, s.accessKey, s.secretKey)
+	}
+	c.Assert(err, IsNil)
+	// execute the HTTP request for object upload.
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+	// The response Etag header should contain Md5sum of an empty string.
+	c.Assert(response.Header.Get("Etag"), Equals, "\""+emptyStrMd5Sum+"\"")
 }
 
 // TestListBuckets - Make request for listing of all buckets.

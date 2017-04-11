@@ -34,6 +34,9 @@ const (
 
 	// Buckets meta prefix.
 	bucketMetaPrefix = "buckets"
+
+	// Md5Sum of empty string.
+	emptyStrMd5Sum = "d41d8cd98f00b204e9800998ecf8427e"
 )
 
 // Global object layer mutex, used for safely updating object layer.
@@ -67,6 +70,10 @@ func dirObjectInfo(bucket, object string, size int64, metadata map[string]string
 	// return success.
 	md5Sum := metadata["md5Sum"]
 	delete(metadata, "md5Sum")
+	if md5Sum == "" {
+		md5Sum = emptyStrMd5Sum
+	}
+
 	return ObjectInfo{
 		Bucket:      bucket,
 		Name:        object,
