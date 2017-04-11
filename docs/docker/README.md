@@ -114,5 +114,3 @@ docker stats <container_id>
 * [Deploy Minio on Docker Swarm](https://docs.minio.io/docs/deploy-minio-on-docker-swarm)
 * [Distributed Minio Quickstart Guide](https://docs.minio.io/docs/distributed-minio-quickstart-guide)
 * [Minio Erasure Code QuickStart Guide](https://docs.minio.io/docs/minio-erasure-code-quickstart-guide)
-
-

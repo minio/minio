@@ -66,5 +66,3 @@ docker stack rm minio_stack
 - [Minio Docker Quickstart Guide](https://docs.minio.io/docs/minio-docker-quickstart-guide)
 - [Deploy Minio on Docker Compose](https://docs.minio.io/docs/deploy-minio-on-docker-compose)
 - [Minio Erasure Code QuickStart Guide](https://docs.minio.io/docs/minio-erasure-code-quickstart-guide)
-
-
