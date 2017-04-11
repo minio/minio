@@ -262,7 +262,10 @@ func (l *s3Gateway) GetObject(bucket string, key string, startOffset int64, leng
 
 	defer object.Close()
 
-	object.Seek(startOffset, io.SeekStart)
+	if _, err := object.Seek(startOffset, io.SeekStart); err != nil {
+		return s3ToObjectError(traceError(err), bucket, key)
+	}
+
 	if _, err := io.CopyN(writer, object, length); err != nil {
 		return s3ToObjectError(traceError(err), bucket, key)
 	}
