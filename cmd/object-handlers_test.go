@@ -1473,15 +1473,17 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 
 	// test cases with inputs and expected result for Copy Object.
 	testCases := []struct {
-		bucketName       string
-		newObjectName    string // name of the newly copied object.
-		copySourceHeader string // data for "X-Amz-Copy-Source" header. Contains the object to be copied in the URL.
-		metadataGarbage  bool
-		metadataReplace  bool
-		metadataCopy     bool
-		metadata         map[string]string
-		accessKey        string
-		secretKey        string
+		bucketName           string
+		newObjectName        string // name of the newly copied object.
+		copySourceHeader     string // data for "X-Amz-Copy-Source" header. Contains the object to be copied in the URL.
+		copyModifiedHeader   string // data for "X-Amz-Copy-Source-If-Modified-Since" header
+		copyUnmodifiedHeader string // data for "X-Amz-Copy-Source-If-Unmodified-Since" header
+		metadataGarbage      bool
+		metadataReplace      bool
+		metadataCopy         bool
+		metadata             map[string]string
+		accessKey            string
+		secretKey            string
 		// expected output.
 		expectedRespStatus int
 	}{
@@ -1624,6 +1626,66 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 
 			expectedRespStatus: http.StatusForbidden,
 		},
+		// Test case - 11, copy metadata from newObject1 with satisfying modified header.
+		{
+			bucketName:         bucketName,
+			newObjectName:      "newObject1",
+			copySourceHeader:   url.QueryEscape("/" + bucketName + "/" + objectName),
+			copyModifiedHeader: "Mon, 02 Jan 2006 15:04:05 GMT",
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
+			expectedRespStatus: http.StatusOK,
+		},
+		// Test case - 12, copy metadata from newObject1 with unsatisfying modified header.
+		{
+			bucketName:         bucketName,
+			newObjectName:      "newObject1",
+			copySourceHeader:   url.QueryEscape("/" + bucketName + "/" + objectName),
+			copyModifiedHeader: "Mon, 02 Jan 2217 15:04:05 GMT",
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
+			expectedRespStatus: http.StatusPreconditionFailed,
+		},
+		// Test case - 13, copy metadata from newObject1 with wrong modified header format
+		{
+			bucketName:         bucketName,
+			newObjectName:      "newObject1",
+			copySourceHeader:   url.QueryEscape("/" + bucketName + "/" + objectName),
+			copyModifiedHeader: "Mon, 02 Jan 2217 15:04:05 +00:00",
+			accessKey:          credentials.AccessKey,
+			secretKey:          credentials.SecretKey,
+			expectedRespStatus: http.StatusOK,
+		},
+		// Test case - 14, copy metadata from newObject1 with satisfying unmodified header.
+		{
+			bucketName:           bucketName,
+			newObjectName:        "newObject1",
+			copySourceHeader:     url.QueryEscape("/" + bucketName + "/" + objectName),
+			copyUnmodifiedHeader: "Mon, 02 Jan 2217 15:04:05 GMT",
+			accessKey:            credentials.AccessKey,
+			secretKey:            credentials.SecretKey,
+			expectedRespStatus:   http.StatusOK,
+		},
+		// Test case - 15, copy metadata from newObject1 with unsatisfying unmodified header.
+		{
+			bucketName:           bucketName,
+			newObjectName:        "newObject1",
+			copySourceHeader:     url.QueryEscape("/" + bucketName + "/" + objectName),
+			copyUnmodifiedHeader: "Mon, 02 Jan 2007 15:04:05 GMT",
+			accessKey:            credentials.AccessKey,
+			secretKey:            credentials.SecretKey,
+			expectedRespStatus:   http.StatusPreconditionFailed,
+		},
+		// Test case - 16, copy metadata from newObject1 with incorrect unmodified header format.
+		{
+			bucketName:           bucketName,
+			newObjectName:        "newObject1",
+			copySourceHeader:     url.QueryEscape("/" + bucketName + "/" + objectName),
+			copyUnmodifiedHeader: "Mon, 02 Jan 2007 15:04:05 +00:00",
+			accessKey:            credentials.AccessKey,
+			secretKey:            credentials.SecretKey,
+			expectedRespStatus:   http.StatusOK,
+		},
 	}
 
 	for i, testCase := range testCases {
@@ -1641,6 +1703,12 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		// "X-Amz-Copy-Source" header contains the information about the source bucket and the object to copied.
 		if testCase.copySourceHeader != "" {
 			req.Header.Set("X-Amz-Copy-Source", testCase.copySourceHeader)
+		}
+		if testCase.copyModifiedHeader != "" {
+			req.Header.Set("X-Amz-Copy-Source-If-Modified-Since", testCase.copyModifiedHeader)
+		}
+		if testCase.copyUnmodifiedHeader != "" {
+			req.Header.Set("X-Amz-Copy-Source-If-Unmodified-Since", testCase.copyUnmodifiedHeader)
 		}
 		// Add custom metadata.
 		for k, v := range testCase.metadata {
@@ -1686,6 +1754,12 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		// "X-Amz-Copy-Source" header contains the information about the source bucket and the object to copied.
 		if testCase.copySourceHeader != "" {
 			reqV2.Header.Set("X-Amz-Copy-Source", testCase.copySourceHeader)
+		}
+		if testCase.copyModifiedHeader != "" {
+			reqV2.Header.Set("X-Amz-Copy-Source-If-Modified-Since", testCase.copyModifiedHeader)
+		}
+		if testCase.copyUnmodifiedHeader != "" {
+			reqV2.Header.Set("X-Amz-Copy-Source-If-Unmodified-Since", testCase.copyUnmodifiedHeader)
 		}
 
 		// Add custom metadata.
