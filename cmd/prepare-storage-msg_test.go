@@ -17,59 +17,9 @@
 package cmd
 
 import (
-	"net/url"
-	"reflect"
+	"fmt"
 	"testing"
 )
-
-// Tests and validates the output for heal endpoint.
-func TestGetHealEndpoint(t *testing.T) {
-	// Test for a SSL scheme.
-	tls := true
-	hURL := getHealEndpoint(tls, &url.URL{
-		Scheme: httpScheme,
-		Host:   "localhost:9000",
-	})
-	sHURL := &url.URL{
-		Scheme: httpsScheme,
-		Host:   "localhost:9000",
-	}
-	if !reflect.DeepEqual(hURL, sHURL) {
-		t.Fatalf("Expected %#v, but got %#v", sHURL, hURL)
-	}
-
-	// Test a non-TLS scheme.
-	tls = false
-	hURL = getHealEndpoint(tls, &url.URL{
-		Scheme: httpsScheme,
-		Host:   "localhost:9000",
-	})
-	sHURL = &url.URL{
-		Scheme: httpScheme,
-		Host:   "localhost:9000",
-	}
-	if !reflect.DeepEqual(hURL, sHURL) {
-		t.Fatalf("Expected %#v, but got %#v", sHURL, hURL)
-	}
-
-	// FIXME(GLOBAL): purposefully Host is left empty because
-	// we need to bring in safe handling on global values
-	// add a proper test case here once that happens.
-	/*
-		tls = false
-		hURL = getHealEndpoint(tls, &url.URL{
-			Path: "/export",
-		})
-		sHURL = &url.URL{
-			Scheme: httpScheme,
-			Host:   "",
-		}
-		globalMinioAddr = ""
-		if !reflect.DeepEqual(hURL, sHURL) {
-			t.Fatalf("Expected %#v, but got %#v", sHURL, hURL)
-		}
-	*/
-}
 
 // Tests heal message to be correct and properly formatted.
 func TestHealMsg(t *testing.T) {
@@ -85,39 +35,26 @@ func TestHealMsg(t *testing.T) {
 	nilDisks[5] = nil
 	authErrs := make([]error, len(storageDisks))
 	authErrs[5] = errAuthentication
-	endpointURL, err := url.Parse("http://10.1.10.1:9000")
-	if err != nil {
-		t.Fatal("Unexpected error:", err)
+
+	args := []string{}
+	for i := range storageDisks {
+		args = append(args, fmt.Sprintf("http://10.1.10.%d:9000/d1", i+1))
 	}
-	endpointURLs := make([]*url.URL, len(storageDisks))
-	for idx := 0; idx < len(endpointURLs); idx++ {
-		endpointURLs[idx] = endpointURL
-	}
+	endpoints := mustGetNewEndpointList(args...)
 
 	testCases := []struct {
-		endPoints    []*url.URL
+		endPoints    EndpointList
 		storageDisks []StorageAPI
 		serrs        []error
 	}{
 		// Test - 1 for valid disks and errors.
-		{
-			endPoints:    endpointURLs,
-			storageDisks: storageDisks,
-			serrs:        errs,
-		},
+		{endpoints, storageDisks, errs},
 		// Test - 2 for one of the disks is nil.
-		{
-			endPoints:    endpointURLs,
-			storageDisks: nilDisks,
-			serrs:        errs,
-		},
+		{endpoints, nilDisks, errs},
 		// Test - 3 for one of the errs is authentication.
-		{
-			endPoints:    endpointURLs,
-			storageDisks: nilDisks,
-			serrs:        authErrs,
-		},
+		{endpoints, nilDisks, authErrs},
 	}
+
 	for i, testCase := range testCases {
 		msg := getHealMsg(testCase.endPoints, testCase.storageDisks)
 		if msg == "" {

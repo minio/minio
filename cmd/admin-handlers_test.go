@@ -158,12 +158,7 @@ func prepareAdminXLTestBed() (*adminXLTestBed, error) {
 	// Initialize boot time
 	globalBootTime = UTCNow()
 
-	// Set globalEndpoints for a single node XL setup.
-	for _, xlDir := range xlDirs {
-		globalEndpoints = append(globalEndpoints, &url.URL{
-			Path: xlDir,
-		})
-	}
+	globalEndpoints = mustGetNewEndpointList(xlDirs...)
 
 	// Set globalIsXL to indicate that the setup uses an erasure code backend.
 	globalIsXL = true
@@ -301,14 +296,8 @@ func testServicesCmdHandler(cmd cmdType, t *testing.T) {
 	// Initialize admin peers to make admin RPC calls. Note: In a
 	// single node setup, this degenerates to a simple function
 	// call under the hood.
-	eps, err := parseStorageEndpoints([]string{"http://127.0.0.1"})
-	if err != nil {
-		t.Fatalf("Failed to parse storage end point - %v", err)
-	}
-
-	// Set globalMinioAddr to be able to distinguish local endpoints from remote.
-	globalMinioAddr = eps[0].Host
-	initGlobalAdminPeers(eps)
+	globalMinioAddr = "127.0.0.1:9000"
+	initGlobalAdminPeers(mustGetNewEndpointList("http://127.0.0.1:9000/d1"))
 
 	// Setting up a go routine to simulate ServerMux's
 	// handleServiceSignals for stop and restart commands.
@@ -367,14 +356,8 @@ func TestServiceSetCreds(t *testing.T) {
 	// Initialize admin peers to make admin RPC calls. Note: In a
 	// single node setup, this degenerates to a simple function
 	// call under the hood.
-	eps, err := parseStorageEndpoints([]string{"http://127.0.0.1"})
-	if err != nil {
-		t.Fatalf("Failed to parse storage end point - %v", err)
-	}
-
-	// Set globalMinioAddr to be able to distinguish local endpoints from remote.
-	globalMinioAddr = eps[0].Host
-	initGlobalAdminPeers(eps)
+	globalMinioAddr = "127.0.0.1:9000"
+	initGlobalAdminPeers(mustGetNewEndpointList("http://127.0.0.1:9000/d1"))
 
 	credentials := serverConfig.GetCredential()
 	var body []byte
@@ -455,14 +438,8 @@ func TestListLocksHandler(t *testing.T) {
 	defer adminTestBed.TearDown()
 
 	// Initialize admin peers to make admin RPC calls.
-	eps, err := parseStorageEndpoints([]string{"http://127.0.0.1"})
-	if err != nil {
-		t.Fatalf("Failed to parse storage end point - %v", err)
-	}
-
-	// Set globalMinioAddr to be able to distinguish local endpoints from remote.
-	globalMinioAddr = eps[0].Host
-	initGlobalAdminPeers(eps)
+	globalMinioAddr = "127.0.0.1:9000"
+	initGlobalAdminPeers(mustGetNewEndpointList("http://127.0.0.1:9000/d1"))
 
 	testCases := []struct {
 		bucket         string
@@ -530,11 +507,7 @@ func TestClearLocksHandler(t *testing.T) {
 	defer adminTestBed.TearDown()
 
 	// Initialize admin peers to make admin RPC calls.
-	eps, err := parseStorageEndpoints([]string{"http://127.0.0.1"})
-	if err != nil {
-		t.Fatalf("Failed to parse storage end point - %v", err)
-	}
-	initGlobalAdminPeers(eps)
+	initGlobalAdminPeers(mustGetNewEndpointList("http://127.0.0.1:9000/d1"))
 
 	testCases := []struct {
 		bucket         string
@@ -1238,14 +1211,8 @@ func TestGetConfigHandler(t *testing.T) {
 	defer adminTestBed.TearDown()
 
 	// Initialize admin peers to make admin RPC calls.
-	eps, err := parseStorageEndpoints([]string{"http://127.0.0.1"})
-	if err != nil {
-		t.Fatalf("Failed to parse storage end point - %v", err)
-	}
-
-	// Set globalMinioAddr to be able to distinguish local endpoints from remote.
-	globalMinioAddr = eps[0].Host
-	initGlobalAdminPeers(eps)
+	globalMinioAddr = "127.0.0.1:9000"
+	initGlobalAdminPeers(mustGetNewEndpointList("http://127.0.0.1:9000/d1"))
 
 	// Prepare query params for get-config mgmt REST API.
 	queryVal := url.Values{}
@@ -1273,14 +1240,8 @@ func TestSetConfigHandler(t *testing.T) {
 	defer adminTestBed.TearDown()
 
 	// Initialize admin peers to make admin RPC calls.
-	eps, err := parseStorageEndpoints([]string{"http://127.0.0.1"})
-	if err != nil {
-		t.Fatalf("Failed to parse storage end point - %v", err)
-	}
-
-	// Set globalMinioAddr to be able to distinguish local endpoints from remote.
-	globalMinioAddr = eps[0].Host
-	initGlobalAdminPeers(eps)
+	globalMinioAddr = "127.0.0.1:9000"
+	initGlobalAdminPeers(mustGetNewEndpointList("http://127.0.0.1:9000/d1"))
 
 	// SetConfigHandler restarts minio setup - need to start a
 	// signal receiver to receive on globalServiceSignalCh.
@@ -1321,14 +1282,8 @@ func TestAdminServerInfo(t *testing.T) {
 	defer adminTestBed.TearDown()
 
 	// Initialize admin peers to make admin RPC calls.
-	eps, err := parseStorageEndpoints([]string{"http://127.0.0.1"})
-	if err != nil {
-		t.Fatalf("Failed to parse storage end point - %v", err)
-	}
-
-	// Set globalMinioAddr to be able to distinguish local endpoints from remote.
-	globalMinioAddr = eps[0].Host
-	initGlobalAdminPeers(eps)
+	globalMinioAddr = "127.0.0.1:9000"
+	initGlobalAdminPeers(mustGetNewEndpointList("http://127.0.0.1:9000/d1"))
 
 	// Prepare query params for set-config mgmt REST API.
 	queryVal := url.Values{}

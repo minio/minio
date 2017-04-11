@@ -90,9 +90,9 @@ func startLockMaintainence(lockServers []*lockServer) {
 }
 
 // Register distributed NS lock handlers.
-func registerDistNSLockRouter(mux *router.Router, serverConfig serverCmdConfig) error {
+func registerDistNSLockRouter(mux *router.Router, endpoints EndpointList) error {
 	// Initialize a new set of lock servers.
-	lockServers := newLockServers(serverConfig)
+	lockServers := newLockServers(endpoints)
 
 	// Start lock maintenance from all lock servers.
 	startLockMaintainence(lockServers)
@@ -102,19 +102,18 @@ func registerDistNSLockRouter(mux *router.Router, serverConfig serverCmdConfig) 
 }
 
 // Create one lock server for every local storage rpc server.
-func newLockServers(srvConfig serverCmdConfig) (lockServers []*lockServer) {
-	for _, ep := range srvConfig.endpoints {
+func newLockServers(endpoints EndpointList) (lockServers []*lockServer) {
+	for _, endpoint := range endpoints {
 		// Initialize new lock server for each local node.
-		if isLocalStorage(ep) {
-			// Create handler for lock RPCs
-			locker := &lockServer{
-				serviceEndpoint: getPath(ep),
+		if endpoint.IsLocal {
+			lockServers = append(lockServers, &lockServer{
+				serviceEndpoint: endpoint.Path,
 				mutex:           sync.Mutex{},
 				lockMap:         make(map[string][]lockRequesterInfo),
-			}
-			lockServers = append(lockServers, locker)
+			})
 		}
 	}
+
 	return lockServers
 }
 

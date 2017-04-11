@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"net/url"
 	"testing"
 
 	"github.com/minio/minio/pkg/disk"
@@ -30,7 +29,7 @@ type testStorageRPCServer struct {
 	token     string
 	diskDirs  []string
 	stServer  *storageServer
-	endpoints []*url.URL
+	endpoints EndpointList
 }
 
 func createTestStorageServer(t *testing.T) *testStorageRPCServer {
@@ -50,11 +49,7 @@ func createTestStorageServer(t *testing.T) *testStorageRPCServer {
 		t.Fatalf("unable to create FS backend, %s", err)
 	}
 
-	endpoints, err := parseStorageEndpoints(fsDirs)
-	if err != nil {
-		t.Fatalf("unable to parse storage endpoints, %s", err)
-	}
-
+	endpoints := mustGetNewEndpointList(fsDirs...)
 	storageDisks, err := initStorageDisks(endpoints)
 	if err != nil {
 		t.Fatalf("unable to initialize storage disks, %s", err)

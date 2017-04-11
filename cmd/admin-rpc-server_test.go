@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"encoding/json"
-	"net/url"
 	"testing"
 )
 
@@ -86,9 +85,7 @@ func TestReInitDisks(t *testing.T) {
 	defer removeRoots(xlDirs)
 
 	// Set globalEndpoints for a single node XL setup.
-	for _, xlDir := range xlDirs {
-		globalEndpoints = append(globalEndpoints, &url.URL{Path: xlDir})
-	}
+	globalEndpoints = mustGetNewEndpointList(xlDirs...)
 
 	// Setup admin rpc server for an XL backend.
 	globalIsXL = true

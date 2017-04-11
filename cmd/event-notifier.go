@@ -94,6 +94,21 @@ type eventData struct {
 // New notification event constructs a new notification event message from
 // input request metadata which completed successfully.
 func newNotificationEvent(event eventData) NotificationEvent {
+	getResponseOriginEndpointKey := func() string {
+		host := globalMinioHost
+		if host == "" {
+			// FIXME: Send FQDN or hostname of this machine than sending IP address.
+			host = localIP4.ToSlice()[0]
+		}
+
+		scheme := httpScheme
+		if globalIsSSL {
+			scheme = httpsScheme
+		}
+
+		return fmt.Sprintf("%s://%s:%s", scheme, host, globalMinioPort)
+	}
+
 	// Fetch the region.
 	region := serverConfig.GetRegion()
 
@@ -102,14 +117,6 @@ func newNotificationEvent(event eventData) NotificationEvent {
 
 	// Time when Minio finished processing the request.
 	eventTime := UTCNow()
-
-	// API endpoint is captured here to be returned back
-	// to the client for it to differentiate from which
-	// server the request came from.
-	var apiEndpoint string
-	if len(globalAPIEndpoints) >= 1 {
-		apiEndpoint = globalAPIEndpoints[0]
-	}
 
 	// Fetch a hexadecimal representation of event time in nano seconds.
 	uniqueID := mustGetRequestID(eventTime)
@@ -131,7 +138,7 @@ func newNotificationEvent(event eventData) NotificationEvent {
 			responseRequestIDKey: uniqueID,
 			// Following is a custom response element to indicate
 			// event origin server endpoint.
-			responseOriginEndpointKey: apiEndpoint,
+			responseOriginEndpointKey: getResponseOriginEndpointKey(),
 		},
 		S3: eventMeta{
 			SchemaVersion:   eventSchemaVersion,

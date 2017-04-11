@@ -19,9 +19,11 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"net/url"
+	"net"
 	"path"
 	"sync"
+
+	"github.com/minio/minio-go/pkg/set"
 )
 
 // s3Peer structs contains the address of a peer in the cluster, and
@@ -39,53 +41,44 @@ type s3Peers []s3Peer
 // makeS3Peers makes an s3Peers struct value from the given urls
 // slice. The urls slice is assumed to be non-empty and free of nil
 // values.
-func makeS3Peers(eps []*url.URL) s3Peers {
-	var ret []s3Peer
-
-	// map to store peers that are already added to ret
-	seenAddr := make(map[string]bool)
-
-	// add local (self) as peer in the array
-	ret = append(ret, s3Peer{
-		globalMinioAddr,
+func makeS3Peers(endpoints EndpointList) (s3PeerList s3Peers) {
+	thisPeer := globalMinioAddr
+	if globalMinioHost == "" {
+		thisPeer = net.JoinHostPort("localhost", globalMinioPort)
+	}
+	s3PeerList = append(s3PeerList, s3Peer{
+		thisPeer,
 		&localBucketMetaState{ObjectAPI: newObjectLayerFn},
 	})
-	seenAddr[globalMinioAddr] = true
 
-	serverCred := serverConfig.GetCredential()
-	// iterate over endpoints to find new remote peers and add
-	// them to ret.
-	for _, ep := range eps {
-		if ep.Host == "" {
+	hostSet := set.CreateStringSet(globalMinioAddr)
+	cred := serverConfig.GetCredential()
+	serviceEndpoint := path.Join(minioReservedBucketPath, s3Path)
+	for _, host := range GetRemotePeers(endpoints) {
+		if hostSet.Contains(host) {
 			continue
 		}
-
-		// Check if the remote host has been added already
-		if !seenAddr[ep.Host] {
-			cfg := authConfig{
-				accessKey:       serverCred.AccessKey,
-				secretKey:       serverCred.SecretKey,
-				serverAddr:      ep.Host,
-				serviceEndpoint: path.Join(minioReservedBucketPath, s3Path),
+		hostSet.Add(host)
+		s3PeerList = append(s3PeerList, s3Peer{
+			addr: host,
+			bmsClient: &remoteBucketMetaState{newAuthRPCClient(authConfig{
+				accessKey:       cred.AccessKey,
+				secretKey:       cred.SecretKey,
+				serverAddr:      host,
+				serviceEndpoint: serviceEndpoint,
 				secureConn:      globalIsSSL,
 				serviceName:     "S3",
-			}
-
-			ret = append(ret, s3Peer{
-				addr:      ep.Host,
-				bmsClient: &remoteBucketMetaState{newAuthRPCClient(cfg)},
-			})
-			seenAddr[ep.Host] = true
-		}
+			})},
+		})
 	}
 
-	return ret
+	return s3PeerList
 }
 
 // initGlobalS3Peers - initialize globalS3Peers by passing in
 // endpoints - intended to be called early in program start-up.
-func initGlobalS3Peers(eps []*url.URL) {
-	globalS3Peers = makeS3Peers(eps)
+func initGlobalS3Peers(endpoints EndpointList) {
+	globalS3Peers = makeS3Peers(endpoints)
 }
 
 // GetPeerClient - fetch BucketMetaState interface by peer address

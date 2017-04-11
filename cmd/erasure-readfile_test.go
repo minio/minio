@@ -194,11 +194,7 @@ func TestErasureReadUtils(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	endpoints, err := parseStorageEndpoints(disks)
-	if err != nil {
-		t.Fatal(err)
-	}
-	objLayer, _, err := initObjectLayer(endpoints)
+	objLayer, _, err := initObjectLayer(mustGetNewEndpointList(disks...))
 	if err != nil {
 		removeRoots(disks)
 		t.Fatal(err)

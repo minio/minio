@@ -197,30 +197,28 @@ func (s *storageServer) RenameFileHandler(args *RenameFileArgs, reply *AuthRPCRe
 }
 
 // Initialize new storage rpc.
-func newRPCServer(srvConfig serverCmdConfig) (servers []*storageServer, err error) {
-	for _, ep := range srvConfig.endpoints {
-		// e.g server:/mnt/disk1
-		if isLocalStorage(ep) {
-			// Get the posix path.
-			path := getPath(ep)
-			var storage StorageAPI
-			storage, err = newPosix(path)
+func newRPCServer(endpoints EndpointList) (servers []*storageServer, err error) {
+	for _, endpoint := range endpoints {
+		if endpoint.IsLocal {
+			storage, err := newPosix(endpoint.Path)
 			if err != nil && err != errDiskNotFound {
 				return nil, err
 			}
+
 			servers = append(servers, &storageServer{
 				storage: storage,
-				path:    path,
+				path:    endpoint.Path,
 			})
 		}
 	}
+
 	return servers, nil
 }
 
 // registerStorageRPCRouter - register storage rpc router.
-func registerStorageRPCRouters(mux *router.Router, srvCmdConfig serverCmdConfig) error {
+func registerStorageRPCRouters(mux *router.Router, endpoints EndpointList) error {
 	// Initialize storage rpc servers for every disk that is hosted on this node.
-	storageRPCs, err := newRPCServer(srvCmdConfig)
+	storageRPCs, err := newRPCServer(endpoints)
 	if err != nil {
 		return traceError(err)
 	}

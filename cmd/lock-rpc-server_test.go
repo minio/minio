@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"net/url"
 	"runtime"
 	"sync"
 	"testing"
@@ -433,66 +432,46 @@ func TestLockServers(t *testing.T) {
 		globalIsDistXL = currentIsDistXL
 	}()
 
+	case1Endpoints := mustGetNewEndpointList(
+		"http://localhost:9000/mnt/disk1",
+		"http://1.1.1.2:9000/mnt/disk2",
+		"http://1.1.2.1:9000/mnt/disk3",
+		"http://1.1.2.2:9000/mnt/disk4",
+	)
+	for i := range case1Endpoints {
+		if case1Endpoints[i].Host == "localhost:9000" {
+			case1Endpoints[i].IsLocal = true
+		}
+	}
+
+	case2Endpoints := mustGetNewEndpointList(
+		"http://localhost:9000/mnt/disk1",
+		"http://localhost:9000/mnt/disk2",
+		"http://1.1.2.1:9000/mnt/disk3",
+		"http://1.1.2.2:9000/mnt/disk4",
+	)
+	for i := range case2Endpoints {
+		if case2Endpoints[i].Host == "localhost:9000" {
+			case2Endpoints[i].IsLocal = true
+		}
+	}
+
 	globalMinioHost = ""
 	testCases := []struct {
 		isDistXL         bool
-		srvCmdConfig     serverCmdConfig
+		endpoints        EndpointList
 		totalLockServers int
 	}{
 		// Test - 1 one lock server initialized.
-		{
-			isDistXL: true,
-			srvCmdConfig: serverCmdConfig{
-				endpoints: []*url.URL{{
-					Scheme: httpScheme,
-					Host:   "localhost:9000",
-					Path:   "/mnt/disk1",
-				}, {
-					Scheme: httpScheme,
-					Host:   "1.1.1.2:9000",
-					Path:   "/mnt/disk2",
-				}, {
-					Scheme: httpScheme,
-					Host:   "1.1.2.1:9000",
-					Path:   "/mnt/disk3",
-				}, {
-					Scheme: httpScheme,
-					Host:   "1.1.2.2:9000",
-					Path:   "/mnt/disk4",
-				}},
-			},
-			totalLockServers: 1,
-		},
+		{true, case1Endpoints, 1},
 		// Test - 2 two servers possible.
-		{
-			isDistXL: true,
-			srvCmdConfig: serverCmdConfig{
-				endpoints: []*url.URL{{
-					Scheme: httpScheme,
-					Host:   "localhost:9000",
-					Path:   "/mnt/disk1",
-				}, {
-					Scheme: httpScheme,
-					Host:   "localhost:9000",
-					Path:   "/mnt/disk2",
-				}, {
-					Scheme: httpScheme,
-					Host:   "1.1.2.1:9000",
-					Path:   "/mnt/disk3",
-				}, {
-					Scheme: httpScheme,
-					Host:   "1.1.2.2:9000",
-					Path:   "/mnt/disk4",
-				}},
-			},
-			totalLockServers: 2,
-		},
+		{true, case2Endpoints, 2},
 	}
 
 	// Validates lock server initialization.
 	for i, testCase := range testCases {
 		globalIsDistXL = testCase.isDistXL
-		lockServers := newLockServers(testCase.srvCmdConfig)
+		lockServers := newLockServers(testCase.endpoints)
 		if len(lockServers) != testCase.totalLockServers {
 			t.Fatalf("Test %d: Expected total %d, got %d", i+1, testCase.totalLockServers, len(lockServers))
 		}
