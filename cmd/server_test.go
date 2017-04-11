@@ -1280,6 +1280,9 @@ func (s *TestSuiteCommon) TestHeadOnObjectLastModified(c *C) {
 		int64(buffer1.Len()), buffer1, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 
+	laTZ, err := time.LoadLocation("America/Los_Angeles")
+	c.Assert(err, IsNil)
+
 	// executing the HTTP request to download the object.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
@@ -1306,7 +1309,18 @@ func (s *TestSuiteCommon) TestHeadOnObjectLastModified(c *C) {
 	request, err = newTestSignedRequest("HEAD", getHeadObjectURL(s.endPoint, bucketName, objectName),
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
-	request.Header.Set("If-Modified-Since", t.Add(10*time.Minute).UTC().Format(http.TimeFormat))
+	request.Header.Set("If-Modified-Since", t.Add(10*time.Minute).UTC().Format(time.RFC1123))
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	// Since the "If-Modified-Since" header was ahead in time compared to the actual
+	// modified time of the object expecting the response status to be http.StatusNotModified.
+	c.Assert(response.StatusCode, Equals, http.StatusNotModified)
+
+	// Test If-Unmodified-Since with a timezone other than GMT
+	request, err = newTestSignedRequest("HEAD", getHeadObjectURL(s.endPoint, bucketName, objectName),
+		0, nil, s.accessKey, s.secretKey, s.signer)
+	c.Assert(err, IsNil)
+	request.Header.Set("If-Modified-Since", t.Add(10*time.Minute).In(laTZ).Format(time.RFC1123))
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	// Since the "If-Modified-Since" header was ahead in time compared to the actual
@@ -1319,10 +1333,29 @@ func (s *TestSuiteCommon) TestHeadOnObjectLastModified(c *C) {
 	request, err = newTestSignedRequest("HEAD", getHeadObjectURL(s.endPoint, bucketName, objectName),
 		0, nil, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
-	request.Header.Set("If-Unmodified-Since", t.Add(-10*time.Minute).UTC().Format(http.TimeFormat))
+	request.Header.Set("If-Unmodified-Since", t.Add(-10*time.Minute).UTC().Format(time.RFC1123))
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusPreconditionFailed)
+
+	// Test If-Unmodified-Since with a timezone other than GMT
+	request, err = newTestSignedRequest("HEAD", getHeadObjectURL(s.endPoint, bucketName, objectName),
+		0, nil, s.accessKey, s.secretKey, s.signer)
+	c.Assert(err, IsNil)
+	request.Header.Set("If-Unmodified-Since", t.Add(-10*time.Minute).In(laTZ).Format(time.RFC1123))
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusPreconditionFailed)
+
+	// Test If-Unmodified-Since with a timezone other than GMT
+	request, err = newTestSignedRequest("HEAD", getHeadObjectURL(s.endPoint, bucketName, objectName),
+		0, nil, s.accessKey, s.secretKey, s.signer)
+	c.Assert(err, IsNil)
+	request.Header.Set("If-Unmodified-Since", t.Add(10*time.Minute).In(laTZ).Format(time.RFC1123))
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
 }
 
 // TestHeadOnBucket - Validates response for HEAD on the bucket.
