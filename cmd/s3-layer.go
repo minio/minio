@@ -218,12 +218,15 @@ func fromMinioClientListBucketV2Result(bucket string, result minio.ListBucketV2R
 		objects[i] = fromMinioClientObjectInfo(bucket, oi)
 	}
 
+	prefixes := make([]string, len(result.CommonPrefixes))
+	for i, p := range result.CommonPrefixes {
+		prefixes[i] = p.Prefix
+	}
+
 	return ListObjectsV2Info{
 		IsTruncated: result.IsTruncated,
-		Prefixes: []string{
-			result.Prefix,
-		},
-		Objects: objects,
+		Prefixes:    prefixes,
+		Objects:     objects,
 
 		ContinuationToken:     result.ContinuationToken,
 		NextContinuationToken: result.NextContinuationToken,
