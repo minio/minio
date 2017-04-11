@@ -525,7 +525,7 @@ func toMinioClientCompleteParts(parts []completePart) []minio.CompletePart {
 func (l *s3Gateway) CompleteMultipartUpload(bucket string, object string, uploadID string, uploadedParts []completePart) (ObjectInfo, error) {
 	err := l.Client.CompleteMultipartUpload(bucket, object, uploadID, toMinioClientCompleteParts(uploadedParts))
 	if err != nil {
-		return ObjectInfo{}, nil
+		return ObjectInfo{}, s3ToObjectError(traceError(err), bucket, object)
 	}
 
 	return l.GetObjectInfo(bucket, object)
