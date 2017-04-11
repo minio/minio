@@ -131,8 +131,5 @@ $ helm install --set accessKey=myaccesskey,secretKey=mysecretkey \
 
 ### Explore Further
 - [Minio Erasure Code QuickStart Guide](https://docs.minio.io/docs/minio-erasure-code-quickstart-guide)
-- [Use `mc` with Minio Server](https://docs.minio.io/docs/minio-client-quickstart-guide)
-- [Use `aws-cli` with Minio Server](https://docs.minio.io/docs/aws-cli-with-minio)
-- [Use `s3cmd` with Minio Server](https://docs.minio.io/docs/s3cmd-with-minio)
-- [Use `minio-go` SDK with Minio Server](https://docs.minio.io/docs/golang-client-quickstart-guide)
-- [The Minio documentation website](https://docs.minio.io)
+- [Kubernetes Documentation](https://kubernetes.io/docs/home/)
+- [Helm package manager for kubernetes](https://helm.sh/)

@@ -28,12 +28,12 @@ func TestLockRpcServerRemoveEntryIfExists(t *testing.T) {
 	defer removeAll(testPath)
 
 	lri := lockRequesterInfo{
-		writer:        false,
-		node:          "host",
-		rpcPath:       "rpc-path",
-		uid:           "0123-4567",
-		timestamp:     UTCNow(),
-		timeLastCheck: UTCNow(),
+		writer:          false,
+		node:            "host",
+		serviceEndpoint: "rpc-path",
+		uid:             "0123-4567",
+		timestamp:       UTCNow(),
+		timeLastCheck:   UTCNow(),
 	}
 	nlrip := nameLockRequesterInfoPair{name: "name", lri: lri}
 
@@ -65,20 +65,20 @@ func TestLockRpcServerRemoveEntry(t *testing.T) {
 	defer removeAll(testPath)
 
 	lockRequesterInfo1 := lockRequesterInfo{
-		writer:        true,
-		node:          "host",
-		rpcPath:       "rpc-path",
-		uid:           "0123-4567",
-		timestamp:     UTCNow(),
-		timeLastCheck: UTCNow(),
+		writer:          true,
+		node:            "host",
+		serviceEndpoint: "rpc-path",
+		uid:             "0123-4567",
+		timestamp:       UTCNow(),
+		timeLastCheck:   UTCNow(),
 	}
 	lockRequesterInfo2 := lockRequesterInfo{
-		writer:        true,
-		node:          "host",
-		rpcPath:       "rpc-path",
-		uid:           "89ab-cdef",
-		timestamp:     UTCNow(),
-		timeLastCheck: UTCNow(),
+		writer:          true,
+		node:            "host",
+		serviceEndpoint: "rpc-path",
+		uid:             "89ab-cdef",
+		timestamp:       UTCNow(),
+		timeLastCheck:   UTCNow(),
 	}
 
 	locker.lockMap["name"] = []lockRequesterInfo{
@@ -127,12 +127,12 @@ func TestLockRpcServerGetLongLivedLocks(t *testing.T) {
 		{
 			lockMap: map[string][]lockRequesterInfo{
 				"test": {{
-					writer:        true,
-					node:          "10.1.10.21",
-					rpcPath:       "/lock/mnt/disk1",
-					uid:           "10000112",
-					timestamp:     ut,
-					timeLastCheck: ut,
+					writer:          true,
+					node:            "10.1.10.21",
+					serviceEndpoint: "/lock/mnt/disk1",
+					uid:             "10000112",
+					timestamp:       ut,
+					timeLastCheck:   ut,
 				}},
 			},
 			lockInterval: 1 * time.Minute,
@@ -142,12 +142,12 @@ func TestLockRpcServerGetLongLivedLocks(t *testing.T) {
 		{
 			lockMap: map[string][]lockRequesterInfo{
 				"test": {{
-					writer:        true,
-					node:          "10.1.10.21",
-					rpcPath:       "/lock/mnt/disk1",
-					uid:           "10000112",
-					timestamp:     ut,
-					timeLastCheck: ut.Add(-2 * time.Minute),
+					writer:          true,
+					node:            "10.1.10.21",
+					serviceEndpoint: "/lock/mnt/disk1",
+					uid:             "10000112",
+					timestamp:       ut,
+					timeLastCheck:   ut.Add(-2 * time.Minute),
 				}},
 			},
 			lockInterval: 1 * time.Minute,
@@ -155,12 +155,12 @@ func TestLockRpcServerGetLongLivedLocks(t *testing.T) {
 				{
 					name: "test",
 					lri: lockRequesterInfo{
-						writer:        true,
-						node:          "10.1.10.21",
-						rpcPath:       "/lock/mnt/disk1",
-						uid:           "10000112",
-						timestamp:     ut,
-						timeLastCheck: ut.Add(-2 * time.Minute),
+						writer:          true,
+						node:            "10.1.10.21",
+						serviceEndpoint: "/lock/mnt/disk1",
+						uid:             "10000112",
+						timestamp:       ut,
+						timeLastCheck:   ut.Add(-2 * time.Minute),
 					},
 				},
 			},

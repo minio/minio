@@ -97,7 +97,7 @@ func calculateSeedSignature(r *http.Request) (signature string, date time.Time, 
 	}
 
 	// Extract all the signed headers along with its values.
-	extractedSignedHeaders, errCode := extractSignedHeaders(signV4Values.SignedHeaders, req.Header)
+	extractedSignedHeaders, errCode := extractSignedHeaders(signV4Values.SignedHeaders, r)
 	if errCode != ErrNone {
 		return "", time.Time{}, errCode
 	}
@@ -133,7 +133,7 @@ func calculateSeedSignature(r *http.Request) (signature string, date time.Time, 
 	queryStr := req.URL.Query().Encode()
 
 	// Get canonical request.
-	canonicalRequest := getCanonicalRequest(extractedSignedHeaders, payload, queryStr, req.URL.Path, req.Method, req.Host)
+	canonicalRequest := getCanonicalRequest(extractedSignedHeaders, payload, queryStr, req.URL.Path, req.Method)
 
 	// Get string to sign from canonical request.
 	stringToSign := getStringToSign(canonicalRequest, date, signV4Values.Credential.getScope())

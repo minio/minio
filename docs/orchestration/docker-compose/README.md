@@ -43,9 +43,7 @@ Each instance is now accessible on the host at ports 9001 through 9004, proceed 
 * Minio services in the Docker compose file expose ports 9001 to 9004. This allows multiple services to run on a host.
 
 ### Explore Further
+- [Overview of Docker Compose](https://docs.docker.com/compose/overview/)
+- [Minio Docker Quickstart Guide](https://docs.minio.io/docs/minio-docker-quickstart-guide)
+- [Deploy Minio on Docker Swarm](https://docs.minio.io/docs/deploy-minio-on-docker-swarm)
 - [Minio Erasure Code QuickStart Guide](https://docs.minio.io/docs/minio-erasure-code-quickstart-guide)
-- [Use `mc` with Minio Server](https://docs.minio.io/docs/minio-client-quickstart-guide)
-- [Use `aws-cli` with Minio Server](https://docs.minio.io/docs/aws-cli-with-minio)
-- [Use `s3cmd` with Minio Server](https://docs.minio.io/docs/s3cmd-with-minio)
-- [Use `minio-go` SDK with Minio Server](https://docs.minio.io/docs/golang-client-quickstart-guide)
-- [The Minio documentation website](https://docs.minio.io)

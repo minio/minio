@@ -132,7 +132,7 @@ func TestGetURLEncodedName(t *testing.T) {
 
 // TestExtractSignedHeaders - Tests validate extraction of signed headers using list of signed header keys.
 func TestExtractSignedHeaders(t *testing.T) {
-	signedHeaders := []string{"host", "x-amz-content-sha256", "x-amz-date"}
+	signedHeaders := []string{"host", "x-amz-content-sha256", "x-amz-date", "transfer-encoding"}
 
 	// If the `expect` key exists in the signed headers then golang server would have stripped out the value, expecting the `expect` header set to `100-continue` in the result.
 	signedHeaders = append(signedHeaders, "expect")
@@ -140,54 +140,67 @@ func TestExtractSignedHeaders(t *testing.T) {
 	expectedHost := "play.minio.io:9000"
 	expectedContentSha256 := "1234abcd"
 	expectedTime := UTCNow().Format(iso8601Format)
+	expectedTransferEncoding := "gzip"
+	expectedExpect := "100-continue"
+
+	r, err := http.NewRequest("GET", "http://play.minio.io:9000", nil)
+	if err != nil {
+		t.Fatal("Unable to create http.Request :", err)
+	}
+	r.TransferEncoding = []string{expectedTransferEncoding}
 
 	// Creating input http header.
-	inputHeader := make(http.Header)
-	inputHeader.Set(signedHeaders[0], expectedHost)
-	inputHeader.Set(signedHeaders[1], expectedContentSha256)
-	inputHeader.Set(signedHeaders[2], expectedTime)
+	inputHeader := r.Header
+	inputHeader.Set("x-amz-content-sha256", expectedContentSha256)
+	inputHeader.Set("x-amz-date", expectedTime)
 	// calling the function being tested.
-	extractedSignedHeaders, errCode := extractSignedHeaders(signedHeaders, inputHeader)
+	extractedSignedHeaders, errCode := extractSignedHeaders(signedHeaders, r)
 	if errCode != ErrNone {
 		t.Fatalf("Expected the APIErrorCode to be %d, but got %d", ErrNone, errCode)
 	}
 
 	// "x-amz-content-sha256" header value from the extracted result.
-	extractedContentSha256 := extractedSignedHeaders[signedHeaders[1]]
+	extractedContentSha256 := extractedSignedHeaders.Get("x-amz-content-sha256")
 	// "host" header value from the extracted result.
-	extractedHost := extractedSignedHeaders[signedHeaders[0]]
+	extractedHost := extractedSignedHeaders.Get("host")
 	//  "x-amz-date" header from the extracted result.
-	extractedDate := extractedSignedHeaders[signedHeaders[2]]
+	extractedDate := extractedSignedHeaders.Get("x-amz-date")
 	// extracted `expect` header.
-	extractedExpect := extractedSignedHeaders["expect"][0]
-	if expectedHost != extractedHost[0] {
+	extractedExpect := extractedSignedHeaders.Get("expect")
+
+	extractedTransferEncoding := extractedSignedHeaders.Get("transfer-encoding")
+
+	if expectedHost != extractedHost {
 		t.Errorf("host header mismatch: expected `%s`, got `%s`", expectedHost, extractedHost)
 	}
 	// assert the result with the expected value.
-	if expectedContentSha256 != extractedContentSha256[0] {
+	if expectedContentSha256 != extractedContentSha256 {
 		t.Errorf("x-amz-content-sha256 header mismatch: expected `%s`, got `%s`", expectedContentSha256, extractedContentSha256)
 	}
-	if expectedTime != extractedDate[0] {
+	if expectedTime != extractedDate {
 		t.Errorf("x-amz-date header mismatch: expected `%s`, got `%s`", expectedTime, extractedDate)
+	}
+	if extractedTransferEncoding != expectedTransferEncoding {
+		t.Errorf("transfer-encoding mismatch: expected %s, got %s", expectedTransferEncoding, extractedTransferEncoding)
 	}
 
 	// Since the list of signed headers value contained `expect`, the default value of `100-continue` will be added to extracted signed headers.
-	if extractedExpect != "100-continue" {
-		t.Errorf("expect header incorrect value: expected `%s`, got `%s`", "100-continue", extractedExpect)
+	if extractedExpect != expectedExpect {
+		t.Errorf("expect header incorrect value: expected `%s`, got `%s`", expectedExpect, extractedExpect)
 	}
 
-	// case where the headers doesn't contain the one of the signed header in the signed headers list.
-	signedHeaders = append(signedHeaders, " X-Amz-Credential")
+	// case where the headers don't contain the one of the signed header in the signed headers list.
+	signedHeaders = append(signedHeaders, "X-Amz-Credential")
 	// expected to fail with `ErrUnsignedHeaders`.
-	_, errCode = extractSignedHeaders(signedHeaders, inputHeader)
+	_, errCode = extractSignedHeaders(signedHeaders, r)
 	if errCode != ErrUnsignedHeaders {
 		t.Fatalf("Expected the APIErrorCode to %d, but got %d", ErrUnsignedHeaders, errCode)
 	}
 
 	// case where the list of signed headers doesn't contain the host field.
-	signedHeaders = signedHeaders[1:]
+	signedHeaders = signedHeaders[2:5]
 	// expected to fail with `ErrUnsignedHeaders`.
-	_, errCode = extractSignedHeaders(signedHeaders, inputHeader)
+	_, errCode = extractSignedHeaders(signedHeaders, r)
 	if errCode != ErrUnsignedHeaders {
 		t.Fatalf("Expected the APIErrorCode to %d, but got %d", ErrUnsignedHeaders, errCode)
 	}
@@ -218,6 +231,34 @@ func TestSignV4TrimAll(t *testing.T) {
 		result := signV4TrimAll(testCase.inputStr)
 		if testCase.result != result {
 			t.Errorf("Test %d: Expected signV4TrimAll result to be \"%s\", but found it to be \"%s\" instead", i+1, testCase.result, result)
+		}
+	}
+}
+
+// Test getContentSha256Cksum
+func TestGetContentSha256Cksum(t *testing.T) {
+	testCases := []struct {
+		h        string // header SHA256
+		q        string // query SHA256
+		expected string // expected SHA256
+	}{
+		{"shastring", "", "shastring"},
+		{"", "", emptySHA256},
+		{"", "X-Amz-Credential=random", unsignedPayload},
+		{"", "X-Amz-Credential=random&X-Amz-Content-Sha256=shastring", "shastring"},
+	}
+
+	for i, testCase := range testCases {
+		r, err := http.NewRequest("GET", "http://localhost/?"+testCase.q, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if testCase.h != "" {
+			r.Header.Set("x-amz-content-sha256", testCase.h)
+		}
+		got := getContentSha256Cksum(r)
+		if got != testCase.expected {
+			t.Errorf("Test %d: got:%s expected:%s", i+1, got, testCase.expected)
 		}
 	}
 }

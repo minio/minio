@@ -89,10 +89,6 @@ export default class Login extends React.Component {
         { alertBox }
         <div className="l-wrap">
           <form onSubmit={ this.handleSubmit.bind(this) }>
-            <input name="fixBrowser"
-              autoComplete="username"
-              type="text"
-              style={ { display: 'none' } } />
             <InputGroup className="ig-dark"
               label="Access Key"
               id="accessKey"
@@ -102,7 +98,6 @@ export default class Login extends React.Component {
               required="required"
               autoComplete="username">
             </InputGroup>
-            <input type="text" autoComplete="new-password" style={ { display: 'none' } } />
             <InputGroup className="ig-dark"
               label="Secret Key"
               id="secretKey"

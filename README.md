@@ -18,19 +18,19 @@ docker run -p 9000:9000 minio/minio:edge server /export
 ```
 Please visit Minio Docker quickstart guide for more [here](https://docs.minio.io/docs/minio-docker-quickstart-guide)
 
-## OS X
+## macOS
 ### Homebrew
 Install minio packages using [Homebrew](http://brew.sh/)
 
 ```sh
-brew install minio
+brew install minio/stable/minio
 minio server ~/Photos
 ```
 
 ### Binary Download
 | Platform| Architecture | URL|
 | ----------| -------- | ------|
-|Apple OS X|64-bit Intel|https://dl.minio.io/server/minio/release/darwin-amd64/minio |
+|Apple macOS|64-bit Intel|https://dl.minio.io/server/minio/release/darwin-amd64/minio |
 ```sh
 chmod 755 minio
 ./minio server ~/Photos

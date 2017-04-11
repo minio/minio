@@ -868,10 +868,10 @@ func presignedGet(host, bucket, object string, expiry int64) string {
 
 	path := "/" + path.Join(bucket, object)
 
-	// Headers are empty, since "host" is the only header required to be signed for Presigned URLs.
-	var extractedSignedHeaders http.Header
-
-	canonicalRequest := getCanonicalRequest(extractedSignedHeaders, unsignedPayload, query, path, "GET", host)
+	// "host" is the only header required to be signed for Presigned URLs.
+	extractedSignedHeaders := make(http.Header)
+	extractedSignedHeaders.Set("host", host)
+	canonicalRequest := getCanonicalRequest(extractedSignedHeaders, unsignedPayload, query, path, "GET")
 	stringToSign := getStringToSign(canonicalRequest, date, getScope(date, region))
 	signingKey := getSigningKey(secretKey, date, region)
 	signature := getSignature(signingKey, stringToSign)

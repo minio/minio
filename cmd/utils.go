@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -27,8 +28,6 @@ import (
 	"os"
 	"strings"
 	"time"
-
-	"encoding/json"
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/pkg/profile"
@@ -110,24 +109,6 @@ const (
 	httpScheme  = "http"
 	httpsScheme = "https"
 )
-
-var portMap = map[string]string{
-	httpScheme:  "80",
-	httpsScheme: "443",
-}
-
-// Given a string of the form "host", "host:port", or "[ipv6::address]:port",
-// return true if the string includes a port.
-func hasPort(s string) bool { return strings.LastIndex(s, ":") > strings.LastIndex(s, "]") }
-
-// canonicalAddr returns url.Host but always with a ":port" suffix
-func canonicalAddr(u *url.URL) string {
-	addr := u.Host
-	if !hasPort(addr) {
-		return addr + ":" + portMap[u.Scheme]
-	}
-	return addr
-}
 
 // checkDuplicates - function to validate if there are duplicates in a slice of endPoints.
 func checkDuplicateEndpoints(endpoints []*url.URL) error {
@@ -248,12 +229,15 @@ func dumpRequest(r *http.Request) string {
 		Path   string      `json:"path"`
 		Query  string      `json:"query"`
 		Header http.Header `json:"header"`
-	}{r.Method, r.URL.Path, r.URL.RawQuery, header}
-	jsonBytes, err := json.Marshal(req)
+	}{r.Method, getURLEncodedName(r.URL.Path), r.URL.RawQuery, header}
+	jsonBytes, err := json.Marshal(&req)
 	if err != nil {
-		return "<error dumping request>"
+		// Upon error just return Go-syntax representation of the value
+		return fmt.Sprintf("%#v", req)
 	}
-	return string(jsonBytes)
+	// Replace all '%' to '%%' so that printer format parser
+	// to ignore URL encoded values.
+	return strings.Replace(string(jsonBytes), "%", "%%", -1)
 }
 
 // isFile - returns whether given path is a file or not.

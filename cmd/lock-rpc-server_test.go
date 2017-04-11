@@ -34,7 +34,7 @@ func testLockEquality(lriLeft, lriRight []lockRequesterInfo) bool {
 	for i := 0; i < len(lriLeft); i++ {
 		if lriLeft[i].writer != lriRight[i].writer ||
 			lriLeft[i].node != lriRight[i].node ||
-			lriLeft[i].rpcPath != lriRight[i].rpcPath ||
+			lriLeft[i].serviceEndpoint != lriRight[i].serviceEndpoint ||
 			lriLeft[i].uid != lriRight[i].uid {
 			return false
 		}
@@ -50,10 +50,10 @@ func createLockTestServer(t *testing.T) (string, *lockServer, string) {
 	}
 
 	locker := &lockServer{
-		AuthRPCServer: AuthRPCServer{},
-		rpcPath:       "rpc-path",
-		mutex:         sync.Mutex{},
-		lockMap:       make(map[string][]lockRequesterInfo),
+		AuthRPCServer:   AuthRPCServer{},
+		serviceEndpoint: "rpc-path",
+		mutex:           sync.Mutex{},
+		lockMap:         make(map[string][]lockRequesterInfo),
 	}
 	creds := serverConfig.GetCredential()
 	loginArgs := LoginRPCArgs{
@@ -97,10 +97,10 @@ func TestLockRpcServerLock(t *testing.T) {
 			gotLri, _ := locker.lockMap["name"]
 			expectedLri := []lockRequesterInfo{
 				{
-					writer:  true,
-					node:    "node",
-					rpcPath: "rpc-path",
-					uid:     "0123-4567",
+					writer:          true,
+					node:            "node",
+					serviceEndpoint: "rpc-path",
+					uid:             "0123-4567",
 				},
 			}
 			if !testLockEquality(expectedLri, gotLri) {
@@ -198,10 +198,10 @@ func TestLockRpcServerRLock(t *testing.T) {
 			gotLri, _ := locker.lockMap["name"]
 			expectedLri := []lockRequesterInfo{
 				{
-					writer:  false,
-					node:    "node",
-					rpcPath: "rpc-path",
-					uid:     "0123-4567",
+					writer:          false,
+					node:            "node",
+					serviceEndpoint: "rpc-path",
+					uid:             "0123-4567",
 				},
 			}
 			if !testLockEquality(expectedLri, gotLri) {
@@ -285,10 +285,10 @@ func TestLockRpcServerRUnlock(t *testing.T) {
 			gotLri, _ := locker.lockMap["name"]
 			expectedLri := []lockRequesterInfo{
 				{
-					writer:  false,
-					node:    "node",
-					rpcPath: "rpc-path",
-					uid:     "89ab-cdef",
+					writer:          false,
+					node:            "node",
+					serviceEndpoint: "rpc-path",
+					uid:             "89ab-cdef",
 				},
 			}
 			if !testLockEquality(expectedLri, gotLri) {

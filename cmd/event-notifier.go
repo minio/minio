@@ -645,7 +645,6 @@ func loadAllQueueTargets() (map[string]*logrus.Logger, error) {
 		if !webhookN.Enable {
 			continue
 		}
-
 		if _, err := addQueueTarget(queueTargets, accountID, queueTypeWebhook, newWebhookNotify); err != nil {
 			return nil, err
 		}

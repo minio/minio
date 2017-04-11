@@ -170,6 +170,10 @@ func newConfig() error {
 		srvCfg.SetBrowser(globalIsBrowserEnabled)
 	}
 
+	if globalIsEnvRegion {
+		srvCfg.SetRegion(globalServerRegion)
+	}
+
 	// hold the mutex lock before a new config is assigned.
 	// Save the new config globally.
 	// unlock the mutex.
@@ -295,8 +299,13 @@ func loadConfig() error {
 	if globalIsEnvCreds {
 		srvCfg.SetCredential(globalActiveCred)
 	}
+
 	if globalIsEnvBrowser {
 		srvCfg.SetBrowser(globalIsBrowserEnabled)
+	}
+
+	if globalIsEnvRegion {
+		srvCfg.SetRegion(globalServerRegion)
 	}
 
 	// hold the mutex lock before a new config is assigned.
@@ -307,6 +316,9 @@ func loadConfig() error {
 	}
 	if !globalIsEnvBrowser {
 		globalIsBrowserEnabled = serverConfig.GetBrowser()
+	}
+	if !globalIsEnvRegion {
+		globalServerRegion = serverConfig.GetRegion()
 	}
 	serverConfigMu.Unlock()
 

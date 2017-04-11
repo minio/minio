@@ -138,10 +138,10 @@ func TestServerConfigWithEnvs(t *testing.T) {
 	os.Setenv("MINIO_SECRET_KEY", "minio123")
 	defer os.Unsetenv("MINIO_SECRET_KEY")
 
-	defer func() {
-		globalIsEnvBrowser = false
-		globalIsEnvCreds = false
-	}()
+	os.Setenv("MINIO_REGION", "us-west-1")
+	defer os.Unsetenv("MINIO_REGION")
+
+	defer resetGlobalIsEnvs()
 
 	// Get test root.
 	rootPath, err := getTestRoot()
@@ -166,6 +166,11 @@ func TestServerConfigWithEnvs(t *testing.T) {
 	}
 
 	// Check if serverConfig has
+	if serverConfig.GetRegion() != "us-west-1" {
+		t.Errorf("Expecting region to be \"us-west-1\" found %v", serverConfig.GetRegion())
+	}
+
+	// Check if serverConfig has
 	cred := serverConfig.GetCredential()
 
 	if cred.AccessKey != "minio" {
@@ -175,6 +180,7 @@ func TestServerConfigWithEnvs(t *testing.T) {
 	if cred.SecretKey != "minio123" {
 		t.Errorf("Expecting access key to be `minio123` found %s", cred.SecretKey)
 	}
+
 }
 
 func TestCheckDupJSONKeys(t *testing.T) {

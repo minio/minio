@@ -51,7 +51,7 @@ func TestNewWebHookNotify(t *testing.T) {
 		t.Fatal("Unexpected should fail")
 	}
 
-	serverConfig.Notify.SetWebhookByID("10", webhookNotify{Enable: true, Endpoint: "http://www."})
+	serverConfig.Notify.SetWebhookByID("10", webhookNotify{Enable: true, Endpoint: "http://127.0.0.1:xxx"})
 	_, err = newWebhookNotify("10")
 	if err == nil {
 		t.Fatal("Unexpected should fail with lookupHost")

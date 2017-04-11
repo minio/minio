@@ -454,6 +454,13 @@ func serverHandleEnvVars() {
 		globalIsEnvBrowser = true
 		globalIsBrowserEnabled = bool(browserFlag)
 	}
+
+	if serverRegion := os.Getenv("MINIO_REGION"); serverRegion != "" {
+		// region Envs are set globally.
+		globalIsEnvRegion = true
+		globalServerRegion = serverRegion
+	}
+
 }
 
 // serverMain handler called for 'minio server' command.

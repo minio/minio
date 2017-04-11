@@ -29,9 +29,9 @@ func TestLockRPCClient(t *testing.T) {
 		accessKey:       "abcd",
 		secretKey:       "abcd123",
 		serverAddr:      fmt.Sprintf("%X", UTCNow().UnixNano()),
-		serviceEndpoint: pathJoin(lockRPCPath, "/test/1"),
+		serviceEndpoint: pathJoin(lockServicePath, "/test/1"),
 		secureConn:      false,
-		serviceName:     "Dsync",
+		serviceName:     lockServiceName,
 	})
 
 	// Attempt all calls.

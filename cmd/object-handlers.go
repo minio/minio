@@ -138,6 +138,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		startOffset = hrange.offsetBegin
 		length = hrange.getLength()
 	}
+
 	// Indicates if any data was written to the http.ResponseWriter
 	dataWritten := false
 	// io.Writer type which keeps track if any data was written.
@@ -156,7 +157,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	})
 
 	// Reads the object at startOffset and writes to mw.
-	if err := objectAPI.GetObject(bucket, object, startOffset, length, writer); err != nil {
+	if err = objectAPI.GetObject(bucket, object, startOffset, length, writer); err != nil {
 		errorIf(err, "Unable to write to client.")
 		if !dataWritten {
 			// Error response only if no data has been written to client yet. i.e if
@@ -174,12 +175,21 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		writer.Write(nil)
 	}
 
+	// Get host and port from Request.RemoteAddr.
+	host, port, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host, port = "", ""
+	}
+
 	// Notify object accessed via a GET request.
 	eventNotify(eventData{
 		Type:      ObjectAccessedGet,
 		Bucket:    bucket,
 		ObjInfo:   objInfo,
 		ReqParams: extractReqParams(r),
+		UserAgent: r.UserAgent(),
+		Host:      host,
+		Port:      port,
 	})
 }
 
@@ -230,12 +240,21 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 	// Successful response.
 	w.WriteHeader(http.StatusOK)
 
+	// Get host and port from Request.RemoteAddr.
+	host, port, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host, port = "", ""
+	}
+
 	// Notify object accessed via a HEAD request.
 	eventNotify(eventData{
 		Type:      ObjectAccessedHead,
 		Bucket:    bucket,
 		ObjInfo:   objInfo,
 		ReqParams: extractReqParams(r),
+		UserAgent: r.UserAgent(),
+		Host:      host,
+		Port:      port,
 	})
 }
 
@@ -505,7 +524,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		}
 		objInfo, err = objectAPI.PutObject(bucket, object, size, r.Body, metadata, sha256sum)
 	case authTypePresigned, authTypeSigned:
-		if s3Error := reqSignatureV4Verify(r); s3Error != ErrNone {
+		if s3Error := reqSignatureV4Verify(r, serverConfig.GetRegion()); s3Error != ErrNone {
 			errorIf(errSignatureMismatch, dumpRequest(r))
 			writeErrorResponse(w, s3Error, r.URL)
 			return
@@ -786,7 +805,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		}
 		partInfo, err = objectAPI.PutObjectPart(bucket, object, uploadID, partID, size, r.Body, incomingMD5, sha256sum)
 	case authTypePresigned, authTypeSigned:
-		if s3Error := reqSignatureV4Verify(r); s3Error != ErrNone {
+		if s3Error := reqSignatureV4Verify(r, serverConfig.GetRegion()); s3Error != ErrNone {
 			errorIf(errSignatureMismatch, dumpRequest(r))
 			writeErrorResponse(w, s3Error, r.URL)
 			return

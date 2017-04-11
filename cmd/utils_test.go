@@ -17,12 +17,14 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
 	"net/url"
 	"reflect"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -411,5 +413,46 @@ func TestCheckURL(t *testing.T) {
 		if !testCase.shouldPass && err == nil {
 			t.Errorf("Test %d: expected to fail but passed.", i+1)
 		}
+	}
+}
+
+// Testing dumping request function.
+func TestDumpRequest(t *testing.T) {
+	req, err := http.NewRequest("GET", "http://localhost:9000?prefix=Hello%2AWorld%2A", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("content-md5", "====test")
+	jsonReq := dumpRequest(req)
+	type jsonResult struct {
+		Method string      `json:"method"`
+		Path   string      `json:"path"`
+		Query  string      `json:"query"`
+		Header http.Header `json:"header"`
+	}
+	jsonReq = strings.Replace(jsonReq, "%%", "%", -1)
+	res := jsonResult{}
+	if err = json.Unmarshal([]byte(jsonReq), &res); err != nil {
+		t.Fatal(err)
+	}
+
+	// Look for expected method.
+	if res.Method != "GET" {
+		t.Fatalf("Unexpected method %s, expected 'GET'", res.Method)
+	}
+
+	// Look for expected query values
+	expectedQuery := url.Values{}
+	expectedQuery.Set("prefix", "Hello*World*")
+	if !reflect.DeepEqual(res.Query, expectedQuery.Encode()) {
+		t.Fatalf("Expected %#v, got %#v", expectedQuery, res.Query)
+	}
+
+	// Look for expected header.
+	expectedHeader := http.Header{}
+	expectedHeader.Set("content-md5", "====test")
+	expectedHeader.Set("host", "localhost:9000")
+	if !reflect.DeepEqual(res.Header, expectedHeader) {
+		t.Fatalf("Expected %#v, got %#v", expectedHeader, res.Header)
 	}
 }

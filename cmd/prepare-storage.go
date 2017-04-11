@@ -132,13 +132,14 @@ func prepForInitXL(firstDisk bool, sErrs []error, diskCount int) InitActions {
 	}
 
 	quorum := diskCount/2 + 1
+	readQuorum := diskCount / 2
 	disksOffline := errMap[errDiskNotFound]
 	disksFormatted := errMap[nil]
 	disksUnformatted := errMap[errUnformattedDisk]
 	disksCorrupted := errMap[errCorruptedFormat]
 
 	// No Quorum lots of offline disks, wait for quorum.
-	if disksOffline >= quorum {
+	if disksOffline > readQuorum {
 		return WaitForQuorum
 	}
 
@@ -168,7 +169,7 @@ func prepForInitXL(firstDisk bool, sErrs []error, diskCount int) InitActions {
 	}
 
 	// Already formatted and in quorum, proceed to initialization of object layer.
-	if disksFormatted >= quorum {
+	if disksFormatted >= readQuorum {
 		if disksFormatted+disksOffline == diskCount {
 			return InitObjectLayer
 		}
@@ -293,7 +294,7 @@ func initStorageDisks(endpoints []*url.URL) ([]StorageAPI, error) {
 	return storageDisks, nil
 }
 
-// Format disks before initialization object layer.
+// Format disks before initialization of object layer.
 func waitForFormatXLDisks(firstDisk bool, endpoints []*url.URL, storageDisks []StorageAPI) (formattedDisks []StorageAPI, err error) {
 	if len(endpoints) == 0 {
 		return nil, errInvalidArgument

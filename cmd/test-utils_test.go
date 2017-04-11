@@ -67,6 +67,9 @@ func init() {
 
 	// Set system resources to maximum.
 	setMaxResources()
+
+	// Quiet logging.
+	log.logger.Hooks = nil
 }
 
 func prepareFS() (ObjectLayer, string, error) {
@@ -487,6 +490,8 @@ func resetGlobalIsXL() {
 
 func resetGlobalIsEnvs() {
 	globalIsEnvCreds = false
+	globalIsEnvBrowser = false
+	globalIsEnvRegion = false
 }
 
 // Resets all the globals used modified in tests.
@@ -886,11 +891,12 @@ func preSignV4(req *http.Request, accessKeyID, secretAccessKey string, expires i
 	query.Set("X-Amz-Credential", credential)
 	query.Set("X-Amz-Content-Sha256", unsignedPayload)
 
-	// Headers are empty, since "host" is the only header required to be signed for Presigned URLs.
-	var extractedSignedHeaders http.Header
+	// "host" is the only header required to be signed for Presigned URLs.
+	extractedSignedHeaders := make(http.Header)
+	extractedSignedHeaders.Set("host", req.Host)
 
 	queryStr := strings.Replace(query.Encode(), "+", "%20", -1)
-	canonicalRequest := getCanonicalRequest(extractedSignedHeaders, unsignedPayload, queryStr, req.URL.Path, req.Method, req.Host)
+	canonicalRequest := getCanonicalRequest(extractedSignedHeaders, unsignedPayload, queryStr, req.URL.Path, req.Method)
 	stringToSign := getStringToSign(canonicalRequest, date, scope)
 	signingKey := getSigningKey(secretAccessKey, date, region)
 	signature := getSignature(signingKey, stringToSign)
@@ -1169,6 +1175,29 @@ func newTestSignedRequest(method, urlStr string, contentLength int64, body io.Re
 		return newTestSignedRequestV2(method, urlStr, contentLength, body, accessKey, secretKey)
 	}
 	return newTestSignedRequestV4(method, urlStr, contentLength, body, accessKey, secretKey)
+}
+
+// Returns request with correct signature but with incorrect SHA256.
+func newTestSignedBadSHARequest(method, urlStr string, contentLength int64, body io.ReadSeeker, accessKey, secretKey string, signer signerType) (*http.Request, error) {
+	req, err := newTestRequest(method, urlStr, contentLength, body)
+	if err != nil {
+		return nil, err
+	}
+
+	// Anonymous request return early.
+	if accessKey == "" || secretKey == "" {
+		return req, nil
+	}
+
+	if signer == signerV2 {
+		err = signRequestV2(req, accessKey, secretKey)
+		req.Header.Del("x-amz-content-sha256")
+	} else {
+		req.Header.Set("x-amz-content-sha256", "92b165232fbd011da355eca0b033db22b934ba9af0145a437a832d27310b89f9")
+		err = signRequestV4(req, accessKey, secretKey)
+	}
+
+	return req, err
 }
 
 // Returns new HTTP request object signed with signature v2.

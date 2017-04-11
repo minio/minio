@@ -33,6 +33,7 @@
   - Response: Success 200
   - Possible error responses
     - ErrMethodNotAllowed
+    ```xml
     <Error>
         <Code>MethodNotAllowed</Code>
         <Message>The specified method is not allowed against this resource.</Message>
@@ -42,7 +43,9 @@
         <RequestId>3L137</RequestId>
         <HostId>3L137</HostId>
     </Error>
+    ```
     - ErrAdminBadCred
+    ```xml
     <Error>
         <Code>XMinioBadCred</Code>
         <Message>XMinioBadCred</Message>
@@ -52,7 +55,9 @@
         <RequestId>3L137</RequestId>
         <HostId>3L137</HostId>
     </Error>
+    ```
     - ErrInternalError
+    ```xml
     <Error>
         <Code>InternalError</Code>
         <Message>We encountered an internal error, please try again.</Message>
@@ -62,6 +67,7 @@
         <RequestId>3L137</RequestId>
         <HostId>3L137</HostId>
     </Error>
+    ```
 
 
 ### Lock Management APIs
@@ -71,6 +77,7 @@
   - Response: On success 200, json encoded response containing all locks held, for longer than duration.
   - Possible error responses
     - ErrInvalidBucketName
+    ```xml
     <Error>
         <Code>InvalidBucketName</Code>
         <Message>The specified bucket is not valid.</Message>
@@ -80,8 +87,9 @@
         <RequestId>3L137</RequestId>
         <HostId>3L137</HostId>
     </Error>
-
+    ```
     - ErrInvalidObjectName
+    ```xml
     <Error>
         <Code>XMinioInvalidObjectName</Code>
         <Message>Object name contains unsupported characters. Unsupported characters are `^*|\&#34;</Message>
@@ -91,8 +99,10 @@
         <RequestId>3L137</RequestId>
         <HostId>3L137</HostId>
     </Error>
+    ```
 
     - ErrInvalidDuration
+      ```xml
       <Error>
           <Code>InvalidDuration</Code>
           <Message>Duration provided in the request is invalid.</Message>
@@ -102,6 +112,7 @@
           <RequestId>3L137</RequestId>
           <HostId>3L137</HostId>
       </Error>
+      ```
 
 
 * ClearLocks
