@@ -50,9 +50,9 @@ func initDsyncNodes() error {
 			accessKey:       cred.AccessKey,
 			secretKey:       cred.SecretKey,
 			serverAddr:      ep.Host,
-			serviceEndpoint: pathutil.Join(minioReservedBucketPath, lockRPCPath, getPath(ep)),
 			secureConn:      globalIsSSL,
-			serviceName:     "Dsync",
+			serviceEndpoint: pathutil.Join(minioReservedBucketPath, lockServicePath, getPath(ep)),
+			serviceName:     lockServiceName,
 		})
 		if isLocalStorage(ep) && myNode == -1 {
 			myNode = index
