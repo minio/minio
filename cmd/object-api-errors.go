@@ -335,6 +335,7 @@ func (e PolicyNesting) Error() string {
 	return "New bucket policy conflicts with an existing policy. Please try again with new prefix."
 }
 
+// PolicyNotFound - policy not found
 type PolicyNotFound GenericError
 
 func (e PolicyNotFound) Error() string {
