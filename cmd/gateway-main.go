@@ -18,7 +18,9 @@ package cmd
 
 import (
 	"fmt"
+	"net/url"
 	"os"
+	"strings"
 
 	"github.com/gorilla/mux"
 	"github.com/minio/cli"
@@ -83,11 +85,11 @@ func mustGetGatewayCredsFromEnv() (accessKey, secretKey string) {
 //
 // - Azure Blob Storage.
 // - Add your favorite backend here.
-func newGatewayLayer(backendType, accessKey, secretKey string) (GatewayLayer, error) {
+func newGatewayLayer(backendType, endPoint, accessKey, secretKey string, secure bool) (GatewayLayer, error) {
 	if gatewayBackend(backendType) != azureBackend {
 		return nil, fmt.Errorf("Unrecognized backend type %s", backendType)
 	}
-	return newAzureLayer(accessKey, secretKey)
+	return newAzureLayer(endPoint, accessKey, secretKey, secure)
 }
 
 // Initialize a new gateway config.
@@ -125,6 +127,28 @@ func newGatewayConfig(accessKey, secretKey, region string) error {
 	return nil
 }
 
+// Return endpoint.
+func parseGatewayEndpoint(arg string) (endPoint string, secure bool, err error) {
+	schemeSpecified := len(strings.Split(arg, "://")) > 1
+	if !schemeSpecified {
+		// Default connection will be "secure".
+		arg = "https://" + arg
+	}
+	u, err := url.Parse(arg)
+	if err != nil {
+		return "", false, err
+	}
+
+	switch u.Scheme {
+	case "http":
+		return u.Host, false, nil
+	case "https":
+		return u.Host, true, nil
+	default:
+		return "", false, fmt.Errorf("Unrecognized scheme %s", u.Scheme)
+	}
+}
+
 // Handler for 'minio gateway'.
 func gatewayMain(ctx *cli.Context) {
 	if !ctx.Args().Present() || ctx.Args().First() == "help" {
@@ -153,7 +177,20 @@ func gatewayMain(ctx *cli.Context) {
 	// First argument is selected backend type.
 	backendType := ctx.Args().First()
 
-	newObject, err := newGatewayLayer(backendType, accessKey, secretKey)
+	// Second argument is endpoint.	If no endpoint is specified then the
+	// gateway implementation should use a default setting.
+	endPoint, secure, err := parseGatewayEndpoint(ctx.Args().Get(1))
+	if err != nil {
+		console.Fatalf("Unable to parse endpoint. Error: %s", err)
+	}
+
+	// Create certs path for SSL configuration.
+	err = createConfigDir()
+	if err != nil {
+		console.Fatalf("Unable to create configuration directory. Error: %s", err)
+	}
+
+	newObject, err := newGatewayLayer(backendType, endPoint, accessKey, secretKey, secure)
 	if err != nil {
 		console.Fatalf("Unable to initialize gateway layer. Error: %s", err)
 	}
