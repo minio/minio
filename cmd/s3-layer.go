@@ -584,7 +584,7 @@ func (l *s3Gateway) DeleteBucketPolicies(bucket string) error {
 		return s3ToObjectError(traceError(err), bucket, "")
 	}
 
-	for prefix, _ := range bucketPolicies {
+	for prefix := range bucketPolicies {
 		prefix := strings.TrimSuffix(prefix, "*")
 		prefix = strings.TrimPrefix(prefix, bucket+"/")
 		l.Client.SetBucketPolicy(bucket, prefix, policy.BucketPolicyNone)
