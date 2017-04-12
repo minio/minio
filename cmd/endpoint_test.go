@@ -143,35 +143,61 @@ func TestNewEndpointList(t *testing.T) {
 }
 
 func TestCreateEndpoints(t *testing.T) {
-	case1u1, _ := url.Parse("http://example.com:10000/d4")
-	case1u2, _ := url.Parse("http://example.org:10000/d3")
-	case1u3, _ := url.Parse("http://localhost:10000/d1")
-	case1u4, _ := url.Parse("http://localhost:10000/d2")
+	// Filter ipList by IPs those do not start with '127.'.
+	nonLoopBackIPs := localIP4.FuncMatch(func(ip string, matchString string) bool {
+		return !strings.HasPrefix(ip, "127.")
+	}, "")
+	if len(nonLoopBackIPs) == 0 {
+		t.Fatalf("No non-loop back IP address found for this host")
+	}
+	nonLoopBackIP := nonLoopBackIPs.ToSlice()[0]
 
-	case2u1, _ := url.Parse("http://example.com:10000/d4")
-	case2u2, _ := url.Parse("http://example.org:10000/d3")
-	case2u3, _ := url.Parse("http://localhost:10000/d1")
-	case2u4, _ := url.Parse("http://localhost:9000/d2")
+	case1Endpoint1 := "http://" + nonLoopBackIP + "/d1"
+	case1Endpoint2 := "http://" + nonLoopBackIP + "/d2"
+	case1u1, _ := url.Parse("http://" + nonLoopBackIP + ":10000/d1")
+	case1u2, _ := url.Parse("http://" + nonLoopBackIP + ":10000/d2")
+	case1u3, _ := url.Parse("http://example.com:10000/d4")
+	case1u4, _ := url.Parse("http://example.org:10000/d3")
 
-	case3u1, _ := url.Parse("http://example.com:80/d3")
-	case3u2, _ := url.Parse("http://example.net:80/d4")
-	case3u3, _ := url.Parse("http://example.org:9000/d2")
-	case3u4, _ := url.Parse("http://localhost:80/d1")
+	case2Endpoint1 := "http://" + nonLoopBackIP + "/d1"
+	case2Endpoint2 := "http://" + nonLoopBackIP + ":9000/d2"
+	case2u1, _ := url.Parse("http://" + nonLoopBackIP + ":10000/d1")
+	case2u2, _ := url.Parse("http://" + nonLoopBackIP + ":9000/d2")
+	case2u3, _ := url.Parse("http://example.com:10000/d4")
+	case2u4, _ := url.Parse("http://example.org:10000/d3")
 
-	case4u1, _ := url.Parse("http://example.com:9000/d3")
-	case4u2, _ := url.Parse("http://example.net:9000/d4")
-	case4u3, _ := url.Parse("http://example.org:9000/d2")
-	case4u4, _ := url.Parse("http://localhost:9000/d1")
+	case3Endpoint1 := "http://" + nonLoopBackIP + "/d1"
+	case3u1, _ := url.Parse("http://" + nonLoopBackIP + ":80/d1")
+	case3u2, _ := url.Parse("http://example.com:80/d3")
+	case3u3, _ := url.Parse("http://example.net:80/d4")
+	case3u4, _ := url.Parse("http://example.org:9000/d2")
 
-	case5u1, _ := url.Parse("http://localhost:9000/d1")
-	case5u2, _ := url.Parse("http://localhost:9001/d2")
-	case5u3, _ := url.Parse("http://localhost:9002/d3")
-	case5u4, _ := url.Parse("http://localhost:9003/d4")
+	case4Endpoint1 := "http://" + nonLoopBackIP + "/d1"
+	case4u1, _ := url.Parse("http://" + nonLoopBackIP + ":9000/d1")
+	case4u2, _ := url.Parse("http://example.com:9000/d3")
+	case4u3, _ := url.Parse("http://example.net:9000/d4")
+	case4u4, _ := url.Parse("http://example.org:9000/d2")
 
+	case5Endpoint1 := "http://" + nonLoopBackIP + ":9000/d1"
+	case5Endpoint2 := "http://" + nonLoopBackIP + ":9001/d2"
+	case5Endpoint3 := "http://" + nonLoopBackIP + ":9002/d3"
+	case5Endpoint4 := "http://" + nonLoopBackIP + ":9003/d4"
+	case5u1, _ := url.Parse("http://" + nonLoopBackIP + ":9000/d1")
+	case5u2, _ := url.Parse("http://" + nonLoopBackIP + ":9001/d2")
+	case5u3, _ := url.Parse("http://" + nonLoopBackIP + ":9002/d3")
+	case5u4, _ := url.Parse("http://" + nonLoopBackIP + ":9003/d4")
+
+	case6Endpoint3 := "http://" + nonLoopBackIP + ":9001/export"
 	case6u1, _ := url.Parse("http://10.0.0.1:9000/export")
 	case6u2, _ := url.Parse("http://10.0.0.2:9000/export")
 	case6u3, _ := url.Parse("http://10.0.0.3:9000/export")
-	case6u4, _ := url.Parse("http://localhost:9001/export")
+	case6u4, _ := url.Parse("http://" + nonLoopBackIP + ":9001/export")
+
+	case7Endpoint := "http://" + nonLoopBackIP + ":9003/d4"
+	case7u1, _ := url.Parse("http://127.0.0.1:9002/d3")
+	case7u2, _ := url.Parse(case7Endpoint)
+	case7u3, _ := url.Parse("http://localhost:9000/d1")
+	case7u4, _ := url.Parse("http://localhost:9001/d2")
 
 	testCases := []struct {
 		serverAddr         string
@@ -218,44 +244,57 @@ func TestCreateEndpoints(t *testing.T) {
 			Endpoint{URL: &url.URL{Path: "/d3"}, IsLocal: true},
 			Endpoint{URL: &url.URL{Path: "/d4"}, IsLocal: true},
 		}, XLSetupType, nil},
+		{":9000", []string{"http://localhost/d1", "http://localhost/d2", "http://example.org/d3", "http://example.com/d4"}, "", EndpointList{}, -1, fmt.Errorf("'localhost' resolves to loopback address is not allowed for distributed XL")},
 
 		// DistXL type
-		{"127.0.0.1:10000", []string{"http://localhost/d1", "http://localhost/d2", "http://example.org/d3", "http://example.com/d4"}, "127.0.0.1:10000", EndpointList{
-			Endpoint{URL: case1u1, IsLocal: false},
-			Endpoint{URL: case1u2, IsLocal: false},
-			Endpoint{URL: case1u3, IsLocal: true},
-			Endpoint{URL: case1u4, IsLocal: true},
+		{"127.0.0.1:10000", []string{case1Endpoint1, case1Endpoint2, "http://example.org/d3", "http://example.com/d4"}, "127.0.0.1:10000", EndpointList{
+			Endpoint{URL: case1u1, IsLocal: true},
+			Endpoint{URL: case1u2, IsLocal: true},
+			Endpoint{URL: case1u3, IsLocal: false},
+			Endpoint{URL: case1u4, IsLocal: false},
 		}, DistXLSetupType, nil},
-		{"127.0.0.1:10000", []string{"http://localhost/d1", "http://localhost:9000/d2", "http://example.org/d3", "http://example.com/d4"}, "127.0.0.1:10000", EndpointList{
-			Endpoint{URL: case2u1, IsLocal: false},
+
+		{"127.0.0.1:10000", []string{case2Endpoint1, case2Endpoint2, "http://example.org/d3", "http://example.com/d4"}, "127.0.0.1:10000", EndpointList{
+			Endpoint{URL: case2u1, IsLocal: true},
 			Endpoint{URL: case2u2, IsLocal: false},
-			Endpoint{URL: case2u3, IsLocal: true},
+			Endpoint{URL: case2u3, IsLocal: false},
 			Endpoint{URL: case2u4, IsLocal: false},
 		}, DistXLSetupType, nil},
-		{":80", []string{"http://localhost/d1", "http://example.org:9000/d2", "http://example.com/d3", "http://example.net/d4"}, ":80", EndpointList{
-			Endpoint{URL: case3u1, IsLocal: false},
+
+		{":80", []string{case3Endpoint1, "http://example.org:9000/d2", "http://example.com/d3", "http://example.net/d4"}, ":80", EndpointList{
+			Endpoint{URL: case3u1, IsLocal: true},
 			Endpoint{URL: case3u2, IsLocal: false},
 			Endpoint{URL: case3u3, IsLocal: false},
-			Endpoint{URL: case3u4, IsLocal: true},
+			Endpoint{URL: case3u4, IsLocal: false},
 		}, DistXLSetupType, nil},
-		{":9000", []string{"http://localhost/d1", "http://example.org/d2", "http://example.com/d3", "http://example.net/d4"}, ":9000", EndpointList{
-			Endpoint{URL: case4u1, IsLocal: false},
+
+		{":9000", []string{case4Endpoint1, "http://example.org/d2", "http://example.com/d3", "http://example.net/d4"}, ":9000", EndpointList{
+			Endpoint{URL: case4u1, IsLocal: true},
 			Endpoint{URL: case4u2, IsLocal: false},
 			Endpoint{URL: case4u3, IsLocal: false},
-			Endpoint{URL: case4u4, IsLocal: true},
+			Endpoint{URL: case4u4, IsLocal: false},
 		}, DistXLSetupType, nil},
-		{":9000", []string{"http://localhost:9000/d1", "http://localhost:9001/d2", "http://localhost:9002/d3", "http://localhost:9003/d4"}, ":9000", EndpointList{
+
+		{":9000", []string{case5Endpoint1, case5Endpoint2, case5Endpoint3, case5Endpoint4}, ":9000", EndpointList{
 			Endpoint{URL: case5u1, IsLocal: true},
 			Endpoint{URL: case5u2, IsLocal: false},
 			Endpoint{URL: case5u3, IsLocal: false},
 			Endpoint{URL: case5u4, IsLocal: false},
 		}, DistXLSetupType, nil},
 
-		{":9001", []string{"http://10.0.0.1:9000/export", "http://10.0.0.2:9000/export", "http://localhost:9001/export", "http://10.0.0.3:9000/export"}, ":9001", EndpointList{
+		{":9001", []string{"http://10.0.0.1:9000/export", "http://10.0.0.2:9000/export", case6Endpoint3, "http://10.0.0.3:9000/export"}, ":9001", EndpointList{
 			Endpoint{URL: case6u1, IsLocal: false},
 			Endpoint{URL: case6u2, IsLocal: false},
 			Endpoint{URL: case6u3, IsLocal: false},
 			Endpoint{URL: case6u4, IsLocal: true},
+		}, DistXLSetupType, nil},
+
+		// DistXL Setup using only local host.
+		{":9003", []string{"http://localhost:9000/d1", "http://localhost:9001/d2", "http://127.0.0.1:9002/d3", case7Endpoint}, ":9003", EndpointList{
+			Endpoint{URL: case7u1, IsLocal: false},
+			Endpoint{URL: case7u2, IsLocal: true},
+			Endpoint{URL: case7u3, IsLocal: false},
+			Endpoint{URL: case7u4, IsLocal: false},
 		}, DistXLSetupType, nil},
 	}
 
