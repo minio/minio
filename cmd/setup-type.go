@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,19 +16,29 @@
 
 package cmd
 
-import "net/url"
+// SetupType - enum for setup type.
+type SetupType int
 
-type byHostPath []*url.URL
+const (
+	// FSSetupType - FS setup type enum.
+	FSSetupType SetupType = iota + 1
 
-func (s byHostPath) Swap(i, j int) {
-	s[i], s[j] = s[j], s[i]
-}
+	// XLSetupType - XL setup type enum.
+	XLSetupType
 
-func (s byHostPath) Len() int {
-	return len(s)
-}
+	// DistXLSetupType - Distributed XL setup type enum.
+	DistXLSetupType
+)
 
-// Note: Host in url.URL includes the port too.
-func (s byHostPath) Less(i, j int) bool {
-	return (s[i].Host + s[i].Path) < (s[j].Host + s[j].Path)
+func (setupType SetupType) String() string {
+	switch setupType {
+	case FSSetupType:
+		return globalMinioModeFS
+	case XLSetupType:
+		return globalMinioModeXL
+	case DistXLSetupType:
+		return globalMinioModeDistXL
+	}
+
+	return ""
 }

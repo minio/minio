@@ -20,7 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/url"
+	"net"
 	"os"
 	"path"
 	"path/filepath"
@@ -28,6 +28,8 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/minio/minio-go/pkg/set"
 )
 
 const (
@@ -211,52 +213,43 @@ type adminPeer struct {
 type adminPeers []adminPeer
 
 // makeAdminPeers - helper function to construct a collection of adminPeer.
-func makeAdminPeers(eps []*url.URL) adminPeers {
-	var servicePeers []adminPeer
-
-	// map to store peers that are already added to ret
-	seenAddr := make(map[string]bool)
-
-	// add local (self) as peer in the array
-	servicePeers = append(servicePeers, adminPeer{
-		globalMinioAddr,
+func makeAdminPeers(endpoints EndpointList) (adminPeerList adminPeers) {
+	thisPeer := globalMinioAddr
+	if globalMinioHost == "" {
+		thisPeer = net.JoinHostPort("localhost", globalMinioPort)
+	}
+	adminPeerList = append(adminPeerList, adminPeer{
+		thisPeer,
 		localAdminClient{},
 	})
-	seenAddr[globalMinioAddr] = true
 
-	serverCred := serverConfig.GetCredential()
-	// iterate over endpoints to find new remote peers and add
-	// them to ret.
-	for _, ep := range eps {
-		if ep.Host == "" {
+	hostSet := set.CreateStringSet(globalMinioAddr)
+	cred := serverConfig.GetCredential()
+	serviceEndpoint := path.Join(minioReservedBucketPath, adminPath)
+	for _, host := range GetRemotePeers(endpoints) {
+		if hostSet.Contains(host) {
 			continue
 		}
-
-		// Check if the remote host has been added already
-		if !seenAddr[ep.Host] {
-			cfg := authConfig{
-				accessKey:       serverCred.AccessKey,
-				secretKey:       serverCred.SecretKey,
-				serverAddr:      ep.Host,
+		hostSet.Add(host)
+		adminPeerList = append(adminPeerList, adminPeer{
+			addr: host,
+			cmdRunner: &remoteAdminClient{newAuthRPCClient(authConfig{
+				accessKey:       cred.AccessKey,
+				secretKey:       cred.SecretKey,
+				serverAddr:      host,
+				serviceEndpoint: serviceEndpoint,
 				secureConn:      globalIsSSL,
-				serviceEndpoint: path.Join(minioReservedBucketPath, adminPath),
 				serviceName:     "Admin",
-			}
-
-			servicePeers = append(servicePeers, adminPeer{
-				addr:      ep.Host,
-				cmdRunner: &remoteAdminClient{newAuthRPCClient(cfg)},
-			})
-			seenAddr[ep.Host] = true
-		}
+			})},
+		})
 	}
 
-	return servicePeers
+	return adminPeerList
 }
 
 // Initialize global adminPeer collection.
-func initGlobalAdminPeers(eps []*url.URL) {
-	globalAdminPeers = makeAdminPeers(eps)
+func initGlobalAdminPeers(endpoints EndpointList) {
+	globalAdminPeers = makeAdminPeers(endpoints)
 }
 
 // invokeServiceCmd - Invoke Restart command.

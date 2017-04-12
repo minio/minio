@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"errors"
-	"net/url"
 	"time"
 
 	"github.com/minio/mc/pkg/console"
@@ -191,7 +190,7 @@ func printRetryMsg(sErrs []error, storageDisks []StorageAPI) {
 
 // Implements a jitter backoff loop for formatting all disks during
 // initialization of the server.
-func retryFormattingXLDisks(firstDisk bool, endpoints []*url.URL, storageDisks []StorageAPI) error {
+func retryFormattingXLDisks(firstDisk bool, endpoints EndpointList, storageDisks []StorageAPI) error {
 	if len(endpoints) == 0 {
 		return errInvalidArgument
 	}
@@ -276,16 +275,13 @@ func retryFormattingXLDisks(firstDisk bool, endpoints []*url.URL, storageDisks [
 }
 
 // Initialize storage disks based on input arguments.
-func initStorageDisks(endpoints []*url.URL) ([]StorageAPI, error) {
+func initStorageDisks(endpoints EndpointList) ([]StorageAPI, error) {
 	// Bootstrap disks.
 	storageDisks := make([]StorageAPI, len(endpoints))
-	for index, ep := range endpoints {
-		if ep == nil {
-			return nil, errInvalidArgument
-		}
+	for index, endpoint := range endpoints {
 		// Intentionally ignore disk not found errors. XL is designed
 		// to handle these errors internally.
-		storage, err := newStorageAPI(ep)
+		storage, err := newStorageAPI(endpoint)
 		if err != nil && err != errDiskNotFound {
 			return nil, err
 		}
@@ -295,12 +291,8 @@ func initStorageDisks(endpoints []*url.URL) ([]StorageAPI, error) {
 }
 
 // Format disks before initialization of object layer.
-func waitForFormatXLDisks(firstDisk bool, endpoints []*url.URL, storageDisks []StorageAPI) (formattedDisks []StorageAPI, err error) {
+func waitForFormatXLDisks(firstDisk bool, endpoints EndpointList, storageDisks []StorageAPI) (formattedDisks []StorageAPI, err error) {
 	if len(endpoints) == 0 {
-		return nil, errInvalidArgument
-	}
-	firstEndpoint := endpoints[0]
-	if firstEndpoint == nil {
 		return nil, errInvalidArgument
 	}
 	if storageDisks == nil {

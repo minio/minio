@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strings"
 
 	"github.com/gorilla/mux"
 	"github.com/minio/cli"
@@ -91,19 +92,12 @@ func mustGetGatewayCredsFromEnv() (accessKey, secretKey string) {
 //
 // - Azure Blob Storage.
 // - Add your favorite backend here.
-func newGatewayLayer(backendType, endpoint, accessKey, secretKey string) (GatewayLayer, error) {
+func newGatewayLayer(backendType, endpoint, accessKey, secretKey string, secure bool) (GatewayLayer, error) {
 	switch gatewayBackend(backendType) {
 	case azureBackend:
-		return newAzureLayer(accessKey, secretKey)
+		return newAzureLayer(endpoint, accessKey, secretKey, secure)
 	case s3Backend:
-		useHTTPS := true
-		if u, err := url.Parse(endpoint); err != nil {
-		} else if u.Scheme == "http" || u.Scheme == "https" {
-			useHTTPS = (u.Scheme == "https")
-			endpoint = u.Host
-		}
-
-		return newS3Gateway(endpoint, useHTTPS, accessKey, secretKey)
+		return newS3Gateway(endpoint, accessKey, secretKey, secure)
 	}
 
 	return nil, fmt.Errorf("Unrecognized backend type %s", backendType)
@@ -136,6 +130,29 @@ func newGatewayConfig(accessKey, secretKey, region string) error {
 	return nil
 }
 
+// Return endpoint.
+func parseGatewayEndpoint(arg string) (endPoint string, secure bool, err error) {
+	schemeSpecified := len(strings.Split(arg, "://")) > 1
+	if !schemeSpecified {
+		// Default connection will be "secure".
+		arg = "https://" + arg
+	}
+
+	u, err := url.Parse(arg)
+	if err != nil {
+		return "", false, err
+	}
+
+	switch u.Scheme {
+	case "http":
+		return u.Host, false, nil
+	case "https":
+		return u.Host, true, nil
+	default:
+		return "", false, fmt.Errorf("Unrecognized scheme %s", u.Scheme)
+	}
+}
+
 // Handler for 'minio gateway'.
 func gatewayMain(ctx *cli.Context) {
 	if !ctx.Args().Present() || ctx.Args().First() == "help" {
@@ -161,11 +178,16 @@ func gatewayMain(ctx *cli.Context) {
 	// First argument is selected backend type.
 	backendType := ctx.Args().First()
 
+	// Second argument is endpoint.	If no endpoint is specified then the
+	// gateway implementation should use a default setting.
+	endPoint, secure, err := parseGatewayEndpoint(ctx.Args().Get(1))
+	fatalIf(err, "Unable to parse endpoint")
+
 	// Create certs path for SSL configuration.
 	fatalIf(createConfigDir(), "Unable to create configuration directory")
 
-	newObject, err := newGatewayLayer(backendType, ctx.String("endpoint"), accessKey, secretKey)
-	fatalIf(err, "Unable to initialize gateway layer. Error: %s", err)
+	newObject, err := newGatewayLayer(backendType, endPoint, accessKey, secretKey, secure)
+	fatalIf(err, "Unable to initialize gateway layer")
 
 	initNSLock(false) // Enable local namespace lock.
 
@@ -206,9 +228,6 @@ func gatewayMain(ctx *cli.Context) {
 		fatalIf(aerr, "Failed to start minio server")
 	}()
 
-	apiEndPoints, err := finalizeAPIEndpoints(apiServer.Addr)
-	fatalIf(err, "Unable to finalize API endpoints for %s", apiServer.Addr)
-
 	// Once endpoints are finalized, initialize the new object api.
 	globalObjLayerMutex.Lock()
 	globalObjectAPI = newObject
@@ -223,7 +242,8 @@ func gatewayMain(ctx *cli.Context) {
 			mode = globalMinioModeGatewayS3
 		}
 		checkUpdate(mode)
-		printGatewayStartupMessage(apiEndPoints, accessKey, secretKey, backendType)
+		apiEndpoints := getAPIEndpoints(apiServer.Addr)
+		printGatewayStartupMessage(apiEndpoints, accessKey, secretKey, backendType)
 	}
 
 	<-globalServiceDoneCh

@@ -19,7 +19,6 @@ package cmd
 import (
 	"bytes"
 	"fmt"
-	"net"
 	"reflect"
 	"testing"
 	"time"
@@ -40,11 +39,7 @@ func TestInitEventNotifierFaultyDisks(t *testing.T) {
 		t.Fatal("Unable to create directories for FS backend. ", err)
 	}
 	defer removeRoots(disks)
-	endpoints, err := parseStorageEndpoints(disks)
-	if err != nil {
-		t.Fatal(err)
-	}
-	obj, _, err := initObjectLayer(endpoints)
+	obj, _, err := initObjectLayer(mustGetNewEndpointList(disks...))
 	if err != nil {
 		t.Fatal("Unable to initialize FS backend.", err)
 	}
@@ -97,11 +92,7 @@ func TestInitEventNotifierWithPostgreSQL(t *testing.T) {
 	if err != nil {
 		t.Fatal("Unable to create directories for FS backend. ", err)
 	}
-	endpoints, err := parseStorageEndpoints(disks)
-	if err != nil {
-		t.Fatal(err)
-	}
-	fs, _, err := initObjectLayer(endpoints)
+	fs, _, err := initObjectLayer(mustGetNewEndpointList(disks...))
 	if err != nil {
 		t.Fatal("Unable to initialize FS backend.", err)
 	}
@@ -128,11 +119,7 @@ func TestInitEventNotifierWithNATS(t *testing.T) {
 	if err != nil {
 		t.Fatal("Unable to create directories for FS backend. ", err)
 	}
-	endpoints, err := parseStorageEndpoints(disks)
-	if err != nil {
-		t.Fatal(err)
-	}
-	fs, _, err := initObjectLayer(endpoints)
+	fs, _, err := initObjectLayer(mustGetNewEndpointList(disks...))
 	if err != nil {
 		t.Fatal("Unable to initialize FS backend.", err)
 	}
@@ -159,11 +146,7 @@ func TestInitEventNotifierWithWebHook(t *testing.T) {
 	if err != nil {
 		t.Fatal("Unable to create directories for FS backend. ", err)
 	}
-	endpoints, err := parseStorageEndpoints(disks)
-	if err != nil {
-		t.Fatal(err)
-	}
-	fs, _, err := initObjectLayer(endpoints)
+	fs, _, err := initObjectLayer(mustGetNewEndpointList(disks...))
 	if err != nil {
 		t.Fatal("Unable to initialize FS backend.", err)
 	}
@@ -190,11 +173,7 @@ func TestInitEventNotifierWithAMQP(t *testing.T) {
 	if err != nil {
 		t.Fatal("Unable to create directories for FS backend. ", err)
 	}
-	endpoints, err := parseStorageEndpoints(disks)
-	if err != nil {
-		t.Fatal(err)
-	}
-	fs, _, err := initObjectLayer(endpoints)
+	fs, _, err := initObjectLayer(mustGetNewEndpointList(disks...))
 	if err != nil {
 		t.Fatal("Unable to initialize FS backend.", err)
 	}
@@ -221,11 +200,7 @@ func TestInitEventNotifierWithElasticSearch(t *testing.T) {
 	if err != nil {
 		t.Fatal("Unable to create directories for FS backend. ", err)
 	}
-	endpoints, err := parseStorageEndpoints(disks)
-	if err != nil {
-		t.Fatal(err)
-	}
-	fs, _, err := initObjectLayer(endpoints)
+	fs, _, err := initObjectLayer(mustGetNewEndpointList(disks...))
 	if err != nil {
 		t.Fatal("Unable to initialize FS backend.", err)
 	}
@@ -252,11 +227,7 @@ func TestInitEventNotifierWithRedis(t *testing.T) {
 	if err != nil {
 		t.Fatal("Unable to create directories for FS backend. ", err)
 	}
-	endpoints, err := parseStorageEndpoints(disks)
-	if err != nil {
-		t.Fatal(err)
-	}
-	fs, _, err := initObjectLayer(endpoints)
+	fs, _, err := initObjectLayer(mustGetNewEndpointList(disks...))
 	if err != nil {
 		t.Fatal("Unable to initialize FS backend.", err)
 	}
@@ -276,15 +247,10 @@ func (s *TestPeerRPCServerData) Setup(t *testing.T) {
 	s.testServer = StartTestPeersRPCServer(t, s.serverType)
 
 	// setup port and minio addr
-	host, port, err := net.SplitHostPort(s.testServer.Server.Listener.Addr().String())
-	if err != nil {
-		t.Fatalf("Initialisation error: %v", err)
-	}
+	host, port := mustSplitHostPort(s.testServer.Server.Listener.Addr().String())
 	globalMinioHost = host
 	globalMinioPort = port
-	globalMinioAddr = getLocalAddress(
-		s.testServer.SrvCmdCfg,
-	)
+	globalMinioAddr = getEndpointsLocalAddr(s.testServer.endpoints)
 
 	// initialize the peer client(s)
 	initGlobalS3Peers(s.testServer.Disks)

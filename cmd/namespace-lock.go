@@ -42,19 +42,16 @@ func initDsyncNodes() error {
 	// Initialize rpc lock client information only if this instance is a distributed setup.
 	clnts := make([]dsync.NetLocker, len(globalEndpoints))
 	myNode := -1
-	for index, ep := range globalEndpoints {
-		if ep == nil {
-			return errInvalidArgument
-		}
+	for index, endpoint := range globalEndpoints {
 		clnts[index] = newLockRPCClient(authConfig{
 			accessKey:       cred.AccessKey,
 			secretKey:       cred.SecretKey,
-			serverAddr:      ep.Host,
+			serverAddr:      endpoint.Host,
 			secureConn:      globalIsSSL,
-			serviceEndpoint: pathutil.Join(minioReservedBucketPath, lockServicePath, getPath(ep)),
+			serviceEndpoint: pathutil.Join(minioReservedBucketPath, lockServicePath, endpoint.Path),
 			serviceName:     lockServiceName,
 		})
-		if isLocalStorage(ep) && myNode == -1 {
+		if endpoint.IsLocal && myNode == -1 {
 			myNode = index
 		}
 	}

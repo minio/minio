@@ -97,14 +97,14 @@ type s3Gateway struct {
 }
 
 // newS3Gateway returns s3 gatewaylayer
-func newS3Gateway(endpoint string, https bool, accessKey, secretKey string) (GatewayLayer, error) {
+func newS3Gateway(endpoint string, accessKey, secretKey string, secure bool) (GatewayLayer, error) {
 	// Initialize minio client object.
-	client, err := minio.NewCore(endpoint, accessKey, secretKey, https)
+	client, err := minio.NewCore(endpoint, accessKey, secretKey, secure)
 	if err != nil {
 		return nil, err
 	}
 
-	anonClient, err := minio.NewCore(endpoint, "", "", https)
+	anonClient, err := minio.NewCore(endpoint, "", "", secure)
 	if err != nil {
 		return nil, err
 	}
