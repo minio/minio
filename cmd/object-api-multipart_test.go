@@ -1457,7 +1457,7 @@ func testListObjectPartsDiskNotFound(obj ObjectLayer, instanceType string, disks
 		// Failed as expected, but does it fail for the expected reason.
 		if actualErr != nil && !testCase.shouldPass {
 			if !strings.Contains(actualErr.Error(), testCase.expectedErr.Error()) {
-				t.Errorf("Test %d: %s: Expected to fail with error \"%s\", but instead failed with error \"%s\" instead", i+1, instanceType, testCase.expectedErr.Error(), actualErr.Error())
+				t.Errorf("Test %d: %s: Expected to fail with error \"%s\", but instead failed with error \"%s\" instead", i+1, instanceType, testCase.expectedErr, actualErr)
 			}
 		}
 		// Passes as expected, but asserting the results.
