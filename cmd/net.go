@@ -77,17 +77,66 @@ func getHostIP4(host string) (ipList set.StringSet, err error) {
 	return ipList, err
 }
 
+// byLastOctetValue implements sort.Interface used in sorting a list
+// of ip address by their last octet value in descending order.
+type byLastOctetValue []net.IP
+
+func (n byLastOctetValue) Len() int      { return len(n) }
+func (n byLastOctetValue) Swap(i, j int) { n[i], n[j] = n[j], n[i] }
+func (n byLastOctetValue) Less(i, j int) bool {
+	// This case is needed when all ips in the list
+	// have same last octets, Following just ensures that
+	// 127.0.0.1 is moved to the end of the list.
+	if n[i].String() == "127.0.0.1" {
+		return false
+	}
+	if n[j].String() == "127.0.0.1" {
+		return true
+	}
+	return []byte(n[i].To4())[3] > []byte(n[j].To4())[3]
+}
+
+// sortIPs - sort ips based on higher octects.
+// The logic to sort by last octet is implemented to
+// prefer CIDRs with higher octects, this in-turn skips the
+// localhost/loopback address to be not preferred as the
+// first ip on the list. Subsequently this list helps us print
+// a user friendly message with appropriate values.
+func sortIPs(ipList []string) []string {
+	if len(ipList) == 1 {
+		return ipList
+	}
+
+	var ipV4s []net.IP
+	var nonIPs []string
+	for _, ip := range ipList {
+		nip := net.ParseIP(ip)
+		if nip != nil {
+			ipV4s = append(ipV4s, nip)
+		} else {
+			nonIPs = append(nonIPs, ip)
+		}
+	}
+
+	sort.Sort(byLastOctetValue(ipV4s))
+
+	var ips []string
+	for _, ip := range ipV4s {
+		ips = append(ips, ip.String())
+	}
+
+	return append(nonIPs, ips...)
+}
+
 func getAPIEndpoints(serverAddr string) (apiEndpoints []string) {
 	host, port := mustSplitHostPort(serverAddr)
 
 	var ipList []string
 	if host == "" {
-		ipList = localIP4.ToSlice()
+		ipList = sortIPs(localIP4.ToSlice())
 	} else {
 		ipList = []string{host}
 	}
-
-	sort.Strings(ipList)
 
 	scheme := httpScheme
 	if globalIsSSL {

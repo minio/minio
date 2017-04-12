@@ -19,6 +19,7 @@ package cmd
 import (
 	"fmt"
 	"net"
+	"reflect"
 	"runtime"
 	"testing"
 
@@ -48,6 +49,64 @@ func TestMustSplitHostPort(t *testing.T) {
 
 		if testCase.expectedPort != port {
 			t.Fatalf("port: expected = %v, got = %v", testCase.expectedPort, port)
+		}
+	}
+}
+
+func TestSortIPs(t *testing.T) {
+	testCases := []struct {
+		ipList       []string
+		sortedIPList []string
+	}{
+		// Default case of two ips one with higher octet moves
+		// to the beginning of the list.
+		{
+			ipList:       []string{"127.0.0.1", "10.0.0.13"},
+			sortedIPList: []string{"10.0.0.13", "127.0.0.1"},
+		},
+		// With multiple types of octet, chooses a higher octet.
+		{
+			ipList:       []string{"127.0.0.1", "172.0.21.1", "192.168.1.106"},
+			sortedIPList: []string{"192.168.1.106", "172.0.21.1", "127.0.0.1"},
+		},
+		// With different ip along with localhost.
+		{
+			ipList:       []string{"127.0.0.1", "192.168.1.106"},
+			sortedIPList: []string{"192.168.1.106", "127.0.0.1"},
+		},
+		// With a list of only one element nothing to sort.
+		{
+			ipList:       []string{"hostname"},
+			sortedIPList: []string{"hostname"},
+		},
+		// With a list of only one element nothing to sort.
+		{
+			ipList:       []string{"127.0.0.1"},
+			sortedIPList: []string{"127.0.0.1"},
+		},
+		// Non parsable ip is assumed to be hostame and gets preserved
+		// as the left most elements, regardless of IP based sorting.
+		{
+			ipList:       []string{"hostname", "127.0.0.1", "192.168.1.106"},
+			sortedIPList: []string{"hostname", "192.168.1.106", "127.0.0.1"},
+		},
+		// Non parsable ip is assumed to be hostname, with a mixed input of ip and hostname.
+		// gets preserved and moved into left most elements, regardless of
+		// IP based sorting.
+		{
+			ipList:       []string{"hostname1", "10.0.0.13", "hostname2", "127.0.0.1", "192.168.1.106"},
+			sortedIPList: []string{"hostname1", "hostname2", "192.168.1.106", "10.0.0.13", "127.0.0.1"},
+		},
+		// With same higher octets, preferentially move the localhost.
+		{
+			ipList:       []string{"127.0.0.1", "10.0.0.1", "192.168.0.1"},
+			sortedIPList: []string{"10.0.0.1", "192.168.0.1", "127.0.0.1"},
+		},
+	}
+	for i, testCase := range testCases {
+		gotIPList := sortIPs(testCase.ipList)
+		if !reflect.DeepEqual(testCase.sortedIPList, gotIPList) {
+			t.Errorf("Test %d: Expected %s, got %s", i+1, testCase.sortedIPList, gotIPList)
 		}
 	}
 }
