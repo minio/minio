@@ -305,9 +305,11 @@ func CreateEndpoints(serverAddr string, args ...string) (string, EndpointList, S
 			hostIPSet, _ := getHostIP4(host)
 			if IPSet, ok := pathIPMap[endpoint.Path]; ok {
 				if !IPSet.Intersection(hostIPSet).IsEmpty() {
-					err = fmt.Errorf("path '%s' can not be served from different address/port", endpoint.Path)
+					err = fmt.Errorf("path '%s' can not be served by different port on same address", endpoint.Path)
 					return serverAddr, endpoints, setupType, err
 				}
+
+				pathIPMap[endpoint.Path] = IPSet.Union(hostIPSet)
 			} else {
 				pathIPMap[endpoint.Path] = hostIPSet
 			}
