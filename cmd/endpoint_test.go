@@ -21,6 +21,7 @@ import (
 	"net/url"
 	"reflect"
 	"runtime"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -143,35 +144,86 @@ func TestNewEndpointList(t *testing.T) {
 }
 
 func TestCreateEndpoints(t *testing.T) {
-	case1u1, _ := url.Parse("http://example.com:10000/d4")
-	case1u2, _ := url.Parse("http://example.org:10000/d3")
-	case1u3, _ := url.Parse("http://localhost:10000/d1")
-	case1u4, _ := url.Parse("http://localhost:10000/d2")
+	// Filter ipList by IPs those do not start with '127.'.
+	nonLoopBackIPs := localIP4.FuncMatch(func(ip string, matchString string) bool {
+		return !strings.HasPrefix(ip, "127.")
+	}, "")
+	if len(nonLoopBackIPs) == 0 {
+		t.Fatalf("No non-loop back IP address found for this host")
+	}
+	nonLoopBackIP := nonLoopBackIPs.ToSlice()[0]
 
-	case2u1, _ := url.Parse("http://example.com:10000/d4")
-	case2u2, _ := url.Parse("http://example.org:10000/d3")
-	case2u3, _ := url.Parse("http://localhost:10000/d1")
-	case2u4, _ := url.Parse("http://localhost:9000/d2")
+	getExpectedEndpoints := func(args []string, prefix string) ([]*url.URL, []bool) {
+		var URLs []*url.URL
+		var localFlags []bool
+		sort.Strings(args)
+		for _, arg := range args {
+			u, _ := url.Parse(arg)
+			URLs = append(URLs, u)
+			localFlags = append(localFlags, strings.HasPrefix(arg, prefix))
+		}
 
-	case3u1, _ := url.Parse("http://example.com:80/d3")
-	case3u2, _ := url.Parse("http://example.net:80/d4")
-	case3u3, _ := url.Parse("http://example.org:9000/d2")
-	case3u4, _ := url.Parse("http://localhost:80/d1")
+		return URLs, localFlags
+	}
 
-	case4u1, _ := url.Parse("http://example.com:9000/d3")
-	case4u2, _ := url.Parse("http://example.net:9000/d4")
-	case4u3, _ := url.Parse("http://example.org:9000/d2")
-	case4u4, _ := url.Parse("http://localhost:9000/d1")
+	case1Endpoint1 := "http://" + nonLoopBackIP + "/d1"
+	case1Endpoint2 := "http://" + nonLoopBackIP + "/d2"
+	args := []string{
+		"http://" + nonLoopBackIP + ":10000/d1",
+		"http://" + nonLoopBackIP + ":10000/d2",
+		"http://example.com:10000/d4",
+		"http://example.org:10000/d3",
+	}
+	case1URLs, case1LocalFlags := getExpectedEndpoints(args, "http://"+nonLoopBackIP+":10000/")
 
-	case5u1, _ := url.Parse("http://localhost:9000/d1")
-	case5u2, _ := url.Parse("http://localhost:9001/d2")
-	case5u3, _ := url.Parse("http://localhost:9002/d3")
-	case5u4, _ := url.Parse("http://localhost:9003/d4")
+	case2Endpoint1 := "http://" + nonLoopBackIP + "/d1"
+	case2Endpoint2 := "http://" + nonLoopBackIP + ":9000/d2"
+	args = []string{
+		"http://" + nonLoopBackIP + ":10000/d1",
+		"http://" + nonLoopBackIP + ":9000/d2",
+		"http://example.com:10000/d4",
+		"http://example.org:10000/d3",
+	}
+	case2URLs, case2LocalFlags := getExpectedEndpoints(args, "http://"+nonLoopBackIP+":10000/")
 
-	case6u1, _ := url.Parse("http://10.0.0.1:9000/export")
-	case6u2, _ := url.Parse("http://10.0.0.2:9000/export")
-	case6u3, _ := url.Parse("http://10.0.0.3:9000/export")
-	case6u4, _ := url.Parse("http://localhost:9001/export")
+	case3Endpoint1 := "http://" + nonLoopBackIP + "/d1"
+	args = []string{
+		"http://" + nonLoopBackIP + ":80/d1",
+		"http://example.com:80/d3",
+		"http://example.net:80/d4",
+		"http://example.org:9000/d2",
+	}
+	case3URLs, case3LocalFlags := getExpectedEndpoints(args, "http://"+nonLoopBackIP+":80/")
+
+	case4Endpoint1 := "http://" + nonLoopBackIP + "/d1"
+	args = []string{
+		"http://" + nonLoopBackIP + ":9000/d1",
+		"http://example.com:9000/d3",
+		"http://example.net:9000/d4",
+		"http://example.org:9000/d2",
+	}
+	case4URLs, case4LocalFlags := getExpectedEndpoints(args, "http://"+nonLoopBackIP+":9000/")
+
+	case5Endpoint1 := "http://" + nonLoopBackIP + ":9000/d1"
+	case5Endpoint2 := "http://" + nonLoopBackIP + ":9001/d2"
+	case5Endpoint3 := "http://" + nonLoopBackIP + ":9002/d3"
+	case5Endpoint4 := "http://" + nonLoopBackIP + ":9003/d4"
+	args = []string{
+		case5Endpoint1,
+		case5Endpoint2,
+		case5Endpoint3,
+		case5Endpoint4,
+	}
+	case5URLs, case5LocalFlags := getExpectedEndpoints(args, "http://"+nonLoopBackIP+":9000/")
+
+	case6Endpoint := "http://" + nonLoopBackIP + ":9003/d4"
+	args = []string{
+		"http://localhost:9000/d1",
+		"http://localhost:9001/d2",
+		"http://127.0.0.1:9002/d3",
+		case6Endpoint,
+	}
+	case6URLs, case6LocalFlags := getExpectedEndpoints(args, "http://"+nonLoopBackIP+":9003/")
 
 	testCases := []struct {
 		serverAddr         string
@@ -192,7 +244,7 @@ func TestCreateEndpoints(t *testing.T) {
 		{"localhost:10000", []string{`.\d1`}, "localhost:10000", EndpointList{Endpoint{URL: &url.URL{Path: `.\d1`}, IsLocal: true}}, FSSetupType, nil},
 		{":8080", []string{"https://example.org/d1", "https://example.org/d2", "https://example.org/d3", "https://example.org/d4"}, "", EndpointList{}, -1, fmt.Errorf("no endpoint found for this host")},
 		{":8080", []string{"https://example.org/d1", "https://example.com/d2", "https://example.net:8000/d3", "https://example.edu/d1"}, "", EndpointList{}, -1, fmt.Errorf("no endpoint found for this host")},
-		{"localhost:9000", []string{"https://127.0.0.1:9000/d1", "https://localhost:9001/d1", "https://example.com/d1", "https://example.com/d2"}, "", EndpointList{}, -1, fmt.Errorf("path '/d1' can not be served from different address/port")},
+		{"localhost:9000", []string{"https://127.0.0.1:9000/d1", "https://localhost:9001/d1", "https://example.com/d1", "https://example.com/d2"}, "", EndpointList{}, -1, fmt.Errorf("path '/d1' can not be served by different port on same address")},
 		{"localhost:9000", []string{"https://127.0.0.1:8000/d1", "https://localhost:9001/d2", "https://example.com/d1", "https://example.com/d2"}, "", EndpointList{}, -1, fmt.Errorf("port number in server address must match with one of the port in local endpoints")},
 		{"localhost:10000", []string{"https://127.0.0.1:8000/d1", "https://localhost:8000/d2", "https://example.com/d1", "https://example.com/d2"}, "", EndpointList{}, -1, fmt.Errorf("server address and local endpoint have different ports")},
 
@@ -218,44 +270,52 @@ func TestCreateEndpoints(t *testing.T) {
 			Endpoint{URL: &url.URL{Path: "/d3"}, IsLocal: true},
 			Endpoint{URL: &url.URL{Path: "/d4"}, IsLocal: true},
 		}, XLSetupType, nil},
+		{":9001", []string{"http://10.0.0.1:9000/export", "http://10.0.0.2:9000/export", "http://" + nonLoopBackIP + ":9001/export", "http://10.0.0.2:9001/export"}, "", EndpointList{}, -1, fmt.Errorf("path '/export' can not be served by different port on same address")},
+
+		{":9000", []string{"http://localhost/d1", "http://localhost/d2", "http://example.org/d3", "http://example.com/d4"}, "", EndpointList{}, -1, fmt.Errorf("'localhost' resolves to loopback address is not allowed for distributed XL")},
 
 		// DistXL type
-		{"127.0.0.1:10000", []string{"http://localhost/d1", "http://localhost/d2", "http://example.org/d3", "http://example.com/d4"}, "127.0.0.1:10000", EndpointList{
-			Endpoint{URL: case1u1, IsLocal: false},
-			Endpoint{URL: case1u2, IsLocal: false},
-			Endpoint{URL: case1u3, IsLocal: true},
-			Endpoint{URL: case1u4, IsLocal: true},
-		}, DistXLSetupType, nil},
-		{"127.0.0.1:10000", []string{"http://localhost/d1", "http://localhost:9000/d2", "http://example.org/d3", "http://example.com/d4"}, "127.0.0.1:10000", EndpointList{
-			Endpoint{URL: case2u1, IsLocal: false},
-			Endpoint{URL: case2u2, IsLocal: false},
-			Endpoint{URL: case2u3, IsLocal: true},
-			Endpoint{URL: case2u4, IsLocal: false},
-		}, DistXLSetupType, nil},
-		{":80", []string{"http://localhost/d1", "http://example.org:9000/d2", "http://example.com/d3", "http://example.net/d4"}, ":80", EndpointList{
-			Endpoint{URL: case3u1, IsLocal: false},
-			Endpoint{URL: case3u2, IsLocal: false},
-			Endpoint{URL: case3u3, IsLocal: false},
-			Endpoint{URL: case3u4, IsLocal: true},
-		}, DistXLSetupType, nil},
-		{":9000", []string{"http://localhost/d1", "http://example.org/d2", "http://example.com/d3", "http://example.net/d4"}, ":9000", EndpointList{
-			Endpoint{URL: case4u1, IsLocal: false},
-			Endpoint{URL: case4u2, IsLocal: false},
-			Endpoint{URL: case4u3, IsLocal: false},
-			Endpoint{URL: case4u4, IsLocal: true},
-		}, DistXLSetupType, nil},
-		{":9000", []string{"http://localhost:9000/d1", "http://localhost:9001/d2", "http://localhost:9002/d3", "http://localhost:9003/d4"}, ":9000", EndpointList{
-			Endpoint{URL: case5u1, IsLocal: true},
-			Endpoint{URL: case5u2, IsLocal: false},
-			Endpoint{URL: case5u3, IsLocal: false},
-			Endpoint{URL: case5u4, IsLocal: false},
+		{"127.0.0.1:10000", []string{case1Endpoint1, case1Endpoint2, "http://example.org/d3", "http://example.com/d4"}, "127.0.0.1:10000", EndpointList{
+			Endpoint{URL: case1URLs[0], IsLocal: case1LocalFlags[0]},
+			Endpoint{URL: case1URLs[1], IsLocal: case1LocalFlags[1]},
+			Endpoint{URL: case1URLs[2], IsLocal: case1LocalFlags[2]},
+			Endpoint{URL: case1URLs[3], IsLocal: case1LocalFlags[3]},
 		}, DistXLSetupType, nil},
 
-		{":9001", []string{"http://10.0.0.1:9000/export", "http://10.0.0.2:9000/export", "http://localhost:9001/export", "http://10.0.0.3:9000/export"}, ":9001", EndpointList{
-			Endpoint{URL: case6u1, IsLocal: false},
-			Endpoint{URL: case6u2, IsLocal: false},
-			Endpoint{URL: case6u3, IsLocal: false},
-			Endpoint{URL: case6u4, IsLocal: true},
+		{"127.0.0.1:10000", []string{case2Endpoint1, case2Endpoint2, "http://example.org/d3", "http://example.com/d4"}, "127.0.0.1:10000", EndpointList{
+			Endpoint{URL: case2URLs[0], IsLocal: case2LocalFlags[0]},
+			Endpoint{URL: case2URLs[1], IsLocal: case2LocalFlags[1]},
+			Endpoint{URL: case2URLs[2], IsLocal: case2LocalFlags[2]},
+			Endpoint{URL: case2URLs[3], IsLocal: case2LocalFlags[3]},
+		}, DistXLSetupType, nil},
+
+		{":80", []string{case3Endpoint1, "http://example.org:9000/d2", "http://example.com/d3", "http://example.net/d4"}, ":80", EndpointList{
+			Endpoint{URL: case3URLs[0], IsLocal: case3LocalFlags[0]},
+			Endpoint{URL: case3URLs[1], IsLocal: case3LocalFlags[1]},
+			Endpoint{URL: case3URLs[2], IsLocal: case3LocalFlags[2]},
+			Endpoint{URL: case3URLs[3], IsLocal: case3LocalFlags[3]},
+		}, DistXLSetupType, nil},
+
+		{":9000", []string{case4Endpoint1, "http://example.org/d2", "http://example.com/d3", "http://example.net/d4"}, ":9000", EndpointList{
+			Endpoint{URL: case4URLs[0], IsLocal: case4LocalFlags[0]},
+			Endpoint{URL: case4URLs[1], IsLocal: case4LocalFlags[1]},
+			Endpoint{URL: case4URLs[2], IsLocal: case4LocalFlags[2]},
+			Endpoint{URL: case4URLs[3], IsLocal: case4LocalFlags[3]},
+		}, DistXLSetupType, nil},
+
+		{":9000", []string{case5Endpoint1, case5Endpoint2, case5Endpoint3, case5Endpoint4}, ":9000", EndpointList{
+			Endpoint{URL: case5URLs[0], IsLocal: case5LocalFlags[0]},
+			Endpoint{URL: case5URLs[1], IsLocal: case5LocalFlags[1]},
+			Endpoint{URL: case5URLs[2], IsLocal: case5LocalFlags[2]},
+			Endpoint{URL: case5URLs[3], IsLocal: case5LocalFlags[3]},
+		}, DistXLSetupType, nil},
+
+		// DistXL Setup using only local host.
+		{":9003", []string{"http://localhost:9000/d1", "http://localhost:9001/d2", "http://127.0.0.1:9002/d3", case6Endpoint}, ":9003", EndpointList{
+			Endpoint{URL: case6URLs[0], IsLocal: case6LocalFlags[0]},
+			Endpoint{URL: case6URLs[1], IsLocal: case6LocalFlags[1]},
+			Endpoint{URL: case6URLs[2], IsLocal: case6LocalFlags[2]},
+			Endpoint{URL: case6URLs[3], IsLocal: case6LocalFlags[3]},
 		}, DistXLSetupType, nil},
 	}
 
