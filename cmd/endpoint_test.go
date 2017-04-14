@@ -86,7 +86,7 @@ func TestNewEndpoint(t *testing.T) {
 		} else if err == nil {
 			t.Fatalf("error: expected = %v, got = <nil>", testCase.expectedErr)
 		} else {
-			match := false
+			var match bool
 			if strings.HasSuffix(testCase.expectedErr.Error(), errMsg) {
 				match = strings.HasSuffix(err.Error(), errMsg)
 			} else {
