@@ -18,7 +18,12 @@ package cmd
 
 import (
 	"bytes"
+	"io/ioutil"
+	"os"
+	"path"
 	"testing"
+
+	"github.com/minio/minio/pkg/lock"
 )
 
 func TestFSStats(t *testing.T) {
@@ -394,5 +399,54 @@ func TestFSRemoves(t *testing.T) {
 
 	if err = fsRemoveAll("my-obj-del-0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001"); errorCause(err) != errFileNameTooLong {
 		t.Fatal(err)
+	}
+}
+
+func TestFSRemoveMeta(t *testing.T) {
+	// create posix test setup
+	_, fsPath, err := newPosixTestSetup()
+	if err != nil {
+		t.Fatalf("Unable to create posix test setup, %s", err)
+	}
+	defer removeAll(fsPath)
+
+	// Setup test environment.
+	if err = fsMkdir(pathJoin(fsPath, "success-vol")); err != nil {
+		t.Fatalf("Unable to create directory, %s", err)
+	}
+
+	filePath := pathJoin(fsPath, "success-vol", "success-file")
+
+	var buf = make([]byte, 4096)
+	var reader = bytes.NewReader([]byte("Hello, world"))
+	if _, err = fsCreateFile(filePath, reader, buf, reader.Size()); err != nil {
+		t.Fatalf("Unable to create file, %s", err)
+	}
+
+	rwPool := &fsIOPool{
+		readersMap: make(map[string]*lock.RLockedFile),
+	}
+
+	if _, err := rwPool.Open(filePath); err != nil {
+		t.Fatalf("Unable to lock file %s", filePath)
+	}
+
+	defer rwPool.Close(filePath)
+
+	tmpDir, tmpErr := ioutil.TempDir(globalTestTmpDir, "minio-")
+	if tmpErr != nil {
+		t.Fatal(tmpErr)
+	}
+
+	if err := fsRemoveMeta(fsPath, filePath, tmpDir); err != nil {
+		t.Fatalf("Unable to remove file, %s", err)
+	}
+
+	if _, err := os.Stat(filePath); !os.IsNotExist(err) {
+		t.Fatalf("`%s` file found though it should have been deleted.", filePath)
+	}
+
+	if _, err := os.Stat(path.Dir(filePath)); !os.IsNotExist(err) {
+		t.Fatalf("`%s` parent directory found though it should have been deleted.", filePath)
 	}
 }
