@@ -867,11 +867,11 @@ func testWebHandlerDownloadZip(obj ObjectLayer, instanceType string, t TestErrHa
 		apiRouter.ServeHTTP(rec, req)
 		return rec.Code, rec.Body.Bytes()
 	}
-	code, data := test("")
+	code, _ := test("")
 	if code != 403 {
 		t.Fatal("Expected to receive authentication error")
 	}
-	code, data = test(authorization)
+	code, data := test(authorization)
 	if code != 200 {
 		t.Fatal("web.DownloadsZip() failed")
 	}

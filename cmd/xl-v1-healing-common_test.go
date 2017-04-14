@@ -272,7 +272,7 @@ func TestListOnlineDisks(t *testing.T) {
 		partsMetadata := partsMetaFromModTimes(test.modTimes, xlMeta.Erasure.Checksum)
 
 		onlineDisks, modTime := listOnlineDisks(xlDisks, partsMetadata, test.errs)
-		availableDisks, newErrs, err := disksWithAllParts(onlineDisks, partsMetadata, test.errs, bucket, object)
+		availableDisks, newErrs, _ := disksWithAllParts(onlineDisks, partsMetadata, test.errs, bucket, object)
 		test.errs = newErrs
 		outdatedDisks := outDatedDisks(xlDisks, availableDisks, test.errs, partsMetadata, bucket, object)
 		if modTime.Equal(timeSentinel) {
