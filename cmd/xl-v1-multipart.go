@@ -208,25 +208,28 @@ func (xl xlObjects) removeObjectPart(bucket, object, uploadID, partName string) 
 
 // statPart - returns fileInfo structure for a successful stat on part file.
 func (xl xlObjects) statPart(bucket, object, uploadID, partName string) (fileInfo FileInfo, err error) {
+	var ignoredErrs []error
 	partNamePath := path.Join(bucket, object, uploadID, partName)
 	for _, disk := range xl.getLoadBalancedDisks() {
 		if disk == nil {
+			ignoredErrs = append(ignoredErrs, errDiskNotFound)
 			continue
 		}
 		fileInfo, err = disk.StatFile(minioMetaMultipartBucket, partNamePath)
 		if err == nil {
 			return fileInfo, nil
 		}
-		err = traceError(err)
 		// For any reason disk was deleted or goes offline we continue to next disk.
 		if isErrIgnored(err, objMetadataOpIgnoredErrs...) {
+			ignoredErrs = append(ignoredErrs, err)
 			continue
 		}
-
-		// Catastrophic error, we return.
-		break
+		// Error is not ignored, return right here.
+		return FileInfo{}, traceError(err)
 	}
-	return FileInfo{}, err
+	// If all errors were ignored, reduce to maximal occurrence
+	// based on the read quorum.
+	return FileInfo{}, reduceReadQuorumErrs(ignoredErrs, nil, xl.readQuorum)
 }
 
 // commitXLMetadata - commit `xl.json` from source prefix to destination prefix in the given slice of disks.
