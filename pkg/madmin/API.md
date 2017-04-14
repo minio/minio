@@ -245,6 +245,18 @@ __Example__
 ### HealObject(bucket, object string, isDryRun bool) (HealResult, error)
 If object is successfully healed returns nil, otherwise returns error indicating the reason for failure. If isDryRun is true, then the object is not healed, but heal object request is validated by the server. e.g, if the object exists, if object name is valid etc.
 
+| Param  | Type  | Description  |
+|---|---|---|
+|`h.State` | _HealState_ | Represents the result of heal operation. It could be one of `HealNone`, `HealPartial` or `HealOK`. |
+
+
+| Value | Description |
+|---|---|
+|`HealNone` | Object/Upload wasn't healed on any of the disks |
+|`HealPartial` | Object/Upload was healed on some of the disks needing heal |
+| `HealOK` | Object/Upload was healed on all the disks needing heal |
+
+
 __Example__
 
 ``` go
@@ -326,6 +338,17 @@ __Example__
 <a name="HealUpload"></a>
 ### HealUpload(bucket, object, uploadID string, isDryRun bool) (HealResult, error)
 If upload is successfully healed returns nil, otherwise returns error indicating the reason for failure. If isDryRun is true, then the upload is not healed, but heal upload request is validated by the server. e.g, if the upload exists, if upload name is valid etc.
+
+| Param  | Type  | Description  |
+|---|---|---|
+|`h.State` | _HealState_ | Represents the result of heal operation. It could be one of `HealNone`, `HealPartial` or `HealOK`. |
+
+
+| Value | Description |
+|---|---|
+| `HealNone` | Object/Upload wasn't healed on any of the disks |
+| `HealPartial` | Object/Upload was healed on some of the disks needing heal |
+| `HealOK` | Object/Upload was healed on all the disks needing heal |
 
 ``` go
     isDryRun = false

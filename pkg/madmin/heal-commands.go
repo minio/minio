@@ -494,9 +494,20 @@ func (adm *AdminClient) HealUpload(bucket, object, uploadID string, dryrun bool)
 
 // HealResult - represents result of heal-object admin API.
 type HealResult struct {
-	HealedCount  int // number of disks that were healed.
-	OfflineCount int // number of disks that needed healing but were offline.
+	State HealState `json:"state"`
 }
+
+// HealState - different states of heal operation
+type HealState int
+
+const (
+	// HealNone - none of the disks healed
+	HealNone HealState = iota
+	// HealPartial - some disks were healed, others were offline
+	HealPartial
+	// HealOK - all disks were healed
+	HealOK
+)
 
 // HealObject - Heal the given object.
 func (adm *AdminClient) HealObject(bucket, object string, dryrun bool) (HealResult, error) {
