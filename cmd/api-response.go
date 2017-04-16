@@ -505,16 +505,24 @@ func generateMultiDeleteResponse(quiet bool, deletedObjects []ObjectIdentifier, 
 	return deleteResp
 }
 
+// writeBody - write data to a HTTP response writer
+func writeBody(w http.ResponseWriter, response []byte) error {
+	if response != nil {
+		if _, err := w.Write(response); err != nil {
+			return err
+		}
+		w.(http.Flusher).Flush()
+	}
+	return nil
+}
+
 func writeResponse(w http.ResponseWriter, statusCode int, response []byte, mType mimeType) {
 	setCommonHeaders(w)
 	if mType != mimeNone {
 		w.Header().Set("Content-Type", string(mType))
 	}
 	w.WriteHeader(statusCode)
-	if response != nil {
-		w.Write(response)
-		w.(http.Flusher).Flush()
-	}
+	writeBody(w, response)
 }
 
 // mimeType represents various MIME type used API responses.

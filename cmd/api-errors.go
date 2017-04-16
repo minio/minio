@@ -717,3 +717,10 @@ func getAPIErrorResponse(err APIError, resource string) APIErrorResponse {
 		HostID:    "3L137",
 	}
 }
+
+// getAPIErrorFromCode converts API error code to ErrorResponse
+func getAPIErrorFromCode(errorCode APIErrorCode, resource string) *APIErrorResponse {
+	apiError := getAPIError(errorCode)
+	retErr := getAPIErrorResponse(apiError, resource)
+	return &retErr
+}
