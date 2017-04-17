@@ -210,7 +210,7 @@ func (l *s3Gateway) ListObjectsV2(bucket, prefix, continuationToken string, fetc
 	return fromMinioClientListBucketV2Result(bucket, result), nil
 }
 
-// fromMinioClientListBucketResult - convert minio ListBucketResult to ListObjectsInfo
+// fromMinioClientListBucketV2Result - convert minio ListBucketResult to ListObjectsInfo
 func fromMinioClientListBucketV2Result(bucket string, result minio.ListBucketV2Result) ListObjectsV2Info {
 	objects := make([]ObjectInfo, len(result.Contents))
 
