@@ -29,7 +29,7 @@ func (l *lockServer) removeEntryIfExists(nlrip nameLockRequesterInfoPair) {
 			// Remove failed, in case it is a:
 			if nlrip.lri.writer {
 				// Writer: this should never happen as the whole (mapped) entry should have been deleted
-				errorIf(errors.New(""), "Lock maintenance failed to remove entry for write lock (should never happen)", nlrip.name, nlrip.lri.uid, lri)
+				errorIf(errors.New(""), "Lock maintenance failed to remove entry for write lock (should never happen) %#v %#v %#v", nlrip.name, nlrip.lri.uid, lri)
 			} // Reader: this can happen if multiple read locks were active and
 			// the one we are looking for has been released concurrently (so it is fine).
 		} // Removal went okay, all is fine.
