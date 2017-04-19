@@ -113,30 +113,41 @@ func (c *ConnMux) PeekProtocol() (string, error) {
 	return protocolTLS, nil
 }
 
-// Read - streams the ConnMux buffer when reset flag is activated, otherwise
-// streams from the incoming network connection
-func (c *ConnMux) Read(b []byte) (n int, e error) {
-	// Push read deadline
-	c.Conn.SetReadDeadline(time.Now().Add(defaultTCPReadTimeout))
+// Read reads from the tcp session for data sent by
+// the client, additionally sets deadline for 15 secs
+// after each successful read. Deadline cancels and
+// returns error if the client does not send any
+// data in 15 secs. Also keeps track of the total
+// bytes received from the client.
+func (c *ConnMux) Read(b []byte) (n int, err error) {
+	// Update total incoming number of bytes.
+	defer globalConnStats.incInputBytes(n)
 
-	// Update server's connection statistics
-	defer func() {
-		globalConnStats.incInputBytes(n)
-	}()
+	n, err = c.peeker.Read(b)
+	if err != nil {
+		return n, err
+	}
 
-	return c.peeker.Read(b)
+	// Read deadline was already set previously, set again
+	// after a successful read operation for future read
+	// operations.
+	c.Conn.SetReadDeadline(UTCNow().Add(defaultTCPReadTimeout))
+
+	// Success.
+	return n, nil
 }
 
-func (c *ConnMux) Write(b []byte) (n int, e error) {
-	// Update server's connection statistics
-	defer func() {
-		globalConnStats.incOutputBytes(n)
-	}()
-	// Run the underlying net.Conn Write() func
+// Write to the client over a tcp session, additionally
+// keeps track of the total bytes written by the server.
+func (c *ConnMux) Write(b []byte) (n int, err error) {
+	// Update total outgoing number of bytes.
+	defer globalConnStats.incOutputBytes(n)
+
+	// Call the conn write wrapper.
 	return c.Conn.Write(b)
 }
 
-// Close the connection.
+// Close closes the underlying tcp connection.
 func (c *ConnMux) Close() (err error) {
 	// Make sure that we always close a connection,
 	return c.Conn.Close()
@@ -188,14 +199,14 @@ type ListenerMuxAcceptRes struct {
 // Default keep alive interval timeout, on your Linux system to figure out
 // maximum probes sent
 //
-// $ cat /proc/sys/net/ipv4/tcp_keepalive_probes
-// 9
+//     > cat /proc/sys/net/ipv4/tcp_keepalive_probes
+//     ! 9
 //
-// Effective value of total keep alive comes upto 9 x 10 * time.Second = 1.5 Minutes.
-var defaultKeepAliveTimeout = 10 * time.Second // 10 seconds.
+// Final value of total keep-alive comes upto 9 x 10 * seconds = 1.5 minutes.
+const defaultKeepAliveTimeout = 10 * time.Second // 10 seconds.
 
-// Timeout to close connection when a client is not sending any data
-var defaultTCPReadTimeout = 30 * time.Second
+// Timeout to close and return error to the client when not sending any data.
+const defaultTCPReadTimeout = 15 * time.Second // 15 seconds.
 
 // newListenerMux listens and wraps accepted connections with tls after protocol peeking
 func newListenerMux(listener net.Listener, config *tls.Config) *ListenerMux {
@@ -224,7 +235,7 @@ func newListenerMux(listener net.Listener, config *tls.Config) *ListenerMux {
 			}
 
 			// Enable Read timeout
-			conn.SetReadDeadline(time.Now().Add(defaultTCPReadTimeout))
+			conn.SetReadDeadline(UTCNow().Add(defaultTCPReadTimeout))
 
 			// Enable keep alive for each connection.
 			conn.SetKeepAlive(true)
@@ -236,12 +247,12 @@ func newListenerMux(listener net.Listener, config *tls.Config) *ListenerMux {
 			// Wrap the connection with ConnMux to be able to peek the data in the incoming connection
 			// and decide if we need to wrap the connection itself with a TLS or not
 			go func(connMux *ConnMux) {
-				protocol, err := connMux.PeekProtocol()
-				if err != nil {
+				protocol, cerr := connMux.PeekProtocol()
+				if cerr != nil {
 					// io.EOF is usually returned by non-http clients,
 					// just close the connection to avoid any leak.
-					if err != io.EOF {
-						errorIf(err, "Unable to peek into incoming protocol")
+					if cerr != io.EOF {
+						errorIf(cerr, "Unable to peek into incoming protocol")
 					}
 					connMux.Close()
 					return
@@ -252,8 +263,8 @@ func newListenerMux(listener net.Listener, config *tls.Config) *ListenerMux {
 					// Make sure to handshake so that we know that this
 					// is a TLS connection, if not we should close and reject
 					// such a connection.
-					if err = tlsConn.Handshake(); err != nil {
-						errorIf(err, "TLS handshake failed")
+					if cerr = tlsConn.Handshake(); cerr != nil {
+						errorIf(cerr, "TLS handshake failed")
 						tlsConn.Close()
 						return
 					}
