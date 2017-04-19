@@ -1,4 +1,4 @@
-dsync
+dsync [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![codecov](https://codecov.io/gh/minio/dsync/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/dsync)
 =====
 
 A distributed locking and syncing package for Go.
@@ -16,7 +16,7 @@ This package was developed for the distributed server version of [Minio Object S
 For [minio](https://minio.io/) the distributed version is started as follows (for a 6-server system):
 
 ```
-$ minio server server1:/disk server2:/disk server3:/disk server4:/disk server5:/disk server6:/disk 
+$ minio server http://server1/disk http://server2/disk http://server3/disk http://server4/disk http://server5/disk http://server6/disk 
 ```
  
 _(note that the same identical command should be run on servers `server1` through to `server6`)_
@@ -57,7 +57,7 @@ This table shows test performance on the same (EC2) instance type but with a var
 | c3.2xlarge           |    12 | (min=1239, max=1558) |           16782 |       25% |
 | c3.2xlarge           |    16 |  (min=996, max=1391) |           19096 |       25% |
 
-The mix and max locks/server/sec gradually declines but due to the larger number of nodes the overall total number of locks rises steadily (at the same CPU usage level).
+The min and max locks/server/sec gradually declines but due to the larger number of nodes the overall total number of locks rises steadily (at the same CPU usage level).
 
 ### Performance with difference instance types
 
