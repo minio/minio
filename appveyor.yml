@@ -48,7 +48,7 @@ after_test:
   # Upload coverage report.
   - "SET PATH=C:\\Python34;C:\\Python34\\Scripts;%PATH%"
   - pip install codecov
-  - codecov -X gcov -f "build\coverage\coverage.txt"
+  - codecov -X fix -f "build\coverage\coverage.txt"
 
 # to disable deployment
 deploy: off
