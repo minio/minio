@@ -124,6 +124,11 @@ func s3ToObjectError(err error, params ...string) error {
 		object = params[1]
 	}
 
+	if isNetworkOrHostDown(err) {
+		e.e = BackendDown{}
+		return e
+	}
+
 	minioErr, ok := err.(minio.ErrorResponse)
 	if !ok {
 		// We don't interpret non Minio errors. As minio errors will

@@ -23,13 +23,22 @@ import (
 // objectAPIHandler implements and provides http handlers for S3 API.
 type objectAPIHandlers struct {
 	ObjectAPI func() ObjectLayer
+	cache     *cacheObjects
 }
 
 // registerAPIRouter - registers S3 compatible APIs.
 func registerAPIRouter(mux *router.Router) {
+	var cache *cacheObjects
+	var err error
+	if globalCacheDir != "" {
+		cache, err = newServerCacheObjects(globalCacheDir, globalCacheMax, 0)
+		fatalIf(err, "Unable to initialize disk caching")
+	}
+
 	// Initialize API.
 	api := objectAPIHandlers{
 		ObjectAPI: newObjectLayerFn,
+		cache:     cache,
 	}
 
 	// API Router

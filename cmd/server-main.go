@@ -34,6 +34,16 @@ var serverFlags = []cli.Flag{
 		Value: ":" + globalMinioPort,
 		Usage: "Bind to a specific ADDRESS:PORT, ADDRESS can be an IP or hostname.",
 	},
+	cli.StringFlag{
+		Name:  "cache-dir",
+		Value: "",
+		Usage: "Path to cache directory.",
+	},
+	cli.StringFlag{
+		Name:  "cache-max",
+		Value: "80",
+		Usage: "Percent of disk space used for caching.",
+	},
 }
 
 var serverCmd = cli.Command{
@@ -88,6 +98,9 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	// Server address.
 	serverAddr := ctx.String("address")
 	fatalIf(CheckLocalServerAddr(serverAddr), "Invalid address ‘%s’ in command line argument.", serverAddr)
+
+	globalCacheDir = ctx.String("cache-dir")
+	globalCacheMax = ctx.Int("cache-max")
 
 	var setupType SetupType
 	var err error

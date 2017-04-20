@@ -265,6 +265,11 @@ func azureToObjectError(err error, params ...string) error {
 		object = params[1]
 	}
 
+	if isNetworkOrHostDown(err) {
+		e.e = BackendDown{}
+		return e
+	}
+
 	azureErr, ok := err.(storage.AzureStorageServiceError)
 	if !ok {
 		// We don't interpret non Azure errors. As azure errors will

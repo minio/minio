@@ -149,6 +149,7 @@ const (
 	ErrServerNotInitialized
 	ErrOperationTimedOut
 	ErrPartsSizeUnequal
+	ErrBackendDown
 	// Add new extended error codes here.
 	// Please open a https://github.com/minio/minio/issues before adding
 	// new error codes here.
@@ -667,6 +668,12 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "All parts except the last part should be of the same size.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrBackendDown: {
+		Code:           "XMinioBackendDown",
+		Description:    "Backend Down.",
+		HTTPStatusCode: http.StatusServiceUnavailable,
+	},
+
 	// Add your error structure here.
 }
 
@@ -765,6 +772,8 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrPartsSizeUnequal
 	case BucketPolicyNotFound:
 		apiErr = ErrNoSuchBucketPolicy
+	case BackendDown:
+		apiErr = ErrBackendDown
 	default:
 		apiErr = ErrInternalError
 	}

@@ -24,9 +24,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 
@@ -188,7 +188,7 @@ func dumpRequest(r *http.Request) string {
 
 // isFile - returns whether given path is a file or not.
 func isFile(path string) bool {
-	if fi, err := os.Stat(path); err == nil {
+	if fi, err := osStat(path); err == nil {
 		return fi.Mode().IsRegular()
 	}
 
@@ -228,4 +228,34 @@ func toS3ETag(etag string) string {
 	}
 
 	return etag
+}
+// isNetworkOrHostDown - if there was a network error or if the host is down.
+func isNetworkOrHostDown(err error) bool {
+	if err == nil {
+		return false
+	}
+	switch err.(type) {
+	case net.Error:
+		switch err.(type) {
+		case *net.DNSError, *net.OpError, net.UnknownNetworkError:
+			return true
+		case *url.Error:
+			// For a URL error, where it replies back "connection closed"
+			if strings.Contains(err.Error(), "Connection closed by foreign host") {
+				return true
+			}
+		default:
+			if strings.Contains(err.Error(), "net/http: TLS handshake timeout") {
+				// If error is - tlsHandshakeTimeoutError,.
+				return true
+			} else if strings.Contains(err.Error(), "i/o timeout") {
+				// If error is - tcp timeoutError.
+				return true
+			} else if strings.Contains(err.Error(), "connection timed out") {
+				// If err is a net.Dial timeout.
+				return true
+			}
+		}
+	}
+	return false
 }

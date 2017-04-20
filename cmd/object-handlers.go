@@ -119,7 +119,12 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	}
 	defer objectLock.RUnlock()
 
-	objInfo, err := objectAPI.GetObjectInfo(bucket, object)
+	getObjectInfo := objectAPI.GetObjectInfo
+	if api.cache != nil {
+		getObjectInfo = api.cache.GetObjectInfo
+	}
+
+	objInfo, err := getObjectInfo(bucket, object)
 	if err != nil {
 		errorIf(err, "Unable to fetch object info.")
 		apiErr := toAPIErrorCode(err)
@@ -177,8 +182,13 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		return w.Write(p)
 	})
 
+	getObject := objectAPI.GetObject
+	if api.cache != nil {
+		getObject = api.cache.GetObject
+	}
+
 	// Reads the object at startOffset and writes to mw.
-	if err = objectAPI.GetObject(bucket, object, startOffset, length, writer); err != nil {
+	if err = getObject(bucket, object, startOffset, length, writer); err != nil {
 		errorIf(err, "Unable to write to client.")
 		if !dataWritten {
 			// Error response only if no data has been written to client yet. i.e if
@@ -242,7 +252,12 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 	}
 	defer objectLock.RUnlock()
 
-	objInfo, err := objectAPI.GetObjectInfo(bucket, object)
+	getObjectInfo := objectAPI.GetObjectInfo
+	if api.cache != nil {
+		getObjectInfo = api.cache.GetObjectInfo
+	}
+
+	objInfo, err := getObjectInfo(bucket, object)
 	if err != nil {
 		errorIf(err, "Unable to fetch object info.")
 		apiErr := toAPIErrorCode(err)
