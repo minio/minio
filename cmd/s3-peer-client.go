@@ -19,7 +19,6 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"net"
 	"path"
 	"sync"
 
@@ -42,12 +41,8 @@ type s3Peers []s3Peer
 // slice. The urls slice is assumed to be non-empty and free of nil
 // values.
 func makeS3Peers(endpoints EndpointList) (s3PeerList s3Peers) {
-	thisPeer := globalMinioAddr
-	if globalMinioHost == "" {
-		thisPeer = net.JoinHostPort("localhost", globalMinioPort)
-	}
 	s3PeerList = append(s3PeerList, s3Peer{
-		thisPeer,
+		globalMinioAddr,
 		&localBucketMetaState{ObjectAPI: newObjectLayerFn},
 	})
 
