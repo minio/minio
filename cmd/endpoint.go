@@ -201,7 +201,7 @@ func NewEndpointList(args ...string) (endpoints EndpointList, err error) {
 
 	// Check whether no. of args are valid for XL distribution.
 	if !isValidDistribution(len(args)) {
-		return nil, fmt.Errorf("total endpoints %d found. For XL/Distribute, it should be %s", len(args), getValidErasureBlocks())
+		return nil, fmt.Errorf("A total of %d endpoints were found. For erasure mode it should be %s", len(args), getValidErasureBlocks())
 	}
 
 	var endpointType EndpointType
