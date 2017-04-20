@@ -707,6 +707,8 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrNotImplemented
 	case PolicyNotFound:
 		apiErr = ErrNoSuchBucketPolicy
+	case BackendDown:
+		apiErr = ErrAccessDenied
 	default:
 		apiErr = ErrInternalError
 	}

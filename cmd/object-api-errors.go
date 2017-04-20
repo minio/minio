@@ -378,3 +378,9 @@ func isErrObjectNotFound(err error) bool {
 	}
 	return false
 }
+
+type BackendDown struct{}
+
+func (e BackendDown) Error() string {
+	return "Backend down"
+}

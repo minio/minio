@@ -49,12 +49,13 @@ type gatewayAPIHandlers struct {
 }
 
 // registerAPIRouter - registers S3 compatible APIs.
-func registerGatewayAPIRouter(mux *router.Router, gw GatewayLayer) {
+func registerGatewayAPIRouter(mux *router.Router, gw GatewayLayer, cache *CacheObjects) {
 	// Initialize API.
 	api := gatewayAPIHandlers{
 		ObjectAPI: func() GatewayLayer { return gw },
 		objectAPIHandlers: objectAPIHandlers{
 			ObjectAPI: newObjectLayerFn,
+			cache:     cache,
 		},
 	}
 

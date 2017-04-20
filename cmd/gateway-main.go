@@ -214,7 +214,9 @@ func gatewayMain(ctx *cli.Context) {
 	initNSLock(false) // Enable local namespace lock.
 
 	router := mux.NewRouter().SkipClean(true)
-	registerGatewayAPIRouter(router, newObject)
+	cache, err := NewGatewayCacheObjects(newObject, "/tmp/cache", 80, 80)
+	fatalIf(err, "Unable to init cache")
+	registerGatewayAPIRouter(router, newObject, cache)
 
 	var handlerFns = []HandlerFunc{
 		// Validate all the incoming paths.

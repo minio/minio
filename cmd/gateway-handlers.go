@@ -74,8 +74,14 @@ func (api gatewayAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	getObjectInfo := objectAPI.GetObjectInfo
+	if api.cache != nil {
+		getObjectInfo = api.cache.GetObjectInfo
+	}
 	if reqAuthType == authTypeAnonymous {
 		getObjectInfo = objectAPI.AnonGetObjectInfo
+		if api.cache != nil {
+			getObjectInfo = api.cache.AnonGetObjectInfo
+		}
 	}
 	objInfo, err := getObjectInfo(bucket, object)
 	if err != nil {
@@ -135,8 +141,14 @@ func (api gatewayAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Re
 	})
 
 	getObject := objectAPI.GetObject
+	if api.cache != nil {
+		getObject = api.cache.GetObject
+	}
 	if reqAuthType == authTypeAnonymous {
 		getObject = objectAPI.AnonGetObject
+		if api.cache != nil {
+			getObject = api.cache.AnonGetObject
+		}
 	}
 
 	// Reads the object at startOffset and writes to mw.
