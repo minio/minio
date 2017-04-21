@@ -122,7 +122,30 @@ If successful restarts the running minio service, for distributed setup restarts
 
  ```
 
-## 3. Lock operations
+## 3. Info operations
+
+<a name="ServerInfo"></a>
+### ServerInfo() ([]ServerInfo, error)
+Fetch all information for all cluster nodes, such as uptime, region, network statistics, etc..
+
+
+ __Example__
+
+ ```go
+
+	serversInfo, err := madmClnt.ServerInfo()
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	for _, peerInfo := range serversInfo {
+		log.Printf("Node: %s, Info: %v\n", peerInfo.Addr, peerInfo.Data)
+	}
+
+ ```
+
+
+## 4. Lock operations
 
 <a name="ListLocks"></a>
 ### ListLocks(bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error)
@@ -154,7 +177,7 @@ __Example__
 
 ```
 
-## 4. Heal operations
+## 5. Heal operations
 
 <a name="ListObjectsHeal"></a>
 ### ListObjectsHeal(bucket, prefix string, recursive bool, doneCh <-chan struct{}) (<-chan ObjectInfo, error)
@@ -360,7 +383,7 @@ If upload is successfully healed returns nil, otherwise returns error indicating
     log.Println("Heal-upload result: ", healResult)
 ```
 
-## 5. Config operations
+## 6. Config operations
 
 <a name="GetConfig"></a>
 ### GetConfig() ([]byte, error)
@@ -384,23 +407,6 @@ __Example__
     log.Println("config received successfully: ", string(buf.Bytes()))
 ```
 
-## 6. Misc operations
-
-<a name="SetCredentials"></a>
-
-### SetCredentials() error
-Set new credentials of a Minio setup.
-
-__Example__
-
-``` go
-    err = madmClnt.SetCredentials("YOUR-NEW-ACCESSKEY", "YOUR-NEW-SECRETKEY")
-    if err != nil {
-            log.Fatalln(err)
-    }
-    log.Println("New credentials successfully set.")
-
-```
 
 <a name="SetConfig"></a>
 ### SetConfig(config io.Reader) (SetConfigResult, error)
@@ -435,3 +441,22 @@ __Example__
     }
     log.Println("SetConfig: ", string(buf.Bytes()))
 ```
+
+## 7. Misc operations
+
+<a name="SetCredentials"></a>
+
+### SetCredentials() error
+Set new credentials of a Minio setup.
+
+__Example__
+
+``` go
+    err = madmClnt.SetCredentials("YOUR-NEW-ACCESSKEY", "YOUR-NEW-SECRETKEY")
+    if err != nil {
+            log.Fatalln(err)
+    }
+    log.Println("New credentials successfully set.")
+
+```
+

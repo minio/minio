@@ -53,10 +53,10 @@ type ListLocksReply struct {
 	volLocks []VolumeLockInfo
 }
 
-// UptimeReply - wraps the uptime response over RPC.
-type UptimeReply struct {
+// ServerInfoDataReply - wraps the server info response over RPC.
+type ServerInfoDataReply struct {
 	AuthRPCReply
-	Uptime time.Duration
+	ServerInfoData ServerInfoData
 }
 
 // ConfigReply - wraps the server config response over RPC.
@@ -122,8 +122,8 @@ func (s *adminCmd) ReInitDisks(args *AuthRPCArgs, reply *AuthRPCReply) error {
 	return nil
 }
 
-// Uptime - returns the time when object layer was initialized on this server.
-func (s *adminCmd) Uptime(args *AuthRPCArgs, reply *UptimeReply) error {
+// ServerInfo - returns the server info when object layer was initialized on this server.
+func (s *adminCmd) ServerInfoData(args *AuthRPCArgs, reply *ServerInfoDataReply) error {
 	if err := args.IsAuthenticated(); err != nil {
 		return err
 	}
@@ -132,12 +132,29 @@ func (s *adminCmd) Uptime(args *AuthRPCArgs, reply *UptimeReply) error {
 		return errServerNotInitialized
 	}
 
-	// N B The uptime is computed assuming that the system time is
-	// monotonic. This is not the case in time pkg in Go, see
-	// https://github.com/golang/go/issues/12914. This is expected
-	// to be fixed by go1.9.
-	*reply = UptimeReply{
-		Uptime: UTCNow().Sub(globalBootTime),
+	// Build storage info
+	objLayer := newObjectLayerFn()
+	if objLayer == nil {
+		return errServerNotInitialized
+	}
+	storageInfo := objLayer.StorageInfo()
+
+	var arns []string
+	for queueArn := range globalEventNotifier.GetAllExternalTargets() {
+		arns = append(arns, queueArn)
+	}
+
+	reply.ServerInfoData = ServerInfoData{
+		Properties: ServerProperties{
+			Uptime:   UTCNow().Sub(globalBootTime),
+			Version:  Version,
+			CommitID: CommitID,
+			Region:   serverConfig.GetRegion(),
+			SQSARN:   arns,
+		},
+		StorageInfo: storageInfo,
+		ConnStats:   globalConnStats.toServerConnStats(),
+		HTTPStats:   globalHTTPStats.toServerHTTPStats(),
 	}
 
 	return nil
