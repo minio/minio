@@ -72,6 +72,35 @@ func (xl xlObjects) HealBucket(bucket string) error {
 	return healBucketMetadata(xl.storageDisks, bucket, xl.readQuorum)
 }
 
+func healUploadsJSON(storageDisks []StorageAPI, bucket string) error {
+	// This lock needs to be held for any changes to the directory
+	// contents of ".minio.sys/multipart/object/"
+	objectMPartPathLock := nsMutex.NewNSLock(minioMetaBucket,
+		pathJoin(mpartMetaPrefix, bucket))
+	objectMPartPathLock.Lock()
+	defer objectMPartPathLock.Unlock()
+
+	// Initialize sync waitgroup.
+	var wg = &sync.WaitGroup{}
+
+	// Initialize list of errors.
+	var dErrs = make([]error, len(storageDisks))
+
+	// Make a volume entry on all underlying storage disks.
+	for index, disk := range storageDisks {
+		if disk == nil {
+			dErrs[index] = traceError(errDiskNotFound)
+			continue
+		}
+		wg.Add(1)
+		// Read `uploads.json` in parallel.
+		go func(index int, disk StorageAPI) {
+			defer wg.Done()
+		}(index, disk)
+	}
+	return nil
+}
+
 // Heal bucket - create buckets on disks where it does not exist.
 func healBucket(storageDisks []StorageAPI, bucket string, writeQuorum int) error {
 	bucketLock := globalNSMutex.NewNSLock(bucket, "")
