@@ -65,41 +65,6 @@ func newDiskCacheObjectMeta(objInfo ObjectInfo, anon bool) diskCacheObjectMeta {
 	return objMeta
 }
 
-type diskCacheObject struct {
-	*os.File
-	cache diskCache
-}
-
-func (o diskCacheObject) Commit(objInfo ObjectInfo, anon bool) error {
-	encPath := o.cache.encodedPath(objInfo.Bucket, objInfo.Name)
-	if err := os.Rename(o.Name(), encPath); err != nil {
-		return err
-	}
-	if err := o.Close(); err != nil {
-		return err
-	}
-	metaPath := o.cache.encodedMetaPath(objInfo.Bucket, objInfo.Name)
-	objMeta := newDiskCacheObjectMeta(objInfo, anon)
-	metaBytes, err := json.Marshal(objMeta)
-	if err != nil {
-		return err
-	}
-	// FIXME: take care of locking.
-	if err = ioutil.WriteFile(metaPath, metaBytes, 0644); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (o diskCacheObject) NoCommit() error {
-	tmpName := o.Name()
-	if err := o.Close(); err != nil {
-		return err
-	}
-
-	return os.Remove(tmpName)
-}
-
 type diskCache struct {
 	dir      string
 	maxUsage int
@@ -116,15 +81,41 @@ func (c diskCache) encodedMetaPath(bucket, object string) string {
 	return path.Join(c.dataDir, fmt.Sprintf("%x.json", sha256.Sum256([]byte(path.Join(bucket, object)))))
 }
 
-func (c diskCache) Put() (*diskCacheObject, error) {
-	f, err := ioutil.TempFile(c.tmpDir, "")
-	if err != nil {
-		return nil, err
+func (c diskCache) Commit(f *os.File, objInfo ObjectInfo, anon bool) error {
+	encPath := c.encodedPath(objInfo.Bucket, objInfo.Name)
+	if err := os.Rename(f.Name(), encPath); err != nil {
+		return err
 	}
-	return &diskCacheObject{f, c}, nil
+	if err := f.Close(); err != nil {
+		return err
+	}
+	metaPath := c.encodedMetaPath(objInfo.Bucket, objInfo.Name)
+	objMeta := newDiskCacheObjectMeta(objInfo, anon)
+	metaBytes, err := json.Marshal(objMeta)
+	if err != nil {
+		return err
+	}
+	// FIXME: take care of locking.
+	if err = ioutil.WriteFile(metaPath, metaBytes, 0644); err != nil {
+		return err
+	}
+	return nil
 }
 
-func (c diskCache) Get(bucket, object string) (*diskCacheObject, ObjectInfo, bool, error) {
+func (o diskCache) NoCommit(f *os.File) error {
+	tmpName := f.Name()
+	if err := f.Close(); err != nil {
+		return err
+	}
+
+	return os.Remove(tmpName)
+}
+
+func (c diskCache) Put() (*os.File, error) {
+	return ioutil.TempFile(c.tmpDir, "")
+}
+
+func (c diskCache) Get(bucket, object string) (*os.File, ObjectInfo, bool, error) {
 	metaPath := c.encodedMetaPath(bucket, object)
 	objMeta := diskCacheObjectMeta{}
 	metaBytes, err := ioutil.ReadFile(metaPath)
@@ -139,7 +130,21 @@ func (c diskCache) Get(bucket, object string) (*diskCacheObject, ObjectInfo, boo
 	if err != nil {
 		return nil, ObjectInfo{}, false, err
 	}
-	return &diskCacheObject{file, c}, objMeta.toObjectInfo(), objMeta.Anonymous, nil
+	return file, objMeta.toObjectInfo(), objMeta.Anonymous, nil
+}
+
+func (c diskCache) GetObjectInfo(bucket, object string) (ObjectInfo, bool, error) {
+	metaPath := c.encodedMetaPath(bucket, object)
+	objMeta := diskCacheObjectMeta{}
+	metaBytes, err := ioutil.ReadFile(metaPath)
+	if err != nil {
+		return ObjectInfo{}, false, err
+	}
+	if err := json.Unmarshal(metaBytes, &objMeta); err != nil {
+		return ObjectInfo{}, false, err
+	}
+
+	return objMeta.toObjectInfo(), objMeta.Anonymous, nil
 }
 
 func (c diskCache) Delete(bucket, object string) error {
@@ -204,17 +209,17 @@ func (c CacheObjects) GetObject(bucket, object string, startOffset int64, length
 	}
 	err = c.GetObjectFn(bucket, object, 0, objInfo.Size, io.MultiWriter(writer, cachedObj))
 	if err != nil {
-		cachedObj.NoCommit()
+		c.dcache.NoCommit(cachedObj)
 		return err
 	}
 	objInfo, err = c.GetObjectInfoFn(bucket, object)
 	if err != nil {
-		cachedObj.NoCommit()
+		c.dcache.NoCommit(cachedObj)
 		return err
 	}
 
 	// FIXME: race-condition: what if the server object got replaced.
-	return cachedObj.Commit(objInfo, false)
+	return c.dcache.Commit(cachedObj, objInfo, false)
 }
 
 func (c CacheObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
@@ -224,18 +229,17 @@ func (c CacheObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 			c.dcache.Delete(bucket, object)
 			return ObjectInfo{}, err
 		}
-		r, cachedObjInfo, _, err := c.dcache.Get(bucket, object)
+		cachedObjInfo, _, err := c.dcache.GetObjectInfo(bucket, object)
 		if err == nil {
-			defer r.Close()
 			return cachedObjInfo, nil
 		}
 		return ObjectInfo{}, BackendDown{}
 	}
-	r, cachedObjInfo, _, err := c.dcache.Get(bucket, object)
+	cachedObjInfo, _, err := c.dcache.GetObjectInfo(bucket, object)
 	if err != nil {
 		return objInfo, nil
 	}
-	defer r.Close()
+
 	if cachedObjInfo.MD5Sum != objInfo.MD5Sum {
 		c.dcache.Delete(bucket, object)
 	}
@@ -268,25 +272,25 @@ func (c CacheObjects) AnonGetObject(bucket, object string, startOffset int64, le
 			}
 		}
 	}
-	if startOffset != 0 || length != cachedObjInfo.Size {
+	if startOffset != 0 || length != objInfo.Size {
 		return c.AnonGetObjectFn(bucket, object, startOffset, length, writer)
 	}
 	cachedObj, err := c.dcache.Put()
 	if err != nil {
 		return err
 	}
-	err = c.AnonGetObjectFn(bucket, object, 0, cachedObjInfo.Size, io.MultiWriter(writer, cachedObj))
+	err = c.AnonGetObjectFn(bucket, object, 0, objInfo.Size, io.MultiWriter(writer, cachedObj))
 	if err != nil {
-		cachedObj.NoCommit()
+		c.dcache.NoCommit(cachedObj)
 		return err
 	}
 	objInfo, err = c.AnonGetObjectInfoFn(bucket, object)
 	if err != nil {
-		cachedObj.NoCommit()
+		c.dcache.NoCommit(cachedObj)
 		return err
 	}
 	// FIXME: race-condition: what if the server object got replaced.
-	return cachedObj.Commit(objInfo, true)
+	return c.dcache.Commit(cachedObj, objInfo, true)
 }
 
 func (c CacheObjects) AnonGetObjectInfo(bucket, object string) (ObjectInfo, error) {
@@ -295,18 +299,16 @@ func (c CacheObjects) AnonGetObjectInfo(bucket, object string) (ObjectInfo, erro
 		if _, ok := errorCause(err).(BackendDown); !ok {
 			return ObjectInfo{}, err
 		}
-		r, cachedObjInfo, anon, err := c.dcache.Get(bucket, object)
+		cachedObjInfo, anon, err := c.dcache.GetObjectInfo(bucket, object)
 		if err == nil && anon {
-			defer r.Close()
 			return cachedObjInfo, nil
 		}
 		return ObjectInfo{}, BackendDown{}
 	}
-	r, cachedObjInfo, _, err := c.dcache.Get(bucket, object)
+	cachedObjInfo, _, err := c.dcache.GetObjectInfo(bucket, object)
 	if err != nil {
 		return objInfo, nil
 	}
-	defer r.Close()
 	if cachedObjInfo.MD5Sum != objInfo.MD5Sum {
 		c.dcache.Delete(bucket, object)
 	}

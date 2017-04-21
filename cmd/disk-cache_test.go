@@ -39,14 +39,14 @@ func TestDiskCache(t *testing.T) {
 	if _, err = cacheObject.Write([]byte(content)); err != nil {
 		t.Fatal(err)
 	}
-	if err = cacheObject.Commit(objInfo, false); err != nil {
+	if err = cache.Commit(cacheObject, objInfo, false); err != nil {
 		t.Fatal(err)
 	}
-	cacheObject, gotObjInfo, anon, err := cache.Get(bucketName, objectName)
+	f, gotObjInfo, anon, err := cache.Get(bucketName, objectName)
 	if err != nil {
 		t.Fatal(err)
 	}
-	buf, err := ioutil.ReadAll(cacheObject)
+	buf, err := ioutil.ReadAll(f)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +76,7 @@ func TestDiskCache(t *testing.T) {
 	if _, err = cacheObject.Write([]byte(content)); err != nil {
 		t.Fatal(err)
 	}
-	if err = cacheObject.NoCommit(); err != nil {
+	if err = cache.NoCommit(cacheObject); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, _, err = cache.Get(bucketName, objectName); err == nil {

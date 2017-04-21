@@ -184,6 +184,8 @@ func gatewayMain(ctx *cli.Context) {
 		log.EnableQuiet()
 	}
 
+	cacheDir := ctx.String("cache-dir")
+
 	// First argument is selected backend type.
 	backendType := ctx.Args().Get(0)
 	// Second argument is the endpoint address (optional)
@@ -211,11 +213,16 @@ func gatewayMain(ctx *cli.Context) {
 	newObject, err := newGatewayLayer(backendType, endPoint, accessKey, secretKey, secure)
 	fatalIf(err, "Unable to initialize gateway layer")
 
+	var cache *CacheObjects
+	if cacheDir != "" {
+		cache, err = NewGatewayCacheObjects(newObject, cacheDir, 80, 80)
+		fatalIf(err, "Unable to init cache")
+	}
+
 	initNSLock(false) // Enable local namespace lock.
 
 	router := mux.NewRouter().SkipClean(true)
-	cache, err := NewGatewayCacheObjects(newObject, "/tmp/cache", 80, 80)
-	fatalIf(err, "Unable to init cache")
+
 	registerGatewayAPIRouter(router, newObject, cache)
 
 	var handlerFns = []HandlerFunc{
