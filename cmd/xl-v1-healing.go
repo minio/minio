@@ -94,12 +94,18 @@ func healBucket(storageDisks []StorageAPI, bucket string, writeQuorum int) error
 		// Make a volume inside a go-routine.
 		go func(index int, disk StorageAPI) {
 			defer wg.Done()
-			if _, err := disk.StatVol(bucket); err != nil {
-				if err != errVolumeNotFound {
-					dErrs[index] = traceError(err)
-					return
-				}
-				if err = disk.MakeVol(bucket); err != nil {
+			// Check if format.json exists on disk, to
+			// make sure this disk is formatted. Otherwise
+			// we do not create bucket.
+			_, err := disk.StatFile(minioMetaBucket, formatConfigFile)
+			if err != nil {
+				dErrs[index] = traceError(err)
+				return
+			}
+
+			// Create volume.
+			if err = disk.MakeVol(bucket); err != nil {
+				if err != errVolumeExists {
 					dErrs[index] = traceError(err)
 				}
 			}
