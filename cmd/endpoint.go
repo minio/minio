@@ -185,23 +185,9 @@ func NewEndpointList(args ...string) (endpoints EndpointList, err error) {
 		return (count >= minErasureBlocks && count <= maxErasureBlocks && count%2 == 0)
 	}
 
-	// getValidErasureBlocks returns a string containing the valid values for erasure coding.
-	getValidErasureBlocks := func() string {
-		list := ""
-		for blocks := minErasureBlocks; blocks <= maxErasureBlocks; blocks += 2 {
-			list += fmt.Sprintf("%d", blocks)
-			if blocks < maxErasureBlocks-2 {
-				list += ", "
-			} else if blocks == maxErasureBlocks-2 {
-				list += " or "
-			}
-		}
-		return list
-	}
-
 	// Check whether no. of args are valid for XL distribution.
 	if !isValidDistribution(len(args)) {
-		return nil, fmt.Errorf("A total of %d endpoints were found. For erasure mode it should be %s", len(args), getValidErasureBlocks())
+		return nil, fmt.Errorf("A total of %d endpoints were found. For erasure mode it should be an even number between %d and %d", len(args), minErasureBlocks, maxErasureBlocks)
 	}
 
 	var endpointType EndpointType
