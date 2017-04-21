@@ -33,11 +33,6 @@ var serverFlags = []cli.Flag{
 		Value: ":9000",
 		Usage: "Bind to a specific ADDRESS:PORT, ADDRESS can be an IP or hostname.",
 	},
-	cli.StringFlag{
-		Name:  "cache-dir",
-		Value: "",
-		Usage: "Cache directory.",
-	},
 }
 
 var serverCmd = cli.Command{

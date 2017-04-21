@@ -72,6 +72,16 @@ var gatewayCmd = cli.Command{
 			Name:  "quiet",
 			Usage: "Disable startup banner.",
 		},
+		cli.StringFlag{
+			Name:  "cache-dir",
+			Value: "",
+			Usage: "Cache directory.",
+		},
+		cli.StringFlag{
+			Name:  "cache-max",
+			Value: "80",
+			Usage: "Percent of disk space for Cache.",
+		},
 	),
 	HideHelpCommand: true,
 }
@@ -185,6 +195,7 @@ func gatewayMain(ctx *cli.Context) {
 	}
 
 	cacheDir := ctx.String("cache-dir")
+	cacheMax := ctx.Int("cache-max")
 
 	// First argument is selected backend type.
 	backendType := ctx.Args().Get(0)
@@ -215,7 +226,7 @@ func gatewayMain(ctx *cli.Context) {
 
 	var cache *CacheObjects
 	if cacheDir != "" {
-		cache, err = NewGatewayCacheObjects(newObject, cacheDir, 80, 80)
+		cache, err = NewGatewayCacheObjects(newObject, cacheDir, cacheMax, 0)
 		fatalIf(err, "Unable to init cache")
 	}
 

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -66,11 +67,12 @@ func newDiskCacheObjectMeta(objInfo ObjectInfo, anon bool) diskCacheObjectMeta {
 }
 
 type diskCache struct {
-	dir      string
-	maxUsage int
-	expiry   int
-	tmpDir   string
-	dataDir  string
+	dir        string
+	maxUsage   int
+	expiry     int
+	tmpDir     string
+	dataDir    string
+	createTime time.Time
 }
 
 func (c diskCache) encodedPath(bucket, object string) string {
@@ -157,7 +159,41 @@ func (c diskCache) Delete(bucket, object string) error {
 	return nil
 }
 
+type diskCacheFormat struct {
+	Version int       `json:"version"`
+	Format  string    `json:"format"`
+	Time    time.Time `json:"createTime"`
+}
+
 func NewDiskCache(dir string, maxUsage, expiry int) (*diskCache, error) {
+	if err := os.MkdirAll(dir, 0766); err != nil {
+		return nil, err
+	}
+	formatPath := path.Join(dir, "format.json")
+	formatBytes, err := ioutil.ReadFile(formatPath)
+	var format diskCacheFormat
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return nil, err
+		}
+		format.Version = 1
+		format.Format = "cachefs"
+		format.Time = time.Now().UTC()
+		if formatBytes, err = json.Marshal(format); err != nil {
+			return nil, err
+		}
+		if err = ioutil.WriteFile(formatPath, formatBytes, 0644); err != nil {
+			return nil, err
+		}
+	} else {
+		if err = json.Unmarshal(formatBytes, &format); err != nil {
+			return nil, err
+		}
+		if format.Version != 1 {
+			return nil, errors.New("format not supported")
+		}
+	}
+
 	tmpDir := path.Join(dir, "tmp")
 	dataDir := path.Join(dir, "data")
 	if err := os.MkdirAll(tmpDir, 0766); err != nil {
@@ -166,7 +202,7 @@ func NewDiskCache(dir string, maxUsage, expiry int) (*diskCache, error) {
 	if err := os.MkdirAll(dataDir, 0766); err != nil {
 		return nil, err
 	}
-	return &diskCache{dir, maxUsage, expiry, tmpDir, dataDir}, nil
+	return &diskCache{dir, maxUsage, expiry, tmpDir, dataDir, format.Time}, nil
 }
 
 type CacheObjects struct {
