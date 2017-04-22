@@ -42,7 +42,6 @@ Minio server can now be accessed at `http://localhost:9000`, with accessKey and 
 
 ## 3. Notes
 
-Minikube currently does not support dynamic provisioning, so we manually create PersistentVolumes(PV) and PersistentVolumeClaims(PVC) to be
-used by the distributed Minio setup. Once the PVs and PVCs are created, we call the `statefulset.yaml` configuration file to create the distributed Minio setup.
+Minikube currently does not support dynamic provisioning, so we manually create PersistentVolumes(PV) and PersistentVolumeClaims(PVC). Once the PVs and PVCs are created, we call the `statefulset.yaml` configuration file to create the distributed Minio setup.
 
 This setup runs on a laptop/computer. Hence only one disk is used as the backend for all the minio instance PVs. Minio sees these PVs as separate disks and reports the available storage incorrectly.

@@ -1,12 +1,12 @@
 # Deploy Minio on Kubernetes [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
 
-Kubernetes constructs like Deployments and StatefulSets provide perfect platform to deploy Minio server in standalone, distributed or shared mode. There are multiple options to deploy Minio on Kubernetes, you can choose the one that suits you the most.
+Kubernetes concepts like Deployments and StatefulSets provide perfect platform to deploy Minio server in standalone, distributed or shared mode. There are multiple options to deploy Minio on Kubernetes, you can choose the one that suits you the most.
 
-- Minio [Helm](https://helm.sh) Chart offers a customizeable yet easy Minio deployment, with a single command. Read more about Minio Helm deployment [here](#prerequisites).
+- Minio [Helm](https://helm.sh) Chart offers a customizable and easy Minio deployment, with a single command. Read more about Minio Helm deployment [here](#prerequisites).
 
 - You can also explore Kubernetes [Minio example](https://github.com/kubernetes/kubernetes/blob/master/examples/storage/minio/README.md) to deploy Minio using `.yaml` files.
 
-- If you'd like get started with Minio on Kubernetes without having to create a real container cluster, you can also [deploy Minio locally](https://raw.githubusercontent.com/minio/minio/master/docs/orchestration/minikube/README.md) with MiniKube.
+- If you'd like to get started with Minio on Kubernetes without having to create a real container cluster, you can also [deploy Minio locally](https://raw.githubusercontent.com/minio/minio/master/docs/orchestration/minikube/README.md) with MiniKube.
 
 <a name="prerequisites"></a>
 ## 1. Prerequisites
