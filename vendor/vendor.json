@@ -392,6 +392,11 @@
 			"path": "gopkg.in/yaml.v2",
 			"revision": "a5b47d31c556af34a302ce5d659e6fea44d90de0",
 			"revisionTime": "2016-09-28T15:37:09Z"
+		},
+		{
+			"path": "github.com/aead/siphash",
+			"revision": "e404fcfc888570cadd1610538e2dbc89f66af814",
+			"revisionTime": "2017-03-30T04:17:24Z"
 		}
 	],
 	"rootPath": "github.com/minio/minio"
