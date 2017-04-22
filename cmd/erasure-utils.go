@@ -18,15 +18,19 @@ package cmd
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"errors"
 	"hash"
 	"io"
 	"sync"
 
+	"github.com/aead/siphash"
 	"github.com/klauspost/reedsolomon"
-	"github.com/minio/sha256-simd"
 	"golang.org/x/crypto/blake2b"
 )
+
+// The fixed SipHash key.
+var siphashKey = []byte("minio is awesome")
 
 // newHashWriters - inititialize a slice of hashes for the disk count.
 func newHashWriters(diskCount int, algo string) []hash.Hash {
@@ -40,22 +44,31 @@ func newHashWriters(diskCount int, algo string) []hash.Hash {
 // newHash - gives you a newly allocated hash depending on the input algorithm.
 func newHash(algo string) (h hash.Hash) {
 	switch algo {
+	case siphash128Algo:
+		// New128 fails if len(key) != 16. But we use a fixed key here,
+		// so this cannot happen. The length of the key is also tested
+		// in the erasue_utils test.
+		h, _ = siphash.New128(siphashKey)
+
+	// SHA-256 for compatibility reasons
 	case sha256Algo:
 		// sha256 checksum specially on ARM64 platforms or whenever
 		// requested as dictated by `xl.json` entry.
 		h = sha256.New()
+
+	// BLAKE2b for compatibility reasons
 	case blake2bAlgo:
 		// ignore the error, because New512 without a key never fails
 		// New512 only returns a non-nil error, if the length of the passed
 		// key > 64 bytes - but we use blake2b as hash function (no key)
 		h, _ = blake2b.New512(nil)
+
 	// Add new hashes here.
 	default:
-		// Default to blake2b.
-		// ignore the error, because New512 without a key never fails
-		// New512 only returns a non-nil error, if the length of the passed
-		// key > 64 bytes - but we use blake2b as hash function (no key)
-		h, _ = blake2b.New512(nil)
+		// New128 fails if len(key) != 16. But we use a fixed key here,
+		// so this cannot happen. The length of the key is also tested
+		// in the erasue_utils test.
+		h, _ = siphash.New128(siphashKey)
 	}
 	return h
 }

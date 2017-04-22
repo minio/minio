@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"errors"
 	"path"
-	"runtime"
 	"sort"
 	"sync"
 	"time"
@@ -60,6 +59,8 @@ const (
 	sha256Algo = "sha256"
 	// Rest of the platforms default to blake2b.
 	blake2bAlgo = "blake2b"
+
+	siphash128Algo = "siphash128"
 )
 
 // Constant indicates current bit-rot algo used when creating objects.
@@ -67,23 +68,11 @@ const (
 var bitRotAlgo = getDefaultBitRotAlgo()
 
 // Get the default bit-rot algo depending on the architecture.
-// Currently this function defaults to "blake2b" as the preferred
-// checksum algorithm on all architectures except ARM64. On ARM64
-// we use sha256 (optimized using sha2 instructions of ARM NEON chip).
+// Currently this function defaults to siphash128. SipHash is much faster
+// than general purpose cryptographic hash functions because it does not
+// provide security properties, but matches minio's purposes quite well.
 func getDefaultBitRotAlgo() string {
-	switch runtime.GOARCH {
-	case "arm64":
-		// As a special case for ARM64 we use an optimized
-		// version of hash i.e sha256. This is done so that
-		// blake2b is sub-optimal and slower on ARM64.
-		// This would also allows erasure coded writes
-		// on ARM64 servers to be on-par with their
-		// counter-part X86_64 servers.
-		return sha256Algo
-	default:
-		// Default for all other architectures we use blake2b.
-		return blake2bAlgo
-	}
+	return siphash128Algo
 }
 
 // erasureInfo - carries erasure coding related information, block
