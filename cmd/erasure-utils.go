@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"errors"
 	"hash"
 	"io"
@@ -26,6 +25,7 @@ import (
 
 	"github.com/aead/siphash"
 	"github.com/klauspost/reedsolomon"
+	"github.com/minio/sha256-simd"
 	"golang.org/x/crypto/blake2b"
 )
 
