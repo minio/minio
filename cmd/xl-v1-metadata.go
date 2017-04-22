@@ -55,11 +55,12 @@ type checkSumInfo struct {
 
 // Various algorithms supported by bit-rot protection feature.
 const (
-	// "sha256" is specifically used on arm64 bit platforms.
+	// "sha256" for compatibility reasons
 	sha256Algo = "sha256"
-	// Rest of the platforms default to blake2b.
+	// "blake2b" for compatibility reasons
 	blake2bAlgo = "blake2b"
 
+	// "siphash128"" is the default on all platforms
 	siphash128Algo = "siphash128"
 )
 
@@ -70,7 +71,8 @@ var bitRotAlgo = getDefaultBitRotAlgo()
 // Get the default bit-rot algo depending on the architecture.
 // Currently this function defaults to siphash128. SipHash is much faster
 // than general purpose cryptographic hash functions because it does not
-// provide security properties, but matches minio's purposes quite well.
+// provide the same strong security properties, but matches minio's purposes
+// quite well.
 func getDefaultBitRotAlgo() string {
 	return siphash128Algo
 }
