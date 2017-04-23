@@ -41,9 +41,8 @@ const (
 	// Uploads metadata file carries per multipart object metadata.
 	uploadsJSONFile = "uploads.json"
 
-	// Represents the minimum required RAM size before
-	// we enable caching.
-	minRAMSize = 8 * humanize.GiByte
+	// Represents the minimum required RAM size to enable caching.
+	minRAMSize = 24 * humanize.GiByte
 
 	// Maximum erasure blocks.
 	maxErasureBlocks = 16

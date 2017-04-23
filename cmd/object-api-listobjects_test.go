@@ -435,7 +435,7 @@ func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
 		{"test-bucket-list-object", "", "", "*", 0, ListObjectsInfo{}, fmt.Errorf("delimiter '%s' is not supported", "*"), false},
 		{"test-bucket-list-object", "", "", "-", 0, ListObjectsInfo{}, fmt.Errorf("delimiter '%s' is not supported", "-"), false},
 		// Testing for failure cases with both perfix and marker (11).
-		// The prefix and marker combination to be valid it should satisy strings.HasPrefix(marker, prefix).
+		// The prefix and marker combination to be valid it should satisfy strings.HasPrefix(marker, prefix).
 		{"test-bucket-list-object", "asia", "europe-object", "", 0, ListObjectsInfo{}, fmt.Errorf("Invalid combination of marker '%s' and prefix '%s'", "europe-object", "asia"), false},
 		// Setting a non-existing directory to be prefix (12-13).
 		{"empty-bucket", "europe/france/", "", "", 1, ListObjectsInfo{}, nil, true},

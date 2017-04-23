@@ -188,6 +188,9 @@ func printRetryMsg(sErrs []error, storageDisks []StorageAPI) {
 	}
 }
 
+// Maximum retry attempts.
+const maxRetryAttempts = 5
+
 // Implements a jitter backoff loop for formatting all disks during
 // initialization of the server.
 func retryFormattingXLDisks(firstDisk bool, endpoints EndpointList, storageDisks []StorageAPI) error {
@@ -219,17 +222,28 @@ func retryFormattingXLDisks(firstDisk bool, endpoints EndpointList, storageDisks
 		case retryCount := <-retryTimerCh:
 			// Attempt to load all `format.json` from all disks.
 			formatConfigs, sErrs := loadAllFormats(storageDisks)
-			if retryCount > 5 {
-				// After 5 retry attempts we start printing actual errors
-				// for disks not being available.
+			if retryCount > maxRetryAttempts {
+				// After max retry attempts we start printing
+				// actual errors for disks not being available.
 				printRetryMsg(sErrs, storageDisks)
 			}
 			// Pre-emptively check if one of the formatted disks
 			// is invalid. This function returns success for the
 			// most part unless one of the formats is not consistent
-			// with expected XL format. For example if a user is trying
-			// to pool FS backend.
-			if err := checkFormatXLValues(formatConfigs); err != nil {
+			// with expected XL format. For example if a user is
+			// trying to pool FS backend into an XL set.
+			if index, err := checkFormatXLValues(formatConfigs); err != nil {
+				// We will perhaps print and retry for the first 5 attempts
+				// because in XL initialization first server is the one which
+				// initializes the erasure set. This check ensures that the
+				// rest of the other servers do get a chance to see that the
+				// first server has a wrong format and exit gracefully.
+				// refer - https://github.com/minio/minio/issues/4140
+				if retryCount > maxRetryAttempts {
+					errorIf(err, "Detected disk (%s) in unexpected format",
+						storageDisks[index])
+					continue
+				}
 				return err
 			}
 			// Check if this is a XL or distributed XL, anything > 1 is considered XL backend.

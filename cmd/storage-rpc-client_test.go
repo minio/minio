@@ -27,6 +27,83 @@ import (
 	"testing"
 )
 
+// Tests the construction of canonical string by the
+// Stringer method for StorageAPI.
+func TestStorageCanonicalStrings(t *testing.T) {
+	testCases := []struct {
+		storageAPI    StorageAPI
+		canonicalPath string
+	}{
+		// Canonicalized name as unix path.
+		{
+			storageAPI: &posix{
+				diskPath: "/tmp",
+			},
+			canonicalPath: "/tmp",
+		},
+		// Canonicalized name as windows path.
+		{
+			storageAPI: &posix{
+				diskPath: "C:/tmp",
+			},
+			canonicalPath: "C:/tmp",
+		},
+		// Canonicalized name as unix path.
+		{
+			storageAPI: &networkStorage{
+				rpcClient: newAuthRPCClient(authConfig{
+					accessKey:        "",
+					secretKey:        "",
+					serverAddr:       "localhost:9000",
+					serviceEndpoint:  "/tmp",
+					secureConn:       false,
+					serviceName:      "Storage",
+					disableReconnect: true,
+				}),
+			},
+			canonicalPath: "http://localhost:9000/tmp",
+		},
+		// Canonicalized name as non TLS.
+		{
+			storageAPI: &networkStorage{
+				rpcClient: newAuthRPCClient(authConfig{
+					accessKey:        "",
+					secretKey:        "",
+					serverAddr:       "localhost:9000",
+					serviceEndpoint:  "C:/tmp",
+					secureConn:       false,
+					serviceName:      "Storage",
+					disableReconnect: true,
+				}),
+			},
+			canonicalPath: "http://localhost:9000/C:/tmp",
+		},
+		// Canonicalized name as TLS.
+		{
+			storageAPI: &networkStorage{
+				rpcClient: newAuthRPCClient(authConfig{
+					accessKey:        "",
+					secretKey:        "",
+					serverAddr:       "localhost:9000",
+					serviceEndpoint:  "C:/tmp",
+					secureConn:       true,
+					serviceName:      "Storage",
+					disableReconnect: true,
+				}),
+			},
+			canonicalPath: "https://localhost:9000/C:/tmp",
+		},
+	}
+
+	// Validate all the test cases.
+	for i, testCase := range testCases {
+		p := testCase.storageAPI
+		if p.String() != testCase.canonicalPath {
+			t.Errorf("Test %d: Expected %s, got %s", i+1, testCase.canonicalPath, p.String())
+		}
+	}
+}
+
 // Tests storage error transformation.
 func TestStorageErr(t *testing.T) {
 	unknownErr := errors.New("Unknown error")

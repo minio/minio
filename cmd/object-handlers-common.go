@@ -66,11 +66,13 @@ func checkCopyObjectPreconditions(w http.ResponseWriter, r *http.Request, objInf
 	// since the specified time otherwise return 412 (precondition failed).
 	ifModifiedSinceHeader := r.Header.Get("x-amz-copy-source-if-modified-since")
 	if ifModifiedSinceHeader != "" {
-		if !ifModifiedSince(objInfo.ModTime, ifModifiedSinceHeader) {
-			// If the object is not modified since the specified time.
-			writeHeaders()
-			writeErrorResponse(w, ErrPreconditionFailed, r.URL)
-			return true
+		if givenTime, err := time.Parse(http.TimeFormat, ifModifiedSinceHeader); err == nil {
+			if !ifModifiedSince(objInfo.ModTime, givenTime) {
+				// If the object is not modified since the specified time.
+				writeHeaders()
+				writeErrorResponse(w, ErrPreconditionFailed, r.URL)
+				return true
+			}
 		}
 	}
 
@@ -78,11 +80,13 @@ func checkCopyObjectPreconditions(w http.ResponseWriter, r *http.Request, objInf
 	// modified since the specified time, otherwise return a 412 (precondition failed).
 	ifUnmodifiedSinceHeader := r.Header.Get("x-amz-copy-source-if-unmodified-since")
 	if ifUnmodifiedSinceHeader != "" {
-		if ifModifiedSince(objInfo.ModTime, ifUnmodifiedSinceHeader) {
-			// If the object is modified since the specified time.
-			writeHeaders()
-			writeErrorResponse(w, ErrPreconditionFailed, r.URL)
-			return true
+		if givenTime, err := time.Parse(http.TimeFormat, ifUnmodifiedSinceHeader); err == nil {
+			if ifModifiedSince(objInfo.ModTime, givenTime) {
+				// If the object is modified since the specified time.
+				writeHeaders()
+				writeErrorResponse(w, ErrPreconditionFailed, r.URL)
+				return true
+			}
 		}
 	}
 
@@ -147,11 +151,13 @@ func checkPreconditions(w http.ResponseWriter, r *http.Request, objInfo ObjectIn
 	// otherwise return a 304 (not modified).
 	ifModifiedSinceHeader := r.Header.Get("If-Modified-Since")
 	if ifModifiedSinceHeader != "" {
-		if !ifModifiedSince(objInfo.ModTime, ifModifiedSinceHeader) {
-			// If the object is not modified since the specified time.
-			writeHeaders()
-			w.WriteHeader(http.StatusNotModified)
-			return true
+		if givenTime, err := time.Parse(http.TimeFormat, ifModifiedSinceHeader); err == nil {
+			if !ifModifiedSince(objInfo.ModTime, givenTime) {
+				// If the object is not modified since the specified time.
+				writeHeaders()
+				w.WriteHeader(http.StatusNotModified)
+				return true
+			}
 		}
 	}
 
@@ -159,11 +165,13 @@ func checkPreconditions(w http.ResponseWriter, r *http.Request, objInfo ObjectIn
 	// time, otherwise return a 412 (precondition failed).
 	ifUnmodifiedSinceHeader := r.Header.Get("If-Unmodified-Since")
 	if ifUnmodifiedSinceHeader != "" {
-		if ifModifiedSince(objInfo.ModTime, ifUnmodifiedSinceHeader) {
-			// If the object is modified since the specified time.
-			writeHeaders()
-			writeErrorResponse(w, ErrPreconditionFailed, r.URL)
-			return true
+		if givenTime, err := time.Parse(http.TimeFormat, ifUnmodifiedSinceHeader); err == nil {
+			if ifModifiedSince(objInfo.ModTime, givenTime) {
+				// If the object is modified since the specified time.
+				writeHeaders()
+				writeErrorResponse(w, ErrPreconditionFailed, r.URL)
+				return true
+			}
 		}
 	}
 
@@ -195,11 +203,7 @@ func checkPreconditions(w http.ResponseWriter, r *http.Request, objInfo ObjectIn
 }
 
 // returns true if object was modified after givenTime.
-func ifModifiedSince(objTime time.Time, givenTimeStr string) bool {
-	givenTime, err := time.Parse(http.TimeFormat, givenTimeStr)
-	if err != nil {
-		return true
-	}
+func ifModifiedSince(objTime time.Time, givenTime time.Time) bool {
 	// The Date-Modified header truncates sub-second precision, so
 	// use mtime < t+1s instead of mtime <= t to check for unmodified.
 	if objTime.After(givenTime.Add(1 * time.Second)) {

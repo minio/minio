@@ -29,15 +29,15 @@ func TestGetMaxCacheSize(t *testing.T) {
 		{uint64(0), minRAMSize, uint64(0)},
 		{uint64(18446744073709551615), uint64(8115998720), uint64(0)},
 		{uint64(8115998720), uint64(16115998720), uint64(0)},
-		{minRAMSize, minRAMSize, uint64(4294967296)},
-		{minRAMSize, uint64(16115998720), uint64(4294967296)},
-		{uint64(18446744073709551615), uint64(10115998720), uint64(5057999360)},
+		{minRAMSize, minRAMSize, uint64(12884901888)},
+		{minRAMSize, uint64(16115998720), uint64(0)},
+		{uint64(18446744073709551615), uint64(10115998720), uint64(0)},
 	}
 
-	for _, testCase := range testCases {
+	for i, testCase := range testCases {
 		cacheSize := getMaxCacheSize(testCase.curLimit, testCase.totalRAM)
 		if testCase.expectedResult != cacheSize {
-			t.Fatalf("expected: %v, got: %v", testCase.expectedResult, cacheSize)
+			t.Fatalf("Test %d, Expected: %v, Got: %v", i+1, testCase.expectedResult, cacheSize)
 		}
 	}
 }

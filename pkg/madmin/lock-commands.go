@@ -42,12 +42,11 @@ const (
 
 // OpsLockState - represents lock specific details.
 type OpsLockState struct {
-	OperationID string        `json:"id"`       // String containing operation ID.
-	LockSource  string        `json:"source"`   // Operation type (GetObject, PutObject...)
-	LockType    lockType      `json:"type"`     // Lock type (RLock, WLock)
-	Status      statusType    `json:"status"`   // Status can be Running/Ready/Blocked.
-	Since       time.Time     `json:"since"`    // Time when the lock was initially held.
-	Duration    time.Duration `json:"duration"` // Duration since the lock was held.
+	OperationID string     `json:"id"`     // String containing operation ID.
+	LockSource  string     `json:"source"` // Operation type (GetObject, PutObject...)
+	LockType    lockType   `json:"type"`   // Lock type (RLock, WLock)
+	Status      statusType `json:"status"` // Status can be Running/Ready/Blocked.
+	Since       time.Time  `json:"since"`  // Time when the lock was initially held.
 }
 
 // VolumeLockInfo - represents summary and individual lock details of all

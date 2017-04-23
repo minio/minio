@@ -1110,7 +1110,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 		{bucketNames[0], "", "", "", "*", 0, ListMultipartsInfo{}, fmt.Errorf("delimiter '%s' is not supported", "*"), false},
 		{bucketNames[0], "", "", "", "-", 0, ListMultipartsInfo{}, fmt.Errorf("delimiter '%s' is not supported", "-"), false},
 		// Testing for failure cases with both perfix and marker (Test number 10).
-		// The prefix and marker combination to be valid it should satisy strings.HasPrefix(marker, prefix).
+		// The prefix and marker combination to be valid it should satisfy strings.HasPrefix(marker, prefix).
 		{bucketNames[0], "asia", "europe-object", "", "", 0, ListMultipartsInfo{},
 			fmt.Errorf("Invalid combination of marker '%s' and prefix '%s'", "europe-object", "asia"), false},
 		// Setting an invalid combination of uploadIDMarker and Marker (Test number 11-12).
@@ -1457,7 +1457,7 @@ func testListObjectPartsDiskNotFound(obj ObjectLayer, instanceType string, disks
 		// Failed as expected, but does it fail for the expected reason.
 		if actualErr != nil && !testCase.shouldPass {
 			if !strings.Contains(actualErr.Error(), testCase.expectedErr.Error()) {
-				t.Errorf("Test %d: %s: Expected to fail with error \"%s\", but instead failed with error \"%s\" instead", i+1, instanceType, testCase.expectedErr.Error(), actualErr.Error())
+				t.Errorf("Test %d: %s: Expected to fail with error \"%s\", but instead failed with error \"%s\" instead", i+1, instanceType, testCase.expectedErr, actualErr)
 			}
 		}
 		// Passes as expected, but asserting the results.

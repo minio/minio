@@ -249,8 +249,10 @@ var objMetadataOpIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied, errV
 
 // readXLMetaParts - returns the XL Metadata Parts from xl.json of one of the disks picked at random.
 func (xl xlObjects) readXLMetaParts(bucket, object string) (xlMetaParts []objectPartInfo, err error) {
+	var ignoredErrs []error
 	for _, disk := range xl.getLoadBalancedDisks() {
 		if disk == nil {
+			ignoredErrs = append(ignoredErrs, errDiskNotFound)
 			continue
 		}
 		xlMetaParts, err = readXLMetaParts(disk, bucket, object)
@@ -260,18 +262,23 @@ func (xl xlObjects) readXLMetaParts(bucket, object string) (xlMetaParts []object
 		// For any reason disk or bucket is not available continue
 		// and read from other disks.
 		if isErrIgnored(err, objMetadataOpIgnoredErrs...) {
+			ignoredErrs = append(ignoredErrs, err)
 			continue
 		}
-		break
+		// Error is not ignored, return right here.
+		return nil, err
 	}
-	// Return error here.
-	return nil, err
+	// If all errors were ignored, reduce to maximal occurrence
+	// based on the read quorum.
+	return nil, reduceReadQuorumErrs(ignoredErrs, nil, xl.readQuorum)
 }
 
 // readXLMetaStat - return xlMetaV1.Stat and xlMetaV1.Meta from  one of the disks picked at random.
 func (xl xlObjects) readXLMetaStat(bucket, object string) (xlStat statInfo, xlMeta map[string]string, err error) {
+	var ignoredErrs []error
 	for _, disk := range xl.getLoadBalancedDisks() {
 		if disk == nil {
+			ignoredErrs = append(ignoredErrs, errDiskNotFound)
 			continue
 		}
 		// parses only xlMetaV1.Meta and xlMeta.Stat
@@ -282,12 +289,15 @@ func (xl xlObjects) readXLMetaStat(bucket, object string) (xlStat statInfo, xlMe
 		// For any reason disk or bucket is not available continue
 		// and read from other disks.
 		if isErrIgnored(err, objMetadataOpIgnoredErrs...) {
+			ignoredErrs = append(ignoredErrs, err)
 			continue
 		}
-		break
+		// Error is not ignored, return right here.
+		return statInfo{}, nil, err
 	}
-	// Return error here.
-	return statInfo{}, nil, err
+	// If all errors were ignored, reduce to maximal occurrence
+	// based on the read quorum.
+	return statInfo{}, nil, reduceReadQuorumErrs(ignoredErrs, nil, xl.readQuorum)
 }
 
 // deleteXLMetadata - deletes `xl.json` on a single disk.
