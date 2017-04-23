@@ -368,7 +368,7 @@ func (api gatewayAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *h
 
 		// Parse check bucket policy.
 		if s3Error := checkBucketPolicyResources(bucket, policyInfo); s3Error != ErrNone {
-			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
 	}
