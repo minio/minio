@@ -25,6 +25,11 @@ _init() {
     OSX_VERSION="10.8"
     KNAME=$(uname -s)
     ARCH=$(uname -m)
+    case "${KNAME}" in
+        SunOS )
+            ARCH=$(isainfo -k)
+            ;;
+    esac
 }
 
 ## FIXME:
@@ -97,7 +102,7 @@ assert_is_supported_arch() {
 
 assert_is_supported_os() {
     case "${KNAME}" in
-        Linux | FreeBSD | OpenBSD | NetBSD | DragonFly )
+        Linux | FreeBSD | OpenBSD | NetBSD | DragonFly | SunOS )
             return
             ;;
         Darwin )
