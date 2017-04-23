@@ -141,7 +141,6 @@ func getSystemLockState() (SystemLockState, error) {
 				LockType:    lockInfo.lType,
 				Status:      lockInfo.status,
 				Since:       lockInfo.since,
-				Duration:    UTCNow().Sub(lockInfo.since),
 			})
 		}
 		lockState.LocksInfoPerObject = append(lockState.LocksInfoPerObject, volLockInfo)

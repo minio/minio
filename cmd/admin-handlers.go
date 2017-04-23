@@ -26,6 +26,7 @@ import (
 	"net/url"
 	"path"
 	"strconv"
+	"sync"
 	"time"
 )
 
@@ -229,12 +230,20 @@ type ServerHTTPStats struct {
 	SuccessDELETEStats ServerHTTPMethodStats `json:"successDELETEs"`
 }
 
-// ServerInfo holds the information that will be returned by ServerInfo API
-type ServerInfo struct {
+// ServerInfoData holds storage, connections and other
+// information of a given server.
+type ServerInfoData struct {
 	StorageInfo StorageInfo      `json:"storage"`
 	ConnStats   ServerConnStats  `json:"network"`
 	HTTPStats   ServerHTTPStats  `json:"http"`
 	Properties  ServerProperties `json:"server"`
+}
+
+// ServerInfo holds server information result of one node
+type ServerInfo struct {
+	Error error
+	Addr  string
+	Data  *ServerInfoData
 }
 
 // ServerInfoHandler - GET /?info
@@ -248,55 +257,37 @@ func (adminAPI adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	// Build storage info
-	objLayer := newObjectLayerFn()
-	if objLayer == nil {
-		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
-		return
-	}
-	storage := objLayer.StorageInfo()
+	// Web service response
+	reply := make([]ServerInfo, len(globalAdminPeers))
 
-	// Build list of enabled ARNs queues
-	var arns []string
-	for queueArn := range globalEventNotifier.GetAllExternalTargets() {
-		arns = append(arns, queueArn)
-	}
+	var wg sync.WaitGroup
 
-	// Fetch uptimes from all peers. This may fail to due to lack
-	// of read-quorum availability.
-	uptime, err := getPeerUptimes(globalAdminPeers)
-	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-		errorIf(err, "Unable to get uptime from majority of servers.")
-		return
-	}
+	// Gather server information for all nodes
+	for i, p := range globalAdminPeers {
+		wg.Add(1)
 
-	// Build server properties information
-	properties := ServerProperties{
-		Version:  Version,
-		CommitID: CommitID,
-		Region:   serverConfig.GetRegion(),
-		SQSARN:   arns,
-		Uptime:   uptime,
+		// Gather information from a peer in a goroutine
+		go func(idx int, peer adminPeer) {
+			defer wg.Done()
+
+			// Initialize server info at index
+			reply[idx] = ServerInfo{Addr: peer.addr}
+
+			serverInfoData, err := peer.cmdRunner.ServerInfoData()
+			if err != nil {
+				errorIf(err, "Unable to get server info from %s.", peer.addr)
+				reply[idx].Error = err
+				return
+			}
+
+			reply[idx].Data = &serverInfoData
+		}(i, p)
 	}
 
-	// Build network info
-	connStats := ServerConnStats{
-		TotalInputBytes:  globalConnStats.getTotalInputBytes(),
-		TotalOutputBytes: globalConnStats.getTotalOutputBytes(),
-	}
-	httpStats := globalHTTPStats.toServerHTTPStats()
-
-	// Build the whole returned information
-	info := ServerInfo{
-		StorageInfo: storage,
-		ConnStats:   connStats,
-		HTTPStats:   httpStats,
-		Properties:  properties,
-	}
+	wg.Wait()
 
 	// Marshal API response
-	jsonBytes, err := json.Marshal(info)
+	jsonBytes, err := json.Marshal(reply)
 	if err != nil {
 		writeErrorResponse(w, ErrInternalError, r.URL)
 		errorIf(err, "Failed to marshal storage info into json.")
@@ -630,9 +621,40 @@ func isDryRun(qval url.Values) bool {
 	return false
 }
 
-type healObjectResult struct {
-	HealedCount  int
-	OfflineCount int
+// healResult - represents result of a heal operation like
+// heal-object, heal-upload.
+type healResult struct {
+	State healState `json:"state"`
+}
+
+// healState - different states of heal operation
+type healState int
+
+const (
+	// healNone - none of the disks healed
+	healNone healState = iota
+	// healPartial - some disks were healed, others were offline
+	healPartial
+	// healOK - all disks were healed
+	healOK
+)
+
+// newHealResult - returns healResult given number of disks healed and
+// number of disks offline
+func newHealResult(numHealedDisks, numOfflineDisks int) healResult {
+	var state healState
+	switch {
+	case numHealedDisks == 0:
+		state = healNone
+
+	case numOfflineDisks > 0:
+		state = healPartial
+
+	default:
+		state = healOK
+	}
+
+	return healResult{State: state}
 }
 
 // HealObjectHandler - POST /?heal&bucket=mybucket&object=myobject&dry-run
@@ -683,10 +705,7 @@ func (adminAPI adminAPIHandlers) HealObjectHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	jsonBytes, err := json.Marshal(healObjectResult{
-		HealedCount:  numHealedDisks,
-		OfflineCount: numOfflineDisks,
-	})
+	jsonBytes, err := json.Marshal(newHealResult(numHealedDisks, numOfflineDisks))
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
@@ -761,10 +780,7 @@ func (adminAPI adminAPIHandlers) HealUploadHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	jsonBytes, err := json.Marshal(healObjectResult{
-		HealedCount:  numHealedDisks,
-		OfflineCount: numOfflineDisks,
-	})
+	jsonBytes, err := json.Marshal(newHealResult(numHealedDisks, numOfflineDisks))
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return

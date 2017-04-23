@@ -37,7 +37,7 @@ const (
 	serviceRestartRPC = "Admin.Restart"
 	listLocksRPC      = "Admin.ListLocks"
 	reInitDisksRPC    = "Admin.ReInitDisks"
-	uptimeRPC         = "Admin.Uptime"
+	serverInfoDataRPC = "Admin.ServerInfoData"
 	getConfigRPC      = "Admin.GetConfig"
 	writeTmpConfigRPC = "Admin.WriteTmpConfig"
 	commitConfigRPC   = "Admin.CommitConfig"
@@ -59,7 +59,7 @@ type adminCmdRunner interface {
 	Restart() error
 	ListLocks(bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error)
 	ReInitDisks() error
-	Uptime() (time.Duration, error)
+	ServerInfoData() (ServerInfoData, error)
 	GetConfig() ([]byte, error)
 	WriteTmpConfig(tmpFileName string, configBytes []byte) error
 	CommitConfig(tmpFileName string) error
@@ -112,26 +112,48 @@ func (rc remoteAdminClient) ReInitDisks() error {
 	return rc.Call(reInitDisksRPC, &args, &reply)
 }
 
-// Uptime - Returns the uptime of this server. Timestamp is taken
-// after object layer is initialized.
-func (lc localAdminClient) Uptime() (time.Duration, error) {
+// ServerInfoData - Returns the server info of this server.
+func (lc localAdminClient) ServerInfoData() (ServerInfoData, error) {
 	if globalBootTime.IsZero() {
-		return time.Duration(0), errServerNotInitialized
+		return ServerInfoData{}, errServerNotInitialized
 	}
 
-	return UTCNow().Sub(globalBootTime), nil
+	// Build storage info
+	objLayer := newObjectLayerFn()
+	if objLayer == nil {
+		return ServerInfoData{}, errServerNotInitialized
+	}
+	storage := objLayer.StorageInfo()
+
+	var arns []string
+	for queueArn := range globalEventNotifier.GetAllExternalTargets() {
+		arns = append(arns, queueArn)
+	}
+
+	return ServerInfoData{
+		StorageInfo: storage,
+		ConnStats:   globalConnStats.toServerConnStats(),
+		HTTPStats:   globalHTTPStats.toServerHTTPStats(),
+		Properties: ServerProperties{
+			Uptime:   UTCNow().Sub(globalBootTime),
+			Version:  Version,
+			CommitID: CommitID,
+			SQSARN:   arns,
+			Region:   serverConfig.GetRegion(),
+		},
+	}, nil
 }
 
-// Uptime - returns the uptime of the server to which the RPC call is made.
-func (rc remoteAdminClient) Uptime() (time.Duration, error) {
+// ServerInfo - returns the server info of the server to which the RPC call is made.
+func (rc remoteAdminClient) ServerInfoData() (ServerInfoData, error) {
 	args := AuthRPCArgs{}
-	reply := UptimeReply{}
-	err := rc.Call(uptimeRPC, &args, &reply)
+	reply := ServerInfoDataReply{}
+	err := rc.Call(serverInfoDataRPC, &args, &reply)
 	if err != nil {
-		return time.Duration(0), err
+		return ServerInfoData{}, err
 	}
 
-	return reply.Uptime, nil
+	return reply.ServerInfoData, nil
 }
 
 // GetConfig - returns config.json of the local server.
@@ -384,7 +406,8 @@ func getPeerUptimes(peers adminPeers) (time.Duration, error) {
 		wg.Add(1)
 		go func(idx int, peer adminPeer) {
 			defer wg.Done()
-			uptimes[idx].uptime, uptimes[idx].err = peer.cmdRunner.Uptime()
+			serverInfoData, rpcErr := peer.cmdRunner.ServerInfoData()
+			uptimes[idx].uptime, uptimes[idx].err = serverInfoData.Properties.Uptime, rpcErr
 		}(i, peer)
 	}
 	wg.Wait()

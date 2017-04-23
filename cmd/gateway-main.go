@@ -31,7 +31,7 @@ var gatewayTemplate = `NAME:
   {{.HelpName}} - {{.Usage}}
 
 USAGE:
-  {{.HelpName}} {{if .VisibleFlags}}[FLAGS]{{end}} BACKEND
+  {{.HelpName}} {{if .VisibleFlags}}[FLAGS]{{end}} BACKEND [ENDPOINT]
 {{if .VisibleFlags}}
 FLAGS:
   {{range .VisibleFlags}}{{.}}
@@ -47,6 +47,10 @@ EXAMPLES:
 
   2. Start minio gateway server bound to a specific ADDRESS:PORT.
       $ {{.HelpName}} --address 192.168.1.101:9000 azure
+
+  3. Gateway server connecting to a custom Azure Blob Storage endpoint.
+      $ {{.HelpName}} azure https://azure-stack.domain.com
+
 `
 
 var gatewayCmd = cli.Command{

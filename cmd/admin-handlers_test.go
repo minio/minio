@@ -1300,17 +1300,29 @@ func TestAdminServerInfo(t *testing.T) {
 		t.Errorf("Expected to succeed but failed with %d", rec.Code)
 	}
 
-	result := ServerInfo{}
-	err = json.NewDecoder(rec.Body).Decode(&result)
+	results := []ServerInfo{}
+	err = json.NewDecoder(rec.Body).Decode(&results)
 	if err != nil {
 		t.Fatalf("Failed to decode set config result json %v", err)
 	}
 
-	if result.StorageInfo.Free == 0 {
-		t.Error("Expected StorageInfo.Free to be non empty")
+	if len(results) == 0 {
+		t.Error("Expected at least one server info result")
 	}
-	if result.Properties.Region != globalMinioDefaultRegion {
-		t.Errorf("Expected %s, got %s", globalMinioDefaultRegion, result.Properties.Region)
+
+	for _, serverInfo := range results {
+		if len(serverInfo.Addr) == 0 {
+			t.Error("Expected server address to be non empty")
+		}
+		if serverInfo.Error != nil {
+			t.Errorf("Unexpected error = %v\n", serverInfo.Error)
+		}
+		if serverInfo.Data.StorageInfo.Free == 0 {
+			t.Error("Expected StorageInfo.Free to be non empty")
+		}
+		if serverInfo.Data.Properties.Region != globalMinioDefaultRegion {
+			t.Errorf("Expected %s, got %s", globalMinioDefaultRegion, serverInfo.Data.Properties.Region)
+		}
 	}
 }
 
@@ -1584,5 +1596,31 @@ func TestListHealUploadsHandler(t *testing.T) {
 			}
 		}
 
+	}
+}
+
+// Test for newHealResult helper function.
+func TestNewHealResult(t *testing.T) {
+	testCases := []struct {
+		healedDisks  int
+		offlineDisks int
+		state        healState
+	}{
+		// 1. No disks healed, no disks offline.
+		{0, 0, healNone},
+		// 2. No disks healed, non-zero disks offline.
+		{0, 1, healNone},
+		// 3. Non-zero disks healed, no disks offline.
+		{1, 0, healOK},
+		// 4. Non-zero disks healed, non-zero disks offline.
+		{1, 1, healPartial},
+	}
+
+	for i, test := range testCases {
+		actual := newHealResult(test.healedDisks, test.offlineDisks)
+		if actual.State != test.state {
+			t.Errorf("Test %d: Expected %v but received %v", i+1,
+				test.state, actual.State)
+		}
 	}
 }

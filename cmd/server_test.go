@@ -1342,6 +1342,19 @@ func (s *TestSuiteCommon) TestHeadOnObjectLastModified(c *C) {
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusPreconditionFailed)
+
+	// make HTTP request to obtain object info.
+	// But this time set a date with unrecognized format to the "If-Modified-Since" header
+	request, err = newTestSignedRequest("HEAD", getHeadObjectURL(s.endPoint, bucketName, objectName),
+		0, nil, s.accessKey, s.secretKey, s.signer)
+	c.Assert(err, IsNil)
+	request.Header.Set("If-Unmodified-Since", "Mon, 02 Jan 2006 15:04:05 +00:00")
+	response, err = client.Do(request)
+	c.Assert(err, IsNil)
+	// Since the "If-Modified-Since" header was ahead in time compared to the actual
+	// modified time of the object expecting the response status to be http.StatusNotModified.
+	c.Assert(response.StatusCode, Equals, http.StatusOK)
+
 }
 
 // TestHeadOnBucket - Validates response for HEAD on the bucket.

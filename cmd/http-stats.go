@@ -52,6 +52,14 @@ func (s *ConnStats) getTotalOutputBytes() uint64 {
 	return s.totalOutputBytes.Load()
 }
 
+// Return connection stats (total input/output bytes)
+func (s *ConnStats) toServerConnStats() ServerConnStats {
+	return ServerConnStats{
+		TotalInputBytes:  s.getTotalInputBytes(),
+		TotalOutputBytes: s.getTotalOutputBytes(),
+	}
+}
+
 // Prepare new ConnStats structure
 func newConnStats() *ConnStats {
 	return &ConnStats{}

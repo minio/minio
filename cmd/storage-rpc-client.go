@@ -113,11 +113,18 @@ func newStorageRPC(endpoint Endpoint) StorageAPI {
 	}
 }
 
-// Stringer interface compatible representation of network device.
+// Stringer provides a canonicalized representation of network device.
 func (n *networkStorage) String() string {
 	// Remove the storage RPC path prefix, internal paths are meaningless.
-	serviceEndpoint := strings.TrimPrefix(n.rpcClient.ServiceEndpoint(), storageRPCPath)
-	return n.rpcClient.ServerAddr() + ":" + serviceEndpoint
+	serviceEndpoint := strings.TrimPrefix(n.rpcClient.ServiceEndpoint(),
+		path.Join(minioReservedBucketPath, storageRPCPath))
+	// Check for the transport layer being used.
+	scheme := "http"
+	if n.rpcClient.config.secureConn {
+		scheme = "https"
+	}
+	// Finally construct the disk endpoint in http://<server>/<path> form.
+	return scheme + "://" + n.rpcClient.ServerAddr() + path.Join("/", serviceEndpoint)
 }
 
 // Init - attempts a login to reconnect.
