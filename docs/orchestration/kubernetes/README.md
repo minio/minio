@@ -1,15 +1,20 @@
 # Deploy Minio on Kubernetes [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
 
-Kubernetes constructs like Deployments and StatefulSets provide perfect platform to deploy Minio server in standalone, distributed or shared mode. In addition, using Minio [Helm](https://helm.sh) Chart, you can deploy Minio server with a single command on your cluster. 
+Kubernetes concepts like Deployments and StatefulSets provide perfect platform to deploy Minio server in standalone, distributed or shared mode. There are multiple options to deploy Minio on Kubernetes, you can choose the one that suits you the most.
 
-Minio Helm Chart offers great deal of [customizability](#configuration), still if you'd rather like to deploy Minio using custom config files, you can do that as well. This [blog post](https://blog.minio.io/build-aws-s3-compatible-cloud-storage-on-gcp-with-minio-and-kubernetes-159cc99caea8#.8zesfh6tc) offers an introduction to running Minio on Kubernetes using .yaml configuration files.
+- Minio [Helm](https://helm.sh) Chart offers a customizable and easy Minio deployment, with a single command. Read more about Minio Helm deployment [here](#prerequisites).
 
+- You can also explore Kubernetes [Minio example](https://github.com/kubernetes/kubernetes/blob/master/examples/storage/minio/README.md) to deploy Minio using `.yaml` files.
+
+- If you'd like to get started with Minio on Kubernetes without having to create a real container cluster, you can also [deploy Minio locally](https://raw.githubusercontent.com/minio/minio/master/docs/orchestration/minikube/README.md) with MiniKube.
+
+<a name="prerequisites"></a>
 ## 1. Prerequisites
 
 * Kubernetes 1.4+ with Beta APIs enabled for default standalone mode.
 * Kubernetes 1.5+ with Beta APIs enabled to run Minio in [distributed mode](#distributed-minio).
-* PV provisioner support in the underlying infrastructure. 
-* Helm package manager [installed](https://github.com/kubernetes/helm#install) on your Kubernetes cluster. 
+* PV provisioner support in the underlying infrastructure.
+* Helm package manager [installed](https://github.com/kubernetes/helm#install) on your Kubernetes cluster.
 
 ## 2. Deploy Minio using Helm Chart
 
