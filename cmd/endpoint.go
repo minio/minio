@@ -182,12 +182,12 @@ func (endpoints EndpointList) SetHTTP() {
 func NewEndpointList(args ...string) (endpoints EndpointList, err error) {
 	// isValidDistribution - checks whether given count is a valid distribution for erasure coding.
 	isValidDistribution := func(count int) bool {
-		return (count >= 4 && count <= 16 && count%2 == 0)
+		return (count >= minErasureBlocks && count <= maxErasureBlocks && count%2 == 0)
 	}
 
 	// Check whether no. of args are valid for XL distribution.
 	if !isValidDistribution(len(args)) {
-		return nil, fmt.Errorf("total endpoints %d found. For XL/Distribute, it should be 4, 6, 8, 10, 12, 14 or 16", len(args))
+		return nil, fmt.Errorf("A total of %d endpoints were found. For erasure mode it should be an even number between %d and %d", len(args), minErasureBlocks, maxErasureBlocks)
 	}
 
 	var endpointType EndpointType
