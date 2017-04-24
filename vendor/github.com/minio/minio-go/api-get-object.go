@@ -24,10 +24,12 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/minio/minio-go/pkg/encrypt"
 )
 
 // GetEncryptedObject deciphers and streams data stored in the server after applying a specifed encryption materiels
-func (c Client) GetEncryptedObject(bucketName, objectName string, encryptMaterials EncryptionMaterials) (io.Reader, error) {
+func (c Client) GetEncryptedObject(bucketName, objectName string, encryptMaterials encrypt.Materials) (io.Reader, error) {
 
 	if encryptMaterials == nil {
 		return nil, ErrInvalidArgument("Unable to recognize empty encryption properties")
@@ -44,8 +46,11 @@ func (c Client) GetEncryptedObject(bucketName, objectName string, encryptMateria
 		return nil, err
 	}
 
-	encryptMaterials.SetupDecryptMode(encReader, st.Metadata)
+	// Setup object for decrytion, object is transparently
+	// decrypted as the consumer starts reading.
+	encryptMaterials.SetupDecryptMode(encReader, st.Metadata.Get(amzHeaderIV), st.Metadata.Get(amzHeaderKey))
 
+	// Success.
 	return encryptMaterials, nil
 }
 

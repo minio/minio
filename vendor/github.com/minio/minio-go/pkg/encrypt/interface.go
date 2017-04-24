@@ -14,31 +14,37 @@
  * limitations under the License.
  */
 
-package minio
+// Package encrypt implements a generic interface to encrypt any stream of data.
+// currently this package implements two types of encryption
+// - Symmetric encryption using AES.
+// - Asymmetric encrytion using RSA.
+package encrypt
 
-import (
-	"io"
-	"net/http"
-)
+import "io"
 
-// EncryptionMaterials - provides generic interface to encrypt
-// any stream of data. Some crypt information can be
-// save in the object metadata
-type EncryptionMaterials interface {
+// Materials - provides generic interface to encrypt any stream of data.
+type Materials interface {
 
-	// Return encrypted/decrypted data.
+	// Returns encrypted/decrypted data, io.Reader compatible.
 	Read(b []byte) (int, error)
 
-	// Metadata that will be stored with the object
-	GetHeaders() http.Header
+	// Get randomly generated IV, base64 encoded.
+	GetIV() (iv string)
+
+	// Get content encrypting key (cek) in encrypted form, base64 encoded.
+	GetKey() (key string)
+
+	// Get user provided encryption material description in
+	// JSON (UTF8) format. This is not used, kept for future.
+	GetDesc() (desc string)
 
 	// Setup encrypt mode, further calls of Read() function
 	// will return the encrypted form of data streamed
 	// by the passed reader
-	SetupEncryptMode(io.Reader) error
+	SetupEncryptMode(stream io.Reader) error
 
 	// Setup decrypted mode, further calls of Read() function
 	// will return the decrypted form of data streamed
 	// by the passed reader
-	SetupDecryptMode(io.Reader, http.Header) error
+	SetupDecryptMode(stream io.Reader, iv string, key string) error
 }

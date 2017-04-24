@@ -172,6 +172,7 @@ The full API Reference is available here.
 
 * [`GetObject`](https://docs.minio.io/docs/golang-client-api-reference#GetObject)
 * [`PutObject`](https://docs.minio.io/docs/golang-client-api-reference#PutObject)
+* [`PutObjectStreaming`](https://docs.minio.io/docs/golang-client-api-reference#PutObjectStreaming)
 * [`StatObject`](https://docs.minio.io/docs/golang-client-api-reference#StatObject)
 * [`CopyObject`](https://docs.minio.io/docs/golang-client-api-reference#CopyObject)
 * [`RemoveObject`](https://docs.minio.io/docs/golang-client-api-reference#RemoveObject)

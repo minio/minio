@@ -208,7 +208,6 @@ func (c Client) RemoveObjects(bucketName string, objectsCh <-chan string) <-chan
 }
 
 // RemoveIncompleteUpload aborts an partially uploaded object.
-// Requires explicit authentication, no anonymous requests are allowed for multipart API.
 func (c Client) RemoveIncompleteUpload(bucketName, objectName string) error {
 	// Input validation.
 	if err := isValidBucketName(bucketName); err != nil {

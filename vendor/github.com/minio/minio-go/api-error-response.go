@@ -1,5 +1,5 @@
 /*
- * Minio Go Library for Amazon S3 Compatible Cloud Storage (C) 2015 Minio, Inc.
+ * Minio Go Library for Amazon S3 Compatible Cloud Storage (C) 2015, 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -72,8 +72,15 @@ func ToErrorResponse(err error) ErrorResponse {
 	}
 }
 
-// Error - Returns HTTP error string
+// Error - Returns S3 error string.
 func (e ErrorResponse) Error() string {
+	if e.Message == "" {
+		msg, ok := s3ErrorResponseMap[e.Code]
+		if !ok {
+			msg = fmt.Sprintf("Error response code %s.", e.Code)
+		}
+		return msg
+	}
 	return e.Message
 }
 

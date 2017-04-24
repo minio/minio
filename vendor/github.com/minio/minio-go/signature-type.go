@@ -24,6 +24,7 @@ const (
 	Latest SignatureType = iota
 	SignatureV4
 	SignatureV2
+	SignatureV4Streaming
 )
 
 // isV2 - is signature SignatureV2?
@@ -34,4 +35,9 @@ func (s SignatureType) isV2() bool {
 // isV4 - is signature SignatureV4?
 func (s SignatureType) isV4() bool {
 	return s == SignatureV4 || s == Latest
+}
+
+// isStreamingV4 - is signature SignatureV4Streaming?
+func (s SignatureType) isStreamingV4() bool {
+	return s == SignatureV4Streaming
 }

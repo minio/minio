@@ -157,10 +157,12 @@ func (c Client) SetBucketPolicy(bucketName string, objectPrefix string, bucketPo
 	if err := isValidObjectPrefix(objectPrefix); err != nil {
 		return err
 	}
+
 	if !bucketPolicy.IsValidBucketPolicy() {
 		return ErrInvalidArgument(fmt.Sprintf("Invalid bucket policy provided. %s", bucketPolicy))
 	}
-	policyInfo, err := c.getBucketPolicy(bucketName, objectPrefix)
+
+	policyInfo, err := c.getBucketPolicy(bucketName)
 	if err != nil {
 		return err
 	}

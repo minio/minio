@@ -34,7 +34,7 @@ func (c Client) GetBucketPolicy(bucketName, objectPrefix string) (bucketPolicy p
 	if err := isValidObjectPrefix(objectPrefix); err != nil {
 		return policy.BucketPolicyNone, err
 	}
-	policyInfo, err := c.getBucketPolicy(bucketName, objectPrefix)
+	policyInfo, err := c.getBucketPolicy(bucketName)
 	if err != nil {
 		return policy.BucketPolicyNone, err
 	}
@@ -50,7 +50,7 @@ func (c Client) ListBucketPolicies(bucketName, objectPrefix string) (bucketPolic
 	if err := isValidObjectPrefix(objectPrefix); err != nil {
 		return map[string]policy.BucketPolicy{}, err
 	}
-	policyInfo, err := c.getBucketPolicy(bucketName, objectPrefix)
+	policyInfo, err := c.getBucketPolicy(bucketName)
 	if err != nil {
 		return map[string]policy.BucketPolicy{}, err
 	}
@@ -58,7 +58,7 @@ func (c Client) ListBucketPolicies(bucketName, objectPrefix string) (bucketPolic
 }
 
 // Request server for current bucket policy.
-func (c Client) getBucketPolicy(bucketName string, objectPrefix string) (policy.BucketAccessPolicy, error) {
+func (c Client) getBucketPolicy(bucketName string) (policy.BucketAccessPolicy, error) {
 	// Get resources properly escaped and lined up before
 	// using them in http request.
 	urlValues := make(url.Values)

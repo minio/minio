@@ -316,7 +316,7 @@ func writeCanonicalizedResource(buf *bytes.Buffer, req http.Request, isPreSign b
 				// Request parameters
 				if len(vv[0]) > 0 {
 					buf.WriteByte('=')
-					buf.WriteString(strings.Replace(url.QueryEscape(vv[0]), "+", "%20", -1))
+					buf.WriteString(vv[0])
 				}
 			}
 		}

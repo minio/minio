@@ -215,34 +215,40 @@
 			"revisionTime": "2016-02-29T08:42:30-08:00"
 		},
 		{
-			"checksumSHA1": "hV9BYxbHU0empaGJDNB/YHiSeIo=",
+			"checksumSHA1": "XkG28JYbxTkTcQr8kAQQn3cXCkA=",
 			"path": "github.com/minio/minio-go",
-			"revision": "8758de8f42f1718dd2452a71e18284c1b1138f7d",
-			"revisionTime": "2017-04-04T10:46:04Z"
+			"revision": "e9431f30cf67eb8e7e2247f4a204ce14fae7eb42",
+			"revisionTime": "2017-04-24T07:49:09Z"
+		},
+		{
+			"checksumSHA1": "lsxCcRcNUDxhQyO999SOdvKzzfM=",
+			"path": "github.com/minio/minio-go/pkg/encrypt",
+			"revision": "e9431f30cf67eb8e7e2247f4a204ce14fae7eb42",
+			"revisionTime": "2017-04-24T07:49:09Z"
 		},
 		{
 			"checksumSHA1": "neH34/65OXeKHM/MlV8MbhcdFBc=",
 			"path": "github.com/minio/minio-go/pkg/policy",
-			"revision": "896a51e471693237a63687a3a27f0260eded2548",
-			"revisionTime": "2017-03-20T08:48:09Z"
+			"revision": "e9431f30cf67eb8e7e2247f4a204ce14fae7eb42",
+			"revisionTime": "2017-04-24T07:49:09Z"
 		},
 		{
-			"checksumSHA1": "m/6/na9lVtamkfmIdIOi5pdccgw=",
+			"checksumSHA1": "/5IXp1nGKqOfHn8Piiod3OCkG2U=",
 			"path": "github.com/minio/minio-go/pkg/s3signer",
-			"revision": "896a51e471693237a63687a3a27f0260eded2548",
-			"revisionTime": "2017-03-20T08:48:09Z"
+			"revision": "e9431f30cf67eb8e7e2247f4a204ce14fae7eb42",
+			"revisionTime": "2017-04-24T07:49:09Z"
 		},
 		{
 			"checksumSHA1": "gRnCFKb4x83GBLVUZXoOjujd+U0=",
 			"path": "github.com/minio/minio-go/pkg/s3utils",
-			"revision": "896a51e471693237a63687a3a27f0260eded2548",
-			"revisionTime": "2017-03-20T08:48:09Z"
+			"revision": "e9431f30cf67eb8e7e2247f4a204ce14fae7eb42",
+			"revisionTime": "2017-04-24T07:49:09Z"
 		},
 		{
 			"checksumSHA1": "maUy+dbN6VfTTnfErrAW2lLit1w=",
 			"path": "github.com/minio/minio-go/pkg/set",
-			"revision": "896a51e471693237a63687a3a27f0260eded2548",
-			"revisionTime": "2017-03-20T08:48:09Z"
+			"revision": "e9431f30cf67eb8e7e2247f4a204ce14fae7eb42",
+			"revisionTime": "2017-04-24T07:49:09Z"
 		},
 		{
 			"checksumSHA1": "URVle4qtadmW9w9BulDRHY3kxnA=",

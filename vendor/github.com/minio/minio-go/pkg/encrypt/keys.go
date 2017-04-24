@@ -14,19 +14,20 @@
  * limitations under the License.
  */
 
-package minio
+package encrypt
 
 import (
 	"crypto/aes"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"errors"
 )
 
-// EncryptionKey - generic interface to encrypt/decrypt a key.
+// Key - generic interface to encrypt/decrypt a key.
 // We use it to encrypt/decrypt content key which is the key
 // that encrypt/decrypt object data.
-type EncryptionKey interface {
+type Key interface {
 	// Encrypt data using to the set encryption key
 	Encrypt([]byte) ([]byte, error)
 	// Decrypt data using to the set encryption key
@@ -140,7 +141,7 @@ func NewAsymmetricKey(privData []byte, pubData []byte) (*AsymmetricKey, error) {
 	}
 	privKey, ok := priv.(*rsa.PrivateKey)
 	if !ok {
-		return nil, ErrInvalidArgument("not a valid private key")
+		return nil, errors.New("not a valid private key")
 	}
 
 	// Parse public key from passed data
@@ -151,7 +152,7 @@ func NewAsymmetricKey(privData []byte, pubData []byte) (*AsymmetricKey, error) {
 
 	pubKey, ok := pub.(*rsa.PublicKey)
 	if !ok {
-		return nil, ErrInvalidArgument("not a valid public key")
+		return nil, errors.New("not a valid public key")
 	}
 
 	// Associate the private key with the passed public key

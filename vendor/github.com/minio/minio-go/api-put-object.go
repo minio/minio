@@ -143,7 +143,6 @@ func (a completedParts) Less(i, j int) bool { return a[i].PartNumber < a[j].Part
 // NOTE: Google Cloud Storage does not implement Amazon S3 Compatible multipart PUT.
 // So we fall back to single PUT operation with the maximum limit of 5GiB.
 //
-// NOTE: For anonymous requests Amazon S3 doesn't allow multipart upload. So we fall back to single PUT operation.
 func (c Client) PutObject(bucketName, objectName string, reader io.Reader, contentType string) (n int64, err error) {
 	return c.PutObjectWithProgress(bucketName, objectName, reader, contentType, nil)
 }

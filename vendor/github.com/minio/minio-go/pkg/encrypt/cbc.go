@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package minio
+package encrypt
 
 import (
 	"bytes"
@@ -24,13 +24,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"io"
-	"net/http"
-)
-
-const (
-	amzHeaderIV      = "X-Amz-Meta-X-Amz-Iv"
-	amzHeaderKey     = "X-Amz-Meta-X-Amz-Key"
-	amzHeaderMatDesc = "X-Amz-Meta-X-Amz-Matdesc"
 )
 
 // Crypt mode - encryption or decryption
@@ -60,7 +53,7 @@ type CBCSecureMaterials struct {
 	dstBuf *bytes.Buffer
 
 	// Encryption algorithm
-	encryptionKey EncryptionKey
+	encryptionKey Key
 
 	// Key to encrypts/decrypts data
 	contentKey []byte
@@ -81,11 +74,11 @@ type CBCSecureMaterials struct {
 	blockMode cipher.BlockMode
 }
 
-// NewCBCSecureMaterials builds new CBC crypter module with the specified encryption key
-// (symmetric or asymmetric)
-func NewCBCSecureMaterials(key EncryptionKey) (*CBCSecureMaterials, error) {
+// NewCBCSecureMaterials builds new CBC crypter module with
+// the specified encryption key (symmetric or asymmetric)
+func NewCBCSecureMaterials(key Key) (*CBCSecureMaterials, error) {
 	if key == nil {
-		return nil, ErrInvalidArgument("Unable to recognize empty encryption properties")
+		return nil, errors.New("Unable to recognize empty encryption properties")
 	}
 	return &CBCSecureMaterials{
 		srcBuf:        bytes.NewBuffer([]byte{}),
@@ -96,14 +89,8 @@ func NewCBCSecureMaterials(key EncryptionKey) (*CBCSecureMaterials, error) {
 
 }
 
-// SetInputStream - set data which needs to be encrypted or decrypted
-// func (s *CBCSecureMaterials) SetInputStream(stream io.Reader) {
-//	s.stream = stream
-// }
-
-// SetEncryptMode - tells CBC that we are going to encrypt data
+// SetupEncryptMode - tells CBC that we are going to encrypt data
 func (s *CBCSecureMaterials) SetupEncryptMode(stream io.Reader) error {
-
 	// Set mode to encrypt
 	s.cryptMode = encryptMode
 
@@ -143,8 +130,7 @@ func (s *CBCSecureMaterials) SetupEncryptMode(stream io.Reader) error {
 }
 
 // SetupDecryptMode - tells CBC that we are going to decrypt data
-func (s *CBCSecureMaterials) SetupDecryptMode(stream io.Reader, metadata http.Header) error {
-
+func (s *CBCSecureMaterials) SetupDecryptMode(stream io.Reader, iv string, key string) error {
 	// Set mode to decrypt
 	s.cryptMode = decryptMode
 
@@ -159,15 +145,17 @@ func (s *CBCSecureMaterials) SetupDecryptMode(stream io.Reader, metadata http.He
 	var err error
 
 	// Get IV
-	s.iv, err = base64.StdEncoding.DecodeString(metadata.Get(amzHeaderIV))
+	s.iv, err = base64.StdEncoding.DecodeString(iv)
 	if err != nil {
 		return err
 	}
+
 	// Get encrypted content key
-	s.cryptedKey, err = base64.StdEncoding.DecodeString(metadata.Get(amzHeaderKey))
+	s.cryptedKey, err = base64.StdEncoding.DecodeString(key)
 	if err != nil {
 		return err
 	}
+
 	// Decrypt content key
 	s.contentKey, err = s.encryptionKey.Decrypt(s.cryptedKey)
 	if err != nil {
@@ -184,17 +172,19 @@ func (s *CBCSecureMaterials) SetupDecryptMode(stream io.Reader, metadata http.He
 	return nil
 }
 
-// GetHeaders - returns headers data to be sent along with data to the S3 server
-// it contains encryption information needed to decrypt later
-func (s *CBCSecureMaterials) GetHeaders() http.Header {
+// GetIV - return randomly generated IV (per S3 object), base64 encoded.
+func (s *CBCSecureMaterials) GetIV() string {
+	return base64.StdEncoding.EncodeToString(s.iv)
+}
 
-	m := make(http.Header)
+// GetKey - return content encrypting key (cek) in encrypted form, base64 encoded.
+func (s *CBCSecureMaterials) GetKey() string {
+	return base64.StdEncoding.EncodeToString(s.cryptedKey)
+}
 
-	m.Set(amzHeaderMatDesc, string(s.matDesc))
-	m.Set(amzHeaderIV, base64.StdEncoding.EncodeToString(s.iv))
-	m.Set(amzHeaderKey, base64.StdEncoding.EncodeToString(s.cryptedKey))
-
-	return m
+// GetDesc - user provided encryption material description in JSON (UTF8) format.
+func (s *CBCSecureMaterials) GetDesc() string {
+	return string(s.matDesc)
 }
 
 // Fill buf with encrypted/decrypted data
