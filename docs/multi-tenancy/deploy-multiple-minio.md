@@ -3,7 +3,7 @@
 ## Standalone Deployment
 To host multiple tenents on a single machine, run one Minio server per tenant with dedicated HTTPS port, config and data directory.  
 
-### Example 1 : Single host, single drive
+#### Example 1 : Single host, single drive
 
 This example hosts 3 tenants on a single drive.
 ```sh
@@ -11,7 +11,7 @@ minio --config-dir /data/conf1 server --address :9001 /data/export1
 minio --config-dir /data/conf2 server --address :9002 /data/export2
 minio --config-dir /data/conf3 server --address :9003 /data/export3
 ```
-### Example 2 : Single host, multiple drives (erasure code)
+#### Example 2 : Single host, multiple drives (erasure code)
 
 This example hosts 4 tenants on multiple drives.
 ```sh
@@ -21,14 +21,6 @@ minio --config-dir ~/tenant3 server --address :9003 /drive1/data/tenant3 /drive2
 ```
 
 ## Distributed Deployment
-While deploying Minio in a cluster, you can either use container orchestration platforms like Kubernetes, DC/OS, Docker Swarm etc. or manage the cluster and Minio instances yourself. While orchestration platforms take care of mapping the requests and endpoints, you'll need to do that yourself in a self managed cluster. Reverse proxies such as Nginx or Traefik can help achieve this.
-
-## Datacentre Wide Deployment
-Orchestration platforms
-
-### Container orchestration platform deployment
-Minio can be easily deployed on all the major orchestration platforms. Refer [this document](https://docs.minio.io/docs/minio-deployment-quickstart-guide) to get started with Minio on orchestration platforms.  
-
 ### Run Minio behind reverse proxy
 In the example config below, a proxy runs on port 80 and reverse proxies the requests to Minio-1 or Minio-2 or Minio-3 depending on the access-key in the client request.
 
@@ -108,3 +100,7 @@ watch = true
     [frontends.frontend3.routes.test_1]
     rule = "HeadersRegexp: Authorization, ^AWS4-HMAC-SHA256 Credential=C988WQ23D98207ELOLPW"
 ```
+
+## Datacentre Wide Deployment
+For massive multi-tenant Minio deployments in production environments, we recommend using one of the major container orchestration platforms, e.g. Kubernetes, DC/OS or Docker Swarm. Refer [this document](https://docs.minio.io/docs/minio-deployment-quickstart-guide) to get started with Minio on orchestration platforms.  
+
