@@ -1,7 +1,5 @@
 # Deploying multiple Minio instances [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
 
-This document outlines various ways to deploy multiple Minio instances.
-
 ## Single machine deployment
 To deploy multiple Minio instances on a single machine, you can use different ports on the same machine. In the example below, there are 3 minio instances on ports 9001, 9002 and 9002, running on the same machine but independent of each other.
 
