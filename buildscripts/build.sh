@@ -53,7 +53,7 @@ go_build() {
 
         release_bin_6="$release_str/$os-${arch}6vl/$(basename $package).$release_tag"
         ## Support building for ARM6vl
-        GOARM=6 GOOS=$os GOARCH=$arch go build --ldflags "${LDFLAGS}" -o $release_bin_6
+        GOARM=6 GOOS=$os GOARCH=$arch go build --ldflags "-s -w ${LDFLAGS}" -o $release_bin_6
 
         ## Copy
         $CP -p $release_bin_6 $release_real_bin_6
@@ -70,7 +70,7 @@ go_build() {
 
         release_bin_7="$release_str/$os-$arch/$(basename $package).$release_tag"
         ## Support building for ARM7vl
-        GOARM=7 GOOS=$os GOARCH=$arch go build --ldflags "${LDFLAGS}" -o $release_bin_7
+        GOARM=7 GOOS=$os GOARCH=$arch go build --ldflags "-s -w ${LDFLAGS}" -o $release_bin_7
 
         ## Copy
         $CP -p $release_bin_7 $release_real_bin_7
@@ -82,7 +82,7 @@ go_build() {
         shasum_str=$(${SHASUM} ${release_bin_7})
         echo ${shasum_str} | $SED "s/$release_str\/$os-$arch\///g" > $release_shasum_7
     else
-        GOOS=$os GOARCH=$arch go build --ldflags "${LDFLAGS}" -o $release_bin
+        GOOS=$os GOARCH=$arch go build --ldflags "-s -w ${LDFLAGS}" -o $release_bin
 
         # Create copy
         if [ $os == "windows" ]; then

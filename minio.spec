@@ -1,8 +1,8 @@
-%define         tag     RELEASE.2017-02-16T01-47-30Z
+%define         tag     RELEASE.2017-04-25T01-27-49Z
 %define         subver  %(echo %{tag} | sed -e 's/[^0-9]//g')
-# git fetch https://github.com/minio/minio.git refs/tags/RELEASE.2017-02-16T01-47-30Z
+# git fetch https://github.com/minio/minio.git refs/tags/RELEASE.2017-04-25T01-27-49Z
 # git rev-list -n 1 FETCH_HEAD
-%define         commitid        3d98311d9f4ceb78dba996dcdc0751253241e697
+%define         commitid        710db6bdadb1b228bf6dee7e2a6958000091125b
 Summary:        Cloud Storage Server.
 Name:           minio
 Version:        0.0.%{subver}
@@ -19,7 +19,7 @@ BuildRoot:      %{tmpdir}/%{name}-%{version}-root-%(id -u -n)
 %define         debug_package %{nil}
 
 ## Go related tags.
-%define         gobuild(o:) go build -ldflags "${LDFLAGS:-}" %{?**};
+%define         gobuild(o:) go build -ldflags "-s -w ${LDFLAGS:-}" %{?**};
 %define         gopath          %{_libdir}/golang
 %define         import_path     github.com/minio/minio
 
