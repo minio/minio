@@ -7,9 +7,9 @@ To host multiple tenants on a single machine, run one Minio server per tenant wi
 
 This example hosts 3 tenants on a single drive.
 ```sh
-minio --config-dir /data/conf1 server --address :9001 /data/export1
-minio --config-dir /data/conf2 server --address :9002 /data/export2
-minio --config-dir /data/conf3 server --address :9003 /data/export3
+minio --config-dir ~/tenant1 server --address :9001 /drive1/data/tenant1
+minio --config-dir ~/tenant2 server --address :9002 /drive1/data/tenant2
+minio --config-dir ~/tenant3 server --address :9003 /drive1/data/tenant3
 ```
 #### Example 2 : Single host, multiple drives (erasure code)
 
@@ -26,18 +26,19 @@ To host multiple tenants in a distributed environment, run several distributed M
 #### Example 1 : Multiple host, multiple drives (erasure code)
 
 This example hosts 3 tenants on a 4 node distributed setup. Execute the following command on all the four nodes. 
+
 ```sh
 export MINIO_ACCESS_KEY=<TENANT1_ACCESS_KEY>
 export MINIO_SECRET_KEY=<TENANT1_SECRET_KEY>
-minio --config-dir ~/tenant1 server --address :9001 http://192.168.10.11/drive1/data/tenant1 http://192.168.10.12/drive2/data/tenant1 http://192.168.10.13/drive3/data/tenant1 http://192.168.10.14/drive4/data/tenant1
+minio --config-dir ~/tenant1 server --address :9001 http://192.168.10.11/drive/data/tenant1 http://192.168.10.12/drive/data/tenant1 http://192.168.10.13/drive/data/tenant1 http://192.168.10.14/drive/data/tenant1
 
-export MINIO_ACCESS_KEY=<ACCESS_KEY>
-export MINIO_SECRET_KEY=<SECRET_KEY>
-minio --config-dir ~/tenant1 server --address :9001 http://192.168.10.11/drive1/data/tenant1 http://192.168.10.12/drive2/data/tenant1 http://192.168.10.13/drive3/data/tenant1 http://192.168.10.14/drive4/data/tenant1
+export MINIO_ACCESS_KEY=<TENANT2_ACCESS_KEY>
+export MINIO_SECRET_KEY=<TENANT2_SECRET_KEY>
+minio --config-dir ~/tenant1 server --address :9001 http://192.168.10.11/drive/data/tenant2 http://192.168.10.12/drive/data/tenant2 http://192.168.10.13/drive/data/tenant2 http://192.168.10.14/drive/data/tenant2
 
-export MINIO_ACCESS_KEY=<ACCESS_KEY>
-export MINIO_SECRET_KEY=<SECRET_KEY>
-minio --config-dir ~/tenant1 server --address :9001 http://192.168.10.11/drive1/data/tenant1 http://192.168.10.12/drive2/data/tenant1 http://192.168.10.13/drive3/data/tenant1 http://192.168.10.14/drive4/data/tenant1
+export MINIO_ACCESS_KEY=<TENANT3_ACCESS_KEY>
+export MINIO_SECRET_KEY=<TENANT3_SECRET_KEY>
+minio --config-dir ~/tenant1 server --address :9001 http://192.168.10.11/drive/data/tenant3 http://192.168.10.12/drive/data/tenant3 http://192.168.10.13/drive/data/tenant3 http://192.168.10.14/drive/data/tenant3
 ```
 
 ## Cloud Scale Deployment
