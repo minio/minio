@@ -419,3 +419,52 @@ func (h httpStatsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Update http statistics
 	globalHTTPStats.updateStats(r, ww, durationSecs)
 }
+
+// pathValidityHandler validates all the incoming paths for
+// any bad components and rejects them.
+type pathValidityHandler struct {
+	handler http.Handler
+}
+
+func setPathValidityHandler(h http.Handler) http.Handler {
+	return pathValidityHandler{handler: h}
+}
+
+// Bad path components to be rejected by the path validity handler.
+const (
+	dotdotComponent = ".."
+	dotComponent    = "."
+)
+
+// Check if the incoming path has bad path components,
+// such as ".." and "."
+func hasBadPathComponent(path string) bool {
+	path = strings.TrimSpace(path)
+	for _, p := range strings.Split(path, slashSeparator) {
+		switch strings.TrimSpace(p) {
+		case dotdotComponent:
+			return true
+		case dotComponent:
+			return true
+		}
+	}
+	return false
+}
+
+func (h pathValidityHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Check for bad components in URL path.
+	if hasBadPathComponent(r.URL.Path) {
+		writeErrorResponse(w, ErrInvalidResourceName, r.URL)
+		return
+	}
+	// Check for bad components in URL query values.
+	for _, vv := range r.URL.Query() {
+		for _, v := range vv {
+			if hasBadPathComponent(v) {
+				writeErrorResponse(w, ErrInvalidResourceName, r.URL)
+				return
+			}
+		}
+	}
+	h.handler.ServeHTTP(w, r)
+}

@@ -131,6 +131,9 @@ func IsValidObjectName(object string) bool {
 // IsValidObjectPrefix verifies whether the prefix is a valid object name.
 // Its valid to have a empty prefix.
 func IsValidObjectPrefix(object string) bool {
+	if hasBadPathComponent(object) {
+		return false
+	}
 	if len(object) > 1024 {
 		return false
 	}
