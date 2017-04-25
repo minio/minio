@@ -27,8 +27,8 @@ import (
 )
 
 func genLDFlags(version string) string {
-	var ldflagsStr string
-	ldflagsStr = "-X github.com/minio/minio/cmd.Version=" + version
+	ldflagsStr := "-s -w"
+	ldflagsStr += " -X github.com/minio/minio/cmd.Version=" + version
 	ldflagsStr += " -X github.com/minio/minio/cmd.ReleaseTag=" + releaseTag(version)
 	ldflagsStr += " -X github.com/minio/minio/cmd.CommitID=" + commitID()
 	ldflagsStr += " -X github.com/minio/minio/cmd.ShortCommitID=" + commitID()[:12]
