@@ -1,7 +1,7 @@
 LDFLAGS := $(shell go run buildscripts/gen-ldflags.go)
 PWD := $(shell pwd)
 GOPATH := $(shell go env GOPATH)
-BUILD_LDFLAGS := '$(LDFLAGS) -s -w'
+BUILD_LDFLAGS := '$(LDFLAGS)'
 TAG := latest
 
 HOST ?= $(shell uname)
