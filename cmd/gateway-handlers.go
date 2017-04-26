@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"bytes"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -354,37 +353,13 @@ func (api gatewayAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	{
-		// FIXME: consolidate bucketPolicy and policy.BucketAccessPolicy so that
-		// the verification below is done on the same type.
-		// Parse bucket policy.
-		policyInfo := &bucketPolicy{}
-		err = parseBucketPolicy(bytes.NewReader(policyBytes), policyInfo)
-		if err != nil {
-			errorIf(err, "Unable to parse bucket policy.")
-			writeErrorResponse(w, ErrInvalidPolicyDocument, r.URL)
-			return
-		}
-
-		// Parse check bucket policy.
-		if s3Error := checkBucketPolicyResources(bucket, policyInfo); s3Error != ErrNone {
-			writeErrorResponse(w, s3Error, r.URL)
-			return
-		}
-	}
-	policyInfo := &policy.BucketAccessPolicy{}
-	if err = json.Unmarshal(policyBytes, policyInfo); err != nil {
+	policyInfo := policy.BucketAccessPolicy{}
+	if err = json.Unmarshal(policyBytes, &policyInfo); err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
-	var policies []BucketAccessPolicy
-	for prefix, policy := range policy.GetPolicies(policyInfo.Statements, bucket) {
-		policies = append(policies, BucketAccessPolicy{
-			Prefix: prefix,
-			Policy: policy,
-		})
-	}
-	if err = objAPI.SetBucketPolicies(bucket, policies); err != nil {
+
+	if err = objAPI.SetBucketPolicies(bucket, policyInfo); err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -453,17 +428,14 @@ func (api gatewayAPIHandlers) GetBucketPolicyHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	policies, err := objAPI.GetBucketPolicies(bucket)
+	bp, err := objAPI.GetBucketPolicies(bucket)
 	if err != nil {
 		errorIf(err, "Unable to read bucket policy.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
-	policyInfo := policy.BucketAccessPolicy{Version: "2012-10-17"}
-	for _, p := range policies {
-		policyInfo.Statements = policy.SetPolicy(policyInfo.Statements, p.Policy, bucket, p.Prefix)
-	}
-	policyBytes, err := json.Marshal(&policyInfo)
+
+	policyBytes, err := json.Marshal(bp)
 	if err != nil {
 		errorIf(err, "Unable to read bucket policy.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)

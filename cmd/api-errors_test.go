@@ -104,6 +104,10 @@ func TestAPIErrCode(t *testing.T) {
 			ErrStorageFull,
 		},
 		{
+			NotSupported{},
+			ErrNotSupported,
+		},
+		{
 			NotImplemented{},
 			ErrNotImplemented,
 		},

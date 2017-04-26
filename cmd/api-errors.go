@@ -114,6 +114,7 @@ const (
 	ErrInvalidQueryParams
 	ErrBucketAlreadyOwnedByYou
 	ErrInvalidDuration
+	ErrNotSupported
 	// Add new error codes here.
 
 	// Bucket notification related errors.

@@ -22,7 +22,6 @@ import (
 	"io"
 	"net/http"
 	"path"
-	"strings"
 
 	"encoding/hex"
 
@@ -67,6 +66,8 @@ func s3ToObjectError(err error, params ...string) error {
 		err = BucketAlreadyOwnedByYou{}
 	case "BucketNotEmpty":
 		err = BucketNotEmpty{}
+	case "NoSuchBucketPolicy":
+		err = PolicyNotFound{}
 	case "InvalidBucketName":
 		err = BucketNameInvalid{Bucket: bucket}
 	case "NoSuchBucket":
@@ -541,56 +542,27 @@ func (l *s3Gateway) CompleteMultipartUpload(bucket string, object string, upload
 }
 
 // SetBucketPolicies - Set policy on bucket
-func (l *s3Gateway) SetBucketPolicies(bucket string, policies []BucketAccessPolicy) error {
-	for _, policy := range policies {
-		prefix := strings.TrimSuffix(policy.Prefix, "*")
-		prefix = strings.TrimPrefix(prefix, bucket+"/")
-		if err := l.Client.SetBucketPolicy(bucket, prefix, policy.Policy); err != nil {
-			return s3ToObjectError(traceError(err), bucket, policy.Prefix)
-		}
+func (l *s3Gateway) SetBucketPolicies(bucket string, policyInfo policy.BucketAccessPolicy) error {
+	if err := l.Client.PutBucketPolicy(bucket, policyInfo); err != nil {
+		return s3ToObjectError(traceError(err), bucket, "")
 	}
+
 	return nil
 }
 
-// fromMinioClientListBucketPolicies converts from map[string]policy.BucketPolicy to []BucketAccessPolicy
-func fromMinioClientListBucketPolicies(bucket string, bucketPolicies map[string]policy.BucketPolicy) []BucketAccessPolicy {
-	policies := make([]BucketAccessPolicy, 0)
-
-	for prefix, permission := range bucketPolicies {
-		prefix := strings.TrimSuffix(prefix, "*")
-		prefix = strings.TrimPrefix(prefix, bucket+"/")
-		policies = append(policies, BucketAccessPolicy{
-			Prefix: prefix,
-			Policy: policy.BucketPolicy(permission),
-		})
-	}
-
-	return policies
-}
-
 // GetBucketPolicies - Get policy on bucket
-func (l *s3Gateway) GetBucketPolicies(bucket string) ([]BucketAccessPolicy, error) {
-	bucketPolicies, err := l.Client.ListBucketPolicies(bucket, "")
+func (l *s3Gateway) GetBucketPolicies(bucket string) (policy.BucketAccessPolicy, error) {
+	policyInfo, err := l.Client.GetBucketPolicy(bucket)
 	if err != nil {
-		return []BucketAccessPolicy{}, s3ToObjectError(traceError(err), bucket, "")
+		return policy.BucketAccessPolicy{}, s3ToObjectError(traceError(err), bucket, "")
 	}
-	if len(bucketPolicies) == 0 {
-		return nil, PolicyNotFound{}
-	}
-	return fromMinioClientListBucketPolicies(bucket, bucketPolicies), nil
+	return policyInfo, nil
 }
 
 // DeleteBucketPolicies - Delete all policies on bucket
 func (l *s3Gateway) DeleteBucketPolicies(bucket string) error {
-	bucketPolicies, err := l.Client.ListBucketPolicies(bucket, "")
-	if err != nil {
+	if err := l.Client.PutBucketPolicy(bucket, policy.BucketAccessPolicy{}); err != nil {
 		return s3ToObjectError(traceError(err), bucket, "")
-	}
-
-	for prefix := range bucketPolicies {
-		prefix := strings.TrimSuffix(prefix, "*")
-		prefix = strings.TrimPrefix(prefix, bucket+"/")
-		l.Client.SetBucketPolicy(bucket, prefix, policy.BucketPolicyNone)
 	}
 
 	return nil
