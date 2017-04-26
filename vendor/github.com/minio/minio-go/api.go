@@ -480,7 +480,7 @@ func (c Client) executeMethod(method string, metadata requestMetadata) (res *htt
 		}
 	}
 
-	// Create a done channel to control 'ListObjects' go routine.
+	// Create a done channel to control 'newRetryTimer' go routine.
 	doneCh := make(chan struct{}, 1)
 
 	// Indicate to our routine to exit cleanly upon return.
@@ -489,7 +489,7 @@ func (c Client) executeMethod(method string, metadata requestMetadata) (res *htt
 	// Blank indentifier is kept here on purpose since 'range' without
 	// blank identifiers is only supported since go1.4
 	// https://golang.org/doc/go1.4#forrange.
-	for _ = range c.newRetryTimer(MaxRetry, time.Second, time.Second*30, MaxJitter, doneCh) {
+	for _ = range c.newRetryTimer(MaxRetry, DefaultRetryUnit, DefaultRetryCap, MaxJitter, doneCh) {
 		// Retry executes the following function body if request has an
 		// error until maxRetries have been exhausted, retry attempts are
 		// performed after waiting for a given period of time in a
@@ -538,14 +538,21 @@ func (c Client) executeMethod(method string, metadata requestMetadata) (res *htt
 		if err != nil {
 			return nil, err
 		}
+
 		// Save the body.
 		errBodySeeker := bytes.NewReader(errBodyBytes)
 		res.Body = ioutil.NopCloser(errBodySeeker)
 
 		// For errors verify if its retryable otherwise fail quickly.
 		errResponse := ToErrorResponse(httpRespToErrorResponse(res, metadata.bucketName, metadata.objectName))
-		// Bucket region if set in error response and the error code dictates invalid region,
-		// we can retry the request with the new region.
+
+		// Save the body back again.
+		errBodySeeker.Seek(0, 0) // Seek back to starting point.
+		res.Body = ioutil.NopCloser(errBodySeeker)
+
+		// Bucket region if set in error response and the error
+		// code dictates invalid region, we can retry the request
+		// with the new region.
 		if errResponse.Code == "InvalidRegion" && errResponse.Region != "" {
 			c.bucketLocCache.Set(metadata.bucketName, errResponse.Region)
 			continue // Retry.
@@ -560,10 +567,6 @@ func (c Client) executeMethod(method string, metadata requestMetadata) (res *htt
 		if isHTTPStatusRetryable(res.StatusCode) {
 			continue // Retry.
 		}
-
-		// Save the body back again.
-		errBodySeeker.Seek(0, 0) // Seek back to starting point.
-		res.Body = ioutil.NopCloser(errBodySeeker)
 
 		// For all other cases break out of the retry loop.
 		break

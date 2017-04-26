@@ -33,8 +33,16 @@ const MaxJitter = 1.0
 // NoJitter disables the use of jitter for randomizing the exponential backoff time
 const NoJitter = 0.0
 
-// newRetryTimer creates a timer with exponentially increasing delays
-// until the maximum retry attempts are reached.
+// DefaultRetryUnit - default unit multiplicative per retry.
+// defaults to 1 second.
+const DefaultRetryUnit = time.Second
+
+// DefaultRetryCap - Each retry attempt never waits no longer than
+// this maximum time duration.
+const DefaultRetryCap = time.Second * 30
+
+// newRetryTimer creates a timer with exponentially increasing
+// delays until the maximum retry attempts are reached.
 func (c Client) newRetryTimer(maxRetry int, unit time.Duration, cap time.Duration, jitter float64, doneCh chan struct{}) <-chan int {
 	attemptCh := make(chan int)
 

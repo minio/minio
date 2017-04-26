@@ -36,6 +36,10 @@ func (c Client) GetBucketPolicy(bucketName, objectPrefix string) (bucketPolicy p
 	}
 	policyInfo, err := c.getBucketPolicy(bucketName)
 	if err != nil {
+		errResponse := ToErrorResponse(err)
+		if errResponse.Code == "NoSuchBucketPolicy" {
+			return policy.BucketPolicyNone, nil
+		}
 		return policy.BucketPolicyNone, err
 	}
 	return policy.GetPolicy(policyInfo.Statements, bucketName, objectPrefix), nil
@@ -52,9 +56,18 @@ func (c Client) ListBucketPolicies(bucketName, objectPrefix string) (bucketPolic
 	}
 	policyInfo, err := c.getBucketPolicy(bucketName)
 	if err != nil {
+		errResponse := ToErrorResponse(err)
+		if errResponse.Code == "NoSuchBucketPolicy" {
+			return map[string]policy.BucketPolicy{}, nil
+		}
 		return map[string]policy.BucketPolicy{}, err
 	}
 	return policy.GetPolicies(policyInfo.Statements, bucketName), nil
+}
+
+// Default empty bucket access policy.
+var emptyBucketAccessPolicy = policy.BucketAccessPolicy{
+	Version: "2012-10-17",
 }
 
 // Request server for current bucket policy.
@@ -72,21 +85,18 @@ func (c Client) getBucketPolicy(bucketName string) (policy.BucketAccessPolicy, e
 
 	defer closeResponse(resp)
 	if err != nil {
-		return policy.BucketAccessPolicy{}, err
+		return emptyBucketAccessPolicy, err
 	}
 
 	if resp != nil {
 		if resp.StatusCode != http.StatusOK {
-			errResponse := httpRespToErrorResponse(resp, bucketName, "")
-			if ToErrorResponse(errResponse).Code == "NoSuchBucketPolicy" {
-				return policy.BucketAccessPolicy{Version: "2012-10-17"}, nil
-			}
-			return policy.BucketAccessPolicy{}, errResponse
+			return emptyBucketAccessPolicy, httpRespToErrorResponse(resp, bucketName, "")
 		}
 	}
+
 	bucketPolicyBuf, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return policy.BucketAccessPolicy{}, err
+		return emptyBucketAccessPolicy, err
 	}
 
 	policy := policy.BucketAccessPolicy{}

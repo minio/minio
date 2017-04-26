@@ -41,7 +41,14 @@ import (
 //
 // For Amazon S3 for more supported regions - http://docs.aws.amazon.com/general/latest/gr/rande.html
 // For Google Cloud Storage for more supported regions - https://cloud.google.com/storage/docs/bucket-locations
-func (c Client) MakeBucket(bucketName string, location string) error {
+func (c Client) MakeBucket(bucketName string, location string) (err error) {
+	defer func() {
+		// Save the location into cache on a successful makeBucket response.
+		if err == nil {
+			c.bucketLocCache.Set(bucketName, location)
+		}
+	}()
+
 	// Validate the input arguments.
 	if err := isValidBucketName(bucketName); err != nil {
 		return err
@@ -52,45 +59,70 @@ func (c Client) MakeBucket(bucketName string, location string) error {
 		location = "us-east-1"
 	}
 
-	// Instantiate the request.
-	req, err := c.makeBucketRequest(bucketName, location)
-	if err != nil {
-		return err
-	}
+	// Try creating bucket with the provided region, in case of
+	// invalid region error let's guess the appropriate region
+	// from S3 API headers
 
-	// Execute the request.
-	resp, err := c.do(req)
-	defer closeResponse(resp)
-	if err != nil {
-		return err
-	}
+	// Create a done channel to control 'newRetryTimer' go routine.
+	doneCh := make(chan struct{}, 1)
 
-	if resp != nil {
-		if resp.StatusCode != http.StatusOK {
-			return httpRespToErrorResponse(resp, bucketName, "")
+	// Indicate to our routine to exit cleanly upon return.
+	defer close(doneCh)
+
+	// Blank indentifier is kept here on purpose since 'range' without
+	// blank identifiers is only supported since go1.4
+	// https://golang.org/doc/go1.4#forrange.
+	for _ = range c.newRetryTimer(MaxRetry, DefaultRetryUnit, DefaultRetryCap, MaxJitter, doneCh) {
+		// Initialize the makeBucket request.
+		req, err := c.makeBucketRequest(bucketName, location)
+		if err != nil {
+			return err
 		}
+
+		// Execute make bucket request.
+		resp, err := c.do(req)
+		defer closeResponse(resp)
+		if err != nil {
+			return err
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			err := httpRespToErrorResponse(resp, bucketName, "")
+			errResp := ToErrorResponse(err)
+			if errResp.Code == "InvalidRegion" && errResp.Region != "" {
+				// Fetch bucket region found in headers
+				// of S3 error response, attempt bucket
+				// create again.
+				location = errResp.Region
+				continue
+			}
+			// Nothing to retry, fail.
+			return err
+		}
+
+		// Control reaches here when bucket create was successful,
+		// break out.
+		break
 	}
 
-	// Save the location into cache on a successful makeBucket response.
-	c.bucketLocCache.Set(bucketName, location)
-
-	// Return.
+	// Success.
 	return nil
 }
 
-// makeBucketRequest constructs request for makeBucket.
+// Low level wrapper API For makeBucketRequest.
 func (c Client) makeBucketRequest(bucketName string, location string) (*http.Request, error) {
 	// Validate input arguments.
 	if err := isValidBucketName(bucketName); err != nil {
 		return nil, err
 	}
 
-	// In case of Amazon S3.  The make bucket issued on already
-	// existing bucket would fail with 'AuthorizationMalformed' error
-	// if virtual style is used. So we default to 'path style' as that
-	// is the preferred method here. The final location of the
-	// 'bucket' is provided through XML LocationConstraint data with
-	// the request.
+	// In case of Amazon S3.  The make bucket issued on
+	// already existing bucket would fail with
+	// 'AuthorizationMalformed' error if virtual style is
+	// used. So we default to 'path style' as that is the
+	// preferred method here. The final location of the
+	// 'bucket' is provided through XML LocationConstraint
+	// data with the request.
 	targetURL := c.endpointURL
 	targetURL.Path = path.Join(bucketName, "") + "/"
 
@@ -103,7 +135,8 @@ func (c Client) makeBucketRequest(bucketName string, location string) (*http.Req
 	// set UserAgent for the request.
 	c.setUserAgent(req)
 
-	// set sha256 sum for signature calculation only with signature version '4'.
+	// set sha256 sum for signature calculation only with
+	// signature version '4'.
 	if c.signature.isV4() {
 		req.Header.Set("X-Amz-Content-Sha256", hex.EncodeToString(sum256([]byte{})))
 	}
@@ -163,7 +196,8 @@ func (c Client) SetBucketPolicy(bucketName string, objectPrefix string, bucketPo
 	}
 
 	policyInfo, err := c.getBucketPolicy(bucketName)
-	if err != nil {
+	errResponse := ToErrorResponse(err)
+	if err != nil && errResponse.Code != "NoSuchBucketPolicy" {
 		return err
 	}
 

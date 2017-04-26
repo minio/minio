@@ -1,4 +1,4 @@
-# Minio Go Client SDK for Amazon S3 Compatible Cloud Storage [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
+# Minio Go Client SDK for Amazon S3 Compatible Cloud Storage [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io) [![Sourcegraph](https://sourcegraph.com/github.com/minio/minio-go/-/badge.svg)](https://sourcegraph.com/github.com/minio/minio-go?badge)
 
 The Minio Go Client SDK provides simple APIs to access any Amazon S3 compatible object storage.
 
@@ -7,7 +7,6 @@ The Minio Go Client SDK provides simple APIs to access any Amazon S3 compatible 
 - AWS Signature Version 4
    - Amazon S3
    - Minio
-
 
 - AWS Signature Version 2
    - Google Cloud Storage (Compatibility Mode)
@@ -19,16 +18,13 @@ This quickstart guide will show you how to install the Minio client SDK, connect
 
 This document assumes that you have a working [Go development environment](https://docs.minio.io/docs/how-to-install-golang).
 
-
 ## Download from Github
-
 ```sh
 go get -u github.com/minio/minio-go
 ```
+
 ## Initialize Minio Client
-
 Minio client requires the following four parameters specified to connect to an Amazon S3 compatible object storage.
-
 
 | Parameter  | Description| 
 | :---         |     :---     |
@@ -62,16 +58,11 @@ func main() {
 ```
 
 ## Quick Start Example - File Uploader
-
 This example program connects to an object storage server, creates a bucket and uploads a file to the bucket.
-
-
-
 
 We will use the Minio server running at [https://play.minio.io:9000](https://play.minio.io:9000) in this example. Feel free to use this service for testing and development. Access credentials shown in this example are open to the public.
 
-#### FileUploader.go
-
+### FileUploader.go
 ```go
 package main
 
@@ -92,7 +83,7 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	// Make a new bucked called mymusic.
+	// Make a new bucket called mymusic.
 	bucketName := "mymusic"
 	location := "us-east-1"
 
@@ -123,8 +114,7 @@ func main() {
 }
 ```
 
-#### Run FileUploader
-
+### Run FileUploader
 ```sh
 go run file-uploader.go
 2016/08/13 17:03:28 Successfully created mymusic 
@@ -135,7 +125,6 @@ mc ls play/mymusic/
 ```
 
 ## API Reference
-
 The full API Reference is available here. 
 
 * [Complete API Reference](https://docs.minio.io/docs/golang-client-api-reference)
@@ -250,7 +239,7 @@ The full API Reference is available here.
 ## Explore Further
 * [Complete Documentation](https://docs.minio.io)
 * [Minio Go Client SDK API Reference](https://docs.minio.io/docs/golang-client-api-reference) 
-* [Go Music Player App- Full Application Example ](https://docs.minio.io/docs/go-music-player-app)
+* [Go Music Player App Full Application Example](https://docs.minio.io/docs/go-music-player-app)
 
 ## Contribute
 
