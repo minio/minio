@@ -85,6 +85,8 @@ func s3ToObjectError(err error, params ...string) error {
 			Bucket: bucket,
 			Object: object,
 		}
+	case "XAmzContentSHA256Mismatch":
+		err = SHA256Mismatch{}
 	}
 
 	e.e = err
