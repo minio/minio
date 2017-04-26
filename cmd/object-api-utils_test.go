@@ -100,12 +100,22 @@ func TestIsValidObjectName(t *testing.T) {
 		{"contains-|-pipe", true},
 		{"contains-\"-quote", true},
 		{"contains-`-tick", true},
+		{"..test", true},
+		{".. test", true},
+		{". test", true},
+		{".test", true},
 		{"There are far too many object names, and far too few bucket names!", true},
 		// cases for which test should fail.
 		// passing invalid object names.
 		{"", false},
 		{"a/b/c/", false},
 		{"/a/b/c", false},
+		{"../../etc", false},
+		{"../../", false},
+		{"/../../etc", false},
+		{" ../etc", false},
+		{"./././", false},
+		{"./etc", false},
 		{"contains-\\-backslash", false},
 		{string([]byte{0xff, 0xfe, 0xfd}), false},
 	}

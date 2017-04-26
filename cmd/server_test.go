@@ -170,7 +170,7 @@ func (s *TestSuiteCommon) TestObjectDir(c *C) {
 	response, err = client.Do(request)
 
 	c.Assert(err, IsNil)
-	verifyError(c, response, "XMinioInvalidObjectName", "Object name contains unsupported characters. Unsupported characters are `^*|\\\"", http.StatusBadRequest)
+	verifyError(c, response, "XMinioInvalidObjectName", "Object name contains unsupported characters.", http.StatusBadRequest)
 }
 
 func (s *TestSuiteCommon) TestBucketSQSNotificationAMQP(c *C) {
@@ -1245,7 +1245,7 @@ func (s *TestSuiteCommon) TestPutObjectLongName(c *C) {
 
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
-	verifyError(c, response, "XMinioInvalidObjectName", "Object name contains unsupported characters. Unsupported characters are `^*|\\\"", http.StatusBadRequest)
+	verifyError(c, response, "XMinioInvalidObjectName", "Object name contains unsupported characters.", http.StatusBadRequest)
 }
 
 // TestNotBeAbleToCreateObjectInNonexistentBucket - Validates the error response

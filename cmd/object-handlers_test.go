@@ -316,6 +316,58 @@ func testAPIGetObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			expectedContent:    encodeResponse(getAPIErrorResponse(getAPIError(ErrInvalidAccessKeyID), getGetObjectURL("", bucketName, objectName))),
 			expectedRespStatus: http.StatusForbidden,
 		},
+		// Test case - 7.
+		// Case with bad components in object name.
+		{
+			bucketName: bucketName,
+			objectName: "../../etc",
+			byteRange:  "",
+			accessKey:  credentials.AccessKey,
+			secretKey:  credentials.SecretKey,
+
+			expectedContent: encodeResponse(getAPIErrorResponse(getAPIError(ErrInvalidObjectName),
+				getGetObjectURL("", bucketName, "../../etc"))),
+			expectedRespStatus: http.StatusBadRequest,
+		},
+		// Test case - 8.
+		// Case with strange components but returning error as not found.
+		{
+			bucketName: bucketName,
+			objectName: ". ./. ./etc",
+			byteRange:  "",
+			accessKey:  credentials.AccessKey,
+			secretKey:  credentials.SecretKey,
+
+			expectedContent: encodeResponse(getAPIErrorResponse(getAPIError(ErrNoSuchKey),
+				"/"+bucketName+"/"+". ./. ./etc")),
+			expectedRespStatus: http.StatusNotFound,
+		},
+		// Test case - 9.
+		// Case with bad components in object name.
+		{
+			bucketName: bucketName,
+			objectName: ". ./../etc",
+			byteRange:  "",
+			accessKey:  credentials.AccessKey,
+			secretKey:  credentials.SecretKey,
+
+			expectedContent: encodeResponse(getAPIErrorResponse(getAPIError(ErrInvalidObjectName),
+				"/"+bucketName+"/"+". ./../etc")),
+			expectedRespStatus: http.StatusBadRequest,
+		},
+		// Test case - 10.
+		// Case with proper components
+		{
+			bucketName: bucketName,
+			objectName: "etc/path/proper/.../etc",
+			byteRange:  "",
+			accessKey:  credentials.AccessKey,
+			secretKey:  credentials.SecretKey,
+
+			expectedContent: encodeResponse(getAPIErrorResponse(getAPIError(ErrNoSuchKey),
+				getGetObjectURL("", bucketName, "etc/path/proper/.../etc"))),
+			expectedRespStatus: http.StatusNotFound,
+		},
 	}
 
 	// Iterating over the cases, fetching the object validating the response.
@@ -346,7 +398,7 @@ func testAPIGetObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 		}
 		// Verify whether the bucket obtained object is same as the one created.
 		if !bytes.Equal(testCase.expectedContent, actualContent) {
-			t.Errorf("Test %d: %s: Object content differs from expected value.: %s", i+1, instanceType, string(actualContent))
+			t.Errorf("Test %d: %s: Object content differs from expected value %s, got %s", i+1, instanceType, testCase.expectedContent, string(actualContent))
 		}
 
 		// Verify response of the V2 signed HTTP request.

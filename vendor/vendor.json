@@ -35,9 +35,10 @@
 			"revisionTime": "2016-07-05T13:30:06-07:00"
 		},
 		{
+			"checksumSHA1": "rhLUtXvcmouYuBwOq9X/nYKzvNg=",
 			"path": "github.com/dustin/go-humanize",
-			"revision": "fef948f2d241bd1fd0631108ecc2c9553bae60bf",
-			"revisionTime": "2016-06-23T09:40:21+08:00"
+			"revision": "259d2a102b871d17f30e3cd9881a642961a1e486",
+			"revisionTime": "2017-02-28T07:34:54Z"
 		},
 		{
 			"checksumSHA1": "y2Kh4iPlgCPXSGTCcFpzePYdzzg=",
@@ -375,6 +376,12 @@
 			"path": "golang.org/x/net/context/ctxhttp",
 			"revision": "f2499483f923065a842d38eb4c7f1927e6fc6e6d",
 			"revisionTime": "2017-01-14T04:22:49Z"
+		},
+		{
+			"checksumSHA1": "ZVZBntvdoK/qUq/6uF8YMWmuMC4=",
+			"path": "golang.org/x/sys/unix",
+			"revision": "ea9bcade75cb975a0b9738936568ab388b845617",
+			"revisionTime": "2017-03-08T18:50:27Z"
 		},
 		{
 			"checksumSHA1": "p36nkSZUaOs/7Wtcy/FduBLgm8g=",

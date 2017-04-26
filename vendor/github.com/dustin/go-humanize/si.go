@@ -68,7 +68,7 @@ func ComputeSI(input float64) (float64, string) {
 	value := mag / math.Pow(10, exponent)
 
 	// Handle special case where value is exactly 1000.0
-	// Should return 1M instead of 1000k
+	// Should return 1 M instead of 1000 k
 	if value == 1000.0 {
 		exponent += 3
 		value = mag / math.Pow(10, exponent)
@@ -86,8 +86,8 @@ func ComputeSI(input float64) (float64, string) {
 //
 // See also: ComputeSI, ParseSI.
 //
-// e.g. SI(1000000, B) -> 1MB
-// e.g. SI(2.2345e-12, "F") -> 2.2345pF
+// e.g. SI(1000000, "B") -> 1 MB
+// e.g. SI(2.2345e-12, "F") -> 2.2345 pF
 func SI(input float64, unit string) string {
 	value, prefix := ComputeSI(input)
 	return Ftoa(value) + " " + prefix + unit
@@ -99,7 +99,7 @@ var errInvalid = errors.New("invalid input")
 //
 // See also: SI, ComputeSI.
 //
-// e.g. ParseSI(2.2345pF) -> (2.2345e-12, "F", nil)
+// e.g. ParseSI("2.2345 pF") -> (2.2345e-12, "F", nil)
 func ParseSI(input string) (float64, string, error) {
 	found := riParseRegex.FindStringSubmatch(input)
 	if len(found) != 4 {

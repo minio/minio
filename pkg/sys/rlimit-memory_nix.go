@@ -1,4 +1,4 @@
-// +build linux darwin netbsd
+// +build linux darwin netbsd solaris
 
 /*
  * Minio Cloud Storage, (C) 2017 Minio, Inc.
