@@ -2,7 +2,7 @@
 
 ## Fresh Install
 
-Install Minio packages for macOS via brew.
+Install Minio on macOS via brew.
 
 ```
 brew install minio/stable/minio
