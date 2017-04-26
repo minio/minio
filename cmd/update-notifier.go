@@ -39,7 +39,7 @@ func colorizeUpdateMessage(updateString string, newerThan time.Duration) string 
 	// than the original string length.
 	newerThanStr := humanize.Time(UTCNow().Add(newerThan))
 
-	line1Str := fmt.Sprintf("You are running an older version of Minio released %s", newerThanStr)
+	line1Str := fmt.Sprintf(" You are running an older version of Minio released %s ", newerThanStr)
 	line2Str := fmt.Sprintf(" Update: %s ", updateString)
 	line1Length := len(line1Str)
 	line2Length := len(line2Str)
@@ -50,44 +50,43 @@ func colorizeUpdateMessage(updateString string, newerThan time.Duration) string 
 
 	// calculate the rectangular box size.
 	maxContentWidth := int(math.Max(float64(line1Length), float64(line2Length)))
-	line1Rest := maxContentWidth - line1Length
-	line2Rest := maxContentWidth - line2Length
 
 	// termWidth is set to a default one to use when we are
 	// not able to calculate terminal width via OS syscalls
 	termWidth := 25
-
 	if width, err := pb.GetTerminalWidth(); err == nil {
 		termWidth = width
 	}
 
-	var message string
-	switch {
-	case len(line2Str) > termWidth:
-		message = "\n" + line1InColor + "\n" + line2InColor + "\n"
-	default:
-		// on windows terminal turn off unicode characters.
-		var top, bottom, sideBar string
-		if runtime.GOOS == globalWindowsOSName {
-			top = yellow("*" + strings.Repeat("*", maxContentWidth) + "*")
-			bottom = yellow("*" + strings.Repeat("*", maxContentWidth) + "*")
-			sideBar = yellow("|")
-		} else {
-			// color the rectangular box, use unicode characters here.
-			top = yellow("┏" + strings.Repeat("━", maxContentWidth) + "┓")
-			bottom = yellow("┗" + strings.Repeat("━", maxContentWidth) + "┛")
-			sideBar = yellow("┃")
-		}
-		// fill spaces to the rest of the area.
-		spacePaddingLine1 := strings.Repeat(" ", line1Rest)
-		spacePaddingLine2 := strings.Repeat(" ", line2Rest)
-
-		// construct the final message.
-		message = "\n" + top + "\n" +
-			sideBar + line1InColor + spacePaddingLine1 + sideBar + "\n" +
-			sideBar + line2InColor + spacePaddingLine2 + sideBar + "\n" +
-			bottom + "\n"
+	// Box cannot be printed if terminal width is small than maxContentWidth
+	if maxContentWidth > termWidth {
+		return "\n" + line1InColor + "\n" + line2InColor + "\n" + "\n"
 	}
-	// Return the final message.
+
+	topLeftChar := "┏"
+	topRightChar := "┓"
+	bottomLeftChar := "┗"
+	bottomRightChar := "┛"
+	horizBarChar := "━"
+	vertBarChar := "┃"
+	// on windows terminal turn off unicode characters.
+	if runtime.GOOS == globalWindowsOSName {
+		topLeftChar = "+"
+		topRightChar = "+"
+		bottomLeftChar = "+"
+		bottomRightChar = "+"
+		horizBarChar = "-"
+		vertBarChar = "|"
+	}
+
+	message := "\n"
+	// Add top line
+	message += yellow(topLeftChar+strings.Repeat(horizBarChar, maxContentWidth)+topRightChar) + "\n"
+	// Add message lines
+	message += vertBarChar + line1InColor + strings.Repeat(" ", maxContentWidth-line1Length) + vertBarChar + "\n"
+	message += vertBarChar + line2InColor + strings.Repeat(" ", maxContentWidth-line2Length) + vertBarChar + "\n"
+	// Add bottom line
+	message += yellow(bottomLeftChar+strings.Repeat(horizBarChar, maxContentWidth)+bottomRightChar) + "\n"
+
 	return message
 }
