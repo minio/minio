@@ -2,6 +2,7 @@ package humanize
 
 import (
 	"bytes"
+	"math"
 	"math/big"
 	"strconv"
 	"strings"
@@ -13,6 +14,12 @@ import (
 // e.g. Comma(834142) -> 834,142
 func Comma(v int64) string {
 	sign := ""
+
+	// minin64 can't be negated to a usable value, so it has to be special cased.
+	if v == math.MinInt64 {
+		return "-9,223,372,036,854,775,808"
+	}
+
 	if v < 0 {
 		sign = "-"
 		v = 0 - v
