@@ -1016,35 +1016,12 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
-	objectLock := globalNSMutex.NewNSLock(bucket, object)
-	objectLock.Lock()
-	defer objectLock.Unlock()
-
-	/// http://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectDELETE.html
-	/// Ignore delete object errors, since we are suppposed to reply
-	/// only 204.
-	if err := objectAPI.DeleteObject(bucket, object); err != nil {
-		writeSuccessNoContent(w)
-		return
+	// http://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectDELETE.html
+	// Ignore delete object errors while replying to client, since we are
+	// suppposed to reply only 204. Additionally log the error for
+	// investigation.
+	if err := deleteObject(objectAPI, bucket, object, r); err != nil {
+		errorIf(err, "Unable to delete an object %s", pathJoin(bucket, object))
 	}
 	writeSuccessNoContent(w)
-
-	// Get host and port from Request.RemoteAddr.
-	host, port, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		host, port = "", ""
-	}
-
-	// Notify object deleted event.
-	eventNotify(eventData{
-		Type:   ObjectRemovedDelete,
-		Bucket: bucket,
-		ObjInfo: ObjectInfo{
-			Name: object,
-		},
-		ReqParams: extractReqParams(r),
-		UserAgent: r.UserAgent(),
-		Host:      host,
-		Port:      port,
-	})
 }
