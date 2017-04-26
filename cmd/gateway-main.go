@@ -212,20 +212,14 @@ func gatewayMain(ctx *cli.Context) {
 		setAuthHandler,
 	}
 
-	apiServer := NewServerMux(ctx.String("address"), registerHandlers(router, handlerFns...))
+	globalPublicCerts, globalRootCAs, globalTLSCertificate, globalIsSSL, err = getSSLConfig()
+	fatalIf(err, "Invalid SSL key/certificate file")
 
-	_, _, globalIsSSL, err = getSSLConfig()
-	fatalIf(err, "Invalid SSL key file")
+	apiServer := NewServerMux(ctx.String("address"), registerHandlers(router, handlerFns...))
 
 	// Start server, automatically configures TLS if certs are available.
 	go func() {
-		cert, key := "", ""
-		if globalIsSSL {
-			cert, key = getPublicCertFile(), getPrivateKeyFile()
-		}
-
-		aerr := apiServer.ListenAndServe(cert, key)
-		fatalIf(aerr, "Failed to start minio server")
+		fatalIf(apiServer.ListenAndServe(globalTLSCertificate), "Failed to start minio server.")
 	}()
 
 	// Once endpoints are finalized, initialize the new object api.

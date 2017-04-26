@@ -408,25 +408,18 @@ func initListeners(serverAddr string, tls *tls.Config) ([]*ListenerMux, error) {
 
 // ListenAndServe - serve HTTP requests with protocol multiplexing support
 // TLS is actived when certFile and keyFile parameters are not empty.
-func (m *ServerMux) ListenAndServe(certFile, keyFile string) (err error) {
-
-	tlsEnabled := certFile != "" && keyFile != ""
-
-	config := &tls.Config{
-		// Causes servers to use Go's default ciphersuite preferences,
-		// which are tuned to avoid attacks. Does nothing on clients.
-		PreferServerCipherSuites: true,
-		// Set minimum version to TLS 1.2
-		MinVersion: tls.VersionTLS12,
-	} // Always instantiate.
-
-	if tlsEnabled {
-		// Configure TLS in the server
-		if config.NextProtos == nil {
-			config.NextProtos = []string{"http/1.1", "h2"}
+func (m *ServerMux) ListenAndServe(tlsCert *tls.Certificate) (err error) {
+	var tlsConfig *tls.Config
+	if tlsCert != nil {
+		tlsConfig = &tls.Config{
+			// Causes servers to use Go's default ciphersuite preferences,
+			// which are tuned to avoid attacks. Does nothing on clients.
+			PreferServerCipherSuites: true,
+			// Set minimum version to TLS 1.2
+			MinVersion: tls.VersionTLS12,
+			NextProtos: []string{"http/1.1", "h2"},
 		}
-		config.Certificates = make([]tls.Certificate, 1)
-		config.Certificates[0], err = tls.LoadX509KeyPair(certFile, keyFile)
+		tlsConfig.Certificates = append(tlsConfig.Certificates, *tlsCert)
 		if err != nil {
 			return err
 		}
@@ -434,7 +427,7 @@ func (m *ServerMux) ListenAndServe(certFile, keyFile string) (err error) {
 
 	go m.handleServiceSignals()
 
-	listeners, err := initListeners(m.Addr, config)
+	listeners, err := initListeners(m.Addr, tlsConfig)
 	if err != nil {
 		return err
 	}
@@ -445,7 +438,7 @@ func (m *ServerMux) ListenAndServe(certFile, keyFile string) (err error) {
 
 	// All http requests start to be processed by httpHandler
 	httpHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if tlsEnabled && r.TLS == nil {
+		if tlsConfig != nil && r.TLS == nil {
 			// TLS is enabled but Request is not TLS configured
 			u := url.URL{
 				Scheme:   httpsScheme,

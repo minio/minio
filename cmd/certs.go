@@ -17,42 +17,45 @@
 package cmd
 
 import (
+	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/pem"
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
+
+	"golang.org/x/crypto/pkcs12"
 )
 
-func parsePublicCertFile(certFile string) (certs []*x509.Certificate, err error) {
-	var bytes []byte
-
-	if bytes, err = ioutil.ReadFile(certFile); err != nil {
-		return certs, err
+func parsePublicCertFile(certFile string) (x509Certs []*x509.Certificate, err error) {
+	// Read certificate file.
+	var data []byte
+	if data, err = ioutil.ReadFile(certFile); err != nil {
+		return nil, err
 	}
 
 	// Parse all certs in the chain.
-	var block *pem.Block
-	var cert *x509.Certificate
-	current := bytes
+	current := data
 	for len(current) > 0 {
-		if block, current = pem.Decode(current); block == nil {
-			err = fmt.Errorf("Could not read PEM block from file %s", certFile)
-			return certs, err
+		var pemBlock *pem.Block
+		if pemBlock, current = pem.Decode(current); pemBlock == nil {
+			return nil, fmt.Errorf("Could not read PEM block from file %s", certFile)
 		}
 
-		if cert, err = x509.ParseCertificate(block.Bytes); err != nil {
-			return certs, err
+		var x509Cert *x509.Certificate
+		if x509Cert, err = x509.ParseCertificate(pemBlock.Bytes); err != nil {
+			return nil, err
 		}
 
-		certs = append(certs, cert)
+		x509Certs = append(x509Certs, x509Cert)
 	}
 
-	if len(certs) == 0 {
-		err = fmt.Errorf("Empty public certificate file %s", certFile)
+	if len(x509Certs) == 0 {
+		return nil, fmt.Errorf("Empty public certificate file %s", certFile)
 	}
 
-	return certs, err
+	return x509Certs, nil
 }
 
 func getRootCAs(certsCAsDir string) (*x509.CertPool, error) {
@@ -81,7 +84,7 @@ func getRootCAs(certsCAsDir string) (*x509.CertPool, error) {
 	for _, caFile := range caFiles {
 		caCert, err := ioutil.ReadFile(caFile)
 		if err != nil {
-			return rootCAs, err
+			return nil, err
 		}
 
 		rootCAs.AppendCertsFromPEM(caCert)
@@ -90,19 +93,70 @@ func getRootCAs(certsCAsDir string) (*x509.CertPool, error) {
 	return rootCAs, nil
 }
 
-func getSSLConfig() (publicCerts []*x509.Certificate, rootCAs *x509.CertPool, secureConn bool, err error) {
-	if !(isFile(getPublicCertFile()) && isFile(getPrivateKeyFile())) {
-		return publicCerts, rootCAs, secureConn, err
+func parsePKCS12CertFile(pkcs12File string) (x509Certs []*x509.Certificate, tlsCert *tls.Certificate, err error) {
+	// Read pkcs12 file.
+	var data []byte
+	if data, err = ioutil.ReadFile(pkcs12File); err != nil {
+		return nil, nil, err
 	}
 
-	if publicCerts, err = parsePublicCertFile(getPublicCertFile()); err != nil {
-		return publicCerts, rootCAs, secureConn, err
+	// Decode if the content is base64 encoded.
+	var decodedData []byte
+	if _, err = base64.StdEncoding.Decode(decodedData, data); err == nil {
+		data = decodedData
 	}
 
-	if rootCAs, err = getRootCAs(getCADir()); err != nil {
-		return publicCerts, rootCAs, secureConn, err
+	// Get PEM blocks from pkcs12 certificate.
+	pemBlocks, err := pkcs12.ToPEM(data, "")
+	if err != nil {
+		return nil, nil, err
 	}
 
-	secureConn = true
-	return publicCerts, rootCAs, secureConn, err
+	var pemData []byte
+	for _, pemBlock := range pemBlocks {
+		if pemBlock.Type != "PRIVATE KEY" {
+			var x509Cert *x509.Certificate
+			if x509Cert, err = x509.ParseCertificate(pemBlock.Bytes); err != nil {
+				return nil, nil, err
+			}
+
+			x509Certs = append(x509Certs, x509Cert)
+		}
+
+		pemData = append(pemData, pem.EncodeToMemory(pemBlock)...)
+	}
+
+	cert, err := tls.X509KeyPair(pemData, pemData)
+	if err != nil {
+		return nil, nil, err
+	}
+	tlsCert = &cert
+
+	return x509Certs, tlsCert, nil
+}
+
+func getSSLConfig() (x509Certs []*x509.Certificate, rootCAs *x509.CertPool, tlsCert *tls.Certificate, secureConn bool, err error) {
+	pkcs12File := getPKCS12File()
+	if isFile(pkcs12File) {
+		x509Certs, tlsCert, err = parsePKCS12CertFile(pkcs12File)
+	} else if isFile(getPublicCertFile()) && isFile(getPrivateKeyFile()) {
+		if x509Certs, err = parsePublicCertFile(getPublicCertFile()); err == nil {
+			var cert tls.Certificate
+			if cert, err = tls.LoadX509KeyPair(getPublicCertFile(), getPrivateKeyFile()); err == nil {
+				tlsCert = &cert
+			}
+		}
+	} else {
+		return nil, nil, nil, false, nil
+	}
+
+	if err == nil {
+		rootCAs, err = getRootCAs(getCADir())
+	}
+
+	if err == nil {
+		secureConn = true
+	}
+
+	return x509Certs, rootCAs, tlsCert, secureConn, err
 }
