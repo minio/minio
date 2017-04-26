@@ -26,6 +26,7 @@ Install minio packages using [Homebrew](http://brew.sh/)
 brew install minio/stable/minio
 minio server ~/Photos
 ```
+Note: If you are upgrading minio on macOS, please see instructions [here](https://github.com/minio/minio/blob/master/docs/minio_homebrew.md).
 
 ### Binary Download
 | Platform| Architecture | URL|
