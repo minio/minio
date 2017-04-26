@@ -28,7 +28,7 @@ brew install minio/stable/minio
 
 #### Installation Path Changes for minio in brew
 
-> `brew upgrade minio` and `brew install minio` commands will no longer install the latest minio binaries on macOS. We recommend you update using `brew install minio/stable/minio` in all your brew paths.
+> `brew upgrade minio` and `brew install minio` commands will no longer install the latest minio binaries on macOS. Use `brew install minio/stable/minio` in all your brew paths.
 
 Upstream bugs in golang 1.8 broke Minio brew installer. We will re-enable minio installation on macOS via `brew install minio` at a later date.
 
