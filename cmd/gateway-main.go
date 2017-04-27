@@ -61,7 +61,13 @@ var gatewayCmd = cli.Command{
 	Flags: append(serverFlags, cli.BoolFlag{
 		Name:  "quiet",
 		Usage: "Disable startup banner.",
-	}),
+	},
+		cli.StringFlag{
+			Name:  "endpoint",
+			Usage: "The endpoint.",
+			Value: "https://s3.amazonaws.com/",
+		},
+	),
 	HideHelpCommand: true,
 }
 
@@ -70,6 +76,7 @@ type gatewayBackend string
 
 const (
 	azureBackend gatewayBackend = "azure"
+	s3Backend    gatewayBackend = "s3"
 	// Add more backends here.
 )
 
@@ -89,11 +96,15 @@ func mustGetGatewayCredsFromEnv() (accessKey, secretKey string) {
 //
 // - Azure Blob Storage.
 // - Add your favorite backend here.
-func newGatewayLayer(backendType, endPoint, accessKey, secretKey string, secure bool) (GatewayLayer, error) {
-	if gatewayBackend(backendType) != azureBackend {
-		return nil, fmt.Errorf("Unrecognized backend type %s", backendType)
+func newGatewayLayer(backendType, endpoint, accessKey, secretKey string, secure bool) (GatewayLayer, error) {
+	switch gatewayBackend(backendType) {
+	case azureBackend:
+		return newAzureLayer(endpoint, accessKey, secretKey, secure)
+	case s3Backend:
+		return newS3Gateway(endpoint, accessKey, secretKey, secure)
 	}
-	return newAzureLayer(endPoint, accessKey, secretKey, secure)
+
+	return nil, fmt.Errorf("Unrecognized backend type %s", backendType)
 }
 
 // Initialize a new gateway config.
@@ -130,6 +141,7 @@ func parseGatewayEndpoint(arg string) (endPoint string, secure bool, err error) 
 		// Default connection will be "secure".
 		arg = "https://" + arg
 	}
+
 	u, err := url.Parse(arg)
 	if err != nil {
 		return "", false, err
@@ -230,6 +242,8 @@ func gatewayMain(ctx *cli.Context) {
 		mode := ""
 		if gatewayBackend(backendType) == azureBackend {
 			mode = globalMinioModeGatewayAzure
+		} else if gatewayBackend(backendType) == s3Backend {
+			mode = globalMinioModeGatewayS3
 		}
 		checkUpdate(mode)
 		apiEndpoints := getAPIEndpoints(apiServer.Addr)

@@ -114,6 +114,7 @@ const (
 	ErrInvalidQueryParams
 	ErrBucketAlreadyOwnedByYou
 	ErrInvalidDuration
+	ErrNotSupported
 	// Add new error codes here.
 
 	// Bucket notification related errors.
@@ -666,6 +667,8 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrInvalidBucketName
 	case BucketNotFound:
 		apiErr = ErrNoSuchBucket
+	case BucketAlreadyOwnedByYou:
+		apiErr = ErrBucketAlreadyOwnedByYou
 	case BucketNotEmpty:
 		apiErr = ErrBucketNotEmpty
 	case BucketExists:
@@ -698,8 +701,12 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrEntityTooLarge
 	case ObjectTooSmall:
 		apiErr = ErrEntityTooSmall
+	case NotSupported:
+		apiErr = ErrNotSupported
 	case NotImplemented:
 		apiErr = ErrNotImplemented
+	case PolicyNotFound:
+		apiErr = ErrNoSuchBucketPolicy
 	default:
 		apiErr = ErrInternalError
 	}

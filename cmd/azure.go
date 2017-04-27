@@ -154,6 +154,12 @@ func (a AzureObjects) StorageInfo() StorageInfo {
 
 // MakeBucket - Create a new container on azure backend.
 func (a AzureObjects) MakeBucket(bucket string) error {
+	// will never be called, only satisfy ObjectLayer interface
+	return traceError(NotImplemented{})
+}
+
+// MakeBucketWithLocation - Create a new container on azure backend.
+func (a AzureObjects) MakeBucketWithLocation(bucket, location string) error {
 	err := a.client.CreateContainer(bucket, storage.ContainerAccessTypePrivate)
 	return azureToObjectError(traceError(err), bucket)
 }
@@ -592,46 +598,16 @@ func azureListBlobsGetParameters(p storage.ListBlobsParameters) url.Values {
 // storage.ContainerAccessTypePrivate - none in minio terminology
 // As the common denominator for minio and azure is readonly and none, we support
 // these two policies at the bucket level.
-func (a AzureObjects) SetBucketPolicies(bucket string, policies []BucketAccessPolicy) error {
-	prefix := bucket + "/*" // For all objects inside the bucket.
-	if len(policies) != 1 {
-		return traceError(NotImplemented{})
-	}
-	if policies[0].Prefix != prefix {
-		return traceError(NotImplemented{})
-	}
-	if policies[0].Policy != policy.BucketPolicyReadOnly {
-		return traceError(NotImplemented{})
-	}
-	perm := storage.ContainerPermissions{
-		AccessType:     storage.ContainerAccessTypeContainer,
-		AccessPolicies: nil,
-	}
-	err := a.client.SetContainerPermissions(bucket, perm, 0, "")
-	return azureToObjectError(traceError(err), bucket)
+func (a AzureObjects) SetBucketPolicies(bucket string, policyInfo policy.BucketAccessPolicy) error {
+	return traceError(NotSupported{})
 }
 
 // GetBucketPolicies - Get the container ACL and convert it to canonical []bucketAccessPolicy
-func (a AzureObjects) GetBucketPolicies(bucket string) ([]BucketAccessPolicy, error) {
-	perm, err := a.client.GetContainerPermissions(bucket, 0, "")
-	if err != nil {
-		return nil, azureToObjectError(traceError(err), bucket)
-	}
-	switch perm.AccessType {
-	case storage.ContainerAccessTypePrivate:
-		return nil, nil
-	case storage.ContainerAccessTypeContainer:
-		return []BucketAccessPolicy{{"", policy.BucketPolicyReadOnly}}, nil
-	}
-	return nil, azureToObjectError(traceError(NotImplemented{}))
+func (a AzureObjects) GetBucketPolicies(bucket string) (policy.BucketAccessPolicy, error) {
+	return policy.BucketAccessPolicy{}, traceError(NotSupported{})
 }
 
 // DeleteBucketPolicies - Set the container ACL to "private"
 func (a AzureObjects) DeleteBucketPolicies(bucket string) error {
-	perm := storage.ContainerPermissions{
-		AccessType:     storage.ContainerAccessTypePrivate,
-		AccessPolicies: nil,
-	}
-	err := a.client.SetContainerPermissions(bucket, perm, 0, "")
-	return azureToObjectError(traceError(err))
+	return traceError(NotSupported{})
 }

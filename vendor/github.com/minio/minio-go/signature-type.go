@@ -14,26 +14,30 @@
  * limitations under the License.
  */
 
-package s3signer
+package minio
 
-import (
-	"crypto/hmac"
-	"crypto/sha256"
+// SignatureType is type of Authorization requested for a given HTTP request.
+type SignatureType int
+
+// Different types of supported signatures - default is Latest i.e SignatureV4.
+const (
+	Latest SignatureType = iota
+	SignatureV4
+	SignatureV2
+	SignatureV4Streaming
 )
 
-// unsignedPayload - value to be set to X-Amz-Content-Sha256 header when
-const unsignedPayload = "UNSIGNED-PAYLOAD"
-
-// sum256 calculate sha256 sum for an input byte array.
-func sum256(data []byte) []byte {
-	hash := sha256.New()
-	hash.Write(data)
-	return hash.Sum(nil)
+// isV2 - is signature SignatureV2?
+func (s SignatureType) isV2() bool {
+	return s == SignatureV2
 }
 
-// sumHMAC calculate hmac between two input byte array.
-func sumHMAC(key []byte, data []byte) []byte {
-	hash := hmac.New(sha256.New, key)
-	hash.Write(data)
-	return hash.Sum(nil)
+// isV4 - is signature SignatureV4?
+func (s SignatureType) isV4() bool {
+	return s == SignatureV4 || s == Latest
+}
+
+// isStreamingV4 - is signature SignatureV4Streaming?
+func (s SignatureType) isStreamingV4() bool {
+	return s == SignatureV4Streaming
 }

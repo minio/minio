@@ -171,6 +171,12 @@
 			"revisionTime": "2016-08-31T22:25:20Z"
 		},
 		{
+			"checksumSHA1": "isRGvFzUCh72bNQFmw7WQaeT7xY=",
+			"path": "github.com/lox/httpcache",
+			"revision": "fff585cf25b80f4ccc4ac7be6d3f564aa9c117ff",
+			"revisionTime": "2017-01-09T03:46:36Z"
+		},
+		{
 			"path": "github.com/mattn/go-colorable",
 			"revision": "9056b7a9f2d1f2d96498d6d146acd1f9d5ed3d59",
 			"revisionTime": "2016-06-03T00:08:27+09:00"
@@ -210,28 +216,40 @@
 			"revisionTime": "2016-02-29T08:42:30-08:00"
 		},
 		{
-			"checksumSHA1": "qTxOBp3GVxCC70ykb7Hxg6UgWwA=",
+			"checksumSHA1": "rtVzxCyARW7zRG1jUf3K7o9vyt0=",
+			"path": "github.com/minio/minio-go",
+			"revision": "5297a818b482fa329b3dc1a3926e3c4c6fb5d459",
+			"revisionTime": "2017-04-26T18:23:05Z"
+		},
+		{
+			"checksumSHA1": "lsxCcRcNUDxhQyO999SOdvKzzfM=",
+			"path": "github.com/minio/minio-go/pkg/encrypt",
+			"revision": "5297a818b482fa329b3dc1a3926e3c4c6fb5d459",
+			"revisionTime": "2017-04-26T18:23:05Z"
+		},
+		{
+			"checksumSHA1": "neH34/65OXeKHM/MlV8MbhcdFBc=",
 			"path": "github.com/minio/minio-go/pkg/policy",
-			"revision": "40505f5d08c721dfe5a6450fbdef3bcd6567aa97",
-			"revisionTime": "2016-09-04T08:12:15Z"
+			"revision": "5297a818b482fa329b3dc1a3926e3c4c6fb5d459",
+			"revisionTime": "2017-04-26T18:23:05Z"
 		},
 		{
-			"checksumSHA1": "l95EyvF0yFAItXsXYqsZ6g7yGy4=",
+			"checksumSHA1": "/5IXp1nGKqOfHn8Piiod3OCkG2U=",
 			"path": "github.com/minio/minio-go/pkg/s3signer",
-			"revision": "d02caa62b9e1034f93a82d41da806651a666c5a3",
-			"revisionTime": "2016-12-14T00:10:05Z"
+			"revision": "5297a818b482fa329b3dc1a3926e3c4c6fb5d459",
+			"revisionTime": "2017-04-26T18:23:05Z"
 		},
 		{
-			"checksumSHA1": "bPvxFS1qu6W9lOqdt8aEfS5Sids=",
+			"checksumSHA1": "gRnCFKb4x83GBLVUZXoOjujd+U0=",
 			"path": "github.com/minio/minio-go/pkg/s3utils",
-			"revision": "532b920ff28900244a2ef7d07468003df36fe7c5",
-			"revisionTime": "2016-12-20T20:43:13Z"
+			"revision": "5297a818b482fa329b3dc1a3926e3c4c6fb5d459",
+			"revisionTime": "2017-04-26T18:23:05Z"
 		},
 		{
 			"checksumSHA1": "maUy+dbN6VfTTnfErrAW2lLit1w=",
 			"path": "github.com/minio/minio-go/pkg/set",
-			"revision": "7a3619e41885dcbcfafee193c10eb80530c2be53",
-			"revisionTime": "2017-02-17T20:03:45Z"
+			"revision": "5297a818b482fa329b3dc1a3926e3c4c6fb5d459",
+			"revisionTime": "2017-04-26T18:23:05Z"
 		},
 		{
 			"checksumSHA1": "URVle4qtadmW9w9BulDRHY3kxnA=",
@@ -291,6 +309,12 @@
 			"path": "github.com/pkg/profile",
 			"revision": "c78aac22bd43883fd2817833b982153dcac17b3b",
 			"revisionTime": "2016-05-18T16:56:57+10:00"
+		},
+		{
+			"checksumSHA1": "NLwKGa5B0STKAvQV+lz/ujnbzN4=",
+			"path": "github.com/rainycape/vfs",
+			"revision": "a62fd22bcf7010946a44f6a1250a82c03110a14b",
+			"revisionTime": "2015-06-11T13:38:00Z"
 		},
 		{
 			"path": "github.com/rs/cors",
