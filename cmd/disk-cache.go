@@ -8,7 +8,11 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"strings"
+	"syscall"
 	"time"
+
+	"github.com/minio/minio/pkg/disk"
 
 	"encoding/json"
 )
@@ -73,6 +77,137 @@ type diskCache struct {
 	tmpDir     string
 	dataDir    string
 	createTime time.Time
+
+	purgeChan chan struct{}
+}
+
+type diskCacheReadDirInfo struct {
+	entry string
+	err   error
+}
+
+func (c diskCache) getReadDirCh() chan diskCacheReadDirInfo {
+	ch := make(chan diskCacheReadDirInfo)
+	go func() {
+		bufp := readDirBufPool.Get().(*[]byte)
+		buf := *bufp
+		defer readDirBufPool.Put(bufp)
+
+		d, err := os.Open(c.dataDir)
+		if err != nil {
+			// File is really not found.
+			if os.IsNotExist(err) {
+				ch <- diskCacheReadDirInfo{"", errFileNotFound}
+				close(ch)
+				return
+			}
+			if os.IsPermission(err) {
+				ch <- diskCacheReadDirInfo{"", errFileAccessDenied}
+				close(ch)
+				return
+			}
+
+			// File path cannot be verified since one of the parents is a file.
+			if strings.Contains(err.Error(), "not a directory") {
+				ch <- diskCacheReadDirInfo{"", errFileNotFound}
+				close(ch)
+				return
+			}
+			ch <- diskCacheReadDirInfo{"", err}
+			close(ch)
+			return
+		}
+		defer d.Close()
+
+		fd := int(d.Fd())
+		for {
+			nbuf, err := syscall.ReadDirent(fd, buf)
+			if err != nil {
+				ch <- diskCacheReadDirInfo{"", err}
+				close(ch)
+				return
+			}
+			if nbuf <= 0 {
+				break
+			}
+			var tmpEntries []string
+			if tmpEntries, err = parseDirents(c.dataDir, buf[:nbuf]); err != nil {
+				ch <- diskCacheReadDirInfo{"", err}
+				close(ch)
+				return
+			}
+			for _, entry := range tmpEntries {
+				ch <- diskCacheReadDirInfo{entry, nil}
+			}
+		}
+	}()
+	return ch
+}
+
+func (c diskCache) diskUsageLow() bool {
+	minUsage := c.maxUsage * 80 / 100
+
+	di, err := disk.GetInfo(c.dir)
+	if err != nil {
+		errorIf(err, "Error getting disk information on %s", c.dir)
+		return false
+	}
+	usedPercent := (di.Total - di.Free) * 100 / di.Total
+	return int(usedPercent) < minUsage
+}
+
+func (c diskCache) diskUsageHigh() bool {
+	di, err := disk.GetInfo(c.dir)
+	if err != nil {
+		return true
+	}
+	usedPercent := (di.Total - di.Free) * 100 / di.Total
+	return int(usedPercent) > c.maxUsage
+}
+
+func (c diskCache) purge() {
+	expiry := c.createTime
+
+	for {
+		for {
+			if c.diskUsageLow() {
+				break
+			}
+			d := time.Now().UTC().Sub(expiry)
+			d = d / 2
+			if d < time.Second {
+				break
+			}
+			expiry = expiry.Add(d)
+			ch := c.getReadDirCh()
+			for info := range ch {
+				if info.err != nil {
+					break
+				}
+
+				entry := info.entry
+				if strings.HasSuffix(entry, ".json") {
+					continue
+				}
+				fi, err := os.Stat(entry)
+				if err != nil {
+					continue
+				}
+				stat := fi.Sys().(*syscall.Stat_t)
+				atime := time.Unix(int64(stat.Atim.Sec), int64(stat.Atim.Nsec))
+				if atime.After(expiry) {
+					continue
+				}
+				if err = os.Remove(pathJoin(c.dataDir, entry)); err != nil {
+					continue
+				}
+				if err = os.Remove(pathJoin(c.dataDir, entry+".json")); err != nil {
+					continue
+				}
+			}
+		}
+		<-c.purgeChan
+	}
 }
 
 func (c diskCache) encodedPath(bucket, object string) string {
@@ -114,6 +249,13 @@ func (o diskCache) NoCommit(f *os.File) error {
 }
 
 func (c diskCache) Put() (*os.File, error) {
+	if c.diskUsageHigh() {
+		select {
+		case c.purgeChan <- struct{}{}:
+		default:
+		}
+		return nil, errDiskFull
+	}
 	return ioutil.TempFile(c.tmpDir, "")
 }
 
@@ -202,7 +344,9 @@ func NewDiskCache(dir string, maxUsage, expiry int) (*diskCache, error) {
 	if err := os.MkdirAll(dataDir, 0766); err != nil {
 		return nil, err
 	}
-	return &diskCache{dir, maxUsage, expiry, tmpDir, dataDir, format.Time}, nil
+	cache := &diskCache{dir, maxUsage, expiry, tmpDir, dataDir, format.Time, make(chan struct{})}
+	go cache.purge()
+	return cache, nil
 }
 
 type CacheObjects struct {
@@ -240,6 +384,9 @@ func (c CacheObjects) GetObject(bucket, object string, startOffset int64, length
 		return c.GetObjectFn(bucket, object, startOffset, length, writer)
 	}
 	cachedObj, err := c.dcache.Put()
+	if err == errDiskFull {
+		return c.GetObjectFn(bucket, object, 0, objInfo.Size, writer)
+	}
 	if err != nil {
 		return err
 	}
@@ -312,6 +459,9 @@ func (c CacheObjects) AnonGetObject(bucket, object string, startOffset int64, le
 		return c.AnonGetObjectFn(bucket, object, startOffset, length, writer)
 	}
 	cachedObj, err := c.dcache.Put()
+	if err == errDiskFull {
+		return c.AnonGetObjectFn(bucket, object, 0, objInfo.Size, writer)
+	}
 	if err != nil {
 		return err
 	}
