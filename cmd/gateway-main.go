@@ -72,16 +72,6 @@ var gatewayCmd = cli.Command{
 			Name:  "quiet",
 			Usage: "Disable startup banner.",
 		},
-		cli.StringFlag{
-			Name:  "cache-dir",
-			Value: "",
-			Usage: "Cache directory.",
-		},
-		cli.StringFlag{
-			Name:  "cache-max",
-			Value: "80",
-			Usage: "Percent of disk space for Cache.",
-		},
 	),
 	HideHelpCommand: true,
 }

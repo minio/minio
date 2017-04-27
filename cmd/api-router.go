@@ -26,9 +26,17 @@ type objectAPIHandlers struct {
 
 // registerAPIRouter - registers S3 compatible APIs.
 func registerAPIRouter(mux *router.Router) {
+	var cache *CacheObjects
+	var err error
+	if globalCacheDir != "" {
+		cache, err = NewServerCacheObjects(globalObjectAPI, globalCacheDir, globalCacheMax, 0)
+		fatalIf(err, "Unable to init cache")
+	}
+
 	// Initialize API.
 	api := objectAPIHandlers{
 		ObjectAPI: newObjectLayerFn,
+		cache:     cache,
 	}
 
 	// API Router

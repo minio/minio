@@ -33,6 +33,16 @@ var serverFlags = []cli.Flag{
 		Value: ":9000",
 		Usage: "Bind to a specific ADDRESS:PORT, ADDRESS can be an IP or hostname.",
 	},
+	cli.StringFlag{
+		Name:  "cache-dir",
+		Value: "",
+		Usage: "Cache directory.",
+	},
+	cli.StringFlag{
+		Name:  "cache-max",
+		Value: "80",
+		Usage: "Percent of disk space for Cache.",
+	},
 }
 
 var serverCmd = cli.Command{
@@ -136,6 +146,9 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	// Server address.
 	serverAddr := ctx.String("address")
 	fatalIf(CheckLocalServerAddr(serverAddr), "Invalid address ‘%s’ in command line argument.", serverAddr)
+
+	globalCacheDir = ctx.String("cache-dir")
+	globalCacheMax = ctx.Int("cache-max")
 
 	var setupType SetupType
 	var err error
@@ -250,6 +263,13 @@ func serverMain(ctx *cli.Context) {
 	// Initialize name space lock.
 	initNSLock(globalIsDistXL)
 
+	newObject, err := newObjectLayer(globalEndpoints)
+	fatalIf(err, "Initializing object layer failed")
+
+	globalObjLayerMutex.Lock()
+	globalObjectAPI = newObject
+	globalObjLayerMutex.Unlock()
+
 	// Configure server.
 	handler, err := configureServerHandler(globalEndpoints)
 	fatalIf(err, "Unable to configure one of server's RPC services.")
@@ -271,13 +291,6 @@ func serverMain(ctx *cli.Context) {
 		}
 		fatalIf(apiServer.ListenAndServe(cert, key), "Failed to start minio server.")
 	}()
-
-	newObject, err := newObjectLayer(globalEndpoints)
-	fatalIf(err, "Initializing object layer failed")
-
-	globalObjLayerMutex.Lock()
-	globalObjectAPI = newObject
-	globalObjLayerMutex.Unlock()
 
 	// Prints the formatted startup message once object layer is initialized.
 	apiEndpoints := getAPIEndpoints(apiServer.Addr)
