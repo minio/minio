@@ -92,29 +92,26 @@ func (c diskCache) getReadDirCh() chan diskCacheReadDirInfo {
 		bufp := readDirBufPool.Get().(*[]byte)
 		buf := *bufp
 		defer readDirBufPool.Put(bufp)
+		defer close(ch)
 
 		d, err := os.Open(c.dataDir)
 		if err != nil {
 			// File is really not found.
 			if os.IsNotExist(err) {
 				ch <- diskCacheReadDirInfo{"", errFileNotFound}
-				close(ch)
 				return
 			}
 			if os.IsPermission(err) {
 				ch <- diskCacheReadDirInfo{"", errFileAccessDenied}
-				close(ch)
 				return
 			}
 
 			// File path cannot be verified since one of the parents is a file.
 			if strings.Contains(err.Error(), "not a directory") {
 				ch <- diskCacheReadDirInfo{"", errFileNotFound}
-				close(ch)
 				return
 			}
 			ch <- diskCacheReadDirInfo{"", err}
-			close(ch)
 			return
 		}
 		defer d.Close()
@@ -124,7 +121,6 @@ func (c diskCache) getReadDirCh() chan diskCacheReadDirInfo {
 			nbuf, err := syscall.ReadDirent(fd, buf)
 			if err != nil {
 				ch <- diskCacheReadDirInfo{"", err}
-				close(ch)
 				return
 			}
 			if nbuf <= 0 {
@@ -133,7 +129,6 @@ func (c diskCache) getReadDirCh() chan diskCacheReadDirInfo {
 			var tmpEntries []string
 			if tmpEntries, err = parseDirents(c.dataDir, buf[:nbuf]); err != nil {
 				ch <- diskCacheReadDirInfo{"", err}
-				close(ch)
 				return
 			}
 			for _, entry := range tmpEntries {
@@ -167,7 +162,6 @@ func (c diskCache) diskUsageHigh() bool {
 
 func (c diskCache) purge() {
 	expiry := c.createTime
-
 	for {
 		for {
 			if c.diskUsageLow() {
@@ -185,23 +179,26 @@ func (c diskCache) purge() {
 					break
 				}
 
-				entry := info.entry
-				if strings.HasSuffix(entry, ".json") {
+				entryPath := pathJoin(c.dataDir, info.entry)
+				if strings.HasSuffix(entryPath, ".json") {
 					continue
 				}
-				fi, err := os.Stat(entry)
+				fi, err := os.Stat(entryPath)
 				if err != nil {
+					errorIf(err, "Unable to Stat %s", entryPath)
 					continue
 				}
 				stat := fi.Sys().(*syscall.Stat_t)
-				atime := time.Unix(int64(stat.Atim.Sec), int64(stat.Atim.Nsec))
+				atime := time.Unix(int64(stat.Atim.Sec), int64(stat.Atim.Nsec)).UTC()
 				if atime.After(expiry) {
 					continue
 				}
-				if err = os.Remove(pathJoin(c.dataDir, entry)); err != nil {
+				if err = os.Remove(entryPath); err != nil {
+					errorIf(err, "Error removing %s", entryPath)
 					continue
 				}
-				if err = os.Remove(pathJoin(c.dataDir, entry+".json")); err != nil {
+				if err = os.Remove(entryPath + ".json"); err != nil {
+					errorIf(err, "Error removing %s", entryPath+".json")
 					continue
 				}
 			}
