@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -223,4 +224,37 @@ func canonicalizeETag(etag string) string {
 // are equal, false otherwise
 func isETagEqual(left, right string) bool {
 	return canonicalizeETag(left) == canonicalizeETag(right)
+}
+
+// deleteObject is a convenient wrapper to delete an object, this
+// is a common function to be called from object handlers and
+// web handlers.
+func deleteObject(obj ObjectLayer, bucket, object string, r *http.Request) (err error) {
+	// Acquire a write lock before deleting the object.
+	objectLock := globalNSMutex.NewNSLock(bucket, object)
+	objectLock.Lock()
+	defer objectLock.Unlock()
+
+	// Proceed to delete the object.
+	if err = obj.DeleteObject(bucket, object); err != nil {
+		return err
+	}
+
+	// Get host and port from Request.RemoteAddr.
+	host, port, _ := net.SplitHostPort(r.RemoteAddr)
+
+	// Notify object deleted event.
+	eventNotify(eventData{
+		Type:   ObjectRemovedDelete,
+		Bucket: bucket,
+		ObjInfo: ObjectInfo{
+			Name: object,
+		},
+		ReqParams: extractReqParams(r),
+		UserAgent: r.UserAgent(),
+		Host:      host,
+		Port:      port,
+	})
+
+	return nil
 }
