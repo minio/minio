@@ -10,7 +10,7 @@ func TestDiskCache(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cache, err := NewDiskCache(cacheDir, 80, 1)
+	cache, err := newDiskCache(cacheDir, 80, 1)
 	if err != nil {
 		t.Fatal(err)
 	}

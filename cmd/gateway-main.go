@@ -67,10 +67,14 @@ var gatewayCmd = cli.Command{
 	Usage:              "Start object storage gateway.",
 	Action:             gatewayMain,
 	CustomHelpTemplate: gatewayTemplate,
-	Flags: append(serverFlags,
-		cli.BoolFlag{
-			Name:  "quiet",
-			Usage: "Disable startup banner.",
+	Flags: append(serverFlags, cli.BoolFlag{
+		Name:  "quiet",
+		Usage: "Disable startup banner.",
+	},
+		cli.StringFlag{
+			Name:  "endpoint",
+			Usage: "The endpoint.",
+			Value: "https://s3.amazonaws.com/",
 		},
 	),
 	HideHelpCommand: true,
@@ -184,9 +188,6 @@ func gatewayMain(ctx *cli.Context) {
 		log.EnableQuiet()
 	}
 
-	cacheDir := ctx.String("cache-dir")
-	cacheMax := ctx.Int("cache-max")
-
 	// First argument is selected backend type.
 	backendType := ctx.Args().Get(0)
 	// Second argument is the endpoint address (optional)
@@ -214,17 +215,10 @@ func gatewayMain(ctx *cli.Context) {
 	newObject, err := newGatewayLayer(backendType, endPoint, accessKey, secretKey, secure)
 	fatalIf(err, "Unable to initialize gateway layer")
 
-	var cache *CacheObjects
-	if cacheDir != "" {
-		cache, err = NewGatewayCacheObjects(newObject, cacheDir, cacheMax, 0)
-		fatalIf(err, "Unable to init cache")
-	}
-
 	initNSLock(false) // Enable local namespace lock.
 
 	router := mux.NewRouter().SkipClean(true)
-
-	registerGatewayAPIRouter(router, newObject, cache)
+	registerGatewayAPIRouter(router, newObject)
 
 	var handlerFns = []HandlerFunc{
 		// Validate all the incoming paths.
