@@ -36,6 +36,9 @@ USAGE:
 FLAGS:
   {{range .VisibleFlags}}{{.}}
   {{end}}{{end}}
+BACKEND:
+  azure: Microsoft Azure Blob Storage. Default ENDPOINT is https://core.windows.net
+
 ENVIRONMENT VARIABLES:
   ACCESS:
      MINIO_ACCESS_KEY: Username or access key of your storage backend.
@@ -43,29 +46,20 @@ ENVIRONMENT VARIABLES:
 
 EXAMPLES:
   1. Start minio gateway server for Azure Blob Storage backend.
+      $ export MINIO_ACCESS_KEY=azureaccountname
+      $ export MINIO_SECRET_KEY=azureaccountkey
       $ {{.HelpName}} azure
-
-  2. Start minio gateway server bound to a specific ADDRESS:PORT.
-      $ {{.HelpName}} --address 192.168.1.101:9000 azure
-
-  3. Gateway server connecting to a custom Azure Blob Storage endpoint.
-      $ {{.HelpName}} azure https://azure-stack.domain.com
-
 `
 
 var gatewayCmd = cli.Command{
 	Name:               "gateway",
-	Usage:              "Start object storage gateway server.",
+	Usage:              "Start object storage gateway.",
 	Action:             gatewayMain,
 	CustomHelpTemplate: gatewayTemplate,
-	Flags: append(serverFlags, cli.BoolFlag{
-		Name:  "quiet",
-		Usage: "Disable startup banner.",
-	},
-		cli.StringFlag{
-			Name:  "endpoint",
-			Usage: "The endpoint.",
-			Value: "https://s3.amazonaws.com/",
+	Flags: append(serverFlags,
+		cli.BoolFlag{
+			Name:  "quiet",
+			Usage: "Disable startup banner.",
 		},
 	),
 	HideHelpCommand: true,
