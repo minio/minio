@@ -26,6 +26,8 @@ export const SET_BUCKETS = 'SET_BUCKETS'
 export const ADD_BUCKET = 'ADD_BUCKET'
 export const SET_VISIBLE_BUCKETS = 'SET_VISIBLE_BUCKETS'
 export const SET_OBJECTS = 'SET_OBJECTS'
+export const APPEND_OBJECTS = 'APPEND_OBJECTS'
+export const RESET_OBJECTS = 'RESET_OBJECTS'
 export const SET_STORAGE_INFO = 'SET_STORAGE_INFO'
 export const SET_SERVER_INFO = 'SET_SERVER_INFO'
 export const SHOW_MAKEBUCKET_MODAL = 'SHOW_MAKEBUCKET_MODAL'
@@ -240,12 +242,25 @@ export const setVisibleBuckets = visibleBuckets => {
   }
 }
 
-export const setObjects = (objects, marker, istruncated) => {
+const appendObjects = (objects, marker, istruncated) => {
   return {
-    type: SET_OBJECTS,
+    type: APPEND_OBJECTS,
     objects,
     marker,
     istruncated
+  }
+}
+
+export const setObjects = (objects) => {
+  return {
+    type: SET_OBJECTS,
+    objects,
+  }
+}
+
+export const resetObjects = () => {
+  return {
+    type: RESET_OBJECTS
   }
 }
 
@@ -316,7 +331,7 @@ export const listObjects = () => {
           object.name = object.name.replace(`${currentPath}`, '');
           return object
         })
-        dispatch(setObjects(objects, res.nextmarker, res.istruncated))
+        dispatch(appendObjects(objects, res.nextmarker, res.istruncated))
         dispatch(setPrefixWritable(res.writable))
         dispatch(setLoadBucket(''))
         dispatch(setLoadPath(''))
@@ -337,7 +352,7 @@ export const listObjects = () => {
 export const selectPrefix = prefix => {
   return (dispatch, getState) => {
     const {currentBucket, web} = getState()
-    dispatch(setObjects([], "", false))
+    dispatch(resetObjects())
     dispatch(setLoadPath(prefix))
     web.ListObjects({
       bucketName: currentBucket,
@@ -352,7 +367,7 @@ export const selectPrefix = prefix => {
           object.name = object.name.replace(`${prefix}`, '');
           return object
         })
-        dispatch(setObjects(
+        dispatch(appendObjects(
           objects,
           res.nextmarker,
           res.istruncated
