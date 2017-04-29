@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"bytes"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
@@ -102,7 +103,7 @@ func parsePKCS12CertFile(pkcs12File string) (x509Certs []*x509.Certificate, tlsC
 
 	// Decode if the content is base64 encoded.
 	var decodedData []byte
-	if _, err = base64.StdEncoding.Decode(decodedData, data); err == nil {
+	if decodedData, err = ioutil.ReadAll(base64.NewDecoder(base64.StdEncoding, bytes.NewBuffer(data))); err == nil {
 		data = decodedData
 	}
 

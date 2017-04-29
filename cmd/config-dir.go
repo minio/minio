@@ -43,8 +43,7 @@ const (
 	privateKeyFile = "private.key"
 
 	// PKCS#12 certificate file for HTTPS.
-	minioPFXFile = "minio.pfx"
-	minioP12File = "minio.p12"
+	pkcs12CertFile = "cert.pfx"
 )
 
 // ConfigDir - configuration directory with locking.
@@ -100,12 +99,7 @@ func (config *ConfigDir) GetPrivateKeyFile() string {
 
 // GetPKCS12File - returns absolute path of PKCS12 file.
 func (config *ConfigDir) GetPKCS12File() string {
-	pkcsFile := filepath.Join(config.getCertsDir(), minioPFXFile)
-	if isFile(pkcsFile) {
-		return pkcsFile
-	}
-
-	return filepath.Join(config.getCertsDir(), minioP12File)
+	return filepath.Join(config.getCertsDir(), pkcs12CertFile)
 }
 
 func mustGetDefaultConfigDir() string {
