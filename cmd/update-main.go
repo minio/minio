@@ -82,7 +82,7 @@ func getCurrentReleaseTime(minioVersion, minioBinaryPath string) (releaseTime ti
 	}
 
 	// Looks like version is minio non-standard, we use minio binary's ModTime as release time.
-	fi, err := os.Stat(minioBinaryPath)
+	fi, err := osStat(minioBinaryPath)
 	if err != nil {
 		err = fmt.Errorf("Unable to get ModTime of %s. %s", minioBinaryPath, err)
 	} else {

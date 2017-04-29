@@ -133,7 +133,7 @@ func fsStatDir(statDir string) (os.FileInfo, error) {
 		return nil, traceError(err)
 	}
 
-	fi, err := os.Stat(preparePath(statDir))
+	fi, err := osStat(preparePath(statDir))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, traceError(errVolumeNotFound)
@@ -160,7 +160,7 @@ func fsStatFile(statFile string) (os.FileInfo, error) {
 		return nil, traceError(err)
 	}
 
-	fi, err := os.Stat(preparePath(statFile))
+	fi, err := osStat(preparePath(statFile))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, traceError(errFileNotFound)
@@ -206,7 +206,7 @@ func fsOpenFile(readPath string, offset int64) (io.ReadCloser, int64, error) {
 	}
 
 	// Stat to get the size of the file at path.
-	st, err := fr.Stat()
+	st, err := osStat(preparePath(readPath))
 	if err != nil {
 		return nil, 0, traceError(err)
 	}
@@ -344,7 +344,7 @@ func fsDeleteFile(basePath, deletePath string) error {
 	}
 
 	// Verify if the path exists.
-	pathSt, err := os.Stat(preparePath(deletePath))
+	pathSt, err := osStat(preparePath(deletePath))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return traceError(errFileNotFound)
