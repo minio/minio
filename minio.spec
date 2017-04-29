@@ -1,8 +1,8 @@
-%define         tag     RELEASE.2017-04-25T01-27-49Z
+%define         tag     RELEASE.2017-04-29T00-40-27Z
 %define         subver  %(echo %{tag} | sed -e 's/[^0-9]//g')
 # git fetch https://github.com/minio/minio.git refs/tags/RELEASE.2017-04-25T01-27-49Z
 # git rev-list -n 1 FETCH_HEAD
-%define         commitid        710db6bdadb1b228bf6dee7e2a6958000091125b
+%define         commitid        0e6a222c4e0647880ed6a9f1900eb8ce69a5b33b
 Summary:        Cloud Storage Server.
 Name:           minio
 Version:        0.0.%{subver}
