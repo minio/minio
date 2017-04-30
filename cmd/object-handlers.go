@@ -19,6 +19,7 @@ package cmd
 import (
 	"encoding/hex"
 	"encoding/xml"
+	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -98,81 +99,77 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	objectLock.RLock()
 	defer objectLock.RUnlock()
 
-	objInfo, err := objectAPI.GetObjectInfo(bucket, object)
+	var err error
+	var hrange *httpRange
+
+	startOffset := int64(0)
+	endOffset := int64(-1)
+
+	// Get request range.
+	rangeHeader := r.Header.Get("Range")
+	if rangeHeader != "" {
+		if startOffset, endOffset, err = simpleParseRequestRange(rangeHeader); err != nil {
+			// Handle only errInvalidRange
+			// Ignore other parse error and treat it as regular Get request like Amazon S3.
+			// if err == errInvalidRange {
+			//	writeErrorResponse(w, ErrInvalidRange, r.URL)
+			//	return
+			// }
+
+			// log the error.
+			// errorIf(err, "Invalid request range")
+		} else {
+			hrange = &httpRange{offsetBegin: startOffset, offsetEnd: endOffset}
+		}
+
+	}
+
+	/* if hrange != nil {
+		startOffset = hrange.offsetBegin
+		length = hrange.getLength()
+	} */
+
+	/* length := int64(-1)
+	if endOffset >= startOffset {
+		length = endOffset - startOffset + 1
+	} */
+
+	// Reads the object at startOffset and writes to mw.
+	objectReader, objectInfo, err := objectAPI.GetObject(bucket, object, startOffset, endOffset)
 	if err != nil {
-		errorIf(err, "Unable to fetch object info.")
+		errorIf(err, "Unable to stream object to the client.")
 		apiErr := toAPIErrorCode(err)
 		if apiErr == ErrNoSuchKey {
 			apiErr = errAllowableObjectNotFound(bucket, r)
 		}
 		writeErrorResponse(w, apiErr, r.URL)
 		return
-	}
 
-	// Get request range.
-	var hrange *httpRange
-	rangeHeader := r.Header.Get("Range")
-	if rangeHeader != "" {
-		if hrange, err = parseRequestRange(rangeHeader, objInfo.Size); err != nil {
-			// Handle only errInvalidRange
-			// Ignore other parse error and treat it as regular Get request like Amazon S3.
-			if err == errInvalidRange {
-				writeErrorResponse(w, ErrInvalidRange, r.URL)
-				return
-			}
-
-			// log the error.
-			errorIf(err, "Invalid request range")
-		}
 	}
+	defer objectReader.Close()
 
 	// Validate pre-conditions if any.
-	if checkPreconditions(w, r, objInfo) {
+	if checkPreconditions(w, r, objectInfo) {
 		return
 	}
 
-	// Get the object.
-	var startOffset int64
-	length := objInfo.Size
 	if hrange != nil {
-		startOffset = hrange.offsetBegin
-		length = hrange.getLength()
+		offset, length, err := calcRange(startOffset, endOffset, objectInfo.Size)
+		if err == nil {
+			hrange.resourceSize = objectInfo.Size
+			hrange.offsetBegin = offset
+			hrange.offsetEnd = offset + length - 1
+		}
 	}
 
-	// Indicates if any data was written to the http.ResponseWriter
-	dataWritten := false
-	// io.Writer type which keeps track if any data was written.
-	writer := funcToWriter(func(p []byte) (int, error) {
-		if !dataWritten {
-			// Set headers on the first write.
-			// Set standard object headers.
-			setObjectHeaders(w, objInfo, hrange)
+	setObjectHeaders(w, objectInfo, hrange)
 
-			// Set any additional requested response headers.
-			setGetRespHeaders(w, r.URL.Query())
+	setGetRespHeaders(w, r.URL.Query())
 
-			dataWritten = true
-		}
-		return w.Write(p)
-	})
-
-	// Reads the object at startOffset and writes to mw.
-	if err = objectAPI.GetObject(bucket, object, startOffset, length, writer); err != nil {
+	written, err := io.Copy(w, objectReader)
+	if written == 0 && err != nil {
 		errorIf(err, "Unable to write to client.")
-		if !dataWritten {
-			// Error response only if no data has been written to client yet. i.e if
-			// partial data has already been written before an error
-			// occurred then no point in setting StatusCode and
-			// sending error XML.
-			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-		}
-		return
-	}
-	if !dataWritten {
-		// If ObjectAPI.GetObject did not return error and no data has
-		// been written it would mean that it is a 0-byte object.
-		// call wrter.Write(nil) to set appropriate headers.
-		writer.Write(nil)
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 	}
 
 	// Get host and port from Request.RemoteAddr.
@@ -185,7 +182,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	eventNotify(eventData{
 		Type:      ObjectAccessedGet,
 		Bucket:    bucket,
-		ObjInfo:   objInfo,
+		ObjInfo:   objectInfo,
 		ReqParams: extractReqParams(r),
 		UserAgent: r.UserAgent(),
 		Host:      host,

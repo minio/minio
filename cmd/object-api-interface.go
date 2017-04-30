@@ -32,7 +32,7 @@ type ObjectLayer interface {
 	ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (result ListObjectsInfo, err error)
 
 	// Object operations.
-	GetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) (err error)
+	GetObject(bucket, object string, startOffset int64, endOffset int64) (obj io.ReadCloser, info ObjectInfo, err error)
 	GetObjectInfo(bucket, object string) (objInfo ObjectInfo, err error)
 	PutObject(bucket, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (objInfo ObjectInfo, err error)
 	CopyObject(srcBucket, srcObject, destBucket, destObject string, metadata map[string]string) (objInfo ObjectInfo, err error)

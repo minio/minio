@@ -389,7 +389,7 @@ func testAPIGetObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 		apiRouter.ServeHTTP(rec, req)
 		// Assert the response code with the expected status.
 		if rec.Code != testCase.expectedRespStatus {
-			t.Fatalf("Case %d: Expected the response status to be `%d`, but instead found `%d`", i+1, testCase.expectedRespStatus, rec.Code)
+			t.Fatalf("Case %d (%s): Expected the response status to be `%d`, but instead found `%d`", i+1, instanceType, testCase.expectedRespStatus, rec.Code)
 		}
 		// read the response body.
 		actualContent, err := ioutil.ReadAll(rec.Body)
@@ -766,8 +766,13 @@ func testAPIPutObjectStreamSigV4Handler(obj ObjectLayer, instanceType, bucketNam
 			if expectedContentEncoding != objInfo.ContentEncoding {
 				t.Fatalf("Test %d: %s: ContentEncoding is set to \"%s\" which is unexpected, expected \"%s\"", i+1, instanceType, objInfo.ContentEncoding, expectedContentEncoding)
 			}
+
 			buffer := new(bytes.Buffer)
-			err = obj.GetObject(testCase.bucketName, testCase.objectName, 0, int64(testCase.dataLen), buffer)
+			objectReader, _, err := obj.GetObject(testCase.bucketName, testCase.objectName, 0, int64(testCase.dataLen)-1)
+			if err != nil {
+				t.Fatalf("Test %d: %s: Failed to fetch the copied object: <ERROR> %s", i+1, instanceType, err)
+			}
+			_, err = io.Copy(buffer, objectReader)
 			if err != nil {
 				t.Fatalf("Test %d: %s: Failed to fetch the copied object: <ERROR> %s", i+1, instanceType, err)
 			}
@@ -930,10 +935,15 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 			buffer := new(bytes.Buffer)
 
 			// Fetch the object to check whether the content is same as the one uploaded via PutObject.
-			err = obj.GetObject(testCase.bucketName, testCase.objectName, 0, int64(len(bytesData)), buffer)
+			objectReader, _, err := obj.GetObject(testCase.bucketName, testCase.objectName, 0, int64(len(bytesData))-1)
 			if err != nil {
 				t.Fatalf("Test %d: %s: Failed to fetch the copied object: <ERROR> %s", i+1, instanceType, err)
 			}
+			_, err = io.Copy(buffer, objectReader)
+			if err != nil {
+				t.Fatalf("Test %d: %s: Failed to fetch the copied object: <ERROR> %s", i+1, instanceType, err)
+			}
+
 			if !bytes.Equal(bytesData, buffer.Bytes()) {
 				t.Errorf("Test %d: %s: Data Mismatch: Data fetched back from the uploaded object doesn't match the original one.", i+1, instanceType)
 			}
@@ -973,7 +983,11 @@ func testAPIPutObjectHandler(obj ObjectLayer, instanceType, bucketName string, a
 		if testCase.expectedRespStatus == http.StatusOK {
 			buffer := new(bytes.Buffer)
 			// Fetch the object to check whether the content is same as the one uploaded via PutObject.
-			err = obj.GetObject(testCase.bucketName, testCase.objectName, 0, int64(len(bytesData)), buffer)
+			objectReader, _, err := obj.GetObject(testCase.bucketName, testCase.objectName, 0, int64(len(bytesData))-1)
+			if err != nil {
+				t.Fatalf("Test %d: %s: Failed to fetch the copied object: <ERROR> %s", i+1, instanceType, err)
+			}
+			_, err = io.Copy(buffer, objectReader)
 			if err != nil {
 				t.Fatalf("Test %d: %s: Failed to fetch the copied object: <ERROR> %s", i+1, instanceType, err)
 			}
@@ -1125,8 +1139,13 @@ func testAPICopyObjectPartHandlerSanity(obj ObjectLayer, instanceType, bucketNam
 		t.Fatalf("Test: %s expected size not written: expected %d, got %d", instanceType, len(bytesData[0].byteData), result.Size)
 	}
 
-	var buf bytes.Buffer
-	if err = obj.GetObject(bucketName, testObject, 0, int64(len(bytesData[0].byteData)), &buf); err != nil {
+	buf := new(bytes.Buffer)
+	objectReader, _, err := obj.GetObject(bucketName, testObject, 0, int64(len(bytesData[0].byteData))-1)
+	if err != nil {
+		t.Fatalf("Test: %s reading completed file failed: <ERROR> %v", instanceType, err)
+	}
+	_, err = io.Copy(buf, objectReader)
+	if err != nil {
 		t.Fatalf("Test: %s reading completed file failed: <ERROR> %v", instanceType, err)
 	}
 	if !bytes.Equal(buf.Bytes(), bytesData[0].byteData) {
@@ -1785,7 +1804,11 @@ func testAPICopyObjectHandler(obj ObjectLayer, instanceType, bucketName string, 
 		if rec.Code == http.StatusOK {
 			// See if the new object is formed.
 			// testing whether the copy was successful.
-			err = obj.GetObject(testCase.bucketName, testCase.newObjectName, 0, int64(len(bytesData[0].byteData)), buffers[0])
+			objectReader, _, err := obj.GetObject(testCase.bucketName, testCase.newObjectName, 0, int64(len(bytesData[0].byteData))-1)
+			if err != nil {
+				t.Fatalf("Test %d: %s: Failed to fetch the copied object: <ERROR> %s", i+1, instanceType, err)
+			}
+			_, err = io.Copy(buffers[0], objectReader)
 			if err != nil {
 				t.Fatalf("Test %d: %s: Failed to fetch the copied object: <ERROR> %s", i+1, instanceType, err)
 			}

@@ -250,7 +250,7 @@ func (a AzureObjects) ListObjects(bucket, prefix, marker, delimiter string, maxK
 //
 // startOffset indicates the starting read location of the object.
 // length indicates the total length of the object.
-func (a AzureObjects) GetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) error {
+func (a AzureObjects) GetObject(bucket, object string, startOffset int64, length int64) (io.ReadCloser, ObjectInfo, error) {
 	byteRange := fmt.Sprintf("%d-", startOffset)
 	if length > 0 && startOffset > 0 {
 		byteRange = fmt.Sprintf("%d-%d", startOffset, startOffset+length-1)
@@ -264,11 +264,14 @@ func (a AzureObjects) GetObject(bucket, object string, startOffset int64, length
 		rc, err = a.client.GetBlobRange(bucket, object, byteRange, nil)
 	}
 	if err != nil {
-		return azureToObjectError(traceError(err), bucket, object)
+		return nil, ObjectInfo{}, azureToObjectError(traceError(err), bucket, object)
 	}
-	_, err = io.Copy(writer, rc)
-	rc.Close()
-	return traceError(err)
+	objectInfo, err := a.GetObjectInfo(bucket, object)
+	if err != nil {
+		return nil, ObjectInfo{}, azureToObjectError(traceError(err), bucket, object)
+	}
+
+	return rc, objectInfo, nil
 }
 
 // GetObjectInfo - reads blob metadata properties and replies back ObjectInfo,

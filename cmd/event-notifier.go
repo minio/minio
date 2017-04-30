@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"net/url"
 	"path"
@@ -365,6 +366,7 @@ func eventNotify(event eventData) {
 // loads notification config if any for a given bucket, returns
 // structured notification config.
 func loadNotificationConfig(bucket string, objAPI ObjectLayer) (*notificationConfig, error) {
+
 	// Construct the notification config path.
 	ncPath := path.Join(bucketConfigPrefix, bucket, bucketNotificationConfig)
 
@@ -373,8 +375,7 @@ func loadNotificationConfig(bucket string, objAPI ObjectLayer) (*notificationCon
 	objLock.RLock()
 	defer objLock.RUnlock()
 
-	var buffer bytes.Buffer
-	err := objAPI.GetObject(minioMetaBucket, ncPath, 0, -1, &buffer) // Read everything.
+	reader, _, err := objAPI.GetObject(minioMetaBucket, ncPath, 0, -1)
 	if err != nil {
 		// 'notification.xml' not found return
 		// 'errNoSuchNotifications'.  This is default when no
@@ -388,7 +389,10 @@ func loadNotificationConfig(bucket string, objAPI ObjectLayer) (*notificationCon
 	}
 
 	// Unmarshal notification bytes.
-	notificationConfigBytes := buffer.Bytes()
+	notificationConfigBytes, err := ioutil.ReadAll(reader)
+	if err != nil {
+		return nil, err
+	}
 	notificationCfg := &notificationConfig{}
 	if err = xml.Unmarshal(notificationConfigBytes, &notificationCfg); err != nil {
 		return nil, err
@@ -401,6 +405,7 @@ func loadNotificationConfig(bucket string, objAPI ObjectLayer) (*notificationCon
 // loads notification config if any for a given bucket, returns
 // structured notification config.
 func loadListenerConfig(bucket string, objAPI ObjectLayer) ([]listenerConfig, error) {
+
 	// in single node mode, there are no peers, so in this case
 	// there is no configuration to load, as any previously
 	// connected listen clients have been disconnected
@@ -416,8 +421,7 @@ func loadListenerConfig(bucket string, objAPI ObjectLayer) ([]listenerConfig, er
 	objLock.RLock()
 	defer objLock.RUnlock()
 
-	var buffer bytes.Buffer
-	err := objAPI.GetObject(minioMetaBucket, lcPath, 0, -1, &buffer)
+	reader, _, err := objAPI.GetObject(minioMetaBucket, lcPath, 0, -1)
 	if err != nil {
 		// 'notification.xml' not found return
 		// 'errNoSuchNotifications'.  This is default when no
@@ -432,7 +436,10 @@ func loadListenerConfig(bucket string, objAPI ObjectLayer) ([]listenerConfig, er
 
 	// Unmarshal notification bytes.
 	var lCfg []listenerConfig
-	lConfigBytes := buffer.Bytes()
+	lConfigBytes, err := ioutil.ReadAll(reader)
+	if err != nil {
+		return nil, err
+	}
 	if err = json.Unmarshal(lConfigBytes, &lCfg); err != nil {
 		errorIf(err, "Unable to unmarshal listener config from JSON.")
 		return nil, err

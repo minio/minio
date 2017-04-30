@@ -263,23 +263,22 @@ func fromMinioClientListBucketResult(bucket string, result minio.ListBucketResul
 //
 // startOffset indicates the starting read location of the object.
 // length indicates the total length of the object.
-func (l *s3Gateway) GetObject(bucket string, key string, startOffset int64, length int64, writer io.Writer) error {
-	object, err := l.Client.GetObject(bucket, key)
+func (l *s3Gateway) GetObject(bucket string, key string, startOffset int64, length int64) (io.ReadCloser, ObjectInfo, error) {
+	objectReader, err := l.Client.GetObject(bucket, key)
 	if err != nil {
-		return s3ToObjectError(traceError(err), bucket, key)
+		return nil, ObjectInfo{}, s3ToObjectError(traceError(err), bucket, key)
 	}
 
-	defer object.Close()
-
-	if _, err := object.Seek(startOffset, io.SeekStart); err != nil {
-		return s3ToObjectError(traceError(err), bucket, key)
+	if _, err := objectReader.Seek(startOffset, io.SeekStart); err != nil {
+		return nil, ObjectInfo{}, s3ToObjectError(traceError(err), bucket, key)
 	}
 
-	if _, err := io.CopyN(writer, object, length); err != nil {
-		return s3ToObjectError(traceError(err), bucket, key)
+	oi, err := l.Client.StatObject(bucket, key)
+	if err != nil {
+		return nil, ObjectInfo{}, s3ToObjectError(traceError(err), bucket, key)
 	}
 
-	return nil
+	return objectReader, fromMinioClientObjectInfo(bucket, oi), nil
 }
 
 // fromMinioClientObjectInfo converts minio ObjectInfo to gateway ObjectInfo

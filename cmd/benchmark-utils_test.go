@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bytes"
+	"io"
 	"io/ioutil"
 	"math"
 	"math/rand"
@@ -229,8 +230,11 @@ func runGetObjectBenchmark(b *testing.B, obj ObjectLayer, objSize int) {
 	// the actual benchmark for GetObject starts here. Reset the benchmark timer.
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		var buffer = new(bytes.Buffer)
-		err = obj.GetObject(bucket, "object"+strconv.Itoa(i%10), 0, int64(objSize), buffer)
+		buffer, _, err := obj.GetObject(bucket, "object"+strconv.Itoa(i%10), 0, int64(objSize)-1)
+		if err != nil {
+			b.Error(err)
+		}
+		_, err = io.Copy(ioutil.Discard, buffer)
 		if err != nil {
 			b.Error(err)
 		}
@@ -387,7 +391,11 @@ func runGetObjectBenchmarkParallel(b *testing.B, obj ObjectLayer, objSize int) {
 	b.RunParallel(func(pb *testing.PB) {
 		i := 0
 		for pb.Next() {
-			err = obj.GetObject(bucket, "object"+strconv.Itoa(i), 0, int64(objSize), ioutil.Discard)
+			objReader, _, err := obj.GetObject(bucket, "object"+strconv.Itoa(i), 0, int64(objSize)-1)
+			if err != nil {
+				b.Error(err)
+			}
+			_, err = io.Copy(ioutil.Discard, objReader)
 			if err != nil {
 				b.Error(err)
 			}

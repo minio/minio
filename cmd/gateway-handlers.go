@@ -65,66 +65,17 @@ func (api gatewayAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	getObjectInfo := objectAPI.GetObjectInfo
-	if reqAuthType == authTypeAnonymous {
-		getObjectInfo = objectAPI.AnonGetObjectInfo
-	}
-	objInfo, err := getObjectInfo(bucket, object)
-	if err != nil {
-		errorIf(err, "Unable to fetch object info.")
-		apiErr := toAPIErrorCode(err)
-		if apiErr == ErrNoSuchKey {
-			apiErr = errAllowableObjectNotFound(bucket, r)
-		}
-		writeErrorResponse(w, apiErr, r.URL)
-		return
-	}
+	var err error
+	startOffset := int64(0)
+	endOffset := int64(-1)
 
 	// Get request range.
 	var hrange *httpRange
 	rangeHeader := r.Header.Get("Range")
 	if rangeHeader != "" {
-		if hrange, err = parseRequestRange(rangeHeader, objInfo.Size); err != nil {
-			// Handle only errInvalidRange
-			// Ignore other parse error and treat it as regular Get request like Amazon S3.
-			if err == errInvalidRange {
-				writeErrorResponse(w, ErrInvalidRange, r.URL)
-				return
-			}
-
-			// log the error.
-			errorIf(err, "Invalid request range")
-		}
+		startOffset, endOffset, _ = simpleParseRequestRange(rangeHeader)
+		hrange = &httpRange{startOffset, endOffset, -1}
 	}
-
-	// Validate pre-conditions if any.
-	if checkPreconditions(w, r, objInfo) {
-		return
-	}
-
-	// Get the object.
-	var startOffset int64
-	length := objInfo.Size
-	if hrange != nil {
-		startOffset = hrange.offsetBegin
-		length = hrange.getLength()
-	}
-	// Indicates if any data was written to the http.ResponseWriter
-	dataWritten := false
-	// io.Writer type which keeps track if any data was written.
-	writer := funcToWriter(func(p []byte) (int, error) {
-		if !dataWritten {
-			// Set headers on the first write.
-			// Set standard object headers.
-			setObjectHeaders(w, objInfo, hrange)
-
-			// Set any additional requested response headers.
-			setGetRespHeaders(w, r.URL.Query())
-
-			dataWritten = true
-		}
-		return w.Write(p)
-	})
 
 	getObject := objectAPI.GetObject
 	if reqAuthType == authTypeAnonymous {
@@ -132,22 +83,38 @@ func (api gatewayAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	// Reads the object at startOffset and writes to mw.
-	if err := getObject(bucket, object, startOffset, length, writer); err != nil {
+	objectReader, objectInfo, err := getObject(bucket, object, startOffset, endOffset)
+	if err != nil {
 		errorIf(err, "Unable to write to client.")
-		if !dataWritten {
-			// Error response only if no data has been written to client yet. i.e if
-			// partial data has already been written before an error
-			// occurred then no point in setting StatusCode and
-			// sending error XML.
-			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-		}
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
-	if !dataWritten {
-		// If ObjectAPI.GetObject did not return error and no data has
-		// been written it would mean that it is a 0-byte object.
-		// call wrter.Write(nil) to set appropriate headers.
-		writer.Write(nil)
+
+	// Validate pre-conditions if any.
+	if checkPreconditions(w, r, objectInfo) {
+		return
+	}
+
+	if hrange != nil {
+		offset, length, err := calcRange(startOffset, endOffset, objectInfo.Size)
+		if err == nil {
+			hrange.resourceSize = objectInfo.Size
+			hrange.offsetBegin = offset
+			hrange.offsetEnd = offset + length - 1
+		}
+	}
+
+	// Set headers on the first write.
+	// Set standard object headers.
+	setObjectHeaders(w, objectInfo, hrange)
+
+	// Set any additional requested response headers.
+	setGetRespHeaders(w, r.URL.Query())
+
+	written, err := io.Copy(w, objectReader)
+	if written == 0 && err != nil {
+		errorIf(err, "Unable to write to client.")
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 	}
 }
 

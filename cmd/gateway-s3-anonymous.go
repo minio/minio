@@ -19,20 +19,22 @@ package cmd
 import "io"
 
 // AnonGetObject - Get object anonymously
-func (l *s3Gateway) AnonGetObject(bucket string, key string, startOffset int64, length int64, writer io.Writer) error {
-	object, err := l.anonClient.GetObject(bucket, key)
+func (l *s3Gateway) AnonGetObject(bucket string, key string, startOffset int64, length int64) (rc io.ReadCloser, info ObjectInfo, err error) {
+	objectData, err := l.anonClient.GetObject(bucket, key)
 	if err != nil {
-		return s3ToObjectError(traceError(err), bucket, key)
+		return nil, ObjectInfo{}, s3ToObjectError(traceError(err), bucket, key)
 	}
 
-	defer object.Close()
+	defer objectData.Close()
 
-	object.Seek(startOffset, io.SeekStart)
-	if _, err := io.CopyN(writer, object, length); err != nil {
-		return s3ToObjectError(traceError(err), bucket, key)
+	objectData.Seek(startOffset, io.SeekStart)
+
+	objectInfo, err := l.AnonGetObjectInfo(bucket, key)
+	if err != nil {
+		return nil, ObjectInfo{}, s3ToObjectError(traceError(err), bucket, key)
 	}
 
-	return nil
+	return objectData, objectInfo, nil
 }
 
 // AnonGetObjectInfo - Get object info anonymously

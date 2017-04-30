@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"hash"
 	"io"
+	"io/ioutil"
 	"path"
 	"strconv"
 	"strings"
@@ -120,26 +121,17 @@ func (xl xlObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string
 		return objInfo, nil
 	}
 
-	// Initialize pipe.
-	pipeReader, pipeWriter := io.Pipe()
+	var startOffset int64 // Read the whole file.
+	objectReader, _, gerr := xl.GetObject(srcBucket, srcObject, startOffset, length-1)
+	if gerr != nil {
+		errorIf(gerr, "Unable to read %s of the object `%s/%s`.", srcBucket, srcObject)
+		return ObjectInfo{}, toObjectErr(gerr, srcBucket, srcObject)
+	}
 
-	go func() {
-		var startOffset int64 // Read the whole file.
-		if gerr := xl.GetObject(srcBucket, srcObject, startOffset, length, pipeWriter); gerr != nil {
-			errorIf(gerr, "Unable to read %s of the object `%s/%s`.", srcBucket, srcObject)
-			pipeWriter.CloseWithError(toObjectErr(gerr, srcBucket, srcObject))
-			return
-		}
-		pipeWriter.Close() // Close writer explicitly signalling we wrote all data.
-	}()
-
-	objInfo, err := xl.PutObject(dstBucket, dstObject, length, pipeReader, metadata, "")
+	objInfo, err := xl.PutObject(dstBucket, dstObject, length, objectReader, metadata, "")
 	if err != nil {
 		return ObjectInfo{}, toObjectErr(err, dstBucket, dstObject)
 	}
-
-	// Explicitly close the reader.
-	pipeReader.Close()
 
 	return objInfo, nil
 }
@@ -150,25 +142,21 @@ func (xl xlObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string
 //
 // startOffset indicates the starting read location of the object.
 // length indicates the total length of the object.
-func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) error {
+func (xl xlObjects) GetObject(bucket, object string, startOffset int64, endOffset int64) (obj io.ReadCloser, info ObjectInfo, err error) {
+
 	if err := checkGetObjArgs(bucket, object); err != nil {
-		return err
+		return nil, ObjectInfo{}, err
 	}
 
-	// Start offset cannot be negative.
-	if startOffset < 0 {
-		return traceError(errUnexpected)
-	}
-
-	// Writer cannot be nil.
-	if writer == nil {
-		return traceError(errUnexpected)
+	objInfo, err := xl.GetObjectInfo(bucket, object)
+	if err != nil {
+		return nil, ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
 	// Read metadata associated with the object from all disks.
 	metaArr, errs := readAllXLMetadata(xl.storageDisks, bucket, object)
 	if reducedErr := reduceReadQuorumErrs(errs, objectOpIgnoredErrs, xl.readQuorum); reducedErr != nil {
-		return toObjectErr(reducedErr, bucket, object)
+		return nil, ObjectInfo{}, toObjectErr(reducedErr, bucket, object)
 	}
 
 	// List all online disks.
@@ -177,7 +165,7 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 	// Pick latest valid metadata.
 	xlMeta, err := pickValidXLMeta(metaArr, modTime)
 	if err != nil {
-		return err
+		return nil, ObjectInfo{}, err
 	}
 
 	// Reorder online disks based on erasure distribution order.
@@ -186,36 +174,28 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 	// Reorder parts metadata based on erasure distribution order.
 	metaArr = shufflePartsMetadata(metaArr, xlMeta.Erasure.Distribution)
 
-	// For negative length read everything.
-	if length < 0 {
-		length = xlMeta.Stat.Size - startOffset
-	}
-
-	// Reply back invalid range if the input offset and length fall out of range.
-	if startOffset > xlMeta.Stat.Size || startOffset+length > xlMeta.Stat.Size {
-		return traceError(InvalidRange{startOffset, length, xlMeta.Stat.Size})
+	offset, length, err := calcRange(startOffset, endOffset, xlMeta.Stat.Size)
+	if err != nil {
+		return nil, ObjectInfo{}, err
 	}
 
 	// Get start part index and offset.
-	partIndex, partOffset, err := xlMeta.ObjectToPartOffset(startOffset)
+	partIndex, partOffset, err := xlMeta.ObjectToPartOffset(offset)
 	if err != nil {
-		return traceError(InvalidRange{startOffset, length, xlMeta.Stat.Size})
-	}
-
-	// Calculate endOffset according to length
-	endOffset := startOffset
-	if length > 0 {
-		endOffset += length - 1
+		return nil, ObjectInfo{}, traceError(InvalidRange{offset, length, xlMeta.Stat.Size})
 	}
 
 	// Get last part index to read given length.
-	lastPartIndex, _, err := xlMeta.ObjectToPartOffset(endOffset)
+	lastPartIndex, _, err := xlMeta.ObjectToPartOffset(offset + length - 1)
 	if err != nil {
-		return traceError(InvalidRange{startOffset, length, xlMeta.Stat.Size})
+		return nil, ObjectInfo{}, traceError(InvalidRange{offset, length, xlMeta.Stat.Size})
 	}
 
 	// Save the writer.
-	mw := writer
+
+	pipeReader, pipeWriter := io.Pipe()
+
+	mw := io.Writer(pipeWriter)
 
 	// Object cache enabled block.
 	if xlMeta.Stat.Size > 0 && xl.objCacheEnabled {
@@ -224,38 +204,39 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 		cachedBuffer, err = xl.objCache.Open(path.Join(bucket, object), modTime)
 		if err == nil { // Cache hit
 			// Create a new section reader, starting at an offset with length.
-			reader := io.NewSectionReader(cachedBuffer, startOffset, length)
+			reader := io.NewSectionReader(cachedBuffer, offset, length)
 
 			// Copy the data out.
-			if _, err = io.Copy(writer, reader); err != nil {
+			/* if _, err = io.Copy(writer, reader); err != nil {
 				return traceError(err)
 			}
 
 			// Success.
-			return nil
+			return nil */
+			return ioutil.NopCloser(reader), ObjectInfo{}, nil
 
 		} // Cache miss.
 
 		// For unknown error, return and error out.
 		if err != objcache.ErrKeyNotFoundInCache {
-			return traceError(err)
+			return nil, ObjectInfo{}, traceError(err)
 		} // Cache has not been found, fill the cache.
 
 		// Cache is only set if whole object is being read.
-		if startOffset == 0 && length == xlMeta.Stat.Size {
+		if offset == 0 && length == xlMeta.Stat.Size {
 			// Proceed to set the cache.
 			var newBuffer io.WriteCloser
 			// Create a new entry in memory of length.
 			newBuffer, err = xl.objCache.Create(path.Join(bucket, object), length)
 			if err == nil {
 				// Create a multi writer to write to both memory and client response.
-				mw = io.MultiWriter(newBuffer, writer)
+				mw = io.MultiWriter(newBuffer, pipeWriter)
 				defer newBuffer.Close()
 			}
 			// Ignore error if cache is full, proceed to write the object.
 			if err != nil && err != objcache.ErrCacheFull {
 				// For any other error return here.
-				return toObjectErr(traceError(err), bucket, object)
+				return nil, ObjectInfo{}, toObjectErr(traceError(err), bucket, object)
 			}
 		}
 	}
@@ -265,57 +246,62 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 	chunkSize := getChunkSize(xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks)
 	pool := bpool.NewBytePool(chunkSize, len(onlineDisks))
 
-	// Read from all parts.
-	for ; partIndex <= lastPartIndex; partIndex++ {
-		if length == totalBytesRead {
-			break
-		}
-		// Save the current part name and size.
-		partName := xlMeta.Parts[partIndex].Name
-		partSize := xlMeta.Parts[partIndex].Size
-
-		readSize := partSize - partOffset
-		// readSize should be adjusted so that we don't write more data than what was requested.
-		if readSize > (length - totalBytesRead) {
-			readSize = length - totalBytesRead
-		}
-
-		// Get the checksums of the current part.
-		checkSums := make([]string, len(onlineDisks))
-		var ckSumAlgo string
-		for index, disk := range onlineDisks {
-			// Disk is not found skip the checksum.
-			if disk == nil {
-				checkSums[index] = ""
-				continue
+	go func() {
+		// Read from all parts.
+		for ; partIndex <= lastPartIndex; partIndex++ {
+			if length == totalBytesRead {
+				break
 			}
-			ckSumInfo := metaArr[index].Erasure.GetCheckSumInfo(partName)
-			checkSums[index] = ckSumInfo.Hash
-			// Set checksum algo only once, while it is possible to have
-			// different algos per block because of our `xl.json`.
-			// It is not a requirement, set this only once for all the disks.
-			if ckSumAlgo == "" {
-				ckSumAlgo = ckSumInfo.Algorithm
+			// Save the current part name and size.
+			partName := xlMeta.Parts[partIndex].Name
+			partSize := xlMeta.Parts[partIndex].Size
+
+			readSize := partSize - partOffset
+			// readSize should be adjusted so that we don't write more data than what was requested.
+			if readSize > (length - totalBytesRead) {
+				readSize = length - totalBytesRead
 			}
-		}
 
-		// Start erasure decoding and writing to the client.
-		n, err := erasureReadFile(mw, onlineDisks, bucket, pathJoin(object, partName), partOffset, readSize, partSize, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks, xlMeta.Erasure.ParityBlocks, checkSums, ckSumAlgo, pool)
-		if err != nil {
-			errorIf(err, "Unable to read %s of the object `%s/%s`.", partName, bucket, object)
-			return toObjectErr(err, bucket, object)
-		}
+			// Get the checksums of the current part.
+			checkSums := make([]string, len(onlineDisks))
+			var ckSumAlgo string
+			for index, disk := range onlineDisks {
+				// Disk is not found skip the checksum.
+				if disk == nil {
+					checkSums[index] = ""
+					continue
+				}
+				ckSumInfo := metaArr[index].Erasure.GetCheckSumInfo(partName)
+				checkSums[index] = ckSumInfo.Hash
+				// Set checksum algo only once, while it is possible to have
+				// different algos per block because of our `xl.json`.
+				// It is not a requirement, set this only once for all the disks.
+				if ckSumAlgo == "" {
+					ckSumAlgo = ckSumInfo.Algorithm
+				}
+			}
 
-		// Track total bytes read from disk and written to the client.
-		totalBytesRead += n
+			// Start erasure decoding and writing to the client.
+			n, err := erasureReadFile(mw, onlineDisks, bucket, pathJoin(object, partName), partOffset, readSize, partSize, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks, xlMeta.Erasure.ParityBlocks, checkSums, ckSumAlgo, pool)
+			if err != nil {
+				errorIf(err, "Unable to read %s of the object `%s/%s`.", partName, bucket, object)
+				pipeWriter.CloseWithError(err) // return nil, ObjectInfo{}, toObjectErr(err, bucket, object)
+				break
+			}
 
-		// partOffset will be valid only for the first part, hence reset it to 0 for
-		// the remaining parts.
-		partOffset = 0
-	} // End of read all parts loop.
+			// Track total bytes read from disk and written to the client.
+			totalBytesRead += n
+
+			// partOffset will be valid only for the first part, hence reset it to 0 for
+			// the remaining parts.
+			partOffset = 0
+		} // End of read all parts loop.
+
+		pipeWriter.Close()
+	}()
 
 	// Return success.
-	return nil
+	return pipeReader, objInfo, nil
 }
 
 // GetObjectInfo - reads object metadata and replies back ObjectInfo.

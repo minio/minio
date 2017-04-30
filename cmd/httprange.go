@@ -132,3 +132,49 @@ func parseRequestRange(rangeString string, resourceSize int64) (hrange *httpRang
 
 	return &httpRange{offsetBegin, offsetEnd, resourceSize}, nil
 }
+
+func simpleParseRequestRange(rangeString string) (int64, int64, error) {
+	var err error
+
+	// Return error if given range string doesn't start with byte range prefix.
+	if !strings.HasPrefix(rangeString, byteRangePrefix) {
+		return -1, -1, fmt.Errorf("'%s' does not start with '%s'", rangeString, byteRangePrefix)
+	}
+
+	// Trim byte range prefix.
+	byteRangeString := strings.TrimPrefix(rangeString, byteRangePrefix)
+
+	// Check if range string contains delimiter '-', else return error. eg. "bytes=8"
+	sepIndex := strings.Index(byteRangeString, "-")
+	if sepIndex == -1 {
+		return -1, -1, fmt.Errorf("'%s' does not have a valid range value", rangeString)
+	}
+
+	offsetBeginString := byteRangeString[:sepIndex]
+	offsetBegin := int64(-1)
+	// Convert offsetBeginString only if its not empty.
+	if len(offsetBeginString) > 0 {
+		if !validBytePos.MatchString(offsetBeginString) {
+			return -1, -1, fmt.Errorf("'%s' does not have a valid first byte position value", rangeString)
+		}
+
+		if offsetBegin, err = strconv.ParseInt(offsetBeginString, 10, 64); err != nil {
+			return -1, -1, fmt.Errorf("'%s' does not have a valid first byte position value", rangeString)
+		}
+	}
+
+	offsetEndString := byteRangeString[sepIndex+1:]
+	offsetEnd := int64(-1)
+	// Convert offsetEndString only if its not empty.
+	if len(offsetEndString) > 0 {
+		if !validBytePos.MatchString(offsetEndString) {
+			return -1, -1, fmt.Errorf("'%s' does not have a valid last byte position value", rangeString)
+		}
+
+		if offsetEnd, err = strconv.ParseInt(offsetEndString, 10, 64); err != nil {
+			return -1, -1, fmt.Errorf("'%s' does not have a valid last byte position value", rangeString)
+		}
+	}
+
+	return offsetBegin, offsetEnd, nil
+}

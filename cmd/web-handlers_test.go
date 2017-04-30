@@ -708,8 +708,12 @@ func testUploadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler
 		t.Fatalf("Expected the response status to be 200, but instead found `%d`", code)
 	}
 
-	var byteBuffer bytes.Buffer
-	err = obj.GetObject(bucketName, objectName, 0, int64(len(content)), &byteBuffer)
+	byteBuffer := new(bytes.Buffer)
+	objReader, _, err := obj.GetObject(bucketName, objectName, 0, int64(len(content))-1)
+	if err != nil {
+		t.Fatalf("Failed, %v", err)
+	}
+	_, err = io.Copy(byteBuffer, objReader)
 	if err != nil {
 		t.Fatalf("Failed, %v", err)
 	}

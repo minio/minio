@@ -541,25 +541,18 @@ func (xl xlObjects) CopyObjectPart(srcBucket, srcObject, dstBucket, dstObject, u
 		return PartInfo{}, err
 	}
 
-	// Initialize pipe.
-	pipeReader, pipeWriter := io.Pipe()
+	endOffset := startOffset + length - 1
 
-	go func() {
-		if gerr := xl.GetObject(srcBucket, srcObject, startOffset, length, pipeWriter); gerr != nil {
-			errorIf(gerr, "Unable to read %s of the object `%s/%s`.", srcBucket, srcObject)
-			pipeWriter.CloseWithError(toObjectErr(gerr, srcBucket, srcObject))
-			return
-		}
-		pipeWriter.Close() // Close writer explicitly signalling we wrote all data.
-	}()
+	objectReader, _, gerr := xl.GetObject(srcBucket, srcObject, startOffset, endOffset)
+	if gerr != nil {
+		errorIf(gerr, "Unable to read %s of the object `%s/%s`.", srcBucket, srcObject)
+		return PartInfo{}, toObjectErr(gerr, srcBucket, srcObject)
+	}
 
-	partInfo, err := xl.PutObjectPart(dstBucket, dstObject, uploadID, partID, length, pipeReader, "", "")
+	partInfo, err := xl.PutObjectPart(dstBucket, dstObject, uploadID, partID, length, objectReader, "", "")
 	if err != nil {
 		return PartInfo{}, toObjectErr(err, dstBucket, dstObject)
 	}
-
-	// Explicitly close the reader.
-	pipeReader.Close()
 
 	// Success.
 	return partInfo, nil
@@ -1004,7 +997,10 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 			// Prefetch the object from disk by triggering a fake GetObject call
 			// Unlike a regular single PutObject,  multipart PutObject is comes in
 			// stages and it is harder to cache.
-			go xl.GetObject(bucket, object, 0, objectSize, ioutil.Discard)
+			objectReader, _, err := xl.GetObject(bucket, object, 0, objectSize-1)
+			if err == nil {
+				go io.Copy(ioutil.Discard, objectReader)
+			}
 		}
 	}()
 

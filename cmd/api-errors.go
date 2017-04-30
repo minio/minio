@@ -677,6 +677,8 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrNoSuchKey
 	case ObjectNameInvalid:
 		apiErr = ErrInvalidObjectName
+	case InvalidRange:
+		apiErr = ErrInvalidRange
 	case InvalidUploadID:
 		apiErr = ErrNoSuchUpload
 	case InvalidPart:

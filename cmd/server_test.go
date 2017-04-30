@@ -1896,6 +1896,7 @@ func (s *TestSuiteCommon) TestGetPartialObjectMisAligned(c *C) {
 		c.Assert(err, IsNil)
 		// Since only part of the object is requested, expecting response status to be http.StatusPartialContent .
 		c.Assert(response.StatusCode, Equals, http.StatusPartialContent)
+
 		// parse the HTTP response body.
 		getContent, err := ioutil.ReadAll(response.Body)
 		c.Assert(err, IsNil)

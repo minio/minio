@@ -231,3 +231,38 @@ func cleanupDir(storage StorageAPI, volume, dirPath string) error {
 	err := delFunc(retainSlash(pathJoin(dirPath)))
 	return err
 }
+
+func calcRange(startOffset, endOffset int64, size int64) (offset, length int64, err error) {
+	switch {
+	// bytes=3-4
+	case startOffset > -1 && endOffset > -1:
+		if startOffset > endOffset {
+			return 0, 0, InvalidRange{startOffset, endOffset, size}
+		}
+		offset = startOffset
+		length = endOffset - startOffset + 1
+		if offset+length > size {
+			length = size - offset
+		}
+	// bytes=10-
+	case startOffset > -1 && endOffset < 0:
+		offset = startOffset
+		length = size - startOffset
+	// bytes=-3
+	case startOffset < 0 && endOffset > -1:
+		// bytes=-0
+		if endOffset == 0 {
+			return 0, 0, InvalidRange{-1, 0, size}
+		}
+		offset = size - endOffset
+		length = endOffset
+	// bytes=-
+	case startOffset < 0 && endOffset < 0:
+		return 0, 0, InvalidRange{-1, -1, size}
+	}
+
+	if offset > size {
+		return 0, 0, InvalidRange{startOffset, endOffset, size}
+	}
+	return
+}

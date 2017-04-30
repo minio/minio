@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -544,10 +545,14 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	objectLock.RLock()
 	defer objectLock.RUnlock()
 
-	if err := objectAPI.GetObject(bucket, object, 0, -1, w); err != nil {
+	objectReader, _, err := objectAPI.GetObject(bucket, object, 0, -1)
+	if err != nil {
 		/// No need to print error, response writer already written to.
+		writeWebErrorResponse(w, errUnexpected)
 		return
 	}
+
+	io.Copy(w, objectReader)
 }
 
 // DownloadZipArgs - Argument for downloading a bunch of files as a zip file.
@@ -601,7 +606,17 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 				writeWebErrorResponse(w, errUnexpected)
 				return err
 			}
-			return objectAPI.GetObject(args.BucketName, objectName, 0, info.Size, writer)
+			objectReader, _, err := objectAPI.GetObject(args.BucketName, objectName, 0, info.Size-1)
+			if err != nil {
+				writeWebErrorResponse(w, errUnexpected)
+				return err
+			}
+			_, err = io.Copy(writer, objectReader)
+			if err != nil {
+				writeWebErrorResponse(w, errUnexpected)
+				return err
+			}
+			return nil
 		}
 
 		if !hasSuffix(object, slashSeparator) {

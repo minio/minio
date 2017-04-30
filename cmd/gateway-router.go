@@ -29,7 +29,7 @@ type GatewayLayer interface {
 
 	MakeBucketWithLocation(bucket, location string) error
 
-	AnonGetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) (err error)
+	AnonGetObject(bucket, object string, startOffset int64, endOffset int64) (io.ReadCloser, ObjectInfo, error)
 	AnonGetObjectInfo(bucket, object string) (objInfo ObjectInfo, err error)
 	SetBucketPolicies(string, policy.BucketAccessPolicy) error
 	GetBucketPolicies(string) (policy.BucketAccessPolicy, error)

@@ -345,26 +345,17 @@ func (fs fsObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string
 	// Length of the file to read.
 	length := fi.Size()
 
-	// Initialize pipe.
-	pipeReader, pipeWriter := io.Pipe()
+	var startOffset int64 // Read the whole file.
+	objectReader, _, gerr := fs.GetObject(srcBucket, srcObject, startOffset, length-1)
+	if gerr != nil {
+		errorIf(gerr, "Unable to read %s/%s.", srcBucket, srcObject)
+		return ObjectInfo{}, gerr
+	}
 
-	go func() {
-		var startOffset int64 // Read the whole file.
-		if gerr := fs.GetObject(srcBucket, srcObject, startOffset, length, pipeWriter); gerr != nil {
-			errorIf(gerr, "Unable to read %s/%s.", srcBucket, srcObject)
-			pipeWriter.CloseWithError(gerr)
-			return
-		}
-		pipeWriter.Close() // Close writer explicitly signalling we wrote all data.
-	}()
-
-	objInfo, err := fs.PutObject(dstBucket, dstObject, length, pipeReader, metadata, "")
+	objInfo, err := fs.PutObject(dstBucket, dstObject, length, objectReader, metadata, "")
 	if err != nil {
 		return ObjectInfo{}, toObjectErr(err, dstBucket, dstObject)
 	}
-
-	// Explicitly close the reader.
-	pipeReader.Close()
 
 	return objInfo, nil
 }
@@ -375,91 +366,63 @@ func (fs fsObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string
 //
 // startOffset indicates the starting read location of the object.
 // length indicates the total length of the object.
-func (fs fsObjects) GetObject(bucket, object string, offset int64, length int64, writer io.Writer) (err error) {
+func (fs fsObjects) GetObject(bucket, object string, startOffset int64, endOffset int64) (objReader io.ReadCloser, objInfo ObjectInfo, err error) {
 	if err = checkGetObjArgs(bucket, object); err != nil {
-		return err
+		return nil, ObjectInfo{}, err
 	}
 
 	if _, err = fs.statBucketDir(bucket); err != nil {
-		return toObjectErr(err, bucket)
+		return nil, ObjectInfo{}, toObjectErr(err, bucket)
 	}
 
-	// Offset cannot be negative.
-	if offset < 0 {
-		return toObjectErr(traceError(errUnexpected), bucket, object)
-	}
-
-	// Writer cannot be nil.
-	if writer == nil {
-		return toObjectErr(traceError(errUnexpected), bucket, object)
-	}
+	fsMeta := fsMetaV1{}
 
 	if bucket != minioMetaBucket {
 		fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fsMetaJSONFile)
-		_, err = fs.rwPool.Open(fsMetaPath)
-		if err != nil && err != errFileNotFound {
-			return toObjectErr(traceError(err), bucket, object)
+		rlk, err := fs.rwPool.Open(fsMetaPath)
+		if err == nil {
+			defer fs.rwPool.Close(fsMetaPath)
+			if _, rerr := fsMeta.ReadFrom(rlk.LockedFile); rerr != nil {
+				// `fs.json` can be empty due to previously failed
+				// PutObject() transaction, if we arrive at such
+				// a situation we just ignore and continue.
+				if errorCause(rerr) != io.EOF {
+					return nil, ObjectInfo{}, toObjectErr(rerr, bucket, object)
+				}
+			}
 		}
-		defer fs.rwPool.Close(fsMetaPath)
+		if err != nil && err != errFileNotFound {
+			return nil, ObjectInfo{}, toObjectErr(traceError(err), bucket, object)
+		}
+	}
+
+	objInfo, err = fs.getObjectInfo(bucket, object, fsMeta)
+	if err != nil {
+		return nil, ObjectInfo{}, toObjectErr(err, bucket, object)
+	}
+
+	offset, length, err := calcRange(startOffset, endOffset, objInfo.Size)
+	if err != nil {
+		return nil, ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
 	// Read the object, doesn't exist returns an s3 compatible error.
 	fsObjPath := pathJoin(fs.fsPath, bucket, object)
-	reader, size, err := fsOpenFile(fsObjPath, offset)
+	reader, _, err := fsOpenFile(fsObjPath, offset)
 	if err != nil {
-		return toObjectErr(err, bucket, object)
-	}
-	defer reader.Close()
-
-	bufSize := int64(readSizeV1)
-	if length > 0 && bufSize > length {
-		bufSize = length
+		return nil, ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
-	// For negative length we read everything.
-	if length < 0 {
-		length = size - offset
+	objReader = reader
+	if length >= 0 {
+		objReader = ioutil.NopCloser(io.LimitReader(reader, length))
 	}
 
-	// Reply back invalid range if the input offset and length fall out of range.
-	if offset > size || offset+length > size {
-		return traceError(InvalidRange{offset, length, size})
-	}
-
-	// Allocate a staging buffer.
-	buf := make([]byte, int(bufSize))
-
-	_, err = io.CopyBuffer(writer, io.LimitReader(reader, length), buf)
-
-	return toObjectErr(traceError(err), bucket, object)
+	return objReader, objInfo, nil
 }
 
 // getObjectInfo - wrapper for reading object metadata and constructs ObjectInfo.
-func (fs fsObjects) getObjectInfo(bucket, object string) (ObjectInfo, error) {
-	fsMeta := fsMetaV1{}
-	fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fsMetaJSONFile)
-
-	// Read `fs.json` to perhaps contend with
-	// parallel Put() operations.
-	rlk, err := fs.rwPool.Open(fsMetaPath)
-	if err == nil {
-		// Read from fs metadata only if it exists.
-		defer fs.rwPool.Close(fsMetaPath)
-		if _, rerr := fsMeta.ReadFrom(rlk.LockedFile); rerr != nil {
-			// `fs.json` can be empty due to previously failed
-			// PutObject() transaction, if we arrive at such
-			// a situation we just ignore and continue.
-			if errorCause(rerr) != io.EOF {
-				return ObjectInfo{}, toObjectErr(rerr, bucket, object)
-			}
-		}
-	}
-
-	// Ignore if `fs.json` is not available, this is true for pre-existing data.
-	if err != nil && err != errFileNotFound {
-		return ObjectInfo{}, toObjectErr(traceError(err), bucket, object)
-	}
-
+func (fs fsObjects) getObjectInfo(bucket, object string, fsMeta fsMetaV1) (ObjectInfo, error) {
 	// Stat the file to get file size.
 	fi, err := fsStatFile(pathJoin(fs.fsPath, bucket, object))
 	if err != nil {
@@ -485,7 +448,31 @@ func (fs fsObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 		return ObjectInfo{}, toObjectErr(err, bucket)
 	}
 
-	return fs.getObjectInfo(bucket, object)
+	fsMeta := fsMetaV1{}
+	fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fsMetaJSONFile)
+
+	// Read `fs.json` to perhaps contend with
+	// parallel Put() operations.
+	rlk, err := fs.rwPool.Open(fsMetaPath)
+	if err == nil {
+		// Read from fs metadata only if it exists.
+		defer fs.rwPool.Close(fsMetaPath)
+		if _, rerr := fsMeta.ReadFrom(rlk.LockedFile); rerr != nil {
+			// `fs.json` can be empty due to previously failed
+			// PutObject() transaction, if we arrive at such
+			// a situation we just ignore and continue.
+			if errorCause(rerr) != io.EOF {
+				return ObjectInfo{}, toObjectErr(rerr, bucket, object)
+			}
+		}
+	}
+
+	// Ignore if `fs.json` is not available, this is true for pre-existing data.
+	if err != nil && err != errFileNotFound {
+		return ObjectInfo{}, toObjectErr(traceError(err), bucket, object)
+	}
+
+	return fs.getObjectInfo(bucket, object, fsMeta)
 }
 
 // PutObject - creates an object upon reading from the input stream

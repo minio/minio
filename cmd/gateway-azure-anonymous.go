@@ -59,11 +59,11 @@ func (a AzureObjects) AnonGetBucketInfo(bucket string) (bucketInfo BucketInfo, e
 
 // AnonGetObject - SendGET request without authentication.
 // This is needed when clients send GET requests on objects that can be downloaded without auth.
-func (a AzureObjects) AnonGetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) (err error) {
+func (a AzureObjects) AnonGetObject(bucket, object string, startOffset int64, length int64) (rc io.ReadCloser, info ObjectInfo, err error) {
 	u := a.client.GetBlobURL(bucket, object)
 	req, err := http.NewRequest("GET", u, nil)
 	if err != nil {
-		return azureToObjectError(traceError(err), bucket, object)
+		return nil, ObjectInfo{}, azureToObjectError(traceError(err), bucket, object)
 	}
 
 	if length > 0 && startOffset > 0 {
@@ -74,16 +74,49 @@ func (a AzureObjects) AnonGetObject(bucket, object string, startOffset int64, le
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return azureToObjectError(traceError(err), bucket, object)
+		return nil, ObjectInfo{}, azureToObjectError(traceError(err), bucket, object)
 	}
-	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusPartialContent && resp.StatusCode != http.StatusOK {
-		return azureToObjectError(traceError(anonErrToObjectErr(resp.StatusCode, bucket, object)), bucket, object)
+		return nil, ObjectInfo{}, azureToObjectError(traceError(anonErrToObjectErr(resp.StatusCode, bucket, object)), bucket, object)
 	}
 
-	_, err = io.Copy(writer, resp.Body)
-	return traceError(err)
+	objectInfo, err := a.headersToObjectInfo(bucket, object, resp.Header)
+	if err != nil {
+		return nil, ObjectInfo{}, azureToObjectError(traceError(anonErrToObjectErr(resp.StatusCode, bucket, object)), bucket, object)
+	}
+
+	return resp.Body, objectInfo, nil
+}
+
+func (a AzureObjects) headersToObjectInfo(bucket, object string, respHeader http.Header) (objInfo ObjectInfo, err error) {
+	var contentLength int64
+	contentLengthStr := respHeader.Get("Content-Length")
+	if contentLengthStr != "" {
+		contentLength, err = strconv.ParseInt(contentLengthStr, 0, 64)
+		if err != nil {
+			return objInfo, azureToObjectError(traceError(errUnexpected), bucket, object)
+		}
+	}
+
+	t, err := time.Parse(time.RFC1123, respHeader.Get("Last-Modified"))
+	if err != nil {
+		return objInfo, traceError(err)
+	}
+
+	objInfo.ModTime = t
+	objInfo.Bucket = bucket
+	objInfo.UserDefined = make(map[string]string)
+	if respHeader.Get("Content-Encoding") != "" {
+		objInfo.UserDefined["Content-Encoding"] = respHeader.Get("Content-Encoding")
+	}
+	objInfo.UserDefined["Content-Type"] = respHeader.Get("Content-Type")
+	objInfo.MD5Sum = respHeader.Get("Etag")
+	objInfo.ModTime = t
+	objInfo.Name = object
+	objInfo.Size = contentLength
+
+	return
 }
 
 // AnonGetObjectInfo - Send HEAD request without authentication and convert the
@@ -99,32 +132,7 @@ func (a AzureObjects) AnonGetObjectInfo(bucket, object string) (objInfo ObjectIn
 		return objInfo, azureToObjectError(traceError(anonErrToObjectErr(resp.StatusCode, bucket, object)), bucket, object)
 	}
 
-	var contentLength int64
-	contentLengthStr := resp.Header.Get("Content-Length")
-	if contentLengthStr != "" {
-		contentLength, err = strconv.ParseInt(contentLengthStr, 0, 64)
-		if err != nil {
-			return objInfo, azureToObjectError(traceError(errUnexpected), bucket, object)
-		}
-	}
-
-	t, err := time.Parse(time.RFC1123, resp.Header.Get("Last-Modified"))
-	if err != nil {
-		return objInfo, traceError(err)
-	}
-
-	objInfo.ModTime = t
-	objInfo.Bucket = bucket
-	objInfo.UserDefined = make(map[string]string)
-	if resp.Header.Get("Content-Encoding") != "" {
-		objInfo.UserDefined["Content-Encoding"] = resp.Header.Get("Content-Encoding")
-	}
-	objInfo.UserDefined["Content-Type"] = resp.Header.Get("Content-Type")
-	objInfo.MD5Sum = resp.Header.Get("Etag")
-	objInfo.ModTime = t
-	objInfo.Name = object
-	objInfo.Size = contentLength
-	return
+	return a.headersToObjectInfo(bucket, object, resp.Header)
 }
 
 // AnonListObjects - Use Azure equivalent ListBlobs.

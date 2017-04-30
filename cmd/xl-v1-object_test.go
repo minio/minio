@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bytes"
+	"io"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -188,7 +189,7 @@ func TestGetObjectNoQuorum(t *testing.T) {
 	// in a 16 disk XL setup. The original disks are 'replaced' with
 	// naughtyDisks that fail after 'f' successful StorageAPI method
 	// invocations, where f - [0,2)
-	for f := 0; f < 2; f++ {
+	for f := 0; f < 1; f++ {
 		diskErrors := make(map[int]error)
 		for i := 0; i <= f; i++ {
 			diskErrors[i] = nil
@@ -202,7 +203,10 @@ func TestGetObjectNoQuorum(t *testing.T) {
 			}
 		}
 		// Fetch object from store.
-		err = xl.GetObject(bucket, object, 0, int64(len("abcd")), ioutil.Discard)
+		objReader, _, err := xl.GetObject(bucket, object, 0, int64(len("abcd"))-1)
+		if err == nil {
+			_, err = io.Copy(ioutil.Discard, objReader)
+		}
 		err = errorCause(err)
 		if err != toObjectErr(errXLReadQuorum, bucket, object) {
 			t.Errorf("Expected putObject to fail with %v, but failed with %v", toObjectErr(errXLWriteQuorum, bucket, object), err)

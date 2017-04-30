@@ -413,29 +413,23 @@ func partToAppend(fsMeta fsMetaV1, fsAppendMeta fsMetaV1) (part objectPartInfo, 
 // object. Internally incoming data is written to '.minio.sys/tmp' location
 // and safely renamed to '.minio.sys/multipart' for reach parts.
 func (fs fsObjects) CopyObjectPart(srcBucket, srcObject, dstBucket, dstObject, uploadID string, partID int, startOffset int64, length int64) (PartInfo, error) {
+
 	if err := checkNewMultipartArgs(srcBucket, srcObject, fs); err != nil {
 		return PartInfo{}, err
 	}
 
-	// Initialize pipe.
-	pipeReader, pipeWriter := io.Pipe()
+	endOffset := startOffset + length - 1
 
-	go func() {
-		if gerr := fs.GetObject(srcBucket, srcObject, startOffset, length, pipeWriter); gerr != nil {
-			errorIf(gerr, "Unable to read %s/%s.", srcBucket, srcObject)
-			pipeWriter.CloseWithError(gerr)
-			return
-		}
-		pipeWriter.Close() // Close writer explicitly signalling we wrote all data.
-	}()
+	objectReader, _, gerr := fs.GetObject(srcBucket, srcObject, startOffset, endOffset)
+	if gerr != nil {
+		errorIf(gerr, "Unable to read %s/%s.", srcBucket, srcObject)
+		return PartInfo{}, gerr
+	}
 
-	partInfo, err := fs.PutObjectPart(dstBucket, dstObject, uploadID, partID, length, pipeReader, "", "")
+	partInfo, err := fs.PutObjectPart(dstBucket, dstObject, uploadID, partID, length, objectReader, "", "")
 	if err != nil {
 		return PartInfo{}, toObjectErr(err, dstBucket, dstObject)
 	}
-
-	// Explicitly close the reader.
-	pipeReader.Close()
 
 	return partInfo, nil
 }

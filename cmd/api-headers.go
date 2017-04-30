@@ -72,7 +72,7 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, contentRange *h
 	}
 
 	// for providing ranged content
-	if contentRange != nil && contentRange.offsetBegin > -1 {
+	if contentRange != nil && contentRange.getLength() > -1 {
 		// Override content-length
 		w.Header().Set("Content-Length", strconv.FormatInt(contentRange.getLength(), 10))
 		w.Header().Set("Content-Range", contentRange.String())
