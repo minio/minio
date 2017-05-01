@@ -217,6 +217,9 @@ func gatewayMain(ctx *cli.Context) {
 
 	initNSLock(false) // Enable local namespace lock.
 
+	globalCacheDir = ctx.String("cache-dir")
+	globalCacheMax = ctx.Int("cache-max")
+
 	router := mux.NewRouter().SkipClean(true)
 	registerGatewayAPIRouter(router, newObject)
 

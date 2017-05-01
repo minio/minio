@@ -394,25 +394,38 @@ type cacheObjects struct {
 	AnonGetObjectInfoFn func(bucket, object string) (objInfo ObjectInfo, err error)
 }
 
-// Uses cached-object to serve the request. If object is not cached it serves the request from the backend and also
-// stores it in the cache for serving subsequent requests.
-func (c cacheObjects) GetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) (err error) {
-	objInfo, err := c.GetObjectInfo(bucket, object)
+func (c cacheObjects) getObject(bucket, object string, startOffset int64, length int64, writer io.Writer, anonReq bool) (err error) {
+	GetObjectFn := c.GetObjectFn
+	GetObjectInfoFn := c.GetObjectInfoFn
+	GetObjectInfo := c.GetObjectInfo
+	if anonReq {
+		GetObjectFn = c.AnonGetObjectFn
+		GetObjectInfoFn = c.AnonGetObjectInfoFn
+		GetObjectInfo = c.AnonGetObjectInfo
+	}
+	objInfo, err := GetObjectInfo(bucket, object)
 	_, backendDown := errorCause(err).(BackendDown)
 	if err != nil && !backendDown {
-		// For any error other than BackendDown we return error
-		c.dcache.Delete(bucket, object)
+		// Do not delete cache entry
 		return err
 	}
-	r, cachedObjInfo, _, err := c.dcache.Get(bucket, object)
+	r, cachedObjInfo, anon, err := c.dcache.Get(bucket, object)
 	if err == nil {
 		defer r.Close()
 		if backendDown {
-			// If the backend is down, serve the request from cache.
-			_, err = io.Copy(writer, io.NewSectionReader(r, startOffset, length))
-			return err
+			if anonReq {
+				if anon {
+					_, err = io.Copy(writer, io.NewSectionReader(r, startOffset, length))
+					return err
+				} else {
+					return BackendDown{}
+				}
+			} else {
+				// If the backend is down, serve the request from cache.
+				_, err = io.Copy(writer, io.NewSectionReader(r, startOffset, length))
+				return err
+			}
 		} else {
-			// If backend is up, ensure that ETag matches.
 			if cachedObjInfo.MD5Sum == objInfo.MD5Sum {
 				_, err = io.Copy(writer, io.NewSectionReader(r, startOffset, length))
 				return err
@@ -422,30 +435,38 @@ func (c cacheObjects) GetObject(bucket, object string, startOffset int64, length
 		}
 	}
 	if startOffset != 0 || length != objInfo.Size {
-		// Do not cache partial objects.
-		return c.GetObjectFn(bucket, object, startOffset, length, writer)
+		return GetObjectFn(bucket, object, startOffset, length, writer)
 	}
 	cachedObj, err := c.dcache.Put()
 	if err == errDiskFull {
-		// Do not cache if the disk usage is high.
-		return c.GetObjectFn(bucket, object, 0, objInfo.Size, writer)
+		return GetObjectFn(bucket, object, 0, objInfo.Size, writer)
 	}
 	if err != nil {
 		return err
 	}
-	err = c.GetObjectFn(bucket, object, 0, objInfo.Size, io.MultiWriter(writer, cachedObj))
-	if err != nil {
-		c.dcache.NoCommit(cachedObj)
-		return err
-	}
-	objInfo, err = c.GetObjectInfoFn(bucket, object)
+	err = GetObjectFn(bucket, object, 0, objInfo.Size, io.MultiWriter(writer, cachedObj))
 	if err != nil {
 		c.dcache.NoCommit(cachedObj)
 		return err
 	}
-
+	objInfo, err = GetObjectInfoFn(bucket, object)
+	if err != nil {
+		c.dcache.NoCommit(cachedObj)
+		return err
+	}
 	// FIXME: race-condition: what if the server object got replaced.
-	return c.dcache.Commit(cachedObj, objInfo, false)
+	return c.dcache.Commit(cachedObj, objInfo, true)
+}
+
+// Uses cached-object to serve the request. If object is not cached it serves the request from the backend and also
+// stores it in the cache for serving subsequent requests.
+func (c cacheObjects) GetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) (err error) {
+	return c.getObject(bucket, object, startOffset, length, writer, false)
+}
+
+// Anonymous version of cacheObjects.GetObject
+func (c cacheObjects) AnonGetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) (err error) {
+	return c.getObject(bucket, object, startOffset, length, writer, true)
 }
 
 // Returns ObjectInfo from cache or the backend.
@@ -471,57 +492,6 @@ func (c cacheObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 		c.dcache.Delete(bucket, object)
 	}
 	return objInfo, nil
-}
-
-// Anonymous version of cacheObjects.GetObject
-func (c cacheObjects) AnonGetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) (err error) {
-	objInfo, err := c.AnonGetObjectInfo(bucket, object)
-	_, backendDown := errorCause(err).(BackendDown)
-	if err != nil && !backendDown {
-		// Do not delete cache entry
-		return err
-	}
-	r, cachedObjInfo, anon, err := c.dcache.Get(bucket, object)
-	if err == nil {
-		defer r.Close()
-		if backendDown {
-			if anon {
-				_, err = io.Copy(writer, io.NewSectionReader(r, startOffset, length))
-				return err
-			} else {
-				return BackendDown{}
-			}
-		} else {
-			if cachedObjInfo.MD5Sum == objInfo.MD5Sum {
-				_, err = io.Copy(writer, io.NewSectionReader(r, startOffset, length))
-				return err
-			} else {
-				c.dcache.Delete(bucket, object)
-			}
-		}
-	}
-	if startOffset != 0 || length != objInfo.Size {
-		return c.AnonGetObjectFn(bucket, object, startOffset, length, writer)
-	}
-	cachedObj, err := c.dcache.Put()
-	if err == errDiskFull {
-		return c.AnonGetObjectFn(bucket, object, 0, objInfo.Size, writer)
-	}
-	if err != nil {
-		return err
-	}
-	err = c.AnonGetObjectFn(bucket, object, 0, objInfo.Size, io.MultiWriter(writer, cachedObj))
-	if err != nil {
-		c.dcache.NoCommit(cachedObj)
-		return err
-	}
-	objInfo, err = c.AnonGetObjectInfoFn(bucket, object)
-	if err != nil {
-		c.dcache.NoCommit(cachedObj)
-		return err
-	}
-	// FIXME: race-condition: what if the server object got replaced.
-	return c.dcache.Commit(cachedObj, objInfo, true)
 }
 
 // Anonymous version of cacheObjects.GetObjectInfo
