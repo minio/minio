@@ -34,11 +34,11 @@ minio --config-dir ~/tenant1 server --address :9001 http://192.168.10.11/drive/d
 
 export MINIO_ACCESS_KEY=<TENANT2_ACCESS_KEY>
 export MINIO_SECRET_KEY=<TENANT2_SECRET_KEY>
-minio --config-dir ~/tenant1 server --address :9001 http://192.168.10.11/drive/data/tenant2 http://192.168.10.12/drive/data/tenant2 http://192.168.10.13/drive/data/tenant2 http://192.168.10.14/drive/data/tenant2
+minio --config-dir ~/tenant1 server --address :9002 http://192.168.10.11/drive/data/tenant2 http://192.168.10.12/drive/data/tenant2 http://192.168.10.13/drive/data/tenant2 http://192.168.10.14/drive/data/tenant2
 
 export MINIO_ACCESS_KEY=<TENANT3_ACCESS_KEY>
 export MINIO_SECRET_KEY=<TENANT3_SECRET_KEY>
-minio --config-dir ~/tenant1 server --address :9001 http://192.168.10.11/drive/data/tenant3 http://192.168.10.12/drive/data/tenant3 http://192.168.10.13/drive/data/tenant3 http://192.168.10.14/drive/data/tenant3
+minio --config-dir ~/tenant1 server --address :9003 http://192.168.10.11/drive/data/tenant3 http://192.168.10.12/drive/data/tenant3 http://192.168.10.13/drive/data/tenant3 http://192.168.10.14/drive/data/tenant3
 ```
 
 ## Cloud Scale Deployment
