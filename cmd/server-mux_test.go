@@ -372,8 +372,7 @@ func TestServerListenAndServeTLS(t *testing.T) {
 	// ListenAndServe in a goroutine, but we don't know when it's ready
 	var tlsCert tls.Certificate
 	if tlsCert, err = tls.LoadX509KeyPair(certFile, keyFile); err != nil {
-		t.Error(err)
-		return
+		t.Fatal(err)
 	}
 
 	go func() { errc <- m.ListenAndServe(&tlsCert) }()

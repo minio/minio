@@ -137,27 +137,29 @@ func parsePKCS12CertFile(pkcs12File string) (x509Certs []*x509.Certificate, tlsC
 }
 
 func getSSLConfig() (x509Certs []*x509.Certificate, rootCAs *x509.CertPool, tlsCert *tls.Certificate, secureConn bool, err error) {
-	pkcs12File := getPKCS12File()
-	if isFile(pkcs12File) {
-		x509Certs, tlsCert, err = parsePKCS12CertFile(pkcs12File)
-	} else if isFile(getPublicCertFile()) && isFile(getPrivateKeyFile()) {
-		if x509Certs, err = parsePublicCertFile(getPublicCertFile()); err == nil {
-			var cert tls.Certificate
-			if cert, err = tls.LoadX509KeyPair(getPublicCertFile(), getPrivateKeyFile()); err == nil {
-				tlsCert = &cert
-			}
+	switch {
+	case isFile(getPKCS12File()):
+		if x509Certs, tlsCert, err = parsePKCS12CertFile(getPKCS12File()); err != nil {
+			return nil, nil, nil, false, err
 		}
-	} else {
+	case isFile(getPublicCertFile()) && isFile(getPrivateKeyFile()):
+		if x509Certs, err = parsePublicCertFile(getPublicCertFile()); err != nil {
+			return nil, nil, nil, false, err
+		}
+
+		var cert tls.Certificate
+		if cert, err = tls.LoadX509KeyPair(getPublicCertFile(), getPrivateKeyFile()); err != nil {
+			return nil, nil, nil, false, err
+		}
+		tlsCert = &cert
+	default:
 		return nil, nil, nil, false, nil
 	}
 
-	if err == nil {
-		rootCAs, err = getRootCAs(getCADir())
+	if rootCAs, err = getRootCAs(getCADir()); err != nil {
+		return nil, nil, nil, false, err
 	}
 
-	if err == nil {
-		secureConn = true
-	}
-
-	return x509Certs, rootCAs, tlsCert, secureConn, err
+	secureConn = true
+	return x509Certs, rootCAs, tlsCert, secureConn, nil
 }
