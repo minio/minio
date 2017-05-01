@@ -85,6 +85,7 @@ type gatewayBackend string
 const (
 	azureBackend gatewayBackend = "azure"
 	s3Backend    gatewayBackend = "s3"
+	gcsBackend   gatewayBackend = "gcs"
 	// Add more backends here.
 )
 
@@ -126,6 +127,8 @@ func newGatewayLayer(backendType, endpoint, accessKey, secretKey string, secure 
 		return newAzureLayer(endpoint, accessKey, secretKey, secure)
 	case s3Backend:
 		return newS3Gateway(endpoint, accessKey, secretKey, secure)
+	case gcsBackend:
+		return newGCSGateway(endpoint, accessKey, secretKey, secure)
 	}
 
 	return nil, fmt.Errorf("Unrecognized backend type %s", backendType)
