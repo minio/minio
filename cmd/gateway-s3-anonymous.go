@@ -16,18 +16,23 @@
 
 package cmd
 
-import "io"
+import (
+	"io"
+
+	minio "github.com/minio/minio-go"
+)
 
 // AnonGetObject - Get object anonymously
 func (l *s3Gateway) AnonGetObject(bucket string, key string, startOffset int64, length int64, writer io.Writer) error {
-	object, err := l.anonClient.GetObject(bucket, key)
+	r := minio.NewGetReqHeaders()
+	r.SetRange(startOffset, startOffset+length-1)
+	object, _, err := l.anonClient.GetObject(bucket, key, r)
 	if err != nil {
 		return s3ToObjectError(traceError(err), bucket, key)
 	}
 
 	defer object.Close()
 
-	object.Seek(startOffset, io.SeekStart)
 	if _, err := io.CopyN(writer, object, length); err != nil {
 		return s3ToObjectError(traceError(err), bucket, key)
 	}
@@ -37,7 +42,8 @@ func (l *s3Gateway) AnonGetObject(bucket string, key string, startOffset int64, 
 
 // AnonGetObjectInfo - Get object info anonymously
 func (l *s3Gateway) AnonGetObjectInfo(bucket string, object string) (ObjectInfo, error) {
-	oi, err := l.anonClient.StatObject(bucket, object)
+	r := minio.NewGetReqHeaders()
+	oi, err := l.anonClient.StatObject(bucket, object, r)
 	if err != nil {
 		return ObjectInfo{}, s3ToObjectError(traceError(err), bucket, object)
 	}
