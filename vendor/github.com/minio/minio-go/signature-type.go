@@ -27,6 +27,8 @@ const (
 	SignatureV4Streaming
 )
 
+var emptySHA256 = sum256(nil)
+
 // isV2 - is signature SignatureV2?
 func (s SignatureType) isV2() bool {
 	return s == SignatureV2
