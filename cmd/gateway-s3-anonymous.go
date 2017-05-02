@@ -25,7 +25,9 @@ import (
 // AnonGetObject - Get object anonymously
 func (l *s3Gateway) AnonGetObject(bucket string, key string, startOffset int64, length int64, writer io.Writer) error {
 	r := minio.NewGetReqHeaders()
-	r.SetRange(startOffset, startOffset+length-1)
+	if err := r.SetRange(startOffset, startOffset+length-1); err != nil {
+		return s3ToObjectError(traceError(err), bucket, key)
+	}
 	object, _, err := l.anonClient.GetObject(bucket, key, r)
 	if err != nil {
 		return s3ToObjectError(traceError(err), bucket, key)
@@ -42,7 +44,7 @@ func (l *s3Gateway) AnonGetObject(bucket string, key string, startOffset int64, 
 
 // AnonGetObjectInfo - Get object info anonymously
 func (l *s3Gateway) AnonGetObjectInfo(bucket string, object string) (ObjectInfo, error) {
-	r := minio.NewGetReqHeaders()
+	r := minio.NewHeadReqHeaders()
 	oi, err := l.anonClient.StatObject(bucket, object, r)
 	if err != nil {
 		return ObjectInfo{}, s3ToObjectError(traceError(err), bucket, object)
