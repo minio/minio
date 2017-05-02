@@ -7,18 +7,22 @@ To host multiple tenants on a single machine, run one Minio server per tenant wi
 
 This example hosts 3 tenants on a single drive.
 ```sh
-minio --config-dir ~/tenant1 server --address :9001 /drive1/data/tenant1
-minio --config-dir ~/tenant2 server --address :9002 /drive1/data/tenant2
-minio --config-dir ~/tenant3 server --address :9003 /drive1/data/tenant3
+minio --config-dir ~/tenant1 server --address :9001 /disk1/data/tenant1
+minio --config-dir ~/tenant2 server --address :9002 /disk1/data/tenant2
+minio --config-dir ~/tenant3 server --address :9003 /disk1/data/tenant3
 ```
+
+![Example-1](https://raw.githubusercontent.com/minio/minio/master/docs/screenshots/Example-1.png)
+
 #### Example 2 : Single host, multiple drives (erasure code)
 
 This example hosts 3 tenants on multiple drives.
 ```sh
-minio --config-dir ~/tenant1 server --address :9001 /drive1/data/tenant1 /drive2/data/tenant1 /drive3/data/tenant1 /drive4/data/tenant1
-minio --config-dir ~/tenant2 server --address :9002 /drive1/data/tenant2 /drive2/data/tenant2 /drive3/data/tenant2 /drive4/data/tenant2
-minio --config-dir ~/tenant3 server --address :9003 /drive1/data/tenant3 /drive2/data/tenant3 /drive3/data/tenant3 /drive4/data/tenant3
+minio --config-dir ~/tenant1 server --address :9001 /disk1/data/tenant1 /disk2/data/tenant1 /disk3/data/tenant1 /disk4/data/tenant1
+minio --config-dir ~/tenant2 server --address :9002 /disk1/data/tenant2 /disk2/data/tenant2 /disk3/data/tenant2 /disk4/data/tenant2
+minio --config-dir ~/tenant3 server --address :9003 /disk1/data/tenant3 /disk2/data/tenant3 /disk3/data/tenant3 /disk4/data/tenant3
 ```
+![Example-2](https://raw.githubusercontent.com/minio/minio/master/docs/screenshots/Example-2.png)
 
 ## Distributed Deployment
 To host multiple tenants in a distributed environment, run several distributed Minio instances concurrently.  
@@ -30,16 +34,18 @@ This example hosts 3 tenants on a 4 node distributed setup. Execute the followin
 ```sh
 export MINIO_ACCESS_KEY=<TENANT1_ACCESS_KEY>
 export MINIO_SECRET_KEY=<TENANT1_SECRET_KEY>
-minio --config-dir ~/tenant1 server --address :9001 http://192.168.10.11/drive/data/tenant1 http://192.168.10.12/drive/data/tenant1 http://192.168.10.13/drive/data/tenant1 http://192.168.10.14/drive/data/tenant1
+minio --config-dir ~/tenant1 server --address :9001 http://192.168.10.11/disk1/data/tenant1 http://192.168.10.12/disk1/data/tenant1 http://192.168.10.13/disk1/data/tenant1 http://192.168.10.14/disk1/data/tenant1
 
 export MINIO_ACCESS_KEY=<TENANT2_ACCESS_KEY>
 export MINIO_SECRET_KEY=<TENANT2_SECRET_KEY>
-minio --config-dir ~/tenant1 server --address :9002 http://192.168.10.11/drive/data/tenant2 http://192.168.10.12/drive/data/tenant2 http://192.168.10.13/drive/data/tenant2 http://192.168.10.14/drive/data/tenant2
+minio --config-dir ~/tenant1 server --address :9002 http://192.168.10.11/disk1/data/tenant2 http://192.168.10.12/disk1/data/tenant2 http://192.168.10.13/disk1/data/tenant2 http://192.168.10.14/disk1/data/tenant2
 
 export MINIO_ACCESS_KEY=<TENANT3_ACCESS_KEY>
 export MINIO_SECRET_KEY=<TENANT3_SECRET_KEY>
-minio --config-dir ~/tenant1 server --address :9003 http://192.168.10.11/drive/data/tenant3 http://192.168.10.12/drive/data/tenant3 http://192.168.10.13/drive/data/tenant3 http://192.168.10.14/drive/data/tenant3
+minio --config-dir ~/tenant1 server --address :9003 http://192.168.10.11/disk1/data/tenant3 http://192.168.10.12/disk1/data/tenant3 http://192.168.10.13/disk1/data/tenant3 http://192.168.10.14/disk1/data/tenant3
 ```
+
+![Example-3](https://raw.githubusercontent.com/minio/minio/master/docs/screenshots/Example-3.png)
 
 ## Cloud Scale Deployment
 For large scale multi-tenant Minio deployments, we recommend using one of the popular container orchestration platforms, e.g. Kubernetes, DC/OS or Docker Swarm. Refer [this document](https://docs.minio.io/docs/minio-deployment-quickstart-guide) to get started with Minio on orchestration platforms.  
