@@ -38,6 +38,7 @@ FLAGS:
   {{end}}{{end}}
 BACKEND:
   azure: Microsoft Azure Blob Storage. Default ENDPOINT is https://core.windows.net
+  s3: Amazon Simple Storage Service (S3).
 
 ENVIRONMENT VARIABLES:
   ACCESS:
