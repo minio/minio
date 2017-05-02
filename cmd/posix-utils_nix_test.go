@@ -20,7 +20,6 @@ package cmd
 
 import (
 	"io/ioutil"
-	"os"
 	"path"
 	"syscall"
 	"testing"
@@ -62,7 +61,7 @@ func TestIsValidUmaskVol(t *testing.T) {
 	defer removeAll(tmpPath)
 
 	// Stat to get permissions bits.
-	st, err := os.Stat(path.Join(tmpPath, testCase.volName))
+	st, err := osStat(path.Join(tmpPath, testCase.volName))
 	if err != nil {
 		t.Fatalf("Stat failed with %s expected to pass.", err)
 	}

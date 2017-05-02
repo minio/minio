@@ -59,7 +59,7 @@ func TestGetCurrentReleaseTime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fi, err = os.Stat(goBinAbsPath)
+	fi, err = osStat(goBinAbsPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +87,7 @@ func TestGetCurrentReleaseTime(t *testing.T) {
 	}
 	errorMessage4 := "Unable to get ModTime of /tmp/non-existent-file. stat /tmp/non-existent-file: no such file or directory"
 	if runtime.GOOS == "windows" {
-		errorMessage4 = "Unable to get ModTime of C:\\tmp\\non-existent-file. GetFileAttributesEx C:\\tmp\\non-existent-file: The system cannot find the path specified."
+		errorMessage4 = "Unable to get ModTime of C:\\tmp\\non-existent-file. CreateFile C:\\tmp\\non-existent-file: The system cannot find the path specified."
 	}
 
 	testCases := []struct {

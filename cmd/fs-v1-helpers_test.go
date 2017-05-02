@@ -442,11 +442,11 @@ func TestFSRemoveMeta(t *testing.T) {
 		t.Fatalf("Unable to remove file, %s", err)
 	}
 
-	if _, err := os.Stat(filePath); !os.IsNotExist(err) {
+	if _, err := osStat(preparePath(filePath)); !os.IsNotExist(err) {
 		t.Fatalf("`%s` file found though it should have been deleted.", filePath)
 	}
 
-	if _, err := os.Stat(path.Dir(filePath)); !os.IsNotExist(err) {
+	if _, err := osStat(preparePath(path.Dir(filePath))); !os.IsNotExist(err) {
 		t.Fatalf("`%s` parent directory found though it should have been deleted.", filePath)
 	}
 }

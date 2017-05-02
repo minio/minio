@@ -1,5 +1,5 @@
 /*
- * Minio Client (C) 2015 Minio, Inc.
+ * Minio Client (C) 2015, 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ import (
 	"path"
 	"testing"
 
+	os2 "github.com/minio/minio/pkg/x/os"
 	. "gopkg.in/check.v1"
 )
 
@@ -47,7 +48,7 @@ func (s *MySuite) TearDownSuite(c *C) {
 func (s *MySuite) TestSafeAbort(c *C) {
 	f, err := CreateFile(path.Join(s.root, "testfile-abort"))
 	c.Assert(err, IsNil)
-	_, err = os.Stat(path.Join(s.root, "testfile-abort"))
+	_, err = os2.Stat(path.Join(s.root, "testfile-abort"))
 	c.Assert(err, Not(IsNil))
 	err = f.Abort()
 	c.Assert(err, IsNil)
@@ -58,11 +59,11 @@ func (s *MySuite) TestSafeAbort(c *C) {
 func (s *MySuite) TestSafeClose(c *C) {
 	f, err := CreateFile(path.Join(s.root, "testfile-close"))
 	c.Assert(err, IsNil)
-	_, err = os.Stat(path.Join(s.root, "testfile-close"))
+	_, err = os2.Stat(path.Join(s.root, "testfile-close"))
 	c.Assert(err, Not(IsNil))
 	err = f.Close()
 	c.Assert(err, IsNil)
-	_, err = os.Stat(path.Join(s.root, "testfile-close"))
+	_, err = os2.Stat(path.Join(s.root, "testfile-close"))
 	c.Assert(err, IsNil)
 	err = os.Remove(path.Join(s.root, "testfile-close"))
 	c.Assert(err, IsNil)
@@ -73,7 +74,7 @@ func (s *MySuite) TestSafeClose(c *C) {
 func (s *MySuite) TestSafe(c *C) {
 	f, err := CreateFile(path.Join(s.root, "testfile-safe"))
 	c.Assert(err, IsNil)
-	_, err = os.Stat(path.Join(s.root, "testfile-safe"))
+	_, err = os2.Stat(path.Join(s.root, "testfile-safe"))
 	c.Assert(err, Not(IsNil))
 	err = f.Close()
 	c.Assert(err, IsNil)
@@ -81,7 +82,7 @@ func (s *MySuite) TestSafe(c *C) {
 	c.Assert(err.Error(), Equals, "write on closed file")
 	err = f.Close()
 	c.Assert(err.Error(), Equals, "close on closed file")
-	_, err = os.Stat(path.Join(s.root, "testfile-safe"))
+	_, err = os2.Stat(path.Join(s.root, "testfile-safe"))
 	c.Assert(err, IsNil)
 	err = os.Remove(path.Join(s.root, "testfile-safe"))
 	c.Assert(err, IsNil)
@@ -90,11 +91,11 @@ func (s *MySuite) TestSafe(c *C) {
 func (s *MySuite) TestSafeAbortWrite(c *C) {
 	f, err := CreateFile(path.Join(s.root, "purgefile-abort"))
 	c.Assert(err, IsNil)
-	_, err = os.Stat(path.Join(s.root, "purgefile-abort"))
+	_, err = os2.Stat(path.Join(s.root, "purgefile-abort"))
 	c.Assert(err, Not(IsNil))
 	err = f.Abort()
 	c.Assert(err, IsNil)
-	_, err = os.Stat(path.Join(s.root, "purgefile-abort"))
+	_, err = os2.Stat(path.Join(s.root, "purgefile-abort"))
 	c.Assert(err, Not(IsNil))
 	err = f.Abort()
 	c.Assert(err.Error(), Equals, "abort on aborted file")

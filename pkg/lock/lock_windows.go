@@ -24,6 +24,8 @@ import (
 	"os"
 	"syscall"
 	"unsafe"
+
+	os2 "github.com/minio/minio/pkg/x/os"
 )
 
 var (
@@ -51,7 +53,7 @@ func LockedOpenFile(path string, flag int, perm os.FileMode) (*LockedFile, error
 		return nil, err
 	}
 
-	st, err := os.Stat(path)
+	st, err := os2.Stat(path)
 	if err != nil {
 		f.Close()
 		return nil, err
@@ -140,7 +142,8 @@ func lockFile(fd syscall.Handle, flags uint32) error {
 
 func lockFileEx(h syscall.Handle, flags, locklow, lockhigh uint32, ol *syscall.Overlapped) (err error) {
 	var reserved = uint32(0)
-	r1, _, e1 := syscall.Syscall6(procLockFileEx.Addr(), 6, uintptr(h), uintptr(flags), uintptr(reserved), uintptr(locklow), uintptr(lockhigh), uintptr(unsafe.Pointer(ol)))
+	r1, _, e1 := syscall.Syscall6(procLockFileEx.Addr(), 6, uintptr(h), uintptr(flags),
+		uintptr(reserved), uintptr(locklow), uintptr(lockhigh), uintptr(unsafe.Pointer(ol)))
 	if r1 == 0 {
 		if e1 != 0 {
 			err = error(e1)

@@ -1,4 +1,4 @@
-// +build linux darwin dragonfly freebsd netbsd openbsd solaris
+// +build !windows
 
 /*
  * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
@@ -19,6 +19,12 @@
 package cmd
 
 import "os"
+
+// osStat returns a FileInfo structure describing the named file.
+// If there is an error, it will be of type *PathError.
+func osStat(name string) (os.FileInfo, error) {
+	return os.Stat(name)
+}
 
 // isValidVolname verifies a volname name in accordance with object
 // layer requirements.

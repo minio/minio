@@ -85,7 +85,7 @@ func newFSObjectLayer(fsPath string) (ObjectLayer, error) {
 		return nil, err
 	}
 
-	fi, err := os.Stat(preparePath(fsPath))
+	fi, err := osStat(preparePath(fsPath))
 	if err == nil {
 		if !fi.IsDir() {
 			return nil, syscall.ENOTDIR
@@ -224,7 +224,7 @@ func (fs fsObjects) GetBucketInfo(bucket string) (BucketInfo, error) {
 		return BucketInfo{}, toObjectErr(err, bucket)
 	}
 
-	// As os.Stat() doesn't carry other than ModTime(), use ModTime() as CreatedTime.
+	// As osStat() doesn't carry other than ModTime(), use ModTime() as CreatedTime.
 	createdTime := st.ModTime()
 	return BucketInfo{
 		Name:    bucket,
@@ -263,7 +263,7 @@ func (fs fsObjects) ListBuckets() ([]BucketInfo, error) {
 
 		bucketInfos = append(bucketInfos, BucketInfo{
 			Name: fi.Name(),
-			// As os.Stat() doesnt carry CreatedTime, use ModTime() as CreatedTime.
+			// As osStat() doesnt carry CreatedTime, use ModTime() as CreatedTime.
 			Created: fi.ModTime(),
 		})
 	}
