@@ -268,7 +268,7 @@ func newListenerMux(listener net.Listener, config *tls.Config) *ListenerMux {
 					// is a TLS connection, if not we should close and reject
 					// such a connection.
 					if cerr = tlsConn.Handshake(); cerr != nil {
-						errorIf(cerr, "TLS handshake failed")
+						// Close for junk message.
 						tlsConn.Close()
 						return
 					}
