@@ -654,27 +654,23 @@ func (c Client) newRequest(method string, metadata requestMetadata) (req *http.R
 		return req, nil
 	} // Sign the request for all authenticated requests.
 
-	if c.signature.isV2() {
+	switch {
+	case c.signature.isV2():
 		// Add signature version '2' authorization header.
 		req = s3signer.SignV2(*req, c.accessKeyID, c.secretAccessKey)
-	} else if c.signature.isV4() || c.signature.isStreamingV4() &&
-		method != "PUT" {
+	case c.signature.isStreamingV4() && method == "PUT":
+		req = s3signer.StreamingSignV4(req, c.accessKeyID,
+			c.secretAccessKey, location, metadata.contentLength, time.Now().UTC())
+	default:
 		// Set sha256 sum for signature calculation only with signature version '4'.
 		shaHeader := unsignedPayload
-		if !c.secure {
-			if metadata.contentSHA256Bytes == nil {
-				shaHeader = hex.EncodeToString(sum256([]byte{}))
-			} else {
-				shaHeader = hex.EncodeToString(metadata.contentSHA256Bytes)
-			}
+		if len(metadata.contentSHA256Bytes) > 0 {
+			shaHeader = hex.EncodeToString(metadata.contentSHA256Bytes)
 		}
 		req.Header.Set("X-Amz-Content-Sha256", shaHeader)
 
 		// Add signature version '4' authorization header.
 		req = s3signer.SignV4(*req, c.accessKeyID, c.secretAccessKey, location)
-	} else if c.signature.isStreamingV4() {
-		req = s3signer.StreamingSignV4(req, c.accessKeyID,
-			c.secretAccessKey, location, metadata.contentLength, time.Now().UTC())
 	}
 
 	// Return request.

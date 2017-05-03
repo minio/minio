@@ -98,3 +98,16 @@ func (c Core) GetBucketPolicy(bucket string) (policy.BucketAccessPolicy, error) 
 func (c Core) PutBucketPolicy(bucket string, bucketPolicy policy.BucketAccessPolicy) error {
 	return c.putBucketPolicy(bucket, bucketPolicy)
 }
+
+// GetObject is a lower level API implemented to support reading
+// partial objects and also downloading objects with special conditions
+// matching etag, modtime etc.
+func (c Core) GetObject(bucketName, objectName string, reqHeaders RequestHeaders) (io.ReadCloser, ObjectInfo, error) {
+	return c.getObject(bucketName, objectName, reqHeaders)
+}
+
+// StatObject is a lower level API implemented to support special
+// conditions matching etag, modtime on a request.
+func (c Core) StatObject(bucketName, objectName string, reqHeaders RequestHeaders) (ObjectInfo, error) {
+	return c.statObject(bucketName, objectName, reqHeaders)
+}

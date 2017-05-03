@@ -17,8 +17,6 @@
 package cmd
 
 import (
-	"crypto/sha256"
-	"hash"
 	"io"
 	"net/http"
 	"path"
@@ -264,16 +262,16 @@ func fromMinioClientListBucketResult(bucket string, result minio.ListBucketResul
 // startOffset indicates the starting read location of the object.
 // length indicates the total length of the object.
 func (l *s3Gateway) GetObject(bucket string, key string, startOffset int64, length int64, writer io.Writer) error {
-	object, err := l.Client.GetObject(bucket, key)
+	r := minio.NewGetReqHeaders()
+	if err := r.SetRange(startOffset, startOffset+length-1); err != nil {
+		return s3ToObjectError(traceError(err), bucket, key)
+	}
+	object, _, err := l.Client.GetObject(bucket, key, r)
 	if err != nil {
 		return s3ToObjectError(traceError(err), bucket, key)
 	}
 
 	defer object.Close()
-
-	if _, err := object.Seek(startOffset, io.SeekStart); err != nil {
-		return s3ToObjectError(traceError(err), bucket, key)
-	}
 
 	if _, err := io.CopyN(writer, object, length); err != nil {
 		return s3ToObjectError(traceError(err), bucket, key)
@@ -301,7 +299,8 @@ func fromMinioClientObjectInfo(bucket string, oi minio.ObjectInfo) ObjectInfo {
 
 // GetObjectInfo reads object info and replies back ObjectInfo
 func (l *s3Gateway) GetObjectInfo(bucket string, object string) (objInfo ObjectInfo, err error) {
-	oi, err := l.Client.StatObject(bucket, object)
+	r := minio.NewHeadReqHeaders()
+	oi, err := l.Client.StatObject(bucket, object, r)
 	if err != nil {
 		return ObjectInfo{}, s3ToObjectError(traceError(err), bucket, object)
 	}
@@ -311,34 +310,29 @@ func (l *s3Gateway) GetObjectInfo(bucket string, object string) (objInfo ObjectI
 
 // PutObject creates a new object with the incoming data,
 func (l *s3Gateway) PutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (ObjectInfo, error) {
-	var sha256Writer hash.Hash
+	var sha256sumBytes []byte
 
-	sha256sumBytes := []byte{}
-
-	teeReader := data
-	if sha256sum == "" {
-	} else if b, err := hex.DecodeString(sha256sum); err != nil {
-		return ObjectInfo{}, s3ToObjectError(traceError(err), bucket, object)
-	} else {
-		sha256sumBytes = b
-
-		sha256Writer = sha256.New()
-		teeReader = io.TeeReader(data, sha256Writer)
+	var err error
+	if sha256sum != "" {
+		sha256sumBytes, err = hex.DecodeString(sha256sum)
+		if err != nil {
+			return ObjectInfo{}, s3ToObjectError(traceError(err), bucket, object)
+		}
 	}
 
-	delete(metadata, "md5Sum")
+	var md5sumBytes []byte
+	md5sum := metadata["md5Sum"]
+	if md5sum != "" {
+		md5sumBytes, err = hex.DecodeString(md5sum)
+		if err != nil {
+			return ObjectInfo{}, s3ToObjectError(traceError(err), bucket, object)
+		}
+		delete(metadata, "md5Sum")
+	}
 
-	oi, err := l.Client.PutObject(bucket, object, size, teeReader, nil, sha256sumBytes, toMinioClientMetadata(metadata))
+	oi, err := l.Client.PutObject(bucket, object, size, data, md5sumBytes, sha256sumBytes, toMinioClientMetadata(metadata))
 	if err != nil {
 		return ObjectInfo{}, s3ToObjectError(traceError(err), bucket, object)
-	}
-
-	if sha256sum != "" {
-		newSHA256sum := hex.EncodeToString(sha256Writer.Sum(nil))
-		if newSHA256sum != sha256sum {
-			l.Client.RemoveObject(bucket, object)
-			return ObjectInfo{}, traceError(SHA256Mismatch{})
-		}
 	}
 
 	return fromMinioClientObjectInfo(bucket, oi), nil

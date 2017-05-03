@@ -134,6 +134,13 @@ func httpRespToErrorResponse(resp *http.Response, bucketName, objectName string)
 				Message:    "Bucket not empty.",
 				BucketName: bucketName,
 			}
+		case http.StatusPreconditionFailed:
+			errResp = ErrorResponse{
+				Code:       "PreconditionFailed",
+				Message:    s3ErrorResponseMap["PreconditionFailed"],
+				BucketName: bucketName,
+				Key:        objectName,
+			}
 		default:
 			errResp = ErrorResponse{
 				Code:       resp.Status,

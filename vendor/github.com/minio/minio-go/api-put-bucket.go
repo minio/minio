@@ -272,8 +272,9 @@ func (c Client) removeBucketPolicy(bucketName string) error {
 
 	// Execute DELETE on objectName.
 	resp, err := c.executeMethod("DELETE", requestMetadata{
-		bucketName:  bucketName,
-		queryValues: urlValues,
+		bucketName:         bucketName,
+		queryValues:        urlValues,
+		contentSHA256Bytes: emptySHA256,
 	})
 	defer closeResponse(resp)
 	if err != nil {
