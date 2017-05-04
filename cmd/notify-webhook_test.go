@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -38,6 +39,12 @@ func (p postHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	io.Copy(w, r.Body)
 }
 
+type errorHandler struct{}
+
+func (e errorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	http.Error(w, fmt.Sprintf("Unexpected method %s", r.Method), http.StatusBadRequest)
+}
+
 // Tests web hook initialization.
 func TestNewWebHookNotify(t *testing.T) {
 	root, err := newTestConfig(globalMinioDefaultRegion)
@@ -53,8 +60,8 @@ func TestNewWebHookNotify(t *testing.T) {
 
 	serverConfig.Notify.SetWebhookByID("10", webhookNotify{Enable: true, Endpoint: "http://127.0.0.1:xxx"})
 	_, err = newWebhookNotify("10")
-	if err == nil {
-		t.Fatal("Unexpected should fail with lookupHost")
+	if err != nil {
+		t.Fatal("Unexpected should not fail with lookupEndpoint", err)
 	}
 
 	serverConfig.Notify.SetWebhookByID("15", webhookNotify{Enable: true, Endpoint: "http://%"})
@@ -76,4 +83,36 @@ func TestNewWebHookNotify(t *testing.T) {
 		"Key":       path.Join("bucket", "object"),
 		"EventType": "s3:ObjectCreated:Put",
 	}).Info()
+}
+
+// Add tests for lookup endpoint.
+func TestLookupEndpoint(t *testing.T) {
+	server := httptest.NewServer(errorHandler{})
+	defer server.Close()
+
+	testCases := []struct {
+		endpoint string
+		err      error
+	}{
+		// Ignore endpoints which don't exist.
+		{
+			endpoint: "http://unknown",
+			err:      nil,
+		},
+		{
+			endpoint: "%%%",
+			err:      errors.New("parse %%%: invalid URL escape \"%%%\""),
+		},
+		{
+			endpoint: server.URL,
+			err:      fmt.Errorf("Unexpected response from webhook server %s: (400 Bad Request)", server.URL),
+		},
+	}
+	for _, test := range testCases {
+		if err := lookupEndpoint(test.endpoint); err != nil {
+			if err.Error() != test.err.Error() {
+				t.Errorf("Expected %s, got %s", test.err, err)
+			}
+		}
+	}
 }
