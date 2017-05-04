@@ -69,10 +69,15 @@ func isNetErrorIgnored(err error) bool {
 	}
 	switch err.(type) {
 	case net.Error:
-		switch err.(type) {
+		switch e := err.(type) {
 		case *net.DNSError, *net.OpError, net.UnknownNetworkError:
 			return true
 		case *url.Error:
+			// Fixes https://github.com/minio/minio/issues/4050
+			switch e.Err.(type) {
+			case *net.DNSError, *net.OpError, net.UnknownNetworkError:
+				return true
+			}
 			// For a URL error, where it replies back "connection closed"
 			// retry again.
 			if strings.Contains(err.Error(), "Connection closed by foreign host") {
@@ -127,6 +132,7 @@ func lookupEndpoint(urlStr string) error {
 		resp, derr := client.Do(req)
 		if derr != nil {
 			if isNetErrorIgnored(derr) {
+				errorIf(derr, "Unable to lookup webhook endpoint %s", urlStr)
 				return nil
 			}
 			return derr

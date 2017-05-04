@@ -1,5 +1,5 @@
 /*
- * Minio Go Library for Amazon S3 Compatible Cloud Storage (C) 2016 Minio, Inc.
+ * Minio Go Library for Amazon S3 Compatible Cloud Storage (C) 2016-17 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -83,23 +83,29 @@ func (c RequestHeaders) SetModified(modTime time.Time) error {
 // See https://tools.ietf.org/html/rfc7233#section-3.1 for reference.
 func (c RequestHeaders) SetRange(start, end int64) error {
 	switch {
-	case start <= 0 && end < 0:
-		// Read everything until the 'end'. `bytes=-N`
+	case start == 0 && end < 0:
+		// Read last '-end' bytes. `bytes=-N`.
 		c.Set("Range", fmt.Sprintf("bytes=%d", end))
-	case start > 0 && end == 0:
-		// Read everything starting from offset 'start'. `bytes=N-`
+	case 0 < start && end == 0:
+		// Read everything starting from offset
+		// 'start'. `bytes=N-`.
 		c.Set("Range", fmt.Sprintf("bytes=%d-", start))
-	case start > 0 && end > 0 && end >= start:
-		// Read everything starting at 'start' till the 'end'. `bytes=N-M`
+	case 0 <= start && start <= end:
+		// Read everything starting at 'start' till the
+		// 'end'. `bytes=N-M`
 		c.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end))
-	case start == 0 && end == 0:
-		// Client attempting to read the whole file.
-		return nil
+	default:
+		// All other cases such as
+		// bytes=-3-
+		// bytes=5-3
+		// bytes=-2-4
+		// bytes=-3-0
+		// bytes=-3--2
+		// are invalid.
+		return ErrInvalidArgument(
+			fmt.Sprintf(
+				"Invalid range specified: start=%d end=%d",
+				start, end))
 	}
-	// All other cases such as
-	// bytes=-N-
-	// bytes=N-M where M < N
-	// These return error and are not supported.
-	return ErrInvalidArgument(fmt.Sprintf("Invalid range start and end specified bytes=%d-%d",
-		start, end))
+	return nil
 }
