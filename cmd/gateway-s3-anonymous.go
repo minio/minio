@@ -45,7 +45,7 @@ func (l *s3Gateway) AnonPutObject(bucket string, object string, size int64, data
 		delete(metadata, "md5Sum")
 	}
 
-	oi, err := l.Client.PutObject(bucket, object, size, data, md5sumBytes, sha256sumBytes, toMinioClientMetadata(metadata))
+	oi, err := l.anonClient.PutObject(bucket, object, size, data, md5sumBytes, sha256sumBytes, toMinioClientMetadata(metadata))
 	if err != nil {
 		return ObjectInfo{}, s3ToObjectError(traceError(err), bucket, object)
 	}
