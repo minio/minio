@@ -38,6 +38,7 @@ FLAGS:
   {{end}}{{end}}
 BACKEND:
   azure: Microsoft Azure Blob Storage. Default ENDPOINT is https://core.windows.net
+  s3: Amazon Simple Storage Service (S3).
 
 ENVIRONMENT VARIABLES:
   ACCESS:
@@ -49,6 +50,16 @@ EXAMPLES:
       $ export MINIO_ACCESS_KEY=azureaccountname
       $ export MINIO_SECRET_KEY=azureaccountkey
       $ {{.HelpName}} azure
+
+  2. Start minio gateway server for S3 backend.
+      $ export MINIO_ACCESS_KEY=accesskey
+      $ export MINIO_SECRET_KEY=secretkey
+      $ {{.HelpName}} s3
+
+  3. Start minio gateway server for S3 backend on custom endpoint.
+      $ export MINIO_ACCESS_KEY=Q3AM3UQ867SPQQA43P2F
+      $ export MINIO_SECRET_KEY=zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG
+      $ {{.HelpName}} s3 https://play.minio.io:9000
 `
 
 var gatewayCmd = cli.Command{
