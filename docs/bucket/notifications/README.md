@@ -547,9 +547,9 @@ key                 |                      value
 <a name="MySQL"></a>
 ## Publish Minio events via MySQL
 
-Install MySQL from [here](https://dev.mysql.com/downloads/mysql/). For illustrative purposes, we have set the root password as `password` and created a database called `miniodb` to store the events.
+Install MySQL from [here](https://dev.mysql.com/downloads/mysql/). To publish Minio events, you'll need `JSON` support in MySQL, available on MySQL `5.7.8` and above. We tested this setup on MySQL `5.7.17`. For illustrative purposes, we have set the root password as `password` and created a database called `miniodb` to store the events. 
 
-This notification target supports two formats: _namespace_ and _access_.
+This notification target supports two formats: _namespace_ and _access_. 
 
 When the _namespace_ format is used, Minio synchronizes objects in the bucket with rows in the table. It creates rows with two columns: key_name and value. The key_name is the bucket and object name of an object that exists in Minio. The value is JSON encoded event data about the operation that created/replaced the object in Minio. When objects are updated or deleted, the corresponding row from this table is updated or deleted respectively.
 
