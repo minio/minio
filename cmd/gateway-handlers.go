@@ -19,7 +19,6 @@ package cmd
 import (
 	"io"
 	"io/ioutil"
-	"net"
 	"net/http"
 	"strconv"
 
@@ -253,23 +252,6 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 	}
 	w.Header().Set("ETag", "\""+objInfo.MD5Sum+"\"")
 	writeSuccessResponseHeadersOnly(w)
-
-	// Get host and port from Request.RemoteAddr.
-	host, port, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		host, port = "", ""
-	}
-
-	// Notify object created event.
-	eventNotify(eventData{
-		Type:      ObjectCreatedPut,
-		Bucket:    bucket,
-		ObjInfo:   objInfo,
-		ReqParams: extractReqParams(r),
-		UserAgent: r.UserAgent(),
-		Host:      host,
-		Port:      port,
-	})
 }
 
 // HeadObjectHandler - HEAD Object
