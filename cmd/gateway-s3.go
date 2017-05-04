@@ -99,6 +99,11 @@ type s3Gateway struct {
 
 // newS3Gateway returns s3 gatewaylayer
 func newS3Gateway(endpoint string, accessKey, secretKey string, secure bool) (GatewayLayer, error) {
+	if endpoint == "" {
+		endpoint = "s3.amazonaws.com"
+		secure = true
+	}
+
 	// Initialize minio client object.
 	client, err := minio.NewCore(endpoint, accessKey, secretKey, secure)
 	if err != nil {
