@@ -64,11 +64,13 @@ func configureServerHandler(endpoints EndpointList) (http.Handler, error) {
 		registerDistXLRouters(mux, endpoints)
 	}
 
-	// Add Admin RPC router
-	err := registerAdminRPCRouter(mux)
-	if err != nil {
-		return nil, err
-	}
+	/*
+		// Add Admin RPC router
+		err := registerAdminRPCRouter(mux)
+		if err != nil {
+			return nil, err
+		}
+	*/
 
 	// Register web router when its enabled.
 	if globalIsBrowserEnabled {
@@ -77,8 +79,10 @@ func configureServerHandler(endpoints EndpointList) (http.Handler, error) {
 		}
 	}
 
-	// Add Admin router.
-	registerAdminRouter(mux)
+	/*
+		// Add Admin router.
+		registerAdminRouter(mux)
+	*/
 
 	// Add API router.
 	registerAPIRouter(mux)

@@ -266,7 +266,8 @@ func retryFormattingXLDisks(firstDisk bool, endpoints EndpointList, storageDisks
 				// Validate formats loaded before proceeding forward.
 				err := genericFormatCheckXL(formatConfigs, sErrs)
 				if err == nil {
-					printHealMsg(endpoints, storageDisks, printOnceFn())
+					// FIXME: enable this later.
+					// printHealMsg(endpoints, storageDisks, printOnceFn())
 				}
 				return err
 			case WaitForQuorum:
