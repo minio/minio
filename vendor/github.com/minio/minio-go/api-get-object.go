@@ -111,7 +111,10 @@ func (c Client) GetObject(bucketName, objectName string) (*Object, error) {
 							reqHeaders.SetRange(req.Offset, req.Offset+int64(len(req.Buffer))-1)
 							httpReader, objectInfo, err = c.getObject(bucketName, objectName, reqHeaders)
 						} else {
-							reqHeaders.SetRange(req.Offset, 0)
+							if req.Offset > 0 {
+								reqHeaders.SetRange(req.Offset, 0)
+							}
+
 							// First request is a Read request.
 							httpReader, objectInfo, err = c.getObject(bucketName, objectName, reqHeaders)
 						}
@@ -194,7 +197,10 @@ func (c Client) GetObject(bucketName, objectName string) (*Object, error) {
 							httpReader, _, err = c.getObject(bucketName, objectName, reqHeaders)
 						} else {
 							// Range is set with respect to the offset.
-							reqHeaders.SetRange(req.Offset, 0)
+							if req.Offset > 0 {
+								reqHeaders.SetRange(req.Offset, 0)
+							}
+
 							httpReader, objectInfo, err = c.getObject(bucketName, objectName, reqHeaders)
 						}
 						if err != nil {
