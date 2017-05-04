@@ -72,6 +72,19 @@ func initMetaVolumeFS(fsPath, fsUUID string) error {
 
 }
 
+// policy.json and notification.xml allowed only in .minio.sys
+func IsValidObjectNameFS(bucket, object string) bool {
+	var reservedObjectNames = map[string]bool{
+		"policy.json":      true,
+		"notification.xml": true,
+	}
+
+	if bucket != minioMetaBucket && reservedObjectNames[object] {
+		return false
+	}
+	return true
+}
+
 // newFSObjectLayer - initialize new fs object layer.
 func newFSObjectLayer(fsPath string) (ObjectLayer, error) {
 	if fsPath == "" {
@@ -508,7 +521,12 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 	if _, err = fs.statBucketDir(bucket); err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket)
 	}
-
+	if !IsValidObjectNameFS(bucket, object) {
+		return ObjectInfo{}, traceError(ObjectNameInvalid{
+			Bucket: bucket,
+			Object: object,
+		})
+	}
 	// No metadata is set, allocate a new one.
 	if metadata == nil {
 		metadata = make(map[string]string)
