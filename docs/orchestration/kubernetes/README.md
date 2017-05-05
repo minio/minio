@@ -4,7 +4,7 @@ Kubernetes concepts like Deployments and StatefulSets provide perfect platform t
 
 - Minio [Helm](https://helm.sh) Chart offers a customizable and easy Minio deployment, with a single command. Read more about Minio Helm deployment [here](#prerequisites).
 
-- You can also explore Kubernetes [Minio example](https://github.com/kubernetes/kubernetes/blob/master/examples/storage/minio/README.md) to deploy Minio using `.yaml` files.
+- You can also explore Kubernetes [Minio example](https://github.com/minio/minio/blob/master/docs/orchestration/kubernetes-yaml/README.md) to deploy Minio using `.yaml` files.
 
 - If you'd like to get started with Minio on Kubernetes without having to create a real container cluster, you can also [deploy Minio locally](https://raw.githubusercontent.com/minio/minio/master/docs/orchestration/minikube/README.md) with MiniKube.
 
