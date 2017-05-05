@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/minio/minio/pkg/lock"
@@ -173,8 +174,7 @@ func TestFSMigrateObjectWithErr(t *testing.T) {
 	}
 
 	if err = initFormatFS(disk, uuid); err != nil {
-		if errorCause(err).Error() !=
-			"Unable to validate 'format.json', corrupted backend format" {
+		if !strings.Contains(errorCause(err).Error(), "Unable to validate 'format.json', corrupted backend format") {
 			t.Fatal("Should not fail with unexpected", err)
 		}
 	}
