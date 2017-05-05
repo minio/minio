@@ -20,8 +20,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"reflect"
 	"sync"
+
+	"github.com/minio/minio/pkg/lock"
 )
 
 // fsFormat - structure holding 'fs' format.
@@ -45,6 +49,43 @@ type formatConfigV1 struct {
 	Format string    `json:"format"`
 	FS     *fsFormat `json:"fs,omitempty"` // FS field holds fs format.
 	XL     *xlFormat `json:"xl,omitempty"` // XL field holds xl format.
+}
+
+func (f *formatConfigV1) WriteTo(lk *lock.LockedFile) (n int64, err error) {
+	// Serialize to prepare to write to disk.
+	var fbytes []byte
+	fbytes, err = json.Marshal(f)
+	if err != nil {
+		return 0, traceError(err)
+	}
+	if err = lk.Truncate(0); err != nil {
+		return 0, traceError(err)
+	}
+	_, err = lk.Write(fbytes)
+	if err != nil {
+		return 0, traceError(err)
+	}
+	return int64(len(fbytes)), nil
+}
+
+func (f *formatConfigV1) ReadFrom(lk *lock.LockedFile) (n int64, err error) {
+	var fbytes []byte
+	fi, err := lk.Stat()
+	if err != nil {
+		return 0, traceError(err)
+	}
+	fbytes, err = ioutil.ReadAll(io.NewSectionReader(lk, 0, fi.Size()))
+	if err != nil {
+		return 0, traceError(err)
+	}
+	if len(fbytes) == 0 {
+		return 0, traceError(io.EOF)
+	}
+	// Decode `format.json`.
+	if err = json.Unmarshal(fbytes, f); err != nil {
+		return 0, traceError(err)
+	}
+	return int64(len(fbytes)), nil
 }
 
 /*

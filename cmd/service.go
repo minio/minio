@@ -82,7 +82,7 @@ func (m *ServerMux) handleServiceSignals() error {
 
 	// Wait for SIGTERM in a go-routine.
 	trapCh := signalTrap(os.Interrupt, syscall.SIGTERM)
-	go func(<-chan bool) {
+	go func(trapCh <-chan bool) {
 		<-trapCh
 		globalServiceSignalCh <- serviceStop
 	}(trapCh)
