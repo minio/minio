@@ -535,7 +535,7 @@ mc cp myphoto.jpg myminio/images
 Open PostgreSQL terminal to list the rows in the `bucketevents` table.
 
 ```
-$ psql -h 127.0.0.1 -u postgres -p minio_events
+$ psql -h 127.0.0.1 -U postgres -d minio_events
 minio_events=# select * from bucketevents;
 
 key                 |                      value
