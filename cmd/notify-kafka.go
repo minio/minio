@@ -19,8 +19,10 @@ package cmd
 import (
 	"io/ioutil"
 	"net"
+	"strings"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/minio/minio-go/pkg/set"
 
 	sarama "gopkg.in/Shopify/sarama.v1"
 )
@@ -36,8 +38,13 @@ type kafkaNotify struct {
 	// file.
 	Enable bool `json:"enable"`
 
-	// List of Kafka brokers in `addr:host` format.
-	Brokers []string `json:"brokers"`
+	// List of Kafka brokers in `addr:port` format.
+	// Supports following styles.
+	// - "addr:port"
+	// - "addr1:port1,addr2:port2"
+	// - ["addr1:port1", "addr2:port2"]
+	// - ["addr1:port1,addr2:port2", "addr3:port3,addr4:port4"]
+	Brokers set.StringSet `json:"brokers"`
 
 	// Topic to which event notifications should be sent.
 	Topic string `json:"topic"`
@@ -51,9 +58,11 @@ func (k *kafkaNotify) Validate() error {
 		return kkErrFunc("No broker(s) specified.")
 	}
 	// Validate all specified brokers.
-	for _, brokerAddr := range k.Brokers {
-		if _, _, err := net.SplitHostPort(brokerAddr); err != nil {
-			return err
+	for brokerAddr := range k.Brokers {
+		for _, baddr := range strings.Split(brokerAddr, ",") {
+			if _, _, err := net.SplitHostPort(strings.TrimSpace(baddr)); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -83,7 +92,13 @@ func dialKafka(kn kafkaNotify) (kafkaConn, error) {
 	config.Producer.Retry.Max = 10
 	config.Producer.Return.Successes = true
 
-	p, err := sarama.NewSyncProducer(kn.Brokers, config)
+	var brokerAddrs []string
+	for brokerEntry := range kn.Brokers {
+		for _, brokerAddr := range strings.Split(brokerEntry, ",") {
+			brokerAddrs = append(brokerAddrs, strings.TrimSpace(brokerAddr))
+		}
+	}
+	p, err := sarama.NewSyncProducer(brokerAddrs, config)
 	if err != nil {
 		return kafkaConn{}, kkErrFunc("Failed to start producer: %v", err)
 	}
