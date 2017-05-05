@@ -127,7 +127,7 @@ func (d config) Diff(c Config) ([]structs.Field, error) {
 	return fields, nil
 }
 
-//DeepDiff  - list fields in A that are missing or not equal to fields in B
+// DeepDiff  - list fields in A that are missing or not equal to fields in B
 func (d config) DeepDiff(c Config) ([]structs.Field, error) {
 	var fields []structs.Field
 
@@ -196,12 +196,22 @@ func New(data interface{}) (Config, error) {
 	return d, nil
 }
 
+// GetVersion - extracts the version information.
+func GetVersion(filename string) (version string, err error) {
+	var qc Config
+	if qc, err = Load(filename, &struct {
+		Version string
+	}{}); err != nil {
+		return "", err
+	}
+	return qc.Version(), err
+}
+
 // Load - loads json config from filename for the a given struct data
 func Load(filename string, data interface{}) (qc Config, err error) {
 	if qc, err = New(data); err == nil {
 		err = qc.Load(filename)
 	}
-
 	return qc, err
 }
 

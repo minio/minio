@@ -36,6 +36,42 @@ type MySuite struct{}
 
 var _ = Suite(&MySuite{})
 
+func (s *MySuite) TestReadVersion(c *C) {
+	type myStruct struct {
+		Version string
+	}
+	saveMe := myStruct{"1"}
+	config, err := New(&saveMe)
+	c.Assert(err, IsNil)
+	err = config.Save("test.json")
+	c.Assert(err, IsNil)
+
+	version, err := GetVersion("test.json")
+	c.Assert(err, IsNil)
+	c.Assert(version, Equals, "1")
+}
+
+func (s *MySuite) TestReadVersionErr(c *C) {
+	type myStruct struct {
+		Version int
+	}
+	saveMe := myStruct{1}
+	_, err := New(&saveMe)
+	c.Assert(err, Not(IsNil))
+
+	err = ioutil.WriteFile("test.json", []byte("{ \"version\":2,"), 0644)
+	c.Assert(err, IsNil)
+
+	_, err = GetVersion("test.json")
+	c.Assert(err, Not(IsNil))
+
+	err = ioutil.WriteFile("test.json", []byte("{ \"version\":2 }"), 0644)
+	c.Assert(err, IsNil)
+
+	_, err = GetVersion("test.json")
+	c.Assert(err, Not(IsNil))
+}
+
 func (s *MySuite) TestSaveFailOnDir(c *C) {
 	defer os.RemoveAll("test.json")
 	e := os.MkdirAll("test.json", 0644)
