@@ -11,7 +11,8 @@ RUN  \
      apk add --no-cache --virtual .build-deps git go musl-dev && \
      go get -v -d github.com/minio/minio && \
      cd /go/src/github.com/minio/minio && \
-     go install -v -ldflags "-X github.com/minio/minio/cmd.Version=2017-04-29T00:40:27Z -X github.com/minio/minio/cmd.ReleaseTag=RELEASE.2017-04-29T00-40-27Z -X github.com/minio/minio/cmd.CommitID=eb50175ad911d496bf583a599de89547f0c9be89" && \
+     git checkout release && \
+     go install -v -ldflags "-X github.com/minio/minio/cmd.Version=2017-05-05T01:14:51Z -X github.com/minio/minio/cmd.ReleaseTag=RELEASE.2017-05-05T01-14-51Z -X github.com/minio/minio/cmd.CommitID=40985cc4e3eec06b7ea82dc34c8d907fd2e7aa12" && \
      rm -rf /go/pkg /go/src /usr/local/go && apk del .build-deps
 
 EXPOSE 9000
