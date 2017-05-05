@@ -21,7 +21,6 @@ import (
 	"reflect"
 	"strconv"
 	"testing"
-	"time"
 
 	humanize "github.com/dustin/go-humanize"
 )
@@ -83,6 +82,9 @@ func TestReduceErrs(t *testing.T) {
 			errDiskNotFound,
 		}, []error{errDiskNotFound}, errVolumeNotFound},
 		{[]error{}, []error{}, errXLReadQuorum},
+		{[]error{errFileNotFound, errFileNotFound, errFileNotFound,
+			errFileNotFound, errFileNotFound, nil, nil, nil, nil, nil},
+			nil, nil},
 	}
 	// Validates list of all the testcases for returning valid errors.
 	for i, testCase := range testCases {
@@ -146,7 +148,7 @@ func newTestXLMetaV1() xlMetaV1 {
 	}
 	xlMeta.Stat = statInfo{
 		Size:    int64(20),
-		ModTime: time.Now().UTC(),
+		ModTime: UTCNow(),
 	}
 	// Set meta data.
 	xlMeta.Meta = make(map[string]string)
@@ -390,11 +392,7 @@ func TestShuffleDisks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	endpoints, err := parseStorageEndpoints(disks)
-	if err != nil {
-		t.Fatal(err)
-	}
-	objLayer, _, err := initObjectLayer(endpoints)
+	objLayer, _, err := initObjectLayer(mustGetNewEndpointList(disks...))
 	if err != nil {
 		removeRoots(disks)
 		t.Fatal(err)

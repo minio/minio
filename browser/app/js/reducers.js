@@ -77,16 +77,18 @@ export default (state = {
     case actions.SET_CURRENT_BUCKET:
       newState.currentBucket = action.currentBucket
       break
+    case actions.APPEND_OBJECTS:
+      newState.objects = [...newState.objects, ...action.objects]
+      newState.marker = action.marker
+      newState.istruncated = action.istruncated
+      break
     case actions.SET_OBJECTS:
-      if (!action.objects.length) {
-        newState.objects = []
-        newState.marker = ""
-        newState.istruncated = action.istruncated
-      } else {
-        newState.objects = [...action.objects]
-        newState.marker = action.marker
-        newState.istruncated = action.istruncated
-      }
+      newState.objects = [...action.objects]
+      break
+    case actions.RESET_OBJECTS:
+      newState.objects = []
+      newState.marker = ""
+      newState.istruncated = false
       break
     case actions.SET_CURRENT_PATH:
       newState.currentPath = action.currentPath

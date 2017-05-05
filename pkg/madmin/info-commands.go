@@ -74,17 +74,24 @@ type ServerConnStats struct {
 	TotalOutputBytes uint64 `json:"received"`
 }
 
-// ServerInfo holds the whole server information that will be
-// returned by ServerInfo API.
-type ServerInfo struct {
+// ServerInfoData holds storage, connections and other
+// information of a given server
+type ServerInfoData struct {
 	StorageInfo StorageInfo      `json:"storage"`
 	ConnStats   ServerConnStats  `json:"network"`
 	Properties  ServerProperties `json:"server"`
 }
 
+// ServerInfo holds server information result of one node
+type ServerInfo struct {
+	Error error           `json:"error"`
+	Addr  string          `json:"addr"`
+	Data  *ServerInfoData `json:"data"`
+}
+
 // ServerInfo - Connect to a minio server and call Server Info Management API
 // to fetch server's information represented by ServerInfo structure
-func (adm *AdminClient) ServerInfo() (ServerInfo, error) {
+func (adm *AdminClient) ServerInfo() ([]ServerInfo, error) {
 	// Prepare web service request
 	reqData := requestData{}
 	reqData.queryValues = make(url.Values)
@@ -94,26 +101,26 @@ func (adm *AdminClient) ServerInfo() (ServerInfo, error) {
 	resp, err := adm.executeMethod("GET", reqData)
 	defer closeResponse(resp)
 	if err != nil {
-		return ServerInfo{}, err
+		return nil, err
 	}
 
 	// Check response http status code
 	if resp.StatusCode != http.StatusOK {
-		return ServerInfo{}, httpRespToErrorResponse(resp)
+		return nil, httpRespToErrorResponse(resp)
 	}
 
 	// Unmarshal the server's json response
-	var info ServerInfo
+	var serversInfo []ServerInfo
 
 	respBytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return ServerInfo{}, err
+		return nil, err
 	}
 
-	err = json.Unmarshal(respBytes, &info)
+	err = json.Unmarshal(respBytes, &serversInfo)
 	if err != nil {
-		return ServerInfo{}, err
+		return nil, err
 	}
 
-	return info, nil
+	return serversInfo, nil
 }

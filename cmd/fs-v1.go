@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sort"
@@ -84,7 +85,7 @@ func newFSObjectLayer(fsPath string) (ObjectLayer, error) {
 		return nil, err
 	}
 
-	fi, err := os.Stat(preparePath(fsPath))
+	fi, err := osStat(preparePath(fsPath))
 	if err == nil {
 		if !fi.IsDir() {
 			return nil, syscall.ENOTDIR
@@ -223,7 +224,7 @@ func (fs fsObjects) GetBucketInfo(bucket string) (BucketInfo, error) {
 		return BucketInfo{}, toObjectErr(err, bucket)
 	}
 
-	// As os.Stat() doesn't carry other than ModTime(), use ModTime() as CreatedTime.
+	// As osStat() doesn't carry other than ModTime(), use ModTime() as CreatedTime.
 	createdTime := st.ModTime()
 	return BucketInfo{
 		Name:    bucket,
@@ -262,7 +263,7 @@ func (fs fsObjects) ListBuckets() ([]BucketInfo, error) {
 
 		bucketInfos = append(bucketInfos, BucketInfo{
 			Name: fi.Name(),
-			// As os.Stat() doesnt carry CreatedTime, use ModTime() as CreatedTime.
+			// As osStat() doesnt carry CreatedTime, use ModTime() as CreatedTime.
 			Created: fi.ModTime(),
 		})
 	}
@@ -491,7 +492,9 @@ func (fs fsObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 // until EOF, writes data directly to configured filesystem path.
 // Additionally writes `fs.json` which carries the necessary metadata
 // for future object operations.
-func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (objInfo ObjectInfo, err error) {
+func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (objInfo ObjectInfo, retErr error) {
+	var err error
+
 	// This is a special case with size as '0' and object ends with
 	// a slash separator, we treat it like a valid operation and
 	// return success.
@@ -516,13 +519,21 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 
 	var wlk *lock.LockedFile
 	if bucket != minioMetaBucket {
-		fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fsMetaJSONFile)
+		bucketMetaDir := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix)
+		fsMetaPath := pathJoin(bucketMetaDir, bucket, object, fsMetaJSONFile)
 		wlk, err = fs.rwPool.Create(fsMetaPath)
 		if err != nil {
 			return ObjectInfo{}, toObjectErr(traceError(err), bucket, object)
 		}
 		// This close will allow for locks to be synchronized on `fs.json`.
 		defer wlk.Close()
+		defer func() {
+			// Remove meta file when PutObject encounters any error
+			if retErr != nil {
+				tmpDir := pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID)
+				fsRemoveMeta(bucketMetaDir, fsMetaPath, tmpDir)
+			}
+		}()
 	}
 
 	// Uploaded object will first be written to the temporary location which will eventually
@@ -687,6 +698,41 @@ func (fs fsObjects) listDirFactory(isLeaf isLeafFunc) listDirFunc {
 	return listDir
 }
 
+// getObjectETag is a helper function, which returns only the md5sum
+// of the file on the disk.
+func (fs fsObjects) getObjectETag(bucket, entry string) (string, error) {
+	fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, entry, fsMetaJSONFile)
+
+	// Read `fs.json` to perhaps contend with
+	// parallel Put() operations.
+	rlk, err := fs.rwPool.Open(fsMetaPath)
+	// Ignore if `fs.json` is not available, this is true for pre-existing data.
+	if err != nil && err != errFileNotFound {
+		return "", toObjectErr(traceError(err), bucket, entry)
+	}
+
+	// If file is not found, we don't need to proceed forward.
+	if err == errFileNotFound {
+		return "", nil
+	}
+
+	// Read from fs metadata only if it exists.
+	defer fs.rwPool.Close(fsMetaPath)
+
+	fsMetaBuf, err := ioutil.ReadAll(rlk.LockedFile)
+	if err != nil {
+		// `fs.json` can be empty due to previously failed
+		// PutObject() transaction, if we arrive at such
+		// a situation we just ignore and continue.
+		if errorCause(err) != io.EOF {
+			return "", toObjectErr(err, bucket, entry)
+		}
+	}
+
+	fsMetaMap := parseFSMetaMap(fsMetaBuf)
+	return fsMetaMap["md5Sum"], nil
+}
+
 // ListObjects - list all objects at prefix upto maxKeys., optionally delimited by '/'. Maintains the list pool
 // state for future re-entrant list requests.
 func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
@@ -731,14 +777,33 @@ func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 			objInfo.IsDir = true
 			return
 		}
+
+		// Protect reading `fs.json`.
+		objectLock := globalNSMutex.NewNSLock(bucket, entry)
+		objectLock.RLock()
+		var md5Sum string
+		md5Sum, err = fs.getObjectETag(bucket, entry)
+		objectLock.RUnlock()
+		if err != nil {
+			return ObjectInfo{}, err
+		}
+
 		// Stat the file to get file size.
 		var fi os.FileInfo
 		fi, err = fsStatFile(pathJoin(fs.fsPath, bucket, entry))
 		if err != nil {
 			return ObjectInfo{}, toObjectErr(err, bucket, entry)
 		}
-		fsMeta := fsMetaV1{}
-		return fsMeta.ToObjectInfo(bucket, entry, fi), nil
+
+		// Success.
+		return ObjectInfo{
+			Name:    entry,
+			Bucket:  bucket,
+			Size:    fi.Size(),
+			ModTime: fi.ModTime(),
+			IsDir:   fi.IsDir(),
+			MD5Sum:  md5Sum,
+		}, nil
 	}
 
 	heal := false // true only for xl.ListObjectsHeal()
@@ -809,8 +874,8 @@ func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 }
 
 // HealObject - no-op for fs. Valid only for XL.
-func (fs fsObjects) HealObject(bucket, object string) error {
-	return traceError(NotImplemented{})
+func (fs fsObjects) HealObject(bucket, object string) (int, int, error) {
+	return 0, 0, traceError(NotImplemented{})
 }
 
 // HealBucket - no-op for fs, Valid only for XL.

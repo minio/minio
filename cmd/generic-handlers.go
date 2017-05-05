@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015, 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -238,7 +238,7 @@ func (h timeValidityHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		// Verify if the request date header is shifted by less than globalMaxSkewTime parameter in the past
 		// or in the future, reject request otherwise.
-		curTime := time.Now().UTC()
+		curTime := UTCNow()
 		if curTime.Sub(amzDate) > globalMaxSkewTime || amzDate.Sub(curTime) > globalMaxSkewTime {
 			writeErrorResponse(w, ErrRequestTimeTooSkewed, r.URL)
 			return
@@ -274,10 +274,11 @@ var defaultAllowableHTTPMethods = []string{
 // setCorsHandler handler for CORS (Cross Origin Resource Sharing)
 func setCorsHandler(h http.Handler) http.Handler {
 	c := cors.New(cors.Options{
-		AllowedOrigins: []string{"*"},
-		AllowedMethods: defaultAllowableHTTPMethods,
-		AllowedHeaders: []string{"*"},
-		ExposedHeaders: []string{"ETag"},
+		AllowedOrigins:   []string{"*"},
+		AllowedMethods:   defaultAllowableHTTPMethods,
+		AllowedHeaders:   []string{"*"},
+		ExposedHeaders:   []string{"ETag"},
+		AllowCredentials: true,
 	})
 	return c.Handler(h)
 }
@@ -401,11 +402,23 @@ func (h httpStatsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Wraps w to record http response information
 	ww := &httpResponseRecorder{ResponseWriter: w}
 
+	// Time start before the call is about to start.
+	tBefore := UTCNow()
+
 	// Execute the request
 	h.handler.ServeHTTP(ww, r)
 
+	// Time after call has completed.
+	tAfter := UTCNow()
+
+	// Time duration in secs since the call started.
+	//
+	// We don't need to do nanosecond precision in this
+	// simply for the fact that it is not human readable.
+	durationSecs := tAfter.Sub(tBefore).Seconds()
+
 	// Update http statistics
-	globalHTTPStats.updateStats(r, ww)
+	globalHTTPStats.updateStats(r, ww, durationSecs)
 }
 
 // pathValidityHandler validates all the incoming paths for

@@ -41,17 +41,17 @@ func main() {
 
 	// Heal object mybucket/myobject - dry run.
 	isDryRun := true
-	err = madmClnt.HealObject("mybucket", "myobject", isDryRun)
+	_, err = madmClnt.HealObject("mybucket", "myobject", isDryRun)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
 	// Heal object mybucket/myobject - this time for real.
 	isDryRun = false
-	err = madmClnt.HealObject("mybucket", "myobject", isDryRun)
+	healResult, err := madmClnt.HealObject("mybucket", "myobject", isDryRun)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	log.Println("successfully healed mybucket/myobject")
+	log.Printf("heal result: %#v\n", healResult)
 }

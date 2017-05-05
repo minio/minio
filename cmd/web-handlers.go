@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -255,16 +255,22 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 	return nil
 }
 
-// RemoveObjectArgs - args to remove an object
-// JSON will look like:
-// '{"bucketname":"testbucket","objects":["photos/hawaii/","photos/maldives/","photos/sanjose.jpg"]}'
+// RemoveObjectArgs - args to remove an object, JSON will look like.
+//
+// {
+//     "bucketname": "testbucket",
+//     "objects": [
+//         "photos/hawaii/",
+//         "photos/maldives/",
+//         "photos/sanjose.jpg"
+//     ]
+// }
 type RemoveObjectArgs struct {
-	Objects    []string `json:"objects"`    // can be files or sub-directories
-	Prefix     string   `json:"prefix"`     // current directory in the browser-ui
-	BucketName string   `json:"bucketname"` // bucket name.
+	Objects    []string `json:"objects"`    // Contains objects, prefixes.
+	BucketName string   `json:"bucketname"` // Contains bucket name.
 }
 
-// RemoveObject - removes an object.
+// RemoveObject - removes an object, or all the objects at a given prefix.
 func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs, reply *WebGenericRep) error {
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
@@ -273,51 +279,35 @@ func (web *webAPIHandlers) RemoveObject(r *http.Request, args *RemoveObjectArgs,
 	if !isHTTPRequestValid(r) {
 		return toJSONError(errAuthentication)
 	}
+
 	if args.BucketName == "" || len(args.Objects) == 0 {
-		return toJSONError(errUnexpected)
+		return toJSONError(errInvalidArgument)
 	}
+
 	var err error
-objectLoop:
-	for _, object := range args.Objects {
-		remove := func(objectName string) error {
-			objectLock := globalNSMutex.NewNSLock(args.BucketName, objectName)
-			objectLock.Lock()
-			defer objectLock.Unlock()
-			err = objectAPI.DeleteObject(args.BucketName, objectName)
-			if err == nil {
-				// Notify object deleted event.
-				eventNotify(eventData{
-					Type:   ObjectRemovedDelete,
-					Bucket: args.BucketName,
-					ObjInfo: ObjectInfo{
-						Name: objectName,
-					},
-					ReqParams: extractReqParams(r),
-				})
-			}
-			return err
-		}
-		if !hasSuffix(object, slashSeparator) {
-			// If not a directory, remove the object.
-			err = remove(object)
-			if err != nil {
-				break objectLoop
+next:
+	for _, objectName := range args.Objects {
+		// If not a directory, remove the object.
+		if !hasSuffix(objectName, slashSeparator) && objectName != "" {
+			if err = deleteObject(objectAPI, args.BucketName, objectName, r); err != nil {
+				break next
 			}
 			continue
 		}
+
 		// For directories, list the contents recursively and remove.
 		marker := ""
 		for {
 			var lo ListObjectsInfo
-			lo, err = objectAPI.ListObjects(args.BucketName, object, marker, "", 1000)
+			lo, err = objectAPI.ListObjects(args.BucketName, objectName, marker, "", 1000)
 			if err != nil {
-				break objectLoop
+				break next
 			}
 			marker = lo.NextMarker
 			for _, obj := range lo.Objects {
-				err = remove(obj.Name)
+				err = deleteObject(objectAPI, args.BucketName, obj.Name, r)
 				if err != nil {
-					break objectLoop
+					break next
 				}
 			}
 			if !lo.IsTruncated {
@@ -850,7 +840,7 @@ func presignedGet(host, bucket, object string, expiry int64) string {
 	accessKey := cred.AccessKey
 	secretKey := cred.SecretKey
 
-	date := time.Now().UTC()
+	date := UTCNow()
 	dateStr := date.Format(iso8601Format)
 	credential := fmt.Sprintf("%s/%s", accessKey, getScope(date, region))
 
@@ -868,10 +858,10 @@ func presignedGet(host, bucket, object string, expiry int64) string {
 
 	path := "/" + path.Join(bucket, object)
 
-	// Headers are empty, since "host" is the only header required to be signed for Presigned URLs.
-	var extractedSignedHeaders http.Header
-
-	canonicalRequest := getCanonicalRequest(extractedSignedHeaders, unsignedPayload, query, path, "GET", host)
+	// "host" is the only header required to be signed for Presigned URLs.
+	extractedSignedHeaders := make(http.Header)
+	extractedSignedHeaders.Set("host", host)
+	canonicalRequest := getCanonicalRequest(extractedSignedHeaders, unsignedPayload, query, path, "GET")
 	stringToSign := getStringToSign(canonicalRequest, date, getScope(date, region))
 	signingKey := getSigningKey(secretKey, date, region)
 	signature := getSignature(signingKey, stringToSign)
@@ -970,6 +960,12 @@ func toWebAPIError(err error) APIError {
 		return APIError{
 			Code:           "AllAccessDisabled",
 			HTTPStatusCode: http.StatusForbidden,
+			Description:    err.Error(),
+		}
+	} else if err == errInvalidArgument {
+		return APIError{
+			Code:           "InvalidArgument",
+			HTTPStatusCode: http.StatusBadRequest,
 			Description:    err.Error(),
 		}
 	}

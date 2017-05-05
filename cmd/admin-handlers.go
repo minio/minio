@@ -24,7 +24,9 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"path"
 	"strconv"
+	"sync"
 	"time"
 )
 
@@ -49,6 +51,7 @@ const (
 	mgmtDryRun         mgmtQueryKey = "dry-run"
 	mgmtUploadIDMarker mgmtQueryKey = "upload-id-marker"
 	mgmtMaxUploads     mgmtQueryKey = "max-uploads"
+	mgmtUploadID       mgmtQueryKey = "upload-id"
 )
 
 // ServerVersion - server version
@@ -205,14 +208,45 @@ type ServerConnStats struct {
 	Throughput       uint64 `json:"throughput,omitempty"`
 }
 
-// ServerInfo holds the information that will be returned by ServerInfo API
-type ServerInfo struct {
+// ServerHTTPMethodStats holds total number of HTTP operations from/to the server,
+// including the average duration the call was spent.
+type ServerHTTPMethodStats struct {
+	Count       uint64 `json:"count"`
+	AvgDuration string `json:"avgDuration"`
+}
+
+// ServerHTTPStats holds all type of http operations performed to/from the server
+// including their average execution time.
+type ServerHTTPStats struct {
+	TotalHEADStats     ServerHTTPMethodStats `json:"totalHEADs"`
+	SuccessHEADStats   ServerHTTPMethodStats `json:"successHEADs"`
+	TotalGETStats      ServerHTTPMethodStats `json:"totalGETs"`
+	SuccessGETStats    ServerHTTPMethodStats `json:"successGETs"`
+	TotalPUTStats      ServerHTTPMethodStats `json:"totalPUTs"`
+	SuccessPUTStats    ServerHTTPMethodStats `json:"successPUTs"`
+	TotalPOSTStats     ServerHTTPMethodStats `json:"totalPOSTs"`
+	SuccessPOSTStats   ServerHTTPMethodStats `json:"successPOSTs"`
+	TotalDELETEStats   ServerHTTPMethodStats `json:"totalDELETEs"`
+	SuccessDELETEStats ServerHTTPMethodStats `json:"successDELETEs"`
+}
+
+// ServerInfoData holds storage, connections and other
+// information of a given server.
+type ServerInfoData struct {
 	StorageInfo StorageInfo      `json:"storage"`
 	ConnStats   ServerConnStats  `json:"network"`
+	HTTPStats   ServerHTTPStats  `json:"http"`
 	Properties  ServerProperties `json:"server"`
 }
 
-// ServerInfoHandler - GET /?server-info
+// ServerInfo holds server information result of one node
+type ServerInfo struct {
+	Error error
+	Addr  string
+	Data  *ServerInfoData
+}
+
+// ServerInfoHandler - GET /?info
 // ----------
 // Get server information
 func (adminAPI adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Request) {
@@ -223,58 +257,43 @@ func (adminAPI adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	// Build storage info
-	objLayer := newObjectLayerFn()
-	if objLayer == nil {
-		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
-		return
-	}
-	storage := objLayer.StorageInfo()
+	// Web service response
+	reply := make([]ServerInfo, len(globalAdminPeers))
 
-	// Build list of enabled ARNs queues
-	var arns []string
-	for queueArn := range globalEventNotifier.GetAllExternalTargets() {
-		arns = append(arns, queueArn)
-	}
+	var wg sync.WaitGroup
 
-	// Fetch uptimes from all peers. This may fail to due to lack
-	// of read-quorum availability.
-	uptime, err := getPeerUptimes(globalAdminPeers)
-	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-		errorIf(err, "Unable to get uptime from majority of servers.")
-		return
-	}
+	// Gather server information for all nodes
+	for i, p := range globalAdminPeers {
+		wg.Add(1)
 
-	// Build server properties information
-	properties := ServerProperties{
-		Version:  Version,
-		CommitID: CommitID,
-		Region:   serverConfig.GetRegion(),
-		SQSARN:   arns,
-		Uptime:   uptime,
+		// Gather information from a peer in a goroutine
+		go func(idx int, peer adminPeer) {
+			defer wg.Done()
+
+			// Initialize server info at index
+			reply[idx] = ServerInfo{Addr: peer.addr}
+
+			serverInfoData, err := peer.cmdRunner.ServerInfoData()
+			if err != nil {
+				errorIf(err, "Unable to get server info from %s.", peer.addr)
+				reply[idx].Error = err
+				return
+			}
+
+			reply[idx].Data = &serverInfoData
+		}(i, p)
 	}
 
-	// Build network info
-	connStats := ServerConnStats{
-		TotalInputBytes:  globalConnStats.getTotalInputBytes(),
-		TotalOutputBytes: globalConnStats.getTotalOutputBytes(),
-	}
-
-	// Build the whole returned information
-	info := ServerInfo{
-		StorageInfo: storage,
-		ConnStats:   connStats,
-		Properties:  properties,
-	}
+	wg.Wait()
 
 	// Marshal API response
-	jsonBytes, err := json.Marshal(info)
+	jsonBytes, err := json.Marshal(reply)
 	if err != nil {
 		writeErrorResponse(w, ErrInternalError, r.URL)
 		errorIf(err, "Failed to marshal storage info into json.")
 		return
 	}
+
 	// Reply with storage information (across nodes in a
 	// distributed setup) as json.
 	writeSuccessResponseJSON(w, jsonBytes)
@@ -602,6 +621,42 @@ func isDryRun(qval url.Values) bool {
 	return false
 }
 
+// healResult - represents result of a heal operation like
+// heal-object, heal-upload.
+type healResult struct {
+	State healState `json:"state"`
+}
+
+// healState - different states of heal operation
+type healState int
+
+const (
+	// healNone - none of the disks healed
+	healNone healState = iota
+	// healPartial - some disks were healed, others were offline
+	healPartial
+	// healOK - all disks were healed
+	healOK
+)
+
+// newHealResult - returns healResult given number of disks healed and
+// number of disks offline
+func newHealResult(numHealedDisks, numOfflineDisks int) healResult {
+	var state healState
+	switch {
+	case numHealedDisks == 0:
+		state = healNone
+
+	case numOfflineDisks > 0:
+		state = healPartial
+
+	default:
+		state = healOK
+	}
+
+	return healResult{State: state}
+}
+
 // HealObjectHandler - POST /?heal&bucket=mybucket&object=myobject&dry-run
 // - x-minio-operation = object
 // - bucket and object are both mandatory query parameters
@@ -644,14 +699,95 @@ func (adminAPI adminAPIHandlers) HealObjectHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	err := objLayer.HealObject(bucket, object)
+	numOfflineDisks, numHealedDisks, err := objLayer.HealObject(bucket, object)
+	if err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
+	jsonBytes, err := json.Marshal(newHealResult(numHealedDisks, numOfflineDisks))
 	if err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 
 	// Return 200 on success.
-	writeSuccessResponseHeadersOnly(w)
+	writeSuccessResponseJSON(w, jsonBytes)
+}
+
+// HealUploadHandler - POST /?heal&bucket=mybucket&object=myobject&upload-id=myuploadID&dry-run
+// - x-minio-operation = upload
+// - bucket, object and upload-id are mandatory query parameters
+// Heal a given upload, if present.
+func (adminAPI adminAPIHandlers) HealUploadHandler(w http.ResponseWriter, r *http.Request) {
+	// Get object layer instance.
+	objLayer := newObjectLayerFn()
+	if objLayer == nil {
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+		return
+	}
+
+	// Validate request signature.
+	adminAPIErr := checkRequestAuthType(r, "", "", "")
+	if adminAPIErr != ErrNone {
+		writeErrorResponse(w, adminAPIErr, r.URL)
+		return
+	}
+
+	vars := r.URL.Query()
+	bucket := vars.Get(string(mgmtBucket))
+	object := vars.Get(string(mgmtObject))
+	uploadID := vars.Get(string(mgmtUploadID))
+	uploadObj := path.Join(bucket, object, uploadID)
+
+	// Validate bucket and object names as supplied via query
+	// parameters.
+	if err := checkBucketAndObjectNames(bucket, object); err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
+	// Validate the bucket and object w.r.t backend representation
+	// of an upload.
+	if err := checkBucketAndObjectNames(minioMetaMultipartBucket,
+		uploadObj); err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
+	// Check if upload exists.
+	if _, err := objLayer.GetObjectInfo(minioMetaMultipartBucket,
+		uploadObj); err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
+	// if dry-run is set in query params then perform validations
+	// and return success.
+	if isDryRun(vars) {
+		writeSuccessResponseHeadersOnly(w)
+		return
+	}
+
+	//We are able to use HealObject for healing an upload since an
+	//ongoing upload has the same backend representation as an
+	//object.  The 'object' corresponding to a given bucket,
+	//object and uploadID is
+	//.minio.sys/multipart/bucket/object/uploadID.
+	numOfflineDisks, numHealedDisks, err := objLayer.HealObject(minioMetaMultipartBucket, uploadObj)
+	if err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
+	jsonBytes, err := json.Marshal(newHealResult(numHealedDisks, numOfflineDisks))
+	if err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
+	// Return 200 on success.
+	writeSuccessResponseJSON(w, jsonBytes)
 }
 
 // HealFormatHandler - POST /?heal&dry-run

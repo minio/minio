@@ -32,6 +32,7 @@ type amqpNotify struct {
 	Exchange     string `json:"exchange"`
 	RoutingKey   string `json:"routingKey"`
 	ExchangeType string `json:"exchangeType"`
+	DeliveryMode uint8  `json:"deliveryMode"`
 	Mandatory    bool   `json:"mandatory"`
 	Immediate    bool   `json:"immediate"`
 	Durable      bool   `json:"durable"`
@@ -145,8 +146,9 @@ func (q amqpConn) Fire(entry *logrus.Entry) error {
 		q.params.Mandatory,
 		q.params.Immediate,
 		amqp.Publishing{
-			ContentType: "application/json",
-			Body:        []byte(body),
+			ContentType:  "application/json",
+			DeliveryMode: q.params.DeliveryMode,
+			Body:         []byte(body),
 		})
 	if err != nil {
 		return err

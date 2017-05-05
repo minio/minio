@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -208,25 +208,28 @@ func (xl xlObjects) removeObjectPart(bucket, object, uploadID, partName string) 
 
 // statPart - returns fileInfo structure for a successful stat on part file.
 func (xl xlObjects) statPart(bucket, object, uploadID, partName string) (fileInfo FileInfo, err error) {
+	var ignoredErrs []error
 	partNamePath := path.Join(bucket, object, uploadID, partName)
 	for _, disk := range xl.getLoadBalancedDisks() {
 		if disk == nil {
+			ignoredErrs = append(ignoredErrs, errDiskNotFound)
 			continue
 		}
 		fileInfo, err = disk.StatFile(minioMetaMultipartBucket, partNamePath)
 		if err == nil {
 			return fileInfo, nil
 		}
-		err = traceError(err)
 		// For any reason disk was deleted or goes offline we continue to next disk.
 		if isErrIgnored(err, objMetadataOpIgnoredErrs...) {
+			ignoredErrs = append(ignoredErrs, err)
 			continue
 		}
-
-		// Catastrophic error, we return.
-		break
+		// Error is not ignored, return right here.
+		return FileInfo{}, traceError(err)
 	}
-	return FileInfo{}, err
+	// If all errors were ignored, reduce to maximal occurrence
+	// based on the read quorum.
+	return FileInfo{}, reduceReadQuorumErrs(ignoredErrs, nil, xl.readQuorum)
 }
 
 // commitXLMetadata - commit `xl.json` from source prefix to destination prefix in the given slice of disks.
@@ -349,11 +352,7 @@ func (xl xlObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 			}
 			// For any walk error return right away.
 			if walkResult.err != nil {
-				// File not found or Disk not found is a valid case.
-				if isErrIgnored(walkResult.err, xlTreeWalkIgnoredErrs...) {
-					continue
-				}
-				return ListMultipartsInfo{}, err
+				return ListMultipartsInfo{}, walkResult.err
 			}
 			entry := strings.TrimPrefix(walkResult.entry, retainSlash(bucket))
 			// For an entry looking like a directory, store and
@@ -478,7 +477,7 @@ func (xl xlObjects) newMultipartUpload(bucket string, object string, meta map[st
 		}
 		meta["content-type"] = contentType
 	}
-	xlMeta.Stat.ModTime = time.Now().UTC()
+	xlMeta.Stat.ModTime = UTCNow()
 	xlMeta.Meta = meta
 
 	// This lock needs to be held for any changes to the directory
@@ -507,7 +506,7 @@ func (xl xlObjects) newMultipartUpload(bucket string, object string, meta map[st
 		return "", toObjectErr(rErr, minioMetaMultipartBucket, uploadIDPath)
 	}
 
-	initiated := time.Now().UTC()
+	initiated := UTCNow()
 	// Create or update 'uploads.json'
 	if err = xl.addUploadID(bucket, object, uploadID, initiated); err != nil {
 		return "", err
@@ -725,7 +724,7 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	}
 
 	// Once part is successfully committed, proceed with updating XL metadata.
-	xlMeta.Stat.ModTime = time.Now().UTC()
+	xlMeta.Stat.ModTime = UTCNow()
 
 	// Add the current part.
 	xlMeta.AddObjectPart(partID, partSuffix, newMD5Hex, size)
@@ -971,7 +970,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 
 	// Save the final object size and modtime.
 	xlMeta.Stat.Size = objectSize
-	xlMeta.Stat.ModTime = time.Now().UTC()
+	xlMeta.Stat.ModTime = UTCNow()
 
 	// Save successfully calculated md5sum.
 	xlMeta.Meta["md5Sum"] = s3MD5

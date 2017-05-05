@@ -113,27 +113,34 @@ func undoMakeBucket(storageDisks []StorageAPI, bucket string) {
 
 // getBucketInfo - returns the BucketInfo from one of the load balanced disks.
 func (xl xlObjects) getBucketInfo(bucketName string) (bucketInfo BucketInfo, err error) {
+	var bucketErrs []error
 	for _, disk := range xl.getLoadBalancedDisks() {
 		if disk == nil {
+			bucketErrs = append(bucketErrs, errDiskNotFound)
 			continue
 		}
-		var volInfo VolInfo
-		volInfo, err = disk.StatVol(bucketName)
-		if err == nil {
+		volInfo, serr := disk.StatVol(bucketName)
+		if serr == nil {
 			bucketInfo = BucketInfo{
 				Name:    volInfo.Name,
 				Created: volInfo.Created,
 			}
 			return bucketInfo, nil
 		}
-		err = traceError(err)
+		err = traceError(serr)
 		// For any reason disk went offline continue and pick the next one.
 		if isErrIgnored(err, bucketMetadataOpIgnoredErrs...) {
+			bucketErrs = append(bucketErrs, err)
 			continue
 		}
-		break
+		// Any error which cannot be ignored, we return quickly.
+		return BucketInfo{}, err
 	}
-	return BucketInfo{}, err
+	// If all our errors were ignored, then we try to
+	// reduce to one error based on read quorum.
+	// `nil` is deliberately passed for ignoredErrs
+	// because these errors were already ignored.
+	return BucketInfo{}, reduceReadQuorumErrs(bucketErrs, nil, xl.readQuorum)
 }
 
 // GetBucketInfo - returns BucketInfo for a bucket.
@@ -180,6 +187,7 @@ func (xl xlObjects) listBuckets() (bucketsInfo []BucketInfo, err error) {
 			}
 			return bucketsInfo, nil
 		}
+		err = traceError(err)
 		// Ignore any disks not found.
 		if isErrIgnored(err, bucketMetadataOpIgnoredErrs...) {
 			continue

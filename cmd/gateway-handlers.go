@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"bytes"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -354,37 +353,13 @@ func (api gatewayAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	{
-		// FIXME: consolidate bucketPolicy and policy.BucketAccessPolicy so that
-		// the verification below is done on the same type.
-		// Parse bucket policy.
-		policyInfo := &bucketPolicy{}
-		err = parseBucketPolicy(bytes.NewReader(policyBytes), policyInfo)
-		if err != nil {
-			errorIf(err, "Unable to parse bucket policy.")
-			writeErrorResponse(w, ErrInvalidPolicyDocument, r.URL)
-			return
-		}
-
-		// Parse check bucket policy.
-		if s3Error := checkBucketPolicyResources(bucket, policyInfo); s3Error != ErrNone {
-			writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-			return
-		}
-	}
-	policyInfo := &policy.BucketAccessPolicy{}
-	if err = json.Unmarshal(policyBytes, policyInfo); err != nil {
+	policyInfo := policy.BucketAccessPolicy{}
+	if err = json.Unmarshal(policyBytes, &policyInfo); err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
-	var policies []BucketAccessPolicy
-	for prefix, policy := range policy.GetPolicies(policyInfo.Statements, bucket) {
-		policies = append(policies, BucketAccessPolicy{
-			Prefix: prefix,
-			Policy: policy,
-		})
-	}
-	if err = objAPI.SetBucketPolicies(bucket, policies); err != nil {
+
+	if err = objAPI.SetBucketPolicies(bucket, policyInfo); err != nil {
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
@@ -453,17 +428,14 @@ func (api gatewayAPIHandlers) GetBucketPolicyHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	policies, err := objAPI.GetBucketPolicies(bucket)
+	bp, err := objAPI.GetBucketPolicies(bucket)
 	if err != nil {
 		errorIf(err, "Unable to read bucket policy.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
-	policyInfo := policy.BucketAccessPolicy{Version: "2012-10-17"}
-	for _, p := range policies {
-		policyInfo.Statements = policy.SetPolicy(policyInfo.Statements, p.Policy, bucket, p.Prefix)
-	}
-	policyBytes, err := json.Marshal(&policyInfo)
+
+	policyBytes, err := json.Marshal(bp)
 	if err != nil {
 		errorIf(err, "Unable to read bucket policy.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
@@ -497,6 +469,65 @@ func (api gatewayAPIHandlers) PutBucketNotificationHandler(w http.ResponseWriter
 // ListenBucketNotificationHandler - list bucket notifications.
 func (api gatewayAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWriter, r *http.Request) {
 	writeErrorResponse(w, ErrNotImplemented, r.URL)
+}
+
+// PutBucketHandler - PUT Bucket
+// ----------
+// This implementation of the PUT operation creates a new bucket for authenticated request
+func (api gatewayAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Request) {
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+		return
+	}
+
+	// PutBucket does not have any bucket action.
+	s3Error := checkRequestAuthType(r, "", "", globalMinioDefaultRegion)
+	if s3Error == ErrInvalidRegion {
+		// Clients like boto3 send putBucket() call signed with region that is configured.
+		s3Error = checkRequestAuthType(r, "", "", serverConfig.GetRegion())
+	}
+	if s3Error != ErrNone {
+		writeErrorResponse(w, s3Error, r.URL)
+		return
+	}
+
+	vars := router.Vars(r)
+	bucket := vars["bucket"]
+
+	// Validate if incoming location constraint is valid, reject
+	// requests which do not follow valid region requirements.
+	location, s3Error := parseLocationConstraint(r)
+	if s3Error != ErrNone {
+		writeErrorResponse(w, s3Error, r.URL)
+		return
+	}
+
+	// validating region here, because isValidLocationConstraint
+	// reads body which has been read already. So only validating
+	// region here.
+	serverRegion := serverConfig.GetRegion()
+	if serverRegion != location {
+		writeErrorResponse(w, ErrInvalidRegion, r.URL)
+		return
+	}
+
+	bucketLock := globalNSMutex.NewNSLock(bucket, "")
+	bucketLock.Lock()
+	defer bucketLock.Unlock()
+
+	// Proceed to creating a bucket.
+	err := objectAPI.MakeBucketWithLocation(bucket, location)
+	if err != nil {
+		errorIf(err, "Unable to create a bucket.")
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
+	// Make sure to add Location information here only for bucket
+	w.Header().Set("Location", getLocation(r))
+
+	writeSuccessResponseHeadersOnly(w)
 }
 
 // DeleteBucketHandler - Delete bucket

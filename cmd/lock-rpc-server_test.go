@@ -17,11 +17,9 @@
 package cmd
 
 import (
-	"net/url"
 	"runtime"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/minio/dsync"
 )
@@ -35,7 +33,7 @@ func testLockEquality(lriLeft, lriRight []lockRequesterInfo) bool {
 	for i := 0; i < len(lriLeft); i++ {
 		if lriLeft[i].writer != lriRight[i].writer ||
 			lriLeft[i].node != lriRight[i].node ||
-			lriLeft[i].rpcPath != lriRight[i].rpcPath ||
+			lriLeft[i].serviceEndpoint != lriRight[i].serviceEndpoint ||
 			lriLeft[i].uid != lriRight[i].uid {
 			return false
 		}
@@ -51,17 +49,17 @@ func createLockTestServer(t *testing.T) (string, *lockServer, string) {
 	}
 
 	locker := &lockServer{
-		AuthRPCServer: AuthRPCServer{},
-		rpcPath:       "rpc-path",
-		mutex:         sync.Mutex{},
-		lockMap:       make(map[string][]lockRequesterInfo),
+		AuthRPCServer:   AuthRPCServer{},
+		serviceEndpoint: "rpc-path",
+		mutex:           sync.Mutex{},
+		lockMap:         make(map[string][]lockRequesterInfo),
 	}
 	creds := serverConfig.GetCredential()
 	loginArgs := LoginRPCArgs{
 		Username:    creds.AccessKey,
 		Password:    creds.SecretKey,
 		Version:     Version,
-		RequestTime: time.Now().UTC(),
+		RequestTime: UTCNow(),
 	}
 	loginReply := LoginRPCReply{}
 	err = locker.Login(&loginArgs, &loginReply)
@@ -98,10 +96,10 @@ func TestLockRpcServerLock(t *testing.T) {
 			gotLri, _ := locker.lockMap["name"]
 			expectedLri := []lockRequesterInfo{
 				{
-					writer:  true,
-					node:    "node",
-					rpcPath: "rpc-path",
-					uid:     "0123-4567",
+					writer:          true,
+					node:            "node",
+					serviceEndpoint: "rpc-path",
+					uid:             "0123-4567",
 				},
 			}
 			if !testLockEquality(expectedLri, gotLri) {
@@ -199,10 +197,10 @@ func TestLockRpcServerRLock(t *testing.T) {
 			gotLri, _ := locker.lockMap["name"]
 			expectedLri := []lockRequesterInfo{
 				{
-					writer:  false,
-					node:    "node",
-					rpcPath: "rpc-path",
-					uid:     "0123-4567",
+					writer:          false,
+					node:            "node",
+					serviceEndpoint: "rpc-path",
+					uid:             "0123-4567",
 				},
 			}
 			if !testLockEquality(expectedLri, gotLri) {
@@ -286,10 +284,10 @@ func TestLockRpcServerRUnlock(t *testing.T) {
 			gotLri, _ := locker.lockMap["name"]
 			expectedLri := []lockRequesterInfo{
 				{
-					writer:  false,
-					node:    "node",
-					rpcPath: "rpc-path",
-					uid:     "89ab-cdef",
+					writer:          false,
+					node:            "node",
+					serviceEndpoint: "rpc-path",
+					uid:             "89ab-cdef",
 				},
 			}
 			if !testLockEquality(expectedLri, gotLri) {
@@ -434,66 +432,46 @@ func TestLockServers(t *testing.T) {
 		globalIsDistXL = currentIsDistXL
 	}()
 
+	case1Endpoints := mustGetNewEndpointList(
+		"http://localhost:9000/mnt/disk1",
+		"http://1.1.1.2:9000/mnt/disk2",
+		"http://1.1.2.1:9000/mnt/disk3",
+		"http://1.1.2.2:9000/mnt/disk4",
+	)
+	for i := range case1Endpoints {
+		if case1Endpoints[i].Host == "localhost:9000" {
+			case1Endpoints[i].IsLocal = true
+		}
+	}
+
+	case2Endpoints := mustGetNewEndpointList(
+		"http://localhost:9000/mnt/disk1",
+		"http://localhost:9000/mnt/disk2",
+		"http://1.1.2.1:9000/mnt/disk3",
+		"http://1.1.2.2:9000/mnt/disk4",
+	)
+	for i := range case2Endpoints {
+		if case2Endpoints[i].Host == "localhost:9000" {
+			case2Endpoints[i].IsLocal = true
+		}
+	}
+
 	globalMinioHost = ""
 	testCases := []struct {
 		isDistXL         bool
-		srvCmdConfig     serverCmdConfig
+		endpoints        EndpointList
 		totalLockServers int
 	}{
 		// Test - 1 one lock server initialized.
-		{
-			isDistXL: true,
-			srvCmdConfig: serverCmdConfig{
-				endpoints: []*url.URL{{
-					Scheme: httpScheme,
-					Host:   "localhost:9000",
-					Path:   "/mnt/disk1",
-				}, {
-					Scheme: httpScheme,
-					Host:   "1.1.1.2:9000",
-					Path:   "/mnt/disk2",
-				}, {
-					Scheme: httpScheme,
-					Host:   "1.1.2.1:9000",
-					Path:   "/mnt/disk3",
-				}, {
-					Scheme: httpScheme,
-					Host:   "1.1.2.2:9000",
-					Path:   "/mnt/disk4",
-				}},
-			},
-			totalLockServers: 1,
-		},
+		{true, case1Endpoints, 1},
 		// Test - 2 two servers possible.
-		{
-			isDistXL: true,
-			srvCmdConfig: serverCmdConfig{
-				endpoints: []*url.URL{{
-					Scheme: httpScheme,
-					Host:   "localhost:9000",
-					Path:   "/mnt/disk1",
-				}, {
-					Scheme: httpScheme,
-					Host:   "localhost:9000",
-					Path:   "/mnt/disk2",
-				}, {
-					Scheme: httpScheme,
-					Host:   "1.1.2.1:9000",
-					Path:   "/mnt/disk3",
-				}, {
-					Scheme: httpScheme,
-					Host:   "1.1.2.2:9000",
-					Path:   "/mnt/disk4",
-				}},
-			},
-			totalLockServers: 2,
-		},
+		{true, case2Endpoints, 2},
 	}
 
 	// Validates lock server initialization.
 	for i, testCase := range testCases {
 		globalIsDistXL = testCase.isDistXL
-		lockServers := newLockServers(testCase.srvCmdConfig)
+		lockServers := newLockServers(testCase.endpoints)
 		if len(lockServers) != testCase.totalLockServers {
 			t.Fatalf("Test %d: Expected total %d, got %d", i+1, testCase.totalLockServers, len(lockServers))
 		}

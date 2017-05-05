@@ -44,6 +44,7 @@ func main() {
 | | |[`HealObject`](#HealObject)|||
 | | |[`HealFormat`](#HealFormat)|||
 | | |[`ListUploadsHeal`](#ListUploadsHeal)|||
+| | |[`HealUpload`](#HealUpload)|||
 
 ## 1. Constructor
 <a name="Minio"></a>
@@ -121,7 +122,30 @@ If successful restarts the running minio service, for distributed setup restarts
 
  ```
 
-## 3. Lock operations
+## 3. Info operations
+
+<a name="ServerInfo"></a>
+### ServerInfo() ([]ServerInfo, error)
+Fetch all information for all cluster nodes, such as uptime, region, network statistics, etc..
+
+
+ __Example__
+
+ ```go
+
+	serversInfo, err := madmClnt.ServerInfo()
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	for _, peerInfo := range serversInfo {
+		log.Printf("Node: %s, Info: %v\n", peerInfo.Addr, peerInfo.Data)
+	}
+
+ ```
+
+
+## 4. Lock operations
 
 <a name="ListLocks"></a>
 ### ListLocks(bucket, prefix string, duration time.Duration) ([]VolumeLockInfo, error)
@@ -153,7 +177,7 @@ __Example__
 
 ```
 
-## 4. Heal operations
+## 5. Heal operations
 
 <a name="ListObjectsHeal"></a>
 ### ListObjectsHeal(bucket, prefix string, recursive bool, doneCh <-chan struct{}) (<-chan ObjectInfo, error)
@@ -241,18 +265,31 @@ __Example__
 ```
 
 <a name="HealObject"></a>
-### HealObject(bucket, object string, isDryRun bool) error
+### HealObject(bucket, object string, isDryRun bool) (HealResult, error)
 If object is successfully healed returns nil, otherwise returns error indicating the reason for failure. If isDryRun is true, then the object is not healed, but heal object request is validated by the server. e.g, if the object exists, if object name is valid etc.
+
+| Param  | Type  | Description  |
+|---|---|---|
+|`h.State` | _HealState_ | Represents the result of heal operation. It could be one of `HealNone`, `HealPartial` or `HealOK`. |
+
+
+| Value | Description |
+|---|---|
+|`HealNone` | Object/Upload wasn't healed on any of the disks |
+|`HealPartial` | Object/Upload was healed on some of the disks needing heal |
+| `HealOK` | Object/Upload was healed on all the disks needing heal |
+
 
 __Example__
 
 ``` go
-    isDryRun := false
-    err := madmClnt.HealObject("mybucket", "myobject", isDryRun)
+    isDryRun = false
+    healResult, err := madmClnt.HealObject("mybucket", "myobject", isDryRun)
     if err != nil {
         log.Fatalln(err)
     }
-    log.Println("successfully healed mybucket/myobject")
+
+    log.Println("Heal-object result: ", healResult)
 
 ```
 
@@ -278,8 +315,75 @@ __Example__
     log.Println("successfully healed storage format on available disks.")
 
 ```
+<a name="ListUploadsHeal"> </a>
+### ListUploadsHeal(bucket, prefix string, recursive bool, doneCh <-chan struct{}) (<-chan UploadInfo, error)
+List ongoing multipart uploads that need healing.
 
-## 5. Config operations
+| Param  | Type  | Description  |
+|---|---|---|
+|`ui.Key` | _string_ | Name of the object being uploaded |
+|`ui.UploadID` | _string_ | UploadID of the ongoing multipart upload |
+|`ui.HealUploadInfo.Status` | _HealStatus_| One of `Healthy`, `CanHeal`, `Corrupted`, `QuorumUnavailable`|
+|`ui.Err`| _error_ | non-nil if fetching fetching healing information failed |
+
+__Example__
+
+``` go
+
+    // Set true if recursive listing is needed.
+    isRecursive := true
+    // List objects that need healing for a given bucket and
+    // prefix.
+    healUploadsCh, err := madmClnt.ListUploadsHeal(bucket, prefix, isRecursive, doneCh)
+    if err != nil {
+        log.Fatalln("Failed to get list of uploads to be healed: ", err)
+    }
+
+    for upload := range healUploadsCh {
+        if upload.Err != nil {
+            log.Println("upload listing error: ", upload.Err)
+        }
+
+        if upload.HealUploadInfo != nil {
+            switch healInfo := *upload.HealUploadInfo; healInfo.Status {
+            case madmin.CanHeal:
+                fmt.Println(upload.Key, " can be healed.")
+            case madmin.QuorumUnavailable:
+                fmt.Println(upload.Key, " can't be healed until quorum is available.")
+            case madmin.Corrupted:
+                fmt.Println(upload.Key, " can't be healed, not enough information.")
+            }
+        }
+    }
+
+```
+
+<a name="HealUpload"></a>
+### HealUpload(bucket, object, uploadID string, isDryRun bool) (HealResult, error)
+If upload is successfully healed returns nil, otherwise returns error indicating the reason for failure. If isDryRun is true, then the upload is not healed, but heal upload request is validated by the server. e.g, if the upload exists, if upload name is valid etc.
+
+| Param  | Type  | Description  |
+|---|---|---|
+|`h.State` | _HealState_ | Represents the result of heal operation. It could be one of `HealNone`, `HealPartial` or `HealOK`. |
+
+
+| Value | Description |
+|---|---|
+| `HealNone` | Object/Upload wasn't healed on any of the disks |
+| `HealPartial` | Object/Upload was healed on some of the disks needing heal |
+| `HealOK` | Object/Upload was healed on all the disks needing heal |
+
+``` go
+    isDryRun = false
+    healResult, err := madmClnt.HealUpload("mybucket", "myobject", "myUploadID", isDryRun)
+    if err != nil {
+        log.Fatalln(err)
+    }
+
+    log.Println("Heal-upload result: ", healResult)
+```
+
+## 6. Config operations
 
 <a name="GetConfig"></a>
 ### GetConfig() ([]byte, error)
@@ -303,23 +407,6 @@ __Example__
     log.Println("config received successfully: ", string(buf.Bytes()))
 ```
 
-## 6. Misc operations
-
-<a name="SetCredentials"></a>
-
-### SetCredentials() error
-Set new credentials of a Minio setup.
-
-__Example__
-
-``` go
-    err = madmClnt.SetCredentials("YOUR-NEW-ACCESSKEY", "YOUR-NEW-SECRETKEY")
-    if err != nil {
-            log.Fatalln(err)
-    }
-    log.Println("New credentials successfully set.")
-
-```
 
 <a name="SetConfig"></a>
 ### SetConfig(config io.Reader) (SetConfigResult, error)
@@ -355,45 +442,21 @@ __Example__
     log.Println("SetConfig: ", string(buf.Bytes()))
 ```
 
-<a name="ListUploadsHeal"> </a>
-### ListUploadsHeal(bucket, prefix string, recursive bool, doneCh <-chan struct{}) (<-chan UploadInfo, error)
-List ongoing multipart uploads that need healing.
+## 7. Misc operations
 
-| Param  | Type  | Description  |
-|---|---|---|
-|`ui.Key` | _string_ | Name of the object being uploaded |
-|`ui.UploadID` | _string_ | UploadID of the ongoing multipart upload |
-|`ui.HealUploadInfo.Status` | _healStatus_| One of `Healthy`, `CanHeal`, `Corrupted`, `QuorumUnavailable`|
-|`ui.Err`| _error_ | non-nil if fetching fetching healing information failed |
+<a name="SetCredentials"></a>
+
+### SetCredentials() error
+Set new credentials of a Minio setup.
 
 __Example__
 
 ``` go
-
-    // Set true if recursive listing is needed.
-    isRecursive := true
-    // List objects that need healing for a given bucket and
-    // prefix.
-    healUploadsCh, err := madmClnt.ListUploadsHeal(bucket, prefix, isRecursive, doneCh)
+    err = madmClnt.SetCredentials("YOUR-NEW-ACCESSKEY", "YOUR-NEW-SECRETKEY")
     if err != nil {
-        log.Fatalln("Failed to get list of uploads to be healed: ", err)
+            log.Fatalln(err)
     }
-
-    for upload := range healUploadsCh {
-        if upload.Err != nil {
-            log.Println("upload listing error: ", upload.Err)
-        }
-
-        if upload.HealUploadInfo != nil {
-            switch healInfo := *upload.HealUploadInfo; healInfo.Status {
-            case madmin.CanHeal:
-                fmt.Println(upload.Key, " can be healed.")
-            case madmin.QuorumUnavailable:
-                fmt.Println(upload.Key, " can't be healed until quorum is available.")
-            case madmin.Corrupted:
-                fmt.Println(upload.Key, " can't be healed, not enough information.")
-            }
-        }
-    }
+    log.Println("New credentials successfully set.")
 
 ```
+

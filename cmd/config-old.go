@@ -16,46 +16,13 @@
 
 package cmd
 
-import (
-	"os"
-	"path/filepath"
-	"sync"
-
-	"github.com/minio/minio/pkg/quick"
-)
-
-func loadOldConfig(configFile string, config interface{}) (interface{}, error) {
-	if _, err := os.Stat(configFile); err != nil {
-		return nil, err
-	}
-
-	qc, err := quick.New(config)
-	if err != nil {
-		return nil, err
-	}
-
-	if err = qc.Load(configFile); err != nil {
-		return nil, err
-	}
-
-	return config, nil
-}
+import "sync"
 
 /////////////////// Config V1 ///////////////////
 type configV1 struct {
 	Version   string `json:"version"`
 	AccessKey string `json:"accessKeyId"`
 	SecretKey string `json:"secretAccessKey"`
-}
-
-// loadConfigV1 load config
-func loadConfigV1() (*configV1, error) {
-	configFile := filepath.Join(getConfigDir(), "fsUsers.json")
-	config, err := loadOldConfig(configFile, &configV1{Version: "1"})
-	if config == nil {
-		return nil, err
-	}
-	return config.(*configV1), err
 }
 
 /////////////////// Config V2 ///////////////////
@@ -80,18 +47,7 @@ type configV2 struct {
 	} `json:"fileLogger"`
 }
 
-// loadConfigV2 load config version '2'.
-func loadConfigV2() (*configV2, error) {
-	configFile := getConfigFile()
-	config, err := loadOldConfig(configFile, &configV2{Version: "2"})
-	if config == nil {
-		return nil, err
-	}
-	return config.(*configV2), err
-}
-
 /////////////////// Config V3 ///////////////////
-
 // backendV3 type.
 type backendV3 struct {
 	Type  string   `json:"type"`
@@ -143,16 +99,6 @@ type configV3 struct {
 	Logger loggerV3 `json:"logger"`
 }
 
-// loadConfigV3 load config version '3'.
-func loadConfigV3() (*configV3, error) {
-	configFile := getConfigFile()
-	config, err := loadOldConfig(configFile, &configV3{Version: "3"})
-	if config == nil {
-		return nil, err
-	}
-	return config.(*configV3), err
-}
-
 // logger type representing version '4' logger config.
 type loggerV4 struct {
 	Console struct {
@@ -181,16 +127,6 @@ type configV4 struct {
 
 	// Additional error logging configuration.
 	Logger loggerV4 `json:"logger"`
-}
-
-// loadConfigV4 load config version '4'.
-func loadConfigV4() (*configV4, error) {
-	configFile := getConfigFile()
-	config, err := loadOldConfig(configFile, &configV4{Version: "4"})
-	if config == nil {
-		return nil, err
-	}
-	return config.(*configV4), err
 }
 
 // logger type representing version '5' logger config.
@@ -250,20 +186,22 @@ type configV5 struct {
 	Logger loggerV5 `json:"logger"`
 }
 
-// loadConfigV5 load config version '5'.
-func loadConfigV5() (*configV5, error) {
-	configFile := getConfigFile()
-	config, err := loadOldConfig(configFile, &configV5{Version: "5"})
-	if config == nil {
-		return nil, err
-	}
-	return config.(*configV5), err
+// consoleLogger - default logger if not other logging is enabled.
+type consoleLoggerV1 struct {
+	Enable bool   `json:"enable"`
+	Level  string `json:"level"`
+}
+
+type fileLoggerV1 struct {
+	Enable   bool   `json:"enable"`
+	Filename string `json:"fileName"`
+	Level    string `json:"level"`
 }
 
 type loggerV6 struct {
-	Console consoleLogger  `json:"console"`
-	File    fileLogger     `json:"file"`
-	Syslog  syslogLoggerV3 `json:"syslog"`
+	Console consoleLoggerV1 `json:"console"`
+	File    fileLoggerV1    `json:"file"`
+	Syslog  syslogLoggerV3  `json:"syslog"`
 }
 
 // configV6 server configuration version '6'.
@@ -279,16 +217,6 @@ type configV6 struct {
 
 	// Notification queue configuration.
 	Notify notifierV1 `json:"notify"`
-}
-
-// loadConfigV6 load config version '6'.
-func loadConfigV6() (*configV6, error) {
-	configFile := getConfigFile()
-	config, err := loadOldConfig(configFile, &configV6{Version: "6"})
-	if config == nil {
-		return nil, err
-	}
-	return config.(*configV6), err
 }
 
 // Notifier represents collection of supported notification queues in version
@@ -331,16 +259,6 @@ type serverConfigV7 struct {
 	rwMutex *sync.RWMutex
 }
 
-// loadConfigV7 load config version '7'.
-func loadConfigV7() (*serverConfigV7, error) {
-	configFile := getConfigFile()
-	config, err := loadOldConfig(configFile, &serverConfigV7{Version: "7"})
-	if config == nil {
-		return nil, err
-	}
-	return config.(*serverConfigV7), err
-}
-
 // serverConfigV8 server configuration version '8'. Adds NATS notifier
 // configuration.
 type serverConfigV8 struct {
@@ -358,16 +276,6 @@ type serverConfigV8 struct {
 
 	// Read Write mutex.
 	rwMutex *sync.RWMutex
-}
-
-// loadConfigV8 load config version '8'.
-func loadConfigV8() (*serverConfigV8, error) {
-	configFile := getConfigFile()
-	config, err := loadOldConfig(configFile, &serverConfigV8{Version: "8"})
-	if config == nil {
-		return nil, err
-	}
-	return config.(*serverConfigV8), err
 }
 
 // serverConfigV9 server configuration version '9'. Adds PostgreSQL
@@ -389,13 +297,10 @@ type serverConfigV9 struct {
 	rwMutex *sync.RWMutex
 }
 
-func loadConfigV9() (*serverConfigV9, error) {
-	configFile := getConfigFile()
-	config, err := loadOldConfig(configFile, &serverConfigV9{Version: "9"})
-	if config == nil {
-		return nil, err
-	}
-	return config.(*serverConfigV9), err
+type loggerV7 struct {
+	sync.RWMutex
+	Console consoleLoggerV1 `json:"console"`
+	File    fileLoggerV1    `json:"file"`
 }
 
 // serverConfigV10 server configuration version '10' which is like
@@ -409,19 +314,10 @@ type serverConfigV10 struct {
 	Region     string     `json:"region"`
 
 	// Additional error logging configuration.
-	Logger logger `json:"logger"`
+	Logger loggerV7 `json:"logger"`
 
 	// Notification queue configuration.
 	Notify notifierV1 `json:"notify"`
-}
-
-func loadConfigV10() (*serverConfigV10, error) {
-	configFile := getConfigFile()
-	config, err := loadOldConfig(configFile, &serverConfigV10{Version: "10"})
-	if config == nil {
-		return nil, err
-	}
-	return config.(*serverConfigV10), err
 }
 
 // natsNotifyV1 - structure was valid until config V 11
@@ -446,19 +342,10 @@ type serverConfigV11 struct {
 	Region     string     `json:"region"`
 
 	// Additional error logging configuration.
-	Logger logger `json:"logger"`
+	Logger loggerV7 `json:"logger"`
 
 	// Notification queue configuration.
 	Notify notifierV1 `json:"notify"`
-}
-
-func loadConfigV11() (*serverConfigV11, error) {
-	configFile := getConfigFile()
-	config, err := loadOldConfig(configFile, &serverConfigV11{Version: "11"})
-	if config == nil {
-		return nil, err
-	}
-	return config.(*serverConfigV11), err
 }
 
 // serverConfigV12 server configuration version '12' which is like
@@ -471,19 +358,10 @@ type serverConfigV12 struct {
 	Region     string     `json:"region"`
 
 	// Additional error logging configuration.
-	Logger logger `json:"logger"`
+	Logger loggerV7 `json:"logger"`
 
 	// Notification queue configuration.
 	Notify notifierV2 `json:"notify"`
-}
-
-func loadConfigV12() (*serverConfigV12, error) {
-	configFile := getConfigFile()
-	config, err := loadOldConfig(configFile, &serverConfigV12{Version: "12"})
-	if config == nil {
-		return nil, err
-	}
-	return config.(*serverConfigV12), err
 }
 
 // serverConfigV13 server configuration version '13' which is like
@@ -496,17 +374,78 @@ type serverConfigV13 struct {
 	Region     string     `json:"region"`
 
 	// Additional error logging configuration.
-	Logger *logger `json:"logger"`
+	Logger *loggerV7 `json:"logger"`
 
 	// Notification queue configuration.
 	Notify *notifier `json:"notify"`
 }
 
-func loadConfigV13() (*serverConfigV13, error) {
-	configFile := getConfigFile()
-	config, err := loadOldConfig(configFile, &serverConfigV13{Version: "13"})
-	if config == nil {
-		return nil, err
-	}
-	return config.(*serverConfigV13), err
+// serverConfigV14 server configuration version '14' which is like
+// version '13' except it adds support of browser param.
+type serverConfigV14 struct {
+	Version string `json:"version"`
+
+	// S3 API configuration.
+	Credential credential  `json:"credential"`
+	Region     string      `json:"region"`
+	Browser    BrowserFlag `json:"browser"`
+
+	// Additional error logging configuration.
+	Logger *loggerV7 `json:"logger"`
+
+	// Notification queue configuration.
+	Notify *notifier `json:"notify"`
+}
+
+// serverConfigV15 server configuration version '15' which is like
+// version '14' except it adds mysql support
+type serverConfigV15 struct {
+	Version string `json:"version"`
+
+	// S3 API configuration.
+	Credential credential  `json:"credential"`
+	Region     string      `json:"region"`
+	Browser    BrowserFlag `json:"browser"`
+
+	// Additional error logging configuration.
+	Logger *loggerV7 `json:"logger"`
+
+	// Notification queue configuration.
+	Notify *notifier `json:"notify"`
+}
+
+// serverConfigV16 server configuration version '16' which is like
+// version '15' except it makes a change to logging configuration.
+type serverConfigV16 struct {
+	Version string `json:"version"`
+
+	// S3 API configuration.
+	Credential credential  `json:"credential"`
+	Region     string      `json:"region"`
+	Browser    BrowserFlag `json:"browser"`
+
+	// Additional error logging configuration.
+	Logger *loggers `json:"logger"`
+
+	// Notification queue configuration.
+	Notify *notifier `json:"notify"`
+}
+
+// serverConfigV17 server configuration version '17' which is like
+// version '16' except it adds support for "format" parameter in
+// database event notification targets: PostgreSQL, MySQL, Redis and
+// Elasticsearch.
+type serverConfigV17 struct {
+	Version string `json:"version"`
+
+	// S3 API configuration.
+	Credential credential  `json:"credential"`
+	Region     string      `json:"region"`
+	Browser    BrowserFlag `json:"browser"`
+
+	// Additional error logging configuration.
+	Logger *loggers `json:"logger"`
+
+	// Notification queue configuration.
+	Notify *notifier `json:"notify"`
 }

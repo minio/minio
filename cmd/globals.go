@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"crypto/x509"
-	"net/url"
 	"runtime"
 	"time"
 
@@ -40,6 +39,7 @@ const (
 	globalMinioModeXL              = "mode-server-xl"
 	globalMinioModeDistXL          = "mode-server-distributed-xl"
 	globalMinioModeGatewayAzure    = "mode-gateway-azure"
+	globalMinioModeGatewayS3       = "mode-gateway-s3"
 	// Add new global values here.
 )
 
@@ -66,8 +66,14 @@ var (
 	globalIsBrowserEnabled = true
 	// This flag is set to 'true' when MINIO_BROWSER env is set.
 	globalIsEnvBrowser = false
+
 	// Set to true if credentials were passed from env, default is false.
 	globalIsEnvCreds = false
+
+	// This flag is set to 'true' wen MINIO_REGION env is set.
+	globalIsEnvRegion = false
+	// This flag is set to 'us-east-1' by default
+	globalServerRegion = globalMinioDefaultRegion
 
 	// Maximum size of internal objects parts
 	globalPutPartSize = int64(64 * 1024 * 1024)
@@ -78,9 +84,6 @@ var (
 	globalMinioPort = "9000"
 	// Holds the host that was passed using --address
 	globalMinioHost = ""
-
-	// Holds the list of API endpoints for a given server.
-	globalAPIEndpoints = []string{}
 
 	// Peer communication struct
 	globalS3Peers = s3Peers{}
@@ -97,8 +100,7 @@ var (
 	// Minio server user agent string.
 	globalServerUserAgent = "Minio/" + ReleaseTag + " (" + runtime.GOOS + "; " + runtime.GOARCH + ")"
 
-	// url.URL endpoints of disks that belong to the object storage.
-	globalEndpoints = []*url.URL{}
+	globalEndpoints EndpointList
 
 	// Global server's network statistics
 	globalConnStats = newConnStats()
@@ -109,6 +111,9 @@ var (
 	// Time when object layer was initialized on start up.
 	globalBootTime time.Time
 
+	globalActiveCred         credential
+	globalPublicCerts        []*x509.Certificate
+	globalXLObjCacheDisabled bool
 	// Add new variable global values here.
 )
 

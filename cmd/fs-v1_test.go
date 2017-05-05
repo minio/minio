@@ -303,7 +303,7 @@ func TestFSHealObject(t *testing.T) {
 	defer removeAll(disk)
 
 	obj := initFSObjects(disk, t)
-	err := obj.HealObject("bucket", "object")
+	_, _, err := obj.HealObject("bucket", "object")
 	if err == nil || !isSameType(errorCause(err), NotImplemented{}) {
 		t.Fatalf("Heal Object should return NotImplemented error ")
 	}

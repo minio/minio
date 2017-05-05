@@ -15,5 +15,13 @@ RUN  \
      rm -rf /go/pkg /go/src /usr/local/go && apk del .build-deps
 
 EXPOSE 9000
-ENTRYPOINT ["minio"]
+
+COPY buildscripts/docker-entrypoint.sh /usr/bin/
+
+RUN chmod +x /usr/bin/docker-entrypoint.sh
+
+ENTRYPOINT ["/usr/bin/docker-entrypoint.sh"]
+
 VOLUME ["/export"]
+
+CMD ["minio"]

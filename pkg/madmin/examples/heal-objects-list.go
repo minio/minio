@@ -61,10 +61,12 @@ func main() {
 			return
 		}
 
-		if object.HealInfo != nil {
-			switch healInfo := *object.HealInfo; healInfo.Status {
+		if object.HealObjectInfo != nil {
+			switch healInfo := *object.HealObjectInfo; healInfo.Status {
 			case madmin.CanHeal:
 				fmt.Println(object.Key, " can be healed.")
+			case madmin.CanPartiallyHeal:
+				fmt.Println(object.Key, " can't be healed completely, some disks are offline.")
 			case madmin.QuorumUnavailable:
 				fmt.Println(object.Key, " can't be healed until quorum is available.")
 			case madmin.Corrupted:

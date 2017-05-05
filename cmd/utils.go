@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2015 Minio, Inc.
+ * Minio Cloud Storage, (C) 2015, 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,16 +18,15 @@ package cmd
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
-
-	"encoding/json"
+	"time"
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/pkg/profile"
@@ -45,44 +44,6 @@ func cloneHeader(h http.Header) http.Header {
 	return h2
 }
 
-// checkDuplicates - function to validate if there are duplicates in a slice of strings.
-func checkDuplicateStrings(list []string) error {
-	// Empty lists are not allowed.
-	if len(list) == 0 {
-		return errInvalidArgument
-	}
-	// Empty keys are not allowed.
-	for _, key := range list {
-		if key == "" {
-			return errInvalidArgument
-		}
-	}
-	listMaps := make(map[string]int)
-	// Navigate through each configs and count the entries.
-	for _, key := range list {
-		listMaps[key]++
-	}
-	// Validate if there are any duplicate counts.
-	for key, count := range listMaps {
-		if count != 1 {
-			return fmt.Errorf("Duplicate key: \"%s\" found of count: \"%d\"", key, count)
-		}
-	}
-	// No duplicates.
-	return nil
-}
-
-// splitStr splits a string into n parts, empty strings are added
-// if we are not able to reach n elements
-func splitStr(path, sep string, n int) []string {
-	splits := strings.SplitN(path, sep, n)
-	// Add empty strings if we found elements less than nr
-	for i := n - len(splits); i > 0; i-- {
-		splits = append(splits, "")
-	}
-	return splits
-}
-
 // Convert url path into bucket and object name.
 func urlPath2BucketObjectName(u *url.URL) (bucketName, objectName string) {
 	if u == nil {
@@ -95,10 +56,11 @@ func urlPath2BucketObjectName(u *url.URL) (bucketName, objectName string) {
 
 	// Split urlpath using slash separator into a given number of
 	// expected tokens.
-	tokens := splitStr(urlPath, slashSeparator, 2)
-
-	// Extract bucket and objects.
-	bucketName, objectName = tokens[0], tokens[1]
+	tokens := strings.SplitN(urlPath, slashSeparator, 2)
+	bucketName = tokens[0]
+	if len(tokens) == 2 {
+		objectName = tokens[1]
+	}
 
 	// Success.
 	return bucketName, objectName
@@ -109,47 +71,6 @@ const (
 	httpScheme  = "http"
 	httpsScheme = "https"
 )
-
-var portMap = map[string]string{
-	httpScheme:  "80",
-	httpsScheme: "443",
-}
-
-// Given a string of the form "host", "host:port", or "[ipv6::address]:port",
-// return true if the string includes a port.
-func hasPort(s string) bool { return strings.LastIndex(s, ":") > strings.LastIndex(s, "]") }
-
-// canonicalAddr returns url.Host but always with a ":port" suffix
-func canonicalAddr(u *url.URL) string {
-	addr := u.Host
-	if !hasPort(addr) {
-		return addr + ":" + portMap[u.Scheme]
-	}
-	return addr
-}
-
-// checkDuplicates - function to validate if there are duplicates in a slice of endPoints.
-func checkDuplicateEndpoints(endpoints []*url.URL) error {
-	var strs []string
-	for _, ep := range endpoints {
-		strs = append(strs, ep.String())
-	}
-	return checkDuplicateStrings(strs)
-}
-
-// Find local node through the command line arguments. Returns in `host:port` format.
-func getLocalAddress(srvCmdConfig serverCmdConfig) string {
-	if !globalIsDistXL {
-		return srvCmdConfig.serverAddr
-	}
-	for _, ep := range srvCmdConfig.endpoints {
-		// Validates if remote endpoint is local.
-		if isLocalStorage(ep) {
-			return ep.Host
-		}
-	}
-	return ""
-}
 
 // xmlDecoder provide decoded value in xml.
 func xmlDecoder(body io.Reader, v interface{}, size int64) error {
@@ -247,17 +168,20 @@ func dumpRequest(r *http.Request) string {
 		Path   string      `json:"path"`
 		Query  string      `json:"query"`
 		Header http.Header `json:"header"`
-	}{r.Method, r.URL.Path, r.URL.RawQuery, header}
-	jsonBytes, err := json.Marshal(req)
+	}{r.Method, getURLEncodedName(r.URL.Path), r.URL.RawQuery, header}
+	jsonBytes, err := json.Marshal(&req)
 	if err != nil {
-		return "<error dumping request>"
+		// Upon error just return Go-syntax representation of the value
+		return fmt.Sprintf("%#v", req)
 	}
-	return string(jsonBytes)
+	// Replace all '%' to '%%' so that printer format parser
+	// to ignore URL encoded values.
+	return strings.Replace(string(jsonBytes), "%", "%%", -1)
 }
 
 // isFile - returns whether given path is a file or not.
 func isFile(path string) bool {
-	if fi, err := os.Stat(path); err == nil {
+	if fi, err := osStat(path); err == nil {
 		return fi.Mode().IsRegular()
 	}
 
@@ -265,13 +189,18 @@ func isFile(path string) bool {
 }
 
 // checkURL - checks if passed address correspond
-func checkURL(address string) (*url.URL, error) {
-	if address == "" {
+func checkURL(urlStr string) (*url.URL, error) {
+	if urlStr == "" {
 		return nil, errors.New("Address cannot be empty")
 	}
-	u, err := url.Parse(address)
+	u, err := url.Parse(urlStr)
 	if err != nil {
-		return nil, fmt.Errorf("`%s` invalid: %s", address, err.Error())
+		return nil, fmt.Errorf("`%s` invalid: %s", urlStr, err.Error())
 	}
 	return u, nil
+}
+
+// UTCNow - returns current UTC time.
+func UTCNow() time.Time {
+	return time.Now().UTC()
 }

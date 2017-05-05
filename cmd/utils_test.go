@@ -17,12 +17,11 @@
 package cmd
 
 import (
-	"fmt"
-	"net"
+	"encoding/json"
 	"net/http"
 	"net/url"
 	"reflect"
-	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -46,57 +45,6 @@ func TestCloneHeader(t *testing.T) {
 		clonedHeader := cloneHeader(header)
 		if !reflect.DeepEqual(header, clonedHeader) {
 			t.Errorf("Test %d failed", i+1)
-		}
-	}
-}
-
-// Tests check duplicates function.
-func TestCheckDuplicates(t *testing.T) {
-	tests := []struct {
-		list       []string
-		err        error
-		shouldPass bool
-	}{
-		// Test 1 - for '/tmp/1' repeated twice.
-		{
-			list:       []string{"/tmp/1", "/tmp/1", "/tmp/2", "/tmp/3"},
-			err:        fmt.Errorf("Duplicate key: \"/tmp/1\" found of count: \"2\""),
-			shouldPass: false,
-		},
-		// Test 2 - for '/tmp/1' repeated thrice.
-		{
-			list:       []string{"/tmp/1", "/tmp/1", "/tmp/1", "/tmp/3"},
-			err:        fmt.Errorf("Duplicate key: \"/tmp/1\" found of count: \"3\""),
-			shouldPass: false,
-		},
-		// Test 3 - empty string.
-		{
-			list:       []string{""},
-			err:        errInvalidArgument,
-			shouldPass: false,
-		},
-		// Test 4 - empty string.
-		{
-			list:       nil,
-			err:        errInvalidArgument,
-			shouldPass: false,
-		},
-		// Test 5 - non repeated strings.
-		{
-			list:       []string{"/tmp/1", "/tmp/2", "/tmp/3"},
-			err:        nil,
-			shouldPass: true,
-		},
-	}
-
-	// Validate if function runs as expected.
-	for i, test := range tests {
-		err := checkDuplicateStrings(test.list)
-		if test.shouldPass && err != test.err {
-			t.Errorf("Test: %d, Expected %s got %s", i+1, test.err, err)
-		}
-		if !test.shouldPass && err.Error() != test.err.Error() {
-			t.Errorf("Test: %d, Expected %s got %s", i+1, test.err, err)
 		}
 	}
 }
@@ -273,132 +221,14 @@ func TestStartProfiler(t *testing.T) {
 	}
 }
 
-// Tests fetch local address.
-func TestLocalAddress(t *testing.T) {
-	if runtime.GOOS == globalWindowsOSName {
-		return
-	}
-
-	currentIsDistXL := globalIsDistXL
-	defer func() {
-		globalIsDistXL = currentIsDistXL
-	}()
-
-	// need to set this to avoid stale values from other tests.
-	globalMinioPort = "9000"
-	globalMinioHost = ""
-	testCases := []struct {
-		isDistXL     bool
-		srvCmdConfig serverCmdConfig
-		localAddr    string
-	}{
-		// Test 1 - local address is found.
-		{
-			isDistXL: true,
-			srvCmdConfig: serverCmdConfig{
-				endpoints: []*url.URL{{
-					Scheme: httpScheme,
-					Host:   "localhost:9000",
-					Path:   "/mnt/disk1",
-				}, {
-					Scheme: httpScheme,
-					Host:   "1.1.1.2:9000",
-					Path:   "/mnt/disk2",
-				}, {
-					Scheme: httpScheme,
-					Host:   "1.1.2.1:9000",
-					Path:   "/mnt/disk3",
-				}, {
-					Scheme: httpScheme,
-					Host:   "1.1.2.2:9000",
-					Path:   "/mnt/disk4",
-				}},
-			},
-			localAddr: net.JoinHostPort("localhost", globalMinioPort),
-		},
-		// Test 2 - local address is everything.
-		{
-			isDistXL: false,
-			srvCmdConfig: serverCmdConfig{
-				serverAddr: net.JoinHostPort("", globalMinioPort),
-				endpoints: []*url.URL{{
-					Path: "/mnt/disk1",
-				}, {
-					Path: "/mnt/disk2",
-				}, {
-					Path: "/mnt/disk3",
-				}, {
-					Path: "/mnt/disk4",
-				}},
-			},
-			localAddr: net.JoinHostPort("", globalMinioPort),
-		},
-		// Test 3 - local address is not found.
-		{
-			isDistXL: true,
-			srvCmdConfig: serverCmdConfig{
-				endpoints: []*url.URL{{
-					Scheme: httpScheme,
-					Host:   "1.1.1.1:9000",
-					Path:   "/mnt/disk2",
-				}, {
-					Scheme: httpScheme,
-					Host:   "1.1.1.2:9000",
-					Path:   "/mnt/disk2",
-				}, {
-					Scheme: httpScheme,
-					Host:   "1.1.2.1:9000",
-					Path:   "/mnt/disk3",
-				}, {
-					Scheme: httpScheme,
-					Host:   "1.1.2.2:9000",
-					Path:   "/mnt/disk4",
-				}},
-			},
-			localAddr: "",
-		},
-		// Test 4 - in case of FS mode, with SSL, the host
-		// name is specified in the --address option on the
-		// server command line.
-		{
-			isDistXL: false,
-			srvCmdConfig: serverCmdConfig{
-				serverAddr: "play.minio.io:9000",
-				endpoints: []*url.URL{{
-					Path: "/mnt/disk1",
-				}, {
-					Path: "/mnt/disk2",
-				}, {
-					Path: "/mnt/disk3",
-				}, {
-					Path: "/mnt/disk4",
-				}},
-			},
-			localAddr: "play.minio.io:9000",
-		},
-	}
-
-	// Validates fetching local address.
-	for i, testCase := range testCases {
-		globalIsDistXL = testCase.isDistXL
-		localAddr := getLocalAddress(testCase.srvCmdConfig)
-		if localAddr != testCase.localAddr {
-			t.Fatalf("Test %d: Expected %s, got %s", i+1, testCase.localAddr, localAddr)
-		}
-	}
-
-}
-
-// TestCheckURL tests valid address
+// TestCheckURL tests valid url.
 func TestCheckURL(t *testing.T) {
 	testCases := []struct {
-		addr       string
+		urlStr     string
 		shouldPass bool
 	}{
 		{"", false},
 		{":", false},
-		{"localhost", true},
-		{"127.0.0.1", true},
 		{"http://localhost/", true},
 		{"http://127.0.0.1/", true},
 		{"proto://myhostname/path", true},
@@ -406,12 +236,53 @@ func TestCheckURL(t *testing.T) {
 
 	// Validates fetching local address.
 	for i, testCase := range testCases {
-		_, err := checkURL(testCase.addr)
+		_, err := checkURL(testCase.urlStr)
 		if testCase.shouldPass && err != nil {
 			t.Errorf("Test %d: expected to pass but got an error: %v\n", i+1, err)
 		}
 		if !testCase.shouldPass && err == nil {
 			t.Errorf("Test %d: expected to fail but passed.", i+1)
 		}
+	}
+}
+
+// Testing dumping request function.
+func TestDumpRequest(t *testing.T) {
+	req, err := http.NewRequest("GET", "http://localhost:9000?prefix=Hello%2AWorld%2A", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("content-md5", "====test")
+	jsonReq := dumpRequest(req)
+	type jsonResult struct {
+		Method string      `json:"method"`
+		Path   string      `json:"path"`
+		Query  string      `json:"query"`
+		Header http.Header `json:"header"`
+	}
+	jsonReq = strings.Replace(jsonReq, "%%", "%", -1)
+	res := jsonResult{}
+	if err = json.Unmarshal([]byte(jsonReq), &res); err != nil {
+		t.Fatal(err)
+	}
+
+	// Look for expected method.
+	if res.Method != "GET" {
+		t.Fatalf("Unexpected method %s, expected 'GET'", res.Method)
+	}
+
+	// Look for expected query values
+	expectedQuery := url.Values{}
+	expectedQuery.Set("prefix", "Hello*World*")
+	if !reflect.DeepEqual(res.Query, expectedQuery.Encode()) {
+		t.Fatalf("Expected %#v, got %#v", expectedQuery, res.Query)
+	}
+
+	// Look for expected header.
+	expectedHeader := http.Header{}
+	expectedHeader.Set("content-md5", "====test")
+	expectedHeader.Set("host", "localhost:9000")
+	if !reflect.DeepEqual(res.Header, expectedHeader) {
+		t.Fatalf("Expected %#v, got %#v", expectedHeader, res.Header)
 	}
 }

@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/minio/minio/pkg/wildcard"
 )
@@ -37,10 +38,16 @@ const (
 	queueTypeRedis = "redis"
 	// Static string indicating queue type 'postgresql'.
 	queueTypePostgreSQL = "postgresql"
+	// Static string indicating queue type 'mysql'.
+	queueTypeMySQL = "mysql"
 	// Static string indicating queue type 'kafka'.
 	queueTypeKafka = "kafka"
 	// Static string for Webhooks
 	queueTypeWebhook = "webhook"
+
+	// Notifier format value constants
+	formatNamespace = "namespace"
+	formatAccess    = "access"
 )
 
 // Topic type.
@@ -156,6 +163,24 @@ func isPostgreSQLQueue(sqsArn arnSQS) bool {
 	return true
 }
 
+// Returns true if queueArn is for MySQL.
+func isMySQLQueue(sqsArn arnSQS) bool {
+	if sqsArn.Type != queueTypeMySQL {
+		return false
+	}
+	msqlNotify := serverConfig.Notify.GetMySQLByID(sqsArn.AccountID)
+	if !msqlNotify.Enable {
+		return false
+	}
+	myC, err := dialMySQL(msqlNotify)
+	if err != nil {
+		errorIf(err, "Unable to connect to MySQL server %#v", msqlNotify)
+		return false
+	}
+	defer myC.Close()
+	return true
+}
+
 // Returns true if queueArn is for Kafka.
 func isKafkaQueue(sqsArn arnSQS) bool {
 	if sqsArn.Type != queueTypeKafka {
@@ -196,4 +221,17 @@ func filterRuleMatch(object string, frs []filterRule) bool {
 		}
 	}
 	return prefixMatch && suffixMatch
+}
+
+// A type to represent dynamic error generation functions for
+// notifications.
+type notificationErrorFactoryFunc func(string, ...interface{}) error
+
+// A function to build dynamic error generation functions for
+// notifications by setting an error prefix string.
+func newNotificationErrorFactory(prefix string) notificationErrorFactoryFunc {
+	return func(msg string, a ...interface{}) error {
+		s := fmt.Sprintf(msg, a...)
+		return fmt.Errorf("%s: %s", prefix, s)
+	}
 }

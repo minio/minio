@@ -45,12 +45,12 @@ func TestServerConfigMigrateV1(t *testing.T) {
 		t.Fatal("Unexpected error: ", err)
 	}
 	// Check if config v1 is removed from filesystem
-	if _, err := os.Stat(configPath); err == nil || !os.IsNotExist(err) {
+	if _, err := osStat(configPath); err == nil || !os.IsNotExist(err) {
 		t.Fatal("Config V1 file is not purged")
 	}
 
 	// Initialize server config and check again if everything is fine
-	if err := loadConfig(envParams{}); err != nil {
+	if err := loadConfig(); err != nil {
 		t.Fatalf("Unable to initialize from updated config file %s", err)
 	}
 }
@@ -109,10 +109,23 @@ func TestServerConfigMigrateInexistentConfig(t *testing.T) {
 	if err := migrateV13ToV14(); err != nil {
 		t.Fatal("migrate v13 to v14 should succeed when no config file is found")
 	}
+	if err := migrateV14ToV15(); err != nil {
+		t.Fatal("migrate v14 to v15 should succeed when no config file is found")
+	}
+	if err := migrateV15ToV16(); err != nil {
+		t.Fatal("migrate v15 to v16 should succeed when no config file is found")
+	}
+	if err := migrateV16ToV17(); err != nil {
+		t.Fatal("migrate v16 to v17 should succeed when no config file is found")
+	}
+	if err := migrateV17ToV18(); err != nil {
+		t.Fatal("migrate v17 to v18 should succeed when no config file is found")
+	}
+
 }
 
-// Test if a config migration from v2 to v12 is successfully done
-func TestServerConfigMigrateV2toV14(t *testing.T) {
+// Test if a config migration from v2 to v18 is successfully done
+func TestServerConfigMigrateV2toV18(t *testing.T) {
 	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
@@ -146,12 +159,12 @@ func TestServerConfigMigrateV2toV14(t *testing.T) {
 	}
 
 	// Initialize server config and check again if everything is fine
-	if err := loadConfig(envParams{}); err != nil {
+	if err := loadConfig(); err != nil {
 		t.Fatalf("Unable to initialize from updated config file %s", err)
 	}
 
 	// Check the version number in the upgraded config file
-	expectedVersion := v14
+	expectedVersion := v18
 	if serverConfig.Version != expectedVersion {
 		t.Fatalf("Expect version "+expectedVersion+", found: %v", serverConfig.Version)
 	}
@@ -218,5 +231,17 @@ func TestServerConfigMigrateFaultyConfig(t *testing.T) {
 	}
 	if err := migrateV13ToV14(); err == nil {
 		t.Fatal("migrateConfigV13ToV14() should fail with a corrupted json")
+	}
+	if err := migrateV14ToV15(); err == nil {
+		t.Fatal("migrateConfigV14ToV15() should fail with a corrupted json")
+	}
+	if err := migrateV15ToV16(); err == nil {
+		t.Fatal("migrateConfigV15ToV16() should fail with a corrupted json")
+	}
+	if err := migrateV16ToV17(); err == nil {
+		t.Fatal("migrateConfigV16ToV17() should fail with a corrupted json")
+	}
+	if err := migrateV17ToV18(); err == nil {
+		t.Fatal("migrateConfigV17ToV18() should fail with a corrupted json")
 	}
 }

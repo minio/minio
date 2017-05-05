@@ -18,10 +18,8 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"runtime/debug"
 	"sort"
-	"strings"
 	"sync"
 
 	humanize "github.com/dustin/go-humanize"
@@ -43,9 +41,8 @@ const (
 	// Uploads metadata file carries per multipart object metadata.
 	uploadsJSONFile = "uploads.json"
 
-	// Represents the minimum required RAM size before
-	// we enable caching.
-	minRAMSize = 8 * humanize.GiByte
+	// Represents the minimum required RAM size to enable caching.
+	minRAMSize = 24 * humanize.GiByte
 
 	// Maximum erasure blocks.
 	maxErasureBlocks = 16
@@ -115,9 +112,6 @@ func newXLObjects(storageDisks []StorageAPI) (ObjectLayer, error) {
 	// Initialize list pool.
 	listPool := newTreeWalkPool(globalLookupTimeout)
 
-	// Check if object cache is disabled.
-	objCacheDisabled := strings.EqualFold(os.Getenv("_MINIO_CACHE"), "off")
-
 	// Initialize xl objects.
 	xl := &xlObjects{
 		mutex:        &sync.Mutex{},
@@ -129,7 +123,7 @@ func newXLObjects(storageDisks []StorageAPI) (ObjectLayer, error) {
 
 	// Get cache size if _MINIO_CACHE environment variable is set.
 	var maxCacheSize uint64
-	if !objCacheDisabled {
+	if !globalXLObjCacheDisabled {
 		maxCacheSize, err = GetMaxCacheSize()
 		errorIf(err, "Unable to get maximum cache size")
 
@@ -159,6 +153,16 @@ func newXLObjects(storageDisks []StorageAPI) (ObjectLayer, error) {
 	// READ and WRITE quorum is always set to (N/2) number of disks.
 	xl.readQuorum = readQuorum
 	xl.writeQuorum = writeQuorum
+
+	// If the number of offline servers is equal to the readQuorum
+	// (i.e. the number of online servers also equals the
+	// readQuorum), we cannot perform quick-heal (no
+	// write-quorum). However reads may still be possible, so we
+	// skip quick-heal in this case, and continue.
+	offlineCount := len(newStorageDisks) - diskCount(newStorageDisks)
+	if offlineCount == readQuorum {
+		return xl, nil
+	}
 
 	// Do a quick heal on the buckets themselves for any discrepancies.
 	return xl, quickHeal(xl.storageDisks, xl.writeQuorum, xl.readQuorum)

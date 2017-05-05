@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"errors"
-	"net/url"
 	pathutil "path"
 	"sync"
 
@@ -38,24 +37,21 @@ type RWLocker interface {
 
 // Initialize distributed locking only in case of distributed setup.
 // Returns if the setup is distributed or not on success.
-func initDsyncNodes(eps []*url.URL) error {
+func initDsyncNodes() error {
 	cred := serverConfig.GetCredential()
 	// Initialize rpc lock client information only if this instance is a distributed setup.
-	clnts := make([]dsync.NetLocker, len(eps))
+	clnts := make([]dsync.NetLocker, len(globalEndpoints))
 	myNode := -1
-	for index, ep := range eps {
-		if ep == nil {
-			return errInvalidArgument
-		}
+	for index, endpoint := range globalEndpoints {
 		clnts[index] = newLockRPCClient(authConfig{
 			accessKey:       cred.AccessKey,
 			secretKey:       cred.SecretKey,
-			serverAddr:      ep.Host,
-			serviceEndpoint: pathutil.Join(minioReservedBucketPath, lockRPCPath, getPath(ep)),
+			serverAddr:      endpoint.Host,
 			secureConn:      globalIsSSL,
-			serviceName:     "Dsync",
+			serviceEndpoint: pathutil.Join(minioReservedBucketPath, lockServicePath, endpoint.Path),
+			serviceName:     lockServiceName,
 		})
-		if isLocalStorage(ep) && myNode == -1 {
+		if endpoint.IsLocal && myNode == -1 {
 			myNode = index
 		}
 	}
@@ -194,7 +190,7 @@ func (n *nsLockMap) unlock(volume, path, opsID string, readLock bool) {
 func (n *nsLockMap) Lock(volume, path, opsID string) {
 	readLock := false // This is a write lock.
 
-	lockSource := callerSource() // Useful for debugging
+	lockSource := getSource() // Useful for debugging
 	n.lock(volume, path, lockSource, opsID, readLock)
 }
 
@@ -208,7 +204,7 @@ func (n *nsLockMap) Unlock(volume, path, opsID string) {
 func (n *nsLockMap) RLock(volume, path, opsID string) {
 	readLock := true
 
-	lockSource := callerSource() // Useful for debugging
+	lockSource := getSource() // Useful for debugging
 	n.lock(volume, path, lockSource, opsID, readLock)
 }
 
@@ -269,7 +265,7 @@ func (n *nsLockMap) NewNSLock(volume, path string) RWLocker {
 
 // Lock - block until write lock is taken.
 func (li *lockInstance) Lock() {
-	lockSource := callerSource()
+	lockSource := getSource()
 	readLock := false
 	li.ns.lock(li.volume, li.path, lockSource, li.opsID, readLock)
 }
@@ -282,7 +278,7 @@ func (li *lockInstance) Unlock() {
 
 // RLock - block until read lock is taken.
 func (li *lockInstance) RLock() {
-	lockSource := callerSource()
+	lockSource := getSource()
 	readLock := true
 	li.ns.lock(li.volume, li.path, lockSource, li.opsID, readLock)
 }

@@ -20,9 +20,9 @@ import (
 	"encoding/hex"
 	"encoding/xml"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/url"
-	"path"
 	"sort"
 	"strconv"
 
@@ -138,6 +138,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		startOffset = hrange.offsetBegin
 		length = hrange.getLength()
 	}
+
 	// Indicates if any data was written to the http.ResponseWriter
 	dataWritten := false
 	// io.Writer type which keeps track if any data was written.
@@ -156,7 +157,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 	})
 
 	// Reads the object at startOffset and writes to mw.
-	if err := objectAPI.GetObject(bucket, object, startOffset, length, writer); err != nil {
+	if err = objectAPI.GetObject(bucket, object, startOffset, length, writer); err != nil {
 		errorIf(err, "Unable to write to client.")
 		if !dataWritten {
 			// Error response only if no data has been written to client yet. i.e if
@@ -173,6 +174,23 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 		// call wrter.Write(nil) to set appropriate headers.
 		writer.Write(nil)
 	}
+
+	// Get host and port from Request.RemoteAddr.
+	host, port, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host, port = "", ""
+	}
+
+	// Notify object accessed via a GET request.
+	eventNotify(eventData{
+		Type:      ObjectAccessedGet,
+		Bucket:    bucket,
+		ObjInfo:   objInfo,
+		ReqParams: extractReqParams(r),
+		UserAgent: r.UserAgent(),
+		Host:      host,
+		Port:      port,
+	})
 }
 
 // HeadObjectHandler - HEAD Object
@@ -221,6 +239,23 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 
 	// Successful response.
 	w.WriteHeader(http.StatusOK)
+
+	// Get host and port from Request.RemoteAddr.
+	host, port, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host, port = "", ""
+	}
+
+	// Notify object accessed via a HEAD request.
+	eventNotify(eventData{
+		Type:      ObjectAccessedHead,
+		Bucket:    bucket,
+		ObjInfo:   objInfo,
+		ReqParams: extractReqParams(r),
+		UserAgent: r.UserAgent(),
+		Host:      host,
+		Port:      port,
+	})
 }
 
 // Extract metadata relevant for an CopyObject operation based on conditional
@@ -250,7 +285,6 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	vars := mux.Vars(r)
 	dstBucket := vars["bucket"]
 	dstObject := vars["object"]
-	cpDestPath := "/" + path.Join(dstBucket, dstObject)
 
 	objectAPI := api.ObjectAPI()
 	if objectAPI == nil {
@@ -285,7 +319,7 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	cpSrcDstSame := cpSrcPath == cpDestPath
+	cpSrcDstSame := srcBucket == dstBucket && srcObject == dstObject
 	// Hold write lock on destination since in both cases
 	// - if source and destination are same
 	// - if source and destination are different
@@ -356,12 +390,21 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	// Write success response.
 	writeSuccessResponseXML(w, encodedSuccessResponse)
 
+	// Get host and port from Request.RemoteAddr.
+	host, port, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host, port = "", ""
+	}
+
 	// Notify object created event.
 	eventNotify(eventData{
 		Type:      ObjectCreatedCopy,
 		Bucket:    dstBucket,
 		ObjInfo:   objInfo,
 		ReqParams: extractReqParams(r),
+		UserAgent: r.UserAgent(),
+		Host:      host,
+		Port:      port,
 	})
 }
 
@@ -419,10 +462,23 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	// Extract metadata to be saved from incoming HTTP header.
 	metadata := extractMetadataFromHeader(r.Header)
 	if rAuthType == authTypeStreamingSigned {
-		// Make sure to delete the content-encoding parameter
-		// for a streaming signature which is set to value
-		// "aws-chunked"
-		delete(metadata, "content-encoding")
+		if contentEncoding, ok := metadata["content-encoding"]; ok {
+			contentEncoding = trimAwsChunkedContentEncoding(contentEncoding)
+			if contentEncoding != "" {
+				// Make sure to trim and save the content-encoding
+				// parameter for a streaming signature which is set
+				// to a custom value for example: "aws-chunked,gzip".
+				metadata["content-encoding"] = contentEncoding
+			} else {
+				// Trimmed content encoding is empty when the header
+				// value is set to "aws-chunked" only.
+
+				// Make sure to delete the content-encoding parameter
+				// for a streaming signature which is set to value
+				// for example: "aws-chunked"
+				delete(metadata, "content-encoding")
+			}
+		}
 	}
 
 	// Make sure we hex encode md5sum here.
@@ -468,7 +524,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		}
 		objInfo, err = objectAPI.PutObject(bucket, object, size, r.Body, metadata, sha256sum)
 	case authTypePresigned, authTypeSigned:
-		if s3Error := reqSignatureV4Verify(r); s3Error != ErrNone {
+		if s3Error := reqSignatureV4Verify(r, serverConfig.GetRegion()); s3Error != ErrNone {
 			errorIf(errSignatureMismatch, dumpRequest(r))
 			writeErrorResponse(w, s3Error, r.URL)
 			return
@@ -487,12 +543,21 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	w.Header().Set("ETag", "\""+objInfo.MD5Sum+"\"")
 	writeSuccessResponseHeadersOnly(w)
 
+	// Get host and port from Request.RemoteAddr.
+	host, port, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host, port = "", ""
+	}
+
 	// Notify object created event.
 	eventNotify(eventData{
 		Type:      ObjectCreatedPut,
 		Bucket:    bucket,
 		ObjInfo:   objInfo,
 		ReqParams: extractReqParams(r),
+		UserAgent: r.UserAgent(),
+		Host:      host,
+		Port:      port,
 	})
 }
 
@@ -740,7 +805,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		}
 		partInfo, err = objectAPI.PutObjectPart(bucket, object, uploadID, partID, size, r.Body, incomingMD5, sha256sum)
 	case authTypePresigned, authTypeSigned:
-		if s3Error := reqSignatureV4Verify(r); s3Error != ErrNone {
+		if s3Error := reqSignatureV4Verify(r, serverConfig.GetRegion()); s3Error != ErrNone {
 			errorIf(errSignatureMismatch, dumpRequest(r))
 			writeErrorResponse(w, s3Error, r.URL)
 			return
@@ -914,12 +979,21 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 	// Write success response.
 	writeSuccessResponseXML(w, encodedSuccessResponse)
 
+	// Get host and port from Request.RemoteAddr.
+	host, port, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host, port = "", ""
+	}
+
 	// Notify object created event.
 	eventNotify(eventData{
 		Type:      ObjectCreatedCompleteMultipartUpload,
 		Bucket:    bucket,
 		ObjInfo:   objInfo,
 		ReqParams: extractReqParams(r),
+		UserAgent: r.UserAgent(),
+		Host:      host,
+		Port:      port,
 	})
 }
 
@@ -942,26 +1016,12 @@ func (api objectAPIHandlers) DeleteObjectHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
-	objectLock := globalNSMutex.NewNSLock(bucket, object)
-	objectLock.Lock()
-	defer objectLock.Unlock()
-
-	/// http://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectDELETE.html
-	/// Ignore delete object errors, since we are suppposed to reply
-	/// only 204.
-	if err := objectAPI.DeleteObject(bucket, object); err != nil {
-		writeSuccessNoContent(w)
-		return
+	// http://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectDELETE.html
+	// Ignore delete object errors while replying to client, since we are
+	// suppposed to reply only 204. Additionally log the error for
+	// investigation.
+	if err := deleteObject(objectAPI, bucket, object, r); err != nil {
+		errorIf(err, "Unable to delete an object %s", pathJoin(bucket, object))
 	}
 	writeSuccessNoContent(w)
-
-	// Notify object deleted event.
-	eventNotify(eventData{
-		Type:   ObjectRemovedDelete,
-		Bucket: bucket,
-		ObjInfo: ObjectInfo{
-			Name: object,
-		},
-		ReqParams: extractReqParams(r),
-	})
 }

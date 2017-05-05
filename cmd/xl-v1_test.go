@@ -50,12 +50,7 @@ func TestStorageInfo(t *testing.T) {
 		t.Fatalf("Diskinfo total values should be greater 0")
 	}
 
-	endpoints, err := parseStorageEndpoints(fsDirs)
-	if err != nil {
-		t.Fatalf("Unexpected error %s", err)
-	}
-
-	storageDisks, err := initStorageDisks(endpoints)
+	storageDisks, err := initStorageDisks(mustGetNewEndpointList(fsDirs...))
 	if err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
@@ -145,11 +140,7 @@ func TestNewXL(t *testing.T) {
 		t.Fatalf("Unable to initialize erasure, %s", err)
 	}
 
-	endpoints, err := parseStorageEndpoints(erasureDisks)
-	if err != nil {
-		t.Fatalf("Unable to initialize erasure, %s", err)
-	}
-
+	endpoints := mustGetNewEndpointList(erasureDisks...)
 	storageDisks, err := initStorageDisks(endpoints)
 	if err != nil {
 		t.Fatal("Unexpected error: ", err)

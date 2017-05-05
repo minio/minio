@@ -26,8 +26,8 @@
 
 ## Your Environment
 <!--- Include as many relevant details about the environment you experienced the bug in -->
-* Version used:
+* Version used (`minio version`):
 * Environment name and version (e.g. nginx 1.9.1):
 * Server type and version:
-* Operating System and version:
+* Operating System and version (`uname -a`):
 * Link to your project:

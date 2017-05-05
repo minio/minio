@@ -94,6 +94,10 @@ const (
 	ObjectCreatedCompleteMultipartUpload
 	// ObjectRemovedDelete is s3:ObjectRemoved:Delete
 	ObjectRemovedDelete
+	// ObjectAccessedGet is s3:ObjectAccessed:Get
+	ObjectAccessedGet
+	// ObjectAccessedHead is s3:ObjectAccessed:Head
+	ObjectAccessedHead
 )
 
 // Stringer interface for event name.
@@ -109,6 +113,10 @@ func (eventName EventName) String() string {
 		return "s3:ObjectCreated:CompleteMultipartUpload"
 	case ObjectRemovedDelete:
 		return "s3:ObjectRemoved:Delete"
+	case ObjectAccessedGet:
+		return "s3:ObjectAccessed:Get"
+	case ObjectAccessedHead:
+		return "s3:ObjectAccessed:Head"
 	default:
 		return "s3:Unknown"
 	}
@@ -128,11 +136,13 @@ type bucketMeta struct {
 
 // Notification event object metadata.
 type objectMeta struct {
-	Key       string `json:"key"`
-	Size      int64  `json:"size,omitempty"`
-	ETag      string `json:"eTag,omitempty"`
-	VersionID string `json:"versionId,omitempty"`
-	Sequencer string `json:"sequencer"`
+	Key         string            `json:"key"`
+	Size        int64             `json:"size,omitempty"`
+	ETag        string            `json:"eTag,omitempty"`
+	ContentType string            `json:"contentType,omitempty"`
+	UserDefined map[string]string `json:"userDefined,omitempty"`
+	VersionID   string            `json:"versionId,omitempty"`
+	Sequencer   string            `json:"sequencer"`
 }
 
 const (
@@ -168,6 +178,14 @@ const (
 	eventVersion = "2.0"
 )
 
+// sourceInfo represents information on the client that triggered the
+// event notification.
+type sourceInfo struct {
+	Host      string `json:"host"`
+	Port      string `json:"port"`
+	UserAgent string `json:"userAgent"`
+}
+
 // NotificationEvent represents an Amazon an S3 bucket notification event.
 type NotificationEvent struct {
 	EventVersion      string            `json:"eventVersion"`
@@ -179,6 +197,7 @@ type NotificationEvent struct {
 	RequestParameters map[string]string `json:"requestParameters"`
 	ResponseElements  map[string]string `json:"responseElements"`
 	S3                eventMeta         `json:"s3"`
+	Source            sourceInfo        `json:"source"`
 }
 
 // Represents the minio sqs type and account id's.

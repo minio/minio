@@ -18,9 +18,7 @@ package cmd
 
 import (
 	"encoding/json"
-	"net/url"
 	"testing"
-	"time"
 )
 
 func testAdminCmd(cmd cmdType, t *testing.T) {
@@ -40,7 +38,7 @@ func testAdminCmd(cmd cmdType, t *testing.T) {
 		Username:    creds.AccessKey,
 		Password:    creds.SecretKey,
 		Version:     Version,
-		RequestTime: time.Now().UTC(),
+		RequestTime: UTCNow(),
 	}
 	reply := LoginRPCReply{}
 	err = adminServer.Login(&args, &reply)
@@ -87,9 +85,7 @@ func TestReInitDisks(t *testing.T) {
 	defer removeRoots(xlDirs)
 
 	// Set globalEndpoints for a single node XL setup.
-	for _, xlDir := range xlDirs {
-		globalEndpoints = append(globalEndpoints, &url.URL{Path: xlDir})
-	}
+	globalEndpoints = mustGetNewEndpointList(xlDirs...)
 
 	// Setup admin rpc server for an XL backend.
 	globalIsXL = true
@@ -99,7 +95,7 @@ func TestReInitDisks(t *testing.T) {
 		Username:    creds.AccessKey,
 		Password:    creds.SecretKey,
 		Version:     Version,
-		RequestTime: time.Now().UTC(),
+		RequestTime: UTCNow(),
 	}
 	reply := LoginRPCReply{}
 	err = adminServer.Login(&args, &reply)
@@ -124,7 +120,7 @@ func TestReInitDisks(t *testing.T) {
 		Username:    creds.AccessKey,
 		Password:    creds.SecretKey,
 		Version:     Version,
-		RequestTime: time.Now().UTC(),
+		RequestTime: UTCNow(),
 	}
 	fsReply := LoginRPCReply{}
 	err = fsAdminServer.Login(&fsArgs, &fsReply)
@@ -161,7 +157,7 @@ func TestGetConfig(t *testing.T) {
 		Username:    creds.AccessKey,
 		Password:    creds.SecretKey,
 		Version:     Version,
-		RequestTime: time.Now().UTC(),
+		RequestTime: UTCNow(),
 	}
 	reply := LoginRPCReply{}
 	err = adminServer.Login(&args, &reply)
@@ -205,7 +201,7 @@ func TestWriteAndCommitConfig(t *testing.T) {
 		Username:    creds.AccessKey,
 		Password:    creds.SecretKey,
 		Version:     Version,
-		RequestTime: time.Now().UTC(),
+		RequestTime: UTCNow(),
 	}
 	reply := LoginRPCReply{}
 	err = adminServer.Login(&args, &reply)

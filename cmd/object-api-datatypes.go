@@ -57,6 +57,7 @@ const (
 	canHeal                             // Object can be healed
 	corrupted                           // Object can't be healed
 	quorumUnavailable                   // Object can't be healed until read quorum is available
+	canPartiallyHeal                    // Object can't be healed completely until outdated disk(s) are online.
 )
 
 // HealBucketInfo - represents healing related information of a bucket.
@@ -78,9 +79,9 @@ type BucketInfo struct {
 
 // HealObjectInfo - represents healing related information of an object.
 type HealObjectInfo struct {
-	Status              healStatus
-	MissingDataCount    int
-	MissingPartityCount int
+	Status             healStatus
+	MissingDataCount   int
+	MissingParityCount int
 }
 
 // ObjectInfo - represents object metadata.
@@ -212,6 +213,30 @@ type ListObjectsInfo struct {
 	// NOTE: This element is returned only if you have delimiter request parameter
 	// specified.
 	NextMarker string
+
+	// List of objects info for this request.
+	Objects []ObjectInfo
+
+	// List of prefixes for this request.
+	Prefixes []string
+}
+
+// ListObjectsV2Info - container for list objects version 2.
+type ListObjectsV2Info struct {
+	// Indicates whether the returned list objects response is truncated. A
+	// value of true indicates that the list was truncated. The list can be truncated
+	// if the number of objects exceeds the limit allowed or specified
+	// by max keys.
+	IsTruncated bool
+
+	// When response is truncated (the IsTruncated element value in the response
+	// is true), you can use the key name in this field as marker in the subsequent
+	// request to get next set of objects.
+	//
+	// NOTE: This element is returned only if you have delimiter request parameter
+	// specified.
+	ContinuationToken     string
+	NextContinuationToken string
 
 	// List of objects info for this request.
 	Objects []ObjectInfo

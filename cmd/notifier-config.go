@@ -31,6 +31,7 @@ type notifier struct {
 	PostgreSQL    postgreSQLConfigs    `json:"postgresql"`
 	Kafka         kafkaConfigs         `json:"kafka"`
 	Webhook       webhookConfigs       `json:"webhook"`
+	MySQL         mySQLConfigs         `json:"mysql"`
 	// Add new notification queues.
 }
 
@@ -167,6 +168,25 @@ func (a webhookConfigs) Validate() error {
 	return nil
 }
 
+type mySQLConfigs map[string]mySQLNotify
+
+func (a mySQLConfigs) Clone() mySQLConfigs {
+	a2 := make(mySQLConfigs, len(a))
+	for k, v := range a {
+		a2[k] = v
+	}
+	return a2
+}
+
+func (a mySQLConfigs) Validate() error {
+	for k, v := range a {
+		if err := v.Validate(); err != nil {
+			return fmt.Errorf("MySQL [%s] configuration invalid: %s", k, err.Error())
+		}
+	}
+	return nil
+}
+
 func (n *notifier) Validate() error {
 	if n == nil {
 		return nil
@@ -190,6 +210,9 @@ func (n *notifier) Validate() error {
 		return err
 	}
 	if err := n.Webhook.Validate(); err != nil {
+		return err
+	}
+	if err := n.MySQL.Validate(); err != nil {
 		return err
 	}
 	return nil
@@ -301,6 +324,24 @@ func (n *notifier) GetPostgreSQLByID(accountID string) postgreSQLNotify {
 	n.RLock()
 	defer n.RUnlock()
 	return n.PostgreSQL[accountID]
+}
+
+func (n *notifier) SetMySQLByID(accountID string, pgn mySQLNotify) {
+	n.Lock()
+	defer n.Unlock()
+	n.MySQL[accountID] = pgn
+}
+
+func (n *notifier) GetMySQL() map[string]mySQLNotify {
+	n.RLock()
+	defer n.RUnlock()
+	return n.MySQL.Clone()
+}
+
+func (n *notifier) GetMySQLByID(accountID string) mySQLNotify {
+	n.RLock()
+	defer n.RUnlock()
+	return n.MySQL[accountID]
 }
 
 func (n *notifier) SetKafkaByID(accountID string, kn kafkaNotify) {

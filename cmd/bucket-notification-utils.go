@@ -16,7 +16,11 @@
 
 package cmd
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/minio/minio-go/pkg/set"
+)
 
 // List of valid event types.
 var suppportedEventTypes = map[string]struct{}{
@@ -29,6 +33,9 @@ var suppportedEventTypes = map[string]struct{}{
 	// Object removed event types.
 	"s3:ObjectRemoved:*":      {},
 	"s3:ObjectRemoved:Delete": {},
+	"s3:ObjectAccessed:Get":   {},
+	"s3:ObjectAccessed:Head":  {},
+	"s3:ObjectAccessed:*":     {},
 }
 
 // checkEvent - checks if an event is supported.
@@ -148,6 +155,10 @@ func isValidQueueID(queueARN string) bool {
 		pgN := serverConfig.Notify.GetPostgreSQLByID(sqsARN.AccountID)
 		// Postgres can work with only default conn. info.
 		return pgN.Enable
+	} else if isMySQLQueue(sqsARN) {
+		msqlN := serverConfig.Notify.GetMySQLByID(sqsARN.AccountID)
+		// Mysql can work with only default conn. info.
+		return msqlN.Enable
 	} else if isKafkaQueue(sqsARN) {
 		kafkaN := serverConfig.Notify.GetKafkaByID(sqsARN.AccountID)
 		return (kafkaN.Enable && len(kafkaN.Brokers) > 0 &&
@@ -200,16 +211,14 @@ func validateQueueConfigs(queueConfigs []queueConfig) APIErrorCode {
 
 // Check all the queue configs for any duplicates.
 func checkDuplicateQueueConfigs(configs []queueConfig) APIErrorCode {
-	var queueConfigARNS []string
+	queueConfigARNS := set.NewStringSet()
 
 	// Navigate through each configs and count the entries.
 	for _, config := range configs {
-		queueConfigARNS = append(queueConfigARNS, config.QueueARN)
+		queueConfigARNS.Add(config.QueueARN)
 	}
 
-	// Check if there are any duplicate counts.
-	if err := checkDuplicateStrings(queueConfigARNS); err != nil {
-		errorIf(err, "Invalid queue configs found.")
+	if len(queueConfigARNS) != len(configs) {
 		return ErrOverlappingConfigs
 	}
 
@@ -244,6 +253,7 @@ func validateNotificationConfig(nConfig notificationConfig) APIErrorCode {
 // - elasticsearch
 // - redis
 // - postgresql
+// - mysql
 // - kafka
 // - webhook
 func unmarshalSqsARN(queueARN string) (mSqs arnSQS) {
@@ -263,6 +273,8 @@ func unmarshalSqsARN(queueARN string) (mSqs arnSQS) {
 		mSqs.Type = queueTypeRedis
 	case hasSuffix(sqsType, queueTypePostgreSQL):
 		mSqs.Type = queueTypePostgreSQL
+	case hasSuffix(sqsType, queueTypeMySQL):
+		mSqs.Type = queueTypeMySQL
 	case hasSuffix(sqsType, queueTypeKafka):
 		mSqs.Type = queueTypeKafka
 	case hasSuffix(sqsType, queueTypeWebhook):

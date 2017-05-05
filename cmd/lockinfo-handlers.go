@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -57,12 +57,11 @@ type VolumeLockInfo struct {
 // OpsLockState - structure to fill in state information of the lock.
 // structure to fill in status information for each operation with given operation ID.
 type OpsLockState struct {
-	OperationID string        `json:"id"`       // String containing operation ID.
-	LockSource  string        `json:"source"`   // Operation type (GetObject, PutObject...)
-	LockType    lockType      `json:"type"`     // Lock type (RLock, WLock)
-	Status      statusType    `json:"status"`   // Status can be Running/Ready/Blocked.
-	Since       time.Time     `json:"since"`    // Time when the lock was initially held.
-	Duration    time.Duration `json:"duration"` // Duration since the lock was held.
+	OperationID string     `json:"id"`     // String containing operation ID.
+	LockSource  string     `json:"source"` // Operation type (GetObject, PutObject...)
+	LockType    lockType   `json:"type"`   // Lock type (RLock, WLock)
+	Status      statusType `json:"status"` // Status can be Running/Ready/Blocked.
+	Since       time.Time  `json:"since"`  // Time when the lock was initially held.
 }
 
 // listLocksInfo - Fetches locks held on bucket, matching prefix held for longer than duration.
@@ -71,7 +70,7 @@ func listLocksInfo(bucket, prefix string, duration time.Duration) []VolumeLockIn
 	defer globalNSMutex.lockMapMutex.Unlock()
 
 	// Fetch current time once instead of fetching system time for every lock.
-	timeNow := time.Now().UTC()
+	timeNow := UTCNow()
 	volumeLocks := []VolumeLockInfo{}
 
 	for param, debugLock := range globalNSMutex.debugLockMap {
@@ -105,7 +104,6 @@ func listLocksInfo(bucket, prefix string, duration time.Duration) []VolumeLockIn
 					LockType:    lockInfo.lType,
 					Status:      lockInfo.status,
 					Since:       lockInfo.since,
-					Duration:    elapsed,
 				})
 			volumeLocks = append(volumeLocks, volLockInfo)
 		}

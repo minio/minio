@@ -164,10 +164,7 @@ func TestTreeWalk(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unable to create tmp directory: %s", err)
 	}
-	endpoints, err := parseStorageEndpoints([]string{fsDir})
-	if err != nil {
-		t.Fatalf("Unexpected error %s", err)
-	}
+	endpoints := mustGetNewEndpointList(fsDir)
 	disk, err := newStorageAPI(endpoints[0])
 	if err != nil {
 		t.Fatalf("Unable to create StorageAPI: %s", err)
@@ -205,10 +202,7 @@ func TestTreeWalkTimeout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unable to create tmp directory: %s", err)
 	}
-	endpoints, err := parseStorageEndpoints([]string{fsDir})
-	if err != nil {
-		t.Fatalf("Unexpected error %s", err)
-	}
+	endpoints := mustGetNewEndpointList(fsDir)
 	disk, err := newStorageAPI(endpoints[0])
 	if err != nil {
 		t.Fatalf("Unable to create StorageAPI: %s", err)
@@ -285,18 +279,15 @@ func TestListDir(t *testing.T) {
 		t.Errorf("Unable to create tmp directory: %s", err)
 	}
 
-	endpoints, err := parseStorageEndpoints([]string{fsDir1, fsDir2})
-	if err != nil {
-		t.Fatalf("Unexpected error %s", err)
-	}
-
 	// Create two StorageAPIs disk1 and disk2.
+	endpoints := mustGetNewEndpointList(fsDir1)
 	disk1, err := newStorageAPI(endpoints[0])
 	if err != nil {
 		t.Errorf("Unable to create StorageAPI: %s", err)
 	}
 
-	disk2, err := newStorageAPI(endpoints[1])
+	endpoints = mustGetNewEndpointList(fsDir2)
+	disk2, err := newStorageAPI(endpoints[0])
 	if err != nil {
 		t.Errorf("Unable to create StorageAPI: %s", err)
 	}
@@ -348,10 +339,12 @@ func TestListDir(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	// None of the disks are available, should get errDiskNotFound.
+	// None of the disks are available, should get
+	// errDiskNotFound. Since errDiskNotFound is an ignored error,
+	// we should get nil.
 	_, _, err = listDir(volume, "", "")
-	if errorCause(err) != errDiskNotFound {
-		t.Error("expected errDiskNotFound error.")
+	if err != nil {
+		t.Errorf("expected nil error but found %v.", err)
 	}
 }
 
@@ -364,10 +357,7 @@ func TestRecursiveTreeWalk(t *testing.T) {
 		t.Fatalf("Unable to create tmp directory: %s", err)
 	}
 
-	endpoints, err := parseStorageEndpoints([]string{fsDir1})
-	if err != nil {
-		t.Fatalf("Unexpected error %s", err)
-	}
+	endpoints := mustGetNewEndpointList(fsDir1)
 	disk1, err := newStorageAPI(endpoints[0])
 	if err != nil {
 		t.Fatalf("Unable to create StorageAPI: %s", err)
@@ -474,10 +464,7 @@ func TestSortedness(t *testing.T) {
 		t.Errorf("Unable to create tmp directory: %s", err)
 	}
 
-	endpoints, err := parseStorageEndpoints([]string{fsDir1})
-	if err != nil {
-		t.Fatalf("Unexpected error %s", err)
-	}
+	endpoints := mustGetNewEndpointList(fsDir1)
 	disk1, err := newStorageAPI(endpoints[0])
 	if err != nil {
 		t.Fatalf("Unable to create StorageAPI: %s", err)
@@ -552,10 +539,7 @@ func TestTreeWalkIsEnd(t *testing.T) {
 		t.Errorf("Unable to create tmp directory: %s", err)
 	}
 
-	endpoints, err := parseStorageEndpoints([]string{fsDir1})
-	if err != nil {
-		t.Fatalf("Unexpected error %s", err)
-	}
+	endpoints := mustGetNewEndpointList(fsDir1)
 	disk1, err := newStorageAPI(endpoints[0])
 	if err != nil {
 		t.Fatalf("Unable to create StorageAPI: %s", err)

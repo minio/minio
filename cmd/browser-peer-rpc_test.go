@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ package cmd
 import (
 	"path"
 	"testing"
-	"time"
 )
 
 // API suite container common to both FS and XL.
@@ -96,7 +95,7 @@ func (s *TestRPCBrowserPeerSuite) testBrowserPeerRPC(t *testing.T) {
 		Username:    creds.AccessKey,
 		Password:    creds.SecretKey,
 		Version:     Version,
-		RequestTime: time.Now().UTC(),
+		RequestTime: UTCNow(),
 	}
 	rreply := &LoginRPCReply{}
 	err = rclient.Call("BrowserPeer"+loginMethodName, rargs, rreply)
@@ -111,7 +110,7 @@ func (s *TestRPCBrowserPeerSuite) testBrowserPeerRPC(t *testing.T) {
 		Username:    creds.AccessKey,
 		Password:    creds.SecretKey,
 		Version:     Version,
-		RequestTime: time.Now().UTC(),
+		RequestTime: UTCNow(),
 	}
 	rreply = &LoginRPCReply{}
 	err = rclient.Call("BrowserPeer"+loginMethodName, rargs, rreply)

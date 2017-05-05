@@ -21,10 +21,12 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
 	"testing"
 	"time"
 
@@ -154,14 +156,9 @@ func prepareAdminXLTestBed() (*adminXLTestBed, error) {
 	}
 
 	// Initialize boot time
-	globalBootTime = time.Now().UTC()
+	globalBootTime = UTCNow()
 
-	// Set globalEndpoints for a single node XL setup.
-	for _, xlDir := range xlDirs {
-		globalEndpoints = append(globalEndpoints, &url.URL{
-			Path: xlDir,
-		})
-	}
+	globalEndpoints = mustGetNewEndpointList(xlDirs...)
 
 	// Set globalIsXL to indicate that the setup uses an erasure code backend.
 	globalIsXL = true
@@ -299,14 +296,8 @@ func testServicesCmdHandler(cmd cmdType, t *testing.T) {
 	// Initialize admin peers to make admin RPC calls. Note: In a
 	// single node setup, this degenerates to a simple function
 	// call under the hood.
-	eps, err := parseStorageEndpoints([]string{"http://127.0.0.1"})
-	if err != nil {
-		t.Fatalf("Failed to parse storage end point - %v", err)
-	}
-
-	// Set globalMinioAddr to be able to distinguish local endpoints from remote.
-	globalMinioAddr = eps[0].Host
-	initGlobalAdminPeers(eps)
+	globalMinioAddr = "127.0.0.1:9000"
+	initGlobalAdminPeers(mustGetNewEndpointList("http://127.0.0.1:9000/d1"))
 
 	// Setting up a go routine to simulate ServerMux's
 	// handleServiceSignals for stop and restart commands.
@@ -365,14 +356,8 @@ func TestServiceSetCreds(t *testing.T) {
 	// Initialize admin peers to make admin RPC calls. Note: In a
 	// single node setup, this degenerates to a simple function
 	// call under the hood.
-	eps, err := parseStorageEndpoints([]string{"http://127.0.0.1"})
-	if err != nil {
-		t.Fatalf("Failed to parse storage end point - %v", err)
-	}
-
-	// Set globalMinioAddr to be able to distinguish local endpoints from remote.
-	globalMinioAddr = eps[0].Host
-	initGlobalAdminPeers(eps)
+	globalMinioAddr = "127.0.0.1:9000"
+	initGlobalAdminPeers(mustGetNewEndpointList("http://127.0.0.1:9000/d1"))
 
 	credentials := serverConfig.GetCredential()
 	var body []byte
@@ -453,14 +438,8 @@ func TestListLocksHandler(t *testing.T) {
 	defer adminTestBed.TearDown()
 
 	// Initialize admin peers to make admin RPC calls.
-	eps, err := parseStorageEndpoints([]string{"http://127.0.0.1"})
-	if err != nil {
-		t.Fatalf("Failed to parse storage end point - %v", err)
-	}
-
-	// Set globalMinioAddr to be able to distinguish local endpoints from remote.
-	globalMinioAddr = eps[0].Host
-	initGlobalAdminPeers(eps)
+	globalMinioAddr = "127.0.0.1:9000"
+	initGlobalAdminPeers(mustGetNewEndpointList("http://127.0.0.1:9000/d1"))
 
 	testCases := []struct {
 		bucket         string
@@ -528,11 +507,7 @@ func TestClearLocksHandler(t *testing.T) {
 	defer adminTestBed.TearDown()
 
 	// Initialize admin peers to make admin RPC calls.
-	eps, err := parseStorageEndpoints([]string{"http://127.0.0.1"})
-	if err != nil {
-		t.Fatalf("Failed to parse storage end point - %v", err)
-	}
-	initGlobalAdminPeers(eps)
+	initGlobalAdminPeers(mustGetNewEndpointList("http://127.0.0.1:9000/d1"))
 
 	testCases := []struct {
 		bucket         string
@@ -1048,6 +1023,160 @@ func TestHealObjectHandler(t *testing.T) {
 			t.Errorf("Test %d - Expected HTTP status code %d but received %d", i+1, test.statusCode, rec.Code)
 		}
 	}
+
+}
+
+// buildAdminRequest - helper function to build an admin API request.
+func buildAdminRequest(queryVal url.Values, opHdr, method string,
+	contentLength int64, bodySeeker io.ReadSeeker) (*http.Request, error) {
+	req, err := newTestRequest(method, "/?"+queryVal.Encode(), contentLength, bodySeeker)
+	if err != nil {
+		return nil, traceError(err)
+	}
+
+	req.Header.Set(minioAdminOpHeader, opHdr)
+
+	cred := serverConfig.GetCredential()
+	err = signRequestV4(req, cred.AccessKey, cred.SecretKey)
+	if err != nil {
+		return nil, traceError(err)
+	}
+
+	return req, nil
+}
+
+// mkHealUploadQuery - helper to build HealUploadHandler query string.
+func mkHealUploadQuery(bucket, object, uploadID, dryRun string) url.Values {
+	queryVal := url.Values{}
+	queryVal.Set(string(mgmtBucket), bucket)
+	queryVal.Set(string(mgmtObject), object)
+	queryVal.Set(string(mgmtUploadID), uploadID)
+	queryVal.Set("heal", "")
+	queryVal.Set(string(mgmtDryRun), dryRun)
+	return queryVal
+}
+
+// TestHealUploadHandler - test for HealUploadHandler.
+func TestHealUploadHandler(t *testing.T) {
+	adminTestBed, err := prepareAdminXLTestBed()
+	if err != nil {
+		t.Fatal("Failed to initialize a single node XL backend for admin handler tests.")
+	}
+	defer adminTestBed.TearDown()
+
+	// Create an object myobject under bucket mybucket.
+	bucketName := "mybucket"
+	objName := "myobject"
+	err = adminTestBed.objLayer.MakeBucket(bucketName)
+	if err != nil {
+		t.Fatalf("Failed to make bucket %s - %v", bucketName, err)
+	}
+
+	// Create a new multipart upload.
+	uploadID, err := adminTestBed.objLayer.NewMultipartUpload(bucketName, objName, nil)
+	if err != nil {
+		t.Fatalf("Failed to create a new multipart upload %s/%s - %v",
+			bucketName, objName, err)
+	}
+
+	// Upload a part.
+	partID := 1
+	_, err = adminTestBed.objLayer.PutObjectPart(bucketName, objName, uploadID,
+		partID, int64(len("hello")), bytes.NewReader([]byte("hello")), "", "")
+	if err != nil {
+		t.Fatalf("Failed to upload part %d of %s/%s - %v", partID,
+			bucketName, objName, err)
+	}
+
+	testCases := []struct {
+		bucket     string
+		object     string
+		dryrun     string
+		statusCode int
+	}{
+		// 1. Valid test case.
+		{
+			bucket:     bucketName,
+			object:     objName,
+			statusCode: http.StatusOK,
+		},
+		// 2. Invalid bucket name.
+		{
+			bucket:     `invalid\\Bucket`,
+			object:     "myobject",
+			statusCode: http.StatusBadRequest,
+		},
+		// 3. Bucket not found.
+		{
+			bucket:     "bucketnotfound",
+			object:     "myobject",
+			statusCode: http.StatusNotFound,
+		},
+		// 4. Invalid object name.
+		{
+			bucket:     bucketName,
+			object:     `invalid\\Object`,
+			statusCode: http.StatusBadRequest,
+		},
+		// 5. Object not found.
+		{
+			bucket:     bucketName,
+			object:     "objectnotfound",
+			statusCode: http.StatusNotFound,
+		},
+		// 6. Valid test case with dry-run.
+		{
+			bucket:     bucketName,
+			object:     objName,
+			dryrun:     "yes",
+			statusCode: http.StatusOK,
+		},
+	}
+	for i, test := range testCases {
+		// Prepare query params.
+		queryVal := mkHealUploadQuery(test.bucket, test.object, uploadID, test.dryrun)
+		req, err1 := buildAdminRequest(queryVal, "upload", http.MethodPost, 0, nil)
+		if err1 != nil {
+			t.Fatalf("Test %d - Failed to construct heal object request - %v", i+1, err1)
+		}
+		rec := httptest.NewRecorder()
+		adminTestBed.mux.ServeHTTP(rec, req)
+		if test.statusCode != rec.Code {
+			t.Errorf("Test %d - Expected HTTP status code %d but received %d", i+1, test.statusCode, rec.Code)
+		}
+	}
+
+	sample := testCases[0]
+	// Modify authorization header after signing to test signature
+	// mismatch handling.
+	queryVal := mkHealUploadQuery(sample.bucket, sample.object, uploadID, sample.dryrun)
+	req, err := buildAdminRequest(queryVal, "upload", "POST", 0, nil)
+	if err != nil {
+		t.Fatalf("Failed to construct heal object request - %v", err)
+	}
+
+	// Set x-amz-date to a date different than time of signing.
+	req.Header.Set("x-amz-date", time.Time{}.Format(iso8601Format))
+
+	rec := httptest.NewRecorder()
+	adminTestBed.mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("Expected %d but received %d", http.StatusBadRequest, rec.Code)
+	}
+
+	// Set objectAPI to nil to test Server not initialized case.
+	resetGlobalObjectAPI()
+	queryVal = mkHealUploadQuery(sample.bucket, sample.object, uploadID, sample.dryrun)
+	req, err = buildAdminRequest(queryVal, "upload", "POST", 0, nil)
+	if err != nil {
+		t.Fatalf("Failed to construct heal object request - %v", err)
+	}
+
+	rec = httptest.NewRecorder()
+	adminTestBed.mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("Expected %d but received %d", http.StatusServiceUnavailable, rec.Code)
+	}
 }
 
 // TestHealFormatHandler - test for HealFormatHandler.
@@ -1061,19 +1190,9 @@ func TestHealFormatHandler(t *testing.T) {
 	// Prepare query params for heal-format mgmt REST API.
 	queryVal := url.Values{}
 	queryVal.Set("heal", "")
-	req, err := newTestRequest("POST", "/?"+queryVal.Encode(), 0, nil)
+	req, err := buildAdminRequest(queryVal, "format", "POST", 0, nil)
 	if err != nil {
 		t.Fatalf("Failed to construct heal object request - %v", err)
-	}
-
-	// Set x-minio-operation header to format.
-	req.Header.Set(minioAdminOpHeader, "format")
-
-	// Sign the request using signature v4.
-	cred := serverConfig.GetCredential()
-	err = signRequestV4(req, cred.AccessKey, cred.SecretKey)
-	if err != nil {
-		t.Fatalf("Failed to sign heal object request - %v", err)
 	}
 
 	rec := httptest.NewRecorder()
@@ -1092,32 +1211,16 @@ func TestGetConfigHandler(t *testing.T) {
 	defer adminTestBed.TearDown()
 
 	// Initialize admin peers to make admin RPC calls.
-	eps, err := parseStorageEndpoints([]string{"http://127.0.0.1"})
-	if err != nil {
-		t.Fatalf("Failed to parse storage end point - %v", err)
-	}
-
-	// Set globalMinioAddr to be able to distinguish local endpoints from remote.
-	globalMinioAddr = eps[0].Host
-	initGlobalAdminPeers(eps)
+	globalMinioAddr = "127.0.0.1:9000"
+	initGlobalAdminPeers(mustGetNewEndpointList("http://127.0.0.1:9000/d1"))
 
 	// Prepare query params for get-config mgmt REST API.
 	queryVal := url.Values{}
 	queryVal.Set("config", "")
 
-	req, err := newTestRequest("GET", "/?"+queryVal.Encode(), 0, nil)
+	req, err := buildAdminRequest(queryVal, "get", http.MethodGet, 0, nil)
 	if err != nil {
 		t.Fatalf("Failed to construct get-config object request - %v", err)
-	}
-
-	// Set x-minio-operation header to get.
-	req.Header.Set(minioAdminOpHeader, "get")
-
-	// Sign the request using signature v4.
-	cred := serverConfig.GetCredential()
-	err = signRequestV4(req, cred.AccessKey, cred.SecretKey)
-	if err != nil {
-		t.Fatalf("Failed to sign heal object request - %v", err)
 	}
 
 	rec := httptest.NewRecorder()
@@ -1137,14 +1240,8 @@ func TestSetConfigHandler(t *testing.T) {
 	defer adminTestBed.TearDown()
 
 	// Initialize admin peers to make admin RPC calls.
-	eps, err := parseStorageEndpoints([]string{"http://127.0.0.1"})
-	if err != nil {
-		t.Fatalf("Failed to parse storage end point - %v", err)
-	}
-
-	// Set globalMinioAddr to be able to distinguish local endpoints from remote.
-	globalMinioAddr = eps[0].Host
-	initGlobalAdminPeers(eps)
+	globalMinioAddr = "127.0.0.1:9000"
+	initGlobalAdminPeers(mustGetNewEndpointList("http://127.0.0.1:9000/d1"))
 
 	// SetConfigHandler restarts minio setup - need to start a
 	// signal receiver to receive on globalServiceSignalCh.
@@ -1154,19 +1251,10 @@ func TestSetConfigHandler(t *testing.T) {
 	queryVal := url.Values{}
 	queryVal.Set("config", "")
 
-	req, err := newTestRequest("PUT", "/?"+queryVal.Encode(), int64(len(configJSON)), bytes.NewReader(configJSON))
+	req, err := buildAdminRequest(queryVal, "set", http.MethodPut, int64(len(configJSON)),
+		bytes.NewReader(configJSON))
 	if err != nil {
 		t.Fatalf("Failed to construct get-config object request - %v", err)
-	}
-
-	// Set x-minio-operation header to set.
-	req.Header.Set(minioAdminOpHeader, "set")
-
-	// Sign the request using signature v4.
-	cred := serverConfig.GetCredential()
-	err = signRequestV4(req, cred.AccessKey, cred.SecretKey)
-	if err != nil {
-		t.Fatalf("Failed to sign heal object request - %v", err)
 	}
 
 	rec := httptest.NewRecorder()
@@ -1183,6 +1271,58 @@ func TestSetConfigHandler(t *testing.T) {
 
 	if !result.Status {
 		t.Error("Expected set-config to succeed, but failed")
+	}
+}
+
+func TestAdminServerInfo(t *testing.T) {
+	adminTestBed, err := prepareAdminXLTestBed()
+	if err != nil {
+		t.Fatal("Failed to initialize a single node XL backend for admin handler tests.")
+	}
+	defer adminTestBed.TearDown()
+
+	// Initialize admin peers to make admin RPC calls.
+	globalMinioAddr = "127.0.0.1:9000"
+	initGlobalAdminPeers(mustGetNewEndpointList("http://127.0.0.1:9000/d1"))
+
+	// Prepare query params for set-config mgmt REST API.
+	queryVal := url.Values{}
+	queryVal.Set("info", "")
+
+	req, err := buildAdminRequest(queryVal, "", http.MethodGet, 0, nil)
+	if err != nil {
+		t.Fatalf("Failed to construct get-config object request - %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	adminTestBed.mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("Expected to succeed but failed with %d", rec.Code)
+	}
+
+	results := []ServerInfo{}
+	err = json.NewDecoder(rec.Body).Decode(&results)
+	if err != nil {
+		t.Fatalf("Failed to decode set config result json %v", err)
+	}
+
+	if len(results) == 0 {
+		t.Error("Expected at least one server info result")
+	}
+
+	for _, serverInfo := range results {
+		if len(serverInfo.Addr) == 0 {
+			t.Error("Expected server address to be non empty")
+		}
+		if serverInfo.Error != nil {
+			t.Errorf("Unexpected error = %v\n", serverInfo.Error)
+		}
+		if serverInfo.Data.StorageInfo.Free == 0 {
+			t.Error("Expected StorageInfo.Free to be non empty")
+		}
+		if serverInfo.Data.Properties.Region != globalMinioDefaultRegion {
+			t.Errorf("Expected %s, got %s", globalMinioDefaultRegion, serverInfo.Data.Properties.Region)
+		}
 	}
 }
 
@@ -1219,6 +1359,11 @@ func TestToAdminAPIErr(t *testing.T) {
 }
 
 func TestWriteSetConfigResponse(t *testing.T) {
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer removeAll(rootPath)
 	testCases := []struct {
 		status bool
 		errs   []error
@@ -1250,7 +1395,7 @@ func TestWriteSetConfigResponse(t *testing.T) {
 		},
 	}
 
-	testURL, err := url.Parse("dummy.com")
+	testURL, err := url.Parse("http://dummy.com")
 	if err != nil {
 		t.Fatalf("Failed to parse a place-holder url")
 	}
@@ -1288,9 +1433,9 @@ func TestWriteSetConfigResponse(t *testing.T) {
 	}
 }
 
-// mkUploadsHealQuery - helper function to construct query values for
+// mkListUploadsHealQuery - helper function to construct query values for
 // listUploadsHeal.
-func mkUploadsHealQuery(bucket, prefix, keyMarker, uploadIDMarker, delimiter, maxUploadsStr string) url.Values {
+func mkListUploadsHealQuery(bucket, prefix, keyMarker, uploadIDMarker, delimiter, maxUploadsStr string) url.Values {
 
 	queryVal := make(url.Values)
 	queryVal.Set("heal", "")
@@ -1319,12 +1464,13 @@ func TestListHealUploadsHandler(t *testing.T) {
 	defer adminTestBed.objLayer.DeleteBucket("mybucket")
 
 	testCases := []struct {
-		bucket     string
-		prefix     string
-		keyMarker  string
-		delimiter  string
-		maxKeys    string
-		statusCode int
+		bucket       string
+		prefix       string
+		keyMarker    string
+		delimiter    string
+		maxKeys      string
+		statusCode   int
+		expectedResp ListMultipartUploadsResponse
 	}{
 		// 1. Valid params.
 		{
@@ -1334,6 +1480,14 @@ func TestListHealUploadsHandler(t *testing.T) {
 			delimiter:  "/",
 			maxKeys:    "10",
 			statusCode: http.StatusOK,
+			expectedResp: ListMultipartUploadsResponse{
+				XMLName:    xml.Name{Space: "http://s3.amazonaws.com/doc/2006-03-01/", Local: "ListMultipartUploadsResult"},
+				Bucket:     "mybucket",
+				KeyMarker:  "prefix11",
+				Delimiter:  "/",
+				Prefix:     "prefix",
+				MaxUploads: 10,
+			},
 		},
 		// 2. Valid params with empty prefix.
 		{
@@ -1343,6 +1497,14 @@ func TestListHealUploadsHandler(t *testing.T) {
 			delimiter:  "/",
 			maxKeys:    "10",
 			statusCode: http.StatusOK,
+			expectedResp: ListMultipartUploadsResponse{
+				XMLName:    xml.Name{Space: "http://s3.amazonaws.com/doc/2006-03-01/", Local: "ListMultipartUploadsResult"},
+				Bucket:     "mybucket",
+				KeyMarker:  "",
+				Delimiter:  "/",
+				Prefix:     "",
+				MaxUploads: 10,
+			},
 		},
 		// 3. Invalid params with invalid bucket.
 		{
@@ -1401,23 +1563,64 @@ func TestListHealUploadsHandler(t *testing.T) {
 	}
 
 	for i, test := range testCases {
-		queryVal := mkUploadsHealQuery(test.bucket, test.prefix, test.keyMarker, "", test.delimiter, test.maxKeys)
+		queryVal := mkListUploadsHealQuery(test.bucket, test.prefix, test.keyMarker, "", test.delimiter, test.maxKeys)
 
-		req, err := newTestRequest("GET", "/?"+queryVal.Encode(), 0, nil)
+		req, err := buildAdminRequest(queryVal, "list-uploads", http.MethodGet, 0, nil)
 		if err != nil {
 			t.Fatalf("Test %d - Failed to construct list uploads needing heal request - %v", i+1, err)
 		}
-		req.Header.Set(minioAdminOpHeader, "list-uploads")
 
-		cred := serverConfig.GetCredential()
-		err = signRequestV4(req, cred.AccessKey, cred.SecretKey)
-		if err != nil {
-			t.Fatalf("Test %d - Failed to sign list uploads needing heal request - %v", i+1, err)
-		}
 		rec := httptest.NewRecorder()
 		adminTestBed.mux.ServeHTTP(rec, req)
+
 		if test.statusCode != rec.Code {
 			t.Errorf("Test %d - Expected HTTP status code %d but received %d", i+1, test.statusCode, rec.Code)
+		}
+
+		// Compare result with the expected one only when we receive 200 OK
+		if rec.Code == http.StatusOK {
+			resp := rec.Result()
+			xmlBytes, err := ioutil.ReadAll(resp.Body)
+			if err != nil {
+				t.Errorf("Test %d: Failed to read response %v", i+1, err)
+			}
+
+			var actualResult ListMultipartUploadsResponse
+			err = xml.Unmarshal(xmlBytes, &actualResult)
+			if err != nil {
+				t.Errorf("Test %d: Failed to unmarshal xml %v", i+1, err)
+			}
+
+			if !reflect.DeepEqual(test.expectedResp, actualResult) {
+				t.Fatalf("Test %d: Unexpected response `%+v`, expected: `%+v`", i+1, test.expectedResp, actualResult)
+			}
+		}
+
+	}
+}
+
+// Test for newHealResult helper function.
+func TestNewHealResult(t *testing.T) {
+	testCases := []struct {
+		healedDisks  int
+		offlineDisks int
+		state        healState
+	}{
+		// 1. No disks healed, no disks offline.
+		{0, 0, healNone},
+		// 2. No disks healed, non-zero disks offline.
+		{0, 1, healNone},
+		// 3. Non-zero disks healed, no disks offline.
+		{1, 0, healOK},
+		// 4. Non-zero disks healed, non-zero disks offline.
+		{1, 1, healPartial},
+	}
+
+	for i, test := range testCases {
+		actual := newHealResult(test.healedDisks, test.offlineDisks)
+		if actual.State != test.state {
+			t.Errorf("Test %d: Expected %v but received %v", i+1,
+				test.state, actual.State)
 		}
 	}
 }

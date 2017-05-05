@@ -27,19 +27,20 @@ func listDirFactory(isLeaf isLeafFunc, treeWalkIgnoredErrs []error, disks ...Sto
 				continue
 			}
 			entries, err = disk.ListDir(bucket, prefixDir)
-			if err == nil {
-				entries, delayIsLeaf = filterListEntries(bucket, prefixDir, entries, prefixEntry, isLeaf)
-				return entries, delayIsLeaf, nil
+			if err != nil {
+				// For any reason disk was deleted or goes offline, continue
+				// and list from other disks if possible.
+				if isErrIgnored(err, treeWalkIgnoredErrs...) {
+					continue
+				}
+				return nil, false, traceError(err)
 			}
-			// For any reason disk was deleted or goes offline, continue
-			// and list from other disks if possible.
-			if isErrIgnored(err, treeWalkIgnoredErrs...) {
-				continue
-			}
-			break
+
+			entries, delayIsLeaf = filterListEntries(bucket, prefixDir, entries, prefixEntry, isLeaf)
+			return entries, delayIsLeaf, nil
 		}
-		// Return error at the end.
-		return nil, false, traceError(err)
+		// Nothing found in all disks
+		return nil, false, nil
 	}
 	return listDir
 }
@@ -73,10 +74,6 @@ func (xl xlObjects) listObjects(bucket, prefix, marker, delimiter string, maxKey
 		}
 		// For any walk error return right away.
 		if walkResult.err != nil {
-			// File not found is a valid case.
-			if errorCause(walkResult.err) == errFileNotFound {
-				return ListObjectsInfo{}, nil
-			}
 			return ListObjectsInfo{}, toObjectErr(walkResult.err, bucket, prefix)
 		}
 		entry := walkResult.entry

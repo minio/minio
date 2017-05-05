@@ -245,7 +245,7 @@ func TestGetValidServerConfig(t *testing.T) {
 
 	// Invalid config - no quorum.
 	serverConfigs = []serverConfigV13{c1, c2, c2, c1}
-	validConfig, err = getValidServerConfig(serverConfigs, noErrs)
+	_, err = getValidServerConfig(serverConfigs, noErrs)
 	if err != errXLWriteQuorum {
 		t.Errorf("Expected to fail due to lack of quorum but received %v", err)
 	}
@@ -253,7 +253,7 @@ func TestGetValidServerConfig(t *testing.T) {
 	// All errors
 	allErrs := []error{errDiskNotFound, errDiskNotFound, errDiskNotFound, errDiskNotFound}
 	serverConfigs = []serverConfigV13{{}, {}, {}, {}}
-	validConfig, err = getValidServerConfig(serverConfigs, allErrs)
+	_, err = getValidServerConfig(serverConfigs, allErrs)
 	if err != errXLWriteQuorum {
 		t.Errorf("Expected to fail due to lack of quorum but received %v", err)
 	}

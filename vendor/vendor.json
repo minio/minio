@@ -35,9 +35,10 @@
 			"revisionTime": "2016-07-05T13:30:06-07:00"
 		},
 		{
+			"checksumSHA1": "rhLUtXvcmouYuBwOq9X/nYKzvNg=",
 			"path": "github.com/dustin/go-humanize",
-			"revision": "fef948f2d241bd1fd0631108ecc2c9553bae60bf",
-			"revisionTime": "2016-06-23T09:40:21+08:00"
+			"revision": "259d2a102b871d17f30e3cd9881a642961a1e486",
+			"revisionTime": "2017-02-28T07:34:54Z"
 		},
 		{
 			"checksumSHA1": "y2Kh4iPlgCPXSGTCcFpzePYdzzg=",
@@ -79,6 +80,12 @@
 			"path": "github.com/garyburd/redigo/redis",
 			"revision": "0d253a66e6e1349f4581d6d2b300ee434ee2da9f",
 			"revisionTime": "2017-02-16T21:49:44Z"
+		},
+		{
+			"checksumSHA1": "QD6LqgLz2JMxXqns8TaxtK9AuHs=",
+			"path": "github.com/go-sql-driver/mysql",
+			"revision": "2e00b5cd70399450106cec6431c2e2ce3cae5034",
+			"revisionTime": "2016-12-24T12:10:19Z"
 		},
 		{
 			"checksumSHA1": "3yco0089CSJ4qbyUccpbDC2+dPg=",
@@ -164,6 +171,12 @@
 			"revisionTime": "2016-08-31T22:25:20Z"
 		},
 		{
+			"checksumSHA1": "isRGvFzUCh72bNQFmw7WQaeT7xY=",
+			"path": "github.com/lox/httpcache",
+			"revision": "fff585cf25b80f4ccc4ac7be6d3f564aa9c117ff",
+			"revisionTime": "2017-01-09T03:46:36Z"
+		},
+		{
 			"path": "github.com/mattn/go-colorable",
 			"revision": "9056b7a9f2d1f2d96498d6d146acd1f9d5ed3d59",
 			"revisionTime": "2016-06-03T00:08:27+09:00"
@@ -187,10 +200,10 @@
 			"revisionTime": "2017-02-27T07:32:28Z"
 		},
 		{
-			"checksumSHA1": "NBGyq2+iTtJvJ+ElG4FzHLe1WSY=",
+			"checksumSHA1": "vrIbl0L+RLwyPRCxMss5+eZtADE=",
 			"path": "github.com/minio/dsync",
-			"revision": "9cafd4d729eb71b31ef7851a8c8f6ceb855d0915",
-			"revisionTime": "2016-12-23T07:07:24Z"
+			"revision": "535db94aebce49cacce4de9c6f5f5821601281cd",
+			"revisionTime": "2017-04-19T20:41:15Z"
 		},
 		{
 			"path": "github.com/minio/go-homedir",
@@ -203,28 +216,40 @@
 			"revisionTime": "2016-02-29T08:42:30-08:00"
 		},
 		{
-			"checksumSHA1": "qTxOBp3GVxCC70ykb7Hxg6UgWwA=",
+			"checksumSHA1": "pvBoasrJ8jrJJG0JNJvxyCZighw=",
+			"path": "github.com/minio/minio-go",
+			"revision": "75a218a15d5413c9a961318160f4c12a29bf9147",
+			"revisionTime": "2017-05-04T18:42:21Z"
+		},
+		{
+			"checksumSHA1": "lsxCcRcNUDxhQyO999SOdvKzzfM=",
+			"path": "github.com/minio/minio-go/pkg/encrypt",
+			"revision": "5297a818b482fa329b3dc1a3926e3c4c6fb5d459",
+			"revisionTime": "2017-04-26T18:23:05Z"
+		},
+		{
+			"checksumSHA1": "neH34/65OXeKHM/MlV8MbhcdFBc=",
 			"path": "github.com/minio/minio-go/pkg/policy",
-			"revision": "40505f5d08c721dfe5a6450fbdef3bcd6567aa97",
-			"revisionTime": "2016-09-04T08:12:15Z"
+			"revision": "5297a818b482fa329b3dc1a3926e3c4c6fb5d459",
+			"revisionTime": "2017-04-26T18:23:05Z"
 		},
 		{
-			"checksumSHA1": "l95EyvF0yFAItXsXYqsZ6g7yGy4=",
+			"checksumSHA1": "/5IXp1nGKqOfHn8Piiod3OCkG2U=",
 			"path": "github.com/minio/minio-go/pkg/s3signer",
-			"revision": "d02caa62b9e1034f93a82d41da806651a666c5a3",
-			"revisionTime": "2016-12-14T00:10:05Z"
+			"revision": "5297a818b482fa329b3dc1a3926e3c4c6fb5d459",
+			"revisionTime": "2017-04-26T18:23:05Z"
 		},
 		{
-			"checksumSHA1": "bPvxFS1qu6W9lOqdt8aEfS5Sids=",
+			"checksumSHA1": "gRnCFKb4x83GBLVUZXoOjujd+U0=",
 			"path": "github.com/minio/minio-go/pkg/s3utils",
-			"revision": "532b920ff28900244a2ef7d07468003df36fe7c5",
-			"revisionTime": "2016-12-20T20:43:13Z"
+			"revision": "5297a818b482fa329b3dc1a3926e3c4c6fb5d459",
+			"revisionTime": "2017-04-26T18:23:05Z"
 		},
 		{
-			"checksumSHA1": "A8QOw1aWwc+RtjGozY0XeS5varo=",
+			"checksumSHA1": "maUy+dbN6VfTTnfErrAW2lLit1w=",
 			"path": "github.com/minio/minio-go/pkg/set",
-			"revision": "9e734013294ab153b0bdbe182738bcddd46f1947",
-			"revisionTime": "2016-08-18T00:31:20Z"
+			"revision": "5297a818b482fa329b3dc1a3926e3c4c6fb5d459",
+			"revisionTime": "2017-04-26T18:23:05Z"
 		},
 		{
 			"checksumSHA1": "URVle4qtadmW9w9BulDRHY3kxnA=",
@@ -286,6 +311,12 @@
 			"revisionTime": "2016-05-18T16:56:57+10:00"
 		},
 		{
+			"checksumSHA1": "NLwKGa5B0STKAvQV+lz/ujnbzN4=",
+			"path": "github.com/rainycape/vfs",
+			"revision": "a62fd22bcf7010946a44f6a1250a82c03110a14b",
+			"revisionTime": "2015-06-11T13:38:00Z"
+		},
+		{
 			"path": "github.com/rs/cors",
 			"revision": "a62a804a8a009876ca59105f7899938a1349f4b3",
 			"revisionTime": "2016-06-18T04:49:35+05:30"
@@ -320,6 +351,12 @@
 			"revisionTime": "2016-08-30T17:39:30Z"
 		},
 		{
+			"checksumSHA1": "6NS7FWJl1FobB+Xfe4SzBGD+75g=",
+			"path": "go.uber.org/atomic",
+			"revision": "3b8db5e93c4c02efbc313e17b2e796b0914a01fb",
+			"revisionTime": "2016-12-15T19:56:52Z"
+		},
+		{
 			"path": "golang.org/x/crypto/bcrypt",
 			"revision": "7b85b097bf7527677d54d3220065e966a0e3b613",
 			"revisionTime": "2015-11-30T17:07:01-05:00"
@@ -335,6 +372,18 @@
 			"revisionTime": "2016-07-07T15:24:52-07:00"
 		},
 		{
+			"checksumSHA1": "WHc3uByvGaMcnSoI21fhzYgbOgg=",
+			"path": "golang.org/x/net/context/ctxhttp",
+			"revision": "f2499483f923065a842d38eb4c7f1927e6fc6e6d",
+			"revisionTime": "2017-01-14T04:22:49Z"
+		},
+		{
+			"checksumSHA1": "ZVZBntvdoK/qUq/6uF8YMWmuMC4=",
+			"path": "golang.org/x/sys/unix",
+			"revision": "ea9bcade75cb975a0b9738936568ab388b845617",
+			"revisionTime": "2017-03-08T18:50:27Z"
+		},
+		{
 			"checksumSHA1": "p36nkSZUaOs/7Wtcy/FduBLgm8g=",
 			"path": "gopkg.in/Shopify/sarama.v1",
 			"revision": "bd61cae2be85fa6ff40eb23dcdd24567967ac2ae",
@@ -344,12 +393,6 @@
 			"path": "gopkg.in/check.v1",
 			"revision": "11d3bc7aa68e238947792f30573146a3231fc0f1",
 			"revisionTime": "2015-07-29T10:04:31+02:00"
-		},
-		{
-			"checksumSHA1": "eC4OV7g1tug838fPWrwflstr/TM=",
-			"path": "gopkg.in/olivere/elastic.v3",
-			"revision": "f7ae701daf3abe5dfb99f57b3f47738ec93c9c26",
-			"revisionTime": "2016-07-16T10:42:39Z"
 		},
 		{
 			"checksumSHA1": "lLdKOn9RPtFoTtPUNq5+sIInAiE=",
@@ -362,6 +405,18 @@
 			"path": "gopkg.in/olivere/elastic.v3/uritemplates",
 			"revision": "f7ae701daf3abe5dfb99f57b3f47738ec93c9c26",
 			"revisionTime": "2016-07-16T10:42:39Z"
+		},
+		{
+			"checksumSHA1": "ji4KugVW5dIfKLoFr1fE+3mT90A=",
+			"path": "gopkg.in/olivere/elastic.v5",
+			"revision": "cf4e58efdcee2e8e7c18dad44d51ed166fb256c2",
+			"revisionTime": "2017-03-26T10:11:08Z"
+		},
+		{
+			"checksumSHA1": "pCApZfp2CeDnWbNVsyzNO62ZUXA=",
+			"path": "gopkg.in/olivere/elastic.v5/uritemplates",
+			"revision": "cf4e58efdcee2e8e7c18dad44d51ed166fb256c2",
+			"revisionTime": "2017-03-26T10:11:08Z"
 		},
 		{
 			"checksumSHA1": "12GqsW8PiRPnezDDy0v4brZrndM=",

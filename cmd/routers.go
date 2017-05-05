@@ -30,15 +30,15 @@ func newObjectLayerFn() (layer ObjectLayer) {
 }
 
 // Composed function registering routers for only distributed XL setup.
-func registerDistXLRouters(mux *router.Router, srvCmdConfig serverCmdConfig) error {
+func registerDistXLRouters(mux *router.Router, endpoints EndpointList) error {
 	// Register storage rpc router only if its a distributed setup.
-	err := registerStorageRPCRouters(mux, srvCmdConfig)
+	err := registerStorageRPCRouters(mux, endpoints)
 	if err != nil {
 		return err
 	}
 
 	// Register distributed namespace lock.
-	err = registerDistNSLockRouter(mux, srvCmdConfig)
+	err = registerDistNSLockRouter(mux, endpoints)
 	if err != nil {
 		return err
 	}
@@ -54,14 +54,14 @@ func registerDistXLRouters(mux *router.Router, srvCmdConfig serverCmdConfig) err
 }
 
 // configureServer handler returns final handler for the http server.
-func configureServerHandler(srvCmdConfig serverCmdConfig) (http.Handler, error) {
+func configureServerHandler(endpoints EndpointList) (http.Handler, error) {
 	// Initialize router. `SkipClean(true)` stops gorilla/mux from
 	// normalizing URL path minio/minio#3256
 	mux := router.NewRouter().SkipClean(true)
 
 	// Initialize distributed NS lock.
 	if globalIsDistXL {
-		registerDistXLRouters(mux, srvCmdConfig)
+		registerDistXLRouters(mux, endpoints)
 	}
 
 	// Add Admin RPC router

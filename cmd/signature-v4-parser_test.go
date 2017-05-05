@@ -87,7 +87,7 @@ func validateCredentialfields(t *testing.T, testNum int, expectedCredentials cre
 //                       },"/")
 func TestParseCredentialHeader(t *testing.T) {
 
-	sampleTimeStr := time.Now().UTC().Format(yyyymmdd)
+	sampleTimeStr := UTCNow().Format(yyyymmdd)
 
 	testCases := []struct {
 		inputCredentialStr  string
@@ -120,7 +120,7 @@ func TestParseCredentialHeader(t *testing.T) {
 		{
 			inputCredentialStr: generateCredentialStr(
 				"^#@.",
-				time.Now().UTC().Format(yyyymmdd),
+				UTCNow().Format(yyyymmdd),
 				"ABCD",
 				"ABCD",
 				"ABCD"),
@@ -133,7 +133,7 @@ func TestParseCredentialHeader(t *testing.T) {
 		{
 			inputCredentialStr: generateCredentialStr(
 				"Z7IXGOO6BZ0REAN1Q26I",
-				time.Now().UTC().String(),
+				UTCNow().String(),
 				"ABCD",
 				"ABCD",
 				"ABCD"),
@@ -146,7 +146,7 @@ func TestParseCredentialHeader(t *testing.T) {
 		{
 			inputCredentialStr: generateCredentialStr(
 				"Z7IXGOO6BZ0REAN1Q26I",
-				time.Now().UTC().Format(yyyymmdd),
+				UTCNow().Format(yyyymmdd),
 				"",
 				"ABCD",
 				"ABCD"),
@@ -159,7 +159,7 @@ func TestParseCredentialHeader(t *testing.T) {
 		{
 			inputCredentialStr: generateCredentialStr(
 				"Z7IXGOO6BZ0REAN1Q26I",
-				time.Now().UTC().Format(yyyymmdd),
+				UTCNow().Format(yyyymmdd),
 				"us-west-1",
 				"ABCD",
 				"ABCD"),
@@ -172,7 +172,7 @@ func TestParseCredentialHeader(t *testing.T) {
 		{
 			inputCredentialStr: generateCredentialStr(
 				"Z7IXGOO6BZ0REAN1Q26I",
-				time.Now().UTC().Format(yyyymmdd),
+				UTCNow().Format(yyyymmdd),
 				"us-west-1",
 				"s3",
 				"ABCD"),
@@ -313,7 +313,7 @@ func TestParseSignedHeaders(t *testing.T) {
 
 // TestParseSignV4 - Tests Parsing of v4 signature form the authorization string.
 func TestParseSignV4(t *testing.T) {
-	sampleTimeStr := time.Now().UTC().Format(yyyymmdd)
+	sampleTimeStr := UTCNow().Format(yyyymmdd)
 	testCases := []struct {
 		inputV4AuthStr    string
 		expectedAuthField signValues
@@ -572,9 +572,9 @@ func TestParsePreSignV4(t *testing.T) {
 		return strconv.Itoa(expires)
 	}
 	// used in expected preSignValues, preSignValues.Date is of type time.Time .
-	queryTime := time.Now().UTC()
+	queryTime := UTCNow()
 
-	sampleTimeStr := time.Now().UTC().Format(yyyymmdd)
+	sampleTimeStr := UTCNow().Format(yyyymmdd)
 
 	testCases := []struct {
 		inputQueryKeyVals     []string
@@ -668,7 +668,7 @@ func TestParsePreSignV4(t *testing.T) {
 					"s3",
 					"aws4_request"),
 				// valid "X-Amz-Date" query.
-				"X-Amz-Date", time.Now().UTC().Format(iso8601Format),
+				"X-Amz-Date", UTCNow().Format(iso8601Format),
 				"X-Amz-Expires", "MalformedExpiry",
 				"X-Amz-SignedHeaders", "",
 				"X-Amz-Signature", "",

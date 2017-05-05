@@ -20,6 +20,7 @@ import (
 	"encoding/base64"
 	"encoding/xml"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"path"
@@ -322,6 +323,13 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	// Write success response.
 	writeSuccessResponseXML(w, encodedSuccessResponse)
 
+	// Get host and port from Request.RemoteAddr failing which
+	// fill them with empty strings.
+	host, port, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host, port = "", ""
+	}
+
 	// Notify deleted event for objects.
 	for _, dobj := range deletedObjects {
 		eventNotify(eventData{
@@ -331,6 +339,9 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 				Name: dobj.ObjectName,
 			},
 			ReqParams: extractReqParams(r),
+			UserAgent: r.UserAgent(),
+			Host:      host,
+			Port:      port,
 		})
 	}
 }
@@ -359,10 +370,17 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 
-	// Validate if incoming location constraint is valid, reject
-	// requests which do not follow valid region requirements.
-	if s3Error := isValidLocationConstraint(r); s3Error != ErrNone {
+	// Parse incoming location constraint.
+	location, s3Error := parseLocationConstraint(r)
+	if s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
+		return
+	}
+
+	// Validate if location sent by the client is valid, reject
+	// requests which do not follow valid region requirements.
+	if !isValidLocation(location) {
+		writeErrorResponse(w, ErrInvalidRegion, r.URL)
 		return
 	}
 
@@ -520,12 +538,21 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	w.Header().Set("ETag", `"`+objInfo.MD5Sum+`"`)
 	w.Header().Set("Location", getObjectLocation(bucket, object))
 
+	// Get host and port from Request.RemoteAddr.
+	host, port, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host, port = "", ""
+	}
+
 	// Notify object created event.
 	defer eventNotify(eventData{
 		Type:      ObjectCreatedPost,
 		Bucket:    objInfo.Bucket,
 		ObjInfo:   objInfo,
 		ReqParams: extractReqParams(r),
+		UserAgent: r.UserAgent(),
+		Host:      host,
+		Port:      port,
 	})
 
 	if successRedirect != "" {

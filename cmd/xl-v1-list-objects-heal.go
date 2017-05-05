@@ -35,37 +35,28 @@ func listDirHealFactory(isLeaf isLeafFunc, disks ...StorageAPI) listDirFunc {
 			if err != nil {
 				continue
 			}
-			// Listing needs to be sorted.
-			sort.Strings(entries)
 
 			// Filter entries that have the prefix prefixEntry.
 			entries = filterMatchingPrefix(entries, prefixEntry)
 
-			// isLeaf() check has to happen here so that trailing "/" for objects can be removed.
+			// isLeaf() check has to happen here so that
+			// trailing "/" for objects can be removed.
 			for i, entry := range entries {
 				if isLeaf(bucket, pathJoin(prefixDir, entry)) {
 					entries[i] = strings.TrimSuffix(entry, slashSeparator)
 				}
 			}
-			// Sort again after removing trailing "/" for objects as the previous sort
-			// does not hold good anymore.
-			sort.Strings(entries)
-			if len(mergedEntries) == 0 {
-				// For the first successful disk.ListDir()
-				mergedEntries = entries
-				sort.Strings(mergedEntries)
-				continue
-			}
-			// find elements in entries which are not in mergedentries
+
+			// Find elements in entries which are not in mergedEntries
 			for _, entry := range entries {
 				idx := sort.SearchStrings(mergedEntries, entry)
-				// idx different from len(mergedEntries) means entry is not found
-				// in mergedEntries
-				if idx < len(mergedEntries) {
+				// if entry is already present in mergedEntries don't add.
+				if idx < len(mergedEntries) && mergedEntries[idx] == entry {
 					continue
 				}
 				newEntries = append(newEntries, entry)
 			}
+
 			if len(newEntries) > 0 {
 				// Merge the entries and sort it.
 				mergedEntries = append(mergedEntries, newEntries...)
@@ -107,10 +98,6 @@ func (xl xlObjects) listObjectsHeal(bucket, prefix, marker, delimiter string, ma
 		}
 		// For any walk error return right away.
 		if walkResult.err != nil {
-			// File not found is a valid case.
-			if walkResult.err == errFileNotFound {
-				return ListObjectsInfo{}, nil
-			}
 			return ListObjectsInfo{}, toObjectErr(walkResult.err, bucket, prefix)
 		}
 		entry := walkResult.entry
@@ -157,7 +144,7 @@ func (xl xlObjects) listObjectsHeal(bucket, prefix, marker, delimiter string, ma
 		objectLock := globalNSMutex.NewNSLock(bucket, objInfo.Name)
 		objectLock.RLock()
 		partsMetadata, errs := readAllXLMetadata(xl.storageDisks, bucket, objInfo.Name)
-		if xlShouldHeal(partsMetadata, errs) {
+		if xlShouldHeal(xl.storageDisks, partsMetadata, errs, bucket, objInfo.Name) {
 			healStat := xlHealStat(xl, partsMetadata, errs)
 			result.Objects = append(result.Objects, ObjectInfo{
 				Name:           objInfo.Name,
@@ -307,6 +294,8 @@ func (xl xlObjects) listMultipartUploadsHeal(bucket, prefix, keyMarker,
 	var walkerDoneCh chan struct{}
 	// Check if we have room left to send more uploads.
 	if maxUploads > 0 {
+		uploadsLeft := maxUploads
+
 		walkerCh, walkerDoneCh = xl.listPool.Release(listParams{
 			bucket:    minioMetaMultipartBucket,
 			recursive: recursive,
@@ -323,16 +312,14 @@ func (xl xlObjects) listMultipartUploadsHeal(bucket, prefix, keyMarker,
 				multipartPrefixPath, multipartMarkerPath,
 				recursive, listDir, isLeaf, walkerDoneCh)
 		}
-		// Collect uploads until maxUploads limit is reached.
-		for walkResult := range walkerCh {
-			// Ignore errors like errDiskNotFound
-			// and errFileNotFound.
-			if isErrIgnored(walkResult.err,
-				xlTreeWalkIgnoredErrs...) {
-				continue
+		// Collect uploads until leftUploads limit is reached.
+		for {
+			walkResult, ok := <-walkerCh
+			if !ok {
+				truncated = false
+				break
 			}
-			// For any error during tree walk we should
-			// return right away.
+			// For any error during tree walk, we should return right away.
 			if walkResult.err != nil {
 				return ListMultipartsInfo{}, walkResult.err
 			}
@@ -344,8 +331,8 @@ func (xl xlObjects) listMultipartUploadsHeal(bucket, prefix, keyMarker,
 				uploads = append(uploads, uploadMetadata{
 					Object: entry,
 				})
-				maxUploads--
-				if maxUploads == 0 {
+				uploadsLeft--
+				if uploadsLeft == 0 {
 					break
 				}
 				continue
@@ -357,20 +344,21 @@ func (xl xlObjects) listMultipartUploadsHeal(bucket, prefix, keyMarker,
 			var end bool
 			uploadIDMarker = ""
 			newUploads, end, err = fetchMultipartUploadIDs(bucket, entry, uploadIDMarker,
-				maxUploads, xl.getLoadBalancedDisks())
+				uploadsLeft, xl.getLoadBalancedDisks())
 			if err != nil {
 				return ListMultipartsInfo{}, err
 			}
 			uploads = append(uploads, newUploads...)
-			maxUploads -= len(newUploads)
+			uploadsLeft -= len(newUploads)
 			if end && walkResult.end {
 				truncated = false
 				break
 			}
-			if maxUploads == 0 {
+			if uploadsLeft == 0 {
 				break
 			}
 		}
+
 	}
 
 	// For all received uploads fill in the multiparts result.
@@ -389,7 +377,9 @@ func (xl xlObjects) listMultipartUploadsHeal(bucket, prefix, keyMarker,
 			uploadIDPath := filepath.Join(bucket, upload.Object, upload.UploadID)
 			partsMetadata, errs := readAllXLMetadata(xl.storageDisks,
 				minioMetaMultipartBucket, uploadIDPath)
-			if xlShouldHeal(partsMetadata, errs) {
+			if xlShouldHeal(xl.storageDisks, partsMetadata, errs,
+				minioMetaMultipartBucket, uploadIDPath) {
+
 				healUploadInfo := xlHealStat(xl, partsMetadata, errs)
 				upload.HealUploadInfo = &healUploadInfo
 				result.Uploads = append(result.Uploads, upload)

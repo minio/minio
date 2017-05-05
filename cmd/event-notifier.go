@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,9 +25,12 @@ import (
 	"net/url"
 	"path"
 	"sync"
-	"time"
 
 	"github.com/Sirupsen/logrus"
+)
+
+const (
+	minioEventSource = "minio:s3"
 )
 
 type externalNotifier struct {
@@ -83,11 +86,29 @@ type eventData struct {
 	Bucket    string
 	ObjInfo   ObjectInfo
 	ReqParams map[string]string
+	Host      string
+	Port      string
+	UserAgent string
 }
 
 // New notification event constructs a new notification event message from
 // input request metadata which completed successfully.
 func newNotificationEvent(event eventData) NotificationEvent {
+	getResponseOriginEndpointKey := func() string {
+		host := globalMinioHost
+		if host == "" {
+			// FIXME: Send FQDN or hostname of this machine than sending IP address.
+			host = localIP4.ToSlice()[0]
+		}
+
+		scheme := httpScheme
+		if globalIsSSL {
+			scheme = httpsScheme
+		}
+
+		return fmt.Sprintf("%s://%s:%s", scheme, host, globalMinioPort)
+	}
+
 	// Fetch the region.
 	region := serverConfig.GetRegion()
 
@@ -95,15 +116,7 @@ func newNotificationEvent(event eventData) NotificationEvent {
 	creds := serverConfig.GetCredential()
 
 	// Time when Minio finished processing the request.
-	eventTime := time.Now().UTC()
-
-	// API endpoint is captured here to be returned back
-	// to the client for it to differentiate from which
-	// server the request came from.
-	var apiEndpoint string
-	if len(globalAPIEndpoints) >= 1 {
-		apiEndpoint = globalAPIEndpoints[0]
-	}
+	eventTime := UTCNow()
 
 	// Fetch a hexadecimal representation of event time in nano seconds.
 	uniqueID := mustGetRequestID(eventTime)
@@ -115,7 +128,7 @@ func newNotificationEvent(event eventData) NotificationEvent {
 	// http://docs.aws.amazon.com/AmazonS3/latest/dev/notification-content-structure.html
 	nEvent := NotificationEvent{
 		EventVersion:      eventVersion,
-		EventSource:       eventSource,
+		EventSource:       minioEventSource,
 		AwsRegion:         region,
 		EventTime:         eventTime.Format(timeFormatAMZ),
 		EventName:         event.Type.String(),
@@ -125,7 +138,7 @@ func newNotificationEvent(event eventData) NotificationEvent {
 			responseRequestIDKey: uniqueID,
 			// Following is a custom response element to indicate
 			// event origin server endpoint.
-			responseOriginEndpointKey: apiEndpoint,
+			responseOriginEndpointKey: getResponseOriginEndpointKey(),
 		},
 		S3: eventMeta{
 			SchemaVersion:   eventSchemaVersion,
@@ -136,6 +149,11 @@ func newNotificationEvent(event eventData) NotificationEvent {
 				ARN:           bucketARNPrefix + event.Bucket,
 			},
 		},
+		Source: sourceInfo{
+			Host:      event.Host,
+			Port:      event.Port,
+			UserAgent: event.UserAgent,
+		},
 	}
 
 	// Escape the object name. For example "red flower.jpg" becomes "red+flower.jpg".
@@ -145,6 +163,7 @@ func newNotificationEvent(event eventData) NotificationEvent {
 	if event.Type == ObjectRemovedDelete {
 		nEvent.S3.Object = objectMeta{
 			Key:       escapedObj,
+			VersionID: "1",
 			Sequencer: uniqueID,
 		}
 		return nEvent
@@ -152,10 +171,13 @@ func newNotificationEvent(event eventData) NotificationEvent {
 
 	// For all other events we should set ETag and Size.
 	nEvent.S3.Object = objectMeta{
-		Key:       escapedObj,
-		ETag:      event.ObjInfo.MD5Sum,
-		Size:      event.ObjInfo.Size,
-		Sequencer: uniqueID,
+		Key:         escapedObj,
+		ETag:        event.ObjInfo.MD5Sum,
+		Size:        event.ObjInfo.Size,
+		ContentType: event.ObjInfo.ContentType,
+		UserDefined: event.ObjInfo.UserDefined,
+		VersionID:   "1",
+		Sequencer:   uniqueID,
 	}
 
 	// Success.
@@ -630,7 +652,6 @@ func loadAllQueueTargets() (map[string]*logrus.Logger, error) {
 		if !webhookN.Enable {
 			continue
 		}
-
 		if _, err := addQueueTarget(queueTargets, accountID, queueTypeWebhook, newWebhookNotify); err != nil {
 			return nil, err
 		}
@@ -662,6 +683,25 @@ func loadAllQueueTargets() (map[string]*logrus.Logger, error) {
 		}
 
 		if queueARN, err := addQueueTarget(queueTargets, accountID, queueTypePostgreSQL, newPostgreSQLNotify); err != nil {
+			if _, ok := err.(net.Error); ok {
+				err = &net.OpError{
+					Op:  "Connecting to " + queueARN,
+					Net: "tcp",
+					Err: err,
+				}
+			}
+
+			return nil, err
+		}
+	}
+
+	// Load MySQL targets, initialize their respective loggers.
+	for accountID, msqlN := range serverConfig.Notify.GetMySQL() {
+		if !msqlN.Enable {
+			continue
+		}
+
+		if queueARN, err := addQueueTarget(queueTargets, accountID, queueTypeMySQL, newMySQLNotify); err != nil {
 			if _, ok := err.(net.Error); ok {
 				err = &net.OpError{
 					Op:  "Connecting to " + queueARN,

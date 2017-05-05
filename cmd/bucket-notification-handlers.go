@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -285,7 +285,7 @@ func (api objectAPIHandlers) ListenBucketNotificationHandler(w http.ResponseWrit
 		return
 	}
 
-	accountID := fmt.Sprintf("%d", time.Now().UTC().UnixNano())
+	accountID := fmt.Sprintf("%d", UTCNow().UnixNano())
 	accountARN := fmt.Sprintf(
 		"%s:%s:%s:%s-%s",
 		minioTopic,

@@ -21,7 +21,6 @@ import (
 	"io"
 	"net"
 	"net/rpc"
-	"net/url"
 	"path"
 	"strings"
 
@@ -96,46 +95,36 @@ func toStorageErr(err error) error {
 }
 
 // Initialize new storage rpc client.
-func newStorageRPC(ep *url.URL) (StorageAPI, error) {
-	if ep == nil {
-		return nil, errInvalidArgument
-	}
-
+func newStorageRPC(endpoint Endpoint) StorageAPI {
 	// Dial minio rpc storage http path.
-	rpcPath := path.Join(minioReservedBucketPath, storageRPCPath, getPath(ep))
-	rpcAddr := ep.Host
-
+	rpcPath := path.Join(minioReservedBucketPath, storageRPCPath, endpoint.Path)
 	serverCred := serverConfig.GetCredential()
-	accessKey := serverCred.AccessKey
-	secretKey := serverCred.SecretKey
-	if ep.User != nil {
-		accessKey = ep.User.Username()
-		if password, ok := ep.User.Password(); ok {
-			secretKey = password
-		}
-	}
 
-	storageAPI := &networkStorage{
+	return &networkStorage{
 		rpcClient: newAuthRPCClient(authConfig{
-			accessKey:        accessKey,
-			secretKey:        secretKey,
-			serverAddr:       rpcAddr,
+			accessKey:        serverCred.AccessKey,
+			secretKey:        serverCred.SecretKey,
+			serverAddr:       endpoint.Host,
 			serviceEndpoint:  rpcPath,
 			secureConn:       globalIsSSL,
 			serviceName:      "Storage",
 			disableReconnect: true,
 		}),
 	}
-
-	// Returns successfully here.
-	return storageAPI, nil
 }
 
-// Stringer interface compatible representation of network device.
+// Stringer provides a canonicalized representation of network device.
 func (n *networkStorage) String() string {
 	// Remove the storage RPC path prefix, internal paths are meaningless.
-	serviceEndpoint := strings.TrimPrefix(n.rpcClient.ServiceEndpoint(), storageRPCPath)
-	return n.rpcClient.ServerAddr() + ":" + serviceEndpoint
+	serviceEndpoint := strings.TrimPrefix(n.rpcClient.ServiceEndpoint(),
+		path.Join(minioReservedBucketPath, storageRPCPath))
+	// Check for the transport layer being used.
+	scheme := "http"
+	if n.rpcClient.config.secureConn {
+		scheme = "https"
+	}
+	// Finally construct the disk endpoint in http://<server>/<path> form.
+	return scheme + "://" + n.rpcClient.ServerAddr() + path.Join("/", serviceEndpoint)
 }
 
 // Init - attempts a login to reconnect.

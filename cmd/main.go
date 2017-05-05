@@ -23,6 +23,7 @@ import (
 	"github.com/minio/cli"
 	"github.com/minio/mc/pkg/console"
 	"github.com/minio/minio/pkg/trie"
+	"github.com/minio/minio/pkg/words"
 )
 
 // global flags for minio.
@@ -86,7 +87,7 @@ func newApp() *cli.App {
 			}
 			// 2 is arbitrary and represents the max
 			// allowed number of typed errors
-			if DamerauLevenshteinDistance(command, value.(string)) < 2 {
+			if words.DamerauLevenshteinDistance(command, value.(string)) < 2 {
 				closestCommands = append(closestCommands, value.(string))
 			}
 		}

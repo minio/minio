@@ -268,6 +268,7 @@ func testListenBucketNotificationNilHandler(obj ObjectLayer, instanceType, bucke
 			[]string{"*.jpg"}, []string{
 				"s3:ObjectCreated:*",
 				"s3:ObjectRemoved:*",
+				"s3:ObjectAccessed:*",
 			}), 0, nil, credentials.AccessKey, credentials.SecretKey)
 	if tErr != nil {
 		t.Fatalf("%s: Failed to create HTTP testRequest for ListenBucketNotification: <ERROR> %v", instanceType, tErr)

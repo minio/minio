@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // Signature and API related constants.
@@ -86,8 +85,12 @@ func doesPresignV2SignatureMatch(r *http.Request) APIErrorCode {
 	cred := serverConfig.GetCredential()
 
 	// r.RequestURI will have raw encoded URI as sent by the client.
-	splits := splitStr(r.RequestURI, "?", 2)
-	encodedResource, encodedQuery := splits[0], splits[1]
+	tokens := strings.SplitN(r.RequestURI, "?", 2)
+	encodedResource := tokens[0]
+	encodedQuery := ""
+	if len(tokens) == 2 {
+		encodedQuery = tokens[1]
+	}
 
 	queries := strings.Split(encodedQuery, "&")
 	var filteredQueries []string
@@ -136,7 +139,7 @@ func doesPresignV2SignatureMatch(r *http.Request) APIErrorCode {
 	}
 
 	// Check if the presigned URL has expired.
-	if expiresInt < time.Now().UTC().Unix() {
+	if expiresInt < UTCNow().Unix() {
 		return ErrExpiredPresignRequest
 	}
 
@@ -207,8 +210,12 @@ func doesSignV2Match(r *http.Request) APIErrorCode {
 	}
 
 	// r.RequestURI will have raw encoded URI as sent by the client.
-	splits := splitStr(r.RequestURI, "?", 2)
-	encodedResource, encodedQuery := splits[0], splits[1]
+	tokens := strings.SplitN(r.RequestURI, "?", 2)
+	encodedResource := tokens[0]
+	encodedQuery := ""
+	if len(tokens) == 2 {
+		encodedQuery = tokens[1]
+	}
 
 	expectedAuth := signatureV2(r.Method, encodedResource, encodedQuery, r.Header)
 	if v2Auth != expectedAuth {
@@ -283,7 +290,13 @@ func canonicalizedResourceV2(encodedPath string, encodedQuery string) string {
 			canonicalQueries = append(canonicalQueries, key)
 			continue
 		}
-		canonicalQueries = append(canonicalQueries, key+"="+val)
+		// Resources values should be unescaped
+		unescapedVal, err := url.QueryUnescape(val)
+		if err != nil {
+			errorIf(err, "Unable to unescape query value (query = `%s`, value = `%s`)", key, val)
+			continue
+		}
+		canonicalQueries = append(canonicalQueries, key+"="+unescapedVal)
 	}
 	if len(canonicalQueries) == 0 {
 		return encodedPath

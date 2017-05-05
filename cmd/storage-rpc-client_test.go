@@ -23,10 +23,86 @@ import (
 	"io"
 	"net"
 	"net/rpc"
-	"net/url"
 	"runtime"
 	"testing"
 )
+
+// Tests the construction of canonical string by the
+// Stringer method for StorageAPI.
+func TestStorageCanonicalStrings(t *testing.T) {
+	testCases := []struct {
+		storageAPI    StorageAPI
+		canonicalPath string
+	}{
+		// Canonicalized name as unix path.
+		{
+			storageAPI: &posix{
+				diskPath: "/tmp",
+			},
+			canonicalPath: "/tmp",
+		},
+		// Canonicalized name as windows path.
+		{
+			storageAPI: &posix{
+				diskPath: "C:/tmp",
+			},
+			canonicalPath: "C:/tmp",
+		},
+		// Canonicalized name as unix path.
+		{
+			storageAPI: &networkStorage{
+				rpcClient: newAuthRPCClient(authConfig{
+					accessKey:        "",
+					secretKey:        "",
+					serverAddr:       "localhost:9000",
+					serviceEndpoint:  "/tmp",
+					secureConn:       false,
+					serviceName:      "Storage",
+					disableReconnect: true,
+				}),
+			},
+			canonicalPath: "http://localhost:9000/tmp",
+		},
+		// Canonicalized name as non TLS.
+		{
+			storageAPI: &networkStorage{
+				rpcClient: newAuthRPCClient(authConfig{
+					accessKey:        "",
+					secretKey:        "",
+					serverAddr:       "localhost:9000",
+					serviceEndpoint:  "C:/tmp",
+					secureConn:       false,
+					serviceName:      "Storage",
+					disableReconnect: true,
+				}),
+			},
+			canonicalPath: "http://localhost:9000/C:/tmp",
+		},
+		// Canonicalized name as TLS.
+		{
+			storageAPI: &networkStorage{
+				rpcClient: newAuthRPCClient(authConfig{
+					accessKey:        "",
+					secretKey:        "",
+					serverAddr:       "localhost:9000",
+					serviceEndpoint:  "C:/tmp",
+					secureConn:       true,
+					serviceName:      "Storage",
+					disableReconnect: true,
+				}),
+			},
+			canonicalPath: "https://localhost:9000/C:/tmp",
+		},
+	}
+
+	// Validate all the test cases.
+	for i, testCase := range testCases {
+		p := testCase.storageAPI
+		if p.String() != testCase.canonicalPath {
+			t.Errorf("Test %d: Expected %s, got %s", i+1, testCase.canonicalPath, p.String())
+		}
+	}
+}
 
 // Tests storage error transformation.
 func TestStorageErr(t *testing.T) {
@@ -146,24 +222,14 @@ func (s *TestRPCStorageSuite) SetUpSuite(c *testing.T) {
 	listenAddress := s.testServer.Server.Listener.Addr().String()
 
 	for _, ep := range s.testServer.Disks {
-		ep.Host = listenAddress
-		storageDisk, err := newStorageRPC(ep)
-		if err != nil {
-			c.Fatal("Unable to initialize RPC client", err)
+		// Eventhough s.testServer.Disks is EndpointList, we would need a URLEndpointType here.
+		endpoint := ep
+		if endpoint.Type() == PathEndpointType {
+			endpoint.Scheme = "http"
 		}
+		endpoint.Host = listenAddress
+		storageDisk := newStorageRPC(endpoint)
 		s.remoteDisks = append(s.remoteDisks, storageDisk)
-	}
-	_, err := newStorageRPC(nil)
-	if err != errInvalidArgument {
-		c.Fatalf("Unexpected error %s, expecting %s", err, errInvalidArgument)
-	}
-	u, err := url.Parse("http://abcd:abcd123@localhost/mnt/disk")
-	if err != nil {
-		c.Fatal("Unexpected error", err)
-	}
-	_, err = newStorageRPC(u)
-	if err != nil {
-		c.Fatal("Unexpected error", err)
 	}
 }
 

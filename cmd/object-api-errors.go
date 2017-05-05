@@ -144,6 +144,13 @@ func (e BucketNotFound) Error() string {
 	return "Bucket not found: " + e.Bucket
 }
 
+// BucketAlreadyOwnedByYou already owned by you.
+type BucketAlreadyOwnedByYou GenericError
+
+func (e BucketAlreadyOwnedByYou) Error() string {
+	return "Bucket already owned by you: " + e.Bucket
+}
+
 // BucketNotEmpty bucket is not empty.
 type BucketNotEmpty GenericError
 
@@ -321,11 +328,25 @@ func (e NotImplemented) Error() string {
 	return "Not Implemented"
 }
 
+// NotSupported If a feature is not supported
+type NotSupported struct{}
+
+func (e NotSupported) Error() string {
+	return "Not Supported"
+}
+
 // PolicyNesting - policy nesting conflict.
 type PolicyNesting struct{}
 
 func (e PolicyNesting) Error() string {
 	return "New bucket policy conflicts with an existing policy. Please try again with new prefix."
+}
+
+// PolicyNotFound - policy not found
+type PolicyNotFound GenericError
+
+func (e PolicyNotFound) Error() string {
+	return "Policy not found"
 }
 
 // Check if error type is IncompleteBody.
