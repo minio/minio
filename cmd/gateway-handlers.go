@@ -180,6 +180,8 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 	bucket = vars["bucket"]
 	object = vars["object"]
 
+	// TODO: we should validate the object name here
+
 	// Get Content-Md5 sent by client and verify if valid
 	md5Bytes, err := checkValidMD5(r.Header.Get("Content-Md5"))
 	if err != nil {
