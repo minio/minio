@@ -27,77 +27,125 @@ import (
 // DO NOT EDIT following message template, please open a github issue to discuss instead.
 var configMigrateMSGTemplate = "Configuration file %s migrated from version '%s' to '%s' successfully.\n"
 
+// Migrates all config versions from "1" to "18".
 func migrateConfig() error {
-	// Purge all configs with version '1'.
+	// Purge all configs with version '1',
+	// this is a special case since version '1' used
+	// to be a filename 'fsUsers.json' not 'config.json'.
 	if err := purgeV1(); err != nil {
 		return err
 	}
-	// Migrate version '2' to '3'.
-	if err := migrateV2ToV3(); err != nil {
-		return err
-	}
-	// Migrate version '3' to '4'.
-	if err := migrateV3ToV4(); err != nil {
-		return err
-	}
-	// Migrate version '4' to '5'.
-	if err := migrateV4ToV5(); err != nil {
-		return err
-	}
-	// Migrate version '5' to '6.
-	if err := migrateV5ToV6(); err != nil {
-		return err
-	}
-	// Migrate version '6' to '7'.
-	if err := migrateV6ToV7(); err != nil {
-		return err
-	}
-	// Migrate version '7' to '8'.
-	if err := migrateV7ToV8(); err != nil {
-		return err
-	}
-	// Migrate version '8' to '9'.
-	if err := migrateV8ToV9(); err != nil {
-		return err
-	}
-	// Migrate version '9' to '10'.
-	if err := migrateV9ToV10(); err != nil {
-		return err
-	}
-	// Migrate version '10' to '11'.
-	if err := migrateV10ToV11(); err != nil {
-		return err
-	}
-	// Migrate version '11' to '12'.
-	if err := migrateV11ToV12(); err != nil {
-		return err
-	}
-	// Migrate version '12' to '13'.
-	if err := migrateV12ToV13(); err != nil {
-		return err
-	}
-	// Migrate version '13' to '14'.
-	if err := migrateV13ToV14(); err != nil {
-		return err
-	}
-	// Migrate version '14' to '15'.
-	if err := migrateV14ToV15(); err != nil {
-		return err
-	}
-	// Migrate version '15' to '16'.
-	if err := migrateV15ToV16(); err != nil {
-		return err
-	}
-	// Migrate version '16' to '17'.
-	if err := migrateV16ToV17(); err != nil {
-		return err
-	}
-	// Migrate version '17' to '18'.
-	if err := migrateV17ToV18(); err != nil {
+
+	// Load only config version information.
+	version, err := quick.GetVersion(getConfigFile())
+	if err != nil {
 		return err
 	}
 
-	return nil
+	// Conditional to migrate only relevant config versions.
+	// Upon success migration continues to the next version in sequence.
+	switch version {
+	case "2":
+		// Migrate version '2' to '3'.
+		if err = migrateV2ToV3(); err != nil {
+			return err
+		}
+		fallthrough
+	case "3":
+		// Migrate version '3' to '4'.
+		if err = migrateV3ToV4(); err != nil {
+			return err
+		}
+		fallthrough
+	case "4":
+		// Migrate version '4' to '5'.
+		if err = migrateV4ToV5(); err != nil {
+			return err
+		}
+		fallthrough
+	case "5":
+		// Migrate version '5' to '6.
+		if err = migrateV5ToV6(); err != nil {
+			return err
+		}
+		fallthrough
+	case "6":
+		// Migrate version '6' to '7'.
+		if err = migrateV6ToV7(); err != nil {
+			return err
+		}
+		fallthrough
+	case "7":
+		// Migrate version '7' to '8'.
+		if err = migrateV7ToV8(); err != nil {
+			return err
+		}
+		fallthrough
+	case "8":
+		// Migrate version '8' to '9'.
+		if err = migrateV8ToV9(); err != nil {
+			return err
+		}
+		fallthrough
+	case "9":
+		// Migrate version '9' to '10'.
+		if err = migrateV9ToV10(); err != nil {
+			return err
+		}
+		fallthrough
+	case "10":
+		// Migrate version '10' to '11'.
+		if err = migrateV10ToV11(); err != nil {
+			return err
+		}
+		fallthrough
+	case "11":
+		// Migrate version '11' to '12'.
+		if err = migrateV11ToV12(); err != nil {
+			return err
+		}
+		fallthrough
+	case "12":
+		// Migrate version '12' to '13'.
+		if err = migrateV12ToV13(); err != nil {
+			return err
+		}
+		fallthrough
+	case "13":
+		// Migrate version '13' to '14'.
+		if err = migrateV13ToV14(); err != nil {
+			return err
+		}
+		fallthrough
+	case "14":
+		// Migrate version '14' to '15'.
+		if err = migrateV14ToV15(); err != nil {
+			return err
+		}
+		fallthrough
+	case "15":
+		// Migrate version '15' to '16'.
+		if err = migrateV15ToV16(); err != nil {
+			return err
+		}
+		fallthrough
+	case "16":
+		// Migrate version '16' to '17'.
+		if err = migrateV16ToV17(); err != nil {
+			return err
+		}
+		fallthrough
+	case "17":
+		// Migrate version '17' to '18'.
+		if err = migrateV17ToV18(); err != nil {
+			return err
+		}
+		fallthrough
+	case v18:
+		// No migration needed. this always points to current version.
+		err = nil
+	}
+	return err
 }
 
 // Version '1' is not supported anymore and deprecated, safe to delete.

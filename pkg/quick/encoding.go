@@ -21,6 +21,7 @@ package quick
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"path/filepath"
 	"runtime"
@@ -55,12 +56,15 @@ func (j jsonEncoding) Unmarshal(b []byte, v interface{}) error {
 	err := json.Unmarshal(b, v)
 	if err != nil {
 		// Try to return a sophisticated json error message if possible
-		switch err := err.(type) {
+		switch jerr := err.(type) {
 		case *json.SyntaxError:
-			return FormatJSONSyntaxError(bytes.NewReader(b), err)
-		default:
-			return err
+			return fmt.Errorf("Unable to parse JSON schema due to a syntax error at '%s'",
+				FormatJSONSyntaxError(bytes.NewReader(b), jerr.Offset))
+		case *json.UnmarshalTypeError:
+			return fmt.Errorf("Unable to parse JSON, type '%v' cannot be converted into the Go '%v' type",
+				jerr.Value, jerr.Type)
 		}
+		return err
 	}
 	return nil
 }
