@@ -141,7 +141,6 @@ func gcsToObjectError(err error, params ...string) error {
 // gcsGateway - Implements gateway for Minio and GCS compatible object storage servers.
 type gcsGateway struct {
 	client     *storage.Client
-	Client     *minio.Core
 	anonClient *minio.Core
 	projectID  string
 	ctx        context.Context
@@ -159,12 +158,16 @@ func newGCSGateway(endpoint string, projectID, secretKey string, secure bool) (G
 		return nil, err
 	}
 
+	anonClient, err := minio.NewCore("storage.googleapis.com", "", "", secure)
+	if err != nil {
+		return nil, err
+	}
+
 	return &gcsGateway{
 		client:     client,
 		projectID:  "minio-166400",
 		ctx:        ctx,
-		Client:     nil,
-		anonClient: nil,
+		anonClient: anonClient,
 	}, nil
 }
 
