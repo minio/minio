@@ -618,31 +618,6 @@ func (a *azureObjects) CompleteMultipartUpload(bucket, object, uploadID string, 
 	return a.GetObjectInfo(bucket, object)
 }
 
-func anonErrToObjectErr(statusCode int, params ...string) error {
-	bucket := ""
-	object := ""
-	if len(params) >= 1 {
-		bucket = params[0]
-	}
-	if len(params) == 2 {
-		object = params[1]
-	}
-
-	switch statusCode {
-	case http.StatusNotFound:
-		if object != "" {
-			return ObjectNotFound{bucket, object}
-		}
-		return BucketNotFound{Bucket: bucket}
-	case http.StatusBadRequest:
-		if object != "" {
-			return ObjectNameInvalid{bucket, object}
-		}
-		return BucketNameInvalid{Bucket: bucket}
-	}
-	return errUnexpected
-}
-
 // Copied from github.com/Azure/azure-sdk-for-go/storage/blob.go
 func azureListBlobsGetParameters(p storage.ListBlobsParameters) url.Values {
 	out := url.Values{}
