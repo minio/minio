@@ -74,9 +74,7 @@ func init() {
 }
 
 // concurreny level for certain parallel tests.
-const (
-	testConcurrencyLevel = 10
-)
+const testConcurrencyLevel = 10
 
 ///
 /// Excerpts from @lsegal - https://github.com/aws/aws-sdk-js/issues/659#issuecomment-120477258
@@ -145,21 +143,6 @@ func calculateStreamContentLength(dataLen, chunkSize int64) int64 {
 	}
 	streamLen += calculateSignedChunkLength(0)
 	return streamLen
-}
-
-// Ask the kernel for a free open port.
-func getFreePort() string {
-	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
-	if err != nil {
-		panic(err)
-	}
-
-	l, err := net.ListenTCP("tcp", addr)
-	if err != nil {
-		panic(err)
-	}
-	defer l.Close()
-	return fmt.Sprintf("%d", l.Addr().(*net.TCPAddr).Port)
 }
 
 func prepareFS() (ObjectLayer, string, error) {

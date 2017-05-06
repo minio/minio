@@ -872,11 +872,6 @@
 			"revisionTime": "2016-08-30T13:25:53Z"
 		},
 		{
-			"path": "gopkg.in/check.v1",
-			"revision": "11d3bc7aa68e238947792f30573146a3231fc0f1",
-			"revisionTime": "2015-07-29T10:04:31+02:00"
-		},
-		{
 			"checksumSHA1": "lLdKOn9RPtFoTtPUNq5+sIInAiE=",
 			"path": "gopkg.in/olivere/elastic.v3/backoff",
 			"revision": "f7ae701daf3abe5dfb99f57b3f47738ec93c9c26",
