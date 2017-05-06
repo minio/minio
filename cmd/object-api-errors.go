@@ -250,6 +250,14 @@ func (e ObjectNameInvalid) Error() string {
 	return "Object name invalid: " + e.Bucket + "#" + e.Object
 }
 
+// AllAccessDisabled All access to this object has been disabled
+type AllAccessDisabled GenericError
+
+// Return string an error formatted as the given text.
+func (e AllAccessDisabled) Error() string {
+	return "All access to this object has been disabled"
+}
+
 // IncompleteBody You did not provide the number of bytes specified by the Content-Length HTTP header.
 type IncompleteBody GenericError
 
