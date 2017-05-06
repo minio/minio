@@ -663,6 +663,8 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrStorageFull
 	case BadDigest:
 		apiErr = ErrBadDigest
+	case AllAccessDisabled:
+		apiErr = ErrAllAccessDisabled
 	case IncompleteBody:
 		apiErr = ErrIncompleteBody
 	case ObjectExistsAsDirectory:
