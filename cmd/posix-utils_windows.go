@@ -1,7 +1,7 @@
 // +build windows
 
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,14 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+
+	os2 "github.com/minio/minio/pkg/x/os"
 )
+
+// Wrapper around safe stat implementation to avoid windows bugs.
+func osStat(name string) (os.FileInfo, error) {
+	return os2.Stat(name)
+}
 
 // isValidVolname verifies a volname name in accordance with object
 // layer requirements.
@@ -44,7 +51,7 @@ func isValidVolname(volname string) bool {
 func mkdirAll(path string, perm os.FileMode) error {
 	path = preparePath(path)
 	// Fast path: if we can tell whether path is a directory or file, stop with success or error.
-	dir, err := os.Stat(path)
+	dir, err := osStat(path)
 	if err == nil {
 		if dir.IsDir() {
 			return nil

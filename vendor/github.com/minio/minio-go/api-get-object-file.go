@@ -78,8 +78,15 @@ func (c Client) FGetObject(bucketName, objectName, filePath string) error {
 		return err
 	}
 
+	// Initialize get object request headers to set the
+	// appropriate range offsets to read from.
+	reqHeaders := NewGetReqHeaders()
+	if st.Size() > 0 {
+		reqHeaders.SetRange(st.Size(), 0)
+	}
+
 	// Seek to current position for incoming reader.
-	objectReader, objectStat, err := c.getObject(bucketName, objectName, st.Size(), 0)
+	objectReader, objectStat, err := c.getObject(bucketName, objectName, reqHeaders)
 	if err != nil {
 		return err
 	}

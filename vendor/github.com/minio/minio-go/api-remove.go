@@ -35,7 +35,8 @@ func (c Client) RemoveBucket(bucketName string) error {
 	}
 	// Execute DELETE on bucket.
 	resp, err := c.executeMethod("DELETE", requestMetadata{
-		bucketName: bucketName,
+		bucketName:         bucketName,
+		contentSHA256Bytes: emptySHA256,
 	})
 	defer closeResponse(resp)
 	if err != nil {
@@ -64,8 +65,9 @@ func (c Client) RemoveObject(bucketName, objectName string) error {
 	}
 	// Execute DELETE on objectName.
 	resp, err := c.executeMethod("DELETE", requestMetadata{
-		bucketName: bucketName,
-		objectName: objectName,
+		bucketName:         bucketName,
+		objectName:         objectName,
+		contentSHA256Bytes: emptySHA256,
 	})
 	defer closeResponse(resp)
 	if err != nil {
@@ -248,9 +250,10 @@ func (c Client) abortMultipartUpload(bucketName, objectName, uploadID string) er
 
 	// Execute DELETE on multipart upload.
 	resp, err := c.executeMethod("DELETE", requestMetadata{
-		bucketName:  bucketName,
-		objectName:  objectName,
-		queryValues: urlValues,
+		bucketName:         bucketName,
+		objectName:         objectName,
+		queryValues:        urlValues,
+		contentSHA256Bytes: emptySHA256,
 	})
 	defer closeResponse(resp)
 	if err != nil {

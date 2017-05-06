@@ -13,7 +13,7 @@
 
 |Item|Specification|
 |:---|:---|
-|Web browser upload size limit| 5GB|
+|Web browser upload size limit| 5GiB|
 
 ### Limits of S3 API
 

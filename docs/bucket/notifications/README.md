@@ -535,7 +535,7 @@ mc cp myphoto.jpg myminio/images
 Open PostgreSQL terminal to list the rows in the `bucketevents` table.
 
 ```
-$ psql -h 127.0.0.1 -u postgres -p minio_events
+$ psql -h 127.0.0.1 -U postgres -d minio_events
 minio_events=# select * from bucketevents;
 
 key                 |                      value
@@ -547,7 +547,7 @@ key                 |                      value
 <a name="MySQL"></a>
 ## Publish Minio events via MySQL
 
-Install MySQL from [here](https://dev.mysql.com/downloads/mysql/). For illustrative purposes, we have set the root password as `password` and created a database called `miniodb` to store the events.
+Install MySQL from [here](https://dev.mysql.com/downloads/mysql/). To publish Minio events, you'll need `JSON` support in MySQL, available on MySQL `5.7.8` and above. We tested this setup on MySQL `5.7.17`. For illustrative purposes, we have set the root password as `password` and created a database called `miniodb` to store the events.
 
 This notification target supports two formats: _namespace_ and _access_.
 

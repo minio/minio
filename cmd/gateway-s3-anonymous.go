@@ -16,18 +16,56 @@
 
 package cmd
 
-import "io"
+import (
+	"encoding/hex"
+	"io"
+
+	minio "github.com/minio/minio-go"
+)
+
+// AnonPutObject creates a new object anonymously with the incoming data,
+func (l *s3Gateway) AnonPutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (ObjectInfo, error) {
+	var sha256sumBytes []byte
+
+	var err error
+	if sha256sum != "" {
+		sha256sumBytes, err = hex.DecodeString(sha256sum)
+		if err != nil {
+			return ObjectInfo{}, s3ToObjectError(traceError(err), bucket, object)
+		}
+	}
+
+	var md5sumBytes []byte
+	md5sum := metadata["md5Sum"]
+	if md5sum != "" {
+		md5sumBytes, err = hex.DecodeString(md5sum)
+		if err != nil {
+			return ObjectInfo{}, s3ToObjectError(traceError(err), bucket, object)
+		}
+		delete(metadata, "md5Sum")
+	}
+
+	oi, err := l.anonClient.PutObject(bucket, object, size, data, md5sumBytes, sha256sumBytes, toMinioClientMetadata(metadata))
+	if err != nil {
+		return ObjectInfo{}, s3ToObjectError(traceError(err), bucket, object)
+	}
+
+	return fromMinioClientObjectInfo(bucket, oi), nil
+}
 
 // AnonGetObject - Get object anonymously
 func (l *s3Gateway) AnonGetObject(bucket string, key string, startOffset int64, length int64, writer io.Writer) error {
-	object, err := l.anonClient.GetObject(bucket, key)
+	r := minio.NewGetReqHeaders()
+	if err := r.SetRange(startOffset, startOffset+length-1); err != nil {
+		return s3ToObjectError(traceError(err), bucket, key)
+	}
+	object, _, err := l.anonClient.GetObject(bucket, key, r)
 	if err != nil {
 		return s3ToObjectError(traceError(err), bucket, key)
 	}
 
 	defer object.Close()
 
-	object.Seek(startOffset, io.SeekStart)
 	if _, err := io.CopyN(writer, object, length); err != nil {
 		return s3ToObjectError(traceError(err), bucket, key)
 	}
@@ -37,7 +75,8 @@ func (l *s3Gateway) AnonGetObject(bucket string, key string, startOffset int64, 
 
 // AnonGetObjectInfo - Get object info anonymously
 func (l *s3Gateway) AnonGetObjectInfo(bucket string, object string) (ObjectInfo, error) {
-	oi, err := l.anonClient.StatObject(bucket, object)
+	r := minio.NewHeadReqHeaders()
+	oi, err := l.anonClient.StatObject(bucket, object, r)
 	if err != nil {
 		return ObjectInfo{}, s3ToObjectError(traceError(err), bucket, object)
 	}

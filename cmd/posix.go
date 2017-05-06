@@ -116,7 +116,7 @@ func newPosix(path string) (StorageAPI, error) {
 			},
 		},
 	}
-	fi, err := os.Stat(preparePath(diskPath))
+	fi, err := osStat(preparePath(diskPath))
 	if err == nil {
 		if !fi.IsDir() {
 			return nil, syscall.ENOTDIR
@@ -230,7 +230,7 @@ func (s *posix) getVolDir(volume string) (string, error) {
 // checkDiskFound - validates if disk is available,
 // returns errDiskNotFound if not found.
 func (s *posix) checkDiskFound() (err error) {
-	_, err = os.Stat(preparePath(s.diskPath))
+	_, err = osStat(preparePath(s.diskPath))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return errDiskNotFound
@@ -291,7 +291,7 @@ func (s *posix) ListVols() (volsInfo []VolInfo, err error) {
 		return nil, err
 	}
 
-	volsInfo, err = listVols(preparePath(s.diskPath))
+	volsInfo, err = listVols(s.diskPath)
 	if err != nil {
 		return nil, err
 	}
@@ -321,7 +321,7 @@ func listVols(dirPath string) ([]VolInfo, error) {
 			continue
 		}
 		var fi os.FileInfo
-		fi, err = os.Stat(preparePath(pathJoin(dirPath, entry)))
+		fi, err = osStat(preparePath(pathJoin(dirPath, entry)))
 		if err != nil {
 			// If the file does not exist, skip the entry.
 			if os.IsNotExist(err) {
@@ -331,7 +331,7 @@ func listVols(dirPath string) ([]VolInfo, error) {
 		}
 		volsInfo = append(volsInfo, VolInfo{
 			Name: fi.Name(),
-			// As os.Stat() doesn't carry other than ModTime(), use
+			// As osStat() doesn't carry other than ModTime(), use
 			// ModTime() as CreatedTime.
 			Created: fi.ModTime(),
 		})
@@ -362,14 +362,14 @@ func (s *posix) StatVol(volume string) (volInfo VolInfo, err error) {
 	}
 	// Stat a volume entry.
 	var st os.FileInfo
-	st, err = os.Stat(preparePath(volumeDir))
+	st, err = osStat(preparePath(volumeDir))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return VolInfo{}, errVolumeNotFound
 		}
 		return VolInfo{}, err
 	}
-	// As os.Stat() doesn't carry other than ModTime(), use ModTime()
+	// As osStat() doesn't carry other than ModTime(), use ModTime()
 	// as CreatedTime.
 	createdTime := st.ModTime()
 	return VolInfo{
@@ -434,7 +434,7 @@ func (s *posix) ListDir(volume, dirPath string) (entries []string, err error) {
 		return nil, err
 	}
 	// Stat a volume entry.
-	_, err = os.Stat(preparePath(volumeDir))
+	_, err = osStat(preparePath(volumeDir))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, errVolumeNotFound
@@ -470,7 +470,7 @@ func (s *posix) ReadAll(volume, path string) (buf []byte, err error) {
 		return nil, err
 	}
 	// Stat a volume entry.
-	_, err = os.Stat(preparePath(volumeDir))
+	_, err = osStat(preparePath(volumeDir))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, errVolumeNotFound
@@ -536,7 +536,7 @@ func (s *posix) ReadFile(volume string, path string, offset int64, buf []byte) (
 		return 0, err
 	}
 	// Stat a volume entry.
-	_, err = os.Stat(preparePath(volumeDir))
+	_, err = osStat(preparePath(volumeDir))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return 0, errVolumeNotFound
@@ -609,7 +609,7 @@ func (s *posix) createFile(volume, path string) (f *os.File, err error) {
 		return nil, err
 	}
 	// Stat a volume entry.
-	_, err = os.Stat(preparePath(volumeDir))
+	_, err = osStat(preparePath(volumeDir))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, errVolumeNotFound
@@ -624,7 +624,7 @@ func (s *posix) createFile(volume, path string) (f *os.File, err error) {
 
 	// Verify if the file already exists and is not of regular type.
 	var st os.FileInfo
-	if st, err = os.Stat(preparePath(filePath)); err == nil {
+	if st, err = osStat(preparePath(filePath)); err == nil {
 		if !st.Mode().IsRegular() {
 			return nil, errIsNotRegular
 		}
@@ -760,7 +760,7 @@ func (s *posix) StatFile(volume, path string) (file FileInfo, err error) {
 		return FileInfo{}, err
 	}
 	// Stat a volume entry.
-	_, err = os.Stat(preparePath(volumeDir))
+	_, err = osStat(preparePath(volumeDir))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return FileInfo{}, errVolumeNotFound
@@ -772,7 +772,7 @@ func (s *posix) StatFile(volume, path string) (file FileInfo, err error) {
 	if err = checkPathLength(preparePath(filePath)); err != nil {
 		return FileInfo{}, err
 	}
-	st, err := os.Stat(preparePath(filePath))
+	st, err := osStat(preparePath(filePath))
 	if err != nil {
 		// File is really not found.
 		if os.IsNotExist(err) {
@@ -806,7 +806,7 @@ func deleteFile(basePath, deletePath string) error {
 		return nil
 	}
 	// Verify if the path exists.
-	pathSt, err := os.Stat(preparePath(deletePath))
+	pathSt, err := osStat(preparePath(deletePath))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return errFileNotFound
@@ -856,7 +856,7 @@ func (s *posix) DeleteFile(volume, path string) (err error) {
 		return err
 	}
 	// Stat a volume entry.
-	_, err = os.Stat(preparePath(volumeDir))
+	_, err = osStat(preparePath(volumeDir))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return errVolumeNotFound
@@ -900,14 +900,14 @@ func (s *posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err e
 		return err
 	}
 	// Stat a volume entry.
-	_, err = os.Stat(preparePath(srcVolumeDir))
+	_, err = osStat(preparePath(srcVolumeDir))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return errVolumeNotFound
 		}
 		return err
 	}
-	_, err = os.Stat(preparePath(dstVolumeDir))
+	_, err = osStat(preparePath(dstVolumeDir))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return errVolumeNotFound
@@ -930,7 +930,7 @@ func (s *posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err e
 	}
 	if srcIsDir {
 		// If source is a directory we expect the destination to be non-existent always.
-		_, err = os.Stat(preparePath(dstFilePath))
+		_, err = osStat(preparePath(dstFilePath))
 		if err == nil {
 			return errFileAccessDenied
 		}

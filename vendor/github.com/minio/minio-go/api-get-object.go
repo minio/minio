@@ -1,5 +1,5 @@
 /*
- * Minio Go Library for Amazon S3 Compatible Cloud Storage (C) 2015, 2016 Minio, Inc.
+ * Minio Go Library for Amazon S3 Compatible Cloud Storage (C) 2015, 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -67,6 +67,7 @@ func (c Client) GetObject(bucketName, objectName string) (*Object, error) {
 	var httpReader io.ReadCloser
 	var objectInfo ObjectInfo
 	var err error
+
 	// Create request channel.
 	reqCh := make(chan getRequest)
 	// Create response channel.
@@ -78,6 +79,9 @@ func (c Client) GetObject(bucketName, objectName string) (*Object, error) {
 	go func() {
 		defer close(reqCh)
 		defer close(resCh)
+
+		// Used to verify if etag of object has changed since last read.
+		var etag string
 
 		// Loop through the incoming control messages and read data.
 		for {
@@ -97,16 +101,22 @@ func (c Client) GetObject(bucketName, objectName string) (*Object, error) {
 				if req.isFirstReq {
 					// First request is a Read/ReadAt.
 					if req.isReadOp {
+						reqHeaders := NewGetReqHeaders()
 						// Differentiate between wanting the whole object and just a range.
 						if req.isReadAt {
 							// If this is a ReadAt request only get the specified range.
 							// Range is set with respect to the offset and length of the buffer requested.
 							// Do not set objectInfo from the first readAt request because it will not get
 							// the whole object.
-							httpReader, _, err = c.getObject(bucketName, objectName, req.Offset, int64(len(req.Buffer)))
+							reqHeaders.SetRange(req.Offset, req.Offset+int64(len(req.Buffer))-1)
+							httpReader, objectInfo, err = c.getObject(bucketName, objectName, reqHeaders)
 						} else {
+							if req.Offset > 0 {
+								reqHeaders.SetRange(req.Offset, 0)
+							}
+
 							// First request is a Read request.
-							httpReader, objectInfo, err = c.getObject(bucketName, objectName, req.Offset, 0)
+							httpReader, objectInfo, err = c.getObject(bucketName, objectName, reqHeaders)
 						}
 						if err != nil {
 							resCh <- getResponse{
@@ -114,6 +124,7 @@ func (c Client) GetObject(bucketName, objectName string) (*Object, error) {
 							}
 							return
 						}
+						etag = objectInfo.ETag
 						// Read at least firstReq.Buffer bytes, if not we have
 						// reached our EOF.
 						size, err := io.ReadFull(httpReader, req.Buffer)
@@ -140,13 +151,18 @@ func (c Client) GetObject(bucketName, objectName string) (*Object, error) {
 							// Exit the go-routine.
 							return
 						}
+						etag = objectInfo.ETag
 						// Send back the first response.
 						resCh <- getResponse{
 							objectInfo: objectInfo,
 						}
 					}
 				} else if req.settingObjectInfo { // Request is just to get objectInfo.
-					objectInfo, err := c.StatObject(bucketName, objectName)
+					reqHeaders := NewGetReqHeaders()
+					if etag != "" {
+						reqHeaders.SetMatchETag(etag)
+					}
+					objectInfo, err := c.statObject(bucketName, objectName, reqHeaders)
 					if err != nil {
 						resCh <- getResponse{
 							Error: err,
@@ -166,6 +182,10 @@ func (c Client) GetObject(bucketName, objectName string) (*Object, error) {
 					// new ones when they haven't been already.
 					// All readAt requests are new requests.
 					if req.DidOffsetChange || !req.beenRead {
+						reqHeaders := NewGetReqHeaders()
+						if etag != "" {
+							reqHeaders.SetMatchETag(etag)
+						}
 						if httpReader != nil {
 							// Close previously opened http reader.
 							httpReader.Close()
@@ -173,9 +193,15 @@ func (c Client) GetObject(bucketName, objectName string) (*Object, error) {
 						// If this request is a readAt only get the specified range.
 						if req.isReadAt {
 							// Range is set with respect to the offset and length of the buffer requested.
-							httpReader, _, err = c.getObject(bucketName, objectName, req.Offset, int64(len(req.Buffer)))
+							reqHeaders.SetRange(req.Offset, req.Offset+int64(len(req.Buffer))-1)
+							httpReader, _, err = c.getObject(bucketName, objectName, reqHeaders)
 						} else {
-							httpReader, objectInfo, err = c.getObject(bucketName, objectName, req.Offset, 0)
+							// Range is set with respect to the offset.
+							if req.Offset > 0 {
+								reqHeaders.SetRange(req.Offset, 0)
+							}
+
+							httpReader, objectInfo, err = c.getObject(bucketName, objectName, reqHeaders)
 						}
 						if err != nil {
 							resCh <- getResponse{
@@ -230,8 +256,8 @@ type getResponse struct {
 	objectInfo ObjectInfo // Used for the first request.
 }
 
-// Object represents an open object. It implements Read, ReadAt,
-// Seeker, Close for a HTTP stream.
+// Object represents an open object. It implements
+// Reader, ReaderAt, Seeker, Closer for a HTTP stream.
 type Object struct {
 	// Mutex.
 	mutex *sync.Mutex
@@ -269,6 +295,12 @@ type Object struct {
 func (o *Object) doGetRequest(request getRequest) (getResponse, error) {
 	o.reqCh <- request
 	response := <-o.resCh
+
+	// Return any error to the top level.
+	if response.Error != nil {
+		return response, response.Error
+	}
+
 	// This was the first request.
 	if !o.isStarted {
 		// The object has been operated on.
@@ -284,11 +316,6 @@ func (o *Object) doGetRequest(request getRequest) (getResponse, error) {
 	if !o.beenRead {
 		o.beenRead = response.didRead
 	}
-	// Return any error to the top level.
-	if response.Error != nil {
-		return response, response.Error
-	}
-
 	// Data are ready on the wire, no need to reinitiate connection in lower level
 	o.seekData = false
 
@@ -594,7 +621,7 @@ func newObject(reqCh chan<- getRequest, resCh <-chan getResponse, doneCh chan<- 
 //
 // For more information about the HTTP Range header.
 // go to http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.35.
-func (c Client) getObject(bucketName, objectName string, offset, length int64) (io.ReadCloser, ObjectInfo, error) {
+func (c Client) getObject(bucketName, objectName string, reqHeaders RequestHeaders) (io.ReadCloser, ObjectInfo, error) {
 	// Validate input arguments.
 	if err := isValidBucketName(bucketName); err != nil {
 		return nil, ObjectInfo{}, err
@@ -603,22 +630,18 @@ func (c Client) getObject(bucketName, objectName string, offset, length int64) (
 		return nil, ObjectInfo{}, err
 	}
 
+	// Set all the necessary reqHeaders.
 	customHeader := make(http.Header)
-	// Set ranges if length and offset are valid.
-	// See  https://tools.ietf.org/html/rfc7233#section-3.1 for reference.
-	if length > 0 && offset >= 0 {
-		customHeader.Set("Range", fmt.Sprintf("bytes=%d-%d", offset, offset+length-1))
-	} else if offset > 0 && length == 0 {
-		customHeader.Set("Range", fmt.Sprintf("bytes=%d-", offset))
-	} else if length < 0 && offset == 0 {
-		customHeader.Set("Range", fmt.Sprintf("bytes=%d", length))
+	for key, value := range reqHeaders.Header {
+		customHeader[key] = value
 	}
 
 	// Execute GET on objectName.
 	resp, err := c.executeMethod("GET", requestMetadata{
-		bucketName:   bucketName,
-		objectName:   objectName,
-		customHeader: customHeader,
+		bucketName:         bucketName,
+		objectName:         objectName,
+		customHeader:       customHeader,
+		contentSHA256Bytes: emptySHA256,
 	})
 	if err != nil {
 		return nil, ObjectInfo{}, err
@@ -645,6 +668,7 @@ func (c Client) getObject(bucketName, objectName string, offset, length int64) (
 			Region:    resp.Header.Get("x-amz-bucket-region"),
 		}
 	}
+
 	// Get content-type.
 	contentType := strings.TrimSpace(resp.Header.Get("Content-Type"))
 	if contentType == "" {

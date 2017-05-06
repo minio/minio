@@ -5,7 +5,7 @@ _init() {
     LDFLAGS=$(go run buildscripts/gen-ldflags.go)
 
     # Extract release tag
-    release_tag=$(echo $LDFLAGS | awk {'print $4'} | cut -f2 -d=)
+    release_tag=$(echo $LDFLAGS | awk {'print $6'} | cut -f2 -d=)
 
     # Verify release tag.
     if [ -z "$release_tag" ]; then

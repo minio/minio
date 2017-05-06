@@ -85,7 +85,7 @@ export default (state = {
     case actions.SET_OBJECTS:
       newState.objects = [...action.objects]
       break
-    case action.RESET_OBJECTS:
+    case actions.RESET_OBJECTS:
       newState.objects = []
       newState.marker = ""
       newState.istruncated = false

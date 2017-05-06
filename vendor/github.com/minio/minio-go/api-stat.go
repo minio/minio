@@ -34,7 +34,8 @@ func (c Client) BucketExists(bucketName string) (bool, error) {
 
 	// Execute HEAD on bucketName.
 	resp, err := c.executeMethod("HEAD", requestMetadata{
-		bucketName: bucketName,
+		bucketName:         bucketName,
+		contentSHA256Bytes: emptySHA256,
 	})
 	defer closeResponse(resp)
 	if err != nil {
@@ -85,11 +86,31 @@ func (c Client) StatObject(bucketName, objectName string) (ObjectInfo, error) {
 	if err := isValidObjectName(objectName); err != nil {
 		return ObjectInfo{}, err
 	}
+	reqHeaders := NewHeadReqHeaders()
+	return c.statObject(bucketName, objectName, reqHeaders)
+}
+
+// Lower level API for statObject supporting pre-conditions and range headers.
+func (c Client) statObject(bucketName, objectName string, reqHeaders RequestHeaders) (ObjectInfo, error) {
+	// Input validation.
+	if err := isValidBucketName(bucketName); err != nil {
+		return ObjectInfo{}, err
+	}
+	if err := isValidObjectName(objectName); err != nil {
+		return ObjectInfo{}, err
+	}
+
+	customHeader := make(http.Header)
+	for k, v := range reqHeaders.Header {
+		customHeader[k] = v
+	}
 
 	// Execute HEAD on objectName.
 	resp, err := c.executeMethod("HEAD", requestMetadata{
-		bucketName: bucketName,
-		objectName: objectName,
+		bucketName:         bucketName,
+		objectName:         objectName,
+		contentSHA256Bytes: emptySHA256,
+		customHeader:       customHeader,
 	})
 	defer closeResponse(resp)
 	if err != nil {
@@ -122,6 +143,7 @@ func (c Client) StatObject(bucketName, objectName string) (ObjectInfo, error) {
 			}
 		}
 	}
+
 	// Parse Last-Modified has http time format.
 	date, err := time.Parse(http.TimeFormat, resp.Header.Get("Last-Modified"))
 	if err != nil {
@@ -135,6 +157,7 @@ func (c Client) StatObject(bucketName, objectName string) (ObjectInfo, error) {
 			Region:     resp.Header.Get("x-amz-bucket-region"),
 		}
 	}
+
 	// Fetch content type if any present.
 	contentType := strings.TrimSpace(resp.Header.Get("Content-Type"))
 	if contentType == "" {
