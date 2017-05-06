@@ -16,24 +16,117 @@
 
 package cmd
 
-import "io"
+import (
+	"fmt"
+	"io"
+	"net/http"
+	"strconv"
+	"time"
+)
+
+func toGCSPublicURL(bucket, object string) string {
+	return fmt.Sprintf("https://storage.googleapis.com/%s/%s", bucket, object)
+}
+
+// AnonPutObject creates a new object anonymously with the incoming data,
+func (l *gcsGateway) AnonPutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (ObjectInfo, error) {
+
+	return ObjectInfo{}, NotImplemented{}
+}
 
 // AnonGetObject - Get object anonymously
-func (l *gcsGateway) AnonGetObject(bucket string, key string, startOffset int64, length int64, writer io.Writer) error {
-	return NotImplemented{}
+func (l *gcsGateway) AnonGetObject(bucket string, object string, startOffset int64, length int64, writer io.Writer) error {
+	req, err := http.NewRequest("GET", toGCSPublicURL(bucket, object), nil)
+	if err != nil {
+		return gcsToObjectError(traceError(err), bucket, object)
+	}
+
+	if length > 0 && startOffset > 0 {
+		req.Header.Add("Range", fmt.Sprintf("bytes=%d-%d", startOffset, startOffset+length-1))
+	} else if startOffset > 0 {
+		req.Header.Add("Range", fmt.Sprintf("bytes=%d-", startOffset))
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return gcsToObjectError(traceError(err), bucket, object)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusPartialContent && resp.StatusCode != http.StatusOK {
+		return gcsToObjectError(traceError(anonErrToObjectErr(resp.StatusCode, bucket, object)), bucket, object)
+	}
+
+	_, err = io.Copy(writer, resp.Body)
+	return gcsToObjectError(traceError(err), bucket, object)
 }
 
 // AnonGetObjectInfo - Get object info anonymously
-func (l *gcsGateway) AnonGetObjectInfo(bucket string, object string) (ObjectInfo, error) {
-	return ObjectInfo{}, NotImplemented{}
+func (l *gcsGateway) AnonGetObjectInfo(bucket string, object string) (objInfo ObjectInfo, err error) {
+	resp, err := http.Head(toGCSPublicURL(bucket, object))
+	if err != nil {
+		return objInfo, gcsToObjectError(traceError(err), bucket, object)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		fmt.Println(resp.StatusCode)
+		return objInfo, gcsToObjectError(traceError(anonErrToObjectErr(resp.StatusCode, bucket, object)), bucket, object)
+	}
+
+	var contentLength int64
+	contentLengthStr := resp.Header.Get("Content-Length")
+	if contentLengthStr != "" {
+		contentLength, err = strconv.ParseInt(contentLengthStr, 0, 64)
+		if err != nil {
+			return objInfo, gcsToObjectError(traceError(errUnexpected), bucket, object)
+		}
+	}
+
+	t, err := time.Parse(time.RFC1123, resp.Header.Get("Last-Modified"))
+	if err != nil {
+		return objInfo, traceError(err)
+	}
+
+	objInfo.ModTime = t
+	objInfo.Bucket = bucket
+	objInfo.UserDefined = make(map[string]string)
+	if resp.Header.Get("Content-Encoding") != "" {
+		objInfo.UserDefined["Content-Encoding"] = resp.Header.Get("Content-Encoding")
+	}
+	objInfo.UserDefined["Content-Type"] = resp.Header.Get("Content-Type")
+	objInfo.MD5Sum = resp.Header.Get("Etag")
+	objInfo.ModTime = t
+	objInfo.Name = object
+	objInfo.Size = contentLength
+	return
 }
 
 // AnonListObjects - List objects anonymously
 func (l *gcsGateway) AnonListObjects(bucket string, prefix string, marker string, delimiter string, maxKeys int) (ListObjectsInfo, error) {
-	return ListObjectsInfo{}, NotImplemented{}
+	result, err := l.anonClient.ListObjects(bucket, prefix, marker, delimiter, maxKeys)
+	if err != nil {
+		return ListObjectsInfo{}, s3ToObjectError(traceError(err), bucket)
+	}
+
+	return fromMinioClientListBucketResult(bucket, result), nil
 }
 
 // AnonGetBucketInfo - Get bucket metadata anonymously.
-func (l *gcsGateway) AnonGetBucketInfo(bucket string) (BucketInfo, error) {
-	return BucketInfo{}, NotImplemented{}
+func (l *gcsGateway) AnonGetBucketInfo(bucket string) (bucketInfo BucketInfo, err error) {
+	resp, err := http.Head(toGCSPublicURL(bucket, ""))
+	if err != nil {
+		return bucketInfo, gcsToObjectError(traceError(err))
+	}
+
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return bucketInfo, gcsToObjectError(traceError(anonErrToObjectErr(resp.StatusCode, bucket)), bucket)
+	}
+
+	// Last-Modified date being returned by GCS
+	return BucketInfo{
+		Name: bucket,
+	}, nil
 }
