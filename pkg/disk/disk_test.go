@@ -24,26 +24,33 @@ import (
 	"testing"
 
 	"github.com/minio/minio/pkg/disk"
-
-	. "gopkg.in/check.v1"
 )
 
-func Test(t *testing.T) { TestingT(t) }
-
-type MySuite struct{}
-
-var _ = Suite(&MySuite{})
-
-func (s *MySuite) TestFree(c *C) {
+func TestFree(t *testing.T) {
 	path, err := ioutil.TempDir(os.TempDir(), "minio-")
 	defer os.RemoveAll(path)
-	c.Assert(err, IsNil)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	di, err := disk.GetInfo(path)
-	c.Assert(err, IsNil)
-	c.Assert(di.Total, Not(Equals), 0)
-	c.Assert(di.Free, Not(Equals), 0)
-	c.Assert(di.Files, Not(Equals), 0)
-	c.Assert(di.Ffree, Not(Equals), 0)
-	c.Assert(di.FSType, Not(Equals), "UNKNOWN")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if di.Total <= 0 {
+		t.Error("Unexpected Total", di.Total)
+	}
+	if di.Free <= 0 {
+		t.Error("Unexpected Free", di.Free)
+	}
+	if di.Files <= 0 {
+		t.Error("Unexpected Files", di.Files)
+	}
+	if di.Ffree <= 0 {
+		t.Error("Unexpected Ffree", di.Ffree)
+	}
+	if di.FSType == "UNKNOWN" {
+		t.Error("Unexpected FSType", di.FSType)
+	}
 }
