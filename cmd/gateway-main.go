@@ -53,6 +53,7 @@ EXAMPLES:
       $ export MINIO_ACCESS_KEY=azureaccountname
       $ export MINIO_SECRET_KEY=azureaccountkey
       $ {{.HelpName}}
+
   2. Start minio gateway server for Azure Blob Storage backend on custom endpoint.
       $ export MINIO_ACCESS_KEY=azureaccountname
       $ export MINIO_SECRET_KEY=azureaccountkey
@@ -105,6 +106,34 @@ EXAMPLES:
       $ {{.HelpName}} https://play.minio.io:9000
 `
 
+const gcsGatewayTemplate = `NAME:
+  {{.HelpName}} - {{.Usage}}
+
+USAGE:
+  {{.HelpName}} {{if .VisibleFlags}}[FLAGS]{{end}} PROJECTID
+{{if .VisibleFlags}}
+FLAGS:
+  {{range .VisibleFlags}}{{.}}
+  {{end}}{{end}}
+PROJECTID:
+  GCS project id, there are no defaults this is mandatory.
+
+ENVIRONMENT VARIABLES:
+  ACCESS:
+     MINIO_ACCESS_KEY: Username or access key of S3 storage.
+     MINIO_SECRET_KEY: Password or secret key of S3 storage.
+
+  BROWSER:
+     MINIO_BROWSER: To disable web browser access, set this value to "off".
+
+EXAMPLES:
+  1. Start minio gateway server for AWS S3 backend.
+      $ export MINIO_ACCESS_KEY=accesskey
+      $ export MINIO_SECRET_KEY=secretkey
+      $ {{.HelpName}} minio-kubernetes-gcs
+
+`
+
 var s3BackendCmd = cli.Command{
 	Name:               "s3",
 	Usage:              "Amazon Simple Storage Service (S3).",
@@ -119,11 +148,25 @@ var s3BackendCmd = cli.Command{
 	HideHelpCommand: true,
 }
 
+var gcsBackendCmd = cli.Command{
+	Name:               "gcs",
+	Usage:              "Google Cloud Storage.",
+	Action:             gcsGatewayMain,
+	CustomHelpTemplate: gcsGatewayTemplate,
+	Flags: append(serverFlags,
+		cli.BoolFlag{
+			Name:  "quiet",
+			Usage: "Disable startup banner.",
+		},
+	),
+	HideHelpCommand: true,
+}
+
 var gatewayCmd = cli.Command{
 	Name:            "gateway",
 	Usage:           "Start object storage gateway.",
 	HideHelpCommand: true,
-	Subcommands:     []cli.Command{azureBackendCmd, s3BackendCmd},
+	Subcommands:     []cli.Command{azureBackendCmd, s3BackendCmd, gcsBackendCmd},
 }
 
 // Represents the type of the gateway backend.
@@ -166,6 +209,8 @@ func mustSetBrowserSettingFromEnv() {
 // Supported backend types are
 //
 // - Azure Blob Storage.
+// - S3 Object Storage.
+// - Google Cloud Storage.
 // - Add your favorite backend here.
 func newGatewayLayer(backendType gatewayBackend, endpoint, accessKey, secretKey string, secure bool) (GatewayLayer, error) {
 
@@ -277,6 +322,15 @@ func s3GatewayMain(ctx *cli.Context) {
 	}
 
 	gatewayMain(ctx, s3Backend)
+}
+
+// Handler for 'minio gateway gcs' command line
+func gcsGatewayMain(ctx *cli.Context) {
+	if ctx.Args().Present() && ctx.Args().First() == "help" {
+		cli.ShowCommandHelpAndExit(ctx, "s3", 1)
+	}
+
+	gatewayMain(ctx, gcsBackend)
 }
 
 // Handler for 'minio gateway'.
