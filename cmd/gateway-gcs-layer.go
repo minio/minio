@@ -131,7 +131,10 @@ func gcsToObjectError(err error, params ...string) error {
 			err = BucketAlreadyOwnedByYou{
 				Bucket: bucket,
 			}
-
+		} else if message == "Sorry, that name is not available. Please try a different one." {
+			err = BucketAlreadyExists{
+				Bucket: bucket,
+			}
 		} else {
 			err = BucketNotEmpty{
 				Bucket: bucket,
