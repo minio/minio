@@ -206,10 +206,8 @@ func (l *gcsGateway) MakeBucket(bucket string) error {
 func (l *gcsGateway) MakeBucketWithLocation(bucket, location string) error {
 	bkt := l.client.Bucket(bucket)
 
-	// TODO: location
-	_ = location
 	if err := bkt.Create(l.ctx, l.projectID, &storage.BucketAttrs{
-		Location: "US",
+		Location: location,
 	}); err != nil {
 		return gcsToObjectError(traceError(err), bucket)
 	}
