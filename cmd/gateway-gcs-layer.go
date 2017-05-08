@@ -162,7 +162,11 @@ func newGCSGateway(endpoint string, projectID, secretKey string, secure bool) (G
 		return nil, err
 	}
 
-	anonClient, err := minio.NewCore("storage.googleapis.com", "", "", secure)
+	if endpoint == "" {
+		endpoint = "storage.googleapis.com"
+	}
+
+	anonClient, err := minio.NewCore(endpoint, "", "", secure)
 	if err != nil {
 		return nil, err
 	}
