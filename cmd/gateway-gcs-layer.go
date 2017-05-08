@@ -237,7 +237,7 @@ func (l *gcsGateway) ListBuckets() ([]BucketInfo, error) {
 		}
 
 		if err != nil {
-			return []BucketInfo{}, err
+			return []BucketInfo{}, gcsToObjectError(traceError(err))
 		}
 
 		b = append(b, BucketInfo{
