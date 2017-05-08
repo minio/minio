@@ -183,6 +183,17 @@ select.form-control {
 .set-expire {
     border: 1px solid @input-border;
     margin: 35px 0 30px;
+    position: relative;
+
+    &:before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 1;
+    }
 }
 
 .set-expire-item {
@@ -191,6 +202,7 @@ select.form-control {
     display: table-cell;
     width: 1%;
     text-align: center;
+    .user-select(none);
 
     &:not(:last-child) {
         border-right: 1px solid @input-border;
@@ -209,6 +221,7 @@ select.form-control {
     left: -8px;
 
     input {
+        .user-select(none);
         font-size: 20px;
         text-align: center;
         position: relative;
