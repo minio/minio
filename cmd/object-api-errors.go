@@ -144,6 +144,13 @@ func (e BucketNotFound) Error() string {
 	return "Bucket not found: " + e.Bucket
 }
 
+// BucketAlreadyExists the requested bucket name is not available.
+type BucketAlreadyExists GenericError
+
+func (e BucketAlreadyExists) Error() string {
+	return "The requested bucket name is not available. The bucket namespace is shared by all users of the system. Please select a different name and try again."
+}
+
 // BucketAlreadyOwnedByYou already owned by you.
 type BucketAlreadyOwnedByYou GenericError
 
