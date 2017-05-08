@@ -179,6 +179,17 @@ const (
 	// Add more backends here.
 )
 
+// GatewayFn returns the GatewayLayer for the backend
+type GatewayFn func([]string) (GatewayLayer, error)
+
+var (
+	backends = map[gatewayBackend]GatewayFn{
+		azureBackend: newAzureLayer,
+		s3Backend:    newS3Gateway,
+		gcsBackend:   newGCSGateway,
+	}
+)
+
 // Returns access and secretkey set from environment variables.
 func mustGetGatewayConfigFromEnv() (string, string, string) {
 	// Fetch access keys from environment variables.
