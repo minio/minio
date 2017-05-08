@@ -503,15 +503,6 @@ func (api gatewayAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// validating region here, because isValidLocationConstraint
-	// reads body which has been read already. So only validating
-	// region here.
-	serverRegion := serverConfig.GetRegion()
-	if serverRegion != location {
-		writeErrorResponse(w, ErrInvalidRegion, r.URL)
-		return
-	}
-
 	bucketLock := globalNSMutex.NewNSLock(bucket, "")
 	bucketLock.Lock()
 	defer bucketLock.Unlock()
@@ -708,21 +699,21 @@ func (api gatewayAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r 
 		}
 	}
 
-	getBucketInfo := objectAPI.GetBucketInfo
+	getBucketLocation := objectAPI.GetBucketLocation
 	if reqAuthType == authTypeAnonymous {
-		getBucketInfo = objectAPI.AnonGetBucketInfo
+		getBucketLocation = objectAPI.AnonGetBucketLocation
 	}
 
-	if _, err := getBucketInfo(bucket); err != nil {
-		errorIf(err, "Unable to fetch bucket info.")
+	region, err := getBucketLocation(bucket)
+	if err != nil {
+		errorIf(err, "Unable to fetch bucket region.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 
 	// Generate response.
 	encodedSuccessResponse := encodeResponse(LocationResponse{})
-	// Get current region.
-	region := serverConfig.GetRegion()
+
 	if region != globalMinioDefaultRegion {
 		encodedSuccessResponse = encodeResponse(LocationResponse{
 			Location: region,

@@ -563,3 +563,21 @@ func (l *s3Gateway) DeleteBucketPolicies(bucket string) error {
 
 	return nil
 }
+
+// GetBucketLocation returns the bucket region
+func (l *s3Gateway) GetBucketLocation(bucket string) (string, error) {
+	location, err := l.Client.GetBucketLocation(bucket)
+	if err != nil {
+		return "", s3ToObjectError(traceError(err), bucket, "")
+	}
+	return location, nil
+}
+
+// AnonGetBucketLocation - Anonymous version of GetBucketLocation
+func (l *s3Gateway) AnonGetBucketLocation(bucket string) (string, error) {
+	location, err := l.anonClient.GetBucketLocation(bucket)
+	if err != nil {
+		return "", s3ToObjectError(traceError(err), bucket, "")
+	}
+	return location, nil
+}

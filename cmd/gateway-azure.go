@@ -652,3 +652,13 @@ func (a AzureObjects) DeleteBucketPolicies(bucket string) error {
 	err := a.client.SetContainerPermissions(bucket, perm, 0, "")
 	return azureToObjectError(traceError(err))
 }
+
+// GetBucketLocation returns "us-east-1" as region is not relevant for Azure
+func (a AzureObjects) GetBucketLocation(bucket string) (string, error) {
+	return globalMinioDefaultRegion, nil
+}
+
+// AnonGetBucketLocation returns "us-east-1" as region is not relevant for Azure
+func (a AzureObjects) AnonGetBucketLocation(bucket string) (string, error) {
+	return globalMinioDefaultRegion, nil
+}

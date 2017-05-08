@@ -28,14 +28,16 @@ type GatewayLayer interface {
 	ObjectLayer
 
 	MakeBucketWithLocation(bucket, location string) error
+	GetBucketLocation(bucket string) (string, error)
+	DeleteBucketPolicies(string) error
+	SetBucketPolicies(string, policy.BucketAccessPolicy) error
+	GetBucketPolicies(string) (policy.BucketAccessPolicy, error)
 
 	AnonGetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) (err error)
 	AnonGetObjectInfo(bucket, object string) (objInfo ObjectInfo, err error)
-	SetBucketPolicies(string, policy.BucketAccessPolicy) error
-	GetBucketPolicies(string) (policy.BucketAccessPolicy, error)
-	DeleteBucketPolicies(string) error
 	AnonListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (result ListObjectsInfo, err error)
 	AnonGetBucketInfo(bucket string) (bucketInfo BucketInfo, err error)
+	AnonGetBucketLocation(bucket string) (string, error)
 }
 
 // Implements and provides http handlers for S3 API.
