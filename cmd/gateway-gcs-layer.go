@@ -161,17 +161,26 @@ type gcsGateway struct {
 }
 
 // newGCSGateway returns gcs gatewaylayer
-func newGCSGateway(endpoint string, projectID, secretKey string, secure bool) (GatewayLayer, error) {
+func newGCSGateway(args []string) (GatewayLayer, error) {
+	if len(args) != 1 {
+		return nil, fmt.Errorf("ProjectID expected")
+	}
+
+	profile := "default"
+	// TODO: don't know where to set profile yet
+	_ = profile
+
+	endpoint := "storage.googleapis.com"
+	secure := true
+
+	projectID := args[0]
+
 	ctx := context.Background()
 
 	// Creates a client.
 	client, err := storage.NewClient(ctx)
 	if err != nil {
 		return nil, err
-	}
-
-	if endpoint == "" {
-		endpoint = "storage.googleapis.com"
 	}
 
 	anonClient, err := minio.NewCore(endpoint, "", "", secure)
@@ -181,7 +190,7 @@ func newGCSGateway(endpoint string, projectID, secretKey string, secure bool) (G
 
 	return &gcsGateway{
 		client:     client,
-		projectID:  "minio-166400",
+		projectID:  projectID,
 		ctx:        ctx,
 		anonClient: anonClient,
 	}, nil
