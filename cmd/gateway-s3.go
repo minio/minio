@@ -449,7 +449,7 @@ func (l *s3Gateway) CopyObjectPart(srcBucket string, srcObject string, destBucke
 func fromMinioClientObjectPart(op minio.ObjectPart) PartInfo {
 	return PartInfo{
 		Size:         op.Size,
-		ETag:         op.ETag,
+		ETag:         canonicalizeETag(op.ETag),
 		LastModified: op.LastModified,
 		PartNumber:   op.PartNumber,
 	}
