@@ -19,11 +19,12 @@ package cmd
 import (
 	"errors"
 	"fmt"
-	"github.com/gorilla/mux"
-	"github.com/minio/cli"
 	"net/url"
 	"os"
 	"strings"
+
+	"github.com/gorilla/mux"
+	"github.com/minio/cli"
 )
 
 var gatewayTemplate = `NAME:
@@ -94,18 +95,24 @@ const (
 )
 
 // Returns access and secretkey set from environment variables.
-func mustGetGatewayCredsFromEnv() (accessKey, secretKey string) {
+func mustGetGatewayConfigFromEnv() (string, string, string) {
 	// Fetch access keys from environment variables.
-	accessKey = os.Getenv("MINIO_ACCESS_KEY")
-	secretKey = os.Getenv("MINIO_SECRET_KEY")
+	accessKey := os.Getenv("MINIO_ACCESS_KEY")
+	secretKey := os.Getenv("MINIO_SECRET_KEY")
 	if accessKey == "" || secretKey == "" {
 		fatalIf(errors.New("Missing credentials"), "Access and secret keys are mandatory to run Minio gateway server.")
 	}
-	return accessKey, secretKey
+
+	region := globalMinioDefaultRegion
+	if v := os.Getenv("MINIO_REGION"); v != "" {
+		region = v
+	}
+
+	return accessKey, secretKey, region
 }
 
 // Set browser setting from environment variables
-func mustSetBrowserSettingFromEnv(){
+func mustSetBrowserSettingFromEnv() {
 	if browser := os.Getenv("MINIO_BROWSER"); browser != "" {
 		browserFlag, err := ParseBrowserFlag(browser)
 		if err != nil {
@@ -118,6 +125,7 @@ func mustSetBrowserSettingFromEnv(){
 		globalIsBrowserEnabled = bool(browserFlag)
 	}
 }
+
 // Initialize gateway layer depending on the backend type.
 // Supported backend types are
 //
@@ -194,14 +202,13 @@ func gatewayMain(ctx *cli.Context) {
 	}
 
 	// Fetch access and secret key from env.
-	accessKey, secretKey := mustGetGatewayCredsFromEnv()
+	accessKey, secretKey, region := mustGetGatewayConfigFromEnv()
 
 	// Fetch browser env setting
 	mustSetBrowserSettingFromEnv()
 
 	// Initialize new gateway config.
-	
-	newGatewayConfig(accessKey, secretKey, globalMinioDefaultRegion)
+	newGatewayConfig(accessKey, secretKey, region)
 
 	// Get quiet flag from command line argument.
 	quietFlag := ctx.Bool("quiet") || ctx.GlobalBool("quiet")
