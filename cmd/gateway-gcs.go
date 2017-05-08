@@ -229,11 +229,6 @@ func (l *gcsGateway) MakeBucket(bucket string) error {
 func (l *gcsGateway) MakeBucketWithLocation(bucket, location string) error {
 	bkt := l.client.Bucket(bucket)
 
-	// we'll default to the us multi-region in case of us-east-1
-	if location == "us-east-1" {
-		location = "us"
-	}
-
 	if err := bkt.Create(l.ctx, l.projectID, &storage.BucketAttrs{
 		Location: location,
 	}); err != nil {
