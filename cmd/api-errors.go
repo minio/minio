@@ -115,6 +115,7 @@ const (
 	ErrBucketAlreadyOwnedByYou
 	ErrInvalidDuration
 	ErrNotSupported
+	ErrBucketAlreadyExists
 	// Add new error codes here.
 
 	// Bucket notification related errors.
@@ -679,6 +680,8 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrBucketAlreadyOwnedByYou
 	case BucketNotEmpty:
 		apiErr = ErrBucketNotEmpty
+	case BucketAlreadyExists:
+		apiErr = ErrBucketAlreadyExists
 	case BucketExists:
 		apiErr = ErrBucketAlreadyOwnedByYou
 	case ObjectNotFound:
