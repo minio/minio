@@ -19,11 +19,13 @@ package cmd
 import (
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"hash"
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -123,10 +125,22 @@ func azureToObjectError(err error, params ...string) error {
 }
 
 // Inits azure blob storage client and returns AzureObjects.
-func newAzureLayer(endPoint string, account, key string, secure bool) (GatewayLayer, error) {
+func newAzureLayer(args []string) (GatewayLayer, error) {
+	endPoint, secure, err := parseGatewayEndpoint(args[0])
+	if err != nil {
+		return nil, err
+	}
+
 	if endPoint == "" {
 		endPoint = storage.DefaultBaseURL
 	}
+
+	account := os.Getenv("MINIO_ACCESS_KEY")
+	key := os.Getenv("MINIO_SECRET_KEY")
+	if account == "" || key == "" {
+		return nil, errors.New("No Azure account and key set")
+	}
+
 	c, err := storage.NewClient(account, key, endPoint, globalAzureAPIVersion, secure)
 	if err != nil {
 		return AzureObjects{}, err

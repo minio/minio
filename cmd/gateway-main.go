@@ -91,6 +91,16 @@ const (
 	// Add more backends here.
 )
 
+type GatewayFn func([]string) (GatewayLayer, error)
+
+var (
+	backends = map[gatewayBackend]GatewayFn{
+		azureBackend: newAzureLayer,
+		s3Backend:    newS3Gateway,
+		gcsBackend:   newGCSGateway,
+	}
+)
+
 // Returns access and secretkey set from environment variables.
 func mustGetGatewayConfigFromEnv() (string, string, string) {
 	// Fetch access keys from environment variables.
@@ -109,18 +119,10 @@ func mustGetGatewayConfigFromEnv() (string, string, string) {
 }
 
 // Initialize gateway layer depending on the backend type.
-// Supported backend types are
-//
-// - Azure Blob Storage.
-// - Add your favorite backend here.
-func newGatewayLayer(backendType, endpoint, accessKey, secretKey string, secure bool) (GatewayLayer, error) {
-	switch gatewayBackend(backendType) {
-	case azureBackend:
-		return newAzureLayer(endpoint, accessKey, secretKey, secure)
-	case s3Backend:
-		return newS3Gateway(endpoint, accessKey, secretKey, secure)
-	case gcsBackend:
-		return newGCSGateway(endpoint, accessKey, secretKey, secure)
+func newGatewayLayer(backendType string, args []string) (GatewayLayer, error) {
+	if fn, ok := backends[gatewayBackend(backendType)]; ok {
+		// every backend is responsible for parsing its own arguments
+		return fn(args)
 	}
 
 	return nil, fmt.Errorf("Unrecognized backend type %s", backendType)
@@ -197,15 +199,10 @@ func gatewayMain(ctx *cli.Context) {
 	// First argument is selected backend type.
 	backendType := ctx.Args().First()
 
-	// Second argument is endpoint.	If no endpoint is specified then the
-	// gateway implementation should use a default setting.
-	endPoint, secure, err := parseGatewayEndpoint(ctx.Args().Get(1))
-	fatalIf(err, "Unable to parse endpoint")
-
 	// Create certs path for SSL configuration.
 	fatalIf(createConfigDir(), "Unable to create configuration directory")
 
-	newObject, err := newGatewayLayer(backendType, endPoint, accessKey, secretKey, secure)
+	newObject, err := newGatewayLayer(backendType, ctx.Args()[1:])
 	fatalIf(err, "Unable to initialize gateway layer")
 
 	initNSLock(false) // Enable local namespace lock.
