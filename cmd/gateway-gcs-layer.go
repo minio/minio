@@ -101,6 +101,11 @@ func gcsToObjectError(err error, params ...string) error {
 	message := googleAPIErr.Errors[0].Message
 
 	switch reason {
+	case "required":
+		// Anonymous users does not have storage.xyz access to project 123.
+		fallthrough
+	case "keyInvalid":
+		fallthrough
 	case "forbidden":
 		err = PrefixAccessDenied{
 			Bucket: bucket,
@@ -237,7 +242,7 @@ func (l *gcsGateway) ListBuckets() ([]BucketInfo, error) {
 		}
 
 		if err != nil {
-			return []BucketInfo{}, err
+			return []BucketInfo{}, gcsToObjectError(traceError(err))
 		}
 
 		b = append(b, BucketInfo{
