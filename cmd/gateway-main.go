@@ -39,6 +39,7 @@ FLAGS:
 BACKEND:
   azure: Microsoft Azure Blob Storage. Default ENDPOINT is https://core.windows.net
   s3: Amazon Simple Storage Service (S3). Default ENDPOINT is https://s3.amazonaws.com
+  gcs: Google Cloud Storage (GCS). Default ENDPOINT is https://storage.googleapis.com
 
 ENVIRONMENT VARIABLES:
   ACCESS:
@@ -63,6 +64,10 @@ EXAMPLES:
       $ export MINIO_ACCESS_KEY=Q3AM3UQ867SPQQA43P2F
       $ export MINIO_SECRET_KEY=zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG
       $ {{.HelpName}} s3 https://play.minio.io:9000
+
+  4. Start minio gateway server for GCS backend.
+      $ gcloud init --console-only # this will configure your google account
+      $ {{.HelpName}} gcs [PROFILE:]PROJECTID
 `
 
 var gatewayCmd = cli.Command{
