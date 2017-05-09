@@ -185,11 +185,24 @@ func gatewayMain(ctx *cli.Context) {
 	}
 
 	// First argument is selected backend type.
-	backendType := ctx.Args().First()
+	backendType := ctx.Args().Get(0)
+	// Second argument is the endpoint address (optional)
+	endpointAddr := ctx.Args().Get(1)
+	// Third argument is the address flag
+	serverAddr := ctx.String("address")
+
+	if endpointAddr != "" {
+		// Reject the endpoint if it points to the gateway handler itself.
+		sameTarget, err := sameLocalAddrs(endpointAddr, serverAddr)
+		fatalIf(err, "Unable to compare server and endpoint addresses.")
+		if sameTarget {
+			fatalIf(errors.New("endpoint points to the local gateway"), "Endpoint url is not allowed")
+		}
+	}
 
 	// Second argument is endpoint.	If no endpoint is specified then the
 	// gateway implementation should use a default setting.
-	endPoint, secure, err := parseGatewayEndpoint(ctx.Args().Get(1))
+	endPoint, secure, err := parseGatewayEndpoint(endpointAddr)
 	fatalIf(err, "Unable to parse endpoint")
 
 	// Create certs path for SSL configuration.
@@ -223,7 +236,7 @@ func gatewayMain(ctx *cli.Context) {
 		setAuthHandler,
 	}
 
-	apiServer := NewServerMux(ctx.String("address"), registerHandlers(router, handlerFns...))
+	apiServer := NewServerMux(serverAddr, registerHandlers(router, handlerFns...))
 
 	_, _, globalIsSSL, err = getSSLConfig()
 	fatalIf(err, "Invalid SSL key file")
