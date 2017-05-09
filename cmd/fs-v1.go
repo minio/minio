@@ -473,6 +473,7 @@ func (fs fsObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string
 // startOffset indicates the starting read location of the object.
 // length indicates the total length of the object.
 func (fs fsObjects) GetObject(bucket, object string, offset int64, length int64, writer io.Writer) (err error) {
+	// This is a special case with object whose name ends with
 	if err = checkGetObjArgs(bucket, object); err != nil {
 		return err
 	}
@@ -568,12 +569,6 @@ func (fs fsObjects) getObjectInfo(bucket, object string) (ObjectInfo, error) {
 
 // GetObjectInfo - reads object metadata and replies back ObjectInfo.
 func (fs fsObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
-	// This is a special case with object whose name ends with
-	// a slash separator, we always return object not found here.
-	if hasSuffix(object, slashSeparator) {
-		return ObjectInfo{}, toObjectErr(traceError(errFileNotFound), bucket, object)
-	}
-
 	if err := checkGetObjArgs(bucket, object); err != nil {
 		return ObjectInfo{}, err
 	}
@@ -591,13 +586,13 @@ func (fs fsObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 // for future object operations.
 func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (objInfo ObjectInfo, retErr error) {
 	var err error
-
 	// This is a special case with size as '0' and object ends with
 	// a slash separator, we treat it like a valid operation and
 	// return success.
 	if isObjectDir(object, size) {
 		return dirObjectInfo(bucket, object, size, metadata), nil
 	}
+
 	if err = checkPutObjectArgs(bucket, object, fs); err != nil {
 		return ObjectInfo{}, err
 	}

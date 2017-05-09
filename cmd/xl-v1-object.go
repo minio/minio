@@ -320,12 +320,6 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 
 // GetObjectInfo - reads object metadata and replies back ObjectInfo.
 func (xl xlObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
-	// This is a special case with object whose name ends with
-	// a slash separator, we always return object not found here.
-	if hasSuffix(object, slashSeparator) {
-		return ObjectInfo{}, toObjectErr(traceError(errFileNotFound), bucket, object)
-	}
-
 	if err := checkGetObjArgs(bucket, object); err != nil {
 		return ObjectInfo{}, err
 	}
@@ -467,6 +461,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	if isObjectDir(object, size) {
 		// Check if an object is present as one of the parent dir.
 		// -- FIXME. (needs a new kind of lock).
+		// -- FIXME (this also causes performance issue when disks are down).
 		if xl.parentDirIsObject(bucket, path.Dir(object)) {
 			return ObjectInfo{}, toObjectErr(traceError(errFileAccessDenied), bucket, object)
 		}
@@ -480,6 +475,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 
 	// Check if an object is present as one of the parent dir.
 	// -- FIXME. (needs a new kind of lock).
+	// -- FIXME (this also causes performance issue when disks are down).
 	if xl.parentDirIsObject(bucket, path.Dir(object)) {
 		return ObjectInfo{}, toObjectErr(traceError(errFileAccessDenied), bucket, object)
 	}
