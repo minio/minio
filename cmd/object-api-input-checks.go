@@ -36,6 +36,10 @@ func checkBucketAndObjectNames(bucket, object string) error {
 	}
 	// Verify if object is valid.
 	if !IsValidObjectName(object) {
+		// Objects with "/" are invalid, verify to return a different error.
+		if hasSuffix(object, slashSeparator) || hasPrefix(object, slashSeparator) {
+			return traceError(ObjectNotFound{Bucket: bucket, Object: object})
+		}
 		return traceError(ObjectNameInvalid{Bucket: bucket, Object: object})
 	}
 	return nil
