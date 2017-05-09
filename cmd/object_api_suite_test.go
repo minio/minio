@@ -749,23 +749,26 @@ func testGetDirectoryReturnsObjectNotFound(obj ObjectLayer, instanceType string,
 		c.Fatalf("%s: <ERROR> %s", instanceType, err)
 	}
 
-	for i, objName := range []string{"dir1", "dir1/", "dir1/dir3", "dir1/dir3/"} {
-		_, err = obj.GetObjectInfo(bucketName, objName)
-		if isErrObjectNotFound(err) {
-			err = errorCause(err)
-			err1 := err.(ObjectNotFound)
-			if err1.Bucket != bucketName {
-				c.Errorf("Test %d, %s: Expected the bucket name in the error message to be `%s`, but instead found `%s`",
-					i+1, instanceType, bucketName, err1.Bucket)
-			}
-			if err1.Object != objName {
-				c.Errorf("Test %d, %s: Expected the object name in the error message to be `%s`, but instead found `%s`",
-					i+1, instanceType, objName, err1.Object)
-			}
-		} else {
-			if err.Error() != "ObjectNotFound" {
-				c.Errorf("Test %d, %s: Expected the error message to be `%s`, but instead found `%s`", i+1, instanceType,
-					"ObjectNotFound", err.Error())
+	testCases := []struct {
+		dir string
+		err error
+	}{
+		{
+			dir: "dir1/",
+			err: ObjectNotFound{Bucket: bucketName, Object: "dir1/"},
+		},
+		{
+			dir: "dir1/dir3/",
+			err: ObjectNotFound{Bucket: bucketName, Object: "dir1/dir3/"},
+		},
+	}
+
+	for i, testCase := range testCases {
+		_, expectedErr := obj.GetObjectInfo(bucketName, testCase.dir)
+		if expectedErr != nil {
+			expectedErr = errorCause(expectedErr)
+			if expectedErr.Error() != testCase.err.Error() {
+				c.Errorf("Test %d, %s: Expected error %s, got %s", i+1, instanceType, testCase.err, expectedErr)
 			}
 		}
 	}
