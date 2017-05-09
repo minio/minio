@@ -38,11 +38,11 @@ minio --config-dir ~/tenant1 server --address :9001 http://192.168.10.11/disk1/d
 
 export MINIO_ACCESS_KEY=<TENANT2_ACCESS_KEY>
 export MINIO_SECRET_KEY=<TENANT2_SECRET_KEY>
-minio --config-dir ~/tenant1 server --address :9002 http://192.168.10.11/disk1/data/tenant2 http://192.168.10.12/disk1/data/tenant2 http://192.168.10.13/disk1/data/tenant2 http://192.168.10.14/disk1/data/tenant2
+minio --config-dir ~/tenant2 server --address :9002 http://192.168.10.11/disk1/data/tenant2 http://192.168.10.12/disk1/data/tenant2 http://192.168.10.13/disk1/data/tenant2 http://192.168.10.14/disk1/data/tenant2
 
 export MINIO_ACCESS_KEY=<TENANT3_ACCESS_KEY>
 export MINIO_SECRET_KEY=<TENANT3_SECRET_KEY>
-minio --config-dir ~/tenant1 server --address :9003 http://192.168.10.11/disk1/data/tenant3 http://192.168.10.12/disk1/data/tenant3 http://192.168.10.13/disk1/data/tenant3 http://192.168.10.14/disk1/data/tenant3
+minio --config-dir ~/tenant3 server --address :9003 http://192.168.10.11/disk1/data/tenant3 http://192.168.10.12/disk1/data/tenant3 http://192.168.10.13/disk1/data/tenant3 http://192.168.10.14/disk1/data/tenant3
 ```
 
 ![Example-3](https://raw.githubusercontent.com/minio/minio/master/docs/screenshots/Example-3.png)
