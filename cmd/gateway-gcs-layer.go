@@ -797,15 +797,90 @@ func (l *gcsGateway) CompleteMultipartUpload(bucket string, key string, uploadID
 
 // SetBucketPolicies - Set policy on bucket
 func (l *gcsGateway) SetBucketPolicies(bucket string, policyInfo policy.BucketAccessPolicy) error {
-	return NotSupported{}
+	var policies []BucketAccessPolicy
+
+	for prefix, policy := range policy.GetPolicies(policyInfo.Statements, bucket) {
+		policies = append(policies, BucketAccessPolicy{
+			Prefix: prefix,
+			Policy: policy,
+		})
+	}
+
+	prefix := bucket + "/*" // For all objects inside the bucket.
+
+	if len(policies) != 1 {
+		return traceError(NotImplemented{})
+	} else if policies[0].Prefix != prefix {
+		return traceError(NotImplemented{})
+	}
+
+	acl := l.client.Bucket(bucket).ACL()
+
+	if policies[0].Policy == policy.BucketPolicyNone {
+		if err := acl.Delete(l.ctx, storage.AllUsers); err != nil {
+			return gcsToObjectError(traceError(err), bucket)
+		}
+
+		return nil
+	}
+
+	role := storage.RoleReader
+
+	if policies[0].Policy == policy.BucketPolicyReadOnly {
+		role = storage.RoleReader
+	} else if policies[0].Policy == policy.BucketPolicyWriteOnly {
+		role = storage.RoleWriter
+	} else if policies[0].Policy == policy.BucketPolicyReadWrite {
+		// not supported, google only has owner role
+		return gcsToObjectError(traceError(NotSupported{}), bucket)
+	} else {
+		return gcsToObjectError(traceError(fmt.Errorf("Unknown policy: %s", policies[0].Policy)), bucket)
+	}
+
+	if err := acl.Set(l.ctx, storage.AllUsers, role); err != nil {
+		return gcsToObjectError(traceError(err), bucket)
+	}
+
+	return nil
 }
 
 // GetBucketPolicies - Get policy on bucket
 func (l *gcsGateway) GetBucketPolicies(bucket string) (policy.BucketAccessPolicy, error) {
-	return policy.BucketAccessPolicy{}, NotSupported{}
+	acl := l.client.Bucket(bucket).ACL()
+
+	rules, err := acl.List(l.ctx)
+	if err != nil {
+		return policy.BucketAccessPolicy{}, gcsToObjectError(traceError(err), bucket)
+	}
+
+	policyInfo := policy.BucketAccessPolicy{Version: "2012-10-17"}
+
+	for _, r := range rules {
+		if r.Entity != storage.AllUsers {
+			continue
+		}
+
+		switch r.Role {
+		case storage.RoleOwner:
+			return policy.BucketAccessPolicy{}, gcsToObjectError(traceError(NotSupported{}), bucket)
+		case storage.RoleReader:
+			policyInfo.Statements = policy.SetPolicy(policyInfo.Statements, policy.BucketPolicyReadOnly, bucket, "")
+		case storage.RoleWriter:
+			policyInfo.Statements = policy.SetPolicy(policyInfo.Statements, policy.BucketPolicyWriteOnly, bucket, "")
+		}
+	}
+
+	return policyInfo, nil
 }
 
 // DeleteBucketPolicies - Delete all policies on bucket
 func (l *gcsGateway) DeleteBucketPolicies(bucket string) error {
-	return NotSupported{}
+	acl := l.client.Bucket(bucket).ACL()
+
+	// this only removes the storage.AllUsers policies
+	if err := acl.Delete(l.ctx, storage.AllUsers); err != nil {
+		return gcsToObjectError(traceError(err), bucket)
+	}
+
+	return nil
 }
