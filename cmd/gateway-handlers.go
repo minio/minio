@@ -278,6 +278,13 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 		objInfo, err = objectAPI.PutObject(bucket, object, size, r.Body, metadata, sha256sum)
 	}
 
+	if err != nil {
+		errorIf(err, "Unable to put object.")
+		apiErr := toAPIErrorCode(err)
+		writeErrorResponse(w, apiErr, r.URL)
+		return
+	}
+
 	w.Header().Set("ETag", "\""+objInfo.MD5Sum+"\"")
 	writeSuccessResponseHeadersOnly(w)
 }
