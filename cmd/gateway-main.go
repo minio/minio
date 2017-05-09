@@ -131,7 +131,6 @@ EXAMPLES:
       $ export MINIO_ACCESS_KEY=accesskey
       $ export MINIO_SECRET_KEY=secretkey
       $ {{.HelpName}} minio-kubernetes-gcs
-
 `
 
 var s3BackendCmd = cli.Command{
