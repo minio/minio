@@ -91,6 +91,7 @@ const (
 	// Add more backends here.
 )
 
+// GatewayFn returns the GatewayLayer for the backend
 type GatewayFn func([]string) (GatewayLayer, error)
 
 var (
