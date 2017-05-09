@@ -469,17 +469,25 @@ func (c cacheObjects) AnonGetObject(bucket, object string, startOffset int64, le
 	return c.getObject(bucket, object, startOffset, length, writer, true)
 }
 
-// Returns ObjectInfo from cache or the backend.
-func (c cacheObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
-	objInfo, err := c.GetObjectInfoFn(bucket, object)
+// Anonymous version of cacheObjects.GetObjectInfo
+func (c cacheObjects) getObjectInfo(bucket, object string, anonReq bool) (ObjectInfo, error) {
+	getObjectInfoFn := c.GetObjectInfoFn
+	if anonReq {
+		getObjectInfoFn = c.AnonGetObjectInfoFn
+	}
+	objInfo, err := getObjectInfoFn(bucket, object)
 	if err != nil {
 		if _, ok := errorCause(err).(BackendDown); !ok {
-			c.dcache.Delete(bucket, object)
 			return ObjectInfo{}, err
 		}
-		cachedObjInfo, _, err := c.dcache.GetObjectInfo(bucket, object)
+		cachedObjInfo, anon, err := c.dcache.GetObjectInfo(bucket, object)
 		if err == nil {
-			return cachedObjInfo, nil
+			if !anonReq {
+				return cachedObjInfo, nil
+			}
+			if anon {
+				return cachedObjInfo, nil
+			}
 		}
 		return ObjectInfo{}, BackendDown{}
 	}
@@ -487,34 +495,20 @@ func (c cacheObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 	if err != nil {
 		return objInfo, nil
 	}
-
 	if cachedObjInfo.MD5Sum != objInfo.MD5Sum {
 		c.dcache.Delete(bucket, object)
 	}
 	return objInfo, nil
 }
 
+// Returns ObjectInfo from cache or the backend.
+func (c cacheObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
+	return c.getObjectInfo(bucket, object, false)
+}
+
 // Anonymous version of cacheObjects.GetObjectInfo
 func (c cacheObjects) AnonGetObjectInfo(bucket, object string) (ObjectInfo, error) {
-	objInfo, err := c.AnonGetObjectInfoFn(bucket, object)
-	if err != nil {
-		if _, ok := errorCause(err).(BackendDown); !ok {
-			return ObjectInfo{}, err
-		}
-		cachedObjInfo, anon, err := c.dcache.GetObjectInfo(bucket, object)
-		if err == nil && anon {
-			return cachedObjInfo, nil
-		}
-		return ObjectInfo{}, BackendDown{}
-	}
-	cachedObjInfo, _, err := c.dcache.GetObjectInfo(bucket, object)
-	if err != nil {
-		return objInfo, nil
-	}
-	if cachedObjInfo.MD5Sum != objInfo.MD5Sum {
-		c.dcache.Delete(bucket, object)
-	}
-	return objInfo, nil
+	return c.getObjectInfo(bucket, object, true)
 }
 
 // Returns cachedObjects for use by Server.
