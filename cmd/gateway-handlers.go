@@ -285,6 +285,7 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	if err != nil {
+		errorIf(err, "Unable to save an object %s", r.URL.Path)
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
