@@ -652,6 +652,15 @@ func (api gatewayAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// validating region here, because isValidLocationConstraint
+	// reads body which has been read already. So only validating
+	// region here.
+	serverRegion := serverConfig.GetRegion()
+	if serverRegion != location {
+		writeErrorResponse(w, ErrInvalidRegion, r.URL)
+		return
+	}
+
 	bucketLock := globalNSMutex.NewNSLock(bucket, "")
 	bucketLock.Lock()
 	defer bucketLock.Unlock()
