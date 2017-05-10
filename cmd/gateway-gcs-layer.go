@@ -826,14 +826,15 @@ func (l *gcsGateway) SetBucketPolicies(bucket string, policyInfo policy.BucketAc
 
 	role := storage.RoleReader
 
-	if policies[0].Policy == policy.BucketPolicyReadOnly {
+	switch policies[0].Policy {
+	case policy.BucketPolicyReadOnly:
 		role = storage.RoleReader
-	} else if policies[0].Policy == policy.BucketPolicyWriteOnly {
+	case policy.BucketPolicyWriteOnly:
 		role = storage.RoleWriter
-	} else if policies[0].Policy == policy.BucketPolicyReadWrite {
+	case policy.BucketPolicyReadWrite:
 		// not supported, google only has owner role
 		return gcsToObjectError(traceError(NotSupported{}), bucket)
-	} else {
+	default:
 		return gcsToObjectError(traceError(fmt.Errorf("Unknown policy: %s", policies[0].Policy)), bucket)
 	}
 
