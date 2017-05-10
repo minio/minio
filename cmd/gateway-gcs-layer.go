@@ -33,6 +33,8 @@ import (
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
 
+	"encoding/base64"
+
 	minio "github.com/minio/minio-go"
 	"github.com/minio/minio-go/pkg/policy"
 )
@@ -274,6 +276,24 @@ func (l *gcsGateway) DeleteBucket(bucket string) error {
 	return nil
 }
 
+func toGCSPageToken(name string) string {
+	length := uint16(len(name))
+
+	b := []byte{
+		0xa,
+		byte(length & 0xFF),
+	}
+
+	length = length >> 7
+	if length > 0 {
+		b = append(b, byte(length&0xFF))
+	}
+
+	b = append(b, []byte(name)...)
+
+	return base64.StdEncoding.EncodeToString(b)
+}
+
 // ListObjects - lists all blobs in GCS bucket filtered by prefix
 func (l *gcsGateway) ListObjects(bucket string, prefix string, marker string, delimiter string, maxKeys int) (ListObjectsInfo, error) {
 	it := l.client.Bucket(bucket).Objects(l.ctx, &storage.Query{Delimiter: delimiter, Prefix: prefix, Versions: false})
@@ -281,6 +301,11 @@ func (l *gcsGateway) ListObjects(bucket string, prefix string, marker string, de
 	isTruncated := false
 	nextMarker := ""
 	prefixes := []string{}
+
+	maxKeys = maxKeys
+
+	// we'll set marker to continue
+	it.PageInfo().Token = marker
 
 	objects := []ObjectInfo{}
 	for {
@@ -290,8 +315,6 @@ func (l *gcsGateway) ListObjects(bucket string, prefix string, marker string, de
 			// metadata folder, then just break
 			// otherwise we've truncated the output
 
-			m := it.PageInfo().Token
-
 			attrs, _ := it.Next()
 			if attrs == nil {
 			} else if attrs.Prefix == ZZZZMinioPrefix {
@@ -299,18 +322,17 @@ func (l *gcsGateway) ListObjects(bucket string, prefix string, marker string, de
 			}
 
 			isTruncated = true
-			nextMarker = m
 			break
 		}
 
 		attrs, err := it.Next()
 		if err == iterator.Done {
 			break
-		}
-
-		if err != nil {
+		} else if err != nil {
 			return ListObjectsInfo{}, gcsToObjectError(traceError(err), bucket, prefix)
 		}
+
+		nextMarker = toGCSPageToken(attrs.Name)
 
 		if attrs.Prefix == ZZZZMinioPrefix {
 			// we don't return our metadata prefix
