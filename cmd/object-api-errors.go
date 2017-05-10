@@ -110,6 +110,13 @@ func (e SHA256Mismatch) Error() string {
 	return "sha256 computed does not match with what is expected"
 }
 
+// SignatureDoesNotMatch - when content md5 does not match with what was sent from client.
+type SignatureDoesNotMatch struct{}
+
+func (e SignatureDoesNotMatch) Error() string {
+	return "The request signature we calculated does not match the signature you provided. Check your key and signing method."
+}
+
 // StorageFull storage ran out of space.
 type StorageFull struct{}
 
