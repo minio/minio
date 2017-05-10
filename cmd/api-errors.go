@@ -706,6 +706,8 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrNoSuchUpload
 	case PartTooSmall:
 		apiErr = ErrEntityTooSmall
+	case SignatureDoesNotMatch:
+		apiErr = ErrSignatureDoesNotMatch
 	case SHA256Mismatch:
 		apiErr = ErrContentSHA256Mismatch
 	case ObjectTooLarge:
