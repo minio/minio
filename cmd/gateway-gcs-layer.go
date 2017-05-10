@@ -218,28 +218,8 @@ func (l *gcsGateway) MakeBucket(bucket string) error {
 func (l *gcsGateway) MakeBucketWithLocation(bucket, location string) error {
 	bkt := l.client.Bucket(bucket)
 
-	// this will map s3 regions to google multi regions
-	if v, ok := map[string]string{
-		"ap-northeast-1": "asia",
-		"ap-northeast-2": "asia",
-		"ap-south-1":     "asia",
-		"ap-southeast-1": "asia",
-		"ap-southeast-2": "asia",
-		"eu-central-1":   "eu",
-		"eu-west-1":      "eu",
-		"eu-west-2":      "eu",
-		"ca-central-1":   "us",
-		"sa-east-1":      "us",
-		"us-east-1":      "us",
-		"us-east-2":      "us",
-		"us-west-1":      "us",
-		"us-west-2":      "us",
-	}[location]; ok {
-		location = v
-	}
-
 	if err := bkt.Create(l.ctx, l.projectID, &storage.BucketAttrs{
-		Location: location,
+		Location: serverConfig.Region,
 	}); err != nil {
 		return gcsToObjectError(traceError(err), bucket)
 	}
@@ -826,14 +806,15 @@ func (l *gcsGateway) SetBucketPolicies(bucket string, policyInfo policy.BucketAc
 
 	role := storage.RoleReader
 
-	if policies[0].Policy == policy.BucketPolicyReadOnly {
+	switch policies[0].Policy {
+	case policy.BucketPolicyReadOnly:
 		role = storage.RoleReader
-	} else if policies[0].Policy == policy.BucketPolicyWriteOnly {
+	case policy.BucketPolicyWriteOnly:
 		role = storage.RoleWriter
-	} else if policies[0].Policy == policy.BucketPolicyReadWrite {
+	case policy.BucketPolicyReadWrite:
 		// not supported, google only has owner role
 		return gcsToObjectError(traceError(NotSupported{}), bucket)
-	} else {
+	default:
 		return gcsToObjectError(traceError(fmt.Errorf("Unknown policy: %s", policies[0].Policy)), bucket)
 	}
 
