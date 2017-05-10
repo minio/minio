@@ -523,6 +523,54 @@ func TestFSGetBucketInfo(t *testing.T) {
 	}
 }
 
+func TestFSPutObject(t *testing.T) {
+	// Prepare for tests
+	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
+	defer removeAll(disk)
+
+	obj := initFSObjects(disk, t)
+	bucketName := "bucket"
+	objectName := "1/2/3/4/object"
+
+	if err := obj.MakeBucket(bucketName); err != nil {
+		t.Fatal(err)
+	}
+	sha256sum := ""
+	_, err := obj.PutObject(bucketName, objectName, int64(len("abcd")), bytes.NewReader([]byte("abcd")), nil, sha256sum)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = obj.PutObject(bucketName, objectName+"/1", int64(len("abcd")), bytes.NewReader([]byte("abcd")), nil, sha256sum)
+	if err == nil {
+		t.Fatal("Unexpected should fail here, backned corruption occurred")
+	}
+	if nerr, ok := errorCause(err).(PrefixAccessDenied); !ok {
+		t.Fatalf("Expected PrefixAccessDenied, got %#v", err)
+	} else {
+		if nerr.Bucket != "bucket" {
+			t.Fatalf("Expected 'bucket', got %s", nerr.Bucket)
+		}
+		if nerr.Object != "1/2/3/4/object/1" {
+			t.Fatalf("Expected '1/2/3/4/object/1', got %s", nerr.Object)
+		}
+	}
+
+	_, err = obj.PutObject(bucketName, objectName+"/1/", 0, bytes.NewReader([]byte("")), nil, sha256sum)
+	if err == nil {
+		t.Fatal("Unexpected should fail here, backned corruption occurred")
+	}
+	if nerr, ok := errorCause(err).(PrefixAccessDenied); !ok {
+		t.Fatalf("Expected PrefixAccessDenied, got %#v", err)
+	} else {
+		if nerr.Bucket != "bucket" {
+			t.Fatalf("Expected 'bucket', got %s", nerr.Bucket)
+		}
+		if nerr.Object != "1/2/3/4/object/1/" {
+			t.Fatalf("Expected '1/2/3/4/object/1/', got %s", nerr.Object)
+		}
+	}
+}
+
 // TestFSDeleteObject - test fs.DeleteObject() with healthy and corrupted disks
 func TestFSDeleteObject(t *testing.T) {
 	// Prepare for tests

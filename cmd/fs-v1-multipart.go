@@ -706,6 +706,11 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 		return ObjectInfo{}, err
 	}
 
+	// Check if an object is present as one of the parent dir.
+	if fs.parentDirIsObject(bucket, pathutil.Dir(object)) {
+		return ObjectInfo{}, toObjectErr(traceError(errFileAccessDenied), bucket, object)
+	}
+
 	if _, err := fs.statBucketDir(bucket); err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket)
 	}
