@@ -302,10 +302,9 @@ func (l *gcsGateway) ListObjects(bucket string, prefix string, marker string, de
 	nextMarker := ""
 	prefixes := []string{}
 
-	maxKeys = maxKeys
-
 	// we'll set marker to continue
 	it.PageInfo().Token = marker
+	it.PageInfo().MaxSize = maxKeys
 
 	objects := []ObjectInfo{}
 	for {
