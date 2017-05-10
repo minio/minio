@@ -33,6 +33,7 @@ import (
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
 
+	"github.com/minio/cli"
 	minio "github.com/minio/minio-go"
 	"github.com/minio/minio-go/pkg/policy"
 )
@@ -161,7 +162,7 @@ type gcsGateway struct {
 }
 
 // newGCSGateway returns gcs gatewaylayer
-func newGCSGateway(args []string) (GatewayLayer, error) {
+func newGCSGateway(args cli.Args) (GatewayLayer, error) {
 	if len(args) != 1 {
 		return nil, fmt.Errorf("ProjectID expected")
 	}
@@ -173,7 +174,7 @@ func newGCSGateway(args []string) (GatewayLayer, error) {
 	endpoint := "storage.googleapis.com"
 	secure := true
 
-	projectID := args[0]
+	projectID := args.First()
 
 	ctx := context.Background()
 
