@@ -35,6 +35,8 @@ import (
 
 	"encoding/base64"
 
+	"bytes"
+
 	minio "github.com/minio/minio-go"
 	"github.com/minio/minio-go/pkg/policy"
 )
@@ -469,17 +471,18 @@ func (l *gcsGateway) PutObject(bucket string, key string, size int64, data io.Re
 		return ObjectInfo{}, gcsToObjectError(traceError(err), bucket)
 	}
 
-	var sha256Writer hash.Hash
-
 	teeReader := data
+
+	var sha256Writer hash.Hash
 	if sha256sum == "" {
 	} else if _, err := hex.DecodeString(sha256sum); err != nil {
 		return ObjectInfo{}, gcsToObjectError(traceError(err), bucket, key)
 	} else {
 		sha256Writer = sha256.New()
-		teeReader = io.TeeReader(data, sha256Writer)
+		teeReader = io.TeeReader(teeReader, sha256Writer)
 	}
 
+	md5sum := metadata["md5Sum"]
 	delete(metadata, "md5Sum")
 
 	object := l.client.Bucket(bucket).Object(key)
@@ -504,12 +507,18 @@ func (l *gcsGateway) PutObject(bucket string, key string, size int64, data io.Re
 	if err != nil {
 		return ObjectInfo{}, gcsToObjectError(traceError(err), bucket, key)
 	}
-	if sha256sum != "" {
-		newSHA256sum := hex.EncodeToString(sha256Writer.Sum(nil))
-		if newSHA256sum != sha256sum {
-			//l.Client.RemoveObject(bucket, object)
-			return ObjectInfo{}, traceError(SHA256Mismatch{})
-		}
+
+	if sha256sum == "" {
+	} else if newSHA256sum := hex.EncodeToString(sha256Writer.Sum(nil)); newSHA256sum != sha256sum {
+		object.Delete(l.ctx)
+		return ObjectInfo{}, traceError(SHA256Mismatch{})
+	}
+
+	if md5sum == "" {
+	} else if b, err := hex.DecodeString(md5sum); err != nil {
+	} else if bytes.Compare(b, attrs.MD5) != 0 {
+		object.Delete(l.ctx)
+		return ObjectInfo{}, traceError(SignatureDoesNotMatch{})
 	}
 
 	return fromGCSObjectInfo(attrs), nil
