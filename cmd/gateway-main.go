@@ -105,20 +105,14 @@ var (
 )
 
 // Returns access and secretkey set from environment variables.
-func mustGetGatewayConfigFromEnv() (string, string, string) {
+func mustGetGatewayCredsFromEnv() (accessKey, secretKey string) {
 	// Fetch access keys from environment variables.
-	accessKey := os.Getenv("MINIO_ACCESS_KEY")
-	secretKey := os.Getenv("MINIO_SECRET_KEY")
+	accessKey = os.Getenv("MINIO_ACCESS_KEY")
+	secretKey = os.Getenv("MINIO_SECRET_KEY")
 	if accessKey == "" || secretKey == "" {
 		fatalIf(errors.New("Missing credentials"), "Access and secret keys are mandatory to run Minio gateway server.")
 	}
-
-	region := globalMinioDefaultRegion
-	if v := os.Getenv("MINIO_REGION"); v != "" {
-		region = v
-	}
-
-	return accessKey, secretKey, region
+	return accessKey, secretKey
 }
 
 // Initialize gateway layer depending on the backend type.
@@ -188,10 +182,14 @@ func gatewayMain(ctx *cli.Context) {
 	}
 
 	// Fetch access and secret key from env.
-	accessKey, secretKey, region := mustGetGatewayConfigFromEnv()
+	accessKey, secretKey := mustGetGatewayCredsFromEnv()
 
 	// Initialize new gateway config.
-	newGatewayConfig(accessKey, secretKey, region)
+	//
+	// TODO: add support for custom region when we add
+	// support for S3 backend storage, currently this can
+	// default to "us-east-1"
+	newGatewayConfig(accessKey, secretKey, globalMinioDefaultRegion)
 
 	// Get quiet flag from command line argument.
 	quietFlag := ctx.Bool("quiet") || ctx.GlobalBool("quiet")
