@@ -27,7 +27,7 @@ go get github.com/elazarl/go-bindata-assetfs/...
 yarn release
 ```
 
-This generates ui-assets.go in the current direcotry. Now do `make` in the parent directory to build the minio binary with the newly generated ``ui-assets.go``
+This generates ui-assets.go in the current directory. Now do `make` in the parent directory to build the minio binary with the newly generated ``ui-assets.go``
 
 ### Run Minio Browser with live reload
 
