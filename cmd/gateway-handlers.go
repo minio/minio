@@ -272,10 +272,9 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 			return
 		}
 
-		sha256sum := getContentSha256Cksum(r)
-
+		sha256sum := ""
 		if !skipContentSha256Cksum(r) {
-			sha256sum = r.Header.Get("X-Amz-Content-Sha256")
+			sha256sum = getContentSha256Cksum(r)
 		}
 
 		// Create object.
