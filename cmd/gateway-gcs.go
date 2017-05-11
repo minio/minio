@@ -799,8 +799,16 @@ func (l *gcsGateway) CompleteMultipartUpload(bucket string, key string, uploadID
 
 	parts := make([]*storage.ObjectHandle, len(uploadedParts))
 	for i, uploadedPart := range uploadedParts {
-		// TODO: verify attrs / ETag
-		parts[i] = l.client.Bucket(bucket).Object(toGCSMultipartKey(key, uploadID, uploadedPart.PartNumber))
+		object := l.client.Bucket(bucket).Object(toGCSMultipartKey(key, uploadID, uploadedPart.PartNumber))
+
+		if etag, partErr := hex.DecodeString(uploadedPart.ETag); partErr != nil {
+		} else if attrs, partErr := object.Attrs(l.ctx); partErr != nil {
+			return ObjectInfo{}, gcsToObjectError(traceError(partErr), bucket, key)
+		} else if bytes.Compare(attrs.MD5, etag) != 0 {
+			return ObjectInfo{}, gcsToObjectError(traceError(InvalidPart{}), bucket, key)
+		}
+
+		parts[i] = object
 	}
 
 	if len(parts) > 32 {
@@ -808,7 +816,7 @@ func (l *gcsGateway) CompleteMultipartUpload(bucket string, key string, uploadID
 		// into subcomposes. This means that the first 32 parts will
 		// compose to a composed-object-0, next parts to composed-object-1,
 		// the final compose will compose composed-object* to 1.
-		return ObjectInfo{}, NotSupported{}
+		return ObjectInfo{}, traceError(NotSupported{})
 	}
 
 	dst := l.client.Bucket(bucket).Object(key)
