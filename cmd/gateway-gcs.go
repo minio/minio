@@ -697,20 +697,22 @@ func (l *gcsGateway) PutObjectPart(bucket string, key string, uploadID string, p
 
 // ListObjectParts returns all object parts for specified object in specified bucket
 func (l *gcsGateway) ListObjectParts(bucket string, key string, uploadID string, partNumberMarker int, maxParts int) (ListPartsInfo, error) {
-	// TODO: support partNumberMarker
-
-	prefix := fmt.Sprintf("%s/multipart-%s-%s", ZZZZMinioPrefix, key, uploadID)
+	prefix := ""
 	delimiter := "/"
 
 	it := l.client.Bucket(bucket).Objects(l.ctx, &storage.Query{Delimiter: delimiter, Prefix: prefix, Versions: false})
 
 	isTruncated := false
 
+	it.PageInfo().Token = toGCSMultipartKey(key, uploadID, partNumberMarker)
+	it.PageInfo().MaxSize = maxParts
+
+	nextPartnumberMarker := 0
+
 	parts := []PartInfo{}
 	for {
-		if maxParts <= len(parts) {
+		if len(parts) >= maxParts {
 			isTruncated = true
-			// nextMarker = it.PageInfo().Token
 			break
 		}
 
@@ -736,6 +738,8 @@ func (l *gcsGateway) ListObjectParts(bucket string, key string, uploadID string,
 			continue
 		}
 
+		nextPartnumberMarker = partID
+
 		parts = append(parts, PartInfo{
 			PartNumber:   partID,
 			LastModified: attrs.Updated,
@@ -745,8 +749,9 @@ func (l *gcsGateway) ListObjectParts(bucket string, key string, uploadID string,
 	}
 
 	return ListPartsInfo{
-		IsTruncated: isTruncated,
-		Parts:       parts,
+		IsTruncated:          isTruncated,
+		NextPartNumberMarker: nextPartnumberMarker,
+		Parts:                parts,
 	}, nil
 }
 
