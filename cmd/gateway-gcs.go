@@ -37,6 +37,12 @@ import (
 
 	"bytes"
 
+	// this package contains the url code of go 1.8
+	// due to compatibility with older versions
+	// copied it to our rep
+
+	"path/filepath"
+
 	minio "github.com/minio/minio-go"
 	"github.com/minio/minio-go/pkg/policy"
 )
@@ -589,9 +595,7 @@ func (l *gcsGateway) ListMultipartUploads(bucket string, prefix string, keyMarke
 		attrs, err := it.Next()
 		if err == iterator.Done {
 			break
-		}
-
-		if err != nil {
+		} else if err != nil {
 			return ListMultipartsInfo{}, gcsToObjectError(traceError(err), bucket)
 		}
 
@@ -629,6 +633,9 @@ func (l *gcsGateway) ListMultipartUploads(bucket string, prefix string, keyMarke
 }
 
 func fromGCSMultipartKey(s string) (key, uploadID string, partID int, err error) {
+	// remove prefixes
+	s = filepath.Base(s)
+
 	parts := strings.Split(s, "-")
 	if parts[0] != "multipart" {
 		return "", "", 0, ErrNotValidMultipartIdentifier
@@ -638,7 +645,8 @@ func fromGCSMultipartKey(s string) (key, uploadID string, partID int, err error)
 		return "", "", 0, ErrNotValidMultipartIdentifier
 	}
 
-	key = parts[1]
+	key = unescape(parts[1])
+
 	uploadID = parts[3]
 
 	partID, err = strconv.Atoi(parts[3])
@@ -649,18 +657,32 @@ func fromGCSMultipartKey(s string) (key, uploadID string, partID int, err error)
 	return
 }
 
-func toGCSMultipartKey(key string, uploadID string, partID int) string {
-	// we don't use the etag within the key, because the amazon spec
-	// explicitly notes that uploaded parts with same number are being overwritten
+func unescape(s string) string {
+	s = strings.Replace(s, "%2D", "-", -1)
+	s = strings.Replace(s, "%2F", "/", -1)
+	s = strings.Replace(s, "%25", "%", -1)
+	return s
+}
 
+func escape(s string) string {
+	s = strings.Replace(s, "%", "%25", -1)
+	s = strings.Replace(s, "/", "%2F", -1)
+	s = strings.Replace(s, "-", "%2D", -1)
+	return s
+}
+
+func toGCSMultipartKey(key string, uploadID string, partID int) string {
 	// parts are allowed to be numbered from 1 to 10,000 (inclusive)
-	return fmt.Sprintf("%s/multipart-%s-%s-%05d", ZZZZMinioPrefix, key, uploadID, partID)
+
+	// we need to encode the key because of possible slashes
+	return fmt.Sprintf("%s/multipart-%s-%s-%05d", ZZZZMinioPrefix, escape(key), uploadID, partID)
 }
 
 // NewMultipartUpload - upload object in multiple parts
 func (l *gcsGateway) NewMultipartUpload(bucket string, key string, metadata map[string]string) (uploadID string, err error) {
 	// generate new uploadid
 	uploadID = mustGetUUID()
+	uploadID = strings.Replace(uploadID, "-", "", -1)
 
 	// generate name for part zero
 	partZeroKey := toGCSMultipartKey(key, uploadID, 0)
@@ -769,9 +791,7 @@ func (l *gcsGateway) AbortMultipartUpload(bucket string, key string, uploadID st
 		attrs, err := it.Next()
 		if err == iterator.Done {
 			break
-		}
-
-		if err != nil {
+		} else if err != nil {
 			return gcsToObjectError(traceError(err), bucket, prefix)
 		}
 
