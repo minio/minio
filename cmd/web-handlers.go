@@ -889,7 +889,7 @@ func toJSONError(err error, params ...string) (jerr *json2.Error) {
 	case "InvalidBucketName":
 		if len(params) > 0 {
 			jerr = &json2.Error{
-				Message: fmt.Sprintf("Bucket Name %s is invalid. Lowercase letters, period, numerals are the only allowed characters and should be minimum 3 characters in length.", params[0]),
+				Message: fmt.Sprintf("Bucket Name %s is invalid. Lowercase letters, period, hypen, numerals are the only allowed characters and should be minimum 3 characters in length.", params[0]),
 			}
 		}
 	// Bucket not found custom error message.
