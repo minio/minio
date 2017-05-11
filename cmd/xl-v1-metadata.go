@@ -146,7 +146,10 @@ type xlMetaV1 struct {
 // XL metadata constants.
 const (
 	// XL meta version.
-	xlMetaVersion = "1.0.0"
+	xlMetaVersion = "1.0.1"
+
+	// XL meta version.
+	xlMetaVersion100 = "1.0.0"
 
 	// XL meta format string.
 	xlMetaFormat = "xl"
@@ -173,7 +176,38 @@ func newXLMetaV1(object string, dataBlocks, parityBlocks int) (xlMeta xlMetaV1) 
 // IsValid - tells if the format is sane by validating the version
 // string and format style.
 func (m xlMetaV1) IsValid() bool {
-	return m.Version == xlMetaVersion && m.Format == xlMetaFormat
+	return isXLMetaValid(m.Version, m.Format)
+}
+
+// Verifies if the backend format metadata is sane by validating
+// the version string and format style.
+func isXLMetaValid(version, format string) bool {
+	return ((version == xlMetaVersion || version == xlMetaVersion100) &&
+		format == xlMetaFormat)
+}
+
+// Converts metadata to object info.
+func (m xlMetaV1) ToObjectInfo(bucket, object string) ObjectInfo {
+	objInfo := ObjectInfo{
+		IsDir:           false,
+		Bucket:          bucket,
+		Name:            object,
+		Size:            m.Stat.Size,
+		ModTime:         m.Stat.ModTime,
+		ContentType:     m.Meta["content-type"],
+		ContentEncoding: m.Meta["content-encoding"],
+	}
+
+	// Extract etag from metadata.
+	objInfo.ETag = extractETag(m.Meta)
+
+	// etag/md5Sum has already been extracted. We need to
+	// remove to avoid it from appearing as part of
+	// response headers. e.g, X-Minio-* or X-Amz-*.
+	objInfo.UserDefined = cleanMetaETag(m.Meta)
+
+	// Success.
+	return objInfo
 }
 
 // objectPartIndex - returns the index of matching object part number.

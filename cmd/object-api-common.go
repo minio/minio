@@ -35,8 +35,8 @@ const (
 	// Objects meta prefix.
 	objectMetaPrefix = "objects"
 
-	// Md5Sum of empty string.
-	emptyStrMd5Sum = "d41d8cd98f00b204e9800998ecf8427e"
+	// ETag (hex encoded md5sum) of empty string.
+	emptyETag = "d41d8cd98f00b204e9800998ecf8427e"
 )
 
 // Global object layer mutex, used for safely updating object layer.
@@ -68,10 +68,10 @@ func dirObjectInfo(bucket, object string, size int64, metadata map[string]string
 	// This is a special case with size as '0' and object ends with
 	// a slash separator, we treat it like a valid operation and
 	// return success.
-	md5Sum := metadata["md5Sum"]
-	delete(metadata, "md5Sum")
-	if md5Sum == "" {
-		md5Sum = emptyStrMd5Sum
+	etag := metadata["etag"]
+	delete(metadata, "etag")
+	if etag == "" {
+		etag = emptyETag
 	}
 
 	return ObjectInfo{
@@ -81,7 +81,7 @@ func dirObjectInfo(bucket, object string, size int64, metadata map[string]string
 		ContentType: "application/octet-stream",
 		IsDir:       true,
 		Size:        size,
-		MD5Sum:      md5Sum,
+		ETag:        etag,
 		UserDefined: metadata,
 	}
 }

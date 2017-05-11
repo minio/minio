@@ -295,7 +295,7 @@ func fromMinioClientObjectInfo(bucket string, oi minio.ObjectInfo) ObjectInfo {
 		Name:            oi.Key,
 		ModTime:         oi.LastModified,
 		Size:            oi.Size,
-		MD5Sum:          oi.ETag,
+		ETag:            oi.ETag,
 		UserDefined:     userDefined,
 		ContentType:     oi.ContentType,
 		ContentEncoding: oi.Metadata.Get("Content-Encoding"),
@@ -326,13 +326,13 @@ func (l *s3Gateway) PutObject(bucket string, object string, size int64, data io.
 	}
 
 	var md5sumBytes []byte
-	md5sum := metadata["md5Sum"]
+	md5sum := metadata["etag"]
 	if md5sum != "" {
 		md5sumBytes, err = hex.DecodeString(md5sum)
 		if err != nil {
 			return ObjectInfo{}, s3ToObjectError(traceError(err), bucket, object)
 		}
-		delete(metadata, "md5Sum")
+		delete(metadata, "etag")
 	}
 
 	oi, err := l.Client.PutObject(bucket, object, size, data, md5sumBytes, sha256sumBytes, toMinioClientMetadata(metadata))

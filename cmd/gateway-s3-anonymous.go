@@ -36,13 +36,13 @@ func (l *s3Gateway) AnonPutObject(bucket string, object string, size int64, data
 	}
 
 	var md5sumBytes []byte
-	md5sum := metadata["md5Sum"]
+	md5sum := metadata["etag"]
 	if md5sum != "" {
 		md5sumBytes, err = hex.DecodeString(md5sum)
 		if err != nil {
 			return ObjectInfo{}, s3ToObjectError(traceError(err), bucket, object)
 		}
-		delete(metadata, "md5Sum")
+		delete(metadata, "etag")
 	}
 
 	oi, err := l.anonClient.PutObject(bucket, object, size, data, md5sumBytes, sha256sumBytes, toMinioClientMetadata(metadata))

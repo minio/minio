@@ -712,12 +712,12 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 
 	newMD5Hex := hex.EncodeToString(md5Writer.Sum(nil))
 	// Update the md5sum if not set with the newly calculated one.
-	if len(metadata["md5Sum"]) == 0 {
-		metadata["md5Sum"] = newMD5Hex
+	if len(metadata["etag"]) == 0 {
+		metadata["etag"] = newMD5Hex
 	}
 
 	// md5Hex representation.
-	md5Hex := metadata["md5Sum"]
+	md5Hex := metadata["etag"]
 	if md5Hex != "" {
 		if newMD5Hex != md5Hex {
 			// Returns md5 mismatch.
@@ -849,8 +849,12 @@ func (fs fsObjects) getObjectETag(bucket, entry string) (string, error) {
 		}
 	}
 
-	fsMetaMap := parseFSMetaMap(fsMetaBuf)
-	return fsMetaMap["md5Sum"], nil
+	// Check if FS metadata is valid, if not return error.
+	if !isFSMetaValid(parseFSVersion(fsMetaBuf), parseFSFormat(fsMetaBuf)) {
+		return "", toObjectErr(traceError(errCorruptedFormat), bucket, entry)
+	}
+
+	return extractETag(parseFSMetaMap(fsMetaBuf)), nil
 }
 
 // ListObjects - list all objects at prefix upto maxKeys., optionally delimited by '/'. Maintains the list pool
@@ -901,8 +905,8 @@ func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 		// Protect reading `fs.json`.
 		objectLock := globalNSMutex.NewNSLock(bucket, entry)
 		objectLock.RLock()
-		var md5Sum string
-		md5Sum, err = fs.getObjectETag(bucket, entry)
+		var etag string
+		etag, err = fs.getObjectETag(bucket, entry)
 		objectLock.RUnlock()
 		if err != nil {
 			return ObjectInfo{}, err
@@ -922,7 +926,7 @@ func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 			Size:    fi.Size(),
 			ModTime: fi.ModTime(),
 			IsDir:   fi.IsDir(),
-			MD5Sum:  md5Sum,
+			ETag:    etag,
 		}, nil
 	}
 

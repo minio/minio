@@ -62,8 +62,8 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, contentRange *h
 	w.Header().Set("Last-Modified", lastModified)
 
 	// Set Etag if available.
-	if objInfo.MD5Sum != "" {
-		w.Header().Set("ETag", "\""+objInfo.MD5Sum+"\"")
+	if objInfo.ETag != "" {
+		w.Header().Set("ETag", "\""+objInfo.ETag+"\"")
 	}
 
 	// Set all other user defined metadata.

@@ -101,23 +101,7 @@ func (xl xlObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string
 		if err = renameXLMetadata(onlineDisks, minioMetaTmpBucket, tempObj, srcBucket, srcObject, xl.writeQuorum); err != nil {
 			return ObjectInfo{}, toObjectErr(err, srcBucket, srcObject)
 		}
-
-		objInfo := ObjectInfo{
-			IsDir:           false,
-			Bucket:          srcBucket,
-			Name:            srcObject,
-			Size:            xlMeta.Stat.Size,
-			ModTime:         xlMeta.Stat.ModTime,
-			MD5Sum:          xlMeta.Meta["md5Sum"],
-			ContentType:     xlMeta.Meta["content-type"],
-			ContentEncoding: xlMeta.Meta["content-encoding"],
-		}
-		// md5Sum has already been extracted into objInfo.MD5Sum.  We
-		// need to remove it from xlMetaMap to avoid it from appearing as
-		// part of response headers. e.g, X-Minio-* or X-Amz-*.
-		delete(xlMeta.Meta, "md5Sum")
-		objInfo.UserDefined = xlMeta.Meta
-		return objInfo, nil
+		return xlMeta.ToObjectInfo(srcBucket, srcObject), nil
 	}
 
 	// Initialize pipe.
@@ -333,10 +317,9 @@ func (xl xlObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 
 // getObjectInfo - wrapper for reading object metadata and constructs ObjectInfo.
 func (xl xlObjects) getObjectInfo(bucket, object string) (objInfo ObjectInfo, err error) {
-	// returns xl meta map and stat info.
+	// Extracts xlStat and xlMetaMap.
 	xlStat, xlMetaMap, err := xl.readXLMetaStat(bucket, object)
 	if err != nil {
-		// Return error.
 		return ObjectInfo{}, err
 	}
 
@@ -346,17 +329,19 @@ func (xl xlObjects) getObjectInfo(bucket, object string) (objInfo ObjectInfo, er
 		Name:            object,
 		Size:            xlStat.Size,
 		ModTime:         xlStat.ModTime,
-		MD5Sum:          xlMetaMap["md5Sum"],
 		ContentType:     xlMetaMap["content-type"],
 		ContentEncoding: xlMetaMap["content-encoding"],
 	}
 
-	// md5Sum has already been extracted into objInfo.MD5Sum.  We
-	// need to remove it from xlMetaMap to avoid it from appearing as
-	// part of response headers. e.g, X-Minio-* or X-Amz-*.
+	// Extract etag.
+	objInfo.ETag = extractETag(xlMetaMap)
 
-	delete(xlMetaMap, "md5Sum")
-	objInfo.UserDefined = xlMetaMap
+	// etag/md5Sum has already been extracted. We need to
+	// remove to avoid it from appearing as part of
+	// response headers. e.g, X-Minio-* or X-Amz-*.
+	objInfo.UserDefined = cleanMetaETag(xlMetaMap)
+
+	// Success.
 	return objInfo, nil
 }
 
@@ -650,8 +635,8 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 
 	newMD5Hex := hex.EncodeToString(md5Writer.Sum(nil))
 	// Update the md5sum if not set with the newly calculated one.
-	if len(metadata["md5Sum"]) == 0 {
-		metadata["md5Sum"] = newMD5Hex
+	if len(metadata["etag"]) == 0 {
+		metadata["etag"] = newMD5Hex
 	}
 
 	// Guess content-type from the extension if possible.
@@ -664,7 +649,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	}
 
 	// md5Hex representation.
-	md5Hex := metadata["md5Sum"]
+	md5Hex := metadata["etag"]
 	if md5Hex != "" {
 		if newMD5Hex != md5Hex {
 			// Returns md5 mismatch.
@@ -730,7 +715,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 		Name:            object,
 		Size:            xlMeta.Stat.Size,
 		ModTime:         xlMeta.Stat.ModTime,
-		MD5Sum:          xlMeta.Meta["md5Sum"],
+		ETag:            xlMeta.Meta["etag"],
 		ContentType:     xlMeta.Meta["content-type"],
 		ContentEncoding: xlMeta.Meta["content-encoding"],
 		UserDefined:     xlMeta.Meta,

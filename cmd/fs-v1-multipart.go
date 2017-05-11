@@ -871,7 +871,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	if len(fsMeta.Meta) == 0 {
 		fsMeta.Meta = make(map[string]string)
 	}
-	fsMeta.Meta["md5Sum"] = s3MD5
+	fsMeta.Meta["etag"] = s3MD5
 
 	// Write all the set metadata.
 	if _, err = fsMeta.WriteTo(metaFile); err != nil {

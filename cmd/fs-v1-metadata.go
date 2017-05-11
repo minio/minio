@@ -33,9 +33,29 @@ import (
 	"github.com/tidwall/gjson"
 )
 
+// FS format, and object metadata.
 const (
-	fsMetaJSONFile   = "fs.json"
+	// fs.json object metadata.
+	fsMetaJSONFile = "fs.json"
+	// format.json FS format metadata.
 	fsFormatJSONFile = "format.json"
+)
+
+// FS metadata constants.
+const (
+	// FS backend meta 1.0.0 version.
+	fsMetaVersion100 = "1.0.0"
+
+	// FS backend meta 1.0.1 version.
+	fsMetaVersion = "1.0.1"
+
+	// FS backend meta format.
+	fsMetaFormat = "fs"
+
+	// FS backend format version.
+	fsFormatVersion = fsFormatV2
+
+	// Add more constants here.
 )
 
 // A fsMetaV1 represents a metadata header mapping keys to sets of values.
@@ -48,6 +68,19 @@ type fsMetaV1 struct {
 	// Metadata map for current object `fs.json`.
 	Meta  map[string]string `json:"meta,omitempty"`
 	Parts []objectPartInfo  `json:"parts,omitempty"`
+}
+
+// IsValid - tells if the format is sane by validating the version
+// string and format style.
+func (m fsMetaV1) IsValid() bool {
+	return isFSMetaValid(m.Version, m.Format)
+}
+
+// Verifies if the backend format metadata is sane by validating
+// the version string and format style.
+func isFSMetaValid(version, format string) bool {
+	return ((version == fsMetaVersion || version == fsMetaVersion100) &&
+		format == fsMetaFormat)
 }
 
 // Converts metadata to object info.
@@ -78,17 +111,15 @@ func (m fsMetaV1) ToObjectInfo(bucket, object string, fi os.FileInfo) ObjectInfo
 		objInfo.IsDir = fi.IsDir()
 	}
 
-	objInfo.MD5Sum = m.Meta["md5Sum"]
+	// Extract etag from metadata.
+	objInfo.ETag = extractETag(m.Meta)
 	objInfo.ContentType = m.Meta["content-type"]
 	objInfo.ContentEncoding = m.Meta["content-encoding"]
 
-	// md5Sum has already been extracted into objInfo.MD5Sum.  We
-	// need to remove it from m.Meta to avoid it from appearing as
-	// part of response headers. e.g, X-Minio-* or X-Amz-*.
-	delete(m.Meta, "md5Sum")
-
-	// Save all the other userdefined API.
-	objInfo.UserDefined = m.Meta
+	// etag/md5Sum has already been extracted. We need to
+	// remove to avoid it from appearing as part of
+	// response headers. e.g, X-Minio-* or X-Amz-*.
+	objInfo.UserDefined = cleanMetaETag(m.Meta)
 
 	// Success..
 	return objInfo
@@ -207,6 +238,12 @@ func (m *fsMetaV1) ReadFrom(lk *lock.LockedFile) (n int64, err error) {
 	// obtain format.
 	m.Format = parseFSFormat(fsMetaBuf)
 
+	// Verify if the format is valid, return corrupted format
+	// for unrecognized formats.
+	if !isFSMetaValid(m.Version, m.Format) {
+		return 0, traceError(errCorruptedFormat)
+	}
+
 	// obtain metadata.
 	m.Meta = parseFSMetaMap(fsMetaBuf)
 
@@ -219,20 +256,6 @@ func (m *fsMetaV1) ReadFrom(lk *lock.LockedFile) (n int64, err error) {
 	// Success.
 	return int64(len(fsMetaBuf)), nil
 }
-
-// FS metadata constants.
-const (
-	// FS backend meta version.
-	fsMetaVersion = "1.0.0"
-
-	// FS backend meta format.
-	fsMetaFormat = "fs"
-
-	// FS backend format version.
-	fsFormatVersion = fsFormatV2
-
-	// Add more constants here.
-)
 
 // FS format version strings.
 const (

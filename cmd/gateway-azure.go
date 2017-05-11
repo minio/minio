@@ -235,7 +235,7 @@ func (a AzureObjects) ListObjects(bucket, prefix, marker, delimiter string, maxK
 			Name:            object.Name,
 			ModTime:         t,
 			Size:            object.Properties.ContentLength,
-			MD5Sum:          canonicalizeETag(object.Properties.Etag),
+			ETag:            canonicalizeETag(object.Properties.Etag),
 			ContentType:     object.Properties.ContentType,
 			ContentEncoding: object.Properties.ContentEncoding,
 		})
@@ -285,7 +285,7 @@ func (a AzureObjects) GetObjectInfo(bucket, object string) (objInfo ObjectInfo, 
 	objInfo = ObjectInfo{
 		Bucket:      bucket,
 		UserDefined: make(map[string]string),
-		MD5Sum:      canonicalizeETag(prop.Etag),
+		ETag:        canonicalizeETag(prop.Etag),
 		ModTime:     t,
 		Name:        object,
 		Size:        prop.ContentLength,
@@ -319,7 +319,7 @@ func (a AzureObjects) PutObject(bucket, object string, size int64, data io.Reade
 		teeReader = io.TeeReader(data, sha256Writer)
 	}
 
-	delete(metadata, "md5Sum")
+	delete(metadata, "etag")
 
 	err = a.client.CreateBlockBlobFromReader(bucket, object, uint64(size), teeReader, canonicalMetadata(metadata))
 	if err != nil {

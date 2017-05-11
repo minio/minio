@@ -134,7 +134,7 @@ func getRedirectPostRawQuery(objInfo ObjectInfo) string {
 	redirectValues := make(url.Values)
 	redirectValues.Set("bucket", objInfo.Bucket)
 	redirectValues.Set("key", objInfo.Name)
-	redirectValues.Set("etag", "\""+objInfo.MD5Sum+"\"")
+	redirectValues.Set("etag", "\""+objInfo.ETag+"\"")
 	return redirectValues.Encode()
 }
 

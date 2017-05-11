@@ -535,7 +535,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	w.Header().Set("ETag", `"`+objInfo.MD5Sum+`"`)
+	w.Header().Set("ETag", `"`+objInfo.ETag+`"`)
 	w.Header().Set("Location", getObjectLocation(bucket, object))
 
 	// Get host and port from Request.RemoteAddr.
@@ -568,7 +568,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		resp := encodeResponse(PostResponse{
 			Bucket:   objInfo.Bucket,
 			Key:      objInfo.Name,
-			ETag:     `"` + objInfo.MD5Sum + `"`,
+			ETag:     `"` + objInfo.ETag + `"`,
 			Location: getObjectLocation(objInfo.Bucket, objInfo.Name),
 		})
 		writeResponse(w, http.StatusCreated, resp, "application/xml")
