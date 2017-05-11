@@ -779,25 +779,29 @@ func (l *gcsGateway) ListObjectParts(bucket string, key string, uploadID string,
 
 // AbortMultipartUpload aborts a ongoing multipart upload
 func (l *gcsGateway) AbortMultipartUpload(bucket string, key string, uploadID string) error {
-	prefix := fmt.Sprintf("%s/multipart-%s-%s", ZZZZMinioPrefix, key, uploadID)
-	delimiter := "/"
 
-	// delete part zero, ignoring errors here, we want to clean up all remains
-	_ = l.client.Bucket(bucket).Object(toGCSMultipartKey(key, uploadID, 0)).Delete(l.ctx)
+	delimiter := "/"
+	prefix := fmt.Sprintf("%s/multipart-%s-%s", ZZZZMinioPrefix, key, uploadID)
 
 	// iterate through all parts and delete them
 	it := l.client.Bucket(bucket).Objects(l.ctx, &storage.Query{Delimiter: delimiter, Prefix: prefix, Versions: false})
+
+	it.PageInfo().Token = toGCSPageToken(toGCSMultipartKey(key, uploadID, 0))
+
 	for {
 		attrs, err := it.Next()
 		if err == iterator.Done {
 			break
 		} else if err != nil {
-			return gcsToObjectError(traceError(err), bucket, prefix)
+			return gcsToObjectError(traceError(err), bucket, key)
 		}
 
 		// on error continue deleting other parts
 		l.client.Bucket(bucket).Object(attrs.Name).Delete(l.ctx)
 	}
+
+	// delete part zero, ignoring errors here, we want to clean up all remains
+	_ = l.client.Bucket(bucket).Object(toGCSMultipartKey(key, uploadID, 0)).Delete(l.ctx)
 
 	return nil
 }
