@@ -593,9 +593,7 @@ func (l *gcsGateway) ListMultipartUploads(bucket string, prefix string, keyMarke
 		attrs, err := it.Next()
 		if err == iterator.Done {
 			break
-		}
-
-		if err != nil {
+		} else if err != nil {
 			return ListMultipartsInfo{}, gcsToObjectError(traceError(err), bucket)
 		}
 
@@ -776,9 +774,7 @@ func (l *gcsGateway) AbortMultipartUpload(bucket string, key string, uploadID st
 		attrs, err := it.Next()
 		if err == iterator.Done {
 			break
-		}
-
-		if err != nil {
+		} else if err != nil {
 			return gcsToObjectError(traceError(err), bucket, prefix)
 		}
 
