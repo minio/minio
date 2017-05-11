@@ -41,7 +41,7 @@ import (
 	// due to compatibility with older versions
 	// copied it to our rep
 
-	"path/filepath"
+	"path"
 
 	minio "github.com/minio/minio-go"
 	"github.com/minio/minio-go/pkg/policy"
@@ -575,18 +575,18 @@ func (l *gcsGateway) DeleteObject(bucket string, object string) error {
 
 // ListMultipartUploads - lists all multipart uploads.
 func (l *gcsGateway) ListMultipartUploads(bucket string, prefix string, keyMarker string, uploadIDMarker string, delimiter string, maxUploads int) (ListMultipartsInfo, error) {
-	// TODO: implement prefix and prefixes, how does this work for Multiparts??
-	prefix = fmt.Sprintf("%s/multipart-", ZZZZMinioPrefix)
+	prefix = pathJoin(ZZZZMinioPrefix, "multipart-")
 
 	it := l.client.Bucket(bucket).Objects(l.ctx, &storage.Query{Delimiter: delimiter, Prefix: prefix, Versions: false})
 
-	isTruncated := false
-	// prefixes := []string{}
 	nextMarker := ""
+	isTruncated := false
+
+	it.PageInfo().Token = uploadIDMarker
 
 	uploads := []uploadMetadata{}
 	for {
-		if maxUploads <= len(uploads) {
+		if len(uploads) >= maxUploads {
 			isTruncated = true
 			nextMarker = it.PageInfo().Token
 			break
@@ -609,6 +609,8 @@ func (l *gcsGateway) ListMultipartUploads(bucket string, prefix string, keyMarke
 		} else if partID != 0 {
 			continue
 		}
+
+		nextMarker = toGCSPageToken(attrs.Name)
 
 		// we count only partID == 0
 		uploads = append(uploads, uploadMetadata{
@@ -634,7 +636,7 @@ func (l *gcsGateway) ListMultipartUploads(bucket string, prefix string, keyMarke
 
 func fromGCSMultipartKey(s string) (key, uploadID string, partID int, err error) {
 	// remove prefixes
-	s = filepath.Base(s)
+	s = path.Base(s)
 
 	parts := strings.Split(s, "-")
 	if parts[0] != "multipart" {
@@ -675,7 +677,7 @@ func toGCSMultipartKey(key string, uploadID string, partID int) string {
 	// parts are allowed to be numbered from 1 to 10,000 (inclusive)
 
 	// we need to encode the key because of possible slashes
-	return fmt.Sprintf("%s/multipart-%s-%s-%05d", ZZZZMinioPrefix, escape(key), uploadID, partID)
+	return pathJoin(ZZZZMinioPrefix, fmt.Sprintf("multipart-%s-%s-%05d", escape(key), uploadID, partID))
 }
 
 // NewMultipartUpload - upload object in multiple parts
@@ -719,8 +721,8 @@ func (l *gcsGateway) PutObjectPart(bucket string, key string, uploadID string, p
 
 // ListObjectParts returns all object parts for specified object in specified bucket
 func (l *gcsGateway) ListObjectParts(bucket string, key string, uploadID string, partNumberMarker int, maxParts int) (ListPartsInfo, error) {
-	prefix := ""
-	delimiter := "/"
+	delimiter := slashSeparator
+	prefix := pathJoin(ZZZZMinioPrefix, fmt.Sprintf("multipart-%s-%s", escape(key), uploadID))
 
 	it := l.client.Bucket(bucket).Objects(l.ctx, &storage.Query{Delimiter: delimiter, Prefix: prefix, Versions: false})
 
@@ -741,9 +743,7 @@ func (l *gcsGateway) ListObjectParts(bucket string, key string, uploadID string,
 		attrs, err := it.Next()
 		if err == iterator.Done {
 			break
-		}
-
-		if err != nil {
+		} else if err != nil {
 			return ListPartsInfo{}, gcsToObjectError(traceError(err), bucket, prefix)
 		}
 
@@ -779,9 +779,8 @@ func (l *gcsGateway) ListObjectParts(bucket string, key string, uploadID string,
 
 // AbortMultipartUpload aborts a ongoing multipart upload
 func (l *gcsGateway) AbortMultipartUpload(bucket string, key string, uploadID string) error {
-
-	delimiter := "/"
-	prefix := fmt.Sprintf("%s/multipart-%s-%s", ZZZZMinioPrefix, key, uploadID)
+	delimiter := slashSeparator
+	prefix := pathJoin(ZZZZMinioPrefix, fmt.Sprintf("multipart-%s-%s", escape(key), uploadID))
 
 	// iterate through all parts and delete them
 	it := l.client.Bucket(bucket).Objects(l.ctx, &storage.Query{Delimiter: delimiter, Prefix: prefix, Versions: false})
