@@ -649,7 +649,7 @@ func fromGCSMultipartKey(s string) (key, uploadID string, partID int, err error)
 
 	key = unescape(parts[1])
 
-	uploadID = parts[3]
+	uploadID = parts[2]
 
 	partID, err = strconv.Atoi(parts[3])
 	if err != nil {
@@ -728,7 +728,7 @@ func (l *gcsGateway) ListObjectParts(bucket string, key string, uploadID string,
 
 	isTruncated := false
 
-	it.PageInfo().Token = toGCSMultipartKey(key, uploadID, partNumberMarker)
+	it.PageInfo().Token = toGCSPageToken(toGCSMultipartKey(key, uploadID, partNumberMarker))
 	it.PageInfo().MaxSize = maxParts
 
 	nextPartnumberMarker := 0
