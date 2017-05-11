@@ -66,7 +66,6 @@ EXAMPLES:
       $ gcloud init --console-only # this will configure your google account
       $ export MINIO_ACCESS_KEY=accesskey
       $ export MINIO_SECRET_KEY=secretkey
-      $ export MINIO_REGION=us
       $ {{.HelpName}} gcs [PROFILE:]PROJECTID
 `
 
