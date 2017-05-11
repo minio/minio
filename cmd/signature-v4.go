@@ -175,7 +175,7 @@ func doesPolicySignatureV4Match(formValues http.Header) APIErrorCode {
 	}
 
 	// Get signing key.
-	signingKey := getSigningKey(cred.SecretKey, credHeader.scope.date, region)
+	signingKey := getSigningKey(cred.SecretKey, credHeader.scope.date, sRegion)
 
 	// Get signature.
 	newSignature := getSignature(signingKey, formValues.Get("Policy"))

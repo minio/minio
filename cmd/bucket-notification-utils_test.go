@@ -259,11 +259,6 @@ func TestQueueARN(t *testing.T) {
 			queueARN: "arn:minio:sns:us-east-1:1:listen",
 			errCode:  ErrARNNotification,
 		},
-		// Invalid region 'us-west-1' in queue arn.
-		{
-			queueARN: "arn:minio:sqs:us-west-1:1:redis",
-			errCode:  ErrRegionNotification,
-		},
 		// Invalid queue name empty in queue arn.
 		{
 			queueARN: "arn:minio:sqs:us-east-1:1:",
@@ -335,11 +330,6 @@ func TestUnmarshalSQSARN(t *testing.T) {
 		// Invalid empty queue arn.
 		{
 			queueARN: "",
-			Type:     "",
-		},
-		// Invalid region 'us-west-1' in queue arn.
-		{
-			queueARN: "arn:minio:sqs:us-west-1:1:redis",
 			Type:     "",
 		},
 		// Partial queue arn.

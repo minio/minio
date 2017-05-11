@@ -29,7 +29,7 @@ import (
 const (
 	globalMinioCertExpireWarnDays = time.Hour * 24 * 30 // 30 days.
 
-	globalMinioDefaultRegion       = "us-east-1"
+	globalMinioDefaultRegion       = ""
 	globalMinioDefaultOwnerID      = "minio"
 	globalMinioDefaultStorageClass = "STANDARD"
 	globalWindowsOSName            = "windows"
