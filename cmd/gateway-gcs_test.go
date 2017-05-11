@@ -18,6 +18,41 @@ package cmd
 
 import "testing"
 
+func TestEscape(t *testing.T) {
+	testCases := []struct {
+		Value        string
+		EscapedValue string
+	}{
+		{
+			Value:        "test-test",
+			EscapedValue: "test%2Dtest",
+		},
+		{
+			Value:        "test/test",
+			EscapedValue: "test%2Ftest",
+		},
+		{
+			Value:        "test%test",
+			EscapedValue: "test%25test",
+		},
+		{
+			Value:        "%%%////+++",
+			EscapedValue: "%25%25%25%2F%2F%2F%2F+++",
+		},
+	}
+
+	for i, testCase := range testCases {
+		if escape(testCase.Value) != testCase.EscapedValue {
+			t.Errorf("Test %d: Expected %s, got %s", i+1, testCase.EscapedValue, escape(testCase.Value))
+		}
+
+		if unescape(testCase.EscapedValue) != testCase.Value {
+			t.Errorf("Test %d: Expected %s, got %s", i+1, testCase.Value, unescape(testCase.EscapedValue))
+		}
+	}
+
+}
+
 func TestToGCSPageToken(t *testing.T) {
 	testCases := []struct {
 		Name  string
