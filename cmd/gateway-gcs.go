@@ -575,18 +575,18 @@ func (l *gcsGateway) DeleteObject(bucket string, object string) error {
 
 // ListMultipartUploads - lists all multipart uploads.
 func (l *gcsGateway) ListMultipartUploads(bucket string, prefix string, keyMarker string, uploadIDMarker string, delimiter string, maxUploads int) (ListMultipartsInfo, error) {
-	// TODO: implement prefix and prefixes, how does this work for Multiparts??
 	prefix = fmt.Sprintf("%s/multipart-", ZZZZMinioPrefix)
 
 	it := l.client.Bucket(bucket).Objects(l.ctx, &storage.Query{Delimiter: delimiter, Prefix: prefix, Versions: false})
 
-	isTruncated := false
-	// prefixes := []string{}
 	nextMarker := ""
+	isTruncated := false
+
+	it.PageInfo().Token = uploadIDMarker
 
 	uploads := []uploadMetadata{}
 	for {
-		if maxUploads <= len(uploads) {
+		if len(uploads) >= maxUploads {
 			isTruncated = true
 			nextMarker = it.PageInfo().Token
 			break
@@ -609,6 +609,8 @@ func (l *gcsGateway) ListMultipartUploads(bucket string, prefix string, keyMarke
 		} else if partID != 0 {
 			continue
 		}
+
+		nextMarker = toGCSPageToken(attrs.Name)
 
 		// we count only partID == 0
 		uploads = append(uploads, uploadMetadata{
