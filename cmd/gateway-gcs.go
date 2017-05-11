@@ -40,7 +40,9 @@ import (
 	// this package contains the url code of go 1.8
 	// due to compatibility with older versions
 	// copied it to our rep
-	gcsurl "github.com/minio/minio/cmd/gcs"
+
+	"path/filepath"
+
 	minio "github.com/minio/minio-go"
 	"github.com/minio/minio-go/pkg/policy"
 )
@@ -631,6 +633,9 @@ func (l *gcsGateway) ListMultipartUploads(bucket string, prefix string, keyMarke
 }
 
 func fromGCSMultipartKey(s string) (key, uploadID string, partID int, err error) {
+	// remove prefixes
+	s = filepath.Base(s)
+
 	parts := strings.Split(s, "-")
 	if parts[0] != "multipart" {
 		return "", "", 0, ErrNotValidMultipartIdentifier
@@ -640,10 +645,7 @@ func fromGCSMultipartKey(s string) (key, uploadID string, partID int, err error)
 		return "", "", 0, ErrNotValidMultipartIdentifier
 	}
 
-	key, err = gcsurl.PathUnescape(parts[1])
-	if err != nil {
-		return "", "", 0, err
-	}
+	key = unescape(parts[1])
 
 	uploadID = parts[3]
 
@@ -655,17 +657,32 @@ func fromGCSMultipartKey(s string) (key, uploadID string, partID int, err error)
 	return
 }
 
+func unescape(s string) string {
+	s = strings.Replace(s, "%2D", "-", -1)
+	s = strings.Replace(s, "%2F", "/", -1)
+	s = strings.Replace(s, "%25", "%", -1)
+	return s
+}
+
+func escape(s string) string {
+	s = strings.Replace(s, "%", "%25", -1)
+	s = strings.Replace(s, "/", "%2F", -1)
+	s = strings.Replace(s, "-", "%2D", -1)
+	return s
+}
+
 func toGCSMultipartKey(key string, uploadID string, partID int) string {
 	// parts are allowed to be numbered from 1 to 10,000 (inclusive)
 
 	// we need to encode the key because of possible slashes
-	return fmt.Sprintf("%s/multipart-%s-%s-%05d", ZZZZMinioPrefix, gcsurl.PathEscape(key), uploadID, partID)
+	return fmt.Sprintf("%s/multipart-%s-%s-%05d", ZZZZMinioPrefix, escape(key), uploadID, partID)
 }
 
 // NewMultipartUpload - upload object in multiple parts
 func (l *gcsGateway) NewMultipartUpload(bucket string, key string, metadata map[string]string) (uploadID string, err error) {
 	// generate new uploadid
 	uploadID = mustGetUUID()
+	uploadID = strings.Replace(uploadID, "-", "", -1)
 
 	// generate name for part zero
 	partZeroKey := toGCSMultipartKey(key, uploadID, 0)
