@@ -37,6 +37,10 @@ import (
 
 	"bytes"
 
+	// this package contains the url code of go 1.8
+	// due to compatibility with older versions
+	// copied it to our rep
+	gcsurl "github.com/minio/minio/cmd/gcs"
 	minio "github.com/minio/minio-go"
 	"github.com/minio/minio-go/pkg/policy"
 )
@@ -638,7 +642,11 @@ func fromGCSMultipartKey(s string) (key, uploadID string, partID int, err error)
 		return "", "", 0, ErrNotValidMultipartIdentifier
 	}
 
-	key = parts[1]
+	key, err = gcsurl.PathUnescape(parts[1])
+	if err != nil {
+		return "", "", 0, err
+	}
+
 	uploadID = parts[3]
 
 	partID, err = strconv.Atoi(parts[3])
@@ -650,11 +658,10 @@ func fromGCSMultipartKey(s string) (key, uploadID string, partID int, err error)
 }
 
 func toGCSMultipartKey(key string, uploadID string, partID int) string {
-	// we don't use the etag within the key, because the amazon spec
-	// explicitly notes that uploaded parts with same number are being overwritten
-
 	// parts are allowed to be numbered from 1 to 10,000 (inclusive)
-	return fmt.Sprintf("%s/multipart-%s-%s-%05d", ZZZZMinioPrefix, key, uploadID, partID)
+
+	// we need to encode the key because of possible slashes
+	return fmt.Sprintf("%s/multipart-%s-%s-%05d", ZZZZMinioPrefix, gcsurl.PathEscape(key), uploadID, partID)
 }
 
 // NewMultipartUpload - upload object in multiple parts
