@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bytes"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -25,6 +26,8 @@ import (
 	"net/rpc"
 	"runtime"
 	"testing"
+
+	"golang.org/x/crypto/blake2b"
 )
 
 // Tests the construction of canonical string by the
@@ -387,6 +390,24 @@ func (s *TestRPCStorageSuite) testRPCStorageFileOps(t *testing.T) {
 		if !bytes.Equal(buf[4:9], buf1) {
 			t.Errorf("Expected %s, got %s", string(buf[4:9]), string(buf1))
 		}
+
+		blakeHash := func(s string) string {
+			k := blake2b.Sum512([]byte(s))
+			return hex.EncodeToString(k[:])
+		}
+		buf2 := make([]byte, 2)
+		n, err = storageDisk.ReadFileWithVerify("myvol", "file1", 1,
+			buf2, HashBlake2b, blakeHash(string(buf)))
+		if err != nil {
+			t.Error("Error in ReadFileWithVerify", err)
+		}
+		if n != 2 {
+			t.Errorf("Expected `2`, got %d", n)
+		}
+		if !bytes.Equal(buf[1:3], buf2) {
+			t.Errorf("Expected %s, got %s", string(buf[1:3]), string(buf2))
+		}
+
 		err = storageDisk.RenameFile("myvol", "file1", "myvol", "file2")
 		if err != nil {
 			t.Error("Unable to initiate RenameFile", err)

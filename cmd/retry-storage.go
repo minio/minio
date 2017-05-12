@@ -178,6 +178,23 @@ func (f retryStorage) ReadFile(volume, path string, offset int64, buffer []byte)
 	return m, err
 }
 
+// ReadFileWithVerify - a retryable implementation of reading at
+// offset from a file with verification.
+func (f retryStorage) ReadFileWithVerify(volume, path string, offset int64, buffer []byte,
+	algo HashAlgo, expectedHash string) (m int64, err error) {
+
+	m, err = f.remoteStorage.ReadFileWithVerify(volume, path, offset, buffer,
+		algo, expectedHash)
+	if err == errDiskNotFound {
+		err = f.reInit()
+		if err == nil {
+			return f.remoteStorage.ReadFileWithVerify(volume, path,
+				offset, buffer, algo, expectedHash)
+		}
+	}
+	return m, err
+}
+
 // ListDir - a retryable implementation of listing directory entries.
 func (f retryStorage) ListDir(volume, path string) (entries []string, err error) {
 	entries, err = f.remoteStorage.ListDir(volume, path)

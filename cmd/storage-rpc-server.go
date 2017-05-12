@@ -160,6 +160,26 @@ func (s *storageServer) ReadFileHandler(args *ReadFileArgs, reply *[]byte) (err 
 	return err
 }
 
+// ReadFileWithVerifyHandler - read file with verify handler is rpc wrapper to read file with verify.
+func (s *storageServer) ReadFileWithVerifyHandler(args *ReadFileWithVerifyArgs, reply *[]byte) (err error) {
+	if err = args.IsAuthenticated(); err != nil {
+		return err
+	}
+
+	var n int64
+	n, err = s.storage.ReadFileWithVerify(args.Vol, args.Path, args.Offset, args.Buffer,
+		args.Algo, args.ExpectedHash)
+	// Sending an error over the rpc layer, would cause unmarshalling to fail. In situations
+	// when we have short read i.e `io.ErrUnexpectedEOF` treat it as good condition and copy
+	// the buffer properly.
+	if err == io.ErrUnexpectedEOF {
+		// Reset to nil as good condition.
+		err = nil
+	}
+	*reply = args.Buffer[0:n]
+	return err
+}
+
 // PrepareFileHandler - prepare file handler is rpc wrapper to prepare file.
 func (s *storageServer) PrepareFileHandler(args *PrepareFileArgs, reply *AuthRPCReply) error {
 	if err := args.IsAuthenticated(); err != nil {

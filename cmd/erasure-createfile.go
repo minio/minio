@@ -28,7 +28,9 @@ import (
 // erasureCreateFile - writes an entire stream by erasure coding to
 // all the disks, writes also calculate individual block's checksum
 // for future bit-rot protection.
-func erasureCreateFile(disks []StorageAPI, volume, path string, reader io.Reader, allowEmpty bool, blockSize int64, dataBlocks int, parityBlocks int, algo string, writeQuorum int) (bytesWritten int64, checkSums []string, err error) {
+func erasureCreateFile(disks []StorageAPI, volume, path string, reader io.Reader, allowEmpty bool, blockSize int64,
+	dataBlocks, parityBlocks int, algo HashAlgo, writeQuorum int) (bytesWritten int64, checkSums []string, err error) {
+
 	// Allocated blockSized buffer for reading from incoming stream.
 	buf := make([]byte, blockSize)
 
