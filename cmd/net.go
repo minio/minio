@@ -23,6 +23,7 @@ import (
 	"sort"
 	"strconv"
 	"syscall"
+	"time"
 
 	"github.com/minio/minio-go/pkg/set"
 )
@@ -60,21 +61,36 @@ func mustGetLocalIP4() (ipList set.StringSet) {
 	return ipList
 }
 
-// getHostIP4 returns IPv4 address of given host.
-func getHostIP4(host string) (ipList set.StringSet, err error) {
-	ipList = set.NewStringSet()
-	ips, err := net.LookupIP(host)
-	if err != nil {
-		return ipList, err
-	}
+// getHostIP4 returns IPv4 address of given host, this function
+// retries forever until the control is returned back to the caller.
+func getHostIP4(host string) (set.StringSet, error) {
+	// Done channel is used to close any lingering retry
+	// routine, as soon as this function returns.
+	doneCh := make(chan struct{})
+	defer close(doneCh)
 
-	for _, ip := range ips {
-		if ip.To4() != nil {
-			ipList.Add(ip.String())
+	attemptCh := newRetryTimer(time.Second, 30*time.Second, doneCh)
+	var retErr error
+	for {
+		select {
+		case <-attemptCh:
+			ips, err := net.LookupIP(host)
+			if err != nil {
+				errorIf(err, "Unable to look up host %s retrying.", host)
+				retErr = err
+				continue
+			}
+			ipList := set.NewStringSet()
+			for _, ip := range ips {
+				if ip.To4() != nil {
+					ipList.Add(ip.String())
+				}
+			}
+			return ipList, nil
+		case <-globalServiceDoneCh:
+			return nil, retErr
 		}
 	}
-
-	return ipList, err
 }
 
 // byLastOctetValue implements sort.Interface used in sorting a list
@@ -208,7 +224,7 @@ func CheckLocalServerAddr(serverAddr string) error {
 		}
 
 		if localIP4.Intersection(hostIPs).IsEmpty() {
-			return fmt.Errorf("host in server address should be this server")
+			return fmt.Errorf("host %s in server address should be this server", host)
 		}
 	}
 
