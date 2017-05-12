@@ -1,0 +1,21 @@
+{
+	"comment": "",
+	"ignore": "test",
+	"package": [
+		{
+			"checksumSHA1": "mUxIFoGjvc8hoWsQMzeIOa0h+Mo=",
+			"origin": "github.com/minio/minio/vendor/github.com/minio/minio-go/pkg/s3signer",
+			"path": "github.com/minio/minio-go/pkg/s3signer",
+			"revision": "3bc9e6101cbd5ffddf363f5051cf560ada854e12",
+			"revisionTime": "2017-05-12T00:34:27Z"
+		},
+		{
+			"checksumSHA1": "xdwBu3i8uIRlPG01zjyy1myJtLA=",
+			"origin": "github.com/minio/minio/vendor/github.com/minio/minio-go/pkg/s3utils",
+			"path": "github.com/minio/minio-go/pkg/s3utils",
+			"revision": "3bc9e6101cbd5ffddf363f5051cf560ada854e12",
+			"revisionTime": "2017-05-12T00:34:27Z"
+		}
+	],
+	"rootPath": "github.com/minio/minio/pkg/madmin"
+}
