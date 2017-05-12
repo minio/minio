@@ -873,27 +873,21 @@ func (l *gcsGateway) SetBucketPolicies(bucket string, policyInfo policy.BucketAc
 	}
 
 	acl := l.client.Bucket(bucket).ACL()
-
 	if policies[0].Policy == policy.BucketPolicyNone {
 		if err := acl.Delete(l.ctx, storage.AllUsers); err != nil {
 			return gcsToObjectError(traceError(err), bucket)
 		}
-
 		return nil
 	}
 
-	role := storage.RoleReader
-
+	var role storage.ACLRole
 	switch policies[0].Policy {
 	case policy.BucketPolicyReadOnly:
 		role = storage.RoleReader
 	case policy.BucketPolicyWriteOnly:
 		role = storage.RoleWriter
-	case policy.BucketPolicyReadWrite:
-		// not supported, google only has owner role
-		return gcsToObjectError(traceError(NotSupported{}), bucket)
 	default:
-		return gcsToObjectError(traceError(fmt.Errorf("Unknown policy: %s", policies[0].Policy)), bucket)
+		return traceError(NotImplemented{})
 	}
 
 	if err := acl.Set(l.ctx, storage.AllUsers, role); err != nil {
@@ -915,13 +909,10 @@ func (l *gcsGateway) GetBucketPolicies(bucket string) (policy.BucketAccessPolicy
 	policyInfo := policy.BucketAccessPolicy{Version: "2012-10-17"}
 
 	for _, r := range rules {
-		if r.Entity != storage.AllUsers {
+		if r.Entity != storage.AllUsers || r.Role == storage.RoleOwner {
 			continue
 		}
-
 		switch r.Role {
-		case storage.RoleOwner:
-			return policy.BucketAccessPolicy{}, gcsToObjectError(traceError(NotSupported{}), bucket)
 		case storage.RoleReader:
 			policyInfo.Statements = policy.SetPolicy(policyInfo.Statements, policy.BucketPolicyReadOnly, bucket, "")
 		case storage.RoleWriter:
@@ -936,7 +927,7 @@ func (l *gcsGateway) GetBucketPolicies(bucket string) (policy.BucketAccessPolicy
 func (l *gcsGateway) DeleteBucketPolicies(bucket string) error {
 	acl := l.client.Bucket(bucket).ACL()
 
-	// this only removes the storage.AllUsers policies
+	// This only removes the storage.AllUsers policies
 	if err := acl.Delete(l.ctx, storage.AllUsers); err != nil {
 		return gcsToObjectError(traceError(err), bucket)
 	}
