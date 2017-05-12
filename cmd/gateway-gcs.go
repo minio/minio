@@ -17,15 +17,18 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"errors"
 	"fmt"
 	"hash"
 	"io"
+	"path"
 	"strconv"
 	"strings"
 
+	"encoding/base64"
 	"encoding/hex"
 
 	"cloud.google.com/go/storage"
@@ -33,16 +36,7 @@ import (
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
 
-	"encoding/base64"
-
-	"bytes"
-
-	// this package contains the url code of go 1.8
-	// due to compatibility with older versions
-	// copied it to our rep
-
-	"path"
-
+	"github.com/minio/cli"
 	minio "github.com/minio/minio-go"
 	"github.com/minio/minio-go/pkg/policy"
 )
@@ -171,7 +165,7 @@ type gcsGateway struct {
 }
 
 // newGCSGateway returns gcs gatewaylayer
-func newGCSGateway(args []string) (GatewayLayer, error) {
+func newGCSGateway(args cli.Args) (GatewayLayer, error) {
 	if len(args) != 1 {
 		return nil, fmt.Errorf("ProjectID expected")
 	}
@@ -183,7 +177,7 @@ func newGCSGateway(args []string) (GatewayLayer, error) {
 	endpoint := "storage.googleapis.com"
 	secure := true
 
-	projectID := args[0]
+	projectID := args.First()
 
 	ctx := context.Background()
 
