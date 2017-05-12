@@ -137,7 +137,7 @@ python rabbit.py
 <a name="Elasticsearch"></a>
 ## Publish Minio events via Elasticsearch
 
-Install [Elasticsearch](https://www.elastic.co/downloads/elasticsearch) server. Minio server supports the latest major release series 5.x. Elasticsearch provides version upgrade migration guidelines [here](https://www.elastic.co/guide/en/elasticsearch/reference/current/setup-upgrade.html).
+Install [Elasticsearch](https://www.elastic.co/downloads/elasticsearch) server.
 
 This notification target supports two formats: _namespace_ and _access_.
 
@@ -147,8 +147,11 @@ When the _access_ format is used, Minio appends events as documents in an Elasti
 
 The steps below show how to use this notification target in `namespace` format. The other format is very similar and is omitted for brevity.
 
+### Step 1: Ensure minimum requirements are met
 
-### Step 1: Add Elasticsearch endpoint to Minio
+Minio requires a 5.x series version of Elasticsearch. This is the latest major release series. Elasticsearch provides version upgrade migration guidelines [here](https://www.elastic.co/guide/en/elasticsearch/reference/current/setup-upgrade.html).
+
+### Step 2: Add Elasticsearch endpoint to Minio
 
 The default location of Minio server configuration file is ``~/.minio/config.json``. The Elasticsearch configuration is located in the `elasticsearch` key under the `notify` top-level key. Create a configuration key-value pair here for your Elasticsearch instance. The key is a name for your Elasticsearch endpoint, and the value is a collection of key-value parameters described in the table below.
 
@@ -176,7 +179,7 @@ After updating the configuration file, restart the Minio server to put the chang
 
 Note that, you can add as many Elasticsearch server endpoint configurations as needed by providing an identifier (like "1" in the example above) for the Elasticsearch instance and an object of per-server configuration parameters.
 
-### Step 2: Enable bucket notification using Minio client
+### Step 3: Enable bucket notification using Minio client
 
 We will now enable bucket event notifications on a bucket named `images`. Whenever a JPEG image is created/overwritten, a new document is added or an existing document is updated in the Elasticsearch index configured above. When an existing object is deleted, the corresponding document is deleted from the index. Thus, the rows in the Elasticsearch index, reflect the `.jpg` objects in the `images` bucket.
 
@@ -191,7 +194,7 @@ mc events list myminio/images
 arn:minio:sqs:us-east-1:1:elasticsearch s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
 ```
 
-### Step 3: Test on Elasticsearch
+### Step 4: Test on Elasticsearch
 
 Upload a JPEG image into ``images`` bucket.
 
@@ -464,7 +467,11 @@ When the _access_ format is used, Minio appends events to a table. It creates ro
 
 The steps below show how to use this notification target in `namespace` format. The other format is very similar and is omitted for brevity.
 
-### Step 1: Add PostgreSQL endpoint to Minio
+### Step 1: Ensure minimum requirements are met
+
+Minio requires PostgreSQL version 9.5 or above. Minio uses the [`INSERT ON CONFLICT`](https://www.postgresql.org/docs/9.5/static/sql-insert.html#SQL-ON-CONFLICT) (aka UPSERT) feature, introduced in version 9.5 and the [JSONB](https://www.postgresql.org/docs/9.4/static/datatype-json.html) data-type introduced in version 9.4.
+
+### Step 2: Add PostgreSQL endpoint to Minio
 
 The default location of Minio server configuration file is ``~/.minio/config.json``. The PostgreSQL configuration is located in the `postgresql` key under the `notify` top-level key. Create a configuration key-value pair here for your PostgreSQL instance. The key is a name for your PostgreSQL endpoint, and the value is a collection of key-value parameters described in the table below.
 
@@ -505,7 +512,7 @@ After updating the configuration file, restart the Minio server to put the chang
 Note that, you can add as many PostgreSQL server endpoint configurations as needed by providing an identifier (like "1" in the example above) for the PostgreSQL instance and an object of per-server configuration parameters.
 
 
-### Step 2: Enable bucket notification using Minio client
+### Step 3: Enable bucket notification using Minio client
 
 We will now enable bucket event notifications on a bucket named `images`. Whenever a JPEG image is created/overwritten, a new row is added or an existing row is updated in the PostgreSQL configured above. When an existing object is deleted, the corresponding row is deleted from the PostgreSQL table. Thus, the rows in the PostgreSQL table, reflect the `.jpg` objects in the `images` bucket.
 
@@ -524,7 +531,7 @@ mc events list myminio/images
 arn:minio:sqs:us-east-1:1:postgresql s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
 ```
 
-### Step 3: Test on PostgreSQL
+### Step 4: Test on PostgreSQL
 
 Open another terminal and upload a JPEG image into ``images`` bucket.
 
@@ -547,7 +554,7 @@ key                 |                      value
 <a name="MySQL"></a>
 ## Publish Minio events via MySQL
 
-Install MySQL from [here](https://dev.mysql.com/downloads/mysql/). To publish Minio events, you'll need `JSON` support in MySQL, available on MySQL `5.7.8` and above. We tested this setup on MySQL `5.7.17`. For illustrative purposes, we have set the root password as `password` and created a database called `miniodb` to store the events.
+Install MySQL from [here](https://dev.mysql.com/downloads/mysql/). For illustrative purposes, we have set the root password as `password` and created a database called `miniodb` to store the events.
 
 This notification target supports two formats: _namespace_ and _access_.
 
@@ -557,7 +564,11 @@ When the _access_ format is used, Minio appends events to a table. It creates ro
 
 The steps below show how to use this notification target in `namespace` format. The other format is very similar and is omitted for brevity.
 
-### Step 1: Add MySQL server endpoint configuration to Minio
+### Step 1: Ensure minimum requirements are met
+
+Minio requires MySQL version 5.7.8 or above. Minio uses the [JSON](https://dev.mysql.com/doc/refman/5.7/en/json.html) data-type introduced in version 5.7.8. We tested this setup on MySQL 5.7.17.
+
+### Step 2: Add MySQL server endpoint configuration to Minio
 
 The default location of Minio server configuration file is ``~/.minio/config.json``. The MySQL configuration is located in the `mysql` key under the `notify` top-level key. Create a configuration key-value pair here for your MySQL instance. The key is a name for your MySQL endpoint, and the value is a collection of key-value parameters described in the table below.
 
@@ -595,7 +606,7 @@ After updating the configuration file, restart the Minio server to put the chang
 Note that, you can add as many MySQL server endpoint configurations as needed by providing an identifier (like "1" in the example above) for the MySQL instance and an object of per-server configuration parameters.
 
 
-### Step 2: Enable bucket notification using Minio client
+### Step 3: Enable bucket notification using Minio client
 
 We will now setup bucket notifications on a bucket named `images`. Whenever a JPEG image object is created/overwritten, a new row is added or an existing row is updated in the MySQL table configured above. When an existing object is deleted, the corresponding row is deleted from the MySQL table. Thus, the rows in the MySQL table, reflect the `.jpg` objects in the `images` bucket.
 
@@ -613,7 +624,7 @@ mc events list myminio/images
 arn:minio:sqs:us-east-1:1:postgresql s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
 ```
 
-### Step 3: Test on MySQL
+### Step 4: Test on MySQL
 
 Open another terminal and upload a JPEG image into ``images`` bucket:
 
@@ -638,9 +649,13 @@ mysql> select * from minio_images;
 <a name="apache-kafka"></a>
 ## Publish Minio events via Kafka
 
-Install kafka from [here](http://kafka.apache.org/).
+Install Apache Kafka from [here](http://kafka.apache.org/).
 
-### Step 1: Add kafka endpoint to Minio
+### Step 1: Ensure minimum requirements are met
+
+Minio requires Kafka version 0.10 or 0.9. Internally Minio uses the [Shopify/sarama](https://github.com/Shopify/sarama/) library and so has the same version compatibility as provided by this library.
+
+### Step 2: Add Kafka endpoint to Minio
 
 The default location of Minio server configuration file is ``~/.minio/config.json``. Update the kafka configuration block in ``config.json`` as follows:
 
@@ -656,7 +671,7 @@ The default location of Minio server configuration file is ``~/.minio/config.jso
 
 Restart Minio server to reflect config changes. ``bucketevents`` is the topic used by kafka in this example.
 
-### Step 2: Enable bucket notification using Minio client
+### Step 3: Enable bucket notification using Minio client
 
 We will enable bucket event notification to trigger whenever a JPEG image is uploaded or deleted from ``images`` bucket on ``myminio`` server. Here ARN value is ``arn:minio:sqs:us-east-1:1:kafka``. To understand more about ARN please follow [AWS ARN](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html) documentation.
 
@@ -667,7 +682,7 @@ mc events list myminio/images
 arn:minio:sqs:us-east-1:1:kafka s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
 ```
 
-### Step 3: Test on kafka
+### Step 4: Test on Kafka
 
 We used [kafkacat](https://github.com/edenhill/kafkacat) to print all notifications on the console.
 
