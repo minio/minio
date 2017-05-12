@@ -171,6 +171,39 @@ func (s *TestSuiteCommon) TestObjectDir(c *C) {
 
 	c.Assert(err, IsNil)
 	verifyError(c, response, "XMinioInvalidObjectName", "Object name contains unsupported characters.", http.StatusBadRequest)
+
+	request, err = newTestSignedRequest("HEAD", getHeadObjectURL(s.endPoint, bucketName, "my-object-directory/"),
+		0, nil, s.accessKey, s.secretKey, s.signer)
+	c.Assert(err, IsNil)
+
+	client = http.Client{Transport: s.transport}
+	// execute the HTTP request.
+	response, err = client.Do(request)
+
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusNotFound)
+
+	request, err = newTestSignedRequest("GET", getGetObjectURL(s.endPoint, bucketName, "my-object-directory/"),
+		0, nil, s.accessKey, s.secretKey, s.signer)
+	c.Assert(err, IsNil)
+
+	client = http.Client{Transport: s.transport}
+	// execute the HTTP request.
+	response, err = client.Do(request)
+
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusNotFound)
+
+	request, err = newTestSignedRequest("DELETE", getDeleteObjectURL(s.endPoint, bucketName, "my-object-directory/"),
+		0, nil, s.accessKey, s.secretKey, s.signer)
+	c.Assert(err, IsNil)
+
+	client = http.Client{Transport: s.transport}
+	// execute the HTTP request.
+	response, err = client.Do(request)
+
+	c.Assert(err, IsNil)
+	c.Assert(response.StatusCode, Equals, http.StatusNoContent)
 }
 
 func (s *TestSuiteCommon) TestBucketSQSNotificationAMQP(c *C) {

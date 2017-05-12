@@ -102,6 +102,7 @@ func (m *ServerMux) handleServiceSignals() error {
 			}
 			runExitFn(nil)
 		case serviceStop:
+			log.Println("Gracefully stopping... (press Ctrl+C again to force)")
 			if err := m.Close(); err != nil {
 				errorIf(err, "Unable to close server gracefully")
 			}

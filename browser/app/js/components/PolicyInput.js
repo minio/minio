@@ -7,6 +7,7 @@ import * as actions from '../actions'
 class PolicyInput extends Component {
   componentDidMount() {
     const {web, dispatch} = this.props
+    this.prefix.focus()
     web.ListAllBucketPolicies({
       bucketName: this.props.currentBucket
     }).then(res => {
@@ -27,8 +28,23 @@ class PolicyInput extends Component {
 
   handlePolicySubmit(e) {
     e.preventDefault()
-    const {web, dispatch} = this.props
+    const {web, dispatch, currentBucket} = this.props
 
+    let prefix = currentBucket + '/' + this.prefix.value
+    let policy = this.policy.value
+
+    if (!prefix.endsWith('*')) prefix = prefix + '*'
+ 
+    let prefixAlreadyExists = this.props.policies.some(elem => prefix === elem.prefix)
+
+    if (prefixAlreadyExists) {
+      dispatch(actions.showAlert({
+       type: 'danger',
+       message: "Policy for this prefix already exists."
+      }))
+      return
+    }
+    
     web.SetBucketPolicy({
       bucketName: this.props.currentBucket,
       prefix: this.prefix.value,
@@ -36,8 +52,7 @@ class PolicyInput extends Component {
     })
       .then(() => {
         dispatch(actions.setPolicies([{
-          policy: this.policy.value,
-          prefix: this.prefix.value + '*',
+          policy, prefix
         }, ...this.props.policies]))
         this.prefix.value = ''
       })

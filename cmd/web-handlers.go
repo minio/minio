@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -567,17 +568,24 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token := r.URL.Query().Get("token")
-
-	if !isAuthTokenValid(token) {
-		writeWebErrorResponse(w, errAuthentication)
-		return
-	}
+	// Auth is done after reading the body to accommodate for anonymous requests
+	// when bucket policy is enabled.
 	var args DownloadZipArgs
-	decodeErr := json.NewDecoder(r.Body).Decode(&args)
+	tenKB := 10 * 1024 // To limit r.Body to take care of misbehaving anonymous client.
+	decodeErr := json.NewDecoder(io.LimitReader(r.Body, int64(tenKB))).Decode(&args)
 	if decodeErr != nil {
 		writeWebErrorResponse(w, decodeErr)
 		return
+	}
+
+	token := r.URL.Query().Get("token")
+	if !isAuthTokenValid(token) {
+		for _, object := range args.Objects {
+			if !isBucketActionAllowed("s3:GetObject", args.BucketName, pathJoin(args.Prefix, object)) {
+				writeWebErrorResponse(w, errAuthentication)
+				return
+			}
+		}
 	}
 
 	archive := zip.NewWriter(w)

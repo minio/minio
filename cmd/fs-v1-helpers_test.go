@@ -134,7 +134,7 @@ func TestFSStats(t *testing.T) {
 			srcFSPath:   path,
 			srcVol:      "success-vol",
 			srcPath:     "path",
-			expectedErr: errFileNotFound,
+			expectedErr: errFileAccessDenied,
 		},
 		// Test case - 6.
 		// Test case with src path segment > 255.
@@ -167,7 +167,8 @@ func TestFSStats(t *testing.T) {
 
 	for i, testCase := range testCases {
 		if testCase.srcPath != "" {
-			if _, err := fsStatFile(pathJoin(testCase.srcFSPath, testCase.srcVol, testCase.srcPath)); errorCause(err) != testCase.expectedErr {
+			if _, err := fsStatFile(pathJoin(testCase.srcFSPath, testCase.srcVol,
+				testCase.srcPath)); errorCause(err) != testCase.expectedErr {
 				t.Fatalf("TestPosix case %d: Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, err)
 			}
 		} else {

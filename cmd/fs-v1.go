@@ -25,6 +25,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/signal"
+	"path"
 	"path/filepath"
 	"sort"
 	"syscall"
@@ -568,12 +569,6 @@ func (fs fsObjects) getObjectInfo(bucket, object string) (ObjectInfo, error) {
 
 // GetObjectInfo - reads object metadata and replies back ObjectInfo.
 func (fs fsObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
-	// This is a special case with object whose name ends with
-	// a slash separator, we always return object not found here.
-	if hasSuffix(object, slashSeparator) {
-		return ObjectInfo{}, toObjectErr(traceError(errFileNotFound), bucket, object)
-	}
-
 	if err := checkGetObjArgs(bucket, object); err != nil {
 		return ObjectInfo{}, err
 	}
@@ -585,21 +580,49 @@ func (fs fsObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 	return fs.getObjectInfo(bucket, object)
 }
 
+// This function does the following check, suppose
+// object is "a/b/c/d", stat makes sure that objects ""a/b/c""
+// "a/b" and "a" do not exist.
+func (fs fsObjects) parentDirIsObject(bucket, parent string) bool {
+	var isParentDirObject func(string) bool
+	isParentDirObject = func(p string) bool {
+		if p == "." {
+			return false
+		}
+		if _, err := fsStatFile(pathJoin(fs.fsPath, bucket, p)); err == nil {
+			// If there is already a file at prefix "p" return error.
+			return true
+		}
+		// Check if there is a file as one of the parent paths.
+		return isParentDirObject(path.Dir(p))
+	}
+	return isParentDirObject(parent)
+}
+
 // PutObject - creates an object upon reading from the input stream
 // until EOF, writes data directly to configured filesystem path.
 // Additionally writes `fs.json` which carries the necessary metadata
 // for future object operations.
 func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (objInfo ObjectInfo, retErr error) {
 	var err error
-
 	// This is a special case with size as '0' and object ends with
 	// a slash separator, we treat it like a valid operation and
 	// return success.
 	if isObjectDir(object, size) {
+		// Check if an object is present as one of the parent dir.
+		if fs.parentDirIsObject(bucket, path.Dir(object)) {
+			return ObjectInfo{}, toObjectErr(traceError(errFileAccessDenied), bucket, object)
+		}
 		return dirObjectInfo(bucket, object, size, metadata), nil
 	}
+
 	if err = checkPutObjectArgs(bucket, object, fs); err != nil {
 		return ObjectInfo{}, err
+	}
+
+	// Check if an object is present as one of the parent dir.
+	if fs.parentDirIsObject(bucket, path.Dir(object)) {
+		return ObjectInfo{}, toObjectErr(traceError(errFileAccessDenied), bucket, object)
 	}
 
 	if _, err = fs.statBucketDir(bucket); err != nil {

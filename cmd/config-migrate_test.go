@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -153,6 +154,7 @@ func TestServerConfigMigrateV2toV18(t *testing.T) {
 	if err := ioutil.WriteFile(configPath, []byte(configJSON), 0644); err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
+
 	// Fire a migrateConfig()
 	if err := migrateConfig(); err != nil {
 		t.Fatal("Unexpected error: ", err)
@@ -191,7 +193,7 @@ func TestServerConfigMigrateFaultyConfig(t *testing.T) {
 	configPath := rootPath + "/" + minioConfigFile
 
 	// Create a corrupted config file
-	if err := ioutil.WriteFile(configPath, []byte("{ \"version\":\""), 0644); err != nil {
+	if err := ioutil.WriteFile(configPath, []byte("{ \"version\":\"2\", \"test\":"), 0644); err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
 
@@ -243,5 +245,41 @@ func TestServerConfigMigrateFaultyConfig(t *testing.T) {
 	}
 	if err := migrateV17ToV18(); err == nil {
 		t.Fatal("migrateConfigV17ToV18() should fail with a corrupted json")
+	}
+}
+
+// Test if all migrate code returns error with corrupted config files
+func TestServerConfigMigrateCorruptedConfig(t *testing.T) {
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
+	if err != nil {
+		t.Fatalf("Init Test config failed")
+	}
+	// remove the root directory after the test ends.
+	defer removeAll(rootPath)
+
+	setConfigDir(rootPath)
+	configPath := rootPath + "/" + minioConfigFile
+
+	for i := 3; i <= 17; i++ {
+		// Create a corrupted config file
+		if err = ioutil.WriteFile(configPath, []byte(fmt.Sprintf("{ \"version\":\"%d\", \"credential\": { \"accessKey\": 1 } }", i)),
+			0644); err != nil {
+			t.Fatal("Unexpected error: ", err)
+		}
+
+		// Test different migrate versions and be sure they are returning an error
+		if err = migrateConfig(); err == nil {
+			t.Fatal("migrateConfig() should fail with a corrupted json")
+		}
+	}
+
+	// Create a corrupted config file for version '2'.
+	if err = ioutil.WriteFile(configPath, []byte("{ \"version\":\"2\", \"credentials\": { \"accessKeyId\": 1 } }"), 0644); err != nil {
+		t.Fatal("Unexpected error: ", err)
+	}
+
+	// Test different migrate versions and be sure they are returning an error
+	if err = migrateConfig(); err == nil {
+		t.Fatal("migrateConfig() should fail with a corrupted json")
 	}
 }

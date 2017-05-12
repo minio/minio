@@ -65,6 +65,12 @@ func (api gatewayAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Re
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
+	case authTypeAnonymous:
+		// No verification needed for anonymous requests.
+	default:
+		// For all unknown auth types return error.
+		writeErrorResponse(w, ErrAccessDenied, r.URL)
+		return
 	}
 
 	getObjectInfo := objectAPI.GetObjectInfo
@@ -239,10 +245,6 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 
 	var objInfo ObjectInfo
 	switch reqAuthType {
-	default:
-		// For all unknown auth types return error.
-		writeErrorResponse(w, ErrAccessDenied, r.URL)
-		return
 	case authTypeAnonymous:
 		// Create anonymous object.
 		objInfo, err = objectAPI.AnonPutObject(bucket, object, size, r.Body, metadata, "")
@@ -277,6 +279,10 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 
 		// Create object.
 		objInfo, err = objectAPI.PutObject(bucket, object, size, r.Body, metadata, sha256sum)
+	default:
+		// For all unknown auth types return error.
+		writeErrorResponse(w, ErrAccessDenied, r.URL)
+		return
 	}
 
 	if err != nil {
@@ -323,6 +329,12 @@ func (api gatewayAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.R
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
+	case authTypeAnonymous:
+		// No verification needed for anonymous requests.
+	default:
+		// For all unknown auth types return error.
+		writeErrorResponse(w, ErrAccessDenied, r.URL)
+		return
 	}
 
 	getObjectInfo := objectAPI.GetObjectInfo
@@ -734,6 +746,12 @@ func (api gatewayAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *htt
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
+	case authTypeAnonymous:
+		// No verification needed for anonymous requests.
+	default:
+		// For all unknown auth types return error.
+		writeErrorResponse(w, ErrAccessDenied, r.URL)
+		return
 	}
 
 	// Extract all the litsObjectsV1 query params to their native values.
@@ -798,6 +816,12 @@ func (api gatewayAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.R
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
+	case authTypeAnonymous:
+		// No verification needed for anonymous requests.
+	default:
+		// For all unknown auth types return error.
+		writeErrorResponse(w, ErrAccessDenied, r.URL)
+		return
 	}
 
 	getBucketInfo := objectAPI.GetBucketInfo
@@ -848,6 +872,12 @@ func (api gatewayAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r 
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
+	case authTypeAnonymous:
+		// No verification needed for anonymous requests.
+	default:
+		// For all unknown auth types return error.
+		writeErrorResponse(w, ErrAccessDenied, r.URL)
+		return
 	}
 
 	getBucketInfo := objectAPI.GetBucketInfo

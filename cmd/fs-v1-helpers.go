@@ -174,7 +174,7 @@ func fsStatFile(statFile string) (os.FileInfo, error) {
 		return nil, traceError(err)
 	}
 	if fi.IsDir() {
-		return nil, traceError(errFileNotFound)
+		return nil, traceError(errFileAccessDenied)
 	}
 	return fi, nil
 }
