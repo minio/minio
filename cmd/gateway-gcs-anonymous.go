@@ -70,7 +70,6 @@ func (l *gcsGateway) AnonGetObjectInfo(bucket string, object string) (objInfo Ob
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		fmt.Println(resp.StatusCode)
 		return objInfo, gcsToObjectError(traceError(anonErrToObjectErr(resp.StatusCode, bucket, object)), bucket, object)
 	}
 
