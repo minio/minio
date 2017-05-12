@@ -356,6 +356,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "The bucket you tried to delete is not empty",
 		HTTPStatusCode: http.StatusConflict,
 	},
+	ErrBucketAlreadyExists: {
+		Code:           "BucketAlreadyExists",
+		Description:    "The requested bucket name is not available. The bucket namespace is shared by all users of the system. Please select a different name and try again.",
+		HTTPStatusCode: http.StatusConflict,
+	},
 	ErrAllAccessDisabled: {
 		Code:           "AllAccessDisabled",
 		Description:    "All access to this bucket has been disabled.",
