@@ -182,7 +182,7 @@ func (c Client) putObjectMultipartFromFile(bucketName, objectName string, fileRe
 				hashAlgos := make(map[string]hash.Hash)
 				hashSums := make(map[string][]byte)
 				hashAlgos["md5"] = md5.New()
-				if c.signature.isV4() && !c.secure {
+				if c.overrideSignerType.IsV4() && !c.secure {
 					hashAlgos["sha256"] = sha256.New()
 				}
 

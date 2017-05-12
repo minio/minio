@@ -1,5 +1,6 @@
 /*
- * Minio Go Library for Amazon S3 Compatible Cloud Storage (C) 2015, 2016 Minio, Inc.
+ * Minio Go Library for Amazon S3 Compatible Cloud Storage
+ * (C) 2015, 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,6 +29,7 @@ import (
 	"net/url"
 	"path"
 
+	"github.com/minio/minio-go/pkg/credentials"
 	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio-go/pkg/s3signer"
 )
@@ -135,9 +137,32 @@ func (c Client) makeBucketRequest(bucketName string, location string) (*http.Req
 	// set UserAgent for the request.
 	c.setUserAgent(req)
 
-	// set sha256 sum for signature calculation only with
-	// signature version '4'.
-	if c.signature.isV4() {
+	// Get credentials from the configured credentials provider.
+	value, err := c.credsProvider.Get()
+	if err != nil {
+		return nil, err
+	}
+
+	var (
+		signerType      = value.SignerType
+		accessKeyID     = value.AccessKeyID
+		secretAccessKey = value.SecretAccessKey
+		sessionToken    = value.SessionToken
+	)
+
+	// Custom signer set then override the behavior.
+	if c.overrideSignerType != credentials.SignatureDefault {
+		signerType = c.overrideSignerType
+	}
+
+	// If signerType returned by credentials helper is anonymous,
+	// then do not sign regardless of signerType override.
+	if value.SignerType == credentials.SignatureAnonymous {
+		signerType = credentials.SignatureAnonymous
+	}
+
+	// set sha256 sum for signature calculation only with signature version '4'.
+	if signerType.IsV4() {
 		req.Header.Set("X-Amz-Content-Sha256", hex.EncodeToString(sum256([]byte{})))
 	}
 
@@ -155,19 +180,19 @@ func (c Client) makeBucketRequest(bucketName string, location string) (*http.Req
 		req.ContentLength = int64(len(createBucketConfigBytes))
 		// Set content-md5.
 		req.Header.Set("Content-Md5", base64.StdEncoding.EncodeToString(sumMD5(createBucketConfigBytes)))
-		if c.signature.isV4() {
+		if signerType.IsV4() {
 			// Set sha256.
 			req.Header.Set("X-Amz-Content-Sha256", hex.EncodeToString(sum256(createBucketConfigBytes)))
 		}
 	}
 
 	// Sign the request.
-	if c.signature.isV4() {
+	if signerType.IsV4() {
 		// Signature calculated for MakeBucket request should be for 'us-east-1',
 		// regardless of the bucket's location constraint.
-		req = s3signer.SignV4(*req, c.accessKeyID, c.secretAccessKey, "us-east-1")
-	} else if c.signature.isV2() {
-		req = s3signer.SignV2(*req, c.accessKeyID, c.secretAccessKey)
+		req = s3signer.SignV4(*req, accessKeyID, secretAccessKey, sessionToken, "us-east-1")
+	} else if signerType.IsV2() {
+		req = s3signer.SignV2(*req, accessKeyID, secretAccessKey)
 	}
 
 	// Return signed request.
