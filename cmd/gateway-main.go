@@ -179,7 +179,7 @@ const (
 )
 
 // GatewayFn returns the GatewayLayer for the backend
-type GatewayFn func([]string) (GatewayLayer, error)
+type GatewayFn func(cli.Args) (GatewayLayer, error)
 
 var (
 	backends = map[gatewayBackend]GatewayFn{

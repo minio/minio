@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/storage"
+	"github.com/minio/cli"
 	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/sha256-simd"
 )
@@ -156,14 +157,20 @@ func azureToObjectError(err error, params ...string) error {
 }
 
 // Inits azure blob storage client and returns AzureObjects.
-func newAzureLayer(args []string) (GatewayLayer, error) {
-	endPoint, secure, err := parseGatewayEndpoint(args[0])
-	if err != nil {
-		return nil, err
-	}
+func newAzureLayer(args cli.Args) (GatewayLayer, error) {
 
-	if endPoint == "" {
-		endPoint = storage.DefaultBaseURL
+	var err error
+
+	// Default endpoint parameters
+	endPoint := storage.DefaultBaseURL
+	secure := true
+
+	// If user provided some parameters
+	if len(args) > 0 {
+		endPoint, secure, err = parseGatewayEndpoint(args.First())
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	account := os.Getenv("MINIO_ACCESS_KEY")
