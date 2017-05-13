@@ -16,7 +16,7 @@ mechanism and can be published to the following targets:
 
 ## Prerequisites
 
-* Install and configure Minio Server from [here](http://docs.minio.io/docs/minio).
+* Install and configure Minio Server from [here](http://docs.minio.io/docs/minio-quickstart-guide).
 * Install and configure Minio Client from [here](https://docs.minio.io/docs/minio-client-quickstart-guide).
 
 <a name="AMQP"></a>
