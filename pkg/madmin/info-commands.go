@@ -84,7 +84,7 @@ type ServerInfoData struct {
 
 // ServerInfo holds server information result of one node
 type ServerInfo struct {
-	Error error           `json:"error"`
+	Error string          `json:"error"`
 	Addr  string          `json:"addr"`
 	Data  *ServerInfoData `json:"data"`
 }

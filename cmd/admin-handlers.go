@@ -241,9 +241,9 @@ type ServerInfoData struct {
 
 // ServerInfo holds server information result of one node
 type ServerInfo struct {
-	Error error
-	Addr  string
-	Data  *ServerInfoData
+	Error string          `json:"error"`
+	Addr  string          `json:"addr"`
+	Data  *ServerInfoData `json:"data"`
 }
 
 // ServerInfoHandler - GET /?info
@@ -276,7 +276,7 @@ func (adminAPI adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *htt
 			serverInfoData, err := peer.cmdRunner.ServerInfoData()
 			if err != nil {
 				errorIf(err, "Unable to get server info from %s.", peer.addr)
-				reply[idx].Error = err
+				reply[idx].Error = err.Error()
 				return
 			}
 

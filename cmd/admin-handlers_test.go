@@ -1314,7 +1314,7 @@ func TestAdminServerInfo(t *testing.T) {
 		if len(serverInfo.Addr) == 0 {
 			t.Error("Expected server address to be non empty")
 		}
-		if serverInfo.Error != nil {
+		if serverInfo.Error != "" {
 			t.Errorf("Unexpected error = %v\n", serverInfo.Error)
 		}
 		if serverInfo.Data.StorageInfo.Free == 0 {
