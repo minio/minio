@@ -173,7 +173,6 @@ func downloadReleaseData(releaseChecksumURL string, timeout time.Duration, mode 
 	if resp.StatusCode != http.StatusOK {
 		return data, fmt.Errorf("Error downloading URL %s. Response: %v", releaseChecksumURL, resp.Status)
 	}
-
 	dataBytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return data, fmt.Errorf("Error reading response. %s", err)
@@ -185,7 +184,11 @@ func downloadReleaseData(releaseChecksumURL string, timeout time.Duration, mode 
 
 // DownloadReleaseData - downloads release data from minio official server.
 func DownloadReleaseData(timeout time.Duration, mode string) (data string, err error) {
-	return downloadReleaseData(minioReleaseURL+"minio.shasum", timeout, mode)
+	data, err = downloadReleaseData(minioReleaseURL+"minio.shasum", timeout, mode)
+	if err == nil {
+		return data, nil
+	}
+	return downloadReleaseData(minioReleaseURL+"minio.sha256sum", timeout, mode)
 }
 
 func parseReleaseData(data string) (releaseTime time.Time, err error) {
