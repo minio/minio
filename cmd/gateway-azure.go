@@ -64,8 +64,8 @@ func (a *azureMultipartMetaInfo) del(key string) {
 	delete(a.meta, key)
 }
 
-// AzureObjects - Implements Object layer for Azure blob storage.
-type AzureObjects struct {
+// azureObjects - Implements Object layer for Azure blob storage.
+type azureObjects struct {
 	client   storage.BlobStorageClient // Azure sdk client
 	metaInfo azureMultipartMetaInfo
 }
@@ -122,16 +122,16 @@ func azureToObjectError(err error, params ...string) error {
 	return e
 }
 
-// Inits azure blob storage client and returns AzureObjects.
+// Inits azure blob storage client and returns azureObjects.
 func newAzureLayer(endPoint string, account, key string, secure bool) (GatewayLayer, error) {
 	if endPoint == "" {
 		endPoint = storage.DefaultBaseURL
 	}
 	c, err := storage.NewClient(account, key, endPoint, globalAzureAPIVersion, secure)
 	if err != nil {
-		return AzureObjects{}, err
+		return &azureObjects{}, err
 	}
-	return &AzureObjects{
+	return &azureObjects{
 		client: c.GetBlobService(),
 		metaInfo: azureMultipartMetaInfo{
 			meta:  make(map[string]map[string]string),
@@ -142,30 +142,30 @@ func newAzureLayer(endPoint string, account, key string, secure bool) (GatewayLa
 
 // Shutdown - save any gateway metadata to disk
 // if necessary and reload upon next restart.
-func (a AzureObjects) Shutdown() error {
+func (a *azureObjects) Shutdown() error {
 	// TODO
 	return nil
 }
 
 // StorageInfo - Not relevant to Azure backend.
-func (a AzureObjects) StorageInfo() StorageInfo {
+func (a *azureObjects) StorageInfo() StorageInfo {
 	return StorageInfo{}
 }
 
 // MakeBucket - Create a new container on azure backend.
-func (a AzureObjects) MakeBucket(bucket string) error {
+func (a *azureObjects) MakeBucket(bucket string) error {
 	// will never be called, only satisfy ObjectLayer interface
 	return traceError(NotImplemented{})
 }
 
 // MakeBucketWithLocation - Create a new container on azure backend.
-func (a AzureObjects) MakeBucketWithLocation(bucket, location string) error {
+func (a *azureObjects) MakeBucketWithLocation(bucket, location string) error {
 	err := a.client.CreateContainer(bucket, storage.ContainerAccessTypePrivate)
 	return azureToObjectError(traceError(err), bucket)
 }
 
 // GetBucketInfo - Get bucket metadata..
-func (a AzureObjects) GetBucketInfo(bucket string) (BucketInfo, error) {
+func (a *azureObjects) GetBucketInfo(bucket string) (BucketInfo, error) {
 	// Azure does not have an equivalent call, hence use ListContainers.
 	resp, err := a.client.ListContainers(storage.ListContainersParameters{
 		Prefix: bucket,
@@ -188,7 +188,7 @@ func (a AzureObjects) GetBucketInfo(bucket string) (BucketInfo, error) {
 }
 
 // ListBuckets - Lists all azure containers, uses Azure equivalent ListContainers.
-func (a AzureObjects) ListBuckets() (buckets []BucketInfo, err error) {
+func (a *azureObjects) ListBuckets() (buckets []BucketInfo, err error) {
 	resp, err := a.client.ListContainers(storage.ListContainersParameters{})
 	if err != nil {
 		return nil, azureToObjectError(traceError(err))
@@ -207,13 +207,13 @@ func (a AzureObjects) ListBuckets() (buckets []BucketInfo, err error) {
 }
 
 // DeleteBucket - delete a container on azure, uses Azure equivalent DeleteContainer.
-func (a AzureObjects) DeleteBucket(bucket string) error {
+func (a *azureObjects) DeleteBucket(bucket string) error {
 	return azureToObjectError(traceError(a.client.DeleteContainer(bucket)), bucket)
 }
 
 // ListObjects - lists all blobs on azure with in a container filtered by prefix
 // and marker, uses Azure equivalent ListBlobs.
-func (a AzureObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (result ListObjectsInfo, err error) {
+func (a *azureObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (result ListObjectsInfo, err error) {
 	resp, err := a.client.ListBlobs(bucket, storage.ListBlobsParameters{
 		Prefix:     prefix,
 		Marker:     marker,
@@ -250,7 +250,7 @@ func (a AzureObjects) ListObjects(bucket, prefix, marker, delimiter string, maxK
 //
 // startOffset indicates the starting read location of the object.
 // length indicates the total length of the object.
-func (a AzureObjects) GetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) error {
+func (a *azureObjects) GetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) error {
 	byteRange := fmt.Sprintf("%d-", startOffset)
 	if length > 0 && startOffset > 0 {
 		byteRange = fmt.Sprintf("%d-%d", startOffset, startOffset+length-1)
@@ -273,7 +273,7 @@ func (a AzureObjects) GetObject(bucket, object string, startOffset int64, length
 
 // GetObjectInfo - reads blob metadata properties and replies back ObjectInfo,
 // uses zure equivalent GetBlobProperties.
-func (a AzureObjects) GetObjectInfo(bucket, object string) (objInfo ObjectInfo, err error) {
+func (a *azureObjects) GetObjectInfo(bucket, object string) (objInfo ObjectInfo, err error) {
 	prop, err := a.client.GetBlobProperties(bucket, object)
 	if err != nil {
 		return objInfo, azureToObjectError(traceError(err), bucket, object)
@@ -311,7 +311,7 @@ func canonicalMetadata(metadata map[string]string) (canonical map[string]string)
 
 // PutObject - Create a new blob with the incoming data,
 // uses Azure equivalent CreateBlockBlobFromReader.
-func (a AzureObjects) PutObject(bucket, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (objInfo ObjectInfo, err error) {
+func (a *azureObjects) PutObject(bucket, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (objInfo ObjectInfo, err error) {
 	var sha256Writer hash.Hash
 	teeReader := data
 	if sha256sum != "" {
@@ -339,7 +339,7 @@ func (a AzureObjects) PutObject(bucket, object string, size int64, data io.Reade
 
 // CopyObject - Copies a blob from source container to destination container.
 // Uses Azure equivalent CopyBlob API.
-func (a AzureObjects) CopyObject(srcBucket, srcObject, destBucket, destObject string, metadata map[string]string) (objInfo ObjectInfo, err error) {
+func (a *azureObjects) CopyObject(srcBucket, srcObject, destBucket, destObject string, metadata map[string]string) (objInfo ObjectInfo, err error) {
 	err = a.client.CopyBlob(destBucket, destObject, a.client.GetBlobURL(srcBucket, srcObject))
 	if err != nil {
 		return objInfo, azureToObjectError(traceError(err), srcBucket, srcObject)
@@ -349,7 +349,7 @@ func (a AzureObjects) CopyObject(srcBucket, srcObject, destBucket, destObject st
 
 // DeleteObject - Deletes a blob on azure container, uses Azure
 // equivalent DeleteBlob API.
-func (a AzureObjects) DeleteObject(bucket, object string) error {
+func (a *azureObjects) DeleteObject(bucket, object string) error {
 	err := a.client.DeleteBlob(bucket, object, nil)
 	if err != nil {
 		return azureToObjectError(traceError(err), bucket, object)
@@ -361,7 +361,7 @@ func (a AzureObjects) DeleteObject(bucket, object string) error {
 // FIXME: Full ListMultipartUploads is not supported yet. It is supported just enough to help our client libs to
 // support re-uploads. a.client.ListBlobs() can be made to return entries which include uncommitted blobs using
 // which we need to filter out the committed blobs to get the list of uncommitted blobs.
-func (a AzureObjects) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (result ListMultipartsInfo, err error) {
+func (a *azureObjects) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarker, delimiter string, maxUploads int) (result ListMultipartsInfo, err error) {
 	result.MaxUploads = maxUploads
 	result.Prefix = prefix
 	result.Delimiter = delimiter
@@ -377,7 +377,7 @@ func (a AzureObjects) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMa
 }
 
 // NewMultipartUpload - Use Azure equivalent CreateBlockBlob.
-func (a AzureObjects) NewMultipartUpload(bucket, object string, metadata map[string]string) (uploadID string, err error) {
+func (a *azureObjects) NewMultipartUpload(bucket, object string, metadata map[string]string) (uploadID string, err error) {
 	// Azure doesn't return a unique upload ID and we use object name in place of it. Azure allows multiple uploads to
 	// co-exist as long as the user keeps the blocks uploaded (in block blobs) unique amongst concurrent upload attempts.
 	// Each concurrent client, keeps its own blockID list which it can commit.
@@ -393,7 +393,7 @@ func (a AzureObjects) NewMultipartUpload(bucket, object string, metadata map[str
 }
 
 // CopyObjectPart - Not implemented.
-func (a AzureObjects) CopyObjectPart(srcBucket, srcObject, destBucket, destObject string, uploadID string, partID int, startOffset int64, length int64) (info PartInfo, err error) {
+func (a *azureObjects) CopyObjectPart(srcBucket, srcObject, destBucket, destObject string, uploadID string, partID int, startOffset int64, length int64) (info PartInfo, err error) {
 	return info, traceError(NotImplemented{})
 }
 
@@ -421,7 +421,7 @@ func azureParseBlockID(blockID string) (int, string, error) {
 }
 
 // PutObjectPart - Use Azure equivalent PutBlockWithLength.
-func (a AzureObjects) PutObjectPart(bucket, object, uploadID string, partID int, size int64, data io.Reader, md5Hex string, sha256sum string) (info PartInfo, err error) {
+func (a *azureObjects) PutObjectPart(bucket, object, uploadID string, partID int, size int64, data io.Reader, md5Hex string, sha256sum string) (info PartInfo, err error) {
 	if meta := a.metaInfo.get(uploadID); meta == nil {
 		return info, traceError(InvalidUploadID{})
 	}
@@ -453,7 +453,7 @@ func (a AzureObjects) PutObjectPart(bucket, object, uploadID string, partID int,
 }
 
 // ListObjectParts - Use Azure equivalent GetBlockList.
-func (a AzureObjects) ListObjectParts(bucket, object, uploadID string, partNumberMarker int, maxParts int) (result ListPartsInfo, err error) {
+func (a *azureObjects) ListObjectParts(bucket, object, uploadID string, partNumberMarker int, maxParts int) (result ListPartsInfo, err error) {
 	result.Bucket = bucket
 	result.Object = object
 	result.UploadID = uploadID
@@ -502,13 +502,13 @@ func (a AzureObjects) ListObjectParts(bucket, object, uploadID string, partNumbe
 // AbortMultipartUpload - Not Implemented.
 // There is no corresponding API in azure to abort an incomplete upload. The uncommmitted blocks
 // gets deleted after one week.
-func (a AzureObjects) AbortMultipartUpload(bucket, object, uploadID string) error {
+func (a *azureObjects) AbortMultipartUpload(bucket, object, uploadID string) error {
 	a.metaInfo.del(uploadID)
 	return nil
 }
 
 // CompleteMultipartUpload - Use Azure equivalent PutBlockList.
-func (a AzureObjects) CompleteMultipartUpload(bucket, object, uploadID string, uploadedParts []completePart) (objInfo ObjectInfo, err error) {
+func (a *azureObjects) CompleteMultipartUpload(bucket, object, uploadID string, uploadedParts []completePart) (objInfo ObjectInfo, err error) {
 	meta := a.metaInfo.get(uploadID)
 	if meta == nil {
 		return objInfo, traceError(InvalidUploadID{uploadID})
@@ -598,7 +598,7 @@ func azureListBlobsGetParameters(p storage.ListBlobsParameters) url.Values {
 // storage.ContainerAccessTypePrivate - none in minio terminology
 // As the common denominator for minio and azure is readonly and none, we support
 // these two policies at the bucket level.
-func (a AzureObjects) SetBucketPolicies(bucket string, policyInfo policy.BucketAccessPolicy) error {
+func (a *azureObjects) SetBucketPolicies(bucket string, policyInfo policy.BucketAccessPolicy) error {
 	var policies []BucketAccessPolicy
 
 	for prefix, policy := range policy.GetPolicies(policyInfo.Statements, bucket) {
@@ -626,7 +626,7 @@ func (a AzureObjects) SetBucketPolicies(bucket string, policyInfo policy.BucketA
 }
 
 // GetBucketPolicies - Get the container ACL and convert it to canonical []bucketAccessPolicy
-func (a AzureObjects) GetBucketPolicies(bucket string) (policy.BucketAccessPolicy, error) {
+func (a *azureObjects) GetBucketPolicies(bucket string) (policy.BucketAccessPolicy, error) {
 	policyInfo := policy.BucketAccessPolicy{Version: "2012-10-17"}
 	perm, err := a.client.GetContainerPermissions(bucket, 0, "")
 	if err != nil {
@@ -644,7 +644,7 @@ func (a AzureObjects) GetBucketPolicies(bucket string) (policy.BucketAccessPolic
 }
 
 // DeleteBucketPolicies - Set the container ACL to "private"
-func (a AzureObjects) DeleteBucketPolicies(bucket string) error {
+func (a *azureObjects) DeleteBucketPolicies(bucket string) error {
 	perm := storage.ContainerPermissions{
 		AccessType:     storage.ContainerAccessTypePrivate,
 		AccessPolicies: nil,
