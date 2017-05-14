@@ -244,7 +244,7 @@ func TestFSMigrateObjectWithObjects(t *testing.T) {
 	fsPath1 := pathJoin(bucketMetaPrefix, "testvolume1", "my-object1", fsMetaJSONFile)
 	fsPath1 = pathJoin(disk, minioMetaBucket, fsPath1)
 
-	fsMetaJSON := `{"version":"1.0.0","format":"fs","minio":{"release":"DEVELOPMENT.2017-03-27T02-26-33Z"},"meta":{"md5Sum":"467886be95c8ecfd71a2900e3f461b4f"}`
+	fsMetaJSON := `{"version":"1.0.0","format":"fs","minio":{"release":"DEVELOPMENT.2017-03-27T02-26-33Z"},"meta":{"etag":"467886be95c8ecfd71a2900e3f461b4f"}`
 	if _, err = fsCreateFile(fsPath1, bytes.NewReader([]byte(fsMetaJSON)), nil, 0); err != nil {
 		t.Fatal(err)
 	}
@@ -253,7 +253,7 @@ func TestFSMigrateObjectWithObjects(t *testing.T) {
 	fsPath2 := pathJoin(bucketMetaPrefix, "testvolume2", "my-object2", fsMetaJSONFile)
 	fsPath2 = pathJoin(disk, minioMetaBucket, fsPath2)
 
-	fsMetaJSON = `{"version":"1.0.0","format":"fs","minio":{"release":"DEVELOPMENT.2017-03-27T02-26-33Z"},"meta":{"md5Sum":"467886be95c8ecfd71a2900eff461b4d"}`
+	fsMetaJSON = `{"version":"1.0.0","format":"fs","minio":{"release":"DEVELOPMENT.2017-03-27T02-26-33Z"},"meta":{"etag":"467886be95c8ecfd71a2900eff461b4d"}`
 	if _, err = fsCreateFile(fsPath2, bytes.NewReader([]byte(fsMetaJSON)), nil, 0); err != nil {
 		t.Fatal(err)
 	}

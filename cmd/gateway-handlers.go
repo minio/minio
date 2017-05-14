@@ -234,7 +234,7 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	// Make sure we hex encode md5sum here.
-	metadata["md5Sum"] = hex.EncodeToString(md5Bytes)
+	metadata["etag"] = hex.EncodeToString(md5Bytes)
 
 	sha256sum := ""
 
@@ -282,7 +282,7 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	w.Header().Set("ETag", "\""+objInfo.MD5Sum+"\"")
+	w.Header().Set("ETag", "\""+objInfo.ETag+"\"")
 	writeSuccessResponseHeadersOnly(w)
 }
 

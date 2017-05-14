@@ -1930,7 +1930,7 @@ func testObjectCompleteMultipartUpload(obj ObjectLayer, instanceType string, t T
 		if actualErr == nil && testCase.shouldPass {
 
 			// Asserting IsTruncated.
-			if actualResult.MD5Sum != testCase.expectedS3MD5 {
+			if actualResult.ETag != testCase.expectedS3MD5 {
 				t.Errorf("Test %d: %s: Expected the result to be \"%v\", but found it to \"%v\"", i+1, instanceType, testCase.expectedS3MD5, actualResult)
 			}
 		}

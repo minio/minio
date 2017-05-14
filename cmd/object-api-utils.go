@@ -187,6 +187,35 @@ func getCompleteMultipartMD5(parts []completePart) (string, error) {
 	return s3MD5, nil
 }
 
+// Clean meta etag keys 'md5Sum', 'etag'.
+func cleanMetaETag(metadata map[string]string) map[string]string {
+	return cleanMetadata(metadata, "md5Sum", "etag")
+}
+
+// Clean metadata takes keys to be filtered
+// and returns a new map with the keys filtered.
+func cleanMetadata(metadata map[string]string, keyNames ...string) map[string]string {
+	var newMeta = make(map[string]string)
+	for k, v := range metadata {
+		if contains(keyNames, k) {
+			continue
+		}
+		newMeta[k] = v
+	}
+	return newMeta
+}
+
+// Extracts etag value from the metadata.
+func extractETag(metadata map[string]string) string {
+	// md5Sum tag is kept for backward compatibility.
+	etag, ok := metadata["md5Sum"]
+	if !ok {
+		etag = metadata["etag"]
+	}
+	// Success.
+	return etag
+}
+
 // Prefix matcher string matches prefix in a platform specific way.
 // For example on windows since its case insensitive we are supposed
 // to do case insensitive checks.

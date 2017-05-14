@@ -127,7 +127,7 @@ func (a AzureObjects) AnonGetObjectInfo(bucket, object string) (objInfo ObjectIn
 		objInfo.UserDefined["Content-Encoding"] = resp.Header.Get("Content-Encoding")
 	}
 	objInfo.UserDefined["Content-Type"] = resp.Header.Get("Content-Type")
-	objInfo.MD5Sum = resp.Header.Get("Etag")
+	objInfo.ETag = resp.Header.Get("Etag")
 	objInfo.ModTime = t
 	objInfo.Name = object
 	objInfo.Size = contentLength
@@ -182,7 +182,7 @@ func (a AzureObjects) AnonListObjects(bucket, prefix, marker, delimiter string, 
 			Name:            object.Name,
 			ModTime:         t,
 			Size:            object.Properties.ContentLength,
-			MD5Sum:          object.Properties.Etag,
+			ETag:            object.Properties.Etag,
 			ContentType:     object.Properties.ContentType,
 			ContentEncoding: object.Properties.ContentEncoding,
 		})

@@ -253,6 +253,19 @@ func readXLMetaStat(disk StorageAPI, bucket string, object string) (statInfo, ma
 	if err != nil {
 		return statInfo{}, nil, traceError(err)
 	}
+
+	// obtain version.
+	xlVersion := parseXLVersion(xlMetaBuf)
+
+	// obtain format.
+	xlFormat := parseXLFormat(xlMetaBuf)
+
+	// Validate if the xl.json we read is sane, return corrupted format.
+	if !isXLMetaValid(xlVersion, xlFormat) {
+		// For version mismatchs and unrecognized format, return corrupted format.
+		return statInfo{}, nil, traceError(errCorruptedFormat)
+	}
+
 	// obtain xlMetaV1{}.Meta using `github.com/tidwall/gjson`.
 	xlMetaMap := parseXLMetaMap(xlMetaBuf)
 
@@ -261,6 +274,7 @@ func readXLMetaStat(disk StorageAPI, bucket string, object string) (statInfo, ma
 	if err != nil {
 		return statInfo{}, nil, traceError(err)
 	}
+
 	// Return structured `xl.json`.
 	return xlStat, xlMetaMap, nil
 }
