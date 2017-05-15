@@ -191,7 +191,7 @@ func TestParseCredentialHeader(t *testing.T) {
 		actualCredential, actualErrCode := parseCredentialHeader(testCase.inputCredentialStr)
 		// validating the credential fields.
 		if testCase.expectedErrCode != actualErrCode {
-			t.Fatalf("Test %d: Expected the APIErrCode to be %s, got %s", i+1, errorCodeResponse[testCase.expectedErrCode], errorCodeResponse[actualErrCode])
+			t.Fatalf("Test %d: Expected the APIErrCode to be %s, got %s", i+1, errorCodeResponse[testCase.expectedErrCode].Code, errorCodeResponse[actualErrCode].Code)
 		}
 		if actualErrCode == ErrNone {
 			validateCredentialfields(t, i+1, testCase.expectedCredentials, actualCredential)
