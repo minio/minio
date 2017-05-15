@@ -41,6 +41,9 @@ const (
 
 	// Private key file for HTTPS.
 	privateKeyFile = "private.key"
+
+	// PKCS#12 certificate file for HTTPS.
+	pkcs12CertFile = "cert.pfx"
 )
 
 // ConfigDir - configuration directory with locking.
@@ -94,6 +97,11 @@ func (config *ConfigDir) GetPrivateKeyFile() string {
 	return filepath.Join(config.getCertsDir(), privateKeyFile)
 }
 
+// GetPKCS12File - returns absolute path of PKCS12 file.
+func (config *ConfigDir) GetPKCS12File() string {
+	return filepath.Join(config.getCertsDir(), pkcs12CertFile)
+}
+
 func mustGetDefaultConfigDir() string {
 	homeDir, err := homedir.Dir()
 	fatalIf(err, "Unable to get home directory.")
@@ -129,4 +137,8 @@ func getPublicCertFile() string {
 
 func getPrivateKeyFile() string {
 	return configDir.GetPrivateKeyFile()
+}
+
+func getPKCS12File() string {
+	return configDir.GetPKCS12File()
 }

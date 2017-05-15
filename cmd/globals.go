@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"crypto/tls"
 	"crypto/x509"
 	"runtime"
 	"time"
@@ -93,6 +94,8 @@ var (
 
 	// IsSSL indicates if the server is configured with SSL.
 	globalIsSSL bool
+
+	globalTLSCertificate *tls.Certificate
 
 	// List of admin peers.
 	globalAdminPeers = adminPeers{}

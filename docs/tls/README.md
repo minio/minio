@@ -8,7 +8,7 @@ In this document, we will configure Minio servers with TLS certificates for both
 
 ## 2. Configure with existing certificates
 
-Assuming that you are already having private and public certificates, you will need to copy them under `certs` in your Minio config directory using the names `private.key` and `public.crt` for key and public certificates respectively.
+Assuming that you are already having private and public certificates, or passwordless PKCS#12 certificate, you will need to copy them under `certs` in your Minio config directory using the names `private.key` and `public.crt` for key and public certificates respectively, or `cert.pfx` in case of PKCS#12 certificate.
 
 If the certificate is signed by a certificate authority, `public.crt` should be the concatenation of the server's certificate, any intermediates, and the CA's root certificate.
 
@@ -46,9 +46,15 @@ Generate the self-signed certificate:
 openssl req -new -x509 -days 3650 -key private.key -out public.crt -subj "/C=US/ST=state/L=location/O=organization/CN=domain"
 ```
 
-### Windows
+Generate PKCS#12 certificate:
+```sh
+openssl genrsa -out server.key 2048
+openssl req -new -key server.key -out server.csr
+openssl x509 -req -days 3650 -in server.csr -signkey server.key -out server.crt
+openssl pkcs12 -keypbe PBE-SHA1-3DES -certpbe PBE-SHA1-3DES -export -in server.crt -inkey server.key -out cert.pfx -name "my-cert-name"
+```
 
-Minio only supports key/certificate in PEM format on Windows. Currently we do not yet support PFX certificates.
+### Windows
 
 #### Install GnuTLS
 
@@ -61,6 +67,10 @@ setx path "%path%;C:\Users\MyUser\Downloads\gnutls-3.4.9-w64\bin"
 ```
 
 You may need to restart your powershell console for this to take affect.
+
+#### Install OpenSSL for PKCS#12
+
+Download and install OpenSSL from [here](https://wiki.openssl.org/index.php/Binaries)
 
 #### Generate private.key
 
@@ -118,6 +128,15 @@ Generate public certificate
 
 ```
 certtool.exe --generate-self-signed --load-privkey private.key --template cert.cnf --outfile public.crt 
+```
+
+#### Generate PKCS#12 certificate.
+
+```
+openssl.exe genrsa -out server.key 2048
+openssl.exe req -new -key server.key -out server.csr
+openssl.exe x509 -req -days 3650 -in server.csr -signkey server.key -out server.crt
+openssl.exe pkcs12 -keypbe PBE-SHA1-3DES -certpbe PBE-SHA1-3DES -export -in server.crt -inkey server.key -out cert.pfx -name "my-cert-name"
 ```
 
 ## 4. Install third-party CAs

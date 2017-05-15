@@ -225,8 +225,8 @@ func serverMain(ctx *cli.Context) {
 
 	// Check and load SSL certificates.
 	var err error
-	globalPublicCerts, globalRootCAs, globalIsSSL, err = getSSLConfig()
-	fatalIf(err, "Invalid SSL key file")
+	globalPublicCerts, globalRootCAs, globalTLSCertificate, globalIsSSL, err = getSSLConfig()
+	fatalIf(err, "Invalid SSL key/certificate file")
 
 	if !quietFlag {
 		// Check for new updates from dl.minio.io.
@@ -265,11 +265,7 @@ func serverMain(ctx *cli.Context) {
 
 	// Start server, automatically configures TLS if certs are available.
 	go func() {
-		cert, key := "", ""
-		if globalIsSSL {
-			cert, key = getPublicCertFile(), getPrivateKeyFile()
-		}
-		fatalIf(apiServer.ListenAndServe(cert, key), "Failed to start minio server.")
+		fatalIf(apiServer.ListenAndServe(globalTLSCertificate), "Failed to start minio server.")
 	}()
 
 	newObject, err := newObjectLayer(globalEndpoints)

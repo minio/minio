@@ -189,7 +189,7 @@ func TestServerMux(t *testing.T) {
 		fmt.Fprint(w, "hello")
 	}))
 	// Start serving requests
-	go m.ListenAndServe("", "")
+	go m.ListenAndServe(nil)
 
 	// Issue a GET request. Since we started server in a goroutine, it could be not ready
 	// at this point. So we allow until 5 failed retries before declare there is an error
@@ -239,7 +239,7 @@ func TestServerCloseBlocking(t *testing.T) {
 	}))
 
 	// Start serving requests in a goroutine
-	go m.ListenAndServe("", "")
+	go m.ListenAndServe(nil)
 
 	// Dial, try until 5 times before declaring a failure
 	dial := func() (net.Conn, error) {
@@ -306,7 +306,7 @@ func TestServerListenAndServePlain(t *testing.T) {
 	}))
 
 	// ListenAndServe in a goroutine, but we don't know when it's ready
-	go func() { errc <- m.ListenAndServe("", "") }()
+	go func() { errc <- m.ListenAndServe(nil) }()
 
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
@@ -370,7 +370,12 @@ func TestServerListenAndServeTLS(t *testing.T) {
 	}
 
 	// ListenAndServe in a goroutine, but we don't know when it's ready
-	go func() { errc <- m.ListenAndServe(certFile, keyFile) }()
+	var tlsCert tls.Certificate
+	if tlsCert, err = tls.LoadX509KeyPair(certFile, keyFile); err != nil {
+		t.Fatal(err)
+	}
+
+	go func() { errc <- m.ListenAndServe(&tlsCert) }()
 
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
