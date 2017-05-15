@@ -17,27 +17,27 @@
 package cmd
 
 // HealBucket - Not relevant.
-func (a AzureObjects) HealBucket(bucket string) error {
+func (a *azureObjects) HealBucket(bucket string) error {
 	return traceError(NotImplemented{})
 }
 
 // ListBucketsHeal - Not relevant.
-func (a AzureObjects) ListBucketsHeal() (buckets []BucketInfo, err error) {
+func (a *azureObjects) ListBucketsHeal() (buckets []BucketInfo, err error) {
 	return nil, traceError(NotImplemented{})
 }
 
 // HealObject - Not relevant.
-func (a AzureObjects) HealObject(bucket, object string) (int, int, error) {
+func (a *azureObjects) HealObject(bucket, object string) (int, int, error) {
 	return 0, 0, traceError(NotImplemented{})
 }
 
 // ListObjectsHeal - Not relevant.
-func (a AzureObjects) ListObjectsHeal(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
+func (a *azureObjects) ListObjectsHeal(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
 	return ListObjectsInfo{}, traceError(NotImplemented{})
 }
 
 // ListUploadsHeal - Not relevant.
-func (a AzureObjects) ListUploadsHeal(bucket, prefix, marker, uploadIDMarker,
+func (a *azureObjects) ListUploadsHeal(bucket, prefix, marker, uploadIDMarker,
 	delimiter string, maxUploads int) (ListMultipartsInfo, error) {
 	return ListMultipartsInfo{}, traceError(NotImplemented{})
 }
