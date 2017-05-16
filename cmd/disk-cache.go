@@ -300,7 +300,7 @@ func (c diskCache) Get(bucket, object string) (*os.File, ObjectInfo, bool, error
 		return nil, ObjectInfo{}, false, err
 	}
 	if objMeta.Version != diskCacheObjectMetaVersion {
-		return nil, ObjectInfo{}, errors.New("format not supported")
+		return nil, ObjectInfo{}, false, errors.New("format not supported")
 	}
 	file, err := os.Open(c.encodedPath(bucket, object))
 	if err != nil {
@@ -397,6 +397,8 @@ type cacheObjects struct {
 	GetObjectInfoFn     func(bucket, object string) (objInfo ObjectInfo, err error)
 	AnonGetObjectFn     func(bucket, object string, startOffset int64, length int64, writer io.Writer) (err error)
 	AnonGetObjectInfoFn func(bucket, object string) (objInfo ObjectInfo, err error)
+	PutObjectFn         func(bucket, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (objInfo ObjectInfo, err error)
+	AnonPutObjectFn     func(bucket, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (objInfo ObjectInfo, err error)
 }
 
 func (c cacheObjects) getObject(bucket, object string, startOffset int64, length int64, writer io.Writer, anonReq bool) (err error) {
@@ -474,7 +476,6 @@ func (c cacheObjects) AnonGetObject(bucket, object string, startOffset int64, le
 	return c.getObject(bucket, object, startOffset, length, writer, true)
 }
 
-// Anonymous version of cacheObjects.GetObjectInfo
 func (c cacheObjects) getObjectInfo(bucket, object string, anonReq bool) (ObjectInfo, error) {
 	getObjectInfoFn := c.GetObjectInfoFn
 	if anonReq {
@@ -516,6 +517,45 @@ func (c cacheObjects) AnonGetObjectInfo(bucket, object string) (ObjectInfo, erro
 	return c.getObjectInfo(bucket, object, true)
 }
 
+func (c cacheObjects) putObject(bucket, object string, size int64, r io.Reader, metadata map[string]string, sha256sum string, reqAnon bool) (ObjectInfo, error) {
+	putObjectFn := c.PutObjectFn
+	if anonReq {
+		putObjectFn = c.AnonGetObjectFn
+	}
+
+	cachedObj, err := c.dcache.Put()
+	if err == errDiskFull {
+		return putObjectFn(bucket, object, size, r, metadata, sha256sum)
+	}
+	if err != nil {
+		return ObjectInfo{}, err
+	}
+	objInfo, err := c.PutObjectFn(bucket, object, size, io.TeeReader(r, cachedObj), metadata, sha256sum)
+	if err != nil {
+		errNoCommit := c.dcache.NoCommit(cachedObj)
+		errorIf(errNoCommit, "Error while discarding temporary cache file for %s/%s", bucket, object)
+		return ObjectInfo{}, err
+	}
+
+	objInfo.Bucket = bucket
+	objInfo.Name = object
+	err = c.dcache.Commit(cachedObj, objInfo, reqAnon)
+	if err != nil {
+		return ObjectInfo{}, err
+	}
+	return objInfo, nil
+}
+
+// PutObject - caches the uploaded object.
+func (c cacheObjects) PutObject(bucket, object string, size int64, r io.Reader, metadata map[string]string, sha256sum string) (ObjectInfo, error) {
+	return c.putObject(bucket, object, size, r, metadata, sha256sum, false)
+}
+
+// AnonPutObject - anonymous version of PutObject.
+func (c cacheObjects) AnonPutObject(bucket, object string, size int64, r io.Reader, metadata map[string]string, sha256sum string) (ObjectInfo, error) {
+	return c.putObject(bucket, object, size, r, metadata, sha256sum, true)
+}
+
 // Returns cachedObjects for use by Server.
 func newServerCacheObjects(l ObjectLayer, dir string, maxUsage, expiry int) (*cacheObjects, error) {
 	dcache, err := newDiskCache(dir, maxUsage, expiry)
@@ -547,7 +587,9 @@ func newGatewayCacheObjects(l GatewayLayer, dir string, maxUsage, expiry int) (*
 		dcache:              dcache,
 		GetObjectFn:         l.GetObject,
 		GetObjectInfoFn:     l.GetObjectInfo,
+		PutObjectFn:         l.PutObject,
 		AnonGetObjectFn:     l.AnonGetObject,
 		AnonGetObjectInfoFn: l.AnonGetObjectInfo,
+		AnonPutObjectFn:     l.AnonPutObject,
 	}, nil
 }
