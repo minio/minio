@@ -79,7 +79,9 @@ func printServerCommonMsg(apiEndpoints []string) {
 	log.Println(colorBlue("\nEndpoint: ") + colorBold(fmt.Sprintf(getFormatStr(len(apiEndpointStr), 1), apiEndpointStr)))
 	log.Println(colorBlue("AccessKey: ") + colorBold(fmt.Sprintf("%s ", cred.AccessKey)))
 	log.Println(colorBlue("SecretKey: ") + colorBold(fmt.Sprintf("%s ", cred.SecretKey)))
-	log.Println(colorBlue("Region: ") + colorBold(fmt.Sprintf(getFormatStr(len(region), 3), region)))
+	if region != "" {
+		log.Println(colorBlue("Region: ") + colorBold(fmt.Sprintf(getFormatStr(len(region), 3), region)))
+	}
 	printEventNotifiers()
 
 	log.Println(colorBlue("\nBrowser Access:"))
@@ -92,12 +94,12 @@ func printEventNotifiers() {
 		// In case initEventNotifier() was not done or failed.
 		return
 	}
-	arnMsg := colorBlue("SQS ARNs: ")
 	// Get all configured external notification targets
 	externalTargets := globalEventNotifier.GetAllExternalTargets()
 	if len(externalTargets) == 0 {
-		arnMsg += colorBold(fmt.Sprintf(getFormatStr(len("<none>"), 1), "<none>"))
+		return
 	}
+	arnMsg := colorBlue("SQS ARNs: ")
 	for queueArn := range externalTargets {
 		arnMsg += colorBold(fmt.Sprintf(getFormatStr(len(queueArn), 1), queueArn))
 	}

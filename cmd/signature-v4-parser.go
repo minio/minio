@@ -69,9 +69,6 @@ func parseCredentialHeader(credElement string) (credentialHeader, APIErrorCode) 
 	if e != nil {
 		return credentialHeader{}, ErrMalformedCredentialDate
 	}
-	if credElements[2] == "" {
-		return credentialHeader{}, ErrMalformedCredentialRegion
-	}
 	cred.scope.region = credElements[2]
 	if credElements[3] != "s3" {
 		return credentialHeader{}, ErrInvalidService

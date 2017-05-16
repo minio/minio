@@ -68,7 +68,10 @@ func getContentSha256Cksum(r *http.Request) string {
 
 // isValidRegion - verify if incoming region value is valid with configured Region.
 func isValidRegion(reqRegion string, confRegion string) bool {
-	if confRegion == "" || confRegion == "US" {
+	if confRegion == "" {
+		return true
+	}
+	if confRegion == "US" {
 		confRegion = globalMinioDefaultRegion
 	}
 	// Some older s3 clients set region as "US" instead of

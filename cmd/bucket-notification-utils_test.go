@@ -259,11 +259,6 @@ func TestQueueARN(t *testing.T) {
 			queueARN: "arn:minio:sns:us-east-1:1:listen",
 			errCode:  ErrARNNotification,
 		},
-		// Invalid region 'us-west-1' in queue arn.
-		{
-			queueARN: "arn:minio:sqs:us-west-1:1:redis",
-			errCode:  ErrRegionNotification,
-		},
 		// Invalid queue name empty in queue arn.
 		{
 			queueARN: "arn:minio:sqs:us-east-1:1:",
@@ -288,6 +283,37 @@ func TestQueueARN(t *testing.T) {
 		{
 			queueARN: "arn:minio:sqs:us-east-1:",
 			errCode:  ErrARNNotification,
+		},
+	}
+
+	// Validate all tests for queue arn.
+	for i, testCase := range testCases {
+		errCode := checkQueueARN(testCase.queueARN)
+		if testCase.errCode != errCode {
+			t.Errorf("Test %d: Expected \"%d\", got \"%d\"", i+1, testCase.errCode, errCode)
+		}
+	}
+
+	// Test when server region is set.
+	rootPath, err = newTestConfig("us-east-1")
+	if err != nil {
+		t.Fatalf("unable initialize config file, %s", err)
+	}
+	defer removeAll(rootPath)
+
+	testCases = []struct {
+		queueARN string
+		errCode  APIErrorCode
+	}{
+		// Incorrect region should produce error.
+		{
+			queueARN: "arn:minio:sqs:us-west-1:1:webhook",
+			errCode:  ErrRegionNotification,
+		},
+		// Correct region should not produce error.
+		{
+			queueARN: "arn:minio:sqs:us-east-1:1:webhook",
+			errCode:  ErrNone,
 		},
 	}
 
@@ -337,11 +363,6 @@ func TestUnmarshalSQSARN(t *testing.T) {
 			queueARN: "",
 			Type:     "",
 		},
-		// Invalid region 'us-west-1' in queue arn.
-		{
-			queueARN: "arn:minio:sqs:us-west-1:1:redis",
-			Type:     "",
-		},
 		// Partial queue arn.
 		{
 			queueARN: "arn:minio:sqs:",
@@ -361,4 +382,33 @@ func TestUnmarshalSQSARN(t *testing.T) {
 		}
 	}
 
+	// Test when the server region is set.
+	rootPath, err = newTestConfig("us-east-1")
+	if err != nil {
+		t.Fatalf("unable initialize config file, %s", err)
+	}
+	defer removeAll(rootPath)
+
+	testCases = []struct {
+		queueARN string
+		Type     string
+	}{
+		// Incorrect region in ARN returns empty mSqs.Type
+		{
+			queueARN: "arn:minio:sqs:us-west-1:1:webhook",
+			Type:     "",
+		},
+		// Correct regionin ARN returns valid mSqs.Type
+		{
+			queueARN: "arn:minio:sqs:us-east-1:1:webhook",
+			Type:     "webhook",
+		},
+	}
+
+	for i, testCase := range testCases {
+		mSqs := unmarshalSqsARN(testCase.queueARN)
+		if testCase.Type != mSqs.Type {
+			t.Errorf("Test %d: Expected \"%s\", got \"%s\"", i+1, testCase.Type, mSqs.Type)
+		}
+	}
 }

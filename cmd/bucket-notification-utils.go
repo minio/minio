@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"errors"
 	"strings"
 
 	"github.com/minio/minio-go/pkg/set"
@@ -111,19 +112,20 @@ func checkARN(arn, arnType string) APIErrorCode {
 	if !strings.HasPrefix(arn, arnType) {
 		return ErrARNNotification
 	}
-	if !strings.HasPrefix(arn, arnType+serverConfig.GetRegion()+":") {
-		return ErrRegionNotification
-	}
-	account := strings.SplitN(strings.TrimPrefix(arn, arnType+serverConfig.GetRegion()+":"), ":", 2)
-	switch len(account) {
-	case 1:
-		// This means ARN is malformed, account should have min of 2elements.
+	strs := strings.SplitN(arn, ":", -1)
+	if len(strs) != 6 {
 		return ErrARNNotification
-	case 2:
-		// Account topic id or topic name cannot be empty.
-		if account[0] == "" || account[1] == "" {
-			return ErrARNNotification
+	}
+	if serverConfig.GetRegion() != "" {
+		region := strs[3]
+		if region != serverConfig.GetRegion() {
+			return ErrRegionNotification
 		}
+	}
+	accountID := strs[4]
+	resource := strs[5]
+	if accountID == "" || resource == "" {
+		return ErrARNNotification
 	}
 	return ErrNone
 }
@@ -258,28 +260,39 @@ func validateNotificationConfig(nConfig notificationConfig) APIErrorCode {
 // - webhook
 func unmarshalSqsARN(queueARN string) (mSqs arnSQS) {
 	mSqs = arnSQS{}
-	if !strings.HasPrefix(queueARN, minioSqs+serverConfig.GetRegion()+":") {
+	strs := strings.SplitN(queueARN, ":", -1)
+	if len(strs) != 6 {
 		return mSqs
 	}
-	sqsType := strings.TrimPrefix(queueARN, minioSqs+serverConfig.GetRegion()+":")
-	switch {
-	case hasSuffix(sqsType, queueTypeAMQP):
+	if serverConfig.GetRegion() != "" {
+		region := strs[3]
+		if region != serverConfig.GetRegion() {
+			return mSqs
+		}
+	}
+	sqsType := strs[5]
+	switch sqsType {
+	case queueTypeAMQP:
 		mSqs.Type = queueTypeAMQP
-	case hasSuffix(sqsType, queueTypeNATS):
+	case queueTypeNATS:
 		mSqs.Type = queueTypeNATS
-	case hasSuffix(sqsType, queueTypeElastic):
+	case queueTypeElastic:
 		mSqs.Type = queueTypeElastic
-	case hasSuffix(sqsType, queueTypeRedis):
+	case queueTypeRedis:
 		mSqs.Type = queueTypeRedis
-	case hasSuffix(sqsType, queueTypePostgreSQL):
+	case queueTypePostgreSQL:
 		mSqs.Type = queueTypePostgreSQL
-	case hasSuffix(sqsType, queueTypeMySQL):
+	case queueTypeMySQL:
 		mSqs.Type = queueTypeMySQL
-	case hasSuffix(sqsType, queueTypeKafka):
+	case queueTypeKafka:
 		mSqs.Type = queueTypeKafka
-	case hasSuffix(sqsType, queueTypeWebhook):
+	case queueTypeWebhook:
 		mSqs.Type = queueTypeWebhook
+	default:
+		errorIf(errors.New("invalid SQS type"), "SQS type: %s", sqsType)
 	} // Add more queues here.
-	mSqs.AccountID = strings.TrimSuffix(sqsType, ":"+mSqs.Type)
+
+	mSqs.AccountID = strs[4]
+
 	return mSqs
 }

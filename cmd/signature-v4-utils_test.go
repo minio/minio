@@ -80,7 +80,7 @@ func TestIsValidRegion(t *testing.T) {
 		expectedResult bool
 	}{
 
-		{"", "", false},
+		{"", "", true},
 		{globalMinioDefaultRegion, "", true},
 		{globalMinioDefaultRegion, "US", true},
 		{"us-west-1", "US", false},
