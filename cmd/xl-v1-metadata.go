@@ -49,18 +49,32 @@ func (t byObjectPartNumber) Less(i, j int) bool { return t[i].Number < t[j].Numb
 
 // checkSumInfo - carries checksums of individual scattered parts per disk.
 type checkSumInfo struct {
-	Name      string `json:"name"`
-	Algorithm string `json:"algorithm"`
-	Hash      string `json:"hash"`
+	Name      string   `json:"name"`
+	Algorithm HashAlgo `json:"algorithm"`
+	Hash      string   `json:"hash"`
 }
 
-// Various algorithms supported by bit-rot protection feature.
+// HashAlgo - represents a supported hashing algorithm for bitrot
+// verification.
+type HashAlgo string
+
 const (
-	// "sha256" is specifically used on arm64 bit platforms.
-	sha256Algo = "sha256"
-	// Rest of the platforms default to blake2b.
-	blake2bAlgo = "blake2b"
+	// HashBlake2b represents the Blake 2b hashing algorithm
+	HashBlake2b HashAlgo = "blake2b"
+	// HashSha256 represents the SHA256 hashing algorithm
+	HashSha256 HashAlgo = "sha256"
 )
+
+// isValidHashAlgo - function that checks if the hash algorithm is
+// valid (known and used).
+func isValidHashAlgo(algo HashAlgo) bool {
+	switch algo {
+	case HashSha256, HashBlake2b:
+		return true
+	default:
+		return false
+	}
+}
 
 // Constant indicates current bit-rot algo used when creating objects.
 // Depending on the architecture we are choosing a different checksum.
@@ -70,7 +84,7 @@ var bitRotAlgo = getDefaultBitRotAlgo()
 // Currently this function defaults to "blake2b" as the preferred
 // checksum algorithm on all architectures except ARM64. On ARM64
 // we use sha256 (optimized using sha2 instructions of ARM NEON chip).
-func getDefaultBitRotAlgo() string {
+func getDefaultBitRotAlgo() HashAlgo {
 	switch runtime.GOARCH {
 	case "arm64":
 		// As a special case for ARM64 we use an optimized
@@ -79,17 +93,17 @@ func getDefaultBitRotAlgo() string {
 		// This would also allows erasure coded writes
 		// on ARM64 servers to be on-par with their
 		// counter-part X86_64 servers.
-		return sha256Algo
+		return HashSha256
 	default:
 		// Default for all other architectures we use blake2b.
-		return blake2bAlgo
+		return HashBlake2b
 	}
 }
 
 // erasureInfo - carries erasure coding related information, block
 // distribution and checksums.
 type erasureInfo struct {
-	Algorithm    string         `json:"algorithm"`
+	Algorithm    HashAlgo       `json:"algorithm"`
 	DataBlocks   int            `json:"data"`
 	ParityBlocks int            `json:"parity"`
 	BlockSize    int64          `json:"blockSize"`

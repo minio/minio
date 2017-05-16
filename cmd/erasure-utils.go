@@ -29,7 +29,7 @@ import (
 )
 
 // newHashWriters - inititialize a slice of hashes for the disk count.
-func newHashWriters(diskCount int, algo string) []hash.Hash {
+func newHashWriters(diskCount int, algo HashAlgo) []hash.Hash {
 	hashWriters := make([]hash.Hash, diskCount)
 	for index := range hashWriters {
 		hashWriters[index] = newHash(algo)
@@ -38,13 +38,13 @@ func newHashWriters(diskCount int, algo string) []hash.Hash {
 }
 
 // newHash - gives you a newly allocated hash depending on the input algorithm.
-func newHash(algo string) (h hash.Hash) {
+func newHash(algo HashAlgo) (h hash.Hash) {
 	switch algo {
-	case sha256Algo:
+	case HashSha256:
 		// sha256 checksum specially on ARM64 platforms or whenever
 		// requested as dictated by `xl.json` entry.
 		h = sha256.New()
-	case blake2bAlgo:
+	case HashBlake2b:
 		// ignore the error, because New512 without a key never fails
 		// New512 only returns a non-nil error, if the length of the passed
 		// key > 64 bytes - but we use blake2b as hash function (no key)
@@ -71,7 +71,7 @@ var hashBufferPool = sync.Pool{
 
 // hashSum calculates the hash of the entire path and returns.
 func hashSum(disk StorageAPI, volume, path string, writer hash.Hash) ([]byte, error) {
-	// Fetch staging a new staging buffer from the pool.
+	// Fetch a new staging buffer from the pool.
 	bufp := hashBufferPool.Get().(*[]byte)
 	defer hashBufferPool.Put(bufp)
 
@@ -206,4 +206,17 @@ func copyBuffer(writer io.Writer, disk StorageAPI, volume string, path string, b
 
 	// Success.
 	return nil
+}
+
+// bitRotVerifier - type representing bit-rot verification process for
+// a single under-lying object (currently whole files)
+type bitRotVerifier struct {
+	// has the bit-rot verification been done?
+	isVerified bool
+	// is the data free of bit-rot?
+	hasBitRot bool
+	// hashing algorithm
+	algo HashAlgo
+	// hex-encoded expected raw-hash value
+	checkSum string
 }
