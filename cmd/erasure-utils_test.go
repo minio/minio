@@ -21,6 +21,8 @@ import (
 	"errors"
 	"io"
 	"testing"
+
+	"github.com/aead/siphash"
 )
 
 // Test validates the number hash writers returned.
@@ -64,6 +66,13 @@ func TestGetChunkSize(t *testing.T) {
 		if testCase.expectedChunkSize != got {
 			t.Errorf("Test %d : expected=%d got=%d", i+1, testCase.expectedChunkSize, got)
 		}
+	}
+}
+
+func TestSipHashKey(t *testing.T) {
+	_, err := siphash.New128(siphashKey)
+	if err != nil {
+		t.Fatalf("The fixed siphash key is invalid: %s", err)
 	}
 }
 
