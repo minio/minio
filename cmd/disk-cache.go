@@ -17,6 +17,9 @@ import (
 	"encoding/json"
 )
 
+const diskCacheBackendVersion = "1"
+const diskCacheObjectMetaVersion = "1.0.0"
+
 // Metadata of a cached object.
 type diskCacheObjectMeta struct {
 	// Version of the metadata structure
@@ -78,7 +81,7 @@ func newDiskCacheObjectMeta(objInfo ObjectInfo, anon bool) diskCacheObjectMeta {
 	}
 
 	objMeta.Anonymous = anon
-
+	objMeta.Version = diskCacheObjectMetaVersion
 	return objMeta
 }
 
@@ -296,7 +299,9 @@ func (c diskCache) Get(bucket, object string) (*os.File, ObjectInfo, bool, error
 	if err := json.Unmarshal(metaBytes, &objMeta); err != nil {
 		return nil, ObjectInfo{}, false, err
 	}
-
+	if objMeta.Version != diskCacheObjectMetaVersion {
+		return nil, ObjectInfo{}, errors.New("format not supported")
+	}
 	file, err := os.Open(c.encodedPath(bucket, object))
 	if err != nil {
 		return nil, ObjectInfo{}, false, err
@@ -333,7 +338,7 @@ func (c diskCache) Delete(bucket, object string) error {
 // format.json structure
 // format.json is put in the root of the cache directory
 type diskCacheFormat struct {
-	Version int       `json:"version"`
+	Version string    `json:"version"`
 	Format  string    `json:"format"`
 	Time    time.Time `json:"createTime"`
 }
@@ -351,7 +356,7 @@ func newDiskCache(dir string, maxUsage, expiry int) (*diskCache, error) {
 		if !os.IsNotExist(err) {
 			return nil, err
 		}
-		format.Version = 1
+		format.Version = diskCacheBackendVersion
 		format.Format = "cachefs"
 		format.Time = time.Now().UTC()
 		if formatBytes, err = json.Marshal(format); err != nil {
@@ -364,7 +369,7 @@ func newDiskCache(dir string, maxUsage, expiry int) (*diskCache, error) {
 		if err = json.Unmarshal(formatBytes, &format); err != nil {
 			return nil, err
 		}
-		if format.Version != 1 {
+		if format.Version != diskCacheBackendVersion {
 			return nil, errors.New("format not supported")
 		}
 	}
