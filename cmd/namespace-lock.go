@@ -240,14 +240,12 @@ func (n *nsLockMap) ForceUnlock(volume, path string) {
 	if _, found := n.lockMap[param]; found {
 		// Remove lock from the map.
 		delete(n.lockMap, param)
-
-		// delete the lock state entry for given
-		// <volume, path> pair.
-		err := n.deleteLockInfoEntryForVolumePath(param)
-		if err != nil {
-			errorIf(err, "Failed to delete lock info entry")
-		}
 	}
+
+	// delete the lock state entry for given
+	// <volume, path> pair. Ignore error as there
+	// is no way to report it back
+	n.deleteLockInfoEntryForVolumePath(param)
 }
 
 // lockInstance - frontend/top-level interface for namespace locks.
