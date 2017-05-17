@@ -351,7 +351,7 @@ func (l *gcsGateway) ListObjects(bucket string, prefix string, marker string, de
 			Bucket:          attrs.Bucket,
 			ModTime:         attrs.Updated,
 			Size:            attrs.Size,
-			MD5Sum:          hex.EncodeToString(attrs.MD5),
+			ETag:            hex.EncodeToString(attrs.MD5),
 			UserDefined:     attrs.Metadata,
 			ContentType:     attrs.ContentType,
 			ContentEncoding: attrs.ContentEncoding,
@@ -443,7 +443,7 @@ func fromGCSObjectInfo(attrs *storage.ObjectAttrs) ObjectInfo {
 		Bucket:          attrs.Bucket,
 		ModTime:         attrs.Updated,
 		Size:            attrs.Size,
-		MD5Sum:          hex.EncodeToString(attrs.MD5),
+		ETag:            hex.EncodeToString(attrs.MD5),
 		UserDefined:     attrs.Metadata,
 		ContentType:     attrs.ContentType,
 		ContentEncoding: attrs.ContentEncoding,
@@ -691,7 +691,7 @@ func (l *gcsGateway) PutObjectPart(bucket string, key string, uploadID string, p
 	return PartInfo{
 		PartNumber:   partID,
 		LastModified: info.ModTime,
-		ETag:         info.MD5Sum,
+		ETag:         info.ETag,
 		Size:         info.Size,
 	}, err
 }
