@@ -220,24 +220,9 @@ func (l *gcsGateway) MakeBucket(bucket string) error {
 func (l *gcsGateway) MakeBucketWithLocation(bucket, location string) error {
 	bkt := l.client.Bucket(bucket)
 
-	// this will map s3 regions to google multi regions
-	if v, ok := map[string]string{
-		"ap-northeast-1": "asia",
-		"ap-northeast-2": "asia",
-		"ap-south-1":     "asia",
-		"ap-southeast-1": "asia",
-		"ap-southeast-2": "asia",
-		"eu-central-1":   "eu",
-		"eu-west-1":      "eu",
-		"eu-west-2":      "eu",
-		"ca-central-1":   "us",
-		"sa-east-1":      "us",
-		"us-east-1":      "us",
-		"us-east-2":      "us",
-		"us-west-1":      "us",
-		"us-west-2":      "us",
-	}[location]; ok {
-		location = v
+	// we'll default to the us multi-region in case of us-east-1
+	if location == "us-east-1" {
+		location = "us"
 	}
 
 	if err := bkt.Create(l.ctx, l.projectID, &storage.BucketAttrs{
