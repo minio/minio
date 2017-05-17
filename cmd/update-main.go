@@ -238,13 +238,16 @@ func getDownloadURL() (downloadURL string) {
 	return minioReleaseURL + "minio"
 }
 
-func getUpdateInfo(timeout time.Duration, mode string) (older time.Duration, downloadURL string, err error) {
-	currentReleaseTime, err := GetCurrentReleaseTime()
+func getUpdateInfo(timeout time.Duration, mode string) (older time.Duration,
+	downloadURL string, err error) {
+
+	var currentReleaseTime, latestReleaseTime time.Time
+	currentReleaseTime, err = GetCurrentReleaseTime()
 	if err != nil {
 		return older, downloadURL, err
 	}
 
-	latestReleaseTime, err := getLatestReleaseTime(timeout, mode)
+	latestReleaseTime, err = getLatestReleaseTime(timeout, mode)
 	if err != nil {
 		return older, downloadURL, err
 	}
@@ -274,8 +277,8 @@ func mainUpdate(ctx *cli.Context) {
 		os.Exit(-1)
 	}
 
-	if older != time.Duration(0) {
-		log.Println(colorizeUpdateMessage(downloadURL, older))
+	if updateMsg := computeUpdateMessage(downloadURL, older); updateMsg != "" {
+		log.Println(updateMsg)
 		os.Exit(1)
 	}
 

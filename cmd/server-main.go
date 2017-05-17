@@ -81,8 +81,8 @@ EXAMPLES:
 func checkUpdate(mode string) {
 	// Its OK to ignore any errors during getUpdateInfo() here.
 	if older, downloadURL, err := getUpdateInfo(1*time.Second, mode); err == nil {
-		if older > time.Duration(0) {
-			log.Println(colorizeUpdateMessage(downloadURL, older))
+		if updateMsg := computeUpdateMessage(downloadURL, older); updateMsg != "" {
+			log.Println(updateMsg)
 		}
 	}
 }
