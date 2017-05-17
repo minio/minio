@@ -17,8 +17,10 @@ import (
 	"encoding/json"
 )
 
-const diskCacheBackendVersion = "1"
-const diskCacheObjectMetaVersion = "1.0.0"
+const (
+	diskCacheBackendVersion    = "1"
+	diskCacheObjectMetaVersion = "1.0.0"
+)
 
 type diskCacheBoltdbEntry map[string]string
 
@@ -170,19 +172,16 @@ func (c diskCache) purge() {
 				b := tx.Bucket([]byte("cache"))
 				cursor := b.Cursor()
 				for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
-					fmt.Println("checking on", string(k))
 					entry := make(diskCacheBoltdbEntry)
-					err := json.Unmarshal(v, entry)
+					err := json.Unmarshal(v, &entry)
 					if err != nil {
 						errorIf(err, "Unable to unmarshall")
 						continue
 					}
 					atime := entry.GetAtime()
 					if atime.After(expiry) {
-						fmt.Println("not deleting", string(k))
 						continue
 					}
-					fmt.Println("deleting", string(k))
 					s := strings.SplitN(string(k), slashSeparator, -1)
 					bucket := s[0]
 					object := s[1]
@@ -194,6 +193,8 @@ func (c diskCache) purge() {
 						errorIf(err, "Unable to remove %s json", string(k))
 						continue
 					}
+					err = b.Delete(k)
+					errorIf(err, "Unable to delete %s", string(k))
 				}
 				return nil
 			})
@@ -247,7 +248,7 @@ func (c diskCache) NoCommit(f *os.File) error {
 
 // Creates a file in the tmp directory to which the cached object is written to.
 // Once the object is written to disk the caller can call diskCache.Commit()
-func (c diskCache) Put() (*os.File, error) {
+func (c diskCache) Put(size int64) (*os.File, error) {
 	if c.diskUsageHigh() {
 		select {
 		case c.purgeChan <- struct{}{}:
@@ -255,7 +256,29 @@ func (c diskCache) Put() (*os.File, error) {
 		}
 		return nil, errDiskFull
 	}
-	return ioutil.TempFile(c.tmpDir, "")
+	f, err := ioutil.TempFile(c.tmpDir, "")
+	if err != nil {
+		return nil, err
+	}
+	e := Fallocate(int(f.Fd()), 0, size)
+	// Ignore errors when Fallocate is not supported in the current system
+	if e != nil && !isSysErrNoSys(e) && !isSysErrOpNotSupported(e) {
+		switch {
+		case isSysErrNoSpace(e):
+			err = errDiskFull
+		case isSysErrIO(e):
+			err = e
+		default:
+			// For errors: EBADF, EINTR, EINVAL, ENODEV, EPERM, ESPIPE  and ETXTBSY
+			// Appending was failed anyway, returns unexpected error
+			err = errUnexpected
+		}
+		tmpPath := f.Name()
+		f.Close()
+		os.Remove(tmpPath)
+		return nil, err
+	}
+	return f, nil
 }
 
 // Returns the handle for the cached object
@@ -436,7 +459,7 @@ func (c cacheObjects) getObject(bucket, object string, startOffset int64, length
 	if startOffset != 0 || length != objInfo.Size {
 		return GetObjectFn(bucket, object, startOffset, length, writer)
 	}
-	cachedObj, err := c.dcache.Put()
+	cachedObj, err := c.dcache.Put(length)
 	if err == errDiskFull {
 		return GetObjectFn(bucket, object, 0, objInfo.Size, writer)
 	}
@@ -515,7 +538,7 @@ func (c cacheObjects) putObject(bucket, object string, size int64, r io.Reader, 
 		putObjectFn = c.AnonPutObjectFn
 	}
 
-	cachedObj, err := c.dcache.Put()
+	cachedObj, err := c.dcache.Put(size)
 	if err == errDiskFull {
 		return putObjectFn(bucket, object, size, r, metadata, sha256sum)
 	}
