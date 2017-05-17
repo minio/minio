@@ -9,9 +9,9 @@ import (
 	"os"
 	"path"
 	"strings"
-	"syscall"
 	"time"
 
+	"github.com/boltdb/bolt"
 	"github.com/minio/minio/pkg/disk"
 
 	"encoding/json"
@@ -19,6 +19,18 @@ import (
 
 const diskCacheBackendVersion = "1"
 const diskCacheObjectMetaVersion = "1.0.0"
+
+type diskCacheBoltdbEntry map[string]string
+
+func (entry diskCacheBoltdbEntry) SetAtime(t time.Time) {
+	entry["atime"] = t.Format(time.RFC3339)
+}
+
+func (entry diskCacheBoltdbEntry) GetAtime() time.Time {
+	t, err := time.Parse(time.RFC3339, entry["atime"])
+	errorIf(err, "Unable to parse atime")
+	return t
+}
 
 // Metadata of a cached object.
 type diskCacheObjectMeta struct {
@@ -99,6 +111,8 @@ type diskCache struct {
 	dataDir string
 	// creation-time of the cache
 	createTime time.Time
+	// BoltDB for storing atime
+	db *bolt.DB
 
 	// purge() listens on this channel to start the cache-purge process
 	purgeChan chan struct{}
@@ -108,54 +122,6 @@ type diskCache struct {
 type diskCacheReadDirInfo struct {
 	entry string
 	err   error
-}
-
-// For listing the files in the data directory. Used for purging unused cached objects.
-func (c diskCache) getReadDirCh() chan diskCacheReadDirInfo {
-	ch := make(chan diskCacheReadDirInfo)
-	go func() {
-		bufp := readDirBufPool.Get().(*[]byte)
-		buf := *bufp
-		defer readDirBufPool.Put(bufp)
-		defer close(ch)
-
-		d, err := os.Open(c.dataDir)
-		if err != nil {
-			if os.IsNotExist(err) {
-				ch <- diskCacheReadDirInfo{"", errFileNotFound}
-				return
-			}
-			if os.IsPermission(err) {
-				ch <- diskCacheReadDirInfo{"", errFileAccessDenied}
-				return
-			}
-
-			ch <- diskCacheReadDirInfo{"", err}
-			return
-		}
-		defer d.Close()
-
-		fd := int(d.Fd())
-		for {
-			nbuf, err := syscall.ReadDirent(fd, buf)
-			if err != nil {
-				ch <- diskCacheReadDirInfo{"", err}
-				return
-			}
-			if nbuf <= 0 {
-				break
-			}
-			var tmpEntries []string
-			if tmpEntries, err = parseDirents(c.dataDir, buf[:nbuf]); err != nil {
-				ch <- diskCacheReadDirInfo{"", err}
-				return
-			}
-			for _, entry := range tmpEntries {
-				ch <- diskCacheReadDirInfo{entry, nil}
-			}
-		}
-	}()
-	return ch
 }
 
 // Returns if the disk usage is low.
@@ -185,9 +151,9 @@ func (c diskCache) diskUsageHigh() bool {
 	return int(usedPercent) > c.maxUsage
 }
 
-// Run as a go-routine. Used for purging unused cached objects.
 func (c diskCache) purge() {
 	expiry := c.createTime
+
 	for {
 		for {
 			if c.diskUsageLow() {
@@ -199,35 +165,38 @@ func (c diskCache) purge() {
 				break
 			}
 			expiry = expiry.Add(d)
-			ch := c.getReadDirCh()
-			for info := range ch {
-				if info.err != nil {
-					break
-				}
 
-				entryPath := pathJoin(c.dataDir, info.entry)
-				if strings.HasSuffix(entryPath, ".json") {
-					continue
+			c.db.View(func(tx *bolt.Tx) error {
+				b := tx.Bucket([]byte("cache"))
+				cursor := b.Cursor()
+				for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
+					fmt.Println("checking on", string(k))
+					entry := make(diskCacheBoltdbEntry)
+					err := json.Unmarshal(v, entry)
+					if err != nil {
+						errorIf(err, "Unable to unmarshall")
+						continue
+					}
+					atime := entry.GetAtime()
+					if atime.After(expiry) {
+						fmt.Println("not deleting", string(k))
+						continue
+					}
+					fmt.Println("deleting", string(k))
+					s := strings.SplitN(string(k), slashSeparator, -1)
+					bucket := s[0]
+					object := s[1]
+					if err := os.Remove(c.encodedPath(bucket, object)); err != nil {
+						errorIf(err, "Unable to remove %s", string(k))
+						continue
+					}
+					if err := os.Remove(c.encodedMetaPath(bucket, object)); err != nil {
+						errorIf(err, "Unable to remove %s json", string(k))
+						continue
+					}
 				}
-				fi, err := os.Stat(entryPath)
-				if err != nil {
-					errorIf(err, "Unable to Stat %s", entryPath)
-					continue
-				}
-				stat := fi.Sys().(*syscall.Stat_t)
-				atime := time.Unix(int64(stat.Atim.Sec), int64(stat.Atim.Nsec)).UTC()
-				if atime.After(expiry) {
-					continue
-				}
-				if err = os.Remove(entryPath); err != nil {
-					errorIf(err, "Error removing %s", entryPath)
-					continue
-				}
-				if err = os.Remove(entryPath + ".json"); err != nil {
-					errorIf(err, "Error removing %s", entryPath+".json")
-					continue
-				}
-			}
+				return nil
+			})
 		}
 		<-c.purgeChan
 	}
@@ -262,6 +231,7 @@ func (c diskCache) Commit(f *os.File, objInfo ObjectInfo, anon bool) error {
 	if err = ioutil.WriteFile(metaPath, metaBytes, 0644); err != nil {
 		return err
 	}
+	c.UpdateAtime(objInfo.Bucket, objInfo.Name, time.Now().UTC())
 	return nil
 }
 
@@ -306,6 +276,7 @@ func (c diskCache) Get(bucket, object string) (*os.File, ObjectInfo, bool, error
 	if err != nil {
 		return nil, ObjectInfo{}, false, err
 	}
+	c.UpdateAtime(bucket, object, time.Now().UTC())
 	return file, objMeta.toObjectInfo(), objMeta.Anonymous, nil
 }
 
@@ -333,6 +304,19 @@ func (c diskCache) Delete(bucket, object string) error {
 		return err
 	}
 	return nil
+}
+
+func (c diskCache) UpdateAtime(bucket, object string, t time.Time) error {
+	entry := make(diskCacheBoltdbEntry)
+	entry.SetAtime(t)
+	entryBytes, err := json.Marshal(entry)
+	if err != nil {
+		return err
+	}
+	return c.db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("cache"))
+		return b.Put([]byte(pathJoin(bucket, object)), entryBytes)
+	})
 }
 
 // format.json structure
@@ -382,7 +366,19 @@ func newDiskCache(dir string, maxUsage, expiry int) (*diskCache, error) {
 	if err := os.MkdirAll(dataDir, 0766); err != nil {
 		return nil, err
 	}
-	cache := &diskCache{dir, maxUsage, expiry, tmpDir, dataDir, format.Time, make(chan struct{})}
+	boltdbPath := pathJoin(dir, "meta.db")
+	db, err := bolt.Open(boltdbPath, 0600, nil)
+	if err != nil {
+		return nil, err
+	}
+	err = db.Update(func(tx *bolt.Tx) error {
+		_, _ = tx.CreateBucket([]byte("cache"))
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	cache := &diskCache{dir, maxUsage, expiry, tmpDir, dataDir, format.Time, db, make(chan struct{})}
 
 	// Start the purging go-routine
 	go cache.purge()
@@ -517,10 +513,10 @@ func (c cacheObjects) AnonGetObjectInfo(bucket, object string) (ObjectInfo, erro
 	return c.getObjectInfo(bucket, object, true)
 }
 
-func (c cacheObjects) putObject(bucket, object string, size int64, r io.Reader, metadata map[string]string, sha256sum string, reqAnon bool) (ObjectInfo, error) {
+func (c cacheObjects) putObject(bucket, object string, size int64, r io.Reader, metadata map[string]string, sha256sum string, anonReq bool) (ObjectInfo, error) {
 	putObjectFn := c.PutObjectFn
 	if anonReq {
-		putObjectFn = c.AnonGetObjectFn
+		putObjectFn = c.AnonPutObjectFn
 	}
 
 	cachedObj, err := c.dcache.Put()
@@ -539,7 +535,7 @@ func (c cacheObjects) putObject(bucket, object string, size int64, r io.Reader, 
 
 	objInfo.Bucket = bucket
 	objInfo.Name = object
-	err = c.dcache.Commit(cachedObj, objInfo, reqAnon)
+	err = c.dcache.Commit(cachedObj, objInfo, anonReq)
 	if err != nil {
 		return ObjectInfo{}, err
 	}
