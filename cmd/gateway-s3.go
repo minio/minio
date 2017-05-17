@@ -110,7 +110,7 @@ func newS3Gateway(args cli.Args) (GatewayLayer, error) {
 	secure := true
 
 	// Check if user provided some parameters
-	if len(args) > 0 {
+	if args.Present() {
 		// Override default params if the endpoint is provided
 		endpoint, secure, err = parseGatewayEndpoint(args.First())
 		if err != nil {
