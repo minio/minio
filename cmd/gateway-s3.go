@@ -54,8 +54,9 @@ func s3ToObjectError(err error, params ...string) error {
 		object = params[1]
 	}
 
-	if urlErr, ok := err.(*url.Error); ok {
-		if _, ok := urlErr.Err.(*net.OpError); ok {
+	var urlErr *url.Error
+	if urlErr, ok = err.(*url.Error); ok {
+		if _, ok = urlErr.Err.(*net.OpError); ok {
 			e.e = BackendDown{}
 			return e
 		}

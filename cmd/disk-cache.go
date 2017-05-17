@@ -236,7 +236,7 @@ func (c diskCache) Commit(f *os.File, objInfo ObjectInfo, anon bool) error {
 }
 
 // Remove the cached object from the tmp directory.
-func (o diskCache) NoCommit(f *os.File) error {
+func (c diskCache) NoCommit(f *os.File) error {
 	tmpName := f.Name()
 	if err := f.Close(); err != nil {
 		return err
@@ -266,7 +266,7 @@ func (c diskCache) Get(bucket, object string) (*os.File, ObjectInfo, bool, error
 	if err != nil {
 		return nil, ObjectInfo{}, false, err
 	}
-	if err := json.Unmarshal(metaBytes, &objMeta); err != nil {
+	if err = json.Unmarshal(metaBytes, &objMeta); err != nil {
 		return nil, ObjectInfo{}, false, err
 	}
 	if objMeta.Version != diskCacheObjectMetaVersion {
@@ -360,10 +360,10 @@ func newDiskCache(dir string, maxUsage, expiry int) (*diskCache, error) {
 
 	tmpDir := path.Join(dir, "tmp")
 	dataDir := path.Join(dir, "data")
-	if err := os.MkdirAll(tmpDir, 0766); err != nil {
+	if err = os.MkdirAll(tmpDir, 0766); err != nil {
 		return nil, err
 	}
-	if err := os.MkdirAll(dataDir, 0766); err != nil {
+	if err = os.MkdirAll(dataDir, 0766); err != nil {
 		return nil, err
 	}
 	boltdbPath := pathJoin(dir, "meta.db")
@@ -420,22 +420,18 @@ func (c cacheObjects) getObject(bucket, object string, startOffset int64, length
 				if anon {
 					_, err = io.Copy(writer, io.NewSectionReader(r, startOffset, length))
 					return err
-				} else {
-					return BackendDown{}
 				}
-			} else {
-				// If the backend is down, serve the request from cache.
-				_, err = io.Copy(writer, io.NewSectionReader(r, startOffset, length))
-				return err
+				return BackendDown{}
 			}
-		} else {
-			if cachedObjInfo.MD5Sum == objInfo.MD5Sum {
-				_, err = io.Copy(writer, io.NewSectionReader(r, startOffset, length))
-				return err
-			} else {
-				c.dcache.Delete(bucket, object)
-			}
+			// If the backend is down, serve the request from cache.
+			_, err = io.Copy(writer, io.NewSectionReader(r, startOffset, length))
+			return err
 		}
+		if cachedObjInfo.MD5Sum == objInfo.MD5Sum {
+			_, err = io.Copy(writer, io.NewSectionReader(r, startOffset, length))
+			return err
+		}
+		c.dcache.Delete(bucket, object)
 	}
 	if startOffset != 0 || length != objInfo.Size {
 		return GetObjectFn(bucket, object, startOffset, length, writer)
@@ -482,8 +478,8 @@ func (c cacheObjects) getObjectInfo(bucket, object string, anonReq bool) (Object
 		if _, ok := errorCause(err).(BackendDown); !ok {
 			return ObjectInfo{}, err
 		}
-		cachedObjInfo, anon, err := c.dcache.GetObjectInfo(bucket, object)
-		if err == nil {
+		cachedObjInfo, anon, infoErr := c.dcache.GetObjectInfo(bucket, object)
+		if infoErr == nil {
 			if !anonReq {
 				return cachedObjInfo, nil
 			}
