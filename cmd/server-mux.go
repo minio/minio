@@ -42,19 +42,22 @@ const (
 	maxHTTPVerbLen = 7
 )
 
+// HTTP2 PRI method.
+var httpMethodPRI = "PRI"
+
 var defaultHTTP2Methods = []string{
-	"PRI",
+	httpMethodPRI,
 }
 
 var defaultHTTP1Methods = []string{
-	"OPTIONS",
-	"GET",
-	"HEAD",
-	"POST",
-	"PUT",
-	"DELETE",
-	"TRACE",
-	"CONNECT",
+	http.MethodOptions,
+	http.MethodGet,
+	http.MethodHead,
+	http.MethodPost,
+	http.MethodPut,
+	http.MethodDelete,
+	http.MethodTrace,
+	http.MethodConnect,
 }
 
 // ConnMux - Peeks into the incoming connection for relevant
