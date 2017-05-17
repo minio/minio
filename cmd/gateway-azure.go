@@ -166,7 +166,7 @@ func newAzureLayer(args cli.Args) (GatewayLayer, error) {
 	secure := true
 
 	// If user provided some parameters
-	if len(args) > 0 {
+	if args.Present() {
 		endPoint, secure, err = parseGatewayEndpoint(args.First())
 		if err != nil {
 			return nil, err

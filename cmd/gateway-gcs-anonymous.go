@@ -94,7 +94,7 @@ func (l *gcsGateway) AnonGetObjectInfo(bucket string, object string) (objInfo Ob
 		objInfo.UserDefined["Content-Encoding"] = resp.Header.Get("Content-Encoding")
 	}
 	objInfo.UserDefined["Content-Type"] = resp.Header.Get("Content-Type")
-	objInfo.MD5Sum = resp.Header.Get("Etag")
+	objInfo.ETag = resp.Header.Get("Etag")
 	objInfo.ModTime = t
 	objInfo.Name = object
 	objInfo.Size = contentLength
