@@ -657,10 +657,7 @@ func (api gatewayAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Re
 	// reads body which has been read already. So only validating
 	// region here.
 	serverRegion := serverConfig.GetRegion()
-	if serverRegion == "" {
-		// we will only validate the region
-		// when the region has been explicitely set
-	} else if serverRegion != location {
+	if serverRegion != "" && serverRegion != location {
 		writeErrorResponse(w, ErrInvalidRegion, r.URL)
 		return
 	}
