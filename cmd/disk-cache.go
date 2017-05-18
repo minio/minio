@@ -26,6 +26,10 @@ const (
 	diskCacheFormatType = "cachefs"
 	// BoldDB bucket
 	diskCacheBoltdbBucket = "cache"
+	diskCacheTmpDir       = "tmp"
+	diskCacheDataDir      = "data"
+	diskCacheBoltDB       = "meta.db"
+	diskCacheFormatFile   = "format.json"
 )
 
 // Entry in BoltDB. Right now it stores only Atime.
@@ -160,6 +164,7 @@ func (c diskCache) diskUsageHigh() bool {
 	return int(usedPercent) > c.maxUsage
 }
 
+// Purge cache entries that were not accessed.
 func (c diskCache) purge() {
 	expiry := c.createTime
 
@@ -170,9 +175,6 @@ func (c diskCache) purge() {
 			}
 			d := time.Now().UTC().Sub(expiry)
 			d = d / 2
-			if d < time.Second {
-				break
-			}
 			expiry = expiry.Add(d)
 
 			c.db.Update(func(tx *bolt.Tx) error {
@@ -195,12 +197,18 @@ func (c diskCache) purge() {
 					s := strings.SplitN(string(k), slashSeparator, 2)
 					bucket := s[0]
 					object := s[1]
+					if bucket == "" {
+						errorIf(errUnexpected, `"bucket" is empty`)
+					}
+					if object == "" {
+						errorIf(errUnexpected, `"object" is empty`)
+					}
 					if err := os.Remove(c.encodedPath(bucket, object)); err != nil {
 						errorIf(err, "Unable to remove %s", string(k))
 						continue
 					}
 					if err := os.Remove(c.encodedMetaPath(bucket, object)); err != nil {
-						errorIf(err, "Unable to remove %s json", string(k))
+						errorIf(err, "Unable to remove meta file for %s", string(k))
 						continue
 					}
 					err = b.Delete(k)
@@ -272,7 +280,7 @@ func (c diskCache) Put(size int64) (*os.File, error) {
 	}
 	e := Fallocate(int(f.Fd()), 0, size)
 	switch {
-	case isSysErrNoSys(e), isSysErrOpNotSupported(e), nil:
+	case isSysErrNoSys(e), isSysErrOpNotSupported(e), e == nil:
 		// Ignore errors when Fallocate is not supported in the current system
 		err = nil
 	case isSysErrNoSpace(e):
@@ -364,7 +372,7 @@ func newDiskCache(dir string, maxUsage, expiry int) (*diskCache, error) {
 	if err := os.MkdirAll(dir, 0766); err != nil {
 		return nil, err
 	}
-	formatPath := path.Join(dir, "format.json")
+	formatPath := path.Join(dir, diskCacheFormatFile)
 	formatBytes, err := ioutil.ReadFile(formatPath)
 	var format diskCacheFormat
 	if err != nil {
@@ -392,15 +400,15 @@ func newDiskCache(dir string, maxUsage, expiry int) (*diskCache, error) {
 		}
 	}
 
-	tmpDir := path.Join(dir, "tmp")
-	dataDir := path.Join(dir, "data")
+	tmpDir := path.Join(dir, diskCacheTmpDir)
+	dataDir := path.Join(dir, diskCacheDataDir)
 	if err = os.MkdirAll(tmpDir, 0766); err != nil {
 		return nil, err
 	}
 	if err = os.MkdirAll(dataDir, 0766); err != nil {
 		return nil, err
 	}
-	boltdbPath := pathJoin(dir, "meta.db")
+	boltdbPath := pathJoin(dir, diskCacheBoltDB)
 	db, err := bolt.Open(boltdbPath, 0600, nil)
 	if err != nil {
 		return nil, err
