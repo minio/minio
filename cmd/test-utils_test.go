@@ -1143,6 +1143,31 @@ func newTestSignedRequest(method, urlStr string, contentLength int64, body io.Re
 }
 
 // Returns request with correct signature but with incorrect SHA256.
+func newTestSignedRequestWithHeaders(method, urlStr string, contentLength int64, body io.ReadSeeker, header http.Header, accessKey, secretKey string, signer signerType) (*http.Request, error) {
+	req, err := newTestRequest(method, urlStr, contentLength, body)
+	if err != nil {
+		return nil, err
+	}
+
+	// Anonymous request return early.
+	if accessKey == "" || secretKey == "" {
+		return req, nil
+	}
+
+	for k, _ := range header {
+		req.Header.Set(k, header.Get(k))
+	}
+
+	if signer == signerV2 {
+		err = signRequestV2(req, accessKey, secretKey)
+	} else {
+		err = signRequestV4(req, accessKey, secretKey)
+	}
+
+	return req, err
+}
+
+// Returns request with correct signature but with incorrect SHA256.
 func newTestSignedBadSHARequest(method, urlStr string, contentLength int64, body io.ReadSeeker, accessKey, secretKey string, signer signerType) (*http.Request, error) {
 	req, err := newTestRequest(method, urlStr, contentLength, body)
 	if err != nil {

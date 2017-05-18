@@ -1107,14 +1107,17 @@ func (s *TestSuiteCommon) TestPutObject(c *C) {
 	buffer1 := bytes.NewReader([]byte("hello world"))
 	objectName := "testObject"
 	// creating HTTP request for object upload.
-	request, err = newTestSignedRequest("PUT", getPutObjectURL(s.endPoint, bucketName, objectName),
-		int64(buffer1.Len()), buffer1, s.accessKey, s.secretKey, s.signer)
+
+	hdr := make(http.Header)
+	hdr.Set("X-Amz-Meta-Cache-Control", "max-age=100")
+
+	request, err = newTestSignedRequestWithHeaders("PUT", getPutObjectURL(s.endPoint, bucketName, objectName),
+		int64(buffer1.Len()), buffer1, hdr, s.accessKey, s.secretKey, s.signer)
 	c.Assert(err, IsNil)
 	// execute the HTTP request for object upload.
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
-
 	// fetch the object back and verify its contents.
 	request, err = newTestSignedRequest("GET", getGetObjectURL(s.endPoint, bucketName, objectName),
 		0, nil, s.accessKey, s.secretKey, s.signer)
@@ -1123,7 +1126,9 @@ func (s *TestSuiteCommon) TestPutObject(c *C) {
 	response, err = client.Do(request)
 	c.Assert(err, IsNil)
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
+	c.Assert(response.Header.Get("Cache-Control"), Equals, "max-age=100")
 	c.Assert(response.ContentLength, Equals, int64(len([]byte("hello world"))))
+
 	var buffer2 bytes.Buffer
 	// retrive the contents of response body.
 	n, err := io.Copy(&buffer2, response.Body)
