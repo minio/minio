@@ -180,6 +180,7 @@ func (c diskCache) purge() {
 			d = d / 2
 			expiry = expiry.Add(d)
 
+			// Delete all the entries that haven't been accessed since "expiry".
 			c.db.Update(func(tx *bolt.Tx) error {
 				b := tx.Bucket([]byte(diskCacheBoltdbBucket))
 				cursor := b.Cursor()
@@ -238,6 +239,7 @@ func (c diskCache) encodedMetaPath(bucket, object string) string {
 func (c diskCache) Commit(f *os.File, objInfo ObjectInfo, anon bool) error {
 	bucket := objInfo.Bucket
 	object := objInfo.Name
+
 	objectLock := globalNSMutex.NewNSLock(diskCacheLockingPrefix+bucket, object)
 	objectLock.Lock()
 	defer objectLock.Unlock()
@@ -401,6 +403,7 @@ func newDiskCache(dir string, maxUsage, expiry int) (*diskCache, error) {
 		if !os.IsNotExist(err) {
 			return nil, err
 		}
+		// Create new format.json
 		format.Version = diskCacheBackendVersion
 		format.Format = diskCacheFormatType
 		format.Time = time.Now().UTC()
@@ -436,7 +439,10 @@ func newDiskCache(dir string, maxUsage, expiry int) (*diskCache, error) {
 		return nil, err
 	}
 	err = db.Update(func(tx *bolt.Tx) error {
-		_, _ = tx.CreateBucket([]byte(diskCacheBoltdbBucket))
+		_, err = tx.CreateBucket([]byte(diskCacheBoltdbBucket))
+		if err != bolt.ErrBucketExists {
+			return err
+		}
 		return nil
 	})
 	if err != nil {
@@ -476,6 +482,7 @@ func (c cacheObjects) getObject(bucket, object string, startOffset int64, length
 	_, backendDown := errorCause(err).(BackendDown)
 	if err != nil && !backendDown {
 		if _, ok := errorCause(err).(ObjectNotFound); ok {
+			// Delte the cached entry if backend object was deleted.
 			c.dcache.Delete(bucket, object)
 		}
 		return err
@@ -502,6 +509,7 @@ func (c cacheObjects) getObject(bucket, object string, startOffset int64, length
 		c.dcache.Delete(bucket, object)
 	}
 	if startOffset != 0 || length != objInfo.Size {
+		// We don't cache partial objects.
 		return GetObjectFn(bucket, object, startOffset, length, writer)
 	}
 	cachedObj, err := c.dcache.Put(length)
@@ -521,7 +529,7 @@ func (c cacheObjects) getObject(bucket, object string, startOffset int64, length
 		c.dcache.NoCommit(cachedObj)
 		return err
 	}
-	// FIXME: race-condition: what if the server object got replaced.
+	// FIXME: race-condition: what if the server object got replaced between GetObjectFn and GetObjectInfoFn
 	return c.dcache.Commit(cachedObj, objInfo, true)
 }
 
@@ -546,6 +554,7 @@ func (c cacheObjects) getObjectInfo(bucket, object string, anonReq bool) (Object
 	if err != nil {
 		if _, ok := errorCause(err).(BackendDown); !ok {
 			if _, ok = errorCause(err).(ObjectNotFound); ok {
+				// Delte the cached entry if backend object was deleted.
 				c.dcache.Delete(bucket, object)
 			}
 			return ObjectInfo{}, err
@@ -566,6 +575,7 @@ func (c cacheObjects) getObjectInfo(bucket, object string, anonReq bool) (Object
 		return objInfo, nil
 	}
 	if cachedObjInfo.ETag != objInfo.ETag {
+		// Delete the cached entry if the backend object was replaced.
 		c.dcache.Delete(bucket, object)
 	}
 	return objInfo, nil
