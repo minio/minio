@@ -18,6 +18,8 @@ import (
 )
 
 const (
+	// Format file name
+	diskCacheFormatFile = "format.json"
 	// Will be written to format.json
 	diskCacheBackendVersion = "1"
 	// Cached object's metadata version
@@ -26,10 +28,13 @@ const (
 	diskCacheFormatType = "cachefs"
 	// BoldDB bucket
 	diskCacheBoltdbBucket = "cache"
-	diskCacheTmpDir       = "tmp"
-	diskCacheDataDir      = "data"
-	diskCacheBoltDB       = "meta.db"
-	diskCacheFormatFile   = "format.json"
+	// Temporary directory where object is written to before moving
+	// to the data directory.
+	diskCacheTmpDir = "tmp"
+	// Once the object is written to "tmp" it is committed to "data"
+	diskCacheDataDir = "data"
+	// BoltDB file
+	diskCacheBoltDB = "meta.db"
 )
 
 // Entry in BoltDB. Right now it stores only Atime.
@@ -246,7 +251,7 @@ func (c diskCache) Commit(f *os.File, objInfo ObjectInfo, anon bool) error {
 	if err != nil {
 		return err
 	}
-	// FIXME: take care of locking.
+
 	if err = ioutil.WriteFile(metaPath, metaBytes, 0644); err != nil {
 		return err
 	}
@@ -439,6 +444,7 @@ type cacheObjects struct {
 	AnonPutObjectFn     func(bucket, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (objInfo ObjectInfo, err error)
 }
 
+// Common function for GetObject and AnonGetObject
 func (c cacheObjects) getObject(bucket, object string, startOffset int64, length int64, writer io.Writer, anonReq bool) (err error) {
 	GetObjectFn := c.GetObjectFn
 	GetObjectInfoFn := c.GetObjectInfoFn
@@ -510,6 +516,7 @@ func (c cacheObjects) AnonGetObject(bucket, object string, startOffset int64, le
 	return c.getObject(bucket, object, startOffset, length, writer, true)
 }
 
+// Common function for GetObjectInfo and AnonGetObjectInfo
 func (c cacheObjects) getObjectInfo(bucket, object string, anonReq bool) (ObjectInfo, error) {
 	getObjectInfoFn := c.GetObjectInfoFn
 	if anonReq {
@@ -551,6 +558,7 @@ func (c cacheObjects) AnonGetObjectInfo(bucket, object string) (ObjectInfo, erro
 	return c.getObjectInfo(bucket, object, true)
 }
 
+// Common code for PutObject and PutObjectInfo
 func (c cacheObjects) putObject(bucket, object string, size int64, r io.Reader, metadata map[string]string, sha256sum string, anonReq bool) (ObjectInfo, error) {
 	putObjectFn := c.PutObjectFn
 	if anonReq {
