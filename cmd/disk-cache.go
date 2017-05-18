@@ -35,6 +35,10 @@ const (
 	diskCacheDataDir = "data"
 	// BoltDB file
 	diskCacheBoltDB = "meta.db"
+	// prefix for locking. Preifx is used so that it does not clash with locking
+	// Done by PutObjectHandler and PostPolicyBucketHandler. Prefix usage can
+	// be removed once we move NS locking out of S3 layer.
+	diskCacheLockingPrefix = "minio/cache/"
 )
 
 // Entry in BoltDB. Right now it stores only Atime.
@@ -238,6 +242,10 @@ func (c diskCache) encodedMetaPath(bucket, object string) string {
 
 // Commit the cached object - rename from tmp directory to data directory.
 func (c diskCache) Commit(f *os.File, objInfo ObjectInfo, anon bool) error {
+	objectLock := globalNSMutex.NewNSLock(diskCacheLockingPrefix+bucket, object)
+	objectLock.Lock()
+	defer objectLock.Unlock()
+
 	encPath := c.encodedPath(objInfo.Bucket, objInfo.Name)
 	if err := os.Rename(f.Name(), encPath); err != nil {
 		return err
@@ -304,6 +312,10 @@ func (c diskCache) Put(size int64) (*os.File, error) {
 
 // Returns the handle for the cached object
 func (c diskCache) Get(bucket, object string) (*os.File, ObjectInfo, bool, error) {
+	objectLock := globalNSMutex.NewNSLock(diskCacheLockingPrefix+bucket, object)
+	objectLock.RLock()
+	defer objectLock.RUnlock()
+
 	metaPath := c.encodedMetaPath(bucket, object)
 	objMeta := diskCacheObjectMeta{}
 	metaBytes, err := ioutil.ReadFile(metaPath)
@@ -326,6 +338,10 @@ func (c diskCache) Get(bucket, object string) (*os.File, ObjectInfo, bool, error
 
 // Returns metadata of the cached object
 func (c diskCache) GetObjectInfo(bucket, object string) (ObjectInfo, bool, error) {
+	objectLock := globalNSMutex.NewNSLock(diskCacheLockingPrefix+bucket, object)
+	objectLock.RLock()
+	defer objectLock.RUnlock()
+
 	metaPath := c.encodedMetaPath(bucket, object)
 	objMeta := diskCacheObjectMeta{}
 	metaBytes, err := ioutil.ReadFile(metaPath)
@@ -341,6 +357,10 @@ func (c diskCache) GetObjectInfo(bucket, object string) (ObjectInfo, bool, error
 
 // Deletes the cached object
 func (c diskCache) Delete(bucket, object string) error {
+	objectLock := globalNSMutex.NewNSLock(diskCacheLockingPrefix+bucket, object)
+	objectLock.Lock()
+	defer objectLock.Unlock()
+
 	if err := os.Remove(c.encodedPath(bucket, object)); err != nil {
 		return err
 	}
@@ -350,6 +370,7 @@ func (c diskCache) Delete(bucket, object string) error {
 	return nil
 }
 
+// Update atime for the cached object.
 func (c diskCache) UpdateAtime(bucket, object string, t time.Time) error {
 	entry := make(diskCacheBoltdbEntry)
 	entry.setAtime(t)
