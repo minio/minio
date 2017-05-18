@@ -29,7 +29,7 @@ func TestDiskCache(t *testing.T) {
 	objInfo.Name = objectName
 	objInfo.Size = int64(size)
 	objInfo.ContentType = contentType
-	objInfo.MD5Sum = etag
+	objInfo.ETag = etag
 	objInfo.UserDefined = httpMeta
 
 	cacheObject, err := cache.Put(objInfo.Size)
@@ -56,7 +56,7 @@ func TestDiskCache(t *testing.T) {
 	if anon != false {
 		t.Fatal("Expected anon to be false")
 	}
-	if objInfo.MD5Sum != gotObjInfo.MD5Sum {
+	if objInfo.ETag != gotObjInfo.ETag {
 		t.Fatal(`httpMeta["ETag"] != httpMetaStored["ETag"]`)
 	}
 	if objInfo.ContentType != gotObjInfo.ContentType {

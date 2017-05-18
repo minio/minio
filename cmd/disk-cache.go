@@ -242,18 +242,20 @@ func (c diskCache) encodedMetaPath(bucket, object string) string {
 
 // Commit the cached object - rename from tmp directory to data directory.
 func (c diskCache) Commit(f *os.File, objInfo ObjectInfo, anon bool) error {
+	bucket := objInfo.Bucket
+	object := objInfo.Name
 	objectLock := globalNSMutex.NewNSLock(diskCacheLockingPrefix+bucket, object)
 	objectLock.Lock()
 	defer objectLock.Unlock()
 
-	encPath := c.encodedPath(objInfo.Bucket, objInfo.Name)
+	encPath := c.encodedPath(bucket, object)
 	if err := os.Rename(f.Name(), encPath); err != nil {
 		return err
 	}
 	if err := f.Close(); err != nil {
 		return err
 	}
-	metaPath := c.encodedMetaPath(objInfo.Bucket, objInfo.Name)
+	metaPath := c.encodedMetaPath(bucket, object)
 	objMeta := newDiskCacheObjectMeta(objInfo, anon)
 	metaBytes, err := json.Marshal(objMeta)
 	if err != nil {
@@ -263,7 +265,7 @@ func (c diskCache) Commit(f *os.File, objInfo ObjectInfo, anon bool) error {
 	if err = ioutil.WriteFile(metaPath, metaBytes, 0644); err != nil {
 		return err
 	}
-	c.UpdateAtime(objInfo.Bucket, objInfo.Name, time.Now().UTC())
+	c.updateAtime(bucket, object, time.Now().UTC())
 	return nil
 }
 
@@ -332,7 +334,7 @@ func (c diskCache) Get(bucket, object string) (*os.File, ObjectInfo, bool, error
 	if err != nil {
 		return nil, ObjectInfo{}, false, err
 	}
-	c.UpdateAtime(bucket, object, time.Now().UTC())
+	c.updateAtime(bucket, object, time.Now().UTC())
 	return file, objMeta.toObjectInfo(), objMeta.Anonymous, nil
 }
 
@@ -371,7 +373,7 @@ func (c diskCache) Delete(bucket, object string) error {
 }
 
 // Update atime for the cached object.
-func (c diskCache) UpdateAtime(bucket, object string, t time.Time) error {
+func (c diskCache) updateAtime(bucket, object string, t time.Time) error {
 	entry := make(diskCacheBoltdbEntry)
 	entry.setAtime(t)
 	entryBytes, err := json.Marshal(entry)
