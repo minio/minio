@@ -271,18 +271,16 @@ func (c diskCache) Put(size int64) (*os.File, error) {
 		return nil, err
 	}
 	e := Fallocate(int(f.Fd()), 0, size)
-	// Ignore errors when Fallocate is not supported in the current system
-	if e != nil && !isSysErrNoSys(e) && !isSysErrOpNotSupported(e) {
-		switch {
-		case isSysErrNoSpace(e):
-			err = errDiskFull
-		case isSysErrIO(e):
-			err = e
-		default:
-			// For errors: EBADF, EINTR, EINVAL, ENODEV, EPERM, ESPIPE  and ETXTBSY
-			// Appending was failed anyway, returns unexpected error
-			err = errUnexpected
-		}
+	switch {
+	case isSysErrNoSys(e), isSysErrOpNotSupported(e), nil:
+		// Ignore errors when Fallocate is not supported in the current system
+		err = nil
+	case isSysErrNoSpace(e):
+		err = errDiskFull
+	default:
+		err = e
+	}
+	if err != nil {
 		tmpPath := f.Name()
 		f.Close()
 		os.Remove(tmpPath)
