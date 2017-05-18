@@ -480,7 +480,9 @@ func (c cacheObjects) getObject(bucket, object string, startOffset int64, length
 	objInfo, err := GetObjectInfo(bucket, object)
 	_, backendDown := errorCause(err).(BackendDown)
 	if err != nil && !backendDown {
-		// Do not delete cache entry
+		if _, ok := errorCause(err).(ObjectNotFound); ok {
+			c.dcache.Delete(bucket, object)
+		}
 		return err
 	}
 	r, cachedObjInfo, anon, err := c.dcache.Get(bucket, object)
@@ -548,6 +550,9 @@ func (c cacheObjects) getObjectInfo(bucket, object string, anonReq bool) (Object
 	objInfo, err := getObjectInfoFn(bucket, object)
 	if err != nil {
 		if _, ok := errorCause(err).(BackendDown); !ok {
+			if _, ok = errorCause(err).(ObjectNotFound); ok {
+				c.dcache.Delete(bucket, object)
+			}
 			return ObjectInfo{}, err
 		}
 		cachedObjInfo, anon, infoErr := c.dcache.GetObjectInfo(bucket, object)
