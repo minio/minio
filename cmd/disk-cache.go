@@ -70,12 +70,12 @@ func (objectMeta diskCacheObjectMeta) toObjectInfo() ObjectInfo {
 
 	objInfo.ModTime = objectMeta.ModTime
 	objInfo.Size = objectMeta.Size
-	objInfo.MD5Sum = objectMeta.HTTPMeta["md5Sum"]
+	objInfo.ETag = objectMeta.HTTPMeta["etag"]
 	objInfo.ContentType = objectMeta.HTTPMeta["content-type"]
 	objInfo.ContentEncoding = objectMeta.HTTPMeta["content-encoding"]
 
 	for key, val := range objectMeta.HTTPMeta {
-		if key == "md5Sum" {
+		if key == "etag" {
 			continue
 		}
 		objInfo.UserDefined[key] = val
@@ -93,7 +93,7 @@ func newDiskCacheObjectMeta(objInfo ObjectInfo, anon bool) diskCacheObjectMeta {
 	objMeta.ModTime = objInfo.ModTime
 	objMeta.Size = objInfo.Size
 
-	objMeta.HTTPMeta["md5Sum"] = objInfo.MD5Sum
+	objMeta.HTTPMeta["etag"] = objInfo.ETag
 	objMeta.HTTPMeta["content-type"] = objInfo.ContentType
 	objMeta.HTTPMeta["content-encoding"] = objInfo.ContentEncoding
 
@@ -463,7 +463,7 @@ func (c cacheObjects) getObject(bucket, object string, startOffset int64, length
 			_, err = io.Copy(writer, io.NewSectionReader(r, startOffset, length))
 			return err
 		}
-		if cachedObjInfo.MD5Sum == objInfo.MD5Sum {
+		if cachedObjInfo.ETag == objInfo.ETag {
 			_, err = io.Copy(writer, io.NewSectionReader(r, startOffset, length))
 			return err
 		}
@@ -529,7 +529,7 @@ func (c cacheObjects) getObjectInfo(bucket, object string, anonReq bool) (Object
 	if err != nil {
 		return objInfo, nil
 	}
-	if cachedObjInfo.MD5Sum != objInfo.MD5Sum {
+	if cachedObjInfo.ETag != objInfo.ETag {
 		c.dcache.Delete(bucket, object)
 	}
 	return objInfo, nil

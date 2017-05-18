@@ -313,7 +313,7 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	objInfo, err = putObject(bucket, object, size, reader, metadata, sha256sum)
-	w.Header().Set("ETag", "\""+objInfo.MD5Sum+"\"")
+	w.Header().Set("ETag", "\""+objInfo.ETag+"\"")
 	writeSuccessResponseHeadersOnly(w)
 }
 
