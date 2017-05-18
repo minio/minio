@@ -168,7 +168,7 @@ func (c diskCache) purge() {
 			}
 			expiry = expiry.Add(d)
 
-			c.db.View(func(tx *bolt.Tx) error {
+			c.db.Update(func(tx *bolt.Tx) error {
 				b := tx.Bucket([]byte("cache"))
 				cursor := b.Cursor()
 				for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
