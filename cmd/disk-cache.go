@@ -632,11 +632,15 @@ func newServerCacheObjects(l ObjectLayer, dir string, maxUsage, expiry int) (*ca
 		dcache:          dcache,
 		GetObjectFn:     l.GetObject,
 		GetObjectInfoFn: l.GetObjectInfo,
+		PutObjectInfoFn: l.PutObject,
 		AnonGetObjectFn: func(bucket, object string, startOffset int64, length int64, writer io.Writer) error {
 			return NotImplemented{}
 		},
 		AnonGetObjectInfoFn: func(bucket, object string) (ObjectInfo, error) {
 			return ObjectInfo{}, NotImplemented{}
+		},
+		AnonPutObjectInfoFn: func(bucket, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (objInfo ObjectInfo, err error) {
+			return NotImplemented{}
 		},
 	}, nil
 }
