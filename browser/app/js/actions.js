@@ -432,6 +432,8 @@ export const setLoginError = () => {
 
 export const downloadSelected = (url, req, xhr) => {
   return (dispatch) => {
+    var anchor = document.createElement('a')
+    document.body.appendChild(anchor);
     xhr.open('POST', url, true)
     xhr.responseType = 'blob'
 
@@ -439,10 +441,20 @@ export const downloadSelected = (url, req, xhr) => {
       if (this.status == 200) {
         dispatch(checkedObjectsReset())
         var blob = new Blob([this.response], {
-          type: 'application/zip'
+          type: 'octet/stream'
         })
         var blobUrl = window.URL.createObjectURL(blob);
-        window.location = blobUrl
+        var separator = req.prefix.length > 1 ? '-' : ''
+
+        anchor.href = blobUrl
+        anchor.download = req.bucketName+separator+req.prefix.slice(0, -1)+'.zip';
+
+
+
+
+        anchor.click()
+        window.URL.revokeObjectURL(blobUrl)
+        anchor.remove()
       }
     };
     xhr.send(JSON.stringify(req));
