@@ -27,6 +27,28 @@ import (
 	"github.com/minio/minio/pkg/lock"
 )
 
+// Tests - fsMkdirAll()
+func TestFSMkdirAll(t *testing.T) {
+	// create posix test setup
+	_, path, err := newPosixTestSetup()
+	if err != nil {
+		t.Fatalf("Unable to create posix test setup, %s", err)
+	}
+	defer os.RemoveAll(path)
+
+	if err = fsMkdirAll(""); errorCause(err) != errInvalidArgument {
+		t.Fatal("Unexpected error", err)
+	}
+
+	if err = fsMkdirAll(pathJoin(path, "my-obj-del-0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001")); errorCause(err) != errFileNameTooLong {
+		t.Fatal("Unexpected error", err)
+	}
+
+	if err = fsMkdirAll(pathJoin(path, "success-vol", "success-object")); err != nil {
+		t.Fatal("Unexpected error", err)
+	}
+}
+
 func TestFSRenameFile(t *testing.T) {
 	// create posix test setup
 	_, path, err := newPosixTestSetup()
@@ -173,7 +195,7 @@ func TestFSStats(t *testing.T) {
 				t.Fatalf("TestPosix case %d: Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, err)
 			}
 		} else {
-			if _, err := fsStatDir(pathJoin(testCase.srcFSPath, testCase.srcVol)); errorCause(err) != testCase.expectedErr {
+			if _, err := fsStatVolume(pathJoin(testCase.srcFSPath, testCase.srcVol)); errorCause(err) != testCase.expectedErr {
 				t.Fatalf("TestPosix case %d: Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, err)
 			}
 		}
