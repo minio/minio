@@ -32,7 +32,7 @@ func TestDiskCache(t *testing.T) {
 	objInfo.MD5Sum = etag
 	objInfo.UserDefined = httpMeta
 
-	cacheObject, err := cache.Put()
+	cacheObject, err := cache.Put(objInfo.Size)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +69,7 @@ func TestDiskCache(t *testing.T) {
 		t.Fatal("Object should have been deleted from the cache")
 	}
 
-	cacheObject, err = cache.Put()
+	cacheObject, err = cache.Put(int64(size))
 	if err != nil {
 		t.Fatal(err)
 	}

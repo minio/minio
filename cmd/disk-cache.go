@@ -18,20 +18,27 @@ import (
 )
 
 const (
-	diskCacheBackendVersion    = "1"
+	// Will be written to format.json
+	diskCacheBackendVersion = "1"
+	// Cached object's metadata version
 	diskCacheObjectMetaVersion = "1.0.0"
+	// Disk Cache format type
+	diskCacheFormatType = "cachefs"
+	// BoldDB bucket
+	diskCacheBoltdbBucket = "cache"
 )
 
+// Entry in BoltDB. Right now it stores only Atime.
 type diskCacheBoltdbEntry map[string]string
 
-func (entry diskCacheBoltdbEntry) SetAtime(t time.Time) {
+// Set Atime.
+func (entry diskCacheBoltdbEntry) setAtime(t time.Time) {
 	entry["atime"] = t.Format(time.RFC3339)
 }
 
-func (entry diskCacheBoltdbEntry) GetAtime() time.Time {
-	t, err := time.Parse(time.RFC3339, entry["atime"])
-	errorIf(err, "Unable to parse atime")
-	return t
+// Return Atime.
+func (entry diskCacheBoltdbEntry) getAtime() (time.Time, error) {
+	return time.Parse(time.RFC3339, entry["atime"])
 }
 
 // Metadata of a cached object.
@@ -169,7 +176,7 @@ func (c diskCache) purge() {
 			expiry = expiry.Add(d)
 
 			c.db.Update(func(tx *bolt.Tx) error {
-				b := tx.Bucket([]byte("cache"))
+				b := tx.Bucket([]byte(diskCacheBoltdbBucket))
 				cursor := b.Cursor()
 				for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
 					entry := make(diskCacheBoltdbEntry)
@@ -178,11 +185,14 @@ func (c diskCache) purge() {
 						errorIf(err, "Unable to unmarshall")
 						continue
 					}
-					atime := entry.GetAtime()
+					atime, err := entry.getAtime()
+					if err != nil {
+						errorIf(err, "Unable to get atime for %s", string(k))
+					}
 					if atime.After(expiry) {
 						continue
 					}
-					s := strings.SplitN(string(k), slashSeparator, -1)
+					s := strings.SplitN(string(k), slashSeparator, 2)
 					bucket := s[0]
 					object := s[1]
 					if err := os.Remove(c.encodedPath(bucket, object)); err != nil {
@@ -331,13 +341,13 @@ func (c diskCache) Delete(bucket, object string) error {
 
 func (c diskCache) UpdateAtime(bucket, object string, t time.Time) error {
 	entry := make(diskCacheBoltdbEntry)
-	entry.SetAtime(t)
+	entry.setAtime(t)
 	entryBytes, err := json.Marshal(entry)
 	if err != nil {
 		return err
 	}
 	return c.db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte("cache"))
+		b := tx.Bucket([]byte(diskCacheBoltdbBucket))
 		return b.Put([]byte(pathJoin(bucket, object)), entryBytes)
 	})
 }
@@ -364,7 +374,7 @@ func newDiskCache(dir string, maxUsage, expiry int) (*diskCache, error) {
 			return nil, err
 		}
 		format.Version = diskCacheBackendVersion
-		format.Format = "cachefs"
+		format.Format = diskCacheFormatType
 		format.Time = time.Now().UTC()
 		if formatBytes, err = json.Marshal(format); err != nil {
 			return nil, err
@@ -378,6 +388,9 @@ func newDiskCache(dir string, maxUsage, expiry int) (*diskCache, error) {
 		}
 		if format.Version != diskCacheBackendVersion {
 			return nil, errors.New("format not supported")
+		}
+		if format.Format != diskCacheFormatType {
+			return nil, errors.New("format not supported : " + format.Format)
 		}
 	}
 
@@ -395,7 +408,7 @@ func newDiskCache(dir string, maxUsage, expiry int) (*diskCache, error) {
 		return nil, err
 	}
 	err = db.Update(func(tx *bolt.Tx) error {
-		_, _ = tx.CreateBucket([]byte("cache"))
+		_, _ = tx.CreateBucket([]byte(diskCacheBoltdbBucket))
 		return nil
 	})
 	if err != nil {
