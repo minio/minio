@@ -605,7 +605,7 @@ func (c cacheObjects) putObject(bucket, object string, size int64, r io.Reader, 
 	if err != nil {
 		return ObjectInfo{}, err
 	}
-	objInfo, err := c.PutObjectFn(bucket, object, size, io.TeeReader(r, cachedObj), metadata, sha256sum)
+	objInfo, err := putObjectFn(bucket, object, size, io.TeeReader(r, cachedObj), metadata, sha256sum)
 	if err != nil {
 		errNoCommit := c.dcache.NoCommit(cachedObj)
 		errorIf(errNoCommit, "Error while discarding temporary cache file for %s/%s", bucket, object)

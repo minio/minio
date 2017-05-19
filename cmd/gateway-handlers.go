@@ -313,6 +313,11 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	objInfo, err = putObject(bucket, object, size, reader, metadata, sha256sum)
+	if err != nil {
+		errorIf(err, "Unable to create an object. %s", r.URL.Path)
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
 	w.Header().Set("ETag", "\""+objInfo.ETag+"\"")
 	writeSuccessResponseHeadersOnly(w)
 }

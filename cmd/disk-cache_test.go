@@ -19,7 +19,7 @@ func TestDiskCache(t *testing.T) {
 	content := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	etag := "061208c10af71a30c6dcd6cf5d89f0fe"
 	contentType := "application/zip"
-	// modTime := time.Now()
+
 	size := len(content)
 
 	httpMeta := make(map[string]string)

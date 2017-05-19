@@ -142,6 +142,7 @@ const (
 	ErrInvalidObjectName
 	ErrInvalidResourceName
 	ErrServerNotInitialized
+	ErrBackendDown
 	// Add new extended error codes here.
 	// Please open a https://github.com/minio/minio/issues before adding
 	// new error codes here.
@@ -618,6 +619,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "Configuration update failed because server quorum was not met",
 		HTTPStatusCode: http.StatusServiceUnavailable,
 	},
+	ErrBackendDown: {
+		Code:           "XMinioBackendDown",
+		Description:    "Backend Down.",
+		HTTPStatusCode: http.StatusServiceUnavailable,
+	},
 
 	// Add your error structure here.
 }
@@ -708,7 +714,7 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 	case PolicyNotFound:
 		apiErr = ErrNoSuchBucketPolicy
 	case BackendDown:
-		apiErr = ErrAccessDenied
+		apiErr = ErrBackendDown
 	default:
 		apiErr = ErrInternalError
 	}
