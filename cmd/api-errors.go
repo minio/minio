@@ -142,6 +142,7 @@ const (
 	ErrInvalidObjectName
 	ErrInvalidResourceName
 	ErrServerNotInitialized
+	ErrOperationTimedOut
 	// Add new extended error codes here.
 	// Please open a https://github.com/minio/minio/issues before adding
 	// new error codes here.
@@ -617,6 +618,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Code:           "XMinioAdminConfigNoQuorum",
 		Description:    "Configuration update failed because server quorum was not met",
 		HTTPStatusCode: http.StatusServiceUnavailable,
+	},
+	ErrOperationTimedOut: {
+		Code:           "XMinioServerTimedOut",
+		Description:    "A timeout occured while trying to lock a resource",
+		HTTPStatusCode: http.StatusRequestTimeout,
 	},
 
 	// Add your error structure here.
