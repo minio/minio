@@ -22,16 +22,26 @@ import (
 	"sync"
 
 	"github.com/minio/dsync"
+	"github.com/minio/lsync"
+	"time"
 )
 
 // Global name space lock.
 var globalNSMutex *nsLockMap
 
-// RWLocker - locker interface extends sync.Locker
-// to introduce RLock, RUnlock.
+// RWLocker - locker interface to introduce GetRLock, RUnlock.
 type RWLocker interface {
-	sync.Locker
-	RLock()
+	GetLock(timeout time.Duration) (timedOutErr error)
+	Unlock()
+	GetRLock(timeout time.Duration) (timedOutErr error)
+	RUnlock()
+}
+
+// RWLockerSync - internal locker interface.
+type RWLockerSync interface {
+	GetLock(timeout time.Duration) bool
+	Unlock()
+	GetRLock(timeout time.Duration) bool
 	RUnlock()
 }
 
@@ -80,7 +90,7 @@ type nsParam struct {
 
 // nsLock - provides primitives for locking critical namespace regions.
 type nsLock struct {
-	RWLocker
+	RWLockerSync
 	ref uint
 }
 
@@ -98,7 +108,7 @@ type nsLockMap struct {
 }
 
 // Lock the namespace resource.
-func (n *nsLockMap) lock(volume, path string, lockSource, opsID string, readLock bool) {
+func (n *nsLockMap) lock(volume, path string, lockSource, opsID string, readLock bool, timeout time.Duration) (locked bool) {
 	var nsLk *nsLock
 	n.lockMapMutex.Lock()
 
@@ -106,11 +116,11 @@ func (n *nsLockMap) lock(volume, path string, lockSource, opsID string, readLock
 	nsLk, found := n.lockMap[param]
 	if !found {
 		nsLk = &nsLock{
-			RWLocker: func() RWLocker {
+			RWLockerSync: func() RWLockerSync {
 				if n.isDistXL {
 					return dsync.NewDRWMutex(pathJoin(volume, path))
 				}
-				return &sync.RWMutex{}
+				return &lsync.LRWMutex{}
 			}(),
 			ref: 0,
 		}
@@ -131,9 +141,37 @@ func (n *nsLockMap) lock(volume, path string, lockSource, opsID string, readLock
 
 	// Locking here can block.
 	if readLock {
-		nsLk.RLock()
+		locked = nsLk.GetRLock(timeout)
 	} else {
-		nsLk.Lock()
+		locked = nsLk.GetLock(timeout)
+	}
+
+	if !locked { // We failed to get the lock
+		n.lockMapMutex.Lock()
+		defer n.lockMapMutex.Unlock()
+		// Changing the status of the operation from blocked to none
+		if err := n.statusBlockedToNone(param, lockSource, opsID, readLock); err != nil {
+			errorIf(err, "Failed to clear the lock state")
+		}
+
+		nsLk.ref-- // Decrement ref count since we failed to get the lock
+		// delete the lock state entry for given operation ID.
+		err := n.deleteLockInfoEntryForOps(param, opsID)
+		if err != nil {
+			errorIf(err, "Failed to delete lock info entry")
+		}
+		if nsLk.ref == 0 {
+			// Remove from the map if there are no more references.
+			delete(n.lockMap, param)
+
+			// delete the lock state entry for given
+			// <volume, path> pair.
+			err := n.deleteLockInfoEntryForVolumePath(param)
+			if err != nil {
+				errorIf(err, "Failed to delete lock info entry")
+			}
+		}
+		return
 	}
 
 	// Changing the status of the operation from blocked to
@@ -142,6 +180,7 @@ func (n *nsLockMap) lock(volume, path string, lockSource, opsID string, readLock
 	if err := n.statusBlockedToRunning(param, lockSource, opsID, readLock); err != nil {
 		errorIf(err, "Failed to set the lock state to running")
 	}
+	return
 }
 
 // Unlock the namespace resource.
@@ -187,11 +226,11 @@ func (n *nsLockMap) unlock(volume, path, opsID string, readLock bool) {
 
 // Lock - locks the given resource for writes, using a previously
 // allocated name space lock or initializing a new one.
-func (n *nsLockMap) Lock(volume, path, opsID string) {
+func (n *nsLockMap) Lock(volume, path, opsID string, timeout time.Duration) (locked bool) {
 	readLock := false // This is a write lock.
 
 	lockSource := getSource() // Useful for debugging
-	n.lock(volume, path, lockSource, opsID, readLock)
+	return n.lock(volume, path, lockSource, opsID, readLock, timeout)
 }
 
 // Unlock - unlocks any previously acquired write locks.
@@ -201,11 +240,11 @@ func (n *nsLockMap) Unlock(volume, path, opsID string) {
 }
 
 // RLock - locks any previously acquired read locks.
-func (n *nsLockMap) RLock(volume, path, opsID string) {
+func (n *nsLockMap) RLock(volume, path, opsID string, timeout time.Duration) (locked bool) {
 	readLock := true
 
 	lockSource := getSource() // Useful for debugging
-	n.lock(volume, path, lockSource, opsID, readLock)
+	return n.lock(volume, path, lockSource, opsID, readLock, timeout)
 }
 
 // RUnlock - unlocks any previously acquired read locks.
@@ -261,11 +300,14 @@ func (n *nsLockMap) NewNSLock(volume, path string) RWLocker {
 	return &lockInstance{n, volume, path, getOpsID()}
 }
 
-// Lock - block until write lock is taken.
-func (li *lockInstance) Lock() {
+// Lock - block until write lock is taken or timeout has occured.
+func (li *lockInstance) GetLock(timeout time.Duration) (timedOutErr error) {
 	lockSource := getSource()
 	readLock := false
-	li.ns.lock(li.volume, li.path, lockSource, li.opsID, readLock)
+	if !li.ns.lock(li.volume, li.path, lockSource, li.opsID, readLock, timeout) {
+		return OperationTimedOut{Path: li.path}
+	}
+	return
 }
 
 // Unlock - block until write lock is released.
@@ -274,11 +316,14 @@ func (li *lockInstance) Unlock() {
 	li.ns.unlock(li.volume, li.path, li.opsID, readLock)
 }
 
-// RLock - block until read lock is taken.
-func (li *lockInstance) RLock() {
+// RLock - block until read lock is taken or timeout has occured.
+func (li *lockInstance) GetRLock(timeout time.Duration) (timedOutErr error) {
 	lockSource := getSource()
 	readLock := true
-	li.ns.lock(li.volume, li.path, lockSource, li.opsID, readLock)
+	if !li.ns.lock(li.volume, li.path, lockSource, li.opsID, readLock, timeout) {
+		return OperationTimedOut{Path: li.path}
+	}
+	return
 }
 
 // RUnlock - block until read lock is released.

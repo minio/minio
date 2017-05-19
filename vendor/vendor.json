@@ -200,15 +200,21 @@
 			"revisionTime": "2017-02-27T07:32:28Z"
 		},
 		{
-			"checksumSHA1": "vrIbl0L+RLwyPRCxMss5+eZtADE=",
+			"checksumSHA1": "RZVYKRHYm8Mj5159tPglCST2FxE=",
 			"path": "github.com/minio/dsync",
-			"revision": "535db94aebce49cacce4de9c6f5f5821601281cd",
-			"revisionTime": "2017-04-19T20:41:15Z"
+			"revision": "10a0b85b2fc88c4a9afd1dd99c761058c458abc6",
+			"revisionTime": "2017-05-18T19:29:26Z"
 		},
 		{
 			"path": "github.com/minio/go-homedir",
 			"revision": "0b1069c753c94b3633cc06a1995252dbcc27c7a6",
 			"revisionTime": "2016-02-15T17:25:11+05:30"
+		},
+		{
+			"checksumSHA1": "Gm0TfieHrMoj27jx78ARWQYChwc=",
+			"path": "github.com/minio/lsync",
+			"revision": "9738cbb46f7f5dc0b6c2acf0dd1d85b4f3ecc0e2",
+			"revisionTime": "2017-05-18T18:32:07Z"
 		},
 		{
 			"path": "github.com/minio/mc/pkg/console",

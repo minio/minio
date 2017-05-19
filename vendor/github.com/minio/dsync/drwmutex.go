@@ -79,7 +79,14 @@ func NewDRWMutex(name string) *DRWMutex {
 func (dm *DRWMutex) Lock() {
 
 	isReadLock := false
-	dm.lockBlocking(isReadLock)
+	dm.lockBlocking(time.Duration(1<<63-1), isReadLock)
+}
+
+// GetLock tries to get a write lock on dm before the timeout occurs.
+func (dm *DRWMutex) GetLock(timeout time.Duration) (locked bool) {
+
+	isReadLock := false
+	return dm.lockBlocking(timeout, isReadLock)
 }
 
 // RLock holds a read lock on dm.
@@ -89,15 +96,22 @@ func (dm *DRWMutex) Lock() {
 func (dm *DRWMutex) RLock() {
 
 	isReadLock := true
-	dm.lockBlocking(isReadLock)
+	dm.lockBlocking(time.Duration(1<<63-1), isReadLock)
+}
+
+// GetRLock tries to get a read lock on dm before the timeout occurs.
+func (dm *DRWMutex) GetRLock(timeout time.Duration) (locked bool) {
+
+	isReadLock := true
+	return dm.lockBlocking(timeout, isReadLock)
 }
 
 // lockBlocking will acquire either a read or a write lock
 //
 // The call will block until the lock is granted using a built-in
 // timing randomized back-off algorithm to try again until successful
-func (dm *DRWMutex) lockBlocking(isReadLock bool) {
-	doneCh := make(chan struct{})
+func (dm *DRWMutex) lockBlocking(timeout time.Duration, isReadLock bool) bool {
+	doneCh, start := make(chan struct{}), time.Now()
 	defer close(doneCh)
 
 	// We timed out on the previous lock, incrementally wait
@@ -122,11 +136,15 @@ func (dm *DRWMutex) lockBlocking(isReadLock bool) {
 				copy(dm.writeLocks, locks[:])
 			}
 
-			return
+			return true
+		}
+		if time.Since(start) >= timeout { // Are we past the timeout?
+			break
 		}
 		// We timed out on the previous lock, incrementally wait
 		// for a longer back-off time and try again afterwards.
 	}
+	return false
 }
 
 // lock tries to acquire the distributed lock, returning true or false.
