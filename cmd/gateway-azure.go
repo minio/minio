@@ -445,7 +445,7 @@ func azureParseBlockID(blockID string) (int, string, error) {
 }
 
 // PutObjectPart - Use Azure equivalent PutBlockWithLength.
-func (a *azureObjects) PutObjectPart(bucket, object, uploadID string, partID int, size int64, data io.Reader, md5Hex string, sha256sum string) (info PartInfo, err error) {
+func (a *azureObjects) PutObjectPart(bucket, object, uploadID string, partID int, size int64, data io.Reader, md5sum string, sha256sum string) (info PartInfo, err error) {
 	if meta := a.metaInfo.get(uploadID); meta == nil {
 		return info, traceError(InvalidUploadID{})
 	}
