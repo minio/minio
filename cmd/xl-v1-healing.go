@@ -75,7 +75,9 @@ func (xl xlObjects) HealBucket(bucket string) error {
 // Heal bucket - create buckets on disks where it does not exist.
 func healBucket(storageDisks []StorageAPI, bucket string, writeQuorum int) error {
 	bucketLock := globalNSMutex.NewNSLock(bucket, "")
-	bucketLock.Lock()
+	if err := bucketLock.GetLock(globalOperationTimeout); err != nil {
+		return err
+	}
 	defer bucketLock.Unlock()
 
 	// Initialize sync waitgroup.
@@ -122,7 +124,9 @@ func healBucket(storageDisks []StorageAPI, bucket string, writeQuorum int) error
 func healBucketMetadata(storageDisks []StorageAPI, bucket string, readQuorum int) error {
 	healBucketMetaFn := func(metaPath string) error {
 		metaLock := globalNSMutex.NewNSLock(minioMetaBucket, metaPath)
-		metaLock.RLock()
+		if err := metaLock.GetRLock(globalOperationTimeout); err != nil {
+			return err
+		}
 		defer metaLock.RUnlock()
 		// Heals the given file at metaPath.
 		if _, _, err := healObject(storageDisks, minioMetaBucket, metaPath, readQuorum); err != nil && !isErrObjectNotFound(err) {
@@ -499,7 +503,9 @@ func healObject(storageDisks []StorageAPI, bucket string, object string, quorum 
 func (xl xlObjects) HealObject(bucket, object string) (int, int, error) {
 	// Lock the object before healing.
 	objectLock := globalNSMutex.NewNSLock(bucket, object)
-	objectLock.RLock()
+	if err := objectLock.GetRLock(globalOperationTimeout); err != nil {
+		return 0, 0, err
+	}
 	defer objectLock.RUnlock()
 
 	// Heal the object.

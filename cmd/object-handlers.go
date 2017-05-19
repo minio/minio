@@ -95,7 +95,10 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 
 	// Lock the object before reading.
 	objectLock := globalNSMutex.NewNSLock(bucket, object)
-	objectLock.RLock()
+	if objectLock.GetRLock(globalOperationTimeout) != nil {
+		writeErrorResponse(w, ErrOperationTimedOut, r.URL)
+		return
+	}
 	defer objectLock.RUnlock()
 
 	objInfo, err := objectAPI.GetObjectInfo(bucket, object)
@@ -215,7 +218,10 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 
 	// Lock the object before reading.
 	objectLock := globalNSMutex.NewNSLock(bucket, object)
-	objectLock.RLock()
+	if objectLock.GetRLock(globalOperationTimeout) != nil {
+		writeErrorResponseHeadersOnly(w, ErrOperationTimedOut)
+		return
+	}
 	defer objectLock.RUnlock()
 
 	objInfo, err := objectAPI.GetObjectInfo(bucket, object)
@@ -325,7 +331,10 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 	// - if source and destination are different
 	// it is the sole mutating state.
 	objectDWLock := globalNSMutex.NewNSLock(dstBucket, dstObject)
-	objectDWLock.Lock()
+	if objectDWLock.GetLock(globalOperationTimeout) != nil {
+		writeErrorResponse(w, ErrOperationTimedOut, r.URL)
+		return
+	}
 	defer objectDWLock.Unlock()
 
 	// if source and destination are different, we have to hold
@@ -335,9 +344,11 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 		// Hold read locks on source object only if we are
 		// going to read data from source object.
 		objectSRLock := globalNSMutex.NewNSLock(srcBucket, srcObject)
-		objectSRLock.RLock()
+		if objectSRLock.GetRLock(globalOperationTimeout) != nil {
+			writeErrorResponse(w, ErrOperationTimedOut, r.URL)
+			return
+		}
 		defer objectSRLock.RUnlock()
-
 	}
 
 	objInfo, err := objectAPI.GetObjectInfo(srcBucket, srcObject)
@@ -485,7 +496,10 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 
 	// Lock the object.
 	objectLock := globalNSMutex.NewNSLock(bucket, object)
-	objectLock.Lock()
+	if objectLock.GetLock(globalOperationTimeout) != nil {
+		writeErrorResponse(w, ErrOperationTimedOut, r.URL)
+		return
+	}
 	defer objectLock.Unlock()
 
 	var objInfo ObjectInfo
@@ -644,7 +658,10 @@ func (api objectAPIHandlers) CopyObjectPartHandler(w http.ResponseWriter, r *htt
 	// Hold read locks on source object only if we are
 	// going to read data from source object.
 	objectSRLock := globalNSMutex.NewNSLock(srcBucket, srcObject)
-	objectSRLock.RLock()
+	if objectSRLock.GetRLock(globalOperationTimeout) != nil {
+		writeErrorResponse(w, ErrOperationTimedOut, r.URL)
+		return
+	}
 	defer objectSRLock.RUnlock()
 
 	objInfo, err := objectAPI.GetObjectInfo(srcBucket, srcObject)
@@ -941,7 +958,10 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 
 	// Hold write lock on the object.
 	destLock := globalNSMutex.NewNSLock(bucket, object)
-	destLock.Lock()
+	if destLock.GetLock(globalOperationTimeout) != nil {
+		writeErrorResponse(w, ErrOperationTimedOut, r.URL)
+		return
+	}
 	defer destLock.Unlock()
 
 	objInfo, err := objectAPI.CompleteMultipartUpload(bucket, object, uploadID, completeParts)

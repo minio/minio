@@ -240,7 +240,10 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 
 	// Lock the object.
 	objectLock := globalNSMutex.NewNSLock(bucket, object)
-	objectLock.Lock()
+	if objectLock.GetLock(globalOperationTimeout) != nil {
+		writeErrorResponse(w, ErrOperationTimedOut, r.URL)
+		return
+	}
 	defer objectLock.Unlock()
 
 	var objInfo ObjectInfo
@@ -654,7 +657,10 @@ func (api gatewayAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	bucketLock := globalNSMutex.NewNSLock(bucket, "")
-	bucketLock.Lock()
+	if bucketLock.GetLock(globalOperationTimeout) != nil {
+		writeErrorResponse(w, ErrOperationTimedOut, r.URL)
+		return
+	}
 	defer bucketLock.Unlock()
 
 	// Proceed to creating a bucket.
