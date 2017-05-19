@@ -5,6 +5,7 @@ import (
 	"testing"
 )
 
+// Test diskCache.
 func TestDiskCache(t *testing.T) {
 	cacheDir, err := ioutil.TempDir("", "")
 	if err != nil {
@@ -32,6 +33,7 @@ func TestDiskCache(t *testing.T) {
 	objInfo.ETag = etag
 	objInfo.UserDefined = httpMeta
 
+	// Put+Commit followed by Get should succeed.
 	cacheObject, err := cache.Put(objInfo.Size)
 	if err != nil {
 		t.Fatal(err)
@@ -69,6 +71,7 @@ func TestDiskCache(t *testing.T) {
 		t.Fatal("Object should have been deleted from the cache")
 	}
 
+	// Put+NoCommit followed by Get should fail.
 	cacheObject, err = cache.Put(int64(size))
 	if err != nil {
 		t.Fatal(err)
