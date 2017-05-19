@@ -57,7 +57,7 @@ docker stack rm minio_stack
 
 * By default the services use `local` volume driver. Refer to [Docker documentation](https://docs.docker.com/compose/compose-file/#/volume-configuration-reference) to explore further options.
 
-* Minio services in the Docker compose file expose ports 9001 to 9004. This allows multiple services to run on a host. Explore other configuration options in [Docker documentation](https://docs.docker.com/compose/compose-file/#/ports).
+* Minio services in the Docker compose file will be loadbalanced using [Træfik](https://traefik.io/) which is exposing port 9000.
 
 * Docker Swarm uses ingress load balancing by default. You can configure [external load balancer based](https://docs.docker.com/engine/swarm/ingress/#/configure-an-external-load-balancer) on requirements.
 
