@@ -23,6 +23,7 @@ import (
 	"github.com/minio/cli"
 	"net/url"
 	"os"
+	"runtime"
 	"strings"
 )
 
@@ -205,8 +206,18 @@ func gatewayMain(ctx *cli.Context) {
 	backendType := ctx.Args().Get(0)
 	// Second argument is the endpoint address (optional)
 	endpointAddr := ctx.Args().Get(1)
-	// Third argument is the address flag
+
 	serverAddr := ctx.String("address")
+
+	fatalIf(CheckLocalServerAddr(serverAddr), "Invalid address %s in command line argument.", serverAddr)
+	if runtime.GOOS == "darwin" {
+		host, port := mustSplitHostPort(serverAddr)
+		// On macOS, if a process already listens on LOCALIPADDR:PORT, net.Listen() falls back
+		// to IPv6 address ie minio will start listening on IPv6 address whereas another
+		// (non-)minio process is listening on IPv4 of given port.
+		// To avoid this error sutiation we check for port availability only for macOS.
+		fatalIf(checkPortAvailability(host), "Port %d already in use", port)
+	}
 
 	if endpointAddr != "" {
 		// Reject the endpoint if it points to the gateway handler itself.
