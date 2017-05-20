@@ -27,9 +27,9 @@ import (
 func TestNamespaceLockTest(t *testing.T) {
 	// List of test cases.
 	testCases := []struct {
-		lk               func(s1, s2, s3 string)
+		lk               func(s1, s2, s3 string, t time.Duration) bool
 		unlk             func(s1, s2, s3 string)
-		rlk              func(s1, s2, s3 string)
+		rlk              func(s1, s2, s3 string, t time.Duration) bool
 		runlk            func(s1, s2, s3 string)
 		lkCount          int
 		lockedRefCount   uint
@@ -63,7 +63,9 @@ func TestNamespaceLockTest(t *testing.T) {
 
 	// Write lock tests.
 	testCase := testCases[0]
-	testCase.lk("a", "b", "c") // lock once.
+	if !testCase.lk("a", "b", "c", 60 * time.Second) { // lock once.
+		t.Errorf("Failed to acquire lock")
+	}
 	nsLk, ok := globalNSMutex.lockMap[nsParam{"a", "b"}]
 	if !ok && testCase.shouldPass {
 		t.Errorf("Lock in map missing.")
@@ -83,10 +85,18 @@ func TestNamespaceLockTest(t *testing.T) {
 
 	// Read lock tests.
 	testCase = testCases[1]
-	testCase.rlk("a", "b", "c") // lock once.
-	testCase.rlk("a", "b", "c") // lock second time.
-	testCase.rlk("a", "b", "c") // lock third time.
-	testCase.rlk("a", "b", "c") // lock fourth time.
+	if !testCase.rlk("a", "b", "c", 60 * time.Second) { // lock once.
+		t.Errorf("Failed to acquire first read lock")
+	}
+	if !testCase.rlk("a", "b", "c", 60 * time.Second) { // lock second time.
+		t.Errorf("Failed to acquire second read lock")
+	}
+	if !testCase.rlk("a", "b", "c", 60 * time.Second) { // lock third time.
+		t.Errorf("Failed to acquire third read lock")
+	}
+	if !testCase.rlk("a", "b", "c", 60 * time.Second) { // lock fourth time.
+		t.Errorf("Failed to acquire fourth read lock")
+	}
 	nsLk, ok = globalNSMutex.lockMap[nsParam{"a", "b"}]
 	if !ok && testCase.shouldPass {
 		t.Errorf("Lock in map missing.")
@@ -108,7 +118,9 @@ func TestNamespaceLockTest(t *testing.T) {
 
 	// Read lock 0 ref count.
 	testCase = testCases[2]
-	testCase.rlk("a", "c", "d") // lock once.
+	if !testCase.rlk("a", "c", "d", 60 * time.Second) { // lock once.
+		t.Errorf("Failed to acquire read lock")
+	}
 
 	nsLk, ok = globalNSMutex.lockMap[nsParam{"a", "c"}]
 	if !ok && testCase.shouldPass {
@@ -126,6 +138,51 @@ func TestNamespaceLockTest(t *testing.T) {
 	if ok && !testCase.shouldPass {
 		t.Errorf("Lock map not found.")
 	}
+}
+
+func TestNamespaceLockTimedOut(t *testing.T) {
+	// initializing the locks.
+	initNSLock(false)
+
+	// Get write lock
+	if !globalNSMutex.Lock("my-bucket", "my-object", "abc", 60 * time.Second) {
+		t.Errorf("Failed to acquire lock")
+	}
+
+	// Second attempt for write lock on same resource should time out
+	locked := globalNSMutex.Lock("my-bucket", "my-object", "def", 1 * time.Second)
+	if locked {
+		t.Errorf("Should not have acquired lock")
+	}
+
+	// Read lock on same resource should also time out
+	locked = globalNSMutex.RLock("my-bucket", "my-object", "def", 1 * time.Second)
+	if locked {
+		t.Errorf("Should not have acquired read lock while write lock is active")
+	}
+
+	// Release write lock
+	globalNSMutex.Unlock("my-bucket", "my-object", "abc")
+
+	// Get read lock
+	if !globalNSMutex.RLock("my-bucket", "my-object", "ghi", 60 * time.Second) {
+		t.Errorf("Failed to acquire read lock")
+	}
+
+	// Write lock on same resource should time out
+	locked = globalNSMutex.Lock("my-bucket", "my-object", "klm", 1 * time.Second)
+	if locked {
+		t.Errorf("Should not have acquired lock")
+	}
+
+	// 2nd read lock should be just fine
+	if !globalNSMutex.RLock("my-bucket", "my-object", "nop", 60 * time.Second) {
+		t.Errorf("Failed to acquire second read lock")
+	}
+
+	// Release both read locks
+	globalNSMutex.RUnlock("my-bucket", "my-object", "ghi")
+	globalNSMutex.RUnlock("my-bucket", "my-object", "nop")
 }
 
 func TestLockStats(t *testing.T) {
@@ -303,7 +360,9 @@ func TestLockStats(t *testing.T) {
 
 	// hold 10 read locks.
 	for i := 0; i < 10; i++ {
-		globalNSMutex.RLock("my-bucket", "my-object", strconv.Itoa(i))
+		if !globalNSMutex.RLock("my-bucket", "my-object", strconv.Itoa(i), 60 * time.Second) {
+			t.Errorf("Failed to get read lock on iteration %d", i)
+		}
 	}
 	// expected lock info.
 	expectedLockStats := expectedResult[0]
@@ -323,7 +382,9 @@ func TestLockStats(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		// blocks till all read locks are released.
-		globalNSMutex.Lock("my-bucket", "my-object", strconv.Itoa(10))
+		if !globalNSMutex.Lock("my-bucket", "my-object", strconv.Itoa(10), 60 * time.Second) {
+			t.Errorf("Failed to get write lock")
+		}
 		// Once the above attempt to lock is unblocked/acquired, we verify the stats and release the lock.
 		expectedWLockStats := expectedResult[2]
 		// Since the write lock acquired here, the number of blocked locks should reduce by 1 and
@@ -348,7 +409,9 @@ func TestLockStats(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		// blocks till all read locks are released.
-		globalNSMutex.Lock("my-bucket", "my-object", strconv.Itoa(11))
+		if !globalNSMutex.Lock("my-bucket", "my-object", strconv.Itoa(11), 60 * time.Second) {
+			t.Errorf("Failed to get write lock")
+		}
 		// Once the above attempt to lock is unblocked/acquired, we release the lock.
 		// Unlock the second write lock only after lock stats for first write lock release is taken.
 		<-syncChan
@@ -387,7 +450,9 @@ func TestNamespaceForceUnlockTest(t *testing.T) {
 
 	// Create lock.
 	lock := globalNSMutex.NewNSLock("bucket", "object")
-	lock.Lock()
+	if lock.GetLock(60 * time.Second) != nil {
+		t.Errorf("Failed to get lock")
+	}
 	// Forcefully unlock lock.
 	globalNSMutex.ForceUnlock("bucket", "object")
 
@@ -396,7 +461,9 @@ func TestNamespaceForceUnlockTest(t *testing.T) {
 	go func() {
 		// Try to claim lock again.
 		anotherLock := globalNSMutex.NewNSLock("bucket", "object")
-		anotherLock.Lock()
+		if anotherLock.GetLock(60 * time.Second) != nil {
+			t.Errorf("Failed to get lock")
+		}
 		// And signal succes.
 		ch <- struct{}{}
 	}()
