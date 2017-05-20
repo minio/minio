@@ -700,7 +700,7 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 
 	// post-upload check (write) lock
 	postUploadIDLock := globalNSMutex.NewNSLock(minioMetaMultipartBucket, uploadIDPath)
-	if err := postUploadIDLock.GetLock(globalOperationTimeout); err != nil {
+	if err = postUploadIDLock.GetLock(globalOperationTimeout); err != nil {
 		return PartInfo{}, err
 	}
 	defer postUploadIDLock.Unlock()

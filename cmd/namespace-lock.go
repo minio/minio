@@ -300,7 +300,7 @@ func (n *nsLockMap) NewNSLock(volume, path string) RWLocker {
 	return &lockInstance{n, volume, path, getOpsID()}
 }
 
-// Lock - block until write lock is taken or timeout has occured.
+// Lock - block until write lock is taken or timeout has occurred.
 func (li *lockInstance) GetLock(timeout time.Duration) (timedOutErr error) {
 	lockSource := getSource()
 	readLock := false
@@ -316,7 +316,7 @@ func (li *lockInstance) Unlock() {
 	li.ns.unlock(li.volume, li.path, li.opsID, readLock)
 }
 
-// RLock - block until read lock is taken or timeout has occured.
+// RLock - block until read lock is taken or timeout has occurred.
 func (li *lockInstance) GetRLock(timeout time.Duration) (timedOutErr error) {
 	lockSource := getSource()
 	readLock := true

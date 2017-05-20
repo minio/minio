@@ -621,7 +621,7 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	},
 	ErrOperationTimedOut: {
 		Code:           "XMinioServerTimedOut",
-		Description:    "A timeout occured while trying to lock a resource",
+		Description:    "A timeout occurred while trying to lock a resource",
 		HTTPStatusCode: http.StatusRequestTimeout,
 	},
 

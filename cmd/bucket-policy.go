@@ -146,7 +146,7 @@ func readBucketPolicyJSON(bucket string, objAPI ObjectLayer) (bucketPolicyReader
 
 	// Acquire a read lock on policy config before reading.
 	objLock := globalNSMutex.NewNSLock(minioMetaBucket, policyPath)
-	if err := objLock.GetRLock(globalOperationTimeout); err != nil {
+	if err = objLock.GetRLock(globalOperationTimeout); err != nil {
 		return nil, err
 	}
 	defer objLock.RUnlock()

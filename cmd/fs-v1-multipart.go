@@ -562,7 +562,7 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	// Lock the part so that another part upload with same part-number gets blocked
 	// while the part is getting appended in the background.
 	partLock := globalNSMutex.NewNSLock(minioMetaMultipartBucket, partPath)
-	if err := partLock.GetLock(globalOperationTimeout); err != nil {
+	if err = partLock.GetLock(globalOperationTimeout); err != nil {
 		return PartInfo{}, err
 	}
 
@@ -736,7 +736,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	// Hold the lock so that two parallel complete-multipart-uploads
 	// do not leave a stale uploads.json behind.
 	objectMPartPathLock := globalNSMutex.NewNSLock(minioMetaMultipartBucket, pathJoin(bucket, object))
-	if err := objectMPartPathLock.GetLock(globalOperationTimeout); err != nil {
+	if err = objectMPartPathLock.GetLock(globalOperationTimeout); err != nil {
 		return ObjectInfo{}, err
 	}
 	defer objectMPartPathLock.Unlock()

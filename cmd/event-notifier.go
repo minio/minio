@@ -458,7 +458,7 @@ func persistNotificationConfig(bucket string, ncfg *notificationConfig, obj Obje
 	ncPath := path.Join(bucketConfigPrefix, bucket, bucketNotificationConfig)
 	// Acquire a write lock on notification config before modifying.
 	objLock := globalNSMutex.NewNSLock(minioMetaBucket, ncPath)
-	if err := objLock.GetLock(globalOperationTimeout); err != nil {
+	if err = objLock.GetLock(globalOperationTimeout); err != nil {
 		return err
 	}
 	defer objLock.Unlock()
@@ -485,7 +485,7 @@ func persistListenerConfig(bucket string, lcfg []listenerConfig, obj ObjectLayer
 	lcPath := path.Join(bucketConfigPrefix, bucket, bucketListenerConfig)
 	// Acquire a write lock on notification config before modifying.
 	objLock := globalNSMutex.NewNSLock(minioMetaBucket, lcPath)
-	if err := objLock.GetLock(globalOperationTimeout); err != nil {
+	if err = objLock.GetLock(globalOperationTimeout); err != nil {
 		return err
 	}
 	defer objLock.Unlock()

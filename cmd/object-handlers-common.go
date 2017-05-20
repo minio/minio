@@ -232,7 +232,7 @@ func isETagEqual(left, right string) bool {
 func deleteObject(obj ObjectLayer, bucket, object string, r *http.Request) (err error) {
 	// Acquire a write lock before deleting the object.
 	objectLock := globalNSMutex.NewNSLock(bucket, object)
-	if err := objectLock.GetLock(globalOperationTimeout); err != nil {
+	if err = objectLock.GetLock(globalOperationTimeout); err != nil {
 		return err
 	}
 	defer objectLock.Unlock()

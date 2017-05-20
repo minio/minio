@@ -283,7 +283,7 @@ func (e ObjectTooSmall) Error() string {
 	return "size of the object less than what is expected"
 }
 
-// OperationTimedOut - a timeout occured.
+// OperationTimedOut - a timeout occurred.
 type OperationTimedOut struct {
 	Path string
 }
