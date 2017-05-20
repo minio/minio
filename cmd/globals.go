@@ -54,8 +54,8 @@ const (
 	// The maximum allowed difference between the request generation time and the server processing time
 	globalMaxSkewTime = 15 * time.Minute
 
-	// 60 seconds default timeout value for operations
-	globalOperationTimeout = 60 * time.Second
+	// 10 minute default timeout value for operations
+	globalOperationTimeout = 10 * time.Minute
 )
 
 var (
