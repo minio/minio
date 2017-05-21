@@ -445,7 +445,7 @@ func azureParseBlockID(blockID string) (int, string, error) {
 }
 
 // PutObjectPart - Use Azure equivalent PutBlockWithLength.
-func (a *azureObjects) PutObjectPart(bucket, object, uploadID string, partID int, size int64, data io.Reader, md5sum string, sha256sum string) (info PartInfo, err error) {
+func (a *azureObjects) PutObjectPart(bucket, object, uploadID string, partID int, size int64, data io.Reader, md5Hex string, sha256sum string) (info PartInfo, err error) {
 	if meta := a.metaInfo.get(uploadID); meta == nil {
 		return info, traceError(InvalidUploadID{})
 	}
@@ -459,7 +459,7 @@ func (a *azureObjects) PutObjectPart(bucket, object, uploadID string, partID int
 		writers = append(writers, sha256Writer)
 	}
 
-	if md5sum != "" {
+	if md5Hex != "" {
 		md5sumWriter = md5.New()
 		writers = append(writers, md5sumWriter)
 	}
@@ -470,17 +470,17 @@ func (a *azureObjects) PutObjectPart(bucket, object, uploadID string, partID int
 		teeReader = io.TeeReader(data, io.MultiWriter(writers...))
 	}
 
-	id := azureGetBlockID(partID, md5sum)
+	id := azureGetBlockID(partID, md5Hex)
 	err = a.client.PutBlockWithLength(bucket, object, id, uint64(size), teeReader, nil)
 	if err != nil {
 		return info, azureToObjectError(traceError(err), bucket, object)
 	}
 
-	if md5sum != "" {
+	if md5Hex != "" {
 		newMD5sum := hex.EncodeToString(md5sumWriter.Sum(nil))
-		if newMD5sum != md5sum {
+		if newMD5sum != md5Hex {
 			a.client.DeleteBlob(bucket, object, nil)
-			return PartInfo{}, azureToObjectError(traceError(BadDigest{md5sum, newMD5sum}))
+			return PartInfo{}, azureToObjectError(traceError(BadDigest{md5Hex, newMD5sum}))
 		}
 	}
 
@@ -492,7 +492,7 @@ func (a *azureObjects) PutObjectPart(bucket, object, uploadID string, partID int
 	}
 
 	info.PartNumber = partID
-	info.ETag = md5sum
+	info.ETag = md5Hex
 	info.LastModified = UTCNow()
 	info.Size = size
 	return info, nil
