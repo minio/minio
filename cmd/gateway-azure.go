@@ -33,6 +33,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/storage"
 	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/sha256-simd"
+	"github.com/skyrings/skyring-common/tools/uuid"
 )
 
 const globalAzureAPIVersion = "2016-05-31"
@@ -451,6 +452,7 @@ func (a *azureObjects) PutObjectPart(bucket, object, uploadID string, partID int
 	}
 	var sha256Writer hash.Hash
 	var md5sumWriter hash.Hash
+	var etag string
 
 	var writers []io.Writer
 
@@ -462,6 +464,14 @@ func (a *azureObjects) PutObjectPart(bucket, object, uploadID string, partID int
 	if md5Hex != "" {
 		md5sumWriter = md5.New()
 		writers = append(writers, md5sumWriter)
+		etag = md5Hex
+	} else {
+		// Generate random ETag.
+		u, err := uuid.New()
+		if err != nil {
+			return info, azureToObjectError(traceError(err))
+		}
+		etag = getMD5Hash([]byte(u.String()))
 	}
 
 	teeReader := data
@@ -470,7 +480,7 @@ func (a *azureObjects) PutObjectPart(bucket, object, uploadID string, partID int
 		teeReader = io.TeeReader(data, io.MultiWriter(writers...))
 	}
 
-	id := azureGetBlockID(partID, md5Hex)
+	id := azureGetBlockID(partID, etag)
 	err = a.client.PutBlockWithLength(bucket, object, id, uint64(size), teeReader, nil)
 	if err != nil {
 		return info, azureToObjectError(traceError(err), bucket, object)
@@ -492,7 +502,7 @@ func (a *azureObjects) PutObjectPart(bucket, object, uploadID string, partID int
 	}
 
 	info.PartNumber = partID
-	info.ETag = md5Hex
+	info.ETag = etag
 	info.LastModified = UTCNow()
 	info.Size = size
 	return info, nil
