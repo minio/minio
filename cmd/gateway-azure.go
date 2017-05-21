@@ -318,8 +318,8 @@ func (a *azureObjects) PutObject(bucket, object string, size int64, data io.Read
 
 	var writers []io.Writer
 
-	md5sum := metadata["md5Sum"]
-	delete(metadata, "md5Sum")
+	md5sum := metadata["etag"]
+	delete(metadata, "etag")
 
 	teeReader := data
 
