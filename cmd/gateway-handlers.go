@@ -282,6 +282,11 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	if err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
 	w.Header().Set("ETag", "\""+objInfo.ETag+"\"")
 	writeSuccessResponseHeadersOnly(w)
 }
