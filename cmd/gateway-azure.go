@@ -33,7 +33,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/storage"
 	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/sha256-simd"
-	"github.com/skyrings/skyring-common/tools/uuid"
 )
 
 const globalAzureAPIVersion = "2016-05-31"
@@ -467,11 +466,7 @@ func (a *azureObjects) PutObjectPart(bucket, object, uploadID string, partID int
 		etag = md5Hex
 	} else {
 		// Generate random ETag.
-		u, err := uuid.New()
-		if err != nil {
-			return info, azureToObjectError(traceError(err))
-		}
-		etag = getMD5Hash([]byte(u.String()))
+		etag = getMD5Hash([]byte(mustGetUUID()))
 	}
 
 	teeReader := data
