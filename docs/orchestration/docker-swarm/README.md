@@ -33,10 +33,10 @@ echo "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" | docker secret create secret_ke
 
 ## 4. Deploy distributed Minio services
 
-Download the [Docker Compose file](https://github.com/minio/minio/blob/master/docs/orchestration/docker-swarm/docker-compose.yaml?raw=true) on your Swarm master. Then execute the command
+Download the [Docker Compose file](https://github.com/minio/minio/blob/master/docs/orchestration/docker-swarm/docker-compose-secrets.yaml?raw=true) on your Swarm master. Then execute the command
 
 ```shell
-docker stack deploy --compose-file=docker-compose.yaml minio_stack
+docker stack deploy --compose-file=docker-compose-secrets.yaml minio_stack
 ```
 
 This deploys services described in the Compose file as Docker stack `minio_stack`. Look up the `docker stack` [command reference](https://docs.docker.com/engine/reference/commandline/stack/) for more info.
