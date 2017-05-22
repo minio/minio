@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"crypto/md5"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
@@ -313,24 +314,47 @@ func canonicalMetadata(metadata map[string]string) (canonical map[string]string)
 // uses Azure equivalent CreateBlockBlobFromReader.
 func (a *azureObjects) PutObject(bucket, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (objInfo ObjectInfo, err error) {
 	var sha256Writer hash.Hash
+	var md5sumWriter hash.Hash
+
+	var writers []io.Writer
+
+	md5sum := metadata["etag"]
+	delete(metadata, "etag")
+
 	teeReader := data
+
 	if sha256sum != "" {
 		sha256Writer = sha256.New()
-		teeReader = io.TeeReader(data, sha256Writer)
+		writers = append(writers, sha256Writer)
 	}
 
-	delete(metadata, "etag")
+	if md5sum != "" {
+		md5sumWriter = md5.New()
+		writers = append(writers, md5sumWriter)
+	}
+
+	if len(writers) > 0 {
+		teeReader = io.TeeReader(data, io.MultiWriter(writers...))
+	}
 
 	err = a.client.CreateBlockBlobFromReader(bucket, object, uint64(size), teeReader, canonicalMetadata(metadata))
 	if err != nil {
 		return objInfo, azureToObjectError(traceError(err), bucket, object)
 	}
 
+	if md5sum != "" {
+		newMD5sum := hex.EncodeToString(md5sumWriter.Sum(nil))
+		if newMD5sum != md5sum {
+			a.client.DeleteBlob(bucket, object, nil)
+			return ObjectInfo{}, azureToObjectError(traceError(BadDigest{md5sum, newMD5sum}))
+		}
+	}
+
 	if sha256sum != "" {
 		newSHA256sum := hex.EncodeToString(sha256Writer.Sum(nil))
 		if newSHA256sum != sha256sum {
 			a.client.DeleteBlob(bucket, object, nil)
-			return ObjectInfo{}, traceError(SHA256Mismatch{})
+			return ObjectInfo{}, azureToObjectError(traceError(SHA256Mismatch{}))
 		}
 	}
 
@@ -426,27 +450,54 @@ func (a *azureObjects) PutObjectPart(bucket, object, uploadID string, partID int
 		return info, traceError(InvalidUploadID{})
 	}
 	var sha256Writer hash.Hash
+	var md5sumWriter hash.Hash
+	var etag string
+
+	var writers []io.Writer
+
 	if sha256sum != "" {
 		sha256Writer = sha256.New()
+		writers = append(writers, sha256Writer)
 	}
 
-	teeReader := io.TeeReader(data, sha256Writer)
+	if md5Hex != "" {
+		md5sumWriter = md5.New()
+		writers = append(writers, md5sumWriter)
+		etag = md5Hex
+	} else {
+		// Generate random ETag.
+		etag = getMD5Hash([]byte(mustGetUUID()))
+	}
 
-	id := azureGetBlockID(partID, md5Hex)
+	teeReader := data
+
+	if len(writers) > 0 {
+		teeReader = io.TeeReader(data, io.MultiWriter(writers...))
+	}
+
+	id := azureGetBlockID(partID, etag)
 	err = a.client.PutBlockWithLength(bucket, object, id, uint64(size), teeReader, nil)
 	if err != nil {
 		return info, azureToObjectError(traceError(err), bucket, object)
 	}
 
+	if md5Hex != "" {
+		newMD5sum := hex.EncodeToString(md5sumWriter.Sum(nil))
+		if newMD5sum != md5Hex {
+			a.client.DeleteBlob(bucket, object, nil)
+			return PartInfo{}, azureToObjectError(traceError(BadDigest{md5Hex, newMD5sum}))
+		}
+	}
+
 	if sha256sum != "" {
 		newSHA256sum := hex.EncodeToString(sha256Writer.Sum(nil))
 		if newSHA256sum != sha256sum {
-			return PartInfo{}, traceError(SHA256Mismatch{})
+			return PartInfo{}, azureToObjectError(traceError(SHA256Mismatch{}))
 		}
 	}
 
 	info.PartNumber = partID
-	info.ETag = md5Hex
+	info.ETag = etag
 	info.LastModified = UTCNow()
 	info.Size = size
 	return info, nil
