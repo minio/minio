@@ -74,8 +74,14 @@ func (api gatewayAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	getObjectInfo := objectAPI.GetObjectInfo
+	if api.cache != nil {
+		getObjectInfo = api.cache.GetObjectInfo
+	}
 	if reqAuthType == authTypeAnonymous {
 		getObjectInfo = objectAPI.AnonGetObjectInfo
+		if api.cache != nil {
+			getObjectInfo = api.cache.AnonGetObjectInfo
+		}
 	}
 	objInfo, err := getObjectInfo(bucket, object)
 	if err != nil {
@@ -135,8 +141,14 @@ func (api gatewayAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Re
 	})
 
 	getObject := objectAPI.GetObject
+	if api.cache != nil {
+		getObject = api.cache.GetObject
+	}
 	if reqAuthType == authTypeAnonymous {
 		getObject = objectAPI.AnonGetObject
+		if api.cache != nil {
+			getObject = api.cache.AnonGetObject
+		}
 	}
 
 	// Reads the object at startOffset and writes to mw.
@@ -243,20 +255,32 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 	objectLock.Lock()
 	defer objectLock.Unlock()
 
+	var reader io.Reader
+	reader = r.Body
+	var putObject func(bucket string, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (ObjectInfo, error)
 	var objInfo ObjectInfo
 	switch reqAuthType {
 	case authTypeAnonymous:
 		// Create anonymous object.
-		objInfo, err = objectAPI.AnonPutObject(bucket, object, size, r.Body, metadata, sha256sum)
+		putObject = objectAPI.AnonPutObject
+		if api.cache != nil {
+			putObject = api.cache.AnonPutObject
+		}
+		// objInfo, err = objectAPI.AnonPutObject(bucket, object, size, r.Body, metadata, sha256sum)
 	case authTypeStreamingSigned:
 		// Initialize stream signature verifier.
-		reader, s3Error := newSignV4ChunkedReader(r)
+		var s3Error APIErrorCode
+		reader, s3Error = newSignV4ChunkedReader(r)
 		if s3Error != ErrNone {
 			errorIf(errSignatureMismatch, dumpRequest(r))
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
-		objInfo, err = objectAPI.PutObject(bucket, object, size, reader, metadata, sha256sum)
+		putObject = objectAPI.PutObject
+		if api.cache != nil {
+			putObject = api.cache.PutObject
+		}
+		// objInfo, err = objectAPI.PutObject(bucket, object, size, reader, metadata, sha256sum)
 	case authTypeSignedV2, authTypePresignedV2:
 		s3Error := isReqAuthenticatedV2(r)
 		if s3Error != ErrNone {
@@ -264,7 +288,11 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
-		objInfo, err = objectAPI.PutObject(bucket, object, size, r.Body, metadata, sha256sum)
+		putObject = objectAPI.PutObject
+		if api.cache != nil {
+			putObject = api.cache.PutObject
+		}
+		// objInfo, err = objectAPI.PutObject(bucket, object, size, r.Body, metadata, sha256sum)
 	case authTypePresigned, authTypeSigned:
 		if s3Error := reqSignatureV4Verify(r, serverConfig.GetRegion()); s3Error != ErrNone {
 			errorIf(errSignatureMismatch, dumpRequest(r))
@@ -274,14 +302,22 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 		if !skipContentSha256Cksum(r) {
 			sha256sum = r.Header.Get("X-Amz-Content-Sha256")
 		}
-		// Create object.
-		objInfo, err = objectAPI.PutObject(bucket, object, size, r.Body, metadata, sha256sum)
+		putObject = objectAPI.PutObject
+		if api.cache != nil {
+			putObject = api.cache.PutObject
+		}
 	default:
 		// For all unknown auth types return error.
 		writeErrorResponse(w, ErrAccessDenied, r.URL)
 		return
 	}
 
+	objInfo, err = putObject(bucket, object, size, reader, metadata, sha256sum)
+	if err != nil {
+		errorIf(err, "Unable to create an object. %s", r.URL.Path)
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
 	w.Header().Set("ETag", "\""+objInfo.ETag+"\"")
 	writeSuccessResponseHeadersOnly(w)
 }
@@ -872,7 +908,9 @@ func (api gatewayAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r 
 		getBucketInfo = objectAPI.AnonGetBucketInfo
 	}
 
-	if _, err := getBucketInfo(bucket); err != nil {
+	_, err := getBucketInfo(bucket)
+	_, backendDown := errorCause(err).(BackendDown)
+	if err != nil && !backendDown {
 		errorIf(err, "Unable to fetch bucket info.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return

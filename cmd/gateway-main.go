@@ -67,10 +67,14 @@ var gatewayCmd = cli.Command{
 	Usage:              "Start object storage gateway.",
 	Action:             gatewayMain,
 	CustomHelpTemplate: gatewayTemplate,
-	Flags: append(serverFlags,
-		cli.BoolFlag{
-			Name:  "quiet",
-			Usage: "Disable startup banner.",
+	Flags: append(serverFlags, cli.BoolFlag{
+		Name:  "quiet",
+		Usage: "Disable startup banner.",
+	},
+		cli.StringFlag{
+			Name:  "endpoint",
+			Usage: "The endpoint.",
+			Value: "https://s3.amazonaws.com/",
 		},
 	),
 	HideHelpCommand: true,
@@ -212,6 +216,9 @@ func gatewayMain(ctx *cli.Context) {
 	fatalIf(err, "Unable to initialize gateway layer")
 
 	initNSLock(false) // Enable local namespace lock.
+
+	globalCacheDir = ctx.String("cache-dir")
+	globalCacheMax = ctx.Int("cache-max")
 
 	router := mux.NewRouter().SkipClean(true)
 	registerGatewayAPIRouter(router, newObject)

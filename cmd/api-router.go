@@ -21,13 +21,22 @@ import router "github.com/gorilla/mux"
 // objectAPIHandler implements and provides http handlers for S3 API.
 type objectAPIHandlers struct {
 	ObjectAPI func() ObjectLayer
+	cache     *cacheObjects
 }
 
 // registerAPIRouter - registers S3 compatible APIs.
 func registerAPIRouter(mux *router.Router) {
+	var cache *cacheObjects
+	var err error
+	if globalCacheDir != "" {
+		cache, err = newServerCacheObjects(globalObjectAPI, globalCacheDir, globalCacheMax, 0)
+		fatalIf(err, "Unable to init cache")
+	}
+
 	// Initialize API.
 	api := objectAPIHandlers{
 		ObjectAPI: newObjectLayerFn,
+		cache:     cache,
 	}
 
 	// API Router

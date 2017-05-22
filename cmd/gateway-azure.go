@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -92,6 +93,14 @@ func azureToObjectError(err error, params ...string) error {
 	}
 	if len(params) == 2 {
 		object = params[1]
+	}
+
+	var urlErr *url.Error
+	if urlErr, ok = err.(*url.Error); ok {
+		if _, ok = urlErr.Err.(*net.OpError); ok {
+			e.e = BackendDown{}
+			return e
+		}
 	}
 
 	azureErr, ok := err.(storage.AzureStorageServiceError)

@@ -114,6 +114,9 @@ var (
 	globalActiveCred         credential
 	globalPublicCerts        []*x509.Certificate
 	globalXLObjCacheDisabled bool
+
+	globalCacheDir string
+	globalCacheMax int
 	// Add new variable global values here.
 )
 
