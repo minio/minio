@@ -24,13 +24,21 @@ docker swarm init --advertise-addr <MANAGER-IP>
 
 After the manager is up, [add worker nodes](https://docs.docker.com/engine/swarm/swarm-tutorial/add-nodes/) to the Swarm. Find detailed steps to create the Swarm on [Docker documentation site](https://docs.docker.com/engine/swarm/swarm-tutorial/create-swarm/).
 
-## 3. Deploy distributed Minio services
-
-Download the [Docker Compose file](https://github.com/minio/minio/blob/master/docs/orchestration/docker-swarm/docker-compose.yaml?raw=true) on your Swarm master. Then execute the command
+## 3. Create Docker secrets for Minio
 
 ```shell
-docker stack deploy --compose-file=docker-compose.yaml minio_stack
+echo "AKIAIOSFODNN7EXAMPLE" | docker secret create access_key -
+echo "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY" | docker secret create secret_key -
 ```
+
+## 4. Deploy distributed Minio services
+
+Download the [Docker Compose file](https://github.com/minio/minio/blob/master/docs/orchestration/docker-swarm/docker-compose-secrets.yaml?raw=true) on your Swarm master. Then execute the command
+
+```shell
+docker stack deploy --compose-file=docker-compose-secrets.yaml minio_stack
+```
+
 This deploys services described in the Compose file as Docker stack `minio_stack`. Look up the `docker stack` [command reference](https://docs.docker.com/engine/reference/commandline/stack/) for more info.
 
 After the stack is successfully deployed, you should be able to access Minio server via [Minio Client](https://docs.minio.io/docs/minio-client-complete-guide) `mc` or your browser at http://[Node_Public_IP_Address]:[Expose_Port_on_Host]
