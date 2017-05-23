@@ -355,17 +355,17 @@ func gatewayMain(ctx *cli.Context, backendType gatewayBackend) {
 	}
 
 	serverAddr := ctx.String("address")
-	endpointAddr := ctx.Args().Get(0)
+	endpointAddr := ctx.Args().First()
 	err := validateGatewayArguments(serverAddr, endpointAddr)
 	fatalIf(err, "Invalid argument")
 
 	// Create certs path for SSL configuration.
 	fatalIf(createConfigDir(), "Unable to create configuration directory")
 
+	initNSLock(false) // Enable local namespace lock.
+
 	newObject, err := newGatewayLayer(backendType, ctx.Args()[1:])
 	fatalIf(err, "Unable to initialize gateway layer")
-
-	initNSLock(false) // Enable local namespace lock.
 
 	router := mux.NewRouter().SkipClean(true)
 
@@ -432,9 +432,12 @@ func gatewayMain(ctx *cli.Context, backendType gatewayBackend) {
 	// Prints the formatted startup message once object layer is initialized.
 	if !quietFlag {
 		mode := ""
-		if gatewayBackend(backendType) == azureBackend {
+		switch gatewayBackend(backendType) {
+		case azureBackend:
 			mode = globalMinioModeGatewayAzure
-		} else if gatewayBackend(backendType) == s3Backend {
+		case gcsBackend:
+			mode = globalMinioModeGatewayGCS
+		case s3Backend:
 			mode = globalMinioModeGatewayS3
 		}
 		checkUpdate(mode)
