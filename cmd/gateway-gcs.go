@@ -18,21 +18,20 @@ package cmd
 
 import (
 	"bytes"
+	"cloud.google.com/go/storage"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"google.golang.org/api/googleapi"
+	"google.golang.org/api/iterator"
 	"hash"
 	"io"
 	"path"
 	"regexp"
 	"strconv"
 	"strings"
-
-	"cloud.google.com/go/storage"
-	"google.golang.org/api/googleapi"
-	"google.golang.org/api/iterator"
 
 	"github.com/minio/cli"
 	minio "github.com/minio/minio-go"
@@ -465,11 +464,14 @@ func (l *gcsGateway) GetObjectInfo(bucket string, object string) (ObjectInfo, er
 	}
 
 	attrs, err := l.client.Bucket(bucket).Object(object).Attrs(l.ctx)
+
 	if err != nil {
 		return ObjectInfo{}, gcsToObjectError(traceError(err), bucket, object)
 	}
+	objInfo := fromGCSObjectInfo(attrs)
+	objInfo.ETag = fmt.Sprintf("%d", attrs.CRC32C)
 
-	return fromGCSObjectInfo(attrs), nil
+	return objInfo, nil
 }
 
 // PutObject - Create a new object with the incoming data,
@@ -833,7 +835,6 @@ func (l *gcsGateway) CompleteMultipartUpload(bucket string, key string, uploadID
 	composer.Metadata = partZeroAttrs.Metadata
 
 	attrs, err := composer.Run(l.ctx)
-
 	// cleanup, delete all parts
 	for _, uploadedPart := range uploadedParts {
 		l.client.Bucket(bucket).Object(toGCSMultipartKey(key, uploadID, uploadedPart.PartNumber)).Delete(l.ctx)
@@ -841,7 +842,11 @@ func (l *gcsGateway) CompleteMultipartUpload(bucket string, key string, uploadID
 
 	partZero.Delete(l.ctx)
 
-	return fromGCSObjectInfo(attrs), gcsToObjectError(traceError(err), bucket, key)
+	objectInfo := fromGCSObjectInfo(attrs)
+	// All google cloud storage objects have a CRC32c hash, whereas composite obejcts may not have a MD5 hash
+	// Refer https://cloud.google.com/storage/docs/hashes-etags
+	objectInfo.ETag = fmt.Sprintf("%d", attrs.CRC32C)
+	return objectInfo, gcsToObjectError(traceError(err), bucket, key)
 }
 
 // SetBucketPolicies - Set policy on bucket
