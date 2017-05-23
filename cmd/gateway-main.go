@@ -221,8 +221,13 @@ func gatewayMain(ctx *cli.Context) {
 
 	// First argument is selected backend type.
 	backendType := ctx.Args().Get(0)
-	// Second argument is the endpoint address (optional)
-	endpointAddr := ctx.Args().Get(1)
+	var endpointAddr string
+	if gatewayBackend(backendType) != gcsBackend {
+		// Second argument is the endpoint address (optional)
+		// Only for gcs.
+		endpointAddr = ctx.Args().Get(1)
+	}
+
 	// Third argument is the address flag
 	serverAddr := ctx.String("address")
 
@@ -305,9 +310,12 @@ func gatewayMain(ctx *cli.Context) {
 	// Prints the formatted startup message once object layer is initialized.
 	if !quietFlag {
 		mode := ""
-		if gatewayBackend(backendType) == azureBackend {
+		switch gatewayBackend(backendType) {
+		case azureBackend:
 			mode = globalMinioModeGatewayAzure
-		} else if gatewayBackend(backendType) == s3Backend {
+		case gcsBackend:
+			mode = globalMinioModeGatewayGCS
+		case s3Backend:
 			mode = globalMinioModeGatewayS3
 		}
 		checkUpdate(mode)
