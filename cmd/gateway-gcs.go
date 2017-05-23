@@ -485,8 +485,8 @@ func (l *gcsGateway) PutObject(bucket string, key string, size int64, data io.Re
 		teeReader = io.TeeReader(teeReader, sha256Writer)
 	}
 
-	md5sum := metadata["md5Sum"]
-	delete(metadata, "md5Sum")
+	md5sum := metadata["etag"]
+	delete(metadata, "etag")
 
 	object := l.client.Bucket(bucket).Object(key)
 
