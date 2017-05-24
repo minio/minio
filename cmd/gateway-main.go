@@ -69,7 +69,7 @@ EXAMPLES:
       $ gcloud init --console-only # this will configure your google account
       $ export MINIO_ACCESS_KEY=accesskey
       $ export MINIO_SECRET_KEY=secretkey
-      $ {{.HelpName}} gcs [PROFILE:]PROJECTID
+      $ {{.HelpName}} gcs PROJECTID
 `
 
 var gatewayCmd = cli.Command{
