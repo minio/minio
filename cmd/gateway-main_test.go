@@ -91,6 +91,7 @@ func TestValidateGatewayArguments(t *testing.T) {
 		valid        bool
 	}{
 		{":9000", "http://localhost:9001", true},
+		{":9000", "http://google.com", true},
 		{"123.123.123.123:9000", "http://localhost:9000", false},
 		{":9000", "http://localhost:9000", false},
 		{":9000", nonLoopBackIP + ":9000", false},
