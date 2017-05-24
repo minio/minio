@@ -66,7 +66,8 @@ EXAMPLES:
       $ {{.HelpName}} s3 https://play.minio.io:9000
 
   4. Start minio gateway server for GCS backend.
-      $ gcloud init --console-only # this will configure your google account
+      $ export GOOGLE_APPLICATION_CREDENTIALS=/path/to/credentials.json
+        (Instructions to generate credentials : https://developers.google.com/identity/protocols/application-default-credentials)
       $ export MINIO_ACCESS_KEY=accesskey
       $ export MINIO_SECRET_KEY=secretkey
       $ {{.HelpName}} gcs PROJECTID
