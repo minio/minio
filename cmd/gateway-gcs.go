@@ -168,10 +168,6 @@ func newGCSGateway(args cli.Args) (GatewayLayer, error) {
 		return nil, fmt.Errorf("ProjectID expected")
 	}
 
-	profile := "default"
-	// TODO: don't know where to set profile yet
-	_ = profile
-
 	endpoint := "storage.googleapis.com"
 	secure := true
 
