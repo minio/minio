@@ -230,7 +230,7 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		HTTPStatusCode: http.StatusInternalServerError,
 	},
 	ErrInvalidAccessKeyID: {
-		Code:           "InvalidAccessKeyID",
+		Code:           "InvalidAccessKeyId",
 		Description:    "The access key ID you provided does not exist in our records.",
 		HTTPStatusCode: http.StatusForbidden,
 	},
