@@ -27,11 +27,12 @@ import (
 
 // Documentation links, these are part of message printing code.
 const (
-	mcQuickStartGuide   = "https://docs.minio.io/docs/minio-client-quickstart-guide"
-	goQuickStartGuide   = "https://docs.minio.io/docs/golang-client-quickstart-guide"
-	jsQuickStartGuide   = "https://docs.minio.io/docs/javascript-client-quickstart-guide"
-	javaQuickStartGuide = "https://docs.minio.io/docs/java-client-quickstart-guide"
-	pyQuickStartGuide   = "https://docs.minio.io/docs/python-client-quickstart-guide"
+	mcQuickStartGuide     = "https://docs.minio.io/docs/minio-client-quickstart-guide"
+	goQuickStartGuide     = "https://docs.minio.io/docs/golang-client-quickstart-guide"
+	jsQuickStartGuide     = "https://docs.minio.io/docs/javascript-client-quickstart-guide"
+	javaQuickStartGuide   = "https://docs.minio.io/docs/java-client-quickstart-guide"
+	pyQuickStartGuide     = "https://docs.minio.io/docs/python-client-quickstart-guide"
+	dotnetQuickStartGuide = "https://docs.minio.io/docs/dotnet-client-quickstart-guide"
 )
 
 // generates format string depending on the string length and padding.
@@ -130,6 +131,7 @@ func printObjectAPIMsg() {
 	log.Println(colorBlue("   Java: ") + fmt.Sprintf(getFormatStr(len(javaQuickStartGuide), 6), javaQuickStartGuide))
 	log.Println(colorBlue("   Python: ") + fmt.Sprintf(getFormatStr(len(pyQuickStartGuide), 4), pyQuickStartGuide))
 	log.Println(colorBlue("   JavaScript: ") + jsQuickStartGuide)
+	log.Println(colorBlue("   .NET: ") + fmt.Sprintf(getFormatStr(len(dotnetQuickStartGuide), 6), dotnetQuickStartGuide))
 }
 
 // Get formatted disk/storage info message.

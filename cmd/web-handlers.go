@@ -50,12 +50,12 @@ type WebGenericRep struct {
 
 // ServerInfoRep - server info reply.
 type ServerInfoRep struct {
-	MinioVersion  string
-	MinioMemory   string
-	MinioPlatform string
-	MinioRuntime  string
-	MinioEnvVars  []string
-	UIVersion     string `json:"uiVersion"`
+	MinioVersion    string
+	MinioMemory     string
+	MinioPlatform   string
+	MinioRuntime    string
+	MinioGlobalInfo map[string]interface{}
+	UIVersion       string `json:"uiVersion"`
 }
 
 // ServerInfo - get server info.
@@ -80,8 +80,8 @@ func (web *webAPIHandlers) ServerInfo(r *http.Request, args *WebGenericArgs, rep
 		runtime.GOARCH)
 	goruntime := fmt.Sprintf("Version: %s | CPUs: %s", runtime.Version(), strconv.Itoa(runtime.NumCPU()))
 
-	reply.MinioEnvVars = os.Environ()
 	reply.MinioVersion = Version
+	reply.MinioGlobalInfo = getGlobalInfo()
 	reply.MinioMemory = mem
 	reply.MinioPlatform = platform
 	reply.MinioRuntime = goruntime

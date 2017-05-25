@@ -45,6 +45,11 @@ const (
 	ZZZZMinioPrefix = "ZZZZ-Minio"
 )
 
+// Check if object prefix is "ZZZZ_Minio".
+func isGCSPrefix(prefix string) bool {
+	return strings.TrimSuffix(prefix, slashSeparator) == ZZZZMinioPrefix
+}
+
 // Convert Minio errors to minio object layer errors.
 func gcsToObjectError(err error, params ...string) error {
 	if err == nil {
@@ -327,7 +332,7 @@ func (l *gcsGateway) ListObjects(bucket string, prefix string, marker string, de
 
 			attrs, _ := it.Next()
 			if attrs == nil {
-			} else if attrs.Prefix == ZZZZMinioPrefix {
+			} else if isGCSPrefix(attrs.Prefix) {
 				break
 			}
 
@@ -344,7 +349,7 @@ func (l *gcsGateway) ListObjects(bucket string, prefix string, marker string, de
 
 		nextMarker = toGCSPageToken(attrs.Name)
 
-		if attrs.Prefix == ZZZZMinioPrefix {
+		if isGCSPrefix(attrs.Prefix) {
 			// we don't return our metadata prefix
 			continue
 		} else if attrs.Prefix != "" {

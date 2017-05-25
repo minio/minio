@@ -319,7 +319,10 @@ func CheckLocalServerAddr(serverAddr string) error {
 		return fmt.Errorf("port number must be between 1 to 65535")
 	}
 
-	if host != "" {
+	// 0.0.0.0 is a wildcard address and refers to local network
+	// addresses. I.e, 0.0.0.0:9000 like ":9000" refers to port
+	// 9000 on localhost.
+	if host != "" && host != net.IPv4zero.String() {
 		isLocalHost, err := isLocalHost(host)
 		if err != nil {
 			return err

@@ -34,23 +34,12 @@ class SettingsModal extends React.Component {
 
     let accessKeyEnv = ''
     let secretKeyEnv = ''
-    // Check environment variables first. They may or may not have been
-    // loaded already; they load in Browse#componentDidMount.
-    if (serverInfo.envVars) {
-      serverInfo.envVars.forEach(envVar => {
-        let keyVal = envVar.split('=')
-        if (keyVal[0] == 'MINIO_ACCESS_KEY') {
-          accessKeyEnv = keyVal[1]
-        } else if (keyVal[0] == 'MINIO_SECRET_KEY') {
-          secretKeyEnv = keyVal[1]
-        }
-      })
-    }
-    if (accessKeyEnv != '' || secretKeyEnv != '') {
+    // Check environment variables first.
+    if (serverInfo.info.isEnvCreds) {
       dispatch(actions.setSettings({
-        accessKey: accessKeyEnv,
-        secretKey: secretKeyEnv,
-        keysReadOnly: true
+          accessKey: 'xxxxxxxxx',
+          secretKey: 'xxxxxxxxx',
+          keysReadOnly: true
       }))
     } else {
       web.GetAuth()

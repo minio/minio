@@ -221,6 +221,7 @@ func TestCheckLocalServerAddr(t *testing.T) {
 	}{
 		{":54321", nil},
 		{"localhost:54321", nil},
+		{"0.0.0.0:9000", nil},
 		{"", fmt.Errorf("missing port in address")},
 		{"localhost", fmt.Errorf("missing port in address localhost")},
 		{"example.org:54321", fmt.Errorf("host in server address should be this server")},
