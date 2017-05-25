@@ -68,7 +68,7 @@ export default class Browse extends React.Component {
           memory: res.MinioMemory,
           platform: res.MinioPlatform,
           runtime: res.MinioRuntime,
-          envVars: res.MinioEnvVars
+          info: res.MinioGlobalInfo
         })
         dispatch(actions.setServerInfo(serverInfo))
       })
