@@ -124,7 +124,7 @@ test: build
 	@echo "Done."
 
 coverage: build
-	@echo -n "Running all coverage for minio: "
+	@echo "Running all coverage for minio: "
 	@./buildscripts/go-coverage.sh
 	@echo "Done."
 
