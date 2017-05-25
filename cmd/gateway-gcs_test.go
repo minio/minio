@@ -95,3 +95,37 @@ func TestToGCSPageToken(t *testing.T) {
 	}
 
 }
+
+// TestValidGCSProjectID tests the behavior of isValidGCSProjectID
+func TestValidGCSProjectID(t *testing.T) {
+	testCases := []struct {
+		ProjectID string
+		Valid     bool
+	}{
+		{"", false},
+		{"a", false},
+		{"Abc", false},
+		{"1bcd", false},
+		// 5 chars
+		{"abcdb", false},
+		// 6 chars
+		{"abcdbz", true},
+		// 30 chars
+		{"project-id-1-project-id-more-1", true},
+		// 31 chars
+		{"project-id-1-project-id-more-11", false},
+		{"storage.googleapis.com", false},
+		{"http://storage.googleapis.com", false},
+		{"http://localhost:9000", false},
+		{"project-id-1", true},
+		{"project-id-1988832", true},
+		{"projectid1414", true},
+	}
+
+	//
+	for i, testCase := range testCases {
+		if isValidGCSProjectID(testCase.ProjectID) != testCase.Valid {
+			t.Errorf("Test %d: Expected %v, got %v", i+1, isValidGCSProjectID(testCase.ProjectID), testCase.Valid)
+		}
+	}
+}
