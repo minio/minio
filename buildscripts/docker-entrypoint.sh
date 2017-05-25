@@ -78,4 +78,10 @@ docker_secrets_env
 ## Wait for all the hosts to come online.
 docker_wait_hosts "$@"
 
+# allow the container to be started with `--user`
+if [ "$1" = 'minio' -a "$(id -u)" = '0' ]; then
+  chown -R minio .
+	exec su-exec minio "$0" "$@"
+fi
+
 exec "$@"
