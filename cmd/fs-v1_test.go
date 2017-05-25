@@ -523,6 +523,7 @@ func TestFSGetBucketInfo(t *testing.T) {
 	}
 }
 
+// Tests FS backend put object behavior.
 func TestFSPutObject(t *testing.T) {
 	// Prepare for tests
 	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
@@ -535,14 +536,34 @@ func TestFSPutObject(t *testing.T) {
 	if err := obj.MakeBucket(bucketName); err != nil {
 		t.Fatal(err)
 	}
+
 	sha256sum := ""
-	_, err := obj.PutObject(bucketName, objectName, int64(len("abcd")), bytes.NewReader([]byte("abcd")), nil, sha256sum)
+
+	// With a regular object.
+	_, err := obj.PutObject(bucketName+"non-existent", objectName, int64(len("abcd")), bytes.NewReader([]byte("abcd")), nil, sha256sum)
+	if err == nil {
+		t.Fatal("Unexpected should fail here, bucket doesn't exist")
+	}
+	if _, ok := errorCause(err).(BucketNotFound); !ok {
+		t.Fatalf("Expected error type BucketNotFound, got %#v", err)
+	}
+
+	// With a directory object.
+	_, err = obj.PutObject(bucketName+"non-existent", objectName+"/", int64(0), bytes.NewReader([]byte("")), nil, sha256sum)
+	if err == nil {
+		t.Fatal("Unexpected should fail here, bucket doesn't exist")
+	}
+	if _, ok := errorCause(err).(BucketNotFound); !ok {
+		t.Fatalf("Expected error type BucketNotFound, got %#v", err)
+	}
+
+	_, err = obj.PutObject(bucketName, objectName, int64(len("abcd")), bytes.NewReader([]byte("abcd")), nil, sha256sum)
 	if err != nil {
 		t.Fatal(err)
 	}
 	_, err = obj.PutObject(bucketName, objectName+"/1", int64(len("abcd")), bytes.NewReader([]byte("abcd")), nil, sha256sum)
 	if err == nil {
-		t.Fatal("Unexpected should fail here, backned corruption occurred")
+		t.Fatal("Unexpected should fail here, backend corruption occurred")
 	}
 	if nerr, ok := errorCause(err).(PrefixAccessDenied); !ok {
 		t.Fatalf("Expected PrefixAccessDenied, got %#v", err)
