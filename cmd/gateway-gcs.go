@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"bytes"
 	"cloud.google.com/go/storage"
 	"context"
 	"crypto/sha256"
@@ -356,7 +355,7 @@ func (l *gcsGateway) ListObjects(bucket string, prefix string, marker string, de
 			Bucket:          attrs.Bucket,
 			ModTime:         attrs.Updated,
 			Size:            attrs.Size,
-			ETag:            hex.EncodeToString(attrs.MD5),
+			ETag:            fmt.Sprintf("%d", attrs.CRC32C),
 			UserDefined:     attrs.Metadata,
 			ContentType:     attrs.ContentType,
 			ContentEncoding: attrs.ContentEncoding,
@@ -401,7 +400,7 @@ func (l *gcsGateway) ListObjectsV2(bucket, prefix, continuationToken string, fet
 			continue
 		}
 
-		objects = append(objects, fromGCSObjectInfo(attrs))
+		objects = append(objects, fromGCSAttrsToObjectInfo(attrs))
 	}
 
 	return ListObjectsV2Info{
@@ -441,18 +440,22 @@ func (l *gcsGateway) GetObject(bucket string, key string, startOffset int64, len
 	return nil
 }
 
-// fromGCSObjectInfo converts GCS BucketAttrs to gateway ObjectInfo
-func fromGCSObjectInfo(attrs *storage.ObjectAttrs) ObjectInfo {
-	return ObjectInfo{
+// fromGCSAttrsToObjectInfo converts GCS BucketAttrs to gateway ObjectInfo
+func fromGCSAttrsToObjectInfo(attrs *storage.ObjectAttrs) ObjectInfo {
+	// All google cloud storage objects have a CRC32c hash, whereas composite objects may not have a MD5 hash
+	// Refer https://cloud.google.com/storage/docs/hashes-etags. Use CRC32C for ETag
+	return  ObjectInfo{
 		Name:            attrs.Name,
 		Bucket:          attrs.Bucket,
 		ModTime:         attrs.Updated,
 		Size:            attrs.Size,
-		ETag:            hex.EncodeToString(attrs.MD5),
+		ETag: 			 fmt.Sprintf("%d", attrs.CRC32C),
 		UserDefined:     attrs.Metadata,
 		ContentType:     attrs.ContentType,
 		ContentEncoding: attrs.ContentEncoding,
 	}
+	
+	 
 }
 
 // GetObjectInfo - reads object info and replies back ObjectInfo
@@ -468,7 +471,7 @@ func (l *gcsGateway) GetObjectInfo(bucket string, object string) (ObjectInfo, er
 	if err != nil {
 		return ObjectInfo{}, gcsToObjectError(traceError(err), bucket, object)
 	}
-	objInfo := fromGCSObjectInfo(attrs)
+	objInfo := fromGCSAttrsToObjectInfo(attrs)
 	objInfo.ETag = fmt.Sprintf("%d", attrs.CRC32C)
 
 	return objInfo, nil
@@ -502,6 +505,14 @@ func (l *gcsGateway) PutObject(bucket string, key string, size int64, data io.Re
 
 	w.ContentType = metadata["content-type"]
 	w.ContentEncoding = metadata["content-encoding"]
+	if md5sum =="" {
+	} else if md5, err := hex.DecodeString(md5sum); err != nil {
+		return ObjectInfo{}, gcsToObjectError(traceError(err), bucket, key)
+	} else {
+		w.MD5 = md5
+	}
+	
+
 	w.Metadata = metadata
 
 	_, err := io.Copy(w, teeReader)
@@ -525,14 +536,7 @@ func (l *gcsGateway) PutObject(bucket string, key string, size int64, data io.Re
 		return ObjectInfo{}, traceError(SHA256Mismatch{})
 	}
 
-	if md5sum == "" {
-	} else if b, err := hex.DecodeString(md5sum); err != nil {
-	} else if bytes.Compare(b, attrs.MD5) != 0 {
-		object.Delete(l.ctx)
-		return ObjectInfo{}, traceError(SignatureDoesNotMatch{})
-	}
-
-	return fromGCSObjectInfo(attrs), nil
+	return fromGCSAttrsToObjectInfo(attrs), nil
 }
 
 // CopyObject - Copies a blob from source container to destination container.
@@ -545,7 +549,7 @@ func (l *gcsGateway) CopyObject(srcBucket string, srcObject string, destBucket s
 		return ObjectInfo{}, gcsToObjectError(traceError(err), destBucket, destObject)
 	}
 
-	return fromGCSObjectInfo(attrs), nil
+	return fromGCSAttrsToObjectInfo(attrs), nil
 }
 
 // DeleteObject - Deletes a blob in bucket
@@ -750,7 +754,7 @@ func (l *gcsGateway) ListObjectParts(bucket string, key string, uploadID string,
 		parts = append(parts, PartInfo{
 			PartNumber:   partID,
 			LastModified: attrs.Updated,
-			ETag:         hex.EncodeToString(attrs.MD5),
+			ETag:         fmt.Sprintf("%d", attrs.CRC32C),
 			Size:         attrs.Size,
 		})
 	}
@@ -808,13 +812,15 @@ func (l *gcsGateway) CompleteMultipartUpload(bucket string, key string, uploadID
 	parts := make([]*storage.ObjectHandle, len(uploadedParts))
 	for i, uploadedPart := range uploadedParts {
 		object := l.client.Bucket(bucket).Object(toGCSMultipartKey(key, uploadID, uploadedPart.PartNumber))
-
-		if etag, partErr := hex.DecodeString(uploadedPart.ETag); partErr != nil {
-		} else if attrs, partErr := object.Attrs(l.ctx); partErr != nil {
+        attrs, partErr := object.Attrs(l.ctx)
+        if partErr != nil {
 			return ObjectInfo{}, gcsToObjectError(traceError(partErr), bucket, key)
-		} else if bytes.Compare(attrs.MD5, etag) != 0 {
+		} 
+		crc32cStr := fmt.Sprintf("%d", attrs.CRC32C)
+		if crc32cStr != uploadedPart.ETag {
 			return ObjectInfo{}, gcsToObjectError(traceError(InvalidPart{}), bucket, key)
 		}
+		
 
 		parts[i] = object
 	}
@@ -842,11 +848,7 @@ func (l *gcsGateway) CompleteMultipartUpload(bucket string, key string, uploadID
 
 	partZero.Delete(l.ctx)
 
-	objectInfo := fromGCSObjectInfo(attrs)
-	// All google cloud storage objects have a CRC32c hash, whereas composite obejcts may not have a MD5 hash
-	// Refer https://cloud.google.com/storage/docs/hashes-etags
-	objectInfo.ETag = fmt.Sprintf("%d", attrs.CRC32C)
-	return objectInfo, gcsToObjectError(traceError(err), bucket, key)
+	return fromGCSAttrsToObjectInfo(attrs), gcsToObjectError(traceError(err), bucket, key)
 }
 
 // SetBucketPolicies - Set policy on bucket
