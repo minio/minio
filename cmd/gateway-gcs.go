@@ -22,11 +22,11 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"hash"
 	"io"
 	"path"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -37,11 +37,6 @@ import (
 	"github.com/minio/cli"
 	minio "github.com/minio/minio-go"
 	"github.com/minio/minio-go/pkg/policy"
-)
-
-var (
-	// ErrNotValidMultipartIdentifier the multipart identifier is not in the correct form
-	ErrNotValidMultipartIdentifier = errors.New("Not a valid multipart identifier")
 )
 
 const (
@@ -154,6 +149,17 @@ func gcsToObjectError(err error, params ...string) error {
 	return e
 }
 
+// gcsProjectIDRegex defines a valid gcs project id format
+var gcsProjectIDRegex = regexp.MustCompile("^[a-z][a-z0-9-]{5,29}$")
+
+// isValidGCSProjectId - checks if a given project id is valid or not.
+// Project IDs must start with a lowercase letter and can have lowercase
+// ASCII letters, digits or hyphens. Project IDs must be between 6 and 30 characters.
+// Ref: https://cloud.google.com/resource-manager/reference/rest/v1/projects#Project (projectId section)
+func isValidGCSProjectID(projectID string) bool {
+	return gcsProjectIDRegex.MatchString(projectID)
+}
+
 // gcsGateway - Implements gateway for Minio and GCS compatible object storage servers.
 type gcsGateway struct {
 	client     *storage.Client
@@ -171,6 +177,11 @@ func newGCSGateway(args cli.Args) (GatewayLayer, error) {
 	endpoint := "storage.googleapis.com"
 	secure := true
 	projectID := args.First()
+
+	if !isValidGCSProjectID(projectID) {
+		fatalIf(errGCSInvalidProjectID, "Unable to initialize GCS gateway")
+	}
+
 	ctx := context.Background()
 
 	// Creates a client.
@@ -611,11 +622,11 @@ func fromGCSMultipartKey(s string) (key, uploadID string, partID int, err error)
 
 	parts := strings.Split(s, "-")
 	if parts[0] != "multipart" {
-		return "", "", 0, ErrNotValidMultipartIdentifier
+		return "", "", 0, errGCSNotValidMultipartIdentifier
 	}
 
 	if len(parts) != 4 {
-		return "", "", 0, ErrNotValidMultipartIdentifier
+		return "", "", 0, errGCSNotValidMultipartIdentifier
 	}
 
 	key = unescape(parts[1])
