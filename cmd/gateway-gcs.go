@@ -558,9 +558,9 @@ func (l *gcsGateway) DeleteObject(bucket string, object string) error {
 
 // ListMultipartUploads - lists all multipart uploads.
 func (l *gcsGateway) ListMultipartUploads(bucket string, prefix string, keyMarker string, uploadIDMarker string, delimiter string, maxUploads int) (ListMultipartsInfo, error) {
-	prefix = pathJoin(ZZZZMinioPrefix, "multipart-")
+	multipartPrefix := pathJoin(ZZZZMinioPrefix, "multipart-") + prefix
 
-	it := l.client.Bucket(bucket).Objects(l.ctx, &storage.Query{Delimiter: delimiter, Prefix: prefix, Versions: false})
+	it := l.client.Bucket(bucket).Objects(l.ctx, &storage.Query{Delimiter: delimiter, Prefix: multipartPrefix, Versions: false})
 
 	nextMarker := ""
 	isTruncated := false
