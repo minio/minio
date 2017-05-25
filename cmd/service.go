@@ -102,7 +102,7 @@ func (m *ServerMux) handleServiceSignals() error {
 			}
 			runExitFn(nil)
 		case serviceStop:
-			log.Println("Exiting.")
+			log.Println("Exiting")
 			go func() {
 				time.Sleep(time.Millisecond * 600)
 				log.Println("press ^C again")
