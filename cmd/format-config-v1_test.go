@@ -223,7 +223,7 @@ func prepareFormatXLHealFreshDisks(obj ObjectLayer) ([]StorageAPI, error) {
 	var err error
 	xl := obj.(*xlObjects)
 
-	err = obj.MakeBucket("bucket")
+	err = obj.MakeBucketWithLocation("bucket", "")
 	if err != nil {
 		return []StorageAPI{}, err
 	}
@@ -346,7 +346,7 @@ func TestFormatXLHealCorruptedDisks(t *testing.T) {
 
 	xl := obj.(*xlObjects)
 
-	err = obj.MakeBucket("bucket")
+	err = obj.MakeBucketWithLocation("bucket", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -419,7 +419,7 @@ func TestFormatXLReorderByInspection(t *testing.T) {
 
 	xl := obj.(*xlObjects)
 
-	err = obj.MakeBucket("bucket")
+	err = obj.MakeBucketWithLocation("bucket", "")
 	if err != nil {
 		t.Fatal(err)
 	}

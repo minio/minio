@@ -66,7 +66,7 @@ func TestFSShutdown(t *testing.T) {
 		obj := initFSObjects(disk, t)
 		fs := obj.(*fsObjects)
 		objectContent := "12345"
-		obj.MakeBucket(bucketName)
+		obj.MakeBucketWithLocation(bucketName, "")
 		sha256sum := ""
 		obj.PutObject(bucketName, objectName, int64(len(objectContent)), bytes.NewReader([]byte(objectContent)), nil, sha256sum)
 		return fs, disk
@@ -498,7 +498,7 @@ func TestFSGetBucketInfo(t *testing.T) {
 	fs := obj.(*fsObjects)
 	bucketName := "bucket"
 
-	obj.MakeBucket(bucketName)
+	obj.MakeBucketWithLocation(bucketName, "")
 
 	// Test with valid parameters
 	info, err := fs.GetBucketInfo(bucketName)
@@ -532,7 +532,7 @@ func TestFSPutObject(t *testing.T) {
 	bucketName := "bucket"
 	objectName := "1/2/3/4/object"
 
-	if err := obj.MakeBucket(bucketName); err != nil {
+	if err := obj.MakeBucketWithLocation(bucketName, ""); err != nil {
 		t.Fatal(err)
 	}
 	sha256sum := ""
@@ -582,7 +582,7 @@ func TestFSDeleteObject(t *testing.T) {
 	bucketName := "bucket"
 	objectName := "object"
 
-	obj.MakeBucket(bucketName)
+	obj.MakeBucketWithLocation(bucketName, "")
 	sha256sum := ""
 	obj.PutObject(bucketName, objectName, int64(len("abcd")), bytes.NewReader([]byte("abcd")), nil, sha256sum)
 
@@ -627,7 +627,7 @@ func TestFSDeleteBucket(t *testing.T) {
 	fs := obj.(*fsObjects)
 	bucketName := "bucket"
 
-	err := obj.MakeBucket(bucketName)
+	err := obj.MakeBucketWithLocation(bucketName, "")
 	if err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
@@ -645,7 +645,7 @@ func TestFSDeleteBucket(t *testing.T) {
 		t.Fatal("Unexpected error: ", err)
 	}
 
-	obj.MakeBucket(bucketName)
+	obj.MakeBucketWithLocation(bucketName, "")
 
 	// Delete bucker should get error disk not found.
 	removeAll(disk)
@@ -666,7 +666,7 @@ func TestFSListBuckets(t *testing.T) {
 	fs := obj.(*fsObjects)
 
 	bucketName := "bucket"
-	if err := obj.MakeBucket(bucketName); err != nil {
+	if err := obj.MakeBucketWithLocation(bucketName, ""); err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
 

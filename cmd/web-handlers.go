@@ -30,7 +30,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
 	"github.com/dustin/go-humanize"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/rpc/v2/json2"
@@ -132,7 +131,8 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 	bucketLock := globalNSMutex.NewNSLock(args.BucketName, "")
 	bucketLock.Lock()
 	defer bucketLock.Unlock()
-	if err := objectAPI.MakeBucket(args.BucketName); err != nil {
+
+	if err := objectAPI.MakeBucketWithLocation(args.BucketName, serverConfig.GetRegion()); err != nil {
 		return toJSONError(err, args.BucketName)
 	}
 
@@ -728,12 +728,23 @@ func (web *webAPIHandlers) ListAllBucketPolicies(r *http.Request, args *ListAllB
 	if !isHTTPRequestValid(r) {
 		return toJSONError(errAuthentication)
 	}
-
-	policyInfo, err := readBucketAccessPolicy(objectAPI, args.BucketName)
-	if err != nil {
-		return toJSONError(err, args.BucketName)
+	// FIXME: remove this code when S3 layer for gateway and server is unified.
+	var policyInfo policy.BucketAccessPolicy
+	var err error
+	if layer, ok := objectAPI.(*s3Objects); ok {
+		policyInfo, err = layer.GetBucketPolicies(args.BucketName)	
+	} else if layer, ok := objectAPI.(*azureObjects); ok {
+		policyInfo, err = layer.GetBucketPolicies(args.BucketName)
+	} else {
+		policyInfo, err = readBucketAccessPolicy(objectAPI, args.BucketName)
+		 
 	}
-
+	if err != nil {
+		_, ok := errorCause(err).(PolicyNotFound)
+		if !ok {
+			return toJSONError(err, args.BucketName)		
+		}
+	}
 	reply.UIVersion = browser.UIVersion
 	for prefix, policy := range policy.GetPolicies(policyInfo.Statements, args.BucketName) {
 		reply.Policies = append(reply.Policies, BucketAccessPolicy{
@@ -769,11 +780,43 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 		}
 	}
 
-	policyInfo, err := readBucketAccessPolicy(objectAPI, args.BucketName)
-	if err != nil {
-		return toJSONError(err, args.BucketName)
+	// FIXME: remove this code when S3 layer for gateway and server is unified.
+	var policyInfo policy.BucketAccessPolicy
+	var err error
+
+	if layer, ok := objectAPI.(*s3Objects); ok {
+		policyInfo, err = layer.GetBucketPolicies(args.BucketName)	
+	} else if layer, ok := objectAPI.(*azureObjects); ok {
+		policyInfo, err = layer.GetBucketPolicies(args.BucketName)
+	} else {	
+		policyInfo, err = readBucketAccessPolicy(objectAPI, args.BucketName)
 	}
+	if err != nil {
+		if _, ok := errorCause(err).(PolicyNotFound); ok {
+			policyInfo = policy.BucketAccessPolicy{Version: "2012-10-17"}
+		} else {
+			return toJSONError(err, args.BucketName)		
+		}
+	}
+	
 	policyInfo.Statements = policy.SetPolicy(policyInfo.Statements, bucketP, args.BucketName, args.Prefix)
+	reply.UIVersion = browser.UIVersion
+	
+    if layer, ok := objectAPI.(*s3Objects); ok {
+		err = layer.SetBucketPolicies(args.BucketName, policyInfo)
+		if err != nil {
+			return toJSONError(err)
+		}
+		return nil
+	}
+	if layer, ok := objectAPI.(*azureObjects); ok {
+		err = layer.SetBucketPolicies(args.BucketName, policyInfo)
+		if err != nil {
+			return toJSONError(err)
+		}
+		return nil
+	}
+
 	if len(policyInfo.Statements) == 0 {
 		err = persistAndNotifyBucketPolicyChange(args.BucketName, policyChange{true, nil}, objectAPI)
 		if err != nil {
@@ -798,7 +841,6 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 		}
 		return toJSONError(err, args.BucketName)
 	}
-	reply.UIVersion = browser.UIVersion
 	return nil
 }
 

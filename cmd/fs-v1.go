@@ -302,7 +302,7 @@ func (fs fsObjects) statBucketDir(bucket string) (os.FileInfo, error) {
 
 // MakeBucket - create a new bucket, returns if it
 // already exists.
-func (fs fsObjects) MakeBucket(bucket string) error {
+func (fs fsObjects) MakeBucketWithLocation(bucket, location string) error {
 	bucketDir, err := fs.getBucketDir(bucket)
 	if err != nil {
 		return toObjectErr(err, bucket)

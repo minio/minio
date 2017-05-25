@@ -42,7 +42,7 @@ func TestCreateCredential(t *testing.T) {
 		// Secret key too small.
 		{"myuser", "pass", false, errInvalidSecretKeyLength},
 		// Secret key too long.
-		{"myuser", "pass1234567890123456789012345678901234567", false, errInvalidSecretKeyLength},
+		{"myuser", "pass1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890", false, errInvalidSecretKeyLength},
 		// Success when access key contains leading/trailing spaces.
 		{" user ", cred.SecretKey, true, nil},
 		{"myuser", "mypassword", true, nil},
