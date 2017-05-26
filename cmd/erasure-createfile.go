@@ -29,7 +29,7 @@ import (
 // all the disks, writes also calculate individual block's checksum
 // for future bit-rot protection.
 func erasureCreateFile(disks []StorageAPI, volume, path string, reader io.Reader, allowEmpty bool, blockSize int64,
-	dataBlocks, parityBlocks int, algo HashAlgo, writeQuorum int) (bytesWritten int64, checkSums []string, err error) {
+	dataBlocks, parityBlocks int, algo HashAlgo, writeQuorum int) (newDisks []StorageAPI, bytesWritten int64, checkSums []string, err error) {
 
 	// Allocated blockSized buffer for reading from incoming stream.
 	buf := make([]byte, blockSize)
@@ -43,7 +43,7 @@ func erasureCreateFile(disks []StorageAPI, volume, path string, reader io.Reader
 		// FIXME: this is a bug in Golang, n == 0 and err ==
 		// io.ErrUnexpectedEOF for io.ReadFull function.
 		if n == 0 && rErr == io.ErrUnexpectedEOF {
-			return 0, nil, traceError(rErr)
+			return nil, 0, nil, traceError(rErr)
 		}
 		if rErr == io.EOF {
 			// We have reached EOF on the first byte read, io.Reader
@@ -51,28 +51,28 @@ func erasureCreateFile(disks []StorageAPI, volume, path string, reader io.Reader
 			// data. Will create a 0byte file instead.
 			if bytesWritten == 0 && allowEmpty {
 				blocks = make([][]byte, len(disks))
-				rErr = appendFile(disks, volume, path, blocks, hashWriters, writeQuorum)
+				newDisks, rErr = appendFile(disks, volume, path, blocks, hashWriters, writeQuorum)
 				if rErr != nil {
-					return 0, nil, rErr
+					return nil, 0, nil, rErr
 				}
 			} // else we have reached EOF after few reads, no need to
 			// add an additional 0bytes at the end.
 			break
 		}
 		if rErr != nil && rErr != io.ErrUnexpectedEOF {
-			return 0, nil, traceError(rErr)
+			return nil, 0, nil, traceError(rErr)
 		}
 		if n > 0 {
 			// Returns encoded blocks.
 			var enErr error
 			blocks, enErr = encodeData(buf[0:n], dataBlocks, parityBlocks)
 			if enErr != nil {
-				return 0, nil, enErr
+				return nil, 0, nil, enErr
 			}
 
 			// Write to all disks.
-			if err = appendFile(disks, volume, path, blocks, hashWriters, writeQuorum); err != nil {
-				return 0, nil, err
+			if newDisks, err = appendFile(disks, volume, path, blocks, hashWriters, writeQuorum); err != nil {
+				return nil, 0, nil, err
 			}
 			bytesWritten += int64(n)
 		}
@@ -82,7 +82,7 @@ func erasureCreateFile(disks []StorageAPI, volume, path string, reader io.Reader
 	for i := range checkSums {
 		checkSums[i] = hex.EncodeToString(hashWriters[i].Sum(nil))
 	}
-	return bytesWritten, checkSums, nil
+	return newDisks, bytesWritten, checkSums, nil
 }
 
 // encodeData - encodes incoming data buffer into
@@ -110,7 +110,7 @@ func encodeData(dataBuffer []byte, dataBlocks, parityBlocks int) ([][]byte, erro
 }
 
 // appendFile - append data buffer at path.
-func appendFile(disks []StorageAPI, volume, path string, enBlocks [][]byte, hashWriters []hash.Hash, writeQuorum int) (err error) {
+func appendFile(disks []StorageAPI, volume, path string, enBlocks [][]byte, hashWriters []hash.Hash, writeQuorum int) ([]StorageAPI, error) {
 	var wg = &sync.WaitGroup{}
 	var wErrs = make([]error, len(disks))
 	// Write encoded data to quorum disks in parallel.
@@ -126,8 +126,6 @@ func appendFile(disks []StorageAPI, volume, path string, enBlocks [][]byte, hash
 			wErr := disk.AppendFile(volume, path, enBlocks[index])
 			if wErr != nil {
 				wErrs[index] = traceError(wErr)
-				// Ignore disk which returned an error.
-				disks[index] = nil
 				return
 			}
 
@@ -142,5 +140,5 @@ func appendFile(disks []StorageAPI, volume, path string, enBlocks [][]byte, hash
 	// Wait for all the appends to finish.
 	wg.Wait()
 
-	return reduceWriteQuorumErrs(wErrs, objectOpIgnoredErrs, writeQuorum)
+	return evalDisks(disks, wErrs), reduceWriteQuorumErrs(wErrs, objectOpIgnoredErrs, writeQuorum)
 }

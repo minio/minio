@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"reflect"
 	"strconv"
 	"testing"
@@ -427,5 +428,63 @@ func testShuffleDisks(t *testing.T, xl *xlObjects) {
 		shuffledDisks[14] != disks[15] ||
 		shuffledDisks[15] != disks[0] {
 		t.Errorf("shuffleDisks returned incorrect order.")
+	}
+}
+
+// TestEvalDisks tests the behavior of evalDisks
+func TestEvalDisks(t *testing.T) {
+	nDisks := 16
+	disks, err := getRandomDisks(nDisks)
+	if err != nil {
+		t.Fatal(err)
+	}
+	objLayer, _, err := initObjectLayer(mustGetNewEndpointList(disks...))
+	if err != nil {
+		removeRoots(disks)
+		t.Fatal(err)
+	}
+	defer removeRoots(disks)
+	xl := objLayer.(*xlObjects)
+	testShuffleDisks(t, xl)
+}
+
+func testEvalDisks(t *testing.T, xl *xlObjects) {
+	disks := xl.storageDisks
+
+	diskErr := errors.New("some disk error")
+	errs := []error{
+		diskErr, nil, nil, nil,
+		nil, diskErr, nil, nil,
+		diskErr, nil, nil, nil,
+		nil, nil, nil, diskErr,
+	}
+
+	// Test normal setup with some disks
+	// returning errors
+	newDisks := evalDisks(disks, errs)
+	if newDisks[0] != nil ||
+		newDisks[1] != disks[1] ||
+		newDisks[2] != disks[2] ||
+		newDisks[3] != disks[3] ||
+		newDisks[4] != disks[4] ||
+		newDisks[5] != nil ||
+		newDisks[6] != disks[6] ||
+		newDisks[7] != disks[7] ||
+		newDisks[8] != nil ||
+		newDisks[9] != disks[9] ||
+		newDisks[10] != disks[10] ||
+		newDisks[11] != disks[11] ||
+		newDisks[12] != disks[12] ||
+		newDisks[13] != disks[13] ||
+		newDisks[14] != disks[14] ||
+		newDisks[15] != nil {
+		t.Errorf("evalDisks returned incorrect new disk set.")
+	}
+
+	// Test when number of errs doesn't match with number of disks
+	errs = []error{nil, nil, nil, nil}
+	newDisks = evalDisks(disks, errs)
+	if newDisks != nil {
+		t.Errorf("evalDisks returned no nil slice")
 	}
 }

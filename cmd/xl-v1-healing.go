@@ -468,7 +468,7 @@ func healObject(storageDisks []StorageAPI, bucket string, object string, quorum 
 	}
 
 	// Generate and write `xl.json` generated from other disks.
-	aErr = writeUniqueXLMetadata(outDatedDisks, minioMetaTmpBucket, tmpID, partsMetadata, diskCount(outDatedDisks))
+	outDatedDisks, aErr = writeUniqueXLMetadata(outDatedDisks, minioMetaTmpBucket, tmpID, partsMetadata, diskCount(outDatedDisks))
 	if aErr != nil {
 		return 0, 0, toObjectErr(aErr, bucket, object)
 	}

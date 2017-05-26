@@ -389,7 +389,7 @@ func deleteAllXLMetadata(disks []StorageAPI, bucket, prefix string, errs []error
 }
 
 // Rename `xl.json` content to destination location for each disk in order.
-func renameXLMetadata(disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry string, quorum int) error {
+func renameXLMetadata(disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry string, quorum int) ([]StorageAPI, error) {
 	isDir := false
 	srcXLJSON := path.Join(srcEntry, xlMetaJSONFile)
 	dstXLJSON := path.Join(dstEntry, xlMetaJSONFile)
@@ -397,7 +397,7 @@ func renameXLMetadata(disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEnt
 }
 
 // writeUniqueXLMetadata - writes unique `xl.json` content for each disk in order.
-func writeUniqueXLMetadata(disks []StorageAPI, bucket, prefix string, xlMetas []xlMetaV1, quorum int) error {
+func writeUniqueXLMetadata(disks []StorageAPI, bucket, prefix string, xlMetas []xlMetaV1, quorum int) ([]StorageAPI, error) {
 	var wg = &sync.WaitGroup{}
 	var mErrs = make([]error, len(disks))
 
@@ -419,8 +419,6 @@ func writeUniqueXLMetadata(disks []StorageAPI, bucket, prefix string, xlMetas []
 			err := writeXLMetadata(disk, bucket, prefix, xlMetas[index])
 			if err != nil {
 				mErrs[index] = err
-				// Ignore disk which returned an error.
-				disks[index] = nil
 			}
 		}(index, disk)
 	}
@@ -433,11 +431,11 @@ func writeUniqueXLMetadata(disks []StorageAPI, bucket, prefix string, xlMetas []
 		// Delete all `xl.json` successfully renamed.
 		deleteAllXLMetadata(disks, bucket, prefix, mErrs)
 	}
-	return err
+	return evalDisks(disks, mErrs), err
 }
 
 // writeSameXLMetadata - write `xl.json` on all disks in order.
-func writeSameXLMetadata(disks []StorageAPI, bucket, prefix string, xlMeta xlMetaV1, writeQuorum, readQuorum int) error {
+func writeSameXLMetadata(disks []StorageAPI, bucket, prefix string, xlMeta xlMetaV1, writeQuorum, readQuorum int) ([]StorageAPI, error) {
 	var wg = &sync.WaitGroup{}
 	var mErrs = make([]error, len(disks))
 
@@ -459,8 +457,6 @@ func writeSameXLMetadata(disks []StorageAPI, bucket, prefix string, xlMeta xlMet
 			err := writeXLMetadata(disk, bucket, prefix, metadata)
 			if err != nil {
 				mErrs[index] = err
-				// Ignore disk which returned an error.
-				disks[index] = nil
 			}
 		}(index, disk, xlMeta)
 	}
@@ -473,5 +469,5 @@ func writeSameXLMetadata(disks []StorageAPI, bucket, prefix string, xlMeta xlMet
 		// Delete all `xl.json` successfully renamed.
 		deleteAllXLMetadata(disks, bucket, prefix, mErrs)
 	}
-	return err
+	return evalDisks(disks, mErrs), err
 }
