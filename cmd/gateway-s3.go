@@ -191,7 +191,6 @@ func (l *s3Objects) DeleteBucket(bucket string) error {
 
 // ListObjects lists all blobs in S3 bucket filtered by prefix
 func (l *s3Objects) ListObjects(bucket string, prefix string, marker string, delimiter string, maxKeys int) (ListObjectsInfo, error) {
-
 	result, err := l.Client.ListObjects(bucket, prefix, marker, delimiter, maxKeys)
 	if err != nil {
 		return ListObjectsInfo{}, s3ToObjectError(traceError(err), bucket)
@@ -556,7 +555,6 @@ func (l *s3Objects) GetBucketPolicies(bucket string) (policy.BucketAccessPolicy,
 
 // DeleteBucketPolicies deletes all policies on bucket
 func (l *s3Objects) DeleteBucketPolicies(bucket string) error {
-
 	if err := l.Client.PutBucketPolicy(bucket, policy.BucketAccessPolicy{}); err != nil {
 		return s3ToObjectError(traceError(err), bucket, "")
 	}

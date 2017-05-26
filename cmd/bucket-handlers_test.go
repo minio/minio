@@ -771,3 +771,36 @@ func testAPIDeleteMultipleObjectsHandler(obj ObjectLayer, instanceType, bucketNa
 	// `ExecObjectLayerAPINilTest` manages the operation.
 	ExecObjectLayerAPINilTest(t, nilBucket, nilObject, instanceType, apiRouter, nilReq)
 }
+
+func TestIsBucketActionAllowed(t *testing.T) {
+	ExecObjectLayerAPITest(t, testIsBucketActionAllowedHandler, []string{"BucketLocation"})
+}
+
+func testIsBucketActionAllowedHandler(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
+	credentials credential, t *testing.T) {
+
+	testCases := []struct {
+		// input.
+		action              string
+		bucket              string
+		prefix              string
+		isGlobalPoliciesNil bool
+		// flag indicating whether the test should pass.
+		shouldPass bool
+	}{
+		{"s3:GetBucketLocation", "mybucket", "abc", true, false},
+		{"s3:ListObject", "mybucket", "abc", false, false},
+	}
+	for i, testCase := range testCases {
+		if testCase.isGlobalPoliciesNil {
+			globalBucketPolicies = nil
+		} else {
+			initBucketPolicies(obj)
+		}
+		isAllowed := isBucketActionAllowed(testCase.action, testCase.bucket, testCase.prefix)
+		if isAllowed != testCase.shouldPass {
+			t.Errorf("Case %d: Expected the response status to be `%t`, but instead found `%t`", i+1, testCase.shouldPass, isAllowed)
+		}
+
+	}
+}

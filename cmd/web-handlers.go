@@ -30,6 +30,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
 	"github.com/dustin/go-humanize"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/rpc/v2/json2"
@@ -679,6 +680,22 @@ func readBucketAccessPolicy(objAPI ObjectLayer, bucketName string) (policy.Bucke
 
 }
 
+func getBucketAccessPolicy(objAPI ObjectLayer, bucketName string) (policy.BucketAccessPolicy, error) {
+	// FIXME: remove this code when S3 layer for gateway and server is unified.
+	var policyInfo policy.BucketAccessPolicy
+	var err error
+
+	switch layer := objAPI.(type) {
+	case *s3Objects:
+		policyInfo, err = layer.GetBucketPolicies(bucketName)
+	case *azureObjects:
+		policyInfo, err = layer.GetBucketPolicies(bucketName)
+	default:
+		policyInfo, err = readBucketAccessPolicy(objAPI, bucketName)
+	}
+	return policyInfo, err
+}
+
 // GetBucketPolicy - get bucket policy.
 func (web *webAPIHandlers) GetBucketPolicy(r *http.Request, args *GetBucketPolicyArgs, reply *GetBucketPolicyRep) error {
 	objectAPI := web.ObjectAPI()
@@ -728,21 +745,12 @@ func (web *webAPIHandlers) ListAllBucketPolicies(r *http.Request, args *ListAllB
 	if !isHTTPRequestValid(r) {
 		return toJSONError(errAuthentication)
 	}
-	// FIXME: remove this code when S3 layer for gateway and server is unified.
-	var policyInfo policy.BucketAccessPolicy
-	var err error
-	if layer, ok := objectAPI.(*s3Objects); ok {
-		policyInfo, err = layer.GetBucketPolicies(args.BucketName)	
-	} else if layer, ok := objectAPI.(*azureObjects); ok {
-		policyInfo, err = layer.GetBucketPolicies(args.BucketName)
-	} else {
-		policyInfo, err = readBucketAccessPolicy(objectAPI, args.BucketName)
-		 
-	}
+	var policyInfo, err = getBucketAccessPolicy(objectAPI, args.BucketName)
+
 	if err != nil {
 		_, ok := errorCause(err).(PolicyNotFound)
 		if !ok {
-			return toJSONError(err, args.BucketName)		
+			return toJSONError(err, args.BucketName)
 		}
 	}
 	reply.UIVersion = browser.UIVersion
@@ -780,40 +788,23 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 		}
 	}
 
-	// FIXME: remove this code when S3 layer for gateway and server is unified.
-	var policyInfo policy.BucketAccessPolicy
-	var err error
+	var policyInfo, err = getBucketAccessPolicy(objectAPI, args.BucketName)
 
-	if layer, ok := objectAPI.(*s3Objects); ok {
-		policyInfo, err = layer.GetBucketPolicies(args.BucketName)	
-	} else if layer, ok := objectAPI.(*azureObjects); ok {
-		policyInfo, err = layer.GetBucketPolicies(args.BucketName)
-	} else {	
-		policyInfo, err = readBucketAccessPolicy(objectAPI, args.BucketName)
-	}
 	if err != nil {
-		if _, ok := errorCause(err).(PolicyNotFound); ok {
-			policyInfo = policy.BucketAccessPolicy{Version: "2012-10-17"}
-		} else {
-			return toJSONError(err, args.BucketName)		
+		if _, ok := errorCause(err).(PolicyNotFound); !ok {
+			return toJSONError(err, args.BucketName)
 		}
+		policyInfo = policy.BucketAccessPolicy{Version: "2012-10-17"}
 	}
-	
+
 	policyInfo.Statements = policy.SetPolicy(policyInfo.Statements, bucketP, args.BucketName, args.Prefix)
-	reply.UIVersion = browser.UIVersion
-	
-    if layer, ok := objectAPI.(*s3Objects); ok {
-		err = layer.SetBucketPolicies(args.BucketName, policyInfo)
+	switch g := objectAPI.(type) {
+	case GatewayLayer:
+		err = g.SetBucketPolicies(args.BucketName, policyInfo)
 		if err != nil {
 			return toJSONError(err)
 		}
-		return nil
-	}
-	if layer, ok := objectAPI.(*azureObjects); ok {
-		err = layer.SetBucketPolicies(args.BucketName, policyInfo)
-		if err != nil {
-			return toJSONError(err)
-		}
+		reply.UIVersion = browser.UIVersion
 		return nil
 	}
 
