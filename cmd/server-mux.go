@@ -32,6 +32,10 @@ import (
 
 const (
 	serverShutdownPoll = 500 * time.Millisecond
+
+	// Maximum number of concurrent connections, to avoid creating
+	// too many threads in the OS and get killed by golang runtime
+	serverMaxConcurrentConns = 9000
 )
 
 // The value chosen below is longest word chosen
@@ -349,6 +353,9 @@ type ServerMux struct {
 
 	// Current number of concurrent http requests
 	currentReqs int32
+	// Max number of concurrent http requests
+	maxConcurrentReqs int32
+
 	// Time to wait before forcing server shutdown
 	gracefulTimeout time.Duration
 
@@ -359,8 +366,9 @@ type ServerMux struct {
 // NewServerMux constructor to create a ServerMux
 func NewServerMux(addr string, handler http.Handler) *ServerMux {
 	m := &ServerMux{
-		Addr:    addr,
-		handler: handler,
+		Addr:              addr,
+		handler:           handler,
+		maxConcurrentReqs: serverMaxConcurrentConns,
 		// Wait for 5 seconds for new incoming connnections, otherwise
 		// forcibly close them during graceful stop or restart.
 		gracefulTimeout: 5 * time.Second,
@@ -468,6 +476,12 @@ func (m *ServerMux) ListenAndServe(certFile, keyFile string) (err error) {
 			closing := m.closing
 			m.mu.RUnlock()
 			if closing {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				return
+			}
+
+			// Return HTTP service unavailable when we have reached maximum concurrent HTTP requests.
+			if atomic.LoadInt32(&m.currentReqs) >= m.maxConcurrentReqs {
 				w.WriteHeader(http.StatusServiceUnavailable)
 				return
 			}
