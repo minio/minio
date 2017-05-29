@@ -99,7 +99,7 @@ func mustGetGatewayConfigFromEnv() (string, string, string) {
 	accessKey := os.Getenv("MINIO_ACCESS_KEY")
 	secretKey := os.Getenv("MINIO_SECRET_KEY")
 	if accessKey == "" || secretKey == "" {
-		fatalIf(errors.New("Missing credentials"), "Access and secret keys are mandatory to run Minio gateway server.")
+		prettyFatalIf(errors.New("Missing credentials"), "Unable to validate access and secret keys before running Minio gateway server")
 	}
 
 	region := globalMinioDefaultRegion
@@ -215,7 +215,7 @@ func gatewayMain(ctx *cli.Context) {
 		sameTarget, err := sameLocalAddrs(endpointAddr, serverAddr)
 		fatalIf(err, "Unable to compare server and endpoint addresses.")
 		if sameTarget {
-			fatalIf(errors.New("endpoint points to the local gateway"), "Endpoint url is not allowed")
+			prettyFatalIf(errors.New("endpoint points to the local gateway"), "Endpoint url is not allowed")
 		}
 	}
 
@@ -223,7 +223,7 @@ func gatewayMain(ctx *cli.Context) {
 	fatalIf(createConfigDir(), "Unable to create configuration directory")
 
 	newObject, err := newGatewayLayer(backendType, ctx.Args()[1:])
-	fatalIf(err, "Unable to initialize gateway layer")
+	prettyFatalIf(err, "Unable to initialize gateway layer")
 
 	initNSLock(false) // Enable local namespace lock.
 

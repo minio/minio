@@ -184,20 +184,46 @@ func getSource() string {
 	return fmt.Sprintf("[%s:%d:%s()]", filename, lineNum, funcName)
 }
 
-func logIf(level logrus.Level, source string, err error, msg string, data ...interface{}) {
-	isErrIgnored := func(err error) (ok bool) {
-		err = errorCause(err)
-		switch err.(type) {
-		case BucketNotFound, BucketNotEmpty, BucketExists:
-			ok = true
-		case ObjectNotFound, ObjectExistsAsDirectory, BucketPolicyNotFound, InvalidUploadID, BadDigest:
-			ok = true
-		}
+func isErrLogged(err error) (ok bool) {
+	ok = true
 
-		return ok
+	err = errorCause(err)
+	switch err.(type) {
+	case BucketNotFound, BucketNotEmpty, BucketExists:
+		ok = false
+	case ObjectNotFound, ObjectExistsAsDirectory, BucketPolicyNotFound, InvalidUploadID, BadDigest:
+		ok = false
 	}
 
-	if err == nil || isErrIgnored(err) {
+	return ok
+}
+
+func prettyLogIf(level logrus.Level, source string, err error, msg string, data ...interface{}) {
+
+	if err == nil || !isErrLogged(err) {
+		return
+	}
+
+	msg = msg + ": " + err.Error() + "."
+
+	switch level {
+	case logrus.PanicLevel:
+		log.logger.Panicf(msg, data...)
+	case logrus.FatalLevel:
+		log.logger.Fatalf(msg, data...)
+	case logrus.ErrorLevel:
+		log.logger.Errorf(msg, data...)
+	case logrus.WarnLevel:
+		log.logger.Warnf(msg, data...)
+	case logrus.InfoLevel:
+		log.logger.Infof(msg, data...)
+	default:
+		log.logger.Debugf(msg, data...)
+	}
+}
+
+func logIf(level logrus.Level, source string, err error, msg string, data ...interface{}) {
+	if err == nil || !isErrLogged(err) {
 		return
 	}
 
@@ -232,4 +258,12 @@ func errorIf(err error, msg string, data ...interface{}) {
 
 func fatalIf(err error, msg string, data ...interface{}) {
 	logIf(logrus.FatalLevel, getSource(), err, msg, data...)
+}
+
+func prettyErrorIf(err error, msg string, data ...interface{}) {
+	prettyLogIf(logrus.ErrorLevel, getSource(), err, msg, data...)
+}
+
+func prettyFatalIf(err error, msg string, data ...interface{}) {
+	prettyLogIf(logrus.FatalLevel, getSource(), err, msg, data...)
 }
