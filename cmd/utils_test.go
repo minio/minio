@@ -248,17 +248,17 @@ func TestCheckURL(t *testing.T) {
 
 // Testing dumping request function.
 func TestDumpRequest(t *testing.T) {
-	req, err := http.NewRequest("GET", "http://localhost:9000?prefix=Hello%2AWorld%2A", nil)
+	req, err := http.NewRequest("GET", "http://localhost:9000?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=USWUXHGYZQYFYFFIT3RE%2F20170529%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20170529T190139Z&X-Amz-Expires=600&X-Amz-Signature=19b58080999df54b446fc97304eb8dda60d3df1812ae97f3e8783351bfd9781d&X-Amz-SignedHeaders=host&prefix=Hello%2AWorld%2A", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+	req.RequestURI = "/?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=USWUXHGYZQYFYFFIT3RE%2F20170529%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20170529T190139Z&X-Amz-Expires=600&X-Amz-Signature=19b58080999df54b446fc97304eb8dda60d3df1812ae97f3e8783351bfd9781d&X-Amz-SignedHeaders=host&prefix=Hello%2AWorld%2A"
 	req.Header.Set("content-md5", "====test")
 	jsonReq := dumpRequest(req)
 	type jsonResult struct {
-		Method string      `json:"method"`
-		Path   string      `json:"path"`
-		Query  string      `json:"query"`
-		Header http.Header `json:"header"`
+		Method     string      `json:"method"`
+		RequestURI string      `json:"reqURI"`
+		Header     http.Header `json:"header"`
 	}
 	jsonReq = strings.Replace(jsonReq, "%%", "%", -1)
 	res := jsonResult{}
@@ -274,8 +274,15 @@ func TestDumpRequest(t *testing.T) {
 	// Look for expected query values
 	expectedQuery := url.Values{}
 	expectedQuery.Set("prefix", "Hello*World*")
-	if !reflect.DeepEqual(res.Query, expectedQuery.Encode()) {
-		t.Fatalf("Expected %#v, got %#v", expectedQuery, res.Query)
+	expectedQuery.Set("X-Amz-Algorithm", "AWS4-HMAC-SHA256")
+	expectedQuery.Set("X-Amz-Credential", "USWUXHGYZQYFYFFIT3RE/20170529/us-east-1/s3/aws4_request")
+	expectedQuery.Set("X-Amz-Date", "20170529T190139Z")
+	expectedQuery.Set("X-Amz-Expires", "600")
+	expectedQuery.Set("X-Amz-SignedHeaders", "host")
+	expectedQuery.Set("X-Amz-Signature", "19b58080999df54b446fc97304eb8dda60d3df1812ae97f3e8783351bfd9781d")
+	expectedRequestURI := "/?" + expectedQuery.Encode()
+	if !reflect.DeepEqual(res.RequestURI, expectedRequestURI) {
+		t.Fatalf("Expected %#v, got %#v", expectedRequestURI, res.RequestURI)
 	}
 
 	// Look for expected header.

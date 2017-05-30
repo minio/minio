@@ -54,14 +54,14 @@ func (api gatewayAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Re
 		// Signature V2 validation.
 		s3Error := isReqAuthenticatedV2(r)
 		if s3Error != ErrNone {
-			errorIf(errSignatureMismatch, dumpRequest(r))
+			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
 	case authTypeSigned, authTypePresigned:
 		s3Error := isReqAuthenticated(r, serverConfig.GetRegion())
 		if s3Error != ErrNone {
-			errorIf(errSignatureMismatch, dumpRequest(r))
+			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
@@ -252,7 +252,7 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 		// Initialize stream signature verifier.
 		reader, s3Error := newSignV4ChunkedReader(r)
 		if s3Error != ErrNone {
-			errorIf(errSignatureMismatch, dumpRequest(r))
+			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
@@ -260,14 +260,14 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 	case authTypeSignedV2, authTypePresignedV2:
 		s3Error := isReqAuthenticatedV2(r)
 		if s3Error != ErrNone {
-			errorIf(errSignatureMismatch, dumpRequest(r))
+			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
 		objInfo, err = objectAPI.PutObject(bucket, object, size, r.Body, metadata, sha256sum)
 	case authTypePresigned, authTypeSigned:
 		if s3Error := reqSignatureV4Verify(r, serverConfig.GetRegion()); s3Error != ErrNone {
-			errorIf(errSignatureMismatch, dumpRequest(r))
+			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
@@ -313,14 +313,14 @@ func (api gatewayAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.R
 		// Signature V2 validation.
 		s3Error := isReqAuthenticatedV2(r)
 		if s3Error != ErrNone {
-			errorIf(errSignatureMismatch, dumpRequest(r))
+			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
 	case authTypeSigned, authTypePresigned:
 		s3Error := isReqAuthenticated(r, serverConfig.GetRegion())
 		if s3Error != ErrNone {
-			errorIf(errSignatureMismatch, dumpRequest(r))
+			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
@@ -727,14 +727,14 @@ func (api gatewayAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *htt
 		// Signature V2 validation.
 		s3Error := isReqAuthenticatedV2(r)
 		if s3Error != ErrNone {
-			errorIf(errSignatureMismatch, dumpRequest(r))
+			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
 	case authTypeSigned, authTypePresigned:
 		s3Error := isReqAuthenticated(r, serverConfig.GetRegion())
 		if s3Error != ErrNone {
-			errorIf(errSignatureMismatch, dumpRequest(r))
+			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
@@ -797,14 +797,14 @@ func (api gatewayAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.R
 		// Signature V2 validation.
 		s3Error := isReqAuthenticatedV2(r)
 		if s3Error != ErrNone {
-			errorIf(errSignatureMismatch, dumpRequest(r))
+			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
 	case authTypeSigned, authTypePresigned:
 		s3Error := isReqAuthenticated(r, serverConfig.GetRegion())
 		if s3Error != ErrNone {
-			errorIf(errSignatureMismatch, dumpRequest(r))
+			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
@@ -849,7 +849,7 @@ func (api gatewayAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r 
 		// Signature V2 validation.
 		s3Error := isReqAuthenticatedV2(r)
 		if s3Error != ErrNone {
-			errorIf(errSignatureMismatch, dumpRequest(r))
+			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
@@ -860,7 +860,7 @@ func (api gatewayAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r 
 			s3Error = isReqAuthenticated(r, serverConfig.GetRegion())
 		}
 		if s3Error != ErrNone {
-			errorIf(errSignatureMismatch, dumpRequest(r))
+			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
