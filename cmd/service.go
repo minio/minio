@@ -106,7 +106,7 @@ func (m *ServerMux) handleServiceSignals() error {
 			log.Println(" Exiting")
 			go func() {
 				time.Sleep(time.Millisecond * 600)
-				log.Println("Press ^C again to exit immediately")
+				log.Println("Waiting for active connections to terminate, press ^C again to exit immediately.")
 			}()
 			if err := m.Close(); err != nil {
 				errorIf(err, "Unable to close server gracefully")
