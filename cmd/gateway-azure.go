@@ -37,6 +37,36 @@ import (
 
 const globalAzureAPIVersion = "2016-05-31"
 
+// Canonicalize the metadata headers, without this azure-sdk calculates
+// incorrect signature. This attempt to canonicalize is to convert
+// any HTTP header which is of form say `accept-encoding` should be
+// converted to `Accept-Encoding` in its canonical form.
+// Also replaces X-Amz-Meta prefix with X-Ms-Meta as Azure expects user
+// defined metadata to have X-Ms-Meta prefix.
+func s3ToAzureHeaders(headers map[string]string) (newHeaders map[string]string) {
+	newHeaders = make(map[string]string)
+	for k, v := range headers {
+		k = http.CanonicalHeaderKey(k)
+		if strings.HasPrefix(k, "X-Amz-Meta") {
+			k = strings.Replace(k, "X-Amz-Meta", "X-Ms-Meta", -1)
+		}
+		newHeaders[k] = v
+	}
+	return newHeaders
+}
+
+// Prefix user metadata with "X-Amz-Meta-".
+// client.GetBlobMetadata() already strips "X-Ms-Meta-"
+func azureToS3Metadata(meta map[string]string) (newMeta map[string]string) {
+	newMeta = make(map[string]string)
+
+	for k, v := range meta {
+		k = "X-Amz-Meta-" + k
+		newMeta[k] = v
+	}
+	return newMeta
+}
+
 // To store metadata during NewMultipartUpload which will be used after
 // CompleteMultipartUpload to call SetBlobMetadata.
 type azureMultipartMetaInfo struct {
@@ -275,6 +305,13 @@ func (a *azureObjects) GetObject(bucket, object string, startOffset int64, lengt
 // GetObjectInfo - reads blob metadata properties and replies back ObjectInfo,
 // uses zure equivalent GetBlobProperties.
 func (a *azureObjects) GetObjectInfo(bucket, object string) (objInfo ObjectInfo, err error) {
+	blobMeta, err := a.client.GetBlobMetadata(bucket, object)
+	if err != nil {
+		return objInfo, azureToObjectError(traceError(err), bucket, object)
+	}
+
+	meta := azureToS3Metadata(blobMeta)
+
 	prop, err := a.client.GetBlobProperties(bucket, object)
 	if err != nil {
 		return objInfo, azureToObjectError(traceError(err), bucket, object)
@@ -283,31 +320,22 @@ func (a *azureObjects) GetObjectInfo(bucket, object string) (objInfo ObjectInfo,
 	if err != nil {
 		return objInfo, traceError(err)
 	}
+
+	if prop.ContentEncoding != "" {
+		meta["Content-Encoding"] = prop.ContentEncoding
+	}
+	meta["Content-Type"] = prop.ContentType
+
 	objInfo = ObjectInfo{
 		Bucket:      bucket,
-		UserDefined: make(map[string]string),
+		UserDefined: meta,
 		ETag:        canonicalizeETag(prop.Etag),
 		ModTime:     t,
 		Name:        object,
 		Size:        prop.ContentLength,
 	}
-	if prop.ContentEncoding != "" {
-		objInfo.UserDefined["Content-Encoding"] = prop.ContentEncoding
-	}
-	objInfo.UserDefined["Content-Type"] = prop.ContentType
-	return objInfo, nil
-}
 
-// Canonicalize the metadata headers, without this azure-sdk calculates
-// incorrect signature. This attempt to canonicalize is to convert
-// any HTTP header which is of form say `accept-encoding` should be
-// converted to `Accept-Encoding` in its canonical form.
-func canonicalMetadata(metadata map[string]string) (canonical map[string]string) {
-	canonical = make(map[string]string)
-	for k, v := range metadata {
-		canonical[http.CanonicalHeaderKey(k)] = v
-	}
-	return canonical
+	return objInfo, nil
 }
 
 // PutObject - Create a new blob with the incoming data,
@@ -337,7 +365,7 @@ func (a *azureObjects) PutObject(bucket, object string, size int64, data io.Read
 		teeReader = io.TeeReader(data, io.MultiWriter(writers...))
 	}
 
-	err = a.client.CreateBlockBlobFromReader(bucket, object, uint64(size), teeReader, canonicalMetadata(metadata))
+	err = a.client.CreateBlockBlobFromReader(bucket, object, uint64(size), teeReader, s3ToAzureHeaders(metadata))
 	if err != nil {
 		return objInfo, azureToObjectError(traceError(err), bucket, object)
 	}
@@ -410,7 +438,7 @@ func (a *azureObjects) NewMultipartUpload(bucket, object string, metadata map[st
 		// Store an empty map as a placeholder else ListObjectParts/PutObjectPart will not work properly.
 		metadata = make(map[string]string)
 	} else {
-		metadata = canonicalMetadata(metadata)
+		metadata = s3ToAzureHeaders(metadata)
 	}
 	a.metaInfo.set(uploadID, metadata)
 	return uploadID, nil
@@ -584,6 +612,10 @@ func (a *azureObjects) CompleteMultipartUpload(bucket, object, uploadID string, 
 			CacheControl:    meta["Cache-Control"],
 		}
 		err = a.client.SetBlobProperties(bucket, object, prop)
+		if err != nil {
+			return objInfo, azureToObjectError(traceError(err), bucket, object)
+		}
+		err = a.client.SetBlobMetadata(bucket, object, nil, meta)
 		if err != nil {
 			return objInfo, azureToObjectError(traceError(err), bucket, object)
 		}
