@@ -31,6 +31,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -339,6 +340,11 @@ func TestServerListenAndServePlain(t *testing.T) {
 }
 
 func TestServerListenAndServeTLS(t *testing.T) {
+	_, err := newTestConfig(globalMinioDefaultRegion)
+	if err != nil {
+		t.Fatalf("Init Test config failed")
+	}
+
 	wait := make(chan struct{})
 	addr := net.JoinHostPort("127.0.0.1", getFreePort())
 	errc := make(chan error)
@@ -354,7 +360,7 @@ func TestServerListenAndServeTLS(t *testing.T) {
 	}))
 
 	// Create a cert
-	err := createConfigDir()
+	err = createConfigDir()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -374,7 +380,6 @@ func TestServerListenAndServeTLS(t *testing.T) {
 
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
-	// Keep trying the server until it's accepting connections
 	go func() {
 		tr := &http.Transport{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
@@ -384,6 +389,7 @@ func TestServerListenAndServeTLS(t *testing.T) {
 			Transport: tr,
 		}
 		okTLS := false
+		// Keep trying the server until it's accepting connections
 		for !okTLS {
 			res, _ := client.Get("https://" + addr)
 			if res != nil && res.StatusCode == http.StatusOK {
@@ -391,14 +397,27 @@ func TestServerListenAndServeTLS(t *testing.T) {
 			}
 		}
 
-		okNoTLS := false
-		for !okNoTLS {
-			res, _ := client.Get("http://" + addr)
-			// Without TLS we expect a re-direction from http to https
-			// And also the request is not rejected.
-			if res != nil && res.StatusCode == http.StatusOK && res.Request.URL.Scheme == httpsScheme {
-				okNoTLS = true
-			}
+		// Once a request succeeds, subsequent requests should
+		// work fine.
+		res, err := client.Get("http://" + addr)
+		if err != nil {
+			t.Errorf("Got unexpected error: %v", err)
+		}
+		// Without TLS we expect a Bad-Request response from the server.
+		if !(res != nil && res.StatusCode == http.StatusBadRequest && res.Request.URL.Scheme == httpScheme) {
+			t.Fatalf("Plaintext request to TLS server did not have expected response!")
+		}
+
+		body, err := ioutil.ReadAll(res.Body)
+		if err != nil {
+			t.Errorf("Error reading body")
+		}
+
+		// Check that the expected error is received.
+		bodyStr := string(body)
+		apiErr := getAPIError(ErrInsecureClientRequest)
+		if !(strings.Contains(bodyStr, apiErr.Code) && strings.Contains(bodyStr, apiErr.Description)) {
+			t.Fatalf("Plaintext request to TLS server did not have expected response body!")
 		}
 		wg.Done()
 	}()
