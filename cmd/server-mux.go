@@ -449,12 +449,20 @@ func (m *ServerMux) ListenAndServe(certFile, keyFile string) (err error) {
 	// All http requests start to be processed by httpHandler
 	httpHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if tlsEnabled && r.TLS == nil {
+			// It is expected that r.Host might not have port
+			// for standard ports such as "80" and "443".
+			host, port, _ := net.SplitHostPort(r.Host)
+			if port == "" {
+				host = net.JoinHostPort(r.Host, globalMinioPort)
+			} else {
+				host = r.Host
+			}
 			// TLS is enabled but Request is not TLS configured
 			u := url.URL{
 				Scheme:   httpsScheme,
 				Opaque:   r.URL.Opaque,
 				User:     r.URL.User,
-				Host:     r.Host,
+				Host:     host,
 				Path:     r.URL.Path,
 				RawQuery: r.URL.RawQuery,
 				Fragment: r.URL.Fragment,
