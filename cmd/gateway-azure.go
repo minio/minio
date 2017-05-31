@@ -156,7 +156,6 @@ func azureToObjectError(err error, params ...string) error {
 
 // Inits azure blob storage client and returns AzureObjects.
 func newAzureLayer(host string) (GatewayLayer, error) {
-
 	var err error
 	var endpoint = storage.DefaultBaseURL
 	var secure = true
