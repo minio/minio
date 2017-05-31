@@ -102,11 +102,10 @@ func (m *ServerMux) handleServiceSignals() error {
 			}
 			runExitFn(nil)
 		case serviceStop:
-			// Extra space will prevent showing "^CExiting" and rather show "^C Exiting" instead.
-			log.Println(" Exiting")
+			log.Println("Received signal to exit.")
 			go func() {
-				time.Sleep(time.Millisecond * 600)
-				log.Println("Waiting for active connections to terminate, press ^C again to exit immediately.")
+				time.Sleep(serverShutdownPoll + time.Millisecond*100)
+				log.Println("Waiting for active connections to terminate - press Ctrl+C to quit immediately.")
 			}()
 			if err := m.Close(); err != nil {
 				errorIf(err, "Unable to close server gracefully")
