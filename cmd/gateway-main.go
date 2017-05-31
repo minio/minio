@@ -39,6 +39,7 @@ FLAGS:
 BACKEND:
   azure: Microsoft Azure Blob Storage. Default ENDPOINT is https://core.windows.net
   s3: Amazon Simple Storage Service (S3). Default ENDPOINT is https://s3.amazonaws.com
+  gcs: Google Cloud Storage (GCS). Default ENDPOINT is https://storage.googleapis.com
 
 ENVIRONMENT VARIABLES:
   ACCESS:
@@ -60,6 +61,12 @@ EXAMPLES:
       $ export MINIO_ACCESS_KEY=Q3AM3UQ867SPQQA43P2F
       $ export MINIO_SECRET_KEY=zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG
       $ {{.HelpName}} s3 https://play.minio.io:9000
+
+  4. Start minio gateway server for GCS backend.
+      $ gcloud init --console-only # this will configure your google account
+      $ export MINIO_ACCESS_KEY=accesskey
+      $ export MINIO_SECRET_KEY=secretkey
+      $ {{.HelpName}} gcs PROJECTID
 `
 
 var gatewayCmd = cli.Command{
@@ -82,31 +89,42 @@ type gatewayBackend string
 const (
 	azureBackend gatewayBackend = "azure"
 	s3Backend    gatewayBackend = "s3"
+	gcsBackend   gatewayBackend = "gcs"
 	// Add more backends here.
 )
 
 // Returns access and secretkey set from environment variables.
-func mustGetGatewayCredsFromEnv() (accessKey, secretKey string) {
+func mustGetGatewayConfigFromEnv() (string, string, string) {
 	// Fetch access keys from environment variables.
-	accessKey = os.Getenv("MINIO_ACCESS_KEY")
-	secretKey = os.Getenv("MINIO_SECRET_KEY")
+	accessKey := os.Getenv("MINIO_ACCESS_KEY")
+	secretKey := os.Getenv("MINIO_SECRET_KEY")
 	if accessKey == "" || secretKey == "" {
 		fatalIf(errors.New("Missing credentials"), "Access and secret keys are mandatory to run Minio gateway server.")
 	}
-	return accessKey, secretKey
+
+	region := globalMinioDefaultRegion
+	if v := os.Getenv("MINIO_REGION"); v != "" {
+		region = v
+	}
+
+	return accessKey, secretKey, region
 }
 
 // Initialize gateway layer depending on the backend type.
 // Supported backend types are
 //
 // - Azure Blob Storage.
+// - AWS S3.
+// - Google Cloud Storage.
 // - Add your favorite backend here.
-func newGatewayLayer(backendType, endpoint, accessKey, secretKey string, secure bool) (GatewayLayer, error) {
+func newGatewayLayer(backendType string, args cli.Args) (GatewayLayer, error) {
 	switch gatewayBackend(backendType) {
 	case azureBackend:
-		return newAzureLayer(endpoint, accessKey, secretKey, secure)
+		return newAzureLayer(args)
 	case s3Backend:
-		return newS3Gateway(endpoint, accessKey, secretKey, secure)
+		return newS3Gateway(args)
+	case gcsBackend:
+		return newGCSGateway(args)
 	}
 
 	return nil, fmt.Errorf("Unrecognized backend type %s", backendType)
@@ -169,14 +187,10 @@ func gatewayMain(ctx *cli.Context) {
 	}
 
 	// Fetch access and secret key from env.
-	accessKey, secretKey := mustGetGatewayCredsFromEnv()
+	accessKey, secretKey, region := mustGetGatewayConfigFromEnv()
 
 	// Initialize new gateway config.
-	//
-	// TODO: add support for custom region when we add
-	// support for S3 backend storage, currently this can
-	// default to "us-east-1"
-	newGatewayConfig(accessKey, secretKey, globalMinioDefaultRegion)
+	newGatewayConfig(accessKey, secretKey, region)
 
 	// Get quiet flag from command line argument.
 	quietFlag := ctx.Bool("quiet") || ctx.GlobalBool("quiet")
@@ -186,8 +200,13 @@ func gatewayMain(ctx *cli.Context) {
 
 	// First argument is selected backend type.
 	backendType := ctx.Args().Get(0)
-	// Second argument is the endpoint address (optional)
-	endpointAddr := ctx.Args().Get(1)
+	var endpointAddr string
+	if gatewayBackend(backendType) != gcsBackend {
+		// Second argument is the endpoint address (optional)
+		// Only for gcs.
+		endpointAddr = ctx.Args().Get(1)
+	}
+
 	// Third argument is the address flag
 	serverAddr := ctx.String("address")
 
@@ -200,15 +219,10 @@ func gatewayMain(ctx *cli.Context) {
 		}
 	}
 
-	// Second argument is endpoint.	If no endpoint is specified then the
-	// gateway implementation should use a default setting.
-	endPoint, secure, err := parseGatewayEndpoint(endpointAddr)
-	fatalIf(err, "Unable to parse endpoint")
-
 	// Create certs path for SSL configuration.
 	fatalIf(createConfigDir(), "Unable to create configuration directory")
 
-	newObject, err := newGatewayLayer(backendType, endPoint, accessKey, secretKey, secure)
+	newObject, err := newGatewayLayer(backendType, ctx.Args()[1:])
 	fatalIf(err, "Unable to initialize gateway layer")
 
 	initNSLock(false) // Enable local namespace lock.
@@ -260,9 +274,12 @@ func gatewayMain(ctx *cli.Context) {
 	// Prints the formatted startup message once object layer is initialized.
 	if !quietFlag {
 		mode := ""
-		if gatewayBackend(backendType) == azureBackend {
+		switch gatewayBackend(backendType) {
+		case azureBackend:
 			mode = globalMinioModeGatewayAzure
-		} else if gatewayBackend(backendType) == s3Backend {
+		case gcsBackend:
+			mode = globalMinioModeGatewayGCS
+		case s3Backend:
 			mode = globalMinioModeGatewayS3
 		}
 		checkUpdate(mode)

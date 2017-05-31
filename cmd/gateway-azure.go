@@ -20,17 +20,20 @@ import (
 	"crypto/md5"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"hash"
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/storage"
+	"github.com/minio/cli"
 	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/sha256-simd"
 )
@@ -153,11 +156,29 @@ func azureToObjectError(err error, params ...string) error {
 	return e
 }
 
-// Inits azure blob storage client and returns azureObjects.
-func newAzureLayer(endPoint string, account, key string, secure bool) (GatewayLayer, error) {
-	if endPoint == "" {
-		endPoint = storage.DefaultBaseURL
+// Inits azure blob storage client and returns AzureObjects.
+func newAzureLayer(args cli.Args) (GatewayLayer, error) {
+
+	var err error
+
+	// Default endpoint parameters
+	endPoint := storage.DefaultBaseURL
+	secure := true
+
+	// If user provided some parameters
+	if args.Present() {
+		endPoint, secure, err = parseGatewayEndpoint(args.First())
+		if err != nil {
+			return nil, err
+		}
 	}
+
+	account := os.Getenv("MINIO_ACCESS_KEY")
+	key := os.Getenv("MINIO_SECRET_KEY")
+	if account == "" || key == "" {
+		return nil, errors.New("No Azure account and key set")
+	}
+
 	c, err := storage.NewClient(account, key, endPoint, globalAzureAPIVersion, secure)
 	if err != nil {
 		return &azureObjects{}, err
@@ -622,31 +643,6 @@ func (a *azureObjects) CompleteMultipartUpload(bucket, object, uploadID string, 
 	}
 	a.metaInfo.del(uploadID)
 	return a.GetObjectInfo(bucket, object)
-}
-
-func anonErrToObjectErr(statusCode int, params ...string) error {
-	bucket := ""
-	object := ""
-	if len(params) >= 1 {
-		bucket = params[0]
-	}
-	if len(params) == 2 {
-		object = params[1]
-	}
-
-	switch statusCode {
-	case http.StatusNotFound:
-		if object != "" {
-			return ObjectNotFound{bucket, object}
-		}
-		return BucketNotFound{Bucket: bucket}
-	case http.StatusBadRequest:
-		if object != "" {
-			return ObjectNameInvalid{bucket, object}
-		}
-		return BucketNameInvalid{Bucket: bucket}
-	}
-	return errUnexpected
 }
 
 // Copied from github.com/Azure/azure-sdk-for-go/storage/blob.go

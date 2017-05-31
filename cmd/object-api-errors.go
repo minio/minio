@@ -110,6 +110,13 @@ func (e SHA256Mismatch) Error() string {
 	return "sha256 computed does not match with what is expected"
 }
 
+// SignatureDoesNotMatch - when content md5 does not match with what was sent from client.
+type SignatureDoesNotMatch struct{}
+
+func (e SignatureDoesNotMatch) Error() string {
+	return "The request signature we calculated does not match the signature you provided. Check your key and signing method."
+}
+
 // StorageFull storage ran out of space.
 type StorageFull struct{}
 
@@ -142,6 +149,13 @@ type BucketNotFound GenericError
 
 func (e BucketNotFound) Error() string {
 	return "Bucket not found: " + e.Bucket
+}
+
+// BucketAlreadyExists the requested bucket name is not available.
+type BucketAlreadyExists GenericError
+
+func (e BucketAlreadyExists) Error() string {
+	return "The requested bucket name is not available. The bucket namespace is shared by all users of the system. Please select a different name and try again."
 }
 
 // BucketAlreadyOwnedByYou already owned by you.
@@ -248,6 +262,14 @@ type ObjectNameInvalid GenericError
 // Return string an error formatted as the given text.
 func (e ObjectNameInvalid) Error() string {
 	return "Object name invalid: " + e.Bucket + "#" + e.Object
+}
+
+// AllAccessDisabled All access to this object has been disabled
+type AllAccessDisabled GenericError
+
+// Return string an error formatted as the given text.
+func (e AllAccessDisabled) Error() string {
+	return "All access to this object has been disabled"
 }
 
 // IncompleteBody You did not provide the number of bytes specified by the Content-Length HTTP header.

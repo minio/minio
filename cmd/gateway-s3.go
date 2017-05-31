@@ -17,12 +17,15 @@
 package cmd
 
 import (
+	"errors"
 	"io"
 	"net/http"
+	"os"
 	"path"
 
 	"encoding/hex"
 
+	"github.com/minio/cli"
 	minio "github.com/minio/minio-go"
 	"github.com/minio/minio-go/pkg/policy"
 )
@@ -98,10 +101,27 @@ type s3Objects struct {
 }
 
 // newS3Gateway returns s3 gatewaylayer
-func newS3Gateway(endpoint string, accessKey, secretKey string, secure bool) (GatewayLayer, error) {
-	if endpoint == "" {
-		endpoint = "s3.amazonaws.com"
-		secure = true
+func newS3Gateway(args cli.Args) (GatewayLayer, error) {
+
+	var err error
+
+	// Default endpoint parameters
+	endpoint := "s3.amazonaws.com"
+	secure := true
+
+	// Check if user provided some parameters
+	if args.Present() {
+		// Override default params if the endpoint is provided
+		endpoint, secure, err = parseGatewayEndpoint(args.First())
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	accessKey := os.Getenv("MINIO_ACCESS_KEY")
+	secretKey := os.Getenv("MINIO_SECRET_KEY")
+	if accessKey == "" || secretKey == "" {
+		return nil, errors.New("No S3 access and secret key")
 	}
 
 	// Initialize minio client object.
