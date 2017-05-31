@@ -157,7 +157,7 @@ func (log *Logger) Printf(format string, args ...interface{}) {
 func NewLogger() *Logger {
 	logger := logrus.New()
 	logger.Out = ioutil.Discard
-	logger.Level = logrus.DebugLevel
+	logger.Level = logrus.ErrorLevel
 
 	l := &Logger{
 		logger:        logger,
