@@ -200,7 +200,7 @@ func (c Client) putObjectSingle(bucketName, objectName string, reader io.Reader,
 	hashAlgos := make(map[string]hash.Hash)
 	hashSums := make(map[string][]byte)
 	hashAlgos["md5"] = md5.New()
-	if c.signature.isV4() && !c.secure {
+	if c.overrideSignerType.IsV4() && !c.secure {
 		hashAlgos["sha256"] = sha256.New()
 	}
 

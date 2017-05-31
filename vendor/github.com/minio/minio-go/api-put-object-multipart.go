@@ -213,7 +213,7 @@ func (c Client) putObjectMultipartStream(bucketName, objectName string, reader i
 		hashSums := make(map[string][]byte)
 		hashAlgos := make(map[string]hash.Hash)
 		hashAlgos["md5"] = md5.New()
-		if c.signature.isV4() && !c.secure {
+		if c.overrideSignerType.IsV4() && !c.secure {
 			hashAlgos["sha256"] = sha256.New()
 		}
 
