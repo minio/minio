@@ -19,6 +19,7 @@ package cmd
 import (
 	"crypto/x509"
 	"fmt"
+	"net/url"
 	"runtime"
 	"strings"
 
@@ -44,12 +45,14 @@ func getFormatStr(strLen int, padding int) string {
 // Prints the formatted startup message.
 func printStartupMessage(apiEndPoints []string) {
 
+	strippedAPIEndpoints := stripStandardPorts(apiEndPoints)
+
 	// Prints credential, region and browser access.
-	printServerCommonMsg(apiEndPoints)
+	printServerCommonMsg(strippedAPIEndpoints)
 
 	// Prints `mc` cli configuration message chooses
 	// first endpoint as default.
-	printCLIAccessMsg(apiEndPoints[0])
+	printCLIAccessMsg(strippedAPIEndpoints[0])
 
 	// Prints documentation message.
 	printObjectAPIMsg()
@@ -67,6 +70,34 @@ func printStartupMessage(apiEndPoints []string) {
 	}
 }
 
+// strip api endpoints list with standard ports such as
+// port "80" and "443" before displaying on the startup
+// banner.  Returns a new list of API endpoints.
+func stripStandardPorts(apiEndpoints []string) (newAPIEndpoints []string) {
+	newAPIEndpoints = make([]string, len(apiEndpoints))
+	// Check all API endpoints for standard ports and strip them.
+	for i, apiEndpoint := range apiEndpoints {
+		url, err := url.Parse(apiEndpoint)
+		if err != nil {
+			newAPIEndpoints[i] = apiEndpoint
+			continue
+		}
+		host, port := mustSplitHostPort(url.Host)
+		// For standard HTTP(s) ports such as "80" and "443"
+		// apiEndpoints should only be host without port.
+		switch {
+		case url.Scheme == "http" && port == "80":
+			fallthrough
+		case url.Scheme == "https" && port == "443":
+			url.Host = host
+			newAPIEndpoints[i] = url.String()
+		default:
+			newAPIEndpoints[i] = apiEndpoint
+		}
+	}
+	return newAPIEndpoints
+}
+
 // Prints common server startup message. Prints credential, region and browser access.
 func printServerCommonMsg(apiEndpoints []string) {
 	// Get saved credentials.
@@ -76,6 +107,7 @@ func printServerCommonMsg(apiEndpoints []string) {
 	region := serverConfig.GetRegion()
 
 	apiEndpointStr := strings.Join(apiEndpoints, "  ")
+
 	// Colorize the message and print.
 	log.Println(colorBlue("\nEndpoint: ") + colorBold(fmt.Sprintf(getFormatStr(len(apiEndpointStr), 1), apiEndpointStr)))
 	log.Println(colorBlue("AccessKey: ") + colorBold(fmt.Sprintf("%s ", cred.AccessKey)))

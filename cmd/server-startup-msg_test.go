@@ -20,6 +20,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -95,6 +96,29 @@ func TestCertificateNotExpired(t *testing.T) {
 	}
 }
 
+// Tests stripping standard ports from apiEndpoints.
+func TestStripStandardPorts(t *testing.T) {
+	apiEndpoints := []string{"http://127.0.0.1:9000", "http://127.0.0.2:80", "https://127.0.0.3:443"}
+	expectedAPIEndpoints := []string{"http://127.0.0.1:9000", "http://127.0.0.2", "https://127.0.0.3"}
+	newAPIEndpoints := stripStandardPorts(apiEndpoints)
+
+	if !reflect.DeepEqual(expectedAPIEndpoints, newAPIEndpoints) {
+		t.Fatalf("Expected %#v, got %#v", expectedAPIEndpoints, newAPIEndpoints)
+	}
+
+	apiEndpoints = []string{"http://%%%%%:9000"}
+	newAPIEndpoints = stripStandardPorts(apiEndpoints)
+	if !reflect.DeepEqual(apiEndpoints, newAPIEndpoints) {
+		t.Fatalf("Expected %#v, got %#v", apiEndpoints, newAPIEndpoints)
+	}
+
+	apiEndpoints = []string{"http://127.0.0.1:443", "https://127.0.0.1:80"}
+	newAPIEndpoints = stripStandardPorts(apiEndpoints)
+	if !reflect.DeepEqual(apiEndpoints, newAPIEndpoints) {
+		t.Fatalf("Expected %#v, got %#v", apiEndpoints, newAPIEndpoints)
+	}
+}
+
 // Test printing server common message.
 func TestPrintServerCommonMessage(t *testing.T) {
 	root, err := newTestConfig(globalMinioDefaultRegion)
@@ -103,7 +127,7 @@ func TestPrintServerCommonMessage(t *testing.T) {
 	}
 	defer removeAll(root)
 
-	apiEndpoints := []string{"127.0.0.1:9000"}
+	apiEndpoints := []string{"http://127.0.0.1:9000"}
 	printServerCommonMsg(apiEndpoints)
 }
 
@@ -115,7 +139,7 @@ func TestPrintCLIAccessMsg(t *testing.T) {
 	}
 	defer removeAll(root)
 
-	apiEndpoints := []string{"127.0.0.1:9000"}
+	apiEndpoints := []string{"http://127.0.0.1:9000"}
 	printCLIAccessMsg(apiEndpoints[0])
 }
 
@@ -127,6 +151,6 @@ func TestPrintStartupMessage(t *testing.T) {
 	}
 	defer removeAll(root)
 
-	apiEndpoints := []string{"127.0.0.1:9000"}
+	apiEndpoints := []string{"http://127.0.0.1:9000"}
 	printStartupMessage(apiEndpoints)
 }
