@@ -251,7 +251,7 @@ func (s *posix) MakeVol(volume string) (err error) {
 		}
 	}()
 
-	if s.ioErrCount > maxAllowedIOError {
+	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
 		return errFaultyDisk
 	}
 
@@ -285,7 +285,7 @@ func (s *posix) ListVols() (volsInfo []VolInfo, err error) {
 		}
 	}()
 
-	if s.ioErrCount > maxAllowedIOError {
+	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
 		return nil, errFaultyDisk
 	}
 
@@ -349,7 +349,7 @@ func (s *posix) StatVol(volume string) (volInfo VolInfo, err error) {
 		}
 	}()
 
-	if s.ioErrCount > maxAllowedIOError {
+	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
 		return VolInfo{}, errFaultyDisk
 	}
 
@@ -388,7 +388,7 @@ func (s *posix) DeleteVol(volume string) (err error) {
 		}
 	}()
 
-	if s.ioErrCount > maxAllowedIOError {
+	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
 		return errFaultyDisk
 	}
 
@@ -422,7 +422,7 @@ func (s *posix) ListDir(volume, dirPath string) (entries []string, err error) {
 		}
 	}()
 
-	if s.ioErrCount > maxAllowedIOError {
+	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
 		return nil, errFaultyDisk
 	}
 
@@ -459,7 +459,7 @@ func (s *posix) ReadAll(volume, path string) (buf []byte, err error) {
 		}
 	}()
 
-	if s.ioErrCount > maxAllowedIOError {
+	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
 		return nil, errFaultyDisk
 	}
 
@@ -544,7 +544,7 @@ func (s *posix) ReadFileWithVerify(volume, path string, offset int64, buf []byte
 		}
 	}()
 
-	if s.ioErrCount > maxAllowedIOError {
+	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
 		return 0, errFaultyDisk
 	}
 
@@ -664,7 +664,7 @@ func (s *posix) createFile(volume, path string) (f *os.File, err error) {
 		}
 	}()
 
-	if s.ioErrCount > maxAllowedIOError {
+	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
 		return nil, errFaultyDisk
 	}
 
@@ -737,7 +737,7 @@ func (s *posix) PrepareFile(volume, path string, fileSize int64) (err error) {
 		}
 	}()
 
-	if s.ioErrCount > maxAllowedIOError {
+	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
 		return errFaultyDisk
 	}
 
@@ -784,7 +784,7 @@ func (s *posix) AppendFile(volume, path string, buf []byte) (err error) {
 		}
 	}()
 
-	if s.ioErrCount > maxAllowedIOError {
+	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
 		return errFaultyDisk
 	}
 
@@ -815,7 +815,7 @@ func (s *posix) StatFile(volume, path string) (file FileInfo, err error) {
 		}
 	}()
 
-	if s.ioErrCount > maxAllowedIOError {
+	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
 		return FileInfo{}, errFaultyDisk
 	}
 
@@ -911,7 +911,7 @@ func (s *posix) DeleteFile(volume, path string) (err error) {
 		}
 	}()
 
-	if s.ioErrCount > maxAllowedIOError {
+	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
 		return errFaultyDisk
 	}
 
@@ -951,7 +951,7 @@ func (s *posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err e
 		}
 	}()
 
-	if s.ioErrCount > maxAllowedIOError {
+	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
 		return errFaultyDisk
 	}
 
