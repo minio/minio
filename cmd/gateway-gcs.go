@@ -30,6 +30,8 @@ import (
 	"strings"
 
 	"cloud.google.com/go/storage"
+	"golang.org/x/oauth2/google"
+	"google.golang.org/api/cloudresourcemanager/v1"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
 
@@ -151,12 +153,60 @@ func gcsToObjectError(err error, params ...string) error {
 // gcsProjectIDRegex defines a valid gcs project id format
 var gcsProjectIDRegex = regexp.MustCompile("^[a-z][a-z0-9-]{5,29}$")
 
-// isValidGCSProjectId - checks if a given project id is valid or not.
-// Project IDs must start with a lowercase letter and can have lowercase
-// ASCII letters, digits or hyphens. Project IDs must be between 6 and 30 characters.
-// Ref: https://cloud.google.com/resource-manager/reference/rest/v1/projects#Project (projectId section)
 func isValidGCSProjectID(projectID string) bool {
+	// Checking projectID format
 	return gcsProjectIDRegex.MatchString(projectID)
+}
+
+// checkGCSProjectID - checks if a given project id is valid and exists.
+// Project IDs has a specific format described here in the following link:
+// https://cloud.google.com/resource-manager/reference/rest/v1/projects#Project (projectId section)
+// Besides, this function checks if the project ID does really exist using
+// resource manager API.
+func checkGCSProjectID(ctx context.Context, projectID string) error {
+
+	// Checking projectID format
+	if !isValidGCSProjectID(projectID) {
+		return errGCSInvalidProjectID
+	}
+
+	// Check if a project id associated to the current account does really exist
+	resourceManagerClient, err := google.DefaultClient(ctx, cloudresourcemanager.CloudPlatformReadOnlyScope)
+	if err != nil {
+		return err
+	}
+
+	baseSvc, err := cloudresourcemanager.New(resourceManagerClient)
+	if err != nil {
+		return err
+	}
+
+	projectSvc := cloudresourcemanager.NewProjectsService(baseSvc)
+
+	curPageToken := ""
+
+	// Iterate over projects list result pages and immediately return nil when
+	// the project ID is found.
+	for {
+		resp, err := projectSvc.List().PageToken(curPageToken).Context(ctx).Do()
+		if err != nil {
+			return fmt.Errorf("Error getting projects list: %s", err.Error())
+		}
+
+		for _, p := range resp.Projects {
+			if p.ProjectId == projectID {
+				return nil
+			}
+		}
+
+		if resp.NextPageToken != "" {
+			curPageToken = resp.NextPageToken
+		} else {
+			break
+		}
+	}
+
+	return errGCSProjectIDNotFound
 }
 
 // gcsGateway - Implements gateway for Minio and GCS compatible object storage servers.
@@ -178,11 +228,10 @@ func newGCSGateway(args cli.Args) (GatewayLayer, error) {
 
 	projectID := args.First()
 
-	if !isValidGCSProjectID(projectID) {
-		fatalIf(errGCSInvalidProjectID, "Unable to initialize GCS gateway")
-	}
-
 	ctx := context.Background()
+
+	err := checkGCSProjectID(ctx, projectID)
+	fatalIf(err, "Unable to initialize GCS gateway")
 
 	// Creates a client.
 	client, err := storage.NewClient(ctx)
