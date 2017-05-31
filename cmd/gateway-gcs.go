@@ -17,20 +17,21 @@
 package cmd
 
 import (
-	"cloud.google.com/go/storage"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
-	"google.golang.org/api/googleapi"
-	"google.golang.org/api/iterator"
 	"hash"
 	"io"
 	"path"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"cloud.google.com/go/storage"
+	"google.golang.org/api/googleapi"
+	"google.golang.org/api/iterator"
 
 	"github.com/minio/cli"
 	minio "github.com/minio/minio-go"
@@ -444,18 +445,17 @@ func (l *gcsGateway) GetObject(bucket string, key string, startOffset int64, len
 func fromGCSAttrsToObjectInfo(attrs *storage.ObjectAttrs) ObjectInfo {
 	// All google cloud storage objects have a CRC32c hash, whereas composite objects may not have a MD5 hash
 	// Refer https://cloud.google.com/storage/docs/hashes-etags. Use CRC32C for ETag
-	return  ObjectInfo{
+	return ObjectInfo{
 		Name:            attrs.Name,
 		Bucket:          attrs.Bucket,
 		ModTime:         attrs.Updated,
 		Size:            attrs.Size,
-		ETag: 			 fmt.Sprintf("%d", attrs.CRC32C),
+		ETag:            fmt.Sprintf("%d", attrs.CRC32C),
 		UserDefined:     attrs.Metadata,
 		ContentType:     attrs.ContentType,
 		ContentEncoding: attrs.ContentEncoding,
 	}
-	
-	 
+
 }
 
 // GetObjectInfo - reads object info and replies back ObjectInfo
@@ -505,13 +505,12 @@ func (l *gcsGateway) PutObject(bucket string, key string, size int64, data io.Re
 
 	w.ContentType = metadata["content-type"]
 	w.ContentEncoding = metadata["content-encoding"]
-	if md5sum =="" {
+	if md5sum == "" {
 	} else if md5, err := hex.DecodeString(md5sum); err != nil {
 		return ObjectInfo{}, gcsToObjectError(traceError(err), bucket, key)
 	} else {
 		w.MD5 = md5
 	}
-	
 
 	w.Metadata = metadata
 
@@ -812,15 +811,14 @@ func (l *gcsGateway) CompleteMultipartUpload(bucket string, key string, uploadID
 	parts := make([]*storage.ObjectHandle, len(uploadedParts))
 	for i, uploadedPart := range uploadedParts {
 		object := l.client.Bucket(bucket).Object(toGCSMultipartKey(key, uploadID, uploadedPart.PartNumber))
-        attrs, partErr := object.Attrs(l.ctx)
-        if partErr != nil {
+		attrs, partErr := object.Attrs(l.ctx)
+		if partErr != nil {
 			return ObjectInfo{}, gcsToObjectError(traceError(partErr), bucket, key)
-		} 
+		}
 		crc32cStr := fmt.Sprintf("%d", attrs.CRC32C)
 		if crc32cStr != uploadedPart.ETag {
 			return ObjectInfo{}, gcsToObjectError(traceError(InvalidPart{}), bucket, key)
 		}
-		
 
 		parts[i] = object
 	}
