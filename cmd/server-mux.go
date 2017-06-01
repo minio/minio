@@ -449,25 +449,9 @@ func (m *ServerMux) ListenAndServe(certFile, keyFile string) (err error) {
 	// All http requests start to be processed by httpHandler
 	httpHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if tlsEnabled && r.TLS == nil {
-			// It is expected that r.Host might not have port
-			// for standard ports such as "80" and "443".
-			host, port, _ := net.SplitHostPort(r.Host)
-			if port == "" {
-				host = net.JoinHostPort(r.Host, globalMinioPort)
-			} else {
-				host = r.Host
-			}
-			// TLS is enabled but Request is not TLS configured
-			u := url.URL{
-				Scheme:   httpsScheme,
-				Opaque:   r.URL.Opaque,
-				User:     r.URL.User,
-				Host:     host,
-				Path:     r.URL.Path,
-				RawQuery: r.URL.RawQuery,
-				Fragment: r.URL.Fragment,
-			}
-			http.Redirect(w, r, u.String(), http.StatusTemporaryRedirect)
+			// TLS is enabled but request is not TLS
+			// configured - return error to client.
+			writeErrorResponse(w, ErrInsecureClientRequest, &url.URL{})
 		} else {
 
 			// Return ServiceUnavailable for clients which are sending requests
@@ -481,7 +465,7 @@ func (m *ServerMux) ListenAndServe(certFile, keyFile string) (err error) {
 			}
 
 			// Execute registered handlers, update currentReqs to keep
-			// tracks of current requests currently processed by the server
+			// track of concurrent requests processing on the server
 			atomic.AddInt32(&m.currentReqs, 1)
 			m.handler.ServeHTTP(w, r)
 			atomic.AddInt32(&m.currentReqs, -1)
