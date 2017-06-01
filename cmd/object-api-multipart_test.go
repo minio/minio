@@ -52,7 +52,7 @@ func testObjectNewMultipartUpload(obj ObjectLayer, instanceType string, t TestEr
 	}
 
 	// Create bucket before intiating NewMultipartUpload.
-	err = obj.MakeBucket(bucket)
+	err = obj.MakeBucketWithLocation(bucket, "")
 	if err != nil {
 		// failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())
@@ -91,7 +91,7 @@ func testObjectAbortMultipartUpload(obj ObjectLayer, instanceType string, t Test
 	object := "minio-object"
 
 	// Create bucket before intiating NewMultipartUpload.
-	err := obj.MakeBucket(bucket)
+	err := obj.MakeBucketWithLocation(bucket, "")
 	if err != nil {
 		// failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())
@@ -137,7 +137,7 @@ func testObjectAPIIsUploadIDExists(obj ObjectLayer, instanceType string, t TestE
 	object := "minio-object"
 
 	// Create bucket before intiating NewMultipartUpload.
-	err := obj.MakeBucket(bucket)
+	err := obj.MakeBucketWithLocation(bucket, "")
 	if err != nil {
 		// Failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())
@@ -173,7 +173,7 @@ func testPutObjectPartDiskNotFound(obj ObjectLayer, instanceType string, disks [
 	// objectNames[0].
 	// uploadIds [0].
 	// Create bucket before intiating NewMultipartUpload.
-	err := obj.MakeBucket(bucketNames[0])
+	err := obj.MakeBucketWithLocation(bucketNames[0], "")
 	if err != nil {
 		// Failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())
@@ -253,7 +253,7 @@ func testObjectAPIPutObjectPart(obj ObjectLayer, instanceType string, t TestErrH
 	object := "minio-object"
 
 	// Create bucket before intiating NewMultipartUpload.
-	err := obj.MakeBucket(bucket)
+	err := obj.MakeBucketWithLocation(bucket, "")
 	if err != nil {
 		// Failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())
@@ -265,7 +265,7 @@ func testObjectAPIPutObjectPart(obj ObjectLayer, instanceType string, t TestErrH
 		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
 	// Creating a dummy bucket for tests.
-	err = obj.MakeBucket("unused-bucket")
+	err = obj.MakeBucketWithLocation("unused-bucket", "")
 	if err != nil {
 		// Failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())
@@ -386,7 +386,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 	// objectNames[0].
 	// uploadIds [0].
 	// Create bucket before initiating NewMultipartUpload.
-	err := obj.MakeBucket(bucketNames[0])
+	err := obj.MakeBucketWithLocation(bucketNames[0], "")
 	if err != nil {
 		// Failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())
@@ -404,7 +404,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 	// objectNames[0].
 	// uploadIds [1-3].
 	// Bucket to test for mutiple upload Id's for a given object.
-	err = obj.MakeBucket(bucketNames[1])
+	err = obj.MakeBucketWithLocation(bucketNames[1], "")
 	if err != nil {
 		// Failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())
@@ -425,7 +425,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 	// bucketnames[2].
 	// objectNames[0-2].
 	// uploadIds [4-9].
-	err = obj.MakeBucket(bucketNames[2])
+	err = obj.MakeBucketWithLocation(bucketNames[2], "")
 	if err != nil {
 		// Failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())
@@ -1288,7 +1288,7 @@ func testListObjectPartsDiskNotFound(obj ObjectLayer, instanceType string, disks
 	// objectNames[0].
 	// uploadIds [0].
 	// Create bucket before intiating NewMultipartUpload.
-	err := obj.MakeBucket(bucketNames[0])
+	err := obj.MakeBucketWithLocation(bucketNames[0], "")
 	if err != nil {
 		// Failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())
@@ -1531,7 +1531,7 @@ func testListObjectParts(obj ObjectLayer, instanceType string, t TestErrHandler)
 	// objectNames[0].
 	// uploadIds [0].
 	// Create bucket before intiating NewMultipartUpload.
-	err := obj.MakeBucket(bucketNames[0])
+	err := obj.MakeBucketWithLocation(bucketNames[0], "")
 	if err != nil {
 		// Failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())
@@ -1769,7 +1769,7 @@ func testObjectCompleteMultipartUpload(obj ObjectLayer, instanceType string, t T
 	// objectNames[0].
 	// uploadIds [0].
 	// Create bucket before intiating NewMultipartUpload.
-	err = obj.MakeBucket(bucketNames[0])
+	err = obj.MakeBucketWithLocation(bucketNames[0], "")
 	if err != nil {
 		// Failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err)

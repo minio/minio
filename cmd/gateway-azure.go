@@ -183,12 +183,6 @@ func (a *azureObjects) StorageInfo() StorageInfo {
 	return StorageInfo{}
 }
 
-// MakeBucket - Create a new container on azure backend.
-func (a *azureObjects) MakeBucket(bucket string) error {
-	// will never be called, only satisfy ObjectLayer interface
-	return traceError(NotImplemented{})
-}
-
 // MakeBucketWithLocation - Create a new container on azure backend.
 func (a *azureObjects) MakeBucketWithLocation(bucket, location string) error {
 	err := a.client.CreateContainer(bucket, storage.ContainerAccessTypePrivate)

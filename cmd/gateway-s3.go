@@ -17,11 +17,10 @@
 package cmd
 
 import (
+	"encoding/hex"
 	"io"
 	"net/http"
 	"path"
-
-	"encoding/hex"
 
 	minio "github.com/minio/minio-go"
 	"github.com/minio/minio-go/pkg/policy"
@@ -131,12 +130,6 @@ func (l *s3Objects) Shutdown() error {
 // StorageInfo is not relevant to S3 backend.
 func (l *s3Objects) StorageInfo() StorageInfo {
 	return StorageInfo{}
-}
-
-// MakeBucket creates a new container on S3 backend.
-func (l *s3Objects) MakeBucket(bucket string) error {
-	// will never be called, only satisfy ObjectLayer interface
-	return traceError(NotImplemented{})
 }
 
 // MakeBucket creates a new container on S3 backend.
@@ -565,6 +558,5 @@ func (l *s3Objects) DeleteBucketPolicies(bucket string) error {
 	if err := l.Client.PutBucketPolicy(bucket, policy.BucketAccessPolicy{}); err != nil {
 		return s3ToObjectError(traceError(err), bucket, "")
 	}
-
 	return nil
 }

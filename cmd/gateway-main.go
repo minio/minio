@@ -19,12 +19,11 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"github.com/gorilla/mux"
+	"github.com/minio/cli"
 	"net/url"
 	"os"
 	"strings"
-
-	"github.com/gorilla/mux"
-	"github.com/minio/cli"
 )
 
 var gatewayTemplate = `NAME:
@@ -44,6 +43,9 @@ ENVIRONMENT VARIABLES:
   ACCESS:
      MINIO_ACCESS_KEY: Username or access key of your storage backend.
      MINIO_SECRET_KEY: Password or secret key of your storage backend.
+
+  BROWSER:
+     MINIO_BROWSER: To disable web browser access, set this value to "off".
 
 EXAMPLES:
   1. Start minio gateway server for Azure Blob Storage backend.
@@ -96,12 +98,27 @@ func mustGetGatewayCredsFromEnv() (accessKey, secretKey string) {
 	return accessKey, secretKey
 }
 
+// Set browser setting from environment variables
+func mustSetBrowserSettingFromEnv(){
+	if browser := os.Getenv("MINIO_BROWSER"); browser != "" {
+		browserFlag, err := ParseBrowserFlag(browser)
+		if err != nil {
+			fatalIf(errors.New("invalid value"), "Unknown value ‘%s’ in MINIO_BROWSER environment variable.", browser)
+		}
+
+		// browser Envs are set globally, this does not represent
+		// if browser is turned off or on.
+		globalIsEnvBrowser = true
+		globalIsBrowserEnabled = bool(browserFlag)
+	}
+}
 // Initialize gateway layer depending on the backend type.
 // Supported backend types are
 //
 // - Azure Blob Storage.
 // - Add your favorite backend here.
 func newGatewayLayer(backendType, endpoint, accessKey, secretKey string, secure bool) (GatewayLayer, error) {
+
 	switch gatewayBackend(backendType) {
 	case azureBackend:
 		return newAzureLayer(endpoint, accessKey, secretKey, secure)
@@ -171,11 +188,11 @@ func gatewayMain(ctx *cli.Context) {
 	// Fetch access and secret key from env.
 	accessKey, secretKey := mustGetGatewayCredsFromEnv()
 
+	// Fetch browser env setting
+	mustSetBrowserSettingFromEnv()
+
 	// Initialize new gateway config.
-	//
-	// TODO: add support for custom region when we add
-	// support for S3 backend storage, currently this can
-	// default to "us-east-1"
+	
 	newGatewayConfig(accessKey, secretKey, globalMinioDefaultRegion)
 
 	// Get quiet flag from command line argument.
@@ -214,6 +231,12 @@ func gatewayMain(ctx *cli.Context) {
 	initNSLock(false) // Enable local namespace lock.
 
 	router := mux.NewRouter().SkipClean(true)
+
+	// Register web router when its enabled.
+	if globalIsBrowserEnabled {
+		aerr := registerWebRouter(router)
+		fatalIf(aerr, "Unable to configure web browser")
+	}
 	registerGatewayAPIRouter(router, newObject)
 
 	var handlerFns = []HandlerFunc{
@@ -223,6 +246,13 @@ func gatewayMain(ctx *cli.Context) {
 		setRequestSizeLimitHandler,
 		// Adds 'crossdomain.xml' policy handler to serve legacy flash clients.
 		setCrossDomainPolicy,
+		// Validates all incoming requests to have a valid date header.
+		// Redirect some pre-defined browser request paths to a static location prefix.
+		setBrowserRedirectHandler,
+		// Validates if incoming request is for restricted buckets.
+		setPrivateBucketHandler,
+		// Adds cache control for all browser requests.
+		setBrowserCacheControlHandler,
 		// Validates all incoming requests to have a valid date header.
 		setTimeValidityHandler,
 		// CORS setting for all browser API requests.
@@ -234,6 +264,8 @@ func gatewayMain(ctx *cli.Context) {
 		// routes them accordingly. Client receives a HTTP error for
 		// invalid/unsupported signatures.
 		setAuthHandler,
+		// Add new handlers here.
+
 	}
 
 	apiServer := NewServerMux(serverAddr, registerHandlers(router, handlerFns...))

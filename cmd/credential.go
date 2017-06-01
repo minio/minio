@@ -28,14 +28,14 @@ const (
 	accessKeyMinLen       = 5
 	accessKeyMaxLen       = 20
 	secretKeyMinLen       = 8
-	secretKeyMaxLenAmazon = 40
+	secretKeyMaxLenAmazon = 100
 	alphaNumericTable     = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 	alphaNumericTableLen  = byte(len(alphaNumericTable))
 )
 
 var (
 	errInvalidAccessKeyLength = errors.New("Invalid access key, access key should be 5 to 20 characters in length")
-	errInvalidSecretKeyLength = errors.New("Invalid secret key, secret key should be 8 to 40 characters in length")
+	errInvalidSecretKeyLength = errors.New("Invalid secret key, secret key should be 8 to 100 characters in length")
 )
 var secretKeyMaxLen = secretKeyMaxLenAmazon
 

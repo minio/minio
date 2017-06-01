@@ -39,7 +39,7 @@ func runPutObjectBenchmark(b *testing.B, obj ObjectLayer, objSize int) {
 	// obtains random bucket name.
 	bucket := getRandomBucketName()
 	// create bucket.
-	err = obj.MakeBucket(bucket)
+	err = obj.MakeBucketWithLocation(bucket, "")
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -78,7 +78,7 @@ func runPutObjectPartBenchmark(b *testing.B, obj ObjectLayer, partSize int) {
 	object := getRandomObjectName()
 
 	// create bucket.
-	err = obj.MakeBucket(bucket)
+	err = obj.MakeBucketWithLocation(bucket, "")
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -199,7 +199,7 @@ func runGetObjectBenchmark(b *testing.B, obj ObjectLayer, objSize int) {
 	// obtains random bucket name.
 	bucket := getRandomBucketName()
 	// create bucket.
-	err = obj.MakeBucket(bucket)
+	err = obj.MakeBucketWithLocation(bucket, "")
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -307,7 +307,7 @@ func runPutObjectBenchmarkParallel(b *testing.B, obj ObjectLayer, objSize int) {
 	// obtains random bucket name.
 	bucket := getRandomBucketName()
 	// create bucket.
-	err = obj.MakeBucket(bucket)
+	err = obj.MakeBucketWithLocation(bucket, "")
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -355,7 +355,7 @@ func runGetObjectBenchmarkParallel(b *testing.B, obj ObjectLayer, objSize int) {
 	// obtains random bucket name.
 	bucket := getRandomBucketName()
 	// create bucket.
-	err = obj.MakeBucket(bucket)
+	err = obj.MakeBucketWithLocation(bucket, "")
 	if err != nil {
 		b.Fatal(err)
 	}

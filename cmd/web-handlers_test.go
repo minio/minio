@@ -315,7 +315,7 @@ func testListBucketsWebHandler(obj ObjectLayer, instanceType string, t TestErrHa
 
 	bucketName := getRandomBucketName()
 	// Create bucket.
-	err = obj.MakeBucket(bucketName)
+	err = obj.MakeBucketWithLocation(bucketName, "")
 	if err != nil {
 		// failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err)
@@ -366,7 +366,7 @@ func testListObjectsWebHandler(obj ObjectLayer, instanceType string, t TestErrHa
 	objectSize := 1 * humanize.KiByte
 
 	// Create bucket.
-	err = obj.MakeBucket(bucketName)
+	err = obj.MakeBucketWithLocation(bucketName, "")
 	if err != nil {
 		// failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err)
@@ -460,7 +460,7 @@ func testRemoveObjectWebHandler(obj ObjectLayer, instanceType string, t TestErrH
 	objectSize := 1 * humanize.KiByte
 
 	// Create bucket.
-	err = obj.MakeBucket(bucketName)
+	err = obj.MakeBucketWithLocation(bucketName, "")
 	if err != nil {
 		// failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err)
@@ -700,7 +700,7 @@ func testUploadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler
 		return rec.Code
 	}
 	// Create bucket.
-	err = obj.MakeBucket(bucketName)
+	err = obj.MakeBucketWithLocation(bucketName, "")
 	if err != nil {
 		// failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err)
@@ -785,7 +785,7 @@ func testDownloadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandl
 	}
 
 	// Create bucket.
-	err = obj.MakeBucket(bucketName)
+	err = obj.MakeBucketWithLocation(bucketName, "")
 	if err != nil {
 		// failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err)
@@ -852,7 +852,7 @@ func testWebHandlerDownloadZip(obj ObjectLayer, instanceType string, t TestErrHa
 	fileThree := "cccccccccccccc"
 
 	// Create bucket.
-	err = obj.MakeBucket(bucket)
+	err = obj.MakeBucketWithLocation(bucket, "")
 	if err != nil {
 		// failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err)
@@ -937,7 +937,7 @@ func testWebPresignedGetHandler(obj ObjectLayer, instanceType string, t TestErrH
 	objectSize := 1 * humanize.KiByte
 
 	// Create bucket.
-	err = obj.MakeBucket(bucketName)
+	err = obj.MakeBucketWithLocation(bucketName, "")
 	if err != nil {
 		// failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err)
@@ -1037,7 +1037,7 @@ func testWebGetBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestE
 	rec := httptest.NewRecorder()
 
 	bucketName := getRandomBucketName()
-	if err := obj.MakeBucket(bucketName); err != nil {
+	if err := obj.MakeBucketWithLocation(bucketName, ""); err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
 
@@ -1111,7 +1111,7 @@ func testWebListAllBucketPoliciesHandler(obj ObjectLayer, instanceType string, t
 	rec := httptest.NewRecorder()
 
 	bucketName := getRandomBucketName()
-	if err := obj.MakeBucket(bucketName); err != nil {
+	if err := obj.MakeBucketWithLocation(bucketName, ""); err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
 
@@ -1209,7 +1209,7 @@ func testWebSetBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestE
 
 	// Create a bucket
 	bucketName := getRandomBucketName()
-	if err = obj.MakeBucket(bucketName); err != nil {
+	if err = obj.MakeBucketWithLocation(bucketName, ""); err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
 
@@ -1445,7 +1445,7 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 	defer removeRoots(fsDirs)
 
 	bucketName := "mybucket"
-	err = obj.MakeBucket(bucketName)
+	err = obj.MakeBucketWithLocation(bucketName, "")
 	if err != nil {
 		t.Fatal("Cannot make bucket:", err)
 	}
