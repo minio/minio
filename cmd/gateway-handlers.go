@@ -778,6 +778,88 @@ func (api gatewayAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *htt
 	writeSuccessResponseXML(w, encodeResponse(response))
 }
 
+// ListObjectsV2Handler - GET Bucket (List Objects) Version 2.
+// --------------------------
+// This implementation of the GET operation returns some or all (up to 1000)
+// of the objects in a bucket. You can use the request parameters as selection
+// criteria to return a subset of the objects in a bucket.
+//
+// NOTE: It is recommended that this API to be used for application development.
+// Minio continues to support ListObjectsV1 for supporting legacy tools.
+func (api gatewayAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http.Request) {
+	vars := router.Vars(r)
+	bucket := vars["bucket"]
+
+	objectAPI := api.ObjectAPI()
+	if objectAPI == nil {
+		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+		return
+	}
+
+	reqAuthType := getRequestAuthType(r)
+
+	switch reqAuthType {
+	case authTypePresignedV2, authTypeSignedV2:
+		// Signature V2 validation.
+		s3Error := isReqAuthenticatedV2(r)
+		if s3Error != ErrNone {
+			errorIf(errSignatureMismatch, dumpRequest(r))
+			writeErrorResponse(w, s3Error, r.URL)
+			return
+		}
+	case authTypeSigned, authTypePresigned:
+		s3Error := isReqAuthenticated(r, serverConfig.GetRegion())
+		if s3Error != ErrNone {
+			errorIf(errSignatureMismatch, dumpRequest(r))
+			writeErrorResponse(w, s3Error, r.URL)
+			return
+		}
+	case authTypeAnonymous:
+		// No verification needed for anonymous requests.
+	default:
+		// For all unknown auth types return error.
+		writeErrorResponse(w, ErrAccessDenied, r.URL)
+		return
+	}
+
+	// Extract all the listObjectsV2 query params to their native values.
+	prefix, token, startAfter, delimiter, fetchOwner, maxKeys, _ := getListObjectsV2Args(r.URL.Query())
+
+	// In ListObjectsV2 'continuation-token' is the marker.
+	marker := token
+	// Check if 'continuation-token' is empty.
+	if token == "" {
+		// Then we need to use 'start-after' as marker instead.
+		marker = startAfter
+	}
+
+	listObjectsV2 := objectAPI.ListObjectsV2
+	if reqAuthType == authTypeAnonymous {
+		listObjectsV2 = objectAPI.AnonListObjectsV2
+	}
+
+	// Validate the query params before beginning to serve the request.
+	// fetch-owner is not validated since it is a boolean
+	if s3Error := validateListObjectsArgs(prefix, marker, delimiter, maxKeys); s3Error != ErrNone {
+		writeErrorResponse(w, s3Error, r.URL)
+		return
+	}
+	// Inititate a list objects operation based on the input params.
+	// On success would return back ListObjectsInfo object to be
+	// marshalled into S3 compatible XML header.
+	listObjectsV2Info, err := listObjectsV2(bucket, prefix, token, fetchOwner, delimiter, maxKeys)
+	if err != nil {
+		errorIf(err, "Unable to list objects.")
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
+	response := generateListObjectsV2Response(bucket, prefix, token, listObjectsV2Info.ContinuationToken, startAfter, delimiter, fetchOwner, listObjectsV2Info.IsTruncated, maxKeys, listObjectsV2Info.Objects, listObjectsV2Info.Prefixes)
+
+	// Write success response.
+	writeSuccessResponseXML(w, encodeResponse(response))
+}
+
 // HeadBucketHandler - HEAD Bucket
 // ----------
 // This operation is useful to determine if a bucket exists.
