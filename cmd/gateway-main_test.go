@@ -99,7 +99,7 @@ func TestValidateGatewayArguments(t *testing.T) {
 	for i, test := range testCases {
 		err := validateGatewayArguments(test.serverAddr, test.endpointAddr)
 		if test.valid && err != nil {
-			t.Errorf("Test %d expected not to return erro but got %s", i+1, err)
+			t.Errorf("Test %d expected not to return error but got %s", i+1, err)
 		}
 		if !test.valid && err == nil {
 			t.Errorf("Test %d expected to fail but it did not", i+1)

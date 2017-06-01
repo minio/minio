@@ -240,7 +240,7 @@ func gatewayMain(ctx *cli.Context) {
 	serverAddr := ctx.String("address")
 
 	err := validateGatewayArguments(serverAddr, endpointAddr)
-	fatalIf(err, "Unable to validate")
+	fatalIf(err, "Invalid argument")
 
 	// Second argument is endpoint.	If no endpoint is specified then the
 	// gateway implementation should use a default setting.
