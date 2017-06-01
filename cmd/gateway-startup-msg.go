@@ -18,28 +18,19 @@ package cmd
 
 import (
 	"fmt"
-	"runtime"
 	"strings"
 )
 
 // Prints the formatted startup message.
-func printGatewayStartupMessage(apiEndPoints []string, accessKey, secretKey, backendType string) {
+func printGatewayStartupMessage(apiEndPoints []string, backendType string) {
+	strippedAPIEndpoints := stripStandardPorts(apiEndPoints)
+
 	// Prints credential.
-	printGatewayCommonMsg(apiEndPoints, accessKey, secretKey)
+	printGatewayCommonMsg(strippedAPIEndpoints)
 
 	// Prints `mc` cli configuration message chooses
 	// first endpoint as default.
-	endPoint := apiEndPoints[0]
-
-	// Configure 'mc', following block prints platform specific information for minio client.
-	log.Println(colorBlue("\nCommand-line Access: ") + mcQuickStartGuide)
-	if runtime.GOOS == globalWindowsOSName {
-		mcMessage := fmt.Sprintf("$ mc.exe config host add my%s %s %s %s", backendType, endPoint, accessKey, secretKey)
-		log.Println(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
-	} else {
-		mcMessage := fmt.Sprintf("$ mc config host add my%s %s %s %s", backendType, endPoint, accessKey, secretKey)
-		log.Println(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
-	}
+	printCLIAccessMsg(strippedAPIEndpoints[0], fmt.Sprintf("my%s", backendType))
 
 	// Prints documentation message.
 	printObjectAPIMsg()
@@ -52,10 +43,16 @@ func printGatewayStartupMessage(apiEndPoints []string, accessKey, secretKey, bac
 }
 
 // Prints common server startup message. Prints credential, region and browser access.
-func printGatewayCommonMsg(apiEndpoints []string, accessKey, secretKey string) {
+func printGatewayCommonMsg(apiEndpoints []string) {
+	// Get saved credentials.
+	cred := serverConfig.GetCredential()
+
 	apiEndpointStr := strings.Join(apiEndpoints, "  ")
 	// Colorize the message and print.
 	log.Println(colorBlue("\nEndpoint: ") + colorBold(fmt.Sprintf(getFormatStr(len(apiEndpointStr), 1), apiEndpointStr)))
-	log.Println(colorBlue("AccessKey: ") + colorBold(fmt.Sprintf("%s ", accessKey)))
-	log.Println(colorBlue("SecretKey: ") + colorBold(fmt.Sprintf("%s ", secretKey)))
+	log.Println(colorBlue("AccessKey: ") + colorBold(fmt.Sprintf("%s ", cred.AccessKey)))
+	log.Println(colorBlue("SecretKey: ") + colorBold(fmt.Sprintf("%s ", cred.SecretKey)))
+
+	log.Println(colorBlue("\nBrowser Access:"))
+	log.Println(fmt.Sprintf(getFormatStr(len(apiEndpointStr), 3), apiEndpointStr))
 }

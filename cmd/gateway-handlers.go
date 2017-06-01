@@ -19,12 +19,12 @@ package cmd
 import (
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"strconv"
 
 	"encoding/hex"
 	"encoding/json"
-	"encoding/xml"
 
 	router "github.com/gorilla/mux"
 	"github.com/minio/minio-go/pkg/policy"
@@ -140,7 +140,7 @@ func (api gatewayAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	// Reads the object at startOffset and writes to mw.
-	if err := getObject(bucket, object, startOffset, length, writer); err != nil {
+	if err = getObject(bucket, object, startOffset, length, writer); err != nil {
 		errorIf(err, "Unable to write to client.")
 		if !dataWritten {
 			// Error response only if no data has been written to client yet. i.e if
@@ -157,6 +157,23 @@ func (api gatewayAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Re
 		// call wrter.Write(nil) to set appropriate headers.
 		writer.Write(nil)
 	}
+
+	// Get host and port from Request.RemoteAddr.
+	host, port, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host, port = "", ""
+	}
+
+	// Notify object accessed via a GET request.
+	eventNotify(eventData{
+		Type:      ObjectAccessedGet,
+		Bucket:    bucket,
+		ObjInfo:   objInfo,
+		ReqParams: extractReqParams(r),
+		UserAgent: r.UserAgent(),
+		Host:      host,
+		Port:      port,
+	})
 }
 
 // PutObjectHandler - PUT Object
@@ -293,6 +310,23 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 
 	w.Header().Set("ETag", "\""+objInfo.ETag+"\"")
 	writeSuccessResponseHeadersOnly(w)
+
+	// Get host and port from Request.RemoteAddr.
+	host, port, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host, port = "", ""
+	}
+
+	// Notify object created event.
+	eventNotify(eventData{
+		Type:      ObjectCreatedPut,
+		Bucket:    bucket,
+		ObjInfo:   objInfo,
+		ReqParams: extractReqParams(r),
+		UserAgent: r.UserAgent(),
+		Host:      host,
+		Port:      port,
+	})
 }
 
 // HeadObjectHandler - HEAD Object
@@ -361,97 +395,23 @@ func (api gatewayAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.R
 
 	// Successful response.
 	w.WriteHeader(http.StatusOK)
-}
 
-// DeleteMultipleObjectsHandler - deletes multiple objects.
-func (api gatewayAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter, r *http.Request) {
-	vars := router.Vars(r)
-	bucket := vars["bucket"]
-
-	objectAPI := api.ObjectAPI()
-	if objectAPI == nil {
-		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
-		return
+	// Get host and port from Request.RemoteAddr.
+	host, port, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host, port = "", ""
 	}
 
-	if s3Error := checkRequestAuthType(r, bucket, "s3:DeleteObject", serverConfig.GetRegion()); s3Error != ErrNone {
-		writeErrorResponse(w, s3Error, r.URL)
-		return
-	}
-
-	// Content-Length is required and should be non-zero
-	// http://docs.aws.amazon.com/AmazonS3/latest/API/multiobjectdeleteapi.html
-	if r.ContentLength <= 0 {
-		writeErrorResponse(w, ErrMissingContentLength, r.URL)
-		return
-	}
-
-	// Content-Md5 is requied should be set
-	// http://docs.aws.amazon.com/AmazonS3/latest/API/multiobjectdeleteapi.html
-	if _, ok := r.Header["Content-Md5"]; !ok {
-		writeErrorResponse(w, ErrMissingContentMD5, r.URL)
-		return
-	}
-
-	// Allocate incoming content length bytes.
-	deleteXMLBytes := make([]byte, r.ContentLength)
-
-	// Read incoming body XML bytes.
-	if _, err := io.ReadFull(r.Body, deleteXMLBytes); err != nil {
-		errorIf(err, "Unable to read HTTP body.")
-		writeErrorResponse(w, ErrInternalError, r.URL)
-		return
-	}
-
-	// Unmarshal list of keys to be deleted.
-	deleteObjects := &DeleteObjectsRequest{}
-	if err := xml.Unmarshal(deleteXMLBytes, deleteObjects); err != nil {
-		errorIf(err, "Unable to unmarshal delete objects request XML.")
-		writeErrorResponse(w, ErrMalformedXML, r.URL)
-		return
-	}
-
-	var dErrs = make([]error, len(deleteObjects.Objects))
-
-	// Delete all requested objects in parallel.
-	for index, object := range deleteObjects.Objects {
-		dErr := objectAPI.DeleteObject(bucket, object.ObjectName)
-		if dErr != nil {
-			dErrs[index] = dErr
-		}
-	}
-
-	// Collect deleted objects and errors if any.
-	var deletedObjects []ObjectIdentifier
-	var deleteErrors []DeleteError
-	for index, err := range dErrs {
-		object := deleteObjects.Objects[index]
-		// Success deleted objects are collected separately.
-		if err == nil {
-			deletedObjects = append(deletedObjects, object)
-			continue
-		}
-		if _, ok := errorCause(err).(ObjectNotFound); ok {
-			// If the object is not found it should be
-			// accounted as deleted as per S3 spec.
-			deletedObjects = append(deletedObjects, object)
-			continue
-		}
-		errorIf(err, "Unable to delete object. %s", object.ObjectName)
-		// Error during delete should be collected separately.
-		deleteErrors = append(deleteErrors, DeleteError{
-			Code:    errorCodeResponse[toAPIErrorCode(err)].Code,
-			Message: errorCodeResponse[toAPIErrorCode(err)].Description,
-			Key:     object.ObjectName,
-		})
-	}
-
-	// Generate response
-	response := generateMultiDeleteResponse(deleteObjects.Quiet, deletedObjects, deleteErrors)
-	encodedSuccessResponse := encodeResponse(response)
-
-	// Write success response.
-	writeSuccessResponseXML(w, encodedSuccessResponse)
+	// Notify object accessed via a HEAD request.
+	eventNotify(eventData{
+		Type:      ObjectAccessedHead,
+		Bucket:    bucket,
+		ObjInfo:   objInfo,
+		ReqParams: extractReqParams(r),
+		UserAgent: r.UserAgent(),
+		Host:      host,
+		Port:      port,
+	})
 }
 
 // PutBucketPolicyHandler - PUT Bucket policy

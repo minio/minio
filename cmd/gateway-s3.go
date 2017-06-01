@@ -20,7 +20,6 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"os"
 	"path"
 
 	"encoding/hex"
@@ -118,14 +117,13 @@ func newS3Gateway(args cli.Args) (GatewayLayer, error) {
 		}
 	}
 
-	accessKey := os.Getenv("MINIO_ACCESS_KEY")
-	secretKey := os.Getenv("MINIO_SECRET_KEY")
-	if accessKey == "" || secretKey == "" {
-		return nil, errors.New("No S3 access and secret key")
+	creds := serverConfig.GetCredential()
+	if !creds.IsValid() && !globalIsEnvCreds {
+		return nil, errors.New("S3 backend account and secret keys should be set through ENVs")
 	}
 
 	// Initialize minio client object.
-	client, err := minio.NewCore(endpoint, accessKey, secretKey, secure)
+	client, err := minio.NewCore(endpoint, creds.AccessKey, creds.SecretKey, secure)
 	if err != nil {
 		return nil, err
 	}

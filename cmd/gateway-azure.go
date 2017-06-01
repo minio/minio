@@ -26,7 +26,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -173,13 +172,12 @@ func newAzureLayer(args cli.Args) (GatewayLayer, error) {
 		}
 	}
 
-	account := os.Getenv("MINIO_ACCESS_KEY")
-	key := os.Getenv("MINIO_SECRET_KEY")
-	if account == "" || key == "" {
-		return nil, errors.New("No Azure account and key set")
+	creds := serverConfig.GetCredential()
+	if !creds.IsValid() && !globalIsEnvCreds {
+		return nil, errors.New("Azure backend account and secret keys should be set through ENVs")
 	}
 
-	c, err := storage.NewClient(account, key, endPoint, globalAzureAPIVersion, secure)
+	c, err := storage.NewClient(creds.AccessKey, creds.SecretKey, endPoint, globalAzureAPIVersion, secure)
 	if err != nil {
 		return &azureObjects{}, err
 	}

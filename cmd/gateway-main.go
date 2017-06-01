@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"os"
 	"strings"
 
 	"github.com/gorilla/mux"
@@ -77,13 +76,8 @@ var gatewayCmd = cli.Command{
 	Usage:              "Start object storage gateway.",
 	Action:             gatewayMain,
 	CustomHelpTemplate: gatewayTemplate,
-	Flags: append(serverFlags,
-		cli.BoolFlag{
-			Name:  "quiet",
-			Usage: "Disable startup banner.",
-		},
-	),
-	HideHelpCommand: true,
+	Flags:              append(serverFlags, globalFlags...),
+	HideHelpCommand:    true,
 }
 
 // Represents the type of the gateway backend.
@@ -95,38 +89,6 @@ const (
 	gcsBackend   gatewayBackend = "gcs"
 	// Add more backends here.
 )
-
-// Returns access and secretkey set from environment variables.
-func mustGetGatewayConfigFromEnv() (string, string, string) {
-	// Fetch access keys from environment variables.
-	accessKey := os.Getenv("MINIO_ACCESS_KEY")
-	secretKey := os.Getenv("MINIO_SECRET_KEY")
-	if accessKey == "" || secretKey == "" {
-		fatalIf(errors.New("Missing credentials"), "Access and secret keys are mandatory to run Minio gateway server.")
-	}
-
-	region := globalMinioDefaultRegion
-	if v := os.Getenv("MINIO_REGION"); v != "" {
-		region = v
-	}
-
-	return accessKey, secretKey, region
-}
-
-// Set browser setting from environment variables
-func mustSetBrowserSettingFromEnv() {
-	if browser := os.Getenv("MINIO_BROWSER"); browser != "" {
-		browserFlag, err := ParseBrowserFlag(browser)
-		if err != nil {
-			fatalIf(errors.New("invalid value"), "Unknown value ‘%s’ in MINIO_BROWSER environment variable.", browser)
-		}
-
-		// browser Envs are set globally, this does not represent
-		// if browser is turned off or on.
-		globalIsEnvBrowser = true
-		globalIsBrowserEnabled = bool(browserFlag)
-	}
-}
 
 // Initialize gateway layer depending on the backend type.
 // Supported backend types are
@@ -146,33 +108,6 @@ func newGatewayLayer(backendType string, args cli.Args) (GatewayLayer, error) {
 	}
 
 	return nil, fmt.Errorf("Unrecognized backend type %s", backendType)
-}
-
-// Initialize a new gateway config.
-//
-// DO NOT save this config, this is meant to be
-// only used in memory.
-func newGatewayConfig(accessKey, secretKey, region string) error {
-	// Initialize server config.
-	srvCfg := newServerConfigV18()
-
-	// If env is set for a fresh start, save them to config file.
-	srvCfg.SetCredential(credential{
-		AccessKey: accessKey,
-		SecretKey: secretKey,
-	})
-
-	// Set custom region.
-	srvCfg.SetRegion(region)
-
-	// hold the mutex lock before a new config is assigned.
-	// Save the new config globally.
-	// unlock the mutex.
-	serverConfigMu.Lock()
-	serverConfig = srvCfg
-	serverConfigMu.Unlock()
-
-	return nil
 }
 
 // Return endpoint.
@@ -204,20 +139,34 @@ func gatewayMain(ctx *cli.Context) {
 		cli.ShowCommandHelpAndExit(ctx, "gateway", 1)
 	}
 
-	// Fetch access and secret key from env.
-	accessKey, secretKey, region := mustGetGatewayConfigFromEnv()
-
-	// Fetch browser env setting
-	mustSetBrowserSettingFromEnv()
-
-	// Initialize new gateway config.
-	newGatewayConfig(accessKey, secretKey, region)
-
 	// Get quiet flag from command line argument.
 	quietFlag := ctx.Bool("quiet") || ctx.GlobalBool("quiet")
 	if quietFlag {
 		log.EnableQuiet()
 	}
+
+	// Handle common command args.
+	handleCommonCmdArgs(ctx)
+
+	// Handle common env vars.
+	handleCommonEnvVars()
+
+	// Create certs path.
+	fatalIf(createConfigDir(), "Unable to create configuration directories.")
+
+	// Initialize config.
+	initConfig()
+
+	// Enable loggers as per configuration file.
+	enableLoggers()
+
+	// Init the error tracing module.
+	initError()
+
+	// Check and load SSL certificates.
+	var err error
+	globalPublicCerts, globalRootCAs, globalIsSSL, err = getSSLConfig()
+	fatalIf(err, "Invalid SSL key file")
 
 	// First argument is selected backend type.
 	backendType := ctx.Args().Get(0)
@@ -230,18 +179,15 @@ func gatewayMain(ctx *cli.Context) {
 
 	// Third argument is the address flag
 	serverAddr := ctx.String("address")
-
 	if endpointAddr != "" {
 		// Reject the endpoint if it points to the gateway handler itself.
-		sameTarget, err := sameLocalAddrs(endpointAddr, serverAddr)
+		var sameTarget bool
+		sameTarget, err = sameLocalAddrs(endpointAddr, serverAddr)
 		fatalIf(err, "Unable to compare server and endpoint addresses.")
 		if sameTarget {
 			fatalIf(errors.New("endpoint points to the local gateway"), "Endpoint url is not allowed")
 		}
 	}
-
-	// Create certs path for SSL configuration.
-	fatalIf(createConfigDir(), "Unable to create configuration directory")
 
 	newObject, err := newGatewayLayer(backendType, ctx.Args()[1:])
 	fatalIf(err, "Unable to initialize gateway layer")
@@ -288,9 +234,6 @@ func gatewayMain(ctx *cli.Context) {
 
 	apiServer := NewServerMux(serverAddr, registerHandlers(router, handlerFns...))
 
-	_, _, globalIsSSL, err = getSSLConfig()
-	fatalIf(err, "Invalid SSL key file")
-
 	// Start server, automatically configures TLS if certs are available.
 	go func() {
 		cert, key := "", ""
@@ -320,7 +263,7 @@ func gatewayMain(ctx *cli.Context) {
 		}
 		checkUpdate(mode)
 		apiEndpoints := getAPIEndpoints(apiServer.Addr)
-		printGatewayStartupMessage(apiEndpoints, accessKey, secretKey, backendType)
+		printGatewayStartupMessage(apiEndpoints, backendType)
 	}
 
 	<-globalServiceDoneCh

@@ -20,12 +20,24 @@ import "testing"
 
 // Test printing Gateway common message.
 func TestPrintGatewayCommonMessage(t *testing.T) {
-	apiEndpoints := []string{"127.0.0.1:9000"}
-	printGatewayCommonMsg(apiEndpoints, "abcd1", "abcd123")
+	root, err := newTestConfig(globalMinioDefaultRegion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer removeAll(root)
+
+	apiEndpoints := []string{"http://127.0.0.1:9000"}
+	printGatewayCommonMsg(apiEndpoints)
 }
 
 // Test print gateway startup message.
 func TestPrintGatewayStartupMessage(t *testing.T) {
-	apiEndpoints := []string{"127.0.0.1:9000"}
-	printGatewayStartupMessage(apiEndpoints, "abcd1", "abcd123", "azure")
+	root, err := newTestConfig(globalMinioDefaultRegion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer removeAll(root)
+
+	apiEndpoints := []string{"http://127.0.0.1:9000"}
+	printGatewayStartupMessage(apiEndpoints, "azure")
 }

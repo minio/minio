@@ -115,7 +115,7 @@ func initConfig() {
 	}
 }
 
-func serverHandleCmdArgs(ctx *cli.Context) {
+func handleCommonCmdArgs(ctx *cli.Context) {
 	// Set configuration directory.
 	{
 		// Get configuration directory from command line argument.
@@ -133,6 +133,10 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 
 		setConfigDir(configDirAbs)
 	}
+}
+
+func serverHandleCmdArgs(ctx *cli.Context) {
+	handleCommonCmdArgs(ctx)
 
 	// Server address.
 	serverAddr := ctx.String("address")
@@ -158,7 +162,7 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 	}
 }
 
-func serverHandleEnvVars() {
+func handleCommonEnvVars() {
 	// Start profiler if env is set.
 	if profiler := os.Getenv("_MINIO_PROFILER"); profiler != "" {
 		globalProfiler = startProfiler(profiler)
@@ -189,6 +193,10 @@ func serverHandleEnvVars() {
 		globalIsEnvBrowser = true
 		globalIsBrowserEnabled = bool(browserFlag)
 	}
+}
+
+func serverHandleEnvVars() {
+	handleCommonEnvVars()
 
 	if serverRegion := os.Getenv("MINIO_REGION"); serverRegion != "" {
 		// region Envs are set globally.
