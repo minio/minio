@@ -28,7 +28,7 @@ import (
 )
 
 type networkStorage struct {
-	rpcClient         *AuthRPCClient
+	rpcClient *AuthRPCClient
 }
 
 const (

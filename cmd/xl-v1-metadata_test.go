@@ -113,7 +113,7 @@ func testXLReadMetaParts(obj ObjectLayer, instanceType string, disks []string, t
 	// objectNames[0].
 	// uploadIds [0].
 	// Create bucket before intiating NewMultipartUpload.
-	err := obj.MakeBucketWithLocation(bucketNames[0] ,"")
+	err := obj.MakeBucketWithLocation(bucketNames[0], "")
 	if err != nil {
 		// Failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())

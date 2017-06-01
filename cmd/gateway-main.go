@@ -99,7 +99,7 @@ func mustGetGatewayCredsFromEnv() (accessKey, secretKey string) {
 }
 
 // Set browser setting from environment variables
-func mustSetBrowserSettingFromEnv(){
+func mustSetBrowserSettingFromEnv() {
 	if browser := os.Getenv("MINIO_BROWSER"); browser != "" {
 		browserFlag, err := ParseBrowserFlag(browser)
 		if err != nil {
@@ -112,6 +112,7 @@ func mustSetBrowserSettingFromEnv(){
 		globalIsBrowserEnabled = bool(browserFlag)
 	}
 }
+
 // Initialize gateway layer depending on the backend type.
 // Supported backend types are
 //
@@ -192,7 +193,7 @@ func gatewayMain(ctx *cli.Context) {
 	mustSetBrowserSettingFromEnv()
 
 	// Initialize new gateway config.
-	
+
 	newGatewayConfig(accessKey, secretKey, globalMinioDefaultRegion)
 
 	// Get quiet flag from command line argument.
