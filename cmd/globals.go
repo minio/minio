@@ -53,9 +53,6 @@ const (
 
 	// The maximum allowed difference between the request generation time and the server processing time
 	globalMaxSkewTime = 15 * time.Minute
-
-	// 10 minute default timeout value for operations
-	globalOperationTimeout = 10 * time.Minute
 )
 
 var (
@@ -118,6 +115,11 @@ var (
 	globalPublicCerts        []*x509.Certificate
 	globalXLObjCacheDisabled bool
 	// Add new variable global values here.
+
+	globalListingTimeout   = newDynamicTimeout(30*time.Second, 5*time.Second)  // timeout for listing related ops
+	globalObjectTimeout    = newDynamicTimeout(1*time.Minute, 10*time.Second)  // timeout for Object API related ops
+	globalOperationTimeout = newDynamicTimeout(10*time.Minute, 30*time.Second) // default timeout for general ops
+	globalHealingTimeout   = newDynamicTimeout(30*time.Minute, 1*time.Minute)  // timeout for healing related ops
 )
 
 var (
