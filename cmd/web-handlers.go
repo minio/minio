@@ -130,7 +130,7 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 	}
 
 	bucketLock := globalNSMutex.NewNSLock(args.BucketName, "")
-	if err := bucketLock.GetLock(globalOperationTimeout); err != nil {
+	if err := bucketLock.GetLock(globalObjectTimeout); err != nil {
 		return toJSONError(errOperationTimedOut)
 	}
 	defer bucketLock.Unlock()
@@ -502,7 +502,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 
 	// Lock the object.
 	objectLock := globalNSMutex.NewNSLock(bucket, object)
-	if objectLock.GetLock(globalOperationTimeout) != nil {
+	if objectLock.GetLock(globalObjectTimeout) != nil {
 		writeWebErrorResponse(w, errOperationTimedOut)
 		return
 	}
@@ -547,7 +547,7 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 
 	// Lock the object before reading.
 	objectLock := globalNSMutex.NewNSLock(bucket, object)
-	if objectLock.GetRLock(globalOperationTimeout) != nil {
+	if objectLock.GetRLock(globalObjectTimeout) != nil {
 		writeWebErrorResponse(w, errOperationTimedOut)
 		return
 	}

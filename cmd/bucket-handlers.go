@@ -280,7 +280,7 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		go func(i int, obj ObjectIdentifier) {
 			defer wg.Done()
 			objectLock := globalNSMutex.NewNSLock(bucket, obj.ObjectName)
-			if timedOutErr := objectLock.GetLock(globalOperationTimeout); timedOutErr != nil {
+			if timedOutErr := objectLock.GetLock(globalObjectTimeout); timedOutErr != nil {
 				dErrs[i] = timedOutErr
 			} else {
 				defer objectLock.Unlock()
@@ -388,7 +388,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	bucketLock := globalNSMutex.NewNSLock(bucket, "")
-	if bucketLock.GetLock(globalOperationTimeout) != nil {
+	if bucketLock.GetLock(globalObjectTimeout) != nil {
 		writeErrorResponse(w, ErrOperationTimedOut, r.URL)
 		return
 	}
@@ -531,7 +531,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	sha256sum := ""
 
 	objectLock := globalNSMutex.NewNSLock(bucket, object)
-	if objectLock.GetLock(globalOperationTimeout) != nil {
+	if objectLock.GetLock(globalObjectTimeout) != nil {
 		writeErrorResponse(w, ErrOperationTimedOut, r.URL)
 		return
 	}
@@ -610,7 +610,7 @@ func (api objectAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	bucketLock := globalNSMutex.NewNSLock(bucket, "")
-	if bucketLock.GetRLock(globalOperationTimeout) != nil {
+	if bucketLock.GetRLock(globalObjectTimeout) != nil {
 		writeErrorResponseHeadersOnly(w, ErrOperationTimedOut)
 		return
 	}
@@ -643,7 +643,7 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 	bucket := vars["bucket"]
 
 	bucketLock := globalNSMutex.NewNSLock(bucket, "")
-	if bucketLock.GetLock(globalOperationTimeout) != nil {
+	if bucketLock.GetLock(globalObjectTimeout) != nil {
 		writeErrorResponse(w, ErrOperationTimedOut, r.URL)
 		return
 	}

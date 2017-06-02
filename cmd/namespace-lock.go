@@ -31,9 +31,9 @@ var globalNSMutex *nsLockMap
 
 // RWLocker - locker interface to introduce GetRLock, RUnlock.
 type RWLocker interface {
-	GetLock(timeout time.Duration) (timedOutErr error)
+	GetLock(timeout *dynamicTimout) (timedOutErr error)
 	Unlock()
-	GetRLock(timeout time.Duration) (timedOutErr error)
+	GetRLock(timeout *dynamicTimout) (timedOutErr error)
 	RUnlock()
 }
 
@@ -301,12 +301,15 @@ func (n *nsLockMap) NewNSLock(volume, path string) RWLocker {
 }
 
 // Lock - block until write lock is taken or timeout has occurred.
-func (li *lockInstance) GetLock(timeout time.Duration) (timedOutErr error) {
+func (li *lockInstance) GetLock(timeout *dynamicTimout) (timedOutErr error) {
 	lockSource := getSource()
+	start := time.Now().UTC()
 	readLock := false
-	if !li.ns.lock(li.volume, li.path, lockSource, li.opsID, readLock, timeout) {
+	if !li.ns.lock(li.volume, li.path, lockSource, li.opsID, readLock, timeout.Timeout()) {
+		timeout.LogFailure()
 		return OperationTimedOut{Path: li.path}
 	}
+	timeout.LogSuccess(time.Now().UTC().Sub(start))
 	return
 }
 
@@ -317,12 +320,15 @@ func (li *lockInstance) Unlock() {
 }
 
 // RLock - block until read lock is taken or timeout has occurred.
-func (li *lockInstance) GetRLock(timeout time.Duration) (timedOutErr error) {
+func (li *lockInstance) GetRLock(timeout *dynamicTimout) (timedOutErr error) {
 	lockSource := getSource()
+	start := time.Now().UTC()
 	readLock := true
-	if !li.ns.lock(li.volume, li.path, lockSource, li.opsID, readLock, timeout) {
+	if !li.ns.lock(li.volume, li.path, lockSource, li.opsID, readLock, timeout.Timeout()) {
+		timeout.LogFailure()
 		return OperationTimedOut{Path: li.path}
 	}
+	timeout.LogSuccess(time.Now().UTC().Sub(start))
 	return
 }
 

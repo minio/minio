@@ -310,7 +310,7 @@ func (xl xlObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 		// hold lock on keyMarker path
 		keyMarkerLock := globalNSMutex.NewNSLock(minioMetaMultipartBucket,
 			pathJoin(bucket, keyMarker))
-		if err = keyMarkerLock.GetRLock(globalOperationTimeout); err != nil {
+		if err = keyMarkerLock.GetRLock(globalListingTimeout); err != nil {
 			return ListMultipartsInfo{}, err
 		}
 		for _, disk := range xl.getLoadBalancedDisks() {
@@ -378,7 +378,7 @@ func (xl xlObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 			// pending uploadIDs.
 			entryLock := globalNSMutex.NewNSLock(minioMetaMultipartBucket,
 				pathJoin(bucket, entry))
-			if err = entryLock.GetRLock(globalOperationTimeout); err != nil {
+			if err = entryLock.GetRLock(globalListingTimeout); err != nil {
 				return ListMultipartsInfo{}, err
 			}
 			var disk StorageAPI
@@ -857,7 +857,7 @@ func (xl xlObjects) ListObjectParts(bucket, object, uploadID string, partNumberM
 	// abort-multipart-upload or complete-multipart-upload.
 	uploadIDLock := globalNSMutex.NewNSLock(minioMetaMultipartBucket,
 		pathJoin(bucket, object, uploadID))
-	if err := uploadIDLock.GetLock(globalOperationTimeout); err != nil {
+	if err := uploadIDLock.GetLock(globalListingTimeout); err != nil {
 		return ListPartsInfo{}, err
 	}
 	defer uploadIDLock.Unlock()

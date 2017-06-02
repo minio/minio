@@ -989,7 +989,7 @@ func (adminAPI adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http
 	// bucket name and wouldn't conflict with normal object
 	// operations.
 	configLock := globalNSMutex.NewNSLock(minioReservedBucket, minioConfigFile)
-	if configLock.GetLock(globalOperationTimeout) != nil {
+	if configLock.GetLock(globalObjectTimeout) != nil {
 		writeErrorResponse(w, ErrOperationTimedOut, r.URL)
 		return
 	}
