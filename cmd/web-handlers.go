@@ -773,6 +773,8 @@ type SetBucketPolicyArgs struct {
 // SetBucketPolicy - set bucket policy.
 func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolicyArgs, reply *WebGenericRep) error {
 	objectAPI := web.ObjectAPI()
+	reply.UIVersion = browser.UIVersion
+
 	if objectAPI == nil {
 		return toJSONError(errServerNotInitialized)
 	}
@@ -804,7 +806,6 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 		if err != nil {
 			return toJSONError(err)
 		}
-		reply.UIVersion = browser.UIVersion
 		return nil
 	}
 
@@ -813,7 +814,6 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 		if err != nil {
 			return toJSONError(err, args.BucketName)
 		}
-		reply.UIVersion = browser.UIVersion
 		return nil
 	}
 	data, err := json.Marshal(policyInfo)
