@@ -731,7 +731,7 @@ func TestListObjectsHealHandler(t *testing.T) {
 	}
 	defer adminTestBed.TearDown()
 
-	err = adminTestBed.objLayer.MakeBucketWithLocation("mybucket","")
+	err = adminTestBed.objLayer.MakeBucketWithLocation("mybucket", "")
 	if err != nil {
 		t.Fatalf("Failed to make bucket - %v", err)
 	}
@@ -859,7 +859,7 @@ func TestHealBucketHandler(t *testing.T) {
 	}
 	defer adminTestBed.TearDown()
 
-	err = adminTestBed.objLayer.MakeBucketWithLocation("mybucket","")
+	err = adminTestBed.objLayer.MakeBucketWithLocation("mybucket", "")
 	if err != nil {
 		t.Fatalf("Failed to make bucket - %v", err)
 	}
@@ -936,7 +936,7 @@ func TestHealObjectHandler(t *testing.T) {
 	// Create an object myobject under bucket mybucket.
 	bucketName := "mybucket"
 	objName := "myobject"
-	err = adminTestBed.objLayer.MakeBucketWithLocation(bucketName,"")
+	err = adminTestBed.objLayer.MakeBucketWithLocation(bucketName, "")
 	if err != nil {
 		t.Fatalf("Failed to make bucket %s - %v", bucketName, err)
 	}
@@ -1067,7 +1067,7 @@ func TestHealUploadHandler(t *testing.T) {
 	// Create an object myobject under bucket mybucket.
 	bucketName := "mybucket"
 	objName := "myobject"
-	err = adminTestBed.objLayer.MakeBucketWithLocation(bucketName,"")
+	err = adminTestBed.objLayer.MakeBucketWithLocation(bucketName, "")
 	if err != nil {
 		t.Fatalf("Failed to make bucket %s - %v", bucketName, err)
 	}
@@ -1455,7 +1455,7 @@ func TestListHealUploadsHandler(t *testing.T) {
 	}
 	defer adminTestBed.TearDown()
 
-	err = adminTestBed.objLayer.MakeBucketWithLocation("mybucket","")
+	err = adminTestBed.objLayer.MakeBucketWithLocation("mybucket", "")
 	if err != nil {
 		t.Fatalf("Failed to make bucket - %v", err)
 	}
