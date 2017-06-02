@@ -1,4 +1,4 @@
-// +build !linux,!darwin
+// +build darwin
 
 /*
  * Minio Cloud Storage, (C) 2016 Minio, Inc.
@@ -18,8 +18,23 @@
 
 package cmd
 
-// Fallocate is not POSIX and not supported under Windows
-// Always return successful
+import (
+	"syscall"
+	"unsafe"
+)
+
+// Fallocate for Darwin, it helps us to make sure that subsequent writes on a file will not fail.
+// In addition, file allocation will be contiguous on the disk.
 func Fallocate(fd int, offset int64, len int64) error {
-	return nil
+	var err error
+	fstore := &syscall.Fstore_t{
+		Flags:   syscall.F_ALLOCATEALL | syscall.F_ALLOCATECONTIG,
+		Posmode: syscall.F_PEOFPOSMODE,
+		Length:  offset + len}
+	p := unsafe.Pointer(fstore)
+	_, _, errno := syscall.Syscall(syscall.SYS_FCNTL, uintptr(fd), uintptr(syscall.F_PREALLOCATE), uintptr(p))
+	if errno != 0 {
+		err = errno
+	}
+	return err
 }

@@ -29,7 +29,7 @@ func isSysErrNoSys(err error) bool {
 
 // Not supported error
 func isSysErrOpNotSupported(err error) bool {
-	return err == syscall.EOPNOTSUPP
+	return err == syscall.EOPNOTSUPP || err == syscall.ENOTSUP
 }
 
 // No space left on device error
