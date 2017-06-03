@@ -252,6 +252,12 @@ func mkHealQueryVal(bucket, prefix, marker, delimiter, maxKeyStr string) url.Val
 	return queryVal
 }
 
+// ListObjectsHealResponse - xml response of list objects heal web service
+type ListObjectsHealResponse struct {
+	HealList listBucketHealResult `xml:"ListBucketResult"`
+	Error    *ErrorResponse       `xml:"Error"`
+}
+
 // listObjectsHeal - issues heal list API request for a batch of maxKeys objects to be healed.
 func (adm *AdminClient) listObjectsHeal(bucket, prefix, marker, delimiter string, maxKeys int) (listBucketHealResult, error) {
 	// Construct query params.
@@ -266,9 +272,6 @@ func (adm *AdminClient) listObjectsHeal(bucket, prefix, marker, delimiter string
 		customHeaders: hdrs,
 	}
 
-	// Empty 'list' of objects to be healed.
-	toBeHealedObjects := listBucketHealResult{}
-
 	// Execute GET on /?heal to list objects needing heal.
 	resp, err := adm.executeMethod("GET", reqData)
 
@@ -278,12 +281,22 @@ func (adm *AdminClient) listObjectsHeal(bucket, prefix, marker, delimiter string
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return toBeHealedObjects, httpRespToErrorResponse(resp)
+		return listBucketHealResult{}, httpRespToErrorResponse(resp)
 
 	}
 
-	err = xml.NewDecoder(resp.Body).Decode(&toBeHealedObjects)
-	return toBeHealedObjects, err
+	listObjectsHealResponse := ListObjectsHealResponse{}
+
+	err = xml.NewDecoder(resp.Body).Decode(&listObjectsHealResponse)
+	if err != nil {
+		return listBucketHealResult{}, err
+	}
+
+	if listObjectsHealResponse.Error != nil {
+		return listBucketHealResult{}, listObjectsHealResponse.Error
+	}
+
+	return listObjectsHealResponse.HealList, nil
 }
 
 // ListObjectsHeal - Lists upto maxKeys objects that needing heal matching bucket, prefix, marker, delimiter.
@@ -439,6 +452,12 @@ func (adm *AdminClient) HealBucket(bucket string, dryrun bool) error {
 	return nil
 }
 
+// HealUploadResponse - xml response of heal upload web service
+type HealUploadResponse struct {
+	HealResult []byte         `xml:"HealResult"`
+	Error      *ErrorResponse `xml:"Error"`
+}
+
 // HealUpload - Heal the given upload.
 func (adm *AdminClient) HealUpload(bucket, object, uploadID string, dryrun bool) (HealResult, error) {
 	// Construct query params.
@@ -478,13 +497,19 @@ func (adm *AdminClient) HealUpload(bucket, object, uploadID string, dryrun bool)
 		return HealResult{}, nil
 	}
 
-	jsonBytes, err := ioutil.ReadAll(resp.Body)
+	healUploadResp := HealUploadResponse{}
+
+	err = xml.NewDecoder(resp.Body).Decode(&healUploadResp)
 	if err != nil {
 		return HealResult{}, err
 	}
 
+	if healUploadResp.Error != nil {
+		return HealResult{}, healUploadResp.Error
+	}
+
 	healResult := HealResult{}
-	err = json.Unmarshal(jsonBytes, &healResult)
+	err = json.Unmarshal(healUploadResp.HealResult, &healResult)
 	if err != nil {
 		return HealResult{}, err
 	}
@@ -508,6 +533,12 @@ const (
 	// HealOK - all disks were healed
 	HealOK
 )
+
+// HealObjectResponse - xml response of heal object web service
+type HealObjectResponse struct {
+	HealResult []byte         `xml:"HealResult"`
+	Error      *ErrorResponse `xml:"Error"`
+}
 
 // HealObject - Heal the given object.
 func (adm *AdminClient) HealObject(bucket, object string, dryrun bool) (HealResult, error) {
@@ -545,13 +576,24 @@ func (adm *AdminClient) HealObject(bucket, object string, dryrun bool) (HealResu
 		return HealResult{}, nil
 	}
 
-	jsonBytes, err := ioutil.ReadAll(resp.Body)
+	respBody, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return HealResult{}, err
 	}
 
+	var healObjectResp HealObjectResponse
+
+	err = xml.Unmarshal(respBody, &healObjectResp)
+	if err != nil {
+		return HealResult{}, err
+	}
+
+	if healObjectResp.Error != nil {
+		return HealResult{}, healObjectResp.Error
+	}
+
 	healResult := HealResult{}
-	err = json.Unmarshal(jsonBytes, &healResult)
+	err = json.Unmarshal(healObjectResp.HealResult, &healResult)
 	if err != nil {
 		return HealResult{}, err
 	}
@@ -591,6 +633,12 @@ func (adm *AdminClient) HealFormat(dryrun bool) error {
 	return nil
 }
 
+// ListUploadsHealResponse - xml response of list uploads heal web service
+type ListUploadsHealResponse struct {
+	HealList listUploadsHealResponse `xml:"ListMultipartUploadsResult"`
+	Error    *ErrorResponse          `xml:"Error"`
+}
+
 // mkUploadsHealQuery - helper function to construct query params for
 // ListUploadsHeal API.
 func mkUploadsHealQuery(bucket, prefix, marker, uploadIDMarker, delimiter, maxUploadsStr string) url.Values {
@@ -619,9 +667,6 @@ func (adm *AdminClient) listUploadsHeal(bucket, prefix, marker, uploadIDMarker, 
 		customHeaders: hdrs,
 	}
 
-	// Empty 'list' of objects to be healed.
-	toBeHealedUploads := listUploadsHealResponse{}
-
 	// Execute GET on /?heal to list objects needing heal.
 	resp, err := adm.executeMethod("GET", reqData)
 
@@ -631,16 +676,22 @@ func (adm *AdminClient) listUploadsHeal(bucket, prefix, marker, uploadIDMarker, 
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return toBeHealedUploads, httpRespToErrorResponse(resp)
+		return listUploadsHealResponse{}, httpRespToErrorResponse(resp)
 
 	}
 
-	err = xml.NewDecoder(resp.Body).Decode(&toBeHealedUploads)
+	listUploadsHealResp := ListUploadsHealResponse{}
+
+	err = xml.NewDecoder(resp.Body).Decode(&listUploadsHealResp)
 	if err != nil {
 		return listUploadsHealResponse{}, err
 	}
 
-	return toBeHealedUploads, nil
+	if listUploadsHealResp.Error != nil {
+		return listUploadsHealResponse{}, listUploadsHealResp.Error
+	}
+
+	return listUploadsHealResp.HealList, nil
 }
 
 // ListUploadsHeal - issues list heal uploads API request

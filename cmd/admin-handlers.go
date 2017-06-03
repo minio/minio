@@ -54,6 +54,36 @@ const (
 	mgmtUploadID       mgmtQueryKey = "upload-id"
 )
 
+// Whitespaces are sent at regular intervals when there is
+// no ready data to send over a http response writer
+const pingInterval = 5 * time.Second
+
+// sendXMLResponse encodes structs to XML and send them to the http
+// response writer. Also, it sends white spaces at regular interval
+// when no data are ready to be received.
+func sendXMLResponse(w http.ResponseWriter, data <-chan interface{}, doneCh chan<- interface{}) {
+	defer close(doneCh)
+
+	// Send successful 200 OK header
+	writeSuccessResponseHeadersOnly(w)
+
+	for {
+		select {
+		case elem, ok := <-data:
+			if !ok {
+				return
+			}
+			if err := writeBody(w, encodeResponse(elem)); err != nil {
+				return
+			}
+		case <-time.After(pingInterval):
+			if err := writeBody(w, []byte(" ")); err != nil {
+				return
+			}
+		}
+	}
+}
+
 // ServerVersion - server version
 type ServerVersion struct {
 	Version  string `json:"version"`
@@ -416,6 +446,12 @@ func (adminAPI adminAPIHandlers) ClearLocksHandler(w http.ResponseWriter, r *htt
 	writeSuccessResponseJSON(w, jsonBytes)
 }
 
+// ListUploadsHealResponse - xml response of ListUploadsHeal web service
+type ListUploadsHealResponse struct {
+	HealList ListMultipartUploadsResponse `xml:"ListMultipartUploadsResult"`
+	Error    *APIErrorResponse            `xml:"Error"`
+}
+
 // ListUploadsHealHandler - similar to listObjectsHealHandler
 // GET
 // /?heal&bucket=mybucket&prefix=myprefix&key-marker=mymarker&upload-id-marker=myuploadid&delimiter=mydelimiter&max-uploads=1000
@@ -452,17 +488,27 @@ func (adminAPI adminAPIHandlers) ListUploadsHealHandler(w http.ResponseWriter, r
 		return
 	}
 
-	// Get the list objects to be healed.
-	listMultipartInfos, err := objLayer.ListUploadsHeal(bucket, prefix,
-		keyMarker, uploadIDMarker, delimiter, maxUploads)
-	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-		return
-	}
+	resultCh := make(chan interface{})
+	doneCh := make(chan interface{})
 
-	listResponse := generateListMultipartUploadsResponse(bucket, listMultipartInfos)
-	// Write success response.
-	writeSuccessResponseXML(w, encodeResponse(listResponse))
+	go func() {
+		resp := ListUploadsHealResponse{}
+		// Get the list objects to be healed.
+		listMultipartInfos, err := objLayer.ListUploadsHeal(bucket, prefix,
+			keyMarker, uploadIDMarker, delimiter, maxUploads)
+		if err != nil {
+			resp.Error = getAPIErrorFromCode(toAPIErrorCode(err), r.URL.Path)
+		} else {
+			resp.HealList = generateListMultipartUploadsResponse(bucket, listMultipartInfos)
+		}
+		select {
+		case resultCh <- resp:
+			close(resultCh)
+		case <-doneCh:
+		}
+	}()
+
+	sendXMLResponse(w, resultCh, doneCh)
 }
 
 // extractListObjectsHealQuery - Validates query params for heal objects list management API.
@@ -501,6 +547,12 @@ func extractListObjectsHealQuery(vars url.Values) (string, string, string, strin
 	return bucket, prefix, marker, delimiter, maxKey, ErrNone
 }
 
+// ListObjectsHealResponse - xml response to ListObjectsHeal web service
+type ListObjectsHealResponse struct {
+	HealList ListObjectsResponse `xml:"ListBucketResult"`
+	Error    *APIErrorResponse   `xml:"Error"`
+}
+
 // ListObjectsHealHandler - GET /?heal&bucket=mybucket&prefix=myprefix&marker=mymarker&delimiter=&mydelimiter&maxKey=1000
 // - bucket is mandatory query parameter
 // - rest are optional query parameters
@@ -528,16 +580,29 @@ func (adminAPI adminAPIHandlers) ListObjectsHealHandler(w http.ResponseWriter, r
 		return
 	}
 
-	// Get the list objects to be healed.
-	objectInfos, err := objLayer.ListObjectsHeal(bucket, prefix, marker, delimiter, maxKey)
-	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-		return
-	}
+	resultCh := make(chan interface{})
+	doneCh := make(chan interface{})
 
-	listResponse := generateListObjectsV1Response(bucket, prefix, marker, delimiter, maxKey, objectInfos)
-	// Write success response.
-	writeSuccessResponseXML(w, encodeResponse(listResponse))
+	go func() {
+		resp := ListObjectsHealResponse{}
+
+		// Get the list objects to be healed.
+		objectInfos, err := objLayer.ListObjectsHeal(bucket, prefix, marker, delimiter, maxKey)
+		if err != nil {
+			resp.Error = getAPIErrorFromCode(toAPIErrorCode(err), r.URL.Path)
+
+		} else {
+			resp.HealList = generateListObjectsV1Response(bucket, prefix, marker, delimiter, maxKey, objectInfos)
+		}
+
+		select {
+		case resultCh <- resp:
+			close(resultCh)
+		case <-doneCh:
+		}
+	}()
+
+	sendXMLResponse(w, resultCh, doneCh)
 }
 
 // ListBucketsHealHandler - GET /?heal
@@ -657,6 +722,12 @@ func newHealResult(numHealedDisks, numOfflineDisks int) healResult {
 	return healResult{State: state}
 }
 
+// HealObjectResponse - xml response to HealObject web service
+type HealObjectResponse struct {
+	HealResult []byte            `xml:"HealResult"`
+	Error      *APIErrorResponse `xml:"Error"`
+}
+
 // HealObjectHandler - POST /?heal&bucket=mybucket&object=myobject&dry-run
 // - x-minio-operation = object
 // - bucket and object are both mandatory query parameters
@@ -699,20 +770,39 @@ func (adminAPI adminAPIHandlers) HealObjectHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	numOfflineDisks, numHealedDisks, err := objLayer.HealObject(bucket, object)
-	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-		return
-	}
+	resultCh := make(chan interface{})
+	doneCh := make(chan interface{})
 
-	jsonBytes, err := json.Marshal(newHealResult(numHealedDisks, numOfflineDisks))
-	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-		return
-	}
+	go func() {
+		resp := HealObjectResponse{}
 
-	// Return 200 on success.
-	writeSuccessResponseJSON(w, jsonBytes)
+		numOfflineDisks, numHealedDisks, err := objLayer.HealObject(bucket, object)
+		if err != nil {
+			resp.Error = getAPIErrorFromCode(toAPIErrorCode(err), r.URL.Path)
+		} else {
+			jsonBytes, err := json.Marshal(newHealResult(numHealedDisks, numOfflineDisks))
+			if err != nil {
+				resp.Error = getAPIErrorFromCode(toAPIErrorCode(err), r.URL.Path)
+			} else {
+				resp.HealResult = jsonBytes
+			}
+		}
+
+		select {
+		case resultCh <- resp:
+			close(resultCh)
+		case <-doneCh:
+		}
+
+	}()
+
+	sendXMLResponse(w, resultCh, doneCh)
+}
+
+// HealUploadResponse - xml response of HealUpload web service
+type HealUploadResponse struct {
+	HealResult []byte            `xml:"HealResult"`
+	Error      *APIErrorResponse `xml:"Error"`
 }
 
 // HealUploadHandler - POST /?heal&bucket=mybucket&object=myobject&upload-id=myuploadID&dry-run
@@ -769,25 +859,39 @@ func (adminAPI adminAPIHandlers) HealUploadHandler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	//We are able to use HealObject for healing an upload since an
-	//ongoing upload has the same backend representation as an
-	//object.  The 'object' corresponding to a given bucket,
-	//object and uploadID is
-	//.minio.sys/multipart/bucket/object/uploadID.
-	numOfflineDisks, numHealedDisks, err := objLayer.HealObject(minioMetaMultipartBucket, uploadObj)
-	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-		return
-	}
+	resultCh := make(chan interface{})
+	doneCh := make(chan interface{})
 
-	jsonBytes, err := json.Marshal(newHealResult(numHealedDisks, numOfflineDisks))
-	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-		return
-	}
+	go func() {
+		resp := HealUploadResponse{}
 
-	// Return 200 on success.
-	writeSuccessResponseJSON(w, jsonBytes)
+		//We are able to use HealObject for healing an upload since an
+		//ongoing upload has the same backend representation as an
+		//object.  The 'object' corresponding to a given bucket,
+		//object and uploadID is
+		//.minio.sys/multipart/bucket/object/uploadID.
+		numOfflineDisks, numHealedDisks, err := objLayer.HealObject(minioMetaMultipartBucket, uploadObj)
+		if err != nil {
+			resp.Error = getAPIErrorFromCode(toAPIErrorCode(err), r.URL.Path)
+
+		} else {
+			jsonBytes, err := json.Marshal(newHealResult(numHealedDisks, numOfflineDisks))
+			if err != nil {
+				resp.Error = getAPIErrorFromCode(toAPIErrorCode(err), r.URL.Path)
+
+			} else {
+				resp.HealResult = jsonBytes
+			}
+		}
+
+		select {
+		case resultCh <- resp:
+			close(resultCh)
+		case <-doneCh:
+		}
+	}()
+
+	sendXMLResponse(w, resultCh, doneCh)
 }
 
 // HealFormatHandler - POST /?heal&dry-run

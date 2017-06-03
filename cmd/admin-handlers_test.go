@@ -1470,7 +1470,7 @@ func TestListHealUploadsHandler(t *testing.T) {
 		delimiter    string
 		maxKeys      string
 		statusCode   int
-		expectedResp ListMultipartUploadsResponse
+		expectedResp ListUploadsHealResponse
 	}{
 		// 1. Valid params.
 		{
@@ -1480,14 +1480,14 @@ func TestListHealUploadsHandler(t *testing.T) {
 			delimiter:  "/",
 			maxKeys:    "10",
 			statusCode: http.StatusOK,
-			expectedResp: ListMultipartUploadsResponse{
+			expectedResp: ListUploadsHealResponse{HealList: ListMultipartUploadsResponse{
 				XMLName:    xml.Name{Space: "http://s3.amazonaws.com/doc/2006-03-01/", Local: "ListMultipartUploadsResult"},
 				Bucket:     "mybucket",
 				KeyMarker:  "prefix11",
 				Delimiter:  "/",
 				Prefix:     "prefix",
 				MaxUploads: 10,
-			},
+			}},
 		},
 		// 2. Valid params with empty prefix.
 		{
@@ -1497,14 +1497,14 @@ func TestListHealUploadsHandler(t *testing.T) {
 			delimiter:  "/",
 			maxKeys:    "10",
 			statusCode: http.StatusOK,
-			expectedResp: ListMultipartUploadsResponse{
+			expectedResp: ListUploadsHealResponse{HealList: ListMultipartUploadsResponse{
 				XMLName:    xml.Name{Space: "http://s3.amazonaws.com/doc/2006-03-01/", Local: "ListMultipartUploadsResult"},
 				Bucket:     "mybucket",
 				KeyMarker:  "",
 				Delimiter:  "/",
 				Prefix:     "",
 				MaxUploads: 10,
-			},
+			}},
 		},
 		// 3. Invalid params with invalid bucket.
 		{
@@ -1585,7 +1585,7 @@ func TestListHealUploadsHandler(t *testing.T) {
 				t.Errorf("Test %d: Failed to read response %v", i+1, err)
 			}
 
-			var actualResult ListMultipartUploadsResponse
+			var actualResult ListUploadsHealResponse
 			err = xml.Unmarshal(xmlBytes, &actualResult)
 			if err != nil {
 				t.Errorf("Test %d: Failed to unmarshal xml %v", i+1, err)
