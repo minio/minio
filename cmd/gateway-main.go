@@ -233,6 +233,11 @@ func gatewayMain(ctx *cli.Context) {
 
 	router := mux.NewRouter().SkipClean(true)
 
+	if gatewayBackend(backendType) == azureBackend ||
+		gatewayBackend(backendType) == s3Backend {
+		globalIsEnvCreds = true
+	}
+
 	// Register web router when its enabled.
 	if globalIsBrowserEnabled {
 		aerr := registerWebRouter(router)
