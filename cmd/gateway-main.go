@@ -19,11 +19,12 @@ package cmd
 import (
 	"errors"
 	"fmt"
-	"github.com/gorilla/mux"
-	"github.com/minio/cli"
 	"net/url"
 	"os"
 	"strings"
+
+	"github.com/gorilla/mux"
+	"github.com/minio/cli"
 )
 
 var gatewayTemplate = `NAME:

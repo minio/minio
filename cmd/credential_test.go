@@ -23,6 +23,9 @@ func TestMustGetNewCredential(t *testing.T) {
 	if !cred.IsValid() {
 		t.Fatalf("Failed to get new valid credential")
 	}
+	if len(cred.SecretKey) != secretKeyMaxLenMinio {
+		t.Fatalf("Invalid length %d of the secretKey credential generated, expected %d", len(cred.SecretKey), secretKeyMaxLenMinio)
+	}
 }
 
 func TestCreateCredential(t *testing.T) {
