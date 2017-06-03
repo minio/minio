@@ -609,6 +609,25 @@ func loadAllQueueTargets() (map[string]*logrus.Logger, error) {
 		}
 	}
 
+	// Load all mqtt targets, initialize their respective loggers.
+	for accountID, mqttN := range serverConfig.Notify.GetMQTT() {
+		if !mqttN.Enable {
+			continue
+		}
+
+		if queueARN, err := addQueueTarget(queueTargets, accountID, queueTypeMQTT, newMQTTNotify); err != nil {
+			if _, ok := err.(net.Error); ok {
+				err = &net.OpError{
+					Op:  "Connecting to " + queueARN,
+					Net: "tcp",
+					Err: err,
+				}
+			}
+
+			return nil, err
+		}
+	}
+
 	// Load all nats targets, initialize their respective loggers.
 	for accountID, natsN := range serverConfig.Notify.GetNATS() {
 		if !natsN.Enable {
