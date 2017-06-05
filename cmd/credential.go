@@ -25,19 +25,35 @@ import (
 )
 
 const (
-	accessKeyMinLen       = 5
-	accessKeyMaxLen       = 20
-	secretKeyMinLen       = 8
-	secretKeyMaxLenAmazon = 100
-	alphaNumericTable     = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-	alphaNumericTableLen  = byte(len(alphaNumericTable))
+	// Minimum length for Minio access key.
+	accessKeyMinLen = 5
+
+	// Maximum length for Minio access key.
+	accessKeyMaxLen = 20
+
+	// Minimum length for Minio secret key for both server and gateway mode.
+	secretKeyMinLen = 8
+
+	// Maximum secret key length for Minio, this
+	// is used when autogenerating new credentials.
+	secretKeyMaxLenMinio = 40
+
+	// Maximum secret key length allowed from client side
+	// caters for both server and gateway mode.
+	secretKeyMaxLen = 100
+
+	// Alpha numeric table used for generating access keys.
+	alphaNumericTable = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+	// Total length of the alpha numeric table.
+	alphaNumericTableLen = byte(len(alphaNumericTable))
 )
 
+// Common errors generated for access and secret key validation.
 var (
 	errInvalidAccessKeyLength = errors.New("Invalid access key, access key should be 5 to 20 characters in length")
 	errInvalidSecretKeyLength = errors.New("Invalid secret key, secret key should be 8 to 100 characters in length")
 )
-var secretKeyMaxLen = secretKeyMaxLenAmazon
 
 // isAccessKeyValid - validate access key for right length.
 func isAccessKeyValid(accessKey string) bool {
@@ -111,10 +127,10 @@ func mustGetNewCredential() credential {
 	accessKey := string(keyBytes)
 
 	// Generate secret key.
-	keyBytes = make([]byte, secretKeyMaxLen)
+	keyBytes = make([]byte, secretKeyMaxLenMinio)
 	_, err = rand.Read(keyBytes)
 	fatalIf(err, "Unable to generate secret key.")
-	secretKey := string([]byte(base64.StdEncoding.EncodeToString(keyBytes))[:secretKeyMaxLen])
+	secretKey := string([]byte(base64.StdEncoding.EncodeToString(keyBytes))[:secretKeyMaxLenMinio])
 
 	cred, err := createCredential(accessKey, secretKey)
 	fatalIf(err, "Unable to generate new credential.")
