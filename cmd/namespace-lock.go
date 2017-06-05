@@ -27,6 +27,9 @@ import (
 // Global name space lock.
 var globalNSMutex *nsLockMap
 
+// Global lock servers
+var globalLockServers []*lockServer
+
 // RWLocker - locker interface extends sync.Locker
 // to introduce RLock, RUnlock.
 type RWLocker interface {
@@ -36,27 +39,45 @@ type RWLocker interface {
 }
 
 // Initialize distributed locking only in case of distributed setup.
-// Returns if the setup is distributed or not on success.
-func initDsyncNodes() error {
+// Returns lock clients and the node index for the current server.
+func newDsyncNodes(endpoints EndpointList) (clnts []dsync.NetLocker, myNode int) {
 	cred := serverConfig.GetCredential()
-	// Initialize rpc lock client information only if this instance is a distributed setup.
-	clnts := make([]dsync.NetLocker, len(globalEndpoints))
-	myNode := -1
-	for index, endpoint := range globalEndpoints {
-		clnts[index] = newLockRPCClient(authConfig{
-			accessKey:       cred.AccessKey,
-			secretKey:       cred.SecretKey,
-			serverAddr:      endpoint.Host,
-			secureConn:      globalIsSSL,
-			serviceEndpoint: pathutil.Join(minioReservedBucketPath, lockServicePath, endpoint.Path),
-			serviceName:     lockServiceName,
-		})
-		if endpoint.IsLocal && myNode == -1 {
+	clnts = make([]dsync.NetLocker, len(endpoints))
+	myNode = -1
+	for index, endpoint := range endpoints {
+		if !endpoint.IsLocal {
+			// For a remote endpoints setup a lock RPC client.
+			clnts[index] = newLockRPCClient(authConfig{
+				accessKey:       cred.AccessKey,
+				secretKey:       cred.SecretKey,
+				serverAddr:      endpoint.Host,
+				secureConn:      globalIsSSL,
+				serviceEndpoint: pathutil.Join(minioReservedBucketPath, lockServicePath, endpoint.Path),
+				serviceName:     lockServiceName,
+			})
+			continue
+		}
+
+		// Local endpoint
+		if myNode == -1 {
 			myNode = index
 		}
+		// For a local endpoint, setup a local lock server to
+		// avoid network requests.
+		localLockServer := lockServer{
+			AuthRPCServer: AuthRPCServer{},
+			ll: localLocker{
+				mutex:           sync.Mutex{},
+				serviceEndpoint: endpoint.Path,
+				serverAddr:      endpoint.Host,
+				lockMap:         make(map[string][]lockRequesterInfo),
+			},
+		}
+		globalLockServers = append(globalLockServers, &localLockServer)
+		clnts[index] = &(localLockServer.ll)
 	}
 
-	return dsync.Init(clnts, myNode)
+	return clnts, myNode
 }
 
 // initNSLock - initialize name space lock map.

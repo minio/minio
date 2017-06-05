@@ -340,10 +340,11 @@ func TestServerListenAndServePlain(t *testing.T) {
 }
 
 func TestServerListenAndServeTLS(t *testing.T) {
-	_, err := newTestConfig(globalMinioDefaultRegion)
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
+	defer removeAll(rootPath)
 
 	wait := make(chan struct{})
 	addr := net.JoinHostPort("127.0.0.1", getFreePort())
