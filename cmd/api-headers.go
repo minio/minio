@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -68,6 +69,9 @@ func setObjectHeaders(w http.ResponseWriter, objInfo ObjectInfo, contentRange *h
 
 	// Set all other user defined metadata.
 	for k, v := range objInfo.UserDefined {
+		if strings.EqualFold(k, "X-Amz-Meta-Cache-Control") {
+			k = "Cache-Control"
+		}
 		w.Header().Set(k, v)
 	}
 
