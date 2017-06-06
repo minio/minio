@@ -234,6 +234,9 @@ func gatewayMain(ctx *cli.Context) {
 
 	router := mux.NewRouter().SkipClean(true)
 
+	// credentials Envs are set globally.
+	globalIsEnvCreds = true
+
 	// Register web router when its enabled.
 	if globalIsBrowserEnabled {
 		aerr := registerWebRouter(router)
