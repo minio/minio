@@ -22,6 +22,7 @@ import (
 	"io/ioutil"
 	"sync"
 
+	"github.com/minio/minio-go/pkg/set"
 	"github.com/minio/minio/pkg/quick"
 	"github.com/tidwall/gjson"
 )
@@ -148,7 +149,7 @@ func newServerConfigV18() *serverConfigV18 {
 	srvCfg.Notify.MySQL = make(map[string]mySQLNotify)
 	srvCfg.Notify.MySQL["1"] = mySQLNotify{}
 	srvCfg.Notify.Kafka = make(map[string]kafkaNotify)
-	srvCfg.Notify.Kafka["1"] = kafkaNotify{}
+	srvCfg.Notify.Kafka["1"] = kafkaNotify{Brokers: set.NewStringSet()}
 	srvCfg.Notify.Webhook = make(map[string]webhookNotify)
 	srvCfg.Notify.Webhook["1"] = webhookNotify{}
 
