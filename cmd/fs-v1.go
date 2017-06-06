@@ -113,10 +113,41 @@ func fsReaddirMetaBuckets(fsPath string) ([]string, error) {
 	return f.Readdirnames(-1)
 }
 
+// List of all bucket metadata configs.
 var bucketMetadataConfigs = []string{
 	bucketNotificationConfig,
 	bucketListenerConfig,
 	bucketPolicyConfig,
+}
+
+// Migrates bucket metadata configs, ignores all other files.
+func migrateBucketMetadataConfigs(metaBucket, bucket, tmpBucket string) error {
+	for _, bucketMetaFile := range bucketMetadataConfigs {
+		fi, err := fsStat(pathJoin(metaBucket, tmpBucket, bucketMetaFile))
+		if err != nil {
+			// There are no such files or directories found,
+			// proceed to next bucket metadata config.
+			if os.IsNotExist(errorCause(err)) {
+				continue
+			}
+			return err
+		}
+
+		// Bucket metadata is a file, move it as an actual bucket config.
+		if fi.Mode().IsRegular() {
+			if err = fsRenameFile(pathJoin(metaBucket, tmpBucket, bucketMetaFile),
+				pathJoin(metaBucket, bucket, bucketMetaFile)); err != nil {
+				if errorCause(err) != errFileNotFound {
+					return err
+				}
+			}
+		}
+
+		// All other file types are ignored.
+	}
+
+	// Success.
+	return nil
 }
 
 // Attempts to migrate old object metadata files to newer format
@@ -152,14 +183,9 @@ func migrateFSFormatV1ToV2(fsPath, fsUUID string) (err error) {
 			return err
 		}
 
-		///  Rename all bucket metadata files to newly created `bucket`.
-		for _, bucketMetaFile := range bucketMetadataConfigs {
-			if err = fsRenameFile(pathJoin(metaBucket, tmpBucket, bucketMetaFile),
-				pathJoin(metaBucket, bucket, bucketMetaFile)); err != nil {
-				if errorCause(err) != errFileNotFound {
-					return err
-				}
-			}
+		// Migrate all the bucket metadata configs.
+		if err = migrateBucketMetadataConfigs(metaBucket, bucket, tmpBucket); err != nil {
+			return err
 		}
 
 		// Finally rename the temporary bucket to `bucket/objects` directory.
@@ -169,6 +195,7 @@ func migrateFSFormatV1ToV2(fsPath, fsUUID string) (err error) {
 				return err
 			}
 		}
+
 	}
 
 	log.Printf("Migrating bucket metadata format from \"%s\" to newer format \"%s\"... completed successfully.", fsFormatV1, fsFormatV2)

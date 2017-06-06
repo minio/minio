@@ -208,6 +208,116 @@ func TestFSMigrateObjectWithErr(t *testing.T) {
 }
 
 // Tests migrating FS format with .minio.sys/buckets filled with
+// objects such as policy.json/fs.json, notification.xml/fs.json
+// listener.json/fs.json.
+func TestFSMigrateObjectWithBucketConfigObjects(t *testing.T) {
+	// Prepare for testing
+	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
+	defer removeAll(disk)
+
+	// Assign a new UUID.
+	uuid := mustGetUUID()
+
+	// Initialize meta volume, if volume already exists ignores it.
+	if err := initMetaVolumeFS(disk, uuid); err != nil {
+		t.Fatal(err)
+	}
+
+	fsFormatPath := pathJoin(disk, minioMetaBucket, fsFormatJSONFile)
+	formatCfg := &formatConfigV1{
+		Version: "1",
+		Format:  "fs",
+		FS: &fsFormat{
+			Version: "1",
+		},
+	}
+	lk, err := lock.LockedOpenFile(preparePath(fsFormatPath), os.O_RDWR|os.O_CREATE, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = formatCfg.WriteTo(lk)
+	lk.Close()
+	if err != nil {
+		t.Fatal("Should not fail here", err)
+	}
+
+	// Construct the full path of fs.json
+	fsPath1 := pathJoin(bucketMetaPrefix, "testvolume1", bucketPolicyConfig, fsMetaJSONFile)
+	fsPath1 = pathJoin(disk, minioMetaBucket, fsPath1)
+
+	fsMetaJSON := `{"version":"1.0.0","format":"fs","minio":{"release":"DEVELOPMENT.2017-03-27T02-26-33Z"},"meta":{"etag":"467886be95c8ecfd71a2900e3f461b4f"}`
+	if _, err = fsCreateFile(fsPath1, bytes.NewReader([]byte(fsMetaJSON)), nil, 0); err != nil {
+		t.Fatal(err)
+	}
+
+	// Construct the full path of fs.json
+	fsPath2 := pathJoin(bucketMetaPrefix, "testvolume2", bucketNotificationConfig, fsMetaJSONFile)
+	fsPath2 = pathJoin(disk, minioMetaBucket, fsPath2)
+
+	fsMetaJSON = `{"version":"1.0.0","format":"fs","minio":{"release":"DEVELOPMENT.2017-03-27T02-26-33Z"},"meta":{"etag":"467886be95c8ecfd71a2900eff461b4d"}`
+	if _, err = fsCreateFile(fsPath2, bytes.NewReader([]byte(fsMetaJSON)), nil, 0); err != nil {
+		t.Fatal(err)
+	}
+
+	// Construct the full path of fs.json
+	fsPath3 := pathJoin(bucketMetaPrefix, "testvolume3", bucketListenerConfig, fsMetaJSONFile)
+	fsPath3 = pathJoin(disk, minioMetaBucket, fsPath3)
+
+	fsMetaJSON = `{"version":"1.0.0","format":"fs","minio":{"release":"DEVELOPMENT.2017-03-27T02-26-33Z"},"meta":{"etag":"467886be95c8ecfd71a2900eff461b4d"}`
+	if _, err = fsCreateFile(fsPath3, bytes.NewReader([]byte(fsMetaJSON)), nil, 0); err != nil {
+		t.Fatal(err)
+	}
+
+	if err = initFormatFS(disk, mustGetUUID()); err != nil {
+		t.Fatal("Should not fail here", err)
+	}
+
+	fsPath1 = pathJoin(bucketMetaPrefix, "testvolume1", objectMetaPrefix, bucketPolicyConfig, fsMetaJSONFile)
+	fsPath1 = pathJoin(disk, minioMetaBucket, fsPath1)
+	fi, err := fsStatFile(fsPath1)
+	if err != nil {
+		t.Fatal("Path should exist and accessible after migration", err)
+	}
+	if fi.IsDir() {
+		t.Fatalf("Unexpected path %s should be a file", fsPath1)
+	}
+
+	fsPath2 = pathJoin(bucketMetaPrefix, "testvolume2", objectMetaPrefix, bucketNotificationConfig, fsMetaJSONFile)
+	fsPath2 = pathJoin(disk, minioMetaBucket, fsPath2)
+	fi, err = fsStatFile(fsPath2)
+	if err != nil {
+		t.Fatal("Path should exist and accessible after migration", err)
+	}
+	if fi.IsDir() {
+		t.Fatalf("Unexpected path %s should be a file", fsPath2)
+	}
+
+	fsPath3 = pathJoin(bucketMetaPrefix, "testvolume3", objectMetaPrefix, bucketListenerConfig, fsMetaJSONFile)
+	fsPath3 = pathJoin(disk, minioMetaBucket, fsPath3)
+	fi, err = fsStatFile(fsPath3)
+	if err != nil {
+		t.Fatal("Path should exist and accessible after migration", err)
+	}
+	if fi.IsDir() {
+		t.Fatalf("Unexpected path %s should be a file", fsPath3)
+	}
+
+	formatCfg = &formatConfigV1{}
+	lk, err = lock.LockedOpenFile(preparePath(fsFormatPath), os.O_RDONLY, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = formatCfg.ReadFrom(lk)
+	lk.Close()
+	if err != nil {
+		t.Fatal("Should not fail here", err)
+	}
+	if formatCfg.FS.Version != fsFormatV2 {
+		t.Fatalf("Unexpected version detected expected \"%s\", got %s", fsFormatV2, formatCfg.FS.Version)
+	}
+}
+
+// Tests migrating FS format with .minio.sys/buckets filled with
 // object metadata.
 func TestFSMigrateObjectWithObjects(t *testing.T) {
 	// Prepare for testing

@@ -123,24 +123,31 @@ func fsMkdir(dirPath string) (err error) {
 	return nil
 }
 
+func fsStat(statLoc string) (os.FileInfo, error) {
+	if statLoc == "" {
+		return nil, traceError(errInvalidArgument)
+	}
+	if err := checkPathLength(statLoc); err != nil {
+		return nil, traceError(err)
+	}
+	fi, err := osStat(preparePath(statLoc))
+	if err != nil {
+		return nil, traceError(err)
+	}
+	return fi, nil
+}
+
 // Lookup if directory exists, returns directory
 // attributes upon success.
 func fsStatDir(statDir string) (os.FileInfo, error) {
-	if statDir == "" {
-		return nil, traceError(errInvalidArgument)
-	}
-	if err := checkPathLength(statDir); err != nil {
-		return nil, traceError(err)
-	}
-
-	fi, err := osStat(preparePath(statDir))
+	fi, err := fsStat(statDir)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if os.IsNotExist(errorCause(err)) {
 			return nil, traceError(errVolumeNotFound)
-		} else if os.IsPermission(err) {
+		} else if os.IsPermission(errorCause(err)) {
 			return nil, traceError(errVolumeAccessDenied)
 		}
-		return nil, traceError(err)
+		return nil, err
 	}
 
 	if !fi.IsDir() {
@@ -152,26 +159,18 @@ func fsStatDir(statDir string) (os.FileInfo, error) {
 
 // Lookup if file exists, returns file attributes upon success
 func fsStatFile(statFile string) (os.FileInfo, error) {
-	if statFile == "" {
-		return nil, traceError(errInvalidArgument)
-	}
-
-	if err := checkPathLength(statFile); err != nil {
-		return nil, traceError(err)
-	}
-
-	fi, err := osStat(preparePath(statFile))
+	fi, err := fsStat(statFile)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if os.IsNotExist(errorCause(err)) {
 			return nil, traceError(errFileNotFound)
-		} else if os.IsPermission(err) {
+		} else if os.IsPermission(errorCause(err)) {
 			return nil, traceError(errFileAccessDenied)
-		} else if isSysErrNotDir(err) {
+		} else if isSysErrNotDir(errorCause(err)) {
 			return nil, traceError(errFileAccessDenied)
-		} else if isSysErrPathNotFound(err) {
+		} else if isSysErrPathNotFound(errorCause(err)) {
 			return nil, traceError(errFileNotFound)
 		}
-		return nil, traceError(err)
+		return nil, err
 	}
 	if fi.IsDir() {
 		return nil, traceError(errFileAccessDenied)
