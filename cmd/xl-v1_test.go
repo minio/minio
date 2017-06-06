@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -164,5 +165,111 @@ func TestNewXL(t *testing.T) {
 	_, err = newXLObjects(formattedDisks)
 	if err != nil {
 		t.Fatalf("Unable to initialize erasure, %s", err)
+	}
+}
+
+// saveXLToDisk - helper function to save an XL format to a specific
+// disk. This is intended only to be used in tests.
+func saveXLToDisk(disk StorageAPI, format *formatConfigV1) (err error) {
+	// Marshal and write to disk.
+	formatBytes, err := json.Marshal(format)
+	if err != nil {
+		return err
+	}
+
+	// Purge any existing temporary file, okay to ignore errors here.
+	disk.DeleteFile(minioMetaBucket, formatConfigFileTmp)
+
+	// Append file `format.json.tmp`.
+	if err = disk.AppendFile(minioMetaBucket, formatConfigFileTmp, formatBytes); err != nil {
+		return err
+	}
+
+	// Rename file `format.json.tmp` --> `format.json`.
+	if err = disk.RenameFile(minioMetaBucket, formatConfigFileTmp, minioMetaBucket, formatConfigFile); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// TestNewXLFormatErrors - tests that XL's format.json validation
+// errors stop the initialization of the object layer.
+func TestNewXLFormatErrors(t *testing.T) {
+	var nDisks = 16 // Maximum disks.
+	var erasureDisks []string
+	for i := 0; i < nDisks; i++ {
+		// Do not attempt to create this path, the test validates
+		// so that newXLObjects initializes non existing paths
+		// and successfully returns initialized object layer.
+		disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
+		erasureDisks = append(erasureDisks, disk)
+		defer removeAll(disk)
+	}
+
+	endpoints := mustGetNewEndpointList(erasureDisks...)
+	storageDisks, err := initStorageDisks(endpoints)
+	if err != nil {
+		t.Fatal("Unexpected error: ", err)
+	}
+
+	// Initializes all erasure disks
+	formattedDisks, err := waitForFormatXLDisks(true, endpoints, storageDisks)
+	if err != nil {
+		t.Fatalf("Unable to format disks for erasure, %s", err)
+	}
+
+	// Disks are formatted - let's corrupt format.json on the last
+	// disk to cause errors.
+	disk := formattedDisks[15]
+	format, err := loadFormat(disk)
+	if err != nil {
+		t.Fatal("unexpected error: ", err)
+	}
+
+	// corrupt format file version
+	format.Version = "2"
+	err = saveXLToDisk(disk, format)
+	if err != nil {
+		t.Fatal("unexpected error: ", err)
+	}
+	_, err = newXLObjects(formattedDisks)
+	if err == nil || err.Error() != "Unable to recognize backend format - error on disk 16: unknown version of backend format `2` found; please upgrade Minio server; if you are running the latest version, you may have a corrupt file - please join https://slack.minio.io for assistance" {
+		t.Fatal("Got unexpected error value:", err)
+	}
+
+	// corrupt format name
+	format.Version = "1"
+	format.Format = "garbage"
+	err = saveXLToDisk(disk, format)
+	if err != nil {
+		t.Fatal("unexpected error: ", err)
+	}
+	_, err = newXLObjects(formattedDisks)
+	if err == nil || err.Error() != "Unable to recognize backend format - error on disk 16: unknown backend format `garbage` found" {
+		t.Fatal("Got unexpected error value:", err)
+	}
+
+	// corrupt xl disk format version
+	format.Format = "xl"
+	format.XL.Version = "2"
+	err = saveXLToDisk(disk, format)
+	if err != nil {
+		t.Fatal("unexpected error: ", err)
+	}
+	_, err = newXLObjects(formattedDisks)
+	if err == nil || err.Error() != "Unable to recognize backend format - error on disk 16: unknown XL backend format version `2` found; please upgrade Minio server; if you are running the latest version, you may have a corrupt file - please join https://slack.minio.io for assistance" {
+		t.Fatal("Got unexpected error value:", err)
+	}
+
+	// fix the file and check that the error stops
+	format.XL.Version = "1"
+	err = saveXLToDisk(disk, format)
+	if err != nil {
+		t.Fatal("unexpected error:", err)
+	}
+	_, err = newXLObjects(formattedDisks)
+	if err != nil {
+		t.Fatal("Unable to initialize erasure:", err)
 	}
 }

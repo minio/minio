@@ -318,7 +318,7 @@ func isSavedUUIDInOrder(uuid string, formatConfigs []*formatConfigV1) bool {
 }
 
 // checkDisksConsistency - checks if all disks are consistent with all JBOD entries on all disks.
-func checkDisksConsistency(formatConfigs []*formatConfigV1) error {
+func checkDisksConsistency(formatConfigs []*formatConfigV1) (int, error) {
 	var disks = make([]string, len(formatConfigs))
 	// Collect currently available disk uuids.
 	for index, formatConfig := range formatConfigs {
@@ -329,20 +329,20 @@ func checkDisksConsistency(formatConfigs []*formatConfigV1) error {
 		disks[index] = formatConfig.XL.Disk
 	}
 	// Validate collected uuids and verify JBOD.
-	for _, uuid := range disks {
+	for idx, uuid := range disks {
 		if uuid == "" {
 			continue
 		}
 		// Is uuid present on all JBOD ?.
 		if !isSavedUUIDInOrder(uuid, formatConfigs) {
-			return fmt.Errorf("%s disk not found in JBOD", uuid)
+			return idx, fmt.Errorf("%s disk not found in JBOD", uuid)
 		}
 	}
-	return nil
+	return -1, nil
 }
 
 // checkJBODConsistency - validate xl jbod order if they are consistent.
-func checkJBODConsistency(formatConfigs []*formatConfigV1) error {
+func checkJBODConsistency(formatConfigs []*formatConfigV1) (int, error) {
 	var sentinelJBOD []string
 	// Extract first valid JBOD.
 	for _, format := range formatConfigs {
@@ -352,16 +352,16 @@ func checkJBODConsistency(formatConfigs []*formatConfigV1) error {
 		sentinelJBOD = format.XL.JBOD
 		break
 	}
-	for _, format := range formatConfigs {
+	for idx, format := range formatConfigs {
 		if format == nil {
 			continue
 		}
 		currentJBOD := format.XL.JBOD
 		if !reflect.DeepEqual(sentinelJBOD, currentJBOD) {
-			return errors.New("Inconsistent JBOD found")
+			return idx, errors.New("Inconsistent JBOD found")
 		}
 	}
-	return nil
+	return -1, nil
 }
 
 // findDiskIndex returns position of disk in JBOD.
@@ -812,13 +812,13 @@ func loadFormatXL(bootstrapDisks []StorageAPI, readQuorum int) (disks []StorageA
 func checkFormatXLValue(formatXL *formatConfigV1) error {
 	// Validate format version and format type.
 	if formatXL.Version != "1" {
-		return fmt.Errorf("Unsupported version of backend format [%s] found", formatXL.Version)
+		return fmt.Errorf("unknown version of backend format `%s` found; please upgrade Minio server; if you are running the latest version, you may have a corrupt file - please join https://slack.minio.io for assistance", formatXL.Version)
 	}
 	if formatXL.Format != "xl" {
-		return fmt.Errorf("Unsupported backend format [%s] found", formatXL.Format)
+		return fmt.Errorf("unknown backend format `%s` found", formatXL.Format)
 	}
 	if formatXL.XL.Version != "1" {
-		return fmt.Errorf("Unsupported XL backend format found [%s]", formatXL.XL.Version)
+		return fmt.Errorf("unknown XL backend format version `%s` found; please upgrade Minio server; if you are running the latest version, you may have a corrupt file - please join https://slack.minio.io for assistance", formatXL.XL.Version)
 	}
 	return nil
 }
@@ -839,15 +839,22 @@ func checkFormatXLValues(formatConfigs []*formatConfigV1) (int, error) {
 	return -1, nil
 }
 
-// checkFormatXL - verifies if format.json format is intact.
+// checkFormatXL - verifies if format.json format is intact. If an
+// error is found, the disk that caused the first error is also
+// returned in the error message.
 func checkFormatXL(formatConfigs []*formatConfigV1) error {
-	if _, err := checkFormatXLValues(formatConfigs); err != nil {
-		return err
+	var err error
+	errCheckCall := func(f func([]*formatConfigV1) (int, error)) {
+		if err == nil {
+			if i, e := f(formatConfigs); e != nil {
+				err = fmt.Errorf("error on disk %d: %v", i+1, e)
+			}
+		}
 	}
-	if err := checkJBODConsistency(formatConfigs); err != nil {
-		return err
-	}
-	return checkDisksConsistency(formatConfigs)
+	errCheckCall(checkFormatXLValues)
+	errCheckCall(checkJBODConsistency)
+	errCheckCall(checkDisksConsistency)
+	return err
 }
 
 // saveFormatXL - populates `format.json` on disks in its order.

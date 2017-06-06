@@ -103,7 +103,7 @@ func newXLObjects(storageDisks []StorageAPI) (ObjectLayer, error) {
 	// Load saved XL format.json and validate.
 	newStorageDisks, err := loadFormatXL(storageDisks, readQuorum)
 	if err != nil {
-		return nil, fmt.Errorf("Unable to recognize backend format, %s", err)
+		return nil, fmt.Errorf("Unable to recognize backend format - %s", err)
 	}
 
 	// Calculate data and parity blocks.
