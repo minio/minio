@@ -261,8 +261,15 @@ func fromMinioClientListBucketResult(bucket string, result minio.ListBucketResul
 // length indicates the total length of the object.
 func (l *s3Objects) GetObject(bucket string, key string, startOffset int64, length int64, writer io.Writer) error {
 	r := minio.NewGetReqHeaders()
-	if err := r.SetRange(startOffset, startOffset+length-1); err != nil {
-		return s3ToObjectError(traceError(err), bucket, key)
+
+	if length < 0 && length != -1 {
+		return s3ToObjectError(traceError(errInvalidArgument), bucket, key)
+	}
+
+	if startOffset >= 0 && length >= 0 {
+		if err := r.SetRange(startOffset, startOffset+length-1); err != nil {
+			return s3ToObjectError(traceError(err), bucket, key)
+		}
 	}
 	object, _, err := l.Client.GetObject(bucket, key, r)
 	if err != nil {
@@ -271,10 +278,9 @@ func (l *s3Objects) GetObject(bucket string, key string, startOffset int64, leng
 
 	defer object.Close()
 
-	if _, err := io.CopyN(writer, object, length); err != nil {
+	if _, err := io.Copy(writer, object); err != nil {
 		return s3ToObjectError(traceError(err), bucket, key)
 	}
-
 	return nil
 }
 
