@@ -802,6 +802,13 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 	policyInfo.Statements = policy.SetPolicy(policyInfo.Statements, bucketP, args.BucketName, args.Prefix)
 	switch g := objectAPI.(type) {
 	case GatewayLayer:
+		if len(policyInfo.Statements) == 0 {
+			err = g.DeleteBucketPolicies(args.BucketName)
+			if err != nil {
+				return toJSONError(err, args.BucketName)
+			}
+			return nil
+		}
 		err = g.SetBucketPolicies(args.BucketName, policyInfo)
 		if err != nil {
 			return toJSONError(err)
@@ -1037,6 +1044,8 @@ func toWebAPIError(err error) APIError {
 		apiErrCode = ErrReadQuorum
 	case PolicyNesting:
 		apiErrCode = ErrPolicyNesting
+	case NotImplemented:
+		apiErrCode = ErrNotImplemented
 	default:
 		// Log unexpected and unhandled errors.
 		errorIf(err, errUnexpected.Error())
