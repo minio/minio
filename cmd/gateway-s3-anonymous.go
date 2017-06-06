@@ -94,6 +94,16 @@ func (l *s3Objects) AnonListObjects(bucket string, prefix string, marker string,
 	return fromMinioClientListBucketResult(bucket, result), nil
 }
 
+// AnonListObjectsV2 - List objects in V2 mode, anonymously
+func (l *s3Objects) AnonListObjectsV2(bucket, prefix, continuationToken string, fetchOwner bool, delimiter string, maxKeys int) (ListObjectsV2Info, error) {
+	result, err := l.anonClient.ListObjectsV2(bucket, prefix, continuationToken, fetchOwner, delimiter, maxKeys)
+	if err != nil {
+		return ListObjectsV2Info{}, s3ToObjectError(traceError(err), bucket)
+	}
+
+	return fromMinioClientListBucketV2Result(bucket, result), nil
+}
+
 // AnonGetBucketInfo - Get bucket metadata anonymously.
 func (l *s3Objects) AnonGetBucketInfo(bucket string) (BucketInfo, error) {
 	if exists, err := l.anonClient.BucketExists(bucket); err != nil {

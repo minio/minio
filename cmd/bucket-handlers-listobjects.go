@@ -100,7 +100,7 @@ func (api objectAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *http
 		return
 	}
 
-	response := generateListObjectsV2Response(bucket, prefix, token, startAfter, delimiter, fetchOwner, maxKeys, listObjectsInfo)
+	response := generateListObjectsV2Response(bucket, prefix, token, listObjectsInfo.NextMarker, startAfter, delimiter, fetchOwner, listObjectsInfo.IsTruncated, maxKeys, listObjectsInfo.Objects, listObjectsInfo.Prefixes)
 
 	// Write success response.
 	writeSuccessResponseXML(w, encodeResponse(response))
