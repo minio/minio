@@ -741,14 +741,10 @@ func (api gatewayAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	// Extract all the litsObjectsV1 query params to their native values.
+	// Extract all the listObjectsV1 query params to their native
+	// values.  N B We delegate validation of params to respective
+	// gateway backends.
 	prefix, marker, delimiter, maxKeys, _ := getListObjectsV1Args(r.URL.Query())
-
-	// Validate all the query params before beginning to serve the request.
-	if s3Error := validateListObjectsArgs(prefix, marker, delimiter, maxKeys); s3Error != ErrNone {
-		writeErrorResponse(w, s3Error, r.URL)
-		return
-	}
 
 	listObjects := objectAPI.ListObjects
 	if reqAuthType == authTypeAnonymous {

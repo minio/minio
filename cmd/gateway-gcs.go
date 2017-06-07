@@ -42,6 +42,9 @@ const (
 	// ZZZZMinioPrefix is used for metadata and multiparts. The prefix is being filtered out,
 	// hence the naming of ZZZZ (last prefix)
 	ZZZZMinioPrefix = "ZZZZ-Minio"
+	// token prefixed with GCS returned marker to differentiate
+	// from user supplied marker.
+	gcsTokenPrefix = "##minio"
 )
 
 // Check if object prefix is "ZZZZ_Minio".
@@ -304,6 +307,12 @@ func toGCSPageToken(name string) string {
 	return base64.StdEncoding.EncodeToString(b)
 }
 
+// Returns true if marker was returned by GCS, i.e prefixed with
+// ##minio by minio gcs gateway.
+func isGCSMarker(marker string) bool {
+	return strings.HasPrefix(marker, gcsTokenPrefix)
+}
+
 // ListObjects - lists all blobs in GCS bucket filtered by prefix
 func (l *gcsGateway) ListObjects(bucket string, prefix string, marker string, delimiter string, maxKeys int) (ListObjectsInfo, error) {
 	it := l.client.Bucket(bucket).Objects(l.ctx, &storage.Query{Delimiter: delimiter, Prefix: prefix, Versions: false})
@@ -312,8 +321,26 @@ func (l *gcsGateway) ListObjects(bucket string, prefix string, marker string, de
 	nextMarker := ""
 	prefixes := []string{}
 
-	// we'll set marker to continue
-	it.PageInfo().Token = marker
+	// To accommodate S3-compatible applications using
+	// ListObjectsV1 to use object keys as markers to control the
+	// listing of objects, we use the following encoding scheme to
+	// distinguish between GCS continuation tokens and application
+	// supplied markers.
+	//
+	// - NextMarker in ListObjectsV1 response is constructed by
+	//   prefixing "##minio" to the GCS continuation token,
+	//   e.g, "##minioCgRvYmoz"
+	//
+	// - Application supplied markers are used as-is to list
+	//   object keys that appear after it in the lexicographical order.
+
+	// If application is using GCS continuation token we should
+	// strip the gcsTokenPrefix we added.
+	gcsMarker := isGCSMarker(marker)
+	if gcsMarker {
+		it.PageInfo().Token = strings.TrimPrefix(marker, gcsTokenPrefix)
+	}
+
 	it.PageInfo().MaxSize = maxKeys
 
 	objects := []ObjectInfo{}
@@ -349,6 +376,10 @@ func (l *gcsGateway) ListObjects(bucket string, prefix string, marker string, de
 		} else if attrs.Prefix != "" {
 			prefixes = append(prefixes, attrs.Prefix)
 			continue
+		} else if !gcsMarker && attrs.Name <= marker {
+			// if user supplied a marker don't append
+			// objects until we reach marker (and skip it).
+			continue
 		}
 
 		objects = append(objects, ObjectInfo{
@@ -365,7 +396,7 @@ func (l *gcsGateway) ListObjects(bucket string, prefix string, marker string, de
 
 	return ListObjectsInfo{
 		IsTruncated: isTruncated,
-		NextMarker:  nextMarker,
+		NextMarker:  gcsTokenPrefix + nextMarker,
 		Prefixes:    prefixes,
 		Objects:     objects,
 	}, nil
