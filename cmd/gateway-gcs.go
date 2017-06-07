@@ -41,7 +41,8 @@ import (
 const (
 	// ZZZZMinioPrefix is used for metadata and multiparts. The prefix is being filtered out,
 	// hence the naming of ZZZZ (last prefix)
-	ZZZZMinioPrefix = "ZZZZ-Minio"
+	ZZZZMinioPrefix  = "ZZZZ-Minio"
+	minioTokenPrefix = "##minio"
 )
 
 // Convert Minio errors to minio object layer errors.
@@ -312,8 +313,27 @@ func (l *gcsGateway) ListObjects(bucket string, prefix string, marker string, de
 	nextMarker := ""
 	prefixes := []string{}
 
-	// we'll set marker to continue
-	it.PageInfo().Token = marker
+	// To accomodate S3-compatible applications using
+	// ListObjectsV1 to use object keys as markers to control the
+	// listing of objects, we use the following encoding scheme to
+	// distinguish between GCS continuation tokens and application
+	// supplied markers.
+	//
+	// - NextMarker in ListObjectsV1 response is constructed by
+	//   prefixing "##minio" to the GCS continuation token,
+	//   e.g, "##minioCgRvYmoz"
+	//
+	// - Application supplied markers are used as-is to list
+	//   object keys that appear after it in the lexicographical order.
+
+	userMarker := false
+	// If application is using GCS continuation token we should
+	// strip the minioTokenPrefix we added.
+	if strings.HasPrefix(marker, minioTokenPrefix) {
+		it.PageInfo().Token = strings.TrimPrefix(marker, minioTokenPrefix)
+	} else {
+		userMarker = true
+	}
 	it.PageInfo().MaxSize = maxKeys
 
 	objects := []ObjectInfo{}
@@ -349,6 +369,10 @@ func (l *gcsGateway) ListObjects(bucket string, prefix string, marker string, de
 		} else if attrs.Prefix != "" {
 			prefixes = append(prefixes, attrs.Prefix)
 			continue
+		} else if userMarker && attrs.Name <= marker {
+			// if user supplied a marker don't append
+			// objects until we reach marker (and skip it).
+			continue
 		}
 
 		objects = append(objects, ObjectInfo{
@@ -365,7 +389,7 @@ func (l *gcsGateway) ListObjects(bucket string, prefix string, marker string, de
 
 	return ListObjectsInfo{
 		IsTruncated: isTruncated,
-		NextMarker:  nextMarker,
+		NextMarker:  minioTokenPrefix + nextMarker,
 		Prefixes:    prefixes,
 		Objects:     objects,
 	}, nil
