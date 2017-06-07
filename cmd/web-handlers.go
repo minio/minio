@@ -1018,41 +1018,46 @@ func toWebAPIError(err error) APIError {
 		}
 	}
 	// Convert error type to api error code.
-	var apiErrCode APIErrorCode
 	switch err.(type) {
 	case StorageFull:
-		apiErrCode = ErrStorageFull
+		return getAPIError(ErrStorageFull)
 	case BucketNotFound:
-		apiErrCode = ErrNoSuchBucket
+		return getAPIError(ErrNoSuchBucket)
 	case BucketExists:
-		apiErrCode = ErrBucketAlreadyOwnedByYou
+		return getAPIError(ErrBucketAlreadyOwnedByYou)
 	case BucketNameInvalid:
-		apiErrCode = ErrInvalidBucketName
+		return getAPIError(ErrInvalidBucketName)
 	case BadDigest:
-		apiErrCode = ErrBadDigest
+		return getAPIError(ErrBadDigest)
 	case IncompleteBody:
-		apiErrCode = ErrIncompleteBody
+		return getAPIError(ErrIncompleteBody)
 	case ObjectExistsAsDirectory:
-		apiErrCode = ErrObjectExistsAsDirectory
+		return getAPIError(ErrObjectExistsAsDirectory)
 	case ObjectNotFound:
-		apiErrCode = ErrNoSuchKey
+		return getAPIError(ErrNoSuchKey)
 	case ObjectNameInvalid:
-		apiErrCode = ErrNoSuchKey
+		return getAPIError(ErrNoSuchKey)
 	case InsufficientWriteQuorum:
-		apiErrCode = ErrWriteQuorum
+		return getAPIError(ErrWriteQuorum)
 	case InsufficientReadQuorum:
-		apiErrCode = ErrReadQuorum
+		return getAPIError(ErrReadQuorum)
 	case PolicyNesting:
-		apiErrCode = ErrPolicyNesting
+		return getAPIError(ErrPolicyNesting)
 	case NotImplemented:
-		apiErrCode = ErrNotImplemented
-	default:
-		// Log unexpected and unhandled errors.
-		errorIf(err, errUnexpected.Error())
-		apiErrCode = ErrInternalError
+		return APIError{
+			Code:           "NotImplemented",
+			HTTPStatusCode: http.StatusBadRequest,
+			Description:    "Functionality not implemented",
+		}
 	}
-	apiErr := getAPIError(apiErrCode)
-	return apiErr
+
+	// Log unexpected and unhandled errors.
+	errorIf(err, errUnexpected.Error())
+	return APIError{
+		Code:           "InternalError",
+		HTTPStatusCode: http.StatusInternalServerError,
+		Description:    err.Error(),
+	}
 }
 
 // writeWebErrorResponse - set HTTP status code and write error description to the body.
