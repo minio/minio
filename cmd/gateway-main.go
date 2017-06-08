@@ -240,6 +240,7 @@ func gatewayMain(ctx *cli.Context) {
 	endpointAddr := ctx.Args().Get(1)
 
 	serverAddr := ctx.String("address")
+	fatalIf(CheckLocalServerAddr(serverAddr), "Invalid address ‘%s’ in command line argument.", serverAddr)
 
 	err := validateGatewayArguments(serverAddr, endpointAddr)
 	fatalIf(err, "Invalid argument")
