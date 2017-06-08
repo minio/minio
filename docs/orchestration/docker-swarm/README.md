@@ -10,19 +10,19 @@ As of [Docker Engine v1.13.0](https://blog.docker.com/2017/01/whats-new-in-docke
 * Docker engine v1.13.0 running on a cluster of [networked host machines](https://docs.docker.com/engine/swarm/swarm-tutorial/#/three-networked-host-machines).
 
 ## 2. Create a Swarm
-
-SSH into the machine supposed to serve as Swarm manager. If the machine is named `manager`, you can SSH by
-
-```shell
-docker-machine ssh manager
-```
-After logging in to the designated manager node, create the Swarm by
+Logon to the machine supposed to work as Swarm manager machines, and initialize the Swarm by
 
 ```shell
 docker swarm init --advertise-addr <MANAGER-IP>
 ```
+Once the Swarm is initialized, you'll get a response like , 
 
-After the manager is up, [add worker nodes](https://docs.docker.com/engine/swarm/swarm-tutorial/add-nodes/) to the Swarm. Find detailed steps to create the Swarm on [Docker documentation site](https://docs.docker.com/engine/swarm/swarm-tutorial/create-swarm/).
+```shell
+docker swarm join \
+  --token  SWMTKN-1-49nj1cmql0jkz5s954yi3oex3nedyz0fb0xx14ie39trti4wxv-8vxv8rssmk743ojnwacrr2e7c \
+  192.168.99.100:2377
+```
+To add other nodes to the Swarm, run the above command to [add worker nodes](https://docs.docker.com/engine/swarm/swarm-tutorial/add-nodes/) to the Swarm. Find detailed steps to create the Swarm on [Docker documentation site](https://docs.docker.com/engine/swarm/swarm-tutorial/create-swarm/).
 
 ## 3. Create Docker secrets for Minio
 
