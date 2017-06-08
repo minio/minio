@@ -86,12 +86,19 @@ func TestWriteWebErrorResponse(t *testing.T) {
 			webErr:     InsufficientReadQuorum{},
 			apiErrCode: ErrReadQuorum,
 		},
+		{
+			webErr:     NotImplemented{},
+			apiErrCode: ErrNotImplemented,
+		},
 	}
 
 	// Validate all the test cases.
 	for i, testCase := range testCases {
 		writeWebErrorResponse(newFlushWriter(&buffer), testCase.webErr)
 		desc := getAPIError(testCase.apiErrCode).Description
+		if testCase.apiErrCode == ErrNotImplemented {
+			desc = "Functionality not implemented"
+		}
 		recvDesc := buffer.Bytes()
 		// Check if the written desc is same as the one expected.
 		if !bytes.Equal(recvDesc, []byte(desc)) {
