@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"runtime"
 	"strings"
 
 	"github.com/gorilla/mux"
@@ -181,6 +182,36 @@ func parseGatewayEndpoint(arg string) (endPoint string, secure bool, err error) 
 	}
 }
 
+// Validate gateway arguments.
+func validateGatewayArguments(serverAddr, endpointAddr string) error {
+	if err := CheckLocalServerAddr(serverAddr); err != nil {
+		return err
+	}
+
+	if runtime.GOOS == "darwin" {
+		_, port := mustSplitHostPort(serverAddr)
+		// On macOS, if a process already listens on LOCALIPADDR:PORT, net.Listen() falls back
+		// to IPv6 address i.e minio will start listening on IPv6 address whereas another
+		// (non-)minio process is listening on IPv4 of given port.
+		// To avoid this error situation we check for port availability only for macOS.
+		if err := checkPortAvailability(port); err != nil {
+			return err
+		}
+	}
+
+	if endpointAddr != "" {
+		// Reject the endpoint if it points to the gateway handler itself.
+		sameTarget, err := sameLocalAddrs(endpointAddr, serverAddr)
+		if err != nil {
+			return err
+		}
+		if sameTarget {
+			return errors.New("endpoint points to the local gateway")
+		}
+	}
+	return nil
+}
+
 // Handler for 'minio gateway'.
 func gatewayMain(ctx *cli.Context) {
 	if !ctx.Args().Present() || ctx.Args().First() == "help" {
@@ -207,17 +238,11 @@ func gatewayMain(ctx *cli.Context) {
 	backendType := ctx.Args().Get(0)
 	// Second argument is the endpoint address (optional)
 	endpointAddr := ctx.Args().Get(1)
-	// Third argument is the address flag
+
 	serverAddr := ctx.String("address")
 
-	if endpointAddr != "" {
-		// Reject the endpoint if it points to the gateway handler itself.
-		sameTarget, err := sameLocalAddrs(endpointAddr, serverAddr)
-		fatalIf(err, "Unable to compare server and endpoint addresses.")
-		if sameTarget {
-			fatalIf(errors.New("endpoint points to the local gateway"), "Endpoint url is not allowed")
-		}
-	}
+	err := validateGatewayArguments(serverAddr, endpointAddr)
+	fatalIf(err, "Invalid argument")
 
 	// Second argument is endpoint.	If no endpoint is specified then the
 	// gateway implementation should use a default setting.
