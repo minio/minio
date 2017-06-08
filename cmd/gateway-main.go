@@ -209,6 +209,7 @@ func gatewayMain(ctx *cli.Context) {
 	endpointAddr := ctx.Args().Get(1)
 	// Third argument is the address flag
 	serverAddr := ctx.String("address")
+	fatalIf(CheckLocalServerAddr(serverAddr), "Invalid address ‘%s’ in command line argument.", serverAddr)
 
 	if endpointAddr != "" {
 		// Reject the endpoint if it points to the gateway handler itself.
