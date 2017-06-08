@@ -104,7 +104,7 @@ func (m *ServerMux) handleServiceSignals() error {
 		case serviceStop:
 			log.Println("Received signal to exit.")
 			go func() {
-				time.Sleep(serverShutdownPoll + time.Millisecond*100)
+				time.Sleep(globalServerShutdownPoll)
 				log.Println("Waiting for active connections to terminate - press Ctrl+C to quit immediately.")
 			}()
 			if err := m.Close(); err != nil {

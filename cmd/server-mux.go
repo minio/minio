@@ -31,7 +31,7 @@ import (
 )
 
 const (
-	serverShutdownPoll = 500 * time.Millisecond
+	globalServerShutdownPoll = 500 * time.Millisecond
 )
 
 // The value chosen below is longest word chosen
@@ -511,16 +511,23 @@ func (m *ServerMux) Close() error {
 
 	// Starting graceful shutdown. Check if all requests are finished
 	// in regular interval or force the shutdown
-	ticker := time.NewTicker(serverShutdownPoll)
+	ticker := time.NewTicker(globalServerShutdownPoll)
 	defer ticker.Stop()
+
+	// Total elapsed shutdown poll duration, after which we
+	// need to break out of this loop.
+	var totalElapsedShutdownPoll time.Duration
 	for {
 		select {
-		case <-time.After(m.gracefulTimeout):
-			return nil
 		case <-ticker.C:
-			if atomic.LoadInt32(&m.currentReqs) <= 0 {
-				return nil
+			if totalElapsedShutdownPoll.Seconds() <= m.gracefulTimeout.Seconds() {
+				if atomic.LoadInt32(&m.currentReqs) <= 0 {
+					return nil
+				}
+				totalElapsedShutdownPoll += globalServerShutdownPoll
+				continue
 			}
+			return nil
 		}
 	}
 }
