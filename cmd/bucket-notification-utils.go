@@ -259,15 +259,14 @@ func validateNotificationConfig(nConfig notificationConfig) APIErrorCode {
 // - kafka
 // - webhook
 func unmarshalSqsARN(queueARN string) (mSqs arnSQS) {
-	mSqs = arnSQS{}
 	strs := strings.SplitN(queueARN, ":", -1)
 	if len(strs) != 6 {
-		return mSqs
+		return
 	}
 	if serverConfig.GetRegion() != "" {
 		region := strs[3]
 		if region != serverConfig.GetRegion() {
-			return mSqs
+			return
 		}
 	}
 	sqsType := strs[5]
@@ -294,5 +293,5 @@ func unmarshalSqsARN(queueARN string) (mSqs arnSQS) {
 
 	mSqs.AccountID = strs[4]
 
-	return mSqs
+	return
 }
