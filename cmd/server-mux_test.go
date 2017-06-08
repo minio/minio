@@ -109,20 +109,18 @@ func dial(addr string) error {
 
 // Tests initializing listeners.
 func TestInitListeners(t *testing.T) {
-	portTest1 := getFreePort()
-	portTest2 := getFreePort()
 	testCases := []struct {
 		serverAddr string
 		shouldPass bool
 	}{
 		// Test 1 with ip and port.
 		{
-			serverAddr: "127.0.0.1:" + portTest1,
+			serverAddr: net.JoinHostPort("127.0.0.1", "0"),
 			shouldPass: true,
 		},
 		// Test 2 only port.
 		{
-			serverAddr: ":" + portTest2,
+			serverAddr: net.JoinHostPort("", "0"),
 			shouldPass: true,
 		},
 		// Test 3 with no port error.
