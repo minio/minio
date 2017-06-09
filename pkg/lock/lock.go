@@ -19,8 +19,14 @@
 package lock
 
 import (
+	"errors"
 	"os"
 	"sync"
+)
+
+var (
+	// ErrLocked is returned if the underlying fd is already locked.
+	ErrLocked = errors.New("lock: file already locked")
 )
 
 // RLockedFile represents a read locked file, implements a special

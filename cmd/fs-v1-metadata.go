@@ -390,7 +390,8 @@ func initFormatFS(fsPath, fsUUID string) (err error) {
 	fsFormatPath := pathJoin(fsPath, minioMetaBucket, fsFormatJSONFile)
 
 	// fsFormatJSONFile - format.json file stored in minioMetaBucket(.minio.sys) directory.
-	lk, err := lock.LockedOpenFile(preparePath(fsFormatPath), os.O_RDWR|os.O_CREATE, 0600)
+	// Attempt to hold a write lock if there are conflicting processes, fail and return.
+	lk, err := lock.TryLockedOpenFile(preparePath(fsFormatPath), os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
 		return traceError(err)
 	}
