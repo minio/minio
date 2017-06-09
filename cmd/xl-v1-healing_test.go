@@ -121,7 +121,7 @@ func TestHealFormatXL(t *testing.T) {
 	}
 	xl = obj.(*xlObjects)
 	for i := 0; i <= 15; i++ {
-		if err = xl.storageDisks[i].DeleteFile(".minio.sys", "format.json"); err != nil {
+		if err = xl.storageDisks[i].DeleteFile(minioMetaBucket, formatConfigFile); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -142,7 +142,7 @@ func TestHealFormatXL(t *testing.T) {
 	}
 	xl = obj.(*xlObjects)
 	for i := 0; i <= 15; i++ {
-		if err = xl.storageDisks[i].AppendFile(".minio.sys", "format.json", []byte("corrupted data")); err != nil {
+		if err = xl.storageDisks[i].AppendFile(minioMetaBucket, formatConfigFile, []byte("corrupted data")); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -163,7 +163,7 @@ func TestHealFormatXL(t *testing.T) {
 	}
 	xl = obj.(*xlObjects)
 	for i := 0; i <= 2; i++ {
-		if err = xl.storageDisks[i].DeleteFile(".minio.sys", "format.json"); err != nil {
+		if err = xl.storageDisks[i].DeleteFile(minioMetaBucket, formatConfigFile); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -184,7 +184,7 @@ func TestHealFormatXL(t *testing.T) {
 	}
 	xl = obj.(*xlObjects)
 	for i := 0; i <= 2; i++ {
-		if err = xl.storageDisks[i].DeleteFile(".minio.sys", "format.json"); err != nil {
+		if err = xl.storageDisks[i].DeleteFile(minioMetaBucket, formatConfigFile); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -216,7 +216,7 @@ func TestHealFormatXL(t *testing.T) {
 		t.Fatal(err)
 	}
 	for i := 0; i <= 2; i++ {
-		if err = xl.storageDisks[i].DeleteFile(".minio.sys", "format.json"); err != nil {
+		if err = xl.storageDisks[i].DeleteFile(minioMetaBucket, formatConfigFile); err != nil {
 			t.Fatal(err)
 		}
 	}

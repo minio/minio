@@ -134,6 +134,7 @@ func fsStat(statLoc string) (os.FileInfo, error) {
 	if err != nil {
 		return nil, traceError(err)
 	}
+
 	return fi, nil
 }
 
@@ -142,12 +143,13 @@ func fsStat(statLoc string) (os.FileInfo, error) {
 func fsStatDir(statDir string) (os.FileInfo, error) {
 	fi, err := fsStat(statDir)
 	if err != nil {
-		if os.IsNotExist(errorCause(err)) {
+		err = errorCause(err)
+		if os.IsNotExist(err) {
 			return nil, traceError(errVolumeNotFound)
-		} else if os.IsPermission(errorCause(err)) {
+		} else if os.IsPermission(err) {
 			return nil, traceError(errVolumeAccessDenied)
 		}
-		return nil, err
+		return nil, traceError(err)
 	}
 
 	if !fi.IsDir() {
@@ -161,16 +163,17 @@ func fsStatDir(statDir string) (os.FileInfo, error) {
 func fsStatFile(statFile string) (os.FileInfo, error) {
 	fi, err := fsStat(statFile)
 	if err != nil {
-		if os.IsNotExist(errorCause(err)) {
+		err = errorCause(err)
+		if os.IsNotExist(err) {
 			return nil, traceError(errFileNotFound)
-		} else if os.IsPermission(errorCause(err)) {
+		} else if os.IsPermission(err) {
 			return nil, traceError(errFileAccessDenied)
-		} else if isSysErrNotDir(errorCause(err)) {
+		} else if isSysErrNotDir(err) {
 			return nil, traceError(errFileAccessDenied)
-		} else if isSysErrPathNotFound(errorCause(err)) {
+		} else if isSysErrPathNotFound(err) {
 			return nil, traceError(errFileNotFound)
 		}
-		return nil, err
+		return nil, traceError(err)
 	}
 	if fi.IsDir() {
 		return nil, traceError(errFileAccessDenied)

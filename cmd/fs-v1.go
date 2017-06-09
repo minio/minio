@@ -24,7 +24,6 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"os/signal"
 	"path"
 	"path/filepath"
 	"sort"
@@ -74,144 +73,15 @@ func initMetaVolumeFS(fsPath, fsUUID string) error {
 
 }
 
-// Migrate FS object is a place holder code for all
-// FS format migrations.
-func migrateFSObject(fsPath, fsUUID string) (err error) {
-	// Writing message here is important for servers being upgraded.
-	log.Println("Please do not stop the server.")
-
-	ch := make(chan os.Signal)
-	defer signal.Stop(ch)
-	defer close(ch)
-
-	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		for {
-			_, ok := <-ch
-			if !ok {
-				break
-			}
-			log.Println("Please wait server is being upgraded..")
-		}
-	}()
-
-	return migrateFSFormatV1ToV2(fsPath, fsUUID)
-}
-
-// List all buckets at meta bucket prefix in `.minio.sys/buckets/` path.
-// This is implemented to avoid a bug on windows with using readDir().
-func fsReaddirMetaBuckets(fsPath string) ([]string, error) {
-	f, err := os.Open(preparePath(pathJoin(fsPath, minioMetaBucket, bucketConfigPrefix)))
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, errFileNotFound
-		} else if os.IsPermission(err) {
-			return nil, errFileAccessDenied
-		}
-		return nil, err
-	}
-	return f.Readdirnames(-1)
-}
-
-// List of all bucket metadata configs.
-var bucketMetadataConfigs = []string{
-	bucketNotificationConfig,
-	bucketListenerConfig,
-	bucketPolicyConfig,
-}
-
-// Migrates bucket metadata configs, ignores all other files.
-func migrateBucketMetadataConfigs(metaBucket, bucket, tmpBucket string) error {
-	for _, bucketMetaFile := range bucketMetadataConfigs {
-		fi, err := fsStat(pathJoin(metaBucket, tmpBucket, bucketMetaFile))
-		if err != nil {
-			// There are no such files or directories found,
-			// proceed to next bucket metadata config.
-			if os.IsNotExist(errorCause(err)) {
-				continue
-			}
-			return err
-		}
-
-		// Bucket metadata is a file, move it as an actual bucket config.
-		if fi.Mode().IsRegular() {
-			if err = fsRenameFile(pathJoin(metaBucket, tmpBucket, bucketMetaFile),
-				pathJoin(metaBucket, bucket, bucketMetaFile)); err != nil {
-				if errorCause(err) != errFileNotFound {
-					return err
-				}
-			}
-		}
-
-		// All other file types are ignored.
-	}
-
-	// Success.
-	return nil
-}
-
-// Attempts to migrate old object metadata files to newer format
-//
-// i.e
-//    -------------------------------------------------------
-//    .minio.sys/buckets/<bucket_name>/<object_path>/fs.json - V1
-//    -------------------------------------------------------
-//    .minio.sys/buckets/<bucket_name>/objects/<object_path>/fs.json - V2
-//    -------------------------------------------------------
-//
-func migrateFSFormatV1ToV2(fsPath, fsUUID string) (err error) {
-	metaBucket := pathJoin(fsPath, minioMetaBucket, bucketConfigPrefix)
-
-	var buckets []string
-	buckets, err = fsReaddirMetaBuckets(fsPath)
-	if err != nil && err != errFileNotFound {
-		return err
-	}
-
-	// Migrate all buckets present.
-	for _, bucket := range buckets {
-		// Temporary bucket of form .UUID-bucket.
-		tmpBucket := fmt.Sprintf(".%s-%s", fsUUID, bucket)
-
-		// Rename existing bucket as `.UUID-bucket`.
-		if err = fsRenameFile(pathJoin(metaBucket, bucket), pathJoin(metaBucket, tmpBucket)); err != nil {
-			return err
-		}
-
-		// Create a new bucket name with name as `bucket`.
-		if err = fsMkdir(pathJoin(metaBucket, bucket)); err != nil {
-			return err
-		}
-
-		// Migrate all the bucket metadata configs.
-		if err = migrateBucketMetadataConfigs(metaBucket, bucket, tmpBucket); err != nil {
-			return err
-		}
-
-		// Finally rename the temporary bucket to `bucket/objects` directory.
-		if err = fsRenameFile(pathJoin(metaBucket, tmpBucket),
-			pathJoin(metaBucket, bucket, objectMetaPrefix)); err != nil {
-			if errorCause(err) != errFileNotFound {
-				return err
-			}
-		}
-
-	}
-
-	log.Printf("Migrating bucket metadata format from \"%s\" to newer format \"%s\"... completed successfully.", fsFormatV1, fsFormatV2)
-
-	// If all goes well we return success.
-	return nil
-}
-
 // newFSObjectLayer - initialize new fs object layer.
 func newFSObjectLayer(fsPath string) (ObjectLayer, error) {
 	if fsPath == "" {
 		return nil, errInvalidArgument
 	}
 
+	var err error
 	// Disallow relative paths, figure out absolute paths.
-	fsPath, err := filepath.Abs(fsPath)
+	fsPath, err = filepath.Abs(fsPath)
 	if err != nil {
 		return nil, err
 	}
@@ -257,12 +127,6 @@ func newFSObjectLayer(fsPath string) (ObjectLayer, error) {
 		return nil, err
 	}
 
-	// Once initialized hold read lock for the entire operation
-	// of filesystem backend.
-	if _, err = fs.rwPool.Open(pathJoin(fsPath, minioMetaBucket, fsFormatJSONFile)); err != nil {
-		return nil, err
-	}
-
 	// Initialize and load bucket policies.
 	err = initBucketPolicies(fs)
 	if err != nil {
@@ -281,9 +145,6 @@ func newFSObjectLayer(fsPath string) (ObjectLayer, error) {
 
 // Should be called when process shuts down.
 func (fs fsObjects) Shutdown() error {
-	// Close the format.json read lock.
-	fs.rwPool.Close(pathJoin(fs.fsPath, minioMetaBucket, fsFormatJSONFile))
-
 	// Cleanup and delete tmp uuid.
 	return fsRemoveAll(pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID))
 }
@@ -363,7 +224,7 @@ func (fs fsObjects) ListBuckets() ([]BucketInfo, error) {
 		return nil, traceError(err)
 	}
 	var bucketInfos []BucketInfo
-	entries, err := readDir(fs.fsPath)
+	entries, err := readDir(preparePath(fs.fsPath))
 	if err != nil {
 		return nil, toObjectErr(traceError(errDiskNotFound))
 	}
@@ -447,7 +308,7 @@ func (fs fsObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string
 	// Check if this request is only metadata update.
 	cpMetadataOnly := isStringEqual(pathJoin(srcBucket, srcObject), pathJoin(dstBucket, dstObject))
 	if cpMetadataOnly {
-		fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, srcBucket, objectMetaPrefix, srcObject, fsMetaJSONFile)
+		fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, srcBucket, srcObject, fsMetaJSONFile)
 		var wlk *lock.LockedFile
 		wlk, err = fs.rwPool.Write(fsMetaPath)
 		if err != nil {
@@ -520,7 +381,7 @@ func (fs fsObjects) GetObject(bucket, object string, offset int64, length int64,
 	}
 
 	if bucket != minioMetaBucket {
-		fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, objectMetaPrefix, object, fsMetaJSONFile)
+		fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fsMetaJSONFile)
 		_, err = fs.rwPool.Open(fsMetaPath)
 		if err != nil && err != errFileNotFound {
 			return toObjectErr(traceError(err), bucket, object)
@@ -562,7 +423,7 @@ func (fs fsObjects) GetObject(bucket, object string, offset int64, length int64,
 // getObjectInfo - wrapper for reading object metadata and constructs ObjectInfo.
 func (fs fsObjects) getObjectInfo(bucket, object string) (ObjectInfo, error) {
 	fsMeta := fsMetaV1{}
-	fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, objectMetaPrefix, object, fsMetaJSONFile)
+	fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fsMetaJSONFile)
 
 	// Read `fs.json` to perhaps contend with
 	// parallel Put() operations.
@@ -669,7 +530,7 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 	var wlk *lock.LockedFile
 	if bucket != minioMetaBucket {
 		bucketMetaDir := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix)
-		fsMetaPath := pathJoin(bucketMetaDir, bucket, objectMetaPrefix, object, fsMetaJSONFile)
+		fsMetaPath := pathJoin(bucketMetaDir, bucket, object, fsMetaJSONFile)
 		wlk, err = fs.rwPool.Create(fsMetaPath)
 		if err != nil {
 			return ObjectInfo{}, toObjectErr(traceError(err), bucket, object)
@@ -796,7 +657,7 @@ func (fs fsObjects) DeleteObject(bucket, object string) error {
 	}
 
 	minioMetaBucketDir := pathJoin(fs.fsPath, minioMetaBucket)
-	fsMetaPath := pathJoin(minioMetaBucketDir, bucketMetaPrefix, bucket, objectMetaPrefix, object, fsMetaJSONFile)
+	fsMetaPath := pathJoin(minioMetaBucketDir, bucketMetaPrefix, bucket, object, fsMetaJSONFile)
 	if bucket != minioMetaBucket {
 		rwlk, lerr := fs.rwPool.Write(fsMetaPath)
 		if lerr == nil {
@@ -850,7 +711,7 @@ func (fs fsObjects) listDirFactory(isLeaf isLeafFunc) listDirFunc {
 // getObjectETag is a helper function, which returns only the md5sum
 // of the file on the disk.
 func (fs fsObjects) getObjectETag(bucket, entry string) (string, error) {
-	fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, objectMetaPrefix, entry, fsMetaJSONFile)
+	fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, entry, fsMetaJSONFile)
 
 	// Read `fs.json` to perhaps contend with
 	// parallel Put() operations.
