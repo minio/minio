@@ -37,6 +37,8 @@ USAGE:
 FLAGS:
   {{range .VisibleFlags}}{{.}}
   {{end}}{{end}}
+ENDPOINT:
+  Azure server endpoint. Default ENDPOINT is https://core.windows.net
 
 ENVIRONMENT VARIABLES:
   ACCESS:
@@ -51,11 +53,15 @@ EXAMPLES:
       $ export MINIO_ACCESS_KEY=azureaccountname
       $ export MINIO_SECRET_KEY=azureaccountkey
       $ {{.HelpName}}
+  2. Start minio gateway server for Azure Blob Storage backend on custom endpoint.
+      $ export MINIO_ACCESS_KEY=azureaccountname
+      $ export MINIO_SECRET_KEY=azureaccountkey
+      $ {{.HelpName}} https://azure.example.com
 `
 
 var azureBackendCmd = cli.Command{
 	Name:               "azure",
-	Usage:              "Microsoft Azure Blob Storage. Default ENDPOINT is https://core.windows.net.",
+	Usage:              "Microsoft Azure Blob Storage.",
 	Action:             azureGatewayMain,
 	CustomHelpTemplate: azureGatewayTemplate,
 	Flags: append(serverFlags,
@@ -76,6 +82,8 @@ USAGE:
 FLAGS:
   {{range .VisibleFlags}}{{.}}
   {{end}}{{end}}
+ENDPOINT:
+  S3 server endpoint. Default ENDPOINT is https://s3.amazonaws.com
 
 ENVIRONMENT VARIABLES:
   ACCESS:
@@ -99,7 +107,7 @@ EXAMPLES:
 
 var s3BackendCmd = cli.Command{
 	Name:               "s3",
-	Usage:              "Amazon Simple Storage Service (S3). Default ENDPOINT is https://s3.amazonaws.com",
+	Usage:              "Amazon Simple Storage Service (S3).",
 	Action:             s3GatewayMain,
 	CustomHelpTemplate: s3GatewayTemplate,
 	Flags: append(serverFlags,
