@@ -107,12 +107,23 @@ func isDocker(cgroupFile string) (bool, error) {
 	return bytes.Contains(cgroup, []byte("docker")), err
 }
 
-// IsDocker - returns if the environment is docker or not.
+// IsDocker - returns if the environment minio is running
+// is docker or not.
 func IsDocker() bool {
 	found, err := isDocker("/proc/self/cgroup")
 	fatalIf(err, "Error in docker check.")
 
 	return found
+}
+
+// IsKubernetes returns if the environment minio is
+// running is kubernetes or not.
+func IsKubernetes() bool {
+	// Kubernetes env used to validate if we are
+	// indeed running inside a kubernetes pod
+	// is KUBERNETES_SERVICE_HOST but in future
+	// we might need to enhance this.
+	return os.Getenv("KUBERNETES_SERVICE_HOST") != ""
 }
 
 func isSourceBuild(minioVersion string) bool {
@@ -127,13 +138,17 @@ func IsSourceBuild() bool {
 
 // DO NOT CHANGE USER AGENT STYLE.
 // The style should be
-//   Minio (<OS>; <ARCH>[; docker][; source])  Minio/<VERSION> Minio/<RELEASE-TAG> Minio/<COMMIT-ID>
+//
+//   Minio (<OS>; <ARCH>[; kubernetes][; docker][; source]) Minio/<VERSION> Minio/<RELEASE-TAG> Minio/<COMMIT-ID>
 //
 // For any change here should be discussed by openning an issue at https://github.com/minio/minio/issues.
 func getUserAgent(mode string) string {
 	userAgent := "Minio (" + runtime.GOOS + "; " + runtime.GOARCH
 	if mode != "" {
 		userAgent += "; " + mode
+	}
+	if IsKubernetes() {
+		userAgent += "; kubernetes"
 	}
 	if IsDocker() {
 		userAgent += "; docker"
@@ -226,11 +241,24 @@ func getLatestReleaseTime(timeout time.Duration, mode string) (releaseTime time.
 	return parseReleaseData(data)
 }
 
-func getDownloadURL() (downloadURL string) {
-	if IsDocker() {
-		return "docker pull minio/minio"
+// Kubernetes deploy doc link.
+const kubernetesDeploymentDoc = "https://docs.minio.io/docs/deploy-minio-on-kubernetes"
+
+func getDownloadURL(buildDate time.Time) (downloadURL string) {
+	// Check if we are in kubernetes environment, return
+	// deployment guide for update procedures.
+	if IsKubernetes() {
+		return kubernetesDeploymentDoc
 	}
 
+	// Check if we are docker environment, return docker update command
+	if IsDocker() {
+		// Construct release tag name.
+		rTag := "RELEASE." + buildDate.Format(minioReleaseTagTimeLayout)
+		return fmt.Sprintf("docker pull minio/minio:%s", rTag)
+	}
+
+	// For binary only installations, then we just show binary download link.
 	if runtime.GOOS == "windows" {
 		return minioReleaseURL + "minio.exe"
 	}
@@ -254,7 +282,7 @@ func getUpdateInfo(timeout time.Duration, mode string) (older time.Duration,
 
 	if latestReleaseTime.After(currentReleaseTime) {
 		older = latestReleaseTime.Sub(currentReleaseTime)
-		downloadURL = getDownloadURL()
+		downloadURL = getDownloadURL(latestReleaseTime)
 	}
 
 	return older, downloadURL, nil

@@ -30,6 +30,28 @@ import (
 	"time"
 )
 
+func TestDownloadURL(t *testing.T) {
+	minioVersion1 := UTCNow()
+	durl := getDownloadURL(minioVersion1)
+	if runtime.GOOS == "windows" {
+		if durl != minioReleaseURL+"minio.exe" {
+			t.Errorf("Expected %s, got %s", minioReleaseURL+"minio.exe", durl)
+		}
+	} else {
+		if durl != minioReleaseURL+"minio" {
+			t.Errorf("Expected %s, got %s", minioReleaseURL+"minio", durl)
+		}
+	}
+
+	os.Setenv("KUBERNETES_SERVICE_HOST", "10.11.148.5")
+	defer os.Unsetenv("KUBERNETES_SERVICE_HOST")
+
+	durl = getDownloadURL(minioVersion1)
+	if durl != kubernetesDeploymentDoc {
+		t.Errorf("Expected %s, got %s", kubernetesDeploymentDoc, durl)
+	}
+}
+
 func TestGetCurrentReleaseTime(t *testing.T) {
 	minioVersion1 := UTCNow().Format(time.RFC3339)
 	releaseTime1, _ := time.Parse(time.RFC3339, minioVersion1)
@@ -136,6 +158,21 @@ func TestGetCurrentReleaseTime(t *testing.T) {
 	}
 }
 
+// Tests if the environment we are running is in kubernetes.
+func TestIsKubernetes(t *testing.T) {
+	os.Setenv("KUBERNETES_SERVICE_HOST", "10.11.148.5")
+	kubernetes := IsKubernetes()
+	if !kubernetes {
+		t.Fatalf("Expected %t, got %t", true, kubernetes)
+	}
+	os.Unsetenv("KUBERNETES_SERVICE_HOST")
+	kubernetes = IsKubernetes()
+	if kubernetes {
+		t.Fatalf("Expected %t, got %t", false, kubernetes)
+	}
+}
+
+// Tests if the environment we are running is in docker.
 func TestIsDocker(t *testing.T) {
 	createTempFile := func(content string) string {
 		tmpfile, err := ioutil.TempFile("", "isdocker-testcase")
@@ -164,6 +201,7 @@ func TestIsDocker(t *testing.T) {
 1:name=systemd:/user.slice/user-1000.slice/user@1000.service/gnome-terminal-server.service
 `)
 	defer os.Remove(filename1)
+
 	filename2 := createTempFile(`14:name=systemd:/docker/d5eb950884d828237f60f624ff575a1a7a4daa28a8d4d750040527ed9545e727
 13:pids:/docker/d5eb950884d828237f60f624ff575a1a7a4daa28a8d4d750040527ed9545e727
 12:hugetlb:/docker/d5eb950884d828237f60f624ff575a1a7a4daa28a8d4d750040527ed9545e727
