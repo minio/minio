@@ -254,6 +254,11 @@ func newFSObjectLayer(fsPath string) (ObjectLayer, error) {
 
 	// Initialize `format.json`.
 	if err = initFormatFS(fsPath, fsUUID); err != nil {
+		// The follow error would occur if there is a conflicting lock held.
+		// we should simply proceed to attempt a read lock.
+		if errorCause(err) == lock.ErrLocked {
+			return nil, fmt.Errorf("Another server already has an exclusive lock on `format.json`, please wait until you start this server. %s", err)
+		}
 		return nil, err
 	}
 
