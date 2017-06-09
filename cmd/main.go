@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"os"
+	"path/filepath"
 	"sort"
 
 	"github.com/minio/cli"
@@ -59,7 +60,7 @@ VERSION:
   ` + Version +
 	`{{ "\n"}}`
 
-func newApp() *cli.App {
+func newApp(name string) *cli.App {
 	// Collection of minio commands currently supported are.
 	commands := []cli.Command{}
 
@@ -108,7 +109,7 @@ func newApp() *cli.App {
 	}
 
 	app := cli.NewApp()
-	app.Name = "Minio"
+	app.Name = name
 	app.Author = "Minio.io"
 	app.Version = Version
 	app.Usage = "Cloud Storage Server."
@@ -137,7 +138,8 @@ func newApp() *cli.App {
 
 // Main main for minio server.
 func Main(args []string) {
-	app := newApp()
+	name := filepath.Base(args[0])
+	app := newApp(name)
 
 	// Run the app - exit on error.
 	if err := app.Run(args); err != nil {
