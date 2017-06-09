@@ -383,11 +383,38 @@ func checkFormatSanityFS(fsPath string, fsFormatVersion string) (err error) {
 	return err
 }
 
+// Check if backend format needs migration to the latest version.
+func formatFSNeedsMigration(fsPath string) bool {
+	fsFormatPath := pathJoin(fsPath, minioMetaBucket, fsFormatJSONFile)
+
+	rlk, err := lock.LockedOpenFile(fsFormatPath, os.O_RDONLY, 0600)
+	if err != nil {
+		return false
+	}
+	defer rlk.Close()
+
+	var format = &formatConfigV1{}
+	_, err = format.ReadFrom(rlk)
+
+	if err != nil {
+		return false
+	}
+
+	err = checkFormatFS(format, fsFormatVersion)
+
+	return err == errFSFormatOld
+}
+
 // Initializes a new `format.json` if not present, validates `format.json`
 // if already present and migrates to newer version if necessary. Returns
 // the final format version.
 func initFormatFS(fsPath, fsUUID string) (err error) {
 	fsFormatPath := pathJoin(fsPath, minioMetaBucket, fsFormatJSONFile)
+
+	needsMigration := formatFSNeedsMigration(fsPath)
+	if needsMigration {
+		log.Printf("Acquiring lock for migration. (If this takes a long time then another minio process might be holding the lock) ")
+	}
 
 	// fsFormatJSONFile - format.json file stored in minioMetaBucket(.minio.sys) directory.
 	lk, err := lock.LockedOpenFile(preparePath(fsFormatPath), os.O_RDWR|os.O_CREATE, 0600)
@@ -396,6 +423,12 @@ func initFormatFS(fsPath, fsUUID string) (err error) {
 	}
 	defer lk.Close()
 
+	if needsMigration {
+		log.Println("- Acquired lock!")
+	}
+
+	// Check if we need to migrate again after holding the write lock to avoid race condition where
+	// another process might have migrated already after formatFSNeedsMigration() releases the lock.
 	var format = &formatConfigV1{}
 	_, err = format.ReadFrom(lk)
 	// For all unexpected errors, we return.
