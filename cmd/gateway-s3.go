@@ -20,12 +20,10 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"os"
 	"path"
 
 	"encoding/hex"
 
-	"github.com/minio/cli"
 	minio "github.com/minio/minio-go"
 	"github.com/minio/minio-go/pkg/policy"
 )
@@ -101,31 +99,33 @@ type s3Objects struct {
 }
 
 // newS3Gateway returns s3 gatewaylayer
-func newS3Gateway(args cli.Args) (GatewayLayer, error) {
+func newS3Gateway(host string) (GatewayLayer, error) {
 
 	var err error
+	var endpoint string
+	var secure = true
 
-	// Default endpoint parameters
-	endpoint := "s3.amazonaws.com"
-	secure := true
-
-	// Check if user provided some parameters
-	if args.Present() {
-		// Override default params if the endpoint is provided
-		endpoint, secure, err = parseGatewayEndpoint(args.First())
+	// Validate host parameters.
+	if host != "" {
+		// Override default params if the host is provided
+		endpoint, secure, err = parseGatewayEndpoint(host)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	accessKey := os.Getenv("MINIO_ACCESS_KEY")
-	secretKey := os.Getenv("MINIO_SECRET_KEY")
-	if accessKey == "" || secretKey == "" {
-		return nil, errors.New("No S3 access and secret key")
+	// Default endpoint parameters
+	if endpoint == "" {
+		endpoint = "s3.amazonaws.com"
+	}
+
+	creds := serverConfig.GetCredential()
+	if !creds.IsValid() && !globalIsEnvCreds {
+		return nil, errors.New("S3 backend account and secret keys should be set through ENVs")
 	}
 
 	// Initialize minio client object.
-	client, err := minio.NewCore(endpoint, accessKey, secretKey, secure)
+	client, err := minio.NewCore(endpoint, creds.AccessKey, creds.SecretKey, secure)
 	if err != nil {
 		return nil, err
 	}

@@ -33,7 +33,6 @@ import (
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
 
-	"github.com/minio/cli"
 	minio "github.com/minio/minio-go"
 	"github.com/minio/minio-go/pkg/policy"
 )
@@ -175,29 +174,20 @@ type gcsGateway struct {
 	ctx        context.Context
 }
 
+const googleStorageEndpoint = "storage.googleapis.com"
+
 // newGCSGateway returns gcs gatewaylayer
-func newGCSGateway(args cli.Args) (GatewayLayer, error) {
-	if !args.Present() {
-		return nil, fmt.Errorf("ProjectID expected")
-	}
-
-	endpoint := "storage.googleapis.com"
-	secure := true
-	projectID := args.First()
-
-	if !isValidGCSProjectID(projectID) {
-		fatalIf(errGCSInvalidProjectID, "Unable to initialize GCS gateway")
-	}
-
+func newGCSGateway(projectID string) (GatewayLayer, error) {
 	ctx := context.Background()
 
-	// Creates a client.
+	// Initialize a GCS client.
 	client, err := storage.NewClient(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	anonClient, err := minio.NewCore(endpoint, "", "", secure)
+	// Initialize a anonymous client with minio core APIs.
+	anonClient, err := minio.NewCore(googleStorageEndpoint, "", "", true)
 	if err != nil {
 		return nil, err
 	}
@@ -213,7 +203,6 @@ func newGCSGateway(args cli.Args) (GatewayLayer, error) {
 // Shutdown - save any gateway metadata to disk
 // if necessary and reload upon next restart.
 func (l *gcsGateway) Shutdown() error {
-	// TODO
 	return nil
 }
 

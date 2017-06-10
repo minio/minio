@@ -26,14 +26,12 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/storage"
-	"github.com/minio/cli"
 	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/sha256-simd"
 )
@@ -157,32 +155,30 @@ func azureToObjectError(err error, params ...string) error {
 }
 
 // Inits azure blob storage client and returns AzureObjects.
-func newAzureLayer(args cli.Args) (GatewayLayer, error) {
+func newAzureLayer(host string) (GatewayLayer, error) {
 
 	var err error
-
-	// Default endpoint parameters
-	endPoint := storage.DefaultBaseURL
-	secure := true
+	var endpoint = storage.DefaultBaseURL
+	var secure = true
 
 	// If user provided some parameters
-	if args.Present() {
-		endPoint, secure, err = parseGatewayEndpoint(args.First())
+	if host != "" {
+		endpoint, secure, err = parseGatewayEndpoint(host)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	account := os.Getenv("MINIO_ACCESS_KEY")
-	key := os.Getenv("MINIO_SECRET_KEY")
-	if account == "" || key == "" {
-		return nil, errors.New("No Azure account and key set")
+	creds := serverConfig.GetCredential()
+	if !creds.IsValid() && !globalIsEnvCreds {
+		return nil, errors.New("Azure backend account and secret keys should be set through ENVs")
 	}
 
-	c, err := storage.NewClient(account, key, endPoint, globalAzureAPIVersion, secure)
+	c, err := storage.NewClient(creds.AccessKey, creds.SecretKey, endpoint, globalAzureAPIVersion, secure)
 	if err != nil {
 		return &azureObjects{}, err
 	}
+
 	return &azureObjects{
 		client: c.GetBlobService(),
 		metaInfo: azureMultipartMetaInfo{
@@ -195,7 +191,6 @@ func newAzureLayer(args cli.Args) (GatewayLayer, error) {
 // Shutdown - save any gateway metadata to disk
 // if necessary and reload upon next restart.
 func (a *azureObjects) Shutdown() error {
-	// TODO
 	return nil
 }
 
