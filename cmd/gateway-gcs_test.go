@@ -164,3 +164,35 @@ func TestIsGCSPrefix(t *testing.T) {
 		}
 	}
 }
+
+// Test for isGCSMarker.
+func TestIsGCSMarker(t *testing.T) {
+	testCases := []struct {
+		marker   string
+		expected bool
+	}{
+		{
+			marker:   "##miniogcs123",
+			expected: true,
+		},
+		{
+			marker:   "##mini_notgcs123",
+			expected: false,
+		},
+		{
+			marker:   "#minioagainnotgcs123",
+			expected: false,
+		},
+		{
+			marker:   "obj1",
+			expected: false,
+		},
+	}
+
+	for i, tc := range testCases {
+		if actual := isGCSMarker(tc.marker); actual != tc.expected {
+			t.Errorf("Test %d: marker is %s, expected %v but got %v",
+				i+1, tc.marker, tc.expected, actual)
+		}
+	}
+}
