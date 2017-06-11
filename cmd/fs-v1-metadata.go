@@ -286,16 +286,16 @@ func newFSFormatV2() (format *formatConfigV1) {
 }
 
 // Checks if input format is version 1 and 2.
-func isFSValidFormat(formatCfg *formatConfigV1) bool {
-	// Supported format versions.
-	var supportedFormatVersions = []string{
+func isKnownFSFormat(formatCfg *formatConfigV1) bool {
+	// Known format versions.
+	var knownFormatVersions = []string{
 		fsFormatV1,
 		fsFormatV2,
-		// New supported versions here.
+		// Add new versions here.
 	}
 
 	// Check for supported format versions.
-	for _, version := range supportedFormatVersions {
+	for _, version := range knownFormatVersions {
 		if formatCfg.FS.Version == version {
 			return true
 		}
@@ -313,17 +313,25 @@ func checkFormatFS(format *formatConfigV1, formatVersion string) error {
 		return errUnexpected
 	}
 
+	// Currently there are no older format versions, so just
+	// validate the version; no migration to be done here.
+	if format.Version != "1" {
+		return fmt.Errorf("unknown format file version %s found; please upgrade Minio server; if you are running the latest version, you may have a corrupt file - please join https://slack.minio.io for assistance", format.Version)
+	}
+
 	// Validate if we have the same format.
 	if format.Format != "fs" {
-		return fmt.Errorf("Unable to recognize backend format, Disk is not in FS format. %s", format.Format)
+		return fmt.Errorf("unable to recognize backend format, disk is not in FS format. %s", format.Format)
 	}
 
-	// Check if format is currently supported.
-	if !isFSValidFormat(format) {
-		return errCorruptedFormat
+	// Check if FS format is known. If the format is unknown, then
+	// the disk may be in a format known to future versions of
+	// Minio, or the disk may be corrupt.
+	if !isKnownFSFormat(format) {
+		return fmt.Errorf("unknown FS backend format version `%s` found; please upgrade Minio server; if you are running the latest version, you may have a corrupt file - please join https://slack.minio.io for assistance", format.FS.Version)
 	}
 
-	// Check for format version is current.
+	// Check if format version is current.
 	if format.FS.Version != formatVersion {
 		return errFSFormatOld
 	}
@@ -331,14 +339,9 @@ func checkFormatFS(format *formatConfigV1, formatVersion string) error {
 	return nil
 }
 
-// This is just kept as reference, there is no sanity
-// check for FS format in version "1".
-func checkFormatSanityFSV1(fsPath string) error {
-	return nil
-}
-
-// Check for sanity of FS format in version "2".
-func checkFormatSanityFSV2(fsPath string) error {
+// Check if a server that knows only version 1 of the on-disk format
+// has corrupted a newer on-disk version in the past.
+func checkV1FSFormatCorruption(fsPath string) error {
 	buckets, err := readDir(pathJoin(fsPath, minioMetaBucket, bucketConfigPrefix))
 	if err != nil && err != errFileNotFound {
 		return err
@@ -355,16 +358,9 @@ func checkFormatSanityFSV2(fsPath string) error {
 		entriesSet := set.CreateStringSet(entries...)
 		expectedConfigsSet := set.CreateStringSet(expectedConfigs...)
 
-		// Entries found shouldn't be more than total
-		// expected config directories, files.
-		if len(entriesSet) > len(expectedConfigsSet) {
-			return errCorruptedFormat
-		}
-
-		// Look for the difference between entries and the
-		// expected config set, resulting entries if they
-		// intersect with original entries set we know
-		// that the backend has unexpected files.
+		// If there are entries in the bucket that are not in
+		// the set of expected entries, we know the backend
+		// has some unexpected files.
 		if !entriesSet.Difference(expectedConfigsSet).IsEmpty() {
 			return errCorruptedFormat
 		}
@@ -372,20 +368,8 @@ func checkFormatSanityFSV2(fsPath string) error {
 	return nil
 }
 
-// Check for sanity of FS format for a given version.
-func checkFormatSanityFS(fsPath string, fsFormatVersion string) (err error) {
-	switch fsFormatVersion {
-	case fsFormatV2:
-		err = checkFormatSanityFSV2(fsPath)
-	default:
-		err = errCorruptedFormat
-	}
-	return err
-}
-
 // Initializes a new `format.json` if not present, validates `format.json`
-// if already present and migrates to newer version if necessary. Returns
-// the final format version.
+// if already present and migrates to newer version if necessary.
 func initFormatFS(fsPath, fsUUID string) (err error) {
 	fsFormatPath := pathJoin(fsPath, minioMetaBucket, fsFormatJSONFile)
 
@@ -415,10 +399,23 @@ func initFormatFS(fsPath, fsUUID string) (err error) {
 		}
 	}
 
+	// Before checking for migration, check if FSV1 has corrupted
+	// the on-disk format. NOTE: This check is correct for when
+	// the server's latest version is V2, but may not be when
+	// future on-disk versions are introduced. Unfortunately, its
+	// accuracy needs to be verified when each future version is
+	// introduced.
+	if format.FS.Version != fsFormatV1 {
+		if cErr := checkV1FSFormatCorruption(fsPath); cErr != nil {
+			return cErr
+		}
+	}
+
 	// Disk is in old format migrate object metadata.
 	if err == errFSFormatOld {
-		if merr := migrateFSObject(fsPath, fsUUID); merr != nil {
-			return merr
+		// migrate to latest format.
+		if mErr := migrateFSObject(fsPath, fsUUID); mErr != nil {
+			return mErr
 		}
 
 		// Initialize format v2.
@@ -433,8 +430,7 @@ func initFormatFS(fsPath, fsUUID string) (err error) {
 		}
 	}
 
-	// Check for sanity.
-	return checkFormatSanityFS(fsPath, format.FS.Version)
+	return nil
 }
 
 // Return if the part info in uploadedParts and completeParts are same.

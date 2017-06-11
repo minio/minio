@@ -174,9 +174,11 @@ func TestFSMigrateObjectWithErr(t *testing.T) {
 	}
 
 	if err = initFormatFS(disk, uuid); err != nil {
-		if !strings.Contains(errorCause(err).Error(), "Unable to validate 'format.json', corrupted backend format") {
-			t.Fatal("Should not fail with unexpected", err)
+		if !strings.Contains(errorCause(err).Error(), "Unable to validate 'format.json', unknown FS backend format version `10` found; please upgrade Minio server; if you are running the latest version, you may have a corrupt file - please join https://slack.minio.io for assistance") {
+			t.Fatal("Should not fail with unexpected err: ", err)
 		}
+	} else {
+		t.Fatal("Operation unexpectedly succeeded.")
 	}
 
 	fsFormatPath = pathJoin(disk, minioMetaBucket, fsFormatJSONFile)
@@ -200,11 +202,12 @@ func TestFSMigrateObjectWithErr(t *testing.T) {
 
 	if err = initFormatFS(disk, uuid); err != nil {
 		if errorCause(err).Error() !=
-			"Unable to validate 'format.json', Unable to recognize backend format, Disk is not in FS format. garbage" {
-			t.Fatal("Should not fail with unexpected", err)
+			"Unable to validate 'format.json', unable to recognize backend format, disk is not in FS format. garbage" {
+			t.Fatal("Should not fail with unexpected err: ", err)
 		}
+	} else {
+		t.Fatal("Operation unexpectedly succeeded.")
 	}
-
 }
 
 // Tests migrating FS format with .minio.sys/buckets filled with
@@ -314,6 +317,54 @@ func TestFSMigrateObjectWithBucketConfigObjects(t *testing.T) {
 	}
 	if formatCfg.FS.Version != fsFormatV2 {
 		t.Fatalf("Unexpected version detected expected \"%s\", got %s", fsFormatV2, formatCfg.FS.Version)
+	}
+}
+
+// TestFSV1Corruption - corrupts the disk like a V1-only server on a
+// V2 disk format.
+func TestFSV1Corruption(t *testing.T) {
+	// Prepare for testing
+	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
+	defer removeAll(disk)
+
+	// Assign a new UUID.
+	uuid := mustGetUUID()
+
+	// Initialize meta volume, if volume already exists ignores it.
+	if err := initMetaVolumeFS(disk, uuid); err != nil {
+		t.Fatal(err)
+	}
+
+	fsFormatPath := pathJoin(disk, minioMetaBucket, fsFormatJSONFile)
+	formatCfg := &formatConfigV1{
+		Version: "1",
+		Format:  "fs",
+		FS: &fsFormat{
+			Version: "2",
+		},
+	}
+	lk, err := lock.LockedOpenFile(preparePath(fsFormatPath), os.O_RDWR|os.O_CREATE, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = formatCfg.WriteTo(lk)
+	lk.Close()
+	if err != nil {
+		t.Fatal("Should not fail here", err)
+	}
+
+	// Construct a file like it was written by a V1 server.
+	fsPath1 := pathJoin(bucketMetaPrefix, "testvolume1", bucketPolicyConfig, fsMetaJSONFile)
+	fsPath1 = pathJoin(disk, minioMetaBucket, fsPath1)
+
+	fsMetaJSON := `{"version":"1.0.0","format":"fs","minio":{"release":"DEVELOPMENT.2017-03-27T02-26-33Z"},"meta":{"etag":"467886be95c8ecfd71a2900e3f461b4f"}`
+	if _, err = fsCreateFile(fsPath1, bytes.NewReader([]byte(fsMetaJSON)), nil, 0); err != nil {
+		t.Fatal(err)
+	}
+
+	if err = initFormatFS(disk, uuid); err == nil ||
+		err.Error() != "corrupted backend format, please join https://slack.minio.io for assistance" {
+		t.Fatal("Unexpected error value:", err)
 	}
 }
 
@@ -485,8 +536,12 @@ func TestFSCheckFormatFSErr(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err = checkFormatFS(formatCfg, fsFormatVersion); errorCause(err) != errCorruptedFormat {
-		t.Fatal("Should not fail with unexpected", err)
+	if err = checkFormatFS(formatCfg, fsFormatVersion); err != nil {
+		if !strings.Contains(errorCause(err).Error(), "unknown FS backend format version `10` found; please upgrade Minio server; if you are running the latest version, you may have a corrupt file - please join https://slack.minio.io for assistance") {
+			t.Fatal("Should not fail with unexpected err:", err)
+		}
+	} else {
+		t.Fatal("Operation unexpectedly succeeded.")
 	}
 
 	formatCfg = &formatConfigV1{
@@ -509,13 +564,39 @@ func TestFSCheckFormatFSErr(t *testing.T) {
 	}
 
 	if err = checkFormatFS(formatCfg, fsFormatVersion); err != nil {
-		if errorCause(err).Error() != "Unable to recognize backend format, Disk is not in FS format. garbage" {
-			t.Fatal("Should not fail with unexpected", err)
+		if errorCause(err).Error() != "unable to recognize backend format, disk is not in FS format. garbage" {
+			t.Fatal("Should not fail with unexpected err:", err)
 		}
+	} else {
+		t.Fatal("Operation unexpectedly succeeded.")
 	}
 
-	if err = checkFormatFS(nil, fsFormatVersion); errorCause(err) != errUnexpected {
-		t.Fatal("Should fail with errUnexpected, but found", err)
+	// test with bad format file version
+	formatCfg = &formatConfigV1{
+		Version: "2",
+		Format:  "fs",
+		FS: &fsFormat{
+			Version: "2",
+		},
+	}
+
+	lk, err = lock.LockedOpenFile(preparePath(fsFormatPath), os.O_RDWR|os.O_CREATE, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = formatCfg.WriteTo(lk)
+	lk.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err = checkFormatFS(formatCfg, fsFormatVersion); err != nil {
+		if errorCause(err).Error() != "unknown format file version 2 found; please upgrade Minio server; if you are running the latest version, you may have a corrupt file - please join https://slack.minio.io for assistance" {
+			t.Fatal("Should not fail with unexpected err:", err)
+		}
+	} else {
+		t.Fatal("Operation unexpectedly succeeded.")
 	}
 
 	formatCfg = &formatConfigV1{
