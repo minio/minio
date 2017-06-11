@@ -15,7 +15,7 @@ Create a swarm on the manager node by running
 ```shell
 docker swarm init --advertise-addr <MANAGER-IP>
 ```
-Once the Swarm is initialized, you'll see the below response. 
+Once the swarm is initialized, you'll see the below response. 
 
 ```shell
 docker swarm join \
@@ -23,7 +23,7 @@ docker swarm join \
   192.168.99.100:2377
 ```
 
-You can now [add worker nodes](https://docs.docker.com/engine/swarm/swarm-tutorial/add-nodes/) to the swarm by running the above command. Find detailed steps to create the Swarm on [Docker documentation site](https://docs.docker.com/engine/swarm/swarm-tutorial/create-swarm/).
+You can now [add worker nodes](https://docs.docker.com/engine/swarm/swarm-tutorial/add-nodes/) to the swarm by running the above command. Find detailed steps to create the swarm on [Docker documentation site](https://docs.docker.com/engine/swarm/swarm-tutorial/create-swarm/).
 
 ## 3. Create Docker secrets for Minio
 
