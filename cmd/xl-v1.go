@@ -29,12 +29,6 @@ import (
 
 // XL constants.
 const (
-	// Format config file carries backend format specific details.
-	formatConfigFile = "format.json"
-
-	// Format config tmp file carries backend format.
-	formatConfigFileTmp = "format.json.tmp"
-
 	// XL metadata file carries per object metadata.
 	xlMetaJSONFile = "xl.json"
 

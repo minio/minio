@@ -293,7 +293,7 @@ func (s *posix) ListVols() (volsInfo []VolInfo, err error) {
 		return nil, err
 	}
 
-	volsInfo, err = listVols(s.diskPath)
+	volsInfo, err = listVols(preparePath(s.diskPath))
 	if err != nil {
 		return nil, err
 	}

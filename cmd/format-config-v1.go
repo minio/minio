@@ -33,6 +33,15 @@ type fsFormat struct {
 	Version string `json:"version"`
 }
 
+// FS format version strings.
+const (
+	// Represents the current backend disk structure
+	// version under `.minio.sys` and actual data namespace.
+
+	// formatConfigV1.fsFormat.Version
+	fsFormatBackendV1 = "1"
+)
+
 // xlFormat - structure holding 'xl' format.
 type xlFormat struct {
 	Version string `json:"version"` // Version of 'xl' format.
@@ -42,6 +51,15 @@ type xlFormat struct {
 	JBOD []string `json:"jbod"`
 }
 
+// XL format version strings.
+const (
+	// Represents the current backend disk structure
+	// version under `.minio.sys` and actual data namespace.
+
+	// formatConfigV1.xlFormat.Version
+	xlFormatBackendV1 = "1"
+)
+
 // formatConfigV1 - structure holds format config version '1'.
 type formatConfigV1 struct {
 	Version string `json:"version"` // Version of the format config.
@@ -49,6 +67,68 @@ type formatConfigV1 struct {
 	Format string    `json:"format"`
 	FS     *fsFormat `json:"fs,omitempty"` // FS field holds fs format.
 	XL     *xlFormat `json:"xl,omitempty"` // XL field holds xl format.
+}
+
+// Format json file.
+const (
+	// Format config file carries backend format specific details.
+	formatConfigFile = "format.json"
+
+	// Format config tmp file carries backend format.
+	formatConfigFileTmp = "format.json.tmp"
+)
+
+// `format.json` version value.
+const (
+	// formatConfigV1.Version represents the version string
+	// of the current structure and its fields in `format.json`.
+	formatFileV1 = "1"
+
+	// Future `format.json` structure changes should have
+	// its own version and should be subsequently listed here.
+)
+
+// Constitutes `format.json` backend name.
+const (
+	// Represents FS backend.
+	formatBackendFS = "fs"
+
+	// Represents XL backend.
+	formatBackendXL = "xl"
+)
+
+// CheckFS if the format is FS and is valid with right values
+// returns appropriate errors otherwise.
+func (f *formatConfigV1) CheckFS() error {
+	// Validate if format config version is v1.
+	if f.Version != formatFileV1 {
+		return fmt.Errorf("Unknown format file version '%s'", f.Version)
+	}
+
+	// Validate if we have the expected format.
+	if f.Format != formatBackendFS {
+		return fmt.Errorf("FS backend format required. Found '%s'", f.Format)
+	}
+
+	// Check if format is currently supported.
+	if f.FS.Version != fsFormatBackendV1 {
+		return fmt.Errorf("Unknown backend FS format version '%s'", f.FS.Version)
+	}
+
+	// Success.
+	return nil
+}
+
+// LoadFormat - loads format config v1, returns `errUnformattedDisk`
+// if reading format.json fails with io.EOF.
+func (f *formatConfigV1) LoadFormat(lk *lock.LockedFile) error {
+	_, err := f.ReadFrom(lk)
+	if errorCause(err) == io.EOF {
+		// No data on disk `format.json` still empty
+		// treat it as unformatted disk.
+		return traceError(errUnformattedDisk)
+	}
+	return err
 }
 
 func (f *formatConfigV1) WriteTo(lk *lock.LockedFile) (n int64, err error) {
@@ -86,6 +166,21 @@ func (f *formatConfigV1) ReadFrom(lk *lock.LockedFile) (n int64, err error) {
 		return 0, traceError(err)
 	}
 	return int64(len(fbytes)), nil
+}
+
+func newFSFormat() (format *formatConfigV1) {
+	return newFSFormatV1()
+}
+
+// newFSFormatV1 - initializes new formatConfigV1 with FS format info.
+func newFSFormatV1() (format *formatConfigV1) {
+	return &formatConfigV1{
+		Version: formatFileV1,
+		Format:  formatBackendFS,
+		FS: &fsFormat{
+			Version: fsFormatBackendV1,
+		},
+	}
 }
 
 /*
@@ -811,10 +906,10 @@ func loadFormatXL(bootstrapDisks []StorageAPI, readQuorum int) (disks []StorageA
 
 func checkFormatXLValue(formatXL *formatConfigV1) error {
 	// Validate format version and format type.
-	if formatXL.Version != "1" {
+	if formatXL.Version != formatFileV1 {
 		return fmt.Errorf("Unsupported version of backend format [%s] found", formatXL.Version)
 	}
-	if formatXL.Format != "xl" {
+	if formatXL.Format != formatBackendXL {
 		return fmt.Errorf("Unsupported backend format [%s] found", formatXL.Format)
 	}
 	if formatXL.XL.Version != "1" {
@@ -916,10 +1011,10 @@ func initFormatXL(storageDisks []StorageAPI) (err error) {
 		}
 		// Allocate format config.
 		formats[index] = &formatConfigV1{
-			Version: "1",
-			Format:  "xl",
+			Version: formatFileV1,
+			Format:  formatBackendXL,
 			XL: &xlFormat{
-				Version: "1",
+				Version: xlFormatBackendV1,
 				Disk:    mustGetUUID(),
 			},
 		}

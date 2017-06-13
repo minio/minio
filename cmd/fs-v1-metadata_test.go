@@ -58,7 +58,7 @@ func TestReadFSMetadata(t *testing.T) {
 	}
 
 	// Construct the full path of fs.json
-	fsPath := pathJoin(bucketMetaPrefix, bucketName, objectMetaPrefix, objectName, "fs.json")
+	fsPath := pathJoin(bucketMetaPrefix, bucketName, objectName, "fs.json")
 	fsPath = pathJoin(fs.fsPath, minioMetaBucket, fsPath)
 
 	rlk, err := fs.rwPool.Open(fsPath)
@@ -95,7 +95,7 @@ func TestWriteFSMetadata(t *testing.T) {
 	}
 
 	// Construct the full path of fs.json
-	fsPath := pathJoin(bucketMetaPrefix, bucketName, objectMetaPrefix, objectName, "fs.json")
+	fsPath := pathJoin(bucketMetaPrefix, bucketName, objectName, "fs.json")
 	fsPath = pathJoin(fs.fsPath, minioMetaBucket, fsPath)
 
 	rlk, err := fs.rwPool.Open(fsPath)

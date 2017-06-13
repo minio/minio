@@ -18,7 +18,12 @@ package cmd
 
 import (
 	"bytes"
+	"errors"
+	"os"
+	"path/filepath"
 	"testing"
+
+	"github.com/minio/minio/pkg/lock"
 )
 
 // generates a valid format.json for XL backend.
@@ -30,10 +35,10 @@ func genFormatXLValid() []*formatConfigV1 {
 	}
 	for index := range jbod {
 		formatConfigs[index] = &formatConfigV1{
-			Version: "1",
-			Format:  "xl",
+			Version: formatFileV1,
+			Format:  formatBackendXL,
 			XL: &xlFormat{
-				Version: "1",
+				Version: xlFormatBackendV1,
 				Disk:    jbod[index],
 				JBOD:    jbod,
 			},
@@ -51,10 +56,10 @@ func genFormatXLInvalidVersion() []*formatConfigV1 {
 	}
 	for index := range jbod {
 		formatConfigs[index] = &formatConfigV1{
-			Version: "1",
-			Format:  "xl",
+			Version: formatFileV1,
+			Format:  formatBackendXL,
 			XL: &xlFormat{
-				Version: "1",
+				Version: xlFormatBackendV1,
 				Disk:    jbod[index],
 				JBOD:    jbod,
 			},
@@ -75,10 +80,10 @@ func genFormatXLInvalidFormat() []*formatConfigV1 {
 	}
 	for index := range jbod {
 		formatConfigs[index] = &formatConfigV1{
-			Version: "1",
-			Format:  "xl",
+			Version: formatFileV1,
+			Format:  formatBackendXL,
 			XL: &xlFormat{
-				Version: "1",
+				Version: xlFormatBackendV1,
 				Disk:    jbod[index],
 				JBOD:    jbod,
 			},
@@ -99,10 +104,10 @@ func genFormatXLInvalidXLVersion() []*formatConfigV1 {
 	}
 	for index := range jbod {
 		formatConfigs[index] = &formatConfigV1{
-			Version: "1",
-			Format:  "xl",
+			Version: formatFileV1,
+			Format:  formatBackendXL,
 			XL: &xlFormat{
-				Version: "1",
+				Version: xlFormatBackendV1,
 				Disk:    jbod[index],
 				JBOD:    jbod,
 			},
@@ -116,8 +121,8 @@ func genFormatXLInvalidXLVersion() []*formatConfigV1 {
 
 func genFormatFS() *formatConfigV1 {
 	return &formatConfigV1{
-		Version: "1",
-		Format:  "fs",
+		Version: formatFileV1,
+		Format:  formatBackendFS,
 	}
 }
 
@@ -130,10 +135,10 @@ func genFormatXLInvalidJBODCount() []*formatConfigV1 {
 	}
 	for index := range jbod {
 		formatConfigs[index] = &formatConfigV1{
-			Version: "1",
-			Format:  "xl",
+			Version: formatFileV1,
+			Format:  formatBackendXL,
 			XL: &xlFormat{
-				Version: "1",
+				Version: xlFormatBackendV1,
 				Disk:    jbod[index],
 				JBOD:    jbod,
 			},
@@ -151,10 +156,10 @@ func genFormatXLInvalidJBOD() []*formatConfigV1 {
 	}
 	for index := range jbod {
 		formatConfigs[index] = &formatConfigV1{
-			Version: "1",
-			Format:  "xl",
+			Version: formatFileV1,
+			Format:  formatBackendXL,
 			XL: &xlFormat{
-				Version: "1",
+				Version: xlFormatBackendV1,
 				Disk:    jbod[index],
 				JBOD:    jbod,
 			},
@@ -178,10 +183,10 @@ func genFormatXLInvalidDisks() []*formatConfigV1 {
 	}
 	for index := range jbod {
 		formatConfigs[index] = &formatConfigV1{
-			Version: "1",
-			Format:  "xl",
+			Version: formatFileV1,
+			Format:  formatBackendXL,
 			XL: &xlFormat{
-				Version: "1",
+				Version: xlFormatBackendV1,
 				Disk:    jbod[index],
 				JBOD:    jbod,
 			},
@@ -202,10 +207,10 @@ func genFormatXLInvalidDisksOrder() []*formatConfigV1 {
 	}
 	for index := range jbod {
 		formatConfigs[index] = &formatConfigV1{
-			Version: "1",
-			Format:  "xl",
+			Version: formatFileV1,
+			Format:  formatBackendXL,
 			XL: &xlFormat{
-				Version: "1",
+				Version: xlFormatBackendV1,
 				Disk:    jbod[index],
 				JBOD:    jbod,
 			},
@@ -240,10 +245,10 @@ func prepareFormatXLHealFreshDisks(obj ObjectLayer) ([]StorageAPI, error) {
 	// Remove the content of export dir 10 but preserve .minio.sys because it is automatically
 	// created when minio starts
 	for i := 3; i <= 5; i++ {
-		if err = xl.storageDisks[i].DeleteFile(".minio.sys", "format.json"); err != nil {
+		if err = xl.storageDisks[i].DeleteFile(minioMetaBucket, formatConfigFile); err != nil {
 			return []StorageAPI{}, err
 		}
-		if err = xl.storageDisks[i].DeleteFile(".minio.sys", "tmp"); err != nil {
+		if err = xl.storageDisks[i].DeleteFile(minioMetaBucket, "tmp"); err != nil {
 			return []StorageAPI{}, err
 		}
 		if err = xl.storageDisks[i].DeleteFile(bucket, object+"/xl.json"); err != nil {
@@ -361,19 +366,19 @@ func TestFormatXLHealCorruptedDisks(t *testing.T) {
 	}
 
 	// Now, remove two format files.. Load them and reorder
-	if err = xl.storageDisks[3].DeleteFile(".minio.sys", "format.json"); err != nil {
+	if err = xl.storageDisks[3].DeleteFile(minioMetaBucket, formatConfigFile); err != nil {
 		t.Fatal(err)
 	}
-	if err = xl.storageDisks[11].DeleteFile(".minio.sys", "format.json"); err != nil {
+	if err = xl.storageDisks[11].DeleteFile(minioMetaBucket, formatConfigFile); err != nil {
 		t.Fatal(err)
 	}
 
 	// Remove the content of export dir 10 but preserve .minio.sys because it is automatically
 	// created when minio starts
-	if err = xl.storageDisks[10].DeleteFile(".minio.sys", "format.json"); err != nil {
+	if err = xl.storageDisks[10].DeleteFile(minioMetaBucket, formatConfigFile); err != nil {
 		t.Fatal(err)
 	}
-	if err = xl.storageDisks[10].DeleteFile(".minio.sys", "tmp"); err != nil {
+	if err = xl.storageDisks[10].DeleteFile(minioMetaBucket, "tmp"); err != nil {
 		t.Fatal(err)
 	}
 	if err = xl.storageDisks[10].DeleteFile(bucket, object+"/xl.json"); err != nil {
@@ -434,10 +439,10 @@ func TestFormatXLReorderByInspection(t *testing.T) {
 	}
 
 	// Now, remove two format files.. Load them and reorder
-	if err = xl.storageDisks[3].DeleteFile(".minio.sys", "format.json"); err != nil {
+	if err = xl.storageDisks[3].DeleteFile(minioMetaBucket, formatConfigFile); err != nil {
 		t.Fatal(err)
 	}
-	if err = xl.storageDisks[5].DeleteFile(".minio.sys", "format.json"); err != nil {
+	if err = xl.storageDisks[5].DeleteFile(minioMetaBucket, formatConfigFile); err != nil {
 		t.Fatal(err)
 	}
 
@@ -555,10 +560,10 @@ func TestSavedUUIDOrder(t *testing.T) {
 	}
 	for index := range jbod {
 		formatConfigs[index] = &formatConfigV1{
-			Version: "1",
-			Format:  "xl",
+			Version: formatFileV1,
+			Format:  formatBackendXL,
 			XL: &xlFormat{
-				Version: "1",
+				Version: xlFormatBackendV1,
 				Disk:    jbod[index],
 				JBOD:    jbod,
 			},
@@ -682,6 +687,163 @@ func TestGenericFormatCheckXL(t *testing.T) {
 	}
 }
 
+// TestFSCheckFormatFSErr - test loadFormatFS loading older format.
+func TestFSCheckFormatFSErr(t *testing.T) {
+	// Prepare for testing
+	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
+	defer removeAll(disk)
+
+	// Assign a new UUID.
+	uuid := mustGetUUID()
+
+	// Initialize meta volume, if volume already exists ignores it.
+	if err := initMetaVolumeFS(disk, uuid); err != nil {
+		t.Fatal(err)
+	}
+
+	testCases := []struct {
+		format         *formatConfigV1
+		formatWriteErr error
+		formatCheckErr error
+		shouldPass     bool
+	}{
+		{
+			format: &formatConfigV1{
+				Version: formatFileV1,
+				Format:  formatBackendFS,
+				FS: &fsFormat{
+					Version: fsFormatBackendV1,
+				},
+			},
+			formatCheckErr: nil,
+			shouldPass:     true,
+		},
+		{
+			format: &formatConfigV1{
+				Version: formatFileV1,
+				Format:  formatBackendFS,
+				FS: &fsFormat{
+					Version: "10",
+				},
+			},
+			formatCheckErr: errors.New("Unknown backend FS format version '10'"),
+			shouldPass:     false,
+		},
+		{
+			format: &formatConfigV1{
+				Version: formatFileV1,
+				Format:  "garbage",
+				FS: &fsFormat{
+					Version: fsFormatBackendV1,
+				},
+			},
+			formatCheckErr: errors.New("FS backend format required. Found 'garbage'"),
+		},
+		{
+			format: &formatConfigV1{
+				Version: "-1",
+				Format:  formatBackendFS,
+				FS: &fsFormat{
+					Version: fsFormatBackendV1,
+				},
+			},
+			formatCheckErr: errors.New("Unknown format file version '-1'"),
+		},
+	}
+
+	fsFormatPath := pathJoin(disk, minioMetaBucket, formatConfigFile)
+	for i, testCase := range testCases {
+		lk, err := lock.LockedOpenFile(preparePath(fsFormatPath), os.O_RDWR|os.O_CREATE, 0600)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = testCase.format.WriteTo(lk)
+		lk.Close()
+		if err != nil {
+			t.Fatalf("Test %d: Expected nil, got %s", i+1, err)
+		}
+
+		lk, err = lock.LockedOpenFile(preparePath(fsFormatPath), os.O_RDWR|os.O_CREATE, 0600)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		formatCfg := &formatConfigV1{}
+		_, err = formatCfg.ReadFrom(lk)
+		lk.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = formatCfg.CheckFS()
+		if err != nil && testCase.shouldPass {
+			t.Errorf("Test %d: Should not fail with unexpected %s, expected nil", i+1, err)
+		}
+		if err == nil && !testCase.shouldPass {
+			t.Errorf("Test %d: Should fail with expected %s, got nil", i+1, testCase.formatCheckErr)
+		}
+		if err != nil && !testCase.shouldPass {
+			if errorCause(err).Error() != testCase.formatCheckErr.Error() {
+				t.Errorf("Test %d: Should fail with expected %s, got %s", i+1, testCase.formatCheckErr, err)
+			}
+		}
+	}
+}
+
+// TestFSCheckFormatFS - test loadFormatFS with healty and faulty disks
+func TestFSCheckFormatFS(t *testing.T) {
+	// Prepare for testing
+	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
+	defer removeAll(disk)
+
+	// Assign a new UUID.
+	uuid := mustGetUUID()
+
+	// Initialize meta volume, if volume already exists ignores it.
+	if err := initMetaVolumeFS(disk, uuid); err != nil {
+		t.Fatal(err)
+	}
+
+	fsFormatPath := pathJoin(disk, minioMetaBucket, formatConfigFile)
+	lk, err := lock.LockedOpenFile(preparePath(fsFormatPath), os.O_RDWR|os.O_CREATE, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	format := newFSFormatV1()
+	_, err = format.WriteTo(lk)
+	lk.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Loading corrupted format file
+	file, err := os.OpenFile(preparePath(fsFormatPath), os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0666)
+	if err != nil {
+		t.Fatal("Should not fail here", err)
+	}
+	file.Write([]byte{'b'})
+	file.Close()
+
+	lk, err = lock.LockedOpenFile(preparePath(fsFormatPath), os.O_RDWR|os.O_CREATE, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	format = &formatConfigV1{}
+	_, err = format.ReadFrom(lk)
+	lk.Close()
+	if err == nil {
+		t.Fatal("Should return an error here")
+	}
+
+	// Loading format file from disk not found.
+	removeAll(disk)
+	_, err = lock.LockedOpenFile(preparePath(fsFormatPath), os.O_RDONLY, 0600)
+	if err != nil && !os.IsNotExist(err) {
+		t.Fatal("Should return 'format.json' does not exist, but got", err)
+	}
+}
+
 func TestLoadFormatXLErrs(t *testing.T) {
 	nDisks := 16
 	fsDirs, err := getRandomDisks(nDisks)
@@ -749,7 +911,7 @@ func TestLoadFormatXLErrs(t *testing.T) {
 
 	// disks 0..10 returns unformatted disk
 	for i := 0; i <= 10; i++ {
-		if err = xl.storageDisks[i].DeleteFile(".minio.sys", "format.json"); err != nil {
+		if err = xl.storageDisks[i].DeleteFile(minioMetaBucket, formatConfigFile); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -873,7 +1035,7 @@ func TestHealFormatXLCorruptedDisksErrs(t *testing.T) {
 	}
 	xl = obj.(*xlObjects)
 	for i := 0; i <= 15; i++ {
-		if err = xl.storageDisks[i].DeleteFile(".minio.sys", "format.json"); err != nil {
+		if err = xl.storageDisks[i].DeleteFile(minioMetaBucket, formatConfigFile); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -894,7 +1056,7 @@ func TestHealFormatXLCorruptedDisksErrs(t *testing.T) {
 	}
 	xl = obj.(*xlObjects)
 	for i := 0; i <= 15; i++ {
-		if err = xl.storageDisks[i].AppendFile(".minio.sys", "format.json", []byte("corrupted data")); err != nil {
+		if err = xl.storageDisks[i].AppendFile(minioMetaBucket, formatConfigFile, []byte("corrupted data")); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -998,7 +1160,7 @@ func TestHealFormatXLFreshDisksErrs(t *testing.T) {
 	}
 	xl = obj.(*xlObjects)
 	for i := 0; i <= 15; i++ {
-		if err = xl.storageDisks[i].DeleteFile(".minio.sys", "format.json"); err != nil {
+		if err = xl.storageDisks[i].DeleteFile(minioMetaBucket, formatConfigFile); err != nil {
 			t.Fatal(err)
 		}
 	}
