@@ -390,10 +390,16 @@ func TestServerListenAndServeTLS(t *testing.T) {
 			Transport: tr,
 		}
 		// Keep trying the server until it's accepting connections
+		start := UTCNow()
 		for {
 			res, _ := client.Get("https://" + addr)
 			if res != nil && res.StatusCode == http.StatusOK {
 				break
+			}
+			// Explicit check to terminate loop after 5 minutes
+			// (for investigational purpose of issue #4461)
+			if UTCNow().Sub(start) >= 5*time.Minute {
+				t.Fatalf("Failed to establish connection after 5 minutes")
 			}
 		}
 
