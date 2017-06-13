@@ -287,20 +287,27 @@ func checkLockedValidFormatFS(fsPath string) (*lock.RLockedFile, error) {
 	}
 
 	//  Always return read lock here and should be closed by the caller.
-	return rlk, traceError(err)
+	return rlk, nil
 }
 
-// Writes the new format.json if unformatted,
-// otherwise closes the input locked file
-// and returns any error.
-func writeFormatFS(lk *lock.LockedFile) error {
+// Creates the new format.json if unformatted
+func createFormatFS(fsPath string) error {
+	fsFormatPath := pathJoin(fsPath, minioMetaBucket, formatConfigFile)
+
+	// Attempt a write lock on formatConfigFile `format.json`
+	// file stored in minioMetaBucket(.minio.sys) directory.
+	lk, err := lock.TryLockedOpenFile(preparePath(fsFormatPath), os.O_RDWR|os.O_CREATE, 0600)
+	if err != nil {
+		// Unexpected error, return.
+		return traceError(err)
+	}
 	// Close the locked file upon return.
 	defer lk.Close()
 
 	// Load format on disk, checks if we are unformatted
 	// writes the new format.json
 	var format = &formatConfigV1{}
-	err := format.LoadFormat(lk)
+	err = format.LoadFormat(lk)
 	if errorCause(err) == errUnformattedDisk {
 		_, err = newFSFormat().WriteTo(lk)
 		return err
@@ -308,9 +315,7 @@ func writeFormatFS(lk *lock.LockedFile) error {
 	return err
 }
 
-func initFormatFS(fsPath, fsUUID string) (err error) {
-	fsFormatPath := pathJoin(fsPath, minioMetaBucket, formatConfigFile)
-
+func initFormatFS(fsPath string) (err error) {
 	// Once the filesystem has initialized hold the read lock for
 	// the life time of the server. This is done to ensure that under
 	// shared backend mode for FS, remote servers do not migrate
@@ -333,26 +338,16 @@ func initFormatFS(fsPath, fsUUID string) (err error) {
 			_ = rlk // Hold the lock on `format.json` until server dies.
 			return nil
 		case errorCause(err) == errUnformattedDisk:
-			// Attempt a write lock on formatConfigFile `format.json`
-			// file stored in minioMetaBucket(.minio.sys) directory.
-			var lk *lock.LockedFile
-			lk, err = lock.TryLockedOpenFile(preparePath(fsFormatPath), os.O_RDWR|os.O_CREATE, 0600)
-			if err != nil {
-				// Existing write locks detected.
-				if err == lock.ErrAlreadyLocked {
-					// Lock already present, sleep and attempt again.
-					time.Sleep(100 * time.Millisecond)
-					continue
-				}
-
-				// Unexpected error, return.
-				return traceError(err)
+			err = createFormatFS(fsPath)
+			if errorCause(err) == lock.ErrAlreadyLocked {
+				// Lock already present, sleep and attempt again.
+				time.Sleep(100 * time.Millisecond)
+				continue
 			}
-
-			// Write new format.
-			if err = writeFormatFS(lk); err != nil {
+			if err != nil {
 				return err
 			}
+
 			// Loop will continue to attempt a
 			// read-lock on `format.json` .
 		default:

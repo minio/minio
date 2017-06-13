@@ -123,7 +123,7 @@ func newFSObjectLayer(fsPath string) (ObjectLayer, error) {
 	}
 
 	// Initialize `format.json`.
-	if err = initFormatFS(fsPath, fsUUID); err != nil {
+	if err = initFormatFS(fsPath); err != nil {
 		return nil, err
 	}
 
