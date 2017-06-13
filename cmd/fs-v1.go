@@ -42,6 +42,9 @@ type fsObjects struct {
 	// temporary transactions.
 	fsUUID string
 
+	// This value shouldn't be touched, once initialized.
+	fsFormatRlk *lock.RLockedFile // Is a read lock on `format.json`.
+
 	// FS rw pool.
 	rwPool *fsIOPool
 
@@ -109,6 +112,12 @@ func newFSObjectLayer(fsPath string) (ObjectLayer, error) {
 		return nil, fmt.Errorf("Unable to initialize '.minio.sys' meta volume, %s", err)
 	}
 
+	// Initialize `format.json`, this function also returns.
+	rlk, err := initFormatFS(fsPath)
+	if err != nil {
+		return nil, err
+	}
+
 	// Initialize fs objects.
 	fs := &fsObjects{
 		fsPath: fsPath,
@@ -122,10 +131,11 @@ func newFSObjectLayer(fsPath string) (ObjectLayer, error) {
 		},
 	}
 
-	// Initialize `format.json`.
-	if err = initFormatFS(fsPath, fsUUID); err != nil {
-		return nil, err
-	}
+	// Once the filesystem has initialized hold the read lock for
+	// the life time of the server. This is done to ensure that under
+	// shared backend mode for FS, remote servers do not migrate
+	// or cause changes on backend format.
+	fs.fsFormatRlk = rlk
 
 	// Initialize and load bucket policies.
 	err = initBucketPolicies(fs)
