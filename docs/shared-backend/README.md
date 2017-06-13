@@ -1,8 +1,6 @@
-# Shared Backend Minio Quickstart Guide [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
+# Minio Distributed FS Quickstart Guide [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
 
-Minio shared mode lets you use single [NAS](https://en.wikipedia.org/wiki/Network-attached_storage) (like NFS, GlusterFS, and other 
-distributed filesystems) as the storage backend for multiple Minio servers. Synchronization among Minio servers is taken care by design. 
-Read more about the Minio shared mode design [here](https://github.com/minio/minio/blob/master/docs/shared-backend/DESIGN.md).
+Minio in distributed FS mode lets you use single [NAS](https://en.wikipedia.org/wiki/Network-attached_storage) (like NFS, GlusterFS, and other distributed filesystems) as the storage backend for multiple Minio servers. Synchronization among Minio servers is taken care by design. Read more about the Minio shared mode design [here](https://github.com/minio/minio/blob/master/docs/shared-backend/DESIGN.md).
 
 Minio shared mode is developed to solve several real world use cases, without any special configuration changes. Some of these are
 

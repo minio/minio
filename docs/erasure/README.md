@@ -1,10 +1,18 @@
-# Minio Erasure Code Quickstart Guide [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
+# Minio Standalone Erasure Quickstart Guide [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
 
-Minio protects data against hardware failures and silent data corruption using erasure code and checksums. You may lose  half the number (N/2) of drives and still be able to recover the data.
+Minio protects data against hardware failures and silent data corruption using erasure code and checksums. You may lose half the number (N/2) of drives and still be able to recover the data.
 
-## 1. Prerequisites:
+## 1. Run Minio Server with Erasure Code
 
-Install Minio - [Minio Quickstart Guide](https://docs.minio.io/docs/minio-quickstart-guide)
+Download [Minio server](https://minio.io/downloads/#minio-server), and pass at least 4 disks to Minio server as arguments. 
+
+For example: Start Minio server in a 12 drives setup.
+
+```sh
+minio server /mnt/export1/backend /mnt/export2/backend /mnt/export3/backend /mnt/export4/backend /mnt/export5/backend /mnt/export6/backend /mnt/export7/backend /mnt/export8/backend /mnt/export9/backend /mnt/export10/backend /mnt/export11/backend /mnt/export12/backend
+```
+
+## 2. Erasure Code
 
 ## What is Erasure Code?
 
@@ -42,14 +50,6 @@ Minio erasure code backend is limited by design to a minimum of 4 drives and a m
 * [OVH](https://www.ovh.com/us): Build your own infrastructure with OVH public cloud.
 * [Onlinetech](http://www.onlinetech.com): Secure, compliant enterprise cloud.
 * [SSD Nodes](https://www.ssdnodes.com): Simple, high performance cloud provider with truly personalized support.
-
-## 2. Run Minio Server with Erasure Code.
-
-Example: Start Minio server in a 12 drives setup.
-
-```sh
-minio server /mnt/export1/backend /mnt/export2/backend /mnt/export3/backend /mnt/export4/backend /mnt/export5/backend /mnt/export6/backend /mnt/export7/backend /mnt/export8/backend /mnt/export9/backend /mnt/export10/backend /mnt/export11/backend /mnt/export12/backend
-```
 
 ## 3. Test your setup
 

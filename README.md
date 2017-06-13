@@ -102,6 +102,16 @@ Source installation is only intended for developers and advanced users. If you d
 go get -u github.com/minio/minio
 ```
 
+## Minio Server modes
+Minio server supports a total of 4 modes:
+
+- Standalone FS mode (explained in the current document). 
+- [Standalone Erasure mode](https://docs.minio.io/docs/minio-erasure-code-quickstart-guide).
+- [Distributed FS mode](https://github.com/minio/minio/blob/master/docs/shared-backend/README.md). 
+- [Distributed Erasure mode](https://docs.minio.io/docs/distributed-minio-quickstart-guide).
+
+Note that all these modes get invoked automatically based on command line arguments passed to the server and there are no separate binaries for different modes. 
+
 ## Test using Minio Browser
 Minio Server comes with an embedded web based object browser. Point your web browser to http://127.0.0.1:9000 ensure your server has started successfully.
 
