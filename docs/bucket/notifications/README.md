@@ -155,7 +155,7 @@ the default location of Minio server configuration file is ``~./minio/config.jso
 | `username` | _string_ | Username to connect to the MQTT server (if required) |
 | `password` | _string_ | Password to connect to the MQTT server (if required) |
 
-An example configutation for MQTT is shown below:
+An example configuration for MQTT is shown below:
 
 ```json
 "mqtt": {

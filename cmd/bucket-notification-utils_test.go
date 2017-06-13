@@ -358,6 +358,11 @@ func TestUnmarshalSQSARN(t *testing.T) {
 			queueARN: "arn:minio:sqs:us-east-1:1:amqp",
 			Type:     "amqp",
 		},
+		// Valid mqtt queue arn.
+		{
+			queueARN: "arn:minio:sqs:us-east-1:1:mqtt",
+			Type:     "mqtt",
+		},
 		// Invalid empty queue arn.
 		{
 			queueARN: "",
