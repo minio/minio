@@ -543,6 +543,68 @@ func TestFSCheckFormatFSErr(t *testing.T) {
 	}
 }
 
+// TestFSCheckFormatFSErr - test loadFormatFS loading older format.
+func TestFormatFSNeedsMigration(t *testing.T) {
+	// Prepare for testing
+	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
+	defer removeAll(disk)
+
+	// Assign a new UUID.
+	uuid := mustGetUUID()
+
+	// Initialize meta volume, if volume already exists ignores it.
+	if err := initMetaVolumeFS(disk, uuid); err != nil {
+		t.Fatal(err)
+	}
+
+	fsFormatPath := pathJoin(disk, minioMetaBucket, fsFormatJSONFile)
+	formatCfg := &formatConfigV1{
+		Version: "1",
+		Format:  "fs",
+		FS: &fsFormat{
+			Version: "1",
+		},
+	}
+
+	lk, err := lock.LockedOpenFile(preparePath(fsFormatPath), os.O_RDWR|os.O_CREATE, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = formatCfg.WriteTo(lk)
+	lk.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if formatFSNeedsMigration(disk) == false {
+		t.Fatal("expected %v, got %v", true, false)
+	}
+
+	formatCfg = &formatConfigV1{
+		Version: "1",
+		Format:  "fs",
+		FS: &fsFormat{
+			Version: "2",
+		},
+	}
+
+	lk, err = lock.LockedOpenFile(preparePath(fsFormatPath), os.O_RDWR|os.O_CREATE, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = formatCfg.WriteTo(lk)
+	lk.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if formatFSNeedsMigration(disk) == true {
+		t.Fatal("expected %v, got %v", false, true)
+	}
+}
+
 // TestFSCheckFormatFS - test loadFormatFS with healty and faulty disks
 func TestFSCheckFormatFS(t *testing.T) {
 	// Prepare for testing
