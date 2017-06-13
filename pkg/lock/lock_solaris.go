@@ -58,7 +58,7 @@ func lockedOpenFile(path string, flag int, perm os.FileMode, rlockType int) (*Lo
 	if err = syscall.FcntlFlock(f.Fd(), rlockType, &lock); err != nil {
 		f.Close()
 		if err == syscall.EAGAIN {
-			err = ErrLocked
+			err = ErrAlreadyLocked
 		}
 		return nil, err
 	}
