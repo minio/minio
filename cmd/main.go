@@ -138,11 +138,11 @@ func newApp(name string) *cli.App {
 
 // Main main for minio server.
 func Main(args []string) {
-	name := filepath.Base(args[0])
-	app := newApp(name)
+	// Set the minio app name.
+	appName := filepath.Base(args[0])
 
 	// Run the app - exit on error.
-	if err := app.Run(args); err != nil {
+	if err := newApp(appName).Run(args); err != nil {
 		os.Exit(1)
 	}
 }
