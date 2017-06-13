@@ -51,6 +51,16 @@ Remove the distributed Minio services and related network by
 ```shell
 docker stack rm minio_stack
 ```
+Swarm doesn't automatically remove host volumes created for services. This may lead to corruption when a new Minio service is created in the swarm. So, we recommend removing all the volumes used by Minio, manually. To do this, go to each node in the swarm and list the volumes by 
+
+```shell
+docker volume ls
+```
+Then remove `minio_stack` volumes by 
+
+```shell
+docker volume rm volume_name 
+```
 
 ### Notes
 
