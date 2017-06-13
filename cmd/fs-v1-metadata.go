@@ -290,17 +290,23 @@ func checkLockedValidFormatFS(fsPath string) (*lock.RLockedFile, error) {
 	return rlk, traceError(err)
 }
 
-// Writes the new format.json if unformatted,
-// otherwise closes the input locked file
-// and returns any error.
-func writeFormatFS(lk *lock.LockedFile) error {
+// Creates a new format.json if unformatted.
+func createFormatFS(fsPath string) error {
+	fsFormatPath := pathJoin(fsPath, minioMetaBucket, formatConfigFile)
+
+	// Attempt a write lock on formatConfigFile `format.json`
+	// file stored in minioMetaBucket(.minio.sys) directory.
+	lk, err := lock.TryLockedOpenFile(preparePath(fsFormatPath), os.O_RDWR|os.O_CREATE, 0600)
+	if err != nil {
+		return traceError(err)
+	}
 	// Close the locked file upon return.
 	defer lk.Close()
 
 	// Load format on disk, checks if we are unformatted
 	// writes the new format.json
 	var format = &formatConfigV1{}
-	err := format.LoadFormat(lk)
+	err = format.LoadFormat(lk)
 	if errorCause(err) == errUnformattedDisk {
 		_, err = newFSFormat().WriteTo(lk)
 		return err
@@ -308,20 +314,12 @@ func writeFormatFS(lk *lock.LockedFile) error {
 	return err
 }
 
-func initFormatFS(fsPath, fsUUID string) (err error) {
-	fsFormatPath := pathJoin(fsPath, minioMetaBucket, formatConfigFile)
-
-	// Once the filesystem has initialized hold the read lock for
-	// the life time of the server. This is done to ensure that under
-	// shared backend mode for FS, remote servers do not migrate
-	// or cause changes on backend format.
-
+func initFormatFS(fsPath string) (rlk *lock.RLockedFile, err error) {
 	// This loop validates format.json by holding a read lock and
 	// proceeds if disk unformatted to hold non-blocking WriteLock
 	// If for some reason non-blocking WriteLock fails and the error
 	// is lock.ErrAlreadyLocked i.e some other process is holding a
 	// lock we retry in the loop again.
-	var rlk *lock.RLockedFile
 	for {
 		// Validate the `format.json` for expected values.
 		rlk, err = checkLockedValidFormatFS(fsPath)
@@ -330,34 +328,24 @@ func initFormatFS(fsPath, fsUUID string) (err error) {
 			// Holding a read lock ensures that any write lock operation
 			// is blocked if attempted in-turn avoiding corruption on
 			// the backend disk.
-			_ = rlk // Hold the lock on `format.json` until server dies.
-			return nil
+			return rlk, nil
 		case errorCause(err) == errUnformattedDisk:
-			// Attempt a write lock on formatConfigFile `format.json`
-			// file stored in minioMetaBucket(.minio.sys) directory.
-			var lk *lock.LockedFile
-			lk, err = lock.TryLockedOpenFile(preparePath(fsFormatPath), os.O_RDWR|os.O_CREATE, 0600)
-			if err != nil {
+			if err = createFormatFS(fsPath); err != nil {
 				// Existing write locks detected.
-				if err == lock.ErrAlreadyLocked {
+				if errorCause(err) == lock.ErrAlreadyLocked {
 					// Lock already present, sleep and attempt again.
 					time.Sleep(100 * time.Millisecond)
 					continue
 				}
 
 				// Unexpected error, return.
-				return traceError(err)
+				return nil, err
 			}
 
-			// Write new format.
-			if err = writeFormatFS(lk); err != nil {
-				return err
-			}
-			// Loop will continue to attempt a
-			// read-lock on `format.json` .
+			// Loop will continue to attempt a read-lock on `format.json`.
 		default:
 			// Unhandled error return.
-			return err
+			return nil, err
 		}
 	}
 }
