@@ -109,7 +109,21 @@ $ helm install --set persistence.enabled=false stable/minio
 
 > *"An emptyDir volume is first created when a Pod is assigned to a Node, and exists as long as that Pod is running on that node. When a Pod is removed from a node for any reason, the data in the emptyDir is deleted forever."*
 
-## 3. Uninstalling the Chart
+## 3. Updating Minio Release using Helm
+
+You can update an existing Minio Helm Release to use a newer Minio Docker image. To do this, use the `helm upgrade` command:
+
+```bash
+$ helm upgrade --set imageTag=<replace-with-minio-docker-image-tag> <helm-release-name> stable/minio
+```
+
+On successful update, you should see the output below
+
+```bash
+Release "your-helm-release" has been upgraded. Happy Helming!
+```
+
+## 4. Uninstalling the Chart
 
 Assuming your release is named as `my-release`, delete it using the command:
 
