@@ -80,7 +80,7 @@ func (endpoint Endpoint) SetHTTP() {
 func NewEndpoint(arg string) (Endpoint, error) {
 	// isEmptyPath - check whether given path is not empty.
 	isEmptyPath := func(path string) bool {
-		return path == "" || path == "." || path == "/" || path == `\`
+		return path == "" || path == "/" || path == `\`
 	}
 
 	if isEmptyPath(arg) {

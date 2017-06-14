@@ -773,6 +773,8 @@ type SetBucketPolicyArgs struct {
 // SetBucketPolicy - set bucket policy.
 func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolicyArgs, reply *WebGenericRep) error {
 	objectAPI := web.ObjectAPI()
+	reply.UIVersion = browser.UIVersion
+
 	if objectAPI == nil {
 		return toJSONError(errServerNotInitialized)
 	}
@@ -800,11 +802,17 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 	policyInfo.Statements = policy.SetPolicy(policyInfo.Statements, bucketP, args.BucketName, args.Prefix)
 	switch g := objectAPI.(type) {
 	case GatewayLayer:
+		if len(policyInfo.Statements) == 0 {
+			err = g.DeleteBucketPolicies(args.BucketName)
+			if err != nil {
+				return toJSONError(err, args.BucketName)
+			}
+			return nil
+		}
 		err = g.SetBucketPolicies(args.BucketName, policyInfo)
 		if err != nil {
 			return toJSONError(err)
 		}
-		reply.UIVersion = browser.UIVersion
 		return nil
 	}
 
@@ -813,7 +821,6 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 		if err != nil {
 			return toJSONError(err, args.BucketName)
 		}
-		reply.UIVersion = browser.UIVersion
 		return nil
 	}
 	data, err := json.Marshal(policyInfo)
@@ -1011,39 +1018,46 @@ func toWebAPIError(err error) APIError {
 		}
 	}
 	// Convert error type to api error code.
-	var apiErrCode APIErrorCode
 	switch err.(type) {
 	case StorageFull:
-		apiErrCode = ErrStorageFull
+		return getAPIError(ErrStorageFull)
 	case BucketNotFound:
-		apiErrCode = ErrNoSuchBucket
+		return getAPIError(ErrNoSuchBucket)
 	case BucketExists:
-		apiErrCode = ErrBucketAlreadyOwnedByYou
+		return getAPIError(ErrBucketAlreadyOwnedByYou)
 	case BucketNameInvalid:
-		apiErrCode = ErrInvalidBucketName
+		return getAPIError(ErrInvalidBucketName)
 	case BadDigest:
-		apiErrCode = ErrBadDigest
+		return getAPIError(ErrBadDigest)
 	case IncompleteBody:
-		apiErrCode = ErrIncompleteBody
+		return getAPIError(ErrIncompleteBody)
 	case ObjectExistsAsDirectory:
-		apiErrCode = ErrObjectExistsAsDirectory
+		return getAPIError(ErrObjectExistsAsDirectory)
 	case ObjectNotFound:
-		apiErrCode = ErrNoSuchKey
+		return getAPIError(ErrNoSuchKey)
 	case ObjectNameInvalid:
-		apiErrCode = ErrNoSuchKey
+		return getAPIError(ErrNoSuchKey)
 	case InsufficientWriteQuorum:
-		apiErrCode = ErrWriteQuorum
+		return getAPIError(ErrWriteQuorum)
 	case InsufficientReadQuorum:
-		apiErrCode = ErrReadQuorum
+		return getAPIError(ErrReadQuorum)
 	case PolicyNesting:
-		apiErrCode = ErrPolicyNesting
-	default:
-		// Log unexpected and unhandled errors.
-		errorIf(err, errUnexpected.Error())
-		apiErrCode = ErrInternalError
+		return getAPIError(ErrPolicyNesting)
+	case NotImplemented:
+		return APIError{
+			Code:           "NotImplemented",
+			HTTPStatusCode: http.StatusBadRequest,
+			Description:    "Functionality not implemented",
+		}
 	}
-	apiErr := getAPIError(apiErrCode)
-	return apiErr
+
+	// Log unexpected and unhandled errors.
+	errorIf(err, errUnexpected.Error())
+	return APIError{
+		Code:           "InternalError",
+		HTTPStatusCode: http.StatusInternalServerError,
+		Description:    err.Error(),
+	}
 }
 
 // writeWebErrorResponse - set HTTP status code and write error description to the body.

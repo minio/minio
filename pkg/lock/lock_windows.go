@@ -19,7 +19,6 @@
 package lock
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"syscall"
@@ -31,24 +30,25 @@ import (
 var (
 	modkernel32    = syscall.NewLazyDLL("kernel32.dll")
 	procLockFileEx = modkernel32.NewProc("LockFileEx")
-
-	errLocked = errors.New("The process cannot access the file because another process has locked a portion of the file.")
 )
 
 const (
+	// https://msdn.microsoft.com/en-us/library/windows/desktop/aa365203(v=vs.85).aspx
+	lockFileExclusiveLock   = 2
+	lockFileFailImmediately = 1
+
 	// see https://msdn.microsoft.com/en-us/library/windows/desktop/ms681382(v=vs.85).aspx
 	errLockViolation syscall.Errno = 0x21
 )
 
-// LockedOpenFile - initializes a new lock and protects
-// the file from concurrent access.
-func LockedOpenFile(path string, flag int, perm os.FileMode) (*LockedFile, error) {
+// lockedOpenFile is an internal function.
+func lockedOpenFile(path string, flag int, perm os.FileMode, lockType uint32) (*LockedFile, error) {
 	f, err := open(path, flag, perm)
 	if err != nil {
 		return nil, err
 	}
 
-	if err = lockFile(syscall.Handle(f.Fd()), 0); err != nil {
+	if err = lockFile(syscall.Handle(f.Fd()), lockType); err != nil {
 		f.Close()
 		return nil, err
 	}
@@ -69,6 +69,21 @@ func LockedOpenFile(path string, flag int, perm os.FileMode) (*LockedFile, error
 	}
 
 	return &LockedFile{File: f}, nil
+}
+
+// TryLockedOpenFile - tries a new write lock, functionality
+// it is similar to LockedOpenFile with with syscall.LOCK_EX
+// mode but along with syscall.LOCK_NB such that the function
+// doesn't wait forever but instead returns if it cannot
+// acquire a write lock.
+func TryLockedOpenFile(path string, flag int, perm os.FileMode) (*LockedFile, error) {
+	return lockedOpenFile(path, flag, perm, lockFileFailImmediately)
+}
+
+// LockedOpenFile - initializes a new lock and protects
+// the file from concurrent access.
+func LockedOpenFile(path string, flag int, perm os.FileMode) (*LockedFile, error) {
+	return lockedOpenFile(path, flag, perm, 0)
 }
 
 // perm param is ignored, on windows file perms/NT acls
@@ -121,7 +136,7 @@ func open(path string, flag int, perm os.FileMode) (*os.File, error) {
 
 func lockFile(fd syscall.Handle, flags uint32) error {
 	// https://msdn.microsoft.com/en-us/library/windows/desktop/aa365203(v=vs.85).aspx
-	var flag uint32 = 2 // Lockfile exlusive.
+	var flag uint32 = lockFileExclusiveLock // Lockfile exlusive.
 	flag |= flags
 
 	if fd == syscall.InvalidHandle {
@@ -131,8 +146,8 @@ func lockFile(fd syscall.Handle, flags uint32) error {
 	err := lockFileEx(fd, flag, 1, 0, &syscall.Overlapped{})
 	if err == nil {
 		return nil
-	} else if err.Error() == errLocked.Error() {
-		return errors.New("lock already acquired")
+	} else if err.Error() == "The process cannot access the file because another process has locked a portion of the file." {
+		return ErrAlreadyLocked
 	} else if err != errLockViolation {
 		return err
 	}

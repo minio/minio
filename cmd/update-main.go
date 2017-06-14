@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"bytes"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -98,21 +97,47 @@ func GetCurrentReleaseTime() (releaseTime time.Time, err error) {
 	return getCurrentReleaseTime(Version, os.Args[0])
 }
 
-func isDocker(cgroupFile string) (bool, error) {
-	cgroup, err := ioutil.ReadFile(cgroupFile)
-	if os.IsNotExist(err) {
-		err = nil
+// Check if we are indeed inside docker.
+// https://github.com/moby/moby/blob/master/daemon/initlayer/setup_unix.go#L25
+//
+//     "/.dockerenv":      "file",
+//
+func isDocker(dockerEnvFile string) (ok bool, err error) {
+	_, err = os.Stat(dockerEnvFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			err = nil
+		}
+		return false, err
 	}
-
-	return bytes.Contains(cgroup, []byte("docker")), err
+	return true, nil
 }
 
-// IsDocker - returns if the environment is docker or not.
+// IsDocker - returns if the environment minio is running
+// is docker or not.
 func IsDocker() bool {
-	found, err := isDocker("/proc/self/cgroup")
-	fatalIf(err, "Error in docker check.")
+	found, err := isDocker("/.dockerenv")
+	// We don't need to fail for this check, log
+	// an error and return false.
+	errorIf(err, "Error in docker check.")
 
 	return found
+}
+
+// IsDCOS returns true if minio is running in DCOS.
+func IsDCOS() bool {
+	// http://mesos.apache.org/documentation/latest/docker-containerizer/
+	// Mesos docker containerizer sets this value
+	return os.Getenv("MESOS_CONTAINER_NAME") != ""
+}
+
+// IsKubernetes returns true if minio is running in kubernetes.
+func IsKubernetes() bool {
+	// Kubernetes env used to validate if we are
+	// indeed running inside a kubernetes pod
+	// is KUBERNETES_SERVICE_HOST but in future
+	// we might need to enhance this.
+	return os.Getenv("KUBERNETES_SERVICE_HOST") != ""
 }
 
 func isSourceBuild(minioVersion string) bool {
@@ -127,7 +152,8 @@ func IsSourceBuild() bool {
 
 // DO NOT CHANGE USER AGENT STYLE.
 // The style should be
-//   Minio (<OS>; <ARCH>[; docker][; source])  Minio/<VERSION> Minio/<RELEASE-TAG> Minio/<COMMIT-ID>
+//
+//   Minio (<OS>; <ARCH>[; dcos][; kubernetes][; docker][; source]) Minio/<VERSION> Minio/<RELEASE-TAG> Minio/<COMMIT-ID> [Minio/univers-<PACKAGE_NAME>]
 //
 // For any change here should be discussed by openning an issue at https://github.com/minio/minio/issues.
 func getUserAgent(mode string) string {
@@ -135,14 +161,27 @@ func getUserAgent(mode string) string {
 	if mode != "" {
 		userAgent += "; " + mode
 	}
+	if IsDCOS() {
+		userAgent += "; dcos"
+	}
+	if IsKubernetes() {
+		userAgent += "; kubernetes"
+	}
 	if IsDocker() {
 		userAgent += "; docker"
 	}
 	if IsSourceBuild() {
 		userAgent += "; source"
 	}
-	userAgent += ") " + " Minio/" + Version + " Minio/" + ReleaseTag + " Minio/" + CommitID
 
+	userAgent += ") Minio/" + Version + " Minio/" + ReleaseTag + " Minio/" + CommitID
+	if IsDCOS() {
+		universePkgVersion := os.Getenv("MARATHON_APP_LABEL_DCOS_PACKAGE_VERSION")
+		// On DC/OS environment try to the get universe package version.
+		if universePkgVersion != "" {
+			userAgent += " Minio/" + "universe-" + universePkgVersion
+		}
+	}
 	return userAgent
 }
 
@@ -226,11 +265,35 @@ func getLatestReleaseTime(timeout time.Duration, mode string) (releaseTime time.
 	return parseReleaseData(data)
 }
 
-func getDownloadURL() (downloadURL string) {
-	if IsDocker() {
-		return "docker pull minio/minio"
+const (
+	// Kubernetes deployment doc link.
+	kubernetesDeploymentDoc = "https://docs.minio.io/docs/deploy-minio-on-kubernetes"
+
+	// Mesos deployment doc link.
+	mesosDeploymentDoc = "https://docs.minio.io/docs/deploy-minio-on-dc-os"
+)
+
+func getDownloadURL(buildDate time.Time) (downloadURL string) {
+	// Check if we are in DCOS environment, return
+	// deployment guide for update procedures.
+	if IsDCOS() {
+		return mesosDeploymentDoc
 	}
 
+	// Check if we are in kubernetes environment, return
+	// deployment guide for update procedures.
+	if IsKubernetes() {
+		return kubernetesDeploymentDoc
+	}
+
+	// Check if we are docker environment, return docker update command
+	if IsDocker() {
+		// Construct release tag name.
+		rTag := "RELEASE." + buildDate.Format(minioReleaseTagTimeLayout)
+		return fmt.Sprintf("docker pull minio/minio:%s", rTag)
+	}
+
+	// For binary only installations, then we just show binary download link.
 	if runtime.GOOS == "windows" {
 		return minioReleaseURL + "minio.exe"
 	}
@@ -254,7 +317,7 @@ func getUpdateInfo(timeout time.Duration, mode string) (older time.Duration,
 
 	if latestReleaseTime.After(currentReleaseTime) {
 		older = latestReleaseTime.Sub(currentReleaseTime)
-		downloadURL = getDownloadURL()
+		downloadURL = getDownloadURL(latestReleaseTime)
 	}
 
 	return older, downloadURL, nil

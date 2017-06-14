@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/minio/cli"
+	"github.com/minio/dsync"
 )
 
 var serverFlags = []cli.Flag{
@@ -244,7 +245,8 @@ func serverMain(ctx *cli.Context) {
 
 	// Set nodes for dsync for distributed setup.
 	if globalIsDistXL {
-		fatalIf(initDsyncNodes(), "Unable to initialize distributed locking clients")
+		clnts, myNode := newDsyncNodes(globalEndpoints)
+		fatalIf(dsync.Init(clnts, myNode), "Unable to initialize distributed locking clients")
 	}
 
 	// Initialize name space lock.

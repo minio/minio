@@ -19,30 +19,31 @@ package cmd
 import (
 	"errors"
 	"fmt"
-	"github.com/gorilla/mux"
-	"github.com/minio/cli"
 	"net/url"
 	"os"
+	"runtime"
 	"strings"
+
+	"github.com/gorilla/mux"
+	"github.com/minio/cli"
 )
 
-var gatewayTemplate = `NAME:
+const azureGatewayTemplate = `NAME:
   {{.HelpName}} - {{.Usage}}
 
 USAGE:
-  {{.HelpName}} {{if .VisibleFlags}}[FLAGS]{{end}} BACKEND [ENDPOINT]
+  {{.HelpName}} {{if .VisibleFlags}}[FLAGS]{{end}} [ENDPOINT]
 {{if .VisibleFlags}}
 FLAGS:
   {{range .VisibleFlags}}{{.}}
   {{end}}{{end}}
-BACKEND:
-  azure: Microsoft Azure Blob Storage. Default ENDPOINT is https://core.windows.net
-  s3: Amazon Simple Storage Service (S3). Default ENDPOINT is https://s3.amazonaws.com
+ENDPOINT:
+  Azure server endpoint. Default ENDPOINT is https://core.windows.net
 
 ENVIRONMENT VARIABLES:
   ACCESS:
-     MINIO_ACCESS_KEY: Username or access key of your storage backend.
-     MINIO_SECRET_KEY: Password or secret key of your storage backend.
+     MINIO_ACCESS_KEY: Username or access key of Azure storage.
+     MINIO_SECRET_KEY: Password or secret key of Azure storage.
 
   BROWSER:
      MINIO_BROWSER: To disable web browser access, set this value to "off".
@@ -51,24 +52,18 @@ EXAMPLES:
   1. Start minio gateway server for Azure Blob Storage backend.
       $ export MINIO_ACCESS_KEY=azureaccountname
       $ export MINIO_SECRET_KEY=azureaccountkey
-      $ {{.HelpName}} azure
-
-  2. Start minio gateway server for AWS S3 backend.
-      $ export MINIO_ACCESS_KEY=accesskey
-      $ export MINIO_SECRET_KEY=secretkey
-      $ {{.HelpName}} s3
-
-  3. Start minio gateway server for S3 backend on custom endpoint.
-      $ export MINIO_ACCESS_KEY=Q3AM3UQ867SPQQA43P2F
-      $ export MINIO_SECRET_KEY=zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG
-      $ {{.HelpName}} s3 https://play.minio.io:9000
+      $ {{.HelpName}}
+  2. Start minio gateway server for Azure Blob Storage backend on custom endpoint.
+      $ export MINIO_ACCESS_KEY=azureaccountname
+      $ export MINIO_SECRET_KEY=azureaccountkey
+      $ {{.HelpName}} https://azure.example.com
 `
 
-var gatewayCmd = cli.Command{
-	Name:               "gateway",
-	Usage:              "Start object storage gateway.",
-	Action:             gatewayMain,
-	CustomHelpTemplate: gatewayTemplate,
+var azureBackendCmd = cli.Command{
+	Name:               "azure",
+	Usage:              "Microsoft Azure Blob Storage.",
+	Action:             azureGatewayMain,
+	CustomHelpTemplate: azureGatewayTemplate,
 	Flags: append(serverFlags,
 		cli.BoolFlag{
 			Name:  "quiet",
@@ -76,6 +71,59 @@ var gatewayCmd = cli.Command{
 		},
 	),
 	HideHelpCommand: true,
+}
+
+const s3GatewayTemplate = `NAME:
+  {{.HelpName}} - {{.Usage}}
+
+USAGE:
+  {{.HelpName}} {{if .VisibleFlags}}[FLAGS]{{end}} [ENDPOINT]
+{{if .VisibleFlags}}
+FLAGS:
+  {{range .VisibleFlags}}{{.}}
+  {{end}}{{end}}
+ENDPOINT:
+  S3 server endpoint. Default ENDPOINT is https://s3.amazonaws.com
+
+ENVIRONMENT VARIABLES:
+  ACCESS:
+     MINIO_ACCESS_KEY: Username or access key of S3 storage.
+     MINIO_SECRET_KEY: Password or secret key of S3 storage.
+
+  BROWSER:
+     MINIO_BROWSER: To disable web browser access, set this value to "off".
+
+EXAMPLES:
+  1. Start minio gateway server for AWS S3 backend.
+      $ export MINIO_ACCESS_KEY=accesskey
+      $ export MINIO_SECRET_KEY=secretkey
+      $ {{.HelpName}}
+
+  2. Start minio gateway server for S3 backend on custom endpoint.
+      $ export MINIO_ACCESS_KEY=Q3AM3UQ867SPQQA43P2F
+      $ export MINIO_SECRET_KEY=zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG
+      $ {{.HelpName}} https://play.minio.io:9000
+`
+
+var s3BackendCmd = cli.Command{
+	Name:               "s3",
+	Usage:              "Amazon Simple Storage Service (S3).",
+	Action:             s3GatewayMain,
+	CustomHelpTemplate: s3GatewayTemplate,
+	Flags: append(serverFlags,
+		cli.BoolFlag{
+			Name:  "quiet",
+			Usage: "Disable startup banner.",
+		},
+	),
+	HideHelpCommand: true,
+}
+
+var gatewayCmd = cli.Command{
+	Name:            "gateway",
+	Usage:           "Start object storage gateway.",
+	HideHelpCommand: true,
+	Subcommands:     []cli.Command{azureBackendCmd, s3BackendCmd},
 }
 
 // Represents the type of the gateway backend.
@@ -118,7 +166,7 @@ func mustSetBrowserSettingFromEnv() {
 //
 // - Azure Blob Storage.
 // - Add your favorite backend here.
-func newGatewayLayer(backendType, endpoint, accessKey, secretKey string, secure bool) (GatewayLayer, error) {
+func newGatewayLayer(backendType gatewayBackend, endpoint, accessKey, secretKey string, secure bool) (GatewayLayer, error) {
 
 	switch gatewayBackend(backendType) {
 	case azureBackend:
@@ -180,12 +228,56 @@ func parseGatewayEndpoint(arg string) (endPoint string, secure bool, err error) 
 	}
 }
 
-// Handler for 'minio gateway'.
-func gatewayMain(ctx *cli.Context) {
-	if !ctx.Args().Present() || ctx.Args().First() == "help" {
-		cli.ShowCommandHelpAndExit(ctx, "gateway", 1)
+// Validate gateway arguments.
+func validateGatewayArguments(serverAddr, endpointAddr string) error {
+	if err := CheckLocalServerAddr(serverAddr); err != nil {
+		return err
 	}
 
+	if runtime.GOOS == "darwin" {
+		_, port := mustSplitHostPort(serverAddr)
+		// On macOS, if a process already listens on LOCALIPADDR:PORT, net.Listen() falls back
+		// to IPv6 address i.e minio will start listening on IPv6 address whereas another
+		// (non-)minio process is listening on IPv4 of given port.
+		// To avoid this error situation we check for port availability only for macOS.
+		if err := checkPortAvailability(port); err != nil {
+			return err
+		}
+	}
+
+	if endpointAddr != "" {
+		// Reject the endpoint if it points to the gateway handler itself.
+		sameTarget, err := sameLocalAddrs(endpointAddr, serverAddr)
+		if err != nil {
+			return err
+		}
+		if sameTarget {
+			return errors.New("endpoint points to the local gateway")
+		}
+	}
+	return nil
+}
+
+// Handler for 'minio gateway azure' command line.
+func azureGatewayMain(ctx *cli.Context) {
+	if ctx.Args().Present() && ctx.Args().First() == "help" {
+		cli.ShowCommandHelpAndExit(ctx, "azure", 1)
+	}
+
+	gatewayMain(ctx, azureBackend)
+}
+
+// Handler for 'minio gateway s3' command line.
+func s3GatewayMain(ctx *cli.Context) {
+	if ctx.Args().Present() && ctx.Args().First() == "help" {
+		cli.ShowCommandHelpAndExit(ctx, "s3", 1)
+	}
+
+	gatewayMain(ctx, s3Backend)
+}
+
+// Handler for 'minio gateway'.
+func gatewayMain(ctx *cli.Context, backendType gatewayBackend) {
 	// Fetch access and secret key from env.
 	accessKey, secretKey := mustGetGatewayCredsFromEnv()
 
@@ -202,21 +294,10 @@ func gatewayMain(ctx *cli.Context) {
 		log.EnableQuiet()
 	}
 
-	// First argument is selected backend type.
-	backendType := ctx.Args().Get(0)
-	// Second argument is the endpoint address (optional)
-	endpointAddr := ctx.Args().Get(1)
-	// Third argument is the address flag
 	serverAddr := ctx.String("address")
-
-	if endpointAddr != "" {
-		// Reject the endpoint if it points to the gateway handler itself.
-		sameTarget, err := sameLocalAddrs(endpointAddr, serverAddr)
-		fatalIf(err, "Unable to compare server and endpoint addresses.")
-		if sameTarget {
-			fatalIf(errors.New("endpoint points to the local gateway"), "Endpoint url is not allowed")
-		}
-	}
+	endpointAddr := ctx.Args().Get(0)
+	err := validateGatewayArguments(serverAddr, endpointAddr)
+	fatalIf(err, "Invalid argument")
 
 	// Second argument is endpoint.	If no endpoint is specified then the
 	// gateway implementation should use a default setting.
@@ -232,6 +313,9 @@ func gatewayMain(ctx *cli.Context) {
 	initNSLock(false) // Enable local namespace lock.
 
 	router := mux.NewRouter().SkipClean(true)
+
+	// credentials Envs are set globally.
+	globalIsEnvCreds = true
 
 	// Register web router when its enabled.
 	if globalIsBrowserEnabled {

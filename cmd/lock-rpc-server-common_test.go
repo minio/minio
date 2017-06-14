@@ -38,9 +38,9 @@ func TestLockRpcServerRemoveEntryIfExists(t *testing.T) {
 	nlrip := nameLockRequesterInfoPair{name: "name", lri: lri}
 
 	// first test by simulating item has already been deleted
-	locker.removeEntryIfExists(nlrip)
+	locker.ll.removeEntryIfExists(nlrip)
 	{
-		gotLri, _ := locker.lockMap["name"]
+		gotLri, _ := locker.ll.lockMap["name"]
 		expectedLri := []lockRequesterInfo(nil)
 		if !reflect.DeepEqual(expectedLri, gotLri) {
 			t.Errorf("Expected %#v, got %#v", expectedLri, gotLri)
@@ -48,10 +48,10 @@ func TestLockRpcServerRemoveEntryIfExists(t *testing.T) {
 	}
 
 	// then test normal deletion
-	locker.lockMap["name"] = []lockRequesterInfo{lri} // add item
-	locker.removeEntryIfExists(nlrip)
+	locker.ll.lockMap["name"] = []lockRequesterInfo{lri} // add item
+	locker.ll.removeEntryIfExists(nlrip)
 	{
-		gotLri, _ := locker.lockMap["name"]
+		gotLri, _ := locker.ll.lockMap["name"]
 		expectedLri := []lockRequesterInfo(nil)
 		if !reflect.DeepEqual(expectedLri, gotLri) {
 			t.Errorf("Expected %#v, got %#v", expectedLri, gotLri)
@@ -81,32 +81,32 @@ func TestLockRpcServerRemoveEntry(t *testing.T) {
 		timeLastCheck:   UTCNow(),
 	}
 
-	locker.lockMap["name"] = []lockRequesterInfo{
+	locker.ll.lockMap["name"] = []lockRequesterInfo{
 		lockRequesterInfo1,
 		lockRequesterInfo2,
 	}
 
-	lri, _ := locker.lockMap["name"]
+	lri, _ := locker.ll.lockMap["name"]
 
 	// test unknown uid
-	if locker.removeEntry("name", "unknown-uid", &lri) {
+	if locker.ll.removeEntry("name", "unknown-uid", &lri) {
 		t.Errorf("Expected %#v, got %#v", false, true)
 	}
 
-	if !locker.removeEntry("name", "0123-4567", &lri) {
+	if !locker.ll.removeEntry("name", "0123-4567", &lri) {
 		t.Errorf("Expected %#v, got %#v", true, false)
 	} else {
-		gotLri, _ := locker.lockMap["name"]
+		gotLri, _ := locker.ll.lockMap["name"]
 		expectedLri := []lockRequesterInfo{lockRequesterInfo2}
 		if !reflect.DeepEqual(expectedLri, gotLri) {
 			t.Errorf("Expected %#v, got %#v", expectedLri, gotLri)
 		}
 	}
 
-	if !locker.removeEntry("name", "89ab-cdef", &lri) {
+	if !locker.ll.removeEntry("name", "89ab-cdef", &lri) {
 		t.Errorf("Expected %#v, got %#v", true, false)
 	} else {
-		gotLri, _ := locker.lockMap["name"]
+		gotLri, _ := locker.ll.lockMap["name"]
 		expectedLri := []lockRequesterInfo(nil)
 		if !reflect.DeepEqual(expectedLri, gotLri) {
 			t.Errorf("Expected %#v, got %#v", expectedLri, gotLri)

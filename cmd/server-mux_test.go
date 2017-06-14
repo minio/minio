@@ -109,20 +109,18 @@ func dial(addr string) error {
 
 // Tests initializing listeners.
 func TestInitListeners(t *testing.T) {
-	portTest1 := getFreePort()
-	portTest2 := getFreePort()
 	testCases := []struct {
 		serverAddr string
 		shouldPass bool
 	}{
 		// Test 1 with ip and port.
 		{
-			serverAddr: "127.0.0.1:" + portTest1,
+			serverAddr: net.JoinHostPort("127.0.0.1", "0"),
 			shouldPass: true,
 		},
 		// Test 2 only port.
 		{
-			serverAddr: ":" + portTest2,
+			serverAddr: net.JoinHostPort("", "0"),
 			shouldPass: true,
 		},
 		// Test 3 with no port error.
@@ -309,41 +307,44 @@ func TestServerListenAndServePlain(t *testing.T) {
 	// ListenAndServe in a goroutine, but we don't know when it's ready
 	go func() { errc <- m.ListenAndServe("", "") }()
 
-	wg := &sync.WaitGroup{}
-	wg.Add(1)
 	// Keep trying the server until it's accepting connections
 	go func() {
 		client := http.Client{Timeout: time.Millisecond * 10}
-		ok := false
-		for !ok {
+		for {
 			res, _ := client.Get("http://" + addr)
 			if res != nil && res.StatusCode == http.StatusOK {
-				ok = true
+				break
 			}
 		}
-
-		wg.Done()
 	}()
 
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		select {
+		case err := <-errc:
+			if err != nil {
+				t.Fatal(err)
+			}
+		case <-wait:
+			return
+		}
+	}()
+
+	// Wait until we get an error or wait closed
 	wg.Wait()
 
-	// Block until we get an error or wait closed
-	select {
-	case err := <-errc:
-		if err != nil {
-			t.Fatal(err)
-		}
-	case <-wait:
-		m.Close() // Shutdown the ServerMux
-		return
-	}
+	// Shutdown the ServerMux
+	m.Close()
 }
 
 func TestServerListenAndServeTLS(t *testing.T) {
-	_, err := newTestConfig(globalMinioDefaultRegion)
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
+	defer removeAll(rootPath)
 
 	wait := make(chan struct{})
 	addr := net.JoinHostPort("127.0.0.1", getFreePort())
@@ -388,12 +389,17 @@ func TestServerListenAndServeTLS(t *testing.T) {
 			Timeout:   time.Millisecond * 10,
 			Transport: tr,
 		}
-		okTLS := false
 		// Keep trying the server until it's accepting connections
-		for !okTLS {
+		start := UTCNow()
+		for {
 			res, _ := client.Get("https://" + addr)
 			if res != nil && res.StatusCode == http.StatusOK {
-				okTLS = true
+				break
+			}
+			// Explicit check to terminate loop after 5 minutes
+			// (for investigational purpose of issue #4461)
+			if UTCNow().Sub(start) >= 5*time.Minute {
+				t.Fatalf("Failed to establish connection after 5 minutes")
 			}
 		}
 
@@ -422,19 +428,25 @@ func TestServerListenAndServeTLS(t *testing.T) {
 		wg.Done()
 	}()
 
-	wg.Wait()
-
-	// Block until we get an error or wait closed
-	select {
-	case err := <-errc:
-		if err != nil {
-			t.Error(err)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		select {
+		case err := <-errc:
+			if err != nil {
+				t.Error(err)
+				return
+			}
+		case <-wait:
 			return
 		}
-	case <-wait:
-		m.Close() // Shutdown the ServerMux
-		return
-	}
+	}()
+
+	// Wait until we get an error or wait closed
+	wg.Wait()
+
+	// Shutdown the ServerMux
+	m.Close()
 }
 
 // generateTestCert creates a cert and a key used for testing only

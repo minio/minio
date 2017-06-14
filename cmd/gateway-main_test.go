@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -72,4 +73,36 @@ func TestSetBrowserFromEnv(t *testing.T) {
 		t.Errorf("Expected the response status to be `%t`, but instead found `%t`", globalIsBrowserEnabled, true)
 	}
 	os.Setenv("MINIO_BROWSER", browser)
+}
+
+// Test validateGatewayArguments
+func TestValidateGatewayArguments(t *testing.T) {
+	nonLoopBackIPs := localIP4.FuncMatch(func(ip string, matchString string) bool {
+		return !strings.HasPrefix(ip, "127.")
+	}, "")
+	if len(nonLoopBackIPs) == 0 {
+		t.Fatalf("No non-loop back IP address found for this host")
+	}
+	nonLoopBackIP := nonLoopBackIPs.ToSlice()[0]
+
+	testCases := []struct {
+		serverAddr   string
+		endpointAddr string
+		valid        bool
+	}{
+		{":9000", "http://localhost:9001", true},
+		{":9000", "http://google.com", true},
+		{"123.123.123.123:9000", "http://localhost:9000", false},
+		{":9000", "http://localhost:9000", false},
+		{":9000", nonLoopBackIP + ":9000", false},
+	}
+	for i, test := range testCases {
+		err := validateGatewayArguments(test.serverAddr, test.endpointAddr)
+		if test.valid && err != nil {
+			t.Errorf("Test %d expected not to return error but got %s", i+1, err)
+		}
+		if !test.valid && err == nil {
+			t.Errorf("Test %d expected to fail but it did not", i+1)
+		}
+	}
 }

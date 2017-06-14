@@ -383,7 +383,7 @@ func healObject(storageDisks []StorageAPI, bucket string, object string, quorum 
 	for index, disk := range outDatedDisks {
 		// Before healing outdated disks, we need to remove xl.json
 		// and part files from "bucket/object/" so that
-		// rename(".minio.sys", "tmp/tmpuuid/", "bucket", "object/") succeeds.
+		// rename(minioMetaBucket, "tmp/tmpuuid/", "bucket", "object/") succeeds.
 		if disk == nil {
 			// Not an outdated disk.
 			continue

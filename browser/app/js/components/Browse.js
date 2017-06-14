@@ -463,21 +463,25 @@ export default class Browse extends React.Component {
     }
 
     if (web.LoggedIn()) {
-      storageUsageDetails = <div className="feh-usage">
-                              <div className="fehu-chart">
-                                <div style={ { width: usedPercent } }></div>
-                              </div>
-                              <ul>
-                                <li>
-                                  <span>Used: </span>
-                                  { humanize.filesize(total - free) }
-                                </li>
-                                <li className="pull-right">
-                                  <span>Free: </span>
-                                  { humanize.filesize(total - used) }
-                                </li>
-                              </ul>
-                            </div>
+      if (!(used === 0 && free === 0)) {
+        storageUsageDetails = <div className="feh-usage">
+          <div className="fehu-chart">
+            <div style={ { width: usedPercent } }></div>
+          </div>
+          <ul>
+            <li>
+              <span>Used: </span>
+              { humanize.filesize(total - free) }
+            </li>
+            <li className="pull-right">
+              <span>Free: </span>
+              { humanize.filesize(total - used) }
+            </li>
+          </ul>
+        </div>
+      }
+
+
     }
 
     let createButton = ''

@@ -18,16 +18,14 @@ package cmd
 
 import (
 	"encoding/json"
-	"errors"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
 	pathutil "path"
 	"sort"
 	"strings"
+	"time"
 
-	"github.com/minio/minio-go/pkg/set"
 	"github.com/minio/minio/pkg/lock"
 	"github.com/minio/minio/pkg/mimedb"
 	"github.com/tidwall/gjson"
@@ -37,8 +35,6 @@ import (
 const (
 	// fs.json object metadata.
 	fsMetaJSONFile = "fs.json"
-	// format.json FS format metadata.
-	fsFormatJSONFile = "format.json"
 )
 
 // FS metadata constants.
@@ -51,9 +47,6 @@ const (
 
 	// FS backend meta format.
 	fsMetaFormat = "fs"
-
-	// FS backend format version.
-	fsFormatVersion = fsFormatV2
 
 	// Add more constants here.
 )
@@ -257,14 +250,6 @@ func (m *fsMetaV1) ReadFrom(lk *lock.LockedFile) (n int64, err error) {
 	return int64(len(fsMetaBuf)), nil
 }
 
-// FS format version strings.
-const (
-	fsFormatV1 = "1" // Previous format.
-	fsFormatV2 = "2" // Current format.
-	// Proceed to add "3" when we
-	// change the backend format in future.
-)
-
 // newFSMetaV1 - initializes new fsMetaV1.
 func newFSMetaV1() (fsMeta fsMetaV1) {
 	fsMeta = fsMetaV1{}
@@ -274,167 +259,95 @@ func newFSMetaV1() (fsMeta fsMetaV1) {
 	return fsMeta
 }
 
-// newFSFormatV2 - initializes new formatConfigV1 with FS format version 2.
-func newFSFormatV2() (format *formatConfigV1) {
-	return &formatConfigV1{
-		Version: "1",
-		Format:  "fs",
-		FS: &fsFormat{
-			Version: fsFormatV2,
-		},
-	}
-}
+// Check if disk has already a valid format, holds a read lock and
+// upon success returns it to the caller to be closed.
+func checkLockedValidFormatFS(fsPath string) (*lock.RLockedFile, error) {
+	fsFormatPath := pathJoin(fsPath, minioMetaBucket, formatConfigFile)
 
-// Checks if input format is version 1 and 2.
-func isFSValidFormat(formatCfg *formatConfigV1) bool {
-	// Supported format versions.
-	var supportedFormatVersions = []string{
-		fsFormatV1,
-		fsFormatV2,
-		// New supported versions here.
-	}
-
-	// Check for supported format versions.
-	for _, version := range supportedFormatVersions {
-		if formatCfg.FS.Version == version {
-			return true
+	rlk, err := lock.RLockedOpenFile(preparePath(fsFormatPath))
+	if err != nil {
+		if os.IsNotExist(err) {
+			// If format.json not found then
+			// its an unformatted disk.
+			return nil, traceError(errUnformattedDisk)
 		}
+		return nil, traceError(err)
 	}
-	return false
+
+	var format = &formatConfigV1{}
+	if err = format.LoadFormat(rlk.LockedFile); err != nil {
+		rlk.Close()
+		return nil, err
+	}
+
+	// Check format FS.
+	if err = format.CheckFS(); err != nil {
+		rlk.Close()
+		return nil, err
+	}
+
+	//  Always return read lock here and should be closed by the caller.
+	return rlk, traceError(err)
 }
 
-// errFSFormatOld- old fs format.
-var errFSFormatOld = errors.New("old FS format found")
+// Creates a new format.json if unformatted.
+func createFormatFS(fsPath string) error {
+	fsFormatPath := pathJoin(fsPath, minioMetaBucket, formatConfigFile)
 
-// Checks if the loaded `format.json` is valid and
-// is expected to be of the requested version.
-func checkFormatFS(format *formatConfigV1, formatVersion string) error {
-	if format == nil {
-		return errUnexpected
+	// Attempt a write lock on formatConfigFile `format.json`
+	// file stored in minioMetaBucket(.minio.sys) directory.
+	lk, err := lock.TryLockedOpenFile(preparePath(fsFormatPath), os.O_RDWR|os.O_CREATE, 0600)
+	if err != nil {
+		return traceError(err)
 	}
+	// Close the locked file upon return.
+	defer lk.Close()
 
-	// Validate if we have the same format.
-	if format.Format != "fs" {
-		return fmt.Errorf("Unable to recognize backend format, Disk is not in FS format. %s", format.Format)
-	}
-
-	// Check if format is currently supported.
-	if !isFSValidFormat(format) {
-		return errCorruptedFormat
-	}
-
-	// Check for format version is current.
-	if format.FS.Version != formatVersion {
-		return errFSFormatOld
-	}
-
-	return nil
-}
-
-// This is just kept as reference, there is no sanity
-// check for FS format in version "1".
-func checkFormatSanityFSV1(fsPath string) error {
-	return nil
-}
-
-// Check for sanity of FS format in version "2".
-func checkFormatSanityFSV2(fsPath string) error {
-	buckets, err := readDir(pathJoin(fsPath, minioMetaBucket, bucketConfigPrefix))
-	if err != nil && err != errFileNotFound {
+	// Load format on disk, checks if we are unformatted
+	// writes the new format.json
+	var format = &formatConfigV1{}
+	err = format.LoadFormat(lk)
+	if errorCause(err) == errUnformattedDisk {
+		_, err = newFSFormat().WriteTo(lk)
 		return err
-	}
-
-	// Attempt to validate all the buckets have a sanitized backend.
-	for _, bucket := range buckets {
-		entries, rerr := readDir(pathJoin(fsPath, minioMetaBucket, bucketConfigPrefix, bucket))
-		if rerr != nil {
-			return rerr
-		}
-
-		var expectedConfigs = append(bucketMetadataConfigs, objectMetaPrefix+"/")
-		entriesSet := set.CreateStringSet(entries...)
-		expectedConfigsSet := set.CreateStringSet(expectedConfigs...)
-
-		// Entries found shouldn't be more than total
-		// expected config directories, files.
-		if len(entriesSet) > len(expectedConfigsSet) {
-			return errCorruptedFormat
-		}
-
-		// Look for the difference between entries and the
-		// expected config set, resulting entries if they
-		// intersect with original entries set we know
-		// that the backend has unexpected files.
-		if !entriesSet.Difference(expectedConfigsSet).IsEmpty() {
-			return errCorruptedFormat
-		}
-	}
-	return nil
-}
-
-// Check for sanity of FS format for a given version.
-func checkFormatSanityFS(fsPath string, fsFormatVersion string) (err error) {
-	switch fsFormatVersion {
-	case fsFormatV2:
-		err = checkFormatSanityFSV2(fsPath)
-	default:
-		err = errCorruptedFormat
 	}
 	return err
 }
 
-// Initializes a new `format.json` if not present, validates `format.json`
-// if already present and migrates to newer version if necessary. Returns
-// the final format version.
-func initFormatFS(fsPath, fsUUID string) (err error) {
-	fsFormatPath := pathJoin(fsPath, minioMetaBucket, fsFormatJSONFile)
+func initFormatFS(fsPath string) (rlk *lock.RLockedFile, err error) {
+	// This loop validates format.json by holding a read lock and
+	// proceeds if disk unformatted to hold non-blocking WriteLock
+	// If for some reason non-blocking WriteLock fails and the error
+	// is lock.ErrAlreadyLocked i.e some other process is holding a
+	// lock we retry in the loop again.
+	for {
+		// Validate the `format.json` for expected values.
+		rlk, err = checkLockedValidFormatFS(fsPath)
+		switch {
+		case err == nil:
+			// Holding a read lock ensures that any write lock operation
+			// is blocked if attempted in-turn avoiding corruption on
+			// the backend disk.
+			return rlk, nil
+		case errorCause(err) == errUnformattedDisk:
+			if err = createFormatFS(fsPath); err != nil {
+				// Existing write locks detected.
+				if errorCause(err) == lock.ErrAlreadyLocked {
+					// Lock already present, sleep and attempt again.
+					time.Sleep(100 * time.Millisecond)
+					continue
+				}
 
-	// fsFormatJSONFile - format.json file stored in minioMetaBucket(.minio.sys) directory.
-	lk, err := lock.LockedOpenFile(preparePath(fsFormatPath), os.O_RDWR|os.O_CREATE, 0600)
-	if err != nil {
-		return traceError(err)
-	}
-	defer lk.Close()
+				// Unexpected error, return.
+				return nil, err
+			}
 
-	var format = &formatConfigV1{}
-	_, err = format.ReadFrom(lk)
-	// For all unexpected errors, we return.
-	if err != nil && errorCause(err) != io.EOF {
-		return traceError(fmt.Errorf("Unable to load 'format.json', %s", err))
-	}
-
-	// If we couldn't read anything, The disk is unformatted.
-	if errorCause(err) == io.EOF {
-		err = errUnformattedDisk
-		format = newFSFormatV2()
-	} else {
-		// Validate loaded `format.json`.
-		err = checkFormatFS(format, fsFormatVersion)
-		if err != nil && err != errFSFormatOld {
-			return traceError(fmt.Errorf("Unable to validate 'format.json', %s", err))
+			// Loop will continue to attempt a read-lock on `format.json`.
+		default:
+			// Unhandled error return.
+			return nil, err
 		}
 	}
-
-	// Disk is in old format migrate object metadata.
-	if err == errFSFormatOld {
-		if merr := migrateFSObject(fsPath, fsUUID); merr != nil {
-			return merr
-		}
-
-		// Initialize format v2.
-		format = newFSFormatV2()
-	}
-
-	// Rewrite or write format.json depending on if disk
-	// unformatted and if format is old.
-	if err == errUnformattedDisk || err == errFSFormatOld {
-		if _, err = format.WriteTo(lk); err != nil {
-			return traceError(fmt.Errorf("Unable to initialize 'format.json', %s", err))
-		}
-	}
-
-	// Check for sanity.
-	return checkFormatSanityFS(fsPath, format.FS.Version)
 }
 
 // Return if the part info in uploadedParts and completeParts are same.
