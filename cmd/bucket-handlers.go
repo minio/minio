@@ -83,6 +83,10 @@ func enforceBucketPolicy(bucket, action, resource, referer string, queryParams u
 
 // Check if the action is allowed on the bucket/prefix.
 func isBucketActionAllowed(action, bucket, prefix string) bool {
+	if globalBucketPolicies == nil {
+		return false
+	}
+
 	policy := globalBucketPolicies.GetBucketPolicy(bucket)
 	if policy == nil {
 		return false
@@ -389,7 +393,7 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	defer bucketLock.Unlock()
 
 	// Proceed to creating a bucket.
-	err := objectAPI.MakeBucket(bucket)
+	err := objectAPI.MakeBucketWithLocation(bucket, "")
 	if err != nil {
 		errorIf(err, "Unable to create a bucket.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
@@ -535,7 +539,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		return
 	}
 
-	w.Header().Set("ETag", `"`+objInfo.MD5Sum+`"`)
+	w.Header().Set("ETag", `"`+objInfo.ETag+`"`)
 	w.Header().Set("Location", getObjectLocation(bucket, object))
 
 	// Get host and port from Request.RemoteAddr.
@@ -568,7 +572,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 		resp := encodeResponse(PostResponse{
 			Bucket:   objInfo.Bucket,
 			Key:      objInfo.Name,
-			ETag:     `"` + objInfo.MD5Sum + `"`,
+			ETag:     `"` + objInfo.ETag + `"`,
 			Location: getObjectLocation(objInfo.Bucket, objInfo.Name),
 		})
 		writeResponse(w, http.StatusCreated, resp, "application/xml")

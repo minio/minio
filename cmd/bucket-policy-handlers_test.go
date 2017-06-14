@@ -251,7 +251,7 @@ func testPutBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName string
 	initBucketPolicies(obj)
 
 	bucketName1 := fmt.Sprintf("%s-1", bucketName)
-	if err := obj.MakeBucket(bucketName1); err != nil {
+	if err := obj.MakeBucketWithLocation(bucketName1, ""); err != nil {
 		t.Fatal(err)
 	}
 

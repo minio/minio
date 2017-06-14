@@ -19,7 +19,9 @@ package cmd
 import "encoding/hex"
 
 // Heals the erasure coded file. reedsolomon.Reconstruct() is used to reconstruct the missing parts.
-func erasureHealFile(latestDisks []StorageAPI, outDatedDisks []StorageAPI, volume, path, healBucket, healPath string, size int64, blockSize int64, dataBlocks int, parityBlocks int, algo string) (checkSums []string, err error) {
+func erasureHealFile(latestDisks []StorageAPI, outDatedDisks []StorageAPI, volume, path, healBucket, healPath string,
+	size, blockSize int64, dataBlocks, parityBlocks int, algo HashAlgo) (checkSums []string, err error) {
+
 	var offset int64
 	remainingSize := size
 

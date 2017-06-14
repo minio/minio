@@ -973,7 +973,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	xlMeta.Stat.ModTime = UTCNow()
 
 	// Save successfully calculated md5sum.
-	xlMeta.Meta["md5Sum"] = s3MD5
+	xlMeta.Meta["etag"] = s3MD5
 	uploadIDPath = path.Join(bucket, object, uploadID)
 	tempUploadIDPath := uploadID
 
@@ -1061,7 +1061,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 		Name:            object,
 		Size:            xlMeta.Stat.Size,
 		ModTime:         xlMeta.Stat.ModTime,
-		MD5Sum:          xlMeta.Meta["md5Sum"],
+		ETag:            xlMeta.Meta["etag"],
 		ContentType:     xlMeta.Meta["content-type"],
 		ContentEncoding: xlMeta.Meta["content-encoding"],
 		UserDefined:     xlMeta.Meta,

@@ -101,8 +101,8 @@ type ObjectInfo struct {
 	// IsDir indicates if the object is prefix.
 	IsDir bool
 
-	// Hex encoded md5 checksum of the object.
-	MD5Sum string
+	// Hex encoded unique entity tag of the object.
+	ETag string
 
 	// A standard MIME type describing the format of the object.
 	ContentType string

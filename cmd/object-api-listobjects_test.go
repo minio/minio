@@ -41,7 +41,7 @@ func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
 		"empty-bucket",
 	}
 	for _, bucket := range testBuckets {
-		err := obj.MakeBucket(bucket)
+		err := obj.MakeBucketWithLocation(bucket, "")
 		if err != nil {
 			t.Fatalf("%s : %s", instanceType, err.Error())
 		}
@@ -549,7 +549,7 @@ func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
 				if testCase.result.Objects[j].Name != result.Objects[j].Name {
 					t.Errorf("Test %d: %s: Expected object name to be \"%s\", but found \"%s\" instead", i+1, instanceType, testCase.result.Objects[j].Name, result.Objects[j].Name)
 				}
-				if result.Objects[j].MD5Sum == "" {
+				if result.Objects[j].ETag == "" {
 					t.Errorf("Test %d: %s: Expected md5sum to be not empty, but found empty instead", i+1, instanceType)
 				}
 
@@ -599,7 +599,7 @@ func BenchmarkListObjects(b *testing.B) {
 
 	bucket := "ls-benchmark-bucket"
 	// Create a bucket.
-	err = obj.MakeBucket(bucket)
+	err = obj.MakeBucketWithLocation(bucket, "")
 	if err != nil {
 		b.Fatal(err)
 	}

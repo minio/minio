@@ -30,6 +30,34 @@ import (
 	"time"
 )
 
+func TestDownloadURL(t *testing.T) {
+	minioVersion1 := UTCNow()
+	durl := getDownloadURL(minioVersion1)
+	if runtime.GOOS == "windows" {
+		if durl != minioReleaseURL+"minio.exe" {
+			t.Errorf("Expected %s, got %s", minioReleaseURL+"minio.exe", durl)
+		}
+	} else {
+		if durl != minioReleaseURL+"minio" {
+			t.Errorf("Expected %s, got %s", minioReleaseURL+"minio", durl)
+		}
+	}
+
+	os.Setenv("KUBERNETES_SERVICE_HOST", "10.11.148.5")
+	durl = getDownloadURL(minioVersion1)
+	if durl != kubernetesDeploymentDoc {
+		t.Errorf("Expected %s, got %s", kubernetesDeploymentDoc, durl)
+	}
+	os.Unsetenv("KUBERNETES_SERVICE_HOST")
+
+	os.Setenv("MESOS_CONTAINER_NAME", "mesos-1111")
+	durl = getDownloadURL(minioVersion1)
+	if durl != mesosDeploymentDoc {
+		t.Errorf("Expected %s, got %s", mesosDeploymentDoc, durl)
+	}
+	os.Unsetenv("MESOS_CONTAINER_NAME")
+}
+
 func TestGetCurrentReleaseTime(t *testing.T) {
 	minioVersion1 := UTCNow().Format(time.RFC3339)
 	releaseTime1, _ := time.Parse(time.RFC3339, minioVersion1)
@@ -136,6 +164,78 @@ func TestGetCurrentReleaseTime(t *testing.T) {
 	}
 }
 
+// Tests user agent string.
+func TestUserAgent(t *testing.T) {
+	testCases := []struct {
+		envName     string
+		envValue    string
+		mode        string
+		expectedStr string
+	}{
+		{
+			envName:     "",
+			envValue:    "",
+			mode:        globalMinioModeFS,
+			expectedStr: fmt.Sprintf("Minio (%s; %s; %s; source) Minio/DEVELOPMENT.GOGET Minio/DEVELOPMENT.GOGET Minio/DEVELOPMENT.GOGET", runtime.GOOS, runtime.GOARCH, globalMinioModeFS),
+		},
+		{
+			envName:     "MESOS_CONTAINER_NAME",
+			envValue:    "mesos-11111",
+			mode:        globalMinioModeXL,
+			expectedStr: fmt.Sprintf("Minio (%s; %s; %s; %s; source) Minio/DEVELOPMENT.GOGET Minio/DEVELOPMENT.GOGET Minio/DEVELOPMENT.GOGET Minio/universe-%s", runtime.GOOS, runtime.GOARCH, globalMinioModeXL, "dcos", "mesos-1111"),
+		},
+		{
+			envName:     "KUBERNETES_SERVICE_HOST",
+			envValue:    "10.11.148.5",
+			mode:        globalMinioModeXL,
+			expectedStr: fmt.Sprintf("Minio (%s; %s; %s; %s; source) Minio/DEVELOPMENT.GOGET Minio/DEVELOPMENT.GOGET Minio/DEVELOPMENT.GOGET", runtime.GOOS, runtime.GOARCH, globalMinioModeXL, "kubernetes"),
+		},
+	}
+
+	for i, testCase := range testCases {
+		os.Setenv(testCase.envName, testCase.envValue)
+		if testCase.envName == "MESOS_CONTAINER_NAME" {
+			os.Setenv("MARATHON_APP_LABEL_DCOS_PACKAGE_VERSION", "mesos-1111")
+		}
+		str := getUserAgent(testCase.mode)
+		if str != testCase.expectedStr {
+			t.Errorf("Test %d: expected: %s, got: %s", i+1, testCase.expectedStr, str)
+		}
+		os.Unsetenv("MARATHON_APP_LABEL_DCOS_PACKAGE_VERSION")
+		os.Unsetenv(testCase.envName)
+	}
+}
+
+// Tests if the environment we are running is in DCOS.
+func TestIsDCOS(t *testing.T) {
+	os.Setenv("MESOS_CONTAINER_NAME", "mesos-1111")
+	dcos := IsDCOS()
+	if !dcos {
+		t.Fatalf("Expected %t, got %t", true, dcos)
+	}
+
+	os.Unsetenv("MESOS_CONTAINER_NAME")
+	dcos = IsDCOS()
+	if dcos {
+		t.Fatalf("Expected %t, got %t", false, dcos)
+	}
+}
+
+// Tests if the environment we are running is in kubernetes.
+func TestIsKubernetes(t *testing.T) {
+	os.Setenv("KUBERNETES_SERVICE_HOST", "10.11.148.5")
+	kubernetes := IsKubernetes()
+	if !kubernetes {
+		t.Fatalf("Expected %t, got %t", true, kubernetes)
+	}
+	os.Unsetenv("KUBERNETES_SERVICE_HOST")
+	kubernetes = IsKubernetes()
+	if kubernetes {
+		t.Fatalf("Expected %t, got %t", false, kubernetes)
+	}
+}
+
+// Tests if the environment we are running is in docker.
 func TestIsDocker(t *testing.T) {
 	createTempFile := func(content string) string {
 		tmpfile, err := ioutil.TempFile("", "isdocker-testcase")
@@ -151,35 +251,8 @@ func TestIsDocker(t *testing.T) {
 		return tmpfile.Name()
 	}
 
-	filename1 := createTempFile(`11:pids:/user.slice/user-1000.slice/user@1000.service
-10:blkio:/
-9:hugetlb:/
-8:perf_event:/
-7:cpuset:/
-6:devices:/user.slice
-5:net_cls,net_prio:/
-4:cpu,cpuacct:/
-3:memory:/user/bala/0
-2:freezer:/user/bala/0
-1:name=systemd:/user.slice/user-1000.slice/user@1000.service/gnome-terminal-server.service
-`)
-	defer os.Remove(filename1)
-	filename2 := createTempFile(`14:name=systemd:/docker/d5eb950884d828237f60f624ff575a1a7a4daa28a8d4d750040527ed9545e727
-13:pids:/docker/d5eb950884d828237f60f624ff575a1a7a4daa28a8d4d750040527ed9545e727
-12:hugetlb:/docker/d5eb950884d828237f60f624ff575a1a7a4daa28a8d4d750040527ed9545e727
-11:net_prio:/docker/d5eb950884d828237f60f624ff575a1a7a4daa28a8d4d750040527ed9545e727
-10:perf_event:/docker/d5eb950884d828237f60f624ff575a1a7a4daa28a8d4d750040527ed9545e727
-9:net_cls:/docker/d5eb950884d828237f60f624ff575a1a7a4daa28a8d4d750040527ed9545e727
-8:freezer:/docker/d5eb950884d828237f60f624ff575a1a7a4daa28a8d4d750040527ed9545e727
-7:devices:/docker/d5eb950884d828237f60f624ff575a1a7a4daa28a8d4d750040527ed9545e727
-6:memory:/docker/d5eb950884d828237f60f624ff575a1a7a4daa28a8d4d750040527ed9545e727
-5:blkio:/docker/d5eb950884d828237f60f624ff575a1a7a4daa28a8d4d750040527ed9545e727
-4:cpuacct:/docker/d5eb950884d828237f60f624ff575a1a7a4daa28a8d4d750040527ed9545e727
-3:cpu:/docker/d5eb950884d828237f60f624ff575a1a7a4daa28a8d4d750040527ed9545e727
-2:cpuset:/docker/d5eb950884d828237f60f624ff575a1a7a4daa28a8d4d750040527ed9545e727
-1:name=openrc:/docker
-`)
-	defer os.Remove(filename2)
+	filename := createTempFile("")
+	defer os.Remove(filename)
 
 	testCases := []struct {
 		filename       string
@@ -188,8 +261,7 @@ func TestIsDocker(t *testing.T) {
 	}{
 		{"", false, nil},
 		{"/tmp/non-existing-file", false, nil},
-		{filename1, false, nil},
-		{filename2, true, nil},
+		{filename, true, nil},
 	}
 
 	if runtime.GOOS == "linux" {
@@ -197,7 +269,7 @@ func TestIsDocker(t *testing.T) {
 			filename       string
 			expectedResult bool
 			expectedErr    error
-		}{"/proc/1/cwd", false, fmt.Errorf("open /proc/1/cwd: permission denied")})
+		}{"/proc/1/cwd", false, errors.New("stat /proc/1/cwd: permission denied")})
 	}
 
 	for _, testCase := range testCases {

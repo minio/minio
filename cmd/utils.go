@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
@@ -163,20 +164,25 @@ var globalProfiler interface {
 func dumpRequest(r *http.Request) string {
 	header := cloneHeader(r.Header)
 	header.Set("Host", r.Host)
+	// Replace all '%' to '%%' so that printer format parser
+	// to ignore URL encoded values.
+	rawURI := strings.Replace(r.RequestURI, "%", "%%", -1)
 	req := struct {
-		Method string      `json:"method"`
-		Path   string      `json:"path"`
-		Query  string      `json:"query"`
-		Header http.Header `json:"header"`
-	}{r.Method, getURLEncodedName(r.URL.Path), r.URL.RawQuery, header}
-	jsonBytes, err := json.Marshal(&req)
-	if err != nil {
+		Method     string      `json:"method"`
+		RequestURI string      `json:"reqURI"`
+		Header     http.Header `json:"header"`
+	}{r.Method, rawURI, header}
+
+	var buffer bytes.Buffer
+	enc := json.NewEncoder(&buffer)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(&req); err != nil {
 		// Upon error just return Go-syntax representation of the value
 		return fmt.Sprintf("%#v", req)
 	}
-	// Replace all '%' to '%%' so that printer format parser
-	// to ignore URL encoded values.
-	return strings.Replace(string(jsonBytes), "%", "%%", -1)
+
+	// Formatted string.
+	return strings.TrimSpace(string(buffer.Bytes()))
 }
 
 // isFile - returns whether given path is a file or not.

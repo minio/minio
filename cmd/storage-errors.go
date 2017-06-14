@@ -16,13 +16,16 @@
 
 package cmd
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
 // errUnexpected - unexpected error, requires manual intervention.
 var errUnexpected = errors.New("Unexpected error, please report this issue at https://github.com/minio/minio/issues")
 
 // errCorruptedFormat - corrupted backend format.
-var errCorruptedFormat = errors.New("corrupted backend format")
+var errCorruptedFormat = errors.New("corrupted backend format, please join https://slack.minio.io for assistance")
 
 // errUnformattedDisk - unformatted disk found.
 var errUnformattedDisk = errors.New("unformatted disk found")
@@ -68,3 +71,21 @@ var errVolumeAccessDenied = errors.New("volume access denied")
 
 // errVolumeAccessDenied - cannot access file, insufficient permissions.
 var errFileAccessDenied = errors.New("file access denied")
+
+// errBitrotHashAlgoInvalid - the algo for bit-rot hash
+// verification is empty or invalid.
+var errBitrotHashAlgoInvalid = errors.New("bit-rot hash algorithm is invalid")
+
+// hashMisMatchError - represents a bit-rot hash verification failure
+// error.
+type hashMismatchError struct {
+	expected string
+	computed string
+}
+
+// error method for the hashMismatchError
+func (h hashMismatchError) Error() string {
+	return fmt.Sprintf(
+		"Bitrot verification mismatch - expected %v, received %v",
+		h.expected, h.computed)
+}

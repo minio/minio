@@ -20,6 +20,7 @@ import (
 	"os"
 	"os/exec"
 	"syscall"
+	"time"
 )
 
 // Type of service signals currently supported.
@@ -79,10 +80,9 @@ func (m *ServerMux) handleServiceSignals() error {
 		// We are usually done here, close global service done channel.
 		globalServiceDoneCh <- struct{}{}
 	}
-
 	// Wait for SIGTERM in a go-routine.
 	trapCh := signalTrap(os.Interrupt, syscall.SIGTERM)
-	go func(<-chan bool) {
+	go func(trapCh <-chan bool) {
 		<-trapCh
 		globalServiceSignalCh <- serviceStop
 	}(trapCh)
@@ -102,6 +102,11 @@ func (m *ServerMux) handleServiceSignals() error {
 			}
 			runExitFn(nil)
 		case serviceStop:
+			log.Println("Received signal to exit.")
+			go func() {
+				time.Sleep(serverShutdownPoll + time.Millisecond*100)
+				log.Println("Waiting for active connections to terminate - press Ctrl+C to quit immediately.")
+			}()
 			if err := m.Close(); err != nil {
 				errorIf(err, "Unable to close server gracefully")
 			}

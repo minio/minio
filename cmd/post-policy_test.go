@@ -143,7 +143,7 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 	// objectNames[0].
 	// uploadIds [0].
 	// Create bucket before initiating NewMultipartUpload.
-	err = obj.MakeBucket(bucketName)
+	err = obj.MakeBucketWithLocation(bucketName, "")
 	if err != nil {
 		// Failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())
@@ -246,6 +246,7 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 		}
 	}
 
+	region := "us-east-1"
 	// Test cases for signature-V4.
 	testCasesV4BadData := []struct {
 		objectName         string
@@ -330,7 +331,7 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 		testCase.policy = fmt.Sprintf(testCase.policy, testCase.dates...)
 
 		req, perr := newPostRequestV4Generic("", bucketName, testCase.objectName, testCase.data, testCase.accessKey,
-			testCase.secretKey, curTime, []byte(testCase.policy), nil, testCase.corruptedBase64, testCase.corruptedMultipart)
+			testCase.secretKey, region, curTime, []byte(testCase.policy), nil, testCase.corruptedBase64, testCase.corruptedMultipart)
 		if perr != nil {
 			t.Fatalf("Test %d: %s: Failed to create HTTP request for PostPolicyHandler: <ERROR> %v", i+1, instanceType, perr)
 		}
@@ -458,7 +459,7 @@ func testPostPolicyBucketHandlerRedirect(obj ObjectLayer, instanceType string, t
 	curTime := UTCNow()
 	curTimePlus5Min := curTime.Add(time.Minute * 5)
 
-	err = obj.MakeBucket(bucketName)
+	err = obj.MakeBucketWithLocation(bucketName, "")
 	if err != nil {
 		// Failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())
@@ -473,9 +474,10 @@ func testPostPolicyBucketHandlerRedirect(obj ObjectLayer, instanceType string, t
 	// Generate the final policy document
 	policy = fmt.Sprintf(policy, dates...)
 
+	region := "us-east-1"
 	// Create a new POST request with success_action_redirect field specified
 	req, perr := newPostRequestV4Generic("", bucketName, keyName, []byte("objData"),
-		credentials.AccessKey, credentials.SecretKey, curTime,
+		credentials.AccessKey, credentials.SecretKey, region, curTime,
 		[]byte(policy), map[string]string{"success_action_redirect": redirectURL.String()}, false, false)
 
 	if perr != nil {
@@ -565,11 +567,11 @@ func newPostRequestV2(endPoint, bucketName, objectName string, accessKey, secret
 	return req, nil
 }
 
-func buildGenericPolicy(t time.Time, accessKey, bucketName, objectName string, contentLengthRange bool) []byte {
+func buildGenericPolicy(t time.Time, accessKey, region, bucketName, objectName string, contentLengthRange bool) []byte {
 	// Expire the request five minutes from now.
 	expirationTime := t.Add(time.Minute * 5)
 
-	credStr := getCredentialString(accessKey, serverConfig.GetRegion(), t)
+	credStr := getCredentialString(accessKey, region, t)
 	// Create a new post policy.
 	policy := newPostPolicyBytesV4(credStr, bucketName, objectName, expirationTime)
 	if contentLengthRange {
@@ -578,10 +580,10 @@ func buildGenericPolicy(t time.Time, accessKey, bucketName, objectName string, c
 	return policy
 }
 
-func newPostRequestV4Generic(endPoint, bucketName, objectName string, objData []byte, accessKey, secretKey string,
+func newPostRequestV4Generic(endPoint, bucketName, objectName string, objData []byte, accessKey, secretKey string, region string,
 	t time.Time, policy []byte, addFormData map[string]string, corruptedB64 bool, corruptedMultipart bool) (*http.Request, error) {
 	// Get the user credential.
-	credStr := getCredentialString(accessKey, serverConfig.GetRegion(), t)
+	credStr := getCredentialString(accessKey, region, t)
 
 	// Only need the encoding.
 	encodedPolicy := base64.StdEncoding.EncodeToString(policy)
@@ -591,7 +593,7 @@ func newPostRequestV4Generic(endPoint, bucketName, objectName string, objData []
 	}
 
 	// Presign with V4 signature based on the policy.
-	signature := postPresignSignatureV4(encodedPolicy, t, secretKey, serverConfig.GetRegion())
+	signature := postPresignSignatureV4(encodedPolicy, t, secretKey, region)
 
 	formData := map[string]string{
 		"bucket":           bucketName,
@@ -645,12 +647,14 @@ func newPostRequestV4Generic(endPoint, bucketName, objectName string, objData []
 
 func newPostRequestV4WithContentLength(endPoint, bucketName, objectName string, objData []byte, accessKey, secretKey string) (*http.Request, error) {
 	t := UTCNow()
-	policy := buildGenericPolicy(t, accessKey, bucketName, objectName, true)
-	return newPostRequestV4Generic(endPoint, bucketName, objectName, objData, accessKey, secretKey, t, policy, nil, false, false)
+	region := "us-east-1"
+	policy := buildGenericPolicy(t, accessKey, region, bucketName, objectName, true)
+	return newPostRequestV4Generic(endPoint, bucketName, objectName, objData, accessKey, secretKey, region, t, policy, nil, false, false)
 }
 
 func newPostRequestV4(endPoint, bucketName, objectName string, objData []byte, accessKey, secretKey string) (*http.Request, error) {
 	t := UTCNow()
-	policy := buildGenericPolicy(t, accessKey, bucketName, objectName, false)
-	return newPostRequestV4Generic(endPoint, bucketName, objectName, objData, accessKey, secretKey, t, policy, nil, false, false)
+	region := "us-east-1"
+	policy := buildGenericPolicy(t, accessKey, region, bucketName, objectName, false)
+	return newPostRequestV4Generic(endPoint, bucketName, objectName, objData, accessKey, secretKey, region, t, policy, nil, false, false)
 }

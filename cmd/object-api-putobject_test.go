@@ -29,7 +29,7 @@ import (
 )
 
 func md5Header(data []byte) map[string]string {
-	return map[string]string{"md5Sum": getMD5Hash([]byte(data))}
+	return map[string]string{"etag": getMD5Hash([]byte(data))}
 }
 
 // Wrapper for calling PutObject tests for both XL multiple disks and single node setup.
@@ -44,14 +44,14 @@ func testObjectAPIPutObject(obj ObjectLayer, instanceType string, t TestErrHandl
 	object := "minio-object"
 
 	// Create bucket.
-	err := obj.MakeBucket(bucket)
+	err := obj.MakeBucketWithLocation(bucket, "")
 	if err != nil {
 		// Failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
 
 	// Creating a dummy bucket for tests.
-	err = obj.MakeBucket("unused-bucket")
+	err = obj.MakeBucketWithLocation("unused-bucket", "")
 	if err != nil {
 		// Failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())
@@ -94,29 +94,29 @@ func testObjectAPIPutObject(obj ObjectLayer, instanceType string, t TestErrHandl
 
 		// Test case - 7.
 		// Input to replicate Md5 mismatch.
-		{bucket, object, []byte(""), map[string]string{"md5Sum": "a35"}, "", 0, "",
+		{bucket, object, []byte(""), map[string]string{"etag": "a35"}, "", 0, "",
 			BadDigest{ExpectedMD5: "a35", CalculatedMD5: "d41d8cd98f00b204e9800998ecf8427e"}},
 
 		// Test case - 8.
 		// With incorrect sha256.
-		{bucket, object, []byte("abcd"), map[string]string{"md5Sum": "e2fc714c4727ee9395f324cd2e7f331f"}, "incorrect-sha256", int64(len("abcd")), "", SHA256Mismatch{}},
+		{bucket, object, []byte("abcd"), map[string]string{"etag": "e2fc714c4727ee9395f324cd2e7f331f"}, "incorrect-sha256", int64(len("abcd")), "", SHA256Mismatch{}},
 
 		// Test case - 9.
 		// Input with size more than the size of actual data inside the reader.
-		{bucket, object, []byte("abcd"), map[string]string{"md5Sum": "a35"}, "", int64(len("abcd") + 1), "",
+		{bucket, object, []byte("abcd"), map[string]string{"etag": "a35"}, "", int64(len("abcd") + 1), "",
 			IncompleteBody{}},
 
 		// Test case - 10.
 		// Input with size less than the size of actual data inside the reader.
-		{bucket, object, []byte("abcd"), map[string]string{"md5Sum": "a35"}, "", int64(len("abcd") - 1), "",
+		{bucket, object, []byte("abcd"), map[string]string{"etag": "a35"}, "", int64(len("abcd") - 1), "",
 			BadDigest{ExpectedMD5: "a35", CalculatedMD5: "900150983cd24fb0d6963f7d28e17f72"}},
 
 		// Test case - 11-14.
 		// Validating for success cases.
-		{bucket, object, []byte("abcd"), map[string]string{"md5Sum": "e2fc714c4727ee9395f324cd2e7f331f"}, "", int64(len("abcd")), "", nil},
-		{bucket, object, []byte("efgh"), map[string]string{"md5Sum": "1f7690ebdd9b4caf8fab49ca1757bf27"}, "", int64(len("efgh")), "", nil},
-		{bucket, object, []byte("ijkl"), map[string]string{"md5Sum": "09a0877d04abf8759f99adec02baf579"}, "", int64(len("ijkl")), "", nil},
-		{bucket, object, []byte("mnop"), map[string]string{"md5Sum": "e132e96a5ddad6da8b07bba6f6131fef"}, "", int64(len("mnop")), "", nil},
+		{bucket, object, []byte("abcd"), map[string]string{"etag": "e2fc714c4727ee9395f324cd2e7f331f"}, "", int64(len("abcd")), "", nil},
+		{bucket, object, []byte("efgh"), map[string]string{"etag": "1f7690ebdd9b4caf8fab49ca1757bf27"}, "", int64(len("efgh")), "", nil},
+		{bucket, object, []byte("ijkl"), map[string]string{"etag": "09a0877d04abf8759f99adec02baf579"}, "", int64(len("ijkl")), "", nil},
+		{bucket, object, []byte("mnop"), map[string]string{"etag": "e132e96a5ddad6da8b07bba6f6131fef"}, "", int64(len("mnop")), "", nil},
 
 		// Test case 15-17.
 		// With no metadata
@@ -169,8 +169,8 @@ func testObjectAPIPutObject(obj ObjectLayer, instanceType string, t TestErrHandl
 		// Test passes as expected, but the output values are verified for correctness here.
 		if actualErr == nil {
 			// Asserting whether the md5 output is correct.
-			if expectedMD5, ok := testCase.inputMeta["md5Sum"]; ok && expectedMD5 != objInfo.MD5Sum {
-				t.Errorf("Test %d: %s: Calculated Md5 different from the actual one %s.", i+1, instanceType, objInfo.MD5Sum)
+			if expectedMD5, ok := testCase.inputMeta["etag"]; ok && expectedMD5 != objInfo.ETag {
+				t.Errorf("Test %d: %s: Calculated Md5 different from the actual one %s.", i+1, instanceType, objInfo.ETag)
 			}
 		}
 	}
@@ -189,14 +189,14 @@ func testObjectAPIPutObjectDiskNotFound(obj ObjectLayer, instanceType string, di
 	object := "minio-object"
 
 	// Create bucket.
-	err := obj.MakeBucket(bucket)
+	err := obj.MakeBucketWithLocation(bucket, "")
 	if err != nil {
 		// Failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
 
 	// Creating a dummy bucket for tests.
-	err = obj.MakeBucket("unused-bucket")
+	err = obj.MakeBucketWithLocation("unused-bucket", "")
 	if err != nil {
 		// Failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())
@@ -220,10 +220,10 @@ func testObjectAPIPutObjectDiskNotFound(obj ObjectLayer, instanceType string, di
 		expectedError error
 	}{
 		// Validating for success cases.
-		{bucket, object, []byte("abcd"), map[string]string{"md5Sum": "e2fc714c4727ee9395f324cd2e7f331f"}, int64(len("abcd")), true, "", nil},
-		{bucket, object, []byte("efgh"), map[string]string{"md5Sum": "1f7690ebdd9b4caf8fab49ca1757bf27"}, int64(len("efgh")), true, "", nil},
-		{bucket, object, []byte("ijkl"), map[string]string{"md5Sum": "09a0877d04abf8759f99adec02baf579"}, int64(len("ijkl")), true, "", nil},
-		{bucket, object, []byte("mnop"), map[string]string{"md5Sum": "e132e96a5ddad6da8b07bba6f6131fef"}, int64(len("mnop")), true, "", nil},
+		{bucket, object, []byte("abcd"), map[string]string{"etag": "e2fc714c4727ee9395f324cd2e7f331f"}, int64(len("abcd")), true, "", nil},
+		{bucket, object, []byte("efgh"), map[string]string{"etag": "1f7690ebdd9b4caf8fab49ca1757bf27"}, int64(len("efgh")), true, "", nil},
+		{bucket, object, []byte("ijkl"), map[string]string{"etag": "09a0877d04abf8759f99adec02baf579"}, int64(len("ijkl")), true, "", nil},
+		{bucket, object, []byte("mnop"), map[string]string{"etag": "e132e96a5ddad6da8b07bba6f6131fef"}, int64(len("mnop")), true, "", nil},
 	}
 
 	sha256sum := ""
@@ -246,8 +246,8 @@ func testObjectAPIPutObjectDiskNotFound(obj ObjectLayer, instanceType string, di
 		// Test passes as expected, but the output values are verified for correctness here.
 		if actualErr == nil && testCase.shouldPass {
 			// Asserting whether the md5 output is correct.
-			if testCase.inputMeta["md5Sum"] != objInfo.MD5Sum {
-				t.Errorf("Test %d: %s: Calculated Md5 different from the actual one %s.", i+1, instanceType, objInfo.MD5Sum)
+			if testCase.inputMeta["etag"] != objInfo.ETag {
+				t.Errorf("Test %d: %s: Calculated Md5 different from the actual one %s.", i+1, instanceType, objInfo.ETag)
 			}
 		}
 	}
@@ -271,7 +271,7 @@ func testObjectAPIPutObjectDiskNotFound(obj ObjectLayer, instanceType string, di
 		bucket,
 		object,
 		[]byte("mnop"),
-		map[string]string{"md5Sum": "e132e96a5ddad6da8b07bba6f6131fef"},
+		map[string]string{"etag": "e132e96a5ddad6da8b07bba6f6131fef"},
 		int64(len("mnop")),
 		false,
 		"",
@@ -303,7 +303,7 @@ func testObjectAPIPutObjectStaleFiles(obj ObjectLayer, instanceType string, disk
 	object := "minio-object"
 
 	// Create bucket.
-	err := obj.MakeBucket(bucket)
+	err := obj.MakeBucketWithLocation(bucket, "")
 	if err != nil {
 		// Failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())
@@ -338,7 +338,7 @@ func testObjectAPIMultipartPutObjectStaleFiles(obj ObjectLayer, instanceType str
 	object := "minio-object"
 
 	// Create bucket.
-	err := obj.MakeBucket(bucket)
+	err := obj.MakeBucketWithLocation(bucket, "")
 	if err != nil {
 		// Failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())

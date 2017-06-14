@@ -123,18 +123,27 @@ func fsMkdir(dirPath string) (err error) {
 	return nil
 }
 
-// Lookup if directory exists, returns directory
-// attributes upon success.
-func fsStatDir(statDir string) (os.FileInfo, error) {
-	if statDir == "" {
+func fsStat(statLoc string) (os.FileInfo, error) {
+	if statLoc == "" {
 		return nil, traceError(errInvalidArgument)
 	}
-	if err := checkPathLength(statDir); err != nil {
+	if err := checkPathLength(statLoc); err != nil {
+		return nil, traceError(err)
+	}
+	fi, err := osStat(preparePath(statLoc))
+	if err != nil {
 		return nil, traceError(err)
 	}
 
-	fi, err := osStat(preparePath(statDir))
+	return fi, nil
+}
+
+// Lookup if directory exists, returns directory
+// attributes upon success.
+func fsStatDir(statDir string) (os.FileInfo, error) {
+	fi, err := fsStat(statDir)
 	if err != nil {
+		err = errorCause(err)
 		if os.IsNotExist(err) {
 			return nil, traceError(errVolumeNotFound)
 		} else if os.IsPermission(err) {
@@ -152,16 +161,9 @@ func fsStatDir(statDir string) (os.FileInfo, error) {
 
 // Lookup if file exists, returns file attributes upon success
 func fsStatFile(statFile string) (os.FileInfo, error) {
-	if statFile == "" {
-		return nil, traceError(errInvalidArgument)
-	}
-
-	if err := checkPathLength(statFile); err != nil {
-		return nil, traceError(err)
-	}
-
-	fi, err := osStat(preparePath(statFile))
+	fi, err := fsStat(statFile)
 	if err != nil {
+		err = errorCause(err)
 		if os.IsNotExist(err) {
 			return nil, traceError(errFileNotFound)
 		} else if os.IsPermission(err) {
@@ -174,7 +176,7 @@ func fsStatFile(statFile string) (os.FileInfo, error) {
 		return nil, traceError(err)
 	}
 	if fi.IsDir() {
-		return nil, traceError(errFileNotFound)
+		return nil, traceError(errFileAccessDenied)
 	}
 	return fi, nil
 }
@@ -230,7 +232,7 @@ func fsOpenFile(readPath string, offset int64) (io.ReadCloser, int64, error) {
 
 // Creates a file and copies data from incoming reader. Staging buffer is used by io.CopyBuffer.
 func fsCreateFile(filePath string, reader io.Reader, buf []byte, fallocSize int64) (int64, error) {
-	if filePath == "" || reader == nil || buf == nil {
+	if filePath == "" || reader == nil {
 		return 0, traceError(errInvalidArgument)
 	}
 
@@ -263,11 +265,18 @@ func fsCreateFile(filePath string, reader io.Reader, buf []byte, fallocSize int6
 		}
 	}
 
-	bytesWritten, err := io.CopyBuffer(writer, reader, buf)
-	if err != nil {
-		return 0, traceError(err)
+	var bytesWritten int64
+	if buf != nil {
+		bytesWritten, err = io.CopyBuffer(writer, reader, buf)
+		if err != nil {
+			return 0, traceError(err)
+		}
+	} else {
+		bytesWritten, err = io.Copy(writer, reader)
+		if err != nil {
+			return 0, traceError(err)
+		}
 	}
-
 	return bytesWritten, nil
 }
 
@@ -275,6 +284,12 @@ func fsCreateFile(filePath string, reader io.Reader, buf []byte, fallocSize int6
 func fsRemoveUploadIDPath(basePath, uploadIDPath string) error {
 	if basePath == "" || uploadIDPath == "" {
 		return traceError(errInvalidArgument)
+	}
+	if err := checkPathLength(basePath); err != nil {
+		return traceError(err)
+	}
+	if err := checkPathLength(uploadIDPath); err != nil {
+		return traceError(err)
 	}
 
 	// List all the entries in uploadID.
@@ -319,6 +334,26 @@ func fsFAllocate(fd int, offset int64, len int64) (err error) {
 // Renames source path to destination path, creates all the
 // missing parents if they don't exist.
 func fsRenameFile(sourcePath, destPath string) error {
+	if err := checkPathLength(sourcePath); err != nil {
+		return traceError(err)
+	}
+	if err := checkPathLength(destPath); err != nil {
+		return traceError(err)
+	}
+	// Verify if source path exists.
+	if _, err := os.Stat(preparePath(sourcePath)); err != nil {
+		if os.IsNotExist(err) {
+			return traceError(errFileNotFound)
+		} else if os.IsPermission(err) {
+			return traceError(errFileAccessDenied)
+		} else if isSysErrPathNotFound(err) {
+			return traceError(errFileNotFound)
+		} else if isSysErrNotDir(err) {
+			// File path cannot be verified since one of the parents is a file.
+			return traceError(errFileAccessDenied)
+		}
+		return traceError(err)
+	}
 	if err := mkdirAll(pathutil.Dir(destPath), 0777); err != nil {
 		return traceError(err)
 	}

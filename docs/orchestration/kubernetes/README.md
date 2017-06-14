@@ -4,7 +4,7 @@ Kubernetes concepts like Deployments and StatefulSets provide perfect platform t
 
 - Minio [Helm](https://helm.sh) Chart offers a customizable and easy Minio deployment, with a single command. Read more about Minio Helm deployment [here](#prerequisites).
 
-- You can also explore Kubernetes [Minio example](https://github.com/kubernetes/kubernetes/blob/master/examples/storage/minio/README.md) to deploy Minio using `.yaml` files.
+- You can also explore Kubernetes [Minio example](https://github.com/minio/minio/blob/master/docs/orchestration/kubernetes-yaml/README.md) to deploy Minio using `.yaml` files.
 
 - If you'd like to get started with Minio on Kubernetes without having to create a real container cluster, you can also [deploy Minio locally](https://raw.githubusercontent.com/minio/minio/master/docs/orchestration/minikube/README.md) with MiniKube.
 
@@ -109,7 +109,21 @@ $ helm install --set persistence.enabled=false stable/minio
 
 > *"An emptyDir volume is first created when a Pod is assigned to a Node, and exists as long as that Pod is running on that node. When a Pod is removed from a node for any reason, the data in the emptyDir is deleted forever."*
 
-## 3. Uninstalling the Chart
+## 3. Updating Minio Release using Helm
+
+You can update an existing Minio Helm Release to use a newer Minio Docker image. To do this, use the `helm upgrade` command:
+
+```bash
+$ helm upgrade --set imageTag=<replace-with-minio-docker-image-tag> <helm-release-name> stable/minio
+```
+
+On successful update, you should see the output below
+
+```bash
+Release "your-helm-release" has been upgraded. Happy Helming!
+```
+
+## 4. Uninstalling the Chart
 
 Assuming your release is named as `my-release`, delete it using the command:
 

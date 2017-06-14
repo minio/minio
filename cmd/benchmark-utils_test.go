@@ -39,7 +39,7 @@ func runPutObjectBenchmark(b *testing.B, obj ObjectLayer, objSize int) {
 	// obtains random bucket name.
 	bucket := getRandomBucketName()
 	// create bucket.
-	err = obj.MakeBucket(bucket)
+	err = obj.MakeBucketWithLocation(bucket, "")
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -49,7 +49,7 @@ func runPutObjectBenchmark(b *testing.B, obj ObjectLayer, objSize int) {
 	// generate md5sum for the generated data.
 	// md5sum of the data to written is required as input for PutObject.
 	metadata := make(map[string]string)
-	metadata["md5Sum"] = getMD5Hash(textData)
+	metadata["etag"] = getMD5Hash(textData)
 	sha256sum := ""
 	// benchmark utility which helps obtain number of allocations and bytes allocated per ops.
 	b.ReportAllocs()
@@ -61,8 +61,8 @@ func runPutObjectBenchmark(b *testing.B, obj ObjectLayer, objSize int) {
 		if err != nil {
 			b.Fatal(err)
 		}
-		if objInfo.MD5Sum != metadata["md5Sum"] {
-			b.Fatalf("Write no: %d: Md5Sum mismatch during object write into the bucket: Expected %s, got %s", i+1, objInfo.MD5Sum, metadata["md5Sum"])
+		if objInfo.ETag != metadata["etag"] {
+			b.Fatalf("Write no: %d: Md5Sum mismatch during object write into the bucket: Expected %s, got %s", i+1, objInfo.ETag, metadata["etag"])
 		}
 	}
 	// Benchmark ends here. Stop timer.
@@ -78,22 +78,22 @@ func runPutObjectPartBenchmark(b *testing.B, obj ObjectLayer, partSize int) {
 	object := getRandomObjectName()
 
 	// create bucket.
-	err = obj.MakeBucket(bucket)
+	err = obj.MakeBucketWithLocation(bucket, "")
 	if err != nil {
 		b.Fatal(err)
 	}
 
 	objSize := 128 * humanize.MiByte
 
-	// PutObjectPart returns md5Sum of the object inserted.
-	// md5Sum variable is assigned with that value.
-	var md5Sum, uploadID string
+	// PutObjectPart returns etag of the object inserted.
+	// etag variable is assigned with that value.
+	var etag, uploadID string
 	// get text data generated for number of bytes equal to object size.
 	textData := generateBytesData(objSize)
 	// generate md5sum for the generated data.
 	// md5sum of the data to written is required as input for NewMultipartUpload.
 	metadata := make(map[string]string)
-	metadata["md5Sum"] = getMD5Hash(textData)
+	metadata["etag"] = getMD5Hash(textData)
 	sha256sum := ""
 	uploadID, err = obj.NewMultipartUpload(bucket, object, metadata)
 	if err != nil {
@@ -115,14 +115,14 @@ func runPutObjectPartBenchmark(b *testing.B, obj ObjectLayer, partSize int) {
 				textPartData = textData[j*partSize:]
 			}
 			metadata := make(map[string]string)
-			metadata["md5Sum"] = getMD5Hash([]byte(textPartData))
+			metadata["etag"] = getMD5Hash([]byte(textPartData))
 			var partInfo PartInfo
-			partInfo, err = obj.PutObjectPart(bucket, object, uploadID, j, int64(len(textPartData)), bytes.NewBuffer(textPartData), metadata["md5Sum"], sha256sum)
+			partInfo, err = obj.PutObjectPart(bucket, object, uploadID, j, int64(len(textPartData)), bytes.NewBuffer(textPartData), metadata["etag"], sha256sum)
 			if err != nil {
 				b.Fatal(err)
 			}
-			if partInfo.ETag != metadata["md5Sum"] {
-				b.Fatalf("Write no: %d: Md5Sum mismatch during object write into the bucket: Expected %s, got %s", i+1, md5Sum, metadata["md5Sum"])
+			if partInfo.ETag != metadata["etag"] {
+				b.Fatalf("Write no: %d: Md5Sum mismatch during object write into the bucket: Expected %s, got %s", i+1, etag, metadata["etag"])
 			}
 		}
 	}
@@ -199,7 +199,7 @@ func runGetObjectBenchmark(b *testing.B, obj ObjectLayer, objSize int) {
 	// obtains random bucket name.
 	bucket := getRandomBucketName()
 	// create bucket.
-	err = obj.MakeBucket(bucket)
+	err = obj.MakeBucketWithLocation(bucket, "")
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -208,19 +208,19 @@ func runGetObjectBenchmark(b *testing.B, obj ObjectLayer, objSize int) {
 	for i := 0; i < 10; i++ {
 		// get text data generated for number of bytes equal to object size.
 		textData := generateBytesData(objSize)
-		// generate md5sum for the generated data.
-		// md5sum of the data to written is required as input for PutObject.
+		// generate etag for the generated data.
+		// etag of the data to written is required as input for PutObject.
 		// PutObject is the functions which writes the data onto the FS/XL backend.
 		metadata := make(map[string]string)
-		metadata["md5Sum"] = getMD5Hash(textData)
+		metadata["etag"] = getMD5Hash(textData)
 		// insert the object.
 		var objInfo ObjectInfo
 		objInfo, err = obj.PutObject(bucket, "object"+strconv.Itoa(i), int64(len(textData)), bytes.NewBuffer(textData), metadata, sha256sum)
 		if err != nil {
 			b.Fatal(err)
 		}
-		if objInfo.MD5Sum != metadata["md5Sum"] {
-			b.Fatalf("Write no: %d: Md5Sum mismatch during object write into the bucket: Expected %s, got %s", i+1, objInfo.MD5Sum, metadata["md5Sum"])
+		if objInfo.ETag != metadata["etag"] {
+			b.Fatalf("Write no: %d: Md5Sum mismatch during object write into the bucket: Expected %s, got %s", i+1, objInfo.ETag, metadata["etag"])
 		}
 	}
 
@@ -307,7 +307,7 @@ func runPutObjectBenchmarkParallel(b *testing.B, obj ObjectLayer, objSize int) {
 	// obtains random bucket name.
 	bucket := getRandomBucketName()
 	// create bucket.
-	err = obj.MakeBucket(bucket)
+	err = obj.MakeBucketWithLocation(bucket, "")
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -317,7 +317,7 @@ func runPutObjectBenchmarkParallel(b *testing.B, obj ObjectLayer, objSize int) {
 	// generate md5sum for the generated data.
 	// md5sum of the data to written is required as input for PutObject.
 	metadata := make(map[string]string)
-	metadata["md5Sum"] = getMD5Hash([]byte(textData))
+	metadata["etag"] = getMD5Hash([]byte(textData))
 	sha256sum := ""
 	// benchmark utility which helps obtain number of allocations and bytes allocated per ops.
 	b.ReportAllocs()
@@ -332,8 +332,8 @@ func runPutObjectBenchmarkParallel(b *testing.B, obj ObjectLayer, objSize int) {
 			if err != nil {
 				b.Fatal(err)
 			}
-			if objInfo.MD5Sum != metadata["md5Sum"] {
-				b.Fatalf("Write no: Md5Sum mismatch during object write into the bucket: Expected %s, got %s", objInfo.MD5Sum, metadata["md5Sum"])
+			if objInfo.ETag != metadata["etag"] {
+				b.Fatalf("Write no: Md5Sum mismatch during object write into the bucket: Expected %s, got %s", objInfo.ETag, metadata["etag"])
 			}
 			i++
 		}
@@ -355,7 +355,7 @@ func runGetObjectBenchmarkParallel(b *testing.B, obj ObjectLayer, objSize int) {
 	// obtains random bucket name.
 	bucket := getRandomBucketName()
 	// create bucket.
-	err = obj.MakeBucket(bucket)
+	err = obj.MakeBucketWithLocation(bucket, "")
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -367,7 +367,7 @@ func runGetObjectBenchmarkParallel(b *testing.B, obj ObjectLayer, objSize int) {
 		// md5sum of the data to written is required as input for PutObject.
 		// PutObject is the functions which writes the data onto the FS/XL backend.
 		metadata := make(map[string]string)
-		metadata["md5Sum"] = getMD5Hash([]byte(textData))
+		metadata["etag"] = getMD5Hash([]byte(textData))
 		sha256sum := ""
 		// insert the object.
 		var objInfo ObjectInfo
@@ -375,8 +375,8 @@ func runGetObjectBenchmarkParallel(b *testing.B, obj ObjectLayer, objSize int) {
 		if err != nil {
 			b.Fatal(err)
 		}
-		if objInfo.MD5Sum != metadata["md5Sum"] {
-			b.Fatalf("Write no: %d: Md5Sum mismatch during object write into the bucket: Expected %s, got %s", i+1, objInfo.MD5Sum, metadata["md5Sum"])
+		if objInfo.ETag != metadata["etag"] {
+			b.Fatalf("Write no: %d: Md5Sum mismatch during object write into the bucket: Expected %s, got %s", i+1, objInfo.ETag, metadata["etag"])
 		}
 	}
 

@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"reflect"
@@ -220,6 +221,7 @@ func TestCheckLocalServerAddr(t *testing.T) {
 	}{
 		{":54321", nil},
 		{"localhost:54321", nil},
+		{"0.0.0.0:9000", nil},
 		{"", fmt.Errorf("missing port in address")},
 		{"localhost", fmt.Errorf("missing port in address localhost")},
 		{"example.org:54321", fmt.Errorf("host in server address should be this server")},
@@ -237,6 +239,80 @@ func TestCheckLocalServerAddr(t *testing.T) {
 			t.Fatalf("error: expected = %v, got = <nil>", testCase.expectedErr)
 		} else if testCase.expectedErr.Error() != err.Error() {
 			t.Fatalf("error: expected = %v, got = %v", testCase.expectedErr, err)
+		}
+	}
+}
+
+func TestExtractHostPort(t *testing.T) {
+	testCases := []struct {
+		addr        string
+		host        string
+		port        string
+		expectedErr error
+	}{
+		{"", "", "", errors.New("unable to process empty address")},
+		{"localhost", "localhost", "80", nil},
+		{"localhost:9000", "localhost", "9000", nil},
+		{"http://:9000/", "", "9000", nil},
+		{"http://8.8.8.8:9000/", "8.8.8.8", "9000", nil},
+		{"https://facebook.com:9000/", "facebook.com", "9000", nil},
+	}
+
+	for i, testCase := range testCases {
+		host, port, err := extractHostPort(testCase.addr)
+		if testCase.expectedErr == nil {
+			if err != nil {
+				t.Fatalf("Test %d: should succeed but failed with err: %v", i+1, err)
+			}
+			if host != testCase.host {
+				t.Fatalf("Test %d: expected: %v, found: %v", i+1, testCase.host, host)
+			}
+			if port != testCase.port {
+				t.Fatalf("Test %d: expected: %v, found: %v", i+1, testCase.port, port)
+			}
+
+		}
+		if testCase.expectedErr != nil {
+			if err == nil {
+				t.Fatalf("Test %d:, should fail but succeeded.", i+1)
+			}
+			if testCase.expectedErr.Error() != err.Error() {
+				t.Fatalf("Test %d: failed with different error, expected: '%v', found:'%v'.", i+1, testCase.expectedErr, err)
+			}
+		}
+	}
+}
+
+func TestSameLocalAddrs(t *testing.T) {
+	testCases := []struct {
+		addr1       string
+		addr2       string
+		sameAddr    bool
+		expectedErr error
+	}{
+		{"", "", false, errors.New("unable to process empty address")},
+		{":9000", ":9000", true, nil},
+		{"localhost:9000", ":9000", true, nil},
+		{"localhost:9000", "http://localhost:9000", true, nil},
+		{"8.8.8.8:9000", "http://localhost:9000", false, nil},
+	}
+
+	for i, testCase := range testCases {
+		sameAddr, err := sameLocalAddrs(testCase.addr1, testCase.addr2)
+		if testCase.expectedErr != nil && err == nil {
+			t.Fatalf("Test %d: should fail but succeeded", i+1)
+		}
+		if testCase.expectedErr == nil && err != nil {
+			t.Fatalf("Test %d: should succeed but failed with %v", i+1, err)
+		}
+		if err == nil {
+			if sameAddr != testCase.sameAddr {
+				t.Fatalf("Test %d: expected: %v, found: %v", i+1, testCase.sameAddr, sameAddr)
+			}
+		} else {
+			if err.Error() != testCase.expectedErr.Error() {
+				t.Fatalf("Test %d: failed with different error, expected: '%v', found:'%v'.", i+1, testCase.expectedErr, err)
+			}
 		}
 	}
 }

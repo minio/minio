@@ -18,6 +18,8 @@ package cmd
 
 import (
 	"bytes"
+	"encoding/hex"
+	"hash"
 	"io"
 	"io/ioutil"
 	"os"
@@ -249,7 +251,7 @@ func (s *posix) MakeVol(volume string) (err error) {
 		}
 	}()
 
-	if s.ioErrCount > maxAllowedIOError {
+	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
 		return errFaultyDisk
 	}
 
@@ -283,7 +285,7 @@ func (s *posix) ListVols() (volsInfo []VolInfo, err error) {
 		}
 	}()
 
-	if s.ioErrCount > maxAllowedIOError {
+	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
 		return nil, errFaultyDisk
 	}
 
@@ -347,7 +349,7 @@ func (s *posix) StatVol(volume string) (volInfo VolInfo, err error) {
 		}
 	}()
 
-	if s.ioErrCount > maxAllowedIOError {
+	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
 		return VolInfo{}, errFaultyDisk
 	}
 
@@ -386,7 +388,7 @@ func (s *posix) DeleteVol(volume string) (err error) {
 		}
 	}()
 
-	if s.ioErrCount > maxAllowedIOError {
+	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
 		return errFaultyDisk
 	}
 
@@ -420,7 +422,7 @@ func (s *posix) ListDir(volume, dirPath string) (entries []string, err error) {
 		}
 	}()
 
-	if s.ioErrCount > maxAllowedIOError {
+	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
 		return nil, errFaultyDisk
 	}
 
@@ -457,7 +459,7 @@ func (s *posix) ReadAll(volume, path string) (buf []byte, err error) {
 		}
 	}()
 
-	if s.ioErrCount > maxAllowedIOError {
+	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
 		return nil, errFaultyDisk
 	}
 
@@ -512,18 +514,37 @@ func (s *posix) ReadAll(volume, path string) (buf []byte, err error) {
 // number of bytes copied. The error is EOF only if no bytes were
 // read. On return, n == len(buf) if and only if err == nil. n == 0
 // for io.EOF.
+//
 // If an EOF happens after reading some but not all the bytes,
 // ReadFull returns ErrUnexpectedEOF.
-// Additionally ReadFile also starts reading from an offset.
-// ReadFile symantics are same as io.ReadFull
-func (s *posix) ReadFile(volume string, path string, offset int64, buf []byte) (n int64, err error) {
+//
+// Additionally ReadFile also starts reading from an offset. ReadFile
+// semantics are same as io.ReadFull.
+func (s *posix) ReadFile(volume, path string, offset int64, buf []byte) (n int64, err error) {
+
+	return s.ReadFileWithVerify(volume, path, offset, buf, "", "")
+}
+
+// ReadFileWithVerify is the same as ReadFile but with hashsum
+// verification: the operation will fail if the hash verification
+// fails.
+//
+// The `expectedHash` is the expected hex-encoded hash string for
+// verification. With an empty expected hash string, hash verification
+// is skipped. An empty HashAlgo defaults to `blake2b`.
+//
+// The function takes care to minimize the number of disk read
+// operations.
+func (s *posix) ReadFileWithVerify(volume, path string, offset int64, buf []byte,
+	algo HashAlgo, expectedHash string) (n int64, err error) {
+
 	defer func() {
 		if err == syscall.EIO {
 			atomic.AddInt32(&s.ioErrCount, 1)
 		}
 	}()
 
-	if s.ioErrCount > maxAllowedIOError {
+	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
 		return 0, errFaultyDisk
 	}
 
@@ -571,19 +592,66 @@ func (s *posix) ReadFile(volume string, path string, offset int64, buf []byte) (
 		return 0, err
 	}
 
-	// Verify if its not a regular file, since subsequent Seek is undefined.
+	// Verify it is a regular file, otherwise subsequent Seek is
+	// undefined.
 	if !st.Mode().IsRegular() {
 		return 0, errIsNotRegular
 	}
 
-	// Seek to requested offset.
-	_, err = file.Seek(offset, os.SEEK_SET)
-	if err != nil {
+	// If expected hash string is empty hash verification is
+	// skipped.
+	needToHash := expectedHash != ""
+	var hasher hash.Hash
+
+	if needToHash {
+		// If the hashing algo is invalid, return an error.
+		if !isValidHashAlgo(algo) {
+			return 0, errBitrotHashAlgoInvalid
+		}
+
+		// Compute hash of object from start to the byte at
+		// (offset - 1), and as a result of this read, seek to
+		// `offset`.
+		hasher = newHash(algo)
+		if offset > 0 {
+			_, err = io.CopyN(hasher, file, offset)
+			if err != nil {
+				return 0, err
+			}
+		}
+	} else {
+		// Seek to requested offset.
+		_, err = file.Seek(offset, os.SEEK_SET)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	// Read until buffer is full.
+	m, err := io.ReadFull(file, buf)
+	if err == io.EOF {
 		return 0, err
 	}
 
-	// Read full until buffer.
-	m, err := io.ReadFull(file, buf)
+	if needToHash {
+		// Continue computing hash with buf.
+		_, err = hasher.Write(buf)
+		if err != nil {
+			return 0, err
+		}
+
+		// Continue computing hash until end of file.
+		_, err = io.Copy(hasher, file)
+		if err != nil {
+			return 0, err
+		}
+
+		// Verify the computed hash.
+		computedHash := hex.EncodeToString(hasher.Sum(nil))
+		if computedHash != expectedHash {
+			return 0, hashMismatchError{expectedHash, computedHash}
+		}
+	}
 
 	// Success.
 	return int64(m), err
@@ -596,7 +664,7 @@ func (s *posix) createFile(volume, path string) (f *os.File, err error) {
 		}
 	}()
 
-	if s.ioErrCount > maxAllowedIOError {
+	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
 		return nil, errFaultyDisk
 	}
 
@@ -669,7 +737,7 @@ func (s *posix) PrepareFile(volume, path string, fileSize int64) (err error) {
 		}
 	}()
 
-	if s.ioErrCount > maxAllowedIOError {
+	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
 		return errFaultyDisk
 	}
 
@@ -716,7 +784,7 @@ func (s *posix) AppendFile(volume, path string, buf []byte) (err error) {
 		}
 	}()
 
-	if s.ioErrCount > maxAllowedIOError {
+	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
 		return errFaultyDisk
 	}
 
@@ -747,7 +815,7 @@ func (s *posix) StatFile(volume, path string) (file FileInfo, err error) {
 		}
 	}()
 
-	if s.ioErrCount > maxAllowedIOError {
+	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
 		return FileInfo{}, errFaultyDisk
 	}
 
@@ -843,7 +911,7 @@ func (s *posix) DeleteFile(volume, path string) (err error) {
 		}
 	}()
 
-	if s.ioErrCount > maxAllowedIOError {
+	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
 		return errFaultyDisk
 	}
 
@@ -883,7 +951,7 @@ func (s *posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err e
 		}
 	}()
 
-	if s.ioErrCount > maxAllowedIOError {
+	if atomic.LoadInt32(&s.ioErrCount) > maxAllowedIOError {
 		return errFaultyDisk
 	}
 

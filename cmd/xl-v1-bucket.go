@@ -30,7 +30,7 @@ var bucketMetadataOpIgnoredErrs = append(bucketOpIgnoredErrs, errVolumeNotFound)
 /// Bucket operations
 
 // MakeBucket - make a bucket.
-func (xl xlObjects) MakeBucket(bucket string) error {
+func (xl xlObjects) MakeBucketWithLocation(bucket, location string) error {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
 		return traceError(BucketNameInvalid{Bucket: bucket})

@@ -23,7 +23,7 @@ import (
 )
 
 // Prints the formatted startup message.
-func printGatewayStartupMessage(apiEndPoints []string, accessKey, secretKey, backendType string) {
+func printGatewayStartupMessage(apiEndPoints []string, accessKey, secretKey string, backendType gatewayBackend) {
 	// Prints credential.
 	printGatewayCommonMsg(apiEndPoints, accessKey, secretKey)
 

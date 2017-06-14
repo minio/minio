@@ -25,18 +25,33 @@ import (
 )
 
 // Test canonical metadata.
-func TestCanonicalMetadata(t *testing.T) {
-	metadata := map[string]string{
+func TestS3ToAzureHeaders(t *testing.T) {
+	headers := map[string]string{
 		"accept-encoding":  "gzip",
 		"content-encoding": "gzip",
 	}
-	expectedCanonicalM := map[string]string{
+	expectedHeaders := map[string]string{
 		"Accept-Encoding":  "gzip",
 		"Content-Encoding": "gzip",
 	}
-	actualCanonicalM := canonicalMetadata(metadata)
-	if !reflect.DeepEqual(actualCanonicalM, expectedCanonicalM) {
-		t.Fatalf("Test failed, expected %#v, got %#v", expectedCanonicalM, actualCanonicalM)
+	actualHeaders := s3ToAzureHeaders(headers)
+	if !reflect.DeepEqual(actualHeaders, expectedHeaders) {
+		t.Fatalf("Test failed, expected %#v, got %#v", expectedHeaders, actualHeaders)
+	}
+}
+
+func TestAzureToS3Metadata(t *testing.T) {
+	// Just one testcase. Adding more test cases does not add value to the testcase
+	// as azureToS3Metadata() just adds a prefix.
+	metadata := map[string]string{
+		"First-Name": "myname",
+	}
+	expectedMeta := map[string]string{
+		"X-Amz-Meta-First-Name": "myname",
+	}
+	actualMeta := azureToS3Metadata(metadata)
+	if !reflect.DeepEqual(actualMeta, expectedMeta) {
+		t.Fatalf("Test failed, expected %#v, got %#v", expectedMeta, actualMeta)
 	}
 }
 

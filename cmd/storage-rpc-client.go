@@ -28,8 +28,7 @@ import (
 )
 
 type networkStorage struct {
-	networkIOErrCount int32 // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
-	rpcClient         *AuthRPCClient
+	rpcClient *AuthRPCClient
 }
 
 const (
@@ -254,6 +253,35 @@ func (n *networkStorage) ReadFile(volume string, path string, offset int64, buff
 		Offset: offset,
 		Buffer: buffer,
 	}, &result)
+
+	// Copy results to buffer.
+	copy(buffer, result)
+
+	// Return length of result, err if any.
+	return int64(len(result)), toStorageErr(err)
+}
+
+// ReadFileWithVerify - reads a file at remote path and fills the buffer.
+func (n *networkStorage) ReadFileWithVerify(volume string, path string, offset int64,
+	buffer []byte, algo HashAlgo, expectedHash string) (m int64, err error) {
+
+	defer func() {
+		if r := recover(); r != nil {
+			// Recover any panic from allocation, and return error.
+			err = bytes.ErrTooLarge
+		}
+	}() // Do not crash the server.
+
+	var result []byte
+	err = n.rpcClient.Call("Storage.ReadFileWithVerifyHandler",
+		&ReadFileWithVerifyArgs{
+			Vol:          volume,
+			Path:         path,
+			Offset:       offset,
+			Buffer:       buffer,
+			Algo:         algo,
+			ExpectedHash: expectedHash,
+		}, &result)
 
 	// Copy results to buffer.
 	copy(buffer, result)

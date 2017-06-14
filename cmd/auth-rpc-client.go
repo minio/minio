@@ -52,10 +52,10 @@ type authConfig struct {
 
 // AuthRPCClient is a authenticated RPC client which does authentication before doing Call().
 type AuthRPCClient struct {
-	sync.Mutex            // Mutex to lock this object.
-	rpcClient  *RPCClient // Reconnectable RPC client to make any RPC call.
-	config     authConfig // Authentication configuration information.
-	authToken  string     // Authentication token.
+	sync.RWMutex            // Mutex to lock this object.
+	rpcClient    *RPCClient // Reconnectable RPC client to make any RPC call.
+	config       authConfig // Authentication configuration information.
+	authToken    string     // Authentication token.
 }
 
 // newAuthRPCClient - returns a JWT based authenticated (go) rpc client, which does automatic reconnect.
@@ -78,33 +78,43 @@ func newAuthRPCClient(config authConfig) *AuthRPCClient {
 	}
 }
 
-// Login - a jwt based authentication is performed with rpc server.
+// Login a JWT based authentication is performed with rpc server.
 func (authClient *AuthRPCClient) Login() (err error) {
+	// Login should be attempted one at a time.
+	//
+	// The reason for large region lock here is
+	// to avoid two simultaneous login attempts
+	// racing over each other.
+	//
+	// #1 Login() gets the lock proceeds to login.
+	// #2 Login() waits for the unlock to happen
+	//    after login in #1.
+	// #1 Successfully completes login saves the
+	//    newly acquired token.
+	// #2 Successfully gets the lock and proceeds,
+	//    but since we have acquired the token
+	//    already the call quickly returns.
 	authClient.Lock()
 	defer authClient.Unlock()
 
-	// Return if already logged in.
-	if authClient.authToken != "" {
-		return nil
+	// Attempt to login if not logged in already.
+	if authClient.authToken == "" {
+		// Login to authenticate and acquire a new auth token.
+		var (
+			loginMethod = authClient.config.serviceName + loginMethodName
+			loginArgs   = LoginRPCArgs{
+				Username:    authClient.config.accessKey,
+				Password:    authClient.config.secretKey,
+				Version:     Version,
+				RequestTime: UTCNow(),
+			}
+			loginReply = LoginRPCReply{}
+		)
+		if err = authClient.rpcClient.Call(loginMethod, &loginArgs, &loginReply); err != nil {
+			return err
+		}
+		authClient.authToken = loginReply.AuthToken
 	}
-
-	// Call login.
-	args := LoginRPCArgs{
-		Username:    authClient.config.accessKey,
-		Password:    authClient.config.secretKey,
-		Version:     Version,
-		RequestTime: UTCNow(),
-	}
-
-	reply := LoginRPCReply{}
-	serviceMethod := authClient.config.serviceName + loginMethodName
-	if err = authClient.rpcClient.Call(serviceMethod, &args, &reply); err != nil {
-		return err
-	}
-
-	// Logged in successfully.
-	authClient.authToken = reply.AuthToken
-
 	return nil
 }
 
@@ -112,17 +122,17 @@ func (authClient *AuthRPCClient) Login() (err error) {
 func (authClient *AuthRPCClient) call(serviceMethod string, args interface {
 	SetAuthToken(authToken string)
 }, reply interface{}) (err error) {
-	// On successful login, execute RPC call.
-	if err = authClient.Login(); err == nil {
-		authClient.Lock()
-		// Set token and timestamp before the rpc call.
-		args.SetAuthToken(authClient.authToken)
-		authClient.Unlock()
+	if err = authClient.Login(); err != nil {
+		return err
+	} // On successful login, execute RPC call.
 
-		// Do RPC call.
-		err = authClient.rpcClient.Call(serviceMethod, args, reply)
-	}
-	return err
+	authClient.RLock()
+	// Set token before the rpc call.
+	args.SetAuthToken(authClient.authToken)
+	authClient.RUnlock()
+
+	// Do an RPC call.
+	return authClient.rpcClient.Call(serviceMethod, args, reply)
 }
 
 // Call executes RPC call till success or globalAuthRPCRetryThreshold on ErrShutdown.

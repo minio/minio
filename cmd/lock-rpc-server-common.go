@@ -22,7 +22,7 @@ import (
 )
 
 // Similar to removeEntry but only removes an entry only if the lock entry exists in map.
-func (l *lockServer) removeEntryIfExists(nlrip nameLockRequesterInfoPair) {
+func (l *localLocker) removeEntryIfExists(nlrip nameLockRequesterInfoPair) {
 	// Check if entry is still in map (could have been removed altogether by 'concurrent' (R)Unlock of last entry)
 	if lri, ok := l.lockMap[nlrip.name]; ok {
 		if !l.removeEntry(nlrip.name, nlrip.lri.uid, &lri) {
@@ -38,7 +38,7 @@ func (l *lockServer) removeEntryIfExists(nlrip nameLockRequesterInfoPair) {
 
 // removeEntry either, based on the uid of the lock message, removes a single entry from the
 // lockRequesterInfo array or the whole array from the map (in case of a write lock or last read lock)
-func (l *lockServer) removeEntry(name, uid string, lri *[]lockRequesterInfo) bool {
+func (l *localLocker) removeEntry(name, uid string, lri *[]lockRequesterInfo) bool {
 	// Find correct entry to remove based on uid.
 	for index, entry := range *lri {
 		if entry.uid == uid {

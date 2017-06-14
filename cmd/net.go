@@ -17,11 +17,14 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"sort"
 	"strconv"
+	"strings"
 	"syscall"
 
 	"github.com/minio/minio-go/pkg/set"
@@ -186,6 +189,121 @@ func checkPortAvailability(port string) (err error) {
 	return nil
 }
 
+// extractHostPort - extracts host/port from many address formats
+// such as, ":9000", "localhost:9000", "http://localhost:9000/"
+func extractHostPort(hostAddr string) (string, string, error) {
+	var addr, scheme string
+
+	if hostAddr == "" {
+		return "", "", errors.New("unable to process empty address")
+	}
+
+	// Parse address to extract host and scheme field
+	u, err := url.Parse(hostAddr)
+	if err != nil {
+		// Ignore scheme not present error
+		if !strings.Contains(err.Error(), "missing protocol scheme") {
+			return "", "", err
+		}
+	} else {
+		addr = u.Host
+		scheme = u.Scheme
+	}
+
+	// Use the given parameter again if url.Parse()
+	// didn't return any useful result.
+	if addr == "" {
+		addr = hostAddr
+		scheme = "http"
+	}
+
+	// At this point, addr can be one of the following form:
+	//	":9000"
+	//	"localhost:9000"
+	//	"localhost" <- in this case, we check for scheme
+
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		if !strings.Contains(err.Error(), "missing port in address") {
+			return "", "", err
+		}
+
+		host = addr
+
+		switch scheme {
+		case "https":
+			port = "443"
+		case "http":
+			port = "80"
+		default:
+			return "", "", errors.New("unable to guess port from scheme")
+		}
+	}
+
+	return host, port, nil
+}
+
+// isLocalHost - checks if the given parameter
+// correspond to one of the local IP of the
+// current machine
+func isLocalHost(host string) (bool, error) {
+	hostIPs, err := getHostIP4(host)
+	if err != nil {
+		return false, err
+	}
+
+	// If intersection of two IP sets is not empty, then the host is local host.
+	isLocal := !localIP4.Intersection(hostIPs).IsEmpty()
+	return isLocal, nil
+}
+
+// sameLocalAddrs - returns true if two addresses, even with different
+// formats, point to the same machine, e.g:
+//   ':9000' and 'http://localhost:9000/' will return true
+func sameLocalAddrs(addr1, addr2 string) (bool, error) {
+
+	// Extract host & port from given parameters
+	host1, port1, err := extractHostPort(addr1)
+	if err != nil {
+		return false, err
+	}
+	host2, port2, err := extractHostPort(addr2)
+	if err != nil {
+		return false, err
+	}
+
+	var addr1Local, addr2Local bool
+
+	if host1 == "" {
+		// If empty host means it is localhost
+		addr1Local = true
+	} else {
+		// Host not empty, check if it is local
+		if addr1Local, err = isLocalHost(host1); err != nil {
+			return false, err
+		}
+	}
+
+	if host2 == "" {
+		// If empty host means it is localhost
+		addr2Local = true
+	} else {
+		// Host not empty, check if it is local
+		if addr2Local, err = isLocalHost(host2); err != nil {
+			return false, err
+		}
+	}
+
+	// If both of addresses point to the same machine, check if
+	// have the same port
+	if addr1Local && addr2Local {
+		if port1 == port2 {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // CheckLocalServerAddr - checks if serverAddr is valid and local host.
 func CheckLocalServerAddr(serverAddr string) error {
 	host, port, err := net.SplitHostPort(serverAddr)
@@ -201,13 +319,15 @@ func CheckLocalServerAddr(serverAddr string) error {
 		return fmt.Errorf("port number must be between 1 to 65535")
 	}
 
-	if host != "" {
-		hostIPs, err := getHostIP4(host)
+	// 0.0.0.0 is a wildcard address and refers to local network
+	// addresses. I.e, 0.0.0.0:9000 like ":9000" refers to port
+	// 9000 on localhost.
+	if host != "" && host != net.IPv4zero.String() {
+		isLocalHost, err := isLocalHost(host)
 		if err != nil {
 			return err
 		}
-
-		if localIP4.Intersection(hostIPs).IsEmpty() {
+		if !isLocalHost {
 			return fmt.Errorf("host in server address should be this server")
 		}
 	}

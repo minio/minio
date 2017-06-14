@@ -261,11 +261,6 @@ func getValidConfig() (*serverConfigV18, error) {
 		return nil, err
 	}
 
-	// Validate region field
-	if srvCfg.Region == "" {
-		return nil, errors.New("Region config value cannot be empty")
-	}
-
 	// Validate credential fields only when
 	// they are not set via the environment
 

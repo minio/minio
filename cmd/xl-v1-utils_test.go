@@ -157,7 +157,7 @@ func newTestXLMetaV1() xlMetaV1 {
 	return xlMeta
 }
 
-func (m *xlMetaV1) AddTestObjectCheckSum(checkSumNum int, name string, hash string, algo string) {
+func (m *xlMetaV1) AddTestObjectCheckSum(checkSumNum int, name string, hash string, algo HashAlgo) {
 	checkSum := checkSumInfo{
 		Name:      name,
 		Algorithm: algo,

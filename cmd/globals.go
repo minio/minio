@@ -29,7 +29,7 @@ import (
 const (
 	globalMinioCertExpireWarnDays = time.Hour * 24 * 30 // 30 days.
 
-	globalMinioDefaultRegion       = "us-east-1"
+	globalMinioDefaultRegion       = ""
 	globalMinioDefaultOwnerID      = "minio"
 	globalMinioDefaultStorageClass = "STANDARD"
 	globalWindowsOSName            = "windows"
@@ -64,6 +64,7 @@ var (
 
 	// This flag is set to 'true' by default
 	globalIsBrowserEnabled = true
+
 	// This flag is set to 'true' when MINIO_BROWSER env is set.
 	globalIsEnvBrowser = false
 
@@ -72,6 +73,7 @@ var (
 
 	// This flag is set to 'true' wen MINIO_REGION env is set.
 	globalIsEnvRegion = false
+
 	// This flag is set to 'us-east-1' by default
 	globalServerRegion = globalMinioDefaultRegion
 
@@ -128,3 +130,23 @@ var (
 	colorBold = color.New(color.Bold).SprintFunc()
 	colorBlue = color.New(color.FgBlue).SprintfFunc()
 )
+
+// Returns minio global information, as a key value map.
+// returned list of global values is not an exhaustive
+// list. Feel free to add new relevant fields.
+func getGlobalInfo() (globalInfo map[string]interface{}) {
+	globalInfo = map[string]interface{}{
+		"isDistXL":         globalIsDistXL,
+		"isXL":             globalIsXL,
+		"isBrowserEnabled": globalIsBrowserEnabled,
+		"isEnvBrowser":     globalIsEnvBrowser,
+		"isEnvCreds":       globalIsEnvCreds,
+		"isEnvRegion":      globalIsEnvRegion,
+		"isSSL":            globalIsSSL,
+		"serverRegion":     globalServerRegion,
+		"serverUserAgent":  globalServerUserAgent,
+		// Add more relevant global settings here.
+	}
+
+	return globalInfo
+}

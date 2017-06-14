@@ -2126,8 +2126,8 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 		uploadIDs = append(uploadIDs, uploadID)
 	}
 
-	// Parts with size greater than 5 MB.
-	// Generating a 6MB byte array.
+	// Parts with size greater than 5 MiB.
+	// Generating a 6 MiB byte array.
 	validPart := bytes.Repeat([]byte("abcdef"), 1*humanize.MiByte)
 	validPartMD5 := getMD5Hash(validPart)
 	// Create multipart parts.
@@ -2147,11 +2147,11 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 		{bucketName, objectName, uploadIDs[0], 2, "efgh", "1f7690ebdd9b4caf8fab49ca1757bf27", int64(len("efgh"))},
 		{bucketName, objectName, uploadIDs[0], 3, "ijkl", "09a0877d04abf8759f99adec02baf579", int64(len("abcd"))},
 		{bucketName, objectName, uploadIDs[0], 4, "mnop", "e132e96a5ddad6da8b07bba6f6131fef", int64(len("abcd"))},
-		// Part with size larger than 5Mb.
+		// Part with size larger than 5 MiB.
 		{bucketName, objectName, uploadIDs[0], 5, string(validPart), validPartMD5, int64(len(string(validPart)))},
 		{bucketName, objectName, uploadIDs[0], 6, string(validPart), validPartMD5, int64(len(string(validPart)))},
 
-		// Part with size larger than 5Mb.
+		// Part with size larger than 5 MiB.
 		// Parts uploaded for anonymous/unsigned API handler test.
 		{bucketName, objectName, uploadIDs[1], 1, string(validPart), validPartMD5, int64(len(string(validPart)))},
 		{bucketName, objectName, uploadIDs[1], 2, string(validPart), validPartMD5, int64(len(string(validPart)))},
@@ -2192,7 +2192,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 		},
 		// inputParts - 3.
 		// Case with valid parts,but parts are unsorted.
-		// Part size greater than 5MB.
+		// Part size greater than 5 MiB.
 		{
 			[]completePart{
 				{ETag: validPartMD5, PartNumber: 6},
@@ -2201,7 +2201,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 		},
 		// inputParts - 4.
 		// Case with valid part.
-		// Part size greater than 5MB.
+		// Part size greater than 5 MiB.
 		{
 			[]completePart{
 				{ETag: validPartMD5, PartNumber: 5},
@@ -2211,7 +2211,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 
 		// inputParts - 5.
 		// Used for the case of testing for anonymous API request.
-		// Part size greater than 5MB.
+		// Part size greater than 5 MiB.
 		{
 			[]completePart{
 				{ETag: validPartMD5, PartNumber: 1},
@@ -2481,8 +2481,8 @@ func testAPIAbortMultipartHandler(obj ObjectLayer, instanceType, bucketName stri
 		uploadIDs = append(uploadIDs, uploadID)
 	}
 
-	// Parts with size greater than 5 MB.
-	// Generating a 6MB byte array.
+	// Parts with size greater than 5 MiB.
+	// Generating a 6 MiB byte array.
 	validPart := bytes.Repeat([]byte("abcdef"), 1*humanize.MiByte)
 	validPartMD5 := getMD5Hash(validPart)
 	// Create multipart parts.
@@ -2502,11 +2502,11 @@ func testAPIAbortMultipartHandler(obj ObjectLayer, instanceType, bucketName stri
 		{bucketName, objectName, uploadIDs[0], 2, "efgh", "1f7690ebdd9b4caf8fab49ca1757bf27", int64(len("efgh"))},
 		{bucketName, objectName, uploadIDs[0], 3, "ijkl", "09a0877d04abf8759f99adec02baf579", int64(len("abcd"))},
 		{bucketName, objectName, uploadIDs[0], 4, "mnop", "e132e96a5ddad6da8b07bba6f6131fef", int64(len("abcd"))},
-		// Part with size larger than 5Mb.
+		// Part with size larger than 5 MiB.
 		{bucketName, objectName, uploadIDs[0], 5, string(validPart), validPartMD5, int64(len(string(validPart)))},
 		{bucketName, objectName, uploadIDs[0], 6, string(validPart), validPartMD5, int64(len(string(validPart)))},
 
-		// Part with size larger than 5Mb.
+		// Part with size larger than 5 MiB.
 		// Parts uploaded for anonymous/unsigned API handler test.
 		{bucketName, objectName, uploadIDs[1], 1, string(validPart), validPartMD5, int64(len(string(validPart)))},
 		{bucketName, objectName, uploadIDs[1], 2, string(validPart), validPartMD5, int64(len(string(validPart)))},

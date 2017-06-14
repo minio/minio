@@ -49,18 +49,32 @@ func (t byObjectPartNumber) Less(i, j int) bool { return t[i].Number < t[j].Numb
 
 // checkSumInfo - carries checksums of individual scattered parts per disk.
 type checkSumInfo struct {
-	Name      string `json:"name"`
-	Algorithm string `json:"algorithm"`
-	Hash      string `json:"hash"`
+	Name      string   `json:"name"`
+	Algorithm HashAlgo `json:"algorithm"`
+	Hash      string   `json:"hash"`
 }
 
-// Various algorithms supported by bit-rot protection feature.
+// HashAlgo - represents a supported hashing algorithm for bitrot
+// verification.
+type HashAlgo string
+
 const (
-	// "sha256" is specifically used on arm64 bit platforms.
-	sha256Algo = "sha256"
-	// Rest of the platforms default to blake2b.
-	blake2bAlgo = "blake2b"
+	// HashBlake2b represents the Blake 2b hashing algorithm
+	HashBlake2b HashAlgo = "blake2b"
+	// HashSha256 represents the SHA256 hashing algorithm
+	HashSha256 HashAlgo = "sha256"
 )
+
+// isValidHashAlgo - function that checks if the hash algorithm is
+// valid (known and used).
+func isValidHashAlgo(algo HashAlgo) bool {
+	switch algo {
+	case HashSha256, HashBlake2b:
+		return true
+	default:
+		return false
+	}
+}
 
 // Constant indicates current bit-rot algo used when creating objects.
 // Depending on the architecture we are choosing a different checksum.
@@ -70,7 +84,7 @@ var bitRotAlgo = getDefaultBitRotAlgo()
 // Currently this function defaults to "blake2b" as the preferred
 // checksum algorithm on all architectures except ARM64. On ARM64
 // we use sha256 (optimized using sha2 instructions of ARM NEON chip).
-func getDefaultBitRotAlgo() string {
+func getDefaultBitRotAlgo() HashAlgo {
 	switch runtime.GOARCH {
 	case "arm64":
 		// As a special case for ARM64 we use an optimized
@@ -79,17 +93,17 @@ func getDefaultBitRotAlgo() string {
 		// This would also allows erasure coded writes
 		// on ARM64 servers to be on-par with their
 		// counter-part X86_64 servers.
-		return sha256Algo
+		return HashSha256
 	default:
 		// Default for all other architectures we use blake2b.
-		return blake2bAlgo
+		return HashBlake2b
 	}
 }
 
 // erasureInfo - carries erasure coding related information, block
 // distribution and checksums.
 type erasureInfo struct {
-	Algorithm    string         `json:"algorithm"`
+	Algorithm    HashAlgo       `json:"algorithm"`
 	DataBlocks   int            `json:"data"`
 	ParityBlocks int            `json:"parity"`
 	BlockSize    int64          `json:"blockSize"`
@@ -146,7 +160,10 @@ type xlMetaV1 struct {
 // XL metadata constants.
 const (
 	// XL meta version.
-	xlMetaVersion = "1.0.0"
+	xlMetaVersion = "1.0.1"
+
+	// XL meta version.
+	xlMetaVersion100 = "1.0.0"
 
 	// XL meta format string.
 	xlMetaFormat = "xl"
@@ -173,7 +190,38 @@ func newXLMetaV1(object string, dataBlocks, parityBlocks int) (xlMeta xlMetaV1) 
 // IsValid - tells if the format is sane by validating the version
 // string and format style.
 func (m xlMetaV1) IsValid() bool {
-	return m.Version == xlMetaVersion && m.Format == xlMetaFormat
+	return isXLMetaValid(m.Version, m.Format)
+}
+
+// Verifies if the backend format metadata is sane by validating
+// the version string and format style.
+func isXLMetaValid(version, format string) bool {
+	return ((version == xlMetaVersion || version == xlMetaVersion100) &&
+		format == xlMetaFormat)
+}
+
+// Converts metadata to object info.
+func (m xlMetaV1) ToObjectInfo(bucket, object string) ObjectInfo {
+	objInfo := ObjectInfo{
+		IsDir:           false,
+		Bucket:          bucket,
+		Name:            object,
+		Size:            m.Stat.Size,
+		ModTime:         m.Stat.ModTime,
+		ContentType:     m.Meta["content-type"],
+		ContentEncoding: m.Meta["content-encoding"],
+	}
+
+	// Extract etag from metadata.
+	objInfo.ETag = extractETag(m.Meta)
+
+	// etag/md5Sum has already been extracted. We need to
+	// remove to avoid it from appearing as part of
+	// response headers. e.g, X-Minio-* or X-Amz-*.
+	objInfo.UserDefined = cleanMetaETag(m.Meta)
+
+	// Success.
+	return objInfo
 }
 
 // objectPartIndex - returns the index of matching object part number.
@@ -245,7 +293,7 @@ func pickValidXLMeta(metaArr []xlMetaV1, modTime time.Time) (xlMetaV1, error) {
 }
 
 // list of all errors that can be ignored in a metadata operation.
-var objMetadataOpIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied, errVolumeNotFound, errFileNotFound, errFileAccessDenied)
+var objMetadataOpIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied, errVolumeNotFound, errFileNotFound, errFileAccessDenied, errCorruptedFormat)
 
 // readXLMetaParts - returns the XL Metadata Parts from xl.json of one of the disks picked at random.
 func (xl xlObjects) readXLMetaParts(bucket, object string) (xlMetaParts []objectPartInfo, err error) {

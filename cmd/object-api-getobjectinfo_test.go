@@ -29,7 +29,7 @@ func TestGetObjectInfo(t *testing.T) {
 // Testing GetObjectInfo().
 func testGetObjectInfo(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	// This bucket is used for testing getObjectInfo operations.
-	err := obj.MakeBucket("test-getobjectinfo")
+	err := obj.MakeBucketWithLocation("test-getobjectinfo", "")
 	if err != nil {
 		t.Fatalf("%s : %s", instanceType, err.Error())
 	}
@@ -69,8 +69,8 @@ func testGetObjectInfo(obj ObjectLayer, instanceType string, t TestErrHandler) {
 		{"test-getobjectinfo", "Antartica", ObjectInfo{}, ObjectNotFound{Bucket: "test-getobjectinfo", Object: "Antartica"}, false},
 		{"test-getobjectinfo", "Asia/myfile", ObjectInfo{}, ObjectNotFound{Bucket: "test-getobjectinfo", Object: "Asia/myfile"}, false},
 		// Test case with existing bucket but object name set to a directory (Test number 12).
-		{"test-getobjectinfo", "Asia", ObjectInfo{}, ObjectNotFound{Bucket: "test-getobjectinfo", Object: "Asia"}, false},
-		// Valid case with existing object (Test number 13).
+		{"test-getobjectinfo", "Asia/", ObjectInfo{}, ObjectNotFound{Bucket: "test-getobjectinfo", Object: "Asia/"}, false},
+		// Valid case with existing object (Test number 14).
 		{"test-getobjectinfo", "Asia/asiapics.jpg", resultCases[0], nil, true},
 	}
 	for i, testCase := range testCases {

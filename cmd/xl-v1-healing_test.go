@@ -121,7 +121,7 @@ func TestHealFormatXL(t *testing.T) {
 	}
 	xl = obj.(*xlObjects)
 	for i := 0; i <= 15; i++ {
-		if err = xl.storageDisks[i].DeleteFile(".minio.sys", "format.json"); err != nil {
+		if err = xl.storageDisks[i].DeleteFile(minioMetaBucket, formatConfigFile); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -142,7 +142,7 @@ func TestHealFormatXL(t *testing.T) {
 	}
 	xl = obj.(*xlObjects)
 	for i := 0; i <= 15; i++ {
-		if err = xl.storageDisks[i].AppendFile(".minio.sys", "format.json", []byte("corrupted data")); err != nil {
+		if err = xl.storageDisks[i].AppendFile(minioMetaBucket, formatConfigFile, []byte("corrupted data")); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -163,7 +163,7 @@ func TestHealFormatXL(t *testing.T) {
 	}
 	xl = obj.(*xlObjects)
 	for i := 0; i <= 2; i++ {
-		if err = xl.storageDisks[i].DeleteFile(".minio.sys", "format.json"); err != nil {
+		if err = xl.storageDisks[i].DeleteFile(minioMetaBucket, formatConfigFile); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -184,7 +184,7 @@ func TestHealFormatXL(t *testing.T) {
 	}
 	xl = obj.(*xlObjects)
 	for i := 0; i <= 2; i++ {
-		if err = xl.storageDisks[i].DeleteFile(".minio.sys", "format.json"); err != nil {
+		if err = xl.storageDisks[i].DeleteFile(minioMetaBucket, formatConfigFile); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -212,11 +212,11 @@ func TestHealFormatXL(t *testing.T) {
 		t.Fatal(err)
 	}
 	xl = obj.(*xlObjects)
-	if err = obj.MakeBucket(getRandomBucketName()); err != nil {
+	if err = obj.MakeBucketWithLocation(getRandomBucketName(), ""); err != nil {
 		t.Fatal(err)
 	}
 	for i := 0; i <= 2; i++ {
-		if err = xl.storageDisks[i].DeleteFile(".minio.sys", "format.json"); err != nil {
+		if err = xl.storageDisks[i].DeleteFile(minioMetaBucket, formatConfigFile); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -248,7 +248,7 @@ func TestUndoMakeBucket(t *testing.T) {
 	}
 
 	bucketName := getRandomBucketName()
-	if err = obj.MakeBucket(bucketName); err != nil {
+	if err = obj.MakeBucketWithLocation(bucketName, ""); err != nil {
 		t.Fatal(err)
 	}
 	xl := obj.(*xlObjects)
@@ -288,7 +288,7 @@ func TestQuickHeal(t *testing.T) {
 	}
 
 	bucketName := getRandomBucketName()
-	if err = obj.MakeBucket(bucketName); err != nil {
+	if err = obj.MakeBucketWithLocation(bucketName, ""); err != nil {
 		t.Fatal(err)
 	}
 
@@ -383,13 +383,13 @@ func TestListBucketsHeal(t *testing.T) {
 
 	// Create a bucket that won't get corrupted
 	saneBucket := "sanebucket"
-	if err = obj.MakeBucket(saneBucket); err != nil {
+	if err = obj.MakeBucketWithLocation(saneBucket, ""); err != nil {
 		t.Fatal(err)
 	}
 
 	// Create a bucket that will be removed in some disks
 	corruptedBucketName := getRandomBucketName()
-	if err = obj.MakeBucket(corruptedBucketName); err != nil {
+	if err = obj.MakeBucketWithLocation(corruptedBucketName, ""); err != nil {
 		t.Fatal(err)
 	}
 
@@ -445,7 +445,7 @@ func TestHealObjectXL(t *testing.T) {
 	object := "object"
 	data := bytes.Repeat([]byte("a"), 5*1024*1024)
 
-	err = obj.MakeBucket(bucket)
+	err = obj.MakeBucketWithLocation(bucket, "")
 	if err != nil {
 		t.Fatalf("Failed to make a bucket - %v", err)
 	}

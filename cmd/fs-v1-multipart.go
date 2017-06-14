@@ -706,6 +706,11 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 		return ObjectInfo{}, err
 	}
 
+	// Check if an object is present as one of the parent dir.
+	if fs.parentDirIsObject(bucket, pathutil.Dir(object)) {
+		return ObjectInfo{}, toObjectErr(traceError(errFileAccessDenied), bucket, object)
+	}
+
 	if _, err := fs.statBucketDir(bucket); err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket)
 	}
@@ -866,7 +871,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	if len(fsMeta.Meta) == 0 {
 		fsMeta.Meta = make(map[string]string)
 	}
-	fsMeta.Meta["md5Sum"] = s3MD5
+	fsMeta.Meta["etag"] = s3MD5
 
 	// Write all the set metadata.
 	if _, err = fsMeta.WriteTo(metaFile); err != nil {

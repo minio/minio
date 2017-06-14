@@ -161,7 +161,7 @@ func parseXLErasureInfo(xlMetaBuf []byte) erasureInfo {
 	}
 	erasure.Distribution = distribution
 
-	erasure.Algorithm = erasureResult.Get("algorithm").String()
+	erasure.Algorithm = HashAlgo(erasureResult.Get("algorithm").String())
 	erasure.DataBlocks = int(erasureResult.Get("data").Int())
 	erasure.ParityBlocks = int(erasureResult.Get("parity").Int())
 	erasure.BlockSize = erasureResult.Get("blockSize").Int()
@@ -172,7 +172,7 @@ func parseXLErasureInfo(xlMetaBuf []byte) erasureInfo {
 	for i, checkSumResult := range checkSumsResult {
 		checkSum := checkSumInfo{}
 		checkSum.Name = checkSumResult.Get("name").String()
-		checkSum.Algorithm = checkSumResult.Get("algorithm").String()
+		checkSum.Algorithm = HashAlgo(checkSumResult.Get("algorithm").String())
 		checkSum.Hash = checkSumResult.Get("hash").String()
 		checkSums[i] = checkSum
 	}
@@ -253,6 +253,19 @@ func readXLMetaStat(disk StorageAPI, bucket string, object string) (statInfo, ma
 	if err != nil {
 		return statInfo{}, nil, traceError(err)
 	}
+
+	// obtain version.
+	xlVersion := parseXLVersion(xlMetaBuf)
+
+	// obtain format.
+	xlFormat := parseXLFormat(xlMetaBuf)
+
+	// Validate if the xl.json we read is sane, return corrupted format.
+	if !isXLMetaValid(xlVersion, xlFormat) {
+		// For version mismatchs and unrecognized format, return corrupted format.
+		return statInfo{}, nil, traceError(errCorruptedFormat)
+	}
+
 	// obtain xlMetaV1{}.Meta using `github.com/tidwall/gjson`.
 	xlMetaMap := parseXLMetaMap(xlMetaBuf)
 
@@ -261,6 +274,7 @@ func readXLMetaStat(disk StorageAPI, bucket string, object string) (statInfo, ma
 	if err != nil {
 		return statInfo{}, nil, traceError(err)
 	}
+
 	// Return structured `xl.json`.
 	return xlStat, xlMetaMap, nil
 }

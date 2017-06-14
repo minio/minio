@@ -42,7 +42,7 @@ func TestRepeatPutObjectPart(t *testing.T) {
 	// cleaning up of temporary test directories
 	defer removeRoots(disks)
 
-	err = objLayer.MakeBucket("bucket1")
+	err = objLayer.MakeBucketWithLocation("bucket1", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,9 +73,9 @@ func TestXLDeleteObjectBasic(t *testing.T) {
 		{".test", "obj", BucketNameInvalid{Bucket: ".test"}},
 		{"----", "obj", BucketNameInvalid{Bucket: "----"}},
 		{"bucket", "", ObjectNameInvalid{Bucket: "bucket", Object: ""}},
-		{"bucket", "obj/", ObjectNameInvalid{Bucket: "bucket", Object: "obj/"}},
-		{"bucket", "/obj", ObjectNameInvalid{Bucket: "bucket", Object: "/obj"}},
 		{"bucket", "doesnotexist", ObjectNotFound{Bucket: "bucket", Object: "doesnotexist"}},
+		{"bucket", "obj/", ObjectNotFound{Bucket: "bucket", Object: "obj/"}},
+		{"bucket", "/obj", ObjectNotFound{Bucket: "bucket", Object: "/obj"}},
 		{"bucket", "obj", nil},
 	}
 
@@ -86,7 +86,7 @@ func TestXLDeleteObjectBasic(t *testing.T) {
 	}
 
 	// Make bucket for Test 7 to pass
-	err = xl.MakeBucket("bucket")
+	err = xl.MakeBucketWithLocation("bucket", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,7 +120,7 @@ func TestXLDeleteObjectDiskNotFound(t *testing.T) {
 	xl := obj.(*xlObjects)
 
 	// Create "bucket"
-	err = obj.MakeBucket("bucket")
+	err = obj.MakeBucketWithLocation("bucket", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +170,7 @@ func TestGetObjectNoQuorum(t *testing.T) {
 	xl := obj.(*xlObjects)
 
 	// Create "bucket"
-	err = obj.MakeBucket("bucket")
+	err = obj.MakeBucketWithLocation("bucket", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -222,7 +222,7 @@ func TestPutObjectNoQuorum(t *testing.T) {
 	xl := obj.(*xlObjects)
 
 	// Create "bucket"
-	err = obj.MakeBucket("bucket")
+	err = obj.MakeBucketWithLocation("bucket", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -279,7 +279,7 @@ func TestHealing(t *testing.T) {
 	xl := obj.(*xlObjects)
 
 	// Create "bucket"
-	err = obj.MakeBucket("bucket")
+	err = obj.MakeBucketWithLocation("bucket", "")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -80,7 +80,7 @@ func (endpoint Endpoint) SetHTTP() {
 func NewEndpoint(arg string) (Endpoint, error) {
 	// isEmptyPath - check whether given path is not empty.
 	isEmptyPath := func(path string) bool {
-		return path == "" || path == "." || path == "/" || path == `\`
+		return path == "" || path == "/" || path == `\`
 	}
 
 	if isEmptyPath(arg) {
@@ -127,14 +127,10 @@ func NewEndpoint(arg string) (Endpoint, error) {
 			return Endpoint{}, fmt.Errorf("empty or root path is not supported in URL endpoint")
 		}
 
-		// Get IPv4 address of the host.
-		hostIPs, err := getHostIP4(host)
+		isLocal, err = isLocalHost(host)
 		if err != nil {
 			return Endpoint{}, err
 		}
-
-		// If intersection of two IP sets is not empty, then the host is local host.
-		isLocal = !localIP4.Intersection(hostIPs).IsEmpty()
 	} else {
 		u = &url.URL{Path: path.Clean(arg)}
 		isLocal = true

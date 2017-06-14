@@ -30,7 +30,7 @@ import (
 )
 
 // AnonGetBucketInfo - Get bucket metadata from azure anonymously.
-func (a AzureObjects) AnonGetBucketInfo(bucket string) (bucketInfo BucketInfo, err error) {
+func (a *azureObjects) AnonGetBucketInfo(bucket string) (bucketInfo BucketInfo, err error) {
 	url, err := url.Parse(a.client.GetBlobURL(bucket, ""))
 	if err != nil {
 		return bucketInfo, azureToObjectError(traceError(err))
@@ -40,7 +40,7 @@ func (a AzureObjects) AnonGetBucketInfo(bucket string) (bucketInfo BucketInfo, e
 	if err != nil {
 		return bucketInfo, azureToObjectError(traceError(err), bucket)
 	}
-	defer resp.Body.Close()
+	resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		return bucketInfo, azureToObjectError(traceError(anonErrToObjectErr(resp.StatusCode, bucket)), bucket)
@@ -57,9 +57,16 @@ func (a AzureObjects) AnonGetBucketInfo(bucket string) (bucketInfo BucketInfo, e
 	return bucketInfo, nil
 }
 
+// AnonPutObject - SendPUT request without authentication.
+// This is needed when clients send PUT requests on objects that can be uploaded without auth.
+func (a *azureObjects) AnonPutObject(bucket, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (objInfo ObjectInfo, err error) {
+	// azure doesn't support anonymous put
+	return ObjectInfo{}, traceError(NotImplemented{})
+}
+
 // AnonGetObject - SendGET request without authentication.
 // This is needed when clients send GET requests on objects that can be downloaded without auth.
-func (a AzureObjects) AnonGetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) (err error) {
+func (a *azureObjects) AnonGetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) (err error) {
 	u := a.client.GetBlobURL(bucket, object)
 	req, err := http.NewRequest("GET", u, nil)
 	if err != nil {
@@ -88,12 +95,12 @@ func (a AzureObjects) AnonGetObject(bucket, object string, startOffset int64, le
 
 // AnonGetObjectInfo - Send HEAD request without authentication and convert the
 // result to ObjectInfo.
-func (a AzureObjects) AnonGetObjectInfo(bucket, object string) (objInfo ObjectInfo, err error) {
+func (a *azureObjects) AnonGetObjectInfo(bucket, object string) (objInfo ObjectInfo, err error) {
 	resp, err := http.Head(a.client.GetBlobURL(bucket, object))
 	if err != nil {
 		return objInfo, azureToObjectError(traceError(err), bucket, object)
 	}
-	defer resp.Body.Close()
+	resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		return objInfo, azureToObjectError(traceError(anonErrToObjectErr(resp.StatusCode, bucket, object)), bucket, object)
@@ -120,7 +127,7 @@ func (a AzureObjects) AnonGetObjectInfo(bucket, object string) (objInfo ObjectIn
 		objInfo.UserDefined["Content-Encoding"] = resp.Header.Get("Content-Encoding")
 	}
 	objInfo.UserDefined["Content-Type"] = resp.Header.Get("Content-Type")
-	objInfo.MD5Sum = resp.Header.Get("Etag")
+	objInfo.ETag = resp.Header.Get("Etag")
 	objInfo.ModTime = t
 	objInfo.Name = object
 	objInfo.Size = contentLength
@@ -128,7 +135,7 @@ func (a AzureObjects) AnonGetObjectInfo(bucket, object string) (objInfo ObjectIn
 }
 
 // AnonListObjects - Use Azure equivalent ListBlobs.
-func (a AzureObjects) AnonListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (result ListObjectsInfo, err error) {
+func (a *azureObjects) AnonListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (result ListObjectsInfo, err error) {
 	params := storage.ListBlobsParameters{
 		Prefix:     prefix,
 		Marker:     marker,
@@ -175,7 +182,7 @@ func (a AzureObjects) AnonListObjects(bucket, prefix, marker, delimiter string, 
 			Name:            object.Name,
 			ModTime:         t,
 			Size:            object.Properties.ContentLength,
-			MD5Sum:          object.Properties.Etag,
+			ETag:            object.Properties.Etag,
 			ContentType:     object.Properties.ContentType,
 			ContentEncoding: object.Properties.ContentEncoding,
 		})

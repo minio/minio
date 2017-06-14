@@ -18,6 +18,8 @@ package cmd
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"reflect"
 	"testing"
 	"time"
@@ -289,6 +291,31 @@ func TestRetryStorage(t *testing.T) {
 		var n int64
 		if n, err = disk.ReadFile("existent", "path", 7, buf2); err != nil {
 			t.Fatal(err)
+		}
+		if err != nil {
+			t.Error("Error in ReadFile", err)
+		}
+		if n != 5 {
+			t.Fatalf("Expected 5, got %d", n)
+		}
+		if !bytes.Equal(buf2, []byte("World")) {
+			t.Fatalf("Expected `World`, got %s", string(buf2))
+		}
+	}
+
+	sha256Hash := func(s string) string {
+		k := sha256.Sum256([]byte(s))
+		return hex.EncodeToString(k[:])
+	}
+	for _, disk := range storageDisks {
+		var buf2 = make([]byte, 5)
+		var n int64
+		if n, err = disk.ReadFileWithVerify("existent", "path", 7, buf2,
+			HashSha256, sha256Hash("Hello, World")); err != nil {
+			t.Fatal(err)
+		}
+		if err != nil {
+			t.Error("Error in ReadFileWithVerify", err)
 		}
 		if n != 5 {
 			t.Fatalf("Expected 5, got %d", n)

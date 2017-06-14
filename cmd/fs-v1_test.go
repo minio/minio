@@ -63,7 +63,7 @@ func TestFSShutdown(t *testing.T) {
 		obj := initFSObjects(disk, t)
 		fs := obj.(*fsObjects)
 		objectContent := "12345"
-		obj.MakeBucket(bucketName)
+		obj.MakeBucketWithLocation(bucketName, "")
 		sha256sum := ""
 		obj.PutObject(bucketName, objectName, int64(len(objectContent)), bytes.NewReader([]byte(objectContent)), nil, sha256sum)
 		return fs, disk
@@ -85,47 +85,6 @@ func TestFSShutdown(t *testing.T) {
 	}
 }
 
-// TestFSLoadFormatFS - test loadFormatFS with healty and faulty disks
-func TestFSLoadFormatFS(t *testing.T) {
-	// Prepare for testing
-	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
-	defer removeAll(disk)
-
-	// Assign a new UUID.
-	uuid := mustGetUUID()
-
-	// Initialize meta volume, if volume already exists ignores it.
-	if err := initMetaVolumeFS(disk, uuid); err != nil {
-		t.Fatal(err)
-	}
-
-	fsFormatPath := pathJoin(disk, minioMetaBucket, fsFormatJSONFile)
-	if err := saveFormatFS(preparePath(fsFormatPath), newFSFormatV1()); err != nil {
-		t.Fatal("Should not fail here", err)
-	}
-	_, err := loadFormatFS(disk)
-	if err != nil {
-		t.Fatal("Should not fail here", err)
-	}
-	// Loading corrupted format file
-	file, err := os.OpenFile(preparePath(fsFormatPath), os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0666)
-	if err != nil {
-		t.Fatal("Should not fail here", err)
-	}
-	file.Write([]byte{'b'})
-	file.Close()
-	_, err = loadFormatFS(disk)
-	if err == nil {
-		t.Fatal("Should return an error here")
-	}
-	// Loading format file from disk not found.
-	removeAll(disk)
-	_, err = loadFormatFS(disk)
-	if err != nil && err != errUnformattedDisk {
-		t.Fatal("Should return unformatted disk, but got", err)
-	}
-}
-
 // TestFSGetBucketInfo - test GetBucketInfo with healty and faulty disks
 func TestFSGetBucketInfo(t *testing.T) {
 	// Prepare for testing
@@ -136,7 +95,7 @@ func TestFSGetBucketInfo(t *testing.T) {
 	fs := obj.(*fsObjects)
 	bucketName := "bucket"
 
-	obj.MakeBucket(bucketName)
+	obj.MakeBucketWithLocation(bucketName, "")
 
 	// Test with valid parameters
 	info, err := fs.GetBucketInfo(bucketName)
@@ -161,6 +120,74 @@ func TestFSGetBucketInfo(t *testing.T) {
 	}
 }
 
+func TestFSPutObject(t *testing.T) {
+	// Prepare for tests
+	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
+	defer removeAll(disk)
+
+	obj := initFSObjects(disk, t)
+	bucketName := "bucket"
+	objectName := "1/2/3/4/object"
+
+	if err := obj.MakeBucketWithLocation(bucketName, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	sha256sum := ""
+
+	// With a regular object.
+	_, err := obj.PutObject(bucketName+"non-existent", objectName, int64(len("abcd")), bytes.NewReader([]byte("abcd")), nil, sha256sum)
+	if err == nil {
+		t.Fatal("Unexpected should fail here, bucket doesn't exist")
+	}
+	if _, ok := errorCause(err).(BucketNotFound); !ok {
+		t.Fatalf("Expected error type BucketNotFound, got %#v", err)
+	}
+
+	// With a directory object.
+	_, err = obj.PutObject(bucketName+"non-existent", objectName+"/", int64(0), bytes.NewReader([]byte("")), nil, sha256sum)
+	if err == nil {
+		t.Fatal("Unexpected should fail here, bucket doesn't exist")
+	}
+	if _, ok := errorCause(err).(BucketNotFound); !ok {
+		t.Fatalf("Expected error type BucketNotFound, got %#v", err)
+	}
+
+	_, err = obj.PutObject(bucketName, objectName, int64(len("abcd")), bytes.NewReader([]byte("abcd")), nil, sha256sum)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = obj.PutObject(bucketName, objectName+"/1", int64(len("abcd")), bytes.NewReader([]byte("abcd")), nil, sha256sum)
+	if err == nil {
+		t.Fatal("Unexpected should fail here, backend corruption occurred")
+	}
+	if nerr, ok := errorCause(err).(PrefixAccessDenied); !ok {
+		t.Fatalf("Expected PrefixAccessDenied, got %#v", err)
+	} else {
+		if nerr.Bucket != "bucket" {
+			t.Fatalf("Expected 'bucket', got %s", nerr.Bucket)
+		}
+		if nerr.Object != "1/2/3/4/object/1" {
+			t.Fatalf("Expected '1/2/3/4/object/1', got %s", nerr.Object)
+		}
+	}
+
+	_, err = obj.PutObject(bucketName, objectName+"/1/", 0, bytes.NewReader([]byte("")), nil, sha256sum)
+	if err == nil {
+		t.Fatal("Unexpected should fail here, backned corruption occurred")
+	}
+	if nerr, ok := errorCause(err).(PrefixAccessDenied); !ok {
+		t.Fatalf("Expected PrefixAccessDenied, got %#v", err)
+	} else {
+		if nerr.Bucket != "bucket" {
+			t.Fatalf("Expected 'bucket', got %s", nerr.Bucket)
+		}
+		if nerr.Object != "1/2/3/4/object/1/" {
+			t.Fatalf("Expected '1/2/3/4/object/1/', got %s", nerr.Object)
+		}
+	}
+}
+
 // TestFSDeleteObject - test fs.DeleteObject() with healthy and corrupted disks
 func TestFSDeleteObject(t *testing.T) {
 	// Prepare for tests
@@ -172,7 +199,7 @@ func TestFSDeleteObject(t *testing.T) {
 	bucketName := "bucket"
 	objectName := "object"
 
-	obj.MakeBucket(bucketName)
+	obj.MakeBucketWithLocation(bucketName, "")
 	sha256sum := ""
 	obj.PutObject(bucketName, objectName, int64(len("abcd")), bytes.NewReader([]byte("abcd")), nil, sha256sum)
 
@@ -217,7 +244,7 @@ func TestFSDeleteBucket(t *testing.T) {
 	fs := obj.(*fsObjects)
 	bucketName := "bucket"
 
-	err := obj.MakeBucket(bucketName)
+	err := obj.MakeBucketWithLocation(bucketName, "")
 	if err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
@@ -235,7 +262,7 @@ func TestFSDeleteBucket(t *testing.T) {
 		t.Fatal("Unexpected error: ", err)
 	}
 
-	obj.MakeBucket(bucketName)
+	obj.MakeBucketWithLocation(bucketName, "")
 
 	// Delete bucker should get error disk not found.
 	removeAll(disk)
@@ -256,7 +283,7 @@ func TestFSListBuckets(t *testing.T) {
 	fs := obj.(*fsObjects)
 
 	bucketName := "bucket"
-	if err := obj.MakeBucket(bucketName); err != nil {
+	if err := obj.MakeBucketWithLocation(bucketName, ""); err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
 

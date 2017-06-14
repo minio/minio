@@ -24,15 +24,31 @@ import (
 	pathutil "path"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/minio/minio/pkg/lock"
 	"github.com/minio/minio/pkg/mimedb"
 	"github.com/tidwall/gjson"
 )
 
+// FS format, and object metadata.
 const (
-	fsMetaJSONFile   = "fs.json"
-	fsFormatJSONFile = "format.json"
+	// fs.json object metadata.
+	fsMetaJSONFile = "fs.json"
+)
+
+// FS metadata constants.
+const (
+	// FS backend meta 1.0.0 version.
+	fsMetaVersion100 = "1.0.0"
+
+	// FS backend meta 1.0.1 version.
+	fsMetaVersion = "1.0.1"
+
+	// FS backend meta format.
+	fsMetaFormat = "fs"
+
+	// Add more constants here.
 )
 
 // A fsMetaV1 represents a metadata header mapping keys to sets of values.
@@ -45,6 +61,19 @@ type fsMetaV1 struct {
 	// Metadata map for current object `fs.json`.
 	Meta  map[string]string `json:"meta,omitempty"`
 	Parts []objectPartInfo  `json:"parts,omitempty"`
+}
+
+// IsValid - tells if the format is sane by validating the version
+// string and format style.
+func (m fsMetaV1) IsValid() bool {
+	return isFSMetaValid(m.Version, m.Format)
+}
+
+// Verifies if the backend format metadata is sane by validating
+// the version string and format style.
+func isFSMetaValid(version, format string) bool {
+	return ((version == fsMetaVersion || version == fsMetaVersion100) &&
+		format == fsMetaFormat)
 }
 
 // Converts metadata to object info.
@@ -75,17 +104,15 @@ func (m fsMetaV1) ToObjectInfo(bucket, object string, fi os.FileInfo) ObjectInfo
 		objInfo.IsDir = fi.IsDir()
 	}
 
-	objInfo.MD5Sum = m.Meta["md5Sum"]
+	// Extract etag from metadata.
+	objInfo.ETag = extractETag(m.Meta)
 	objInfo.ContentType = m.Meta["content-type"]
 	objInfo.ContentEncoding = m.Meta["content-encoding"]
 
-	// md5Sum has already been extracted into objInfo.MD5Sum.  We
-	// need to remove it from m.Meta to avoid it from appearing as
-	// part of response headers. e.g, X-Minio-* or X-Amz-*.
-	delete(m.Meta, "md5Sum")
-
-	// Save all the other userdefined API.
-	objInfo.UserDefined = m.Meta
+	// etag/md5Sum has already been extracted. We need to
+	// remove to avoid it from appearing as part of
+	// response headers. e.g, X-Minio-* or X-Amz-*.
+	objInfo.UserDefined = cleanMetaETag(m.Meta)
 
 	// Success..
 	return objInfo
@@ -204,6 +231,12 @@ func (m *fsMetaV1) ReadFrom(lk *lock.LockedFile) (n int64, err error) {
 	// obtain format.
 	m.Format = parseFSFormat(fsMetaBuf)
 
+	// Verify if the format is valid, return corrupted format
+	// for unrecognized formats.
+	if !isFSMetaValid(m.Version, m.Format) {
+		return 0, traceError(errCorruptedFormat)
+	}
+
 	// obtain metadata.
 	m.Meta = parseFSMetaMap(fsMetaBuf)
 
@@ -217,17 +250,6 @@ func (m *fsMetaV1) ReadFrom(lk *lock.LockedFile) (n int64, err error) {
 	return int64(len(fsMetaBuf)), nil
 }
 
-// FS metadata constants.
-const (
-	// FS backend meta version.
-	fsMetaVersion = "1.0.0"
-
-	// FS backend meta format.
-	fsMetaFormat = "fs"
-
-	// Add more constants here.
-)
-
 // newFSMetaV1 - initializes new fsMetaV1.
 func newFSMetaV1() (fsMeta fsMetaV1) {
 	fsMeta = fsMetaV1{}
@@ -237,58 +259,95 @@ func newFSMetaV1() (fsMeta fsMetaV1) {
 	return fsMeta
 }
 
-// newFSFormatV1 - initializes new formatConfigV1 with FS format info.
-func newFSFormatV1() (format *formatConfigV1) {
-	return &formatConfigV1{
-		Version: "1",
-		Format:  "fs",
-		FS: &fsFormat{
-			Version: "1",
-		},
-	}
-}
+// Check if disk has already a valid format, holds a read lock and
+// upon success returns it to the caller to be closed.
+func checkLockedValidFormatFS(fsPath string) (*lock.RLockedFile, error) {
+	fsFormatPath := pathJoin(fsPath, minioMetaBucket, formatConfigFile)
 
-// loads format.json from minioMetaBucket if it exists.
-func loadFormatFS(fsPath string) (*formatConfigV1, error) {
-	rlk, err := lock.RLockedOpenFile(pathJoin(fsPath, minioMetaBucket, fsFormatJSONFile))
+	rlk, err := lock.RLockedOpenFile(preparePath(fsFormatPath))
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, errUnformattedDisk
+			// If format.json not found then
+			// its an unformatted disk.
+			return nil, traceError(errUnformattedDisk)
 		}
-		return nil, err
-	}
-	defer rlk.Close()
-
-	formatBytes, err := ioutil.ReadAll(rlk)
-	if err != nil {
-		return nil, err
+		return nil, traceError(err)
 	}
 
-	format := &formatConfigV1{}
-	if err = json.Unmarshal(formatBytes, format); err != nil {
+	var format = &formatConfigV1{}
+	if err = format.LoadFormat(rlk.LockedFile); err != nil {
+		rlk.Close()
 		return nil, err
 	}
 
-	return format, nil
+	// Check format FS.
+	if err = format.CheckFS(); err != nil {
+		rlk.Close()
+		return nil, err
+	}
+
+	//  Always return read lock here and should be closed by the caller.
+	return rlk, traceError(err)
 }
 
-// writes FS format (format.json) into minioMetaBucket.
-func saveFormatFS(formatPath string, fsFormat *formatConfigV1) error {
-	metadataBytes, err := json.Marshal(fsFormat)
-	if err != nil {
-		return err
-	}
+// Creates a new format.json if unformatted.
+func createFormatFS(fsPath string) error {
+	fsFormatPath := pathJoin(fsPath, minioMetaBucket, formatConfigFile)
 
-	// fsFormatJSONFile - format.json file stored in minioMetaBucket(.minio.sys) directory.
-	lk, err := lock.LockedOpenFile(preparePath(formatPath), os.O_CREATE|os.O_WRONLY, 0600)
+	// Attempt a write lock on formatConfigFile `format.json`
+	// file stored in minioMetaBucket(.minio.sys) directory.
+	lk, err := lock.TryLockedOpenFile(preparePath(fsFormatPath), os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
-		return err
+		return traceError(err)
 	}
+	// Close the locked file upon return.
 	defer lk.Close()
 
-	_, err = lk.Write(metadataBytes)
-	// Success.
+	// Load format on disk, checks if we are unformatted
+	// writes the new format.json
+	var format = &formatConfigV1{}
+	err = format.LoadFormat(lk)
+	if errorCause(err) == errUnformattedDisk {
+		_, err = newFSFormat().WriteTo(lk)
+		return err
+	}
 	return err
+}
+
+func initFormatFS(fsPath string) (rlk *lock.RLockedFile, err error) {
+	// This loop validates format.json by holding a read lock and
+	// proceeds if disk unformatted to hold non-blocking WriteLock
+	// If for some reason non-blocking WriteLock fails and the error
+	// is lock.ErrAlreadyLocked i.e some other process is holding a
+	// lock we retry in the loop again.
+	for {
+		// Validate the `format.json` for expected values.
+		rlk, err = checkLockedValidFormatFS(fsPath)
+		switch {
+		case err == nil:
+			// Holding a read lock ensures that any write lock operation
+			// is blocked if attempted in-turn avoiding corruption on
+			// the backend disk.
+			return rlk, nil
+		case errorCause(err) == errUnformattedDisk:
+			if err = createFormatFS(fsPath); err != nil {
+				// Existing write locks detected.
+				if errorCause(err) == lock.ErrAlreadyLocked {
+					// Lock already present, sleep and attempt again.
+					time.Sleep(100 * time.Millisecond)
+					continue
+				}
+
+				// Unexpected error, return.
+				return nil, err
+			}
+
+			// Loop will continue to attempt a read-lock on `format.json`.
+		default:
+			// Unhandled error return.
+			return nil, err
+		}
+	}
 }
 
 // Return if the part info in uploadedParts and completeParts are same.

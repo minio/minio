@@ -48,7 +48,7 @@ func TestReadFSMetadata(t *testing.T) {
 	bucketName := "bucket"
 	objectName := "object"
 
-	if err := obj.MakeBucket(bucketName); err != nil {
+	if err := obj.MakeBucketWithLocation(bucketName, ""); err != nil {
 		t.Fatal("Unexpected err: ", err)
 	}
 	sha256sum := ""
@@ -58,7 +58,7 @@ func TestReadFSMetadata(t *testing.T) {
 	}
 
 	// Construct the full path of fs.json
-	fsPath := pathJoin("buckets", bucketName, objectName, "fs.json")
+	fsPath := pathJoin(bucketMetaPrefix, bucketName, objectName, "fs.json")
 	fsPath = pathJoin(fs.fsPath, minioMetaBucket, fsPath)
 
 	rlk, err := fs.rwPool.Open(fsPath)
@@ -85,7 +85,7 @@ func TestWriteFSMetadata(t *testing.T) {
 	bucketName := "bucket"
 	objectName := "object"
 
-	if err := obj.MakeBucket(bucketName); err != nil {
+	if err := obj.MakeBucketWithLocation(bucketName, ""); err != nil {
 		t.Fatal("Unexpected err: ", err)
 	}
 	sha256sum := ""
@@ -95,7 +95,7 @@ func TestWriteFSMetadata(t *testing.T) {
 	}
 
 	// Construct the full path of fs.json
-	fsPath := pathJoin("buckets", bucketName, objectName, "fs.json")
+	fsPath := pathJoin(bucketMetaPrefix, bucketName, objectName, "fs.json")
 	fsPath = pathJoin(fs.fsPath, minioMetaBucket, fsPath)
 
 	rlk, err := fs.rwPool.Open(fsPath)
@@ -110,10 +110,10 @@ func TestWriteFSMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatal("Unexpected error ", err)
 	}
-	if fsMeta.Version != "1.0.0" {
+	if fsMeta.Version != fsMetaVersion {
 		t.Fatalf("Unexpected version %s", fsMeta.Version)
 	}
-	if fsMeta.Format != "fs" {
+	if fsMeta.Format != fsMetaFormat {
 		t.Fatalf("Unexpected format %s", fsMeta.Format)
 	}
 }

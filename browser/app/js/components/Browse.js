@@ -68,7 +68,7 @@ export default class Browse extends React.Component {
           memory: res.MinioMemory,
           platform: res.MinioPlatform,
           runtime: res.MinioRuntime,
-          envVars: res.MinioEnvVars
+          info: res.MinioGlobalInfo
         })
         dispatch(actions.setServerInfo(serverInfo))
       })
@@ -463,21 +463,25 @@ export default class Browse extends React.Component {
     }
 
     if (web.LoggedIn()) {
-      storageUsageDetails = <div className="feh-usage">
-                              <div className="fehu-chart">
-                                <div style={ { width: usedPercent } }></div>
-                              </div>
-                              <ul>
-                                <li>
-                                  <span>Used: </span>
-                                  { humanize.filesize(total - free) }
-                                </li>
-                                <li className="pull-right">
-                                  <span>Free: </span>
-                                  { humanize.filesize(total - used) }
-                                </li>
-                              </ul>
-                            </div>
+      if (!(used === 0 && free === 0)) {
+        storageUsageDetails = <div className="feh-usage">
+          <div className="fehu-chart">
+            <div style={ { width: usedPercent } }></div>
+          </div>
+          <ul>
+            <li>
+              <span>Used: </span>
+              { humanize.filesize(total - free) }
+            </li>
+            <li className="pull-right">
+              <span>Free: </span>
+              { humanize.filesize(total - used) }
+            </li>
+          </ul>
+        </div>
+      }
+
+
     }
 
     let createButton = ''
@@ -722,11 +726,11 @@ export default class Browse extends React.Component {
                 </div>
                 <div className="input-group" style={ { display: web.LoggedIn() ? 'block' : 'none' } }>
                   <label>
-                    Expires in
+                    Expires in (Max 7 days)
                   </label>
                   <div className="set-expire">
                     <div className="set-expire-item">
-                      <i className="set-expire-increase" onClick={ this.handleExpireValue.bind(this, 'expireDays', 1, shareObject.object) }></i>
+                      <i className="set-expire-increase" onClick={ this.handleExpireValue.bind(this, 'expireDays', 1, shareObject.object) } />
                       <div className="set-expire-title">
                         Days
                       </div>
@@ -735,12 +739,14 @@ export default class Browse extends React.Component {
                           type="number"
                           min={ 0 }
                           max={ 7 }
-                          defaultValue={ 5 } />
+                          defaultValue={ 5 }
+                          readOnly="readOnly"
+                        />
                       </div>
-                      <i className="set-expire-decrease" onClick={ this.handleExpireValue.bind(this, 'expireDays', -1, shareObject.object) }></i>
+                      <i className="set-expire-decrease" onClick={ this.handleExpireValue.bind(this, 'expireDays', -1, shareObject.object) } />
                     </div>
                     <div className="set-expire-item">
-                      <i className="set-expire-increase" onClick={ this.handleExpireValue.bind(this, 'expireHours', 1, shareObject.object) }></i>
+                      <i className="set-expire-increase" onClick={ this.handleExpireValue.bind(this, 'expireHours', 1, shareObject.object) } />
                       <div className="set-expire-title">
                         Hours
                       </div>
@@ -749,12 +755,14 @@ export default class Browse extends React.Component {
                           type="number"
                           min={ 0 }
                           max={ 23 }
-                          defaultValue={ 0 } />
+                          defaultValue={ 0 }
+                          readOnly="readOnly"
+                        />
                       </div>
-                      <i className="set-expire-decrease" onClick={ this.handleExpireValue.bind(this, 'expireHours', -1, shareObject.object) }></i>
+                      <i className="set-expire-decrease" onClick={ this.handleExpireValue.bind(this, 'expireHours', -1, shareObject.object) } />
                     </div>
                     <div className="set-expire-item">
-                      <i className="set-expire-increase" onClick={ this.handleExpireValue.bind(this, 'expireMins', 1, shareObject.object) }></i>
+                      <i className="set-expire-increase" onClick={ this.handleExpireValue.bind(this, 'expireMins', 1, shareObject.object) } />
                       <div className="set-expire-title">
                         Minutes
                       </div>
@@ -763,9 +771,11 @@ export default class Browse extends React.Component {
                           type="number"
                           min={ 0 }
                           max={ 59 }
-                          defaultValue={ 0 } />
+                          defaultValue={ 0 }
+                          readOnly="readOnly"
+                        />
                       </div>
-                      <i className="set-expire-decrease" onClick={ this.handleExpireValue.bind(this, 'expireMins', -1, shareObject.object) }></i>
+                      <i className="set-expire-decrease" onClick={ this.handleExpireValue.bind(this, 'expireMins', -1, shareObject.object) } />
                     </div>
                   </div>
                 </div>

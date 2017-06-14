@@ -141,19 +141,6 @@ func TestParseCredentialHeader(t *testing.T) {
 			expectedErrCode:     ErrMalformedCredentialDate,
 		},
 		// Test Case - 6.
-		// Test case with invalid region.
-		// region should a non empty string.
-		{
-			inputCredentialStr: generateCredentialStr(
-				"Z7IXGOO6BZ0REAN1Q26I",
-				UTCNow().Format(yyyymmdd),
-				"",
-				"ABCD",
-				"ABCD"),
-			expectedCredentials: credentialHeader{},
-			expectedErrCode:     ErrMalformedCredentialRegion,
-		},
-		// Test Case - 7.
 		// Test case with invalid service.
 		// "s3" is the valid service string.
 		{
@@ -166,7 +153,7 @@ func TestParseCredentialHeader(t *testing.T) {
 			expectedCredentials: credentialHeader{},
 			expectedErrCode:     ErrInvalidService,
 		},
-		// Test Case - 8.
+		// Test Case - 7.
 		// Test case with invalid request version.
 		// "aws4_request" is the valid request version.
 		{
@@ -179,7 +166,7 @@ func TestParseCredentialHeader(t *testing.T) {
 			expectedCredentials: credentialHeader{},
 			expectedErrCode:     ErrInvalidRequestVersion,
 		},
-		// Test Case - 9.
+		// Test Case - 8.
 		// Test case with right inputs. Expected to return a valid CredentialHeader.
 		// "aws4_request" is the valid request version.
 		{
@@ -204,7 +191,7 @@ func TestParseCredentialHeader(t *testing.T) {
 		actualCredential, actualErrCode := parseCredentialHeader(testCase.inputCredentialStr)
 		// validating the credential fields.
 		if testCase.expectedErrCode != actualErrCode {
-			t.Fatalf("Test %d: Expected the APIErrCode to be %d, got %d", i+1, testCase.expectedErrCode, actualErrCode)
+			t.Fatalf("Test %d: Expected the APIErrCode to be %s, got %s", i+1, errorCodeResponse[testCase.expectedErrCode].Code, errorCodeResponse[actualErrCode].Code)
 		}
 		if actualErrCode == ErrNone {
 			validateCredentialfields(t, i+1, testCase.expectedCredentials, actualCredential)

@@ -37,7 +37,7 @@ func testXLReadStat(obj ObjectLayer, instanceType string, disks []string, t *tes
 	bucketName := getRandomBucketName()
 	objectName := "test-object"
 	// create bucket.
-	err := obj.MakeBucket(bucketName)
+	err := obj.MakeBucketWithLocation(bucketName, "")
 	// Stop the test if creation of the bucket fails.
 	if err != nil {
 		t.Fatalf("%s : %s", instanceType, err.Error())
@@ -113,7 +113,7 @@ func testXLReadMetaParts(obj ObjectLayer, instanceType string, disks []string, t
 	// objectNames[0].
 	// uploadIds [0].
 	// Create bucket before intiating NewMultipartUpload.
-	err := obj.MakeBucket(bucketNames[0])
+	err := obj.MakeBucketWithLocation(bucketNames[0], "")
 	if err != nil {
 		// Failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())

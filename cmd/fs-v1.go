@@ -24,6 +24,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"syscall"
@@ -40,6 +41,9 @@ type fsObjects struct {
 	// Unique value to be used for all
 	// temporary transactions.
 	fsUUID string
+
+	// This value shouldn't be touched, once initialized.
+	fsFormatRlk *lock.RLockedFile // Is a read lock on `format.json`.
 
 	// FS rw pool.
 	rwPool *fsIOPool
@@ -108,24 +112,10 @@ func newFSObjectLayer(fsPath string) (ObjectLayer, error) {
 		return nil, fmt.Errorf("Unable to initialize '.minio.sys' meta volume, %s", err)
 	}
 
-	// Load `format.json`.
-	format, err := loadFormatFS(fsPath)
-	if err != nil && err != errUnformattedDisk {
-		return nil, fmt.Errorf("Unable to load 'format.json', %s", err)
-	}
-
-	// If the `format.json` doesn't exist create one.
-	if err == errUnformattedDisk {
-		fsFormatPath := pathJoin(fsPath, minioMetaBucket, fsFormatJSONFile)
-		// Initialize format.json, if already exists overwrite it.
-		if serr := saveFormatFS(fsFormatPath, newFSFormatV1()); serr != nil {
-			return nil, fmt.Errorf("Unable to initialize 'format.json', %s", serr)
-		}
-	}
-
-	// Validate if we have the same format.
-	if err == nil && format.Format != "fs" {
-		return nil, fmt.Errorf("Unable to recognize backend format, Disk is not in FS format. %s", format.Format)
+	// Initialize `format.json`, this function also returns.
+	rlk, err := initFormatFS(fsPath)
+	if err != nil {
+		return nil, err
 	}
 
 	// Initialize fs objects.
@@ -140,6 +130,12 @@ func newFSObjectLayer(fsPath string) (ObjectLayer, error) {
 			infoMap: make(map[string]bgAppendPartsInfo),
 		},
 	}
+
+	// Once the filesystem has initialized hold the read lock for
+	// the life time of the server. This is done to ensure that under
+	// shared backend mode for FS, remote servers do not migrate
+	// or cause changes on backend format.
+	fs.fsFormatRlk = rlk
 
 	// Initialize and load bucket policies.
 	err = initBucketPolicies(fs)
@@ -204,7 +200,7 @@ func (fs fsObjects) statBucketDir(bucket string) (os.FileInfo, error) {
 
 // MakeBucket - create a new bucket, returns if it
 // already exists.
-func (fs fsObjects) MakeBucket(bucket string) error {
+func (fs fsObjects) MakeBucketWithLocation(bucket, location string) error {
 	bucketDir, err := fs.getBucketDir(bucket)
 	if err != nil {
 		return toObjectErr(err, bucket)
@@ -471,12 +467,6 @@ func (fs fsObjects) getObjectInfo(bucket, object string) (ObjectInfo, error) {
 
 // GetObjectInfo - reads object metadata and replies back ObjectInfo.
 func (fs fsObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
-	// This is a special case with object whose name ends with
-	// a slash separator, we always return object not found here.
-	if hasSuffix(object, slashSeparator) {
-		return ObjectInfo{}, toObjectErr(traceError(errFileNotFound), bucket, object)
-	}
-
 	if err := checkGetObjArgs(bucket, object); err != nil {
 		return ObjectInfo{}, err
 	}
@@ -488,6 +478,25 @@ func (fs fsObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 	return fs.getObjectInfo(bucket, object)
 }
 
+// This function does the following check, suppose
+// object is "a/b/c/d", stat makes sure that objects ""a/b/c""
+// "a/b" and "a" do not exist.
+func (fs fsObjects) parentDirIsObject(bucket, parent string) bool {
+	var isParentDirObject func(string) bool
+	isParentDirObject = func(p string) bool {
+		if p == "." {
+			return false
+		}
+		if _, err := fsStatFile(pathJoin(fs.fsPath, bucket, p)); err == nil {
+			// If there is already a file at prefix "p" return error.
+			return true
+		}
+		// Check if there is a file as one of the parent paths.
+		return isParentDirObject(path.Dir(p))
+	}
+	return isParentDirObject(parent)
+}
+
 // PutObject - creates an object upon reading from the input stream
 // until EOF, writes data directly to configured filesystem path.
 // Additionally writes `fs.json` which carries the necessary metadata
@@ -495,18 +504,29 @@ func (fs fsObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
 func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (objInfo ObjectInfo, retErr error) {
 	var err error
 
-	// This is a special case with size as '0' and object ends with
-	// a slash separator, we treat it like a valid operation and
-	// return success.
+	// Validate if bucket name is valid and exists.
+	if _, err = fs.statBucketDir(bucket); err != nil {
+		return ObjectInfo{}, toObjectErr(err, bucket)
+	}
+
+	// This is a special case with size as '0' and object ends
+	// with a slash separator, we treat it like a valid operation
+	// and return success.
 	if isObjectDir(object, size) {
+		// Check if an object is present as one of the parent dir.
+		if fs.parentDirIsObject(bucket, path.Dir(object)) {
+			return ObjectInfo{}, toObjectErr(traceError(errFileAccessDenied), bucket, object)
+		}
 		return dirObjectInfo(bucket, object, size, metadata), nil
 	}
+
 	if err = checkPutObjectArgs(bucket, object, fs); err != nil {
 		return ObjectInfo{}, err
 	}
 
-	if _, err = fs.statBucketDir(bucket); err != nil {
-		return ObjectInfo{}, toObjectErr(err, bucket)
+	// Check if an object is present as one of the parent dir.
+	if fs.parentDirIsObject(bucket, path.Dir(object)) {
+		return ObjectInfo{}, toObjectErr(traceError(errFileAccessDenied), bucket, object)
 	}
 
 	// No metadata is set, allocate a new one.
@@ -592,12 +612,12 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 
 	newMD5Hex := hex.EncodeToString(md5Writer.Sum(nil))
 	// Update the md5sum if not set with the newly calculated one.
-	if len(metadata["md5Sum"]) == 0 {
-		metadata["md5Sum"] = newMD5Hex
+	if len(metadata["etag"]) == 0 {
+		metadata["etag"] = newMD5Hex
 	}
 
 	// md5Hex representation.
-	md5Hex := metadata["md5Sum"]
+	md5Hex := metadata["etag"]
 	if md5Hex != "" {
 		if newMD5Hex != md5Hex {
 			// Returns md5 mismatch.
@@ -729,8 +749,12 @@ func (fs fsObjects) getObjectETag(bucket, entry string) (string, error) {
 		}
 	}
 
-	fsMetaMap := parseFSMetaMap(fsMetaBuf)
-	return fsMetaMap["md5Sum"], nil
+	// Check if FS metadata is valid, if not return error.
+	if !isFSMetaValid(parseFSVersion(fsMetaBuf), parseFSFormat(fsMetaBuf)) {
+		return "", toObjectErr(traceError(errCorruptedFormat), bucket, entry)
+	}
+
+	return extractETag(parseFSMetaMap(fsMetaBuf)), nil
 }
 
 // ListObjects - list all objects at prefix upto maxKeys., optionally delimited by '/'. Maintains the list pool
@@ -781,8 +805,8 @@ func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 		// Protect reading `fs.json`.
 		objectLock := globalNSMutex.NewNSLock(bucket, entry)
 		objectLock.RLock()
-		var md5Sum string
-		md5Sum, err = fs.getObjectETag(bucket, entry)
+		var etag string
+		etag, err = fs.getObjectETag(bucket, entry)
 		objectLock.RUnlock()
 		if err != nil {
 			return ObjectInfo{}, err
@@ -802,7 +826,7 @@ func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 			Size:    fi.Size(),
 			ModTime: fi.ModTime(),
 			IsDir:   fi.IsDir(),
-			MD5Sum:  md5Sum,
+			ETag:    etag,
 		}, nil
 	}
 

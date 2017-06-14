@@ -14,7 +14,7 @@ You can install Minio Universe package using the DC/OS GUI or CLI.
 
 ### Minio installation on DC/OS GUI 
 
-Visit the DC/OS admin page, and click on `Univers` on the left menu bar. Then click on the `Package` tab and search for Minio. Once you see the package, click the `Instal` button on the right hand side. Then, enter configuration values like the storage and service type you’d like to use with your Minio instance. Finally enter the public Marathon-LB IP address under `networking >> public-agent`, and click `Review and Install`.
+Visit the DC/OS admin page, and click on `Universe` on the left menu bar. Then click on the `Packages` tab and search for Minio. Once you see the package, click the `Install Package` button on the right hand side. Then, enter configuration values like the storage and service type you’d like to use with your Minio instance. Finally enter the public Marathon-LB IP address under `networking >> public-agent`, and click `Review and Install`.
 
 This completes the install process. Before you can access Minio server, get the access key and secret key from the Minio container logs. Click on `Services` and select Minio service in DC/OS admin page. Then go to the `logs` tab and copy the accesskey and secretkey.
 

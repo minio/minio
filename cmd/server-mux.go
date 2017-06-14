@@ -42,19 +42,22 @@ const (
 	maxHTTPVerbLen = 7
 )
 
+// HTTP2 PRI method.
+var httpMethodPRI = "PRI"
+
 var defaultHTTP2Methods = []string{
-	"PRI",
+	httpMethodPRI,
 }
 
 var defaultHTTP1Methods = []string{
-	"OPTIONS",
-	"GET",
-	"HEAD",
-	"POST",
-	"PUT",
-	"DELETE",
-	"TRACE",
-	"CONNECT",
+	http.MethodOptions,
+	http.MethodGet,
+	http.MethodHead,
+	http.MethodPost,
+	http.MethodPut,
+	http.MethodDelete,
+	http.MethodTrace,
+	http.MethodConnect,
 }
 
 // ConnMux - Peeks into the incoming connection for relevant
@@ -446,17 +449,9 @@ func (m *ServerMux) ListenAndServe(certFile, keyFile string) (err error) {
 	// All http requests start to be processed by httpHandler
 	httpHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if tlsEnabled && r.TLS == nil {
-			// TLS is enabled but Request is not TLS configured
-			u := url.URL{
-				Scheme:   httpsScheme,
-				Opaque:   r.URL.Opaque,
-				User:     r.URL.User,
-				Host:     r.Host,
-				Path:     r.URL.Path,
-				RawQuery: r.URL.RawQuery,
-				Fragment: r.URL.Fragment,
-			}
-			http.Redirect(w, r, u.String(), http.StatusTemporaryRedirect)
+			// TLS is enabled but request is not TLS
+			// configured - return error to client.
+			writeErrorResponse(w, ErrInsecureClientRequest, &url.URL{})
 		} else {
 
 			// Return ServiceUnavailable for clients which are sending requests
@@ -470,7 +465,7 @@ func (m *ServerMux) ListenAndServe(certFile, keyFile string) (err error) {
 			}
 
 			// Execute registered handlers, update currentReqs to keep
-			// tracks of current requests currently processed by the server
+			// track of concurrent requests processing on the server
 			atomic.AddInt32(&m.currentReqs, 1)
 			m.handler.ServeHTTP(w, r)
 			atomic.AddInt32(&m.currentReqs, -1)

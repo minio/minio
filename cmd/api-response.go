@@ -321,8 +321,8 @@ func generateListObjectsV1Response(bucket, prefix, marker, delimiter string, max
 		}
 		content.Key = object.Name
 		content.LastModified = object.ModTime.UTC().Format(timeFormatAMZLong)
-		if object.MD5Sum != "" {
-			content.ETag = "\"" + object.MD5Sum + "\""
+		if object.ETag != "" {
+			content.ETag = "\"" + object.ETag + "\""
 		}
 		content.Size = object.Size
 		content.StorageClass = globalMinioDefaultStorageClass
@@ -370,8 +370,8 @@ func generateListObjectsV2Response(bucket, prefix, token, startAfter, delimiter 
 		}
 		content.Key = object.Name
 		content.LastModified = object.ModTime.UTC().Format(timeFormatAMZLong)
-		if object.MD5Sum != "" {
-			content.ETag = "\"" + object.MD5Sum + "\""
+		if object.ETag != "" {
+			content.ETag = "\"" + object.ETag + "\""
 		}
 		content.Size = object.Size
 		content.StorageClass = globalMinioDefaultStorageClass
