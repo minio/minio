@@ -307,7 +307,7 @@ func (e InvalidUploadID) Error() string {
 type InvalidPart struct{}
 
 func (e InvalidPart) Error() string {
-	return "One or more of the specified parts could not be found"
+	return "One or more of the specified parts could not be found. The part may not have been uploaded, or the specified entity tag may not match the part's entity tag."
 }
 
 // PartTooSmall - error if part size is less than 5MB.

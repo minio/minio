@@ -317,7 +317,7 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	},
 	ErrInvalidPart: {
 		Code:           "InvalidPart",
-		Description:    "One or more of the specified parts could not be found.",
+		Description:    "One or more of the specified parts could not be found.  The part may not have been uploaded, or the specified entity tag may not match the part's entity tag.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrInvalidPartOrder: {
