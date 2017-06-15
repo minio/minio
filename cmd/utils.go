@@ -30,6 +30,7 @@ import (
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
+	"github.com/minio/mc/pkg/console"
 	"github.com/pkg/profile"
 )
 
@@ -158,6 +159,24 @@ func startProfiler(profiler string) interface {
 // Global profiler to be used by service go-routine.
 var globalProfiler interface {
 	Stop()
+}
+
+// Prints a given message after a requested delay.
+func delayPrint(message string, delay time.Duration) chan bool {
+	printedCh := make(chan bool)
+	go func() {
+		defer close(printedCh)
+		select {
+		case printedCh <- false:
+			return
+		case <-time.After(delay):
+			console.Print(message)
+			// Sends true to indicate that we
+			// printed successfully to console.
+			printedCh <- true
+		}
+	}()
+	return printedCh
 }
 
 // dump the request into a string in JSON format.
