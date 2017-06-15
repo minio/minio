@@ -27,18 +27,17 @@ import (
 )
 
 // Config version
-const v18 = "18"
+const v19 = "19"
 
 var (
 	// serverConfig server config.
-	serverConfig   *serverConfigV18
+	serverConfig   *serverConfigV19
 	serverConfigMu sync.RWMutex
 )
 
-// serverConfigV18 server configuration version '18' which is like
-// version '17' except it adds support for "deliveryMode" parameter in
-// the AMQP notification target.
-type serverConfigV18 struct {
+// serverConfigV19 server configuration version '19' which is like
+// version '18' except it adds support for MQTT notifications.
+type serverConfigV19 struct {
 	sync.RWMutex
 	Version string `json:"version"`
 
@@ -55,7 +54,7 @@ type serverConfigV18 struct {
 }
 
 // GetVersion get current config version.
-func (s *serverConfigV18) GetVersion() string {
+func (s *serverConfigV19) GetVersion() string {
 	s.RLock()
 	defer s.RUnlock()
 
@@ -63,7 +62,7 @@ func (s *serverConfigV18) GetVersion() string {
 }
 
 // SetRegion set new region.
-func (s *serverConfigV18) SetRegion(region string) {
+func (s *serverConfigV19) SetRegion(region string) {
 	s.Lock()
 	defer s.Unlock()
 
@@ -71,7 +70,7 @@ func (s *serverConfigV18) SetRegion(region string) {
 }
 
 // GetRegion get current region.
-func (s *serverConfigV18) GetRegion() string {
+func (s *serverConfigV19) GetRegion() string {
 	s.RLock()
 	defer s.RUnlock()
 
@@ -79,7 +78,7 @@ func (s *serverConfigV18) GetRegion() string {
 }
 
 // SetCredentials set new credentials.
-func (s *serverConfigV18) SetCredential(creds credential) {
+func (s *serverConfigV19) SetCredential(creds credential) {
 	s.Lock()
 	defer s.Unlock()
 
@@ -88,7 +87,7 @@ func (s *serverConfigV18) SetCredential(creds credential) {
 }
 
 // GetCredentials get current credentials.
-func (s *serverConfigV18) GetCredential() credential {
+func (s *serverConfigV19) GetCredential() credential {
 	s.RLock()
 	defer s.RUnlock()
 
@@ -96,7 +95,7 @@ func (s *serverConfigV18) GetCredential() credential {
 }
 
 // SetBrowser set if browser is enabled.
-func (s *serverConfigV18) SetBrowser(b bool) {
+func (s *serverConfigV19) SetBrowser(b bool) {
 	s.Lock()
 	defer s.Unlock()
 
@@ -105,7 +104,7 @@ func (s *serverConfigV18) SetBrowser(b bool) {
 }
 
 // GetCredentials get current credentials.
-func (s *serverConfigV18) GetBrowser() bool {
+func (s *serverConfigV19) GetBrowser() bool {
 	s.RLock()
 	defer s.RUnlock()
 
@@ -113,7 +112,7 @@ func (s *serverConfigV18) GetBrowser() bool {
 }
 
 // Save config.
-func (s *serverConfigV18) Save() error {
+func (s *serverConfigV19) Save() error {
 	s.RLock()
 	defer s.RUnlock()
 
@@ -121,9 +120,9 @@ func (s *serverConfigV18) Save() error {
 	return quick.Save(getConfigFile(), s)
 }
 
-func newServerConfigV18() *serverConfigV18 {
-	srvCfg := &serverConfigV18{
-		Version:    v18,
+func newServerConfigV19() *serverConfigV19 {
+	srvCfg := &serverConfigV19{
+		Version:    v19,
 		Credential: mustGetNewCredential(),
 		Region:     globalMinioDefaultRegion,
 		Browser:    true,
@@ -137,6 +136,8 @@ func newServerConfigV18() *serverConfigV18 {
 	// Make sure to initialize notification configs.
 	srvCfg.Notify.AMQP = make(map[string]amqpNotify)
 	srvCfg.Notify.AMQP["1"] = amqpNotify{}
+	srvCfg.Notify.MQTT = make(map[string]mqttNotify)
+	srvCfg.Notify.MQTT["1"] = mqttNotify{}
 	srvCfg.Notify.ElasticSearch = make(map[string]elasticSearchNotify)
 	srvCfg.Notify.ElasticSearch["1"] = elasticSearchNotify{}
 	srvCfg.Notify.Redis = make(map[string]redisNotify)
@@ -159,7 +160,7 @@ func newServerConfigV18() *serverConfigV18 {
 // found, otherwise use default parameters
 func newConfig() error {
 	// Initialize server config.
-	srvCfg := newServerConfigV18()
+	srvCfg := newServerConfigV19()
 
 	// If env is set override the credentials from config file.
 	if globalIsEnvCreds {
@@ -237,8 +238,8 @@ func checkDupJSONKeys(json string) error {
 }
 
 // getValidConfig - returns valid server configuration
-func getValidConfig() (*serverConfigV18, error) {
-	srvCfg := &serverConfigV18{
+func getValidConfig() (*serverConfigV19, error) {
+	srvCfg := &serverConfigV19{
 		Region:  globalMinioDefaultRegion,
 		Browser: true,
 	}
@@ -248,8 +249,8 @@ func getValidConfig() (*serverConfigV18, error) {
 		return nil, err
 	}
 
-	if srvCfg.Version != v18 {
-		return nil, fmt.Errorf("configuration version mismatch. Expected: ‘%s’, Got: ‘%s’", v18, srvCfg.Version)
+	if srvCfg.Version != v19 {
+		return nil, fmt.Errorf("configuration version mismatch. Expected: ‘%s’, Got: ‘%s’", v19, srvCfg.Version)
 	}
 
 	// Load config file json and check for duplication json keys

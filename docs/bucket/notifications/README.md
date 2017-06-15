@@ -6,6 +6,7 @@ mechanism and can be published to the following targets:
 | Notification Targets|
 |:---|
 | [`AMQP`](#AMQP) |
+| [`MQTT`](#MQTT) |
 | [`Elasticsearch`](#Elasticsearch) |
 | [`Redis`](#Redis) |
 | [`NATS`](#NATS) |
@@ -132,6 +133,113 @@ You should receive the following event notification via RabbitMQ once the upload
 ```py
 python rabbit.py
 ‘{“Records”:[{“eventVersion”:”2.0",”eventSource”:”aws:s3",”awsRegion”:”us-east-1",”eventTime”:”2016–09–08T22:34:38.226Z”,”eventName”:”s3:ObjectCreated:Put”,”userIdentity”:{“principalId”:”minio”},”requestParameters”:{“sourceIPAddress”:”10.1.10.150:44576"},”responseElements”:{},”s3":{“s3SchemaVersion”:”1.0",”configurationId”:”Config”,”bucket”:{“name”:”images”,”ownerIdentity”:{“principalId”:”minio”},”arn”:”arn:aws:s3:::images”},”object”:{“key”:”myphoto.jpg”,”size”:200436,”sequencer”:”147279EAF9F40933"}}}],”level”:”info”,”msg”:””,”time”:”2016–09–08T15:34:38–07:00"}\n
+```
+
+<a name="MQTT"></a>
+## Publish Minio events MQTT
+
+Install an MQTT Broker from [here](https://mosquitto.org/).
+
+### Step 1: Add MQTT endpoint to Minio
+
+the default location of Minio server configuration file is ``~./minio/config.json``. The MQTT configuration is location in the `mqtt` key under the `notify` top-level key. Create a configuration key-value pair here for your MQTT instance. The key is a name for your MQTT endpoint, and the value is a collection of key-value parameters described in the table below.
+
+
+| Parameter | Type | Description |
+|:---|:---|:---|
+| `enable` | _bool_ | (Required) Is this server endpoint configuration active/enabled? |
+| `broker` | _string_ | (Required) MQTT server endpoint, e.g. `tcp://localhost:1883` |
+| `topic` | _string_ | (Required) Name of the MQTT topic to publish on, e.g. `minio` |
+| `qos` | _int_ | Set the Quality of Service Level |
+| `clientId` | _string_ | Unique ID for the MQTT broker to identify Minio |
+| `username` | _string_ | Username to connect to the MQTT server (if required) |
+| `password` | _string_ | Password to connect to the MQTT server (if required) |
+
+An example configuration for MQTT is shown below:
+
+```json
+"mqtt": {
+    "1": {
+        "enable": true,
+        "broker": "tcp://localhost:1883",
+        "topic": "minio",
+        "qos": 1,
+        "clientId": "minio",
+        "username": "",
+        "password": ""
+    }
+}
+```
+
+After updating the configuration file, restart the Minio sever to put the changes into effect. The server will print a line like `SQS ARNs: arn:minio:sqs:us-east-1:1:mqtt` at start-up if there were no errors.
+
+Minio supports any MQTT server that supports MQTT 3.1 or 3.1.1 and can connect to them over TCP, TLS, or a Websocket connection using ``tcp://``, ``tls://``, or ``ws://`` respectively as the scheme for the broker url. See the [Go Client](http://www.eclipse.org/paho/clients/golang/) documentation for more information.
+
+Note that, you can add as many MQTT server endpoint configurations as needed by providing an identifier (like "1" in the example above) for the MQTT instance and an object of per-server configuration parameters.
+
+
+### Step 2: Enable bucket notification using Minio client
+
+We will enable bucket event notification to trigger whenever a JPEG image is uploaded or deleted ``images`` bucket on ``myminio`` server. Here ARN value is ``arn:minio:sqs:us-east-1:1:mqtt``.
+
+```
+mc mb myminio/images
+mc events add  myminio/images arn:minio:sqs:us-east-1:1:mqtt --suffix .jpg
+mc events list myminio/images
+arn:minio:sqs:us-east-1:1:amqp s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
+```
+
+### Step 3: Test on MQTT
+
+The python program below waits on mqtt topic ``/minio`` and prints event notifications on the console. We use [paho-mqtt](https://pypi.python.org/pypi/paho-mqtt/) library to do this.
+
+```py
+#!/usr/bin/env python
+from __future__ import print_function
+import paho.mqtt.client as mqtt
+
+# The callback for when the client receives a CONNACK response from the server.
+def on_connect(client, userdata, flags, rc):
+    print("Connected with result code", rc)
+
+    # Subscribing in on_connect() means that if we lose the connection and
+    # reconnect then subscriptions will be renewed.
+    client.subscribe("/minio")
+
+# The callback for when a PUBLISH message is received from the server.
+def on_message(client, userdata, msg):
+    print(msg.payload)
+
+client = mqtt.Client()
+client.on_connect = on_connect
+client.on_message = on_message
+
+client.connect("localhost:1883", 1883, 60)
+
+# Blocking call that processes network traffic, dispatches callbacks and
+# handles reconnecting.
+# Other loop*() functions are available that give a threaded interface and a
+# manual interface.
+client.loop_forever()
+```
+
+Execute this example python program to watch for MQTT events on the console.
+
+```py
+python mqtt.py
+```
+
+Open another terminal and upload a JPEG image into ``images`` bucket.
+
+```
+mc cp myphoto.jpg myminio/images
+```
+
+You should receive the following event notification via MQTT once the upload completes.
+
+```py
+python mqtt.py
+{“Records”:[{“eventVersion”:”2.0",”eventSource”:”aws:s3",”awsRegion”:”us-east-1",”eventTime”:”2016–09–08T22:34:38.226Z”,”eventName”:”s3:ObjectCreated:Put”,”userIdentity”:{“principalId”:”minio”},”requestParameters”:{“sourceIPAddress”:”10.1.10.150:44576"},”responseElements”:{},”s3":{“s3SchemaVersion”:”1.0",”configurationId”:”Config”,”bucket”:{“name”:”images”,”ownerIdentity”:{“principalId”:”minio”},”arn”:”arn:aws:s3:::images”},”object”:{“key”:”myphoto.jpg”,”size”:200436,”sequencer”:”147279EAF9F40933"}}}],”level”:”info”,”msg”:””,”time”:”2016–09–08T15:34:38–07:00"}
 ```
 
 <a name="Elasticsearch"></a>

@@ -80,11 +80,19 @@ func TestServerConfig(t *testing.T) {
 	}
 
 	// Set new console logger.
-	// Set new Webhook notification id.
+	// Set new MySQL notification id.
 	serverConfig.Notify.SetMySQLByID("2", mySQLNotify{})
 	savedNotifyCfg6 := serverConfig.Notify.GetMySQLByID("2")
 	if !reflect.DeepEqual(savedNotifyCfg6, mySQLNotify{}) {
 		t.Errorf("Expecting Webhook config %#v found %#v", mySQLNotify{}, savedNotifyCfg6)
+	}
+
+	// Set new console logger.
+	// Set new MQTT notification id.
+	serverConfig.Notify.SetMQTTByID("2", mqttNotify{})
+	savedNotifyCfg7 := serverConfig.Notify.GetMQTTByID("2")
+	if !reflect.DeepEqual(savedNotifyCfg7, mqttNotify{}) {
+		t.Errorf("Expecting Webhook config %#v found %#v", mqttNotify{}, savedNotifyCfg7)
 	}
 
 	consoleLogger := NewConsoleLogger()
@@ -109,8 +117,8 @@ func TestServerConfig(t *testing.T) {
 	serverConfig.Logger.SetFile(fileLogger)
 
 	// Match version.
-	if serverConfig.GetVersion() != v18 {
-		t.Errorf("Expecting version %s found %s", serverConfig.GetVersion(), v18)
+	if serverConfig.GetVersion() != v19 {
+		t.Errorf("Expecting version %s found %s", serverConfig.GetVersion(), v19)
 	}
 
 	// Attempt to save.
@@ -223,7 +231,7 @@ func TestValidateConfig(t *testing.T) {
 
 	configPath := filepath.Join(rootPath, minioConfigFile)
 
-	v := v18
+	v := v19
 
 	testCases := []struct {
 		configData string
@@ -309,6 +317,9 @@ func TestValidateConfig(t *testing.T) {
 
 		// Test 28 - Test valid Format for Redis
 		{`{"version": "` + v + `", "credential": { "accessKey": "minio", "secretKey": "minio123" }, "region": "us-east-1", "browser": "on", "notify": { "redis": { "1": { "enable": true, "format": "namespace", "address": "example.com:80", "password": "xxx", "key": "key1" } }}}`, true},
+
+		// Test 29 - Test MQTT
+		{`{"version": "` + v + `", "credential": { "accessKey": "minio", "secretKey": "minio123" }, "region": "us-east-1", "browser": "on", "notify": { "mqtt": { "1": { "enable": true, "broker": "",  "topic": "", "qos": 0, "clientId": "", "username": "", "password": ""}}}}`, false},
 	}
 
 	for i, testCase := range testCases {
