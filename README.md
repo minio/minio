@@ -27,19 +27,12 @@ brew install minio/stable/minio
 minio server ~/Photos
 ```
 #### Note
-If you previously installed minio using `brew install minio` then uninstall minio as shown below 
+If you previously installed minio using `brew install minio` then reinstall minio from `minio/stable/minio` official repo. Homebrew builds are unstable due to golang 1.8 bugs.
 
 ```
 brew uninstall minio 
-```
-
-Then re-install the latest minio using:
-
-```
 brew install minio/stable/minio
 ```  
-
->`brew install minio` and `brew upgrade minio` will no longer install/upgrade the latest minio binaries on macOS. Upstream bugs in golang 1.8 broke Minio brew installer. Use the updated `minio/stable/minio` in your brew paths.
 
 ### Binary Download
 | Platform| Architecture | URL|
