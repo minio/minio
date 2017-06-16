@@ -1,6 +1,6 @@
 # Deploy Minio on DC/OS [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
 
-To deploy Minio on DC/OS, you can use a Universe package, or create a customized config file. We at Minio recently released an [official universe package](https://github.com/mesosphere/universe/tree/version-3.x/repo/packages/M/minio/0) to enable single click Minio deployment on a DC/OS cluster.
+To deploy Minio on DC/OS, you can use our [official universe package](https://github.com/mesosphere/universe/tree/version-3.x/repo/packages/M/minio/6).
 
 ## 1. Prerequisites
 
