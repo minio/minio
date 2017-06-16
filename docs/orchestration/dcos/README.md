@@ -4,19 +4,19 @@ To deploy Minio on DC/OS, you can use a Universe package, or create a customized
 
 ## 1. Prerequisites
 
-- DC/OS 1.8 or later running on your cluster. 
-- [Marathon-LB](https://dcos.io/docs/1.8/usage/service-discovery/marathon-lb/usage/) installed and running.
-- IP address of the public agent(s) where Marathon-LB or an available hostname configured to point to the public agent(s) where Marathon-LB is running.
+  - DC/OS 1.9 or later
+  - [Marathon-LB](https://dcos.io/docs/1.9/usage/service-discovery/marathon-lb/usage/) must be installed and running
+  - Identify [IP of the public agent](https://dcos.io/docs/1.9/administration/locate-public-agent/) where Marathon-LB or an available hostname configured to point to the public agent(s) where Marathon-LB is running.
+
 
 ## 2. Setting up Minio 
 
 You can install Minio Universe package using the DC/OS GUI or CLI. 
 
 ### Minio installation on DC/OS GUI 
+- Visit the DC/OS admin page, and click on Universe on the left menu bar. Then click on the Packages tab and search for Minio, click on the ```Install``` button on the right hand side.
 
-Visit the DC/OS admin page, and click on `Universe` on the left menu bar. Then click on the `Packages` tab and search for Minio. Once you see the package, click the `Install Package` button on the right hand side. Then, enter configuration values like the storage and service type you’d like to use with your Minio instance. Finally enter the public Marathon-LB IP address under `networking >> public-agent`, and click `Review and Install`.
-
-This completes the install process. Before you can access Minio server, get the access key and secret key from the Minio container logs. Click on `Services` and select Minio service in DC/OS admin page. Then go to the `logs` tab and copy the accesskey and secretkey.
+- Click on the `Install Package` button for the single-click default installation. This installs Minio server instance with factory defaults. You can reach your Minio server at `host:9000` where `host` is IP address or hostname of public-agent where Marathon-LB is installed. `minio` and `minio123` are the default access key and secret keys respectively.
 
 ### Minio installation on DC/OS CLI
 
@@ -35,5 +35,7 @@ $ dcos package uninstall minio
 ```
 
 ### Explore Further
+- [Advanced installation of Minio on DC/OS GUI](https://github.com/dcos/examples/blob/master/minio/1.9/README.md#minio-installation-using-gui)
 - [Minio Erasure Code QuickStart Guide](https://docs.minio.io/docs/minio-erasure-code-quickstart-guide)
 - [DC/OS Project](https://docs.mesosphere.com/)
+
