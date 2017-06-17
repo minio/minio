@@ -808,7 +808,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 
 			if fsMeta.Parts[partIdx].ETag != part.ETag {
 				fs.rwPool.Close(fsMetaPathMultipart)
-				return ObjectInfo{}, traceError(BadDigest{})
+				return ObjectInfo{}, traceError(InvalidPart{})
 			}
 
 			// All parts except the last part has to be atleast 5MB.

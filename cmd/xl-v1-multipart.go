@@ -936,7 +936,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 
 		// All parts should have same ETag as previously generated.
 		if currentXLMeta.Parts[partIdx].ETag != part.ETag {
-			return ObjectInfo{}, traceError(BadDigest{})
+			return ObjectInfo{}, traceError(InvalidPart{})
 		}
 
 		// All parts except the last part has to be atleast 5MB.
