@@ -190,3 +190,63 @@ func (a *azureObjects) AnonListObjects(bucket, prefix, marker, delimiter string,
 	result.Prefixes = listResp.BlobPrefixes
 	return result, nil
 }
+
+// AnonListObjectsV2 - List objects in V2 mode, anonymously
+func (a *azureObjects) AnonListObjectsV2(bucket, prefix, continuationToken string, fetchOwner bool, delimiter string, maxKeys int) (result ListObjectsV2Info, err error) {
+	params := storage.ListBlobsParameters{
+		Prefix:     prefix,
+		Marker:     continuationToken,
+		Delimiter:  delimiter,
+		MaxResults: uint(maxKeys),
+	}
+
+	q := azureListBlobsGetParameters(params)
+	q.Set("restype", "container")
+	q.Set("comp", "list")
+
+	url, err := url.Parse(a.client.GetBlobURL(bucket, ""))
+	if err != nil {
+		return result, azureToObjectError(traceError(err))
+	}
+	url.RawQuery = q.Encode()
+
+	resp, err := http.Get(url.String())
+	if err != nil {
+		return result, azureToObjectError(traceError(err))
+	}
+	defer resp.Body.Close()
+
+	var listResp storage.BlobListResponse
+
+	data, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return result, azureToObjectError(traceError(err))
+	}
+	err = xml.Unmarshal(data, &listResp)
+	if err != nil {
+		return result, azureToObjectError(traceError(err))
+	}
+
+	// If NextMarker is not empty, this means response is truncated and NextContinuationToken should be set
+	if listResp.NextMarker != "" {
+		result.IsTruncated = true
+		result.NextContinuationToken = listResp.NextMarker
+	}
+	for _, object := range listResp.Blobs {
+		t, e := time.Parse(time.RFC1123, object.Properties.LastModified)
+		if e != nil {
+			continue
+		}
+		result.Objects = append(result.Objects, ObjectInfo{
+			Bucket:          bucket,
+			Name:            object.Name,
+			ModTime:         t,
+			Size:            object.Properties.ContentLength,
+			ETag:            canonicalizeETag(object.Properties.Etag),
+			ContentType:     object.Properties.ContentType,
+			ContentEncoding: object.Properties.ContentEncoding,
+		})
+	}
+	result.Prefixes = listResp.BlobPrefixes
+	return result, nil
+}

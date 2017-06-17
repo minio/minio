@@ -352,9 +352,9 @@ func generateListObjectsV1Response(bucket, prefix, marker, delimiter string, max
 }
 
 // generates an ListObjectsV2 response for the said bucket with other enumerated options.
-func generateListObjectsV2Response(bucket, prefix, token, startAfter, delimiter string, fetchOwner bool, maxKeys int, resp ListObjectsInfo) ListObjectsV2Response {
+func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter, delimiter string, fetchOwner, isTruncated bool, maxKeys int, objects []ObjectInfo, prefixes []string) ListObjectsV2Response {
 	var contents []Object
-	var prefixes []CommonPrefix
+	var commonPrefixes []CommonPrefix
 	var owner = Owner{}
 	var data = ListObjectsV2Response{}
 
@@ -363,7 +363,7 @@ func generateListObjectsV2Response(bucket, prefix, token, startAfter, delimiter 
 		owner.DisplayName = globalMinioDefaultOwnerID
 	}
 
-	for _, object := range resp.Objects {
+	for _, object := range objects {
 		var content = Object{}
 		if object.Name == "" {
 			continue
@@ -387,14 +387,14 @@ func generateListObjectsV2Response(bucket, prefix, token, startAfter, delimiter 
 	data.Prefix = prefix
 	data.MaxKeys = maxKeys
 	data.ContinuationToken = token
-	data.NextContinuationToken = resp.NextMarker
-	data.IsTruncated = resp.IsTruncated
-	for _, prefix := range resp.Prefixes {
+	data.NextContinuationToken = nextToken
+	data.IsTruncated = isTruncated
+	for _, prefix := range prefixes {
 		var prefixItem = CommonPrefix{}
 		prefixItem.Prefix = prefix
-		prefixes = append(prefixes, prefixItem)
+		commonPrefixes = append(commonPrefixes, prefixItem)
 	}
-	data.CommonPrefixes = prefixes
+	data.CommonPrefixes = commonPrefixes
 	data.KeyCount = len(data.Contents) + len(data.CommonPrefixes)
 	return data
 }

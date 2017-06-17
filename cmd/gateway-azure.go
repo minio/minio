@@ -269,6 +269,41 @@ func (a *azureObjects) ListObjects(bucket, prefix, marker, delimiter string, max
 	return result, nil
 }
 
+// ListObjectsV2 - list all blobs in Azure bucket filtered by prefix
+func (a *azureObjects) ListObjectsV2(bucket, prefix, continuationToken string, fetchOwner bool, delimiter string, maxKeys int) (result ListObjectsV2Info, err error) {
+	resp, err := a.client.ListBlobs(bucket, storage.ListBlobsParameters{
+		Prefix:     prefix,
+		Marker:     continuationToken,
+		Delimiter:  delimiter,
+		MaxResults: uint(maxKeys),
+	})
+	if err != nil {
+		return result, azureToObjectError(traceError(err), bucket, prefix)
+	}
+	// If NextMarker is not empty, this means response is truncated and NextContinuationToken should be set
+	if resp.NextMarker != "" {
+		result.IsTruncated = true
+		result.NextContinuationToken = resp.NextMarker
+	}
+	for _, object := range resp.Blobs {
+		t, e := time.Parse(time.RFC1123, object.Properties.LastModified)
+		if e != nil {
+			continue
+		}
+		result.Objects = append(result.Objects, ObjectInfo{
+			Bucket:          bucket,
+			Name:            object.Name,
+			ModTime:         t,
+			Size:            object.Properties.ContentLength,
+			ETag:            canonicalizeETag(object.Properties.Etag),
+			ContentType:     object.Properties.ContentType,
+			ContentEncoding: object.Properties.ContentEncoding,
+		})
+	}
+	result.Prefixes = resp.BlobPrefixes
+	return result, nil
+}
+
 // GetObject - reads an object from azure. Supports additional
 // parameters like offset and length which are synonymous with
 // HTTP Range requests.
