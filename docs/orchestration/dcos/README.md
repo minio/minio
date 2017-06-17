@@ -18,6 +18,8 @@ You can install Minio Universe package using the DC/OS GUI or CLI.
 
 - Click on the `Install Package` button for the single-click default installation. This installs Minio server instance with factory defaults. You can reach your Minio server at `host:9000` where `host` is IP address or hostname of public-agent where Marathon-LB is installed. `minio` and `minio123` are the default access key and secret keys respectively.
 
+- For more information on advanced installation of Minio on DC/OS GUI, look [here](https://github.com/dcos/examples/blob/master/minio/1.9/README.md#minio-installation-using-gui).
+
 ### Minio installation on DC/OS CLI
 
 To install Minio package via CLI, type
@@ -35,7 +37,7 @@ $ dcos package uninstall minio
 ```
 
 ### Explore Further
-- [Advanced installation of Minio on DC/OS GUI](https://github.com/dcos/examples/blob/master/minio/1.9/README.md#minio-installation-using-gui)
+
 - [Minio Erasure Code QuickStart Guide](https://docs.minio.io/docs/minio-erasure-code-quickstart-guide)
 - [DC/OS Project](https://docs.mesosphere.com/)
 
