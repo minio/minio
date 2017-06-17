@@ -583,7 +583,7 @@ func GetPolicies(statements []Statement, bucketName string) map[string]BucketPol
 			r = r[:len(r)-1]
 			asterisk = "*"
 		}
-		objectPath := r[len(awsResourcePrefix+bucketName)+1 : len(r)]
+		objectPath := r[len(awsResourcePrefix+bucketName)+1:]
 		p := GetPolicy(statements, bucketName, objectPath)
 		policyRules[bucketName+"/"+objectPath+asterisk] = p
 	}

@@ -17,6 +17,8 @@ install:
   - go version
   - go env
   - go get -u github.com/golang/lint/golint
+  - go get -u github.com/go-ini/ini
+  - go get -u github.com/minio/go-homedir
   - go get -u github.com/remyoudompheng/go-misc/deadcode
   - go get -u github.com/gordonklaus/ineffassign
 

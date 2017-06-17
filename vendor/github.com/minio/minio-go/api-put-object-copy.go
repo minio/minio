@@ -25,10 +25,10 @@ import (
 // CopyObject - copy a source object into a new object with the provided name in the provided bucket
 func (c Client) CopyObject(bucketName string, objectName string, objectSource string, cpCond CopyConditions) error {
 	// Input validation.
-	if err := isValidBucketName(bucketName); err != nil {
+	if err := s3utils.CheckValidBucketName(bucketName); err != nil {
 		return err
 	}
-	if err := isValidObjectName(objectName); err != nil {
+	if err := s3utils.CheckValidObjectName(objectName); err != nil {
 		return err
 	}
 	if objectSource == "" {

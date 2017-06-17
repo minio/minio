@@ -161,6 +161,9 @@ func httpRespToErrorResponse(resp *http.Response, bucketName, objectName string)
 	if errResp.Region == "" {
 		errResp.Region = resp.Header.Get("x-amz-bucket-region")
 	}
+	if errResp.Code == "InvalidRegion" && errResp.Region != "" {
+		errResp.Message = fmt.Sprintf("Region does not match, expecting region '%s'.", errResp.Region)
+	}
 
 	// Save headers returned in the API XML error
 	errResp.Headers = resp.Header

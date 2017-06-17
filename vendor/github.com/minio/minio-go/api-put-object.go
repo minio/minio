@@ -17,7 +17,6 @@
 package minio
 
 import (
-	"bytes"
 	"crypto/md5"
 	"crypto/sha256"
 	"hash"
@@ -28,6 +27,8 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
+
+	"github.com/minio/minio-go/pkg/s3utils"
 )
 
 // toInt - converts go value to its integer representation based
@@ -109,14 +110,24 @@ func getReaderSize(reader io.Reader) (size int64, err error) {
 			case "|0", "|1":
 				return
 			}
-			size = st.Size()
+			var pos int64
+			pos, err = v.Seek(0, 1) // SeekCurrent.
+			if err != nil {
+				return -1, err
+			}
+			size = st.Size() - pos
 		case *Object:
 			var st ObjectInfo
 			st, err = v.Stat()
 			if err != nil {
 				return
 			}
-			size = st.Size
+			var pos int64
+			pos, err = v.Seek(0, 1) // SeekCurrent.
+			if err != nil {
+				return -1, err
+			}
+			size = st.Size - pos
 		}
 	}
 	// Returns the size here.
@@ -151,14 +162,17 @@ func (c Client) PutObject(bucketName, objectName string, reader io.Reader, conte
 // is used for Google Cloud Storage since Google's multipart API is not S3 compatible.
 func (c Client) putObjectNoChecksum(bucketName, objectName string, reader io.Reader, size int64, metaData map[string][]string, progress io.Reader) (n int64, err error) {
 	// Input validation.
-	if err := isValidBucketName(bucketName); err != nil {
+	if err := s3utils.CheckValidBucketName(bucketName); err != nil {
 		return 0, err
 	}
-	if err := isValidObjectName(objectName); err != nil {
+	if err := s3utils.CheckValidObjectName(objectName); err != nil {
 		return 0, err
 	}
-	if size > maxSinglePutObjectSize {
-		return 0, ErrEntityTooLarge(size, maxSinglePutObjectSize, bucketName, objectName)
+	if size > 0 {
+		readerAt, ok := reader.(io.ReaderAt)
+		if ok {
+			reader = io.NewSectionReader(readerAt, 0, size)
+		}
 	}
 
 	// Update progress reader appropriately to the latest offset as we
@@ -181,10 +195,10 @@ func (c Client) putObjectNoChecksum(bucketName, objectName string, reader io.Rea
 // This special function is used as a fallback when multipart upload fails.
 func (c Client) putObjectSingle(bucketName, objectName string, reader io.Reader, size int64, metaData map[string][]string, progress io.Reader) (n int64, err error) {
 	// Input validation.
-	if err := isValidBucketName(bucketName); err != nil {
+	if err := s3utils.CheckValidBucketName(bucketName); err != nil {
 		return 0, err
 	}
-	if err := isValidObjectName(objectName); err != nil {
+	if err := s3utils.CheckValidObjectName(objectName); err != nil {
 		return 0, err
 	}
 	if size > maxSinglePutObjectSize {
@@ -200,38 +214,29 @@ func (c Client) putObjectSingle(bucketName, objectName string, reader io.Reader,
 	hashAlgos := make(map[string]hash.Hash)
 	hashSums := make(map[string][]byte)
 	hashAlgos["md5"] = md5.New()
-	if c.signature.isV4() && !c.secure {
+	if c.overrideSignerType.IsV4() && !c.secure {
 		hashAlgos["sha256"] = sha256.New()
 	}
 
-	if size <= minPartSize {
-		// Initialize a new temporary buffer.
-		tmpBuffer := new(bytes.Buffer)
-		size, err = hashCopyN(hashAlgos, hashSums, tmpBuffer, reader, size)
-		reader = bytes.NewReader(tmpBuffer.Bytes())
-		tmpBuffer.Reset()
-	} else {
-		// Initialize a new temporary file.
-		var tmpFile *tempFile
-		tmpFile, err = newTempFile("single$-putobject-single")
-		if err != nil {
-			return 0, err
-		}
-		defer tmpFile.Close()
-		size, err = hashCopyN(hashAlgos, hashSums, tmpFile, reader, size)
-		if err != nil {
-			return 0, err
-		}
-		// Seek back to beginning of the temporary file.
-		if _, err = tmpFile.Seek(0, 0); err != nil {
-			return 0, err
-		}
-		reader = tmpFile
+	// Initialize a new temporary file.
+	tmpFile, err := newTempFile("single$-putobject-single")
+	if err != nil {
+		return 0, err
 	}
+	defer tmpFile.Close()
+
+	size, err = hashCopyN(hashAlgos, hashSums, tmpFile, reader, size)
 	// Return error if its not io.EOF.
 	if err != nil && err != io.EOF {
 		return 0, err
 	}
+
+	// Seek back to beginning of the temporary file.
+	if _, err = tmpFile.Seek(0, 0); err != nil {
+		return 0, err
+	}
+	reader = tmpFile
+
 	// Execute put object.
 	st, err := c.putObjectDo(bucketName, objectName, reader, hashSums["md5"], hashSums["sha256"], size, metaData)
 	if err != nil {
@@ -253,19 +258,11 @@ func (c Client) putObjectSingle(bucketName, objectName string, reader io.Reader,
 // NOTE: You must have WRITE permissions on a bucket to add an object to it.
 func (c Client) putObjectDo(bucketName, objectName string, reader io.Reader, md5Sum []byte, sha256Sum []byte, size int64, metaData map[string][]string) (ObjectInfo, error) {
 	// Input validation.
-	if err := isValidBucketName(bucketName); err != nil {
+	if err := s3utils.CheckValidBucketName(bucketName); err != nil {
 		return ObjectInfo{}, err
 	}
-	if err := isValidObjectName(objectName); err != nil {
+	if err := s3utils.CheckValidObjectName(objectName); err != nil {
 		return ObjectInfo{}, err
-	}
-
-	if size <= -1 {
-		return ObjectInfo{}, ErrEntityTooSmall(size, bucketName, objectName)
-	}
-
-	if size > maxSinglePutObjectSize {
-		return ObjectInfo{}, ErrEntityTooLarge(size, maxSinglePutObjectSize, bucketName, objectName)
 	}
 
 	// Set headers.

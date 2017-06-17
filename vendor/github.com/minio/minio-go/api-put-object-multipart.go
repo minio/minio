@@ -32,6 +32,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/minio/minio-go/pkg/s3utils"
 )
 
 // Comprehensive put object operation involving multipart resumable uploads.
@@ -74,10 +76,10 @@ func (c Client) putObjectMultipartStreamNoChecksum(bucketName, objectName string
 	reader io.Reader, size int64, metadata map[string][]string, progress io.Reader) (int64, error) {
 
 	// Input validation.
-	if err := isValidBucketName(bucketName); err != nil {
+	if err := s3utils.CheckValidBucketName(bucketName); err != nil {
 		return 0, err
 	}
-	if err := isValidObjectName(objectName); err != nil {
+	if err := s3utils.CheckValidObjectName(objectName); err != nil {
 		return 0, err
 	}
 
@@ -176,10 +178,10 @@ func (c Client) putObjectMultipartStreamNoChecksum(bucketName, objectName string
 // special case where size is unknown i.e '-1'.
 func (c Client) putObjectMultipartStream(bucketName, objectName string, reader io.Reader, size int64, metaData map[string][]string, progress io.Reader) (n int64, err error) {
 	// Input validation.
-	if err := isValidBucketName(bucketName); err != nil {
+	if err := s3utils.CheckValidBucketName(bucketName); err != nil {
 		return 0, err
 	}
-	if err := isValidObjectName(objectName); err != nil {
+	if err := s3utils.CheckValidObjectName(objectName); err != nil {
 		return 0, err
 	}
 
@@ -213,7 +215,7 @@ func (c Client) putObjectMultipartStream(bucketName, objectName string, reader i
 		hashSums := make(map[string][]byte)
 		hashAlgos := make(map[string]hash.Hash)
 		hashAlgos["md5"] = md5.New()
-		if c.signature.isV4() && !c.secure {
+		if c.overrideSignerType.IsV4() && !c.secure {
 			hashAlgos["sha256"] = sha256.New()
 		}
 
@@ -305,10 +307,10 @@ func (c Client) putObjectMultipartStream(bucketName, objectName string, reader i
 // initiateMultipartUpload - Initiates a multipart upload and returns an upload ID.
 func (c Client) initiateMultipartUpload(bucketName, objectName string, metaData map[string][]string) (initiateMultipartUploadResult, error) {
 	// Input validation.
-	if err := isValidBucketName(bucketName); err != nil {
+	if err := s3utils.CheckValidBucketName(bucketName); err != nil {
 		return initiateMultipartUploadResult{}, err
 	}
-	if err := isValidObjectName(objectName); err != nil {
+	if err := s3utils.CheckValidObjectName(objectName); err != nil {
 		return initiateMultipartUploadResult{}, err
 	}
 
@@ -359,10 +361,10 @@ func (c Client) initiateMultipartUpload(bucketName, objectName string, metaData 
 // uploadPart - Uploads a part in a multipart upload.
 func (c Client) uploadPart(bucketName, objectName, uploadID string, reader io.Reader, partNumber int, md5Sum, sha256Sum []byte, size int64) (ObjectPart, error) {
 	// Input validation.
-	if err := isValidBucketName(bucketName); err != nil {
+	if err := s3utils.CheckValidBucketName(bucketName); err != nil {
 		return ObjectPart{}, err
 	}
-	if err := isValidObjectName(objectName); err != nil {
+	if err := s3utils.CheckValidObjectName(objectName); err != nil {
 		return ObjectPart{}, err
 	}
 	if size > maxPartSize {
@@ -419,10 +421,10 @@ func (c Client) uploadPart(bucketName, objectName, uploadID string, reader io.Re
 // completeMultipartUpload - Completes a multipart upload by assembling previously uploaded parts.
 func (c Client) completeMultipartUpload(bucketName, objectName, uploadID string, complete completeMultipartUpload) (completeMultipartUploadResult, error) {
 	// Input validation.
-	if err := isValidBucketName(bucketName); err != nil {
+	if err := s3utils.CheckValidBucketName(bucketName); err != nil {
 		return completeMultipartUploadResult{}, err
 	}
-	if err := isValidObjectName(objectName); err != nil {
+	if err := s3utils.CheckValidObjectName(objectName); err != nil {
 		return completeMultipartUploadResult{}, err
 	}
 

@@ -23,6 +23,8 @@ import (
 	"io/ioutil"
 	"math"
 	"os"
+
+	"github.com/minio/minio-go/pkg/s3utils"
 )
 
 // Verify if reader is *os.File
@@ -168,10 +170,10 @@ func hashCopyN(hashAlgorithms map[string]hash.Hash, hashSums map[string][]byte, 
 // or initiate a new request to fetch a new upload id.
 func (c Client) newUploadID(bucketName, objectName string, metaData map[string][]string) (uploadID string, err error) {
 	// Input validation.
-	if err := isValidBucketName(bucketName); err != nil {
+	if err := s3utils.CheckValidBucketName(bucketName); err != nil {
 		return "", err
 	}
-	if err := isValidObjectName(objectName); err != nil {
+	if err := s3utils.CheckValidObjectName(objectName); err != nil {
 		return "", err
 	}
 
