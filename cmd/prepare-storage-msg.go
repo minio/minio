@@ -133,6 +133,14 @@ func printConfigErrMsg(storageDisks []StorageAPI, sErrs []error, fn printOnceFun
 // Generate a formatted message when cluster is misconfigured.
 func getConfigErrMsg(storageDisks []StorageAPI, sErrs []error) string {
 	msg := colorBlue("\nDetected configuration inconsistencies in the cluster. Please fix following servers.")
+	return msg + combineDiskErrs(storageDisks, sErrs)
+}
+
+// Combines each disk errors in a newline formatted string.
+// this is a helper function in printing messages across
+// all disks.
+func combineDiskErrs(storageDisks []StorageAPI, sErrs []error) string {
+	var msg string
 	for i, disk := range storageDisks {
 		if disk == nil {
 			continue
