@@ -29,7 +29,7 @@ func toGCSPublicURL(bucket, object string) string {
 }
 
 // AnonPutObject creates a new object anonymously with the incoming data,
-func (l *gcsGateway) AnonPutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (ObjectInfo, error) {
+func (l *gcsGateway) AnonPutObject(bucket, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (ObjectInfo, error) {
 
 	return ObjectInfo{}, NotImplemented{}
 }

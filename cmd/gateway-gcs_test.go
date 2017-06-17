@@ -18,41 +18,6 @@ package cmd
 
 import "testing"
 
-func TestEscape(t *testing.T) {
-	testCases := []struct {
-		Value        string
-		EscapedValue string
-	}{
-		{
-			Value:        "test-test",
-			EscapedValue: "test%2Dtest",
-		},
-		{
-			Value:        "test/test",
-			EscapedValue: "test%2Ftest",
-		},
-		{
-			Value:        "test%test",
-			EscapedValue: "test%25test",
-		},
-		{
-			Value:        "%%%////+++",
-			EscapedValue: "%25%25%25%2F%2F%2F%2F+++",
-		},
-	}
-
-	for i, testCase := range testCases {
-		if escape(testCase.Value) != testCase.EscapedValue {
-			t.Errorf("Test %d: Expected %s, got %s", i+1, testCase.EscapedValue, escape(testCase.Value))
-		}
-
-		if unescape(testCase.EscapedValue) != testCase.Value {
-			t.Errorf("Test %d: Expected %s, got %s", i+1, testCase.Value, unescape(testCase.EscapedValue))
-		}
-	}
-
-}
-
 func TestToGCSPageToken(t *testing.T) {
 	testCases := []struct {
 		Name  string
@@ -122,7 +87,6 @@ func TestValidGCSProjectID(t *testing.T) {
 		{"projectid1414", true},
 	}
 
-	//
 	for i, testCase := range testCases {
 		if isValidGCSProjectID(testCase.ProjectID) != testCase.Valid {
 			t.Errorf("Test %d: Expected %v, got %v", i+1, isValidGCSProjectID(testCase.ProjectID), testCase.Valid)
@@ -148,12 +112,12 @@ func TestIsGCSPrefix(t *testing.T) {
 		},
 		// GCS prefix without a trailing slash
 		{
-			prefix:      ZZZZMinioPrefix,
+			prefix:      gcsMinioPath,
 			expectedRes: true,
 		},
 		// GCS prefix with a trailing slash
 		{
-			prefix:      ZZZZMinioPrefix + "/",
+			prefix:      gcsMinioPath + "/",
 			expectedRes: true,
 		},
 	}
@@ -194,5 +158,26 @@ func TestIsGCSMarker(t *testing.T) {
 			t.Errorf("Test %d: marker is %s, expected %v but got %v",
 				i+1, tc.marker, tc.expected, actual)
 		}
+	}
+}
+
+// Test for gcsMultipartMetaName.
+func TestGCSMultipartMetaName(t *testing.T) {
+	uploadID := "a"
+	expected := pathJoin(gcsMinioMultipartPath, uploadID, gcsMinioMultipartMeta)
+	got := gcsMultipartMetaName(uploadID)
+	if expected != got {
+		t.Errorf("expected: %s, got: %s", expected, got)
+	}
+}
+
+// Test for gcsMultipartDataName.
+func TestGCSMultipartDataName(t *testing.T) {
+	uploadID := "a"
+	etag := "b"
+	expected := pathJoin(gcsMinioMultipartPath, uploadID, etag)
+	got := gcsMultipartDataName(uploadID, etag)
+	if expected != got {
+		t.Errorf("expected: %s, got: %s", expected, got)
 	}
 }
