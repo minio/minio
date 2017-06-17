@@ -72,10 +72,9 @@ type ConnMux struct {
 
 // NewConnMux - creates a new ConnMux instance
 func NewConnMux(c net.Conn) *ConnMux {
-	br := bufio.NewReader(c)
 	return &ConnMux{
 		Conn:   c,
-		peeker: bufio.NewReader(br),
+		peeker: bufio.NewReader(c),
 	}
 }
 
@@ -116,12 +115,9 @@ func (c *ConnMux) PeekProtocol() (string, error) {
 	return protocolTLS, nil
 }
 
-// Read reads from the tcp session for data sent by
-// the client, additionally sets deadline for 15 secs
-// after each successful read. Deadline cancels and
-// returns error if the client does not send any
-// data in 15 secs. Also keeps track of the total
-// bytes received from the client.
+// Read() reads from the tcp session for data sent by
+// the client, it also keeps track of the total bytes
+// received from the client.
 func (c *ConnMux) Read(b []byte) (n int, err error) {
 	// Update total incoming number of bytes.
 	defer func() {
@@ -132,11 +128,6 @@ func (c *ConnMux) Read(b []byte) (n int, err error) {
 	if err != nil {
 		return n, err
 	}
-
-	// Read deadline was already set previously, set again
-	// after a successful read operation for future read
-	// operations.
-	c.Conn.SetReadDeadline(UTCNow().Add(defaultTCPReadTimeout))
 
 	// Success.
 	return n, nil
@@ -213,7 +204,7 @@ type ListenerMuxAcceptRes struct {
 const defaultKeepAliveTimeout = 10 * time.Second // 10 seconds.
 
 // Timeout to close and return error to the client when not sending any data.
-const defaultTCPReadTimeout = 15 * time.Second // 15 seconds.
+const defaultTCPReadTimeout = 30 * time.Second // 30 seconds.
 
 // newListenerMux listens and wraps accepted connections with tls after protocol peeking
 func newListenerMux(listener net.Listener, config *tls.Config) *ListenerMux {
@@ -241,7 +232,7 @@ func newListenerMux(listener net.Listener, config *tls.Config) *ListenerMux {
 				continue
 			}
 
-			// Enable Read timeout
+			// Enable Read timeout when the connection is just accepted
 			conn.SetReadDeadline(UTCNow().Add(defaultTCPReadTimeout))
 
 			// Enable keep alive for each connection.
