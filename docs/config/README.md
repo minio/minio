@@ -50,6 +50,13 @@ minio server ~/Photos
 |:---|:---|:---|
 |``region``| _string_ | `region` describes the physical location of the server. By default it is set to `us-east-1`, which is same as AWS3's default region. If you are unsure leave it to default.|
 
+Example:
+
+```sh
+export MINIO_REGION="my_region"
+minio server ~/Photos
+```
+
 #### Browser
 |Field|Type|Description|
 |:---|:---|:---|
