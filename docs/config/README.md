@@ -48,7 +48,7 @@ minio server ~/Photos
 #### Region
 |Field|Type|Description|
 |:---|:---|:---|
-|``region``| _string_ | `region` describes the physical location of the server. By default it is set to `us-east-1`, which is same as AWS3's default region. You may override this field with `MINIO_REGION` environment variable. If you are unsure leave it to default.|
+|``region``| _string_ | `region` describes the physical location of the server. By default it is set to `us-east-1`, which is same as AWS S3's default region. You may override this field with `MINIO_REGION` environment variable. If you are unsure leave it unset.|
 
 Example:
 
