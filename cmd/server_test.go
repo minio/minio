@@ -1619,7 +1619,8 @@ func (s *TestSuiteCommon) TestListObjectsHandler(c *C) {
 	c.Assert(err, IsNil)
 
 	c.Assert(strings.Contains(string(getContent), "<Key>bar</Key>"), Equals, true)
-	c.Assert(strings.Contains(string(getContent), "<Owner><ID>minio</ID><DisplayName>minio</DisplayName></Owner>"), Equals, true)
+	c.Assert(strings.Contains(string(getContent), fmt.Sprintf("<Owner><ID>%s</ID><DisplayName></DisplayName></Owner>",
+		globalMinioDefaultOwnerID)), Equals, true)
 
 }
 
