@@ -58,6 +58,9 @@ ENVIRONMENT VARIABLES:
   BROWSER:
      MINIO_BROWSER: To disable web browser access, set this value to "off".
 
+  REGION:
+     MINIO_REGION: To set custom region. By default it is "us-east-1".
+
 EXAMPLES:
   1. Start minio server on "/home/shared" directory.
       $ {{.HelpName}} /home/shared
