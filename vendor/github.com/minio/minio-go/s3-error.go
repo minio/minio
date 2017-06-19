@@ -25,7 +25,7 @@ var s3ErrorResponseMap = map[string]string{
 	"EntityTooLarge":                    "Your proposed upload exceeds the maximum allowed object size.",
 	"IncompleteBody":                    "You did not provide the number of bytes specified by the Content-Length HTTP header.",
 	"InternalError":                     "We encountered an internal error, please try again.",
-	"InvalidAccessKeyID":                "The access key ID you provided does not exist in our records.",
+	"InvalidAccessKeyId":                "The access key ID you provided does not exist in our records.",
 	"InvalidBucketName":                 "The specified bucket is not valid.",
 	"InvalidDigest":                     "The Content-Md5 you specified is not valid.",
 	"InvalidRange":                      "The requested range is not satisfiable",

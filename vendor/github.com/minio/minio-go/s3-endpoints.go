@@ -33,6 +33,7 @@ var awsS3EndpointMap = map[string]string{
 	"ap-northeast-1": "s3-ap-northeast-1.amazonaws.com",
 	"ap-northeast-2": "s3-ap-northeast-2.amazonaws.com",
 	"sa-east-1":      "s3-sa-east-1.amazonaws.com",
+	"us-gov-west-1":  "s3-us-gov-west-1.amazonaws.com",
 	"cn-north-1":     "s3.cn-north-1.amazonaws.com.cn",
 }
 

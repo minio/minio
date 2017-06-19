@@ -89,6 +89,15 @@ func NewCBCSecureMaterials(key Key) (*CBCSecureMaterials, error) {
 
 }
 
+// Close implements closes the internal stream.
+func (s *CBCSecureMaterials) Close() error {
+	closer, ok := s.stream.(io.Closer)
+	if ok {
+		return closer.Close()
+	}
+	return nil
+}
+
 // SetupEncryptMode - tells CBC that we are going to encrypt data
 func (s *CBCSecureMaterials) SetupEncryptMode(stream io.Reader) error {
 	// Set mode to encrypt

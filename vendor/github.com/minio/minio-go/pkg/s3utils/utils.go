@@ -19,6 +19,7 @@ package s3utils
 import (
 	"bytes"
 	"encoding/hex"
+	"errors"
 	"net"
 	"net/url"
 	"regexp"
@@ -84,8 +85,27 @@ func IsAmazonEndpoint(endpointURL url.URL) bool {
 	if IsAmazonChinaEndpoint(endpointURL) {
 		return true
 	}
-
+	if IsAmazonGovCloudEndpoint(endpointURL) {
+		return true
+	}
 	return endpointURL.Host == "s3.amazonaws.com"
+}
+
+// IsAmazonGovCloudEndpoint - Match if it is exactly Amazon S3 GovCloud endpoint.
+func IsAmazonGovCloudEndpoint(endpointURL url.URL) bool {
+	if endpointURL == sentinelURL {
+		return false
+	}
+	return (endpointURL.Host == "s3-us-gov-west-1.amazonaws.com" ||
+		IsAmazonFIPSGovCloudEndpoint(endpointURL))
+}
+
+// IsAmazonFIPSGovCloudEndpoint - Match if it is exactly Amazon S3 FIPS GovCloud endpoint.
+func IsAmazonFIPSGovCloudEndpoint(endpointURL url.URL) bool {
+	if endpointURL == sentinelURL {
+		return false
+	}
+	return endpointURL.Host == "s3-fips-us-gov-west-1.amazonaws.com"
 }
 
 // IsAmazonChinaEndpoint - Match if it is exactly Amazon S3 China endpoint.
@@ -180,4 +200,75 @@ func EncodePath(pathName string) string {
 		}
 	}
 	return encodedPathname
+}
+
+// We support '.' with bucket names but we fallback to using path
+// style requests instead for such buckets.
+var (
+	validBucketName       = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9\.\-]{1,61}[A-Za-z0-9]$`)
+	validBucketNameStrict = regexp.MustCompile(`^[a-z0-9][a-z0-9\.\-]{1,61}[a-z0-9]$`)
+	ipAddress             = regexp.MustCompile(`^(\d+\.){3}\d+$`)
+)
+
+// Common checker for both stricter and basic validation.
+func checkBucketNameCommon(bucketName string, strict bool) (err error) {
+	if strings.TrimSpace(bucketName) == "" {
+		return errors.New("Bucket name cannot be empty")
+	}
+	if len(bucketName) < 3 {
+		return errors.New("Bucket name cannot be smaller than 3 characters")
+	}
+	if len(bucketName) > 63 {
+		return errors.New("Bucket name cannot be greater than 63 characters")
+	}
+	if ipAddress.MatchString(bucketName) {
+		return errors.New("Bucket name cannot be an ip address")
+	}
+	if strings.Contains(bucketName, "..") {
+		return errors.New("Bucket name contains invalid characters")
+	}
+	if strict {
+		if !validBucketNameStrict.MatchString(bucketName) {
+			err = errors.New("Bucket name contains invalid characters")
+		}
+		return err
+	}
+	if !validBucketName.MatchString(bucketName) {
+		err = errors.New("Bucket name contains invalid characters")
+	}
+	return err
+}
+
+// CheckValidBucketName - checks if we have a valid input bucket name.
+// This is a non stricter version.
+// - http://docs.aws.amazon.com/AmazonS3/latest/dev/UsingBucket.html
+func CheckValidBucketName(bucketName string) (err error) {
+	return checkBucketNameCommon(bucketName, false)
+}
+
+// CheckValidBucketNameStrict - checks if we have a valid input bucket name.
+// This is a stricter version.
+func CheckValidBucketNameStrict(bucketName string) (err error) {
+	return checkBucketNameCommon(bucketName, true)
+}
+
+// CheckValidObjectNamePrefix - checks if we have a valid input object name prefix.
+//   - http://docs.aws.amazon.com/AmazonS3/latest/dev/UsingMetadata.html
+func CheckValidObjectNamePrefix(objectName string) error {
+	if len(objectName) > 1024 {
+		return errors.New("Object name cannot be greater than 1024 characters")
+	}
+	if !utf8.ValidString(objectName) {
+		return errors.New("Object name with non UTF-8 strings are not supported")
+	}
+	return nil
+}
+
+// CheckValidObjectName - checks if we have a valid input object name.
+//   - http://docs.aws.amazon.com/AmazonS3/latest/dev/UsingMetadata.html
+func CheckValidObjectName(objectName string) error {
+	if strings.TrimSpace(objectName) == "" {
+		return errors.New("Object name cannot be empty")
+	}
+	return CheckValidObjectNamePrefix(objectName)
 }

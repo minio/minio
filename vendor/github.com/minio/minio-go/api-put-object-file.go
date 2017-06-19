@@ -35,10 +35,10 @@ import (
 // FPutObject - Create an object in a bucket, with contents from file at filePath.
 func (c Client) FPutObject(bucketName, objectName, filePath, contentType string) (n int64, err error) {
 	// Input validation.
-	if err := isValidBucketName(bucketName); err != nil {
+	if err := s3utils.CheckValidBucketName(bucketName); err != nil {
 		return 0, err
 	}
-	if err := isValidObjectName(objectName); err != nil {
+	if err := s3utils.CheckValidObjectName(objectName); err != nil {
 		return 0, err
 	}
 
@@ -77,17 +77,8 @@ func (c Client) FPutObject(bucketName, objectName, filePath, contentType string)
 	objMetadata["Content-Type"] = []string{contentType}
 
 	// NOTE: Google Cloud Storage multipart Put is not compatible with Amazon S3 APIs.
-	// Current implementation will only upload a maximum of 5GiB to Google Cloud Storage servers.
 	if s3utils.IsGoogleEndpoint(c.endpointURL) {
-		if fileSize > int64(maxSinglePutObjectSize) {
-			return 0, ErrorResponse{
-				Code:       "NotImplemented",
-				Message:    fmt.Sprintf("Invalid Content-Length %d for file uploads to Google Cloud Storage.", fileSize),
-				Key:        objectName,
-				BucketName: bucketName,
-			}
-		}
-		// Do not compute MD5 for Google Cloud Storage. Uploads up to 5GiB in size.
+		// Do not compute MD5 for Google Cloud Storage.
 		return c.putObjectNoChecksum(bucketName, objectName, fileReader, fileSize, objMetadata, nil)
 	}
 
@@ -125,10 +116,10 @@ func (c Client) FPutObject(bucketName, objectName, filePath, contentType string)
 // specific sections and not having to create temporary files.
 func (c Client) putObjectMultipartFromFile(bucketName, objectName string, fileReader io.ReaderAt, fileSize int64, metaData map[string][]string, progress io.Reader) (int64, error) {
 	// Input validation.
-	if err := isValidBucketName(bucketName); err != nil {
+	if err := s3utils.CheckValidBucketName(bucketName); err != nil {
 		return 0, err
 	}
-	if err := isValidObjectName(objectName); err != nil {
+	if err := s3utils.CheckValidObjectName(objectName); err != nil {
 		return 0, err
 	}
 
@@ -182,7 +173,7 @@ func (c Client) putObjectMultipartFromFile(bucketName, objectName string, fileRe
 				hashAlgos := make(map[string]hash.Hash)
 				hashSums := make(map[string][]byte)
 				hashAlgos["md5"] = md5.New()
-				if c.signature.isV4() && !c.secure {
+				if c.overrideSignerType.IsV4() && !c.secure {
 					hashAlgos["sha256"] = sha256.New()
 				}
 
