@@ -22,9 +22,11 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hash"
 	"io"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -207,6 +209,14 @@ const googleStorageEndpoint = "storage.googleapis.com"
 // newGCSGateway returns gcs gatewaylayer
 func newGCSGateway(projectID string) (GatewayLayer, error) {
 	ctx := context.Background()
+
+	if !isValidGCSProjectID(projectID) {
+		fatalIf(errGCSInvalidProjectID, "Unable to initialize GCS gateway")
+	}
+
+	if os.Getenv("MINIO_ACCESS_KEY") == "" || os.Getenv("MINIO_SECRET_KEY") == "" {
+		return nil, errors.New("No credentials set")
+	}
 
 	// Initialize a GCS client.
 	client, err := storage.NewClient(ctx)
