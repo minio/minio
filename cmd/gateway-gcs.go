@@ -292,8 +292,48 @@ func (l *gcsGateway) ListBuckets() ([]BucketInfo, error) {
 	return b, nil
 }
 
-// DeleteBucket delete a bucket on GCS
+// DeleteBucket delete a bucket on GCS.
 func (l *gcsGateway) DeleteBucket(bucket string) error {
+	itObject := l.client.Bucket(bucket).Objects(l.ctx, &storage.Query{Delimiter: slashSeparator, Versions: false})
+	// We list the bucket and if we find any objects we return BucketNotEmpty error. If we
+	// find only "minio.sys.temp/" then we remove it before deleting the bucket.
+	gcsMinioPathFound := false
+	nonGCSMinioPathFound := false
+	for {
+		objAttrs, err := itObject.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return gcsToObjectError(traceError(err))
+		}
+		if isGCSPrefix(objAttrs.Prefix) {
+			gcsMinioPathFound = true
+			continue
+		}
+		nonGCSMinioPathFound = true
+		break
+	}
+	if nonGCSMinioPathFound {
+		return gcsToObjectError(traceError(BucketNotEmpty{}))
+	}
+	if gcsMinioPathFound {
+		// Remove minio.sys.temp before deleting the bucket.
+		itObject = l.client.Bucket(bucket).Objects(l.ctx, &storage.Query{Versions: false})
+		for {
+			objAttrs, err := itObject.Next()
+			if err == iterator.Done {
+				break
+			}
+			if err != nil {
+				return gcsToObjectError(traceError(err))
+			}
+			err = l.client.Bucket(bucket).Object(objAttrs.Name).Delete(l.ctx)
+			if err != nil {
+				return gcsToObjectError(traceError(err))
+			}
+		}
+	}
 	err := l.client.Bucket(bucket).Delete(l.ctx)
 	return gcsToObjectError(traceError(err), bucket)
 }
