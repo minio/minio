@@ -64,7 +64,7 @@ type lockServer struct {
 }
 
 // Start lock maintenance from all lock servers.
-func startLockMaintainence(lockServers []*lockServer) {
+func startLockMaintenance(lockServers []*lockServer) {
 	for _, locker := range lockServers {
 		// Start loop for stale lock maintenance
 		go func(lk *lockServer) {
@@ -90,7 +90,7 @@ func startLockMaintainence(lockServers []*lockServer) {
 // Register distributed NS lock handlers.
 func registerDistNSLockRouter(mux *router.Router, endpoints EndpointList) error {
 	// Start lock maintenance from all lock servers.
-	startLockMaintainence(globalLockServers)
+	startLockMaintenance(globalLockServers)
 
 	// Register initialized lock servers to their respective rpc endpoints.
 	return registerStorageLockers(mux, globalLockServers)
