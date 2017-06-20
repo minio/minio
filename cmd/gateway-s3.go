@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"errors"
 	"io"
 	"net/http"
 	"path"
@@ -120,9 +119,6 @@ func newS3Gateway(host string) (GatewayLayer, error) {
 	}
 
 	creds := serverConfig.GetCredential()
-	if !creds.IsValid() && !globalIsEnvCreds {
-		return nil, errors.New("S3 backend account and secret keys should be set through ENVs")
-	}
 
 	// Initialize minio client object.
 	client, err := minio.NewCore(endpoint, creds.AccessKey, creds.SecretKey, secure)

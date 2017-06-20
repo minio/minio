@@ -20,7 +20,6 @@ import (
 	"crypto/md5"
 	"encoding/base64"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"hash"
 	"io"
@@ -169,10 +168,6 @@ func newAzureLayer(host string) (GatewayLayer, error) {
 	}
 
 	creds := serverConfig.GetCredential()
-	if !creds.IsValid() && !globalIsEnvCreds {
-		return nil, errors.New("Azure backend account and secret keys should be set through ENVs")
-	}
-
 	c, err := storage.NewClient(creds.AccessKey, creds.SecretKey, endpoint, globalAzureAPIVersion, secure)
 	if err != nil {
 		return &azureObjects{}, err

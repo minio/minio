@@ -290,6 +290,11 @@ func gatewayMain(ctx *cli.Context, backendType gatewayBackend) {
 	// Handle common env vars.
 	handleCommonEnvVars()
 
+	// Validate if we have access, secret set through environment.
+	if !globalIsEnvCreds {
+		fatalIf(fmt.Errorf("Access and Secret keys should be set through ENVs for backend [%s]", backendType), "")
+	}
+
 	// Create certs path.
 	fatalIf(createConfigDir(), "Unable to create configuration directories.")
 
