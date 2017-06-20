@@ -24,14 +24,14 @@ import (
 )
 
 // AnonPutObject creates a new object anonymously with the incoming data,
-func (l *s3Objects) AnonPutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (ObjectInfo, error) {
+func (l *s3Objects) AnonPutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (objInfo ObjectInfo, e error) {
 	var sha256sumBytes []byte
 
 	var err error
 	if sha256sum != "" {
 		sha256sumBytes, err = hex.DecodeString(sha256sum)
 		if err != nil {
-			return ObjectInfo{}, s3ToObjectError(traceError(err), bucket, object)
+			return objInfo, s3ToObjectError(traceError(err), bucket, object)
 		}
 	}
 
@@ -40,14 +40,14 @@ func (l *s3Objects) AnonPutObject(bucket string, object string, size int64, data
 	if md5sum != "" {
 		md5sumBytes, err = hex.DecodeString(md5sum)
 		if err != nil {
-			return ObjectInfo{}, s3ToObjectError(traceError(err), bucket, object)
+			return objInfo, s3ToObjectError(traceError(err), bucket, object)
 		}
 		delete(metadata, "etag")
 	}
 
 	oi, err := l.anonClient.PutObject(bucket, object, size, data, md5sumBytes, sha256sumBytes, toMinioClientMetadata(metadata))
 	if err != nil {
-		return ObjectInfo{}, s3ToObjectError(traceError(err), bucket, object)
+		return objInfo, s3ToObjectError(traceError(err), bucket, object)
 	}
 
 	return fromMinioClientObjectInfo(bucket, oi), nil
@@ -74,47 +74,47 @@ func (l *s3Objects) AnonGetObject(bucket string, key string, startOffset int64, 
 }
 
 // AnonGetObjectInfo - Get object info anonymously
-func (l *s3Objects) AnonGetObjectInfo(bucket string, object string) (ObjectInfo, error) {
+func (l *s3Objects) AnonGetObjectInfo(bucket string, object string) (objInfo ObjectInfo, e error) {
 	r := minio.NewHeadReqHeaders()
 	oi, err := l.anonClient.StatObject(bucket, object, r)
 	if err != nil {
-		return ObjectInfo{}, s3ToObjectError(traceError(err), bucket, object)
+		return objInfo, s3ToObjectError(traceError(err), bucket, object)
 	}
 
 	return fromMinioClientObjectInfo(bucket, oi), nil
 }
 
 // AnonListObjects - List objects anonymously
-func (l *s3Objects) AnonListObjects(bucket string, prefix string, marker string, delimiter string, maxKeys int) (ListObjectsInfo, error) {
+func (l *s3Objects) AnonListObjects(bucket string, prefix string, marker string, delimiter string, maxKeys int) (loi ListObjectsInfo, e error) {
 	result, err := l.anonClient.ListObjects(bucket, prefix, marker, delimiter, maxKeys)
 	if err != nil {
-		return ListObjectsInfo{}, s3ToObjectError(traceError(err), bucket)
+		return loi, s3ToObjectError(traceError(err), bucket)
 	}
 
 	return fromMinioClientListBucketResult(bucket, result), nil
 }
 
 // AnonListObjectsV2 - List objects in V2 mode, anonymously
-func (l *s3Objects) AnonListObjectsV2(bucket, prefix, continuationToken string, fetchOwner bool, delimiter string, maxKeys int) (ListObjectsV2Info, error) {
+func (l *s3Objects) AnonListObjectsV2(bucket, prefix, continuationToken string, fetchOwner bool, delimiter string, maxKeys int) (loi ListObjectsV2Info, e error) {
 	result, err := l.anonClient.ListObjectsV2(bucket, prefix, continuationToken, fetchOwner, delimiter, maxKeys)
 	if err != nil {
-		return ListObjectsV2Info{}, s3ToObjectError(traceError(err), bucket)
+		return loi, s3ToObjectError(traceError(err), bucket)
 	}
 
 	return fromMinioClientListBucketV2Result(bucket, result), nil
 }
 
 // AnonGetBucketInfo - Get bucket metadata anonymously.
-func (l *s3Objects) AnonGetBucketInfo(bucket string) (BucketInfo, error) {
+func (l *s3Objects) AnonGetBucketInfo(bucket string) (bi BucketInfo, e error) {
 	if exists, err := l.anonClient.BucketExists(bucket); err != nil {
-		return BucketInfo{}, s3ToObjectError(traceError(err), bucket)
+		return bi, s3ToObjectError(traceError(err), bucket)
 	} else if !exists {
-		return BucketInfo{}, traceError(BucketNotFound{Bucket: bucket})
+		return bi, traceError(BucketNotFound{Bucket: bucket})
 	}
 
 	buckets, err := l.anonClient.ListBuckets()
 	if err != nil {
-		return BucketInfo{}, s3ToObjectError(traceError(err), bucket)
+		return bi, s3ToObjectError(traceError(err), bucket)
 	}
 
 	for _, bi := range buckets {
@@ -128,5 +128,5 @@ func (l *s3Objects) AnonGetBucketInfo(bucket string) (BucketInfo, error) {
 		}, nil
 	}
 
-	return BucketInfo{}, traceError(BucketNotFound{Bucket: bucket})
+	return bi, traceError(BucketNotFound{Bucket: bucket})
 }

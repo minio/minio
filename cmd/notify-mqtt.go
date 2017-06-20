@@ -50,9 +50,9 @@ type mqttConn struct {
 	Client MQTT.Client
 }
 
-func dialMQTT(mqttL mqttNotify) (mqttConn, error) {
+func dialMQTT(mqttL mqttNotify) (mc mqttConn, e error) {
 	if !mqttL.Enable {
-		return mqttConn{}, errNotifyNotEnabled
+		return mc, errNotifyNotEnabled
 	}
 	connOpts := &MQTT.ClientOptions{
 		ClientID:             mqttL.ClientID,
@@ -66,7 +66,7 @@ func dialMQTT(mqttL mqttNotify) (mqttConn, error) {
 	connOpts.AddBroker(mqttL.Broker)
 	client := MQTT.NewClient(connOpts)
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
-		return mqttConn{}, token.Error()
+		return mc, token.Error()
 	}
 	return mqttConn{Client: client, params: mqttL}, nil
 }

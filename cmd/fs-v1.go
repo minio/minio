@@ -214,10 +214,10 @@ func (fs fsObjects) MakeBucketWithLocation(bucket, location string) error {
 }
 
 // GetBucketInfo - fetch bucket metadata info.
-func (fs fsObjects) GetBucketInfo(bucket string) (BucketInfo, error) {
+func (fs fsObjects) GetBucketInfo(bucket string) (bi BucketInfo, e error) {
 	st, err := fs.statBucketDir(bucket)
 	if err != nil {
-		return BucketInfo{}, toObjectErr(err, bucket)
+		return bi, toObjectErr(err, bucket)
 	}
 
 	// As osStat() doesn't carry other than ModTime(), use ModTime() as CreatedTime.
@@ -304,15 +304,15 @@ func (fs fsObjects) DeleteBucket(bucket string) error {
 // CopyObject - copy object source object to destination object.
 // if source object and destination object are same we only
 // update metadata.
-func (fs fsObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string, metadata map[string]string) (ObjectInfo, error) {
+func (fs fsObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string, metadata map[string]string) (oi ObjectInfo, e error) {
 	if _, err := fs.statBucketDir(srcBucket); err != nil {
-		return ObjectInfo{}, toObjectErr(err, srcBucket)
+		return oi, toObjectErr(err, srcBucket)
 	}
 
 	// Stat the file to get file size.
 	fi, err := fsStatFile(pathJoin(fs.fsPath, srcBucket, srcObject))
 	if err != nil {
-		return ObjectInfo{}, toObjectErr(err, srcBucket, srcObject)
+		return oi, toObjectErr(err, srcBucket, srcObject)
 	}
 
 	// Check if this request is only metadata update.
@@ -322,7 +322,7 @@ func (fs fsObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string
 		var wlk *lock.LockedFile
 		wlk, err = fs.rwPool.Write(fsMetaPath)
 		if err != nil {
-			return ObjectInfo{}, toObjectErr(traceError(err), srcBucket, srcObject)
+			return oi, toObjectErr(traceError(err), srcBucket, srcObject)
 		}
 		// This close will allow for locks to be synchronized on `fs.json`.
 		defer wlk.Close()
@@ -331,7 +331,7 @@ func (fs fsObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string
 		fsMeta := newFSMetaV1()
 		fsMeta.Meta = metadata
 		if _, err = fsMeta.WriteTo(wlk); err != nil {
-			return ObjectInfo{}, toObjectErr(err, srcBucket, srcObject)
+			return oi, toObjectErr(err, srcBucket, srcObject)
 		}
 
 		// Return the new object info.
@@ -356,7 +356,7 @@ func (fs fsObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string
 
 	objInfo, err := fs.PutObject(dstBucket, dstObject, length, pipeReader, metadata, "")
 	if err != nil {
-		return ObjectInfo{}, toObjectErr(err, dstBucket, dstObject)
+		return oi, toObjectErr(err, dstBucket, dstObject)
 	}
 
 	// Explicitly close the reader.
@@ -431,7 +431,7 @@ func (fs fsObjects) GetObject(bucket, object string, offset int64, length int64,
 }
 
 // getObjectInfo - wrapper for reading object metadata and constructs ObjectInfo.
-func (fs fsObjects) getObjectInfo(bucket, object string) (ObjectInfo, error) {
+func (fs fsObjects) getObjectInfo(bucket, object string) (oi ObjectInfo, e error) {
 	fsMeta := fsMetaV1{}
 	fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fsMetaJSONFile)
 
@@ -446,33 +446,33 @@ func (fs fsObjects) getObjectInfo(bucket, object string) (ObjectInfo, error) {
 			// PutObject() transaction, if we arrive at such
 			// a situation we just ignore and continue.
 			if errorCause(rerr) != io.EOF {
-				return ObjectInfo{}, toObjectErr(rerr, bucket, object)
+				return oi, toObjectErr(rerr, bucket, object)
 			}
 		}
 	}
 
 	// Ignore if `fs.json` is not available, this is true for pre-existing data.
 	if err != nil && err != errFileNotFound {
-		return ObjectInfo{}, toObjectErr(traceError(err), bucket, object)
+		return oi, toObjectErr(traceError(err), bucket, object)
 	}
 
 	// Stat the file to get file size.
 	fi, err := fsStatFile(pathJoin(fs.fsPath, bucket, object))
 	if err != nil {
-		return ObjectInfo{}, toObjectErr(err, bucket, object)
+		return oi, toObjectErr(err, bucket, object)
 	}
 
 	return fsMeta.ToObjectInfo(bucket, object, fi), nil
 }
 
 // GetObjectInfo - reads object metadata and replies back ObjectInfo.
-func (fs fsObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
+func (fs fsObjects) GetObjectInfo(bucket, object string) (oi ObjectInfo, e error) {
 	if err := checkGetObjArgs(bucket, object); err != nil {
-		return ObjectInfo{}, err
+		return oi, err
 	}
 
 	if _, err := fs.statBucketDir(bucket); err != nil {
-		return ObjectInfo{}, toObjectErr(err, bucket)
+		return oi, toObjectErr(err, bucket)
 	}
 
 	return fs.getObjectInfo(bucket, object)
@@ -759,18 +759,18 @@ func (fs fsObjects) getObjectETag(bucket, entry string) (string, error) {
 
 // ListObjects - list all objects at prefix upto maxKeys., optionally delimited by '/'. Maintains the list pool
 // state for future re-entrant list requests.
-func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
+func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, e error) {
 	if err := checkListObjsArgs(bucket, prefix, marker, delimiter, fs); err != nil {
-		return ListObjectsInfo{}, err
+		return loi, err
 	}
 
 	if _, err := fs.statBucketDir(bucket); err != nil {
-		return ListObjectsInfo{}, err
+		return loi, err
 	}
 
 	// With max keys of zero we have reached eof, return right here.
 	if maxKeys == 0 {
-		return ListObjectsInfo{}, nil
+		return loi, nil
 	}
 
 	// For delimiter and prefix as '/' we do not list anything at all
@@ -779,7 +779,7 @@ func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 	// as '/' we don't have any entries, since all the keys are
 	// of form 'keyName/...'
 	if delimiter == slashSeparator && prefix == slashSeparator {
-		return ListObjectsInfo{}, nil
+		return loi, nil
 	}
 
 	// Over flowing count - reset to maxObjectList.
@@ -860,13 +860,13 @@ func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 		if walkResult.err != nil {
 			// File not found is a valid case.
 			if errorCause(walkResult.err) == errFileNotFound {
-				return ListObjectsInfo{}, nil
+				return loi, nil
 			}
-			return ListObjectsInfo{}, toObjectErr(walkResult.err, bucket, prefix)
+			return loi, toObjectErr(walkResult.err, bucket, prefix)
 		}
 		objInfo, err := entryToObjectInfo(walkResult.entry)
 		if err != nil {
-			return ListObjectsInfo{}, nil
+			return loi, nil
 		}
 		nextMarker = objInfo.Name
 		objInfos = append(objInfos, objInfo)
@@ -908,8 +908,8 @@ func (fs fsObjects) HealBucket(bucket string) error {
 }
 
 // ListObjectsHeal - list all objects to be healed. Valid only for XL
-func (fs fsObjects) ListObjectsHeal(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
-	return ListObjectsInfo{}, traceError(NotImplemented{})
+func (fs fsObjects) ListObjectsHeal(bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, e error) {
+	return loi, traceError(NotImplemented{})
 }
 
 // ListBucketsHeal - list all buckets to be healed. Valid only for XL
@@ -918,6 +918,6 @@ func (fs fsObjects) ListBucketsHeal() ([]BucketInfo, error) {
 }
 
 func (fs fsObjects) ListUploadsHeal(bucket, prefix, marker, uploadIDMarker,
-	delimiter string, maxUploads int) (ListMultipartsInfo, error) {
-	return ListMultipartsInfo{}, traceError(NotImplemented{})
+	delimiter string, maxUploads int) (lmi ListMultipartsInfo, e error) {
+	return lmi, traceError(NotImplemented{})
 }
