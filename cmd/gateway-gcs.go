@@ -321,7 +321,7 @@ func (l *gcsGateway) DeleteBucket(bucket string) error {
 	}
 	if gcsMinioPathFound {
 		// Remove minio.sys.temp before deleting the bucket.
-		itObject = l.client.Bucket(bucket).Objects(l.ctx, &storage.Query{Versions: false})
+		itObject = l.client.Bucket(bucket).Objects(l.ctx, &storage.Query{Versions: false, Prefix: gcsMinioPath + slashSeparator})
 		for {
 			objAttrs, err := itObject.Next()
 			if err == iterator.Done {
