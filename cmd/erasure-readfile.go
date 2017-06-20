@@ -22,6 +22,7 @@ import (
 	"sync"
 
 	"github.com/klauspost/reedsolomon"
+	"github.com/minio/minio/pkg/bitrot"
 	"github.com/minio/minio/pkg/bpool"
 )
 
@@ -184,7 +185,7 @@ func parallelRead(volume, path string, readDisks, orderedDisks []StorageAPI, enB
 // detection by verifying checksum of individual block's checksum.
 func erasureReadFile(writer io.Writer, disks []StorageAPI, volume, path string,
 	offset, length, totalLength, blockSize int64, dataBlocks, parityBlocks int,
-	checkSums []string, algo HashAlgo, pool *bpool.BytePool) (int64, error) {
+	checkSums []string, algo bitrot.Algorithm, pool *bpool.BytePool) (int64, error) {
 
 	// Offset and length cannot be negative.
 	if offset < 0 || length < 0 {

@@ -19,6 +19,7 @@ package cmd
 import (
 	"sync"
 
+	"github.com/minio/minio/pkg/bitrot"
 	"github.com/minio/minio/pkg/disk"
 )
 
@@ -123,7 +124,7 @@ func (d *naughtyDisk) ReadFile(volume string, path string, offset int64, buf []b
 }
 
 func (d *naughtyDisk) ReadFileWithVerify(volume, path string, offset int64,
-	buf []byte, algo HashAlgo, expectedHash string) (n int64, err error) {
+	buf []byte, algo bitrot.Algorithm, expectedHash string) (n int64, err error) {
 
 	if err := d.calcError(); err != nil {
 		return 0, err

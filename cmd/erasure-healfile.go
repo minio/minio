@@ -17,16 +17,17 @@
 package cmd
 
 import "encoding/hex"
+import "github.com/minio/minio/pkg/bitrot"
 
 // Heals the erasure coded file. reedsolomon.Reconstruct() is used to reconstruct the missing parts.
 func erasureHealFile(latestDisks []StorageAPI, outDatedDisks []StorageAPI, volume, path, healBucket, healPath string,
-	size, blockSize int64, dataBlocks, parityBlocks int, algo HashAlgo) (checkSums []string, err error) {
+	size, blockSize int64, dataBlocks, parityBlocks int, algo bitrot.Algorithm) (checkSums []string, err error) {
 
 	var offset int64
 	remainingSize := size
 
 	// Hash for bitrot protection.
-	hashWriters := newHashWriters(len(outDatedDisks), bitRotAlgo)
+	hashWriters := newHashWriters(len(outDatedDisks), defaultBitRotAlgorithm)
 
 	for remainingSize > 0 {
 		curBlockSize := blockSize

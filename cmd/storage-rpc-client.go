@@ -24,6 +24,7 @@ import (
 	"path"
 	"strings"
 
+	"github.com/minio/minio/pkg/bitrot"
 	"github.com/minio/minio/pkg/disk"
 )
 
@@ -263,7 +264,7 @@ func (n *networkStorage) ReadFile(volume string, path string, offset int64, buff
 
 // ReadFileWithVerify - reads a file at remote path and fills the buffer.
 func (n *networkStorage) ReadFileWithVerify(volume string, path string, offset int64,
-	buffer []byte, algo HashAlgo, expectedHash string) (m int64, err error) {
+	buffer []byte, algo bitrot.Algorithm, expectedHash string) (m int64, err error) {
 
 	defer func() {
 		if r := recover(); r != nil {

@@ -24,12 +24,38 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/minio/minio/pkg/bitrot"
+	sha256 "github.com/minio/sha256-simd"
+	"golang.org/x/crypto/blake2b"
 )
 
 const (
 	// Erasure related constants.
 	erasureAlgorithmKlauspost = "klauspost/reedsolomon/vandermonde"
 )
+
+// register bitrot algorithms
+func init() {
+	newSHA256 := func([]byte, bitrot.Mode) bitrot.Hash {
+		return sha256.New()
+	}
+	newBLAKE2b := func([]byte, bitrot.Mode) bitrot.Hash {
+		b2, _ := blake2b.New512(nil)
+		return b2
+	}
+	/*
+		newPoly1305 := func(key []byte) bitrot.Hash {
+			var pKey [32]byte
+			copy(pKey[:], key) // this is safe because bitrot.New will check the len of key
+			return poly1305.New(pKey)
+		}
+	*/
+
+	bitrot.RegisterAlgorithm(bitrot.SHA256, newSHA256)
+	bitrot.RegisterAlgorithm(bitrot.BLAKE2b512, newBLAKE2b)
+	//bitrot.RegisterAlgorithm(bitrot.Poly1305, newPoly1305)
+}
 
 // objectPartInfo Info of each part kept in the multipart metadata
 // file after CompleteMultipartUpload() is called.
@@ -49,42 +75,21 @@ func (t byObjectPartNumber) Less(i, j int) bool { return t[i].Number < t[j].Numb
 
 // checkSumInfo - carries checksums of individual scattered parts per disk.
 type checkSumInfo struct {
-	Name      string   `json:"name"`
-	Algorithm HashAlgo `json:"algorithm"`
-	Hash      string   `json:"hash"`
-}
-
-// HashAlgo - represents a supported hashing algorithm for bitrot
-// verification.
-type HashAlgo string
-
-const (
-	// HashBlake2b represents the Blake 2b hashing algorithm
-	HashBlake2b HashAlgo = "blake2b"
-	// HashSha256 represents the SHA256 hashing algorithm
-	HashSha256 HashAlgo = "sha256"
-)
-
-// isValidHashAlgo - function that checks if the hash algorithm is
-// valid (known and used).
-func isValidHashAlgo(algo HashAlgo) bool {
-	switch algo {
-	case HashSha256, HashBlake2b:
-		return true
-	default:
-		return false
-	}
+	Name      string `json:"name"`
+	Algorithm string `json:"algorithm"`
+	Hash      string `json:"hash"`
+	Key       string `json:"key"`
 }
 
 // Constant indicates current bit-rot algo used when creating objects.
 // Depending on the architecture we are choosing a different checksum.
-var bitRotAlgo = getDefaultBitRotAlgo()
+var defaultBitRotAlgorithm = getDefaultBitRotAlgo()
 
 // Get the default bit-rot algo depending on the architecture.
 // Currently this function defaults to "blake2b" as the preferred
 // checksum algorithm on all architectures except ARM64. On ARM64
 // we use sha256 (optimized using sha2 instructions of ARM NEON chip).
-func getDefaultBitRotAlgo() HashAlgo {
+func getDefaultBitRotAlgo() bitrot.Algorithm {
 	switch runtime.GOARCH {
 	case "arm64":
 		// As a special case for ARM64 we use an optimized
@@ -93,17 +98,17 @@ func getDefaultBitRotAlgo() HashAlgo {
 		// This would also allows erasure coded writes
 		// on ARM64 servers to be on-par with their
 		// counter-part X86_64 servers.
-		return HashSha256
+		return bitrot.SHA256
 	default:
 		// Default for all other architectures we use blake2b.
-		return HashBlake2b
+		return bitrot.BLAKE2b512
 	}
 }
 
 // erasureInfo - carries erasure coding related information, block
 // distribution and checksums.
 type erasureInfo struct {
-	Algorithm    HashAlgo       `json:"algorithm"`
+	Algorithm    string         `json:"algorithm"`
 	DataBlocks   int            `json:"data"`
 	ParityBlocks int            `json:"parity"`
 	BlockSize    int64          `json:"blockSize"`
@@ -131,7 +136,7 @@ func (e erasureInfo) GetCheckSumInfo(partName string) (ckSum checkSumInfo) {
 			return sum
 		}
 	}
-	return checkSumInfo{Algorithm: bitRotAlgo}
+	return checkSumInfo{Algorithm: defaultBitRotAlgorithm.String()}
 }
 
 // statInfo - carries stat information of the object.
