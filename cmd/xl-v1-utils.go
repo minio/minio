@@ -161,7 +161,7 @@ func parseXLErasureInfo(xlMetaBuf []byte) erasureInfo {
 	}
 	erasure.Distribution = distribution
 
-	erasure.Algorithm = HashAlgo(erasureResult.Get("algorithm").String())
+	erasure.Algorithm = erasureResult.Get("algorithm").String()
 	erasure.DataBlocks = int(erasureResult.Get("data").Int())
 	erasure.ParityBlocks = int(erasureResult.Get("parity").Int())
 	erasure.BlockSize = erasureResult.Get("blockSize").Int()
@@ -172,7 +172,7 @@ func parseXLErasureInfo(xlMetaBuf []byte) erasureInfo {
 	for i, checkSumResult := range checkSumsResult {
 		checkSum := checkSumInfo{}
 		checkSum.Name = checkSumResult.Get("name").String()
-		checkSum.Algorithm = HashAlgo(checkSumResult.Get("algorithm").String())
+		checkSum.Algorithm = checkSumResult.Get("algorithm").String()
 		checkSum.Hash = checkSumResult.Get("hash").String()
 		checkSums[i] = checkSum
 	}

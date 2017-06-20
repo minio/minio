@@ -27,6 +27,7 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/minio/minio/pkg/bitrot"
 	"golang.org/x/crypto/blake2b"
 )
 
@@ -397,7 +398,7 @@ func (s *TestRPCStorageSuite) testRPCStorageFileOps(t *testing.T) {
 		}
 		buf2 := make([]byte, 2)
 		n, err = storageDisk.ReadFileWithVerify("myvol", "file1", 1,
-			buf2, HashBlake2b, blakeHash(string(buf)))
+			buf2, bitrot.BLAKE2b512, blakeHash(string(buf)))
 		if err != nil {
 			t.Error("Error in ReadFileWithVerify", err)
 		}

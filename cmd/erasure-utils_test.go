@@ -26,7 +26,7 @@ import (
 // Test validates the number hash writers returned.
 func TestNewHashWriters(t *testing.T) {
 	diskNum := 8
-	hashWriters := newHashWriters(diskNum, bitRotAlgo)
+	hashWriters := newHashWriters(diskNum, defaultBitRotAlgorithm)
 	if len(hashWriters) != diskNum {
 		t.Errorf("Expected %d hashWriters, but instead got %d", diskNum, len(hashWriters))
 	}
