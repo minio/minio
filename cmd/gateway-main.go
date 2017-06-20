@@ -105,17 +105,17 @@ PROJECTID:
 
 ENVIRONMENT VARIABLES:
   ACCESS:
-     MINIO_ACCESS_KEY: Username or access key of S3 storage.
-     MINIO_SECRET_KEY: Password or secret key of S3 storage.
+     MINIO_ACCESS_KEY: Username or access key of GCS.
+     MINIO_SECRET_KEY: Password or secret key of GCS.
 
   BROWSER:
      MINIO_BROWSER: To disable web browser access, set this value to "off".
 
 EXAMPLES:
-  1. Start minio gateway server for AWS S3 backend.
+  1. Start minio gateway server for GCS backend.
       $ export MINIO_ACCESS_KEY=accesskey
       $ export MINIO_SECRET_KEY=secretkey
-      $ {{.HelpName}} minio-kubernetes-gcs
+      $ {{.HelpName}} mygcsprojectid
 
 `
 
