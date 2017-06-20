@@ -41,11 +41,11 @@ const (
 	// gcsMinioMeta is used for multiparts. We have "minio.sys.temp" prefix so that
 	// listing on the GCS lists this entry in the end. Also in the gateway
 	// ListObjects we filter out this entry.
-	gcsMinioPath = "minio.sys.temp"
+	gcsMinioPath = "minio.sys.temp/"
 	// Path where multipart objects are saved.
 	// If we change the backend format we will use a different url path like /multipart/v2
 	// but we will not migrate old data.
-	gcsMinioMultipartPathV1 = gcsMinioPath + "/multipart/v1"
+	gcsMinioMultipartPathV1 = gcsMinioPath + "multipart/v1"
 	// Multipart meta file.
 	gcsMinioMultipartMeta = "gcs.json"
 	// gcs.json version number
@@ -61,11 +61,6 @@ type gcsMultipartMetaV1 struct {
 	Version string `json:"version"` // Version number
 	Bucket  string `json:"bucket"`  // Bucket name
 	Object  string `json:"object"`  // Object name
-}
-
-// Check if object prefix is "ZZZZ_Minio".
-func isGCSPrefix(prefix string) bool {
-	return strings.TrimSuffix(prefix, slashSeparator) == gcsMinioPath
 }
 
 // Returns name of the multipart meta object.
@@ -309,7 +304,7 @@ func (l *gcsGateway) DeleteBucket(bucket string) error {
 		if err != nil {
 			return gcsToObjectError(traceError(err))
 		}
-		if isGCSPrefix(objAttrs.Prefix) {
+		if objAttrs.Prefix == gcsMinioPath {
 			gcsMinioPathFound = true
 			continue
 		}
@@ -321,7 +316,7 @@ func (l *gcsGateway) DeleteBucket(bucket string) error {
 	}
 	if gcsMinioPathFound {
 		// Remove minio.sys.temp before deleting the bucket.
-		itObject = l.client.Bucket(bucket).Objects(l.ctx, &storage.Query{Versions: false, Prefix: gcsMinioPath + slashSeparator})
+		itObject = l.client.Bucket(bucket).Objects(l.ctx, &storage.Query{Versions: false, Prefix: gcsMinioPath})
 		for {
 			objAttrs, err := itObject.Next()
 			if err == iterator.Done {
@@ -404,7 +399,7 @@ func (l *gcsGateway) ListObjects(bucket string, prefix string, marker string, de
 
 			attrs, _ := it.Next()
 			if attrs == nil {
-			} else if isGCSPrefix(attrs.Prefix) {
+			} else if attrs.Prefix == gcsMinioPath {
 				break
 			}
 
@@ -421,7 +416,7 @@ func (l *gcsGateway) ListObjects(bucket string, prefix string, marker string, de
 
 		nextMarker = toGCSPageToken(attrs.Name)
 
-		if isGCSPrefix(attrs.Prefix) {
+		if attrs.Prefix == gcsMinioPath {
 			// we don't return our metadata prefix
 			continue
 		} else if attrs.Prefix != "" {
