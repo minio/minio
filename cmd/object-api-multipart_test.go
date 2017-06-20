@@ -1061,7 +1061,7 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 		{
 			MaxUploads:     10,
 			IsTruncated:    false,
-			Prefix:         globalMinioDefaultOwnerID,
+			Prefix:         "minio",
 			UploadIDMarker: uploadIDs[4],
 			Uploads: []uploadMetadata{
 				{

@@ -77,7 +77,7 @@ func TestLogin(t *testing.T) {
 		// Invalid password length
 		{
 			args: LoginRPCArgs{
-				Username: globalMinioDefaultOwnerID,
+				Username: "minio",
 				Password: "aaa",
 				Version:  Version,
 			},

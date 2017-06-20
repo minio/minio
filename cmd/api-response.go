@@ -288,8 +288,6 @@ func generateListBucketsResponse(buckets []BucketInfo) ListBucketsResponse {
 	var owner = Owner{}
 
 	owner.ID = globalMinioDefaultOwnerID
-	owner.DisplayName = globalMinioDefaultOwnerID
-
 	for _, bucket := range buckets {
 		var listbucket = Bucket{}
 		listbucket.Name = bucket.Name
@@ -312,8 +310,6 @@ func generateListObjectsV1Response(bucket, prefix, marker, delimiter string, max
 	var data = ListObjectsResponse{}
 
 	owner.ID = globalMinioDefaultOwnerID
-	owner.DisplayName = globalMinioDefaultOwnerID
-
 	for _, object := range resp.Objects {
 		var content = Object{}
 		if object.Name == "" {
@@ -360,7 +356,6 @@ func generateListObjectsV2Response(bucket, prefix, token, nextToken, startAfter,
 
 	if fetchOwner {
 		owner.ID = globalMinioDefaultOwnerID
-		owner.DisplayName = globalMinioDefaultOwnerID
 	}
 
 	for _, object := range objects {
@@ -443,9 +438,7 @@ func generateListPartsResponse(partsInfo ListPartsInfo) ListPartsResponse {
 	listPartsResponse.UploadID = partsInfo.UploadID
 	listPartsResponse.StorageClass = globalMinioDefaultStorageClass
 	listPartsResponse.Initiator.ID = globalMinioDefaultOwnerID
-	listPartsResponse.Initiator.DisplayName = globalMinioDefaultOwnerID
 	listPartsResponse.Owner.ID = globalMinioDefaultOwnerID
-	listPartsResponse.Owner.DisplayName = globalMinioDefaultOwnerID
 
 	listPartsResponse.MaxParts = partsInfo.MaxParts
 	listPartsResponse.PartNumberMarker = partsInfo.PartNumberMarker
