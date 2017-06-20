@@ -153,15 +153,26 @@ func azureToObjectError(err error, params ...string) error {
 	return e
 }
 
-// Inits azure blob storage client and returns azureObjects.
-func newAzureLayer(endPoint string, account, key string, secure bool) (GatewayLayer, error) {
-	if endPoint == "" {
-		endPoint = storage.DefaultBaseURL
+// Inits azure blob storage client and returns AzureObjects.
+func newAzureLayer(host string) (GatewayLayer, error) {
+	var err error
+	var endpoint = storage.DefaultBaseURL
+	var secure = true
+
+	// If user provided some parameters
+	if host != "" {
+		endpoint, secure, err = parseGatewayEndpoint(host)
+		if err != nil {
+			return nil, err
+		}
 	}
-	c, err := storage.NewClient(account, key, endPoint, globalAzureAPIVersion, secure)
+
+	creds := serverConfig.GetCredential()
+	c, err := storage.NewClient(creds.AccessKey, creds.SecretKey, endpoint, globalAzureAPIVersion, secure)
 	if err != nil {
 		return &azureObjects{}, err
 	}
+
 	return &azureObjects{
 		client: c.GetBlobService(),
 		metaInfo: azureMultipartMetaInfo{
@@ -174,7 +185,6 @@ func newAzureLayer(endPoint string, account, key string, secure bool) (GatewayLa
 // Shutdown - save any gateway metadata to disk
 // if necessary and reload upon next restart.
 func (a *azureObjects) Shutdown() error {
-	// TODO
 	return nil
 }
 
@@ -651,31 +661,6 @@ func (a *azureObjects) CompleteMultipartUpload(bucket, object, uploadID string, 
 	}
 	a.metaInfo.del(uploadID)
 	return a.GetObjectInfo(bucket, object)
-}
-
-func anonErrToObjectErr(statusCode int, params ...string) error {
-	bucket := ""
-	object := ""
-	if len(params) >= 1 {
-		bucket = params[0]
-	}
-	if len(params) == 2 {
-		object = params[1]
-	}
-
-	switch statusCode {
-	case http.StatusNotFound:
-		if object != "" {
-			return ObjectNotFound{bucket, object}
-		}
-		return BucketNotFound{Bucket: bucket}
-	case http.StatusBadRequest:
-		if object != "" {
-			return ObjectNameInvalid{bucket, object}
-		}
-		return BucketNameInvalid{Bucket: bucket}
-	}
-	return errUnexpected
 }
 
 // Copied from github.com/Azure/azure-sdk-for-go/storage/blob.go

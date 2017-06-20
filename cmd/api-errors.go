@@ -115,6 +115,7 @@ const (
 	ErrBucketAlreadyOwnedByYou
 	ErrInvalidDuration
 	ErrNotSupported
+	ErrBucketAlreadyExists
 	// Add new error codes here.
 
 	// Bucket notification related errors.
@@ -353,6 +354,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	ErrBucketNotEmpty: {
 		Code:           "BucketNotEmpty",
 		Description:    "The bucket you tried to delete is not empty",
+		HTTPStatusCode: http.StatusConflict,
+	},
+	ErrBucketAlreadyExists: {
+		Code:           "BucketAlreadyExists",
+		Description:    "The requested bucket name is not available. The bucket namespace is shared by all users of the system. Please select a different name and try again.",
 		HTTPStatusCode: http.StatusConflict,
 	},
 	ErrAllAccessDisabled: {
@@ -663,6 +669,8 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrStorageFull
 	case BadDigest:
 		apiErr = ErrBadDigest
+	case AllAccessDisabled:
+		apiErr = ErrAllAccessDisabled
 	case IncompleteBody:
 		apiErr = ErrIncompleteBody
 	case ObjectExistsAsDirectory:
@@ -677,6 +685,8 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrBucketAlreadyOwnedByYou
 	case BucketNotEmpty:
 		apiErr = ErrBucketNotEmpty
+	case BucketAlreadyExists:
+		apiErr = ErrBucketAlreadyExists
 	case BucketExists:
 		apiErr = ErrBucketAlreadyOwnedByYou
 	case ObjectNotFound:
@@ -701,6 +711,8 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrNoSuchUpload
 	case PartTooSmall:
 		apiErr = ErrEntityTooSmall
+	case SignatureDoesNotMatch:
+		apiErr = ErrSignatureDoesNotMatch
 	case SHA256Mismatch:
 		apiErr = ErrContentSHA256Mismatch
 	case ObjectTooLarge:

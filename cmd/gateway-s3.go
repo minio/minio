@@ -17,10 +17,11 @@
 package cmd
 
 import (
-	"encoding/hex"
 	"io"
 	"net/http"
 	"path"
+
+	"encoding/hex"
 
 	minio "github.com/minio/minio-go"
 	"github.com/minio/minio-go/pkg/policy"
@@ -97,14 +98,30 @@ type s3Objects struct {
 }
 
 // newS3Gateway returns s3 gatewaylayer
-func newS3Gateway(endpoint string, accessKey, secretKey string, secure bool) (GatewayLayer, error) {
-	if endpoint == "" {
-		endpoint = "s3.amazonaws.com"
-		secure = true
+func newS3Gateway(host string) (GatewayLayer, error) {
+
+	var err error
+	var endpoint string
+	var secure = true
+
+	// Validate host parameters.
+	if host != "" {
+		// Override default params if the host is provided
+		endpoint, secure, err = parseGatewayEndpoint(host)
+		if err != nil {
+			return nil, err
+		}
 	}
 
+	// Default endpoint parameters
+	if endpoint == "" {
+		endpoint = "s3.amazonaws.com"
+	}
+
+	creds := serverConfig.GetCredential()
+
 	// Initialize minio client object.
-	client, err := minio.NewCore(endpoint, accessKey, secretKey, secure)
+	client, err := minio.NewCore(endpoint, creds.AccessKey, creds.SecretKey, secure)
 	if err != nil {
 		return nil, err
 	}
