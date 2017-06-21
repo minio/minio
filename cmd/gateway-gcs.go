@@ -409,8 +409,17 @@ func (l *gcsGateway) ListObjects(bucket string, prefix string, marker string, de
 		nextMarker = toGCSPageToken(attrs.Name)
 
 		if attrs.Prefix == gcsMinioPath {
-			// we don't return our metadata prefix
+			// We don't return our metadata prefix.
 			continue
+		}
+		if !strings.HasPrefix(prefix, gcsMinioPath) {
+			// If client lists outside gcsMinioPath then we filter out gcsMinioPath/* entries.
+			// But if the client lists inside gcsMinioPath then we return the entries in gcsMinioPath/
+			// which will be helpful to observe the "directory structure" for debugging purposes.
+			if strings.HasPrefix(attrs.Prefix, gcsMinioPath) ||
+				strings.HasPrefix(attrs.Name, gcsMinioPath) {
+				continue
+			}
 		}
 		if attrs.Prefix != "" {
 			prefixes = append(prefixes, attrs.Prefix)
