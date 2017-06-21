@@ -164,7 +164,7 @@ func TestIsGCSMarker(t *testing.T) {
 // Test for gcsMultipartMetaName.
 func TestGCSMultipartMetaName(t *testing.T) {
 	uploadID := "a"
-	expected := pathJoin(gcsMinioMultipartPath, uploadID, gcsMinioMultipartMeta)
+	expected := pathJoin(gcsMinioMultipartPathV1, uploadID, gcsMinioMultipartMeta)
 	got := gcsMultipartMetaName(uploadID)
 	if expected != got {
 		t.Errorf("expected: %s, got: %s", expected, got)
@@ -175,7 +175,7 @@ func TestGCSMultipartMetaName(t *testing.T) {
 func TestGCSMultipartDataName(t *testing.T) {
 	uploadID := "a"
 	etag := "b"
-	expected := pathJoin(gcsMinioMultipartPath, uploadID, etag)
+	expected := pathJoin(gcsMinioMultipartPathV1, uploadID, etag)
 	got := gcsMultipartDataName(uploadID, etag)
 	if expected != got {
 		t.Errorf("expected: %s, got: %s", expected, got)

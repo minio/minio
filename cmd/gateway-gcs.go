@@ -43,7 +43,9 @@ const (
 	// ListObjects we filter out this entry.
 	gcsMinioPath = "minio.sys.temp"
 	// Path where multipart objects are saved.
-	gcsMinioMultipartPath = gcsMinioPath + "/multipart"
+	// If we change the backend format we will use a different url path like /multipart/v2
+	// but we will not migrate old data.
+	gcsMinioMultipartPathV1 = gcsMinioPath + "/multipart/v1"
 	// Multipart meta file.
 	gcsMinioMultipartMeta = "gcs.json"
 	// gcs.json version number
@@ -68,12 +70,12 @@ func isGCSPrefix(prefix string) bool {
 
 // Returns name of the multipart meta object.
 func gcsMultipartMetaName(uploadID string) string {
-	return fmt.Sprintf("%s/%s/%s", gcsMinioMultipartPath, uploadID, gcsMinioMultipartMeta)
+	return fmt.Sprintf("%s/%s/%s", gcsMinioMultipartPathV1, uploadID, gcsMinioMultipartMeta)
 }
 
 // Returns name of the part object.
 func gcsMultipartDataName(uploadID, etag string) string {
-	return fmt.Sprintf("%s/%s/%s", gcsMinioMultipartPath, uploadID, etag)
+	return fmt.Sprintf("%s/%s/%s", gcsMinioMultipartPathV1, uploadID, etag)
 }
 
 // Convert Minio errors to minio object layer errors.
@@ -726,7 +728,7 @@ func (l *gcsGateway) cleanupMultipartUpload(bucket, key, uploadID string) error 
 		return gcsToObjectError(traceError(err), bucket, key)
 	}
 
-	prefix := fmt.Sprintf("%s/%s/", gcsMinioMultipartPath, uploadID)
+	prefix := fmt.Sprintf("%s/%s/", gcsMinioMultipartPathV1, uploadID)
 
 	// iterate through all parts and delete them
 	it := l.client.Bucket(bucket).Objects(l.ctx, &storage.Query{Prefix: prefix, Versions: false})
