@@ -19,8 +19,11 @@ package cmd
 import "errors"
 
 var (
-	// ProjectID format is not valid.
+	// Project ID format is not valid.
 	errGCSInvalidProjectID = errors.New("GCS project id is either empty or invalid")
+
+	// Project ID not found
+	errGCSProjectIDNotFound = errors.New("unknown project id")
 
 	// Multipart identifier is not in the correct form.
 	errGCSNotValidMultipartIdentifier = errors.New("Not a valid multipart identifier")
