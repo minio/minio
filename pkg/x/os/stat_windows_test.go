@@ -71,9 +71,6 @@ func sameFile(fi1, fi2 os1.FileInfo) bool {
 }
 
 func TestNetworkSymbolicLink(t *testing.T) {
-	// Skipping this test for now - appveyor builds are failing.
-	t.Skip()
-
 	dir, err := ioutil.TempDir("", "TestNetworkSymbolicLink")
 	if err != nil {
 		t.Fatal(err)
