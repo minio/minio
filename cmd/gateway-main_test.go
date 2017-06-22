@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"os"
 	"strings"
 	"testing"
 )
@@ -51,28 +50,6 @@ func TestParseGatewayEndpoint(t *testing.T) {
 				endPoint, secure, errReturned)
 		}
 	}
-}
-
-func TestSetBrowserFromEnv(t *testing.T) {
-	browser := os.Getenv("MINIO_BROWSER")
-
-	os.Setenv("MINIO_BROWSER", "on")
-	mustSetBrowserSettingFromEnv()
-	if globalIsBrowserEnabled != true {
-		t.Errorf("Expected the response status to be `%t`, but instead found `%t`", globalIsBrowserEnabled, false)
-	}
-
-	os.Setenv("MINIO_BROWSER", "off")
-	mustSetBrowserSettingFromEnv()
-	if globalIsBrowserEnabled != false {
-		t.Errorf("Expected the response status to be `%t`, but instead found `%t`", globalIsBrowserEnabled, true)
-	}
-	os.Setenv("MINIO_BROWSER", "")
-	mustSetBrowserSettingFromEnv()
-	if globalIsBrowserEnabled != false {
-		t.Errorf("Expected the response status to be `%t`, but instead found `%t`", globalIsBrowserEnabled, true)
-	}
-	os.Setenv("MINIO_BROWSER", browser)
 }
 
 // Test validateGatewayArguments

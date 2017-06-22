@@ -17,12 +17,8 @@
 package cmd
 
 import (
-	"errors"
 	"os"
-	"path/filepath"
 	"runtime"
-	"strings"
-	"time"
 
 	"github.com/minio/cli"
 	"github.com/minio/dsync"
@@ -81,61 +77,9 @@ EXAMPLES:
 `,
 }
 
-// Check for updates and print a notification message
-func checkUpdate(mode string) {
-	// Its OK to ignore any errors during getUpdateInfo() here.
-	if older, downloadURL, err := getUpdateInfo(1*time.Second, mode); err == nil {
-		if updateMsg := computeUpdateMessage(downloadURL, older); updateMsg != "" {
-			log.Println(updateMsg)
-		}
-	}
-}
-
-func enableLoggers() {
-	fileLogTarget := serverConfig.Logger.GetFile()
-	if fileLogTarget.Enable {
-		err := InitFileLogger(&fileLogTarget)
-		fatalIf(err, "Unable to initialize file logger")
-		log.AddTarget(fileLogTarget)
-	}
-
-	consoleLogTarget := serverConfig.Logger.GetConsole()
-	if consoleLogTarget.Enable {
-		InitConsoleLogger(&consoleLogTarget)
-	}
-
-	log.SetConsoleTarget(consoleLogTarget)
-}
-
-func initConfig() {
-	// Config file does not exist, we create it fresh and return upon success.
-	if isFile(getConfigFile()) {
-		fatalIf(migrateConfig(), "Config migration failed.")
-		fatalIf(loadConfig(), "Unable to load config version: '%s'.", v19)
-	} else {
-		fatalIf(newConfig(), "Unable to initialize minio config for the first time.")
-		log.Println("Created minio configuration file successfully at " + getConfigDir())
-	}
-}
-
 func serverHandleCmdArgs(ctx *cli.Context) {
-	// Set configuration directory.
-	{
-		// Get configuration directory from command line argument.
-		configDir := ctx.String("config-dir")
-		if !ctx.IsSet("config-dir") && ctx.GlobalIsSet("config-dir") {
-			configDir = ctx.GlobalString("config-dir")
-		}
-		if configDir == "" {
-			fatalIf(errors.New("empty directory"), "Configuration directory cannot be empty.")
-		}
-
-		// Disallow relative paths, figure out absolute paths.
-		configDirAbs, err := filepath.Abs(configDir)
-		fatalIf(err, "Unable to fetch absolute path for config directory %s", configDir)
-
-		setConfigDir(configDirAbs)
-	}
+	// Handle common command args.
+	handleCommonCmdArgs(ctx)
 
 	// Server address.
 	serverAddr := ctx.String("address")
@@ -162,36 +106,8 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 }
 
 func serverHandleEnvVars() {
-	// Start profiler if env is set.
-	if profiler := os.Getenv("_MINIO_PROFILER"); profiler != "" {
-		globalProfiler = startProfiler(profiler)
-	}
-
-	// Check if object cache is disabled.
-	globalXLObjCacheDisabled = strings.EqualFold(os.Getenv("_MINIO_CACHE"), "off")
-
-	accessKey := os.Getenv("MINIO_ACCESS_KEY")
-	secretKey := os.Getenv("MINIO_SECRET_KEY")
-	if accessKey != "" && secretKey != "" {
-		cred, err := createCredential(accessKey, secretKey)
-		fatalIf(err, "Invalid access/secret Key set in environment.")
-
-		// credential Envs are set globally.
-		globalIsEnvCreds = true
-		globalActiveCred = cred
-	}
-
-	if browser := os.Getenv("MINIO_BROWSER"); browser != "" {
-		browserFlag, err := ParseBrowserFlag(browser)
-		if err != nil {
-			fatalIf(errors.New("invalid value"), "Unknown value ‘%s’ in MINIO_BROWSER environment variable.", browser)
-		}
-
-		// browser Envs are set globally, this does not represent
-		// if browser is turned off or on.
-		globalIsEnvBrowser = true
-		globalIsBrowserEnabled = bool(browserFlag)
-	}
+	// Handle common environment variables.
+	handleCommonEnvVars()
 
 	if serverRegion := os.Getenv("MINIO_REGION"); serverRegion != "" {
 		// region Envs are set globally.
@@ -213,12 +129,16 @@ func serverMain(ctx *cli.Context) {
 		log.EnableQuiet()
 	}
 
+	// Handle all server command args.
 	serverHandleCmdArgs(ctx)
+
+	// Handle all server environment vars.
 	serverHandleEnvVars()
 
 	// Create certs path.
 	fatalIf(createConfigDir(), "Unable to create configuration directories.")
 
+	// Initialize server config.
 	initConfig()
 
 	// Enable loggers as per configuration file.
