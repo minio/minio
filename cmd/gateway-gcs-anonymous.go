@@ -111,6 +111,11 @@ func (l *gcsGateway) AnonListObjects(bucket string, prefix string, marker string
 	return fromMinioClientListBucketResult(bucket, result), nil
 }
 
+// AnonListObjectsV2 - List objects anonymously v2
+func (l *gcsGateway) AnonListObjectsV2(bucket, prefix, continuationToken string, fetchOwner bool, delimiter string, maxKeys int) (loi ListObjectsV2Info, e error) {
+	return loi, NotImplemented{}
+}
+
 // AnonGetBucketInfo - Get bucket metadata anonymously.
 func (l *gcsGateway) AnonGetBucketInfo(bucket string) (bucketInfo BucketInfo, err error) {
 	resp, err := http.Head(toGCSPublicURL(bucket, ""))
