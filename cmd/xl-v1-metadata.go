@@ -282,14 +282,14 @@ func (m xlMetaV1) ObjectToPartOffset(offset int64) (partIndex int, partOffset in
 // pickValidXLMeta - picks one valid xlMeta content and returns from a
 // slice of xlmeta content. If no value is found this function panics
 // and dies.
-func pickValidXLMeta(metaArr []xlMetaV1, modTime time.Time) (xlMetaV1, error) {
+func pickValidXLMeta(metaArr []xlMetaV1, modTime time.Time) (xmv xlMetaV1, e error) {
 	// Pick latest valid metadata.
 	for _, meta := range metaArr {
 		if meta.IsValid() && meta.Stat.ModTime.Equal(modTime) {
 			return meta, nil
 		}
 	}
-	return xlMetaV1{}, traceError(errors.New("No valid xl.json present"))
+	return xmv, traceError(errors.New("No valid xl.json present"))
 }
 
 // list of all errors that can be ignored in a metadata operation.

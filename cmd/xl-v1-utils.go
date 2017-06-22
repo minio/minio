@@ -123,13 +123,13 @@ func hashOrder(key string, cardinality int) []int {
 	return nums
 }
 
-func parseXLStat(xlMetaBuf []byte) (statInfo, error) {
+func parseXLStat(xlMetaBuf []byte) (si statInfo, e error) {
 	// obtain stat info.
 	stat := statInfo{}
 	// fetching modTime.
 	modTime, err := time.Parse(time.RFC3339, gjson.GetBytes(xlMetaBuf, "stat.modTime").String())
 	if err != nil {
-		return statInfo{}, err
+		return si, err
 	}
 	stat.ModTime = modTime
 	// obtain Stat.Size .
@@ -207,7 +207,7 @@ func parseXLMetaMap(xlMetaBuf []byte) map[string]string {
 }
 
 // Constructs XLMetaV1 using `gjson` lib to retrieve each field.
-func xlMetaV1UnmarshalJSON(xlMetaBuf []byte) (xlMetaV1, error) {
+func xlMetaV1UnmarshalJSON(xlMetaBuf []byte) (xmv xlMetaV1, e error) {
 	xlMeta := xlMetaV1{}
 	// obtain version.
 	xlMeta.Version = parseXLVersion(xlMetaBuf)
@@ -216,7 +216,7 @@ func xlMetaV1UnmarshalJSON(xlMetaBuf []byte) (xlMetaV1, error) {
 	// Parse xlMetaV1.Stat .
 	stat, err := parseXLStat(xlMetaBuf)
 	if err != nil {
-		return xlMetaV1{}, err
+		return xmv, err
 	}
 
 	xlMeta.Stat = stat
@@ -247,11 +247,11 @@ func readXLMetaParts(disk StorageAPI, bucket string, object string) ([]objectPar
 }
 
 // read xl.json from the given disk and parse xlV1Meta.Stat and xlV1Meta.Meta using gjson.
-func readXLMetaStat(disk StorageAPI, bucket string, object string) (statInfo, map[string]string, error) {
+func readXLMetaStat(disk StorageAPI, bucket string, object string) (si statInfo, mp map[string]string, e error) {
 	// Reads entire `xl.json`.
 	xlMetaBuf, err := disk.ReadAll(bucket, path.Join(object, xlMetaJSONFile))
 	if err != nil {
-		return statInfo{}, nil, traceError(err)
+		return si, nil, traceError(err)
 	}
 
 	// obtain version.
@@ -263,7 +263,7 @@ func readXLMetaStat(disk StorageAPI, bucket string, object string) (statInfo, ma
 	// Validate if the xl.json we read is sane, return corrupted format.
 	if !isXLMetaValid(xlVersion, xlFormat) {
 		// For version mismatchs and unrecognized format, return corrupted format.
-		return statInfo{}, nil, traceError(errCorruptedFormat)
+		return si, nil, traceError(errCorruptedFormat)
 	}
 
 	// obtain xlMetaV1{}.Meta using `github.com/tidwall/gjson`.
@@ -272,7 +272,7 @@ func readXLMetaStat(disk StorageAPI, bucket string, object string) (statInfo, ma
 	// obtain xlMetaV1{}.Stat using `github.com/tidwall/gjson`.
 	xlStat, err := parseXLStat(xlMetaBuf)
 	if err != nil {
-		return statInfo{}, nil, traceError(err)
+		return si, nil, traceError(err)
 	}
 
 	// Return structured `xl.json`.

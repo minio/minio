@@ -59,11 +59,11 @@ func (xl xlObjects) prepareFile(bucket, object string, size int64, onlineDisks [
 // CopyObject - copy object source object to destination object.
 // if source object and destination object are same we only
 // update metadata.
-func (xl xlObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string, metadata map[string]string) (ObjectInfo, error) {
+func (xl xlObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string, metadata map[string]string) (oi ObjectInfo, e error) {
 	// Read metadata associated with the object from all disks.
 	metaArr, errs := readAllXLMetadata(xl.storageDisks, srcBucket, srcObject)
 	if reducedErr := reduceReadQuorumErrs(errs, objectOpIgnoredErrs, xl.readQuorum); reducedErr != nil {
-		return ObjectInfo{}, toObjectErr(reducedErr, srcBucket, srcObject)
+		return oi, toObjectErr(reducedErr, srcBucket, srcObject)
 	}
 
 	// List all online disks.
@@ -72,7 +72,7 @@ func (xl xlObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string
 	// Pick latest valid metadata.
 	xlMeta, err := pickValidXLMeta(metaArr, modTime)
 	if err != nil {
-		return ObjectInfo{}, toObjectErr(err, srcBucket, srcObject)
+		return oi, toObjectErr(err, srcBucket, srcObject)
 	}
 
 	// Reorder online disks based on erasure distribution order.
@@ -95,11 +95,11 @@ func (xl xlObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string
 
 		// Write unique `xl.json` for each disk.
 		if onlineDisks, err = writeUniqueXLMetadata(onlineDisks, minioMetaTmpBucket, tempObj, partsMetadata, xl.writeQuorum); err != nil {
-			return ObjectInfo{}, toObjectErr(err, srcBucket, srcObject)
+			return oi, toObjectErr(err, srcBucket, srcObject)
 		}
 		// Rename atomically `xl.json` from tmp location to destination for each disk.
 		if onlineDisks, err = renameXLMetadata(onlineDisks, minioMetaTmpBucket, tempObj, srcBucket, srcObject, xl.writeQuorum); err != nil {
-			return ObjectInfo{}, toObjectErr(err, srcBucket, srcObject)
+			return oi, toObjectErr(err, srcBucket, srcObject)
 		}
 		return xlMeta.ToObjectInfo(srcBucket, srcObject), nil
 	}
@@ -119,7 +119,7 @@ func (xl xlObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string
 
 	objInfo, err := xl.PutObject(dstBucket, dstObject, length, pipeReader, metadata, "")
 	if err != nil {
-		return ObjectInfo{}, toObjectErr(err, dstBucket, dstObject)
+		return oi, toObjectErr(err, dstBucket, dstObject)
 	}
 
 	// Explicitly close the reader.
@@ -303,14 +303,14 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 }
 
 // GetObjectInfo - reads object metadata and replies back ObjectInfo.
-func (xl xlObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
+func (xl xlObjects) GetObjectInfo(bucket, object string) (oi ObjectInfo, e error) {
 	if err := checkGetObjArgs(bucket, object); err != nil {
-		return ObjectInfo{}, err
+		return oi, err
 	}
 
 	info, err := xl.getObjectInfo(bucket, object)
 	if err != nil {
-		return ObjectInfo{}, toObjectErr(err, bucket, object)
+		return oi, toObjectErr(err, bucket, object)
 	}
 	return info, nil
 }

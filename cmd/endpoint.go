@@ -77,14 +77,14 @@ func (endpoint Endpoint) SetHTTP() {
 }
 
 // NewEndpoint - returns new endpoint based on given arguments.
-func NewEndpoint(arg string) (Endpoint, error) {
+func NewEndpoint(arg string) (ep Endpoint, e error) {
 	// isEmptyPath - check whether given path is not empty.
 	isEmptyPath := func(path string) bool {
 		return path == "" || path == "/" || path == `\`
 	}
 
 	if isEmptyPath(arg) {
-		return Endpoint{}, fmt.Errorf("empty or root endpoint is not supported")
+		return ep, fmt.Errorf("empty or root endpoint is not supported")
 	}
 
 	var isLocal bool
@@ -96,13 +96,13 @@ func NewEndpoint(arg string) (Endpoint, error) {
 		// - All field should be empty except Host and Path.
 		if !((u.Scheme == "http" || u.Scheme == "https") &&
 			u.User == nil && u.Opaque == "" && u.ForceQuery == false && u.RawQuery == "" && u.Fragment == "") {
-			return Endpoint{}, fmt.Errorf("invalid URL endpoint format")
+			return ep, fmt.Errorf("invalid URL endpoint format")
 		}
 
 		host, port, err := net.SplitHostPort(u.Host)
 		if err != nil {
 			if !strings.Contains(err.Error(), "missing port in address") {
-				return Endpoint{}, fmt.Errorf("invalid URL endpoint format: %s", err)
+				return ep, fmt.Errorf("invalid URL endpoint format: %s", err)
 			}
 
 			host = u.Host
@@ -110,26 +110,26 @@ func NewEndpoint(arg string) (Endpoint, error) {
 			var p int
 			p, err = strconv.Atoi(port)
 			if err != nil {
-				return Endpoint{}, fmt.Errorf("invalid URL endpoint format: invalid port number")
+				return ep, fmt.Errorf("invalid URL endpoint format: invalid port number")
 			} else if p < 1 || p > 65535 {
-				return Endpoint{}, fmt.Errorf("invalid URL endpoint format: port number must be between 1 to 65535")
+				return ep, fmt.Errorf("invalid URL endpoint format: port number must be between 1 to 65535")
 			}
 		}
 
 		if host == "" {
-			return Endpoint{}, fmt.Errorf("invalid URL endpoint format: empty host name")
+			return ep, fmt.Errorf("invalid URL endpoint format: empty host name")
 		}
 
 		// As this is path in the URL, we should use path package, not filepath package.
 		// On MS Windows, filepath.Clean() converts into Windows path style ie `/foo` becomes `\foo`
 		u.Path = path.Clean(u.Path)
 		if isEmptyPath(u.Path) {
-			return Endpoint{}, fmt.Errorf("empty or root path is not supported in URL endpoint")
+			return ep, fmt.Errorf("empty or root path is not supported in URL endpoint")
 		}
 
 		isLocal, err = isLocalHost(host)
 		if err != nil {
-			return Endpoint{}, err
+			return ep, err
 		}
 	} else {
 		u = &url.URL{Path: path.Clean(arg)}

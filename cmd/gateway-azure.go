@@ -179,8 +179,8 @@ func (a *azureObjects) Shutdown() error {
 }
 
 // StorageInfo - Not relevant to Azure backend.
-func (a *azureObjects) StorageInfo() StorageInfo {
-	return StorageInfo{}
+func (a *azureObjects) StorageInfo() (si StorageInfo) {
+	return si
 }
 
 // MakeBucketWithLocation - Create a new container on azure backend.
@@ -190,13 +190,13 @@ func (a *azureObjects) MakeBucketWithLocation(bucket, location string) error {
 }
 
 // GetBucketInfo - Get bucket metadata..
-func (a *azureObjects) GetBucketInfo(bucket string) (BucketInfo, error) {
+func (a *azureObjects) GetBucketInfo(bucket string) (bi BucketInfo, e error) {
 	// Azure does not have an equivalent call, hence use ListContainers.
 	resp, err := a.client.ListContainers(storage.ListContainersParameters{
 		Prefix: bucket,
 	})
 	if err != nil {
-		return BucketInfo{}, azureToObjectError(traceError(err), bucket)
+		return bi, azureToObjectError(traceError(err), bucket)
 	}
 	for _, container := range resp.Containers {
 		if container.Name == bucket {
@@ -209,7 +209,7 @@ func (a *azureObjects) GetBucketInfo(bucket string) (BucketInfo, error) {
 			} // else continue
 		}
 	}
-	return BucketInfo{}, traceError(BucketNotFound{Bucket: bucket})
+	return bi, traceError(BucketNotFound{Bucket: bucket})
 }
 
 // ListBuckets - Lists all azure containers, uses Azure equivalent ListContainers.
