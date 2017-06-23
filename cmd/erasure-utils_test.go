@@ -162,6 +162,9 @@ func TestCopyBuffer(t *testing.T) {
 	}
 }
 
+// Ensures that only algorithms without keys can be used and that those
+// algorithms do not fail for nil keys.
+// TODO(aead): change this as soon as other bitrot algorithms are used.
 func TestAvailableBitrotAlgorithms(t *testing.T) {
 	algorithms := []bitrot.Algorithm{bitrot.SHA256, bitrot.BLAKE2b512, bitrot.Poly1305, bitrot.GHASH}
 	for _, alg := range algorithms {

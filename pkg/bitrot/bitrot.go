@@ -1,3 +1,20 @@
+/*
+ * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+// Package bitrot provides algorithms for detecting data corruption.
 package bitrot
 
 import (
@@ -24,7 +41,9 @@ const (
 	SHA256
 
 	// add algorithms here
-	unknownAlgorithm
+
+	// UnknownAlgorithm indicates an unknown/invalid algorithm
+	UnknownAlgorithm
 )
 
 var keysizes = []int{
@@ -41,7 +60,7 @@ var names = []string{
 	SHA256:     "sha256",
 }
 
-var hashes = make([]func([]byte) Hash, unknownAlgorithm)
+var hashes = make([]func([]byte) Hash, UnknownAlgorithm)
 
 // New returns a new Hash implementing the given algorithm.
 // It returns an error if the given key cannot be used by the algorithm.
@@ -60,7 +79,7 @@ func (a Algorithm) New(key []byte) (Hash, error) {
 // KeySize returns the size of valid keys for the given algorithm in bytes.
 // It panics if the algorithm is unknown.
 func (a Algorithm) KeySize() int {
-	if a >= 0 && a < unknownAlgorithm {
+	if a >= 0 && a < UnknownAlgorithm {
 		return keysizes[a]
 	}
 	panic("bitrot: requested algorithm  #" + strconv.Itoa(int(a)) + " is not available")
@@ -68,13 +87,13 @@ func (a Algorithm) KeySize() int {
 
 // Available reports whether the given algorithm is registered.
 func (a Algorithm) Available() bool {
-	return a < unknownAlgorithm && hashes[a] != nil
+	return a < UnknownAlgorithm && hashes[a] != nil
 }
 
 // String returns a string representation of the algorithm.
 // It panics if the algorithm is unknown.
 func (a Algorithm) String() string {
-	if a >= 0 && a < unknownAlgorithm {
+	if a >= 0 && a < UnknownAlgorithm {
 		return names[a]
 	}
 	panic("bitrot: requested algorithm  #" + strconv.Itoa(int(a)) + " is not available")
@@ -96,7 +115,7 @@ func (a Algorithm) GenerateKey(reader io.Reader) (key []byte, err error) {
 // hash function. This is intended to be called from the init function in
 // packages that implement the hash function.
 func RegisterAlgorithm(alg Algorithm, f func([]byte) Hash) {
-	if alg >= unknownAlgorithm {
+	if alg >= UnknownAlgorithm {
 		panic("bitrot: cannot register unknown algorithm")
 	}
 	hashes[alg] = f
@@ -110,7 +129,7 @@ func AlgorithmFromString(s string) (Algorithm, error) {
 			return Algorithm(i), nil
 		}
 	}
-	return unknownAlgorithm, fmt.Errorf("bitrot: algorithm #%s is unknown", s)
+	return UnknownAlgorithm, fmt.Errorf("bitrot: algorithm #%s is unknown", s)
 }
 
 // Hash is the common interface for bitrot protection.

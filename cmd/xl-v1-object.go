@@ -267,7 +267,7 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 
 		// Get the checksums of the current part.
 		checkSums := make([]string, len(onlineDisks))
-		var ckSumAlgo bitrot.Algorithm = 0xffffffff
+		var ckSumAlgo bitrot.Algorithm = bitrot.UnknownAlgorithm
 		for index, disk := range onlineDisks {
 			// Disk is not found skip the checksum.
 			if disk == nil {
