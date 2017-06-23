@@ -43,7 +43,8 @@ func azureAnonRequest(verb, urlStr string, header http.Header) (*http.Response, 
 		return nil, err
 	}
 
-	if resp.StatusCode >= 400 && resp.StatusCode <= 505 {
+	// 4XX and 5XX are error HTTP codes.
+	if resp.StatusCode >= 400 && resp.StatusCode <= 511 {
 		defer resp.Body.Close()
 		respBody, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
