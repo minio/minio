@@ -311,7 +311,7 @@ func fromMinioClientObjectInfo(bucket string, oi minio.ObjectInfo) ObjectInfo {
 		Name:            oi.Key,
 		ModTime:         oi.LastModified,
 		Size:            oi.Size,
-		ETag:            oi.ETag,
+		ETag:            canonicalizeETag(oi.ETag),
 		UserDefined:     userDefined,
 		ContentType:     oi.ContentType,
 		ContentEncoding: oi.Metadata.Get("Content-Encoding"),
