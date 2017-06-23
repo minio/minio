@@ -18,9 +18,12 @@ package cmd
 
 import (
 	"bytes"
+	"crypto/rand"
 	"errors"
 	"io"
 	"testing"
+
+	"github.com/minio/minio/pkg/bitrot"
 )
 
 // Test validates the number hash writers returned.
@@ -154,6 +157,24 @@ func TestCopyBuffer(t *testing.T) {
 		if actualErr == nil && testCase.shouldPass {
 			if !bytes.Equal(testCase.expectedResult, buffers[2].Bytes()) {
 				t.Errorf("Test %d: copied buffer differs from the expected one.", i+1)
+			}
+		}
+	}
+}
+
+func TestAvailableBitrotAlgorithms(t *testing.T) {
+	algorithms := []bitrot.Algorithm{bitrot.SHA256, bitrot.BLAKE2b512, bitrot.Poly1305, bitrot.GHASH}
+	for _, alg := range algorithms {
+		if alg.Available() {
+			key, err := alg.GenerateKey(rand.Reader)
+			if err != nil {
+				t.Errorf("Algorithm %s: Failed to generate key", alg.String())
+			}
+			if len(key) != 0 {
+				t.Errorf("Algorithm %s: Generated key length is #%d instead of 0", alg.String(), len(key))
+			}
+			if _, err := alg.New(nil); err != nil {
+				t.Errorf("Algorithm %s: failed to create instance with nil key", alg.String())
 			}
 		}
 	}
