@@ -114,39 +114,6 @@ func setupTestReadDirGeneric(t *testing.T) (testResults []result) {
 	return testResults
 }
 
-// Test to read non-empty directory with symlinks.
-func setupTestReadDirSymlink(t *testing.T) (testResults []result) {
-	dir := mustSetupDir(t)
-	entries := []string{}
-	for i := 0; i < 10; i++ {
-		name1 := fmt.Sprintf("file-%d", i)
-		name2 := fmt.Sprintf("file-%d", i+10)
-		if err := ioutil.WriteFile(filepath.Join(dir, name1), []byte{}, os.ModePerm); err != nil {
-			// For cleanup, its required to add these entries into test results.
-			testResults = append(testResults, result{dir, entries})
-			t.Fatalf("Unable to create a file, %s", err)
-		}
-		// Symlink will not be added to entries.
-		if err := os.Symlink(filepath.Join(dir, name1), filepath.Join(dir, name2)); err != nil {
-			t.Fatalf("Unable to create a symlink, %s", err)
-		}
-		// Add to entries.
-		entries = append(entries, name1)
-		entries = append(entries, name2)
-	}
-	if err := os.MkdirAll(filepath.Join(dir, "mydir"), 0777); err != nil {
-		t.Fatalf("Unable to create \"mydir\", %s", err)
-	}
-	entries = append(entries, "mydir/")
-
-	// Keep entries sorted for easier comparison.
-	sort.Strings(entries)
-
-	// Add entries slice for this test directory.
-	testResults = append(testResults, result{dir, entries})
-	return testResults
-}
-
 // checkResult - checks whether entries are got are same as expected entries.
 func checkResult(expected []string, got []string) bool {
 	// If length of expected and got slice are different, the test actually failed.
@@ -182,8 +149,6 @@ func TestReadDir(t *testing.T) {
 	testResults = append(testResults, setupTestReadDirFiles(t)...)
 	// Setup and capture test results for directory with files and directories.
 	testResults = append(testResults, setupTestReadDirGeneric(t)...)
-	// Setup and capture test results for directory with files and symlink.
-	testResults = append(testResults, setupTestReadDirSymlink(t)...)
 
 	// Remove all dirs once tests are over.
 	defer teardown(testResults)
