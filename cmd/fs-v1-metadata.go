@@ -26,6 +26,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/minio/mc/pkg/console"
 	"github.com/minio/minio/pkg/lock"
 	"github.com/minio/minio/pkg/mimedb"
 	"github.com/tidwall/gjson"
@@ -315,16 +316,23 @@ func createFormatFS(fsPath string) error {
 }
 
 func initFormatFS(fsPath string) (rlk *lock.RLockedFile, err error) {
-	// This loop validates format.json by holding a read lock and
-	// proceeds if disk unformatted to hold non-blocking WriteLock
-	// If for some reason non-blocking WriteLock fails and the error
-	// is lock.ErrAlreadyLocked i.e some other process is holding a
-	// lock we retry in the loop again.
 	for {
+		printedCh := delayPrint("Waiting to acquire lock.. ", time.Second)
+
 		// Validate the `format.json` for expected values.
 		rlk, err = checkLockedValidFormatFS(fsPath)
+
+		// Waits on delayed printer to send back notification
+		// if the previous message was indeed printed.
+		printed := <-printedCh
 		switch {
 		case err == nil:
+			// Print this message only if previously
+			// read-lock was waiting and blocked.
+			if printed {
+				console.Println("Lock acquired.")
+			}
+
 			// Holding a read lock ensures that any write lock operation
 			// is blocked if attempted in-turn avoiding corruption on
 			// the backend disk.
