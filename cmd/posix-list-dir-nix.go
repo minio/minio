@@ -20,7 +20,6 @@ package cmd
 
 import (
 	"os"
-	"path"
 	"runtime"
 	"strings"
 	"sync"
@@ -74,27 +73,6 @@ func parseDirents(dirPath string, buf []byte) (entries []string, err error) {
 			entries = append(entries, name+slashSeparator)
 		case syscall.DT_REG:
 			entries = append(entries, name)
-		case syscall.DT_LNK, syscall.DT_UNKNOWN:
-			// If its symbolic link, follow the link using osStat()
-
-			// On Linux XFS does not implement d_type for on disk
-			// format << v5. Fall back to OsStat().
-			var fi os.FileInfo
-			fi, err = osStat(path.Join(dirPath, name))
-			if err != nil {
-				// If file does not exist, we continue and skip it.
-				// Could happen if it was deleted in the middle while
-				// this list was being performed.
-				if os.IsNotExist(err) {
-					continue
-				}
-				return nil, err
-			}
-			if fi.IsDir() {
-				entries = append(entries, fi.Name()+slashSeparator)
-			} else if fi.Mode().IsRegular() {
-				entries = append(entries, fi.Name())
-			}
 		default:
 			// Skip entries which are not file or directory.
 			continue

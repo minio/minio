@@ -21,7 +21,6 @@ package cmd
 import (
 	"io"
 	"os"
-	"path"
 	"strings"
 )
 
@@ -52,22 +51,6 @@ func readDir(dirPath string) (entries []string, err error) {
 			return nil, err
 		}
 		for _, fi := range fis {
-			// Stat symbolic link and follow to get the final value.
-			if fi.Mode()&os.ModeSymlink == os.ModeSymlink {
-				var st os.FileInfo
-				st, err = osStat(preparePath(path.Join(dirPath, fi.Name())))
-				if err != nil {
-					errorIf(err, "Unable to stat path %s", path.Join(dirPath, fi.Name()))
-					continue
-				}
-				// Append to entries if symbolic link exists and is valid.
-				if st.IsDir() {
-					entries = append(entries, fi.Name()+slashSeparator)
-				} else if st.Mode().IsRegular() {
-					entries = append(entries, fi.Name())
-				}
-				continue
-			}
 			if fi.Mode().IsDir() {
 				// Append "/" instead of "\" so that sorting is achieved as expected.
 				entries = append(entries, fi.Name()+slashSeparator)
