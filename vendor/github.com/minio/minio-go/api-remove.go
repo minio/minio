@@ -176,7 +176,7 @@ func (c Client) RemoveObjects(bucketName string, objectsCh <-chan string) <-chan
 				}
 			}
 			if count == 0 {
-				// Multi Objects Delete API doesn't accept empty object list, quit immediatly
+				// Multi Objects Delete API doesn't accept empty object list, quit immediately
 				break
 			}
 			if count < maxEntries {

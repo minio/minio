@@ -45,23 +45,6 @@ func isReadAt(reader io.Reader) (ok bool) {
 	return
 }
 
-// shouldUploadPart - verify if part should be uploaded.
-func shouldUploadPart(objPart ObjectPart, uploadReq uploadPartReq) bool {
-	// If part not found should upload the part.
-	if uploadReq.Part == nil {
-		return true
-	}
-	// if size mismatches should upload the part.
-	if objPart.Size != uploadReq.Part.Size {
-		return true
-	}
-	// if md5sum mismatches should upload the part.
-	if objPart.ETag != uploadReq.Part.ETag {
-		return true
-	}
-	return false
-}
-
 // optimalPartInfo - calculate the optimal part info for a given
 // object size.
 //
@@ -183,49 +166,6 @@ func (c Client) newUploadID(bucketName, objectName string, metaData map[string][
 		return "", err
 	}
 	return initMultipartUploadResult.UploadID, nil
-}
-
-// getMpartUploadSession returns the upload id and the uploaded parts to continue a previous upload session
-// or initiate a new multipart session if no current one found
-func (c Client) getMpartUploadSession(bucketName, objectName string, metaData map[string][]string) (string, map[int]ObjectPart, error) {
-	// A map of all uploaded parts.
-	var partsInfo map[int]ObjectPart
-	var err error
-
-	uploadID, err := c.findUploadID(bucketName, objectName)
-	if err != nil {
-		return "", nil, err
-	}
-
-	if uploadID == "" {
-		// Initiates a new multipart request
-		uploadID, err = c.newUploadID(bucketName, objectName, metaData)
-		if err != nil {
-			return "", nil, err
-		}
-	} else {
-		// Fetch previously upload parts and maximum part size.
-		partsInfo, err = c.listObjectParts(bucketName, objectName, uploadID)
-		if err != nil {
-			// When the server returns NoSuchUpload even if its previouls acknowleged the existance of the upload id,
-			// initiate a new multipart upload
-			if respErr, ok := err.(ErrorResponse); ok && respErr.Code == "NoSuchUpload" {
-				uploadID, err = c.newUploadID(bucketName, objectName, metaData)
-				if err != nil {
-					return "", nil, err
-				}
-			} else {
-				return "", nil, err
-			}
-		}
-	}
-
-	// Allocate partsInfo if not done yet
-	if partsInfo == nil {
-		partsInfo = make(map[int]ObjectPart)
-	}
-
-	return uploadID, partsInfo, nil
 }
 
 // computeHash - Calculates hashes for an input read Seeker.

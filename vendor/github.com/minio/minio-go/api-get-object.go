@@ -29,7 +29,7 @@ import (
 	"github.com/minio/minio-go/pkg/s3utils"
 )
 
-// GetEncryptedObject deciphers and streams data stored in the server after applying a specifed encryption materials,
+// GetEncryptedObject deciphers and streams data stored in the server after applying a specified encryption materials,
 // returned stream should be closed by the caller.
 func (c Client) GetEncryptedObject(bucketName, objectName string, encryptMaterials encrypt.Materials) (io.ReadCloser, error) {
 	if encryptMaterials == nil {

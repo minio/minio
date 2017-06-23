@@ -18,12 +18,8 @@ package minio
 
 import (
 	"bytes"
-	"crypto/md5"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/xml"
 	"fmt"
-	"hash"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -36,7 +32,7 @@ import (
 	"github.com/minio/minio-go/pkg/s3utils"
 )
 
-// Comprehensive put object operation involving multipart resumable uploads.
+// Comprehensive put object operation involving multipart uploads.
 //
 // Following code handles these types of readers.
 //
@@ -44,9 +40,6 @@ import (
 //  - *minio.Object
 //  - Any reader which has a method 'ReadAt()'
 //
-// If we exhaust all the known types, code proceeds to use stream as
-// is where each part is re-downloaded, checksummed and verified
-// before upload.
 func (c Client) putObjectMultipart(bucketName, objectName string, reader io.Reader, size int64, metaData map[string][]string, progress io.Reader) (n int64, err error) {
 	if size > 0 && size > minPartSize {
 		// Verify if reader is *os.File, then use file system functionalities.
@@ -70,8 +63,6 @@ func (c Client) putObjectMultipart(bucketName, objectName string, reader io.Read
 
 // putObjectMultipartStreamNoChecksum - upload a large object using
 // multipart upload and streaming signature for signing payload.
-// N B We don't resume an incomplete multipart upload, we overwrite
-// existing parts of an incomplete upload.
 func (c Client) putObjectMultipartStreamNoChecksum(bucketName, objectName string,
 	reader io.Reader, size int64, metadata map[string][]string, progress io.Reader) (int64, error) {
 
@@ -83,17 +74,10 @@ func (c Client) putObjectMultipartStreamNoChecksum(bucketName, objectName string
 		return 0, err
 	}
 
-	// Get the upload id of a previously partially uploaded object or initiate a new multipart upload
-	uploadID, err := c.findUploadID(bucketName, objectName)
+	// Initiates a new multipart request
+	uploadID, err := c.newUploadID(bucketName, objectName, metadata)
 	if err != nil {
 		return 0, err
-	}
-	if uploadID == "" {
-		// Initiates a new multipart request
-		uploadID, err = c.newUploadID(bucketName, objectName, metadata)
-		if err != nil {
-			return 0, err
-		}
 	}
 
 	// Calculate the optimal parts info for a given size.
@@ -191,8 +175,8 @@ func (c Client) putObjectMultipartStream(bucketName, objectName string, reader i
 	// Complete multipart upload.
 	var complMultipartUpload completeMultipartUpload
 
-	// Get the upload id of a previously partially uploaded object or initiate a new multipart upload
-	uploadID, partsInfo, err := c.getMpartUploadSession(bucketName, objectName, metaData)
+	// Initiate a new multipart upload.
+	uploadID, err := c.newUploadID(bucketName, objectName, metaData)
 	if err != nil {
 		return 0, err
 	}
@@ -209,15 +193,13 @@ func (c Client) putObjectMultipartStream(bucketName, objectName string, reader i
 	// Initialize a temporary buffer.
 	tmpBuffer := new(bytes.Buffer)
 
+	// Initialize parts uploaded map.
+	partsInfo := make(map[int]ObjectPart)
+
 	for partNumber <= totalPartsCount {
 		// Choose hash algorithms to be calculated by hashCopyN, avoid sha256
 		// with non-v4 signature request or HTTPS connection
-		hashSums := make(map[string][]byte)
-		hashAlgos := make(map[string]hash.Hash)
-		hashAlgos["md5"] = md5.New()
-		if c.overrideSignerType.IsV4() && !c.secure {
-			hashAlgos["sha256"] = sha256.New()
-		}
+		hashAlgos, hashSums := c.hashMaterials()
 
 		// Calculates hash sums while copying partSize bytes into tmpBuffer.
 		prtSize, rErr := hashCopyN(hashAlgos, hashSums, tmpBuffer, reader, partSize)
@@ -230,30 +212,22 @@ func (c Client) putObjectMultipartStream(bucketName, objectName string, reader i
 		// as we read from the source.
 		reader = newHook(tmpBuffer, progress)
 
-		part, ok := partsInfo[partNumber]
+		// Proceed to upload the part.
+		var objPart ObjectPart
+		objPart, err = c.uploadPart(bucketName, objectName, uploadID, reader, partNumber, hashSums["md5"], hashSums["sha256"], prtSize)
+		if err != nil {
+			// Reset the temporary buffer upon any error.
+			tmpBuffer.Reset()
+			return totalUploadedSize, err
+		}
 
-		// Verify if part should be uploaded.
-		if !ok || shouldUploadPart(ObjectPart{
-			ETag:       hex.EncodeToString(hashSums["md5"]),
-			PartNumber: partNumber,
-			Size:       prtSize,
-		}, uploadPartReq{PartNum: partNumber, Part: &part}) {
-			// Proceed to upload the part.
-			var objPart ObjectPart
-			objPart, err = c.uploadPart(bucketName, objectName, uploadID, reader, partNumber, hashSums["md5"], hashSums["sha256"], prtSize)
-			if err != nil {
-				// Reset the temporary buffer upon any error.
-				tmpBuffer.Reset()
+		// Save successfully uploaded part metadata.
+		partsInfo[partNumber] = objPart
+
+		// Update the progress reader for the skipped part.
+		if progress != nil {
+			if _, err = io.CopyN(ioutil.Discard, progress, prtSize); err != nil {
 				return totalUploadedSize, err
-			}
-			// Save successfully uploaded part metadata.
-			partsInfo[partNumber] = objPart
-		} else {
-			// Update the progress reader for the skipped part.
-			if progress != nil {
-				if _, err = io.CopyN(ioutil.Discard, progress, prtSize); err != nil {
-					return totalUploadedSize, err
-				}
 			}
 		}
 

@@ -192,3 +192,23 @@ func redactSignature(origAuth string) string {
 	// Strip out 256-bit signature from: Signature=<256-bit signature>
 	return regSign.ReplaceAllString(newAuth, "Signature=**REDACTED**")
 }
+
+// Get default location returns the location based on the input
+// URL `u`, if region override is provided then all location
+// defaults to regionOverride.
+//
+// If no other cases match then the location is set to `us-east-1`
+// as a last resort.
+func getDefaultLocation(u url.URL, regionOverride string) (location string) {
+	if regionOverride != "" {
+		return regionOverride
+	}
+	if s3utils.IsAmazonChinaEndpoint(u) {
+		return "cn-north-1"
+	}
+	if s3utils.IsAmazonGovCloudEndpoint(u) {
+		return "us-gov-west-1"
+	}
+	// Default to location to 'us-east-1'.
+	return "us-east-1"
+}

@@ -19,10 +19,13 @@ package minio
 
 import (
 	"bytes"
+	"crypto/md5"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"hash"
 	"io"
 	"io/ioutil"
 	"math/rand"
@@ -289,6 +292,29 @@ func (c *Client) SetS3TransferAccelerate(accelerateEndpoint string) {
 	}
 }
 
+// Hash materials provides relevant initialized hash algo writers
+// based on the expected signature type.
+//
+//  - For signature v4 request if the connection is insecure compute only sha256.
+//  - For signature v4 request if the connection is secure compute only md5.
+//  - For anonymous request compute md5.
+func (c *Client) hashMaterials() (hashAlgos map[string]hash.Hash, hashSums map[string][]byte) {
+	hashSums = make(map[string][]byte)
+	hashAlgos = make(map[string]hash.Hash)
+	if c.overrideSignerType.IsV4() {
+		if c.secure {
+			hashAlgos["md5"] = md5.New()
+		} else {
+			hashAlgos["sha256"] = sha256.New()
+		}
+	} else {
+		if c.overrideSignerType.IsAnonymous() {
+			hashAlgos["md5"] = md5.New()
+		}
+	}
+	return hashAlgos, hashSums
+}
+
 // requestMetadata - is container for all the values to make a request.
 type requestMetadata struct {
 	// If set newRequest presigns the URL.
@@ -450,6 +476,13 @@ func (c Client) executeMethod(method string, metadata requestMetadata) (res *htt
 		case os.Stdin, os.Stdout, os.Stderr:
 			isRetryable = false
 		}
+		// Figure out if the body can be closed - if yes
+		// we will definitely close it upon the function
+		// return.
+		bodyCloser, ok := metadata.contentBody.(io.Closer)
+		if ok {
+			defer bodyCloser.Close()
+		}
 	}
 
 	// Create a done channel to control 'newRetryTimer' go routine.
@@ -558,15 +591,23 @@ func (c Client) newRequest(method string, metadata requestMetadata) (req *http.R
 		method = "POST"
 	}
 
-	var location string
-	// Gather location only if bucketName is present.
-	if metadata.bucketName != "" && metadata.bucketLocation == "" {
-		location, err = c.getBucketLocation(metadata.bucketName)
-		if err != nil {
-			return nil, err
+	location := metadata.bucketLocation
+	if location == "" {
+		if metadata.bucketName != "" {
+			// Gather location only if bucketName is present.
+			location, err = c.getBucketLocation(metadata.bucketName)
+			if err != nil {
+				if ToErrorResponse(err).Code != "AccessDenied" {
+					return nil, err
+				}
+			}
+			// Upon AccessDenied error on fetching bucket location, default
+			// to possible locations based on endpoint URL. This can usually
+			// happen when GetBucketLocation() is disabled using IAM policies.
 		}
-	} else {
-		location = metadata.bucketLocation
+		if location == "" {
+			location = getDefaultLocation(c.endpointURL, c.region)
+		}
 	}
 
 	// Construct a new target URL.
@@ -575,8 +616,17 @@ func (c Client) newRequest(method string, metadata requestMetadata) (req *http.R
 		return nil, err
 	}
 
+	// Go net/http notoriously closes the request body.
+	// - The request Body, if non-nil, will be closed by the underlying Transport, even on errors.
+	// This can cause underlying *os.File seekers to fail, avoid that
+	// by making sure to wrap the closer as a nop.
+	var body io.ReadCloser
+	if metadata.contentBody != nil {
+		body = ioutil.NopCloser(metadata.contentBody)
+	}
+
 	// Initialize a new HTTP request for the method.
-	req, err = http.NewRequest(method, targetURL.String(), metadata.contentBody)
+	req, err = http.NewRequest(method, targetURL.String(), body)
 	if err != nil {
 		return nil, err
 	}

@@ -17,11 +17,7 @@
 package minio
 
 import (
-	"crypto/md5"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
-	"hash"
 	"io"
 	"io/ioutil"
 	"mime"
@@ -109,11 +105,9 @@ func (c Client) FPutObject(bucketName, objectName, filePath, contentType string)
 // putObjectMultipartFromFile - Creates object from contents of *os.File
 //
 // NOTE: This function is meant to be used for readers with local
-// file as in *os.File. This function resumes by skipping all the
-// necessary parts which were already uploaded by verifying them
-// against MD5SUM of each individual parts. This function also
-// effectively utilizes file system capabilities of reading from
-// specific sections and not having to create temporary files.
+// file as in *os.File. This function effectively utilizes file
+// system capabilities of reading from specific sections and not
+// having to create temporary files.
 func (c Client) putObjectMultipartFromFile(bucketName, objectName string, fileReader io.ReaderAt, fileSize int64, metaData map[string][]string, progress io.Reader) (int64, error) {
 	// Input validation.
 	if err := s3utils.CheckValidBucketName(bucketName); err != nil {
@@ -123,8 +117,8 @@ func (c Client) putObjectMultipartFromFile(bucketName, objectName string, fileRe
 		return 0, err
 	}
 
-	// Get the upload id of a previously partially uploaded object or initiate a new multipart upload
-	uploadID, partsInfo, err := c.getMpartUploadSession(bucketName, objectName, metaData)
+	// Initiate a new multipart upload.
+	uploadID, err := c.newUploadID(bucketName, objectName, metaData)
 	if err != nil {
 		return 0, err
 	}
@@ -152,6 +146,9 @@ func (c Client) putObjectMultipartFromFile(bucketName, objectName string, fileRe
 	// Just for readability.
 	lastPartNumber := totalPartsCount
 
+	// Initialize parts uploaded map.
+	partsInfo := make(map[int]ObjectPart)
+
 	// Send each part through the partUploadCh to be uploaded.
 	for p := 1; p <= totalPartsCount; p++ {
 		part, ok := partsInfo[p]
@@ -170,12 +167,7 @@ func (c Client) putObjectMultipartFromFile(bucketName, objectName string, fileRe
 			for uploadReq := range uploadPartsCh {
 				// Add hash algorithms that need to be calculated by computeHash()
 				// In case of a non-v4 signature or https connection, sha256 is not needed.
-				hashAlgos := make(map[string]hash.Hash)
-				hashSums := make(map[string][]byte)
-				hashAlgos["md5"] = md5.New()
-				if c.overrideSignerType.IsV4() && !c.secure {
-					hashAlgos["sha256"] = sha256.New()
-				}
+				hashAlgos, hashSums := c.hashMaterials()
 
 				// If partNumber was not uploaded we calculate the missing
 				// part offset and size. For all other part numbers we
@@ -204,36 +196,24 @@ func (c Client) putObjectMultipartFromFile(bucketName, objectName string, fileRe
 					return
 				}
 
-				// Create the part to be uploaded.
-				verifyObjPart := ObjectPart{
-					ETag:       hex.EncodeToString(hashSums["md5"]),
-					PartNumber: uploadReq.PartNum,
-					Size:       partSize,
-				}
-
-				// If this is the last part do not give it the full part size.
-				if uploadReq.PartNum == lastPartNumber {
-					verifyObjPart.Size = lastPartSize
-				}
-
-				// Verify if part should be uploaded.
-				if shouldUploadPart(verifyObjPart, uploadReq) {
-					// Proceed to upload the part.
-					var objPart ObjectPart
-					objPart, err = c.uploadPart(bucketName, objectName, uploadID, sectionReader, uploadReq.PartNum, hashSums["md5"], hashSums["sha256"], prtSize)
-					if err != nil {
-						uploadedPartsCh <- uploadedPartRes{
-							Error: err,
-						}
-						// Exit the goroutine.
-						return
+				// Proceed to upload the part.
+				var objPart ObjectPart
+				objPart, err = c.uploadPart(bucketName, objectName, uploadID, sectionReader, uploadReq.PartNum,
+					hashSums["md5"], hashSums["sha256"], prtSize)
+				if err != nil {
+					uploadedPartsCh <- uploadedPartRes{
+						Error: err,
 					}
-					// Save successfully uploaded part metadata.
-					uploadReq.Part = &objPart
+					// Exit the goroutine.
+					return
 				}
+
+				// Save successfully uploaded part metadata.
+				uploadReq.Part = &objPart
+
 				// Return through the channel the part size.
 				uploadedPartsCh <- uploadedPartRes{
-					Size:    verifyObjPart.Size,
+					Size:    missingPartSize,
 					PartNum: uploadReq.PartNum,
 					Part:    uploadReq.Part,
 					Error:   nil,

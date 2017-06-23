@@ -306,10 +306,10 @@
 			"revisionTime": "2016-02-29T08:42:30-08:00"
 		},
 		{
-			"checksumSHA1": "o6xvhvD7RCOkBZ5pUPOsPcsz/B8=",
+			"checksumSHA1": "vRZLSG4FsBdanI19VMtKf17jzZA=",
 			"path": "github.com/minio/minio-go",
-			"revision": "79aa9c39f7be2cdf802aa550a00850dbc1e37835",
-			"revisionTime": "2017-06-19T22:00:32Z"
+			"revision": "2cca719d0760cc8906b0843a3e1e93fe9dbd8bb4",
+			"revisionTime": "2017-06-23T21:21:08Z"
 		},
 		{
 			"checksumSHA1": "wDNvEYgDy1gOkzJ81WuuYore3dw=",
