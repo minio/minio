@@ -270,7 +270,7 @@ func gcsGatewayMain(ctx *cli.Context) {
 		cli.ShowCommandHelpAndExit(ctx, "gcs", 1)
 	}
 
-	if !isValidGCSProjectID(ctx.Args().First()) {
+	if !isValidGCSProjectIDFormat(ctx.Args().First()) {
 		errorIf(errGCSInvalidProjectID, "Unable to start GCS gateway with %s", ctx.Args().First())
 		cli.ShowCommandHelpAndExit(ctx, "gcs", 1)
 	}

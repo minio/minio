@@ -66,8 +66,8 @@ func TestToGCSPageToken(t *testing.T) {
 
 }
 
-// TestValidGCSProjectID tests the behavior of isValidGCSProjectID
-func TestValidGCSProjectID(t *testing.T) {
+// TestIsValidGCSProjectIDFormat tests isValidGCSProjectIDFormat
+func TestValidGCSProjectIDFormat(t *testing.T) {
 	testCases := []struct {
 		ProjectID string
 		Valid     bool
@@ -93,8 +93,9 @@ func TestValidGCSProjectID(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		if isValidGCSProjectID(testCase.ProjectID) != testCase.Valid {
-			t.Errorf("Test %d: Expected %v, got %v", i+1, isValidGCSProjectID(testCase.ProjectID), testCase.Valid)
+		valid := isValidGCSProjectIDFormat(testCase.ProjectID)
+		if valid != testCase.Valid {
+			t.Errorf("Test %d: Expected %v, got %v", i+1, valid, testCase.Valid)
 		}
 	}
 }
