@@ -36,8 +36,8 @@ type owner struct {
 	ID          string
 }
 
-// commonPrefix container for prefix response.
-type commonPrefix struct {
+// CommonPrefix container for prefix response.
+type CommonPrefix struct {
 	Prefix string
 }
 
@@ -45,7 +45,7 @@ type commonPrefix struct {
 type ListBucketV2Result struct {
 	// A response can contain CommonPrefixes only if you have
 	// specified a delimiter.
-	CommonPrefixes []commonPrefix
+	CommonPrefixes []CommonPrefix
 	// Metadata about each object returned.
 	Contents  []ObjectInfo
 	Delimiter string
@@ -74,7 +74,7 @@ type ListBucketV2Result struct {
 type ListBucketResult struct {
 	// A response can contain CommonPrefixes only if you have
 	// specified a delimiter.
-	CommonPrefixes []commonPrefix
+	CommonPrefixes []CommonPrefix
 	// Metadata about each object returned.
 	Contents  []ObjectInfo
 	Delimiter string
@@ -116,7 +116,7 @@ type ListMultipartUploadsResult struct {
 	Prefix             string
 	Delimiter          string
 	// A response can contain CommonPrefixes only if you specify a delimiter.
-	CommonPrefixes []commonPrefix
+	CommonPrefixes []CommonPrefix
 }
 
 // initiator container for who initiated multipart upload.

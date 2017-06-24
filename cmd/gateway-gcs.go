@@ -483,6 +483,29 @@ func (l *gcsGateway) GetObject(bucket string, key string, startOffset int64, len
 	return nil
 }
 
+// fromMinioClientListBucketResultToV2Info converts minio ListBucketResult to ListObjectsV2Info
+func fromMinioClientListBucketResultToV2Info(bucket string, result minio.ListBucketResult) ListObjectsV2Info {
+	objects := make([]ObjectInfo, len(result.Contents))
+
+	for i, oi := range result.Contents {
+		objects[i] = fromMinioClientObjectInfo(bucket, oi)
+	}
+
+	prefixes := make([]string, len(result.CommonPrefixes))
+	for i, p := range result.CommonPrefixes {
+		prefixes[i] = p.Prefix
+	}
+
+	return ListObjectsV2Info{
+		IsTruncated: result.IsTruncated,
+		Prefixes:    prefixes,
+		Objects:     objects,
+
+		ContinuationToken:     result.Marker,
+		NextContinuationToken: result.NextMarker,
+	}
+}
+
 // fromGCSAttrsToObjectInfo converts GCS BucketAttrs to gateway ObjectInfo
 func fromGCSAttrsToObjectInfo(attrs *storage.ObjectAttrs) ObjectInfo {
 	// All google cloud storage objects have a CRC32c hash, whereas composite objects may not have a MD5 hash

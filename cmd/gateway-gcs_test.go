@@ -16,7 +16,12 @@
 
 package cmd
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+
+	minio "github.com/minio/minio-go"
+)
 
 func TestToGCSPageToken(t *testing.T) {
 	testCases := []struct {
@@ -179,5 +184,28 @@ func TestGCSMultipartDataName(t *testing.T) {
 	got := gcsMultipartDataName(uploadID, etag)
 	if expected != got {
 		t.Errorf("expected: %s, got: %s", expected, got)
+	}
+}
+
+func TestFromMinioClientListBucketResultToV2Info(t *testing.T) {
+
+	listBucketResult := minio.ListBucketResult{
+		IsTruncated:    false,
+		Marker:         "testMarker",
+		NextMarker:     "testMarker2",
+		CommonPrefixes: []minio.CommonPrefix{{Prefix: "one"}, {Prefix: "two"}},
+		Contents:       []minio.ObjectInfo{{Key: "testobj", ContentType: ""}},
+	}
+
+	listBucketV2Info := ListObjectsV2Info{
+		Prefixes:              []string{"one", "two"},
+		Objects:               []ObjectInfo{{Name: "testobj", Bucket: "testbucket", UserDefined: map[string]string{"Content-Type": ""}}},
+		IsTruncated:           false,
+		ContinuationToken:     "testMarker",
+		NextContinuationToken: "testMarker2",
+	}
+
+	if got := fromMinioClientListBucketResultToV2Info("testbucket", listBucketResult); !reflect.DeepEqual(got, listBucketV2Info) {
+		t.Errorf("fromMinioClientListBucketResultToV2Info() = %v, want %v", got, listBucketV2Info)
 	}
 }

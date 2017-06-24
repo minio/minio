@@ -17,6 +17,7 @@
 package minio
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -86,8 +87,10 @@ func (c Client) ListObjectsV2(bucketName, objectPrefix string, recursive bool, d
 		// If recursive we do not delimit.
 		delimiter = ""
 	}
+
 	// Return object owner information by default
 	fetchOwner := true
+
 	// Validate bucket name.
 	if err := s3utils.CheckValidBucketName(bucketName); err != nil {
 		defer close(objectStatCh)
@@ -96,6 +99,7 @@ func (c Client) ListObjectsV2(bucketName, objectPrefix string, recursive bool, d
 		}
 		return objectStatCh
 	}
+
 	// Validate incoming object prefix.
 	if err := s3utils.CheckValidObjectNamePrefix(objectPrefix); err != nil {
 		defer close(objectStatCh)
@@ -122,7 +126,6 @@ func (c Client) ListObjectsV2(bucketName, objectPrefix string, recursive bool, d
 
 			// If contents are available loop through and send over channel.
 			for _, object := range result.Contents {
-				// Save the marker.
 				select {
 				// Send object content.
 				case objectStatCh <- object:
@@ -135,12 +138,12 @@ func (c Client) ListObjectsV2(bucketName, objectPrefix string, recursive bool, d
 			// Send all common prefixes if any.
 			// NOTE: prefixes are only present if the request is delimited.
 			for _, obj := range result.CommonPrefixes {
-				object := ObjectInfo{}
-				object.Key = obj.Prefix
-				object.Size = 0
 				select {
 				// Send object prefixes.
-				case objectStatCh <- object:
+				case objectStatCh <- ObjectInfo{
+					Key:  obj.Prefix,
+					Size: 0,
+				}:
 				// If receives done from the caller, return here.
 				case <-doneCh:
 					return
@@ -229,10 +232,17 @@ func (c Client) listObjectsV2Query(bucketName, objectPrefix, continuationToken s
 
 	// Decode listBuckets XML.
 	listBucketResult := ListBucketV2Result{}
-	err = xmlDecoder(resp.Body, &listBucketResult)
-	if err != nil {
+	if err = xmlDecoder(resp.Body, &listBucketResult); err != nil {
 		return listBucketResult, err
 	}
+
+	// This is an additional verification check to make
+	// sure proper responses are received.
+	if listBucketResult.IsTruncated && listBucketResult.NextContinuationToken == "" {
+		return listBucketResult, errors.New("Truncated response should have continuation token set")
+	}
+
+	// Success.
 	return listBucketResult, nil
 }
 

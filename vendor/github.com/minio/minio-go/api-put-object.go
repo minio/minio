@@ -17,9 +17,6 @@
 package minio
 
 import (
-	"crypto/md5"
-	"crypto/sha256"
-	"hash"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -146,14 +143,13 @@ func (a completedParts) Less(i, j int) bool { return a[i].PartNumber < a[j].Part
 //
 // You must have WRITE permissions on a bucket to create an object.
 //
-//  - For size smaller than 5MiB PutObject automatically does a single atomic Put operation.
-//  - For size larger than 5MiB PutObject automatically does a resumable multipart Put operation.
+//  - For size smaller than 64MiB PutObject automatically does a single atomic Put operation.
+//  - For size larger than 64MiB PutObject automatically does a multipart Put operation.
 //  - For size input as -1 PutObject does a multipart Put operation until input stream reaches EOF.
 //    Maximum object size that can be uploaded through this operation will be 5TiB.
 //
 // NOTE: Google Cloud Storage does not implement Amazon S3 Compatible multipart PUT.
 // So we fall back to single PUT operation with the maximum limit of 5GiB.
-//
 func (c Client) PutObject(bucketName, objectName string, reader io.Reader, contentType string) (n int64, err error) {
 	return c.PutObjectWithProgress(bucketName, objectName, reader, contentType, nil)
 }
@@ -211,12 +207,7 @@ func (c Client) putObjectSingle(bucketName, objectName string, reader io.Reader,
 
 	// Add the appropriate hash algorithms that need to be calculated by hashCopyN
 	// In case of non-v4 signature request or HTTPS connection, sha256 is not needed.
-	hashAlgos := make(map[string]hash.Hash)
-	hashSums := make(map[string][]byte)
-	hashAlgos["md5"] = md5.New()
-	if c.overrideSignerType.IsV4() && !c.secure {
-		hashAlgos["sha256"] = sha256.New()
-	}
+	hashAlgos, hashSums := c.hashMaterials()
 
 	// Initialize a new temporary file.
 	tmpFile, err := newTempFile("single$-putobject-single")

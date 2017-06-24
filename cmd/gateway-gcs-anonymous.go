@@ -111,9 +111,15 @@ func (l *gcsGateway) AnonListObjects(bucket string, prefix string, marker string
 	return fromMinioClientListBucketResult(bucket, result), nil
 }
 
-// AnonListObjectsV2 - List objects anonymously v2
-func (l *gcsGateway) AnonListObjectsV2(bucket, prefix, continuationToken string, fetchOwner bool, delimiter string, maxKeys int) (loi ListObjectsV2Info, e error) {
-	return loi, NotImplemented{}
+// AnonListObjectsV2 - List objects in V2 mode, anonymously
+func (l *gcsGateway) AnonListObjectsV2(bucket, prefix, continuationToken string, fetchOwner bool, delimiter string, maxKeys int) (ListObjectsV2Info, error) {
+	// Request V1 List Object to the backend
+	result, err := l.anonClient.ListObjects(bucket, prefix, continuationToken, delimiter, maxKeys)
+	if err != nil {
+		return ListObjectsV2Info{}, s3ToObjectError(traceError(err), bucket)
+	}
+	// translate V1 Result to V2Info
+	return fromMinioClientListBucketResultToV2Info(bucket, result), nil
 }
 
 // AnonGetBucketInfo - Get bucket metadata anonymously.
