@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"bufio"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -140,6 +141,30 @@ func IsKubernetes() bool {
 	return os.Getenv("KUBERNETES_SERVICE_HOST") != ""
 }
 
+// Minio Helm chart uses DownwardAPIFile to write pod label info to /podinfo/labels
+// More info: https://kubernetes.io/docs/tasks/inject-data-application/downward-api-volume-expose-pod-information/#store-pod-fields
+// Check if this is Helm package installation and report helm chart version
+func getHelmVersion(helmInfoFilePath string) string {
+	// Read the file exists.
+	helmInfoFile, err := os.Open(helmInfoFilePath)
+	// Log errors and return "" as Minio can be deployed without Helm charts as well.
+	if err != nil && !os.IsNotExist(err) {
+		errorIf(err, "Unable to read %s", helmInfoFilePath)
+		return ""
+	}
+
+	scanner := bufio.NewScanner(helmInfoFile)
+	for scanner.Scan() {
+		if strings.Contains(scanner.Text(), "chart=") {
+			helmChartVersion := strings.TrimPrefix(scanner.Text(), "chart=")
+			// remove quotes from the chart version
+			return strings.Trim(helmChartVersion, `"`)
+		}
+	}
+
+	return ""
+}
+
 func isSourceBuild(minioVersion string) bool {
 	_, err := time.Parse(time.RFC3339, minioVersion)
 	return err != nil
@@ -182,6 +207,15 @@ func getUserAgent(mode string) string {
 			userAgent += " Minio/" + "universe-" + universePkgVersion
 		}
 	}
+
+	if IsKubernetes() {
+		// In Kubernetes environment, try to fetch the helm package version
+		helmChartVersion := getHelmVersion("/podinfo/labels")
+		if helmChartVersion != "" {
+			userAgent += " Minio/" + "helm-" + helmChartVersion
+		}
+	}
+
 	return userAgent
 }
 
