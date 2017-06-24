@@ -29,6 +29,48 @@ import (
 	"github.com/Azure/azure-sdk-for-go/storage"
 )
 
+// Make anonymous HTTP request to azure endpoint.
+func azureAnonRequest(verb, urlStr string, header http.Header) (*http.Response, error) {
+	req, err := http.NewRequest(verb, urlStr, nil)
+	if err != nil {
+		return nil, err
+	}
+	if header != nil {
+		req.Header = header
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	// 4XX and 5XX are error HTTP codes.
+	if resp.StatusCode >= 400 && resp.StatusCode <= 511 {
+		defer resp.Body.Close()
+		respBody, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return nil, err
+		}
+
+		if len(respBody) == 0 {
+			// no error in response body, might happen in HEAD requests
+			return nil, storage.AzureStorageServiceError{
+				StatusCode: resp.StatusCode,
+				Code:       resp.Status,
+				Message:    "no response body was available for error status code",
+			}
+		}
+		// Response contains Azure storage service error object.
+		var storageErr storage.AzureStorageServiceError
+		if err := xml.Unmarshal(respBody, &storageErr); err != nil {
+			return nil, err
+		}
+		storageErr.StatusCode = resp.StatusCode
+		return nil, storageErr
+	}
+
+	return resp, nil
+}
+
 // AnonGetBucketInfo - Get bucket metadata from azure anonymously.
 func (a *azureObjects) AnonGetBucketInfo(bucket string) (bucketInfo BucketInfo, err error) {
 	url, err := url.Parse(a.client.GetBlobURL(bucket, ""))
@@ -36,11 +78,11 @@ func (a *azureObjects) AnonGetBucketInfo(bucket string) (bucketInfo BucketInfo, 
 		return bucketInfo, azureToObjectError(traceError(err))
 	}
 	url.RawQuery = "restype=container"
-	resp, err := http.Head(url.String())
+	resp, err := azureAnonRequest(httpHEAD, url.String(), nil)
 	if err != nil {
 		return bucketInfo, azureToObjectError(traceError(err), bucket)
 	}
-	resp.Body.Close()
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		return bucketInfo, azureToObjectError(traceError(anonErrToObjectErr(resp.StatusCode, bucket)), bucket)
@@ -67,19 +109,14 @@ func (a *azureObjects) AnonPutObject(bucket, object string, size int64, data io.
 // AnonGetObject - SendGET request without authentication.
 // This is needed when clients send GET requests on objects that can be downloaded without auth.
 func (a *azureObjects) AnonGetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) (err error) {
-	u := a.client.GetBlobURL(bucket, object)
-	req, err := http.NewRequest("GET", u, nil)
-	if err != nil {
-		return azureToObjectError(traceError(err), bucket, object)
-	}
-
+	h := make(http.Header)
 	if length > 0 && startOffset > 0 {
-		req.Header.Add("Range", fmt.Sprintf("bytes=%d-%d", startOffset, startOffset+length-1))
+		h.Add("Range", fmt.Sprintf("bytes=%d-%d", startOffset, startOffset+length-1))
 	} else if startOffset > 0 {
-		req.Header.Add("Range", fmt.Sprintf("bytes=%d-", startOffset))
+		h.Add("Range", fmt.Sprintf("bytes=%d-", startOffset))
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := azureAnonRequest(httpGET, a.client.GetBlobURL(bucket, object), h)
 	if err != nil {
 		return azureToObjectError(traceError(err), bucket, object)
 	}
@@ -96,11 +133,11 @@ func (a *azureObjects) AnonGetObject(bucket, object string, startOffset int64, l
 // AnonGetObjectInfo - Send HEAD request without authentication and convert the
 // result to ObjectInfo.
 func (a *azureObjects) AnonGetObjectInfo(bucket, object string) (objInfo ObjectInfo, err error) {
-	resp, err := http.Head(a.client.GetBlobURL(bucket, object))
+	resp, err := azureAnonRequest(httpHEAD, a.client.GetBlobURL(bucket, object), nil)
 	if err != nil {
 		return objInfo, azureToObjectError(traceError(err), bucket, object)
 	}
-	resp.Body.Close()
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		return objInfo, azureToObjectError(traceError(anonErrToObjectErr(resp.StatusCode, bucket, object)), bucket, object)
@@ -153,7 +190,7 @@ func (a *azureObjects) AnonListObjects(bucket, prefix, marker, delimiter string,
 	}
 	url.RawQuery = q.Encode()
 
-	resp, err := http.Get(url.String())
+	resp, err := azureAnonRequest(httpGET, url.String(), nil)
 	if err != nil {
 		return result, azureToObjectError(traceError(err))
 	}
