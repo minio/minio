@@ -90,9 +90,18 @@ main() {
             go_build ${each_osarch}
         done
     else
-        for each_osarch in $(echo $chosen_osarch | sed 's/,/ /g'); do
-            go_build ${each_osarch}
+        local found=0
+        for each_osarch in ${SUPPORTED_OSARCH}; do
+            if [ "$chosen_osarch" = "$each_osarch" ]; then
+                found=1
+            fi
         done
+        if [ ${found} -eq 1 ]; then
+            go_build ${chosen_osarch}
+        else
+            echo "Unknown architecture \"${chosen_osarch}\""
+            exit 1
+        fi
     fi
 
 }
