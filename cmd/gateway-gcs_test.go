@@ -99,41 +99,6 @@ func TestValidGCSProjectID(t *testing.T) {
 	}
 }
 
-// Test for isGCSPrefix
-func TestIsGCSPrefix(t *testing.T) {
-	testCases := []struct {
-		prefix      string
-		expectedRes bool
-	}{
-		// Regular prefix without a trailing slash
-		{
-			prefix:      "hello",
-			expectedRes: false,
-		},
-		// Regular prefix with a trailing slash
-		{
-			prefix:      "hello/",
-			expectedRes: false,
-		},
-		// GCS prefix without a trailing slash
-		{
-			prefix:      gcsMinioPath,
-			expectedRes: true,
-		},
-		// GCS prefix with a trailing slash
-		{
-			prefix:      gcsMinioPath + "/",
-			expectedRes: true,
-		},
-	}
-
-	for i, tc := range testCases {
-		if actualRes := isGCSPrefix(tc.prefix); actualRes != tc.expectedRes {
-			t.Errorf("%d: Expected isGCSPrefix to return %v but got %v", i, tc.expectedRes, actualRes)
-		}
-	}
-}
-
 // Test for isGCSMarker.
 func TestIsGCSMarker(t *testing.T) {
 	testCases := []struct {
