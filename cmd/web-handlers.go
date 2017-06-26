@@ -919,7 +919,7 @@ func presignedGet(host, bucket, object string, expiry int64) string {
 	signature := getSignature(signingKey, stringToSign)
 
 	// Construct the final presigned URL.
-	return host + path + "?" + query + "&" + "X-Amz-Signature=" + signature
+	return host + getURLEncodedName(path) + "?" + query + "&" + "X-Amz-Signature=" + signature
 }
 
 // toJSONError converts regular errors into more user friendly
