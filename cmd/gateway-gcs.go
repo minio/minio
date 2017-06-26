@@ -268,12 +268,48 @@ func newGCSGateway(projectID string) (GatewayLayer, error) {
 		return nil, err
 	}
 
-	return &gcsGateway{
+	gateway := &gcsGateway{
 		client:     client,
 		projectID:  projectID,
 		ctx:        ctx,
 		anonClient: anonClient,
-	}, nil
+	}
+	// Start background process to cleanup old files in minio.sys.temp
+	go gateway.CleanupGCSMinioPath()
+	return gateway, nil
+}
+
+// Cleanup old files in minio.sys.temp of the given bucket.
+func (l *gcsGateway) CleanupGCSMinioPathBucket(bucket string) {
+	it := l.client.Bucket(bucket).Objects(l.ctx, &storage.Query{Prefix: gcsMinioPath, Versions: false})
+	for {
+		attrs, err := it.Next()
+		if err != nil {
+			return
+		}
+		if time.Since(attrs.Updated) > time.Hour*24*7 {
+			// Delete files older than 1 week.
+			err := l.client.Bucket(bucket).Object(attrs.Name).Delete(l.ctx)
+			if err != nil {
+				return
+			}
+		}
+	}
+}
+
+// Cleanup old files in minio.sys.temp of all buckets.
+func (l *gcsGateway) CleanupGCSMinioPath() {
+	for {
+		it := l.client.Buckets(l.ctx, l.projectID)
+		for {
+			attrs, err := it.Next()
+			if err != nil {
+				break
+			}
+			l.CleanupGCSMinioPathBucket(attrs.Name)
+		}
+		time.Sleep(time.Hour * 12)
+	}
 }
 
 // Shutdown - save any gateway metadata to disk
