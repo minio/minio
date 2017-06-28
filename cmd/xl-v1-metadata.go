@@ -37,10 +37,10 @@ const (
 
 // register bitrot algorithms
 func init() {
-	newSHA256 := func([]byte) bitrot.Hash {
+	newSHA256 := func([]byte, bitrot.Mode) bitrot.Hash {
 		return sha256.New()
 	}
-	newBLAKE2b := func([]byte) bitrot.Hash {
+	newBLAKE2b := func([]byte, bitrot.Mode) bitrot.Hash {
 		b2, _ := blake2b.New512(nil)
 		return b2
 	}

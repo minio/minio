@@ -176,7 +176,7 @@ func TestAvailableBitrotAlgorithms(t *testing.T) {
 			if len(key) != 0 {
 				t.Errorf("Algorithm %s: Generated key length is #%d instead of 0", alg.String(), len(key))
 			}
-			if _, err := alg.New(nil); err != nil {
+			if _, err := alg.New(nil, bitrot.Protect); err != nil {
 				t.Errorf("Algorithm %s: failed to create instance with nil key", alg.String())
 			}
 		}

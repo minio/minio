@@ -23,6 +23,16 @@ import (
 	"strconv"
 )
 
+// Mode specifies how the Hash will be used - either for protection or for verification.
+type Mode bool
+
+const (
+	// Protect indicates that the Hash is used for computing a checksum.
+	Protect Mode = true
+	// Verify indicates that the Hash is used for verifying a previous computed checksum.
+	Verify Mode = !Protect
+)
+
 // Algorithm identifies a bitrot detection algorithm that is implemented in another
 // package.
 type Algorithm uint
@@ -70,18 +80,18 @@ var names = []string{
 	ChaCha20Poly1305: "chacha20poly1305",
 }
 
-var hashes = make([]func([]byte) Hash, UnknownAlgorithm)
+var hashes = make([]func([]byte, Mode) Hash, UnknownAlgorithm)
 
 // New returns a new Hash implementing the given algorithm.
 // It returns an error if the given key cannot be used by the algorithm.
 // New panics if the algorithm is unknown.
-func (a Algorithm) New(key []byte) (Hash, error) {
+func (a Algorithm) New(key []byte, mode Mode) (Hash, error) {
 	if a.KeySize() != len(key) {
 		return nil, fmt.Errorf("bitrot: bad keysize %d for algorithm #%s", len(key), a)
 	}
 	f := hashes[a]
 	if f != nil {
-		return f(key), nil
+		return f(key, mode), nil
 	}
 	panic("bitrot: requested algorithm  #" + strconv.Itoa(int(a)) + " is not available")
 }
@@ -124,7 +134,7 @@ func (a Algorithm) GenerateKey(reader io.Reader) (key []byte, err error) {
 // RegisterAlgorithm registers a function that returns a new instance of the given
 // hash function. This is intended to be called from the init function in
 // packages that implement the hash function.
-func RegisterAlgorithm(alg Algorithm, f func([]byte) Hash) {
+func RegisterAlgorithm(alg Algorithm, f func(key []byte, mode Mode) Hash) {
 	if alg >= UnknownAlgorithm {
 		panic("bitrot: cannot register unknown algorithm")
 	}

@@ -37,7 +37,7 @@ func newHashWriters(diskCount int, algo bitrot.Algorithm) []bitrot.Hash {
 
 // newHash - gives you a newly allocated hash depending on the input algorithm.
 func newHash(algo bitrot.Algorithm) (h bitrot.Hash) {
-	h, _ = algo.New(nil)
+	h, _ = algo.New(nil, bitrot.Protect) // the mode is only necessary for ciphers, so it doesn't matter which mode we pass
 	return
 }
 
