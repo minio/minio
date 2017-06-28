@@ -63,16 +63,15 @@
 		},
 		{
 			"checksumSHA1": "k6yGM5Pb5Ex8pkbb1xWVc/Pr6G0=",
-			"origin": "github.com/minio/minio/vendor/github.com/aead/poly",
 			"path": "github.com/aead/poly",
 			"revision": "cd636c11f395e186703d4a978d28dabad0d990ef",
 			"revisionTime": "2017-06-28T02:51:18Z"
 		},
 		{
-			"checksumSHA1": "E3w8SwP9z/Vto/2lT2nNU70g7Rg=",
+			"checksumSHA1": "dvWiTk1aVJzotmOQbek8gkc7XNc=",
 			"path": "github.com/aead/poly1305",
-			"revision": "559ab853fe0556bc2fbac43b244a1ae425f78055",
-			"revisionTime": "2017-06-28T02:50:08Z"
+			"revision": "8f708478afd78b4ac45ebf7350b242887b5f31f0",
+			"revisionTime": "2017-06-28T16:56:05Z"
 		},
 		{
 			"path": "github.com/cheggaaa/pb",

@@ -18,10 +18,8 @@ const (
 // an attacker to forge messages at will.
 func Sum(msg []byte, key [32]byte) [TagSize]byte {
 	var (
-		h, r  [5]uint32
-		s     [4]uint32
-		block [TagSize]byte
-		off   int
+		h, r [5]uint32
+		s    [4]uint32
 	)
 	var out [TagSize]byte
 
@@ -34,7 +32,8 @@ func Sum(msg []byte, key [32]byte) [TagSize]byte {
 		msg = msg[n:]
 	}
 	if len(msg) > 0 {
-		off = copy(block[:], msg)
+		var block [TagSize]byte
+		off := copy(block[:], msg)
 		block[off] = 1
 		update(block[:], finalBlock, &h, &r)
 	}

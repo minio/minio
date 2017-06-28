@@ -93,7 +93,7 @@ func (a Algorithm) Available() bool {
 // String returns a string representation of the algorithm.
 // It panics if the algorithm is unknown.
 func (a Algorithm) String() string {
-	if a < UnknownAlgorithm && int(a) < len(keysizes) {
+	if a < UnknownAlgorithm && int(a) < len(names) {
 		return names[a]
 	}
 	panic("bitrot: requested algorithm  #" + strconv.Itoa(int(a)) + " is not available")
