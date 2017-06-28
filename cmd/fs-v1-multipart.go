@@ -461,7 +461,7 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	// do not leave a stale uploads.json behind.
 	objectMPartPathLock := globalNSMutex.NewNSLock(minioMetaMultipartBucket, pathJoin(bucket, object))
 	if err := objectMPartPathLock.GetLock(globalOperationTimeout); err != nil {
-		return PartInfo{}, err
+		return pi, err
 	}
 	defer objectMPartPathLock.Unlock()
 
@@ -563,7 +563,7 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	// while the part is getting appended in the background.
 	partLock := globalNSMutex.NewNSLock(minioMetaMultipartBucket, partPath)
 	if err = partLock.GetLock(globalOperationTimeout); err != nil {
-		return PartInfo{}, err
+		return pi, err
 	}
 
 	fsNSPartPath := pathJoin(fs.fsPath, minioMetaMultipartBucket, partPath)
@@ -692,7 +692,7 @@ func (fs fsObjects) ListObjectParts(bucket, object, uploadID string, partNumberM
 	// do not leave a stale uploads.json behind.
 	objectMPartPathLock := globalNSMutex.NewNSLock(minioMetaMultipartBucket, pathJoin(bucket, object))
 	if err := objectMPartPathLock.GetRLock(globalListingTimeout); err != nil {
-		return ListPartsInfo{}, err
+		return lpi, err
 	}
 	defer objectMPartPathLock.RUnlock()
 
@@ -737,7 +737,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 	// do not leave a stale uploads.json behind.
 	objectMPartPathLock := globalNSMutex.NewNSLock(minioMetaMultipartBucket, pathJoin(bucket, object))
 	if err = objectMPartPathLock.GetLock(globalOperationTimeout); err != nil {
-		return ObjectInfo{}, err
+		return oi, err
 	}
 	defer objectMPartPathLock.Unlock()
 

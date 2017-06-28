@@ -309,7 +309,7 @@ func (xl xlObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 		keyMarkerLock := globalNSMutex.NewNSLock(minioMetaMultipartBucket,
 			pathJoin(bucket, keyMarker))
 		if err = keyMarkerLock.GetRLock(globalListingTimeout); err != nil {
-			return ListMultipartsInfo{}, err
+			return lmi, err
 		}
 		for _, disk := range xl.getLoadBalancedDisks() {
 			if disk == nil {
@@ -377,7 +377,7 @@ func (xl xlObjects) listMultipartUploads(bucket, prefix, keyMarker, uploadIDMark
 			entryLock := globalNSMutex.NewNSLock(minioMetaMultipartBucket,
 				pathJoin(bucket, entry))
 			if err = entryLock.GetRLock(globalListingTimeout); err != nil {
-				return ListMultipartsInfo{}, err
+				return lmi, err
 			}
 			var disk StorageAPI
 			for _, disk = range xl.getLoadBalancedDisks() {
@@ -586,7 +586,7 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	// pre-check upload id lock.
 	preUploadIDLock := globalNSMutex.NewNSLock(minioMetaMultipartBucket, uploadIDPath)
 	if err := preUploadIDLock.GetRLock(globalOperationTimeout); err != nil {
-		return PartInfo{}, err
+		return pi, err
 	}
 	// Validates if upload ID exists.
 	if !xl.isUploadIDExists(bucket, object, uploadID) {
@@ -699,7 +699,7 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	// post-upload check (write) lock
 	postUploadIDLock := globalNSMutex.NewNSLock(minioMetaMultipartBucket, uploadIDPath)
 	if err = postUploadIDLock.GetLock(globalOperationTimeout); err != nil {
-		return PartInfo{}, err
+		return pi, err
 	}
 	defer postUploadIDLock.Unlock()
 
@@ -857,7 +857,7 @@ func (xl xlObjects) ListObjectParts(bucket, object, uploadID string, partNumberM
 	uploadIDLock := globalNSMutex.NewNSLock(minioMetaMultipartBucket,
 		pathJoin(bucket, object, uploadID))
 	if err := uploadIDLock.GetLock(globalListingTimeout); err != nil {
-		return ListPartsInfo{}, err
+		return lpi, err
 	}
 	defer uploadIDLock.Unlock()
 
@@ -888,7 +888,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	uploadIDLock := globalNSMutex.NewNSLock(minioMetaMultipartBucket,
 		pathJoin(bucket, object, uploadID))
 	if err := uploadIDLock.GetLock(globalOperationTimeout); err != nil {
-		return ObjectInfo{}, err
+		return oi, err
 	}
 	defer uploadIDLock.Unlock()
 
@@ -1062,7 +1062,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	objectMPartPathLock := globalNSMutex.NewNSLock(minioMetaMultipartBucket,
 		pathJoin(bucket, object))
 	if err = objectMPartPathLock.GetLock(globalOperationTimeout); err != nil {
-		return ObjectInfo{}, toObjectErr(err, bucket, object)
+		return oi toObjectErr(err, bucket, object)
 	}
 	defer objectMPartPathLock.Unlock()
 

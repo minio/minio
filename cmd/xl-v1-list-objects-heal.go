@@ -143,7 +143,7 @@ func (xl xlObjects) listObjectsHeal(bucket, prefix, marker, delimiter string, ma
 		// Check if the current object needs healing
 		objectLock := globalNSMutex.NewNSLock(bucket, objInfo.Name)
 		if err := objectLock.GetRLock(globalHealingTimeout); err != nil {
-			return ListObjectsInfo{}, err
+			return loi, err
 		}
 		partsMetadata, errs := readAllXLMetadata(xl.storageDisks, bucket, objInfo.Name)
 		if xlShouldHeal(xl.storageDisks, partsMetadata, errs, bucket, objInfo.Name) {
