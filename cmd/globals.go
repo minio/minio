@@ -137,8 +137,9 @@ var (
 
 // global colors.
 var (
-	colorBold = color.New(color.Bold).SprintFunc()
-	colorBlue = color.New(color.FgBlue).SprintfFunc()
+	colorBold   = color.New(color.Bold).SprintFunc()
+	colorBlue   = color.New(color.FgBlue).SprintfFunc()
+	colorYellow = color.New(color.FgYellow).SprintfFunc()
 )
 
 // Returns minio global information, as a key value map.

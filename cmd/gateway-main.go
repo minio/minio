@@ -181,6 +181,9 @@ func newGatewayLayer(backendType gatewayBackend, arg string) (GatewayLayer, erro
 	case s3Backend:
 		return newS3Gateway(arg)
 	case gcsBackend:
+		// FIXME: The following print command is temporary and
+		// will be removed when gcs is ready for production use.
+		log.Println(colorYellow("\n               *** Warning: Not Ready for Production ***"))
 		return newGCSGateway(arg)
 	}
 
