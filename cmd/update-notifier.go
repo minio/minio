@@ -28,25 +28,39 @@ import (
 	"github.com/fatih/color"
 )
 
+// computeUpdateMessage - calculates the update message, only if a
+// newer version is available.
+func computeUpdateMessage(downloadURL string, older time.Duration) string {
+	if downloadURL == "" || older <= 0 {
+		return ""
+	}
+
+	// Compute friendly duration string to indicate time
+	// difference between newer and current release.
+	t := time.Time{}
+	newerThan := humanize.RelTime(t, t.Add(older), "ago", "")
+
+	// Return the nicely colored and formatted update message.
+	return colorizeUpdateMessage(downloadURL, newerThan)
+}
+
 // colorizeUpdateMessage - inspired from Yeoman project npm package https://github.com/yeoman/update-notifier
-func colorizeUpdateMessage(updateString string, newerThan time.Duration) string {
+func colorizeUpdateMessage(updateString string, newerThan string) string {
 	// Initialize coloring.
 	cyan := color.New(color.FgCyan, color.Bold).SprintFunc()
 	yellow := color.New(color.FgYellow, color.Bold).SprintfFunc()
 
-	// Calculate length without color coding, due to ANSI color
-	// characters padded to actual string the final length is wrong
-	// than the original string length.
-	newerThanStr := humanize.Time(UTCNow().Add(newerThan))
+	msgLine1Fmt := " You are running an older version of Minio released %s "
+	msgLine2Fmt := " Update: %s "
 
-	line1Str := fmt.Sprintf(" You are running an older version of Minio released %s ", newerThanStr)
-	line2Str := fmt.Sprintf(" Update: %s ", updateString)
-	line1Length := len(line1Str)
-	line2Length := len(line2Str)
+	// Calculate length *without* color coding: with ANSI terminal
+	// color characters, the result is incorrect.
+	line1Length := len(fmt.Sprintf(msgLine1Fmt, newerThan))
+	line2Length := len(fmt.Sprintf(msgLine2Fmt, updateString))
 
 	// Populate lines with color coding.
-	line1InColor := fmt.Sprintf(" You are running an older version of Minio released %s ", yellow(newerThanStr))
-	line2InColor := fmt.Sprintf(" Update: %s ", cyan(updateString))
+	line1InColor := fmt.Sprintf(msgLine1Fmt, yellow(newerThan))
+	line2InColor := fmt.Sprintf(msgLine2Fmt, cyan(updateString))
 
 	// calculate the rectangular box size.
 	maxContentWidth := int(math.Max(float64(line1Length), float64(line2Length)))
@@ -60,7 +74,7 @@ func colorizeUpdateMessage(updateString string, newerThan time.Duration) string 
 
 	// Box cannot be printed if terminal width is small than maxContentWidth
 	if maxContentWidth > termWidth {
-		return "\n" + line1InColor + "\n" + line2InColor + "\n" + "\n"
+		return "\n" + line1InColor + "\n" + line2InColor + "\n\n"
 	}
 
 	topLeftChar := "┏"
@@ -79,14 +93,11 @@ func colorizeUpdateMessage(updateString string, newerThan time.Duration) string 
 		vertBarChar = "|"
 	}
 
-	message := "\n"
-	// Add top line
-	message += yellow(topLeftChar+strings.Repeat(horizBarChar, maxContentWidth)+topRightChar) + "\n"
-	// Add message lines
-	message += vertBarChar + line1InColor + strings.Repeat(" ", maxContentWidth-line1Length) + vertBarChar + "\n"
-	message += vertBarChar + line2InColor + strings.Repeat(" ", maxContentWidth-line2Length) + vertBarChar + "\n"
-	// Add bottom line
-	message += yellow(bottomLeftChar+strings.Repeat(horizBarChar, maxContentWidth)+bottomRightChar) + "\n"
-
-	return message
+	lines := []string{
+		yellow(topLeftChar + strings.Repeat(horizBarChar, maxContentWidth) + topRightChar),
+		vertBarChar + line1InColor + strings.Repeat(" ", maxContentWidth-line1Length) + vertBarChar,
+		vertBarChar + line2InColor + strings.Repeat(" ", maxContentWidth-line2Length) + vertBarChar,
+		yellow(bottomLeftChar + strings.Repeat(horizBarChar, maxContentWidth) + bottomRightChar),
+	}
+	return "\n" + strings.Join(lines, "\n") + "\n"
 }

@@ -32,8 +32,6 @@ func readDir(dirPath string) (entries []string, err error) {
 		// File is really not found.
 		if os.IsNotExist(err) {
 			return nil, errFileNotFound
-		} else if os.IsPermission(err) {
-			return nil, errFileAccessDenied
 		}
 
 		// File path cannot be verified since one of the parents is a file.

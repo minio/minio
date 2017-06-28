@@ -20,61 +20,142 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"os"
+	"runtime"
 	"strings"
 
 	"github.com/gorilla/mux"
 	"github.com/minio/cli"
 )
 
-var gatewayTemplate = `NAME:
+const azureGatewayTemplate = `NAME:
   {{.HelpName}} - {{.Usage}}
 
 USAGE:
-  {{.HelpName}} {{if .VisibleFlags}}[FLAGS]{{end}} BACKEND [ENDPOINT]
+  {{.HelpName}} {{if .VisibleFlags}}[FLAGS]{{end}} [ENDPOINT]
 {{if .VisibleFlags}}
 FLAGS:
   {{range .VisibleFlags}}{{.}}
   {{end}}{{end}}
-BACKEND:
-  azure: Microsoft Azure Blob Storage. Default ENDPOINT is https://core.windows.net
-  s3: Amazon Simple Storage Service (S3). Default ENDPOINT is https://s3.amazonaws.com
+ENDPOINT:
+  Azure server endpoint. Default ENDPOINT is https://core.windows.net
 
 ENVIRONMENT VARIABLES:
   ACCESS:
-     MINIO_ACCESS_KEY: Username or access key of your storage backend.
-     MINIO_SECRET_KEY: Password or secret key of your storage backend.
+     MINIO_ACCESS_KEY: Username or access key of Azure storage.
+     MINIO_SECRET_KEY: Password or secret key of Azure storage.
+
+  BROWSER:
+     MINIO_BROWSER: To disable web browser access, set this value to "off".
 
 EXAMPLES:
   1. Start minio gateway server for Azure Blob Storage backend.
       $ export MINIO_ACCESS_KEY=azureaccountname
       $ export MINIO_SECRET_KEY=azureaccountkey
-      $ {{.HelpName}} azure
+      $ {{.HelpName}}
 
-  2. Start minio gateway server for AWS S3 backend.
-      $ export MINIO_ACCESS_KEY=accesskey
-      $ export MINIO_SECRET_KEY=secretkey
-      $ {{.HelpName}} s3
-
-  3. Start minio gateway server for S3 backend on custom endpoint.
-      $ export MINIO_ACCESS_KEY=Q3AM3UQ867SPQQA43P2F
-      $ export MINIO_SECRET_KEY=zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG
-      $ {{.HelpName}} s3 https://play.minio.io:9000
+  2. Start minio gateway server for Azure Blob Storage backend on custom endpoint.
+      $ export MINIO_ACCESS_KEY=azureaccountname
+      $ export MINIO_SECRET_KEY=azureaccountkey
+      $ {{.HelpName}} https://azure.example.com
 `
 
-var gatewayCmd = cli.Command{
-	Name:               "gateway",
-	Usage:              "Start object storage gateway.",
-	Action:             gatewayMain,
-	CustomHelpTemplate: gatewayTemplate,
-	Flags: append(serverFlags,
-		cli.BoolFlag{
-			Name:  "quiet",
-			Usage: "Disable startup banner.",
-		},
-	),
-	HideHelpCommand: true,
-}
+const s3GatewayTemplate = `NAME:
+  {{.HelpName}} - {{.Usage}}
+
+USAGE:
+  {{.HelpName}} {{if .VisibleFlags}}[FLAGS]{{end}} [ENDPOINT]
+{{if .VisibleFlags}}
+FLAGS:
+  {{range .VisibleFlags}}{{.}}
+  {{end}}{{end}}
+ENDPOINT:
+  S3 server endpoint. Default ENDPOINT is https://s3.amazonaws.com
+
+ENVIRONMENT VARIABLES:
+  ACCESS:
+     MINIO_ACCESS_KEY: Username or access key of S3 storage.
+     MINIO_SECRET_KEY: Password or secret key of S3 storage.
+
+  BROWSER:
+     MINIO_BROWSER: To disable web browser access, set this value to "off".
+
+EXAMPLES:
+  1. Start minio gateway server for AWS S3 backend.
+      $ export MINIO_ACCESS_KEY=accesskey
+      $ export MINIO_SECRET_KEY=secretkey
+      $ {{.HelpName}}
+
+  2. Start minio gateway server for S3 backend on custom endpoint.
+      $ export MINIO_ACCESS_KEY=Q3AM3UQ867SPQQA43P2F
+      $ export MINIO_SECRET_KEY=zuf+tfteSlswRu7BJ86wekitnifILbZam1KYY3TG
+      $ {{.HelpName}} https://play.minio.io:9000
+`
+
+const gcsGatewayTemplate = `NAME:
+  {{.HelpName}} - {{.Usage}}
+
+USAGE:
+  {{.HelpName}} {{if .VisibleFlags}}[FLAGS]{{end}} PROJECTID
+{{if .VisibleFlags}}
+FLAGS:
+  {{range .VisibleFlags}}{{.}}
+  {{end}}{{end}}
+PROJECTID:
+  GCS project id, there are no defaults this is mandatory.
+
+ENVIRONMENT VARIABLES:
+  ACCESS:
+     MINIO_ACCESS_KEY: Username or access key of GCS.
+     MINIO_SECRET_KEY: Password or secret key of GCS.
+
+  BROWSER:
+     MINIO_BROWSER: To disable web browser access, set this value to "off".
+
+EXAMPLES:
+  1. Start minio gateway server for GCS backend.
+      $ export GOOGLE_APPLICATION_CREDENTIALS=/path/to/credentials.json
+      (Instructions to generate credentials : https://developers.google.com/identity/protocols/application-default-credentials)
+      $ export MINIO_ACCESS_KEY=accesskey
+      $ export MINIO_SECRET_KEY=secretkey
+      $ {{.HelpName}} mygcsprojectid
+
+`
+
+var (
+	azureBackendCmd = cli.Command{
+		Name:               "azure",
+		Usage:              "Microsoft Azure Blob Storage.",
+		Action:             azureGatewayMain,
+		CustomHelpTemplate: azureGatewayTemplate,
+		Flags:              append(serverFlags, globalFlags...),
+		HideHelpCommand:    true,
+	}
+
+	s3BackendCmd = cli.Command{
+		Name:               "s3",
+		Usage:              "Amazon Simple Storage Service (S3).",
+		Action:             s3GatewayMain,
+		CustomHelpTemplate: s3GatewayTemplate,
+		Flags:              append(serverFlags, globalFlags...),
+		HideHelpCommand:    true,
+	}
+	gcsBackendCmd = cli.Command{
+		Name:               "gcs",
+		Usage:              "Google Cloud Storage.",
+		Action:             gcsGatewayMain,
+		CustomHelpTemplate: gcsGatewayTemplate,
+		Flags:              append(serverFlags, globalFlags...),
+		HideHelpCommand:    true,
+	}
+
+	gatewayCmd = cli.Command{
+		Name:            "gateway",
+		Usage:           "Start object storage gateway.",
+		Flags:           append(serverFlags, globalFlags...),
+		HideHelpCommand: true,
+		Subcommands:     []cli.Command{azureBackendCmd, s3BackendCmd, gcsBackendCmd},
+	}
+)
 
 // Represents the type of the gateway backend.
 type gatewayBackend string
@@ -82,61 +163,31 @@ type gatewayBackend string
 const (
 	azureBackend gatewayBackend = "azure"
 	s3Backend    gatewayBackend = "s3"
+	gcsBackend   gatewayBackend = "gcs"
 	// Add more backends here.
 )
-
-// Returns access and secretkey set from environment variables.
-func mustGetGatewayCredsFromEnv() (accessKey, secretKey string) {
-	// Fetch access keys from environment variables.
-	accessKey = os.Getenv("MINIO_ACCESS_KEY")
-	secretKey = os.Getenv("MINIO_SECRET_KEY")
-	if accessKey == "" || secretKey == "" {
-		fatalIf(errors.New("Missing credentials"), "Access and secret keys are mandatory to run Minio gateway server.")
-	}
-	return accessKey, secretKey
-}
 
 // Initialize gateway layer depending on the backend type.
 // Supported backend types are
 //
 // - Azure Blob Storage.
+// - AWS S3.
+// - Google Cloud Storage.
 // - Add your favorite backend here.
-func newGatewayLayer(backendType, endpoint, accessKey, secretKey string, secure bool) (GatewayLayer, error) {
-	switch gatewayBackend(backendType) {
+func newGatewayLayer(backendType gatewayBackend, arg string) (GatewayLayer, error) {
+	switch backendType {
 	case azureBackend:
-		return newAzureLayer(endpoint, accessKey, secretKey, secure)
+		return newAzureLayer(arg)
 	case s3Backend:
-		return newS3Gateway(endpoint, accessKey, secretKey, secure)
+		return newS3Gateway(arg)
+	case gcsBackend:
+		// FIXME: The following print command is temporary and
+		// will be removed when gcs is ready for production use.
+		log.Println(colorYellow("\n               *** Warning: Not Ready for Production ***"))
+		return newGCSGateway(arg)
 	}
 
 	return nil, fmt.Errorf("Unrecognized backend type %s", backendType)
-}
-
-// Initialize a new gateway config.
-//
-// DO NOT save this config, this is meant to be
-// only used in memory.
-func newGatewayConfig(accessKey, secretKey, region string) error {
-	// Initialize server config.
-	srvCfg := newServerConfigV18()
-
-	// If env is set for a fresh start, save them to config file.
-	srvCfg.SetCredential(credential{
-		AccessKey: accessKey,
-		SecretKey: secretKey,
-	})
-
-	// Set custom region.
-	srvCfg.SetRegion(region)
-
-	// hold the mutex lock before a new config is assigned.
-	// Save the new config globally.
-	// unlock the mutex.
-	serverConfigMu.Lock()
-	serverConfig = srvCfg
-	serverConfigMu.Unlock()
-
-	return nil
 }
 
 // Return endpoint.
@@ -162,58 +213,121 @@ func parseGatewayEndpoint(arg string) (endPoint string, secure bool, err error) 
 	}
 }
 
-// Handler for 'minio gateway'.
-func gatewayMain(ctx *cli.Context) {
-	if !ctx.Args().Present() || ctx.Args().First() == "help" {
-		cli.ShowCommandHelpAndExit(ctx, "gateway", 1)
+// Validate gateway arguments.
+func validateGatewayArguments(serverAddr, endpointAddr string) error {
+	if err := CheckLocalServerAddr(serverAddr); err != nil {
+		return err
 	}
 
-	// Fetch access and secret key from env.
-	accessKey, secretKey := mustGetGatewayCredsFromEnv()
+	if runtime.GOOS == "darwin" {
+		_, port := mustSplitHostPort(serverAddr)
+		// On macOS, if a process already listens on LOCALIPADDR:PORT, net.Listen() falls back
+		// to IPv6 address i.e minio will start listening on IPv6 address whereas another
+		// (non-)minio process is listening on IPv4 of given port.
+		// To avoid this error situation we check for port availability only for macOS.
+		if err := checkPortAvailability(port); err != nil {
+			return err
+		}
+	}
 
-	// Initialize new gateway config.
-	//
-	// TODO: add support for custom region when we add
-	// support for S3 backend storage, currently this can
-	// default to "us-east-1"
-	newGatewayConfig(accessKey, secretKey, globalMinioDefaultRegion)
+	if endpointAddr != "" {
+		// Reject the endpoint if it points to the gateway handler itself.
+		sameTarget, err := sameLocalAddrs(endpointAddr, serverAddr)
+		if err != nil {
+			return err
+		}
+		if sameTarget {
+			return errors.New("endpoint points to the local gateway")
+		}
+	}
+	return nil
+}
 
+// Handler for 'minio gateway azure' command line.
+func azureGatewayMain(ctx *cli.Context) {
+	if ctx.Args().Present() && ctx.Args().First() == "help" {
+		cli.ShowCommandHelpAndExit(ctx, "azure", 1)
+	}
+
+	// Validate gateway arguments.
+	fatalIf(validateGatewayArguments(ctx.String("address"), ctx.Args().First()), "Invalid argument")
+
+	gatewayMain(ctx, azureBackend)
+}
+
+// Handler for 'minio gateway s3' command line.
+func s3GatewayMain(ctx *cli.Context) {
+	if ctx.Args().Present() && ctx.Args().First() == "help" {
+		cli.ShowCommandHelpAndExit(ctx, "s3", 1)
+	}
+
+	// Validate gateway arguments.
+	fatalIf(validateGatewayArguments(ctx.String("address"), ctx.Args().First()), "Invalid argument")
+
+	gatewayMain(ctx, s3Backend)
+}
+
+// Handler for 'minio gateway gcs' command line
+func gcsGatewayMain(ctx *cli.Context) {
+	if ctx.Args().Present() && ctx.Args().First() == "help" {
+		cli.ShowCommandHelpAndExit(ctx, "gcs", 1)
+	}
+
+	if !isValidGCSProjectIDFormat(ctx.Args().First()) {
+		errorIf(errGCSInvalidProjectID, "Unable to start GCS gateway with %s", ctx.Args().First())
+		cli.ShowCommandHelpAndExit(ctx, "gcs", 1)
+	}
+
+	gatewayMain(ctx, gcsBackend)
+}
+
+// Handler for 'minio gateway'.
+func gatewayMain(ctx *cli.Context, backendType gatewayBackend) {
 	// Get quiet flag from command line argument.
 	quietFlag := ctx.Bool("quiet") || ctx.GlobalBool("quiet")
 	if quietFlag {
 		log.EnableQuiet()
 	}
 
-	// First argument is selected backend type.
-	backendType := ctx.Args().Get(0)
-	// Second argument is the endpoint address (optional)
-	endpointAddr := ctx.Args().Get(1)
-	// Third argument is the address flag
-	serverAddr := ctx.String("address")
+	// Handle common command args.
+	handleCommonCmdArgs(ctx)
 
-	if endpointAddr != "" {
-		// Reject the endpoint if it points to the gateway handler itself.
-		sameTarget, err := sameLocalAddrs(endpointAddr, serverAddr)
-		fatalIf(err, "Unable to compare server and endpoint addresses.")
-		if sameTarget {
-			fatalIf(errors.New("endpoint points to the local gateway"), "Endpoint url is not allowed")
-		}
+	// Handle common env vars.
+	handleCommonEnvVars()
+
+	// Validate if we have access, secret set through environment.
+	if !globalIsEnvCreds {
+		fatalIf(fmt.Errorf("Access and Secret keys should be set through ENVs for backend [%s]", backendType), "")
 	}
 
-	// Second argument is endpoint.	If no endpoint is specified then the
-	// gateway implementation should use a default setting.
-	endPoint, secure, err := parseGatewayEndpoint(endpointAddr)
-	fatalIf(err, "Unable to parse endpoint")
+	// Create certs path.
+	fatalIf(createConfigDir(), "Unable to create configuration directories.")
 
-	// Create certs path for SSL configuration.
-	fatalIf(createConfigDir(), "Unable to create configuration directory")
+	// Initialize gateway config.
+	initConfig()
 
-	newObject, err := newGatewayLayer(backendType, endPoint, accessKey, secretKey, secure)
-	fatalIf(err, "Unable to initialize gateway layer")
+	// Enable loggers as per configuration file.
+	enableLoggers()
+
+	// Init the error tracing module.
+	initError()
+
+	// Check and load SSL certificates.
+	var err error
+	globalPublicCerts, globalRootCAs, globalIsSSL, err = getSSLConfig()
+	fatalIf(err, "Invalid SSL key file")
 
 	initNSLock(false) // Enable local namespace lock.
 
+	newObject, err := newGatewayLayer(backendType, ctx.Args().First())
+	fatalIf(err, "Unable to initialize gateway layer")
+
 	router := mux.NewRouter().SkipClean(true)
+
+	// Register web router when its enabled.
+	if globalIsBrowserEnabled {
+		fatalIf(registerWebRouter(router), "Unable to configure web browser")
+	}
 	registerGatewayAPIRouter(router, newObject)
 
 	var handlerFns = []HandlerFunc{
@@ -223,6 +337,13 @@ func gatewayMain(ctx *cli.Context) {
 		setRequestSizeLimitHandler,
 		// Adds 'crossdomain.xml' policy handler to serve legacy flash clients.
 		setCrossDomainPolicy,
+		// Validates all incoming requests to have a valid date header.
+		// Redirect some pre-defined browser request paths to a static location prefix.
+		setBrowserRedirectHandler,
+		// Validates if incoming request is for restricted buckets.
+		setPrivateBucketHandler,
+		// Adds cache control for all browser requests.
+		setBrowserCacheControlHandler,
 		// Validates all incoming requests to have a valid date header.
 		setTimeValidityHandler,
 		// CORS setting for all browser API requests.
@@ -234,12 +355,11 @@ func gatewayMain(ctx *cli.Context) {
 		// routes them accordingly. Client receives a HTTP error for
 		// invalid/unsupported signatures.
 		setAuthHandler,
+		// Add new handlers here.
+
 	}
 
-	apiServer := NewServerMux(serverAddr, registerHandlers(router, handlerFns...))
-
-	_, _, globalIsSSL, err = getSSLConfig()
-	fatalIf(err, "Invalid SSL key file")
+	apiServer := NewServerMux(ctx.String("address"), registerHandlers(router, handlerFns...))
 
 	// Start server, automatically configures TLS if certs are available.
 	go func() {
@@ -247,9 +367,7 @@ func gatewayMain(ctx *cli.Context) {
 		if globalIsSSL {
 			cert, key = getPublicCertFile(), getPrivateKeyFile()
 		}
-
-		aerr := apiServer.ListenAndServe(cert, key)
-		fatalIf(aerr, "Failed to start minio server")
+		fatalIf(apiServer.ListenAndServe(cert, key), "Failed to start minio server")
 	}()
 
 	// Once endpoints are finalized, initialize the new object api.
@@ -260,14 +378,20 @@ func gatewayMain(ctx *cli.Context) {
 	// Prints the formatted startup message once object layer is initialized.
 	if !quietFlag {
 		mode := ""
-		if gatewayBackend(backendType) == azureBackend {
+		switch gatewayBackend(backendType) {
+		case azureBackend:
 			mode = globalMinioModeGatewayAzure
-		} else if gatewayBackend(backendType) == s3Backend {
+		case gcsBackend:
+			mode = globalMinioModeGatewayGCS
+		case s3Backend:
 			mode = globalMinioModeGatewayS3
 		}
+
+		// Check update mode.
 		checkUpdate(mode)
-		apiEndpoints := getAPIEndpoints(apiServer.Addr)
-		printGatewayStartupMessage(apiEndpoints, accessKey, secretKey, backendType)
+
+		// Print gateway startup message.
+		printGatewayStartupMessage(getAPIEndpoints(apiServer.Addr), backendType)
 	}
 
 	<-globalServiceDoneCh

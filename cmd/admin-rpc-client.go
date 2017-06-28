@@ -113,15 +113,15 @@ func (rc remoteAdminClient) ReInitDisks() error {
 }
 
 // ServerInfoData - Returns the server info of this server.
-func (lc localAdminClient) ServerInfoData() (ServerInfoData, error) {
+func (lc localAdminClient) ServerInfoData() (sid ServerInfoData, e error) {
 	if globalBootTime.IsZero() {
-		return ServerInfoData{}, errServerNotInitialized
+		return sid, errServerNotInitialized
 	}
 
 	// Build storage info
 	objLayer := newObjectLayerFn()
 	if objLayer == nil {
-		return ServerInfoData{}, errServerNotInitialized
+		return sid, errServerNotInitialized
 	}
 	storage := objLayer.StorageInfo()
 
@@ -145,12 +145,12 @@ func (lc localAdminClient) ServerInfoData() (ServerInfoData, error) {
 }
 
 // ServerInfo - returns the server info of the server to which the RPC call is made.
-func (rc remoteAdminClient) ServerInfoData() (ServerInfoData, error) {
+func (rc remoteAdminClient) ServerInfoData() (sid ServerInfoData, e error) {
 	args := AuthRPCArgs{}
 	reply := ServerInfoDataReply{}
 	err := rc.Call(serverInfoDataRPC, &args, &reply)
 	if err != nil {
-		return ServerInfoData{}, err
+		return sid, err
 	}
 
 	return reply.ServerInfoData, nil
@@ -493,7 +493,7 @@ func getPeerConfig(peers adminPeers) ([]byte, error) {
 
 // getValidServerConfig - finds the server config that is present in
 // quorum or more number of servers.
-func getValidServerConfig(serverConfigs []serverConfigV13, errs []error) (serverConfigV13, error) {
+func getValidServerConfig(serverConfigs []serverConfigV13, errs []error) (scv serverConfigV13, e error) {
 	// majority-based quorum
 	quorum := len(serverConfigs)/2 + 1
 
@@ -566,7 +566,7 @@ func getValidServerConfig(serverConfigs []serverConfigV13, errs []error) (server
 
 	// If quorum nodes don't agree.
 	if maxOccurrence < quorum {
-		return serverConfigV13{}, errXLWriteQuorum
+		return scv, errXLWriteQuorum
 	}
 
 	return configJSON, nil

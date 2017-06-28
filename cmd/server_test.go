@@ -93,13 +93,6 @@ func (s *TestSuiteCommon) TearDownSuite(c *C) {
 	s.testServer.Stop()
 }
 
-func (s *TestSuiteCommon) TestAuth(c *C) {
-	cred := mustGetNewCredential()
-
-	c.Assert(len(cred.AccessKey), Equals, accessKeyMaxLen)
-	c.Assert(len(cred.SecretKey), Equals, secretKeyMaxLen)
-}
-
 func (s *TestSuiteCommon) TestBucketSQSNotificationWebHook(c *C) {
 	// Sample bucket notification.
 	bucketNotificationBuf := `<NotificationConfiguration><QueueConfiguration><Event>s3:ObjectCreated:Put</Event><Filter><S3Key><FilterRule><Name>prefix</Name><Value>images/</Value></FilterRule></S3Key></Filter><Id>1</Id><Queue>arn:minio:sqs:us-east-1:444455556666:webhook</Queue></QueueConfiguration></NotificationConfiguration>`
@@ -1626,7 +1619,8 @@ func (s *TestSuiteCommon) TestListObjectsHandler(c *C) {
 	c.Assert(err, IsNil)
 
 	c.Assert(strings.Contains(string(getContent), "<Key>bar</Key>"), Equals, true)
-	c.Assert(strings.Contains(string(getContent), "<Owner><ID>minio</ID><DisplayName>minio</DisplayName></Owner>"), Equals, true)
+	c.Assert(strings.Contains(string(getContent), fmt.Sprintf("<Owner><ID>%s</ID><DisplayName></DisplayName></Owner>",
+		globalMinioDefaultOwnerID)), Equals, true)
 
 }
 

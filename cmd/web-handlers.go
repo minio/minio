@@ -50,12 +50,12 @@ type WebGenericRep struct {
 
 // ServerInfoRep - server info reply.
 type ServerInfoRep struct {
-	MinioVersion  string
-	MinioMemory   string
-	MinioPlatform string
-	MinioRuntime  string
-	MinioEnvVars  []string
-	UIVersion     string `json:"uiVersion"`
+	MinioVersion    string
+	MinioMemory     string
+	MinioPlatform   string
+	MinioRuntime    string
+	MinioGlobalInfo map[string]interface{}
+	UIVersion       string `json:"uiVersion"`
 }
 
 // ServerInfo - get server info.
@@ -80,8 +80,8 @@ func (web *webAPIHandlers) ServerInfo(r *http.Request, args *WebGenericArgs, rep
 		runtime.GOARCH)
 	goruntime := fmt.Sprintf("Version: %s | CPUs: %s", runtime.Version(), strconv.Itoa(runtime.NumCPU()))
 
-	reply.MinioEnvVars = os.Environ()
 	reply.MinioVersion = Version
+	reply.MinioGlobalInfo = getGlobalInfo()
 	reply.MinioMemory = mem
 	reply.MinioPlatform = platform
 	reply.MinioRuntime = goruntime
@@ -134,7 +134,8 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 		return toJSONError(errOperationTimedOut)
 	}
 	defer bucketLock.Unlock()
-	if err := objectAPI.MakeBucket(args.BucketName); err != nil {
+
+	if err := objectAPI.MakeBucketWithLocation(args.BucketName, serverConfig.GetRegion()); err != nil {
 		return toJSONError(err, args.BucketName)
 	}
 
@@ -687,7 +688,25 @@ func readBucketAccessPolicy(objAPI ObjectLayer, bucketName string) (policy.Bucke
 
 }
 
-// GetBucketPolicy - get bucket policy.
+func getBucketAccessPolicy(objAPI ObjectLayer, bucketName string) (policy.BucketAccessPolicy, error) {
+	// FIXME: remove this code when S3 layer for gateway and server is unified.
+	var policyInfo policy.BucketAccessPolicy
+	var err error
+
+	switch layer := objAPI.(type) {
+	case *s3Objects:
+		policyInfo, err = layer.GetBucketPolicies(bucketName)
+	case *azureObjects:
+		policyInfo, err = layer.GetBucketPolicies(bucketName)
+	case *gcsGateway:
+		policyInfo, err = layer.GetBucketPolicies(bucketName)
+	default:
+		policyInfo, err = readBucketAccessPolicy(objAPI, bucketName)
+	}
+	return policyInfo, err
+}
+
+// GetBucketPolicy - get bucket policy for the requested prefix.
 func (web *webAPIHandlers) GetBucketPolicy(r *http.Request, args *GetBucketPolicyArgs, reply *GetBucketPolicyRep) error {
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
@@ -698,9 +717,12 @@ func (web *webAPIHandlers) GetBucketPolicy(r *http.Request, args *GetBucketPolic
 		return toJSONError(errAuthentication)
 	}
 
-	policyInfo, err := readBucketAccessPolicy(objectAPI, args.BucketName)
+	var policyInfo, err = getBucketAccessPolicy(objectAPI, args.BucketName)
 	if err != nil {
-		return toJSONError(err, args.BucketName)
+		_, ok := errorCause(err).(PolicyNotFound)
+		if !ok {
+			return toJSONError(err, args.BucketName)
+		}
 	}
 
 	reply.UIVersion = browser.UIVersion
@@ -737,11 +759,13 @@ func (web *webAPIHandlers) ListAllBucketPolicies(r *http.Request, args *ListAllB
 		return toJSONError(errAuthentication)
 	}
 
-	policyInfo, err := readBucketAccessPolicy(objectAPI, args.BucketName)
+	var policyInfo, err = getBucketAccessPolicy(objectAPI, args.BucketName)
 	if err != nil {
-		return toJSONError(err, args.BucketName)
+		_, ok := errorCause(err).(PolicyNotFound)
+		if !ok {
+			return toJSONError(err, args.BucketName)
+		}
 	}
-
 	reply.UIVersion = browser.UIVersion
 	for prefix, policy := range policy.GetPolicies(policyInfo.Statements, args.BucketName) {
 		reply.Policies = append(reply.Policies, BucketAccessPolicy{
@@ -762,6 +786,8 @@ type SetBucketPolicyArgs struct {
 // SetBucketPolicy - set bucket policy.
 func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolicyArgs, reply *WebGenericRep) error {
 	objectAPI := web.ObjectAPI()
+	reply.UIVersion = browser.UIVersion
+
 	if objectAPI == nil {
 		return toJSONError(errServerNotInitialized)
 	}
@@ -777,17 +803,36 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 		}
 	}
 
-	policyInfo, err := readBucketAccessPolicy(objectAPI, args.BucketName)
+	var policyInfo, err = getBucketAccessPolicy(objectAPI, args.BucketName)
 	if err != nil {
-		return toJSONError(err, args.BucketName)
+		if _, ok := errorCause(err).(PolicyNotFound); !ok {
+			return toJSONError(err, args.BucketName)
+		}
+		policyInfo = policy.BucketAccessPolicy{Version: "2012-10-17"}
 	}
+
 	policyInfo.Statements = policy.SetPolicy(policyInfo.Statements, bucketP, args.BucketName, args.Prefix)
+	switch g := objectAPI.(type) {
+	case GatewayLayer:
+		if len(policyInfo.Statements) == 0 {
+			err = g.DeleteBucketPolicies(args.BucketName)
+			if err != nil {
+				return toJSONError(err, args.BucketName)
+			}
+			return nil
+		}
+		err = g.SetBucketPolicies(args.BucketName, policyInfo)
+		if err != nil {
+			return toJSONError(err)
+		}
+		return nil
+	}
+
 	if len(policyInfo.Statements) == 0 {
 		err = persistAndNotifyBucketPolicyChange(args.BucketName, policyChange{true, nil}, objectAPI)
 		if err != nil {
 			return toJSONError(err, args.BucketName)
 		}
-		reply.UIVersion = browser.UIVersion
 		return nil
 	}
 	data, err := json.Marshal(policyInfo)
@@ -806,7 +851,6 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 		}
 		return toJSONError(err, args.BucketName)
 	}
-	reply.UIVersion = browser.UIVersion
 	return nil
 }
 
@@ -883,7 +927,7 @@ func presignedGet(host, bucket, object string, expiry int64) string {
 	signature := getSignature(signingKey, stringToSign)
 
 	// Construct the final presigned URL.
-	return host + path + "?" + query + "&" + "X-Amz-Signature=" + signature
+	return host + getURLEncodedName(path) + "?" + query + "&" + "X-Amz-Signature=" + signature
 }
 
 // toJSONError converts regular errors into more user friendly
@@ -905,7 +949,7 @@ func toJSONError(err error, params ...string) (jerr *json2.Error) {
 	case "InvalidBucketName":
 		if len(params) > 0 {
 			jerr = &json2.Error{
-				Message: fmt.Sprintf("Bucket Name %s is invalid. Lowercase letters, period, numerals are the only allowed characters and should be minimum 3 characters in length.", params[0]),
+				Message: fmt.Sprintf("Bucket Name %s is invalid. Lowercase letters, period, hyphen, numerals are the only allowed characters and should be minimum 3 characters in length.", params[0]),
 			}
 		}
 	// Bucket not found custom error message.
@@ -986,39 +1030,46 @@ func toWebAPIError(err error) APIError {
 		}
 	}
 	// Convert error type to api error code.
-	var apiErrCode APIErrorCode
 	switch err.(type) {
 	case StorageFull:
-		apiErrCode = ErrStorageFull
+		return getAPIError(ErrStorageFull)
 	case BucketNotFound:
-		apiErrCode = ErrNoSuchBucket
+		return getAPIError(ErrNoSuchBucket)
 	case BucketExists:
-		apiErrCode = ErrBucketAlreadyOwnedByYou
+		return getAPIError(ErrBucketAlreadyOwnedByYou)
 	case BucketNameInvalid:
-		apiErrCode = ErrInvalidBucketName
+		return getAPIError(ErrInvalidBucketName)
 	case BadDigest:
-		apiErrCode = ErrBadDigest
+		return getAPIError(ErrBadDigest)
 	case IncompleteBody:
-		apiErrCode = ErrIncompleteBody
+		return getAPIError(ErrIncompleteBody)
 	case ObjectExistsAsDirectory:
-		apiErrCode = ErrObjectExistsAsDirectory
+		return getAPIError(ErrObjectExistsAsDirectory)
 	case ObjectNotFound:
-		apiErrCode = ErrNoSuchKey
+		return getAPIError(ErrNoSuchKey)
 	case ObjectNameInvalid:
-		apiErrCode = ErrNoSuchKey
+		return getAPIError(ErrNoSuchKey)
 	case InsufficientWriteQuorum:
-		apiErrCode = ErrWriteQuorum
+		return getAPIError(ErrWriteQuorum)
 	case InsufficientReadQuorum:
-		apiErrCode = ErrReadQuorum
+		return getAPIError(ErrReadQuorum)
 	case PolicyNesting:
-		apiErrCode = ErrPolicyNesting
-	default:
-		// Log unexpected and unhandled errors.
-		errorIf(err, errUnexpected.Error())
-		apiErrCode = ErrInternalError
+		return getAPIError(ErrPolicyNesting)
+	case NotImplemented:
+		return APIError{
+			Code:           "NotImplemented",
+			HTTPStatusCode: http.StatusBadRequest,
+			Description:    "Functionality not implemented",
+		}
 	}
-	apiErr := getAPIError(apiErrCode)
-	return apiErr
+
+	// Log unexpected and unhandled errors.
+	errorIf(err, errUnexpected.Error())
+	return APIError{
+		Code:           "InternalError",
+		HTTPStatusCode: http.StatusInternalServerError,
+		Description:    err.Error(),
+	}
 }
 
 // writeWebErrorResponse - set HTTP status code and write error description to the body.

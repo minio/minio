@@ -143,7 +143,7 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 	// objectNames[0].
 	// uploadIds [0].
 	// Create bucket before initiating NewMultipartUpload.
-	err = obj.MakeBucket(bucketName)
+	err = obj.MakeBucketWithLocation(bucketName, "")
 	if err != nil {
 		// Failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())
@@ -459,7 +459,7 @@ func testPostPolicyBucketHandlerRedirect(obj ObjectLayer, instanceType string, t
 	curTime := UTCNow()
 	curTimePlus5Min := curTime.Add(time.Minute * 5)
 
-	err = obj.MakeBucket(bucketName)
+	err = obj.MakeBucketWithLocation(bucketName, "")
 	if err != nil {
 		// Failed to create newbucket, abort.
 		t.Fatalf("%s : %s", instanceType, err.Error())

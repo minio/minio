@@ -49,10 +49,12 @@ func createLockTestServer(t *testing.T) (string, *lockServer, string) {
 	}
 
 	locker := &lockServer{
-		AuthRPCServer:   AuthRPCServer{},
-		serviceEndpoint: "rpc-path",
-		mutex:           sync.Mutex{},
-		lockMap:         make(map[string][]lockRequesterInfo),
+		AuthRPCServer: AuthRPCServer{},
+		ll: localLocker{
+			mutex:           sync.Mutex{},
+			serviceEndpoint: "rpc-path",
+			lockMap:         make(map[string][]lockRequesterInfo),
+		},
 	}
 	creds := serverConfig.GetCredential()
 	loginArgs := LoginRPCArgs{
@@ -93,7 +95,7 @@ func TestLockRpcServerLock(t *testing.T) {
 		if !result {
 			t.Errorf("Expected %#v, got %#v", true, result)
 		} else {
-			gotLri, _ := locker.lockMap["name"]
+			gotLri, _ := locker.ll.lockMap["name"]
 			expectedLri := []lockRequesterInfo{
 				{
 					writer:          true,
@@ -163,7 +165,7 @@ func TestLockRpcServerUnlock(t *testing.T) {
 		if !result {
 			t.Errorf("Expected %#v, got %#v", true, result)
 		} else {
-			gotLri, _ := locker.lockMap["name"]
+			gotLri, _ := locker.ll.lockMap["name"]
 			expectedLri := []lockRequesterInfo(nil)
 			if !testLockEquality(expectedLri, gotLri) {
 				t.Errorf("Expected %#v, got %#v", expectedLri, gotLri)
@@ -194,7 +196,7 @@ func TestLockRpcServerRLock(t *testing.T) {
 		if !result {
 			t.Errorf("Expected %#v, got %#v", true, result)
 		} else {
-			gotLri, _ := locker.lockMap["name"]
+			gotLri, _ := locker.ll.lockMap["name"]
 			expectedLri := []lockRequesterInfo{
 				{
 					writer:          false,
@@ -281,7 +283,7 @@ func TestLockRpcServerRUnlock(t *testing.T) {
 		if !result {
 			t.Errorf("Expected %#v, got %#v", true, result)
 		} else {
-			gotLri, _ := locker.lockMap["name"]
+			gotLri, _ := locker.ll.lockMap["name"]
 			expectedLri := []lockRequesterInfo{
 				{
 					writer:          false,
@@ -305,7 +307,7 @@ func TestLockRpcServerRUnlock(t *testing.T) {
 		if !result {
 			t.Errorf("Expected %#v, got %#v", true, result)
 		} else {
-			gotLri, _ := locker.lockMap["name"]
+			gotLri, _ := locker.ll.lockMap["name"]
 			expectedLri := []lockRequesterInfo(nil)
 			if !testLockEquality(expectedLri, gotLri) {
 				t.Errorf("Expected %#v, got %#v", expectedLri, gotLri)
@@ -427,6 +429,12 @@ func TestLockServers(t *testing.T) {
 		return
 	}
 
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
+	if err != nil {
+		t.Fatalf("Init Test config failed")
+	}
+	defer removeAll(rootPath)
+
 	currentIsDistXL := globalIsDistXL
 	defer func() {
 		globalIsDistXL = currentIsDistXL
@@ -471,9 +479,13 @@ func TestLockServers(t *testing.T) {
 	// Validates lock server initialization.
 	for i, testCase := range testCases {
 		globalIsDistXL = testCase.isDistXL
-		lockServers := newLockServers(testCase.endpoints)
-		if len(lockServers) != testCase.totalLockServers {
-			t.Fatalf("Test %d: Expected total %d, got %d", i+1, testCase.totalLockServers, len(lockServers))
+		globalLockServers = nil
+		_, _ = newDsyncNodes(testCase.endpoints)
+		if err != nil {
+			t.Fatalf("Got unexpected error initializing lock servers: %v", err)
+		}
+		if len(globalLockServers) != testCase.totalLockServers {
+			t.Fatalf("Test %d: Expected total %d, got %d", i+1, testCase.totalLockServers, len(globalLockServers))
 		}
 	}
 }

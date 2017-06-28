@@ -32,6 +32,7 @@ type notifier struct {
 	Kafka         kafkaConfigs         `json:"kafka"`
 	Webhook       webhookConfigs       `json:"webhook"`
 	MySQL         mySQLConfigs         `json:"mysql"`
+	MQTT          mqttConfigs          `json:"mqtt"`
 	// Add new notification queues.
 }
 
@@ -49,6 +50,25 @@ func (a amqpConfigs) Validate() error {
 	for k, v := range a {
 		if err := v.Validate(); err != nil {
 			return fmt.Errorf("AMQP [%s] configuration invalid: %s", k, err.Error())
+		}
+	}
+	return nil
+}
+
+type mqttConfigs map[string]mqttNotify
+
+func (a mqttConfigs) Clone() mqttConfigs {
+	a2 := make(mqttConfigs, len(a))
+	for k, v := range a {
+		a2[k] = v
+	}
+	return a2
+}
+
+func (a mqttConfigs) Validate() error {
+	for k, v := range a {
+		if err := v.Validate(); err != nil {
+			return fmt.Errorf("MQTT [%s] configuration invalid: %s", k, err.Error())
 		}
 	}
 	return nil
@@ -215,6 +235,9 @@ func (n *notifier) Validate() error {
 	if err := n.MySQL.Validate(); err != nil {
 		return err
 	}
+	if err := n.MQTT.Validate(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -234,6 +257,24 @@ func (n *notifier) GetAMQPByID(accountID string) amqpNotify {
 	n.RLock()
 	defer n.RUnlock()
 	return n.AMQP[accountID]
+}
+
+func (n *notifier) SetMQTTByID(accountID string, mqttn mqttNotify) {
+	n.Lock()
+	defer n.Unlock()
+	n.MQTT[accountID] = mqttn
+}
+
+func (n *notifier) GetMQTT() map[string]mqttNotify {
+	n.RLock()
+	defer n.RUnlock()
+	return n.MQTT.Clone()
+}
+
+func (n *notifier) GetMQTTByID(accountID string) mqttNotify {
+	n.RLock()
+	defer n.RUnlock()
+	return n.MQTT[accountID]
 }
 
 func (n *notifier) SetNATSByID(accountID string, natsn natsNotify) {

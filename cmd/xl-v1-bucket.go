@@ -30,7 +30,7 @@ var bucketMetadataOpIgnoredErrs = append(bucketOpIgnoredErrs, errVolumeNotFound)
 /// Bucket operations
 
 // MakeBucket - make a bucket.
-func (xl xlObjects) MakeBucket(bucket string) error {
+func (xl xlObjects) MakeBucketWithLocation(bucket, location string) error {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
 		return traceError(BucketNameInvalid{Bucket: bucket})
@@ -144,15 +144,15 @@ func (xl xlObjects) getBucketInfo(bucketName string) (bucketInfo BucketInfo, err
 }
 
 // GetBucketInfo - returns BucketInfo for a bucket.
-func (xl xlObjects) GetBucketInfo(bucket string) (BucketInfo, error) {
+func (xl xlObjects) GetBucketInfo(bucket string) (bi BucketInfo, e error) {
 	// Verify if bucket is valid.
 	if !IsValidBucketName(bucket) {
-		return BucketInfo{}, BucketNameInvalid{Bucket: bucket}
+		return bi, BucketNameInvalid{Bucket: bucket}
 	}
 
 	bucketInfo, err := xl.getBucketInfo(bucket)
 	if err != nil {
-		return BucketInfo{}, toObjectErr(err, bucket)
+		return bi, toObjectErr(err, bucket)
 	}
 	return bucketInfo, nil
 }

@@ -30,6 +30,8 @@ const (
 
 	// Static string indicating queue type 'amqp'.
 	queueTypeAMQP = "amqp"
+	// Static string indicating queue type 'mqtt'.
+	queueTypeMQTT = "mqtt"
 	// Static string indicating queue type 'nats'.
 	queueTypeNATS = "nats"
 	// Static string indicating queue type 'elasticsearch'.
@@ -77,6 +79,25 @@ func isAMQPQueue(sqsArn arnSQS) bool {
 		return false
 	}
 	defer amqpC.Close()
+	return true
+}
+
+// Returns true if mqttARN is for an MQTT queue.
+func isMQTTQueue(sqsArn arnSQS) bool {
+	if sqsArn.Type != queueTypeMQTT {
+		return false
+	}
+	mqttL := serverConfig.Notify.GetMQTTByID(sqsArn.AccountID)
+	if !mqttL.Enable {
+		return false
+	}
+	// Connect to mqtt server to validate.
+	mqttC, err := dialMQTT(mqttL)
+	if err != nil {
+		errorIf(err, "Unable to connect to mqtt service. %#v", mqttL)
+		return false
+	}
+	defer mqttC.Client.Disconnect(250)
 	return true
 }
 

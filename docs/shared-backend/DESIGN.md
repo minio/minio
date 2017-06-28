@@ -81,7 +81,7 @@ An example here shows how the contention is handled with GetObject().
 GetObject() holds a read lock on `fs.json`.
 
 ```go
-	fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, objectMetaPrefix, object, fsMetaJSONFile)
+	fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fsMetaJSONFile)
 	rlk, err := fs.rwPool.Open(fsMetaPath)
 	if err != nil {
 		return toObjectErr(traceError(err), bucket, object)
@@ -98,7 +98,7 @@ GetObject() holds a read lock on `fs.json`.
 A concurrent PutObject is requested on the same object, PutObject() attempts a write lock on `fs.json`.
 
 ```go
-	fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, objectMetaPrefix, object, fsMetaJSONFile)
+	fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fsMetaJSONFile)
 	wlk, err := fs.rwPool.Create(fsMetaPath)
 	if err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)

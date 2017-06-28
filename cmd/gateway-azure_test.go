@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"net/http"
+	"net/url"
 	"reflect"
 	"testing"
 
@@ -25,18 +26,33 @@ import (
 )
 
 // Test canonical metadata.
-func TestCanonicalMetadata(t *testing.T) {
-	metadata := map[string]string{
+func TestS3ToAzureHeaders(t *testing.T) {
+	headers := map[string]string{
 		"accept-encoding":  "gzip",
 		"content-encoding": "gzip",
 	}
-	expectedCanonicalM := map[string]string{
+	expectedHeaders := map[string]string{
 		"Accept-Encoding":  "gzip",
 		"Content-Encoding": "gzip",
 	}
-	actualCanonicalM := canonicalMetadata(metadata)
-	if !reflect.DeepEqual(actualCanonicalM, expectedCanonicalM) {
-		t.Fatalf("Test failed, expected %#v, got %#v", expectedCanonicalM, actualCanonicalM)
+	actualHeaders := s3ToAzureHeaders(headers)
+	if !reflect.DeepEqual(actualHeaders, expectedHeaders) {
+		t.Fatalf("Test failed, expected %#v, got %#v", expectedHeaders, actualHeaders)
+	}
+}
+
+func TestAzureToS3Metadata(t *testing.T) {
+	// Just one testcase. Adding more test cases does not add value to the testcase
+	// as azureToS3Metadata() just adds a prefix.
+	metadata := map[string]string{
+		"First-Name": "myname",
+	}
+	expectedMeta := map[string]string{
+		"X-Amz-Meta-First-Name": "myname",
+	}
+	actualMeta := azureToS3Metadata(metadata)
+	if !reflect.DeepEqual(actualMeta, expectedMeta) {
+		t.Fatalf("Test failed, expected %#v, got %#v", expectedMeta, actualMeta)
 	}
 }
 
@@ -138,5 +154,83 @@ func TestAzureParseBlockID(t *testing.T) {
 	_, _, err := azureParseBlockID("junk")
 	if err == nil {
 		t.Fatal("Expected azureParseBlockID() to return error")
+	}
+}
+
+// Test azureListBlobsGetParameters()
+func TestAzureListBlobsGetParameters(t *testing.T) {
+
+	// Test values set 1
+	expectedURLValues := url.Values{}
+	expectedURLValues.Set("prefix", "test")
+	expectedURLValues.Set("delimiter", "_")
+	expectedURLValues.Set("marker", "marker")
+	expectedURLValues.Set("include", "hello")
+	expectedURLValues.Set("maxresults", "20")
+	expectedURLValues.Set("timeout", "10")
+
+	setBlobParameters := storage.ListBlobsParameters{"test", "_", "marker", "hello", 20, 10}
+
+	// Test values set 2
+	expectedURLValues1 := url.Values{}
+
+	setBlobParameters1 := storage.ListBlobsParameters{"", "", "", "", 0, 0}
+
+	testCases := []struct {
+		name string
+		args storage.ListBlobsParameters
+		want url.Values
+	}{
+		{"TestIfValuesSet", setBlobParameters, expectedURLValues},
+		{"TestIfValuesNotSet", setBlobParameters1, expectedURLValues1},
+	}
+	for _, test := range testCases {
+		t.Run(test.name, func(t *testing.T) {
+			if got := azureListBlobsGetParameters(test.args); !reflect.DeepEqual(got, test.want) {
+				t.Errorf("azureListBlobsGetParameters() = %v, want %v", got, test.want)
+			}
+		})
+	}
+}
+
+func TestAnonErrToObjectErr(t *testing.T) {
+	testCases := []struct {
+		name       string
+		statusCode int
+		params     []string
+		wantErr    error
+	}{
+		{"ObjectNotFound",
+			http.StatusNotFound,
+			[]string{"testBucket", "testObject"},
+			ObjectNotFound{Bucket: "testBucket", Object: "testObject"},
+		},
+		{"BucketNotFound",
+			http.StatusNotFound,
+			[]string{"testBucket", ""},
+			BucketNotFound{Bucket: "testBucket"},
+		},
+		{"ObjectNameInvalid",
+			http.StatusBadRequest,
+			[]string{"testBucket", "testObject"},
+			ObjectNameInvalid{Bucket: "testBucket", Object: "testObject"},
+		},
+		{"BucketNameInvalid",
+			http.StatusBadRequest,
+			[]string{"testBucket", ""},
+			BucketNameInvalid{Bucket: "testBucket"},
+		},
+		{"UnexpectedError",
+			http.StatusBadGateway,
+			[]string{"testBucket", "testObject"},
+			errUnexpected,
+		},
+	}
+	for _, test := range testCases {
+		t.Run(test.name, func(t *testing.T) {
+			if err := anonErrToObjectErr(test.statusCode, test.params...); !reflect.DeepEqual(err, test.wantErr) {
+				t.Errorf("anonErrToObjectErr() error = %v, wantErr %v", err, test.wantErr)
+			}
+		})
 	}
 }

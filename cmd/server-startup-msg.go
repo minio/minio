@@ -19,6 +19,7 @@ package cmd
 import (
 	"crypto/x509"
 	"fmt"
+	"net/url"
 	"runtime"
 	"strings"
 
@@ -27,11 +28,12 @@ import (
 
 // Documentation links, these are part of message printing code.
 const (
-	mcQuickStartGuide   = "https://docs.minio.io/docs/minio-client-quickstart-guide"
-	goQuickStartGuide   = "https://docs.minio.io/docs/golang-client-quickstart-guide"
-	jsQuickStartGuide   = "https://docs.minio.io/docs/javascript-client-quickstart-guide"
-	javaQuickStartGuide = "https://docs.minio.io/docs/java-client-quickstart-guide"
-	pyQuickStartGuide   = "https://docs.minio.io/docs/python-client-quickstart-guide"
+	mcQuickStartGuide     = "https://docs.minio.io/docs/minio-client-quickstart-guide"
+	goQuickStartGuide     = "https://docs.minio.io/docs/golang-client-quickstart-guide"
+	jsQuickStartGuide     = "https://docs.minio.io/docs/javascript-client-quickstart-guide"
+	javaQuickStartGuide   = "https://docs.minio.io/docs/java-client-quickstart-guide"
+	pyQuickStartGuide     = "https://docs.minio.io/docs/python-client-quickstart-guide"
+	dotnetQuickStartGuide = "https://docs.minio.io/docs/dotnet-client-quickstart-guide"
 )
 
 // generates format string depending on the string length and padding.
@@ -43,12 +45,14 @@ func getFormatStr(strLen int, padding int) string {
 // Prints the formatted startup message.
 func printStartupMessage(apiEndPoints []string) {
 
+	strippedAPIEndpoints := stripStandardPorts(apiEndPoints)
+
 	// Prints credential, region and browser access.
-	printServerCommonMsg(apiEndPoints)
+	printServerCommonMsg(strippedAPIEndpoints)
 
 	// Prints `mc` cli configuration message chooses
 	// first endpoint as default.
-	printCLIAccessMsg(apiEndPoints[0])
+	printCLIAccessMsg(strippedAPIEndpoints[0], "myminio")
 
 	// Prints documentation message.
 	printObjectAPIMsg()
@@ -66,6 +70,34 @@ func printStartupMessage(apiEndPoints []string) {
 	}
 }
 
+// strip api endpoints list with standard ports such as
+// port "80" and "443" before displaying on the startup
+// banner.  Returns a new list of API endpoints.
+func stripStandardPorts(apiEndpoints []string) (newAPIEndpoints []string) {
+	newAPIEndpoints = make([]string, len(apiEndpoints))
+	// Check all API endpoints for standard ports and strip them.
+	for i, apiEndpoint := range apiEndpoints {
+		url, err := url.Parse(apiEndpoint)
+		if err != nil {
+			newAPIEndpoints[i] = apiEndpoint
+			continue
+		}
+		host, port := mustSplitHostPort(url.Host)
+		// For standard HTTP(s) ports such as "80" and "443"
+		// apiEndpoints should only be host without port.
+		switch {
+		case url.Scheme == "http" && port == "80":
+			fallthrough
+		case url.Scheme == "https" && port == "443":
+			url.Host = host
+			newAPIEndpoints[i] = url.String()
+		default:
+			newAPIEndpoints[i] = apiEndpoint
+		}
+	}
+	return newAPIEndpoints
+}
+
 // Prints common server startup message. Prints credential, region and browser access.
 func printServerCommonMsg(apiEndpoints []string) {
 	// Get saved credentials.
@@ -75,8 +107,9 @@ func printServerCommonMsg(apiEndpoints []string) {
 	region := serverConfig.GetRegion()
 
 	apiEndpointStr := strings.Join(apiEndpoints, "  ")
+
 	// Colorize the message and print.
-	log.Println(colorBlue("\nEndpoint: ") + colorBold(fmt.Sprintf(getFormatStr(len(apiEndpointStr), 1), apiEndpointStr)))
+	log.Println(colorBlue("Endpoint: ") + colorBold(fmt.Sprintf(getFormatStr(len(apiEndpointStr), 1), apiEndpointStr)))
 	log.Println(colorBlue("AccessKey: ") + colorBold(fmt.Sprintf("%s ", cred.AccessKey)))
 	log.Println(colorBlue("SecretKey: ") + colorBold(fmt.Sprintf("%s ", cred.SecretKey)))
 	if region != "" {
@@ -108,17 +141,17 @@ func printEventNotifiers() {
 
 // Prints startup message for command line access. Prints link to our documentation
 // and custom platform specific message.
-func printCLIAccessMsg(endPoint string) {
+func printCLIAccessMsg(endPoint string, alias string) {
 	// Get saved credentials.
 	cred := serverConfig.GetCredential()
 
 	// Configure 'mc', following block prints platform specific information for minio client.
 	log.Println(colorBlue("\nCommand-line Access: ") + mcQuickStartGuide)
 	if runtime.GOOS == globalWindowsOSName {
-		mcMessage := fmt.Sprintf("$ mc.exe config host add myminio %s %s %s", endPoint, cred.AccessKey, cred.SecretKey)
+		mcMessage := fmt.Sprintf("$ mc.exe config host add %s %s %s %s", alias, endPoint, cred.AccessKey, cred.SecretKey)
 		log.Println(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
 	} else {
-		mcMessage := fmt.Sprintf("$ mc config host add myminio %s %s %s", endPoint, cred.AccessKey, cred.SecretKey)
+		mcMessage := fmt.Sprintf("$ mc config host add %s %s %s %s", alias, endPoint, cred.AccessKey, cred.SecretKey)
 		log.Println(fmt.Sprintf(getFormatStr(len(mcMessage), 3), mcMessage))
 	}
 }
@@ -130,6 +163,7 @@ func printObjectAPIMsg() {
 	log.Println(colorBlue("   Java: ") + fmt.Sprintf(getFormatStr(len(javaQuickStartGuide), 6), javaQuickStartGuide))
 	log.Println(colorBlue("   Python: ") + fmt.Sprintf(getFormatStr(len(pyQuickStartGuide), 4), pyQuickStartGuide))
 	log.Println(colorBlue("   JavaScript: ") + jsQuickStartGuide)
+	log.Println(colorBlue("   .NET: ") + fmt.Sprintf(getFormatStr(len(dotnetQuickStartGuide), 6), dotnetQuickStartGuide))
 }
 
 // Get formatted disk/storage info message.
@@ -140,7 +174,7 @@ func getStorageInfoMsg(storageInfo StorageInfo) string {
 	if storageInfo.Backend.Type == Erasure {
 		diskInfo := fmt.Sprintf(" %d Online, %d Offline. ", storageInfo.Backend.OnlineDisks, storageInfo.Backend.OfflineDisks)
 		if maxDiskFailures := storageInfo.Backend.ReadQuorum - storageInfo.Backend.OfflineDisks; maxDiskFailures >= 0 {
-			diskInfo += fmt.Sprintf("We can withstand [%d] more drive failure(s).", maxDiskFailures)
+			diskInfo += fmt.Sprintf("We can withstand [%d] drive failure(s).", maxDiskFailures)
 		}
 		msg += colorBlue("\nStatus:") + fmt.Sprintf(getFormatStr(len(diskInfo), 8), diskInfo)
 	}

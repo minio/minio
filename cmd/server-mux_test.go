@@ -31,6 +31,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -108,20 +109,18 @@ func dial(addr string) error {
 
 // Tests initializing listeners.
 func TestInitListeners(t *testing.T) {
-	portTest1 := getFreePort()
-	portTest2 := getFreePort()
 	testCases := []struct {
 		serverAddr string
 		shouldPass bool
 	}{
 		// Test 1 with ip and port.
 		{
-			serverAddr: "127.0.0.1:" + portTest1,
+			serverAddr: net.JoinHostPort("127.0.0.1", "0"),
 			shouldPass: true,
 		},
 		// Test 2 only port.
 		{
-			serverAddr: ":" + portTest2,
+			serverAddr: net.JoinHostPort("", "0"),
 			shouldPass: true,
 		},
 		// Test 3 with no port error.
@@ -308,37 +307,45 @@ func TestServerListenAndServePlain(t *testing.T) {
 	// ListenAndServe in a goroutine, but we don't know when it's ready
 	go func() { errc <- m.ListenAndServe("", "") }()
 
-	wg := &sync.WaitGroup{}
-	wg.Add(1)
 	// Keep trying the server until it's accepting connections
 	go func() {
 		client := http.Client{Timeout: time.Millisecond * 10}
-		ok := false
-		for !ok {
+		for {
 			res, _ := client.Get("http://" + addr)
 			if res != nil && res.StatusCode == http.StatusOK {
-				ok = true
+				break
 			}
 		}
-
-		wg.Done()
 	}()
 
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		select {
+		case err := <-errc:
+			if err != nil {
+				t.Fatal(err)
+			}
+		case <-wait:
+			return
+		}
+	}()
+
+	// Wait until we get an error or wait closed
 	wg.Wait()
 
-	// Block until we get an error or wait closed
-	select {
-	case err := <-errc:
-		if err != nil {
-			t.Fatal(err)
-		}
-	case <-wait:
-		m.Close() // Shutdown the ServerMux
-		return
-	}
+	// Shutdown the ServerMux
+	m.Close()
 }
 
 func TestServerListenAndServeTLS(t *testing.T) {
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
+	if err != nil {
+		t.Fatalf("Init Test config failed")
+	}
+	defer removeAll(rootPath)
+
 	wait := make(chan struct{})
 	addr := net.JoinHostPort("127.0.0.1", getFreePort())
 	errc := make(chan error)
@@ -354,7 +361,7 @@ func TestServerListenAndServeTLS(t *testing.T) {
 	}))
 
 	// Create a cert
-	err := createConfigDir()
+	err = createConfigDir()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -374,7 +381,6 @@ func TestServerListenAndServeTLS(t *testing.T) {
 
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
-	// Keep trying the server until it's accepting connections
 	go func() {
 		tr := &http.Transport{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
@@ -383,39 +389,64 @@ func TestServerListenAndServeTLS(t *testing.T) {
 			Timeout:   time.Millisecond * 10,
 			Transport: tr,
 		}
-		okTLS := false
-		for !okTLS {
+		// Keep trying the server until it's accepting connections
+		start := UTCNow()
+		for {
 			res, _ := client.Get("https://" + addr)
 			if res != nil && res.StatusCode == http.StatusOK {
-				okTLS = true
+				break
+			}
+			// Explicit check to terminate loop after 5 minutes
+			// (for investigational purpose of issue #4461)
+			if UTCNow().Sub(start) >= 5*time.Minute {
+				t.Fatalf("Failed to establish connection after 5 minutes")
 			}
 		}
 
-		okNoTLS := false
-		for !okNoTLS {
-			res, _ := client.Get("http://" + addr)
-			// Without TLS we expect a re-direction from http to https
-			// And also the request is not rejected.
-			if res != nil && res.StatusCode == http.StatusOK && res.Request.URL.Scheme == httpsScheme {
-				okNoTLS = true
-			}
+		// Once a request succeeds, subsequent requests should
+		// work fine.
+		res, err := client.Get("http://" + addr)
+		if err != nil {
+			t.Errorf("Got unexpected error: %v", err)
+		}
+		// Without TLS we expect a Bad-Request response from the server.
+		if !(res != nil && res.StatusCode == http.StatusBadRequest && res.Request.URL.Scheme == httpScheme) {
+			t.Fatalf("Plaintext request to TLS server did not have expected response!")
+		}
+
+		body, err := ioutil.ReadAll(res.Body)
+		if err != nil {
+			t.Errorf("Error reading body")
+		}
+
+		// Check that the expected error is received.
+		bodyStr := string(body)
+		apiErr := getAPIError(ErrInsecureClientRequest)
+		if !(strings.Contains(bodyStr, apiErr.Code) && strings.Contains(bodyStr, apiErr.Description)) {
+			t.Fatalf("Plaintext request to TLS server did not have expected response body!")
 		}
 		wg.Done()
 	}()
 
-	wg.Wait()
-
-	// Block until we get an error or wait closed
-	select {
-	case err := <-errc:
-		if err != nil {
-			t.Error(err)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		select {
+		case err := <-errc:
+			if err != nil {
+				t.Error(err)
+				return
+			}
+		case <-wait:
 			return
 		}
-	case <-wait:
-		m.Close() // Shutdown the ServerMux
-		return
-	}
+	}()
+
+	// Wait until we get an error or wait closed
+	wg.Wait()
+
+	// Shutdown the ServerMux
+	m.Close()
 }
 
 // generateTestCert creates a cert and a key used for testing only

@@ -48,7 +48,7 @@ func (c RequestHeaders) SetMatchETag(etag string) error {
 	if etag == "" {
 		return ErrInvalidArgument("ETag cannot be empty.")
 	}
-	c.Set("If-Match", etag)
+	c.Set("If-Match", "\""+etag+"\"")
 	return nil
 }
 
@@ -57,7 +57,7 @@ func (c RequestHeaders) SetMatchETagExcept(etag string) error {
 	if etag == "" {
 		return ErrInvalidArgument("ETag cannot be empty.")
 	}
-	c.Set("If-None-Match", etag)
+	c.Set("If-None-Match", "\""+etag+"\"")
 	return nil
 }
 

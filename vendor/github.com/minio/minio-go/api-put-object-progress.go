@@ -20,6 +20,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/minio/minio-go/pkg/credentials"
 	"github.com/minio/minio-go/pkg/encrypt"
 	"github.com/minio/minio-go/pkg/s3utils"
 )
@@ -57,10 +58,10 @@ func (c Client) PutEncryptedObject(bucketName, objectName string, reader io.Read
 // PutObjectWithMetadata - with metadata.
 func (c Client) PutObjectWithMetadata(bucketName, objectName string, reader io.Reader, metaData map[string][]string, progress io.Reader) (n int64, err error) {
 	// Input validation.
-	if err := isValidBucketName(bucketName); err != nil {
+	if err := s3utils.CheckValidBucketName(bucketName); err != nil {
 		return 0, err
 	}
-	if err := isValidObjectName(objectName); err != nil {
+	if err := s3utils.CheckValidObjectName(objectName); err != nil {
 		return 0, err
 	}
 	if reader == nil {
@@ -82,20 +83,8 @@ func (c Client) PutObjectWithMetadata(bucketName, objectName string, reader io.R
 	}
 
 	// NOTE: Google Cloud Storage does not implement Amazon S3 Compatible multipart PUT.
-	// So we fall back to single PUT operation with the maximum limit of 5GiB.
 	if s3utils.IsGoogleEndpoint(c.endpointURL) {
-		if size <= -1 {
-			return 0, ErrorResponse{
-				Code:       "NotImplemented",
-				Message:    "Content-Length cannot be negative for file uploads to Google Cloud Storage.",
-				Key:        objectName,
-				BucketName: bucketName,
-			}
-		}
-		if size > maxSinglePutObjectSize {
-			return 0, ErrEntityTooLarge(size, maxSinglePutObjectSize, bucketName, objectName)
-		}
-		// Do not compute MD5 for Google Cloud Storage. Uploads up to 5GiB in size.
+		// Do not compute MD5 for Google Cloud Storage.
 		return c.putObjectNoChecksum(bucketName, objectName, reader, size, metaData, progress)
 	}
 
@@ -103,6 +92,7 @@ func (c Client) PutObjectWithMetadata(bucketName, objectName string, reader io.R
 	if size < minPartSize && size >= 0 {
 		return c.putObjectSingle(bucketName, objectName, reader, size, metaData, progress)
 	}
+
 	// For all sizes greater than 5MiB do multipart.
 	n, err = c.putObjectMultipart(bucketName, objectName, reader, size, metaData, progress)
 	if err != nil {
@@ -143,8 +133,8 @@ func (c Client) PutObjectStreamingWithProgress(bucketName, objectName string, re
 			BucketName: bucketName,
 		}
 	}
-	// This method should return error with signature v2 minioClient.
-	if c.signature.isV2() {
+
+	if c.overrideSignerType.IsV2() {
 		return 0, ErrorResponse{
 			Code:       "NotImplemented",
 			Message:    "AWS streaming signature v4 is not supported with minio client initialized for AWS signature v2",
@@ -173,8 +163,8 @@ func (c Client) PutObjectStreamingWithProgress(bucketName, objectName string, re
 		return c.putObjectMultipartStream(bucketName, objectName, reader, size, metadata, progress)
 	}
 
-	// Set signature type to streaming signature v4.
-	c.signature = SignatureV4Streaming
+	// Set streaming signature.
+	c.overrideSignerType = credentials.SignatureV4Streaming
 
 	if size < minPartSize && size >= 0 {
 		return c.putObjectNoChecksum(bucketName, objectName, reader, size, metadata, progress)

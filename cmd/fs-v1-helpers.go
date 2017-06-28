@@ -123,18 +123,27 @@ func fsMkdir(dirPath string) (err error) {
 	return nil
 }
 
-// Lookup if directory exists, returns directory
-// attributes upon success.
-func fsStatDir(statDir string) (os.FileInfo, error) {
-	if statDir == "" {
+func fsStat(statLoc string) (os.FileInfo, error) {
+	if statLoc == "" {
 		return nil, traceError(errInvalidArgument)
 	}
-	if err := checkPathLength(statDir); err != nil {
+	if err := checkPathLength(statLoc); err != nil {
+		return nil, traceError(err)
+	}
+	fi, err := osStat(preparePath(statLoc))
+	if err != nil {
 		return nil, traceError(err)
 	}
 
-	fi, err := osStat(preparePath(statDir))
+	return fi, nil
+}
+
+// Lookup if directory exists, returns directory
+// attributes upon success.
+func fsStatDir(statDir string) (os.FileInfo, error) {
+	fi, err := fsStat(statDir)
 	if err != nil {
+		err = errorCause(err)
 		if os.IsNotExist(err) {
 			return nil, traceError(errVolumeNotFound)
 		} else if os.IsPermission(err) {
@@ -152,16 +161,9 @@ func fsStatDir(statDir string) (os.FileInfo, error) {
 
 // Lookup if file exists, returns file attributes upon success
 func fsStatFile(statFile string) (os.FileInfo, error) {
-	if statFile == "" {
-		return nil, traceError(errInvalidArgument)
-	}
-
-	if err := checkPathLength(statFile); err != nil {
-		return nil, traceError(err)
-	}
-
-	fi, err := osStat(preparePath(statFile))
+	fi, err := fsStat(statFile)
 	if err != nil {
+		err = errorCause(err)
 		if os.IsNotExist(err) {
 			return nil, traceError(errFileNotFound)
 		} else if os.IsPermission(err) {

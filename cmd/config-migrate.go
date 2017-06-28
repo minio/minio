@@ -141,7 +141,13 @@ func migrateConfig() error {
 			return err
 		}
 		fallthrough
-	case v18:
+	case "18":
+		// Migrate version '17' to '18'.
+		if err = migrateV18ToV19(); err != nil {
+			return err
+		}
+		fallthrough
+	case v19:
 		// No migration needed. this always points to current version.
 		err = nil
 	}
@@ -1364,5 +1370,111 @@ func migrateV17ToV18() error {
 	}
 
 	log.Printf(configMigrateMSGTemplate, configFile, cv17.Version, srvConfig.Version)
+	return nil
+}
+
+func migrateV18ToV19() error {
+	configFile := getConfigFile()
+
+	cv18 := &serverConfigV18{}
+	_, err := quick.Load(configFile, cv18)
+	if os.IsNotExist(err) {
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("Unable to load config version ‘18’. %v", err)
+	}
+	if cv18.Version != "18" {
+		return nil
+	}
+
+	// Copy over fields from V18 into V19 config struct
+	srvConfig := &serverConfigV18{
+		Logger: &loggers{},
+		Notify: &notifier{},
+	}
+	srvConfig.Version = "19"
+	srvConfig.Credential = cv18.Credential
+	srvConfig.Region = cv18.Region
+	if srvConfig.Region == "" {
+		// Region needs to be set for AWS Signature Version 4.
+		srvConfig.Region = globalMinioDefaultRegion
+	}
+
+	srvConfig.Logger.Console = cv18.Logger.Console
+	srvConfig.Logger.File = cv18.Logger.File
+
+	// check and set notifiers config
+	if len(cv18.Notify.AMQP) == 0 {
+		srvConfig.Notify.AMQP = make(map[string]amqpNotify)
+		srvConfig.Notify.AMQP["1"] = amqpNotify{}
+	} else {
+		// New deliveryMode parameter is added for AMQP,
+		// default value is already 0, so nothing to
+		// explicitly migrate here.
+		srvConfig.Notify.AMQP = cv18.Notify.AMQP
+	}
+	if len(cv18.Notify.ElasticSearch) == 0 {
+		srvConfig.Notify.ElasticSearch = make(map[string]elasticSearchNotify)
+		srvConfig.Notify.ElasticSearch["1"] = elasticSearchNotify{
+			Format: formatNamespace,
+		}
+	} else {
+		srvConfig.Notify.ElasticSearch = cv18.Notify.ElasticSearch
+	}
+	if len(cv18.Notify.Redis) == 0 {
+		srvConfig.Notify.Redis = make(map[string]redisNotify)
+		srvConfig.Notify.Redis["1"] = redisNotify{
+			Format: formatNamespace,
+		}
+	} else {
+		srvConfig.Notify.Redis = cv18.Notify.Redis
+	}
+	if len(cv18.Notify.PostgreSQL) == 0 {
+		srvConfig.Notify.PostgreSQL = make(map[string]postgreSQLNotify)
+		srvConfig.Notify.PostgreSQL["1"] = postgreSQLNotify{
+			Format: formatNamespace,
+		}
+	} else {
+		srvConfig.Notify.PostgreSQL = cv18.Notify.PostgreSQL
+	}
+	if len(cv18.Notify.Kafka) == 0 {
+		srvConfig.Notify.Kafka = make(map[string]kafkaNotify)
+		srvConfig.Notify.Kafka["1"] = kafkaNotify{}
+	} else {
+		srvConfig.Notify.Kafka = cv18.Notify.Kafka
+	}
+	if len(cv18.Notify.NATS) == 0 {
+		srvConfig.Notify.NATS = make(map[string]natsNotify)
+		srvConfig.Notify.NATS["1"] = natsNotify{}
+	} else {
+		srvConfig.Notify.NATS = cv18.Notify.NATS
+	}
+	if len(cv18.Notify.Webhook) == 0 {
+		srvConfig.Notify.Webhook = make(map[string]webhookNotify)
+		srvConfig.Notify.Webhook["1"] = webhookNotify{}
+	} else {
+		srvConfig.Notify.Webhook = cv18.Notify.Webhook
+	}
+	if len(cv18.Notify.MySQL) == 0 {
+		srvConfig.Notify.MySQL = make(map[string]mySQLNotify)
+		srvConfig.Notify.MySQL["1"] = mySQLNotify{
+			Format: formatNamespace,
+		}
+	} else {
+		srvConfig.Notify.MySQL = cv18.Notify.MySQL
+	}
+
+	// V18 will not have mqtt support, so we add that here.
+	srvConfig.Notify.MQTT = make(map[string]mqttNotify)
+	srvConfig.Notify.MQTT["1"] = mqttNotify{}
+
+	// Load browser config from existing config in the file.
+	srvConfig.Browser = cv18.Browser
+
+	if err = quick.Save(configFile, srvConfig); err != nil {
+		return fmt.Errorf("Failed to migrate config from ‘%s’ to ‘%s’. %v", cv18.Version, srvConfig.Version, err)
+	}
+
+	log.Printf(configMigrateMSGTemplate, configFile, cv18.Version, srvConfig.Version)
 	return nil
 }

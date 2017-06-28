@@ -48,7 +48,7 @@ func TestListObjectsHeal(t *testing.T) {
 	objName := "obj"
 
 	// Create test bucket
-	err = xl.MakeBucket(bucketName)
+	err = xl.MakeBucketWithLocation(bucketName, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,7 +166,7 @@ func TestListUploadsHeal(t *testing.T) {
 	objName := path.Join(prefix, "obj")
 
 	// Create test bucket.
-	err = xl.MakeBucket(bucketName)
+	err = xl.MakeBucketWithLocation(bucketName, "")
 	if err != nil {
 		t.Fatal(err)
 	}

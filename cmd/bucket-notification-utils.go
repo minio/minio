@@ -144,6 +144,9 @@ func isValidQueueID(queueARN string) bool {
 	if isAMQPQueue(sqsARN) { // AMQP eueue.
 		amqpN := serverConfig.Notify.GetAMQPByID(sqsARN.AccountID)
 		return amqpN.Enable && amqpN.URL != ""
+	} else if isMQTTQueue(sqsARN) {
+		mqttN := serverConfig.Notify.GetMQTTByID(sqsARN.AccountID)
+		return mqttN.Enable && mqttN.Broker != ""
 	} else if isNATSQueue(sqsARN) {
 		natsN := serverConfig.Notify.GetNATSByID(sqsARN.AccountID)
 		return natsN.Enable && natsN.Address != ""
@@ -251,6 +254,7 @@ func validateNotificationConfig(nConfig notificationConfig) APIErrorCode {
 // Unmarshals input value of AWS ARN format into minioSqs object.
 // Returned value represents minio sqs types, currently supported are
 // - amqp
+// - mqtt
 // - nats
 // - elasticsearch
 // - redis
@@ -259,21 +263,22 @@ func validateNotificationConfig(nConfig notificationConfig) APIErrorCode {
 // - kafka
 // - webhook
 func unmarshalSqsARN(queueARN string) (mSqs arnSQS) {
-	mSqs = arnSQS{}
 	strs := strings.SplitN(queueARN, ":", -1)
 	if len(strs) != 6 {
-		return mSqs
+		return
 	}
 	if serverConfig.GetRegion() != "" {
 		region := strs[3]
 		if region != serverConfig.GetRegion() {
-			return mSqs
+			return
 		}
 	}
 	sqsType := strs[5]
 	switch sqsType {
 	case queueTypeAMQP:
 		mSqs.Type = queueTypeAMQP
+	case queueTypeMQTT:
+		mSqs.Type = queueTypeMQTT
 	case queueTypeNATS:
 		mSqs.Type = queueTypeNATS
 	case queueTypeElastic:
@@ -294,5 +299,5 @@ func unmarshalSqsARN(queueARN string) (mSqs arnSQS) {
 
 	mSqs.AccountID = strs[4]
 
-	return mSqs
+	return
 }

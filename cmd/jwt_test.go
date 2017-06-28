@@ -44,7 +44,7 @@ func testAuthenticate(authType string, t *testing.T) {
 		// Secret key too small.
 		{"myuser", "pass", errInvalidSecretKeyLength},
 		// Secret key too long.
-		{"myuser", "pass1234567890123456789012345678901234567", errInvalidSecretKeyLength},
+		{"myuser", "pass1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890", errInvalidSecretKeyLength},
 		// Authentication error.
 		{"myuser", "mypassword", errInvalidAccessKeyID},
 		// Authentication error.

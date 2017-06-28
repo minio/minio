@@ -185,7 +185,7 @@ func testGetBucketNotificationHandler(obj ObjectLayer, instanceType, bucketName 
 	filterRules := []filterRule{
 		{
 			Name:  "prefix",
-			Value: globalMinioDefaultOwnerID,
+			Value: "minio",
 		},
 		{
 			Name:  "suffix",

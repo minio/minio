@@ -4,17 +4,20 @@
 
 - [Prerequisites](#prerequisites)
 - [Minio Standalone Server Deployment](#minio-standalone-server-deployment)
-  - [Standalone Quickstart](#standalone-quickstart)
-  - [Step 1: Create Persistent Volume Claim](#step-1-create-persistent-volume-claim)
-  - [Step 2: Create Deployment](#step-2-create-minio-deployment)
-  - [Step 3: Create LoadBalancer Service](#step-3-create-minio-service)
-  - [Step 4: Resource cleanup](#step-4-resource-cleanup)
+    - [Standalone Quickstart](#standalone-quickstart)
+    - [Create Persistent Volume Claim](#create-persistent-volume-claim)
+    - [Create Deployment](#create-minio-deployment)
+    - [Create LoadBalancer Service](#create-minio-service)
+  - [Update existing Minio Deployment](#update-existing-minio-deployment)
+  - [Resource cleanup](#standalone-resource-cleanup)
+
 - [Minio Distributed Server Deployment](#minio-distributed-server-deployment)
-  - [Distributed Quickstart](#distributed-quickstart)
-  - [Step 1: Create Minio Headless Service](#step-1-create-minio-headless-service)
-  - [Step 2: Create Minio Statefulset](#step-2-create-minio-statefulset)
-  - [Step 3: Create LoadBalancer Service](#step-3-create-minio-service)
-  - [Step 4: Resource cleanup](#step-4-resource-cleanup)
+    - [Distributed Quickstart](#distributed-quickstart)
+    - [Create Minio Headless Service](#create-minio-headless-service)
+    - [Create Minio Statefulset](#create-minio-statefulset)
+    - [Create LoadBalancer Service](#create-minio-service)
+  - [Update existing Minio StatefulSet](#update-existing-minio-statefulset)
+  - [Resource cleanup](#distributed-resource-cleanup)
 
 ## Prerequisites
 
@@ -42,7 +45,7 @@ kubectl create -f https://github.com/minio/minio/blob/master/docs/orchestration/
 kubectl create -f https://github.com/minio/minio/blob/master/docs/orchestration/kubernetes-yaml/minio-standalone-service.yaml?raw=true
 ```
 
-### Step 1: Create Persistent Volume Claim
+### Create Persistent Volume Claim
 
 Minio needs persistent storage to store objects. If there is no
 persistent storage, the data stored in Minio instance will be stored in the container file system and will be wiped off as soon as the container restarts.
@@ -78,7 +81,7 @@ kubectl create -f https://github.com/minio/minio/blob/master/docs/orchestration/
 persistentvolumeclaim "minio-pv-claim" created
 ```
 
-### Step 2: Create Minio Deployment
+### Create Minio Deployment
 
 A deployment encapsulates replica sets and pods — so, if a pod goes down, replication controller makes sure another pod comes up automatically. This way you won’t need to bother about pod failures and will have a stable Minio service available.
 
@@ -134,7 +137,7 @@ kubectl create -f https://github.com/minio/minio/blob/master/docs/orchestration/
 deployment "minio-deployment" created
 ```
 
-### Step 3: Create Minio Service
+### Create Minio Service
 
 Now that you have a Minio deployment running, you may either want to access it internally (within the cluster) or expose it as a Service onto an external (outside of your cluster, maybe public internet) IP address, depending on your use case. You can achieve this using Services. There are 3 major service types — default type is ClusterIP, which exposes a service to connection from inside the cluster. NodePort and LoadBalancer are two types that expose services to external traffic.
 
@@ -169,9 +172,24 @@ NAME            CLUSTER-IP     EXTERNAL-IP       PORT(S)          AGE
 minio-service   10.55.248.23   104.199.249.165   9000:31852/TCP   1m
 ```
 
-### Step 4: Resource cleanup
+### Update existing Minio Deployment
 
-Once you are done, cleanup the cluster using
+You can update an existing Minio deployment to use a newer Minio release. To do this, use the `kubectl set image` command:
+
+```sh
+kubectl set image deployment/minio-deployment minio=<replace-with-new-minio-image>
+```
+
+Kubernetes will restart the deployment to update the image. You will get a message as shown below, on successful update:
+
+```
+deployment "minio-deployment" image updated
+```
+
+### Standalone Resource cleanup
+
+You can cleanup the cluster using
+
 ```sh
 kubectl delete deployment minio-deployment \
 &&  kubectl delete pvc minio-pv-claim \
@@ -198,7 +216,7 @@ kubectl create -f https://github.com/minio/minio/blob/master/docs/orchestration/
 kubectl create -f https://github.com/minio/minio/blob/master/docs/orchestration/kubernetes-yaml/minio-distributed-service.yaml?raw=true
 ```
 
-### Step 1: Create Minio Headless Service
+### Create Minio Headless Service
 
 Headless Service controls the domain within which StatefulSets are created. The domain managed by this Service takes the form: `$(service name).$(namespace).svc.cluster.local` (where “cluster.local” is the cluster domain), and the pods in this domain take the form: `$(pod-name-{i}).$(service name).$(namespace).svc.cluster.local`. This is required to get a DNS resolvable URL for each of the pods created within the Statefulset.
 
@@ -227,7 +245,7 @@ $ kubectl create -f https://github.com/minio/minio/blob/master/docs/orchestratio
 service "minio" created
 ```
 
-### Step 2: Create Minio Statefulset
+### Create Minio Statefulset
 
 A StatefulSet provides a deterministic name and a unique identity to each pod, making it easy to deploy stateful distributed applications. To launch distributed Minio you need to pass drive locations as parameters to the minio server command. Then, you’ll need to run the same command on all the participating pods. StatefulSets offer a perfect way to handle this requirement.
 
@@ -292,7 +310,7 @@ $ kubectl create -f https://github.com/minio/minio/blob/master/docs/orchestratio
 statefulset "minio" created
 ```
 
-### Step 3: Create Minio Service
+### Create Minio Service
 
 Now that you have a Minio statefulset running, you may either want to access it internally (within the cluster) or expose it as a Service onto an external (outside of your cluster, maybe public internet) IP address, depending on your use case. You can achieve this using Services. There are 3 major service types — default type is ClusterIP, which exposes a service to connection from inside the cluster. NodePort and LoadBalancer are two types that expose services to external traffic.
 
@@ -327,7 +345,26 @@ NAME            CLUSTER-IP     EXTERNAL-IP       PORT(S)          AGE
 minio-service   10.55.248.23   104.199.249.165   9000:31852/TCP   1m
 ```
 
-### Step 4: Resource cleanup
+### Update existing Minio StatefulSet
+You can update an existing Minio StatefulSet to use a newer Minio release. To do this, use the `kubectl patch statefulset` command:
+
+```sh
+kubectl patch statefulset minio --type='json' -p='[{"op": "replace", "path": "/spec/template/spec/containers/0/image", "value":"<replace-with-new-minio-image>"}]'
+```
+
+On successful update, you should see the output below
+
+```
+statefulset "minio" patched
+```
+
+Then delete all the pods in your StatefulSet one by one as shown below. Kubernetes will restart those pods for you, using the new image. 
+
+```sh
+kubectl delete minio-0
+```
+
+### Resource cleanup
 
 You can cleanup the cluster using
 ```sh

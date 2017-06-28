@@ -153,9 +153,9 @@ type pgConn struct {
 	*sql.DB
 }
 
-func dialPostgreSQL(pgN postgreSQLNotify) (pgConn, error) {
+func dialPostgreSQL(pgN postgreSQLNotify) (pc pgConn, e error) {
 	if !pgN.Enable {
-		return pgConn{}, errNotifyNotEnabled
+		return pc, errNotifyNotEnabled
 	}
 
 	// collect connection params
@@ -179,7 +179,7 @@ func dialPostgreSQL(pgN postgreSQLNotify) (pgConn, error) {
 
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
-		return pgConn{}, pgErrFunc(
+		return pc, pgErrFunc(
 			"Connection opening failure (connectionString=%s): %v",
 			connStr, err)
 	}
@@ -187,7 +187,7 @@ func dialPostgreSQL(pgN postgreSQLNotify) (pgConn, error) {
 	// ping to check that server is actually reachable.
 	err = db.Ping()
 	if err != nil {
-		return pgConn{}, pgErrFunc("Ping to server failed with: %v",
+		return pc, pgErrFunc("Ping to server failed with: %v",
 			err)
 	}
 
@@ -203,7 +203,7 @@ func dialPostgreSQL(pgN postgreSQLNotify) (pgConn, error) {
 		_, errCreate := db.Exec(fmt.Sprintf(createStmt, pgN.Table))
 		if errCreate != nil {
 			// failed to create the table. error out.
-			return pgConn{}, pgErrFunc(
+			return pc, pgErrFunc(
 				"'Select' failed with %v, then 'Create Table' failed with %v",
 				err, errCreate,
 			)
@@ -218,14 +218,14 @@ func dialPostgreSQL(pgN postgreSQLNotify) (pgConn, error) {
 		stmts["upsertRow"], err = db.Prepare(fmt.Sprintf(upsertRowForNS,
 			pgN.Table))
 		if err != nil {
-			return pgConn{}, pgErrFunc(
+			return pc, pgErrFunc(
 				"create UPSERT prepared statement failed with: %v", err)
 		}
 		// delete statement
 		stmts["deleteRow"], err = db.Prepare(fmt.Sprintf(deleteRowForNS,
 			pgN.Table))
 		if err != nil {
-			return pgConn{}, pgErrFunc(
+			return pc, pgErrFunc(
 				"create DELETE prepared statement failed with: %v", err)
 		}
 	case formatAccess:
@@ -233,7 +233,7 @@ func dialPostgreSQL(pgN postgreSQLNotify) (pgConn, error) {
 		stmts["insertRow"], err = db.Prepare(fmt.Sprintf(insertRowForAccess,
 			pgN.Table))
 		if err != nil {
-			return pgConn{}, pgErrFunc(
+			return pc, pgErrFunc(
 				"create INSERT prepared statement failed with: %v", err)
 		}
 	}

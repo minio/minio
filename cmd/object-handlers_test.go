@@ -2252,7 +2252,7 @@ func testAPICompleteMultipartHandler(obj ObjectLayer, instanceType, bucketName s
 			accessKey: credentials.AccessKey,
 			secretKey: credentials.SecretKey,
 
-			expectedContent: encodeResponse(getAPIErrorResponse(getAPIError(toAPIErrorCode(BadDigest{})),
+			expectedContent: encodeResponse(getAPIErrorResponse(getAPIError(toAPIErrorCode(InvalidPart{})),
 				getGetObjectURL("", bucketName, objectName))),
 			expectedRespStatus: http.StatusBadRequest,
 		},

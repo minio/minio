@@ -62,7 +62,6 @@ func TestNewEndpoint(t *testing.T) {
 		{"http://127.0.0.1:8080/path", Endpoint{URL: u3, IsLocal: true}, URLEndpointType, nil},
 		{"http://192.168.253.200/path", Endpoint{URL: u4}, URLEndpointType, nil},
 		{"", Endpoint{}, -1, fmt.Errorf("empty or root endpoint is not supported")},
-		{".", Endpoint{}, -1, fmt.Errorf("empty or root endpoint is not supported")},
 		{"/", Endpoint{}, -1, fmt.Errorf("empty or root endpoint is not supported")},
 		{`\`, Endpoint{}, -1, fmt.Errorf("empty or root endpoint is not supported")},
 		{"c://foo", Endpoint{}, -1, fmt.Errorf("invalid URL endpoint format")},

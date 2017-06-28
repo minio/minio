@@ -32,9 +32,6 @@ const (
 	// Buckets meta prefix.
 	bucketMetaPrefix = "buckets"
 
-	// Objects meta prefix.
-	objectMetaPrefix = "objects"
-
 	// ETag (hex encoded md5sum) of empty string.
 	emptyETag = "d41d8cd98f00b204e9800998ecf8427e"
 )

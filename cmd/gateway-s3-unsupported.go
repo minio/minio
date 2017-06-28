@@ -32,11 +32,11 @@ func (l *s3Objects) HealObject(bucket string, object string) (int, int, error) {
 }
 
 // ListObjectsHeal - Not relevant.
-func (l *s3Objects) ListObjectsHeal(bucket string, prefix string, marker string, delimiter string, maxKeys int) (ListObjectsInfo, error) {
-	return ListObjectsInfo{}, traceError(NotImplemented{})
+func (l *s3Objects) ListObjectsHeal(bucket string, prefix string, marker string, delimiter string, maxKeys int) (loi ListObjectsInfo, e error) {
+	return loi, traceError(NotImplemented{})
 }
 
 // ListUploadsHeal - Not relevant.
-func (l *s3Objects) ListUploadsHeal(bucket string, prefix string, marker string, uploadIDMarker string, delimiter string, maxUploads int) (ListMultipartsInfo, error) {
-	return ListMultipartsInfo{}, traceError(NotImplemented{})
+func (l *s3Objects) ListUploadsHeal(bucket string, prefix string, marker string, uploadIDMarker string, delimiter string, maxUploads int) (lmi ListMultipartsInfo, e error) {
+	return lmi, traceError(NotImplemented{})
 }

@@ -112,7 +112,7 @@ type PostPolicyForm struct {
 }
 
 // parsePostPolicyForm - Parse JSON policy string into typed POostPolicyForm structure.
-func parsePostPolicyForm(policy string) (PostPolicyForm, error) {
+func parsePostPolicyForm(policy string) (ppf PostPolicyForm, e error) {
 	// Convert po into interfaces and
 	// perform strict type conversion using reflection.
 	var rawPolicy struct {
@@ -122,7 +122,7 @@ func parsePostPolicyForm(policy string) (PostPolicyForm, error) {
 
 	err := json.Unmarshal([]byte(policy), &rawPolicy)
 	if err != nil {
-		return PostPolicyForm{}, err
+		return ppf, err
 	}
 
 	parsedPolicy := PostPolicyForm{}
@@ -130,7 +130,7 @@ func parsePostPolicyForm(policy string) (PostPolicyForm, error) {
 	// Parse expiry time.
 	parsedPolicy.Expiration, err = time.Parse(time.RFC3339Nano, rawPolicy.Expiration)
 	if err != nil {
-		return PostPolicyForm{}, err
+		return ppf, err
 	}
 	parsedPolicy.Conditions.Policies = make(map[string]struct {
 		Operator string

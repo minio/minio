@@ -46,7 +46,7 @@ func listDirFactory(isLeaf isLeafFunc, treeWalkIgnoredErrs []error, disks ...Sto
 }
 
 // listObjects - wrapper function implemented over file tree walk.
-func (xl xlObjects) listObjects(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
+func (xl xlObjects) listObjects(bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, e error) {
 	// Default is recursive, if delimiter is set then list non recursive.
 	recursive := true
 	if delimiter == slashSeparator {
@@ -74,7 +74,7 @@ func (xl xlObjects) listObjects(bucket, prefix, marker, delimiter string, maxKey
 		}
 		// For any walk error return right away.
 		if walkResult.err != nil {
-			return ListObjectsInfo{}, toObjectErr(walkResult.err, bucket, prefix)
+			return loi, toObjectErr(walkResult.err, bucket, prefix)
 		}
 		entry := walkResult.entry
 		var objInfo ObjectInfo
@@ -92,7 +92,7 @@ func (xl xlObjects) listObjects(bucket, prefix, marker, delimiter string, maxKey
 				if errorCause(err) == errFileNotFound {
 					continue
 				}
-				return ListObjectsInfo{}, toObjectErr(err, bucket, prefix)
+				return loi, toObjectErr(err, bucket, prefix)
 			}
 		}
 		nextMarker = objInfo.Name
@@ -122,14 +122,14 @@ func (xl xlObjects) listObjects(bucket, prefix, marker, delimiter string, maxKey
 }
 
 // ListObjects - list all objects at prefix, delimited by '/'.
-func (xl xlObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
+func (xl xlObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, e error) {
 	if err := checkListObjsArgs(bucket, prefix, marker, delimiter, xl); err != nil {
-		return ListObjectsInfo{}, err
+		return loi, err
 	}
 
 	// With max keys of zero we have reached eof, return right here.
 	if maxKeys == 0 {
-		return ListObjectsInfo{}, nil
+		return loi, nil
 	}
 
 	// For delimiter and prefix as '/' we do not list anything at all
@@ -137,7 +137,7 @@ func (xl xlObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 	// with the prefix. On a flat namespace with 'prefix' as '/'
 	// we don't have any entries, since all the keys are of form 'keyName/...'
 	if delimiter == slashSeparator && prefix == slashSeparator {
-		return ListObjectsInfo{}, nil
+		return loi, nil
 	}
 
 	// Over flowing count - reset to maxObjectList.
@@ -153,5 +153,5 @@ func (xl xlObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 	}
 
 	// Return error at the end.
-	return ListObjectsInfo{}, toObjectErr(err, bucket, prefix)
+	return loi, toObjectErr(err, bucket, prefix)
 }

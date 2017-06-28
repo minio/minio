@@ -68,7 +68,7 @@ export default class Browse extends React.Component {
           memory: res.MinioMemory,
           platform: res.MinioPlatform,
           runtime: res.MinioRuntime,
-          envVars: res.MinioEnvVars
+          info: res.MinioGlobalInfo
         })
         dispatch(actions.setServerInfo(serverInfo))
       })
@@ -370,8 +370,24 @@ export default class Browse extends React.Component {
   }
 
   handleExpireValue(targetInput, inc, object) {
-    inc === -1 ? this.refs[targetInput].stepDown(1) : this.refs[targetInput].stepUp(1)
+    let value = this.refs[targetInput].value
+    let maxValue = (targetInput == 'expireHours') ? 23 : (targetInput == 'expireMins') ? 59 : (targetInput == 'expireDays') ? 7 : 0
+    value = isNaN(value) ? 0 : value
 
+    // Use custom step count to support browser Edge
+    if((inc === -1)) {
+      if(value != 0) {
+        value--
+      }
+    }
+    else {
+      if(value != maxValue) {
+        value++
+      }
+    }
+    this.refs[targetInput].value = value
+
+    // Reset hours and mins when days reaches it's max value
     if (this.refs.expireDays.value == 7) {
       this.refs.expireHours.value = 0
       this.refs.expireMins.value = 0
@@ -379,6 +395,7 @@ export default class Browse extends React.Component {
     if (this.refs.expireDays.value + this.refs.expireHours.value + this.refs.expireMins.value == 0) {
       this.refs.expireDays.value = 7
     }
+
     const {dispatch} = this.props
     dispatch(actions.shareObject(object, this.refs.expireDays.value, this.refs.expireHours.value, this.refs.expireMins.value))
   }
@@ -463,21 +480,25 @@ export default class Browse extends React.Component {
     }
 
     if (web.LoggedIn()) {
-      storageUsageDetails = <div className="feh-usage">
-                              <div className="fehu-chart">
-                                <div style={ { width: usedPercent } }></div>
-                              </div>
-                              <ul>
-                                <li>
-                                  <span>Used: </span>
-                                  { humanize.filesize(total - free) }
-                                </li>
-                                <li className="pull-right">
-                                  <span>Free: </span>
-                                  { humanize.filesize(total - used) }
-                                </li>
-                              </ul>
-                            </div>
+      if (!(used === 0 && free === 0)) {
+        storageUsageDetails = <div className="feh-usage">
+          <div className="fehu-chart">
+            <div style={ { width: usedPercent } }></div>
+          </div>
+          <ul>
+            <li>
+              <span>Used: </span>
+              { humanize.filesize(total - free) }
+            </li>
+            <li className="pull-right">
+              <span>Free: </span>
+              { humanize.filesize(total - used) }
+            </li>
+          </ul>
+        </div>
+      }
+
+
     }
 
     let createButton = ''

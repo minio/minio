@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/minio/mc/pkg/console"
@@ -118,6 +119,24 @@ func quickErrToActions(errMap map[error]int) InitActions {
 // Preparatory initialization stage for XL validates known errors.
 // Converts them into specific actions. These actions have special purpose
 // which caller decides on what needs to be done.
+
+// Logic used in this function is as shown below.
+//
+// ---- Possible states and handled conditions -----
+//
+// - Formatted setup
+//   - InitObjectLayer when `disksFormatted >= readQuorum`
+//   - Wait for quorum when `disksFormatted < readQuorum && disksFormatted + disksOffline >= readQuorum`
+//     (we don't know yet if there are unformatted disks)
+//   - Wait for heal when `disksFormatted >= readQuorum && disksUnformatted > 0`
+//     (here we know there is at least one unformatted disk which requires healing)
+//
+// - Unformatted setup
+//   - Format/Wait for format when `disksUnformatted == diskCount`
+//
+// - Wait for all when `disksUnformatted + disksOffline == disksCount`
+//
+// Under all other conditions should lead to server initialization aborted.
 func prepForInitXL(firstDisk bool, sErrs []error, diskCount int) InitActions {
 	// Count errors by error value.
 	errMap := make(map[error]int)
@@ -135,17 +154,10 @@ func prepForInitXL(firstDisk bool, sErrs []error, diskCount int) InitActions {
 	disksOffline := errMap[errDiskNotFound]
 	disksFormatted := errMap[nil]
 	disksUnformatted := errMap[errUnformattedDisk]
-	disksCorrupted := errMap[errCorruptedFormat]
 
 	// No Quorum lots of offline disks, wait for quorum.
 	if disksOffline > readQuorum {
 		return WaitForQuorum
-	}
-
-	// There is quorum or more corrupted disks, there is not enough good
-	// disks to reconstruct format.json.
-	if disksCorrupted >= quorum {
-		return Abort
 	}
 
 	// All disks are unformatted, proceed to formatting disks.
@@ -163,6 +175,7 @@ func prepForInitXL(firstDisk bool, sErrs []error, diskCount int) InitActions {
 		if disksUnformatted+disksFormatted+disksOffline == diskCount {
 			return WaitForAll
 		}
+
 		// Some disks possibly corrupted and too many unformatted disks.
 		return Abort
 	}
@@ -172,10 +185,13 @@ func prepForInitXL(firstDisk bool, sErrs []error, diskCount int) InitActions {
 		if disksFormatted+disksOffline == diskCount {
 			return InitObjectLayer
 		}
+
 		// Some of the formatted disks are possibly corrupted or unformatted, heal them.
 		return WaitForHeal
-	} // Exhausted all our checks, un-handled errors perhaps we Abort.
-	return WaitForQuorum
+	}
+
+	// Exhausted all our checks, un-handled errors perhaps we Abort.
+	return Abort
 }
 
 // Prints retry message upon a specific retry count.
@@ -227,6 +243,7 @@ func retryFormattingXLDisks(firstDisk bool, endpoints EndpointList, storageDisks
 				// actual errors for disks not being available.
 				printRetryMsg(sErrs, storageDisks)
 			}
+
 			// Pre-emptively check if one of the formatted disks
 			// is invalid. This function returns success for the
 			// most part unless one of the formats is not consistent
@@ -240,16 +257,17 @@ func retryFormattingXLDisks(firstDisk bool, endpoints EndpointList, storageDisks
 				// first server has a wrong format and exit gracefully.
 				// refer - https://github.com/minio/minio/issues/4140
 				if retryCount > maxRetryAttempts {
-					errorIf(err, "Detected disk (%s) in unexpected format",
+					errorIf(err, "%s : Detected disk in unexpected format",
 						storageDisks[index])
 					continue
 				}
 				return err
 			}
+
 			// Check if this is a XL or distributed XL, anything > 1 is considered XL backend.
 			switch prepForInitXL(firstDisk, sErrs, len(storageDisks)) {
 			case Abort:
-				return errCorruptedFormat
+				return fmt.Errorf("%s", combineDiskErrs(storageDisks, sErrs))
 			case FormatDisks:
 				console.Eraseline()
 				printFormatMsg(endpoints, storageDisks, printOnceFn())

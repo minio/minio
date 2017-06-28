@@ -28,8 +28,7 @@ import (
 )
 
 type networkStorage struct {
-	networkIOErrCount int32 // ref: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
-	rpcClient         *AuthRPCClient
+	rpcClient *AuthRPCClient
 }
 
 const (

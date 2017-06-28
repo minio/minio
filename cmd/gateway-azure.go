@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"crypto/md5"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
@@ -35,6 +36,36 @@ import (
 )
 
 const globalAzureAPIVersion = "2016-05-31"
+
+// Canonicalize the metadata headers, without this azure-sdk calculates
+// incorrect signature. This attempt to canonicalize is to convert
+// any HTTP header which is of form say `accept-encoding` should be
+// converted to `Accept-Encoding` in its canonical form.
+// Also replaces X-Amz-Meta prefix with X-Ms-Meta as Azure expects user
+// defined metadata to have X-Ms-Meta prefix.
+func s3ToAzureHeaders(headers map[string]string) (newHeaders map[string]string) {
+	newHeaders = make(map[string]string)
+	for k, v := range headers {
+		k = http.CanonicalHeaderKey(k)
+		if strings.HasPrefix(k, "X-Amz-Meta") {
+			k = strings.Replace(k, "X-Amz-Meta", "X-Ms-Meta", -1)
+		}
+		newHeaders[k] = v
+	}
+	return newHeaders
+}
+
+// Prefix user metadata with "X-Amz-Meta-".
+// client.GetBlobMetadata() already strips "X-Ms-Meta-"
+func azureToS3Metadata(meta map[string]string) (newMeta map[string]string) {
+	newMeta = make(map[string]string)
+
+	for k, v := range meta {
+		k = "X-Amz-Meta-" + k
+		newMeta[k] = v
+	}
+	return newMeta
+}
 
 // To store metadata during NewMultipartUpload which will be used after
 // CompleteMultipartUpload to call SetBlobMetadata.
@@ -122,15 +153,26 @@ func azureToObjectError(err error, params ...string) error {
 	return e
 }
 
-// Inits azure blob storage client and returns azureObjects.
-func newAzureLayer(endPoint string, account, key string, secure bool) (GatewayLayer, error) {
-	if endPoint == "" {
-		endPoint = storage.DefaultBaseURL
+// Inits azure blob storage client and returns AzureObjects.
+func newAzureLayer(host string) (GatewayLayer, error) {
+	var err error
+	var endpoint = storage.DefaultBaseURL
+	var secure = true
+
+	// If user provided some parameters
+	if host != "" {
+		endpoint, secure, err = parseGatewayEndpoint(host)
+		if err != nil {
+			return nil, err
+		}
 	}
-	c, err := storage.NewClient(account, key, endPoint, globalAzureAPIVersion, secure)
+
+	creds := serverConfig.GetCredential()
+	c, err := storage.NewClient(creds.AccessKey, creds.SecretKey, endpoint, globalAzureAPIVersion, secure)
 	if err != nil {
 		return &azureObjects{}, err
 	}
+
 	return &azureObjects{
 		client: c.GetBlobService(),
 		metaInfo: azureMultipartMetaInfo{
@@ -143,19 +185,12 @@ func newAzureLayer(endPoint string, account, key string, secure bool) (GatewayLa
 // Shutdown - save any gateway metadata to disk
 // if necessary and reload upon next restart.
 func (a *azureObjects) Shutdown() error {
-	// TODO
 	return nil
 }
 
 // StorageInfo - Not relevant to Azure backend.
-func (a *azureObjects) StorageInfo() StorageInfo {
-	return StorageInfo{}
-}
-
-// MakeBucket - Create a new container on azure backend.
-func (a *azureObjects) MakeBucket(bucket string) error {
-	// will never be called, only satisfy ObjectLayer interface
-	return traceError(NotImplemented{})
+func (a *azureObjects) StorageInfo() (si StorageInfo) {
+	return si
 }
 
 // MakeBucketWithLocation - Create a new container on azure backend.
@@ -165,13 +200,13 @@ func (a *azureObjects) MakeBucketWithLocation(bucket, location string) error {
 }
 
 // GetBucketInfo - Get bucket metadata..
-func (a *azureObjects) GetBucketInfo(bucket string) (BucketInfo, error) {
+func (a *azureObjects) GetBucketInfo(bucket string) (bi BucketInfo, e error) {
 	// Azure does not have an equivalent call, hence use ListContainers.
 	resp, err := a.client.ListContainers(storage.ListContainersParameters{
 		Prefix: bucket,
 	})
 	if err != nil {
-		return BucketInfo{}, azureToObjectError(traceError(err), bucket)
+		return bi, azureToObjectError(traceError(err), bucket)
 	}
 	for _, container := range resp.Containers {
 		if container.Name == bucket {
@@ -184,7 +219,7 @@ func (a *azureObjects) GetBucketInfo(bucket string) (BucketInfo, error) {
 			} // else continue
 		}
 	}
-	return BucketInfo{}, traceError(BucketNotFound{Bucket: bucket})
+	return bi, traceError(BucketNotFound{Bucket: bucket})
 }
 
 // ListBuckets - Lists all azure containers, uses Azure equivalent ListContainers.
@@ -244,6 +279,41 @@ func (a *azureObjects) ListObjects(bucket, prefix, marker, delimiter string, max
 	return result, nil
 }
 
+// ListObjectsV2 - list all blobs in Azure bucket filtered by prefix
+func (a *azureObjects) ListObjectsV2(bucket, prefix, continuationToken string, fetchOwner bool, delimiter string, maxKeys int) (result ListObjectsV2Info, err error) {
+	resp, err := a.client.ListBlobs(bucket, storage.ListBlobsParameters{
+		Prefix:     prefix,
+		Marker:     continuationToken,
+		Delimiter:  delimiter,
+		MaxResults: uint(maxKeys),
+	})
+	if err != nil {
+		return result, azureToObjectError(traceError(err), bucket, prefix)
+	}
+	// If NextMarker is not empty, this means response is truncated and NextContinuationToken should be set
+	if resp.NextMarker != "" {
+		result.IsTruncated = true
+		result.NextContinuationToken = resp.NextMarker
+	}
+	for _, object := range resp.Blobs {
+		t, e := time.Parse(time.RFC1123, object.Properties.LastModified)
+		if e != nil {
+			continue
+		}
+		result.Objects = append(result.Objects, ObjectInfo{
+			Bucket:          bucket,
+			Name:            object.Name,
+			ModTime:         t,
+			Size:            object.Properties.ContentLength,
+			ETag:            canonicalizeETag(object.Properties.Etag),
+			ContentType:     object.Properties.ContentType,
+			ContentEncoding: object.Properties.ContentEncoding,
+		})
+	}
+	result.Prefixes = resp.BlobPrefixes
+	return result, nil
+}
+
 // GetObject - reads an object from azure. Supports additional
 // parameters like offset and length which are synonymous with
 // HTTP Range requests.
@@ -274,6 +344,13 @@ func (a *azureObjects) GetObject(bucket, object string, startOffset int64, lengt
 // GetObjectInfo - reads blob metadata properties and replies back ObjectInfo,
 // uses zure equivalent GetBlobProperties.
 func (a *azureObjects) GetObjectInfo(bucket, object string) (objInfo ObjectInfo, err error) {
+	blobMeta, err := a.client.GetBlobMetadata(bucket, object)
+	if err != nil {
+		return objInfo, azureToObjectError(traceError(err), bucket, object)
+	}
+
+	meta := azureToS3Metadata(blobMeta)
+
 	prop, err := a.client.GetBlobProperties(bucket, object)
 	if err != nil {
 		return objInfo, azureToObjectError(traceError(err), bucket, object)
@@ -282,55 +359,69 @@ func (a *azureObjects) GetObjectInfo(bucket, object string) (objInfo ObjectInfo,
 	if err != nil {
 		return objInfo, traceError(err)
 	}
+
+	if prop.ContentEncoding != "" {
+		meta["Content-Encoding"] = prop.ContentEncoding
+	}
+	meta["Content-Type"] = prop.ContentType
+
 	objInfo = ObjectInfo{
 		Bucket:      bucket,
-		UserDefined: make(map[string]string),
+		UserDefined: meta,
 		ETag:        canonicalizeETag(prop.Etag),
 		ModTime:     t,
 		Name:        object,
 		Size:        prop.ContentLength,
 	}
-	if prop.ContentEncoding != "" {
-		objInfo.UserDefined["Content-Encoding"] = prop.ContentEncoding
-	}
-	objInfo.UserDefined["Content-Type"] = prop.ContentType
-	return objInfo, nil
-}
 
-// Canonicalize the metadata headers, without this azure-sdk calculates
-// incorrect signature. This attempt to canonicalize is to convert
-// any HTTP header which is of form say `accept-encoding` should be
-// converted to `Accept-Encoding` in its canonical form.
-func canonicalMetadata(metadata map[string]string) (canonical map[string]string) {
-	canonical = make(map[string]string)
-	for k, v := range metadata {
-		canonical[http.CanonicalHeaderKey(k)] = v
-	}
-	return canonical
+	return objInfo, nil
 }
 
 // PutObject - Create a new blob with the incoming data,
 // uses Azure equivalent CreateBlockBlobFromReader.
 func (a *azureObjects) PutObject(bucket, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (objInfo ObjectInfo, err error) {
 	var sha256Writer hash.Hash
-	teeReader := data
-	if sha256sum != "" {
-		sha256Writer = sha256.New()
-		teeReader = io.TeeReader(data, sha256Writer)
-	}
+	var md5sumWriter hash.Hash
 
+	var writers []io.Writer
+
+	md5sum := metadata["etag"]
 	delete(metadata, "etag")
 
-	err = a.client.CreateBlockBlobFromReader(bucket, object, uint64(size), teeReader, canonicalMetadata(metadata))
+	teeReader := data
+
+	if sha256sum != "" {
+		sha256Writer = sha256.New()
+		writers = append(writers, sha256Writer)
+	}
+
+	if md5sum != "" {
+		md5sumWriter = md5.New()
+		writers = append(writers, md5sumWriter)
+	}
+
+	if len(writers) > 0 {
+		teeReader = io.TeeReader(data, io.MultiWriter(writers...))
+	}
+
+	err = a.client.CreateBlockBlobFromReader(bucket, object, uint64(size), teeReader, s3ToAzureHeaders(metadata))
 	if err != nil {
 		return objInfo, azureToObjectError(traceError(err), bucket, object)
+	}
+
+	if md5sum != "" {
+		newMD5sum := hex.EncodeToString(md5sumWriter.Sum(nil))
+		if newMD5sum != md5sum {
+			a.client.DeleteBlob(bucket, object, nil)
+			return ObjectInfo{}, azureToObjectError(traceError(BadDigest{md5sum, newMD5sum}))
+		}
 	}
 
 	if sha256sum != "" {
 		newSHA256sum := hex.EncodeToString(sha256Writer.Sum(nil))
 		if newSHA256sum != sha256sum {
 			a.client.DeleteBlob(bucket, object, nil)
-			return ObjectInfo{}, traceError(SHA256Mismatch{})
+			return ObjectInfo{}, azureToObjectError(traceError(SHA256Mismatch{}))
 		}
 	}
 
@@ -386,7 +477,7 @@ func (a *azureObjects) NewMultipartUpload(bucket, object string, metadata map[st
 		// Store an empty map as a placeholder else ListObjectParts/PutObjectPart will not work properly.
 		metadata = make(map[string]string)
 	} else {
-		metadata = canonicalMetadata(metadata)
+		metadata = s3ToAzureHeaders(metadata)
 	}
 	a.metaInfo.set(uploadID, metadata)
 	return uploadID, nil
@@ -426,27 +517,54 @@ func (a *azureObjects) PutObjectPart(bucket, object, uploadID string, partID int
 		return info, traceError(InvalidUploadID{})
 	}
 	var sha256Writer hash.Hash
+	var md5sumWriter hash.Hash
+	var etag string
+
+	var writers []io.Writer
+
 	if sha256sum != "" {
 		sha256Writer = sha256.New()
+		writers = append(writers, sha256Writer)
 	}
 
-	teeReader := io.TeeReader(data, sha256Writer)
+	if md5Hex != "" {
+		md5sumWriter = md5.New()
+		writers = append(writers, md5sumWriter)
+		etag = md5Hex
+	} else {
+		// Generate random ETag.
+		etag = getMD5Hash([]byte(mustGetUUID()))
+	}
 
-	id := azureGetBlockID(partID, md5Hex)
+	teeReader := data
+
+	if len(writers) > 0 {
+		teeReader = io.TeeReader(data, io.MultiWriter(writers...))
+	}
+
+	id := azureGetBlockID(partID, etag)
 	err = a.client.PutBlockWithLength(bucket, object, id, uint64(size), teeReader, nil)
 	if err != nil {
 		return info, azureToObjectError(traceError(err), bucket, object)
 	}
 
+	if md5Hex != "" {
+		newMD5sum := hex.EncodeToString(md5sumWriter.Sum(nil))
+		if newMD5sum != md5Hex {
+			a.client.DeleteBlob(bucket, object, nil)
+			return PartInfo{}, azureToObjectError(traceError(BadDigest{md5Hex, newMD5sum}))
+		}
+	}
+
 	if sha256sum != "" {
 		newSHA256sum := hex.EncodeToString(sha256Writer.Sum(nil))
 		if newSHA256sum != sha256sum {
-			return PartInfo{}, traceError(SHA256Mismatch{})
+			return PartInfo{}, azureToObjectError(traceError(SHA256Mismatch{}))
 		}
 	}
 
 	info.PartNumber = partID
-	info.ETag = md5Hex
+	info.ETag = etag
 	info.LastModified = UTCNow()
 	info.Size = size
 	return info, nil
@@ -536,34 +654,13 @@ func (a *azureObjects) CompleteMultipartUpload(bucket, object, uploadID string, 
 		if err != nil {
 			return objInfo, azureToObjectError(traceError(err), bucket, object)
 		}
+		err = a.client.SetBlobMetadata(bucket, object, nil, meta)
+		if err != nil {
+			return objInfo, azureToObjectError(traceError(err), bucket, object)
+		}
 	}
 	a.metaInfo.del(uploadID)
 	return a.GetObjectInfo(bucket, object)
-}
-
-func anonErrToObjectErr(statusCode int, params ...string) error {
-	bucket := ""
-	object := ""
-	if len(params) >= 1 {
-		bucket = params[0]
-	}
-	if len(params) == 2 {
-		object = params[1]
-	}
-
-	switch statusCode {
-	case http.StatusNotFound:
-		if object != "" {
-			return ObjectNotFound{bucket, object}
-		}
-		return BucketNotFound{Bucket: bucket}
-	case http.StatusBadRequest:
-		if object != "" {
-			return ObjectNameInvalid{bucket, object}
-		}
-		return BucketNameInvalid{Bucket: bucket}
-	}
-	return errUnexpected
 }
 
 // Copied from github.com/Azure/azure-sdk-for-go/storage/blob.go

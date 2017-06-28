@@ -29,8 +29,17 @@ import (
 const (
 	globalMinioCertExpireWarnDays = time.Hour * 24 * 30 // 30 days.
 
-	globalMinioDefaultRegion       = ""
-	globalMinioDefaultOwnerID      = "minio"
+	globalMinioDefaultRegion = ""
+	// This is a sha256 output of ``arn:aws:iam::minio:user/admin``,
+	// this is kept in present form to be compatible with S3 owner ID
+	// requirements -
+	//
+	// ```
+	//    The canonical user ID is the Amazon S3–only concept.
+	//    It is 64-character obfuscated version of the account ID.
+	// ```
+	// http://docs.aws.amazon.com/AmazonS3/latest/dev/example-walkthroughs-managing-access-example4.html
+	globalMinioDefaultOwnerID      = "02d6176db174dc93cb1b899f7c6078f08654445fe8cf1b6ce98d8855f66bdbf4"
 	globalMinioDefaultStorageClass = "STANDARD"
 	globalWindowsOSName            = "windows"
 	globalNetBSDOSName             = "netbsd"
@@ -40,6 +49,7 @@ const (
 	globalMinioModeDistXL          = "mode-server-distributed-xl"
 	globalMinioModeGatewayAzure    = "mode-gateway-azure"
 	globalMinioModeGatewayS3       = "mode-gateway-s3"
+	globalMinioModeGatewayGCS      = "mode-gateway-gcs"
 	// Add new global values here.
 )
 
@@ -64,6 +74,7 @@ var (
 
 	// This flag is set to 'true' by default
 	globalIsBrowserEnabled = true
+
 	// This flag is set to 'true' when MINIO_BROWSER env is set.
 	globalIsEnvBrowser = false
 
@@ -72,6 +83,7 @@ var (
 
 	// This flag is set to 'true' wen MINIO_REGION env is set.
 	globalIsEnvRegion = false
+
 	// This flag is set to 'us-east-1' by default
 	globalServerRegion = globalMinioDefaultRegion
 
@@ -130,6 +142,27 @@ var (
 
 // global colors.
 var (
-	colorBold = color.New(color.Bold).SprintFunc()
-	colorBlue = color.New(color.FgBlue).SprintfFunc()
+	colorBold   = color.New(color.Bold).SprintFunc()
+	colorBlue   = color.New(color.FgBlue).SprintfFunc()
+	colorYellow = color.New(color.FgYellow).SprintfFunc()
 )
+
+// Returns minio global information, as a key value map.
+// returned list of global values is not an exhaustive
+// list. Feel free to add new relevant fields.
+func getGlobalInfo() (globalInfo map[string]interface{}) {
+	globalInfo = map[string]interface{}{
+		"isDistXL":         globalIsDistXL,
+		"isXL":             globalIsXL,
+		"isBrowserEnabled": globalIsBrowserEnabled,
+		"isEnvBrowser":     globalIsEnvBrowser,
+		"isEnvCreds":       globalIsEnvCreds,
+		"isEnvRegion":      globalIsEnvRegion,
+		"isSSL":            globalIsSSL,
+		"serverRegion":     globalServerRegion,
+		"serverUserAgent":  globalServerUserAgent,
+		// Add more relevant global settings here.
+	}
+
+	return globalInfo
+}

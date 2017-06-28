@@ -27,8 +27,6 @@ import (
 type GatewayLayer interface {
 	ObjectLayer
 
-	MakeBucketWithLocation(bucket, location string) error
-
 	AnonGetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) (err error)
 	AnonGetObjectInfo(bucket, object string) (objInfo ObjectInfo, err error)
 
@@ -38,6 +36,8 @@ type GatewayLayer interface {
 	GetBucketPolicies(string) (policy.BucketAccessPolicy, error)
 	DeleteBucketPolicies(string) error
 	AnonListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (result ListObjectsInfo, err error)
+	AnonListObjectsV2(bucket, prefix, continuationToken string, fetchOwner bool, delimiter string, maxKeys int) (result ListObjectsV2Info, err error)
+	ListObjectsV2(bucket, prefix, continuationToken string, fetchOwner bool, delimiter string, maxKeys int) (result ListObjectsV2Info, err error)
 	AnonGetBucketInfo(bucket string) (bucketInfo BucketInfo, err error)
 }
 
