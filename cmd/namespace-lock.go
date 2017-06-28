@@ -324,13 +324,13 @@ func (n *nsLockMap) NewNSLock(volume, path string) RWLocker {
 // Lock - block until write lock is taken or timeout has occurred.
 func (li *lockInstance) GetLock(timeout *dynamicTimout) (timedOutErr error) {
 	lockSource := getSource()
-	start := time.Now().UTC()
+	start := UTCNow()
 	readLock := false
 	if !li.ns.lock(li.volume, li.path, lockSource, li.opsID, readLock, timeout.Timeout()) {
 		timeout.LogFailure()
 		return OperationTimedOut{Path: li.path}
 	}
-	timeout.LogSuccess(time.Now().UTC().Sub(start))
+	timeout.LogSuccess(UTCNow().Sub(start))
 	return
 }
 
@@ -343,13 +343,13 @@ func (li *lockInstance) Unlock() {
 // RLock - block until read lock is taken or timeout has occurred.
 func (li *lockInstance) GetRLock(timeout *dynamicTimout) (timedOutErr error) {
 	lockSource := getSource()
-	start := time.Now().UTC()
+	start := UTCNow()
 	readLock := true
 	if !li.ns.lock(li.volume, li.path, lockSource, li.opsID, readLock, timeout.Timeout()) {
 		timeout.LogFailure()
 		return OperationTimedOut{Path: li.path}
 	}
-	timeout.LogSuccess(time.Now().UTC().Sub(start))
+	timeout.LogSuccess(UTCNow().Sub(start))
 	return
 }
 
