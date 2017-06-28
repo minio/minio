@@ -65,27 +65,35 @@ func (dt *dynamicTimeout) logEntry(duration time.Duration) {
 		dt.log[index] = duration
 	}
 	if entries == dynamicTimeoutLogSize {
-		dt.adjust(entries)
+
+		// Make copy on stack in order to call adjust()
+		logCopy := [dynamicTimeoutLogSize]time.Duration{}
+		copy(logCopy[:], dt.log[:])
+
+		// reset log entries
+		atomic.StoreInt64(&dt.entries, 0)
+
+		dt.adjust(logCopy)
 	}
 }
 
 // adjust changes the value of the dynamic timeout based on the
 // previous results
-func (dt *dynamicTimeout) adjust(entries int) {
+func (dt *dynamicTimeout) adjust(entries [dynamicTimeoutLogSize]time.Duration) {
 
 	failures, average := 0, 0
-	for i := 0; i < entries; i++ {
-		if dt.log[i] == maxDuration {
+	for i := 0; i < len(entries); i++ {
+		if entries[i] == maxDuration {
 			failures++
 		} else {
-			average += int(dt.log[i])
+			average += int(entries[i])
 		}
 	}
-	if failures < entries {
-		average /= entries - failures
+	if failures < len(entries) {
+		average /= len(entries) - failures
 	}
 
-	timeOutHitPct := float64(failures) / float64(entries)
+	timeOutHitPct := float64(failures) / float64(len(entries))
 
 	if timeOutHitPct > dynamicTimeoutIncreaseThresholdPct {
 		// We are hitting the timeout too often, so increase the timeout by 25%
@@ -102,6 +110,4 @@ func (dt *dynamicTimeout) adjust(entries int) {
 		atomic.StoreInt64(&dt.timeout, timeout)
 	}
 
-	// reset log entries
-	atomic.StoreInt64(&dt.entries, 0)
 }
