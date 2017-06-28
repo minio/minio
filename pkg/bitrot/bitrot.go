@@ -40,6 +40,12 @@ const (
 	// SHA256 specifies the SHA256 hash function
 	SHA256
 
+	// AESGCM specifies the AES-GCM AEAD cipher construction (AES-256)
+	AESGCM
+
+	// ChaCha20Poly1305 specifies the ChaCha20Poly1305 AEAD cipher construction
+	ChaCha20Poly1305
+
 	// add algorithms here
 
 	// UnknownAlgorithm indicates an unknown/invalid algorithm
@@ -47,17 +53,21 @@ const (
 )
 
 var keysizes = []int{
-	Poly1305:   32,
-	GHASH:      32,
-	BLAKE2b512: 0,
-	SHA256:     0,
+	Poly1305:         32,
+	GHASH:            32,
+	BLAKE2b512:       0,
+	SHA256:           0,
+	AESGCM:           32,
+	ChaCha20Poly1305: 32,
 }
 
 var names = []string{
-	Poly1305:   "poly1305",
-	GHASH:      "ghash",
-	BLAKE2b512: "blake2b",
-	SHA256:     "sha256",
+	Poly1305:         "poly1305",
+	GHASH:            "ghash",
+	BLAKE2b512:       "blake2b",
+	SHA256:           "sha256",
+	AESGCM:           "aes-gcm",
+	ChaCha20Poly1305: "chacha20poly1305",
 }
 
 var hashes = make([]func([]byte) Hash, UnknownAlgorithm)
