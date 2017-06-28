@@ -1062,7 +1062,7 @@ func (xl xlObjects) CompleteMultipartUpload(bucket string, object string, upload
 	objectMPartPathLock := globalNSMutex.NewNSLock(minioMetaMultipartBucket,
 		pathJoin(bucket, object))
 	if err = objectMPartPathLock.GetLock(globalOperationTimeout); err != nil {
-		return oi toObjectErr(err, bucket, object)
+		return oi, toObjectErr(err, bucket, object)
 	}
 	defer objectMPartPathLock.Unlock()
 
