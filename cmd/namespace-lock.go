@@ -34,9 +34,9 @@ var globalLockServers []*lockServer
 
 // RWLocker - locker interface to introduce GetRLock, RUnlock.
 type RWLocker interface {
-	GetLock(timeout *dynamicTimout) (timedOutErr error)
+	GetLock(timeout *dynamicTimeout) (timedOutErr error)
 	Unlock()
-	GetRLock(timeout *dynamicTimout) (timedOutErr error)
+	GetRLock(timeout *dynamicTimeout) (timedOutErr error)
 	RUnlock()
 }
 
@@ -322,7 +322,7 @@ func (n *nsLockMap) NewNSLock(volume, path string) RWLocker {
 }
 
 // Lock - block until write lock is taken or timeout has occurred.
-func (li *lockInstance) GetLock(timeout *dynamicTimout) (timedOutErr error) {
+func (li *lockInstance) GetLock(timeout *dynamicTimeout) (timedOutErr error) {
 	lockSource := getSource()
 	start := UTCNow()
 	readLock := false
@@ -341,7 +341,7 @@ func (li *lockInstance) Unlock() {
 }
 
 // RLock - block until read lock is taken or timeout has occurred.
-func (li *lockInstance) GetRLock(timeout *dynamicTimout) (timedOutErr error) {
+func (li *lockInstance) GetRLock(timeout *dynamicTimeout) (timedOutErr error) {
 	lockSource := getSource()
 	start := UTCNow()
 	readLock := true

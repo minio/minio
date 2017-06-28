@@ -29,7 +29,7 @@ const (
 )
 
 // timeouts that are dynamically adapted based on actual usage results
-type dynamicTimout struct {
+type dynamicTimeout struct {
 	timeout int64
 	minimum int64
 	entries int64
@@ -37,28 +37,28 @@ type dynamicTimout struct {
 }
 
 // newDynamicTimeout returns a new dynamic timeout initialized with timeout value
-func newDynamicTimeout(timeout, minimum time.Duration) *dynamicTimout {
-	return &dynamicTimout{timeout: int64(timeout), minimum: int64(minimum)}
+func newDynamicTimeout(timeout, minimum time.Duration) *dynamicTimeout {
+	return &dynamicTimeout{timeout: int64(timeout), minimum: int64(minimum)}
 }
 
 // Timeout returns the current timeout value
-func (dt *dynamicTimout) Timeout() time.Duration {
+func (dt *dynamicTimeout) Timeout() time.Duration {
 	return time.Duration(atomic.LoadInt64(&dt.timeout))
 }
 
 // LogSuccess logs the duration of a successful action that
 // did not hit the timeout
-func (dt *dynamicTimout) LogSuccess(duration time.Duration) {
+func (dt *dynamicTimeout) LogSuccess(duration time.Duration) {
 	dt.logEntry(duration)
 }
 
 // LogFailure logs an action that hit the timeout
-func (dt *dynamicTimout) LogFailure() {
+func (dt *dynamicTimeout) LogFailure() {
 	dt.logEntry(maxDuration)
 }
 
 // logEntry stores a log entry
-func (dt *dynamicTimout) logEntry(duration time.Duration) {
+func (dt *dynamicTimeout) logEntry(duration time.Duration) {
 	entries := int(atomic.AddInt64(&dt.entries, 1))
 	index := entries - 1
 	if index < dynamicTimeoutLogSize {
@@ -71,7 +71,7 @@ func (dt *dynamicTimout) logEntry(duration time.Duration) {
 
 // adjust changes the value of the dynamic timeout based on the
 // previous results
-func (dt *dynamicTimout) adjust(entries int) {
+func (dt *dynamicTimeout) adjust(entries int) {
 
 	failures, average := 0, 0
 	for i := 0; i < entries; i++ {
