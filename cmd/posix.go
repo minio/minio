@@ -521,7 +521,7 @@ func (s *posix) ReadAll(volume, path string) (buf []byte, err error) {
 // Additionally ReadFile also starts reading from an offset. ReadFile
 // semantics are same as io.ReadFull.
 func (s *posix) ReadFile(volume, path string, offset int64, buf []byte) (n int64, err error) {
-	return s.ReadFileWithVerify(volume, path, offset, buf, 0xfffffff, "")
+	return s.ReadFileWithVerify(volume, path, offset, buf, bitrot.UnknownAlgorithm, "")
 }
 
 // ReadFileWithVerify is the same as ReadFile but with hashsum

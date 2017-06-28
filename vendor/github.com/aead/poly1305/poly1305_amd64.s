@@ -15,12 +15,11 @@ TEXT ·initialize(SB), $0-16
 	MOVQ state+0(FP), DI
 	MOVQ key+8(FP), SI
 
-
 	// state[0...7] is initialized with zero
 	MOVOU 0(SI), X0
 	MOVOU 16(SI), X1
 	MOVOU ·poly1305Mask<>(SB), X2
-	PAND  X2, X0 
+	PAND  X2, X0
 	MOVOU X0, 24(DI)
 	MOVOU X1, 40(DI)
 	RET

@@ -109,6 +109,6 @@ DONE:
 
 // func supportsBMI2() bool
 TEXT ·supportsBMI2(SB), 4, $0-1
-    XORQ AX, AX
-    MOVB AX, ret+0(FP)
-    RET
+	XORQ AX, AX
+	MOVB AX, ret+0(FP)
+	RET

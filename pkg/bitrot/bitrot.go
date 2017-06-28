@@ -66,7 +66,7 @@ var hashes = make([]func([]byte) Hash, UnknownAlgorithm)
 // It returns an error if the given key cannot be used by the algorithm.
 // New panics if the algorithm is unknown.
 func (a Algorithm) New(key []byte) (Hash, error) {
-	if keysize := a.KeySize(); keysize != len(key) {
+	if a.KeySize() != len(key) {
 		return nil, fmt.Errorf("bitrot: bad keysize %d for algorithm #%s", len(key), a)
 	}
 	f := hashes[a]
@@ -79,7 +79,7 @@ func (a Algorithm) New(key []byte) (Hash, error) {
 // KeySize returns the size of valid keys for the given algorithm in bytes.
 // It panics if the algorithm is unknown.
 func (a Algorithm) KeySize() int {
-	if a >= 0 && a < UnknownAlgorithm {
+	if a < UnknownAlgorithm && int(a) < len(keysizes) {
 		return keysizes[a]
 	}
 	panic("bitrot: requested algorithm  #" + strconv.Itoa(int(a)) + " is not available")
@@ -93,7 +93,7 @@ func (a Algorithm) Available() bool {
 // String returns a string representation of the algorithm.
 // It panics if the algorithm is unknown.
 func (a Algorithm) String() string {
-	if a >= 0 && a < UnknownAlgorithm {
+	if a < UnknownAlgorithm && int(a) < len(keysizes) {
 		return names[a]
 	}
 	panic("bitrot: requested algorithm  #" + strconv.Itoa(int(a)) + " is not available")
@@ -129,7 +129,7 @@ func AlgorithmFromString(s string) (Algorithm, error) {
 			return Algorithm(i), nil
 		}
 	}
-	return UnknownAlgorithm, fmt.Errorf("bitrot: algorithm #%s is unknown", s)
+	return UnknownAlgorithm, fmt.Errorf("bitrot: algorithm %s is unknown", s)
 }
 
 // Hash is the common interface for bitrot protection.

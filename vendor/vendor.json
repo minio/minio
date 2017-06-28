@@ -62,6 +62,19 @@
 			"revisionTime": "2016-07-12T20:17:32-04:00"
 		},
 		{
+			"checksumSHA1": "k6yGM5Pb5Ex8pkbb1xWVc/Pr6G0=",
+			"origin": "github.com/minio/minio/vendor/github.com/aead/poly",
+			"path": "github.com/aead/poly",
+			"revision": "cd636c11f395e186703d4a978d28dabad0d990ef",
+			"revisionTime": "2017-06-28T02:51:18Z"
+		},
+		{
+			"checksumSHA1": "E3w8SwP9z/Vto/2lT2nNU70g7Rg=",
+			"path": "github.com/aead/poly1305",
+			"revision": "559ab853fe0556bc2fbac43b244a1ae425f78055",
+			"revisionTime": "2017-06-28T02:50:08Z"
+		},
+		{
 			"path": "github.com/cheggaaa/pb",
 			"revision": "73ae1d68fe0bd482ab11913a9828634f795b987f",
 			"revisionTime": "2016-07-13T13:44:25+03:00"

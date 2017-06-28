@@ -45,7 +45,7 @@ func New(key [32]byte) *Hash {
 
 // Hash implements the poly1305 authenticator.
 // Poly1305 cannot be used like common hash.Hash implementations,
-// because of using a poly1305 key twice breaks its security.
+// because using a poly1305 key twice breaks its security.
 type Hash struct {
 	state [7]uint64 // := uint64{ h0, h1, h2, r0, r1, pad0, pad1 }
 
@@ -79,6 +79,7 @@ func (p *Hash) Write(msg []byte) (int, error) {
 		p.off = 0
 	}
 
+	// process full 16-byte blocks
 	if nn := len(msg) & (^(TagSize - 1)); nn > 0 {
 		update(&(p.state), msg[:nn])
 		msg = msg[nn:]
@@ -91,7 +92,7 @@ func (p *Hash) Write(msg []byte) (int, error) {
 	return n, nil
 }
 
-// Sum appends the Pol1305 hash of the previously
+// Sum appends the Poly1305 hash of the previously
 // processed data to b and returns the resulting slice.
 // It is safe to call this function multiple times.
 func (p *Hash) Sum(b []byte) []byte {

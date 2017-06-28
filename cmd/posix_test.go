@@ -1095,13 +1095,13 @@ func TestPosixReadFileWithVerify(t *testing.T) {
 		},
 		// Empty hash-algo returns error - 7
 		{
-			"myobject", 7, 4, 0xffffffff, blakeHash("Hello, world!"),
+			"myobject", 7, 4, bitrot.UnknownAlgorithm, blakeHash("Hello, world!"),
 			[]byte("worl"), errBitrotHashAlgoInvalid,
 		},
 		// Empty content hash verification with empty
 		// hash-algo algo returns error - 8
 		{
-			"myobject", 7, 0, 0xffffffff, blakeHash("Hello, world!"),
+			"myobject", 7, 0, bitrot.UnknownAlgorithm, blakeHash("Hello, world!"),
 			[]byte(""), errBitrotHashAlgoInvalid,
 		},
 	}

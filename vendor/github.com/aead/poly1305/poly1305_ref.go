@@ -27,13 +27,14 @@ func Sum(msg []byte, key [32]byte) [TagSize]byte {
 
 	initialize(&r, &s, &key)
 
+	// process full 16-byte blocks
 	n := len(msg) & (^(TagSize - 1))
 	if n > 0 {
 		update(msg[:n], msgBlock, &h, &r)
 		msg = msg[n:]
 	}
 	if len(msg) > 0 {
-		off += copy(block[:], msg)
+		off = copy(block[:], msg)
 		block[off] = 1
 		update(block[:], finalBlock, &h, &r)
 	}
@@ -51,7 +52,7 @@ func New(key [32]byte) *Hash {
 
 // Hash implements a Poly1305 writer interface.
 // Poly1305 cannot be used like common hash.Hash implementations,
-// because of using a poly1305 key twice breaks its security.
+// because using a poly1305 key twice breaks its security.
 // So poly1305.Hash does not support some kind of reset.
 type Hash struct {
 	h, r [5]uint32
@@ -87,6 +88,7 @@ func (p *Hash) Write(msg []byte) (int, error) {
 		p.off = 0
 	}
 
+	// process full 16-byte blocks
 	if nn := len(msg) & (^(TagSize - 1)); nn > 0 {
 		update(msg[:nn], msgBlock, &(p.h), &(p.r))
 		msg = msg[nn:]
