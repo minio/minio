@@ -514,17 +514,25 @@ func (l *gcsGateway) ListObjectsV2(bucket, prefix, continuationToken string, fet
 	it := l.client.Bucket(bucket).Objects(l.ctx, &storage.Query{Delimiter: delimiter, Prefix: prefix, Versions: false})
 
 	isTruncated := false
-	nextMarker := ""
-	prefixes := []string{}
+	it.PageInfo().MaxSize = maxKeys
 
-	objects := []ObjectInfo{}
-	for {
-		if maxKeys < len(objects) {
+	if continuationToken != "" {
+		// If client sends continuationToken, set it
+		it.PageInfo().Token = continuationToken
+	} else {
+		// else set the continuationToken to return
+		continuationToken = it.PageInfo().Token
+		if continuationToken != "" {
+			// If GCS SDK sets continuationToken, it means there are more than maxKeys in the current page
+			// and the response will be truncated
 			isTruncated = true
-			nextMarker = it.PageInfo().Token
-			break
 		}
+	}
 
+	prefixes := []string{}
+	objects := []ObjectInfo{}
+
+	for {
 		attrs, err := it.Next()
 		if err == iterator.Done {
 			break
@@ -532,6 +540,20 @@ func (l *gcsGateway) ListObjectsV2(bucket, prefix, continuationToken string, fet
 
 		if err != nil {
 			return ListObjectsV2Info{}, gcsToObjectError(traceError(err), bucket, prefix)
+		}
+
+		if attrs.Prefix == gcsMinioPath {
+			// We don't return our metadata prefix.
+			continue
+		}
+		if !strings.HasPrefix(prefix, gcsMinioPath) {
+			// If client lists outside gcsMinioPath then we filter out gcsMinioPath/* entries.
+			// But if the client lists inside gcsMinioPath then we return the entries in gcsMinioPath/
+			// which will be helpful to observe the "directory structure" for debugging purposes.
+			if strings.HasPrefix(attrs.Prefix, gcsMinioPath) ||
+				strings.HasPrefix(attrs.Name, gcsMinioPath) {
+				continue
+			}
 		}
 
 		if attrs.Prefix != "" {
@@ -545,7 +567,7 @@ func (l *gcsGateway) ListObjectsV2(bucket, prefix, continuationToken string, fet
 	return ListObjectsV2Info{
 		IsTruncated:           isTruncated,
 		ContinuationToken:     continuationToken,
-		NextContinuationToken: nextMarker,
+		NextContinuationToken: continuationToken,
 		Prefixes:              prefixes,
 		Objects:               objects,
 	}, nil
