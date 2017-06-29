@@ -29,7 +29,7 @@ type Mode bool
 const (
 	// Protect indicates that the Hash is used for computing a checksum.
 	Protect Mode = true
-	// Verify indicates that the Hash is used for verifying a previous computed checksum.
+	// Verify indicates that the Hash is used for verifying a previously computed checksum.
 	Verify Mode = !Protect
 )
 
