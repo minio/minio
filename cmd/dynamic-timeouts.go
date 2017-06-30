@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -34,6 +35,7 @@ type dynamicTimeout struct {
 	minimum int64
 	entries int64
 	log     [dynamicTimeoutLogSize]time.Duration
+	mutex   sync.Mutex
 }
 
 // newDynamicTimeout returns a new dynamic timeout initialized with timeout value
@@ -65,6 +67,7 @@ func (dt *dynamicTimeout) logEntry(duration time.Duration) {
 		dt.log[index] = duration
 	}
 	if entries == dynamicTimeoutLogSize {
+		dt.mutex.Lock()
 
 		// Make copy on stack in order to call adjust()
 		logCopy := [dynamicTimeoutLogSize]time.Duration{}
@@ -72,6 +75,8 @@ func (dt *dynamicTimeout) logEntry(duration time.Duration) {
 
 		// reset log entries
 		atomic.StoreInt64(&dt.entries, 0)
+
+		dt.mutex.Unlock()
 
 		dt.adjust(logCopy)
 	}
