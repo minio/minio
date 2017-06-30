@@ -64,7 +64,9 @@ func (dt *dynamicTimeout) logEntry(duration time.Duration) {
 	entries := int(atomic.AddInt64(&dt.entries, 1))
 	index := entries - 1
 	if index < dynamicTimeoutLogSize {
+		dt.mutex.Lock()
 		dt.log[index] = duration
+		dt.mutex.Unlock()
 	}
 	if entries == dynamicTimeoutLogSize {
 		dt.mutex.Lock()
