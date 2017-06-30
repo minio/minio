@@ -20,6 +20,8 @@ import (
 	"encoding/hex"
 	"path/filepath"
 	"time"
+
+	"github.com/minio/minio/pkg/bitrot"
 )
 
 // commonTime returns a maximally occurring time from a list of time.
@@ -263,7 +265,11 @@ func disksWithAllParts(onlineDisks []StorageAPI, partsMetadata []xlMetaV1, errs 
 			// compute blake2b sum of part.
 			partPath := filepath.Join(object, part.Name)
 			checkSumInfo := partsMetadata[diskIndex].Erasure.GetCheckSumInfo(part.Name)
-			hash := newHash(checkSumInfo.Algorithm)
+			alg, err := bitrot.AlgorithmFromString(checkSumInfo.Algorithm)
+			if err != nil {
+				return nil, nil, err
+			}
+			hash := newHash(alg)
 			blakeBytes, hErr := hashSum(onlineDisk, bucket, partPath, hash)
 			if hErr == errFileNotFound {
 				errs[diskIndex] = errFileNotFound

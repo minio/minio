@@ -19,6 +19,7 @@ package cmd
 import (
 	"time"
 
+	"github.com/minio/minio/pkg/bitrot"
 	"github.com/minio/minio/pkg/disk"
 )
 
@@ -181,7 +182,7 @@ func (f retryStorage) ReadFile(volume, path string, offset int64, buffer []byte)
 // ReadFileWithVerify - a retryable implementation of reading at
 // offset from a file with verification.
 func (f retryStorage) ReadFileWithVerify(volume, path string, offset int64, buffer []byte,
-	algo HashAlgo, expectedHash string) (m int64, err error) {
+	algo bitrot.Algorithm, expectedHash string) (m int64, err error) {
 
 	m, err = f.remoteStorage.ReadFileWithVerify(volume, path, offset, buffer,
 		algo, expectedHash)

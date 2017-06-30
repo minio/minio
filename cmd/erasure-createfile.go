@@ -18,18 +18,18 @@ package cmd
 
 import (
 	"encoding/hex"
-	"hash"
 	"io"
 	"sync"
 
 	"github.com/klauspost/reedsolomon"
+	"github.com/minio/minio/pkg/bitrot"
 )
 
 // erasureCreateFile - writes an entire stream by erasure coding to
 // all the disks, writes also calculate individual block's checksum
 // for future bit-rot protection.
 func erasureCreateFile(disks []StorageAPI, volume, path string, reader io.Reader, allowEmpty bool, blockSize int64,
-	dataBlocks, parityBlocks int, algo HashAlgo, writeQuorum int) (newDisks []StorageAPI, bytesWritten int64, checkSums []string, err error) {
+	dataBlocks, parityBlocks int, algo bitrot.Algorithm, writeQuorum int) (newDisks []StorageAPI, bytesWritten int64, checkSums []string, err error) {
 
 	// Allocated blockSized buffer for reading from incoming stream.
 	buf := make([]byte, blockSize)
@@ -110,7 +110,7 @@ func encodeData(dataBuffer []byte, dataBlocks, parityBlocks int) ([][]byte, erro
 }
 
 // appendFile - append data buffer at path.
-func appendFile(disks []StorageAPI, volume, path string, enBlocks [][]byte, hashWriters []hash.Hash, writeQuorum int) ([]StorageAPI, error) {
+func appendFile(disks []StorageAPI, volume, path string, enBlocks [][]byte, hashWriters []bitrot.Hash, writeQuorum int) ([]StorageAPI, error) {
 	var wg = &sync.WaitGroup{}
 	var wErrs = make([]error, len(disks))
 	// Write encoded data to quorum disks in parallel.

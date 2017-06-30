@@ -26,6 +26,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/minio/minio/pkg/bitrot"
 	"github.com/minio/minio/pkg/bpool"
 	"github.com/minio/minio/pkg/mimedb"
 	"github.com/minio/minio/pkg/objcache"
@@ -266,7 +267,7 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 
 		// Get the checksums of the current part.
 		checkSums := make([]string, len(onlineDisks))
-		var ckSumAlgo HashAlgo
+		var ckSumAlgo = bitrot.UnknownAlgorithm
 		for index, disk := range onlineDisks {
 			// Disk is not found skip the checksum.
 			if disk == nil {
@@ -278,8 +279,12 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 			// Set checksum algo only once, while it is possible to have
 			// different algos per block because of our `xl.json`.
 			// It is not a requirement, set this only once for all the disks.
-			if ckSumAlgo == "" {
-				ckSumAlgo = ckSumInfo.Algorithm
+			if !ckSumAlgo.Available() {
+				alg, err := bitrot.AlgorithmFromString(ckSumInfo.Algorithm)
+				if err != nil {
+					return traceError(err)
+				}
+				ckSumAlgo = alg
 			}
 		}
 
@@ -576,7 +581,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 		var erasureErr error
 
 		// Erasure code data and write across all disks.
-		onlineDisks, partSizeWritten, checkSums, erasureErr = erasureCreateFile(onlineDisks, minioMetaTmpBucket, tempErasureObj, partReader, allowEmptyPart, partsMetadata[0].Erasure.BlockSize, partsMetadata[0].Erasure.DataBlocks, partsMetadata[0].Erasure.ParityBlocks, bitRotAlgo, xl.writeQuorum)
+		onlineDisks, partSizeWritten, checkSums, erasureErr = erasureCreateFile(onlineDisks, minioMetaTmpBucket, tempErasureObj, partReader, allowEmptyPart, partsMetadata[0].Erasure.BlockSize, partsMetadata[0].Erasure.DataBlocks, partsMetadata[0].Erasure.ParityBlocks, defaultBitRotAlgorithm, xl.writeQuorum)
 		if erasureErr != nil {
 			return ObjectInfo{}, toObjectErr(erasureErr, minioMetaTmpBucket, tempErasureObj)
 		}
@@ -599,7 +604,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 				partsMetadata[index].Erasure.AddCheckSumInfo(checkSumInfo{
 					Name:      partName,
 					Hash:      checkSums[index],
-					Algorithm: bitRotAlgo,
+					Algorithm: defaultBitRotAlgorithm.String(),
 				})
 			}
 		}

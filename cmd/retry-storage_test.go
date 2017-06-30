@@ -23,6 +23,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/minio/minio/pkg/bitrot"
 )
 
 // Tests retry storage.
@@ -311,7 +313,7 @@ func TestRetryStorage(t *testing.T) {
 		var buf2 = make([]byte, 5)
 		var n int64
 		if n, err = disk.ReadFileWithVerify("existent", "path", 7, buf2,
-			HashSha256, sha256Hash("Hello, World")); err != nil {
+			bitrot.SHA256, sha256Hash("Hello, World")); err != nil {
 			t.Fatal(err)
 		}
 		if err != nil {

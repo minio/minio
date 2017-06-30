@@ -21,6 +21,8 @@ import (
 	"path"
 	"sort"
 	"sync"
+
+	"github.com/minio/minio/pkg/bitrot"
 )
 
 // healFormatXL - heals missing `format.json` on freshly or corrupted
@@ -439,11 +441,15 @@ func healObject(storageDisks []StorageAPI, bucket string, object string, quorum 
 		partSize := latestMeta.Parts[partIndex].Size
 		erasure := latestMeta.Erasure
 		sumInfo := latestMeta.Erasure.GetCheckSumInfo(partName)
+		alg, err := bitrot.AlgorithmFromString(sumInfo.Algorithm)
+		if err != nil {
+			return 0, 0, traceError(err)
+		}
 		// Heal the part file.
 		checkSums, hErr := erasureHealFile(latestDisks, outDatedDisks,
 			bucket, pathJoin(object, partName),
 			minioMetaTmpBucket, pathJoin(tmpID, partName),
-			partSize, erasure.BlockSize, erasure.DataBlocks, erasure.ParityBlocks, sumInfo.Algorithm)
+			partSize, erasure.BlockSize, erasure.DataBlocks, erasure.ParityBlocks, alg)
 		if hErr != nil {
 			return 0, 0, toObjectErr(hErr, bucket, object)
 		}

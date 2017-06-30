@@ -19,7 +19,6 @@ package cmd
 import (
 	"bytes"
 	"encoding/hex"
-	"hash"
 	"io"
 	"io/ioutil"
 	"os"
@@ -31,6 +30,7 @@ import (
 	"syscall"
 
 	humanize "github.com/dustin/go-humanize"
+	"github.com/minio/minio/pkg/bitrot"
 	"github.com/minio/minio/pkg/disk"
 )
 
@@ -521,8 +521,7 @@ func (s *posix) ReadAll(volume, path string) (buf []byte, err error) {
 // Additionally ReadFile also starts reading from an offset. ReadFile
 // semantics are same as io.ReadFull.
 func (s *posix) ReadFile(volume, path string, offset int64, buf []byte) (n int64, err error) {
-
-	return s.ReadFileWithVerify(volume, path, offset, buf, "", "")
+	return s.ReadFileWithVerify(volume, path, offset, buf, bitrot.UnknownAlgorithm, "")
 }
 
 // ReadFileWithVerify is the same as ReadFile but with hashsum
@@ -536,7 +535,7 @@ func (s *posix) ReadFile(volume, path string, offset int64, buf []byte) (n int64
 // The function takes care to minimize the number of disk read
 // operations.
 func (s *posix) ReadFileWithVerify(volume, path string, offset int64, buf []byte,
-	algo HashAlgo, expectedHash string) (n int64, err error) {
+	algo bitrot.Algorithm, expectedHash string) (n int64, err error) {
 
 	defer func() {
 		if err == syscall.EIO {
@@ -601,11 +600,11 @@ func (s *posix) ReadFileWithVerify(volume, path string, offset int64, buf []byte
 	// If expected hash string is empty hash verification is
 	// skipped.
 	needToHash := expectedHash != ""
-	var hasher hash.Hash
+	var hasher bitrot.Hash
 
 	if needToHash {
 		// If the hashing algo is invalid, return an error.
-		if !isValidHashAlgo(algo) {
+		if !algo.Available() {
 			return 0, errBitrotHashAlgoInvalid
 		}
 

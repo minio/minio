@@ -29,6 +29,8 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/minio/minio/pkg/bitrot"
+
 	"golang.org/x/crypto/blake2b"
 )
 
@@ -1053,7 +1055,7 @@ func TestPosixReadFileWithVerify(t *testing.T) {
 		fileName     string
 		offset       int64
 		bufSize      int
-		algo         HashAlgo
+		algo         bitrot.Algorithm
 		expectedHash string
 
 		expectedBuf []byte
@@ -1062,44 +1064,44 @@ func TestPosixReadFileWithVerify(t *testing.T) {
 		// Hash verification is skipped with empty expected
 		// hash - 1
 		{
-			"myobject", 0, 5, HashBlake2b, "",
+			"myobject", 0, 5, bitrot.BLAKE2b512, "",
 			[]byte("Hello"), nil,
 		},
 		// Hash verification failure case - 2
 		{
-			"myobject", 0, 5, HashBlake2b, "a",
+			"myobject", 0, 5, bitrot.BLAKE2b512, "a",
 			[]byte(""),
 			hashMismatchError{"a", blakeHash("Hello, world!")},
 		},
 		// Hash verification success with full content requested - 3
 		{
-			"myobject", 0, 13, HashBlake2b, blakeHash("Hello, world!"),
+			"myobject", 0, 13, bitrot.BLAKE2b512, blakeHash("Hello, world!"),
 			[]byte("Hello, world!"), nil,
 		},
 		// Hash verification success with full content and Sha256 - 4
 		{
-			"myobject", 0, 13, HashSha256, sha256Hash("Hello, world!"),
+			"myobject", 0, 13, bitrot.SHA256, sha256Hash("Hello, world!"),
 			[]byte("Hello, world!"), nil,
 		},
 		// Hash verification success with partial content requested - 5
 		{
-			"myobject", 7, 4, HashBlake2b, blakeHash("Hello, world!"),
+			"myobject", 7, 4, bitrot.BLAKE2b512, blakeHash("Hello, world!"),
 			[]byte("worl"), nil,
 		},
 		// Hash verification success with partial content and Sha256 - 6
 		{
-			"myobject", 7, 4, HashSha256, sha256Hash("Hello, world!"),
+			"myobject", 7, 4, bitrot.SHA256, sha256Hash("Hello, world!"),
 			[]byte("worl"), nil,
 		},
 		// Empty hash-algo returns error - 7
 		{
-			"myobject", 7, 4, "", blakeHash("Hello, world!"),
+			"myobject", 7, 4, bitrot.UnknownAlgorithm, blakeHash("Hello, world!"),
 			[]byte("worl"), errBitrotHashAlgoInvalid,
 		},
 		// Empty content hash verification with empty
 		// hash-algo algo returns error - 8
 		{
-			"myobject", 7, 0, "", blakeHash("Hello, world!"),
+			"myobject", 7, 0, bitrot.UnknownAlgorithm, blakeHash("Hello, world!"),
 			[]byte(""), errBitrotHashAlgoInvalid,
 		},
 	}
