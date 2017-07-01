@@ -28,6 +28,7 @@ import (
 	"math"
 	"regexp"
 	"strings"
+	"time"
 
 	"golang.org/x/oauth2/google"
 
@@ -45,12 +46,15 @@ const (
 	// listing on the GCS lists this entry in the end. Also in the gateway
 	// ListObjects we filter out this entry.
 	gcsMinioPath = "minio.sys.temp/"
+
 	// Path where multipart objects are saved.
 	// If we change the backend format we will use a different url path like /multipart/v2
 	// but we will not migrate old data.
 	gcsMinioMultipartPathV1 = gcsMinioPath + "multipart/v1"
+
 	// Multipart meta file.
 	gcsMinioMultipartMeta = "gcs.json"
+
 	// gcs.json version number
 	gcsMinioMultipartMetaCurrentVersion = "1"
 
@@ -64,6 +68,12 @@ const (
 
 	// maxPartCount - maximum multipart parts GCS supports which is 32 x 32 = 1024.
 	maxPartCount = 1024
+
+	// Every 12 hours we scan minio.sys.temp to delete expired multiparts.
+	gcsCleanupInterval = time.Hour * 12
+
+	// Expiry time after which the multipart gets deleted.
+	gcsMultipartExpiry = time.Hour * 24 * 7
 )
 
 // Stored in gcs.json - Contents of this file is not used anywhere. It can be
@@ -239,10 +249,11 @@ func checkGCSProjectID(ctx context.Context, projectID string) error {
 
 // gcsGateway - Implements gateway for Minio and GCS compatible object storage servers.
 type gcsGateway struct {
-	client     *storage.Client
-	anonClient *minio.Core
-	projectID  string
-	ctx        context.Context
+	client       *storage.Client
+	anonClient   *minio.Core
+	projectID    string
+	cleanupEndCh chan struct{}
+	ctx          context.Context
 }
 
 const googleStorageEndpoint = "storage.googleapis.com"
@@ -269,10 +280,11 @@ func newGCSGateway(projectID string) (GatewayLayer, error) {
 	}
 
 	gateway := &gcsGateway{
-		client:     client,
-		projectID:  projectID,
-		ctx:        ctx,
-		anonClient: anonClient,
+		client:       client,
+		projectID:    projectID,
+		ctx:          ctx,
+		anonClient:   anonClient,
+		cleanupEndCh: make(chan struct{}),
 	}
 	// Start background process to cleanup old files in minio.sys.temp
 	go gateway.CleanupGCSMinioPath()
@@ -285,12 +297,16 @@ func (l *gcsGateway) CleanupGCSMinioPathBucket(bucket string) {
 	for {
 		attrs, err := it.Next()
 		if err != nil {
+			if err != iterator.Done {
+				errorIf(err, "Object listing error on bucket %s", bucket)
+			}
 			return
 		}
-		if time.Since(attrs.Updated) > time.Hour*24*7 {
+		if time.Since(attrs.Updated) > gcsMultipartExpiry {
 			// Delete files older than 1 week.
 			err := l.client.Bucket(bucket).Object(attrs.Name).Delete(l.ctx)
 			if err != nil {
+				errorIf(err, "Unable to delete the object %", attrs.Name)
 				return
 			}
 		}
@@ -304,17 +320,26 @@ func (l *gcsGateway) CleanupGCSMinioPath() {
 		for {
 			attrs, err := it.Next()
 			if err != nil {
+				if err != iterator.Done {
+					errorIf(err, "Bucket listing error")
+				}
 				break
 			}
 			l.CleanupGCSMinioPathBucket(attrs.Name)
 		}
-		time.Sleep(time.Hour * 12)
+		select {
+		case <-l.cleanupEndCh:
+			// If shutdown is called we end the cleanup process.
+			return
+		case <-time.After(gcsCleanupInterval):
+		}
 	}
 }
 
 // Shutdown - save any gateway metadata to disk
 // if necessary and reload upon next restart.
 func (l *gcsGateway) Shutdown() error {
+	close(l.cleanupEndCh)
 	return nil
 }
 
