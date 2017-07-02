@@ -29,6 +29,8 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/minio/minio/pkg/disk"
+
 	"golang.org/x/crypto/blake2b"
 )
 
@@ -1666,6 +1668,109 @@ func TestPosixStatFile(t *testing.T) {
 		}
 		if _, err := posixStorage.StatFile(testCase.srcVol, testCase.srcPath); err != testCase.expectedErr {
 			t.Fatalf("TestPosix case %d: Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, err)
+		}
+	}
+}
+
+// Checks for restrictions for min total disk space and inodes.
+func TestCheckDiskTotalMin(t *testing.T) {
+	testCases := []struct {
+		diskInfo disk.Info
+		err      error
+	}{
+		// Test 1 - when fstype is nfs.
+		{
+			diskInfo: disk.Info{
+				Total:  diskMinTotalSpace * 3,
+				FSType: "NFS",
+			},
+			err: nil,
+		},
+		// Test 2 - when fstype is xfs and total inodes are small.
+		{
+			diskInfo: disk.Info{
+				Total:  diskMinTotalSpace * 3,
+				FSType: "XFS",
+				Files:  9999,
+			},
+			err: errDiskFull,
+		},
+		// Test 3 - when fstype is btrfs and total inodes is empty.
+		{
+			diskInfo: disk.Info{
+				Total:  diskMinTotalSpace * 3,
+				FSType: "BTRFS",
+				Files:  0,
+			},
+			err: nil,
+		},
+		// Test 4 - when fstype is xfs and total disk space is really small.
+		{
+			diskInfo: disk.Info{
+				Total:  diskMinTotalSpace - diskMinTotalSpace/1024,
+				FSType: "XFS",
+				Files:  9999,
+			},
+			err: errDiskFull,
+		},
+	}
+
+	// Validate all cases.
+	for i, test := range testCases {
+		if err := checkDiskMinTotal(test.diskInfo); test.err != err {
+			t.Errorf("Test %d: Expected error %s, got %s", i+1, test.err, err)
+		}
+	}
+}
+
+// Checks for restrictions for min free disk space and inodes.
+func TestCheckDiskFreeMin(t *testing.T) {
+	testCases := []struct {
+		diskInfo disk.Info
+		err      error
+	}{
+		// Test 1 - when fstype is nfs.
+		{
+			diskInfo: disk.Info{
+				Free:   diskMinTotalSpace * 3,
+				FSType: "NFS",
+			},
+			err: nil,
+		},
+		// Test 2 - when fstype is xfs and total inodes are small.
+		{
+			diskInfo: disk.Info{
+				Free:   diskMinTotalSpace * 3,
+				FSType: "XFS",
+				Files:  9999,
+				Ffree:  9999,
+			},
+			err: errDiskFull,
+		},
+		// Test 3 - when fstype is btrfs and total inodes are empty.
+		{
+			diskInfo: disk.Info{
+				Free:   diskMinTotalSpace * 3,
+				FSType: "BTRFS",
+				Files:  0,
+			},
+			err: nil,
+		},
+		// Test 4 - when fstype is xfs and total disk space is really small.
+		{
+			diskInfo: disk.Info{
+				Free:   diskMinTotalSpace - diskMinTotalSpace/1024,
+				FSType: "XFS",
+				Files:  9999,
+			},
+			err: errDiskFull,
+		},
+	}
+
+	// Validate all cases.
+	for i, test := range testCases {
+		if err := checkDiskMinFree(test.diskInfo); test.err != err {
+			t.Errorf("Test %d: Expected error %s, got %s", i+1, test.err, err)
 		}
 	}
 }
