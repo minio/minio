@@ -525,7 +525,11 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	}
 
 	// Extract metadata to be saved from received Form.
-	metadata := extractMetadataFromForm(formValues)
+	metadata, err := extractMetadataFromHeader(formValues)
+	if err != nil {
+		writeErrorResponse(w, ErrInvalidMetadataDirective, r.URL)
+		return
+	}
 	sha256sum := ""
 
 	objectLock := globalNSMutex.NewNSLock(bucket, object)

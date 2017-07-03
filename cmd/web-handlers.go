@@ -497,7 +497,11 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Extract incoming metadata if any.
-	metadata := extractMetadataFromHeader(r.Header)
+	metadata, err := extractMetadataFromHeader(r.Header)
+	if err != nil {
+		writeErrorResponse(w, ErrInvalidMetadataDirective, r.URL)
+		return
+	}
 
 	// Lock the object.
 	objectLock := globalNSMutex.NewNSLock(bucket, object)
