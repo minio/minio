@@ -23,7 +23,10 @@ import (
 	"strconv"
 	"testing"
 
+	"bytes"
+
 	humanize "github.com/dustin/go-humanize"
+	"github.com/minio/minio/pkg/bitrot"
 )
 
 // Tests caclculating disk count.
@@ -158,11 +161,10 @@ func newTestXLMetaV1() xlMetaV1 {
 	return xlMeta
 }
 
-func (m *xlMetaV1) AddTestObjectCheckSum(checkSumNum int, name string, hash string, algo HashAlgo) {
-	checkSum := checkSumInfo{
-		Name:      name,
-		Algorithm: algo,
-		Hash:      hash,
+func (m *xlMetaV1) AddTestObjectCheckSum(checkSumNum int, name string, key, hash string, algo bitrot.Algorithm) {
+	checkSum := ChecksumInfo{}
+	if err := checkSum.parseChecksumInfo(name, algo.String(), key, hash); err != nil {
+		panic(err)
 	}
 	m.Erasure.Checksum[checkSumNum] = checkSum
 }
@@ -194,14 +196,14 @@ func getXLMetaBytes(totalParts int) []byte {
 func getSampleXLMeta(totalParts int) xlMetaV1 {
 	xlMeta := newTestXLMetaV1()
 	// Number of checksum info == total parts.
-	xlMeta.Erasure.Checksum = make([]checkSumInfo, totalParts)
+	xlMeta.Erasure.Checksum = make([]ChecksumInfo, totalParts)
 	// total number of parts.
 	xlMeta.Parts = make([]objectPartInfo, totalParts)
 	for i := 0; i < totalParts; i++ {
 		partName := "part." + strconv.Itoa(i+1)
 		// hard coding hash and algo value for the checksum, Since we are benchmarking the parsing of xl.json the magnitude doesn't affect the test,
 		// The magnitude doesn't make a difference, only the size does.
-		xlMeta.AddTestObjectCheckSum(i, partName, "a23f5eff248c4372badd9f3b2455a285cd4ca86c3d9a570b091d3fc5cd7ca6d9484bbea3f8c5d8d4f84daae96874419eda578fd736455334afbac2c924b3915a", "blake2b")
+		xlMeta.AddTestObjectCheckSum(i, partName, "", "a23f5eff248c4372badd9f3b2455a285cd4ca86c3d9a570b091d3fc5cd7ca6d9484bbea3f8c5d8d4f84daae96874419eda578fd736455334afbac2c924b3915a", bitrot.BLAKE2b512)
 		xlMeta.AddTestObjectPart(i, partName, "d3fdd79cc3efd5fe5c068d7be397934b", 67108864)
 	}
 	return xlMeta
@@ -258,8 +260,11 @@ func compareXLMetaV1(t *testing.T, unMarshalXLMeta, gjsonXLMeta xlMetaV1) {
 			if unMarshalXLMeta.Erasure.Checksum[i].Algorithm != gjsonXLMeta.Erasure.Checksum[i].Algorithm {
 				t.Errorf("Expected the Erasure Checksum Algorithm to be \"%s\", got \"%s.\"", unMarshalXLMeta.Erasure.Checksum[i].Algorithm, gjsonXLMeta.Erasure.Checksum[i].Algorithm)
 			}
-			if unMarshalXLMeta.Erasure.Checksum[i] != gjsonXLMeta.Erasure.Checksum[i] {
+			if !bytes.Equal(unMarshalXLMeta.Erasure.Checksum[i].Hash, gjsonXLMeta.Erasure.Checksum[i].Hash) {
 				t.Errorf("Expected the Erasure Checksum Hash to be \"%s\", got \"%s\".", unMarshalXLMeta.Erasure.Checksum[i].Hash, gjsonXLMeta.Erasure.Checksum[i].Hash)
+			}
+			if !bytes.Equal(unMarshalXLMeta.Erasure.Checksum[i].Key, gjsonXLMeta.Erasure.Checksum[i].Key) {
+				t.Errorf("Expected the Erasure Checksum Key to be \"%s\", got \"%s\".", unMarshalXLMeta.Erasure.Checksum[i].Key, gjsonXLMeta.Erasure.Checksum[i].Key)
 			}
 		}
 	}

@@ -62,6 +62,12 @@
 			"revisionTime": "2016-07-12T20:17:32-04:00"
 		},
 		{
+			"checksumSHA1": "dvWiTk1aVJzotmOQbek8gkc7XNc=",
+			"path": "github.com/aead/poly1305",
+			"revision": "8f708478afd78b4ac45ebf7350b242887b5f31f0",
+			"revisionTime": "2017-06-28T16:56:05Z"
+		},
+		{
 			"path": "github.com/cheggaaa/pb",
 			"revision": "73ae1d68fe0bd482ab11913a9828634f795b987f",
 			"revisionTime": "2016-07-13T13:44:25+03:00"

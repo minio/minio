@@ -17,19 +17,46 @@
 package cmd
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"path"
-	"runtime"
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/aead/poly1305"
+	"github.com/minio/minio/pkg/bitrot"
+	sha256 "github.com/minio/sha256-simd"
+	"golang.org/x/crypto/blake2b"
 )
 
 const (
 	// Erasure related constants.
 	erasureAlgorithmKlauspost = "klauspost/reedsolomon/vandermonde"
 )
+
+// DefaultBitrotAlgorithm is the default algorithm used for bitrot protection
+const DefaultBitrotAlgorithm = bitrot.Poly1305
+
+// register bitrot algorithms
+func init() {
+	newSHA256 := func([]byte, bitrot.Mode) bitrot.Hash {
+		return sha256.New()
+	}
+	newBLAKE2b := func([]byte, bitrot.Mode) bitrot.Hash {
+		b2, _ := blake2b.New512(nil) // New512 never returns an error if the key is nil
+		return b2
+	}
+	newPoly1305 := func(key []byte, mode bitrot.Mode) bitrot.Hash {
+		var pKey [32]byte
+		copy(pKey[:], key) // this is safe because bitrot.New will check the len of key
+		return poly1305.New(pKey)
+	}
+	bitrot.RegisterAlgorithm(bitrot.SHA256, newSHA256)
+	bitrot.RegisterAlgorithm(bitrot.BLAKE2b512, newBLAKE2b)
+	bitrot.RegisterAlgorithm(bitrot.Poly1305, newPoly1305)
+}
 
 // objectPartInfo Info of each part kept in the multipart metadata
 // file after CompleteMultipartUpload() is called.
@@ -47,73 +74,84 @@ func (t byObjectPartNumber) Len() int           { return len(t) }
 func (t byObjectPartNumber) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
 func (t byObjectPartNumber) Less(i, j int) bool { return t[i].Number < t[j].Number }
 
-// checkSumInfo - carries checksums of individual scattered parts per disk.
-type checkSumInfo struct {
-	Name      string   `json:"name"`
-	Algorithm HashAlgo `json:"algorithm"`
-	Hash      string   `json:"hash"`
+// ChecksumInfo - carries checksums of individual scattered parts per disk.
+type ChecksumInfo struct {
+	Name      string
+	Algorithm bitrot.Algorithm
+	Hash      []byte
+	Key       []byte
 }
 
-// HashAlgo - represents a supported hashing algorithm for bitrot
-// verification.
-type HashAlgo string
-
-const (
-	// HashBlake2b represents the Blake 2b hashing algorithm
-	HashBlake2b HashAlgo = "blake2b"
-	// HashSha256 represents the SHA256 hashing algorithm
-	HashSha256 HashAlgo = "sha256"
-)
-
-// isValidHashAlgo - function that checks if the hash algorithm is
-// valid (known and used).
-func isValidHashAlgo(algo HashAlgo) bool {
-	switch algo {
-	case HashSha256, HashBlake2b:
-		return true
-	default:
-		return false
+// MarshalJSON marshals the ChecksumInfo struct
+func (c *ChecksumInfo) MarshalJSON() ([]byte, error) {
+	type checksuminfo struct {
+		Name      string `json:"name"`
+		Algorithm string `json:"algorithm"`
+		Hash      string `json:"hash"`
+		Key       string `json:"key"`
 	}
+
+	info := checksuminfo{
+		Name:      c.Name,
+		Algorithm: c.Algorithm.String(),
+		Hash:      hex.EncodeToString(c.Hash),
+		Key:       hex.EncodeToString(c.Key),
+	}
+	return json.Marshal(info)
 }
 
-// Constant indicates current bit-rot algo used when creating objects.
-// Depending on the architecture we are choosing a different checksum.
-var bitRotAlgo = getDefaultBitRotAlgo()
-
-// Get the default bit-rot algo depending on the architecture.
-// Currently this function defaults to "blake2b" as the preferred
-// checksum algorithm on all architectures except ARM64. On ARM64
-// we use sha256 (optimized using sha2 instructions of ARM NEON chip).
-func getDefaultBitRotAlgo() HashAlgo {
-	switch runtime.GOARCH {
-	case "arm64":
-		// As a special case for ARM64 we use an optimized
-		// version of hash i.e sha256. This is done so that
-		// blake2b is sub-optimal and slower on ARM64.
-		// This would also allows erasure coded writes
-		// on ARM64 servers to be on-par with their
-		// counter-part X86_64 servers.
-		return HashSha256
-	default:
-		// Default for all other architectures we use blake2b.
-		return HashBlake2b
+// UnmarshalJSON unmarshals the the given data into the ChecksumInfo struct
+func (c *ChecksumInfo) UnmarshalJSON(data []byte) error {
+	type checksuminfo struct {
+		Name      string `json:"name"`
+		Algorithm string `json:"algorithm"`
+		Hash      string `json:"hash"`
+		Key       string `json:"key"`
 	}
+
+	var info checksuminfo
+	err := json.Unmarshal(data, &info)
+	if err != nil {
+		return err
+	}
+	c.parseChecksumInfo(info.Name, info.Algorithm, info.Hash, info.Key)
+	return nil
+}
+
+func (c *ChecksumInfo) parseChecksumInfo(name, algorithm, hash, key string) (err error) {
+	c.Name = name
+	c.Algorithm, err = bitrot.AlgorithmFromString(algorithm)
+	if err != nil {
+		return err
+	}
+	if !c.Algorithm.Available() {
+		return errBitrotHashAlgoInvalid
+	}
+	c.Hash, err = hex.DecodeString(hash)
+	if err != nil {
+		return err
+	}
+	c.Key, err = hex.DecodeString(key)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // erasureInfo - carries erasure coding related information, block
 // distribution and checksums.
 type erasureInfo struct {
-	Algorithm    HashAlgo       `json:"algorithm"`
+	Algorithm    string         `json:"algorithm"`
 	DataBlocks   int            `json:"data"`
 	ParityBlocks int            `json:"parity"`
 	BlockSize    int64          `json:"blockSize"`
 	Index        int            `json:"index"`
 	Distribution []int          `json:"distribution"`
-	Checksum     []checkSumInfo `json:"checksum,omitempty"`
+	Checksum     []ChecksumInfo `json:"checksum,omitempty"`
 }
 
 // AddCheckSum - add checksum of a part.
-func (e *erasureInfo) AddCheckSumInfo(ckSumInfo checkSumInfo) {
+func (e *erasureInfo) AddCheckSumInfo(ckSumInfo ChecksumInfo) {
 	for i, sum := range e.Checksum {
 		if sum.Name == ckSumInfo.Name {
 			e.Checksum[i] = ckSumInfo
@@ -124,14 +162,14 @@ func (e *erasureInfo) AddCheckSumInfo(ckSumInfo checkSumInfo) {
 }
 
 // GetCheckSumInfo - get checksum of a part.
-func (e erasureInfo) GetCheckSumInfo(partName string) (ckSum checkSumInfo) {
+func (e erasureInfo) GetCheckSumInfo(partName string) (ckSum ChecksumInfo) {
 	// Return the checksum.
 	for _, sum := range e.Checksum {
 		if sum.Name == partName {
 			return sum
 		}
 	}
-	return checkSumInfo{Algorithm: bitRotAlgo}
+	return ChecksumInfo{"", bitrot.UnknownAlgorithm, nil, nil}
 }
 
 // statInfo - carries stat information of the object.

@@ -19,10 +19,11 @@ package cmd
 import (
 	"bytes"
 	"crypto/sha256"
-	"encoding/hex"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/minio/minio/pkg/bitrot"
 )
 
 // Tests retry storage.
@@ -303,15 +304,19 @@ func TestRetryStorage(t *testing.T) {
 		}
 	}
 
-	sha256Hash := func(s string) string {
-		k := sha256.Sum256([]byte(s))
-		return hex.EncodeToString(k[:])
+	sha256Hash := func(b []byte) []byte {
+		k := sha256.Sum256(b)
+		return k[:]
 	}
 	for _, disk := range storageDisks {
 		var buf2 = make([]byte, 5)
+		var verifier *BitrotVerifier
+		verifier, err = NewBitrotVerifier(bitrot.SHA256, nil, sha256Hash([]byte("Hello, World")))
+		if err != nil {
+			t.Fatalf("failed to create bitrot verifier: %v", err)
+		}
 		var n int64
-		if n, err = disk.ReadFileWithVerify("existent", "path", 7, buf2,
-			HashSha256, sha256Hash("Hello, World")); err != nil {
+		if n, err = disk.ReadFileWithVerify("existent", "path", 7, buf2, verifier); err != nil {
 			t.Fatal(err)
 		}
 		if err != nil {

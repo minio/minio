@@ -19,111 +19,149 @@ package cmd
 import (
 	"bytes"
 	"crypto/rand"
-	"os"
-	"path"
+	"encoding/binary"
+	"io"
 	"testing"
+	"time"
 
-	humanize "github.com/dustin/go-humanize"
+	"reflect"
+
+	"github.com/minio/minio/pkg/bitrot"
 )
 
-// Test erasureHealFile()
+type determinsticReader struct {
+	val []byte
+}
+
+func NewDerministicRandom() io.Reader {
+	now := uint64(time.Now().Unix())
+	var val [8]byte
+	binary.LittleEndian.PutUint64(val[:], now)
+	return determinsticReader{val[:]}
+}
+
+func (r determinsticReader) Read(p []byte) (n int, err error) {
+	n = len(p)
+	for len(p) >= len(r.val) {
+		copy(p, r.val)
+		p = p[len(r.val):]
+	}
+	if len(p) > 0 {
+		copy(p, r.val[:len(p)])
+	}
+	return
+}
+
+var erasureHealFileTests = []struct {
+	disks, offDisks, badDisks, badOffDisks int
+	blocksize, size                        int64
+	algorithm                              bitrot.Algorithm
+	shouldFail                             bool
+	shouldFailQuorum                       bool
+}{
+	{disks: 4, offDisks: 1, badDisks: 0, badOffDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: bitrot.SHA256, shouldFail: false, shouldFailQuorum: false},          // 0
+	{disks: 6, offDisks: 2, badDisks: 0, badOffDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: bitrot.BLAKE2b512, shouldFail: false, shouldFailQuorum: false},      // 1
+	{disks: 8, offDisks: 2, badDisks: 1, badOffDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: bitrot.BLAKE2b512, shouldFail: false, shouldFailQuorum: false},      // 2
+	{disks: 10, offDisks: 3, badDisks: 1, badOffDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: bitrot.Poly1305, shouldFail: false, shouldFailQuorum: false},       // 3
+	{disks: 12, offDisks: 2, badDisks: 3, badOffDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: bitrot.SHA256, shouldFail: false, shouldFailQuorum: false},         // 4
+	{disks: 14, offDisks: 4, badDisks: 1, badOffDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: bitrot.Poly1305, shouldFail: false, shouldFailQuorum: false},       // 5
+	{disks: 16, offDisks: 6, badDisks: 1, badOffDisks: 1, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: bitrot.Poly1305, shouldFail: false, shouldFailQuorum: true},        // 6
+	{disks: 14, offDisks: 2, badDisks: 3, badOffDisks: 0, blocksize: int64(oneMiByte / 2), size: oneMiByte, algorithm: bitrot.BLAKE2b512, shouldFail: true, shouldFailQuorum: false},    // 7
+	{disks: 12, offDisks: 1, badDisks: 0, badOffDisks: 1, blocksize: int64(oneMiByte - 1), size: oneMiByte, algorithm: bitrot.Poly1305, shouldFail: true, shouldFailQuorum: false},      // 8
+	{disks: 10, offDisks: 3, badDisks: 0, badOffDisks: 3, blocksize: int64(oneMiByte / 2), size: oneMiByte, algorithm: bitrot.SHA256, shouldFail: true, shouldFailQuorum: false},        // 9
+	{disks: 8, offDisks: 1, badDisks: 1, badOffDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: bitrot.Poly1305, shouldFail: false, shouldFailQuorum: false},        // 10
+	{disks: 4, offDisks: 1, badDisks: 0, badOffDisks: 1, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: bitrot.Poly1305, shouldFail: false, shouldFailQuorum: true},         // 11
+	{disks: 12, offDisks: 8, badDisks: 3, badOffDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: bitrot.Poly1305, shouldFail: false, shouldFailQuorum: true},        // 12
+	{disks: 14, offDisks: 3, badDisks: 4, badOffDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: bitrot.BLAKE2b512, shouldFail: false, shouldFailQuorum: false},     // 13
+	{disks: 14, offDisks: 6, badDisks: 1, badOffDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: bitrot.Poly1305, shouldFail: false, shouldFailQuorum: false},       // 14
+	{disks: 16, offDisks: 4, badDisks: 5, badOffDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: bitrot.Poly1305, shouldFail: false, shouldFailQuorum: true},        // 15
+	{disks: 4, offDisks: 0, badDisks: 0, badOffDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: bitrot.Poly1305, shouldFail: false, shouldFailQuorum: false},        // 16
+	{disks: 4, offDisks: 0, badDisks: 0, badOffDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: bitrot.UnknownAlgorithm, shouldFail: true, shouldFailQuorum: false}, // 17
+}
+
 func TestErasureHealFile(t *testing.T) {
-	// Initialize environment needed for the test.
-	dataBlocks := 7
-	parityBlocks := 7
-	blockSize := int64(blockSizeV1)
-	setup, err := newErasureTestSetup(dataBlocks, parityBlocks, blockSize)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	defer setup.Remove()
-
-	disks := setup.disks
-
-	// Prepare a slice of 1MiB with random data.
-	data := make([]byte, 1*humanize.MiByte)
-	_, err = rand.Read(data)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Create a test file.
-	_, size, checkSums, err := erasureCreateFile(disks, "testbucket", "testobject1", bytes.NewReader(data), true, blockSize, dataBlocks, parityBlocks, bitRotAlgo, dataBlocks+1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if size != int64(len(data)) {
-		t.Errorf("erasureCreateFile returned %d, expected %d", size, len(data))
-	}
-
-	latest := make([]StorageAPI, len(disks))   // Slice of latest disks
-	outDated := make([]StorageAPI, len(disks)) // Slice of outdated disks
-
-	// Test case when one part needs to be healed.
-	dataPath := path.Join(setup.diskPaths[0], "testbucket", "testobject1")
-	err = os.Remove(dataPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	copy(latest, disks)
-	latest[0] = nil
-	outDated[0] = disks[0]
-
-	healCheckSums, err := erasureHealFile(latest, outDated, "testbucket", "testobject1", "testbucket", "testobject1", 1*humanize.MiByte, blockSize, dataBlocks, parityBlocks, bitRotAlgo)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Checksum of the healed file should match.
-	if checkSums[0] != healCheckSums[0] {
-		t.Error("Healing failed, data does not match.")
-	}
-
-	// Test case when parityBlocks number of disks need to be healed.
-	// Should succeed.
-	copy(latest, disks)
-	for index := 0; index < parityBlocks; index++ {
-		dataPath := path.Join(setup.diskPaths[index], "testbucket", "testobject1")
-		err = os.Remove(dataPath)
+	for i, test := range erasureHealFileTests {
+		setup, err := newErasureTestSetup(test.disks/2, test.disks/2, test.blocksize)
 		if err != nil {
-			t.Fatal(err)
+			t.Fatalf("Test %d: failed to setup XL environment: %v", i, err)
+		}
+		storage := XLStorage(setup.disks)
+		offline := storage.Clone()
+
+		data := make([]byte, test.size)
+		if _, err = io.ReadFull(rand.Reader, data); err != nil {
+			setup.Remove()
+			t.Fatalf("Test %d: failed to create random test data: %v", i, err)
 		}
 
-		latest[index] = nil
-		outDated[index] = disks[index]
-	}
-
-	healCheckSums, err = erasureHealFile(latest, outDated, "testbucket", "testobject1", "testbucket", "testobject1", 1*humanize.MiByte, blockSize, dataBlocks, parityBlocks, bitRotAlgo)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Checksums of the healed files should match.
-	for index := 0; index < parityBlocks; index++ {
-		if checkSums[index] != healCheckSums[index] {
-			t.Error("Healing failed, data does not match.")
+		algorithm := test.algorithm
+		if algorithm == bitrot.UnknownAlgorithm {
+			algorithm = bitrot.BLAKE2b512
 		}
-	}
-	for index := dataBlocks; index < len(disks); index++ {
-		if healCheckSums[index] != "" {
-			t.Errorf("expected healCheckSums[%d] to be empty", index)
-		}
-	}
-
-	// Test case when parityBlocks+1 number of disks need to be healed.
-	// Should fail.
-	copy(latest, disks)
-	for index := 0; index < parityBlocks+1; index++ {
-		dataPath := path.Join(setup.diskPaths[index], "testbucket", "testobject1")
-		err = os.Remove(dataPath)
+		buffer := make([]byte, test.blocksize)
+		file, err := storage.CreateFile(bytes.NewReader(data), "testbucket", "testobject", buffer, NewDerministicRandom(), algorithm)
 		if err != nil {
-			t.Fatal(err)
+			setup.Remove()
+			t.Fatalf("Test %d: failed to create random test data: %v", i, err)
 		}
 
-		latest[index] = nil
-		outDated[index] = disks[index]
-	}
-	_, err = erasureHealFile(latest, outDated, "testbucket", "testobject1", "testbucket", "testobject1", 1*humanize.MiByte, blockSize, dataBlocks, parityBlocks, bitRotAlgo)
-	if err == nil {
-		t.Error("Expected erasureHealFile() to fail when the number of available disks <= parityBlocks")
+		info, err := storage.HealFile(offline, "testbucket", "testobject", test.blocksize, "testbucket", "healedobject", test.size, test.algorithm, file.Keys, file.Checksums, nil)
+		if err != nil && !test.shouldFail {
+			t.Errorf("Test %d: should pass but it failed with: %v", i, err)
+		}
+		if err == nil && test.shouldFail {
+			t.Errorf("Test %d: should fail but it passed", i)
+		}
+		if err == nil {
+			if info.Size != test.size {
+				t.Errorf("Test %d: healed wrong number of bytes: got: #%d want: #%d", i, info.Size, test.size)
+			}
+			if info.Algorithm != test.algorithm {
+				t.Errorf("Test %d: healed with wrong algorithm: got: %v want: %v", i, info.Algorithm, test.algorithm)
+			}
+			if !reflect.DeepEqual(info.Keys, file.Keys) {
+				t.Errorf("Test %d: heal returned different bitrot keys", i)
+			}
+			if !reflect.DeepEqual(info.Checksums, file.Checksums) {
+				t.Errorf("Test %d: heal returned different bitrot keys", i)
+			}
+		}
+		if err == nil && !test.shouldFail {
+			for j := 0; j < len(storage); j++ {
+				if j < test.offDisks {
+					storage[j] = OfflineDisk
+				} else {
+					offline[j] = OfflineDisk
+				}
+			}
+			for j := 0; j < test.badDisks; j++ {
+				storage[test.offDisks+j] = badDisk{nil}
+			}
+			for j := 0; j < test.badOffDisks; j++ {
+				offline[j] = badDisk{nil}
+			}
+			info, err := storage.HealFile(offline, "testbucket", "testobject", test.blocksize, "testbucket", "healedobject", test.size, test.algorithm, file.Keys, file.Checksums, NewDerministicRandom())
+			if err != nil && !test.shouldFailQuorum {
+				t.Errorf("Test %d: should pass but it failed with: %v", i, err)
+			}
+			if err == nil && test.shouldFailQuorum {
+				t.Errorf("Test %d: should fail but it passed", i)
+			}
+			if err == nil {
+				if info.Size != test.size {
+					t.Errorf("Test %d: healed wrong number of bytes: got: #%d want: #%d", i, info.Size, test.size)
+				}
+				if info.Algorithm != test.algorithm {
+					t.Errorf("Test %d: healed with wrong algorithm: got: %v want: %v", i, info.Algorithm, test.algorithm)
+				}
+				if !reflect.DeepEqual(info.Keys, file.Keys) {
+					t.Errorf("Test %d: heal returned different bitrot keys", i)
+				}
+				if !reflect.DeepEqual(info.Checksums, file.Checksums) {
+					t.Errorf("Test %d: heal returned different bitrot keys", i)
+				}
+			}
+		}
+		setup.Remove()
 	}
 }

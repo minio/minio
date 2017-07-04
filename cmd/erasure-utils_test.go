@@ -18,20 +18,13 @@ package cmd
 
 import (
 	"bytes"
+	"crypto/rand"
 	"errors"
 	"io"
 	"testing"
+
+	"github.com/minio/minio/pkg/bitrot"
 )
-
-// Test validates the number hash writers returned.
-func TestNewHashWriters(t *testing.T) {
-	diskNum := 8
-	hashWriters := newHashWriters(diskNum, bitRotAlgo)
-	if len(hashWriters) != diskNum {
-		t.Errorf("Expected %d hashWriters, but instead got %d", diskNum, len(hashWriters))
-	}
-
-}
 
 // Tests validate the output of getChunkSize.
 func TestGetChunkSize(t *testing.T) {
@@ -156,5 +149,24 @@ func TestCopyBuffer(t *testing.T) {
 				t.Errorf("Test %d: copied buffer differs from the expected one.", i+1)
 			}
 		}
+	}
+}
+
+// Checks whether all available algorithms can create implementation instances and
+// ensures that the default bitrot algorithm is available.
+func TestAvailableBitrotAlgorithms(t *testing.T) {
+	for alg := bitrot.Algorithm(0); alg < bitrot.UnknownAlgorithm; alg++ {
+		if alg.Available() {
+			key, err := alg.GenerateKey(rand.Reader)
+			if err != nil {
+				t.Errorf("Algorithm %s: Failed to generate key", alg.String())
+			}
+			if _, err = alg.New(key, bitrot.Protect); err != nil {
+				t.Errorf("Algorithm %s: failed to create instance with key", alg.String())
+			}
+		}
+	}
+	if !DefaultBitrotAlgorithm.Available() {
+		t.Errorf("default bitrot algorithm %s is not available", DefaultBitrotAlgorithm)
 	}
 }

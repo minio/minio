@@ -17,9 +17,11 @@
 package cmd
 
 import (
-	"encoding/hex"
+	"crypto/subtle"
 	"path/filepath"
 	"time"
+
+	"github.com/minio/minio/pkg/bitrot"
 )
 
 // commonTime returns a maximally occurring time from a list of time.
@@ -253,7 +255,7 @@ func xlHealStat(xl xlObjects, partsMetadata []xlMetaV1, errs []error) HealObject
 func disksWithAllParts(onlineDisks []StorageAPI, partsMetadata []xlMetaV1, errs []error, bucket, object string) ([]StorageAPI, []error, error) {
 	availableDisks := make([]StorageAPI, len(onlineDisks))
 	for diskIndex, onlineDisk := range onlineDisks {
-		if onlineDisk == nil {
+		if onlineDisk == OfflineDisk {
 			continue
 		}
 		// disk has a valid xl.json but may not have all the
@@ -263,23 +265,20 @@ func disksWithAllParts(onlineDisks []StorageAPI, partsMetadata []xlMetaV1, errs 
 			// compute blake2b sum of part.
 			partPath := filepath.Join(object, part.Name)
 			checkSumInfo := partsMetadata[diskIndex].Erasure.GetCheckSumInfo(part.Name)
-			hash := newHash(checkSumInfo.Algorithm)
-			blakeBytes, hErr := hashSum(onlineDisk, bucket, partPath, hash)
+			hash, err := checkSumInfo.Algorithm.New(checkSumInfo.Key, bitrot.Verify)
+			if err != nil {
+				return nil, nil, err
+			}
+			sum, hErr := hashSum(onlineDisk, bucket, partPath, hash)
 			if hErr == errFileNotFound {
 				errs[diskIndex] = errFileNotFound
 				availableDisks[diskIndex] = nil
 				break
 			}
-
 			if hErr != nil && hErr != errFileNotFound {
 				return nil, nil, traceError(hErr)
 			}
-
-			blakeSum := hex.EncodeToString(blakeBytes)
-			// if blake2b sum doesn't match for a part
-			// then this disk is outdated and needs
-			// healing.
-			if blakeSum != checkSumInfo.Hash {
+			if subtle.ConstantTimeCompare(sum, checkSumInfo.Hash) != 1 {
 				errs[diskIndex] = errFileNotFound
 				availableDisks[diskIndex] = nil
 				break

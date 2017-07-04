@@ -86,7 +86,7 @@ func TestCommonTime(t *testing.T) {
 
 // partsMetaFromModTimes - returns slice of modTimes given metadata of
 // an object part.
-func partsMetaFromModTimes(modTimes []time.Time, checksums []checkSumInfo) []xlMetaV1 {
+func partsMetaFromModTimes(modTimes []time.Time, checksums []ChecksumInfo) []xlMetaV1 {
 	var partsMetadata []xlMetaV1
 	for _, modTime := range modTimes {
 		partsMetadata = append(partsMetadata, xlMetaV1{
@@ -367,8 +367,6 @@ func TestDisksWithAllParts(t *testing.T) {
 		t.Fatalf("Failed to read xl meta data %v", err)
 	}
 
-	// Replace the default blake2b erasure algorithm to HashSha256 and test that
-	// disks are excluded
 	diskFailures := make(map[int]string)
 	// key = disk index, value = part name with hash mismatch
 	diskFailures[0] = "part.3"
@@ -378,7 +376,7 @@ func TestDisksWithAllParts(t *testing.T) {
 	for diskIndex, partName := range diskFailures {
 		for index, info := range partsMetadata[diskIndex].Erasure.Checksum {
 			if info.Name == partName {
-				partsMetadata[diskIndex].Erasure.Checksum[index].Algorithm = HashSha256
+				partsMetadata[diskIndex].Erasure.Checksum[index].Hash[0]++
 			}
 		}
 	}

@@ -23,7 +23,8 @@ import (
 
 // mustEncodeData - encodes data slice and provides encoded 2 dimensional slice.
 func mustEncodeData(data []byte, dataBlocks, parityBlocks int) [][]byte {
-	encodedData, err := encodeData(data, dataBlocks, parityBlocks)
+	storage := make(XLStorage, dataBlocks+parityBlocks)
+	encodedData, err := storage.ErasureEncode(data)
 	if err != nil {
 		// Upon failure panic this function.
 		panic(err)
@@ -120,7 +121,7 @@ func TestErasureDecode(t *testing.T) {
 			// Encoding matrix.
 			dataBlocks := encodingMatrix.dataBlocks
 			parityBlocks := encodingMatrix.parityBlocks
-
+			storage := make(XLStorage, dataBlocks+parityBlocks)
 			// Data block size.
 			blockSize := len(data)
 
@@ -128,7 +129,7 @@ func TestErasureDecode(t *testing.T) {
 			encodedData := testCase.enFn(data, dataBlocks, parityBlocks)
 
 			// Decodes the data.
-			err := decodeData(encodedData, dataBlocks, parityBlocks)
+			err := storage.ErasureDecode(encodedData)
 			if err != nil && testCase.shouldPass {
 				t.Errorf("Test %d: Expected to pass by failed instead with %s", i+1, err)
 			}

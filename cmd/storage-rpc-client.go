@@ -262,8 +262,7 @@ func (n *networkStorage) ReadFile(volume string, path string, offset int64, buff
 }
 
 // ReadFileWithVerify - reads a file at remote path and fills the buffer.
-func (n *networkStorage) ReadFileWithVerify(volume string, path string, offset int64,
-	buffer []byte, algo HashAlgo, expectedHash string) (m int64, err error) {
+func (n *networkStorage) ReadFileWithVerify(volume string, path string, offset int64, buffer []byte, verifier *BitrotVerifier) (m int64, err error) {
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -279,8 +278,9 @@ func (n *networkStorage) ReadFileWithVerify(volume string, path string, offset i
 			Path:         path,
 			Offset:       offset,
 			Buffer:       buffer,
-			Algo:         algo,
-			ExpectedHash: expectedHash,
+			Algo:         verifier.algorithm,
+			Key:          verifier.key,
+			ExpectedHash: verifier.sum,
 		}, &result)
 
 	// Copy results to buffer.

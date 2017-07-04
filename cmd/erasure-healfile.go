@@ -16,71 +16,79 @@
 
 package cmd
 
-import "encoding/hex"
+import (
+	"io"
 
-// Heals the erasure coded file. reedsolomon.Reconstruct() is used to reconstruct the missing parts.
-func erasureHealFile(latestDisks []StorageAPI, outDatedDisks []StorageAPI, volume, path, healBucket, healPath string,
-	size, blockSize int64, dataBlocks, parityBlocks int, algo HashAlgo) (checkSums []string, err error) {
+	"github.com/minio/minio/pkg/bitrot"
+)
 
-	var offset int64
-	remainingSize := size
-
-	// Hash for bitrot protection.
-	hashWriters := newHashWriters(len(outDatedDisks), bitRotAlgo)
-
-	for remainingSize > 0 {
-		curBlockSize := blockSize
-		if remainingSize < curBlockSize {
-			curBlockSize = remainingSize
+// HealFile tries to reconstruct a bitrot encoded file spreed over all available disks. HealFile will read the valid parts of the file,
+// reconstruct the missing data and write the reconstructed parts pack to the disks.
+// It will try to read the valid parts from the file under the given volume and path and tries to reconstruct the file under the given
+// healVolume and healPath. The given algorithm will be used to verify the valid parts and to protected the reconstructed file.
+// The random reader should return random data (if it's nil the system PRNG will be used).
+func (s XLStorage) HealFile(offlineDisks XLStorage, volume, path string, blocksize int64, healVolume, healPath string, size int64, algorithm bitrot.Algorithm, keys, checksums [][]byte, random io.Reader) (f ErasureFileInfo, err error) {
+	hashers, verifiers := make([]bitrot.Hash, len(s)), make([]*BitrotVerifier, len(s))
+	f.Keys, f.Checksums = make([][]byte, len(s)), make([][]byte, len(s))
+	for i, disk := range s {
+		if disk == OfflineDisk {
+			f.Keys[i], hashers[i], err = NewBitrotProtector(algorithm, random)
+		} else {
+			verifiers[i], err = NewBitrotVerifier(algorithm, keys[i], checksums[i])
+			f.Keys[i] = keys[i]
+			f.Checksums[i] = checksums[i]
 		}
-
-		// Calculate the block size that needs to be read from each disk.
-		curEncBlockSize := getChunkSize(curBlockSize, dataBlocks)
-
-		// Memory for reading data from disks and reconstructing missing data using erasure coding.
-		enBlocks := make([][]byte, len(latestDisks))
-
-		// Read data from the latest disks.
-		// FIXME: no need to read from all the disks. dataBlocks+1 is enough.
-		for index, disk := range latestDisks {
-			if disk == nil {
-				continue
-			}
-			enBlocks[index] = make([]byte, curEncBlockSize)
-			_, err := disk.ReadFile(volume, path, offset, enBlocks[index])
-			if err != nil {
-				enBlocks[index] = nil
-			}
-		}
-
-		// Reconstruct missing data.
-		err := decodeData(enBlocks, dataBlocks, parityBlocks)
 		if err != nil {
-			return nil, err
+			return f, err
 		}
-
-		// Write to the healPath file.
-		for index, disk := range outDatedDisks {
-			if disk == nil {
-				continue
-			}
-			err := disk.AppendFile(healBucket, healPath, enBlocks[index])
-			if err != nil {
-				return nil, traceError(err)
-			}
-			hashWriters[index].Write(enBlocks[index])
-		}
-		remainingSize -= curBlockSize
-		offset += curEncBlockSize
 	}
-
-	// Checksums for the bit rot.
-	checkSums = make([]string, len(outDatedDisks))
-	for index, disk := range outDatedDisks {
-		if disk == nil {
-			continue
+	blocks := make([][]byte, len(s))
+	chunksize := getChunkSize(blocksize, len(s)/2)
+	for offset := int64(0); offset < size; offset += blocksize {
+		if size < blocksize {
+			blocksize = size
+			chunksize = getChunkSize(blocksize, len(s)/2)
 		}
-		checkSums[index] = hex.EncodeToString(hashWriters[index].Sum(nil))
+		numReads := 0
+		for i, disk := range s {
+			if disk != OfflineDisk {
+				if blocks[i] == nil {
+					blocks[i] = make([]byte, chunksize)
+				}
+				blocks[i] = blocks[i][:chunksize]
+				if !verifiers[i].IsVerified() {
+					_, err = disk.ReadFileWithVerify(volume, path, offset, blocks[i], verifiers[i])
+				} else {
+					_, err = disk.ReadFile(volume, path, offset, blocks[i])
+				}
+				if err != nil {
+					blocks[i] = MissingShard
+				} else {
+					numReads++
+				}
+				if numReads == len(s)/2 { // we have enough data to reconstruct
+					break
+				}
+			}
+		}
+		if err = s.ErasureDecode(blocks); err != nil {
+			return f, err
+		}
+		for i, disk := range s {
+			if disk == OfflineDisk {
+				if err = offlineDisks[i].AppendFile(healVolume, healPath, blocks[i]); err != nil {
+					return f, traceError(err)
+				}
+				hashers[i].Write(blocks[i])
+			}
+		}
 	}
-	return checkSums, nil
+	f.Size = size
+	f.Algorithm = algorithm
+	for i, disk := range s {
+		if disk == OfflineDisk {
+			f.Checksums[i] = hashers[i].Sum(nil)
+		}
+	}
+	return f, nil
 }
