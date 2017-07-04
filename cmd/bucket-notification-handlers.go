@@ -204,6 +204,15 @@ func writeNotification(w http.ResponseWriter, notification map[string][]Notifica
 	if err != nil {
 		return err
 	}
+
+	// https://github.com/containous/traefik/issues/560
+	// https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events
+	//
+	// Proxies might buffer the connection to avoid this we
+	// need the proper MIME type before writing to client.
+	// This MIME header tells the proxies to avoid buffering
+	w.Header().Set("Content-Type", "text/event-stream")
+
 	// Add additional CRLF characters for client to
 	// differentiate the individual events properly.
 	_, err = w.Write(append(notificationBytes, crlf...))
