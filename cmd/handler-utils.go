@@ -100,7 +100,7 @@ func path2BucketAndObject(path string) (bucket, object string) {
 // extractMetadataFromHeader extracts metadata from HTTP header.
 func extractMetadataFromHeader(header http.Header) (map[string]string, error) {
 	if header == nil {
-		return nil, nil
+		return nil, traceError(errInvalidArgument)
 	}
 	metadata := make(map[string]string)
 	// Save standard supported headers.
@@ -117,7 +117,7 @@ func extractMetadataFromHeader(header http.Header) (map[string]string, error) {
 	// Go through all other headers for any additional headers that needs to be saved.
 	for key := range header {
 		if key != http.CanonicalHeaderKey(key) {
-			return nil, errInvalidArgument
+			return nil, traceError(errInvalidArgument)
 		}
 		if strings.HasPrefix(key, "X-Amz-Meta-") {
 			metadata[key] = header.Get(key)

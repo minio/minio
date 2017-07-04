@@ -365,7 +365,8 @@ func (api objectAPIHandlers) CopyObjectHandler(w http.ResponseWriter, r *http.Re
 
 	newMetadata, err := getCpObjMetadataFromHeader(r.Header, defaultMeta)
 	if err != nil {
-		writeErrorResponse(w, ErrInvalidMetadataDirective, r.URL)
+		errorIf(err, "found invalid http request header")
+		writeErrorResponse(w, ErrInternalError, r.URL)
 	}
 	// Check if x-amz-metadata-directive was not set to REPLACE and source,
 	// desination are same objects.
@@ -462,7 +463,8 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 	// Extract metadata to be saved from incoming HTTP header.
 	metadata, err := extractMetadataFromHeader(r.Header)
 	if err != nil {
-		writeErrorResponse(w, ErrInvalidMetadataDirective, r.URL)
+		errorIf(err, "found invalid http request header")
+		writeErrorResponse(w, ErrInternalError, r.URL)
 		return
 	}
 	if rAuthType == authTypeStreamingSigned {
@@ -588,7 +590,8 @@ func (api objectAPIHandlers) NewMultipartUploadHandler(w http.ResponseWriter, r 
 	// Extract metadata that needs to be saved.
 	metadata, err := extractMetadataFromHeader(r.Header)
 	if err != nil {
-		writeErrorResponse(w, ErrInvalidMetadataDirective, r.URL)
+		errorIf(err, "found invalid http request header")
+		writeErrorResponse(w, ErrInternalError, r.URL)
 		return
 	}
 

@@ -499,7 +499,8 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	// Extract incoming metadata if any.
 	metadata, err := extractMetadataFromHeader(r.Header)
 	if err != nil {
-		writeErrorResponse(w, ErrInvalidMetadataDirective, r.URL)
+		errorIf(err, "found invalid http request header")
+		writeErrorResponse(w, ErrInternalError, r.URL)
 		return
 	}
 

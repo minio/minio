@@ -527,7 +527,8 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	// Extract metadata to be saved from received Form.
 	metadata, err := extractMetadataFromHeader(formValues)
 	if err != nil {
-		writeErrorResponse(w, ErrInvalidMetadataDirective, r.URL)
+		errorIf(err, "found invalid http request header")
+		writeErrorResponse(w, ErrInternalError, r.URL)
 		return
 	}
 	sha256sum := ""

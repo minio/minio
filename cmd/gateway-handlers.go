@@ -233,7 +233,8 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 	// Extract metadata to be saved from incoming HTTP header.
 	metadata, err := extractMetadataFromHeader(r.Header)
 	if err != nil {
-		writeErrorResponse(w, ErrInvalidMetadataDirective, r.URL)
+		errorIf(err, "found invalid http request header")
+		writeErrorResponse(w, ErrInternalError, r.URL)
 		return
 	}
 	if reqAuthType == authTypeStreamingSigned {

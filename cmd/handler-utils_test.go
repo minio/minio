@@ -171,7 +171,7 @@ func TestExtractMetadataHeaders(t *testing.T) {
 		{
 			header:     nil,
 			metadata:   nil,
-			shouldFail: false,
+			shouldFail: true,
 		},
 	}
 
