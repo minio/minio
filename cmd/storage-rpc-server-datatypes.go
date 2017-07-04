@@ -79,11 +79,10 @@ type ReadFileWithVerifyArgs struct {
 	Buffer []byte
 
 	// Algorithm used in bit-rot hash computation.
-	Algo HashAlgo
+	Algo BitrotAlgorithm
 
-	// Stored hash value (hex-encoded) used to compare with
-	// computed value.
-	ExpectedHash string
+	// Stored hash value used to compare with computed value.
+	ExpectedHash []byte
 }
 
 // PrepareFileArgs represents append file RPC arguments.

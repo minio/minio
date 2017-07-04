@@ -249,7 +249,11 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 	chunkSize := getChunkSize(xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks)
 	pool := bpool.NewBytePool(chunkSize, len(onlineDisks))
 
-	// Read from all parts.
+	storage, err := NewErasureStorage(onlineDisks, xlMeta.Erasure.DataBlocks, xlMeta.Erasure.ParityBlocks)
+	if err != nil {
+		return toObjectErr(err, bucket, object)
+	}
+	checksums := make([][]byte, len(storage.disks))
 	for ; partIndex <= lastPartIndex; partIndex++ {
 		if length == totalBytesRead {
 			break
@@ -265,33 +269,24 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 		}
 
 		// Get the checksums of the current part.
-		checkSums := make([]string, len(onlineDisks))
-		var ckSumAlgo HashAlgo
-		for index, disk := range onlineDisks {
-			// Disk is not found skip the checksum.
-			if disk == nil {
-				checkSums[index] = ""
+		var algorithm BitrotAlgorithm
+		for index, disk := range storage.disks {
+			if disk == OfflineDisk {
 				continue
 			}
-			ckSumInfo := metaArr[index].Erasure.GetCheckSumInfo(partName)
-			checkSums[index] = ckSumInfo.Hash
-			// Set checksum algo only once, while it is possible to have
-			// different algos per block because of our `xl.json`.
-			// It is not a requirement, set this only once for all the disks.
-			if ckSumAlgo == "" {
-				ckSumAlgo = ckSumInfo.Algorithm
-			}
+			checksumInfo := metaArr[index].Erasure.GetChecksumInfo(partName)
+			algorithm = checksumInfo.Algorithm
+			checksums[index] = checksumInfo.Hash
 		}
 
-		// Start erasure decoding and writing to the client.
-		n, err := erasureReadFile(mw, onlineDisks, bucket, pathJoin(object, partName), partOffset, readSize, partSize, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks, xlMeta.Erasure.ParityBlocks, checkSums, ckSumAlgo, pool)
+		file, err := storage.ReadFile(mw, bucket, pathJoin(object, partName), partOffset, readSize, partSize, checksums, algorithm, xlMeta.Erasure.BlockSize, pool)
 		if err != nil {
 			errorIf(err, "Unable to read %s of the object `%s/%s`.", partName, bucket, object)
 			return toObjectErr(err, bucket, object)
 		}
 
 		// Track total bytes read from disk and written to the client.
-		totalBytesRead += n
+		totalBytesRead += file.Size
 
 		// partOffset will be valid only for the first part, hence reset it to 0 for
 		// the remaining parts.
@@ -540,6 +535,11 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	// Total size of the written object
 	var sizeWritten int64
 
+	storage, err := NewErasureStorage(onlineDisks, xlMeta.Erasure.DataBlocks, xlMeta.Erasure.ParityBlocks)
+	if err != nil {
+		return ObjectInfo{}, toObjectErr(err, bucket, object)
+	}
+	buffer := make([]byte, partsMetadata[0].Erasure.BlockSize, 2*partsMetadata[0].Erasure.BlockSize) // alloc additional space for parity blocks created while erasure coding
 	// Read data and split into parts - similar to multipart mechanism
 	for partIdx := 1; ; partIdx++ {
 		// Compute part name
@@ -558,55 +558,39 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 		// Hint the filesystem to pre-allocate one continuous large block.
 		// This is only an optimization.
 		if curPartSize > 0 {
-			pErr := xl.prepareFile(minioMetaTmpBucket, tempErasureObj, curPartSize, onlineDisks, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks)
+			pErr := xl.prepareFile(minioMetaTmpBucket, tempErasureObj, curPartSize, storage.disks, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks)
 			if pErr != nil {
 				return ObjectInfo{}, toObjectErr(pErr, bucket, object)
 			}
 		}
 
-		// partReader streams at most maximum part size
-		partReader := io.LimitReader(teeReader, globalPutPartSize)
-
-		// Allow creating empty earsure file only when this is the first part. This flag is useful
-		// when size == -1 because in this case, we are not able to predict how many parts we will have.
-		allowEmptyPart := partIdx == 1
-
-		var partSizeWritten int64
-		var checkSums []string
-		var erasureErr error
-
-		// Erasure code data and write across all disks.
-		onlineDisks, partSizeWritten, checkSums, erasureErr = erasureCreateFile(onlineDisks, minioMetaTmpBucket, tempErasureObj, partReader, allowEmptyPart, partsMetadata[0].Erasure.BlockSize, partsMetadata[0].Erasure.DataBlocks, partsMetadata[0].Erasure.ParityBlocks, bitRotAlgo, xl.writeQuorum)
+		file, erasureErr := storage.CreateFile(io.LimitReader(teeReader, globalPutPartSize), minioMetaTmpBucket, tempErasureObj, buffer, DefaultBitrotAlgorithm, xl.writeQuorum)
 		if erasureErr != nil {
 			return ObjectInfo{}, toObjectErr(erasureErr, minioMetaTmpBucket, tempErasureObj)
 		}
 
 		// Should return IncompleteBody{} error when reader has fewer bytes
 		// than specified in request header.
-		if partSizeWritten < int64(curPartSize) {
+		if file.Size < int64(curPartSize) {
 			return ObjectInfo{}, traceError(IncompleteBody{})
 		}
 
 		// Update the total written size
-		sizeWritten += partSizeWritten
+		sizeWritten += file.Size
 
-		// If erasure stored some data in the loop or created an empty file
-		if partSizeWritten > 0 || allowEmptyPart {
-			for index := range partsMetadata {
-				// Add the part to xl.json.
-				partsMetadata[index].AddObjectPart(partIdx, partName, "", partSizeWritten)
-				// Add part checksum info to xl.json.
-				partsMetadata[index].Erasure.AddCheckSumInfo(checkSumInfo{
-					Name:      partName,
-					Hash:      checkSums[index],
-					Algorithm: bitRotAlgo,
-				})
+		// allowEmpty creating empty earsure file only when this is the first part. This flag is useful
+		// when size == -1 because in this case, we are not able to predict how many parts we will have.
+		allowEmpty := partIdx == 1
+		if file.Size > 0 || allowEmpty {
+			for i := range partsMetadata {
+				partsMetadata[i].AddObjectPart(partIdx, partName, "", file.Size)
+				partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{partName, file.Algorithm, file.Checksums[i]})
 			}
 		}
 
 		// If we didn't write anything or we know that the next part doesn't have any
 		// data to write, we should quit this loop immediately
-		if partSizeWritten == 0 {
+		if file.Size == 0 {
 			break
 		}
 

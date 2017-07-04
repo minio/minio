@@ -22,6 +22,19 @@ To get the package use the standard:
 go get github.com/klauspost/reedsolomon
 ```
 
+# Changes
+
+## July 20, 2017
+
+`ReconstructData` added to [`Encoder`](https://godoc.org/github.com/klauspost/reedsolomon#Encoder) interface. This can cause compatibility issues if you implement your own Encoder. A simple workaround can be added:
+```Go
+func (e *YourEnc) ReconstructData(shards [][]byte) error {
+	return ReconstructData(shards)
+}
+```
+
+You can of course also do your own implementation. The [`StreamEncoder`](https://godoc.org/github.com/klauspost/reedsolomon#StreamEncoder) handles this without modifying the interface. This is a good lesson on why returning interfaces is not a good design.
+
 # Usage
 
 This section assumes you know the basics of Reed-Solomon encoding. A good start is this [Backblaze blog post](https://www.backblaze.com/blog/reed-solomon/).

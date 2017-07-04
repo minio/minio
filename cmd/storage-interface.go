@@ -16,7 +16,11 @@
 
 package cmd
 
-import "github.com/minio/minio/pkg/disk"
+import (
+	"io"
+
+	"github.com/minio/minio/pkg/disk"
+)
 
 // StorageAPI interface.
 type StorageAPI interface {
@@ -37,8 +41,7 @@ type StorageAPI interface {
 	// File operations.
 	ListDir(volume, dirPath string) ([]string, error)
 	ReadFile(volume string, path string, offset int64, buf []byte) (n int64, err error)
-	ReadFileWithVerify(volume string, path string, offset int64, buf []byte,
-		algo HashAlgo, expectedHash string) (n int64, err error)
+	ReadFileWithVerify(volume string, path string, offset int64, buf []byte, verifier *BitrotVerifier) (n int64, err error)
 	PrepareFile(volume string, path string, len int64) (err error)
 	AppendFile(volume string, path string, buf []byte) (err error)
 	RenameFile(srcVolume, srcPath, dstVolume, dstPath string) error
@@ -47,4 +50,48 @@ type StorageAPI interface {
 
 	// Read all.
 	ReadAll(volume string, path string) (buf []byte, err error)
+}
+
+// storageReader is an io.Reader view of a disk
+type storageReader struct {
+	storage      StorageAPI
+	volume, path string
+	offset       int64
+}
+
+func (r *storageReader) Read(p []byte) (n int, err error) {
+	nn, err := r.storage.ReadFile(r.volume, r.path, r.offset, p)
+	r.offset += nn
+	n = int(nn)
+
+	if err == io.ErrUnexpectedEOF && nn > 0 {
+		err = io.EOF
+	}
+	return
+}
+
+// storageWriter is a io.Writer view of a disk.
+type storageWriter struct {
+	storage      StorageAPI
+	volume, path string
+}
+
+func (w *storageWriter) Write(p []byte) (n int, err error) {
+	err = w.storage.AppendFile(w.volume, w.path, p)
+	if err == nil {
+		n = len(p)
+	}
+	return
+}
+
+// StorageWriter returns a new io.Writer which appends data to the file
+// at the given disk, volume and path.
+func StorageWriter(storage StorageAPI, volume, path string) io.Writer {
+	return &storageWriter{storage, volume, path}
+}
+
+// StorageReader returns a new io.Reader which reads data to the file
+// at the given disk, volume, path and offset.
+func StorageReader(storage StorageAPI, volume, path string, offset int64) io.Reader {
+	return &storageReader{storage, volume, path, offset}
 }
