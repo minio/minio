@@ -4,7 +4,7 @@ Minio GCS Gateway adds Amazon S3 compatibility to Google Cloud Storage.
 ## Run Minio Gateway for GCS
 ### Create service account key for GCS and get the credentials file
 1. Go to the [API Console Credentials page](https://console.developers.google.com/project/_/apis/credentials).
-2. From the project drop-down at the top, select your project.
+2. Select your project or create a new project. Note down your project ID.
 3. On the Credentials page, select the __Create credentials__ drop-down, then select __Service account key__.
 4. From the __Service account__ drop-down, select __New service account__
 5. Fill up __Service account name__ and __Service account ID__
