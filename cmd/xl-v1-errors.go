@@ -18,15 +18,6 @@ package cmd
 
 import "errors"
 
-// errXLMaxDisks - returned for reached maximum of disks.
-var errXLMaxDisks = errors.New("Number of disks are higher than supported maximum count '16'")
-
-// errXLMinDisks - returned for minimum number of disks.
-var errXLMinDisks = errors.New("Minimum '4' disks are required to enable erasure code")
-
-// errXLNumDisks - returned for odd number of disks.
-var errXLNumDisks = errors.New("Total number of disks should be multiples of '2'")
-
 // errXLReadQuorum - did not meet read quorum.
 var errXLReadQuorum = errors.New("Read failed. Insufficient number of disks online")
 
