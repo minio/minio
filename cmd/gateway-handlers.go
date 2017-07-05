@@ -231,7 +231,12 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	// Extract metadata to be saved from incoming HTTP header.
-	metadata := extractMetadataFromHeader(r.Header)
+	metadata, err := extractMetadataFromHeader(r.Header)
+	if err != nil {
+		errorIf(err, "found invalid http request header")
+		writeErrorResponse(w, ErrInternalError, r.URL)
+		return
+	}
 	if reqAuthType == authTypeStreamingSigned {
 		if contentEncoding, ok := metadata["content-encoding"]; ok {
 			contentEncoding = trimAwsChunkedContentEncoding(contentEncoding)
