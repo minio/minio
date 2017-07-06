@@ -1,5 +1,5 @@
 /*
- * Minio Client, (C) 2015 Minio, Inc.
+ * Minio Client, (C) 2015, 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,32 +18,75 @@ package cmd
 
 import (
 	"os"
-	"os/signal"
 )
 
-// signalTrap traps the registered signals and notifies the caller.
-func signalTrap(sig ...os.Signal) <-chan bool {
-	// channel to notify the caller.
-	trapCh := make(chan bool, 1)
+func handleSignals() {
+	// Custom exit function
+	exit := func(err error) {
+		// If global profiler is set stop before we exit.
+		if globalProfiler != nil {
+			globalProfiler.Stop()
+		}
 
-	go func(chan<- bool) {
-		// channel to receive signals.
-		sigCh := make(chan os.Signal, 1)
-		defer close(sigCh)
+		rv := 0
+		if err != nil {
+			rv = 1
+		}
 
-		// `signal.Notify` registers the given channel to
-		// receive notifications of the specified signals.
-		signal.Notify(sigCh, sig...)
+		os.Exit(rv)
+	}
 
-		// Wait for the signal.
-		<-sigCh
+	stopProcess := func() error {
+		err := globalHTTPServer.Shutdown()
+		errorIf(err, "Unable to shutdown http server")
+		if objAPI := newObjectLayerFn(); objAPI != nil {
+			oerr := objAPI.Shutdown()
+			errorIf(oerr, "Unable to shutdown object layer")
+			if err == nil {
+				err = oerr
+			}
+		}
 
-		// Once signal has been received stop signal Notify handler.
-		signal.Stop(sigCh)
+		return err
+	}
 
-		// Notify the caller.
-		trapCh <- true
-	}(trapCh)
+	for {
+		select {
+		case err := <-globalHTTPServerErrorCh:
+			errorIf(err, "http server exited abnormally")
+			if objAPI := newObjectLayerFn(); objAPI != nil {
+				oerr := objAPI.Shutdown()
+				errorIf(oerr, "Unable to shutdown object layer")
+				if err == nil {
+					err = oerr
+				}
+			}
 
-	return trapCh
+			exit(err)
+		case osSignal := <-globalOSSignalCh:
+			log.Printf("Exiting on signal %v\n", osSignal)
+			exit(stopProcess())
+		case signal := <-globalServiceSignalCh:
+			switch signal {
+			case serviceStatus:
+				// Ignore this at the moment.
+			case serviceRestart:
+				log.Println("Restarting on service signal")
+				err := globalHTTPServer.Shutdown()
+				errorIf(err, "Unable to shutdown http server")
+
+				rerr := restartProcess()
+				errorIf(rerr, "Unable to restart the server.")
+
+				if err == nil {
+					err = rerr
+				}
+
+				exit(err)
+			case serviceStop:
+				log.Println("Stopping on service signal")
+				exit(stopProcess())
+			}
+		}
+	}
 }
