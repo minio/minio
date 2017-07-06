@@ -67,6 +67,11 @@ func azureToS3Metadata(meta map[string]string) (newMeta map[string]string) {
 	return newMeta
 }
 
+// Append "-1" to etag so that clients do not interpret it as MD5.
+func azureToS3ETag(etag string) string {
+	return canonicalizeETag(etag) + "-1"
+}
+
 // To store metadata during NewMultipartUpload which will be used after
 // CompleteMultipartUpload to call SetBlobMetadata.
 type azureMultipartMetaInfo struct {
@@ -270,7 +275,7 @@ func (a *azureObjects) ListObjects(bucket, prefix, marker, delimiter string, max
 			Name:            object.Name,
 			ModTime:         t,
 			Size:            object.Properties.ContentLength,
-			ETag:            canonicalizeETag(object.Properties.Etag),
+			ETag:            azureToS3ETag(object.Properties.Etag),
 			ContentType:     object.Properties.ContentType,
 			ContentEncoding: object.Properties.ContentEncoding,
 		})
@@ -305,7 +310,7 @@ func (a *azureObjects) ListObjectsV2(bucket, prefix, continuationToken string, f
 			Name:            object.Name,
 			ModTime:         t,
 			Size:            object.Properties.ContentLength,
-			ETag:            canonicalizeETag(object.Properties.Etag),
+			ETag:            azureToS3ETag(object.Properties.Etag),
 			ContentType:     object.Properties.ContentType,
 			ContentEncoding: object.Properties.ContentEncoding,
 		})
@@ -368,7 +373,7 @@ func (a *azureObjects) GetObjectInfo(bucket, object string) (objInfo ObjectInfo,
 	objInfo = ObjectInfo{
 		Bucket:      bucket,
 		UserDefined: meta,
-		ETag:        canonicalizeETag(prop.Etag),
+		ETag:        azureToS3ETag(prop.Etag),
 		ModTime:     t,
 		Name:        object,
 		Size:        prop.ContentLength,
