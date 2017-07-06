@@ -367,8 +367,7 @@ func gatewayMain(ctx *cli.Context, backendType gatewayBackend) {
 
 	// Start server, automatically configures TLS if certs are available.
 	go func() {
-		serr := globalHTTPServer.Start()
-		globalHTTPServerErrorCh <- serr
+		globalHTTPServerErrorCh <- globalHTTPServer.Start()
 	}()
 
 	signal.Notify(globalOSSignalCh, os.Interrupt, syscall.SIGTERM)

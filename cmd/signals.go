@@ -22,47 +22,44 @@ import (
 
 func handleSignals() {
 	// Custom exit function
-	exit := func(err error) {
+	exit := func(state bool) {
 		// If global profiler is set stop before we exit.
 		if globalProfiler != nil {
 			globalProfiler.Stop()
 		}
 
-		rv := 0
-		if err != nil {
-			rv = 1
+		if state {
+			os.Exit(0)
 		}
 
-		os.Exit(rv)
+		os.Exit(1)
 	}
 
-	stopProcess := func() error {
-		err := globalHTTPServer.Shutdown()
+	stopProcess := func() bool {
+		var err, oerr error
+
+		err = globalHTTPServer.Shutdown()
 		errorIf(err, "Unable to shutdown http server")
+
 		if objAPI := newObjectLayerFn(); objAPI != nil {
-			oerr := objAPI.Shutdown()
+			oerr = objAPI.Shutdown()
 			errorIf(oerr, "Unable to shutdown object layer")
-			if err == nil {
-				err = oerr
-			}
 		}
 
-		return err
+		return (err == nil && oerr == nil)
 	}
 
 	for {
 		select {
 		case err := <-globalHTTPServerErrorCh:
 			errorIf(err, "http server exited abnormally")
+			var oerr error
 			if objAPI := newObjectLayerFn(); objAPI != nil {
-				oerr := objAPI.Shutdown()
+				oerr = objAPI.Shutdown()
 				errorIf(oerr, "Unable to shutdown object layer")
-				if err == nil {
-					err = oerr
-				}
 			}
 
-			exit(err)
+			exit(err == nil && oerr == nil)
 		case osSignal := <-globalOSSignalCh:
 			log.Printf("Exiting on signal %v\n", osSignal)
 			exit(stopProcess())
@@ -74,15 +71,10 @@ func handleSignals() {
 				log.Println("Restarting on service signal")
 				err := globalHTTPServer.Shutdown()
 				errorIf(err, "Unable to shutdown http server")
-
 				rerr := restartProcess()
-				errorIf(rerr, "Unable to restart the server.")
+				errorIf(rerr, "Unable to restart the server")
 
-				if err == nil {
-					err = rerr
-				}
-
-				exit(err)
+				exit(err == nil && rerr == nil)
 			case serviceStop:
 				log.Println("Stopping on service signal")
 				exit(stopProcess())

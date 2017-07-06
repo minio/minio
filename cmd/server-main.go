@@ -195,8 +195,7 @@ func serverMain(ctx *cli.Context) {
 	globalHTTPServer.UpdateBytesWrittenFunc = globalConnStats.incOutputBytes
 	globalHTTPServer.ErrorLogFunc = errorIf
 	go func() {
-		serr := globalHTTPServer.Start()
-		globalHTTPServerErrorCh <- serr
+		globalHTTPServerErrorCh <- globalHTTPServer.Start()
 	}()
 
 	signal.Notify(globalOSSignalCh, os.Interrupt, syscall.SIGTERM)
