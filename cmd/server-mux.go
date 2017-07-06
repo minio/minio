@@ -1,5 +1,5 @@
 /*
- * Minio Cloud Storage, (C) 2016 Minio, Inc.
+ * Minio Cloud Storage, (C) 2016, 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,8 @@ import (
 	"time"
 )
 
+// FIXME: deprecate the functionality provided in this code,
+// when we move to go1.8.x.
 const (
 	serverShutdownPoll = 500 * time.Millisecond
 )
@@ -133,11 +135,6 @@ func (c *ConnMux) Read(b []byte) (n int, err error) {
 		return n, err
 	}
 
-	// Read deadline was already set previously, set again
-	// after a successful read operation for future read
-	// operations.
-	c.Conn.SetReadDeadline(UTCNow().Add(defaultTCPReadTimeout))
-
 	// Success.
 	return n, nil
 }
@@ -213,7 +210,7 @@ type ListenerMuxAcceptRes struct {
 const defaultKeepAliveTimeout = 10 * time.Second // 10 seconds.
 
 // Timeout to close and return error to the client when not sending any data.
-const defaultTCPReadTimeout = 15 * time.Second // 15 seconds.
+const defaultTCPReadTimeout = 30 * time.Second // 30 seconds.
 
 // newListenerMux listens and wraps accepted connections with tls after protocol peeking
 func newListenerMux(listener net.Listener, config *tls.Config) *ListenerMux {
@@ -513,9 +510,11 @@ func (m *ServerMux) Close() error {
 	// in regular interval or force the shutdown
 	ticker := time.NewTicker(serverShutdownPoll)
 	defer ticker.Stop()
+
+	timeAfterCh := time.After(m.gracefulTimeout)
 	for {
 		select {
-		case <-time.After(m.gracefulTimeout):
+		case <-timeAfterCh:
 			return nil
 		case <-ticker.C:
 			if atomic.LoadInt32(&m.currentReqs) <= 0 {
