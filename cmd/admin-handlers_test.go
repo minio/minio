@@ -18,8 +18,8 @@ package cmd
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
-	"encoding/xml"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -27,13 +27,10 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
-	"reflect"
 	"testing"
-	"time"
 
 	router "github.com/gorilla/mux"
 	"github.com/minio/minio/pkg/auth"
-	"github.com/minio/minio/pkg/errors"
 )
 
 var configJSON = []byte(`{
@@ -211,6 +208,7 @@ type cmdType int
 const (
 	statusCmd cmdType = iota
 	restartCmd
+	stopCmd
 	setCreds
 )
 
@@ -221,6 +219,8 @@ func (c cmdType) String() string {
 		return "status"
 	case restartCmd:
 		return "restart"
+	case stopCmd:
+		return "stop"
 	case setCreds:
 		return "set-credentials"
 	}
@@ -235,10 +235,24 @@ func (c cmdType) apiMethod() string {
 		return "GET"
 	case restartCmd:
 		return "POST"
+	case stopCmd:
+		return "POST"
 	case setCreds:
 		return "POST"
 	}
 	return "GET"
+}
+
+// apiEndpoint - Return endpoint for each admin REST API mapped to a
+// command here.
+func (c cmdType) apiEndpoint() string {
+	switch c {
+	case statusCmd, restartCmd, stopCmd:
+		return "/minio/admin/v1/service"
+	case setCreds:
+		return "/minio/admin/v1/config/credential"
+	}
+	return ""
 }
 
 // toServiceSignal - Helper function that translates a given cmdType
@@ -249,8 +263,20 @@ func (c cmdType) toServiceSignal() serviceSignal {
 		return serviceStatus
 	case restartCmd:
 		return serviceRestart
+	case stopCmd:
+		return serviceStop
 	}
 	return serviceStatus
+}
+
+func (c cmdType) toServiceActionValue() madmin.ServiceActionValue {
+	switch c {
+	case restartCmd:
+		return madmin.ServiceActionValueRestart
+	case stopCmd:
+		return madmin.ServiceActionValueStop
+	}
+	return madmin.ServiceActionValueStop
 }
 
 // testServiceSignalReceiver - Helper function that simulates a
@@ -266,17 +292,14 @@ func testServiceSignalReceiver(cmd cmdType, t *testing.T) {
 // getServiceCmdRequest - Constructs a management REST API request for service
 // subcommands for a given cmdType value.
 func getServiceCmdRequest(cmd cmdType, cred auth.Credentials, body []byte) (*http.Request, error) {
-	req, err := newTestRequest(cmd.apiMethod(), "/?service", 0, nil)
+	req, err := newTestRequest(cmd.apiMethod(), cmd.apiEndpoint(), 0, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	// Set body
 	req.Body = ioutil.NopCloser(bytes.NewReader(body))
-
-	// minioAdminOpHeader is to identify the request as a
-	// management REST API request.
-	req.Header.Set(minioAdminOpHeader, cmd.String())
+	// Set sha-sum header
 	req.Header.Set("X-Amz-Content-Sha256", getSHA256Hash(body))
 
 	// management REST API uses signature V4 for authentication.
@@ -307,8 +330,13 @@ func testServicesCmdHandler(cmd cmdType, t *testing.T) {
 	if cmd == restartCmd {
 		go testServiceSignalReceiver(cmd, t)
 	}
-	credentials := globalServerConfig.GetCredential()
-	var body []byte
+	credentials := serverConfig.GetCredential()
+
+	body, err := json.Marshal(madmin.ServiceAction{
+		cmd.toServiceActionValue()})
+	if err != nil {
+		t.Fatalf("JSONify error: %v", err)
+	}
 
 	req, err := getServiceCmdRequest(cmd, credentials, body)
 	if err != nil {
@@ -319,10 +347,10 @@ func testServicesCmdHandler(cmd cmdType, t *testing.T) {
 	adminTestBed.mux.ServeHTTP(rec, req)
 
 	if cmd == statusCmd {
-		expectedInfo := ServerStatus{
-			ServerVersion: ServerVersion{Version: Version, CommitID: CommitID},
+		expectedInfo := madmin.ServiceStatus{
+			ServerVersion: madmin.ServerVersion{Version: Version, CommitID: CommitID},
 		}
-		receivedInfo := ServerStatus{}
+		receivedInfo := madmin.ServiceStatus{}
 		if jsonErr := json.Unmarshal(rec.Body.Bytes(), &receivedInfo); jsonErr != nil {
 			t.Errorf("Failed to unmarshal StorageInfo - %v", jsonErr)
 		}
@@ -363,39 +391,48 @@ func TestServiceSetCreds(t *testing.T) {
 	initGlobalAdminPeers(mustGetNewEndpointList("http://127.0.0.1:9000/d1"))
 
 	credentials := globalServerConfig.GetCredential()
-	var body []byte
 
 	testCases := []struct {
-		Username           string
-		Password           string
-		EnvKeysSet         bool
-		ExpectedStatusCode int
+		AccessKey           string
+		SecretKey           string
+		EnvKeysSet          bool
+		ExpectedStatusCode  int
+		PretendSecureServer bool
 	}{
+		// test without TLS
+		{"minio", "minio123", false, http.StatusBadRequest, false},
 		// Bad secret key
-		{"minio", "minio", false, http.StatusBadRequest},
+		{"minio", "minio", false, http.StatusBadRequest, true},
 		// Bad  secret key set from the env
-		{"minio", "minio", true, http.StatusMethodNotAllowed},
+		{"minio", "minio", true, http.StatusMethodNotAllowed, true},
 		// Good keys set from the env
-		{"minio", "minio123", true, http.StatusMethodNotAllowed},
-		// Successful operation should be the last one to do not change server credentials during tests.
-		{"minio", "minio123", false, http.StatusOK},
+		{"minio", "minio123", true, http.StatusMethodNotAllowed, true},
+		// Successful operation should be the last one to
+		// not change server credentials during tests.
+		{"minio", "minio123", false, http.StatusOK, true},
 	}
 	for i, testCase := range testCases {
 		// Set or unset environement keys
-		if !testCase.EnvKeysSet {
-			globalIsEnvCreds = false
-		} else {
-			globalIsEnvCreds = true
-		}
+		globalIsEnvCreds = testCase.EnvKeysSet
 
 		// Construct setCreds request body
-		body, _ = xml.Marshal(setCredsReq{Username: testCase.Username, Password: testCase.Password})
+		body, err := json.Marshal(madmin.SetCredsReq{
+			AccessKey: testCase.AccessKey,
+			SecretKey: testCase.SecretKey})
+		if err != nil {
+			t.Fatalf("JSONify err: %v", err)
+		}
 		// Construct setCreds request
 		req, err := getServiceCmdRequest(setCreds, credentials, body)
 		if err != nil {
 			t.Fatalf("Failed to build service status request %v", err)
 		}
 
+		// HACK: sets a dummy TLS value so the server pretends
+		// to receive a TLS request
+		if testCase.PretendSecureServer {
+			req.TLS = &tls.ConnectionState{}
+		}
 		rec := httptest.NewRecorder()
 
 		// Execute request
@@ -412,11 +449,11 @@ func TestServiceSetCreds(t *testing.T) {
 		// If we got 200 OK, check if new credentials are really set
 		if rec.Code == http.StatusOK {
 			cred := globalServerConfig.GetCredential()
-			if cred.AccessKey != testCase.Username {
-				t.Errorf("Test %d: Wrong access key, expected = %s, found = %s", i+1, testCase.Username, cred.AccessKey)
+			if cred.AccessKey != testCase.AccessKey {
+				t.Errorf("Test %d: Wrong access key, expected = %s, found = %s", i+1, testCase.AccessKey, cred.AccessKey)
 			}
-			if cred.SecretKey != testCase.Password {
-				t.Errorf("Test %d: Wrong secret key, expected = %s, found = %s", i+1, testCase.Password, cred.SecretKey)
+			if cred.SecretKey != testCase.SecretKey {
+				t.Errorf("Test %d: Wrong secret key, expected = %s, found = %s", i+1, testCase.SecretKey, cred.SecretKey)
 			}
 		}
 	}
@@ -425,10 +462,9 @@ func TestServiceSetCreds(t *testing.T) {
 // mkLockQueryVal - helper function to build lock query param.
 func mkLockQueryVal(bucket, prefix, durationStr string) url.Values {
 	qVal := url.Values{}
-	qVal.Set("lock", "")
 	qVal.Set(string(mgmtBucket), bucket)
 	qVal.Set(string(mgmtPrefix), prefix)
-	qVal.Set(string(mgmtLockDuration), durationStr)
+	qVal.Set(string(mgmtLockOlderThan), durationStr)
 	return qVal
 }
 
@@ -482,11 +518,10 @@ func TestListLocksHandler(t *testing.T) {
 
 	for i, test := range testCases {
 		queryVal := mkLockQueryVal(test.bucket, test.prefix, test.duration)
-		req, err := newTestRequest("GET", "/?"+queryVal.Encode(), 0, nil)
+		req, err := newTestRequest("GET", "/minio/admin/v1/locks?"+queryVal.Encode(), 0, nil)
 		if err != nil {
 			t.Fatalf("Test %d - Failed to construct list locks request - %v", i+1, err)
 		}
-		req.Header.Set(minioAdminOpHeader, "list")
 
 		cred := globalServerConfig.GetCredential()
 		err = signRequestV4(req, cred.AccessKey, cred.SecretKey)
@@ -550,11 +585,10 @@ func TestClearLocksHandler(t *testing.T) {
 
 	for i, test := range testCases {
 		queryVal := mkLockQueryVal(test.bucket, test.prefix, test.duration)
-		req, err := newTestRequest("POST", "/?"+queryVal.Encode(), 0, nil)
+		req, err := newTestRequest("DELETE", "/minio/admin/v1/locks?"+queryVal.Encode(), 0, nil)
 		if err != nil {
 			t.Fatalf("Test %d - Failed to construct clear locks request - %v", i+1, err)
 		}
-		req.Header.Set(minioAdminOpHeader, "clear")
 
 		cred := globalServerConfig.GetCredential()
 		err = signRequestV4(req, cred.AccessKey, cred.SecretKey)
@@ -612,432 +646,16 @@ func TestValidateLockQueryParams(t *testing.T) {
 	}
 }
 
-// mkListObjectsQueryStr - helper to build ListObjectsHeal query string.
-func mkListObjectsQueryVal(bucket, prefix, marker, delimiter, maxKeyStr string) url.Values {
-	qVal := url.Values{}
-	qVal.Set("heal", "")
-	qVal.Set(string(mgmtBucket), bucket)
-	qVal.Set(string(mgmtPrefix), prefix)
-	qVal.Set(string(mgmtMarker), marker)
-	qVal.Set(string(mgmtDelimiter), delimiter)
-	qVal.Set(string(mgmtMaxKey), maxKeyStr)
-	return qVal
-}
-
-// TestValidateHealQueryParams - Test for query param validation helper function for heal APIs.
-func TestValidateHealQueryParams(t *testing.T) {
-	testCases := []struct {
-		bucket    string
-		prefix    string
-		marker    string
-		delimiter string
-		maxKeys   string
-		apiErr    APIErrorCode
-	}{
-		// 1. Valid params.
-		{
-			bucket:    "mybucket",
-			prefix:    "prefix",
-			marker:    "prefix11",
-			delimiter: "/",
-			maxKeys:   "10",
-			apiErr:    ErrNone,
-		},
-		// 2. Valid params with meta bucket.
-		{
-			bucket:    minioMetaBucket,
-			prefix:    "prefix",
-			marker:    "prefix11",
-			delimiter: "/",
-			maxKeys:   "10",
-			apiErr:    ErrNone,
-		},
-		// 3. Valid params with empty prefix.
-		{
-			bucket:    "mybucket",
-			prefix:    "",
-			marker:    "",
-			delimiter: "/",
-			maxKeys:   "10",
-			apiErr:    ErrNone,
-		},
-		// 4. Invalid params with invalid bucket.
-		{
-			bucket:    `invalid\\Bucket`,
-			prefix:    "prefix",
-			marker:    "prefix11",
-			delimiter: "/",
-			maxKeys:   "10",
-			apiErr:    ErrInvalidBucketName,
-		},
-		// 5. Invalid params with invalid prefix.
-		{
-			bucket:    "mybucket",
-			prefix:    `invalid\\Prefix`,
-			marker:    "prefix11",
-			delimiter: "/",
-			maxKeys:   "10",
-			apiErr:    ErrInvalidObjectName,
-		},
-		// 6. Invalid params with invalid maxKeys.
-		{
-			bucket:    "mybucket",
-			prefix:    "prefix",
-			marker:    "prefix11",
-			delimiter: "/",
-			maxKeys:   "-1",
-			apiErr:    ErrInvalidMaxKeys,
-		},
-		// 7. Invalid params with unsupported prefix marker combination.
-		{
-			bucket:    "mybucket",
-			prefix:    "prefix",
-			marker:    "notmatchingmarker",
-			delimiter: "/",
-			maxKeys:   "10",
-			apiErr:    ErrNotImplemented,
-		},
-		// 8. Invalid params with unsupported delimiter.
-		{
-			bucket:    "mybucket",
-			prefix:    "prefix",
-			marker:    "notmatchingmarker",
-			delimiter: "unsupported",
-			maxKeys:   "10",
-			apiErr:    ErrNotImplemented,
-		},
-		// 9. Invalid params with invalid max Keys
-		{
-			bucket:    "mybucket",
-			prefix:    "prefix",
-			marker:    "prefix11",
-			delimiter: "/",
-			maxKeys:   "999999999999999999999999999",
-			apiErr:    ErrInvalidMaxKeys,
-		},
-	}
-	for i, test := range testCases {
-		vars := mkListObjectsQueryVal(test.bucket, test.prefix, test.marker, test.delimiter, test.maxKeys)
-		_, _, _, _, _, actualErr := extractListObjectsHealQuery(vars)
-		if actualErr != test.apiErr {
-			t.Errorf("Test %d - Expected %v but received %v",
-				i+1, getAPIError(test.apiErr), getAPIError(actualErr))
-		}
-	}
-}
-
-// TestListObjectsHeal - Test for ListObjectsHealHandler.
-func TestListObjectsHealHandler(t *testing.T) {
-	adminTestBed, err := prepareAdminXLTestBed()
-	if err != nil {
-		t.Fatal("Failed to initialize a single node XL backend for admin handler tests.")
-	}
-	defer adminTestBed.TearDown()
-
-	err = adminTestBed.objLayer.MakeBucketWithLocation("mybucket", "")
-	if err != nil {
-		t.Fatalf("Failed to make bucket - %v", err)
-	}
-
-	// Delete bucket after running all test cases.
-	defer adminTestBed.objLayer.DeleteBucket("mybucket")
-
-	testCases := []struct {
-		bucket     string
-		prefix     string
-		marker     string
-		delimiter  string
-		maxKeys    string
-		statusCode int
-	}{
-		// 1. Valid params.
-		{
-			bucket:     "mybucket",
-			prefix:     "prefix",
-			marker:     "prefix11",
-			delimiter:  "/",
-			maxKeys:    "10",
-			statusCode: http.StatusOK,
-		},
-		// 2. Valid params with meta bucket.
-		{
-			bucket:     minioMetaBucket,
-			prefix:     "prefix",
-			marker:     "prefix11",
-			delimiter:  "/",
-			maxKeys:    "10",
-			statusCode: http.StatusOK,
-		},
-		// 3. Valid params with empty prefix.
-		{
-			bucket:     "mybucket",
-			prefix:     "",
-			marker:     "",
-			delimiter:  "/",
-			maxKeys:    "10",
-			statusCode: http.StatusOK,
-		},
-		// 4. Invalid params with invalid bucket.
-		{
-			bucket:     `invalid\\Bucket`,
-			prefix:     "prefix",
-			marker:     "prefix11",
-			delimiter:  "/",
-			maxKeys:    "10",
-			statusCode: getAPIError(ErrInvalidBucketName).HTTPStatusCode,
-		},
-		// 5. Invalid params with invalid prefix.
-		{
-			bucket:     "mybucket",
-			prefix:     `invalid\\Prefix`,
-			marker:     "prefix11",
-			delimiter:  "/",
-			maxKeys:    "10",
-			statusCode: getAPIError(ErrInvalidObjectName).HTTPStatusCode,
-		},
-		// 6. Invalid params with invalid maxKeys.
-		{
-			bucket:     "mybucket",
-			prefix:     "prefix",
-			marker:     "prefix11",
-			delimiter:  "/",
-			maxKeys:    "-1",
-			statusCode: getAPIError(ErrInvalidMaxKeys).HTTPStatusCode,
-		},
-		// 7. Invalid params with unsupported prefix marker combination.
-		{
-			bucket:     "mybucket",
-			prefix:     "prefix",
-			marker:     "notmatchingmarker",
-			delimiter:  "/",
-			maxKeys:    "10",
-			statusCode: getAPIError(ErrNotImplemented).HTTPStatusCode,
-		},
-		// 8. Invalid params with unsupported delimiter.
-		{
-			bucket:     "mybucket",
-			prefix:     "prefix",
-			marker:     "notmatchingmarker",
-			delimiter:  "unsupported",
-			maxKeys:    "10",
-			statusCode: getAPIError(ErrNotImplemented).HTTPStatusCode,
-		},
-		// 9. Invalid params with invalid max Keys
-		{
-			bucket:     "mybucket",
-			prefix:     "prefix",
-			marker:     "prefix11",
-			delimiter:  "/",
-			maxKeys:    "999999999999999999999999999",
-			statusCode: getAPIError(ErrInvalidMaxKeys).HTTPStatusCode,
-		},
-	}
-
-	for i, test := range testCases {
-		queryVal := mkListObjectsQueryVal(test.bucket, test.prefix, test.marker, test.delimiter, test.maxKeys)
-		req, err := newTestRequest("GET", "/?"+queryVal.Encode(), 0, nil)
-		if err != nil {
-			t.Fatalf("Test %d - Failed to construct list objects needing heal request - %v", i+1, err)
-		}
-		req.Header.Set(minioAdminOpHeader, "list-objects")
-
-		cred := globalServerConfig.GetCredential()
-		err = signRequestV4(req, cred.AccessKey, cred.SecretKey)
-		if err != nil {
-			t.Fatalf("Test %d - Failed to sign list objects needing heal request - %v", i+1, err)
-		}
-		rec := httptest.NewRecorder()
-		adminTestBed.mux.ServeHTTP(rec, req)
-		if test.statusCode != rec.Code {
-			t.Errorf("Test %d - Expected HTTP status code %d but received %d", i+1, test.statusCode, rec.Code)
-		}
-	}
-}
-
-// TestHealBucketHandler - Test for HealBucketHandler.
-func TestHealBucketHandler(t *testing.T) {
-	adminTestBed, err := prepareAdminXLTestBed()
-	if err != nil {
-		t.Fatal("Failed to initialize a single node XL backend for admin handler tests.")
-	}
-	defer adminTestBed.TearDown()
-
-	err = adminTestBed.objLayer.MakeBucketWithLocation("mybucket", "")
-	if err != nil {
-		t.Fatalf("Failed to make bucket - %v", err)
-	}
-
-	// Delete bucket after running all test cases.
-	defer adminTestBed.objLayer.DeleteBucket("mybucket")
-
-	testCases := []struct {
-		bucket     string
-		statusCode int
-		dryrun     string
-	}{
-		// 1. Valid test case.
-		{
-			bucket:     "mybucket",
-			statusCode: http.StatusOK,
-		},
-		// 2. Invalid bucket name.
-		{
-			bucket:     `invalid\\Bucket`,
-			statusCode: http.StatusBadRequest,
-		},
-		// 3. Bucket not found.
-		{
-			bucket:     "bucketnotfound",
-			statusCode: http.StatusNotFound,
-		},
-		// 4. Valid test case with dry-run.
-		{
-			bucket:     "mybucket",
-			statusCode: http.StatusOK,
-			dryrun:     "yes",
-		},
-	}
-	for i, test := range testCases {
-		// Prepare query params.
-		queryVal := url.Values{}
-		queryVal.Set(string(mgmtBucket), test.bucket)
-		queryVal.Set("heal", "")
-		queryVal.Set(string(mgmtDryRun), test.dryrun)
-
-		req, err := newTestRequest("POST", "/?"+queryVal.Encode(), 0, nil)
-		if err != nil {
-			t.Fatalf("Test %d - Failed to construct heal bucket request - %v",
-				i+1, err)
-		}
-
-		req.Header.Set(minioAdminOpHeader, "bucket")
-
-		cred := globalServerConfig.GetCredential()
-		err = signRequestV4(req, cred.AccessKey, cred.SecretKey)
-		if err != nil {
-			t.Fatalf("Test %d - Failed to sign heal bucket request - %v",
-				i+1, err)
-		}
-		rec := httptest.NewRecorder()
-		adminTestBed.mux.ServeHTTP(rec, req)
-		if test.statusCode != rec.Code {
-			t.Errorf("Test %d - Expected HTTP status code %d but received %d",
-				i+1, test.statusCode, rec.Code)
-		}
-
-	}
-}
-
-// TestHealObjectHandler - Test for HealObjectHandler.
-func TestHealObjectHandler(t *testing.T) {
-	adminTestBed, err := prepareAdminXLTestBed()
-	if err != nil {
-		t.Fatal("Failed to initialize a single node XL backend for admin handler tests.")
-	}
-	defer adminTestBed.TearDown()
-
-	// Create an object myobject under bucket mybucket.
-	bucketName := "mybucket"
-	objName := "myobject"
-	err = adminTestBed.objLayer.MakeBucketWithLocation(bucketName, "")
-	if err != nil {
-		t.Fatalf("Failed to make bucket %s - %v", bucketName, err)
-	}
-
-	_, err = adminTestBed.objLayer.PutObject(bucketName, objName,
-		mustGetHashReader(t, bytes.NewReader([]byte("hello")), int64(len("hello")), "", ""), nil)
-	if err != nil {
-		t.Fatalf("Failed to create %s - %v", objName, err)
-	}
-
-	// Delete bucket and object after running all test cases.
-	defer func(objLayer ObjectLayer, bucketName, objName string) {
-		objLayer.DeleteObject(bucketName, objName)
-		objLayer.DeleteBucket(bucketName)
-	}(adminTestBed.objLayer, bucketName, objName)
-
-	testCases := []struct {
-		bucket     string
-		object     string
-		dryrun     string
-		statusCode int
-	}{
-		// 1. Valid test case.
-		{
-			bucket:     bucketName,
-			object:     objName,
-			statusCode: http.StatusOK,
-		},
-		// 2. Invalid bucket name.
-		{
-			bucket:     `invalid\\Bucket`,
-			object:     "myobject",
-			statusCode: http.StatusBadRequest,
-		},
-		// 3. Bucket not found.
-		{
-			bucket:     "bucketnotfound",
-			object:     "myobject",
-			statusCode: http.StatusNotFound,
-		},
-		// 4. Invalid object name.
-		{
-			bucket:     bucketName,
-			object:     `invalid\\Object`,
-			statusCode: http.StatusBadRequest,
-		},
-		// 5. Object not found.
-		{
-			bucket:     bucketName,
-			object:     "objectnotfound",
-			statusCode: http.StatusNotFound,
-		},
-		// 6. Valid test case with dry-run.
-		{
-			bucket:     bucketName,
-			object:     objName,
-			dryrun:     "yes",
-			statusCode: http.StatusOK,
-		},
-	}
-	for i, test := range testCases {
-		// Prepare query params.
-		queryVal := url.Values{}
-		queryVal.Set(string(mgmtBucket), test.bucket)
-		queryVal.Set(string(mgmtObject), test.object)
-		queryVal.Set("heal", "")
-		queryVal.Set(string(mgmtDryRun), test.dryrun)
-
-		req, err := newTestRequest("POST", "/?"+queryVal.Encode(), 0, nil)
-		if err != nil {
-			t.Fatalf("Test %d - Failed to construct heal object request - %v", i+1, err)
-		}
-
-		req.Header.Set(minioAdminOpHeader, "object")
-
-		cred := globalServerConfig.GetCredential()
-		err = signRequestV4(req, cred.AccessKey, cred.SecretKey)
-		if err != nil {
-			t.Fatalf("Test %d - Failed to sign heal object request - %v", i+1, err)
-		}
-		rec := httptest.NewRecorder()
-		adminTestBed.mux.ServeHTTP(rec, req)
-		if test.statusCode != rec.Code {
-			t.Errorf("Test %d - Expected HTTP status code %d but received %d", i+1, test.statusCode, rec.Code)
-		}
-	}
-
-}
-
 // buildAdminRequest - helper function to build an admin API request.
-func buildAdminRequest(queryVal url.Values, opHdr, method string,
+func buildAdminRequest(queryVal url.Values, method, path string,
 	contentLength int64, bodySeeker io.ReadSeeker) (*http.Request, error) {
-	req, err := newTestRequest(method, "/?"+queryVal.Encode(), contentLength, bodySeeker)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
 
-	req.Header.Set(minioAdminOpHeader, opHdr)
+	req, err := newTestRequest(method,
+		"/minio/admin/v1"+path+"?"+queryVal.Encode(),
+		contentLength, bodySeeker)
+	if err != nil {
+		return nil, traceError(err)
+	}
 
 	cred := globalServerConfig.GetCredential()
 	err = signRequestV4(req, cred.AccessKey, cred.SecretKey)
@@ -1046,163 +664,6 @@ func buildAdminRequest(queryVal url.Values, opHdr, method string,
 	}
 
 	return req, nil
-}
-
-// mkHealUploadQuery - helper to build HealUploadHandler query string.
-func mkHealUploadQuery(bucket, object, uploadID, dryRun string) url.Values {
-	queryVal := url.Values{}
-	queryVal.Set(string(mgmtBucket), bucket)
-	queryVal.Set(string(mgmtObject), object)
-	queryVal.Set(string(mgmtUploadID), uploadID)
-	queryVal.Set("heal", "")
-	queryVal.Set(string(mgmtDryRun), dryRun)
-	return queryVal
-}
-
-// TestHealUploadHandler - test for HealUploadHandler.
-func TestHealUploadHandler(t *testing.T) {
-	adminTestBed, err := prepareAdminXLTestBed()
-	if err != nil {
-		t.Fatal("Failed to initialize a single node XL backend for admin handler tests.")
-	}
-	defer adminTestBed.TearDown()
-
-	// Create an object myobject under bucket mybucket.
-	bucketName := "mybucket"
-	objName := "myobject"
-	err = adminTestBed.objLayer.MakeBucketWithLocation(bucketName, "")
-	if err != nil {
-		t.Fatalf("Failed to make bucket %s - %v", bucketName, err)
-	}
-
-	// Create a new multipart upload.
-	uploadID, err := adminTestBed.objLayer.NewMultipartUpload(bucketName, objName, nil)
-	if err != nil {
-		t.Fatalf("Failed to create a new multipart upload %s/%s - %v",
-			bucketName, objName, err)
-	}
-
-	// Upload a part.
-	partID := 1
-	_, err = adminTestBed.objLayer.PutObjectPart(bucketName, objName, uploadID,
-		partID, mustGetHashReader(t, bytes.NewReader([]byte("hello")), int64(len("hello")), "", ""))
-	if err != nil {
-		t.Fatalf("Failed to upload part %d of %s/%s - %v", partID,
-			bucketName, objName, err)
-	}
-
-	testCases := []struct {
-		bucket     string
-		object     string
-		dryrun     string
-		statusCode int
-	}{
-		// 1. Valid test case.
-		{
-			bucket:     bucketName,
-			object:     objName,
-			statusCode: http.StatusOK,
-		},
-		// 2. Invalid bucket name.
-		{
-			bucket:     `invalid\\Bucket`,
-			object:     "myobject",
-			statusCode: http.StatusBadRequest,
-		},
-		// 3. Bucket not found.
-		{
-			bucket:     "bucketnotfound",
-			object:     "myobject",
-			statusCode: http.StatusNotFound,
-		},
-		// 4. Invalid object name.
-		{
-			bucket:     bucketName,
-			object:     `invalid\\Object`,
-			statusCode: http.StatusBadRequest,
-		},
-		// 5. Object not found.
-		{
-			bucket:     bucketName,
-			object:     "objectnotfound",
-			statusCode: http.StatusNotFound,
-		},
-		// 6. Valid test case with dry-run.
-		{
-			bucket:     bucketName,
-			object:     objName,
-			dryrun:     "yes",
-			statusCode: http.StatusOK,
-		},
-	}
-	for i, test := range testCases {
-		// Prepare query params.
-		queryVal := mkHealUploadQuery(test.bucket, test.object, uploadID, test.dryrun)
-		req, err1 := buildAdminRequest(queryVal, "upload", http.MethodPost, 0, nil)
-		if err1 != nil {
-			t.Fatalf("Test %d - Failed to construct heal object request - %v", i+1, err1)
-		}
-		rec := httptest.NewRecorder()
-		adminTestBed.mux.ServeHTTP(rec, req)
-		if test.statusCode != rec.Code {
-			t.Errorf("Test %d - Expected HTTP status code %d but received %d", i+1, test.statusCode, rec.Code)
-		}
-	}
-
-	sample := testCases[0]
-	// Modify authorization header after signing to test signature
-	// mismatch handling.
-	queryVal := mkHealUploadQuery(sample.bucket, sample.object, uploadID, sample.dryrun)
-	req, err := buildAdminRequest(queryVal, "upload", "POST", 0, nil)
-	if err != nil {
-		t.Fatalf("Failed to construct heal object request - %v", err)
-	}
-
-	// Set x-amz-date to a date different than time of signing.
-	req.Header.Set("x-amz-date", time.Time{}.Format(iso8601Format))
-
-	rec := httptest.NewRecorder()
-	adminTestBed.mux.ServeHTTP(rec, req)
-	if rec.Code != http.StatusForbidden {
-		t.Errorf("Expected %d but received %d", http.StatusBadRequest, rec.Code)
-	}
-
-	// Set objectAPI to nil to test Server not initialized case.
-	resetGlobalObjectAPI()
-	queryVal = mkHealUploadQuery(sample.bucket, sample.object, uploadID, sample.dryrun)
-	req, err = buildAdminRequest(queryVal, "upload", "POST", 0, nil)
-	if err != nil {
-		t.Fatalf("Failed to construct heal object request - %v", err)
-	}
-
-	rec = httptest.NewRecorder()
-	adminTestBed.mux.ServeHTTP(rec, req)
-	if rec.Code != http.StatusServiceUnavailable {
-		t.Errorf("Expected %d but received %d", http.StatusServiceUnavailable, rec.Code)
-	}
-}
-
-// TestHealFormatHandler - test for HealFormatHandler.
-func TestHealFormatHandler(t *testing.T) {
-	adminTestBed, err := prepareAdminXLTestBed()
-	if err != nil {
-		t.Fatal("Failed to initialize a single node XL backend for admin handler tests.")
-	}
-	defer adminTestBed.TearDown()
-
-	// Prepare query params for heal-format mgmt REST API.
-	queryVal := url.Values{}
-	queryVal.Set("heal", "")
-	req, err := buildAdminRequest(queryVal, "format", "POST", 0, nil)
-	if err != nil {
-		t.Fatalf("Failed to construct heal object request - %v", err)
-	}
-
-	rec := httptest.NewRecorder()
-	adminTestBed.mux.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Errorf("Expected to succeed but failed with %d", rec.Code)
-	}
 }
 
 // TestGetConfigHandler - test for GetConfigHandler.
@@ -1221,10 +682,14 @@ func TestGetConfigHandler(t *testing.T) {
 	queryVal := url.Values{}
 	queryVal.Set("config", "")
 
-	req, err := buildAdminRequest(queryVal, "get", http.MethodGet, 0, nil)
+	req, err := buildAdminRequest(queryVal, http.MethodGet, "/config", 0, nil)
 	if err != nil {
 		t.Fatalf("Failed to construct get-config object request - %v", err)
 	}
+
+	// HACK: sets a dummy TLS value so the server pretends
+	// to receive a TLS request
+	req.TLS = &tls.ConnectionState{}
 
 	rec := httptest.NewRecorder()
 	adminTestBed.mux.ServeHTTP(rec, req)
@@ -1254,11 +719,15 @@ func TestSetConfigHandler(t *testing.T) {
 	queryVal := url.Values{}
 	queryVal.Set("config", "")
 
-	req, err := buildAdminRequest(queryVal, "set", http.MethodPut, int64(len(configJSON)),
-		bytes.NewReader(configJSON))
+	req, err := buildAdminRequest(queryVal, http.MethodPut, "/config",
+		int64(len(configJSON)), bytes.NewReader(configJSON))
 	if err != nil {
 		t.Fatalf("Failed to construct get-config object request - %v", err)
 	}
+
+	// HACK: sets a dummy TLS value so the server pretends
+	// to receive a TLS request
+	req.TLS = &tls.ConnectionState{}
 
 	rec := httptest.NewRecorder()
 	adminTestBed.mux.ServeHTTP(rec, req)
@@ -1292,7 +761,7 @@ func TestAdminServerInfo(t *testing.T) {
 	queryVal := url.Values{}
 	queryVal.Set("info", "")
 
-	req, err := buildAdminRequest(queryVal, "", http.MethodGet, 0, nil)
+	req, err := buildAdminRequest(queryVal, http.MethodGet, "/info", 0, nil)
 	if err != nil {
 		t.Fatalf("Failed to construct get-config object request - %v", err)
 	}
@@ -1432,198 +901,6 @@ func TestWriteSetConfigResponse(t *testing.T) {
 			if res.ErrSet != expectedErrSet {
 				t.Errorf("Test %d: Expected ErrSet %v but received %v", i+1, expectedErrSet, res.ErrSet)
 			}
-		}
-	}
-}
-
-// mkListUploadsHealQuery - helper function to construct query values for
-// listUploadsHeal.
-func mkListUploadsHealQuery(bucket, prefix, keyMarker, uploadIDMarker, delimiter, maxUploadsStr string) url.Values {
-
-	queryVal := make(url.Values)
-	queryVal.Set("heal", "")
-	queryVal.Set(string(mgmtBucket), bucket)
-	queryVal.Set(string(mgmtPrefix), prefix)
-	queryVal.Set(string(mgmtKeyMarker), keyMarker)
-	queryVal.Set(string(mgmtUploadIDMarker), uploadIDMarker)
-	queryVal.Set(string(mgmtDelimiter), delimiter)
-	queryVal.Set(string(mgmtMaxUploads), maxUploadsStr)
-	return queryVal
-}
-
-func TestListHealUploadsHandler(t *testing.T) {
-	adminTestBed, err := prepareAdminXLTestBed()
-	if err != nil {
-		t.Fatal("Failed to initialize a single node XL backend for admin handler tests.")
-	}
-	defer adminTestBed.TearDown()
-
-	err = adminTestBed.objLayer.MakeBucketWithLocation("mybucket", "")
-	if err != nil {
-		t.Fatalf("Failed to make bucket - %v", err)
-	}
-
-	// Delete bucket after running all test cases.
-	defer adminTestBed.objLayer.DeleteBucket("mybucket")
-
-	testCases := []struct {
-		bucket       string
-		prefix       string
-		keyMarker    string
-		delimiter    string
-		maxKeys      string
-		statusCode   int
-		expectedResp ListMultipartUploadsResponse
-	}{
-		// 1. Valid params.
-		{
-			bucket:     "mybucket",
-			prefix:     "prefix",
-			keyMarker:  "prefix11",
-			delimiter:  "/",
-			maxKeys:    "10",
-			statusCode: http.StatusOK,
-			expectedResp: ListMultipartUploadsResponse{
-				XMLName:    xml.Name{Space: "http://s3.amazonaws.com/doc/2006-03-01/", Local: "ListMultipartUploadsResult"},
-				Bucket:     "mybucket",
-				KeyMarker:  "prefix11",
-				Delimiter:  "/",
-				Prefix:     "prefix",
-				MaxUploads: 10,
-			},
-		},
-		// 2. Valid params with empty prefix.
-		{
-			bucket:     "mybucket",
-			prefix:     "",
-			keyMarker:  "",
-			delimiter:  "/",
-			maxKeys:    "10",
-			statusCode: http.StatusOK,
-			expectedResp: ListMultipartUploadsResponse{
-				XMLName:    xml.Name{Space: "http://s3.amazonaws.com/doc/2006-03-01/", Local: "ListMultipartUploadsResult"},
-				Bucket:     "mybucket",
-				KeyMarker:  "",
-				Delimiter:  "/",
-				Prefix:     "",
-				MaxUploads: 10,
-			},
-		},
-		// 3. Invalid params with invalid bucket.
-		{
-			bucket:     `invalid\\Bucket`,
-			prefix:     "prefix",
-			keyMarker:  "prefix11",
-			delimiter:  "/",
-			maxKeys:    "10",
-			statusCode: getAPIError(ErrInvalidBucketName).HTTPStatusCode,
-		},
-		// 4. Invalid params with invalid prefix.
-		{
-			bucket:     "mybucket",
-			prefix:     `invalid\\Prefix`,
-			keyMarker:  "prefix11",
-			delimiter:  "/",
-			maxKeys:    "10",
-			statusCode: getAPIError(ErrInvalidObjectName).HTTPStatusCode,
-		},
-		// 5. Invalid params with invalid maxKeys.
-		{
-			bucket:     "mybucket",
-			prefix:     "prefix",
-			keyMarker:  "prefix11",
-			delimiter:  "/",
-			maxKeys:    "-1",
-			statusCode: getAPIError(ErrInvalidMaxUploads).HTTPStatusCode,
-		},
-		// 6. Invalid params with unsupported prefix marker combination.
-		{
-			bucket:     "mybucket",
-			prefix:     "prefix",
-			keyMarker:  "notmatchingmarker",
-			delimiter:  "/",
-			maxKeys:    "10",
-			statusCode: getAPIError(ErrNotImplemented).HTTPStatusCode,
-		},
-		// 7. Invalid params with unsupported delimiter.
-		{
-			bucket:     "mybucket",
-			prefix:     "prefix",
-			keyMarker:  "notmatchingmarker",
-			delimiter:  "unsupported",
-			maxKeys:    "10",
-			statusCode: getAPIError(ErrNotImplemented).HTTPStatusCode,
-		},
-		// 8. Invalid params with invalid max Keys
-		{
-			bucket:     "mybucket",
-			prefix:     "prefix",
-			keyMarker:  "prefix11",
-			delimiter:  "/",
-			maxKeys:    "999999999999999999999999999",
-			statusCode: getAPIError(ErrInvalidMaxUploads).HTTPStatusCode,
-		},
-	}
-
-	for i, test := range testCases {
-		queryVal := mkListUploadsHealQuery(test.bucket, test.prefix, test.keyMarker, "", test.delimiter, test.maxKeys)
-
-		req, err := buildAdminRequest(queryVal, "list-uploads", http.MethodGet, 0, nil)
-		if err != nil {
-			t.Fatalf("Test %d - Failed to construct list uploads needing heal request - %v", i+1, err)
-		}
-
-		rec := httptest.NewRecorder()
-		adminTestBed.mux.ServeHTTP(rec, req)
-
-		if test.statusCode != rec.Code {
-			t.Errorf("Test %d - Expected HTTP status code %d but received %d", i+1, test.statusCode, rec.Code)
-		}
-
-		// Compare result with the expected one only when we receive 200 OK
-		if rec.Code == http.StatusOK {
-			resp := rec.Result()
-			xmlBytes, err := ioutil.ReadAll(resp.Body)
-			if err != nil {
-				t.Errorf("Test %d: Failed to read response %v", i+1, err)
-			}
-
-			var actualResult ListMultipartUploadsResponse
-			err = xml.Unmarshal(xmlBytes, &actualResult)
-			if err != nil {
-				t.Errorf("Test %d: Failed to unmarshal xml %v", i+1, err)
-			}
-
-			if !reflect.DeepEqual(test.expectedResp, actualResult) {
-				t.Fatalf("Test %d: Unexpected response `%+v`, expected: `%+v`", i+1, test.expectedResp, actualResult)
-			}
-		}
-
-	}
-}
-
-// Test for newHealResult helper function.
-func TestNewHealResult(t *testing.T) {
-	testCases := []struct {
-		healedDisks  int
-		offlineDisks int
-		state        healState
-	}{
-		// 1. No disks healed, no disks offline.
-		{0, 0, healNone},
-		// 2. No disks healed, non-zero disks offline.
-		{0, 1, healNone},
-		// 3. Non-zero disks healed, no disks offline.
-		{1, 0, healOK},
-		// 4. Non-zero disks healed, non-zero disks offline.
-		{1, 1, healPartial},
-	}
-
-	for i, test := range testCases {
-		actual := newHealResult(test.healedDisks, test.offlineDisks)
-		if actual.State != test.state {
-			t.Errorf("Test %d: Expected %v but received %v", i+1,
-				test.state, actual.State)
 		}
 	}
 }

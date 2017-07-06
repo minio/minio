@@ -70,15 +70,15 @@ func configureServerHandler(endpoints EndpointList) (http.Handler, error) {
 		return nil, err
 	}
 
+	// Add Admin router.
+	registerAdminRouter(mux)
+
 	// Register web router when its enabled.
 	if globalIsBrowserEnabled {
 		if err := registerWebRouter(mux); err != nil {
 			return nil, err
 		}
 	}
-
-	// Add Admin router.
-	registerAdminRouter(mux)
 
 	// Add API router.
 	registerAPIRouter(mux)

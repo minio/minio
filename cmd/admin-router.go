@@ -18,6 +18,10 @@ package cmd
 
 import router "github.com/gorilla/mux"
 
+const (
+	adminAPIPathPrefix = "/minio/admin"
+)
+
 // adminAPIHandlers provides HTTP handlers for Minio admin API.
 type adminAPIHandlers struct {
 }
@@ -27,50 +31,55 @@ func registerAdminRouter(mux *router.Router) {
 
 	adminAPI := adminAPIHandlers{}
 	// Admin router
-	adminRouter := mux.NewRoute().PathPrefix("/").Subrouter()
+	adminRouter := mux.NewRoute().PathPrefix(adminAPIPathPrefix).Subrouter()
+
+	// Version handler
+	adminRouter.Methods("GET").Path("/version").HandlerFunc(adminAPI.VersionHandler)
+
+	adminV1Router := mux.NewRoute().PathPrefix("/minio/admin/v1").Subrouter()
 
 	/// Service operations
 
 	// Service status
-	adminRouter.Methods("GET").Queries("service", "").Headers(minioAdminOpHeader, "status").HandlerFunc(adminAPI.ServiceStatusHandler)
+	adminV1Router.Methods("GET").Path("/service").HandlerFunc(adminAPI.ServiceStatusHandler)
 
-	// Service restart
-	adminRouter.Methods("POST").Queries("service", "").Headers(minioAdminOpHeader, "restart").HandlerFunc(adminAPI.ServiceRestartHandler)
-	// Service update credentials
-	adminRouter.Methods("POST").Queries("service", "").Headers(minioAdminOpHeader, "set-credentials").HandlerFunc(adminAPI.ServiceCredentialsHandler)
+	// Service restart and stop - TODO
+	adminV1Router.Methods("POST").Path("/service").HandlerFunc(adminAPI.ServiceStopNRestartHandler)
 
 	// Info operations
-	adminRouter.Methods("GET").Queries("info", "").HandlerFunc(adminAPI.ServerInfoHandler)
+	adminV1Router.Methods("GET").Path("/info").HandlerFunc(adminAPI.ServerInfoHandler)
 
 	/// Lock operations
 
 	// List Locks
-	adminRouter.Methods("GET").Queries("lock", "").Headers(minioAdminOpHeader, "list").HandlerFunc(adminAPI.ListLocksHandler)
+	adminV1Router.Methods("GET").Path("/locks").HandlerFunc(adminAPI.ListLocksHandler)
 	// Clear locks
-	adminRouter.Methods("POST").Queries("lock", "").Headers(minioAdminOpHeader, "clear").HandlerFunc(adminAPI.ClearLocksHandler)
+	adminV1Router.Methods("DELETE").Path("/locks").HandlerFunc(adminAPI.ClearLocksHandler)
 
-	/// Heal operations
+	// /// Heal operations
 
-	// List Objects needing heal.
-	adminRouter.Methods("GET").Queries("heal", "").Headers(minioAdminOpHeader, "list-objects").HandlerFunc(adminAPI.ListObjectsHealHandler)
-	// List Uploads needing heal.
-	adminRouter.Methods("GET").Queries("heal", "").Headers(minioAdminOpHeader, "list-uploads").HandlerFunc(adminAPI.ListUploadsHealHandler)
-	// List Buckets needing heal.
-	adminRouter.Methods("GET").Queries("heal", "").Headers(minioAdminOpHeader, "list-buckets").HandlerFunc(adminAPI.ListBucketsHealHandler)
+	// // List Objects needing heal.
+	// adminRouter.Methods("GET").Queries("heal", "").Headers(minioAdminOpHeader, "list-objects").HandlerFunc(adminAPI.ListObjectsHealHandler)
+	// // List Uploads needing heal.
+	// adminRouter.Methods("GET").Queries("heal", "").Headers(minioAdminOpHeader, "list-uploads").HandlerFunc(adminAPI.ListUploadsHealHandler)
+	// // List Buckets needing heal.
+	// adminRouter.Methods("GET").Queries("heal", "").Headers(minioAdminOpHeader, "list-buckets").HandlerFunc(adminAPI.ListBucketsHealHandler)
 
-	// Heal Buckets.
-	adminRouter.Methods("POST").Queries("heal", "").Headers(minioAdminOpHeader, "bucket").HandlerFunc(adminAPI.HealBucketHandler)
-	// Heal Objects.
-	adminRouter.Methods("POST").Queries("heal", "").Headers(minioAdminOpHeader, "object").HandlerFunc(adminAPI.HealObjectHandler)
-	// Heal Format.
-	adminRouter.Methods("POST").Queries("heal", "").Headers(minioAdminOpHeader, "format").HandlerFunc(adminAPI.HealFormatHandler)
-	// Heal Uploads.
-	adminRouter.Methods("POST").Queries("heal", "").Headers(minioAdminOpHeader, "upload").HandlerFunc(adminAPI.HealUploadHandler)
+	// // Heal Buckets.
+	// adminRouter.Methods("POST").Queries("heal", "").Headers(minioAdminOpHeader, "bucket").HandlerFunc(adminAPI.HealBucketHandler)
+	// // Heal Objects.
+	// adminRouter.Methods("POST").Queries("heal", "").Headers(minioAdminOpHeader, "object").HandlerFunc(adminAPI.HealObjectHandler)
+	// // Heal Format.
+	// adminRouter.Methods("POST").Queries("heal", "").Headers(minioAdminOpHeader, "format").HandlerFunc(adminAPI.HealFormatHandler)
+	// // Heal Uploads.
+	// adminRouter.Methods("POST").Queries("heal", "").Headers(minioAdminOpHeader, "upload").HandlerFunc(adminAPI.HealUploadHandler)
 
 	/// Config operations
 
+	// Update credentials
+	adminV1Router.Methods("POST").Path("/config/credential").HandlerFunc(adminAPI.UpdateCredentialsHandler)
 	// Get config
-	adminRouter.Methods("GET").Queries("config", "").Headers(minioAdminOpHeader, "get").HandlerFunc(adminAPI.GetConfigHandler)
-	// Set Config
-	adminRouter.Methods("PUT").Queries("config", "").Headers(minioAdminOpHeader, "set").HandlerFunc(adminAPI.SetConfigHandler)
+	adminV1Router.Methods("GET").Path("/config").HandlerFunc(adminAPI.GetConfigHandler)
+	// Set config
+	adminV1Router.Methods("POST").Path("/config").HandlerFunc(adminAPI.SetConfigHandler)
 }

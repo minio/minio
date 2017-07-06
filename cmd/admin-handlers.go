@@ -19,7 +19,6 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
-	"encoding/xml"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -30,10 +29,10 @@ import (
 	"time"
 
 	"github.com/minio/minio/pkg/auth"
+	"github.com/minio/minio/pkg/madmin"
 )
 
 const (
-	minioAdminOpHeader   = "X-Minio-Operation"
 	minioConfigTmpFormat = "config-%s.json"
 )
 
@@ -45,7 +44,7 @@ const (
 	mgmtBucket         mgmtQueryKey = "bucket"
 	mgmtObject         mgmtQueryKey = "object"
 	mgmtPrefix         mgmtQueryKey = "prefix"
-	mgmtLockDuration   mgmtQueryKey = "duration"
+	mgmtLockOlderThan  mgmtQueryKey = "older-than"
 	mgmtDelimiter      mgmtQueryKey = "delimiter"
 	mgmtMarker         mgmtQueryKey = "marker"
 	mgmtKeyMarker      mgmtQueryKey = "key-marker"
@@ -56,23 +55,34 @@ const (
 	mgmtUploadID       mgmtQueryKey = "upload-id"
 )
 
-// ServerVersion - server version
-type ServerVersion struct {
-	Version  string `json:"version"`
-	CommitID string `json:"commitID"`
+var (
+	// This struct literal represents the Admin API version that
+	// the server uses.
+	adminAPIVersionInfo = madmin.AdminAPIVersionInfo{"1"}
+)
+
+func (adminAPI adminAPIHandlers) VersionHandler(w http.ResponseWriter,
+	r *http.Request) {
+
+	adminAPIErr := checkRequestAuthType(r, "", "", "")
+	if adminAPIErr != ErrNone {
+		writeErrorResponse(w, adminAPIErr, r.URL)
+		return
+	}
+
+	jsonBytes, err := json.Marshal(adminAPIVersionInfo)
+	if err != nil {
+		writeErrorResponse(w, ErrInternalError, r.URL)
+		errorIf(err, "Failed to marshal Admin API Version to JSON.")
+		return
+	}
+
+	writeSuccessResponseJSON(w, jsonBytes)
 }
 
-// ServerStatus - contains the response of service status API
-type ServerStatus struct {
-	ServerVersion ServerVersion `json:"serverVersion"`
-	Uptime        time.Duration `json:"uptime"`
-}
-
-// ServiceStatusHandler - GET /?service
-// HTTP header x-minio-operation: status
+// ServiceStatusHandler - GET /minio/admin/v1/service
 // ----------
-// Fetches server status information like total disk space available
-// to use, online disks, offline disks and quorum threshold.
+// Returns server version and uptime.
 func (adminAPI adminAPIHandlers) ServiceStatusHandler(w http.ResponseWriter, r *http.Request) {
 	adminAPIErr := checkRequestAuthType(r, "", "", "")
 	if adminAPIErr != ErrNone {
@@ -81,7 +91,10 @@ func (adminAPI adminAPIHandlers) ServiceStatusHandler(w http.ResponseWriter, r *
 	}
 
 	// Fetch server version
-	serverVersion := ServerVersion{Version: Version, CommitID: CommitID}
+	serverVersion := madmin.ServerVersion{
+		Version:  Version,
+		CommitID: CommitID,
+	}
 
 	// Fetch uptimes from all peers. This may fail to due to lack
 	// of read-quorum availability.
@@ -93,7 +106,7 @@ func (adminAPI adminAPIHandlers) ServiceStatusHandler(w http.ResponseWriter, r *
 	}
 
 	// Create API response
-	serverStatus := ServerStatus{
+	serverStatus := madmin.ServiceStatus{
 		ServerVersion: serverVersion,
 		Uptime:        uptime,
 	}
@@ -110,93 +123,49 @@ func (adminAPI adminAPIHandlers) ServiceStatusHandler(w http.ResponseWriter, r *
 	writeSuccessResponseJSON(w, jsonBytes)
 }
 
-// ServiceRestartHandler - POST /?service
-// HTTP header x-minio-operation: restart
+// ServiceStopNRestartHandler - POST /minio/admin/v1/service
+// Body: {"action": <restart-action>}
 // ----------
-// Restarts minio server gracefully. In a distributed setup,  restarts
-// all the servers in the cluster.
-func (adminAPI adminAPIHandlers) ServiceRestartHandler(w http.ResponseWriter, r *http.Request) {
+// Restarts/Stops minio server gracefully. In a distributed setup,
+// restarts all the servers in the cluster.
+func (adminAPI adminAPIHandlers) ServiceStopNRestartHandler(w http.ResponseWriter, r *http.Request) {
 	adminAPIErr := checkRequestAuthType(r, "", "", "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponse(w, adminAPIErr, r.URL)
+		return
+	}
+
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		errorIf(err, "Failed to read request body")
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
+	var sa madmin.ServiceAction
+	err = json.Unmarshal(body, &sa)
+	if err != nil {
+		writeErrorResponse(w, ErrMalformedPOSTRequest, r.URL)
+		errorIf(err, "Error parsing body JSON")
+		return
+	}
+
+	var serviceSig serviceSignal
+	switch sa.Action {
+	case madmin.ServiceActionValueRestart:
+		serviceSig = serviceRestart
+	case madmin.ServiceActionValueStop:
+		serviceSig = serviceStop
+	default:
+		writeErrorResponse(w, ErrMalformedPOSTRequest, r.URL)
+		errorIf(err, "Invalid service action received")
 		return
 	}
 
 	// Reply to the client before restarting minio server.
 	writeSuccessResponseHeadersOnly(w)
 
-	sendServiceCmd(globalAdminPeers, serviceRestart)
-}
-
-// setCredsReq request
-type setCredsReq struct {
-	Username string `xml:"username"`
-	Password string `xml:"password"`
-}
-
-// ServiceCredsHandler - POST /?service
-// HTTP header x-minio-operation: creds
-// ----------
-// Update credentials in a minio server. In a distributed setup, update all the servers
-// in the cluster.
-func (adminAPI adminAPIHandlers) ServiceCredentialsHandler(w http.ResponseWriter, r *http.Request) {
-	// Authenticate request
-	adminAPIErr := checkRequestAuthType(r, "", "", "")
-	if adminAPIErr != ErrNone {
-		writeErrorResponse(w, adminAPIErr, r.URL)
-		return
-	}
-
-	// Avoid setting new credentials when they are already passed
-	// by the environment.
-	if globalIsEnvCreds {
-		writeErrorResponse(w, ErrMethodNotAllowed, r.URL)
-		return
-	}
-
-	// Load request body
-	inputData, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		writeErrorResponse(w, ErrInternalError, r.URL)
-		return
-	}
-
-	// Unmarshal request body
-	var req setCredsReq
-	err = xml.Unmarshal(inputData, &req)
-	if err != nil {
-		errorIf(err, "Cannot unmarshal credentials request")
-		writeErrorResponse(w, ErrMalformedXML, r.URL)
-		return
-	}
-
-	creds, err := auth.CreateCredentials(req.Username, req.Password)
-	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-		return
-	}
-
-	// Notify all other Minio peers to update credentials
-	updateErrs := updateCredsOnPeers(creds)
-	for peer, err := range updateErrs {
-		errorIf(err, "Unable to update credentials on peer %s.", peer)
-	}
-
-	// Update local credentials in memory.
-	prevCred := globalServerConfig.SetCredential(creds)
-
-	// Save credentials to config file
-	if err = globalServerConfig.Save(); err != nil {
-		// Save the current creds when failed to update.
-		globalServerConfig.SetCredential(prevCred)
-
-		errorIf(err, "Unable to update the config with new credentials.")
-		writeErrorResponse(w, ErrInternalError, r.URL)
-		return
-	}
-
-	// At this stage, the operation is successful, return 200 OK
-	w.WriteHeader(http.StatusOK)
+	sendServiceCmd(globalAdminPeers, serviceSig)
 }
 
 // ServerProperties holds some server information such as, version, region
@@ -254,7 +223,7 @@ type ServerInfo struct {
 	Data  *ServerInfoData `json:"data"`
 }
 
-// ServerInfoHandler - GET /?info
+// ServerInfoHandler - GET /minio/admin/v1/info
 // ----------
 // Get server information
 func (adminAPI adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Request) {
@@ -307,11 +276,14 @@ func (adminAPI adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *htt
 	writeSuccessResponseJSON(w, jsonBytes)
 }
 
-// validateLockQueryParams - Validates query params for list/clear locks management APIs.
-func validateLockQueryParams(vars url.Values) (string, string, time.Duration, APIErrorCode) {
+// validateLockQueryParams - Validates query params for list/clear
+// locks management APIs.
+func validateLockQueryParams(vars url.Values) (string, string, time.Duration,
+	APIErrorCode) {
+
 	bucket := vars.Get(string(mgmtBucket))
 	prefix := vars.Get(string(mgmtPrefix))
-	durationStr := vars.Get(string(mgmtLockDuration))
+	olderThanStr := vars.Get(string(mgmtLockOlderThan))
 
 	// N B empty bucket name is invalid
 	if !IsValidBucketName(bucket) {
@@ -324,10 +296,10 @@ func validateLockQueryParams(vars url.Values) (string, string, time.Duration, AP
 
 	// If older-than parameter was empty then set it to 0s to list
 	// all locks older than now.
-	if durationStr == "" {
-		durationStr = "0s"
+	if olderThanStr == "" {
+		olderThanStr = "0s"
 	}
-	duration, err := time.ParseDuration(durationStr)
+	duration, err := time.ParseDuration(olderThanStr)
 	if err != nil {
 		errorIf(err, "Failed to parse duration passed as query value.")
 		return "", "", time.Duration(0), ErrInvalidDuration
@@ -336,13 +308,14 @@ func validateLockQueryParams(vars url.Values) (string, string, time.Duration, AP
 	return bucket, prefix, duration, ErrNone
 }
 
-// ListLocksHandler - GET /?lock&bucket=mybucket&prefix=myprefix&duration=duration
+// ListLocksHandler - GET /minio/admin/v1/locks?bucket=mybucket&prefix=myprefix&older-than=10s
 // - bucket is a mandatory query parameter
 // - prefix and older-than are optional query parameters
-// HTTP header x-minio-operation: list
 // ---------
 // Lists locks held on a given bucket, prefix and duration it was held for.
-func (adminAPI adminAPIHandlers) ListLocksHandler(w http.ResponseWriter, r *http.Request) {
+func (adminAPI adminAPIHandlers) ListLocksHandler(w http.ResponseWriter,
+	r *http.Request) {
+
 	adminAPIErr := checkRequestAuthType(r, "", "", "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponse(w, adminAPIErr, r.URL)
@@ -358,7 +331,8 @@ func (adminAPI adminAPIHandlers) ListLocksHandler(w http.ResponseWriter, r *http
 
 	// Fetch lock information of locks matching bucket/prefix that
 	// are available for longer than duration.
-	volLocks, err := listPeerLocksInfo(globalAdminPeers, bucket, prefix, duration)
+	volLocks, err := listPeerLocksInfo(globalAdminPeers, bucket, prefix,
+		duration)
 	if err != nil {
 		writeErrorResponse(w, ErrInternalError, r.URL)
 		errorIf(err, "Failed to fetch lock information from remote nodes.")
@@ -378,13 +352,15 @@ func (adminAPI adminAPIHandlers) ListLocksHandler(w http.ResponseWriter, r *http
 	writeSuccessResponseJSON(w, jsonBytes)
 }
 
-// ClearLocksHandler - POST /?lock&bucket=mybucket&prefix=myprefix&duration=duration
+// ClearLocksHandler - DELETE /?lock&bucket=mybucket&prefix=myprefix&duration=duration
 // - bucket is a mandatory query parameter
 // - prefix and older-than are optional query parameters
 // HTTP header x-minio-operation: clear
 // ---------
 // Clear locks held on a given bucket, prefix and duration it was held for.
-func (adminAPI adminAPIHandlers) ClearLocksHandler(w http.ResponseWriter, r *http.Request) {
+func (adminAPI adminAPIHandlers) ClearLocksHandler(w http.ResponseWriter,
+	r *http.Request) {
+
 	adminAPIErr := checkRequestAuthType(r, "", "", "")
 	if adminAPIErr != ErrNone {
 		writeErrorResponse(w, adminAPIErr, r.URL)
@@ -400,7 +376,8 @@ func (adminAPI adminAPIHandlers) ClearLocksHandler(w http.ResponseWriter, r *htt
 
 	// Fetch lock information of locks matching bucket/prefix that
 	// are held for longer than duration.
-	volLocks, err := listPeerLocksInfo(globalAdminPeers, bucket, prefix, duration)
+	volLocks, err := listPeerLocksInfo(globalAdminPeers, bucket, prefix,
+		duration)
 	if err != nil {
 		writeErrorResponse(w, ErrInternalError, r.URL)
 		errorIf(err, "Failed to fetch lock information from remote nodes.")
@@ -873,10 +850,19 @@ func (adminAPI adminAPIHandlers) HealFormatHandler(w http.ResponseWriter, r *htt
 	writeSuccessResponseHeadersOnly(w)
 }
 
-// GetConfigHandler - GET /?config
-// - x-minio-operation = get
+// GetConfigHandler - GET /minio/admin/v1/config
 // Get config.json of this minio setup.
-func (adminAPI adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Request) {
+func (adminAPI adminAPIHandlers) GetConfigHandler(w http.ResponseWriter,
+	r *http.Request) {
+
+	// Reject the request on non-TLS connection (though
+	// credentials/config have possibly been transmitted over the
+	// wire already)
+	if r.TLS == nil {
+		writeErrorResponseJSON(w, ErrAdminNonTLSCredsUpdate, r.URL)
+		return
+	}
+
 	// Validate request signature.
 	adminAPIErr := checkRequestAuthType(r, "", "", "")
 	if adminAPIErr != ErrNone {
@@ -890,8 +876,8 @@ func (adminAPI adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	// Get config.json from all nodes. In a single node setup, it
-	// returns local config.json.
+	// Get config.json - in distributed mode, the configuration
+	// occurring on a quorum of the servers is returned.
 	configBytes, err := getPeerConfig(globalAdminPeers)
 	if err != nil {
 		errorIf(err, "Failed to get config from peers")
@@ -925,8 +911,11 @@ type setConfigResult struct {
 	Status      bool          `json:"status"`
 }
 
-// writeSetConfigResponse - writes setConfigResult value as json depending on the status.
-func writeSetConfigResponse(w http.ResponseWriter, peers adminPeers, errs []error, status bool, reqURL *url.URL) {
+// writeSetConfigResponse - writes setConfigResult value as json
+// depending on the status.
+func writeSetConfigResponse(w http.ResponseWriter, peers adminPeers,
+	errs []error, status bool, reqURL *url.URL) {
+
 	var nodeResults []nodeSummary
 	// Build nodeResults based on error values received during
 	// set-config operation.
@@ -960,9 +949,18 @@ func writeSetConfigResponse(w http.ResponseWriter, peers adminPeers, errs []erro
 	return
 }
 
-// SetConfigHandler - PUT /?config
-// - x-minio-operation = set
-func (adminAPI adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Request) {
+// SetConfigHandler - PUT /minio/admin/v1/config
+func (adminAPI adminAPIHandlers) SetConfigHandler(w http.ResponseWriter,
+	r *http.Request) {
+
+	// Reject the request on non-TLS connection (though
+	// credentials/config have possibly been transmitted over the
+	// wire already)
+	if r.TLS == nil {
+		writeErrorResponseJSON(w, ErrAdminNonTLSCredsUpdate, r.URL)
+		return
+	}
+
 	// Get current object layer instance.
 	objectAPI := newObjectLayerFn()
 	if objectAPI == nil {

@@ -536,7 +536,7 @@ func loadFormat(disk StorageAPI) (format *formatConfigV1, err error) {
 // the reference config and saves it on all disks, this is to be
 // called from healFormatXL* functions.
 func collectNSaveNewFormatConfigs(referenceConfig *formatConfigV1,
-	orderedDisks []StorageAPI) error {
+	orderedDisks []StorageAPI, dryRun bool) error {
 
 	// Collect new format configs that need to be written.
 	var newFormatConfigs = make([]*formatConfigV1, len(orderedDisks))

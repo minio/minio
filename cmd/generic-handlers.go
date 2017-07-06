@@ -243,6 +243,12 @@ func (h cacheControlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.handler.ServeHTTP(w, r)
 }
 
+// Check to allow access to the reserved "bucket" `/minio` for Admin
+// API requests.
+func isAdminAPIRequest(r *http.Request) bool {
+	return strings.HasPrefix(r.URL.Path, adminAPIPathPrefix+"/")
+}
+
 // Adds verification for incoming paths.
 type minioReservedBucketHandler struct {
 	handler http.Handler
@@ -253,8 +259,9 @@ func setReservedBucketHandler(h http.Handler) http.Handler {
 }
 
 func (h minioReservedBucketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if !guessIsRPCReq(r) && !guessIsBrowserReq(r) {
-		// For all non browser, non RPC requests, reject access to 'minioReservedBucketPath'.
+	if !guessIsRPCReq(r) && !guessIsBrowserReq(r) && !isAdminAPIRequest(r) {
+		// For all non browser, non RPC requests, reject
+		// access to 'minioReservedBucketPath'.
 		bucketName, _ := urlPath2BucketObjectName(r.URL)
 		if isMinioReservedBucket(bucketName) || isMinioMetaBucket(bucketName) {
 			writeErrorResponse(w, ErrAllAccessDisabled, r.URL)
@@ -439,6 +446,11 @@ func (h resourceHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			writeErrorResponse(w, ErrNotImplemented, r.URL)
 			return
 		}
+	}
+	// A put method on path "/" doesn't make sense, ignore it.
+	if r.Method == httpPUT && r.URL.Path == "/" {
+		writeErrorResponse(w, ErrNotImplemented, r.URL)
+		return
 	}
 
 	// Serve HTTP.

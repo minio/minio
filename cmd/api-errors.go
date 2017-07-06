@@ -168,10 +168,12 @@ const (
 	// Please open a https://github.com/minio/minio/issues before adding
 	// new error codes here.
 
+	ErrMalformedJSON
 	ErrAdminInvalidAccessKey
 	ErrAdminInvalidSecretKey
 	ErrAdminConfigNoQuorum
 	ErrAdminCredentialsMismatch
+	ErrAdminNonTLSCredsUpdate
 	ErrInsecureClientRequest
 	ErrObjectTampered
 )
@@ -683,6 +685,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "Server not initialized, please try again.",
 		HTTPStatusCode: http.StatusServiceUnavailable,
 	},
+	ErrMalformedJSON: {
+		Code:           "XMinioMalformedJSON",
+		Description:    "The JSON you provided was not well-formed or did not validate against our published format.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	ErrAdminInvalidAccessKey: {
 		Code:           "XMinioAdminInvalidAccessKey",
 		Description:    "The access key is invalid.",
@@ -702,6 +709,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Code:           "XMinioAdminCredentialsMismatch",
 		Description:    "Credentials in config mismatch with server environment variables",
 		HTTPStatusCode: http.StatusServiceUnavailable,
+	},
+	ErrAdminNonTLSCredsUpdate: {
+		Code:           "XMinioAdminNonTLSCredentialsUpdate",
+		Description:    "Credentials/Configuration cannot be updated/retrieved over a non-TLS connection",
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrInsecureClientRequest: {
 		Code:           "XMinioInsecureClientRequest",
