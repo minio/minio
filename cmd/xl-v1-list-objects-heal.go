@@ -37,9 +37,6 @@ func listDirHealFactory(isLeaf isLeafFunc, disks ...StorageAPI) listDirFunc {
 				continue
 			}
 
-			// Filter entries that have the prefix prefixEntry.
-			entries = filterMatchingPrefix(entries, prefixEntry)
-
 			// isLeaf() check has to happen here so that
 			// trailing "/" for objects can be removed.
 			for i, entry := range entries {
@@ -63,6 +60,9 @@ func listDirHealFactory(isLeaf isLeafFunc, disks ...StorageAPI) listDirFunc {
 				mergedEntries = append(mergedEntries, newEntries...)
 				sort.Strings(mergedEntries)
 			}
+
+			// Filter entries that have the prefix prefixEntry.
+			mergedEntries = filterMatchingPrefix(mergedEntries, prefixEntry)
 		}
 		return mergedEntries, false, nil
 	}
@@ -141,23 +141,15 @@ func (xl xlObjects) listObjectsHeal(bucket, prefix, marker, delimiter string, ma
 			continue
 		}
 
-		// Check if the current object needs healing
-		objectLock := xl.nsMutex.NewNSLock(bucket, objInfo.Name)
-		if err := objectLock.GetRLock(globalHealingTimeout); err != nil {
-			return loi, err
-		}
-		partsMetadata, errs := readAllXLMetadata(xl.storageDisks, bucket, objInfo.Name)
-		if xlShouldHeal(xl.storageDisks, partsMetadata, errs, bucket, objInfo.Name) {
-			healStat := xlHealStat(xl, partsMetadata, errs)
-			result.Objects = append(result.Objects, ObjectInfo{
-				Name:           objInfo.Name,
-				ModTime:        objInfo.ModTime,
-				Size:           objInfo.Size,
-				IsDir:          false,
-				HealObjectInfo: &healStat,
-			})
-		}
-		objectLock.RUnlock()
+		// Add each object seen to the result - objects are
+		// checked for healing later.
+		result.Objects = append(result.Objects, ObjectInfo{
+			Bucket:  bucket,
+			Name:    objInfo.Name,
+			ModTime: objInfo.ModTime,
+			Size:    objInfo.Size,
+			IsDir:   false,
+		})
 	}
 	return result, nil
 }

@@ -186,6 +186,15 @@ func (endpoints EndpointList) IsHTTPS() bool {
 	return endpoints[0].IsHTTPS()
 }
 
+// GetString - returns endpoint string of i-th endpoint (0-based),
+// and empty string for invalid indexes.
+func (endpoints EndpointList) GetString(i int) string {
+	if i < 0 || i >= len(endpoints) {
+		return ""
+	}
+	return endpoints[i].String()
+}
+
 // NewEndpointList - returns new endpoint list based on input args.
 func NewEndpointList(args ...string) (endpoints EndpointList, err error) {
 	// isValidDistribution - checks whether given count is a valid distribution for erasure coding.

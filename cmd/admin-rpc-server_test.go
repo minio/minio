@@ -23,8 +23,8 @@ import (
 )
 
 func testAdminCmd(cmd cmdType, t *testing.T) {
-	// reset globals.
-	// this is to make sure that the tests are not affected by modified globals.
+	// reset globals. this is to make sure that the tests are not
+	// affected by modified globals.
 	resetTestGlobals()
 
 	rootPath, err := newTestConfig(globalMinioDefaultRegion)
@@ -55,12 +55,22 @@ func testAdminCmd(cmd cmdType, t *testing.T) {
 		<-globalServiceSignalCh
 	}()
 
-	ga := AuthRPCArgs{AuthToken: token}
+	sa := SignalServiceArgs{
+		AuthRPCArgs: AuthRPCArgs{AuthToken: token},
+		Sig:         cmd.toServiceSignal(),
+	}
 	genReply := AuthRPCReply{}
 	switch cmd {
-	case restartCmd:
-		if err = adminServer.Restart(&ga, &genReply); err != nil {
-			t.Errorf("restartCmd: Expected: <nil>, got: %v", err)
+	case restartCmd, stopCmd:
+		if err = adminServer.SignalService(&sa, &genReply); err != nil {
+			t.Errorf("restartCmd/stopCmd: Expected: <nil>, got: %v",
+				err)
+		}
+	default:
+		err = adminServer.SignalService(&sa, &genReply)
+		if err != nil && err.Error() != errUnsupportedSignal.Error() {
+			t.Errorf("invalidSignal %s: unexpected error got: %v",
+				cmd, err)
 		}
 	}
 }
@@ -68,6 +78,16 @@ func testAdminCmd(cmd cmdType, t *testing.T) {
 // TestAdminRestart - test for Admin.Restart RPC service.
 func TestAdminRestart(t *testing.T) {
 	testAdminCmd(restartCmd, t)
+}
+
+// TestAdminStop - test for Admin.Stop RPC service.
+func TestAdminStop(t *testing.T) {
+	testAdminCmd(stopCmd, t)
+}
+
+// TestAdminStatus - test for Admin.Status RPC service (error case)
+func TestAdminStatus(t *testing.T) {
+	testAdminCmd(statusCmd, t)
 }
 
 // TestReInitDisks - test for Admin.ReInitDisks RPC service.

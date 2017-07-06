@@ -41,8 +41,8 @@ type APIErrorResponse struct {
 	Key        string
 	BucketName string
 	Resource   string
-	RequestID  string `xml:"RequestId"`
-	HostID     string `xml:"HostId"`
+	RequestID  string `xml:"RequestId" json:"RequestId"`
+	HostID     string `xml:"HostId" json:"HostId"`
 }
 
 // APIErrorCode type of error status.
@@ -158,6 +158,7 @@ const (
 	ErrReadQuorum
 	ErrWriteQuorum
 	ErrStorageFull
+	ErrRequestBodyParse
 	ErrObjectExistsAsDirectory
 	ErrPolicyNesting
 	ErrInvalidObjectName
@@ -174,6 +175,7 @@ const (
 	// Please open a https://github.com/minio/minio/issues before adding
 	// new error codes here.
 
+	ErrMalformedJSON
 	ErrAdminInvalidAccessKey
 	ErrAdminInvalidSecretKey
 	ErrAdminConfigNoQuorum
@@ -183,6 +185,11 @@ const (
 	ErrInsecureClientRequest
 	ErrObjectTampered
 	ErrHealNotImplemented
+	ErrHealNoSuchProcess
+	ErrHealInvalidClientToken
+	ErrHealMissingBucket
+	ErrHealAlreadyRunning
+	ErrHealOverlappingPaths
 )
 
 // error code to APIError structure, these fields carry respective
@@ -673,6 +680,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "Storage backend has reached its minimum free disk threshold. Please delete a few objects to proceed.",
 		HTTPStatusCode: http.StatusInternalServerError,
 	},
+	ErrRequestBodyParse: {
+		Code:           "XMinioRequestBodyParse",
+		Description:    "The request body failed to parse.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	ErrObjectExistsAsDirectory: {
 		Code:           "XMinioObjectExistsAsDirectory",
 		Description:    "Object name already exists as a directory.",
@@ -707,6 +719,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Code:           "XMinioServerNotInitialized",
 		Description:    "Server not initialized, please try again.",
 		HTTPStatusCode: http.StatusServiceUnavailable,
+	},
+	ErrMalformedJSON: {
+		Code:           "XMinioMalformedJSON",
+		Description:    "The JSON you provided was not well-formed or did not validate against our published format.",
+		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrAdminInvalidAccessKey: {
 		Code:           "XMinioAdminInvalidAccessKey",
@@ -764,11 +781,6 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    errObjectTampered.Error(),
 		HTTPStatusCode: http.StatusPartialContent,
 	},
-	ErrHealNotImplemented: {
-		Code:           "XMinioHealNotImplemented",
-		Description:    "This server does not implement heal functionality.",
-		HTTPStatusCode: http.StatusBadRequest,
-	},
 	ErrMaximumExpires: {
 		Code:           "AuthorizationQueryParametersError",
 		Description:    "X-Amz-Expires must be less than a week (in seconds); that is, the given X-Amz-Expires must be less than 604800 seconds",
@@ -780,6 +792,36 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	ErrInvalidRequest: {
 		Code:           "InvalidRequest",
 		Description:    "Invalid Request",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrHealNotImplemented: {
+		Code:           "XMinioHealNotImplemented",
+		Description:    "This server does not implement heal functionality.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrHealNoSuchProcess: {
+		Code:           "XMinioHealNoSuchProcess",
+		Description:    "No such heal process is running on the server",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrHealInvalidClientToken: {
+		Code:           "XMinioHealInvalidClientToken",
+		Description:    "Client token mismatch",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrHealMissingBucket: {
+		Code:           "XMinioHealMissingBucket",
+		Description:    "A heal start request with a non-empty object-prefix parameter requires a bucket to be specified.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrHealAlreadyRunning: {
+		Code:           "XMinioHealAlreadyRunning",
+		Description:    "",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrHealOverlappingPaths: {
+		Code:           "XMinioHealOverlappingPaths",
+		Description:    "",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 

@@ -497,6 +497,17 @@ func resetGlobalStorageEnvs() {
 	globalRRStorageClass = storageClass{}
 }
 
+// reset global heal state
+func resetGlobalHealState() {
+	globalAllHealState.Lock()
+	defer globalAllHealState.Unlock()
+	for _, v := range globalAllHealState.healSeqMap {
+		if !v.hasEnded() {
+			v.stop()
+		}
+	}
+}
+
 // Resets all the globals used modified in tests.
 // Resetting ensures that the changes made to globals by one test doesn't affect others.
 func resetTestGlobals() {
@@ -518,6 +529,8 @@ func resetTestGlobals() {
 	resetGlobalIsEnvs()
 	// Reset global storage class flags
 	resetGlobalStorageEnvs()
+	// Reset global heal state
+	resetGlobalHealState()
 }
 
 // Configure the server for the test run.

@@ -31,6 +31,7 @@ import (
 	"github.com/minio/minio/pkg/errors"
 	"github.com/minio/minio/pkg/hash"
 	"github.com/minio/minio/pkg/lock"
+	"github.com/minio/minio/pkg/madmin"
 )
 
 // fsObjects - Implements fs object layer.
@@ -1039,13 +1040,17 @@ func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 }
 
 // HealObject - no-op for fs. Valid only for XL.
-func (fs fsObjects) HealObject(bucket, object string) (int, int, error) {
-	return 0, 0, errors.Trace(NotImplemented{})
+func (fs fsObjects) HealObject(bucket, object string, dryRun bool) (
+	res madmin.HealResultItem, err error) {
+
+	return res, errors.Trace(NotImplemented{})
 }
 
 // HealBucket - no-op for fs, Valid only for XL.
-func (fs fsObjects) HealBucket(bucket string) error {
-	return errors.Trace(NotImplemented{})
+func (fs fsObjects) HealBucket(bucket string, dryRun bool) ([]madmin.HealResultItem,
+	error) {
+
+	return nil, errors.Trace(NotImplemented{})
 }
 
 // ListObjectsHeal - list all objects to be healed. Valid only for XL

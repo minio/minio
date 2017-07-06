@@ -20,14 +20,10 @@ package madmin
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
-	"net/url"
-)
-
-const (
-	configQueryParam = "config"
 )
 
 // NodeSummary - represents the result of an operation part of
@@ -47,20 +43,14 @@ type SetConfigResult struct {
 
 // GetConfig - returns the config.json of a minio setup.
 func (adm *AdminClient) GetConfig() ([]byte, error) {
-	queryVal := make(url.Values)
-	queryVal.Set(configQueryParam, "")
-
-	hdrs := make(http.Header)
-	hdrs.Set(minioAdminOpHeader, "get")
-
-	reqData := requestData{
-		queryValues:   queryVal,
-		customHeaders: hdrs,
+	// No TLS?
+	if !adm.secure {
+		return nil, fmt.Errorf("credentials/configuration cannot be retrieved over an insecure connection")
 	}
 
-	// Execute GET on /?config to get config of a setup.
-	resp, err := adm.executeMethod("GET", reqData)
-
+	// Execute GET on /minio/admin/v1/config to get config of a setup.
+	resp, err := adm.executeMethod("GET",
+		requestData{relPath: "/v1/config"})
 	defer closeResponse(resp)
 	if err != nil {
 		return nil, err
@@ -75,50 +65,42 @@ func (adm *AdminClient) GetConfig() ([]byte, error) {
 }
 
 // SetConfig - set config supplied as config.json for the setup.
-func (adm *AdminClient) SetConfig(config io.Reader) (SetConfigResult, error) {
-	queryVal := url.Values{}
-	queryVal.Set(configQueryParam, "")
-
-	// Set x-minio-operation to set.
-	hdrs := make(http.Header)
-	hdrs.Set(minioAdminOpHeader, "set")
+func (adm *AdminClient) SetConfig(config io.Reader) (r SetConfigResult, err error) {
+	// No TLS?
+	if !adm.secure {
+		return r, fmt.Errorf("credentials/configuration cannot be updated over an insecure connection")
+	}
 
 	// Read config bytes to calculate MD5, SHA256 and content length.
 	configBytes, err := ioutil.ReadAll(config)
 	if err != nil {
-		return SetConfigResult{}, err
+		return r, err
 	}
 
 	reqData := requestData{
-		queryValues:        queryVal,
-		customHeaders:      hdrs,
+		relPath:            "/v1/config",
 		contentBody:        bytes.NewReader(configBytes),
 		contentMD5Bytes:    sumMD5(configBytes),
 		contentSHA256Bytes: sum256(configBytes),
 	}
 
-	// Execute PUT on /?config to set config.
+	// Execute PUT on /minio/admin/v1/config to set config.
 	resp, err := adm.executeMethod("PUT", reqData)
 
 	defer closeResponse(resp)
 	if err != nil {
-		return SetConfigResult{}, err
+		return r, err
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return SetConfigResult{}, httpRespToErrorResponse(resp)
+		return r, httpRespToErrorResponse(resp)
 	}
 
-	var result SetConfigResult
 	jsonBytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return SetConfigResult{}, err
+		return r, err
 	}
 
-	err = json.Unmarshal(jsonBytes, &result)
-	if err != nil {
-		return SetConfigResult{}, err
-	}
-
-	return result, nil
+	err = json.Unmarshal(jsonBytes, &r)
+	return r, err
 }

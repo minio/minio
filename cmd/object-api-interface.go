@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/minio/minio/pkg/hash"
+	"github.com/minio/minio/pkg/madmin"
 )
 
 // ObjectLayer implements primitives for object API layer.
@@ -53,9 +54,9 @@ type ObjectLayer interface {
 	CompleteMultipartUpload(bucket, object, uploadID string, uploadedParts []CompletePart) (objInfo ObjectInfo, err error)
 
 	// Healing operations.
-	HealBucket(bucket string) error
+	HealBucket(bucket string, dryRun bool) ([]madmin.HealResultItem, error)
+	HealObject(bucket, object string, dryRun bool) (madmin.HealResultItem, error)
 	ListBucketsHeal() (buckets []BucketInfo, err error)
-	HealObject(bucket, object string) (int, int, error)
 	ListObjectsHeal(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error)
 
 	// Locking operations

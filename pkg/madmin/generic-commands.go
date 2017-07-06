@@ -19,46 +19,50 @@ package madmin
 
 import (
 	"bytes"
-	"encoding/xml"
+	"encoding/json"
+	"fmt"
 	"net/http"
-	"net/url"
 )
 
-// setCredsReq - xml to send to the server to set new credentials
-type setCredsReq struct {
-	Username string `xml:"username"`
-	Password string `xml:"password"`
+// SetCredsReq - xml to send to the server to set new credentials
+type SetCredsReq struct {
+	AccessKey string `json:"accessKey"`
+	SecretKey string `json:"secretKey"`
 }
 
-// SetCredentials - Call Set Credentials API to set new access and secret keys in the specified Minio server
+// SetCredentials - Call Set Credentials API to set new access and
+// secret keys in the specified Minio server
 func (adm *AdminClient) SetCredentials(access, secret string) error {
-
-	// Setup new request
-	reqData := requestData{}
-	reqData.queryValues = make(url.Values)
-	reqData.queryValues.Set("service", "")
-	reqData.customHeaders = make(http.Header)
-	reqData.customHeaders.Set(minioAdminOpHeader, "set-credentials")
-
 	// Setup request's body
-	body, err := xml.Marshal(setCredsReq{Username: access, Password: secret})
+	body, err := json.Marshal(SetCredsReq{access, secret})
 	if err != nil {
 		return err
 	}
-	reqData.contentBody = bytes.NewReader(body)
-	reqData.contentLength = int64(len(body))
-	reqData.contentMD5Bytes = sumMD5(body)
-	reqData.contentSHA256Bytes = sum256(body)
+
+	// No TLS?
+	if !adm.secure {
+		return fmt.Errorf("credentials cannot be updated over an insecure connection")
+	}
+
+	// Setup new request
+	reqData := requestData{
+		relPath:            "/v1/config/credential",
+		contentBody:        bytes.NewReader(body),
+		contentLength:      int64(len(body)),
+		contentMD5Bytes:    sumMD5(body),
+		contentSHA256Bytes: sum256(body),
+	}
 
 	// Execute GET on bucket to list objects.
-	resp, err := adm.executeMethod("POST", reqData)
+	resp, err := adm.executeMethod("PUT", reqData)
 
 	defer closeResponse(resp)
 	if err != nil {
 		return err
 	}
 
-	// Return error to the caller if http response code is different from 200
+	// Return error to the caller if http response code is
+	// different from 200
 	if resp.StatusCode != http.StatusOK {
 		return httpRespToErrorResponse(resp)
 	}
