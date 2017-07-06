@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -32,8 +33,7 @@ import (
 type HandlerFunc func(http.Handler) http.Handler
 
 func registerHandlers(mux *router.Router, handlerFns ...HandlerFunc) http.Handler {
-	var f http.Handler
-	f = mux
+	var f http.Handler = mux
 	for _, hFn := range handlerFns {
 		f = hFn(f)
 	}
@@ -466,6 +466,29 @@ func (h pathValidityHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
+	}
+	h.handler.ServeHTTP(w, r)
+}
+
+// adminAPIEnablingHandler enables administration related APIs only
+// when an environment variable is set - this handler is temporary
+// until the admin APIs become production ready.
+type adminAPIEnablingHandler struct {
+	handler http.Handler
+}
+
+func setAdminAPIEnablingHandler(h http.Handler) http.Handler {
+	return adminAPIEnablingHandler{handler: h}
+}
+
+func (h adminAPIEnablingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Admin APIs are disabled unless special environment variable
+	// is set.
+	if r.Header.Get(minioAdminOpHeader) != "" &&
+		os.Getenv("_MINIO_ADMIN_HANDLERS") == "" {
+
+		writeErrorResponse(w, ErrAdminAPIsTemporarilyDisabled, r.URL)
+		return
 	}
 	h.handler.ServeHTTP(w, r)
 }

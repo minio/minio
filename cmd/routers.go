@@ -89,6 +89,8 @@ func configureServerHandler(endpoints EndpointList) (http.Handler, error) {
 		setPathValidityHandler,
 		// Network statistics
 		setHTTPStatsHandler,
+		// Check that admin APIs are enabled if the request needs it
+		setAdminAPIEnablingHandler,
 		// Limits all requests size to a maximum fixed limit
 		setRequestSizeLimitHandler,
 		// Adds 'crossdomain.xml' policy handler to serve legacy flash clients.

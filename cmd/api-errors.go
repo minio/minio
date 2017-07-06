@@ -151,6 +151,7 @@ const (
 	ErrAdminInvalidSecretKey
 	ErrAdminConfigNoQuorum
 	ErrInsecureClientRequest
+	ErrAdminAPIsTemporarilyDisabled
 )
 
 // error code to APIError structure, these fields carry respective
@@ -628,6 +629,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	ErrInsecureClientRequest: {
 		Code:           "XMinioInsecureClientRequest",
 		Description:    "Cannot respond to plain-text request from TLS-encrypted server",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrAdminAPIsTemporarilyDisabled: {
+		Code:           "XMinioAdminAPIsTemporarilyDisabled",
+		Description:    "Admin APIs are disabled by default as they are not production ready. They will be enabled in a subsequent release.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 
