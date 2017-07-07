@@ -79,6 +79,9 @@ func TestBuffConnReadTimeout(t *testing.T) {
 		if terr != nil {
 			t.Fatalf("failed to write to client. %v", terr)
 		}
+
+		// Removes all deadlines if any.
+		bufconn.RemoveTimeout()
 	}()
 
 	c, err := net.Dial("tcp", "localhost:"+port)

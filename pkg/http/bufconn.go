@@ -32,6 +32,7 @@ type BufConn struct {
 	updateBytesWrittenFunc func(int)     // function to be called to update bytes written.
 }
 
+// Sets read timeout
 func (c *BufConn) setReadTimeout() {
 	if c.readTimeout != 0 {
 		c.SetReadDeadline(time.Now().UTC().Add(c.readTimeout))
@@ -44,6 +45,20 @@ func (c *BufConn) setWriteTimeout() {
 	}
 }
 
+// RemoveTimeout - removes all configured read and write
+// timeouts. Used by callers which control net.Conn behavior
+// themselves.
+func (c *BufConn) RemoveTimeout() {
+	c.readTimeout = 0
+	c.writeTimeout = 0
+	// Unset read/write timeouts, since we use **bufio** it is not
+	// guaranteed that the underlying Peek/Read operation in-fact
+	// indeed performed a Read() operation on the network. With
+	// that in mind we need to unset any timeouts currently set to
+	// avoid any pre-mature timeouts.
+	c.SetDeadline(time.Time{})
+}
+
 // Peek - returns the next n bytes without advancing the reader.  It just wraps bufio.Reader.Peek().
 func (c *BufConn) Peek(n int) ([]byte, error) {
 	c.setReadTimeout()
@@ -54,7 +69,6 @@ func (c *BufConn) Peek(n int) ([]byte, error) {
 func (c *BufConn) Read(b []byte) (n int, err error) {
 	c.setReadTimeout()
 	n, err = c.bufReader.Read(b)
-
 	if err == nil && c.updateBytesReadFunc != nil {
 		c.updateBytesReadFunc(n)
 	}
@@ -66,7 +80,6 @@ func (c *BufConn) Read(b []byte) (n int, err error) {
 func (c *BufConn) Write(b []byte) (n int, err error) {
 	c.setWriteTimeout()
 	n, err = c.Conn.Write(b)
-
 	if err == nil && c.updateBytesWrittenFunc != nil {
 		c.updateBytesWrittenFunc(n)
 	}

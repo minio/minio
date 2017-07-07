@@ -19,7 +19,6 @@ package cmd
 import (
 	"fmt"
 	"math/rand"
-	"net/rpc"
 	"path"
 	"sync"
 	"time"
@@ -99,7 +98,7 @@ func registerDistNSLockRouter(mux *router.Router, endpoints EndpointList) error 
 // registerStorageLockers - register locker rpc handlers for net/rpc library clients
 func registerStorageLockers(mux *router.Router, lockServers []*lockServer) error {
 	for _, lockServer := range lockServers {
-		lockRPCServer := rpc.NewServer()
+		lockRPCServer := newRPCServer()
 		if err := lockRPCServer.RegisterName(lockServiceName, lockServer); err != nil {
 			return traceError(err)
 		}
