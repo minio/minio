@@ -490,11 +490,43 @@ The default location of Minio server configuration file is ``~/.minio/config.jso
         "token": "",
         "secure": false,
         "pingInterval": 0
+        "streaming": {
+            "enable": false,
+            "clusterID": "",
+            "clientID": "",
+            "async": false,
+            "maxPubAcksInflight": 0
+        }
     }
 },
 ```
 
 Restart Minio server to reflect config changes. ``bucketevents`` is the subject used by NATS in this example.
+
+Minio server also supports [NATS Streaming mode](http://nats.io/documentation/streaming/nats-streaming-intro/) that offers additional functionality like `Message/event persistence`, `At-least-once-delivery`, and `Publisher rate limiting`. To configure Minio server to send notifications to NATS Streaming server, update the Minio server configuration file as follows:
+
+```
+"nats": {
+    "1": {
+        "enable": true,
+        "address": "0.0.0.0:4222",
+        "subject": "bucketevents",
+        "username": "yourusername",
+        "password": "yoursecret",
+        "token": "",
+        "secure": false,
+        "pingInterval": 0
+        "streaming": {
+            "enable": true,
+            "clusterID": "test-cluster",
+            "clientID": "minio-client",
+            "async": true,
+            "maxPubAcksInflight": 10
+        }
+    }
+},
+``` 
+Read more about sections `clusterID`, `clientID` on [NATS documentation](https://github.com/nats-io/nats-streaming-server/blob/master/README.md). Section `maxPubAcksInflight` is explained [here](https://github.com/nats-io/go-nats-streaming#publisher-rate-limiting). 
 
 ### Step 2: Enable bucket notification using Minio client
 
@@ -509,7 +541,7 @@ arn:minio:sqs:us-east-1:1:nats s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suf
 
 ### Step 3: Test on NATS
 
-Using this program below we can log the bucket notification added to NATS.
+If you use NATS server, check out this sample program below to log the bucket notification added to NATS.
 
 ```go
 package main
@@ -560,6 +592,53 @@ go run nats.go
 2016/10/12 06:51:26 Connected
 2016/10/12 06:51:26 Subscribing to subject 'bucketevents'
 2016/10/12 06:51:33 Received message '{"EventType":"s3:ObjectCreated:Put","Key":"images/myphoto.jpg","Records":[{"eventVersion":"2.0","eventSource":"aws:s3","awsRegion":"us-east-1","eventTime":"2016-10-12T13:51:33Z","eventName":"s3:ObjectCreated:Put","userIdentity":{"principalId":"minio"},"requestParameters":{"sourceIPAddress":"[::1]:57106"},"responseElements":{},"s3":{"s3SchemaVersion":"1.0","configurationId":"Config","bucket":{"name":"images","ownerIdentity":{"principalId":"minio"},"arn":"arn:aws:s3:::images"},"object":{"key":"myphoto.jpg","size":56060,"eTag":"1d97bf45ecb37f7a7b699418070df08f","sequencer":"147CCD1AE054BFD0"}}}],"level":"info","msg":"","time":"2016-10-12T06:51:33-07:00"}
+```
+
+If you use NATS Streaming server, check out this sample program below to log the bucket notification added to NATS.
+
+```go
+package main
+
+// Import Go and NATS packages
+import (
+	"fmt"
+	"runtime"
+
+	"github.com/nats-io/go-nats-streaming"
+)
+
+func main() {
+	natsConnection, _ := stan.Connect("test-cluster", "test-client")
+	log.Println("Connected")
+
+	// Subscribe to subject
+	log.Printf("Subscribing to subject 'bucketevents'\n")
+	natsConnection.Subscribe("bucketevents", func(m *stan.Msg) {
+
+		// Handle the message
+		fmt.Printf("Received a message: %s\n", string(m.Data))
+	})
+
+	// Keep the connection alive
+	runtime.Goexit()
+}
+```
+
+```
+go run nats.go 
+2017/07/07 11:47:40 Connected
+2017/07/07 11:47:40 Subscribing to subject 'bucketevents'
+```
+Open another terminal and upload a JPEG image into ``images`` bucket.
+
+```
+mc cp myphoto.jpg myminio/images
+```
+
+The example ``nats.go`` program prints event notification to console.
+
+```
+Received a message: {"EventType":"s3:ObjectCreated:Put","Key":"images/myphoto.jpg","Records":[{"eventVersion":"2.0","eventSource":"minio:s3","awsRegion":"","eventTime":"2017-07-07T18:46:37Z","eventName":"s3:ObjectCreated:Put","userIdentity":{"principalId":"minio"},"requestParameters":{"sourceIPAddress":"192.168.1.80:55328"},"responseElements":{"x-amz-request-id":"14CF20BD1EFD5B93","x-minio-origin-endpoint":"http://127.0.0.1:9000"},"s3":{"s3SchemaVersion":"1.0","configurationId":"Config","bucket":{"name":"images","ownerIdentity":{"principalId":"minio"},"arn":"arn:aws:s3:::images"},"object":{"key":"myphoto.jpg","size":248682,"eTag":"f1671feacb8bbf7b0397c6e9364e8c92","contentType":"image/jpeg","userDefined":{"content-type":"image/jpeg"},"versionId":"1","sequencer":"14CF20BD1EFD5B93"}},"source":{"host":"192.168.1.80","port":"55328","userAgent":"Minio (linux; amd64) minio-go/2.0.4 mc/DEVELOPMENT.GOGET"}}],"level":"info","msg":"","time":"2017-07-07T11:46:37-07:00"}
 ```
 
 <a name="PostgreSQL"></a>
