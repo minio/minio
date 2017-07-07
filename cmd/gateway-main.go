@@ -319,7 +319,7 @@ func gatewayMain(ctx *cli.Context, backendType gatewayBackend) {
 	// Check and load SSL certificates.
 	var err error
 	globalPublicCerts, globalRootCAs, globalTLSCertificate, globalIsSSL, err = getSSLConfig()
-	fatalIf(err, "Invalid SSL key/certificate file")
+	fatalIf(err, "Invalid SSL certificate file")
 
 	initNSLock(false) // Enable local namespace lock.
 

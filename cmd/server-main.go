@@ -154,7 +154,7 @@ func serverMain(ctx *cli.Context) {
 	// Check and load SSL certificates.
 	var err error
 	globalPublicCerts, globalRootCAs, globalTLSCertificate, globalIsSSL, err = getSSLConfig()
-	fatalIf(err, "Invalid SSL key/certificate file")
+	fatalIf(err, "Invalid SSL certificate file")
 
 	if !quietFlag {
 		// Check for new updates from dl.minio.io.

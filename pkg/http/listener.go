@@ -19,11 +19,11 @@ package http
 import (
 	"crypto/tls"
 	"errors"
-	"io"
 	"net"
 	"net/http"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -219,7 +219,7 @@ func (listener *httpListener) Accept() (conn net.Conn, err error) {
 		return result.conn, result.err
 	}
 
-	return nil, io.EOF
+	return nil, syscall.EINVAL
 }
 
 // Close - closes underneath all TCP listeners.
@@ -227,7 +227,7 @@ func (listener *httpListener) Close() (err error) {
 	listener.mutex.Lock()
 	defer listener.mutex.Unlock()
 	if listener.doneChs == nil {
-		return nil
+		return syscall.EINVAL
 	}
 
 	wg := &sync.WaitGroup{}

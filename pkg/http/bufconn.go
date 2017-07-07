@@ -55,7 +55,7 @@ func (c *bufConn) Read(b []byte) (n int, err error) {
 	c.setReadTimeout()
 	n, err = c.bufReader.Read(b)
 
-	if c.updateBytesReadFunc != nil {
+	if err == nil && c.updateBytesReadFunc != nil {
 		c.updateBytesReadFunc(n)
 	}
 
@@ -67,7 +67,7 @@ func (c *bufConn) Write(b []byte) (n int, err error) {
 	c.setWriteTimeout()
 	n, err = c.Conn.Write(b)
 
-	if c.updateBytesWrittenFunc != nil {
+	if err == nil && c.updateBytesWrittenFunc != nil {
 		c.updateBytesWrittenFunc(n)
 	}
 
