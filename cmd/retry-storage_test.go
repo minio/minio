@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"reflect"
 	"testing"
 	"time"
@@ -420,6 +421,34 @@ func TestRetryStorage(t *testing.T) {
 		}
 		if err = disk.DeleteVol("existent"); err != nil {
 			t.Fatal(err)
+		}
+	}
+}
+
+// Tests reply storage error transformation.
+func TestReplyStorageErr(t *testing.T) {
+	unknownErr := errors.New("Unknown error")
+	testCases := []struct {
+		expectedErr error
+		err         error
+	}{
+		{
+			expectedErr: errDiskNotFound,
+			err:         errDiskNotFoundFromNetError,
+		},
+		{
+			expectedErr: errDiskNotFound,
+			err:         errDiskNotFoundFromRPCShutdown,
+		},
+		{
+			expectedErr: unknownErr,
+			err:         unknownErr,
+		},
+	}
+	for i, testCase := range testCases {
+		resultErr := retryToStorageErr(testCase.err)
+		if testCase.expectedErr != resultErr {
+			t.Errorf("Test %d: Expected %s, got %s", i+1, testCase.expectedErr, resultErr)
 		}
 	}
 }

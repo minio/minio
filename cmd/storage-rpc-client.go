@@ -45,11 +45,11 @@ func toStorageErr(err error) error {
 
 	switch err.(type) {
 	case *net.OpError:
-		return errDiskNotFound
+		return errDiskNotFoundFromNetError
 	}
 
 	if err == rpc.ErrShutdown {
-		return errDiskNotFound
+		return errDiskNotFoundFromRPCShutdown
 	}
 
 	switch err.Error() {
