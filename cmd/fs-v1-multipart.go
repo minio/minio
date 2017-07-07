@@ -757,6 +757,30 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 		return oi, toObjectErr(err, minioMetaMultipartBucket, fsMetaPathMultipart)
 	}
 
+	// Validate all parts and then commit to disk.
+	for i, part := range parts {
+		partIdx := fsMeta.ObjectPartIndex(part.PartNumber)
+		if partIdx == -1 {
+			fs.rwPool.Close(fsMetaPathMultipart)
+			return oi, traceError(InvalidPart{})
+		}
+
+		if fsMeta.Parts[partIdx].ETag != part.ETag {
+			fs.rwPool.Close(fsMetaPathMultipart)
+			return oi, traceError(InvalidPart{})
+		}
+
+		// All parts except the last part has to be atleast 5MB.
+		if (i < len(parts)-1) && !isMinAllowedPartSize(fsMeta.Parts[partIdx].Size) {
+			fs.rwPool.Close(fsMetaPathMultipart)
+			return oi, traceError(PartTooSmall{
+				PartNumber: part.PartNumber,
+				PartSize:   fsMeta.Parts[partIdx].Size,
+				PartETag:   part.ETag,
+			})
+		}
+	}
+
 	// Wait for any competing PutObject() operation on bucket/object, since same namespace
 	// would be acquired for `fs.json`.
 	fsMetaPath := pathJoin(fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fsMetaJSONFile)
@@ -798,29 +822,7 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 		// Allocate staging buffer.
 		var buf = make([]byte, readSizeV1)
 
-		// Validate all parts and then commit to disk.
-		for i, part := range parts {
-			partIdx := fsMeta.ObjectPartIndex(part.PartNumber)
-			if partIdx == -1 {
-				fs.rwPool.Close(fsMetaPathMultipart)
-				return oi, traceError(InvalidPart{})
-			}
-
-			if fsMeta.Parts[partIdx].ETag != part.ETag {
-				fs.rwPool.Close(fsMetaPathMultipart)
-				return oi, traceError(InvalidPart{})
-			}
-
-			// All parts except the last part has to be atleast 5MB.
-			if (i < len(parts)-1) && !isMinAllowedPartSize(fsMeta.Parts[partIdx].Size) {
-				fs.rwPool.Close(fsMetaPathMultipart)
-				return oi, traceError(PartTooSmall{
-					PartNumber: part.PartNumber,
-					PartSize:   fsMeta.Parts[partIdx].Size,
-					PartETag:   part.ETag,
-				})
-			}
-
+		for _, part := range parts {
 			// Construct part suffix.
 			partSuffix := fmt.Sprintf("object%d", part.PartNumber)
 			multipartPartFile := pathJoin(fs.fsPath, minioMetaMultipartBucket, uploadIDPath, partSuffix)
