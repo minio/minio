@@ -52,6 +52,9 @@ mc ls mygcs
 [2017-02-26 22:10:11 PST]     0B test-container1/
 ```
 
+### Known limitations
+[Limitations](https://github.com/minio/minio/blob/master/docs/gateway/gcs-limitations.md)
+
 ## Explore Further
 - [`mc` command-line interface](https://docs.minio.io/docs/minio-client-quickstart-guide)
 - [`aws` command-line interface](https://docs.minio.io/docs/aws-cli-with-minio)
