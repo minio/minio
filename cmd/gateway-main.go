@@ -250,7 +250,7 @@ func azureGatewayMain(ctx *cli.Context) {
 	}
 
 	// Validate gateway arguments.
-	fatalIf(validateGatewayArguments(ctx.String("address"), ctx.Args().First()), "Invalid argument")
+	fatalIf(validateGatewayArguments(ctx.GlobalString("address"), ctx.Args().First()), "Invalid argument")
 
 	gatewayMain(ctx, azureBackend)
 }
@@ -262,7 +262,7 @@ func s3GatewayMain(ctx *cli.Context) {
 	}
 
 	// Validate gateway arguments.
-	fatalIf(validateGatewayArguments(ctx.String("address"), ctx.Args().First()), "Invalid argument")
+	fatalIf(validateGatewayArguments(ctx.GlobalString("address"), ctx.Args().First()), "Invalid argument")
 
 	gatewayMain(ctx, s3Backend)
 }
@@ -359,7 +359,7 @@ func gatewayMain(ctx *cli.Context, backendType gatewayBackend) {
 
 	}
 
-	apiServer := NewServerMux(ctx.String("address"), registerHandlers(router, handlerFns...))
+	apiServer := NewServerMux(ctx.GlobalString("address"), registerHandlers(router, handlerFns...))
 
 	// Start server, automatically configures TLS if certs are available.
 	go func() {
