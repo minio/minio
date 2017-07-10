@@ -46,6 +46,9 @@ func erasureCreateFile(disks []StorageAPI, volume, path string, reader io.Reader
 			return nil, 0, nil, traceError(rErr)
 		}
 		if rErr == io.EOF {
+			if bytesWritten == 0 && !allowEmpty {
+				return nil, 0, nil, rErr
+			}
 			// We have reached EOF on the first byte read, io.Reader
 			// must be 0bytes, we don't need to erasure code
 			// data. Will create a 0byte file instead.

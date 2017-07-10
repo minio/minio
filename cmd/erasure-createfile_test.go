@@ -19,6 +19,7 @@ package cmd
 import (
 	"bytes"
 	"crypto/rand"
+	"io"
 	"testing"
 
 	humanize "github.com/dustin/go-humanize"
@@ -55,6 +56,11 @@ func TestErasureCreateFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	_, _, _, err = erasureCreateFile(disks, "testbucket", "testobject", bytes.NewReader(data[:0]), false, blockSize, dataBlocks, parityBlocks, bitRotAlgo, dataBlocks+1)
+	if err != io.EOF {
+		t.Error("Expected to fail if data is empty and allowEmpty flag is not set")
+	}
+
 	// Test when all disks are up.
 	_, size, _, err := erasureCreateFile(disks, "testbucket", "testobject1", bytes.NewReader(data), true, blockSize, dataBlocks, parityBlocks, bitRotAlgo, dataBlocks+1)
 	if err != nil {
