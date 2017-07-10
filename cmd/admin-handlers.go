@@ -23,11 +23,11 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"path"
 	"strconv"
 	"sync"
 	"time"
 
+	"github.com/gorilla/mux"
 	"github.com/minio/minio/pkg/auth"
 	"github.com/minio/minio/pkg/madmin"
 )
@@ -41,18 +41,10 @@ type mgmtQueryKey string
 
 // Only valid query params for mgmt admin APIs.
 const (
-	mgmtBucket         mgmtQueryKey = "bucket"
-	mgmtObject         mgmtQueryKey = "object"
-	mgmtPrefix         mgmtQueryKey = "prefix"
-	mgmtLockOlderThan  mgmtQueryKey = "older-than"
-	mgmtDelimiter      mgmtQueryKey = "delimiter"
-	mgmtMarker         mgmtQueryKey = "marker"
-	mgmtKeyMarker      mgmtQueryKey = "key-marker"
-	mgmtMaxKey         mgmtQueryKey = "max-key"
-	mgmtDryRun         mgmtQueryKey = "dry-run"
-	mgmtUploadIDMarker mgmtQueryKey = "upload-id-marker"
-	mgmtMaxUploads     mgmtQueryKey = "max-uploads"
-	mgmtUploadID       mgmtQueryKey = "upload-id"
+	mgmtBucket        mgmtQueryKey = "bucket"
+	mgmtPrefix        mgmtQueryKey = "prefix"
+	mgmtLockOlderThan mgmtQueryKey = "older-than"
+	mgmtMarker        mgmtQueryKey = "marker"
 )
 
 var (
@@ -61,8 +53,10 @@ var (
 	adminAPIVersionInfo = madmin.AdminAPIVersionInfo{"1"}
 )
 
-func (adminAPI adminAPIHandlers) VersionHandler(w http.ResponseWriter,
-	r *http.Request) {
+// VersionHandler - GET /minio/admin/version
+// -----------
+// Returns Administration API version
+func (a adminAPIHandlers) VersionHandler(w http.ResponseWriter, r *http.Request) {
 
 	adminAPIErr := checkRequestAuthType(r, "", "", "")
 	if adminAPIErr != ErrNone {
@@ -72,7 +66,7 @@ func (adminAPI adminAPIHandlers) VersionHandler(w http.ResponseWriter,
 
 	jsonBytes, err := json.Marshal(adminAPIVersionInfo)
 	if err != nil {
-		writeErrorResponse(w, ErrInternalError, r.URL)
+		writeErrorResponseJSON(w, ErrInternalError, r.URL)
 		errorIf(err, "Failed to marshal Admin API Version to JSON.")
 		return
 	}
@@ -83,10 +77,10 @@ func (adminAPI adminAPIHandlers) VersionHandler(w http.ResponseWriter,
 // ServiceStatusHandler - GET /minio/admin/v1/service
 // ----------
 // Returns server version and uptime.
-func (adminAPI adminAPIHandlers) ServiceStatusHandler(w http.ResponseWriter, r *http.Request) {
+func (a adminAPIHandlers) ServiceStatusHandler(w http.ResponseWriter, r *http.Request) {
 	adminAPIErr := checkRequestAuthType(r, "", "", "")
 	if adminAPIErr != ErrNone {
-		writeErrorResponse(w, adminAPIErr, r.URL)
+		writeErrorResponseJSON(w, adminAPIErr, r.URL)
 		return
 	}
 
@@ -100,7 +94,7 @@ func (adminAPI adminAPIHandlers) ServiceStatusHandler(w http.ResponseWriter, r *
 	// of read-quorum availability.
 	uptime, err := getPeerUptimes(globalAdminPeers)
 	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		writeErrorResponseJSON(w, toAPIErrorCode(err), r.URL)
 		errorIf(err, "Possibly failed to get uptime from majority of servers.")
 		return
 	}
@@ -114,7 +108,7 @@ func (adminAPI adminAPIHandlers) ServiceStatusHandler(w http.ResponseWriter, r *
 	// Marshal API response
 	jsonBytes, err := json.Marshal(serverStatus)
 	if err != nil {
-		writeErrorResponse(w, ErrInternalError, r.URL)
+		writeErrorResponseJSON(w, ErrInternalError, r.URL)
 		errorIf(err, "Failed to marshal storage info into json.")
 		return
 	}
@@ -128,24 +122,24 @@ func (adminAPI adminAPIHandlers) ServiceStatusHandler(w http.ResponseWriter, r *
 // ----------
 // Restarts/Stops minio server gracefully. In a distributed setup,
 // restarts all the servers in the cluster.
-func (adminAPI adminAPIHandlers) ServiceStopNRestartHandler(w http.ResponseWriter, r *http.Request) {
+func (a adminAPIHandlers) ServiceStopNRestartHandler(w http.ResponseWriter, r *http.Request) {
 	adminAPIErr := checkRequestAuthType(r, "", "", "")
 	if adminAPIErr != ErrNone {
-		writeErrorResponse(w, adminAPIErr, r.URL)
+		writeErrorResponseJSON(w, adminAPIErr, r.URL)
 		return
 	}
 
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		errorIf(err, "Failed to read request body")
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		writeErrorResponseJSON(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 
 	var sa madmin.ServiceAction
 	err = json.Unmarshal(body, &sa)
 	if err != nil {
-		writeErrorResponse(w, ErrMalformedPOSTRequest, r.URL)
+		writeErrorResponseJSON(w, ErrMalformedPOSTRequest, r.URL)
 		errorIf(err, "Error parsing body JSON")
 		return
 	}
@@ -157,7 +151,7 @@ func (adminAPI adminAPIHandlers) ServiceStopNRestartHandler(w http.ResponseWrite
 	case madmin.ServiceActionValueStop:
 		serviceSig = serviceStop
 	default:
-		writeErrorResponse(w, ErrMalformedPOSTRequest, r.URL)
+		writeErrorResponseJSON(w, ErrMalformedPOSTRequest, r.URL)
 		errorIf(err, "Invalid service action received")
 		return
 	}
@@ -226,11 +220,11 @@ type ServerInfo struct {
 // ServerInfoHandler - GET /minio/admin/v1/info
 // ----------
 // Get server information
-func (adminAPI adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Request) {
+func (a adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *http.Request) {
 	// Authenticate request
 	adminAPIErr := checkRequestAuthType(r, "", "", "")
 	if adminAPIErr != ErrNone {
-		writeErrorResponse(w, adminAPIErr, r.URL)
+		writeErrorResponseJSON(w, adminAPIErr, r.URL)
 		return
 	}
 
@@ -266,7 +260,7 @@ func (adminAPI adminAPIHandlers) ServerInfoHandler(w http.ResponseWriter, r *htt
 	// Marshal API response
 	jsonBytes, err := json.Marshal(reply)
 	if err != nil {
-		writeErrorResponse(w, ErrInternalError, r.URL)
+		writeErrorResponseJSON(w, ErrInternalError, r.URL)
 		errorIf(err, "Failed to marshal storage info into json.")
 		return
 	}
@@ -313,19 +307,18 @@ func validateLockQueryParams(vars url.Values) (string, string, time.Duration,
 // - prefix and older-than are optional query parameters
 // ---------
 // Lists locks held on a given bucket, prefix and duration it was held for.
-func (adminAPI adminAPIHandlers) ListLocksHandler(w http.ResponseWriter,
-	r *http.Request) {
+func (a adminAPIHandlers) ListLocksHandler(w http.ResponseWriter, r *http.Request) {
 
 	adminAPIErr := checkRequestAuthType(r, "", "", "")
 	if adminAPIErr != ErrNone {
-		writeErrorResponse(w, adminAPIErr, r.URL)
+		writeErrorResponseJSON(w, adminAPIErr, r.URL)
 		return
 	}
 
 	vars := r.URL.Query()
 	bucket, prefix, duration, adminAPIErr := validateLockQueryParams(vars)
 	if adminAPIErr != ErrNone {
-		writeErrorResponse(w, adminAPIErr, r.URL)
+		writeErrorResponseJSON(w, adminAPIErr, r.URL)
 		return
 	}
 
@@ -334,7 +327,7 @@ func (adminAPI adminAPIHandlers) ListLocksHandler(w http.ResponseWriter,
 	volLocks, err := listPeerLocksInfo(globalAdminPeers, bucket, prefix,
 		duration)
 	if err != nil {
-		writeErrorResponse(w, ErrInternalError, r.URL)
+		writeErrorResponseJSON(w, ErrInternalError, r.URL)
 		errorIf(err, "Failed to fetch lock information from remote nodes.")
 		return
 	}
@@ -342,7 +335,7 @@ func (adminAPI adminAPIHandlers) ListLocksHandler(w http.ResponseWriter,
 	// Marshal list of locks as json.
 	jsonBytes, err := json.Marshal(volLocks)
 	if err != nil {
-		writeErrorResponse(w, ErrInternalError, r.URL)
+		writeErrorResponseJSON(w, ErrInternalError, r.URL)
 		errorIf(err, "Failed to marshal lock information into json.")
 		return
 	}
@@ -358,19 +351,18 @@ func (adminAPI adminAPIHandlers) ListLocksHandler(w http.ResponseWriter,
 // HTTP header x-minio-operation: clear
 // ---------
 // Clear locks held on a given bucket, prefix and duration it was held for.
-func (adminAPI adminAPIHandlers) ClearLocksHandler(w http.ResponseWriter,
-	r *http.Request) {
+func (a adminAPIHandlers) ClearLocksHandler(w http.ResponseWriter, r *http.Request) {
 
 	adminAPIErr := checkRequestAuthType(r, "", "", "")
 	if adminAPIErr != ErrNone {
-		writeErrorResponse(w, adminAPIErr, r.URL)
+		writeErrorResponseJSON(w, adminAPIErr, r.URL)
 		return
 	}
 
 	vars := r.URL.Query()
 	bucket, prefix, duration, adminAPIErr := validateLockQueryParams(vars)
 	if adminAPIErr != ErrNone {
-		writeErrorResponse(w, adminAPIErr, r.URL)
+		writeErrorResponseJSON(w, adminAPIErr, r.URL)
 		return
 	}
 
@@ -379,7 +371,7 @@ func (adminAPI adminAPIHandlers) ClearLocksHandler(w http.ResponseWriter,
 	volLocks, err := listPeerLocksInfo(globalAdminPeers, bucket, prefix,
 		duration)
 	if err != nil {
-		writeErrorResponse(w, ErrInternalError, r.URL)
+		writeErrorResponseJSON(w, ErrInternalError, r.URL)
 		errorIf(err, "Failed to fetch lock information from remote nodes.")
 		return
 	}
@@ -387,7 +379,7 @@ func (adminAPI adminAPIHandlers) ClearLocksHandler(w http.ResponseWriter,
 	// Marshal list of locks as json.
 	jsonBytes, err := json.Marshal(volLocks)
 	if err != nil {
-		writeErrorResponse(w, ErrInternalError, r.URL)
+		writeErrorResponseJSON(w, ErrInternalError, r.URL)
 		errorIf(err, "Failed to marshal lock information into json.")
 		return
 	}
@@ -401,459 +393,249 @@ func (adminAPI adminAPIHandlers) ClearLocksHandler(w http.ResponseWriter,
 	writeSuccessResponseJSON(w, jsonBytes)
 }
 
-// ListUploadsHealHandler - similar to listObjectsHealHandler
-// GET
-// /?heal&bucket=mybucket&prefix=myprefix&key-marker=mymarker&upload-id-marker=myuploadid&delimiter=mydelimiter&max-uploads=1000
-// - bucket is mandatory query parameter
-// - rest are optional query parameters List upto maxKey objects that
-// need healing in a given bucket matching the given prefix.
-func (adminAPI adminAPIHandlers) ListUploadsHealHandler(w http.ResponseWriter, r *http.Request) {
-	// Get object layer instance.
-	objLayer := newObjectLayerFn()
-	if objLayer == nil {
-		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
-		return
-	}
+// extractHealInitParams - Validates params for heal init API.
+func extractHealInitParams(r *http.Request) (bucket, objPrefix string,
+	hs madmin.HealOpts, err APIErrorCode) {
 
-	// Validate request signature.
-	adminAPIErr := checkRequestAuthType(r, "", "", "")
-	if adminAPIErr != ErrNone {
-		writeErrorResponse(w, adminAPIErr, r.URL)
-		return
-	}
+	vars := mux.Vars(r)
+	bucket, objPrefix = vars[string(mgmtBucket)], vars[string(mgmtPrefix)]
 
-	// Validate query params.
-	vars := r.URL.Query()
-	bucket := vars.Get(string(mgmtBucket))
-	prefix, keyMarker, uploadIDMarker, delimiter, maxUploads, _ := getBucketMultipartResources(r.URL.Query())
-
-	if err := checkListMultipartArgs(bucket, prefix, keyMarker, uploadIDMarker, delimiter, objLayer); err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-		return
-	}
-
-	if maxUploads <= 0 || maxUploads > maxUploadsList {
-		writeErrorResponse(w, ErrInvalidMaxUploads, r.URL)
-		return
-	}
-
-	// Get the list objects to be healed.
-	listMultipartInfos, err := objLayer.ListUploadsHeal(bucket, prefix,
-		keyMarker, uploadIDMarker, delimiter, maxUploads)
-	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-		return
-	}
-
-	listResponse := generateListMultipartUploadsResponse(bucket, listMultipartInfos)
-	// Write success response.
-	writeSuccessResponseXML(w, encodeResponse(listResponse))
-}
-
-// extractListObjectsHealQuery - Validates query params for heal objects list management API.
-func extractListObjectsHealQuery(vars url.Values) (string, string, string, string, int, APIErrorCode) {
-	bucket := vars.Get(string(mgmtBucket))
-	prefix := vars.Get(string(mgmtPrefix))
-	marker := vars.Get(string(mgmtMarker))
-	delimiter := vars.Get(string(mgmtDelimiter))
-	maxKeyStr := vars.Get(string(mgmtMaxKey))
-
-	// N B empty bucket name is invalid
-	if !IsValidBucketName(bucket) {
-		return "", "", "", "", 0, ErrInvalidBucketName
+	if bucket == "" {
+		if objPrefix != "" {
+			// Bucket is required if object-prefix is given
+			return bucket, objPrefix, hs, ErrHealMissingBucket
+		}
+	} else if !IsValidBucketName(bucket) {
+		return bucket, objPrefix, hs, ErrInvalidBucketName
 	}
 
 	// empty prefix is valid.
-	if !IsValidObjectPrefix(prefix) {
-		return "", "", "", "", 0, ErrInvalidObjectName
+	if !IsValidObjectPrefix(objPrefix) {
+		return bucket, objPrefix, hs, ErrInvalidObjectName
 	}
 
-	// check if maxKey is a valid integer, if present.
-	var maxKey int
-	var err error
-	if maxKeyStr != "" {
-		if maxKey, err = strconv.Atoi(maxKeyStr); err != nil {
-			return "", "", "", "", 0, ErrInvalidMaxKeys
-		}
+	body, berr := ioutil.ReadAll(r.Body)
+	if berr != nil {
+		return bucket, objPrefix, hs, ErrMalformedPOSTRequest
 	}
 
-	// Validate prefix, marker, delimiter and maxKey.
-	apiErr := validateListObjectsArgs(prefix, marker, delimiter, maxKey)
+	jerr := json.Unmarshal(body, &hs)
+	if jerr != nil {
+		return bucket, objPrefix, hs, ErrMalformedPOSTRequest
+	}
+	return bucket, objPrefix, hs, ErrNone
+}
+
+// HealStartHandler - POST /minio/admin/v1/heal
+// -----------
+// Initiates a heal sequence
+func (a adminAPIHandlers) HealStartHandler(w http.ResponseWriter, r *http.Request) {
+
+	// Get object layer instance.
+	objLayer := newObjectLayerFn()
+	if objLayer == nil {
+		writeErrorResponseJSON(w, ErrServerNotInitialized, r.URL)
+		return
+	}
+
+	// Validate request signature.
+	adminAPIErr := checkRequestAuthType(r, "", "", "")
+	if adminAPIErr != ErrNone {
+		writeErrorResponseJSON(w, adminAPIErr, r.URL)
+		return
+	}
+
+	// Check if this setup is an erasure code backend, since
+	// heal-format is only applicable to single node XL and
+	// distributed XL setup. In this case, it is not a failure, we skip
+	if !globalIsXL {
+		writeErrorResponseJSON(w, ErrNotImplemented, r.URL)
+		return
+	}
+
+	bucket, objPrefix, hs, apiErr := extractHealInitParams(r)
 	if apiErr != ErrNone {
-		return "", "", "", "", 0, apiErr
-	}
-
-	return bucket, prefix, marker, delimiter, maxKey, ErrNone
-}
-
-// ListObjectsHealHandler - GET /?heal&bucket=mybucket&prefix=myprefix&marker=mymarker&delimiter=&mydelimiter&maxKey=1000
-// - bucket is mandatory query parameter
-// - rest are optional query parameters
-// List upto maxKey objects that need healing in a given bucket matching the given prefix.
-func (adminAPI adminAPIHandlers) ListObjectsHealHandler(w http.ResponseWriter, r *http.Request) {
-	// Get object layer instance.
-	objLayer := newObjectLayerFn()
-	if objLayer == nil {
-		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+		writeErrorResponseJSON(w, apiErr, r.URL)
 		return
 	}
 
-	// Validate request signature.
-	adminAPIErr := checkRequestAuthType(r, "", "", "")
-	if adminAPIErr != ErrNone {
-		writeErrorResponse(w, adminAPIErr, r.URL)
+	// find number of disk in the setup
+	info := objLayer.StorageInfo()
+	numDisks := info.Backend.OfflineDisks + info.Backend.OnlineDisks
+	// read quorum gives the number of data shards for erasure
+	// coding, thus parity shard count is:
+	numParityDisks := numDisks - info.Backend.ReadQuorum
+
+	nh := newHealSequence(bucket, objPrefix, numDisks, numParityDisks, hs)
+	if err := globalAllHealState.LaunchNewHealSequence(nh); err != nil {
+		writeErrorResponseJSON(w, ErrInternalError, r.URL)
+		errorIf(err, "Failed to start heal sequence.")
 		return
 	}
 
-	// Validate query params.
-	vars := r.URL.Query()
-	bucket, prefix, marker, delimiter, maxKey, adminAPIErr := extractListObjectsHealQuery(vars)
-	if adminAPIErr != ErrNone {
-		writeErrorResponse(w, adminAPIErr, r.URL)
-		return
-	}
-
-	// Get the list objects to be healed.
-	objectInfos, err := objLayer.ListObjectsHeal(bucket, prefix, marker, delimiter, maxKey)
+	// Marshal heal path in reply.
+	jsonBytes, err := json.Marshal(struct {
+		HealPath string `json:"healPathId"`
+	}{nh.path})
 	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		writeErrorResponseJSON(w, ErrInternalError, r.URL)
+		errorIf(err, "Failed to marshal JSON for heal start result.")
 		return
 	}
-
-	listResponse := generateListObjectsV1Response(bucket, prefix, marker, delimiter, maxKey, objectInfos)
-	// Write success response.
-	writeSuccessResponseXML(w, encodeResponse(listResponse))
-}
-
-// ListBucketsHealHandler - GET /?heal
-func (adminAPI adminAPIHandlers) ListBucketsHealHandler(w http.ResponseWriter, r *http.Request) {
-	// Get object layer instance.
-	objLayer := newObjectLayerFn()
-	if objLayer == nil {
-		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
-		return
-	}
-
-	// Validate request signature.
-	adminAPIErr := checkRequestAuthType(r, "", "", "")
-	if adminAPIErr != ErrNone {
-		writeErrorResponse(w, adminAPIErr, r.URL)
-		return
-	}
-
-	// Get the list buckets to be healed.
-	bucketsInfo, err := objLayer.ListBucketsHeal()
-	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-		return
-	}
-
-	listResponse := generateListBucketsResponse(bucketsInfo)
-	// Write success response.
-	writeSuccessResponseXML(w, encodeResponse(listResponse))
-}
-
-// HealBucketHandler - POST /?heal&bucket=mybucket&dry-run
-// - x-minio-operation = bucket
-// - bucket is mandatory query parameter
-// Heal a given bucket, if present.
-func (adminAPI adminAPIHandlers) HealBucketHandler(w http.ResponseWriter, r *http.Request) {
-	// Get object layer instance.
-	objLayer := newObjectLayerFn()
-	if objLayer == nil {
-		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
-		return
-	}
-
-	// Validate request signature.
-	adminAPIErr := checkRequestAuthType(r, "", "", "")
-	if adminAPIErr != ErrNone {
-		writeErrorResponse(w, adminAPIErr, r.URL)
-		return
-	}
-
-	// Validate bucket name and check if it exists.
-	vars := r.URL.Query()
-	bucket := vars.Get(string(mgmtBucket))
-	if err := checkBucketExist(bucket, objLayer); err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-		return
-	}
-
-	// if dry-run is present in query-params, then only perform validations and return success.
-	if isDryRun(vars) {
-		writeSuccessResponseHeadersOnly(w)
-		return
-	}
-
-	// Heal the given bucket.
-	err := objLayer.HealBucket(bucket)
-	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-		return
-	}
-
-	// Return 200 on success.
-	writeSuccessResponseHeadersOnly(w)
-}
-
-// isDryRun - returns true if dry-run query param was set and false otherwise.
-// otherwise.
-func isDryRun(qval url.Values) bool {
-	if _, dryRun := qval[string(mgmtDryRun)]; dryRun {
-		return true
-	}
-	return false
-}
-
-// healResult - represents result of a heal operation like
-// heal-object, heal-upload.
-type healResult struct {
-	State healState `json:"state"`
-}
-
-// healState - different states of heal operation
-type healState int
-
-const (
-	// healNone - none of the disks healed
-	healNone healState = iota
-	// healPartial - some disks were healed, others were offline
-	healPartial
-	// healOK - all disks were healed
-	healOK
-)
-
-// newHealResult - returns healResult given number of disks healed and
-// number of disks offline
-func newHealResult(numHealedDisks, numOfflineDisks int) healResult {
-	var state healState
-	switch {
-	case numHealedDisks == 0:
-		state = healNone
-
-	case numOfflineDisks > 0:
-		state = healPartial
-
-	default:
-		state = healOK
-	}
-
-	return healResult{State: state}
-}
-
-// HealObjectHandler - POST /?heal&bucket=mybucket&object=myobject&dry-run
-// - x-minio-operation = object
-// - bucket and object are both mandatory query parameters
-// Heal a given object, if present.
-func (adminAPI adminAPIHandlers) HealObjectHandler(w http.ResponseWriter, r *http.Request) {
-	// Get object layer instance.
-	objLayer := newObjectLayerFn()
-	if objLayer == nil {
-		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
-		return
-	}
-
-	// Validate request signature.
-	adminAPIErr := checkRequestAuthType(r, "", "", "")
-	if adminAPIErr != ErrNone {
-		writeErrorResponse(w, adminAPIErr, r.URL)
-		return
-	}
-
-	vars := r.URL.Query()
-	bucket := vars.Get(string(mgmtBucket))
-	object := vars.Get(string(mgmtObject))
-
-	// Validate bucket and object names.
-	if err := checkBucketAndObjectNames(bucket, object); err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-		return
-	}
-
-	// Check if object exists.
-	if _, err := objLayer.GetObjectInfo(bucket, object); err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-		return
-	}
-
-	// if dry-run is set in query params then perform validations
-	// and return success.
-	if isDryRun(vars) {
-		writeSuccessResponseHeadersOnly(w)
-		return
-	}
-
-	numOfflineDisks, numHealedDisks, err := objLayer.HealObject(bucket, object)
-	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-		return
-	}
-
-	jsonBytes, err := json.Marshal(newHealResult(numHealedDisks, numOfflineDisks))
-	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-		return
-	}
-
-	// Return 200 on success.
 	writeSuccessResponseJSON(w, jsonBytes)
+}
+
+func extractHealStatusParams(r *http.Request) (healPath string, marker int64,
+	errCode APIErrorCode) {
+
+	vars := mux.Vars(r)
+	bucket, objPrefix := vars[string(mgmtBucket)], vars[string(mgmtPrefix)]
+	healPath = bucket + "/" + objPrefix
+
+	qParams := r.URL.Query()
+	markerStrs := qParams[string(mgmtMarker)]
+	if len(markerStrs) > 1 {
+		return healPath, marker, ErrHealMarkerInvalid
+	}
+	if len(markerStrs) == 1 {
+		var err error
+		marker, err = strconv.ParseInt(markerStrs[0], 10, 64)
+		if err != nil {
+			return healPath, marker, ErrHealMarkerInvalid
+		}
+	} else {
+		marker = -1
+	}
+	return healPath, marker, ErrNone
+}
+
+// HealStatusHandler - POST /minio/admin/v1/heal-status/<bucket>/<obj-prefix>
+// -----------
+// Fetches heal sequence status
+func (a adminAPIHandlers) HealStatusHandler(w http.ResponseWriter, r *http.Request) {
+	// Get object layer instance.
+	objLayer := newObjectLayerFn()
+	if objLayer == nil {
+		writeErrorResponseJSON(w, ErrServerNotInitialized, r.URL)
+		return
+	}
+
+	// Validate request signature.
+	adminAPIErr := checkRequestAuthType(r, "", "", "")
+	if adminAPIErr != ErrNone {
+		writeErrorResponseJSON(w, adminAPIErr, r.URL)
+		return
+	}
+
+	// Check if this setup is an erasure code backend, since
+	// heal-format is only applicable to single node XL and
+	// distributed XL setup. In this case, it is not a failure, we skip
+	if !globalIsXL {
+		writeErrorResponseJSON(w, ErrNotImplemented, r.URL)
+		return
+	}
+
+	healPath, marker, apiErr := extractHealStatusParams(r)
+	if apiErr != ErrNone {
+		writeErrorResponseJSON(w, apiErr, r.URL)
+		return
+	}
+
+	jbytes, errCode := globalAllHealState.UpdateNFetchHealStatusJSON(
+		healPath, marker)
+	if errCode != ErrNone {
+		writeErrorResponseJSON(w, errCode, r.URL)
+		return
+	}
+
+	writeSuccessResponseJSON(w, jbytes)
+}
+
+// HealStopHandler - DELETE /minio/admin/v1/heal-status/<bucket>/<obj-prefix>
+// -----------
+// Stops a running heal sequence
+func (a adminAPIHandlers) HealStopHandler(w http.ResponseWriter, r *http.Request) {
+	// Get object layer instance.
+	objLayer := newObjectLayerFn()
+	if objLayer == nil {
+		writeErrorResponseJSON(w, ErrServerNotInitialized, r.URL)
+		return
+	}
+
+	// Validate request signature.
+	adminAPIErr := checkRequestAuthType(r, "", "", "")
+	if adminAPIErr != ErrNone {
+		writeErrorResponseJSON(w, adminAPIErr, r.URL)
+		return
+	}
+
+	vars := mux.Vars(r)
+	bucket, objPrefix := vars[string(mgmtBucket)], vars[string(mgmtPrefix)]
+	healPath := bucket + "/" + objPrefix
+
+	errCode := globalAllHealState.StopHealSequence(healPath)
+	if errCode != ErrNone {
+		writeErrorResponseJSON(w, errCode, r.URL)
+		return
+	}
+
+	jbytes, err := json.Marshal(struct {
+		Message string `json:"message"`
+	}{
+		"Heal processing on the requested path was stopped.",
+	})
+	if err != nil {
+		writeErrorResponseJSON(w, ErrInternalError, r.URL)
+		errorIf(err, "Failed to marshal heal stop result into json.")
+	}
+	// Return 200 on success.
+	writeSuccessResponseJSON(w, jbytes)
 }
 
 // HealUploadHandler - POST /?heal&bucket=mybucket&object=myobject&upload-id=myuploadID&dry-run
 // - x-minio-operation = upload
 // - bucket, object and upload-id are mandatory query parameters
 // Heal a given upload, if present.
-func (adminAPI adminAPIHandlers) HealUploadHandler(w http.ResponseWriter, r *http.Request) {
+func (a adminAPIHandlers) HealUploadHandler(w http.ResponseWriter, r *http.Request) {
 	// Get object layer instance.
 	objLayer := newObjectLayerFn()
 	if objLayer == nil {
-		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+		writeErrorResponseJSON(w, ErrServerNotInitialized, r.URL)
 		return
 	}
 
 	// Validate request signature.
 	adminAPIErr := checkRequestAuthType(r, "", "", "")
 	if adminAPIErr != ErrNone {
-		writeErrorResponse(w, adminAPIErr, r.URL)
+		writeErrorResponseJSON(w, adminAPIErr, r.URL)
 		return
 	}
 
-	vars := r.URL.Query()
-	bucket := vars.Get(string(mgmtBucket))
-	object := vars.Get(string(mgmtObject))
-	uploadID := vars.Get(string(mgmtUploadID))
-	uploadObj := path.Join(bucket, object, uploadID)
+	vars := mux.Vars(r)
+	bucket, objPrefix := vars[string(mgmtBucket)], vars[string(mgmtPrefix)]
+	healPath := bucket + "/" + objPrefix
 
-	// Validate bucket and object names as supplied via query
-	// parameters.
-	if err := checkBucketAndObjectNames(bucket, object); err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+	errCode := globalAllHealState.StopHealSequence(healPath)
+	if errCode != ErrNone {
+		writeErrorResponseJSON(w, errCode, r.URL)
 		return
 	}
 
-	// Validate the bucket and object w.r.t backend representation
-	// of an upload.
-	if err := checkBucketAndObjectNames(minioMetaMultipartBucket,
-		uploadObj); err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-		return
-	}
-
-	// Check if upload exists.
-	if _, err := objLayer.GetObjectInfo(minioMetaMultipartBucket,
-		uploadObj); err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-		return
-	}
-
-	// if dry-run is set in query params then perform validations
-	// and return success.
-	if isDryRun(vars) {
-		writeSuccessResponseHeadersOnly(w)
-		return
-	}
-
-	//We are able to use HealObject for healing an upload since an
-	//ongoing upload has the same backend representation as an
-	//object.  The 'object' corresponding to a given bucket,
-	//object and uploadID is
-	//.minio.sys/multipart/bucket/object/uploadID.
-	numOfflineDisks, numHealedDisks, err := objLayer.HealObject(minioMetaMultipartBucket, uploadObj)
+	jbytes, err := json.Marshal(struct {
+		Message string `json:"message"`
+	}{
+		"Heal processing on the requested path was stopped.",
+	})
 	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-		return
+		writeErrorResponseJSON(w, ErrInternalError, r.URL)
+		errorIf(err, "Failed to marshal heal stop result into json.")
 	}
-
-	jsonBytes, err := json.Marshal(newHealResult(numHealedDisks, numOfflineDisks))
-	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-		return
-	}
-
-	// Return 200 on success.
-	writeSuccessResponseJSON(w, jsonBytes)
-}
-
-// HealFormatHandler - POST /?heal&dry-run
-// - x-minio-operation = format
-// - bucket and object are both mandatory query parameters
-// Heal a given object, if present.
-func (adminAPI adminAPIHandlers) HealFormatHandler(w http.ResponseWriter, r *http.Request) {
-	// Get current object layer instance.
-	objectAPI := newObjectLayerFn()
-	if objectAPI == nil {
-		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
-		return
-	}
-
-	// Validate request signature.
-	adminAPIErr := checkRequestAuthType(r, "", "", "")
-	if adminAPIErr != ErrNone {
-		writeErrorResponse(w, adminAPIErr, r.URL)
-		return
-	}
-
-	// Check if this setup is an erasure code backend, since
-	// heal-format is only applicable to single node XL and
-	// distributed XL setup.
-	if !globalIsXL {
-		writeErrorResponse(w, ErrNotImplemented, r.URL)
-		return
-	}
-
-	// if dry-run is set in query-params, return success as
-	// validations are successful so far.
-	vars := r.URL.Query()
-	if isDryRun(vars) {
-		writeSuccessResponseHeadersOnly(w)
-		return
-	}
-
-	// Create a new set of storage instances to heal format.json.
-	bootstrapDisks, err := initStorageDisks(globalEndpoints)
-	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-		return
-	}
-
-	// Wrap into retrying disks
-	retryingDisks := initRetryableStorageDisks(bootstrapDisks,
-		time.Millisecond, time.Millisecond*5)
-
-	// Heal format.json on available storage.
-	err = healFormatXL(retryingDisks)
-	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-		return
-	}
-
-	// Instantiate new object layer with newly formatted storage.
-	newObjectAPI, err := newXLObjects(retryingDisks)
-	if err != nil {
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
-		return
-	}
-
-	// Set object layer with newly formatted storage to globalObjectAPI.
-	globalObjLayerMutex.Lock()
-	globalObjectAPI = newObjectAPI
-	globalObjLayerMutex.Unlock()
-
-	// Shutdown storage belonging to old object layer instance.
-	objectAPI.Shutdown()
-
-	// Inform peers to reinitialize storage with newly formatted storage.
-	reInitPeerDisks(globalAdminPeers)
-
-	// Return 200 on success.
-	writeSuccessResponseHeadersOnly(w)
+	writeSuccessResponseJSON(w, jbytes)
 }
 
 // GetConfigHandler - GET /minio/admin/v1/config
 // Get config.json of this minio setup.
-func (adminAPI adminAPIHandlers) GetConfigHandler(w http.ResponseWriter,
-	r *http.Request) {
+func (a adminAPIHandlers) GetConfigHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Reject the request on non-TLS connection (though
 	// credentials/config have possibly been transmitted over the
@@ -866,13 +648,13 @@ func (adminAPI adminAPIHandlers) GetConfigHandler(w http.ResponseWriter,
 	// Validate request signature.
 	adminAPIErr := checkRequestAuthType(r, "", "", "")
 	if adminAPIErr != ErrNone {
-		writeErrorResponse(w, adminAPIErr, r.URL)
+		writeErrorResponseJSON(w, adminAPIErr, r.URL)
 		return
 	}
 
 	// check if objectLayer is initialized, if not return.
 	if newObjectLayerFn() == nil {
-		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+		writeErrorResponseJSON(w, ErrServerNotInitialized, r.URL)
 		return
 	}
 
@@ -881,7 +663,7 @@ func (adminAPI adminAPIHandlers) GetConfigHandler(w http.ResponseWriter,
 	configBytes, err := getPeerConfig(globalAdminPeers)
 	if err != nil {
 		errorIf(err, "Failed to get config from peers")
-		writeErrorResponse(w, toAdminAPIErrCode(err), r.URL)
+		writeErrorResponseJSON(w, toAdminAPIErrCode(err), r.URL)
 		return
 	}
 
@@ -941,7 +723,7 @@ func writeSetConfigResponse(w http.ResponseWriter, peers adminPeers,
 	enc.SetEscapeHTML(false)
 	jsonErr := enc.Encode(result)
 	if jsonErr != nil {
-		writeErrorResponse(w, toAPIErrorCode(jsonErr), reqURL)
+		writeErrorResponseJSON(w, toAPIErrorCode(jsonErr), reqURL)
 		return
 	}
 
@@ -950,8 +732,7 @@ func writeSetConfigResponse(w http.ResponseWriter, peers adminPeers,
 }
 
 // SetConfigHandler - PUT /minio/admin/v1/config
-func (adminAPI adminAPIHandlers) SetConfigHandler(w http.ResponseWriter,
-	r *http.Request) {
+func (a adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Reject the request on non-TLS connection (though
 	// credentials/config have possibly been transmitted over the
@@ -964,14 +745,14 @@ func (adminAPI adminAPIHandlers) SetConfigHandler(w http.ResponseWriter,
 	// Get current object layer instance.
 	objectAPI := newObjectLayerFn()
 	if objectAPI == nil {
-		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
+		writeErrorResponseJSON(w, ErrServerNotInitialized, r.URL)
 		return
 	}
 
 	// Validate request signature.
 	adminAPIErr := checkRequestAuthType(r, "", "", "")
 	if adminAPIErr != ErrNone {
-		writeErrorResponse(w, adminAPIErr, r.URL)
+		writeErrorResponseJSON(w, adminAPIErr, r.URL)
 		return
 	}
 
@@ -979,7 +760,7 @@ func (adminAPI adminAPIHandlers) SetConfigHandler(w http.ResponseWriter,
 	configBytes, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		errorIf(err, "Failed to read config from request body.")
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		writeErrorResponseJSON(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 
@@ -988,7 +769,7 @@ func (adminAPI adminAPIHandlers) SetConfigHandler(w http.ResponseWriter,
 
 	if err != nil {
 		errorIf(err, "Failed to unmarshal config from request body.")
-		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		writeErrorResponseJSON(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 
@@ -996,7 +777,7 @@ func (adminAPI adminAPIHandlers) SetConfigHandler(w http.ResponseWriter,
 		creds := globalServerConfig.GetCredential()
 		if config.Credential.AccessKey != creds.AccessKey ||
 			config.Credential.SecretKey != creds.SecretKey {
-			writeErrorResponse(w, ErrAdminCredentialsMismatch, r.URL)
+			writeErrorResponseJSON(w, ErrAdminCredentialsMismatch, r.URL)
 			return
 		}
 	}
@@ -1018,7 +799,7 @@ func (adminAPI adminAPIHandlers) SetConfigHandler(w http.ResponseWriter,
 	// operations.
 	configLock := globalNSMutex.NewNSLock(minioReservedBucket, minioConfigFile)
 	if configLock.GetLock(globalObjectTimeout) != nil {
-		writeErrorResponse(w, ErrOperationTimedOut, r.URL)
+		writeErrorResponseJSON(w, ErrOperationTimedOut, r.URL)
 		return
 	}
 	defer configLock.Unlock()
@@ -1039,4 +820,72 @@ func (adminAPI adminAPIHandlers) SetConfigHandler(w http.ResponseWriter,
 
 	// Restart all node for the modified config to take effect.
 	sendServiceCmd(globalAdminPeers, serviceRestart)
+}
+
+// ConfigCredsHandler - POST /minio/admin/v1/config/credential
+// ----------
+// Update credentials in a minio server. In a distributed setup,
+// update all the servers in the cluster.
+func (a adminAPIHandlers) UpdateCredentialsHandler(w http.ResponseWriter,
+	r *http.Request) {
+
+	// Reject the request on non-TLS connection (though
+	// credentials have possibly been transmitted over the wire
+	// already)
+	if r.TLS == nil {
+		writeErrorResponseJSON(w, ErrAdminNonTLSCredsUpdate, r.URL)
+		return
+	}
+
+	// Authenticate request
+	adminAPIErr := checkRequestAuthType(r, "", "", "")
+	if adminAPIErr != ErrNone {
+		writeErrorResponse(w, adminAPIErr, r.URL)
+		return
+	}
+
+	// Avoid setting new credentials when they are already passed
+	// by the environment.
+	if globalIsEnvCreds {
+		writeErrorResponse(w, ErrMethodNotAllowed, r.URL)
+		return
+	}
+
+	// Load request body
+	inputData, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		writeErrorResponse(w, ErrInternalError, r.URL)
+		return
+	}
+
+	// Unmarshal request body
+	var req madmin.SetCredsReq
+	err = json.Unmarshal(inputData, &req)
+	if err != nil {
+		errorIf(err, "Cannot unmarshal credentials request")
+		writeErrorResponse(w, ErrMalformedJSON, r.URL)
+		return
+	}
+
+	creds, err := auth.CreateCredentials(req.AccessKey, req.SecretKey)
+	if err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
+	// Notify all other Minio peers to update credentials
+	updateErrs := updateCredsOnPeers(creds)
+	for peer, err := range updateErrs {
+		errorIf(err, "Unable to update credentials on peer %s.", peer)
+	}
+
+	// Update local credentials in memory.
+	globalServerConfig.SetCredential(creds)
+	if err = globalServerConfig.Save(); err != nil {
+		writeErrorResponse(w, ErrInternalError, r.URL)
+		return
+	}
+
+	// At this stage, the operation is successful, return 200 OK
+	w.WriteHeader(http.StatusOK)
 }

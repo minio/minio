@@ -66,17 +66,18 @@ func reduceErrs(errs []error, ignoredErrs []error) (maxCount int, maxErr error) 
 // Additionally a special error is provided to be returned in case
 // quorum is not satisfied.
 func reduceQuorumErrs(errs []error, ignoredErrs []error, quorum int, quorumErr error) (maxErr error) {
-	maxCount, maxErr := reduceErrs(errs, ignoredErrs)
-	if maxErr == nil && maxCount >= quorum {
+	var maxCount int
+	maxCount, maxErr = reduceErrs(errs, ignoredErrs)
+	switch {
+	case maxErr == nil && maxCount >= quorum:
 		// Success in quorum.
-		return nil
-	}
-	if maxErr != nil && maxCount >= quorum {
+	case maxErr != nil && maxCount >= quorum:
 		// Errors in quorum.
-		return errors2.Trace(maxErr, errs...)
+		maxErr = errors2.Trace(maxErr, errs...)
+	default:
+		// No quorum satisfied.
+		maxErr = errors2.Trace(quorumErr, errs...)
 	}
-	// No quorum satisfied.
-	maxErr = errors2.Trace(quorumErr, errs...)
 	return
 }
 
@@ -363,6 +364,17 @@ func shuffleDisks(disks []StorageAPI, distribution []int) (shuffledDisks []Stora
 		shuffledDisks[blockIndex-1] = disks[index]
 	}
 	return shuffledDisks
+}
+
+// unshuffleIndex - performs reverse of the shuffleDisks operations
+// for a single 0-based index.
+func unshuffleIndex(n int, distribution []int) int {
+	for i, v := range distribution {
+		if v-1 == n {
+			return i
+		}
+	}
+	return -1
 }
 
 // evalDisks - returns a new slice of disks where nil is set if

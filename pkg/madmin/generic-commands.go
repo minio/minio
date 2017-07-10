@@ -54,7 +54,7 @@ func (adm *AdminClient) SetCredentials(access, secret string) error {
 	}
 
 	// Execute GET on bucket to list objects.
-	resp, err := adm.executeMethod("POST", reqData)
+	resp, err := adm.executeMethod("PUT", reqData)
 
 	defer closeResponse(resp)
 	if err != nil {

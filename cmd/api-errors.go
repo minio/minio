@@ -40,8 +40,8 @@ type APIErrorResponse struct {
 	Key        string
 	BucketName string
 	Resource   string
-	RequestID  string `xml:"RequestId"`
-	HostID     string `xml:"HostId"`
+	RequestID  string `xml:"RequestId" json:"RequestId"`
+	HostID     string `xml:"HostId" json:"HostId"`
 }
 
 // APIErrorCode type of error status.
@@ -176,6 +176,12 @@ const (
 	ErrAdminNonTLSCredsUpdate
 	ErrInsecureClientRequest
 	ErrObjectTampered
+	ErrHealMarkerInvalid
+	ErrHealNoSuchProcess
+	ErrHealAlreadyStopped
+	ErrHealStaleStatusMarker
+	ErrHealInvalidFutureStatusMarker
+	ErrHealMissingBucket
 )
 
 // error code to APIError structure, these fields carry respective
@@ -751,6 +757,36 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	ErrInvalidRequest: {
 		Code:           "InvalidRequest",
 		Description:    "Invalid Request",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrHealMarkerInvalid: {
+		Code:           "XMinioHealMarkerInvalid",
+		Description:    "Heal status request requires a valid `marker` query parameter",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrHealNoSuchProcess: {
+		Code:           "XMinioHealNoSuchProcess",
+		Description:    "No such heal process is running on the server",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrHealAlreadyStopped: {
+		Code:           "XMinioHealAlreadyStopped",
+		Description:    "The heal sequence has already been stopped",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrHealStaleStatusMarker: {
+		Code:           "XMinioHealStaleStatusMarker",
+		Description:    "Provided `marker` is too stale. A newer result index has already been consumed.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrHealInvalidFutureStatusMarker: {
+		Code:           "XMinioHealInvalidFutureStatusMarker",
+		Description:    "Provided `marker` is invalid as a heal result with given index has not yet been produced.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrHealMissingBucket: {
+		Code:           "XMinioHealMissingBucket",
+		Description:    "A heal start request with a non-empty object-prefix parameter requires a bucket to be specified.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 

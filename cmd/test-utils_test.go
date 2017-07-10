@@ -491,6 +491,17 @@ func resetGlobalIsEnvs() {
 	globalIsEnvRegion = false
 }
 
+// reset global heal state
+func resetGlobalHealState() {
+	globalAllHealState.Lock()
+	defer globalAllHealState.Unlock()
+	for k, v := range globalAllHealState.healSeqMap {
+		if !v.hasEnded() {
+			globalAllHealState.StopHealSequence(k)
+		}
+	}
+}
+
 // Resets all the globals used modified in tests.
 // Resetting ensures that the changes made to globals by one test doesn't affect others.
 func resetTestGlobals() {
@@ -510,6 +521,8 @@ func resetTestGlobals() {
 	resetGlobalIsXL()
 	// Reset global isEnvCreds flag.
 	resetGlobalIsEnvs()
+	// Reset global heal state
+	resetGlobalHealState()
 }
 
 // Configure the server for the test run.

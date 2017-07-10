@@ -245,7 +245,7 @@ func (h cacheControlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // Check to allow access to the reserved "bucket" `/minio` for Admin
 // API requests.
-func isAdminAPIRequest(r *http.Request) bool {
+func isAdminReq(r *http.Request) bool {
 	return strings.HasPrefix(r.URL.Path, adminAPIPathPrefix+"/")
 }
 
@@ -259,9 +259,12 @@ func setReservedBucketHandler(h http.Handler) http.Handler {
 }
 
 func (h minioReservedBucketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if !guessIsRPCReq(r) && !guessIsBrowserReq(r) && !isAdminAPIRequest(r) {
-		// For all non browser, non RPC requests, reject
-		// access to 'minioReservedBucketPath'.
+	switch {
+	case guessIsRPCReq(r), guessIsBrowserReq(r), isAdminReq(r):
+		// Allow access to reserved buckets
+	default:
+		// For all other requests reject access to reserved
+		// buckets
 		bucketName, _ := urlPath2BucketObjectName(r.URL)
 		if isMinioReservedBucket(bucketName) || isMinioMetaBucket(bucketName) {
 			writeErrorResponse(w, ErrAllAccessDisabled, r.URL)

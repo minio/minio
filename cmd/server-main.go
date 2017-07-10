@@ -183,6 +183,9 @@ func serverMain(ctx *cli.Context) {
 	// Initialize name space lock.
 	initNSLock(globalIsDistXL)
 
+	// Init global heal state
+	initAllHealState(globalIsXL)
+
 	// Configure server.
 	var handler http.Handler
 	handler, err = configureServerHandler(globalEndpoints)
