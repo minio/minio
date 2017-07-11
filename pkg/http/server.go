@@ -49,7 +49,7 @@ const (
 // Server - extended http.Server supports multiple addresses to serve and enhanced connection handling.
 type Server struct {
 	http.Server
-	Addrs                  []string                            // addresses on which the server listen for new connection.
+	Addrs                  []string                            // addresses on which the server listens for new connection.
 	ShutdownTimeout        time.Duration                       // timeout used for graceful server shutdown.
 	TCPKeepAliveTimeout    time.Duration                       // timeout used for underneath TCP connection.
 	UpdateBytesReadFunc    func(int)                           // function to be called to update bytes read in bufConn.
@@ -57,8 +57,7 @@ type Server struct {
 	ErrorLogFunc           func(error, string, ...interface{}) // function to be called on errors.
 	listenerMutex          *sync.Mutex                         // to guard 'listener' field.
 	listener               *httpListener                       // HTTP listener for all 'Addrs' field.
-	inShutdownMutex        *sync.Mutex                         // to guard 'inShutdown' field
-	inShutdown             bool                                // indicates whether the server is in shutdown or not
+	inShutdown             uint32                              // indicates whether the server is in shutdown or not
 	requestCount           int32                               // counter holds no. of request in process.
 }
 
@@ -99,10 +98,7 @@ func (srv *Server) Start() (err error) {
 		defer atomic.AddInt32(&srv.requestCount, -1)
 
 		// If server is in shutdown, return 503 (service unavailable)
-		srv.inShutdownMutex.Lock()
-		inShutdown := srv.inShutdown
-		srv.inShutdownMutex.Unlock()
-		if inShutdown {
+		if atomic.LoadUint32(&srv.inShutdown) != 0 {
 			w.WriteHeader(http.StatusServiceUnavailable)
 			return
 		}
@@ -122,37 +118,31 @@ func (srv *Server) Start() (err error) {
 
 // Shutdown - shuts down HTTP server.
 func (srv *Server) Shutdown() error {
-	srv.inShutdownMutex.Lock()
-	if !srv.inShutdown {
-		// Indicate the server is in shutdown.
-		srv.inShutdown = true
-		srv.inShutdownMutex.Unlock()
+	if atomic.AddUint32(&srv.inShutdown, 1) > 1 {
+		// shutdown in progress
+		return errors.New("http server already in shutdown")
+	}
 
-		// Close underneath HTTP listener.
-		srv.listenerMutex.Lock()
-		err := srv.listener.Close()
-		srv.listenerMutex.Unlock()
+	// Close underneath HTTP listener.
+	srv.listenerMutex.Lock()
+	err := srv.listener.Close()
+	srv.listenerMutex.Unlock()
 
-		// Wait for opened connection to be closed up to Shutdown timeout.
-		shutdownTimeout := srv.ShutdownTimeout
-		shutdownTimer := time.NewTimer(shutdownTimeout)
-		ticker := time.NewTicker(serverShutdownPoll)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-shutdownTimer.C:
-				return errors.New("timed out. some connections are still active. doing abnormal shutdown")
-			case <-ticker.C:
-				if atomic.LoadInt32(&srv.requestCount) <= 0 {
-					return err
-				}
+	// Wait for opened connection to be closed up to Shutdown timeout.
+	shutdownTimeout := srv.ShutdownTimeout
+	shutdownTimer := time.NewTimer(shutdownTimeout)
+	ticker := time.NewTicker(serverShutdownPoll)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-shutdownTimer.C:
+			return errors.New("timed out. some connections are still active. doing abnormal shutdown")
+		case <-ticker.C:
+			if atomic.LoadInt32(&srv.requestCount) <= 0 {
+				return err
 			}
 		}
 	}
-	srv.inShutdownMutex.Unlock()
-
-	// shutdown in progress
-	return errors.New("http server already in shutdown")
 }
 
 // NewServer - creates new HTTP server using given arguments.
@@ -172,7 +162,6 @@ func NewServer(addrs []string, handler http.Handler, certificate *tls.Certificat
 		ShutdownTimeout:     DefaultShutdownTimeout,
 		TCPKeepAliveTimeout: DefaultTCPKeepAliveTimeout,
 		listenerMutex:       &sync.Mutex{},
-		inShutdownMutex:     &sync.Mutex{},
 	}
 	httpServer.Handler = handler
 	httpServer.TLSConfig = tlsConfig

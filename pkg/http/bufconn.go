@@ -34,13 +34,13 @@ type bufConn struct {
 
 func (c *bufConn) setReadTimeout() {
 	if c.readTimeout != 0 {
-		c.SetReadDeadline(time.Now().Add(c.readTimeout))
+		c.SetReadDeadline(time.Now().UTC().Add(c.readTimeout))
 	}
 }
 
 func (c *bufConn) setWriteTimeout() {
 	if c.writeTimeout != 0 {
-		c.SetWriteDeadline(time.Now().Add(c.writeTimeout))
+		c.SetWriteDeadline(time.Now().UTC().Add(c.writeTimeout))
 	}
 }
 
@@ -76,7 +76,7 @@ func (c *bufConn) Write(b []byte) (n int, err error) {
 
 // newBufConn - creates a new connection object wrapping net.Conn.
 func newBufConn(c net.Conn, readTimeout, writeTimeout time.Duration,
-	updateBytesReadFunc func(int), updateBytesWrittenFunc func(int)) *bufConn {
+	updateBytesReadFunc, updateBytesWrittenFunc func(int)) *bufConn {
 	return &bufConn{
 		Conn:                   c,
 		bufReader:              bufio.NewReader(c),

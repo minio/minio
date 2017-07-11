@@ -19,6 +19,7 @@ package http
 import (
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"strings"
@@ -189,7 +190,7 @@ func (listener *httpListener) start() {
 		return
 	}
 
-	// Closure to handle new connections till done channel is not closed.
+	// Closure to handle new connections until done channel is closed.
 	handleConnection := func(tcpListener *net.TCPListener, doneCh <-chan struct{}) {
 		for {
 			tcpConn, err := tcpListener.AcceptTCP()
@@ -230,7 +231,7 @@ func (listener *httpListener) Close() (err error) {
 		return syscall.EINVAL
 	}
 
-	wg := &sync.WaitGroup{}
+	wg := sync.WaitGroup{}
 	for i := range listener.tcpListeners {
 		wg.Add(1)
 		go func(tcpListener *net.TCPListener, doneCh chan<- struct{}) {
@@ -304,7 +305,7 @@ func newHTTPListener(serverAddrs []string,
 
 		tcpListener, ok := l.(*net.TCPListener)
 		if !ok {
-			return nil, errors.New("unexpected assertion failure to get net.TCPListener")
+			return nil, fmt.Errorf("unexpected listener type found %v, expected net.TCPListener", l)
 		}
 
 		tcpListeners = append(tcpListeners, tcpListener)

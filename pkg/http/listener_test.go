@@ -38,9 +38,7 @@ import (
 var serverPort uint32 = 60000
 
 func getNextPort() string {
-	port := atomic.LoadUint32(&serverPort)
-	atomic.AddUint32(&serverPort, 1)
-	return strconv.Itoa(int(port))
+	return strconv.Itoa(int(atomic.AddUint32(&serverPort, 1)))
 }
 
 func getTLSCert() (tls.Certificate, error) {
