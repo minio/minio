@@ -80,8 +80,8 @@ func gcsMultipartMetaName(uploadID string) string {
 }
 
 // Returns name of the part object.
-func gcsMultipartDataName(uploadID, etag string) string {
-	return fmt.Sprintf("%s/%s/%s", gcsMinioMultipartPathV1, uploadID, etag)
+func gcsMultipartDataName(uploadID string, partNumber int, etag string) string {
+	return fmt.Sprintf("%s/%s/%05d.%s", gcsMinioMultipartPathV1, uploadID, partNumber, etag)
 }
 
 // Convert Minio errors to minio object layer errors.
@@ -800,7 +800,7 @@ func (l *gcsGateway) checkUploadIDExists(bucket string, key string, uploadID str
 }
 
 // PutObjectPart puts a part of object in bucket
-func (l *gcsGateway) PutObjectPart(bucket string, key string, uploadID string, partID int, size int64, data io.Reader, md5Hex string, sha256sum string) (PartInfo, error) {
+func (l *gcsGateway) PutObjectPart(bucket string, key string, uploadID string, partNumber int, size int64, data io.Reader, md5Hex string, sha256sum string) (PartInfo, error) {
 	if err := l.checkUploadIDExists(bucket, key, uploadID); err != nil {
 		return PartInfo{}, err
 	}
@@ -822,7 +822,7 @@ func (l *gcsGateway) PutObjectPart(bucket string, key string, uploadID string, p
 		reader = io.TeeReader(data, sha256Writer)
 	}
 
-	object := l.client.Bucket(bucket).Object(gcsMultipartDataName(uploadID, etag))
+	object := l.client.Bucket(bucket).Object(gcsMultipartDataName(uploadID, partNumber, etag))
 	w := object.NewWriter(l.ctx)
 	// Disable "chunked" uploading in GCS client. If enabled, it can cause a corner case
 	// where it tries to upload 0 bytes in the last chunk and get error from server.
@@ -855,7 +855,7 @@ func (l *gcsGateway) PutObjectPart(bucket string, key string, uploadID string, p
 	}
 
 	return PartInfo{
-		PartNumber:   partID,
+		PartNumber:   partNumber,
 		ETag:         etag,
 		LastModified: UTCNow(),
 		Size:         size,
@@ -942,7 +942,13 @@ func (l *gcsGateway) CompleteMultipartUpload(bucket string, key string, uploadID
 
 	var parts []*storage.ObjectHandle
 	for _, uploadedPart := range uploadedParts {
-		parts = append(parts, l.client.Bucket(bucket).Object(gcsMultipartDataName(uploadID, uploadedPart.ETag)))
+		parts = append(parts, l.client.Bucket(bucket).Object(gcsMultipartDataName(uploadID,
+			uploadedPart.PartNumber, uploadedPart.ETag)))
+	}
+
+	// Returns name of the composed object.
+	gcsMultipartComposeName := func(uploadID string, composeNumber int) string {
+		return fmt.Sprintf("%s/tmp/%s/composed-object-%05d", gcsMinioPath, uploadID, composeNumber)
 	}
 
 	composeCount := int(math.Ceil(float64(len(parts)) / float64(maxComponents)))
@@ -951,9 +957,7 @@ func (l *gcsGateway) CompleteMultipartUpload(bucket string, key string, uploadID
 		composeParts := make([]*storage.ObjectHandle, composeCount)
 		for i := 0; i < composeCount; i++ {
 			// Create 'composed-object-N' using next 32 parts.
-			composeName := fmt.Sprintf("composed-object-%d", i)
-			composeParts[i] = l.client.Bucket(bucket).Object(gcsMultipartDataName(uploadID, composeName))
-
+			composeParts[i] = l.client.Bucket(bucket).Object(gcsMultipartComposeName(uploadID, i))
 			start := i * maxComponents
 			end := start + maxComponents
 			if end > len(parts) {
