@@ -103,6 +103,16 @@ func newFSObjectLayer(fsPath string) (ObjectLayer, error) {
 		}
 	}
 
+	di, err := getDiskInfo(preparePath(fsPath))
+	if err != nil {
+		return nil, err
+	}
+
+	// Check if disk has minimum required total space.
+	if err = checkDiskMinTotal(di); err != nil {
+		return nil, err
+	}
+
 	// Assign a new UUID for FS minio mode. Each server instance
 	// gets its own UUID for temporary file transaction.
 	fsUUID := mustGetUUID()
@@ -138,14 +148,12 @@ func newFSObjectLayer(fsPath string) (ObjectLayer, error) {
 	fs.fsFormatRlk = rlk
 
 	// Initialize and load bucket policies.
-	err = initBucketPolicies(fs)
-	if err != nil {
+	if err = initBucketPolicies(fs); err != nil {
 		return nil, fmt.Errorf("Unable to load all bucket policies. %s", err)
 	}
 
 	// Initialize a new event notifier.
-	err = initEventNotifier(fs)
-	if err != nil {
+	if err = initEventNotifier(fs); err != nil {
 		return nil, fmt.Errorf("Unable to initialize event notification. %s", err)
 	}
 
