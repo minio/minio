@@ -142,6 +142,8 @@ func azureToObjectError(err error, params ...string) error {
 		err = BucketExists{Bucket: bucket}
 	case "InvalidResourceName":
 		err = BucketNameInvalid{Bucket: bucket}
+	case "RequestBodyTooLarge":
+		err = PartTooBig{}
 	default:
 		switch azureErr.StatusCode {
 		case http.StatusNotFound:
