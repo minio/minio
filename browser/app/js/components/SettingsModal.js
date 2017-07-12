@@ -93,10 +93,16 @@ class SettingsModal extends React.Component {
 
     let accessKey = document.getElementById('accessKey').value
     let secretKey = document.getElementById('secretKey').value
-    web.SetAuth({
-      accessKey,
-      secretKey
-    })
+
+    // In order to set the new auth, we need the old credentials.
+    web.GetAuth()
+      .then(oldCredentials => {
+        return web.SetAuth({
+          accessKey,
+          secretKey,
+          oldCredentials
+        })
+      })
       .then(data => {
         dispatch(actions.setSettings({
           accessKey: '',

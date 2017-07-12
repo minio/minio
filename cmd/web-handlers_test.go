@@ -592,18 +592,30 @@ func testSetAuthWebHandler(obj ObjectLayer, instanceType string, t TestErrHandle
 	}
 
 	testCases := []struct {
-		username string
-		password string
-		success  bool
+		username     string
+		password     string
+		oldAccessKey string
+		oldSecretKey string
+		success      bool
 	}{
-		{"", "", false},
-		{"1", "1", false},
-		{"azerty", "foooooooooooooo", true},
+		{"", "", "", "", false},
+		{"1", "1", "incorrect", "data", false},
+		{"", "", credentials.AccessKey, credentials.SecretKey, false},
+		{"1", "1", credentials.AccessKey, credentials.SecretKey, false},
+		{"azerty", "foooooooooooooo", "...", "...", false},
+		{"azerty", "foooooooooooooo", credentials.AccessKey, credentials.SecretKey, true},
 	}
 
 	// Iterating over the test cases, calling the function under test and asserting the response.
 	for i, testCase := range testCases {
-		setAuthRequest := SetAuthArgs{AccessKey: testCase.username, SecretKey: testCase.password}
+		setAuthRequest := SetAuthArgs{
+			AccessKey: testCase.username,
+			SecretKey: testCase.password,
+			OldCredentials: OldCredentialsArgs{
+				AccessKey: testCase.oldAccessKey,
+				SecretKey: testCase.oldSecretKey,
+			},
+		}
 		setAuthReply := &SetAuthReply{}
 		req, err := newTestWebRPCRequest("Web.SetAuth", authorization, setAuthRequest)
 		if err != nil {
