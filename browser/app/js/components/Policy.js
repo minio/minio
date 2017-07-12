@@ -22,8 +22,14 @@ class Policy extends Component {
   removePolicy(e) {
     e.preventDefault()
     const {dispatch, currentBucket, prefix} = this.props
+
     let newPrefix = prefix.replace(currentBucket + '/', '')
     newPrefix = newPrefix.replace('*', '')
+
+    // An empty prefix should match the whole bucket.
+    if (!newPrefix)
+      newPrefix = '*'
+
     web.SetBucketPolicy({
       bucketName: currentBucket,
       prefix: newPrefix,
