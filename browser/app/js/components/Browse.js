@@ -145,12 +145,43 @@ export default class Browse extends React.Component {
   selectPrefix(e, prefix) {
     e.preventDefault()
     const {dispatch, currentPath, web, currentBucket} = this.props
-    const encPrefix = encodeURI(prefix)
+    const objectName = encodeURI(prefix)
     if (prefix.endsWith('/') || prefix === '') {
       if (prefix === currentPath) return
-      browserHistory.push(utils.pathJoin(currentBucket, encPrefix))
+      browserHistory.push(utils.pathJoin(currentBucket, objectName))
     } else {
-      window.location = `${window.location.origin}/minio/download/${currentBucket}/${encPrefix}?token=${storage.getItem('token')}`
+      let xhr = new XMLHttpRequest()
+      let url = `${location.origin}/minio/download/${currentBucket}/${objectName}`
+
+      xhr.open('GET', url, true)
+      xhr.setRequestHeader('Authorization', 'Bearer ' + storage.getItem('token'))
+
+      // The response must allow binary data.
+      xhr.responseType = 'arraybuffer'
+
+      // This allows us to download the file directly from the XMLHttpRequest.
+      xhr.onload = function() {
+        if (this.status == 200) {
+          // A temporary link for the purpose of downloading.
+          let anchor = document.createElement('a')
+          document.body.appendChild(anchor)
+
+          // Creates a URL to the downloaded blob.
+          let downloadURL = window.URL.createObjectURL(new Blob([this.response], {
+            type: xhr.getResponseHeader('Content-Type')
+          }))
+
+          anchor.href = downloadURL
+          // The name of the downloaded file.
+          anchor.download = objectName
+
+          anchor.click()
+          window.URL.revokeObjectURL(downloadURL)
+          anchor.remove()
+        }
+      }
+
+      xhr.send()
     }
   }
 
@@ -412,7 +443,7 @@ export default class Browse extends React.Component {
       objects: this.props.checkedObjects,
       prefix: this.props.currentPath
     }
-    let requestUrl = location.origin + "/minio/zip?token=" + localStorage.token
+    let requestUrl = location.origin + "/minio/zip"
 
     this.xhr = new XMLHttpRequest()
     dispatch(actions.downloadSelected(requestUrl, req, this.xhr))

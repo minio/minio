@@ -776,12 +776,14 @@ func testDownloadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandl
 
 	test := func(token string) (int, []byte) {
 		rec := httptest.NewRecorder()
-		path := "/minio/download/" + bucketName + "/" + objectName + "?token="
-		if token != "" {
-			path = path + token
-		}
+		path := "/minio/download/" + bucketName + "/" + objectName
+
 		var req *http.Request
 		req, err = http.NewRequest("GET", path, nil)
+
+		if token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
 
 		if err != nil {
 			t.Fatalf("Cannot create upload request, %v", err)
@@ -871,10 +873,8 @@ func testWebHandlerDownloadZip(obj ObjectLayer, instanceType string, t TestErrHa
 
 	test := func(token string) (int, []byte) {
 		rec := httptest.NewRecorder()
-		path := "/minio/zip" + "?token="
-		if token != "" {
-			path = path + token
-		}
+		path := "/minio/zip"
+
 		args := DownloadZipArgs{
 			Objects:    []string{"one", "b/", "c/"},
 			Prefix:     "a/",
@@ -888,9 +888,12 @@ func testWebHandlerDownloadZip(obj ObjectLayer, instanceType string, t TestErrHa
 		}
 		var req *http.Request
 		req, err = http.NewRequest("POST", path, bytes.NewBuffer(argsData))
-
 		if err != nil {
 			t.Fatalf("Cannot create upload request, %v", err)
+		}
+
+		if token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
 		}
 
 		apiRouter.ServeHTTP(rec, req)
