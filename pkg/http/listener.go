@@ -78,19 +78,20 @@ type httpListener struct {
 	mutex                  sync.Mutex         // to guard Close() method.
 	tcpListeners           []*net.TCPListener // underlaying TCP listeners.
 	acceptCh               chan acceptResult  // channel where all TCP listeners write accepted connection.
-	doneChs                []chan struct{}    // done channels for each goroutine for TCP listeners.
+	doneCh                 chan struct{}      // done channel for TCP listener goroutines.
 	tlsConfig              *tls.Config        // TLS configuration
 	tcpKeepAliveTimeout    time.Duration
 	readTimeout            time.Duration
 	writeTimeout           time.Duration
-	updateBytesReadFunc    func(int)                           // function to be called to update bytes read in bufConn.
-	updateBytesWrittenFunc func(int)                           // function to be called to update bytes written in bufConn.
+	updateBytesReadFunc    func(int)                           // function to be called to update bytes read in BufConn.
+	updateBytesWrittenFunc func(int)                           // function to be called to update bytes written in BufConn.
 	errorLogFunc           func(error, string, ...interface{}) // function to be called on errors.
 }
 
 // start - starts separate goroutine for each TCP listener.  A valid insecure/TLS HTTP new connection is passed to httpListener.acceptCh.
 func (listener *httpListener) start() {
 	listener.acceptCh = make(chan acceptResult)
+	listener.doneCh = make(chan struct{})
 
 	// Closure to send acceptResult to acceptCh.
 	// It returns true if the result is sent else false if returns when doneCh is closed.
@@ -108,8 +109,8 @@ func (listener *httpListener) start() {
 		}
 	}
 
-	// Closure to accept single connection.
-	acceptTCP := func(tcpConn *net.TCPConn, doneCh <-chan struct{}) {
+	// Closure to handle single connection.
+	handleConn := func(tcpConn *net.TCPConn, doneCh <-chan struct{}) {
 		// Tune accepted TCP connection.
 		tcpConn.SetKeepAlive(true)
 		tcpConn.SetKeepAlivePeriod(listener.tcpKeepAliveTimeout)
@@ -190,8 +191,8 @@ func (listener *httpListener) start() {
 		return
 	}
 
-	// Closure to handle new connections until done channel is closed.
-	handleConnection := func(tcpListener *net.TCPListener, doneCh <-chan struct{}) {
+	// Closure to handle TCPListener until done channel is closed.
+	handleListener := func(tcpListener *net.TCPListener, doneCh <-chan struct{}) {
 		for {
 			tcpConn, err := tcpListener.AcceptTCP()
 			if err != nil {
@@ -200,16 +201,14 @@ func (listener *httpListener) start() {
 					return
 				}
 			} else {
-				go acceptTCP(tcpConn, doneCh)
+				go handleConn(tcpConn, doneCh)
 			}
 		}
 	}
 
 	// Start separate goroutine for each TCP listener to handle connection.
 	for _, tcpListener := range listener.tcpListeners {
-		doneCh := make(chan struct{})
-		go handleConnection(tcpListener, doneCh)
-		listener.doneChs = append(listener.doneChs, doneCh)
+		go handleListener(tcpListener, listener.doneCh)
 	}
 }
 
@@ -227,22 +226,16 @@ func (listener *httpListener) Accept() (conn net.Conn, err error) {
 func (listener *httpListener) Close() (err error) {
 	listener.mutex.Lock()
 	defer listener.mutex.Unlock()
-	if listener.doneChs == nil {
+	if listener.doneCh == nil {
 		return syscall.EINVAL
 	}
 
-	wg := sync.WaitGroup{}
 	for i := range listener.tcpListeners {
-		wg.Add(1)
-		go func(tcpListener *net.TCPListener, doneCh chan<- struct{}) {
-			tcpListener.Close()
-			close(doneCh)
-			wg.Done()
-		}(listener.tcpListeners[i], listener.doneChs[i])
+		listener.tcpListeners[i].Close()
 	}
-	wg.Wait()
+	close(listener.doneCh)
 
-	listener.doneChs = nil
+	listener.doneCh = nil
 	return nil
 }
 

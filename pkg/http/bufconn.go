@@ -22,8 +22,8 @@ import (
 	"time"
 )
 
-// bufConn - is a generic stream-oriented network connection supporting buffered reader and read/write timeout.
-type bufConn struct {
+// BufConn - is a generic stream-oriented network connection supporting buffered reader and read/write timeout.
+type BufConn struct {
 	net.Conn
 	bufReader              *bufio.Reader // buffered reader wraps reader in net.Conn.
 	readTimeout            time.Duration // sets the read timeout in the connection.
@@ -32,26 +32,26 @@ type bufConn struct {
 	updateBytesWrittenFunc func(int)     // function to be called to update bytes written.
 }
 
-func (c *bufConn) setReadTimeout() {
+func (c *BufConn) setReadTimeout() {
 	if c.readTimeout != 0 {
 		c.SetReadDeadline(time.Now().UTC().Add(c.readTimeout))
 	}
 }
 
-func (c *bufConn) setWriteTimeout() {
+func (c *BufConn) setWriteTimeout() {
 	if c.writeTimeout != 0 {
 		c.SetWriteDeadline(time.Now().UTC().Add(c.writeTimeout))
 	}
 }
 
 // Peek - returns the next n bytes without advancing the reader.  It just wraps bufio.Reader.Peek().
-func (c *bufConn) Peek(n int) ([]byte, error) {
+func (c *BufConn) Peek(n int) ([]byte, error) {
 	c.setReadTimeout()
 	return c.bufReader.Peek(n)
 }
 
 // Read - reads data from the connection using wrapped buffered reader.
-func (c *bufConn) Read(b []byte) (n int, err error) {
+func (c *BufConn) Read(b []byte) (n int, err error) {
 	c.setReadTimeout()
 	n, err = c.bufReader.Read(b)
 
@@ -63,7 +63,7 @@ func (c *bufConn) Read(b []byte) (n int, err error) {
 }
 
 // Write - writes data to the connection.
-func (c *bufConn) Write(b []byte) (n int, err error) {
+func (c *BufConn) Write(b []byte) (n int, err error) {
 	c.setWriteTimeout()
 	n, err = c.Conn.Write(b)
 
@@ -76,8 +76,8 @@ func (c *bufConn) Write(b []byte) (n int, err error) {
 
 // newBufConn - creates a new connection object wrapping net.Conn.
 func newBufConn(c net.Conn, readTimeout, writeTimeout time.Duration,
-	updateBytesReadFunc, updateBytesWrittenFunc func(int)) *bufConn {
-	return &bufConn{
+	updateBytesReadFunc, updateBytesWrittenFunc func(int)) *BufConn {
+	return &BufConn{
 		Conn:                   c,
 		bufReader:              bufio.NewReader(c),
 		readTimeout:            readTimeout,
