@@ -20,11 +20,15 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"os"
+	"os/signal"
 	"runtime"
 	"strings"
+	"syscall"
 
 	"github.com/gorilla/mux"
 	"github.com/minio/cli"
+	miniohttp "github.com/minio/minio/pkg/http"
 )
 
 const azureGatewayTemplate = `NAME:
@@ -314,8 +318,8 @@ func gatewayMain(ctx *cli.Context, backendType gatewayBackend) {
 
 	// Check and load SSL certificates.
 	var err error
-	globalPublicCerts, globalRootCAs, globalIsSSL, err = getSSLConfig()
-	fatalIf(err, "Invalid SSL key file")
+	globalPublicCerts, globalRootCAs, globalTLSCertificate, globalIsSSL, err = getSSLConfig()
+	fatalIf(err, "Invalid SSL certificate file")
 
 	initNSLock(false) // Enable local namespace lock.
 
@@ -359,16 +363,14 @@ func gatewayMain(ctx *cli.Context, backendType gatewayBackend) {
 
 	}
 
-	apiServer := NewServerMux(ctx.GlobalString("address"), registerHandlers(router, handlerFns...))
+	globalHTTPServer = miniohttp.NewServer([]string{ctx.GlobalString("address")}, registerHandlers(router, handlerFns...), globalTLSCertificate)
 
 	// Start server, automatically configures TLS if certs are available.
 	go func() {
-		cert, key := "", ""
-		if globalIsSSL {
-			cert, key = getPublicCertFile(), getPrivateKeyFile()
-		}
-		fatalIf(apiServer.ListenAndServe(cert, key), "Failed to start minio server")
+		globalHTTPServerErrorCh <- globalHTTPServer.Start()
 	}()
+
+	signal.Notify(globalOSSignalCh, os.Interrupt, syscall.SIGTERM)
 
 	// Once endpoints are finalized, initialize the new object api.
 	globalObjLayerMutex.Lock()
@@ -391,8 +393,8 @@ func gatewayMain(ctx *cli.Context, backendType gatewayBackend) {
 		checkUpdate(mode)
 
 		// Print gateway startup message.
-		printGatewayStartupMessage(getAPIEndpoints(apiServer.Addr), backendType)
+		printGatewayStartupMessage(getAPIEndpoints(ctx.String("address")), backendType)
 	}
 
-	<-globalServiceDoneCh
+	handleSignals()
 }

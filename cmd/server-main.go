@@ -17,11 +17,15 @@
 package cmd
 
 import (
+	"net/http"
 	"os"
+	"os/signal"
 	"runtime"
+	"syscall"
 
 	"github.com/minio/cli"
 	"github.com/minio/dsync"
+	miniohttp "github.com/minio/minio/pkg/http"
 )
 
 var serverFlags = []cli.Flag{
@@ -149,8 +153,8 @@ func serverMain(ctx *cli.Context) {
 
 	// Check and load SSL certificates.
 	var err error
-	globalPublicCerts, globalRootCAs, globalIsSSL, err = getSSLConfig()
-	fatalIf(err, "Invalid SSL key file")
+	globalPublicCerts, globalRootCAs, globalTLSCertificate, globalIsSSL, err = getSSLConfig()
+	fatalIf(err, "Invalid SSL certificate file")
 
 	if !quietFlag {
 		// Check for new updates from dl.minio.io.
@@ -176,11 +180,10 @@ func serverMain(ctx *cli.Context) {
 	initNSLock(globalIsDistXL)
 
 	// Configure server.
-	handler, err := configureServerHandler(globalEndpoints)
+	// Declare handler to avoid lint errors.
+	var handler http.Handler
+	handler, err = configureServerHandler(globalEndpoints)
 	fatalIf(err, "Unable to configure one of server's RPC services.")
-
-	// Initialize a new HTTP server.
-	apiServer := NewServerMux(globalMinioAddr, handler)
 
 	// Initialize S3 Peers inter-node communication only in distributed setup.
 	initGlobalS3Peers(globalEndpoints)
@@ -188,31 +191,36 @@ func serverMain(ctx *cli.Context) {
 	// Initialize Admin Peers inter-node communication only in distributed setup.
 	initGlobalAdminPeers(globalEndpoints)
 
-	// Start server, automatically configures TLS if certs are available.
+	globalHTTPServer = miniohttp.NewServer([]string{globalMinioAddr}, handler, globalTLSCertificate)
+	globalHTTPServer.UpdateBytesReadFunc = globalConnStats.incInputBytes
+	globalHTTPServer.UpdateBytesWrittenFunc = globalConnStats.incOutputBytes
+	globalHTTPServer.ErrorLogFunc = errorIf
 	go func() {
-		cert, key := "", ""
-		if globalIsSSL {
-			cert, key = getPublicCertFile(), getPrivateKeyFile()
-		}
-		fatalIf(apiServer.ListenAndServe(cert, key), "Failed to start minio server.")
+		globalHTTPServerErrorCh <- globalHTTPServer.Start()
 	}()
 
+	signal.Notify(globalOSSignalCh, os.Interrupt, syscall.SIGTERM)
+
 	newObject, err := newObjectLayer(globalEndpoints)
-	fatalIf(err, "Initializing object layer failed")
+	if err != nil {
+		errorIf(err, "Initializing object layer failed")
+		err = globalHTTPServer.Shutdown()
+		errorIf(err, "Unable to shutdown http server")
+		os.Exit(1)
+	}
 
 	globalObjLayerMutex.Lock()
 	globalObjectAPI = newObject
 	globalObjLayerMutex.Unlock()
 
 	// Prints the formatted startup message once object layer is initialized.
-	apiEndpoints := getAPIEndpoints(apiServer.Addr)
+	apiEndpoints := getAPIEndpoints(globalMinioAddr)
 	printStartupMessage(apiEndpoints)
 
 	// Set uptime time after object layer has initialized.
 	globalBootTime = UTCNow()
 
-	// Waits on the server.
-	<-globalServiceDoneCh
+	handleSignals()
 }
 
 // Initialize object layer with the supplied disks, objectLayer is nil upon any error.
