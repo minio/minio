@@ -376,6 +376,14 @@ func (web webAPIHandlers) GenerateAuth(r *http.Request, args *WebGenericArgs, re
 type SetAuthArgs struct {
 	AccessKey string `json:"accessKey"`
 	SecretKey string `json:"secretKey"`
+	// Requires old credentials to verify they have access.
+	OldCredentials OldCredentialsArgs `json:"oldCredentials"`
+}
+
+// OldCredentialsArgs holds the old credentials.
+type OldCredentialsArgs struct {
+	AccessKey string `json:"accessKey"`
+	SecretKey string `json:"secretKey"`
 }
 
 // SetAuthReply - reply for SetAuth
@@ -394,6 +402,15 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 	// If creds are set through ENV disallow changing credentials.
 	if globalIsEnvCreds {
 		return toJSONError(errChangeCredNotAllowed)
+	}
+
+	// Just validating the token isn't enough, because tokens are temporary but credentials are
+	// permanent. Check to make sure they provided the correct old credentials to verify auth.
+	hasValidOldCredentials := args.OldCredentials.AccessKey == serverConfig.Credential.AccessKey &&
+		args.OldCredentials.SecretKey == serverConfig.Credential.SecretKey
+
+	if !hasValidOldCredentials {
+		return toJSONError(errors.New("Did not provide valid old credentials"))
 	}
 
 	creds, err := createCredential(args.AccessKey, args.SecretKey)
