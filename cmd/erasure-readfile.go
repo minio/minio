@@ -34,9 +34,9 @@ func (s XLStorage) ReadFile(writer io.Writer, volume, path string, offset, lengt
 		return f, traceError(errUnexpected)
 	}
 
-	f.Keys, f.Checksums = make([][]byte, len(s)), make([][]byte, len(s))
-	verifiers := make([]*BitrotVerifier, len(s))
-	for i, disk := range s {
+	f.Keys, f.Checksums = make([][]byte, len(s.disks)), make([][]byte, len(s.disks))
+	verifiers := make([]*BitrotVerifier, len(s.disks))
+	for i, disk := range s.disks {
 		if disk != OfflineDisk {
 			verifiers[i], err = NewBitrotVerifier(algorithm, keys[i], checksums[i])
 			if err != nil {
@@ -44,22 +44,22 @@ func (s XLStorage) ReadFile(writer io.Writer, volume, path string, offset, lengt
 			}
 		}
 	}
-	locks := make([]chan error, len(s))
+	locks := make([]chan error, len(s.disks))
 	for i := range locks {
 		locks[i] = make(chan error, 1)
 	}
 	lastBlock := totalLength / blocksize
 	startOffset := offset % blocksize
-	chunksize := getChunkSize(blocksize, len(s)/2)
+	chunksize := getChunkSize(blocksize, s.dataBlocks)
 
-	blocks := make([][]byte, len(s))
+	blocks := make([][]byte, len(s.disks))
 	for off := offset / blocksize; length > 0; off++ {
 		blockOffset := off * chunksize
 		pool.Reset()
 
 		if currentBlock := (offset + f.Size) / blocksize; currentBlock == lastBlock {
 			blocksize = totalLength % blocksize
-			chunksize = getChunkSize(blocksize, len(s)/2)
+			chunksize = getChunkSize(blocksize, s.dataBlocks)
 		}
 		err = s.readConcurrent(volume, path, blockOffset, chunksize, blocks, verifiers, locks, pool)
 		if err != nil {
@@ -70,7 +70,7 @@ func (s XLStorage) ReadFile(writer io.Writer, volume, path string, offset, lengt
 		if length < writeLength {
 			writeLength = length
 		}
-		n, err := writeDataBlocks(writer, blocks, len(s)/2, startOffset, writeLength)
+		n, err := writeDataBlocks(writer, blocks, s.dataBlocks, startOffset, writeLength)
 		if err != nil {
 			return f, err
 		}
@@ -80,7 +80,7 @@ func (s XLStorage) ReadFile(writer io.Writer, volume, path string, offset, lengt
 	}
 
 	f.Algorithm = algorithm
-	for i, disk := range s {
+	for i, disk := range s.disks {
 		if disk != OfflineDisk {
 			f.Keys[i] = verifiers[i].key
 			f.Checksums[i] = verifiers[i].Sum(nil)
@@ -89,17 +89,20 @@ func (s XLStorage) ReadFile(writer io.Writer, volume, path string, offset, lengt
 	return f, nil
 }
 
-func erasureMustReconstruct(blocks [][]byte, datablocks int) bool {
-	for _, block := range blocks[:datablocks] {
-		if block == nil { // at least one shard is missing
-			return true
+func erasureCountMissingBlocks(blocks [][]byte, limit int) int {
+	missing := 0
+	for i := range blocks[:limit] {
+		if blocks[i] == nil {
+			missing++
 		}
 	}
-	return false
+	return missing
 }
 
-func (s XLStorage) readConcurrent(volume, path string, offset int64, length int64, blocks [][]byte, verifiers []*BitrotVerifier, locks []chan error, pool *bpool.BytePool) (err error) {
-	errs := make([]error, len(s))
+// readConcurrent reads all requested data concurrently from the disks into blocks. It returns an error if
+// too many disks failed while reading.
+func (s *XLStorage) readConcurrent(volume, path string, offset int64, length int64, blocks [][]byte, verifiers []*BitrotVerifier, locks []chan error, pool *bpool.BytePool) (err error) {
+	errs := make([]error, len(s.disks))
 	for i := range blocks {
 		blocks[i], err = pool.Get()
 		if err != nil {
@@ -107,32 +110,53 @@ func (s XLStorage) readConcurrent(volume, path string, offset int64, length int6
 		}
 		blocks[i] = blocks[i][:length]
 	}
-	for i := range locks {
-		go erasureReadFromFile(s[i], volume, path, offset, blocks[i][:length], verifiers[i], locks[i])
-	}
-	for i := range locks {
-		errs[i] = <-locks[i]
-		if errs[i] != nil {
-			s[i] = OfflineDisk
-			blocks[i] = MissingShard
+
+	erasureReadBlocksConcurrent(s.disks[:s.dataBlocks], volume, path, offset, blocks[:s.dataBlocks], verifiers[:s.dataBlocks], errs[:s.dataBlocks], locks[:s.dataBlocks])
+	missingDataBlocks := erasureCountMissingBlocks(blocks, s.dataBlocks)
+	mustReconstruct := missingDataBlocks > 0
+	if mustReconstruct {
+		requiredReads := s.dataBlocks + missingDataBlocks
+		if requiredReads > s.dataBlocks+s.parityBlocks {
+			return errXLReadQuorum
+		}
+		erasureReadBlocksConcurrent(s.disks[s.dataBlocks:requiredReads], volume, path, offset, blocks[s.dataBlocks:requiredReads], verifiers[s.dataBlocks:requiredReads], errs[s.dataBlocks:requiredReads], locks[s.dataBlocks:requiredReads])
+		if erasureCountMissingBlocks(blocks, requiredReads) > 0 {
+			erasureReadBlocksConcurrent(s.disks[requiredReads:], volume, path, offset, blocks[requiredReads:], verifiers[requiredReads:], errs[requiredReads:], locks[requiredReads:])
 		}
 	}
-	if err = reduceReadQuorumErrs(errs, []error{}, len(s)/2); err != nil {
+	if err = reduceReadQuorumErrs(errs, []error{}, s.readQuorum); err != nil {
 		return err
 	}
-	if erasureMustReconstruct(blocks, len(s)/2) {
-		if err = s.ErasureDecode(blocks); err != nil {
+	if mustReconstruct {
+		if err = s.ErasureDecodeDataBlocks(blocks); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func erasureReadFromFile(disk StorageAPI, volume, path string, offset int64, buffer []byte, verifier *BitrotVerifier, lock chan<- error) {
-	if disk == OfflineDisk {
-		lock <- traceError(errDiskNotFound)
-		return
+// erasureReadBlocksConcurrent reads all data from each disk to each data block in parallel.
+// Therefore disks, blocks, verifiers errors and locks must have the same length.
+func erasureReadBlocksConcurrent(disks []StorageAPI, volume, path string, offset int64, blocks [][]byte, verifiers []*BitrotVerifier, errors []error, locks []chan error) {
+	for i := range locks {
+		if disks[i] == OfflineDisk {
+			locks[i] <- traceError(errDiskNotFound)
+			continue
+		}
+		go erasureReadFromFile(disks[i], volume, path, offset, blocks[i], verifiers[i], locks[i])
 	}
+	for i := range locks {
+		errors[i] = <-locks[i] // blocks until the go routine 'i' is done - no data race
+		if errors[i] != nil {
+			disks[i] = OfflineDisk
+			blocks[i] = nil
+		}
+	}
+}
+
+// erasureReadReadFromFile reads data from the disk to buffer in parallel.
+// It sends the returned error through the lock channel.
+func erasureReadFromFile(disk StorageAPI, volume, path string, offset int64, buffer []byte, verifier *BitrotVerifier, lock chan<- error) {
 	var err error
 	if !verifier.IsVerified() {
 		_, err = disk.ReadFileWithVerify(volume, path, offset, buffer, verifier)

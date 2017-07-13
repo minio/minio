@@ -251,8 +251,11 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 	chunkSize := getChunkSize(xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks)
 	pool := bpool.NewBytePool(chunkSize, len(onlineDisks))
 
-	storage := XLStorage(onlineDisks)
-	keys, checksums := make([][]byte, len(storage)), make([][]byte, len(storage))
+	storage, err := NewXLStorage(onlineDisks, xlMeta.Erasure.DataBlocks, xlMeta.Erasure.ParityBlocks, xl.readQuorum, xl.writeQuorum)
+	if err != nil {
+		return toObjectErr(err, bucket, object)
+	}
+	keys, checksums := make([][]byte, len(storage.disks)), make([][]byte, len(storage.disks))
 	for ; partIndex <= lastPartIndex; partIndex++ {
 		if length == totalBytesRead {
 			break
@@ -269,7 +272,7 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 
 		// Get the checksums of the current part.
 		var algorithm = bitrot.UnknownAlgorithm
-		for index, disk := range storage {
+		for index, disk := range storage.disks {
 			if disk != OfflineDisk {
 				ckSumInfo := metaArr[index].Erasure.GetCheckSumInfo(partName)
 				checksums[index] = ckSumInfo.Hash
@@ -535,7 +538,10 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	// Total size of the written object
 	var sizeWritten int64
 
-	storage := XLStorage(onlineDisks)
+	storage, err := NewXLStorage(onlineDisks, xlMeta.Erasure.DataBlocks, xlMeta.Erasure.ParityBlocks, xl.readQuorum, xl.writeQuorum)
+	if err != nil {
+		return ObjectInfo{}, toObjectErr(err, bucket, object)
+	}
 	buffer := make([]byte, partsMetadata[0].Erasure.BlockSize)
 	// Read data and split into parts - similar to multipart mechanism
 	for partIdx := 1; ; partIdx++ {
@@ -555,7 +561,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 		// Hint the filesystem to pre-allocate one continuous large block.
 		// This is only an optimization.
 		if curPartSize > 0 {
-			pErr := xl.prepareFile(minioMetaTmpBucket, tempErasureObj, curPartSize, storage, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks)
+			pErr := xl.prepareFile(minioMetaTmpBucket, tempErasureObj, curPartSize, storage.disks, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks)
 			if pErr != nil {
 				return ObjectInfo{}, toObjectErr(pErr, bucket, object)
 			}

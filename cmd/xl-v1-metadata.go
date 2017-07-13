@@ -54,7 +54,7 @@ func init() {
 		return poly1305.New(pKey)
 	}
 	bitrot.RegisterAlgorithm(bitrot.SHA256, newSHA256)
-	bitrot.RegisterAlgorithm(bitrot.BLAKE2b512, newBLAKE2b)
+	bitrot.RegisterAlgorithm(bitrot.BLAKE2b, newBLAKE2b)
 	bitrot.RegisterAlgorithm(bitrot.Poly1305, newPoly1305)
 }
 

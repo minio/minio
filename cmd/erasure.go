@@ -1,3 +1,19 @@
+/*
+ * Minio Cloud Storage, (C) 2017 Minio, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package cmd
 
 import (
@@ -12,10 +28,7 @@ import (
 // OfflineDisk represents an unavailable disk.
 var OfflineDisk StorageAPI // zero value is nil
 
-// MissingShard indicates a missing data/parity shard for erasure coding
-var MissingShard []byte // zero value is nil
-
-// ErasureFileInfo contains information about a erasure file operation (create, read, heal).
+// ErasureFileInfo contains information about an erasure file operation (create, read, heal).
 type ErasureFileInfo struct {
 	Size      int64
 	Algorithm bitrot.Algorithm
@@ -24,48 +37,77 @@ type ErasureFileInfo struct {
 }
 
 // XLStorage represents an array of disks.
-// The disks contains erasure coded and bitrot-protected data.
-type XLStorage []StorageAPI
+// The disks contain erasure coded and bitrot-protected data.
+type XLStorage struct {
+	disks                    []StorageAPI
+	erasure                  reedsolomon.Encoder
+	dataBlocks, parityBlocks int
+	readQuorum, writeQuorum  int
+}
 
-// Clone creates a copy of storage.
-func (s XLStorage) Clone() XLStorage {
-	s0 := make(XLStorage, len(s))
-	copy(s0, s)
-	return s0
+// NewXLStorage creates a new XLStorage. The storage erasure codes and protects all data written to
+// the disks.
+func NewXLStorage(disks []StorageAPI, dataBlocks, parityBlocks int, readQuorum, writeQuorum int) (s XLStorage, err error) {
+	erasure, err := reedsolomon.New(dataBlocks, parityBlocks)
+	if err != nil {
+		return s, Errorf("failed to create erasure coding: %v", err)
+	}
+	s = XLStorage{
+		disks:        make([]StorageAPI, len(disks)),
+		erasure:      erasure,
+		readQuorum:   readQuorum,
+		writeQuorum:  writeQuorum,
+		dataBlocks:   dataBlocks,
+		parityBlocks: parityBlocks,
+	}
+	copy(s.disks, disks)
+	return
+}
+
+// AppendWriters creates one writer for every disk of the storage array.
+// Every writer appends data to the corresponding storage disk.
+func (s *XLStorage) AppendWriters(volume, path string) []io.Writer {
+	writers := make([]io.Writer, len(s.disks))
+	for i := range writers {
+		writers[i] = StorageWriter(s.disks[i], volume, path)
+	}
+	return writers
 }
 
 // ErasureEncode encodes the given data and returns the erasure-coded data.
 // It returns an error if the erasure coding failed.
-func (s XLStorage) ErasureEncode(data []byte) ([][]byte, error) {
-	encoder, err := reedsolomon.New(len(s)/2, len(s)/2)
-	if err != nil {
-		return nil, Errorf("failed to create erasure coding: %v", err)
-	}
-	encoded, err := encoder.Split(data)
+func (s *XLStorage) ErasureEncode(data []byte) ([][]byte, error) {
+	encoded, err := s.erasure.Split(data)
 	if err != nil {
 		return nil, Errorf("failed to split data: %v", err)
 	}
-	if err = encoder.Encode(encoded); err != nil {
+	if err = s.erasure.Encode(encoded); err != nil {
 		return nil, Errorf("failed to encode data: %v", err)
 	}
 	return encoded, nil
 }
 
-// ErasureDecode decodes the given erasure-coded data.
+// ErasureDecodeDataBlocks decodes the given erasure-coded data.
+// It only decodes the data blocks but does not verify them.
 // It returns an error if the decoding failed.
-func (s XLStorage) ErasureDecode(data [][]byte) error {
-	decoder, err := reedsolomon.New(len(s)/2, len(s)/2)
-	if err != nil {
-		return Errorf("failed to create erasure coding: %v", err)
+func (s *XLStorage) ErasureDecodeDataBlocks(data [][]byte) error {
+	if err := s.erasure.Reconstruct(data); err != nil {
+		return Errorf("failed to reconstruct data: %v", err)
 	}
-	if err = decoder.Reconstruct(data); err != nil {
-		return Errorf("failed to split data: %v", err)
+	return nil
+}
+
+// ErasureDecodeDataAndParityBlocks decodes the given erasure-coded data and verifies it.
+// It returns an error if the decoding failed.
+func (s *XLStorage) ErasureDecodeDataAndParityBlocks(data [][]byte) error {
+	if err := s.erasure.Reconstruct(data); err != nil {
+		return Errorf("failed to reconstruct data: %v", err)
 	}
-	if ok, err := decoder.Verify(data); !ok || err != nil {
+	if ok, err := s.erasure.Verify(data); !ok || err != nil {
 		if err != nil {
-			return Errorf("failed to encode data: %v", err)
+			return Errorf("failed to verify data: %v", err)
 		}
-		return Errorf("failed to verify reconstructed data: %s", "data corrupted")
+		return Errorf("data verification failed: %v", "data is corrupted")
 	}
 	return nil
 }
@@ -121,5 +163,5 @@ func (v *BitrotVerifier) Verify() bool {
 	return subtle.ConstantTimeCompare(v.Sum(nil), v.sum) == 1
 }
 
-// IsVerified returns true iff Verify was called at least one.
+// IsVerified returns true iff Verify was called at least once.
 func (v *BitrotVerifier) IsVerified() bool { return v.verified }

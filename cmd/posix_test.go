@@ -1061,18 +1061,18 @@ func TestPosixReadFileWithVerify(t *testing.T) {
 		// Hash verification is skipped with empty expected
 		// hash - 1
 		{
-			"myobject", 0, 5, bitrot.BLAKE2b512, "",
+			"myobject", 0, 5, bitrot.BLAKE2b, "",
 			[]byte("Hello"), nil,
 		},
 		// Hash verification failure case - 2
 		{
-			"myobject", 0, 5, bitrot.BLAKE2b512, "a",
+			"myobject", 0, 5, bitrot.BLAKE2b, "a",
 			[]byte(""),
 			hashMismatchError{"a", blakeHash("Hello, world!")},
 		},
 		// Hash verification success with full content requested - 3
 		{
-			"myobject", 0, 13, bitrot.BLAKE2b512, blakeHash("Hello, world!"),
+			"myobject", 0, 13, bitrot.BLAKE2b, blakeHash("Hello, world!"),
 			[]byte("Hello, world!"), nil,
 		},
 		// Hash verification success with full content and Sha256 - 4
@@ -1082,7 +1082,7 @@ func TestPosixReadFileWithVerify(t *testing.T) {
 		},
 		// Hash verification success with partial content requested - 5
 		{
-			"myobject", 7, 4, bitrot.BLAKE2b512, blakeHash("Hello, world!"),
+			"myobject", 7, 4, bitrot.BLAKE2b, blakeHash("Hello, world!"),
 			[]byte("worl"), nil,
 		},
 		// Hash verification success with partial content and Sha256 - 6

@@ -53,40 +53,50 @@ func (r determinsticReader) Read(p []byte) (n int, err error) {
 }
 
 var erasureHealFileTests = []struct {
+	dataBlocks                             int
 	disks, offDisks, badDisks, badOffDisks int
 	blocksize, size                        int64
 	algorithm                              bitrot.Algorithm
 	shouldFail                             bool
 	shouldFailQuorum                       bool
 }{
-	{disks: 4, offDisks: 1, badDisks: 0, badOffDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: bitrot.SHA256, shouldFail: false, shouldFailQuorum: false},          // 0
-	{disks: 6, offDisks: 2, badDisks: 0, badOffDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: bitrot.BLAKE2b512, shouldFail: false, shouldFailQuorum: false},      // 1
-	{disks: 8, offDisks: 2, badDisks: 1, badOffDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: bitrot.BLAKE2b512, shouldFail: false, shouldFailQuorum: false},      // 2
-	{disks: 10, offDisks: 3, badDisks: 1, badOffDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: bitrot.Poly1305, shouldFail: false, shouldFailQuorum: false},       // 3
-	{disks: 12, offDisks: 2, badDisks: 3, badOffDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: bitrot.SHA256, shouldFail: false, shouldFailQuorum: false},         // 4
-	{disks: 14, offDisks: 4, badDisks: 1, badOffDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: bitrot.Poly1305, shouldFail: false, shouldFailQuorum: false},       // 5
-	{disks: 16, offDisks: 6, badDisks: 1, badOffDisks: 1, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: bitrot.Poly1305, shouldFail: false, shouldFailQuorum: true},        // 6
-	{disks: 14, offDisks: 2, badDisks: 3, badOffDisks: 0, blocksize: int64(oneMiByte / 2), size: oneMiByte, algorithm: bitrot.BLAKE2b512, shouldFail: true, shouldFailQuorum: false},    // 7
-	{disks: 12, offDisks: 1, badDisks: 0, badOffDisks: 1, blocksize: int64(oneMiByte - 1), size: oneMiByte, algorithm: bitrot.Poly1305, shouldFail: true, shouldFailQuorum: false},      // 8
-	{disks: 10, offDisks: 3, badDisks: 0, badOffDisks: 3, blocksize: int64(oneMiByte / 2), size: oneMiByte, algorithm: bitrot.SHA256, shouldFail: true, shouldFailQuorum: false},        // 9
-	{disks: 8, offDisks: 1, badDisks: 1, badOffDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: bitrot.Poly1305, shouldFail: false, shouldFailQuorum: false},        // 10
-	{disks: 4, offDisks: 1, badDisks: 0, badOffDisks: 1, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: bitrot.Poly1305, shouldFail: false, shouldFailQuorum: true},         // 11
-	{disks: 12, offDisks: 8, badDisks: 3, badOffDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: bitrot.Poly1305, shouldFail: false, shouldFailQuorum: true},        // 12
-	{disks: 14, offDisks: 3, badDisks: 4, badOffDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: bitrot.BLAKE2b512, shouldFail: false, shouldFailQuorum: false},     // 13
-	{disks: 14, offDisks: 6, badDisks: 1, badOffDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: bitrot.Poly1305, shouldFail: false, shouldFailQuorum: false},       // 14
-	{disks: 16, offDisks: 4, badDisks: 5, badOffDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: bitrot.Poly1305, shouldFail: false, shouldFailQuorum: true},        // 15
-	{disks: 4, offDisks: 0, badDisks: 0, badOffDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: bitrot.Poly1305, shouldFail: false, shouldFailQuorum: false},        // 16
-	{disks: 4, offDisks: 0, badDisks: 0, badOffDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: bitrot.UnknownAlgorithm, shouldFail: true, shouldFailQuorum: false}, // 17
+	{dataBlocks: 2, disks: 4, offDisks: 1, badDisks: 0, badOffDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: bitrot.SHA256, shouldFail: false, shouldFailQuorum: false},           // 0
+	{dataBlocks: 3, disks: 6, offDisks: 2, badDisks: 0, badOffDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: bitrot.BLAKE2b, shouldFail: false, shouldFailQuorum: false},          // 1
+	{dataBlocks: 4, disks: 8, offDisks: 2, badDisks: 1, badOffDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: bitrot.BLAKE2b, shouldFail: false, shouldFailQuorum: false},          // 2
+	{dataBlocks: 5, disks: 10, offDisks: 3, badDisks: 1, badOffDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: bitrot.Poly1305, shouldFail: false, shouldFailQuorum: false},        // 3
+	{dataBlocks: 6, disks: 12, offDisks: 2, badDisks: 3, badOffDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: bitrot.SHA256, shouldFail: false, shouldFailQuorum: false},          // 4
+	{dataBlocks: 7, disks: 14, offDisks: 4, badDisks: 1, badOffDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: bitrot.Poly1305, shouldFail: false, shouldFailQuorum: false},        // 5
+	{dataBlocks: 8, disks: 16, offDisks: 6, badDisks: 1, badOffDisks: 1, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: bitrot.Poly1305, shouldFail: false, shouldFailQuorum: true},         // 6
+	{dataBlocks: 7, disks: 14, offDisks: 2, badDisks: 3, badOffDisks: 0, blocksize: int64(oneMiByte / 2), size: oneMiByte, algorithm: bitrot.BLAKE2b, shouldFail: true, shouldFailQuorum: false},        // 7
+	{dataBlocks: 6, disks: 12, offDisks: 1, badDisks: 0, badOffDisks: 1, blocksize: int64(oneMiByte - 1), size: oneMiByte, algorithm: bitrot.Poly1305, shouldFail: true, shouldFailQuorum: false},       // 8
+	{dataBlocks: 5, disks: 10, offDisks: 3, badDisks: 0, badOffDisks: 3, blocksize: int64(oneMiByte / 2), size: oneMiByte, algorithm: bitrot.SHA256, shouldFail: true, shouldFailQuorum: false},         // 9
+	{dataBlocks: 4, disks: 8, offDisks: 1, badDisks: 1, badOffDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: bitrot.Poly1305, shouldFail: false, shouldFailQuorum: false},         // 10
+	{dataBlocks: 2, disks: 4, offDisks: 1, badDisks: 0, badOffDisks: 1, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: bitrot.Poly1305, shouldFail: false, shouldFailQuorum: true},          // 11
+	{dataBlocks: 6, disks: 12, offDisks: 8, badDisks: 3, badOffDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: bitrot.Poly1305, shouldFail: false, shouldFailQuorum: true},         // 12
+	{dataBlocks: 7, disks: 14, offDisks: 3, badDisks: 4, badOffDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: bitrot.BLAKE2b, shouldFail: false, shouldFailQuorum: false},         // 13
+	{dataBlocks: 7, disks: 14, offDisks: 6, badDisks: 1, badOffDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: bitrot.Poly1305, shouldFail: false, shouldFailQuorum: false},        // 14
+	{dataBlocks: 8, disks: 16, offDisks: 4, badDisks: 5, badOffDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: bitrot.Poly1305, shouldFail: false, shouldFailQuorum: true},         // 15
+	{dataBlocks: 2, disks: 4, offDisks: 0, badDisks: 0, badOffDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: bitrot.Poly1305, shouldFail: false, shouldFailQuorum: false},         // 16
+	{dataBlocks: 2, disks: 4, offDisks: 0, badDisks: 0, badOffDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: bitrot.UnknownAlgorithm, shouldFail: true, shouldFailQuorum: false},  // 17
+	{dataBlocks: 12, disks: 16, offDisks: 2, badDisks: 1, badOffDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: bitrot.Poly1305, shouldFail: false, shouldFailQuorum: false},       // 18
+	{dataBlocks: 6, disks: 8, offDisks: 1, badDisks: 0, badOffDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: bitrot.BLAKE2b, shouldFail: false, shouldFailQuorum: false},          // 19
+	{dataBlocks: 7, disks: 10, offDisks: 1, badDisks: 0, badOffDisks: 0, blocksize: int64(blockSizeV1), size: oneMiByte, algorithm: bitrot.UnknownAlgorithm, shouldFail: true, shouldFailQuorum: false}, // 20
 }
 
 func TestErasureHealFile(t *testing.T) {
+	random := NewDerministicRandom()
 	for i, test := range erasureHealFileTests {
-		setup, err := newErasureTestSetup(test.disks/2, test.disks/2, test.blocksize)
+		setup, err := newErasureTestSetup(test.dataBlocks, test.disks-test.dataBlocks, test.blocksize)
 		if err != nil {
 			t.Fatalf("Test %d: failed to setup XL environment: %v", i, err)
 		}
-		storage := XLStorage(setup.disks)
-		offline := storage.Clone()
+		storage, err := NewXLStorage(setup.disks, test.dataBlocks, test.disks-test.dataBlocks, test.dataBlocks, test.dataBlocks+1)
+		if err != nil {
+			setup.Remove()
+			t.Fatalf("Test %d: failed to create XL Storage: %v", i, err)
+		}
+		offline := make([]StorageAPI, len(storage.disks))
+		copy(offline, storage.disks)
 
 		data := make([]byte, test.size)
 		if _, err = io.ReadFull(rand.Reader, data); err != nil {
@@ -96,16 +106,16 @@ func TestErasureHealFile(t *testing.T) {
 
 		algorithm := test.algorithm
 		if algorithm == bitrot.UnknownAlgorithm {
-			algorithm = bitrot.BLAKE2b512
+			algorithm = bitrot.BLAKE2b
 		}
 		buffer := make([]byte, test.blocksize)
-		file, err := storage.CreateFile(bytes.NewReader(data), "testbucket", "testobject", buffer, NewDerministicRandom(), algorithm)
+		file, err := storage.CreateFile(bytes.NewReader(data), "testbucket", "testobject", buffer, random, algorithm)
 		if err != nil {
 			setup.Remove()
 			t.Fatalf("Test %d: failed to create random test data: %v", i, err)
 		}
 
-		info, err := storage.HealFile(offline, "testbucket", "testobject", test.blocksize, "testbucket", "healedobject", test.size, test.algorithm, file.Keys, file.Checksums, nil)
+		info, err := storage.HealFile(offline, "testbucket", "testobject", test.blocksize, "testbucket", "healedobject", test.size, test.algorithm, file.Keys, file.Checksums, random)
 		if err != nil && !test.shouldFail {
 			t.Errorf("Test %d: should pass but it failed with: %v", i, err)
 		}
@@ -127,20 +137,20 @@ func TestErasureHealFile(t *testing.T) {
 			}
 		}
 		if err == nil && !test.shouldFail {
-			for j := 0; j < len(storage); j++ {
+			for j := 0; j < len(storage.disks); j++ {
 				if j < test.offDisks {
-					storage[j] = OfflineDisk
+					storage.disks[j] = OfflineDisk
 				} else {
 					offline[j] = OfflineDisk
 				}
 			}
 			for j := 0; j < test.badDisks; j++ {
-				storage[test.offDisks+j] = badDisk{nil}
+				storage.disks[test.offDisks+j] = badDisk{nil}
 			}
 			for j := 0; j < test.badOffDisks; j++ {
 				offline[j] = badDisk{nil}
 			}
-			info, err := storage.HealFile(offline, "testbucket", "testobject", test.blocksize, "testbucket", "healedobject", test.size, test.algorithm, file.Keys, file.Checksums, NewDerministicRandom())
+			info, err := storage.HealFile(offline, "testbucket", "testobject", test.blocksize, "testbucket", "healedobject", test.size, test.algorithm, file.Keys, file.Checksums, random)
 			if err != nil && !test.shouldFailQuorum {
 				t.Errorf("Test %d: should pass but it failed with: %v", i, err)
 			}
@@ -158,7 +168,7 @@ func TestErasureHealFile(t *testing.T) {
 					t.Errorf("Test %d: heal returned different bitrot keys", i)
 				}
 				if !reflect.DeepEqual(info.Checksums, file.Checksums) {
-					t.Errorf("Test %d: heal returned different bitrot keys", i)
+					t.Errorf("Test %d: heal returned different bitrot checksums", i)
 				}
 			}
 		}

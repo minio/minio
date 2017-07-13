@@ -37,6 +37,7 @@ func (d badDisk) ReadFileWithVerify(volume string, path string, offset int64, bu
 }
 
 var erasureReadFileTests = []struct {
+	dataBlocks                   int
 	onDisks, offDisks            int
 	blocksize, data              int64
 	offset                       int64
@@ -44,51 +45,58 @@ var erasureReadFileTests = []struct {
 	algorithm                    bitrot.Algorithm
 	shouldFail, shouldFailQuorum bool
 }{
-	{onDisks: 4, offDisks: 0, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: bitrot.BLAKE2b512, shouldFail: false, shouldFailQuorum: false},                                                  // 0
-	{onDisks: 6, offDisks: 0, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: bitrot.SHA256, shouldFail: false, shouldFailQuorum: false},                                                      // 1
-	{onDisks: 8, offDisks: 0, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: bitrot.Poly1305, shouldFail: false, shouldFailQuorum: false},                                                    // 2
-	{onDisks: 10, offDisks: 0, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 1, length: oneMiByte - 1, algorithm: bitrot.BLAKE2b512, shouldFail: false, shouldFailQuorum: false},                                             // 3
-	{onDisks: 12, offDisks: 0, blocksize: int64(oneMiByte), data: oneMiByte, offset: oneMiByte, length: 0, algorithm: bitrot.BLAKE2b512, shouldFail: false, shouldFailQuorum: false},                                                   // 4
-	{onDisks: 14, offDisks: 0, blocksize: int64(oneMiByte), data: oneMiByte, offset: 3, length: 1024, algorithm: bitrot.Poly1305, shouldFail: false, shouldFailQuorum: false},                                                          // 5
-	{onDisks: 16, offDisks: 0, blocksize: int64(oneMiByte), data: oneMiByte, offset: 4, length: 8 * 1024, algorithm: bitrot.Poly1305, shouldFail: false, shouldFailQuorum: false},                                                      // 6
-	{onDisks: 14, offDisks: 7, blocksize: int64(blockSizeV1), data: oneMiByte, offset: oneMiByte, length: 1, algorithm: bitrot.Poly1305, shouldFail: true, shouldFailQuorum: false},                                                    // 7
-	{onDisks: 12, offDisks: 6, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: bitrot.Poly1305, shouldFail: false, shouldFailQuorum: false},                                                   // 8
-	{onDisks: 10, offDisks: 5, blocksize: int64(oneMiByte), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: bitrot.BLAKE2b512, shouldFail: false, shouldFailQuorum: false},                                                   // 9
-	{onDisks: 8, offDisks: 4, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: bitrot.SHA256, shouldFail: false, shouldFailQuorum: false},                                                      // 10
-	{onDisks: 6, offDisks: 3, blocksize: int64(oneMiByte), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: bitrot.Poly1305, shouldFail: false, shouldFailQuorum: false},                                                      // 11
-	{onDisks: 4, offDisks: 2, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: bitrot.Poly1305, shouldFail: false, shouldFailQuorum: false},                                                    // 12
-	{onDisks: 4, offDisks: 1, blocksize: int64(oneMiByte), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: bitrot.Poly1305, shouldFail: false, shouldFailQuorum: false},                                                      // 13
-	{onDisks: 6, offDisks: 2, blocksize: int64(oneMiByte), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: bitrot.Poly1305, shouldFail: false, shouldFailQuorum: false},                                                      // 14
-	{onDisks: 8, offDisks: 3, blocksize: int64(2 * oneMiByte), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: bitrot.Poly1305, shouldFail: false, shouldFailQuorum: false},                                                  // 15
-	{onDisks: 10, offDisks: 6, blocksize: int64(oneMiByte), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: bitrot.Poly1305, shouldFail: false, shouldFailQuorum: true},                                                      // 16
-	{onDisks: 10, offDisks: 2, blocksize: int64(blockSizeV1), data: 2 * oneMiByte, offset: oneMiByte, length: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},                                // 17
-	{onDisks: 10, offDisks: 1, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: bitrot.BLAKE2b512, shouldFail: false, shouldFailQuorum: false},                                                 // 18
-	{onDisks: 12, offDisks: 3, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: bitrot.SHA256, shouldFail: false, shouldFailQuorum: false},                                                     // 19
-	{onDisks: 12, offDisks: 7, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: true},                                             // 20
-	{onDisks: 16, offDisks: 8, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},                                            // 21
-	{onDisks: 16, offDisks: 9, blocksize: int64(oneMiByte), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: true},                                               // 22
-	{onDisks: 16, offDisks: 7, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},                                            // 23
-	{onDisks: 4, offDisks: 1, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},                                             // 24
-	{onDisks: 4, offDisks: 0, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},                                             // 25
-	{onDisks: 4, offDisks: 0, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: bitrot.UnknownAlgorithm, shouldFail: true, shouldFailQuorum: false},                                             // 26
-	{onDisks: 4, offDisks: 0, blocksize: int64(blockSizeV1), data: int64(blockSizeV1) + 1, offset: 0, length: int64(blockSizeV1) + 1, algorithm: bitrot.BLAKE2b512, shouldFail: false, shouldFailQuorum: false},                        // 27
-	{onDisks: 4, offDisks: 0, blocksize: int64(blockSizeV1), data: int64(2 * blockSizeV1), offset: 12, length: int64(blockSizeV1) + 17, algorithm: bitrot.BLAKE2b512, shouldFail: false, shouldFailQuorum: false},                      // 28
-	{onDisks: 6, offDisks: 0, blocksize: int64(blockSizeV1), data: int64(2 * blockSizeV1), offset: 1023, length: int64(blockSizeV1) + 1024, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},             // 29
-	{onDisks: 8, offDisks: 0, blocksize: int64(blockSizeV1), data: int64(2 * blockSizeV1), offset: 11, length: int64(blockSizeV1) + 2*1024, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},             // 30
-	{onDisks: 12, offDisks: 0, blocksize: int64(blockSizeV1), data: int64(2 * blockSizeV1), offset: 512, length: int64(blockSizeV1) + 8*1024, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},           // 31
-	{onDisks: 16, offDisks: 0, blocksize: int64(blockSizeV1), data: int64(2 * blockSizeV1), offset: int64(blockSizeV1), length: int64(blockSizeV1) - 1, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false}, // 32
-	{onDisks: 4, offDisks: 0, blocksize: int64(blockSizeV1), data: int64(oneMiByte), offset: -1, length: 3, algorithm: DefaultBitrotAlgorithm, shouldFail: true, shouldFailQuorum: false},                                              // 33
-	{onDisks: 4, offDisks: 0, blocksize: int64(blockSizeV1), data: int64(oneMiByte), offset: 1024, length: -1, algorithm: DefaultBitrotAlgorithm, shouldFail: true, shouldFailQuorum: false},                                           // 3 4
-
+	{dataBlocks: 2, onDisks: 4, offDisks: 0, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: bitrot.BLAKE2b, shouldFail: false, shouldFailQuorum: false},                                                     // 0
+	{dataBlocks: 3, onDisks: 6, offDisks: 0, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: bitrot.SHA256, shouldFail: false, shouldFailQuorum: false},                                                      // 1
+	{dataBlocks: 4, onDisks: 8, offDisks: 0, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: bitrot.Poly1305, shouldFail: false, shouldFailQuorum: false},                                                    // 2
+	{dataBlocks: 5, onDisks: 10, offDisks: 0, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 1, length: oneMiByte - 1, algorithm: bitrot.BLAKE2b, shouldFail: false, shouldFailQuorum: false},                                                // 3
+	{dataBlocks: 6, onDisks: 12, offDisks: 0, blocksize: int64(oneMiByte), data: oneMiByte, offset: oneMiByte, length: 0, algorithm: bitrot.BLAKE2b, shouldFail: false, shouldFailQuorum: false},                                                      // 4
+	{dataBlocks: 7, onDisks: 14, offDisks: 0, blocksize: int64(oneMiByte), data: oneMiByte, offset: 3, length: 1024, algorithm: bitrot.Poly1305, shouldFail: false, shouldFailQuorum: false},                                                          // 5
+	{dataBlocks: 8, onDisks: 16, offDisks: 0, blocksize: int64(oneMiByte), data: oneMiByte, offset: 4, length: 8 * 1024, algorithm: bitrot.Poly1305, shouldFail: false, shouldFailQuorum: false},                                                      // 6
+	{dataBlocks: 7, onDisks: 14, offDisks: 7, blocksize: int64(blockSizeV1), data: oneMiByte, offset: oneMiByte, length: 1, algorithm: bitrot.Poly1305, shouldFail: true, shouldFailQuorum: false},                                                    // 7
+	{dataBlocks: 6, onDisks: 12, offDisks: 6, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: bitrot.Poly1305, shouldFail: false, shouldFailQuorum: false},                                                   // 8
+	{dataBlocks: 5, onDisks: 10, offDisks: 5, blocksize: int64(oneMiByte), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: bitrot.BLAKE2b, shouldFail: false, shouldFailQuorum: false},                                                      // 9
+	{dataBlocks: 4, onDisks: 8, offDisks: 4, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: bitrot.SHA256, shouldFail: false, shouldFailQuorum: false},                                                      // 10
+	{dataBlocks: 3, onDisks: 6, offDisks: 3, blocksize: int64(oneMiByte), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: bitrot.Poly1305, shouldFail: false, shouldFailQuorum: false},                                                      // 11
+	{dataBlocks: 2, onDisks: 4, offDisks: 2, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: bitrot.Poly1305, shouldFail: false, shouldFailQuorum: false},                                                    // 12
+	{dataBlocks: 2, onDisks: 4, offDisks: 1, blocksize: int64(oneMiByte), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: bitrot.Poly1305, shouldFail: false, shouldFailQuorum: false},                                                      // 13
+	{dataBlocks: 3, onDisks: 6, offDisks: 2, blocksize: int64(oneMiByte), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: bitrot.Poly1305, shouldFail: false, shouldFailQuorum: false},                                                      // 14
+	{dataBlocks: 4, onDisks: 8, offDisks: 3, blocksize: int64(2 * oneMiByte), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: bitrot.Poly1305, shouldFail: false, shouldFailQuorum: false},                                                  // 15
+	{dataBlocks: 5, onDisks: 10, offDisks: 6, blocksize: int64(oneMiByte), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: bitrot.Poly1305, shouldFail: false, shouldFailQuorum: true},                                                      // 16
+	{dataBlocks: 5, onDisks: 10, offDisks: 2, blocksize: int64(blockSizeV1), data: 2 * oneMiByte, offset: oneMiByte, length: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},                                // 17
+	{dataBlocks: 5, onDisks: 10, offDisks: 1, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: bitrot.BLAKE2b, shouldFail: false, shouldFailQuorum: false},                                                    // 18
+	{dataBlocks: 6, onDisks: 12, offDisks: 3, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: bitrot.SHA256, shouldFail: false, shouldFailQuorum: false},                                                     // 19
+	{dataBlocks: 6, onDisks: 12, offDisks: 7, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: true},                                             // 20
+	{dataBlocks: 8, onDisks: 16, offDisks: 8, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},                                            // 21
+	{dataBlocks: 8, onDisks: 16, offDisks: 9, blocksize: int64(oneMiByte), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: true},                                               // 22
+	{dataBlocks: 8, onDisks: 16, offDisks: 7, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},                                            // 23
+	{dataBlocks: 2, onDisks: 4, offDisks: 1, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},                                             // 24
+	{dataBlocks: 2, onDisks: 4, offDisks: 0, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},                                             // 25
+	{dataBlocks: 2, onDisks: 4, offDisks: 0, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: bitrot.UnknownAlgorithm, shouldFail: true, shouldFailQuorum: false},                                             // 26
+	{dataBlocks: 2, onDisks: 4, offDisks: 0, blocksize: int64(blockSizeV1), data: int64(blockSizeV1) + 1, offset: 0, length: int64(blockSizeV1) + 1, algorithm: bitrot.BLAKE2b, shouldFail: false, shouldFailQuorum: false},                           // 27
+	{dataBlocks: 2, onDisks: 4, offDisks: 0, blocksize: int64(blockSizeV1), data: int64(2 * blockSizeV1), offset: 12, length: int64(blockSizeV1) + 17, algorithm: bitrot.BLAKE2b, shouldFail: false, shouldFailQuorum: false},                         // 28
+	{dataBlocks: 3, onDisks: 6, offDisks: 0, blocksize: int64(blockSizeV1), data: int64(2 * blockSizeV1), offset: 1023, length: int64(blockSizeV1) + 1024, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},             // 29
+	{dataBlocks: 4, onDisks: 8, offDisks: 0, blocksize: int64(blockSizeV1), data: int64(2 * blockSizeV1), offset: 11, length: int64(blockSizeV1) + 2*1024, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},             // 30
+	{dataBlocks: 6, onDisks: 12, offDisks: 0, blocksize: int64(blockSizeV1), data: int64(2 * blockSizeV1), offset: 512, length: int64(blockSizeV1) + 8*1024, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},           // 31
+	{dataBlocks: 8, onDisks: 16, offDisks: 0, blocksize: int64(blockSizeV1), data: int64(2 * blockSizeV1), offset: int64(blockSizeV1), length: int64(blockSizeV1) - 1, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false}, // 32
+	{dataBlocks: 2, onDisks: 4, offDisks: 0, blocksize: int64(blockSizeV1), data: int64(oneMiByte), offset: -1, length: 3, algorithm: DefaultBitrotAlgorithm, shouldFail: true, shouldFailQuorum: false},                                              // 33
+	{dataBlocks: 2, onDisks: 4, offDisks: 0, blocksize: int64(blockSizeV1), data: int64(oneMiByte), offset: 1024, length: -1, algorithm: DefaultBitrotAlgorithm, shouldFail: true, shouldFailQuorum: false},                                           // 34
+	{dataBlocks: 4, onDisks: 6, offDisks: 0, blocksize: int64(blockSizeV1), data: int64(blockSizeV1), offset: 0, length: int64(blockSizeV1), algorithm: bitrot.BLAKE2b, shouldFail: false, shouldFailQuorum: false},                                   // 35
+	{dataBlocks: 4, onDisks: 6, offDisks: 1, blocksize: int64(blockSizeV1), data: int64(2 * blockSizeV1), offset: 12, length: int64(blockSizeV1) + 17, algorithm: bitrot.BLAKE2b, shouldFail: false, shouldFailQuorum: false},                         // 36
+	{dataBlocks: 4, onDisks: 6, offDisks: 3, blocksize: int64(blockSizeV1), data: int64(2 * blockSizeV1), offset: 1023, length: int64(blockSizeV1) + 1024, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: true},              // 37
+	{dataBlocks: 8, onDisks: 12, offDisks: 4, blocksize: int64(blockSizeV1), data: int64(2 * blockSizeV1), offset: 11, length: int64(blockSizeV1) + 2*1024, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},            // 38
 }
 
 func TestErasureReadFile(t *testing.T) {
 	for i, test := range erasureReadFileTests {
-		setup, err := newErasureTestSetup(test.onDisks/2, test.onDisks/2, test.blocksize)
+		setup, err := newErasureTestSetup(test.dataBlocks, test.onDisks-test.dataBlocks, test.blocksize)
 		if err != nil {
 			t.Fatalf("Test %d: failed to create test setup: %v", i, err)
 		}
-		storage := XLStorage(setup.disks)
+		storage, err := NewXLStorage(setup.disks, test.dataBlocks, test.onDisks-test.dataBlocks, test.dataBlocks, test.dataBlocks+1)
+		if err != nil {
+			setup.Remove()
+			t.Fatalf("Test %d: failed to create XL Storage: %v", i, err)
+		}
 
 		data := make([]byte, test.data)
 		if _, err = io.ReadFull(crand.Reader, data); err != nil {
@@ -97,7 +105,7 @@ func TestErasureReadFile(t *testing.T) {
 		}
 		writeAlgorithm := test.algorithm
 		if !test.algorithm.Available() {
-			writeAlgorithm = bitrot.BLAKE2b512
+			writeAlgorithm = bitrot.BLAKE2b
 		}
 		buffer := make([]byte, test.blocksize)
 		file, err := storage.CreateFile(bytes.NewReader(data[:]), "testbucket", "object", buffer, crand.Reader, writeAlgorithm)
@@ -105,7 +113,7 @@ func TestErasureReadFile(t *testing.T) {
 			setup.Remove()
 			t.Fatalf("Test %d: failed to create erasure test file: %v", i, err)
 		}
-		pool := bpool.NewBytePool(getChunkSize(test.blocksize, test.onDisks/2), len(storage))
+		pool := bpool.NewBytePool(getChunkSize(test.blocksize, test.dataBlocks), len(storage.disks))
 		writer := bytes.NewBuffer(nil)
 		readInfo, err := storage.ReadFile(writer, "testbucket", "object", test.offset, test.length, test.data, file.Keys, file.Checksums, test.algorithm, test.blocksize, pool)
 		if err != nil && !test.shouldFail {
@@ -127,11 +135,11 @@ func TestErasureReadFile(t *testing.T) {
 		}
 		if err == nil && !test.shouldFail {
 			writer.Reset()
-			for j := range storage[:test.offDisks] {
-				storage[j] = badDisk{nil}
+			for j := range storage.disks[:test.offDisks] {
+				storage.disks[j] = badDisk{nil}
 			}
 			if test.offDisks > 0 {
-				storage[0] = OfflineDisk
+				storage.disks[0] = OfflineDisk
 			}
 			readInfo, err = storage.ReadFile(writer, "testbucket", "object", test.offset, test.length, test.data, file.Keys, file.Checksums, test.algorithm, test.blocksize, pool)
 			if err != nil && !test.shouldFailQuorum {
@@ -173,7 +181,10 @@ func TestErasureReadFileRandomOffsetLength(t *testing.T) {
 	}
 	defer setup.Remove()
 
-	storage := XLStorage(setup.disks)
+	storage, err := NewXLStorage(setup.disks, dataBlocks, parityBlocks, dataBlocks, dataBlocks+1)
+	if err != nil {
+		t.Fatalf("failed to create XL Storage: %v", err)
+	}
 	// Prepare a slice of 5MiB with random data.
 	data := make([]byte, 5*humanize.MiByte)
 	length := int64(len(data))
@@ -201,7 +212,7 @@ func TestErasureReadFileRandomOffsetLength(t *testing.T) {
 	// create pool buffer which will be used by erasureReadFile for
 	// reading from disks and erasure decoding.
 	chunkSize := getChunkSize(blockSize, dataBlocks)
-	pool := bpool.NewBytePool(chunkSize, len(storage))
+	pool := bpool.NewBytePool(chunkSize, len(storage.disks))
 
 	buf := &bytes.Buffer{}
 

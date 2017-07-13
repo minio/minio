@@ -395,7 +395,7 @@ func (s *TestRPCStorageSuite) testRPCStorageFileOps(t *testing.T) {
 			k := blake2b.Sum512(b)
 			return k[:]
 		}
-		verifier, err := NewBitrotVerifier(bitrot.BLAKE2b512, nil, blakeHash(buf))
+		verifier, err := NewBitrotVerifier(bitrot.BLAKE2b, nil, blakeHash(buf))
 		if err != nil {
 			t.Fatalf("failed to create bitrot verifier: %v", err)
 		}

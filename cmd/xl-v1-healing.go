@@ -435,14 +435,17 @@ func healObject(storageDisks []StorageAPI, bucket string, object string, quorum 
 
 	// Heal each part. erasureHealFile() will write the healed part to
 	// .minio/tmp/uuid/ which needs to be renamed later to the final location.
-	storage := XLStorage(latestDisks)
+	storage, err := NewXLStorage(latestDisks, latestMeta.Erasure.DataBlocks, latestMeta.Erasure.ParityBlocks, quorum, quorum+1)
+	if err != nil {
+		return 0, 0, toObjectErr(err, bucket, object)
+	}
 	keys, checksums := make([][]byte, len(latestDisks)), make([][]byte, len(latestDisks))
 	for partIndex := 0; partIndex < len(latestMeta.Parts); partIndex++ {
 		partName := latestMeta.Parts[partIndex].Name
 		partSize := latestMeta.Parts[partIndex].Size
 		erasure := latestMeta.Erasure
 		sumInfo := latestMeta.Erasure.GetCheckSumInfo(partName)
-		for i, disk := range storage {
+		for i, disk := range storage.disks {
 			if disk != OfflineDisk {
 				info := partsMetadata[i].Erasure.GetCheckSumInfo(partName)
 				keys[i] = info.Key

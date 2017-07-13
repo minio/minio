@@ -22,22 +22,23 @@ import (
 	"github.com/minio/minio/pkg/bitrot"
 )
 
-// CreateFile creates a new bitrot encoded file spreed over all available disks. CreateFile will create
+// CreateFile creates a new bitrot encoded file spread over all available disks. CreateFile will create
 // the file at the given volume and path. It will read from src until an io.EOF occurs. The given algorithm will
-// be used to protected the erasure encoded file. The random reader should return random data (if it's nil the system PRNG will be used).
-func (s XLStorage) CreateFile(src io.Reader, volume, path string, buffer []byte, random io.Reader, algorithm bitrot.Algorithm) (f ErasureFileInfo, err error) {
-	f.Keys, f.Checksums = make([][]byte, len(s)), make([][]byte, len(s))
-	hashers := make([]bitrot.Hash, len(s))
+// be used to protect the erasure encoded file. The random reader should return random data (if it's nil the system PRNG will be used).
+func (s *XLStorage) CreateFile(src io.Reader, volume, path string, buffer []byte, random io.Reader, algorithm bitrot.Algorithm) (f ErasureFileInfo, err error) {
+	f.Keys, f.Checksums = make([][]byte, len(s.disks)), make([][]byte, len(s.disks))
+	hashers := make([]bitrot.Hash, len(s.disks))
 	for i := range hashers {
 		f.Keys[i], hashers[i], err = NewBitrotProtector(algorithm, random)
 		if err != nil {
 			return f, err
 		}
 	}
-	locks, errors := make([]chan error, len(s)), make([]error, len(s))
+	locks, errors := make([]chan error, len(s.disks)), make([]error, len(s.disks))
 	for i := range locks {
 		locks[i] = make(chan error, 1)
 	}
+	appendWriters := s.AppendWriters(volume, path)
 
 	blocks, n := [][]byte{}, len(buffer)
 	for n == len(buffer) {
@@ -46,7 +47,7 @@ func (s XLStorage) CreateFile(src io.Reader, volume, path string, buffer []byte,
 			if f.Size != 0 {
 				break
 			}
-			blocks = make([][]byte, len(s))
+			blocks = make([][]byte, len(s.disks))
 		} else if err == nil || (n > 0 && err == io.ErrUnexpectedEOF) {
 			blocks, err = s.ErasureEncode(buffer[:n])
 			if err != nil {
@@ -57,20 +58,24 @@ func (s XLStorage) CreateFile(src io.Reader, volume, path string, buffer []byte,
 		}
 
 		for i := range locks {
-			go erasureAppendFile(s[i], volume, path, blocks[i], hashers[i], locks[i])
+			if s.disks[i] == OfflineDisk {
+				locks[i] <- traceError(errDiskNotFound)
+				continue
+			}
+			go erasureAppendFile(io.MultiWriter(appendWriters[i], hashers[i]), blocks[i], locks[i])
 		}
 		for i := range locks {
 			errors[i] = <-locks[i]
 		}
-		if err = reduceWriteQuorumErrs(errors, objectOpIgnoredErrs, (len(s)/2)+1); err != nil {
+		if err = reduceWriteQuorumErrs(errors, objectOpIgnoredErrs, s.writeQuorum); err != nil {
 			return f, err
 		}
-		s = XLStorage(evalDisks(s, errors))
+		s.disks = evalDisks(s.disks, errors)
 		f.Size += int64(n)
 	}
 
 	f.Algorithm = algorithm
-	for i, disk := range s {
+	for i, disk := range s.disks {
 		if disk == OfflineDisk {
 			f.Keys[i] = nil
 			f.Checksums[i] = nil
@@ -81,14 +86,7 @@ func (s XLStorage) CreateFile(src io.Reader, volume, path string, buffer []byte,
 	return f, nil
 }
 
-func erasureAppendFile(disk StorageAPI, volume, path string, buf []byte, hash bitrot.Hash, pipe chan<- error) {
-	if disk == nil {
-		pipe <- traceError(errDiskNotFound)
-		return
-	}
-	err := disk.AppendFile(volume, path, buf)
-	if err == nil {
-		hash.Write(buf)
-	}
-	pipe <- err
+func erasureAppendFile(w io.Writer, buf []byte, lock chan<- error) {
+	_, err := w.Write(buf)
+	lock <- err
 }

@@ -27,10 +27,10 @@ import (
 // It will try to read the valid parts from the file under the given volume and path and tries to reconstruct the file under the given
 // healVolume and healPath. The given algorithm will be used to verify the valid parts and to protected the reconstructed file.
 // The random reader should return random data (if it's nil the system PRNG will be used).
-func (s XLStorage) HealFile(offlineDisks XLStorage, volume, path string, blocksize int64, healVolume, healPath string, size int64, algorithm bitrot.Algorithm, keys, checksums [][]byte, random io.Reader) (f ErasureFileInfo, err error) {
-	hashers, verifiers := make([]bitrot.Hash, len(s)), make([]*BitrotVerifier, len(s))
-	f.Keys, f.Checksums = make([][]byte, len(s)), make([][]byte, len(s))
-	for i, disk := range s {
+func (s XLStorage) HealFile(offlineDisks []StorageAPI, volume, path string, blocksize int64, healVolume, healPath string, size int64, algorithm bitrot.Algorithm, keys, checksums [][]byte, random io.Reader) (f ErasureFileInfo, err error) {
+	hashers, verifiers := make([]bitrot.Hash, len(s.disks)), make([]*BitrotVerifier, len(s.disks))
+	f.Keys, f.Checksums = make([][]byte, len(s.disks)), make([][]byte, len(s.disks))
+	for i, disk := range s.disks {
 		if disk == OfflineDisk {
 			f.Keys[i], hashers[i], err = NewBitrotProtector(algorithm, random)
 		} else {
@@ -42,15 +42,15 @@ func (s XLStorage) HealFile(offlineDisks XLStorage, volume, path string, blocksi
 			return f, err
 		}
 	}
-	blocks := make([][]byte, len(s))
-	chunksize := getChunkSize(blocksize, len(s)/2)
+	blocks := make([][]byte, len(s.disks))
+	chunksize := getChunkSize(blocksize, s.dataBlocks)
 	for offset := int64(0); offset < size; offset += blocksize {
 		if size < blocksize {
 			blocksize = size
-			chunksize = getChunkSize(blocksize, len(s)/2)
+			chunksize = getChunkSize(blocksize, s.dataBlocks)
 		}
 		numReads := 0
-		for i, disk := range s {
+		for i, disk := range s.disks {
 			if disk != OfflineDisk {
 				if blocks[i] == nil {
 					blocks[i] = make([]byte, chunksize)
@@ -62,19 +62,19 @@ func (s XLStorage) HealFile(offlineDisks XLStorage, volume, path string, blocksi
 					_, err = disk.ReadFile(volume, path, offset, blocks[i])
 				}
 				if err != nil {
-					blocks[i] = MissingShard
+					blocks[i] = nil
 				} else {
 					numReads++
 				}
-				if numReads == len(s)/2 { // we have enough data to reconstruct
+				if numReads == s.readQuorum { // we have enough data to reconstruct
 					break
 				}
 			}
 		}
-		if err = s.ErasureDecode(blocks); err != nil {
+		if err = s.ErasureDecodeDataAndParityBlocks(blocks); err != nil {
 			return f, err
 		}
-		for i, disk := range s {
+		for i, disk := range s.disks {
 			if disk == OfflineDisk {
 				if err = offlineDisks[i].AppendFile(healVolume, healPath, blocks[i]); err != nil {
 					return f, traceError(err)
@@ -85,7 +85,7 @@ func (s XLStorage) HealFile(offlineDisks XLStorage, volume, path string, blocksi
 	}
 	f.Size = size
 	f.Algorithm = algorithm
-	for i, disk := range s {
+	for i, disk := range s.disks {
 		if disk == OfflineDisk {
 			f.Checksums[i] = hashers[i].Sum(nil)
 		}

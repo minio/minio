@@ -44,8 +44,8 @@ const (
 	// GHASH specifies the GHASH (AES-GCM) polynomial authenticator
 	GHASH
 
-	// BLAKE2b512 specifies the BLAKE2b-512 hash function
-	BLAKE2b512
+	// BLAKE2b specifies the BLAKE2b-512 hash function
+	BLAKE2b
 
 	// SHA256 specifies the SHA256 hash function
 	SHA256
@@ -57,17 +57,17 @@ const (
 )
 
 var keysizes = []int{
-	Poly1305:   32,
-	GHASH:      32,
-	BLAKE2b512: 0,
-	SHA256:     0,
+	Poly1305: 32,
+	GHASH:    32,
+	BLAKE2b:  0,
+	SHA256:   0,
 }
 
 var names = []string{
-	Poly1305:   "poly1305",
-	GHASH:      "ghash",
-	BLAKE2b512: "blake2b",
-	SHA256:     "sha256",
+	Poly1305: "poly1305",
+	GHASH:    "ghash",
+	BLAKE2b:  "blake2b",
+	SHA256:   "sha256",
 }
 
 var hashes = make([]func([]byte, Mode) Hash, UnknownAlgorithm)
