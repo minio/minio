@@ -22,7 +22,7 @@ import connect from 'react-redux/lib/components/connect'
 import logo from '../../img/logo-dark.svg'
 import Dropdown from 'react-bootstrap/lib/Dropdown'
 
-let SideBar = ({visibleBuckets, loadBucket, currentBucket, selectBucket, searchBuckets, sidebarStatus, clickOutside, showPolicy, storageDetails}) => {
+let SideBar = ({visibleBuckets, loadBucket, currentBucket, selectBucket, searchBuckets, sidebarStatus, clickOutside, showPolicy, deleteBucket, storageDetails}) => {
 
   const list = visibleBuckets.map((bucket, i) => {
     return <li className={ classNames({
@@ -44,7 +44,7 @@ let SideBar = ({visibleBuckets, loadBucket, currentBucket, selectBucket, searchB
                    <a onClick={ showPolicy }>Edit policy</a>
                  </li>
                  <li>
-                   <a href="">Delete</a>
+                   <a onClick={ (e) => deleteBucket(e, bucket) }>Delete</a>
                  </li>
                </Dropdown.Menu>
              </Dropdown>

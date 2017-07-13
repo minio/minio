@@ -76,6 +76,10 @@ export default (state = {
       newState.buckets = [action.bucket, ...newState.buckets]
       newState.visibleBuckets = [action.bucket, ...newState.visibleBuckets]
       break
+    case actions.REMOVE_BUCKET:
+      newState.buckets = newState.buckets.filter(bucket => bucket != action.bucket)
+      newState.visibleBuckets = newState.visibleBuckets.filter(bucket => bucket != action.bucket)
+      break
     case actions.SET_VISIBLE_BUCKETS:
       newState.visibleBuckets = action.visibleBuckets
       break

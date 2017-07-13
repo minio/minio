@@ -24,6 +24,7 @@ export const SET_CURRENT_BUCKET = 'SET_CURRENT_BUCKET'
 export const SET_CURRENT_PATH = 'SET_CURRENT_PATH'
 export const SET_BUCKETS = 'SET_BUCKETS'
 export const ADD_BUCKET = 'ADD_BUCKET'
+export const REMOVE_BUCKET = 'REMOVE_BUCKET'
 export const SET_VISIBLE_BUCKETS = 'SET_VISIBLE_BUCKETS'
 export const SET_OBJECTS = 'SET_OBJECTS'
 export const APPEND_OBJECTS = 'APPEND_OBJECTS'
@@ -170,6 +171,13 @@ export const setBuckets = buckets => {
 export const addBucket = bucket => {
   return {
     type: ADD_BUCKET,
+    bucket
+  }
+}
+
+export const removeBucket = bucket => {
+  return {
+    type: REMOVE_BUCKET,
     bucket
   }
 }
@@ -323,6 +331,37 @@ export const selectBucket = (newCurrentBucket, prefix) => {
     dispatch(setCurrentBucket(newCurrentBucket))
     dispatch(selectPrefix(prefix))
     return
+  }
+}
+
+export const deleteBucket = (bucket) => {
+  return (dispatch, getState) => {
+    // DeleteBucket() RPC call will ONLY delete a bucket if it is empty of
+    // objects. This means a call can just be sent, as it is entirely reversable
+    // and won't do any permanent damage.
+    web.DeleteBucket({
+      bucketName: bucket
+    })
+      .then(() => {
+        dispatch(showAlert({
+          type: 'info',
+          message: `Bucket '${bucket}' has been deleted.`
+        }))
+        dispatch(removeBucket(bucket))
+      })
+      .catch(err => {
+        let message = err.message
+
+        // Show a custom "bucket not empty" message, as it can be confusing.
+        if (/Bucket not empty/.test(err.message)) {
+          message = `Bucket '${bucket}' must be empty to delete.`
+        }
+
+        dispatch(showAlert({
+          type: 'danger',
+          message: message
+        }))
+      })
   }
 }
 

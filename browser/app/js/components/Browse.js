@@ -216,6 +216,12 @@ export default class Browse extends React.Component {
     dispatch(actions.hideBucketPolicy())
   }
 
+  deleteBucket(e, bucket) {
+    e.preventDefault()
+    const {dispatch} = this.props
+    dispatch(actions.deleteBucket(bucket))
+  }
+
   uploadFile(e) {
     e.preventDefault()
     const {dispatch, buckets} = this.props
@@ -575,6 +581,7 @@ export default class Browse extends React.Component {
             selectBucket={ this.selectBucket.bind(this) }
             clickOutside={ this.hideSidebar.bind(this) }
             showPolicy={ this.showBucketPolicy.bind(this) }
+            deleteBucket={ this.deleteBucket.bind(this) }
             storageDetails={ storageUsageDetails } />
           <div className="objects">
             <header className="objects__row" data-type="folder">
