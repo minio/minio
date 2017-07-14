@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -144,10 +145,13 @@ func TestGCSMultipartMetaName(t *testing.T) {
 
 // Test for gcsMultipartDataName.
 func TestGCSMultipartDataName(t *testing.T) {
-	uploadID := "a"
-	etag := "b"
-	expected := pathJoin(gcsMinioMultipartPathV1, uploadID, etag)
-	got := gcsMultipartDataName(uploadID, etag)
+	var (
+		uploadID   = "a"
+		etag       = "b"
+		partNumber = 1
+	)
+	expected := pathJoin(gcsMinioMultipartPathV1, uploadID, fmt.Sprintf("%05d.%s", partNumber, etag))
+	got := gcsMultipartDataName(uploadID, partNumber, etag)
 	if expected != got {
 		t.Errorf("expected: %s, got: %s", expected, got)
 	}
