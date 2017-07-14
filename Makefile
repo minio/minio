@@ -19,7 +19,7 @@ getdeps: checks
 	@echo "Installing misspell" && go get -u github.com/client9/misspell/cmd/misspell
 	@echo "Installing ineffassign" && go get -u github.com/gordonklaus/ineffassign
 
-verifiers: vet fmt lint cyclo spelling
+verifiers: getdeps vet fmt lint cyclo spelling
 
 vet:
 	@echo "Running $@"
@@ -45,7 +45,7 @@ cyclo:
 	@${GOPATH}/bin/gocyclo -over 100 cmd
 	@${GOPATH}/bin/gocyclo -over 100 pkg
 
-build: getdeps verifiers $(UI_ASSETS)
+build: $(UI_ASSETS)
 
 deadcode:
 	@${GOPATH}/bin/deadcode
@@ -55,7 +55,7 @@ spelling:
 	@${GOPATH}/bin/misspell -error `find pkg/`
 	@${GOPATH}/bin/misspell -error `find docs/`
 
-test: build
+test: verifiers build
 	@echo "Running all minio testing"
 	@go test $(GOFLAGS) .
 	@go test $(GOFLAGS) github.com/minio/minio/cmd...
