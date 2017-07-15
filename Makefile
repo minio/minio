@@ -67,7 +67,7 @@ coverage: build
 
 # Builds minio locally.
 build:
-	@echo "Building minio to $(PWD)/minio"
+	@echo "Building minio to $(PWD)/minio ..."
 	@CGO_ENABLED=0 go build --ldflags $(BUILD_LDFLAGS) -o $(PWD)/minio
 
 pkg-add:
@@ -87,8 +87,9 @@ pkg-list:
 
 # Builds minio and installs it to $GOPATH/bin.
 install: build
-	@echo "Installing minio at $(GOPATH)/bin/minio"
+	@echo "Installing minio at $(GOPATH)/bin/minio ..."
 	@cp $(PWD)/minio $(GOPATH)/bin/minio
+	@echo "Minio installed successfully. Use 'minio server export' to start."
 
 release: verifiers
 	@MINIO_RELEASE=RELEASE ./buildscripts/build.sh
