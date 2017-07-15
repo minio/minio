@@ -89,7 +89,7 @@ pkg-list:
 install: build
 	@echo "Installing minio at $(GOPATH)/bin/minio ..."
 	@cp $(PWD)/minio $(GOPATH)/bin/minio
-	@echo "Minio installed successfully. Use 'minio server export' to start."
+	@echo "Check 'minio -h' for help."
 
 release: verifiers
 	@MINIO_RELEASE=RELEASE ./buildscripts/build.sh
