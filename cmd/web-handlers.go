@@ -536,9 +536,13 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	bucket := vars["bucket"]
 	object := vars["object"]
-	token := r.URL.Query().Get("token")
 
-	if !isAuthTokenValid(token) && !isBucketActionAllowed("s3:GetObject", bucket, object) {
+	authErr := webRequestAuthenticate(r)
+	if authErr == errAuthentication {
+		writeWebErrorResponse(w, errAuthentication)
+		return
+	}
+	if authErr != nil && !isBucketActionAllowed("s3:GetObject", bucket, object) {
 		writeWebErrorResponse(w, errAuthentication)
 		return
 	}
@@ -584,8 +588,14 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token := r.URL.Query().Get("token")
-	if !isAuthTokenValid(token) {
+	authErr := webRequestAuthenticate(r)
+	if authErr == errAuthentication {
+		writeWebErrorResponse(w, errAuthentication)
+		return
+	}
+	if authErr != nil {
+		// If the user didn't provide a token as a header, ensure GetObject is allowed
+		// for all buckets they're requesting.
 		for _, object := range args.Objects {
 			if !isBucketActionAllowed("s3:GetObject", args.BucketName, pathJoin(args.Prefix, object)) {
 				writeWebErrorResponse(w, errAuthentication)

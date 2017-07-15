@@ -83,8 +83,8 @@ func registerWebRouter(mux *router.Router) error {
 	// RPC handler at URI - /minio/webrpc
 	webBrowserRouter.Methods("POST").Path("/webrpc").Handler(webRPC)
 	webBrowserRouter.Methods("PUT").Path("/upload/{bucket}/{object:.+}").HandlerFunc(web.Upload)
-	webBrowserRouter.Methods("GET").Path("/download/{bucket}/{object:.+}").Queries("token", "{token:.*}").HandlerFunc(web.Download)
-	webBrowserRouter.Methods("POST").Path("/zip").Queries("token", "{token:.*}").HandlerFunc(web.DownloadZip)
+	webBrowserRouter.Methods("GET").Path("/download/{bucket}/{object:.+}").HandlerFunc(web.Download)
+	webBrowserRouter.Methods("POST").Path("/zip").HandlerFunc(web.DownloadZip)
 
 	// Add compression for assets.
 	compressedAssets := handlers.CompressHandler(http.StripPrefix(minioReservedBucketPath, http.FileServer(assetFS())))

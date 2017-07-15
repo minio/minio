@@ -436,6 +436,7 @@ export const downloadSelected = (url, req, xhr) => {
     document.body.appendChild(anchor);
     xhr.open('POST', url, true)
     xhr.responseType = 'blob'
+    xhr.setRequestHeader('Authorization', 'Bearer ' + storage.getItem('token'))
 
     xhr.onload = function(e) {
       if (this.status == 200) {
@@ -448,9 +449,6 @@ export const downloadSelected = (url, req, xhr) => {
 
         anchor.href = blobUrl
         anchor.download = req.bucketName+separator+req.prefix.slice(0, -1)+'.zip';
-
-
-
 
         anchor.click()
         window.URL.revokeObjectURL(blobUrl)
