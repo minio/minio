@@ -4,7 +4,7 @@ LDFLAGS := $(shell go run buildscripts/gen-ldflags.go)
 
 BUILD_LDFLAGS := '$(LDFLAGS)'
 
-all: install
+all: build
 
 checks:
 	@echo "Check deps"
@@ -19,7 +19,7 @@ getdeps: checks
 	@echo "Installing misspell" && go get -u github.com/client9/misspell/cmd/misspell
 	@echo "Installing ineffassign" && go get -u github.com/gordonklaus/ineffassign
 
-verifiers: vet fmt lint cyclo spelling
+verifiers: getdeps vet fmt lint cyclo spelling
 
 vet:
 	@echo "Running $@"
@@ -45,8 +45,6 @@ cyclo:
 	@${GOPATH}/bin/gocyclo -over 100 cmd
 	@${GOPATH}/bin/gocyclo -over 100 pkg
 
-build: getdeps verifiers $(UI_ASSETS)
-
 deadcode:
 	@${GOPATH}/bin/deadcode
 
@@ -55,7 +53,9 @@ spelling:
 	@${GOPATH}/bin/misspell -error `find pkg/`
 	@${GOPATH}/bin/misspell -error `find docs/`
 
-test: build
+# Builds minio, runs the verifiers then runs the tests.
+check: test
+test: verifiers build
 	@echo "Running all minio testing"
 	@go test $(GOFLAGS) .
 	@go test $(GOFLAGS) github.com/minio/minio/cmd...
@@ -65,9 +65,10 @@ coverage: build
 	@echo "Running all coverage for minio"
 	@./buildscripts/go-coverage.sh
 
-gomake-all: build
-	@echo "Installing minio at $(GOPATH)/bin/minio"
-	@CGO_ENABLED=0 go build --ldflags $(BUILD_LDFLAGS) -o $(GOPATH)/bin/minio
+# Builds minio locally.
+build:
+	@echo "Building minio to $(PWD)/minio ..."
+	@CGO_ENABLED=0 go build --ldflags $(BUILD_LDFLAGS) -o $(PWD)/minio
 
 pkg-add:
 	@echo "Adding new package $(PKG)"
@@ -84,7 +85,11 @@ pkg-remove:
 pkg-list:
 	@$(GOPATH)/bin/govendor list
 
-install: gomake-all
+# Builds minio and installs it to $GOPATH/bin.
+install: build
+	@echo "Installing minio at $(GOPATH)/bin/minio ..."
+	@cp $(PWD)/minio $(GOPATH)/bin/minio
+	@echo "Check 'minio -h' for help."
 
 release: verifiers
 	@MINIO_RELEASE=RELEASE ./buildscripts/build.sh
