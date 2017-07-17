@@ -60,6 +60,8 @@ func testAuthenticate(authType string, t *testing.T) {
 			_, err = authenticateNode(testCase.accessKey, testCase.secretKey)
 		} else if authType == "web" {
 			_, err = authenticateWeb(testCase.accessKey, testCase.secretKey)
+		} else if authType == "url" {
+			_, err = authenticateURL(testCase.accessKey, testCase.secretKey)
 		}
 
 		if testCase.expectedErr != nil {
@@ -81,6 +83,10 @@ func TestAuthenticateNode(t *testing.T) {
 
 func TestAuthenticateWeb(t *testing.T) {
 	testAuthenticate("web", t)
+}
+
+func TestAuthenticateURL(t *testing.T) {
+	testAuthenticate("url", t)
 }
 
 func BenchmarkAuthenticateNode(b *testing.B) {
