@@ -25,43 +25,33 @@ import (
 	"github.com/minio/minio/pkg/bpool"
 )
 
-// isSuccessDecodeBlocks - do we have all the blocks to be
-// successfully decoded?. Input encoded blocks ordered matrix.
+// isSuccessDecodeBlocks - do we have enough blocks to allow
+// successful decoding? Input encoded blocks ordered matrix.
 func isSuccessDecodeBlocks(enBlocks [][]byte, dataBlocks int) bool {
 	// Count number of data and parity blocks that were read.
-	var successDataBlocksCount = 0
-	var successParityBlocksCount = 0
+	var successBlocksCount = 0
 	for index := range enBlocks {
-		if enBlocks[index] == nil {
-			continue
+		if enBlocks[index] != nil {
+			successBlocksCount++
+			if successBlocksCount >= dataBlocks {
+				// Return true if we have at least dataBlocks blocks (irrespective whether data or parity).
+				return true
+			}
 		}
-		// block index lesser than data blocks, update data block count.
-		if index < dataBlocks {
-			successDataBlocksCount++
-			continue
-		} // else { // update parity block count.
-		successParityBlocksCount++
 	}
-	// Returns true if we have atleast dataBlocks parity.
-	return successDataBlocksCount == dataBlocks || successDataBlocksCount+successParityBlocksCount >= dataBlocks
+	return false
 }
 
 // isSuccessDataBlocks - do we have all the data blocks?
 // Input encoded blocks ordered matrix.
 func isSuccessDataBlocks(enBlocks [][]byte, dataBlocks int) bool {
-	// Count number of data blocks that were read.
-	var successDataBlocksCount = 0
+	// Iterate up to dataBlocks over the slice and make sure they are all there
 	for index := range enBlocks[:dataBlocks] {
 		if enBlocks[index] == nil {
-			continue
-		}
-		// block index lesser than data blocks, update data block count.
-		if index < dataBlocks {
-			successDataBlocksCount++
+			return false
 		}
 	}
-	// Returns true if we have atleast the dataBlocks.
-	return successDataBlocksCount >= dataBlocks
+	return true
 }
 
 // Return readable disks slice from which we can read parallelly.
