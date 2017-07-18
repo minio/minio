@@ -323,8 +323,7 @@ func decodeMissingData(enBlocks [][]byte, dataBlocks, parityBlocks int) error {
 	}
 
 	// Reconstruct any missing data blocks.
-	// TODO: Implement ReconstructMissingData method to just reconstruct the data blocks
-	return rs.Reconstruct(enBlocks)
+	return rs.ReconstructMissingData(enBlocks)
 }
 
 // decodeDataAndParity - decode all encoded data and parity blocks.
