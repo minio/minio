@@ -327,6 +327,14 @@ func TestHealing(t *testing.T) {
 		t.Fatal("HealObject failed")
 	}
 
+	// Clear out the old xl.json file to avoid appending a new one, as StorageAPI
+	// only appends. Right now, we don't use temporary files for append -> rename
+	// in this test, although this should eventually change.
+	err = deleteXLMetdata(disk, bucket, object)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	// Write xl.json with different modtime to simulate the case where a disk had
 	// gone down when an object was replaced by a new object.
 	xlMetaOutDated := xlMetaPreHeal
