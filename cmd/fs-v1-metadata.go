@@ -26,9 +26,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/json-iterator/go"
 	"github.com/minio/minio/pkg/lock"
 	"github.com/minio/minio/pkg/mimedb"
-	"github.com/tidwall/gjson"
 )
 
 // FS format, and object metadata.
@@ -172,43 +172,6 @@ func (m *fsMetaV1) WriteTo(lk *lock.LockedFile) (n int64, err error) {
 	return int64(len(metadataBytes)), nil
 }
 
-func parseFSVersion(fsMetaBuf []byte) string {
-	return gjson.GetBytes(fsMetaBuf, "version").String()
-}
-
-func parseFSFormat(fsMetaBuf []byte) string {
-	return gjson.GetBytes(fsMetaBuf, "format").String()
-}
-
-func parseFSRelease(fsMetaBuf []byte) string {
-	return gjson.GetBytes(fsMetaBuf, "minio.release").String()
-}
-
-func parseFSMetaMap(fsMetaBuf []byte) map[string]string {
-	// Get xlMetaV1.Meta map.
-	metaMapResult := gjson.GetBytes(fsMetaBuf, "meta").Map()
-	metaMap := make(map[string]string)
-	for key, valResult := range metaMapResult {
-		metaMap[key] = valResult.String()
-	}
-	return metaMap
-}
-
-func parseFSParts(fsMetaBuf []byte) []objectPartInfo {
-	// Parse the FS Parts.
-	partsResult := gjson.GetBytes(fsMetaBuf, "parts").Array()
-	partInfo := make([]objectPartInfo, len(partsResult))
-	for i, p := range partsResult {
-		info := objectPartInfo{}
-		info.Number = int(p.Get("number").Int())
-		info.Name = p.Get("name").String()
-		info.ETag = p.Get("etag").String()
-		info.Size = p.Get("size").Int()
-		partInfo[i] = info
-	}
-	return partInfo
-}
-
 func (m *fsMetaV1) ReadFrom(lk *lock.LockedFile) (n int64, err error) {
 	var fsMetaBuf []byte
 	fi, err := lk.Stat()
@@ -225,26 +188,16 @@ func (m *fsMetaV1) ReadFrom(lk *lock.LockedFile) (n int64, err error) {
 		return 0, traceError(io.EOF)
 	}
 
-	// obtain version.
-	m.Version = parseFSVersion(fsMetaBuf)
-
-	// obtain format.
-	m.Format = parseFSFormat(fsMetaBuf)
+	err = jsoniter.Unmarshal(fsMetaBuf, &m)
+	if err != nil {
+		return 0, traceError(err)
+	}
 
 	// Verify if the format is valid, return corrupted format
 	// for unrecognized formats.
-	if !isFSMetaValid(m.Version, m.Format) {
+	if !m.IsValid() {
 		return 0, traceError(errCorruptedFormat)
 	}
-
-	// obtain metadata.
-	m.Meta = parseFSMetaMap(fsMetaBuf)
-
-	// obtain parts info list.
-	m.Parts = parseFSParts(fsMetaBuf)
-
-	// obtain minio release date.
-	m.Minio.Release = parseFSRelease(fsMetaBuf)
 
 	// Success.
 	return int64(len(fsMetaBuf)), nil
