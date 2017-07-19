@@ -295,10 +295,16 @@ func newGCSGateway(projectID string) (GatewayLayer, error) {
 func (l *gcsGateway) CleanupGCSMinioPathBucket(bucket string) {
 	it := l.client.Bucket(bucket).Objects(l.ctx, &storage.Query{Prefix: gcsMinioTempPath, Versions: false})
 	for {
+		select {
+		case <-l.cleanupEndCh:
+			// Stop cleanup process if Shutdown() was called.
+			return
+		default:
+		}
 		attrs, err := it.Next()
 		if err != nil {
 			if err != iterator.Done {
-				errorIf(err, "Object listing error on bucket %s", bucket)
+				errorIf(err, "Object listing error on bucket %s during purging of old files in minio.sys.temp", bucket)
 			}
 			return
 		}
@@ -306,7 +312,7 @@ func (l *gcsGateway) CleanupGCSMinioPathBucket(bucket string) {
 			// Delete files older than 2 weeks.
 			err := l.client.Bucket(bucket).Object(attrs.Name).Delete(l.ctx)
 			if err != nil {
-				errorIf(err, "Unable to delete the object %s", attrs.Name)
+				errorIf(err, "Unable to delete the object %s during purging of old files in minio.sys.temp", attrs.Name)
 				return
 			}
 		}
@@ -318,10 +324,16 @@ func (l *gcsGateway) CleanupGCSMinioPath() {
 	for {
 		it := l.client.Buckets(l.ctx, l.projectID)
 		for {
+			select {
+			case <-l.cleanupEndCh:
+				// Stop cleanup process if Shutdown() was called.
+				return
+			default:
+			}
 			attrs, err := it.Next()
 			if err != nil {
 				if err != iterator.Done {
-					errorIf(err, "Bucket listing error")
+					errorIf(err, "Bucket listing error during purging of old files in minio.sys.temp")
 				}
 				break
 			}
@@ -329,7 +341,7 @@ func (l *gcsGateway) CleanupGCSMinioPath() {
 		}
 		select {
 		case <-l.cleanupEndCh:
-			// If shutdown is called we end the cleanup process.
+			// Stop cleanup process if Shutdown() was called.
 			return
 		case <-time.After(gcsCleanupInterval):
 		}
