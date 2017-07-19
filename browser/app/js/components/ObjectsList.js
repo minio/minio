@@ -19,78 +19,61 @@ import Moment from 'moment'
 import humanize from 'humanize'
 import connect from 'react-redux/lib/components/connect'
 import Dropdown from 'react-bootstrap/lib/Dropdown'
+import MaterialDesignIconicFonts from 'material-design-iconic-font/dist/css/material-design-iconic-font.min.css'
 
-let ObjectsList = ({objects, currentPath, selectPrefix, dataType, showDeleteConfirmation, shareObject, loadPath, checkObject, checkedObjectsArray}) => {
-  const list = objects.map((object, i) => {
-    let size = object.name.endsWith('/') ? '-' : humanize.filesize(object.size)
-    let lastModified = object.name.endsWith('/') ? '-' : Moment(object.lastModified).format('lll')
-    let loadingClass = loadPath === `${currentPath}${object.name}` ? 'fesl-loading' : ''
-    let actionButtons = ''
-    let deleteButton = ''
-    if (web.LoggedIn())
-      deleteButton = <a href="" className="fiad-action" onClick={ (e) => showDeleteConfirmation(e, `${currentPath}${object.name}`) }><i className="fa fa-trash"></i></a>
+let ObjectsList = ({objects, currentPath, selectPrefix, dataType, showDeleteConfirmation, shareObject, loadPath, checkObject, checkedObjectsArray, showObjectPreview, objectName}) => {
+    const list = objects.map ((object, i) => {
+        let size = object.name.endsWith ('/') ? '' : humanize.filesize (object.size)
+        let lastModified = object.name.endsWith ('/') ? '' : Moment (object.lastModified).format ('lll')
+        let loadingClass = loadPath === `${currentPath}${object.name}` ? 'fesl-loading' : ''
 
-    if (!checkedObjectsArray.length > 0) {
-      if (!object.name.endsWith('/')) {
-        actionButtons = <Dropdown id={ "fia-dropdown-" + object.name.replace('.', '-') }>
-                          <Dropdown.Toggle noCaret className="fia-toggle"></Dropdown.Toggle>
-                          <Dropdown.Menu>
-                            <a href="" className="fiad-action" onClick={ (e) => shareObject(e, `${currentPath}${object.name}`) }><i className="fa fa-copy"></i></a>
-                            { deleteButton }
-                          </Dropdown.Menu>
-                        </Dropdown>
-      }
-    }
+        let activeClass = ''
+        let isChecked = ''
+        let folderClass = dataType (object.name, object.contentType) == 'folder' ? 'objects__row--folder' : ''
 
-    let activeClass = ''
-    let isChecked = ''
 
-    if (checkedObjectsArray.indexOf(object.name) > -1) {
-      activeClass = ' fesl-row-selected'
-      isChecked = true
-    }
+        if (checkedObjectsArray.indexOf (object.name) > -1) {
+            activeClass = ' objects__row-selected'
+            isChecked = true
+        }
 
+
+        return (
+            <div key={ i } className={ "objects__row " + folderClass + loadingClass + activeClass } onClick={ (e) => showObjectPreview(e) }>
+
+                <div className="objects__item objects__item--select" data-object-type={ dataType (object.name, object.contentType) }>
+                    <div className="checkbox">
+                        <input type="checkbox" name={ object.name } checked={ isChecked } onChange={ (e) => checkObject (e, object.name) }/>
+                        <i className="checkbox__helper" />
+                    </div>
+                </div>
+
+                <div className="objects__item objects__item--name">
+                    <a href="" onClick={ (e) => selectPrefix (e, `${currentPath}${object.name}`) }>
+                        { object.name }
+                    </a>
+                </div>
+                <div className="objects__item objects__item--size">
+                    { size }
+                </div>
+                <div className="objects__item objects__item--modified">
+                    { lastModified }
+                </div>
+            </div>
+        )
+    })
     return (
-      <div key={ i } className={ "fesl-row " + loadingClass + activeClass } data-type={ dataType(object.name, object.contentType) }>
-        <div className="fesl-item fesl-item-icon">
-          <div className="fi-select">
-            <input type="checkbox"
-              name={ object.name }
-              checked={ isChecked }
-              onChange={ (e) => checkObject(e, object.name) } />
-            <i className="fis-icon"></i>
-            <i className="fis-helper"></i>
-          </div>
+        <div>
+            { list }
         </div>
-        <div className="fesl-item fesl-item-name">
-          <a href="" onClick={ (e) => selectPrefix(e, `${currentPath}${object.name}`) }>
-            { object.name }
-          </a>
-        </div>
-        <div className="fesl-item fesl-item-size">
-          { size }
-        </div>
-        <div className="fesl-item fesl-item-modified">
-          { lastModified }
-        </div>
-        <div className="fesl-item fesl-item-actions">
-          { actionButtons }
-        </div>
-      </div>
     )
-  })
-  return (
-    <div>
-      { list }
-    </div>
-  )
 }
 
 // Subscribe it to state changes.
-export default connect(state => {
-  return {
-    objects: state.objects,
-    currentPath: state.currentPath,
-    loadPath: state.loadPath
-  }
-})(ObjectsList)
+export default connect (state => {
+    return {
+        objects: state.objects,
+        currentPath: state.currentPath,
+        loadPath: state.loadPath
+    }
+}) (ObjectsList)

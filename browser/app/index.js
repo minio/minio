@@ -31,15 +31,13 @@ import IndexRoute from 'react-router/lib/IndexRoute'
 import Provider from 'react-redux/lib/components/Provider'
 import connect from 'react-redux/lib/components/connect'
 
-import Moment from 'moment'
-
 import { minioBrowserPrefix } from './js/constants.js'
 import * as actions from './js/actions.js'
 import reducer from './js/reducers.js'
 
 import _Login from './js/components/Login.js'
 import _Browse from './js/components/Browse.js'
-import fontAwesome from 'font-awesome/css/font-awesome.css'
+import MaterialDesignIconicFonts from 'material-design-iconic-font/dist/css/material-design-iconic-font.min.css'
 
 import Web from './js/web'
 window.Web = Web
