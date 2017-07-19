@@ -7,7 +7,6 @@ import * as actions from '../actions'
 class PolicyInput extends Component {
   componentDidMount() {
     const {web, dispatch} = this.props
-    this.prefix.focus()
     web.ListAllBucketPolicies({
       bucketName: this.props.currentBucket
     }).then(res => {
@@ -28,23 +27,8 @@ class PolicyInput extends Component {
 
   handlePolicySubmit(e) {
     e.preventDefault()
-    const {web, dispatch, currentBucket} = this.props
+    const {web, dispatch} = this.props
 
-    let prefix = currentBucket + '/' + this.prefix.value
-    let policy = this.policy.value
-
-    if (!prefix.endsWith('*')) prefix = prefix + '*'
- 
-    let prefixAlreadyExists = this.props.policies.some(elem => prefix === elem.prefix)
-
-    if (prefixAlreadyExists) {
-      dispatch(actions.showAlert({
-       type: 'danger',
-       message: "Policy for this prefix already exists."
-      }))
-      return
-    }
-    
     web.SetBucketPolicy({
       bucketName: this.props.currentBucket,
       prefix: this.prefix.value,
@@ -52,7 +36,8 @@ class PolicyInput extends Component {
     })
       .then(() => {
         dispatch(actions.setPolicies([{
-          policy, prefix
+          policy: this.policy.value,
+          prefix: this.prefix.value + '*',
         }, ...this.props.policies]))
         this.prefix.value = ''
       })
@@ -64,16 +49,19 @@ class PolicyInput extends Component {
 
   render() {
     return (
-      <header className="pmb-list">
-        <div className="pmbl-item">
-          <input type="text"
-            ref={ prefix => this.prefix = prefix }
-            className="form-control"
-            placeholder="Prefix"
-            editable={ true } />
+      <header className="policy__list">
+        <div className="policy__item">
+          <div className="form-group">
+            <input type="text"
+              ref={ prefix => this.prefix = prefix }
+              className="form-group__field form-group__field--sm"
+              placeholder="Prefix"
+              editable={ true } />
+            <i className="form-group__bar" />
+          </div>
         </div>
-        <div className="pmbl-item">
-          <select ref={ policy => this.policy = policy } className="form-control">
+        <div className="policy__item">
+          <select ref={ policy => this.policy = policy } className="form-group__field form-group__field--sm">
             <option value={ READ_ONLY }>
               Read Only
             </option>
@@ -85,8 +73,8 @@ class PolicyInput extends Component {
             </option>
           </select>
         </div>
-        <div className="pmbl-item">
-          <button className="btn btn-block btn-primary" onClick={ this.handlePolicySubmit.bind(this) }>
+        <div className="policy__item">
+          <button className="btn btn--block btn--primary" onClick={ this.handlePolicySubmit.bind(this) }>
             Add
           </button>
         </div>

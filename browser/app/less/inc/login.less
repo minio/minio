@@ -1,104 +1,103 @@
 .login {
-    height: 100vh;
-    min-height: 500px;
-    background: @dark-gray;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    min-height: 100vh;
+    justify-content: center;
+    padding: 50px;
+    background-color: @login-bg;
 
+    @media (max-width: @screen-xs-max) {
+        padding: 20px;
+    }
+}
+
+.login__content {
+    flex: 1;
+    max-width: 400px;
+    width: 100%;
+    align-self: center;
+    align-items: center;
+    display: flex;
+}
+
+.login__form {
+    width: 100%;
     text-align: center;
-    &:before {
-        height: ~"calc(100% - 110px)";
-        width: 1px;
-        content: "";
+
+    .form-group {
+        margin-bottom: 30px !important;
     }
 }
 
-.l-wrap,
-.login:before {
-    display: inline-block;
-    vertical-align: middle;
-}
-
-.l-wrap {
-    width: 80%;
-    max-width: 500px;
-    margin-top: -50px;
-    &.toggled {
-        display: inline-block;
-    }
-
-    .input-group:not(:last-child) {
-        margin-bottom: 40px;
-    }
-}
-
-.l-footer {
-    height: 110px;
-    padding: 0 50px;
-}
-
-.lf-logo {
-    float: right;
-    img {
-        width: 40px;
-    }
-}
-
-.lf-server {
-    float: left;
-    color: rgba(255, 255, 255, 0.4);
-    font-size: 20px;
-    font-weight: 400;
-    padding-top: 40px;
-}
-
-@media (max-width: @screen-sm-min) {
-    .lf-logo,
-    .lf-server {
-        float: none;
-        display: block;
-        text-align: center;
-        width: 100%;
-    }
-
-    .lf-logo {
-        margin-bottom: 5px;
-    }
-
-    .lf-server {
-        font-size: 15px;
-    }
-}
-
-.lw-btn {
+.login__submit {
+    background-color: transparent;
     width: 50px;
     height: 50px;
-    border: 1px solid @white;
-    display: inline-block;
     border-radius: 50%;
-    font-size: 22px;
-    color: @white;
+    display: inline-block;
+    border: 1px solid lighten(@input-border-invert, 5%);
+    position: relative;
+    overflow: hidden;
+    color: fade(@input-color-invert, 70%);
     .transition(all);
     .transition-duration(300ms);
-    opacity: 0.3;
-    background-color: transparent;
-    line-height: 45px;
-    padding: 0;
+
     &:hover {
-        color: @white;
-        opacity: 0.8;
-        border-color: @white;
+        border-color: @input-color-invert;
+
+        &:before {
+            left: 32px;
+            .opacity(0);
+        }
+
+        &:after {
+            .opacity(1);
+            left: 0;
+        }
     }
 
-    i {
-        display: block;
+    &:before,
+    &:after {
+        content: '\f301';
+        font-family: @font-family-icon;
+        position: absolute;
+        left: 0;
+        top: 0;
+        font-size: 20px;
+        line-height: 48px;
         width: 100%;
-        padding-left: 3px;
+        height: 100%;
+        .transition(all);
+        .transition-duration(300ms);
+    }
+
+    &:after {
+        left: -32px;
+        .opacity(0);
     }
 }
 
-/*------------------------------
-    Chrome autofill fix
--------------------------------*/
-input:-webkit-autofill {
-     -webkit-box-shadow:0 0 0 50px @dark-gray inset !important;
-     -webkit-text-fill-color: @white !important;
+.login__footer {
+    display: flex;
+    align-items: flex-end;
+
+    @media (max-width: @screen-xs-max) {
+        margin-top: 30px;
+        flex-direction: column;
+        align-items: center;
+    }
+}
+
+.login__logo {
+    width: 40px;
+
+    @media (min-width: @screen-sm-min) {
+        margin-left: auto;
+    }
+}
+
+.login__host {
+    font-size: 20px;
+    color: fade(@white, 25%);
 }

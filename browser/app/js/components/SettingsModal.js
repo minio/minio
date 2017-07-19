@@ -34,12 +34,23 @@ class SettingsModal extends React.Component {
 
     let accessKeyEnv = ''
     let secretKeyEnv = ''
-    // Check environment variables first.
-    if (serverInfo.info.isEnvCreds) {
+    // Check environment variables first. They may or may not have been
+    // loaded already; they load in Browse#componentDidMount.
+    if (serverInfo.envVars) {
+      serverInfo.envVars.forEach(envVar => {
+        let keyVal = envVar.split('=')
+        if (keyVal[0] == 'MINIO_ACCESS_KEY') {
+          accessKeyEnv = keyVal[1]
+        } else if (keyVal[0] == 'MINIO_SECRET_KEY') {
+          secretKeyEnv = keyVal[1]
+        }
+      })
+    }
+    if (accessKeyEnv != '' || secretKeyEnv != '') {
       dispatch(actions.setSettings({
-          accessKey: 'xxxxxxxxx',
-          secretKey: 'xxxxxxxxx',
-          keysReadOnly: true
+        accessKey: accessKeyEnv,
+        secretKey: secretKeyEnv,
+        keysReadOnly: true
       }))
     } else {
       web.GetAuth()
@@ -151,43 +162,49 @@ class SettingsModal extends React.Component {
 
     return (
       <Modal bsSize="sm" animation={ false } show={ true }>
+        <a className="close close--dark" onClick={ this.hideSettings.bind(this) }>×</a>
         <ModalHeader>
           Change Password
         </ModalHeader>
-        <ModalBody className="m-t-20">
-          <InputGroup value={ settings.accessKey }
-            onChange={ this.accessKeyChange.bind(this) }
-            id="accessKey"
-            label="Access Key"
-            name="accesskey"
-            type="text"
-            spellCheck="false"
-            required="required"
-            autoComplete="false"
-            align="ig-left"
-            readonly={ settings.keysReadOnly }></InputGroup>
-          <i onClick={ this.secretKeyVisible.bind(this, !settings.secretKeyVisible) } className={ "toggle-password fa fa-eye " + (settings.secretKeyVisible ? "toggled" : "") } />
-          <InputGroup value={ settings.secretKey }
-            onChange={ this.secretKeyChange.bind(this) }
-            id="secretKey"
-            label="Secret Key"
-            name="accesskey"
-            type={ settings.secretKeyVisible ? "text" : "password" }
-            spellCheck="false"
-            required="required"
-            autoComplete="false"
-            align="ig-left"
-            readonly={ settings.keysReadOnly }></InputGroup>
+        <ModalBody>
+          <div className="form-group">
+            <label className="form-group__label">
+              Access key
+            </label>
+            <input type="text"
+              className="form-group__field"
+              id="accessKey"
+              name="accesskey"
+              value={ settings.accessKey }
+              onChange={ this.accessKeyChange.bind(this) }
+              readonly={ settings.keysReadOnly } />
+            <i className="form-group__bar"></i>
+          </div>
+          <div className="form-group">
+            <label className="form-group__label">
+              Secret key
+            </label>
+            <div className="form-group__wrap">
+              <input type={ settings.secretKeyVisible ? "text" : "password" }
+                className="form-group__field"
+                id="secretKey"
+                name="secretKey"
+                value={ settings.secretKey }
+                onChange={ this.secretKeyChange.bind(this) }
+                readonly={ settings.keysReadOnly } />
+              <div onClick={ this.secretKeyVisible.bind(this, !settings.secretKeyVisible) } className="form-group__addon">
+                <i className={ "form-group__toggle-type" + (settings.secretKeyVisible ? " toggled" : "") }></i>
+              </div>
+              <i className="form-group__bar"></i>
+            </div>
+          </div>
         </ModalBody>
         <div className="modal-footer">
-          <button className={ "btn btn-primary " + (settings.keysReadOnly ? "hidden" : "") } onClick={ this.generateAuth.bind(this) }>
+          <button className={ "btn btn--link " + (settings.keysReadOnly ? "hidden" : "") } onClick={ this.generateAuth.bind(this) }>
             Generate
           </button>
-          <button href="" className={ "btn btn-success " + (settings.keysReadOnly ? "hidden" : "") } onClick={ this.setAuth.bind(this) }>
+          <button className={ "btn btn--link " + (settings.keysReadOnly ? "hidden" : "") } onClick={ this.setAuth.bind(this) }>
             Update
-          </button>
-          <button href="" className="btn btn-link" onClick={ this.hideSettings.bind(this) }>
-            Cancel
           </button>
         </div>
       </Modal>
