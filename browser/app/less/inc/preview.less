@@ -1,0 +1,114 @@
+// Preview
+.preview {
+    position: fixed;
+    right: 0;
+    top: 0;
+    background-color: @white;
+    height: 100%;
+    max-width: @sidebar-width;
+    width: 90%;
+    z-index: @sidebar-z-index;
+    .transition(all);
+    .transition-duration(300ms);
+
+    &:not(.preview--toggled) {
+        .opacity(0);
+        .translate3d((@sidebar-width - 15px), 0, 0);
+    }
+}
+
+.preview--toggled {
+    .preview__close {
+        .rotate(180deg);
+    }
+}
+
+.preview__header {
+    background-color: lighten(@toolbar-bg, 4.5%);
+    height: @toolbar-height;
+    display: flex;
+    align-items: center;
+    flex-direction: row;
+    padding: 0 65px 0 20px;
+    position: relative;
+}
+
+.preview__label {
+    color: @headings-color;
+    font-size: 13px;
+    font-weight: @font-weight-bold;
+    .text-overflow();
+}
+
+.preview__close {
+    width: 35px;
+    height: 35px;
+    background: darken(@toolbar-bg, 2%);
+    border-radius: 50%;
+    line-height: 35px !important;
+    text-align: center;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: 20px;
+    margin: auto;
+    cursor: pointer;
+    .transition(transform);
+    .transition-duration(1000ms);
+
+    &:hover {
+        background: darken(@toolbar-bg, 4%);
+    }
+}
+
+.preview__body {
+    padding: 30px;
+}
+
+.preview__item {
+    text-align: center;
+    border-radius: 2px;
+
+    &:not(.preview__item--img) {
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    }
+}
+
+.preview__item--img {
+    & > img {
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        max-height: 250px;
+        max-width: 100%;
+    }
+}
+
+.preview__info {
+    margin-top: 40px;
+
+    & > dl {
+        font-size: 14px;
+
+        & > dd {
+            margin: 0 0 10px 100px;
+        }
+
+        & > dt {
+            float: left;
+            color: @headings-color;
+        }
+
+    }
+}
+
+.preview__actions {
+    display: flex;
+    flex-direction: row;
+    margin: 40px -5px 0;
+
+    & > .btn {
+        margin: 0 5px;
+        flex-grow: 1;
+        flex-basis: 0;
+        box-shadow: 0 2px 3px rgba(0, 0, 0, 0.15);
+    }
+}
