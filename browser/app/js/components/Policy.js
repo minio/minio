@@ -29,13 +29,13 @@ class Policy extends Component {
       prefix: newPrefix,
       policy: 'none'
     })
-      .then(() => {
-        dispatch(actions.setPolicies(this.props.policies.filter(policy => policy.prefix != prefix)))
-      })
-      .catch(e => dispatch(actions.showAlert({
-        type: 'danger',
-        message: e.message,
-      })))
+        .then(() => {
+          dispatch(actions.setPolicies(this.props.policies.filter(policy => policy.prefix != prefix)))
+        })
+        .catch(e => dispatch(actions.showAlert({
+          type: 'danger',
+          message: e.message,
+        })))
   }
 
   render() {
@@ -47,32 +47,32 @@ class Policy extends Component {
       newPrefix = '*'
 
     return (
-      <div className="pmb-list">
-        <div className="pmbl-item">
-          { newPrefix }
+        <div className="policy__list">
+          <div className="policy__item">
+            { newPrefix }
+          </div>
+          <div className="policy__item">
+            <select>
+              disabled
+              value={ policy }
+              onChange={ this.handlePolicyChange.bind(this) }>
+              <option value={ READ_ONLY }>
+                Read Only
+              </option>
+              <option value={ WRITE_ONLY }>
+                Write Only
+              </option>
+              <option value={ READ_WRITE }>
+                Read and Write
+              </option>
+            </select>
+          </div>
+          <div className="policy__item">
+            <button className="btn btn--block btn--danger" onClick={ this.removePolicy.bind(this) }>
+              Remove
+            </button>
+          </div>
         </div>
-        <div className="pmbl-item">
-          <select className="form-control"
-            disabled
-            value={ policy }
-            onChange={ this.handlePolicyChange.bind(this) }>
-            <option value={ READ_ONLY }>
-              Read Only
-            </option>
-            <option value={ WRITE_ONLY }>
-              Write Only
-            </option>
-            <option value={ READ_WRITE }>
-              Read and Write
-            </option>
-          </select>
-        </div>
-        <div className="pmbl-item">
-          <button className="btn btn-block btn-danger" onClick={ this.removePolicy.bind(this) }>
-            Remove
-          </button>
-        </div>
-      </div>
     )
   }
 }

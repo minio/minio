@@ -28,177 +28,197 @@ import InputGroup from './InputGroup'
 class SettingsModal extends React.Component {
 
   // When the settings are shown, it loads the access key and secret key.
-  componentWillMount() {
+  componentWillMount () {
     const {web, dispatch} = this.props
     const {serverInfo} = this.props
 
     let accessKeyEnv = ''
     let secretKeyEnv = ''
-    // Check environment variables first.
-    if (serverInfo.info.isEnvCreds) {
-      dispatch(actions.setSettings({
-          accessKey: 'xxxxxxxxx',
-          secretKey: 'xxxxxxxxx',
-          keysReadOnly: true
+    // Check environment variables first. They may or may not have been
+    // loaded already; they load in Browse#componentDidMount.
+    if (serverInfo.envVars) {
+      serverInfo.envVars.forEach (envVar => {
+        let keyVal = envVar.split ('=')
+        if (keyVal[0] == 'MINIO_ACCESS_KEY') {
+          accessKeyEnv = keyVal[1]
+        } else if (keyVal[0] == 'MINIO_SECRET_KEY') {
+          secretKeyEnv = keyVal[1]
+        }
+      })
+    }
+    if (accessKeyEnv != '' || secretKeyEnv != '') {
+      dispatch (actions.setSettings ({
+        accessKey: accessKeyEnv,
+        secretKey: secretKeyEnv,
+        keysReadOnly: true
       }))
     } else {
-      web.GetAuth()
-        .then(data => {
-          dispatch(actions.setSettings({
-            accessKey: data.accessKey,
-            secretKey: data.secretKey
-          }))
-        })
+      web.GetAuth ()
+          .then (data => {
+            dispatch (actions.setSettings ({
+              accessKey: data.accessKey,
+              secretKey: data.secretKey
+            }))
+          })
     }
   }
 
   // When they are re-hidden, the keys are unloaded from memory.
-  componentWillUnmount() {
+  componentWillUnmount () {
     const {dispatch} = this.props
 
-    dispatch(actions.setSettings({
+    dispatch (actions.setSettings ({
       accessKey: '',
       secretKey: '',
       secretKeyVisible: false
     }))
-    dispatch(actions.hideSettings())
+    dispatch (actions.hideSettings ())
   }
 
   // Handle field changes from inside the modal.
-  accessKeyChange(e) {
+  accessKeyChange (e) {
     const {dispatch} = this.props
-    dispatch(actions.setSettings({
+    dispatch (actions.setSettings ({
       accessKey: e.target.value
     }))
   }
 
-  secretKeyChange(e) {
+  secretKeyChange (e) {
     const {dispatch} = this.props
-    dispatch(actions.setSettings({
+    dispatch (actions.setSettings ({
       secretKey: e.target.value
     }))
   }
 
-  secretKeyVisible(secretKeyVisible) {
+  secretKeyVisible (secretKeyVisible) {
     const {dispatch} = this.props
-    dispatch(actions.setSettings({
+    dispatch (actions.setSettings ({
       secretKeyVisible
     }))
   }
 
   // Save the auth params and set them.
-  setAuth(e) {
-    e.preventDefault()
+  setAuth (e) {
+    e.preventDefault ()
     const {web, dispatch} = this.props
 
-    let accessKey = document.getElementById('accessKey').value
-    let secretKey = document.getElementById('secretKey').value
-    web.SetAuth({
+    let accessKey = document.getElementById ('accessKey').value
+    let secretKey = document.getElementById ('secretKey').value
+    web.SetAuth ({
       accessKey,
       secretKey
     })
-      .then(data => {
-        dispatch(actions.setSettings({
-          accessKey: '',
-          secretKey: '',
-          secretKeyVisible: false
-        }))
-        dispatch(actions.hideSettings())
-        dispatch(actions.showAlert({
-          type: 'success',
-          message: 'Changed credentials'
-        }))
-      })
-      .catch(err => {
-        dispatch(actions.setSettings({
-          accessKey: '',
-          secretKey: '',
-          secretKeyVisible: false
-        }))
-        dispatch(actions.hideSettings())
-        dispatch(actions.showAlert({
-          type: 'danger',
-          message: err.message
-        }))
-      })
+        .then (data => {
+          dispatch (actions.setSettings ({
+            accessKey: '',
+            secretKey: '',
+            secretKeyVisible: false
+          }))
+          dispatch (actions.hideSettings ())
+          dispatch (actions.showAlert ({
+            type: 'success',
+            message: 'Changed credentials'
+          }))
+        })
+        .catch (err => {
+          dispatch (actions.setSettings ({
+            accessKey: '',
+            secretKey: '',
+            secretKeyVisible: false
+          }))
+          dispatch (actions.hideSettings ())
+          dispatch (actions.showAlert ({
+            type: 'danger',
+            message: err.message
+          }))
+        })
   }
 
-  generateAuth(e) {
-    e.preventDefault()
+  generateAuth (e) {
+    e.preventDefault ()
     const {dispatch} = this.props
 
-    web.GenerateAuth()
-      .then(data => {
-        dispatch(actions.setSettings({
-          secretKeyVisible: true
-        }))
-        dispatch(actions.setSettings({
-          accessKey: data.accessKey,
-          secretKey: data.secretKey
-        }))
-      })
+    web.GenerateAuth ()
+        .then (data => {
+          dispatch (actions.setSettings ({
+            secretKeyVisible: true
+          }))
+          dispatch (actions.setSettings ({
+            accessKey: data.accessKey,
+            secretKey: data.secretKey
+          }))
+        })
   }
 
-  hideSettings(e) {
-    e.preventDefault()
+  hideSettings (e) {
+    e.preventDefault ()
 
     const {dispatch} = this.props
-    dispatch(actions.hideSettings())
+    dispatch (actions.hideSettings ())
   }
 
-  render() {
+  render () {
     let {settings} = this.props
 
     return (
-      <Modal bsSize="sm" animation={ false } show={ true }>
-        <ModalHeader>
-          Change Password
-        </ModalHeader>
-        <ModalBody className="m-t-20">
-          <InputGroup value={ settings.accessKey }
-            onChange={ this.accessKeyChange.bind(this) }
-            id="accessKey"
-            label="Access Key"
-            name="accesskey"
-            type="text"
-            spellCheck="false"
-            required="required"
-            autoComplete="false"
-            align="ig-left"
-            readonly={ settings.keysReadOnly }></InputGroup>
-          <i onClick={ this.secretKeyVisible.bind(this, !settings.secretKeyVisible) } className={ "toggle-password fa fa-eye " + (settings.secretKeyVisible ? "toggled" : "") } />
-          <InputGroup value={ settings.secretKey }
-            onChange={ this.secretKeyChange.bind(this) }
-            id="secretKey"
-            label="Secret Key"
-            name="accesskey"
-            type={ settings.secretKeyVisible ? "text" : "password" }
-            spellCheck="false"
-            required="required"
-            autoComplete="false"
-            align="ig-left"
-            readonly={ settings.keysReadOnly }></InputGroup>
-        </ModalBody>
-        <div className="modal-footer">
-          <button className={ "btn btn-primary " + (settings.keysReadOnly ? "hidden" : "") } onClick={ this.generateAuth.bind(this) }>
-            Generate
-          </button>
-          <button href="" className={ "btn btn-success " + (settings.keysReadOnly ? "hidden" : "") } onClick={ this.setAuth.bind(this) }>
-            Update
-          </button>
-          <button href="" className="btn btn-link" onClick={ this.hideSettings.bind(this) }>
-            Cancel
-          </button>
-        </div>
-      </Modal>
+        <Modal bsSize="sm" animation={ false } show={ true }>
+          <a className="close close--dark" onClick={ this.hideSettings.bind (this) }>&times;</a>
+
+          <ModalHeader>Change Password</ModalHeader>
+
+          <ModalBody>
+            <div className="form-group">
+              <label className="form-group__label">Access key</label>
+              <input type="text"
+                     className="form-group__field"
+                     id="accessKey"
+                     name="accesskey"
+                     value={ settings.accessKey }
+                     onChange={ this.accessKeyChange.bind (this) }
+                     readonly={ settings.keysReadOnly }
+              />
+              <i className="form-group__bar"></i>
+            </div>
+
+            <div className="form-group">
+              <label className="form-group__label">Secret key</label>
+
+              <div className="form-group__wrap">
+                <input type={ settings.secretKeyVisible ? "text" : "password" }
+                       className="form-group__field"
+                       id="secretKey"
+                       name="secretKey"
+                       value={ settings.secretKey }
+                       onChange={ this.secretKeyChange.bind (this) }
+                       readonly={ settings.keysReadOnly }
+                />
+
+                <div onClick={ this.secretKeyVisible.bind (this, !settings.secretKeyVisible) } className="form-group__addon">
+                  <i className={ "form-group__toggle-type" + (settings.secretKeyVisible ? " toggled" : "") }></i>
+                </div>
+
+                <i className="form-group__bar"></i>
+              </div>
+            </div>
+          </ModalBody>
+
+          <div className="modal-footer">
+            <button className={ "btn btn--link " + (settings.keysReadOnly ? "hidden" : "") }
+                    onClick={ this.generateAuth.bind (this) }>Generate
+            </button>
+            <button className={ "btn btn--link " + (settings.keysReadOnly ? "hidden" : "") }
+                    onClick={ this.setAuth.bind (this) }>Update
+            </button>
+          </div>
+        </Modal>
     )
   }
 }
 
-export default connect(state => {
+export default connect (state => {
   return {
     web: state.web,
     settings: state.settings,
     serverInfo: state.serverInfo
   }
-})(SettingsModal)
+}) (SettingsModal)
