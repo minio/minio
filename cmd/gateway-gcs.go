@@ -306,7 +306,7 @@ func (l *gcsGateway) CleanupGCSMinioPathBucket(bucket string) {
 			// Delete files older than 1 week.
 			err := l.client.Bucket(bucket).Object(attrs.Name).Delete(l.ctx)
 			if err != nil {
-				errorIf(err, "Unable to delete the object %", attrs.Name)
+				errorIf(err, "Unable to delete the object %s", attrs.Name)
 				return
 			}
 		}
@@ -339,7 +339,7 @@ func (l *gcsGateway) CleanupGCSMinioPath() {
 // Shutdown - save any gateway metadata to disk
 // if necessary and reload upon next restart.
 func (l *gcsGateway) Shutdown() error {
-	close(l.cleanupEndCh)
+	l.cleanupEndCh <- struct{}{}
 	return nil
 }
 
