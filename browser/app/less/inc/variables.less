@@ -1,101 +1,119 @@
-/*--------------------------
-    Base
-----------------------------*/
-@font-family-sans-serif             : 'Lato', sans-serif;
-@font-family-icon                   : 'fontAwesome';
-@body-bg                            : #edecec;
-@text-color                         : #8e8e8e;
-@font-size-base                     : 15px;
-@link-color                         : #46a5e0;
-@link-hover-decoration              : none;
+// Base
+@font-family-sans-serif: 'Roboto', sans-serif;
+@headings-font-family: @font-family-sans-serif;
+@font-family-icon: 'Material-Design-Iconic-Font';
+@body-bg: #f3f3f3;
+@font-size-base: 15px;
+@link-hover-decoration: none;
 
+// Icons
+@zmdi-font-path: '../dist/fonts';
 
-/*--------------------------
-    File Explorer
-----------------------------*/
-@fe-sidebar-width                   : 320px;
-@text-muted-color                   : #BDBDBD;
-@text-strong-color                  : #333;
+// App colors
+@muted-bg: #f7f7f7;
+@br-line-color: #eceff3;
+@storage-chart-color: #52b6f3;
 
-/*--------------------------
-    Colors
-----------------------------*/
-@cyan                               : #2ED2FF;
-@amber                              : #ffc107;
-@red                                : #ff726f;
-@grey                               : #f5f5f5;
-@dark-blue                          : #0084d3;
-@blue                               : #00a6f7;
-@white                              : #ffffff;
-@black                              : #1b1e25;
-@blue                               : #50b2ff;
-@light-blue                         : #c1d1e8;
-@green                              : #33d46f;
-@yellow                             : #FFC107;
-@orange                             : #ffc155;
-@purple                             : #9C27B0;
-@teal                               : #009688;
-@brown                              : #795548;
-@blue-gray                          : #374952;
-@dark-gray                          : #32393F;
+// Text colors
+@text-color: #6f6f6f;
+@link-color: #46a5e0;
+@headings-color: #384143;
+@text-muted-color: #999999;
+@text-strong-color: #333;
 
+// Bootstrap colors
+@brand-primary: #2298f7;
+@brand-success: #4CAF50;
+@brand-info: #00BCD4;
+@brand-warning: #FF9800;
+@brand-danger: #FF5722;
 
-/*--------------------------
-    Dropdown
-----------------------------*/
-@dropdown-fallback-border           : transparent;
-@dropdown-border                    : transparent;
-@dropdown-divider-bg                : '';
-@dropdown-link-hover-bg             : rgba(0,0,0,0.05);
-@dropdown-link-color                : @text-color;
-@dropdown-link-hover-color          : #333;
-@dropdown-link-disabled-color       : #e4e4e4;
-@dropdown-divider-bg                : rgba(0,0,0,0.08);
-@dropdown-link-active-color         : #333;
-@dropdown-link-active-bg            : rgba(0, 0, 0, 0.075);
-@dropdown-shadow                    : 0 2px 10px rgba(0, 0, 0, 0.2);
+// Other colors
+@red: #ff6b68;
+@pink: #ff85af;
+@purple: #d066e2;
+@deep-purple: #673AB7;
+@indigo: #3F51B5;
+@blue: #2196F3;
+@light-blue: #03A9F4;
+@cyan: #00BCD4;
+@teal: #39bbb0;
+@green: #32c787;
+@light-green: #8BC34A;
+@lime: #CDDC39;
+@yellow: #FFEB3B;
+@amber: #f5c942;
+@orange: #FF9800;
+@deep-orange: #FF5722;
+@brown: #795548;
+@grey: #9E9E9E;
+@blue-grey: #607D8B;
+@black: #000000;
+@white: #FFFFFF;
 
+// Header
+@header-height: 120px;
+@header-link-color: #f8f8f8;
+@header-z-index: 10;
+@toolbar-height: 65px;
+@toolbar-bg: #ebebeb;
 
-/*--------------------------
-    Modal
-----------------------------*/
-@modal-content-fallback-border-color:	transparent;
-@modal-content-border-color:			transparent;
-@modal-backdrop-bg:				        rgba(0,0,0,0.1);
-@modal-header-border-color:				transparent;
-@modal-title-line-height:				transparent;
-@modal-footer-border-color:				transparent;
-@modal-inner-padding:                   30px 35px;
-@modal-title-padding:                   30px 35px 0px;
-@modal-sm:                              400px;
+// Sidebar
+@sidebar-width: 320px;
+@sidebar-bg: @white;
+@sidebar-padding: 30px;
+@sidebar-z-index: @header-z-index + 1;
 
+// Dropdown
+@dropdown-fallback-border: transparent;
+@dropdown-border: @br-line-color;
+@dropdown-divider-bg: '';
+@dropdown-link-hover-bg: @muted-bg;
+@dropdown-link-color: @text-color;
+@dropdown-link-hover-color: @headings-color;
+@dropdown-link-disabled-color: #e4e4e4;
+@dropdown-divider-bg: rgba(0, 0, 0, 0.08);
+@dropdown-link-active-color: #333;
+@dropdown-link-active-bg: rgba(0, 0, 0, 0.075);
+@dropdown-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
 
-/*-------------------------
-  Buttons
---------------------------*/
+// Modal
+@modal-content-fallback-border-color: transparent;
+@modal-content-border-color: transparent;
+@modal-backdrop-bg: fade(@black, 7%);
+@modal-header-border-color: transparent;
+@modal-title-line-height: transparent;
+@modal-footer-border-color: transparent;
+@modal-inner-padding: 30px 35px;
+@modal-title-padding: 30px 35px 15px;
+@modal-sm: 400px;
+
+// Buttons
 @btn-border-radius-large: 2px;
 @btn-border-radius-small: 2px;
 @btn-border-radius-base: 2px;
 
+// Form
+@checbox-checked-bg: @headings-color;
+@input-border: #e8ebed;
+@input-border-invert: fade(#8394af, 15%);
+@input-color: @headings-color;
+@input-bg: transparent;
+@placeholder-color-invert: fade(@white, 50%);
+@input-color-invert: darken(@white, 5%);
 
-/*-------------------------
-  Colors
---------------------------*/
-@brand-primary: #2298f7;
-@brand-success:             #4CAF50;
-@brand-info:                #00BCD4;
-@brand-warning:             #FF9800;
-@brand-danger:              #FF5722;
+// Listings
+@list-row-even-bg: #fbfbfb;
+@list-row-hover-bg: lighten(@body-bg, 2.5%);
+@list-row-selected-bg: @list-row-hover-bg;
 
+// Misc
+@border-radius-base: 2px;
+@font-weight-bold: 500;
+@font-weight-body: 400;
 
-/*-------------------------
-    Form
---------------------------*/
-@input-border:              #eee;
+// Login
+@login-bg: #32393f;
 
-
-/*-------------------------
-    List
---------------------------*/
-@list-row-selected-bg: #fbf2bf;
-@list-row-even-bg:          #fafafa;
+// Tooltips
+@tooltip-bg: #333;
