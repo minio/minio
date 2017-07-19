@@ -69,7 +69,7 @@ const (
 	// gcsMaxPartCount - maximum multipart parts GCS supports which is 32 x 32 = 1024.
 	gcsMaxPartCount = 1024
 
-	// Every 12 hours we scan minio.sys.temp to delete expired multiparts.
+	// Every 24 hours we scan minio.sys.temp to delete expired multiparts.
 	gcsCleanupInterval = time.Hour * 24
 
 	// Expiry time after which the multipart gets deleted.
@@ -249,11 +249,10 @@ func checkGCSProjectID(ctx context.Context, projectID string) error {
 
 // gcsGateway - Implements gateway for Minio and GCS compatible object storage servers.
 type gcsGateway struct {
-	client       *storage.Client
-	anonClient   *minio.Core
-	projectID    string
-	cleanupEndCh chan struct{}
-	ctx          context.Context
+	client     *storage.Client
+	anonClient *minio.Core
+	projectID  string
+	ctx        context.Context
 }
 
 const googleStorageEndpoint = "storage.googleapis.com"
@@ -280,11 +279,10 @@ func newGCSGateway(projectID string) (GatewayLayer, error) {
 	}
 
 	gateway := &gcsGateway{
-		client:       client,
-		projectID:    projectID,
-		ctx:          ctx,
-		anonClient:   anonClient,
-		cleanupEndCh: make(chan struct{}),
+		client:     client,
+		projectID:  projectID,
+		ctx:        ctx,
+		anonClient: anonClient,
 	}
 	// Start background process to cleanup old files in minio.sys.temp
 	go gateway.CleanupGCSMinioPath()
@@ -295,12 +293,6 @@ func newGCSGateway(projectID string) (GatewayLayer, error) {
 func (l *gcsGateway) CleanupGCSMinioPathBucket(bucket string) {
 	it := l.client.Bucket(bucket).Objects(l.ctx, &storage.Query{Prefix: gcsMinioTempPath, Versions: false})
 	for {
-		select {
-		case <-l.cleanupEndCh:
-			// Stop cleanup process if Shutdown() was called.
-			return
-		default:
-		}
 		attrs, err := it.Next()
 		if err != nil {
 			if err != iterator.Done {
@@ -312,7 +304,7 @@ func (l *gcsGateway) CleanupGCSMinioPathBucket(bucket string) {
 			// Delete files older than 2 weeks.
 			err := l.client.Bucket(bucket).Object(attrs.Name).Delete(l.ctx)
 			if err != nil {
-				errorIf(err, "Unable to delete the object %s during purging of old files in minio.sys.temp", attrs.Name)
+				errorIf(err, "Unable to delete %s/%s during purging of old files in minio.sys.temp", bucket, attrs.Name)
 				return
 			}
 		}
@@ -324,12 +316,6 @@ func (l *gcsGateway) CleanupGCSMinioPath() {
 	for {
 		it := l.client.Buckets(l.ctx, l.projectID)
 		for {
-			select {
-			case <-l.cleanupEndCh:
-				// Stop cleanup process if Shutdown() was called.
-				return
-			default:
-			}
 			attrs, err := it.Next()
 			if err != nil {
 				if err != iterator.Done {
@@ -339,19 +325,14 @@ func (l *gcsGateway) CleanupGCSMinioPath() {
 			}
 			l.CleanupGCSMinioPathBucket(attrs.Name)
 		}
-		select {
-		case <-l.cleanupEndCh:
-			// Stop cleanup process if Shutdown() was called.
-			return
-		case <-time.After(gcsCleanupInterval):
-		}
+		// Run the cleanup loop every 1 day.
+		time.Sleep(gcsCleanupInterval)
 	}
 }
 
 // Shutdown - save any gateway metadata to disk
 // if necessary and reload upon next restart.
 func (l *gcsGateway) Shutdown() error {
-	l.cleanupEndCh <- struct{}{}
 	return nil
 }
 
