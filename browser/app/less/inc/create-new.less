@@ -1,0 +1,133 @@
+// Base
+.create-new {
+    position: fixed;
+    bottom: 0;
+    right: 0;
+    padding: 30px;
+
+    .dropdown-menu {
+        z-index: 1;
+        min-width: 145px;
+        box-shadow: none;
+        border: 0;
+        width: 145px;
+        height: 145px;
+        text-align: center;
+        margin: 0;
+        background-color: transparent;
+        bottom: 0;
+        right: 0;
+        left: auto;
+    }
+
+    &.open {
+        .create-new__btn {
+            display: inline-block;
+        }
+
+        .create-new__toggle {
+            .scale-rotate(0.9, -45deg);
+        }
+    }
+}
+
+// Toggle
+.create-new__toggle {
+    cursor: pointer;
+    width: 55px;
+    height: 55px;
+    border-radius: 50%;
+    display: inline-block;
+    text-align: center;
+    border: 0;
+    padding: 0;
+    z-index: 2;
+    position: relative;
+    background-color: @red;
+    color: @white;
+    font-size: 22px !important;
+    box-shadow: 0 0 0 5px fade(@black, 4%);
+    .transition(all);
+    .transition-duration(350ms);
+
+    &:hover {
+        background-color: darken(@red, 5%);
+        .scale-rotate(1.2, -90deg);
+    }
+}
+
+// Sub buttons
+.create-new__btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    text-align: center;
+    position: absolute;
+    color: @white;
+    line-height: 40px;
+    display: none;
+    box-shadow: 0 0 10px fade(@amber, 50%);
+    background-color: @amber;
+    background-repeat: no-repeat;
+    background-position: center;
+    .animated(zoomIn, 300ms);
+    .animation-fill-mode(both);
+    .transition(background-color);
+    .transition-duration(300ms);
+    .transform-origin(center);
+
+    &:hover,
+    &:focus {
+        background-color: darken(@amber, 10%);
+    }
+}
+
+.create-new__btn--bucket {
+    .img-retina('/../../img/icons/bucket-white.png', '/../../img/icons/bucket-white@2x.png', 14px, 15px);
+    left: 16px;
+    bottom: 85px;
+    .animation-delay(100ms);
+}
+
+.create-new__btn--upload {
+    background: @amber url(/../../img/icons/upload.svg) no-repeat center;
+    right: 28px;
+    top: 0;
+    .animation-delay(200ms);
+
+    & > input {
+        display: none;
+    }
+
+    & > label {
+        width: 100%;
+        height: 100%;
+        position: absolute;
+        bottom: 0;
+        right: 0;
+        cursor: pointer;
+    }
+}
+
+.create-new__btn--folder {
+    .img-retina('/../../img/icons/folder-upload.png', '/../../img/icons/folder-upload@2x.png', 22px, 19px);
+    left: 2px;
+    bottom: 25px;
+}
+
+// Create bucket window
+.create-bucket {
+    @media (min-width: @screen-sm-min) {
+        .modal-dialog {
+            position: fixed;
+            right: 25px;
+            bottom: 95px;
+            margin: 0;
+        }
+
+        .modal-content {
+            width: 100%;
+            height: 100%;
+        }
+    }
+}

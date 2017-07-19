@@ -47,15 +47,15 @@ class Policy extends Component {
       newPrefix = '*'
 
     return (
-      <div className="pmb-list">
-        <div className="pmbl-item">
+      <div className="policy__list">
+        <div className="policy__item">
           { newPrefix }
         </div>
-        <div className="pmbl-item">
-          <select className="form-control"
-            disabled
-            value={ policy }
-            onChange={ this.handlePolicyChange.bind(this) }>
+        <div className="policy__item">
+          <select>
+            disabled value=
+            { policy } onChange=
+            { this.handlePolicyChange.bind(this) }>
             <option value={ READ_ONLY }>
               Read Only
             </option>
@@ -67,8 +67,8 @@ class Policy extends Component {
             </option>
           </select>
         </div>
-        <div className="pmbl-item">
-          <button className="btn btn-block btn-danger" onClick={ this.removePolicy.bind(this) }>
+        <div className="policy__item">
+          <button className="btn btn--block btn--danger" onClick={ this.removePolicy.bind(this) }>
             Remove
           </button>
         </div>
