@@ -293,6 +293,12 @@ func gatewayMain(ctx *cli.Context, backendType gatewayBackend) {
 		log.EnableQuiet()
 	}
 
+	// Fetch address option
+	gatewayAddr := ctx.GlobalString("address")
+	if gatewayAddr == ":"+globalMinioPort {
+		gatewayAddr = ctx.String("address")
+	}
+
 	// Handle common command args.
 	handleCommonCmdArgs(ctx)
 
@@ -363,7 +369,7 @@ func gatewayMain(ctx *cli.Context, backendType gatewayBackend) {
 
 	}
 
-	globalHTTPServer = miniohttp.NewServer([]string{ctx.GlobalString("address")}, registerHandlers(router, handlerFns...), globalTLSCertificate)
+	globalHTTPServer = miniohttp.NewServer([]string{gatewayAddr}, registerHandlers(router, handlerFns...), globalTLSCertificate)
 
 	// Start server, automatically configures TLS if certs are available.
 	go func() {
@@ -393,7 +399,7 @@ func gatewayMain(ctx *cli.Context, backendType gatewayBackend) {
 		checkUpdate(mode)
 
 		// Print gateway startup message.
-		printGatewayStartupMessage(getAPIEndpoints(ctx.String("address")), backendType)
+		printGatewayStartupMessage(getAPIEndpoints(gatewayAddr), backendType)
 	}
 
 	handleSignals()
