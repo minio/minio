@@ -62,6 +62,17 @@ export default class Login extends React.Component {
       type: 'danger',
       message: ''
     }))
+
+    // If we're on an insecure connection, warn the user.
+    if (window.location.protocol === 'http:') {
+      dispatch(actions.showAlert({
+        type: 'danger',
+        message: 'You are on an insecure connection. Your access key and secret '
+               + 'key should be considered exposed to the network upon login. '
+               + 'Please configure TLS certificates for secure access.'
+      }))
+    }
+
     document.body.classList.add('is-guest')
   }
 
