@@ -19,58 +19,53 @@ import classNames from 'classnames'
 import ClickOutHandler from 'react-onclickout'
 import Scrollbars from 'react-custom-scrollbars/lib/Scrollbars'
 import connect from 'react-redux/lib/components/connect'
+import logo from '../../img/logo-dark.svg'
 
-import logo from '../../img/logo.svg'
-
-let SideBar = ({visibleBuckets, loadBucket, currentBucket, selectBucket, searchBuckets, sidebarStatus, clickOutside, showPolicy}) => {
+let SideBar = ({visibleBuckets, loadBucket, currentBucket, selectBucket, searchBuckets, sidebarStatus, clickOutside, showPolicy, storageDetails}) => {
 
   const list = visibleBuckets.map((bucket, i) => {
     return <li className={ classNames({
-                  'active': bucket === currentBucket
+                  'buckets__list__active': bucket === currentBucket,
+                  'fesli-loading': bucket === loadBucket
                 }) } key={ i } onClick={ (e) => selectBucket(e, bucket) }>
-             <a href="" className={ classNames({
-                                      'fesli-loading': bucket === loadBucket
-                                    }) }>
+             <div className="buckets__list__name">
                { bucket }
-             </a>
-             <i className="fesli-trigger" onClick={ showPolicy }></i>
+             </div>
+             <div className="buckets__list__actions">
+               <span>read and write</span>
+               <span className="buckets__list__policy" onClick={ showPolicy }>edit policy</span>
+             </div>
            </li>
   })
 
   return (
-    <ClickOutHandler onClickOut={ clickOutside }>
-      <div className={ classNames({
-                         'fe-sidebar': true,
-                         'toggled': sidebarStatus
-                       }) }>
-        <div className="fes-header clearfix hidden-sm hidden-xs">
-          <img src={ logo } alt="" />
+    <aside className={ classNames({
+                     'sidebar': true,
+                     'sidebar--toggled': sidebarStatus
+                   }) }>
+      <div className="logo">
+        <img className="logo__img" src={ logo } alt="" />
+        <div className="logo__title">
           <h2>Minio Browser</h2>
+          <small>{ window.location.host }</small>
         </div>
-        <div className="fes-list">
-          <div className="input-group ig-dark ig-left ig-search" style={ { display: web.LoggedIn() ? 'block' : 'none' } }>
-            <input className="ig-text"
+      </div>
+      <div className="buckets">
+        <div className="buckets__search" style={ { display: web.LoggedIn() ? 'block' : 'none' } }>
+          <div className="form-group">
+            <input className="form-group__field"
               type="text"
               onChange={ searchBuckets }
               placeholder="Search Buckets..." />
-            <i className="ig-helpers"></i>
-          </div>
-          <div className="fesl-inner">
-            <Scrollbars renderScrollbarVertical={ props => <div className="scrollbar-vertical" /> }>
-              <ul>
-                { list }
-              </ul>
-            </Scrollbars>
+            <i className="form-group__bar"></i>
           </div>
         </div>
-        <div className="fes-host">
-          <i className="fa fa-globe"></i>
-          <a href="/">
-            { window.location.host }
-          </a>
-        </div>
+        <ul className="buckets__list">
+          { list }
+        </ul>
       </div>
-    </ClickOutHandler>
+      { storageDetails }
+    </aside>
   )
 }
 

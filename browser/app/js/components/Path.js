@@ -24,12 +24,15 @@ let Path = ({currentBucket, currentPath, selectPrefix}) => {
     path = currentPath.split('/').map((dir, i) => {
       dirPath.push(dir)
       let dirPath_ = dirPath.join('/') + '/'
-      return <span key={ i }><a href="" onClick={ (e) => selectPrefix(e, dirPath_) }>{ dir }</a></span>
+      return <span key={ i } onClick={ (e) => selectPrefix(e, dirPath_) }>{ dir }</span>
     })
   }
 
   return (
-    <h2><span className="main"><a onClick={ (e) => selectPrefix(e, '') } href="">{ currentBucket }</a></span>{ path }</h2>
+    <nav className="breadcrumb">
+      <span onClick={ (e) => selectPrefix(e, '') }>{ currentBucket }</span>
+      { path }
+    </nav>
   )
 }
 

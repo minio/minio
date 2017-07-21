@@ -1,17 +1,12 @@
-/*--------------------------
-    User Select
-----------------------------*/
+// User select
 .user-select(@value) {
     -webkit-user-select: @value;
     -moz-user-select: @value;
     -ms-user-select: @value;
-    user-select: @value; 
+    user-select: @value;
 }
 
-
-/*----------------------------------------
-    CSS Animations based on animate.css
------------------------------------------*/
+// CSS Animations based on animate.css
 .animated(@name, @duration) {
     -webkit-animation-name: @name;
     animation-name: @name;
@@ -21,22 +16,7 @@
     animation-fill-mode: both;
 }
 
-/*-------------------------------------------------
-    For loop mixin for generate custom classes
---------------------------------------------------*/
-.for(@i, @n) {.-each(@i)}
-.for(@n)     when (isnumber(@n)) {.for(1, @n)}
-.for(@i, @n) when not (@i = @n)  {
-    .for((@i + (@n - @i) / abs(@n - @i)), @n);
-}
-
-.for(@array)   when (default()) {.for-impl_(length(@array))}
-.for-impl_(@i) when (@i > 1)    {.for-impl_((@i - 1))}
-.for-impl_(@i) when (@i > 0)    {.-each(extract(@array, @i))}
-
-/*----------------------------------------
-    List Loader
------------------------------------------*/
+// List Loader
 .list-loader(@width, @height, @borderColor, @borderColorBottom) {
     content: '';
     width: @width;
@@ -49,4 +29,28 @@
     z-index: 1;
     -webkit-animation: zoomIn 250ms, spin 700ms 250ms infinite linear;
     animation: zoomIn 250ms, spin 700ms 250ms infinite linear;
+}
+
+// Scale and rotate
+.scale-rotate(@scale, @rotate) {
+    -webkit-transform: scale(@scale) rotate(@rotate);
+    -ms-transform: scale(@scale) rotate(@rotate);
+    transform: scale(@scale) rotate(@rotate);
+}
+
+// Scale3D
+.scale3d(@x, @y, @z) {
+    -webkit-transform: scale3d(@x, @y, @z);
+    -ms-transform: scale3d(@x, @y, @z);
+    transform: scale3d(@x, @y, @z);
+}
+
+// Retina image
+.img-retina(@file-1x; @file-2x; @width-1x; @height-1x) {
+    background-image: url("@{file-1x}");
+
+    @media only screen and (-webkit-min-device-pixel-ratio: 2), only screen and (   min--moz-device-pixel-ratio: 2), only screen and (     -o-min-device-pixel-ratio: 2/1), only screen and (        min-device-pixel-ratio: 2), only screen and (                min-resolution: 192dpi), only screen and (                min-resolution: 2dppx) {
+        background-image: url("@{file-2x}");
+        background-size: @width-1x @height-1x;
+    }
 }
