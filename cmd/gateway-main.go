@@ -125,6 +125,22 @@ EXAMPLES:
 
 `
 
+const siaGatewayTemplate = `NAME:
+  {{.HelpName}} - {{.Usage}}
+
+USAGE:
+  {{.HelpName}} {{if .VisibleFlags}}[FLAGS]{{end}}
+{{if .VisibleFlags}}
+FLAGS:
+  {{range .VisibleFlags}}{{.}}
+  {{end}}{{end}}
+
+EXAMPLES:
+  1. Start minio gateway server for GCS backend.
+      $ {{.HelpName}}
+
+`
+
 var (
 	azureBackendCmd = cli.Command{
 		Name:               "azure",
@@ -151,13 +167,21 @@ var (
 		Flags:              append(serverFlags, globalFlags...),
 		HideHelpCommand:    true,
 	}
+	siaBackendCmd = cli.Command{
+		Name:               "sia",
+		Usage:              "Sia Decentralized Private Cloud Storage.",
+		Action:             siaGatewayMain,
+		CustomHelpTemplate: siaGatewayTemplate,
+		Flags:              append(serverFlags, globalFlags...),
+		HideHelpCommand:    true,
+	}
 
 	gatewayCmd = cli.Command{
 		Name:            "gateway",
 		Usage:           "Start object storage gateway.",
 		Flags:           append(serverFlags, globalFlags...),
 		HideHelpCommand: true,
-		Subcommands:     []cli.Command{azureBackendCmd, s3BackendCmd, gcsBackendCmd},
+		Subcommands:     []cli.Command{azureBackendCmd, s3BackendCmd, gcsBackendCmd, siaBackendCmd},
 	}
 )
 
@@ -168,6 +192,7 @@ const (
 	azureBackend gatewayBackend = "azure"
 	s3Backend    gatewayBackend = "s3"
 	gcsBackend   gatewayBackend = "gcs"
+	siaBackend   gatewayBackend = "sia"
 	// Add more backends here.
 )
 
@@ -177,6 +202,7 @@ const (
 // - Azure Blob Storage.
 // - AWS S3.
 // - Google Cloud Storage.
+// - Sia Decentralized Private Cloud.
 // - Add your favorite backend here.
 func newGatewayLayer(backendType gatewayBackend, arg string) (GatewayLayer, error) {
 	switch backendType {
@@ -189,6 +215,9 @@ func newGatewayLayer(backendType gatewayBackend, arg string) (GatewayLayer, erro
 		// will be removed when gcs is ready for production use.
 		log.Println(colorYellow("\n               *** Warning: Not Ready for Production ***"))
 		return newGCSGateway(arg)
+    case siaBackend:
+		log.Println(colorYellow("\n               *** Warning: Sia Not Ready for Production ***"))
+		return newSiaGateway(arg)
 	}
 
 	return nil, fmt.Errorf("Unrecognized backend type %s", backendType)
@@ -285,6 +314,15 @@ func gcsGatewayMain(ctx *cli.Context) {
 	gatewayMain(ctx, gcsBackend)
 }
 
+// Handler for 'minio gateway sia' command line
+func siaGatewayMain(ctx *cli.Context) {
+	if ctx.Args().Present() && ctx.Args().First() == "help" {
+		cli.ShowCommandHelpAndExit(ctx, "sia", 1)
+	}
+
+	gatewayMain(ctx, siaBackend)
+}
+
 // Handler for 'minio gateway'.
 func gatewayMain(ctx *cli.Context, backendType gatewayBackend) {
 	// Get quiet flag from command line argument.
@@ -293,21 +331,18 @@ func gatewayMain(ctx *cli.Context, backendType gatewayBackend) {
 		log.EnableQuiet()
 	}
 
-	// Fetch address option
-	gatewayAddr := ctx.GlobalString("address")
-	if gatewayAddr == ":"+globalMinioPort {
-		gatewayAddr = ctx.String("address")
-	}
-
 	// Handle common command args.
 	handleCommonCmdArgs(ctx)
 
 	// Handle common env vars.
 	handleCommonEnvVars()
 
-	// Validate if we have access, secret set through environment.
-	if !globalIsEnvCreds {
-		fatalIf(fmt.Errorf("Access and Secret keys should be set through ENVs for backend [%s]", backendType), "")
+    // Sia doesn't need envs
+    if gatewayBackend(backendType) != siaBackend {
+		// Validate if we have access, secret set through environment.
+		if !globalIsEnvCreds {
+			fatalIf(fmt.Errorf("Access and Secret keys should be set through ENVs for backend [%s]", backendType), "")
+		}
 	}
 
 	// Create certs path.
@@ -369,7 +404,7 @@ func gatewayMain(ctx *cli.Context, backendType gatewayBackend) {
 
 	}
 
-	globalHTTPServer = miniohttp.NewServer([]string{gatewayAddr}, registerHandlers(router, handlerFns...), globalTLSCertificate)
+	globalHTTPServer = miniohttp.NewServer([]string{ctx.GlobalString("address")}, registerHandlers(router, handlerFns...), globalTLSCertificate)
 
 	// Start server, automatically configures TLS if certs are available.
 	go func() {
@@ -393,13 +428,15 @@ func gatewayMain(ctx *cli.Context, backendType gatewayBackend) {
 			mode = globalMinioModeGatewayGCS
 		case s3Backend:
 			mode = globalMinioModeGatewayS3
+	 	case siaBackend:
+			mode = globalMinioModeGatewaySia
 		}
 
 		// Check update mode.
 		checkUpdate(mode)
 
 		// Print gateway startup message.
-		printGatewayStartupMessage(getAPIEndpoints(gatewayAddr), backendType)
+		printGatewayStartupMessage(getAPIEndpoints(ctx.String("address")), backendType)
 	}
 
 	handleSignals()

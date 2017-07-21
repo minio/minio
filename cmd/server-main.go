@@ -31,7 +31,7 @@ import (
 var serverFlags = []cli.Flag{
 	cli.StringFlag{
 		Name:  "address",
-		Value: ":" + globalMinioPort,
+		Value: ":9000",
 		Usage: "Bind to a specific ADDRESS:PORT, ADDRESS can be an IP or hostname.",
 	},
 }
