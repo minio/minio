@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"bytes"
 	"encoding/hex"
 	"io"
 	"io/ioutil"
@@ -641,9 +640,8 @@ func (s *posix) ReadFileWithVerify(volume, path string, offset int64, buf []byte
 		return 0, errIsNotRegular
 	}
 
-	var buffer []byte
 	if !verifier.IsVerified() {
-		buffer = *(s.pool.Get().(*[]byte))
+		buffer := *(s.pool.Get().(*[]byte))
 		defer s.pool.Put(&buffer)
 
 		if offset != 0 {
@@ -651,17 +649,9 @@ func (s *posix) ReadFileWithVerify(volume, path string, offset int64, buf []byte
 				return 0, err
 			}
 		}
-	} else {
-		if _, err = file.Seek(offset, os.SEEK_SET); err != nil {
-			return 0, err
+		if _, err = file.Read(buf); err != nil {
+			return n, err
 		}
-	}
-	m, err := io.ReadFull(file, buf)
-	if err == io.EOF {
-		return 0, err
-	}
-
-	if !verifier.IsVerified() {
 		if _, err = verifier.Write(buf); err != nil {
 			return 0, err
 		}
@@ -671,6 +661,12 @@ func (s *posix) ReadFileWithVerify(volume, path string, offset int64, buf []byte
 		if !verifier.Verify() {
 			return 0, hashMismatchError{hex.EncodeToString(verifier.sum), hex.EncodeToString(verifier.Sum(nil))}
 		}
+		return int64(len(buf)), err
+	}
+
+	m, err := file.ReadAt(buf, offset)
+	if m > 0 && m < len(buf) {
+		err = io.ErrUnexpectedEOF
 	}
 	return int64(m), err
 }
@@ -811,17 +807,8 @@ func (s *posix) AppendFile(volume, path string, buf []byte) (err error) {
 	if err != nil {
 		return err
 	}
-
-	// Close upon return.
-	defer w.Close()
-
-	bufp := s.pool.Get().(*[]byte)
-
-	// Reuse buffer.
-	defer s.pool.Put(bufp)
-
-	// Return io.Copy
-	_, err = io.CopyBuffer(w, bytes.NewReader(buf), *bufp)
+	_, err = w.Write(buf)
+	w.Close()
 	return err
 }
 
