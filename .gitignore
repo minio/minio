@@ -16,3 +16,5 @@ release
 .DS_Store
 *.syso
 coverage.txt
+.sia_cache
+siabridge.db
