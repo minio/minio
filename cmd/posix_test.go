@@ -887,7 +887,7 @@ func TestPosixReadFile(t *testing.T) {
 					return &os.PathError{
 						Op:   "read",
 						Path: preparePath(slashpath.Join(path, "success-vol", "myobject")),
-						Err:  syscall.Errno(0x16), // invalid parameter
+						Err:  syscall.Errno(0x57), // invalid parameter
 					}
 				}
 				return &os.PathError{

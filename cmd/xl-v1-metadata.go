@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -50,7 +51,20 @@ func init() {
 	}
 	newPoly1305 := func(key []byte, mode bitrot.Mode) bitrot.Hash {
 		var pKey [32]byte
-		copy(pKey[:], key) // this is safe because bitrot.New will check the len of key
+
+		//Poly1305 uses the first 16 byte of the key for multiplication.
+		//If this part of the key is ever zero the multiply has no effect on the checksum.
+		// It is very unlikely that this will ever happen because the key is randomly generated
+		// but even tough we should prevent this from happening. If the part of the key is zero
+		// we now use the inverse - all bit's set. This will guarantee that the multiplication
+		// effects the checksum.
+		if bytes.Equal(key[:16], pKey[:16]) {
+			for i := range key[:16] {
+				key[i] = ^key[i] // inverse bits
+			}
+		}
+
+		copy(pKey[:], key)
 		return poly1305.New(pKey)
 	}
 	bitrot.RegisterAlgorithm(bitrot.SHA256, newSHA256)
