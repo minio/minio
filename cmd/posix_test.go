@@ -877,13 +877,13 @@ func TestPosixReadFile(t *testing.T) {
 				if runtime.GOOS == globalWindowsOSName {
 					return &os.PathError{
 						Op:   "seek",
-						Path: preparePath(slashpath.Join(path, "success-vol", "myobject")),
+						Path: slashpath.Join(path, "success-vol", "myobject"),
 						Err:  syscall.Errno(0x83), // ERROR_NEGATIVE_SEEK
 					}
 				}
 				return &os.PathError{
 					Op:   "seek",
-					Path: preparePath(slashpath.Join(path, "success-vol", "myobject")),
+					Path: slashpath.Join(path, "success-vol", "myobject"),
 					Err:  os.ErrInvalid,
 				}
 			}(),
