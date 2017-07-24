@@ -98,9 +98,9 @@ func path2BucketAndObject(path string) (bucket, object string) {
 }
 
 // extractMetadataFromHeader extracts metadata from HTTP header.
-func extractMetadataFromHeader(header http.Header) map[string]string {
+func extractMetadataFromHeader(header http.Header) (map[string]string, error) {
 	if header == nil {
-		return nil
+		return nil, traceError(errInvalidArgument)
 	}
 	metadata := make(map[string]string)
 	// Save standard supported headers.
@@ -116,16 +116,17 @@ func extractMetadataFromHeader(header http.Header) map[string]string {
 	}
 	// Go through all other headers for any additional headers that needs to be saved.
 	for key := range header {
-		cKey := http.CanonicalHeaderKey(key)
-		if strings.HasPrefix(cKey, "X-Amz-Meta-") {
-			metadata[cKey] = header.Get(key)
-		} else if strings.HasPrefix(key, "X-Minio-Meta-") {
-			metadata[cKey] = header.Get(key)
+		if key != http.CanonicalHeaderKey(key) {
+			return nil, traceError(errInvalidArgument)
+		}
+		if strings.HasPrefix(key, "X-Amz-Meta-") {
+			metadata[key] = header.Get(key)
+		}
+		if strings.HasPrefix(key, "X-Minio-Meta-") {
+			metadata[key] = header.Get(key)
 		}
 	}
-
-	// Success.
-	return metadata
+	return metadata, nil
 }
 
 // The Query string for the redirect URL the client is
@@ -166,11 +167,6 @@ func trimAwsChunkedContentEncoding(contentEnc string) (trimmedContentEnc string)
 		}
 	}
 	return strings.Join(newEncs, ",")
-}
-
-// extractMetadataFromForm extracts metadata from Post Form.
-func extractMetadataFromForm(formValues http.Header) map[string]string {
-	return extractMetadataFromHeader(formValues)
 }
 
 // Validate form field size for s3 specification requirement.

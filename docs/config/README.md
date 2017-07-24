@@ -48,7 +48,14 @@ minio server ~/Photos
 #### Region
 |Field|Type|Description|
 |:---|:---|:---|
-|``region``| _string_ | `region` describes the physical location of the server. By default it is set to `us-east-1`, which is same as AWS3's default region. If you are unsure leave it to default.|
+|``region``| _string_ | `region` describes the physical location of the server. By default it is set to `us-east-1`, which is same as AWS S3's default region. You may override this field with `MINIO_REGION` environment variable. If you are unsure leave it unset.|
+
+Example:
+
+```sh
+export MINIO_REGION="my_region"
+minio server ~/Photos
+```
 
 #### Browser
 |Field|Type|Description|
@@ -77,6 +84,7 @@ minio server ~/Photos
 |:---|:---|:---|
 |``notify``| |Notify enables bucket notification events for lambda computing via the following targets.|
 |``notify.amqp``| |[Configure to publish Minio events via AMQP target.](http://docs.minio.io/docs/minio-bucket-notification-guide#AMQP)|
+|``notify.mqtt``| |[Configure to publish Minio events via MQTT target.](http://docs.minio.io/docs/minio-bucket-notification-guide#MQTT)|
 |``notify.elasticsearch``| |[Configure to publish Minio events via Elasticsearch target.](http://docs.minio.io/docs/minio-bucket-notification-guide#Elasticsearch)|
 |``notify.redis``| |[Configure to publish Minio events via Redis target.](http://docs.minio.io/docs/minio-bucket-notification-guide#Redis)|
 |``notify.nats``| |[Configure to publish Minio events via NATS target.](http://docs.minio.io/docs/minio-bucket-notification-guide#NATS)|

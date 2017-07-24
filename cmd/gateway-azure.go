@@ -67,6 +67,11 @@ func azureToS3Metadata(meta map[string]string) (newMeta map[string]string) {
 	return newMeta
 }
 
+// Append "-1" to etag so that clients do not interpret it as MD5.
+func azureToS3ETag(etag string) string {
+	return canonicalizeETag(etag) + "-1"
+}
+
 // To store metadata during NewMultipartUpload which will be used after
 // CompleteMultipartUpload to call SetBlobMetadata.
 type azureMultipartMetaInfo struct {
@@ -137,6 +142,8 @@ func azureToObjectError(err error, params ...string) error {
 		err = BucketExists{Bucket: bucket}
 	case "InvalidResourceName":
 		err = BucketNameInvalid{Bucket: bucket}
+	case "RequestBodyTooLarge":
+		err = PartTooBig{}
 	default:
 		switch azureErr.StatusCode {
 		case http.StatusNotFound:
@@ -153,15 +160,26 @@ func azureToObjectError(err error, params ...string) error {
 	return e
 }
 
-// Inits azure blob storage client and returns azureObjects.
-func newAzureLayer(endPoint string, account, key string, secure bool) (GatewayLayer, error) {
-	if endPoint == "" {
-		endPoint = storage.DefaultBaseURL
+// Inits azure blob storage client and returns AzureObjects.
+func newAzureLayer(host string) (GatewayLayer, error) {
+	var err error
+	var endpoint = storage.DefaultBaseURL
+	var secure = true
+
+	// If user provided some parameters
+	if host != "" {
+		endpoint, secure, err = parseGatewayEndpoint(host)
+		if err != nil {
+			return nil, err
+		}
 	}
-	c, err := storage.NewClient(account, key, endPoint, globalAzureAPIVersion, secure)
+
+	creds := serverConfig.GetCredential()
+	c, err := storage.NewClient(creds.AccessKey, creds.SecretKey, endpoint, globalAzureAPIVersion, secure)
 	if err != nil {
 		return &azureObjects{}, err
 	}
+
 	return &azureObjects{
 		client: c.GetBlobService(),
 		metaInfo: azureMultipartMetaInfo{
@@ -174,13 +192,12 @@ func newAzureLayer(endPoint string, account, key string, secure bool) (GatewayLa
 // Shutdown - save any gateway metadata to disk
 // if necessary and reload upon next restart.
 func (a *azureObjects) Shutdown() error {
-	// TODO
 	return nil
 }
 
 // StorageInfo - Not relevant to Azure backend.
-func (a *azureObjects) StorageInfo() StorageInfo {
-	return StorageInfo{}
+func (a *azureObjects) StorageInfo() (si StorageInfo) {
+	return si
 }
 
 // MakeBucketWithLocation - Create a new container on azure backend.
@@ -190,13 +207,13 @@ func (a *azureObjects) MakeBucketWithLocation(bucket, location string) error {
 }
 
 // GetBucketInfo - Get bucket metadata..
-func (a *azureObjects) GetBucketInfo(bucket string) (BucketInfo, error) {
+func (a *azureObjects) GetBucketInfo(bucket string) (bi BucketInfo, e error) {
 	// Azure does not have an equivalent call, hence use ListContainers.
 	resp, err := a.client.ListContainers(storage.ListContainersParameters{
 		Prefix: bucket,
 	})
 	if err != nil {
-		return BucketInfo{}, azureToObjectError(traceError(err), bucket)
+		return bi, azureToObjectError(traceError(err), bucket)
 	}
 	for _, container := range resp.Containers {
 		if container.Name == bucket {
@@ -209,7 +226,7 @@ func (a *azureObjects) GetBucketInfo(bucket string) (BucketInfo, error) {
 			} // else continue
 		}
 	}
-	return BucketInfo{}, traceError(BucketNotFound{Bucket: bucket})
+	return bi, traceError(BucketNotFound{Bucket: bucket})
 }
 
 // ListBuckets - Lists all azure containers, uses Azure equivalent ListContainers.
@@ -260,7 +277,42 @@ func (a *azureObjects) ListObjects(bucket, prefix, marker, delimiter string, max
 			Name:            object.Name,
 			ModTime:         t,
 			Size:            object.Properties.ContentLength,
-			ETag:            canonicalizeETag(object.Properties.Etag),
+			ETag:            azureToS3ETag(object.Properties.Etag),
+			ContentType:     object.Properties.ContentType,
+			ContentEncoding: object.Properties.ContentEncoding,
+		})
+	}
+	result.Prefixes = resp.BlobPrefixes
+	return result, nil
+}
+
+// ListObjectsV2 - list all blobs in Azure bucket filtered by prefix
+func (a *azureObjects) ListObjectsV2(bucket, prefix, continuationToken string, fetchOwner bool, delimiter string, maxKeys int) (result ListObjectsV2Info, err error) {
+	resp, err := a.client.ListBlobs(bucket, storage.ListBlobsParameters{
+		Prefix:     prefix,
+		Marker:     continuationToken,
+		Delimiter:  delimiter,
+		MaxResults: uint(maxKeys),
+	})
+	if err != nil {
+		return result, azureToObjectError(traceError(err), bucket, prefix)
+	}
+	// If NextMarker is not empty, this means response is truncated and NextContinuationToken should be set
+	if resp.NextMarker != "" {
+		result.IsTruncated = true
+		result.NextContinuationToken = resp.NextMarker
+	}
+	for _, object := range resp.Blobs {
+		t, e := time.Parse(time.RFC1123, object.Properties.LastModified)
+		if e != nil {
+			continue
+		}
+		result.Objects = append(result.Objects, ObjectInfo{
+			Bucket:          bucket,
+			Name:            object.Name,
+			ModTime:         t,
+			Size:            object.Properties.ContentLength,
+			ETag:            azureToS3ETag(object.Properties.Etag),
 			ContentType:     object.Properties.ContentType,
 			ContentEncoding: object.Properties.ContentEncoding,
 		})
@@ -323,7 +375,7 @@ func (a *azureObjects) GetObjectInfo(bucket, object string) (objInfo ObjectInfo,
 	objInfo = ObjectInfo{
 		Bucket:      bucket,
 		UserDefined: meta,
-		ETag:        canonicalizeETag(prop.Etag),
+		ETag:        azureToS3ETag(prop.Etag),
 		ModTime:     t,
 		Name:        object,
 		Size:        prop.ContentLength,
@@ -616,31 +668,6 @@ func (a *azureObjects) CompleteMultipartUpload(bucket, object, uploadID string, 
 	}
 	a.metaInfo.del(uploadID)
 	return a.GetObjectInfo(bucket, object)
-}
-
-func anonErrToObjectErr(statusCode int, params ...string) error {
-	bucket := ""
-	object := ""
-	if len(params) >= 1 {
-		bucket = params[0]
-	}
-	if len(params) == 2 {
-		object = params[1]
-	}
-
-	switch statusCode {
-	case http.StatusNotFound:
-		if object != "" {
-			return ObjectNotFound{bucket, object}
-		}
-		return BucketNotFound{Bucket: bucket}
-	case http.StatusBadRequest:
-		if object != "" {
-			return ObjectNameInvalid{bucket, object}
-		}
-		return BucketNameInvalid{Bucket: bucket}
-	}
-	return errUnexpected
 }
 
 // Copied from github.com/Azure/azure-sdk-for-go/storage/blob.go

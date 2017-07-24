@@ -59,13 +59,13 @@ type amqpConn struct {
 // dialAMQP - dials and returns an amqpConnection instance,
 // for sending notifications. Returns error if amqp logger
 // is not enabled.
-func dialAMQP(amqpL amqpNotify) (amqpConn, error) {
+func dialAMQP(amqpL amqpNotify) (ac amqpConn, e error) {
 	if !amqpL.Enable {
-		return amqpConn{}, errNotifyNotEnabled
+		return ac, errNotifyNotEnabled
 	}
 	conn, err := amqp.Dial(amqpL.URL)
 	if err != nil {
-		return amqpConn{}, err
+		return ac, err
 	}
 	return amqpConn{Connection: conn, params: amqpL}, nil
 }

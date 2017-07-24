@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"io"
-	"net/rpc"
 	"path"
 	"time"
 
@@ -217,7 +216,7 @@ func (s *storageServer) RenameFileHandler(args *RenameFileArgs, reply *AuthRPCRe
 }
 
 // Initialize new storage rpc.
-func newRPCServer(endpoints EndpointList) (servers []*storageServer, err error) {
+func newStorageRPCServer(endpoints EndpointList) (servers []*storageServer, err error) {
 	for _, endpoint := range endpoints {
 		if endpoint.IsLocal {
 			storage, err := newPosix(endpoint.Path)
@@ -238,14 +237,14 @@ func newRPCServer(endpoints EndpointList) (servers []*storageServer, err error) 
 // registerStorageRPCRouter - register storage rpc router.
 func registerStorageRPCRouters(mux *router.Router, endpoints EndpointList) error {
 	// Initialize storage rpc servers for every disk that is hosted on this node.
-	storageRPCs, err := newRPCServer(endpoints)
+	storageRPCs, err := newStorageRPCServer(endpoints)
 	if err != nil {
 		return traceError(err)
 	}
 
 	// Create a unique route for each disk exported from this node.
 	for _, stServer := range storageRPCs {
-		storageRPCServer := rpc.NewServer()
+		storageRPCServer := newRPCServer()
 		err = storageRPCServer.RegisterName("Storage", stServer)
 		if err != nil {
 			return traceError(err)

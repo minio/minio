@@ -20,15 +20,17 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+
+	"github.com/minio/minio-go/pkg/s3utils"
 )
 
 // FGetObject - download contents of an object to a local file.
 func (c Client) FGetObject(bucketName, objectName, filePath string) error {
 	// Input validation.
-	if err := isValidBucketName(bucketName); err != nil {
+	if err := s3utils.CheckValidBucketName(bucketName); err != nil {
 		return err
 	}
-	if err := isValidObjectName(objectName); err != nil {
+	if err := s3utils.CheckValidObjectName(objectName); err != nil {
 		return err
 	}
 

@@ -497,7 +497,12 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Extract incoming metadata if any.
-	metadata := extractMetadataFromHeader(r.Header)
+	metadata, err := extractMetadataFromHeader(r.Header)
+	if err != nil {
+		errorIf(err, "found invalid http request header")
+		writeErrorResponse(w, ErrInternalError, r.URL)
+		return
+	}
 
 	// Lock the object.
 	objectLock := globalNSMutex.NewNSLock(bucket, object)
@@ -690,13 +695,15 @@ func getBucketAccessPolicy(objAPI ObjectLayer, bucketName string) (policy.Bucket
 		policyInfo, err = layer.GetBucketPolicies(bucketName)
 	case *azureObjects:
 		policyInfo, err = layer.GetBucketPolicies(bucketName)
+	case *gcsGateway:
+		policyInfo, err = layer.GetBucketPolicies(bucketName)
 	default:
 		policyInfo, err = readBucketAccessPolicy(objAPI, bucketName)
 	}
 	return policyInfo, err
 }
 
-// GetBucketPolicy - get bucket policy.
+// GetBucketPolicy - get bucket policy for the requested prefix.
 func (web *webAPIHandlers) GetBucketPolicy(r *http.Request, args *GetBucketPolicyArgs, reply *GetBucketPolicyRep) error {
 	objectAPI := web.ObjectAPI()
 	if objectAPI == nil {
@@ -707,9 +714,12 @@ func (web *webAPIHandlers) GetBucketPolicy(r *http.Request, args *GetBucketPolic
 		return toJSONError(errAuthentication)
 	}
 
-	policyInfo, err := readBucketAccessPolicy(objectAPI, args.BucketName)
+	var policyInfo, err = getBucketAccessPolicy(objectAPI, args.BucketName)
 	if err != nil {
-		return toJSONError(err, args.BucketName)
+		_, ok := errorCause(err).(PolicyNotFound)
+		if !ok {
+			return toJSONError(err, args.BucketName)
+		}
 	}
 
 	reply.UIVersion = browser.UIVersion
@@ -745,8 +755,8 @@ func (web *webAPIHandlers) ListAllBucketPolicies(r *http.Request, args *ListAllB
 	if !isHTTPRequestValid(r) {
 		return toJSONError(errAuthentication)
 	}
-	var policyInfo, err = getBucketAccessPolicy(objectAPI, args.BucketName)
 
+	var policyInfo, err = getBucketAccessPolicy(objectAPI, args.BucketName)
 	if err != nil {
 		_, ok := errorCause(err).(PolicyNotFound)
 		if !ok {
@@ -791,7 +801,6 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 	}
 
 	var policyInfo, err = getBucketAccessPolicy(objectAPI, args.BucketName)
-
 	if err != nil {
 		if _, ok := errorCause(err).(PolicyNotFound); !ok {
 			return toJSONError(err, args.BucketName)
@@ -915,7 +924,7 @@ func presignedGet(host, bucket, object string, expiry int64) string {
 	signature := getSignature(signingKey, stringToSign)
 
 	// Construct the final presigned URL.
-	return host + path + "?" + query + "&" + "X-Amz-Signature=" + signature
+	return host + getURLEncodedName(path) + "?" + query + "&" + "X-Amz-Signature=" + signature
 }
 
 // toJSONError converts regular errors into more user friendly

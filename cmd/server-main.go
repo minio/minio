@@ -17,21 +17,21 @@
 package cmd
 
 import (
-	"errors"
+	"net/http"
 	"os"
-	"path/filepath"
+	"os/signal"
 	"runtime"
-	"strings"
-	"time"
+	"syscall"
 
 	"github.com/minio/cli"
 	"github.com/minio/dsync"
+	miniohttp "github.com/minio/minio/pkg/http"
 )
 
 var serverFlags = []cli.Flag{
 	cli.StringFlag{
 		Name:  "address",
-		Value: ":9000",
+		Value: ":" + globalMinioPort,
 		Usage: "Bind to a specific ADDRESS:PORT, ADDRESS can be an IP or hostname.",
 	},
 }
@@ -58,6 +58,9 @@ ENVIRONMENT VARIABLES:
   BROWSER:
      MINIO_BROWSER: To disable web browser access, set this value to "off".
 
+  REGION:
+     MINIO_REGION: To set custom region. By default it is "us-east-1".
+
 EXAMPLES:
   1. Start minio server on "/home/shared" directory.
       $ {{.HelpName}} /home/shared
@@ -78,61 +81,9 @@ EXAMPLES:
 `,
 }
 
-// Check for updates and print a notification message
-func checkUpdate(mode string) {
-	// Its OK to ignore any errors during getUpdateInfo() here.
-	if older, downloadURL, err := getUpdateInfo(1*time.Second, mode); err == nil {
-		if updateMsg := computeUpdateMessage(downloadURL, older); updateMsg != "" {
-			log.Println(updateMsg)
-		}
-	}
-}
-
-func enableLoggers() {
-	fileLogTarget := serverConfig.Logger.GetFile()
-	if fileLogTarget.Enable {
-		err := InitFileLogger(&fileLogTarget)
-		fatalIf(err, "Unable to initialize file logger")
-		log.AddTarget(fileLogTarget)
-	}
-
-	consoleLogTarget := serverConfig.Logger.GetConsole()
-	if consoleLogTarget.Enable {
-		InitConsoleLogger(&consoleLogTarget)
-	}
-
-	log.SetConsoleTarget(consoleLogTarget)
-}
-
-func initConfig() {
-	// Config file does not exist, we create it fresh and return upon success.
-	if isFile(getConfigFile()) {
-		fatalIf(migrateConfig(), "Config migration failed.")
-		fatalIf(loadConfig(), "Unable to load config version: '%s'.", v18)
-	} else {
-		fatalIf(newConfig(), "Unable to initialize minio config for the first time.")
-		log.Println("Created minio configuration file successfully at " + getConfigDir())
-	}
-}
-
 func serverHandleCmdArgs(ctx *cli.Context) {
-	// Set configuration directory.
-	{
-		// Get configuration directory from command line argument.
-		configDir := ctx.String("config-dir")
-		if !ctx.IsSet("config-dir") && ctx.GlobalIsSet("config-dir") {
-			configDir = ctx.GlobalString("config-dir")
-		}
-		if configDir == "" {
-			fatalIf(errors.New("empty directory"), "Configuration directory cannot be empty.")
-		}
-
-		// Disallow relative paths, figure out absolute paths.
-		configDirAbs, err := filepath.Abs(configDir)
-		fatalIf(err, "Unable to fetch absolute path for config directory %s", configDir)
-
-		setConfigDir(configDirAbs)
-	}
+	// Handle common command args.
+	handleCommonCmdArgs(ctx)
 
 	// Server address.
 	serverAddr := ctx.String("address")
@@ -159,36 +110,8 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 }
 
 func serverHandleEnvVars() {
-	// Start profiler if env is set.
-	if profiler := os.Getenv("_MINIO_PROFILER"); profiler != "" {
-		globalProfiler = startProfiler(profiler)
-	}
-
-	// Check if object cache is disabled.
-	globalXLObjCacheDisabled = strings.EqualFold(os.Getenv("_MINIO_CACHE"), "off")
-
-	accessKey := os.Getenv("MINIO_ACCESS_KEY")
-	secretKey := os.Getenv("MINIO_SECRET_KEY")
-	if accessKey != "" && secretKey != "" {
-		cred, err := createCredential(accessKey, secretKey)
-		fatalIf(err, "Invalid access/secret Key set in environment.")
-
-		// credential Envs are set globally.
-		globalIsEnvCreds = true
-		globalActiveCred = cred
-	}
-
-	if browser := os.Getenv("MINIO_BROWSER"); browser != "" {
-		browserFlag, err := ParseBrowserFlag(browser)
-		if err != nil {
-			fatalIf(errors.New("invalid value"), "Unknown value ‘%s’ in MINIO_BROWSER environment variable.", browser)
-		}
-
-		// browser Envs are set globally, this does not represent
-		// if browser is turned off or on.
-		globalIsEnvBrowser = true
-		globalIsBrowserEnabled = bool(browserFlag)
-	}
+	// Handle common environment variables.
+	handleCommonEnvVars()
 
 	if serverRegion := os.Getenv("MINIO_REGION"); serverRegion != "" {
 		// region Envs are set globally.
@@ -210,12 +133,16 @@ func serverMain(ctx *cli.Context) {
 		log.EnableQuiet()
 	}
 
+	// Handle all server command args.
 	serverHandleCmdArgs(ctx)
+
+	// Handle all server environment vars.
 	serverHandleEnvVars()
 
 	// Create certs path.
 	fatalIf(createConfigDir(), "Unable to create configuration directories.")
 
+	// Initialize server config.
 	initConfig()
 
 	// Enable loggers as per configuration file.
@@ -226,8 +153,8 @@ func serverMain(ctx *cli.Context) {
 
 	// Check and load SSL certificates.
 	var err error
-	globalPublicCerts, globalRootCAs, globalIsSSL, err = getSSLConfig()
-	fatalIf(err, "Invalid SSL key file")
+	globalPublicCerts, globalRootCAs, globalTLSCertificate, globalIsSSL, err = getSSLConfig()
+	fatalIf(err, "Invalid SSL certificate file")
 
 	if !quietFlag {
 		// Check for new updates from dl.minio.io.
@@ -253,11 +180,10 @@ func serverMain(ctx *cli.Context) {
 	initNSLock(globalIsDistXL)
 
 	// Configure server.
-	handler, err := configureServerHandler(globalEndpoints)
+	// Declare handler to avoid lint errors.
+	var handler http.Handler
+	handler, err = configureServerHandler(globalEndpoints)
 	fatalIf(err, "Unable to configure one of server's RPC services.")
-
-	// Initialize a new HTTP server.
-	apiServer := NewServerMux(globalMinioAddr, handler)
 
 	// Initialize S3 Peers inter-node communication only in distributed setup.
 	initGlobalS3Peers(globalEndpoints)
@@ -265,31 +191,36 @@ func serverMain(ctx *cli.Context) {
 	// Initialize Admin Peers inter-node communication only in distributed setup.
 	initGlobalAdminPeers(globalEndpoints)
 
-	// Start server, automatically configures TLS if certs are available.
+	globalHTTPServer = miniohttp.NewServer([]string{globalMinioAddr}, handler, globalTLSCertificate)
+	globalHTTPServer.UpdateBytesReadFunc = globalConnStats.incInputBytes
+	globalHTTPServer.UpdateBytesWrittenFunc = globalConnStats.incOutputBytes
+	globalHTTPServer.ErrorLogFunc = errorIf
 	go func() {
-		cert, key := "", ""
-		if globalIsSSL {
-			cert, key = getPublicCertFile(), getPrivateKeyFile()
-		}
-		fatalIf(apiServer.ListenAndServe(cert, key), "Failed to start minio server.")
+		globalHTTPServerErrorCh <- globalHTTPServer.Start()
 	}()
 
+	signal.Notify(globalOSSignalCh, os.Interrupt, syscall.SIGTERM)
+
 	newObject, err := newObjectLayer(globalEndpoints)
-	fatalIf(err, "Initializing object layer failed")
+	if err != nil {
+		errorIf(err, "Initializing object layer failed")
+		err = globalHTTPServer.Shutdown()
+		errorIf(err, "Unable to shutdown http server")
+		os.Exit(1)
+	}
 
 	globalObjLayerMutex.Lock()
 	globalObjectAPI = newObject
 	globalObjLayerMutex.Unlock()
 
 	// Prints the formatted startup message once object layer is initialized.
-	apiEndpoints := getAPIEndpoints(apiServer.Addr)
+	apiEndpoints := getAPIEndpoints(globalMinioAddr)
 	printStartupMessage(apiEndpoints)
 
 	// Set uptime time after object layer has initialized.
 	globalBootTime = UTCNow()
 
-	// Waits on the server.
-	<-globalServiceDoneCh
+	handleSignals()
 }
 
 // Initialize object layer with the supplied disks, objectLayer is nil upon any error.

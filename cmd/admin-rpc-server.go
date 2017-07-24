@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"net/rpc"
 	"os"
 	"path/filepath"
 	"time"
@@ -236,7 +235,7 @@ func (s *adminCmd) CommitConfig(cArgs *CommitConfigArgs, cReply *CommitConfigRep
 // stop and restart commands.
 func registerAdminRPCRouter(mux *router.Router) error {
 	adminRPCHandler := &adminCmd{}
-	adminRPCServer := rpc.NewServer()
+	adminRPCServer := newRPCServer()
 	err := adminRPCServer.RegisterName("Admin", adminRPCHandler)
 	if err != nil {
 		return traceError(err)

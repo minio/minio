@@ -525,7 +525,12 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	}
 
 	// Extract metadata to be saved from received Form.
-	metadata := extractMetadataFromForm(formValues)
+	metadata, err := extractMetadataFromHeader(formValues)
+	if err != nil {
+		errorIf(err, "found invalid http request header")
+		writeErrorResponse(w, ErrInternalError, r.URL)
+		return
+	}
 	sha256sum := ""
 
 	objectLock := globalNSMutex.NewNSLock(bucket, object)
@@ -648,11 +653,20 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 	// Delete bucket access policy, if present - ignore any errors.
 	_ = removeBucketPolicy(bucket, objectAPI)
 
+	// Notify all peers (including self) to update in-memory state
+	S3PeersUpdateBucketPolicy(bucket, policyChange{true, nil})
+
 	// Delete notification config, if present - ignore any errors.
 	_ = removeNotificationConfig(bucket, objectAPI)
 
+	// Notify all peers (including self) to update in-memory state
+	S3PeersUpdateBucketNotification(bucket, nil)
+
 	// Delete listener config, if present - ignore any errors.
 	_ = removeListenerConfig(bucket, objectAPI)
+
+	// Notify all peers (including self) to update in-memory state
+	S3PeersUpdateBucketListener(bucket, []listenerConfig{})
 
 	// Write success response.
 	writeSuccessNoContent(w)

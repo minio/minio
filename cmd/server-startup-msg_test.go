@@ -140,7 +140,7 @@ func TestPrintCLIAccessMsg(t *testing.T) {
 	defer removeAll(root)
 
 	apiEndpoints := []string{"http://127.0.0.1:9000"}
-	printCLIAccessMsg(apiEndpoints[0])
+	printCLIAccessMsg(apiEndpoints[0], "myminio")
 }
 
 // Test print startup message.

@@ -35,9 +35,11 @@ import (
 )
 
 const (
-	fsMinFreeSpace    = 1 * humanize.GiByte // Min 1GiB free space.
-	fsMinFreeInodes   = 10000               // Min 10000.
-	maxAllowedIOError = 5
+	diskMinFreeSpace   = 1 * humanize.GiByte // Min 1GiB free space.
+	diskMinTotalSpace  = diskMinFreeSpace    // Min 1GiB total space.
+	diskMinFreeInodes  = 10000               // Min 10000 free inodes.
+	diskMinTotalInodes = diskMinFreeInodes   // Min 10000 total inodes.
+	maxAllowedIOError  = 5
 )
 
 // posix - implements StorageAPI interface.
@@ -108,7 +110,7 @@ func newPosix(path string) (StorageAPI, error) {
 	if err != nil {
 		return nil, err
 	}
-	fs := &posix{
+	st := &posix{
 		diskPath: diskPath,
 		// 1MiB buffer pool for posix internal operations.
 		pool: sync.Pool{
@@ -131,7 +133,19 @@ func newPosix(path string) (StorageAPI, error) {
 			return nil, err
 		}
 	}
-	return fs, nil
+
+	di, err := getDiskInfo(preparePath(diskPath))
+	if err != nil {
+		return nil, err
+	}
+
+	// Check if disk has minimum required total space.
+	if err = checkDiskMinTotal(di); err != nil {
+		return nil, err
+	}
+
+	// Success.
+	return st, nil
 }
 
 // getDiskInfo returns given disk information.
@@ -155,11 +169,58 @@ var ignoreDiskFreeOS = []string{
 	globalSolarisOSName,
 }
 
+// check if disk total has minimum required size.
+func checkDiskMinTotal(di disk.Info) (err error) {
+	// Remove 5% from total space for cumulative disk space
+	// used for journalling, inodes etc.
+	totalDiskSpace := float64(di.Total) * 0.95
+	if int64(totalDiskSpace) <= diskMinTotalSpace {
+		return errDiskFull
+	}
+
+	// Some filesystems do not implement a way to provide total inodes available, instead
+	// inodes are allocated based on available disk space. For example CephDISK, StoreNext CVDISK,
+	// AzureFile driver. Allow for the available disk to be separately validated and we will
+	// validate inodes only if total inodes are provided by the underlying filesystem.
+	if di.Files != 0 && di.FSType != "NFS" {
+		totalFiles := int64(di.Files)
+		if totalFiles <= diskMinTotalInodes {
+			return errDiskFull
+		}
+	}
+
+	return nil
+}
+
+// check if disk free has minimum required size.
+func checkDiskMinFree(di disk.Info) error {
+	// Remove 5% from free space for cumulative disk space used for journalling, inodes etc.
+	availableDiskSpace := float64(di.Free) * 0.95
+	if int64(availableDiskSpace) <= diskMinFreeSpace {
+		return errDiskFull
+	}
+
+	// Some filesystems do not implement a way to provide total inodes available, instead inodes
+	// are allocated based on available disk space. For example CephDISK, StoreNext CVDISK, AzureFile driver.
+	// Allow for the available disk to be separately validate and we will validate inodes only if
+	// total inodes are provided by the underlying filesystem.
+	if di.Files != 0 && di.FSType != "NFS" {
+		availableFiles := int64(di.Ffree)
+		if availableFiles <= diskMinFreeInodes {
+			return errDiskFull
+		}
+	}
+
+	// Success.
+	return nil
+}
+
 // checkDiskFree verifies if disk path has sufficient minimum free disk space and files.
 func checkDiskFree(diskPath string, neededSpace int64) (err error) {
 	// We don't validate disk space or inode utilization on windows.
-	// Each windows calls to 'GetVolumeInformationW' takes around 3-5seconds.
-	// And StatFS is not supported by Go for solaris and netbsd.
+	// Each windows call to 'GetVolumeInformationW' takes around
+	// 3-5seconds. And StatDISK is not supported by Go for solaris
+	// and netbsd.
 	if contains(ignoreDiskFreeOS, runtime.GOOS) {
 		return nil
 	}
@@ -170,29 +231,15 @@ func checkDiskFree(diskPath string, neededSpace int64) (err error) {
 		return err
 	}
 
-	// Remove 5% from free space for cumulative disk space used for journalling, inodes etc.
-	availableDiskSpace := float64(di.Free) * 0.95
-	if int64(availableDiskSpace) <= fsMinFreeSpace {
-		return errDiskFull
-	}
-
-	// Some filesystems do not implement a way to provide total inodes available, instead inodes
-	// are allocated based on available disk space. For example CephFS, StoreNext CVFS, AzureFile driver.
-	// Allow for the available disk to be separately validate and we will validate inodes only if
-	// total inodes are provided by the underlying filesystem.
-	if di.Files != 0 && di.FSType != "NFS" {
-		availableFiles := int64(di.Ffree)
-		if availableFiles <= fsMinFreeInodes {
-			return errDiskFull
-		}
+	if err = checkDiskMinFree(di); err != nil {
+		return err
 	}
 
 	// Check if we have enough space to store data
-	if neededSpace > int64(availableDiskSpace) {
+	if neededSpace > int64(float64(di.Free)*0.95) {
 		return errDiskFull
 	}
 
-	// Success.
 	return nil
 }
 

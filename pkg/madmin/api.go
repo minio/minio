@@ -446,7 +446,7 @@ func (c AdminClient) newRequest(method string, reqData requestData) (req *http.R
 	}
 
 	// Add signature version '4' authorization header.
-	req = s3signer.SignV4(*req, c.accessKeyID, c.secretAccessKey, location)
+	req = s3signer.SignV4(*req, c.accessKeyID, c.secretAccessKey, "", location)
 
 	// Return request.
 	return req, nil

@@ -69,7 +69,7 @@ func listDirHealFactory(isLeaf isLeafFunc, disks ...StorageAPI) listDirFunc {
 }
 
 // listObjectsHeal - wrapper function implemented over file tree walk.
-func (xl xlObjects) listObjectsHeal(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
+func (xl xlObjects) listObjectsHeal(bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, e error) {
 	// Default is recursive, if delimiter is set then list non recursive.
 	recursive := true
 	if delimiter == slashSeparator {
@@ -98,7 +98,7 @@ func (xl xlObjects) listObjectsHeal(bucket, prefix, marker, delimiter string, ma
 		}
 		// For any walk error return right away.
 		if walkResult.err != nil {
-			return ListObjectsInfo{}, toObjectErr(walkResult.err, bucket, prefix)
+			return loi, toObjectErr(walkResult.err, bucket, prefix)
 		}
 		entry := walkResult.entry
 		var objInfo ObjectInfo
@@ -115,7 +115,7 @@ func (xl xlObjects) listObjectsHeal(bucket, prefix, marker, delimiter string, ma
 				if errorCause(err) == errFileNotFound {
 					continue
 				}
-				return ListObjectsInfo{}, toObjectErr(err, bucket, prefix)
+				return loi, toObjectErr(err, bucket, prefix)
 			}
 		}
 		nextMarker = objInfo.Name
@@ -160,14 +160,14 @@ func (xl xlObjects) listObjectsHeal(bucket, prefix, marker, delimiter string, ma
 }
 
 // ListObjects - list all objects at prefix, delimited by '/'.
-func (xl xlObjects) ListObjectsHeal(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
+func (xl xlObjects) ListObjectsHeal(bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, e error) {
 	if err := checkListObjsArgs(bucket, prefix, marker, delimiter, xl); err != nil {
-		return ListObjectsInfo{}, err
+		return loi, err
 	}
 
 	// With max keys of zero we have reached eof, return right here.
 	if maxKeys == 0 {
-		return ListObjectsInfo{}, nil
+		return loi, nil
 	}
 
 	// For delimiter and prefix as '/' we do not list anything at all
@@ -175,7 +175,7 @@ func (xl xlObjects) ListObjectsHeal(bucket, prefix, marker, delimiter string, ma
 	// with the prefix. On a flat namespace with 'prefix' as '/'
 	// we don't have any entries, since all the keys are of form 'keyName/...'
 	if delimiter == slashSeparator && prefix == slashSeparator {
-		return ListObjectsInfo{}, nil
+		return loi, nil
 	}
 
 	// Over flowing count - reset to maxObjectList.
@@ -191,27 +191,27 @@ func (xl xlObjects) ListObjectsHeal(bucket, prefix, marker, delimiter string, ma
 	}
 
 	// Return error at the end.
-	return ListObjectsInfo{}, toObjectErr(err, bucket, prefix)
+	return loi, toObjectErr(err, bucket, prefix)
 }
 
 // ListUploadsHeal - lists ongoing multipart uploads that require
 // healing in one or more disks.
 func (xl xlObjects) ListUploadsHeal(bucket, prefix, marker, uploadIDMarker,
-	delimiter string, maxUploads int) (ListMultipartsInfo, error) {
+	delimiter string, maxUploads int) (lmi ListMultipartsInfo, e error) {
 
 	// For delimiter and prefix as '/' we do not list anything at all
 	// since according to s3 spec we stop at the 'delimiter' along
 	// with the prefix. On a flat namespace with 'prefix' as '/'
 	// we don't have any entries, since all the keys are of form 'keyName/...'
 	if delimiter == slashSeparator && prefix == slashSeparator {
-		return ListMultipartsInfo{}, nil
+		return lmi, nil
 	}
 
 	// Initiate a list operation.
 	listMultipartInfo, err := xl.listMultipartUploadsHeal(bucket, prefix,
 		marker, uploadIDMarker, delimiter, maxUploads)
 	if err != nil {
-		return ListMultipartsInfo{}, toObjectErr(err, bucket, prefix)
+		return lmi, toObjectErr(err, bucket, prefix)
 	}
 
 	// We got the entries successfully return.
@@ -245,7 +245,7 @@ func fetchMultipartUploadIDs(bucket, keyMarker, uploadIDMarker string,
 // listMultipartUploadsHeal - Returns a list of incomplete multipart
 // uploads that need to be healed.
 func (xl xlObjects) listMultipartUploadsHeal(bucket, prefix, keyMarker,
-	uploadIDMarker, delimiter string, maxUploads int) (ListMultipartsInfo, error) {
+	uploadIDMarker, delimiter string, maxUploads int) (lmi ListMultipartsInfo, e error) {
 
 	result := ListMultipartsInfo{
 		IsTruncated: true,
@@ -265,7 +265,7 @@ func (xl xlObjects) listMultipartUploadsHeal(bucket, prefix, keyMarker,
 		uploads, _, err = fetchMultipartUploadIDs(bucket, keyMarker,
 			uploadIDMarker, maxUploads, xl.getLoadBalancedDisks())
 		if err != nil {
-			return ListMultipartsInfo{}, err
+			return lmi, err
 		}
 		maxUploads = maxUploads - len(uploads)
 	}
@@ -321,7 +321,7 @@ func (xl xlObjects) listMultipartUploadsHeal(bucket, prefix, keyMarker,
 			}
 			// For any error during tree walk, we should return right away.
 			if walkResult.err != nil {
-				return ListMultipartsInfo{}, walkResult.err
+				return lmi, walkResult.err
 			}
 
 			entry := strings.TrimPrefix(walkResult.entry,
@@ -346,7 +346,7 @@ func (xl xlObjects) listMultipartUploadsHeal(bucket, prefix, keyMarker,
 			newUploads, end, err = fetchMultipartUploadIDs(bucket, entry, uploadIDMarker,
 				uploadsLeft, xl.getLoadBalancedDisks())
 			if err != nil {
-				return ListMultipartsInfo{}, err
+				return lmi, err
 			}
 			uploads = append(uploads, newUploads...)
 			uploadsLeft -= len(newUploads)

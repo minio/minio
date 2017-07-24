@@ -17,8 +17,6 @@
 package cmd
 
 import (
-	"net/rpc"
-
 	router "github.com/gorilla/mux"
 )
 
@@ -39,7 +37,7 @@ func registerS3PeerRPCRouter(mux *router.Router) error {
 		},
 	}
 
-	s3PeerRPCServer := rpc.NewServer()
+	s3PeerRPCServer := newRPCServer()
 	err := s3PeerRPCServer.RegisterName("S3", s3PeerHandlers)
 	if err != nil {
 		return traceError(err)

@@ -6,6 +6,7 @@ mechanism and can be published to the following targets:
 | Notification Targets|
 |:---|
 | [`AMQP`](#AMQP) |
+| [`MQTT`](#MQTT) |
 | [`Elasticsearch`](#Elasticsearch) |
 | [`Redis`](#Redis) |
 | [`NATS`](#NATS) |
@@ -132,6 +133,113 @@ You should receive the following event notification via RabbitMQ once the upload
 ```py
 python rabbit.py
 ‘{“Records”:[{“eventVersion”:”2.0",”eventSource”:”aws:s3",”awsRegion”:”us-east-1",”eventTime”:”2016–09–08T22:34:38.226Z”,”eventName”:”s3:ObjectCreated:Put”,”userIdentity”:{“principalId”:”minio”},”requestParameters”:{“sourceIPAddress”:”10.1.10.150:44576"},”responseElements”:{},”s3":{“s3SchemaVersion”:”1.0",”configurationId”:”Config”,”bucket”:{“name”:”images”,”ownerIdentity”:{“principalId”:”minio”},”arn”:”arn:aws:s3:::images”},”object”:{“key”:”myphoto.jpg”,”size”:200436,”sequencer”:”147279EAF9F40933"}}}],”level”:”info”,”msg”:””,”time”:”2016–09–08T15:34:38–07:00"}\n
+```
+
+<a name="MQTT"></a>
+## Publish Minio events MQTT
+
+Install an MQTT Broker from [here](https://mosquitto.org/).
+
+### Step 1: Add MQTT endpoint to Minio
+
+the default location of Minio server configuration file is ``~./minio/config.json``. The MQTT configuration is location in the `mqtt` key under the `notify` top-level key. Create a configuration key-value pair here for your MQTT instance. The key is a name for your MQTT endpoint, and the value is a collection of key-value parameters described in the table below.
+
+
+| Parameter | Type | Description |
+|:---|:---|:---|
+| `enable` | _bool_ | (Required) Is this server endpoint configuration active/enabled? |
+| `broker` | _string_ | (Required) MQTT server endpoint, e.g. `tcp://localhost:1883` |
+| `topic` | _string_ | (Required) Name of the MQTT topic to publish on, e.g. `minio` |
+| `qos` | _int_ | Set the Quality of Service Level |
+| `clientId` | _string_ | Unique ID for the MQTT broker to identify Minio |
+| `username` | _string_ | Username to connect to the MQTT server (if required) |
+| `password` | _string_ | Password to connect to the MQTT server (if required) |
+
+An example configuration for MQTT is shown below:
+
+```json
+"mqtt": {
+    "1": {
+        "enable": true,
+        "broker": "tcp://localhost:1883",
+        "topic": "minio",
+        "qos": 1,
+        "clientId": "minio",
+        "username": "",
+        "password": ""
+    }
+}
+```
+
+After updating the configuration file, restart the Minio sever to put the changes into effect. The server will print a line like `SQS ARNs: arn:minio:sqs:us-east-1:1:mqtt` at start-up if there were no errors.
+
+Minio supports any MQTT server that supports MQTT 3.1 or 3.1.1 and can connect to them over TCP, TLS, or a Websocket connection using ``tcp://``, ``tls://``, or ``ws://`` respectively as the scheme for the broker url. See the [Go Client](http://www.eclipse.org/paho/clients/golang/) documentation for more information.
+
+Note that, you can add as many MQTT server endpoint configurations as needed by providing an identifier (like "1" in the example above) for the MQTT instance and an object of per-server configuration parameters.
+
+
+### Step 2: Enable bucket notification using Minio client
+
+We will enable bucket event notification to trigger whenever a JPEG image is uploaded or deleted ``images`` bucket on ``myminio`` server. Here ARN value is ``arn:minio:sqs:us-east-1:1:mqtt``.
+
+```
+mc mb myminio/images
+mc events add  myminio/images arn:minio:sqs:us-east-1:1:mqtt --suffix .jpg
+mc events list myminio/images
+arn:minio:sqs:us-east-1:1:amqp s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
+```
+
+### Step 3: Test on MQTT
+
+The python program below waits on mqtt topic ``/minio`` and prints event notifications on the console. We use [paho-mqtt](https://pypi.python.org/pypi/paho-mqtt/) library to do this.
+
+```py
+#!/usr/bin/env python
+from __future__ import print_function
+import paho.mqtt.client as mqtt
+
+# The callback for when the client receives a CONNACK response from the server.
+def on_connect(client, userdata, flags, rc):
+    print("Connected with result code", rc)
+
+    # Subscribing in on_connect() means that if we lose the connection and
+    # reconnect then subscriptions will be renewed.
+    client.subscribe("/minio")
+
+# The callback for when a PUBLISH message is received from the server.
+def on_message(client, userdata, msg):
+    print(msg.payload)
+
+client = mqtt.Client()
+client.on_connect = on_connect
+client.on_message = on_message
+
+client.connect("localhost:1883", 1883, 60)
+
+# Blocking call that processes network traffic, dispatches callbacks and
+# handles reconnecting.
+# Other loop*() functions are available that give a threaded interface and a
+# manual interface.
+client.loop_forever()
+```
+
+Execute this example python program to watch for MQTT events on the console.
+
+```py
+python mqtt.py
+```
+
+Open another terminal and upload a JPEG image into ``images`` bucket.
+
+```
+mc cp myphoto.jpg myminio/images
+```
+
+You should receive the following event notification via MQTT once the upload completes.
+
+```py
+python mqtt.py
+{“Records”:[{“eventVersion”:”2.0",”eventSource”:”aws:s3",”awsRegion”:”us-east-1",”eventTime”:”2016–09–08T22:34:38.226Z”,”eventName”:”s3:ObjectCreated:Put”,”userIdentity”:{“principalId”:”minio”},”requestParameters”:{“sourceIPAddress”:”10.1.10.150:44576"},”responseElements”:{},”s3":{“s3SchemaVersion”:”1.0",”configurationId”:”Config”,”bucket”:{“name”:”images”,”ownerIdentity”:{“principalId”:”minio”},”arn”:”arn:aws:s3:::images”},”object”:{“key”:”myphoto.jpg”,”size”:200436,”sequencer”:”147279EAF9F40933"}}}],”level”:”info”,”msg”:””,”time”:”2016–09–08T15:34:38–07:00"}
 ```
 
 <a name="Elasticsearch"></a>
@@ -382,11 +490,43 @@ The default location of Minio server configuration file is ``~/.minio/config.jso
         "token": "",
         "secure": false,
         "pingInterval": 0
+        "streaming": {
+            "enable": false,
+            "clusterID": "",
+            "clientID": "",
+            "async": false,
+            "maxPubAcksInflight": 0
+        }
     }
 },
 ```
 
 Restart Minio server to reflect config changes. ``bucketevents`` is the subject used by NATS in this example.
+
+Minio server also supports [NATS Streaming mode](http://nats.io/documentation/streaming/nats-streaming-intro/) that offers additional functionality like `Message/event persistence`, `At-least-once-delivery`, and `Publisher rate limiting`. To configure Minio server to send notifications to NATS Streaming server, update the Minio server configuration file as follows:
+
+```
+"nats": {
+    "1": {
+        "enable": true,
+        "address": "0.0.0.0:4222",
+        "subject": "bucketevents",
+        "username": "yourusername",
+        "password": "yoursecret",
+        "token": "",
+        "secure": false,
+        "pingInterval": 0
+        "streaming": {
+            "enable": true,
+            "clusterID": "test-cluster",
+            "clientID": "minio-client",
+            "async": true,
+            "maxPubAcksInflight": 10
+        }
+    }
+},
+``` 
+Read more about sections `clusterID`, `clientID` on [NATS documentation](https://github.com/nats-io/nats-streaming-server/blob/master/README.md). Section `maxPubAcksInflight` is explained [here](https://github.com/nats-io/go-nats-streaming#publisher-rate-limiting). 
 
 ### Step 2: Enable bucket notification using Minio client
 
@@ -401,7 +541,7 @@ arn:minio:sqs:us-east-1:1:nats s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suf
 
 ### Step 3: Test on NATS
 
-Using this program below we can log the bucket notification added to NATS.
+If you use NATS server, check out this sample program below to log the bucket notification added to NATS.
 
 ```go
 package main
@@ -452,6 +592,53 @@ go run nats.go
 2016/10/12 06:51:26 Connected
 2016/10/12 06:51:26 Subscribing to subject 'bucketevents'
 2016/10/12 06:51:33 Received message '{"EventType":"s3:ObjectCreated:Put","Key":"images/myphoto.jpg","Records":[{"eventVersion":"2.0","eventSource":"aws:s3","awsRegion":"us-east-1","eventTime":"2016-10-12T13:51:33Z","eventName":"s3:ObjectCreated:Put","userIdentity":{"principalId":"minio"},"requestParameters":{"sourceIPAddress":"[::1]:57106"},"responseElements":{},"s3":{"s3SchemaVersion":"1.0","configurationId":"Config","bucket":{"name":"images","ownerIdentity":{"principalId":"minio"},"arn":"arn:aws:s3:::images"},"object":{"key":"myphoto.jpg","size":56060,"eTag":"1d97bf45ecb37f7a7b699418070df08f","sequencer":"147CCD1AE054BFD0"}}}],"level":"info","msg":"","time":"2016-10-12T06:51:33-07:00"}
+```
+
+If you use NATS Streaming server, check out this sample program below to log the bucket notification added to NATS.
+
+```go
+package main
+
+// Import Go and NATS packages
+import (
+	"fmt"
+	"runtime"
+
+	"github.com/nats-io/go-nats-streaming"
+)
+
+func main() {
+	natsConnection, _ := stan.Connect("test-cluster", "test-client")
+	log.Println("Connected")
+
+	// Subscribe to subject
+	log.Printf("Subscribing to subject 'bucketevents'\n")
+	natsConnection.Subscribe("bucketevents", func(m *stan.Msg) {
+
+		// Handle the message
+		fmt.Printf("Received a message: %s\n", string(m.Data))
+	})
+
+	// Keep the connection alive
+	runtime.Goexit()
+}
+```
+
+```
+go run nats.go 
+2017/07/07 11:47:40 Connected
+2017/07/07 11:47:40 Subscribing to subject 'bucketevents'
+```
+Open another terminal and upload a JPEG image into ``images`` bucket.
+
+```
+mc cp myphoto.jpg myminio/images
+```
+
+The example ``nats.go`` program prints event notification to console.
+
+```
+Received a message: {"EventType":"s3:ObjectCreated:Put","Key":"images/myphoto.jpg","Records":[{"eventVersion":"2.0","eventSource":"minio:s3","awsRegion":"","eventTime":"2017-07-07T18:46:37Z","eventName":"s3:ObjectCreated:Put","userIdentity":{"principalId":"minio"},"requestParameters":{"sourceIPAddress":"192.168.1.80:55328"},"responseElements":{"x-amz-request-id":"14CF20BD1EFD5B93","x-minio-origin-endpoint":"http://127.0.0.1:9000"},"s3":{"s3SchemaVersion":"1.0","configurationId":"Config","bucket":{"name":"images","ownerIdentity":{"principalId":"minio"},"arn":"arn:aws:s3:::images"},"object":{"key":"myphoto.jpg","size":248682,"eTag":"f1671feacb8bbf7b0397c6e9364e8c92","contentType":"image/jpeg","userDefined":{"content-type":"image/jpeg"},"versionId":"1","sequencer":"14CF20BD1EFD5B93"}},"source":{"host":"192.168.1.80","port":"55328","userAgent":"Minio (linux; amd64) minio-go/2.0.4 mc/DEVELOPMENT.GOGET"}}],"level":"info","msg":"","time":"2017-07-07T11:46:37-07:00"}
 ```
 
 <a name="PostgreSQL"></a>

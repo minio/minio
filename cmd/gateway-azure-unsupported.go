@@ -32,12 +32,12 @@ func (a *azureObjects) HealObject(bucket, object string) (int, int, error) {
 }
 
 // ListObjectsHeal - Not relevant.
-func (a *azureObjects) ListObjectsHeal(bucket, prefix, marker, delimiter string, maxKeys int) (ListObjectsInfo, error) {
-	return ListObjectsInfo{}, traceError(NotImplemented{})
+func (a *azureObjects) ListObjectsHeal(bucket, prefix, marker, delimiter string, maxKeys int) (loi ListObjectsInfo, e error) {
+	return loi, traceError(NotImplemented{})
 }
 
 // ListUploadsHeal - Not relevant.
 func (a *azureObjects) ListUploadsHeal(bucket, prefix, marker, uploadIDMarker,
-	delimiter string, maxUploads int) (ListMultipartsInfo, error) {
-	return ListMultipartsInfo{}, traceError(NotImplemented{})
+	delimiter string, maxUploads int) (lmi ListMultipartsInfo, e error) {
+	return lmi, traceError(NotImplemented{})
 }

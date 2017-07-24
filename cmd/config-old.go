@@ -449,3 +449,22 @@ type serverConfigV17 struct {
 	// Notification queue configuration.
 	Notify *notifier `json:"notify"`
 }
+
+// serverConfigV18 server configuration version '18' which is like
+// version '17' except it adds support for "deliveryMode" parameter in
+// the AMQP notification target.
+type serverConfigV18 struct {
+	sync.RWMutex
+	Version string `json:"version"`
+
+	// S3 API configuration.
+	Credential credential  `json:"credential"`
+	Region     string      `json:"region"`
+	Browser    BrowserFlag `json:"browser"`
+
+	// Additional error logging configuration.
+	Logger *loggers `json:"logger"`
+
+	// Notification queue configuration.
+	Notify *notifier `json:"notify"`
+}

@@ -17,10 +17,13 @@
 package minio
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/minio/minio-go/pkg/s3utils"
 )
 
 // ListBuckets list all buckets owned by this authenticated user.
@@ -69,7 +72,7 @@ func (c Client) ListBuckets() ([]BucketInfo, error) {
 //   // Create a done channel.
 //   doneCh := make(chan struct{})
 //   defer close(doneCh)
-//   // Recurively list all objects in 'mytestbucket'
+//   // Recursively list all objects in 'mytestbucket'
 //   recursive := true
 //   for message := range api.ListObjectsV2("mytestbucket", "starthere", recursive, doneCh) {
 //       fmt.Println(message)
@@ -84,18 +87,21 @@ func (c Client) ListObjectsV2(bucketName, objectPrefix string, recursive bool, d
 		// If recursive we do not delimit.
 		delimiter = ""
 	}
+
 	// Return object owner information by default
 	fetchOwner := true
+
 	// Validate bucket name.
-	if err := isValidBucketName(bucketName); err != nil {
+	if err := s3utils.CheckValidBucketName(bucketName); err != nil {
 		defer close(objectStatCh)
 		objectStatCh <- ObjectInfo{
 			Err: err,
 		}
 		return objectStatCh
 	}
+
 	// Validate incoming object prefix.
-	if err := isValidObjectPrefix(objectPrefix); err != nil {
+	if err := s3utils.CheckValidObjectNamePrefix(objectPrefix); err != nil {
 		defer close(objectStatCh)
 		objectStatCh <- ObjectInfo{
 			Err: err,
@@ -120,7 +126,6 @@ func (c Client) ListObjectsV2(bucketName, objectPrefix string, recursive bool, d
 
 			// If contents are available loop through and send over channel.
 			for _, object := range result.Contents {
-				// Save the marker.
 				select {
 				// Send object content.
 				case objectStatCh <- object:
@@ -133,12 +138,12 @@ func (c Client) ListObjectsV2(bucketName, objectPrefix string, recursive bool, d
 			// Send all common prefixes if any.
 			// NOTE: prefixes are only present if the request is delimited.
 			for _, obj := range result.CommonPrefixes {
-				object := ObjectInfo{}
-				object.Key = obj.Prefix
-				object.Size = 0
 				select {
 				// Send object prefixes.
-				case objectStatCh <- object:
+				case objectStatCh <- ObjectInfo{
+					Key:  obj.Prefix,
+					Size: 0,
+				}:
 				// If receives done from the caller, return here.
 				case <-doneCh:
 					return
@@ -170,11 +175,11 @@ func (c Client) ListObjectsV2(bucketName, objectPrefix string, recursive bool, d
 // ?max-keys - Sets the maximum number of keys returned in the response body.
 func (c Client) listObjectsV2Query(bucketName, objectPrefix, continuationToken string, fetchOwner bool, delimiter string, maxkeys int) (ListBucketV2Result, error) {
 	// Validate bucket name.
-	if err := isValidBucketName(bucketName); err != nil {
+	if err := s3utils.CheckValidBucketName(bucketName); err != nil {
 		return ListBucketV2Result{}, err
 	}
 	// Validate object prefix.
-	if err := isValidObjectPrefix(objectPrefix); err != nil {
+	if err := s3utils.CheckValidObjectNamePrefix(objectPrefix); err != nil {
 		return ListBucketV2Result{}, err
 	}
 	// Get resources properly escaped and lined up before
@@ -227,10 +232,17 @@ func (c Client) listObjectsV2Query(bucketName, objectPrefix, continuationToken s
 
 	// Decode listBuckets XML.
 	listBucketResult := ListBucketV2Result{}
-	err = xmlDecoder(resp.Body, &listBucketResult)
-	if err != nil {
+	if err = xmlDecoder(resp.Body, &listBucketResult); err != nil {
 		return listBucketResult, err
 	}
+
+	// This is an additional verification check to make
+	// sure proper responses are received.
+	if listBucketResult.IsTruncated && listBucketResult.NextContinuationToken == "" {
+		return listBucketResult, errors.New("Truncated response should have continuation token set")
+	}
+
+	// Success.
 	return listBucketResult, nil
 }
 
@@ -266,7 +278,7 @@ func (c Client) ListObjects(bucketName, objectPrefix string, recursive bool, don
 		delimiter = ""
 	}
 	// Validate bucket name.
-	if err := isValidBucketName(bucketName); err != nil {
+	if err := s3utils.CheckValidBucketName(bucketName); err != nil {
 		defer close(objectStatCh)
 		objectStatCh <- ObjectInfo{
 			Err: err,
@@ -274,7 +286,7 @@ func (c Client) ListObjects(bucketName, objectPrefix string, recursive bool, don
 		return objectStatCh
 	}
 	// Validate incoming object prefix.
-	if err := isValidObjectPrefix(objectPrefix); err != nil {
+	if err := s3utils.CheckValidObjectNamePrefix(objectPrefix); err != nil {
 		defer close(objectStatCh)
 		objectStatCh <- ObjectInfo{
 			Err: err,
@@ -350,11 +362,11 @@ func (c Client) ListObjects(bucketName, objectPrefix string, recursive bool, don
 // ?max-keys - Sets the maximum number of keys returned in the response body.
 func (c Client) listObjectsQuery(bucketName, objectPrefix, objectMarker, delimiter string, maxkeys int) (ListBucketResult, error) {
 	// Validate bucket name.
-	if err := isValidBucketName(bucketName); err != nil {
+	if err := s3utils.CheckValidBucketName(bucketName); err != nil {
 		return ListBucketResult{}, err
 	}
 	// Validate object prefix.
-	if err := isValidObjectPrefix(objectPrefix); err != nil {
+	if err := s3utils.CheckValidObjectNamePrefix(objectPrefix); err != nil {
 		return ListBucketResult{}, err
 	}
 	// Get resources properly escaped and lined up before
@@ -442,7 +454,7 @@ func (c Client) listIncompleteUploads(bucketName, objectPrefix string, recursive
 		delimiter = ""
 	}
 	// Validate bucket name.
-	if err := isValidBucketName(bucketName); err != nil {
+	if err := s3utils.CheckValidBucketName(bucketName); err != nil {
 		defer close(objectMultipartStatCh)
 		objectMultipartStatCh <- ObjectMultipartInfo{
 			Err: err,
@@ -450,7 +462,7 @@ func (c Client) listIncompleteUploads(bucketName, objectPrefix string, recursive
 		return objectMultipartStatCh
 	}
 	// Validate incoming object prefix.
-	if err := isValidObjectPrefix(objectPrefix); err != nil {
+	if err := s3utils.CheckValidObjectNamePrefix(objectPrefix); err != nil {
 		defer close(objectMultipartStatCh)
 		objectMultipartStatCh <- ObjectMultipartInfo{
 			Err: err,

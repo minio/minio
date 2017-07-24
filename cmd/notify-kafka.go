@@ -66,13 +66,13 @@ type kafkaConn struct {
 	topic    string
 }
 
-func dialKafka(kn kafkaNotify) (kafkaConn, error) {
+func dialKafka(kn kafkaNotify) (kc kafkaConn, e error) {
 	if !kn.Enable {
-		return kafkaConn{}, errNotifyNotEnabled
+		return kc, errNotifyNotEnabled
 	}
 
 	if kn.Topic == "" {
-		return kafkaConn{}, kkErrFunc(
+		return kc, kkErrFunc(
 			"Topic was not specified in configuration")
 	}
 
@@ -85,7 +85,7 @@ func dialKafka(kn kafkaNotify) (kafkaConn, error) {
 
 	p, err := sarama.NewSyncProducer(kn.Brokers, config)
 	if err != nil {
-		return kafkaConn{}, kkErrFunc("Failed to start producer: %v", err)
+		return kc, kkErrFunc("Failed to start producer: %v", err)
 	}
 
 	return kafkaConn{p, kn.Topic}, nil

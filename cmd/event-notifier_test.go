@@ -312,7 +312,7 @@ func TestInitEventNotifier(t *testing.T) {
 	filterRules := []filterRule{
 		{
 			Name:  "prefix",
-			Value: globalMinioDefaultOwnerID,
+			Value: "minio",
 		},
 		{
 			Name:  "suffix",
@@ -535,7 +535,7 @@ func TestAddRemoveBucketListenerConfig(t *testing.T) {
 	filterRules := []filterRule{
 		{
 			Name:  "prefix",
-			Value: globalMinioDefaultOwnerID,
+			Value: "minio",
 		},
 		{
 			Name:  "suffix",

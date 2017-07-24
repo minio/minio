@@ -59,11 +59,11 @@ func (xl xlObjects) prepareFile(bucket, object string, size int64, onlineDisks [
 // CopyObject - copy object source object to destination object.
 // if source object and destination object are same we only
 // update metadata.
-func (xl xlObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string, metadata map[string]string) (ObjectInfo, error) {
+func (xl xlObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string, metadata map[string]string) (oi ObjectInfo, e error) {
 	// Read metadata associated with the object from all disks.
 	metaArr, errs := readAllXLMetadata(xl.storageDisks, srcBucket, srcObject)
 	if reducedErr := reduceReadQuorumErrs(errs, objectOpIgnoredErrs, xl.readQuorum); reducedErr != nil {
-		return ObjectInfo{}, toObjectErr(reducedErr, srcBucket, srcObject)
+		return oi, toObjectErr(reducedErr, srcBucket, srcObject)
 	}
 
 	// List all online disks.
@@ -72,7 +72,7 @@ func (xl xlObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string
 	// Pick latest valid metadata.
 	xlMeta, err := pickValidXLMeta(metaArr, modTime)
 	if err != nil {
-		return ObjectInfo{}, toObjectErr(err, srcBucket, srcObject)
+		return oi, toObjectErr(err, srcBucket, srcObject)
 	}
 
 	// Reorder online disks based on erasure distribution order.
@@ -94,12 +94,12 @@ func (xl xlObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string
 		tempObj := mustGetUUID()
 
 		// Write unique `xl.json` for each disk.
-		if err = writeUniqueXLMetadata(onlineDisks, minioMetaTmpBucket, tempObj, partsMetadata, xl.writeQuorum); err != nil {
-			return ObjectInfo{}, toObjectErr(err, srcBucket, srcObject)
+		if onlineDisks, err = writeUniqueXLMetadata(onlineDisks, minioMetaTmpBucket, tempObj, partsMetadata, xl.writeQuorum); err != nil {
+			return oi, toObjectErr(err, srcBucket, srcObject)
 		}
 		// Rename atomically `xl.json` from tmp location to destination for each disk.
-		if err = renameXLMetadata(onlineDisks, minioMetaTmpBucket, tempObj, srcBucket, srcObject, xl.writeQuorum); err != nil {
-			return ObjectInfo{}, toObjectErr(err, srcBucket, srcObject)
+		if onlineDisks, err = renameXLMetadata(onlineDisks, minioMetaTmpBucket, tempObj, srcBucket, srcObject, xl.writeQuorum); err != nil {
+			return oi, toObjectErr(err, srcBucket, srcObject)
 		}
 		return xlMeta.ToObjectInfo(srcBucket, srcObject), nil
 	}
@@ -119,7 +119,7 @@ func (xl xlObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string
 
 	objInfo, err := xl.PutObject(dstBucket, dstObject, length, pipeReader, metadata, "")
 	if err != nil {
-		return ObjectInfo{}, toObjectErr(err, dstBucket, dstObject)
+		return oi, toObjectErr(err, dstBucket, dstObject)
 	}
 
 	// Explicitly close the reader.
@@ -303,14 +303,14 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 }
 
 // GetObjectInfo - reads object metadata and replies back ObjectInfo.
-func (xl xlObjects) GetObjectInfo(bucket, object string) (ObjectInfo, error) {
+func (xl xlObjects) GetObjectInfo(bucket, object string) (oi ObjectInfo, e error) {
 	if err := checkGetObjArgs(bucket, object); err != nil {
-		return ObjectInfo{}, err
+		return oi, err
 	}
 
 	info, err := xl.getObjectInfo(bucket, object)
 	if err != nil {
-		return ObjectInfo{}, toObjectErr(err, bucket, object)
+		return oi, toObjectErr(err, bucket, object)
 	}
 	return info, nil
 }
@@ -374,7 +374,7 @@ func undoRename(disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry str
 
 // rename - common function that renamePart and renameObject use to rename
 // the respective underlying storage layer representations.
-func rename(disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry string, isDir bool, quorum int) error {
+func rename(disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry string, isDir bool, quorum int) ([]StorageAPI, error) {
 	// Initialize sync waitgroup.
 	var wg = &sync.WaitGroup{}
 
@@ -398,8 +398,6 @@ func rename(disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry string,
 			err := disk.RenameFile(srcBucket, srcEntry, dstBucket, dstEntry)
 			if err != nil && err != errFileNotFound {
 				errs[index] = traceError(err)
-				// Ignore disk which returned an error.
-				disks[index] = nil
 			}
 		}(index, disk)
 	}
@@ -414,14 +412,14 @@ func rename(disks []StorageAPI, srcBucket, srcEntry, dstBucket, dstEntry string,
 		// Undo all the partial rename operations.
 		undoRename(disks, srcBucket, srcEntry, dstBucket, dstEntry, isDir, errs)
 	}
-	return err
+	return evalDisks(disks, errs), err
 }
 
 // renamePart - renames a part of the source object to the destination
 // across all disks in parallel. Additionally if we have errors and do
 // not have a readQuorum partially renamed files are renamed back to
 // its proper location.
-func renamePart(disks []StorageAPI, srcBucket, srcPart, dstBucket, dstPart string, quorum int) error {
+func renamePart(disks []StorageAPI, srcBucket, srcPart, dstBucket, dstPart string, quorum int) ([]StorageAPI, error) {
 	isDir := false
 	return rename(disks, srcBucket, srcPart, dstBucket, dstPart, isDir, quorum)
 }
@@ -430,7 +428,7 @@ func renamePart(disks []StorageAPI, srcBucket, srcPart, dstBucket, dstPart strin
 // across all disks in parallel. Additionally if we have errors and do
 // not have a readQuorum partially renamed files are renamed back to
 // its proper location.
-func renameObject(disks []StorageAPI, srcBucket, srcObject, dstBucket, dstObject string, quorum int) error {
+func renameObject(disks []StorageAPI, srcBucket, srcObject, dstBucket, dstObject string, quorum int) ([]StorageAPI, error) {
 	isDir := true
 	return rename(disks, srcBucket, srcObject, dstBucket, dstObject, isDir, quorum)
 }
@@ -573,8 +571,12 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 		// when size == -1 because in this case, we are not able to predict how many parts we will have.
 		allowEmptyPart := partIdx == 1
 
+		var partSizeWritten int64
+		var checkSums []string
+		var erasureErr error
+
 		// Erasure code data and write across all disks.
-		partSizeWritten, checkSums, erasureErr := erasureCreateFile(onlineDisks, minioMetaTmpBucket, tempErasureObj, partReader, allowEmptyPart, partsMetadata[0].Erasure.BlockSize, partsMetadata[0].Erasure.DataBlocks, partsMetadata[0].Erasure.ParityBlocks, bitRotAlgo, xl.writeQuorum)
+		onlineDisks, partSizeWritten, checkSums, erasureErr = erasureCreateFile(onlineDisks, minioMetaTmpBucket, tempErasureObj, partReader, allowEmptyPart, partsMetadata[0].Erasure.BlockSize, partsMetadata[0].Erasure.DataBlocks, partsMetadata[0].Erasure.ParityBlocks, bitRotAlgo, xl.writeQuorum)
 		if erasureErr != nil {
 			return ObjectInfo{}, toObjectErr(erasureErr, minioMetaTmpBucket, tempErasureObj)
 		}
@@ -674,7 +676,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 		// NOTE: Do not use online disks slice here.
 		// The reason is that existing object should be purged
 		// regardless of `xl.json` status and rolled back in case of errors.
-		err = renameObject(xl.storageDisks, bucket, object, minioMetaTmpBucket, newUniqueID, xl.writeQuorum)
+		_, err = renameObject(xl.storageDisks, bucket, object, minioMetaTmpBucket, newUniqueID, xl.writeQuorum)
 		if err != nil {
 			return ObjectInfo{}, toObjectErr(err, bucket, object)
 		}
@@ -689,12 +691,12 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	}
 
 	// Write unique `xl.json` for each disk.
-	if err = writeUniqueXLMetadata(onlineDisks, minioMetaTmpBucket, tempObj, partsMetadata, xl.writeQuorum); err != nil {
+	if onlineDisks, err = writeUniqueXLMetadata(onlineDisks, minioMetaTmpBucket, tempObj, partsMetadata, xl.writeQuorum); err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
 
 	// Rename the successfully written temporary object to final location.
-	err = renameObject(onlineDisks, minioMetaTmpBucket, tempObj, bucket, object, xl.writeQuorum)
+	onlineDisks, err = renameObject(onlineDisks, minioMetaTmpBucket, tempObj, bucket, object, xl.writeQuorum)
 	if err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}

@@ -235,6 +235,48 @@ func TestIsKubernetes(t *testing.T) {
 	}
 }
 
+// Tests if the environment we are running is Helm chart.
+func TestGetHelmVersion(t *testing.T) {
+	createTempFile := func(content string) string {
+		tmpfile, err := ioutil.TempFile("", "helm-testfile-")
+		if err != nil {
+			t.Fatalf("Unable to create temporary file. %s", err)
+		}
+		if _, err = tmpfile.Write([]byte(content)); err != nil {
+			t.Fatalf("Unable to create temporary file. %s", err)
+		}
+		if err = tmpfile.Close(); err != nil {
+			t.Fatalf("Unable to create temporary file. %s", err)
+		}
+		return tmpfile.Name()
+	}
+
+	filename := createTempFile(
+		`app="virtuous-rat-minio"
+chart="minio-0.1.3"
+heritage="Tiller"
+pod-template-hash="818089471"`)
+
+	defer os.Remove(filename)
+
+	testCases := []struct {
+		filename       string
+		expectedResult string
+	}{
+		{"", ""},
+		{"/tmp/non-existing-file", ""},
+		{filename, "minio-0.1.3"},
+	}
+
+	for _, testCase := range testCases {
+		result := getHelmVersion(testCase.filename)
+
+		if testCase.expectedResult != result {
+			t.Fatalf("result: expected: %v, got: %v", testCase.expectedResult, result)
+		}
+	}
+}
+
 // Tests if the environment we are running is in docker.
 func TestIsDocker(t *testing.T) {
 	createTempFile := func(content string) string {

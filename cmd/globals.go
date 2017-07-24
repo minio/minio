@@ -17,20 +17,32 @@
 package cmd
 
 import (
+	"crypto/tls"
 	"crypto/x509"
+	"os"
 	"runtime"
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/fatih/color"
+	miniohttp "github.com/minio/minio/pkg/http"
 )
 
 // minio configuration related constants.
 const (
 	globalMinioCertExpireWarnDays = time.Hour * 24 * 30 // 30 days.
 
-	globalMinioDefaultRegion       = ""
-	globalMinioDefaultOwnerID      = "minio"
+	globalMinioDefaultRegion = ""
+	// This is a sha256 output of ``arn:aws:iam::minio:user/admin``,
+	// this is kept in present form to be compatible with S3 owner ID
+	// requirements -
+	//
+	// ```
+	//    The canonical user ID is the Amazon S3–only concept.
+	//    It is 64-character obfuscated version of the account ID.
+	// ```
+	// http://docs.aws.amazon.com/AmazonS3/latest/dev/example-walkthroughs-managing-access-example4.html
+	globalMinioDefaultOwnerID      = "02d6176db174dc93cb1b899f7c6078f08654445fe8cf1b6ce98d8855f66bdbf4"
 	globalMinioDefaultStorageClass = "STANDARD"
 	globalWindowsOSName            = "windows"
 	globalNetBSDOSName             = "netbsd"
@@ -40,6 +52,7 @@ const (
 	globalMinioModeDistXL          = "mode-server-distributed-xl"
 	globalMinioModeGatewayAzure    = "mode-gateway-azure"
 	globalMinioModeGatewayS3       = "mode-gateway-s3"
+	globalMinioModeGatewayGCS      = "mode-gateway-gcs"
 	// Add new global values here.
 )
 
@@ -96,6 +109,12 @@ var (
 	// IsSSL indicates if the server is configured with SSL.
 	globalIsSSL bool
 
+	globalTLSCertificate *tls.Certificate
+
+	globalHTTPServer        *miniohttp.Server
+	globalHTTPServerErrorCh = make(chan error)
+	globalOSSignalCh        = make(chan os.Signal, 1)
+
 	// List of admin peers.
 	globalAdminPeers = adminPeers{}
 
@@ -127,8 +146,9 @@ var (
 
 // global colors.
 var (
-	colorBold = color.New(color.Bold).SprintFunc()
-	colorBlue = color.New(color.FgBlue).SprintfFunc()
+	colorBold   = color.New(color.Bold).SprintFunc()
+	colorBlue   = color.New(color.FgBlue).SprintfFunc()
+	colorYellow = color.New(color.FgYellow).SprintfFunc()
 )
 
 // Returns minio global information, as a key value map.

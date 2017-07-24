@@ -23,15 +23,16 @@ import (
 	"net/url"
 
 	"github.com/minio/minio-go/pkg/policy"
+	"github.com/minio/minio-go/pkg/s3utils"
 )
 
 // GetBucketPolicy - get bucket policy at a given path.
 func (c Client) GetBucketPolicy(bucketName, objectPrefix string) (bucketPolicy policy.BucketPolicy, err error) {
 	// Input validation.
-	if err := isValidBucketName(bucketName); err != nil {
+	if err := s3utils.CheckValidBucketName(bucketName); err != nil {
 		return policy.BucketPolicyNone, err
 	}
-	if err := isValidObjectPrefix(objectPrefix); err != nil {
+	if err := s3utils.CheckValidObjectNamePrefix(objectPrefix); err != nil {
 		return policy.BucketPolicyNone, err
 	}
 	policyInfo, err := c.getBucketPolicy(bucketName)
@@ -48,10 +49,10 @@ func (c Client) GetBucketPolicy(bucketName, objectPrefix string) (bucketPolicy p
 // ListBucketPolicies - list all policies for a given prefix and all its children.
 func (c Client) ListBucketPolicies(bucketName, objectPrefix string) (bucketPolicies map[string]policy.BucketPolicy, err error) {
 	// Input validation.
-	if err := isValidBucketName(bucketName); err != nil {
+	if err := s3utils.CheckValidBucketName(bucketName); err != nil {
 		return map[string]policy.BucketPolicy{}, err
 	}
-	if err := isValidObjectPrefix(objectPrefix); err != nil {
+	if err := s3utils.CheckValidObjectNamePrefix(objectPrefix); err != nil {
 		return map[string]policy.BucketPolicy{}, err
 	}
 	policyInfo, err := c.getBucketPolicy(bucketName)

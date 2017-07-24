@@ -19,7 +19,6 @@ package cmd
 import (
 	"fmt"
 	"math/rand"
-	"net/rpc"
 	"path"
 	"sync"
 	"time"
@@ -64,7 +63,7 @@ type lockServer struct {
 }
 
 // Start lock maintenance from all lock servers.
-func startLockMaintainence(lockServers []*lockServer) {
+func startLockMaintenance(lockServers []*lockServer) {
 	for _, locker := range lockServers {
 		// Start loop for stale lock maintenance
 		go func(lk *lockServer) {
@@ -90,7 +89,7 @@ func startLockMaintainence(lockServers []*lockServer) {
 // Register distributed NS lock handlers.
 func registerDistNSLockRouter(mux *router.Router, endpoints EndpointList) error {
 	// Start lock maintenance from all lock servers.
-	startLockMaintainence(globalLockServers)
+	startLockMaintenance(globalLockServers)
 
 	// Register initialized lock servers to their respective rpc endpoints.
 	return registerStorageLockers(mux, globalLockServers)
@@ -99,7 +98,7 @@ func registerDistNSLockRouter(mux *router.Router, endpoints EndpointList) error 
 // registerStorageLockers - register locker rpc handlers for net/rpc library clients
 func registerStorageLockers(mux *router.Router, lockServers []*lockServer) error {
 	for _, lockServer := range lockServers {
-		lockRPCServer := rpc.NewServer()
+		lockRPCServer := newRPCServer()
 		if err := lockRPCServer.RegisterName(lockServiceName, lockServer); err != nil {
 			return traceError(err)
 		}

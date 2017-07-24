@@ -25,6 +25,9 @@ import "io"
 // Materials - provides generic interface to encrypt any stream of data.
 type Materials interface {
 
+	// Closes the wrapped stream properly, initiated by the caller.
+	Close() error
+
 	// Returns encrypted/decrypted data, io.Reader compatible.
 	Read(b []byte) (int, error)
 

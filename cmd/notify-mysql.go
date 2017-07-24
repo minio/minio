@@ -145,9 +145,9 @@ type mySQLConn struct {
 	*sql.DB
 }
 
-func dialMySQL(msql mySQLNotify) (mySQLConn, error) {
+func dialMySQL(msql mySQLNotify) (mc mySQLConn, e error) {
 	if !msql.Enable {
-		return mySQLConn{}, errNotifyNotEnabled
+		return mc, errNotifyNotEnabled
 	}
 
 	dsnStr := msql.DsnString
@@ -166,7 +166,7 @@ func dialMySQL(msql mySQLNotify) (mySQLConn, error) {
 
 	db, err := sql.Open("mysql", dsnStr)
 	if err != nil {
-		return mySQLConn{}, mysqlErrFunc(
+		return mc, mysqlErrFunc(
 			"Connection opening failure (dsnStr=%s): %v",
 			dsnStr, err)
 	}
@@ -174,7 +174,7 @@ func dialMySQL(msql mySQLNotify) (mySQLConn, error) {
 	// ping to check that server is actually reachable.
 	err = db.Ping()
 	if err != nil {
-		return mySQLConn{}, mysqlErrFunc(
+		return mc, mysqlErrFunc(
 			"Ping to server failed with: %v", err)
 	}
 
@@ -190,7 +190,7 @@ func dialMySQL(msql mySQLNotify) (mySQLConn, error) {
 		_, errCreate := db.Exec(fmt.Sprintf(createStmt, msql.Table))
 		if errCreate != nil {
 			// failed to create the table. error out.
-			return mySQLConn{}, mysqlErrFunc(
+			return mc, mysqlErrFunc(
 				"'Select' failed with %v, then 'Create Table' failed with %v",
 				err, errCreate,
 			)
@@ -205,22 +205,20 @@ func dialMySQL(msql mySQLNotify) (mySQLConn, error) {
 		stmts["upsertRow"], err = db.Prepare(fmt.Sprintf(upsertRowForNSMySQL,
 			msql.Table))
 		if err != nil {
-			return mySQLConn{},
-				mysqlErrFunc("create UPSERT prepared statement failed with: %v", err)
+			return mc, mysqlErrFunc("create UPSERT prepared statement failed with: %v", err)
 		}
 		// delete statement
 		stmts["deleteRow"], err = db.Prepare(fmt.Sprintf(deleteRowForNSMySQL,
 			msql.Table))
 		if err != nil {
-			return mySQLConn{},
-				mysqlErrFunc("create DELETE prepared statement failed with: %v", err)
+			return mc, mysqlErrFunc("create DELETE prepared statement failed with: %v", err)
 		}
 	case formatAccess:
 		// insert statement
 		stmts["insertRow"], err = db.Prepare(fmt.Sprintf(insertRowForAccessMySQL,
 			msql.Table))
 		if err != nil {
-			return mySQLConn{}, mysqlErrFunc(
+			return mc, mysqlErrFunc(
 				"create INSERT prepared statement failed with: %v", err)
 		}
 

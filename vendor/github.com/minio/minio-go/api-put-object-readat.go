@@ -18,13 +18,12 @@ package minio
 
 import (
 	"bytes"
-	"crypto/md5"
-	"crypto/sha256"
 	"fmt"
-	"hash"
 	"io"
 	"io/ioutil"
 	"sort"
+
+	"github.com/minio/minio-go/pkg/s3utils"
 )
 
 // uploadedPartRes - the response received from a part upload.
@@ -40,19 +39,6 @@ type uploadPartReq struct {
 	Part    *ObjectPart // Size of the part uploaded.
 }
 
-// shouldUploadPartReadAt - verify if part should be uploaded.
-func shouldUploadPartReadAt(objPart ObjectPart, uploadReq uploadPartReq) bool {
-	// If part not found part should be uploaded.
-	if uploadReq.Part == nil {
-		return true
-	}
-	// if size mismatches part should be uploaded.
-	if uploadReq.Part.Size != objPart.Size {
-		return true
-	}
-	return false
-}
-
 // putObjectMultipartFromReadAt - Uploads files bigger than 5MiB. Supports reader
 // of type which implements io.ReaderAt interface (ReadAt method).
 //
@@ -65,15 +51,15 @@ func shouldUploadPartReadAt(objPart ObjectPart, uploadReq uploadPartReq) bool {
 // stream after uploading all the contents successfully.
 func (c Client) putObjectMultipartFromReadAt(bucketName, objectName string, reader io.ReaderAt, size int64, metaData map[string][]string, progress io.Reader) (n int64, err error) {
 	// Input validation.
-	if err := isValidBucketName(bucketName); err != nil {
+	if err := s3utils.CheckValidBucketName(bucketName); err != nil {
 		return 0, err
 	}
-	if err := isValidObjectName(objectName); err != nil {
+	if err := s3utils.CheckValidObjectName(objectName); err != nil {
 		return 0, err
 	}
 
-	// Get the upload id of a previously partially uploaded object or initiate a new multipart upload
-	uploadID, partsInfo, err := c.getMpartUploadSession(bucketName, objectName, metaData)
+	// Initiate a new multipart upload.
+	uploadID, err := c.newUploadID(bucketName, objectName, metaData)
 	if err != nil {
 		return 0, err
 	}
@@ -90,9 +76,6 @@ func (c Client) putObjectMultipartFromReadAt(bucketName, objectName string, read
 		return 0, err
 	}
 
-	// Used for readability, lastPartNumber is always totalPartsCount.
-	lastPartNumber := totalPartsCount
-
 	// Declare a channel that sends the next part number to be uploaded.
 	// Buffered to 10000 because thats the maximum number of parts allowed
 	// by S3.
@@ -102,6 +85,12 @@ func (c Client) putObjectMultipartFromReadAt(bucketName, objectName string, read
 	// Buffered to 10000 because thats the maximum number of parts allowed
 	// by S3.
 	uploadedPartsCh := make(chan uploadedPartRes, 10000)
+
+	// Used for readability, lastPartNumber is always totalPartsCount.
+	lastPartNumber := totalPartsCount
+
+	// Initialize parts uploaded map.
+	partsInfo := make(map[int]ObjectPart)
 
 	// Send each part number to the channel to be processed.
 	for p := 1; p <= totalPartsCount; p++ {
@@ -143,12 +132,7 @@ func (c Client) putObjectMultipartFromReadAt(bucketName, objectName string, read
 
 				// Choose the needed hash algorithms to be calculated by hashCopyBuffer.
 				// Sha256 is avoided in non-v4 signature requests or HTTPS connections
-				hashSums := make(map[string][]byte)
-				hashAlgos := make(map[string]hash.Hash)
-				hashAlgos["md5"] = md5.New()
-				if c.signature.isV4() && !c.secure {
-					hashAlgos["sha256"] = sha256.New()
-				}
+				hashAlgos, hashSums := c.hashMaterials()
 
 				var prtSize int64
 				var err error
@@ -163,37 +147,25 @@ func (c Client) putObjectMultipartFromReadAt(bucketName, objectName string, read
 					return
 				}
 
-				// Verify object if its uploaded.
-				verifyObjPart := ObjectPart{
-					PartNumber: uploadReq.PartNum,
-					Size:       partSize,
-				}
-				// Special case if we see a last part number, save last part
-				// size as the proper part size.
-				if uploadReq.PartNum == lastPartNumber {
-					verifyObjPart.Size = lastPartSize
+				// Proceed to upload the part.
+				var objPart ObjectPart
+				objPart, err = c.uploadPart(bucketName, objectName, uploadID, tmpBuffer,
+					uploadReq.PartNum, hashSums["md5"], hashSums["sha256"], prtSize)
+				if err != nil {
+					uploadedPartsCh <- uploadedPartRes{
+						Size:  0,
+						Error: err,
+					}
+					// Exit the goroutine.
+					return
 				}
 
-				// Only upload the necessary parts. Otherwise return size through channel
-				// to update any progress bar.
-				if shouldUploadPartReadAt(verifyObjPart, uploadReq) {
-					// Proceed to upload the part.
-					var objPart ObjectPart
-					objPart, err = c.uploadPart(bucketName, objectName, uploadID, tmpBuffer, uploadReq.PartNum, hashSums["md5"], hashSums["sha256"], prtSize)
-					if err != nil {
-						uploadedPartsCh <- uploadedPartRes{
-							Size:  0,
-							Error: err,
-						}
-						// Exit the goroutine.
-						return
-					}
-					// Save successfully uploaded part metadata.
-					uploadReq.Part = &objPart
-				}
+				// Save successfully uploaded part metadata.
+				uploadReq.Part = &objPart
+
 				// Send successful part info through the channel.
 				uploadedPartsCh <- uploadedPartRes{
-					Size:    verifyObjPart.Size,
+					Size:    missingPartSize,
 					PartNum: uploadReq.PartNum,
 					Part:    uploadReq.Part,
 					Error:   nil,

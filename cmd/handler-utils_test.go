@@ -123,8 +123,9 @@ func TestValidateFormFieldSize(t *testing.T) {
 // Tests validate metadata extraction from http headers.
 func TestExtractMetadataHeaders(t *testing.T) {
 	testCases := []struct {
-		header   http.Header
-		metadata map[string]string
+		header     http.Header
+		metadata   map[string]string
+		shouldFail bool
 	}{
 		// Validate if there a known 'content-type'.
 		{
@@ -134,15 +135,17 @@ func TestExtractMetadataHeaders(t *testing.T) {
 			metadata: map[string]string{
 				"content-type": "image/png",
 			},
+			shouldFail: false,
 		},
 		// Validate if there are no keys to extract.
 		{
 			header: http.Header{
-				"test-1": []string{"123"},
+				"Test-1": []string{"123"},
 			},
-			metadata: map[string]string{},
+			metadata:   map[string]string{},
+			shouldFail: false,
 		},
-		// Validate if there are no keys to extract.
+		// Validate that there are all headers extracted
 		{
 			header: http.Header{
 				"X-Amz-Meta-Appid":   []string{"amz-meta"},
@@ -150,19 +153,38 @@ func TestExtractMetadataHeaders(t *testing.T) {
 			},
 			metadata: map[string]string{
 				"X-Amz-Meta-Appid":   "amz-meta",
-				"X-Minio-Meta-Appid": "minio-meta"},
+				"X-Minio-Meta-Appid": "minio-meta",
+			},
+			shouldFail: false,
+		},
+		// Fail if header key is not in canonicalized form
+		{
+			header: http.Header{
+				"x-amz-meta-appid": []string{"amz-meta"},
+			},
+			metadata: map[string]string{
+				"X-Amz-Meta-Appid": "amz-meta",
+			},
+			shouldFail: true,
 		},
 		// Empty header input returns empty metadata.
 		{
-			header:   nil,
-			metadata: nil,
+			header:     nil,
+			metadata:   nil,
+			shouldFail: true,
 		},
 	}
 
 	// Validate if the extracting headers.
 	for i, testCase := range testCases {
-		metadata := extractMetadataFromHeader(testCase.header)
-		if !reflect.DeepEqual(metadata, testCase.metadata) {
+		metadata, err := extractMetadataFromHeader(testCase.header)
+		if err != nil && !testCase.shouldFail {
+			t.Fatalf("Test %d failed to extract metadata: %v", i+1, err)
+		}
+		if err == nil && testCase.shouldFail {
+			t.Fatalf("Test %d should fail, but it passed", i+1)
+		}
+		if err == nil && !reflect.DeepEqual(metadata, testCase.metadata) {
 			t.Fatalf("Test %d failed: Expected \"%#v\", got \"%#v\"", i+1, testCase.metadata, metadata)
 		}
 	}

@@ -69,9 +69,9 @@ type natsIOConn struct {
 // dialNATS - dials and returns an natsIOConn instance,
 // for sending notifications. Returns error if nats logger
 // is not enabled.
-func dialNATS(natsL natsNotify, testDial bool) (natsIOConn, error) {
+func dialNATS(natsL natsNotify, testDial bool) (nioc natsIOConn, e error) {
 	if !natsL.Enable {
-		return natsIOConn{}, errNotifyNotEnabled
+		return nioc, errNotifyNotEnabled
 	}
 
 	// Construct natsIOConn which holds all NATS connection information
@@ -105,7 +105,7 @@ func dialNATS(natsL natsNotify, testDial bool) (natsIOConn, error) {
 		// Do the real connection to the NATS server
 		sc, err := stan.Connect(natsL.Streaming.ClusterID, clientID, connOpts...)
 		if err != nil {
-			return natsIOConn{}, err
+			return nioc, err
 		}
 		// Save the created connection
 		conn.stanConn = sc
@@ -120,7 +120,7 @@ func dialNATS(natsL natsNotify, testDial bool) (natsIOConn, error) {
 		// Do the real connection
 		nc, err := natsC.Connect()
 		if err != nil {
-			return natsIOConn{}, err
+			return nioc, err
 		}
 		// Save the created connection
 		conn.natsConn = nc
