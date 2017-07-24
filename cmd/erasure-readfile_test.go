@@ -107,7 +107,7 @@ func TestErasureReadFile(t *testing.T) {
 		if !test.algorithm.Available() {
 			writeAlgorithm = bitrot.BLAKE2b
 		}
-		buffer := make([]byte, test.blocksize)
+		buffer := make([]byte, test.blocksize, 2*test.blocksize)
 		file, err := storage.CreateFile(bytes.NewReader(data[:]), "testbucket", "object", buffer, crand.Reader, writeAlgorithm)
 		if err != nil {
 			setup.Remove()
@@ -197,7 +197,7 @@ func TestErasureReadFileRandomOffsetLength(t *testing.T) {
 	iterations := 10000
 
 	// Create a test file to read from.
-	buffer := make([]byte, blockSize)
+	buffer := make([]byte, blockSize, 2*blockSize)
 	file, err := storage.CreateFile(bytes.NewReader(data), "testbucket", "testobject", buffer, nil, DefaultBitrotAlgorithm)
 	if err != nil {
 		t.Fatal(err)

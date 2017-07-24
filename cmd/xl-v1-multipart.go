@@ -649,7 +649,7 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	if err != nil {
 		return pi, toObjectErr(err, bucket, object)
 	}
-	buffer := make([]byte, xlMeta.Erasure.BlockSize)
+	buffer := make([]byte, xlMeta.Erasure.BlockSize, 2*xlMeta.Erasure.BlockSize)
 	file, err := storage.CreateFile(io.TeeReader(lreader, mw), minioMetaTmpBucket, tmpPartPath, buffer, rand.Reader, DefaultBitrotAlgorithm)
 	if err != nil {
 		return pi, toObjectErr(err, bucket, object)

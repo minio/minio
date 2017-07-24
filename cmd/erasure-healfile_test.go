@@ -108,7 +108,7 @@ func TestErasureHealFile(t *testing.T) {
 		if algorithm == bitrot.UnknownAlgorithm {
 			algorithm = bitrot.BLAKE2b
 		}
-		buffer := make([]byte, test.blocksize)
+		buffer := make([]byte, test.blocksize, 2*test.blocksize)
 		file, err := storage.CreateFile(bytes.NewReader(data), "testbucket", "testobject", buffer, random, algorithm)
 		if err != nil {
 			setup.Remove()

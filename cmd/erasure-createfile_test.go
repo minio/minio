@@ -77,7 +77,7 @@ func TestErasureCreateFile(t *testing.T) {
 			setup.Remove()
 			t.Fatalf("Test %d: failed to create XL Storage: %v", i, err)
 		}
-		buffer := make([]byte, test.blocksize)
+		buffer := make([]byte, test.blocksize, 2*test.blocksize)
 
 		data := make([]byte, test.data)
 		if _, err = io.ReadFull(rand.Reader, data); err != nil {

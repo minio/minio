@@ -542,7 +542,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	if err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
-	buffer := make([]byte, partsMetadata[0].Erasure.BlockSize)
+	buffer := make([]byte, partsMetadata[0].Erasure.BlockSize, 2*partsMetadata[0].Erasure.BlockSize)
 	// Read data and split into parts - similar to multipart mechanism
 	for partIdx := 1; ; partIdx++ {
 		// Compute part name
