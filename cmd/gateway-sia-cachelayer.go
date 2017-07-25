@@ -296,9 +296,7 @@ func (b *SiaCacheLayer) GuaranteeObjectIsInCache(bucket string, objectName strin
 	}
 
 	// Is file already in cache?
-	var siaObj = bucket + "/" + objectName
-	var cachedFile = filepath.Join(b.CacheDir,siaObj)
-	_, err = os.Stat(cachedFile);
+	_, err = os.Stat(objInfo.SrcFile);
 	if err == nil {
 		// File exists in cache
 		// Increment cached fetch count
@@ -311,8 +309,6 @@ func (b *SiaCacheLayer) GuaranteeObjectIsInCache(bucket string, objectName strin
     	return errors.New("Attempting to download incomplete file from Sia")
     }
 
-
-
     // Make sure bucket path exists in cache directory
 	os.Mkdir(filepath.Join(b.CacheDir, bucket), 0744)
 
@@ -322,7 +318,8 @@ func (b *SiaCacheLayer) GuaranteeObjectIsInCache(bucket string, objectName strin
 		return err
 	}
 
-	err = get(b.SiadAddress, "/renter/download/" + siaObj + "?destination=" + abs(cachedFile))
+	var siaObj = bucket + "/" + objectName
+	err = get(b.SiadAddress, "/renter/download/" + siaObj + "?destination=" + objInfo.SrcFile)
 	if err != nil {
 		return err
 	}
