@@ -2,43 +2,84 @@ package cmd
 
 import (
 	"io"
+	"os"
 	"fmt"
-	"time"
+	"strconv"
 
 	"github.com/minio/minio-go/pkg/policy"
-	"github.com/dvstate/siabridge/bridge"
 )
 
 // How many seconds to wait to purge object from SiaBridge cache
-const PURGE_AFTER_SEC = 24*60*60 // 24 hours
+var SIA_CACHE_PURGE_AFTER_SEC = 24*60*60 // 24 hours
+var SIA_DAEMON_ADDR = "127.0.0.1:9980"
+var SIA_CACHE_DIR = ".sia_cache"
+var SIA_DB_FILE = ".sia.db"
 
 type siaObjects struct {
-	siab *bridge.SiaBridge
+	siacl *SiaCacheLayer
+	fs ObjectLayer
 }
 
 // newSiaGateway returns Sia gatewaylayer
 func newSiaGateway(host string) (GatewayLayer, error) {
-	fmt.Printf("newSiaGateway host: %s", host)
+	loadSiaEnv()
 
-	b := &bridge.SiaBridge{"127.0.0.1:9980",
-								  ".sia_cache",
-	                              "siabridge.db"}
+	// Create the filesystem layer
+	f, err := newFSObjectLayer(SIA_CACHE_DIR)
+	if err != nil {
+		return nil, err
+	}
+	// Create the Sia cache layer
+	s := &SiaCacheLayer{SIA_DAEMON_ADDR, SIA_CACHE_DIR, SIA_DB_FILE}
 
-	err := b.Start()
+	// Start the Sia cache layer
+	err = s.Start()
 	if err != nil {
 		panic(err)
 	}
 
 	return &siaObjects{
-		siab:	b,
+		siacl:	s,
+		fs:     f,
 	}, nil
+}
+
+// Attempt to load Sia config from ENV
+func loadSiaEnv() {
+	tmp := os.Getenv("SIA_CACHE_DIR")
+	if tmp != "" {
+		SIA_CACHE_DIR = tmp
+	}
+	fmt.Printf("SIA_CACHE_DIR: %s\n", SIA_CACHE_DIR)
+
+	tmp = os.Getenv("SIA_CACHE_PURGE_AFTER_SEC")
+	if tmp != "" {
+		i, err := strconv.Atoi(tmp)
+		if err == nil {
+			SIA_CACHE_PURGE_AFTER_SEC = i
+		}
+	}
+	fmt.Printf("SIA_CACHE_PURGE_AFTER_SEC: %d\n", SIA_CACHE_PURGE_AFTER_SEC)
+
+	tmp = os.Getenv("SIA_DAEMON_ADDR")
+	if tmp != "" {
+		SIA_DAEMON_ADDR = tmp
+	}
+	fmt.Printf("SIA_DAEMON_ADDR: %s\n", SIA_DAEMON_ADDR)
+
+	tmp = os.Getenv("SIA_DB_FILE")
+	if tmp != "" {
+		SIA_DB_FILE = tmp
+	}
+	fmt.Printf("SIA_DB_FILE: %s\n", SIA_DB_FILE)
 }
 
 
 // Shutdown saves any gateway metadata to disk
 // if necessary and reload upon next restart.
 func (s *siaObjects) Shutdown() error {
-	s.siab.Stop()
+	// Stop the Sia caching layer
+	s.siacl.Stop()
 
 	return nil
 }
@@ -50,48 +91,36 @@ func (s *siaObjects) StorageInfo() (si StorageInfo) {
 
 // MakeBucket creates a new container on Sia backend.
 func (s *siaObjects) MakeBucketWithLocation(bucket, location string) error {
-	return s.siab.CreateBucket(bucket)
-}
-
-// GetBucketInfo gets bucket metadata..
-func (s *siaObjects) GetBucketInfo(bucket string) (bi BucketInfo, e error) {
-	sbi, err := s.siab.GetBucketInfo(bucket)
+	err := s.fs.MakeBucketWithLocation(bucket, location)
 	if err != nil {
-		return bi, err
+		return err
 	}
 
-	bi.Name = bucket
-	bi.Created = sbi.Created
-	return bi, nil
+	return s.siacl.InsertBucket(bucket)
+}
+
+// GetBucketInfo gets bucket metadata.
+func (s *siaObjects) GetBucketInfo(bucket string) (bi BucketInfo, e error) {
+	return s.fs.GetBucketInfo(bucket)
 }
 
 // ListBuckets lists all Sia buckets
 func (s *siaObjects) ListBuckets() (buckets []BucketInfo, e error) {
-	sbkts, err := s.siab.ListBuckets()
-	if err != nil {
-		return buckets, err
-	}
-
-	for _, sbkt := range sbkts {
-		buckets = append(buckets, BucketInfo{
-			Name: sbkt.Name,
-			Created: sbkt.Created,
-		})
-	}
-
-	return buckets, nil
+	return s.fs.ListBuckets()
 }
 
 // DeleteBucket deletes a bucket on Sia
 func (s *siaObjects) DeleteBucket(bucket string) error {
-	return s.siab.DeleteBucket(bucket)
+	err := s.siacl.DeleteBucket(bucket)
+	if err != nil {
+		return err
+	}
+
+	return s.fs.DeleteBucket(bucket)
 }
 
-// ListObjects lists all blobs in Sia bucket filtered by prefix
 func (s *siaObjects) ListObjects(bucket string, prefix string, marker string, delimiter string, maxKeys int) (loi ListObjectsInfo, e error) {
-	//fmt.Printf("ListObjects bucket: %s, prefix: %s, marker: %s, delimiter: %s, maxKeys: %d\n", bucket, prefix, marker, delimiter, maxKeys)
-
-	sobjs, err := s.siab.ListObjects(bucket)
+	sobjs, err := s.siacl.ListObjects(bucket)
 	if err != nil {
 		return loi, err
 	}
@@ -111,104 +140,124 @@ func (s *siaObjects) ListObjects(bucket string, prefix string, marker string, de
 		})
 	}
 
-	return loi, nil
+return loi, nil
 }
 
-// ListObjectsV2 lists all blobs in S3 bucket filtered by prefix
 func (s *siaObjects) ListObjectsV2(bucket, prefix, continuationToken string, fetchOwner bool, delimiter string, maxKeys int) (loi ListObjectsV2Info, e error) {
-	fmt.Println("ListObjectsV2")
 	return loi, nil
 }
 
 func (s *siaObjects) GetObject(bucket string, key string, startOffset int64, length int64, writer io.Writer) error {
-	return s.siab.GetObject(bucket, key, writer)
+	err := s.siacl.GuaranteeObjectIsInCache(bucket, key)
+	if err != nil {
+		return err
+	}
+
+	return s.fs.GetObject(bucket, key, startOffset, length, writer)
 }
 
 // GetObjectInfo reads object info and replies back ObjectInfo
 func (s *siaObjects) GetObjectInfo(bucket string, object string) (objInfo ObjectInfo, err error) {
-	sobjInfo, err := s.siab.GetObjectInfo(bucket, object)
-	if err != nil {
-		return objInfo, err
-	}
-
-	objInfo.Bucket = sobjInfo.Bucket
-	objInfo.Name = sobjInfo.Name
-	objInfo.Size = sobjInfo.Size
-	objInfo.ModTime = sobjInfo.Queued
-
-	return objInfo, nil
+	return s.fs.GetObjectInfo(bucket, object)
 }
 
 // PutObject creates a new object with the incoming data,
 func (s *siaObjects) PutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (objInfo ObjectInfo, e error) {
-	err := s.siab.PutObjectFromReader(data, bucket, object, size, PURGE_AFTER_SEC)
-	if err != nil {
-		return objInfo, err
+	oi, e := s.fs.PutObject(bucket, object, size, data, metadata, sha256sum)
+	if e != nil {
+		return oi, e
 	}
 
-	objInfo.Bucket = bucket
-	objInfo.Name = object
-	objInfo.Size = size
-	objInfo.ModTime = time.Now()
-	return objInfo, nil
+	src_file := pathJoin(abs(SIA_CACHE_DIR), bucket, object)
+	e = s.siacl.PutObject(bucket, object, size, int64(SIA_CACHE_PURGE_AFTER_SEC), src_file)
+	// If put fails to the cache layer, then delete from object layer
+	if e != nil {
+		s.fs.DeleteObject(bucket, object)
+	}
+	return oi, e
 }
 
 // CopyObject copies a blob from source container to destination container.
 func (s *siaObjects) CopyObject(srcBucket string, srcObject string, destBucket string, destObject string, metadata map[string]string) (objInfo ObjectInfo, e error) {
-	return objInfo, nil
+	return s.fs.CopyObject(srcBucket, srcObject, destBucket, destObject, metadata)
 }
 
 // DeleteObject deletes a blob in bucket
 func (s *siaObjects) DeleteObject(bucket string, object string) error {
-	return s.siab.DeleteObject(bucket, object)
+	err := s.siacl.DeleteObject(bucket, object)
+	if err != nil {
+		return err
+	}
+
+	return s.fs.DeleteObject(bucket, object)
 }
 
 // ListMultipartUploads lists all multipart uploads.
 func (s *siaObjects) ListMultipartUploads(bucket string, prefix string, keyMarker string, uploadIDMarker string, delimiter string, maxUploads int) (lmi ListMultipartsInfo, e error) {
-	return lmi, nil
+	return s.fs.ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarker, delimiter, maxUploads)
 }
 
 // NewMultipartUpload upload object in multiple parts
 func (s *siaObjects) NewMultipartUpload(bucket string, object string, metadata map[string]string) (uploadID string, err error) {
-	return uploadID, nil
+	return s.fs.NewMultipartUpload(bucket, object, metadata)
 }
 
 // CopyObjectPart copy part of object to other bucket and object
 func (s *siaObjects) CopyObjectPart(srcBucket string, srcObject string, destBucket string, destObject string, uploadID string, partID int, startOffset int64, length int64) (info PartInfo, err error) {
-	return info, nil
+	return s.fs.CopyObjectPart(srcBucket, srcObject, destBucket, destObject, uploadID, partID, startOffset, length)
 }
 
 // PutObjectPart puts a part of object in bucket
 func (s *siaObjects) PutObjectPart(bucket string, object string, uploadID string, partID int, size int64, data io.Reader, md5Hex string, sha256sum string) (pi PartInfo, e error) {
-	return pi, nil
+	return s.fs.PutObjectPart(bucket, object, uploadID, partID, size, data, md5Hex, sha256sum)
 }
 
 // ListObjectParts returns all object parts for specified object in specified bucket
 func (s *siaObjects) ListObjectParts(bucket string, object string, uploadID string, partNumberMarker int, maxParts int) (lpi ListPartsInfo, e error) {
-	return lpi, nil
+	return s.fs.ListObjectParts(bucket, object, uploadID, partNumberMarker, maxParts)
 }
 
 // AbortMultipartUpload aborts a ongoing multipart upload
 func (s *siaObjects) AbortMultipartUpload(bucket string, object string, uploadID string) error {
-	return nil
+	return s.fs.AbortMultipartUpload(bucket, object, uploadID)
 }
 
 // CompleteMultipartUpload completes ongoing multipart upload and finalizes object
 func (s *siaObjects) CompleteMultipartUpload(bucket string, object string, uploadID string, uploadedParts []completePart) (oi ObjectInfo, e error) {
+	oi, err := s.fs.CompleteMultipartUpload(bucket, object, uploadID, uploadedParts)
+	if err != nil {
+		return oi, err
+	}
+
+	src_file := pathJoin(abs(SIA_CACHE_DIR), bucket, object)
+	fi, err := os.Stat(src_file)
+	if err != nil {
+		return oi, err
+	}
+
+	err = s.siacl.PutObject(bucket, object, fi.Size(), int64(SIA_CACHE_PURGE_AFTER_SEC), src_file)
+	// If put fails to the cache layer, then delete from object layer
+	if err != nil {
+		s.fs.DeleteObject(bucket, object)
+	}
+
 	return oi, nil
 }
 
 // SetBucketPolicies sets policy on bucket
 func (s *siaObjects) SetBucketPolicies(bucket string, policyInfo policy.BucketAccessPolicy) error {
+	//return s.fs.SetBucketPolicies(bucket, policyInfo)
 	return nil
 }
 
 // GetBucketPolicies will get policy on bucket
 func (s *siaObjects) GetBucketPolicies(bucket string) (policy.BucketAccessPolicy, error) {
+	//return s.fs.GetBucketPolicies(bucket)
 	return policy.BucketAccessPolicy{}, nil
 }
 
 // DeleteBucketPolicies deletes all policies on bucket
 func (s *siaObjects) DeleteBucketPolicies(bucket string) error {
+	//return s.fs.DeleteBucketPolciies(bucket)
 	return nil
 }

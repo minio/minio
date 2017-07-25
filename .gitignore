@@ -23,3 +23,6 @@ parts/
 prime/
 snap/.snapcraft/
 stage/
+.sia_cache
+.sia.db
+
