@@ -14,11 +14,14 @@ var SIA_CACHE_PURGE_AFTER_SEC = 24*60*60 // 24 hours
 var SIA_DAEMON_ADDR = "127.0.0.1:9980"
 var SIA_CACHE_DIR = ".sia_cache"
 var SIA_DB_FILE = ".sia.db"
+var SIA_DEBUG = 0
 
 type siaObjects struct {
 	siacl *SiaCacheLayer
 	fs ObjectLayer
 }
+
+
 
 // newSiaGateway returns Sia gatewaylayer
 func newSiaGateway(host string) (GatewayLayer, error) {
@@ -72,12 +75,23 @@ func loadSiaEnv() {
 		SIA_DB_FILE = tmp
 	}
 	fmt.Printf("SIA_DB_FILE: %s\n", SIA_DB_FILE)
+
+	tmp = os.Getenv("SIA_DEBUG")
+	if tmp != "" {
+		i, err := strconv.Atoi(tmp)
+		if err == nil {
+			SIA_DEBUG = i
+		}
+	}
+	fmt.Printf("SIA_DEBUG: %d\n", SIA_DEBUG)
 }
 
 
 // Shutdown saves any gateway metadata to disk
 // if necessary and reload upon next restart.
 func (s *siaObjects) Shutdown() error {
+	debugmsg("Gateway.Shutdown")
+
 	// Stop the Sia caching layer
 	s.siacl.Stop()
 
@@ -86,11 +100,13 @@ func (s *siaObjects) Shutdown() error {
 
 // StorageInfo is not relevant to Sia backend.
 func (s *siaObjects) StorageInfo() (si StorageInfo) {
+	debugmsg("Gateway.StorageInfo")
 	return si
 }
 
 // MakeBucket creates a new container on Sia backend.
 func (s *siaObjects) MakeBucketWithLocation(bucket, location string) error {
+	debugmsg(fmt.Sprintf("Gateway.MakeBucketWithLocation(%s, %s)", bucket, location))
 	err := s.fs.MakeBucketWithLocation(bucket, location)
 	if err != nil {
 		return err
@@ -101,16 +117,19 @@ func (s *siaObjects) MakeBucketWithLocation(bucket, location string) error {
 
 // GetBucketInfo gets bucket metadata.
 func (s *siaObjects) GetBucketInfo(bucket string) (bi BucketInfo, e error) {
+	debugmsg("Gateway.GetBucketInfo")
 	return s.fs.GetBucketInfo(bucket)
 }
 
 // ListBuckets lists all Sia buckets
 func (s *siaObjects) ListBuckets() (buckets []BucketInfo, e error) {
+	debugmsg("Gateway.ListBuckets")
 	return s.fs.ListBuckets()
 }
 
 // DeleteBucket deletes a bucket on Sia
 func (s *siaObjects) DeleteBucket(bucket string) error {
+	debugmsg("Gateway.DeleteBucket")
 	err := s.siacl.DeleteBucket(bucket)
 	if err != nil {
 		return err
@@ -120,6 +139,7 @@ func (s *siaObjects) DeleteBucket(bucket string) error {
 }
 
 func (s *siaObjects) ListObjects(bucket string, prefix string, marker string, delimiter string, maxKeys int) (loi ListObjectsInfo, e error) {
+	debugmsg("Gateway.ListObjects")
 	sobjs, err := s.siacl.ListObjects(bucket)
 	if err != nil {
 		return loi, err
@@ -144,10 +164,12 @@ return loi, nil
 }
 
 func (s *siaObjects) ListObjectsV2(bucket, prefix, continuationToken string, fetchOwner bool, delimiter string, maxKeys int) (loi ListObjectsV2Info, e error) {
+	debugmsg("Gateway.ListObjectsV2")
 	return loi, nil
 }
 
 func (s *siaObjects) GetObject(bucket string, key string, startOffset int64, length int64, writer io.Writer) error {
+	debugmsg("Gateway.GetObject")
 	err := s.siacl.GuaranteeObjectIsInCache(bucket, key)
 	if err != nil {
 		return err
@@ -158,11 +180,13 @@ func (s *siaObjects) GetObject(bucket string, key string, startOffset int64, len
 
 // GetObjectInfo reads object info and replies back ObjectInfo
 func (s *siaObjects) GetObjectInfo(bucket string, object string) (objInfo ObjectInfo, err error) {
+	debugmsg("Gateway.GetObjectInfo")
 	return s.fs.GetObjectInfo(bucket, object)
 }
 
 // PutObject creates a new object with the incoming data,
 func (s *siaObjects) PutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (objInfo ObjectInfo, e error) {
+	debugmsg("Gateway.PutObject")
 	oi, e := s.fs.PutObject(bucket, object, size, data, metadata, sha256sum)
 	if e != nil {
 		return oi, e
@@ -179,11 +203,13 @@ func (s *siaObjects) PutObject(bucket string, object string, size int64, data io
 
 // CopyObject copies a blob from source container to destination container.
 func (s *siaObjects) CopyObject(srcBucket string, srcObject string, destBucket string, destObject string, metadata map[string]string) (objInfo ObjectInfo, e error) {
+	debugmsg("Gateway.CopyObject")
 	return s.fs.CopyObject(srcBucket, srcObject, destBucket, destObject, metadata)
 }
 
 // DeleteObject deletes a blob in bucket
 func (s *siaObjects) DeleteObject(bucket string, object string) error {
+	debugmsg("Gateway.DeleteObject")
 	err := s.siacl.DeleteObject(bucket, object)
 	if err != nil {
 		return err
@@ -194,36 +220,43 @@ func (s *siaObjects) DeleteObject(bucket string, object string) error {
 
 // ListMultipartUploads lists all multipart uploads.
 func (s *siaObjects) ListMultipartUploads(bucket string, prefix string, keyMarker string, uploadIDMarker string, delimiter string, maxUploads int) (lmi ListMultipartsInfo, e error) {
+	debugmsg("Gateway.ListMultipartUploads")
 	return s.fs.ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarker, delimiter, maxUploads)
 }
 
 // NewMultipartUpload upload object in multiple parts
 func (s *siaObjects) NewMultipartUpload(bucket string, object string, metadata map[string]string) (uploadID string, err error) {
+	debugmsg("Gateway.NewMultipartUpload")
 	return s.fs.NewMultipartUpload(bucket, object, metadata)
 }
 
 // CopyObjectPart copy part of object to other bucket and object
 func (s *siaObjects) CopyObjectPart(srcBucket string, srcObject string, destBucket string, destObject string, uploadID string, partID int, startOffset int64, length int64) (info PartInfo, err error) {
+	debugmsg("Gateway.CopyObjectPart")
 	return s.fs.CopyObjectPart(srcBucket, srcObject, destBucket, destObject, uploadID, partID, startOffset, length)
 }
 
 // PutObjectPart puts a part of object in bucket
 func (s *siaObjects) PutObjectPart(bucket string, object string, uploadID string, partID int, size int64, data io.Reader, md5Hex string, sha256sum string) (pi PartInfo, e error) {
+	debugmsg("Gateway.PutObjectPart")
 	return s.fs.PutObjectPart(bucket, object, uploadID, partID, size, data, md5Hex, sha256sum)
 }
 
 // ListObjectParts returns all object parts for specified object in specified bucket
 func (s *siaObjects) ListObjectParts(bucket string, object string, uploadID string, partNumberMarker int, maxParts int) (lpi ListPartsInfo, e error) {
+	debugmsg("Gateway.ListObjectParts")
 	return s.fs.ListObjectParts(bucket, object, uploadID, partNumberMarker, maxParts)
 }
 
 // AbortMultipartUpload aborts a ongoing multipart upload
 func (s *siaObjects) AbortMultipartUpload(bucket string, object string, uploadID string) error {
+	debugmsg("Gateway.AbortMultipartUpload")
 	return s.fs.AbortMultipartUpload(bucket, object, uploadID)
 }
 
 // CompleteMultipartUpload completes ongoing multipart upload and finalizes object
 func (s *siaObjects) CompleteMultipartUpload(bucket string, object string, uploadID string, uploadedParts []completePart) (oi ObjectInfo, e error) {
+	debugmsg("Gateway.CompleteMultipartUpload")
 	oi, err := s.fs.CompleteMultipartUpload(bucket, object, uploadID, uploadedParts)
 	if err != nil {
 		return oi, err
@@ -246,18 +279,21 @@ func (s *siaObjects) CompleteMultipartUpload(bucket string, object string, uploa
 
 // SetBucketPolicies sets policy on bucket
 func (s *siaObjects) SetBucketPolicies(bucket string, policyInfo policy.BucketAccessPolicy) error {
+	debugmsg("Gateway.SetBucketPolicies")
 	//return s.fs.SetBucketPolicies(bucket, policyInfo)
 	return nil
 }
 
 // GetBucketPolicies will get policy on bucket
 func (s *siaObjects) GetBucketPolicies(bucket string) (policy.BucketAccessPolicy, error) {
+	debugmsg("Gateway.GetBucketPolicies")
 	//return s.fs.GetBucketPolicies(bucket)
 	return policy.BucketAccessPolicy{}, nil
 }
 
 // DeleteBucketPolicies deletes all policies on bucket
 func (s *siaObjects) DeleteBucketPolicies(bucket string) error {
+	debugmsg("Gateway.DeleteBucketPolicies")
 	//return s.fs.DeleteBucketPolciies(bucket)
 	return nil
 }
