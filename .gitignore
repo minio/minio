@@ -17,4 +17,4 @@ release
 *.syso
 coverage.txt
 .sia_cache
-siabridge.db
+.sia.db
