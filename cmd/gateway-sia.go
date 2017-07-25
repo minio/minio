@@ -169,7 +169,7 @@ func (s *siaObjects) ListObjectsV2(bucket, prefix, continuationToken string, fet
 }
 
 func (s *siaObjects) GetObject(bucket string, key string, startOffset int64, length int64, writer io.Writer) error {
-	debugmsg("Gateway.GetObject %s %s startOffset: %d, length: %d", bucket, key, startOffset, length)
+	debugmsg(fmt.Sprintf("Gateway.GetObject %s %s startOffset: %d, length: %d", bucket, key, startOffset, length))
 	err := s.siacl.GuaranteeObjectIsInCache(bucket, key)
 	if err != nil {
 		return err
