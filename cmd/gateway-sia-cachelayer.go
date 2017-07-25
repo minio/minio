@@ -185,16 +185,7 @@ func (b *SiaCacheLayer) DeleteObject(bucket string, objectName string) error {
 		return err
 	}
 
-	stmt, err := g_db.Prepare("DELETE FROM objects WHERE bucket=? AND name=?")
-    if err != nil {
-    	return err
-    }
-	_, err = stmt.Exec(bucket, objectName)
-    if err != nil {
-    	return err
-    }
-
-	return nil
+	return b.deleteObjectFromDb(bucket, objectName)
 }
 
 func (b *SiaCacheLayer) PutObject(bucket string, objectName string, size int64, purge_after int64, src_file string) error {
@@ -204,7 +195,24 @@ func (b *SiaCacheLayer) PutObject(bucket string, objectName string, size int64, 
 		return err
 	}
 
-	err = b.insertObject(bucket, objectName, size, time.Now().Unix(), 0, purge_after, src_file, 1)
+	// Before inserting to DB, there is a very rare chance that the object already exists in DB 
+	// from a failed upload and Minio crashed or was killed before DB updated to reflect. So just in case 
+	// we will check if the object exists and has a not uploaded status. If so, we will delete that 
+	// record and then continue as normal.
+	objInfo, e := b.GetObjectInfo(bucket, objectName)
+	if e == nil {
+		// Object does exist. If uploaded, return error. If not uploaded, delete it and continue.
+		if objInfo.Uploaded.Unix() > 0 {
+			return errors.New("Object already exists")
+		} else {
+			e = b.deleteObjectFromDb(bucket, objectName)
+			if e != nil {
+				return e
+			}
+		}
+	}
+
+	err = b.insertObjectToDb(bucket, objectName, size, time.Now().Unix(), 0, purge_after, src_file, 1)
 	if err != nil {
 		return err
 	}
@@ -213,17 +221,25 @@ func (b *SiaCacheLayer) PutObject(bucket string, objectName string, size int64, 
 	siaObj := bucket + "/" + objectName
 	err = post(b.SiadAddress, "/renter/upload/"+siaObj, "source="+src_file)
 	if err != nil {
+		b.deleteObjectFromDb(bucket, objectName)
 		return err
 	}
 
 	// Need to wait for upload to complete
 	err = b.waitTillSiaUploadCompletes(siaObj)
 	if err != nil {
+		b.deleteObjectFromDb(bucket, objectName)
 		return err
 	}
 
 	// Mark object as uploaded
-	return b.markObjectUploaded(bucket, objectName)
+	err = b.markObjectUploaded(bucket, objectName)
+	if err != nil {
+		b.deleteObjectFromDb(bucket, objectName)
+		return err
+	}
+
+	return nil
 }
 
 // Returns a list of objects in the bucket provided
@@ -658,7 +674,7 @@ func (b *SiaCacheLayer) isSiaFileAvailable(siaObj string) (bool, error) {
 	return false, errors.New("File not in Sia renter list")
 }
 
-func (b *SiaCacheLayer) insertObject(bucket string, objectName string, size int64, queued int64, uploaded int64, purge_after int64, src_file string, cached int64) error {
+func (b *SiaCacheLayer) insertObjectToDb(bucket string, objectName string, size int64, queued int64, uploaded int64, purge_after int64, src_file string, cached int64) error {
 	stmt, err := g_db.Prepare("INSERT INTO objects(bucket, name, size, queued, uploaded, purge_after, cached_fetches, sia_fetches, last_fetch, src_file, deleted, cached) values(?,?,?,?,?,?,?,?,?,?,?,?)")
     if err != nil {
     	return err
@@ -683,6 +699,18 @@ func (b *SiaCacheLayer) insertObject(bucket string, objectName string, size int6
     return nil
 }
 
+func (b *SiaCacheLayer) deleteObjectFromDb(bucket string, objectName string) error {
+	stmt, err := g_db.Prepare("DELETE FROM objects WHERE bucket=? AND name=?")
+    if err != nil {
+    	return err
+    }
+	_, err = stmt.Exec(bucket, objectName)
+    if err != nil {
+    	return err
+    }
+    return nil
+}
+
 func (b *SiaCacheLayer) guaranteeCacheSpace(extraSpace int64) error {
 	cs, e := b.getCacheSize()
 	if e != nil {
@@ -693,6 +721,7 @@ func (b *SiaCacheLayer) guaranteeCacheSpace(extraSpace int64) error {
 	for cs > space_needed {
 		e = b.forceDeleteOldestCacheFile()
 		if e != nil {
+			fmt.Println("Unable to clear enough space in the Sia cache!")
 			return e
 		}
 
