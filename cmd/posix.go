@@ -35,11 +35,9 @@ import (
 )
 
 const (
-	diskMinFreeSpace   = 1 * humanize.GiByte // Min 1GiB free space.
-	diskMinTotalSpace  = diskMinFreeSpace    // Min 1GiB total space.
-	diskMinFreeInodes  = 10000               // Min 10000 free inodes.
-	diskMinTotalInodes = diskMinFreeInodes   // Min 10000 total inodes.
-	maxAllowedIOError  = 5
+	diskMinFreeSpace  = 1 * humanize.GiByte // Min 1GiB free space.
+	diskMinTotalSpace = diskMinFreeSpace    // Min 1GiB total space.
+	maxAllowedIOError = 5
 )
 
 // posix - implements StorageAPI interface.
@@ -177,18 +175,6 @@ func checkDiskMinTotal(di disk.Info) (err error) {
 	if int64(totalDiskSpace) <= diskMinTotalSpace {
 		return errDiskFull
 	}
-
-	// Some filesystems do not implement a way to provide total inodes available, instead
-	// inodes are allocated based on available disk space. For example CephDISK, StoreNext CVDISK,
-	// AzureFile driver. Allow for the available disk to be separately validated and we will
-	// validate inodes only if total inodes are provided by the underlying filesystem.
-	if di.Files != 0 && di.FSType != "NFS" {
-		totalFiles := int64(di.Files)
-		if totalFiles <= diskMinTotalInodes {
-			return errDiskFull
-		}
-	}
-
 	return nil
 }
 
@@ -198,17 +184,6 @@ func checkDiskMinFree(di disk.Info) error {
 	availableDiskSpace := float64(di.Free) * 0.95
 	if int64(availableDiskSpace) <= diskMinFreeSpace {
 		return errDiskFull
-	}
-
-	// Some filesystems do not implement a way to provide total inodes available, instead inodes
-	// are allocated based on available disk space. For example CephDISK, StoreNext CVDISK, AzureFile driver.
-	// Allow for the available disk to be separately validate and we will validate inodes only if
-	// total inodes are provided by the underlying filesystem.
-	if di.Files != 0 && di.FSType != "NFS" {
-		availableFiles := int64(di.Ffree)
-		if availableFiles <= diskMinFreeInodes {
-			return errDiskFull
-		}
 	}
 
 	// Success.

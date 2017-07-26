@@ -1594,8 +1594,9 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed %v", err)
 	}
-	if storageInfoReply.StorageInfo.Total != -1 || storageInfoReply.StorageInfo.Free != -1 {
-		t.Fatalf("Should get negative values of Total and Free since disks are faulty ")
+	// if Total size is 0 it indicates faulty disk.
+	if storageInfoReply.StorageInfo.Total != 0 {
+		t.Fatalf("Should get zero Total size since disks are faulty ")
 	}
 
 	// Test authorization of Web.Download

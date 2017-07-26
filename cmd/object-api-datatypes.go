@@ -34,9 +34,9 @@ const (
 // StorageInfo - represents total capacity of underlying storage.
 type StorageInfo struct {
 	// Total disk space.
-	Total int64
+	Total uint64
 	// Free available disk space.
-	Free int64
+	Free uint64
 	// Backend type.
 	Backend struct {
 		// Represents various backend types, currently on FS and Erasure.

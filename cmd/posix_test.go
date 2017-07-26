@@ -1686,14 +1686,14 @@ func TestCheckDiskTotalMin(t *testing.T) {
 			},
 			err: nil,
 		},
-		// Test 2 - when fstype is xfs and total inodes are small.
+		// Test 2 - when fstype is xfs and total inodes are less than 10k.
 		{
 			diskInfo: disk.Info{
 				Total:  diskMinTotalSpace * 3,
 				FSType: "XFS",
 				Files:  9999,
 			},
-			err: errDiskFull,
+			err: nil,
 		},
 		// Test 3 - when fstype is btrfs and total inodes is empty.
 		{
@@ -1737,7 +1737,7 @@ func TestCheckDiskFreeMin(t *testing.T) {
 			},
 			err: nil,
 		},
-		// Test 2 - when fstype is xfs and total inodes are small.
+		// Test 2 - when fstype is xfs and total inodes are less than 10k.
 		{
 			diskInfo: disk.Info{
 				Free:   diskMinTotalSpace * 3,
@@ -1745,7 +1745,7 @@ func TestCheckDiskFreeMin(t *testing.T) {
 				Files:  9999,
 				Ffree:  9999,
 			},
-			err: errDiskFull,
+			err: nil,
 		},
 		// Test 3 - when fstype is btrfs and total inodes are empty.
 		{
