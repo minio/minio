@@ -3024,7 +3024,7 @@ mocha@^2.5.3:
     supports-color "1.2.0"
     to-iso-string "0.0.2"
 
-moment@^2.15.1:
+moment@^2.18.1:
   version "2.18.1"
   resolved "https://registry.yarnpkg.com/moment/-/moment-2.18.1.tgz#c36193dd3ce1c2eed2adb7c802dbbc77a81b1c0f"
 
@@ -3907,7 +3907,7 @@ react-copy-to-clipboard@^4.2.3:
     create-react-class "^15.5.2"
     prop-types "^15.5.8"
 
-react-custom-scrollbars@^2.2.2:
+react-custom-scrollbars@^2.3.0:
   version "2.3.0"
   resolved "https://registry.yarnpkg.com/react-custom-scrollbars/-/react-custom-scrollbars-2.3.0.tgz#53c9b72be6933e7a853c6ece7493dda7998752b3"
   dependencies:

@@ -21,6 +21,52 @@ type siaObjects struct {
 	fs ObjectLayer
 }
 
+// Convert Sia errors to minio object layer errors.
+func siaToObjectError(err error, params ...string) error {
+	if err == nil {
+		return nil
+	}
+
+	e, ok := err.(*Error)
+	if !ok {
+		// Code should be fixed if this function is called without doing traceError()
+		// Else handling different situations in this function makes this function complicated.
+		errorIf(err, "Expected type *Error")
+		return err
+	}
+
+	err = e.e
+	bucket := ""
+	//object := ""
+	if len(params) >= 1 {
+		bucket = params[0]
+	}
+	if len(params) == 2 {
+		//object = params[1]
+	}
+
+	siaErr, ok := err.(SiaServiceError)
+	if !ok {
+		// We don't interpret non Sia errors. As Sia errors will
+		// have StatusCode to help to convert to object errors.
+		return e
+	}
+
+	switch siaErr.Code {
+	case "SiaError":
+		return err
+		//err = NotImplemented{}
+	case "InvalidResourceName":
+		err = BucketNameInvalid{Bucket: bucket}
+	case "RequestBodyTooLarge":
+		err = PartTooBig{}
+	default:
+		
+	}
+	e.e = err
+	return e
+}
+
 
 
 // newSiaGateway returns Sia gatewaylayer
@@ -109,7 +155,7 @@ func (s *siaObjects) MakeBucketWithLocation(bucket, location string) error {
 	debugmsg(fmt.Sprintf("Gateway.MakeBucketWithLocation(%s, %s)", bucket, location))
 	err := s.fs.MakeBucketWithLocation(bucket, location)
 	if err != nil {
-		return err
+		return siaToObjectError(traceError(err), bucket)
 	}
 
 	return s.siacl.InsertBucket(bucket)
@@ -185,7 +231,23 @@ func (s *siaObjects) GetObject(bucket string, key string, startOffset int64, len
 // GetObjectInfo reads object info and replies back ObjectInfo
 func (s *siaObjects) GetObjectInfo(bucket string, object string) (objInfo ObjectInfo, err error) {
 	debugmsg("Gateway.GetObjectInfo")
-	return s.fs.GetObjectInfo(bucket, object)
+
+	// Can't use object layer. File may not be on local filesystem.
+	// Pull the info from cache database.
+
+	sobjInfo, err := s.siacl.GetObjectInfo(bucket, object)
+	if err != nil {
+		return objInfo, err
+	}
+	objInfo = ObjectInfo{
+		Bucket:      bucket,
+		//UserDefined: meta,
+		//ETag:        azureToS3ETag(prop.Etag),
+		ModTime:     sobjInfo.Queued,
+		Name:        object,
+		Size:        sobjInfo.Size,
+	}
+	return objInfo, nil
 }
 
 // PutObject creates a new object with the incoming data,
@@ -201,6 +263,7 @@ func (s *siaObjects) PutObject(bucket string, object string, size int64, data io
 	// If put fails to the cache layer, then delete from object layer
 	if e != nil {
 		s.fs.DeleteObject(bucket, object)
+		return oi, siaToObjectError(traceError(e), bucket, object)
 	}
 	return oi, e
 }

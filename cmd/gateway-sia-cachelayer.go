@@ -54,10 +54,35 @@ type SiaObjectInfo struct {
 	Cached int64        // Whether object is currently in cache. 0: Not Cached, 1: Cached
 }
 
-func debugmsg(str string) {
-	if SIA_DEBUG > 0 {
-		fmt.Println(str)
-	}
+type SiaServiceError struct {
+	Code                      string
+	Message                   string
+}
+
+func (e SiaServiceError) Error() string {
+	return fmt.Sprintf("Sia Error: %s",
+		e.Message)
+}
+
+var siaErrorUnableToClearAnyCachedFiles = SiaServiceError{
+	Code:       "SiaErrorUnableToClearAnyCachedFiles",
+	Message:    "Unable to clear any files from cache.",
+}
+var siaErrorDeterminingCacheSize = SiaServiceError{
+	Code:       "SiaErrorDeterminingCacheSize",
+	Message:    "Unable to determine total size of files in cache.",
+}
+var siaErrorDatabaseDeleteError = SiaServiceError{
+	Code:       "SiaErrorDatabaseDeleteError",
+	Message:    "Failed to delete a record in the cache database",
+}
+var siaErrorDatabaseInsertError = SiaServiceError{
+	Code:       "SiaErrorDatabaseInsertError",
+	Message:    "Failed to insert a record in the cache database",
+}
+var siaErrorDatabaseUpdateError = SiaServiceError{
+	Code:       "SiaErrorDatabaseUpdateError",
+	Message:    "Failed to update a record in the cache database",
 }
 
 // Called to start running the SiaBridge
@@ -202,6 +227,7 @@ func (b *SiaCacheLayer) DeleteObject(bucket string, objectName string) error {
 
 func (b *SiaCacheLayer) PutObject(bucket string, objectName string, size int64, purge_after int64, src_file string) error {
 	debugmsg("SiaCacheLayer.PutObject")
+	
 	// First, make sure space exists in cache
 	err := b.guaranteeCacheSpace(size)
 	if err != nil {
@@ -303,6 +329,7 @@ func (b *SiaCacheLayer) ListObjects(bucket string) (objects []SiaObjectInfo, e e
 }
 
 func (b *SiaCacheLayer) GuaranteeObjectIsInCache(bucket string, objectName string) error {
+	defer b.timeTrack(time.Now(), "GuaranteeObjectIsInCache")
 	debugmsg("SiaCacheLayer.GuaranteeObjectIsInCache")
 	// Make sure object exists in database
 	objInfo, err := b.GetObjectInfo(bucket, objectName)
@@ -325,7 +352,7 @@ func (b *SiaCacheLayer) GuaranteeObjectIsInCache(bucket string, objectName strin
     }
 
     // Make sure bucket path exists in cache directory
-	os.Mkdir(filepath.Join(b.CacheDir, bucket), 0744)
+    b.ensureCacheBucketDirExists(bucket)
 
 	// Make sure enough space exists in cache
 	err = b.guaranteeCacheSpace(objInfo.Size)
@@ -704,7 +731,7 @@ func (b *SiaCacheLayer) insertObjectToDb(bucket string, objectName string, size 
 	debugmsg("SiaCacheLayer.insertObjectToDb")
 	stmt, err := g_db.Prepare("INSERT INTO objects(bucket, name, size, queued, uploaded, purge_after, cached_fetches, sia_fetches, last_fetch, src_file, deleted, cached) values(?,?,?,?,?,?,?,?,?,?,?,?)")
     if err != nil {
-    	return err
+    	return siaErrorDatabaseInsertError
     }
 
     _, err = stmt.Exec(bucket,
@@ -720,7 +747,7 @@ func (b *SiaCacheLayer) insertObjectToDb(bucket string, objectName string, size 
 						0,
 						cached)
     if err != nil {
-    	return err
+    	return siaErrorDatabaseInsertError
     }
 
     return nil
@@ -730,11 +757,11 @@ func (b *SiaCacheLayer) deleteObjectFromDb(bucket string, objectName string) err
 	debugmsg("SiaCacheLayer.deleteObjectFromDb")
 	stmt, err := g_db.Prepare("DELETE FROM objects WHERE bucket=? AND name=?")
     if err != nil {
-    	return err
+    	return siaErrorDatabaseDeleteError
     }
 	_, err = stmt.Exec(bucket, objectName)
     if err != nil {
-    	return err
+    	return siaErrorDatabaseDeleteError
     }
     return nil
 }
@@ -750,7 +777,6 @@ func (b *SiaCacheLayer) guaranteeCacheSpace(extraSpace int64) error {
 	for cs > space_needed {
 		e = b.forceDeleteOldestCacheFile()
 		if e != nil {
-			fmt.Println("Unable to clear enough space in the Sia cache!")
 			return e
 		}
 
@@ -770,22 +796,26 @@ func (b *SiaCacheLayer) forceDeleteOldestCacheFile() error {
 	err := g_db.QueryRow("SELECT bucket,name FROM objects WHERE uploaded>0 AND cached=1 ORDER BY last_fetch DESC LIMIT 1").Scan(&bucket,&objectName)
 	switch {
 	case err == sql.ErrNoRows:
-		return errors.New("No objects in cache")
+		return siaErrorUnableToClearAnyCachedFiles;
 	case err != nil:
 		// An error occured
-		return err
+		return siaErrorUnableToClearAnyCachedFiles
 	default:
 		// Cached item exists. Delete it.
 		siaObj := bucket + "/" + objectName
 		var cachedFile = filepath.Join(b.CacheDir,siaObj)
 		err = os.Remove(abs(cachedFile))
 		if err != nil {
-			return err
+			return siaErrorUnableToClearAnyCachedFiles
 		}
-		return b.markObjectCached(bucket, objectName, 0)
+		err = b.markObjectCached(bucket, objectName, 0)
+		if err != nil {
+			return siaErrorUnableToClearAnyCachedFiles
+		}
+		return nil
 	}
 
-	return errors.New("Unknown error")
+	return siaErrorUnableToClearAnyCachedFiles // Shouldn't happen
 }
 
 func (b *SiaCacheLayer) getCacheSize() (int64, error) {
@@ -797,7 +827,10 @@ func (b *SiaCacheLayer) getCacheSize() (int64, error) {
         }
         return err
     })
-    return size, err
+    if err != nil {
+    	return 0, siaErrorDeterminingCacheSize
+    }
+    return size, nil
 }
 
 func (b *SiaCacheLayer) ensureCacheDirExists() {
@@ -809,4 +842,17 @@ func (b *SiaCacheLayer) ensureCacheDirExists() {
 func (b* SiaCacheLayer) ensureCacheBucketDirExists(bucket string) {
 	debugmsg("SiaCacheLayer.ensureCacheBucketDirExists")
 	os.Mkdir(filepath.Join(b.CacheDir, bucket), 0744)
+}
+
+func debugmsg(str string) {
+	if SIA_DEBUG > 0 {
+		fmt.Println(str)
+	}
+}
+
+func (b* SiaCacheLayer) timeTrack(start time.Time, name string) {
+	if SIA_DEBUG > 0 {
+	    elapsed := time.Since(start)
+	    log.Printf("%s took %s\n", name, elapsed)
+	}
 }
