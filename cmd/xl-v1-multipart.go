@@ -489,6 +489,13 @@ func (xl xlObjects) newMultipartUpload(bucket string, object string, meta map[st
 	uploadID := mustGetUUID()
 	uploadIDPath := path.Join(bucket, object, uploadID)
 	tempUploadIDPath := uploadID
+
+	key, err := DefaultBitrotAlgorithm.GenerateKey(rand.Reader)
+	if err != nil {
+		return "", toObjectErr(err, bucket, object)
+	}
+	xlMeta.Erasure.Bitrot = BitrotInfo{Algorithm: DefaultBitrotAlgorithm, Key: key}
+
 	// Write updated `xl.json` to all disks.
 	disks, err := writeSameXLMetadata(xl.storageDisks, minioMetaTmpBucket, tempUploadIDPath, xlMeta, xl.writeQuorum, xl.readQuorum)
 	if err != nil {
@@ -650,7 +657,7 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 		return pi, toObjectErr(err, bucket, object)
 	}
 	buffer := make([]byte, xlMeta.Erasure.BlockSize, 2*xlMeta.Erasure.BlockSize)
-	file, err := storage.CreateFile(io.TeeReader(lreader, mw), minioMetaTmpBucket, tmpPartPath, buffer, rand.Reader, DefaultBitrotAlgorithm)
+	file, err := storage.CreateFile(io.TeeReader(lreader, mw), minioMetaTmpBucket, tmpPartPath, buffer, xlMeta.Erasure.Bitrot.Key, DefaultBitrotAlgorithm)
 	if err != nil {
 		return pi, toObjectErr(err, bucket, object)
 	}
@@ -724,8 +731,9 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 
 	for i, disk := range onlineDisks {
 		if disk != OfflineDisk {
+			partsMetadata[i].Erasure.Bitrot = BitrotInfo{Algorithm: file.Algorithm, Key: file.Key}
 			partsMetadata[i].Parts = xlMeta.Parts
-			partsMetadata[i].Erasure.AddCheckSumInfo(ChecksumInfo{partSuffix, file.Algorithm, file.Checksums[i], file.Keys[i]})
+			partsMetadata[i].Erasure.AddCheckSumInfo(ChecksumInfo{partSuffix, file.Checksums[i]})
 		}
 	}
 

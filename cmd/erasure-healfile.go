@@ -17,8 +17,6 @@
 package cmd
 
 import (
-	"io"
-
 	"github.com/minio/minio/pkg/bitrot"
 )
 
@@ -27,15 +25,17 @@ import (
 // It will try to read the valid parts from the file under the given volume and path and tries to reconstruct the file under the given
 // healVolume and healPath. The given algorithm will be used to verify the valid parts and to protected the reconstructed file.
 // The random reader should return random data (if it's nil the system PRNG will be used).
-func (s XLStorage) HealFile(offlineDisks []StorageAPI, volume, path string, blocksize int64, healVolume, healPath string, size int64, algorithm bitrot.Algorithm, keys, checksums [][]byte, random io.Reader) (f ErasureFileInfo, err error) {
+func (s XLStorage) HealFile(offlineDisks []StorageAPI, volume, path string, blocksize int64, healVolume, healPath string, size int64, algorithm bitrot.Algorithm, key []byte, checksums [][]byte) (f ErasureFileInfo, err error) {
+	if !algorithm.Available() {
+		return f, traceError(errBitrotHashAlgoInvalid)
+	}
+	f.Checksums = make([][]byte, len(s.disks))
 	hashers, verifiers := make([]bitrot.Hash, len(s.disks)), make([]*BitrotVerifier, len(s.disks))
-	f.Keys, f.Checksums = make([][]byte, len(s.disks)), make([][]byte, len(s.disks))
 	for i, disk := range s.disks {
 		if disk == OfflineDisk {
-			f.Keys[i], hashers[i], err = NewBitrotProtector(algorithm, random)
+			hashers[i], err = algorithm.New(key, bitrot.Protect)
 		} else {
-			verifiers[i], err = NewBitrotVerifier(algorithm, keys[i], checksums[i])
-			f.Keys[i] = keys[i]
+			verifiers[i], err = NewBitrotVerifier(algorithm, key, checksums[i])
 			f.Checksums[i] = checksums[i]
 		}
 		if err != nil {
@@ -85,6 +85,7 @@ func (s XLStorage) HealFile(offlineDisks []StorageAPI, volume, path string, bloc
 	}
 	f.Size = size
 	f.Algorithm = algorithm
+	f.Key = key
 	for i, disk := range s.disks {
 		if disk == OfflineDisk {
 			f.Checksums[i] = hashers[i].Sum(nil)

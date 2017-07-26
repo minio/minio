@@ -17,12 +17,14 @@
 package cmd
 
 import (
+	"encoding/hex"
 	"errors"
 	"hash/crc32"
 	"path"
 	"sync"
 	"time"
 
+	"github.com/minio/minio/pkg/bitrot"
 	"github.com/tidwall/gjson"
 )
 
@@ -166,19 +168,42 @@ func parseXLErasureInfo(xlMetaBuf []byte) (erasureInfo, error) {
 	erasure.ParityBlocks = int(erasureResult.Get("parity").Int())
 	erasure.BlockSize = erasureResult.Get("blockSize").Int()
 	erasure.Index = int(erasureResult.Get("index").Int())
-	// Pare xlMetaV1.Erasure.Checksum array.
+
 	checkSumsResult := erasureResult.Get("checksum").Array()
-	checkSums := make([]ChecksumInfo, len(checkSumsResult))
-	for i, v := range checkSumsResult {
-		checkSum := ChecksumInfo{}
-		key := ""
-		if res := v.Get("key"); res.Exists() {
-			key = res.String()
-		}
-		if err := checkSum.parseChecksumInfo(v.Get("name").String(), v.Get("algorithm").String(), v.Get("hash").String(), key); err != nil {
+	if bitrotInfo := erasureResult.Get("bitrot"); bitrotInfo.Exists() {
+		algorithm, err := bitrot.AlgorithmFromString(bitrotInfo.Get("algorithm").String())
+		if err != nil {
 			return erasure, traceError(err)
 		}
-		checkSums[i] = checkSum
+		if !algorithm.Available() {
+			return erasure, errBitrotHashAlgoInvalid
+		}
+		key, err := hex.DecodeString(bitrotInfo.Get("key").String())
+		if err != nil {
+			return erasure, traceError(err)
+		}
+		erasure.Bitrot = BitrotInfo{algorithm, key}
+	} else if len(checkSumsResult) > 0 {
+		algorithm, err := bitrot.AlgorithmFromString(checkSumsResult[0].Get("algorithm").String())
+		if err != nil {
+			return erasure, traceError(err)
+		}
+		if !algorithm.Available() {
+			return erasure, errBitrotHashAlgoInvalid
+		}
+		erasure.Bitrot = BitrotInfo{algorithm, nil}
+	} else {
+		erasure.Bitrot = BitrotInfo{bitrot.UnknownAlgorithm, nil}
+	}
+
+	// Pare xlMetaV1.Erasure.Checksum array.
+	checkSums := make([]ChecksumInfo, len(checkSumsResult))
+	for i, v := range checkSumsResult {
+		hash, err := hex.DecodeString(v.Get("hash").String())
+		if err != nil {
+			return erasure, traceError(err)
+		}
+		checkSums[i] = ChecksumInfo{Name: v.Get("name").String(), Hash: hash}
 	}
 	erasure.Checksum = checkSums
 

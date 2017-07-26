@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"crypto/rand"
 	"fmt"
 	"path"
 	"sort"
@@ -439,27 +438,25 @@ func healObject(storageDisks []StorageAPI, bucket string, object string, quorum 
 	if err != nil {
 		return 0, 0, toObjectErr(err, bucket, object)
 	}
-	keys, checksums := make([][]byte, len(latestDisks)), make([][]byte, len(latestDisks))
+	checksums := make([][]byte, len(latestDisks))
 	for partIndex := 0; partIndex < len(latestMeta.Parts); partIndex++ {
 		partName := latestMeta.Parts[partIndex].Name
 		partSize := latestMeta.Parts[partIndex].Size
 		erasure := latestMeta.Erasure
-		sumInfo := latestMeta.Erasure.GetCheckSumInfo(partName)
 		for i, disk := range storage.disks {
 			if disk != OfflineDisk {
 				info := partsMetadata[i].Erasure.GetCheckSumInfo(partName)
-				keys[i] = info.Key
 				checksums[i] = info.Hash
 			}
 		}
 		// Heal the part file.
-		file, hErr := storage.HealFile(outDatedDisks, bucket, pathJoin(object, partName), erasure.BlockSize, minioMetaTmpBucket, pathJoin(tmpID, partName), partSize, sumInfo.Algorithm, keys, checksums, rand.Reader)
+		file, hErr := storage.HealFile(outDatedDisks, bucket, pathJoin(object, partName), erasure.BlockSize, minioMetaTmpBucket, pathJoin(tmpID, partName), partSize, latestMeta.Erasure.Bitrot.Algorithm, latestMeta.Erasure.Bitrot.Key, checksums)
 		if hErr != nil {
 			return 0, 0, toObjectErr(hErr, bucket, object)
 		}
 		for i := range outDatedDisks {
 			if outDatedDisks[i] != OfflineDisk {
-				checkSumInfos[i] = append(checkSumInfos[i], ChecksumInfo{partName, file.Algorithm, file.Checksums[i], file.Keys[i]})
+				checkSumInfos[i] = append(checkSumInfos[i], ChecksumInfo{partName, file.Checksums[i]})
 			}
 		}
 	}

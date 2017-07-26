@@ -276,12 +276,14 @@ func disksWithAllParts(onlineDisks []StorageAPI, partsMetadata []xlMetaV1, errs 
 		// disk has a valid xl.json but may not have all the
 		// parts. This is considered an outdated disk, since
 		// it needs healing too.
+		algorithm := partsMetadata[diskIndex].Erasure.Bitrot.Algorithm
+		key := partsMetadata[diskIndex].Erasure.Bitrot.Key
 		for _, part := range partsMetadata[diskIndex].Parts {
 			partPath := filepath.Join(object, part.Name)
 			checkSumInfo := partsMetadata[diskIndex].Erasure.GetCheckSumInfo(part.Name)
-			hash, err := checkSumInfo.Algorithm.New(checkSumInfo.Key, bitrot.Verify)
+			hash, err := algorithm.New(key, bitrot.Verify)
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, traceError(err)
 			}
 			_, hErr := io.CopyBuffer(hash, StorageReader(onlineDisk, bucket, partPath, 0), buffer)
 			if hErr == errFileNotFound {

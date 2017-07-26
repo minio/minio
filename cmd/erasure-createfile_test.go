@@ -84,7 +84,16 @@ func TestErasureCreateFile(t *testing.T) {
 			setup.Remove()
 			t.Fatalf("Test %d: failed to generate random test data: %v", i, err)
 		}
-		file, err := storage.CreateFile(bytes.NewReader(data[test.offset:]), "testbucket", "object", buffer, rand.Reader, test.algorithm)
+		algorithm := test.algorithm
+		if !algorithm.Available() {
+			algorithm = DefaultBitrotAlgorithm
+		}
+		key, err := algorithm.GenerateKey(rand.Reader)
+		if err != nil {
+			setup.Remove()
+			t.Fatalf("Test %d: failed to generate random key: %v", i, err)
+		}
+		file, err := storage.CreateFile(bytes.NewReader(data[test.offset:]), "testbucket", "object", buffer, key, test.algorithm)
 		if err != nil && !test.shouldFail {
 			t.Errorf("Test %d: should pass but failed with: %v", i, err)
 		}
@@ -102,7 +111,7 @@ func TestErasureCreateFile(t *testing.T) {
 			if test.offDisks > 0 {
 				storage.disks[0] = OfflineDisk
 			}
-			file, err = storage.CreateFile(bytes.NewReader(data[test.offset:]), "testbucket", "object2", buffer, nil, test.algorithm)
+			file, err = storage.CreateFile(bytes.NewReader(data[test.offset:]), "testbucket", "object2", buffer, key, test.algorithm)
 			if err != nil && !test.shouldFailQuorum {
 				t.Errorf("Test %d: should pass but failed with: %v", i, err)
 			}

@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"crypto/rand"
 	"crypto/subtle"
 	"io"
 
@@ -32,7 +31,7 @@ var OfflineDisk StorageAPI // zero value is nil
 type ErasureFileInfo struct {
 	Size      int64
 	Algorithm bitrot.Algorithm
-	Keys      [][]byte
+	Key       []byte
 	Checksums [][]byte
 }
 
@@ -123,27 +122,6 @@ func NewBitrotVerifier(algorithm bitrot.Algorithm, key, checksum []byte) (*Bitro
 		return nil, traceError(err)
 	}
 	return &BitrotVerifier{h, algorithm, key, checksum, false}, nil
-}
-
-// NewBitrotProtector creates a new instance of a bitrot protection mechanism. The protector implements the given algorithm.
-// It returns an error if the algorithm is not available. NewBitrotProtector will generate a new key if the algorithm requires
-// one - so the given io.Reader should return random data.
-func NewBitrotProtector(algorithm bitrot.Algorithm, random io.Reader) (key []byte, hasher bitrot.Hash, err error) {
-	if !algorithm.Available() {
-		return nil, nil, traceError(errBitrotHashAlgoInvalid)
-	}
-	if random == nil {
-		random = rand.Reader
-	}
-	key, err = algorithm.GenerateKey(random)
-	if err != nil {
-		return nil, nil, traceError(err)
-	}
-	hasher, err = algorithm.New(key, bitrot.Protect)
-	if err != nil {
-		return nil, nil, traceError(err)
-	}
-	return
 }
 
 // BitrotVerifier can be used to verify protected data.

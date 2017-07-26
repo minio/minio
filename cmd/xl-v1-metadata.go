@@ -88,28 +88,68 @@ func (t byObjectPartNumber) Len() int           { return len(t) }
 func (t byObjectPartNumber) Swap(i, j int)      { t[i], t[j] = t[j], t[i] }
 func (t byObjectPartNumber) Less(i, j int) bool { return t[i].Number < t[j].Number }
 
-// ChecksumInfo - carries checksums of individual scattered parts per disk.
-type ChecksumInfo struct {
-	Name      string
+// BitrotInfo holds information for bitrot protection
+type BitrotInfo struct {
 	Algorithm bitrot.Algorithm
-	Hash      []byte
 	Key       []byte
 }
 
-// MarshalJSON marshals the ChecksumInfo struct
-func (c *ChecksumInfo) MarshalJSON() ([]byte, error) {
-	type checksuminfo struct {
-		Name      string `json:"name"`
+// MarshalJSON marshals the BitrotInfo struct
+func (b BitrotInfo) MarshalJSON() ([]byte, error) {
+	type bitrotinfo struct {
 		Algorithm string `json:"algorithm"`
-		Hash      string `json:"hash"`
 		Key       string `json:"key"`
 	}
 
+	info := bitrotinfo{
+		Algorithm: b.Algorithm.String(),
+		Key:       hex.EncodeToString(b.Key),
+	}
+	return json.Marshal(info)
+}
+
+// UnmarshalJSON unmarshals the the given data into the BitrotInfo struct
+func (b *BitrotInfo) UnmarshalJSON(data []byte) error {
+	type bitrotinfo struct {
+		Algorithm string `json:"algorithm"`
+		Key       string `json:"key"`
+	}
+
+	var info bitrotinfo
+	err := json.Unmarshal(data, &info)
+	if err != nil {
+		return err
+	}
+	b.Algorithm, err = bitrot.AlgorithmFromString(info.Algorithm)
+	if err != nil {
+		return err
+	}
+	if !b.Algorithm.Available() {
+		return errBitrotHashAlgoInvalid
+	}
+	b.Key, err = hex.DecodeString(info.Key)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// ChecksumInfo - carries checksums of individual scattered parts per disk.
+type ChecksumInfo struct {
+	Name string
+	Hash []byte
+}
+
+// MarshalJSON marshals the ChecksumInfo struct
+func (c ChecksumInfo) MarshalJSON() ([]byte, error) {
+	type checksuminfo struct {
+		Name string `json:"name"`
+		Hash string `json:"hash"`
+	}
+
 	info := checksuminfo{
-		Name:      c.Name,
-		Algorithm: c.Algorithm.String(),
-		Hash:      hex.EncodeToString(c.Hash),
-		Key:       hex.EncodeToString(c.Key),
+		Name: c.Name,
+		Hash: hex.EncodeToString(c.Hash),
 	}
 	return json.Marshal(info)
 }
@@ -117,10 +157,8 @@ func (c *ChecksumInfo) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON unmarshals the the given data into the ChecksumInfo struct
 func (c *ChecksumInfo) UnmarshalJSON(data []byte) error {
 	type checksuminfo struct {
-		Name      string `json:"name"`
-		Algorithm string `json:"algorithm"`
-		Hash      string `json:"hash"`
-		Key       string `json:"key"`
+		Name string `json:"name"`
+		Hash string `json:"hash"`
 	}
 
 	var info checksuminfo
@@ -128,27 +166,11 @@ func (c *ChecksumInfo) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return err
 	}
-	c.parseChecksumInfo(info.Name, info.Algorithm, info.Hash, info.Key)
-	return nil
-}
-
-func (c *ChecksumInfo) parseChecksumInfo(name, algorithm, hash, key string) (err error) {
-	c.Name = name
-	c.Algorithm, err = bitrot.AlgorithmFromString(algorithm)
+	c.Hash, err = hex.DecodeString(info.Hash)
 	if err != nil {
 		return err
 	}
-	if !c.Algorithm.Available() {
-		return errBitrotHashAlgoInvalid
-	}
-	c.Hash, err = hex.DecodeString(hash)
-	if err != nil {
-		return err
-	}
-	c.Key, err = hex.DecodeString(key)
-	if err != nil {
-		return err
-	}
+	c.Name = info.Name
 	return nil
 }
 
@@ -161,6 +183,7 @@ type erasureInfo struct {
 	BlockSize    int64          `json:"blockSize"`
 	Index        int            `json:"index"`
 	Distribution []int          `json:"distribution"`
+	Bitrot       BitrotInfo     `json:"bitrot"`
 	Checksum     []ChecksumInfo `json:"checksum,omitempty"`
 }
 
@@ -183,7 +206,7 @@ func (e erasureInfo) GetCheckSumInfo(partName string) (ckSum ChecksumInfo) {
 			return sum
 		}
 	}
-	return ChecksumInfo{"", bitrot.UnknownAlgorithm, nil, nil}
+	return ChecksumInfo{"", nil}
 }
 
 // statInfo - carries stat information of the object.

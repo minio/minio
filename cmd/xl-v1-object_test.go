@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"bytes"
-	crand "crypto/rand"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -278,10 +277,6 @@ func TestHealing(t *testing.T) {
 	}
 	defer removeRoots(fsDirs)
 	xl := obj.(*xlObjects)
-
-	random := crand.Reader
-	crand.Reader = NewDerministicRandom()
-	defer func() { crand.Reader = random }()
 
 	// Create "bucket"
 	err = obj.MakeBucketWithLocation("bucket", "")

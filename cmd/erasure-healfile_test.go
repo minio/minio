@@ -19,38 +19,13 @@ package cmd
 import (
 	"bytes"
 	"crypto/rand"
-	"encoding/binary"
 	"io"
 	"testing"
-	"time"
 
 	"reflect"
 
 	"github.com/minio/minio/pkg/bitrot"
 )
-
-type determinsticReader struct {
-	val []byte
-}
-
-func NewDerministicRandom() io.Reader {
-	now := uint64(time.Now().Unix())
-	var val [8]byte
-	binary.LittleEndian.PutUint64(val[:], now)
-	return determinsticReader{val[:]}
-}
-
-func (r determinsticReader) Read(p []byte) (n int, err error) {
-	n = len(p)
-	for len(p) >= len(r.val) {
-		copy(p, r.val)
-		p = p[len(r.val):]
-	}
-	if len(p) > 0 {
-		copy(p, r.val[:len(p)])
-	}
-	return
-}
 
 var erasureHealFileTests = []struct {
 	dataBlocks                             int
@@ -84,7 +59,6 @@ var erasureHealFileTests = []struct {
 }
 
 func TestErasureHealFile(t *testing.T) {
-	random := NewDerministicRandom()
 	for i, test := range erasureHealFileTests {
 		setup, err := newErasureTestSetup(test.dataBlocks, test.disks-test.dataBlocks, test.blocksize)
 		if err != nil {
@@ -108,14 +82,19 @@ func TestErasureHealFile(t *testing.T) {
 		if algorithm == bitrot.UnknownAlgorithm {
 			algorithm = bitrot.BLAKE2b
 		}
+		key, err := algorithm.GenerateKey(rand.Reader)
+		if err != nil {
+			setup.Remove()
+			t.Fatalf("Test %d: failed to generate random key: %v", i, err)
+		}
 		buffer := make([]byte, test.blocksize, 2*test.blocksize)
-		file, err := storage.CreateFile(bytes.NewReader(data), "testbucket", "testobject", buffer, random, algorithm)
+		file, err := storage.CreateFile(bytes.NewReader(data), "testbucket", "testobject", buffer, key, algorithm)
 		if err != nil {
 			setup.Remove()
 			t.Fatalf("Test %d: failed to create random test data: %v", i, err)
 		}
 
-		info, err := storage.HealFile(offline, "testbucket", "testobject", test.blocksize, "testbucket", "healedobject", test.size, test.algorithm, file.Keys, file.Checksums, random)
+		info, err := storage.HealFile(offline, "testbucket", "testobject", test.blocksize, "testbucket", "healedobject", test.size, test.algorithm, file.Key, file.Checksums)
 		if err != nil && !test.shouldFail {
 			t.Errorf("Test %d: should pass but it failed with: %v", i, err)
 		}
@@ -129,8 +108,8 @@ func TestErasureHealFile(t *testing.T) {
 			if info.Algorithm != test.algorithm {
 				t.Errorf("Test %d: healed with wrong algorithm: got: %v want: %v", i, info.Algorithm, test.algorithm)
 			}
-			if !reflect.DeepEqual(info.Keys, file.Keys) {
-				t.Errorf("Test %d: heal returned different bitrot keys", i)
+			if !bytes.Equal(info.Key, file.Key) {
+				t.Errorf("Test %d: heal returned different bitrot keys: got: %v , want: %v", i, info.Key, file.Key)
 			}
 			if !reflect.DeepEqual(info.Checksums, file.Checksums) {
 				t.Errorf("Test %d: heal returned different bitrot keys", i)
@@ -150,7 +129,7 @@ func TestErasureHealFile(t *testing.T) {
 			for j := 0; j < test.badOffDisks; j++ {
 				offline[j] = badDisk{nil}
 			}
-			info, err := storage.HealFile(offline, "testbucket", "testobject", test.blocksize, "testbucket", "healedobject", test.size, test.algorithm, file.Keys, file.Checksums, random)
+			info, err := storage.HealFile(offline, "testbucket", "testobject", test.blocksize, "testbucket", "healedobject", test.size, test.algorithm, file.Key, file.Checksums)
 			if err != nil && !test.shouldFailQuorum {
 				t.Errorf("Test %d: should pass but it failed with: %v", i, err)
 			}
@@ -164,8 +143,8 @@ func TestErasureHealFile(t *testing.T) {
 				if info.Algorithm != test.algorithm {
 					t.Errorf("Test %d: healed with wrong algorithm: got: %v want: %v", i, info.Algorithm, test.algorithm)
 				}
-				if !reflect.DeepEqual(info.Keys, file.Keys) {
-					t.Errorf("Test %d: heal returned different bitrot keys", i)
+				if !bytes.Equal(info.Key, file.Key) {
+					t.Errorf("Test %d: heal returned different bitrot keys: got: %v , want: %v", i, info.Key, file.Key)
 				}
 				if !reflect.DeepEqual(info.Checksums, file.Checksums) {
 					t.Errorf("Test %d: heal returned different bitrot checksums", i)

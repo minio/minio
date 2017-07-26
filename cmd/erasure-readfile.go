@@ -26,7 +26,7 @@ import (
 // ReadFile reads as much data as requested from the file under the given volume and path and writes the data to the provided writer.
 // The algorithm and the keys/checksums are used to verify the integrity of the given file. ReadFile will read data from the given offset
 // up to the given length. If parts of the file are corrupted ReadFile tries to reconstruct the data.
-func (s XLStorage) ReadFile(writer io.Writer, volume, path string, offset, length int64, totalLength int64, keys, checksums [][]byte, algorithm bitrot.Algorithm, blocksize int64, pool *bpool.BytePool) (f ErasureFileInfo, err error) {
+func (s XLStorage) ReadFile(writer io.Writer, volume, path string, offset, length int64, totalLength int64, key []byte, checksums [][]byte, algorithm bitrot.Algorithm, blocksize int64, pool *bpool.BytePool) (f ErasureFileInfo, err error) {
 	if offset < 0 || length < 0 {
 		return f, traceError(errUnexpected)
 	}
@@ -34,11 +34,11 @@ func (s XLStorage) ReadFile(writer io.Writer, volume, path string, offset, lengt
 		return f, traceError(errUnexpected)
 	}
 
-	f.Keys, f.Checksums = make([][]byte, len(s.disks)), make([][]byte, len(s.disks))
+	f.Checksums = make([][]byte, len(s.disks))
 	verifiers := make([]*BitrotVerifier, len(s.disks))
 	for i, disk := range s.disks {
 		if disk != OfflineDisk {
-			verifiers[i], err = NewBitrotVerifier(algorithm, keys[i], checksums[i])
+			verifiers[i], err = NewBitrotVerifier(algorithm, key, checksums[i])
 			if err != nil {
 				return f, err
 			}
@@ -80,9 +80,9 @@ func (s XLStorage) ReadFile(writer io.Writer, volume, path string, offset, lengt
 	}
 
 	f.Algorithm = algorithm
+	f.Key = key
 	for i, disk := range s.disks {
 		if disk != OfflineDisk {
-			f.Keys[i] = verifiers[i].key
 			f.Checksums[i] = verifiers[i].Sum(nil)
 		}
 	}

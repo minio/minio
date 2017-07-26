@@ -27,7 +27,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/minio/minio/pkg/bitrot"
 	"github.com/minio/minio/pkg/bpool"
 	"github.com/minio/minio/pkg/mimedb"
 	"github.com/minio/minio/pkg/objcache"
@@ -255,7 +254,7 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 	if err != nil {
 		return toObjectErr(err, bucket, object)
 	}
-	keys, checksums := make([][]byte, len(storage.disks)), make([][]byte, len(storage.disks))
+	checksums := make([][]byte, len(storage.disks))
 	for ; partIndex <= lastPartIndex; partIndex++ {
 		if length == totalBytesRead {
 			break
@@ -271,18 +270,14 @@ func (xl xlObjects) GetObject(bucket, object string, startOffset int64, length i
 		}
 
 		// Get the checksums of the current part.
-		var algorithm = bitrot.UnknownAlgorithm
 		for index, disk := range storage.disks {
 			if disk != OfflineDisk {
 				ckSumInfo := metaArr[index].Erasure.GetCheckSumInfo(partName)
 				checksums[index] = ckSumInfo.Hash
-				keys[index] = ckSumInfo.Key
-				algorithm = ckSumInfo.Algorithm
 			}
-
 		}
 
-		file, err := storage.ReadFile(mw, bucket, pathJoin(object, partName), partOffset, readSize, partSize, keys, checksums, algorithm, xlMeta.Erasure.BlockSize, pool)
+		file, err := storage.ReadFile(mw, bucket, pathJoin(object, partName), partOffset, readSize, partSize, xlMeta.Erasure.Bitrot.Key, checksums, xlMeta.Erasure.Bitrot.Algorithm, xlMeta.Erasure.BlockSize, pool)
 		if err != nil {
 			errorIf(err, "Unable to read %s of the object `%s/%s`.", partName, bucket, object)
 			return toObjectErr(err, bucket, object)
@@ -542,6 +537,10 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 	if err != nil {
 		return ObjectInfo{}, toObjectErr(err, bucket, object)
 	}
+	key, err := DefaultBitrotAlgorithm.GenerateKey(rand.Reader)
+	if err != nil {
+		return ObjectInfo{}, toObjectErr(err, bucket, object)
+	}
 	buffer := make([]byte, partsMetadata[0].Erasure.BlockSize, 2*partsMetadata[0].Erasure.BlockSize)
 	// Read data and split into parts - similar to multipart mechanism
 	for partIdx := 1; ; partIdx++ {
@@ -567,7 +566,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 			}
 		}
 
-		file, erasureErr := storage.CreateFile(io.LimitReader(teeReader, globalPutPartSize), minioMetaTmpBucket, tempErasureObj, buffer, rand.Reader, DefaultBitrotAlgorithm)
+		file, erasureErr := storage.CreateFile(io.LimitReader(teeReader, globalPutPartSize), minioMetaTmpBucket, tempErasureObj, buffer, key, DefaultBitrotAlgorithm)
 		if erasureErr != nil {
 			return ObjectInfo{}, toObjectErr(erasureErr, minioMetaTmpBucket, tempErasureObj)
 		}
@@ -586,8 +585,9 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 		allowEmpty := partIdx == 1
 		if file.Size > 0 || allowEmpty {
 			for i := range partsMetadata {
+				partsMetadata[i].Erasure.Bitrot = BitrotInfo{Algorithm: file.Algorithm, Key: file.Key}
 				partsMetadata[i].AddObjectPart(partIdx, partName, "", file.Size)
-				partsMetadata[i].Erasure.AddCheckSumInfo(ChecksumInfo{partName, file.Algorithm, file.Checksums[i], file.Keys[i]})
+				partsMetadata[i].Erasure.AddCheckSumInfo(ChecksumInfo{partName, file.Checksums[i]})
 			}
 		}
 

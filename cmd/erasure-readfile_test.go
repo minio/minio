@@ -107,15 +107,20 @@ func TestErasureReadFile(t *testing.T) {
 		if !test.algorithm.Available() {
 			writeAlgorithm = bitrot.BLAKE2b
 		}
+		key, err := writeAlgorithm.GenerateKey(crand.Reader)
+		if err != nil {
+			setup.Remove()
+			t.Fatalf("Test %d: failed to generate random key: %v", i, err)
+		}
 		buffer := make([]byte, test.blocksize, 2*test.blocksize)
-		file, err := storage.CreateFile(bytes.NewReader(data[:]), "testbucket", "object", buffer, crand.Reader, writeAlgorithm)
+		file, err := storage.CreateFile(bytes.NewReader(data[:]), "testbucket", "object", buffer, key, writeAlgorithm)
 		if err != nil {
 			setup.Remove()
 			t.Fatalf("Test %d: failed to create erasure test file: %v", i, err)
 		}
 		pool := bpool.NewBytePool(getChunkSize(test.blocksize, test.dataBlocks), len(storage.disks))
 		writer := bytes.NewBuffer(nil)
-		readInfo, err := storage.ReadFile(writer, "testbucket", "object", test.offset, test.length, test.data, file.Keys, file.Checksums, test.algorithm, test.blocksize, pool)
+		readInfo, err := storage.ReadFile(writer, "testbucket", "object", test.offset, test.length, test.data, file.Key, file.Checksums, test.algorithm, test.blocksize, pool)
 		if err != nil && !test.shouldFail {
 			t.Errorf("Test %d: should pass but failed with: %v", i, err)
 		}
@@ -141,7 +146,7 @@ func TestErasureReadFile(t *testing.T) {
 			if test.offDisks > 0 {
 				storage.disks[0] = OfflineDisk
 			}
-			readInfo, err = storage.ReadFile(writer, "testbucket", "object", test.offset, test.length, test.data, file.Keys, file.Checksums, test.algorithm, test.blocksize, pool)
+			readInfo, err = storage.ReadFile(writer, "testbucket", "object", test.offset, test.length, test.data, file.Key, file.Checksums, test.algorithm, test.blocksize, pool)
 			if err != nil && !test.shouldFailQuorum {
 				t.Errorf("Test %d: should pass but failed with: %v", i, err)
 			}
@@ -223,7 +228,7 @@ func TestErasureReadFileRandomOffsetLength(t *testing.T) {
 
 		expected := data[offset : offset+readLen]
 
-		_, err = storage.ReadFile(buf, "testbucket", "testobject", offset, readLen, length, file.Keys, file.Checksums, DefaultBitrotAlgorithm, blockSize, pool)
+		_, err = storage.ReadFile(buf, "testbucket", "testobject", offset, readLen, length, file.Key, file.Checksums, DefaultBitrotAlgorithm, blockSize, pool)
 		if err != nil {
 			t.Fatal(err, offset, readLen)
 		}

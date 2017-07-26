@@ -25,11 +25,14 @@ import (
 // CreateFile creates a new bitrot encoded file spread over all available disks. CreateFile will create
 // the file at the given volume and path. It will read from src until an io.EOF occurs. The given algorithm will
 // be used to protect the erasure encoded file. The random reader should return random data (if it's nil the system PRNG will be used).
-func (s *XLStorage) CreateFile(src io.Reader, volume, path string, buffer []byte, random io.Reader, algorithm bitrot.Algorithm) (f ErasureFileInfo, err error) {
-	f.Keys, f.Checksums = make([][]byte, len(s.disks)), make([][]byte, len(s.disks))
+func (s *XLStorage) CreateFile(src io.Reader, volume, path string, buffer []byte, key []byte, algorithm bitrot.Algorithm) (f ErasureFileInfo, err error) {
+	if !algorithm.Available() {
+		return f, traceError(errBitrotHashAlgoInvalid)
+	}
+	f.Checksums = make([][]byte, len(s.disks))
 	hashers := make([]bitrot.Hash, len(s.disks))
 	for i := range hashers {
-		f.Keys[i], hashers[i], err = NewBitrotProtector(algorithm, random)
+		hashers[i], err = algorithm.New(key, bitrot.Protect)
 		if err != nil {
 			return f, err
 		}
@@ -74,10 +77,10 @@ func (s *XLStorage) CreateFile(src io.Reader, volume, path string, buffer []byte
 		f.Size += int64(n)
 	}
 
+	f.Key = key
 	f.Algorithm = algorithm
 	for i, disk := range s.disks {
 		if disk == OfflineDisk {
-			f.Keys[i] = nil
 			f.Checksums[i] = nil
 		} else {
 			f.Checksums[i] = hashers[i].Sum(nil)
