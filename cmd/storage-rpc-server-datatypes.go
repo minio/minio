@@ -83,7 +83,7 @@ type ReadFileWithVerifyArgs struct {
 	// Algorithm used in bit-rot hash computation.
 	Algo bitrot.Algorithm
 
-	// Stored key used to compute the hash value.
+	// Stored key used to compute the hash value if required by algorithm
 	Key []byte
 
 	// Stored hash value used to compare with computed value.

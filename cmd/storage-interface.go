@@ -52,7 +52,7 @@ type StorageAPI interface {
 	ReadAll(volume string, path string) (buf []byte, err error)
 }
 
-// storageReader is a io.Reader view of a disk
+// storageReader is an io.Reader view of a disk
 type storageReader struct {
 	storage      StorageAPI
 	volume, path string
@@ -61,14 +61,13 @@ type storageReader struct {
 
 func (r *storageReader) Read(p []byte) (n int, err error) {
 	nn, err := r.storage.ReadFile(r.volume, r.path, r.offset, p)
-	n = int(nn)
 	r.offset += nn
+	n = int(nn)
 
 	if err == io.ErrUnexpectedEOF && nn > 0 {
 		err = io.EOF
 	}
-	return int(n), err
-
+	return
 }
 
 // storageWriter is a io.Writer view of a disk.
