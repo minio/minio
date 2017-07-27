@@ -510,7 +510,10 @@ func (b *SiaCacheLayer) purgeCache() SiaServiceError {
 				since_uploaded := time.Now().Unix() - object.Uploaded.Unix()
 				since_fetched := time.Now().Unix() - object.LastFetch.Unix()
 				if since_uploaded > object.PurgeAfter && since_fetched > object.PurgeAfter {
-					return b.removeFromCache(object)
+					err = b.removeFromCache(object)
+					if err != siaSuccess {
+						return err
+					}
 				}
 			}
 		}
