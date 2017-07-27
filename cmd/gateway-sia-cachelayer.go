@@ -403,10 +403,12 @@ func (b *SiaCacheLayer) GuaranteeObjectIsInCache(bucket string, objectName strin
 	// This will prevent the cache manager from removing the partially downloaded file.
 	err = b.updateSiaFetches(bucket, objectName, objInfo.SiaFetches+1)
 	if err != siaSuccess {
+		debugmsg(fmt.Sprintf("updateSiaFetches returned %s\n", err))
 		return err
 	}
 
 	var siaObj = bucket + "/" + objectName
+	debugmsg(fmt.Sprintf("GET %s %s %s\n", b.SiadAddress, siaObj, objInfo.SrcFile))
 	derr := get(b.SiadAddress, "/renter/download/" + siaObj + "?destination=" + objInfo.SrcFile)
 	if derr != nil {
 		return SiaServiceError{ Code: "SiaErrorDaemon", Message: derr.Error(), }
