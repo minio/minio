@@ -5,6 +5,7 @@ import (
 	"time"
 	"os"
 	"strconv"
+	"net/url"
 	"path/filepath"
 	"database/sql"
 	_ "github.com/mattn/go-sqlite3"
@@ -409,7 +410,7 @@ func (b *SiaCacheLayer) GuaranteeObjectIsInCache(bucket string, objectName strin
 
 	var siaObj = bucket + "/" + objectName
 	debugmsg(fmt.Sprintf("GET %s %s %s\n", b.SiadAddress, siaObj, objInfo.SrcFile))
-	derr := get(b.SiadAddress, "/renter/download/" + siaObj + "?destination=" + objInfo.SrcFile)
+	derr := get(b.SiadAddress, "/renter/download/" + url.QueryEscape(siaObj) + "?destination=" + url.QueryEscape(objInfo.SrcFile))
 	if derr != nil {
 		return SiaServiceError{ Code: "SiaErrorDaemon", Message: derr.Error(), }
 	}
