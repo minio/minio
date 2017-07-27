@@ -150,7 +150,8 @@ func (s *siaObjects) MakeBucketWithLocation(bucket, location string) error {
 		return err
 	}
 
-	return s.siacl.InsertBucket(bucket)
+	sia_err := s.siacl.InsertBucket(bucket)
+	return siaToObjectError(sia_err)
 }
 
 // GetBucketInfo gets bucket metadata.
@@ -328,10 +329,11 @@ func (s *siaObjects) CompleteMultipartUpload(bucket string, object string, uploa
 		return oi, err
 	}
 
-	err = s.siacl.PutObject(bucket, object, fi.Size(), int64(SIA_CACHE_PURGE_AFTER_SEC), src_file)
+	sia_err := s.siacl.PutObject(bucket, object, fi.Size(), int64(SIA_CACHE_PURGE_AFTER_SEC), src_file)
 	// If put fails to the cache layer, then delete from object layer
-	if err != nil {
+	if sia_err != siaSuccess {
 		s.fs.DeleteObject(bucket, object)
+		return oi, siaToObjectError(sia_err)
 	}
 
 	return oi, nil
