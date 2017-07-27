@@ -738,7 +738,7 @@ func (a *azureObjects) GetBucketPolicies(bucket string) (policy.BucketAccessPoli
 	}
 	switch perm.AccessType {
 	case storage.ContainerAccessTypePrivate:
-		// Do nothing
+		return policy.BucketAccessPolicy{}, traceError(PolicyNotFound{Bucket: bucket})
 	case storage.ContainerAccessTypeContainer:
 		policyInfo.Statements = policy.SetPolicy(policyInfo.Statements, policy.BucketPolicyReadOnly, bucket, "")
 	default:
