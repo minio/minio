@@ -250,7 +250,7 @@ func (b *SiaCacheLayer) DeleteObject(bucket string, objectName string) SiaServic
 	}
 
     // Tell Sia daemon to delete the object
-	var siaObj = bucket + "/" + objectName
+	var siaObj = b.getSiaObjectName(bucket, objectName)
 	
 	derr := post(b.SiadAddress, "/renter/delete/"+siaObj, "")
 	if derr != nil {
@@ -292,7 +292,7 @@ func (b *SiaCacheLayer) PutObject(bucket string, objectName string, size int64, 
 	}
 
 	// Tell Sia daemon to upload the object
-	siaObj := bucket + "/" + objectName
+	siaObj := b.getSiaObjectName(bucket, objectName)
 	derr := post(b.SiadAddress, "/renter/upload/"+siaObj, "source="+src_file)
 	if derr != nil {
 		b.deleteObjectFromDb(bucket, objectName)
@@ -408,10 +408,11 @@ func (b *SiaCacheLayer) GuaranteeObjectIsInCache(bucket string, objectName strin
 		return err
 	}
 
-	var siaObj = bucket + "/" + objectName
+	var siaObj = b.getSiaObjectName(bucket, objectName)
 	debugmsg(fmt.Sprintf("GET %s %s %s\n", b.SiadAddress, siaObj, objInfo.SrcFile))
 	derr := get(b.SiadAddress, "/renter/download/" + url.QueryEscape(siaObj) + "?destination=" + url.QueryEscape(objInfo.SrcFile))
 	if derr != nil {
+		debugmsg(fmt.Sprintf("Error: %s", derr))
 		return SiaServiceError{ Code: "SiaErrorDaemon", Message: derr.Error(), }
 	}
 
@@ -559,7 +560,7 @@ func (b *SiaCacheLayer) checkSiaUploads() SiaServiceError {
 
 	// If uploading object is available on Sia, update database
 	for _, obj := range objs {
-		var siaObj = obj.Bucket + "/" + obj.Name
+		var siaObj = b.getSiaObjectName(obj.Bucket, obj.Name)
 		for _, file := range rf.Files {
 			if file.SiaPath == siaObj && file.Available {
 				err = b.markObjectUploaded(obj.Bucket, obj.Name)
@@ -879,6 +880,10 @@ func (b *SiaCacheLayer) guaranteeCacheSpace(extraSpace int64) SiaServiceError {
 	}
 
 	return siaSuccess
+}
+
+func (b *SiaCacheLayer) getSiaObjectName(bucket string, objectName string) string {
+	return url.QueryEscape(bucket) + "/" + url.QueryEscape(objectName)
 }
 
 func (b *SiaCacheLayer) forceDeleteOldestCacheFile() SiaServiceError {
