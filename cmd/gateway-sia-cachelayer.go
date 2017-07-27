@@ -521,10 +521,10 @@ func (b *SiaCacheLayer) purgeCache() SiaServiceError {
 func (b *SiaCacheLayer) removeFromCache(objInfo SiaObjectInfo) SiaServiceError {
 	debugmsg(fmt.Sprintf("removeFromCache: %s", objInfo.SrcFile))
 
-	// If file doesn't exist in cache, just return success
+	// If file doesn't exist in cache, it's falsely labelled. Update and return.
 	_, err := os.Stat(objInfo.SrcFile)
 	if err != nil {
-		return siaSuccess
+		return b.markObjectCached(objInfo.Bucket, objInfo.Name, 0)
 	}
 
 	err = os.Remove(objInfo.SrcFile)

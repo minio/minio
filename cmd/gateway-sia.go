@@ -227,9 +227,9 @@ func (s *siaObjects) GetObjectInfo(bucket string, object string) (objInfo Object
 	// Can't use object layer. File may not be on local filesystem.
 	// Pull the info from cache database.
 
-	sobjInfo, err := s.siacl.GetObjectInfo(bucket, object)
-	if err != nil {
-		return objInfo, err
+	sobjInfo, sia_err := s.siacl.GetObjectInfo(bucket, object)
+	if sia_err != siaSuccess {
+		return objInfo, siaToObjectError(sia_err)
 	}
 	objInfo = ObjectInfo{
 		Bucket:      bucket,
@@ -237,8 +237,9 @@ func (s *siaObjects) GetObjectInfo(bucket string, object string) (objInfo Object
 		//ETag:        azureToS3ETag(prop.Etag),
 		ModTime:     sobjInfo.Queued,
 		Name:        object,
-		Size:        sobjInfo.Size,
+		Size:        int64(sobjInfo.Size),
 	}
+
 	return objInfo, nil
 }
 
