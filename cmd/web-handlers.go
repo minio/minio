@@ -970,7 +970,6 @@ func toJSONError(err error, params ...string) (jerr *json2.Error) {
 
 // toWebAPIError - convert into error into APIError.
 func toWebAPIError(err error) APIError {
-	
 	err = errorCause(err)
 	if err == errAuthentication {
 		return APIError{
@@ -1062,6 +1061,7 @@ func toWebAPIError(err error) APIError {
 		}
 	}
 
+
 	// Log unexpected and unhandled errors.
 	errorIf(err, errUnexpected.Error())
 	return APIError{
@@ -1074,9 +1074,7 @@ func toWebAPIError(err error) APIError {
 
 // writeWebErrorResponse - set HTTP status code and write error description to the body.
 func writeWebErrorResponse(w http.ResponseWriter, err error) {
-	fmt.Printf("writeWebErrorResponse: %s", err.Error())
 	apiErr := toWebAPIError(err)
-	fmt.Printf("HTTPStatusCode: %d", apiErr.HTTPStatusCode)
 	w.WriteHeader(apiErr.HTTPStatusCode)
 	w.Write([]byte(apiErr.Description))
 }
