@@ -24,8 +24,12 @@ func testAuthenticate(authType string, t *testing.T) {
 		t.Fatalf("unable initialize config file, %s", err)
 	}
 	defer removeAll(testPath)
-
-	serverCred := serverConfig.GetCredential()
+	// Create access and secret keys in length, 300 and 600
+	cred, err := getNewCredential(300, 600)
+	if err != nil {
+		t.Fatalf("unable to get new credential, %v", err)
+	}
+	serverConfig.SetCredential(cred)
 
 	// Define test cases.
 	testCases := []struct {
@@ -33,24 +37,16 @@ func testAuthenticate(authType string, t *testing.T) {
 		secretKey   string
 		expectedErr error
 	}{
-		// Access key too small.
-		{"user", "pass", errInvalidAccessKeyLength},
-		// Access key too long.
-		{"user12345678901234567", "pass", errInvalidAccessKeyLength},
-		// Access key contains unsuppported characters.
-		{"!@#$", "pass", errInvalidAccessKeyLength},
-		// Success when access key contains leading/trailing spaces.
-		{" " + serverCred.AccessKey + " ", serverCred.SecretKey, errInvalidAccessKeyLength},
-		// Secret key too small.
-		{"myuser", "pass", errInvalidSecretKeyLength},
-		// Secret key too long.
-		{"myuser", "pass1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890", errInvalidSecretKeyLength},
+		// Access key (less than 5 chrs) too small.
+		{"user", cred.SecretKey, errInvalidAccessKeyLength},
+		// Secret key (less than 8 chrs) too small.
+		{cred.AccessKey, "pass", errInvalidSecretKeyLength},
 		// Authentication error.
 		{"myuser", "mypassword", errInvalidAccessKeyID},
 		// Authentication error.
-		{serverCred.AccessKey, "mypassword", errAuthentication},
+		{cred.AccessKey, "mypassword", errAuthentication},
 		// Success.
-		{serverCred.AccessKey, serverCred.SecretKey, nil},
+		{cred.AccessKey, cred.SecretKey, nil},
 	}
 
 	// Run tests.

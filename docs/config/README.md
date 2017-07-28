@@ -34,8 +34,8 @@ $ tree ~/.minio
 |Field|Type|Description|
 |:---|:---|:---|
 |``credential``| | Auth credential for object storage and web access.|
-|``credential.accessKey`` | _string_ | Access key of 5 to 20 characters in length. You may override this field with `MINIO_ACCESS_KEY` environment variable.|
-|``credential.secretKey`` | _string_ | Secret key of 8 to 40 characters in length. You may override this field with `MINIO_SECRET_KEY` environment variable.|
+|``credential.accessKey`` | _string_ | Access key of minimum 5 characters in length. You may override this field with `MINIO_ACCESS_KEY` environment variable.|
+|``credential.secretKey`` | _string_ | Secret key of minimum 8 characters in length. You may override this field with `MINIO_SECRET_KEY` environment variable.|
 
 Example:
 

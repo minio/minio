@@ -52,8 +52,8 @@ FLAGS:
   {{end}}{{end}}
 ENVIRONMENT VARIABLES:
   ACCESS:
-     MINIO_ACCESS_KEY: Custom username or access key of 5 to 20 characters in length.
-     MINIO_SECRET_KEY: Custom password or secret key of 8 to 40 characters in length.
+     MINIO_ACCESS_KEY: Custom username or access key of minimum 5 characters in length.
+     MINIO_SECRET_KEY: Custom password or secret key of minimum 8 characters in length.
 
   BROWSER:
      MINIO_BROWSER: To disable web browser access, set this value to "off".
