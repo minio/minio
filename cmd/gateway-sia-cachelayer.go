@@ -4,12 +4,15 @@ import (
 	"fmt"
 	"time"
 	"os"
+	"sync"
 	"strconv"
 	"net/url"
 	"path/filepath"
 	"database/sql"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/NebulousLabs/Sia/api"
+	"github.com/minio/minio-go/pkg/policy"
+	"encoding/json"
 )
 
 // How many seconds to delay between cache/db management operations
@@ -26,6 +29,9 @@ var g_cache_ticker *time.Ticker
 // Global database object
 var g_db *sql.DB
 
+// Mutex for DB access
+var g_db_mutex = &sync.Mutex{}
+
 type SiaCacheLayer struct {
 	SiadAddress string 	// Address of siad daemon API. (e.g., "127.0.0.1:9980")
 	CacheDir string 	// Cache directory for downloads
@@ -34,8 +40,8 @@ type SiaCacheLayer struct {
 
 
 type SiaBucketInfo struct {
-	Name string 		// Name of bucket
-	Created time.Time   // Time of bucket creation
+	Name string 				// Name of bucket
+	Created time.Time   		// Time of bucket creation
 }
 
 type SiaObjectInfo struct {
@@ -118,7 +124,39 @@ var siaErrorObjectAlreadyExists = SiaServiceError{
 	Code:       "SiaErrorObjectAlreadyExists",
 	Message:    "Object does not exist in bucket.",
 }
+var siaErrorInvalidBucketPolicy = SiaServiceError{
+	Code:       "SiaErrorInvalidBucketPolicy",
+	Message:    "An invalid bucket policy has been specified.",
+}
 
+// Need to implement os.FileInfo interface on SiaObjectInfo for convenience.
+type SiaFileInfo struct {
+	FileName string
+	FileSize int64
+	FileModTime time.Time
+	FileMode os.FileMode
+	FileIsDir bool
+	FileSys interface {}
+}
+
+func (o SiaFileInfo) Name() string {
+	return o.FileName
+}
+func (o SiaFileInfo) Size() int64 {
+	return o.FileSize
+}
+func (o SiaFileInfo) ModTime() time.Time {
+	return o.FileModTime
+}
+func (o SiaFileInfo) Mode() os.FileMode {
+	return o.FileMode
+}
+func (o SiaFileInfo) IsDir() bool {
+	return o.FileIsDir
+}
+func (o SiaFileInfo) Sys() interface{} {
+	return o.FileSys
+}
 
 // Called to start running the SiaBridge
 func (b *SiaCacheLayer) Start() SiaServiceError {
@@ -181,18 +219,39 @@ func (b *SiaCacheLayer) Stop() {
 	g_cache_ticker.Stop()
 
 	// Close the database
+	b.lockDB()
 	g_db.Close()
+	b.unlockDB()
+}
+
+func (b *SiaCacheLayer) lockDB() {
+	//debugmsg("SiaCacheLayer.LockDB")
+	g_db_mutex.Lock()
+}
+
+func (b *SiaCacheLayer) unlockDB() {
+	//debugmsg("SiaCacheLayer.UnlockDB")
+	g_db_mutex.Unlock()
 }
 
 func (b *SiaCacheLayer) InsertBucket(bucket string) SiaServiceError {
 	debugmsg("SiaCacheLayer.InsertBucket")
-	stmt, err := g_db.Prepare("INSERT INTO buckets(name, created) values(?,?)")
+
+	b.lockDB()
+	defer b.unlockDB()
+	
+	stmt, err := g_db.Prepare("INSERT INTO buckets(name, created, policy) values(?,?,?)")
     if err != nil {
     	return siaErrorDatabaseInsertError
     }
 
-    _, err = stmt.Exec(bucket, time.Now().Unix())
+    defer stmt.Close()
+
+    policyInfo := policy.BucketAccessPolicy{}
+    res, _ := json.Marshal(&policyInfo)
+    _, err = stmt.Exec(bucket, time.Now().Unix(), string(res))
     if err != nil {
+    	debugmsg(err.Error())
     	return siaErrorDatabaseInsertError
     }
 
@@ -201,12 +260,31 @@ func (b *SiaCacheLayer) InsertBucket(bucket string) SiaServiceError {
 
 func (b *SiaCacheLayer) DeleteBucket(bucket string) SiaServiceError {
 	debugmsg("SiaCacheLayer.DeleteBucket")
-	stmt, err := g_db.Prepare("DELETE FROM buckets WHERE name=?")
-    if err != nil {
+	// First, should delete all objects in the bucket
+	objects, err := b.ListObjects(bucket)
+	if err != siaSuccess {
+		return err
+	}
+	for _, object := range objects {
+		err = b.DeleteObject(bucket, object.Name)
+		if err != siaSuccess {
+			return err
+		}
+	}
+
+	b.lockDB()
+	defer b.unlockDB()
+
+	// Now delete the actual bucket
+	stmt, e := g_db.Prepare("DELETE FROM buckets WHERE name=?")
+    if e != nil {
     	return siaErrorDatabaseDeleteError
     }
-	_, err = stmt.Exec(bucket)
-    if err != nil {
+
+    defer stmt.Close()
+
+	_, e = stmt.Exec(bucket)
+    if e != nil {
     	return siaErrorDatabaseDeleteError
     }
 
@@ -216,10 +294,16 @@ func (b *SiaCacheLayer) DeleteBucket(bucket string) SiaServiceError {
 // List all buckets
 func (b *SiaCacheLayer) ListBuckets() (buckets []SiaBucketInfo, e SiaServiceError) {
 	debugmsg("SiaCacheLayer.ListBuckets")
-	rows, err := g_db.Query("SELECT * FROM buckets")
+
+	b.lockDB()
+	defer b.unlockDB()
+
+	rows, err := g_db.Query("SELECT name,created FROM buckets")
     if err != nil {
     	return buckets, siaErrorDatabaseSelectError
     }
+
+    defer rows.Close()
 
     var name string
     var created int64
@@ -319,10 +403,16 @@ func (b *SiaCacheLayer) PutObject(bucket string, objectName string, size int64, 
 // Returns a list of objects in the bucket provided
 func (b *SiaCacheLayer) ListObjects(bucket string) (objects []SiaObjectInfo, e SiaServiceError) {
 	debugmsg("SiaCacheLayer.listUploadingObjects")
+
+	b.lockDB()
+	defer b.unlockDB()
+
 	rows, err := g_db.Query("SELECT name,size,queued,uploaded,purge_after,cached_fetches,sia_fetches,last_fetch,src_file,deleted,cached FROM objects WHERE bucket=?",bucket)
     if err != nil {
     	return objects, siaErrorDatabaseSelectError
     }
+
+    defer rows.Close()
 
     var name string
     var size int64
@@ -358,14 +448,18 @@ func (b *SiaCacheLayer) ListObjects(bucket string) (objects []SiaObjectInfo, e S
     	})
     }
 
-    rows.Close()
-
 	return objects, siaSuccess
 }
 
 func (b *SiaCacheLayer) GuaranteeObjectIsInCache(bucket string, objectName string) SiaServiceError {
 	defer b.timeTrack(time.Now(), "GuaranteeObjectIsInCache")
 	debugmsg("SiaCacheLayer.GuaranteeObjectIsInCache")
+	// Minio filesystem layer may request files from .minio.sys bucket
+	// If we get a request for Minio, we'll pass back success and let Minio deal with it.
+	if bucket == ".minio.sys" {
+		return siaSuccess
+	}
+	
 	// Make sure object exists in database
 	objInfo, err := b.GetObjectInfo(bucket, objectName)
 	if err != siaSuccess {
@@ -404,7 +498,6 @@ func (b *SiaCacheLayer) GuaranteeObjectIsInCache(bucket string, objectName strin
 	// This will prevent the cache manager from removing the partially downloaded file.
 	err = b.updateSiaFetches(bucket, objectName, objInfo.SiaFetches+1)
 	if err != siaSuccess {
-		debugmsg(fmt.Sprintf("updateSiaFetches returned %s\n", err))
 		return err
 	}
 
@@ -424,6 +517,10 @@ func (b *SiaCacheLayer) GuaranteeObjectIsInCache(bucket string, objectName strin
 // Returns info for the provided object
 func (b *SiaCacheLayer) GetObjectInfo(bucket string, objectName string) (objInfo SiaObjectInfo, e SiaServiceError) {
 	debugmsg("SiaCacheLayer.GetObjectInfo")
+
+	b.lockDB()
+	defer b.unlockDB()
+
 	// Query the database
 	var size int64
 	var queued int64
@@ -461,6 +558,69 @@ func (b *SiaCacheLayer) GetObjectInfo(bucket string, objectName string) (objInfo
 
 	// Shouldn't happen, but just in case
 	return objInfo, siaErrorUnknown
+}
+
+// SetBucketPolicies sets policy on bucket
+func (b *SiaCacheLayer) SetBucketPolicies(bucket string, policyInfo policy.BucketAccessPolicy) SiaServiceError {
+	debugmsg("SiaCacheLayer.SetBucketPolicies")
+	res, _ := json.Marshal(&policyInfo)
+    return b.updateBucketPolicy(bucket, string(res))
+}
+
+// GetBucketPolicies will get policy on bucket
+func (b *SiaCacheLayer) GetBucketPolicies(bucket string) (bal policy.BucketAccessPolicy, e SiaServiceError) {
+	debugmsg("SiaCacheLayer.GetBucketPolicies")
+
+	b.lockDB()
+	defer b.unlockDB()
+
+	// Query the database
+	var bktPolicy string
+	err := g_db.QueryRow("SELECT policy FROM buckets WHERE name=?", bucket).Scan(&bktPolicy)
+	switch {
+	case err == sql.ErrNoRows:
+	   return bal, siaErrorDatabaseSelectError		// Bucket does not exist
+	case err != nil:
+	   return bal, siaErrorDatabaseSelectError 		// An error occured
+	default:
+		res := policy.BucketAccessPolicy{}
+    	json.Unmarshal([]byte(bktPolicy), &res)
+    	fmt.Println("Returning success!")
+    	return res, siaSuccess
+	}
+
+	// Shouldn't happen, but just in case
+	return bal, siaErrorUnknown
+}
+
+// DeleteBucketPolicies deletes all policies on bucket
+func (b *SiaCacheLayer) DeleteBucketPolicies(bucket string) SiaServiceError {
+	debugmsg("SiaCacheLayer.DeleteBucketPolicies")
+	
+	return b.updateBucketPolicy(bucket, "")
+}
+
+func (b *SiaCacheLayer) updateBucketPolicy(bucket string, bktPolicy string) SiaServiceError {
+	debugmsg("SiaCacheLayer.updateBucketPolicy")
+
+	b.lockDB()
+	defer b.unlockDB()
+
+	stmt, err := g_db.Prepare("UPDATE buckets SET policy=? WHERE name=?")
+    if err != nil {
+    	debugmsg(err.Error())
+    	return siaErrorDatabaseUpdateError
+    }
+
+    defer stmt.Close()
+
+    _, err = stmt.Exec(bktPolicy, bucket)
+    if err != nil {
+    	debugmsg(err.Error())
+    	return siaErrorDatabaseUpdateError
+    }
+
+    return siaSuccess
 }
 
 // Runs periodically to manage the database and cache
@@ -576,10 +736,16 @@ func (b *SiaCacheLayer) checkSiaUploads() SiaServiceError {
 
 func (b *SiaCacheLayer) markObjectUploaded(bucket string, objectName string) SiaServiceError {
 	debugmsg("SiaCacheLayer.markObjectUploaded")
+
+	b.lockDB()
+	defer b.unlockDB()
+
 	stmt, err := g_db.Prepare("UPDATE objects SET uploaded=? WHERE bucket=? AND name=?")
     if err != nil {
     	return siaErrorDatabaseUpdateError
     }
+
+    defer stmt.Close()
 
     _, err = stmt.Exec(time.Now().Unix(), bucket, objectName)
     if err != nil {
@@ -591,10 +757,16 @@ func (b *SiaCacheLayer) markObjectUploaded(bucket string, objectName string) Sia
 
 func (b *SiaCacheLayer) markObjectDeleted(bucket string, objectName string) SiaServiceError {
 	debugmsg("SiaCacheLayer.markObjectDeleted")
+	
+	b.lockDB()
+	defer b.unlockDB()
+
 	stmt, err := g_db.Prepare("UPDATE objects SET deleted=1 WHERE bucket=? AND name=?")
     if err != nil {
     	return siaErrorDatabaseUpdateError
     }
+
+    defer stmt.Close()
 
     _, err = stmt.Exec(bucket, objectName)
     if err != nil {
@@ -606,10 +778,16 @@ func (b *SiaCacheLayer) markObjectDeleted(bucket string, objectName string) SiaS
 
 func (b *SiaCacheLayer) markObjectCached(bucket string, objectName string, status int) SiaServiceError {
 	debugmsg("SiaCacheLayer.markObjectCached")
+
+	b.lockDB()
+	defer b.unlockDB()
+
 	stmt, err := g_db.Prepare("UPDATE objects SET cached=? WHERE bucket=? AND name=?")
     if err != nil {
     	return siaErrorDatabaseUpdateError
     }
+
+    stmt.Close()
 
     _, err = stmt.Exec(status, bucket, objectName)
     if err != nil {
@@ -621,6 +799,10 @@ func (b *SiaCacheLayer) markObjectCached(bucket string, objectName string, statu
 
 func (b *SiaCacheLayer) initDatabase() SiaServiceError {
 	debugmsg("SiaCacheLayer.initDatabase")
+
+	b.lockDB()
+	defer b.unlockDB()
+
 	// Open the database
 	var e error
 	g_db, e = sql.Open("sqlite3", b.DbFile)
@@ -629,21 +811,27 @@ func (b *SiaCacheLayer) initDatabase() SiaServiceError {
 	}
 
 	// Make sure buckets table exists
-	stmt, err := g_db.Prepare("CREATE TABLE IF NOT EXISTS buckets(name TEXT PRIMARY KEY, created INTEGER)")
+	stmt, err := g_db.Prepare("CREATE TABLE IF NOT EXISTS buckets(name TEXT PRIMARY KEY, created INTEGER, policy TEXT)")
     if err != nil {
     	return siaErrorDatabaseCreateError
     }
+
+    defer stmt.Close()
+
 	_, err = stmt.Exec()
     if err != nil {
     	return siaErrorDatabaseCreateError
     }
 
 	// Make sure objects table exists
-    stmt, err = g_db.Prepare("CREATE TABLE IF NOT EXISTS objects(bucket TEXT, name TEXT, size INTEGER, queued INTEGER, uploaded INTEGER, purge_after INTEGER, cached_fetches INTEGER, sia_fetches INTEGER, last_fetch INTEGER, src_file TEXT, deleted INTEGER, cached INTEGER, PRIMARY KEY(bucket,name) )")
-    if err != nil {
+    stmt2, e := g_db.Prepare("CREATE TABLE IF NOT EXISTS objects(bucket TEXT, name TEXT, size INTEGER, queued INTEGER, uploaded INTEGER, purge_after INTEGER, cached_fetches INTEGER, sia_fetches INTEGER, last_fetch INTEGER, src_file TEXT, deleted INTEGER, cached INTEGER, PRIMARY KEY(bucket,name) )")
+    if e != nil {
     	return siaErrorDatabaseCreateError
     }
-	_, err = stmt.Exec()
+
+    defer stmt2.Close()
+
+	_, err = stmt2.Exec()
     if err != nil {
     	return siaErrorDatabaseCreateError
     }
@@ -653,6 +841,10 @@ func (b *SiaCacheLayer) initDatabase() SiaServiceError {
 
 func (b *SiaCacheLayer) bucketExists(bucket string) (exists bool, e SiaServiceError) {
 	debugmsg("SiaCacheLayer.bucketExists")
+
+	b.lockDB()
+	defer b.unlockDB()
+
 	// Query the database
 	var name string
 	err := g_db.QueryRow("SELECT name FROM buckets WHERE name=?", bucket).Scan(&name)
@@ -673,6 +865,10 @@ func (b *SiaCacheLayer) bucketExists(bucket string) (exists bool, e SiaServiceEr
 
 func (b *SiaCacheLayer) objectExists(bucket string, objectName string) (exists bool, e SiaServiceError) {
 	debugmsg("SiaCacheLayer.objectExists")
+
+	b.lockDB()
+	defer b.unlockDB()
+
 	// Query the database
 	var bkt string
 	var name string
@@ -696,10 +892,16 @@ func (b *SiaCacheLayer) objectExists(bucket string, objectName string) (exists b
 // Updates last_fetch time and sets the cached_fetches quantity
 func (b *SiaCacheLayer) updateCachedFetches(bucket string, objectName string, fetches int64) SiaServiceError {
 	debugmsg("SiaCacheLayer.updateCachedFetches")
+
+	b.lockDB()
+	defer b.unlockDB()
+
 	stmt, err := g_db.Prepare("UPDATE objects SET last_fetch=?, cached_fetches=? WHERE bucket=? AND name=?")
     if err != nil {
     	return siaErrorDatabaseUpdateError
     }
+
+    defer stmt.Close()
 
     _, err = stmt.Exec(time.Now().Unix(), fetches, bucket, objectName)
     if err != nil {
@@ -712,10 +914,16 @@ func (b *SiaCacheLayer) updateCachedFetches(bucket string, objectName string, fe
 // Updates the cached status of the object
 func (b *SiaCacheLayer) updateCachedStatus(bucket string, objectName string, status int64) SiaServiceError {
 	debugmsg("SiaCacheLayer.updateCachedFetches")
+
+	b.lockDB()
+	defer b.unlockDB()
+
 	stmt, err := g_db.Prepare("UPDATE objects SET cached=? WHERE bucket=? AND name=?")
     if err != nil {
     	return siaErrorDatabaseUpdateError
     }
+
+    defer stmt.Close()
 
     _, err = stmt.Exec(status, bucket, objectName)
     if err != nil {
@@ -728,10 +936,15 @@ func (b *SiaCacheLayer) updateCachedStatus(bucket string, objectName string, sta
 func (b *SiaCacheLayer) updateSiaFetches(bucket string, objectName string, fetches int64) SiaServiceError {
 	debugmsg("SiaCacheLayer.updateSiaFetches")
 
+	b.lockDB()
+	defer b.unlockDB()
+
 	stmt, err := g_db.Prepare("UPDATE objects SET last_fetch=?, sia_fetches=? WHERE bucket=? AND name=?")
     if err != nil {
     	return siaErrorDatabaseUpdateError
     }
+
+    defer stmt.Close()
 
     _, err = stmt.Exec(time.Now().Unix(), fetches, bucket, objectName)
     if err != nil {
@@ -743,6 +956,10 @@ func (b *SiaCacheLayer) updateSiaFetches(bucket string, objectName string, fetch
 
 func (b *SiaCacheLayer) listUploadingObjects() (objects []SiaObjectInfo, e SiaServiceError) {
 	debugmsg("SiaCacheLayer.listUploadingObjects")
+
+	b.lockDB()
+	defer b.unlockDB()
+
 	rows, err := g_db.Query("SELECT bucket,name,size,queued,purge_after,cached_fetches,sia_fetches,last_fetch,deleted,cached FROM objects WHERE uploaded=0")
     if err != nil {
     	return objects, siaErrorDatabaseSelectError
@@ -822,10 +1039,16 @@ func (b *SiaCacheLayer) isSiaFileAvailable(siaObj string) (bool, SiaServiceError
 
 func (b *SiaCacheLayer) insertObjectToDb(bucket string, objectName string, size int64, queued int64, uploaded int64, purge_after int64, src_file string, cached int64) SiaServiceError {
 	debugmsg("SiaCacheLayer.insertObjectToDb")
+
+	b.lockDB()
+	defer b.unlockDB()
+
 	stmt, err := g_db.Prepare("INSERT INTO objects(bucket, name, size, queued, uploaded, purge_after, cached_fetches, sia_fetches, last_fetch, src_file, deleted, cached) values(?,?,?,?,?,?,?,?,?,?,?,?)")
     if err != nil {
     	return siaErrorDatabaseInsertError
     }
+
+    defer stmt.Close()
 
     _, err = stmt.Exec(bucket,
 						objectName,
@@ -848,10 +1071,17 @@ func (b *SiaCacheLayer) insertObjectToDb(bucket string, objectName string, size 
 
 func (b *SiaCacheLayer) deleteObjectFromDb(bucket string, objectName string) SiaServiceError {
 	debugmsg("SiaCacheLayer.deleteObjectFromDb")
+
+	b.lockDB()
+	defer b.unlockDB()
+
 	stmt, err := g_db.Prepare("DELETE FROM objects WHERE bucket=? AND name=?")
     if err != nil {
     	return siaErrorDatabaseDeleteError
     }
+
+    defer stmt.Close()
+
 	_, err = stmt.Exec(bucket, objectName)
     if err != nil {
     	return siaErrorDatabaseDeleteError
@@ -888,10 +1118,15 @@ func (b *SiaCacheLayer) getSiaObjectName(bucket string, objectName string) strin
 
 func (b *SiaCacheLayer) forceDeleteOldestCacheFile() SiaServiceError {
 	debugmsg("SiaCacheLayer.forceDeleteOldestCacheFile")
+
+	b.lockDB()
+
 	var bucket string
 	var objectName string
 	var src_file string
 	err := g_db.QueryRow("SELECT bucket,name,src_file FROM objects WHERE uploaded>0 AND cached=1 ORDER BY last_fetch DESC LIMIT 1").Scan(&bucket,&objectName,&src_file)
+	b.unlockDB()
+	
 	switch {
 	case err == sql.ErrNoRows:
 		return siaErrorUnableToClearAnyCachedFiles;
@@ -911,6 +1146,7 @@ func (b *SiaCacheLayer) forceDeleteOldestCacheFile() SiaServiceError {
 		if err != nil {
 			return siaErrorUnableToClearAnyCachedFiles
 		}
+
 		err = b.markObjectCached(bucket, objectName, 0)
 		if err != nil {
 			return siaErrorUnableToClearAnyCachedFiles
