@@ -18,7 +18,7 @@ var SIA_DEBUG = 0
 
 type siaObjects struct {
 	siacl *SiaCacheLayer
-	fs ObjectLayer
+	fs *fsObjects
 }
 
 // Convert Sia errors to minio object layer errors.
@@ -79,9 +79,14 @@ func newSiaGateway(host string) (GatewayLayer, error) {
 		panic(sia_err)
 	}
 
+	fso, ok := f.(*fsObjects)
+	if !ok {
+		return nil, errors.New("Invalid type")
+	}
+
 	return &siaObjects{
 		siacl:	s,
-		fs:     f,
+		fs:     fso,
 	}, nil
 }
 
@@ -188,12 +193,17 @@ func (s *siaObjects) ListObjects(bucket string, prefix string, marker string, de
 	loi.NextMarker = ""
 
 	for _, sobj := range sobjs {
+		etag, err := s.fs.getObjectETag(bucket, sobj.Name)
+		if err != nil {
+			return loi, err
+		}
+
 		loi.Objects = append(loi.Objects, ObjectInfo{
 			Bucket:          bucket,
 			Name:            sobj.Name,
 			ModTime:         sobj.Queued,
 			Size:            int64(sobj.Size),
-			//ETag:            azureToS3ETag(object.Properties.Etag),
+			ETag:            etag,
 			//ContentType:     object.Properties.ContentType,
 			//ContentEncoding: object.Properties.ContentEncoding,
 		})
@@ -225,23 +235,70 @@ func (s *siaObjects) GetObject(bucket string, key string, startOffset int64, len
 func (s *siaObjects) GetObjectInfo(bucket string, object string) (objInfo ObjectInfo, err error) {
 	debugmsg("Gateway.GetObjectInfo")
 
-	// Can't use object layer. File may not be on local filesystem.
+	// Can't delegate to object layer. File may not be on local filesystem.
 	// Pull the info from cache database.
+	// Use size from cache database instead of checking filesystem.
 
 	sobjInfo, sia_err := s.siacl.GetObjectInfo(bucket, object)
 	if sia_err != siaSuccess {
 		return objInfo, siaToObjectError(sia_err)
 	}
+
+	fsMeta := fsMetaV1{}
+	fsMetaPath := pathJoin(s.fs.fsPath, minioMetaBucket, bucketMetaPrefix, bucket, object, fsMetaJSONFile)
+
+	// Read `fs.json` to perhaps contend with
+	// parallel Put() operations.
+	rlk, err := s.fs.rwPool.Open(fsMetaPath)
+	if err == nil {
+		// Read from fs metadata only if it exists.
+		defer s.fs.rwPool.Close(fsMetaPath)
+		if _, rerr := fsMeta.ReadFrom(rlk.LockedFile); rerr != nil {
+			// `fs.json` can be empty due to previously failed
+			// PutObject() transaction, if we arrive at such
+			// a situation we just ignore and continue.
+			if errorCause(rerr) != io.EOF {
+				return objInfo, toObjectErr(rerr, bucket, object)
+			}
+		}
+	}
+
+	// Ignore if `fs.json` is not available, this is true for pre-existing data.
+	if err != nil && err != errFileNotFound {
+		return objInfo, toObjectErr(traceError(err), bucket, object)
+	}
+
+	// SiaFileInfo object is passed in, which implements os.FileInfo interface.
+	// This allows the following function to read file size from it without checking file.
+	siaFileInfo := SiaFileInfo {
+		FileName: sobjInfo.Name,
+		FileSize: sobjInfo.Size,
+		FileModTime: sobjInfo.Queued,
+		FileIsDir: false,
+	}
+	return fsMeta.ToObjectInfo(bucket, object, siaFileInfo), nil
+
+
+
+
+
+/*
+
+	etag, err := s.fs.getObjectETag(bucket, sobj.Name)
+	if err != nil {
+		return err
+	}
+
 	objInfo = ObjectInfo{
 		Bucket:      bucket,
 		//UserDefined: meta,
-		//ETag:        azureToS3ETag(prop.Etag),
+		ETag:        etag,
 		ModTime:     sobjInfo.Queued,
 		Name:        object,
 		Size:        int64(sobjInfo.Size),
 	}
 
-	return objInfo, nil
+	return objInfo, nil*/
 }
 
 // PutObject creates a new object with the incoming data,
@@ -342,20 +399,20 @@ func (s *siaObjects) CompleteMultipartUpload(bucket string, object string, uploa
 // SetBucketPolicies sets policy on bucket
 func (s *siaObjects) SetBucketPolicies(bucket string, policyInfo policy.BucketAccessPolicy) error {
 	debugmsg("Gateway.SetBucketPolicies")
-	//return s.fs.SetBucketPolicies(bucket, policyInfo)
-	return nil
+	
+	return siaToObjectError(s.siacl.SetBucketPolicies(bucket, policyInfo))
 }
 
 // GetBucketPolicies will get policy on bucket
-func (s *siaObjects) GetBucketPolicies(bucket string) (policy.BucketAccessPolicy, error) {
+func (s *siaObjects) GetBucketPolicies(bucket string) (bal policy.BucketAccessPolicy, e error) {
 	debugmsg("Gateway.GetBucketPolicies")
-	//return s.fs.GetBucketPolicies(bucket)
-	return policy.BucketAccessPolicy{}, nil
+
+	bp, sia_err := s.siacl.GetBucketPolicies(bucket)
+	return bp, siaToObjectError(sia_err)
 }
 
 // DeleteBucketPolicies deletes all policies on bucket
 func (s *siaObjects) DeleteBucketPolicies(bucket string) error {
 	debugmsg("Gateway.DeleteBucketPolicies")
-	//return s.fs.DeleteBucketPolciies(bucket)
-	return nil
+	return siaToObjectError(s.siacl.DeleteBucketPolicies(bucket))
 }

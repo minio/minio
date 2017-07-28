@@ -697,6 +697,8 @@ func getBucketAccessPolicy(objAPI ObjectLayer, bucketName string) (policy.Bucket
 		policyInfo, err = layer.GetBucketPolicies(bucketName)
 	case *gcsGateway:
 		policyInfo, err = layer.GetBucketPolicies(bucketName)
+	case *siaObjects:
+		policyInfo, err = layer.GetBucketPolicies(bucketName)
 	default:
 		policyInfo, err = readBucketAccessPolicy(objAPI, bucketName)
 	}
