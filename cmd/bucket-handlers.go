@@ -33,7 +33,7 @@ import (
 
 // http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
 // Enforces bucket policies for a bucket for a given tatusaction.
-func enforceBucketPolicy(bucket, action, resource, referer string, queryParams url.Values) (s3Error APIErrorCode) {
+func enforceBucketPolicy(bucket, action, resource, referer, sourceIP string, queryParams url.Values) (s3Error APIErrorCode) {
 	// Verify if bucket actually exists
 	if err := checkBucketExist(bucket, newObjectLayerFn()); err != nil {
 		err = errorCause(err)
@@ -73,6 +73,8 @@ func enforceBucketPolicy(bucket, action, resource, referer string, queryParams u
 	if referer != "" {
 		conditionKeyMap["referer"] = set.CreateStringSet(referer)
 	}
+	// Add request source Ip to conditionKeyMap.
+	conditionKeyMap["ip"] = set.CreateStringSet(sourceIP)
 
 	// Validate action, resource and conditions with current policy statements.
 	if !bucketPolicyEvalStatements(action, arn, conditionKeyMap, policy.Statements) {
