@@ -675,9 +675,6 @@ export default class Browse extends React.Component {
               </div>
               <div className="preview__actions">
                 <button className="btn btn--lg btn--primary">
-                  Preview
-                </button>
-                <button className="btn btn--lg btn--primary">
                   Download
                 </button>
               </div>
