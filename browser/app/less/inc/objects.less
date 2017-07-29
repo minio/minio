@@ -2,7 +2,6 @@
 .objects__container {
     height: ~"calc(100vh - 175px)";
     overflow: auto;
-    padding-top: 10px;
 }
 
 // Rows
@@ -60,8 +59,10 @@ header.objects__row {
         .objects__item__sort {
             margin-top: 2px;
             color: @text-muted-color;
-            float: right;
+            position: absolute;
             font-size: @font-size-base;
+            right: 0;
+            bottom: 11px;
             .opacity(0);
         }
     }
@@ -277,4 +278,49 @@ div.objects__row {
 
 [data-object-type=text] {
     .object-type(#00BCD4, 'text', 'text@2x', 12px, 12px);
+}
+
+// Drag and drop
+.objects__drop {
+    position: relative;
+    height: 100%;
+
+    &:before,
+    &:after {
+        position: absolute;
+        left: 0;
+        top: 0;
+        display: none;
+    }
+
+    &:before {
+        width: 100%;
+        height: 100%;
+        background-color: fade(@light-blue, 10%);
+        z-index: 1;
+        content: '';
+        border: 1px solid fade(@light-blue, 30%);
+    }
+
+    &:after {
+        content: 'Drop your files to upload';
+        width: 250px;
+        height: 45px;
+        background-color: @light-blue;
+        color: @white;
+        text-align: center;
+        line-height: 45px;
+        border-radius: 2px;
+        bottom: 0;
+        right: 0;
+        margin: auto;
+        .animated(bounceIn, 500ms);
+    }
+}
+
+.objects__drop--active {
+    &:before,
+    &:after {
+        display: block;
+    }
 }
