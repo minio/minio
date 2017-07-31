@@ -915,27 +915,23 @@ func (s *posix) StatFile(volume, path string) (file FileInfo, err error) {
 	}, nil
 }
 
-// deleteFile - delete file path if its empty.
+// deleteFile deletes a file path if its empty. If it's successfully deleted,
+// it will recursively move up the tree, deleting empty parent directories
+// until it finds one with files in it. Returns nil for a non-empty directory.
 func deleteFile(basePath, deletePath string) error {
 	if basePath == deletePath {
 		return nil
 	}
-	// Verify if the path exists.
-	pathSt, err := osStat(preparePath(deletePath))
-	if err != nil {
-		if os.IsNotExist(err) {
-			return errFileNotFound
-		} else if os.IsPermission(err) {
-			return errFileAccessDenied
-		}
-		return err
-	}
-	if pathSt.IsDir() && !isDirEmpty(deletePath) {
-		// Verify if directory is empty.
-		return nil
-	}
+
 	// Attempt to remove path.
 	if err := os.Remove(preparePath(deletePath)); err != nil {
+		// Ignore errors if the directory is not empty. The server relies on
+		// this functionality, and sometimes uses recursion that should not
+		// error on parent directories.
+		if isSysErrNotEmpty(err) {
+			return nil
+		}
+
 		if os.IsNotExist(err) {
 			return errFileNotFound
 		} else if os.IsPermission(err) {
@@ -943,11 +939,9 @@ func deleteFile(basePath, deletePath string) error {
 		}
 		return err
 	}
+
 	// Recursively go down the next path and delete again.
-	if err := deleteFile(basePath, slashpath.Dir(deletePath)); err != nil {
-		return err
-	}
-	return nil
+	return deleteFile(basePath, slashpath.Dir(deletePath))
 }
 
 // DeleteFile - delete a file at path.
