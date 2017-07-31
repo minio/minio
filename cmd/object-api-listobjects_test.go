@@ -412,7 +412,7 @@ func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
 		prefix     string
 		marker     string
 		delimeter  string
-		maxKeys    int
+		maxKeys    int32
 		// Expected output of ListObjects.
 		result ListObjectsInfo
 		err    error
@@ -446,13 +446,13 @@ func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
 		{"empty-bucket", "", "", "", -1, ListObjectsInfo{}, nil, true},
 		{"empty-bucket", "", "", "", 1, ListObjectsInfo{}, nil, true},
 		// Setting maxKeys to a very large value (17).
-		{"empty-bucket", "", "", "", 1111000000000000, ListObjectsInfo{}, nil, true},
+		{"empty-bucket", "", "", "", 111100000, ListObjectsInfo{}, nil, true},
 		// Testing for all 7 objects in the bucket (18).
 		{"test-bucket-list-object", "", "", "", 9, resultCases[0], nil, true},
 		//Testing for negative value of maxKey, this should set maxKeys to listObjectsLimit (19).
 		{"test-bucket-list-object", "", "", "", -1, resultCases[0], nil, true},
 		// Testing for very large value of maxKey, this should set maxKeys to listObjectsLimit (20).
-		{"test-bucket-list-object", "", "", "", 1234567891011, resultCases[0], nil, true},
+		{"test-bucket-list-object", "", "", "", 1234567890, resultCases[0], nil, true},
 		// Testing for trancated value (21-24).
 		{"test-bucket-list-object", "", "", "", 5, resultCases[1], nil, true},
 		{"test-bucket-list-object", "", "", "", 4, resultCases[2], nil, true},
@@ -520,7 +520,7 @@ func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	}
 
 	for i, testCase := range testCases {
-		result, err := obj.ListObjects(testCase.bucketName, testCase.prefix, testCase.marker, testCase.delimeter, testCase.maxKeys)
+		result, err := obj.ListObjects(testCase.bucketName, testCase.prefix, testCase.marker, testCase.delimeter, int(testCase.maxKeys))
 		if err != nil && testCase.shouldPass {
 			t.Errorf("Test %d: %s:  Expected to pass, but failed with: <ERROR> %s", i+1, instanceType, err.Error())
 		}
