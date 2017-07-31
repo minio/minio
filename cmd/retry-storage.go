@@ -180,16 +180,13 @@ func (f retryStorage) ReadFile(volume, path string, offset int64, buffer []byte)
 
 // ReadFileWithVerify - a retryable implementation of reading at
 // offset from a file with verification.
-func (f retryStorage) ReadFileWithVerify(volume, path string, offset int64, buffer []byte,
-	algo HashAlgo, expectedHash string) (m int64, err error) {
+func (f retryStorage) ReadFileWithVerify(volume, path string, offset int64, buffer []byte, verifier *BitrotVerifier) (m int64, err error) {
 
-	m, err = f.remoteStorage.ReadFileWithVerify(volume, path, offset, buffer,
-		algo, expectedHash)
+	m, err = f.remoteStorage.ReadFileWithVerify(volume, path, offset, buffer, verifier)
 	if err == errDiskNotFound {
 		err = f.reInit()
 		if err == nil {
-			return f.remoteStorage.ReadFileWithVerify(volume, path,
-				offset, buffer, algo, expectedHash)
+			return f.remoteStorage.ReadFileWithVerify(volume, path, offset, buffer, verifier)
 		}
 	}
 	return m, err

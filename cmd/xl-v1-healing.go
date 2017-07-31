@@ -430,30 +430,33 @@ func healObject(storageDisks []StorageAPI, bucket string, object string, quorum 
 
 	// Checksum of the part files. checkSumInfos[index] will contain checksums
 	// of all the part files in the outDatedDisks[index]
-	checkSumInfos := make([][]checkSumInfo, len(outDatedDisks))
+	checkSumInfos := make([][]ChecksumInfo, len(outDatedDisks))
 
 	// Heal each part. erasureHealFile() will write the healed part to
 	// .minio/tmp/uuid/ which needs to be renamed later to the final location.
+	storage, err := NewXLStorage(latestDisks, latestMeta.Erasure.DataBlocks, latestMeta.Erasure.ParityBlocks, quorum, quorum+1)
+	if err != nil {
+		return 0, 0, toObjectErr(err, bucket, object)
+	}
+	checksums := make([][]byte, len(latestDisks))
 	for partIndex := 0; partIndex < len(latestMeta.Parts); partIndex++ {
 		partName := latestMeta.Parts[partIndex].Name
 		partSize := latestMeta.Parts[partIndex].Size
 		erasure := latestMeta.Erasure
-		sumInfo := latestMeta.Erasure.GetCheckSumInfo(partName)
+		for i, disk := range storage.disks {
+			if disk != OfflineDisk {
+				info := partsMetadata[i].Erasure.GetCheckSumInfo(partName)
+				checksums[i] = info.Hash
+			}
+		}
 		// Heal the part file.
-		checkSums, hErr := erasureHealFile(latestDisks, outDatedDisks,
-			bucket, pathJoin(object, partName),
-			minioMetaTmpBucket, pathJoin(tmpID, partName),
-			partSize, erasure.BlockSize, erasure.DataBlocks, erasure.ParityBlocks, sumInfo.Algorithm)
+		file, hErr := storage.HealFile(outDatedDisks, bucket, pathJoin(object, partName), erasure.BlockSize, minioMetaTmpBucket, pathJoin(tmpID, partName), partSize, latestMeta.Erasure.Bitrot.Algorithm, latestMeta.Erasure.Bitrot.Key, checksums)
 		if hErr != nil {
 			return 0, 0, toObjectErr(hErr, bucket, object)
 		}
-		for index, sum := range checkSums {
-			if outDatedDisks[index] != nil {
-				checkSumInfos[index] = append(checkSumInfos[index], checkSumInfo{
-					Name:      partName,
-					Algorithm: sumInfo.Algorithm,
-					Hash:      sum,
-				})
+		for i := range outDatedDisks {
+			if outDatedDisks[i] != OfflineDisk {
+				checkSumInfos[i] = append(checkSumInfos[i], ChecksumInfo{partName, file.Checksums[i]})
 			}
 		}
 	}

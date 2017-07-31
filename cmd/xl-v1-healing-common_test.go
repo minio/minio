@@ -86,12 +86,13 @@ func TestCommonTime(t *testing.T) {
 
 // partsMetaFromModTimes - returns slice of modTimes given metadata of
 // an object part.
-func partsMetaFromModTimes(modTimes []time.Time, checksums []checkSumInfo) []xlMetaV1 {
+func partsMetaFromModTimes(modTimes []time.Time, bitrot BitrotInfo, checksums []ChecksumInfo) []xlMetaV1 {
 	var partsMetadata []xlMetaV1
 	for _, modTime := range modTimes {
 		partsMetadata = append(partsMetadata, xlMetaV1{
 			Erasure: erasureInfo{
 				Checksum: checksums,
+				Bitrot:   bitrot,
 			},
 			Stat: statInfo{
 				ModTime: modTime,
@@ -269,7 +270,7 @@ func TestListOnlineDisks(t *testing.T) {
 
 		}
 
-		partsMetadata := partsMetaFromModTimes(test.modTimes, xlMeta.Erasure.Checksum)
+		partsMetadata := partsMetaFromModTimes(test.modTimes, xlMeta.Erasure.Bitrot, xlMeta.Erasure.Checksum)
 
 		onlineDisks, modTime := listOnlineDisks(xlDisks, partsMetadata, test.errs)
 		availableDisks, newErrs, _ := disksWithAllParts(onlineDisks, partsMetadata, test.errs, bucket, object)
@@ -356,8 +357,7 @@ func TestDisksWithAllParts(t *testing.T) {
 		t.Fatalf("Failed to make a bucket %v", err)
 	}
 
-	_, err = obj.PutObject(bucket, object, int64(len(data)),
-		bytes.NewReader(data), nil, "")
+	_, err = obj.PutObject(bucket, object, int64(len(data)), bytes.NewReader(data), nil, "")
 	if err != nil {
 		t.Fatalf("Failed to putObject %v", err)
 	}
@@ -367,8 +367,6 @@ func TestDisksWithAllParts(t *testing.T) {
 		t.Fatalf("Failed to read xl meta data %v", err)
 	}
 
-	// Replace the default blake2b erasure algorithm to HashSha256 and test that
-	// disks are excluded
 	diskFailures := make(map[int]string)
 	// key = disk index, value = part name with hash mismatch
 	diskFailures[0] = "part.3"
@@ -378,14 +376,13 @@ func TestDisksWithAllParts(t *testing.T) {
 	for diskIndex, partName := range diskFailures {
 		for index, info := range partsMetadata[diskIndex].Erasure.Checksum {
 			if info.Name == partName {
-				partsMetadata[diskIndex].Erasure.Checksum[index].Algorithm = HashSha256
+				partsMetadata[diskIndex].Erasure.Checksum[index].Hash[0]++
 			}
 		}
 	}
 
 	errs = make([]error, len(xlDisks))
-	filteredDisks, errs, err :=
-		disksWithAllParts(xlDisks, partsMetadata, errs, bucket, object)
+	filteredDisks, errs, err := disksWithAllParts(xlDisks, partsMetadata, errs, bucket, object)
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err)
 	}
@@ -395,7 +392,6 @@ func TestDisksWithAllParts(t *testing.T) {
 	}
 
 	for diskIndex, disk := range filteredDisks {
-
 		if _, ok := diskFailures[diskIndex]; ok {
 			if disk != nil {
 				t.Errorf("Disk not filtered as expected, disk: %d", diskIndex)
@@ -421,8 +417,7 @@ func TestDisksWithAllParts(t *testing.T) {
 		t.Fatalf("Failed to read xl meta data %v", err)
 	}
 
-	filteredDisks, errs, err =
-		disksWithAllParts(xlDisks, partsMetadata, errs, bucket, object)
+	filteredDisks, errs, err = disksWithAllParts(xlDisks, partsMetadata, errs, bucket, object)
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err)
 	}

@@ -151,3 +151,8 @@ func isErr(err error, errs ...error) bool {
 	}
 	return false
 }
+
+// Errorf behaves like fmt.Errorf but also traces the returned error.
+func Errorf(format string, args ...interface{}) error {
+	return traceError(fmt.Errorf(format, args...))
+}

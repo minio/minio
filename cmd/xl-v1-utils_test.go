@@ -17,13 +17,17 @@
 package cmd
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"reflect"
 	"strconv"
 	"testing"
 
+	"bytes"
+
 	humanize "github.com/dustin/go-humanize"
+	"github.com/minio/minio/pkg/bitrot"
 )
 
 // Tests caclculating disk count.
@@ -158,13 +162,12 @@ func newTestXLMetaV1() xlMetaV1 {
 	return xlMeta
 }
 
-func (m *xlMetaV1) AddTestObjectCheckSum(checkSumNum int, name string, hash string, algo HashAlgo) {
-	checkSum := checkSumInfo{
-		Name:      name,
-		Algorithm: algo,
-		Hash:      hash,
+func (m *xlMetaV1) AddTestObjectCheckSum(checkSumNum int, name string, hash string) {
+	checksum, err := hex.DecodeString(hash)
+	if err != nil {
+		panic(err)
 	}
-	m.Erasure.Checksum[checkSumNum] = checkSum
+	m.Erasure.Checksum[checkSumNum] = ChecksumInfo{name, checksum}
 }
 
 // AddTestObjectPart - add a new object part in order.
@@ -194,14 +197,15 @@ func getXLMetaBytes(totalParts int) []byte {
 func getSampleXLMeta(totalParts int) xlMetaV1 {
 	xlMeta := newTestXLMetaV1()
 	// Number of checksum info == total parts.
-	xlMeta.Erasure.Checksum = make([]checkSumInfo, totalParts)
+	xlMeta.Erasure.Checksum = make([]ChecksumInfo, totalParts)
 	// total number of parts.
 	xlMeta.Parts = make([]objectPartInfo, totalParts)
+	xlMeta.Erasure.Bitrot = BitrotInfo{Algorithm: bitrot.BLAKE2b, Key: nil}
 	for i := 0; i < totalParts; i++ {
 		partName := "part." + strconv.Itoa(i+1)
 		// hard coding hash and algo value for the checksum, Since we are benchmarking the parsing of xl.json the magnitude doesn't affect the test,
 		// The magnitude doesn't make a difference, only the size does.
-		xlMeta.AddTestObjectCheckSum(i, partName, "a23f5eff248c4372badd9f3b2455a285cd4ca86c3d9a570b091d3fc5cd7ca6d9484bbea3f8c5d8d4f84daae96874419eda578fd736455334afbac2c924b3915a", "blake2b")
+		xlMeta.AddTestObjectCheckSum(i, partName, "a23f5eff248c4372badd9f3b2455a285cd4ca86c3d9a570b091d3fc5cd7ca6d9484bbea3f8c5d8d4f84daae96874419eda578fd736455334afbac2c924b3915a")
 		xlMeta.AddTestObjectPart(i, partName, "d3fdd79cc3efd5fe5c068d7be397934b", 67108864)
 	}
 	return xlMeta
@@ -247,6 +251,12 @@ func compareXLMetaV1(t *testing.T, unMarshalXLMeta, gjsonXLMeta xlMetaV1) {
 			}
 		}
 	}
+	if unMarshalXLMeta.Erasure.Bitrot.Algorithm != gjsonXLMeta.Erasure.Bitrot.Algorithm {
+		t.Errorf("Expected the erasure bitrot algorithm to be %v, but got %v.", unMarshalXLMeta.Erasure.Bitrot.Algorithm, gjsonXLMeta.Erasure.Bitrot.Algorithm)
+	}
+	if !bytes.Equal(unMarshalXLMeta.Erasure.Bitrot.Key, gjsonXLMeta.Erasure.Bitrot.Key) {
+		t.Errorf("Expected the erasure bitrot key to be %v, but got %v.", unMarshalXLMeta.Erasure.Bitrot.Key, gjsonXLMeta.Erasure.Bitrot.Key)
+	}
 
 	if len(unMarshalXLMeta.Erasure.Checksum) != len(gjsonXLMeta.Erasure.Checksum) {
 		t.Errorf("Expected the size of Erasure Checksum to be %d, but got %d.", len(unMarshalXLMeta.Erasure.Checksum), len(gjsonXLMeta.Erasure.Checksum))
@@ -255,10 +265,7 @@ func compareXLMetaV1(t *testing.T, unMarshalXLMeta, gjsonXLMeta xlMetaV1) {
 			if unMarshalXLMeta.Erasure.Checksum[i].Name != gjsonXLMeta.Erasure.Checksum[i].Name {
 				t.Errorf("Expected the Erasure Checksum Name to be \"%s\", got \"%s\".", unMarshalXLMeta.Erasure.Checksum[i].Name, gjsonXLMeta.Erasure.Checksum[i].Name)
 			}
-			if unMarshalXLMeta.Erasure.Checksum[i].Algorithm != gjsonXLMeta.Erasure.Checksum[i].Algorithm {
-				t.Errorf("Expected the Erasure Checksum Algorithm to be \"%s\", got \"%s.\"", unMarshalXLMeta.Erasure.Checksum[i].Algorithm, gjsonXLMeta.Erasure.Checksum[i].Algorithm)
-			}
-			if unMarshalXLMeta.Erasure.Checksum[i] != gjsonXLMeta.Erasure.Checksum[i] {
+			if !bytes.Equal(unMarshalXLMeta.Erasure.Checksum[i].Hash, gjsonXLMeta.Erasure.Checksum[i].Hash) {
 				t.Errorf("Expected the Erasure Checksum Hash to be \"%s\", got \"%s\".", unMarshalXLMeta.Erasure.Checksum[i].Hash, gjsonXLMeta.Erasure.Checksum[i].Hash)
 			}
 		}
@@ -304,12 +311,12 @@ func TestGetXLMetaV1GJson1(t *testing.T) {
 
 	var unMarshalXLMeta xlMetaV1
 	if err := json.Unmarshal(xlMetaJSON, &unMarshalXLMeta); err != nil {
-		t.Errorf("Unmarshalling failed")
+		t.Errorf("Unmarshalling failed: %v", err)
 	}
 
 	gjsonXLMeta, err := xlMetaV1UnmarshalJSON(xlMetaJSON)
 	if err != nil {
-		t.Errorf("gjson parsing of XLMeta failed")
+		t.Errorf("gjson parsing of XLMeta failed: %v", err)
 	}
 	compareXLMetaV1(t, unMarshalXLMeta, gjsonXLMeta)
 }
@@ -322,11 +329,11 @@ func TestGetXLMetaV1GJson10(t *testing.T) {
 
 	var unMarshalXLMeta xlMetaV1
 	if err := json.Unmarshal(xlMetaJSON, &unMarshalXLMeta); err != nil {
-		t.Errorf("Unmarshalling failed")
+		t.Errorf("Unmarshalling failed: %v", err)
 	}
 	gjsonXLMeta, err := xlMetaV1UnmarshalJSON(xlMetaJSON)
 	if err != nil {
-		t.Errorf("gjson parsing of XLMeta failed")
+		t.Errorf("gjson parsing of XLMeta failed: %v", err)
 	}
 	compareXLMetaV1(t, unMarshalXLMeta, gjsonXLMeta)
 }

@@ -18,7 +18,6 @@ package cmd
 
 import (
 	"bytes"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -27,6 +26,7 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/minio/minio/pkg/bitrot"
 	"golang.org/x/crypto/blake2b"
 )
 
@@ -391,13 +391,17 @@ func (s *TestRPCStorageSuite) testRPCStorageFileOps(t *testing.T) {
 			t.Errorf("Expected %s, got %s", string(buf[4:9]), string(buf1))
 		}
 
-		blakeHash := func(s string) string {
-			k := blake2b.Sum512([]byte(s))
-			return hex.EncodeToString(k[:])
+		blakeHash := func(b []byte) []byte {
+			k := blake2b.Sum512(b)
+			return k[:]
 		}
+		verifier, err := NewBitrotVerifier(bitrot.BLAKE2b, nil, blakeHash(buf))
+		if err != nil {
+			t.Fatalf("failed to create bitrot verifier: %v", err)
+		}
+
 		buf2 := make([]byte, 2)
-		n, err = storageDisk.ReadFileWithVerify("myvol", "file1", 1,
-			buf2, HashBlake2b, blakeHash(string(buf)))
+		n, err = storageDisk.ReadFileWithVerify("myvol", "file1", 1, buf2, verifier)
 		if err != nil {
 			t.Error("Error in ReadFileWithVerify", err)
 		}

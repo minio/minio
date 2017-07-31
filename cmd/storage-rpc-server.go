@@ -165,9 +165,12 @@ func (s *storageServer) ReadFileWithVerifyHandler(args *ReadFileWithVerifyArgs, 
 		return err
 	}
 
+	verifier, err := NewBitrotVerifier(args.Algo, args.Key, args.ExpectedHash)
+	if err != nil {
+		return err
+	}
 	var n int64
-	n, err = s.storage.ReadFileWithVerify(args.Vol, args.Path, args.Offset, args.Buffer,
-		args.Algo, args.ExpectedHash)
+	n, err = s.storage.ReadFileWithVerify(args.Vol, args.Path, args.Offset, args.Buffer, verifier)
 	// Sending an error over the rpc layer, would cause unmarshalling to fail. In situations
 	// when we have short read i.e `io.ErrUnexpectedEOF` treat it as good condition and copy
 	// the buffer properly.

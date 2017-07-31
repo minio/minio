@@ -17,128 +17,79 @@
 package cmd
 
 import (
-	"encoding/hex"
-	"hash"
 	"io"
-	"sync"
 
-	"github.com/klauspost/reedsolomon"
+	"github.com/minio/minio/pkg/bitrot"
 )
 
-// erasureCreateFile - writes an entire stream by erasure coding to
-// all the disks, writes also calculate individual block's checksum
-// for future bit-rot protection.
-func erasureCreateFile(disks []StorageAPI, volume, path string, reader io.Reader, allowEmpty bool, blockSize int64,
-	dataBlocks, parityBlocks int, algo HashAlgo, writeQuorum int) (newDisks []StorageAPI, bytesWritten int64, checkSums []string, err error) {
-
-	// Allocated blockSized buffer for reading from incoming stream.
-	buf := make([]byte, blockSize)
-
-	hashWriters := newHashWriters(len(disks), algo)
-
-	// Read until io.EOF, erasure codes data and writes to all disks.
-	for {
-		var blocks [][]byte
-		n, rErr := io.ReadFull(reader, buf)
-		// FIXME: this is a bug in Golang, n == 0 and err ==
-		// io.ErrUnexpectedEOF for io.ReadFull function.
-		if n == 0 && rErr == io.ErrUnexpectedEOF {
-			return nil, 0, nil, traceError(rErr)
-		}
-		if rErr == io.EOF {
-			// We have reached EOF on the first byte read, io.Reader
-			// must be 0bytes, we don't need to erasure code
-			// data. Will create a 0byte file instead.
-			if bytesWritten == 0 && allowEmpty {
-				blocks = make([][]byte, len(disks))
-				newDisks, rErr = appendFile(disks, volume, path, blocks, hashWriters, writeQuorum)
-				if rErr != nil {
-					return nil, 0, nil, rErr
-				}
-			} // else we have reached EOF after few reads, no need to
-			// add an additional 0bytes at the end.
-			break
-		}
-		if rErr != nil && rErr != io.ErrUnexpectedEOF {
-			return nil, 0, nil, traceError(rErr)
-		}
-		if n > 0 {
-			// Returns encoded blocks.
-			var enErr error
-			blocks, enErr = encodeData(buf[0:n], dataBlocks, parityBlocks)
-			if enErr != nil {
-				return nil, 0, nil, enErr
-			}
-
-			// Write to all disks.
-			if newDisks, err = appendFile(disks, volume, path, blocks, hashWriters, writeQuorum); err != nil {
-				return nil, 0, nil, err
-			}
-			bytesWritten += int64(n)
+// CreateFile creates a new bitrot encoded file spread over all available disks. CreateFile will create
+// the file at the given volume and path. It will read from src until an io.EOF occurs. The given algorithm will
+// be used to protect the erasure encoded file. The random reader should return random data (if it's nil the system PRNG will be used).
+func (s *XLStorage) CreateFile(src io.Reader, volume, path string, buffer []byte, key []byte, algorithm bitrot.Algorithm) (f ErasureFileInfo, err error) {
+	if !algorithm.Available() {
+		return f, traceError(errBitrotHashAlgoInvalid)
+	}
+	f.Checksums = make([][]byte, len(s.disks))
+	hashers := make([]bitrot.Hash, len(s.disks))
+	for i := range hashers {
+		hashers[i], err = algorithm.New(key, bitrot.Protect)
+		if err != nil {
+			return f, err
 		}
 	}
-
-	checkSums = make([]string, len(disks))
-	for i := range checkSums {
-		checkSums[i] = hex.EncodeToString(hashWriters[i].Sum(nil))
+	locks, errors := make([]chan error, len(s.disks)), make([]error, len(s.disks))
+	for i := range locks {
+		locks[i] = make(chan error, 1)
 	}
-	return newDisks, bytesWritten, checkSums, nil
+	appendWriters := s.AppendWriters(volume, path)
+
+	blocks, n := [][]byte{}, len(buffer)
+	for n == len(buffer) {
+		n, err = io.ReadFull(src, buffer)
+		if n == 0 && err == io.EOF {
+			if f.Size != 0 {
+				break
+			}
+			blocks = make([][]byte, len(s.disks))
+		} else if err == nil || (n > 0 && err == io.ErrUnexpectedEOF) {
+			blocks, err = s.ErasureEncode(buffer[:n])
+			if err != nil {
+				return f, err
+			}
+		} else {
+			return f, traceError(err)
+		}
+
+		for i := range locks {
+			if s.disks[i] == OfflineDisk {
+				locks[i] <- traceError(errDiskNotFound)
+				continue
+			}
+			go erasureAppendFile(io.MultiWriter(appendWriters[i], hashers[i]), blocks[i], locks[i])
+		}
+		for i := range locks {
+			errors[i] = <-locks[i]
+		}
+		if err = reduceWriteQuorumErrs(errors, objectOpIgnoredErrs, s.writeQuorum); err != nil {
+			return f, err
+		}
+		s.disks = evalDisks(s.disks, errors)
+		f.Size += int64(n)
+	}
+
+	f.Key = key
+	f.Algorithm = algorithm
+	for i, disk := range s.disks {
+		if disk == OfflineDisk {
+			f.Checksums[i] = nil
+		} else {
+			f.Checksums[i] = hashers[i].Sum(nil)
+		}
+	}
+	return f, nil
 }
 
-// encodeData - encodes incoming data buffer into
-// dataBlocks+parityBlocks returns a 2 dimensional byte array.
-func encodeData(dataBuffer []byte, dataBlocks, parityBlocks int) ([][]byte, error) {
-	rs, err := reedsolomon.New(dataBlocks, parityBlocks)
-	if err != nil {
-		return nil, traceError(err)
-	}
-	// Split the input buffer into data and parity blocks.
-	var blocks [][]byte
-	blocks, err = rs.Split(dataBuffer)
-	if err != nil {
-		return nil, traceError(err)
-	}
-
-	// Encode parity blocks using data blocks.
-	err = rs.Encode(blocks)
-	if err != nil {
-		return nil, traceError(err)
-	}
-
-	// Return encoded blocks.
-	return blocks, nil
-}
-
-// appendFile - append data buffer at path.
-func appendFile(disks []StorageAPI, volume, path string, enBlocks [][]byte, hashWriters []hash.Hash, writeQuorum int) ([]StorageAPI, error) {
-	var wg = &sync.WaitGroup{}
-	var wErrs = make([]error, len(disks))
-	// Write encoded data to quorum disks in parallel.
-	for index, disk := range disks {
-		if disk == nil {
-			wErrs[index] = traceError(errDiskNotFound)
-			continue
-		}
-		wg.Add(1)
-		// Write encoded data in routine.
-		go func(index int, disk StorageAPI) {
-			defer wg.Done()
-			wErr := disk.AppendFile(volume, path, enBlocks[index])
-			if wErr != nil {
-				wErrs[index] = traceError(wErr)
-				return
-			}
-
-			// Calculate hash for each blocks.
-			hashWriters[index].Write(enBlocks[index])
-
-			// Successfully wrote.
-			wErrs[index] = nil
-		}(index, disk)
-	}
-
-	// Wait for all the appends to finish.
-	wg.Wait()
-
-	return evalDisks(disks, wErrs), reduceWriteQuorumErrs(wErrs, objectOpIgnoredErrs, writeQuorum)
+func erasureAppendFile(w io.Writer, buf []byte, lock chan<- error) {
+	_, err := w.Write(buf)
+	lock <- err
 }

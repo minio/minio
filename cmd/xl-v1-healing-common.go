@@ -17,10 +17,24 @@
 package cmd
 
 import (
-	"encoding/hex"
+	"crypto/subtle"
 	"path/filepath"
+	"sync"
 	"time"
+
+	"io"
+
+	"github.com/minio/minio/pkg/bitrot"
 )
+
+// healBufferPool is a pool of reusable buffers used to verify a stream
+// while healing.
+var healBufferPool = sync.Pool{
+	New: func() interface{} {
+		b := make([]byte, readSizeV1)
+		return &b
+	},
+}
 
 // commonTime returns a maximally occurring time from a list of time.
 func commonTime(modTimes []time.Time) (modTime time.Time, count int) {
@@ -252,36 +266,37 @@ func xlHealStat(xl xlObjects, partsMetadata []xlMetaV1, errs []error) HealObject
 // calculating blake2b checksum.
 func disksWithAllParts(onlineDisks []StorageAPI, partsMetadata []xlMetaV1, errs []error, bucket, object string) ([]StorageAPI, []error, error) {
 	availableDisks := make([]StorageAPI, len(onlineDisks))
+	buffer := *(healBufferPool.Get().(*[]byte))
+	defer healBufferPool.Put(&buffer)
+
 	for diskIndex, onlineDisk := range onlineDisks {
-		if onlineDisk == nil {
+		if onlineDisk == OfflineDisk {
 			continue
 		}
 		// disk has a valid xl.json but may not have all the
 		// parts. This is considered an outdated disk, since
 		// it needs healing too.
+		algorithm := partsMetadata[diskIndex].Erasure.Bitrot.Algorithm
+		key := partsMetadata[diskIndex].Erasure.Bitrot.Key
 		for _, part := range partsMetadata[diskIndex].Parts {
-			// compute blake2b sum of part.
 			partPath := filepath.Join(object, part.Name)
 			checkSumInfo := partsMetadata[diskIndex].Erasure.GetCheckSumInfo(part.Name)
-			hash := newHash(checkSumInfo.Algorithm)
-			blakeBytes, hErr := hashSum(onlineDisk, bucket, partPath, hash)
+			hash, err := algorithm.New(key, bitrot.Verify)
+			if err != nil {
+				return nil, nil, traceError(err)
+			}
+			_, hErr := io.CopyBuffer(hash, StorageReader(onlineDisk, bucket, partPath, 0), buffer)
 			if hErr == errFileNotFound {
 				errs[diskIndex] = errFileNotFound
-				availableDisks[diskIndex] = nil
+				availableDisks[diskIndex] = OfflineDisk
 				break
 			}
-
 			if hErr != nil && hErr != errFileNotFound {
 				return nil, nil, traceError(hErr)
 			}
-
-			blakeSum := hex.EncodeToString(blakeBytes)
-			// if blake2b sum doesn't match for a part
-			// then this disk is outdated and needs
-			// healing.
-			if blakeSum != checkSumInfo.Hash {
+			if subtle.ConstantTimeCompare(hash.Sum(nil), checkSumInfo.Hash) != 1 {
 				errs[diskIndex] = errFileNotFound
-				availableDisks[diskIndex] = nil
+				availableDisks[diskIndex] = OfflineDisk
 				break
 			}
 			availableDisks[diskIndex] = onlineDisk
