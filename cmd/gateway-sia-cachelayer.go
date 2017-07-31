@@ -6,6 +6,7 @@ import (
 	"os"
 	"sync"
 	"strconv"
+	"regexp"
 	"net/url"
 	"path/filepath"
 	"database/sql"
@@ -503,7 +504,7 @@ func (b *SiaCacheLayer) GuaranteeObjectIsInCache(bucket string, objectName strin
 
 	var siaObj = b.getSiaObjectName(bucket, objectName)
 	debugmsg(fmt.Sprintf("GET %s %s %s\n", b.SiadAddress, siaObj, objInfo.SrcFile))
-	derr := get(b.SiadAddress, "/renter/download/" + url.QueryEscape(siaObj) + "?destination=" + url.QueryEscape(objInfo.SrcFile))
+	derr := get(b.SiadAddress, "/renter/download/" + siaObj + "?destination=" + url.QueryEscape(objInfo.SrcFile))
 	if derr != nil {
 		debugmsg(fmt.Sprintf("Error: %s", derr))
 		return SiaServiceError{ Code: "SiaErrorDaemon", Message: derr.Error(), }
@@ -766,7 +767,7 @@ func (b *SiaCacheLayer) markObjectDeleted(bucket string, objectName string) SiaS
     	return siaErrorDatabaseUpdateError
     }
 
-    defer stmt.Close()
+	defer stmt.Close()
 
     _, err = stmt.Exec(bucket, objectName)
     if err != nil {
@@ -787,7 +788,7 @@ func (b *SiaCacheLayer) markObjectCached(bucket string, objectName string, statu
     	return siaErrorDatabaseUpdateError
     }
 
-    stmt.Close()
+    defer stmt.Close()
 
     _, err = stmt.Exec(status, bucket, objectName)
     if err != nil {
@@ -1021,7 +1022,7 @@ func (b *SiaCacheLayer) waitTillSiaUploadCompletes(siaObj string) SiaServiceErro
 }
 
 func (b *SiaCacheLayer) isSiaFileAvailable(siaObj string) (bool, SiaServiceError) {
-	debugmsg("SiaCacheLayer.isSiaFileAvailable")
+	debugmsg(fmt.Sprintf("SiaCacheLayer.isSiaFileAvailable: %s", siaObj))
 	var rf api.RenterFiles
 	err := getAPI(b.SiadAddress, "/renter/files", &rf)
 	if err != nil {
@@ -1029,6 +1030,7 @@ func (b *SiaCacheLayer) isSiaFileAvailable(siaObj string) (bool, SiaServiceError
 	}
 
 	for _, file := range rf.Files {
+		debugmsg(fmt.Sprintf("  Renter file: %s", file.SiaPath))
 		if file.SiaPath == siaObj {
 			return file.Available, siaSuccess
 		}
@@ -1113,7 +1115,10 @@ func (b *SiaCacheLayer) guaranteeCacheSpace(extraSpace int64) SiaServiceError {
 }
 
 func (b *SiaCacheLayer) getSiaObjectName(bucket string, objectName string) string {
-	return url.QueryEscape(bucket) + "/" + url.QueryEscape(objectName)
+	reg, _ := regexp.Compile("[^a-zA-Z0-9]+")
+    
+    cleanedName := reg.ReplaceAllString(objectName, "+")
+	return bucket + "/" + cleanedName
 }
 
 func (b *SiaCacheLayer) forceDeleteOldestCacheFile() SiaServiceError {
