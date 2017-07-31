@@ -19,14 +19,12 @@ package http
 import (
 	"bufio"
 	"net"
-	"sync/atomic"
 	"time"
 )
 
 // BufConn - is a generic stream-oriented network connection supporting buffered reader and read/write timeout.
 type BufConn struct {
 	QuirkConn
-	hadReadDeadlineInPast  int32         // atomic
 	bufReader              *bufio.Reader // buffered reader wraps reader in net.Conn.
 	readTimeout            time.Duration // sets the read timeout in the connection.
 	writeTimeout           time.Duration // sets the write timeout in the connection.
@@ -34,21 +32,9 @@ type BufConn struct {
 	updateBytesWrittenFunc func(int)     // function to be called to update bytes written.
 }
 
-// SetReadDeadline - this reimplements golang net.Conn's SetReadDeadline as a workaround
-// to a bug reported here https://github.com/golang/go/issues/21133. Once the golang bug
-// fixed, we can remove this function.
-func (c *BufConn) SetReadDeadline(t time.Time) error {
-	inPast := int32(0)
-	if t.Before(time.Now()) {
-		inPast = 1
-	}
-	atomic.StoreInt32(&c.hadReadDeadlineInPast, inPast)
-	return c.Conn.SetReadDeadline(t)
-}
-
 // Sets read timeout
 func (c *BufConn) setReadTimeout() {
-	if c.readTimeout != 0 && atomic.LoadInt32(&c.hadReadDeadlineInPast) != 1 {
+	if c.readTimeout != 0 && c.canSetReadDeadline() {
 		c.SetReadDeadline(time.Now().UTC().Add(c.readTimeout))
 	}
 }
