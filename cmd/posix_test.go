@@ -73,6 +73,31 @@ func TestPosixGetDiskInfo(t *testing.T) {
 	}
 }
 
+func TestPosixIsDirEmpty(t *testing.T) {
+	tmp, err := ioutil.TempDir(globalTestTmpDir, "minio-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer removeAll(tmp)
+
+	// Should give false on non-existent directory.
+	dir1 := slashpath.Join(tmp, "non-existent-directory")
+	if isDirEmpty(dir1) != false {
+		t.Error("expected false for non-existent directory, got true")
+	}
+
+	// Should give false for not-a-directory.
+	dir2 := slashpath.Join(tmp, "file")
+	err = ioutil.WriteFile(dir2, []byte("hello"), 0777)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if isDirEmpty(dir2) != false {
+		t.Error("expected false for a file, got true")
+	}
+}
+
 // TestPosixReadAll - TestPosixs the functionality implemented by posix ReadAll storage API.
 func TestPosixReadAll(t *testing.T) {
 	// create posix test setup

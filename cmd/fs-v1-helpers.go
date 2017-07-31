@@ -363,8 +363,7 @@ func fsRenameFile(sourcePath, destPath string) error {
 	return nil
 }
 
-// Delete a file and its parent if it is empty at the destination path.
-// this function additionally protects the basePath from being deleted.
+// fsDeleteFile is a wrapper for deleteFile(), after checking the path length.
 func fsDeleteFile(basePath, deletePath string) error {
 	if err := checkPathLength(basePath); err != nil {
 		return traceError(err)
@@ -374,44 +373,7 @@ func fsDeleteFile(basePath, deletePath string) error {
 		return traceError(err)
 	}
 
-	if basePath == deletePath {
-		return nil
-	}
-
-	// Verify if the path exists.
-	pathSt, err := osStat(preparePath(deletePath))
-	if err != nil {
-		if os.IsNotExist(err) {
-			return traceError(errFileNotFound)
-		} else if os.IsPermission(err) {
-			return traceError(errFileAccessDenied)
-		}
-		return traceError(err)
-	}
-
-	if pathSt.IsDir() && !isDirEmpty(deletePath) {
-		// Verify if directory is empty.
-		return nil
-	}
-
-	// Attempt to remove path.
-	if err = os.Remove(preparePath(deletePath)); err != nil {
-		if os.IsNotExist(err) {
-			return traceError(errFileNotFound)
-		} else if os.IsPermission(err) {
-			return traceError(errFileAccessDenied)
-		} else if isSysErrNotEmpty(err) {
-			return traceError(errVolumeNotEmpty)
-		}
-		return traceError(err)
-	}
-
-	// Recursively go down the next path and delete again.
-	if err := fsDeleteFile(basePath, pathutil.Dir(deletePath)); err != nil {
-		return err
-	}
-
-	return nil
+	return deleteFile(basePath, deletePath)
 }
 
 // fsRemoveMeta safely removes a locked file and takes care of Windows special case

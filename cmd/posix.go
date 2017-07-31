@@ -76,24 +76,20 @@ func checkPathLength(pathName string) error {
 func isDirEmpty(dirname string) bool {
 	f, err := os.Open(preparePath(dirname))
 	if err != nil {
-		errorIf(func() error {
-			if !os.IsNotExist(err) {
-				return err
-			}
-			return nil
-		}(), "Unable to access directory.")
+		if !os.IsNotExist(err) {
+			errorIf(err, "Unable to access directory")
+		}
+
 		return false
 	}
 	defer f.Close()
 	// List one entry.
 	_, err = f.Readdirnames(1)
 	if err != io.EOF {
-		errorIf(func() error {
-			if !os.IsNotExist(err) {
-				return err
-			}
-			return nil
-		}(), "Unable to list directory.")
+		if !os.IsNotExist(err) {
+			errorIf(err, "Unable to list directory")
+		}
+
 		return false
 	}
 	// Returns true if we have reached EOF, directory is indeed empty.
@@ -915,38 +911,30 @@ func (s *posix) StatFile(volume, path string) (file FileInfo, err error) {
 	}, nil
 }
 
-// deleteFile - delete file path if its empty.
+// deleteFile deletes a file path if its empty. If it's successfully deleted,
+// it will recursively move up the tree, deleting empty parent directories
+// until it finds one with files in it. Returns nil for a non-empty directory.
 func deleteFile(basePath, deletePath string) error {
 	if basePath == deletePath {
 		return nil
 	}
-	// Verify if the path exists.
-	pathSt, err := osStat(preparePath(deletePath))
-	if err != nil {
-		if os.IsNotExist(err) {
-			return errFileNotFound
-		} else if os.IsPermission(err) {
-			return errFileAccessDenied
-		}
-		return err
-	}
-	if pathSt.IsDir() && !isDirEmpty(deletePath) {
-		// Verify if directory is empty.
-		return nil
-	}
+
 	// Attempt to remove path.
 	if err := os.Remove(preparePath(deletePath)); err != nil {
 		if os.IsNotExist(err) {
 			return errFileNotFound
 		} else if os.IsPermission(err) {
 			return errFileAccessDenied
+		} else if isSysErrNotEmpty(err) {
+			return nil
 		}
 		return err
 	}
+
 	// Recursively go down the next path and delete again.
-	if err := deleteFile(basePath, slashpath.Dir(deletePath)); err != nil {
-		return err
-	}
+	// Errors for parent directories shouldn't trickle down.
+	deleteFile(basePath, slashpath.Dir(deletePath))
+
 	return nil
 }
 
