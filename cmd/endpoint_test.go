@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"net/url"
 	"reflect"
-	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -31,11 +30,6 @@ func TestNewEndpoint(t *testing.T) {
 	u2, _ := url.Parse("https://example.org/path")
 	u3, _ := url.Parse("http://127.0.0.1:8080/path")
 	u4, _ := url.Parse("http://192.168.253.200/path")
-
-	errMsg := ": no such host"
-	if runtime.GOOS == "windows" {
-		errMsg = ": No such host is known."
-	}
 
 	testCases := []struct {
 		arg              string
@@ -73,7 +67,7 @@ func TestNewEndpoint(t *testing.T) {
 		{"https://93.184.216.34:808080/path", Endpoint{}, -1, fmt.Errorf("invalid URL endpoint format: port number must be between 1 to 65535")},
 		{"http://server:8080//", Endpoint{}, -1, fmt.Errorf("empty or root path is not supported in URL endpoint")},
 		{"http://server:8080/", Endpoint{}, -1, fmt.Errorf("empty or root path is not supported in URL endpoint")},
-		{"http://server/path", Endpoint{}, -1, fmt.Errorf("lookup server" + errMsg)},
+		{"http://server/path", Endpoint{}, -1, fmt.Errorf("lookup server: no such host")},
 	}
 
 	for _, testCase := range testCases {
@@ -85,13 +79,7 @@ func TestNewEndpoint(t *testing.T) {
 		} else if err == nil {
 			t.Fatalf("error: expected = %v, got = <nil>", testCase.expectedErr)
 		} else {
-			var match bool
-			if strings.HasSuffix(testCase.expectedErr.Error(), errMsg) {
-				match = strings.HasSuffix(err.Error(), errMsg)
-			} else {
-				match = (testCase.expectedErr.Error() == err.Error())
-			}
-			if !match {
+			if testCase.expectedErr.Error() != err.Error() {
 				t.Fatalf("error: expected = %v, got = %v", testCase.expectedErr, err)
 			}
 		}
