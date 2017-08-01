@@ -54,7 +54,7 @@ func getSourceIPAddress(r *http.Request) string {
 	// Attempt to get ip from standard headers.
 	var ip string
 	for _, h := range []string{"X-Forwarded-For", "X-Real-Ip"} {
-		addresses := strings.Split(r.Header.Get(h), ",")
+		addresses := r.Header[h]
 		// Get most recently used ip.
 		for i := len(addresses) - 1; i >= 0; i-- {
 			ip = strings.TrimSpace(addresses[i])
