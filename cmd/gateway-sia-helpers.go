@@ -1,14 +1,14 @@
 package cmd
 
 import (
-	"errors"
 	"encoding/json"
+	"errors"
+	"github.com/NebulousLabs/Sia/api"
+	"github.com/NebulousLabs/Sia/modules"
+	"github.com/bgentry/speakeasy"
+	"net"
 	"net/http"
 	"path/filepath"
-	"net"
-	"github.com/bgentry/speakeasy"
-	"github.com/NebulousLabs/Sia/modules"
-	"github.com/NebulousLabs/Sia/api"
 )
 
 // User-supplied password, cached.
@@ -95,7 +95,7 @@ func apiGet(addr, call string) (*http.Response, error) {
 // does not return 2xx, the error will be read and returned. The response body
 // is not closed.
 func apiPost(addr, call, vals string) (*http.Response, error) {
-	
+
 	if host, port, _ := net.SplitHostPort(addr); host == "" {
 		addr = net.JoinHostPort("localhost", port)
 	}
