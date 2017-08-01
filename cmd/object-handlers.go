@@ -52,11 +52,12 @@ func setGetRespHeaders(w http.ResponseWriter, reqParams url.Values) {
 // getSourceIPAddress - get the source ip address of the request.
 func getSourceIPAddress(r *http.Request) string {
 	// Attempt to get ip from standard headers.
+	var ip string
 	for _, h := range []string{"X-Forwarded-For", "X-Real-Ip"} {
 		addresses := strings.Split(r.Header.Get(h), ",")
 		// Get most recently used ip.
 		for i := len(addresses) - 1; i >= 0; i-- {
-			ip := strings.TrimSpace(addresses[i])
+			ip = strings.TrimSpace(addresses[i])
 			parsedIP := net.ParseIP(ip)
 			// Skip non valid IP address.
 			if parsedIP == nil {
@@ -66,7 +67,8 @@ func getSourceIPAddress(r *http.Request) string {
 		}
 	}
 	// Default to remote address if headers not set.
-	return r.RemoteAddr
+	ip, _, _ = net.SplitHostPort(r.RemoteAddr)
+	return ip
 }
 
 // errAllowableNotFound - For an anon user, return 404 if have ListBucket, 403 otherwise
