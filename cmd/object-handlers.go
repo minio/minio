@@ -25,7 +25,6 @@ import (
 	"net/url"
 	"sort"
 	"strconv"
-	"strings"
 
 	mux "github.com/gorilla/mux"
 )
@@ -51,20 +50,14 @@ func setGetRespHeaders(w http.ResponseWriter, reqParams url.Values) {
 
 // getSourceIPAddress - get the source ip address of the request.
 func getSourceIPAddress(r *http.Request) string {
-	// Attempt to get ip from standard headers.
 	var ip string
-	for _, h := range []string{"X-Forwarded-For", "X-Real-Ip"} {
-		addresses := r.Header[h]
-		// Get most recently used ip.
-		for i := len(addresses) - 1; i >= 0; i-- {
-			ip = strings.TrimSpace(addresses[i])
-			parsedIP := net.ParseIP(ip)
-			// Skip non valid IP address.
-			if parsedIP == nil {
-				continue
-			}
-			return ip
-		}
+	// Attempt to get ip from standard headers.
+	// Do not support X-Forwarded-For because it is easy to spoof.
+	ip = r.Header.Get("X-Real-Ip")
+	parsedIP := net.ParseIP(ip)
+	// Skip non valid IP address.
+	if parsedIP != nil {
+		return ip
 	}
 	// Default to remote address if headers not set.
 	ip, _, _ = net.SplitHostPort(r.RemoteAddr)

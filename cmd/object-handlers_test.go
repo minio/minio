@@ -3571,24 +3571,24 @@ func TestGetSourceIPAddress(t *testing.T) {
 			request: &http.Request{
 				RemoteAddr: "127.0.0.1:9000",
 				Header: map[string][]string{
-					"X-Forwarded-For": {"54.240.143.0"},
+					"X-Real-Ip": {"54.240.143.0"},
 				},
 			},
 			expectedIP: "54.240.143.0", // Use headers before RemoteAddr.
 		},
 		{
 			// Test Case 3. Use both RemoteAddr and several header vals.
-			// Check that last val in header is used.
+			// Check that first val in header is used.
 			request: &http.Request{
 				RemoteAddr: "127.0.0.1:9000",
 				Header: map[string][]string{
-					"X-Forwarded-For": {"54.240.143.0", "54.240.143.188"},
+					"X-Real-Ip": {"54.240.143.0", "54.240.143.188"},
 				},
 			},
-			expectedIP: "54.240.143.188",
+			expectedIP: "54.240.143.0",
 		},
 		{
-			// Test Case 4. Different header and corrupt header value.
+			// Test Case 4. Use header and corrupt header value.
 			request: &http.Request{
 				RemoteAddr: "127.0.0.1:9000",
 				Header: map[string][]string{
