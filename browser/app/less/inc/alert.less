@@ -10,21 +10,16 @@
     border-radius: 3px;
     padding: 17px 50px 17px 17px;
     z-index: 10010;
+    font-size: @font-size-base - 1;
     .animation-duration(800ms);
-    .animation-fill-mode(both);
 
-    &:not(.progress) {
+    &:not(.alert--upload) {
         top: 20px;
 
-        @media(min-width: (@screen-sm-min)) {
+        @media (min-width: (@screen-sm-min)) {
             left: 50%;
             margin-left: -250px;
         }
-    }
-
-    &.progress {
-        bottom: 20px;
-        right: 20px;
     }
 
     &.alert-danger {
@@ -36,33 +31,31 @@
     }
 
     &.alert-info {
-        background: @blue;
+        background: @light-blue;
     }
 
-    @media(max-width: (@screen-xs-max)) {
+    @media (max-width: (@screen-xs-max)) {
         left: 20px;
         width: ~"calc(100% - 40px)";
         max-width: 100%;
     }
 
-    .progress {
-        margin: 10px 10px 8px 0;
-        height: 5px;
-        box-shadow: none;
-        border-radius: 1px;
-        background-color: @blue;
-        border-radius: 2px;
-        overflow: hidden;
-    }
-
-    .progress-bar {
-        box-shadow: none;
-        background-color: @white;
-        height: 100%;
-    }
-
     .close {
         position: absolute;
         top: 15px;
+        right: 15px;
+        background-color: fade(@white, 20%);
+        color: fade(@white, 80%);
+
+        &:hover {
+            background-color: fade(@white, 25%);
+            color: @white;
+        }
     }
+}
+
+.alert--upload {
+    top: auto;
+    bottom: 20px;
+    right: 20px;
 }

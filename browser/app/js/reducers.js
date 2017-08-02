@@ -154,6 +154,9 @@ export default (state = {
     case actions.SET_SIDEBAR_STATUS:
       newState.sidebarStatus = action.sidebarStatus
       break
+    case actions.SET_PREVIEW_STATUS:
+      newState.previewStatus = action.previewStatus
+      break
     case actions.SET_LOGIN_REDIRECT_PATH:
       newState.loginRedirectPath = action.path
     case actions.SET_LOAD_BUCKET:

@@ -18,7 +18,6 @@ import React from 'react'
 import classNames from 'classnames'
 import browserHistory from 'react-router/lib/browserHistory'
 import humanize from 'humanize'
-import Moment from 'moment'
 import Modal from 'react-bootstrap/lib/Modal'
 import ModalBody from 'react-bootstrap/lib/ModalBody'
 import ModalHeader from 'react-bootstrap/lib/ModalHeader'
@@ -26,8 +25,6 @@ import Alert from 'react-bootstrap/lib/Alert'
 import OverlayTrigger from 'react-bootstrap/lib/OverlayTrigger'
 import Tooltip from 'react-bootstrap/lib/Tooltip'
 import Dropdown from 'react-bootstrap/lib/Dropdown'
-import MenuItem from 'react-bootstrap/lib/MenuItem'
-import InputGroup from '../components/InputGroup'
 import Dropzone from '../components/Dropzone'
 import ObjectsList from '../components/ObjectsList'
 import SideBar from '../components/SideBar'
@@ -39,7 +36,6 @@ import PolicyInput from '../components/PolicyInput'
 import Policy from '../components/Policy'
 import BrowserDropdown from '../components/BrowserDropdown'
 import ConfirmModal from './ConfirmModal'
-import logo from '../../img/logo.svg'
 import * as actions from '../actions'
 import * as utils from '../utils'
 import * as mime from '../mime'
@@ -47,6 +43,8 @@ import { minioBrowserPrefix } from '../constants'
 import CopyToClipboard from 'react-copy-to-clipboard'
 import storage from 'local-storage-fallback'
 import InfiniteScroll from 'react-infinite-scroller';
+
+import logoInvert from '../../img/logo-dark.svg'
 
 export default class Browse extends React.Component {
   componentDidMount() {
@@ -384,13 +382,12 @@ export default class Browse extends React.Component {
     value = isNaN(value) ? 0 : value
 
     // Use custom step count to support browser Edge
-    if((inc === -1)) {
-      if(value != 0) {
+    if( (inc === -1) ) {
+      if (value != 0) {
         value--
       }
-    }
-    else {
-      if(value != maxValue) {
+    } else {
+      if (value != maxValue) {
         value++
       }
     }
@@ -440,11 +437,23 @@ export default class Browse extends React.Component {
     dispatch(actions.checkedObjectsReset())
   }
 
+  showPreview(e) {
+    const {dispatch} = this.props
+    dispatch(actions.setPreviewStatus(true))
+  }
+
+  hidePreview(e) {
+    const {dispatch} = this.props
+    dispatch(actions.setPreviewStatus(false))
+    this.clearSelected()
+  }
+
   render() {
     const {total, free} = this.props.storageInfo
     const {showMakeBucketModal, alert, sortNameOrder, sortSizeOrder, sortDateOrder, showAbout, showBucketPolicy, checkedObjects} = this.props
     const {version, memory, platform, runtime} = this.props.serverInfo
     const {sidebarStatus} = this.props
+    const {previewStatus} = this.props
     const {showSettings} = this.props
     const {policies, currentBucket, currentPath} = this.props
     const {deleteConfirmation} = this.props
@@ -470,22 +479,24 @@ export default class Browse extends React.Component {
     if (!alert.message)
       alertBox = ''
 
-    let signoutTooltip = <Tooltip id="tt-sign-out">
-                           Sign out
-                         </Tooltip>
-    let uploadTooltip = <Tooltip id="tt-upload-file">
-                          Upload file
-                        </Tooltip>
-    let makeBucketTooltip = <Tooltip id="tt-create-bucket">
-                              Create bucket
-                            </Tooltip>
+    let tooltips = {
+      uploadFile: <Tooltip id="tooltip-upload-file">
+                    Upload File
+                  </Tooltip>,
+      createBucket: <Tooltip id="tooltip-create-bucket">
+                      Create Bucket
+                    </Tooltip>,
+      uploadFolder: <Tooltip id="tooltip-upload-folder">
+                      Upload Folder
+                    </Tooltip>,
+    }
+
     let loginButton = ''
     let browserDropdownButton = ''
     let storageUsageDetails = ''
 
     let used = total - free
     let usedPercent = (used / total) * 100 + '%'
-    let freePercent = free * 100 / total
 
     if (web.LoggedIn()) {
       browserDropdownButton = <BrowserDropdown fullScreenFunc={ this.fullScreen.bind(this) }
@@ -497,338 +508,346 @@ export default class Browse extends React.Component {
     }
 
     if (web.LoggedIn()) {
-      if (!(used === 0 && free === 0)) {
-        storageUsageDetails = <div className="feh-usage">
-          <div className="fehu-chart">
-            <div style={ { width: usedPercent } }></div>
-          </div>
-          <ul>
-            <li>
-              <span>Used: </span>
-              { humanize.filesize(total - free) }
-            </li>
-            <li className="pull-right">
-              <span>Free: </span>
-              { humanize.filesize(total - used) }
-            </li>
-          </ul>
-        </div>
-      }
-
-
+      storageUsageDetails = <div className="browser-status">
+                              <div className="browser-status__storage">
+                                <small>{ humanize.filesize(total - free) } of { humanize.filesize(total) } Used</small>
+                                <div className="browser-status__chart">
+                                  <div style={ { width: usedPercent } }></div>
+                                </div>
+                              </div>
+                            </div>
     }
 
     let createButton = ''
     if (web.LoggedIn()) {
-      createButton = <Dropdown dropup className="feb-actions" id="fe-action-toggle">
-                       <Dropdown.Toggle noCaret className="feba-toggle">
-                         <span><i className="fa fa-plus"></i></span>
+      createButton = <Dropdown dropup className="create-new" id="dropdown-create-new">
+                       <Dropdown.Toggle noCaret className="create-new__toggle">
+                         <i className="zmdi zmdi-plus"></i>
                        </Dropdown.Toggle>
                        <Dropdown.Menu>
-                         <OverlayTrigger placement="left" overlay={ uploadTooltip }>
-                           <a href="#" className="feba-btn feba-upload">
-                             <input type="file"
-                               onChange={ this.uploadFile.bind(this) }
-                               style={ { display: 'none' } }
-                               id="file-input"></input>
-                             <label htmlFor="file-input"> <i className="fa fa-cloud-upload"></i> </label>
+                         <OverlayTrigger placement="top" overlay={ tooltips.uploadFile }>
+                           <a href="#" className="create-new__btn create-new__btn--upload">
+                             <input type="file" onChange={ this.uploadFile.bind(this) } id="object-upload-input" />
+                             <label htmlFor="object-upload-input"> </label>
                            </a>
                          </OverlayTrigger>
-                         <OverlayTrigger placement="left" overlay={ makeBucketTooltip }>
-                           <a href="#" className="feba-btn feba-bucket" onClick={ this.showMakeBucketModal.bind(this) }><i className="fa fa-hdd-o"></i></a>
+                         <OverlayTrigger placement="top" overlay={ tooltips.createBucket }>
+                           <a href="#" className="create-new__btn create-new__btn--bucket" onClick={ this.showMakeBucketModal.bind(this) }></a>
+                         </OverlayTrigger>
+                         <OverlayTrigger placement="top" overlay={ tooltips.uploadFolder }>
+                           <a href="#" className="create-new__btn create-new__btn--folder"></a>
                          </OverlayTrigger>
                        </Dropdown.Menu>
                      </Dropdown>
 
     } else {
       if (prefixWritable)
-        createButton = <Dropdown dropup className="feb-actions" id="fe-action-toggle">
-                         <Dropdown.Toggle noCaret className="feba-toggle">
-                           <span><i className="fa fa-plus"></i></span>
+        createButton = <Dropdown dropup className="create-new" id="dropdown-create-new">
+                         <Dropdown.Toggle noCaret className="create-new__toggle">
+                           <i className="zmdi zmdi-times"></i>
                          </Dropdown.Toggle>
                          <Dropdown.Menu>
-                           <OverlayTrigger placement="left" overlay={ uploadTooltip }>
-                             <a href="#" className="feba-btn feba-upload">
-                               <input type="file"
-                                 onChange={ this.uploadFile.bind(this) }
-                                 style={ { display: 'none' } }
-                                 id="file-input"></input>
-                               <label htmlFor="file-input"> <i className="fa fa-cloud-upload"></i> </label>
-                             </a>
-                           </OverlayTrigger>
+                           <a href="#" className="create-new__btn create-new__btn--upload">
+                             <input type="file" onChange={ this.uploadFile.bind(this) } id="object-upload-input" />
+                             <label htmlFor="object-upload-input"> </label>
+                           </a>
                          </Dropdown.Menu>
                        </Dropdown>
     }
 
+    let deleteButton = ''
+    if (web.LoggedIn()) {
+      deleteButton = <button onClick={ this.shareObject.bind(this) } disabled={ checkedObjects.length != 1 } className="zmdi zmdi-share" />
+    }
+
     return (
-      <div className={ classNames({
-                   'file-explorer': true,
-                   'toggled': sidebarStatus
-                 }) }>
-        <SideBar searchBuckets={ this.searchBuckets.bind(this) }
-          selectBucket={ this.selectBucket.bind(this) }
-          clickOutside={ this.hideSidebar.bind(this) }
-          showPolicy={ this.showBucketPolicy.bind(this) } />
-        <div className="fe-body">
-          <div className={ 'list-actions' + (classNames({
-                             ' list-actions-toggled': checkedObjects.length > 0
-                           })) }>
-            <span className="la-label"><i className="fa fa-check-circle" /> { checkedObjects.length } Objects selected</span>
-            <span className="la-actions pull-right"><button onClick={ this.downloadSelected.bind(this) }> Download all as zip </button></span>
-            <span className="la-actions pull-right"><button onClick={ this.showDeleteConfirmation.bind(this) }> Delete selected </button></span>
-            <i className="la-close fa fa-times" onClick={ this.clearSelected.bind(this) }></i>
+      <section className="browser__inner">
+        { alertBox }
+        <section className={ classNames({
+                               'content': true,
+                               'content--toggled': sidebarStatus
+                             }) }>
+          <header className="header">
+            <div className="toolbar">
+              <div className="actions">
+                <button className="zmdi zmdi-menu" onClick={ this.toggleSidebar.bind(this, !sidebarStatus) } />
+                <button className="zmdi zmdi-view-comfy" />
+                <button onClick={ this.showDeleteConfirmation.bind(this) } disabled={ checkedObjects.length == 0 } className="zmdi zmdi-delete" />
+                { deleteButton }
+                <button onClick={ this.downloadSelected.bind(this) } disabled={ checkedObjects.length == 0 } className="zmdi zmdi-download" />
+              </div>
+              { loginButton }
+              { browserDropdownButton }
+            </div>
+            <Path selectPrefix={ this.selectPrefix.bind(this) } />
+            <BrowserUpdate />
+          </header>
+          <SideBar searchBuckets={ this.searchBuckets.bind(this) }
+            selectBucket={ this.selectBucket.bind(this) }
+            clickOutside={ this.hideSidebar.bind(this) }
+            showPolicy={ this.showBucketPolicy.bind(this) }
+            storageDetails={ storageUsageDetails } />
+          <div className="objects">
+            <header className="objects__row" data-type="folder">
+              <div className="objects__item objects__item--name" onClick={ this.sortObjectsByName.bind(this) } data-sort="name">
+                Name
+                <i className={ classNames({
+                                 'objects__item__sort': true,
+                                 'zmdi': true,
+                                 'zmdi-sort-desc': sortNameOrder,
+                                 'zmdi-sort-asc': !sortNameOrder
+                               }) } />
+              </div>
+              <div className="objects__item objects__item--size" onClick={ this.sortObjectsBySize.bind(this) } data-sort="size">
+                Size
+                <i className={ classNames({
+                                 'objects__item__sort': true,
+                                 'zmdi': true,
+                                 'zmdi-sort-amount-desc': sortSizeOrder,
+                                 'zmdi-sort-amount-asc': !sortSizeOrder
+                               }) } />
+              </div>
+              <div className="objects__item objects__item--modified" onClick={ this.sortObjectsByDate.bind(this) } data-sort="last-modified">
+                Last Modified
+                <i className={ classNames({
+                                 'objects__item__sort': true,
+                                 'zmdi': true,
+                                 'zmdi-sort-amount-desc': sortDateOrder,
+                                 'zmdi-sort-amount-asc': !sortDateOrder
+                               }) } />
+              </div>
+            </header>
+            <div className="objects__container">
+              <Dropzone>
+                <InfiniteScroll loadMore={ this.listObjects.bind(this) }
+                  hasMore={ istruncated }
+                  useWindow={ true }
+                  initialLoad={ false }>
+                  <ObjectsList dataType={ this.dataType.bind(this) }
+                    selectPrefix={ this.selectPrefix.bind(this) }
+                    showDeleteConfirmation={ this.showDeleteConfirmation.bind(this) }
+                    shareObject={ this.shareObject.bind(this) }
+                    checkObject={ this.checkObject.bind(this) }
+                    checkedObjectsArray={ checkedObjects }
+                    showObjectPreview={ this.showPreview.bind(this) } />
+                </InfiniteScroll>
+                <div className="text-center" style={ { display: (istruncated && currentBucket) ? 'block' : 'none' } }>
+                  <span>Loading...</span>
+                </div>
+              </Dropzone>
+            </div>
           </div>
-          <Dropzone>
-            { alertBox }
-            <header className="fe-header-mobile hidden-lg hidden-md">
-              <div id="feh-trigger" className={ 'feh-trigger ' + (classNames({
-                                                  'feht-toggled': sidebarStatus
-                                                })) } onClick={ this.toggleSidebar.bind(this, !sidebarStatus) }>
-                <div className="feht-lines">
-                  <div className="top"></div>
-                  <div className="center"></div>
-                  <div className="bottom"></div>
-                </div>
-              </div>
-              <img className="mh-logo" src={ logo } alt="" />
-            </header>
-            <header className="fe-header">
-              <Path selectPrefix={ this.selectPrefix.bind(this) } />
-              { storageUsageDetails }
-              <ul className="feh-actions">
-                <BrowserUpdate />
-                { loginButton }
-                { browserDropdownButton }
-              </ul>
-            </header>
-            <div className="feb-container">
-              <header className="fesl-row" data-type="folder">
-                <div className="fesl-item fesl-item-icon"></div>
-                <div className="fesl-item fesl-item-name" onClick={ this.sortObjectsByName.bind(this) } data-sort="name">
-                  Name
-                  <i className={ classNames({
-                                   'fesli-sort': true,
-                                   'fa': true,
-                                   'fa-sort-alpha-desc': sortNameOrder,
-                                   'fa-sort-alpha-asc': !sortNameOrder
-                                 }) } />
-                </div>
-                <div className="fesl-item fesl-item-size" onClick={ this.sortObjectsBySize.bind(this) } data-sort="size">
-                  Size
-                  <i className={ classNames({
-                                   'fesli-sort': true,
-                                   'fa': true,
-                                   'fa-sort-amount-desc': sortSizeOrder,
-                                   'fa-sort-amount-asc': !sortSizeOrder
-                                 }) } />
-                </div>
-                <div className="fesl-item fesl-item-modified" onClick={ this.sortObjectsByDate.bind(this) } data-sort="last-modified">
-                  Last Modified
-                  <i className={ classNames({
-                                   'fesli-sort': true,
-                                   'fa': true,
-                                   'fa-sort-numeric-desc': sortDateOrder,
-                                   'fa-sort-numeric-asc': !sortDateOrder
-                                 }) } />
-                </div>
-                <div className="fesl-item fesl-item-actions"></div>
-              </header>
+          <aside className={ classNames({
+                               'preview': true,
+                               'preview--toggled': previewStatus
+                             }) }>
+            <div className="preview__header">
+              <span className="preview__label">filename.jpg</span>
+              <i className="preview__close zmdi zmdi-long-arrow-left" onClick={ this.hidePreview.bind(this) } />
             </div>
-            <div className="feb-container">
-              <InfiniteScroll loadMore={ this.listObjects.bind(this) }
-                hasMore={ istruncated }
-                useWindow={ true }
-                initialLoad={ false }>
-                <ObjectsList dataType={ this.dataType.bind(this) }
-                  selectPrefix={ this.selectPrefix.bind(this) }
-                  showDeleteConfirmation={ this.showDeleteConfirmation.bind(this) }
-                  shareObject={ this.shareObject.bind(this) }
-                  checkObject={ this.checkObject.bind(this) }
-                  checkedObjectsArray={ checkedObjects } />
-              </InfiniteScroll>
-              <div className="text-center" style={ { display: (istruncated && currentBucket) ? 'block' : 'none' } }>
-                <span>Loading...</span>
+            <div className="preview__body">
+              <div className="preview__item preview__item--img">
+                <img src="https://placeholdit.imgix.net/~text?w=100&h=300" alt="" />
               </div>
-            </div>
-            <UploadModal />
-            { createButton }
-            <Modal className="modal-create-bucket"
-              bsSize="small"
-              animation={ false }
-              show={ showMakeBucketModal }
-              onHide={ this.hideMakeBucketModal.bind(this) }>
-              <button className="close close-alt" onClick={ this.hideMakeBucketModal.bind(this) }>
-                <span>×</span>
-              </button>
-              <ModalBody>
-                <form onSubmit={ this.makeBucket.bind(this) }>
-                  <div className="input-group">
-                    <input className="ig-text"
-                      type="text"
-                      ref="makeBucketRef"
-                      placeholder="Bucket Name"
-                      autoFocus/>
-                    <i className="ig-helpers"></i>
-                  </div>
-                </form>
-              </ModalBody>
-            </Modal>
-            <Modal className="modal-about modal-dark"
-              animation={ false }
-              show={ showAbout }
-              onHide={ this.hideAbout.bind(this) }>
-              <button className="close" onClick={ this.hideAbout.bind(this) }>
-                <span>×</span>
-              </button>
-              <div className="ma-inner">
-                <div className="mai-item hidden-xs">
-                  <a href="https://minio.io" target="_blank"><img className="maii-logo" src={ logo } alt="" /></a>
-                </div>
-                <div className="mai-item">
-                  <ul className="maii-list">
-                    <li>
-                      <div>
-                        Version
-                      </div>
-                      <small>{ version }</small>
-                    </li>
-                    <li>
-                      <div>
-                        Memory
-                      </div>
-                      <small>{ memory }</small>
-                    </li>
-                    <li>
-                      <div>
-                        Platform
-                      </div>
-                      <small>{ platform }</small>
-                    </li>
-                    <li>
-                      <div>
-                        Runtime
-                      </div>
-                      <small>{ runtime }</small>
-                    </li>
-                  </ul>
-                </div>
+              <div className="preview__info">
+                <dl>
+                  <dt>Type</dt>
+                  <dd>
+                    JPEG Image
+                  </dd>
+                  <dt>Size</dt>
+                  <dd>
+                    1.1 MB
+                  </dd>
+                  <dt>Modified</dt>
+                  <dd>
+                    Mar 1, 2017 12:!2 PM
+                  </dd>
+                  <dt>Policy</dt>
+                  <dd>
+                    Read and Write
+                  </dd>
+                  <dt>Shared</dt>
+                  <dd>
+                    No
+                  </dd>
+                </dl>
               </div>
-            </Modal>
-            <Modal className="modal-policy"
-              animation={ false }
-              show={ showBucketPolicy }
-              onHide={ this.hideBucketPolicy.bind(this) }>
-              <ModalHeader>
-                Bucket Policy (
-                { currentBucket })
-                <button className="close close-alt" onClick={ this.hideBucketPolicy.bind(this) }>
-                  <span>×</span>
+              <div className="preview__actions">
+                <button className="btn btn--lg btn--primary">
+                  Download
                 </button>
-              </ModalHeader>
-              <div className="pm-body">
-                <PolicyInput bucket={ currentBucket } />
-                { policies.map((policy, i) => <Policy key={ i } prefix={ policy.prefix } policy={ policy.policy } />
-                  ) }
               </div>
-            </Modal>
-            <ConfirmModal show={ deleteConfirmation.show }
-              icon='fa fa-exclamation-triangle mci-red'
-              text='Are you sure you want to delete?'
-              sub='This cannot be undone!'
-              okText='Delete'
-              cancelText='Cancel'
-              okHandler={ this.removeObject.bind(this) }
-              cancelHandler={ this.hideDeleteConfirmation.bind(this) }>
-            </ConfirmModal>
-            <Modal show={ shareObject.show }
-              animation={ false }
-              onHide={ this.hideShareObjectModal.bind(this) }
-              bsSize="small">
-              <ModalHeader>
-                Share Object
-              </ModalHeader>
-              <ModalBody>
-                <div className="input-group copy-text">
-                  <label>
-                    Shareable Link
+            </div>
+          </aside>
+          <UploadModal />
+          { createButton }
+          <Modal className="create-bucket"
+            bsSize="small"
+            animation={ false }
+            show={ showMakeBucketModal }
+            onHide={ this.hideMakeBucketModal.bind(this) }>
+            <ModalBody>
+              <form onSubmit={ this.makeBucket.bind(this) }>
+                <div className="form-group">
+                  <label className="form-group__label">
+                    Create new bucket
                   </label>
-                  <input type="text"
-                    ref="copyTextInput"
-                    readOnly="readOnly"
-                    value={ window.location.protocol + '//' + shareObject.url }
-                    onClick={ this.selectTexts.bind(this) } />
+                  <input className="form-group__field"
+                    type="text"
+                    ref="makeBucketRef"
+                    placeholder="e.g documents"
+                    autoFocus/>
+                  <i className="form-group__bar" />
                 </div>
-                <div className="input-group" style={ { display: web.LoggedIn() ? 'block' : 'none' } }>
-                  <label>
-                    Expires in (Max 7 days)
-                  </label>
-                  <div className="set-expire">
-                    <div className="set-expire-item">
-                      <i className="set-expire-increase" onClick={ this.handleExpireValue.bind(this, 'expireDays', 1, shareObject.object) } />
-                      <div className="set-expire-title">
-                        Days
-                      </div>
-                      <div className="set-expire-value">
-                        <input ref="expireDays"
-                          type="number"
-                          min={ 0 }
-                          max={ 7 }
-                          defaultValue={ 5 }
-                          readOnly="readOnly"
-                        />
-                      </div>
-                      <i className="set-expire-decrease" onClick={ this.handleExpireValue.bind(this, 'expireDays', -1, shareObject.object) } />
-                    </div>
-                    <div className="set-expire-item">
-                      <i className="set-expire-increase" onClick={ this.handleExpireValue.bind(this, 'expireHours', 1, shareObject.object) } />
-                      <div className="set-expire-title">
-                        Hours
-                      </div>
-                      <div className="set-expire-value">
-                        <input ref="expireHours"
-                          type="number"
-                          min={ 0 }
-                          max={ 23 }
-                          defaultValue={ 0 }
-                          readOnly="readOnly"
-                        />
-                      </div>
-                      <i className="set-expire-decrease" onClick={ this.handleExpireValue.bind(this, 'expireHours', -1, shareObject.object) } />
-                    </div>
-                    <div className="set-expire-item">
-                      <i className="set-expire-increase" onClick={ this.handleExpireValue.bind(this, 'expireMins', 1, shareObject.object) } />
-                      <div className="set-expire-title">
-                        Minutes
-                      </div>
-                      <div className="set-expire-value">
-                        <input ref="expireMins"
-                          type="number"
-                          min={ 0 }
-                          max={ 59 }
-                          defaultValue={ 0 }
-                          readOnly="readOnly"
-                        />
-                      </div>
-                      <i className="set-expire-decrease" onClick={ this.handleExpireValue.bind(this, 'expireMins', -1, shareObject.object) } />
-                    </div>
-                  </div>
-                </div>
-              </ModalBody>
-              <div className="modal-footer">
-                <CopyToClipboard text={ window.location.protocol + '//' + shareObject.url } onCopy={ this.showMessage.bind(this) }>
-                  <button className="btn btn-success">
-                    Copy Link
+                <div className="text-right">
+                  <input type="submit" className="btn btn--link" value="Create" />
+                  <button className="btn btn--link" onClick={ this.hideMakeBucketModal.bind(this) }>
+                    Cancel
                   </button>
-                </CopyToClipboard>
-                <button className="btn btn-link" onClick={ this.hideShareObjectModal.bind(this) }>
-                  Cancel
-                </button>
+                </div>
+              </form>
+            </ModalBody>
+          </Modal>
+          <Modal animation={ false } show={ showAbout } onHide={ this.hideAbout.bind(this) }>
+            <i className="close close--dark" onClick={ this.hideAbout.bind(this) }>×</i>
+            <div className="about">
+              <div className="about__logo">
+                <img src={ logoInvert } alt="" />
               </div>
-            </Modal>
-            { settingsModal }
-          </Dropzone>
-        </div>
-      </div>
+              <div className="about__content">
+                <dl className="about__info">
+                  <dt>Version</dt>
+                  <dd>
+                    { version }
+                  </dd>
+                  <dt>Memory</dt>
+                  <dd>
+                    { memory }
+                  </dd>
+                  <dt>Platform</dt>
+                  <dd>
+                    { platform }
+                  </dd>
+                  <dt>Runtime</dt>
+                  <dd>
+                    { runtime }
+                  </dd>
+                </dl>
+              </div>
+            </div>
+          </Modal>
+          <Modal className="policy"
+            animation={ false }
+            show={ showBucketPolicy }
+            onHide={ this.hideBucketPolicy.bind(this) }>
+            <ModalHeader>
+              Bucket Policy
+              <small className="modal-header__sub">({ currentBucket })</small>
+              <i className="close close--dark" onClick={ this.hideBucketPolicy.bind(this) }>×</i>
+            </ModalHeader>
+            <div className="policy__body">
+              <PolicyInput bucket={ currentBucket } />
+              { policies.map((policy, i) => <Policy key={ i } prefix={ policy.prefix } policy={ policy.policy } />) }
+            </div>
+          </Modal>
+          <ConfirmModal show={ deleteConfirmation.show }
+            icon={ 'zmdi-alert-polygon c-red' }
+            text='Are you sure you want to delete?'
+            sub='This cannot be undone!'
+            okText='Delete'
+            cancelText='Cancel'
+            okHandler={ this.removeObject.bind(this) }
+            cancelHandler={ this.hideDeleteConfirmation.bind(this) }>
+          </ConfirmModal>
+          <Modal show={ shareObject.show }
+            animation={ false }
+            onHide={ this.hideShareObjectModal.bind(this) }
+            bsSize="small">
+            <ModalHeader>
+              Share Object
+            </ModalHeader>
+            <ModalBody>
+              <div className="form-group">
+                <label className="form-group__label">
+                  Shareable Link
+                </label>
+                <input className="form-group__field"
+                  type="text"
+                  ref="copyTextInput"
+                  readOnly="readOnly"
+                  value={ window.location.protocol + '//' + shareObject.url }
+                  onClick={ this.selectTexts.bind(this) } />
+                <i className="form-group__bar" />
+              </div>
+              <div className="form-group" style={ { display: web.LoggedIn() ? 'block' : 'none' } }>
+                <label className="form-group__label">
+                  Expires in
+                </label>
+                <div className="set-expire">
+                  <div className="set-expire__item">
+                    <i className="set-expire__increase" onClick={ this.handleExpireValue.bind(this, 'expireDays', 1, shareObject.object) }></i>
+                    <div className="set-expire__title">
+                      Days
+                    </div>
+                    <div className="set-expire__value">
+                      <input ref="expireDays"
+                        type="number"
+                        min={ 0 }
+                        max={ 7 }
+                        defaultValue={ 5 } />
+                    </div>
+                    <i className="set-expire__decrease" onClick={ this.handleExpireValue.bind(this, 'expireDays', -1, shareObject.object) }></i>
+                  </div>
+                  <div className="set-expire__item">
+                    <i className="set-expire__increase" onClick={ this.handleExpireValue.bind(this, 'expireHours', 1, shareObject.object) }></i>
+                    <div className="set-expire__title">
+                      Hours
+                    </div>
+                    <div className="set-expire__value">
+                      <input ref="expireHours"
+                        type="number"
+                        min={ 0 }
+                        max={ 23 }
+                        defaultValue={ 0 } />
+                    </div>
+                    <i className="set-expire__decrease" onClick={ this.handleExpireValue.bind(this, 'expireHours', -1, shareObject.object) }></i>
+                  </div>
+                  <div className="set-expire__item">
+                    <i className="set-expire__increase" onClick={ this.handleExpireValue.bind(this, 'expireMins', 1, shareObject.object) }></i>
+                    <div className="set-expire__title">
+                      Minutes
+                    </div>
+                    <div className="set-expire__value">
+                      <input ref="expireMins"
+                        type="number"
+                        min={ 0 }
+                        max={ 59 }
+                        defaultValue={ 0 } />
+                    </div>
+                    <i className="set-expire__decrease" onClick={ this.handleExpireValue.bind(this, 'expireMins', -1, shareObject.object) }></i>
+                  </div>
+                </div>
+              </div>
+            </ModalBody>
+            <div className="modal-footer">
+              <CopyToClipboard text={ window.location.protocol + '//' + shareObject.url } onCopy={ this.showMessage.bind(this) }>
+                <button className="btn btn--link">
+                  Copy Link
+                </button>
+              </CopyToClipboard>
+              <button className="btn btn--link" onClick={ this.hideShareObjectModal.bind(this) }>
+                Cancel
+              </button>
+            </div>
+          </Modal>
+          { settingsModal }
+          <div className={ classNames({
+                             "sidebar-backdrop": true,
+                             "sidebar-backdrop--toggled": sidebarStatus
+                           }) } onClick={ this.hideSidebar.bind(this) } />
+        </section>
+      </section>
     )
   }
 }
