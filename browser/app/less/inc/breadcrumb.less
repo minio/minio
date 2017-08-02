@@ -1,0 +1,38 @@
+.breadcrumb {
+    line-height: 100%;
+    padding: 25px 30px 10px;
+
+    @media (max-width: @screen-xs-max) {
+        padding: 15px 20px 10px;
+    }
+
+    & > span {
+        display: inline-block;
+        vertical-align: middle;
+        .user-select(none);
+        position: relative;
+
+        &:not(:nth-last-child(2)) {
+            color: @headings-color;
+            font-weight: @font-weight-bold;
+            cursor: pointer;
+
+            &:hover {
+                color: lighten(@headings-color, 10%);
+            }
+
+            & + span {
+                margin-left: 35px;
+
+                &:before {
+                    content: '\f2fb';
+                    font-family: @font-family-icon;
+                    color: @text-muted-color;
+                    position: absolute;
+                    left: -20px;
+                    top: 1px;
+                }
+            }
+        }
+    }
+}

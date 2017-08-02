@@ -37,26 +37,16 @@ export default class Dropzone extends React.Component {
   render() {
     // Overwrite the default styling from react-dropzone; otherwise it
     // won't handle child elements correctly.
-    const style = {
-      height: '100%',
-      borderWidth: '0',
-      borderStyle: 'dashed',
-      borderColor: '#fff'
-    }
-    const activeStyle = {
-      borderWidth: '2px',
-      borderColor: '#777'
-    }
-    const rejectStyle = {
-      backgroundColor: '#ffdddd'
-    }
+    const className = 'objects__drop'
+    const activeClassName = 'objects__drop--active'
+    const rejectClassName = 'objects__drop--reject'
 
     // disableClick means that it won't trigger a file upload box when
     // the user clicks on a file.
     return (
-      <ReactDropzone style={ style }
-        activeStyle={ activeStyle }
-        rejectStyle={ rejectStyle }
+      <ReactDropzone className={ className }
+        activeClassName={ activeClassName }
+        rejectClassName={ rejectClassName }
         disableClick={ true }
         onDrop={ this.onDrop }>
         { this.props.children }

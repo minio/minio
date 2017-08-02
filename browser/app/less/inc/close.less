@@ -1,0 +1,36 @@
+.close-variant(@color, @bg-color, @color-hover, @bg-color-hover) {
+    background-color: @bg-color;
+    color: @color;
+
+    &:hover,
+    &:focus {
+        background-color: @bg-color-hover;
+        color: @color-hover;
+    }
+}
+
+.close {
+    font-weight: @font-weight-bold;
+    font-style: normal;
+    opacity: 1;
+    font-size: 16px;
+    position: absolute;
+    text-align: center;
+    z-index: 1;
+    border: 0;
+    width: 25px;
+    height: 25px;
+    border-radius: 50%;
+    text-shadow: none;
+    line-height: 22px;
+    cursor: pointer;
+    background-color: darken(@muted-bg, 1%);
+    color: lighten(@text-color, 15%);
+    .transition(all);
+    .transition-duration(300ms);
+
+    &:hover {
+        background-color: darken(@muted-bg, 5%);
+        color: darken(@text-color, 10%);
+    }
+}

@@ -43,6 +43,7 @@ export const SET_SORT_SIZE_ORDER = 'SET_SORT_SIZE_ORDER'
 export const SET_SORT_DATE_ORDER = 'SET_SORT_DATE_ORDER'
 export const SET_LATEST_UI_VERSION = 'SET_LATEST_UI_VERSION'
 export const SET_SIDEBAR_STATUS = 'SET_SIDEBAR_STATUS'
+export const SET_PREVIEW_STATUS = 'SET_PREVIEW_STATUS'
 export const SET_LOGIN_REDIRECT_PATH = 'SET_LOGIN_REDIRECT_PATH'
 export const SET_LOAD_BUCKET = 'SET_LOAD_BUCKET'
 export const SET_LOAD_PATH = 'SET_LOAD_PATH'
@@ -225,6 +226,13 @@ export const setSidebarStatus = (status) => {
   return {
     type: SET_SIDEBAR_STATUS,
     sidebarStatus: status
+  }
+}
+
+export const setPreviewStatus = (status) => {
+  return {
+    type: SET_PREVIEW_STATUS,
+    previewStatus: status
   }
 }
 
@@ -447,7 +455,7 @@ export const downloadSelected = (url, req, xhr) => {
         var separator = req.prefix.length > 1 ? '-' : ''
 
         anchor.href = blobUrl
-        anchor.download = req.bucketName+separator+req.prefix.slice(0, -1)+'.zip';
+        anchor.download = req.bucketName + separator + req.prefix.slice(0, -1) + '.zip';
 
 
 
