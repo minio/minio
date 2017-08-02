@@ -57,7 +57,12 @@ export default (state = {
       object: ''
     },
     prefixWritable: false,
-    checkedObjects: []
+    checkedObjects: [],
+    previewStatus: {
+      display: false,
+      bucket: '',
+      object: ''
+    }
   }, action) => {
   let newState = Object.assign({}, state)
   switch (action.type) {

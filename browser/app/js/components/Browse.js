@@ -34,6 +34,7 @@ import UploadModal from '../components/UploadModal'
 import SettingsModal from '../components/SettingsModal'
 import PolicyInput from '../components/PolicyInput'
 import Policy from '../components/Policy'
+import Preview from '../components/Preview'
 import BrowserDropdown from '../components/BrowserDropdown'
 import ConfirmModal from './ConfirmModal'
 import * as actions from '../actions'
@@ -432,20 +433,9 @@ export default class Browse extends React.Component {
       })))
   }
 
-  clearSelected() {
-    const {dispatch} = this.props
-    dispatch(actions.checkedObjectsReset())
-  }
-
-  showPreview(e) {
-    const {dispatch} = this.props
-    dispatch(actions.setPreviewStatus(true))
-  }
-
-  hidePreview(e) {
-    const {dispatch} = this.props
-    dispatch(actions.setPreviewStatus(false))
-    this.clearSelected()
+  showPreview(e, bucket, object) {
+    const {dispatch, previewStatus} = this.props
+    dispatch(actions.setPreviewStatus(true, bucket, object))
   }
 
   render() {
@@ -453,7 +443,6 @@ export default class Browse extends React.Component {
     const {showMakeBucketModal, alert, sortNameOrder, sortSizeOrder, sortDateOrder, showAbout, showBucketPolicy, checkedObjects} = this.props
     const {version, memory, platform, runtime} = this.props.serverInfo
     const {sidebarStatus} = this.props
-    const {previewStatus} = this.props
     const {showSettings} = this.props
     const {policies, currentBucket, currentPath} = this.props
     const {deleteConfirmation} = this.props
@@ -629,6 +618,7 @@ export default class Browse extends React.Component {
                     shareObject={ this.shareObject.bind(this) }
                     checkObject={ this.checkObject.bind(this) }
                     checkedObjectsArray={ checkedObjects }
+                    currentBucket={ currentBucket }
                     showObjectPreview={ this.showPreview.bind(this) } />
                 </InfiniteScroll>
                 <div className="text-center" style={ { display: (istruncated && currentBucket) ? 'block' : 'none' } }>
@@ -637,49 +627,7 @@ export default class Browse extends React.Component {
               </Dropzone>
             </div>
           </div>
-          <aside className={ classNames({
-                               'preview': true,
-                               'preview--toggled': previewStatus
-                             }) }>
-            <div className="preview__header">
-              <span className="preview__label">filename.jpg</span>
-              <i className="preview__close zmdi zmdi-long-arrow-left" onClick={ this.hidePreview.bind(this) } />
-            </div>
-            <div className="preview__body">
-              <div className="preview__item preview__item--img">
-                <img src="https://placeholdit.imgix.net/~text?w=100&h=300" alt="" />
-              </div>
-              <div className="preview__info">
-                <dl>
-                  <dt>Type</dt>
-                  <dd>
-                    JPEG Image
-                  </dd>
-                  <dt>Size</dt>
-                  <dd>
-                    1.1 MB
-                  </dd>
-                  <dt>Modified</dt>
-                  <dd>
-                    Mar 1, 2017 12:!2 PM
-                  </dd>
-                  <dt>Policy</dt>
-                  <dd>
-                    Read and Write
-                  </dd>
-                  <dt>Shared</dt>
-                  <dd>
-                    No
-                  </dd>
-                </dl>
-              </div>
-              <div className="preview__actions">
-                <button className="btn btn--lg btn--primary">
-                  Download
-                </button>
-              </div>
-            </div>
-          </aside>
+          <Preview />
           <UploadModal />
           { createButton }
           <Modal className="create-bucket"
