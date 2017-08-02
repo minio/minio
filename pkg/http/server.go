@@ -118,6 +118,10 @@ func (srv *Server) Start() (err error) {
 
 // Shutdown - shuts down HTTP server.
 func (srv *Server) Shutdown() error {
+	if srv.listener == nil {
+		return errors.New("server not initialized")
+	}
+
 	if atomic.AddUint32(&srv.inShutdown, 1) > 1 {
 		// shutdown in progress
 		return errors.New("http server already in shutdown")
