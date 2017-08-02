@@ -863,11 +863,9 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 	}
 
 	if len(policyInfo.Statements) == 0 {
-		err = persistAndNotifyBucketPolicyChange(args.BucketName, policyChange{true, nil}, objectAPI)
-		if err != nil {
-			return toJSONError(err, args.BucketName)
-		}
-		return nil
+		return toJSONError(persistAndNotifyBucketPolicyChange(args.BucketName, policyChange{
+			true, policy.BucketAccessPolicy{},
+		}, objectAPI), args.BucketName)
 	}
 	data, err := json.Marshal(policyInfo)
 	if err != nil {

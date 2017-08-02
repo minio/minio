@@ -564,7 +564,6 @@ func (l *s3Objects) SetBucketPolicies(bucket string, policyInfo policy.BucketAcc
 	if err := l.Client.PutBucketPolicy(bucket, policyInfo); err != nil {
 		return s3ToObjectError(traceError(err), bucket, "")
 	}
-
 	return nil
 }
 
