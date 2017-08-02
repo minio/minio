@@ -23,23 +23,23 @@ let ConfirmModal = ({baseClass, icon, text, sub, okText, cancelText, okHandler, 
     <Modal bsSize="small"
       animation={ false }
       show={ show }
-      className={ "modal-confirm " + (baseClass || '') }>
+      className={ "modal--confirm " + (baseClass || '') }>
       <ModalBody>
-        <div className="mc-icon">
-          <i className={ icon }></i>
+        <div className="modal--confirm__icon">
+          <i className={ 'zmdi ' + icon } />
         </div>
-        <div className="mc-text">
+        <div className="modal--confirm__text">
           { text }
         </div>
-        <div className="mc-sub">
+        <div className="modal--confirm__sub">
           { sub }
         </div>
       </ModalBody>
-      <div className="modal-footer">
-        <button className="btn btn-danger" onClick={ okHandler }>
+      <div className="modal-footer text-center">
+        <button className="btn btn--link" onClick={ okHandler }>
           { okText }
         </button>
-        <button className="btn btn-link" onClick={ cancelHandler }>
+        <button className="btn btn--link" onClick={ cancelHandler }>
           { cancelText }
         </button>
       </div>

@@ -10,22 +10,17 @@
 
 html {
     font-size: 10px;
-    -webkit-tap-highlight-color: rgba(0,0,0,0);
+    -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+    min-height: 100%;
 }
 
 html,
 body {
-    min-height: 100%;
+    font-weight: @font-weight-body;
 }
 
-a {
-    .transition(color);
-    .transition-duration(300ms);
-
+h1, h2, h3, h4, h5, h6 {
+    font-family: @headings-font-family;
+    color: @headings-color;
+    font-weight: @font-weight-bold;
 }
-
-button {
-    border: 0;
-}
-
-
