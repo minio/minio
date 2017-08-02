@@ -74,6 +74,10 @@ var exports = {
       '/minio/zip': {
         target: 'http://localhost:9000',
         secure: false
+      },
+      '/minio/thumbnail/*': {
+        target: 'http://localhost:9000',
+        secure: false
       }
     }
   },

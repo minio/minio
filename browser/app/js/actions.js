@@ -229,10 +229,14 @@ export const setSidebarStatus = (status) => {
   }
 }
 
-export const setPreviewStatus = (status) => {
+export const setPreviewStatus = (display, bucket, object) => {
   return {
     type: SET_PREVIEW_STATUS,
-    previewStatus: status
+    previewStatus: {
+      bucket: bucket,
+      object: object,
+      display: display
+    }
   }
 }
 
