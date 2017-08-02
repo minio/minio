@@ -662,6 +662,45 @@ func testGetAuthWebHandler(obj ObjectLayer, instanceType string, t TestErrHandle
 	}
 }
 
+func TestWebCreateURLToken(t *testing.T) {
+	ExecObjectLayerTest(t, testCreateURLToken)
+}
+
+func testCreateURLToken(obj ObjectLayer, instanceType string, t TestErrHandler) {
+	apiRouter := initTestWebRPCEndPoint(obj)
+	credentials := serverConfig.GetCredential()
+
+	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	args := WebGenericArgs{}
+	tokenReply := &URLTokenReply{}
+
+	req, err := newTestWebRPCRequest("Web.CreateURLToken", authorization, args)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rec := httptest.NewRecorder()
+	apiRouter.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Expected the response status to be 200, but instead found `%d`", rec.Code)
+	}
+
+	err = getTestWebRPCResponse(rec, &tokenReply)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Ensure the token is valid now. It will expire later.
+	if !isAuthTokenValid(tokenReply.Token) {
+		t.Fatalf("token is not valid")
+	}
+}
+
 // Wrapper for calling Upload Handler
 func TestWebHandlerUpload(t *testing.T) {
 	ExecObjectLayerTest(t, testUploadWebHandler)
@@ -815,6 +854,32 @@ func testDownloadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandl
 		t.Fatalf("The downloaded file is corrupted")
 	}
 
+	// Temporary token should succeed.
+	tmpToken, err := authenticateURL(credentials.AccessKey, credentials.SecretKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	code, bodyContent = test(tmpToken)
+
+	if code != http.StatusOK {
+		t.Fatalf("Expected the response status to be 200, but instead found `%d`", code)
+	}
+
+	if !bytes.Equal(bodyContent, content) {
+		t.Fatalf("The downloaded file is corrupted")
+	}
+
+	// Old token should fail.
+	code, bodyContent = test("eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE1MDAzMzIwOTUsImlhdCI6MTUwMDMzMjAzNSwic3ViIjoiRFlLSU01VlRZNDBJMVZQSE5VMTkifQ.tXQ45GJc8eOFet_a4VWVyeqJEOPWybotQYNr2zVxBpEOICkGbu_YWGhd9TkLLe1E65oeeiLHPdXSN8CzcbPoRA")
+	if code != http.StatusForbidden {
+		t.Fatalf("Expected the response status to be 403, but instead found `%d`", code)
+	}
+
+	if !bytes.Equal(bodyContent, bytes.NewBufferString("Authentication failed, check your access credentials").Bytes()) {
+		t.Fatalf("Expected authentication error message, got %v", bodyContent)
+	}
+
 	// Unauthenticated download should fail.
 	code, _ = test("")
 	if code != http.StatusForbidden {
@@ -848,7 +913,7 @@ func testWebHandlerDownloadZip(obj ObjectLayer, instanceType string, t TestErrHa
 	apiRouter := initTestWebRPCEndPoint(obj)
 	credentials := serverConfig.GetCredential()
 
-	authorization, err := getWebRPCToken(apiRouter, credentials.AccessKey, credentials.SecretKey)
+	authorization, err := authenticateURL(credentials.AccessKey, credentials.SecretKey)
 	if err != nil {
 		t.Fatal("Cannot authenticate")
 	}

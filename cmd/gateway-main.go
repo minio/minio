@@ -204,23 +204,31 @@ const (
 // - Google Cloud Storage.
 // - Sia Decentralized Private Cloud.
 // - Add your favorite backend here.
-func newGatewayLayer(backendType gatewayBackend, arg string) (GatewayLayer, error) {
+func newGatewayLayer(backendType gatewayBackend, arg string) (gw GatewayLayer, err error) {
 	switch backendType {
 	case azureBackend:
-		return newAzureLayer(arg)
+		gw, err = newAzureLayer(arg)
 	case s3Backend:
-		return newS3Gateway(arg)
+		gw, err = newS3Gateway(arg)
 	case gcsBackend:
 		// FIXME: The following print command is temporary and
 		// will be removed when gcs is ready for production use.
 		log.Println(colorYellow("\n               *** Warning: Not Ready for Production ***"))
-		return newGCSGateway(arg)
+		gw, err = newGCSGateway(arg)
     case siaBackend:
 		log.Println(colorYellow("\n               *** Warning: Sia Not Ready for Production ***"))
-		return newSiaGateway(arg)
+		gw, err = newSiaGateway(arg)
+
+	default:
+		return nil, fmt.Errorf("Unrecognized backend type %s", backendType)
 	}
 
-	return nil, fmt.Errorf("Unrecognized backend type %s", backendType)
+	if err = initBucketPoliciesGW(gw); err != nil {
+		return nil, err
+		
+	}
+
+	return gw, nil
 }
 
 // Return endpoint.

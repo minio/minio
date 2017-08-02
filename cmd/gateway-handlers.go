@@ -478,6 +478,9 @@ func (api gatewayAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *h
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
+
+	globalBucketPolicies.SetBucketPolicy(bucket, policyChange{false, policyInfo})
+
 	// Success.
 	writeSuccessNoContent(w)
 }
@@ -509,9 +512,13 @@ func (api gatewayAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r
 		return
 	}
 
-	// Delete bucket access policy, by passing an empty policy
-	// struct.
+	// Delete bucket access policy.
 	objAPI.DeleteBucketPolicies(bucket)
+
+	globalBucketPolicies.SetBucketPolicy(bucket, policyChange{
+		true, policy.BucketAccessPolicy{},
+	})
+
 	// Success.
 	writeSuccessNoContent(w)
 }
