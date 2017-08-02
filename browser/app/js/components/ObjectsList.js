@@ -21,7 +21,7 @@ import connect from 'react-redux/lib/components/connect'
 import Dropdown from 'react-bootstrap/lib/Dropdown'
 import MaterialDesignIconicFonts from 'material-design-iconic-font/dist/css/material-design-iconic-font.min.css'
 
-let ObjectsList = ({objects, currentPath, selectPrefix, dataType, showDeleteConfirmation, shareObject, loadPath, checkObject, checkedObjectsArray, showObjectPreview, objectName}) => {
+let ObjectsList = ({objects, currentPath, selectPrefix, dataType, showDeleteConfirmation, shareObject, loadPath, checkObject, checkedObjectsArray, currentBucket, showObjectPreview}) => {
   const list = objects.map((object, i) => {
     let size = object.name.endsWith('/') ? '' : humanize.filesize(object.size)
     let lastModified = object.name.endsWith('/') ? '' : Moment(object.lastModified).format('lll')
@@ -39,7 +39,7 @@ let ObjectsList = ({objects, currentPath, selectPrefix, dataType, showDeleteConf
 
 
     return (
-      <div key={ i } className={ "objects__row " + folderClass + loadingClass + activeClass } onClick={ (e) => showObjectPreview(e) }>
+      <div key={ i } className={ "objects__row " + folderClass + loadingClass + activeClass } onClick={ (e) => showObjectPreview(e, currentBucket, object.name) }>
         <div className="objects__item objects__item--select" data-object-type={ dataType(object.name, object.contentType) }>
           <div className="checkbox">
             <input type="checkbox"
