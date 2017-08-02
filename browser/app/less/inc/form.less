@@ -1,71 +1,47 @@
-.form-control {
-    border: 0;
-    border-bottom: 1px solid @input-border;
-    color: #32393F;
-    padding: 5px;
-    width: 100%;
-    font-size: 13px;
-    background-color: transparent;
-}
-
-select.form-control {
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    border-radius: 0;
-    background: url(../../img/select-caret.svg) no-repeat bottom 7px right;
-
-}
-
-
-/*--------------------------
-    Input Group
-----------------------------*/
-.input-group {
+// Form group
+.form-group {
     position: relative;
-    &:not(:last-child) {
-        margin-bottom: 25px;
+
+    &:not(:only-child):not(:last-child) {
+        margin-bottom: 20px;
     }
 
-    label:not(.ig-label) {
-        font-size: 13px;
-        display: block;
-        margin-bottom: 10px;
+    &:not(.form-group--invert) {
+        .form-group__bar {
+            &:before, &:after {
+                background-color: @light-blue;
+            }
+        }
+
+        .form-group__field {
+            border-bottom: 1px solid @input-border;
+            color: @input-color;
+
+            .placeholder(@text-muted-color);
+        }
     }
 }
 
-.ig-label {
+.form-group__wrap {
+    position: relative;
+}
+
+.form-group__bar {
     position: absolute;
-    text-align: center;
-    bottom: 7px;
     left: 0;
-    width: 100%;
-    .transition(all);
-    .transition-duration(250ms);
-    padding: 2px 0 3px;
-    border-radius: 2px;
-    font-weight: 400;
-}
-
-.ig-helpers {
+    bottom: 0;
     z-index: 1;
     width: 100%;
-    left: 0;
 
-    &,
-    &:before,
-    &:after {
+    &:before, &:after {
+        content: '';
         position: absolute;
         height: 2px;
-        bottom: 0;
-    }
-
-    &:before,
-    &:after {
-        content: '';
         width: 0;
+        bottom: 0;
         .transition(all);
-        .transition-duration(250ms);
-        background-color: #03A9F4;
+        .transition-duration(200ms);
+        .transition-timing-function(ease);
     }
 
     &:before {
@@ -77,151 +53,217 @@ select.form-control {
     }
 }
 
-.ig-text {
-    width: 100%;
-    height: 40px;
+.form-group--invert {
+    .form-group__bar {
+        &:before,
+        &:after {
+            background-color: @white;
+        }
+    }
+
+    .form-group__field {
+        border-bottom: 1px solid @input-border-invert;
+        color: @input-color-invert;
+
+        .placeholder(@placeholder-color-invert);
+    }
+}
+
+// Controls
+.form-group__field {
     border: 0;
-    background: transparent !important;
-    text-align: center;
-    position: relative;
-    z-index: 1;
-    border-bottom: 1px solid #eee;
-    color: #32393F;
-    font-size: 13px;
+    width: 100%;
+    font-size: @font-size-base - 2;
+    background-color: @input-bg;
+    padding: 0 1px;
 
-
-    &:focus + .ig-helpers {
-        &:before,
-        &:after {
-            width: 50%;
-        }
+    &:not(.mb-form-group__field--lg):not(.form-group__field--sm) {
+        height: 37px;
     }
 
-    &:valid,
-    &:disabled,
     &:focus {
-        & ~ .ig-label {
-            bottom: 35px;
-            font-size: 13px;
-            z-index: 1;
-        }
-    }
-
-    &:disabled {
-        .opacity(0.5);
-    }
-}
-
-.ig-dark {
-    .ig-text {
-        color: @white !important;
-        border-color: rgba(255,255,255,0.1) !important;
-    }
-
-    .ig-helpers {
-        &:before,
-        &:after {
-            background-color: #dfdfdf;
-            height: 1px;
+        & ~ .form-group__bar {
+            &:before,
+            &:after {
+                width: 50%;
+            }
         }
     }
 }
 
-.ig-left {
-    .ig-label,
-    .ig-text {
-        text-align: left;
+.form-group__field--sm {
+    height: 32px;
+}
+
+select {
+    background-color: transparent;
+
+    &.form-group__field {
+        border-bottom: 1px solid @input-border;
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        border-radius: 0;
+        background: url(../../img/select-caret.svg) no-repeat bottom 5px right 1px;
     }
 }
 
-.ig-error {
-    .ig-label {
-        color: #E23F3F;
-    }
-    .ig-helpers i {
-        &:first-child,
-        &:first-child:before,
-        &:first-child:after {
-            background: rgba(226, 63, 63, 0.43);
-        }
-        &:last-child,
-        &:last-child:before,
-        &:last-child:after {
-            background: #E23F3F !important;
-        }
-    }
-    &:after {
-        content: "\f05a";
-        font-family: FontAwesome;
-        position: absolute;
-        top: 17px;
-        right: 9px;
-        font-size: 20px;
-        color: #D33D3E;
-    }
+// Label
+.form-group__label {
+    text-transform: uppercase;
+    color: @text-muted-color;
+    font-size: 11px;
+    display: block;
+    margin-bottom: 10px;
+    font-weight: @font-weight-bold;
 }
 
-.ig-search {
-    &:before {
-        font-family: @font-family-icon;
-        content: '\f002';
-        font-size: 15px;
-        position: absolute;
-        left: 2px;
-        top: 8px;
-    }
-
-    .ig-text {
-        padding-left: 25px;
-    }
-}
-
-
-/*--------------------------
-    Share Spinners
-----------------------------*/
-.set-expire {
+// Addons
+.form-group__addon {
+    position: absolute;
+    top: 0;
+    right: 0;
     border: 1px solid @input-border;
-    margin: 35px 0 30px;
-    position: relative;
+    width: 40px;
+    text-align: center;
+    height: 100%;
+    background-color: @input-bg;
+    line-height: 40px;
+}
 
-    &:before {
-        content: '';
+.form-group__toggle-type {
+    &:before,
+    &:after {
+        font-style: normal;
+        font-family: @font-family-icon;
         position: absolute;
         left: 0;
         top: 0;
-        width: 100%;
         height: 100%;
-        z-index: 1;
+        width: 100%;
+        font-size: 18px;
+        line-height: 36px;
+        .transition(all);
+        .transition-duration(300ms);
+        cursor: pointer;
+    }
+
+    &:hover {
+        color: @headings-color;
+    }
+
+    &:before {
+        content: '\f15c';
+        color: @green;
+    }
+
+    &:after {
+        content: '\f15b';
+        .scale(0);
+        color: @red;
+    }
+
+    &.toggled {
+        &:before {
+            .scale(0);
+        }
+
+        &:after {
+            .scale(1);
+        }
     }
 }
 
-.set-expire-item {
-    padding: 9px 5px 3px;
+// Checkbox
+.checkbox {
+    position: relative;
+
+    input[type=checkbox] {
+        .opacity(0);
+        position: relative;
+        z-index: 1;
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+
+        &:checked {
+            & ~ .checkbox__helper {
+                &:after {
+                    .scale(1);
+                    .opacity(1);
+                }
+
+                &:before {
+                    .opacity(0);
+                }
+            }
+        }
+    }
+}
+
+.checkbox__helper {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 18px;
+    height: 18px;
+
+    &:before,
+    &:after {
+        font-family: @font-family-icon;
+        position: absolute;
+        left: 0;
+        top: -2px;
+        font-style: normal;
+        font-size: 23px;
+        line-height: 100%;
+        .transition(all);
+        .transition-duration(200ms);
+
+    }
+
+    &:before {
+        content: '\f26c';
+    }
+
+    &:after {
+        content: '\f269';
+        .scale(0);
+        .opacity(0);
+    }
+}
+
+// Share spinners
+.set-expire {
+    border: 2px solid @input-border;
+    margin: 35px 0 30px;
+}
+
+.set-expire__item {
+    padding: 12px 5px 0;
     position: relative;
     display: table-cell;
     width: 1%;
     text-align: center;
-    .user-select(none);
 
     &:not(:last-child) {
-        border-right: 1px solid @input-border;
+        border-right: 2px solid @input-border;
     }
 }
 
-.set-expire-title {
+.set-expire__title {
     font-size: 10px;
     text-transform: uppercase;
+    font-weight: @font-weight-bold;
+    color: @text-muted-color;
 }
 
-.set-expire-value {
+.set-expire__value {
     display: inline-block;
     overflow: hidden;
     position: relative;
     left: -8px;
 
     input {
-        .user-select(none);
         font-size: 20px;
         text-align: center;
         position: relative;
@@ -235,28 +277,27 @@ select.form-control {
     }
 }
 
-.set-expire-decrease,
-.set-expire-increase {
+.set-expire__decrease,
+.set-expire__increase {
     position: absolute;
     width: 20px;
     height: 20px;
-    background: url(../../img/arrow.svg) no-repeat center;
-    background-size: 85%;
+    background: url(../../img/icons/chevron-up.svg) no-repeat center;
     left: 50%;
     margin-left: -10px;
-    .opacity(0.2);
+    .opacity(0.4);
     cursor: pointer;
 
     &:hover {
-        .opacity(0.5);
+        .opacity(0.8);
     }
 }
 
-.set-expire-increase {
+.set-expire__increase {
     top: -25px;
 }
 
-.set-expire-decrease {
+.set-expire__decrease {
     bottom: -27px;
     .rotate(-180deg);
 }

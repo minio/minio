@@ -62,6 +62,12 @@
 			"revisionTime": "2016-07-12T20:17:32-04:00"
 		},
 		{
+			"checksumSHA1": "ApK8RA5ligw3pljblqcL60fXg+U=",
+			"path": "github.com/bamiaux/rez",
+			"revision": "34826ff3306cc464ce2699a6f8d3bab5d5c40ffc",
+			"revisionTime": "2017-04-18T07:34:14Z"
+		},
+		{
 			"path": "github.com/cheggaaa/pb",
 			"revision": "73ae1d68fe0bd482ab11913a9828634f795b987f",
 			"revisionTime": "2016-07-13T13:44:25+03:00"
