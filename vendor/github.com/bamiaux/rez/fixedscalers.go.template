@@ -1,0 +1,45 @@
+// Copyright 2013 Benoît Amiaux. All rights reserved.
+// Use of this source code is governed by a MIT-style
+// license that can be found in the LICENSE file.
+
+package rez
+
+// This file is auto-generated - do not modify
+
+{{range $_, $tab := .taps}}
+{{$n := len $tab}}
+func h8scale{{$n}}Go(dst, src []byte, cof, off []int16,
+	taps, width, height, dp, sp int) {
+	di := 0
+	si := 0
+	for y := 0; y < height; y++ {
+		c := cof
+		s := src[si:]
+		d := dst[di:]
+		for x, xoff := range off[:width] {
+			pix :={{range $i, $_ := $tab}}{{if gt $i 0}} +
+			{{end}}int(s[xoff+{{$i}}]) * int(c[{{$i}}]){{end}}
+			d[x] = u8((pix + 1<<(Bits-1)) >> Bits)
+			c = c[{{$n}}:]
+		}
+		di += dp
+		si += sp
+	}
+}
+
+func v8scale{{$n}}Go(dst, src []byte, cof, off []int16,
+	taps, width, height, dp, sp int) {
+	di := 0
+	for _, yoff := range off[:height] {
+		src = src[sp*int(yoff):]
+		d := dst[di:]
+		for x := range d[:width] {
+			pix:={{range $i, $_ := $tab}}{{if gt $i 0}} +
+			{{end}}int(src[sp*{{$i}}+x]) * int(cof[{{$i}}]){{end}}
+			d[x] = u8((pix + 1<<(Bits-1)) >> Bits)
+		}
+		cof = cof[{{$n}}:]
+		di += dp
+	}
+}
+{{end}}
