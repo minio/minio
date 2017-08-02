@@ -52,6 +52,7 @@ import (
 
 	"github.com/fatih/color"
 	router "github.com/gorilla/mux"
+	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio-go/pkg/s3signer"
 	"github.com/minio/minio/pkg/hash"
 )
@@ -1761,7 +1762,7 @@ func prepareTestBackend(instanceType string) (ObjectLayer, []string, error) {
 //   STEP 2: Set the policy to allow the unsigned request, use the policyFunc to obtain the relevant statement and call
 //           the handler again to verify its success.
 func ExecObjectLayerAPIAnonTest(t *testing.T, testName, bucketName, objectName, instanceType string, apiRouter http.Handler,
-	anonReq *http.Request, policyFunc func(string, string) policyStatement) {
+	anonReq *http.Request, policyFunc func(string, string) policy.Statement) {
 
 	anonTestStr := "Anonymous HTTP request test"
 	unknownSignTestStr := "Unknown HTTP signature test"
@@ -1814,12 +1815,12 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, testName, bucketName, objectName, 
 	}
 	// Set write only policy on bucket to allow anonymous HTTP request for the operation under test.
 	// request to go through.
-	policy := bucketPolicy{
+	bp := policy.BucketAccessPolicy{
 		Version:    "1.0",
-		Statements: []policyStatement{policyFunc(bucketName, "")},
+		Statements: []policy.Statement{policyFunc(bucketName, "")},
 	}
 
-	globalBucketPolicies.SetBucketPolicy(bucketName, policyChange{false, &policy})
+	globalBucketPolicies.SetBucketPolicy(bucketName, policyChange{false, bp})
 	// now call the handler again with the unsigned/anonymous request, it should be accepted.
 	rec = httptest.NewRecorder()
 

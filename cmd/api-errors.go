@@ -763,6 +763,8 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrUnsupportedMetadata
 	case PartsSizeUnequal:
 		apiErr = ErrPartsSizeUnequal
+	case BucketPolicyNotFound:
+		apiErr = ErrNoSuchBucketPolicy
 	default:
 		apiErr = ErrInternalError
 	}

@@ -17,7 +17,7 @@
 package cmd
 
 import (
-	"fmt"
+	"encoding/json"
 	"io"
 	"io/ioutil"
 	"net"
@@ -27,7 +27,7 @@ import (
 
 	humanize "github.com/dustin/go-humanize"
 	mux "github.com/gorilla/mux"
-	"github.com/minio/minio-go/pkg/set"
+	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio/pkg/wildcard"
 )
 
@@ -36,7 +36,8 @@ const maxAccessPolicySize = 20 * humanize.KiByte
 
 // Verify if a given action is valid for the url path based on the
 // existing bucket access policy.
-func bucketPolicyEvalStatements(action string, resource string, conditions map[string]set.StringSet, statements []policyStatement) bool {
+func bucketPolicyEvalStatements(action string, resource string, conditions policy.ConditionKeyMap,
+	statements []policy.Statement) bool {
 	for _, statement := range statements {
 		if bucketPolicyMatchStatement(action, resource, conditions, statement) {
 			if statement.Effect == "Allow" {
@@ -52,7 +53,8 @@ func bucketPolicyEvalStatements(action string, resource string, conditions map[s
 }
 
 // Verify if action, resource and conditions match input policy statement.
-func bucketPolicyMatchStatement(action string, resource string, conditions map[string]set.StringSet, statement policyStatement) bool {
+func bucketPolicyMatchStatement(action string, resource string, conditions policy.ConditionKeyMap,
+	statement policy.Statement) bool {
 	// Verify if action, resource and condition match in given statement.
 	return (bucketPolicyActionMatch(action, statement) &&
 		bucketPolicyResourceMatch(resource, statement) &&
@@ -60,7 +62,7 @@ func bucketPolicyMatchStatement(action string, resource string, conditions map[s
 }
 
 // Verify if given action matches with policy statement.
-func bucketPolicyActionMatch(action string, statement policyStatement) bool {
+func bucketPolicyActionMatch(action string, statement policy.Statement) bool {
 	return !statement.Actions.FuncMatch(actionMatch, action).IsEmpty()
 }
 
@@ -95,7 +97,7 @@ func isIPInCIDR(cidr, ip string) bool {
 }
 
 // Verify if given resource matches with policy statement.
-func bucketPolicyResourceMatch(resource string, statement policyStatement) bool {
+func bucketPolicyResourceMatch(resource string, statement policy.Statement) bool {
 	// the resource rule for object could contain "*" wild card.
 	// the requested object can be given access based on the already set bucket policy if
 	// the match is successful.
@@ -104,7 +106,7 @@ func bucketPolicyResourceMatch(resource string, statement policyStatement) bool 
 }
 
 // Verify if given condition matches with policy statement.
-func bucketPolicyConditionMatch(conditions map[string]set.StringSet, statement policyStatement) bool {
+func bucketPolicyConditionMatch(conditions policy.ConditionKeyMap, statement policy.Statement) bool {
 	// Supports following conditions.
 	// - StringEquals
 	// - StringNotEquals
@@ -300,13 +302,11 @@ func (api objectAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r 
 
 	// Delete bucket access policy, by passing an empty policy
 	// struct.
-	if err := persistAndNotifyBucketPolicyChange(bucket, policyChange{true, nil}, objAPI); err != nil {
-		switch err.(type) {
-		case BucketPolicyNotFound:
-			writeErrorResponse(w, ErrNoSuchBucketPolicy, r.URL)
-		default:
-			writeErrorResponse(w, ErrInternalError, r.URL)
-		}
+	err = persistAndNotifyBucketPolicyChange(bucket, policyChange{
+		true, policy.BucketAccessPolicy{},
+	}, objAPI)
+	if err != nil {
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 
@@ -345,15 +345,17 @@ func (api objectAPIHandlers) GetBucketPolicyHandler(w http.ResponseWriter, r *ht
 	policy, err := readBucketPolicy(bucket, objAPI)
 	if err != nil {
 		errorIf(err, "Unable to read bucket policy.")
-		switch err.(type) {
-		case BucketPolicyNotFound:
-			writeErrorResponse(w, ErrNoSuchBucketPolicy, r.URL)
-		default:
-			writeErrorResponse(w, ErrInternalError, r.URL)
-		}
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
+	policyBytes, err := json.Marshal(&policy)
+	if err != nil {
+		errorIf(err, "Unable to marshal bucket policy.")
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
 
 	// Write to client.
-	fmt.Fprint(w, policy)
+	w.Write(policyBytes)
 }
