@@ -204,7 +204,7 @@ func TestNewHTTPListener(t *testing.T) {
 	}{
 		{[]string{"93.184.216.34:9000"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, nil, errors.New(remoteAddrErrMsg)},
 		{[]string{"example.org:9000"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, nil, errors.New(remoteAddrErrMsg)},
-		{[]string{"unknown-host"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, nil, errors.New("listen tcp: missing port in address unknown-host")},
+		{[]string{"unknown-host"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, nil, errors.New("listen tcp: address unknown-host: missing port in address")},
 		{[]string{"unknown-host:9000"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, nil, errors.New("listen tcp: lookup unknown-host" + errMsg)},
 		{[]string{"localhost:9000", "93.184.216.34:9000"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, nil, errors.New(remoteAddrErrMsg)},
 		{[]string{"localhost:9000", "unknown-host:9000"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, nil, errors.New("listen tcp: lookup unknown-host" + errMsg)},
@@ -212,7 +212,7 @@ func TestNewHTTPListener(t *testing.T) {
 		{[]string{"localhost:" + getNextPort()}, tlsConfig, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, nil, nil},
 	}
 
-	for _, testCase := range testCases {
+	for i, testCase := range testCases {
 		listener, err := newHTTPListener(
 			testCase.serverAddrs,
 			testCase.tlsConfig,
@@ -226,10 +226,10 @@ func TestNewHTTPListener(t *testing.T) {
 
 		if testCase.expectedErr == nil {
 			if err != nil {
-				t.Fatalf("error: expected = <nil>, got = %v", err)
+				t.Fatalf("Test %d, error: expected = <nil>, got = %v", i+1, err)
 			}
 		} else if err == nil {
-			t.Fatalf("error: expected = %v, got = <nil>", testCase.expectedErr)
+			t.Fatalf("Test %d, error: expected = %v, got = <nil>", i+1, testCase.expectedErr)
 		} else {
 			var match bool
 			if strings.HasSuffix(testCase.expectedErr.Error(), errMsg) {
@@ -238,7 +238,7 @@ func TestNewHTTPListener(t *testing.T) {
 				match = (testCase.expectedErr.Error() == err.Error())
 			}
 			if !match {
-				t.Fatalf("error: expected = %v, got = %v", testCase.expectedErr, err)
+				t.Fatalf("Test %d, error: expected = %v, got = %v", i+1, testCase.expectedErr, err)
 			}
 		}
 

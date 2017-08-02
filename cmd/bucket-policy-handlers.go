@@ -65,7 +65,7 @@ func bucketPolicyActionMatch(action string, statement policyStatement) bool {
 
 // Match function matches wild cards in 'pattern' for resource.
 func resourceMatch(pattern, resource string) bool {
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == globalWindowsOSName {
 		// For windows specifically make sure we are case insensitive.
 		return wildcard.Match(strings.ToLower(pattern), strings.ToLower(resource))
 	}

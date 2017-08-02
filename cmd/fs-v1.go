@@ -89,7 +89,7 @@ func newFSObjectLayer(fsPath string) (ObjectLayer, error) {
 		return nil, err
 	}
 
-	fi, err := osStat(preparePath(fsPath))
+	fi, err := osStat(fsPath)
 	if err == nil {
 		if !fi.IsDir() {
 			return nil, syscall.ENOTDIR
@@ -103,7 +103,7 @@ func newFSObjectLayer(fsPath string) (ObjectLayer, error) {
 		}
 	}
 
-	di, err := getDiskInfo(preparePath(fsPath))
+	di, err := getDiskInfo(fsPath)
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +169,7 @@ func (fs fsObjects) Shutdown() error {
 
 // StorageInfo - returns underlying storage statistics.
 func (fs fsObjects) StorageInfo() StorageInfo {
-	info, err := getDiskInfo(preparePath(fs.fsPath))
+	info, err := getDiskInfo(fs.fsPath)
 	errorIf(err, "Unable to get disk info %#v", fs.fsPath)
 	storageInfo := StorageInfo{
 		Total: info.Total,
@@ -242,7 +242,7 @@ func (fs fsObjects) ListBuckets() ([]BucketInfo, error) {
 		return nil, traceError(err)
 	}
 	var bucketInfos []BucketInfo
-	entries, err := readDir(preparePath(fs.fsPath))
+	entries, err := readDir(fs.fsPath)
 	if err != nil {
 		return nil, toObjectErr(traceError(errDiskNotFound))
 	}

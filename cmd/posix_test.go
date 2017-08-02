@@ -290,19 +290,6 @@ func TestPosixMakeVol(t *testing.T) {
 			t.Fatalf("TestPosix %d: Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, err)
 		}
 	}
-
-	// TestPosix for permission denied.
-	if runtime.GOOS != globalWindowsOSName {
-		// Initialize posix storage layer for permission denied error.
-		posix, err := newPosix("/usr")
-		if err != nil {
-			t.Fatalf("Unable to initialize posix, %s", err)
-		}
-
-		if err := posix.MakeVol("test-vol"); err != errDiskAccessDenied {
-			t.Fatalf("expected: %s, got: %s", errDiskAccessDenied, err)
-		}
-	}
 }
 
 // TestPosixDeleteVol - Validates the expected behaviour of posix.DeleteVol for various cases.
@@ -890,13 +877,13 @@ func TestPosixReadFile(t *testing.T) {
 				if runtime.GOOS == globalWindowsOSName {
 					return &os.PathError{
 						Op:   "seek",
-						Path: preparePath(slashpath.Join(path, "success-vol", "myobject")),
+						Path: slashpath.Join(path, "success-vol", "myobject"),
 						Err:  syscall.Errno(0x83), // ERROR_NEGATIVE_SEEK
 					}
 				}
 				return &os.PathError{
 					Op:   "seek",
-					Path: preparePath(slashpath.Join(path, "success-vol", "myobject")),
+					Path: slashpath.Join(path, "success-vol", "myobject"),
 					Err:  os.ErrInvalid,
 				}
 			}(),

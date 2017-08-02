@@ -10,6 +10,12 @@ installed on your system.
 
 ## 2. Steps
 
+* Start minikube
+
+```sh
+minikube start
+```
+
 * Download `minio_distributed.sh` and `statefulset.yaml`
 
 ```sh

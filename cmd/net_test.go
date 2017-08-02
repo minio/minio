@@ -223,7 +223,7 @@ func TestCheckLocalServerAddr(t *testing.T) {
 		{"localhost:54321", nil},
 		{"0.0.0.0:9000", nil},
 		{"", fmt.Errorf("missing port in address")},
-		{"localhost", fmt.Errorf("missing port in address localhost")},
+		{"localhost", fmt.Errorf("address localhost: missing port in address")},
 		{"example.org:54321", fmt.Errorf("host in server address should be this server")},
 		{":0", fmt.Errorf("port number must be between 1 to 65535")},
 		{":-10", fmt.Errorf("port number must be between 1 to 65535")},
@@ -291,10 +291,9 @@ func TestSameLocalAddrs(t *testing.T) {
 		expectedErr error
 	}{
 		{"", "", false, errors.New("unable to process empty address")},
-		{":9000", ":9000", true, nil},
-		{"localhost:9000", ":9000", true, nil},
-		{"localhost:9000", "http://localhost:9000", true, nil},
-		{"8.8.8.8:9000", "http://localhost:9000", false, nil},
+		{"http://localhost:9000", ":9000", true, nil},
+		{"http://localhost:9000", "http://localhost:9000", true, nil},
+		{"http://8.8.8.8:9000", "http://localhost:9000", false, nil},
 	}
 
 	for i, testCase := range testCases {
