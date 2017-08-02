@@ -1,0 +1,12 @@
+.content {
+    min-height: 100vh;
+
+    @media (min-width: @screen-md-min) {
+        .transition(padding);
+        .transition-duration(300ms);
+
+        &:not(.content--toggled) {
+            padding-left: @sidebar-width;
+        }
+    }
+}

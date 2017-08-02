@@ -1,22 +1,19 @@
+// Base
 .btn {
     border: 0;
-    padding: 5px 10px;
-    font-size: 12px;
-    line-height: 1.5;
-    border-radius: 2px;
-    text-align: center;
     .transition(all);
     .transition-duration(300ms);
+    border-radius: 2px;
+    text-align: center;
 
-    &:hover,
-    &:focus {
-        .opacity(0.9);
+    &:not(.btn--link):not(.btn--lg) {
+        padding: 5px 10px;
+        font-size: 12px;
+        line-height: 1.5;
     }
 }
 
-/*-----------------------------------
-    Button Variants
-------------------------------------*/
+// Variants
 .btn-variant(@bg-color, @color) {
     color: @color;
     background-color: @bg-color;
@@ -26,32 +23,45 @@
         color: @color;
         background-color: darken(@bg-color, 6%);
     }
-
-
 }
 
-.btn-block {
+.btn--white {
+    .btn-variant(@white, darken(@text-color, 20%));
+}
+
+.btn--danger {
+    .btn-variant(@red, @white);
+}
+
+.btn--primary {
+    .btn-variant(@light-blue, @white);
+}
+
+.btn--success {
+    .btn-variant(@green, @white);
+}
+
+// Other modifiers
+.btn--link {
+    background-color: transparent;
+    text-transform: uppercase;
+    font-weight: @font-weight-bold;
+    color: @headings-color;
+    font-size: 13px;
+    padding: 8px 10px;
+
+    &:hover {
+        background-color: @muted-bg;
+    }
+}
+
+.btn--block {
     display: block;
     width: 100%;
 }
 
-.btn-white {
-    .btn-variant(#fff, darken(@text-color, 20%));
+.btn--lg {
+    padding: 7px 15px;
+    font-size: 14px;
+    line-height: 1.5;
 }
-
-.btn-link {
-    .btn-variant(#eee, #545454);
-}
-
-.btn-danger {
-    .btn-variant(@red, @white);
-}
-
-.btn-primary {
-    .btn-variant(@blue, @white);
-}
-
-.btn-success {
-    .btn-variant(@green, @white);
-}
-//-----------------------------------
