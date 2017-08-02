@@ -21,6 +21,8 @@ import (
 	"encoding/json"
 	"io"
 	"sync"
+
+	"github.com/minio/minio-go/pkg/policy"
 )
 
 const (
@@ -41,7 +43,7 @@ type bucketPolicies struct {
 	rwMutex *sync.RWMutex
 
 	// Collection of 'bucket' policies.
-	bucketPolicyConfigs map[string]*bucketPolicy
+	bucketPolicyConfigs map[string]policy.BucketAccessPolicy
 }
 
 // Represent a policy change
@@ -51,11 +53,11 @@ type policyChange struct {
 	IsRemove bool
 
 	// represents the new policy for the bucket
-	BktPolicy *bucketPolicy
+	BktPolicy policy.BucketAccessPolicy
 }
 
 // Fetch bucket policy for a given bucket.
-func (bp bucketPolicies) GetBucketPolicy(bucket string) *bucketPolicy {
+func (bp bucketPolicies) GetBucketPolicy(bucket string) policy.BucketAccessPolicy {
 	bp.rwMutex.RLock()
 	defer bp.rwMutex.RUnlock()
 	return bp.bucketPolicyConfigs[bucket]
@@ -70,16 +72,27 @@ func (bp *bucketPolicies) SetBucketPolicy(bucket string, pCh policyChange) error
 	if pCh.IsRemove {
 		delete(bp.bucketPolicyConfigs, bucket)
 	} else {
-		if pCh.BktPolicy == nil {
-			return errInvalidArgument
-		}
 		bp.bucketPolicyConfigs[bucket] = pCh.BktPolicy
 	}
 	return nil
 }
 
+func getBucketAccessPolicy(bucketName string, objAPI ObjectLayer) (policyInfo policy.BucketAccessPolicy, err error) {
+	// FIXME: remove this code when S3 layer for gateway and server is unified.
+	if gw, ok := objAPI.(GatewayLayer); ok {
+		return gw.GetBucketPolicies(bucketName)
+	}
+	policyInfo, err = readBucketPolicy(bucketName, objAPI)
+	if err != nil {
+		if isErrBucketPolicyNotFound(err) {
+			err = nil
+		}
+	}
+	return policyInfo, err
+}
+
 // Loads all bucket policies from persistent layer.
-func loadAllBucketPolicies(objAPI ObjectLayer) (policies map[string]*bucketPolicy, err error) {
+func loadAllBucketPolicies(objAPI ObjectLayer) (policies map[string]policy.BucketAccessPolicy, err error) {
 	// List buckets to proceed loading all notification configuration.
 	buckets, err := objAPI.ListBuckets()
 	errorIf(err, "Unable to list buckets.")
@@ -87,18 +100,16 @@ func loadAllBucketPolicies(objAPI ObjectLayer) (policies map[string]*bucketPolic
 		return nil, errorCause(err)
 	}
 
-	policies = make(map[string]*bucketPolicy)
+	policies = make(map[string]policy.BucketAccessPolicy)
 	var pErrs []error
 	// Loads bucket policy.
 	for _, bucket := range buckets {
-		policy, pErr := readBucketPolicy(bucket.Name, objAPI)
+		policy, pErr := getBucketAccessPolicy(bucket.Name, objAPI)
 		if pErr != nil {
 			// net.Dial fails for rpc client or any
 			// other unexpected errors during net.Dial.
 			if !isErrIgnored(pErr, errDiskNotFound) {
-				if !isErrBucketPolicyNotFound(pErr) {
-					pErrs = append(pErrs, pErr)
-				}
+				pErrs = append(pErrs, pErr)
 			}
 			// Continue to load other bucket policies if possible.
 			continue
@@ -164,18 +175,17 @@ func readBucketPolicyJSON(bucket string, objAPI ObjectLayer) (bucketPolicyReader
 
 // readBucketPolicy - reads bucket policy for an input bucket, returns BucketPolicyNotFound
 // if bucket policy is not found. This function also parses the bucket policy into an object.
-func readBucketPolicy(bucket string, objAPI ObjectLayer) (*bucketPolicy, error) {
+func readBucketPolicy(bucket string, objAPI ObjectLayer) (policy.BucketAccessPolicy, error) {
 	// Read bucket policy JSON.
 	bucketPolicyReader, err := readBucketPolicyJSON(bucket, objAPI)
 	if err != nil {
-		return nil, err
+		return sentinelBucketPolicy, err
 	}
 
 	// Parse the saved policy.
-	var policy = &bucketPolicy{}
-	err = parseBucketPolicy(bucketPolicyReader, policy)
-	if err != nil {
-		return nil, err
+	var policy policy.BucketAccessPolicy
+	if err = parseBucketPolicy(bucketPolicyReader, &policy); err != nil {
+		return sentinelBucketPolicy, err
 
 	}
 	return policy, nil
@@ -201,10 +211,10 @@ func removeBucketPolicy(bucket string, objAPI ObjectLayer) error {
 }
 
 // writeBucketPolicy - save a bucket policy that is assumed to be validated.
-func writeBucketPolicy(bucket string, objAPI ObjectLayer, bpy *bucketPolicy) error {
+func writeBucketPolicy(bucket string, objAPI ObjectLayer, bpy policy.BucketAccessPolicy) error {
 	buf, err := json.Marshal(bpy)
 	if err != nil {
-		errorIf(err, "Unable to marshal bucket policy '%v' to JSON", *bpy)
+		errorIf(err, "Unable to marshal bucket policy '%#v' to JSON", bpy)
 		return err
 	}
 	policyPath := pathJoin(bucketConfigPrefix, bucket, bucketPolicyConfig)
@@ -212,7 +222,8 @@ func writeBucketPolicy(bucket string, objAPI ObjectLayer, bpy *bucketPolicy) err
 	objLock := globalNSMutex.NewNSLock(minioMetaBucket, policyPath)
 	objLock.Lock()
 	defer objLock.Unlock()
-	if _, err := objAPI.PutObject(minioMetaBucket, policyPath, int64(len(buf)), bytes.NewReader(buf), nil, ""); err != nil {
+	_, err = objAPI.PutObject(minioMetaBucket, policyPath, int64(len(buf)), bytes.NewReader(buf), nil, "")
+	if err != nil {
 		errorIf(err, "Unable to set policy for the bucket %s", bucket)
 		return errorCause(err)
 	}
@@ -221,15 +232,15 @@ func writeBucketPolicy(bucket string, objAPI ObjectLayer, bpy *bucketPolicy) err
 
 func parseAndPersistBucketPolicy(bucket string, policyBytes []byte, objAPI ObjectLayer) APIErrorCode {
 	// Parse bucket policy.
-	var policy = &bucketPolicy{}
-	err := parseBucketPolicy(bytes.NewReader(policyBytes), policy)
+	var bktPolicy policy.BucketAccessPolicy
+	err := parseBucketPolicy(bytes.NewReader(policyBytes), &bktPolicy)
 	if err != nil {
 		errorIf(err, "Unable to parse bucket policy.")
 		return ErrInvalidPolicyDocument
 	}
 
 	// Parse check bucket policy.
-	if s3Error := checkBucketPolicyResources(bucket, policy); s3Error != ErrNone {
+	if s3Error := checkBucketPolicyResources(bucket, bktPolicy); s3Error != ErrNone {
 		return s3Error
 	}
 
@@ -240,7 +251,7 @@ func parseAndPersistBucketPolicy(bucket string, policyBytes []byte, objAPI Objec
 	defer bucketLock.Unlock()
 
 	// Save bucket policy.
-	if err = persistAndNotifyBucketPolicyChange(bucket, policyChange{false, policy}, objAPI); err != nil {
+	if err = persistAndNotifyBucketPolicyChange(bucket, policyChange{false, bktPolicy}, objAPI); err != nil {
 		switch err.(type) {
 		case BucketNameInvalid:
 			return ErrInvalidBucketName
@@ -263,9 +274,6 @@ func persistAndNotifyBucketPolicyChange(bucket string, pCh policyChange, objAPI 
 			return err
 		}
 	} else {
-		if pCh.BktPolicy == nil {
-			return errInvalidArgument
-		}
 		if err := writeBucketPolicy(bucket, objAPI, pCh.BktPolicy); err != nil {
 			return err
 		}

@@ -23,19 +23,21 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"path"
+	"reflect"
 	"strings"
 	"sync"
 
 	mux "github.com/gorilla/mux"
+	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio-go/pkg/set"
 )
 
 // http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
 // Enforces bucket policies for a bucket for a given tatusaction.
 func enforceBucketPolicy(bucket, action, resource, referer, sourceIP string, queryParams url.Values) (s3Error APIErrorCode) {
+	objectAPI := newObjectLayerFn()
 	// Verify if bucket actually exists
-	if err := checkBucketExist(bucket, newObjectLayerFn()); err != nil {
+	if err := checkBucketExist(bucket, objectAPI); err != nil {
 		err = errorCause(err)
 		switch err.(type) {
 		case BucketNameInvalid:
@@ -50,21 +52,31 @@ func enforceBucketPolicy(bucket, action, resource, referer, sourceIP string, que
 		return ErrInternalError
 	}
 
-	if globalBucketPolicies == nil {
-		return ErrAccessDenied
+	var bktpolicy policy.BucketAccessPolicy
+	switch gw := objectAPI.(type) {
+	case GatewayLayer:
+		var err error
+		bktpolicy, err = gw.GetBucketPolicies(bucket)
+		if err != nil {
+			return ErrAccessDenied
+		}
+	default:
+		if globalBucketPolicies == nil {
+			return ErrAccessDenied
+		}
+		bktpolicy = globalBucketPolicies.GetBucketPolicy(bucket)
 	}
 
 	// Fetch bucket policy, if policy is not set return access denied.
-	policy := globalBucketPolicies.GetBucketPolicy(bucket)
-	if policy == nil {
+	if reflect.DeepEqual(bktpolicy, sentinelBucketPolicy) {
 		return ErrAccessDenied
 	}
 
 	// Construct resource in 'arn:aws:s3:::examplebucket/object' format.
-	arn := bucketARNPrefix + strings.TrimSuffix(strings.TrimPrefix(resource, "/"), "/")
+	arn := bucketARNPrefix + resource
 
 	// Get conditions for policy verification.
-	conditionKeyMap := make(map[string]set.StringSet)
+	conditionKeyMap := make(policy.ConditionKeyMap)
 	for queryParam := range queryParams {
 		conditionKeyMap[queryParam] = set.CreateStringSet(queryParams.Get(queryParam))
 	}
@@ -73,30 +85,16 @@ func enforceBucketPolicy(bucket, action, resource, referer, sourceIP string, que
 	if referer != "" {
 		conditionKeyMap["referer"] = set.CreateStringSet(referer)
 	}
-	// Add request source Ip to conditionKeyMap.
-	conditionKeyMap["ip"] = set.CreateStringSet(sourceIP)
+	if sourceIP != "" {
+		// Add request source Ip to conditionKeyMap.
+		conditionKeyMap["ip"] = set.CreateStringSet(sourceIP)
+	}
 
 	// Validate action, resource and conditions with current policy statements.
-	if !bucketPolicyEvalStatements(action, arn, conditionKeyMap, policy.Statements) {
+	if !bucketPolicyEvalStatements(action, arn, conditionKeyMap, bktpolicy.Statements) {
 		return ErrAccessDenied
 	}
 	return ErrNone
-}
-
-// Check if the action is allowed on the bucket/prefix.
-func isBucketActionAllowed(action, bucket, prefix string) bool {
-	if globalBucketPolicies == nil {
-		return false
-	}
-
-	policy := globalBucketPolicies.GetBucketPolicy(bucket)
-	if policy == nil {
-		return false
-	}
-	resource := bucketARNPrefix + path.Join(bucket, prefix)
-	var conditionKeyMap map[string]set.StringSet
-	// Validate action, resource and conditions with current policy statements.
-	return bucketPolicyEvalStatements(action, resource, conditionKeyMap, policy.Statements)
 }
 
 // GetBucketLocationHandler - GET Bucket location.
@@ -656,7 +654,7 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 	_ = removeBucketPolicy(bucket, objectAPI)
 
 	// Notify all peers (including self) to update in-memory state
-	S3PeersUpdateBucketPolicy(bucket, policyChange{true, nil})
+	S3PeersUpdateBucketPolicy(bucket, policyChange{true, sentinelBucketPolicy})
 
 	// Delete notification config, if present - ignore any errors.
 	_ = removeNotificationConfig(bucket, objectAPI)

@@ -431,12 +431,12 @@ func testListObjectsWebHandler(obj ObjectLayer, instanceType string, t TestErrHa
 		t.Fatalf("Expected error `%s`", err)
 	}
 
-	policy := bucketPolicy{
+	policy := policy.BucketAccessPolicy{
 		Version:    "1.0",
-		Statements: []policyStatement{getReadOnlyObjectStatement(bucketName, "")},
+		Statements: []policy.Statement{getReadOnlyObjectStatement(bucketName, "")},
 	}
 
-	globalBucketPolicies.SetBucketPolicy(bucketName, policyChange{false, &policy})
+	globalBucketPolicies.SetBucketPolicy(bucketName, policyChange{false, policy})
 
 	// Unauthenticated ListObjects with READ bucket policy should succeed.
 	err, reply = test("")
@@ -781,12 +781,12 @@ func testUploadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandler
 		t.Fatalf("Expected the response status to be 403, but instead found `%d`", code)
 	}
 
-	policy := bucketPolicy{
+	policy := policy.BucketAccessPolicy{
 		Version:    "1.0",
-		Statements: []policyStatement{getWriteOnlyObjectStatement(bucketName, "")},
+		Statements: []policy.Statement{getWriteOnlyObjectStatement(bucketName, "")},
 	}
 
-	globalBucketPolicies.SetBucketPolicy(bucketName, policyChange{false, &policy})
+	globalBucketPolicies.SetBucketPolicy(bucketName, policyChange{false, policy})
 
 	// Unauthenticated upload with WRITE policy should succeed.
 	code = test("", true)
@@ -887,12 +887,12 @@ func testDownloadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandl
 		t.Fatalf("Expected the response status to be 403, but instead found `%d`", code)
 	}
 
-	policy := bucketPolicy{
+	policy := policy.BucketAccessPolicy{
 		Version:    "1.0",
-		Statements: []policyStatement{getReadOnlyObjectStatement(bucketName, "")},
+		Statements: []policy.Statement{getReadOnlyObjectStatement(bucketName, "")},
 	}
 
-	globalBucketPolicies.SetBucketPolicy(bucketName, policyChange{false, &policy})
+	globalBucketPolicies.SetBucketPolicy(bucketName, policyChange{false, policy})
 
 	// Unauthenticated download with READ policy should succeed.
 	code, bodyContent = test("")
@@ -1114,26 +1114,29 @@ func testWebGetBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestE
 		t.Fatal("Unexpected error: ", err)
 	}
 
-	policyVal := bucketPolicy{
+	allUsers := policy.User{AWS: set.NewStringSet()}
+	allUsers.AWS.Add("*")
+
+	policyVal := policy.BucketAccessPolicy{
 		Version: "2012-10-17",
-		Statements: []policyStatement{
+		Statements: []policy.Statement{
 			{
 				Actions:   set.CreateStringSet("s3:GetBucketLocation", "s3:ListBucket"),
 				Effect:    "Allow",
-				Principal: map[string][]string{"AWS": {"*"}},
+				Principal: allUsers,
 				Resources: set.CreateStringSet(bucketARNPrefix + bucketName),
 				Sid:       "",
 			},
 			{
 				Actions:   set.CreateStringSet("s3:GetObject"),
 				Effect:    "Allow",
-				Principal: map[string][]string{"AWS": {"*"}},
+				Principal: allUsers,
 				Resources: set.CreateStringSet(bucketARNPrefix + bucketName + "/*"),
 				Sid:       "",
 			},
 		},
 	}
-	if err := writeBucketPolicy(bucketName, obj, &policyVal); err != nil {
+	if err := writeBucketPolicy(bucketName, obj, policyVal); err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
 
@@ -1188,32 +1191,35 @@ func testWebListAllBucketPoliciesHandler(obj ObjectLayer, instanceType string, t
 		t.Fatal("Unexpected error: ", err)
 	}
 
-	policyVal := bucketPolicy{
+	allUsers := policy.User{AWS: set.NewStringSet()}
+	allUsers.AWS.Add("*")
+
+	policyVal := policy.BucketAccessPolicy{
 		Version: "2012-10-17",
-		Statements: []policyStatement{
+		Statements: []policy.Statement{
 			{
 				Actions:   set.CreateStringSet("s3:GetBucketLocation"),
 				Effect:    "Allow",
-				Principal: map[string][]string{"AWS": {"*"}},
+				Principal: allUsers,
 				Resources: set.CreateStringSet(bucketARNPrefix + bucketName),
 				Sid:       "",
 			},
 			{
 				Actions: set.CreateStringSet("s3:ListBucket"),
-				Conditions: map[string]map[string]set.StringSet{
+				Conditions: policy.ConditionMap{
 					"StringEquals": {
 						"s3:prefix": set.CreateStringSet("hello"),
 					},
 				},
 				Effect:    "Allow",
-				Principal: map[string][]string{"AWS": {"*"}},
+				Principal: allUsers,
 				Resources: set.CreateStringSet(bucketARNPrefix + bucketName),
 				Sid:       "",
 			},
 			{
 				Actions:   set.CreateStringSet("s3:ListBucketMultipartUploads"),
 				Effect:    "Allow",
-				Principal: map[string][]string{"AWS": {"*"}},
+				Principal: allUsers,
 				Resources: set.CreateStringSet(bucketARNPrefix + bucketName),
 				Sid:       "",
 			},
@@ -1221,13 +1227,13 @@ func testWebListAllBucketPoliciesHandler(obj ObjectLayer, instanceType string, t
 				Actions: set.CreateStringSet("s3:AbortMultipartUpload", "s3:DeleteObject",
 					"s3:GetObject", "s3:ListMultipartUploadParts", "s3:PutObject"),
 				Effect:    "Allow",
-				Principal: map[string][]string{"AWS": {"*"}},
+				Principal: allUsers,
 				Resources: set.CreateStringSet(bucketARNPrefix + bucketName + "/hello*"),
 				Sid:       "",
 			},
 		},
 	}
-	if err := writeBucketPolicy(bucketName, obj, &policyVal); err != nil {
+	if err := writeBucketPolicy(bucketName, obj, policyVal); err != nil {
 		t.Fatal("Unexpected error: ", err)
 	}
 
@@ -1305,7 +1311,11 @@ func testWebSetBucketPolicyHandler(obj ObjectLayer, instanceType string, t TestE
 	}
 
 	for i, testCase := range testCases {
-		args := &SetBucketPolicyArgs{BucketName: testCase.bucketName, Prefix: testCase.prefix, Policy: testCase.policy}
+		args := &SetBucketPolicyArgs{
+			BucketName: testCase.bucketName,
+			Prefix:     testCase.prefix,
+			Policy:     testCase.policy,
+		}
 		reply := &WebGenericRep{}
 		// Call SetBucketPolicy RPC
 		req, err := newTestWebRPCRequest("Web.SetBucketPolicy", authorization, args)

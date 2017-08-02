@@ -47,34 +47,14 @@ func (api gatewayAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	reqAuthType := getRequestAuthType(r)
-
-	switch reqAuthType {
-	case authTypePresignedV2, authTypeSignedV2:
-		// Signature V2 validation.
-		s3Error := isReqAuthenticatedV2(r)
-		if s3Error != ErrNone {
-			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
-			writeErrorResponse(w, s3Error, r.URL)
-			return
-		}
-	case authTypeSigned, authTypePresigned:
-		s3Error := isReqAuthenticated(r, serverConfig.GetRegion())
-		if s3Error != ErrNone {
-			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
-			writeErrorResponse(w, s3Error, r.URL)
-			return
-		}
-	case authTypeAnonymous:
-		// No verification needed for anonymous requests.
-	default:
-		// For all unknown auth types return error.
-		writeErrorResponse(w, ErrAccessDenied, r.URL)
+	if s3Error := checkRequestAuthType(r, bucket, "s3:GetObject",
+		serverConfig.GetRegion()); s3Error != ErrNone {
+		writeErrorResponse(w, s3Error, r.URL)
 		return
 	}
 
 	getObjectInfo := objectAPI.GetObjectInfo
-	if reqAuthType == authTypeAnonymous {
+	if getRequestAuthType(r) == authTypeAnonymous {
 		getObjectInfo = objectAPI.AnonGetObjectInfo
 	}
 	objInfo, err := getObjectInfo(bucket, object)
@@ -135,7 +115,7 @@ func (api gatewayAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Re
 	})
 
 	getObject := objectAPI.GetObject
-	if reqAuthType == authTypeAnonymous {
+	if getRequestAuthType(r) == authTypeAnonymous {
 		getObject = objectAPI.AnonGetObject
 	}
 
@@ -268,6 +248,13 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 	var objInfo ObjectInfo
 	switch reqAuthType {
 	case authTypeAnonymous:
+		sourceIP := getSourceIPAddress(r)
+		// http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
+		if s3Error := enforceBucketPolicy(bucket, "s3:PutObject", r.URL.Path,
+			r.Referer(), sourceIP, r.URL.Query()); s3Error != ErrNone {
+			writeErrorResponse(w, s3Error, r.URL)
+			return
+		}
 		// Create anonymous object.
 		objInfo, err = objectAPI.AnonPutObject(bucket, object, size, r.Body, metadata, "")
 	case authTypeStreamingSigned:
@@ -349,34 +336,14 @@ func (api gatewayAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	reqAuthType := getRequestAuthType(r)
-
-	switch reqAuthType {
-	case authTypePresignedV2, authTypeSignedV2:
-		// Signature V2 validation.
-		s3Error := isReqAuthenticatedV2(r)
-		if s3Error != ErrNone {
-			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
-			writeErrorResponse(w, s3Error, r.URL)
-			return
-		}
-	case authTypeSigned, authTypePresigned:
-		s3Error := isReqAuthenticated(r, serverConfig.GetRegion())
-		if s3Error != ErrNone {
-			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
-			writeErrorResponse(w, s3Error, r.URL)
-			return
-		}
-	case authTypeAnonymous:
-		// No verification needed for anonymous requests.
-	default:
-		// For all unknown auth types return error.
-		writeErrorResponse(w, ErrAccessDenied, r.URL)
+	if s3Error := checkRequestAuthType(r, bucket, "s3:GetObject",
+		serverConfig.GetRegion()); s3Error != ErrNone {
+		writeErrorResponseHeadersOnly(w, s3Error)
 		return
 	}
 
 	getObjectInfo := objectAPI.GetObjectInfo
-	if reqAuthType == authTypeAnonymous {
+	if getRequestAuthType(r) == authTypeAnonymous {
 		getObjectInfo = objectAPI.AnonGetObjectInfo
 	}
 	objInfo, err := getObjectInfo(bucket, object)
@@ -481,6 +448,9 @@ func (api gatewayAPIHandlers) PutBucketPolicyHandler(w http.ResponseWriter, r *h
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
 		return
 	}
+
+	globalBucketPolicies.SetBucketPolicy(bucket, policyChange{false, policyInfo})
+
 	// Success.
 	writeSuccessNoContent(w)
 }
@@ -512,9 +482,13 @@ func (api gatewayAPIHandlers) DeleteBucketPolicyHandler(w http.ResponseWriter, r
 		return
 	}
 
-	// Delete bucket access policy, by passing an empty policy
-	// struct.
+	// Delete bucket access policy.
 	objAPI.DeleteBucketPolicies(bucket)
+
+	globalBucketPolicies.SetBucketPolicy(bucket, policyChange{
+		true, sentinelBucketPolicy,
+	})
+
 	// Success.
 	writeSuccessNoContent(w)
 }
@@ -683,29 +657,9 @@ func (api gatewayAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	reqAuthType := getRequestAuthType(r)
-
-	switch reqAuthType {
-	case authTypePresignedV2, authTypeSignedV2:
-		// Signature V2 validation.
-		s3Error := isReqAuthenticatedV2(r)
-		if s3Error != ErrNone {
-			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
-			writeErrorResponse(w, s3Error, r.URL)
-			return
-		}
-	case authTypeSigned, authTypePresigned:
-		s3Error := isReqAuthenticated(r, serverConfig.GetRegion())
-		if s3Error != ErrNone {
-			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
-			writeErrorResponse(w, s3Error, r.URL)
-			return
-		}
-	case authTypeAnonymous:
-		// No verification needed for anonymous requests.
-	default:
-		// For all unknown auth types return error.
-		writeErrorResponse(w, ErrAccessDenied, r.URL)
+	if s3Error := checkRequestAuthType(r, bucket, "s3:ListBucket",
+		serverConfig.GetRegion()); s3Error != ErrNone {
+		writeErrorResponse(w, s3Error, r.URL)
 		return
 	}
 
@@ -715,7 +669,7 @@ func (api gatewayAPIHandlers) ListObjectsV1Handler(w http.ResponseWriter, r *htt
 	prefix, marker, delimiter, maxKeys, _ := getListObjectsV1Args(r.URL.Query())
 
 	listObjects := objectAPI.ListObjects
-	if reqAuthType == authTypeAnonymous {
+	if getRequestAuthType(r) == authTypeAnonymous {
 		listObjects = objectAPI.AnonListObjects
 	}
 	// Inititate a list objects operation based on the input params.
@@ -750,29 +704,9 @@ func (api gatewayAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	reqAuthType := getRequestAuthType(r)
-
-	switch reqAuthType {
-	case authTypePresignedV2, authTypeSignedV2:
-		// Signature V2 validation.
-		s3Error := isReqAuthenticatedV2(r)
-		if s3Error != ErrNone {
-			errorIf(errSignatureMismatch, dumpRequest(r))
-			writeErrorResponse(w, s3Error, r.URL)
-			return
-		}
-	case authTypeSigned, authTypePresigned:
-		s3Error := isReqAuthenticated(r, serverConfig.GetRegion())
-		if s3Error != ErrNone {
-			errorIf(errSignatureMismatch, dumpRequest(r))
-			writeErrorResponse(w, s3Error, r.URL)
-			return
-		}
-	case authTypeAnonymous:
-		// No verification needed for anonymous requests.
-	default:
-		// For all unknown auth types return error.
-		writeErrorResponse(w, ErrAccessDenied, r.URL)
+	if s3Error := checkRequestAuthType(r, bucket, "s3:ListBucket",
+		serverConfig.GetRegion()); s3Error != ErrNone {
+		writeErrorResponse(w, s3Error, r.URL)
 		return
 	}
 
@@ -788,7 +722,7 @@ func (api gatewayAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *htt
 	}
 
 	listObjectsV2 := objectAPI.ListObjectsV2
-	if reqAuthType == authTypeAnonymous {
+	if getRequestAuthType(r) == authTypeAnonymous {
 		listObjectsV2 = objectAPI.AnonListObjectsV2
 	}
 
@@ -830,34 +764,14 @@ func (api gatewayAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	reqAuthType := getRequestAuthType(r)
-
-	switch reqAuthType {
-	case authTypePresignedV2, authTypeSignedV2:
-		// Signature V2 validation.
-		s3Error := isReqAuthenticatedV2(r)
-		if s3Error != ErrNone {
-			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
-			writeErrorResponse(w, s3Error, r.URL)
-			return
-		}
-	case authTypeSigned, authTypePresigned:
-		s3Error := isReqAuthenticated(r, serverConfig.GetRegion())
-		if s3Error != ErrNone {
-			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
-			writeErrorResponse(w, s3Error, r.URL)
-			return
-		}
-	case authTypeAnonymous:
-		// No verification needed for anonymous requests.
-	default:
-		// For all unknown auth types return error.
-		writeErrorResponse(w, ErrAccessDenied, r.URL)
+	if s3Error := checkRequestAuthType(r, bucket, "s3:ListBucket",
+		serverConfig.GetRegion()); s3Error != ErrNone {
+		writeErrorResponseHeadersOnly(w, s3Error)
 		return
 	}
 
 	getBucketInfo := objectAPI.GetBucketInfo
-	if reqAuthType == authTypeAnonymous {
+	if getRequestAuthType(r) == authTypeAnonymous {
 		getBucketInfo = objectAPI.AnonGetBucketInfo
 	}
 
@@ -882,38 +796,19 @@ func (api gatewayAPIHandlers) GetBucketLocationHandler(w http.ResponseWriter, r 
 		writeErrorResponse(w, ErrServerNotInitialized, r.URL)
 		return
 	}
-	reqAuthType := getRequestAuthType(r)
 
-	switch reqAuthType {
-	case authTypePresignedV2, authTypeSignedV2:
-		// Signature V2 validation.
-		s3Error := isReqAuthenticatedV2(r)
-		if s3Error != ErrNone {
-			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
-			writeErrorResponse(w, s3Error, r.URL)
-			return
-		}
-	case authTypeSigned, authTypePresigned:
-		s3Error := isReqAuthenticated(r, globalMinioDefaultRegion)
-		if s3Error == ErrInvalidRegion {
-			// Clients like boto3 send getBucketLocation() call signed with region that is configured.
-			s3Error = isReqAuthenticated(r, serverConfig.GetRegion())
-		}
-		if s3Error != ErrNone {
-			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
-			writeErrorResponse(w, s3Error, r.URL)
-			return
-		}
-	case authTypeAnonymous:
-		// No verification needed for anonymous requests.
-	default:
-		// For all unknown auth types return error.
-		writeErrorResponse(w, ErrAccessDenied, r.URL)
+	s3Error := checkRequestAuthType(r, bucket, "s3:GetBucketLocation", globalMinioDefaultRegion)
+	if s3Error == ErrInvalidRegion {
+		// Clients like boto3 send getBucketLocation() call signed with region that is configured.
+		s3Error = checkRequestAuthType(r, "", "s3:GetBucketLocation", serverConfig.GetRegion())
+	}
+	if s3Error != ErrNone {
+		writeErrorResponse(w, s3Error, r.URL)
 		return
 	}
 
 	getBucketInfo := objectAPI.GetBucketInfo
-	if reqAuthType == authTypeAnonymous {
+	if getRequestAuthType(r) == authTypeAnonymous {
 		getBucketInfo = objectAPI.AnonGetBucketInfo
 	}
 

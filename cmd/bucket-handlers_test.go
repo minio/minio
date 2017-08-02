@@ -22,6 +22,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
 	"testing"
 )
@@ -797,7 +798,7 @@ func testIsBucketActionAllowedHandler(obj ObjectLayer, instanceType, bucketName 
 		} else {
 			initBucketPolicies(obj)
 		}
-		isAllowed := isBucketActionAllowed(testCase.action, testCase.bucket, testCase.prefix)
+		isAllowed := enforceBucketPolicy(testCase.bucket, testCase.action, testCase.prefix, "", "", url.Values{}) == ErrNone
 		if isAllowed != testCase.shouldPass {
 			t.Errorf("Case %d: Expected the response status to be `%t`, but instead found `%t`", i+1, testCase.shouldPass, isAllowed)
 		}
