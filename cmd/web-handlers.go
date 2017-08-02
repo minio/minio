@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"archive/zip"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -36,6 +37,7 @@ import (
 	"github.com/gorilla/rpc/v2/json2"
 	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio/browser"
+	"github.com/minio/minio/pkg/thumbnail"
 )
 
 // WebGenericArgs - empty struct for calls that don't accept arguments
@@ -670,6 +672,59 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 				break
 			}
 		}
+	}
+}
+
+// Creates a thumbnail image for an object and responds with it.
+func (web *webAPIHandlers) Thumbnail(w http.ResponseWriter, r *http.Request) {
+	objectAPI := web.ObjectAPI()
+	if objectAPI == nil {
+		writeWebErrorResponse(w, errServerNotInitialized)
+		return
+	}
+
+	vars := mux.Vars(r)
+	bucket := vars["bucket"]
+	object := vars["object"]
+
+	// The user needs to provide an Authorization: header, or can s3:GetObject.
+	authErr := webRequestAuthenticate(r)
+	if authErr == errAuthentication {
+		writeWebErrorResponse(w, errAuthentication)
+		return
+	}
+
+	if authErr != nil && !isBucketActionAllowed("s3:GetObject", bucket, object) {
+		writeWebErrorResponse(w, errAuthentication)
+		return
+	}
+
+	// Lock the object before reading.
+	objectLock := globalNSMutex.NewNSLock(bucket, object)
+	objectLock.RLock()
+	defer objectLock.RUnlock()
+
+	options := thumbnail.Options{
+		Dimensions: "300x100",
+		Format:     "jpg",
+	}
+
+	buffer := new(bytes.Buffer)
+
+	err := objectAPI.GetObject(bucket, object, 0, -1, buffer)
+	if err != nil {
+		writeWebErrorResponse(w, err)
+		return
+	}
+
+	// Output thumbnail will always be a JPEG.
+	w.Header().Set("Content-Type", "image/jpeg")
+	// Cache output for 8 hours (60 * 60 * 8).
+	w.Header().Set("Cache-Control", "private, max-age=28800")
+
+	err = thumbnail.GenerateThumbnail(buffer, w, options)
+	if err != nil {
+		writeWebErrorResponse(w, err)
 	}
 }
 
