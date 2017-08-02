@@ -24,10 +24,12 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"reflect"
 	"strings"
 	"sync"
 
 	mux "github.com/gorilla/mux"
+	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio-go/pkg/set"
 )
 
@@ -56,7 +58,7 @@ func enforceBucketPolicy(bucket, action, resource, referer string, queryParams u
 
 	// Fetch bucket policy, if policy is not set return access denied.
 	policy := globalBucketPolicies.GetBucketPolicy(bucket)
-	if policy == nil {
+	if reflect.DeepEqual(policy, sentinelBucketPolicy) {
 		return ErrAccessDenied
 	}
 
@@ -88,7 +90,7 @@ func isBucketActionAllowed(action, bucket, prefix string) bool {
 	}
 
 	policy := globalBucketPolicies.GetBucketPolicy(bucket)
-	if policy == nil {
+	if reflect.DeepEqual(policy, sentinelBucketPolicy) {
 		return false
 	}
 	resource := bucketARNPrefix + path.Join(bucket, prefix)
@@ -654,7 +656,7 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 	_ = removeBucketPolicy(bucket, objectAPI)
 
 	// Notify all peers (including self) to update in-memory state
-	S3PeersUpdateBucketPolicy(bucket, policyChange{true, nil})
+	S3PeersUpdateBucketPolicy(bucket, policyChange{true, policy.BucketAccessPolicy{}})
 
 	// Delete notification config, if present - ignore any errors.
 	_ = removeNotificationConfig(bucket, objectAPI)
