@@ -5,34 +5,40 @@ import (
 )
 
 // AnonGetBucketInfo - Get bucket metadata from azure anonymously.
-func (l *siaObjects) AnonGetBucketInfo(bucket string) (bucketInfo BucketInfo, err error) {
-	return bucketInfo, nil
+func (s *siaObjects) AnonGetBucketInfo(bucket string) (bucketInfo BucketInfo, err error) {
+	s.debugmsg("Gateway.AnonGetBucketInfo")
+	return s.GetBucketInfo(bucket)
 }
 
 // AnonPutObject - SendPUT request without authentication.
 // This is needed when clients send PUT requests on objects that can be uploaded without auth.
-func (l *siaObjects) AnonPutObject(bucket, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (objInfo ObjectInfo, err error) {
-	return ObjectInfo{}, nil
+func (s *siaObjects) AnonPutObject(bucket, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (objInfo ObjectInfo, err error) {
+	s.debugmsg("Gateway.AnonPutObject")
+	return s.PutObject(bucket, object, size, data, metadata, sha256sum)
 }
 
 // AnonGetObject - SendGET request without authentication.
 // This is needed when clients send GET requests on objects that can be downloaded without auth.
-func (l *siaObjects) AnonGetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) (err error) {
-	return nil
+func (s *siaObjects) AnonGetObject(bucket, object string, startOffset int64, length int64, writer io.Writer) (err error) {
+	s.debugmsg("Gateway.AnonGetObject")
+	return s.GetObject(bucket, object, startOffset, length, writer)
 }
 
 // AnonGetObjectInfo - Send HEAD request without authentication and convert the
 // result to ObjectInfo.
-func (l *siaObjects) AnonGetObjectInfo(bucket, object string) (objInfo ObjectInfo, err error) {
-	return ObjectInfo{}, nil
+func (s *siaObjects) AnonGetObjectInfo(bucket, object string) (objInfo ObjectInfo, err error) {
+	s.debugmsg("Gateway.AnonGetObjectInfo")
+	return s.GetObjectInfo(bucket, object)
 }
 
 // AnonListObjects - Use Azure equivalent ListBlobs.
-func (l *siaObjects) AnonListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (result ListObjectsInfo, err error) {
-	return result, nil
+func (s *siaObjects) AnonListObjects(bucket, prefix, marker, delimiter string, maxKeys int) (result ListObjectsInfo, err error) {
+	s.debugmsg("Gateway.AnonListObjects")
+	return s.ListObjects(bucket, prefix, marker, delimiter, maxKeys)
 }
 
 // AnonListObjectsV2 - List objects in V2 mode, anonymously
-func (l *siaObjects) AnonListObjectsV2(bucket, prefix, continuationToken string, fetchOwner bool, delimiter string, maxKeys int) (result ListObjectsV2Info, err error) {
-	return result, nil
+func (s *siaObjects) AnonListObjectsV2(bucket, prefix, continuationToken string, fetchOwner bool, delimiter string, maxKeys int) (result ListObjectsV2Info, err error) {
+	s.debugmsg("Gateway.AnonListObjectsV2")
+	return s.ListObjectsV2(bucket, prefix, continuationToken, fetchOwner, delimiter, maxKeys)
 }

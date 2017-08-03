@@ -590,7 +590,6 @@ func (cache *SiaCacheLayer) GetBucketPolicies(bucket string) (bal policy.BucketA
 	default:
 		res := policy.BucketAccessPolicy{}
 		json.Unmarshal([]byte(bktPolicy), &res)
-		fmt.Println("Returning success!")
 		return res, siaSuccess
 	}
 
