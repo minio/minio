@@ -64,8 +64,8 @@ func GetInfo(path string) (info Info, err error) {
 		uintptr(unsafe.Pointer(&lpTotalNumberOfBytes)),
 		uintptr(unsafe.Pointer(&lpTotalNumberOfFreeBytes)))
 	info = Info{}
-	info.Total = int64(lpTotalNumberOfBytes)
-	info.Free = int64(lpFreeBytesAvailable)
+	info.Total = uint64(lpTotalNumberOfBytes)
+	info.Free = uint64(lpFreeBytesAvailable)
 	info.FSType = getFSType(path)
 
 	// Return values of GetDiskFreeSpace()
@@ -88,8 +88,8 @@ func GetInfo(path string) (info Info, err error) {
 		uintptr(unsafe.Pointer(&lpNumberOfFreeClusters)),
 		uintptr(unsafe.Pointer(&lpTotalNumberOfClusters)))
 
-	info.Files = int64(lpTotalNumberOfClusters)
-	info.Ffree = int64(lpNumberOfFreeClusters)
+	info.Files = uint64(lpTotalNumberOfClusters)
+	info.Ffree = uint64(lpNumberOfFreeClusters)
 
 	return info, nil
 }
