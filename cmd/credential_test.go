@@ -23,8 +23,8 @@ func TestMustGetNewCredential(t *testing.T) {
 	if !cred.IsValid() {
 		t.Fatalf("Failed to get new valid credential")
 	}
-	if len(cred.SecretKey) != secretKeyMaxLenMinio {
-		t.Fatalf("Invalid length %d of the secretKey credential generated, expected %d", len(cred.SecretKey), secretKeyMaxLenMinio)
+	if len(cred.SecretKey) != secretKeyMaxLen {
+		t.Fatalf("Invalid length %d of the secretKey credential generated, expected %d", len(cred.SecretKey), secretKeyMaxLen)
 	}
 }
 
@@ -36,18 +36,14 @@ func TestCreateCredential(t *testing.T) {
 		expectedResult bool
 		expectedErr    error
 	}{
-		// Access key too small.
+		// Access key too small (min 5 chars).
 		{"user", "pass", false, errInvalidAccessKeyLength},
-		// Access key too long.
-		{"user12345678901234567", "pass", false, errInvalidAccessKeyLength},
-		// Access key contains unsuppported characters.
-		{"!@#$", "pass", false, errInvalidAccessKeyLength},
-		// Secret key too small.
+		// Long access key is ok.
+		{"user123456789012345678901234567890", "password", true, nil},
+		// Secret key too small (min 8 chars).
 		{"myuser", "pass", false, errInvalidSecretKeyLength},
-		// Secret key too long.
-		{"myuser", "pass1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890", false, errInvalidSecretKeyLength},
-		// Success when access key contains leading/trailing spaces.
-		{" user ", cred.SecretKey, true, nil},
+		// Long secret key is ok.
+		{"myuser", "pass1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890", true, nil},
 		{"myuser", "mypassword", true, nil},
 		{cred.AccessKey, cred.SecretKey, true, nil},
 	}
