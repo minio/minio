@@ -277,6 +277,7 @@ func newGCSGateway(projectID string) (GatewayLayer, error) {
 	if err != nil {
 		return nil, err
 	}
+	anonClient.SetCustomTransport(newCustomHTTPTransport())
 
 	gateway := &gcsGateway{
 		client:     client,
