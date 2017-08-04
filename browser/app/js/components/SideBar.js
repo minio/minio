@@ -20,6 +20,7 @@ import ClickOutHandler from 'react-onclickout'
 import Scrollbars from 'react-custom-scrollbars/lib/Scrollbars'
 import connect from 'react-redux/lib/components/connect'
 import logo from '../../img/logo-dark.svg'
+import Dropdown from 'react-bootstrap/lib/Dropdown'
 
 let SideBar = ({visibleBuckets, loadBucket, currentBucket, selectBucket, searchBuckets, sidebarStatus, clickOutside, showPolicy, storageDetails}) => {
 
@@ -31,10 +32,22 @@ let SideBar = ({visibleBuckets, loadBucket, currentBucket, selectBucket, searchB
              <div className="buckets__list__name">
                { bucket }
              </div>
-             <div className="buckets__list__actions">
-               <span>read and write</span>
-               <span className="buckets__list__policy" onClick={ showPolicy }>edit policy</span>
+             <div className="buckets__list__policy">
+               read and write
              </div>
+             <Dropdown pullRight id="dropdown-bucket-actions" className={ 'buckets__list__actions' }>
+               <Dropdown.Toggle noCaret>
+                 <i className="zmdi zmdi-more-vert" />
+               </Dropdown.Toggle>
+               <Dropdown.Menu className="dropdown-menu-right">
+                 <li>
+                   <a onClick={ showPolicy }>Edit policy</a>
+                 </li>
+                 <li>
+                   <a href="">Delete</a>
+                 </li>
+               </Dropdown.Menu>
+             </Dropdown>
            </li>
   })
 
