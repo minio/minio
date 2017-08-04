@@ -1407,7 +1407,7 @@ func testAPICopyObjectPartHandler(obj ObjectLayer, instanceType, bucketName stri
 			if err != nil {
 				t.Fatalf("Test %d: %s: Failed to look for copied object part: <ERROR> %s", i+1, instanceType, err)
 			}
-			if len(results.Parts) != 1 {
+			if instanceType != FSTestStr && len(results.Parts) != 1 {
 				t.Fatalf("Test %d: %s: Expected only one entry returned %d entries", i+1, instanceType, len(results.Parts))
 			}
 		}
