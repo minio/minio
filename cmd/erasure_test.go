@@ -19,6 +19,7 @@ package cmd
 import (
 	"bytes"
 	"testing"
+	"math/rand"
 )
 
 // mustEncodeData - encodes data slice and provides encoded 2 dimensional slice.
@@ -34,20 +35,20 @@ func mustEncodeData(data []byte, dataBlocks, parityBlocks int) [][]byte {
 // Generates good encoded data with one parity block and data block missing.
 func getGoodEncodedData(data []byte, dataBlocks, parityBlocks int) [][]byte {
 	encodedData := mustEncodeData(data, dataBlocks, parityBlocks)
-	encodedData[3] = nil
-	encodedData[1] = nil
+	encodedData[rand.Intn(dataBlocks)+parityBlocks] = nil
+	encodedData[rand.Intn(dataBlocks)] = nil
 	return encodedData
 }
 
 // Generates bad encoded data with one parity block and data block with garbage data.
 func getBadEncodedData(data []byte, dataBlocks, parityBlocks int) [][]byte {
 	encodedData := mustEncodeData(data, dataBlocks, parityBlocks)
-	encodedData[3] = []byte("garbage")
-	encodedData[1] = []byte("garbage")
+	encodedData[rand.Intn(dataBlocks)+parityBlocks] = []byte("garbage")
+	encodedData[rand.Intn(dataBlocks)] = []byte("garbage")
 	return encodedData
 }
 
-// Generates encoded data with all data blocks missing.
+// Generates encoded data with all data blocks and first parity block missing.
 func getMissingData(data []byte, dataBlocks, parityBlocks int) [][]byte {
 	encodedData := mustEncodeData(data, dataBlocks, parityBlocks)
 	for i := 0; i < dataBlocks+1; i++ {
@@ -77,6 +78,17 @@ var encodingMatrices = []encodingMatrix{
 	{6, 6}, // 6 data, 6 parity blocks.
 	{7, 7}, // 7 data, 7 parity blocks.
 	{8, 8}, // 8 data, 8 parity blocks.
+}
+
+// Count the number of parity blocks in the encode slice
+func countParityBlocks(enBlocks [][]byte, dataBlocks int) int {
+	blocks := 0
+	for _, parBlock := range enBlocks[dataBlocks:] {
+		if parBlock != nil {
+			blocks++
+		}
+	}
+	return blocks
 }
 
 // Tests erasure decoding functionality for various types of inputs.
@@ -124,26 +136,62 @@ func TestErasureDecode(t *testing.T) {
 			// Data block size.
 			blockSize := len(data)
 
-			// Generates encoded data based on type of testCase function.
-			encodedData := testCase.enFn(data, dataBlocks, parityBlocks)
+			// Test decoder for just the missing data blocks
+			{
+				// Generates encoded data based on type of testCase function.
+				encodedData := testCase.enFn(data, dataBlocks, parityBlocks)
 
-			// Decodes the data.
-			err := decodeData(encodedData, dataBlocks, parityBlocks)
-			if err != nil && testCase.shouldPass {
-				t.Errorf("Test %d: Expected to pass by failed instead with %s", i+1, err)
+				// Decodes the data.
+				err := decodeMissingData(encodedData, dataBlocks, parityBlocks)
+				if err != nil && testCase.shouldPass {
+					t.Errorf("Test %d: Expected to pass but failed instead with %s", i+1, err)
+				}
+
+				if testCase.shouldPass && countParityBlocks(encodedData, dataBlocks) != parityBlocks - 1 {
+					t.Errorf("Test %d: Expected %d parity blocks to be found: got %d", i+1, parityBlocks - 1, countParityBlocks(encodedData, dataBlocks))
+				}
+
+				// Proceed to extract the data blocks.
+				decodedDataWriter := new(bytes.Buffer)
+				_, err = writeDataBlocks(decodedDataWriter, encodedData, dataBlocks, 0, int64(blockSize))
+				if err != nil && testCase.shouldPass {
+					t.Errorf("Test %d: Expected to pass but failed instead with %s", i+1, err)
+				}
+
+				// Validate if decoded data is what we expected.
+				if bytes.Equal(decodedDataWriter.Bytes(), data) != testCase.shouldPass {
+					err := errUnexpected
+					t.Errorf("Test %d: Expected to pass but failed instead %s", i+1, err)
+				}
 			}
 
-			// Proceed to extract the data blocks.
-			decodedDataWriter := new(bytes.Buffer)
-			_, err = writeDataBlocks(decodedDataWriter, encodedData, dataBlocks, 0, int64(blockSize))
-			if err != nil && testCase.shouldPass {
-				t.Errorf("Test %d: Expected to pass by failed instead with %s", i+1, err)
-			}
+			// Test decoder for all missing data and parity blocks
+			{
+				// Generates encoded data based on type of testCase function.
+				encodedData := testCase.enFn(data, dataBlocks, parityBlocks)
 
-			// Validate if decoded data is what we expected.
-			if bytes.Equal(decodedDataWriter.Bytes(), data) != testCase.shouldPass {
-				err := errUnexpected
-				t.Errorf("Test %d: Expected to pass by failed instead %s", i+1, err)
+				// Decodes the data.
+				err := decodeDataAndParity(encodedData, dataBlocks, parityBlocks)
+				if err != nil && testCase.shouldPass {
+					t.Errorf("Test %d: Expected to pass but failed instead with %s", i+1, err)
+				}
+
+				if testCase.shouldPass && countParityBlocks(encodedData, dataBlocks) != parityBlocks {
+					t.Errorf("Test %d: Expected %d parity blocks to be found: got %d", i+1, parityBlocks, countParityBlocks(encodedData, dataBlocks))
+				}
+
+				// Proceed to extract the data blocks.
+				decodedDataWriter := new(bytes.Buffer)
+				_, err = writeDataBlocks(decodedDataWriter, encodedData, dataBlocks, 0, int64(blockSize))
+				if err != nil && testCase.shouldPass {
+					t.Errorf("Test %d: Expected to pass but failed instead with %s", i+1, err)
+				}
+
+				// Validate if decoded data is what we expected.
+				if bytes.Equal(decodedDataWriter.Bytes(), data) != testCase.shouldPass {
+					err := errUnexpected
+					t.Errorf("Test %d: Expected to pass but failed instead %s", i+1, err)
+				}
 			}
 		}
 	}

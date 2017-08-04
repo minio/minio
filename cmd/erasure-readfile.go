@@ -272,7 +272,7 @@ func erasureReadFile(writer io.Writer, disks []StorageAPI, volume, path string,
 		// If we have all the data blocks no need to decode, continue to write.
 		if !isSuccessDataBlocks(enBlocks, dataBlocks) {
 			// Reconstruct the missing data blocks.
-			if err := decodeData(enBlocks, dataBlocks, parityBlocks); err != nil {
+			if err := decodeMissingData(enBlocks, dataBlocks, parityBlocks); err != nil {
 				return bytesWritten, err
 			}
 		}
@@ -314,9 +314,21 @@ func erasureReadFile(writer io.Writer, disks []StorageAPI, volume, path string,
 	return bytesWritten, nil
 }
 
-// decodeData - decode encoded blocks.
-func decodeData(enBlocks [][]byte, dataBlocks, parityBlocks int) error {
-	// Initialized reedsolomon.
+// decodeMissingData - decode any missing data blocks.
+func decodeMissingData(enBlocks [][]byte, dataBlocks, parityBlocks int) error {
+	// Initialize reedsolomon.
+	rs, err := reedsolomon.New(dataBlocks, parityBlocks)
+	if err != nil {
+		return traceError(err)
+	}
+
+	// Reconstruct any missing data blocks.
+	return rs.ReconstructMissingData(enBlocks)
+}
+
+// decodeDataAndParity - decode all encoded data and parity blocks.
+func decodeDataAndParity(enBlocks [][]byte, dataBlocks, parityBlocks int) error {
+	// Initialize reedsolomon.
 	rs, err := reedsolomon.New(dataBlocks, parityBlocks)
 	if err != nil {
 		return traceError(err)
@@ -328,14 +340,23 @@ func decodeData(enBlocks [][]byte, dataBlocks, parityBlocks int) error {
 		return traceError(err)
 	}
 
-	// Verify reconstructed blocks (parity).
+	// Verify correctness of all parity blocks.
 	ok, err := rs.Verify(enBlocks)
 	if err != nil {
 		return traceError(err)
 	}
 	if !ok {
-		// Blocks cannot be reconstructed, corrupted data.
-		err = errors.New("Verification failed after reconstruction, data likely corrupted")
+		// Verification of the parity blocks failed, this means one of two things:
+		// - either one (or more) of the data blocks is corrupted,
+		// - or one (or more) of the parity blocks is corrupted.
+		//
+		// Unfortunately it is not possible to state which one of the two possibilities
+		// it is, so while the data may still be intact, we have no way of saying this
+		// definitively.
+		//
+		// Note that in the presence of bit-rot protection (as is present in Minio)
+		// you really should never see this message.
+		err = errors.New("Unable to verify parity blocks, either existing data or parity blocks corrupted")
 		return traceError(err)
 	}
 
