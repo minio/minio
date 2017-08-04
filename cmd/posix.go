@@ -912,7 +912,10 @@ func deleteFile(basePath, deletePath string) error {
 	}
 
 	// Recursively go down the next path and delete again.
-	return deleteFile(basePath, slashpath.Dir(deletePath))
+	// Errors for parent directories shouldn't trickle down.
+	deleteFile(basePath, slashpath.Dir(deletePath))
+
+	return nil
 }
 
 // DeleteFile - delete a file at path.

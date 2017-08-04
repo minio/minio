@@ -742,6 +742,17 @@ func TestPosixDeleteFile(t *testing.T) {
 		t.Fatalf("Unable to create file, %s", err)
 	}
 
+	if err = posixStorage.MakeVol("no-permissions"); err != nil {
+		t.Fatalf("Unable to create volume, %s", err.Error())
+	}
+	if err = posixStorage.AppendFile("no-permissions", "dir/file", []byte("Hello, world")); err != nil {
+		t.Fatalf("Unable to create file, %s", err.Error())
+	}
+	// Parent directory must have write permissions, this is read + execute.
+	if err = os.Chmod(pathJoin(path, "no-permissions"), 0555); err != nil {
+		t.Fatalf("Unable to chmod directory, %s", err.Error())
+	}
+
 	testCases := []struct {
 		srcVol      string
 		srcPath     string
@@ -795,6 +806,15 @@ func TestPosixDeleteFile(t *testing.T) {
 			srcPath:     "my-obj-del-0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
 			ioErrCnt:    0,
 			expectedErr: errFileNameTooLong,
+		},
+		// TestPosix case - 7.
+		// TestPosix case with undeletable parent directory.
+		// File can delete, dir cannot delete because no-permissions doesn't have write perms.
+		{
+			srcVol:      "no-permissions",
+			srcPath:     "dir/file",
+			ioErrCnt:    0,
+			expectedErr: nil,
 		},
 	}
 
