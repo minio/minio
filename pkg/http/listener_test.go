@@ -815,3 +815,42 @@ func TestHTTPListenerAcceptParallel(t *testing.T) {
 		listener.Close()
 	}
 }
+
+type myTimeoutErr struct {
+	timeout bool
+}
+
+func (m *myTimeoutErr) Error() string { return fmt.Sprintf("myTimeoutErr: %v", m.timeout) }
+func (m *myTimeoutErr) Timeout() bool { return m.timeout }
+
+// Test for ignoreErr helper function
+func TestIgnoreErr(t *testing.T) {
+	testCases := []struct {
+		err  error
+		want bool
+	}{
+		{
+			err:  io.EOF,
+			want: true,
+		},
+		{
+			err:  &net.OpError{Err: &myTimeoutErr{timeout: true}},
+			want: true,
+		},
+		{
+			err:  &net.OpError{Err: &myTimeoutErr{timeout: false}},
+			want: false,
+		},
+		{
+			err:  io.ErrUnexpectedEOF,
+			want: false,
+		},
+	}
+
+	for i, tc := range testCases {
+		if actual := ignoreErr(tc.err); actual != tc.want {
+			t.Errorf("Test case %d: Expected %v but got %v for %v", i+1,
+				tc.want, actual, tc.err)
+		}
+	}
+}
