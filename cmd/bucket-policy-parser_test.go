@@ -374,6 +374,12 @@ func TestIsValidConditions(t *testing.T) {
 	// returns map with the "StringNotLike" set to empty map.
 	setEmptyStringNotLike := getEmptyConditionKeyMap("StringNotLike")
 
+	// returns map with the "IpAddress" set to empty map.
+	setEmptyIPAddress := getEmptyConditionKeyMap("IpAddress")
+
+	// returns map with "NotIpAddress" set to empty map.
+	setEmptyNotIPAddress := getEmptyConditionKeyMap("NotIpAddress")
+
 	// Generate conditions.
 	generateConditions := func(key1, key2, value string) map[string]map[string]set.StringSet {
 		innerMap := make(map[string]set.StringSet)
@@ -427,6 +433,8 @@ func TestIsValidConditions(t *testing.T) {
 		setEmptyStringNotEquals(),
 		setEmptyStringLike(),
 		setEmptyStringNotLike(),
+		setEmptyIPAddress(),
+		setEmptyNotIPAddress(),
 		generateConditions("StringEquals", "s3:prefix", "Asia/"),
 		generateConditions("StringEquals", "s3:max-keys", "100"),
 		generateConditions("StringNotEquals", "s3:prefix", "Asia/"),
@@ -482,7 +490,13 @@ func TestIsValidConditions(t *testing.T) {
 		// Test case - 12.
 		{roBucketActionSet, testConditions[11], nil, true},
 		// Test case - 13.
-		{getObjectActionSet, testConditions[11], maxKeysConditionErr, false},
+		{roBucketActionSet, testConditions[12], nil, true},
+		// Test case - 11.
+		{roBucketActionSet, testConditions[13], nil, true},
+		// Test case - 12.
+		{roBucketActionSet, testConditions[14], nil, true},
+		// Test case - 13.
+		{getObjectActionSet, testConditions[15], maxKeysConditionErr, false},
 	}
 	for i, testCase := range testCases {
 		actualErr := isValidConditions(testCase.inputActions, testCase.inputCondition)
@@ -763,6 +777,68 @@ func TestAWSRefererCondition(t *testing.T) {
 		{
 			effect:       "Deny",
 			conditionKey: "StringNotLike",
+			match:        false,
+		},
+	}
+
+	for i, test := range testCases {
+		conditions := make(map[string]map[string]set.StringSet)
+		conditions[test.conditionKey] = conditionsKeyMap
+
+		allowStatement := policyStatement{
+			Sid:    "Testing AWS referer condition",
+			Effect: test.effect,
+			Principal: map[string]interface{}{
+				"AWS": "*",
+			},
+			Resources:  resource,
+			Conditions: conditions,
+		}
+
+		if result := bucketPolicyConditionMatch(requestConditionKeyMap, allowStatement); result != test.match {
+			t.Errorf("Test %d -  Expected conditons to evaluate to %v but got %v",
+				i+1, test.match, result)
+		}
+	}
+}
+
+func TestAWSSourceIPCondition(t *testing.T) {
+	resource := set.CreateStringSet([]string{
+		fmt.Sprintf("%s%s", bucketARNPrefix, "minio-bucket"+"/"+"Asia"+"*"),
+	}...)
+
+	conditionsKeyMap := make(policy.ConditionKeyMap)
+	// Test both IPv4 and IPv6 addresses.
+	conditionsKeyMap.Add("aws:SourceIp",
+		set.CreateStringSet("54.240.143.0/24",
+			"2001:DB8:1234:5678::/64"))
+
+	requestConditionKeyMap := make(map[string]set.StringSet)
+	requestConditionKeyMap["ip"] = set.CreateStringSet("54.240.143.2")
+
+	testCases := []struct {
+		effect       string
+		conditionKey string
+		match        bool
+	}{
+		{
+			effect:       "Allow",
+			conditionKey: "IpAddress",
+			match:        true,
+		},
+		{
+			effect:       "Allow",
+			conditionKey: "NotIpAddress",
+			match:        false,
+		},
+		{
+			effect:       "Deny",
+			conditionKey: "IpAddress",
+			match:        true,
+		},
+		{
+			effect:       "Deny",
+			conditionKey: "NotIpAddress",
 			match:        false,
 		},
 	}
