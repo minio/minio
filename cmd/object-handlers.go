@@ -48,16 +48,33 @@ func setGetRespHeaders(w http.ResponseWriter, reqParams url.Values) {
 	}
 }
 
+// getSourceIPAddress - get the source ip address of the request.
+func getSourceIPAddress(r *http.Request) string {
+	var ip string
+	// Attempt to get ip from standard headers.
+	// Do not support X-Forwarded-For because it is easy to spoof.
+	ip = r.Header.Get("X-Real-Ip")
+	parsedIP := net.ParseIP(ip)
+	// Skip non valid IP address.
+	if parsedIP != nil {
+		return ip
+	}
+	// Default to remote address if headers not set.
+	ip, _, _ = net.SplitHostPort(r.RemoteAddr)
+	return ip
+}
+
 // errAllowableNotFound - For an anon user, return 404 if have ListBucket, 403 otherwise
 // this is in keeping with the permissions sections of the docs of both:
 //   HEAD Object: http://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectHEAD.html
 //   GET Object: http://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectGET.html
 func errAllowableObjectNotFound(bucket string, r *http.Request) APIErrorCode {
 	if getRequestAuthType(r) == authTypeAnonymous {
-		//we care about the bucket as a whole, not a particular resource
+		// We care about the bucket as a whole, not a particular resource.
 		resource := "/" + bucket
+		sourceIP := getSourceIPAddress(r)
 		if s3Error := enforceBucketPolicy(bucket, "s3:ListBucket", resource,
-			r.Referer(), r.URL.Query()); s3Error != ErrNone {
+			r.Referer(), sourceIP, r.URL.Query()); s3Error != ErrNone {
 			return ErrAccessDenied
 		}
 	}
@@ -505,8 +522,9 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	case authTypeAnonymous:
 		// http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
+		sourceIP := getSourceIPAddress(r)
 		if s3Error := enforceBucketPolicy(bucket, "s3:PutObject", r.URL.Path,
-			r.Referer(), r.URL.Query()); s3Error != ErrNone {
+			r.Referer(), sourceIP, r.URL.Query()); s3Error != ErrNone {
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
@@ -791,8 +809,9 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		return
 	case authTypeAnonymous:
 		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
+		sourceIP := getSourceIPAddress(r)
 		if s3Error := enforceBucketPolicy(bucket, "s3:PutObject", r.URL.Path,
-			r.Referer(), r.URL.Query()); s3Error != ErrNone {
+			r.Referer(), sourceIP, r.URL.Query()); s3Error != ErrNone {
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}

@@ -467,6 +467,30 @@ func (web *webAPIHandlers) GetAuth(r *http.Request, args *WebGenericArgs, reply 
 	return nil
 }
 
+// URLTokenReply contains the reply for CreateURLToken.
+type URLTokenReply struct {
+	Token     string `json:"token"`
+	UIVersion string `json:"uiVersion"`
+}
+
+// CreateURLToken creates a URL token (short-lived) for GET requests.
+func (web *webAPIHandlers) CreateURLToken(r *http.Request, args *WebGenericArgs, reply *URLTokenReply) error {
+	if !isHTTPRequestValid(r) {
+		return toJSONError(errAuthentication)
+	}
+
+	creds := serverConfig.GetCredential()
+
+	token, err := authenticateURL(creds.AccessKey, creds.SecretKey)
+	if err != nil {
+		return toJSONError(err)
+	}
+
+	reply.Token = token
+	reply.UIVersion = browser.UIVersion
+	return nil
+}
+
 // Upload - file upload handler.
 func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	objectAPI := web.ObjectAPI()

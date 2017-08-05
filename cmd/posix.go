@@ -35,11 +35,9 @@ import (
 )
 
 const (
-	diskMinFreeSpace   = 1 * humanize.GiByte // Min 1GiB free space.
-	diskMinTotalSpace  = diskMinFreeSpace    // Min 1GiB total space.
-	diskMinFreeInodes  = 10000               // Min 10000 free inodes.
-	diskMinTotalInodes = diskMinFreeInodes   // Min 10000 total inodes.
-	maxAllowedIOError  = 5
+	diskMinFreeSpace  = 1 * humanize.GiByte // Min 1GiB free space.
+	diskMinTotalSpace = diskMinFreeSpace    // Min 1GiB total space.
+	maxAllowedIOError = 5
 )
 
 // posix - implements StorageAPI interface.
@@ -76,24 +74,20 @@ func checkPathLength(pathName string) error {
 func isDirEmpty(dirname string) bool {
 	f, err := os.Open(preparePath(dirname))
 	if err != nil {
-		errorIf(func() error {
-			if !os.IsNotExist(err) {
-				return err
-			}
-			return nil
-		}(), "Unable to access directory.")
+		if !os.IsNotExist(err) {
+			errorIf(err, "Unable to access directory")
+		}
+
 		return false
 	}
 	defer f.Close()
 	// List one entry.
 	_, err = f.Readdirnames(1)
 	if err != io.EOF {
-		errorIf(func() error {
-			if !os.IsNotExist(err) {
-				return err
-			}
-			return nil
-		}(), "Unable to list directory.")
+		if !os.IsNotExist(err) {
+			errorIf(err, "Unable to list directory")
+		}
+
 		return false
 	}
 	// Returns true if we have reached EOF, directory is indeed empty.
@@ -177,18 +171,6 @@ func checkDiskMinTotal(di disk.Info) (err error) {
 	if int64(totalDiskSpace) <= diskMinTotalSpace {
 		return errDiskFull
 	}
-
-	// Some filesystems do not implement a way to provide total inodes available, instead
-	// inodes are allocated based on available disk space. For example CephDISK, StoreNext CVDISK,
-	// AzureFile driver. Allow for the available disk to be separately validated and we will
-	// validate inodes only if total inodes are provided by the underlying filesystem.
-	if di.Files != 0 && di.FSType != "NFS" {
-		totalFiles := int64(di.Files)
-		if totalFiles <= diskMinTotalInodes {
-			return errDiskFull
-		}
-	}
-
 	return nil
 }
 
@@ -198,17 +180,6 @@ func checkDiskMinFree(di disk.Info) error {
 	availableDiskSpace := float64(di.Free) * 0.95
 	if int64(availableDiskSpace) <= diskMinFreeSpace {
 		return errDiskFull
-	}
-
-	// Some filesystems do not implement a way to provide total inodes available, instead inodes
-	// are allocated based on available disk space. For example CephDISK, StoreNext CVDISK, AzureFile driver.
-	// Allow for the available disk to be separately validate and we will validate inodes only if
-	// total inodes are provided by the underlying filesystem.
-	if di.Files != 0 && di.FSType != "NFS" {
-		availableFiles := int64(di.Ffree)
-		if availableFiles <= diskMinFreeInodes {
-			return errDiskFull
-		}
 	}
 
 	// Success.
@@ -915,27 +886,23 @@ func (s *posix) StatFile(volume, path string) (file FileInfo, err error) {
 	}, nil
 }
 
-// deleteFile - delete file path if its empty.
+// deleteFile deletes a file path if its empty. If it's successfully deleted,
+// it will recursively move up the tree, deleting empty parent directories
+// until it finds one with files in it. Returns nil for a non-empty directory.
 func deleteFile(basePath, deletePath string) error {
 	if basePath == deletePath {
 		return nil
 	}
-	// Verify if the path exists.
-	pathSt, err := osStat(preparePath(deletePath))
-	if err != nil {
-		if os.IsNotExist(err) {
-			return errFileNotFound
-		} else if os.IsPermission(err) {
-			return errFileAccessDenied
-		}
-		return err
-	}
-	if pathSt.IsDir() && !isDirEmpty(deletePath) {
-		// Verify if directory is empty.
-		return nil
-	}
+
 	// Attempt to remove path.
 	if err := os.Remove(preparePath(deletePath)); err != nil {
+		// Ignore errors if the directory is not empty. The server relies on
+		// this functionality, and sometimes uses recursion that should not
+		// error on parent directories.
+		if isSysErrNotEmpty(err) {
+			return nil
+		}
+
 		if os.IsNotExist(err) {
 			return errFileNotFound
 		} else if os.IsPermission(err) {
@@ -943,10 +910,11 @@ func deleteFile(basePath, deletePath string) error {
 		}
 		return err
 	}
+
 	// Recursively go down the next path and delete again.
-	if err := deleteFile(basePath, slashpath.Dir(deletePath)); err != nil {
-		return err
-	}
+	// Errors for parent directories shouldn't trickle down.
+	deleteFile(basePath, slashpath.Dir(deletePath))
+
 	return nil
 }
 

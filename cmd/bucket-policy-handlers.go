@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"runtime"
 	"strings"
@@ -81,6 +82,18 @@ func refererMatch(pattern, referer string) bool {
 	return wildcard.MatchSimple(pattern, referer)
 }
 
+// isIPInCIDR - checks if a given a IP address is a member of the given subnet.
+func isIPInCIDR(cidr, ip string) bool {
+	// AWS S3 spec says IPs must use standard CIDR notation.
+	// http://docs.aws.amazon.com/AmazonS3/latest/dev/example-bucket-policies.html#example-bucket-policies-use-case-3.
+	_, cidrNet, err := net.ParseCIDR(cidr)
+	if err != nil {
+		return false // If provided CIDR can't be parsed no IP will be in the subnet.
+	}
+	addr := net.ParseIP(ip)
+	return cidrNet.Contains(addr)
+}
+
 // Verify if given resource matches with policy statement.
 func bucketPolicyResourceMatch(resource string, statement policyStatement) bool {
 	// the resource rule for object could contain "*" wild card.
@@ -97,11 +110,14 @@ func bucketPolicyConditionMatch(conditions map[string]set.StringSet, statement p
 	// - StringNotEquals
 	// - StringLike
 	// - StringNotLike
+	// - IpAddress
+	// - NotIpAddress
 	//
 	// Supported applicable condition keys for each conditions.
 	// - s3:prefix
 	// - s3:max-keys
 	// - s3:aws-Referer
+	// - s3:aws-SourceIp
 
 	// The following loop evaluates the logical AND of all the
 	// conditions in the statement. Note: we can break out of the
@@ -156,6 +172,37 @@ func bucketPolicyConditionMatch(conditions map[string]set.StringSet, statement p
 			// StringNotLike has a match, i.e, condition evaluates to false.
 			for referer := range conditions["referer"] {
 				if !awsReferers.FuncMatch(refererMatch, referer).IsEmpty() {
+					return false
+				}
+			}
+		} else if condition == "IpAddress" {
+			awsIps := conditionKeyVal["aws:SourceIp"]
+			// Skip empty condition, it is trivially satisfied.
+			if awsIps.IsEmpty() {
+				continue
+			}
+			// wildcard match of ip if statement was not empty.
+			// Find a valid ip.
+			ipFound := false
+			for ip := range conditions["ip"] {
+				if !awsIps.FuncMatch(isIPInCIDR, ip).IsEmpty() {
+					ipFound = true
+					break
+				}
+			}
+			if !ipFound {
+				return false
+			}
+		} else if condition == "NotIpAddress" {
+			awsIps := conditionKeyVal["aws:SourceIp"]
+			// Skip empty condition, it is trivially satisfied.
+			if awsIps.IsEmpty() {
+				continue
+			}
+			// wildcard match of ip if statement was not empty.
+			// Find if nothing matches.
+			for ip := range conditions["ip"] {
+				if !awsIps.FuncMatch(isIPInCIDR, ip).IsEmpty() {
 					return false
 				}
 			}
