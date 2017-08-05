@@ -65,10 +65,10 @@ func (h requestSizeLimitHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 	h.handler.ServeHTTP(w, r)
 }
 
-// Reserved bucket.
+// Reserved keyword and paths.
 const (
-	minioReservedBucket     = "minio"
-	minioReservedBucketPath = "/" + minioReservedBucket
+	minioReservedKeyword    = "minio"
+	minioReservedBucketPath = "/" + minioReservedKeyword
 )
 
 // Adds redirect rules for incoming requests.
