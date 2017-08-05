@@ -40,11 +40,11 @@ var supportedActionMap = set.CreateStringSet("*", "s3:*", "s3:GetObject",
 	"s3:AbortMultipartUpload", "s3:ListBucketMultipartUploads", "s3:ListMultipartUploadParts")
 
 // supported Conditions type.
-var supportedConditionsType = set.CreateStringSet("StringEquals", "StringNotEquals", "StringLike", "StringNotLike")
+var supportedConditionsType = set.CreateStringSet("StringEquals", "StringNotEquals", "StringLike", "StringNotLike", "IpAddress", "NotIpAddress")
 
 // Validate s3:prefix, s3:max-keys are present if not
 // supported keys for the conditions.
-var supportedConditionsKey = set.CreateStringSet("s3:prefix", "s3:max-keys", "aws:Referer")
+var supportedConditionsKey = set.CreateStringSet("s3:prefix", "s3:max-keys", "aws:Referer", "aws:SourceIp")
 
 // supportedEffectMap - supported effects.
 var supportedEffectMap = set.CreateStringSet("Allow", "Deny")
