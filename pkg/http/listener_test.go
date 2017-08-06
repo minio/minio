@@ -180,9 +180,6 @@ func TestIsHTTPMethod(t *testing.T) {
 
 func TestNewHTTPListener(t *testing.T) {
 	errMsg := ": no such host"
-	if runtime.GOOS == "windows" {
-		errMsg = ": No such host is known."
-	}
 
 	remoteAddrErrMsg := "listen tcp 93.184.216.34:9000: bind: cannot assign requested address"
 	if runtime.GOOS == "windows" {
@@ -204,7 +201,7 @@ func TestNewHTTPListener(t *testing.T) {
 	}{
 		{[]string{"93.184.216.34:9000"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, nil, errors.New(remoteAddrErrMsg)},
 		{[]string{"example.org:9000"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, nil, errors.New(remoteAddrErrMsg)},
-		{[]string{"unknown-host"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, nil, errors.New("listen tcp: missing port in address unknown-host")},
+		{[]string{"unknown-host"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, nil, errors.New("listen tcp: address unknown-host: missing port in address")},
 		{[]string{"unknown-host:9000"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, nil, errors.New("listen tcp: lookup unknown-host" + errMsg)},
 		{[]string{"localhost:9000", "93.184.216.34:9000"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, nil, errors.New(remoteAddrErrMsg)},
 		{[]string{"localhost:9000", "unknown-host:9000"}, nil, time.Duration(0), time.Duration(0), time.Duration(0), nil, nil, nil, errors.New("listen tcp: lookup unknown-host" + errMsg)},

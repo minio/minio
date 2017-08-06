@@ -198,17 +198,19 @@ func extractHostPort(hostAddr string) (string, string, error) {
 		return "", "", errors.New("unable to process empty address")
 	}
 
+	// Simplify the work of url.Parse() and always send a url with
+	if !strings.HasPrefix(hostAddr, "http://") && !strings.HasPrefix(hostAddr, "https://") {
+		hostAddr = "//" + hostAddr
+	}
+
 	// Parse address to extract host and scheme field
 	u, err := url.Parse(hostAddr)
 	if err != nil {
-		// Ignore scheme not present error
-		if !strings.Contains(err.Error(), "missing protocol scheme") {
-			return "", "", err
-		}
-	} else {
-		addr = u.Host
-		scheme = u.Scheme
+		return "", "", err
 	}
+
+	addr = u.Host
+	scheme = u.Scheme
 
 	// Use the given parameter again if url.Parse()
 	// didn't return any useful result.

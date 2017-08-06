@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"net/url"
 	"reflect"
-	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -33,9 +32,6 @@ func TestNewEndpoint(t *testing.T) {
 	u4, _ := url.Parse("http://192.168.253.200/path")
 
 	errMsg := ": no such host"
-	if runtime.GOOS == "windows" {
-		errMsg = ": No such host is known."
-	}
 
 	testCases := []struct {
 		arg              string
@@ -232,7 +228,7 @@ func TestCreateEndpoints(t *testing.T) {
 		expectedSetupType  SetupType
 		expectedErr        error
 	}{
-		{"localhost", []string{}, "", EndpointList{}, -1, fmt.Errorf("missing port in address localhost")},
+		{"localhost", []string{}, "", EndpointList{}, -1, fmt.Errorf("address localhost: missing port in address")},
 
 		// FS Setup
 		{"localhost:9000", []string{"http://localhost/d1"}, "", EndpointList{}, -1, fmt.Errorf("use path style endpoint for FS setup")},
