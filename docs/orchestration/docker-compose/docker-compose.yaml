@@ -5,7 +5,7 @@ version: '2'
 # 9001 through 9004.
 services:
   minio1:
-    image: minio/minio:RELEASE.2017-06-13T19-01-01Z
+    image: minio/minio:RELEASE.2017-08-05T00-00-53Z
     ports:
       - "9001:9000"
     environment:
@@ -13,7 +13,7 @@ services:
       MINIO_SECRET_KEY: minio123
     command: server http://minio1/myexport http://minio2/myexport http://minio3/myexport http://minio4/myexport
   minio2:
-    image: minio/minio:RELEASE.2017-06-13T19-01-01Z
+    image: minio/minio:RELEASE.2017-08-05T00-00-53Z
     ports:
       - "9002:9000"
     environment:
@@ -21,7 +21,7 @@ services:
       MINIO_SECRET_KEY: minio123
     command: server http://minio1/myexport http://minio2/myexport http://minio3/myexport http://minio4/myexport
   minio3:
-    image: minio/minio:RELEASE.2017-06-13T19-01-01Z
+    image: minio/minio:RELEASE.2017-08-05T00-00-53Z
     ports:
       - "9003:9000"
     environment:
@@ -29,7 +29,7 @@ services:
       MINIO_SECRET_KEY: minio123
     command: server http://minio1/myexport http://minio2/myexport http://minio3/myexport http://minio4/myexport
   minio4:
-    image: minio/minio:RELEASE.2017-06-13T19-01-01Z
+    image: minio/minio:RELEASE.2017-08-05T00-00-53Z
     ports:
       - "9004:9000"
     environment:
