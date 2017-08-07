@@ -184,6 +184,8 @@ func TestNewHTTPListener(t *testing.T) {
 	remoteAddrErrMsg := "listen tcp 93.184.216.34:9000: bind: cannot assign requested address"
 	if runtime.GOOS == "windows" {
 		remoteAddrErrMsg = "listen tcp 93.184.216.34:9000: bind: The requested address is not valid in its context."
+	} else if runtime.GOOS == "darwin" {
+		remoteAddrErrMsg = "listen tcp 93.184.216.34:9000: bind: can't assign requested address"
 	}
 
 	tlsConfig := getTLSConfig(t)
