@@ -19,7 +19,7 @@ var path = require('path')
 var CopyWebpackPlugin = require('copy-webpack-plugin')
 var purify = require("purifycss-webpack-plugin")
 
-var exports = {
+module.exports = {
   context: __dirname,
   entry: [
     path.resolve(__dirname, 'app/index.js')
@@ -32,26 +32,28 @@ var exports = {
   module: {
     loaders: [{
         test: /\.js$/,
-        exclude: /(node_modules|bower_components)/,
-        loader: 'babel',
+        loader: 'babel-loader',
         query: {
-              presets: ['react', 'es2015']
-            }
+          presets: ['es2015']
+        }
+      }, {
+        test: /\.vue$/,
+        loader: 'vue-loader',
       }, {
         test: /\.less$/,
-        loader: 'style!css!less'
+        loader: 'style-loader!css-loader!less-loader'
       }, {
         test: /\.json$/,
         loader: 'json-loader'
       },{
         test: /\.css$/,
-        loader: 'style!css'
+        loader: 'style-loader!css-loader'
       }, {
         test: /\.(eot|woff|woff2|ttf|svg|png)/,
-        loader: 'url'
+        loader: 'url-loader'
       }]
   },
-  node:{
+  node: {
     fs:'empty'
   },
   devServer: {
@@ -60,16 +62,16 @@ var exports = {
     },
     proxy: {
       '/minio/webrpc': {
-	target: 'http://localhost:9000',
-	secure: false
+        target: 'http://localhost:9000',
+        secure: false
       },
       '/minio/upload/*': {
-	target: 'http://localhost:9000',
-	secure: false
+        target: 'http://localhost:9000',
+        secure: false
       },
       '/minio/download/*': {
-	target: 'http://localhost:9000',
-	secure: false
+        target: 'http://localhost:9000',
+        secure: false
       },
       '/minio/zip': {
         target: 'http://localhost:9000',
@@ -94,18 +96,22 @@ var exports = {
         basePath: __dirname,
         paths: [
             "app/index.html",
-            "app/js/*.js"
+            "app/js/*.js",
+            "app/js/*.vue"
         ]
     })
-  ]
+  ],
+  resolve: {
+    alias: {
+      'vue$': 'vue/dist/vue.esm.js'
+    }
+  }
 }
 
 if (process.env.NODE_ENV === 'dev') {
-  exports.entry = [
+  module.exports.entry = [
     'webpack/hot/dev-server',
     'webpack-dev-server/client?http://localhost:8080',
     path.resolve(__dirname, 'app/index.js')
   ]
 }
-
-module.exports = exports
