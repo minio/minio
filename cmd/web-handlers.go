@@ -405,10 +405,13 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 	errsMap := updateCredsOnPeers(creds)
 
 	// Update local credentials
-	serverConfig.SetCredential(creds)
+	prevCred := serverConfig.SetCredential(creds)
 
 	// Persist updated credentials.
 	if err = serverConfig.Save(); err != nil {
+		// Save the current creds when failed to update.
+		serverConfig.SetCredential(prevCred)
+
 		errsMap[globalMinioAddr] = err
 	}
 

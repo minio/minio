@@ -61,11 +61,12 @@ func (s *serverConfigV19) GetVersion() string {
 	return s.Version
 }
 
-// SetRegion set new region.
+// SetRegion set a new region.
 func (s *serverConfigV19) SetRegion(region string) {
 	s.Lock()
 	defer s.Unlock()
 
+	// Save new region.
 	s.Region = region
 }
 
@@ -77,13 +78,19 @@ func (s *serverConfigV19) GetRegion() string {
 	return s.Region
 }
 
-// SetCredentials set new credentials.
-func (s *serverConfigV19) SetCredential(creds credential) {
+// SetCredentials set new credentials. SetCredential returns the previous credential.
+func (s *serverConfigV19) SetCredential(creds credential) (prevCred credential) {
 	s.Lock()
 	defer s.Unlock()
 
+	// Save previous credential.
+	prevCred = s.Credential
+
 	// Set updated credential.
 	s.Credential = creds
+
+	// Return previous credential.
+	return prevCred
 }
 
 // GetCredentials get current credentials.

@@ -26,6 +26,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/minio/minio-go/pkg/set"
 )
@@ -66,17 +67,52 @@ func mustGetLocalIP4() (ipList set.StringSet) {
 // getHostIP4 returns IPv4 address of given host.
 func getHostIP4(host string) (ipList set.StringSet, err error) {
 	ipList = set.NewStringSet()
-	ips, err := net.LookupIP(host)
-	if err != nil {
-		return ipList, err
+	//variable to list resolved IP addresses
+	var ips []net.IP
+	// wait for hosts to resolve in case of kubernetes or Swarm environment.
+	// This is needed for orchestration platforms like kubernetes,
+	// as the remote hosts are sometime not available immediately.
+	// We use IsDocker() method to check for Docker Swarm environment as there
+	// is no reliable way to clearly identify Swarm from Docker environment.
+	if IsDocker() || IsKubernetes() {
+		// channel to indicate completion of host resolution
+		doneCh := make(chan struct{})
+		// Indicate to our retry routine to exit cleanly, upon this function return.
+		defer close(doneCh)
+		// Mark the starting time
+		startTime := time.Now().Round(time.Second)
+		// try to resolve remote host
+		ips, err = net.LookupIP(host)
+		// If not resolved
+		if err != nil {
+			// Wait on the jitter retry loop
+			for _ = range newRetryTimerSimple(doneCh) {
+				// log error and continue. We dont fail on host resolution, just log
+				// the message to console about the host not being resolveable.
+				errorIf(err, "Unable to resolve host %s (elapsed %s)", host,
+					time.Now().Round(time.Second).Sub(startTime).String())
+				// try to resolve remote host again
+				ips, err = net.LookupIP(host)
+				// if resolved, exit the loop
+				if err == nil {
+					break
+				}
+			}
+		}
+	} else {
+		// It is expected that user provides resolveable
+		// hosts in non container environments, else we fail
+		ips, err = net.LookupIP(host)
+		if err != nil {
+			return ipList, err
+		}
 	}
-
+	// add to list if successfully resolved
 	for _, ip := range ips {
 		if ip.To4() != nil {
 			ipList.Add(ip.String())
 		}
 	}
-
 	return ipList, err
 }
 
