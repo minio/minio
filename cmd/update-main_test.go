@@ -263,20 +263,21 @@ func TestDownloadReleaseData(t *testing.T) {
 func TestParseReleaseData(t *testing.T) {
 	releaseTime, _ := releaseTagToReleaseTime("RELEASE.2016-10-07T01-16-39Z")
 	testCases := []struct {
-		data           string
-		expectedResult time.Time
-		expectedErr    error
+		data              string
+		expectedResult    time.Time
+		expectedSha256hex string
+		expectedErr       error
 	}{
-		{"more than two fields", time.Time{}, fmt.Errorf("Unknown release data `more than two fields`")},
-		{"more than", time.Time{}, fmt.Errorf("Unknown release information `than`")},
-		{"more than.two.fields", time.Time{}, fmt.Errorf("Unknown release `than.two.fields`")},
-		{"more minio.RELEASE.fields", time.Time{}, fmt.Errorf(`Unknown release tag format. parsing time "fields" as "2006-01-02T15-04-05Z": cannot parse "fields" as "2006"`)},
-		{"more minio.RELEASE.2016-10-07T01-16-39Z", releaseTime, nil},
-		{"fbe246edbd382902db9a4035df7dce8cb441357d minio.RELEASE.2016-10-07T01-16-39Z\n", releaseTime, nil},
+		{"more than two fields", time.Time{}, "", fmt.Errorf("Unknown release data `more than two fields`")},
+		{"more than", time.Time{}, "", fmt.Errorf("Unknown release information `than`")},
+		{"more than.two.fields", time.Time{}, "", fmt.Errorf("Unknown release `than.two.fields`")},
+		{"more minio.RELEASE.fields", time.Time{}, "", fmt.Errorf(`Unknown release tag format. parsing time "fields" as "2006-01-02T15-04-05Z": cannot parse "fields" as "2006"`)},
+		{"more minio.RELEASE.2016-10-07T01-16-39Z", releaseTime, "more", nil},
+		{"fbe246edbd382902db9a4035df7dce8cb441357d minio.RELEASE.2016-10-07T01-16-39Z\n", releaseTime, "fbe246edbd382902db9a4035df7dce8cb441357d", nil},
 	}
 
 	for i, testCase := range testCases {
-		result, err := parseReleaseData(testCase.data)
+		sha256Hex, result, err := parseReleaseData(testCase.data)
 		if testCase.expectedErr == nil {
 			if err != nil {
 				t.Errorf("error case %d: expected: %v, got: %v", i+1, testCase.expectedErr, err)
@@ -286,9 +287,13 @@ func TestParseReleaseData(t *testing.T) {
 		} else if testCase.expectedErr.Error() != err.Error() {
 			t.Errorf("error case %d: expected: %v, got: %v", i+1, testCase.expectedErr, err)
 		}
-
-		if !testCase.expectedResult.Equal(result) {
-			t.Errorf("case %d: result: expected: %v, got: %v", i+1, testCase.expectedResult, result)
+		if err == nil {
+			if sha256Hex != testCase.expectedSha256hex {
+				t.Errorf("case %d: result: expected: %v, got: %v", i+1, testCase.expectedSha256hex, sha256Hex)
+			}
+			if !testCase.expectedResult.Equal(result) {
+				t.Errorf("case %d: result: expected: %v, got: %v", i+1, testCase.expectedResult, result)
+			}
 		}
 	}
 }

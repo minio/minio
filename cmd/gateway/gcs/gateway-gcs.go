@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+
 	"math"
 	"os"
 	"regexp"
@@ -108,6 +109,9 @@ ENVIRONMENT VARIABLES:
 
   BROWSER:
      MINIO_BROWSER: To disable web browser access, set this value to "off".
+
+  UPDATE:
+     MINIO_UPDATE: To turn off in-place upgrades, set this value to "off".
 
   GCS credentials file:
      GOOGLE_APPLICATION_CREDENTIALS: Path to credentials.json

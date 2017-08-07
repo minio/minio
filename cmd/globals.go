@@ -89,8 +89,11 @@ var (
 	// Set to true if credentials were passed from env, default is false.
 	globalIsEnvCreds = false
 
-	// This flag is set to 'true' wen MINIO_REGION env is set.
+	// This flag is set to 'true' when MINIO_REGION env is set.
 	globalIsEnvRegion = false
+
+	// This flag is set to 'true' when MINIO_UPDATE env is set to 'off'. Default is false.
+	globalInplaceUpdateDisabled = false
 
 	// This flag is set to 'us-east-1' by default
 	globalServerRegion = globalMinioDefaultRegion
