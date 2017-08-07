@@ -116,6 +116,7 @@ const (
 	ErrInvalidDuration
 	ErrNotSupported
 	ErrBucketAlreadyExists
+	ErrMetadataTooLarge
 	// Add new error codes here.
 
 	// Bucket notification related errors.
@@ -630,7 +631,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "Cannot respond to plain-text request from TLS-encrypted server",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
-
+	ErrMetadataTooLarge: {
+		Code:           "InvalidArgument",
+		Description:    "Your metadata headers exceed the maximum allowed metadata size.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	// Add your error structure here.
 }
 
