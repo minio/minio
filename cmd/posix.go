@@ -102,6 +102,7 @@ func newPosix(path string) (StorageAPI, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	st := &posix{
 		diskPath: diskPath,
 		// 1MiB buffer pool for posix internal operations.
