@@ -29,8 +29,8 @@ import (
 	mux "github.com/gorilla/mux"
 )
 
-// supportedGetReqParams - supported request parameters for GET presigned request.
-var supportedGetReqParams = map[string]string{
+// supportedHeadGetReqParams - supported request parameters for GET and HEAD presigned request.
+var supportedHeadGetReqParams = map[string]string{
 	"response-expires":             "Expires",
 	"response-content-type":        "Content-Type",
 	"response-cache-control":       "Cache-Control",
@@ -39,10 +39,10 @@ var supportedGetReqParams = map[string]string{
 	"response-content-disposition": "Content-Disposition",
 }
 
-// setGetRespHeaders - set any requested parameters as response headers.
-func setGetRespHeaders(w http.ResponseWriter, reqParams url.Values) {
+// setHeadGetRespHeaders - set any requested parameters as response headers.
+func setHeadGetRespHeaders(w http.ResponseWriter, reqParams url.Values) {
 	for k, v := range reqParams {
-		if header, ok := supportedGetReqParams[k]; ok {
+		if header, ok := supportedHeadGetReqParams[k]; ok {
 			w.Header()[header] = v
 		}
 	}
@@ -166,7 +166,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 			setObjectHeaders(w, objInfo, hrange)
 
 			// Set any additional requested response headers.
-			setGetRespHeaders(w, r.URL.Query())
+			setHeadGetRespHeaders(w, r.URL.Query())
 
 			dataWritten = true
 		}
@@ -253,6 +253,9 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 
 	// Set standard object headers.
 	setObjectHeaders(w, objInfo, nil)
+
+	// Set any additional requested response headers.
+	setHeadGetRespHeaders(w, r.URL.Query())
 
 	// Successful response.
 	w.WriteHeader(http.StatusOK)
