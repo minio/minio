@@ -101,7 +101,6 @@ func (s *siaObjects) loadSiaEnv() {
 	if tmp != "" {
 		s.CacheDir = tmp
 	}
-	fmt.Printf("SIA_CACHE_DIR: %s\n", s.CacheDir)
 
 	tmp = os.Getenv("SIA_CACHE_PURGE_AFTER_SEC")
 	if tmp != "" {
@@ -110,19 +109,16 @@ func (s *siaObjects) loadSiaEnv() {
 			s.PurgeCacheAfterSec = i
 		}
 	}
-	fmt.Printf("SIA_CACHE_PURGE_AFTER_SEC: %d\n", s.PurgeCacheAfterSec)
 
 	tmp = os.Getenv("SIA_DAEMON_ADDR")
 	if tmp != "" {
 		s.SiadAddress = tmp
 	}
-	fmt.Printf("SIA_DAEMON_ADDR: %s\n", s.SiadAddress)
 
 	tmp = os.Getenv("SIA_DB_FILE")
 	if tmp != "" {
 		s.DbFile = tmp
 	}
-	fmt.Printf("SIA_DB_FILE: %s\n", s.DbFile)
 
 	tmp = os.Getenv("SIA_DEBUG")
 	if tmp != "" {
@@ -135,7 +131,14 @@ func (s *siaObjects) loadSiaEnv() {
 			}
 		}
 	}
-	fmt.Printf("SIA_DEBUG: %v\n", s.DebugMode)
+
+	if s.DebugMode {
+		fmt.Printf("SIA_DEBUG: %v\n", s.DebugMode)
+		fmt.Printf("SIA_CACHE_DIR: %s\n", s.CacheDir)
+		fmt.Printf("SIA_CACHE_PURGE_AFTER_SEC: %d\n", s.PurgeCacheAfterSec)
+		fmt.Printf("SIA_DAEMON_ADDR: %s\n", s.SiadAddress)
+		fmt.Printf("SIA_DB_FILE: %s\n", s.DbFile)
+	}
 }
 
 // Shutdown saves any gateway metadata to disk
