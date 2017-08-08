@@ -197,7 +197,6 @@ func (cache *SiaCacheLayer) loadSiaEnv() {
 			cache.ManagerDelaySec = i
 		}
 	}
-	fmt.Printf("SIA_MANAGER_DELAY_SEC: %d\n", cache.ManagerDelaySec)
 
 	tmp = os.Getenv("SIA_UPLOAD_CHECK_FREQ_MS")
 	if tmp != "" {
@@ -206,7 +205,6 @@ func (cache *SiaCacheLayer) loadSiaEnv() {
 			cache.UploadCheckFreqMs = i
 		}
 	}
-	fmt.Printf("SIA_UPLOAD_CHECK_FREQ_MS: %d\n", cache.UploadCheckFreqMs)
 
 	tmp = os.Getenv("SIA_CACHE_MAX_SIZE_BYTES")
 	if tmp != "" {
@@ -215,7 +213,12 @@ func (cache *SiaCacheLayer) loadSiaEnv() {
 			cache.MaxCacheSizeBytes = i
 		}
 	}
-	fmt.Printf("SIA_CACHE_MAX_SIZE_BYTES: %d\n", cache.MaxCacheSizeBytes)
+
+	if cache.DebugMode {
+		fmt.Printf("SIA_CACHE_MAX_SIZE_BYTES: %d\n", cache.MaxCacheSizeBytes)
+		fmt.Printf("SIA_MANAGER_DELAY_SEC: %d\n", cache.ManagerDelaySec)
+		fmt.Printf("SIA_UPLOAD_CHECK_FREQ_MS: %d\n", cache.UploadCheckFreqMs)
+	}
 }
 
 // Called to stop the SiaBridge
@@ -695,7 +698,7 @@ func (cache *SiaCacheLayer) removeFromCache(objInfo SiaObjectInfo) SiaServiceErr
 	// If file doesn't exist in cache, it's falsely labelled. Update and return.
 	_, err := os.Stat(objInfo.SrcFile)
 	if err != nil {
-		return cache.markObjectCached(objInfo.Bucket, objInfo.Name, 0)
+		return cache.updateCachedStatus(objInfo.Bucket, objInfo.Name, 0)
 	}
 
 	err = os.Remove(objInfo.SrcFile)
@@ -704,7 +707,7 @@ func (cache *SiaCacheLayer) removeFromCache(objInfo SiaObjectInfo) SiaServiceErr
 		return siaErrorFailedToDeleteCachedFile
 	}
 
-	return cache.markObjectCached(objInfo.Bucket, objInfo.Name, 0)
+	return cache.updateCachedStatus(objInfo.Bucket, objInfo.Name, 0)
 }
 
 func (cache *SiaCacheLayer) checkSiaUploads() SiaServiceError {
@@ -773,27 +776,6 @@ func (cache *SiaCacheLayer) markObjectDeleted(bucket string, objectName string) 
 	defer stmt.Close()
 
 	_, err = stmt.Exec(bucket, objectName)
-	if err != nil {
-		return siaErrorDatabaseUpdateError
-	}
-
-	return siaSuccess
-}
-
-func (cache *SiaCacheLayer) markObjectCached(bucket string, objectName string, status int) SiaServiceError {
-	cache.debugmsg("SiaCacheLayer.markObjectCached")
-
-	cache.lockDB()
-	defer cache.unlockDB()
-
-	stmt, err := cache.Db.Prepare("UPDATE objects SET cached=? WHERE bucket=? AND name=?")
-	if err != nil {
-		return siaErrorDatabaseUpdateError
-	}
-
-	defer stmt.Close()
-
-	_, err = stmt.Exec(status, bucket, objectName)
 	if err != nil {
 		return siaErrorDatabaseUpdateError
 	}
@@ -1147,7 +1129,7 @@ func (cache *SiaCacheLayer) forceDeleteOldestCacheFile() SiaServiceError {
 		if err != nil {
 			// Item does NOT exist in cache. Could have been deleted manually by user.
 			// Update the cached flag and return. (Returning failure would stop cache manager.)
-			return cache.markObjectCached(bucket, objectName, 0)
+			return cache.updateCachedStatus(bucket, objectName, 0)
 		}
 
 		err = os.Remove(src_file)
@@ -1155,7 +1137,7 @@ func (cache *SiaCacheLayer) forceDeleteOldestCacheFile() SiaServiceError {
 			return siaErrorUnableToClearAnyCachedFiles
 		}
 
-		err = cache.markObjectCached(bucket, objectName, 0)
+		err = cache.updateCachedStatus(bucket, objectName, 0)
 		if err != nil {
 			return siaErrorUnableToClearAnyCachedFiles
 		}
@@ -1200,6 +1182,6 @@ func (cache *SiaCacheLayer) debugmsg(str string) {
 func (cache *SiaCacheLayer) timeTrack(start time.Time, name string) {
 	if cache.DebugMode {
 		elapsed := time.Since(start)
-		log.Printf("%s took %s\n", name, elapsed)
+		fmt.Printf("%s took %s\n", name, elapsed)
 	}
 }
