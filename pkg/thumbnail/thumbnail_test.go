@@ -26,14 +26,14 @@ import (
 	"testing"
 )
 
-func TestGenerateThumbnail(t *testing.T) {
+func TestGenerateThumbnailConvert(t *testing.T) {
 	// Generate a thumbnail for testdata/car.png and check to make sure
 	// it is both a JPEG and 128x78 (convert does it differently).
-	img1, err := os.Open("testdata/car.png")
+	file, err := os.Open("testdata/car.png")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer img1.Close()
+	defer file.Close()
 
 	options := Options{
 		Dimensions:     "128x128",
@@ -43,8 +43,14 @@ func TestGenerateThumbnail(t *testing.T) {
 
 	buffer := new(bytes.Buffer)
 
-	err = GenerateThumbnail(img1, buffer, options)
+	err = GenerateThumbnail(file, buffer, options)
 	if err != nil {
+		if err == ErrNoLibrary {
+			// ImageMagick is not installed on this machine.
+			// Skip this test.
+			t.Skip("ImageMagick `convert` not installed, skipping.")
+		}
+
 		t.Error(err)
 	}
 
@@ -63,28 +69,30 @@ func TestGenerateThumbnail(t *testing.T) {
 			t.Errorf("expected 128x78 dimensions, got %dx%d", width, height)
 		}
 	}
+}
 
+func TestGenerateThumbnailRez(t *testing.T) {
 	// Now do it for a jpg.
-	img2, err := os.Open("testdata/beach.jpg")
+	file, err := os.Open("testdata/beach.jpg")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer img2.Close()
+	defer file.Close()
 
-	options = Options{
+	options := Options{
 		Dimensions:     "64x64",
 		Format:         "gif",
 		AvoidLibraries: AvoidConvert,
 	}
 
-	buffer = new(bytes.Buffer)
+	buffer := new(bytes.Buffer)
 
-	err = GenerateThumbnail(img2, buffer, options)
+	err = GenerateThumbnail(file, buffer, options)
 	if err != nil {
 		t.Error(err)
 	}
 
-	img, format, err = image.Decode(buffer)
+	img, format, err := image.Decode(buffer)
 	if err != nil {
 		t.Error(err)
 	} else {
@@ -98,15 +106,23 @@ func TestGenerateThumbnail(t *testing.T) {
 			t.Errorf("expected 64x64 dimensions, got %dx%d", width, height)
 		}
 	}
+}
+
+func TestGenerateThumbnailNoLibrary(t *testing.T) {
+	img, err := os.Open("testdata/beach.jpg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer img.Close()
 
 	// This should fail with no libraries.
-	options = Options{
+	options := Options{
 		Dimensions:     "1x1",
 		Format:         "jpeg",
 		AvoidLibraries: AvoidConvert | AvoidRez,
 	}
 
-	err = GenerateThumbnail(img2, ioutil.Discard, options)
+	err = GenerateThumbnail(img, ioutil.Discard, options)
 	if err != ErrNoLibrary {
 		t.Errorf("expected ErrNoLibrary, got %s", err.Error())
 	}
