@@ -113,7 +113,8 @@ func TestFSGetBucketInfo(t *testing.T) {
 	}
 
 	// Check for buckets and should get disk not found.
-	removeAll(disk)
+	fs.fsPath = filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
+
 	_, err = fs.GetBucketInfo(bucketName)
 	if !isSameType(errorCause(err), BucketNotFound{}) {
 		t.Fatal("BucketNotFound error not returned")
@@ -225,7 +226,7 @@ func TestFSDeleteObject(t *testing.T) {
 	}
 
 	// Delete object should err disk not found.
-	removeAll(disk)
+	fs.fsPath = filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 	if err := fs.DeleteObject(bucketName, objectName); err != nil {
 		if !isSameType(errorCause(err), BucketNotFound{}) {
 			t.Fatal("Unexpected error: ", err)
@@ -264,8 +265,8 @@ func TestFSDeleteBucket(t *testing.T) {
 
 	obj.MakeBucketWithLocation(bucketName, "")
 
-	// Delete bucker should get error disk not found.
-	removeAll(disk)
+	// Delete bucket should get error disk not found.
+	fs.fsPath = filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 	if err = fs.DeleteBucket(bucketName); err != nil {
 		if !isSameType(errorCause(err), BucketNotFound{}) {
 			t.Fatal("Unexpected error: ", err)
@@ -307,7 +308,7 @@ func TestFSListBuckets(t *testing.T) {
 	}
 
 	// Test ListBuckets with disk not found.
-	removeAll(disk)
+	fs.fsPath = filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 
 	if _, err := fs.ListBuckets(); err != nil {
 		if errorCause(err) != errDiskNotFound {
