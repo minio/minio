@@ -20,7 +20,6 @@ import (
 	"archive/zip"
 	"bytes"
 	"crypto/md5"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -1130,10 +1129,10 @@ func testThumbnailWebHandler(obj ObjectLayer, instanceType string, t TestErrHand
 		t.Fatalf("failed to create bucket %s (on %s)", err.Error(), instanceType)
 	}
 
-	// This is the smallest possible PNG image ever, base64-encoded.
-	content, err := base64.StdEncoding.DecodeString("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVR4nGMAAQAABQABDQottAAAAABJRU5ErkJggg==")
+	// Upload an image from pkg/thumbnail.
+	content, err := ioutil.ReadFile("../pkg/thumbnail/testdata/beach.jpg")
 	if err != nil {
-		t.Fatalf("failed to decode png, %s", err.Error())
+		t.Fatalf("could not read file, %s", err.Error())
 	}
 
 	_, err = obj.PutObject(bucketName, objectName, int64(len(content)), bytes.NewReader(content), nil, "")
@@ -1196,10 +1195,10 @@ func BenchmarkWebHandlerThumbnail(b *testing.B) {
 		b.Fatalf("failed to create bucket %s", err.Error())
 	}
 
-	// This is the smallest possible PNG image ever, base64-encoded.
-	content, err := base64.StdEncoding.DecodeString("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVR4nGMAAQAABQABDQottAAAAABJRU5ErkJggg==")
+	// Upload an image from pkg/thumbnail.
+	content, err := ioutil.ReadFile("../pkg/thumbnail/testdata/beach.jpg")
 	if err != nil {
-		b.Fatalf("failed to decode png, %s", err.Error())
+		b.Fatalf("could not read file, %s", err.Error())
 	}
 
 	_, err = obj.PutObject(bucketName, objectName, int64(len(content)), bytes.NewReader(content), nil, "")

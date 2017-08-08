@@ -734,7 +734,7 @@ func (web *webAPIHandlers) Thumbnail(w http.ResponseWriter, r *http.Request) {
 
 	options := thumbnail.Options{
 		Dimensions: "300x100",
-		Format:     "jpg",
+		Format:     "jpeg",
 	}
 
 	buffer := new(bytes.Buffer)
