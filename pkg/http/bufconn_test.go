@@ -27,12 +27,12 @@ import (
 
 // Test bufconn handles read timeout properly by reading two messages beyond deadline.
 func TestBuffConnReadTimeout(t *testing.T) {
-	port := getNextPort()
-	l, err := net.Listen("tcp", "localhost:"+port)
+	l, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("unable to create listener. %v", err)
 	}
 	defer l.Close()
+	serverAddr := l.Addr().String()
 
 	tcpListener, ok := l.(*net.TCPListener)
 	if !ok {
@@ -84,7 +84,7 @@ func TestBuffConnReadTimeout(t *testing.T) {
 		bufconn.RemoveTimeout()
 	}()
 
-	c, err := net.Dial("tcp", "localhost:"+port)
+	c, err := net.Dial("tcp", serverAddr)
 	if err != nil {
 		t.Fatalf("unable to connect to server. %v", err)
 	}
