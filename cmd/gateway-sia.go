@@ -20,8 +20,8 @@ type siaObjects struct {
 }
 
 // Convert Sia errors to minio object layer errors.
-func siaToObjectError(err SiaServiceError, params ...string) (e error) {
-	if err == siaSuccess {
+func siaToObjectError(err *SiaServiceError, params ...string) (e error) {
+	if err == nil {
 		return nil
 	}
 
@@ -82,7 +82,7 @@ func newSiaGateway(host string) (GatewayLayer, error) {
 
 	// Start the Sia cache layer
 	sia_err := sia.Cache.Start()
-	if sia_err != siaSuccess {
+	if sia_err != nil {
 		panic(sia_err)
 	}
 
@@ -186,7 +186,7 @@ func (s *siaObjects) ListBuckets() (buckets []BucketInfo, e error) {
 func (s *siaObjects) DeleteBucket(bucket string) error {
 	s.debugmsg("Gateway.DeleteBucket")
 	sia_err := s.Cache.DeleteBucket(bucket)
-	if sia_err != siaSuccess {
+	if sia_err != nil {
 		return siaToObjectError(sia_err)
 	}
 
@@ -196,7 +196,7 @@ func (s *siaObjects) DeleteBucket(bucket string) error {
 func (s *siaObjects) ListObjects(bucket string, prefix string, marker string, delimiter string, maxKeys int) (loi ListObjectsInfo, e error) {
 	s.debugmsg("Gateway.ListObjects")
 	sobjs, sia_err := s.Cache.ListObjects(bucket)
-	if sia_err != siaSuccess {
+	if sia_err != nil {
 		return loi, siaToObjectError(sia_err)
 	}
 
@@ -234,7 +234,7 @@ func (s *siaObjects) GetObject(bucket string, key string, startOffset int64, len
 	// Only deal with cache on first chunk
 	if startOffset == 0 {
 		sia_err := s.Cache.GuaranteeObjectIsInCache(bucket, key)
-		if sia_err != siaSuccess {
+		if sia_err != nil {
 			return siaToObjectError(sia_err)
 		}
 	}
@@ -251,7 +251,7 @@ func (s *siaObjects) GetObjectInfo(bucket string, object string) (objInfo Object
 	// Use size from cache database instead of checking filesystem.
 
 	sobjInfo, sia_err := s.Cache.GetObjectInfo(bucket, object)
-	if sia_err != siaSuccess {
+	if sia_err != nil {
 		return objInfo, siaToObjectError(sia_err)
 	}
 
@@ -319,7 +319,7 @@ func (s *siaObjects) PutObject(bucket string, object string, size int64, data io
 	src_file := pathJoin(abs(s.CacheDir), bucket, object)
 	sia_err := s.Cache.PutObject(bucket, object, size, int64(s.PurgeCacheAfterSec), src_file)
 	// If put fails to the cache layer, then delete from object layer
-	if sia_err != siaSuccess {
+	if sia_err != nil {
 		s.Fs.DeleteObject(bucket, object)
 		return oi, siaToObjectError(sia_err, bucket, object)
 	}
@@ -336,7 +336,7 @@ func (s *siaObjects) CopyObject(srcBucket string, srcObject string, destBucket s
 func (s *siaObjects) DeleteObject(bucket string, object string) error {
 	s.debugmsg("Gateway.DeleteObject")
 	sia_err := s.Cache.DeleteObject(bucket, object)
-	if sia_err != siaSuccess {
+	if sia_err != nil {
 		return siaToObjectError(sia_err)
 	}
 
@@ -395,7 +395,7 @@ func (s *siaObjects) CompleteMultipartUpload(bucket string, object string, uploa
 
 	sia_err := s.Cache.PutObject(bucket, object, fi.Size(), int64(s.PurgeCacheAfterSec), src_file)
 	// If put fails to the cache layer, then delete from object layer
-	if sia_err != siaSuccess {
+	if sia_err != nil {
 		s.Fs.DeleteObject(bucket, object)
 		return oi, siaToObjectError(sia_err)
 	}

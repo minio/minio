@@ -61,59 +61,55 @@ func (e SiaServiceError) Error() string {
 
 //Also: SiaErrorDaemon for daemon errors
 
-var siaSuccess = SiaServiceError{
-	Code:    "SiaSuccess",
-	Message: "",
-}
-var siaErrorUnableToClearAnyCachedFiles = SiaServiceError{
+var siaErrorUnableToClearAnyCachedFiles = &SiaServiceError{
 	Code:    "SiaErrorUnableToClearAnyCachedFiles",
 	Message: "Unable to clear any files from cache.",
 }
-var siaErrorDeterminingCacheSize = SiaServiceError{
+var siaErrorDeterminingCacheSize = &SiaServiceError{
 	Code:    "SiaErrorDeterminingCacheSize",
 	Message: "Unable to determine total size of files in cache.",
 }
-var siaErrorDatabaseDeleteError = SiaServiceError{
+var siaErrorDatabaseDeleteError = &SiaServiceError{
 	Code:    "SiaErrorDatabaseDeleteError",
 	Message: "Failed to delete a record in the cache database.",
 }
-var siaErrorDatabaseCreateError = SiaServiceError{
+var siaErrorDatabaseCreateError = &SiaServiceError{
 	Code:    "SiaErrorDatabaseCreateError",
 	Message: "Failed to create a table in the cache database.",
 }
-var siaErrorDatabaseCantBeOpened = SiaServiceError{
+var siaErrorDatabaseCantBeOpened = &SiaServiceError{
 	Code:    "SiaErrorDatabaseCantBeOpened",
 	Message: "The cache database could not be opened.",
 }
-var siaErrorDatabaseInsertError = SiaServiceError{
+var siaErrorDatabaseInsertError = &SiaServiceError{
 	Code:    "SiaErrorDatabaseInsertError",
 	Message: "Failed to insert a record in the cache database.",
 }
-var siaErrorDatabaseUpdateError = SiaServiceError{
+var siaErrorDatabaseUpdateError = &SiaServiceError{
 	Code:    "SiaErrorDatabaseUpdateError",
 	Message: "Failed to update a record in the cache database.",
 }
-var siaErrorDatabaseSelectError = SiaServiceError{
+var siaErrorDatabaseSelectError = &SiaServiceError{
 	Code:    "SiaErrorDatabaseSelectError",
 	Message: "Failed to select records in the cache database.",
 }
-var siaErrorUnknown = SiaServiceError{
+var siaErrorUnknown = &SiaServiceError{
 	Code:    "SiaErrorUnknown",
 	Message: "An unknown error has occured.",
 }
-var siaErrorFailedToDeleteCachedFile = SiaServiceError{
+var siaErrorFailedToDeleteCachedFile = &SiaServiceError{
 	Code:    "SiaFailedToDeleteCachedFile",
 	Message: "Failed to delete cached file. Check permissions.",
 }
-var siaErrorObjectDoesNotExistInBucket = SiaServiceError{
+var siaErrorObjectDoesNotExistInBucket = &SiaServiceError{
 	Code:    "SiaErrorObjectDoesNotExistInBucket",
 	Message: "Object does not exist in bucket.",
 }
-var siaErrorObjectAlreadyExists = SiaServiceError{
+var siaErrorObjectAlreadyExists = &SiaServiceError{
 	Code:    "SiaErrorObjectAlreadyExists",
 	Message: "Object does not exist in bucket.",
 }
-var siaErrorInvalidBucketPolicy = SiaServiceError{
+var siaErrorInvalidBucketPolicy = &SiaServiceError{
 	Code:    "SiaErrorInvalidBucketPolicy",
 	Message: "An invalid bucket policy has been specified.",
 }
@@ -163,7 +159,7 @@ func newSiaCacheLayer(siadAddress string, cacheDir string, dbFile string, debug 
 }
 
 // Called to start running the Cache Layer
-func (cache *SiaCacheLayer) Start() SiaServiceError {
+func (cache *SiaCacheLayer) Start() *SiaServiceError {
 	cache.debugmsg("SiaCacheLayer.Start")
 	cache.loadSiaEnv()
 
@@ -173,7 +169,7 @@ func (cache *SiaCacheLayer) Start() SiaServiceError {
 
 	// Open and initialize database
 	err := cache.initDatabase()
-	if err != siaSuccess {
+	if err != nil {
 		return err
 	}
 
@@ -185,7 +181,7 @@ func (cache *SiaCacheLayer) Start() SiaServiceError {
 		}
 	}()
 
-	return siaSuccess
+	return nil
 }
 
 // Attempt to load Sia config from ENV
@@ -243,7 +239,7 @@ func (cache *SiaCacheLayer) unlockDB() {
 	cache.DbMutex.Unlock()
 }
 
-func (cache *SiaCacheLayer) InsertBucket(bucket string) SiaServiceError {
+func (cache *SiaCacheLayer) InsertBucket(bucket string) *SiaServiceError {
 	cache.debugmsg("SiaCacheLayer.InsertBucket")
 
 	cache.lockDB()
@@ -264,19 +260,19 @@ func (cache *SiaCacheLayer) InsertBucket(bucket string) SiaServiceError {
 		return siaErrorDatabaseInsertError
 	}
 
-	return siaSuccess
+	return nil
 }
 
-func (cache *SiaCacheLayer) DeleteBucket(bucket string) SiaServiceError {
+func (cache *SiaCacheLayer) DeleteBucket(bucket string) *SiaServiceError {
 	cache.debugmsg("SiaCacheLayer.DeleteBucket")
 	// First, should delete all objects in the bucket
 	objects, err := cache.ListObjects(bucket)
-	if err != siaSuccess {
+	if err != nil {
 		return err
 	}
 	for _, object := range objects {
 		err = cache.DeleteObject(bucket, object.Name)
-		if err != siaSuccess {
+		if err != nil {
 			return err
 		}
 	}
@@ -297,11 +293,11 @@ func (cache *SiaCacheLayer) DeleteBucket(bucket string) SiaServiceError {
 		return siaErrorDatabaseDeleteError
 	}
 
-	return siaSuccess
+	return nil
 }
 
 // List all buckets
-func (cache *SiaCacheLayer) ListBuckets() (buckets []SiaBucketInfo, e SiaServiceError) {
+func (cache *SiaCacheLayer) ListBuckets() (buckets []SiaBucketInfo, e *SiaServiceError) {
 	cache.debugmsg("SiaCacheLayer.ListBuckets")
 
 	cache.lockDB()
@@ -331,14 +327,14 @@ func (cache *SiaCacheLayer) ListBuckets() (buckets []SiaBucketInfo, e SiaService
 
 	rows.Close()
 
-	return buckets, siaSuccess
+	return buckets, nil
 }
 
 // Deletes the object
-func (cache *SiaCacheLayer) DeleteObject(bucket string, objectName string) SiaServiceError {
+func (cache *SiaCacheLayer) DeleteObject(bucket string, objectName string) *SiaServiceError {
 	cache.debugmsg("SiaCacheLayer.DeleteObject")
 	err := cache.markObjectDeleted(bucket, objectName)
-	if err != siaSuccess {
+	if err != nil {
 		return err
 	}
 
@@ -347,18 +343,18 @@ func (cache *SiaCacheLayer) DeleteObject(bucket string, objectName string) SiaSe
 
 	derr := post(cache.SiadAddress, "/renter/delete/"+siaObj, "")
 	if derr != nil {
-		return SiaServiceError{Code: "SiaErrorDaemon", Message: derr.Error()}
+		return &SiaServiceError{Code: "SiaErrorDaemon", Message: derr.Error()}
 	}
 
 	return cache.deleteObjectFromDb(bucket, objectName)
 }
 
-func (cache *SiaCacheLayer) PutObject(bucket string, objectName string, size int64, purge_after int64, src_file string) SiaServiceError {
+func (cache *SiaCacheLayer) PutObject(bucket string, objectName string, size int64, purge_after int64, src_file string) *SiaServiceError {
 	cache.debugmsg("SiaCacheLayer.PutObject")
 
 	// First, make sure space exists in cache
 	err := cache.guaranteeCacheSpace(size)
-	if err != siaSuccess {
+	if err != nil {
 		return err
 	}
 
@@ -367,20 +363,20 @@ func (cache *SiaCacheLayer) PutObject(bucket string, objectName string, size int
 	// we will check if the object exists and has a not uploaded status. If so, we will delete that
 	// record and then continue as normal.
 	objInfo, e := cache.GetObjectInfo(bucket, objectName)
-	if e == siaSuccess {
+	if e == nil {
 		// Object does exist. If uploaded, return error. If not uploaded, delete it and continue.
 		if objInfo.Uploaded.Unix() > 0 {
 			return siaErrorObjectAlreadyExists
 		} else {
 			e = cache.deleteObjectFromDb(bucket, objectName)
-			if e != siaSuccess {
+			if e != nil {
 				return e
 			}
 		}
 	}
 
 	err = cache.insertObjectToDb(bucket, objectName, size, time.Now().Unix(), 0, purge_after, src_file, 1)
-	if err != siaSuccess {
+	if err != nil {
 		return err
 	}
 
@@ -389,28 +385,28 @@ func (cache *SiaCacheLayer) PutObject(bucket string, objectName string, size int
 	derr := post(cache.SiadAddress, "/renter/upload/"+siaObj, "source="+src_file)
 	if derr != nil {
 		cache.deleteObjectFromDb(bucket, objectName)
-		return SiaServiceError{Code: "SiaErrorDaemon", Message: derr.Error()}
+		return &SiaServiceError{Code: "SiaErrorDaemon", Message: derr.Error()}
 	}
 
 	// Need to wait for upload to complete
 	err = cache.waitTillSiaUploadCompletes(siaObj)
-	if err != siaSuccess {
+	if err != nil {
 		cache.deleteObjectFromDb(bucket, objectName)
 		return err
 	}
 
 	// Mark object as uploaded
 	err = cache.markObjectUploaded(bucket, objectName)
-	if err != siaSuccess {
+	if err != nil {
 		cache.deleteObjectFromDb(bucket, objectName)
 		return err
 	}
 
-	return siaSuccess
+	return nil
 }
 
 // Returns a list of objects in the bucket provided
-func (cache *SiaCacheLayer) ListObjects(bucket string) (objects []SiaObjectInfo, e SiaServiceError) {
+func (cache *SiaCacheLayer) ListObjects(bucket string) (objects []SiaObjectInfo, e *SiaServiceError) {
 	cache.debugmsg("SiaCacheLayer.listUploadingObjects")
 
 	cache.lockDB()
@@ -457,21 +453,21 @@ func (cache *SiaCacheLayer) ListObjects(bucket string) (objects []SiaObjectInfo,
 		})
 	}
 
-	return objects, siaSuccess
+	return objects, nil
 }
 
-func (cache *SiaCacheLayer) GuaranteeObjectIsInCache(bucket string, objectName string) SiaServiceError {
+func (cache *SiaCacheLayer) GuaranteeObjectIsInCache(bucket string, objectName string) *SiaServiceError {
 	defer cache.timeTrack(time.Now(), "GuaranteeObjectIsInCache")
 	cache.debugmsg("SiaCacheLayer.GuaranteeObjectIsInCache")
 	// Minio filesystem layer may request files from .minio.sys bucket
 	// If we get a request for Minio, we'll pass back success and let Minio deal with it.
 	if bucket == ".minio.sys" {
-		return siaSuccess
+		return nil
 	}
 
 	// Make sure object exists in database
 	objInfo, err := cache.GetObjectInfo(bucket, objectName)
-	if err != siaSuccess {
+	if err != nil {
 		return err
 	}
 
@@ -480,7 +476,7 @@ func (cache *SiaCacheLayer) GuaranteeObjectIsInCache(bucket string, objectName s
 	if serr == nil {
 		// File exists in cache
 		err = cache.updateCachedStatus(bucket, objectName, 1)
-		if err != siaSuccess {
+		if err != nil {
 			return err
 		}
 		// Increment cached fetch count and update last_fetch
@@ -499,14 +495,14 @@ func (cache *SiaCacheLayer) GuaranteeObjectIsInCache(bucket string, objectName s
 
 	// Make sure enough space exists in cache
 	err = cache.guaranteeCacheSpace(objInfo.Size)
-	if err != siaSuccess {
+	if err != nil {
 		return err
 	}
 
 	// Increment fetch count and update last_fetch BEFORE requesting d/l from Sia.
 	// This will prevent the cache manager from removing the partially downloaded file.
 	err = cache.updateSiaFetches(bucket, objectName, objInfo.SiaFetches+1)
-	if err != siaSuccess {
+	if err != nil {
 		return err
 	}
 
@@ -515,7 +511,7 @@ func (cache *SiaCacheLayer) GuaranteeObjectIsInCache(bucket string, objectName s
 	derr := get(cache.SiadAddress, "/renter/download/"+siaObj+"?destination="+url.QueryEscape(objInfo.SrcFile))
 	if derr != nil {
 		cache.debugmsg(fmt.Sprintf("Error: %s", derr))
-		return SiaServiceError{Code: "SiaErrorDaemon", Message: derr.Error()}
+		return &SiaServiceError{Code: "SiaErrorDaemon", Message: derr.Error()}
 	}
 
 	// After successfully downloading to the cache, make sure the cached flag of the object is set.
@@ -523,7 +519,7 @@ func (cache *SiaCacheLayer) GuaranteeObjectIsInCache(bucket string, objectName s
 }
 
 // Returns info for the provided object
-func (cache *SiaCacheLayer) GetObjectInfo(bucket string, objectName string) (objInfo SiaObjectInfo, e SiaServiceError) {
+func (cache *SiaCacheLayer) GetObjectInfo(bucket string, objectName string) (objInfo SiaObjectInfo, e *SiaServiceError) {
 	cache.debugmsg("SiaCacheLayer.GetObjectInfo")
 
 	cache.lockDB()
@@ -561,7 +557,7 @@ func (cache *SiaCacheLayer) GetObjectInfo(bucket string, objectName string) (obj
 		objInfo.SrcFile = src_file
 		objInfo.Deleted = deleted
 		objInfo.Cached = cached
-		return objInfo, siaSuccess
+		return objInfo, nil
 	}
 
 	// Shouldn't happen, but just in case
@@ -569,14 +565,14 @@ func (cache *SiaCacheLayer) GetObjectInfo(bucket string, objectName string) (obj
 }
 
 // SetBucketPolicies sets policy on bucket
-func (cache *SiaCacheLayer) SetBucketPolicies(bucket string, policyInfo policy.BucketAccessPolicy) SiaServiceError {
+func (cache *SiaCacheLayer) SetBucketPolicies(bucket string, policyInfo policy.BucketAccessPolicy) *SiaServiceError {
 	cache.debugmsg("SiaCacheLayer.SetBucketPolicies")
 	res, _ := json.Marshal(&policyInfo)
 	return cache.updateBucketPolicy(bucket, string(res))
 }
 
 // GetBucketPolicies will get policy on bucket
-func (cache *SiaCacheLayer) GetBucketPolicies(bucket string) (bal policy.BucketAccessPolicy, e SiaServiceError) {
+func (cache *SiaCacheLayer) GetBucketPolicies(bucket string) (bal policy.BucketAccessPolicy, e *SiaServiceError) {
 	cache.debugmsg("SiaCacheLayer.GetBucketPolicies")
 
 	cache.lockDB()
@@ -593,7 +589,7 @@ func (cache *SiaCacheLayer) GetBucketPolicies(bucket string) (bal policy.BucketA
 	default:
 		res := policy.BucketAccessPolicy{}
 		json.Unmarshal([]byte(bktPolicy), &res)
-		return res, siaSuccess
+		return res, nil
 	}
 
 	// Shouldn't happen, but just in case
@@ -601,13 +597,13 @@ func (cache *SiaCacheLayer) GetBucketPolicies(bucket string) (bal policy.BucketA
 }
 
 // DeleteBucketPolicies deletes all policies on bucket
-func (cache *SiaCacheLayer) DeleteBucketPolicies(bucket string) SiaServiceError {
+func (cache *SiaCacheLayer) DeleteBucketPolicies(bucket string) *SiaServiceError {
 	cache.debugmsg("SiaCacheLayer.DeleteBucketPolicies")
 
 	return cache.updateBucketPolicy(bucket, "")
 }
 
-func (cache *SiaCacheLayer) updateBucketPolicy(bucket string, bktPolicy string) SiaServiceError {
+func (cache *SiaCacheLayer) updateBucketPolicy(bucket string, bktPolicy string) *SiaServiceError {
 	cache.debugmsg("SiaCacheLayer.updateBucketPolicy")
 
 	cache.lockDB()
@@ -627,7 +623,7 @@ func (cache *SiaCacheLayer) updateBucketPolicy(bucket string, bktPolicy string) 
 		return siaErrorDatabaseUpdateError
 	}
 
-	return siaSuccess
+	return nil
 }
 
 // Runs periodically to manage the database and cache
@@ -636,21 +632,21 @@ func (cache *SiaCacheLayer) manager() {
 	// Check to see if any files in database have completed uploading to Sia.
 	// If so, update uploaded timestamp in database.
 	err := cache.checkSiaUploads()
-	if err != siaSuccess {
+	if err != nil {
 		fmt.Println("Error in DB/Cache Management Process:")
 		fmt.Println(err)
 	}
 
 	// Remove files from cache that have not been uploaded or fetched in purge_after seconds.
 	err = cache.purgeCache()
-	if err != siaSuccess {
+	if err != nil {
 		fmt.Println("Error in DB/Cache Management Process:")
 		fmt.Println(err)
 	}
 
 	// Check cache disk usage
 	err = cache.guaranteeCacheSpace(0)
-	if err != siaSuccess {
+	if err != nil {
 		fmt.Println("Error in DB/Cache Management Process:")
 		fmt.Println(err)
 	}
@@ -659,16 +655,16 @@ func (cache *SiaCacheLayer) manager() {
 
 // Purge older, infrequently accessed files from cache.
 // This function is less strict and doesn't consider max space quota.
-func (cache *SiaCacheLayer) purgeCache() SiaServiceError {
+func (cache *SiaCacheLayer) purgeCache() *SiaServiceError {
 	cache.debugmsg("SiaCacheLayer.purgeCache")
 	buckets, err := cache.ListBuckets()
-	if err != siaSuccess {
+	if err != nil {
 		return err
 	}
 
 	for _, bucket := range buckets {
 		objects, err := cache.ListObjects(bucket.Name)
-		if err != siaSuccess {
+		if err != nil {
 			return err
 		}
 
@@ -682,17 +678,17 @@ func (cache *SiaCacheLayer) purgeCache() SiaServiceError {
 				since_fetched := time.Now().Unix() - object.LastFetch.Unix()
 				if since_uploaded > object.PurgeAfter && since_fetched > object.PurgeAfter {
 					err = cache.removeFromCache(object)
-					if err != siaSuccess {
+					if err != nil {
 						return err
 					}
 				}
 			}
 		}
 	}
-	return siaSuccess
+	return nil
 }
 
-func (cache *SiaCacheLayer) removeFromCache(objInfo SiaObjectInfo) SiaServiceError {
+func (cache *SiaCacheLayer) removeFromCache(objInfo SiaObjectInfo) *SiaServiceError {
 	cache.debugmsg(fmt.Sprintf("removeFromCache: %s", objInfo.SrcFile))
 
 	// If file doesn't exist in cache, it's falsely labelled. Update and return.
@@ -710,11 +706,11 @@ func (cache *SiaCacheLayer) removeFromCache(objInfo SiaObjectInfo) SiaServiceErr
 	return cache.updateCachedStatus(objInfo.Bucket, objInfo.Name, 0)
 }
 
-func (cache *SiaCacheLayer) checkSiaUploads() SiaServiceError {
+func (cache *SiaCacheLayer) checkSiaUploads() *SiaServiceError {
 	cache.debugmsg("SiaCacheLayer.checkSiaUploads")
 	// Get list of all uploading objects
 	objs, err := cache.listUploadingObjects()
-	if err != siaSuccess {
+	if err != nil {
 		return err
 	}
 
@@ -722,7 +718,7 @@ func (cache *SiaCacheLayer) checkSiaUploads() SiaServiceError {
 	var rf api.RenterFiles
 	derr := getAPI(cache.SiadAddress, "/renter/files", &rf)
 	if derr != nil {
-		return SiaServiceError{Code: "SiaErrorDaemon", Message: derr.Error()}
+		return &SiaServiceError{Code: "SiaErrorDaemon", Message: derr.Error()}
 	}
 
 	// If uploading object is available on Sia, update database
@@ -731,17 +727,17 @@ func (cache *SiaCacheLayer) checkSiaUploads() SiaServiceError {
 		for _, file := range rf.Files {
 			if file.SiaPath == siaObj && file.Available {
 				err = cache.markObjectUploaded(obj.Bucket, obj.Name)
-				if err != siaSuccess {
+				if err != nil {
 					return err
 				}
 			}
 		}
 	}
 
-	return siaSuccess
+	return nil
 }
 
-func (cache *SiaCacheLayer) markObjectUploaded(bucket string, objectName string) SiaServiceError {
+func (cache *SiaCacheLayer) markObjectUploaded(bucket string, objectName string) *SiaServiceError {
 	cache.debugmsg("SiaCacheLayer.markObjectUploaded")
 
 	cache.lockDB()
@@ -759,10 +755,10 @@ func (cache *SiaCacheLayer) markObjectUploaded(bucket string, objectName string)
 		return siaErrorDatabaseUpdateError
 	}
 
-	return siaSuccess
+	return nil
 }
 
-func (cache *SiaCacheLayer) markObjectDeleted(bucket string, objectName string) SiaServiceError {
+func (cache *SiaCacheLayer) markObjectDeleted(bucket string, objectName string) *SiaServiceError {
 	cache.debugmsg("SiaCacheLayer.markObjectDeleted")
 
 	cache.lockDB()
@@ -780,10 +776,10 @@ func (cache *SiaCacheLayer) markObjectDeleted(bucket string, objectName string) 
 		return siaErrorDatabaseUpdateError
 	}
 
-	return siaSuccess
+	return nil
 }
 
-func (cache *SiaCacheLayer) initDatabase() SiaServiceError {
+func (cache *SiaCacheLayer) initDatabase() *SiaServiceError {
 	cache.debugmsg("SiaCacheLayer.initDatabase")
 
 	cache.lockDB()
@@ -822,10 +818,10 @@ func (cache *SiaCacheLayer) initDatabase() SiaServiceError {
 		return siaErrorDatabaseCreateError
 	}
 
-	return siaSuccess
+	return nil
 }
 
-func (cache *SiaCacheLayer) bucketExists(bucket string) (exists bool, e SiaServiceError) {
+func (cache *SiaCacheLayer) bucketExists(bucket string) (exists bool, e *SiaServiceError) {
 	cache.debugmsg("SiaCacheLayer.bucketExists")
 
 	cache.lockDB()
@@ -836,12 +832,12 @@ func (cache *SiaCacheLayer) bucketExists(bucket string) (exists bool, e SiaServi
 	err := cache.Db.QueryRow("SELECT name FROM buckets WHERE name=?", bucket).Scan(&name)
 	switch {
 	case err == sql.ErrNoRows:
-		return false, siaSuccess // Bucket does not exist
+		return false, nil // Bucket does not exist
 	case err != nil:
 		return false, siaErrorDatabaseSelectError // An error occured
 	default:
 		if name == bucket {
-			return true, siaSuccess // Bucket exists
+			return true, nil // Bucket exists
 		}
 	}
 
@@ -849,7 +845,7 @@ func (cache *SiaCacheLayer) bucketExists(bucket string) (exists bool, e SiaServi
 	return false, siaErrorUnknown
 }
 
-func (cache *SiaCacheLayer) objectExists(bucket string, objectName string) (exists bool, e SiaServiceError) {
+func (cache *SiaCacheLayer) objectExists(bucket string, objectName string) (exists bool, e *SiaServiceError) {
 	cache.debugmsg("SiaCacheLayer.objectExists")
 
 	cache.lockDB()
@@ -862,12 +858,12 @@ func (cache *SiaCacheLayer) objectExists(bucket string, objectName string) (exis
 		bucket, objectName).Scan(&bkt, &name)
 	switch {
 	case err == sql.ErrNoRows:
-		return false, siaSuccess // Object does not exist
+		return false, nil // Object does not exist
 	case err != nil:
 		return false, siaErrorDatabaseSelectError // An error occured
 	default:
 		if bkt == bucket && name == objectName {
-			return true, siaSuccess // Object exists
+			return true, nil // Object exists
 		}
 	}
 
@@ -876,7 +872,7 @@ func (cache *SiaCacheLayer) objectExists(bucket string, objectName string) (exis
 }
 
 // Updates last_fetch time and sets the cached_fetches quantity
-func (cache *SiaCacheLayer) updateCachedFetches(bucket string, objectName string, fetches int64) SiaServiceError {
+func (cache *SiaCacheLayer) updateCachedFetches(bucket string, objectName string, fetches int64) *SiaServiceError {
 	cache.debugmsg("SiaCacheLayer.updateCachedFetches")
 
 	cache.lockDB()
@@ -894,11 +890,11 @@ func (cache *SiaCacheLayer) updateCachedFetches(bucket string, objectName string
 		return siaErrorDatabaseUpdateError
 	}
 
-	return siaSuccess
+	return nil
 }
 
 // Updates the cached status of the object
-func (cache *SiaCacheLayer) updateCachedStatus(bucket string, objectName string, status int64) SiaServiceError {
+func (cache *SiaCacheLayer) updateCachedStatus(bucket string, objectName string, status int64) *SiaServiceError {
 	cache.debugmsg("SiaCacheLayer.updateCachedFetches")
 
 	cache.lockDB()
@@ -916,10 +912,10 @@ func (cache *SiaCacheLayer) updateCachedStatus(bucket string, objectName string,
 		return siaErrorDatabaseUpdateError
 	}
 
-	return siaSuccess
+	return nil
 }
 
-func (cache *SiaCacheLayer) updateSiaFetches(bucket string, objectName string, fetches int64) SiaServiceError {
+func (cache *SiaCacheLayer) updateSiaFetches(bucket string, objectName string, fetches int64) *SiaServiceError {
 	cache.debugmsg("SiaCacheLayer.updateSiaFetches")
 
 	cache.lockDB()
@@ -937,10 +933,10 @@ func (cache *SiaCacheLayer) updateSiaFetches(bucket string, objectName string, f
 		return siaErrorDatabaseUpdateError
 	}
 
-	return siaSuccess
+	return nil
 }
 
-func (cache *SiaCacheLayer) listUploadingObjects() (objects []SiaObjectInfo, e SiaServiceError) {
+func (cache *SiaCacheLayer) listUploadingObjects() (objects []SiaObjectInfo, e *SiaServiceError) {
 	cache.debugmsg("SiaCacheLayer.listUploadingObjects")
 
 	cache.lockDB()
@@ -985,46 +981,46 @@ func (cache *SiaCacheLayer) listUploadingObjects() (objects []SiaObjectInfo, e S
 
 	rows.Close()
 
-	return objects, siaSuccess
+	return objects, nil
 }
 
-func (cache *SiaCacheLayer) waitTillSiaUploadCompletes(siaObj string) SiaServiceError {
+func (cache *SiaCacheLayer) waitTillSiaUploadCompletes(siaObj string) *SiaServiceError {
 	cache.debugmsg("SiaCacheLayer.waitTillSiaUploadCompletes")
 	complete := false
 	for !complete {
 		avail, e := cache.isSiaFileAvailable(siaObj)
-		if e != siaSuccess {
+		if e != nil {
 			return e
 		}
 
 		if avail {
-			return siaSuccess
+			return nil
 		}
 		time.Sleep(time.Duration(cache.UploadCheckFreqMs) * time.Millisecond)
 	}
 
-	return siaSuccess
+	return nil
 }
 
-func (cache *SiaCacheLayer) isSiaFileAvailable(siaObj string) (bool, SiaServiceError) {
+func (cache *SiaCacheLayer) isSiaFileAvailable(siaObj string) (bool, *SiaServiceError) {
 	cache.debugmsg(fmt.Sprintf("SiaCacheLayer.isSiaFileAvailable: %s", siaObj))
 	var rf api.RenterFiles
 	err := getAPI(cache.SiadAddress, "/renter/files", &rf)
 	if err != nil {
-		return false, SiaServiceError{Code: "SiaErrorDaemon", Message: err.Error()}
+		return false, &SiaServiceError{Code: "SiaErrorDaemon", Message: err.Error()}
 	}
 
 	for _, file := range rf.Files {
 		cache.debugmsg(fmt.Sprintf("  Renter file: %s", file.SiaPath))
 		if file.SiaPath == siaObj {
-			return file.Available, siaSuccess
+			return file.Available, nil
 		}
 	}
 
-	return false, SiaServiceError{Code: "SiaErrorDaemon", Message: "File not in Sia renter list"}
+	return false, &SiaServiceError{Code: "SiaErrorDaemon", Message: "File not in Sia renter list"}
 }
 
-func (cache *SiaCacheLayer) insertObjectToDb(bucket string, objectName string, size int64, queued int64, uploaded int64, purge_after int64, src_file string, cached int64) SiaServiceError {
+func (cache *SiaCacheLayer) insertObjectToDb(bucket string, objectName string, size int64, queued int64, uploaded int64, purge_after int64, src_file string, cached int64) *SiaServiceError {
 	cache.debugmsg("SiaCacheLayer.insertObjectToDb")
 
 	cache.lockDB()
@@ -1053,10 +1049,10 @@ func (cache *SiaCacheLayer) insertObjectToDb(bucket string, objectName string, s
 		return siaErrorDatabaseInsertError
 	}
 
-	return siaSuccess
+	return nil
 }
 
-func (cache *SiaCacheLayer) deleteObjectFromDb(bucket string, objectName string) SiaServiceError {
+func (cache *SiaCacheLayer) deleteObjectFromDb(bucket string, objectName string) *SiaServiceError {
 	cache.debugmsg("SiaCacheLayer.deleteObjectFromDb")
 
 	cache.lockDB()
@@ -1073,30 +1069,30 @@ func (cache *SiaCacheLayer) deleteObjectFromDb(bucket string, objectName string)
 	if err != nil {
 		return siaErrorDatabaseDeleteError
 	}
-	return siaSuccess
+	return nil
 }
 
-func (cache *SiaCacheLayer) guaranteeCacheSpace(extraSpace int64) SiaServiceError {
+func (cache *SiaCacheLayer) guaranteeCacheSpace(extraSpace int64) *SiaServiceError {
 	cache.debugmsg("SiaCacheLayer.guaranteeCacheSpace")
 	cs, e := cache.getCacheSize()
-	if e != siaSuccess {
+	if e != nil {
 		return e
 	}
 
 	space_needed := int64(cache.MaxCacheSizeBytes) - extraSpace
 	for cs > space_needed {
 		e = cache.forceDeleteOldestCacheFile()
-		if e != siaSuccess {
+		if e != nil {
 			return e
 		}
 
 		cs, e = cache.getCacheSize()
-		if e != siaSuccess {
+		if e != nil {
 			return e
 		}
 	}
 
-	return siaSuccess
+	return nil
 }
 
 func (cache *SiaCacheLayer) getSiaObjectName(bucket string, objectName string) string {
@@ -1106,7 +1102,7 @@ func (cache *SiaCacheLayer) getSiaObjectName(bucket string, objectName string) s
 	return bucket + "/" + cleanedName
 }
 
-func (cache *SiaCacheLayer) forceDeleteOldestCacheFile() SiaServiceError {
+func (cache *SiaCacheLayer) forceDeleteOldestCacheFile() *SiaServiceError {
 	cache.debugmsg("SiaCacheLayer.forceDeleteOldestCacheFile")
 
 	cache.lockDB()
@@ -1141,13 +1137,13 @@ func (cache *SiaCacheLayer) forceDeleteOldestCacheFile() SiaServiceError {
 		if err != nil {
 			return siaErrorUnableToClearAnyCachedFiles
 		}
-		return siaSuccess
+		return nil
 	}
 
 	return siaErrorUnableToClearAnyCachedFiles // Shouldn't happen
 }
 
-func (cache *SiaCacheLayer) getCacheSize() (int64, SiaServiceError) {
+func (cache *SiaCacheLayer) getCacheSize() (int64, *SiaServiceError) {
 	cache.debugmsg("SiaCacheLayer.getCacheSize")
 	var size int64
 	err := filepath.Walk(cache.CacheDir, func(_ string, info os.FileInfo, err error) error {
@@ -1159,7 +1155,7 @@ func (cache *SiaCacheLayer) getCacheSize() (int64, SiaServiceError) {
 	if err != nil {
 		return 0, siaErrorDeterminingCacheSize
 	}
-	return size, siaSuccess
+	return size, nil
 }
 
 func (cache *SiaCacheLayer) ensureCacheDirExists() {

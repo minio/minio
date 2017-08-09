@@ -18,13 +18,13 @@ func TestSiaCacheLayer(t *testing.T) {
 
 	// Start the cache layer
 	serr := cache.Start()
-	if serr != siaSuccess {
+	if serr != nil {
 		t.Fatal("Test failed, count not start Sia Cache Layer")
 	}
 
 	// Bucket list should be empty
 	buckets, serr := cache.ListBuckets()
-	if serr != siaSuccess {
+	if serr != nil {
 		t.Fatal("Test failed, could not list Sia buckets")
 	}
 
@@ -34,13 +34,13 @@ func TestSiaCacheLayer(t *testing.T) {
 
 	// Create a bucket
 	serr = cache.InsertBucket("test_bucket")
-	if serr != siaSuccess {
+	if serr != nil {
 		t.Fatal("Test failed, could not insert Sia bucket")
 	}
 
 	// Verify bucket exists
 	buckets, serr = cache.ListBuckets()
-	if serr != siaSuccess {
+	if serr != nil {
 		t.Fatal("Test failed, could not list Sia buckets")
 	}
 
@@ -50,13 +50,13 @@ func TestSiaCacheLayer(t *testing.T) {
 
 	// Delete the bucket
 	serr = cache.DeleteBucket("test_bucket")
-	if serr != siaSuccess {
+	if serr != nil {
 		t.Fatal("Test failed, could not delete Sia bucket")
 	}
 
 	// Bucket list should be empty again
 	buckets, serr = cache.ListBuckets()
-	if serr != siaSuccess {
+	if serr != nil {
 		t.Fatal("Test failed, could not list Sia buckets")
 	}
 
@@ -66,7 +66,7 @@ func TestSiaCacheLayer(t *testing.T) {
 
 	// Create a bucket again
 	serr = cache.InsertBucket("test_bucket")
-	if serr != siaSuccess {
+	if serr != nil {
 		t.Fatal("Test failed, could not insert Sia bucket")
 	}
 
