@@ -572,7 +572,7 @@ func (cache *SiaCacheLayer) GetObjectInfo(bucket string, objectName string) (obj
 		objInfo.PurgeAfter = purgeAfter
 		objInfo.CachedFetches = cachedFetches
 		objInfo.SiaFetches = siaFetches
-		objInfo.LastFetch = time.Unix(last_fetch, 0)
+		objInfo.LastFetch = time.Unix(lastFetch, 0)
 		objInfo.SrcFile = srcFile
 		objInfo.Deleted = deleted
 		objInfo.Cached = cached
