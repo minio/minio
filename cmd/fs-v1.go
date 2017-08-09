@@ -257,17 +257,14 @@ func (fs fsObjects) ListBuckets() ([]BucketInfo, error) {
 		}
 		var fi os.FileInfo
 		fi, err = fsStatDir(pathJoin(fs.fsPath, entry))
+		// There seems like no practical reason to check for errors
+		// at this point, if there are indeed errors we can simply
+		// just ignore such buckets and list only those which
+		// return proper Stat information instead.
 		if err != nil {
-			// If the directory does not exist, skip the entry.
-			if errorCause(err) == errVolumeNotFound {
-				continue
-			} else if errorCause(err) == errVolumeAccessDenied {
-				// Skip the entry if its a file.
-				continue
-			}
-			return nil, err
+			// Ignore any errors returned here.
+			continue
 		}
-
 		bucketInfos = append(bucketInfos, BucketInfo{
 			Name: fi.Name(),
 			// As osStat() doesnt carry CreatedTime, use ModTime() as CreatedTime.
