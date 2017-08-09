@@ -40,6 +40,16 @@ Additionally it provides `lsync.LFrequentAccess` which uses an atomic load and s
 	fmt.Println(mpReadOnly[key])                    // Safe access with no further synchronization
 ````
 
+## Design
+
+The design is pretty straightforward in the sense that `lsync` tries to get a lock in a loop with an exponential [backoff](https://www.awsarchitectureblog.com/2015/03/backoff.html) algorithm. The algorithm is configurable in terms of initial delay and jitter.
+
+If the lock is acquired before the timeout has occured, it will return success to the caller and the caller can proceed as intended. The caller must call `unlock` after the operation that is to be protected has completed in order to release the lock.
+
+When more time has elapsed than the timeout value the lock loop will cancel out and signal back to the caller that the lock has not been acquired. In this case the caller must _not_ call `unlock` since no lock was obtained. Typically it should signal an error back up the call stack so that errors can be dealt with appropriately at the correct level.
+
+Note that this algorithm is not 'real-time' in the sense that it will time out exactly at the timeout value, but instead a (short) while after the timeout has lapsed. It is even possible that (in edge cases) a succesful lock can be returned a very short time after the timeout has lapsed.
+
 ## API
 
 #### LMutex
@@ -100,7 +110,6 @@ BenchmarkMutexWork-8               133           2547          +1815.04%
 BenchmarkMutexWorkSlack-8          137           2683          +1858.39%
 ```
 
-
 ### LFrequentAccess
 
 An `lsync.LFrequentAccess` provides an atomic load and store of a consistently typed value.
@@ -109,44 +118,4 @@ An `lsync.LFrequentAccess` provides an atomic load and store of a consistently t
 benchmark                           old ns/op     new ns/op     delta
 BenchmarkLFrequentAccessMap-8       114           4.67          -95.90%
 BenchmarkLFrequentAccessSlice-8     109           5.95          -94.54%
-```
-
-
-### sync.Mutex
-```
-BenchmarkMutexUncontended-8        	300000000	         4.47 ns/op
-BenchmarkMutex-8                   	20000000	       111 ns/op
-BenchmarkMutexSlack-8              	10000000	       120 ns/op
-BenchmarkMutexWork-8               	10000000	       133 ns/op
-BenchmarkMutexWorkSlack-8          	10000000	       137 ns/op
-BenchmarkRWMutexWrite100-8         	20000000	        78.7 ns/op
-BenchmarkRWMutexWrite10-8          	20000000	        96.7 ns/op
-BenchmarkRWMutexWorkWrite100-8     	10000000	       129 ns/op
-BenchmarkRWMutexWorkWrite10-8      	 5000000	       277 ns/op
-```
-
-100 millisecond
-```
-BenchmarkLMutexUncontended-8                  	 2000000	       868 ns/op
-BenchmarkLMutex-8                             	  500000	      2649 ns/op
-BenchmarkLMutexSlack-8                        	  500000	      2478 ns/op
-BenchmarkLMutexWork-8                         	  500000	      2547 ns/op
-BenchmarkLMutexWorkSlack-8                    	  500000	      2683 ns/op
-BenchmarkRWMutexWrite100-8                    	  500000	      2764 ns/op
-BenchmarkRWMutexWrite10-8                     	  500000	      2801 ns/op
-BenchmarkRWMutexWorkWrite100-8                	  500000	      2749 ns/op
-BenchmarkRWMutexWorkWrite10-8                 	  500000	      2810 ns/op
-```
-
-1 millisecond
-```
-BenchmarkLMutexUncontended-8                  	 2000000	       996 ns/op
-BenchmarkLMutex-8                             	  500000	      2649 ns/op
-BenchmarkLMutexSlack-8                        	 1000000	      1719 ns/op
-BenchmarkLMutexWork-8                         	  500000	      2637 ns/op
-BenchmarkLMutexWorkSlack-8                    	 1000000	      1729 ns/op
-BenchmarkRWMutexWrite100-8                    	 1000000	      1347 ns/op
-BenchmarkRWMutexWrite10-8                     	 1000000	      2417 ns/op
-BenchmarkRWMutexWorkWrite100-8                	 1000000	      1313 ns/op
-BenchmarkRWMutexWorkWrite10-8                 	 1000000	      2421 ns/op
 ```

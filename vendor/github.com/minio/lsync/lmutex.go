@@ -49,7 +49,7 @@ func (lm *LMutex) GetLock(timeout time.Duration) (locked bool) {
 // The call will block until the lock is granted using a built-in
 // timing randomized back-off algorithm to try again until successful
 func (lm *LMutex) lockLoop(timeout time.Duration) bool {
-	doneCh, start := make(chan struct{}), time.Now()
+	doneCh, start := make(chan struct{}), time.Now().UTC()
 	defer close(doneCh)
 
 	// We timed out on the previous lock, incrementally wait
@@ -59,7 +59,7 @@ func (lm *LMutex) lockLoop(timeout time.Duration) bool {
 		// Try to acquire the lock.
 		if atomic.CompareAndSwapInt64(&lm.state, NOLOCKS, WRITELOCK) {
 			return true
-		} else if time.Since(start) >= timeout { // Are we past the timeout?
+		} else if time.Now().UTC().Sub(start) >= timeout { // Are we past the timeout?
 			break
 		}
 		// We timed out on the previous lock, incrementally wait

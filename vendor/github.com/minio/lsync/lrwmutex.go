@@ -21,9 +21,11 @@ import (
 	"time"
 )
 
-const WRITELOCK = -1
-const NOLOCKS = 0
-const READLOCKS = 1
+const (
+     WRITELOCK = -1 + iota
+     NOLOCKS
+     READLOCKS
+)
 
 // A LRWMutex is a mutual exclusion lock with timeouts.
 type LRWMutex struct {
@@ -75,7 +77,7 @@ func (lm *LRWMutex) GetRLock(timeout time.Duration) (locked bool) {
 // The call will block until the lock is granted using a built-in
 // timing randomized back-off algorithm to try again until successful
 func (lm *LRWMutex) lockLoop(timeout time.Duration, isWriteLock bool) bool {
-	doneCh, start := make(chan struct{}), time.Now()
+	doneCh, start := make(chan struct{}), time.Now().UTC()
 	defer close(doneCh)
 
 	// We timed out on the previous lock, incrementally wait
@@ -104,7 +106,7 @@ func (lm *LRWMutex) lockLoop(timeout time.Duration, isWriteLock bool) bool {
 		if success {
 			return true
 		}
-		if time.Since(start) >= timeout { // Are we past the timeout?
+		if time.Now().UTC().Sub(start) >= timeout { // Are we past the timeout?
 			break
 		}
 		// We timed out on the previous lock, incrementally wait

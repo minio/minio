@@ -301,10 +301,10 @@
 			"revisionTime": "2016-02-15T17:25:11+05:30"
 		},
 		{
-			"checksumSHA1": "Gm0TfieHrMoj27jx78ARWQYChwc=",
+			"checksumSHA1": "7/Hdd23/j4/yt4BXa+h0kqz1yjw=",
 			"path": "github.com/minio/lsync",
-			"revision": "9738cbb46f7f5dc0b6c2acf0dd1d85b4f3ecc0e2",
-			"revisionTime": "2017-05-18T18:32:07Z"
+			"revision": "2d7c40f41402df6f0713a749a011cddc12d1b2f3",
+			"revisionTime": "2017-08-09T21:08:26Z"
 		},
 		{
 			"path": "github.com/minio/mc/pkg/console",
