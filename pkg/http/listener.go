@@ -20,6 +20,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"strings"
@@ -88,6 +89,16 @@ type httpListener struct {
 	errorLogFunc           func(error, string, ...interface{}) // function to be called on errors.
 }
 
+// ignoreErr returns true if error is due to a network timeout or
+// io.EOF and false otherwise
+func ignoreErr(err error) bool {
+	if nErr, ok := err.(*net.OpError); ok {
+		return nErr.Timeout()
+	}
+
+	return err == io.EOF
+}
+
 // start - starts separate goroutine for each TCP listener.  A valid insecure/TLS HTTP new connection is passed to httpListener.acceptCh.
 func (listener *httpListener) start() {
 	listener.acceptCh = make(chan acceptResult)
@@ -122,9 +133,16 @@ func (listener *httpListener) start() {
 		data, err := bufconn.Peek(methodMaxLen)
 		if err != nil {
 			if listener.errorLogFunc != nil {
-				listener.errorLogFunc(err,
-					"Error in reading from new connection %s at server %s",
-					bufconn.RemoteAddr(), bufconn.LocalAddr())
+				// Peek could fail legitimately when clients abruptly close
+				// connection. E.g. Chrome browser opens connections speculatively to
+				// speed up loading of a web page. Peek may also fail due to network
+				// saturation on a transport with read timeout set. All other kind of
+				// errors should be logged for further investigation. Thanks @brendanashworth.
+				if !ignoreErr(err) {
+					listener.errorLogFunc(err,
+						"Error in reading from new connection %s at server %s",
+						bufconn.RemoteAddr(), bufconn.LocalAddr())
+				}
 			}
 			bufconn.Close()
 			return

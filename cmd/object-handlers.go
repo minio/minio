@@ -29,8 +29,8 @@ import (
 	mux "github.com/gorilla/mux"
 )
 
-// supportedGetReqParams - supported request parameters for GET presigned request.
-var supportedGetReqParams = map[string]string{
+// supportedHeadGetReqParams - supported request parameters for GET and HEAD presigned request.
+var supportedHeadGetReqParams = map[string]string{
 	"response-expires":             "Expires",
 	"response-content-type":        "Content-Type",
 	"response-cache-control":       "Cache-Control",
@@ -39,13 +39,29 @@ var supportedGetReqParams = map[string]string{
 	"response-content-disposition": "Content-Disposition",
 }
 
-// setGetRespHeaders - set any requested parameters as response headers.
-func setGetRespHeaders(w http.ResponseWriter, reqParams url.Values) {
+// setHeadGetRespHeaders - set any requested parameters as response headers.
+func setHeadGetRespHeaders(w http.ResponseWriter, reqParams url.Values) {
 	for k, v := range reqParams {
-		if header, ok := supportedGetReqParams[k]; ok {
+		if header, ok := supportedHeadGetReqParams[k]; ok {
 			w.Header()[header] = v
 		}
 	}
+}
+
+// getSourceIPAddress - get the source ip address of the request.
+func getSourceIPAddress(r *http.Request) string {
+	var ip string
+	// Attempt to get ip from standard headers.
+	// Do not support X-Forwarded-For because it is easy to spoof.
+	ip = r.Header.Get("X-Real-Ip")
+	parsedIP := net.ParseIP(ip)
+	// Skip non valid IP address.
+	if parsedIP != nil {
+		return ip
+	}
+	// Default to remote address if headers not set.
+	ip, _, _ = net.SplitHostPort(r.RemoteAddr)
+	return ip
 }
 
 // errAllowableNotFound - For an anon user, return 404 if have ListBucket, 403 otherwise
@@ -54,10 +70,11 @@ func setGetRespHeaders(w http.ResponseWriter, reqParams url.Values) {
 //   GET Object: http://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectGET.html
 func errAllowableObjectNotFound(bucket string, r *http.Request) APIErrorCode {
 	if getRequestAuthType(r) == authTypeAnonymous {
-		//we care about the bucket as a whole, not a particular resource
+		// We care about the bucket as a whole, not a particular resource.
 		resource := "/" + bucket
+		sourceIP := getSourceIPAddress(r)
 		if s3Error := enforceBucketPolicy(bucket, "s3:ListBucket", resource,
-			r.Referer(), r.URL.Query()); s3Error != ErrNone {
+			r.Referer(), sourceIP, r.URL.Query()); s3Error != ErrNone {
 			return ErrAccessDenied
 		}
 	}
@@ -149,7 +166,7 @@ func (api objectAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Req
 			setObjectHeaders(w, objInfo, hrange)
 
 			// Set any additional requested response headers.
-			setGetRespHeaders(w, r.URL.Query())
+			setHeadGetRespHeaders(w, r.URL.Query())
 
 			dataWritten = true
 		}
@@ -236,6 +253,9 @@ func (api objectAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.Re
 
 	// Set standard object headers.
 	setObjectHeaders(w, objInfo, nil)
+
+	// Set any additional requested response headers.
+	setHeadGetRespHeaders(w, r.URL.Query())
 
 	// Successful response.
 	w.WriteHeader(http.StatusOK)
@@ -505,8 +525,9 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 		return
 	case authTypeAnonymous:
 		// http://docs.aws.amazon.com/AmazonS3/latest/dev/using-with-s3-actions.html
+		sourceIP := getSourceIPAddress(r)
 		if s3Error := enforceBucketPolicy(bucket, "s3:PutObject", r.URL.Path,
-			r.Referer(), r.URL.Query()); s3Error != ErrNone {
+			r.Referer(), sourceIP, r.URL.Query()); s3Error != ErrNone {
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
@@ -791,8 +812,9 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		return
 	case authTypeAnonymous:
 		// http://docs.aws.amazon.com/AmazonS3/latest/dev/mpuAndPermissions.html
+		sourceIP := getSourceIPAddress(r)
 		if s3Error := enforceBucketPolicy(bucket, "s3:PutObject", r.URL.Path,
-			r.Referer(), r.URL.Query()); s3Error != ErrNone {
+			r.Referer(), sourceIP, r.URL.Query()); s3Error != ErrNone {
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}

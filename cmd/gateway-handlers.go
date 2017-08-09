@@ -127,7 +127,7 @@ func (api gatewayAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Re
 			setObjectHeaders(w, objInfo, hrange)
 
 			// Set any additional requested response headers.
-			setGetRespHeaders(w, r.URL.Query())
+			setHeadGetRespHeaders(w, r.URL.Query())
 
 			dataWritten = true
 		}
@@ -397,6 +397,9 @@ func (api gatewayAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.R
 
 	// Set standard object headers.
 	setObjectHeaders(w, objInfo, nil)
+
+	// Set any additional requested response headers.
+	setHeadGetRespHeaders(w, r.URL.Query())
 
 	// Successful response.
 	w.WriteHeader(http.StatusOK)

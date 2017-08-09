@@ -108,15 +108,15 @@ func TestIsGCSMarker(t *testing.T) {
 		expected bool
 	}{
 		{
-			marker:   "##miniogcs123",
+			marker:   "{minio}gcs123",
 			expected: true,
 		},
 		{
-			marker:   "##mini_notgcs123",
+			marker:   "{mini_no}tgcs123",
 			expected: false,
 		},
 		{
-			marker:   "#minioagainnotgcs123",
+			marker:   "{minioagainnotgcs123",
 			expected: false,
 		},
 		{

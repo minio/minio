@@ -179,6 +179,7 @@ func newAzureLayer(host string) (GatewayLayer, error) {
 	if err != nil {
 		return &azureObjects{}, err
 	}
+	c.HTTPClient.Transport = newCustomHTTPTransport()
 
 	return &azureObjects{
 		client: c.GetBlobService(),
@@ -738,7 +739,7 @@ func (a *azureObjects) GetBucketPolicies(bucket string) (policy.BucketAccessPoli
 	}
 	switch perm.AccessType {
 	case storage.ContainerAccessTypePrivate:
-		// Do nothing
+		return policy.BucketAccessPolicy{}, traceError(PolicyNotFound{Bucket: bucket})
 	case storage.ContainerAccessTypeContainer:
 		policyInfo.Statements = policy.SetPolicy(policyInfo.Statements, policy.BucketPolicyReadOnly, bucket, "")
 	default:

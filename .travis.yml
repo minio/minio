@@ -39,4 +39,4 @@ after_success:
 - bash <(curl -s https://codecov.io/bash)
 
 go:
-- 1.7.5
+- 1.8.3
