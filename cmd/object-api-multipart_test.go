@@ -1236,26 +1236,33 @@ func testListMultipartUploads(obj ObjectLayer, instanceType string, t TestErrHan
 			if actualResult.Delimiter != expectedResult.Delimiter {
 				t.Errorf("Test %d: %s: Expected Delimiter to be \"%s\", but instead found it to be \"%s\"", i+1, instanceType, expectedResult.Delimiter, actualResult.Delimiter)
 			}
-			// Asserting NextUploadIDMarker.
-			if actualResult.NextUploadIDMarker != expectedResult.NextUploadIDMarker {
-				t.Errorf("Test %d: %s: Expected NextUploadIDMarker to be \"%s\", but instead found it to be \"%s\"", i+1, instanceType, expectedResult.NextUploadIDMarker, actualResult.NextUploadIDMarker)
-			}
-			// Asserting NextKeyMarker.
-			if actualResult.NextKeyMarker != expectedResult.NextKeyMarker {
-				t.Errorf("Test %d: %s: Expected NextKeyMarker to be \"%s\", but instead found it to be \"%s\"", i+1, instanceType, expectedResult.NextKeyMarker, actualResult.NextKeyMarker)
-			}
 			// Asserting the keyMarker.
 			if actualResult.KeyMarker != expectedResult.KeyMarker {
 				t.Errorf("Test %d: %s: Expected keyMarker to be \"%s\", but instead found it to be \"%s\"", i+1, instanceType, expectedResult.KeyMarker, actualResult.KeyMarker)
 			}
-			// Asserting IsTruncated.
-			if actualResult.IsTruncated != testCase.expectedResult.IsTruncated {
-				t.Errorf("Test %d: %s: Expected Istruncated to be \"%v\", but found it to \"%v\"", i+1, instanceType, expectedResult.IsTruncated, actualResult.IsTruncated)
-			}
-			// Asserting the number of upload Metadata info.
-			if len(expectedResult.Uploads) != len(actualResult.Uploads) {
-				t.Errorf("Test %d: %s: Expected the result to contain info of %d Multipart Uploads, but found %d instead", i+1, instanceType, len(expectedResult.Uploads), len(actualResult.Uploads))
-			} else {
+
+			// ListMultipartUploads returns empty respsonse always in FS mode
+			if instanceType != FSTestStr {
+				// Asserting IsTruncated.
+				if actualResult.IsTruncated != testCase.expectedResult.IsTruncated {
+					t.Errorf("Test %d: %s: Expected Istruncated to be \"%v\", but found it to \"%v\"", i+1, instanceType, expectedResult.IsTruncated, actualResult.IsTruncated)
+					continue
+				}
+				// Asserting NextUploadIDMarker.
+				if actualResult.NextUploadIDMarker != expectedResult.NextUploadIDMarker {
+					t.Errorf("Test %d: %s: Expected NextUploadIDMarker to be \"%s\", but instead found it to be \"%s\"", i+1, instanceType, expectedResult.NextUploadIDMarker, actualResult.NextUploadIDMarker)
+					continue
+				}
+				// Asserting NextKeyMarker.
+				if actualResult.NextKeyMarker != expectedResult.NextKeyMarker {
+					t.Errorf("Test %d: %s: Expected NextKeyMarker to be \"%s\", but instead found it to be \"%s\"", i+1, instanceType, expectedResult.NextKeyMarker, actualResult.NextKeyMarker)
+					continue
+				}
+				// Asserting the number of upload Metadata info.
+				if len(expectedResult.Uploads) != len(actualResult.Uploads) {
+					t.Errorf("Test %d: %s: Expected the result to contain info of %d Multipart Uploads, but found %d instead", i+1, instanceType, len(expectedResult.Uploads), len(actualResult.Uploads))
+					continue
+				}
 				// Iterating over the uploads Metadata and asserting the fields.
 				for j, actualMetaData := range actualResult.Uploads {
 					//  Asserting the object name in the upload Metadata.
@@ -1712,10 +1719,6 @@ func testListObjectParts(obj ObjectLayer, instanceType string, t TestErrHandler)
 			if actualResult.UploadID != expectedResult.UploadID {
 				t.Errorf("Test %d: %s: Expected UploadID to be \"%s\", but instead found it to be \"%s\"", i+1, instanceType, expectedResult.UploadID, actualResult.UploadID)
 			}
-			// Asserting NextPartNumberMarker.
-			if actualResult.NextPartNumberMarker != expectedResult.NextPartNumberMarker {
-				t.Errorf("Test %d: %s: Expected NextPartNumberMarker to be \"%d\", but instead found it to be \"%d\"", i+1, instanceType, expectedResult.NextPartNumberMarker, actualResult.NextPartNumberMarker)
-			}
 			// Asserting PartNumberMarker.
 			if actualResult.PartNumberMarker != expectedResult.PartNumberMarker {
 				t.Errorf("Test %d: %s: Expected PartNumberMarker to be \"%d\", but instead found it to be \"%d\"", i+1, instanceType, expectedResult.PartNumberMarker, actualResult.PartNumberMarker)
@@ -1724,14 +1727,24 @@ func testListObjectParts(obj ObjectLayer, instanceType string, t TestErrHandler)
 			if actualResult.Bucket != expectedResult.Bucket {
 				t.Errorf("Test %d: %s: Expected Bucket to be \"%s\", but instead found it to be \"%s\"", i+1, instanceType, expectedResult.Bucket, actualResult.Bucket)
 			}
-			// Asserting IsTruncated.
-			if actualResult.IsTruncated != testCase.expectedResult.IsTruncated {
-				t.Errorf("Test %d: %s: Expected IsTruncated to be \"%v\", but found it to \"%v\"", i+1, instanceType, expectedResult.IsTruncated, actualResult.IsTruncated)
-			}
-			// Asserting the number of Parts.
-			if len(expectedResult.Parts) != len(actualResult.Parts) {
-				t.Errorf("Test %d: %s: Expected the result to contain info of %d Parts, but found %d instead", i+1, instanceType, len(expectedResult.Parts), len(actualResult.Parts))
-			} else {
+
+			// ListObjectParts returns empty response always in FS mode
+			if instanceType != FSTestStr {
+				// Asserting IsTruncated.
+				if actualResult.IsTruncated != testCase.expectedResult.IsTruncated {
+					t.Errorf("Test %d: %s: Expected IsTruncated to be \"%v\", but found it to \"%v\"", i+1, instanceType, expectedResult.IsTruncated, actualResult.IsTruncated)
+					continue
+				}
+				// Asserting NextPartNumberMarker.
+				if actualResult.NextPartNumberMarker != expectedResult.NextPartNumberMarker {
+					t.Errorf("Test %d: %s: Expected NextPartNumberMarker to be \"%d\", but instead found it to be \"%d\"", i+1, instanceType, expectedResult.NextPartNumberMarker, actualResult.NextPartNumberMarker)
+					continue
+				}
+				// Asserting the number of Parts.
+				if len(expectedResult.Parts) != len(actualResult.Parts) {
+					t.Errorf("Test %d: %s: Expected the result to contain info of %d Parts, but found %d instead", i+1, instanceType, len(expectedResult.Parts), len(actualResult.Parts))
+					continue
+				}
 				// Iterating over the partInfos and asserting the fields.
 				for j, actualMetaData := range actualResult.Parts {
 					//  Asserting the PartNumber in the PartInfo.
@@ -1747,6 +1760,7 @@ func testListObjectParts(obj ObjectLayer, instanceType string, t TestErrHandler)
 						t.Errorf("Test %d: %s: Part %d: Expected Etag to be \"%s\", but instead found \"%s\"", i+1, instanceType, j+1, expectedResult.Parts[j].ETag, actualMetaData.ETag)
 					}
 				}
+
 			}
 		}
 	}

@@ -503,9 +503,8 @@ func removeNotificationConfig(bucket string, objAPI ObjectLayer) error {
 	// Acquire a write lock on notification config before modifying.
 	objLock := globalNSMutex.NewNSLock(minioMetaBucket, ncPath)
 	objLock.Lock()
-	err := objAPI.DeleteObject(minioMetaBucket, ncPath)
-	objLock.Unlock()
-	return err
+	defer objLock.Unlock()
+	return objAPI.DeleteObject(minioMetaBucket, ncPath)
 }
 
 // Remove listener configuration from storage layer. Used when a bucket is deleted.
@@ -516,9 +515,8 @@ func removeListenerConfig(bucket string, objAPI ObjectLayer) error {
 	// Acquire a write lock on notification config before modifying.
 	objLock := globalNSMutex.NewNSLock(minioMetaBucket, lcPath)
 	objLock.Lock()
-	err := objAPI.DeleteObject(minioMetaBucket, lcPath)
-	objLock.Unlock()
-	return err
+	defer objLock.Unlock()
+	return objAPI.DeleteObject(minioMetaBucket, lcPath)
 }
 
 // Loads both notification and listener config.

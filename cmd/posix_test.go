@@ -29,6 +29,8 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/minio/minio/pkg/disk"
+
 	"golang.org/x/crypto/blake2b"
 )
 
@@ -68,6 +70,42 @@ func TestPosixGetDiskInfo(t *testing.T) {
 		if _, err := getDiskInfo(testCase.diskPath); err != testCase.expectedErr {
 			t.Fatalf("expected: %s, got: %s", testCase.expectedErr, err)
 		}
+	}
+}
+
+func TestPosixIsDirEmpty(t *testing.T) {
+	tmp, err := ioutil.TempDir(globalTestTmpDir, "minio-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer removeAll(tmp)
+
+	// Should give false on non-existent directory.
+	dir1 := slashpath.Join(tmp, "non-existent-directory")
+	if isDirEmpty(dir1) != false {
+		t.Error("expected false for non-existent directory, got true")
+	}
+
+	// Should give false for not-a-directory.
+	dir2 := slashpath.Join(tmp, "file")
+	err = ioutil.WriteFile(dir2, []byte("hello"), 0777)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if isDirEmpty(dir2) != false {
+		t.Error("expected false for a file, got true")
+	}
+
+	// Should give true for a real empty directory.
+	dir3 := slashpath.Join(tmp, "empty")
+	err = os.Mkdir(dir3, 0777)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if isDirEmpty(dir3) != true {
+		t.Error("expected true for empty dir, got false")
 	}
 }
 
@@ -704,6 +742,17 @@ func TestPosixDeleteFile(t *testing.T) {
 		t.Fatalf("Unable to create file, %s", err)
 	}
 
+	if err = posixStorage.MakeVol("no-permissions"); err != nil {
+		t.Fatalf("Unable to create volume, %s", err.Error())
+	}
+	if err = posixStorage.AppendFile("no-permissions", "dir/file", []byte("Hello, world")); err != nil {
+		t.Fatalf("Unable to create file, %s", err.Error())
+	}
+	// Parent directory must have write permissions, this is read + execute.
+	if err = os.Chmod(pathJoin(path, "no-permissions"), 0555); err != nil {
+		t.Fatalf("Unable to chmod directory, %s", err.Error())
+	}
+
 	testCases := []struct {
 		srcVol      string
 		srcPath     string
@@ -757,6 +806,15 @@ func TestPosixDeleteFile(t *testing.T) {
 			srcPath:     "my-obj-del-0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
 			ioErrCnt:    0,
 			expectedErr: errFileNameTooLong,
+		},
+		// TestPosix case - 7.
+		// TestPosix case with undeletable parent directory.
+		// File can delete, dir cannot delete because no-permissions doesn't have write perms.
+		{
+			srcVol:      "no-permissions",
+			srcPath:     "dir/file",
+			ioErrCnt:    0,
+			expectedErr: nil,
 		},
 	}
 
@@ -1666,6 +1724,109 @@ func TestPosixStatFile(t *testing.T) {
 		}
 		if _, err := posixStorage.StatFile(testCase.srcVol, testCase.srcPath); err != testCase.expectedErr {
 			t.Fatalf("TestPosix case %d: Expected: \"%s\", got: \"%s\"", i+1, testCase.expectedErr, err)
+		}
+	}
+}
+
+// Checks for restrictions for min total disk space and inodes.
+func TestCheckDiskTotalMin(t *testing.T) {
+	testCases := []struct {
+		diskInfo disk.Info
+		err      error
+	}{
+		// Test 1 - when fstype is nfs.
+		{
+			diskInfo: disk.Info{
+				Total:  diskMinTotalSpace * 3,
+				FSType: "NFS",
+			},
+			err: nil,
+		},
+		// Test 2 - when fstype is xfs and total inodes are less than 10k.
+		{
+			diskInfo: disk.Info{
+				Total:  diskMinTotalSpace * 3,
+				FSType: "XFS",
+				Files:  9999,
+			},
+			err: nil,
+		},
+		// Test 3 - when fstype is btrfs and total inodes is empty.
+		{
+			diskInfo: disk.Info{
+				Total:  diskMinTotalSpace * 3,
+				FSType: "BTRFS",
+				Files:  0,
+			},
+			err: nil,
+		},
+		// Test 4 - when fstype is xfs and total disk space is really small.
+		{
+			diskInfo: disk.Info{
+				Total:  diskMinTotalSpace - diskMinTotalSpace/1024,
+				FSType: "XFS",
+				Files:  9999,
+			},
+			err: errDiskFull,
+		},
+	}
+
+	// Validate all cases.
+	for i, test := range testCases {
+		if err := checkDiskMinTotal(test.diskInfo); test.err != err {
+			t.Errorf("Test %d: Expected error %s, got %s", i+1, test.err, err)
+		}
+	}
+}
+
+// Checks for restrictions for min free disk space and inodes.
+func TestCheckDiskFreeMin(t *testing.T) {
+	testCases := []struct {
+		diskInfo disk.Info
+		err      error
+	}{
+		// Test 1 - when fstype is nfs.
+		{
+			diskInfo: disk.Info{
+				Free:   diskMinTotalSpace * 3,
+				FSType: "NFS",
+			},
+			err: nil,
+		},
+		// Test 2 - when fstype is xfs and total inodes are less than 10k.
+		{
+			diskInfo: disk.Info{
+				Free:   diskMinTotalSpace * 3,
+				FSType: "XFS",
+				Files:  9999,
+				Ffree:  9999,
+			},
+			err: nil,
+		},
+		// Test 3 - when fstype is btrfs and total inodes are empty.
+		{
+			diskInfo: disk.Info{
+				Free:   diskMinTotalSpace * 3,
+				FSType: "BTRFS",
+				Files:  0,
+			},
+			err: nil,
+		},
+		// Test 4 - when fstype is xfs and total disk space is really small.
+		{
+			diskInfo: disk.Info{
+				Free:   diskMinTotalSpace - diskMinTotalSpace/1024,
+				FSType: "XFS",
+				Files:  9999,
+			},
+			err: errDiskFull,
+		},
+	}
+
+	// Validate all cases.
+	for i, test := range testCases {
+		if err := checkDiskMinFree(test.diskInfo); test.err != err {
+			t.Errorf("Test %d: Expected error %s, got %s", i+1, test.err, err)
 		}
 	}
 }

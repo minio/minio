@@ -843,7 +843,7 @@ func testDeleteBucketPolicyHandler(obj ObjectLayer, instanceType, bucketName str
 
 // TestBucketPolicyConditionMatch - Tests to validate whether bucket policy conditions match.
 func TestBucketPolicyConditionMatch(t *testing.T) {
-	// obtain the inner map[string]set.StringSet for policyStatement.Conditions .
+	// obtain the inner map[string]set.StringSet for policyStatement.Conditions.
 	getInnerMap := func(key2, value string) map[string]set.StringSet {
 		innerMap := make(map[string]set.StringSet)
 		innerMap[key2] = set.CreateStringSet(value)
@@ -969,6 +969,34 @@ func TestBucketPolicyConditionMatch(t *testing.T) {
 			statementCondition: getStatementWithCondition("StringNotLike", "aws:Referer", "http://www.example.com/"),
 			condition:          getInnerMap("referer", "http://somethingelse.com/"),
 			expectedMatch:      true,
+		},
+		// Test case 13.
+		// IpAddress condition evaluates to true.
+		{
+			statementCondition: getStatementWithCondition("IpAddress", "aws:SourceIp", "54.240.143.0/24"),
+			condition:          getInnerMap("ip", "54.240.143.2"),
+			expectedMatch:      true,
+		},
+		// Test case 14.
+		// IpAddress condition evaluates to false.
+		{
+			statementCondition: getStatementWithCondition("IpAddress", "aws:SourceIp", "54.240.143.0/24"),
+			condition:          getInnerMap("ip", "127.240.143.224"),
+			expectedMatch:      false,
+		},
+		// Test case 15.
+		// NotIpAddress condition evaluates to true.
+		{
+			statementCondition: getStatementWithCondition("NotIpAddress", "aws:SourceIp", "54.240.143.0/24"),
+			condition:          getInnerMap("ip", "54.240.144.188"),
+			expectedMatch:      true,
+		},
+		// Test case 16.
+		// NotIpAddress condition evaluates to false.
+		{
+			statementCondition: getStatementWithCondition("NotIpAddress", "aws:SourceIp", "54.240.143.0/24"),
+			condition:          getInnerMap("ip", "54.240.143.243"),
+			expectedMatch:      false,
 		},
 	}
 

@@ -42,28 +42,38 @@ import (
 )
 
 const (
-	// gcsMinioMeta is used for multiparts. We have "minio.sys.temp" prefix so that
+	// gcsMinioSysTmp is used for multiparts. We have "minio.sys.tmp" prefix so that
 	// listing on the GCS lists this entry in the end. Also in the gateway
 	// ListObjects we filter out this entry.
-	gcsMinioPath = "minio.sys.temp/"
+	gcsMinioSysTmp = "minio.sys.tmp/"
+
 	// Path where multipart objects are saved.
 	// If we change the backend format we will use a different url path like /multipart/v2
 	// but we will not migrate old data.
-	gcsMinioMultipartPathV1 = gcsMinioPath + "multipart/v1"
+	gcsMinioMultipartPathV1 = gcsMinioSysTmp + "multipart/v1"
+
 	// Multipart meta file.
 	gcsMinioMultipartMeta = "gcs.json"
+
 	// gcs.json version number
-	gcsMultipartMetaCurrentVersion = "1"
+	gcsMinioMultipartMetaCurrentVersion = "1"
+
 	// token prefixed with GCS returned marker to differentiate
 	// from user supplied marker.
-	gcsTokenPrefix = "##minio"
+	gcsTokenPrefix = "{minio}"
 
-	// maxComponents - maximum component object count to create a composite object.
+	// Maximum component object count to create a composite object.
 	// Refer https://cloud.google.com/storage/docs/composite-objects
-	maxComponents = 32
+	gcsMaxComponents = 32
 
-	// maxPartCount - maximum multipart parts GCS supports which is 32 x 32 = 1024.
-	maxPartCount = 1024
+	// gcsMaxPartCount - maximum multipart parts GCS supports which is 32 x 32 = 1024.
+	gcsMaxPartCount = 1024
+
+	// Every 24 hours we scan minio.sys.tmp to delete expired multiparts in minio.sys.tmp
+	gcsCleanupInterval = time.Hour * 24
+
+	// The cleanup routine deletes files older than 2 weeks in minio.sys.tmp
+	gcsMultipartExpiry = time.Hour * 24 * 14
 )
 
 // Stored in gcs.json - Contents of this file is not used anywhere. It can be
@@ -80,8 +90,8 @@ func gcsMultipartMetaName(uploadID string) string {
 }
 
 // Returns name of the part object.
-func gcsMultipartDataName(uploadID, etag string) string {
-	return fmt.Sprintf("%s/%s/%s", gcsMinioMultipartPathV1, uploadID, etag)
+func gcsMultipartDataName(uploadID string, partNumber int, etag string) string {
+	return fmt.Sprintf("%s/%s/%05d.%s", gcsMinioMultipartPathV1, uploadID, partNumber, etag)
 }
 
 // Convert Minio errors to minio object layer errors.
@@ -267,13 +277,58 @@ func newGCSGateway(projectID string) (GatewayLayer, error) {
 	if err != nil {
 		return nil, err
 	}
+	anonClient.SetCustomTransport(newCustomHTTPTransport())
 
-	return &gcsGateway{
+	gateway := &gcsGateway{
 		client:     client,
 		projectID:  projectID,
 		ctx:        ctx,
 		anonClient: anonClient,
-	}, nil
+	}
+	// Start background process to cleanup old files in minio.sys.tmp
+	go gateway.CleanupGCSMinioSysTmp()
+	return gateway, nil
+}
+
+// Cleanup old files in minio.sys.tmp of the given bucket.
+func (l *gcsGateway) CleanupGCSMinioSysTmpBucket(bucket string) {
+	it := l.client.Bucket(bucket).Objects(l.ctx, &storage.Query{Prefix: gcsMinioSysTmp, Versions: false})
+	for {
+		attrs, err := it.Next()
+		if err != nil {
+			if err != iterator.Done {
+				errorIf(err, "Object listing error on bucket %s during purging of old files in minio.sys.tmp", bucket)
+			}
+			return
+		}
+		if time.Since(attrs.Updated) > gcsMultipartExpiry {
+			// Delete files older than 2 weeks.
+			err := l.client.Bucket(bucket).Object(attrs.Name).Delete(l.ctx)
+			if err != nil {
+				errorIf(err, "Unable to delete %s/%s during purging of old files in minio.sys.tmp", bucket, attrs.Name)
+				return
+			}
+		}
+	}
+}
+
+// Cleanup old files in minio.sys.tmp of all buckets.
+func (l *gcsGateway) CleanupGCSMinioSysTmp() {
+	for {
+		it := l.client.Buckets(l.ctx, l.projectID)
+		for {
+			attrs, err := it.Next()
+			if err != nil {
+				if err != iterator.Done {
+					errorIf(err, "Bucket listing error during purging of old files in minio.sys.tmp")
+				}
+				break
+			}
+			l.CleanupGCSMinioSysTmpBucket(attrs.Name)
+		}
+		// Run the cleanup loop every 1 day.
+		time.Sleep(gcsCleanupInterval)
+	}
 }
 
 // Shutdown - save any gateway metadata to disk
@@ -316,35 +371,35 @@ func (l *gcsGateway) GetBucketInfo(bucket string) (BucketInfo, error) {
 	}, nil
 }
 
-// ListBuckets lists all GCS buckets
-func (l *gcsGateway) ListBuckets() ([]BucketInfo, error) {
+// ListBuckets lists all buckets under your project-id on GCS.
+func (l *gcsGateway) ListBuckets() (buckets []BucketInfo, err error) {
 	it := l.client.Buckets(l.ctx, l.projectID)
 
-	b := []BucketInfo{}
+	// Iterate and capture all the buckets.
 	for {
-		attrs, err := it.Next()
-		if err == iterator.Done {
+		attrs, ierr := it.Next()
+		if ierr == iterator.Done {
 			break
 		}
 
-		if err != nil {
-			return []BucketInfo{}, gcsToObjectError(traceError(err))
+		if ierr != nil {
+			return buckets, gcsToObjectError(traceError(ierr))
 		}
 
-		b = append(b, BucketInfo{
+		buckets = append(buckets, BucketInfo{
 			Name:    attrs.Name,
 			Created: attrs.Created,
 		})
 	}
 
-	return b, nil
+	return buckets, nil
 }
 
 // DeleteBucket delete a bucket on GCS.
 func (l *gcsGateway) DeleteBucket(bucket string) error {
 	itObject := l.client.Bucket(bucket).Objects(l.ctx, &storage.Query{Delimiter: slashSeparator, Versions: false})
 	// We list the bucket and if we find any objects we return BucketNotEmpty error. If we
-	// find only "minio.sys.temp/" then we remove it before deleting the bucket.
+	// find only "minio.sys.tmp/" then we remove it before deleting the bucket.
 	gcsMinioPathFound := false
 	nonGCSMinioPathFound := false
 	for {
@@ -355,7 +410,7 @@ func (l *gcsGateway) DeleteBucket(bucket string) error {
 		if err != nil {
 			return gcsToObjectError(traceError(err))
 		}
-		if objAttrs.Prefix == gcsMinioPath {
+		if objAttrs.Prefix == gcsMinioSysTmp {
 			gcsMinioPathFound = true
 			continue
 		}
@@ -366,8 +421,8 @@ func (l *gcsGateway) DeleteBucket(bucket string) error {
 		return gcsToObjectError(traceError(BucketNotEmpty{}))
 	}
 	if gcsMinioPathFound {
-		// Remove minio.sys.temp before deleting the bucket.
-		itObject = l.client.Bucket(bucket).Objects(l.ctx, &storage.Query{Versions: false, Prefix: gcsMinioPath})
+		// Remove minio.sys.tmp before deleting the bucket.
+		itObject = l.client.Bucket(bucket).Objects(l.ctx, &storage.Query{Versions: false, Prefix: gcsMinioSysTmp})
 		for {
 			objAttrs, err := itObject.Next()
 			if err == iterator.Done {
@@ -412,7 +467,11 @@ func isGCSMarker(marker string) bool {
 
 // ListObjects - lists all blobs in GCS bucket filtered by prefix
 func (l *gcsGateway) ListObjects(bucket string, prefix string, marker string, delimiter string, maxKeys int) (ListObjectsInfo, error) {
-	it := l.client.Bucket(bucket).Objects(l.ctx, &storage.Query{Delimiter: delimiter, Prefix: prefix, Versions: false})
+	it := l.client.Bucket(bucket).Objects(l.ctx, &storage.Query{
+		Delimiter: delimiter,
+		Prefix:    prefix,
+		Versions:  false,
+	})
 
 	isTruncated := false
 	nextMarker := ""
@@ -448,7 +507,7 @@ func (l *gcsGateway) ListObjects(bucket string, prefix string, marker string, de
 			// metadata folder, then just break
 			// otherwise we've truncated the output
 			attrs, _ := it.Next()
-			if attrs != nil && attrs.Prefix == gcsMinioPath {
+			if attrs != nil && attrs.Prefix == gcsMinioSysTmp {
 				break
 			}
 
@@ -466,16 +525,16 @@ func (l *gcsGateway) ListObjects(bucket string, prefix string, marker string, de
 
 		nextMarker = toGCSPageToken(attrs.Name)
 
-		if attrs.Prefix == gcsMinioPath {
+		if attrs.Prefix == gcsMinioSysTmp {
 			// We don't return our metadata prefix.
 			continue
 		}
-		if !strings.HasPrefix(prefix, gcsMinioPath) {
+		if !strings.HasPrefix(prefix, gcsMinioSysTmp) {
 			// If client lists outside gcsMinioPath then we filter out gcsMinioPath/* entries.
 			// But if the client lists inside gcsMinioPath then we return the entries in gcsMinioPath/
 			// which will be helpful to observe the "directory structure" for debugging purposes.
-			if strings.HasPrefix(attrs.Prefix, gcsMinioPath) ||
-				strings.HasPrefix(attrs.Name, gcsMinioPath) {
+			if strings.HasPrefix(attrs.Prefix, gcsMinioSysTmp) ||
+				strings.HasPrefix(attrs.Name, gcsMinioSysTmp) {
 				continue
 			}
 		}
@@ -510,8 +569,14 @@ func (l *gcsGateway) ListObjects(bucket string, prefix string, marker string, de
 }
 
 // ListObjectsV2 - lists all blobs in GCS bucket filtered by prefix
-func (l *gcsGateway) ListObjectsV2(bucket, prefix, continuationToken string, fetchOwner bool, delimiter string, maxKeys int) (ListObjectsV2Info, error) {
-	it := l.client.Bucket(bucket).Objects(l.ctx, &storage.Query{Delimiter: delimiter, Prefix: prefix, Versions: false})
+func (l *gcsGateway) ListObjectsV2(bucket, prefix, continuationToken string, fetchOwner bool,
+	delimiter string, maxKeys int) (ListObjectsV2Info, error) {
+
+	it := l.client.Bucket(bucket).Objects(l.ctx, &storage.Query{
+		Delimiter: delimiter,
+		Prefix:    prefix,
+		Versions:  false,
+	})
 
 	isTruncated := false
 	it.PageInfo().MaxSize = maxKeys
@@ -542,16 +607,16 @@ func (l *gcsGateway) ListObjectsV2(bucket, prefix, continuationToken string, fet
 			return ListObjectsV2Info{}, gcsToObjectError(traceError(err), bucket, prefix)
 		}
 
-		if attrs.Prefix == gcsMinioPath {
+		if attrs.Prefix == gcsMinioSysTmp {
 			// We don't return our metadata prefix.
 			continue
 		}
-		if !strings.HasPrefix(prefix, gcsMinioPath) {
+		if !strings.HasPrefix(prefix, gcsMinioSysTmp) {
 			// If client lists outside gcsMinioPath then we filter out gcsMinioPath/* entries.
 			// But if the client lists inside gcsMinioPath then we return the entries in gcsMinioPath/
 			// which will be helpful to observe the "directory structure" for debugging purposes.
-			if strings.HasPrefix(attrs.Prefix, gcsMinioPath) ||
-				strings.HasPrefix(attrs.Name, gcsMinioPath) {
+			if strings.HasPrefix(attrs.Prefix, gcsMinioSysTmp) ||
+				strings.HasPrefix(attrs.Name, gcsMinioSysTmp) {
 				continue
 			}
 		}
@@ -591,7 +656,6 @@ func (l *gcsGateway) GetObject(bucket string, key string, startOffset int64, len
 	if err != nil {
 		return gcsToObjectError(traceError(err), bucket, key)
 	}
-
 	defer r.Close()
 
 	if _, err := io.Copy(writer, r); err != nil {
@@ -615,10 +679,9 @@ func fromMinioClientListBucketResultToV2Info(bucket string, result minio.ListBuc
 	}
 
 	return ListObjectsV2Info{
-		IsTruncated: result.IsTruncated,
-		Prefixes:    prefixes,
-		Objects:     objects,
-
+		IsTruncated:           result.IsTruncated,
+		Prefixes:              prefixes,
+		Objects:               objects,
 		ContinuationToken:     result.Marker,
 		NextContinuationToken: result.NextMarker,
 	}
@@ -649,18 +712,17 @@ func (l *gcsGateway) GetObjectInfo(bucket string, object string) (ObjectInfo, er
 	}
 
 	attrs, err := l.client.Bucket(bucket).Object(object).Attrs(l.ctx)
-
 	if err != nil {
 		return ObjectInfo{}, gcsToObjectError(traceError(err), bucket, object)
 	}
-	objInfo := fromGCSAttrsToObjectInfo(attrs)
-	objInfo.ETag = fmt.Sprintf("%d", attrs.CRC32C)
 
-	return objInfo, nil
+	return fromGCSAttrsToObjectInfo(attrs), nil
 }
 
 // PutObject - Create a new object with the incoming data,
-func (l *gcsGateway) PutObject(bucket string, key string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (ObjectInfo, error) {
+func (l *gcsGateway) PutObject(bucket string, key string, size int64, data io.Reader,
+	metadata map[string]string, sha256sum string) (ObjectInfo, error) {
+
 	// if we want to mimic S3 behavior exactly, we need to verify if bucket exists first,
 	// otherwise gcs will just return object not exist in case of non-existing bucket
 	if _, err := l.client.Bucket(bucket).Attrs(l.ctx); err != nil {
@@ -684,31 +746,26 @@ func (l *gcsGateway) PutObject(bucket string, key string, size int64, data io.Re
 
 	w.ContentType = metadata["content-type"]
 	w.ContentEncoding = metadata["content-encoding"]
+	w.Metadata = metadata
 	if md5sum != "" {
 		var err error
 		w.MD5, err = hex.DecodeString(md5sum)
 		if err != nil {
+			// Close the object writer upon error.
+			w.Close()
 			return ObjectInfo{}, gcsToObjectError(traceError(err), bucket, key)
 		}
 	}
 
-	w.Metadata = metadata
-
-	_, err := io.Copy(w, reader)
-	if err != nil {
+	if _, err := io.CopyN(w, reader, size); err != nil {
+		// Close the object writer upon error.
+		w.Close()
 		return ObjectInfo{}, gcsToObjectError(traceError(err), bucket, key)
 	}
+	// Close the object writer upon success.
+	w.Close()
 
-	err = w.Close()
-	if err != nil {
-		return ObjectInfo{}, gcsToObjectError(traceError(err), bucket, key)
-	}
-
-	attrs, err := object.Attrs(l.ctx)
-	if err != nil {
-		return ObjectInfo{}, gcsToObjectError(traceError(err), bucket, key)
-	}
-
+	// Verify sha256sum after close.
 	if sha256sum != "" {
 		if hex.EncodeToString(sha256Writer.Sum(nil)) != sha256sum {
 			object.Delete(l.ctx)
@@ -716,11 +773,18 @@ func (l *gcsGateway) PutObject(bucket string, key string, size int64, data io.Re
 		}
 	}
 
+	attrs, err := object.Attrs(l.ctx)
+	if err != nil {
+		return ObjectInfo{}, gcsToObjectError(traceError(err), bucket, key)
+	}
+
 	return fromGCSAttrsToObjectInfo(attrs), nil
 }
 
 // CopyObject - Copies a blob from source container to destination container.
-func (l *gcsGateway) CopyObject(srcBucket string, srcObject string, destBucket string, destObject string, metadata map[string]string) (ObjectInfo, error) {
+func (l *gcsGateway) CopyObject(srcBucket string, srcObject string, destBucket string, destObject string,
+	metadata map[string]string) (ObjectInfo, error) {
+
 	src := l.client.Bucket(srcBucket).Object(srcObject)
 	dst := l.client.Bucket(destBucket).Object(destObject)
 
@@ -751,21 +815,19 @@ func (l *gcsGateway) NewMultipartUpload(bucket string, key string, metadata map[
 	meta := gcsMultipartMetaName(uploadID)
 
 	w := l.client.Bucket(bucket).Object(meta).NewWriter(l.ctx)
+	defer w.Close()
+
 	w.ContentType = metadata["content-type"]
 	w.ContentEncoding = metadata["content-encoding"]
 	w.Metadata = metadata
 
-	content, err := json.Marshal(gcsMultipartMetaV1{gcsMultipartMetaCurrentVersion, bucket, key})
-	if err != nil {
+	if err = json.NewEncoder(w).Encode(gcsMultipartMetaV1{
+		gcsMinioMultipartMetaCurrentVersion,
+		bucket,
+		key,
+	}); err != nil {
 		return "", gcsToObjectError(traceError(err), bucket, key)
 	}
-	if _, err = w.Write(content); err != nil {
-		return "", gcsToObjectError(traceError(err), bucket, key)
-	}
-	if err = w.Close(); err != nil {
-		return "", gcsToObjectError(traceError(err), bucket, key)
-	}
-
 	return uploadID, nil
 }
 
@@ -785,52 +847,61 @@ func (l *gcsGateway) CopyObjectPart(srcBucket string, srcObject string, destBuck
 	return PartInfo{}, traceError(NotSupported{})
 }
 
-// PutObjectPart puts a part of object in bucket
-func (l *gcsGateway) PutObjectPart(bucket string, key string, uploadID string, partID int, size int64, data io.Reader, md5Hex string, sha256sum string) (PartInfo, error) {
-	meta := gcsMultipartMetaName(uploadID)
-	object := l.client.Bucket(bucket).Object(meta)
+// Checks if minio.sys.tmp/multipart/v1/<upload-id>/gcs.json exists, returns
+// an object layer compatible error upon any error.
+func (l *gcsGateway) checkUploadIDExists(bucket string, key string, uploadID string) error {
+	_, err := l.client.Bucket(bucket).Object(gcsMultipartMetaName(uploadID)).Attrs(l.ctx)
+	return gcsToObjectError(traceError(err), bucket, key)
+}
 
-	_, err := object.Attrs(l.ctx)
-	if err != nil {
-		return PartInfo{}, gcsToObjectError(traceError(err), bucket, key)
+// PutObjectPart puts a part of object in bucket
+func (l *gcsGateway) PutObjectPart(bucket string, key string, uploadID string, partNumber int, size int64, data io.Reader, md5Hex string, sha256sum string) (PartInfo, error) {
+	if err := l.checkUploadIDExists(bucket, key, uploadID); err != nil {
+		return PartInfo{}, err
 	}
 
 	var sha256Writer hash.Hash
 
-	// Generate random ETag.
-	etag := getMD5Hash([]byte(mustGetUUID()))
+	var etag string
+	// Honor etag if client did send md5Hex.
+	if md5Hex != "" {
+		etag = md5Hex
+	} else {
+		// Generate random ETag.
+		etag = getMD5Hash([]byte(mustGetUUID()))
+	}
 
 	reader := data
-
 	if sha256sum != "" {
 		sha256Writer = sha256.New()
 		reader = io.TeeReader(data, sha256Writer)
 	}
 
-	dataName := gcsMultipartDataName(uploadID, etag)
-
-	object = l.client.Bucket(bucket).Object(dataName)
-
+	object := l.client.Bucket(bucket).Object(gcsMultipartDataName(uploadID, partNumber, etag))
 	w := object.NewWriter(l.ctx)
 	// Disable "chunked" uploading in GCS client. If enabled, it can cause a corner case
 	// where it tries to upload 0 bytes in the last chunk and get error from server.
 	w.ChunkSize = 0
 	if md5Hex != "" {
+		var err error
 		w.MD5, err = hex.DecodeString(md5Hex)
 		if err != nil {
+			// Make sure to close object writer upon error.
+			w.Close()
 			return PartInfo{}, gcsToObjectError(traceError(err), bucket, key)
 		}
 	}
-	_, err = io.Copy(w, reader)
-	if err != nil {
+
+	if _, err := io.CopyN(w, reader, size); err != nil {
+		// Make sure to close object writer upon error.
+		w.Close()
 		return PartInfo{}, gcsToObjectError(traceError(err), bucket, key)
 	}
 
-	err = w.Close()
-	if err != nil {
-		return PartInfo{}, gcsToObjectError(traceError(err), bucket, key)
-	}
+	// Make sure to close the object writer upon success.
+	w.Close()
 
+	// Verify sha256sum after Close().
 	if sha256sum != "" {
 		if hex.EncodeToString(sha256Writer.Sum(nil)) != sha256sum {
 			object.Delete(l.ctx)
@@ -839,36 +910,21 @@ func (l *gcsGateway) PutObjectPart(bucket string, key string, uploadID string, p
 	}
 
 	return PartInfo{
-		PartNumber:   partID,
+		PartNumber:   partNumber,
 		ETag:         etag,
-		LastModified: time.Now().UTC(),
+		LastModified: UTCNow(),
 		Size:         size,
 	}, nil
+
 }
 
 // ListObjectParts returns all object parts for specified object in specified bucket
 func (l *gcsGateway) ListObjectParts(bucket string, key string, uploadID string, partNumberMarker int, maxParts int) (ListPartsInfo, error) {
-	meta := gcsMultipartMetaName(uploadID)
-	object := l.client.Bucket(bucket).Object(meta)
-
-	_, err := object.Attrs(l.ctx)
-	if err != nil {
-		return ListPartsInfo{}, gcsToObjectError(traceError(err), bucket, key)
-	}
-
-	return ListPartsInfo{}, nil
+	return ListPartsInfo{}, l.checkUploadIDExists(bucket, key, uploadID)
 }
 
 // Called by AbortMultipartUpload and CompleteMultipartUpload for cleaning up.
 func (l *gcsGateway) cleanupMultipartUpload(bucket, key, uploadID string) error {
-	meta := gcsMultipartMetaName(uploadID)
-	object := l.client.Bucket(bucket).Object(meta)
-
-	_, err := object.Attrs(l.ctx)
-	if err != nil {
-		return gcsToObjectError(traceError(err), bucket, key)
-	}
-
 	prefix := fmt.Sprintf("%s/%s/", gcsMinioMultipartPathV1, uploadID)
 
 	// iterate through all parts and delete them
@@ -893,13 +949,20 @@ func (l *gcsGateway) cleanupMultipartUpload(bucket, key, uploadID string) error 
 
 // AbortMultipartUpload aborts a ongoing multipart upload
 func (l *gcsGateway) AbortMultipartUpload(bucket string, key string, uploadID string) error {
+	if err := l.checkUploadIDExists(bucket, key, uploadID); err != nil {
+		return err
+	}
 	return l.cleanupMultipartUpload(bucket, key, uploadID)
 }
 
 // CompleteMultipartUpload completes ongoing multipart upload and finalizes object
-// Note that there is a limit (currently 32) to the number of components that can be composed in a single operation.
-// There is a limit (currently 1024) to the total number of components for a given composite object. This means you can append to each object at most 1023 times.
-// There is a per-project rate limit (currently 200) to the number of components you can compose per second. This rate counts both the components being appended to a composite object as well as the components being copied when the composite object of which they are a part is copied.
+// Note that there is a limit (currently 32) to the number of components that can
+// be composed in a single operation. There is a limit (currently 1024) to the total
+// number of components for a given composite object. This means you can append to
+// each object at most 1023 times. There is a per-project rate limit (currently 200)
+// to the number of components you can compose per second. This rate counts both the
+// components being appended to a composite object as well as the components being
+// copied when the composite object of which they are a part is copied.
 func (l *gcsGateway) CompleteMultipartUpload(bucket string, key string, uploadID string, uploadedParts []completePart) (ObjectInfo, error) {
 	meta := gcsMultipartMetaName(uploadID)
 	object := l.client.Bucket(bucket).Object(meta)
@@ -908,42 +971,50 @@ func (l *gcsGateway) CompleteMultipartUpload(bucket string, key string, uploadID
 	if err != nil {
 		return ObjectInfo{}, gcsToObjectError(traceError(err), bucket, key)
 	}
+
 	r, err := object.NewReader(l.ctx)
 	if err != nil {
 		return ObjectInfo{}, gcsToObjectError(traceError(err), bucket, key)
 	}
+	defer r.Close()
 
 	// Check version compatibility of the meta file before compose()
 	multipartMeta := gcsMultipartMetaV1{}
-	decoder := json.NewDecoder(r)
-	err = decoder.Decode(&multipartMeta)
-	if err != nil {
+	if err = json.NewDecoder(r).Decode(&multipartMeta); err != nil {
 		return ObjectInfo{}, gcsToObjectError(traceError(err), bucket, key)
 	}
-	if multipartMeta.Version != gcsMultipartMetaCurrentVersion {
+
+	if multipartMeta.Version != gcsMinioMultipartMetaCurrentVersion {
 		return ObjectInfo{}, gcsToObjectError(traceError(errFormatNotSupported), bucket, key)
 	}
 
-	parts := make([]*storage.ObjectHandle, len(uploadedParts))
-	for i, uploadedPart := range uploadedParts {
-		parts[i] = l.client.Bucket(bucket).Object(gcsMultipartDataName(uploadID, uploadedPart.ETag))
+	// Validate if the gcs.json stores valid entries for the bucket and key.
+	if multipartMeta.Bucket != bucket || multipartMeta.Object != key {
+		return ObjectInfo{}, gcsToObjectError(InvalidUploadID{
+			UploadID: uploadID,
+		}, bucket, key)
 	}
 
-	if len(parts) > maxPartCount {
-		return ObjectInfo{}, traceError(NotSupported{})
+	var parts []*storage.ObjectHandle
+	for _, uploadedPart := range uploadedParts {
+		parts = append(parts, l.client.Bucket(bucket).Object(gcsMultipartDataName(uploadID,
+			uploadedPart.PartNumber, uploadedPart.ETag)))
 	}
 
-	composeCount := int(math.Ceil(float64(len(parts)) / float64(maxComponents)))
+	// Returns name of the composed object.
+	gcsMultipartComposeName := func(uploadID string, composeNumber int) string {
+		return fmt.Sprintf("%s/tmp/%s/composed-object-%05d", gcsMinioSysTmp, uploadID, composeNumber)
+	}
+
+	composeCount := int(math.Ceil(float64(len(parts)) / float64(gcsMaxComponents)))
 	if composeCount > 1 {
 		// Create composes of every 32 parts.
 		composeParts := make([]*storage.ObjectHandle, composeCount)
 		for i := 0; i < composeCount; i++ {
 			// Create 'composed-object-N' using next 32 parts.
-			composeName := fmt.Sprintf("composed-object-%d", i)
-			composeParts[i] = l.client.Bucket(bucket).Object(gcsMultipartDataName(uploadID, composeName))
-
-			start := i * maxComponents
-			end := start + maxComponents
+			composeParts[i] = l.client.Bucket(bucket).Object(gcsMultipartComposeName(uploadID, i))
+			start := i * gcsMaxComponents
+			end := start + gcsMaxComponents
 			if end > len(parts) {
 				end = len(parts)
 			}
@@ -952,8 +1023,7 @@ func (l *gcsGateway) CompleteMultipartUpload(bucket string, key string, uploadID
 			composer.ContentType = partZeroAttrs.ContentType
 			composer.Metadata = partZeroAttrs.Metadata
 
-			_, err = composer.Run(l.ctx)
-			if err != nil {
+			if _, err = composer.Run(l.ctx); err != nil {
 				return ObjectInfo{}, gcsToObjectError(traceError(err), bucket, key)
 			}
 		}
@@ -962,13 +1032,9 @@ func (l *gcsGateway) CompleteMultipartUpload(bucket string, key string, uploadID
 		parts = composeParts
 	}
 
-	dst := l.client.Bucket(bucket).Object(key)
-
-	composer := dst.ComposerFrom(parts...)
-
+	composer := l.client.Bucket(bucket).Object(key).ComposerFrom(parts...)
 	composer.ContentType = partZeroAttrs.ContentType
 	composer.Metadata = partZeroAttrs.Metadata
-
 	attrs, err := composer.Run(l.ctx)
 	if err != nil {
 		return ObjectInfo{}, gcsToObjectError(traceError(err), bucket, key)
@@ -1026,15 +1092,12 @@ func (l *gcsGateway) SetBucketPolicies(bucket string, policyInfo policy.BucketAc
 
 // GetBucketPolicies - Get policy on bucket
 func (l *gcsGateway) GetBucketPolicies(bucket string) (policy.BucketAccessPolicy, error) {
-	acl := l.client.Bucket(bucket).ACL()
-
-	rules, err := acl.List(l.ctx)
+	rules, err := l.client.Bucket(bucket).ACL().List(l.ctx)
 	if err != nil {
 		return policy.BucketAccessPolicy{}, gcsToObjectError(traceError(err), bucket)
 	}
 
 	policyInfo := policy.BucketAccessPolicy{Version: "2012-10-17"}
-
 	for _, r := range rules {
 		if r.Entity != storage.AllUsers || r.Role == storage.RoleOwner {
 			continue
@@ -1052,10 +1115,8 @@ func (l *gcsGateway) GetBucketPolicies(bucket string) (policy.BucketAccessPolicy
 
 // DeleteBucketPolicies - Delete all policies on bucket
 func (l *gcsGateway) DeleteBucketPolicies(bucket string) error {
-	acl := l.client.Bucket(bucket).ACL()
-
 	// This only removes the storage.AllUsers policies
-	if err := acl.Delete(l.ctx, storage.AllUsers); err != nil {
+	if err := l.client.Bucket(bucket).ACL().Delete(l.ctx, storage.AllUsers); err != nil {
 		return gcsToObjectError(traceError(err), bucket)
 	}
 

@@ -150,7 +150,16 @@ export default class Browse extends React.Component {
       if (prefix === currentPath) return
       browserHistory.push(utils.pathJoin(currentBucket, encPrefix))
     } else {
-      window.location = `${window.location.origin}/minio/download/${currentBucket}/${encPrefix}?token=${storage.getItem('token')}`
+      // Download the selected file.
+      web.CreateURLToken()
+        .then(res => {
+          let url = `${window.location.origin}/minio/download/${currentBucket}/${encPrefix}?token=${res.token}`
+          window.location = url
+        })
+        .catch(err => dispatch(actions.showAlert({
+          type: 'danger',
+          message: err.message
+        })))
     }
   }
 
@@ -406,16 +415,24 @@ export default class Browse extends React.Component {
   }
 
   downloadSelected() {
-    const {dispatch} = this.props
+    const {dispatch, web} = this.props
     let req = {
       bucketName: this.props.currentBucket,
       objects: this.props.checkedObjects,
       prefix: this.props.currentPath
     }
-    let requestUrl = location.origin + "/minio/zip?token=" + localStorage.token
 
-    this.xhr = new XMLHttpRequest()
-    dispatch(actions.downloadSelected(requestUrl, req, this.xhr))
+    web.CreateURLToken()
+      .then(res => {
+        let requestUrl = location.origin + "/minio/zip?token=" + res.token
+
+        this.xhr = new XMLHttpRequest()
+        dispatch(actions.downloadSelected(requestUrl, req, this.xhr))
+      })
+      .catch(err => dispatch(actions.showAlert({
+        type: 'danger',
+        message: err.message
+      })))
   }
 
   clearSelected() {

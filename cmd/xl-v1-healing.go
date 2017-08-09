@@ -36,21 +36,37 @@ func healFormatXL(storageDisks []StorageAPI) (err error) {
 		return err
 	}
 
-	// Handles different cases properly.
-	switch reduceFormatErrs(sErrs, len(storageDisks)) {
-	case errCorruptedFormat:
-		if err = healFormatXLCorruptedDisks(storageDisks); err != nil {
+	numDisks := len(storageDisks)
+	_, unformattedDiskCount, diskNotFoundCount,
+		corruptedFormatCount, otherErrCount := formatErrsSummary(sErrs)
+
+	switch {
+	case unformattedDiskCount == numDisks:
+		// all unformatted.
+		if err = initFormatXL(storageDisks); err != nil {
+			return err
+		}
+
+	case diskNotFoundCount > 0:
+		return fmt.Errorf("cannot proceed with heal as %s",
+			errSomeDiskOffline)
+
+	case otherErrCount > 0:
+		return fmt.Errorf("cannot proceed with heal as some disks had unhandled errors")
+
+	case corruptedFormatCount > 0:
+		if err = healFormatXLCorruptedDisks(storageDisks, formatConfigs); err != nil {
 			return fmt.Errorf("Unable to repair corrupted format, %s", err)
 		}
-	case errSomeDiskUnformatted:
+
+	case unformattedDiskCount > 0:
 		// All drives online but some report missing format.json.
-		if err = healFormatXLFreshDisks(storageDisks); err != nil {
-			// There was an unexpected unrecoverable error during healing.
+		if err = healFormatXLFreshDisks(storageDisks, formatConfigs); err != nil {
+			// There was an unexpected unrecoverable error
+			// during healing.
 			return fmt.Errorf("Unable to heal backend %s", err)
 		}
-	case errSomeDiskOffline:
-		// FIXME: in future.
-		return fmt.Errorf("Unable to initialize format %s and %s", errSomeDiskOffline, errSomeDiskUnformatted)
+
 	}
 	return nil
 }

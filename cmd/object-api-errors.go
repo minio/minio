@@ -343,6 +343,13 @@ func (e PartTooSmall) Error() string {
 	return fmt.Sprintf("Part size for %d should be atleast 5MB", e.PartNumber)
 }
 
+// PartTooBig returned if size of part is bigger than the allowed limit.
+type PartTooBig struct{}
+
+func (e PartTooBig) Error() string {
+	return "Part size bigger than the allowed limit"
+}
+
 // NotImplemented If a feature is not implemented
 type NotImplemented struct{}
 

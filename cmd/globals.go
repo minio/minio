@@ -17,12 +17,15 @@
 package cmd
 
 import (
+	"crypto/tls"
 	"crypto/x509"
+	"os"
 	"runtime"
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/fatih/color"
+	miniohttp "github.com/minio/minio/pkg/http"
 )
 
 // minio configuration related constants.
@@ -105,6 +108,12 @@ var (
 
 	// IsSSL indicates if the server is configured with SSL.
 	globalIsSSL bool
+
+	globalTLSCertificate *tls.Certificate
+
+	globalHTTPServer        *miniohttp.Server
+	globalHTTPServerErrorCh = make(chan error)
+	globalOSSignalCh        = make(chan os.Signal, 1)
 
 	// List of admin peers.
 	globalAdminPeers = adminPeers{}

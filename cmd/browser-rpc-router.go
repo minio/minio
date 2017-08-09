@@ -17,8 +17,6 @@
 package cmd
 
 import (
-	"net/rpc"
-
 	router "github.com/gorilla/mux"
 )
 
@@ -39,7 +37,7 @@ type browserPeerAPIHandlers struct {
 func registerBrowserPeerRPCRouter(mux *router.Router) error {
 	bpHandlers := &browserPeerAPIHandlers{}
 
-	bpRPCServer := rpc.NewServer()
+	bpRPCServer := newRPCServer()
 	err := bpRPCServer.RegisterName("BrowserPeer", bpHandlers)
 	if err != nil {
 		return traceError(err)
