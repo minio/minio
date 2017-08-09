@@ -1085,7 +1085,6 @@ func toWebAPIError(err error) APIError {
 		}
 	}
 
-
 	// Log unexpected and unhandled errors.
 	errorIf(err, errUnexpected.Error())
 	return APIError{

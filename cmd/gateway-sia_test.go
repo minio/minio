@@ -1,8 +1,8 @@
 package cmd
 
 import (
-	"testing"
 	"os"
+	"testing"
 )
 
 func TestSiaCacheLayer(t *testing.T) {
@@ -10,7 +10,7 @@ func TestSiaCacheLayer(t *testing.T) {
 	os.Remove(".sia_test.db")
 	os.RemoveAll(".sia_cache_test")
 
-	// Instantiate a Sia Cache Layer 
+	// Instantiate a Sia Cache Layer
 	cache, err := newSiaCacheLayer("", ".sia_cache_test", ".sia_test.db", false)
 	if err != nil {
 		t.Fatal("Test failed, could not create Sia Cache Layer")
@@ -78,10 +78,9 @@ func TestSiaCacheLayer(t *testing.T) {
 
 	// Stop the cache layer
 	cache.Stop()
-	
+
 	// Delete test cache directory and DB
 	os.Remove(".sia_test.db")
 	os.RemoveAll(".sia_cache_test")
-
 
 }

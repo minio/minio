@@ -215,7 +215,7 @@ func newGatewayLayer(backendType gatewayBackend, arg string) (gw GatewayLayer, e
 		// will be removed when gcs is ready for production use.
 		log.Println(colorYellow("\n               *** Warning: Not Ready for Production ***"))
 		gw, err = newGCSGateway(arg)
-    case siaBackend:
+	case siaBackend:
 		log.Println(colorYellow("\n               *** Warning: Sia Not Ready for Production ***"))
 		gw, err = newSiaGateway(arg)
 
@@ -225,7 +225,7 @@ func newGatewayLayer(backendType gatewayBackend, arg string) (gw GatewayLayer, e
 
 	if err = initBucketPoliciesGW(gw); err != nil {
 		return nil, err
-		
+
 	}
 
 	return gw, nil
@@ -345,8 +345,8 @@ func gatewayMain(ctx *cli.Context, backendType gatewayBackend) {
 	// Handle common env vars.
 	handleCommonEnvVars()
 
-    // Sia doesn't need envs
-    if gatewayBackend(backendType) != siaBackend {
+	// Sia doesn't need envs
+	if gatewayBackend(backendType) != siaBackend {
 		// Validate if we have access, secret set through environment.
 		if !globalIsEnvCreds {
 			fatalIf(fmt.Errorf("Access and Secret keys should be set through ENVs for backend [%s]", backendType), "")
@@ -436,7 +436,7 @@ func gatewayMain(ctx *cli.Context, backendType gatewayBackend) {
 			mode = globalMinioModeGatewayGCS
 		case s3Backend:
 			mode = globalMinioModeGatewayS3
-	 	case siaBackend:
+		case siaBackend:
 			mode = globalMinioModeGatewaySia
 		}
 

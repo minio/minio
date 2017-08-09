@@ -27,33 +27,33 @@ func siaToObjectError(err *SiaServiceError, params ...string) (e error) {
 
 	switch err.Code {
 	case "SiaErrorDaemon":
-		return errors.New(fmt.Sprintf("Sia Daemon: %s", err.Message))
+		return fmt.Errorf("Sia Daemon: %s", err.Message)
 	case "SiaErrorUnableToClearAnyCachedFiles":
-		return errors.New(fmt.Sprintf("Sia: %s", err.Message))
+		return fmt.Errorf("Sia: %s", err.Message)
 	case "SiaErrorDeterminingCacheSize":
-		return errors.New(fmt.Sprintf("Sia: %s", err.Message))
+		return fmt.Errorf("Sia: %s", err.Message)
 	case "SiaErrorDatabaseDeleteError":
-		return errors.New(fmt.Sprintf("Sia: %s", err.Message))
+		return fmt.Errorf("Sia: %s", err.Message)
 	case "SiaErrorDatabaseCreateError":
-		return errors.New(fmt.Sprintf("Sia: %s", err.Message))
+		return fmt.Errorf("Sia: %s", err.Message)
 	case "SiaErrorDatabaseCantBeOpened":
-		return errors.New(fmt.Sprintf("Sia: %s", err.Message))
+		return fmt.Errorf("Sia: %s", err.Message)
 	case "SiaErrorDatabaseInsertError":
-		return errors.New(fmt.Sprintf("Sia: %s", err.Message))
+		return fmt.Errorf("Sia: %s", err.Message)
 	case "SiaErrorDatabaseUpdateError":
-		return errors.New(fmt.Sprintf("Sia: %s", err.Message))
+		return fmt.Errorf("Sia: %s", err.Message)
 	case "SiaErrorDatabaseSelectError":
-		return errors.New(fmt.Sprintf("Sia: %s", err.Message))
+		return fmt.Errorf("Sia: %s", err.Message)
 	case "SiaFailedToDeleteCachedFile":
-		return errors.New(fmt.Sprintf("Sia: %s", err.Message))
+		return fmt.Errorf("Sia: %s", err.Message)
 	case "SiaErrorObjectDoesNotExistInBucket":
-		return errors.New(fmt.Sprintf("Sia: %s", err.Message))
+		return fmt.Errorf("Sia: %s", err.Message)
 	case "SiaErrorObjectAlreadyExists":
-		return errors.New(fmt.Sprintf("Sia: %s", err.Message))
+		return fmt.Errorf("Sia: %s", err.Message)
 	case "SiaErrorUnknown":
-		return errors.New(fmt.Sprintf("Sia: %s", err.Message))
+		return fmt.Errorf("Sia: %s", err.Message)
 	default:
-		return errors.New(fmt.Sprintf("Sia: %s", err.Message))
+		return fmt.Errorf("Sia: %s", err.Message)
 	}
 }
 
@@ -81,9 +81,9 @@ func newSiaGateway(host string) (GatewayLayer, error) {
 	}
 
 	// Start the Sia cache layer
-	sia_err := sia.Cache.Start()
-	if sia_err != nil {
-		panic(sia_err)
+	siaErr := sia.Cache.Start()
+	if siaErr != nil {
+		panic(siaErr)
 	}
 
 	fso, ok := f.(*fsObjects)
@@ -166,8 +166,8 @@ func (s *siaObjects) MakeBucketWithLocation(bucket, location string) error {
 		return err
 	}
 
-	sia_err := s.Cache.InsertBucket(bucket)
-	return siaToObjectError(sia_err)
+	siaErr := s.Cache.InsertBucket(bucket)
+	return siaToObjectError(siaErr)
 }
 
 // GetBucketInfo gets bucket metadata.
@@ -185,9 +185,9 @@ func (s *siaObjects) ListBuckets() (buckets []BucketInfo, e error) {
 // DeleteBucket deletes a bucket on Sia
 func (s *siaObjects) DeleteBucket(bucket string) error {
 	s.debugmsg("Gateway.DeleteBucket")
-	sia_err := s.Cache.DeleteBucket(bucket)
-	if sia_err != nil {
-		return siaToObjectError(sia_err)
+	siaErr := s.Cache.DeleteBucket(bucket)
+	if siaErr != nil {
+		return siaToObjectError(siaErr)
 	}
 
 	return s.Fs.DeleteBucket(bucket)
@@ -195,9 +195,9 @@ func (s *siaObjects) DeleteBucket(bucket string) error {
 
 func (s *siaObjects) ListObjects(bucket string, prefix string, marker string, delimiter string, maxKeys int) (loi ListObjectsInfo, e error) {
 	s.debugmsg("Gateway.ListObjects")
-	sobjs, sia_err := s.Cache.ListObjects(bucket)
-	if sia_err != nil {
-		return loi, siaToObjectError(sia_err)
+	sobjs, siaErr := s.Cache.ListObjects(bucket)
+	if siaErr != nil {
+		return loi, siaToObjectError(siaErr)
 	}
 
 	loi.IsTruncated = false
@@ -233,9 +233,9 @@ func (s *siaObjects) GetObject(bucket string, key string, startOffset int64, len
 
 	// Only deal with cache on first chunk
 	if startOffset == 0 {
-		sia_err := s.Cache.GuaranteeObjectIsInCache(bucket, key)
-		if sia_err != nil {
-			return siaToObjectError(sia_err)
+		siaErr := s.Cache.GuaranteeObjectIsInCache(bucket, key)
+		if siaErr != nil {
+			return siaToObjectError(siaErr)
 		}
 	}
 
@@ -250,9 +250,9 @@ func (s *siaObjects) GetObjectInfo(bucket string, object string) (objInfo Object
 	// Pull the info from cache database.
 	// Use size from cache database instead of checking filesystem.
 
-	sobjInfo, sia_err := s.Cache.GetObjectInfo(bucket, object)
-	if sia_err != nil {
-		return objInfo, siaToObjectError(sia_err)
+	sobjInfo, siaErr := s.Cache.GetObjectInfo(bucket, object)
+	if siaErr != nil {
+		return objInfo, siaToObjectError(siaErr)
 	}
 
 	fsMeta := fsMetaV1{}
@@ -316,12 +316,12 @@ func (s *siaObjects) PutObject(bucket string, object string, size int64, data io
 		return oi, e
 	}
 
-	src_file := pathJoin(abs(s.CacheDir), bucket, object)
-	sia_err := s.Cache.PutObject(bucket, object, size, int64(s.PurgeCacheAfterSec), src_file)
+	srcFile := pathJoin(abs(s.CacheDir), bucket, object)
+	siaErr := s.Cache.PutObject(bucket, object, size, int64(s.PurgeCacheAfterSec), srcFile)
 	// If put fails to the cache layer, then delete from object layer
-	if sia_err != nil {
+	if siaErr != nil {
 		s.Fs.DeleteObject(bucket, object)
-		return oi, siaToObjectError(sia_err, bucket, object)
+		return oi, siaToObjectError(siaErr, bucket, object)
 	}
 	return oi, e
 }
@@ -335,9 +335,9 @@ func (s *siaObjects) CopyObject(srcBucket string, srcObject string, destBucket s
 // DeleteObject deletes a blob in bucket
 func (s *siaObjects) DeleteObject(bucket string, object string) error {
 	s.debugmsg("Gateway.DeleteObject")
-	sia_err := s.Cache.DeleteObject(bucket, object)
-	if sia_err != nil {
-		return siaToObjectError(sia_err)
+	siaErr := s.Cache.DeleteObject(bucket, object)
+	if siaErr != nil {
+		return siaToObjectError(siaErr)
 	}
 
 	return s.Fs.DeleteObject(bucket, object)
@@ -387,17 +387,17 @@ func (s *siaObjects) CompleteMultipartUpload(bucket string, object string, uploa
 		return oi, err
 	}
 
-	src_file := pathJoin(abs(s.CacheDir), bucket, object)
-	fi, err := os.Stat(src_file)
+	srcFile := pathJoin(abs(s.CacheDir), bucket, object)
+	fi, err := os.Stat(srcFile)
 	if err != nil {
 		return oi, err
 	}
 
-	sia_err := s.Cache.PutObject(bucket, object, fi.Size(), int64(s.PurgeCacheAfterSec), src_file)
+	siaErr := s.Cache.PutObject(bucket, object, fi.Size(), int64(s.PurgeCacheAfterSec), srcFile)
 	// If put fails to the cache layer, then delete from object layer
-	if sia_err != nil {
+	if siaErr != nil {
 		s.Fs.DeleteObject(bucket, object)
-		return oi, siaToObjectError(sia_err)
+		return oi, siaToObjectError(siaErr)
 	}
 
 	return oi, nil
@@ -414,8 +414,8 @@ func (s *siaObjects) SetBucketPolicies(bucket string, policyInfo policy.BucketAc
 func (s *siaObjects) GetBucketPolicies(bucket string) (bal policy.BucketAccessPolicy, e error) {
 	s.debugmsg("Gateway.GetBucketPolicies")
 
-	bp, sia_err := s.Cache.GetBucketPolicies(bucket)
-	return bp, siaToObjectError(sia_err)
+	bp, siaErr := s.Cache.GetBucketPolicies(bucket)
+	return bp, siaToObjectError(siaErr)
 }
 
 // DeleteBucketPolicies deletes all policies on bucket
