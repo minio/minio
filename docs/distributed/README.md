@@ -69,7 +69,7 @@ minio.exe server http://192.168.1.11/C:/data http://192.168.1.12/C:/data ^
                   http://192.168.1.17/C:/data http://192.168.1.18/C:/data
 ```
 
-![Distributed Minio, 8 nodes with 1 disk each](https://raw.githubusercontent.com/minio/minio/master/docs/screenshots/Architecture-diagram_distributed_8.png)
+![Distributed Minio, 8 nodes with 1 disk each](https://github.com/minio/minio/blob/master/docs/screenshots/Architecture-diagram_distributed_8.jpg?raw=true)
 
 Example 2: Start distributed Minio instance with 4 drives each on 4 nodes, by running this command on all the 4 nodes.
 
@@ -103,7 +103,7 @@ minio.exe server http://192.168.1.11/C:/data1 http://192.168.1.11/C:/data2 ^
                   http://192.168.1.14/C:/data3 http://192.168.1.14/C:/data4
 ```
 
-![Distributed Minio, 4 nodes with 4 disks each](https://raw.githubusercontent.com/minio/minio/master/docs/screenshots/Architecture-diagram_distributed_16.png)
+![Distributed Minio, 4 nodes with 4 disks each](https://github.com/minio/minio/blob/master/docs/screenshots/Architecture-diagram_distributed_16.jpg?raw=true)
 
 ## 3. Test your setup
 

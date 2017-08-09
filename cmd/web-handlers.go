@@ -407,10 +407,13 @@ func (web *webAPIHandlers) SetAuth(r *http.Request, args *SetAuthArgs, reply *Se
 	errsMap := updateCredsOnPeers(creds)
 
 	// Update local credentials
-	serverConfig.SetCredential(creds)
+	prevCred := serverConfig.SetCredential(creds)
 
 	// Persist updated credentials.
 	if err = serverConfig.Save(); err != nil {
+		// Save the current creds when failed to update.
+		serverConfig.SetCredential(prevCred)
+
 		errsMap[globalMinioAddr] = err
 	}
 
@@ -469,6 +472,30 @@ func (web *webAPIHandlers) GetAuth(r *http.Request, args *WebGenericArgs, reply 
 	return nil
 }
 
+// URLTokenReply contains the reply for CreateURLToken.
+type URLTokenReply struct {
+	Token     string `json:"token"`
+	UIVersion string `json:"uiVersion"`
+}
+
+// CreateURLToken creates a URL token (short-lived) for GET requests.
+func (web *webAPIHandlers) CreateURLToken(r *http.Request, args *WebGenericArgs, reply *URLTokenReply) error {
+	if !isHTTPRequestValid(r) {
+		return toJSONError(errAuthentication)
+	}
+
+	creds := serverConfig.GetCredential()
+
+	token, err := authenticateURL(creds.AccessKey, creds.SecretKey)
+	if err != nil {
+		return toJSONError(err)
+	}
+
+	reply.Token = token
+	reply.UIVersion = browser.UIVersion
+	return nil
+}
+
 // Upload - file upload handler.
 func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	objectAPI := web.ObjectAPI()
@@ -499,7 +526,12 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Extract incoming metadata if any.
-	metadata := extractMetadataFromHeader(r.Header)
+	metadata, err := extractMetadataFromHeader(r.Header)
+	if err != nil {
+		errorIf(err, "found invalid http request header")
+		writeErrorResponse(w, ErrInternalError, r.URL)
+		return
+	}
 
 	// Lock the object.
 	objectLock := globalNSMutex.NewNSLock(bucket, object)

@@ -19,8 +19,6 @@ package cmd
 import (
 	"os"
 	"os/exec"
-	"syscall"
-	"time"
 )
 
 // Type of service signals currently supported.
@@ -63,60 +61,4 @@ func restartProcess() error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Start()
-}
-
-// Handles all serviceSignal and execute service functions.
-func (m *ServerMux) handleServiceSignals() error {
-	// Custom exit function
-	runExitFn := func(err error) {
-		// If global profiler is set stop before we exit.
-		if globalProfiler != nil {
-			globalProfiler.Stop()
-		}
-
-		// Call user supplied user exit function
-		fatalIf(err, "Unable to gracefully complete service operation.")
-
-		// We are usually done here, close global service done channel.
-		globalServiceDoneCh <- struct{}{}
-	}
-	// Wait for SIGTERM in a go-routine.
-	trapCh := signalTrap(os.Interrupt, syscall.SIGTERM)
-	go func(trapCh <-chan bool) {
-		<-trapCh
-		globalServiceSignalCh <- serviceStop
-	}(trapCh)
-
-	// Start listening on service signal. Monitor signals.
-	for {
-		signal := <-globalServiceSignalCh
-		switch signal {
-		case serviceStatus:
-			/// We don't do anything for this.
-		case serviceRestart:
-			if err := m.Close(); err != nil {
-				errorIf(err, "Unable to close server gracefully")
-			}
-			if err := restartProcess(); err != nil {
-				errorIf(err, "Unable to restart the server.")
-			}
-			runExitFn(nil)
-		case serviceStop:
-			log.Println("Received signal to exit.")
-			go func() {
-				time.Sleep(serverShutdownPoll + time.Millisecond*100)
-				log.Println("Waiting for active connections to terminate - press Ctrl+C to quit immediately.")
-			}()
-			if err := m.Close(); err != nil {
-				errorIf(err, "Unable to close server gracefully")
-			}
-			objAPI := newObjectLayerFn()
-			if objAPI == nil {
-				// Server not initialized yet, exit happily.
-				runExitFn(nil)
-			} else {
-				runExitFn(objAPI.Shutdown())
-			}
-		}
-	}
 }

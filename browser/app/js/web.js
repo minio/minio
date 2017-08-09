@@ -112,6 +112,9 @@ export default class Web {
         return res
       })
   }
+  CreateURLToken() {
+    return this.makeCall('CreateURLToken')
+  }
   GetBucketPolicy(args) {
     return this.makeCall('GetBucketPolicy', args)
   }

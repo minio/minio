@@ -513,9 +513,8 @@ func removeNotificationConfig(bucket string, objAPI ObjectLayer) error {
 	if err := objLock.GetLock(globalOperationTimeout); err != nil {
 		return err
 	}
-	err := objAPI.DeleteObject(minioMetaBucket, ncPath)
-	objLock.Unlock()
-	return err
+	defer objLock.Unlock()
+	return objAPI.DeleteObject(minioMetaBucket, ncPath)
 }
 
 // Remove listener configuration from storage layer. Used when a bucket is deleted.
@@ -528,9 +527,8 @@ func removeListenerConfig(bucket string, objAPI ObjectLayer) error {
 	if err := objLock.GetLock(globalOperationTimeout); err != nil {
 		return err
 	}
-	err := objAPI.DeleteObject(minioMetaBucket, lcPath)
-	objLock.Unlock()
-	return err
+	defer objLock.Unlock()
+	return objAPI.DeleteObject(minioMetaBucket, lcPath)
 }
 
 // Loads both notification and listener config.

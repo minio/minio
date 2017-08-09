@@ -67,6 +67,11 @@ func azureToS3Metadata(meta map[string]string) (newMeta map[string]string) {
 	return newMeta
 }
 
+// Append "-1" to etag so that clients do not interpret it as MD5.
+func azureToS3ETag(etag string) string {
+	return canonicalizeETag(etag) + "-1"
+}
+
 // To store metadata during NewMultipartUpload which will be used after
 // CompleteMultipartUpload to call SetBlobMetadata.
 type azureMultipartMetaInfo struct {
@@ -137,6 +142,8 @@ func azureToObjectError(err error, params ...string) error {
 		err = BucketExists{Bucket: bucket}
 	case "InvalidResourceName":
 		err = BucketNameInvalid{Bucket: bucket}
+	case "RequestBodyTooLarge":
+		err = PartTooBig{}
 	default:
 		switch azureErr.StatusCode {
 		case http.StatusNotFound:
@@ -172,6 +179,7 @@ func newAzureLayer(host string) (GatewayLayer, error) {
 	if err != nil {
 		return &azureObjects{}, err
 	}
+	c.HTTPClient.Transport = newCustomHTTPTransport()
 
 	return &azureObjects{
 		client: c.GetBlobService(),
@@ -270,7 +278,7 @@ func (a *azureObjects) ListObjects(bucket, prefix, marker, delimiter string, max
 			Name:            object.Name,
 			ModTime:         t,
 			Size:            object.Properties.ContentLength,
-			ETag:            canonicalizeETag(object.Properties.Etag),
+			ETag:            azureToS3ETag(object.Properties.Etag),
 			ContentType:     object.Properties.ContentType,
 			ContentEncoding: object.Properties.ContentEncoding,
 		})
@@ -305,7 +313,7 @@ func (a *azureObjects) ListObjectsV2(bucket, prefix, continuationToken string, f
 			Name:            object.Name,
 			ModTime:         t,
 			Size:            object.Properties.ContentLength,
-			ETag:            canonicalizeETag(object.Properties.Etag),
+			ETag:            azureToS3ETag(object.Properties.Etag),
 			ContentType:     object.Properties.ContentType,
 			ContentEncoding: object.Properties.ContentEncoding,
 		})
@@ -368,7 +376,7 @@ func (a *azureObjects) GetObjectInfo(bucket, object string) (objInfo ObjectInfo,
 	objInfo = ObjectInfo{
 		Bucket:      bucket,
 		UserDefined: meta,
-		ETag:        canonicalizeETag(prop.Etag),
+		ETag:        azureToS3ETag(prop.Etag),
 		ModTime:     t,
 		Name:        object,
 		Size:        prop.ContentLength,
@@ -731,7 +739,7 @@ func (a *azureObjects) GetBucketPolicies(bucket string) (policy.BucketAccessPoli
 	}
 	switch perm.AccessType {
 	case storage.ContainerAccessTypePrivate:
-		// Do nothing
+		return policy.BucketAccessPolicy{}, traceError(PolicyNotFound{Bucket: bucket})
 	case storage.ContainerAccessTypeContainer:
 		policyInfo.Statements = policy.SetPolicy(policyInfo.Statements, policy.BucketPolicyReadOnly, bucket, "")
 	default:

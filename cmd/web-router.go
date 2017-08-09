@@ -83,6 +83,9 @@ func registerWebRouter(mux *router.Router) error {
 	// RPC handler at URI - /minio/webrpc
 	webBrowserRouter.Methods("POST").Path("/webrpc").Handler(webRPC)
 	webBrowserRouter.Methods("PUT").Path("/upload/{bucket}/{object:.+}").HandlerFunc(web.Upload)
+
+	// These methods use short-expiry tokens in the URLs. These tokens may unintentionally
+	// be logged, so a new one must be generated for each request.
 	webBrowserRouter.Methods("GET").Path("/download/{bucket}/{object:.+}").Queries("token", "{token:.*}").HandlerFunc(web.Download)
 	webBrowserRouter.Methods("POST").Path("/zip").Queries("token", "{token:.*}").HandlerFunc(web.DownloadZip)
 

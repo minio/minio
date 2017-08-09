@@ -16,3 +16,4 @@ release
 .DS_Store
 *.syso
 coverage.txt
+settings.json

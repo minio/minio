@@ -130,6 +130,7 @@ func newS3Gateway(host string) (GatewayLayer, error) {
 	if err != nil {
 		return nil, err
 	}
+	anonClient.SetCustomTransport(newCustomHTTPTransport())
 
 	return &s3Objects{
 		Client:     client,

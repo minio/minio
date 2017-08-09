@@ -97,14 +97,15 @@ func TestHealFormatXL(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// One disk is not found, heal corrupted disks should return nil
+	// One disk is not found, heal corrupted disks should return
+	// error for offline disk
 	obj, _, err = initObjectLayer(mustGetNewEndpointList(fsDirs...))
 	if err != nil {
 		t.Fatal(err)
 	}
 	xl = obj.(*xlObjects)
 	xl.storageDisks[0] = nil
-	if err = healFormatXL(xl.storageDisks); err != nil {
+	if err = healFormatXL(xl.storageDisks); err != nil && err.Error() != "cannot proceed with heal as some disks are offline" {
 		t.Fatal("Got an unexpected error: ", err)
 	}
 	removeRoots(fsDirs)
@@ -193,7 +194,37 @@ func TestHealFormatXL(t *testing.T) {
 		t.Fatal("storage disk is not *retryStorage type")
 	}
 	xl.storageDisks[3] = newNaughtyDisk(posixDisk, nil, errDiskNotFound)
-	expectedErr := fmt.Errorf("Unable to initialize format %s and %s", errSomeDiskOffline, errSomeDiskUnformatted)
+	expectedErr := fmt.Errorf("cannot proceed with heal as %s", errSomeDiskOffline)
+	if err = healFormatXL(xl.storageDisks); err != nil {
+		if err.Error() != expectedErr.Error() {
+			t.Fatal("Got an unexpected error: ", err)
+		}
+	}
+	removeRoots(fsDirs)
+
+	fsDirs, err = getRandomDisks(nDisks)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// One disk has access denied error, heal should return
+	// appropriate error
+	obj, _, err = initObjectLayer(mustGetNewEndpointList(fsDirs...))
+	if err != nil {
+		t.Fatal(err)
+	}
+	xl = obj.(*xlObjects)
+	for i := 0; i <= 2; i++ {
+		if err = xl.storageDisks[i].DeleteFile(minioMetaBucket, formatConfigFile); err != nil {
+			t.Fatal(err)
+		}
+	}
+	posixDisk, ok = xl.storageDisks[3].(*retryStorage)
+	if !ok {
+		t.Fatal("storage disk is not *retryStorage type")
+	}
+	xl.storageDisks[3] = newNaughtyDisk(posixDisk, nil, errDiskAccessDenied)
+	expectedErr = fmt.Errorf("cannot proceed with heal as some disks had unhandled errors")
 	if err = healFormatXL(xl.storageDisks); err != nil {
 		if err.Error() != expectedErr.Error() {
 			t.Fatal("Got an unexpected error: ", err)

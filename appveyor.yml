@@ -11,12 +11,12 @@ clone_folder: c:\gopath\src\github.com\minio\minio
 
 # Environment variables
 environment:
-  GOROOT: c:\go17
+  GOVERSION: 1.8.3
   GOPATH: c:\gopath
 
 # scripts that run after cloning repository
 install:
-  - set PATH=%GOPATH%\bin;c:\go17\bin;%PATH%
+  - set PATH=%GOPATH%\bin;c:\go\bin;%PATH%
   - go version
   - go env
   - python --version

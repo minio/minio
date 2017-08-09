@@ -24,7 +24,4 @@ var (
 
 	// Project ID not found
 	errGCSProjectIDNotFound = errors.New("unknown project id")
-
-	// Multipart identifier is not in the correct form.
-	errGCSNotValidMultipartIdentifier = errors.New("Not a valid multipart identifier")
 )

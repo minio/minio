@@ -127,7 +127,7 @@ func (api gatewayAPIHandlers) GetObjectHandler(w http.ResponseWriter, r *http.Re
 			setObjectHeaders(w, objInfo, hrange)
 
 			// Set any additional requested response headers.
-			setGetRespHeaders(w, r.URL.Query())
+			setHeadGetRespHeaders(w, r.URL.Query())
 
 			dataWritten = true
 		}
@@ -231,7 +231,12 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	// Extract metadata to be saved from incoming HTTP header.
-	metadata := extractMetadataFromHeader(r.Header)
+	metadata, err := extractMetadataFromHeader(r.Header)
+	if err != nil {
+		errorIf(err, "found invalid http request header")
+		writeErrorResponse(w, ErrInternalError, r.URL)
+		return
+	}
 	if reqAuthType == authTypeStreamingSigned {
 		if contentEncoding, ok := metadata["content-encoding"]; ok {
 			contentEncoding = trimAwsChunkedContentEncoding(contentEncoding)
@@ -395,6 +400,9 @@ func (api gatewayAPIHandlers) HeadObjectHandler(w http.ResponseWriter, r *http.R
 
 	// Set standard object headers.
 	setObjectHeaders(w, objInfo, nil)
+
+	// Set any additional requested response headers.
+	setHeadGetRespHeaders(w, r.URL.Query())
 
 	// Successful response.
 	w.WriteHeader(http.StatusOK)

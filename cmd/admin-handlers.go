@@ -181,8 +181,14 @@ func (adminAPI adminAPIHandlers) ServiceCredentialsHandler(w http.ResponseWriter
 	}
 
 	// Update local credentials in memory.
-	serverConfig.SetCredential(creds)
+	prevCred := serverConfig.SetCredential(creds)
+
+	// Save credentials to config file
 	if err = serverConfig.Save(); err != nil {
+		// Save the current creds when failed to update.
+		serverConfig.SetCredential(prevCred)
+
+		errorIf(err, "Unable to update the config with new credentials.")
 		writeErrorResponse(w, ErrInternalError, r.URL)
 		return
 	}

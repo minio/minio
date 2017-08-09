@@ -34,6 +34,9 @@ const (
 
 	// Inter-node JWT token expiry is 100 years approx.
 	defaultInterNodeJWTExpiry = 100 * 365 * 24 * time.Hour
+
+	// URL JWT token expiry is one minute (might be exposed).
+	defaultURLJWTExpiry = time.Minute
 )
 
 var (
@@ -75,6 +78,10 @@ func authenticateNode(accessKey, secretKey string) (string, error) {
 
 func authenticateWeb(accessKey, secretKey string) (string, error) {
 	return authenticateJWT(accessKey, secretKey, defaultJWTExpiry)
+}
+
+func authenticateURL(accessKey, secretKey string) (string, error) {
+	return authenticateJWT(accessKey, secretKey, defaultURLJWTExpiry)
 }
 
 func keyFuncCallback(jwtToken *jwtgo.Token) (interface{}, error) {
