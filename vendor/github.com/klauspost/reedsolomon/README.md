@@ -81,6 +81,17 @@ To indicate missing data, you set the shard to nil before calling `Reconstruct()
 ```
 The missing data and parity shards will be recreated. If more than 3 shards are missing, the reconstruction will fail.
 
+If you are only interested in the data shards (for reading purposes) you can call `ReconstructData()`:
+
+```Go
+    // Delete two data shards
+    data[3] = nil
+    data[7] = nil
+    
+    // Reconstruct just the missing data shards
+    err := enc.ReconstructData(data)
+```
+
 So to sum up reconstruction:
 * The number of data/parity shards must match the numbers used for encoding.
 * The order of shards must be the same as used when encoding.
@@ -101,7 +112,7 @@ You might have a large slice of data. To help you split this, there are some hel
 ```
 This will split the file into the number of data shards set when creating the encoder and create empty parity shards. 
 
-An important thing to note is that you have to *keep track of the exact input size*. If the size of the input isn't diviable by the number of data shards, extra zeros will be inserted in the last shard.
+An important thing to note is that you have to *keep track of the exact input size*. If the size of the input isn't divisible by the number of data shards, extra zeros will be inserted in the last shard.
 
 To join a data set, use the `Join()` function, which will join the shards and write it to the `io.Writer` you supply: 
 ```Go
@@ -153,7 +164,7 @@ This also means that you can divide big input up into smaller blocks, and do rec
 
 # Streaming API
 
-There has been added a fully streaming API, to help perform fully streaming operations, which enables you to do the same operations, but on streams. To use the stream API, use [`NewStream`](https://godoc.org/github.com/klauspost/reedsolomon#NewStream) function to create the encoding/decoding interfaces. You can use [`NewStreamC`](https://godoc.org/github.com/klauspost/reedsolomon#NewStreamC) to ready an interface that reads/writes concurrently from the streams.
+There has been added support for a streaming API, to help perform fully streaming operations, which enables you to do the same operations, but on streams. To use the stream API, use [`NewStream`](https://godoc.org/github.com/klauspost/reedsolomon#NewStream) function to create the encoding/decoding interfaces. You can use [`NewStreamC`](https://godoc.org/github.com/klauspost/reedsolomon#NewStreamC) to ready an interface that reads/writes concurrently from the streams.
 
 Input is delivered as `[]io.Reader`, output as `[]io.Writer`, and functionality corresponds to the in-memory API. Each stream must supply the same amount of data, similar to how each slice must be similar size with the in-memory API. 
 If an error occurs in relation to a stream, a [`StreamReadError`](https://godoc.org/github.com/klauspost/reedsolomon#StreamReadError) or [`StreamWriteError`](https://godoc.org/github.com/klauspost/reedsolomon#StreamWriteError) will help you determine which stream was the offender.
@@ -161,6 +172,18 @@ If an error occurs in relation to a stream, a [`StreamReadError`](https://godoc.
 There is no buffering or timeouts/retry specified. If you want to add that, you need to add it to the Reader/Writer.
 
 For complete examples of a streaming encoder and decoder see the [examples folder](https://github.com/klauspost/reedsolomon/tree/master/examples).
+
+#Advanced Options
+
+You can modify internal options which affects how jobs are split between and processed by goroutines.
+
+To create options, use the WithXXX functions. You can supply options to `New`, `NewStream` and `NewStreamC`. If no Options are supplied, default options are used.
+
+Example of how to supply options:
+
+ ```Go
+     enc, err := reedsolomon.New(10, 3, WithMaxGoroutines(25))
+ ```
 
 
 # Performance
@@ -185,6 +208,18 @@ Example of performance scaling on Intel(R) Core(TM) i7-2600 CPU @ 3.40GHz - 4 ph
 | 2       | 2339,78 | 172%  |
 | 4       | 3179,33 | 235%  |
 | 8       | 4346,18 | 321%  |
+
+Benchmarking `Reconstruct()` followed by a `Verify()` (=`all`) versus just calling `ReconstructData()` (=`data`) gives the following result:
+```
+benchmark                            all MB/s     data MB/s    speedup
+BenchmarkReconstruct10x2x10000-8     2011.67      10530.10     5.23x
+BenchmarkReconstruct50x5x50000-8     4585.41      14301.60     3.12x
+BenchmarkReconstruct10x2x1M-8        8081.15      28216.41     3.49x
+BenchmarkReconstruct5x2x1M-8         5780.07      28015.37     4.85x
+BenchmarkReconstruct10x4x1M-8        4352.56      14367.61     3.30x
+BenchmarkReconstruct50x20x1M-8       1364.35      4189.79      3.07x
+BenchmarkReconstruct10x4x16M-8       1484.35      5779.53      3.89x
+```
 
 # asm2plan9s
 
