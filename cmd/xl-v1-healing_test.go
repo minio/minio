@@ -19,6 +19,7 @@ package cmd
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -29,7 +30,7 @@ func TestHealFormatXL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer removeAll(root)
+	defer os.RemoveAll(root)
 
 	nDisks := 16
 	fsDirs, err := getRandomDisks(nDisks)
@@ -263,7 +264,7 @@ func TestUndoMakeBucket(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer removeAll(root)
+	defer os.RemoveAll(root)
 
 	nDisks := 16
 	fsDirs, err := getRandomDisks(nDisks)
@@ -303,7 +304,7 @@ func TestQuickHeal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer removeAll(root)
+	defer os.RemoveAll(root)
 
 	nDisks := 16
 	fsDirs, err := getRandomDisks(nDisks)
@@ -398,7 +399,7 @@ func TestListBucketsHeal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer removeAll(root)
+	defer os.RemoveAll(root)
 
 	nDisks := 16
 	fsDirs, err := getRandomDisks(nDisks)
@@ -456,7 +457,7 @@ func TestHealObjectXL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer removeAll(root)
+	defer os.RemoveAll(root)
 
 	nDisks := 16
 	fsDirs, err := getRandomDisks(nDisks)

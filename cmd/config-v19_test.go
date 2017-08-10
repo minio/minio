@@ -32,7 +32,7 @@ func TestServerConfig(t *testing.T) {
 		t.Fatalf("Init Test config failed")
 	}
 	// remove the root directory after the test ends.
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 
 	if serverConfig.GetRegion() != globalMinioDefaultRegion {
 		t.Errorf("Expecting region `us-east-1` found %s", serverConfig.GetRegion())
@@ -166,7 +166,7 @@ func TestServerConfigWithEnvs(t *testing.T) {
 	initConfig()
 
 	// remove the root directory after the test ends.
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 
 	// Check if serverConfig has
 	if serverConfig.GetBrowser() {
@@ -227,7 +227,7 @@ func TestValidateConfig(t *testing.T) {
 	}
 
 	// remove the root directory after the test ends.
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 
 	configPath := filepath.Join(rootPath, minioConfigFile)
 

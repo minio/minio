@@ -19,6 +19,7 @@ package cmd
 import (
 	"fmt"
 	"io/ioutil"
+	"os"
 	"reflect"
 	"sort"
 	"testing"
@@ -190,7 +191,7 @@ func TestTreeWalk(t *testing.T) {
 	testTreeWalkPrefix(t, listDir, isLeaf)
 	// Simple test when marker is set.
 	testTreeWalkMarker(t, listDir, isLeaf)
-	err = removeAll(fsDir)
+	err = os.RemoveAll(fsDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -258,7 +259,7 @@ func TestTreeWalkTimeout(t *testing.T) {
 	if ok {
 		t.Error("Tree-walk go routine has not exited after timeout.")
 	}
-	err = removeAll(fsDir)
+	err = os.RemoveAll(fsDir)
 	if err != nil {
 		t.Error(err)
 	}
@@ -319,7 +320,7 @@ func TestListDir(t *testing.T) {
 	}
 
 	// Remove fsDir1 to test failover.
-	err = removeAll(fsDir1)
+	err = os.RemoveAll(fsDir1)
 	if err != nil {
 		t.Error(err)
 	}
@@ -335,7 +336,7 @@ func TestListDir(t *testing.T) {
 	if entries[0] != file2 {
 		t.Fatal("Expected the entry to be file2")
 	}
-	err = removeAll(fsDir2)
+	err = os.RemoveAll(fsDir2)
 	if err != nil {
 		t.Error(err)
 	}
@@ -451,7 +452,7 @@ func TestRecursiveTreeWalk(t *testing.T) {
 			}
 		}
 	}
-	err = removeAll(fsDir1)
+	err = os.RemoveAll(fsDir1)
 	if err != nil {
 		t.Error(err)
 	}
@@ -526,7 +527,7 @@ func TestSortedness(t *testing.T) {
 	}
 
 	// Remove directory created for testing
-	err = removeAll(fsDir1)
+	err = os.RemoveAll(fsDir1)
 	if err != nil {
 		t.Error(err)
 	}
@@ -601,7 +602,7 @@ func TestTreeWalkIsEnd(t *testing.T) {
 	}
 
 	// Remove directory created for testing
-	err = removeAll(fsDir1)
+	err = os.RemoveAll(fsDir1)
 	if err != nil {
 		t.Error(err)
 	}

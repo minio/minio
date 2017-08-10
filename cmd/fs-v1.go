@@ -62,17 +62,17 @@ func initMetaVolumeFS(fsPath, fsUUID string) error {
 	// optimizing all other calls. Create minio meta volume,
 	// if it doesn't exist yet.
 	metaBucketPath := pathJoin(fsPath, minioMetaBucket)
-	if err := mkdirAll(metaBucketPath, 0777); err != nil {
+	if err := os.MkdirAll(metaBucketPath, 0777); err != nil {
 		return err
 	}
 
 	metaTmpPath := pathJoin(fsPath, minioMetaTmpBucket, fsUUID)
-	if err := mkdirAll(metaTmpPath, 0777); err != nil {
+	if err := os.MkdirAll(metaTmpPath, 0777); err != nil {
 		return err
 	}
 
 	metaMultipartPath := pathJoin(fsPath, minioMetaMultipartBucket)
-	return mkdirAll(metaMultipartPath, 0777)
+	return os.MkdirAll(metaMultipartPath, 0777)
 
 }
 
@@ -89,7 +89,7 @@ func newFSObjectLayer(fsPath string) (ObjectLayer, error) {
 		return nil, err
 	}
 
-	fi, err := osStat(preparePath(fsPath))
+	fi, err := osStat((fsPath))
 	if err == nil {
 		if !fi.IsDir() {
 			return nil, syscall.ENOTDIR
@@ -97,13 +97,13 @@ func newFSObjectLayer(fsPath string) (ObjectLayer, error) {
 	}
 	if os.IsNotExist(err) {
 		// Disk not found create it.
-		err = mkdirAll(fsPath, 0777)
+		err = os.MkdirAll(fsPath, 0777)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	di, err := getDiskInfo(preparePath(fsPath))
+	di, err := getDiskInfo((fsPath))
 	if err != nil {
 		return nil, err
 	}
@@ -174,7 +174,7 @@ func (fs fsObjects) Shutdown() error {
 
 // StorageInfo - returns underlying storage statistics.
 func (fs fsObjects) StorageInfo() StorageInfo {
-	info, err := getDiskInfo(preparePath(fs.fsPath))
+	info, err := getDiskInfo((fs.fsPath))
 	errorIf(err, "Unable to get disk info %#v", fs.fsPath)
 	storageInfo := StorageInfo{
 		Total: info.Total,
@@ -247,7 +247,7 @@ func (fs fsObjects) ListBuckets() ([]BucketInfo, error) {
 		return nil, traceError(err)
 	}
 	var bucketInfos []BucketInfo
-	entries, err := readDir(preparePath(fs.fsPath))
+	entries, err := readDir((fs.fsPath))
 	if err != nil {
 		return nil, toObjectErr(traceError(errDiskNotFound))
 	}

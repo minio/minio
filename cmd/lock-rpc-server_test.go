@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"os"
 	"runtime"
 	"sync"
 	"testing"
@@ -76,7 +77,7 @@ func createLockTestServer(t *testing.T) (string, *lockServer, string) {
 // Test Lock functionality
 func TestLockRpcServerLock(t *testing.T) {
 	testPath, locker, token := createLockTestServer(t)
-	defer removeAll(testPath)
+	defer os.RemoveAll(testPath)
 
 	la := newLockArgs(dsync.LockArgs{
 		UID:             "0123-4567",
@@ -132,7 +133,7 @@ func TestLockRpcServerLock(t *testing.T) {
 // Test Unlock functionality
 func TestLockRpcServerUnlock(t *testing.T) {
 	testPath, locker, token := createLockTestServer(t)
-	defer removeAll(testPath)
+	defer os.RemoveAll(testPath)
 
 	la := newLockArgs(dsync.LockArgs{
 		UID:             "0123-4567",
@@ -177,7 +178,7 @@ func TestLockRpcServerUnlock(t *testing.T) {
 // Test RLock functionality
 func TestLockRpcServerRLock(t *testing.T) {
 	testPath, locker, token := createLockTestServer(t)
-	defer removeAll(testPath)
+	defer os.RemoveAll(testPath)
 
 	la := newLockArgs(dsync.LockArgs{
 		UID:             "0123-4567",
@@ -233,7 +234,7 @@ func TestLockRpcServerRLock(t *testing.T) {
 // Test RUnlock functionality
 func TestLockRpcServerRUnlock(t *testing.T) {
 	testPath, locker, token := createLockTestServer(t)
-	defer removeAll(testPath)
+	defer os.RemoveAll(testPath)
 
 	la := newLockArgs(dsync.LockArgs{
 		UID:             "0123-4567",
@@ -319,7 +320,7 @@ func TestLockRpcServerRUnlock(t *testing.T) {
 // Test ForceUnlock functionality
 func TestLockRpcServerForceUnlock(t *testing.T) {
 	testPath, locker, token := createLockTestServer(t)
-	defer removeAll(testPath)
+	defer os.RemoveAll(testPath)
 
 	laForce := newLockArgs(dsync.LockArgs{
 		UID:             "1234-5678",
@@ -383,7 +384,7 @@ func TestLockRpcServerForceUnlock(t *testing.T) {
 // Test Expired functionality
 func TestLockRpcServerExpired(t *testing.T) {
 	testPath, locker, token := createLockTestServer(t)
-	defer removeAll(testPath)
+	defer os.RemoveAll(testPath)
 
 	la := newLockArgs(dsync.LockArgs{
 		UID:             "0123-4567",
@@ -433,7 +434,7 @@ func TestLockServers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Init Test config failed")
 	}
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 
 	currentIsDistXL := globalIsDistXL
 	defer func() {

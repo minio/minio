@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"testing"
 	"time"
 )
@@ -95,7 +96,7 @@ func TestDoesPresignedSignatureMatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 
 	// sha256 hash of "payload"
 	payloadSHA256 := "239f59ed55e737c77147cf55ad0c1b030b6d7ee748a7426952f9b852d5a935e5"

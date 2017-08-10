@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"os"
 	"testing"
 )
 
@@ -30,7 +31,7 @@ func testAdminCmd(cmd cmdType, t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create test config - %v", err)
 	}
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 
 	adminServer := adminCmd{}
 	creds := serverConfig.GetCredential()
@@ -75,7 +76,7 @@ func TestReInitDisks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unable to initialize server config. %s", err)
 	}
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 
 	// Initializing objectLayer for HealFormatHandler.
 	_, xlDirs, xlErr := initTestXLObjLayer()
@@ -149,7 +150,7 @@ func TestGetConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unable to initialize server config. %s", err)
 	}
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 
 	adminServer := adminCmd{}
 	creds := serverConfig.GetCredential()
@@ -193,7 +194,7 @@ func TestWriteAndCommitConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unable to initialize server config. %s", err)
 	}
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 
 	adminServer := adminCmd{}
 	creds := serverConfig.GetCredential()

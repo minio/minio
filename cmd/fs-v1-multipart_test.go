@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bytes"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -26,7 +27,7 @@ import (
 func TestFSCleanupMultipartUploadsInRoutine(t *testing.T) {
 	// Prepare for tests
 	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
-	defer removeAll(disk)
+	defer os.RemoveAll(disk)
 
 	obj := initFSObjects(disk, t)
 	fs := obj.(*fsObjects)
@@ -66,7 +67,7 @@ func TestFSCleanupMultipartUploadsInRoutine(t *testing.T) {
 func TestFSCleanupMultipartUpload(t *testing.T) {
 	// Prepare for tests
 	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
-	defer removeAll(disk)
+	defer os.RemoveAll(disk)
 
 	obj := initFSObjects(disk, t)
 	fs := obj.(*fsObjects)
@@ -103,7 +104,7 @@ func TestFSCleanupMultipartUpload(t *testing.T) {
 func TestFSWriteUploadJSON(t *testing.T) {
 	// Prepare for tests
 	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
-	defer removeAll(disk)
+	defer os.RemoveAll(disk)
 
 	obj := initFSObjects(disk, t)
 	fs := obj.(*fsObjects)
@@ -131,7 +132,7 @@ func TestFSWriteUploadJSON(t *testing.T) {
 func TestNewMultipartUploadFaultyDisk(t *testing.T) {
 	// Prepare for tests
 	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
-	defer removeAll(disk)
+	defer os.RemoveAll(disk)
 	obj := initFSObjects(disk, t)
 
 	fs := obj.(*fsObjects)
@@ -157,11 +158,11 @@ func TestPutObjectPartFaultyDisk(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer removeAll(root)
+	defer os.RemoveAll(root)
 
 	// Prepare for tests
 	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
-	defer removeAll(disk)
+	defer os.RemoveAll(disk)
 	obj := initFSObjects(disk, t)
 	fs := obj.(*fsObjects)
 	bucketName := "bucket"
@@ -192,7 +193,7 @@ func TestPutObjectPartFaultyDisk(t *testing.T) {
 func TestCompleteMultipartUploadFaultyDisk(t *testing.T) {
 	// Prepare for tests
 	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
-	defer removeAll(disk)
+	defer os.RemoveAll(disk)
 	obj := initFSObjects(disk, t)
 
 	fs := obj.(*fsObjects)
@@ -230,7 +231,7 @@ func TestCompleteMultipartUploadFaultyDisk(t *testing.T) {
 func TestListMultipartUploadsFaultyDisk(t *testing.T) {
 	// Prepare for tests
 	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
-	defer removeAll(disk)
+	defer os.RemoveAll(disk)
 
 	obj := initFSObjects(disk, t)
 

@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bytes"
+	"os"
 	"testing"
 )
 
@@ -189,7 +190,7 @@ type erasureTestSetup struct {
 // Removes the temporary disk directories.
 func (e erasureTestSetup) Remove() {
 	for _, path := range e.diskPaths {
-		removeAll(path)
+		os.RemoveAll(path)
 	}
 }
 

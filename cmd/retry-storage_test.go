@@ -21,6 +21,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -32,7 +33,7 @@ func TestRetryStorage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer removeAll(root)
+	defer os.RemoveAll(root)
 
 	originalStorageDisks, disks := prepareXLStorageDisks(t)
 	defer removeRoots(disks)

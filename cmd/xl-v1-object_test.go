@@ -269,7 +269,7 @@ func TestHealing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to initialize test config %v", err)
 	}
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 
 	obj, fsDirs, err := prepareXL()
 	if err != nil {

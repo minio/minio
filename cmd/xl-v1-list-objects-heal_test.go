@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bytes"
+	"os"
 	"path"
 	"path/filepath"
 	"strconv"
@@ -34,7 +35,7 @@ func TestListObjectsHeal(t *testing.T) {
 		t.Fatalf("Init Test config failed")
 	}
 	// remove the root directory after the test ends.
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 
 	// Create an instance of xl backend
 	xl, fsDirs, err := prepareXL()
@@ -151,7 +152,7 @@ func TestListUploadsHeal(t *testing.T) {
 		t.Fatalf("Init Test config failed")
 	}
 	// Remove config directory after the test ends.
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 
 	// Create an instance of XL backend.
 	xl, fsDirs, err := prepareXL()

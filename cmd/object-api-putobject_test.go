@@ -204,7 +204,7 @@ func testObjectAPIPutObjectDiskNotFound(obj ObjectLayer, instanceType string, di
 
 	// Take 8 disks down, one more we loose quorum on 16 disk node.
 	for _, disk := range disks[:7] {
-		removeAll(disk)
+		os.RemoveAll(disk)
 	}
 
 	testCases := []struct {
@@ -253,7 +253,7 @@ func testObjectAPIPutObjectDiskNotFound(obj ObjectLayer, instanceType string, di
 	}
 
 	// This causes quorum failure verify.
-	removeAll(disks[len(disks)-1])
+	os.RemoveAll(disks[len(disks)-1])
 
 	// Validate the last test.
 	testCase := struct {

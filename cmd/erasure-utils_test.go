@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"os"
 	"testing"
 )
 
@@ -74,7 +75,7 @@ func TestCopyBuffer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unable to create posix test setup, %s", err)
 	}
-	defer removeAll(diskPath)
+	defer os.RemoveAll(diskPath)
 
 	volume := "success-vol"
 	// Setup test environment.

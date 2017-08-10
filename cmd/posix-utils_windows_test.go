@@ -21,7 +21,6 @@ package cmd
 import (
 	"bytes"
 	"os"
-	"strings"
 	"testing"
 )
 
@@ -103,34 +102,5 @@ func TestUNCPathENOTDIR(t *testing.T) {
 	err = fs.AppendFile("voldir", "/file/obj1", []byte("hello"))
 	if err != errFileAccessDenied {
 		t.Errorf("expected: %s, got: %s", errFileAccessDenied, err)
-	}
-}
-
-// Test to validate 32k path works on windows platform
-func Test32kUNCPath(t *testing.T) {
-	var err error
-	// The following calculation was derived empirically. It is not exactly MAX_PATH - len(longDiskName)
-	// possibly due to expansion rules as mentioned here -
-	// https://msdn.microsoft.com/en-us/library/windows/desktop/aa365247(v=vs.85).aspx#maxpath
-	var longPathName string
-	for {
-		compt := strings.Repeat("a", 255)
-		if len(compt)+len(longPathName)+1 > 32767 {
-			break
-		}
-		longPathName = longPathName + `\` + compt
-	}
-	longPathName = "C:" + longPathName
-	err = mkdirAll(longPathName, 0777)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Cleanup on exit of test
-	defer removeAll(longPathName)
-
-	_, err = newPosix(longPathName)
-	if err != nil {
-		t.Fatal(err)
 	}
 }
