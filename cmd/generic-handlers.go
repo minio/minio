@@ -18,9 +18,16 @@ package cmd
 
 import (
 	"bufio"
+	"fmt"
+	"io"
 	"net"
 	"net/http"
+	"net/http/httptest"
+	"net/http/httputil"
+	"os"
+	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
@@ -524,4 +531,75 @@ func (h pathValidityHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	h.handler.ServeHTTP(w, r)
+}
+
+// logginHandler logs all HTTP requests and responses
+// and write the log to a io.Writer object.
+type loggingHandler struct {
+	writer    io.Writer
+	writeLock sync.Mutex
+	handler   http.Handler
+}
+
+func (h loggingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Time that will be printed in log
+	const timeFormat = "2006-01-02 15:04:05 -0700"
+	// Generate short random request ID
+	reqID := fmt.Sprintf("%X", time.Now().UnixNano()%1e8)
+	// Log HTTP request
+	requestDump, err := httputil.DumpRequest(r, false)
+	if err == nil {
+		reqBanner := fmt.Sprintf("[%s] [%s] >> ", reqID, time.Now().Format(timeFormat))
+		h.writeLock.Lock()
+		h.writer.Write([]byte(reqBanner))
+		h.writer.Write(requestDump)
+		h.writer.Write([]byte("\n"))
+		h.writeLock.Unlock()
+	} else {
+		errorIf(err, "Cannot dump HTTP request")
+	}
+
+	// Setup a http recorder to save HTTP response
+	rec := httptest.NewRecorder()
+	h.handler.ServeHTTP(rec, r)
+
+	// Log HTTP Response
+	respDump, err := httputil.DumpResponse(rec.Result(), false)
+	if err == nil {
+		respBanner := fmt.Sprintf("[%s] [%s] << ", reqID, time.Now().Format(timeFormat))
+		h.writeLock.Lock()
+		h.writer.Write([]byte(respBanner))
+		h.writer.Write(respDump)
+		h.writer.Write([]byte("\n\n"))
+		h.writeLock.Unlock()
+	} else {
+		errorIf(err, "Cannot dump HTTP response")
+	}
+
+	// We copy the captured response headers to our new response
+	for k, v := range rec.Header() {
+		w.Header()[k] = v
+	}
+
+	// Grab the captured response body
+	w.WriteHeader(rec.Code)
+	w.Write(rec.Body.Bytes())
+}
+
+// Enable HTTP requests and responses logging handler
+func setLoggingHandler(h http.Handler) http.Handler {
+	if globalHTTPTraceDir == "" {
+		// Do nothing if no MINIO_TRACE_DIR is not set
+		return h
+	}
+	// Create the log file
+	logFile, err := os.Create(filepath.Join(globalHTTPTraceDir, "minio-"+time.Now().Format("2006-01-02T15:04:05")+".log"))
+	if err != nil {
+		errorIf(err, "Cannot create the log file")
+		return h
+	}
+	return loggingHandler{
+		writer:  logFile,
+		handler: h,
+	}
 }

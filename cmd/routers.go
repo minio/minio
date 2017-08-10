@@ -115,6 +115,11 @@ func configureServerHandler(endpoints EndpointList) (http.Handler, error) {
 		// Add new handlers here.
 	}
 
+	// Add HTTP requests/responses logging handler when ENV is et
+	if globalHTTPTraceDir != "" {
+		handlerFns = append(handlerFns, setLoggingHandler)
+	}
+
 	// Register rest of the handlers.
 	return registerHandlers(mux, handlerFns...), nil
 }
