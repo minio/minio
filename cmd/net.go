@@ -153,6 +153,15 @@ func getAPIEndpoints(serverAddr string) (apiEndpoints []string) {
 	return apiEndpoints
 }
 
+// isHostIPv4 - helper for validating if the provided arg is an ip address.
+func isHostIPv4(ipAddress string) bool {
+	host, _, err := net.SplitHostPort(ipAddress)
+	if err != nil {
+		host = ipAddress
+	}
+	return net.ParseIP(host) != nil
+}
+
 // checkPortAvailability - check if given port is already in use.
 // Note: The check method tries to listen on given port and closes it.
 // It is possible to have a disconnected client in this tiny window of time.
