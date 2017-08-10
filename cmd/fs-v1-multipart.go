@@ -32,8 +32,10 @@ import (
 )
 
 const (
-	fsMultipartExpiry        = time.Hour * 24 * 14
-	fsMultipartCleanupPeriod = time.Hour * 24
+	// Expiry duration after which the multipart uploads are deemed stale.
+	fsMultipartExpiry = time.Hour * 24 * 14 // 2 weeks.
+	// Cleanup interval when the stale multipart cleanup is initiated.
+	fsMultipartCleanupInterval = time.Hour * 24 // 24 hrs.
 )
 
 // Returns if the prefix is a multipart upload.
@@ -937,33 +939,32 @@ func (fs fsObjects) AbortMultipartUpload(bucket, object, uploadID string) error 
 	return nil
 }
 
-// Remove multipart uploads left unattended in a given bucket older than `fsMultipartExpiry`
-func (fs fsObjects) cleanupStaleMultipartUpload(bucket string) (err error) {
+// Removes multipart uploads if any older than `expiry` duration in a given bucket.
+func (fs fsObjects) cleanupStaleMultipartUpload(bucket string, expiry time.Duration) (err error) {
 	var lmi ListMultipartsInfo
-
+	var st os.FileInfo
 	for {
 		// List multipart uploads in a bucket 1000 at a time
 		prefix := ""
 		lmi, err = fs.listMultipartUploadsHelper(bucket, prefix, lmi.KeyMarker, lmi.UploadIDMarker, slashSeparator, 1000)
 		if err != nil {
-			errorIf(err, fmt.Sprintf("Failed to list uploads of %s for cleaning up of multipart uploads older than %d weeks", bucket, fsMultipartExpiry))
+			errorIf(err, "Unable to list uploads")
 			return err
 		}
 
-		// Remove uploads (and its parts) older than 2 weeks
+		// Remove uploads (and its parts) older than expiry duration.
 		for _, upload := range lmi.Uploads {
 			uploadIDPath := pathJoin(fs.fsPath, minioMetaMultipartBucket, bucket, upload.Object, upload.UploadID)
-			st, err := fsStatDir(uploadIDPath)
-			if err != nil {
-				errorIf(err, "Failed to stat uploads directory", uploadIDPath)
-				return err
+			if st, err = fsStatDir(uploadIDPath); err != nil {
+				errorIf(err, "Failed to lookup uploads directory path %s", uploadIDPath)
+				continue
 			}
-			if time.Since(st.ModTime()) > fsMultipartExpiry {
+			if time.Since(st.ModTime()) > expiry {
 				fs.AbortMultipartUpload(bucket, upload.Object, upload.UploadID)
 			}
 		}
 
-		// No more incomplete uploads remain
+		// No more incomplete uploads remain, break and return.
 		if !lmi.IsTruncated {
 			break
 		}
@@ -972,20 +973,26 @@ func (fs fsObjects) cleanupStaleMultipartUpload(bucket string) (err error) {
 	return nil
 }
 
-// Remove multipart uploads left unattended for more than `fsMultipartExpiry` seconds.
-func (fs fsObjects) cleanupStaleMultipartUploads() {
+// Removes multipart uploads if any older than `expiry` duration
+// on all buckets for every `cleanupInterval`, this function is
+// blocking and should be run in a go-routine.
+func (fs fsObjects) cleanupStaleMultipartUploads(cleanupInterval, expiry time.Duration, doneCh chan struct{}) {
+	timer := time.NewTimer(cleanupInterval)
 	for {
-		bucketInfos, err := fs.ListBuckets()
-		if err != nil {
-			errorIf(err, fmt.Sprintf("Failed to list buckets for cleaning up of multipart uploads older than %d weeks", fsMultipartExpiry))
+		select {
+		case <-doneCh:
+			// Stop the timer.
+			timer.Stop()
 			return
+		case <-timer.C:
+			bucketInfos, err := fs.ListBuckets()
+			if err != nil {
+				errorIf(err, "Unable to list buckets")
+				continue
+			}
+			for _, bucketInfo := range bucketInfos {
+				fs.cleanupStaleMultipartUpload(bucketInfo.Name, expiry)
+			}
 		}
-
-		for _, bucketInfo := range bucketInfos {
-			fs.cleanupStaleMultipartUpload(bucketInfo.Name)
-		}
-
-		// Schedule for the next multipart backend cleanup
-		time.Sleep(fsMultipartCleanupPeriod)
 	}
 }
