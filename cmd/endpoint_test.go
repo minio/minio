@@ -70,6 +70,7 @@ func TestNewEndpoint(t *testing.T) {
 		{"http://server:8080//", Endpoint{}, -1, fmt.Errorf("empty or root path is not supported in URL endpoint")},
 		{"http://server:8080/", Endpoint{}, -1, fmt.Errorf("empty or root path is not supported in URL endpoint")},
 		{"http://server/path", Endpoint{}, -1, fmt.Errorf("lookup server" + errMsg)},
+		{"192.168.1.210:9000", Endpoint{}, -1, fmt.Errorf("invalid URL endpoint format: missing scheme http or https")},
 	}
 
 	for _, testCase := range testCases {
@@ -122,6 +123,7 @@ func TestNewEndpointList(t *testing.T) {
 		{[]string{"ftp://server/d1", "http://server/d2", "http://server/d3", "http://server/d4"}, fmt.Errorf("'ftp://server/d1': invalid URL endpoint format")},
 		{[]string{"d1", "http://localhost/d2", "d3", "d4"}, fmt.Errorf("mixed style endpoints are not supported")},
 		{[]string{"http://example.org/d1", "https://example.com/d1", "http://example.net/d1", "https://example.edut/d1"}, fmt.Errorf("mixed scheme is not supported")},
+		{[]string{"192.168.1.210:9000/tmp/dir0", "192.168.1.210:9000/tmp/dir1", "192.168.1.210:9000/tmp/dir2", "192.168.110:9000/tmp/dir3"}, fmt.Errorf("'192.168.1.210:9000/tmp/dir0': invalid URL endpoint format: missing scheme http or https")},
 	}
 
 	for _, testCase := range testCases {
