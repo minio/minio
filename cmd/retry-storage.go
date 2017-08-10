@@ -295,9 +295,8 @@ func (f *retryStorage) reInit(e error) (err error) {
 			f.offline = true // Marking node offline
 			f.offlineTimestamp = UTCNow()
 			return errDiskNotFound
-		} else if e == errDiskNotFoundFromRPCShutdown {
-			// Ignore network errors due to RPC shutdown (and retry connection below)
 		}
+		// Continue for other errors like RPC shutdown (and retry connection below)
 	}
 
 	// Close the underlying connection.
