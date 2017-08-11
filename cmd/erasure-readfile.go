@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"errors"
 	"io"
 	"sync"
 
@@ -335,31 +334,5 @@ func decodeDataAndParity(enBlocks [][]byte, dataBlocks, parityBlocks int) error 
 	}
 
 	// Reconstruct encoded blocks.
-	err = rs.Reconstruct(enBlocks)
-	if err != nil {
-		return traceError(err)
-	}
-
-	// Verify correctness of all parity blocks.
-	ok, err := rs.Verify(enBlocks)
-	if err != nil {
-		return traceError(err)
-	}
-	if !ok {
-		// Verification of the parity blocks failed, this means one of two things:
-		// - either one (or more) of the data blocks is corrupted,
-		// - or one (or more) of the parity blocks is corrupted.
-		//
-		// Unfortunately it is not possible to state which one of the two possibilities
-		// it is, so while the data may still be intact, we have no way of saying this
-		// definitively.
-		//
-		// Note that in the presence of bit-rot protection (as is present in Minio)
-		// you really should never see this message.
-		err = errors.New("Unable to verify parity blocks, either existing data or parity blocks corrupted")
-		return traceError(err)
-	}
-
-	// Success.
-	return nil
+	return rs.Reconstruct(enBlocks)
 }
