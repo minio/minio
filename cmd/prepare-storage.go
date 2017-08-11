@@ -341,6 +341,7 @@ func waitForFormatXLDisks(firstDisk bool, endpoints EndpointList, storageDisks [
 			maxRetryAttempts: globalStorageInitRetryThreshold,
 			retryUnit:        time.Second,
 			retryCap:         time.Second * 30, // 30 seconds.
+			offlineTimestamp: UTCNow(),
 		}
 	}
 
@@ -361,6 +362,7 @@ func waitForFormatXLDisks(firstDisk bool, endpoints EndpointList, storageDisks [
 			maxRetryAttempts: globalStorageRetryThreshold,
 			retryUnit:        time.Millisecond,
 			retryCap:         time.Millisecond * 5, // 5 milliseconds.
+			offlineTimestamp: UTCNow(),             // Set timestamp to prevent immediate marking as offline
 		}
 	}
 
