@@ -17,3 +17,9 @@ release
 *.syso
 coverage.txt
 settings.json
+.snap
+*.tar.bz2
+parts/
+prime/
+snap/.snapcraft/
+stage/
