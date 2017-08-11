@@ -190,7 +190,7 @@ func (n *nsLockMap) lock(volume, path string, lockSource, opsID string, readLock
 			// <volume, path> pair.
 			err := n.deleteLockInfoEntryForVolumePath(param)
 			if err != nil {
-				errorIf(err, fmt.Sprintf("Failed to delete lock info entry (param = %v)", param, opsID))
+				errorIf(err, fmt.Sprintf("Failed to delete lock info entry (param = %v)", param))
 			}
 		}
 		return
