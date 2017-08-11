@@ -317,3 +317,23 @@ func TestSameLocalAddrs(t *testing.T) {
 		}
 	}
 }
+func TestIsHostIPv4(t *testing.T) {
+	testCases := []struct {
+		args           string
+		expectedResult bool
+	}{
+		{"localhost", false},
+		{"localhost:9000", false},
+		{"example.com", false},
+		{"http://192.168.1.0", false},
+		{"http://192.168.1.0:9000", false},
+		{"192.168.1.0", true},
+	}
+
+	for _, testCase := range testCases {
+		ret := isHostIPv4(testCase.args)
+		if testCase.expectedResult != ret {
+			t.Fatalf("expected: %v , got: %v", testCase.expectedResult, ret)
+		}
+	}
+}
