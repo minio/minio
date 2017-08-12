@@ -17,7 +17,6 @@
 package cmd
 
 import (
-	"errors"
 	"io"
 	"sync"
 
@@ -272,7 +271,7 @@ func erasureReadFile(writer io.Writer, disks []StorageAPI, volume, path string,
 		// If we have all the data blocks no need to decode, continue to write.
 		if !isSuccessDataBlocks(enBlocks, dataBlocks) {
 			// Reconstruct the missing data blocks.
-			if err := decodeData(enBlocks, dataBlocks, parityBlocks); err != nil {
+			if err := decodeMissingData(enBlocks, dataBlocks, parityBlocks); err != nil {
 				return bytesWritten, err
 			}
 		}
@@ -314,31 +313,26 @@ func erasureReadFile(writer io.Writer, disks []StorageAPI, volume, path string,
 	return bytesWritten, nil
 }
 
-// decodeData - decode encoded blocks.
-func decodeData(enBlocks [][]byte, dataBlocks, parityBlocks int) error {
-	// Initialized reedsolomon.
+// decodeMissingData - decode any missing data blocks.
+func decodeMissingData(enBlocks [][]byte, dataBlocks, parityBlocks int) error {
+	// Initialize reedsolomon.
+	rs, err := reedsolomon.New(dataBlocks, parityBlocks)
+	if err != nil {
+		return traceError(err)
+	}
+
+	// Reconstruct any missing data blocks.
+	return rs.ReconstructData(enBlocks)
+}
+
+// decodeDataAndParity - decode all encoded data and parity blocks.
+func decodeDataAndParity(enBlocks [][]byte, dataBlocks, parityBlocks int) error {
+	// Initialize reedsolomon.
 	rs, err := reedsolomon.New(dataBlocks, parityBlocks)
 	if err != nil {
 		return traceError(err)
 	}
 
 	// Reconstruct encoded blocks.
-	err = rs.Reconstruct(enBlocks)
-	if err != nil {
-		return traceError(err)
-	}
-
-	// Verify reconstructed blocks (parity).
-	ok, err := rs.Verify(enBlocks)
-	if err != nil {
-		return traceError(err)
-	}
-	if !ok {
-		// Blocks cannot be reconstructed, corrupted data.
-		err = errors.New("Verification failed after reconstruction, data likely corrupted")
-		return traceError(err)
-	}
-
-	// Success.
-	return nil
+	return rs.Reconstruct(enBlocks)
 }

@@ -174,11 +174,11 @@ func TestErasureEncode(t *testing.T) {
 			reedsolomon.ErrInvShardNum,
 		},
 		// TestCase - 8.
-		// test case with data + parity blocks > 255.
+		// test case with data + parity blocks > 256.
 		// expected to fail with Error Max Shard number.
 		{
 			[]byte("1"),
-			128,
+			129,
 			128,
 			false,
 			reedsolomon.ErrMaxShardNum,

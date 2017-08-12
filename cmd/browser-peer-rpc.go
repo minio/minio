@@ -69,11 +69,14 @@ func (br *browserPeerAPIHandlers) SetAuthPeer(args SetAuthPeerArgs, reply *AuthR
 	}
 
 	// Update credentials in memory
-	serverConfig.SetCredential(args.Creds)
+	prevCred := serverConfig.SetCredential(args.Creds)
 
 	// Save credentials to config file
 	if err := serverConfig.Save(); err != nil {
-		errorIf(err, "Error updating config file with new credentials sent from browser RPC.")
+		// Save the current creds when failed to update.
+		serverConfig.SetCredential(prevCred)
+
+		errorIf(err, "Unable to update the config with new credentials sent from browser RPC.")
 		return err
 	}
 

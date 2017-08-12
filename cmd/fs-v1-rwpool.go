@@ -182,7 +182,7 @@ func (fsi *fsIOPool) Create(path string) (wlk *lock.LockedFile, err error) {
 	}
 
 	// Success.
-	return wlk, err
+	return wlk, nil
 }
 
 // Close implements closing the path referenced by the reader in such

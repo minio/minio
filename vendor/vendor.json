@@ -243,10 +243,10 @@
 			"revisionTime": "2016-10-16T15:41:25Z"
 		},
 		{
-			"checksumSHA1": "Pzd1bfm8Yj1radncaohNZu+UT1I=",
+			"checksumSHA1": "DnS7x0Gqc93p4hQ88FgE35vfIRw=",
 			"path": "github.com/klauspost/reedsolomon",
-			"revision": "d0a56f72c0d40a6cdde43a1575ad9686a0098b70",
-			"revisionTime": "2016-10-28T07:13:20Z"
+			"revision": "a9202d772777d8d2264c3e0c6159be5047697380",
+			"revisionTime": "2017-07-19T04:51:23Z"
 		},
 		{
 			"checksumSHA1": "dNYxHiBLalTqluak2/Z8c3RsSEM=",
