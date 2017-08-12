@@ -157,8 +157,8 @@ func newFSObjectLayer(fsPath string) (ObjectLayer, error) {
 		return nil, fmt.Errorf("Unable to initialize event notification. %s", err)
 	}
 
-	// Start background process to cleanup old files in minio.sys.tmp
-	go fs.cleanupStaleMultipartUploads()
+	// Start background process to cleanup old files in `.minio.sys`.
+	go fs.cleanupStaleMultipartUploads(fsMultipartCleanupInterval, fsMultipartExpiry, globalServiceDoneCh)
 
 	// Return successfully initialized object layer.
 	return fs, nil
@@ -166,6 +166,8 @@ func newFSObjectLayer(fsPath string) (ObjectLayer, error) {
 
 // Should be called when process shuts down.
 func (fs fsObjects) Shutdown() error {
+	fs.fsFormatRlk.Close()
+
 	// Cleanup and delete tmp uuid.
 	return fsRemoveAll(pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID))
 }
@@ -257,17 +259,14 @@ func (fs fsObjects) ListBuckets() ([]BucketInfo, error) {
 		}
 		var fi os.FileInfo
 		fi, err = fsStatDir(pathJoin(fs.fsPath, entry))
+		// There seems like no practical reason to check for errors
+		// at this point, if there are indeed errors we can simply
+		// just ignore such buckets and list only those which
+		// return proper Stat information instead.
 		if err != nil {
-			// If the directory does not exist, skip the entry.
-			if errorCause(err) == errVolumeNotFound {
-				continue
-			} else if errorCause(err) == errVolumeAccessDenied {
-				// Skip the entry if its a file.
-				continue
-			}
-			return nil, err
+			// Ignore any errors returned here.
+			continue
 		}
-
 		bucketInfos = append(bucketInfos, BucketInfo{
 			Name: fi.Name(),
 			// As osStat() doesnt carry CreatedTime, use ModTime() as CreatedTime.

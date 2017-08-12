@@ -132,6 +132,12 @@ func NewEndpoint(arg string) (ep Endpoint, e error) {
 			return ep, err
 		}
 	} else {
+		// Only check if the arg is an ip address and ask for scheme since its absent.
+		// localhost, example.com, any FQDN cannot be disambiguated from a regular file path such as
+		// /mnt/export1. So we go ahead and start the minio server in FS modes in these cases.
+		if isHostIPv4(arg) {
+			return ep, fmt.Errorf("invalid URL endpoint format: missing scheme http or https")
+		}
 		u = &url.URL{Path: path.Clean(arg)}
 		isLocal = true
 	}
@@ -212,7 +218,6 @@ func NewEndpointList(args ...string) (endpoints EndpointList, err error) {
 			return nil, fmt.Errorf("duplicate endpoints found")
 		}
 		uniqueArgs.Add(arg)
-
 		endpoints = append(endpoints, endpoint)
 	}
 
@@ -267,6 +272,7 @@ func CreateEndpoints(serverAddr string, args ...string) (string, EndpointList, S
 	localEndpointCount := 0
 	localServerAddrSet := set.NewStringSet()
 	localPortSet := set.NewStringSet()
+
 	for _, endpoint := range endpoints {
 		endpointPathSet.Add(endpoint.Path)
 		if endpoint.IsLocal {
