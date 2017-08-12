@@ -98,7 +98,8 @@
 
         &.buckets__list__active {
             &:before,
-            &:after {
+            &:after,
+            .buckets__list__actions {
                 .opacity(1);
             }
         }
@@ -161,7 +162,7 @@
         .transition(opacity 300ms);
     }
 
-    & > .dropdown-toggle {
+    .dropdown-toggle {
         width: 35px;
         height: 35px;
         line-height: 32px;
@@ -172,6 +173,16 @@
 
         &:hover {
             background-color: @muted-bg;
+        }
+    }
+
+    .dropdown-menu {
+        // vue-strap doesn't allow specifying right
+        right: 0;
+        left: auto;
+
+        & > li > a {
+            text-align: right;
         }
     }
 }

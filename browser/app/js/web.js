@@ -14,22 +14,23 @@
  * limitations under the License.
  */
 
-import { browserHistory } from 'react-router'
 import JSONrpc from './jsonrpc'
-import * as  actions from './actions'
 import { minioBrowserPrefix } from './constants.js'
 import Moment from 'moment'
 import storage from 'local-storage-fallback'
 
 export default class Web {
-  constructor(endpoint, dispatch) {
-    const namespace = 'Web'
-    this.dispatch = dispatch
+  constructor(endpoint, vm) {
+    this.namespace = 'Web'
+    this.vm = vm
+
     this.JSONrpc = new JSONrpc({
       endpoint,
-      namespace
+      namespace: this.namespace
     })
   }
+
+  // Makes an RPC call to the server.
   makeCall(method, options) {
     return this.JSONrpc.call(method, {
       params: options
@@ -37,23 +38,31 @@ export default class Web {
       .catch(err => {
         if (err.status === 401) {
           storage.removeItem('token')
-          browserHistory.push(`${minioBrowserPrefix}/login`)
+
+          this.vm.$router.push(`${minioBrowserPrefix}/login`)
           throw new Error('Please re-login.')
         }
+
         if (err.status)
           throw new Error(`Server returned error [${err.status}]`)
+
         throw new Error('Minio server is unreachable')
       })
       .then(res => {
         let json = JSON.parse(res.text)
-        let result = json.result
+
+        // Handle any errors.
         let error = json.error
         if (error) {
           throw new Error(error.message)
         }
+
+        // Parse the result.
+        let result = json.result
         if (!Moment(result.uiVersion).isValid()) {
           throw new Error("Invalid UI version in the JSON-RPC response")
         }
+
         if (result.uiVersion !== currentUiVersion
           && currentUiVersion !== 'MINIO_UI_VERSION') {
           storage.setItem('newlyUpdated', true)

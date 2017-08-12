@@ -17,98 +17,71 @@ import 'babel-polyfill'
 
 import './less/main.less'
 
-import React from 'react'
-import ReactDOM from 'react-dom'
-import thunkMiddleware from 'redux-thunk'
-import createStore from 'redux/lib/createStore'
-import applyMiddleware from 'redux/lib/applyMiddleware'
+import Vue from 'vue'
+import VueRouter from 'vue-router'
 
-import Route from 'react-router/lib/Route'
-import Router from 'react-router/lib/Router'
-import browserHistory from 'react-router/lib/browserHistory'
-import IndexRoute from 'react-router/lib/IndexRoute'
+Vue.use(VueRouter)
 
-import Provider from 'react-redux/lib/components/Provider'
-import connect from 'react-redux/lib/components/connect'
+// This is our store, a global way of managing state in the application.
+import { store } from './js/store'
 
-import { minioBrowserPrefix } from './js/constants.js'
-import * as actions from './js/actions.js'
-import reducer from './js/reducers.js'
-
-import _Login from './js/components/Login.js'
-import _Browse from './js/components/Browse.js'
-import MaterialDesignIconicFonts from 'material-design-iconic-font/dist/css/material-design-iconic-font.min.css'
-
+// This allows us to manipulate the server.
 import Web from './js/web'
-window.Web = Web
+store.state.web = new Web(`${window.location.protocol}//${window.location.host}${minioBrowserPrefix}/webrpc`, vm)
 
-import storage from 'local-storage-fallback'
-const store = applyMiddleware(thunkMiddleware)(createStore)(reducer)
-const Browse = connect(state => state)(_Browse)
-const Login = connect(state => state)(_Login)
+// Initialize our routes.
+import { minioBrowserPrefix } from './js/constants'
+import { requireAuth } from './js/auth'
 
-let web = new Web(`${window.location.protocol}//${window.location.host}${minioBrowserPrefix}/webrpc`, store.dispatch)
+import Login from './js/components/Login.vue'
+import Browse from './js/components/Browse.vue'
 
-window.web = web
+const router = new VueRouter({
+  // This allows us to have host/minio/xxx, instead of host/#/minio/xxx.
+  mode: 'history',
 
-store.dispatch(actions.setWeb(web))
+  routes: [{
+    beforeEnter: requireAuth,
+    path: minioBrowserPrefix,
+    component: Browse
+  }, {
+    beforeEnter: requireAuth,
+    path: minioBrowserPrefix + '/bucket/:bucket',
+    component: Browse
+  }, {
+    /* TODO: show login on unauthenticated /, not as own route,
+       change above route to /:bucket, see harsha */
+    path: minioBrowserPrefix + '/login',
+    component: Login
+  }, {
+    // Redirect / to /minio.
+    path: '/',
+    redirect: minioBrowserPrefix
+  }, {
+    path: '*',
+    component: {
+      /* TODO create a not found error */
+      template: '<h1>404 not found, ha</h1>'
+    }
+  }]
+})
 
-function authNeeded(nextState, replace, cb) {
-  if (web.LoggedIn()) {
-    return cb()
-  }
-  if (location.pathname === minioBrowserPrefix || location.pathname === minioBrowserPrefix + '/') {
-    replace(`${minioBrowserPrefix}/login`)
-  }
-  return cb()
-}
+const vm = new Vue({
+  el: document.getElementById('root'),
 
-function authNotNeeded(nextState, replace) {
-  if (web.LoggedIn()) {
-    replace(`${minioBrowserPrefix}`)
-  }
-}
+  // Inject the router.
+  router,
 
-const App = (props) => {
-  return <div>
-           { props.children }
-         </div>
-}
+  // Inject the store.
+  store
+})
 
-ReactDOM.render((
-  <Provider store={ store } web={ web }>
-    <Router history={ browserHistory }>
-      <Route path='/' component={ App }>
-        <Route path='minio' component={ App }>
-          <IndexRoute component={ Browse } onEnter={ authNeeded } />
-          <Route path='login' component={ Login } onEnter={ authNotNeeded } />
-          <Route path=':bucket' component={ Browse } onEnter={ authNeeded } />
-          <Route path=':bucket/*' component={ Browse } onEnter={ authNeeded } />
-        </Route>
-      </Route>
-    </Router>
-  </Provider>
-  ), document.getElementById('root'))
+// This gives us a nice and pretty page loader.
+// First fade it out, then hide it entirely.
+setTimeout(() => {
+  document.querySelector('.page-load').classList.add('pl-0')
+}, 50)
 
-//Page loader
-let delay = [0, 400]
-let i = 0
-
-function handleLoader() {
-  if (i < 2) {
-    setTimeout(function() {
-      document.querySelector('.page-load').classList.add('pl-' + i)
-      i++
-      handleLoader()
-    }, delay[i])
-  }
-}
-handleLoader()
-
-if (storage.getItem('newlyUpdated')) {
-  store.dispatch(actions.showAlert({
-    type: 'success',
-    message: "Updated to the latest UI Version."
-  }))
-  storage.removeItem('newlyUpdated')
-}
+setTimeout(() => {
+  document.querySelector('.page-load').classList.add('pl-1')
+}, 400)
