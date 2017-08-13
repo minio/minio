@@ -30,7 +30,7 @@ func TestServerConfigMigrateV1(t *testing.T) {
 		t.Fatalf("Init Test config failed")
 	}
 	// remove the root directory after the test ends.
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 
 	setConfigDir(rootPath)
 
@@ -64,7 +64,7 @@ func TestServerConfigMigrateInexistentConfig(t *testing.T) {
 		t.Fatalf("Init Test config failed")
 	}
 	// remove the root directory after the test ends.
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 
 	setConfigDir(rootPath)
 	configPath := rootPath + "/" + minioConfigFile
@@ -135,7 +135,7 @@ func TestServerConfigMigrateV2toV19(t *testing.T) {
 		t.Fatalf("Init Test config failed")
 	}
 	// remove the root directory after the test ends.
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 
 	setConfigDir(rootPath)
 	configPath := rootPath + "/" + minioConfigFile
@@ -190,7 +190,7 @@ func TestServerConfigMigrateFaultyConfig(t *testing.T) {
 		t.Fatalf("Init Test config failed")
 	}
 	// remove the root directory after the test ends.
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 
 	setConfigDir(rootPath)
 	configPath := rootPath + "/" + minioConfigFile
@@ -261,7 +261,7 @@ func TestServerConfigMigrateCorruptedConfig(t *testing.T) {
 		t.Fatalf("Init Test config failed")
 	}
 	// remove the root directory after the test ends.
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 
 	setConfigDir(rootPath)
 	configPath := rootPath + "/" + minioConfigFile

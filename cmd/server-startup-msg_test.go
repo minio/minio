@@ -20,6 +20,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"fmt"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -125,7 +126,7 @@ func TestPrintServerCommonMessage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer removeAll(root)
+	defer os.RemoveAll(root)
 
 	apiEndpoints := []string{"http://127.0.0.1:9000"}
 	printServerCommonMsg(apiEndpoints)
@@ -137,7 +138,7 @@ func TestPrintCLIAccessMsg(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer removeAll(root)
+	defer os.RemoveAll(root)
 
 	apiEndpoints := []string{"http://127.0.0.1:9000"}
 	printCLIAccessMsg(apiEndpoints[0], "myminio")
@@ -149,7 +150,7 @@ func TestPrintStartupMessage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer removeAll(root)
+	defer os.RemoveAll(root)
 
 	apiEndpoints := []string{"http://127.0.0.1:9000"}
 	printStartupMessage(apiEndpoints)

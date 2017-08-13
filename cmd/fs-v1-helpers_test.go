@@ -33,7 +33,7 @@ func TestFSRenameFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unable to create posix test setup, %s", err)
 	}
-	defer removeAll(path)
+	defer os.RemoveAll(path)
 
 	if err = fsMkdir(pathJoin(path, "testvolume1")); err != nil {
 		t.Fatal(err)
@@ -58,7 +58,7 @@ func TestFSStats(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unable to create posix test setup, %s", err)
 	}
-	defer removeAll(path)
+	defer os.RemoveAll(path)
 
 	// Setup test environment.
 
@@ -186,7 +186,7 @@ func TestFSCreateAndOpen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unable to create posix test setup, %s", err)
 	}
-	defer removeAll(path)
+	defer os.RemoveAll(path)
 
 	if err = fsMkdir(pathJoin(path, "success-vol")); err != nil {
 		t.Fatalf("Unable to create directory, %s", err)
@@ -251,7 +251,7 @@ func TestFSDeletes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unable to create posix test setup, %s", err)
 	}
-	defer removeAll(path)
+	defer os.RemoveAll(path)
 
 	// Setup test environment.
 	if err = fsMkdir(pathJoin(path, "success-vol")); err != nil {
@@ -354,7 +354,7 @@ func BenchmarkFSDeleteFile(b *testing.B) {
 	if err != nil {
 		b.Fatalf("Unable to create posix test setup, %s", err)
 	}
-	defer removeAll(path)
+	defer os.RemoveAll(path)
 
 	// Setup test environment.
 	if err = fsMkdir(pathJoin(path, "benchmark")); err != nil {
@@ -388,7 +388,7 @@ func TestFSRemoves(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unable to create posix test setup, %s", err)
 	}
-	defer removeAll(path)
+	defer os.RemoveAll(path)
 
 	// Setup test environment.
 	if err = fsMkdir(pathJoin(path, "success-vol")); err != nil {
@@ -505,7 +505,7 @@ func TestFSRemoveMeta(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unable to create posix test setup, %s", err)
 	}
-	defer removeAll(fsPath)
+	defer os.RemoveAll(fsPath)
 
 	// Setup test environment.
 	if err = fsMkdir(pathJoin(fsPath, "success-vol")); err != nil {
@@ -538,11 +538,11 @@ func TestFSRemoveMeta(t *testing.T) {
 		t.Fatalf("Unable to remove file, %s", err)
 	}
 
-	if _, err := osStat(preparePath(filePath)); !os.IsNotExist(err) {
+	if _, err := osStat((filePath)); !os.IsNotExist(err) {
 		t.Fatalf("`%s` file found though it should have been deleted.", filePath)
 	}
 
-	if _, err := osStat(preparePath(path.Dir(filePath))); !os.IsNotExist(err) {
+	if _, err := osStat((path.Dir(filePath))); !os.IsNotExist(err) {
 		t.Fatalf("`%s` parent directory found though it should have been deleted.", filePath)
 	}
 }

@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"sort"
 	"testing"
 )
@@ -43,7 +44,7 @@ func TestDoesPresignedV2SignatureMatch(t *testing.T) {
 	if err != nil {
 		t.Fatal("Unable to initialize test config.")
 	}
-	defer removeAll(root)
+	defer os.RemoveAll(root)
 
 	now := UTCNow()
 
@@ -138,7 +139,7 @@ func TestValidateV2AuthHeader(t *testing.T) {
 	if err != nil {
 		t.Fatal("Unable to initialize test config.")
 	}
-	defer removeAll(root)
+	defer os.RemoveAll(root)
 
 	accessID := serverConfig.GetCredential().AccessKey
 	testCases := []struct {
@@ -209,7 +210,7 @@ func TestDoesPolicySignatureV2Match(t *testing.T) {
 	if err != nil {
 		t.Fatal("Unable to initialize test config.")
 	}
-	defer removeAll(root)
+	defer os.RemoveAll(root)
 	creds := serverConfig.GetCredential()
 	policy := "policy"
 	testCases := []struct {

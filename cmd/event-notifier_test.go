@@ -19,6 +19,7 @@ package cmd
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -32,7 +33,7 @@ func TestInitEventNotifierFaultyDisks(t *testing.T) {
 		t.Fatalf("Init Test config failed")
 	}
 	// remove the root directory after the test ends.
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 
 	disks, err := getRandomDisks(4)
 	if err != nil {
@@ -85,10 +86,10 @@ func TestInitEventNotifierWithPostgreSQL(t *testing.T) {
 		t.Fatalf("Init Test config failed")
 	}
 	// remove the root directory after the test ends.
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 
 	disks, err := getRandomDisks(1)
-	defer removeAll(disks[0])
+	defer os.RemoveAll(disks[0])
 	if err != nil {
 		t.Fatal("Unable to create directories for FS backend. ", err)
 	}
@@ -112,10 +113,10 @@ func TestInitEventNotifierWithNATS(t *testing.T) {
 		t.Fatalf("Init Test config failed")
 	}
 	// remove the root directory after the test ends.
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 
 	disks, err := getRandomDisks(1)
-	defer removeAll(disks[0])
+	defer os.RemoveAll(disks[0])
 	if err != nil {
 		t.Fatal("Unable to create directories for FS backend. ", err)
 	}
@@ -139,10 +140,10 @@ func TestInitEventNotifierWithWebHook(t *testing.T) {
 		t.Fatalf("Init Test config failed")
 	}
 	// remove the root directory after the test ends.
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 
 	disks, err := getRandomDisks(1)
-	defer removeAll(disks[0])
+	defer os.RemoveAll(disks[0])
 	if err != nil {
 		t.Fatal("Unable to create directories for FS backend. ", err)
 	}
@@ -166,10 +167,10 @@ func TestInitEventNotifierWithAMQP(t *testing.T) {
 		t.Fatalf("Init Test config failed")
 	}
 	// remove the root directory after the test ends.
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 
 	disks, err := getRandomDisks(1)
-	defer removeAll(disks[0])
+	defer os.RemoveAll(disks[0])
 	if err != nil {
 		t.Fatal("Unable to create directories for FS backend. ", err)
 	}
@@ -193,10 +194,10 @@ func TestInitEventNotifierWithElasticSearch(t *testing.T) {
 		t.Fatalf("Init Test config failed")
 	}
 	// remove the root directory after the test ends.
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 
 	disks, err := getRandomDisks(1)
-	defer removeAll(disks[0])
+	defer os.RemoveAll(disks[0])
 	if err != nil {
 		t.Fatal("Unable to create directories for FS backend. ", err)
 	}
@@ -220,10 +221,10 @@ func TestInitEventNotifierWithRedis(t *testing.T) {
 		t.Fatalf("Init Test config failed")
 	}
 	// remove the root directory after the test ends.
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 
 	disks, err := getRandomDisks(1)
-	defer removeAll(disks[0])
+	defer os.RemoveAll(disks[0])
 	if err != nil {
 		t.Fatal("Unable to create directories for FS backend. ", err)
 	}
@@ -258,9 +259,9 @@ func (s *TestPeerRPCServerData) Setup(t *testing.T) {
 
 func (s *TestPeerRPCServerData) TearDown() {
 	s.testServer.Stop()
-	_ = removeAll(s.testServer.Root)
+	_ = os.RemoveAll(s.testServer.Root)
 	for _, d := range s.testServer.Disks {
-		_ = removeAll(d.Path)
+		_ = os.RemoveAll(d.Path)
 	}
 }
 

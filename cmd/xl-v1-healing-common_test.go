@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bytes"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -127,7 +128,7 @@ func TestListOnlineDisks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to initialize config - %v", err)
 	}
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 
 	obj, disks, err := prepareXL()
 	if err != nil {
@@ -336,7 +337,7 @@ func TestDisksWithAllParts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to initialize config - %v", err)
 	}
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 
 	obj, disks, err := prepareXL()
 	if err != nil {
