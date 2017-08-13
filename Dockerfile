@@ -2,6 +2,12 @@ FROM alpine:3.6
 
 MAINTAINER Minio Inc <dev@minio.io>
 
+# add our user and group first to make sure their IDs get assigned consistently, regardless of whatever dependencies get added
+RUN addgroup -S minio && adduser -S -G minio minio
+
+# grab su-exec for easy step-down from root
+RUN apk add --no-cache 'su-exec>=0.2'
+
 ENV GOPATH /go
 ENV PATH $PATH:$GOPATH/bin
 ENV CGO_ENABLED 0
@@ -15,7 +21,8 @@ RUN  \
      go get -v -d github.com/minio/minio && \
      cd /go/src/github.com/minio/minio && \
      go install -v -ldflags "$(go run buildscripts/gen-ldflags.go)" && \
-     rm -rf /go/pkg /go/src /usr/local/go && apk del .build-deps
+     rm -rf /go/pkg /go/src /usr/local/go && apk del .build-deps && \
+     mkdir /export && chown minio:minio /export
 
 EXPOSE 9000
 
