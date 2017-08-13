@@ -61,6 +61,8 @@ func fsRemoveAll(dirPath string) (err error) {
 	if err = removeAll(dirPath); err != nil {
 		if os.IsPermission(err) {
 			return traceError(errVolumeAccessDenied)
+		} else if isSysErrNotEmpty(err) {
+			return traceError(errVolumeNotEmpty)
 		}
 		return traceError(err)
 	}
