@@ -137,7 +137,7 @@ func (m matrix) Augment(right matrix) (matrix, error) {
 }
 
 // errMatrixSize is returned if matrix dimensions are doesn't match.
-var errMatrixSize = errors.New("matrix sizes does not match")
+var errMatrixSize = errors.New("matrix sizes do not match")
 
 func (m matrix) SameSize(n matrix) error {
 	if len(m) != len(n) {

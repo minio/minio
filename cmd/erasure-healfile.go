@@ -53,8 +53,8 @@ func erasureHealFile(latestDisks []StorageAPI, outDatedDisks []StorageAPI, volum
 			}
 		}
 
-		// Reconstruct missing data.
-		err := decodeData(enBlocks, dataBlocks, parityBlocks)
+		// Reconstruct any missing data and parity blocks.
+		err := decodeDataAndParity(enBlocks, dataBlocks, parityBlocks)
 		if err != nil {
 			return nil, err
 		}
