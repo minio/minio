@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"os"
 	"reflect"
 	"testing"
 )
@@ -29,7 +30,7 @@ func TestMakeS3Peers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%s", err)
 	}
-	defer removeAll(root)
+	defer os.RemoveAll(root)
 
 	// test cases
 	testCases := []struct {

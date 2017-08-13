@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"os"
 	"runtime"
 	"testing"
 
@@ -50,7 +51,7 @@ func TestRWPool(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unable to create posix test setup, %s", err)
 	}
-	defer removeAll(path)
+	defer os.RemoveAll(path)
 
 	rwPool := &fsIOPool{
 		readersMap: make(map[string]*lock.RLockedFile),

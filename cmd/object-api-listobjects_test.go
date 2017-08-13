@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -586,14 +587,14 @@ func BenchmarkListObjects(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	defer removeAll(directory)
+	defer os.RemoveAll(directory)
 	// initialize the root directory.
 	rootPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		b.Fatalf("Unable to initialize config. %s", err)
 	}
 
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 	// Create the obj.
 	obj := initFSObjectsB(directory, b)
 

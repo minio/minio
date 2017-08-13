@@ -25,6 +25,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"reflect"
 	"testing"
 )
@@ -51,7 +52,7 @@ func TestWriteNotification(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unable to initialize test config %s", err)
 	}
-	defer removeAll(root)
+	defer os.RemoveAll(root)
 
 	var buffer bytes.Buffer
 	// Collection of test cases for each event writer.
@@ -116,7 +117,7 @@ func TestSendBucketNotification(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unable to initialize test config %s", err)
 	}
-	defer removeAll(root)
+	defer os.RemoveAll(root)
 
 	eventCh := make(chan []NotificationEvent)
 

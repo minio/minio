@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"os"
 	"testing"
 	"time"
 )
@@ -27,7 +28,7 @@ func TestUpdateUploadJSON(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%s", err)
 	}
-	defer removeAll(root)
+	defer os.RemoveAll(root)
 
 	// Create an instance of xl backend
 	obj, fsDirs, err := prepareXL()

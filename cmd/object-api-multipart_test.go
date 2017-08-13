@@ -19,6 +19,7 @@ package cmd
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 
@@ -188,7 +189,7 @@ func testPutObjectPartDiskNotFound(obj ObjectLayer, instanceType string, disks [
 
 	// Remove some random disk.
 	for _, disk := range disks[:6] {
-		removeAll(disk)
+		os.RemoveAll(disk)
 	}
 
 	uploadIDs = append(uploadIDs, uploadID)
@@ -226,7 +227,7 @@ func testPutObjectPartDiskNotFound(obj ObjectLayer, instanceType string, disks [
 	// This causes quorum failure verify.
 	disks = disks[len(disks)-3:]
 	for _, disk := range disks {
-		removeAll(disk)
+		os.RemoveAll(disk)
 	}
 
 	// Object part upload should fail with quorum not available.

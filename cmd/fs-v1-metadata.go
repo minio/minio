@@ -264,7 +264,7 @@ func newFSMetaV1() (fsMeta fsMetaV1) {
 func checkLockedValidFormatFS(fsPath string) (*lock.RLockedFile, error) {
 	fsFormatPath := pathJoin(fsPath, minioMetaBucket, formatConfigFile)
 
-	rlk, err := lock.RLockedOpenFile(preparePath(fsFormatPath))
+	rlk, err := lock.RLockedOpenFile((fsFormatPath))
 	if err != nil {
 		if os.IsNotExist(err) {
 			// If format.json not found then
@@ -296,7 +296,7 @@ func createFormatFS(fsPath string) error {
 
 	// Attempt a write lock on formatConfigFile `format.json`
 	// file stored in minioMetaBucket(.minio.sys) directory.
-	lk, err := lock.TryLockedOpenFile(preparePath(fsFormatPath), os.O_RDWR|os.O_CREATE, 0600)
+	lk, err := lock.TryLockedOpenFile((fsFormatPath), os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
 		return traceError(err)
 	}

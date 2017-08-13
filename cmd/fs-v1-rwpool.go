@@ -77,7 +77,7 @@ func (fsi *fsIOPool) Open(path string) (*lock.RLockedFile, error) {
 		var err error
 		var newRlkFile *lock.RLockedFile
 		// Open file for reading.
-		newRlkFile, err = lock.RLockedOpenFile(preparePath(path))
+		newRlkFile, err = lock.RLockedOpenFile(path)
 		if err != nil {
 			if os.IsNotExist(err) {
 				return nil, errFileNotFound
@@ -137,7 +137,7 @@ func (fsi *fsIOPool) Write(path string) (wlk *lock.LockedFile, err error) {
 		return nil, err
 	}
 
-	wlk, err = lock.LockedOpenFile(preparePath(path), os.O_RDWR, 0666)
+	wlk, err = lock.LockedOpenFile(path, os.O_RDWR, 0666)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, errFileNotFound
@@ -159,7 +159,7 @@ func (fsi *fsIOPool) Create(path string) (wlk *lock.LockedFile, err error) {
 	}
 
 	// Creates parent if missing.
-	if err = mkdirAll(pathutil.Dir(path), 0777); err != nil {
+	if err = os.MkdirAll(pathutil.Dir(path), 0777); err != nil {
 		if os.IsPermission(err) {
 			return nil, errFileAccessDenied
 		} else if isSysErrNotDir(err) {
@@ -169,7 +169,7 @@ func (fsi *fsIOPool) Create(path string) (wlk *lock.LockedFile, err error) {
 	}
 
 	// Attempt to create the file.
-	wlk, err = lock.LockedOpenFile(preparePath(path), os.O_RDWR|os.O_CREATE, 0666)
+	wlk, err = lock.LockedOpenFile(path, os.O_RDWR|os.O_CREATE, 0666)
 	if err != nil {
 		if os.IsPermission(err) {
 			return nil, errFileAccessDenied

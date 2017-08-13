@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"os"
 	"testing"
 	"time"
 )
@@ -26,7 +27,7 @@ func TestLogin(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create test config - %v", err)
 	}
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 	creds := serverConfig.GetCredential()
 	ls := AuthRPCServer{}
 	testCases := []struct {

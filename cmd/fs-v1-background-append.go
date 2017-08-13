@@ -224,7 +224,7 @@ func (fs fsObjects) appendPart(bucket, object, uploadID string, part objectPartI
 	tmpObjPath := pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID, uploadID)
 	// No need to hold a lock, this is a unique file and will be only written
 	// to one one process per uploadID per minio process.
-	wfile, err := os.OpenFile(preparePath(tmpObjPath), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0666)
+	wfile, err := os.OpenFile((tmpObjPath), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0666)
 	if err != nil {
 		return err
 	}
