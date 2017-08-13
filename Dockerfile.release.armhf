@@ -1,4 +1,4 @@
-FROM resin/armhf-alpine:3.5
+FROM resin/armhf-alpine:3.6
 
 MAINTAINER Minio Inc <dev@minio.io>
 
