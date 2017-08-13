@@ -258,9 +258,17 @@ func isMinioMetaBucket(bucketName string) bool {
 	return bucketName == minioMetaBucket
 }
 
-// Returns true if input bucket is a reserved minio bucket 'minio'.
+// Returns true if input bucket is a reserved minio bucket.
 func isMinioReservedBucket(bucketName string) bool {
-	return bucketName == minioReservedBucket
+	// Reserved buckets - minio, login are reserved buckets for
+	// Minio browser access. Explanation for reserving buckets is
+	// - bucket named minio conflicts with base URI
+	// - bucket name login conflicts with login page's URI
+	minioReservedBuckets := []string{"minio", "login"}
+	if contains(minioReservedBuckets, bucketName) {
+		return true
+	}
+	return false
 }
 
 // byBucketName is a collection satisfying sort.Interface.
