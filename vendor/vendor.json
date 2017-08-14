@@ -232,6 +232,12 @@
 			"revisionTime": "2016-01-19T13:13:26-08:00"
 		},
 		{
+			"checksumSHA1": "B0iiSbSXAuFwg/aHQcnIHiSjQB0=",
+			"path": "github.com/json-iterator/go",
+			"revision": "12cd299fa8869e84f3eecabc92a6336b287487a0",
+			"revisionTime": "2017-07-18T16:22:41Z"
+		},
+		{
 			"path": "github.com/klauspost/cpuid",
 			"revision": "349c675778172472f5e8f3a3e0fe187e302e5a10",
 			"revisionTime": "2016-01-06T11:44:51+01:00"

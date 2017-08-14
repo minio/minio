@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"hash"
 	"io"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -749,22 +748,19 @@ func (fs fsObjects) getObjectETag(bucket, entry string) (string, error) {
 	// Read from fs metadata only if it exists.
 	defer fs.rwPool.Close(fsMetaPath)
 
-	fsMetaBuf, err := ioutil.ReadAll(rlk.LockedFile)
+	var fmv fsMetaV1
+
+	_, err = fmv.ReadFrom(rlk.LockedFile)
 	if err != nil {
-		// `fs.json` can be empty due to previously failed
-		// PutObject() transaction, if we arrive at such
-		// a situation we just ignore and continue.
-		if errorCause(err) != io.EOF {
-			return "", toObjectErr(err, bucket, entry)
-		}
+		return "", toObjectErr(err, bucket, entry)
 	}
 
 	// Check if FS metadata is valid, if not return error.
-	if !isFSMetaValid(parseFSVersion(fsMetaBuf), parseFSFormat(fsMetaBuf)) {
+	if !fmv.IsValid() {
 		return "", toObjectErr(traceError(errCorruptedFormat), bucket, entry)
 	}
 
-	return extractETag(parseFSMetaMap(fsMetaBuf)), nil
+	return extractETag(fmv.Meta), nil
 }
 
 // ListObjects - list all objects at prefix upto maxKeys., optionally delimited by '/'. Maintains the list pool

@@ -17,8 +17,10 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"math/rand"
 	"reflect"
 	"strconv"
 	"testing"
@@ -486,5 +488,105 @@ func testEvalDisks(t *testing.T, xl *xlObjects) {
 	newDisks = evalDisks(disks, errs)
 	if newDisks != nil {
 		t.Errorf("evalDisks returned no nil slice")
+	}
+}
+
+// Benchmark readAllXLMetadata, which reads the xl.json file from the disk and
+// loads it from JSON into a struct.
+func BenchmarkReadAllXLMetadata(b *testing.B) {
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
+	if err != nil {
+		b.Fatalf("Failed to initialize test config %v", err)
+	}
+	defer removeAll(rootPath)
+
+	obj, fsDirs, err := prepareXL()
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer removeRoots(fsDirs)
+	xl := obj.(*xlObjects)
+
+	// Create "bucket"
+	err = obj.MakeBucketWithLocation("bucket", "")
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	bucket := "bucket"
+	object := "object"
+
+	data := make([]byte, 1*humanize.KiByte)
+	length := int64(len(data))
+	_, err = rand.Read(data)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	_, err = obj.PutObject(bucket, object, length, bytes.NewReader(data), nil, "")
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	// Reset the timer and start the benchmark.
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		readAllXLMetadata(xl.storageDisks, bucket, object)
+	}
+}
+
+// Benchmark WriteSameXLMetadata, which writes the xl.json file
+// to all the disks.
+func BenchmarkWriteSameXLMetadata(b *testing.B) {
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
+	if err != nil {
+		b.Fatalf("Failed to initialize test config %v", err)
+	}
+	defer removeAll(rootPath)
+
+	obj, fsDirs, err := prepareXL()
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer removeRoots(fsDirs)
+	xl := obj.(*xlObjects)
+
+	// Create "bucket"
+	err = obj.MakeBucketWithLocation("bucket", "")
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	bucket := "bucket"
+	object := "object"
+
+	data := make([]byte, 1*humanize.KiByte)
+	length := int64(len(data))
+	_, err = rand.Read(data)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	_, err = obj.PutObject(bucket, object, length, bytes.NewReader(data), nil, "")
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	// Get back the old metadata, as we'll just be writing that.
+	xmv, errs := readAllXLMetadata(xl.storageDisks, bucket, object)
+	for _, err = range errs {
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+
+	// Reset the timer and start the benchmark.
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err = writeSameXLMetadata(xl.storageDisks, bucket, object, xmv[0], xl.writeQuorum, xl.readQuorum)
+
+		if err != nil {
+			b.Fatal(err)
+		}
 	}
 }
