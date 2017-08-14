@@ -146,6 +146,9 @@ var (
 	globalActiveCred         auth.Credentials
 	globalPublicCerts        []*x509.Certificate
 	globalXLObjCacheDisabled bool
+
+	globalIsEnvDomainName bool
+	globalDomainName      string // Root domain for virtual host style requests
 	// Add new variable global values here.
 
 	globalListingTimeout   = newDynamicTimeout( /*30*/ 600*time.Second /*5*/, 600*time.Second) // timeout for listing related ops

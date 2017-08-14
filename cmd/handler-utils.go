@@ -19,6 +19,7 @@ package cmd
 import (
 	"io"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -258,4 +259,25 @@ func httpTraceHdrs(f http.HandlerFunc) http.HandlerFunc {
 		return f
 	}
 	return httptracer.TraceReqHandlerFunc(f, os.Stdout, false)
+}
+
+// Returns "/bucketName/objectName" for path-style or virtual-host-style requests.
+func getResource(path string, host string, domain string) (string, error) {
+	if domain == "" {
+		return path, nil
+	}
+	// If virtual-host-style is enabled construct the "resource" properly.
+	if strings.Contains(host, ":") {
+		// In bucket.mydomain.com:9000, strip out :9000
+		var err error
+		if host, _, err = net.SplitHostPort(host); err != nil {
+			errorIf(err, "Unable to split %s", host)
+			return "", err
+		}
+	}
+	if !strings.HasSuffix(host, "."+domain) {
+		return path, nil
+	}
+	bucket := strings.TrimSuffix(host, "."+domain)
+	return slashSeparator + pathJoin(bucket, path), nil
 }
