@@ -2392,3 +2392,71 @@ func TestToErrIsNil(t *testing.T) {
 		t.Errorf("Test expected to return nil, failed instead got a non-nil value %s", gcsToObjectError(nil))
 	}
 }
+
+// fsTestBed - encapsulates subsystems that need to be setup
+type fsTestBed struct {
+	configPath string
+	fsDir      string
+	objLayer   ObjectLayer
+	mux        *router.Router
+}
+
+// initTestFSObjLayer - Helper function to initialize an FS-based object
+// layer and set globalObjectAPI.
+func initTestFSObjLayer() (ObjectLayer, string, error) {
+	objLayer, fsDir, fsErr := prepareFS()
+	if fsErr != nil {
+		return nil, "", fsErr
+	}
+	// Make objLayer available to all internal services via globalObjectAPI.
+	globalObjLayerMutex.Lock()
+	globalObjectAPI = objLayer
+	globalObjLayerMutex.Unlock()
+	return objLayer, fsDir, nil
+}
+
+// prepareTestServer - helper function that setups a single-node FS backend
+// for generic handlers tests.
+func prepareFSTestServer(mux *router.Router) (*fsTestBed, error) {
+	// reset global variables to start afresh.
+	resetTestGlobals()
+
+	// Initialize minio server config.
+	rootPath, err := newTestConfig(globalMinioDefaultRegion)
+	if err != nil {
+		return nil, err
+	}
+
+	// Initializing objectLayer
+	objLayer, fsDir, fsErr := initTestFSObjLayer()
+	if fsErr != nil {
+		return nil, fsErr
+	}
+
+	// Initialize boot time
+	globalBootTime = UTCNow()
+
+	globalEndpoints = mustGetNewEndpointList(fsDir)
+
+	// Set globalIsXL to indicate that the setup uses an erasure code backend.
+	globalIsXL = false
+
+	// initialize NSLock.
+	isDistXL := false
+	initNSLock(isDistXL)
+
+	return &fsTestBed{
+		configPath: rootPath,
+		fsDir:      fsDir,
+		objLayer:   objLayer,
+		mux:        mux,
+	}, nil
+}
+
+// TearDown - method that resets the test bed for subsequent unit
+// tests to start afresh.
+func (atb *fsTestBed) TearDown() {
+	os.RemoveAll(atb.configPath)
+	os.RemoveAll(atb.fsDir)
+	resetTestGlobals()
+}

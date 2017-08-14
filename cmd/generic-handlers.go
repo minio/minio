@@ -18,12 +18,12 @@ package cmd
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net"
 	"net/http"
-	"net/http/httptest"
-	"net/http/httputil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -536,54 +536,54 @@ func (h pathValidityHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // logginHandler logs all HTTP requests and responses
 // and write the log to a io.Writer object.
 type loggingHandler struct {
-	writer    io.Writer
-	writeLock sync.Mutex
-	handler   http.Handler
+	writer io.Writer
+	sync.Mutex
+	handler http.Handler
 }
 
-func (h loggingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Time that will be printed in log
+func (h *loggingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+
 	const timeFormat = "2006-01-02 15:04:05 -0700"
+	const recordLen = 32 * 1024
+
 	// Generate short random request ID
-	reqID := fmt.Sprintf("%X", time.Now().UnixNano()%1e8)
-	// Log HTTP request
-	requestDump, err := httputil.DumpRequest(r, false)
-	if err == nil {
-		reqBanner := fmt.Sprintf("[%s] [%s] >> ", reqID, time.Now().Format(timeFormat))
-		h.writeLock.Lock()
-		h.writer.Write([]byte(reqBanner))
-		h.writer.Write(requestDump)
-		h.writer.Write([]byte("\n"))
-		h.writeLock.Unlock()
-	} else {
-		errorIf(err, "Cannot dump HTTP request")
+	reqID := fmt.Sprintf("%f", float64(time.Now().UnixNano())/1e10)
+
+	// Setup a http request body recorder
+	reqBodyRecorder := &recordReader{Reader: r.Body, recLen: recordLen}
+	r.Body = ioutil.NopCloser(reqBodyRecorder)
+	// Setup a http response body recorder
+	respBodyRecorder := &recordResponseWriter{ResponseWriter: w, recLen: recordLen, buf: bytes.NewBuffer([]byte{})}
+
+	b := bytes.NewBuffer([]byte{})
+	fmt.Fprintf(b, "[REQUEST] [%s] [%s]\n", reqID, time.Now().Format(timeFormat))
+
+	h.handler.ServeHTTP(respBodyRecorder, r)
+
+	// Build request log and write it to log file
+	fmt.Fprintf(b, "%s %s", r.Method, r.URL.Path)
+	if r.URL.RawQuery != "" {
+		fmt.Fprintf(b, "?%s", r.URL.RawQuery)
+	}
+	fmt.Fprintf(b, "\n")
+
+	fmt.Fprintf(b, "Host: %s\n", r.Host)
+	for k, v := range r.Header {
+		fmt.Fprintf(b, "%s: %s\n", k, v[0])
 	}
 
-	// Setup a http recorder to save HTTP response
-	rec := httptest.NewRecorder()
-	h.handler.ServeHTTP(rec, r)
+	b.Write(reqBodyRecorder.Data())
 
-	// Log HTTP Response
-	respDump, err := httputil.DumpResponse(rec.Result(), false)
-	if err == nil {
-		respBanner := fmt.Sprintf("[%s] [%s] << ", reqID, time.Now().Format(timeFormat))
-		h.writeLock.Lock()
-		h.writer.Write([]byte(respBanner))
-		h.writer.Write(respDump)
-		h.writer.Write([]byte("\n\n"))
-		h.writeLock.Unlock()
-	} else {
-		errorIf(err, "Cannot dump HTTP response")
-	}
+	fmt.Fprintf(b, "\n\n")
 
-	// We copy the captured response headers to our new response
-	for k, v := range rec.Header() {
-		w.Header()[k] = v
-	}
+	// Build response log and write it to log file
+	fmt.Fprintf(b, "[RESPONSE] [%s] [%s]\n", reqID, time.Now().Format(timeFormat))
+	b.Write(respBodyRecorder.Data())
+	fmt.Fprintf(b, "\n\n")
 
-	// Grab the captured response body
-	w.WriteHeader(rec.Code)
-	w.Write(rec.Body.Bytes())
+	h.Lock()
+	h.writer.Write(b.Bytes())
+	h.Unlock()
 }
 
 // Enable HTTP requests and responses logging handler
@@ -593,12 +593,12 @@ func setLoggingHandler(h http.Handler) http.Handler {
 		return h
 	}
 	// Create the log file
-	logFile, err := os.Create(filepath.Join(globalHTTPTraceDir, "minio-"+time.Now().Format("2006-01-02T15:04:05")+".log"))
+	logFile, err := os.Create(filepath.Join(globalHTTPTraceDir, "minio-"+time.Now().Format("2006-01-02T15_04_05")+".log"))
 	if err != nil {
 		errorIf(err, "Cannot create the log file")
 		return h
 	}
-	return loggingHandler{
+	return &loggingHandler{
 		writer:  logFile,
 		handler: h,
 	}

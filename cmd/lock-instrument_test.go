@@ -218,6 +218,7 @@ func TestNewDebugLockInfoPerVolumePath(t *testing.T) {
 
 // TestNsLockMapStatusBlockedToRunning - Validates the function for changing the lock state from blocked to running.
 func TestNsLockMapStatusBlockedToRunning(t *testing.T) {
+
 	testCases := []struct {
 		volume      string
 		path        string
@@ -288,6 +289,9 @@ func TestNsLockMapStatusBlockedToRunning(t *testing.T) {
 			expectedErr: nil,
 		},
 	}
+
+	// Initialize the locks.
+	initNSLock(false)
 
 	param := nsParam{testCases[0].volume, testCases[0].path}
 	// Testing before the initialization done.
