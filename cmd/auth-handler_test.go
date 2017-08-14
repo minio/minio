@@ -21,6 +21,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"testing"
 )
 
@@ -324,7 +325,7 @@ func TestIsReqAuthenticated(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unable initialize config file, %s", err)
 	}
-	defer removeAll(path)
+	defer os.RemoveAll(path)
 
 	creds, err := createCredential("myuser", "mypassword")
 	if err != nil {

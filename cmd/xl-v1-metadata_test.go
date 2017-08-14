@@ -19,6 +19,7 @@ package cmd
 import (
 	"bytes"
 	"errors"
+	"os"
 	"path"
 	"strconv"
 	"testing"
@@ -89,7 +90,7 @@ func testXLReadStat(obj ObjectLayer, instanceType string, disks []string, t *tes
 	}
 
 	for _, disk := range disks {
-		removeAll(path.Join(disk, bucketName))
+		os.RemoveAll(path.Join(disk, bucketName))
 	}
 
 	_, _, err = obj.(*xlObjects).readXLMetaStat(bucketName, objectName)
@@ -173,8 +174,8 @@ func testXLReadMetaParts(obj ObjectLayer, instanceType string, disks []string, t
 	}
 
 	for _, disk := range disks {
-		removeAll(path.Join(disk, bucketNames[0]))
-		removeAll(path.Join(disk, minioMetaMultipartBucket, bucketNames[0]))
+		os.RemoveAll(path.Join(disk, bucketNames[0]))
+		os.RemoveAll(path.Join(disk, minioMetaMultipartBucket, bucketNames[0]))
 	}
 
 	_, err = obj.(*xlObjects).readXLMetaParts(minioMetaMultipartBucket, uploadIDPath)

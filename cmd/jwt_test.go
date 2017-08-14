@@ -16,14 +16,17 @@
 
 package cmd
 
-import "testing"
+import (
+	"os"
+	"testing"
+)
 
 func testAuthenticate(authType string, t *testing.T) {
 	testPath, err := newTestConfig(globalMinioDefaultRegion)
 	if err != nil {
 		t.Fatalf("unable initialize config file, %s", err)
 	}
-	defer removeAll(testPath)
+	defer os.RemoveAll(testPath)
 	// Create access and secret keys in length, 300 and 600
 	cred, err := getNewCredential(300, 600)
 	if err != nil {
@@ -90,7 +93,7 @@ func BenchmarkAuthenticateNode(b *testing.B) {
 	if err != nil {
 		b.Fatalf("unable initialize config file, %s", err)
 	}
-	defer removeAll(testPath)
+	defer os.RemoveAll(testPath)
 
 	creds := serverConfig.GetCredential()
 	b.ResetTimer()
@@ -105,7 +108,7 @@ func BenchmarkAuthenticateWeb(b *testing.B) {
 	if err != nil {
 		b.Fatalf("unable initialize config file, %s", err)
 	}
-	defer removeAll(testPath)
+	defer os.RemoveAll(testPath)
 
 	creds := serverConfig.GetCredential()
 	b.ResetTimer()

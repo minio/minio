@@ -55,7 +55,7 @@ func TestPosixGetDiskInfo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unable to create a temporary directory, %s", err)
 	}
-	defer removeAll(path)
+	defer os.RemoveAll(path)
 
 	testCases := []struct {
 		diskPath    string
@@ -78,7 +78,7 @@ func TestPosixIsDirEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer removeAll(tmp)
+	defer os.RemoveAll(tmp)
 
 	// Should give false on non-existent directory.
 	dir1 := slashpath.Join(tmp, "non-existent-directory")
@@ -117,7 +117,7 @@ func TestPosixReadAll(t *testing.T) {
 		t.Fatalf("Unable to create posix test setup, %s", err)
 	}
 
-	defer removeAll(path)
+	defer os.RemoveAll(path)
 
 	// Create files for the test cases.
 	if err = posixStorage.MakeVol("exists"); err != nil {
@@ -262,7 +262,7 @@ func TestPosixMakeVol(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unable to create posix test setup, %s", err)
 	}
-	defer removeAll(path)
+	defer os.RemoveAll(path)
 
 	// Setup test environment.
 	// Create a file.
@@ -348,7 +348,7 @@ func TestPosixDeleteVol(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unable to create posix test setup, %s", err)
 	}
-	defer removeAll(path)
+	defer os.RemoveAll(path)
 
 	// Setup test environment.
 	if err = posixStorage.MakeVol("success-vol"); err != nil {
@@ -436,7 +436,7 @@ func TestPosixDeleteVol(t *testing.T) {
 		t.Fatalf("Unable to create posix test setup, %s", err)
 	}
 	// removing the disk, used to recreate disk not found error.
-	removeAll(diskPath)
+	os.RemoveAll(diskPath)
 
 	// TestPosix for delete on an removed disk.
 	// should fail with disk not found.
@@ -453,7 +453,7 @@ func TestPosixStatVol(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unable to create posix test setup, %s", err)
 	}
-	defer removeAll(path)
+	defer os.RemoveAll(path)
 
 	// Setup test environment.
 	if err = posixStorage.MakeVol("success-vol"); err != nil {
@@ -517,7 +517,7 @@ func TestPosixStatVol(t *testing.T) {
 		t.Fatalf("Unable to create posix test setup, %s", err)
 	}
 	// removing the disk, used to recreate disk not found error.
-	removeAll(diskPath)
+	os.RemoveAll(diskPath)
 
 	// TestPosix for delete on an removed disk.
 	// should fail with disk not found.
@@ -566,7 +566,7 @@ func TestPosixListVols(t *testing.T) {
 		t.Errorf("Expected to fail with \"%s\", but instead failed with \"%s\"", errFaultyDisk, err)
 	}
 	// removing the path and simulating disk failure
-	removeAll(path)
+	os.RemoveAll(path)
 	// Resetting the IO error.
 	// should fail with errDiskNotFound.
 	if posixType, ok := posixStorage.(*posix); ok {
@@ -587,7 +587,7 @@ func TestPosixPosixListDir(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unable to create posix test setup, %s", err)
 	}
-	defer removeAll(path)
+	defer os.RemoveAll(path)
 
 	// create posix test setup.
 	posixDeletedStorage, diskPath, err := newPosixTestSetup()
@@ -595,7 +595,7 @@ func TestPosixPosixListDir(t *testing.T) {
 		t.Fatalf("Unable to create posix test setup, %s", err)
 	}
 	// removing the disk, used to recreate disk not found error.
-	removeAll(diskPath)
+	os.RemoveAll(diskPath)
 	// Setup test environment.
 	if err = posixStorage.MakeVol("success-vol"); err != nil {
 		t.Fatalf("Unable to create volume, %s", err)
@@ -725,7 +725,7 @@ func TestPosixDeleteFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unable to create posix test setup, %s", err)
 	}
-	defer removeAll(path)
+	defer os.RemoveAll(path)
 
 	// create posix test setup
 	posixDeletedStorage, diskPath, err := newPosixTestSetup()
@@ -733,7 +733,7 @@ func TestPosixDeleteFile(t *testing.T) {
 		t.Fatalf("Unable to create posix test setup, %s", err)
 	}
 	// removing the disk, used to recreate disk not found error.
-	removeAll(diskPath)
+	os.RemoveAll(diskPath)
 	// Setup test environment.
 	if err = posixStorage.MakeVol("success-vol"); err != nil {
 		t.Fatalf("Unable to create volume, %s", err)
@@ -859,7 +859,7 @@ func TestPosixReadFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unable to create posix test setup, %s", err)
 	}
-	defer removeAll(path)
+	defer os.RemoveAll(path)
 
 	volume := "success-vol"
 	// Setup test environment.
@@ -946,13 +946,13 @@ func TestPosixReadFile(t *testing.T) {
 				if runtime.GOOS == globalWindowsOSName {
 					return &os.PathError{
 						Op:   "seek",
-						Path: preparePath(slashpath.Join(path, "success-vol", "myobject")),
+						Path: (slashpath.Join(path, "success-vol", "myobject")),
 						Err:  syscall.Errno(0x83), // ERROR_NEGATIVE_SEEK
 					}
 				}
 				return &os.PathError{
 					Op:   "seek",
-					Path: preparePath(slashpath.Join(path, "success-vol", "myobject")),
+					Path: (slashpath.Join(path, "success-vol", "myobject")),
 					Err:  os.ErrInvalid,
 				}
 			}(),
@@ -1089,7 +1089,7 @@ func TestPosixReadFileWithVerify(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unable to create posix test setup, %s", err)
 	}
-	defer removeAll(path)
+	defer os.RemoveAll(path)
 
 	volume := "success-vol"
 	// Setup test environment.
@@ -1195,7 +1195,7 @@ func TestPosixAppendFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unable to create posix test setup, %s", err)
 	}
-	defer removeAll(path)
+	defer os.RemoveAll(path)
 
 	// Setup test environment.
 	if err = posixStorage.MakeVol("success-vol"); err != nil {
@@ -1287,7 +1287,7 @@ func TestPosixPrepareFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unable to create posix test setup, %s", err)
 	}
-	defer removeAll(path)
+	defer os.RemoveAll(path)
 
 	// Setup test environment.
 	if err = posixStorage.MakeVol("success-vol"); err != nil {
@@ -1381,7 +1381,7 @@ func TestPosixRenameFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unable to create posix test setup, %s", err)
 	}
-	defer removeAll(path)
+	defer os.RemoveAll(path)
 
 	// Setup test environment.
 	if err := posixStorage.MakeVol("src-vol"); err != nil {
@@ -1635,7 +1635,7 @@ func TestPosixStatFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unable to create posix test setup, %s", err)
 	}
-	defer removeAll(path)
+	defer os.RemoveAll(path)
 
 	// Setup test environment.
 	if err := posixStorage.MakeVol("success-vol"); err != nil {

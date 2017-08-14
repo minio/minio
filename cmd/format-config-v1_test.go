@@ -663,7 +663,7 @@ func TestGenericFormatCheckXL(t *testing.T) {
 func TestFSCheckFormatFSErr(t *testing.T) {
 	// Prepare for testing
 	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
-	defer removeAll(disk)
+	defer os.RemoveAll(disk)
 
 	// Assign a new UUID.
 	uuid := mustGetUUID()
@@ -725,7 +725,7 @@ func TestFSCheckFormatFSErr(t *testing.T) {
 
 	fsFormatPath := pathJoin(disk, minioMetaBucket, formatConfigFile)
 	for i, testCase := range testCases {
-		lk, err := lock.LockedOpenFile(preparePath(fsFormatPath), os.O_RDWR|os.O_CREATE, 0600)
+		lk, err := lock.LockedOpenFile((fsFormatPath), os.O_RDWR|os.O_CREATE, 0600)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -735,7 +735,7 @@ func TestFSCheckFormatFSErr(t *testing.T) {
 			t.Fatalf("Test %d: Expected nil, got %s", i+1, err)
 		}
 
-		lk, err = lock.LockedOpenFile(preparePath(fsFormatPath), os.O_RDWR|os.O_CREATE, 0600)
+		lk, err = lock.LockedOpenFile((fsFormatPath), os.O_RDWR|os.O_CREATE, 0600)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -765,7 +765,7 @@ func TestFSCheckFormatFSErr(t *testing.T) {
 func TestFSCheckFormatFS(t *testing.T) {
 	// Prepare for testing
 	disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
-	defer removeAll(disk)
+	defer os.RemoveAll(disk)
 
 	// Assign a new UUID.
 	uuid := mustGetUUID()
@@ -776,7 +776,7 @@ func TestFSCheckFormatFS(t *testing.T) {
 	}
 
 	fsFormatPath := pathJoin(disk, minioMetaBucket, formatConfigFile)
-	lk, err := lock.LockedOpenFile(preparePath(fsFormatPath), os.O_RDWR|os.O_CREATE, 0600)
+	lk, err := lock.LockedOpenFile((fsFormatPath), os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -789,14 +789,14 @@ func TestFSCheckFormatFS(t *testing.T) {
 	}
 
 	// Loading corrupted format file
-	file, err := os.OpenFile(preparePath(fsFormatPath), os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0666)
+	file, err := os.OpenFile((fsFormatPath), os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0666)
 	if err != nil {
 		t.Fatal("Should not fail here", err)
 	}
 	file.Write([]byte{'b'})
 	file.Close()
 
-	lk, err = lock.LockedOpenFile(preparePath(fsFormatPath), os.O_RDWR|os.O_CREATE, 0600)
+	lk, err = lock.LockedOpenFile((fsFormatPath), os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -809,8 +809,8 @@ func TestFSCheckFormatFS(t *testing.T) {
 	}
 
 	// Loading format file from disk not found.
-	removeAll(disk)
-	_, err = lock.LockedOpenFile(preparePath(fsFormatPath), os.O_RDONLY, 0600)
+	os.RemoveAll(disk)
+	_, err = lock.LockedOpenFile((fsFormatPath), os.O_RDONLY, 0600)
 	if err != nil && !os.IsNotExist(err) {
 		t.Fatal("Should return 'format.json' does not exist, but got", err)
 	}
@@ -918,7 +918,7 @@ func TestHealFormatXLCorruptedDisksErrs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer removeAll(root)
+	defer os.RemoveAll(root)
 
 	nDisks := 16
 	fsDirs, err := getRandomDisks(nDisks)
@@ -991,7 +991,7 @@ func TestHealFormatXLFreshDisksErrs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer removeAll(root)
+	defer os.RemoveAll(root)
 
 	nDisks := 16
 	fsDirs, err := getRandomDisks(nDisks)

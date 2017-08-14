@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -25,7 +26,7 @@ import (
 // Test function to remove lock entries from map only in case they still exist based on name & uid combination
 func TestLockRpcServerRemoveEntryIfExists(t *testing.T) {
 	testPath, locker, _ := createLockTestServer(t)
-	defer removeAll(testPath)
+	defer os.RemoveAll(testPath)
 
 	lri := lockRequesterInfo{
 		writer:          false,
@@ -62,7 +63,7 @@ func TestLockRpcServerRemoveEntryIfExists(t *testing.T) {
 // Test function to remove lock entries from map based on name & uid combination
 func TestLockRpcServerRemoveEntry(t *testing.T) {
 	testPath, locker, _ := createLockTestServer(t)
-	defer removeAll(testPath)
+	defer os.RemoveAll(testPath)
 
 	lockRequesterInfo1 := lockRequesterInfo{
 		writer:          true,

@@ -16,7 +16,10 @@
 
 package cmd
 
-import "testing"
+import (
+	"os"
+	"testing"
+)
 
 // Test printing Gateway common message.
 func TestPrintGatewayCommonMessage(t *testing.T) {
@@ -24,7 +27,7 @@ func TestPrintGatewayCommonMessage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer removeAll(root)
+	defer os.RemoveAll(root)
 
 	apiEndpoints := []string{"http://127.0.0.1:9000"}
 	printGatewayCommonMsg(apiEndpoints)
@@ -36,7 +39,7 @@ func TestPrintGatewayStartupMessage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer removeAll(root)
+	defer os.RemoveAll(root)
 
 	apiEndpoints := []string{"http://127.0.0.1:9000"}
 	printGatewayStartupMessage(apiEndpoints, "azure")

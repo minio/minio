@@ -72,7 +72,7 @@ func checkPathLength(pathName string) error {
 
 // isDirEmpty - returns whether given directory is empty or not.
 func isDirEmpty(dirname string) bool {
-	f, err := os.Open(preparePath(dirname))
+	f, err := os.Open((dirname))
 	if err != nil {
 		if !os.IsNotExist(err) {
 			errorIf(err, "Unable to access directory")
@@ -114,7 +114,7 @@ func newPosix(path string) (StorageAPI, error) {
 			},
 		},
 	}
-	fi, err := osStat(preparePath(diskPath))
+	fi, err := osStat((diskPath))
 	if err == nil {
 		if !fi.IsDir() {
 			return nil, syscall.ENOTDIR
@@ -122,13 +122,13 @@ func newPosix(path string) (StorageAPI, error) {
 	}
 	if os.IsNotExist(err) {
 		// Disk not found create it.
-		err = mkdirAll(diskPath, 0777)
+		err = os.MkdirAll(diskPath, 0777)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	di, err := getDiskInfo(preparePath(diskPath))
+	di, err := getDiskInfo((diskPath))
 	if err != nil {
 		return nil, err
 	}
@@ -197,7 +197,7 @@ func checkDiskFree(diskPath string, neededSpace int64) (err error) {
 	}
 
 	var di disk.Info
-	di, err = getDiskInfo(preparePath(diskPath))
+	di, err = getDiskInfo((diskPath))
 	if err != nil {
 		return err
 	}
@@ -232,7 +232,7 @@ func (s *posix) Close() error {
 // DiskInfo provides current information about disk space usage,
 // total free inodes and underlying filesystem.
 func (s *posix) DiskInfo() (info disk.Info, err error) {
-	return getDiskInfo(preparePath(s.diskPath))
+	return getDiskInfo((s.diskPath))
 }
 
 // getVolDir - will convert incoming volume names to
@@ -250,7 +250,7 @@ func (s *posix) getVolDir(volume string) (string, error) {
 // checkDiskFound - validates if disk is available,
 // returns errDiskNotFound if not found.
 func (s *posix) checkDiskFound() (err error) {
-	_, err = osStat(preparePath(s.diskPath))
+	_, err = osStat((s.diskPath))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return errDiskNotFound
@@ -282,7 +282,7 @@ func (s *posix) MakeVol(volume string) (err error) {
 		return err
 	}
 	// Make a volume entry, with mode 0777 mkdir honors system umask.
-	err = os.Mkdir(preparePath(volumeDir), 0777)
+	err = os.Mkdir((volumeDir), 0777)
 	if err != nil {
 		if os.IsExist(err) {
 			return errVolumeExists
@@ -311,7 +311,7 @@ func (s *posix) ListVols() (volsInfo []VolInfo, err error) {
 		return nil, err
 	}
 
-	volsInfo, err = listVols(preparePath(s.diskPath))
+	volsInfo, err = listVols((s.diskPath))
 	if err != nil {
 		return nil, err
 	}
@@ -341,7 +341,7 @@ func listVols(dirPath string) ([]VolInfo, error) {
 			continue
 		}
 		var fi os.FileInfo
-		fi, err = osStat(preparePath(pathJoin(dirPath, entry)))
+		fi, err = osStat((pathJoin(dirPath, entry)))
 		if err != nil {
 			// If the file does not exist, skip the entry.
 			if os.IsNotExist(err) {
@@ -382,7 +382,7 @@ func (s *posix) StatVol(volume string) (volInfo VolInfo, err error) {
 	}
 	// Stat a volume entry.
 	var st os.FileInfo
-	st, err = osStat(preparePath(volumeDir))
+	st, err = osStat((volumeDir))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return VolInfo{}, errVolumeNotFound
@@ -419,7 +419,7 @@ func (s *posix) DeleteVol(volume string) (err error) {
 	if err != nil {
 		return err
 	}
-	err = os.Remove(preparePath(volumeDir))
+	err = os.Remove((volumeDir))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return errVolumeNotFound
@@ -454,7 +454,7 @@ func (s *posix) ListDir(volume, dirPath string) (entries []string, err error) {
 		return nil, err
 	}
 	// Stat a volume entry.
-	_, err = osStat(preparePath(volumeDir))
+	_, err = osStat((volumeDir))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, errVolumeNotFound
@@ -490,7 +490,7 @@ func (s *posix) ReadAll(volume, path string) (buf []byte, err error) {
 		return nil, err
 	}
 	// Stat a volume entry.
-	_, err = osStat(preparePath(volumeDir))
+	_, err = osStat((volumeDir))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, errVolumeNotFound
@@ -500,12 +500,12 @@ func (s *posix) ReadAll(volume, path string) (buf []byte, err error) {
 
 	// Validate file path length, before reading.
 	filePath := pathJoin(volumeDir, path)
-	if err = checkPathLength(preparePath(filePath)); err != nil {
+	if err = checkPathLength((filePath)); err != nil {
 		return nil, err
 	}
 
 	// Open the file for reading.
-	buf, err = ioutil.ReadFile(preparePath(filePath))
+	buf, err = ioutil.ReadFile((filePath))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, errFileNotFound
@@ -575,7 +575,7 @@ func (s *posix) ReadFileWithVerify(volume, path string, offset int64, buf []byte
 		return 0, err
 	}
 	// Stat a volume entry.
-	_, err = osStat(preparePath(volumeDir))
+	_, err = osStat((volumeDir))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return 0, errVolumeNotFound
@@ -585,12 +585,12 @@ func (s *posix) ReadFileWithVerify(volume, path string, offset int64, buf []byte
 
 	// Validate effective path length before reading.
 	filePath := pathJoin(volumeDir, path)
-	if err = checkPathLength(preparePath(filePath)); err != nil {
+	if err = checkPathLength((filePath)); err != nil {
 		return 0, err
 	}
 
 	// Open the file for reading.
-	file, err := os.Open(preparePath(filePath))
+	file, err := os.Open((filePath))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return 0, errFileNotFound
@@ -695,7 +695,7 @@ func (s *posix) createFile(volume, path string) (f *os.File, err error) {
 		return nil, err
 	}
 	// Stat a volume entry.
-	_, err = osStat(preparePath(volumeDir))
+	_, err = osStat((volumeDir))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, errVolumeNotFound
@@ -704,20 +704,20 @@ func (s *posix) createFile(volume, path string) (f *os.File, err error) {
 	}
 
 	filePath := pathJoin(volumeDir, path)
-	if err = checkPathLength(preparePath(filePath)); err != nil {
+	if err = checkPathLength((filePath)); err != nil {
 		return nil, err
 	}
 
 	// Verify if the file already exists and is not of regular type.
 	var st os.FileInfo
-	if st, err = osStat(preparePath(filePath)); err == nil {
+	if st, err = osStat((filePath)); err == nil {
 		if !st.Mode().IsRegular() {
 			return nil, errIsNotRegular
 		}
 	} else {
 		// Create top level directories if they don't exist.
 		// with mode 0777 mkdir honors system umask.
-		if err = mkdirAll(slashpath.Dir(filePath), 0777); err != nil {
+		if err = os.MkdirAll(slashpath.Dir(filePath), 0777); err != nil {
 			// File path cannot be verified since one of the parents is a file.
 			if isSysErrNotDir(err) {
 				return nil, errFileAccessDenied
@@ -729,7 +729,7 @@ func (s *posix) createFile(volume, path string) (f *os.File, err error) {
 		}
 	}
 
-	w, err := os.OpenFile(preparePath(filePath), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0666)
+	w, err := os.OpenFile((filePath), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0666)
 	if err != nil {
 		// File path cannot be verified since one of the parents is a file.
 		if isSysErrNotDir(err) {
@@ -846,7 +846,7 @@ func (s *posix) StatFile(volume, path string) (file FileInfo, err error) {
 		return FileInfo{}, err
 	}
 	// Stat a volume entry.
-	_, err = osStat(preparePath(volumeDir))
+	_, err = osStat((volumeDir))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return FileInfo{}, errVolumeNotFound
@@ -855,10 +855,10 @@ func (s *posix) StatFile(volume, path string) (file FileInfo, err error) {
 	}
 
 	filePath := slashpath.Join(volumeDir, path)
-	if err = checkPathLength(preparePath(filePath)); err != nil {
+	if err = checkPathLength((filePath)); err != nil {
 		return FileInfo{}, err
 	}
-	st, err := osStat(preparePath(filePath))
+	st, err := osStat((filePath))
 	if err != nil {
 		// File is really not found.
 		if os.IsNotExist(err) {
@@ -895,7 +895,7 @@ func deleteFile(basePath, deletePath string) error {
 	}
 
 	// Attempt to remove path.
-	if err := os.Remove(preparePath(deletePath)); err != nil {
+	if err := os.Remove((deletePath)); err != nil {
 		// Ignore errors if the directory is not empty. The server relies on
 		// this functionality, and sometimes uses recursion that should not
 		// error on parent directories.
@@ -939,7 +939,7 @@ func (s *posix) DeleteFile(volume, path string) (err error) {
 		return err
 	}
 	// Stat a volume entry.
-	_, err = osStat(preparePath(volumeDir))
+	_, err = osStat((volumeDir))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return errVolumeNotFound
@@ -950,7 +950,7 @@ func (s *posix) DeleteFile(volume, path string) (err error) {
 	// Following code is needed so that we retain "/" suffix if any in
 	// path argument.
 	filePath := pathJoin(volumeDir, path)
-	if err = checkPathLength(preparePath(filePath)); err != nil {
+	if err = checkPathLength((filePath)); err != nil {
 		return err
 	}
 
@@ -983,14 +983,14 @@ func (s *posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err e
 		return err
 	}
 	// Stat a volume entry.
-	_, err = osStat(preparePath(srcVolumeDir))
+	_, err = osStat((srcVolumeDir))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return errVolumeNotFound
 		}
 		return err
 	}
-	_, err = osStat(preparePath(dstVolumeDir))
+	_, err = osStat((dstVolumeDir))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return errVolumeNotFound
@@ -1004,16 +1004,16 @@ func (s *posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err e
 		return errFileAccessDenied
 	}
 	srcFilePath := slashpath.Join(srcVolumeDir, srcPath)
-	if err = checkPathLength(preparePath(srcFilePath)); err != nil {
+	if err = checkPathLength((srcFilePath)); err != nil {
 		return err
 	}
 	dstFilePath := slashpath.Join(dstVolumeDir, dstPath)
-	if err = checkPathLength(preparePath(dstFilePath)); err != nil {
+	if err = checkPathLength((dstFilePath)); err != nil {
 		return err
 	}
 	if srcIsDir {
 		// If source is a directory we expect the destination to be non-existent always.
-		_, err = osStat(preparePath(dstFilePath))
+		_, err = osStat((dstFilePath))
 		if err == nil {
 			return errFileAccessDenied
 		}
@@ -1023,7 +1023,7 @@ func (s *posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err e
 		// Destination does not exist, hence proceed with the rename.
 	}
 	// Creates all the parent directories, with mode 0777 mkdir honors system umask.
-	if err = mkdirAll(slashpath.Dir(dstFilePath), 0777); err != nil {
+	if err = os.MkdirAll(slashpath.Dir(dstFilePath), 0777); err != nil {
 		// File path cannot be verified since one of the parents is a file.
 		if isSysErrNotDir(err) {
 			return errFileAccessDenied
@@ -1036,7 +1036,7 @@ func (s *posix) RenameFile(srcVolume, srcPath, dstVolume, dstPath string) (err e
 		return err
 	}
 	// Finally attempt a rename.
-	err = os.Rename(preparePath(srcFilePath), preparePath(dstFilePath))
+	err = os.Rename((srcFilePath), (dstFilePath))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return errFileNotFound
