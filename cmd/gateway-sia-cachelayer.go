@@ -1,4 +1,20 @@
-package cmd
+/*
+ * (C) 2017 David Gore <dvstate@gmail.com>
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+ package cmd
 
 import (
 	"database/sql"
@@ -108,6 +124,10 @@ var siaErrorFailedToDeleteCachedFile = &SiaServiceError{
 var siaErrorObjectDoesNotExistInBucket = &SiaServiceError{
 	Code:    "SiaErrorObjectDoesNotExistInBucket",
 	Message: "Object does not exist in bucket.",
+}
+var siaErrorBucketNotEmpty = &SiaServiceError{
+	Code:    "SiaErrorBucketNotEmpty",
+	Message: "Bucket is not empty.",
 }
 var siaErrorObjectAlreadyExists = &SiaServiceError{
 	Code:    "SiaErrorObjectAlreadyExists",
@@ -283,16 +303,14 @@ func (cache *SiaCacheLayer) InsertBucket(bucket string) *SiaServiceError {
 // DeleteBucket will attempt to delete an existing bucket
 func (cache *SiaCacheLayer) DeleteBucket(bucket string) *SiaServiceError {
 	cache.debugmsg("SiaCacheLayer.DeleteBucket")
-	// First, should delete all objects in the bucket
+
+	// Do NOT delete if objects exist in bucket.
 	objects, err := cache.ListObjects(bucket)
 	if err != nil {
 		return err
 	}
-	for _, object := range objects {
-		err = cache.DeleteObject(bucket, object.Name)
-		if err != nil {
-			return err
-		}
+	if (len(objects) > 0) {
+		return siaErrorBucketNotEmpty
 	}
 
 	cache.lockDB()
