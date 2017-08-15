@@ -446,30 +446,35 @@ func healObject(storageDisks []StorageAPI, bucket string, object string, quorum 
 
 	// Checksum of the part files. checkSumInfos[index] will contain checksums
 	// of all the part files in the outDatedDisks[index]
-	checkSumInfos := make([][]checkSumInfo, len(outDatedDisks))
+	checksumInfos := make([][]ChecksumInfo, len(outDatedDisks))
 
 	// Heal each part. erasureHealFile() will write the healed part to
 	// .minio/tmp/uuid/ which needs to be renamed later to the final location.
+	storage, err := NewErasureStorage(latestDisks, latestMeta.Erasure.DataBlocks, latestMeta.Erasure.ParityBlocks)
+	if err != nil {
+		return 0, 0, toObjectErr(err, bucket, object)
+	}
+	checksums := make([][]byte, len(latestDisks))
 	for partIndex := 0; partIndex < len(latestMeta.Parts); partIndex++ {
 		partName := latestMeta.Parts[partIndex].Name
 		partSize := latestMeta.Parts[partIndex].Size
 		erasure := latestMeta.Erasure
-		sumInfo := latestMeta.Erasure.GetCheckSumInfo(partName)
+		var algorithm BitrotAlgorithm
+		for i, disk := range storage.disks {
+			if disk != OfflineDisk {
+				info := partsMetadata[i].Erasure.GetChecksumInfo(partName)
+				algorithm = info.Algorithm
+				checksums[i] = info.Hash
+			}
+		}
 		// Heal the part file.
-		checkSums, hErr := erasureHealFile(latestDisks, outDatedDisks,
-			bucket, pathJoin(object, partName),
-			minioMetaTmpBucket, pathJoin(tmpID, partName),
-			partSize, erasure.BlockSize, erasure.DataBlocks, erasure.ParityBlocks, sumInfo.Algorithm)
+		file, hErr := storage.HealFile(outDatedDisks, bucket, pathJoin(object, partName), erasure.BlockSize, minioMetaTmpBucket, pathJoin(tmpID, partName), partSize, algorithm, checksums)
 		if hErr != nil {
 			return 0, 0, toObjectErr(hErr, bucket, object)
 		}
-		for index, sum := range checkSums {
-			if outDatedDisks[index] != nil {
-				checkSumInfos[index] = append(checkSumInfos[index], checkSumInfo{
-					Name:      partName,
-					Algorithm: sumInfo.Algorithm,
-					Hash:      sum,
-				})
+		for i := range outDatedDisks {
+			if outDatedDisks[i] != OfflineDisk {
+				checksumInfos[i] = append(checksumInfos[i], ChecksumInfo{partName, file.Algorithm, file.Checksums[i]})
 			}
 		}
 	}
@@ -480,7 +485,7 @@ func healObject(storageDisks []StorageAPI, bucket string, object string, quorum 
 			continue
 		}
 		partsMetadata[index] = latestMeta
-		partsMetadata[index].Erasure.Checksum = checkSumInfos[index]
+		partsMetadata[index].Erasure.Checksums = checksumInfos[index]
 	}
 
 	// Generate and write `xl.json` generated from other disks.

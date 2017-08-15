@@ -18,358 +18,148 @@ package cmd
 
 import (
 	"bytes"
+	crand "crypto/rand"
+	"io"
 	"math/rand"
 	"testing"
-
-	"reflect"
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio/pkg/bpool"
 )
 
-// Tests getReadDisks which returns readable disks slice from which we can
-// read parallelly.
-func testGetReadDisks(t *testing.T, xl *xlObjects) {
-	d := xl.storageDisks
-	testCases := []struct {
-		index     int          // index argument for getReadDisks
-		argDisks  []StorageAPI // disks argument for getReadDisks
-		retDisks  []StorageAPI // disks return value from getReadDisks
-		nextIndex int          // return value from getReadDisks
-		err       error        // error return value from getReadDisks
-	}{
-		// Test case - 1.
-		// When all disks are available, should return data disks.
-		{
-			0,
-			[]StorageAPI{d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7], d[8], d[9], d[10], d[11], d[12], d[13], d[14], d[15]},
-			[]StorageAPI{d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7], nil, nil, nil, nil, nil, nil, nil, nil},
-			8,
-			nil,
-		},
-		// Test case - 2.
-		// If a parity disk is down, should return all data disks.
-		{
-			0,
-			[]StorageAPI{d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7], d[8], nil, d[10], d[11], d[12], d[13], d[14], d[15]},
-			[]StorageAPI{d[0], d[1], d[2], d[3], d[4], d[5], d[6], d[7], nil, nil, nil, nil, nil, nil, nil, nil},
-			8,
-			nil,
-		},
-		// Test case - 3.
-		// If a data disk is down, should return 7 data and 1 parity.
-		{
-			0,
-			[]StorageAPI{nil, d[1], d[2], d[3], d[4], d[5], d[6], d[7], d[8], d[9], d[10], d[11], d[12], d[13], d[14], d[15]},
-			[]StorageAPI{nil, d[1], d[2], d[3], d[4], d[5], d[6], d[7], d[8], nil, nil, nil, nil, nil, nil, nil},
-			9,
-			nil,
-		},
-		// Test case - 4.
-		// If 7 data disks are down, should return 1 data and 7 parity.
-		{
-			0,
-			[]StorageAPI{nil, nil, nil, nil, nil, nil, nil, d[7], d[8], d[9], d[10], d[11], d[12], d[13], d[14], d[15]},
-			[]StorageAPI{nil, nil, nil, nil, nil, nil, nil, d[7], d[8], d[9], d[10], d[11], d[12], d[13], d[14], nil},
-			15,
-			nil,
-		},
-		// Test case - 5.
-		// When 2 disks fail during parallelRead, next call to getReadDisks should return 3 disks
-		{
-			8,
-			[]StorageAPI{nil, nil, d[2], d[3], d[4], d[5], d[6], d[7], d[8], d[9], d[10], d[11], d[12], d[13], d[14], d[15]},
-			[]StorageAPI{nil, nil, nil, nil, nil, nil, nil, nil, d[8], d[9], nil, nil, nil, nil, nil, nil},
-			10,
-			nil,
-		},
-		// Test case - 6.
-		// If 2 disks again fail from the 3 disks returned previously, return next 2 disks
-		{
-			11,
-			[]StorageAPI{nil, nil, d[2], d[3], d[4], d[5], d[6], d[7], nil, nil, d[10], d[11], d[12], d[13], d[14], d[15]},
-			[]StorageAPI{nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, d[11], nil, nil, nil, nil},
-			12,
-			nil,
-		},
-		// Test case - 7.
-		// No more disks are available for read, return error
-		{
-			13,
-			[]StorageAPI{nil, nil, d[2], d[3], d[4], d[5], d[6], d[7], nil, nil, d[10], nil, nil, nil, nil, nil},
-			nil,
-			0,
-			errXLReadQuorum,
-		},
-	}
-
-	for i, test := range testCases {
-		disks, nextIndex, err := getReadDisks(test.argDisks, test.index, xl.dataBlocks)
-		if errorCause(err) != test.err {
-			t.Errorf("test-case %d - expected error : %s, got : %s", i+1, test.err, err)
-			continue
-		}
-		if test.nextIndex != nextIndex {
-			t.Errorf("test-case %d - expected nextIndex: %d, got : %d", i+1, test.nextIndex, nextIndex)
-			continue
-		}
-		if !reflect.DeepEqual(test.retDisks, disks) {
-			t.Errorf("test-case %d : incorrect disks returned. expected %+v, got %+v", i+1, test.retDisks, disks)
-			continue
-		}
-	}
-}
-
-// Test for isSuccessDataBlocks and isSuccessDecodeBlocks.
-func TestIsSuccessBlocks(t *testing.T) {
-	dataBlocks := 8
-	testCases := []struct {
-		enBlocks      [][]byte // data and parity blocks.
-		successData   bool     // expected return value of isSuccessDataBlocks()
-		successDecode bool     // expected return value of isSuccessDecodeBlocks()
-	}{
-		{
-			// When all data and partity blocks are available.
-			[][]byte{
-				{'a'}, {'a'}, {'a'}, {'a'}, {'a'}, {'a'}, {'a'}, {'a'},
-				{'a'}, {'a'}, {'a'}, {'a'}, {'a'}, {'a'}, {'a'}, {'a'},
-			},
-			true,
-			true,
-		},
-		{
-			// When one data block is not available.
-			[][]byte{
-				nil, {'a'}, {'a'}, {'a'}, {'a'}, {'a'}, {'a'}, {'a'},
-				{'a'}, {'a'}, {'a'}, {'a'}, {'a'}, {'a'}, {'a'}, {'a'},
-			},
-			false,
-			true,
-		},
-		{
-			// When one data and all parity are available, enough for reedsolomon.Reconstruct()
-			[][]byte{
-				nil, nil, nil, nil, nil, nil, nil, {'a'},
-				{'a'}, {'a'}, {'a'}, {'a'}, {'a'}, {'a'}, {'a'}, {'a'},
-			},
-			false,
-			true,
-		},
-		{
-			// When all data disks are not available, enough for reedsolomon.Reconstruct()
-			[][]byte{
-				nil, nil, nil, nil, nil, nil, nil, nil,
-				{'a'}, {'a'}, {'a'}, {'a'}, {'a'}, {'a'}, {'a'}, {'a'},
-			},
-			false,
-			true,
-		},
-		{
-			// Not enough disks for reedsolomon.Reconstruct()
-			[][]byte{
-				nil, nil, nil, nil, nil, nil, nil, nil,
-				nil, {'a'}, {'a'}, {'a'}, {'a'}, {'a'}, {'a'}, {'a'},
-			},
-			false,
-			false,
-		},
-	}
-
-	for i, test := range testCases {
-		got := isSuccessDataBlocks(test.enBlocks, dataBlocks)
-		if test.successData != got {
-			t.Errorf("test-case %d : expected %v got %v", i+1, test.successData, got)
-		}
-		got = isSuccessDecodeBlocks(test.enBlocks, dataBlocks)
-		if test.successDecode != got {
-			t.Errorf("test-case %d : expected %v got %v", i+1, test.successDecode, got)
-		}
-	}
-}
-
-// Wrapper function for testGetReadDisks, testShuffleDisks.
-func TestErasureReadUtils(t *testing.T) {
-	nDisks := 16
-	disks, err := getRandomDisks(nDisks)
-	if err != nil {
-		t.Fatal(err)
-	}
-	objLayer, _, err := initObjectLayer(mustGetNewEndpointList(disks...))
-	if err != nil {
-		removeRoots(disks)
-		t.Fatal(err)
-	}
-	defer removeRoots(disks)
-	xl := objLayer.(*xlObjects)
-	testGetReadDisks(t, xl)
-}
-
-// Simulates a faulty disk for ReadFile()
-type ReadDiskDown struct {
-	*posix
-}
-
-func (r ReadDiskDown) ReadFile(volume string, path string, offset int64, buf []byte) (n int64, err error) {
+func (d badDisk) ReadFile(volume string, path string, offset int64, buf []byte) (n int64, err error) {
 	return 0, errFaultyDisk
 }
 
-func (r ReadDiskDown) ReadFileWithVerify(volume string, path string, offset int64, buf []byte,
-	algo HashAlgo, expectedHash string) (n int64, err error) {
-
+func (d badDisk) ReadFileWithVerify(volume string, path string, offset int64, buf []byte, verifier *BitrotVerifier) (n int64, err error) {
 	return 0, errFaultyDisk
 }
 
-func TestErasureReadFileDiskFail(t *testing.T) {
-	// Initialize environment needed for the test.
-	dataBlocks := 7
-	parityBlocks := 7
-	blockSize := int64(blockSizeV1)
-	setup, err := newErasureTestSetup(dataBlocks, parityBlocks, blockSize)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	defer setup.Remove()
-
-	disks := setup.disks
-
-	// Prepare a slice of 1humanize.MiByte with random data.
-	data := make([]byte, 1*humanize.MiByte)
-	length := int64(len(data))
-	_, err = rand.Read(data)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Create a test file to read from.
-	_, size, checkSums, err := erasureCreateFile(disks, "testbucket", "testobject", bytes.NewReader(data), true, blockSize, dataBlocks, parityBlocks, bitRotAlgo, dataBlocks+1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if size != length {
-		t.Errorf("erasureCreateFile returned %d, expected %d", size, length)
-	}
-
-	// create byte pool which will be used by erasureReadFile for
-	// reading from disks and erasure decoding.
-	chunkSize := getChunkSize(blockSize, dataBlocks)
-	pool := bpool.NewBytePool(chunkSize, len(disks))
-
-	buf := &bytes.Buffer{}
-	_, err = erasureReadFile(buf, disks, "testbucket", "testobject", 0, length, length, blockSize, dataBlocks, parityBlocks, checkSums, bitRotAlgo, pool)
-	if err != nil {
-		t.Error(err)
-	}
-	if !bytes.Equal(buf.Bytes(), data) {
-		t.Error("Contents of the erasure coded file differs")
-	}
-
-	// 2 disks down. Read should succeed.
-	disks[4] = ReadDiskDown{disks[4].(*posix)}
-	disks[5] = ReadDiskDown{disks[5].(*posix)}
-
-	buf.Reset()
-	_, err = erasureReadFile(buf, disks, "testbucket", "testobject", 0, length, length, blockSize, dataBlocks, parityBlocks, checkSums, bitRotAlgo, pool)
-	if err != nil {
-		t.Error(err)
-	}
-	if !bytes.Equal(buf.Bytes(), data) {
-		t.Error("Contents of the erasure coded file differs")
-	}
-
-	// 4 more disks down. 6 disks down in total. Read should succeed.
-	disks[6] = ReadDiskDown{disks[6].(*posix)}
-	disks[8] = ReadDiskDown{disks[8].(*posix)}
-	disks[9] = ReadDiskDown{disks[9].(*posix)}
-	disks[11] = ReadDiskDown{disks[11].(*posix)}
-
-	buf.Reset()
-	_, err = erasureReadFile(buf, disks, "testbucket", "testobject", 0, length, length, blockSize, dataBlocks, parityBlocks, checkSums, bitRotAlgo, pool)
-	if err != nil {
-		t.Error(err)
-	}
-	if !bytes.Equal(buf.Bytes(), data) {
-		t.Error("Contents of the erasure coded file differs")
-	}
-
-	// 2 more disk down. 8 disks down in total. Read should fail.
-	disks[12] = ReadDiskDown{disks[12].(*posix)}
-	disks[13] = ReadDiskDown{disks[13].(*posix)}
-	buf.Reset()
-	_, err = erasureReadFile(buf, disks, "testbucket", "testobject", 0, length, length, blockSize, dataBlocks, parityBlocks, checkSums, bitRotAlgo, pool)
-	if errorCause(err) != errXLReadQuorum {
-		t.Fatal("expected errXLReadQuorum error")
-	}
+var erasureReadFileTests = []struct {
+	dataBlocks                   int
+	onDisks, offDisks            int
+	blocksize, data              int64
+	offset                       int64
+	length                       int64
+	algorithm                    BitrotAlgorithm
+	shouldFail, shouldFailQuorum bool
+}{
+	{dataBlocks: 2, onDisks: 4, offDisks: 0, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: BLAKE2b512, shouldFail: false, shouldFailQuorum: false},                                                         // 0
+	{dataBlocks: 3, onDisks: 6, offDisks: 0, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: SHA256, shouldFail: false, shouldFailQuorum: false},                                                             // 1
+	{dataBlocks: 4, onDisks: 8, offDisks: 0, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},                                             // 2
+	{dataBlocks: 5, onDisks: 10, offDisks: 0, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 1, length: oneMiByte - 1, algorithm: BLAKE2b512, shouldFail: false, shouldFailQuorum: false},                                                    // 3
+	{dataBlocks: 6, onDisks: 12, offDisks: 0, blocksize: int64(oneMiByte), data: oneMiByte, offset: oneMiByte, length: 0, algorithm: BLAKE2b512, shouldFail: false, shouldFailQuorum: false},                                                          // 4
+	{dataBlocks: 7, onDisks: 14, offDisks: 0, blocksize: int64(oneMiByte), data: oneMiByte, offset: 3, length: 1024, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},                                                   // 5
+	{dataBlocks: 8, onDisks: 16, offDisks: 0, blocksize: int64(oneMiByte), data: oneMiByte, offset: 4, length: 8 * 1024, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},                                               // 6
+	{dataBlocks: 7, onDisks: 14, offDisks: 7, blocksize: int64(blockSizeV1), data: oneMiByte, offset: oneMiByte, length: 1, algorithm: DefaultBitrotAlgorithm, shouldFail: true, shouldFailQuorum: false},                                             // 7
+	{dataBlocks: 6, onDisks: 12, offDisks: 6, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},                                            // 8
+	{dataBlocks: 5, onDisks: 10, offDisks: 5, blocksize: int64(oneMiByte), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: BLAKE2b512, shouldFail: false, shouldFailQuorum: false},                                                          // 9
+	{dataBlocks: 4, onDisks: 8, offDisks: 4, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: SHA256, shouldFail: false, shouldFailQuorum: false},                                                             // 10
+	{dataBlocks: 3, onDisks: 6, offDisks: 3, blocksize: int64(oneMiByte), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},                                               // 11
+	{dataBlocks: 2, onDisks: 4, offDisks: 2, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},                                             // 12
+	{dataBlocks: 2, onDisks: 4, offDisks: 1, blocksize: int64(oneMiByte), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},                                               // 13
+	{dataBlocks: 3, onDisks: 6, offDisks: 2, blocksize: int64(oneMiByte), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},                                               // 14
+	{dataBlocks: 4, onDisks: 8, offDisks: 3, blocksize: int64(2 * oneMiByte), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},                                           // 15
+	{dataBlocks: 5, onDisks: 10, offDisks: 6, blocksize: int64(oneMiByte), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: true},                                               // 16
+	{dataBlocks: 5, onDisks: 10, offDisks: 2, blocksize: int64(blockSizeV1), data: 2 * oneMiByte, offset: oneMiByte, length: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},                                // 17
+	{dataBlocks: 5, onDisks: 10, offDisks: 1, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: BLAKE2b512, shouldFail: false, shouldFailQuorum: false},                                                        // 18
+	{dataBlocks: 6, onDisks: 12, offDisks: 3, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: SHA256, shouldFail: false, shouldFailQuorum: false},                                                            // 19
+	{dataBlocks: 6, onDisks: 12, offDisks: 7, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: true},                                             // 20
+	{dataBlocks: 8, onDisks: 16, offDisks: 8, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},                                            // 21
+	{dataBlocks: 8, onDisks: 16, offDisks: 9, blocksize: int64(oneMiByte), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: true},                                               // 22
+	{dataBlocks: 8, onDisks: 16, offDisks: 7, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},                                            // 23
+	{dataBlocks: 2, onDisks: 4, offDisks: 1, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},                                             // 24
+	{dataBlocks: 2, onDisks: 4, offDisks: 0, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},                                             // 25
+	{dataBlocks: 2, onDisks: 4, offDisks: 0, blocksize: int64(blockSizeV1), data: oneMiByte, offset: 0, length: oneMiByte, algorithm: 0, shouldFail: true, shouldFailQuorum: false},                                                                   // 26
+	{dataBlocks: 2, onDisks: 4, offDisks: 0, blocksize: int64(blockSizeV1), data: int64(blockSizeV1) + 1, offset: 0, length: int64(blockSizeV1) + 1, algorithm: BLAKE2b512, shouldFail: false, shouldFailQuorum: false},                               // 27
+	{dataBlocks: 2, onDisks: 4, offDisks: 0, blocksize: int64(blockSizeV1), data: int64(2 * blockSizeV1), offset: 12, length: int64(blockSizeV1) + 17, algorithm: BLAKE2b512, shouldFail: false, shouldFailQuorum: false},                             // 28
+	{dataBlocks: 3, onDisks: 6, offDisks: 0, blocksize: int64(blockSizeV1), data: int64(2 * blockSizeV1), offset: 1023, length: int64(blockSizeV1) + 1024, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},             // 29
+	{dataBlocks: 4, onDisks: 8, offDisks: 0, blocksize: int64(blockSizeV1), data: int64(2 * blockSizeV1), offset: 11, length: int64(blockSizeV1) + 2*1024, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},             // 30
+	{dataBlocks: 6, onDisks: 12, offDisks: 0, blocksize: int64(blockSizeV1), data: int64(2 * blockSizeV1), offset: 512, length: int64(blockSizeV1) + 8*1024, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},           // 31
+	{dataBlocks: 8, onDisks: 16, offDisks: 0, blocksize: int64(blockSizeV1), data: int64(2 * blockSizeV1), offset: int64(blockSizeV1), length: int64(blockSizeV1) - 1, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false}, // 32
+	{dataBlocks: 2, onDisks: 4, offDisks: 0, blocksize: int64(blockSizeV1), data: int64(oneMiByte), offset: -1, length: 3, algorithm: DefaultBitrotAlgorithm, shouldFail: true, shouldFailQuorum: false},                                              // 33
+	{dataBlocks: 2, onDisks: 4, offDisks: 0, blocksize: int64(blockSizeV1), data: int64(oneMiByte), offset: 1024, length: -1, algorithm: DefaultBitrotAlgorithm, shouldFail: true, shouldFailQuorum: false},                                           // 34
+	{dataBlocks: 4, onDisks: 6, offDisks: 0, blocksize: int64(blockSizeV1), data: int64(blockSizeV1), offset: 0, length: int64(blockSizeV1), algorithm: BLAKE2b512, shouldFail: false, shouldFailQuorum: false},                                       // 35
+	{dataBlocks: 4, onDisks: 6, offDisks: 1, blocksize: int64(blockSizeV1), data: int64(2 * blockSizeV1), offset: 12, length: int64(blockSizeV1) + 17, algorithm: BLAKE2b512, shouldFail: false, shouldFailQuorum: false},                             // 36
+	{dataBlocks: 4, onDisks: 6, offDisks: 3, blocksize: int64(blockSizeV1), data: int64(2 * blockSizeV1), offset: 1023, length: int64(blockSizeV1) + 1024, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: true},              // 37
+	{dataBlocks: 8, onDisks: 12, offDisks: 4, blocksize: int64(blockSizeV1), data: int64(2 * blockSizeV1), offset: 11, length: int64(blockSizeV1) + 2*1024, algorithm: DefaultBitrotAlgorithm, shouldFail: false, shouldFailQuorum: false},            // 38
 }
 
-func TestErasureReadFileOffsetLength(t *testing.T) {
-	// Initialize environment needed for the test.
-	dataBlocks := 7
-	parityBlocks := 7
-	blockSize := int64(1 * humanize.MiByte)
-	setup, err := newErasureTestSetup(dataBlocks, parityBlocks, blockSize)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	defer setup.Remove()
-
-	disks := setup.disks
-
-	// Prepare a slice of 5humanize.MiByte with random data.
-	data := make([]byte, 5*humanize.MiByte)
-	length := int64(len(data))
-	_, err = rand.Read(data)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Create a test file to read from.
-	_, size, checkSums, err := erasureCreateFile(disks, "testbucket", "testobject", bytes.NewReader(data), true, blockSize, dataBlocks, parityBlocks, bitRotAlgo, dataBlocks+1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if size != length {
-		t.Errorf("erasureCreateFile returned %d, expected %d", size, length)
-	}
-
-	testCases := []struct {
-		offset, length int64
-	}{
-		// Full file.
-		{0, length},
-		// Read nothing.
-		{length, 0},
-		// 2nd block.
-		{blockSize, blockSize},
-		// Test cases for random offsets and lengths.
-		{blockSize - 1, 2},
-		{blockSize - 1, blockSize + 1},
-		{blockSize + 1, blockSize - 1},
-		{blockSize + 1, blockSize},
-		{blockSize + 1, blockSize + 1},
-		{blockSize*2 - 1, blockSize + 1},
-		{length - 1, 1},
-		{length - blockSize, blockSize},
-		{length - blockSize - 1, blockSize},
-		{length - blockSize - 1, blockSize + 1},
-	}
-	chunkSize := getChunkSize(blockSize, dataBlocks)
-	pool := bpool.NewBytePool(chunkSize, len(disks))
-
-	// Compare the data read from file with "data" byte array.
-	for i, testCase := range testCases {
-		expected := data[testCase.offset:(testCase.offset + testCase.length)]
-		buf := &bytes.Buffer{}
-		_, err = erasureReadFile(buf, disks, "testbucket", "testobject", testCase.offset, testCase.length, length, blockSize, dataBlocks, parityBlocks, checkSums, bitRotAlgo, pool)
+func TestErasureReadFile(t *testing.T) {
+	for i, test := range erasureReadFileTests {
+		setup, err := newErasureTestSetup(test.dataBlocks, test.onDisks-test.dataBlocks, test.blocksize)
 		if err != nil {
-			t.Error(err)
-			continue
+			t.Fatalf("Test %d: failed to create test setup: %v", i, err)
 		}
-		got := buf.Bytes()
-		if !bytes.Equal(expected, got) {
-			t.Errorf("Test %d : read data is different from what was expected", i+1)
+		storage, err := NewErasureStorage(setup.disks, test.dataBlocks, test.onDisks-test.dataBlocks)
+		if err != nil {
+			setup.Remove()
+			t.Fatalf("Test %d: failed to create ErasureStorage: %v", i, err)
 		}
+
+		data := make([]byte, test.data)
+		if _, err = io.ReadFull(crand.Reader, data); err != nil {
+			setup.Remove()
+			t.Fatalf("Test %d: failed to generate random test data: %v", i, err)
+		}
+		writeAlgorithm := test.algorithm
+		if !test.algorithm.Available() {
+			writeAlgorithm = DefaultBitrotAlgorithm
+		}
+		buffer := make([]byte, test.blocksize, 2*test.blocksize)
+		file, err := storage.CreateFile(bytes.NewReader(data[:]), "testbucket", "object", buffer, writeAlgorithm, test.dataBlocks+1)
+		if err != nil {
+			setup.Remove()
+			t.Fatalf("Test %d: failed to create erasure test file: %v", i, err)
+		}
+		pool := bpool.NewBytePool(getChunkSize(test.blocksize, test.dataBlocks), len(storage.disks))
+		writer := bytes.NewBuffer(nil)
+		readInfo, err := storage.ReadFile(writer, "testbucket", "object", test.offset, test.length, test.data, file.Checksums, test.algorithm, test.blocksize, pool)
+		if err != nil && !test.shouldFail {
+			t.Errorf("Test %d: should pass but failed with: %v", i, err)
+		}
+		if err == nil && test.shouldFail {
+			t.Errorf("Test %d: should fail but it passed", i)
+		}
+		if err == nil {
+			if readInfo.Size != test.length {
+				t.Errorf("Test %d: read returns wrong number of bytes: got: #%d want: #%d", i, readInfo.Size, test.length)
+			}
+			if readInfo.Algorithm != test.algorithm {
+				t.Errorf("Test %d: read returns wrong algorithm: got: %v want: %v", i, readInfo.Algorithm, test.algorithm)
+			}
+			if content := writer.Bytes(); !bytes.Equal(content, data[test.offset:test.offset+test.length]) {
+				t.Errorf("Test %d: read retruns wrong file content", i)
+			}
+		}
+		if err == nil && !test.shouldFail {
+			writer.Reset()
+			for j := range storage.disks[:test.offDisks] {
+				storage.disks[j] = badDisk{nil}
+			}
+			if test.offDisks > 0 {
+				storage.disks[0] = OfflineDisk
+			}
+			readInfo, err = storage.ReadFile(writer, "testbucket", "object", test.offset, test.length, test.data, file.Checksums, test.algorithm, test.blocksize, pool)
+			if err != nil && !test.shouldFailQuorum {
+				t.Errorf("Test %d: should pass but failed with: %v", i, err)
+			}
+			if err == nil && test.shouldFailQuorum {
+				t.Errorf("Test %d: should fail but it passed", i)
+			}
+			if !test.shouldFailQuorum {
+				if readInfo.Size != test.length {
+					t.Errorf("Test %d: read returns wrong number of bytes: got: #%d want: #%d", i, readInfo.Size, test.length)
+				}
+				if readInfo.Algorithm != test.algorithm {
+					t.Errorf("Test %d: read returns wrong algorithm: got: %v want: %v", i, readInfo.Algorithm, test.algorithm)
+				}
+				if content := writer.Bytes(); !bytes.Equal(content, data[test.offset:test.offset+test.length]) {
+					t.Errorf("Test %d: read retruns wrong file content", i)
+				}
+			}
+		}
+		setup.Remove()
 	}
 }
 
@@ -390,8 +180,10 @@ func TestErasureReadFileRandomOffsetLength(t *testing.T) {
 	}
 	defer setup.Remove()
 
-	disks := setup.disks
-
+	storage, err := NewErasureStorage(setup.disks, dataBlocks, parityBlocks)
+	if err != nil {
+		t.Fatalf("failed to create ErasureStorage: %v", err)
+	}
 	// Prepare a slice of 5MiB with random data.
 	data := make([]byte, 5*humanize.MiByte)
 	length := int64(len(data))
@@ -404,12 +196,13 @@ func TestErasureReadFileRandomOffsetLength(t *testing.T) {
 	iterations := 10000
 
 	// Create a test file to read from.
-	_, size, checkSums, err := erasureCreateFile(disks, "testbucket", "testobject", bytes.NewReader(data), true, blockSize, dataBlocks, parityBlocks, bitRotAlgo, dataBlocks+1)
+	buffer := make([]byte, blockSize, 2*blockSize)
+	file, err := storage.CreateFile(bytes.NewReader(data), "testbucket", "testobject", buffer, DefaultBitrotAlgorithm, dataBlocks+1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if size != length {
-		t.Errorf("erasureCreateFile returned %d, expected %d", size, length)
+	if file.Size != length {
+		t.Errorf("erasureCreateFile returned %d, expected %d", file.Size, length)
 	}
 
 	// To generate random offset/length.
@@ -418,7 +211,7 @@ func TestErasureReadFileRandomOffsetLength(t *testing.T) {
 	// create pool buffer which will be used by erasureReadFile for
 	// reading from disks and erasure decoding.
 	chunkSize := getChunkSize(blockSize, dataBlocks)
-	pool := bpool.NewBytePool(chunkSize, len(disks))
+	pool := bpool.NewBytePool(chunkSize, len(storage.disks))
 
 	buf := &bytes.Buffer{}
 
@@ -429,7 +222,7 @@ func TestErasureReadFileRandomOffsetLength(t *testing.T) {
 
 		expected := data[offset : offset+readLen]
 
-		_, err = erasureReadFile(buf, disks, "testbucket", "testobject", offset, readLen, length, blockSize, dataBlocks, parityBlocks, checkSums, bitRotAlgo, pool)
+		_, err = storage.ReadFile(buf, "testbucket", "testobject", offset, readLen, length, file.Checksums, DefaultBitrotAlgorithm, blockSize, pool)
 		if err != nil {
 			t.Fatal(err, offset, readLen)
 		}

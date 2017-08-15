@@ -18,7 +18,7 @@ package cmd
 
 import (
 	"bytes"
-	"crypto/sha256"
+	"crypto/rand"
 	"encoding/hex"
 	"io"
 	"io/ioutil"
@@ -30,8 +30,6 @@ import (
 	"testing"
 
 	"github.com/minio/minio/pkg/disk"
-
-	"golang.org/x/crypto/blake2b"
 )
 
 // creates a temp dir and sets up posix layer.
@@ -945,14 +943,14 @@ func TestPosixReadFile(t *testing.T) {
 			func() error {
 				if runtime.GOOS == globalWindowsOSName {
 					return &os.PathError{
-						Op:   "seek",
-						Path: (slashpath.Join(path, "success-vol", "myobject")),
-						Err:  syscall.Errno(0x83), // ERROR_NEGATIVE_SEEK
+						Op:   "read",
+						Path: slashpath.Join(path, "success-vol", "myobject"),
+						Err:  syscall.Errno(0x57), // invalid parameter
 					}
 				}
 				return &os.PathError{
-					Op:   "seek",
-					Path: (slashpath.Join(path, "success-vol", "myobject")),
+					Op:   "read",
+					Path: slashpath.Join(path, "success-vol", "myobject"),
 					Err:  os.ErrInvalid,
 				}
 			}(),
@@ -1079,111 +1077,77 @@ func TestPosixReadFile(t *testing.T) {
 	}
 }
 
+var posixReadFileWithVerifyTests = []struct {
+	file      string
+	offset    int
+	length    int
+	algorithm BitrotAlgorithm
+	expError  error
+}{
+	{file: "myobject", offset: 0, length: 100, algorithm: SHA256, expError: nil},                     // 0
+	{file: "myobject", offset: 25, length: 74, algorithm: SHA256, expError: nil},                     // 1
+	{file: "myobject", offset: 29, length: 70, algorithm: SHA256, expError: nil},                     // 2
+	{file: "myobject", offset: 100, length: 0, algorithm: SHA256, expError: nil},                     // 3
+	{file: "myobject", offset: 1, length: 120, algorithm: SHA256, expError: hashMismatchError{}},     // 4
+	{file: "myobject", offset: 3, length: 1100, algorithm: SHA256, expError: nil},                    // 5
+	{file: "myobject", offset: 2, length: 100, algorithm: SHA256, expError: hashMismatchError{}},     // 6
+	{file: "myobject", offset: 1000, length: 1001, algorithm: SHA256, expError: nil},                 // 7
+	{file: "myobject", offset: 0, length: 100, algorithm: BLAKE2b512, expError: hashMismatchError{}}, // 8
+	{file: "myobject", offset: 25, length: 74, algorithm: BLAKE2b512, expError: nil},                 // 9
+	{file: "myobject", offset: 29, length: 70, algorithm: BLAKE2b512, expError: hashMismatchError{}}, // 10
+	{file: "myobject", offset: 100, length: 0, algorithm: BLAKE2b512, expError: nil},                 // 11
+	{file: "myobject", offset: 1, length: 120, algorithm: BLAKE2b512, expError: nil},                 // 12
+	{file: "myobject", offset: 3, length: 1100, algorithm: BLAKE2b512, expError: nil},                // 13
+	{file: "myobject", offset: 2, length: 100, algorithm: BLAKE2b512, expError: nil},                 // 14
+	{file: "myobject", offset: 1000, length: 1001, algorithm: BLAKE2b512, expError: nil},             // 15
+}
+
 // TestPosixReadFileWithVerify - tests the posix level
 // ReadFileWithVerify API. Only tests hashing related
 // functionality. Other functionality is tested with
 // TestPosixReadFile.
 func TestPosixReadFileWithVerify(t *testing.T) {
-	// create posix test setup
+	volume, object := "test-vol", "myobject"
 	posixStorage, path, err := newPosixTestSetup()
 	if err != nil {
+		os.RemoveAll(path)
 		t.Fatalf("Unable to create posix test setup, %s", err)
 	}
-	defer os.RemoveAll(path)
-
-	volume := "success-vol"
-	// Setup test environment.
 	if err = posixStorage.MakeVol(volume); err != nil {
-		t.Fatalf("Unable to create volume, %s", err)
+		os.RemoveAll(path)
+		t.Fatalf("Unable to create volume %s: %v", volume, err)
+	}
+	data := make([]byte, 8*1024)
+	if _, err = io.ReadFull(rand.Reader, data); err != nil {
+		os.RemoveAll(path)
+		t.Fatalf("Unable to create generate random data: %v", err)
+	}
+	if err = posixStorage.AppendFile(volume, object, data); err != nil {
+		os.RemoveAll(path)
+		t.Fatalf("Unable to create object: %v", err)
 	}
 
-	blakeHash := func(s string) string {
-		k := blake2b.Sum512([]byte(s))
-		return hex.EncodeToString(k[:])
-	}
+	for i, test := range posixReadFileWithVerifyTests {
+		h := test.algorithm.New()
+		h.Write(data)
+		if test.expError != nil {
+			expected := h.Sum(nil)
+			h.Write([]byte{0})
+			test.expError = hashMismatchError{hex.EncodeToString(h.Sum(nil)), hex.EncodeToString(expected)}
+		}
 
-	sha256Hash := func(s string) string {
-		k := sha256.Sum256([]byte(s))
-		return hex.EncodeToString(k[:])
-	}
-
-	testCases := []struct {
-		fileName     string
-		offset       int64
-		bufSize      int
-		algo         HashAlgo
-		expectedHash string
-
-		expectedBuf []byte
-		expectedErr error
-	}{
-		// Hash verification is skipped with empty expected
-		// hash - 1
-		{
-			"myobject", 0, 5, HashBlake2b, "",
-			[]byte("Hello"), nil,
-		},
-		// Hash verification failure case - 2
-		{
-			"myobject", 0, 5, HashBlake2b, "a",
-			[]byte(""),
-			hashMismatchError{"a", blakeHash("Hello, world!")},
-		},
-		// Hash verification success with full content requested - 3
-		{
-			"myobject", 0, 13, HashBlake2b, blakeHash("Hello, world!"),
-			[]byte("Hello, world!"), nil,
-		},
-		// Hash verification success with full content and Sha256 - 4
-		{
-			"myobject", 0, 13, HashSha256, sha256Hash("Hello, world!"),
-			[]byte("Hello, world!"), nil,
-		},
-		// Hash verification success with partial content requested - 5
-		{
-			"myobject", 7, 4, HashBlake2b, blakeHash("Hello, world!"),
-			[]byte("worl"), nil,
-		},
-		// Hash verification success with partial content and Sha256 - 6
-		{
-			"myobject", 7, 4, HashSha256, sha256Hash("Hello, world!"),
-			[]byte("worl"), nil,
-		},
-		// Empty hash-algo returns error - 7
-		{
-			"myobject", 7, 4, "", blakeHash("Hello, world!"),
-			[]byte("worl"), errBitrotHashAlgoInvalid,
-		},
-		// Empty content hash verification with empty
-		// hash-algo algo returns error - 8
-		{
-			"myobject", 7, 0, "", blakeHash("Hello, world!"),
-			[]byte(""), errBitrotHashAlgoInvalid,
-		},
-	}
-
-	// Create file used in testcases
-	err = posixStorage.AppendFile(volume, "myobject", []byte("Hello, world!"))
-	if err != nil {
-		t.Fatalf("Failure in test setup: %v\n", err)
-	}
-
-	// Validate each test case.
-	for i, testCase := range testCases {
-		var n int64
-		// Common read buffer.
-		var buf = make([]byte, testCase.bufSize)
-		n, err = posixStorage.ReadFileWithVerify(volume, testCase.fileName, testCase.offset, buf, testCase.algo, testCase.expectedHash)
+		buffer := make([]byte, test.length)
+		n, err := posixStorage.ReadFileWithVerify(volume, test.file, int64(test.offset), buffer, NewBitrotVerifier(test.algorithm, h.Sum(nil)))
 
 		switch {
-		case err == nil && testCase.expectedErr != nil:
-			t.Errorf("Test %d: Expected error %v but got none.", i+1, testCase.expectedErr)
-		case err == nil && n != int64(testCase.bufSize):
-			t.Errorf("Test %d: %d bytes were expected, but %d were written", i+1, testCase.bufSize, n)
-		case err == nil && !bytes.Equal(testCase.expectedBuf, buf):
-			t.Errorf("Test %d: Expected bytes: %v, but got: %v", i+1, testCase.expectedBuf, buf)
-		case err != nil && err != testCase.expectedErr:
-			t.Errorf("Test %d: Expected error: %v, but got: %v", i+1, testCase.expectedErr, err)
+		case err == nil && test.expError != nil:
+			t.Errorf("Test %d: Expected error %v but got none.", i, test.expError)
+		case err == nil && n != int64(test.length):
+			t.Errorf("Test %d: %d bytes were expected, but %d were written", i, test.length, n)
+		case err == nil && !bytes.Equal(data[test.offset:test.offset+test.length], buffer):
+			t.Errorf("Test %d: Expected bytes: %v, but got: %v", i, data[test.offset:test.offset+test.length], buffer)
+		case err != nil && err != test.expError:
+			t.Errorf("Test %d: Expected error: %v, but got: %v", i, test.expError, err)
 		}
 	}
 }

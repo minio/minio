@@ -616,7 +616,7 @@ func (r reedSolomon) reconstruct(shards [][]byte, dataOnly bool) error {
 var ErrShortData = errors.New("not enough data to fill the number of requested shards")
 
 // Split a data slice into the number of shards given to the encoder,
-// and create empty parity shards.
+// and create empty parity shards if necessary.
 //
 // The data will be split into equally sized shards.
 // If the data size isn't divisible by the number of shards,
@@ -631,12 +631,19 @@ func (r reedSolomon) Split(data []byte) ([][]byte, error) {
 	if len(data) == 0 {
 		return nil, ErrShortData
 	}
-	// Calculate number of bytes per shard.
+	// Calculate number of bytes per data shard.
 	perShard := (len(data) + r.DataShards - 1) / r.DataShards
 
-	// Pad data to r.Shards*perShard.
-	padding := make([]byte, (r.Shards*perShard)-len(data))
-	data = append(data, padding...)
+	if cap(data) > len(data) {
+		data = data[:cap(data)]
+	}
+
+	// Only allocate memory if necessary
+	if len(data) < (r.Shards * perShard) {
+		// Pad data to r.Shards*perShard.
+		padding := make([]byte, (r.Shards*perShard)-len(data))
+		data = append(data, padding...)
+	}
 
 	// Split into equal-length shards.
 	dst := make([][]byte, r.Shards)

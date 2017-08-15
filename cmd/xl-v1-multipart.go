@@ -488,6 +488,7 @@ func (xl xlObjects) newMultipartUpload(bucket string, object string, meta map[st
 	uploadID := mustGetUUID()
 	uploadIDPath := path.Join(bucket, object, uploadID)
 	tempUploadIDPath := uploadID
+
 	// Write updated `xl.json` to all disks.
 	disks, err := writeSameXLMetadata(xl.storageDisks, minioMetaTmpBucket, tempUploadIDPath, xlMeta, xl.writeQuorum, xl.readQuorum)
 	if err != nil {
@@ -627,23 +628,16 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 
 	mw := io.MultiWriter(writers...)
 
-	var lreader io.Reader
+	var lreader = data
 	// Limit the reader to its provided size > 0.
 	if size > 0 {
 		// This is done so that we can avoid erroneous clients sending
 		// more data than the set content size.
 		lreader = io.LimitReader(data, size)
-	} else {
-		// else we read till EOF.
-		lreader = data
 	}
-
-	// Construct a tee reader for md5sum.
-	teeReader := io.TeeReader(lreader, mw)
 
 	// Delete the temporary object part. If PutObjectPart succeeds there would be nothing to delete.
 	defer xl.deleteObject(minioMetaTmpBucket, tmpPart)
-
 	if size > 0 {
 		if pErr := xl.prepareFile(minioMetaTmpBucket, tmpPartPath, size, onlineDisks, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks); err != nil {
 			return pi, toObjectErr(pErr, bucket, object)
@@ -651,25 +645,26 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 		}
 	}
 
-	// We always allow empty part.
-	allowEmpty := true
-
-	// Erasure code data and write across all disks.
-	onlineDisks, sizeWritten, checkSums, err := erasureCreateFile(onlineDisks, minioMetaTmpBucket, tmpPartPath, teeReader, allowEmpty, xlMeta.Erasure.BlockSize, xl.dataBlocks, xl.parityBlocks, bitRotAlgo, xl.writeQuorum)
+	storage, err := NewErasureStorage(onlineDisks, xlMeta.Erasure.DataBlocks, xlMeta.Erasure.ParityBlocks)
+	if err != nil {
+		return pi, toObjectErr(err, bucket, object)
+	}
+	buffer := make([]byte, xlMeta.Erasure.BlockSize, 2*xlMeta.Erasure.BlockSize) // alloc additional space for parity blocks created while erasure coding
+	file, err := storage.CreateFile(io.TeeReader(lreader, mw), minioMetaTmpBucket, tmpPartPath, buffer, DefaultBitrotAlgorithm, xl.writeQuorum)
 	if err != nil {
 		return pi, toObjectErr(err, bucket, object)
 	}
 
 	// Should return IncompleteBody{} error when reader has fewer bytes
 	// than specified in request header.
-	if sizeWritten < size {
+	if file.Size < size {
 		return pi, traceError(IncompleteBody{})
 	}
 
 	// For size == -1, perhaps client is sending in chunked encoding
 	// set the size as size that was actually written.
 	if size == -1 {
-		size = sizeWritten
+		size = file.Size
 	}
 
 	// Calculate new md5sum.
@@ -727,16 +722,12 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	// Add the current part.
 	xlMeta.AddObjectPart(partID, partSuffix, newMD5Hex, size)
 
-	for index, disk := range onlineDisks {
-		if disk == nil {
+	for i, disk := range onlineDisks {
+		if disk == OfflineDisk {
 			continue
 		}
-		partsMetadata[index].Parts = xlMeta.Parts
-		partsMetadata[index].Erasure.AddCheckSumInfo(checkSumInfo{
-			Name:      partSuffix,
-			Hash:      checkSums[index],
-			Algorithm: bitRotAlgo,
-		})
+		partsMetadata[i].Parts = xlMeta.Parts
+		partsMetadata[i].Erasure.AddChecksumInfo(ChecksumInfo{partSuffix, file.Algorithm, file.Checksums[i]})
 	}
 
 	// Write all the checksum metadata.

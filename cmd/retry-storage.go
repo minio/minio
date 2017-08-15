@@ -221,18 +221,11 @@ func (f *retryStorage) ReadFile(volume, path string, offset int64, buffer []byte
 
 // ReadFileWithVerify - a retryable implementation of reading at
 // offset from a file with verification.
-func (f *retryStorage) ReadFileWithVerify(volume, path string, offset int64, buffer []byte,
-	algo HashAlgo, expectedHash string) (m int64, err error) {
-	if f.IsOffline() {
-		return m, errDiskNotFound
-	}
+func (f retryStorage) ReadFileWithVerify(volume, path string, offset int64, buffer []byte, verifier *BitrotVerifier) (m int64, err error) {
 
-	m, err = f.remoteStorage.ReadFileWithVerify(volume, path, offset, buffer,
-		algo, expectedHash)
+	m, err = f.remoteStorage.ReadFileWithVerify(volume, path, offset, buffer, verifier)
 	if f.reInitUponDiskNotFound(err) {
-		m, err = f.remoteStorage.ReadFileWithVerify(volume, path,
-			offset, buffer, algo, expectedHash)
-		return m, retryToStorageErr(err)
+		m, err = f.remoteStorage.ReadFileWithVerify(volume, path, offset, buffer, verifier)
 	}
 	return m, retryToStorageErr(err)
 }
