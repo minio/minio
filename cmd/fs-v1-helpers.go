@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"fmt"
 	"io"
 	"os"
 	pathutil "path"
@@ -360,6 +361,9 @@ func fsRenameFile(sourcePath, destPath string) error {
 		return traceError(err)
 	}
 	if err := os.Rename((sourcePath), (destPath)); err != nil {
+		if isSysErrCrossDevice(err) {
+			return traceError(fmt.Errorf("%s (%s)->(%s)", errCrossDeviceLink, sourcePath, destPath))
+		}
 		return traceError(err)
 	}
 	return nil
