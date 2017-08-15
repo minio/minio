@@ -240,9 +240,14 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 		return
 	}
 
-	if s3Error := checkRequestAuthType(r, bucket, "s3:DeleteObject", serverConfig.GetRegion()); s3Error != ErrNone {
-		writeErrorResponse(w, s3Error, r.URL)
-		return
+	var authError APIErrorCode
+	if authError = checkRequestAuthType(r, bucket, "s3:DeleteObject", serverConfig.GetRegion()); authError != ErrNone {
+		// In the event access is denied, a 200 response should still be returned
+		// http://docs.aws.amazon.com/AmazonS3/latest/API/multiobjectdeleteapi.html
+		if authError != ErrAccessDenied {
+			writeErrorResponse(w, authError, r.URL)
+			return
+		}
 	}
 
 	// Content-Length is required and should be non-zero
@@ -284,10 +289,19 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 	for index, object := range deleteObjects.Objects {
 		wg.Add(1)
 		go func(i int, obj ObjectIdentifier) {
+			defer wg.Done()
+			// If the request is denied access, each item
+			// should be marked as 'AccessDenied'
+			if authError == ErrAccessDenied {
+				dErrs[i] = PrefixAccessDenied{
+					Bucket: bucket,
+					Object: obj.ObjectName,
+				}
+				return
+			}
 			objectLock := globalNSMutex.NewNSLock(bucket, obj.ObjectName)
 			objectLock.Lock()
 			defer objectLock.Unlock()
-			defer wg.Done()
 
 			dErr := objectAPI.DeleteObject(bucket, obj.ObjectName)
 			if dErr != nil {
