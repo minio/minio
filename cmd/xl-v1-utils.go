@@ -28,7 +28,7 @@ import (
 )
 
 // Returns number of errors that occurred the most (incl. nil) and the
-// corresponding error value. N B when there is more than one error value that
+// corresponding error value. NB When there is more than one error value that
 // occurs maximum number of times, the error value returned depends on how
 // golang's map orders keys. This doesn't affect correctness as long as quorum
 // value is greater than or equal to simple majority, since none of the equally
@@ -61,9 +61,9 @@ func reduceErrs(errs []error, ignoredErrs []error) (maxCount int, maxErr error) 
 
 // reduceQuorumErrs behaves like reduceErrs by only for returning
 // values of maximally occurring errors validated against a generic
-// quorum number can be read or write quorum depending on usage.
-// additionally a special error is provided as well to be returned
-// in case quorum is not satisfied.
+// quorum number that can be read or write quorum depending on usage.
+// Additionally a special error is provided to be returned in case
+// quorum is not satisfied.
 func reduceQuorumErrs(errs []error, ignoredErrs []error, quorum int, quorumErr error) (maxErr error) {
 	maxCount, maxErr := reduceErrs(errs, ignoredErrs)
 	if maxErr == nil && maxCount >= quorum {
@@ -91,7 +91,7 @@ func reduceWriteQuorumErrs(errs []error, ignoredErrs []error, writeQuorum int) (
 	return reduceQuorumErrs(errs, ignoredErrs, writeQuorum, errXLWriteQuorum)
 }
 
-// Similar to 'len(slice)' but returns  the actual elements count
+// Similar to 'len(slice)' but returns the actual elements count
 // skipping the unallocated elements.
 func diskCount(disks []StorageAPI) int {
 	diskCount := 0
@@ -104,7 +104,7 @@ func diskCount(disks []StorageAPI) int {
 	return diskCount
 }
 
-// hashOrder - hashes input key to return returns consistent
+// hashOrder - hashes input key to return consistent
 // hashed integer slice. Returned integer order is salted
 // with an input key. This results in consistent order.
 // NOTE: collisions are fine, we are not looking for uniqueness
@@ -349,7 +349,7 @@ func shufflePartsMetadata(partsMetadata []xlMetaV1, distribution []int) (shuffle
 }
 
 // shuffleDisks - shuffle input disks slice depending on the
-// erasure distribution. return shuffled slice of disks with
+// erasure distribution. Return shuffled slice of disks with
 // their expected distribution.
 func shuffleDisks(disks []StorageAPI, distribution []int) (shuffledDisks []StorageAPI) {
 	if distribution == nil {
@@ -365,7 +365,7 @@ func shuffleDisks(disks []StorageAPI, distribution []int) (shuffledDisks []Stora
 }
 
 // evalDisks - returns a new slice of disks where nil is set if
-// the correspond error in errs slice is not nil
+// the corresponding error in errs slice is not nil
 func evalDisks(disks []StorageAPI, errs []error) []StorageAPI {
 	if len(errs) != len(disks) {
 		errorIf(errors.New("unexpected disks/errors slice length"), "unable to evaluate internal disks")
@@ -389,7 +389,7 @@ var (
 )
 
 // getPartSizeFromIdx predicts the part size according to its index. It also
-// returns -1 when totalSize is also -1.
+// returns -1 when totalSize is -1.
 func getPartSizeFromIdx(totalSize int64, partSize int64, partIndex int) (int64, error) {
 	if partSize == 0 {
 		return 0, traceError(errPartSizeZero)
