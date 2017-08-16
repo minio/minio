@@ -24,20 +24,17 @@ import (
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
-	router "github.com/gorilla/mux"
 	"github.com/rs/cors"
 )
 
 // HandlerFunc - useful to chain different middleware http.Handler
 type HandlerFunc func(http.Handler) http.Handler
 
-func registerHandlers(mux *router.Router, handlerFns ...HandlerFunc) http.Handler {
-	var f http.Handler
-	f = mux
+func registerHandlers(h http.Handler, handlerFns ...HandlerFunc) http.Handler {
 	for _, hFn := range handlerFns {
-		f = hFn(f)
+		h = hFn(h)
 	}
-	return f
+	return h
 }
 
 // Adds limiting body size middleware
