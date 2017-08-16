@@ -42,6 +42,7 @@ type SiaCacheLayer struct {
 	CacheTicker       *time.Ticker // Ticker for cache management.
 	Db                *bolt.DB     // The database object.
 	DbMutex           *sync.Mutex  // Mutex for protecting database access.
+	BackgroundUpload  bool         // Whether or not to upload to Sia in background
 	DebugMode         bool         // Whether or not debug mode is enabled.
 }
 
@@ -250,18 +251,20 @@ func (cache *SiaCacheLayer) PutObject(bucket string, objectName string, size int
 		return &SiaServiceError{Code: "SiaErrorDaemon", Message: derr.Error()}
 	}
 
-	// Need to wait for upload to complete
-	err = cache.waitTillSiaUploadCompletes(siaObj)
-	if err != nil {
-		cache.dbDeleteObject(bucket, objectName)
-		return err
-	}
+	// Need to wait for upload to complete unless background uploading is enabled
+	if (!cache.BackgroundUpload) {
+		err = cache.waitTillSiaUploadCompletes(siaObj)
+		if err != nil {
+			cache.dbDeleteObject(bucket, objectName)
+			return err
+		}
 
-	// Mark object as uploaded
-	err = cache.dbUpdateObjectUploadedStatus(bucket, objectName, 1)
-	if err != nil {
-		cache.dbDeleteObject(bucket, objectName)
-		return err
+		// Mark object as uploaded
+		err = cache.dbUpdateObjectUploadedStatus(bucket, objectName, 1)
+		if err != nil {
+			cache.dbDeleteObject(bucket, objectName)
+			return err
+		}
 	}
 
 	return nil
@@ -465,6 +468,7 @@ func (cache *SiaCacheLayer) checkSiaUploads() *SiaServiceError {
 		var siaObj = cache.getSiaObjectName(obj.Bucket, obj.Name)
 		for _, file := range rf.Files {
 			if file.SiaPath == siaObj && file.Available {
+				cache.debugmsg(fmt.Sprintf("  Upload to Sia completed: %s", obj.Name))
 				err = cache.dbUpdateObjectUploadedStatus(obj.Bucket, obj.Name, 1)
 				if err != nil {
 					return err
@@ -653,9 +657,22 @@ func (cache *SiaCacheLayer) loadSiaEnv() {
 		}
 	}
 
+	tmp = os.Getenv("SIA_BACKGROUND_UPLOAD")
+	if tmp != "" {
+		i, err := strconv.ParseInt(tmp, 10, 64)
+		if err == nil {
+			if i == 0 {
+				cache.BackgroundUpload = false
+			} else {
+				cache.BackgroundUpload = true
+			}
+		}
+	}
+
 	if cache.DebugMode {
 		fmt.Printf("SIA_CACHE_MAX_SIZE_BYTES: %d\n", cache.MaxCacheSizeBytes)
 		fmt.Printf("SIA_MANAGER_DELAY_SEC: %d\n", cache.ManagerDelaySec)
 		fmt.Printf("SIA_UPLOAD_CHECK_FREQ_MS: %d\n", cache.UploadCheckFreqMs)
+		fmt.Printf("SIA_BACKGROUND_UPLOAD: %v\n", cache.BackgroundUpload)
 	}
 }

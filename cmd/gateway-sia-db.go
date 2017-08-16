@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"encoding/json"
 	"time"
+	"fmt"
 )
 
 func (cache *SiaCacheLayer) dbLockDB() {
@@ -335,7 +336,7 @@ func (cache *SiaCacheLayer) dbDeleteObject(bucket string, objectName string) *Si
 
 
 func (cache *SiaCacheLayer) dbListObjects(bucket string) (objects []SiaObjectInfo, e *SiaServiceError) {
-	cache.debugmsg("SiaCacheLayer.dbListObjects")
+	cache.debugmsg(fmt.Sprintf("SiaCacheLayer.dbListObjects bucket: %s", bucket))
 
 	cache.dbLockDB()
 	defer cache.dbUnlockDB()
@@ -343,6 +344,7 @@ func (cache *SiaCacheLayer) dbListObjects(bucket string) (objects []SiaObjectInf
 	err := cache.Db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(cache.dbBucketName(bucket)))
 		if b == nil {
+			cache.debugmsg("SiaCacheLayer.dbListObjects1")
 			return siaErrorDatabaseSelectError
 		}
 		bktObjects := b.Bucket([]byte("objects"))
@@ -354,6 +356,7 @@ func (cache *SiaCacheLayer) dbListObjects(bucket string) (objects []SiaObjectInf
         	bo := bktObjects.Bucket(k)
 			soi, serr := cache.boltPopulateSiaObjectInfo(bo)
 			if serr != nil {
+				cache.debugmsg("SiaCacheLayer.dbListObjects2")
 				return serr
 			}
 			objects = append(objects, soi)
@@ -362,6 +365,7 @@ func (cache *SiaCacheLayer) dbListObjects(bucket string) (objects []SiaObjectInf
         return nil
     })
     if err != nil {
+    	cache.debugmsg("SiaCacheLayer.dbListObjects3")
     	return objects, siaErrorDatabaseSelectError
     }
 	
