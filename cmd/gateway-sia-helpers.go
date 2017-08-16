@@ -1,4 +1,20 @@
-package cmd
+/*
+ * (C) 2017 David Gore <dvstate@gmail.com>
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+ package cmd
 
 import (
 	"encoding/json"
@@ -8,7 +24,6 @@ import (
 	"github.com/bgentry/speakeasy"
 	"net"
 	"net/http"
-	"path/filepath"
 )
 
 // User-supplied password, cached.
@@ -21,17 +36,6 @@ type bySiaPath []modules.FileInfo
 func (s bySiaPath) Len() int           { return len(s) }
 func (s bySiaPath) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 func (s bySiaPath) Less(i, j int) bool { return s[i].SiaPath < s[j].SiaPath }
-
-// abs returns the absolute representation of a path.
-// TODO: bad things can happen if you run siac from a non-existent directory.
-// Implement some checks to catch this problem.
-func abs(path string) string {
-	abspath, err := filepath.Abs(path)
-	if err != nil {
-		return path
-	}
-	return abspath
-}
 
 // non2xx returns true for non-success HTTP status codes.
 func non2xx(code int) bool {

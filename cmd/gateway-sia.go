@@ -1,9 +1,26 @@
-package cmd
+/*
+ * (C) 2017 David Gore <dvstate@gmail.com>
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+ package cmd
 
 import (
 	"errors"
 	"fmt"
 	"github.com/minio/minio-go/pkg/policy"
+	"path/filepath"
 	"io"
 	"os"
 	"strconv"
@@ -61,7 +78,7 @@ func siaToObjectError(err *SiaServiceError, params ...string) (e error) {
 func newSiaGateway(host string) (GatewayLayer, error) {
 	sia := &siaObjects{
 		PurgeCacheAfterSec: 24 * 60 * 60,
-		SiadAddress:        "127.0.0.1:9980",
+		SiadAddress:        host,
 		CacheDir:           ".sia_cache",
 		DbFile:             ".sia.db",
 		DebugMode:          false,
@@ -316,7 +333,12 @@ func (s *siaObjects) PutObject(bucket string, object string, size int64, data io
 		return oi, e
 	}
 
-	srcFile := pathJoin(abs(s.CacheDir), bucket, object)
+	absCacheDir, e := filepath.Abs(s.CacheDir)
+	if e != nil {
+		return oi, e
+	}
+
+	srcFile := pathJoin(absCacheDir, bucket, object)
 	siaErr := s.Cache.PutObject(bucket, object, size, int64(s.PurgeCacheAfterSec), srcFile)
 	// If put fails to the cache layer, then delete from object layer
 	if siaErr != nil {
@@ -387,7 +409,12 @@ func (s *siaObjects) CompleteMultipartUpload(bucket string, object string, uploa
 		return oi, err
 	}
 
-	srcFile := pathJoin(abs(s.CacheDir), bucket, object)
+	absCacheDir, err := filepath.Abs(s.CacheDir)
+	if err != nil {
+		return oi, err
+	}
+
+	srcFile := pathJoin(absCacheDir, bucket, object)
 	fi, err := os.Stat(srcFile)
 	if err != nil {
 		return oi, err

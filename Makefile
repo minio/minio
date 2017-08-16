@@ -68,7 +68,7 @@ coverage: build
 # Builds minio locally.
 build:
 	@echo "Building minio to $(PWD)/minio ..."
-	@CGO_ENABLED=1 go build --ldflags $(BUILD_LDFLAGS) -o $(PWD)/minio
+	@CGO_ENABLED=0 go build --ldflags $(BUILD_LDFLAGS) -o $(PWD)/minio
 
 pkg-add:
 	@echo "Adding new package $(PKG)"
