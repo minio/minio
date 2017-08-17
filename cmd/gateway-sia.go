@@ -86,6 +86,16 @@ func newSiaGateway(host string) (GatewayLayer, error) {
 
 	sia.loadSiaEnv()
 
+	// If host is specified on command line, override the ENV
+	if host != "" {
+		sia.SiadAddress = host
+	}
+
+	// If SiadAddress not provided on command line or ENV, default to:
+    if sia.SiadAddress == "" {
+    	sia.SiadAddress = "127.0.0.1:9980"
+    }
+
 	// Create the filesystem layer
 	f, err := newFSObjectLayer(sia.CacheDir)
 	if err != nil {
@@ -96,6 +106,17 @@ func newSiaGateway(host string) (GatewayLayer, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	fmt.Printf("\nSia Gateway Configuration:\n")
+	fmt.Printf("  Debug Mode: %v\n", sia.DebugMode)
+	fmt.Printf("  Sia Daemon API Address: %s\n", sia.SiadAddress)
+	fmt.Printf("  Cache Directory: %s\n", sia.CacheDir)
+	fmt.Printf("  Purge Cache After: %ds\n", sia.PurgeCacheAfterSec)
+	fmt.Printf("  Cache Database File: %s\n", sia.DbFile)
+	fmt.Printf("  Cache Manager Delay: %ds\n", sia.Cache.ManagerDelaySec)
+	fmt.Printf("  Cache Max Size: %d bytes\n", sia.Cache.MaxCacheSizeBytes)
+	fmt.Printf("  Upload Check Frequency: %dms\n", sia.Cache.UploadCheckFreqMs)
+	fmt.Printf("  Background Uploading: %v\n\n", sia.Cache.BackgroundUpload)
 
 	// Start the Sia cache layer
 	siaErr := sia.Cache.Start()
@@ -147,14 +168,6 @@ func (s *siaObjects) loadSiaEnv() {
 				s.DebugMode = true
 			}
 		}
-	}
-
-	if s.DebugMode {
-		fmt.Printf("SIA_DEBUG: %v\n", s.DebugMode)
-		fmt.Printf("SIA_CACHE_DIR: %s\n", s.CacheDir)
-		fmt.Printf("SIA_CACHE_PURGE_AFTER_SEC: %d\n", s.PurgeCacheAfterSec)
-		fmt.Printf("SIA_DAEMON_ADDR: %s\n", s.SiadAddress)
-		fmt.Printf("SIA_DB_FILE: %s\n", s.DbFile)
 	}
 }
 

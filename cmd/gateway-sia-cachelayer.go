@@ -111,7 +111,7 @@ func (o SiaFileInfo) Sys() interface{} {
 
 // newSiaCacheLayer creates a new Sia cache layer
 func newSiaCacheLayer(siadAddress string, cacheDir string, dbFile string, debug bool) (*SiaCacheLayer, error) {
-	return &SiaCacheLayer{
+	cache := &SiaCacheLayer{
 		SiadAddress:       siadAddress,
 		CacheDir:          cacheDir,
 		DbFile:            dbFile,
@@ -122,13 +122,16 @@ func newSiaCacheLayer(siadAddress string, cacheDir string, dbFile string, debug 
 		CacheTicker:       nil,
 		Db:                nil,
 		DbMutex:           &sync.Mutex{},
-	}, nil
+	}
+
+	cache.loadSiaEnv()
+
+	return cache, nil
 }
 
 // Start will start running the Cache Layer
 func (cache *SiaCacheLayer) Start() *SiaServiceError {
 	cache.debugmsg("SiaCacheLayer.Start")
-	cache.loadSiaEnv()
 
 	cache.DbMutex = &sync.Mutex{}
 
@@ -667,12 +670,5 @@ func (cache *SiaCacheLayer) loadSiaEnv() {
 				cache.BackgroundUpload = true
 			}
 		}
-	}
-
-	if cache.DebugMode {
-		fmt.Printf("SIA_CACHE_MAX_SIZE_BYTES: %d\n", cache.MaxCacheSizeBytes)
-		fmt.Printf("SIA_MANAGER_DELAY_SEC: %d\n", cache.ManagerDelaySec)
-		fmt.Printf("SIA_UPLOAD_CHECK_FREQ_MS: %d\n", cache.UploadCheckFreqMs)
-		fmt.Printf("SIA_BACKGROUND_UPLOAD: %v\n", cache.BackgroundUpload)
 	}
 }
