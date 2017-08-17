@@ -219,12 +219,6 @@ func (cache *SiaCacheLayer) DeleteObject(bucket string, objectName string) *SiaS
 func (cache *SiaCacheLayer) PutObject(bucket string, objectName string, size int64, purgeAfter int64, srcFile string) *SiaServiceError {
 	cache.debugmsg("SiaCacheLayer.PutObject")
 
-	// First, make sure space exists in cache
-	err := cache.guaranteeCacheSpace(size)
-	if err != nil {
-		return err
-	}
-
 	// Before inserting to DB, there is a very rare chance that the object already exists in DB
 	// from a failed upload and Minio crashed or was killed before DB updated to reflect. So just in case
 	// we will check if the object exists and has a not uploaded status. If so, we will delete that
@@ -241,7 +235,7 @@ func (cache *SiaCacheLayer) PutObject(bucket string, objectName string, size int
 		}
 	}
 
-	err = cache.dbInsertObject(bucket, objectName, size, time.Now().Unix(), 0, purgeAfter, srcFile, 1)
+	err := cache.dbInsertObject(bucket, objectName, size, time.Now().Unix(), 0, purgeAfter, srcFile, 1)
 	if err != nil {
 		return err
 	}
@@ -503,6 +497,7 @@ func (cache *SiaCacheLayer) waitTillSiaUploadCompletes(siaObj string) *SiaServic
 
 func (cache *SiaCacheLayer) isSiaFileAvailable(siaObj string) (bool, *SiaServiceError) {
 	cache.debugmsg(fmt.Sprintf("SiaCacheLayer.isSiaFileAvailable: %s", siaObj))
+
 	var rf api.RenterFiles
 	err := getAPI(cache.SiadAddress, "/renter/files", &rf)
 	if err != nil {
@@ -519,24 +514,26 @@ func (cache *SiaCacheLayer) isSiaFileAvailable(siaObj string) (bool, *SiaService
 	return false, &SiaServiceError{Code: "SiaErrorDaemon", Message: "File not in Sia renter list"}
 }
 
-func (cache *SiaCacheLayer) guaranteeCacheSpace(extraSpace int64) *SiaServiceError {
+func (cache *SiaCacheLayer) guaranteeCacheSpace(cacheNeeded int64) *SiaServiceError {
 	cache.debugmsg("SiaCacheLayer.guaranteeCacheSpace")
-	cs, e := cache.getCacheSize()
+
+	avail, e := cache.getCacheAvailable()
 	if e != nil {
 		return e
 	}
 
-	spaceNeeded := int64(cache.MaxCacheSizeBytes) - extraSpace
-	for cs > spaceNeeded {
+	cache.debugmsg(fmt.Sprintf("  Cache space available: %d\n", avail))
+	for avail < cacheNeeded {
 		e = cache.forceDeleteOldestCacheFile()
 		if e != nil {
 			return e
 		}
 
-		cs, e = cache.getCacheSize()
+		avail, e = cache.getCacheAvailable()
 		if e != nil {
 			return e
 		}
+		cache.debugmsg(fmt.Sprintf("  Cache space available: %d\n", avail))
 	}
 
 	return nil
@@ -575,6 +572,10 @@ func (cache *SiaCacheLayer) forceDeleteOldestCacheFile() *SiaServiceError {
 		}
 	}
 
+	if objToDelete == nil {
+		return siaErrorUnableToClearAnyCachedFiles
+	}
+
 	// Make certain cached item exists, then delete it.
 	_, err := os.Stat(objToDelete.SrcFile)
 	if err != nil {
@@ -595,19 +596,29 @@ func (cache *SiaCacheLayer) forceDeleteOldestCacheFile() *SiaServiceError {
 	return nil
 }
 
-func (cache *SiaCacheLayer) getCacheSize() (int64, *SiaServiceError) {
-	cache.debugmsg("SiaCacheLayer.getCacheSize")
+func (cache *SiaCacheLayer) getCacheUsed() (int64, *SiaServiceError) {
+	cache.debugmsg("SiaCacheLayer.getCacheUsed")
+
 	var size int64
-	err := filepath.Walk(cache.CacheDir, func(_ string, info os.FileInfo, err error) error {
+	size = 0
+	err := filepath.Walk(cache.CacheDir, func(_ string, info os.FileInfo, e error) error {
 		if !info.IsDir() {
+			cache.debugmsg(fmt.Sprintf("  %s: %d", info.Name(), info.Size()))
 			size += info.Size()
 		}
-		return err
+		return e
 	})
 	if err != nil {
 		return 0, siaErrorDeterminingCacheSize
 	}
 	return size, nil
+}
+
+func (cache *SiaCacheLayer) getCacheAvailable() (int64, *SiaServiceError) {
+	cache.debugmsg("SiaCacheLayer.getCacheAvailable")
+
+	used, serr := cache.getCacheUsed()
+	return (cache.MaxCacheSizeBytes - used), serr
 }
 
 func (cache *SiaCacheLayer) ensureCacheDirExists() {

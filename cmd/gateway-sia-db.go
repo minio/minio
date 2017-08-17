@@ -168,25 +168,27 @@ func (cache *SiaCacheLayer) dbListBuckets() (buckets []SiaBucketInfo, e *SiaServ
     	var pol string
     	var name string
     	err = cache.Db.View(func(tx *bolt.Tx) error {
-    		cache.debugmsg(bucketName)
-        	b := tx.Bucket([]byte(bucketName))
-        	if b == nil {
-        		return siaErrorDatabaseSelectError
-        	}
-			vCreated := b.Get([]byte("created"))
-			vPolicy := b.Get([]byte("policy"))
-			name = string(b.Get([]byte("name")))
+      	b := tx.Bucket([]byte(bucketName))
+      	if b == nil {
+      		return siaErrorDatabaseSelectError
+      	}
+  			vCreated := b.Get([]byte("created"))
+  			vPolicy := b.Get([]byte("policy"))
+  			name = string(b.Get([]byte("name")))
 
-			i, err := strconv.ParseInt(string(vCreated), 10, 64)
-			if err != nil {
-				return siaErrorDatabaseSelectError
-			}
-			created = i
+        cache.debugmsg(fmt.Sprintf("  %s", name))
 
-			pol = string(vPolicy)
+  			i, err := strconv.ParseInt(string(vCreated), 10, 64)
+  			if err != nil {
+  				return siaErrorDatabaseSelectError
+  			}
+  			created = i
 
-			return nil
-    	})
+  			pol = string(vPolicy)
+
+  			return nil
+      })
+
     	if err != nil {
     		return buckets, siaErrorDatabaseSelectError
     	}

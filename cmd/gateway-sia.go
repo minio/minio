@@ -341,14 +341,21 @@ func (s *siaObjects) GetObjectInfo(bucket string, object string) (objInfo Object
 // PutObject creates a new object with the incoming data,
 func (s *siaObjects) PutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (objInfo ObjectInfo, e error) {
 	s.debugmsg("Gateway.PutObject")
+
+	// First, make sure space exists in cache
+	serr := s.Cache.guaranteeCacheSpace(size)
+	if serr != nil {
+		return objInfo, siaToObjectError(serr)
+	}
+
 	oi, e := s.Fs.PutObject(bucket, object, size, data, metadata, sha256sum)
 	if e != nil {
-		return oi, e
+		return objInfo, e
 	}
 
 	absCacheDir, e := filepath.Abs(s.CacheDir)
 	if e != nil {
-		return oi, e
+		return objInfo, e
 	}
 
 	srcFile := pathJoin(absCacheDir, bucket, object)
@@ -356,7 +363,7 @@ func (s *siaObjects) PutObject(bucket string, object string, size int64, data io
 	// If put fails to the cache layer, then delete from object layer
 	if siaErr != nil {
 		s.Fs.DeleteObject(bucket, object)
-		return oi, siaToObjectError(siaErr, bucket, object)
+		return objInfo, siaToObjectError(siaErr, bucket, object)
 	}
 	return oi, e
 }
