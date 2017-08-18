@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -45,6 +46,59 @@ func newPosixTestSetup() (StorageAPI, string, error) {
 		return nil, "", err
 	}
 	return posixStorage, diskPath, nil
+}
+
+// createPermDeniedFile - creates temporary directory and file with path '/mybucket/myobject'
+func createPermDeniedFile(t *testing.T) (permDeniedDir string) {
+	var errMsg string
+
+	defer func() {
+		if errMsg == "" {
+			return
+		}
+
+		if permDeniedDir != "" {
+			os.RemoveAll(permDeniedDir)
+		}
+
+		t.Fatalf(errMsg)
+	}()
+
+	var err error
+	if permDeniedDir, err = ioutil.TempDir(globalTestTmpDir, "minio-"); err != nil {
+		errMsg = fmt.Sprintf("Unable to create temporary directory. %v", err)
+		return permDeniedDir
+	}
+
+	if err = os.Mkdir(slashpath.Join(permDeniedDir, "mybucket"), 0775); err != nil {
+		errMsg = fmt.Sprintf("Unable to create temporary directory %v. %v", slashpath.Join(permDeniedDir, "mybucket"), err)
+		return permDeniedDir
+	}
+
+	if err = ioutil.WriteFile(slashpath.Join(permDeniedDir, "mybucket", "myobject"), []byte(""), 0400); err != nil {
+		errMsg = fmt.Sprintf("Unable to create file %v. %v", slashpath.Join(permDeniedDir, "mybucket", "myobject"), err)
+		return permDeniedDir
+	}
+
+	if err = os.Chmod(slashpath.Join(permDeniedDir, "mybucket"), 0400); err != nil {
+		errMsg = fmt.Sprintf("Unable to change permission to temporary directory %v. %v", slashpath.Join(permDeniedDir, "mybucket"), err)
+		return permDeniedDir
+	}
+
+	if err = os.Chmod(permDeniedDir, 0400); err != nil {
+		errMsg = fmt.Sprintf("Unable to change permission to temporary directory %v. %v", permDeniedDir, err)
+	}
+
+	return permDeniedDir
+}
+
+// removePermDeniedFile - removes temporary directory and file with path '/mybucket/myobject'
+func removePermDeniedFile(permDeniedDir string) {
+	if err := os.Chmod(permDeniedDir, 0775); err == nil {
+		if err = os.Chmod(slashpath.Join(permDeniedDir, "mybucket"), 0775); err == nil {
+			os.RemoveAll(permDeniedDir)
+		}
+	}
 }
 
 // TestPosixs posix.getDiskInfo()
@@ -327,13 +381,21 @@ func TestPosixMakeVol(t *testing.T) {
 
 	// TestPosix for permission denied.
 	if runtime.GOOS != globalWindowsOSName {
+		permDeniedDir, err := ioutil.TempDir(globalTestTmpDir, "minio-")
+		if err != nil {
+			t.Fatalf("Unable to create temporary directory. %v", err)
+		}
+		defer os.RemoveAll(permDeniedDir)
+		if err = os.Chmod(permDeniedDir, 0400); err != nil {
+			t.Fatalf("Unable to change permission to temporary directory %v. %v", permDeniedDir, err)
+		}
 		// Initialize posix storage layer for permission denied error.
-		posix, err := newPosix("/usr")
+		posixStorage, err = newPosix(permDeniedDir)
 		if err != nil {
 			t.Fatalf("Unable to initialize posix, %s", err)
 		}
 
-		if err := posix.MakeVol("test-vol"); err != errDiskAccessDenied {
+		if err := posixStorage.MakeVol("test-vol"); err != errDiskAccessDenied {
 			t.Fatalf("expected: %s, got: %s", errDiskAccessDenied, err)
 		}
 	}
@@ -418,8 +480,19 @@ func TestPosixDeleteVol(t *testing.T) {
 
 	// TestPosix for permission denied.
 	if runtime.GOOS != globalWindowsOSName {
+		var permDeniedDir string
+		if permDeniedDir, err = ioutil.TempDir(globalTestTmpDir, "minio-"); err != nil {
+			t.Fatalf("Unable to create temporary directory. %v", err)
+		}
+		defer removePermDeniedFile(permDeniedDir)
+		if err = os.Mkdir(slashpath.Join(permDeniedDir, "mybucket"), 0400); err != nil {
+			t.Fatalf("Unable to create temporary directory %v. %v", slashpath.Join(permDeniedDir, "mybucket"), err)
+		}
+		if err = os.Chmod(permDeniedDir, 0400); err != nil {
+			t.Fatalf("Unable to change permission to temporary directory %v. %v", permDeniedDir, err)
+		}
 		// Initialize posix storage layer for permission denied error.
-		posixStorage, err = newPosix("/usr")
+		posixStorage, err = newPosix(permDeniedDir)
 		if err != nil {
 			t.Fatalf("Unable to initialize posix, %s", err)
 		}
@@ -697,14 +770,18 @@ func TestPosixPosixListDir(t *testing.T) {
 
 	// TestPosix for permission denied.
 	if runtime.GOOS != globalWindowsOSName {
+		permDeniedDir := createPermDeniedFile(t)
+		defer removePermDeniedFile(permDeniedDir)
+
 		// Initialize posix storage layer for permission denied error.
-		posixStorage, err = newPosix("/usr")
+		posixStorage, err = newPosix(permDeniedDir)
 		if err != nil {
-			t.Errorf("Unable to initialize posix, %s", err)
+			t.Fatalf("Unable to initialize posix, %s", err)
 		}
 
-		if err = posixStorage.DeleteFile("bin", "yes"); err != errFileAccessDenied {
-			t.Errorf("expected: %s, got: %s", errFileAccessDenied, err)
+		errMsg := fmt.Sprintf("stat %v: permission denied", slashpath.Join(permDeniedDir, "mybucket"))
+		if err = posixStorage.DeleteFile("mybucket", "myobject"); err.Error() != errMsg {
+			t.Errorf("expected: %s, got: %s", errMsg, err)
 		}
 	}
 
@@ -831,14 +908,18 @@ func TestPosixDeleteFile(t *testing.T) {
 
 	// TestPosix for permission denied.
 	if runtime.GOOS != globalWindowsOSName {
+		permDeniedDir := createPermDeniedFile(t)
+		defer removePermDeniedFile(permDeniedDir)
+
 		// Initialize posix storage layer for permission denied error.
-		posixStorage, err = newPosix("/usr")
+		posixStorage, err = newPosix(permDeniedDir)
 		if err != nil {
-			t.Errorf("Unable to initialize posix, %s", err)
+			t.Fatalf("Unable to initialize posix, %s", err)
 		}
 
-		if err = posixStorage.DeleteFile("bin", "yes"); err != errFileAccessDenied {
-			t.Errorf("expected: %s, got: %s", errFileAccessDenied, err)
+		errMsg := fmt.Sprintf("stat %v: permission denied", slashpath.Join(permDeniedDir, "mybucket"))
+		if err = posixStorage.DeleteFile("mybucket", "myobject"); err.Error() != errMsg {
+			t.Errorf("expected: %s, got: %s", errMsg, err)
 		}
 	}
 
@@ -1211,14 +1292,18 @@ func TestPosixAppendFile(t *testing.T) {
 
 	// TestPosix for permission denied.
 	if runtime.GOOS != globalWindowsOSName {
+		permDeniedDir := createPermDeniedFile(t)
+		defer removePermDeniedFile(permDeniedDir)
+
+		var posixPermStorage StorageAPI
 		// Initialize posix storage layer for permission denied error.
-		posixStorage, err = newPosix("/usr")
+		posixPermStorage, err = newPosix(permDeniedDir)
 		if err != nil {
 			t.Fatalf("Unable to initialize posix, %s", err)
 		}
 
-		if err = posixStorage.AppendFile("bin", "yes", []byte("hello, world")); !os.IsPermission(err) {
-			t.Errorf("expected: Permission error, got: %s", err)
+		if err = posixPermStorage.AppendFile("mybucket", "myobject", []byte("hello, world")); !os.IsPermission(err) {
+			t.Fatalf("expected: Permission error, got: %s", err)
 		}
 	}
 	// TestPosix case with invalid volume name.
@@ -1298,14 +1383,18 @@ func TestPosixPrepareFile(t *testing.T) {
 
 	// TestPosix for permission denied.
 	if runtime.GOOS != globalWindowsOSName {
+		permDeniedDir := createPermDeniedFile(t)
+		defer removePermDeniedFile(permDeniedDir)
+
+		var posixPermStorage StorageAPI
 		// Initialize posix storage layer for permission denied error.
-		posixStorage, err = newPosix("/usr")
+		posixPermStorage, err = newPosix(permDeniedDir)
 		if err != nil {
 			t.Fatalf("Unable to initialize posix, %s", err)
 		}
 
-		if err = posixStorage.PrepareFile("bin", "yes", 16); !os.IsPermission(err) {
-			t.Errorf("expected: Permission error, got: %s", err)
+		if err = posixPermStorage.PrepareFile("mybucket", "myobject", 16); !os.IsPermission(err) {
+			t.Fatalf("expected: Permission error, got: %s", err)
 		}
 	}
 
