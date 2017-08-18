@@ -571,7 +571,7 @@ func (xl xlObjects) PutObject(bucket string, object string, size int64, data io.
 
 		// Should return IncompleteBody{} error when reader has fewer bytes
 		// than specified in request header.
-		if file.Size < int64(curPartSize) {
+		if file.Size < curPartSize {
 			return ObjectInfo{}, traceError(IncompleteBody{})
 		}
 

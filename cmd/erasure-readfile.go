@@ -75,8 +75,8 @@ func (s ErasureStorage) ReadFile(writer io.Writer, volume, path string, offset, 
 			return f, err
 		}
 		startOffset = 0
-		f.Size += int64(n)
-		length -= int64(n)
+		f.Size += n
+		length -= n
 	}
 
 	f.Algorithm = algorithm
