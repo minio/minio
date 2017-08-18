@@ -82,10 +82,6 @@ func TestErasureCreateFile(t *testing.T) {
 			setup.Remove()
 			t.Fatalf("Test %d: failed to generate random test data: %v", i, err)
 		}
-		algorithm := test.algorithm
-		if !algorithm.Available() {
-			algorithm = DefaultBitrotAlgorithm
-		}
 		file, err := storage.CreateFile(bytes.NewReader(data[test.offset:]), "testbucket", "object", buffer, test.algorithm, test.dataBlocks+1)
 		if err != nil && !test.shouldFail {
 			t.Errorf("Test %d: should pass but failed with: %v", i, err)

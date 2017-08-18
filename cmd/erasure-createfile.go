@@ -38,7 +38,8 @@ func (s *ErasureStorage) CreateFile(src io.Reader, volume, path string, buffer [
 		errChans[i] = make(chan error, 1) // create buffered channel to let finished go-routines die early
 	}
 
-	blocks, n := [][]byte{}, len(buffer)
+	var blocks [][]byte
+	var n = len(buffer)
 	for n == len(buffer) {
 		n, err = io.ReadFull(src, buffer)
 		if n == 0 && err == io.EOF {

@@ -350,7 +350,8 @@ func TestDisksWithAllParts(t *testing.T) {
 	// make data with more than one part
 	partCount := 3
 	data := bytes.Repeat([]byte("a"), int(globalPutPartSize)*partCount)
-	xlDisks := obj.(*xlObjects).storageDisks
+	xl := obj.(*xlObjects)
+	xlDisks := xl.storageDisks
 
 	err = obj.MakeBucketWithLocation("bucket", "")
 	if err != nil {
@@ -363,8 +364,8 @@ func TestDisksWithAllParts(t *testing.T) {
 	}
 
 	partsMetadata, errs := readAllXLMetadata(xlDisks, bucket, object)
-	if err != nil {
-		t.Fatalf("Failed to read xl meta data %v", err)
+	if reducedErr := reduceReadQuorumErrs(errs, objectOpIgnoredErrs, xl.readQuorum); reducedErr != nil {
+		t.Fatalf("Failed to read xl meta data %v", reducedErr)
 	}
 
 	diskFailures := make(map[int]string)
