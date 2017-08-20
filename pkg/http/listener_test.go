@@ -37,6 +37,13 @@ import (
 
 var serverPort uint32 = 60000
 
+// fail - as t.Fatalf() is not goroutine safe, this function behaves like t.Fatalf().
+func fail(t *testing.T, template string, args ...interface{}) {
+	fmt.Printf(template, args...)
+	fmt.Println()
+	t.Fail()
+}
+
 func getNextPort() string {
 	return strconv.Itoa(int(atomic.AddUint32(&serverPort, 1)))
 }
@@ -506,10 +513,10 @@ func TestHTTPListenerAcceptPeekError(t *testing.T) {
 		go func() {
 			serverConn, aerr := listener.Accept()
 			if aerr == nil {
-				t.Fatalf("Test %d: accept: expected = <error>, got = <nil>", i+1)
+				fail(t, "Test %d: accept: expected = <error>, got = <nil>", i+1)
 			}
 			if serverConn != nil {
-				t.Fatalf("Test %d: accept: server expected = <nil>, got = %v", i+1, serverConn)
+				fail(t, "Test %d: accept: server expected = <nil>, got = %v", i+1, serverConn)
 			}
 		}()
 
@@ -575,10 +582,10 @@ func TestHTTPListenerAcceptTLSError(t *testing.T) {
 			go func() {
 				serverConn, aerr := listener.Accept()
 				if aerr == nil {
-					t.Fatalf("Test %d: accept: expected = <error>, got = <nil>", i+1)
+					fail(t, "Test %d: accept: expected = <error>, got = <nil>", i+1)
 				}
 				if serverConn != nil {
-					t.Fatalf("Test %d: accept: server expected = <nil>, got = %v", i+1, serverConn)
+					fail(t, "Test %d: accept: server expected = <nil>, got = %v", i+1, serverConn)
 				}
 			}()
 
@@ -654,10 +661,10 @@ func TestHTTPListenerAcceptError(t *testing.T) {
 			go func() {
 				serverConn, aerr := listener.Accept()
 				if aerr == nil {
-					t.Fatalf("Test %d: accept: expected = <error>, got = <nil>", i+1)
+					fail(t, "Test %d: accept: expected = <error>, got = <nil>", i+1)
 				}
 				if serverConn != nil {
-					t.Fatalf("Test %d: accept: server expected = <nil>, got = %v", i+1, serverConn)
+					fail(t, "Test %d: accept: server expected = <nil>, got = %v", i+1, serverConn)
 				}
 			}()
 
@@ -688,13 +695,6 @@ func TestHTTPListenerAcceptParallel(t *testing.T) {
 		{[]string{"127.0.0.1:0", nonLoopBackIP + ":0"}, tlsConfig, "200 OK\n"},
 	}
 
-	// As t.Fatalf() is not goroutine safe, use this closure.
-	fail := func(template string, args ...interface{}) {
-		fmt.Printf(template, args...)
-		fmt.Println()
-		t.Fail()
-	}
-
 	connect := func(i int, serverAddr string, secure bool, delay bool, request, reply string) {
 		var conn net.Conn
 		var err error
@@ -705,29 +705,29 @@ func TestHTTPListenerAcceptParallel(t *testing.T) {
 			conn, err = net.Dial("tcp", serverAddr)
 		}
 		if err != nil {
-			fail("Test %d: error: expected = <nil>, got = %v", i+1, err)
+			fail(t, "Test %d: error: expected = <nil>, got = %v", i+1, err)
 		}
 
 		if delay {
 			if _, err = io.WriteString(conn, request[:3]); err != nil {
-				fail("Test %d: request send: expected = <nil>, got = %v", i+1, err)
+				fail(t, "Test %d: request send: expected = <nil>, got = %v", i+1, err)
 			}
 			time.Sleep(1 * time.Second)
 			if _, err = io.WriteString(conn, request[3:]); err != nil {
-				fail("Test %d: request send: expected = <nil>, got = %v", i+1, err)
+				fail(t, "Test %d: request send: expected = <nil>, got = %v", i+1, err)
 			}
 		} else {
 			if _, err = io.WriteString(conn, request); err != nil {
-				fail("Test %d: request send: expected = <nil>, got = %v", i+1, err)
+				fail(t, "Test %d: request send: expected = <nil>, got = %v", i+1, err)
 			}
 		}
 
 		received, err := bufio.NewReader(conn).ReadString('\n')
 		if err != nil {
-			fail("Test %d: reply read: expected = <nil>, got = %v", i+1, err)
+			fail(t, "Test %d: reply read: expected = <nil>, got = %v", i+1, err)
 		}
 		if received != reply {
-			fail("Test %d: reply: expected = %v, got = %v", i+1, reply, received)
+			fail(t, "Test %d: reply: expected = %v, got = %v", i+1, reply, received)
 		}
 
 		conn.Close()
@@ -739,15 +739,15 @@ func TestHTTPListenerAcceptParallel(t *testing.T) {
 
 		received, err := bufio.NewReader(serverConn).ReadString('\n')
 		if err != nil {
-			fail("Test %d: request read: expected = <nil>, got = %v", i+1, err)
+			fail(t, "Test %d: request read: expected = <nil>, got = %v", i+1, err)
 		}
 
 		if received != request {
-			fail("Test %d: request: expected = %v, got = %v", i+1, request, received)
+			fail(t, "Test %d: request: expected = %v, got = %v", i+1, request, received)
 		}
 
 		if _, err := io.WriteString(serverConn, reply); err != nil {
-			fail("Test %d: reply send: expected = <nil>, got = %v", i+1, err)
+			fail(t, "Test %d: reply send: expected = <nil>, got = %v", i+1, err)
 		}
 
 		serverConn.Close()
