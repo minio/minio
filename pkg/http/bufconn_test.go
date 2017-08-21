@@ -40,8 +40,8 @@ func TestBuffConnReadTimeout(t *testing.T) {
 	}
 
 	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
-		wg.Add(1)
 		defer wg.Done()
 
 		tcpConn, terr := tcpListener.AcceptTCP()

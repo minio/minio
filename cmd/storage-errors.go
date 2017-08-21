@@ -83,6 +83,9 @@ var errFileAccessDenied = errors.New("file access denied")
 // verification is empty or invalid.
 var errBitrotHashAlgoInvalid = errors.New("bit-rot hash algorithm is invalid")
 
+// errCrossDeviceLink - rename across devices not allowed.
+var errCrossDeviceLink = errors.New("Rename across devices not allowed, please fix your backend configuration")
+
 // hashMisMatchError - represents a bit-rot hash verification failure
 // error.
 type hashMismatchError struct {

@@ -91,6 +91,7 @@ func serverHandleCmdArgs(ctx *cli.Context) {
 
 	var setupType SetupType
 	var err error
+
 	globalMinioAddr, globalEndpoints, setupType, err = CreateEndpoints(serverAddr, ctx.Args()...)
 	fatalIf(err, "Invalid command line arguments server=‘%s’, args=%s", serverAddr, ctx.Args())
 	globalMinioHost, globalMinioPort = mustSplitHostPort(globalMinioAddr)
