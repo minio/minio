@@ -67,11 +67,20 @@ minio.exe server D:\Photos
 Install minio packages using [pkg](https://github.com/freebsd/pkg)
 
 ```sh
-pkg install minio
+pkg install minio minio-client
 sysrc minio_enable=yes
 sysrc minio_disks=/home/user/Photos
+chown minio:minio /home/user/Photos
 service minio start
 ```
+
+On FreeBSD, minio service starts using configuration files from `/usr/local/etc/minio/config.json`, with:
+
+* Credentials
+* Region
+* Browser
+* Logging
+* Notify
 
 ## Install from Source
 
