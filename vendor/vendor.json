@@ -453,16 +453,6 @@
 			"revisionTime": "2016-12-15T19:56:52Z"
 		},
 		{
-			"path": "golang.org/x/crypto/bcrypt",
-			"revision": "7b85b097bf7527677d54d3220065e966a0e3b613",
-			"revisionTime": "2015-11-30T17:07:01-05:00"
-		},
-		{
-			"path": "golang.org/x/crypto/blowfish",
-			"revision": "7b85b097bf7527677d54d3220065e966a0e3b613",
-			"revisionTime": "2015-11-30T17:07:01-05:00"
-		},
-		{
 			"path": "golang.org/x/net/context",
 			"revision": "a728288923b47049b2ce791836767ffbe964a5bd",
 			"revisionTime": "2016-07-07T15:24:52-07:00"
