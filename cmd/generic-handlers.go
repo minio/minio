@@ -62,6 +62,52 @@ func (h requestSizeLimitHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 	h.handler.ServeHTTP(w, r)
 }
 
+const (
+	// Maximum size for http headers - See: https://docs.aws.amazon.com/AmazonS3/latest/dev/UsingMetadata.html
+	maxHeaderSize = 8 * 1024
+	// Maximum size for user-defined metadata - See: https://docs.aws.amazon.com/AmazonS3/latest/dev/UsingMetadata.html
+	maxUserDataSize = 2 * 1024
+)
+
+type requestHeaderSizeLimitHandler struct {
+	http.Handler
+}
+
+func setRequestHeaderSizeLimitHandler(h http.Handler) http.Handler {
+	return requestHeaderSizeLimitHandler{h}
+}
+
+// ServeHTTP restricts the size of the http header to 8 KB and the size
+// of the user-defined metadata to 2 KB.
+func (h requestHeaderSizeLimitHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if isHTTPHeaderSizeTooLarge(r.Header) {
+		writeErrorResponse(w, ErrMetadataTooLarge, r.URL)
+		return
+	}
+	h.Handler.ServeHTTP(w, r)
+}
+
+// isHTTPHeaderSizeTooLarge returns true if the provided
+// header is larger than 8 KB or the user-defined metadata
+// is larger than 2 KB.
+func isHTTPHeaderSizeTooLarge(header http.Header) bool {
+	var size, usersize int
+	for key := range header {
+		length := len(key) + len(header.Get(key))
+		size += length
+		for _, prefix := range userMetadataKeyPrefixes {
+			if strings.HasPrefix(key, prefix) {
+				usersize += length
+				break
+			}
+		}
+		if usersize > maxUserDataSize || size > maxHeaderSize {
+			return true
+		}
+	}
+	return false
+}
+
 // Reserved bucket.
 const (
 	minioReservedBucket     = "minio"

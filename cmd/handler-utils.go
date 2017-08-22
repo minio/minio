@@ -97,6 +97,14 @@ func path2BucketAndObject(path string) (bucket, object string) {
 	return bucket, object
 }
 
+// userMetadataKeyPrefixes contains the prefixes of used-defined metadata keys.
+// All values stored with a key starting with one of the following prefixes
+// must be extracted from the header.
+var userMetadataKeyPrefixes = []string{
+	"X-Amz-Meta-",
+	"X-Minio-Meta-",
+}
+
 // extractMetadataFromHeader extracts metadata from HTTP header.
 func extractMetadataFromHeader(header http.Header) (map[string]string, error) {
 	if header == nil {
@@ -119,11 +127,11 @@ func extractMetadataFromHeader(header http.Header) (map[string]string, error) {
 		if key != http.CanonicalHeaderKey(key) {
 			return nil, traceError(errInvalidArgument)
 		}
-		if strings.HasPrefix(key, "X-Amz-Meta-") {
-			metadata[key] = header.Get(key)
-		}
-		if strings.HasPrefix(key, "X-Minio-Meta-") {
-			metadata[key] = header.Get(key)
+		for _, prefix := range userMetadataKeyPrefixes {
+			if strings.HasPrefix(key, prefix) {
+				metadata[key] = header.Get(key)
+				break
+			}
 		}
 	}
 	return metadata, nil

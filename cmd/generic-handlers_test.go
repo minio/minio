@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"net/http"
+	"strconv"
 	"testing"
 )
 
@@ -86,5 +87,39 @@ func TestGuessIsBrowser(t *testing.T) {
 	r.Header.Set("User-Agent", "mc")
 	if guessIsBrowserReq(r) {
 		t.Fatal("Test shouldn't report as browser for a non browser request.")
+	}
+}
+
+var isHTTPHeaderSizeTooLargeTests = []struct {
+	header     http.Header
+	shouldFail bool
+}{
+	{header: generateHeader(0, 0), shouldFail: false},
+	{header: generateHeader(1024, 0), shouldFail: false},
+	{header: generateHeader(2048, 0), shouldFail: false},
+	{header: generateHeader(8*1024+1, 0), shouldFail: true},
+	{header: generateHeader(0, 1024), shouldFail: false},
+	{header: generateHeader(0, 2048), shouldFail: true},
+	{header: generateHeader(0, 2048+1), shouldFail: true},
+}
+
+func generateHeader(size, usersize int) http.Header {
+	header := http.Header{}
+	for i := 0; i < size; i++ {
+		header.Add(strconv.Itoa(i), "")
+	}
+	userlength := 0
+	for i := 0; userlength < usersize; i++ {
+		userlength += len(userMetadataKeyPrefixes[0] + strconv.Itoa(i))
+		header.Add(userMetadataKeyPrefixes[0]+strconv.Itoa(i), "")
+	}
+	return header
+}
+
+func TestIsHTTPHeaderSizeTooLarge(t *testing.T) {
+	for i, test := range isHTTPHeaderSizeTooLargeTests {
+		if res := isHTTPHeaderSizeTooLarge(test.header); res != test.shouldFail {
+			t.Errorf("Test %d: Expected %v got %v", i, res, test.shouldFail)
+		}
 	}
 }
