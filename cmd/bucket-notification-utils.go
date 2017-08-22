@@ -235,6 +235,12 @@ func checkDuplicateQueueConfigs(configs []queueConfig) APIErrorCode {
 // if one of the config is malformed or has invalid data it is rejected.
 // Configuration is never applied partially.
 func validateNotificationConfig(nConfig notificationConfig) APIErrorCode {
+	// Minio server does not support lambda/topic configurations
+	// currently. Such configuration is rejected.
+	if len(nConfig.LambdaConfigs) > 0 || len(nConfig.TopicConfigs) > 0 {
+		return ErrUnsupportedNotification
+	}
+
 	// Validate all queue configs.
 	if s3Error := validateQueueConfigs(nConfig.QueueConfigs); s3Error != ErrNone {
 		return s3Error

@@ -67,6 +67,7 @@ type notificationConfig struct {
 	XMLName       xml.Name       `xml:"NotificationConfiguration"`
 	QueueConfigs  []queueConfig  `xml:"QueueConfiguration"`
 	LambdaConfigs []lambdaConfig `xml:"CloudFunctionConfiguration"`
+	TopicConfigs  []topicConfig  `xml:"TopicConfiguration"`
 }
 
 // listenerConfig structure represents run-time notification

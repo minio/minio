@@ -128,6 +128,7 @@ const (
 	ErrFilterNameSuffix
 	ErrFilterValueInvalid
 	ErrOverlappingConfigs
+	ErrUnsupportedNotification
 
 	// S3 extended errors.
 	ErrContentSHA256Mismatch
@@ -549,6 +550,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	ErrOverlappingConfigs: {
 		Code:           "InvalidArgument",
 		Description:    "Configurations overlap. Configurations on the same bucket cannot share a common event type.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrUnsupportedNotification: {
+		Code:           "UnsupportedNotification",
+		Description:    "Minio server does not support Topic or Cloud Function based notifications.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	ErrInvalidCopyPartRange: {
