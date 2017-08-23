@@ -363,7 +363,7 @@ func TestDisksWithAllParts(t *testing.T) {
 	}
 
 	partsMetadata, errs := readAllXLMetadata(xlDisks, bucket, object)
-	if err != nil {
+	if err = reduceReadQuorumErrs(errs, []error{}, obj.(*xlObjects).dataBlocks); err != nil {
 		t.Fatalf("Failed to read xl meta data %v", err)
 	}
 
