@@ -247,6 +247,95 @@ func testGetBucketNotificationHandler(obj ObjectLayer, instanceType, bucketName 
 	}
 }
 
+func TestPutBucketNotificationHandler(t *testing.T) {
+	ExecObjectLayerAPITest(t, testPutBucketNotificationHandler, []string{
+		"PutBucketNotification",
+	})
+}
+
+func testPutBucketNotificationHandler(obj ObjectLayer, instanceType,
+	bucketName string, apiRouter http.Handler, credentials credential,
+	t *testing.T) {
+
+	// declare sample configs
+	filterRules := []filterRule{
+		{
+			Name:  "prefix",
+			Value: "minio",
+		},
+		{
+			Name:  "suffix",
+			Value: "*.jpg",
+		},
+	}
+	sampleSvcCfg := ServiceConfig{
+		[]string{"s3:ObjectRemoved:*", "s3:ObjectCreated:*"},
+		filterStruct{
+			keyFilter{filterRules},
+		},
+		"1",
+	}
+	sampleNotifCfg := notificationConfig{
+		QueueConfigs: []queueConfig{
+			{
+				ServiceConfig: sampleSvcCfg,
+				QueueARN:      "testqARN",
+			},
+		},
+	}
+
+	{
+		sampleNotifCfg.LambdaConfigs = []lambdaConfig{
+			{
+				sampleSvcCfg, "testLARN",
+			},
+		}
+		xmlBytes, err := xml.Marshal(sampleNotifCfg)
+		if err != nil {
+			t.Fatalf("%s: Unexpected err: %#v", instanceType, err)
+		}
+		rec := httptest.NewRecorder()
+		req, err := newTestSignedRequestV4("PUT",
+			getPutBucketNotificationURL("", bucketName),
+			int64(len(xmlBytes)), bytes.NewReader(xmlBytes),
+			credentials.AccessKey, credentials.SecretKey)
+		if err != nil {
+			t.Fatalf("%s: Failed to create HTTP testRequest for PutBucketNotification: <ERROR> %v",
+				instanceType, err)
+		}
+		apiRouter.ServeHTTP(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("Unexpected http response %d", rec.Code)
+		}
+	}
+
+	{
+		sampleNotifCfg.LambdaConfigs = nil
+		sampleNotifCfg.TopicConfigs = []topicConfig{
+			{
+				sampleSvcCfg, "testTARN",
+			},
+		}
+		xmlBytes, err := xml.Marshal(sampleNotifCfg)
+		if err != nil {
+			t.Fatalf("%s: Unexpected err: %#v", instanceType, err)
+		}
+		rec := httptest.NewRecorder()
+		req, err := newTestSignedRequestV4("PUT",
+			getPutBucketNotificationURL("", bucketName),
+			int64(len(xmlBytes)), bytes.NewReader(xmlBytes),
+			credentials.AccessKey, credentials.SecretKey)
+		if err != nil {
+			t.Fatalf("%s: Failed to create HTTP testRequest for PutBucketNotification: <ERROR> %v",
+				instanceType, err)
+		}
+		apiRouter.ServeHTTP(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("Unexpected http response %d", rec.Code)
+		}
+	}
+}
+
 func TestListenBucketNotificationNilHandler(t *testing.T) {
 	ExecObjectLayerAPITest(t, testListenBucketNotificationNilHandler, []string{
 		"ListenBucketNotification",
@@ -281,26 +370,28 @@ func testListenBucketNotificationNilHandler(obj ObjectLayer, instanceType, bucke
 	}
 }
 
-func testRemoveNotificationConfig(obj ObjectLayer, instanceType, bucketName string, apiRouter http.Handler,
-	credentials credential, t *testing.T) {
+func testRemoveNotificationConfig(obj ObjectLayer, instanceType,
+	bucketName string, apiRouter http.Handler, credentials credential,
+	t *testing.T) {
+
 	invalidBucket := "Invalid\\Bucket"
 	// get random bucket name.
 	randBucket := bucketName
 
-	sampleNotificationBytes := []byte("<NotificationConfiguration><TopicConfiguration>" +
-		"<Event>s3:ObjectCreated:*</Event><Event>s3:ObjectRemoved:*</Event><Filter>" +
-		"<S3Key></S3Key></Filter><Id></Id><Topic>arn:minio:sns:us-east-1:1474332374:listen</Topic>" +
-		"</TopicConfiguration></NotificationConfiguration>")
-
-	// Set sample bucket notification on randBucket.
-	testRec := httptest.NewRecorder()
-	testReq, tErr := newTestSignedRequestV4("PUT", getPutBucketNotificationURL("", randBucket),
-		int64(len(sampleNotificationBytes)), bytes.NewReader(sampleNotificationBytes),
-		credentials.AccessKey, credentials.SecretKey)
-	if tErr != nil {
-		t.Fatalf("%s: Failed to create HTTP testRequest for PutBucketNotification: <ERROR> %v", instanceType, tErr)
+	nCfg := notificationConfig{
+		QueueConfigs: []queueConfig{
+			{
+				ServiceConfig: ServiceConfig{
+					Events: []string{"s3:ObjectRemoved:*",
+						"s3:ObjectCreated:*"},
+				},
+				QueueARN: "testqARN",
+			},
+		},
 	}
-	apiRouter.ServeHTTP(testRec, testReq)
+	if err := persistNotificationConfig(randBucket, &nCfg, obj); err != nil {
+		t.Fatalf("Unexpected error: %#v", err)
+	}
 
 	testCases := []struct {
 		bucketName  string
