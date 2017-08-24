@@ -14,7 +14,12 @@ confinement: strict
 apps:
   minio:
     command: minio
-    plugs: [home, removable-media, network, network-bind]
+    plugs:
+      - home
+      - mount-observe
+      - network
+      - network-bind
+      - removable-media
 
 parts:
   minio:
