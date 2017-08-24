@@ -749,14 +749,24 @@ func (fs fsObjects) getObjectETag(bucket, entry string) (string, error) {
 	// Read from fs metadata only if it exists.
 	defer fs.rwPool.Close(fsMetaPath)
 
-	fsMetaBuf, err := ioutil.ReadAll(rlk.LockedFile)
+	// Fetch the size of the underlying file.
+	fi, err := rlk.LockedFile.Stat()
 	if err != nil {
-		// `fs.json` can be empty due to previously failed
-		// PutObject() transaction, if we arrive at such
-		// a situation we just ignore and continue.
-		if errorCause(err) != io.EOF {
-			return "", toObjectErr(err, bucket, entry)
-		}
+		return "", toObjectErr(traceError(err), bucket, entry)
+	}
+
+	// `fs.json` can be empty due to previously failed
+	// PutObject() transaction, if we arrive at such
+	// a situation we just ignore and continue.
+	if fi.Size() == 0 {
+		return "", nil
+	}
+
+	// Wrap the locked file in a ReadAt() backend section reader to
+	// make sure the underlying offsets don't move.
+	fsMetaBuf, err := ioutil.ReadAll(io.NewSectionReader(rlk.LockedFile, 0, fi.Size()))
+	if err != nil {
+		return "", traceError(err)
 	}
 
 	// Check if FS metadata is valid, if not return error.
@@ -876,6 +886,7 @@ func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 		}
 		objInfo, err := entryToObjectInfo(walkResult.entry)
 		if err != nil {
+			errorIf(err, "Unable to fetch object info for %s", walkResult.entry)
 			return loi, nil
 		}
 		nextMarker = objInfo.Name
