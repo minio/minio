@@ -34,6 +34,7 @@ import (
 	"strings"
 	"testing"
 
+	jwtgo "github.com/dgrijalva/jwt-go"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio-go/pkg/set"
@@ -667,6 +668,16 @@ func TestWebCreateURLToken(t *testing.T) {
 	ExecObjectLayerTest(t, testCreateURLToken)
 }
 
+func getTokenString(accessKey, secretKey string) (string, error) {
+	utcNow := UTCNow()
+	token := jwtgo.NewWithClaims(jwtgo.SigningMethodHS512, jwtgo.StandardClaims{
+		ExpiresAt: utcNow.Add(defaultJWTExpiry).Unix(),
+		IssuedAt:  utcNow.Unix(),
+		Subject:   accessKey,
+	})
+	return token.SignedString([]byte(secretKey))
+}
+
 func testCreateURLToken(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	apiRouter := initTestWebRPCEndPoint(obj)
 	credentials := serverConfig.GetCredential()
@@ -699,6 +710,21 @@ func testCreateURLToken(obj ObjectLayer, instanceType string, t TestErrHandler) 
 	// Ensure the token is valid now. It will expire later.
 	if !isAuthTokenValid(tokenReply.Token) {
 		t.Fatalf("token is not valid")
+	}
+
+	// Token is invalid.
+	if isAuthTokenValid("") {
+		t.Fatalf("token shouldn't be valid, but it is")
+	}
+
+	token, err := getTokenString("invalid-access", credentials.SecretKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Token has invalid access key.
+	if isAuthTokenValid(token) {
+		t.Fatalf("token shouldn't be valid, but it is")
 	}
 }
 
