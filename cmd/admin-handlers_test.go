@@ -26,6 +26,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -182,7 +183,7 @@ func prepareAdminXLTestBed() (*adminXLTestBed, error) {
 // TearDown - method that resets the test bed for subsequent unit
 // tests to start afresh.
 func (atb *adminXLTestBed) TearDown() {
-	removeAll(atb.configPath)
+	os.RemoveAll(atb.configPath)
 	removeRoots(atb.xlDirs)
 	resetTestGlobals()
 }
@@ -1363,7 +1364,7 @@ func TestWriteSetConfigResponse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 	testCases := []struct {
 		status bool
 		errs   []error

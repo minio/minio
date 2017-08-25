@@ -510,9 +510,9 @@ func newTestConfig(bucketLocation string) (rootPath string, err error) {
 
 // Deleting the temporary backend and stopping the server.
 func (testServer TestServer) Stop() {
-	removeAll(testServer.Root)
+	os.RemoveAll(testServer.Root)
 	for _, disk := range testServer.Disks {
-		removeAll(disk.Path)
+		os.RemoveAll(disk.Path)
 	}
 	testServer.Server.Close()
 }
@@ -1646,7 +1646,7 @@ func initObjectLayer(endpoints EndpointList) (ObjectLayer, []StorageAPI, error) 
 // removeRoots - Cleans up initialized directories during tests.
 func removeRoots(roots []string) {
 	for _, root := range roots {
-		removeAll(root)
+		os.RemoveAll(root)
 	}
 }
 
@@ -1656,7 +1656,7 @@ func removeDiskN(disks []string, n int) {
 		n = len(disks)
 	}
 	for _, disk := range disks[:n] {
-		removeAll(disk)
+		os.RemoveAll(disk)
 	}
 }
 
@@ -1977,7 +1977,7 @@ func ExecObjectLayerTest(t TestErrHandler, objTest objTestType) {
 	if err != nil {
 		t.Fatal("Unexpected error", err)
 	}
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 
 	objLayer, fsDir, err := prepareFS()
 	if err != nil {
@@ -2002,7 +2002,7 @@ func ExecObjectLayerDiskAlteredTest(t *testing.T, objTest objTestDiskNotFoundTyp
 	if err != nil {
 		t.Fatal("Failed to create config directory", err)
 	}
-	defer removeAll(configPath)
+	defer os.RemoveAll(configPath)
 
 	objLayer, fsDirs, err := prepareXL()
 	if err != nil {
@@ -2024,7 +2024,7 @@ func ExecObjectLayerStaleFilesTest(t *testing.T, objTest objTestStaleFilesType) 
 	if err != nil {
 		t.Fatal("Failed to create config directory", err)
 	}
-	defer removeAll(configPath)
+	defer os.RemoveAll(configPath)
 
 	nDisks := 16
 	erasureDisks, err := getRandomDisks(nDisks)

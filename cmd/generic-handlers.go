@@ -24,20 +24,17 @@ import (
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
-	router "github.com/gorilla/mux"
 	"github.com/rs/cors"
 )
 
 // HandlerFunc - useful to chain different middleware http.Handler
 type HandlerFunc func(http.Handler) http.Handler
 
-func registerHandlers(mux *router.Router, handlerFns ...HandlerFunc) http.Handler {
-	var f http.Handler
-	f = mux
+func registerHandlers(h http.Handler, handlerFns ...HandlerFunc) http.Handler {
 	for _, hFn := range handlerFns {
-		f = hFn(f)
+		h = hFn(h)
 	}
-	return f
+	return h
 }
 
 // Adds limiting body size middleware
@@ -63,6 +60,52 @@ func (h requestSizeLimitHandler) ServeHTTP(w http.ResponseWriter, r *http.Reques
 	// Restricting read data to a given maximum length
 	r.Body = http.MaxBytesReader(w, r.Body, h.maxBodySize)
 	h.handler.ServeHTTP(w, r)
+}
+
+const (
+	// Maximum size for http headers - See: https://docs.aws.amazon.com/AmazonS3/latest/dev/UsingMetadata.html
+	maxHeaderSize = 8 * 1024
+	// Maximum size for user-defined metadata - See: https://docs.aws.amazon.com/AmazonS3/latest/dev/UsingMetadata.html
+	maxUserDataSize = 2 * 1024
+)
+
+type requestHeaderSizeLimitHandler struct {
+	http.Handler
+}
+
+func setRequestHeaderSizeLimitHandler(h http.Handler) http.Handler {
+	return requestHeaderSizeLimitHandler{h}
+}
+
+// ServeHTTP restricts the size of the http header to 8 KB and the size
+// of the user-defined metadata to 2 KB.
+func (h requestHeaderSizeLimitHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if isHTTPHeaderSizeTooLarge(r.Header) {
+		writeErrorResponse(w, ErrMetadataTooLarge, r.URL)
+		return
+	}
+	h.Handler.ServeHTTP(w, r)
+}
+
+// isHTTPHeaderSizeTooLarge returns true if the provided
+// header is larger than 8 KB or the user-defined metadata
+// is larger than 2 KB.
+func isHTTPHeaderSizeTooLarge(header http.Header) bool {
+	var size, usersize int
+	for key := range header {
+		length := len(key) + len(header.Get(key))
+		size += length
+		for _, prefix := range userMetadataKeyPrefixes {
+			if strings.HasPrefix(key, prefix) {
+				usersize += length
+				break
+			}
+		}
+		if usersize > maxUserDataSize || size > maxHeaderSize {
+			return true
+		}
+	}
+	return false
 }
 
 // Reserved bucket.

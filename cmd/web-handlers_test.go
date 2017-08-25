@@ -28,6 +28,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -1346,7 +1347,7 @@ func TestWebCheckAuthorization(t *testing.T) {
 		t.Fatal("Init Test config failed", err)
 	}
 	// remove the root directory after the test ends.
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 
 	rec := httptest.NewRecorder()
 
@@ -1428,7 +1429,7 @@ func TestWebObjectLayerNotReady(t *testing.T) {
 		t.Fatal("Init Test config failed", err)
 	}
 	// remove the root directory after the test ends.
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 
 	rec := httptest.NewRecorder()
 
@@ -1506,7 +1507,7 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer removeAll(root)
+	defer os.RemoveAll(root)
 
 	// Prepare XL backend
 	obj, fsDirs, err := prepareXL()
@@ -1538,7 +1539,7 @@ func TestWebObjectLayerFaultyDisks(t *testing.T) {
 		t.Fatal("Init Test config failed", err)
 	}
 	// remove the root directory after the test ends.
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 
 	rec := httptest.NewRecorder()
 

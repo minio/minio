@@ -18,6 +18,7 @@ package cmd
 
 import (
 	"bytes"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -86,12 +87,12 @@ func TestCommonTime(t *testing.T) {
 
 // partsMetaFromModTimes - returns slice of modTimes given metadata of
 // an object part.
-func partsMetaFromModTimes(modTimes []time.Time, checksums []checkSumInfo) []xlMetaV1 {
+func partsMetaFromModTimes(modTimes []time.Time, algorithm BitrotAlgorithm, checksums []ChecksumInfo) []xlMetaV1 {
 	var partsMetadata []xlMetaV1
 	for _, modTime := range modTimes {
 		partsMetadata = append(partsMetadata, xlMetaV1{
-			Erasure: erasureInfo{
-				Checksum: checksums,
+			Erasure: ErasureInfo{
+				Checksums: checksums,
 			},
 			Stat: statInfo{
 				ModTime: modTime,
@@ -127,7 +128,7 @@ func TestListOnlineDisks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to initialize config - %v", err)
 	}
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 
 	obj, disks, err := prepareXL()
 	if err != nil {
@@ -269,7 +270,7 @@ func TestListOnlineDisks(t *testing.T) {
 
 		}
 
-		partsMetadata := partsMetaFromModTimes(test.modTimes, xlMeta.Erasure.Checksum)
+		partsMetadata := partsMetaFromModTimes(test.modTimes, DefaultBitrotAlgorithm, xlMeta.Erasure.Checksums)
 
 		onlineDisks, modTime := listOnlineDisks(xlDisks, partsMetadata, test.errs)
 		availableDisks, newErrs, _ := disksWithAllParts(onlineDisks, partsMetadata, test.errs, bucket, object)
@@ -336,7 +337,7 @@ func TestDisksWithAllParts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to initialize config - %v", err)
 	}
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 
 	obj, disks, err := prepareXL()
 	if err != nil {
@@ -349,26 +350,24 @@ func TestDisksWithAllParts(t *testing.T) {
 	// make data with more than one part
 	partCount := 3
 	data := bytes.Repeat([]byte("a"), int(globalPutPartSize)*partCount)
-	xlDisks := obj.(*xlObjects).storageDisks
+	xl := obj.(*xlObjects)
+	xlDisks := xl.storageDisks
 
 	err = obj.MakeBucketWithLocation("bucket", "")
 	if err != nil {
 		t.Fatalf("Failed to make a bucket %v", err)
 	}
 
-	_, err = obj.PutObject(bucket, object, int64(len(data)),
-		bytes.NewReader(data), nil, "")
+	_, err = obj.PutObject(bucket, object, int64(len(data)), bytes.NewReader(data), nil, "")
 	if err != nil {
 		t.Fatalf("Failed to putObject %v", err)
 	}
 
 	partsMetadata, errs := readAllXLMetadata(xlDisks, bucket, object)
-	if err != nil {
-		t.Fatalf("Failed to read xl meta data %v", err)
+	if reducedErr := reduceReadQuorumErrs(errs, objectOpIgnoredErrs, xl.readQuorum); reducedErr != nil {
+		t.Fatalf("Failed to read xl meta data %v", reducedErr)
 	}
 
-	// Replace the default blake2b erasure algorithm to HashSha256 and test that
-	// disks are excluded
 	diskFailures := make(map[int]string)
 	// key = disk index, value = part name with hash mismatch
 	diskFailures[0] = "part.3"
@@ -376,16 +375,15 @@ func TestDisksWithAllParts(t *testing.T) {
 	diskFailures[15] = "part.2"
 
 	for diskIndex, partName := range diskFailures {
-		for index, info := range partsMetadata[diskIndex].Erasure.Checksum {
+		for index, info := range partsMetadata[diskIndex].Erasure.Checksums {
 			if info.Name == partName {
-				partsMetadata[diskIndex].Erasure.Checksum[index].Algorithm = HashSha256
+				partsMetadata[diskIndex].Erasure.Checksums[index].Hash[0]++
 			}
 		}
 	}
 
 	errs = make([]error, len(xlDisks))
-	filteredDisks, errs, err :=
-		disksWithAllParts(xlDisks, partsMetadata, errs, bucket, object)
+	filteredDisks, errs, err := disksWithAllParts(xlDisks, partsMetadata, errs, bucket, object)
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err)
 	}
@@ -395,7 +393,6 @@ func TestDisksWithAllParts(t *testing.T) {
 	}
 
 	for diskIndex, disk := range filteredDisks {
-
 		if _, ok := diskFailures[diskIndex]; ok {
 			if disk != nil {
 				t.Errorf("Disk not filtered as expected, disk: %d", diskIndex)
@@ -421,8 +418,7 @@ func TestDisksWithAllParts(t *testing.T) {
 		t.Fatalf("Failed to read xl meta data %v", err)
 	}
 
-	filteredDisks, errs, err =
-		disksWithAllParts(xlDisks, partsMetadata, errs, bucket, object)
+	filteredDisks, errs, err = disksWithAllParts(xlDisks, partsMetadata, errs, bucket, object)
 	if err != nil {
 		t.Errorf("Unexpected error: %s", err)
 	}

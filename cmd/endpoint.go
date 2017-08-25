@@ -21,11 +21,13 @@ import (
 	"net"
 	"net/url"
 	"path"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/minio/minio-go/pkg/set"
+	"github.com/minio/minio/pkg/mountinfo"
 )
 
 // EndpointType - enum for endpoint type.
@@ -99,7 +101,8 @@ func NewEndpoint(arg string) (ep Endpoint, e error) {
 			return ep, fmt.Errorf("invalid URL endpoint format")
 		}
 
-		host, port, err := net.SplitHostPort(u.Host)
+		var host, port string
+		host, port, err = net.SplitHostPort(u.Host)
 		if err != nil {
 			if !strings.Contains(err.Error(), "missing port in address") {
 				return ep, fmt.Errorf("invalid URL endpoint format: %s", err)
@@ -132,6 +135,12 @@ func NewEndpoint(arg string) (ep Endpoint, e error) {
 			return ep, err
 		}
 	} else {
+		// Only check if the arg is an ip address and ask for scheme since its absent.
+		// localhost, example.com, any FQDN cannot be disambiguated from a regular file path such as
+		// /mnt/export1. So we go ahead and start the minio server in FS modes in these cases.
+		if isHostIPv4(arg) {
+			return ep, fmt.Errorf("invalid URL endpoint format: missing scheme http or https")
+		}
 		u = &url.URL{Path: path.Clean(arg)}
 		isLocal = true
 	}
@@ -212,13 +221,28 @@ func NewEndpointList(args ...string) (endpoints EndpointList, err error) {
 			return nil, fmt.Errorf("duplicate endpoints found")
 		}
 		uniqueArgs.Add(arg)
-
 		endpoints = append(endpoints, endpoint)
 	}
 
 	sort.Sort(endpoints)
 
 	return endpoints, nil
+}
+
+// Checks if there are any cross device mounts.
+func checkCrossDeviceMounts(endpoints EndpointList) (err error) {
+	var absPaths []string
+	for _, endpoint := range endpoints {
+		if endpoint.IsLocal {
+			var absPath string
+			absPath, err = filepath.Abs(endpoint.Path)
+			if err != nil {
+				return err
+			}
+			absPaths = append(absPaths, absPath)
+		}
+	}
+	return mountinfo.CheckCrossDevice(absPaths)
 }
 
 // CreateEndpoints - validates and creates new endpoints for given args.
@@ -241,18 +265,26 @@ func CreateEndpoints(serverAddr string, args ...string) (string, EndpointList, S
 		if err != nil {
 			return serverAddr, endpoints, setupType, err
 		}
-
 		if endpoint.Type() != PathEndpointType {
 			return serverAddr, endpoints, setupType, fmt.Errorf("use path style endpoint for FS setup")
 		}
-
 		endpoints = append(endpoints, endpoint)
 		setupType = FSSetupType
+
+		// Check for cross device mounts if any.
+		if err = checkCrossDeviceMounts(endpoints); err != nil {
+			return serverAddr, endpoints, setupType, err
+		}
 		return serverAddr, endpoints, setupType, nil
 	}
 
 	// Convert args to endpoints
 	if endpoints, err = NewEndpointList(args...); err != nil {
+		return serverAddr, endpoints, setupType, err
+	}
+
+	// Check for cross device mounts if any.
+	if err = checkCrossDeviceMounts(endpoints); err != nil {
 		return serverAddr, endpoints, setupType, err
 	}
 
@@ -267,6 +299,7 @@ func CreateEndpoints(serverAddr string, args ...string) (string, EndpointList, S
 	localEndpointCount := 0
 	localServerAddrSet := set.NewStringSet()
 	localPortSet := set.NewStringSet()
+
 	for _, endpoint := range endpoints {
 		endpointPathSet.Add(endpoint.Path)
 		if endpoint.IsLocal {

@@ -8,13 +8,13 @@ Minio server is light enough to be bundled with the application stack, similar t
 ### Stable
 ```
 docker pull minio/minio
-docker run -p 9000:9000 minio/minio server /export
+docker run -p 9000:9000 minio/minio server /data
 ```
 
 ### Edge
 ```
 docker pull minio/minio:edge
-docker run -p 9000:9000 minio/minio:edge server /export
+docker run -p 9000:9000 minio/minio:edge server /data
 ```
 Please visit Minio Docker quickstart guide for more [here](https://docs.minio.io/docs/minio-docker-quickstart-guide)
 
@@ -48,21 +48,25 @@ chmod 755 minio
 | Platform| Architecture | URL|
 | ----------| -------- | ------|
 |GNU/Linux|64-bit Intel|https://dl.minio.io/server/minio/release/linux-amd64/minio |
-|         |32-bit Intel|https://dl.minio.io/server/minio/release/linux-386/minio |
-|         |32-bit ARM|https://dl.minio.io/server/minio/release/linux-arm/minio |
-|         |64-bit ARM|https://dl.minio.io/server/minio/release/linux-arm64/minio |
-|         |32-bit ARMv6|https://dl.minio.io/server/minio/release/linux-arm6vl/minio |
 ```sh
 chmod +x minio
 ./minio server ~/Photos
 ```
+
+### Snap
+You can install the latest `minio` [snap](https://snapcraft.io), and help testing the most recent changes of the master branch in [all the supported Linux distros](https://snapcraft.io/docs/core/install) with:
+
+```sh
+sudo snap install minio --edge
+```
+
+Every time a new version of `minio` is pushed to the store, you will get it updated automatically.
 
 ## Microsoft Windows
 ### Binary Download
 | Platform| Architecture | URL|
 | ----------| -------- | ------|
 |Microsoft Windows|64-bit|https://dl.minio.io/server/minio/release/windows-amd64/minio.exe |
-|                 |32-bit|https://dl.minio.io/server/minio/release/windows-386/minio.exe |
 ```sh
 minio.exe server D:\Photos
 ```
@@ -76,15 +80,6 @@ pkg install minio
 sysrc minio_enable=yes
 sysrc minio_disks=/home/user/Photos
 service minio start
-```
-
-### Binary Download
-| Platform| Architecture | URL|
-| ----------| -------- | ------|
-|FreeBSD|64-bit|https://dl.minio.io/server/minio/release/freebsd-amd64/minio |
-```sh
-chmod 755 minio
-./minio server ~/Photos
 ```
 
 ## Install from Source

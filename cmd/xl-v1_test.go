@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -33,7 +34,7 @@ func TestStorageInfo(t *testing.T) {
 
 	// Remove all dirs.
 	for _, dir := range fsDirs {
-		defer removeAll(dir)
+		defer os.RemoveAll(dir)
 	}
 
 	// Get storage info first attempt.
@@ -131,7 +132,7 @@ func TestNewXL(t *testing.T) {
 		// and successfully returns initialized object layer.
 		disk := filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
 		erasureDisks = append(erasureDisks, disk)
-		defer removeAll(disk)
+		defer os.RemoveAll(disk)
 	}
 
 	// No disks input.

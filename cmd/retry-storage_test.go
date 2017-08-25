@@ -19,7 +19,8 @@ package cmd
 import (
 	"bytes"
 	"crypto/sha256"
-	"encoding/hex"
+	"errors"
+	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -31,7 +32,7 @@ func TestRetryStorage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer removeAll(root)
+	defer os.RemoveAll(root)
 
 	originalStorageDisks, disks := prepareXLStorageDisks(t)
 	defer removeRoots(disks)
@@ -303,15 +304,15 @@ func TestRetryStorage(t *testing.T) {
 		}
 	}
 
-	sha256Hash := func(s string) string {
-		k := sha256.Sum256([]byte(s))
-		return hex.EncodeToString(k[:])
+	sha256Hash := func(b []byte) []byte {
+		k := sha256.Sum256(b)
+		return k[:]
 	}
 	for _, disk := range storageDisks {
 		var buf2 = make([]byte, 5)
+		verifier := NewBitrotVerifier(SHA256, sha256Hash([]byte("Hello, World")))
 		var n int64
-		if n, err = disk.ReadFileWithVerify("existent", "path", 7, buf2,
-			HashSha256, sha256Hash("Hello, World")); err != nil {
+		if n, err = disk.ReadFileWithVerify("existent", "path", 7, buf2, verifier); err != nil {
 			t.Fatal(err)
 		}
 		if err != nil {
@@ -420,6 +421,34 @@ func TestRetryStorage(t *testing.T) {
 		}
 		if err = disk.DeleteVol("existent"); err != nil {
 			t.Fatal(err)
+		}
+	}
+}
+
+// Tests reply storage error transformation.
+func TestReplyStorageErr(t *testing.T) {
+	unknownErr := errors.New("Unknown error")
+	testCases := []struct {
+		expectedErr error
+		err         error
+	}{
+		{
+			expectedErr: errDiskNotFound,
+			err:         errDiskNotFoundFromNetError,
+		},
+		{
+			expectedErr: errDiskNotFound,
+			err:         errDiskNotFoundFromRPCShutdown,
+		},
+		{
+			expectedErr: unknownErr,
+			err:         unknownErr,
+		},
+	}
+	for i, testCase := range testCases {
+		resultErr := retryToStorageErr(testCase.err)
+		if testCase.expectedErr != resultErr {
+			t.Errorf("Test %d: Expected %s, got %s", i+1, testCase.expectedErr, resultErr)
 		}
 	}
 }

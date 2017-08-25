@@ -23,18 +23,6 @@ script:
 - make test GOFLAGS="-timeout 15m -race -v"
 - make coverage
 
-# Refer https://blog.hypriot.com/post/setup-simple-ci-pipeline-for-arm-images/
-# push image
-- >
-  if [ "$TRAVIS_BRANCH" == "master" ] && [ "$TRAVIS_PULL_REQUEST" == "false" ] && [ "$ARCH" == "x86_64" ]; then
-    docker run --rm --privileged multiarch/qemu-user-static:register --reset
-    docker build -t minio/minio:edge-armhf . -f Dockerfile.armhf
-    docker build -t minio/minio:edge-aarch64 . -f Dockerfile.aarch64
-    docker login -u="$DOCKER_USER" -p="$DOCKER_PASS"
-    docker push minio/minio:edge-armhf
-    docker push minio/minio:edge-aarch64
-  fi
-
 after_success:
 - bash <(curl -s https://codecov.io/bash)
 

@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"encoding/hex"
 	"errors"
 	"hash/crc32"
 	"path"
@@ -27,7 +28,7 @@ import (
 )
 
 // Returns number of errors that occurred the most (incl. nil) and the
-// corresponding error value. N B when there is more than one error value that
+// corresponding error value. NB When there is more than one error value that
 // occurs maximum number of times, the error value returned depends on how
 // golang's map orders keys. This doesn't affect correctness as long as quorum
 // value is greater than or equal to simple majority, since none of the equally
@@ -60,9 +61,9 @@ func reduceErrs(errs []error, ignoredErrs []error) (maxCount int, maxErr error) 
 
 // reduceQuorumErrs behaves like reduceErrs by only for returning
 // values of maximally occurring errors validated against a generic
-// quorum number can be read or write quorum depending on usage.
-// additionally a special error is provided as well to be returned
-// in case quorum is not satisfied.
+// quorum number that can be read or write quorum depending on usage.
+// Additionally a special error is provided to be returned in case
+// quorum is not satisfied.
 func reduceQuorumErrs(errs []error, ignoredErrs []error, quorum int, quorumErr error) (maxErr error) {
 	maxCount, maxErr := reduceErrs(errs, ignoredErrs)
 	if maxErr == nil && maxCount >= quorum {
@@ -90,7 +91,7 @@ func reduceWriteQuorumErrs(errs []error, ignoredErrs []error, writeQuorum int) (
 	return reduceQuorumErrs(errs, ignoredErrs, writeQuorum, errXLWriteQuorum)
 }
 
-// Similar to 'len(slice)' but returns  the actual elements count
+// Similar to 'len(slice)' but returns the actual elements count
 // skipping the unallocated elements.
 func diskCount(disks []StorageAPI) int {
 	diskCount := 0
@@ -103,7 +104,7 @@ func diskCount(disks []StorageAPI) int {
 	return diskCount
 }
 
-// hashOrder - hashes input key to return returns consistent
+// hashOrder - hashes input key to return consistent
 // hashed integer slice. Returned integer order is salted
 // with an input key. This results in consistent order.
 // NOTE: collisions are fine, we are not looking for uniqueness
@@ -116,7 +117,7 @@ func hashOrder(key string, cardinality int) []int {
 	nums := make([]int, cardinality)
 	keyCrc := crc32.Checksum([]byte(key), crc32.IEEETable)
 
-	start := int(uint32(keyCrc)%uint32(cardinality)) | 1
+	start := int(keyCrc%uint32(cardinality)) | 1
 	for i := 1; i <= cardinality; i++ {
 		nums[i-1] = 1 + ((start + i) % cardinality)
 	}
@@ -149,8 +150,8 @@ func parseXLRelease(xlMetaBuf []byte) string {
 	return gjson.GetBytes(xlMetaBuf, "minio.release").String()
 }
 
-func parseXLErasureInfo(xlMetaBuf []byte) erasureInfo {
-	erasure := erasureInfo{}
+func parseXLErasureInfo(xlMetaBuf []byte) (ErasureInfo, error) {
+	erasure := ErasureInfo{}
 	erasureResult := gjson.GetBytes(xlMetaBuf, "erasure")
 	// parse the xlV1Meta.Erasure.Distribution.
 	disResult := erasureResult.Get("distribution").Array()
@@ -161,24 +162,28 @@ func parseXLErasureInfo(xlMetaBuf []byte) erasureInfo {
 	}
 	erasure.Distribution = distribution
 
-	erasure.Algorithm = HashAlgo(erasureResult.Get("algorithm").String())
+	erasure.Algorithm = erasureResult.Get("algorithm").String()
 	erasure.DataBlocks = int(erasureResult.Get("data").Int())
 	erasure.ParityBlocks = int(erasureResult.Get("parity").Int())
 	erasure.BlockSize = erasureResult.Get("blockSize").Int()
 	erasure.Index = int(erasureResult.Get("index").Int())
-	// Pare xlMetaV1.Erasure.Checksum array.
-	checkSumsResult := erasureResult.Get("checksum").Array()
-	checkSums := make([]checkSumInfo, len(checkSumsResult))
-	for i, checkSumResult := range checkSumsResult {
-		checkSum := checkSumInfo{}
-		checkSum.Name = checkSumResult.Get("name").String()
-		checkSum.Algorithm = HashAlgo(checkSumResult.Get("algorithm").String())
-		checkSum.Hash = checkSumResult.Get("hash").String()
-		checkSums[i] = checkSum
-	}
-	erasure.Checksum = checkSums
 
-	return erasure
+	checkSumsResult := erasureResult.Get("checksum").Array()
+	// Parse xlMetaV1.Erasure.Checksum array.
+	checkSums := make([]ChecksumInfo, len(checkSumsResult))
+	for i, v := range checkSumsResult {
+		algorithm := BitrotAlgorithmFromString(v.Get("algorithm").String())
+		if !algorithm.Available() {
+			return erasure, traceError(errBitrotHashAlgoInvalid)
+		}
+		hash, err := hex.DecodeString(v.Get("hash").String())
+		if err != nil {
+			return erasure, traceError(err)
+		}
+		checkSums[i] = ChecksumInfo{Name: v.Get("name").String(), Algorithm: algorithm, Hash: hash}
+	}
+	erasure.Checksums = checkSums
+	return erasure, nil
 }
 
 func parseXLParts(xlMetaBuf []byte) []objectPartInfo {
@@ -207,8 +212,7 @@ func parseXLMetaMap(xlMetaBuf []byte) map[string]string {
 }
 
 // Constructs XLMetaV1 using `gjson` lib to retrieve each field.
-func xlMetaV1UnmarshalJSON(xlMetaBuf []byte) (xmv xlMetaV1, e error) {
-	xlMeta := xlMetaV1{}
+func xlMetaV1UnmarshalJSON(xlMetaBuf []byte) (xlMeta xlMetaV1, e error) {
 	// obtain version.
 	xlMeta.Version = parseXLVersion(xlMetaBuf)
 	// obtain format.
@@ -216,12 +220,15 @@ func xlMetaV1UnmarshalJSON(xlMetaBuf []byte) (xmv xlMetaV1, e error) {
 	// Parse xlMetaV1.Stat .
 	stat, err := parseXLStat(xlMetaBuf)
 	if err != nil {
-		return xmv, err
+		return xlMeta, err
 	}
 
 	xlMeta.Stat = stat
 	// parse the xlV1Meta.Erasure fields.
-	xlMeta.Erasure = parseXLErasureInfo(xlMetaBuf)
+	xlMeta.Erasure, err = parseXLErasureInfo(xlMetaBuf)
+	if err != nil {
+		return xlMeta, err
+	}
 
 	// Parse the XL Parts.
 	xlMeta.Parts = parseXLParts(xlMetaBuf)
@@ -342,7 +349,7 @@ func shufflePartsMetadata(partsMetadata []xlMetaV1, distribution []int) (shuffle
 }
 
 // shuffleDisks - shuffle input disks slice depending on the
-// erasure distribution. return shuffled slice of disks with
+// erasure distribution. Return shuffled slice of disks with
 // their expected distribution.
 func shuffleDisks(disks []StorageAPI, distribution []int) (shuffledDisks []StorageAPI) {
 	if distribution == nil {
@@ -358,7 +365,7 @@ func shuffleDisks(disks []StorageAPI, distribution []int) (shuffledDisks []Stora
 }
 
 // evalDisks - returns a new slice of disks where nil is set if
-// the correspond error in errs slice is not nil
+// the corresponding error in errs slice is not nil
 func evalDisks(disks []StorageAPI, errs []error) []StorageAPI {
 	if len(errs) != len(disks) {
 		errorIf(errors.New("unexpected disks/errors slice length"), "unable to evaluate internal disks")
@@ -382,7 +389,7 @@ var (
 )
 
 // getPartSizeFromIdx predicts the part size according to its index. It also
-// returns -1 when totalSize is also -1.
+// returns -1 when totalSize is -1.
 func getPartSizeFromIdx(totalSize int64, partSize int64, partIndex int) (int64, error) {
 	if partSize == 0 {
 		return 0, traceError(errPartSizeZero)

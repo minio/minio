@@ -20,6 +20,7 @@ package cmd
 
 import (
 	"io/ioutil"
+	"os"
 	"path"
 	"syscall"
 	"testing"
@@ -58,7 +59,7 @@ func TestIsValidUmaskVol(t *testing.T) {
 	if err = disk.MakeVol(testCase.volName); err != nil {
 		t.Fatalf("Creating a volume failed with %s expected to pass.", err)
 	}
-	defer removeAll(tmpPath)
+	defer os.RemoveAll(tmpPath)
 
 	// Stat to get permissions bits.
 	st, err := osStat(path.Join(tmpPath, testCase.volName))
@@ -101,7 +102,7 @@ func TestIsValidUmaskFile(t *testing.T) {
 		t.Fatalf("Creating a volume failed with %s expected to pass.", err)
 	}
 
-	defer removeAll(tmpPath)
+	defer os.RemoveAll(tmpPath)
 
 	// Attempt to create a file to verify the permissions later.
 	// AppendFile creates file with 0666 perms.

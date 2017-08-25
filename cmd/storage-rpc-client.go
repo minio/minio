@@ -45,11 +45,11 @@ func toStorageErr(err error) error {
 
 	switch err.(type) {
 	case *net.OpError:
-		return errDiskNotFound
+		return errDiskNotFoundFromNetError
 	}
 
 	if err == rpc.ErrShutdown {
-		return errDiskNotFound
+		return errDiskNotFoundFromRPCShutdown
 	}
 
 	switch err.Error() {
@@ -262,8 +262,7 @@ func (n *networkStorage) ReadFile(volume string, path string, offset int64, buff
 }
 
 // ReadFileWithVerify - reads a file at remote path and fills the buffer.
-func (n *networkStorage) ReadFileWithVerify(volume string, path string, offset int64,
-	buffer []byte, algo HashAlgo, expectedHash string) (m int64, err error) {
+func (n *networkStorage) ReadFileWithVerify(volume string, path string, offset int64, buffer []byte, verifier *BitrotVerifier) (m int64, err error) {
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -279,8 +278,8 @@ func (n *networkStorage) ReadFileWithVerify(volume string, path string, offset i
 			Path:         path,
 			Offset:       offset,
 			Buffer:       buffer,
-			Algo:         algo,
-			ExpectedHash: expectedHash,
+			Algo:         verifier.algorithm,
+			ExpectedHash: verifier.sum,
 		}, &result)
 
 	// Copy results to buffer.

@@ -243,10 +243,10 @@
 			"revisionTime": "2016-10-16T15:41:25Z"
 		},
 		{
-			"checksumSHA1": "Pzd1bfm8Yj1radncaohNZu+UT1I=",
+			"checksumSHA1": "gYAsuckCW3o4veePKZzEHvCcJro=",
 			"path": "github.com/klauspost/reedsolomon",
-			"revision": "d0a56f72c0d40a6cdde43a1575ad9686a0098b70",
-			"revisionTime": "2016-10-28T07:13:20Z"
+			"revision": "48a4fd05f1730dd3ef9c3f9e943f6091d063f2c4",
+			"revisionTime": "2017-07-22T14:16:58Z"
 		},
 		{
 			"checksumSHA1": "dNYxHiBLalTqluak2/Z8c3RsSEM=",
@@ -457,16 +457,6 @@
 			"path": "go.uber.org/atomic",
 			"revision": "3b8db5e93c4c02efbc313e17b2e796b0914a01fb",
 			"revisionTime": "2016-12-15T19:56:52Z"
-		},
-		{
-			"path": "golang.org/x/crypto/bcrypt",
-			"revision": "7b85b097bf7527677d54d3220065e966a0e3b613",
-			"revisionTime": "2015-11-30T17:07:01-05:00"
-		},
-		{
-			"path": "golang.org/x/crypto/blowfish",
-			"revision": "7b85b097bf7527677d54d3220065e966a0e3b613",
-			"revisionTime": "2015-11-30T17:07:01-05:00"
 		},
 		{
 			"path": "golang.org/x/net/context",

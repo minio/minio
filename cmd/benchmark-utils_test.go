@@ -21,6 +21,7 @@ import (
 	"io/ioutil"
 	"math"
 	"math/rand"
+	"os"
 	"strconv"
 	"testing"
 
@@ -136,7 +137,7 @@ func benchmarkPutObjectPart(b *testing.B, instanceType string, objSize int) {
 	if err != nil {
 		b.Fatalf("Unable to initialize config. %s", err)
 	}
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 
 	// create a temp XL/FS backend.
 	objLayer, disks, err := prepareBenchmarkBackend(instanceType)
@@ -155,7 +156,7 @@ func benchmarkPutObject(b *testing.B, instanceType string, objSize int) {
 	if err != nil {
 		b.Fatalf("Unable to initialize config. %s", err)
 	}
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 
 	// create a temp XL/FS backend.
 	objLayer, disks, err := prepareBenchmarkBackend(instanceType)
@@ -174,7 +175,7 @@ func benchmarkPutObjectParallel(b *testing.B, instanceType string, objSize int) 
 	if err != nil {
 		b.Fatalf("Unable to initialize config. %s", err)
 	}
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 
 	// create a temp XL/FS backend.
 	objLayer, disks, err := prepareBenchmarkBackend(instanceType)
@@ -194,7 +195,7 @@ func runGetObjectBenchmark(b *testing.B, obj ObjectLayer, objSize int) {
 	if err != nil {
 		b.Fatalf("Unable to initialize config. %s", err)
 	}
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 
 	// obtains random bucket name.
 	bucket := getRandomBucketName()
@@ -263,7 +264,7 @@ func benchmarkGetObject(b *testing.B, instanceType string, objSize int) {
 	if err != nil {
 		b.Fatalf("Unable to initialize config. %s", err)
 	}
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 
 	// create a temp XL/FS backend.
 	objLayer, disks, err := prepareBenchmarkBackend(instanceType)
@@ -282,7 +283,7 @@ func benchmarkGetObjectParallel(b *testing.B, instanceType string, objSize int) 
 	if err != nil {
 		b.Fatalf("Unable to initialize config. %s", err)
 	}
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 
 	// create a temp XL/FS backend.
 	objLayer, disks, err := prepareBenchmarkBackend(instanceType)
@@ -302,7 +303,7 @@ func runPutObjectBenchmarkParallel(b *testing.B, obj ObjectLayer, objSize int) {
 	if err != nil {
 		b.Fatalf("Unable to initialize config. %s", err)
 	}
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 
 	// obtains random bucket name.
 	bucket := getRandomBucketName()
@@ -350,7 +351,7 @@ func runGetObjectBenchmarkParallel(b *testing.B, obj ObjectLayer, objSize int) {
 	if err != nil {
 		b.Fatalf("Unable to initialize config. %s", err)
 	}
-	defer removeAll(rootPath)
+	defer os.RemoveAll(rootPath)
 
 	// obtains random bucket name.
 	bucket := getRandomBucketName()

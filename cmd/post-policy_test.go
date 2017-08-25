@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"testing"
 	"time"
 
@@ -120,7 +121,7 @@ func testPostPolicyBucketHandler(obj ObjectLayer, instanceType string, t TestErr
 	if err != nil {
 		t.Fatalf("Initializing config.json failed")
 	}
-	defer removeAll(root)
+	defer os.RemoveAll(root)
 
 	// Register event notifier.
 	err = initEventNotifier(obj)
@@ -428,7 +429,7 @@ func testPostPolicyBucketHandlerRedirect(obj ObjectLayer, instanceType string, t
 	if err != nil {
 		t.Fatalf("Initializing config.json failed")
 	}
-	defer removeAll(root)
+	defer os.RemoveAll(root)
 
 	// Register event notifier.
 	err = initEventNotifier(obj)

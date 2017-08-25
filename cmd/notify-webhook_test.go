@@ -22,6 +22,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path"
 	"testing"
 
@@ -51,7 +52,7 @@ func TestNewWebHookNotify(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer removeAll(root)
+	defer os.RemoveAll(root)
 
 	_, err = newWebhookNotify("1")
 	if err == nil {

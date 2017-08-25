@@ -62,17 +62,17 @@ func initMetaVolumeFS(fsPath, fsUUID string) error {
 	// optimizing all other calls. Create minio meta volume,
 	// if it doesn't exist yet.
 	metaBucketPath := pathJoin(fsPath, minioMetaBucket)
-	if err := mkdirAll(metaBucketPath, 0777); err != nil {
+	if err := os.MkdirAll(metaBucketPath, 0777); err != nil {
 		return err
 	}
 
 	metaTmpPath := pathJoin(fsPath, minioMetaTmpBucket, fsUUID)
-	if err := mkdirAll(metaTmpPath, 0777); err != nil {
+	if err := os.MkdirAll(metaTmpPath, 0777); err != nil {
 		return err
 	}
 
 	metaMultipartPath := pathJoin(fsPath, minioMetaMultipartBucket)
-	return mkdirAll(metaMultipartPath, 0777)
+	return os.MkdirAll(metaMultipartPath, 0777)
 
 }
 
@@ -89,7 +89,7 @@ func newFSObjectLayer(fsPath string) (ObjectLayer, error) {
 		return nil, err
 	}
 
-	fi, err := osStat(preparePath(fsPath))
+	fi, err := osStat((fsPath))
 	if err == nil {
 		if !fi.IsDir() {
 			return nil, syscall.ENOTDIR
@@ -97,13 +97,13 @@ func newFSObjectLayer(fsPath string) (ObjectLayer, error) {
 	}
 	if os.IsNotExist(err) {
 		// Disk not found create it.
-		err = mkdirAll(fsPath, 0777)
+		err = os.MkdirAll(fsPath, 0777)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	di, err := getDiskInfo(preparePath(fsPath))
+	di, err := getDiskInfo((fsPath))
 	if err != nil {
 		return nil, err
 	}
@@ -157,8 +157,8 @@ func newFSObjectLayer(fsPath string) (ObjectLayer, error) {
 		return nil, fmt.Errorf("Unable to initialize event notification. %s", err)
 	}
 
-	// Start background process to cleanup old files in minio.sys.tmp
-	go fs.cleanupStaleMultipartUploads()
+	// Start background process to cleanup old files in `.minio.sys`.
+	go fs.cleanupStaleMultipartUploads(fsMultipartCleanupInterval, fsMultipartExpiry, globalServiceDoneCh)
 
 	// Return successfully initialized object layer.
 	return fs, nil
@@ -166,13 +166,15 @@ func newFSObjectLayer(fsPath string) (ObjectLayer, error) {
 
 // Should be called when process shuts down.
 func (fs fsObjects) Shutdown() error {
+	fs.fsFormatRlk.Close()
+
 	// Cleanup and delete tmp uuid.
 	return fsRemoveAll(pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID))
 }
 
 // StorageInfo - returns underlying storage statistics.
 func (fs fsObjects) StorageInfo() StorageInfo {
-	info, err := getDiskInfo(preparePath(fs.fsPath))
+	info, err := getDiskInfo((fs.fsPath))
 	errorIf(err, "Unable to get disk info %#v", fs.fsPath)
 	storageInfo := StorageInfo{
 		Total: info.Total,
@@ -245,7 +247,7 @@ func (fs fsObjects) ListBuckets() ([]BucketInfo, error) {
 		return nil, traceError(err)
 	}
 	var bucketInfos []BucketInfo
-	entries, err := readDir(preparePath(fs.fsPath))
+	entries, err := readDir((fs.fsPath))
 	if err != nil {
 		return nil, toObjectErr(traceError(errDiskNotFound))
 	}
@@ -257,17 +259,14 @@ func (fs fsObjects) ListBuckets() ([]BucketInfo, error) {
 		}
 		var fi os.FileInfo
 		fi, err = fsStatDir(pathJoin(fs.fsPath, entry))
+		// There seems like no practical reason to check for errors
+		// at this point, if there are indeed errors we can simply
+		// just ignore such buckets and list only those which
+		// return proper Stat information instead.
 		if err != nil {
-			// If the directory does not exist, skip the entry.
-			if errorCause(err) == errVolumeNotFound {
-				continue
-			} else if errorCause(err) == errVolumeAccessDenied {
-				// Skip the entry if its a file.
-				continue
-			}
-			return nil, err
+			// Ignore any errors returned here.
+			continue
 		}
-
 		bucketInfos = append(bucketInfos, BucketInfo{
 			Name: fi.Name(),
 			// As osStat() doesnt carry CreatedTime, use ModTime() as CreatedTime.
@@ -750,14 +749,24 @@ func (fs fsObjects) getObjectETag(bucket, entry string) (string, error) {
 	// Read from fs metadata only if it exists.
 	defer fs.rwPool.Close(fsMetaPath)
 
-	fsMetaBuf, err := ioutil.ReadAll(rlk.LockedFile)
+	// Fetch the size of the underlying file.
+	fi, err := rlk.LockedFile.Stat()
 	if err != nil {
-		// `fs.json` can be empty due to previously failed
-		// PutObject() transaction, if we arrive at such
-		// a situation we just ignore and continue.
-		if errorCause(err) != io.EOF {
-			return "", toObjectErr(err, bucket, entry)
-		}
+		return "", toObjectErr(traceError(err), bucket, entry)
+	}
+
+	// `fs.json` can be empty due to previously failed
+	// PutObject() transaction, if we arrive at such
+	// a situation we just ignore and continue.
+	if fi.Size() == 0 {
+		return "", nil
+	}
+
+	// Wrap the locked file in a ReadAt() backend section reader to
+	// make sure the underlying offsets don't move.
+	fsMetaBuf, err := ioutil.ReadAll(io.NewSectionReader(rlk.LockedFile, 0, fi.Size()))
+	if err != nil {
+		return "", traceError(err)
 	}
 
 	// Check if FS metadata is valid, if not return error.
@@ -879,6 +888,7 @@ func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 		}
 		objInfo, err := entryToObjectInfo(walkResult.entry)
 		if err != nil {
+			errorIf(err, "Unable to fetch object info for %s", walkResult.entry)
 			return loi, nil
 		}
 		nextMarker = objInfo.Name

@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"os"
 	"path/filepath"
 	"sync"
 
@@ -76,7 +77,7 @@ func (config *ConfigDir) GetCADir() string {
 
 // Create - creates configuration directory tree.
 func (config *ConfigDir) Create() error {
-	return mkdirAll(config.GetCADir(), 0700)
+	return os.MkdirAll(config.GetCADir(), 0700)
 }
 
 // GetMinioConfigFile - returns absolute path of config.json file.

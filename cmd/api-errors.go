@@ -116,6 +116,7 @@ const (
 	ErrInvalidDuration
 	ErrNotSupported
 	ErrBucketAlreadyExists
+	ErrMetadataTooLarge
 	// Add new error codes here.
 
 	// Bucket notification related errors.
@@ -128,6 +129,7 @@ const (
 	ErrFilterNameSuffix
 	ErrFilterValueInvalid
 	ErrOverlappingConfigs
+	ErrUnsupportedNotification
 
 	// S3 extended errors.
 	ErrContentSHA256Mismatch
@@ -552,6 +554,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "Configurations overlap. Configurations on the same bucket cannot share a common event type.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrUnsupportedNotification: {
+		Code:           "UnsupportedNotification",
+		Description:    "Minio server does not support Topic or Cloud Function based notifications.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	ErrInvalidCopyPartRange: {
 		Code:           "InvalidArgument",
 		Description:    "The x-amz-copy-source-range value must be of the form bytes=first-last where first and last are the zero-based offsets of the first and last bytes to copy",
@@ -636,7 +643,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "A timeout occurred while trying to lock a resource",
 		HTTPStatusCode: http.StatusRequestTimeout,
 	},
-
+	ErrMetadataTooLarge: {
+		Code:           "InvalidArgument",
+		Description:    "Your metadata headers exceed the maximum allowed metadata size.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	// Add your error structure here.
 }
 

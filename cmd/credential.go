@@ -18,10 +18,9 @@ package cmd
 
 import (
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/base64"
 	"errors"
-
-	"golang.org/x/crypto/bcrypt"
 )
 
 const (
@@ -65,9 +64,8 @@ func isSecretKeyValid(secretKey string) bool {
 
 // credential container for access and secret keys.
 type credential struct {
-	AccessKey     string `json:"accessKey,omitempty"`
-	SecretKey     string `json:"secretKey,omitempty"`
-	secretKeyHash []byte
+	AccessKey string `json:"accessKey,omitempty"`
+	SecretKey string `json:"secretKey,omitempty"`
 }
 
 // IsValid - returns whether credential is valid or not.
@@ -80,48 +78,31 @@ func (cred credential) Equal(ccred credential) bool {
 	if !ccred.IsValid() {
 		return false
 	}
-
-	if cred.secretKeyHash == nil {
-		secretKeyHash, err := bcrypt.GenerateFromPassword([]byte(cred.SecretKey), bcrypt.DefaultCost)
-		if err != nil {
-			errorIf(err, "Unable to generate hash of given password")
-			return false
-		}
-
-		cred.secretKeyHash = secretKeyHash
-	}
-
-	return (cred.AccessKey == ccred.AccessKey &&
-		bcrypt.CompareHashAndPassword(cred.secretKeyHash, []byte(ccred.SecretKey)) == nil)
+	return cred.AccessKey == ccred.AccessKey && subtle.ConstantTimeCompare([]byte(cred.SecretKey), []byte(ccred.SecretKey)) == 1
 }
 
-func createCredential(accessKey, secretKey string) (cred credential, err error) {
+// createCredential returns new credentials from the given access key and secret key.
+// It returns an error if the access key or secret key are too long or short.
+func createCredential(accessKey, secretKey string) (credential, error) {
 	if !isAccessKeyValid(accessKey) {
-		err = errInvalidAccessKeyLength
-	} else if !isSecretKeyValid(secretKey) {
-		err = errInvalidSecretKeyLength
-	} else {
-		var secretKeyHash []byte
-		secretKeyHash, err = bcrypt.GenerateFromPassword([]byte(secretKey), bcrypt.DefaultCost)
-		if err == nil {
-			cred.AccessKey = accessKey
-			cred.SecretKey = secretKey
-			cred.secretKeyHash = secretKeyHash
-		}
+		return credential{}, errInvalidAccessKeyLength
 	}
-
-	return cred, err
+	if !isSecretKeyValid(secretKey) {
+		return credential{}, errInvalidSecretKeyLength
+	}
+	return credential{
+		AccessKey: accessKey,
+		SecretKey: secretKey,
+	}, nil
 }
 
 // Initialize a new credential object
 func getNewCredential(accessKeyLen, secretKeyLen int) (cred credential, err error) {
-	// Generate access key.
 	keyBytes := make([]byte, accessKeyLen)
 	_, err = rand.Read(keyBytes)
 	if err != nil {
 		return cred, err
 	}
-
 	for i := 0; i < accessKeyLen; i++ {
 		keyBytes[i] = alphaNumericTable[keyBytes[i]%alphaNumericTableLen]
 	}
@@ -133,7 +114,6 @@ func getNewCredential(accessKeyLen, secretKeyLen int) (cred credential, err erro
 	if err != nil {
 		return cred, err
 	}
-
 	secretKey := string([]byte(base64.StdEncoding.EncodeToString(keyBytes))[:secretKeyLen])
 	cred, err = createCredential(accessKey, secretKey)
 

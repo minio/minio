@@ -21,6 +21,7 @@ import (
 	"encoding/xml"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -32,7 +33,7 @@ func TestIsValidLocationContraint(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unable initialize config file, %s", err)
 	}
-	defer removeAll(path)
+	defer os.RemoveAll(path)
 
 	// Test with corrupted XML
 	malformedReq := &http.Request{
