@@ -16,7 +16,7 @@ release
 .DS_Store
 *.syso
 coverage.txt
-settings.json
+.vscode/
 .snap
 *.tar.bz2
 parts/
