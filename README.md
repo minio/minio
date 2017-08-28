@@ -30,9 +30,9 @@ minio server ~/Photos
 If you previously installed minio using `brew install minio` then reinstall minio from `minio/stable/minio` official repo. Homebrew builds are unstable due to golang 1.8 bugs.
 
 ```
-brew uninstall minio 
+brew uninstall minio
 brew install minio/stable/minio
-```  
+```
 
 ### Binary Download
 | Platform| Architecture | URL|
@@ -61,6 +61,12 @@ sudo snap install minio --edge
 ```
 
 Every time a new version of `minio` is pushed to the store, you will get it updated automatically.
+
+You will need to allow the minio snap to observe mounts in the system:
+
+```sh
+sudo snap connect minio:mount-observe
+```
 
 ## Microsoft Windows
 ### Binary Download
