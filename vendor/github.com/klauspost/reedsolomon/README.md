@@ -8,7 +8,7 @@
 
 Reed-Solomon Erasure Coding in Go, with speeds exceeding 1GB/s/cpu core implemented in pure Go.
 
-This is a golang port of the [JavaReedSolomon](https://github.com/Backblaze/JavaReedSolomon) library released by [Backblaze](http://backblaze.com), with some additional optimizations.
+This is a Go port of the [JavaReedSolomon](https://github.com/Backblaze/JavaReedSolomon) library released by [Backblaze](http://backblaze.com), with some additional optimizations.
 
 For an introduction on erasure coding, see the post on the [Backblaze blog](https://www.backblaze.com/blog/reed-solomon/).
 
@@ -19,10 +19,16 @@ Godoc: https://godoc.org/github.com/klauspost/reedsolomon
 # Installation
 To get the package use the standard:
 ```bash
-go get github.com/klauspost/reedsolomon
+go get -u github.com/klauspost/reedsolomon
 ```
 
 # Changes
+
+## August 26, 2017
+
+*  The[`Encoder()`](https://godoc.org/github.com/klauspost/reedsolomon#Encoder) now contains an `Update` function contributed by [chenzhongtao](https://github.com/chenzhongtao).
+
+* [Frank Wessels](https://github.com/fwessels) kindly contributed ARM 64 bit assembly, which gives a huge performance boost on this platform.
 
 ## July 20, 2017
 
@@ -186,7 +192,7 @@ There is no buffering or timeouts/retry specified. If you want to add that, you 
 
 For complete examples of a streaming encoder and decoder see the [examples folder](https://github.com/klauspost/reedsolomon/tree/master/examples).
 
-#Advanced Options
+# Advanced Options
 
 You can modify internal options which affects how jobs are split between and processed by goroutines.
 
@@ -233,6 +239,16 @@ BenchmarkReconstruct10x4x1M-8        4352.56      14367.61     3.30x
 BenchmarkReconstruct50x20x1M-8       1364.35      4189.79      3.07x
 BenchmarkReconstruct10x4x16M-8       1484.35      5779.53      3.89x
 ```
+
+# Performance on ARM64 NEON
+
+By exploiting NEON instructions the performance for ARM has been accelerated. Below are the performance numbers for a single core on an ARM Cortex-A53 CPU @ 1.2GHz (Debian 8.0 Jessie running Go: 1.7.4):
+
+| Data | Parity | Parity | ARM64 Go MB/s | ARM64 NEON MB/s | NEON Speed |
+|------|--------|--------|--------------:|----------------:|-----------:|
+| 5    | 2      | 40%    |           189 |            1304 |       588% |
+| 10   | 2      | 20%    |           188 |            1738 |       925% |
+| 10   | 4      | 40%    |            96 |             839 |       877% |
 
 # asm2plan9s
 
