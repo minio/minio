@@ -213,7 +213,7 @@ func setPrivateBucketHandler(h http.Handler) http.Handler {
 func (h minioPrivateBucketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// For all non browser requests, reject access to 'minioReservedBucketPath'.
 	bucketName, _ := urlPath2BucketObjectName(r.URL)
-	if !guessIsBrowserReq(r) && isMinioReservedBucket(bucketName) && isMinioMetaBucket(bucketName) {
+	if !guessIsBrowserReq(r) && (isMinioReservedBucket(bucketName) || isMinioMetaBucket(bucketName)) {
 		writeErrorResponse(w, ErrAllAccessDisabled, r.URL)
 		return
 	}
