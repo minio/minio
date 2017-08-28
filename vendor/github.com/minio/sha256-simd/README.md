@@ -8,20 +8,48 @@ This package is designed as a drop-in replacement for `crypto/sha256`. For Intel
 
 This package uses Golang assembly and as such does not depend on cgo. The Intel versions are based on the implementations as described in "Fast SHA-256 Implementations on Intel Architecture Processors" by J. Guilford et al.
 
+## Drop-In Replacement
+
+Following code snippet shows you how you can directly replace wherever `crypto/sha256` is used can be replaced with `github.com/minio/sha256-simd`.
+
+Before:
+```go
+import "crypto/sha256"
+
+func main() {
+        ...
+	shaWriter := sha256.New()
+	io.Copy(shaWriter, file)
+        ...
+}
+```
+
+After:
+```go
+import "github.com/minio/sha256-simd"
+
+func main() {
+        ...
+	shaWriter := sha256.New()
+	io.Copy(shaWriter, file)
+        ...
+}
+```
+
 ## Performance
 
 Below is the speed in MB/s for a single core (ranked fast to slow) as well as the factor of improvement over `crypto/sha256` (when applicable).
 
-| Processor                         | Package                      |       Speed | Improvement |
-| --------------------------------- | ---------------------------- | -----------:| -----------:|
-| 1.2 GHz ARM Cortex-A53            | minio/sha256-simd (ARM64)    |  638.2 MB/s |        105x |
-| 2.4 GHz Intel Xeon CPU E5-2620 v3 | minio/sha256-simd (AVX2) (*) |  355.0 MB/s |       1.88x |
-| 2.4 GHz Intel Xeon CPU E5-2620 v3 | minio/sha256-simd (AVX)      |  306.0 MB/s |       1.62x |
-| 2.4 GHz Intel Xeon CPU E5-2620 v3 | minio/sha256-simd (SSE)      |  298.7 MB/s |       1.58x |
-| 2.4 GHz Intel Xeon CPU E5-2620 v3 | crypto/sha256                |  189.2 MB/s |             |
-| 1.2 GHz ARM Cortex-A53            | crypto/sha256                |    6.1 MB/s |             |
+| Processor                         | Package                   |       Speed | Improvement |
+| --------------------------------- | ------------------------- | -----------:| -----------:|
+| 1.2 GHz ARM Cortex-A53            | minio/sha256-simd (ARM64) |  638.2 MB/s |        105x |
+| 2.4 GHz Intel Xeon CPU E5-2620 v3 | minio/sha256-simd (AVX2)  |  355.0 MB/s |       1.88x |
+| 2.4 GHz Intel Xeon CPU E5-2620 v3 | minio/sha256-simd (AVX)   |  306.0 MB/s |       1.62x |
+| 2.4 GHz Intel Xeon CPU E5-2620 v3 | minio/sha256-simd (SSE)   |  298.7 MB/s |       1.58x |
+| 2.4 GHz Intel Xeon CPU E5-2620 v3 | crypto/sha256             |  189.2 MB/s |             |
+| 1.2 GHz ARM Cortex-A53            | crypto/sha256             |    6.1 MB/s |             |
 
-(*) Measured with the "unrolled"/"demacro-ed" AVX2 version. Due to some Golang assembly restrictions the AVX2 version that uses `defines` loses about 15% performance. The optimized version is contained in the git history so for maximum speed you want to do this after getting: `git cat-file blob 586b6e > sha256blockAvx2_amd64.s` (or vendor it for your project; see [here](https://github.com/minio/sha256-simd/blob/13b11bdf9b0580a756a111492d2ae382bab7ec79/sha256blockAvx2_amd64.s) to view it in its full glory).
+Note that the AVX2 version is measured with the "unrolled"/"demacro-ed" version. Due to some Golang assembly restrictions the AVX2 version that uses `defines` loses about 15% performance (you can see the macrofied version, which is a little bit easier to read, [here](https://github.com/minio/sha256-simd/blob/e1b0a493b71bb31e3f1bf82d3b8cbd0d6960dfa6/sha256blockAvx2_amd64.s)).
  
  See further down for detailed performance.
  
