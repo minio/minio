@@ -339,7 +339,7 @@ func (cache *SiaCacheLayer) GuaranteeObjectIsInCache(bucket string, objectName s
 
 // GetObjectInfo will return object information for the object specified
 func (cache *SiaCacheLayer) GetObjectInfo(bucket string, objectName string) (objInfo SiaObjectInfo, e *SiaServiceError) {
-	cache.debugmsg("SiaCacheLayer.GetObjectInfo")
+	cache.debugmsg(fmt.Sprintf("SiaCacheLayer.SetBucketPolicies - bucket: %s, object: %s", bucket, objectName))
 
 	return cache.dbGetObjectInfo(bucket, objectName)
 }
