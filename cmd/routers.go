@@ -112,6 +112,9 @@ func configureServerHandler(endpoints EndpointList) (http.Handler, error) {
 		// routes them accordingly. Client receives a HTTP error for
 		// invalid/unsupported signatures.
 		setAuthHandler,
+		// filters HTTP headers which are treated as metadata and are reserved
+		// for internal use only.
+		filterReservedMetadata,
 		// Add new handlers here.
 	}
 
