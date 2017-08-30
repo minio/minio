@@ -179,7 +179,7 @@ func newAzureLayer(host string) (GatewayLayer, error) {
 	if err != nil {
 		return &azureObjects{}, err
 	}
-	c.HTTPClient.Transport = newCustomHTTPTransport()
+	c.HTTPClient = &http.Client{Transport: newCustomHTTPTransport()}
 
 	return &azureObjects{
 		client: c.GetBlobService(),
