@@ -133,15 +133,16 @@ func TestAzureToObjectError(t *testing.T) {
 // Test azureGetBlockID().
 func TestAzureGetBlockID(t *testing.T) {
 	testCases := []struct {
-		partID  int
-		md5     string
-		blockID string
+		partID        int
+		subPartNumber int
+		md5           string
+		blockID       string
 	}{
-		{1, "d41d8cd98f00b204e9800998ecf8427e", "MDAwMDEuZDQxZDhjZDk4ZjAwYjIwNGU5ODAwOTk4ZWNmODQyN2U="},
-		{2, "a7fb6b7b36ee4ed66b5546fac4690273", "MDAwMDIuYTdmYjZiN2IzNmVlNGVkNjZiNTU0NmZhYzQ2OTAyNzM="},
+		{1, 7, "d41d8cd98f00b204e9800998ecf8427e", "MDAwMDEuMDcuZDQxZDhjZDk4ZjAwYjIwNGU5ODAwOTk4ZWNmODQyN2U="},
+		{2, 19, "a7fb6b7b36ee4ed66b5546fac4690273", "MDAwMDIuMTkuYTdmYjZiN2IzNmVlNGVkNjZiNTU0NmZhYzQ2OTAyNzM="},
 	}
 	for _, test := range testCases {
-		blockID := azureGetBlockID(test.partID, test.md5)
+		blockID := azureGetBlockID(test.partID, test.subPartNumber, test.md5)
 		if blockID != test.blockID {
 			t.Fatalf("%s is not equal to %s", blockID, test.blockID)
 		}
@@ -151,26 +152,31 @@ func TestAzureGetBlockID(t *testing.T) {
 // Test azureParseBlockID().
 func TestAzureParseBlockID(t *testing.T) {
 	testCases := []struct {
-		partID  int
-		md5     string
-		blockID string
+		blockID       string
+		partID        int
+		subPartNumber int
+		md5           string
 	}{
-		{1, "d41d8cd98f00b204e9800998ecf8427e", "MDAwMDEuZDQxZDhjZDk4ZjAwYjIwNGU5ODAwOTk4ZWNmODQyN2U="},
-		{2, "a7fb6b7b36ee4ed66b5546fac4690273", "MDAwMDIuYTdmYjZiN2IzNmVlNGVkNjZiNTU0NmZhYzQ2OTAyNzM="},
+		{"MDAwMDEuMDcuZDQxZDhjZDk4ZjAwYjIwNGU5ODAwOTk4ZWNmODQyN2U=", 1, 7, "d41d8cd98f00b204e9800998ecf8427e"},
+		{"MDAwMDIuMTkuYTdmYjZiN2IzNmVlNGVkNjZiNTU0NmZhYzQ2OTAyNzM=", 2, 19, "a7fb6b7b36ee4ed66b5546fac4690273"},
 	}
 	for _, test := range testCases {
-		partID, md5, err := azureParseBlockID(test.blockID)
+		partID, subPartNumber, md5, err := azureParseBlockID(test.blockID)
 		if err != nil {
 			t.Fatal(err)
 		}
 		if partID != test.partID {
 			t.Fatalf("%d not equal to %d", partID, test.partID)
 		}
+		if subPartNumber != test.subPartNumber {
+			t.Fatalf("%d not equal to %d", subPartNumber, test.subPartNumber)
+		}
 		if md5 != test.md5 {
 			t.Fatalf("%s not equal to %s", md5, test.md5)
 		}
 	}
-	_, _, err := azureParseBlockID("junk")
+
+	_, _, _, err := azureParseBlockID("junk")
 	if err == nil {
 		t.Fatal("Expected azureParseBlockID() to return error")
 	}
