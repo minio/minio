@@ -152,6 +152,7 @@ const (
 	ErrAdminInvalidAccessKey
 	ErrAdminInvalidSecretKey
 	ErrAdminConfigNoQuorum
+	ErrAdminCredentialsMismatch
 	ErrInsecureClientRequest
 )
 
@@ -630,6 +631,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	ErrAdminConfigNoQuorum: {
 		Code:           "XMinioAdminConfigNoQuorum",
 		Description:    "Configuration update failed because server quorum was not met",
+		HTTPStatusCode: http.StatusServiceUnavailable,
+	},
+	ErrAdminCredentialsMismatch: {
+		Code:           "XMinioAdminCredentialsMismatch",
+		Description:    "Credentials in config mismatch with server environment variables",
 		HTTPStatusCode: http.StatusServiceUnavailable,
 	},
 	ErrInsecureClientRequest: {
