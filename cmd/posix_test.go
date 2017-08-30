@@ -1016,43 +1016,23 @@ func TestPosixReadFile(t *testing.T) {
 			[]byte("world"),
 			io.ErrUnexpectedEOF,
 		},
-		// Seeking into a wrong offset, return PathError. - 11
-		{
-			volume, "myobject",
-			-1, 5,
-			nil,
-			func() error {
-				if runtime.GOOS == globalWindowsOSName {
-					return &os.PathError{
-						Op:   "read",
-						Path: slashpath.Join(path, "success-vol", "myobject"),
-						Err:  syscall.Errno(0x57), // invalid parameter
-					}
-				}
-				return &os.PathError{
-					Op:   "read",
-					Path: slashpath.Join(path, "success-vol", "myobject"),
-					Err:  os.ErrInvalid,
-				}
-			}(),
-		},
-		// Seeking ahead returns io.EOF. - 12
+		// Seeking ahead returns io.EOF. - 11
 		{
 			volume, "myobject", 14, 1, nil, io.EOF,
 		},
-		// Empty volume name. - 13
+		// Empty volume name. - 12
 		{
 			"", "myobject", 14, 1, nil, errInvalidArgument,
 		},
-		// Empty filename name. - 14
+		// Empty filename name. - 13
 		{
 			volume, "", 14, 1, nil, errIsNotRegular,
 		},
-		// Non existent volume name - 15.
+		// Non existent volume name - 14.
 		{
 			"abcd", "", 14, 1, nil, errVolumeNotFound,
 		},
-		// Non existent filename - 16.
+		// Non existent filename - 15.
 		{
 			volume, "abcd", 14, 1, nil, errFileNotFound,
 		},
@@ -1066,6 +1046,24 @@ func TestPosixReadFile(t *testing.T) {
 		err = posixStorage.AppendFile(volume, appendFile.fileName, []byte("hello, world"))
 		if err != appendFile.expectedErr {
 			t.Fatalf("Creating file failed: %d %#v, expected: %s, got: %s", i+1, appendFile, appendFile.expectedErr, err)
+		}
+	}
+
+	// Check PathError specially.
+	{
+		buf := make([]byte, 5)
+		if _, err = posixStorage.ReadFile(volume, "myobject", -1, buf, nil); err != nil {
+			isPathError := false
+			switch err.(type) {
+			case *os.PathError:
+				isPathError = true
+			}
+
+			if !isPathError {
+				t.Fatalf("expected: <os.PathError>, got: %v", err)
+			}
+		} else {
+			t.Fatalf("expected: <os.PathError>, got: <nil>")
 		}
 	}
 
