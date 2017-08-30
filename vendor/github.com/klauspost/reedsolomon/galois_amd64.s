@@ -162,3 +162,25 @@ done_avx2:
 
 	BYTE $0xc5; BYTE $0xf8; BYTE $0x77 // VZEROUPPER
 	RET
+
+// func sSE2XorSlice(in, out []byte)
+TEXT ·sSE2XorSlice(SB), 7, $0
+	MOVQ in+0(FP), SI     // SI: &in
+	MOVQ in_len+8(FP), R9 // R9: len(in)
+	MOVQ out+24(FP), DX   // DX: &out
+	SHRQ $4, R9           // len(in) / 16
+	CMPQ R9, $0
+	JEQ  done_xor_sse2
+
+loopback_xor_sse2:
+	MOVOU (SI), X0          // in[x]
+	MOVOU (DX), X1          // out[x]
+	PXOR  X0, X1
+	MOVOU X1, (DX)
+	ADDQ  $16, SI           // in+=16
+	ADDQ  $16, DX           // out+=16
+	SUBQ  $1, R9
+	JNZ   loopback_xor_sse2
+
+done_xor_sse2:
+	RET
