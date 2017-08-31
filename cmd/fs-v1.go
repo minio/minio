@@ -824,7 +824,9 @@ func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 
 		// Protect reading `fs.json`.
 		objectLock := globalNSMutex.NewNSLock(bucket, entry)
-		objectLock.RLock()
+		if err = objectLock.GetRLock(globalListingTimeout); err != nil {
+			return ObjectInfo{}, err
+		}
 		var etag string
 		etag, err = fs.getObjectETag(bucket, entry)
 		objectLock.RUnlock()

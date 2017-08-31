@@ -146,7 +146,9 @@ func readBucketPolicyJSON(bucket string, objAPI ObjectLayer) (bucketPolicyReader
 
 	// Acquire a read lock on policy config before reading.
 	objLock := globalNSMutex.NewNSLock(minioMetaBucket, policyPath)
-	objLock.RLock()
+	if err = objLock.GetRLock(globalOperationTimeout); err != nil {
+		return nil, err
+	}
 	defer objLock.RUnlock()
 
 	var buffer bytes.Buffer
@@ -187,7 +189,9 @@ func removeBucketPolicy(bucket string, objAPI ObjectLayer) error {
 	policyPath := pathJoin(bucketConfigPrefix, bucket, bucketPolicyConfig)
 	// Acquire a write lock on policy config before modifying.
 	objLock := globalNSMutex.NewNSLock(minioMetaBucket, policyPath)
-	objLock.Lock()
+	if err := objLock.GetLock(globalOperationTimeout); err != nil {
+		return err
+	}
 	defer objLock.Unlock()
 	if err := objAPI.DeleteObject(minioMetaBucket, policyPath); err != nil {
 		errorIf(err, "Unable to remove bucket-policy on bucket %s.", bucket)
@@ -210,7 +214,9 @@ func writeBucketPolicy(bucket string, objAPI ObjectLayer, bpy *bucketPolicy) err
 	policyPath := pathJoin(bucketConfigPrefix, bucket, bucketPolicyConfig)
 	// Acquire a write lock on policy config before modifying.
 	objLock := globalNSMutex.NewNSLock(minioMetaBucket, policyPath)
-	objLock.Lock()
+	if err := objLock.GetLock(globalOperationTimeout); err != nil {
+		return err
+	}
 	defer objLock.Unlock()
 	if _, err := objAPI.PutObject(minioMetaBucket, policyPath, int64(len(buf)), bytes.NewReader(buf), nil, ""); err != nil {
 		errorIf(err, "Unable to set policy for the bucket %s", bucket)
@@ -235,7 +241,9 @@ func parseAndPersistBucketPolicy(bucket string, policyBytes []byte, objAPI Objec
 
 	// Acquire a write lock on bucket before modifying its configuration.
 	bucketLock := globalNSMutex.NewNSLock(bucket, "")
-	bucketLock.Lock()
+	if bucketLock.GetLock(globalOperationTimeout) != nil {
+		return ErrOperationTimedOut
+	}
 	// Release lock after notifying peers
 	defer bucketLock.Unlock()
 

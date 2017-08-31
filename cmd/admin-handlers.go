@@ -995,7 +995,10 @@ func (adminAPI adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http
 	// bucket name and wouldn't conflict with normal object
 	// operations.
 	configLock := globalNSMutex.NewNSLock(minioReservedBucket, minioConfigFile)
-	configLock.Lock()
+	if configLock.GetLock(globalObjectTimeout) != nil {
+		writeErrorResponse(w, ErrOperationTimedOut, r.URL)
+		return
+	}
 	defer configLock.Unlock()
 
 	// Rename the temporary config file to config.json

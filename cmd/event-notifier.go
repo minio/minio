@@ -370,7 +370,9 @@ func loadNotificationConfig(bucket string, objAPI ObjectLayer) (*notificationCon
 
 	// Acquire a write lock on notification config before modifying.
 	objLock := globalNSMutex.NewNSLock(minioMetaBucket, ncPath)
-	objLock.RLock()
+	if err := objLock.GetRLock(globalOperationTimeout); err != nil {
+		return nil, err
+	}
 	defer objLock.RUnlock()
 
 	var buffer bytes.Buffer
@@ -413,7 +415,9 @@ func loadListenerConfig(bucket string, objAPI ObjectLayer) ([]listenerConfig, er
 
 	// Acquire a write lock on notification config before modifying.
 	objLock := globalNSMutex.NewNSLock(minioMetaBucket, lcPath)
-	objLock.RLock()
+	if err := objLock.GetRLock(globalOperationTimeout); err != nil {
+		return nil, err
+	}
 	defer objLock.RUnlock()
 
 	var buffer bytes.Buffer
@@ -454,7 +458,9 @@ func persistNotificationConfig(bucket string, ncfg *notificationConfig, obj Obje
 	ncPath := path.Join(bucketConfigPrefix, bucket, bucketNotificationConfig)
 	// Acquire a write lock on notification config before modifying.
 	objLock := globalNSMutex.NewNSLock(minioMetaBucket, ncPath)
-	objLock.Lock()
+	if err = objLock.GetLock(globalOperationTimeout); err != nil {
+		return err
+	}
 	defer objLock.Unlock()
 
 	// write object to path
@@ -479,7 +485,9 @@ func persistListenerConfig(bucket string, lcfg []listenerConfig, obj ObjectLayer
 	lcPath := path.Join(bucketConfigPrefix, bucket, bucketListenerConfig)
 	// Acquire a write lock on notification config before modifying.
 	objLock := globalNSMutex.NewNSLock(minioMetaBucket, lcPath)
-	objLock.Lock()
+	if err = objLock.GetLock(globalOperationTimeout); err != nil {
+		return err
+	}
 	defer objLock.Unlock()
 
 	// write object to path
@@ -502,7 +510,9 @@ func removeNotificationConfig(bucket string, objAPI ObjectLayer) error {
 
 	// Acquire a write lock on notification config before modifying.
 	objLock := globalNSMutex.NewNSLock(minioMetaBucket, ncPath)
-	objLock.Lock()
+	if err := objLock.GetLock(globalOperationTimeout); err != nil {
+		return err
+	}
 	defer objLock.Unlock()
 	return objAPI.DeleteObject(minioMetaBucket, ncPath)
 }
@@ -514,7 +524,9 @@ func removeListenerConfig(bucket string, objAPI ObjectLayer) error {
 
 	// Acquire a write lock on notification config before modifying.
 	objLock := globalNSMutex.NewNSLock(minioMetaBucket, lcPath)
-	objLock.Lock()
+	if err := objLock.GetLock(globalOperationTimeout); err != nil {
+		return err
+	}
 	defer objLock.Unlock()
 	return objAPI.DeleteObject(minioMetaBucket, lcPath)
 }

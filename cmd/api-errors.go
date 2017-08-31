@@ -145,6 +145,7 @@ const (
 	ErrInvalidObjectName
 	ErrInvalidResourceName
 	ErrServerNotInitialized
+	ErrOperationTimedOut
 	// Add new extended error codes here.
 	// Please open a https://github.com/minio/minio/issues before adding
 	// new error codes here.
@@ -636,6 +637,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Code:           "XMinioInsecureClientRequest",
 		Description:    "Cannot respond to plain-text request from TLS-encrypted server",
 		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrOperationTimedOut: {
+		Code:           "XMinioServerTimedOut",
+		Description:    "A timeout occurred while trying to lock a resource",
+		HTTPStatusCode: http.StatusRequestTimeout,
 	},
 	ErrMetadataTooLarge: {
 		Code:           "InvalidArgument",
