@@ -1,5 +1,5 @@
 /*
- * (C) 2017 David Gore <dvstate@gmail.com>
+ * Minio Cloud Storage, (C) 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
- package cmd
+package cmd
 
 import (
 	"os"
@@ -154,10 +154,10 @@ func TestSia(t *testing.T) {
 	if objInfo.Size != 1000000 {
 		t.Fatal("Test failed, dbGetObjectInfo returned incorrect Size for object")
 	}
-	if objInfo.Queued != time.Unix(1502865643,0) {
+	if objInfo.Queued != time.Unix(1502865643, 0) {
 		t.Fatal("Test failed, dbGetObjectInfo returned incorrect Queued time for object")
 	}
-	if objInfo.Uploaded != time.Unix(1502865644,0) {
+	if objInfo.Uploaded != time.Unix(1502865644, 0) {
 		t.Fatal("Test failed, dbGetObjectInfo returned incorrect Uploaded time for object")
 	}
 	if objInfo.PurgeAfter != 3600 {
@@ -199,14 +199,13 @@ func TestSia(t *testing.T) {
 	if serr != nil {
 		t.Fatal("Test failed, could not update object sia fetch count")
 	}
-	
 
 	// Verify object changes
 	objInfo, serr = cache.dbGetObjectInfo("test_bucket", "test_object")
 	if serr != nil {
 		t.Fatal("Test failed, could not get Sia object info after upload status changed")
 	}
-	if objInfo.Uploaded != time.Unix(1,0) {
+	if objInfo.Uploaded != time.Unix(1, 0) {
 		t.Fatal("Test failed, object uploaded status not as expected")
 	}
 	if objInfo.Deleted != 1 {
@@ -261,23 +260,18 @@ func TestSia(t *testing.T) {
 	if len(objects) != 0 {
 		t.Fatal("Test failed, Sia object list not empty as expected after delete")
 	}
-	
+
 	// Close the database
 	serr = cache.dbCloseDatabase()
 	if serr != nil {
 		t.Fatal("Test failed, could not close database")
 	}
 
-
-
-
-
 	// Verify object naming works as expected
 	objName := cache.getSiaObjectName("test_bucket", "object ~!@#$%^&*() name.jpg")
 	if objName != "test_bucket/object+name.jpg" {
 		t.Fatalf("Test failed, Sia object name not as expected: %s", objName)
 	}
-
 
 	// Delete test cache directory and DB
 	os.Remove(".sia_test.db")
