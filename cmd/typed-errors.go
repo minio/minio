@@ -51,9 +51,9 @@ var errServerVersionMismatch = errors.New("Server versions do not match")
 // errServerTimeMismatch - server times are too far apart.
 var errServerTimeMismatch = errors.New("Server times are too far apart")
 
-// errReservedBucket - bucket name is reserved for Minio, usually
-// returned for 'minio', '.minio.sys'
-var errReservedBucket = errors.New("All access to this bucket is disabled")
+// errInvalidBucketName - bucket name is reserved for Minio, usually
+// returned for 'minio', '.minio.sys', buckets with capital letters.
+var errInvalidBucketName = errors.New("The specified bucket is not valid")
 
 // errInvalidRange - returned when given range value is not valid.
 var errInvalidRange = errors.New("Invalid range")
