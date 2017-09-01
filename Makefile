@@ -56,10 +56,12 @@ spelling:
 # Builds minio, runs the verifiers then runs the tests.
 check: test
 test: verifiers build
-	@echo "Running all minio testing"
+	@echo "Running unit tests"
 	@go test $(GOFLAGS) .
 	@go test $(GOFLAGS) github.com/minio/minio/cmd...
 	@go test $(GOFLAGS) github.com/minio/minio/pkg...
+	@echo "Verifying build"
+	@(env bash $(PWD)/buildscripts/verify-build.sh)
 
 coverage: build
 	@echo "Running all coverage for minio"
