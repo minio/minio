@@ -69,6 +69,27 @@ func TestRedirectLocation(t *testing.T) {
 	}
 }
 
+// Tests request guess function for net/rpc requests.
+func TestGuessIsRPC(t *testing.T) {
+	if guessIsRPCReq(nil) {
+		t.Fatal("Unexpected return for nil request")
+	}
+	r := &http.Request{
+		Proto:  "HTTP/1.0",
+		Method: http.MethodConnect,
+	}
+	if !guessIsRPCReq(r) {
+		t.Fatal("Test shouldn't fail for a possible net/rpc request.")
+	}
+	r = &http.Request{
+		Proto:  "HTTP/1.1",
+		Method: http.MethodGet,
+	}
+	if guessIsRPCReq(r) {
+		t.Fatal("Test shouldn't report as net/rpc for a non net/rpc request.")
+	}
+}
+
 // Tests browser request guess function.
 func TestGuessIsBrowser(t *testing.T) {
 	if guessIsBrowserReq(nil) {

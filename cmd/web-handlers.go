@@ -124,9 +124,9 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 		return toJSONError(errAuthentication)
 	}
 
-	// Check if bucket is a reserved bucket name.
-	if isMinioMetaBucket(args.BucketName) || isMinioReservedBucket(args.BucketName) {
-		return toJSONError(errReservedBucket)
+	// Check if bucket is a reserved bucket name or invalid.
+	if isReservedOrInvalidBucket(args.BucketName) {
+		return toJSONError(errInvalidBucketName)
 	}
 
 	bucketLock := globalNSMutex.NewNSLock(args.BucketName, "")
@@ -1048,10 +1048,10 @@ func toWebAPIError(err error) APIError {
 			HTTPStatusCode: http.StatusMethodNotAllowed,
 			Description:    err.Error(),
 		}
-	} else if err == errReservedBucket {
+	} else if err == errInvalidBucketName {
 		return APIError{
-			Code:           "AllAccessDisabled",
-			HTTPStatusCode: http.StatusForbidden,
+			Code:           "InvalidBucketName",
+			HTTPStatusCode: http.StatusBadRequest,
 			Description:    err.Error(),
 		}
 	} else if err == errInvalidArgument {
