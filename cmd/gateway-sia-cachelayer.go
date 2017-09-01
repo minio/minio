@@ -1,5 +1,5 @@
 /*
- * (C) 2017 David Gore <dvstate@gmail.com>
+ * Minio Cloud Storage, (C) 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,9 +19,6 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/boltdb/bolt"
-	"github.com/NebulousLabs/Sia/api"
-	"github.com/minio/minio-go/pkg/policy"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -29,6 +26,10 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/NebulousLabs/Sia/api"
+	"github.com/boltdb/bolt"
+	"github.com/minio/minio-go/pkg/policy"
 )
 
 // SiaCacheLayer represents the cache layer between Minio and Sia network
@@ -165,9 +166,9 @@ func (cache *SiaCacheLayer) Stop() {
 	cache.dbCloseDatabase()
 }
 
-// InsertBucket will attempt to insert a new bucket
-func (cache *SiaCacheLayer) InsertBucket(bucket string) *SiaServiceError {
-	cache.debugmsg("SiaCacheLayer.InsertBucket")
+// MakeBucket will attempt to create a new bucket
+func (cache *SiaCacheLayer) MakeBucket(bucket string) *SiaServiceError {
+	cache.debugmsg("SiaCacheLayer.MakeBucket")
 
 	return cache.dbInsertBucket(bucket)
 }
@@ -181,7 +182,7 @@ func (cache *SiaCacheLayer) DeleteBucket(bucket string) *SiaServiceError {
 	if serr != nil {
 		return serr
 	}
-	if (len(objects) > 0) {
+	if len(objects) > 0 {
 		return siaErrorBucketNotEmpty
 	}
 
@@ -249,7 +250,7 @@ func (cache *SiaCacheLayer) PutObject(bucket string, objectName string, size int
 	}
 
 	// Need to wait for upload to complete unless background uploading is enabled
-	if (!cache.BackgroundUpload) {
+	if !cache.BackgroundUpload {
 		err = cache.waitTillSiaUploadCompletes(siaObj)
 		if err != nil {
 			cache.dbDeleteObject(bucket, objectName)
@@ -339,7 +340,7 @@ func (cache *SiaCacheLayer) GuaranteeObjectIsInCache(bucket string, objectName s
 
 // GetObjectInfo will return object information for the object specified
 func (cache *SiaCacheLayer) GetObjectInfo(bucket string, objectName string) (objInfo SiaObjectInfo, e *SiaServiceError) {
-	cache.debugmsg(fmt.Sprintf("SiaCacheLayer.SetBucketPolicies - bucket: %s, object: %s", bucket, objectName))
+	cache.debugmsg(fmt.Sprintf("SiaCacheLayer.GetObjectInfo - bucket: %s, object: %s", bucket, objectName))
 
 	return cache.dbGetObjectInfo(bucket, objectName)
 }
@@ -554,7 +555,7 @@ func (cache *SiaCacheLayer) forceDeleteOldestCacheFile() *SiaServiceError {
 		return serr
 	}
 
-	var objToDelete *SiaObjectInfo;
+	var objToDelete *SiaObjectInfo
 	objToDelete = nil
 
 	for _, bkt := range buckets {

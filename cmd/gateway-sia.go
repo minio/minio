@@ -1,5 +1,5 @@
 /*
- * (C) 2017 David Gore <dvstate@gmail.com>
+ * Minio Cloud Storage, (C) 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,16 +14,17 @@
  * limitations under the License.
  */
 
- package cmd
+package cmd
 
 import (
 	"errors"
 	"fmt"
-	"github.com/minio/minio-go/pkg/policy"
-	"path/filepath"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
+
+	"github.com/minio/minio-go/pkg/policy"
 )
 
 type siaObjects struct {
@@ -92,9 +93,9 @@ func newSiaGateway(host string) (GatewayLayer, error) {
 	}
 
 	// If SiadAddress not provided on command line or ENV, default to:
-    if sia.SiadAddress == "" {
-    	sia.SiadAddress = "127.0.0.1:9980"
-    }
+	if sia.SiadAddress == "" {
+		sia.SiadAddress = "127.0.0.1:9980"
+	}
 
 	// Create the filesystem layer
 	f, err := newFSObjectLayer(sia.CacheDir)
@@ -196,7 +197,7 @@ func (s *siaObjects) MakeBucketWithLocation(bucket, location string) error {
 		return err
 	}
 
-	siaErr := s.Cache.InsertBucket(bucket)
+	siaErr := s.Cache.MakeBucket(bucket)
 	return siaToObjectError(siaErr)
 }
 

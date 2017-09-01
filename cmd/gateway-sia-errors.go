@@ -1,5 +1,5 @@
 /*
- * (C) 2017 David Gore <dvstate@gmail.com>
+ * Minio Cloud Storage, (C) 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,8 @@
 
 package cmd
 
-import(
- 	"fmt"
+import (
+	"fmt"
 )
 
 // SiaServiceError is a custom error type used by Sia cache layer

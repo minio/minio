@@ -1,5 +1,5 @@
 /*
- * (C) 2017 David Gore <dvstate@gmail.com>
+ * Minio Cloud Storage, (C) 2017 Minio, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,12 +17,13 @@
 package cmd
 
 import (
+	"encoding/json"
+	"fmt"
+	"strconv"
+	"time"
+
 	"github.com/boltdb/bolt"
 	"github.com/minio/minio-go/pkg/policy"
-	"strconv"
-	"encoding/json"
-	"time"
-	"fmt"
 )
 
 func (cache *SiaCacheLayer) dbLockDB() {
@@ -75,11 +76,11 @@ func (cache *SiaCacheLayer) dbInsertBucket(bucket string) *SiaServiceError {
 	defer cache.dbUnlockDB()
 
 	// Start a transaction
-    tx, err := cache.Db.Begin(true)
-    if err != nil {
-        return siaErrorDatabaseInsertError
-    }
-    defer tx.Rollback()
+	tx, err := cache.Db.Begin(true)
+	if err != nil {
+		return siaErrorDatabaseInsertError
+	}
+	defer tx.Rollback()
 
 	b, err := tx.CreateBucket([]byte(cache.dbBucketName(bucket)))
 	if err != nil {
@@ -107,12 +108,12 @@ func (cache *SiaCacheLayer) dbInsertBucket(bucket string) *SiaServiceError {
 		return siaErrorDatabaseInsertError
 	}
 
-    // Commit the transaction
-    if err = tx.Commit(); err != nil {
-        return siaErrorDatabaseInsertError
-    }
+	// Commit the transaction
+	if err = tx.Commit(); err != nil {
+		return siaErrorDatabaseInsertError
+	}
 
-    return nil
+	return nil
 }
 
 // dbDeleteBucket will attempt to delete the bucket from the database
@@ -125,23 +126,23 @@ func (cache *SiaCacheLayer) dbDeleteBucket(bucket string) *SiaServiceError {
 	// Now delete the actual bucket
 
 	// Start a transaction
-    tx, err := cache.Db.Begin(true)
-    if err != nil {
-        return siaErrorDatabaseDeleteError
-    }
-    defer tx.Rollback()
+	tx, err := cache.Db.Begin(true)
+	if err != nil {
+		return siaErrorDatabaseDeleteError
+	}
+	defer tx.Rollback()
 
 	err = tx.DeleteBucket([]byte(cache.dbBucketName(bucket)))
 	if err != nil {
 		return siaErrorDatabaseDeleteError
 	}
 
-    // Commit the transaction
-    if err = tx.Commit(); err != nil {
-        return siaErrorDatabaseDeleteError
-    }
+	// Commit the transaction
+	if err = tx.Commit(); err != nil {
+		return siaErrorDatabaseDeleteError
+	}
 
-    return nil
+	return nil
 }
 
 // dbListBuckets will attempt to return a list of all existing buckets
@@ -153,55 +154,55 @@ func (cache *SiaCacheLayer) dbListBuckets() (buckets []SiaBucketInfo, e *SiaServ
 
 	var bucketNames []string
 	err := cache.Db.View(func(tx *bolt.Tx) error {
-        return tx.ForEach(func(name []byte, _ *bolt.Bucket) error {
-            bucketNames = append(bucketNames, string(name))
-            return nil
-        })
-    })
-    if err != nil {
-    	return buckets, siaErrorDatabaseSelectError
-    }
+		return tx.ForEach(func(name []byte, _ *bolt.Bucket) error {
+			bucketNames = append(bucketNames, string(name))
+			return nil
+		})
+	})
+	if err != nil {
+		return buckets, siaErrorDatabaseSelectError
+	}
 
-    for _, bucketName := range bucketNames {
+	for _, bucketName := range bucketNames {
 
-    	var created int64
-    	var pol string
-    	var name string
-    	err = cache.Db.View(func(tx *bolt.Tx) error {
-      	b := tx.Bucket([]byte(bucketName))
-      	if b == nil {
-      		return siaErrorDatabaseSelectError
-      	}
-  			vCreated := b.Get([]byte("created"))
-  			vPolicy := b.Get([]byte("policy"))
-  			name = string(b.Get([]byte("name")))
+		var created int64
+		var pol string
+		var name string
+		err = cache.Db.View(func(tx *bolt.Tx) error {
+			b := tx.Bucket([]byte(bucketName))
+			if b == nil {
+				return siaErrorDatabaseSelectError
+			}
+			vCreated := b.Get([]byte("created"))
+			vPolicy := b.Get([]byte("policy"))
+			name = string(b.Get([]byte("name")))
 
-        cache.debugmsg(fmt.Sprintf("  %s", name))
+			cache.debugmsg(fmt.Sprintf("  %s", name))
 
-  			i, err := strconv.ParseInt(string(vCreated), 10, 64)
-  			if err != nil {
-  				return siaErrorDatabaseSelectError
-  			}
-  			created = i
+			i, err := strconv.ParseInt(string(vCreated), 10, 64)
+			if err != nil {
+				return siaErrorDatabaseSelectError
+			}
+			created = i
 
-  			pol = string(vPolicy)
+			pol = string(vPolicy)
 
-  			return nil
-      })
+			return nil
+		})
 
-    	if err != nil {
-    		return buckets, siaErrorDatabaseSelectError
-    	}
+		if err != nil {
+			return buckets, siaErrorDatabaseSelectError
+		}
 
-    	buckets = append(buckets, SiaBucketInfo{
+		buckets = append(buckets, SiaBucketInfo{
 			Name:    name,
 			Created: time.Unix(created, 0),
 			Policy:  pol,
 		})
 
-    }
+	}
 
-    return buckets, nil
+	return buckets, nil
 }
 
 func (cache *SiaCacheLayer) dbInsertObject(bucket string, objectName string, size int64, queued int64, uploaded int64, purgeAfter int64, srcFile string, cached int64) *SiaServiceError {
@@ -211,28 +212,28 @@ func (cache *SiaCacheLayer) dbInsertObject(bucket string, objectName string, siz
 	defer cache.dbUnlockDB()
 
 	// Start a transaction
-    tx, err := cache.Db.Begin(true)
-    if err != nil {
-        return siaErrorDatabaseInsertError
-    }
-    defer tx.Rollback()
+	tx, err := cache.Db.Begin(true)
+	if err != nil {
+		return siaErrorDatabaseInsertError
+	}
+	defer tx.Rollback()
 
-    bktBucket := tx.Bucket([]byte(cache.dbBucketName(bucket)))
-    if bktBucket == nil {
-    	return siaErrorDatabaseInsertError
-    }
+	bktBucket := tx.Bucket([]byte(cache.dbBucketName(bucket)))
+	if bktBucket == nil {
+		return siaErrorDatabaseInsertError
+	}
 
-    bktObjects, err := bktBucket.CreateBucketIfNotExists([]byte("objects"))
-   	if err != nil {
-   		return siaErrorDatabaseInsertError
-   	}
+	bktObjects, err := bktBucket.CreateBucketIfNotExists([]byte("objects"))
+	if err != nil {
+		return siaErrorDatabaseInsertError
+	}
 
-   	bktObj, err := bktObjects.CreateBucketIfNotExists([]byte(objectName))
-   	if err != nil {
-   		return siaErrorDatabaseInsertError
-   	}
+	bktObj, err := bktObjects.CreateBucketIfNotExists([]byte(objectName))
+	if err != nil {
+		return siaErrorDatabaseInsertError
+	}
 
-   	err = bktObj.Put([]byte("name"), []byte(objectName))
+	err = bktObj.Put([]byte("name"), []byte(objectName))
 	if err != nil {
 		return siaErrorDatabaseInsertError
 	}
@@ -292,10 +293,10 @@ func (cache *SiaCacheLayer) dbInsertObject(bucket string, objectName string, siz
 		return siaErrorDatabaseInsertError
 	}
 
-    // Commit the transaction
-    if err := tx.Commit(); err != nil {
-        return siaErrorDatabaseInsertError
-    }
+	// Commit the transaction
+	if err := tx.Commit(); err != nil {
+		return siaErrorDatabaseInsertError
+	}
 
 	return nil
 }
@@ -307,35 +308,34 @@ func (cache *SiaCacheLayer) dbDeleteObject(bucket string, objectName string) *Si
 	defer cache.dbUnlockDB()
 
 	// Start a transaction
-    tx, err := cache.Db.Begin(true)
-    if err != nil {
-        return siaErrorDatabaseDeleteError
-    }
-    defer tx.Rollback()
+	tx, err := cache.Db.Begin(true)
+	if err != nil {
+		return siaErrorDatabaseDeleteError
+	}
+	defer tx.Rollback()
 
-    bktBucket := tx.Bucket([]byte(cache.dbBucketName(bucket)))
-    if bktBucket == nil {
-    	return siaErrorDatabaseDeleteError
-    }
+	bktBucket := tx.Bucket([]byte(cache.dbBucketName(bucket)))
+	if bktBucket == nil {
+		return siaErrorDatabaseDeleteError
+	}
 
-    bktObjects := bktBucket.Bucket([]byte("objects"))
-   	if bktObjects == nil {
-   		return siaErrorDatabaseDeleteError
-   	}
+	bktObjects := bktBucket.Bucket([]byte("objects"))
+	if bktObjects == nil {
+		return siaErrorDatabaseDeleteError
+	}
 
-   	err = bktObjects.DeleteBucket([]byte(objectName))
-   	if err != nil {
-   		return siaErrorDatabaseDeleteError
-   	}
+	err = bktObjects.DeleteBucket([]byte(objectName))
+	if err != nil {
+		return siaErrorDatabaseDeleteError
+	}
 
-    // Commit the transaction
-    if err := tx.Commit(); err != nil {
-        return siaErrorDatabaseDeleteError
-    }
+	// Commit the transaction
+	if err := tx.Commit(); err != nil {
+		return siaErrorDatabaseDeleteError
+	}
 
 	return nil
 }
-
 
 func (cache *SiaCacheLayer) dbListObjects(bucket string) (objects []SiaObjectInfo, e *SiaServiceError) {
 	cache.debugmsg(fmt.Sprintf("SiaCacheLayer.dbListObjects bucket: %s", bucket))
@@ -354,8 +354,8 @@ func (cache *SiaCacheLayer) dbListObjects(bucket string) (objects []SiaObjectInf
 			return nil
 		}
 
-        bktObjects.ForEach(func(k []byte, v []byte) error {
-        	bo := bktObjects.Bucket(k)
+		bktObjects.ForEach(func(k []byte, v []byte) error {
+			bo := bktObjects.Bucket(k)
 			soi, serr := cache.boltPopulateSiaObjectInfo(bo)
 			if serr != nil {
 				cache.debugmsg("SiaCacheLayer.dbListObjects2")
@@ -364,13 +364,13 @@ func (cache *SiaCacheLayer) dbListObjects(bucket string) (objects []SiaObjectInf
 			objects = append(objects, soi)
 			return nil
 		})
-        return nil
-    })
-    if err != nil {
-    	cache.debugmsg("SiaCacheLayer.dbListObjects3")
-    	return objects, siaErrorDatabaseSelectError
-    }
-	
+		return nil
+	})
+	if err != nil {
+		cache.debugmsg("SiaCacheLayer.dbListObjects3")
+		return objects, siaErrorDatabaseSelectError
+	}
+
 	return objects, nil
 }
 
@@ -391,23 +391,23 @@ func (cache *SiaCacheLayer) dbGetObjectInfo(bucket string, objectName string) (o
 			return siaErrorDatabaseSelectError
 		}
 
-        bktObj := bktObjects.Bucket([]byte(objectName))
-        if bktObj == nil {
-        	return siaErrorDatabaseSelectError
-        }
-		
+		bktObj := bktObjects.Bucket([]byte(objectName))
+		if bktObj == nil {
+			return siaErrorDatabaseSelectError
+		}
+
 		soi, serr := cache.boltPopulateSiaObjectInfo(bktObj)
 		if serr != nil {
 			return serr
 		}
 		objInfo = soi
 		return nil
-    })
-    if err != nil {
-    	return objInfo, siaErrorDatabaseSelectError
-    }
+	})
+	if err != nil {
+		return objInfo, siaErrorDatabaseSelectError
+	}
 
-    return objInfo, nil
+	return objInfo, nil
 }
 
 func (cache *SiaCacheLayer) dbDoesBucketExist(bucket string) (exists bool, e *SiaServiceError) {
@@ -417,17 +417,17 @@ func (cache *SiaCacheLayer) dbDoesBucketExist(bucket string) (exists bool, e *Si
 	defer cache.dbUnlockDB()
 
 	err := cache.Db.View(func(tx *bolt.Tx) error {
-        bkt := tx.Bucket([]byte(cache.dbBucketName(bucket)))
-        if bkt != nil {
-        	exists = true
-        } else {
-        	exists = false
-        }
-        return nil
-    })
-    if err != nil {
-    	return false, siaErrorUnknown
-    }
+		bkt := tx.Bucket([]byte(cache.dbBucketName(bucket)))
+		if bkt != nil {
+			exists = true
+		} else {
+			exists = false
+		}
+		return nil
+	})
+	if err != nil {
+		return false, siaErrorUnknown
+	}
 
 	return exists, nil
 }
@@ -439,29 +439,29 @@ func (cache *SiaCacheLayer) dbDoesObjectExist(bucket string, objectName string) 
 	defer cache.dbUnlockDB()
 
 	err := cache.Db.View(func(tx *bolt.Tx) error {
-        bkt := tx.Bucket([]byte(cache.dbBucketName(bucket)))
-        if bkt == nil {
-        	exists = false
-        	return nil
-        }
+		bkt := tx.Bucket([]byte(cache.dbBucketName(bucket)))
+		if bkt == nil {
+			exists = false
+			return nil
+		}
 
-        bktObjects := bkt.Bucket([]byte("objects"))
-        if bktObjects == nil {
-        	exists = false
-        	return nil
-        }
+		bktObjects := bkt.Bucket([]byte("objects"))
+		if bktObjects == nil {
+			exists = false
+			return nil
+		}
 
-        bktObj := bktObjects.Bucket([]byte(objectName))
-        if bktObj == nil {
-        	exists = false
-        } else {
-        	exists = true
-        }
-        return nil
-    })
-    if err != nil {
-    	return false, siaErrorUnknown
-    }
+		bktObj := bktObjects.Bucket([]byte(objectName))
+		if bktObj == nil {
+			exists = false
+		} else {
+			exists = true
+		}
+		return nil
+	})
+	if err != nil {
+		return false, siaErrorUnknown
+	}
 
 	return exists, nil
 }
@@ -474,21 +474,21 @@ func (cache *SiaCacheLayer) dbGetBucketPolicies(bucket string) (bal policy.Bucke
 	defer cache.dbUnlockDB()
 
 	err := cache.Db.View(func(tx *bolt.Tx) error {
-        bkt := tx.Bucket([]byte(cache.dbBucketName(bucket)))
-        if bkt == nil {
-        	return siaErrorDatabaseSelectError
-        }
+		bkt := tx.Bucket([]byte(cache.dbBucketName(bucket)))
+		if bkt == nil {
+			return siaErrorDatabaseSelectError
+		}
 
-        policy := bkt.Get([]byte("policy"))
+		policy := bkt.Get([]byte("policy"))
 		json.Unmarshal(policy, &bal)
-        
-        return nil
-    })
-    if err != nil {
-    	return bal, siaErrorDatabaseSelectError
-    }
-    
-    return bal, nil
+
+		return nil
+	})
+	if err != nil {
+		return bal, siaErrorDatabaseSelectError
+	}
+
+	return bal, nil
 }
 
 // dbUpdateBucketPolicies will attempt to update the policies for the bucket provided
@@ -499,26 +499,26 @@ func (cache *SiaCacheLayer) dbUpdateBucketPolicies(bucket string, policy string)
 	defer cache.dbUnlockDB()
 
 	// Start a transaction
-    tx, err := cache.Db.Begin(true)
-    if err != nil {
-        return siaErrorDatabaseUpdateError
-    }
-    defer tx.Rollback()
+	tx, err := cache.Db.Begin(true)
+	if err != nil {
+		return siaErrorDatabaseUpdateError
+	}
+	defer tx.Rollback()
 
-    bktBucket := tx.Bucket([]byte(cache.dbBucketName(bucket)))
-    if bktBucket == nil {
-    	return siaErrorDatabaseUpdateError
-    }
+	bktBucket := tx.Bucket([]byte(cache.dbBucketName(bucket)))
+	if bktBucket == nil {
+		return siaErrorDatabaseUpdateError
+	}
 
-   	err = bktBucket.Put([]byte("policy"), []byte(policy))
-   	if err != nil {
-   		return siaErrorDatabaseUpdateError
-   	}
+	err = bktBucket.Put([]byte("policy"), []byte(policy))
+	if err != nil {
+		return siaErrorDatabaseUpdateError
+	}
 
-    // Commit the transaction
-    if err := tx.Commit(); err != nil {
-        return siaErrorDatabaseUpdateError
-    }
+	// Commit the transaction
+	if err := tx.Commit(); err != nil {
+		return siaErrorDatabaseUpdateError
+	}
 
 	return nil
 }
@@ -530,36 +530,36 @@ func (cache *SiaCacheLayer) dbUpdateObjectUploadedStatus(bucket string, objectNa
 	defer cache.dbUnlockDB()
 
 	// Start a transaction
-    tx, err := cache.Db.Begin(true)
-    if err != nil {
-        return siaErrorDatabaseUpdateError
-    }
-    defer tx.Rollback()
+	tx, err := cache.Db.Begin(true)
+	if err != nil {
+		return siaErrorDatabaseUpdateError
+	}
+	defer tx.Rollback()
 
-    bktBucket := tx.Bucket([]byte(cache.dbBucketName(bucket)))
-    if bktBucket == nil {
-    	return siaErrorDatabaseUpdateError
-    }
+	bktBucket := tx.Bucket([]byte(cache.dbBucketName(bucket)))
+	if bktBucket == nil {
+		return siaErrorDatabaseUpdateError
+	}
 
-    bktObjects := bktBucket.Bucket([]byte("objects"))
-   	if bktObjects == nil {
-   		return siaErrorDatabaseUpdateError
-   	}
+	bktObjects := bktBucket.Bucket([]byte("objects"))
+	if bktObjects == nil {
+		return siaErrorDatabaseUpdateError
+	}
 
-   	bktObj := bktObjects.Bucket([]byte(objectName))
-   	if bktObj == nil {
-   		return siaErrorDatabaseUpdateError
-   	}
+	bktObj := bktObjects.Bucket([]byte(objectName))
+	if bktObj == nil {
+		return siaErrorDatabaseUpdateError
+	}
 
-   	err = bktObj.Put([]byte("uploaded"), []byte(strconv.FormatInt(uploaded, 10)))
-   	if err != nil {
-   		return siaErrorDatabaseUpdateError
-   	}
+	err = bktObj.Put([]byte("uploaded"), []byte(strconv.FormatInt(uploaded, 10)))
+	if err != nil {
+		return siaErrorDatabaseUpdateError
+	}
 
-    // Commit the transaction
-    if err := tx.Commit(); err != nil {
-        return siaErrorDatabaseUpdateError
-    }
+	// Commit the transaction
+	if err := tx.Commit(); err != nil {
+		return siaErrorDatabaseUpdateError
+	}
 
 	return nil
 }
@@ -571,36 +571,36 @@ func (cache *SiaCacheLayer) dbUpdateObjectDeletedStatus(bucket string, objectNam
 	defer cache.dbUnlockDB()
 
 	// Start a transaction
-    tx, err := cache.Db.Begin(true)
-    if err != nil {
-        return siaErrorDatabaseUpdateError
-    }
-    defer tx.Rollback()
+	tx, err := cache.Db.Begin(true)
+	if err != nil {
+		return siaErrorDatabaseUpdateError
+	}
+	defer tx.Rollback()
 
-    bktBucket := tx.Bucket([]byte(cache.dbBucketName(bucket)))
-    if bktBucket == nil {
-    	return siaErrorDatabaseUpdateError
-    }
+	bktBucket := tx.Bucket([]byte(cache.dbBucketName(bucket)))
+	if bktBucket == nil {
+		return siaErrorDatabaseUpdateError
+	}
 
-    bktObjects := bktBucket.Bucket([]byte("objects"))
-   	if bktObjects == nil {
-   		return siaErrorDatabaseUpdateError
-   	}
+	bktObjects := bktBucket.Bucket([]byte("objects"))
+	if bktObjects == nil {
+		return siaErrorDatabaseUpdateError
+	}
 
-   	bktObj := bktObjects.Bucket([]byte(objectName))
-   	if bktObj == nil {
-   		return siaErrorDatabaseUpdateError
-   	}
+	bktObj := bktObjects.Bucket([]byte(objectName))
+	if bktObj == nil {
+		return siaErrorDatabaseUpdateError
+	}
 
-   	err = bktObj.Put([]byte("deleted"), []byte(strconv.FormatInt(deleted, 10)))
-   	if err != nil {
-   		return siaErrorDatabaseUpdateError
-   	}
+	err = bktObj.Put([]byte("deleted"), []byte(strconv.FormatInt(deleted, 10)))
+	if err != nil {
+		return siaErrorDatabaseUpdateError
+	}
 
-    // Commit the transaction
-    if err := tx.Commit(); err != nil {
-        return siaErrorDatabaseUpdateError
-    }
+	// Commit the transaction
+	if err := tx.Commit(); err != nil {
+		return siaErrorDatabaseUpdateError
+	}
 
 	return nil
 }
@@ -613,41 +613,41 @@ func (cache *SiaCacheLayer) dbUpdateCachedFetches(bucket string, objectName stri
 	defer cache.dbUnlockDB()
 
 	// Start a transaction
-    tx, err := cache.Db.Begin(true)
-    if err != nil {
-        return siaErrorDatabaseUpdateError
-    }
-    defer tx.Rollback()
+	tx, err := cache.Db.Begin(true)
+	if err != nil {
+		return siaErrorDatabaseUpdateError
+	}
+	defer tx.Rollback()
 
-    bktBucket := tx.Bucket([]byte(cache.dbBucketName(bucket)))
-    if bktBucket == nil {
-    	return siaErrorDatabaseUpdateError
-    }
+	bktBucket := tx.Bucket([]byte(cache.dbBucketName(bucket)))
+	if bktBucket == nil {
+		return siaErrorDatabaseUpdateError
+	}
 
-    bktObjects := bktBucket.Bucket([]byte("objects"))
-   	if bktObjects == nil {
-   		return siaErrorDatabaseUpdateError
-   	}
+	bktObjects := bktBucket.Bucket([]byte("objects"))
+	if bktObjects == nil {
+		return siaErrorDatabaseUpdateError
+	}
 
-   	bktObj := bktObjects.Bucket([]byte(objectName))
-   	if bktObj == nil {
-   		return siaErrorDatabaseUpdateError
-   	}
+	bktObj := bktObjects.Bucket([]byte(objectName))
+	if bktObj == nil {
+		return siaErrorDatabaseUpdateError
+	}
 
-   	err = bktObj.Put([]byte("lastFetch"), []byte(strconv.FormatInt(time.Now().Unix(), 10)))
-   	if err != nil {
-   		return siaErrorDatabaseUpdateError
-   	}
+	err = bktObj.Put([]byte("lastFetch"), []byte(strconv.FormatInt(time.Now().Unix(), 10)))
+	if err != nil {
+		return siaErrorDatabaseUpdateError
+	}
 
-   	err = bktObj.Put([]byte("cachedFetches"), []byte(strconv.FormatInt(fetches, 10)))
-   	if err != nil {
-   		return siaErrorDatabaseUpdateError
-   	}
+	err = bktObj.Put([]byte("cachedFetches"), []byte(strconv.FormatInt(fetches, 10)))
+	if err != nil {
+		return siaErrorDatabaseUpdateError
+	}
 
-    // Commit the transaction
-    if err := tx.Commit(); err != nil {
-        return siaErrorDatabaseUpdateError
-    }
+	// Commit the transaction
+	if err := tx.Commit(); err != nil {
+		return siaErrorDatabaseUpdateError
+	}
 
 	return nil
 }
@@ -660,36 +660,36 @@ func (cache *SiaCacheLayer) dbUpdateCachedStatus(bucket string, objectName strin
 	defer cache.dbUnlockDB()
 
 	// Start a transaction
-    tx, err := cache.Db.Begin(true)
-    if err != nil {
-        return siaErrorDatabaseUpdateError
-    }
-    defer tx.Rollback()
+	tx, err := cache.Db.Begin(true)
+	if err != nil {
+		return siaErrorDatabaseUpdateError
+	}
+	defer tx.Rollback()
 
-    bktBucket := tx.Bucket([]byte(cache.dbBucketName(bucket)))
-    if bktBucket == nil {
-    	return siaErrorDatabaseUpdateError
-    }
+	bktBucket := tx.Bucket([]byte(cache.dbBucketName(bucket)))
+	if bktBucket == nil {
+		return siaErrorDatabaseUpdateError
+	}
 
-    bktObjects := bktBucket.Bucket([]byte("objects"))
-   	if bktObjects == nil {
-   		return siaErrorDatabaseUpdateError
-   	}
+	bktObjects := bktBucket.Bucket([]byte("objects"))
+	if bktObjects == nil {
+		return siaErrorDatabaseUpdateError
+	}
 
-   	bktObj := bktObjects.Bucket([]byte(objectName))
-   	if bktObj == nil {
-   		return siaErrorDatabaseUpdateError
-   	}
+	bktObj := bktObjects.Bucket([]byte(objectName))
+	if bktObj == nil {
+		return siaErrorDatabaseUpdateError
+	}
 
-   	err = bktObj.Put([]byte("cached"), []byte(strconv.FormatInt(status, 10)))
-   	if err != nil {
-   		return siaErrorDatabaseUpdateError
-   	}
+	err = bktObj.Put([]byte("cached"), []byte(strconv.FormatInt(status, 10)))
+	if err != nil {
+		return siaErrorDatabaseUpdateError
+	}
 
-    // Commit the transaction
-    if err := tx.Commit(); err != nil {
-        return siaErrorDatabaseUpdateError
-    }
+	// Commit the transaction
+	if err := tx.Commit(); err != nil {
+		return siaErrorDatabaseUpdateError
+	}
 
 	return nil
 }
@@ -702,41 +702,41 @@ func (cache *SiaCacheLayer) dbUpdateSiaFetches(bucket string, objectName string,
 	defer cache.dbUnlockDB()
 
 	// Start a transaction
-    tx, err := cache.Db.Begin(true)
-    if err != nil {
-        return siaErrorDatabaseUpdateError
-    }
-    defer tx.Rollback()
+	tx, err := cache.Db.Begin(true)
+	if err != nil {
+		return siaErrorDatabaseUpdateError
+	}
+	defer tx.Rollback()
 
-    bktBucket := tx.Bucket([]byte(cache.dbBucketName(bucket)))
-    if bktBucket == nil {
-    	return siaErrorDatabaseUpdateError
-    }
+	bktBucket := tx.Bucket([]byte(cache.dbBucketName(bucket)))
+	if bktBucket == nil {
+		return siaErrorDatabaseUpdateError
+	}
 
-    bktObjects := bktBucket.Bucket([]byte("objects"))
-   	if bktObjects == nil {
-   		return siaErrorDatabaseUpdateError
-   	}
+	bktObjects := bktBucket.Bucket([]byte("objects"))
+	if bktObjects == nil {
+		return siaErrorDatabaseUpdateError
+	}
 
-   	bktObj := bktObjects.Bucket([]byte(objectName))
-   	if bktObj == nil {
-   		return siaErrorDatabaseUpdateError
-   	}
+	bktObj := bktObjects.Bucket([]byte(objectName))
+	if bktObj == nil {
+		return siaErrorDatabaseUpdateError
+	}
 
-   	err = bktObj.Put([]byte("lastFetch"), []byte(strconv.FormatInt(time.Now().Unix(), 10)))
-   	if err != nil {
-   		return siaErrorDatabaseUpdateError
-   	}
+	err = bktObj.Put([]byte("lastFetch"), []byte(strconv.FormatInt(time.Now().Unix(), 10)))
+	if err != nil {
+		return siaErrorDatabaseUpdateError
+	}
 
-   	err = bktObj.Put([]byte("siaFetches"), []byte(strconv.FormatInt(fetches, 10)))
-   	if err != nil {
-   		return siaErrorDatabaseUpdateError
-   	}
+	err = bktObj.Put([]byte("siaFetches"), []byte(strconv.FormatInt(fetches, 10)))
+	if err != nil {
+		return siaErrorDatabaseUpdateError
+	}
 
-    // Commit the transaction
-    if err := tx.Commit(); err != nil {
-        return siaErrorDatabaseUpdateError
-    }
+	// Commit the transaction
+	if err := tx.Commit(); err != nil {
+		return siaErrorDatabaseUpdateError
+	}
 
 	return nil
 }
@@ -754,8 +754,8 @@ func (cache *SiaCacheLayer) dbListUploadingObjects() (objects []SiaObjectInfo, e
 			if bktObjects == nil {
 				return siaErrorDatabaseSelectError
 			}
-            bktObjects.ForEach(func(k []byte, v []byte) error {
-            	bo := bktObjects.Bucket(k)
+			bktObjects.ForEach(func(k []byte, v []byte) error {
+				bo := bktObjects.Bucket(k)
 				vUp := bo.Get([]byte("uploaded"))
 				if string(vUp) == "0" {
 					soi, serr := cache.boltPopulateSiaObjectInfo(bo)
@@ -766,15 +766,15 @@ func (cache *SiaCacheLayer) dbListUploadingObjects() (objects []SiaObjectInfo, e
 				}
 				return nil
 			})
-            return nil
-        })
-        return nil
-    })
-    if err != nil {
-    	return objects, siaErrorDatabaseSelectError
-    }
-    
-    return objects, nil
+			return nil
+		})
+		return nil
+	})
+	if err != nil {
+		return objects, siaErrorDatabaseSelectError
+	}
+
+	return objects, nil
 }
 
 // boltPopulateSiaObjectInfo is a BoltDB helper function to populate a SiaObjectInfo structure from a given BoltDB bucket
