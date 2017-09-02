@@ -196,6 +196,9 @@ func TestLoggingHandler(t *testing.T) {
 		t.Fatalf("Failed to create HTTP request for Put Object: <ERROR> %v", err)
 	}
 
+	setupHTTPTrace()
+	defer globalHTTPTrace.logFile.Close()
+
 	// Run a PUT object call with logging Handler
 	handler := registerHandlers(apiRouter, setLoggingHandler)
 	rec := httptest.NewRecorder()
@@ -226,8 +229,8 @@ func TestLoggingHandler(t *testing.T) {
 		t.Fatal("Cannot find correct PUT in log test")
 	}
 
-	// Check if log file contains a substring of the uploaded file
-	if !strings.Contains(logFileContentsStr, "Lorem Ipsum") {
-		t.Fatal("Cannot find uploaded data in log test")
+	// We log the string "[BODY]" instead of the actual body.
+	if !strings.Contains(logFileContentsStr, "[BODY]") {
+		t.Fatal(`log file should contain the body place holder string "[BODY]"`)
 	}
 }

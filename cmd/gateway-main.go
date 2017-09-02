@@ -422,11 +422,6 @@ func gatewayMain(ctx *cli.Context, backendType gatewayBackend) {
 		// Add new handlers here.
 	}
 
-	// Add HTTP requests/responses logging handler when ENV is et
-	if globalHTTPTraceDir != "" {
-		handlerFns = append(handlerFns, setLoggingHandler)
-	}
-
 	globalHTTPServer = miniohttp.NewServer([]string{gatewayAddr}, registerHandlers(router, handlerFns...), globalTLSCertificate)
 
 	// Start server, automatically configures TLS if certs are available.

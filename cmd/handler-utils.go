@@ -248,21 +248,19 @@ func extractPostPolicyFormValues(form *multipart.Form) (filePart io.ReadCloser, 
 type recordReader struct {
 	// Data source to record
 	io.Reader
-	// Data length to record
-	recLen int
+	// Response body should be logged
+	logBody bool
 	// Internal recording buffer
 	buf bytes.Buffer
 }
 
 func (r *recordReader) Read(p []byte) (n int, err error) {
 	n, err = r.Reader.Read(p)
-	// Log data only when maximum log size is not reached
-	if r.buf.Len() < r.recLen {
-		l := n
-		if l > r.recLen-r.buf.Len() {
-			l = r.recLen - r.buf.Len()
-		}
-		r.buf.Write(p[:l])
+	if r.logBody {
+		r.buf.Write(p[:n])
+	}
+	if err != nil {
+		return n, err
 	}
 	return n, err
 }
@@ -276,22 +274,15 @@ func (r *recordReader) Data() []byte {
 type recordResponseWriter struct {
 	// Data source to record
 	http.ResponseWriter
-	// Data length to record
-	recLen int
+	// Response body should be logged
+	logBody bool
 	// Internal recording buffer
-	buf *bytes.Buffer
+	headers bytes.Buffer
+	body    bytes.Buffer
 	// The status code of the current HTTP request
 	statusCode int
 	// Indicate if headers are written in the log
 	headersLogged bool
-}
-
-func newRecordResponseWriter(w http.ResponseWriter, recordLen int) *recordResponseWriter {
-	return &recordResponseWriter{
-		ResponseWriter: w,
-		statusCode:     http.StatusOK,
-		buf:            bytes.NewBuffer([]byte{}),
-	}
 }
 
 func writeHeaders(w io.Writer, statusCode int, headers http.Header) {
@@ -299,13 +290,12 @@ func writeHeaders(w io.Writer, statusCode int, headers http.Header) {
 	for k, v := range headers {
 		fmt.Fprintf(w, "%s: %s\n", k, v[0])
 	}
-	fmt.Fprintf(w, "\n")
 }
 
 func (r *recordResponseWriter) WriteHeader(i int) {
 	r.statusCode = i
 	if !r.headersLogged {
-		writeHeaders(r.buf, i, r.ResponseWriter.Header())
+		writeHeaders(&r.headers, i, r.ResponseWriter.Header())
 		r.headersLogged = true
 	}
 	r.ResponseWriter.WriteHeader(i)
@@ -316,16 +306,17 @@ func (r *recordResponseWriter) Write(p []byte) (n int, err error) {
 	// We log after calling ResponseWriter.Write() because this latter
 	// proactively prepares headers when WriteHeader is not called yet.
 	if !r.headersLogged {
-		writeHeaders(r.buf, http.StatusOK, r.ResponseWriter.Header())
+		writeHeaders(&r.headers, http.StatusOK, r.ResponseWriter.Header())
 		r.headersLogged = true
 	}
-	// Write in the log if log size doesn't exceed the maximum
-	if r.buf.Len() < r.recLen {
-		l := n
-		if l > r.recLen-r.buf.Len() {
-			l = r.recLen - r.buf.Len()
-		}
-		r.buf.Write(p[:l])
+	if r.statusCode != http.StatusOK && r.statusCode != http.StatusNoContent && r.statusCode != 0 {
+		// We always log error responses.
+		r.body.Write(p)
+		return
+	}
+	if r.logBody {
+		r.body.Write(p)
+		return
 	}
 	return n, err
 }
@@ -334,6 +325,10 @@ func (r *recordResponseWriter) Flush() {
 	r.ResponseWriter.(http.Flusher).Flush()
 }
 
-func (r *recordResponseWriter) Data() []byte {
-	return r.buf.Bytes()
+func (r *recordResponseWriter) Headers() []byte {
+	return r.headers.Bytes()
+}
+
+func (r *recordResponseWriter) Body() []byte {
+	return r.body.Bytes()
 }

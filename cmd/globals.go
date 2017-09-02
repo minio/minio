@@ -125,7 +125,7 @@ var (
 	globalHTTPServerErrorCh = make(chan error)
 	globalOSSignalCh        = make(chan os.Signal, 1)
 
-	globalHTTPTraceDir string
+	globalHTTPTrace bool
 
 	// List of admin peers.
 	globalAdminPeers = adminPeers{}
