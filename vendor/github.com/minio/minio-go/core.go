@@ -70,7 +70,13 @@ func (c Core) ListMultipartUploads(bucket, prefix, keyMarker, uploadIDMarker, de
 
 // PutObjectPart - Upload an object part.
 func (c Core) PutObjectPart(bucket, object, uploadID string, partID int, size int64, data io.Reader, md5Sum, sha256Sum []byte) (ObjectPart, error) {
-	return c.uploadPart(bucket, object, uploadID, data, partID, md5Sum, sha256Sum, size)
+	return c.PutObjectPartWithMetadata(bucket, object, uploadID, partID, size, data, md5Sum, sha256Sum, nil)
+}
+
+// PutObjectPartWithMetadata - upload an object part with additional request metadata.
+func (c Core) PutObjectPartWithMetadata(bucket, object, uploadID string, partID int,
+	size int64, data io.Reader, md5Sum, sha256Sum []byte, metadata map[string][]string) (ObjectPart, error) {
+	return c.uploadPart(bucket, object, uploadID, data, partID, md5Sum, sha256Sum, size, metadata)
 }
 
 // ListObjectParts - List uploaded parts of an incomplete upload.x
@@ -80,7 +86,9 @@ func (c Core) ListObjectParts(bucket, object, uploadID string, partNumberMarker 
 
 // CompleteMultipartUpload - Concatenate uploaded parts and commit to an object.
 func (c Core) CompleteMultipartUpload(bucket, object, uploadID string, parts []CompletePart) error {
-	_, err := c.completeMultipartUpload(bucket, object, uploadID, completeMultipartUpload{Parts: parts})
+	_, err := c.completeMultipartUpload(bucket, object, uploadID, completeMultipartUpload{
+		Parts: parts,
+	})
 	return err
 }
 

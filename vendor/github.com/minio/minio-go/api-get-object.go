@@ -679,12 +679,18 @@ func (c Client) getObject(bucketName, objectName string, reqHeaders RequestHeade
 	if contentType == "" {
 		contentType = "application/octet-stream"
 	}
-	var objectStat ObjectInfo
-	objectStat.ETag = md5sum
-	objectStat.Key = objectName
-	objectStat.Size = resp.ContentLength
-	objectStat.LastModified = date
-	objectStat.ContentType = contentType
+
+	objectStat := ObjectInfo{
+		ETag:         md5sum,
+		Key:          objectName,
+		Size:         resp.ContentLength,
+		LastModified: date,
+		ContentType:  contentType,
+		// Extract only the relevant header keys describing the object.
+		// following function filters out a list of standard set of keys
+		// which are not part of object metadata.
+		Metadata: extractObjMetadata(resp.Header),
+	}
 
 	// do not close body here, caller will close
 	return resp.Body, objectStat, nil

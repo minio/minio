@@ -54,7 +54,7 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	log.Println("%v", minioClient) // minioClient is now setup
+	log.Printf("%#v\n", minioClient) // minioClient is now setup
 ```
 
 ## Quick Start Example - File Uploader
@@ -130,7 +130,6 @@ The full API Reference is available here.
 * [Complete API Reference](https://docs.minio.io/docs/golang-client-api-reference)
 
 ### API Reference : Bucket Operations
-
 * [`MakeBucket`](https://docs.minio.io/docs/golang-client-api-reference#MakeBucket)
 * [`ListBuckets`](https://docs.minio.io/docs/golang-client-api-reference#ListBuckets)
 * [`BucketExists`](https://docs.minio.io/docs/golang-client-api-reference#BucketExists)
@@ -140,25 +139,21 @@ The full API Reference is available here.
 * [`ListIncompleteUploads`](https://docs.minio.io/docs/golang-client-api-reference#ListIncompleteUploads)
 
 ### API Reference : Bucket policy Operations
-
 * [`SetBucketPolicy`](https://docs.minio.io/docs/golang-client-api-reference#SetBucketPolicy)
 * [`GetBucketPolicy`](https://docs.minio.io/docs/golang-client-api-reference#GetBucketPolicy)
 * [`ListBucketPolicies`](https://docs.minio.io/docs/golang-client-api-reference#ListBucketPolicies)
 
 ### API Reference : Bucket notification Operations
-
 * [`SetBucketNotification`](https://docs.minio.io/docs/golang-client-api-reference#SetBucketNotification)
 * [`GetBucketNotification`](https://docs.minio.io/docs/golang-client-api-reference#GetBucketNotification)
 * [`RemoveAllBucketNotification`](https://docs.minio.io/docs/golang-client-api-reference#RemoveAllBucketNotification)
 * [`ListenBucketNotification`](https://docs.minio.io/docs/golang-client-api-reference#ListenBucketNotification) (Minio Extension)
 
 ### API Reference : File Object Operations
-
 * [`FPutObject`](https://docs.minio.io/docs/golang-client-api-reference#FPutObject)
 * [`FGetObject`](https://docs.minio.io/docs/golang-client-api-reference#FPutObject)
 
 ### API Reference : Object Operations
-
 * [`GetObject`](https://docs.minio.io/docs/golang-client-api-reference#GetObject)
 * [`PutObject`](https://docs.minio.io/docs/golang-client-api-reference#PutObject)
 * [`PutObjectStreaming`](https://docs.minio.io/docs/golang-client-api-reference#PutObjectStreaming)
@@ -169,14 +164,13 @@ The full API Reference is available here.
 * [`RemoveIncompleteUpload`](https://docs.minio.io/docs/golang-client-api-reference#RemoveIncompleteUpload)
 
 ### API Reference: Encrypted Object Operations
-
 * [`GetEncryptedObject`](https://docs.minio.io/docs/golang-client-api-reference#GetEncryptedObject)
 * [`PutEncryptedObject`](https://docs.minio.io/docs/golang-client-api-reference#PutEncryptedObject)
 
 ### API Reference : Presigned Operations
-
 * [`PresignedGetObject`](https://docs.minio.io/docs/golang-client-api-reference#PresignedGetObject)
 * [`PresignedPutObject`](https://docs.minio.io/docs/golang-client-api-reference#PresignedPutObject)
+* [`PresignedHeadObject`](https://docs.minio.io/docs/golang-client-api-reference#PresignedHeadObject)
 * [`PresignedPostPolicy`](https://docs.minio.io/docs/golang-client-api-reference#PresignedPostPolicy)
 
 ### API Reference : Client custom settings
@@ -185,11 +179,9 @@ The full API Reference is available here.
 * [`TraceOn`](http://docs.minio.io/docs/golang-client-api-reference#TraceOn)
 * [`TraceOff`](http://docs.minio.io/docs/golang-client-api-reference#TraceOff)
 
-
 ## Full Examples
 
-#### Full Examples : Bucket Operations
-
+### Full Examples : Bucket Operations
 * [makebucket.go](https://github.com/minio/minio-go/blob/master/examples/s3/makebucket.go)
 * [listbuckets.go](https://github.com/minio/minio-go/blob/master/examples/s3/listbuckets.go)
 * [bucketexists.go](https://github.com/minio/minio-go/blob/master/examples/s3/bucketexists.go)
@@ -198,26 +190,22 @@ The full API Reference is available here.
 * [listobjectsV2.go](https://github.com/minio/minio-go/blob/master/examples/s3/listobjectsV2.go)
 * [listincompleteuploads.go](https://github.com/minio/minio-go/blob/master/examples/s3/listincompleteuploads.go)
 
-#### Full Examples : Bucket policy Operations
-
+### Full Examples : Bucket policy Operations
 * [setbucketpolicy.go](https://github.com/minio/minio-go/blob/master/examples/s3/setbucketpolicy.go)
 * [getbucketpolicy.go](https://github.com/minio/minio-go/blob/master/examples/s3/getbucketpolicy.go)
 * [listbucketpolicies.go](https://github.com/minio/minio-go/blob/master/examples/s3/listbucketpolicies.go)
  
-#### Full Examples : Bucket notification Operations
-
+### Full Examples : Bucket notification Operations
 * [setbucketnotification.go](https://github.com/minio/minio-go/blob/master/examples/s3/setbucketnotification.go)
 * [getbucketnotification.go](https://github.com/minio/minio-go/blob/master/examples/s3/getbucketnotification.go)
 * [removeallbucketnotification.go](https://github.com/minio/minio-go/blob/master/examples/s3/removeallbucketnotification.go)
 * [listenbucketnotification.go](https://github.com/minio/minio-go/blob/master/examples/minio/listenbucketnotification.go) (Minio Extension)
 
-#### Full Examples : File Object Operations
-
+### Full Examples : File Object Operations
 * [fputobject.go](https://github.com/minio/minio-go/blob/master/examples/s3/fputobject.go)
 * [fgetobject.go](https://github.com/minio/minio-go/blob/master/examples/s3/fgetobject.go)
 
-#### Full Examples : Object Operations
-
+### Full Examples : Object Operations
 * [putobject.go](https://github.com/minio/minio-go/blob/master/examples/s3/putobject.go)
 * [getobject.go](https://github.com/minio/minio-go/blob/master/examples/s3/getobject.go)
 * [statobject.go](https://github.com/minio/minio-go/blob/master/examples/s3/statobject.go)
@@ -226,14 +214,14 @@ The full API Reference is available here.
 * [removeincompleteupload.go](https://github.com/minio/minio-go/blob/master/examples/s3/removeincompleteupload.go)
 * [removeobjects.go](https://github.com/minio/minio-go/blob/master/examples/s3/removeobjects.go)
 
-#### Full Examples : Encrypted Object Operations
-
+### Full Examples : Encrypted Object Operations
 * [put-encrypted-object.go](https://github.com/minio/minio-go/blob/master/examples/s3/put-encrypted-object.go)
 * [get-encrypted-object.go](https://github.com/minio/minio-go/blob/master/examples/s3/get-encrypted-object.go)
 
-#### Full Examples : Presigned Operations
+### Full Examples : Presigned Operations
 * [presignedgetobject.go](https://github.com/minio/minio-go/blob/master/examples/s3/presignedgetobject.go)
 * [presignedputobject.go](https://github.com/minio/minio-go/blob/master/examples/s3/presignedputobject.go)
+* [presignedheadobject.go](https://github.com/minio/minio-go/blob/master/examples/s3/presignedheadobject.go)
 * [presignedpostpolicy.go](https://github.com/minio/minio-go/blob/master/examples/s3/presignedpostpolicy.go)
 
 ## Explore Further
@@ -242,7 +230,6 @@ The full API Reference is available here.
 * [Go Music Player App Full Application Example](https://docs.minio.io/docs/go-music-player-app)
 
 ## Contribute
-
 [Contributors Guide](https://github.com/minio/minio-go/blob/master/CONTRIBUTING.md)
 
 [![Build Status](https://travis-ci.org/minio/minio-go.svg)](https://travis-ci.org/minio/minio-go)
