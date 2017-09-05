@@ -387,6 +387,13 @@ func (e PolicyNotFound) Error() string {
 	return "Policy not found"
 }
 
+// UnsupportedMetadata - unsupported metadata
+type UnsupportedMetadata struct{}
+
+func (e UnsupportedMetadata) Error() string {
+	return "Unsupported headers in Metadata"
+}
+
 // Check if error type is IncompleteBody.
 func isErrIncompleteBody(err error) bool {
 	err = errorCause(err)

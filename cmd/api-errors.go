@@ -117,6 +117,7 @@ const (
 	ErrNotSupported
 	ErrBucketAlreadyExists
 	ErrMetadataTooLarge
+	ErrUnsupportedMetadata
 	// Add new error codes here.
 
 	// Bucket notification related errors.
@@ -654,6 +655,11 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "Your metadata headers exceed the maximum allowed metadata size.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrUnsupportedMetadata: {
+		Code:           "InvalidArgument",
+		Description:    "Your metadata headers are not supported.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
 	// Add your error structure here.
 }
 
@@ -750,6 +756,8 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrNoSuchBucketPolicy
 	case PartTooBig:
 		apiErr = ErrEntityTooLarge
+	case UnsupportedMetadata:
+		apiErr = ErrUnsupportedMetadata
 	default:
 		apiErr = ErrInternalError
 	}
