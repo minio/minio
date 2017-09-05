@@ -78,7 +78,7 @@ func isAMQPQueue(sqsArn arnSQS) bool {
 		errorIf(err, "Unable to connect to amqp service. %#v", amqpL)
 		return false
 	}
-	defer amqpC.Close()
+	defer amqpC.conn.Close()
 	return true
 }
 
