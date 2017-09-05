@@ -17,10 +17,7 @@
 package minio
 
 import (
-	"fmt"
-	"hash"
 	"io"
-	"io/ioutil"
 	"math"
 	"os"
 
@@ -78,77 +75,6 @@ func optimalPartInfo(objectSize int64) (totalPartsCount int, partSize int64, las
 	return totalPartsCount, partSize, lastPartSize, nil
 }
 
-// hashCopyBuffer is identical to hashCopyN except that it doesn't take
-// any size argument but takes a buffer argument and reader should be
-// of io.ReaderAt interface.
-//
-// Stages reads from offsets into the buffer, if buffer is nil it is
-// initialized to optimalBufferSize.
-func hashCopyBuffer(hashAlgorithms map[string]hash.Hash, hashSums map[string][]byte, writer io.Writer, reader io.ReaderAt, buf []byte) (size int64, err error) {
-	hashWriter := writer
-	for _, v := range hashAlgorithms {
-		hashWriter = io.MultiWriter(hashWriter, v)
-	}
-
-	// Buffer is nil, initialize.
-	if buf == nil {
-		buf = make([]byte, optimalReadBufferSize)
-	}
-
-	// Offset to start reading from.
-	var readAtOffset int64
-
-	// Following block reads data at an offset from the input
-	// reader and copies data to into local temporary file.
-	for {
-		readAtSize, rerr := reader.ReadAt(buf, readAtOffset)
-		if rerr != nil {
-			if rerr != io.EOF {
-				return 0, rerr
-			}
-		}
-		writeSize, werr := hashWriter.Write(buf[:readAtSize])
-		if werr != nil {
-			return 0, werr
-		}
-		if readAtSize != writeSize {
-			return 0, fmt.Errorf("Read size was not completely written to writer. wanted %d, got %d - %s", readAtSize, writeSize, reportIssue)
-		}
-		readAtOffset += int64(writeSize)
-		size += int64(writeSize)
-		if rerr == io.EOF {
-			break
-		}
-	}
-
-	for k, v := range hashAlgorithms {
-		hashSums[k] = v.Sum(nil)
-	}
-	return size, err
-}
-
-// hashCopyN - Calculates chosen hashes up to partSize amount of bytes.
-func hashCopyN(hashAlgorithms map[string]hash.Hash, hashSums map[string][]byte, writer io.Writer, reader io.Reader, partSize int64) (size int64, err error) {
-	hashWriter := writer
-	for _, v := range hashAlgorithms {
-		hashWriter = io.MultiWriter(hashWriter, v)
-	}
-
-	// Copies to input at writer.
-	size, err = io.CopyN(hashWriter, reader, partSize)
-	if err != nil {
-		// If not EOF return error right here.
-		if err != io.EOF {
-			return 0, err
-		}
-	}
-
-	for k, v := range hashAlgorithms {
-		hashSums[k] = v.Sum(nil)
-	}
-	return size, err
-}
-
 // getUploadID - fetch upload id if already present for an object name
 // or initiate a new request to fetch a new upload id.
 func (c Client) newUploadID(bucketName, objectName string, metaData map[string][]string) (uploadID string, err error) {
@@ -166,28 +92,4 @@ func (c Client) newUploadID(bucketName, objectName string, metaData map[string][
 		return "", err
 	}
 	return initMultipartUploadResult.UploadID, nil
-}
-
-// computeHash - Calculates hashes for an input read Seeker.
-func computeHash(hashAlgorithms map[string]hash.Hash, hashSums map[string][]byte, reader io.ReadSeeker) (size int64, err error) {
-	hashWriter := ioutil.Discard
-	for _, v := range hashAlgorithms {
-		hashWriter = io.MultiWriter(hashWriter, v)
-	}
-
-	// If no buffer is provided, no need to allocate just use io.Copy.
-	size, err = io.Copy(hashWriter, reader)
-	if err != nil {
-		return 0, err
-	}
-
-	// Seek back reader to the beginning location.
-	if _, err := reader.Seek(0, 0); err != nil {
-		return 0, err
-	}
-
-	for k, v := range hashAlgorithms {
-		hashSums[k] = v.Sum(nil)
-	}
-	return size, nil
 }

@@ -55,11 +55,13 @@ func (c Client) BucketExists(bucketName string) (bool, error) {
 // List of header keys to be filtered, usually
 // from all S3 API http responses.
 var defaultFilterKeys = []string{
+	"Connection",
 	"Transfer-Encoding",
 	"Accept-Ranges",
 	"Date",
 	"Server",
 	"Vary",
+	"x-amz-bucket-region",
 	"x-amz-request-id",
 	"x-amz-id-2",
 	// Add new headers to be ignored.
@@ -165,11 +167,6 @@ func (c Client) statObject(bucketName, objectName string, reqHeaders RequestHead
 		contentType = "application/octet-stream"
 	}
 
-	// Extract only the relevant header keys describing the object.
-	// following function filters out a list of standard set of keys
-	// which are not part of object metadata.
-	metadata := extractObjMetadata(resp.Header)
-
 	// Save object metadata info.
 	return ObjectInfo{
 		ETag:         md5sum,
@@ -177,6 +174,9 @@ func (c Client) statObject(bucketName, objectName string, reqHeaders RequestHead
 		Size:         size,
 		LastModified: date,
 		ContentType:  contentType,
-		Metadata:     metadata,
+		// Extract only the relevant header keys describing the object.
+		// following function filters out a list of standard set of keys
+		// which are not part of object metadata.
+		Metadata: extractObjMetadata(resp.Header),
 	}, nil
 }

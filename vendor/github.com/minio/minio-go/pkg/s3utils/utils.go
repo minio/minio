@@ -80,6 +80,9 @@ func IsVirtualHostSupported(endpointURL url.URL, bucketName string) bool {
 	return IsAmazonEndpoint(endpointURL) || IsGoogleEndpoint(endpointURL)
 }
 
+// AmazonS3Host - regular expression used to determine if an arg is s3 host.
+var AmazonS3Host = regexp.MustCompile("^s3[.-]?(.*?)\\.amazonaws\\.com$")
+
 // IsAmazonEndpoint - Match if it is exactly Amazon S3 endpoint.
 func IsAmazonEndpoint(endpointURL url.URL) bool {
 	if IsAmazonChinaEndpoint(endpointURL) {
@@ -88,7 +91,7 @@ func IsAmazonEndpoint(endpointURL url.URL) bool {
 	if IsAmazonGovCloudEndpoint(endpointURL) {
 		return true
 	}
-	return endpointURL.Host == "s3.amazonaws.com"
+	return AmazonS3Host.MatchString(endpointURL.Host)
 }
 
 // IsAmazonGovCloudEndpoint - Match if it is exactly Amazon S3 GovCloud endpoint.
@@ -205,7 +208,7 @@ func EncodePath(pathName string) string {
 // We support '.' with bucket names but we fallback to using path
 // style requests instead for such buckets.
 var (
-	validBucketName       = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9\.\-]{1,61}[A-Za-z0-9]$`)
+	validBucketName       = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9\.\-\_\:]{1,61}[A-Za-z0-9]$`)
 	validBucketNameStrict = regexp.MustCompile(`^[a-z0-9][a-z0-9\.\-]{1,61}[a-z0-9]$`)
 	ipAddress             = regexp.MustCompile(`^(\d+\.){3}\d+$`)
 )
@@ -240,14 +243,13 @@ func checkBucketNameCommon(bucketName string, strict bool) (err error) {
 }
 
 // CheckValidBucketName - checks if we have a valid input bucket name.
-// This is a non stricter version.
-// - http://docs.aws.amazon.com/AmazonS3/latest/dev/UsingBucket.html
 func CheckValidBucketName(bucketName string) (err error) {
 	return checkBucketNameCommon(bucketName, false)
 }
 
 // CheckValidBucketNameStrict - checks if we have a valid input bucket name.
 // This is a stricter version.
+// - http://docs.aws.amazon.com/AmazonS3/latest/dev/UsingBucket.html
 func CheckValidBucketNameStrict(bucketName string) (err error) {
 	return checkBucketNameCommon(bucketName, true)
 }

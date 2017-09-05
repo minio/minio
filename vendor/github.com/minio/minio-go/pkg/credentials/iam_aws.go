@@ -42,7 +42,7 @@ type IAM struct {
 	// Required http Client to use when connecting to IAM metadata service.
 	Client *http.Client
 
-	// Custom endpoint in place of
+	// Custom endpoint to fetch IAM role credentials.
 	endpoint string
 }
 
@@ -58,14 +58,19 @@ func redirectHeaders(req *http.Request, via []*http.Request) error {
 	return nil
 }
 
+// IAM Roles for Amazon EC2
+// http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/iam-roles-for-amazon-ec2.html
+const (
+	defaultIAMRoleEndpoint      = "http://169.254.169.254"
+	defaultIAMSecurityCredsPath = "/latest/meta-data/iam/security-credentials"
+)
+
 // NewIAM returns a pointer to a new Credentials object wrapping
 // the IAM. Takes a ConfigProvider to create a EC2Metadata client.
 // The ConfigProvider is satisfied by the session.Session type.
 func NewIAM(endpoint string) *Credentials {
 	if endpoint == "" {
-		// IAM Roles for Amazon EC2
-		// http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/iam-roles-for-amazon-ec2.html
-		endpoint = "http://169.254.169.254"
+		endpoint = defaultIAMRoleEndpoint
 	}
 	p := &IAM{
 		Client: &http.Client{
@@ -81,17 +86,7 @@ func NewIAM(endpoint string) *Credentials {
 // Error will be returned if the request fails, or unable to extract
 // the desired
 func (m *IAM) Retrieve() (Value, error) {
-	credsList, err := requestCredList(m.Client, m.endpoint)
-	if err != nil {
-		return Value{}, err
-	}
-
-	if len(credsList) == 0 {
-		return Value{}, errors.New("empty EC2 Role list")
-	}
-	credsName := credsList[0]
-
-	roleCreds, err := requestCred(m.Client, m.endpoint, credsName)
+	roleCreds, err := getCredentials(m.Client, m.endpoint)
 	if err != nil {
 		return Value{}, err
 	}
@@ -119,18 +114,32 @@ type ec2RoleCredRespBody struct {
 	// Error state
 	Code    string
 	Message string
+
+	// Unused params.
+	LastUpdated time.Time
+	Type        string
 }
 
-const iamSecurityCredsPath = "/latest/meta-data/iam/security-credentials"
-
-// requestCredList requests a list of credentials from the EC2 service.
-// If there are no credentials, or there is an error making or receiving the request
-func requestCredList(client *http.Client, endpoint string) ([]string, error) {
+// Get the final IAM role URL where the request will
+// be sent to fetch the rolling access credentials.
+// http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/iam-roles-for-amazon-ec2.html
+func getIAMRoleURL(endpoint string) (*url.URL, error) {
+	if endpoint == "" {
+		endpoint = defaultIAMRoleEndpoint
+	}
 	u, err := url.Parse(endpoint)
 	if err != nil {
 		return nil, err
 	}
-	u.Path = iamSecurityCredsPath
+	u.Path = defaultIAMSecurityCredsPath
+	return u, nil
+}
+
+// listRoleNames lists of credential role names associated
+// with the current EC2 service. If there are no credentials,
+// or there is an error making or receiving the request.
+// http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/iam-roles-for-amazon-ec2.html
+func listRoleNames(client *http.Client, u *url.URL) ([]string, error) {
 	req, err := http.NewRequest("GET", u.String(), nil)
 	if err != nil {
 		return nil, err
@@ -157,17 +166,39 @@ func requestCredList(client *http.Client, endpoint string) ([]string, error) {
 	return credsList, nil
 }
 
-// requestCred requests the credentials for a specific credentials from the EC2 service.
+// getCredentials - obtains the credentials from the IAM role name associated with
+// the current EC2 service.
 //
-// If the credentials cannot be found, or there is an error reading the response
-// and error will be returned.
-func requestCred(client *http.Client, endpoint string, credsName string) (ec2RoleCredRespBody, error) {
-	u, err := url.Parse(endpoint)
+// If the credentials cannot be found, or there is an error
+// reading the response an error will be returned.
+func getCredentials(client *http.Client, endpoint string) (ec2RoleCredRespBody, error) {
+	// http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/iam-roles-for-amazon-ec2.html
+	u, err := getIAMRoleURL(endpoint)
 	if err != nil {
 		return ec2RoleCredRespBody{}, err
 	}
 
-	u.Path = path.Join(iamSecurityCredsPath, credsName)
+	// http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/iam-roles-for-amazon-ec2.html
+	roleNames, err := listRoleNames(client, u)
+	if err != nil {
+		return ec2RoleCredRespBody{}, err
+	}
+
+	if len(roleNames) == 0 {
+		return ec2RoleCredRespBody{}, errors.New("No IAM roles attached to this EC2 service")
+	}
+
+	// http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/iam-roles-for-amazon-ec2.html
+	// - An instance profile can contain only one IAM role. This limit cannot be increased.
+	roleName := roleNames[0]
+
+	// http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/iam-roles-for-amazon-ec2.html
+	// The following command retrieves the security credentials for an
+	// IAM role named `s3access`.
+	//
+	//    $ curl http://169.254.169.254/latest/meta-data/iam/security-credentials/s3access
+	//
+	u.Path = path.Join(u.Path, roleName)
 	req, err := http.NewRequest("GET", u.String(), nil)
 	if err != nil {
 		return ec2RoleCredRespBody{}, err

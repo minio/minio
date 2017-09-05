@@ -91,20 +91,6 @@ func (c Client) getBucketLocation(bucketName string) (string, error) {
 		return c.region, nil
 	}
 
-	if s3utils.IsAmazonChinaEndpoint(c.endpointURL) {
-		// For china specifically we need to set everything to
-		// cn-north-1 for now, there is no easier way until AWS S3
-		// provides a cleaner compatible API across "us-east-1" and
-		// China region.
-		return "cn-north-1", nil
-	} else if s3utils.IsAmazonGovCloudEndpoint(c.endpointURL) {
-		// For us-gov specifically we need to set everything to
-		// us-gov-west-1 for now, there is no easier way until AWS S3
-		// provides a cleaner compatible API across "us-east-1" and
-		// Gov cloud region.
-		return "us-gov-west-1", nil
-	}
-
 	if location, ok := c.bucketLocCache.Get(bucketName); ok {
 		return location, nil
 	}
@@ -213,20 +199,24 @@ func (c Client) getBucketLocationRequest(bucketName string) (*http.Request, erro
 		signerType = credentials.SignatureAnonymous
 	}
 
-	// Set sha256 sum for signature calculation only with signature version '4'.
-	switch {
-	case signerType.IsV4():
-		var contentSha256 string
-		if c.secure {
-			contentSha256 = unsignedPayload
-		} else {
-			contentSha256 = hex.EncodeToString(sum256([]byte{}))
-		}
-		req.Header.Set("X-Amz-Content-Sha256", contentSha256)
-		req = s3signer.SignV4(*req, accessKeyID, secretAccessKey, sessionToken, "us-east-1")
-	case signerType.IsV2():
-		req = s3signer.SignV2(*req, accessKeyID, secretAccessKey)
+	if signerType.IsAnonymous() {
+		return req, nil
 	}
 
+	if signerType.IsV2() {
+		req = s3signer.SignV2(*req, accessKeyID, secretAccessKey)
+		return req, nil
+	}
+
+	// Set sha256 sum for signature calculation only with signature version '4'.
+	var contentSha256 string
+	if c.secure {
+		contentSha256 = unsignedPayload
+	} else {
+		contentSha256 = hex.EncodeToString(sum256([]byte{}))
+	}
+
+	req.Header.Set("X-Amz-Content-Sha256", contentSha256)
+	req = s3signer.SignV4(*req, accessKeyID, secretAccessKey, sessionToken, "us-east-1")
 	return req, nil
 }
