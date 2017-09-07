@@ -18,6 +18,22 @@ package cmd
 
 import "github.com/skyrings/skyring-common/tools/uuid"
 
+// Checks bucket and object name validity, returns nil if both are valid.
+func checkBucketAndObjectNamesFS(bucket, object string) error {
+	// Verify if bucket is valid.
+	if !IsValidBucketName(bucket) {
+		return traceError(BucketNameInvalid{Bucket: bucket})
+	}
+	// Verify if object is valid.
+	if len(object) == 0 {
+		return traceError(ObjectNameInvalid{Bucket: bucket, Object: object})
+	}
+	if !IsValidObjectPrefix(object) {
+		return traceError(ObjectNameInvalid{Bucket: bucket, Object: object})
+	}
+	return nil
+}
+
 // Checks on GetObject arguments, bucket and object.
 func checkGetObjArgs(bucket, object string) error {
 	return checkBucketAndObjectNames(bucket, object)

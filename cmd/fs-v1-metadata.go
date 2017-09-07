@@ -91,6 +91,10 @@ func (m fsMetaV1) ToObjectInfo(bucket, object string, fi os.FileInfo) ObjectInfo
 		}
 	}
 
+	if hasSuffix(object, slashSeparator) {
+		m.Meta["content-type"] = "application/octet-stream"
+	}
+
 	objInfo := ObjectInfo{
 		Bucket: bucket,
 		Name:   object,

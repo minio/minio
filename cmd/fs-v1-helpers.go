@@ -126,6 +126,24 @@ func fsMkdir(dirPath string) (err error) {
 	return nil
 }
 
+func fsStatAll(statLoc string) (os.FileInfo, error) {
+	fi, err := fsStat(statLoc)
+	if err != nil {
+		err = errorCause(err)
+		if os.IsNotExist(err) {
+			return nil, traceError(errFileNotFound)
+		} else if os.IsPermission(err) {
+			return nil, traceError(errFileAccessDenied)
+		} else if isSysErrNotDir(err) {
+			return nil, traceError(errFileAccessDenied)
+		} else if isSysErrPathNotFound(err) {
+			return nil, traceError(errFileNotFound)
+		}
+		return nil, traceError(err)
+	}
+	return fi, nil
+}
+
 func fsStat(statLoc string) (os.FileInfo, error) {
 	if statLoc == "" {
 		return nil, traceError(errInvalidArgument)

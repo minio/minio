@@ -466,18 +466,23 @@ func (fs fsObjects) getObjectInfo(bucket, object string) (oi ObjectInfo, e error
 		return oi, toObjectErr(traceError(err), bucket, object)
 	}
 
-	// Stat the file to get file size.
-	fi, err := fsStatFile(pathJoin(fs.fsPath, bucket, object))
+	// Stat the object on disk, supports both file and directories.
+	fi, err := fsStatAll(pathJoin(fs.fsPath, bucket, object))
 	if err != nil {
 		return oi, toObjectErr(err, bucket, object)
 	}
-
+	if !hasSuffix(object, slashSeparator) && fi.IsDir() {
+		// Directory call needs to arrive with object ending with "/"
+		// if it didn't we need to return objectNotFound to be
+		// compatible with AWS S3.
+		return oi, toObjectErr(ObjectNotFound{bucket, object})
+	}
 	return fsMeta.ToObjectInfo(bucket, object, fi), nil
 }
 
 // GetObjectInfo - reads object metadata and replies back ObjectInfo.
 func (fs fsObjects) GetObjectInfo(bucket, object string) (oi ObjectInfo, e error) {
-	if err := checkGetObjArgs(bucket, object); err != nil {
+	if err := checkBucketAndObjectNamesFS(bucket, object); err != nil {
 		return oi, err
 	}
 
@@ -526,6 +531,11 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 		// Check if an object is present as one of the parent dir.
 		if fs.parentDirIsObject(bucket, path.Dir(object)) {
 			return ObjectInfo{}, toObjectErr(traceError(errFileAccessDenied), bucket, object)
+		}
+		if err = fsMkdir(pathJoin(fs.fsPath, bucket, object)); err != nil {
+			if errorCause(err) != errVolumeExists {
+				return ObjectInfo{}, err
+			}
 		}
 		return dirObjectInfo(bucket, object, size, metadata), nil
 	}
@@ -668,7 +678,7 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 // DeleteObject - deletes an object from a bucket, this operation is destructive
 // and there are no rollbacks supported.
 func (fs fsObjects) DeleteObject(bucket, object string) error {
-	if err := checkDelObjArgs(bucket, object); err != nil {
+	if err := checkBucketAndObjectNamesFS(bucket, object); err != nil {
 		return err
 	}
 
@@ -819,7 +829,7 @@ func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 			// Object name needs to be full path.
 			objInfo.Name = entry
 			objInfo.IsDir = true
-			return
+			return objInfo, nil
 		}
 
 		// Protect reading `fs.json`.
@@ -836,7 +846,7 @@ func (fs fsObjects) ListObjects(bucket, prefix, marker, delimiter string, maxKey
 
 		// Stat the file to get file size.
 		var fi os.FileInfo
-		fi, err = fsStatFile(pathJoin(fs.fsPath, bucket, entry))
+		fi, err = fsStatAll(pathJoin(fs.fsPath, bucket, entry))
 		if err != nil {
 			return ObjectInfo{}, toObjectErr(err, bucket, entry)
 		}
