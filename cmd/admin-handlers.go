@@ -979,6 +979,24 @@ func (adminAPI adminAPIHandlers) SetConfigHandler(w http.ResponseWriter, r *http
 		return
 	}
 
+	var config serverConfigV19
+	err = json.Unmarshal(configBytes, &config)
+
+	if err != nil {
+		errorIf(err, "Failed to unmarshal config from request body.")
+		writeErrorResponse(w, toAPIErrorCode(err), r.URL)
+		return
+	}
+
+	if globalIsEnvCreds {
+		creds := serverConfig.GetCredential()
+		if config.Credential.AccessKey != creds.AccessKey ||
+			config.Credential.SecretKey != creds.SecretKey {
+			writeErrorResponse(w, ErrAdminCredentialsMismatch, r.URL)
+			return
+		}
+	}
+
 	// Write config received from request onto a temporary file on
 	// all nodes.
 	tmpFileName := fmt.Sprintf(minioConfigTmpFormat, mustGetUUID())
