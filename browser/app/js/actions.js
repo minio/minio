@@ -18,6 +18,7 @@ import Moment from 'moment'
 import browserHistory from 'react-router/lib/browserHistory'
 import storage from 'local-storage-fallback'
 import { minioBrowserPrefix } from './constants'
+import { minioServerPrefix } from './constants'
 
 export const SET_WEB = 'SET_WEB'
 export const SET_CURRENT_BUCKET = 'SET_CURRENT_BUCKET'
@@ -79,11 +80,13 @@ export const hideDeleteConfirmation = () => {
 }
 
 export const showShareObject = (object, url) => {
+  var newUrl = url.replace(/\//i, minioServerPrefix + '/../');
+  newUrl = newUrl.replace(/\/[^\/]+\/\.\.\//i, '/');
   return {
     type: SET_SHARE_OBJECT,
     shareObject: {
       object,
-      url,
+      url: newUrl,
       show: true
     }
   }
@@ -465,7 +468,7 @@ export const uploadFile = (file, xhr) => {
   return (dispatch, getState) => {
     const {currentBucket, currentPath} = getState()
     const objectName = `${currentPath}${file.name}`
-    const uploadUrl = `${window.location.origin}/minio/upload/${currentBucket}/${objectName}`
+    const uploadUrl = `${window.location.origin}${minioServerPrefix}/upload/${currentBucket}/${objectName}`
     // The slug is a unique identifer for the file upload.
     const slug = `${currentBucket}-${currentPath}-${file.name}`
 

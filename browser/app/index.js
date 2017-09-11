@@ -33,7 +33,9 @@ import connect from 'react-redux/lib/components/connect'
 
 import Moment from 'moment'
 
-import { minioBrowserPrefix } from './js/constants.js'
+import { minioBrowserPrefix } from './js/constants'
+import { minioServerRootlessPrefix } from './js/constants'
+import { minioBrowserRootlessPrefix } from './js/constants'
 import * as actions from './js/actions.js'
 import reducer from './js/reducers.js'
 
@@ -49,7 +51,7 @@ const store = applyMiddleware(thunkMiddleware)(createStore)(reducer)
 const Browse = connect(state => state)(_Browse)
 const Login = connect(state => state)(_Login)
 
-let web = new Web(`${window.location.protocol}//${window.location.host}${minioBrowserPrefix}/webrpc`, store.dispatch)
+let web = new Web(`${window.location.protocol}//${window.location.host}/${minioServerRootlessPrefix}/webrpc`, store.dispatch)
 
 window.web = web
 
@@ -81,7 +83,7 @@ ReactDOM.render((
   <Provider store={ store } web={ web }>
     <Router history={ browserHistory }>
       <Route path='/' component={ App }>
-        <Route path='minio' component={ App }>
+        <Route path={ minioBrowserRootlessPrefix } component={ App }>
           <IndexRoute component={ Browse } onEnter={ authNeeded } />
           <Route path='login' component={ Login } onEnter={ authNotNeeded } />
           <Route path=':bucket' component={ Browse } onEnter={ authNeeded } />
