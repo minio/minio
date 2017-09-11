@@ -326,11 +326,14 @@ var defaultAllowableHTTPMethods = []string{
 
 // setCorsHandler handler for CORS (Cross Origin Resource Sharing)
 func setCorsHandler(h http.Handler) http.Handler {
+	commonS3Headers := []string{"Content-Length", "Content-Type", "Connection",
+		"Date", "ETag", "Server", "x-amz-delete-marker", "x-amz-id-2",
+		"x-amz-request-id", "x-amz-version-id"}
 	c := cors.New(cors.Options{
 		AllowedOrigins:   []string{"*"},
 		AllowedMethods:   defaultAllowableHTTPMethods,
 		AllowedHeaders:   []string{"*"},
-		ExposedHeaders:   []string{"ETag"},
+		ExposedHeaders:   commonS3Headers,
 		AllowCredentials: true,
 	})
 	return c.Handler(h)
