@@ -45,9 +45,18 @@ const azureBlockSize = 100 * humanize.MiByte
 // Also replaces X-Amz-Meta prefix with X-Ms-Meta as Azure expects user
 // defined metadata to have X-Ms-Meta prefix.
 func s3ToAzureHeaders(headers map[string]string) (newHeaders map[string]string) {
+	gatewayHeaders := map[string]string{
+		"X-Amz-Meta-X-Amz-Key":     "X-Amz-Meta-x_minio_key",
+		"X-Amz-Meta-X-Amz-Matdesc": "X-Amz-Meta-x_minio_matdesc",
+		"X-Amz-Meta-X-Amz-Iv":      "X-Amz-Meta-x_minio_iv",
+	}
+
 	newHeaders = make(map[string]string)
 	for k, v := range headers {
 		k = http.CanonicalHeaderKey(k)
+		if nk, ok := gatewayHeaders[k]; ok {
+			k = nk
+		}
 		if strings.HasPrefix(k, "X-Amz-Meta") {
 			k = strings.Replace(k, "X-Amz-Meta", "X-Ms-Meta", -1)
 		}
@@ -59,10 +68,19 @@ func s3ToAzureHeaders(headers map[string]string) (newHeaders map[string]string) 
 // Prefix user metadata with "X-Amz-Meta-".
 // client.GetBlobMetadata() already strips "X-Ms-Meta-"
 func azureToS3Metadata(meta map[string]string) (newMeta map[string]string) {
+	gatewayHeaders := map[string]string{
+		"X-Amz-Meta-x_minio_key":     "X-Amz-Meta-X-Amz-Key",
+		"X-Amz-Meta-x_minio_matdesc": "X-Amz-Meta-X-Amz-Matdesc",
+		"X-Amz-Meta-x_minio_iv":      "X-Amz-Meta-X-Amz-Iv",
+	}
+
 	newMeta = make(map[string]string)
 
 	for k, v := range meta {
 		k = "X-Amz-Meta-" + k
+		if nk, ok := gatewayHeaders[k]; ok {
+			k = nk
+		}
 		newMeta[k] = v
 	}
 	return newMeta
@@ -145,6 +163,8 @@ func azureToObjectError(err error, params ...string) error {
 		err = BucketNameInvalid{Bucket: bucket}
 	case "RequestBodyTooLarge":
 		err = PartTooBig{}
+	case "InvalidMetadata":
+		err = UnsupportedMetadata{}
 	default:
 		switch azureErr.StatusCode {
 		case http.StatusNotFound:

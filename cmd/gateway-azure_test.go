@@ -45,14 +45,20 @@ func TestAzureToS3ETag(t *testing.T) {
 // Test canonical metadata.
 func TestS3ToAzureHeaders(t *testing.T) {
 	headers := map[string]string{
-		"accept-encoding":  "gzip",
-		"content-encoding": "gzip",
-		"X-Amz-Meta-Hdr":   "value",
+		"accept-encoding":          "gzip",
+		"content-encoding":         "gzip",
+		"X-Amz-Meta-Hdr":           "value",
+		"X-Amz-Meta-X-Amz-Key":     "hu3ZSqtqwn+aL4V2VhAeov4i+bG3KyCtRMSXQFRHXOk=",
+		"X-Amz-Meta-X-Amz-Matdesc": "{}",
+		"X-Amz-Meta-X-Amz-Iv":      "eWmyryl8kq+EVnnsE7jpOg==",
 	}
 	expectedHeaders := map[string]string{
-		"Accept-Encoding":  "gzip",
-		"Content-Encoding": "gzip",
-		"X-Ms-Meta-Hdr":    "value",
+		"Accept-Encoding":           "gzip",
+		"Content-Encoding":          "gzip",
+		"X-Ms-Meta-Hdr":             "value",
+		"X-Ms-Meta-x_minio_key":     "hu3ZSqtqwn+aL4V2VhAeov4i+bG3KyCtRMSXQFRHXOk=",
+		"X-Ms-Meta-x_minio_matdesc": "{}",
+		"X-Ms-Meta-x_minio_iv":      "eWmyryl8kq+EVnnsE7jpOg==",
 	}
 	actualHeaders := s3ToAzureHeaders(headers)
 	if !reflect.DeepEqual(actualHeaders, expectedHeaders) {
@@ -64,10 +70,16 @@ func TestAzureToS3Metadata(t *testing.T) {
 	// Just one testcase. Adding more test cases does not add value to the testcase
 	// as azureToS3Metadata() just adds a prefix.
 	metadata := map[string]string{
-		"First-Name": "myname",
+		"First-Name":      "myname",
+		"x_minio_key":     "hu3ZSqtqwn+aL4V2VhAeov4i+bG3KyCtRMSXQFRHXOk=",
+		"x_minio_matdesc": "{}",
+		"x_minio_iv":      "eWmyryl8kq+EVnnsE7jpOg==",
 	}
 	expectedMeta := map[string]string{
-		"X-Amz-Meta-First-Name": "myname",
+		"X-Amz-Meta-First-Name":    "myname",
+		"X-Amz-Meta-X-Amz-Key":     "hu3ZSqtqwn+aL4V2VhAeov4i+bG3KyCtRMSXQFRHXOk=",
+		"X-Amz-Meta-X-Amz-Matdesc": "{}",
+		"X-Amz-Meta-X-Amz-Iv":      "eWmyryl8kq+EVnnsE7jpOg==",
 	}
 	actualMeta := azureToS3Metadata(metadata)
 	if !reflect.DeepEqual(actualMeta, expectedMeta) {
