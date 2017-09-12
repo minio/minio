@@ -240,7 +240,7 @@ func (c diskCache) Commit(f *os.File, objInfo ObjectInfo, anon bool) error {
 	bucket := objInfo.Bucket
 	object := objInfo.Name
 
-	objectLock := globalNSMutex.NewNSLock(diskCacheLockingPrefix+bucket, object)
+	objectLock := globalNSMutex.NewNSLock(path.Join(diskCacheLockingPrefix, bucket), object)
 	objectLock.Lock()
 	defer objectLock.Unlock()
 
@@ -310,7 +310,7 @@ func (c diskCache) Put(size int64) (*os.File, error) {
 
 // Returns the handle for the cached object
 func (c diskCache) Get(bucket, object string) (*os.File, ObjectInfo, bool, error) {
-	objectLock := globalNSMutex.NewNSLock(diskCacheLockingPrefix+bucket, object)
+	objectLock := globalNSMutex.NewNSLock(path.Join(diskCacheLockingPrefix, bucket), object)
 	objectLock.RLock()
 	defer objectLock.RUnlock()
 
@@ -336,7 +336,7 @@ func (c diskCache) Get(bucket, object string) (*os.File, ObjectInfo, bool, error
 
 // Returns metadata of the cached object
 func (c diskCache) GetObjectInfo(bucket, object string) (ObjectInfo, bool, error) {
-	objectLock := globalNSMutex.NewNSLock(diskCacheLockingPrefix+bucket, object)
+	objectLock := globalNSMutex.NewNSLock(path.Join(diskCacheLockingPrefix, bucket), object)
 	objectLock.RLock()
 	defer objectLock.RUnlock()
 
@@ -355,7 +355,7 @@ func (c diskCache) GetObjectInfo(bucket, object string) (ObjectInfo, bool, error
 
 // Deletes the cached object
 func (c diskCache) Delete(bucket, object string) error {
-	objectLock := globalNSMutex.NewNSLock(diskCacheLockingPrefix+bucket, object)
+	objectLock := globalNSMutex.NewNSLock(path.Join(diskCacheLockingPrefix, bucket), object)
 	objectLock.Lock()
 	defer objectLock.Unlock()
 
@@ -482,7 +482,7 @@ func (c cacheObjects) getObject(bucket, object string, startOffset int64, length
 	_, backendDown := errorCause(err).(BackendDown)
 	if err != nil && !backendDown {
 		if _, ok := errorCause(err).(ObjectNotFound); ok {
-			// Delte the cached entry if backend object was deleted.
+			// Delete the cached entry if backend object was deleted.
 			c.dcache.Delete(bucket, object)
 		}
 		return err

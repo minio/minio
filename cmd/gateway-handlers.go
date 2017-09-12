@@ -266,7 +266,6 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 		if api.cache != nil {
 			putObject = api.cache.AnonPutObject
 		}
-		// objInfo, err = objectAPI.AnonPutObject(bucket, object, size, r.Body, metadata, sha256sum)
 	case authTypeStreamingSigned:
 		// Initialize stream signature verifier.
 		var s3Error APIErrorCode
@@ -280,7 +279,6 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 		if api.cache != nil {
 			putObject = api.cache.PutObject
 		}
-		// objInfo, err = objectAPI.PutObject(bucket, object, size, reader, metadata, sha256sum)
 	case authTypeSignedV2, authTypePresignedV2:
 		s3Error := isReqAuthenticatedV2(r)
 		if s3Error != ErrNone {
@@ -292,7 +290,6 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 		if api.cache != nil {
 			putObject = api.cache.PutObject
 		}
-		// objInfo, err = objectAPI.PutObject(bucket, object, size, r.Body, metadata, sha256sum)
 	case authTypePresigned, authTypeSigned:
 		if s3Error := reqSignatureV4Verify(r, serverConfig.GetRegion()); s3Error != ErrNone {
 			errorIf(errSignatureMismatch, dumpRequest(r))
