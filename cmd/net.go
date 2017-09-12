@@ -175,13 +175,8 @@ func getAPIEndpoints(serverAddr string) (apiEndpoints []string) {
 		ipList = []string{host}
 	}
 
-	scheme := httpScheme
-	if globalIsSSL {
-		scheme = httpsScheme
-	}
-
 	for _, ip := range ipList {
-		apiEndpoints = append(apiEndpoints, fmt.Sprintf("%s://%s:%s", scheme, ip, port))
+		apiEndpoints = append(apiEndpoints, fmt.Sprintf("%s://%s:%s", getURLScheme(globalIsSSL), ip, port))
 	}
 
 	return apiEndpoints
