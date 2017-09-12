@@ -632,17 +632,23 @@ func (c cacheObjects) AnonPutObject(bucket, object string, size int64, r io.Read
 }
 
 // Returns cachedObjects for use by Server.
-func newServerCacheObjects(l ObjectLayer, dir string, maxUsage, expiry int) (*cacheObjects, error) {
+func newServerCacheObjects(dir string, maxUsage, expiry int) (*cacheObjects, error) {
 	dcache, err := newDiskCache(dir, maxUsage, expiry)
 	if err != nil {
 		return nil, err
 	}
 
 	return &cacheObjects{
-		dcache:          dcache,
-		GetObjectFn:     l.GetObject,
-		GetObjectInfoFn: l.GetObjectInfo,
-		PutObjectFn:     l.PutObject,
+		dcache: dcache,
+		GetObjectFn: func(bucket, object string, startOffset int64, length int64, writer io.Writer) error {
+			return newObjectLayerFn().GetObject(bucket, object, startOffset, length, writer)
+		},
+		GetObjectInfoFn: func(bucket, object string) (ObjectInfo, error) {
+			return newObjectLayerFn().GetObjectInfo(bucket, object)
+		},
+		PutObjectFn: func(bucket, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (objInfo ObjectInfo, err error) {
+			return newObjectLayerFn().PutObject(bucket, object, size, data, metadata, sha256sum)
+		},
 		AnonGetObjectFn: func(bucket, object string, startOffset int64, length int64, writer io.Writer) error {
 			return NotImplemented{}
 		},

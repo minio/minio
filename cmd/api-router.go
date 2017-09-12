@@ -29,8 +29,8 @@ func registerAPIRouter(mux *router.Router) {
 	var cache *cacheObjects
 	var err error
 	if globalCacheDir != "" {
-		cache, err = newServerCacheObjects(globalObjectAPI, globalCacheDir, globalCacheMax, 0)
-		fatalIf(err, "Unable to init cache")
+		cache, err = newServerCacheObjects(globalCacheDir, globalCacheMax, 0)
+		fatalIf(err, "Unable to initialize disk caching")
 	}
 
 	// Initialize API.

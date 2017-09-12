@@ -115,8 +115,13 @@ var (
 	globalPublicCerts        []*x509.Certificate
 	globalXLObjCacheDisabled bool
 
+	// Directory where disk-cache stores cached objects
 	globalCacheDir string
+
+	// Max disk usage limit (--cache-max) in percent. If the disk usage crosses this
+	// limit then we stop caching.
 	globalCacheMax int
+
 	// Add new variable global values here.
 )
 

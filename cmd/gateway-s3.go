@@ -18,9 +18,7 @@ package cmd
 
 import (
 	"io"
-	"net"
 	"net/http"
-	"net/url"
 	"path"
 
 	"encoding/hex"
@@ -54,12 +52,9 @@ func s3ToObjectError(err error, params ...string) error {
 		object = params[1]
 	}
 
-	var urlErr *url.Error
-	if urlErr, ok = err.(*url.Error); ok {
-		if _, ok = urlErr.Err.(*net.OpError); ok {
-			e.e = BackendDown{}
-			return e
-		}
+	if isNetworkOrHostDown(err) {
+		e.e = BackendDown{}
+		return e
 	}
 
 	minioErr, ok := err.(minio.ErrorResponse)

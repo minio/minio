@@ -51,9 +51,8 @@ type gatewayAPIHandlers struct {
 // registerAPIRouter - registers S3 compatible APIs.
 func registerGatewayAPIRouter(mux *router.Router, gw GatewayLayer) {
 	cache, err := newGatewayCacheObjects(gw, globalCacheDir, globalCacheMax, 0)
-	if err != nil {
-		fatalIf(err, "Unable to initialize disk cache")
-	}
+	fatalIf(err, "Unable to initialize disk cache")
+
 	// Initialize API.
 	api := gatewayAPIHandlers{
 		ObjectAPI: func() GatewayLayer { return gw },

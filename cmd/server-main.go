@@ -36,12 +36,12 @@ var serverFlags = []cli.Flag{
 	cli.StringFlag{
 		Name:  "cache-dir",
 		Value: "",
-		Usage: "Cache directory.",
+		Usage: "Path to cache directory.",
 	},
 	cli.StringFlag{
 		Name:  "cache-max",
 		Value: "80",
-		Usage: "Percent of disk space for Cache.",
+		Usage: "Percent of disk space used for caching.",
 	},
 }
 
@@ -263,13 +263,6 @@ func serverMain(ctx *cli.Context) {
 	// Initialize name space lock.
 	initNSLock(globalIsDistXL)
 
-	newObject, err := newObjectLayer(globalEndpoints)
-	fatalIf(err, "Initializing object layer failed")
-
-	globalObjLayerMutex.Lock()
-	globalObjectAPI = newObject
-	globalObjLayerMutex.Unlock()
-
 	// Configure server.
 	handler, err := configureServerHandler(globalEndpoints)
 	fatalIf(err, "Unable to configure one of server's RPC services.")
@@ -291,6 +284,13 @@ func serverMain(ctx *cli.Context) {
 		}
 		fatalIf(apiServer.ListenAndServe(cert, key), "Failed to start minio server.")
 	}()
+
+	newObject, err := newObjectLayer(globalEndpoints)
+	fatalIf(err, "Initializing object layer failed")
+
+	globalObjLayerMutex.Lock()
+	globalObjectAPI = newObject
+	globalObjLayerMutex.Unlock()
 
 	// Prints the formatted startup message once object layer is initialized.
 	apiEndpoints := getAPIEndpoints(apiServer.Addr)
