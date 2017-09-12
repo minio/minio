@@ -26,8 +26,8 @@ func (action InitActions) String() string {
 		return "FormatDisks"
 	case WaitForFormatting:
 		return "WaitForFormatting"
-	case WaitForHeal:
-		return "WaitForHeal"
+	case SuggestToHeal:
+		return "SuggestToHeal"
 	case WaitForAll:
 		return "WaitForAll"
 	case WaitForQuorum:
@@ -76,6 +76,7 @@ func TestPrepForInitXL(t *testing.T) {
 		errUnformattedDisk, errUnformattedDisk, errUnformattedDisk, errUnformattedDisk,
 		errUnformattedDisk, errCorruptedFormat, errCorruptedFormat, errDiskNotFound,
 	}
+
 	// Quorum number of disks not online yet.
 	noQuourm := []error{
 		errDiskNotFound, errDiskNotFound, errDiskNotFound, errDiskNotFound,
@@ -101,6 +102,20 @@ func TestPrepForInitXL(t *testing.T) {
 		nil, nil, nil, nil,
 		errServerTimeMismatch, nil, nil, nil,
 	}
+	// Suggest to heal under formatted disks in quorum.
+	formattedDisksInQuorum := []error{
+		nil, nil, nil, nil,
+		errUnformattedDisk, errUnformattedDisk, errDiskNotFound, errDiskNotFound,
+	}
+	// Wait for all under undecisive state.
+	undecisiveErrs1 := []error{
+		errDiskNotFound, nil, nil, nil,
+		errUnformattedDisk, errUnformattedDisk, errDiskNotFound, errDiskNotFound,
+	}
+	undecisiveErrs2 := []error{
+		errDiskNotFound, errDiskNotFound, errDiskNotFound, errDiskNotFound,
+		errUnformattedDisk, errUnformattedDisk, errUnformattedDisk, errUnformattedDisk,
+	}
 
 	testCases := []struct {
 		// Params for prepForInit().
@@ -116,7 +131,7 @@ func TestPrepForInitXL(t *testing.T) {
 		{true, quorumUnformatted, 8, WaitForAll},
 		{true, quorumUnformattedSomeCorrupted, 8, Abort},
 		{true, noQuourm, 8, WaitForQuorum},
-		{true, minorityCorrupted, 8, WaitForHeal},
+		{true, minorityCorrupted, 8, SuggestToHeal},
 		{true, majorityCorrupted, 8, Abort},
 		// Remote disks.
 		{false, allFormatted, 8, InitObjectLayer},
@@ -125,8 +140,11 @@ func TestPrepForInitXL(t *testing.T) {
 		{false, quorumUnformatted, 8, WaitForAll},
 		{false, quorumUnformattedSomeCorrupted, 8, Abort},
 		{false, noQuourm, 8, WaitForQuorum},
-		{false, minorityCorrupted, 8, WaitForHeal},
+		{false, minorityCorrupted, 8, SuggestToHeal},
+		{false, formattedDisksInQuorum, 8, SuggestToHeal},
 		{false, majorityCorrupted, 8, Abort},
+		{false, undecisiveErrs1, 8, WaitForAll},
+		{false, undecisiveErrs2, 8, WaitForAll},
 		// Config mistakes.
 		{true, accessKeyIDErr, 8, WaitForConfig},
 		{true, authenticationErr, 8, WaitForConfig},
@@ -136,7 +154,7 @@ func TestPrepForInitXL(t *testing.T) {
 	for i, test := range testCases {
 		actual := prepForInitXL(test.firstDisk, test.errs, test.diskCount)
 		if actual != test.action {
-			t.Errorf("Test %d expected %s but receieved %s\n", i+1, test.action, actual)
+			t.Errorf("Test %d expected %s but received %s\n", i+1, test.action, actual)
 		}
 	}
 }
