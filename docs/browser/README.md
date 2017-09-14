@@ -12,7 +12,7 @@ Currently these tokens expire after 10hrs, this is not configurable yet.
 ### Start minio server
 
 ```
-minio server <testdir>
+minio server /data
 ```
 
 ### JSON RPC APIs.

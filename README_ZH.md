@@ -42,7 +42,7 @@ $ go get -u github.com/minio/minio
 
 $ chmod +x minio
 $ ./minio --help
-$ ./minio server ~/Photos
+$ ./minio server /data
 
 端点:  http://10.0.0.10:9000  http://127.0.0.1:9000  http://172.17.0.1:9000
 AccessKey: USWUXHGYZQYFYFFIT3RE
@@ -70,7 +70,7 @@ SecretKey: MOJRH0mkL1IPauahWITSVvyDrQbEEIwljvmxdq03
 
 $ chmod 755 minio
 $ ./minio --help
-$ ./minio server ~/Photos
+$ ./minio server /data
 
 端点:  http://10.0.0.10:9000  http://127.0.0.1:9000  http://172.17.0.1:9000
 AccessKey: USWUXHGYZQYFYFFIT3RE
@@ -134,7 +134,7 @@ $ docker run -p 9000:9000 minio/minio
 
 $ chmod 755 minio
 $ ./minio --help
-$ ./minio server ~/Photos
+$ ./minio server /data
 
 端点:  http://10.0.0.10:9000  http://127.0.0.1:9000  http://172.17.0.1:9000
 AccessKey: USWUXHGYZQYFYFFIT3RE
