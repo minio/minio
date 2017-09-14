@@ -180,6 +180,7 @@ func (c diskCache) purge() {
 			d = d / 2
 			expiry = expiry.Add(d)
 
+			deletedCount := 0
 			// Delete all the entries that haven't been accessed since "expiry".
 			c.db.Update(func(tx *bolt.Tx) error {
 				b := tx.Bucket([]byte(diskCacheBoltdbBucket))
@@ -217,9 +218,17 @@ func (c diskCache) purge() {
 					}
 					err = b.Delete(k)
 					errorIf(err, "Unable to delete %s", string(k))
+					if err != nil {
+						deletedCount++
+					}
 				}
 				return nil
 			})
+
+			if deletedCount == 0 {
+				// to avoid a busy loop
+				time.Sleep(time.Second * 30)
+			}
 		}
 		<-c.purgeChan
 	}
@@ -545,7 +554,7 @@ func (c cacheObjects) getObject(bucket, object string, startOffset int64, length
 		return err
 	}
 	// FIXME: race-condition: what if the server object got replaced between GetObjectFn and GetObjectInfoFn
-	return c.dcache.Commit(cachedObj, objInfo, true)
+	return c.dcache.Commit(cachedObj, objInfo, anonReq)
 }
 
 // Uses cached-object to serve the request. If object is not cached it serves the request from the backend and also
