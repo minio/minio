@@ -88,16 +88,16 @@ func (dt *dynamicTimeout) logEntry(duration time.Duration) {
 // previous results
 func (dt *dynamicTimeout) adjust(entries [dynamicTimeoutLogSize]time.Duration) {
 
-	failures, average := 0, 0
+	failures, average := 0, int64(0)
 	for i := 0; i < len(entries); i++ {
 		if entries[i] == maxDuration {
 			failures++
 		} else {
-			average += int(entries[i])
+			average += int64(entries[i])
 		}
 	}
 	if failures < len(entries) {
-		average /= len(entries) - failures
+		average /= int64(len(entries) - failures)
 	}
 
 	timeOutHitPct := float64(failures) / float64(len(entries))
