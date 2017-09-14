@@ -43,7 +43,7 @@ func (fs fsObjects) isMultipartUpload(bucket, prefix string) bool {
 	uploadsIDPath := pathJoin(fs.fsPath, bucket, prefix, uploadsJSONFile)
 	_, err := fsStatFile(uploadsIDPath)
 	if err != nil {
-		if err == errFileNotFound {
+		if errorCause(err) == errFileNotFound {
 			return false
 		}
 		errorIf(err, "Unable to access uploads.json "+uploadsIDPath)
