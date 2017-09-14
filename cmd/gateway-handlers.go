@@ -800,7 +800,7 @@ func (api gatewayAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *htt
 
 	// Validate the query params before beginning to serve the request.
 	// fetch-owner is not validated since it is a boolean
-	if s3Error := validateListObjectsArgs(prefix, marker, delimiter, maxKeys); s3Error != ErrNone {
+	if s3Error := validateGatewayListObjectsV2Args(prefix, marker, delimiter, maxKeys); s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
 		return
 	}
