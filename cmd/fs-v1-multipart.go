@@ -38,6 +38,12 @@ const (
 	fsMultipartCleanupInterval = time.Hour * 24 // 24 hrs.
 )
 
+type fsMultipart struct {
+        Expiry int64 `json:"expiry"`
+        CleanupInterval int64 `json:"cleanupInterval"`
+        Unit string `json:"unit"`
+}
+
 // Returns if the prefix is a multipart upload.
 func (fs fsObjects) isMultipartUpload(bucket, prefix string) bool {
 	uploadsIDPath := pathJoin(fs.fsPath, bucket, prefix, uploadsJSONFile)

@@ -51,6 +51,7 @@ type serverConfigV19 struct {
 
 	// Notification queue configuration.
 	Notify *notifier `json:"notify"`
+	Multipart *fsMultipart `json:"multipart"`
 }
 
 // GetVersion get current config version.
@@ -135,6 +136,7 @@ func newServerConfigV19() *serverConfigV19 {
 		Browser:    true,
 		Logger:     &loggers{},
 		Notify:     &notifier{},
+		Multipart:  &fsMultipart{},
 	}
 
 	// Enable console logger by default on a fresh run.

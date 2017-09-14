@@ -28,6 +28,7 @@ import (
 	"path/filepath"
 	"sort"
 	"syscall"
+	"time"
 
 	"github.com/minio/minio/pkg/lock"
 	"github.com/minio/sha256-simd"
@@ -157,8 +158,25 @@ func newFSObjectLayer(fsPath string) (ObjectLayer, error) {
 		return nil, fmt.Errorf("Unable to initialize event notification. %s", err)
 	}
 
+	var multipartExpiry, multipartCleanupInterval time.Duration
+
+	unit := time.Hour
+
+	if serverConfig.Multipart != nil {
+		if serverConfig.Multipart.Unit == "hour" {
+                	unit = time.Hour
+		} else if  serverConfig.Multipart.Unit == "minute" {
+			unit = time.Minute
+		}
+ 		multipartExpiry = time.Duration(serverConfig.Multipart.Expiry * int64(unit))
+		multipartCleanupInterval = time.Duration(serverConfig.Multipart.CleanupInterval * int64(unit)) 
+	} else {
+		multipartExpiry = fsMultipartExpiry
+		multipartCleanupInterval = fsMultipartCleanupInterval
+	}  
+
 	// Start background process to cleanup old files in `.minio.sys`.
-	go fs.cleanupStaleMultipartUploads(fsMultipartCleanupInterval, fsMultipartExpiry, globalServiceDoneCh)
+	go fs.cleanupStaleMultipartUploads(multipartCleanupInterval, multipartExpiry, globalServiceDoneCh)
 
 	// Return successfully initialized object layer.
 	return fs, nil
