@@ -989,14 +989,14 @@ func (fs fsObjects) cleanupStaleMultipartUpload(bucket string, expiry time.Durat
 // on all buckets for every `cleanupInterval`, this function is
 // blocking and should be run in a go-routine.
 func (fs fsObjects) cleanupStaleMultipartUploads(cleanupInterval, expiry time.Duration, doneCh chan struct{}) {
-	timer := time.NewTimer(cleanupInterval)
+	ticker := time.NewTicker(cleanupInterval)
 	for {
 		select {
 		case <-doneCh:
 			// Stop the timer.
-			timer.Stop()
+			ticker.Stop()
 			return
-		case <-timer.C:
+		case <-ticker.C:
 			bucketInfos, err := fs.ListBuckets()
 			if err != nil {
 				errorIf(err, "Unable to list buckets")
