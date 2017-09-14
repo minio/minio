@@ -958,7 +958,7 @@ func (fs fsObjects) cleanupStaleMultipartUpload(bucket string, expiry time.Durat
 	for {
 		// List multipart uploads in a bucket 1000 at a time
 		prefix := ""
-		lmi, err = fs.listMultipartUploadsHelper(bucket, prefix, lmi.KeyMarker, lmi.UploadIDMarker, slashSeparator, 1000)
+		lmi, err = fs.listMultipartUploadsHelper(bucket, prefix, lmi.KeyMarker, lmi.UploadIDMarker, "", 1000)
 		if err != nil {
 			errorIf(err, "Unable to list uploads")
 			return err
