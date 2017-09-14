@@ -236,19 +236,21 @@ func (c diskCache) encodedMetaPath(bucket, object string) string {
 }
 
 // Commit the cached object - rename from tmp directory to data directory.
-func (c diskCache) Commit(f *os.File, objInfo ObjectInfo, anon bool) error {
+func (c diskCache) Commit(f *os.File, objInfo ObjectInfo, anon bool) (err error) {
 	bucket := objInfo.Bucket
 	object := objInfo.Name
 
 	objectLock := globalNSMutex.NewNSLock(path.Join(diskCacheLockingPrefix, bucket), object)
-	objectLock.Lock()
+	if err = objectLock.GetLock(globalOperationTimeout); err != nil {
+		return err
+	}
 	defer objectLock.Unlock()
 
 	encPath := c.encodedPath(bucket, object)
-	if err := os.Rename(f.Name(), encPath); err != nil {
+	if err = os.Rename(f.Name(), encPath); err != nil {
 		return err
 	}
-	if err := f.Close(); err != nil {
+	if err = f.Close(); err != nil {
 		return err
 	}
 	metaPath := c.encodedMetaPath(bucket, object)
@@ -309,60 +311,73 @@ func (c diskCache) Put(size int64) (*os.File, error) {
 }
 
 // Returns the handle for the cached object
-func (c diskCache) Get(bucket, object string) (*os.File, ObjectInfo, bool, error) {
-	objectLock := globalNSMutex.NewNSLock(path.Join(diskCacheLockingPrefix, bucket), object)
-	objectLock.RLock()
+func (c diskCache) Get(bucket, object string) (f *os.File, info ObjectInfo,
+	isAnon bool, err error) {
+
+	objectLock := globalNSMutex.NewNSLock(path.Join(diskCacheLockingPrefix,
+		bucket), object)
+	if err = objectLock.GetRLock(globalOperationTimeout); err != nil {
+		return f, info, isAnon, err
+	}
 	defer objectLock.RUnlock()
 
 	metaPath := c.encodedMetaPath(bucket, object)
 	objMeta := diskCacheObjectMeta{}
 	metaBytes, err := ioutil.ReadFile(metaPath)
 	if err != nil {
-		return nil, ObjectInfo{}, false, err
+		return f, info, isAnon, err
 	}
 	if err = json.Unmarshal(metaBytes, &objMeta); err != nil {
-		return nil, ObjectInfo{}, false, err
+		return f, info, isAnon, err
 	}
 	if objMeta.Version != diskCacheObjectMetaVersion {
-		return nil, ObjectInfo{}, false, errors.New("format not supported")
+		return f, info, isAnon, errors.New("format not supported")
 	}
-	file, err := os.Open(c.encodedPath(bucket, object))
+	f, err = os.Open(c.encodedPath(bucket, object))
 	if err != nil {
-		return nil, ObjectInfo{}, false, err
+		return f, info, isAnon, err
 	}
 	c.updateAtime(bucket, object, time.Now().UTC())
-	return file, objMeta.toObjectInfo(), objMeta.Anonymous, nil
+	return f, objMeta.toObjectInfo(), objMeta.Anonymous, err
 }
 
 // Returns metadata of the cached object
-func (c diskCache) GetObjectInfo(bucket, object string) (ObjectInfo, bool, error) {
-	objectLock := globalNSMutex.NewNSLock(path.Join(diskCacheLockingPrefix, bucket), object)
-	objectLock.RLock()
+func (c diskCache) GetObjectInfo(bucket, object string) (info ObjectInfo,
+	isAnon bool, err error) {
+
+	objectLock := globalNSMutex.NewNSLock(path.Join(diskCacheLockingPrefix,
+		bucket), object)
+	if err = objectLock.GetRLock(globalOperationTimeout); err != nil {
+		return info, isAnon, err
+	}
 	defer objectLock.RUnlock()
 
 	metaPath := c.encodedMetaPath(bucket, object)
 	objMeta := diskCacheObjectMeta{}
 	metaBytes, err := ioutil.ReadFile(metaPath)
 	if err != nil {
-		return ObjectInfo{}, false, err
+		return info, isAnon, err
 	}
 	if err := json.Unmarshal(metaBytes, &objMeta); err != nil {
-		return ObjectInfo{}, false, err
+		return info, isAnon, err
 	}
 
 	return objMeta.toObjectInfo(), objMeta.Anonymous, nil
 }
 
 // Deletes the cached object
-func (c diskCache) Delete(bucket, object string) error {
-	objectLock := globalNSMutex.NewNSLock(path.Join(diskCacheLockingPrefix, bucket), object)
-	objectLock.Lock()
-	defer objectLock.Unlock()
-
-	if err := os.Remove(c.encodedPath(bucket, object)); err != nil {
+func (c diskCache) Delete(bucket, object string) (err error) {
+	objectLock := globalNSMutex.NewNSLock(path.Join(diskCacheLockingPrefix,
+		bucket), object)
+	if err = objectLock.GetLock(globalOperationTimeout); err != nil {
 		return err
 	}
-	if err := os.Remove(c.encodedMetaPath(bucket, object)); err != nil {
+	defer objectLock.Unlock()
+
+	if err = os.Remove(c.encodedPath(bucket, object)); err != nil {
+		return err
+	}
+	if err = os.Remove(c.encodedMetaPath(bucket, object)); err != nil {
 		return err
 	}
 	return nil
