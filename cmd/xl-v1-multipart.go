@@ -17,10 +17,8 @@
 package cmd
 
 import (
-	"crypto/md5"
 	"encoding/hex"
 	"fmt"
-	"hash"
 	"io"
 	"io/ioutil"
 	"path"
@@ -29,7 +27,6 @@ import (
 	"time"
 
 	"github.com/minio/minio/pkg/mimedb"
-	"github.com/minio/sha256-simd"
 )
 
 // updateUploadJSON - add or remove upload ID info in all `uploads.json`.
@@ -558,7 +555,7 @@ func (xl xlObjects) CopyObjectPart(srcBucket, srcObject, dstBucket, dstObject, u
 		pipeWriter.Close() // Close writer explicitly signalling we wrote all data.
 	}()
 
-	partInfo, err := xl.PutObjectPart(dstBucket, dstObject, uploadID, partID, length, pipeReader, "", "")
+	partInfo, err := xl.PutObjectPart(dstBucket, dstObject, uploadID, partID, NewHashReader(pipeReader, length, "", ""))
 	if err != nil {
 		return pi, toObjectErr(err, dstBucket, dstObject)
 	}
@@ -575,7 +572,7 @@ func (xl xlObjects) CopyObjectPart(srcBucket, srcObject, dstBucket, dstObject, u
 // of the multipart transaction.
 //
 // Implements S3 compatible Upload Part API.
-func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, size int64, data io.Reader, md5Hex string, sha256sum string) (pi PartInfo, e error) {
+func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, data *HashReader) (pi PartInfo, e error) {
 	if err := checkPutObjectPartArgs(bucket, object, xl); err != nil {
 		return pi, err
 	}
@@ -623,31 +620,10 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	tmpPart := mustGetUUID()
 	tmpPartPath := path.Join(tmpPart, partSuffix)
 
-	// Initialize md5 writer.
-	md5Writer := md5.New()
-
-	writers := []io.Writer{md5Writer}
-
-	var sha256Writer hash.Hash
-	if sha256sum != "" {
-		sha256Writer = sha256.New()
-		writers = append(writers, sha256Writer)
-	}
-
-	mw := io.MultiWriter(writers...)
-
-	var lreader = data
-	// Limit the reader to its provided size > 0.
-	if size > 0 {
-		// This is done so that we can avoid erroneous clients sending
-		// more data than the set content size.
-		lreader = io.LimitReader(data, size)
-	}
-
 	// Delete the temporary object part. If PutObjectPart succeeds there would be nothing to delete.
 	defer xl.deleteObject(minioMetaTmpBucket, tmpPart)
-	if size > 0 {
-		if pErr := xl.prepareFile(minioMetaTmpBucket, tmpPartPath, size, onlineDisks, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks); err != nil {
+	if data.Size() > 0 {
+		if pErr := xl.prepareFile(minioMetaTmpBucket, tmpPartPath, data.Size(), onlineDisks, xlMeta.Erasure.BlockSize, xlMeta.Erasure.DataBlocks); err != nil {
 			return pi, toObjectErr(pErr, bucket, object)
 
 		}
@@ -658,37 +634,19 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 		return pi, toObjectErr(err, bucket, object)
 	}
 	buffer := make([]byte, xlMeta.Erasure.BlockSize, 2*xlMeta.Erasure.BlockSize) // alloc additional space for parity blocks created while erasure coding
-	file, err := storage.CreateFile(io.TeeReader(lreader, mw), minioMetaTmpBucket, tmpPartPath, buffer, DefaultBitrotAlgorithm, xl.writeQuorum)
+	file, err := storage.CreateFile(data, minioMetaTmpBucket, tmpPartPath, buffer, DefaultBitrotAlgorithm, xl.writeQuorum)
 	if err != nil {
 		return pi, toObjectErr(err, bucket, object)
 	}
 
 	// Should return IncompleteBody{} error when reader has fewer bytes
 	// than specified in request header.
-	if file.Size < size {
+	if file.Size < data.Size() {
 		return pi, traceError(IncompleteBody{})
 	}
 
-	// For size == -1, perhaps client is sending in chunked encoding
-	// set the size as size that was actually written.
-	if size == -1 {
-		size = file.Size
-	}
-
-	// Calculate new md5sum.
-	newMD5Hex := hex.EncodeToString(md5Writer.Sum(nil))
-	if md5Hex != "" {
-		if newMD5Hex != md5Hex {
-			// Returns md5 mismatch.
-			return pi, traceError(BadDigest{md5Hex, newMD5Hex})
-		}
-	}
-
-	if sha256sum != "" {
-		newSHA256sum := hex.EncodeToString(sha256Writer.Sum(nil))
-		if newSHA256sum != sha256sum {
-			return pi, traceError(SHA256Mismatch{})
-		}
+	if err = data.Verify(); err != nil {
+		return pi, toObjectErr(err, bucket, object)
 	}
 
 	// post-upload check (write) lock
@@ -730,7 +688,8 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	xlMeta.Stat.ModTime = UTCNow()
 
 	// Add the current part.
-	xlMeta.AddObjectPart(partID, partSuffix, newMD5Hex, size)
+	md5Hex := hex.EncodeToString(data.MD5())
+	xlMeta.AddObjectPart(partID, partSuffix, md5Hex, file.Size)
 
 	for i, disk := range onlineDisks {
 		if disk == OfflineDisk {
@@ -762,7 +721,7 @@ func (xl xlObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	return PartInfo{
 		PartNumber:   partID,
 		LastModified: fi.ModTime,
-		ETag:         newMD5Hex,
+		ETag:         md5Hex,
 		Size:         fi.Size,
 	}, nil
 }

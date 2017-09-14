@@ -17,10 +17,8 @@
 package cmd
 
 import (
-	"crypto/md5"
 	"encoding/hex"
 	"fmt"
-	"hash"
 	"io"
 	"io/ioutil"
 	"os"
@@ -30,7 +28,6 @@ import (
 	"syscall"
 
 	"github.com/minio/minio/pkg/lock"
-	"github.com/minio/sha256-simd"
 )
 
 // fsObjects - Implements fs object layer.
@@ -364,7 +361,7 @@ func (fs fsObjects) CopyObject(srcBucket, srcObject, dstBucket, dstObject string
 		pipeWriter.Close() // Close writer explicitly signalling we wrote all data.
 	}()
 
-	objInfo, err := fs.PutObject(dstBucket, dstObject, length, pipeReader, metadata, "")
+	objInfo, err := fs.PutObject(dstBucket, dstObject, NewHashReader(pipeReader, length, metadata["etag"], ""), metadata)
 	if err != nil {
 		return oi, toObjectErr(err, dstBucket, dstObject)
 	}
@@ -511,7 +508,7 @@ func (fs fsObjects) parentDirIsObject(bucket, parent string) bool {
 // until EOF, writes data directly to configured filesystem path.
 // Additionally writes `fs.json` which carries the necessary metadata
 // for future object operations.
-func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (objInfo ObjectInfo, retErr error) {
+func (fs fsObjects) PutObject(bucket string, object string, data *HashReader, metadata map[string]string) (objInfo ObjectInfo, retErr error) {
 	var err error
 
 	// Validate if bucket name is valid and exists.
@@ -522,12 +519,12 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 	// This is a special case with size as '0' and object ends
 	// with a slash separator, we treat it like a valid operation
 	// and return success.
-	if isObjectDir(object, size) {
+	if isObjectDir(object, data.Size()) {
 		// Check if an object is present as one of the parent dir.
 		if fs.parentDirIsObject(bucket, path.Dir(object)) {
 			return ObjectInfo{}, toObjectErr(traceError(errFileAccessDenied), bucket, object)
 		}
-		return dirObjectInfo(bucket, object, size, metadata), nil
+		return dirObjectInfo(bucket, object, data.Size(), metadata), nil
 	}
 
 	if err = checkPutObjectArgs(bucket, object, fs); err != nil {
@@ -571,37 +568,14 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 	// so that cleaning it up will be easy if the server goes down.
 	tempObj := mustGetUUID()
 
-	// Initialize md5 writer.
-	md5Writer := md5.New()
-
-	hashWriters := []io.Writer{md5Writer}
-
-	var sha256Writer hash.Hash
-	if sha256sum != "" {
-		sha256Writer = sha256.New()
-		hashWriters = append(hashWriters, sha256Writer)
-	}
-	multiWriter := io.MultiWriter(hashWriters...)
-
-	// Limit the reader to its provided size if specified.
-	var limitDataReader io.Reader
-	if size > 0 {
-		// This is done so that we can avoid erroneous clients sending more data than the set content size.
-		limitDataReader = io.LimitReader(data, size)
-	} else {
-		// else we read till EOF.
-		limitDataReader = data
-	}
-
 	// Allocate a buffer to Read() from request body
 	bufSize := int64(readSizeV1)
-	if size > 0 && bufSize > size {
+	if size := data.Size(); size > 0 && bufSize > size {
 		bufSize = size
 	}
 	buf := make([]byte, int(bufSize))
-	teeReader := io.TeeReader(limitDataReader, multiWriter)
 	fsTmpObjPath := pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID, tempObj)
-	bytesWritten, err := fsCreateFile(fsTmpObjPath, teeReader, buf, size)
+	bytesWritten, err := fsCreateFile(fsTmpObjPath, data, buf, data.Size())
 	if err != nil {
 		fsRemoveFile(fsTmpObjPath)
 		errorIf(err, "Failed to create object %s/%s", bucket, object)
@@ -610,7 +584,7 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 
 	// Should return IncompleteBody{} error when reader has fewer
 	// bytes than specified in request header.
-	if bytesWritten < size {
+	if bytesWritten < data.Size() {
 		fsRemoveFile(fsTmpObjPath)
 		return ObjectInfo{}, traceError(IncompleteBody{})
 	}
@@ -620,27 +594,11 @@ func (fs fsObjects) PutObject(bucket string, object string, size int64, data io.
 	// nothing to delete.
 	defer fsRemoveFile(fsTmpObjPath)
 
-	newMD5Hex := hex.EncodeToString(md5Writer.Sum(nil))
-	// Update the md5sum if not set with the newly calculated one.
-	if len(metadata["etag"]) == 0 {
-		metadata["etag"] = newMD5Hex
+	if err = data.Verify(); err != nil { // verify MD5 and SHA256
+		return ObjectInfo{}, traceError(err)
 	}
 
-	// md5Hex representation.
-	md5Hex := metadata["etag"]
-	if md5Hex != "" {
-		if newMD5Hex != md5Hex {
-			// Returns md5 mismatch.
-			return ObjectInfo{}, traceError(BadDigest{md5Hex, newMD5Hex})
-		}
-	}
-
-	if sha256sum != "" {
-		newSHA256sum := hex.EncodeToString(sha256Writer.Sum(nil))
-		if newSHA256sum != sha256sum {
-			return ObjectInfo{}, traceError(SHA256Mismatch{})
-		}
-	}
+	metadata["etag"] = hex.EncodeToString(data.MD5())
 
 	// Entire object was written to the temp location, now it's safe to rename it to the actual location.
 	fsNSObjPath := pathJoin(fs.fsPath, bucket, object)

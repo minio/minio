@@ -17,11 +17,8 @@
 package cmd
 
 import (
-	"crypto/md5"
 	"encoding/base64"
-	"encoding/hex"
 	"fmt"
-	"hash"
 	"io"
 	"net/http"
 	"net/url"
@@ -32,7 +29,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/storage"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio-go/pkg/policy"
-	"github.com/minio/sha256-simd"
 )
 
 const globalAzureAPIVersion = "2016-05-31"
@@ -408,52 +404,16 @@ func (a *azureObjects) GetObjectInfo(bucket, object string) (objInfo ObjectInfo,
 
 // PutObject - Create a new blob with the incoming data,
 // uses Azure equivalent CreateBlockBlobFromReader.
-func (a *azureObjects) PutObject(bucket, object string, size int64, data io.Reader, metadata map[string]string, sha256sum string) (objInfo ObjectInfo, err error) {
-	var sha256Writer hash.Hash
-	var md5sumWriter hash.Hash
-
-	var writers []io.Writer
-
-	md5sum := metadata["etag"]
+func (a *azureObjects) PutObject(bucket, object string, data *HashReader, metadata map[string]string) (objInfo ObjectInfo, err error) {
 	delete(metadata, "etag")
-
-	teeReader := data
-
-	if sha256sum != "" {
-		sha256Writer = sha256.New()
-		writers = append(writers, sha256Writer)
-	}
-
-	if md5sum != "" {
-		md5sumWriter = md5.New()
-		writers = append(writers, md5sumWriter)
-	}
-
-	if len(writers) > 0 {
-		teeReader = io.TeeReader(data, io.MultiWriter(writers...))
-	}
-
-	err = a.client.CreateBlockBlobFromReader(bucket, object, uint64(size), teeReader, s3ToAzureHeaders(metadata))
+	err = a.client.CreateBlockBlobFromReader(bucket, object, uint64(data.Size()), data, s3ToAzureHeaders(metadata))
 	if err != nil {
 		return objInfo, azureToObjectError(traceError(err), bucket, object)
 	}
-
-	if md5sum != "" {
-		newMD5sum := hex.EncodeToString(md5sumWriter.Sum(nil))
-		if newMD5sum != md5sum {
-			a.client.DeleteBlob(bucket, object, nil)
-			return ObjectInfo{}, azureToObjectError(traceError(BadDigest{md5sum, newMD5sum}))
-		}
+	if err = data.Verify(); err != nil {
+		a.client.DeleteBlob(bucket, object, nil)
+		return ObjectInfo{}, azureToObjectError(traceError(err))
 	}
-
-	if sha256sum != "" {
-		newSHA256sum := hex.EncodeToString(sha256Writer.Sum(nil))
-		if newSHA256sum != sha256sum {
-			a.client.DeleteBlob(bucket, object, nil)
-			return ObjectInfo{}, azureToObjectError(traceError(SHA256Mismatch{}))
-		}
-	}
-
 	return a.GetObjectInfo(bucket, object)
 }
 
@@ -537,39 +497,19 @@ func azureParseBlockID(blockID string) (partID, subPartNumber int, md5Hex string
 }
 
 // PutObjectPart - Use Azure equivalent PutBlockWithLength.
-func (a *azureObjects) PutObjectPart(bucket, object, uploadID string, partID int, size int64, data io.Reader, md5Hex string, sha256sum string) (info PartInfo, err error) {
+func (a *azureObjects) PutObjectPart(bucket, object, uploadID string, partID int, data *HashReader) (info PartInfo, err error) {
 	if meta := a.metaInfo.get(uploadID); meta == nil {
 		return info, traceError(InvalidUploadID{})
 	}
-	var sha256Writer hash.Hash
-	var md5sumWriter hash.Hash
-	var etag string
 
-	var writers []io.Writer
-
-	if sha256sum != "" {
-		sha256Writer = sha256.New()
-		writers = append(writers, sha256Writer)
-	}
-
-	if md5Hex != "" {
-		md5sumWriter = md5.New()
-		writers = append(writers, md5sumWriter)
-		etag = md5Hex
-	} else {
+	etag := data.md5Sum
+	if etag == "" {
 		// Generate random ETag.
 		etag = getMD5Hash([]byte(mustGetUUID()))
 	}
 
-	teeReader := data
-
-	if len(writers) > 0 {
-		teeReader = io.TeeReader(data, io.MultiWriter(writers...))
-	}
-
-	subPartSize := int64(azureBlockSize)
-	subPartNumber := 1
-	for remainingSize := size; remainingSize >= 0; remainingSize -= subPartSize {
+	subPartSize, subPartNumber := int64(azureBlockSize), 1
+	for remainingSize := data.Size(); remainingSize >= 0; remainingSize -= subPartSize {
 		// Allow to create zero sized part.
 		if remainingSize == 0 && subPartNumber > 1 {
 			break
@@ -580,33 +520,21 @@ func (a *azureObjects) PutObjectPart(bucket, object, uploadID string, partID int
 		}
 
 		id := azureGetBlockID(partID, subPartNumber, etag)
-		err = a.client.PutBlockWithLength(bucket, object, id, uint64(subPartSize), io.LimitReader(teeReader, subPartSize), nil)
+		err = a.client.PutBlockWithLength(bucket, object, id, uint64(subPartSize), io.LimitReader(data, subPartSize), nil)
 		if err != nil {
 			return info, azureToObjectError(traceError(err), bucket, object)
 		}
-
 		subPartNumber++
 	}
-
-	if md5Hex != "" {
-		newMD5sum := hex.EncodeToString(md5sumWriter.Sum(nil))
-		if newMD5sum != md5Hex {
-			a.client.DeleteBlob(bucket, object, nil)
-			return PartInfo{}, azureToObjectError(traceError(BadDigest{md5Hex, newMD5sum}))
-		}
-	}
-
-	if sha256sum != "" {
-		newSHA256sum := hex.EncodeToString(sha256Writer.Sum(nil))
-		if newSHA256sum != sha256sum {
-			return PartInfo{}, azureToObjectError(traceError(SHA256Mismatch{}))
-		}
+	if err = data.Verify(); err != nil {
+		a.client.DeleteBlob(bucket, object, nil)
+		return info, azureToObjectError(traceError(err), bucket, object)
 	}
 
 	info.PartNumber = partID
 	info.ETag = etag
 	info.LastModified = UTCNow()
-	info.Size = size
+	info.Size = data.Size()
 	return info, nil
 }
 

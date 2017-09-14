@@ -58,7 +58,7 @@ func runPutObjectBenchmark(b *testing.B, obj ObjectLayer, objSize int) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		// insert the object.
-		objInfo, err := obj.PutObject(bucket, "object"+strconv.Itoa(i), int64(len(textData)), bytes.NewBuffer(textData), metadata, sha256sum)
+		objInfo, err := obj.PutObject(bucket, "object"+strconv.Itoa(i), NewHashReader(bytes.NewBuffer(textData), int64(len(textData)), metadata["etag"], sha256sum), metadata)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -118,7 +118,7 @@ func runPutObjectPartBenchmark(b *testing.B, obj ObjectLayer, partSize int) {
 			metadata := make(map[string]string)
 			metadata["etag"] = getMD5Hash([]byte(textPartData))
 			var partInfo PartInfo
-			partInfo, err = obj.PutObjectPart(bucket, object, uploadID, j, int64(len(textPartData)), bytes.NewBuffer(textPartData), metadata["etag"], sha256sum)
+			partInfo, err = obj.PutObjectPart(bucket, object, uploadID, j, NewHashReader(bytes.NewBuffer(textPartData), int64(len(textPartData)), metadata["etag"], sha256sum))
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -216,7 +216,7 @@ func runGetObjectBenchmark(b *testing.B, obj ObjectLayer, objSize int) {
 		metadata["etag"] = getMD5Hash(textData)
 		// insert the object.
 		var objInfo ObjectInfo
-		objInfo, err = obj.PutObject(bucket, "object"+strconv.Itoa(i), int64(len(textData)), bytes.NewBuffer(textData), metadata, sha256sum)
+		objInfo, err = obj.PutObject(bucket, "object"+strconv.Itoa(i), NewHashReader(bytes.NewBuffer(textData), int64(len(textData)), metadata["etag"], sha256sum), metadata)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -329,7 +329,7 @@ func runPutObjectBenchmarkParallel(b *testing.B, obj ObjectLayer, objSize int) {
 		i := 0
 		for pb.Next() {
 			// insert the object.
-			objInfo, err := obj.PutObject(bucket, "object"+strconv.Itoa(i), int64(len(textData)), bytes.NewBuffer(textData), metadata, sha256sum)
+			objInfo, err := obj.PutObject(bucket, "object"+strconv.Itoa(i), NewHashReader(bytes.NewBuffer(textData), int64(len(textData)), metadata["etag"], sha256sum), metadata)
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -372,7 +372,7 @@ func runGetObjectBenchmarkParallel(b *testing.B, obj ObjectLayer, objSize int) {
 		sha256sum := ""
 		// insert the object.
 		var objInfo ObjectInfo
-		objInfo, err = obj.PutObject(bucket, "object"+strconv.Itoa(i), int64(len(textData)), bytes.NewBuffer(textData), metadata, sha256sum)
+		objInfo, err = obj.PutObject(bucket, "object"+strconv.Itoa(i), NewHashReader(bytes.NewBuffer(textData), int64(len(textData)), metadata["etag"], sha256sum), metadata)
 		if err != nil {
 			b.Fatal(err)
 		}

@@ -546,7 +546,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			return
 		}
 		// Create anonymous object.
-		objInfo, err = objectAPI.PutObject(bucket, object, size, r.Body, metadata, sha256sum)
+		objInfo, err = objectAPI.PutObject(bucket, object, NewHashReader(r.Body, size, metadata["etag"], sha256sum), metadata)
 	case authTypeStreamingSigned:
 		// Initialize stream signature verifier.
 		reader, s3Error := newSignV4ChunkedReader(r)
@@ -555,7 +555,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
-		objInfo, err = objectAPI.PutObject(bucket, object, size, reader, metadata, sha256sum)
+		objInfo, err = objectAPI.PutObject(bucket, object, NewHashReader(reader, size, metadata["etag"], sha256sum), metadata)
 	case authTypeSignedV2, authTypePresignedV2:
 		s3Error := isReqAuthenticatedV2(r)
 		if s3Error != ErrNone {
@@ -563,7 +563,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
-		objInfo, err = objectAPI.PutObject(bucket, object, size, r.Body, metadata, sha256sum)
+		objInfo, err = objectAPI.PutObject(bucket, object, NewHashReader(r.Body, size, metadata["etag"], sha256sum), metadata)
 	case authTypePresigned, authTypeSigned:
 		if s3Error := reqSignatureV4Verify(r, serverConfig.GetRegion()); s3Error != ErrNone {
 			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
@@ -574,7 +574,7 @@ func (api objectAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Req
 			sha256sum = r.Header.Get("X-Amz-Content-Sha256")
 		}
 		// Create object.
-		objInfo, err = objectAPI.PutObject(bucket, object, size, r.Body, metadata, sha256sum)
+		objInfo, err = objectAPI.PutObject(bucket, object, NewHashReader(r.Body, size, metadata["etag"], sha256sum), metadata)
 	}
 	if err != nil {
 		errorIf(err, "Unable to create an object. %s", r.URL.Path)
@@ -836,7 +836,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			return
 		}
 		// No need to verify signature, anonymous request access is already allowed.
-		partInfo, err = objectAPI.PutObjectPart(bucket, object, uploadID, partID, size, r.Body, incomingMD5, sha256sum)
+		partInfo, err = objectAPI.PutObjectPart(bucket, object, uploadID, partID, NewHashReader(r.Body, size, incomingMD5, sha256sum))
 	case authTypeStreamingSigned:
 		// Initialize stream signature verifier.
 		reader, s3Error := newSignV4ChunkedReader(r)
@@ -845,7 +845,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
-		partInfo, err = objectAPI.PutObjectPart(bucket, object, uploadID, partID, size, reader, incomingMD5, sha256sum)
+		partInfo, err = objectAPI.PutObjectPart(bucket, object, uploadID, partID, NewHashReader(reader, size, incomingMD5, sha256sum))
 	case authTypeSignedV2, authTypePresignedV2:
 		s3Error := isReqAuthenticatedV2(r)
 		if s3Error != ErrNone {
@@ -853,7 +853,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
-		partInfo, err = objectAPI.PutObjectPart(bucket, object, uploadID, partID, size, r.Body, incomingMD5, sha256sum)
+		partInfo, err = objectAPI.PutObjectPart(bucket, object, uploadID, partID, NewHashReader(r.Body, size, incomingMD5, sha256sum))
 	case authTypePresigned, authTypeSigned:
 		if s3Error := reqSignatureV4Verify(r, serverConfig.GetRegion()); s3Error != ErrNone {
 			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
@@ -864,7 +864,7 @@ func (api objectAPIHandlers) PutObjectPartHandler(w http.ResponseWriter, r *http
 		if !skipContentSha256Cksum(r) {
 			sha256sum = r.Header.Get("X-Amz-Content-Sha256")
 		}
-		partInfo, err = objectAPI.PutObjectPart(bucket, object, uploadID, partID, size, r.Body, incomingMD5, sha256sum)
+		partInfo, err = objectAPI.PutObjectPart(bucket, object, uploadID, partID, NewHashReader(r.Body, size, incomingMD5, sha256sum))
 	}
 	if err != nil {
 		errorIf(err, "Unable to create object part.")

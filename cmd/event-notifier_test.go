@@ -62,7 +62,7 @@ func TestInitEventNotifierFaultyDisks(t *testing.T) {
 	notificationXML += "</NotificationConfiguration>"
 	size := int64(len([]byte(notificationXML)))
 	reader := bytes.NewReader([]byte(notificationXML))
-	if _, err := xl.PutObject(minioMetaBucket, bucketConfigPrefix+"/"+bucketName+"/"+bucketNotificationConfig, size, reader, nil, ""); err != nil {
+	if _, err := xl.PutObject(minioMetaBucket, bucketConfigPrefix+"/"+bucketName+"/"+bucketNotificationConfig, NewHashReader(reader, size, "", ""), nil); err != nil {
 		t.Fatal("Unexpected error:", err)
 	}
 

@@ -65,11 +65,10 @@ func testGetObject(obj ObjectLayer, instanceType string, t TestErrHandler) {
 		// case - 1.
 		{bucketName, objectName, int64(len(bytesData[0].byteData)), bytesData[0].byteData, make(map[string]string)},
 	}
-	sha256sum := ""
 	// iterate through the above set of inputs and upkoad the object.
 	for i, input := range putObjectInputs {
 		// uploading the object.
-		_, err = obj.PutObject(input.bucketName, input.objectName, input.contentLength, bytes.NewBuffer(input.textData), input.metaData, sha256sum)
+		_, err = obj.PutObject(input.bucketName, input.objectName, NewHashReader(bytes.NewBuffer(input.textData), input.contentLength, input.metaData["etag"], ""), input.metaData)
 		// if object upload fails stop the test.
 		if err != nil {
 			t.Fatalf("Put Object case %d:  Error uploading object: <ERROR> %v", i+1, err)
@@ -215,11 +214,10 @@ func testGetObjectPermissionDenied(obj ObjectLayer, instanceType string, disks [
 		{bucketName, "test-object2", int64(len(bytesData[0].byteData)), bytesData[0].byteData, make(map[string]string)},
 		{bucketName, "dir/test-object3", int64(len(bytesData[0].byteData)), bytesData[0].byteData, make(map[string]string)},
 	}
-	sha256sum := ""
 	// iterate through the above set of inputs and upkoad the object.
 	for i, input := range putObjectInputs {
 		// uploading the object.
-		_, err = obj.PutObject(input.bucketName, input.objectName, input.contentLength, bytes.NewBuffer(input.textData), input.metaData, sha256sum)
+		_, err = obj.PutObject(input.bucketName, input.objectName, NewHashReader(bytes.NewBuffer(input.textData), input.contentLength, input.metaData["etag"], ""), input.metaData)
 		// if object upload fails stop the test.
 		if err != nil {
 			t.Fatalf("Put Object case %d:  Error uploading object: <ERROR> %v", i+1, err)
@@ -329,11 +327,10 @@ func testGetObjectDiskNotFound(obj ObjectLayer, instanceType string, disks []str
 		// case - 1.
 		{bucketName, objectName, int64(len(bytesData[0].byteData)), bytesData[0].byteData, make(map[string]string)},
 	}
-	sha256sum := ""
 	// iterate through the above set of inputs and upkoad the object.
 	for i, input := range putObjectInputs {
 		// uploading the object.
-		_, err = obj.PutObject(input.bucketName, input.objectName, input.contentLength, bytes.NewBuffer(input.textData), input.metaData, sha256sum)
+		_, err = obj.PutObject(input.bucketName, input.objectName, NewHashReader(bytes.NewBuffer(input.textData), input.contentLength, input.metaData["etag"], ""), input.metaData)
 		// if object upload fails stop the test.
 		if err != nil {
 			t.Fatalf("Put Object case %d:  Error uploading object: <ERROR> %v", i+1, err)
