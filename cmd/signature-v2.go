@@ -290,13 +290,7 @@ func canonicalizedResourceV2(encodedPath string, encodedQuery string) string {
 			canonicalQueries = append(canonicalQueries, key)
 			continue
 		}
-		// Resources values should be unescaped
-		unescapedVal, err := url.QueryUnescape(val)
-		if err != nil {
-			errorIf(err, "Unable to unescape query value (query = `%s`, value = `%s`)", key, val)
-			continue
-		}
-		canonicalQueries = append(canonicalQueries, key+"="+unescapedVal)
+		canonicalQueries = append(canonicalQueries, key+"="+val)
 	}
 	if len(canonicalQueries) == 0 {
 		return encodedPath
