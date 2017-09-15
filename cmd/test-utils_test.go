@@ -20,14 +20,11 @@ import (
 	"bufio"
 	"bytes"
 	"crypto/ecdsa"
-	"crypto/hmac"
 	crand "crypto/rand"
 	"crypto/rsa"
-	"crypto/sha1"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
@@ -52,6 +49,7 @@ import (
 
 	"github.com/fatih/color"
 	router "github.com/gorilla/mux"
+	"github.com/minio/minio-go/pkg/s3signer"
 )
 
 // Tests should initNSLock only once.
@@ -882,84 +880,14 @@ func preSignV2(req *http.Request, accessKeyID, secretAccessKey string, expires i
 	if accessKeyID == "" || secretAccessKey == "" {
 		return errors.New("Presign cannot be generated without access and secret keys")
 	}
-
-	d := UTCNow()
-	// Find epoch expires when the request will expire.
-	epochExpires := d.Unix() + expires
-
-	// Add expires header if not present.
-	expiresStr := req.Header.Get("Expires")
-	if expiresStr == "" {
-		expiresStr = strconv.FormatInt(epochExpires, 10)
-		req.Header.Set("Expires", expiresStr)
-	}
-
-	// url.RawPath will be valid if path has any encoded characters, if not it will
-	// be empty - in which case we need to consider url.Path (bug in net/http?)
-	encodedResource := req.URL.RawPath
-	encodedQuery := req.URL.RawQuery
-	if encodedResource == "" {
-		splits := strings.Split(req.URL.Path, "?")
-		if len(splits) > 0 {
-			encodedResource = splits[0]
-		}
-	}
-
-	// Get presigned string to sign.
-	stringToSign := presignV2STS(req.Method, encodedResource, encodedQuery, req.Header, expiresStr)
-	hm := hmac.New(sha1.New, []byte(secretAccessKey))
-	hm.Write([]byte(stringToSign))
-
-	// Calculate signature.
-	signature := base64.StdEncoding.EncodeToString(hm.Sum(nil))
-
-	query := req.URL.Query()
-	// Handle specially for Google Cloud Storage.
-	query.Set("AWSAccessKeyId", accessKeyID)
-	// Fill in Expires for presigned query.
-	query.Set("Expires", strconv.FormatInt(epochExpires, 10))
-
-	// Encode query and save.
-	req.URL.RawQuery = query.Encode()
-
-	// Save signature finally.
-	req.URL.RawQuery += "&Signature=" + url.QueryEscape(signature)
-
 	// Success.
+	req = s3signer.PreSignV2(*req, accessKeyID, secretAccessKey, expires)
 	return nil
 }
 
 // Sign given request using Signature V2.
 func signRequestV2(req *http.Request, accessKey, secretKey string) error {
-	// Initial time.
-	d := UTCNow()
-
-	// Add date if not present.
-	if date := req.Header.Get("Date"); date == "" {
-		req.Header.Set("Date", d.Format(http.TimeFormat))
-	}
-
-	splits := strings.Split(req.URL.Path, "?")
-	var encodedResource string
-	if len(splits) > 0 {
-		encodedResource = getURLEncodedName(splits[0])
-	}
-	encodedQuery := req.URL.Query().Encode()
-
-	// Calculate HMAC for secretAccessKey.
-	stringToSign := signV2STS(req.Method, encodedResource, encodedQuery, req.Header)
-	hm := hmac.New(sha1.New, []byte(secretKey))
-	hm.Write([]byte(stringToSign))
-
-	// Prepare auth header.
-	authHeader := new(bytes.Buffer)
-	authHeader.WriteString(fmt.Sprintf("%s %s:", signV2Algorithm, accessKey))
-	encoder := base64.NewEncoder(base64.StdEncoding, authHeader)
-	encoder.Write(hm.Sum(nil))
-	encoder.Close()
-
-	// Set Authorization header.
-	req.Header.Set("Authorization", authHeader.String())
+	req = s3signer.SignV2(*req, accessKey, secretKey)
 	return nil
 }
 

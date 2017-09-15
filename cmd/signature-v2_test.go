@@ -48,9 +48,12 @@ func TestDoesPresignedV2SignatureMatch(t *testing.T) {
 
 	now := UTCNow()
 
+	var (
+		accessKey = serverConfig.GetCredential().AccessKey
+		secretKey = serverConfig.GetCredential().SecretKey
+	)
 	testCases := []struct {
 		queryParams map[string]string
-		headers     map[string]string
 		expected    APIErrorCode
 	}{
 		// (0) Should error without a set URL query.
@@ -71,7 +74,7 @@ func TestDoesPresignedV2SignatureMatch(t *testing.T) {
 			queryParams: map[string]string{
 				"Expires":        "60s",
 				"Signature":      "badsignature",
-				"AWSAccessKeyId": serverConfig.GetCredential().AccessKey,
+				"AWSAccessKeyId": accessKey,
 			},
 			expected: ErrMalformedExpires,
 		},
@@ -80,7 +83,7 @@ func TestDoesPresignedV2SignatureMatch(t *testing.T) {
 			queryParams: map[string]string{
 				"Expires":        "60",
 				"Signature":      "badsignature",
-				"AWSAccessKeyId": serverConfig.GetCredential().AccessKey,
+				"AWSAccessKeyId": accessKey,
 			},
 			expected: ErrExpiredPresignRequest,
 		},
@@ -89,7 +92,7 @@ func TestDoesPresignedV2SignatureMatch(t *testing.T) {
 			queryParams: map[string]string{
 				"Expires":        fmt.Sprintf("%d", now.Unix()+60),
 				"Signature":      "badsignature",
-				"AWSAccessKeyId": serverConfig.GetCredential().AccessKey,
+				"AWSAccessKeyId": accessKey,
 			},
 			expected: ErrSignatureDoesNotMatch,
 		},
@@ -98,9 +101,16 @@ func TestDoesPresignedV2SignatureMatch(t *testing.T) {
 			queryParams: map[string]string{
 				"Expires":        fmt.Sprintf("%d", now.Unix()+60),
 				"Signature":      "zOM2YrY/yAQe15VWmT78OlBrK6g=",
-				"AWSAccessKeyId": serverConfig.GetCredential().AccessKey,
+				"AWSAccessKeyId": accessKey,
 			},
 			expected: ErrSignatureDoesNotMatch,
+		},
+		// (6) Should error when the signature does not match.
+		{
+			queryParams: map[string]string{
+				"response-content-disposition": "attachment; filename=\"4K%2d4M.txt\"",
+			},
+			expected: ErrNone,
 		},
 	}
 
@@ -111,25 +121,32 @@ func TestDoesPresignedV2SignatureMatch(t *testing.T) {
 		for key, value := range testCase.queryParams {
 			query.Set(key, value)
 		}
-
 		// Create a request to use.
-		req, e := http.NewRequest(http.MethodGet, "http://host/a/b?"+query.Encode(), nil)
-		if e != nil {
-			t.Errorf("(%d) failed to create http.Request, got %v", i, e)
+		req, err := http.NewRequest(http.MethodGet, "http://host/a/b?"+query.Encode(), nil)
+		if err != nil {
+			t.Errorf("(%d) failed to create http.Request, got %v", i, err)
 		}
-		// Should be set since we are simulating a http server.
-		req.RequestURI = req.URL.RequestURI()
+		if testCase.expected != ErrNone {
+			// Should be set since we are simulating a http server.
+			req.RequestURI = req.URL.RequestURI()
+			// Check if it matches!
+			errCode := doesPresignV2SignatureMatch(req)
+			if errCode != testCase.expected {
+				t.Errorf("(%d) expected to get %s, instead got %s", i, niceError(testCase.expected), niceError(errCode))
+			}
+		} else {
+			err = preSignV2(req, accessKey, secretKey, now.Unix()+60)
+			if err != nil {
+				t.Fatalf("(%d) failed to preSignV2 http request, got %v", i, err)
+			}
+			// Should be set since we are simulating a http server.
+			req.RequestURI = req.URL.RequestURI()
+			errCode := doesPresignV2SignatureMatch(req)
+			if errCode != testCase.expected {
+				t.Errorf("(%d) expected to get success, instead got %s", i, niceError(errCode))
+			}
+		}
 
-		// Do the same for the headers.
-		for key, value := range testCase.headers {
-			req.Header.Set(key, value)
-		}
-
-		// Check if it matches!
-		err := doesPresignV2SignatureMatch(req)
-		if err != testCase.expected {
-			t.Errorf("(%d) expected to get %s, instead got %s", i, niceError(testCase.expected), niceError(err))
-		}
 	}
 }
 
