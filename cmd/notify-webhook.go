@@ -111,7 +111,7 @@ func lookupEndpoint(urlStr string) error {
 	client := &http.Client{
 		Timeout: 1 * time.Second,
 		Transport: &http.Transport{
-			// need to close connection after usage.
+			// Need to close connection after usage.
 			DisableKeepAlives: true,
 		},
 	}
@@ -122,50 +122,20 @@ func lookupEndpoint(urlStr string) error {
 	// Set proper server user-agent.
 	req.Header.Set("User-Agent", globalServerUserAgent)
 
-	// Retry if the request needs to be re-directed.
-	// This code is necessary since Go 1.7.x do not
-	// support retrying for http 307 for POST operation.
-	// https://github.com/golang/go/issues/7912
-	//
-	// FIXME: Remove this when we move to Go 1.8.
-	for {
-		resp, derr := client.Do(req)
-		if derr != nil {
-			if isNetErrorIgnored(derr) {
-				errorIf(derr, "Unable to lookup webhook endpoint %s", urlStr)
-				return nil
-			}
-			return derr
+	resp, err := client.Do(req)
+	if err != nil {
+		if isNetErrorIgnored(err) {
+			errorIf(err, "Unable to lookup webhook endpoint %s", urlStr)
+			return nil
 		}
-		if resp == nil {
-			return fmt.Errorf("No response from server to download URL %s", urlStr)
-		}
-		resp.Body.Close()
-
-		// Redo the request with the new redirect url if http 307
-		// is returned, quit the loop otherwise
-		if resp.StatusCode == http.StatusTemporaryRedirect {
-			newURL, uerr := url.Parse(resp.Header.Get("Location"))
-			if uerr != nil {
-				return uerr
-			}
-			req.URL = newURL
-			continue
-		}
-
-		// For any known successful http status, return quickly.
-		for _, httpStatus := range successStatus {
-			if httpStatus == resp.StatusCode {
-				return nil
-			}
-		}
-
-		err = fmt.Errorf("Unexpected response from webhook server %s: (%s)", urlStr, resp.Status)
-		break
+		return err
 	}
-
-	// Succes.
-	return err
+	defer resp.Body.Close()
+	// HTTP status OK/NoContent.
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("Unable to lookup webhook endpoint %s response(%s)", urlStr, resp.Status)
+	}
+	return nil
 }
 
 // Initializes new webhook logrus notifier.
