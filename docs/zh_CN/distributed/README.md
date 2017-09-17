@@ -1,54 +1,55 @@
-# Distributed Minio Quickstart Guide [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
+# 分布式Minio快速入门 [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io) [![Go Report Card](https://goreportcard.com/badge/minio/minio)](https://goreportcard.com/report/minio/minio) [![Docker Pulls](https://img.shields.io/docker/pulls/minio/minio.svg?maxAge=604800)](https://hub.docker.com/r/minio/minio/) [![codecov](https://codecov.io/gh/minio/minio/branch/master/graph/badge.svg)](https://codecov.io/gh/minio/minio)
 
-Minio in distributed mode lets you pool multiple drives (even on different machines) into a single object storage server. As drives are distributed across several nodes, distributed Minio can withstand multiple node failures and yet ensure full data protection.
+分布式Minio可以让你将多块硬盘（甚至在不同的机器上）组成一个对象存储服务。由于硬盘分布在不同的节点上，分布式Minio避免了单点故障。   
 
-## Why distributed Minio?
+## 分布式Minio有什么好处?
 
-Minio in distributed mode can help you setup a highly-available storage system with a single object storage deployment. With distributed Minio, you can optimally use storage devices, irrespective of their location in a network.
+在大数据领域，通常的设计理念都是无中心和分布式。Minio分布式模式可以帮助你搭建一个高可用的对象存储服务，你可以使用这些存储设备，而不用考虑其真实物理位置。 
 
-### Data protection
+### 数据保护
 
-Distributed Minio provides protection against multiple node/drive failures and [bit rot](https://github.com/minio/minio/blob/master/docs/erasure/README.md#what-is-bit-rot-protection) using [erasure code](https://docs.minio.io/docs/minio-erasure-code-quickstart-guide). As the minimum disks required for distributed Minio is 4 (same as minimum disks required for erasure coding), erasure code automatically kicks in as you launch distributed Minio.
+分布式Minio采用 [erasure code](https://docs.minio.io/docs/zh_CN/minio-erasure-code-quickstart-guide)来防范多个节点宕机和[位衰减`bit rot`](https://github.com/minio/minio/blob/master/docs/erasure/README.md#what-is-bit-rot-protection)。  
+分布式Minio至少需要4个节点，使用分布式Minio自动引入了纠删码功能。
 
-### High availability
+### 高可用
 
-A stand-alone Minio server would go down if the server hosting the disks goes offline. In contrast, a distributed Minio setup with _n_ disks will have your data safe as long as _n/2_ or more disks are online. You'll need a minimum of _(n/2 + 1)_ [Quorum](https://github.com/minio/dsync#lock-process) disks to create new objects though.
+单机Minio服务存在单点故障，相反，如果是一个N节点的分布式Minio,只要有N/2节点在线，你的数据就是安全的。不过你需要至少有N/2+1个节点   [Quorum](https://github.com/minio/dsync#lock-process) 来创建新的对象。
 
-For example, an 8-node distributed Minio setup, with 1 disk per node would stay put, even if upto 4 nodes are offline. But, you'll need atleast 5 nodes online to create new objects.
+例如，一个8节点的Minio集群，每个节点一块盘，就算4个节点宕机，这个集群仍然是可读的，不过你需要5个节点才能写数据。
 
-### Limits
+### 限制
 
-As with Minio in stand-alone mode, distributed Minio has a per tenant limit of minimum 4 and maximum 16 drives (imposed by erasure code). This helps maintain simplicity and yet remain scalable. If you need a multiple tenant setup, you can easily spin multiple Minio instances managed by orchestration tools like Kubernetes.
+分布式Minio单租户存在最少4个盘最多16个盘的限制（受限于纠删码）。这种限制确保了Minio的简洁，同时仍拥有伸缩性。如果你需要搭建一个多租户环境，你可以轻松的使用编排工具（Kubernetes）来管理多个Minio实例。
 
-Note that with distributed Minio you can play around with the number of nodes and drives as long as the limits are adhered to. For example, you can have 2 nodes with 4 drives each, 4 nodes with 4 drives each, 8 nodes with 2 drives each, and so on.
+注意，只要遵守分布式Minio的限制，你可以组合不同的节点和每个节点几块盘。比如，你可以使用2个节点，每个节点4块盘，也可以使用4个节点，每个节点两块盘，诸如此类。
 
-### Consistency Guarantees
+### 一致性
 
-Minio follows strict **read-after-write** consistency model for all i/o operations both in distributed and standalone modes.
+Minio在分布式和单机模式下，所有读写操作都严格遵守**read-after-write**一致性模型。
 
-# Get started
+# 开始吧
 
-If you're aware of stand-alone Minio set up, the process remains largely the same, as the Minio server automatically switches to stand-alone or distributed mode, depending on the command line parameters.
+如果你了解Minio单机模式的搭建的话，分布式搭建的流程基本一样，Minio服务基于命令行传入的参数自动切换成单机模式还是分布式模式。 
 
-## 1. Prerequisites
+## 1. 前提条件
 
-Install Minio - [Minio Quickstart Guide](https://docs.minio.io/docs/minio-quickstart-guide).
+安装Minio - [Minio快速入门](https://docs.minio.io/docs/zh_CN/minio-quickstart-guide).
 
-## 2. Run distributed Minio
+## 2. 运行分布式Minio
 
-To start a distributed Minio instance, you just need to pass drive locations as parameters to the minio server command. Then, you’ll need to run the same command on all the participating nodes.
+启动一个分布式Minio实例，你只需要把硬盘位置做为参数传给minio server命令即可，然后，你需要在所有其它节点运行同样的命令。
 
-*Note* 
+*注意* 
 
-- All the nodes running distributed Minio need to have same access key and secret key for the nodes to connect. To achieve this, you need to export access key and secret key as environment variables on all the nodes before executing Minio server command.
-- Disks used for Minio distributed should be fresh with no pre-existing data. 
-- The IP addresses and drive paths below are for demonstration purposes only, you need to replace these with the actual IP addresses and drive paths/folders.
-- Servers running distributed Minio instances should be less than 3 seconds apart. You can use [NTP](http://www.ntp.org/) as a best practice to ensure consistent times across servers. 
-- Running Distributed Minio on Windows is experimental as of now. Please proceed with caution. 
+- 分布式Minio里所有的节点需要有同样的access秘钥和secret秘钥，这样这些节点才能建立联接。为了实现这个，你需要在执行minio server命令之前，先将access秘钥和secret秘钥export成环境变量。 
+- 分布式Minio使用的磁盘里必须是干净的，里面没有数据。
+- 下面示例里的IP仅供示例参考，你需要改成你真实用到的IP和文件夹路径。 
+- 分布式Minio里的节点时间差不能超过3秒，你可以使用[NTP](http://www.ntp.org/) 来保证时间一致。
+- 在Windows下运行分布式Minio处于实验阶段，请悠着点使用。
 
-Example 1: Start distributed Minio instance with 1 drive each on 8 nodes, by running this command on all the 8 nodes.
+示例1: 启动分布式Minio实例，8个节点，每节点1块盘，需要在8个节点上都运行下面的命令。 
 
-#### GNU/Linux and macOS
+#### GNU/Linux 和 macOS
 
 ```shell
 export MINIO_ACCESS_KEY=<ACCESS_KEY>
@@ -69,11 +70,11 @@ minio.exe server http://192.168.1.11/C:/data http://192.168.1.12/C:/data ^
                   http://192.168.1.17/C:/data http://192.168.1.18/C:/data
 ```
 
-![Distributed Minio, 8 nodes with 1 disk each](https://github.com/minio/minio/blob/master/docs/screenshots/Architecture-diagram_distributed_8.jpg?raw=true)
+![分布式Minio,8节点，每个节点一块盘](https://github.com/minio/minio/blob/master/docs/screenshots/Architecture-diagram_distributed_8.jpg?raw=true)
 
-Example 2: Start distributed Minio instance with 4 drives each on 4 nodes, by running this command on all the 4 nodes.
+示例2: 启动分布式Minio实例，4节点，每节点4块盘，需要在4个节点上都运行下面的命令。
 
-#### GNU/Linux and macOS
+#### GNU/Linux 和 macOS
 
 ```shell
 export MINIO_ACCESS_KEY=<ACCESS_KEY>
@@ -103,16 +104,16 @@ minio.exe server http://192.168.1.11/C:/data1 http://192.168.1.11/C:/data2 ^
                   http://192.168.1.14/C:/data3 http://192.168.1.14/C:/data4
 ```
 
-![Distributed Minio, 4 nodes with 4 disks each](https://github.com/minio/minio/blob/master/docs/screenshots/Architecture-diagram_distributed_16.jpg?raw=true)
+![分布式Minio,4节点，每节点4块盘](https://github.com/minio/minio/blob/master/docs/screenshots/Architecture-diagram_distributed_16.jpg?raw=true)
 
-## 3. Test your setup
+## 3. 验证
 
-To test this setup, access the Minio server via browser or [`mc`](https://docs.minio.io/docs/minio-client-quickstart-guide). You’ll see the combined capacity of all the storage drives as the capacity of this drive.
+验证是否部署成功，使用浏览器访问Minio服务或者使用 [`mc`](https://docs.minio.io/docs/minio-client-quickstart-guide)。多个节点的存储容量和就是分布式Minio的存储容量。
 
-## Explore Further
-- [Minio Erasure Code QuickStart Guide](https://docs.minio.io/docs/minio-erasure-code-quickstart-guide)
-- [Use `mc` with Minio Server](https://docs.minio.io/docs/minio-client-quickstart-guide)
-- [Use `aws-cli` with Minio Server](https://docs.minio.io/docs/aws-cli-with-minio)
-- [Use `s3cmd` with Minio Server](https://docs.minio.io/docs/s3cmd-with-minio)
-- [Use `minio-go` SDK with Minio Server](https://docs.minio.io/docs/golang-client-quickstart-guide)
-- [The Minio documentation website](https://docs.minio.io)
+## 了解更多
+- [Minio纠删码快速入门](https://docs.minio.io/docs/zh_CN/minio-erasure-code-quickstart-guide)
+- [使用 `mc`](https://docs.minio.io/docs/zh_CN/minio-client-quickstart-guide)
+- [使用 `aws-cli`](https://docs.minio.io/docs/zh_CN/aws-cli-with-minio)
+- [使用 `s3cmd](https://docs.minio.io/docs/zh_CN/s3cmd-with-minio)
+- [使用 `minio-go` SDK ](https://docs.minio.io/docs/zh_CN/golang-client-quickstart-guide)
+- [minio官方文档](https://docs.minio.io)
