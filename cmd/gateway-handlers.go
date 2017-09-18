@@ -262,7 +262,10 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 
 	// Lock the object.
 	objectLock := globalNSMutex.NewNSLock(bucket, object)
-	objectLock.Lock()
+	if objectLock.GetLock(globalOperationTimeout) != nil {
+		writeErrorResponse(w, ErrOperationTimedOut, r.URL)
+		return
+	}
 	defer objectLock.Unlock()
 
 	var objInfo ObjectInfo
@@ -622,7 +625,10 @@ func (api gatewayAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	bucketLock := globalNSMutex.NewNSLock(bucket, "")
-	bucketLock.Lock()
+	if bucketLock.GetLock(globalOperationTimeout) != nil {
+		writeErrorResponse(w, ErrOperationTimedOut, r.URL)
+		return
+	}
 	defer bucketLock.Unlock()
 
 	// Proceed to creating a bucket.
@@ -794,7 +800,7 @@ func (api gatewayAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *htt
 
 	// Validate the query params before beginning to serve the request.
 	// fetch-owner is not validated since it is a boolean
-	if s3Error := validateListObjectsArgs(prefix, marker, delimiter, maxKeys); s3Error != ErrNone {
+	if s3Error := validateGatewayListObjectsV2Args(prefix, marker, delimiter, maxKeys); s3Error != ErrNone {
 		writeErrorResponse(w, s3Error, r.URL)
 		return
 	}
@@ -808,8 +814,7 @@ func (api gatewayAPIHandlers) ListObjectsV2Handler(w http.ResponseWriter, r *htt
 		return
 	}
 
-	response := generateListObjectsV2Response(bucket, prefix, token, listObjectsV2Info.ContinuationToken, startAfter, delimiter, fetchOwner, listObjectsV2Info.IsTruncated, maxKeys, listObjectsV2Info.Objects, listObjectsV2Info.Prefixes)
-
+	response := generateListObjectsV2Response(bucket, prefix, token, listObjectsV2Info.NextContinuationToken, startAfter, delimiter, fetchOwner, listObjectsV2Info.IsTruncated, maxKeys, listObjectsV2Info.Objects, listObjectsV2Info.Prefixes)
 	// Write success response.
 	writeSuccessResponseXML(w, encodeResponse(response))
 }

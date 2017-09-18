@@ -156,6 +156,14 @@ func guessIsBrowserReq(req *http.Request) bool {
 	return strings.Contains(req.Header.Get("User-Agent"), "Mozilla")
 }
 
+// guessIsRPCReq - returns true if the request is for an RPC endpoint.
+func guessIsRPCReq(req *http.Request) bool {
+	if req == nil {
+		return false
+	}
+	return req.Method == http.MethodConnect && req.Proto == "HTTP/1.0"
+}
+
 func (h redirectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	aType := getRequestAuthType(r)
 	// Re-direct only for JWT and anonymous requests from browser.
@@ -202,20 +210,22 @@ func (h cacheControlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // Adds verification for incoming paths.
-type minioPrivateBucketHandler struct {
+type minioReservedBucketHandler struct {
 	handler http.Handler
 }
 
-func setPrivateBucketHandler(h http.Handler) http.Handler {
-	return minioPrivateBucketHandler{h}
+func setReservedBucketHandler(h http.Handler) http.Handler {
+	return minioReservedBucketHandler{h}
 }
 
-func (h minioPrivateBucketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// For all non browser requests, reject access to 'minioReservedBucketPath'.
-	bucketName, _ := urlPath2BucketObjectName(r.URL)
-	if !guessIsBrowserReq(r) && (isMinioReservedBucket(bucketName) || isMinioMetaBucket(bucketName)) {
-		writeErrorResponse(w, ErrAllAccessDisabled, r.URL)
-		return
+func (h minioReservedBucketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if !guessIsRPCReq(r) && !guessIsBrowserReq(r) {
+		// For all non browser, non RPC requests, reject access to 'minioReservedBucketPath'.
+		bucketName, _ := urlPath2BucketObjectName(r.URL)
+		if isMinioReservedBucket(bucketName) || isMinioMetaBucket(bucketName) {
+			writeErrorResponse(w, ErrAllAccessDisabled, r.URL)
+			return
+		}
 	}
 	h.handler.ServeHTTP(w, r)
 }
@@ -316,11 +326,14 @@ var defaultAllowableHTTPMethods = []string{
 
 // setCorsHandler handler for CORS (Cross Origin Resource Sharing)
 func setCorsHandler(h http.Handler) http.Handler {
+	commonS3Headers := []string{"Content-Length", "Content-Type", "Connection",
+		"Date", "ETag", "Server", "x-amz-delete-marker", "x-amz-id-2",
+		"x-amz-request-id", "x-amz-version-id"}
 	c := cors.New(cors.Options{
 		AllowedOrigins:   []string{"*"},
 		AllowedMethods:   defaultAllowableHTTPMethods,
 		AllowedHeaders:   []string{"*"},
-		ExposedHeaders:   []string{"ETag"},
+		ExposedHeaders:   commonS3Headers,
 		AllowCredentials: true,
 	})
 	return c.Handler(h)

@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"strconv"
 	"strings"
@@ -98,7 +99,7 @@ func prepareStreamingRequest(req *http.Request, sessionToken string, dataLen int
 	if sessionToken != "" {
 		req.Header.Set("X-Amz-Security-Token", sessionToken)
 	}
-	req.Header.Set("Content-Encoding", streamingEncoding)
+	req.Header.Add("Content-Encoding", streamingEncoding)
 	req.Header.Set("X-Amz-Date", timestamp.Format(iso8601DateFormat))
 
 	// Set content length with streaming signature for each chunk included.
@@ -205,6 +206,10 @@ func StreamingSignV4(req *http.Request, accessKeyID, secretAccessKey, sessionTok
 	// Set headers needed for streaming signature.
 	prepareStreamingRequest(req, sessionToken, dataLen, reqTime)
 
+	if req.Body == nil {
+		req.Body = ioutil.NopCloser(bytes.NewReader([]byte("")))
+	}
+
 	stReader := &StreamingReader{
 		baseReadCloser:  req.Body,
 		accessKeyID:     accessKeyID,
@@ -249,7 +254,18 @@ func (s *StreamingReader) Read(buf []byte) (int, error) {
 		s.chunkBufLen = 0
 		for {
 			n1, err := s.baseReadCloser.Read(s.chunkBuf[s.chunkBufLen:])
-			if err == nil || err == io.ErrUnexpectedEOF {
+			// Usually we validate `err` first, but in this case
+			// we are validating n > 0 for the following reasons.
+			//
+			// 1. n > 0, err is one of io.EOF, nil (near end of stream)
+			// A Reader returning a non-zero number of bytes at the end
+			// of the input stream may return either err == EOF or err == nil
+			//
+			// 2. n == 0, err is io.EOF (actual end of stream)
+			//
+			// Callers should always process the n > 0 bytes returned
+			// before considering the error err.
+			if n1 > 0 {
 				s.chunkBufLen += n1
 				s.bytesRead += int64(n1)
 
@@ -260,25 +276,26 @@ func (s *StreamingReader) Read(buf []byte) (int, error) {
 					s.signChunk(s.chunkBufLen)
 					break
 				}
+			}
+			if err != nil {
+				if err == io.EOF {
+					// No more data left in baseReader - last chunk.
+					// Done reading the last chunk from baseReader.
+					s.done = true
 
-			} else if err == io.EOF {
-				// No more data left in baseReader - last chunk.
-				// Done reading the last chunk from baseReader.
-				s.done = true
+					// bytes read from baseReader different than
+					// content length provided.
+					if s.bytesRead != s.contentLen {
+						return 0, io.ErrUnexpectedEOF
+					}
 
-				// bytes read from baseReader different than
-				// content length provided.
-				if s.bytesRead != s.contentLen {
-					return 0, io.ErrUnexpectedEOF
+					// Sign the chunk and write it to s.buf.
+					s.signChunk(0)
+					break
 				}
-
-				// Sign the chunk and write it to s.buf.
-				s.signChunk(0)
-				break
-
-			} else {
 				return 0, err
 			}
+
 		}
 	}
 	return s.buf.Read(buf)

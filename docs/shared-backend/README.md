@@ -31,12 +31,12 @@ To run Minio shared backend instances, you need to start multiple Minio servers 
 
 #### Minio shared mode on Ubuntu 16.04 LTS. 
 
-You'll need the path to the shared volume, e.g. `/mnt/nfs`. Then run the following commands on all the nodes you'd like to launch Minio.
+You'll need the path to the shared volume, e.g. `/path/to/nfs-volume`. Then run the following commands on all the nodes you'd like to launch Minio.
 
 ```sh
 export MINIO_ACCESS_KEY=<ACCESS_KEY>
 export MINIO_SECRET_KEY=<SECRET_KEY>
-minio server /mnt/nfs
+minio server /path/to/nfs-volume
 ```
 
 #### Minio shared mode on Windows 2012 Server

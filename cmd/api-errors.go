@@ -117,6 +117,7 @@ const (
 	ErrNotSupported
 	ErrBucketAlreadyExists
 	ErrMetadataTooLarge
+	ErrUnsupportedMetadata
 	// Add new error codes here.
 
 	// Bucket notification related errors.
@@ -145,6 +146,7 @@ const (
 	ErrInvalidObjectName
 	ErrInvalidResourceName
 	ErrServerNotInitialized
+	ErrOperationTimedOut
 	// Add new extended error codes here.
 	// Please open a https://github.com/minio/minio/issues before adding
 	// new error codes here.
@@ -152,6 +154,7 @@ const (
 	ErrAdminInvalidAccessKey
 	ErrAdminInvalidSecretKey
 	ErrAdminConfigNoQuorum
+	ErrAdminCredentialsMismatch
 	ErrInsecureClientRequest
 )
 
@@ -579,7 +582,7 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 	/// Minio extensions.
 	ErrStorageFull: {
 		Code:           "XMinioStorageFull",
-		Description:    "Storage backend has reached its minimum free disk threshold. Please delete few objects to proceed.",
+		Description:    "Storage backend has reached its minimum free disk threshold. Please delete a few objects to proceed.",
 		HTTPStatusCode: http.StatusInternalServerError,
 	},
 	ErrObjectExistsAsDirectory: {
@@ -632,14 +635,29 @@ var errorCodeResponse = map[APIErrorCode]APIError{
 		Description:    "Configuration update failed because server quorum was not met",
 		HTTPStatusCode: http.StatusServiceUnavailable,
 	},
+	ErrAdminCredentialsMismatch: {
+		Code:           "XMinioAdminCredentialsMismatch",
+		Description:    "Credentials in config mismatch with server environment variables",
+		HTTPStatusCode: http.StatusServiceUnavailable,
+	},
 	ErrInsecureClientRequest: {
 		Code:           "XMinioInsecureClientRequest",
 		Description:    "Cannot respond to plain-text request from TLS-encrypted server",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
+	ErrOperationTimedOut: {
+		Code:           "XMinioServerTimedOut",
+		Description:    "A timeout occurred while trying to lock a resource",
+		HTTPStatusCode: http.StatusRequestTimeout,
+	},
 	ErrMetadataTooLarge: {
 		Code:           "InvalidArgument",
 		Description:    "Your metadata headers exceed the maximum allowed metadata size.",
+		HTTPStatusCode: http.StatusBadRequest,
+	},
+	ErrUnsupportedMetadata: {
+		Code:           "InvalidArgument",
+		Description:    "Your metadata headers are not supported.",
 		HTTPStatusCode: http.StatusBadRequest,
 	},
 	// Add your error structure here.
@@ -738,6 +756,8 @@ func toAPIErrorCode(err error) (apiErr APIErrorCode) {
 		apiErr = ErrNoSuchBucketPolicy
 	case PartTooBig:
 		apiErr = ErrEntityTooLarge
+	case UnsupportedMetadata:
+		apiErr = ErrUnsupportedMetadata
 	default:
 		apiErr = ErrInternalError
 	}

@@ -142,7 +142,9 @@ func (xl xlObjects) listObjectsHeal(bucket, prefix, marker, delimiter string, ma
 
 		// Check if the current object needs healing
 		objectLock := globalNSMutex.NewNSLock(bucket, objInfo.Name)
-		objectLock.RLock()
+		if err := objectLock.GetRLock(globalHealingTimeout); err != nil {
+			return loi, err
+		}
 		partsMetadata, errs := readAllXLMetadata(xl.storageDisks, bucket, objInfo.Name)
 		if xlShouldHeal(xl.storageDisks, partsMetadata, errs, bucket, objInfo.Name) {
 			healStat := xlHealStat(xl, partsMetadata, errs)
@@ -226,7 +228,9 @@ func fetchMultipartUploadIDs(bucket, keyMarker, uploadIDMarker string,
 	// Hold a read lock on keyMarker path.
 	keyMarkerLock := globalNSMutex.NewNSLock(minioMetaMultipartBucket,
 		pathJoin(bucket, keyMarker))
-	keyMarkerLock.RLock()
+	if err = keyMarkerLock.GetRLock(globalHealingTimeout); err != nil {
+		return uploads, end, err
+	}
 	for _, disk := range disks {
 		if disk == nil {
 			continue

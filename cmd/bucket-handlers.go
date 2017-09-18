@@ -300,12 +300,15 @@ func (api objectAPIHandlers) DeleteMultipleObjectsHandler(w http.ResponseWriter,
 				return
 			}
 			objectLock := globalNSMutex.NewNSLock(bucket, obj.ObjectName)
-			objectLock.Lock()
-			defer objectLock.Unlock()
+			if timedOutErr := objectLock.GetLock(globalObjectTimeout); timedOutErr != nil {
+				dErrs[i] = timedOutErr
+			} else {
+				defer objectLock.Unlock()
 
-			dErr := objectAPI.DeleteObject(bucket, obj.ObjectName)
-			if dErr != nil {
-				dErrs[i] = dErr
+				dErr := objectAPI.DeleteObject(bucket, obj.ObjectName)
+				if dErr != nil {
+					dErrs[i] = dErr
+				}
 			}
 		}(index, object)
 	}
@@ -405,7 +408,10 @@ func (api objectAPIHandlers) PutBucketHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	bucketLock := globalNSMutex.NewNSLock(bucket, "")
-	bucketLock.Lock()
+	if bucketLock.GetLock(globalObjectTimeout) != nil {
+		writeErrorResponse(w, ErrOperationTimedOut, r.URL)
+		return
+	}
 	defer bucketLock.Unlock()
 
 	// Proceed to creating a bucket.
@@ -550,7 +556,10 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	sha256sum := ""
 
 	objectLock := globalNSMutex.NewNSLock(bucket, object)
-	objectLock.Lock()
+	if objectLock.GetLock(globalObjectTimeout) != nil {
+		writeErrorResponse(w, ErrOperationTimedOut, r.URL)
+		return
+	}
 	defer objectLock.Unlock()
 
 	objInfo, err := objectAPI.PutObject(bucket, object, fileSize, fileBody, metadata, sha256sum)
@@ -626,7 +635,10 @@ func (api objectAPIHandlers) HeadBucketHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	bucketLock := globalNSMutex.NewNSLock(bucket, "")
-	bucketLock.RLock()
+	if bucketLock.GetRLock(globalObjectTimeout) != nil {
+		writeErrorResponseHeadersOnly(w, ErrOperationTimedOut)
+		return
+	}
 	defer bucketLock.RUnlock()
 
 	if _, err := objectAPI.GetBucketInfo(bucket); err != nil {
@@ -656,7 +668,10 @@ func (api objectAPIHandlers) DeleteBucketHandler(w http.ResponseWriter, r *http.
 	bucket := vars["bucket"]
 
 	bucketLock := globalNSMutex.NewNSLock(bucket, "")
-	bucketLock.Lock()
+	if bucketLock.GetLock(globalObjectTimeout) != nil {
+		writeErrorResponse(w, ErrOperationTimedOut, r.URL)
+		return
+	}
 	defer bucketLock.Unlock()
 
 	// Attempt to delete bucket.

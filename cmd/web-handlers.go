@@ -124,13 +124,15 @@ func (web *webAPIHandlers) MakeBucket(r *http.Request, args *MakeBucketArgs, rep
 		return toJSONError(errAuthentication)
 	}
 
-	// Check if bucket is a reserved bucket name.
-	if isMinioMetaBucket(args.BucketName) || isMinioReservedBucket(args.BucketName) {
-		return toJSONError(errReservedBucket)
+	// Check if bucket is a reserved bucket name or invalid.
+	if isReservedOrInvalidBucket(args.BucketName) {
+		return toJSONError(errInvalidBucketName)
 	}
 
 	bucketLock := globalNSMutex.NewNSLock(args.BucketName, "")
-	bucketLock.Lock()
+	if err := bucketLock.GetLock(globalObjectTimeout); err != nil {
+		return toJSONError(errOperationTimedOut)
+	}
 	defer bucketLock.Unlock()
 
 	if err := objectAPI.MakeBucketWithLocation(args.BucketName, serverConfig.GetRegion()); err != nil {
@@ -533,7 +535,10 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 
 	// Lock the object.
 	objectLock := globalNSMutex.NewNSLock(bucket, object)
-	objectLock.Lock()
+	if objectLock.GetLock(globalObjectTimeout) != nil {
+		writeWebErrorResponse(w, errOperationTimedOut)
+		return
+	}
 	defer objectLock.Unlock()
 
 	sha256sum := ""
@@ -575,7 +580,10 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 
 	// Lock the object before reading.
 	objectLock := globalNSMutex.NewNSLock(bucket, object)
-	objectLock.RLock()
+	if objectLock.GetRLock(globalObjectTimeout) != nil {
+		writeWebErrorResponse(w, errOperationTimedOut)
+		return
+	}
 	defer objectLock.RUnlock()
 
 	if err := objectAPI.GetObject(bucket, object, 0, -1, w); err != nil {
@@ -1040,10 +1048,10 @@ func toWebAPIError(err error) APIError {
 			HTTPStatusCode: http.StatusMethodNotAllowed,
 			Description:    err.Error(),
 		}
-	} else if err == errReservedBucket {
+	} else if err == errInvalidBucketName {
 		return APIError{
-			Code:           "AllAccessDisabled",
-			HTTPStatusCode: http.StatusForbidden,
+			Code:           "InvalidBucketName",
+			HTTPStatusCode: http.StatusBadRequest,
 			Description:    err.Error(),
 		}
 	} else if err == errInvalidArgument {

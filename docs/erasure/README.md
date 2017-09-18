@@ -29,22 +29,22 @@ Install Minio - [Minio Quickstart Guide](https://docs.minio.io/docs/minio-quicks
 Example: Start Minio server in a 12 drives setup, using Minio binary.
 
 ```sh
-minio server /mnt/export1/backend /mnt/export2/backend /mnt/export3/backend /mnt/export4/backend /mnt/export5/backend /mnt/export6/backend /mnt/export7/backend /mnt/export8/backend /mnt/export9/backend /mnt/export10/backend /mnt/export11/backend /mnt/export12/backend
+minio server /data1 /data2 /data3 /data4 /data5 /data6 /data7 /data8 /data9 /data10 /data11 /data12
 ```
 
 Example: Start Minio server in a 8 drives setup, using Minio Docker image. 
 
 ```sh
 docker run -p 9000:9000 --name minio \
-  -v /mnt/export1/backend:/export1 \
-  -v /mnt/export2/backend:/export2 \
-  -v /mnt/export3/backend:/export3 \
-  -v /mnt/export4/backend:/export4 \
-  -v /mnt/export5/backend:/export5 \
-  -v /mnt/export6/backend:/export6 \
-  -v /mnt/export7/backend:/export7 \
-  -v /mnt/export8/backend:/export8 \
-  minio/minio server /export1 /export2 /export3 /export4 /export5 /export6 /export7 /export8
+  -v /mnt/data1:/data1 \
+  -v /mnt/data2:/data2 \
+  -v /mnt/data3:/data3 \
+  -v /mnt/data4:/data4 \
+  -v /mnt/data5:/data5 \
+  -v /mnt/data6:/data6 \
+  -v /mnt/data7:/data7 \
+  -v /mnt/data8:/data8 \
+  minio/minio server /data1 /data2 /data3 /data4 /data5 /data6 /data7 /data8
 ```
 
 ### 3. Test your setup

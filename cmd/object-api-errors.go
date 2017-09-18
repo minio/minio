@@ -305,6 +305,15 @@ func (e ObjectTooSmall) Error() string {
 	return "size of the object less than what is expected"
 }
 
+// OperationTimedOut - a timeout occurred.
+type OperationTimedOut struct {
+	Path string
+}
+
+func (e OperationTimedOut) Error() string {
+	return "Operation timed out: " + e.Path
+}
+
 /// Multipart related errors.
 
 // MalformedUploadID malformed upload id.
@@ -376,6 +385,13 @@ type PolicyNotFound GenericError
 
 func (e PolicyNotFound) Error() string {
 	return "Policy not found"
+}
+
+// UnsupportedMetadata - unsupported metadata
+type UnsupportedMetadata struct{}
+
+func (e UnsupportedMetadata) Error() string {
+	return "Unsupported headers in Metadata"
 }
 
 // Check if error type is IncompleteBody.

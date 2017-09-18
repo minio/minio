@@ -45,14 +45,20 @@ func TestAzureToS3ETag(t *testing.T) {
 // Test canonical metadata.
 func TestS3ToAzureHeaders(t *testing.T) {
 	headers := map[string]string{
-		"accept-encoding":  "gzip",
-		"content-encoding": "gzip",
-		"X-Amz-Meta-Hdr":   "value",
+		"accept-encoding":          "gzip",
+		"content-encoding":         "gzip",
+		"X-Amz-Meta-Hdr":           "value",
+		"X-Amz-Meta-X-Amz-Key":     "hu3ZSqtqwn+aL4V2VhAeov4i+bG3KyCtRMSXQFRHXOk=",
+		"X-Amz-Meta-X-Amz-Matdesc": "{}",
+		"X-Amz-Meta-X-Amz-Iv":      "eWmyryl8kq+EVnnsE7jpOg==",
 	}
 	expectedHeaders := map[string]string{
-		"Accept-Encoding":  "gzip",
-		"Content-Encoding": "gzip",
-		"X-Ms-Meta-Hdr":    "value",
+		"Accept-Encoding":           "gzip",
+		"Content-Encoding":          "gzip",
+		"X-Ms-Meta-Hdr":             "value",
+		"X-Ms-Meta-x_minio_key":     "hu3ZSqtqwn+aL4V2VhAeov4i+bG3KyCtRMSXQFRHXOk=",
+		"X-Ms-Meta-x_minio_matdesc": "{}",
+		"X-Ms-Meta-x_minio_iv":      "eWmyryl8kq+EVnnsE7jpOg==",
 	}
 	actualHeaders := s3ToAzureHeaders(headers)
 	if !reflect.DeepEqual(actualHeaders, expectedHeaders) {
@@ -64,10 +70,16 @@ func TestAzureToS3Metadata(t *testing.T) {
 	// Just one testcase. Adding more test cases does not add value to the testcase
 	// as azureToS3Metadata() just adds a prefix.
 	metadata := map[string]string{
-		"First-Name": "myname",
+		"First-Name":      "myname",
+		"x_minio_key":     "hu3ZSqtqwn+aL4V2VhAeov4i+bG3KyCtRMSXQFRHXOk=",
+		"x_minio_matdesc": "{}",
+		"x_minio_iv":      "eWmyryl8kq+EVnnsE7jpOg==",
 	}
 	expectedMeta := map[string]string{
-		"X-Amz-Meta-First-Name": "myname",
+		"X-Amz-Meta-First-Name":    "myname",
+		"X-Amz-Meta-X-Amz-Key":     "hu3ZSqtqwn+aL4V2VhAeov4i+bG3KyCtRMSXQFRHXOk=",
+		"X-Amz-Meta-X-Amz-Matdesc": "{}",
+		"X-Amz-Meta-X-Amz-Iv":      "eWmyryl8kq+EVnnsE7jpOg==",
 	}
 	actualMeta := azureToS3Metadata(metadata)
 	if !reflect.DeepEqual(actualMeta, expectedMeta) {
@@ -133,15 +145,16 @@ func TestAzureToObjectError(t *testing.T) {
 // Test azureGetBlockID().
 func TestAzureGetBlockID(t *testing.T) {
 	testCases := []struct {
-		partID  int
-		md5     string
-		blockID string
+		partID        int
+		subPartNumber int
+		md5           string
+		blockID       string
 	}{
-		{1, "d41d8cd98f00b204e9800998ecf8427e", "MDAwMDEuZDQxZDhjZDk4ZjAwYjIwNGU5ODAwOTk4ZWNmODQyN2U="},
-		{2, "a7fb6b7b36ee4ed66b5546fac4690273", "MDAwMDIuYTdmYjZiN2IzNmVlNGVkNjZiNTU0NmZhYzQ2OTAyNzM="},
+		{1, 7, "d41d8cd98f00b204e9800998ecf8427e", "MDAwMDEuMDcuZDQxZDhjZDk4ZjAwYjIwNGU5ODAwOTk4ZWNmODQyN2U="},
+		{2, 19, "a7fb6b7b36ee4ed66b5546fac4690273", "MDAwMDIuMTkuYTdmYjZiN2IzNmVlNGVkNjZiNTU0NmZhYzQ2OTAyNzM="},
 	}
 	for _, test := range testCases {
-		blockID := azureGetBlockID(test.partID, test.md5)
+		blockID := azureGetBlockID(test.partID, test.subPartNumber, test.md5)
 		if blockID != test.blockID {
 			t.Fatalf("%s is not equal to %s", blockID, test.blockID)
 		}
@@ -151,26 +164,31 @@ func TestAzureGetBlockID(t *testing.T) {
 // Test azureParseBlockID().
 func TestAzureParseBlockID(t *testing.T) {
 	testCases := []struct {
-		partID  int
-		md5     string
-		blockID string
+		blockID       string
+		partID        int
+		subPartNumber int
+		md5           string
 	}{
-		{1, "d41d8cd98f00b204e9800998ecf8427e", "MDAwMDEuZDQxZDhjZDk4ZjAwYjIwNGU5ODAwOTk4ZWNmODQyN2U="},
-		{2, "a7fb6b7b36ee4ed66b5546fac4690273", "MDAwMDIuYTdmYjZiN2IzNmVlNGVkNjZiNTU0NmZhYzQ2OTAyNzM="},
+		{"MDAwMDEuMDcuZDQxZDhjZDk4ZjAwYjIwNGU5ODAwOTk4ZWNmODQyN2U=", 1, 7, "d41d8cd98f00b204e9800998ecf8427e"},
+		{"MDAwMDIuMTkuYTdmYjZiN2IzNmVlNGVkNjZiNTU0NmZhYzQ2OTAyNzM=", 2, 19, "a7fb6b7b36ee4ed66b5546fac4690273"},
 	}
 	for _, test := range testCases {
-		partID, md5, err := azureParseBlockID(test.blockID)
+		partID, subPartNumber, md5, err := azureParseBlockID(test.blockID)
 		if err != nil {
 			t.Fatal(err)
 		}
 		if partID != test.partID {
 			t.Fatalf("%d not equal to %d", partID, test.partID)
 		}
+		if subPartNumber != test.subPartNumber {
+			t.Fatalf("%d not equal to %d", subPartNumber, test.subPartNumber)
+		}
 		if md5 != test.md5 {
 			t.Fatalf("%s not equal to %s", md5, test.md5)
 		}
 	}
-	_, _, err := azureParseBlockID("junk")
+
+	_, _, _, err := azureParseBlockID("junk")
 	if err == nil {
 		t.Fatal("Expected azureParseBlockID() to return error")
 	}

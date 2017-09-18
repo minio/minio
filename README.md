@@ -24,7 +24,7 @@ Install minio packages using [Homebrew](http://brew.sh/)
 
 ```sh
 brew install minio/stable/minio
-minio server ~/Photos
+minio server /data
 ```
 #### Note
 If you previously installed minio using `brew install minio` then reinstall minio from `minio/stable/minio` official repo. Homebrew builds are unstable due to golang 1.8 bugs.
@@ -40,7 +40,7 @@ brew install minio/stable/minio
 |Apple macOS|64-bit Intel|https://dl.minio.io/server/minio/release/darwin-amd64/minio |
 ```sh
 chmod 755 minio
-./minio server ~/Photos
+./minio server /data
 ```
 
 ## GNU/Linux
@@ -50,7 +50,7 @@ chmod 755 minio
 |GNU/Linux|64-bit Intel|https://dl.minio.io/server/minio/release/linux-amd64/minio |
 ```sh
 chmod +x minio
-./minio server ~/Photos
+./minio server /data
 ```
 
 ### Snap

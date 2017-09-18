@@ -7,9 +7,9 @@ To host multiple tenants on a single machine, run one Minio server per tenant wi
 
 This example hosts 3 tenants on a single drive.
 ```sh
-minio --config-dir ~/tenant1 server --address :9001 /disk1/data/tenant1
-minio --config-dir ~/tenant2 server --address :9002 /disk1/data/tenant2
-minio --config-dir ~/tenant3 server --address :9003 /disk1/data/tenant3
+minio --config-dir ~/tenant1 server --address :9001 /data/tenant1
+minio --config-dir ~/tenant2 server --address :9002 /data/tenant2
+minio --config-dir ~/tenant3 server --address :9003 /data/tenant3
 ```
 
 ![Example-1](https://github.com/minio/minio/blob/master/docs/screenshots/Example-1.jpg?raw=true)
@@ -34,15 +34,15 @@ This example hosts 3 tenants on a 4 node distributed setup. Execute the followin
 ```sh
 export MINIO_ACCESS_KEY=<TENANT1_ACCESS_KEY>
 export MINIO_SECRET_KEY=<TENANT1_SECRET_KEY>
-minio --config-dir ~/tenant1 server --address :9001 http://192.168.10.11/disk1/data/tenant1 http://192.168.10.12/disk1/data/tenant1 http://192.168.10.13/disk1/data/tenant1 http://192.168.10.14/disk1/data/tenant1
+minio --config-dir ~/tenant1 server --address :9001 http://192.168.10.11/data/tenant1 http://192.168.10.12/data/tenant1 http://192.168.10.13/data/tenant1 http://192.168.10.14/data/tenant1
 
 export MINIO_ACCESS_KEY=<TENANT2_ACCESS_KEY>
 export MINIO_SECRET_KEY=<TENANT2_SECRET_KEY>
-minio --config-dir ~/tenant2 server --address :9002 http://192.168.10.11/disk1/data/tenant2 http://192.168.10.12/disk1/data/tenant2 http://192.168.10.13/disk1/data/tenant2 http://192.168.10.14/disk1/data/tenant2
+minio --config-dir ~/tenant2 server --address :9002 http://192.168.10.11/data/tenant2 http://192.168.10.12/data/tenant2 http://192.168.10.13/data/tenant2 http://192.168.10.14/data/tenant2
 
 export MINIO_ACCESS_KEY=<TENANT3_ACCESS_KEY>
 export MINIO_SECRET_KEY=<TENANT3_SECRET_KEY>
-minio --config-dir ~/tenant3 server --address :9003 http://192.168.10.11/disk1/data/tenant3 http://192.168.10.12/disk1/data/tenant3 http://192.168.10.13/disk1/data/tenant3 http://192.168.10.14/disk1/data/tenant3
+minio --config-dir ~/tenant3 server --address :9003 http://192.168.10.11/data/tenant3 http://192.168.10.12/data/tenant3 http://192.168.10.13/data/tenant3 http://192.168.10.14/data/tenant3
 ```
 
 ![Example-3](https://github.com/minio/minio/blob/master/docs/screenshots/Example-3.jpg?raw=true)

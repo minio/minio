@@ -42,9 +42,7 @@ const (
 func encodeURL2Path(u *url.URL) (path string) {
 	// Encode URL path.
 	if isS3, _ := filepath.Match("*.s3*.amazonaws.com", u.Host); isS3 {
-		hostSplits := strings.SplitN(u.Host, ".", 4)
-		// First element is the bucket name.
-		bucketName := hostSplits[0]
+		bucketName := u.Host[:strings.LastIndex(u.Host, ".s3")]
 		path = "/" + bucketName
 		path += u.Path
 		path = s3utils.EncodePath(path)

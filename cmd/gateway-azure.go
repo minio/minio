@@ -25,17 +25,18 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/storage"
+	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/sha256-simd"
 )
 
 const globalAzureAPIVersion = "2016-05-31"
+const azureBlockSize = 100 * humanize.MiByte
 
 // Canonicalize the metadata headers, without this azure-sdk calculates
 // incorrect signature. This attempt to canonicalize is to convert
@@ -44,9 +45,18 @@ const globalAzureAPIVersion = "2016-05-31"
 // Also replaces X-Amz-Meta prefix with X-Ms-Meta as Azure expects user
 // defined metadata to have X-Ms-Meta prefix.
 func s3ToAzureHeaders(headers map[string]string) (newHeaders map[string]string) {
+	gatewayHeaders := map[string]string{
+		"X-Amz-Meta-X-Amz-Key":     "X-Amz-Meta-x_minio_key",
+		"X-Amz-Meta-X-Amz-Matdesc": "X-Amz-Meta-x_minio_matdesc",
+		"X-Amz-Meta-X-Amz-Iv":      "X-Amz-Meta-x_minio_iv",
+	}
+
 	newHeaders = make(map[string]string)
 	for k, v := range headers {
 		k = http.CanonicalHeaderKey(k)
+		if nk, ok := gatewayHeaders[k]; ok {
+			k = nk
+		}
 		if strings.HasPrefix(k, "X-Amz-Meta") {
 			k = strings.Replace(k, "X-Amz-Meta", "X-Ms-Meta", -1)
 		}
@@ -58,10 +68,19 @@ func s3ToAzureHeaders(headers map[string]string) (newHeaders map[string]string) 
 // Prefix user metadata with "X-Amz-Meta-".
 // client.GetBlobMetadata() already strips "X-Ms-Meta-"
 func azureToS3Metadata(meta map[string]string) (newMeta map[string]string) {
+	gatewayHeaders := map[string]string{
+		"X-Amz-Meta-x_minio_key":     "X-Amz-Meta-X-Amz-Key",
+		"X-Amz-Meta-x_minio_matdesc": "X-Amz-Meta-X-Amz-Matdesc",
+		"X-Amz-Meta-x_minio_iv":      "X-Amz-Meta-X-Amz-Iv",
+	}
+
 	newMeta = make(map[string]string)
 
 	for k, v := range meta {
 		k = "X-Amz-Meta-" + k
+		if nk, ok := gatewayHeaders[k]; ok {
+			k = nk
+		}
 		newMeta[k] = v
 	}
 	return newMeta
@@ -144,6 +163,8 @@ func azureToObjectError(err error, params ...string) error {
 		err = BucketNameInvalid{Bucket: bucket}
 	case "RequestBodyTooLarge":
 		err = PartTooBig{}
+	case "InvalidMetadata":
+		err = UnsupportedMetadata{}
 	default:
 		switch azureErr.StatusCode {
 		case http.StatusNotFound:
@@ -179,7 +200,7 @@ func newAzureLayer(host string) (GatewayLayer, error) {
 	if err != nil {
 		return &azureObjects{}, err
 	}
-	c.HTTPClient.Transport = newCustomHTTPTransport()
+	c.HTTPClient = &http.Client{Transport: newCustomHTTPTransport()}
 
 	return &azureObjects{
 		client: c.GetBlobService(),
@@ -496,27 +517,23 @@ func (a *azureObjects) CopyObjectPart(srcBucket, srcObject, destBucket, destObje
 	return info, traceError(NotImplemented{})
 }
 
-// Encode partID+md5Hex to a blockID.
-func azureGetBlockID(partID int, md5Hex string) string {
-	return base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%.5d.%s", partID, md5Hex)))
+// Encode partID, subPartNumber and md5Hex to blockID.
+func azureGetBlockID(partID, subPartNumber int, md5Hex string) string {
+	return base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%05d.%02d.%s", partID, subPartNumber, md5Hex)))
 }
 
-// Decode blockID to partID+md5Hex.
-func azureParseBlockID(blockID string) (int, string, error) {
-	idByte, err := base64.StdEncoding.DecodeString(blockID)
-	if err != nil {
-		return 0, "", traceError(err)
+// Parse blockID into partID, subPartNumber and md5Hex.
+func azureParseBlockID(blockID string) (partID, subPartNumber int, md5Hex string, err error) {
+	var blockIDBytes []byte
+	if blockIDBytes, err = base64.StdEncoding.DecodeString(blockID); err != nil {
+		return
 	}
-	idStr := string(idByte)
-	splitRes := strings.Split(idStr, ".")
-	if len(splitRes) != 2 {
-		return 0, "", traceError(errUnexpected)
+
+	if _, err = fmt.Sscanf(string(blockIDBytes), "%05d.%02d.%s", &partID, &subPartNumber, &md5Hex); err != nil {
+		err = fmt.Errorf("invalid block id '%s'", string(blockIDBytes))
 	}
-	partID, err := strconv.Atoi(splitRes[0])
-	if err != nil {
-		return 0, "", traceError(err)
-	}
-	return partID, splitRes[1], nil
+
+	return
 }
 
 // PutObjectPart - Use Azure equivalent PutBlockWithLength.
@@ -550,10 +567,25 @@ func (a *azureObjects) PutObjectPart(bucket, object, uploadID string, partID int
 		teeReader = io.TeeReader(data, io.MultiWriter(writers...))
 	}
 
-	id := azureGetBlockID(partID, etag)
-	err = a.client.PutBlockWithLength(bucket, object, id, uint64(size), teeReader, nil)
-	if err != nil {
-		return info, azureToObjectError(traceError(err), bucket, object)
+	subPartSize := int64(azureBlockSize)
+	subPartNumber := 1
+	for remainingSize := size; remainingSize >= 0; remainingSize -= subPartSize {
+		// Allow to create zero sized part.
+		if remainingSize == 0 && subPartNumber > 1 {
+			break
+		}
+
+		if remainingSize < subPartSize {
+			subPartSize = remainingSize
+		}
+
+		id := azureGetBlockID(partID, subPartNumber, etag)
+		err = a.client.PutBlockWithLength(bucket, object, id, uint64(subPartSize), io.LimitReader(teeReader, subPartSize), nil)
+		if err != nil {
+			return info, azureToObjectError(traceError(err), bucket, object)
+		}
+
+		subPartNumber++
 	}
 
 	if md5Hex != "" {
@@ -601,7 +633,7 @@ func (a *azureObjects) ListObjectParts(bucket, object, uploadID string, partNumb
 			break
 		}
 		partCount++
-		partID, md5Hex, err := azureParseBlockID(part.Name)
+		partID, _, md5Hex, err := azureParseBlockID(part.Name)
 		if err != nil {
 			return result, err
 		}
@@ -639,14 +671,63 @@ func (a *azureObjects) CompleteMultipartUpload(bucket, object, uploadID string, 
 	if meta == nil {
 		return objInfo, traceError(InvalidUploadID{uploadID})
 	}
-	var blocks []storage.Block
-	for _, part := range uploadedParts {
-		blocks = append(blocks, storage.Block{
-			ID:     azureGetBlockID(part.PartNumber, part.ETag),
-			Status: storage.BlockStatusUncommitted,
-		})
+
+	resp, err := a.client.GetBlockList(bucket, object, storage.BlockListTypeUncommitted)
+	if err != nil {
+		return objInfo, azureToObjectError(traceError(err), bucket, object)
 	}
-	err = a.client.PutBlockList(bucket, object, blocks)
+
+	getBlocks := func(partNumber int, etag string) (blocks []storage.Block, size int64, err error) {
+		for _, part := range resp.UncommittedBlocks {
+			var partID int
+			var md5Hex string
+			if partID, _, md5Hex, err = azureParseBlockID(part.Name); err != nil {
+				return nil, 0, err
+			}
+
+			if partNumber == partID && etag == md5Hex {
+				blocks = append(blocks, storage.Block{
+					ID:     part.Name,
+					Status: storage.BlockStatusUncommitted,
+				})
+
+				size += part.Size
+			}
+		}
+
+		if len(blocks) == 0 {
+			return nil, 0, InvalidPart{}
+		}
+
+		return blocks, size, nil
+	}
+
+	var allBlocks []storage.Block
+	partSizes := make([]int64, len(uploadedParts))
+	for i, part := range uploadedParts {
+		var blocks []storage.Block
+		var size int64
+		blocks, size, err = getBlocks(part.PartNumber, part.ETag)
+		if err != nil {
+			return objInfo, traceError(err)
+		}
+
+		allBlocks = append(allBlocks, blocks...)
+		partSizes[i] = size
+	}
+
+	// Error out if parts except last part sizing < 5MiB.
+	for i, size := range partSizes[:len(partSizes)-1] {
+		if size < globalMinPartSize {
+			return objInfo, traceError(PartTooSmall{
+				PartNumber: uploadedParts[i].PartNumber,
+				PartSize:   size,
+				PartETag:   uploadedParts[i].ETag,
+			})
+		}
+	}
+
+	err = a.client.PutBlockList(bucket, object, allBlocks)
 	if err != nil {
 		return objInfo, azureToObjectError(traceError(err), bucket, object)
 	}

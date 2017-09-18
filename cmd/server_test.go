@@ -1254,6 +1254,9 @@ func (s *TestSuiteCommon) TestPutObjectLongName(c *C) {
 	buffer := bytes.NewReader([]byte("hello world"))
 	// make long object name.
 	longObjName := fmt.Sprintf("%0255d/%0255d/%0255d", 1, 1, 1)
+	if IsDocker() || IsKubernetes() {
+		longObjName = fmt.Sprintf("%0242d/%0242d/%0242d", 1, 1, 1)
+	}
 	// create new HTTP request to insert the object.
 	request, err = newTestSignedRequest("PUT", getPutObjectURL(s.endPoint, bucketName, longObjName),
 		int64(buffer.Len()), buffer, s.accessKey, s.secretKey, s.signer)
