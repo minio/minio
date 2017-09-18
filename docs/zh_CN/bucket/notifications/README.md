@@ -1,7 +1,6 @@
-# Minio Bucket Notification Guide [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
+# Minio存储桶通知指南 [![Slack](https://slack.minio.io/slack?type=svg)](https://slack.minio.io)
 
-Changes in a bucket, such as object uploads and removal, can be monitored using bucket event notification
-mechanism and can be published to the following targets:
+存储桶（Bucket）如果发生改变,比如上传对象和删除对象，可以使用存储桶事件通知机制进行监控，并发布到以下目标:
 
 | Notification Targets|
 |:---|
@@ -15,28 +14,28 @@ mechanism and can be published to the following targets:
 | [`Apache Kafka`](#apache-kafka) |
 | [`Webhooks`](#webhooks) |
 
-## Prerequisites
+## 前提条件
 
-* Install and configure Minio Server from [here](http://docs.minio.io/docs/minio-quickstart-guide).
-* Install and configure Minio Client from [here](https://docs.minio.io/docs/minio-client-quickstart-guide).
+* 从 [这里](http://docs.minio.io/docs/zh_CN/minio-quickstart-guide)下载并安装Minio Server.
+* 从[这里](https://docs.minio.io/docs/zh_CN/minio-client-quickstart-guide)下载并安装Minio Client.
 
 <a name="AMQP"></a>
-## Publish Minio events via AMQP
+## 使用AMQP发布Minio事件
 
-Install RabbitMQ from [here](https://www.rabbitmq.com/).
+从[这里](https://www.rabbitmq.com/)下载安装RabbitMQ。
 
-### Step 1: Add AMQP endpoint to Minio
+### 第一步: 将AMQP endpoint添加到Minio
 
-The default location of Minio server configuration file is ``~/.minio/config.json``. The AMQP configuration is located in the `amqp` key under the `notify` top-level key. Create a configuration key-value pair here for your AMQP instance. The key is a name for your AMQP endpoint, and the value is a collection of key-value parameters described in the table below.
+Minio Server的配置文件默认路径是 ``~/.minio/config.json``。AMQP配置信息是在`notify`这个节点下的`amqp`节点下，在这里为你的AMQP实例创建配置信息键值对，key是你的AMQP endpoint的名称，value是下面表格中列列的键值对集合。
 
-| Parameter | Type | Description |
+| 参数 | 类型 | 描述 |
 |:---|:---|:---|
-| `enable` | _bool_ | (Required) Is this server endpoint configuration active/enabled? |
-| `url` | _string_ | (Required) AMQP server endpoint, e.g. `amqp://myuser:mypassword@localhost:5672` |
-| `exchange` | _string_ | Name of the exchange. |
-| `routingKey` | _string_ | Routing key for publishing. |
-| `exchangeType` | _string_ | Kind of exchange. |
-| `deliveryMode` | _uint8_ | Delivery mode for publishing. 0 or 1 - transient; 2 - persistent. |
+| `enable` | _bool_ | (必须) 此AMQP server endpoint是否可用 |
+| `url` | _string_ | (必须) AMQP server endpoint, 例如. `amqp://myuser:mypassword@localhost:5672` |
+| `exchange` | _string_ | exchange名称 |
+| `routingKey` | _string_ | 发布用的Routing key  |
+| `exchangeType` | _string_ | exchange类型 |
+| `deliveryMode` | _uint8_ | 发布方式。 0或1 - 瞬态; 2 - 持久。|
 | `mandatory` | _bool_ | Publishing related bool. |
 | `immediate` | _bool_ | Publishing related bool. |
 | `durable` | _bool_ | Exchange declaration related bool. |
@@ -44,7 +43,7 @@ The default location of Minio server configuration file is ``~/.minio/config.jso
 | `noWait` | _bool_ | Exchange declaration related bool. |
 | `autoDeleted` | _bool_ | Exchange declaration related bool. |
 
-An example configuration for RabbitMQ is shown below:
+下面展示的是RabbitMQ的配置示例:
 
 ```json
 "amqp": {
@@ -65,16 +64,16 @@ An example configuration for RabbitMQ is shown below:
 }
 ```
 
-After updating the configuration file, restart the Minio server to put the changes into effect. The server will print a line like `SQS ARNs:  arn:minio:sqs:us-east-1:1:amqp` at start-up if there were no errors.
+更新完配置文件后，重启Minio Server让配置生效。如果一切顺利，Minio Server会在启动时输出一行信息，类似 `SQS ARNs:  arn:minio:sqs:us-east-1:1:amqp`。
 
-Minio supports all the exchanges available in [RabbitMQ](https://www.rabbitmq.com/). For this setup, we are using ``fanout`` exchange.
+Minio支持[RabbitMQ](https://www.rabbitmq.com/)中所有的交换方式，这次我们采用  ``fanout`` 交换。
 
-Note that, you can add as many AMQP server endpoint configurations as needed by providing an identifier (like "1" in the example above) for the AMQP instance and an object of per-server configuration parameters.
+注意一下，你可以听从你内心的想法，想配几个AMQP服务就配几个，只要每个AMQP服务实例有不同的ID (比如前面示例中的"1") 和配置信息。
 
 
-### Step 2: Enable bucket notification using Minio client
+### 第二步: 使用Minio客户端启用bucket通知
 
-We will enable bucket event notification to trigger whenever a JPEG image is uploaded or deleted ``images`` bucket on ``myminio`` server. Here ARN value is ``arn:minio:sqs:us-east-1:1:amqp``. To understand more about ARN please follow [AWS ARN](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html) documentation.
+如果一个JPEG图片上传到``myminio`` server里的``images`` 存储桶或者从桶中删除，一个存储桶事件提醒就会被触发。 这里ARN值是``arn:minio:sqs:us-east-1:1:amqp``，想了解更多关于ARN的信息，请参考[AWS ARN](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html) documentation.
 
 ```
 mc mb myminio/images
@@ -83,9 +82,9 @@ mc events list myminio/images
 arn:minio:sqs:us-east-1:1:amqp s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
 ```
 
-### Step 3: Test on RabbitMQ
+### 第三步:在RabbitMQ上进行验证
 
-The python program below waits on the queue exchange ``bucketevents`` and prints event notifications on the console. We use [Pika Python Client](https://www.rabbitmq.com/tutorials/tutorial-three-python.html) library to do this.
+下面将要出场的python程序会等待队列交换T``bucketevents``并在控制台中输出事件提醒。我们使用的是[Pika Python Client](https://www.rabbitmq.com/tutorials/tutorial-three-python.html) 来实现此功能。
 
 ```py
 #!/usr/bin/env python
@@ -116,19 +115,19 @@ channel.basic_consume(callback,
 channel.start_consuming()
 ```
 
-Execute this example python program to watch for RabbitMQ events on the console.
+执行示例中的python程序来观察RabbitMQ事件。
 
 ```py
 python rabbit.py
 ```
 
-Open another terminal and upload a JPEG image into ``images`` bucket.
+另开一个terminal终端并上传一张JPEG图片到``images``存储桶。
 
 ```
 mc cp myphoto.jpg myminio/images
 ```
 
-You should receive the following event notification via RabbitMQ once the upload completes.
+一旦上传完毕，你应该会通过RabbitMQ收到下面的事件提醒。
 
 ```py
 python rabbit.py
@@ -138,24 +137,24 @@ python rabbit.py
 <a name="MQTT"></a>
 ## Publish Minio events MQTT
 
-Install an MQTT Broker from [here](https://mosquitto.org/).
+从 [这里](https://mosquitto.org/)安装MQTT Broker。
 
-### Step 1: Add MQTT endpoint to Minio
+### 第一步: 添加MQTT endpoint到Minio
 
-the default location of Minio server configuration file is ``~./minio/config.json``. The MQTT configuration is location in the `mqtt` key under the `notify` top-level key. Create a configuration key-value pair here for your MQTT instance. The key is a name for your MQTT endpoint, and the value is a collection of key-value parameters described in the table below.
+Minio Server的配置文件默认路径是 ``~/.minio/config.json``。MQTT配置信息是在`notify`这个节点下的`mqtt`节点下，在这里为你的MQTT实例创建配置信息键值对，key是你的MQTT endpoint的名称，value是下面表格中列列的键值对集合。 
 
 
-| Parameter | Type | Description |
+| 参数 | 类型 | 描述 |
 |:---|:---|:---|
-| `enable` | _bool_ | (Required) Is this server endpoint configuration active/enabled? |
-| `broker` | _string_ | (Required) MQTT server endpoint, e.g. `tcp://localhost:1883` |
-| `topic` | _string_ | (Required) Name of the MQTT topic to publish on, e.g. `minio` |
-| `qos` | _int_ | Set the Quality of Service Level |
-| `clientId` | _string_ | Unique ID for the MQTT broker to identify Minio |
-| `username` | _string_ | Username to connect to the MQTT server (if required) |
-| `password` | _string_ | Password to connect to the MQTT server (if required) |
+| `enable` | _bool_ | (必须) 这个 server endpoint是否可用? |
+| `broker` | _string_ | (必须) MQTT server endpoint, 例如. `tcp://localhost:1883` |
+| `topic` | _string_ | (必须) 要发布的MQTT主题的名称, 例如. `minio` |
+| `qos` | _int_ | 设置服务质量级别 |
+| `clientId` | _string_ | MQTT代理识别Minio的唯一ID |
+| `username` | _string_ | 连接MQTT server的用户名 (如果需要的话) |
+| `password` | _string_ | 链接MQTT server的密码 (如果需要的话) |
 
-An example configuration for MQTT is shown below:
+以下是一个MQTT的配置示例:
 
 ```json
 "mqtt": {
@@ -171,11 +170,11 @@ An example configuration for MQTT is shown below:
 }
 ```
 
-After updating the configuration file, restart the Minio sever to put the changes into effect. The server will print a line like `SQS ARNs: arn:minio:sqs:us-east-1:1:mqtt` at start-up if there were no errors.
+更新完配置文件后，重启Minio Server让配置生效。如果一切顺利，Minio Server会在启动时输出一行信息，类似 `SQS ARNs:  arn:minio:sqs:us-east-1:1:mqtt`。
 
-Minio supports any MQTT server that supports MQTT 3.1 or 3.1.1 and can connect to them over TCP, TLS, or a Websocket connection using ``tcp://``, ``tls://``, or ``ws://`` respectively as the scheme for the broker url. See the [Go Client](http://www.eclipse.org/paho/clients/golang/) documentation for more information.
+Minio支持任何支持MQTT 3.1或3.1.1的MQTT服务器，并且可以通过TCP，TLS或Websocket连接使用``tcp://``, ``tls://``, or ``ws://``分别作为代理URL的方案。 更多信息，请参考 [Go Client](http://www.eclipse.org/paho/clients/golang/)。
 
-Note that, you can add as many MQTT server endpoint configurations as needed by providing an identifier (like "1" in the example above) for the MQTT instance and an object of per-server configuration parameters.
+注意一下，你还是和之前AMQP一样可以听从你内心的想法，想配几个MQTT服务就配几个，只要每个MQTT服务实例有不同的ID (比如前面示例中的"1") 和配置信息。
 
 
 ### Step 2: Enable bucket notification using Minio client
