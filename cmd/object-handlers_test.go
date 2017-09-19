@@ -1402,8 +1402,7 @@ func testAPICopyObjectPartHandler(obj ObjectLayer, instanceType, bucketName stri
 		if rec.Code == http.StatusOK {
 			// See if the new part has been uploaded.
 			// testing whether the copy was successful.
-			var results ListPartsInfo
-			results, err = obj.ListObjectParts(testCase.bucketName, testObject, testCase.uploadID, 0, 1)
+			_, err = obj.ListObjectParts(testCase.bucketName, testObject, testCase.uploadID, 0, 1)
 			if err != nil {
 				t.Fatalf("Test %d: %s: Failed to look for copied object part: <ERROR> %s", i+1, instanceType, err)
 			}
