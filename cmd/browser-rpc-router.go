@@ -35,7 +35,7 @@ type browserPeerAPIHandlers struct {
 
 // Register RPC router
 func registerBrowserPeerRPCRouter(mux *router.Router) error {
-	bpHandlers := &browserPeerAPIHandlers{}
+	bpHandlers := &browserPeerAPIHandlers{AuthRPCServer{}}
 
 	bpRPCServer := newRPCServer()
 	err := bpRPCServer.RegisterName("BrowserPeer", bpHandlers)

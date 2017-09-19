@@ -60,8 +60,7 @@ type AuthRPCReply struct{}
 
 // LoginRPCArgs - login username and password for RPC.
 type LoginRPCArgs struct {
-	Username    string
-	Password    string
+	AuthToken   string
 	Version     string
 	RequestTime time.Time
 }
@@ -80,11 +79,8 @@ func (args LoginRPCArgs) IsValid() error {
 	return nil
 }
 
-// LoginRPCReply - login reply provides generated token to be used
-// with subsequent requests.
-type LoginRPCReply struct {
-	AuthToken string
-}
+// LoginRPCReply - login reply is a dummy struct perhaps for future use.
+type LoginRPCReply struct{}
 
 // LockArgs represents arguments for any authenticated lock RPC call.
 type LockArgs struct {

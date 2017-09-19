@@ -63,10 +63,10 @@ func authenticateJWT(accessKey, secretKey string, expiry time.Duration) (string,
 	}
 
 	utcNow := UTCNow()
-	token := jwtgo.NewWithClaims(jwtgo.SigningMethodHS512, jwtgo.MapClaims{
-		"exp": utcNow.Add(expiry).Unix(),
-		"iat": utcNow.Unix(),
-		"sub": accessKey,
+	token := jwtgo.NewWithClaims(jwtgo.SigningMethodHS512, jwtgo.StandardClaims{
+		ExpiresAt: utcNow.Add(expiry).Unix(),
+		IssuedAt:  utcNow.Unix(),
+		Subject:   accessKey,
 	})
 
 	return token.SignedString([]byte(serverCred.SecretKey))
@@ -93,13 +93,17 @@ func keyFuncCallback(jwtToken *jwtgo.Token) (interface{}, error) {
 }
 
 func isAuthTokenValid(tokenString string) bool {
-	jwtToken, err := jwtgo.Parse(tokenString, keyFuncCallback)
+	var claims jwtgo.StandardClaims
+	jwtToken, err := jwtgo.ParseWithClaims(tokenString, &claims, keyFuncCallback)
 	if err != nil {
 		errorIf(err, "Unable to parse JWT token string")
 		return false
 	}
-
-	return jwtToken.Valid
+	if err = claims.Valid(); err != nil {
+		errorIf(err, "Invalid claims in JWT token string")
+		return false
+	}
+	return jwtToken.Valid && claims.Subject == serverConfig.GetCredential().AccessKey
 }
 
 func isHTTPRequestValid(req *http.Request) bool {
@@ -110,14 +114,20 @@ func isHTTPRequestValid(req *http.Request) bool {
 // Returns nil if the request is authenticated. errNoAuthToken if token missing.
 // Returns errAuthentication for all other errors.
 func webRequestAuthenticate(req *http.Request) error {
-	jwtToken, err := jwtreq.ParseFromRequest(req, jwtreq.AuthorizationHeaderExtractor, keyFuncCallback)
+	var claims jwtgo.StandardClaims
+	jwtToken, err := jwtreq.ParseFromRequestWithClaims(req, jwtreq.AuthorizationHeaderExtractor, &claims, keyFuncCallback)
 	if err != nil {
 		if err == jwtreq.ErrNoTokenInRequest {
 			return errNoAuthToken
 		}
 		return errAuthentication
 	}
-
+	if err = claims.Valid(); err != nil {
+		return err
+	}
+	if claims.Subject != serverConfig.GetCredential().AccessKey {
+		return errInvalidAccessKeyID
+	}
 	if !jwtToken.Valid {
 		return errAuthentication
 	}

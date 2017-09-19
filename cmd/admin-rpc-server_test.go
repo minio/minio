@@ -33,16 +33,19 @@ func testAdminCmd(cmd cmdType, t *testing.T) {
 	}
 	defer os.RemoveAll(rootPath)
 
-	adminServer := adminCmd{}
 	creds := serverConfig.GetCredential()
+	token, err := authenticateNode(creds.AccessKey, creds.SecretKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	adminServer := adminCmd{}
 	args := LoginRPCArgs{
-		Username:    creds.AccessKey,
-		Password:    creds.SecretKey,
+		AuthToken:   token,
 		Version:     Version,
 		RequestTime: UTCNow(),
 	}
-	reply := LoginRPCReply{}
-	err = adminServer.Login(&args, &reply)
+	err = adminServer.Login(&args, &LoginRPCReply{})
 	if err != nil {
 		t.Fatalf("Failed to login to admin server - %v", err)
 	}
@@ -52,7 +55,7 @@ func testAdminCmd(cmd cmdType, t *testing.T) {
 		<-globalServiceSignalCh
 	}()
 
-	ga := AuthRPCArgs{AuthToken: reply.AuthToken}
+	ga := AuthRPCArgs{AuthToken: token}
 	genReply := AuthRPCReply{}
 	switch cmd {
 	case restartCmd:
@@ -91,21 +94,25 @@ func TestReInitDisks(t *testing.T) {
 	// Setup admin rpc server for an XL backend.
 	globalIsXL = true
 	adminServer := adminCmd{}
+
 	creds := serverConfig.GetCredential()
+	token, err := authenticateNode(creds.AccessKey, creds.SecretKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	args := LoginRPCArgs{
-		Username:    creds.AccessKey,
-		Password:    creds.SecretKey,
+		AuthToken:   token,
 		Version:     Version,
 		RequestTime: UTCNow(),
 	}
-	reply := LoginRPCReply{}
-	err = adminServer.Login(&args, &reply)
+	err = adminServer.Login(&args, &LoginRPCReply{})
 	if err != nil {
 		t.Fatalf("Failed to login to admin server - %v", err)
 	}
 
 	authArgs := AuthRPCArgs{
-		AuthToken: reply.AuthToken,
+		AuthToken: token,
 	}
 	authReply := AuthRPCReply{}
 
@@ -114,12 +121,15 @@ func TestReInitDisks(t *testing.T) {
 		t.Errorf("Expected to pass, but failed with %v", err)
 	}
 
+	token, err = authenticateNode(creds.AccessKey, creds.SecretKey)
+	if err != nil {
+		t.Fatal(err)
+	}
 	// Negative test case with admin rpc server setup for FS.
 	globalIsXL = false
 	fsAdminServer := adminCmd{}
 	fsArgs := LoginRPCArgs{
-		Username:    creds.AccessKey,
-		Password:    creds.SecretKey,
+		AuthToken:   token,
 		Version:     Version,
 		RequestTime: UTCNow(),
 	}
@@ -130,7 +140,7 @@ func TestReInitDisks(t *testing.T) {
 	}
 
 	authArgs = AuthRPCArgs{
-		AuthToken: fsReply.AuthToken,
+		AuthToken: token,
 	}
 	authReply = AuthRPCReply{}
 	// Attempt ReInitDisks service on a FS backend.
@@ -154,9 +164,14 @@ func TestGetConfig(t *testing.T) {
 
 	adminServer := adminCmd{}
 	creds := serverConfig.GetCredential()
+
+	token, err := authenticateNode(creds.AccessKey, creds.SecretKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	args := LoginRPCArgs{
-		Username:    creds.AccessKey,
-		Password:    creds.SecretKey,
+		AuthToken:   token,
 		Version:     Version,
 		RequestTime: UTCNow(),
 	}
@@ -167,7 +182,7 @@ func TestGetConfig(t *testing.T) {
 	}
 
 	authArgs := AuthRPCArgs{
-		AuthToken: reply.AuthToken,
+		AuthToken: token,
 	}
 
 	configReply := ConfigReply{}
@@ -198,9 +213,12 @@ func TestWriteAndCommitConfig(t *testing.T) {
 
 	adminServer := adminCmd{}
 	creds := serverConfig.GetCredential()
+	token, err := authenticateNode(creds.AccessKey, creds.SecretKey)
+	if err != nil {
+		t.Fatal(err)
+	}
 	args := LoginRPCArgs{
-		Username:    creds.AccessKey,
-		Password:    creds.SecretKey,
+		AuthToken:   token,
 		Version:     Version,
 		RequestTime: UTCNow(),
 	}
@@ -215,7 +233,7 @@ func TestWriteAndCommitConfig(t *testing.T) {
 	tmpFileName := mustGetUUID()
 	wArgs := WriteConfigArgs{
 		AuthRPCArgs: AuthRPCArgs{
-			AuthToken: reply.AuthToken,
+			AuthToken: token,
 		},
 		TmpFileName: tmpFileName,
 		Buf:         buf,
@@ -232,7 +250,7 @@ func TestWriteAndCommitConfig(t *testing.T) {
 
 	cArgs := CommitConfigArgs{
 		AuthRPCArgs: AuthRPCArgs{
-			AuthToken: reply.AuthToken,
+			AuthToken: token,
 		},
 		FileName: tmpFileName,
 	}

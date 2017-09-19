@@ -23,26 +23,6 @@ import (
 	"time"
 )
 
-// Login handler implements JWT login token generator, which upon login request
-// along with username and password is generated.
-func (br *browserPeerAPIHandlers) Login(args *LoginRPCArgs, reply *LoginRPCReply) error {
-	// Validate LoginRPCArgs
-	if err := args.IsValid(); err != nil {
-		return err
-	}
-
-	// Authenticate using JWT.
-	token, err := authenticateWeb(args.Username, args.Password)
-	if err != nil {
-		return err
-	}
-
-	// Return the token.
-	reply.AuthToken = token
-
-	return nil
-}
-
 // SetAuthPeerArgs - Arguments collection for SetAuth RPC call
 type SetAuthPeerArgs struct {
 	// For Auth
