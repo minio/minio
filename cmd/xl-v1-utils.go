@@ -240,19 +240,6 @@ func xlMetaV1UnmarshalJSON(xlMetaBuf []byte) (xlMeta xlMetaV1, e error) {
 	return xlMeta, nil
 }
 
-// read xl.json from the given disk, parse and return xlV1MetaV1.Parts.
-func readXLMetaParts(disk StorageAPI, bucket string, object string) ([]objectPartInfo, error) {
-	// Reads entire `xl.json`.
-	xlMetaBuf, err := disk.ReadAll(bucket, path.Join(object, xlMetaJSONFile))
-	if err != nil {
-		return nil, traceError(err)
-	}
-	// obtain xlMetaV1{}.Partsusing `github.com/tidwall/gjson`.
-	xlMetaParts := parseXLParts(xlMetaBuf)
-
-	return xlMetaParts, nil
-}
-
 // read xl.json from the given disk and parse xlV1Meta.Stat and xlV1Meta.Meta using gjson.
 func readXLMetaStat(disk StorageAPI, bucket string, object string) (si statInfo, mp map[string]string, e error) {
 	// Reads entire `xl.json`.

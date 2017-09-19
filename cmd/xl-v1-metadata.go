@@ -373,32 +373,6 @@ func pickValidXLMeta(metaArr []xlMetaV1, modTime time.Time) (xmv xlMetaV1, e err
 // list of all errors that can be ignored in a metadata operation.
 var objMetadataOpIgnoredErrs = append(baseIgnoredErrs, errDiskAccessDenied, errVolumeNotFound, errFileNotFound, errFileAccessDenied, errCorruptedFormat)
 
-// readXLMetaParts - returns the XL Metadata Parts from xl.json of one of the disks picked at random.
-func (xl xlObjects) readXLMetaParts(bucket, object string) (xlMetaParts []objectPartInfo, err error) {
-	var ignoredErrs []error
-	for _, disk := range xl.getLoadBalancedDisks() {
-		if disk == nil {
-			ignoredErrs = append(ignoredErrs, errDiskNotFound)
-			continue
-		}
-		xlMetaParts, err = readXLMetaParts(disk, bucket, object)
-		if err == nil {
-			return xlMetaParts, nil
-		}
-		// For any reason disk or bucket is not available continue
-		// and read from other disks.
-		if isErrIgnored(err, objMetadataOpIgnoredErrs...) {
-			ignoredErrs = append(ignoredErrs, err)
-			continue
-		}
-		// Error is not ignored, return right here.
-		return nil, err
-	}
-	// If all errors were ignored, reduce to maximal occurrence
-	// based on the read quorum.
-	return nil, reduceReadQuorumErrs(ignoredErrs, nil, xl.readQuorum)
-}
-
 // readXLMetaStat - return xlMetaV1.Stat and xlMetaV1.Meta from  one of the disks picked at random.
 func (xl xlObjects) readXLMetaStat(bucket, object string) (xlStat statInfo, xlMeta map[string]string, err error) {
 	var ignoredErrs []error
