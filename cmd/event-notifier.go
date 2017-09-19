@@ -465,7 +465,7 @@ func persistNotificationConfig(bucket string, ncfg *notificationConfig, obj Obje
 
 	// write object to path
 	sha256Sum := getSHA256Hash(buf)
-	_, err = obj.PutObject(minioMetaBucket, ncPath, int64(len(buf)), bytes.NewReader(buf), nil, sha256Sum)
+	_, err = obj.PutObject(minioMetaBucket, ncPath, NewHashReader(bytes.NewReader(buf), int64(len(buf)), "", sha256Sum), nil)
 	if err != nil {
 		errorIf(err, "Unable to write bucket notification configuration.")
 		return err
@@ -492,7 +492,7 @@ func persistListenerConfig(bucket string, lcfg []listenerConfig, obj ObjectLayer
 
 	// write object to path
 	sha256Sum := getSHA256Hash(buf)
-	_, err = obj.PutObject(minioMetaBucket, lcPath, int64(len(buf)), bytes.NewReader(buf), nil, sha256Sum)
+	_, err = obj.PutObject(minioMetaBucket, lcPath, NewHashReader(bytes.NewReader(buf), int64(len(buf)), "", sha256Sum), nil)
 	if err != nil {
 		errorIf(err, "Unable to write bucket listener configuration to object layer.")
 	}

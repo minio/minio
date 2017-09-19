@@ -17,10 +17,8 @@
 package cmd
 
 import (
-	"crypto/md5"
 	"encoding/hex"
 	"fmt"
-	"hash"
 	"io"
 	"os"
 	pathutil "path"
@@ -28,7 +26,6 @@ import (
 	"time"
 
 	"github.com/minio/minio/pkg/lock"
-	"github.com/minio/sha256-simd"
 )
 
 const (
@@ -459,7 +456,7 @@ func (fs fsObjects) CopyObjectPart(srcBucket, srcObject, dstBucket, dstObject, u
 		pipeWriter.Close() // Close writer explicitly signalling we wrote all data.
 	}()
 
-	partInfo, err := fs.PutObjectPart(dstBucket, dstObject, uploadID, partID, length, pipeReader, "", "")
+	partInfo, err := fs.PutObjectPart(dstBucket, dstObject, uploadID, partID, NewHashReader(pipeReader, length, "", ""))
 	if err != nil {
 		return pi, toObjectErr(err, dstBucket, dstObject)
 	}
@@ -474,7 +471,7 @@ func (fs fsObjects) CopyObjectPart(srcBucket, srcObject, dstBucket, dstObject, u
 // an ongoing multipart transaction. Internally incoming data is
 // written to '.minio.sys/tmp' location and safely renamed to
 // '.minio.sys/multipart' for reach parts.
-func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, size int64, data io.Reader, md5Hex string, sha256sum string) (pi PartInfo, e error) {
+func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, data *HashReader) (pi PartInfo, e error) {
 	if err := checkPutObjectPartArgs(bucket, object, fs); err != nil {
 		return pi, err
 	}
@@ -523,36 +520,14 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	partSuffix := fmt.Sprintf("object%d", partID)
 	tmpPartPath := uploadID + "." + mustGetUUID() + "." + partSuffix
 
-	// Initialize md5 writer.
-	md5Writer := md5.New()
-	hashWriters := []io.Writer{md5Writer}
-
-	var sha256Writer hash.Hash
-	if sha256sum != "" {
-		sha256Writer = sha256.New()
-		hashWriters = append(hashWriters, sha256Writer)
-	}
-	multiWriter := io.MultiWriter(hashWriters...)
-
-	// Limit the reader to its provided size if specified.
-	var limitDataReader io.Reader
-	if size > 0 {
-		// This is done so that we can avoid erroneous clients sending more data than the set content size.
-		limitDataReader = io.LimitReader(data, size)
-	} else {
-		// else we read till EOF.
-		limitDataReader = data
-	}
-
-	teeReader := io.TeeReader(limitDataReader, multiWriter)
 	bufSize := int64(readSizeV1)
-	if size > 0 && bufSize > size {
+	if size := data.Size(); size > 0 && bufSize > size {
 		bufSize = size
 	}
-	buf := make([]byte, int(bufSize))
+	buf := make([]byte, bufSize)
 
 	fsPartPath := pathJoin(fs.fsPath, minioMetaTmpBucket, fs.fsUUID, tmpPartPath)
-	bytesWritten, cErr := fsCreateFile(fsPartPath, teeReader, buf, size)
+	bytesWritten, cErr := fsCreateFile(fsPartPath, data, buf, data.Size())
 	if cErr != nil {
 		fsRemoveFile(fsPartPath)
 		return pi, toObjectErr(cErr, minioMetaTmpBucket, tmpPartPath)
@@ -560,7 +535,7 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 
 	// Should return IncompleteBody{} error when reader has fewer
 	// bytes than specified in request header.
-	if bytesWritten < size {
+	if bytesWritten < data.Size() {
 		fsRemoveFile(fsPartPath)
 		return pi, traceError(IncompleteBody{})
 	}
@@ -570,18 +545,8 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	// delete.
 	defer fsRemoveFile(fsPartPath)
 
-	newMD5Hex := hex.EncodeToString(md5Writer.Sum(nil))
-	if md5Hex != "" {
-		if newMD5Hex != md5Hex {
-			return pi, traceError(BadDigest{md5Hex, newMD5Hex})
-		}
-	}
-
-	if sha256sum != "" {
-		newSHA256sum := hex.EncodeToString(sha256Writer.Sum(nil))
-		if newSHA256sum != sha256sum {
-			return pi, traceError(SHA256Mismatch{})
-		}
+	if err = data.Verify(); err != nil {
+		return pi, toObjectErr(err, minioMetaTmpBucket, tmpPartPath)
 	}
 
 	partPath := pathJoin(bucket, object, uploadID, partSuffix)
@@ -599,7 +564,8 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	}
 
 	// Save the object part info in `fs.json`.
-	fsMeta.AddObjectPart(partID, partSuffix, newMD5Hex, size)
+	md5Hex := hex.EncodeToString(data.MD5())
+	fsMeta.AddObjectPart(partID, partSuffix, md5Hex, data.Size())
 	if _, err = fsMeta.WriteTo(rwlk); err != nil {
 		partLock.Unlock()
 		return pi, toObjectErr(err, minioMetaMultipartBucket, uploadIDPath)
@@ -625,7 +591,7 @@ func (fs fsObjects) PutObjectPart(bucket, object, uploadID string, partID int, s
 	return PartInfo{
 		PartNumber:   partID,
 		LastModified: fi.ModTime(),
-		ETag:         newMD5Hex,
+		ETag:         md5Hex,
 		Size:         fi.Size(),
 	}, nil
 }

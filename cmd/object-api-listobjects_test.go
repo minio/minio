@@ -64,9 +64,8 @@ func testListObjects(obj ObjectLayer, instanceType string, t TestErrHandler) {
 		{"obj1", "obj1", nil},
 		{"obj2", "obj2", nil},
 	}
-	sha256sum := ""
 	for _, object := range testObjects {
-		_, err = obj.PutObject(testBuckets[0], object.name, int64(len(object.content)), bytes.NewBufferString(object.content), object.meta, sha256sum)
+		_, err = obj.PutObject(testBuckets[0], object.name, NewHashReader(bytes.NewBufferString(object.content), int64(len(object.content)), object.meta["etag"], ""), object.meta)
 		if err != nil {
 			t.Fatalf("%s : %s", instanceType, err.Error())
 		}
@@ -605,11 +604,10 @@ func BenchmarkListObjects(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	sha256sum := ""
 	// Insert objects to be listed and benchmarked later.
 	for i := 0; i < 20000; i++ {
 		key := "obj" + strconv.Itoa(i)
-		_, err = obj.PutObject(bucket, key, int64(len(key)), bytes.NewBufferString(key), nil, sha256sum)
+		_, err = obj.PutObject(bucket, key, NewHashReader(bytes.NewBufferString(key), int64(len(key)), "", ""), nil)
 		if err != nil {
 			b.Fatal(err)
 		}
