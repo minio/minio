@@ -52,6 +52,7 @@ import (
 
 	"github.com/fatih/color"
 	router "github.com/gorilla/mux"
+	"github.com/minio/minio-go/pkg/policy"
 )
 
 // Tests should initNSLock only once.
@@ -1754,13 +1755,13 @@ func prepareTestBackend(instanceType string) (ObjectLayer, []string, error) {
 // Here is the brief description of some of the arguments to the function below.
 //   apiRouter - http.Handler with the relevant API endPoint (API endPoint under test) registered.
 //   anonReq   - unsigned *http.Request to invoke the handler's response for anonymous requests.
-//   policyFunc    - function to return bucketPolicy statement which would permit the anonymous request to be served.
+//   policyFunc    - function to return policy.BucketAccessPolicy statement which would permit the anonymous request to be served.
 // The test works in 2 steps, here is the description of the steps.
 //   STEP 1: Call the handler with the unsigned HTTP request (anonReq), assert for the `ErrAccessDenied` error response.
 //   STEP 2: Set the policy to allow the unsigned request, use the policyFunc to obtain the relevant statement and call
 //           the handler again to verify its success.
 func ExecObjectLayerAPIAnonTest(t *testing.T, testName, bucketName, objectName, instanceType string, apiRouter http.Handler,
-	anonReq *http.Request, policyFunc func(string, string) policyStatement) {
+	anonReq *http.Request, policyFunc func(string, string) policy.Statement) {
 
 	anonTestStr := "Anonymous HTTP request test"
 	unknownSignTestStr := "Unknown HTTP signature test"
@@ -1813,12 +1814,12 @@ func ExecObjectLayerAPIAnonTest(t *testing.T, testName, bucketName, objectName, 
 	}
 	// Set write only policy on bucket to allow anonymous HTTP request for the operation under test.
 	// request to go through.
-	policy := bucketPolicy{
+	policy := policy.BucketAccessPolicy{
 		Version:    "1.0",
-		Statements: []policyStatement{policyFunc(bucketName, "")},
+		Statements: []policy.Statement{policyFunc(bucketName, "")},
 	}
 
-	globalBucketPolicies.SetBucketPolicy(bucketName, policyChange{false, &policy})
+	globalBucketPolicies.SetBucketPolicy(bucketName, policyChange{false, policy})
 	// now call the handler again with the unsigned/anonymous request, it should be accepted.
 	rec = httptest.NewRecorder()
 

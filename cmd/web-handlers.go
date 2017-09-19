@@ -22,8 +22,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"runtime"
@@ -216,9 +216,9 @@ func (web *webAPIHandlers) ListObjects(r *http.Request, args *ListObjectsArgs, r
 	if objectAPI == nil {
 		return toJSONError(errServerNotInitialized)
 	}
-	prefix := args.Prefix + "test" // To test if GetObject/PutObject with the specified prefix is allowed.
-	readable := isBucketActionAllowed("s3:GetObject", args.BucketName, prefix)
-	writable := isBucketActionAllowed("s3:PutObject", args.BucketName, prefix)
+	prefix := pathJoin(args.BucketName, args.Prefix, "/")
+	readable := enforceBucketPolicy(args.BucketName, "s3:GetObject", prefix, "", "", url.Values{}) == ErrNone
+	writable := enforceBucketPolicy(args.BucketName, "s3:PutObject", prefix, "", "", url.Values{}) == ErrNone
 	authErr := webRequestAuthenticate(r)
 	switch {
 	case authErr == errAuthentication:
@@ -513,7 +513,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 		writeWebErrorResponse(w, errAuthentication)
 		return
 	}
-	if authErr != nil && !isBucketActionAllowed("s3:PutObject", bucket, object) {
+	if authErr != nil && enforceBucketPolicy(bucket, "s3:PutObject", r.URL.Path, "", "", url.Values{}) != ErrNone {
 		writeWebErrorResponse(w, errAuthentication)
 		return
 	}
@@ -570,7 +570,7 @@ func (web *webAPIHandlers) Download(w http.ResponseWriter, r *http.Request) {
 	object := vars["object"]
 	token := r.URL.Query().Get("token")
 
-	if !isAuthTokenValid(token) && !isBucketActionAllowed("s3:GetObject", bucket, object) {
+	if !isAuthTokenValid(token) && enforceBucketPolicy(bucket, "s3:GetObject", r.URL.Path, "", "", url.Values{}) != ErrNone {
 		writeWebErrorResponse(w, errAuthentication)
 		return
 	}
@@ -622,7 +622,7 @@ func (web *webAPIHandlers) DownloadZip(w http.ResponseWriter, r *http.Request) {
 	token := r.URL.Query().Get("token")
 	if !isAuthTokenValid(token) {
 		for _, object := range args.Objects {
-			if !isBucketActionAllowed("s3:GetObject", args.BucketName, pathJoin(args.Prefix, object)) {
+			if enforceBucketPolicy(args.BucketName, "s3:GetObject", pathJoin(args.BucketName, args.Prefix, object), "", "", url.Values{}) != ErrNone {
 				writeWebErrorResponse(w, errAuthentication)
 				return
 			}
@@ -696,48 +696,6 @@ type GetBucketPolicyRep struct {
 	Policy    policy.BucketPolicy `json:"policy"`
 }
 
-func readBucketAccessPolicy(objAPI ObjectLayer, bucketName string) (policy.BucketAccessPolicy, error) {
-	bucketPolicyReader, err := readBucketPolicyJSON(bucketName, objAPI)
-	if err != nil {
-		if _, ok := err.(BucketPolicyNotFound); ok {
-			return policy.BucketAccessPolicy{Version: "2012-10-17"}, nil
-		}
-		return policy.BucketAccessPolicy{}, err
-	}
-
-	bucketPolicyBuf, err := ioutil.ReadAll(bucketPolicyReader)
-	if err != nil {
-		return policy.BucketAccessPolicy{}, err
-	}
-
-	policyInfo := policy.BucketAccessPolicy{}
-	err = json.Unmarshal(bucketPolicyBuf, &policyInfo)
-	if err != nil {
-		return policy.BucketAccessPolicy{}, err
-	}
-
-	return policyInfo, nil
-
-}
-
-func getBucketAccessPolicy(objAPI ObjectLayer, bucketName string) (policy.BucketAccessPolicy, error) {
-	// FIXME: remove this code when S3 layer for gateway and server is unified.
-	var policyInfo policy.BucketAccessPolicy
-	var err error
-
-	switch layer := objAPI.(type) {
-	case *s3Objects:
-		policyInfo, err = layer.GetBucketPolicies(bucketName)
-	case *azureObjects:
-		policyInfo, err = layer.GetBucketPolicies(bucketName)
-	case *gcsGateway:
-		policyInfo, err = layer.GetBucketPolicies(bucketName)
-	default:
-		policyInfo, err = readBucketAccessPolicy(objAPI, bucketName)
-	}
-	return policyInfo, err
-}
-
 // GetBucketPolicy - get bucket policy for the requested prefix.
 func (web *webAPIHandlers) GetBucketPolicy(r *http.Request, args *GetBucketPolicyArgs, reply *GetBucketPolicyRep) error {
 	objectAPI := web.ObjectAPI()
@@ -749,7 +707,7 @@ func (web *webAPIHandlers) GetBucketPolicy(r *http.Request, args *GetBucketPolic
 		return toJSONError(errAuthentication)
 	}
 
-	var policyInfo, err = getBucketAccessPolicy(objectAPI, args.BucketName)
+	policyInfo, err := getBucketAccessPolicy(args.BucketName, objectAPI)
 	if err != nil {
 		_, ok := errorCause(err).(PolicyNotFound)
 		if !ok {
@@ -791,12 +749,9 @@ func (web *webAPIHandlers) ListAllBucketPolicies(r *http.Request, args *ListAllB
 		return toJSONError(errAuthentication)
 	}
 
-	var policyInfo, err = getBucketAccessPolicy(objectAPI, args.BucketName)
+	policyInfo, err := getBucketAccessPolicy(args.BucketName, objectAPI)
 	if err != nil {
-		_, ok := errorCause(err).(PolicyNotFound)
-		if !ok {
-			return toJSONError(err, args.BucketName)
-		}
+		return toJSONError(err, args.BucketName)
 	}
 	reply.UIVersion = browser.UIVersion
 	for prefix, policy := range policy.GetPolicies(policyInfo.Statements, args.BucketName) {
@@ -835,34 +790,29 @@ func (web *webAPIHandlers) SetBucketPolicy(r *http.Request, args *SetBucketPolic
 		}
 	}
 
-	var policyInfo, err = getBucketAccessPolicy(objectAPI, args.BucketName)
+	policyInfo, err := getBucketAccessPolicy(args.BucketName, objectAPI)
 	if err != nil {
-		if _, ok := errorCause(err).(PolicyNotFound); !ok {
-			return toJSONError(err, args.BucketName)
-		}
-		policyInfo = policy.BucketAccessPolicy{Version: "2012-10-17"}
+		return toJSONError(err, args.BucketName)
 	}
 
 	policyInfo.Statements = policy.SetPolicy(policyInfo.Statements, bucketP, args.BucketName, args.Prefix)
-	switch g := objectAPI.(type) {
+	switch gw := objectAPI.(type) {
 	case GatewayLayer:
 		if len(policyInfo.Statements) == 0 {
-			err = g.DeleteBucketPolicies(args.BucketName)
-			if err != nil {
+			if err = gw.DeleteBucketPolicies(args.BucketName); err != nil {
 				return toJSONError(err, args.BucketName)
 			}
 			return nil
 		}
-		err = g.SetBucketPolicies(args.BucketName, policyInfo)
-		if err != nil {
+		if err = gw.SetBucketPolicies(args.BucketName, policyInfo); err != nil {
 			return toJSONError(err)
 		}
 		return nil
 	}
 
 	if len(policyInfo.Statements) == 0 {
-		err = persistAndNotifyBucketPolicyChange(args.BucketName, policyChange{true, nil}, objectAPI)
-		if err != nil {
+		if err = persistAndNotifyBucketPolicyChange(args.BucketName, policyChange{true, policyInfo},
+			objectAPI); err != nil {
 			return toJSONError(err, args.BucketName)
 		}
 		return nil
