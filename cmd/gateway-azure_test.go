@@ -147,14 +147,15 @@ func TestAzureGetBlockID(t *testing.T) {
 	testCases := []struct {
 		partID        int
 		subPartNumber int
+		uploadID      string
 		md5           string
 		blockID       string
 	}{
-		{1, 7, "d41d8cd98f00b204e9800998ecf8427e", "MDAwMDEuMDcuZDQxZDhjZDk4ZjAwYjIwNGU5ODAwOTk4ZWNmODQyN2U="},
-		{2, 19, "a7fb6b7b36ee4ed66b5546fac4690273", "MDAwMDIuMTkuYTdmYjZiN2IzNmVlNGVkNjZiNTU0NmZhYzQ2OTAyNzM="},
+		{1, 7, "f328c35cad938137", "d41d8cd98f00b204e9800998ecf8427e", "MDAwMDEuMDcuZjMyOGMzNWNhZDkzODEzNy5kNDFkOGNkOThmMDBiMjA0ZTk4MDA5OThlY2Y4NDI3ZQ=="},
+		{2, 19, "abcdc35cad938137", "a7fb6b7b36ee4ed66b5546fac4690273", "MDAwMDIuMTkuYWJjZGMzNWNhZDkzODEzNy5hN2ZiNmI3YjM2ZWU0ZWQ2NmI1NTQ2ZmFjNDY5MDI3Mw=="},
 	}
 	for _, test := range testCases {
-		blockID := azureGetBlockID(test.partID, test.subPartNumber, test.md5)
+		blockID := azureGetBlockID(test.partID, test.subPartNumber, test.uploadID, test.md5)
 		if blockID != test.blockID {
 			t.Fatalf("%s is not equal to %s", blockID, test.blockID)
 		}
@@ -167,13 +168,14 @@ func TestAzureParseBlockID(t *testing.T) {
 		blockID       string
 		partID        int
 		subPartNumber int
+		uploadID      string
 		md5           string
 	}{
-		{"MDAwMDEuMDcuZDQxZDhjZDk4ZjAwYjIwNGU5ODAwOTk4ZWNmODQyN2U=", 1, 7, "d41d8cd98f00b204e9800998ecf8427e"},
-		{"MDAwMDIuMTkuYTdmYjZiN2IzNmVlNGVkNjZiNTU0NmZhYzQ2OTAyNzM=", 2, 19, "a7fb6b7b36ee4ed66b5546fac4690273"},
+		{"MDAwMDEuMDcuZjMyOGMzNWNhZDkzODEzNy5kNDFkOGNkOThmMDBiMjA0ZTk4MDA5OThlY2Y4NDI3ZQ==", 1, 7, "f328c35cad938137", "d41d8cd98f00b204e9800998ecf8427e"},
+		{"MDAwMDIuMTkuYWJjZGMzNWNhZDkzODEzNy5hN2ZiNmI3YjM2ZWU0ZWQ2NmI1NTQ2ZmFjNDY5MDI3Mw==", 2, 19, "abcdc35cad938137", "a7fb6b7b36ee4ed66b5546fac4690273"},
 	}
 	for _, test := range testCases {
-		partID, subPartNumber, md5, err := azureParseBlockID(test.blockID)
+		partID, subPartNumber, uploadID, md5, err := azureParseBlockID(test.blockID)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -183,12 +185,15 @@ func TestAzureParseBlockID(t *testing.T) {
 		if subPartNumber != test.subPartNumber {
 			t.Fatalf("%d not equal to %d", subPartNumber, test.subPartNumber)
 		}
+		if uploadID != test.uploadID {
+			t.Fatalf("%s not equal to %s", uploadID, test.uploadID)
+		}
 		if md5 != test.md5 {
 			t.Fatalf("%s not equal to %s", md5, test.md5)
 		}
 	}
 
-	_, _, _, err := azureParseBlockID("junk")
+	_, _, _, _, err := azureParseBlockID("junk")
 	if err == nil {
 		t.Fatal("Expected azureParseBlockID() to return error")
 	}
@@ -269,5 +274,31 @@ func TestAnonErrToObjectErr(t *testing.T) {
 				t.Errorf("anonErrToObjectErr() error = %v, wantErr %v", err, test.wantErr)
 			}
 		})
+	}
+}
+
+func TestCheckAzureUploadID(t *testing.T) {
+	invalidUploadIDs := []string{
+		"123456789abcdefg",
+		"hello world",
+		"0x1234567890",
+		"1234567890abcdef1234567890abcdef",
+	}
+
+	for _, uploadID := range invalidUploadIDs {
+		if err := checkAzureUploadID(uploadID); err == nil {
+			t.Fatalf("%s: expected: <error>, got: <nil>", uploadID)
+		}
+	}
+
+	validUploadIDs := []string{
+		"1234567890abcdef",
+		"1122334455667788",
+	}
+
+	for _, uploadID := range validUploadIDs {
+		if err := checkAzureUploadID(uploadID); err != nil {
+			t.Fatalf("%s: expected: <nil>, got: %s", uploadID, err)
+		}
 	}
 }

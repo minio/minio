@@ -53,6 +53,10 @@ const (
 	globalMinioModeGatewayAzure    = "mode-gateway-azure"
 	globalMinioModeGatewayS3       = "mode-gateway-s3"
 	globalMinioModeGatewayGCS      = "mode-gateway-gcs"
+
+	// globalMinioSysTmp prefix is used in Azure/GCS gateway for save metadata sent by Initialize Multipart Upload API.
+	globalMinioSysTmp = "minio.sys.tmp/"
+
 	// Add new global values here.
 )
 
