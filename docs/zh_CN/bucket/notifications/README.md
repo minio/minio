@@ -73,7 +73,7 @@ Minio支持[RabbitMQ](https://www.rabbitmq.com/)中所有的交换方式，这�
 
 ### 第二步: 使用Minio客户端启用bucket通知
 
-如果一个JPEG图片上传到``myminio`` server里的``images`` 存储桶或者从桶中删除，一个存储桶事件提醒就会被触发。 这里ARN值是``arn:minio:sqs:us-east-1:1:amqp``，想了解更多关于ARN的信息，请参考[AWS ARN](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html) documentation.
+如果一个JPEG图片上传到``myminio`` server里的``images`` 存储桶或者从桶中删除，一个存储桶事件通知就会被触发。 这里ARN值是``arn:minio:sqs:us-east-1:1:amqp``，想了解更多关于ARN的信息，请参考[AWS ARN](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html) documentation.
 
 ```
 mc mb myminio/images
@@ -84,7 +84,7 @@ arn:minio:sqs:us-east-1:1:amqp s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suf
 
 ### 第三步:在RabbitMQ上进行验证
 
-下面将要出场的python程序会等待队列交换T``bucketevents``并在控制台中输出事件提醒。我们使用的是[Pika Python Client](https://www.rabbitmq.com/tutorials/tutorial-three-python.html) 来实现此功能。
+下面将要出场的python程序会等待队列交换T``bucketevents``并在控制台中输出事件通知。我们使用的是[Pika Python Client](https://www.rabbitmq.com/tutorials/tutorial-three-python.html) 来实现此功能。
 
 ```py
 #!/usr/bin/env python
@@ -127,7 +127,7 @@ python rabbit.py
 mc cp myphoto.jpg myminio/images
 ```
 
-一旦上传完毕，你应该会通过RabbitMQ收到下面的事件提醒。
+一旦上传完毕，你应该会通过RabbitMQ收到下面的事件通知。
 
 ```py
 python rabbit.py
@@ -135,7 +135,7 @@ python rabbit.py
 ```
 
 <a name="MQTT"></a>
-## Publish Minio events MQTT
+## 使用MQTT发布Minio事件
 
 从 [这里](https://mosquitto.org/)安装MQTT Broker。
 
@@ -177,9 +177,9 @@ Minio支持任何支持MQTT 3.1或3.1.1的MQTT服务器，并且可以通过TCP�
 注意一下，你还是和之前AMQP一样可以听从你内心的想法，想配几个MQTT服务就配几个，只要每个MQTT服务实例有不同的ID (比如前面示例中的"1") 和配置信息。
 
 
-### Step 2: Enable bucket notification using Minio client
+### 第二步: 使用Minio客户端启用bucket通知
 
-We will enable bucket event notification to trigger whenever a JPEG image is uploaded or deleted ``images`` bucket on ``myminio`` server. Here ARN value is ``arn:minio:sqs:us-east-1:1:mqtt``.
+如果一个JPEG图片上传到``myminio`` server里的``images`` 存储桶或者从桶中删除，一个存储桶事件通知就会被触发。 这里ARN值是``arn:minio:sqs:us-east-1:1:mqtt``。
 
 ```
 mc mb myminio/images
@@ -188,9 +188,9 @@ mc events list myminio/images
 arn:minio:sqs:us-east-1:1:amqp s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
 ```
 
-### Step 3: Test on MQTT
+### 第三步：验证MQTT
 
-The python program below waits on mqtt topic ``/minio`` and prints event notifications on the console. We use [paho-mqtt](https://pypi.python.org/pypi/paho-mqtt/) library to do this.
+下面的python程序等待mqtt主题``/ minio``，并在控制台上打印事件通知。 我们使用[paho-mqtt](https://pypi.python.org/pypi/paho-mqtt/)库来执行此操作。
 
 ```py
 #!/usr/bin/env python
@@ -222,19 +222,19 @@ client.connect("localhost:1883", 1883, 60)
 client.loop_forever()
 ```
 
-Execute this example python program to watch for MQTT events on the console.
+执行这个python示例程序来观察MQTT事件。
 
 ```py
 python mqtt.py
 ```
 
-Open another terminal and upload a JPEG image into ``images`` bucket.
+打开一个新的terminal终端并上传一张JPEG图片到``images`` 存储桶。
 
 ```
 mc cp myphoto.jpg myminio/images
 ```
 
-You should receive the following event notification via MQTT once the upload completes.
+一旦上传完毕，你应该会通过MQTT收到下面的事件通知。
 
 ```py
 python mqtt.py
@@ -242,34 +242,35 @@ python mqtt.py
 ```
 
 <a name="Elasticsearch"></a>
-## Publish Minio events via Elasticsearch
+## 使用Elasticsearch发布Minio事件
 
-Install [Elasticsearch](https://www.elastic.co/downloads/elasticsearch) server.
+安装 [Elasticsearch](https://www.elastic.co/downloads/elasticsearch) 。
 
-This notification target supports two formats: _namespace_ and _access_.
+这个通知目标支持两种格式: _namespace_ and _access_.
 
-When the _namespace_ format is used, Minio synchronizes objects in the bucket with documents in the index. For each event in the Minio, the server creates a document with the bucket and object name from the event as the document ID. Other details of the event are stored in the body of the document. Thus if an existing object is over-written in Minio, the corresponding document in the Elasticsearch index is updated. If an object is deleted, the corresponding document is deleted from the index.
+如果使用的是 _namespace_ 格式, Minio将桶中的对象与索引中的文档进行同步。对于Minio的每一个事件，ES都会创建一个document,这个document的ID就是存储桶以及存储对象的名称。事件的其他细节存储在document的正文中。因此，如果一个已经存在的对象在Minio中被覆盖，在ES中的相对应的document也会被更新。如果一个对象被删除，相对应的document也会从index中删除。
 
-When the _access_ format is used, Minio appends events as documents in an Elasticsearch index. For each event, a document with the event details, with the timestamp of document set to the event's timestamp is appended to an index. The ID of the documented is randomly generated by Elasticsearch. No documents are deleted or modified in this format.
+如果使用的是_access_格式，Minio将事件作为document加到ES的index中。对于每一个事件，ES同样会创建一个document,这个document包含事件的所有细节，document的时间戳设置为事件的时间戳，并将该document加到ES的index中。这个document的ID是由ES随机生成的。在_access_格式下，没有文档会被删除或者修改，对于一个对象的操作，都会生成新的document附加到index中。
 
-The steps below show how to use this notification target in `namespace` format. The other format is very similar and is omitted for brevity.
+下面的步骤展示的是在`namespace`格式下，如何使用通知目标。另一种格式和这个很类似，为了不让你们说我墨迹，就不再赘述了。
 
-### Step 1: Ensure minimum requirements are met
 
-Minio requires a 5.x series version of Elasticsearch. This is the latest major release series. Elasticsearch provides version upgrade migration guidelines [here](https://www.elastic.co/guide/en/elasticsearch/reference/current/setup-upgrade.html).
+### 第一步：确保至少满足第低要求
 
-### Step 2: Add Elasticsearch endpoint to Minio
+Minio要求使用的是ES 5.X系统版本。如果使用的是低版本的ES，也没关系，ES官方支持升级迁移，详情请看[这里](https://www.elastic.co/guide/en/elasticsearch/reference/current/setup-upgrade.html)。
 
-The default location of Minio server configuration file is ``~/.minio/config.json``. The Elasticsearch configuration is located in the `elasticsearch` key under the `notify` top-level key. Create a configuration key-value pair here for your Elasticsearch instance. The key is a name for your Elasticsearch endpoint, and the value is a collection of key-value parameters described in the table below.
+### 第二步：把ES集成到Minio中
 
-| Parameter | Type | Description |
+Minio Server的配置文件默认路径是 ``~/.minio/config.json``。ES配置信息是在`notify`这个节点下的`elasticsearch`节点下，在这里为你的ES实例创建配置信息键值对，key是你的ES的名称，value是下面表格中列列的键值对集合。 
+
+| 参数 | 类型 | 描述 |
 |:---|:---|:---|
-| `enable` | _bool_ | (Required) Is this server endpoint configuration active/enabled? |
-| `format` | _string_ | (Required) Either `namespace` or `access`. |
-| `url` | _string_ | (Required) The Elasticsearch server's address. For example: `http://localhost:9200`. |
-| `index` | _string_ | (Required) The name of an Elasticsearch index in which Minio will store documents. |
+| `enable` | _bool_ | (必须) 是否启用这个配置? |
+| `format` | _string_ | (必须)  是`namespace` 还是 `access` |
+| `url` | _string_ | (必须) ES地址，比如: `http://localhost:9200` |
+| `index` | _string_ | (必须) 给Minio用的index |
 
-An example of Elasticsearch configuration is as follows:
+以下是ES的一个配置示例:
 
 ```json
 "elasticsearch": {
@@ -282,17 +283,17 @@ An example of Elasticsearch configuration is as follows:
 },
 ```
 
-After updating the configuration file, restart the Minio server to put the changes into effect. The server will print a line like `SQS ARNs:  arn:minio:sqs:us-east-1:1:elasticsearch` at start-up if there were no errors.
+更新完配置文件后，重启Minio Server让配置生效。如果一切顺利，Minio Server会在启动时输出一行信息，类似 `SQS ARNs:  arn:minio:sqs:us-east-1:1:elasticsearch`。
 
-Note that, you can add as many Elasticsearch server endpoint configurations as needed by providing an identifier (like "1" in the example above) for the Elasticsearch instance and an object of per-server configuration parameters.
+注意一下，你又可以再一次听从你内心的想法，想配几个ES服务就配几个，只要每个ES服务实例有不同的ID (比如前面示例中的"1") 和配置信息。
 
-### Step 3: Enable bucket notification using Minio client
+### 第三步：使用Minio客户端启用bucket通知
 
-We will now enable bucket event notifications on a bucket named `images`. Whenever a JPEG image is created/overwritten, a new document is added or an existing document is updated in the Elasticsearch index configured above. When an existing object is deleted, the corresponding document is deleted from the index. Thus, the rows in the Elasticsearch index, reflect the `.jpg` objects in the `images` bucket.
+我们现在可以在一个叫`images`的存储桶上开启事件通知。一旦有文件被创建或者覆盖，一个新的ES的document会被创建或者更新到之前咱配的index里。如果一个已经存在的对象被删除，这个对应的document也会从index中删除。因此，这个ES index里的行，就映射着`images`存储桶里的对象。
 
-To configure this bucket notification, we need the ARN printed by Minio in the previous step. Additional information about ARN is available [here](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html).
+要配置这种存储桶通知，我们需要用到前面步骤Minio输出的ARN信息。更多有关ARN的资料，请参考[这里](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html)。
 
-With the `mc` tool, the configuration is very simple to add. Let us say that the Minio server is aliased as `myminio` in our mc configuration. Execute the following:
+有了`mc`这个工具，这些配置信息很容易就能添加上。假设咱们的Minio服务别名叫`myminio`,可执行下列脚本：
 
 ```
 mc mb myminio/images
@@ -301,15 +302,15 @@ mc events list myminio/images
 arn:minio:sqs:us-east-1:1:elasticsearch s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
 ```
 
-### Step 4: Test on Elasticsearch
+### 第四步：验证ES
 
-Upload a JPEG image into ``images`` bucket.
+上传一张图片到``images`` 存储桶。
 
 ```
 mc cp myphoto.jpg myminio/images
 ```
 
-Use curl to view contents of ``minio_events`` index.
+使用curl查到``minio_events`` index中的内容。
 
 ```
 $ curl  "http://localhost:9200/minio_events/_search?pretty=true"
@@ -379,36 +380,36 @@ $ curl  "http://localhost:9200/minio_events/_search?pretty=true"
 }
 ```
 
-This output shows that a document has been created for the event in Elasticsearch.
+这个输出显示在ES中为这个事件创建了一个document。
 
-Here we see that the document ID is the bucket and object name. In case `access` format was used, the document ID would be automatically generated by Elasticsearch.
+这里我们可以看到这个document ID就是存储桶和对象的名称。如果用的是`access`格式，这个document ID就是由ES随机生成的。
 
 <a name="Redis"></a>
-## Publish Minio events via Redis
+## 使用Redis发布Minio事件
 
-Install [Redis](http://redis.io/download) server. For illustrative purposes, we have set the database password as "yoursecret".
+安装 [Redis](http://redis.io/download)。为了演示，我们将数据库密码设为"yoursecret"。
 
-This notification target supports two formats: _namespace_ and _access_.
+这咱通知目标支持两种格式: _namespace_ 和 _access_。
 
-When the _namespace_ format is used, Minio synchronizes objects in the bucket with entries in a hash. For each entry, the key is formatted as "bucketName/objectName" for an object that exists in the bucket, and the value is the JSON-encoded event data about the operation that created/replaced the object in Minio. When objects are updated or deleted, the corresponding entry int he hash is updated or deleted respectively.
+如果用的是_namespacee_格式，Minio将存储桶里的对象同步成Redis hash中的条目。对于每一个条目，对对应一个存储桶里的对象，其key都被设为"存储桶名称/对象名称"，value都是一个有关这个Minio对象的JSON格式的事件数据。如果对象更新或者删除，hash中对象的条目也会相应的更新或者删除。
 
-When the _access_ format is used, Minio appends events to a list using [RPUSH](https://redis.io/commands/rpush). Each item in the list is a JSON encoded list with two items, where the first item is a timestamp string, and second item is a JSON object containing evnet data about the operation that happened in the bucket. No entries appended to the list are updated or deleted by Minio in this format.
+如果使用的是_access_,Minio使用[RPUSH](https://redis.io/commands/rpush)将事件添加到list中。这个list中每一个元素都是一个JSON格式的list,这个list中又有两个元素，第一个元素是时间戳的字符串，第二个元素是一个含有在这个存储桶上进行操作的事件数据的JSON对象。在这种格式下，list中的元素不会更更新或者删除。
 
-The steps below show how to use this notification target in `namespace` and `access` format.
+下面的步骤展示的是如何在`namespace`和`access`格式下使用通知目标。
 
-### Step 1: Add Redis endpoint to Minio
+### 第一步：集成Redis到Minio
 
-The default location of Minio server configuration file is ``~/.minio/config.json``. The Redis configuration is located in the `redis` key under the `notify` top-level key. Create a configuration key-value pair here for your Redis instance. The key is a name for your Redis endpoint, and the value is a collection of key-value parameters described in the table below.
+Minio Server的配置文件默认路径是 ``~/.minio/config.json``。Redis配置信息是在`notify`这个节点下的`redis`节点下，在这里为你的Redis实例创建配置信息键值对，key是你的Redis的名称，value是下面表格中列列的键值对集合。 
 
-| Parameter | Type | Description |
+| 参数 | 类型 | 描述 |
 |:---|:---|:---|
-| `enable` | _bool_ | (Required) Is this server endpoint configuration active/enabled? |
-| `format` | _string_ | (Required) Either `namespace` or `access`. |
-| `address` | _string_ | (Required) The Redis server's address. For example: `localhost:6379`. |
-| `password` | _string_ | (Optional) The Redis server's password. |
-| `key` | _string_ | (Required) The name of the redis key under which events are stored. A hash is used in case of `namespace` format and a list in case of `access` format.|
+| `enable` | _bool_ | (必须) 这个配置是否可用? |
+| `format` | _string_ | (必须) 是 `namespace` 还是 `access` |
+| `address` | _string_ | (必须) Redis服务地址，比如: `localhost:6379` |
+| `password` | _string_ | (可选) Redis服务密码 |
+| `key` | _string_ | (必须) 事件要存储到redis key的名称。如果用的是`namespace`格式的话，则是一个hash,如果是`access`格式的话，则是一个list|
 
-An example of Redis configuration is as follows:
+下面是一个Redis配置示例:
 
 ```json
 "redis": {
@@ -421,17 +422,17 @@ An example of Redis configuration is as follows:
 }
 ```
 
-After updating the configuration file, restart the Minio server to put the changes into effect. The server will print a line like `SQS ARNs:  arn:minio:sqs:us-east-1:1:redis` at start-up if there were no errors.
+更新完配置文件后，重启Minio Server让配置生效。如果一切顺利，Minio Server会在启动时输出一行信息，类似 `SQS ARNs:  arn:minio:sqs:us-east-1:1:redis`。
 
-Note that, you can add as many Redis server endpoint configurations as needed by providing an identifier (like "1" in the example above) for the Redis instance and an object of per-server configuration parameters.
+注意一下，你永远都可以听从你内心的想法，想配几个Redis服务就配几个，只要每个Redis服务实例有不同的ID (比如前面示例中的"1") 和配置信息。
 
-### Step 2: Enable bucket notification using Minio client
+### 第二步: 使用Minio客户端启用bucket通知
 
-We will now enable bucket event notifications on a bucket named `images`. Whenever a JPEG image is created/overwritten, a new key is added or an existing key is updated in the Redis hash configured above. When an existing object is deleted, the corresponding key is deleted from the Redis hash. Thus, the rows in the Redis hash, reflect the `.jpg` objects in the `images` bucket.
+我们现在可以在一个叫`images`的存储桶上开启事件通知。一旦有文件被创建或者覆盖，一个新的key会被创建,或者一个已经存在的key就会被更新到之前咱配的redis hash里。如果一个已经存在的对象被删除，这个对应的key也会从hash中删除。因此，这个Redis hash里的行，就映射着`images`存储桶里的对象。
 
-To configure this bucket notification, we need the ARN printed by Minio in the previous step. Additional information about ARN is available [here](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html).
+要配置这种存储桶通知，我们需要用到前面步骤Minio输出的ARN信息。更多有关ARN的资料，请参考[这里](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html)。
 
-With the `mc` tool, the configuration is very simple to add. Let us say that the Minio server is aliased as `myminio` in our mc configuration. Execute the following:
+有了`mc`这个工具，这些配置信息很容易就能添加上。假设咱们的Minio服务别名叫`myminio`,可执行下列脚本：
 
 ```
 mc mb myminio/images
@@ -440,9 +441,9 @@ mc events list myminio/images
 arn:minio:sqs:us-east-1:1:redis s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
 ```
 
-### Step 3: Test on Redis
+### 第三步：验证Redis
 
-Start the `redis-cli` Redis client program to inspect the contents in Redis. Run the `monitor` Redis command. This prints each operation performed on Redis as it occurs.
+启动`redis-cli`这个Redis客户端程序来检查Redis中的内容. 运行`monitor`Redis命令。 这将打印在Redis上执行的每个操作。
 
 ```
 redis-cli -a yoursecret
@@ -450,13 +451,13 @@ redis-cli -a yoursecret
 OK
 ```
 
-Open another terminal and upload a JPEG image into ``images`` bucket.
+打开一个新的terminal终端并上传一张JPEG图片到``images`` 存储桶。
 
 ```
 mc cp myphoto.jpg myminio/images
 ```
 
-In the previous terminal, you will now see the operation that Minio performs on Redis:
+在上一个终端中，你将看到Minio在Redis上执行的操作：
 
 ```
 127.0.0.1:6379> monitor
@@ -465,9 +466,9 @@ OK
 1490686879.651061 [0 172.17.0.1:44710] "HSET" "minio_events" "images/myphoto.jpg" "{\"Records\":[{\"eventVersion\":\"2.0\",\"eventSource\":\"minio:s3\",\"awsRegion\":\"us-east-1\",\"eventTime\":\"2017-03-28T07:41:19Z\",\"eventName\":\"s3:ObjectCreated:Put\",\"userIdentity\":{\"principalId\":\"minio\"},\"requestParameters\":{\"sourceIPAddress\":\"127.0.0.1:52234\"},\"responseElements\":{\"x-amz-request-id\":\"14AFFBD1ACE5F632\",\"x-minio-origin-endpoint\":\"http://192.168.86.115:9000\"},\"s3\":{\"s3SchemaVersion\":\"1.0\",\"configurationId\":\"Config\",\"bucket\":{\"name\":\"images\",\"ownerIdentity\":{\"principalId\":\"minio\"},\"arn\":\"arn:aws:s3:::images\"},\"object\":{\"key\":\"myphoto.jpg\",\"size\":2586,\"eTag\":\"5d284463f9da279f060f0ea4d11af098\",\"sequencer\":\"14AFFBD1ACE5F632\"}},\"source\":{\"host\":\"127.0.0.1\",\"port\":\"52234\",\"userAgent\":\"Minio (linux; amd64) minio-go/2.0.3 mc/2017-02-15T17:57:25Z\"}}]}"
 ```
 
-Here we see that Minio performed `HSET` on `minio_events` key.
+在这我看看到了Minio在`minio_events`这个key上执行了`HSET`命令。
 
-In case, `access` format was used, then `minio_events` would be a list, and the Minio server would have performed an `RPUSH` to append to the list. A consumer of this list would ideally use `BLPOP` to remove list items from the left-end of the list.
+如果用的是`access`格式，那么`minio_events`就是一个list,Minio就会调用`RPUSH`添加到list中。这个list的消费者会使用`BLPOP`从list的最左端删除list元素。
 
 <a name="NATS"></a>
 ## Publish Minio events via NATS
