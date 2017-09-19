@@ -6,7 +6,7 @@ Minio server stores all its configuration data in `${HOME}/.minio/config.json` f
 The default configuration directory is `${HOME}/.minio`. You can override the default configuration directory using `--config-dir` command-line option. Minio server generates a new `config.json` with auto-generated access credentials when its started for the first time.
 
 ```sh
-minio server --config-dir /etc/minio
+minio server --config-dir /etc/minio /data
 ```
 
 ### Certificate Directory
@@ -42,7 +42,7 @@ Example:
 ```sh
 export MINIO_ACCESS_KEY=admin
 export MINIO_SECRET_KEY=password
-minio server ~/Photos
+minio server /data
 ```
 
 #### Region
@@ -54,7 +54,7 @@ Example:
 
 ```sh
 export MINIO_REGION="my_region"
-minio server ~/Photos
+minio server /data
 ```
 
 #### Browser
@@ -66,7 +66,7 @@ Example:
 
 ```sh
 export MINIO_BROWSER=off
-minio server ~/Photos
+minio server /data
 ```
 
 #### Logger

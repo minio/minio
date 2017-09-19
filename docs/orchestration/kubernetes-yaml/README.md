@@ -112,7 +112,7 @@ spec:
     spec:
       # Refer to the PVC created earlier
       volumes:
-      - name: storage
+      - name: data
         persistentVolumeClaim:
           # Name of the PVC created earlier
           claimName: minio-pv-claim
@@ -122,7 +122,7 @@ spec:
         image: minio/minio:RELEASE.2017-05-05T01-14-51Z
         args:
         - server
-        - /storage
+        - /data
         env:
         # Minio access key and secret key
         - name: MINIO_ACCESS_KEY
@@ -134,8 +134,8 @@ spec:
           hostPort: 9000
         # Mount the volume into the pod
         volumeMounts:
-        - name: storage # must match the volume name, above
-          mountPath: "/storage"
+        - name: data # must match the volume name, above
+          mountPath: "/data"
 ```
 
 Create the Deployment

@@ -43,7 +43,7 @@ func (fs fsObjects) isMultipartUpload(bucket, prefix string) bool {
 	uploadsIDPath := pathJoin(fs.fsPath, bucket, prefix, uploadsJSONFile)
 	_, err := fsStatFile(uploadsIDPath)
 	if err != nil {
-		if err == errFileNotFound {
+		if errorCause(err) == errFileNotFound {
 			return false
 		}
 		errorIf(err, "Unable to access uploads.json "+uploadsIDPath)
@@ -958,7 +958,7 @@ func (fs fsObjects) cleanupStaleMultipartUpload(bucket string, expiry time.Durat
 	for {
 		// List multipart uploads in a bucket 1000 at a time
 		prefix := ""
-		lmi, err = fs.listMultipartUploadsHelper(bucket, prefix, lmi.KeyMarker, lmi.UploadIDMarker, slashSeparator, 1000)
+		lmi, err = fs.listMultipartUploadsHelper(bucket, prefix, lmi.KeyMarker, lmi.UploadIDMarker, "", 1000)
 		if err != nil {
 			errorIf(err, "Unable to list uploads")
 			return err
@@ -989,14 +989,14 @@ func (fs fsObjects) cleanupStaleMultipartUpload(bucket string, expiry time.Durat
 // on all buckets for every `cleanupInterval`, this function is
 // blocking and should be run in a go-routine.
 func (fs fsObjects) cleanupStaleMultipartUploads(cleanupInterval, expiry time.Duration, doneCh chan struct{}) {
-	timer := time.NewTimer(cleanupInterval)
+	ticker := time.NewTicker(cleanupInterval)
 	for {
 		select {
 		case <-doneCh:
 			// Stop the timer.
-			timer.Stop()
+			ticker.Stop()
 			return
-		case <-timer.C:
+		case <-ticker.C:
 			bucketInfos, err := fs.ListBuckets()
 			if err != nil {
 				errorIf(err, "Unable to list buckets")
