@@ -22,15 +22,13 @@ Please visit Minio Docker quickstart guide for more [here](https://docs.minio.io
 ## macOS
 ### Homebrew
 Install minio packages using [Homebrew](http://brew.sh/)
-
 ```sh
 brew install minio/stable/minio
 minio server /data
 ```
 #### Note
-If you previously installed minio using `brew install minio` then reinstall minio from `minio/stable/minio` official repo. Homebrew builds are unstable due to golang 1.8 bugs.
-
-```
+If you previously installed minio using `brew install minio` then it is recommended that you reinstall minio from `minio/stable/minio` official repo instead.
+```sh
 brew uninstall minio
 brew install minio/stable/minio
 ```
