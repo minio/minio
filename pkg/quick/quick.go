@@ -92,7 +92,6 @@ func (d config) Save(filename string) error {
 func (d config) Load(filename string) error {
 	d.lock.Lock()
 	defer d.lock.Unlock()
-
 	return loadFileConfig(filename, d.data)
 }
 

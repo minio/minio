@@ -99,21 +99,22 @@ func (authClient *AuthRPCClient) Login() (err error) {
 
 	// Attempt to login if not logged in already.
 	if authClient.authToken == "" {
-		// Login to authenticate and acquire a new auth token.
+		authClient.authToken, err = authenticateNode(authClient.config.accessKey, authClient.config.secretKey)
+		if err != nil {
+			return err
+		}
+		// Login to authenticate your token.
 		var (
 			loginMethod = authClient.config.serviceName + loginMethodName
 			loginArgs   = LoginRPCArgs{
-				Username:    authClient.config.accessKey,
-				Password:    authClient.config.secretKey,
+				AuthToken:   authClient.authToken,
 				Version:     Version,
 				RequestTime: UTCNow(),
 			}
-			loginReply = LoginRPCReply{}
 		)
-		if err = authClient.rpcClient.Call(loginMethod, &loginArgs, &loginReply); err != nil {
+		if err = authClient.rpcClient.Call(loginMethod, &loginArgs, &LoginRPCReply{}); err != nil {
 			return err
 		}
-		authClient.authToken = loginReply.AuthToken
 	}
 	return nil
 }

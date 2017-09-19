@@ -34,6 +34,7 @@ import (
 	"strings"
 	"testing"
 
+	jwtgo "github.com/dgrijalva/jwt-go"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/minio/minio-go/pkg/policy"
 	"github.com/minio/minio-go/pkg/set"
@@ -381,8 +382,8 @@ func testListObjectsWebHandler(obj ObjectLayer, instanceType string, t TestErrHa
 	}
 
 	data := bytes.Repeat([]byte("a"), objectSize)
-
-	_, err = obj.PutObject(bucketName, objectName, int64(len(data)), bytes.NewReader(data), map[string]string{"etag": "c9a34cfc85d982698c6ac89f76071abd"}, "")
+	metadata := map[string]string{"etag": "c9a34cfc85d982698c6ac89f76071abd"}
+	_, err = obj.PutObject(bucketName, objectName, NewHashReader(bytes.NewReader(data), int64(len(data)), metadata["etag"], ""), metadata)
 
 	if err != nil {
 		t.Fatalf("Was not able to upload an object, %v", err)
@@ -475,16 +476,15 @@ func testRemoveObjectWebHandler(obj ObjectLayer, instanceType string, t TestErrH
 	}
 
 	data := bytes.Repeat([]byte("a"), objectSize)
-
-	_, err = obj.PutObject(bucketName, objectName, int64(len(data)), bytes.NewReader(data),
-		map[string]string{"etag": "c9a34cfc85d982698c6ac89f76071abd"}, "")
+	metadata := map[string]string{"etag": "c9a34cfc85d982698c6ac89f76071abd"}
+	_, err = obj.PutObject(bucketName, objectName, NewHashReader(bytes.NewReader(data), int64(len(data)), metadata["etag"], ""), metadata)
 	if err != nil {
 		t.Fatalf("Was not able to upload an object, %v", err)
 	}
 
 	objectName = "a/object"
-	_, err = obj.PutObject(bucketName, objectName, int64(len(data)), bytes.NewReader(data),
-		map[string]string{"etag": "c9a34cfc85d982698c6ac89f76071abd"}, "")
+	metadata = map[string]string{"etag": "c9a34cfc85d982698c6ac89f76071abd"}
+	_, err = obj.PutObject(bucketName, objectName, NewHashReader(bytes.NewReader(data), int64(len(data)), metadata["etag"], ""), metadata)
 	if err != nil {
 		t.Fatalf("Was not able to upload an object, %v", err)
 	}
@@ -667,6 +667,16 @@ func TestWebCreateURLToken(t *testing.T) {
 	ExecObjectLayerTest(t, testCreateURLToken)
 }
 
+func getTokenString(accessKey, secretKey string) (string, error) {
+	utcNow := UTCNow()
+	token := jwtgo.NewWithClaims(jwtgo.SigningMethodHS512, jwtgo.StandardClaims{
+		ExpiresAt: utcNow.Add(defaultJWTExpiry).Unix(),
+		IssuedAt:  utcNow.Unix(),
+		Subject:   accessKey,
+	})
+	return token.SignedString([]byte(secretKey))
+}
+
 func testCreateURLToken(obj ObjectLayer, instanceType string, t TestErrHandler) {
 	apiRouter := initTestWebRPCEndPoint(obj)
 	credentials := serverConfig.GetCredential()
@@ -699,6 +709,21 @@ func testCreateURLToken(obj ObjectLayer, instanceType string, t TestErrHandler) 
 	// Ensure the token is valid now. It will expire later.
 	if !isAuthTokenValid(tokenReply.Token) {
 		t.Fatalf("token is not valid")
+	}
+
+	// Token is invalid.
+	if isAuthTokenValid("") {
+		t.Fatalf("token shouldn't be valid, but it is")
+	}
+
+	token, err := getTokenString("invalid-access", credentials.SecretKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Token has invalid access key.
+	if isAuthTokenValid(token) {
+		t.Fatalf("token shouldn't be valid, but it is")
 	}
 }
 
@@ -839,7 +864,8 @@ func testDownloadWebHandler(obj ObjectLayer, instanceType string, t TestErrHandl
 	}
 
 	content := []byte("temporary file's content")
-	_, err = obj.PutObject(bucketName, objectName, int64(len(content)), bytes.NewReader(content), map[string]string{"etag": "01ce59706106fe5e02e7f55fffda7f34"}, "")
+	metadata := map[string]string{"etag": "01ce59706106fe5e02e7f55fffda7f34"}
+	_, err = obj.PutObject(bucketName, objectName, NewHashReader(bytes.NewReader(content), int64(len(content)), metadata["etag"], ""), metadata)
 	if err != nil {
 		t.Fatalf("Was not able to upload an object, %v", err)
 	}
@@ -931,9 +957,9 @@ func testWebHandlerDownloadZip(obj ObjectLayer, instanceType string, t TestErrHa
 		t.Fatalf("%s : %s", instanceType, err)
 	}
 
-	obj.PutObject(bucket, "a/one", int64(len(fileOne)), strings.NewReader(fileOne), nil, "")
-	obj.PutObject(bucket, "a/b/two", int64(len(fileTwo)), strings.NewReader(fileTwo), nil, "")
-	obj.PutObject(bucket, "a/c/three", int64(len(fileThree)), strings.NewReader(fileThree), nil, "")
+	obj.PutObject(bucket, "a/one", NewHashReader(strings.NewReader(fileOne), int64(len(fileOne)), "", ""), nil)
+	obj.PutObject(bucket, "a/b/two", NewHashReader(strings.NewReader(fileTwo), int64(len(fileTwo)), "", ""), nil)
+	obj.PutObject(bucket, "a/c/three", NewHashReader(strings.NewReader(fileThree), int64(len(fileThree)), "", ""), nil)
 
 	test := func(token string) (int, []byte) {
 		rec := httptest.NewRecorder()
@@ -1017,7 +1043,8 @@ func testWebPresignedGetHandler(obj ObjectLayer, instanceType string, t TestErrH
 	}
 
 	data := bytes.Repeat([]byte("a"), objectSize)
-	_, err = obj.PutObject(bucketName, objectName, int64(len(data)), bytes.NewReader(data), map[string]string{"etag": "c9a34cfc85d982698c6ac89f76071abd"}, "")
+	metadata := map[string]string{"etag": "c9a34cfc85d982698c6ac89f76071abd"}
+	_, err = obj.PutObject(bucketName, objectName, NewHashReader(bytes.NewReader(data), int64(len(data)), metadata["etag"], ""), metadata)
 	if err != nil {
 		t.Fatalf("Was not able to upload an object, %v", err)
 	}

@@ -53,12 +53,12 @@ func TestRepeatPutObjectPart(t *testing.T) {
 	}
 	fiveMBBytes := bytes.Repeat([]byte("a"), 5*humanize.MiByte)
 	md5Hex := getMD5Hash(fiveMBBytes)
-	_, err = objLayer.PutObjectPart("bucket1", "mpartObj1", uploadID, 1, 5*humanize.MiByte, bytes.NewReader(fiveMBBytes), md5Hex, "")
+	_, err = objLayer.PutObjectPart("bucket1", "mpartObj1", uploadID, 1, NewHashReader(bytes.NewReader(fiveMBBytes), 5*humanize.MiByte, md5Hex, ""))
 	if err != nil {
 		t.Fatal(err)
 	}
 	// PutObjectPart should succeed even if part already exists. ref: https://github.com/minio/minio/issues/1930
-	_, err = objLayer.PutObjectPart("bucket1", "mpartObj1", uploadID, 1, 5*humanize.MiByte, bytes.NewReader(fiveMBBytes), md5Hex, "")
+	_, err = objLayer.PutObjectPart("bucket1", "mpartObj1", uploadID, 1, NewHashReader(bytes.NewReader(fiveMBBytes), 5*humanize.MiByte, md5Hex, ""))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func TestXLDeleteObjectBasic(t *testing.T) {
 	}
 
 	// Create object "obj" under bucket "bucket" for Test 7 to pass
-	_, err = xl.PutObject("bucket", "obj", int64(len("abcd")), bytes.NewReader([]byte("abcd")), nil, "")
+	_, err = xl.PutObject("bucket", "obj", NewHashReader(bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil)
 	if err != nil {
 		t.Fatalf("XL Object upload failed: <ERROR> %s", err)
 	}
@@ -128,7 +128,7 @@ func TestXLDeleteObjectDiskNotFound(t *testing.T) {
 	bucket := "bucket"
 	object := "object"
 	// Create object "obj" under bucket "bucket".
-	_, err = obj.PutObject(bucket, object, int64(len("abcd")), bytes.NewReader([]byte("abcd")), nil, "")
+	_, err = obj.PutObject(bucket, object, NewHashReader(bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,7 +143,7 @@ func TestXLDeleteObjectDiskNotFound(t *testing.T) {
 	}
 
 	// Create "obj" under "bucket".
-	_, err = obj.PutObject(bucket, object, int64(len("abcd")), bytes.NewReader([]byte("abcd")), nil, "")
+	_, err = obj.PutObject(bucket, object, NewHashReader(bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,7 +178,7 @@ func TestGetObjectNoQuorum(t *testing.T) {
 	bucket := "bucket"
 	object := "object"
 	// Create "object" under "bucket".
-	_, err = obj.PutObject(bucket, object, int64(len("abcd")), bytes.NewReader([]byte("abcd")), nil, "")
+	_, err = obj.PutObject(bucket, object, NewHashReader(bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -230,7 +230,7 @@ func TestPutObjectNoQuorum(t *testing.T) {
 	bucket := "bucket"
 	object := "object"
 	// Create "object" under "bucket".
-	_, err = obj.PutObject(bucket, object, int64(len("abcd")), bytes.NewReader([]byte("abcd")), nil, "")
+	_, err = obj.PutObject(bucket, object, NewHashReader(bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -253,7 +253,7 @@ func TestPutObjectNoQuorum(t *testing.T) {
 			}
 		}
 		// Upload new content to same object "object"
-		_, err = obj.PutObject(bucket, object, int64(len("abcd")), bytes.NewReader([]byte("abcd")), nil, "")
+		_, err = obj.PutObject(bucket, object, NewHashReader(bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil)
 		err = errorCause(err)
 		if err != toObjectErr(errXLWriteQuorum, bucket, object) {
 			t.Errorf("Expected putObject to fail with %v, but failed with %v", toObjectErr(errXLWriteQuorum, bucket, object), err)
@@ -294,7 +294,7 @@ func TestHealing(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = obj.PutObject(bucket, object, length, bytes.NewReader(data), nil, "")
+	_, err = obj.PutObject(bucket, object, NewHashReader(bytes.NewReader(data), length, "", ""), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

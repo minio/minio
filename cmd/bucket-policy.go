@@ -218,7 +218,7 @@ func writeBucketPolicy(bucket string, objAPI ObjectLayer, bpy *bucketPolicy) err
 		return err
 	}
 	defer objLock.Unlock()
-	if _, err := objAPI.PutObject(minioMetaBucket, policyPath, int64(len(buf)), bytes.NewReader(buf), nil, ""); err != nil {
+	if _, err := objAPI.PutObject(minioMetaBucket, policyPath, NewHashReader(bytes.NewReader(buf), int64(len(buf)), "", ""), nil); err != nil {
 		errorIf(err, "Unable to set policy for the bucket %s", bucket)
 		return errorCause(err)
 	}

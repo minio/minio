@@ -183,7 +183,7 @@ func TestPutObjectPartFaultyDisk(t *testing.T) {
 	sha256sum := ""
 
 	fs.fsPath = filepath.Join(globalTestTmpDir, "minio-"+nextSuffix())
-	_, err = fs.PutObjectPart(bucketName, objectName, uploadID, 1, dataLen, bytes.NewReader(data), md5Hex, sha256sum)
+	_, err = fs.PutObjectPart(bucketName, objectName, uploadID, 1, NewHashReader(bytes.NewReader(data), dataLen, md5Hex, sha256sum))
 	if !isSameType(errorCause(err), BucketNotFound{}) {
 		t.Fatal("Unexpected error ", err)
 	}
@@ -211,9 +211,8 @@ func TestCompleteMultipartUploadFaultyDisk(t *testing.T) {
 	}
 
 	md5Hex := getMD5Hash(data)
-	sha256sum := ""
 
-	if _, err := fs.PutObjectPart(bucketName, objectName, uploadID, 1, 5, bytes.NewReader(data), md5Hex, sha256sum); err != nil {
+	if _, err := fs.PutObjectPart(bucketName, objectName, uploadID, 1, NewHashReader(bytes.NewReader(data), 5, md5Hex, "")); err != nil {
 		t.Fatal("Unexpected error ", err)
 	}
 
@@ -252,7 +251,7 @@ func TestListMultipartUploadsFaultyDisk(t *testing.T) {
 	md5Hex := getMD5Hash(data)
 	sha256sum := ""
 
-	if _, err := fs.PutObjectPart(bucketName, objectName, uploadID, 1, 5, bytes.NewReader(data), md5Hex, sha256sum); err != nil {
+	if _, err := fs.PutObjectPart(bucketName, objectName, uploadID, 1, NewHashReader(bytes.NewReader(data), 5, md5Hex, sha256sum)); err != nil {
 		t.Fatal("Unexpected error ", err)
 	}
 

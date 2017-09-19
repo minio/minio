@@ -542,7 +542,7 @@ func (web *webAPIHandlers) Upload(w http.ResponseWriter, r *http.Request) {
 	defer objectLock.Unlock()
 
 	sha256sum := ""
-	objInfo, err := objectAPI.PutObject(bucket, object, size, r.Body, metadata, sha256sum)
+	objInfo, err := objectAPI.PutObject(bucket, object, NewHashReader(r.Body, size, metadata["etag"], sha256sum), metadata)
 	if err != nil {
 		writeWebErrorResponse(w, err)
 		return

@@ -18,12 +18,10 @@ package cmd
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"hash"
 	"io"
 	"math"
 	"regexp"
@@ -720,8 +718,7 @@ func (l *gcsGateway) GetObjectInfo(bucket string, object string) (ObjectInfo, er
 }
 
 // PutObject - Create a new object with the incoming data,
-func (l *gcsGateway) PutObject(bucket string, key string, size int64, data io.Reader,
-	metadata map[string]string, sha256sum string) (ObjectInfo, error) {
+func (l *gcsGateway) PutObject(bucket string, key string, data *HashReader, metadata map[string]string) (ObjectInfo, error) {
 
 	// if we want to mimic S3 behavior exactly, we need to verify if bucket exists first,
 	// otherwise gcs will just return object not exist in case of non-existing bucket
@@ -729,15 +726,9 @@ func (l *gcsGateway) PutObject(bucket string, key string, size int64, data io.Re
 		return ObjectInfo{}, gcsToObjectError(traceError(err), bucket)
 	}
 
-	reader := data
-
-	var sha256Writer hash.Hash
-	if sha256sum != "" {
-		sha256Writer = sha256.New()
-		reader = io.TeeReader(data, sha256Writer)
+	if _, err := hex.DecodeString(metadata["etag"]); err != nil {
+		return ObjectInfo{}, gcsToObjectError(traceError(err), bucket, key)
 	}
-
-	md5sum := metadata["etag"]
 	delete(metadata, "etag")
 
 	object := l.client.Bucket(bucket).Object(key)
@@ -747,17 +738,8 @@ func (l *gcsGateway) PutObject(bucket string, key string, size int64, data io.Re
 	w.ContentType = metadata["content-type"]
 	w.ContentEncoding = metadata["content-encoding"]
 	w.Metadata = metadata
-	if md5sum != "" {
-		var err error
-		w.MD5, err = hex.DecodeString(md5sum)
-		if err != nil {
-			// Close the object writer upon error.
-			w.Close()
-			return ObjectInfo{}, gcsToObjectError(traceError(err), bucket, key)
-		}
-	}
 
-	if _, err := io.CopyN(w, reader, size); err != nil {
+	if _, err := io.Copy(w, data); err != nil {
 		// Close the object writer upon error.
 		w.Close()
 		return ObjectInfo{}, gcsToObjectError(traceError(err), bucket, key)
@@ -765,12 +747,9 @@ func (l *gcsGateway) PutObject(bucket string, key string, size int64, data io.Re
 	// Close the object writer upon success.
 	w.Close()
 
-	// Verify sha256sum after close.
-	if sha256sum != "" {
-		if hex.EncodeToString(sha256Writer.Sum(nil)) != sha256sum {
-			object.Delete(l.ctx)
-			return ObjectInfo{}, traceError(SHA256Mismatch{})
-		}
+	if err := data.Verify(); err != nil { // Verify sha256sum after close.
+		object.Delete(l.ctx)
+		return ObjectInfo{}, gcsToObjectError(traceError(err), bucket, key)
 	}
 
 	attrs, err := object.Attrs(l.ctx)
@@ -855,65 +834,37 @@ func (l *gcsGateway) checkUploadIDExists(bucket string, key string, uploadID str
 }
 
 // PutObjectPart puts a part of object in bucket
-func (l *gcsGateway) PutObjectPart(bucket string, key string, uploadID string, partNumber int, size int64, data io.Reader, md5Hex string, sha256sum string) (PartInfo, error) {
+func (l *gcsGateway) PutObjectPart(bucket string, key string, uploadID string, partNumber int, data *HashReader) (PartInfo, error) {
 	if err := l.checkUploadIDExists(bucket, key, uploadID); err != nil {
 		return PartInfo{}, err
 	}
-
-	var sha256Writer hash.Hash
-
-	var etag string
-	// Honor etag if client did send md5Hex.
-	if md5Hex != "" {
-		etag = md5Hex
-	} else {
+	etag := data.md5Sum
+	if etag == "" {
 		// Generate random ETag.
 		etag = getMD5Hash([]byte(mustGetUUID()))
 	}
-
-	reader := data
-	if sha256sum != "" {
-		sha256Writer = sha256.New()
-		reader = io.TeeReader(data, sha256Writer)
-	}
-
 	object := l.client.Bucket(bucket).Object(gcsMultipartDataName(uploadID, partNumber, etag))
 	w := object.NewWriter(l.ctx)
 	// Disable "chunked" uploading in GCS client. If enabled, it can cause a corner case
 	// where it tries to upload 0 bytes in the last chunk and get error from server.
 	w.ChunkSize = 0
-	if md5Hex != "" {
-		var err error
-		w.MD5, err = hex.DecodeString(md5Hex)
-		if err != nil {
-			// Make sure to close object writer upon error.
-			w.Close()
-			return PartInfo{}, gcsToObjectError(traceError(err), bucket, key)
-		}
-	}
-
-	if _, err := io.CopyN(w, reader, size); err != nil {
+	if _, err := io.Copy(w, data); err != nil {
 		// Make sure to close object writer upon error.
 		w.Close()
 		return PartInfo{}, gcsToObjectError(traceError(err), bucket, key)
 	}
-
 	// Make sure to close the object writer upon success.
 	w.Close()
 
-	// Verify sha256sum after Close().
-	if sha256sum != "" {
-		if hex.EncodeToString(sha256Writer.Sum(nil)) != sha256sum {
-			object.Delete(l.ctx)
-			return PartInfo{}, traceError(SHA256Mismatch{})
-		}
+	if err := data.Verify(); err != nil {
+		object.Delete(l.ctx)
+		return PartInfo{}, gcsToObjectError(traceError(err), bucket, key)
 	}
-
 	return PartInfo{
 		PartNumber:   partNumber,
 		ETag:         etag,
 		LastModified: UTCNow(),
-		Size:         size,
+		Size:         data.Size(),
 	}, nil
 
 }
