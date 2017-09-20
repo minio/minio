@@ -29,6 +29,10 @@ func TestLogin(t *testing.T) {
 	}
 	defer os.RemoveAll(rootPath)
 	creds := serverConfig.GetCredential()
+	token, err := authenticateNode(creds.AccessKey, creds.SecretKey)
+	if err != nil {
+		t.Fatal(err)
+	}
 	ls := AuthRPCServer{}
 	testCases := []struct {
 		args        LoginRPCArgs
@@ -38,9 +42,8 @@ func TestLogin(t *testing.T) {
 		// Valid case.
 		{
 			args: LoginRPCArgs{
-				Username: creds.AccessKey,
-				Password: creds.SecretKey,
-				Version:  Version,
+				AuthToken: token,
+				Version:   Version,
 			},
 			skewTime:    0,
 			expectedErr: nil,
@@ -48,9 +51,8 @@ func TestLogin(t *testing.T) {
 		// Valid username, password and request time, not version.
 		{
 			args: LoginRPCArgs{
-				Username: creds.AccessKey,
-				Password: creds.SecretKey,
-				Version:  "INVALID-" + Version,
+				AuthToken: token,
+				Version:   "INVALID-" + Version,
 			},
 			skewTime:    0,
 			expectedErr: errServerVersionMismatch,
@@ -58,49 +60,17 @@ func TestLogin(t *testing.T) {
 		// Valid username, password and version, not request time
 		{
 			args: LoginRPCArgs{
-				Username: creds.AccessKey,
-				Password: creds.SecretKey,
-				Version:  Version,
+				AuthToken: token,
+				Version:   Version,
 			},
 			skewTime:    20 * time.Minute,
 			expectedErr: errServerTimeMismatch,
 		},
-		// Invalid username length
+		// Invalid token, fails with authentication error
 		{
 			args: LoginRPCArgs{
-				Username: "aaa",
-				Password: "minio123",
-				Version:  Version,
-			},
-			skewTime:    0,
-			expectedErr: errInvalidAccessKeyLength,
-		},
-		// Invalid password length
-		{
-			args: LoginRPCArgs{
-				Username: "minio",
-				Password: "aaa",
-				Version:  Version,
-			},
-			skewTime:    0,
-			expectedErr: errInvalidSecretKeyLength,
-		},
-		// Invalid username
-		{
-			args: LoginRPCArgs{
-				Username: "aaaaa",
-				Password: creds.SecretKey,
-				Version:  Version,
-			},
-			skewTime:    0,
-			expectedErr: errInvalidAccessKeyID,
-		},
-		// Invalid password
-		{
-			args: LoginRPCArgs{
-				Username: creds.AccessKey,
-				Password: "aaaaaaaa",
-				Version:  Version,
+				AuthToken: "",
+				Version:   Version,
 			},
 			skewTime:    0,
 			expectedErr: errAuthentication,
@@ -108,7 +78,7 @@ func TestLogin(t *testing.T) {
 	}
 	for i, test := range testCases {
 		reply := LoginRPCReply{}
-		test.args.RequestTime = time.Now().Add(test.skewTime).UTC()
+		test.args.RequestTime = UTCNow().Add(test.skewTime)
 		err := ls.Login(&test.args, &reply)
 		if err != test.expectedErr {
 			t.Errorf("Test %d: Expected error %v but received %v",

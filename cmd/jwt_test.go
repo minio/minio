@@ -17,6 +17,7 @@
 package cmd
 
 import (
+	"net/http"
 	"os"
 	"testing"
 )
@@ -86,6 +87,58 @@ func TestAuthenticateWeb(t *testing.T) {
 
 func TestAuthenticateURL(t *testing.T) {
 	testAuthenticate("url", t)
+}
+
+// Tests web request authenticator.
+func TestWebRequestAuthenticate(t *testing.T) {
+	testPath, err := newTestConfig(globalMinioDefaultRegion)
+	if err != nil {
+		t.Fatalf("unable initialize config file, %s", err)
+	}
+	defer os.RemoveAll(testPath)
+
+	creds := serverConfig.GetCredential()
+	token, err := getTokenString(creds.AccessKey, creds.SecretKey)
+	if err != nil {
+		t.Fatalf("unable get token %s", err)
+	}
+	testCases := []struct {
+		req         *http.Request
+		expectedErr error
+	}{
+		// Set valid authorization header.
+		{
+			req: &http.Request{
+				Header: http.Header{
+					"Authorization": []string{token},
+				},
+			},
+			expectedErr: nil,
+		},
+		// No authorization header.
+		{
+			req: &http.Request{
+				Header: http.Header{},
+			},
+			expectedErr: errNoAuthToken,
+		},
+		// Invalid authorization token.
+		{
+			req: &http.Request{
+				Header: http.Header{
+					"Authorization": []string{"invalid-token"},
+				},
+			},
+			expectedErr: errAuthentication,
+		},
+	}
+
+	for i, testCase := range testCases {
+		gotErr := webRequestAuthenticate(testCase.req)
+		if testCase.expectedErr != gotErr {
+			t.Errorf("Test %d, expected err %s, got %s", i+1, testCase.expectedErr, gotErr)
+		}
+	}
 }
 
 func BenchmarkAuthenticateNode(b *testing.B) {

@@ -281,7 +281,7 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
-		objInfo, err = objectAPI.PutObject(bucket, object, size, reader, metadata, "")
+		objInfo, err = objectAPI.PutObject(bucket, object, NewHashReader(reader, size, "", ""), metadata)
 	case authTypeSignedV2, authTypePresignedV2:
 		s3Error := isReqAuthenticatedV2(r)
 		if s3Error != ErrNone {
@@ -289,7 +289,7 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 			writeErrorResponse(w, s3Error, r.URL)
 			return
 		}
-		objInfo, err = objectAPI.PutObject(bucket, object, size, r.Body, metadata, "")
+		objInfo, err = objectAPI.PutObject(bucket, object, NewHashReader(r.Body, size, "", ""), metadata)
 	case authTypePresigned, authTypeSigned:
 		if s3Error := reqSignatureV4Verify(r, serverConfig.GetRegion()); s3Error != ErrNone {
 			errorIf(errSignatureMismatch, "%s", dumpRequest(r))
@@ -303,7 +303,7 @@ func (api gatewayAPIHandlers) PutObjectHandler(w http.ResponseWriter, r *http.Re
 		}
 
 		// Create object.
-		objInfo, err = objectAPI.PutObject(bucket, object, size, r.Body, metadata, sha256sum)
+		objInfo, err = objectAPI.PutObject(bucket, object, NewHashReader(r.Body, size, "", sha256sum), metadata)
 	default:
 		// For all unknown auth types return error.
 		writeErrorResponse(w, ErrAccessDenied, r.URL)

@@ -64,11 +64,10 @@ func testXLReadStat(obj ObjectLayer, instanceType string, disks []string, t *tes
 		// case - 1.
 		{bucketName, objectName, int64(len(bytesData[0].byteData)), bytesData[0].byteData, make(map[string]string)},
 	}
-	sha256sum := ""
 	// iterate through the above set of inputs and upkoad the object.
 	for i, input := range putObjectInputs {
 		// uploading the object.
-		_, err = obj.PutObject(input.bucketName, input.objectName, input.contentLength, bytes.NewBuffer(input.textData), input.metaData, sha256sum)
+		_, err = obj.PutObject(input.bucketName, input.objectName, NewHashReader(bytes.NewBuffer(input.textData), input.contentLength, input.metaData["etag"], ""), input.metaData)
 		// if object upload fails stop the test.
 		if err != nil {
 			t.Fatalf("Put Object case %d:  Error uploading object: <ERROR> %v", i+1, err)
@@ -151,7 +150,7 @@ func testXLReadMetaParts(obj ObjectLayer, instanceType string, disks []string, t
 	sha256sum := ""
 	// Iterating over creatPartCases to generate multipart chunks.
 	for _, testCase := range createPartCases {
-		_, perr := obj.PutObjectPart(testCase.bucketName, testCase.objName, testCase.uploadID, testCase.PartID, testCase.intputDataSize, bytes.NewBufferString(testCase.inputReaderData), testCase.inputMd5, sha256sum)
+		_, perr := obj.PutObjectPart(testCase.bucketName, testCase.objName, testCase.uploadID, testCase.PartID, NewHashReader(bytes.NewBufferString(testCase.inputReaderData), testCase.intputDataSize, testCase.inputMd5, sha256sum))
 		if perr != nil {
 			t.Fatalf("%s : %s", instanceType, perr)
 		}

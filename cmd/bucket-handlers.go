@@ -562,7 +562,7 @@ func (api objectAPIHandlers) PostPolicyBucketHandler(w http.ResponseWriter, r *h
 	}
 	defer objectLock.Unlock()
 
-	objInfo, err := objectAPI.PutObject(bucket, object, fileSize, fileBody, metadata, sha256sum)
+	objInfo, err := objectAPI.PutObject(bucket, object, NewHashReader(fileBody, fileSize, metadata["etag"], sha256sum), metadata)
 	if err != nil {
 		errorIf(err, "Unable to create object.")
 		writeErrorResponse(w, toAPIErrorCode(err), r.URL)

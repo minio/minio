@@ -52,9 +52,7 @@ func TestReadFSMetadata(t *testing.T) {
 	if err := obj.MakeBucketWithLocation(bucketName, ""); err != nil {
 		t.Fatal("Unexpected err: ", err)
 	}
-	sha256sum := ""
-	if _, err := obj.PutObject(bucketName, objectName, int64(len("abcd")), bytes.NewReader([]byte("abcd")),
-		map[string]string{"X-Amz-Meta-AppId": "a"}, sha256sum); err != nil {
+	if _, err := obj.PutObject(bucketName, objectName, NewHashReader(bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil); err != nil {
 		t.Fatal("Unexpected err: ", err)
 	}
 
@@ -89,9 +87,7 @@ func TestWriteFSMetadata(t *testing.T) {
 	if err := obj.MakeBucketWithLocation(bucketName, ""); err != nil {
 		t.Fatal("Unexpected err: ", err)
 	}
-	sha256sum := ""
-	if _, err := obj.PutObject(bucketName, objectName, int64(len("abcd")), bytes.NewReader([]byte("abcd")),
-		map[string]string{"X-Amz-Meta-AppId": "a"}, sha256sum); err != nil {
+	if _, err := obj.PutObject(bucketName, objectName, NewHashReader(bytes.NewReader([]byte("abcd")), int64(len("abcd")), "", ""), nil); err != nil {
 		t.Fatal("Unexpected err: ", err)
 	}
 
