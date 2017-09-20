@@ -2,8 +2,6 @@
 
 Gateway inherits the following Azure limitations:
 
-- Maximum Multipart part size is 100MB.
-- Maximum Multipart object size is 10000*100 MB = 1TB
 - No support for prefix based bucket policies. Only top level bucket policy is supported.
 - Gateway restart implies all the ongoing multipart uploads must be restarted.
   i.e clients must again start with NewMultipartUpload
