@@ -17,13 +17,16 @@
 package cmd
 
 import (
+	"fmt"
 	"hash"
+	"strings"
 )
 
 // HealFile tries to reconstruct an erasure-coded file spread over all
 // available disks. HealFile will read the valid parts of the file,
 // reconstruct the missing data and write the reconstructed parts back
-// to `staleDisks`.
+// to `staleDisks` at the destination `dstVol/dstPath/`. Parts are
+// verified against the given BitrotAlgorithm and checksums.
 //
 // `staleDisks` is a slice of disks where each non-nil entry has stale
 // or no data, and so will be healed.
@@ -34,19 +37,17 @@ import (
 // In addition, `staleDisks` and `s.disks` must have the same ordering
 // of disks w.r.t. erasure coding of the object.
 //
-// The function will try to read the valid parts from the file under
-// the given volume and path and tries to reconstruct the file under
-// the given healVolume and healPath (on staleDisks). The given
-// algorithm will be used to verify the valid parts and to protect the
-// reconstructed file.
+// Errors when writing to `staleDisks` are not propagated as long as
+// writes succeed for at least one disk. This allows partial healing
+// despite stale disks being faulty.
 //
-// It returns bitrot checksums for the non-nil staleDisks.
-func (s ErasureStorage) HealFile(staleDisks []StorageAPI, volume, path string,
-	blocksize int64, healVolume, healPath string, size int64,
-	algorithm BitrotAlgorithm, checksums [][]byte) (f ErasureFileInfo,
-	err error) {
+// It returns bitrot checksums for the non-nil staleDisks on which
+// healing succeeded.
+func (s ErasureStorage) HealFile(staleDisks []StorageAPI, volume, path string, blocksize int64,
+	dstVol, dstPath string, size int64, alg BitrotAlgorithm, checksums [][]byte) (
+	f ErasureFileInfo, err error) {
 
-	if !algorithm.Available() {
+	if !alg.Available() {
 		return f, traceError(errBitrotHashAlgoInvalid)
 	}
 
@@ -57,15 +58,15 @@ func (s ErasureStorage) HealFile(staleDisks []StorageAPI, volume, path string,
 	for i, disk := range s.disks {
 		switch {
 		case staleDisks[i] != nil:
-			hashers[i] = algorithm.New()
+			hashers[i] = alg.New()
 		case disk == nil:
 			// disregard unavailable disk
 			continue
 		default:
-			verifiers[i] = NewBitrotVerifier(algorithm, checksums[i])
-			f.Checksums[i] = checksums[i]
+			verifiers[i] = NewBitrotVerifier(alg, checksums[i])
 		}
 	}
+	writeErrors := make([]error, len(s.disks))
 
 	// Scan part files on disk, block-by-block reconstruct it and
 	// write to stale disks.
@@ -125,27 +126,48 @@ func (s ErasureStorage) HealFile(staleDisks []StorageAPI, volume, path string,
 
 		// write computed shards as chunks on file in each
 		// stale disk
+		writeSucceeded := false
 		for i, disk := range staleDisks {
-			if disk == nil {
+			// skip nil disk or disk that had error on
+			// previous write
+			if disk == nil || writeErrors[i] != nil {
 				continue
 			}
 
-			err = disk.AppendFile(healVolume, healPath, blocks[i])
-			if err != nil {
-				return f, traceError(err)
+			writeErrors[i] = disk.AppendFile(dstVol, dstPath, blocks[i])
+			if writeErrors[i] == nil {
+				hashers[i].Write(blocks[i])
+				writeSucceeded = true
 			}
-			hashers[i].Write(blocks[i])
+		}
+
+		// If all disks had write errors we quit.
+		if !writeSucceeded {
+			// build error from all write errors
+			return f, traceError(joinWriteErrors(writeErrors))
 		}
 	}
 
 	// copy computed file hashes into output variable
 	f.Size = size
-	f.Algorithm = algorithm
+	f.Algorithm = alg
 	for i, disk := range staleDisks {
-		if disk == nil {
+		if disk == nil || writeErrors[i] != nil {
 			continue
 		}
 		f.Checksums[i] = hashers[i].Sum(nil)
 	}
 	return f, nil
+}
+
+func joinWriteErrors(errs []error) error {
+	msgs := []string{}
+	for i, err := range errs {
+		if err == nil {
+			continue
+		}
+		msgs = append(msgs, fmt.Sprintf("disk %d: %v", i+1, err))
+	}
+	return fmt.Errorf("all stale disks had write errors during healing: %s",
+		strings.Join(msgs, ", "))
 }
