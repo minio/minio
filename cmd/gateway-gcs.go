@@ -40,15 +40,10 @@ import (
 )
 
 const (
-	// gcsMinioSysTmp is used for multiparts. We have "minio.sys.tmp" prefix so that
-	// listing on the GCS lists this entry in the end. Also in the gateway
-	// ListObjects we filter out this entry.
-	gcsMinioSysTmp = "minio.sys.tmp/"
-
 	// Path where multipart objects are saved.
 	// If we change the backend format we will use a different url path like /multipart/v2
 	// but we will not migrate old data.
-	gcsMinioMultipartPathV1 = gcsMinioSysTmp + "multipart/v1"
+	gcsMinioMultipartPathV1 = globalMinioSysTmp + "multipart/v1"
 
 	// Multipart meta file.
 	gcsMinioMultipartMeta = "gcs.json"
@@ -290,7 +285,7 @@ func newGCSGateway(projectID string) (GatewayLayer, error) {
 
 // Cleanup old files in minio.sys.tmp of the given bucket.
 func (l *gcsGateway) CleanupGCSMinioSysTmpBucket(bucket string) {
-	it := l.client.Bucket(bucket).Objects(l.ctx, &storage.Query{Prefix: gcsMinioSysTmp, Versions: false})
+	it := l.client.Bucket(bucket).Objects(l.ctx, &storage.Query{Prefix: globalMinioSysTmp, Versions: false})
 	for {
 		attrs, err := it.Next()
 		if err != nil {
@@ -408,7 +403,7 @@ func (l *gcsGateway) DeleteBucket(bucket string) error {
 		if err != nil {
 			return gcsToObjectError(traceError(err))
 		}
-		if objAttrs.Prefix == gcsMinioSysTmp {
+		if objAttrs.Prefix == globalMinioSysTmp {
 			gcsMinioPathFound = true
 			continue
 		}
@@ -420,7 +415,7 @@ func (l *gcsGateway) DeleteBucket(bucket string) error {
 	}
 	if gcsMinioPathFound {
 		// Remove minio.sys.tmp before deleting the bucket.
-		itObject = l.client.Bucket(bucket).Objects(l.ctx, &storage.Query{Versions: false, Prefix: gcsMinioSysTmp})
+		itObject = l.client.Bucket(bucket).Objects(l.ctx, &storage.Query{Versions: false, Prefix: globalMinioSysTmp})
 		for {
 			objAttrs, err := itObject.Next()
 			if err == iterator.Done {
@@ -505,7 +500,7 @@ func (l *gcsGateway) ListObjects(bucket string, prefix string, marker string, de
 			// metadata folder, then just break
 			// otherwise we've truncated the output
 			attrs, _ := it.Next()
-			if attrs != nil && attrs.Prefix == gcsMinioSysTmp {
+			if attrs != nil && attrs.Prefix == globalMinioSysTmp {
 				break
 			}
 
@@ -523,16 +518,16 @@ func (l *gcsGateway) ListObjects(bucket string, prefix string, marker string, de
 
 		nextMarker = toGCSPageToken(attrs.Name)
 
-		if attrs.Prefix == gcsMinioSysTmp {
+		if attrs.Prefix == globalMinioSysTmp {
 			// We don't return our metadata prefix.
 			continue
 		}
-		if !strings.HasPrefix(prefix, gcsMinioSysTmp) {
+		if !strings.HasPrefix(prefix, globalMinioSysTmp) {
 			// If client lists outside gcsMinioPath then we filter out gcsMinioPath/* entries.
 			// But if the client lists inside gcsMinioPath then we return the entries in gcsMinioPath/
 			// which will be helpful to observe the "directory structure" for debugging purposes.
-			if strings.HasPrefix(attrs.Prefix, gcsMinioSysTmp) ||
-				strings.HasPrefix(attrs.Name, gcsMinioSysTmp) {
+			if strings.HasPrefix(attrs.Prefix, globalMinioSysTmp) ||
+				strings.HasPrefix(attrs.Name, globalMinioSysTmp) {
 				continue
 			}
 		}
@@ -605,16 +600,16 @@ func (l *gcsGateway) ListObjectsV2(bucket, prefix, continuationToken string, fet
 			return ListObjectsV2Info{}, gcsToObjectError(traceError(err), bucket, prefix)
 		}
 
-		if attrs.Prefix == gcsMinioSysTmp {
+		if attrs.Prefix == globalMinioSysTmp {
 			// We don't return our metadata prefix.
 			continue
 		}
-		if !strings.HasPrefix(prefix, gcsMinioSysTmp) {
+		if !strings.HasPrefix(prefix, globalMinioSysTmp) {
 			// If client lists outside gcsMinioPath then we filter out gcsMinioPath/* entries.
 			// But if the client lists inside gcsMinioPath then we return the entries in gcsMinioPath/
 			// which will be helpful to observe the "directory structure" for debugging purposes.
-			if strings.HasPrefix(attrs.Prefix, gcsMinioSysTmp) ||
-				strings.HasPrefix(attrs.Name, gcsMinioSysTmp) {
+			if strings.HasPrefix(attrs.Prefix, globalMinioSysTmp) ||
+				strings.HasPrefix(attrs.Name, globalMinioSysTmp) {
 				continue
 			}
 		}
@@ -954,7 +949,7 @@ func (l *gcsGateway) CompleteMultipartUpload(bucket string, key string, uploadID
 
 	// Returns name of the composed object.
 	gcsMultipartComposeName := func(uploadID string, composeNumber int) string {
-		return fmt.Sprintf("%s/tmp/%s/composed-object-%05d", gcsMinioSysTmp, uploadID, composeNumber)
+		return fmt.Sprintf("%s/tmp/%s/composed-object-%05d", globalMinioSysTmp, uploadID, composeNumber)
 	}
 
 	composeCount := int(math.Ceil(float64(len(parts)) / float64(gcsMaxComponents)))
