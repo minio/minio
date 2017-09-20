@@ -316,7 +316,7 @@ func TestRetryStorage(t *testing.T) {
 			t.Fatal(err)
 		}
 		if err != nil {
-			t.Error("Error in ReadFil with bitrot verification", err)
+			t.Error("Error in ReadFile with bitrot verification", err)
 		}
 		if n != 5 {
 			t.Fatalf("Expected 5, got %d", n)

@@ -66,7 +66,7 @@ type ReadFileArgs struct {
 	// Stored hash value used to compare with computed value.
 	ExpectedHash []byte
 
-	// Indicates wether the disk should be verified
+	// Indicates whether the disk has already been verified
 	Verified bool
 }
 

@@ -533,9 +533,9 @@ func (s *posix) ReadAll(volume, path string) (buf []byte, err error) {
 // for io.EOF.
 //
 // If an EOF happens after reading some but not all the bytes,
-// ReadFull returns ErrUnexpectedEOF.
+// ReadFile returns ErrUnexpectedEOF.
 //
-// If the BitrotVerifier is not nil or not verified read file
+// If the BitrotVerifier is not nil or not verified ReadFile
 // tries to verify whether the disk has bitrot.
 //
 // Additionally ReadFile also starts reading from an offset. ReadFile
