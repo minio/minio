@@ -1074,7 +1074,7 @@ func TestPosixReadFile(t *testing.T) {
 		var n int64
 		// Common read buffer.
 		var buf = make([]byte, testCase.bufSize)
-		n, err = posixStorage.ReadFile(testCase.volume, testCase.fileName, testCase.offset, buf)
+		n, err = posixStorage.ReadFile(testCase.volume, testCase.fileName, testCase.offset, buf, nil)
 		if err != nil && testCase.expectedErr != nil {
 			// Validate if the type string of the errors are an exact match.
 			if err.Error() != testCase.expectedErr.Error() {
@@ -1135,7 +1135,7 @@ func TestPosixReadFile(t *testing.T) {
 		if err == nil {
 			// Common read buffer.
 			var buf = make([]byte, 10)
-			if _, err = posixStorage.ReadFile("proc", "1/fd", 0, buf); err != errFileAccessDenied {
+			if _, err = posixStorage.ReadFile("proc", "1/fd", 0, buf, nil); err != errFileAccessDenied {
 				t.Errorf("expected: %s, got: %s", errFileAccessDenied, err)
 			}
 		}
@@ -1149,7 +1149,7 @@ func TestPosixReadFile(t *testing.T) {
 		posixType.ioErrCount = int32(6)
 		// Common read buffer.
 		var buf = make([]byte, 10)
-		_, err = posixType.ReadFile("abc", "yes", 0, buf)
+		_, err = posixType.ReadFile("abc", "yes", 0, buf, nil)
 		if err != errFaultyDisk {
 			t.Fatalf("Expected \"Faulty Disk\", got: \"%s\"", err)
 		}
@@ -1183,8 +1183,8 @@ var posixReadFileWithVerifyTests = []struct {
 	{file: "myobject", offset: 1000, length: 1001, algorithm: BLAKE2b512, expError: nil},             // 15
 }
 
-// TestPosixReadFileWithVerify - tests the posix level
-// ReadFileWithVerify API. Only tests hashing related
+// TestPosixReadFile with bitrot verification - tests the posix level
+// ReadFile API with a BitrotVerifier. Only tests hashing related
 // functionality. Other functionality is tested with
 // TestPosixReadFile.
 func TestPosixReadFileWithVerify(t *testing.T) {
@@ -1218,7 +1218,7 @@ func TestPosixReadFileWithVerify(t *testing.T) {
 		}
 
 		buffer := make([]byte, test.length)
-		n, err := posixStorage.ReadFileWithVerify(volume, test.file, int64(test.offset), buffer, NewBitrotVerifier(test.algorithm, h.Sum(nil)))
+		n, err := posixStorage.ReadFile(volume, test.file, int64(test.offset), buffer, NewBitrotVerifier(test.algorithm, h.Sum(nil)))
 
 		switch {
 		case err == nil && test.expError != nil:

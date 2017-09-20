@@ -27,11 +27,7 @@ import (
 	"github.com/minio/minio/pkg/bpool"
 )
 
-func (d badDisk) ReadFile(volume string, path string, offset int64, buf []byte) (n int64, err error) {
-	return 0, errFaultyDisk
-}
-
-func (d badDisk) ReadFileWithVerify(volume string, path string, offset int64, buf []byte, verifier *BitrotVerifier) (n int64, err error) {
+func (d badDisk) ReadFile(volume string, path string, offset int64, buf []byte, verifier *BitrotVerifier) (n int64, err error) {
 	return 0, errFaultyDisk
 }
 
