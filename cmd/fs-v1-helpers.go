@@ -17,9 +17,11 @@
 package cmd
 
 import (
+	"strings"
 	"fmt"
 	"io"
 	"os"
+	"syscall"
 	pathutil "path"
 	"runtime"
 )
@@ -233,6 +235,10 @@ func fsOpenFile(readPath string, offset int64) (io.ReadCloser, int64, error) {
 	return fr, st.Size(), nil
 }
 
+func fsUseSync() bool {
+	return strings.ToLower(os.Getenv("MINIO_FSYNC")) == "true"
+}
+
 // Creates a file and copies data from incoming reader. Staging buffer is used by io.CopyBuffer.
 func fsCreateFile(filePath string, reader io.Reader, buf []byte, fallocSize int64) (int64, error) {
 	if filePath == "" || reader == nil {
@@ -279,6 +285,10 @@ func fsCreateFile(filePath string, reader io.Reader, buf []byte, fallocSize int6
 		if err != nil {
 			return 0, traceError(err)
 		}
+	}
+
+	if fsUseSync() {
+		syscall.Fsync(int(writer.Fd()))
 	}
 	return bytesWritten, nil
 }
