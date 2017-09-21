@@ -112,7 +112,7 @@ func (l *gcsGateway) AnonListObjects(bucket string, prefix string, marker string
 }
 
 // AnonListObjectsV2 - List objects in V2 mode, anonymously
-func (l *gcsGateway) AnonListObjectsV2(bucket, prefix, continuationToken string, fetchOwner bool, delimiter string, maxKeys int) (ListObjectsV2Info, error) {
+func (l *gcsGateway) AnonListObjectsV2(bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (ListObjectsV2Info, error) {
 	// Request V1 List Object to the backend
 	result, err := l.anonClient.ListObjects(bucket, prefix, continuationToken, delimiter, maxKeys)
 	if err != nil {

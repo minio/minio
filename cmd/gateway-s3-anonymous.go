@@ -95,7 +95,7 @@ func (l *s3Objects) AnonListObjects(bucket string, prefix string, marker string,
 }
 
 // AnonListObjectsV2 - List objects in V2 mode, anonymously
-func (l *s3Objects) AnonListObjectsV2(bucket, prefix, continuationToken string, fetchOwner bool, delimiter string, maxKeys int) (loi ListObjectsV2Info, e error) {
+func (l *s3Objects) AnonListObjectsV2(bucket, prefix, continuationToken, delimiter string, maxKeys int, fetchOwner bool, startAfter string) (loi ListObjectsV2Info, e error) {
 	result, err := l.anonClient.ListObjectsV2(bucket, prefix, continuationToken, fetchOwner, delimiter, maxKeys)
 	if err != nil {
 		return loi, s3ToObjectError(traceError(err), bucket)
