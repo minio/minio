@@ -106,7 +106,7 @@ func TestLookupEndpoint(t *testing.T) {
 		},
 		{
 			endpoint: server.URL,
-			err:      fmt.Errorf("Unexpected response from webhook server %s: (400 Bad Request)", server.URL),
+			err:      fmt.Errorf("Unable to lookup webhook endpoint %s response(400 Bad Request)", server.URL),
 		},
 	}
 	for _, test := range testCases {
