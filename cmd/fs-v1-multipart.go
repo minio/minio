@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"syscall"
 	pathutil "path"
 	"strings"
 	"time"
@@ -791,6 +792,10 @@ func (fs fsObjects) CompleteMultipartUpload(bucket string, object string, upload
 				fs.rwPool.Close(fsMetaPathMultipart)
 				return oi, toObjectErr(traceError(err), bucket, object)
 			}
+
+		        if fsUseSync() {
+				syscall.Fsync(int(wfile.Fd()))
+		        }
 
 			wfile.Close()
 			reader.Close()

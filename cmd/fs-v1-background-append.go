@@ -20,6 +20,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"syscall"
 	"reflect"
 	"sync"
 	"time"
@@ -236,5 +237,8 @@ func (fs fsObjects) appendPart(bucket, object, uploadID string, part objectPartI
 	}
 
 	_, err = io.CopyBuffer(wfile, file, buf)
+	if fsUseSync() {
+		syscall.Fsync(int(wfile.Fd()))
+	}
 	return err
 }
