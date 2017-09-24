@@ -141,7 +141,7 @@ python rabbit.py
 
 ### 第一步: 添加MQTT endpoint到Minio
 
-Minio Server的配置文件默认路径是 ``~/.minio/config.json``。MQTT配置信息是在`notify`这个节点下的`mqtt`节点下，在这里为你的MQTT实例创建配置信息键值对，key是你的MQTT endpoint的名称，value是下面表格中列列的键值对集合。 
+Minio Server的配置文件默认路径是 ``~/.minio/config.json``。MQTT配置信息是在`notify`这个节点下的`mqtt`节点下，在这里为你的MQTT实例创建配置信息键值对，key是你的MQTT endpoint的名称，value是下面表格中列列的键值对集合。
 
 
 | 参数 | 类型 | 描述 |
@@ -246,7 +246,7 @@ python mqtt.py
 
 安装 [Elasticsearch](https://www.elastic.co/downloads/elasticsearch) 。
 
-这个通知目标支持两种格式: _namespace_ and _access_.
+这个通知目标支持两种格式: _namespace_ and _access_。
 
 如果使用的是 _namespace_ 格式, Minio将桶中的对象与索引中的文档进行同步。对于Minio的每一个事件，ES都会创建一个document,这个document的ID就是存储桶以及存储对象的名称。事件的其他细节存储在document的正文中。因此，如果一个已经存在的对象在Minio中被覆盖，在ES中的相对应的document也会被更新。如果一个对象被删除，相对应的document也会从index中删除。
 
@@ -261,7 +261,7 @@ Minio要求使用的是ES 5.X系统版本。如果使用的是低版本的ES，�
 
 ### 第二步：把ES集成到Minio中
 
-Minio Server的配置文件默认路径是 ``~/.minio/config.json``。ES配置信息是在`notify`这个节点下的`elasticsearch`节点下，在这里为你的ES实例创建配置信息键值对，key是你的ES的名称，value是下面表格中列列的键值对集合。 
+Minio Server的配置文件默认路径是 ``~/.minio/config.json``。ES配置信息是在`notify`这个节点下的`elasticsearch`节点下，在这里为你的ES实例创建配置信息键值对，key是你的ES的名称，value是下面表格中列列的键值对集合。
 
 | 参数 | 类型 | 描述 |
 |:---|:---|:---|
@@ -399,7 +399,7 @@ $ curl  "http://localhost:9200/minio_events/_search?pretty=true"
 
 ### 第一步：集成Redis到Minio
 
-Minio Server的配置文件默认路径是 ``~/.minio/config.json``。Redis配置信息是在`notify`这个节点下的`redis`节点下，在这里为你的Redis实例创建配置信息键值对，key是你的Redis的名称，value是下面表格中列列的键值对集合。 
+Minio Server的配置文件默认路径是 ``~/.minio/config.json``。Redis配置信息是在`notify`这个节点下的`redis`节点下，在这里为你的Redis实例创建配置信息键值对，key是你的Redis的名称，value是下面表格中列列的键值对集合。
 
 | 参数 | 类型 | 描述 |
 |:---|:---|:---|
@@ -471,13 +471,13 @@ OK
 如果用的是`access`格式，那么`minio_events`就是一个list,Minio就会调用`RPUSH`添加到list中。这个list的消费者会使用`BLPOP`从list的最左端删除list元素。
 
 <a name="NATS"></a>
-## Publish Minio events via NATS
+## 使用NATS发布Minio事件
 
-Install NATS from [here](http://nats.io/).
+安装 [NATS](http://nats.io/).
 
-### Step 1: Add NATS endpoint to Minio
+### 第一步：集成NATS到Minio
 
-The default location of Minio server configuration file is ``~/.minio/config.json``. Update the NATS configuration block in ``config.json`` as follows:
+Minio Server的配置文件默认路径是 ``~/.minio/config.json``。参考下面的示例修改NATS的配置:
 
 ```
 "nats": {
@@ -501,9 +501,9 @@ The default location of Minio server configuration file is ``~/.minio/config.jso
 },
 ```
 
-Restart Minio server to reflect config changes. ``bucketevents`` is the subject used by NATS in this example.
+更新完配置文件后，重启Minio Server让配置生效。``bucketevents``是NATS在这个例子中使用的主题。
 
-Minio server also supports [NATS Streaming mode](http://nats.io/documentation/streaming/nats-streaming-intro/) that offers additional functionality like `Message/event persistence`, `At-least-once-delivery`, and `Publisher rate limiting`. To configure Minio server to send notifications to NATS Streaming server, update the Minio server configuration file as follows:
+Minio服务也支持 [NATS Streaming mode](http://nats.io/documentation/streaming/nats-streaming-intro/) ，这种模式额外提供了像 `Message/event persistence`, `At-least-once-delivery`, 以及 `Publisher rate limiting`这样的功能。如果想让Minio服务发送通知到NATS Streaming server,参考下面示面进行配置：
 
 ```
 "nats": {
@@ -525,12 +525,12 @@ Minio server also supports [NATS Streaming mode](http://nats.io/documentation/st
         }
     }
 },
-``` 
-Read more about sections `clusterID`, `clientID` on [NATS documentation](https://github.com/nats-io/nats-streaming-server/blob/master/README.md). Section `maxPubAcksInflight` is explained [here](https://github.com/nats-io/go-nats-streaming#publisher-rate-limiting). 
+```
+更多关于 `clusterID`, `clientID` 的信息，请看 [NATS documentation](https://github.com/nats-io/nats-streaming-server/blob/master/README.md). 关于 `maxPubAcksInflight` ，请看 [这里](https://github.com/nats-io/go-nats-streaming#publisher-rate-limiting).
 
-### Step 2: Enable bucket notification using Minio client
+### 第二步: 使用Minio客户端启用bucket通知
 
-We will enable bucket event notification to trigger whenever a JPEG image is uploaded or deleted from ``images`` bucket on ``myminio`` server. Here ARN value is ``arn:minio:sqs:us-east-1:1:nats``. To understand more about ARN please follow [AWS ARN](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html) documentation.
+我们现在可以在一个叫`images`的存储桶上开启事件通知，一旦``myminio`` server上有文件  从``images``存储桶里删除或者上传到存储桶中，事件即被触发。在这里，ARN的值是``arn:minio:sqs:us-east-1:1:nats``。 更多有关ARN的资料，请参考[这里](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html)。
 
 ```
 mc mb myminio/images
@@ -539,9 +539,9 @@ mc events list myminio/images
 arn:minio:sqs:us-east-1:1:nats s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
 ```
 
-### Step 3: Test on NATS
+###  第三步：验证NATS
 
-If you use NATS server, check out this sample program below to log the bucket notification added to NATS.
+如果你用的是NATS server，请查看下面的示例程序来记录添加到NATS的存储桶通知。
 
 ```go
 package main
@@ -579,13 +579,13 @@ go run nats.go
 2016/10/12 06:39:18 Subscribing to subject 'bucketevents'
 ```
 
-Open another terminal and upload a JPEG image into ``images`` bucket.
+打开一个新的terminal终端并上传一张JPEG图片到``images`` 存储桶。
 
 ```
 mc cp myphoto.jpg myminio/images
 ```
 
-The example ``nats.go`` program prints event notification to console.
+ ``nats.go``示例程序将事件通知打印到控制台。
 
 ```
 go run nats.go
@@ -594,7 +594,7 @@ go run nats.go
 2016/10/12 06:51:33 Received message '{"EventType":"s3:ObjectCreated:Put","Key":"images/myphoto.jpg","Records":[{"eventVersion":"2.0","eventSource":"aws:s3","awsRegion":"us-east-1","eventTime":"2016-10-12T13:51:33Z","eventName":"s3:ObjectCreated:Put","userIdentity":{"principalId":"minio"},"requestParameters":{"sourceIPAddress":"[::1]:57106"},"responseElements":{},"s3":{"s3SchemaVersion":"1.0","configurationId":"Config","bucket":{"name":"images","ownerIdentity":{"principalId":"minio"},"arn":"arn:aws:s3:::images"},"object":{"key":"myphoto.jpg","size":56060,"eTag":"1d97bf45ecb37f7a7b699418070df08f","sequencer":"147CCD1AE054BFD0"}}}],"level":"info","msg":"","time":"2016-10-12T06:51:33-07:00"}
 ```
 
-If you use NATS Streaming server, check out this sample program below to log the bucket notification added to NATS.
+如果你用的是NATS Streaming server,请查看下面的示例程序来记录添加到NATS的存储桶通知。
 
 ```go
 package main
@@ -625,56 +625,56 @@ func main() {
 ```
 
 ```
-go run nats.go 
+go run nats.go
 2017/07/07 11:47:40 Connected
 2017/07/07 11:47:40 Subscribing to subject 'bucketevents'
 ```
-Open another terminal and upload a JPEG image into ``images`` bucket.
+打开一个新的terminal终端并上传一张JPEG图片到``images`` 存储桶。
 
 ```
 mc cp myphoto.jpg myminio/images
 ```
 
-The example ``nats.go`` program prints event notification to console.
+ ``nats.go``示例程序将事件通知打印到控制台。
 
 ```
 Received a message: {"EventType":"s3:ObjectCreated:Put","Key":"images/myphoto.jpg","Records":[{"eventVersion":"2.0","eventSource":"minio:s3","awsRegion":"","eventTime":"2017-07-07T18:46:37Z","eventName":"s3:ObjectCreated:Put","userIdentity":{"principalId":"minio"},"requestParameters":{"sourceIPAddress":"192.168.1.80:55328"},"responseElements":{"x-amz-request-id":"14CF20BD1EFD5B93","x-minio-origin-endpoint":"http://127.0.0.1:9000"},"s3":{"s3SchemaVersion":"1.0","configurationId":"Config","bucket":{"name":"images","ownerIdentity":{"principalId":"minio"},"arn":"arn:aws:s3:::images"},"object":{"key":"myphoto.jpg","size":248682,"eTag":"f1671feacb8bbf7b0397c6e9364e8c92","contentType":"image/jpeg","userDefined":{"content-type":"image/jpeg"},"versionId":"1","sequencer":"14CF20BD1EFD5B93"}},"source":{"host":"192.168.1.80","port":"55328","userAgent":"Minio (linux; amd64) minio-go/2.0.4 mc/DEVELOPMENT.GOGET"}}],"level":"info","msg":"","time":"2017-07-07T11:46:37-07:00"}
 ```
 
 <a name="PostgreSQL"></a>
-## Publish Minio events via PostgreSQL
+## 使用PostgreSQL发布Minio事件
 
-Install [PostgreSQL](https://www.postgresql.org/) database server. For illustrative purposes, we have set the "postgres" user password as `password` and created a database called `minio_events` to store the events.
+安装 [PostgreSQL](https://www.postgresql.org/) 数据库。为了演示，我们将"postgres"用户的密码设为`password`，并且创建了一个`minio_events`数据库来存储事件信息。
 
-This notification target supports two formats: _namespace_ and _access_.
+这个通知目标支持两种格式: _namespace_ and _access_。
 
-When the _namespace_ format is used, Minio synchronizes objects in the bucket with rows in the table. It creates rows with two columns: key and value. The key is the bucket and object name of an object that exists in Minio. The value is JSON encoded event data about the operation that created/replaced the object in Minio. When objects are updated or deleted, the corresponding row from this table is updated or deleted respectively.
+如果使用的是_namespace_格式，Minio将存储桶里的对象同步成数据库表中的行。每一行有两列：key和value。key是这个对象的存储桶名字加上对象名，value都是一个有关这个Minio对象的JSON格式的事件数据。如果对象更新或者删除，表中相应的行也会相应的更新或者删除。
 
-When the _access_ format is used, Minio appends events to a table. It creates rows with two columns: event_time and event_data. The event_time is the time at which the event occurred in the Minio server. The event_data is the JSON encoded event data about the operation on an object. No rows are deleted or modified in this format.
+如果使用的是_access_,Minio将将事件添加到表里，行有两列：event_time 和 event_data。event_time是事件在Minio server里发生的时间，event_data是有关这个Minio对象的JSON格式的事件数据。在这种格式下，不会有行会被删除或者修改。
 
-The steps below show how to use this notification target in `namespace` format. The other format is very similar and is omitted for brevity.
+下面的步骤展示的是如何在`namespace`格式下使用通知目标，`_access_`差不多，不再赘述，我相信你可以触类旁通，举一反三，不要让我失望哦。
 
-### Step 1: Ensure minimum requirements are met
+### 第一步：确保确保至少满足第低要求
 
-Minio requires PostgreSQL version 9.5 or above. Minio uses the [`INSERT ON CONFLICT`](https://www.postgresql.org/docs/9.5/static/sql-insert.html#SQL-ON-CONFLICT) (aka UPSERT) feature, introduced in version 9.5 and the [JSONB](https://www.postgresql.org/docs/9.4/static/datatype-json.html) data-type introduced in version 9.4.
+Minio要求PostgresSQL9.5版本及以上。 Minio用了PostgreSQL9.5引入的[`INSERT ON CONFLICT`](https://www.postgresql.org/docs/9.5/static/sql-insert.html#SQL-ON-CONFLICT) (aka UPSERT) 特性,以及9.4引入的 [JSONB](https://www.postgresql.org/docs/9.4/static/datatype-json.html) 数据类型。
 
-### Step 2: Add PostgreSQL endpoint to Minio
+### 第二步：集成PostgreSQL到Minio
 
-The default location of Minio server configuration file is ``~/.minio/config.json``. The PostgreSQL configuration is located in the `postgresql` key under the `notify` top-level key. Create a configuration key-value pair here for your PostgreSQL instance. The key is a name for your PostgreSQL endpoint, and the value is a collection of key-value parameters described in the table below.
+Minio Server的配置文件默认路径是 ``~/.minio/config.json``。PostgreSQL配置信息是在`notify`这个节点下的`postgresql`节点下，在这里为你的PostgreSQL实例创建配置信息键值对，key是你的PostgreSQL的名称，value是下面表格中列列的键值对集合。
 
-| Parameter | Type | Description |
+| 参数 | 类型 | 描述 |
 |:---|:---|:---|
-| `enable` | _bool_ | (Required) Is this server endpoint configuration active/enabled? |
-| `format` | _string_ | (Required) Either `namespace` or `access`. |
-| `connectionString` | _string_ | (Optional) [Connection string parameters](https://godoc.org/github.com/lib/pq#hdr-Connection_String_Parameters) for the PostgreSQL server. Can be used to set `sslmode` for example. |
-| `table` | _string_ | (Required) Table name in which events will be stored/updated. If the table does not exist, the Minio server creates it at start-up.|
-| `host` | _string_ | (Optional) Host name of the PostgreSQL server. Defaults to `localhost`|
-| `port` | _string_ | (Optional) Port on which to connect to PostgreSQL server. Defaults to `5432`. |
-| `user` | _string_ | (Optional) Database user name. Defaults to user running the server process. |
-| `password` | _string_ | (Optional) Database password. |
-| `database` | _string_ | (Optional) Database name. |
+| `enable` | _bool_ | (必须)此配置是否启用 |
+| `format` | _string_ | (必须) 是 `namespace` 还是 `access`|
+| `connectionString` | _string_ | (可选) PostgreSQL的[连接参数](https://godoc.org/github.com/lib/pq#hdr-Connection_String_Parameters) 。比如可以用来设置  `sslmode` |
+| `table` | _string_ | (必须) 事件对应的表名，如果该表不存在，Mniio server会在启动时创建。|
+| `host` | _string_ | (可选) PostgresSQL的主机名，默认是`localhost`|
+| `port` | _string_ | (可选) PostgreSQL的端口号，默认是`5432` |
+| `user` | _string_ | (可选)数据库用户名，默认是运行Minio server进程的用户|
+| `password` | _string_ | (可选) 数据库密码 |
+| `database` | _string_ | (可选)库名 |
 
-An example of PostgreSQL configuration is as follows:
+下面是一个PostgreSQL配置示例:
 
 ```
 "postgresql": {
@@ -692,20 +692,20 @@ An example of PostgreSQL configuration is as follows:
 }
 ```
 
-Note that for illustration here, we have disabled SSL. In the interest of security, for production this is not recommended.
+注意一下，为了演示，咱们这把SSL禁掉了，但是为了安全起见，不建议在生产环境这么弄。
 
-After updating the configuration file, restart the Minio server to put the changes into effect. The server will print a line like `SQS ARNs:  arn:minio:sqs:us-east-1:1:postgresql` at start-up if there were no errors.
+更新完配置文件后，重启Minio Server让配置生效。如果一切顺利，Minio Server会在启动时输出一行信息，类似 `SQS ARNs:  arn:minio:sqs:us-east-1:1:postgresql`。
 
-Note that, you can add as many PostgreSQL server endpoint configurations as needed by providing an identifier (like "1" in the example above) for the PostgreSQL instance and an object of per-server configuration parameters.
+和之前描述的一样，你也可以添加多个PostreSQL实例，只要ID不重复就行。
 
 
-### Step 3: Enable bucket notification using Minio client
+### 第三步：使用Minio客户端启用bucket通知
 
-We will now enable bucket event notifications on a bucket named `images`. Whenever a JPEG image is created/overwritten, a new row is added or an existing row is updated in the PostgreSQL configured above. When an existing object is deleted, the corresponding row is deleted from the PostgreSQL table. Thus, the rows in the PostgreSQL table, reflect the `.jpg` objects in the `images` bucket.
+我们现在可以在一个叫`images`的存储桶上开启事件通知，一旦上有文件上传到存储桶中，PostgreSQL中会insert一条新的记录或者一条已经存在的记录会被update，如果一个存在对象被删除，一条对应的记录也会从PostgreSQL表中删除。因此，PostgreSQL表中的行，对应的就是存储桶里的一个对象。
 
-To configure this bucket notification, we need the ARN printed by Minio in the previous step. Additional information about ARN is available [here](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html).
+要配置这种存储桶通知，我们需要用到前面步骤Minio输出的ARN信息。更多有关ARN的资料，请参考[这里](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html)。
 
-With the `mc` tool, the configuration is very simple to add. Let us say that the Minio server is aliased as `myminio` in our mc configuration. Execute the following:
+有了`mc`这个工具，这些配置信息很容易就能添加上。假设咱们的Minio服务别名叫`myminio`,可执行下列脚本：
 
 ```
 # Create bucket named `images` in myminio
@@ -718,15 +718,15 @@ mc events list myminio/images
 arn:minio:sqs:us-east-1:1:postgresql s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
 ```
 
-### Step 4: Test on PostgreSQL
+### 第四步：验证PostgreSQL
 
-Open another terminal and upload a JPEG image into ``images`` bucket.
+打开一个新的terminal终端并上传一张JPEG图片到``images`` 存储桶。
 
 ```
 mc cp myphoto.jpg myminio/images
 ```
 
-Open PostgreSQL terminal to list the rows in the `bucketevents` table.
+打开一个PostgreSQL终端列出表 `bucketevents` 中所有的记录。
 
 ```
 $ psql -h 127.0.0.1 -U postgres -d minio_events
@@ -739,39 +739,39 @@ key                 |                      value
 ```
 
 <a name="MySQL"></a>
-## Publish Minio events via MySQL
+## 使用MySQL发布Minio事件
 
-Install MySQL from [here](https://dev.mysql.com/downloads/mysql/). For illustrative purposes, we have set the root password as `password` and created a database called `miniodb` to store the events.
+安装 [MySQL](https://dev.mysql.com/downloads/mysql/). 为了演示，我们将"postgres"用户的密码设为`password`，并且创建了一个`miniodb`数据库来存储事件信息。
 
-This notification target supports two formats: _namespace_ and _access_.
+这个通知目标支持两种格式: _namespace_ and _access_。
 
-When the _namespace_ format is used, Minio synchronizes objects in the bucket with rows in the table. It creates rows with two columns: key_name and value. The key_name is the bucket and object name of an object that exists in Minio. The value is JSON encoded event data about the operation that created/replaced the object in Minio. When objects are updated or deleted, the corresponding row from this table is updated or deleted respectively.
+如果使用的是_namespace_格式，Minio将存储桶里的对象同步成数据库表中的行。每一行有两列：key_name和value。key_name是这个对象的存储桶名字加上对象名，value都是一个有关这个Minio对象的JSON格式的事件数据。如果对象更新或者删除，表中相应的行也会相应的更新或者删除。
 
-When the _access_ format is used, Minio appends events to a table. It creates rows with two columns: event_time and event_data. The event_time is the time at which the event occurred in the Minio server. The event_data is the JSON encoded event data about the operation on an object. No rows are deleted or modified in this format.
+如果使用的是_access_,Minio将将事件添加到表里，行有两列：event_time 和 event_data。event_time是事件在Minio server里发生的时间，event_data是有关这个Minio对象的JSON格式的事件数据。在这种格式下，不会有行会被删除或者修改。
 
-The steps below show how to use this notification target in `namespace` format. The other format is very similar and is omitted for brevity.
+下面的步骤展示的是如何在`namespace`格式下使用通知目标，`_access_`差不多，不再赘述。
 
-### Step 1: Ensure minimum requirements are met
+### 第一步：确保确保至少满足第低要求
 
-Minio requires MySQL version 5.7.8 or above. Minio uses the [JSON](https://dev.mysql.com/doc/refman/5.7/en/json.html) data-type introduced in version 5.7.8. We tested this setup on MySQL 5.7.17.
+Minio要求MySQL 版本 5.7.8及以上，Minio使用了MySQL5.7.8版本引入的 [JSON](https://dev.mysql.com/doc/refman/5.7/en/json.html) 数据类型。我们使用的是MySQL5.7.17进行的测试。
 
-### Step 2: Add MySQL server endpoint configuration to Minio
+### 第二步：集成MySQL到Minio
 
-The default location of Minio server configuration file is ``~/.minio/config.json``. The MySQL configuration is located in the `mysql` key under the `notify` top-level key. Create a configuration key-value pair here for your MySQL instance. The key is a name for your MySQL endpoint, and the value is a collection of key-value parameters described in the table below.
+Minio Server的配置文件默认路径是 ``~/.minio/config.json``。MySQL配置信息是在`notify`这个节点下的`mysql`节点下，在这里为你的MySQL实例创建配置信息键值对，key是你的PostgreSQL的名称，value是下面表格中列列的键值对集合。
 
-| Parameter | Type | Description |
+| 参数 | 类型 | 描述 |
 |:---|:---|:---|
-| `enable` | _bool_ | (Required) Is this server endpoint configuration active/enabled? |
-| `format` | _string_ | (Required) Either `namespace` or `access`. |
-| `dsnString` | _string_ | (Optional) [Data-Source-Name connection string](https://github.com/go-sql-driver/mysql#dsn-data-source-name) for the MySQL server. If not specified, the connection information specified by the `host`, `port`, `user`, `password` and `database` parameters are used. |
-| `table` | _string_ | (Required) Table name in which events will be stored/updated. If the table does not exist, the Minio server creates it at start-up.|
-| `host` | _string_ | Host name of the MySQL server (used only if `dsnString` is empty). |
-| `port` | _string_ | Port on which to connect to the MySQL server (used only if `dsnString` is empty). |
-| `user` | _string_ | Database user-name (used only if `dsnString` is empty). |
-| `password` | _string_ | Database password (used only if `dsnString` is empty). |
-| `database` | _string_ | Database name (used only if `dsnString` is empty). |
+| `enable` | _bool_ | (必须)此配置是否启用？ |
+| `format` | _string_ | (必须)是 `namespace` 还是 `access` |
+| `dsnString` | _string_ | (可选)MySQL的 [Data-Source-Name连接串](https://github.com/go-sql-driver/mysql#dsn-data-source-name) 。如果没设值，连接信息将使用下列参数： `host`, `port`, `user`, `password` 以及 `database` |
+| `table` | _string_ | (必须) 事件对应的表名，如果该表不存在，Mniio server会在启动时创建。|
+| `host` | _string_ | MySQL server主机名 (如果 `dsnString` 是空才会使用此配置)。 |
+| `port` | _string_ | MySQL server端口号 (如果 `dsnString` 是空才会使用此配置)。 |
+| `user` | _string_ | 数据库用户名 (如果 `dsnString` 是空才会使用此配置)。 |
+| `password` | _string_ |数据库密码(如果 `dsnString` 是空才会使用此配置)。 |
+| `database` | _string_ |数据库名(如果 `dsnString` 是空才会使用此配置)。 |
 
-An example of MySQL configuration is as follows:
+下面是一个MySQL配置示例:
 
 ```
 "mysql": {
@@ -788,18 +788,18 @@ An example of MySQL configuration is as follows:
 }
 ```
 
-After updating the configuration file, restart the Minio server to put the changes into effect. The server will print a line like `SQS ARNs:  arn:minio:sqs:us-east-1:1:mysql` at start-up if there were no errors.
+更新完配置文件后，重启Minio Server让配置生效。如果一切顺利，Minio Server会在启动时输出一行信息，类似 `SQS ARNs:  arn:minio:sqs:us-east-1:1:mysql`。
 
-Note that, you can add as many MySQL server endpoint configurations as needed by providing an identifier (like "1" in the example above) for the MySQL instance and an object of per-server configuration parameters.
+和之前描述的一样，你也可以添加多个MySQL实例，只要ID不重复就行。
 
 
-### Step 3: Enable bucket notification using Minio client
+### 第三步：使用Minio客户端启用bucket通知
 
-We will now setup bucket notifications on a bucket named `images`. Whenever a JPEG image object is created/overwritten, a new row is added or an existing row is updated in the MySQL table configured above. When an existing object is deleted, the corresponding row is deleted from the MySQL table. Thus, the rows in the MySQL table, reflect the `.jpg` objects in the `images` bucket.
+我们现在可以在一个叫`images`的存储桶上开启事件通知，一旦上有文件上传到存储桶中，MySQL中会insert一条新的记录或者一条已经存在的记录会被update，如果一个存在对象被删除，一条对应的记录也会从MySQL表中删除。因此，MySQL表中的行，对应的就是存储桶里的一个对象。
 
-To configure this bucket notification, we need the ARN printed by Minio in the previous step. Additional information about ARN is available [here](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html).
+要配置这种存储桶通知，我们需要用到前面步骤Minio输出的ARN信息。更多有关ARN的资料，请参考[这里](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html)。
 
-With the `mc` tool, the configuration is very simple to add. Let us say that the Minio server is aliased as `myminio` in our mc configuration. Execute the following:
+有了`mc`这个工具，这些配置信息很容易就能添加上。假设咱们的Minio服务别名叫`myminio`,可执行下列脚本：
 
 ```
 # Create bucket named `images` in myminio
@@ -811,15 +811,15 @@ mc events list myminio/images
 arn:minio:sqs:us-east-1:1:postgresql s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
 ```
 
-### Step 4: Test on MySQL
+### 第四步：验证MySQL
 
-Open another terminal and upload a JPEG image into ``images`` bucket:
+打开一个新的terminal终端并上传一张JPEG图片到``images`` 存储桶。
 
 ```
 mc cp myphoto.jpg myminio/images
 ```
 
-Open MySQL terminal and list the rows in the `minio_images` table.
+打开一个MySQL终端列出表 `minio_images` 中所有的记录。
 
 ```
 $ mysql -h 172.17.0.1 -P 3306 -u root -p miniodb
@@ -834,17 +834,17 @@ mysql> select * from minio_images;
 ```
 
 <a name="apache-kafka"></a>
-## Publish Minio events via Kafka
+## 使用Kafka发布Minio事件
 
-Install Apache Kafka from [here](http://kafka.apache.org/).
+安装[ Apache Kafka](http://kafka.apache.org/).
 
-### Step 1: Ensure minimum requirements are met
+### 第一步：确保确保至少满足第低要求
 
-Minio requires Kafka version 0.10 or 0.9. Internally Minio uses the [Shopify/sarama](https://github.com/Shopify/sarama/) library and so has the same version compatibility as provided by this library.
+Minio要求Kafka版本0.10或者0.9.Minio内部使用了 [Shopify/sarama](https://github.com/Shopify/sarama/) 库，因此需要和该库有同样的版本兼容性。
 
-### Step 2: Add Kafka endpoint to Minio
+###第二步：集成Kafka到Minio
 
-The default location of Minio server configuration file is ``~/.minio/config.json``. Update the kafka configuration block in ``config.json`` as follows:
+Minio Server的配置文件默认路径是 ``~/.minio/config.json``。参考下面的示例更新Kafka配置：
 
 ```
 "kafka": {
@@ -856,11 +856,12 @@ The default location of Minio server configuration file is ``~/.minio/config.jso
 }
 ```
 
-Restart Minio server to reflect config changes. ``bucketevents`` is the topic used by kafka in this example.
+重启Minio server让配置生效。``bucketevents``是本示例用到的Kafka主题（topic）。
 
-### Step 3: Enable bucket notification using Minio client
+### 第三步：使用Minio客户端启用bucket通知
 
-We will enable bucket event notification to trigger whenever a JPEG image is uploaded or deleted from ``images`` bucket on ``myminio`` server. Here ARN value is ``arn:minio:sqs:us-east-1:1:kafka``. To understand more about ARN please follow [AWS ARN](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html) documentation.
+
+我们现在可以在一个叫`images`的存储桶上开启事件通知，一旦上有文件上传到存储桶中，事件将被触发。在这里，ARN的值是``arn:minio:sqs:us-east-1:1:kafka``。更多有关ARN的资料，请参考[这里](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html)。
 
 ```
 mc mb myminio/images
@@ -869,21 +870,21 @@ mc events list myminio/images
 arn:minio:sqs:us-east-1:1:kafka s3:ObjectCreated:*,s3:ObjectRemoved:* Filter: suffix=”.jpg”
 ```
 
-### Step 4: Test on Kafka
+### 第四步：验证Kafka
 
-We used [kafkacat](https://github.com/edenhill/kafkacat) to print all notifications on the console.
+我们使用 [kafkacat](https://github.com/edenhill/kafkacat) 将所有的通知输出到控制台。
 
 ```
 kafkacat -C -b localhost:9092 -t bucketevents
 ```
 
-Open another terminal and upload a JPEG image into ``images`` bucket.
+打开一个新的terminal终端并上传一张JPEG图片到``images`` 存储桶。
 
 ```
 mc cp myphoto.jpg myminio/images
 ```
 
-``kafkacat`` prints the event notification to the console.
+``kafkacat`` 输出事件通知到控制台。
 
 ```
 kafkacat -b localhost:9092 -t bucketevents
@@ -891,13 +892,13 @@ kafkacat -b localhost:9092 -t bucketevents
 ```
 
 <a name="webhooks"></a>
-## Publish Minio events via Webhooks
+## 使用Webhook发布Minio事件
 
-[Webhooks](https://en.wikipedia.org/wiki/Webhook) are a way to receive information when it happens, rather than continually polling for that data.
+[Webhooks](https://en.wikipedia.org/wiki/Webhook) 采用推的方式获取数据，而不是一直去拉取。
 
-### Step 1: Add Webhook endpoint to Minio
+### 第一步：集成MySQL到Minio
 
-The default location of Minio server configuration file is ``~/.minio/config.json``. Update the Webhook configuration block in ``config.json`` as follows
+Minio Server的配置文件默认路径是 ``~/.minio/config.json``。参考下面的示例更新Webhook配置：
 
 ```
 "webhook": {
@@ -906,11 +907,11 @@ The default location of Minio server configuration file is ``~/.minio/config.jso
     "endpoint": "http://localhost:3000/"
 }
 ```
-Here the endpoint is the server listening for webhook notifications. Save the file and restart the Minio server for changes to take effect. Note that the endpoint needs to be live and reachable when you restart your Minio server.
+endpoint是监听webhook通知的服务。保存配置文件并重启Minio服务让配配置生效。注意一下，在重启Minio时，这个endpoint必须是启动并且可访问到。
 
-### Step 2: Enable bucket notification using Minio client
+### 第二步：使用Minio客户端启用bucket通知
 
-We will enable bucket event notification to trigger whenever a JPEG image is uploaded to ``images`` bucket on ``myminio`` server. Here ARN value is ``arn:minio:sqs:us-east-1:1:webhook``. To learn more about ARN please follow [AWS ARN](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html) documentation.
+我们现在可以在一个叫`images`的存储桶上开启事件通知，一旦上有文件上传到存储桶中，事件将被触发。在这里，ARN的值是``arn:minio:sqs:us-east-1:1:webhook``。更多有关ARN的资料，请参考[这里](http://docs.aws.amazon.com/general/latest/gr/aws-arns-and-namespaces.html)。
 
 ```
 mc mb myminio/images
@@ -918,45 +919,45 @@ mc mb myminio/images-thumbnail
 mc events add myminio/images arn:minio:sqs:us-east-1:1:webhook --events put --suffix .jpg
 ```
 
-Check if event notification is successfully configured by
+验证事件通知是否配置正确：
 
 ```
 mc events list myminio/images
 ```
 
-You should get a response like this
+你应该可以收到如下的响应：
 
 ```
 arn:minio:sqs:us-east-1:1:webhook   s3:ObjectCreated:*   Filter: suffix=".jpg"
 ```
 
-### Step 3: Test with Thumbnailer
+### 第三步：采用Thumbnailer进行验证
 
-We used [Thumbnailer](https://github.com/minio/thumbnailer) to listen for Minio notifications when a new JPEG file is uploaded (HTTP PUT). Triggered by a notification, Thumbnailer uploads a thumbnail of new image to Minio server. To start with, download and install Thumbnailer.
+我们使用 [Thumbnailer](https://github.com/minio/thumbnailer) 来监听Minio通知。如果有文件上传于是Minio服务，Thumnailer监听到该通知，生成一个缩略图并上传到Minio服务。
+安装Thumbnailer:
 
 ```
 git clone https://github.com/minio/thumbnailer/
 npm install
 ```
 
-Then open the Thumbnailer config file at ``config/webhook.json`` and add the configuration for your Minio server and then start Thumbnailer by
+然后打开Thumbnailer的``config/webhook.json``配置文件，添加有关Minio server的配置，使用下面的方式启动Thumbnailer:
 
 ```
 NODE_ENV=webhook node thumbnail-webhook.js
 ```
 
-Thumbnailer starts running at ``http://localhost:3000/``. Next, configure the Minio server to send notifications to this URL (as mentioned in step 1) and use ``mc`` to set up bucket notifications (as mentioned in step 2). Then upload a JPEG image to Minio server by
+Thumbnailer运行在``http://localhost:3000/``。下一步，配置Minio server,让其发送消息到这个URL（第一步提到的），并使用 ``mc`` 来设置存储桶通知（第二步提到的）。然后上传一张图片到Minio server:
 
 ```
 mc cp ~/images.jpg myminio/images
 .../images.jpg:  8.31 KB / 8.31 KB ┃▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓┃ 100.00% 59.42 KB/s 0s
 ```
-Wait a few moments, then check the bucket’s contents with mc ls — you will see a thumbnail appear.
+稍等片刻，然后使用mc ls检查存储桶的内容 -，你将看到有个缩略图出现了。
 
 ```
 mc ls myminio/images-thumbnail
 [2017-02-08 11:39:40 IST]   992B images-thumbnail.jpg
 ```
 
-
-*NOTE* If you are running [distributed Minio](https://docs.minio.io/docs/distributed-minio-quickstart-guide), modify ``~/.minio/config.json`` on all the nodes with your bucket event notification backend configuration.
+*注意* 如果你用的是 [distributed Minio](https://docs.minio.io/docs/distributed-minio-quickstart-guide),请修改所有节点的 ``~/.minio/config.json``。
