@@ -455,7 +455,6 @@ func testListMultipartUploadsHandler(obj ObjectLayer, instanceType, bucketName s
 
 		// verify response for V2 signed HTTP request.
 		reqV2, err := newTestSignedRequestV2("GET", u, 0, nil, testCase.accessKey, testCase.secretKey)
-
 		if err != nil {
 			t.Fatalf("Test %d: %s: Failed to create HTTP request for PutBucketPolicyHandler: <ERROR> %v", i+1, instanceType, err)
 		}
