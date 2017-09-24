@@ -58,7 +58,13 @@ type policyChange struct {
 func (bp bucketPolicies) GetBucketPolicy(bucket string) *bucketPolicy {
 	bp.rwMutex.RLock()
 	defer bp.rwMutex.RUnlock()
-	return bp.bucketPolicyConfigs[bucket]
+  
+    	policy, err := readBucketPolicy(bucket,globalObjectAPI)
+    	if err != nil {
+		return nil
+	}
+  
+	return policy
 }
 
 // Set a new bucket policy for a bucket, this operation will overwrite
